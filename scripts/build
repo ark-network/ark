@@ -13,6 +13,6 @@ ARCH=$(eval "go env GOARCH")
 
 pushd $PARENT_PATH
 mkdir -p build
-GO111MODULE=on go build -ldflags="-s -w" -o build/arkd-$OS-$ARCH cmd/arkd/main.go
+GO111MODULE=on go build -ldflags="-s -w" -o build/coordinatord-$OS-$ARCH cmd/coordinatord/main.go
 popd	
   

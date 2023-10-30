@@ -2,7 +2,7 @@
 
 ## build: build for all platforms
 build:
-	@echo "Building arkd binary..."
+	@echo "Building coordinatord binary..."
 	@bash ./scripts/build
 
 ## clean: cleans the binary
@@ -32,8 +32,8 @@ lint:
 
 ## run: run in dev mode
 run: clean
-	@echo "Running arkd in dev mode..."
-	@go run ./cmd/arkd
+	@echo "Running coordinatord in dev mode..."
+	@go run ./cmd/coordinatord
 
 ## test: runs unit and component tests
 test:

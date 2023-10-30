@@ -1,6 +1,6 @@
 builds:
-  - id: "arkd"
-    main: ./cmd/arkd
+  - id: "coordinatord"
+    main: ./cmd/coordinatord
     ldflags:
       - -s -X 'main.version={{.Version}}' -X 'main.commit={{.Commit}}' -X 'main.date={{.Date}}'
     goos:
@@ -9,7 +9,7 @@ builds:
     goarch:
       - amd64
       - arm64
-    binary: arkd
+    binary: coordinatord
 
 ## flag the semver v**.**.**-<tag>.* as pre-release on Github
 release:
@@ -25,11 +25,11 @@ changelog:
   use: github-native
 
 archives:
-  - id: arkd
+  - id: coordinatord
     format: binary
     builds:
-      - arkd
-    name_template: "arkd-v{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+      - coordinatord
+    name_template: "coordinatord-v{{ .Version }}-{{ .Os }}-{{ .Arch }}"
 
 dockers:
   ###########################
@@ -38,12 +38,12 @@ dockers:
 
   #amd64
   - image_templates:
-      - "ghcr.io/ark-network/arkd:{{ .Tag }}-amd64"
+      - "ghcr.io/ark-network/coordinatord:{{ .Tag }}-amd64"
         # push always either release or prerelease with a docker tag with the semver only
     skip_push: "false"
     use: buildx
     ids:
-      - arkd
+      - coordinatord
     dockerfile: goreleaser.Dockerfile
     # GOOS of the built binaries/packages that should be used.
     goos: linux
@@ -54,19 +54,19 @@ dockers:
       - "--platform=linux/amd64"
       - "--pull"
       - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.title=arkd"
+      - "--label=org.opencontainers.image.title=coordinatord"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--build-arg=VERSION={{.Version}}"
       - "--build-arg=COMMIT={{.Commit}}"
       - "--build-arg=DATE={{.Date}}"
   - image_templates:
-      - "ghcr.io/ark-network/arkd:{{ .Tag }}-arm64v8"
+      - "ghcr.io/ark-network/coordinatord:{{ .Tag }}-arm64v8"
         # push always either release or prerelease with a docker tag with the semver only
     skip_push: "false"
     use: buildx
     ids:
-      - arkd
+      - coordinatord
     dockerfile: goreleaser.Dockerfile
     # GOOS of the built binaries/packages that should be used.
     goos: linux
@@ -77,7 +77,7 @@ dockers:
       - "--platform=linux/arm64/v8"
       - "--pull"
       - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.title=arkd"
+      - "--label=org.opencontainers.image.title=coordinatord"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--build-arg=VERSION={{.Version}}"
@@ -85,15 +85,15 @@ dockers:
       - "--build-arg=DATE={{.Date}}"
 
 docker_manifests:
-  - name_template: ghcr.io/ark-network/arkd:{{ .Tag }}
+  - name_template: ghcr.io/ark-network/coordinatord:{{ .Tag }}
     image_templates:
-      - ghcr.io/ark-network/arkd:{{ .Tag }}-amd64
-      - ghcr.io/ark-network/arkd:{{ .Tag }}-arm64v8
+      - ghcr.io/ark-network/coordinatord:{{ .Tag }}-amd64
+      - ghcr.io/ark-network/coordinatord:{{ .Tag }}-arm64v8
     skip_push: "false"
 
-  - name_template: ghcr.io/ark-network/arkd:latest
+  - name_template: ghcr.io/ark-network/coordinatord:latest
     image_templates:
-      - ghcr.io/ark-network/arkd:{{ .Tag }}-amd64
-      - ghcr.io/ark-network/arkd:{{ .Tag }}-arm64v8
+      - ghcr.io/ark-network/coordinatord:{{ .Tag }}-amd64
+      - ghcr.io/ark-network/coordinatord:{{ .Tag }}-arm64v8
     skip_push: auto
   

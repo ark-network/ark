@@ -11,9 +11,9 @@ WORKDIR /app
 
 COPY . .
 
-RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-X 'main.Version=${COMMIT}' -X 'main.Commit=${COMMIT}' -X 'main.Date=${COMMIT}'" -o bin/arkd cmd/arkd/main.go
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-X 'main.Version=${COMMIT}' -X 'main.Commit=${COMMIT}' -X 'main.Date=${COMMIT}'" -o bin/coordinatord cmd/coordinatord/main.go
 
-# Second image, running the arkd executable
+# Second image, running the coordinatord executable
 FROM debian:buster-slim
 
 # $USER name, and data $DIR to be used in the 'final' image
@@ -31,11 +31,11 @@ RUN adduser --disabled-password \
 						"$USER"
 USER $USER
 
-# Prevents 'VOLUME $DIR/.arkd/' being created as owned by 'root'
-RUN mkdir -p "$DIR/.arkd/"
+# Prevents 'VOLUME $DIR/.coordinatord/' being created as owned by 'root'
+RUN mkdir -p "$DIR/.coordinatord/"
 
-# Expose volume containing all 'arkd' data
-VOLUME $DIR/.arkd/
+# Expose volume containing all 'coordinatord' data
+VOLUME $DIR/.coordinatord/
 
-ENTRYPOINT [ "arkd" ]
+ENTRYPOINT [ "coordinatord" ]
     

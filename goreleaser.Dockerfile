@@ -9,7 +9,7 @@ COPY . .
 RUN set -ex \
   && if [ "${TARGETPLATFORM}" = "linux/amd64" ]; then export TARGETPLATFORM=amd64; fi \
   && if [ "${TARGETPLATFORM}" = "linux/arm64" ]; then export TARGETPLATFORM=arm64; fi \
-  && mv "arkd-linux-$TARGETPLATFORM" /usr/local/bin/arkd
+  && mv "coordinatord-linux-$TARGETPLATFORM" /usr/local/bin/coordinatord
 
 
 # $USER name, and data $DIR to be used in the 'final' image
@@ -25,11 +25,11 @@ RUN adduser --disabled-password \
             "$USER"
 USER $USER
 
-# Prevents 'VOLUME $DIR/.arkd/' being created as owned by 'root'
-RUN mkdir -p "$DIR/.arkd/"
+# Prevents 'VOLUME $DIR/.coordinatord/' being created as owned by 'root'
+RUN mkdir -p "$DIR/.coordinatord/"
 
-# Expose volume containing all arkd data
-VOLUME $DIR/.arkd/
+# Expose volume containing all coordinatord data
+VOLUME $DIR/.coordinatord/
 
-ENTRYPOINT [ "arkd" ]
+ENTRYPOINT [ "coordinatord" ]
 	

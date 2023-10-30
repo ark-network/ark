@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package coordinator.v1;
+
+import "google/api/annotations.proto";
+
+service CoordinatorService {
+  rpc RegisterPayment(RegisterPaymentRequest) returns (RegisterPaymentResponse) {
+    option (google.api.http) = {
+      post: "/v1/payment/register"
+      body: "*"
+    };
+  };
+  rpc FinalizePayment(FinalizePaymentRequest) returns (FinalizePaymentResponse) {
+    option (google.api.http) = {
+      post: "/v1/payment/finalize"
+      body: "*"
+    };
+  };
+  rpc ListPoolTransactions(ListPoolTransactionsRequest) returns (ListPoolTransactionsResponse) {
+    option (google.api.http) = {
+      post: "/v1/pools"
+      body: "*"
+    };
+  };
+  rpc GetPoolTransaction(GetPoolTransactionRequest) returns (GetPoolTransactionResponse) {
+    option (google.api.http) = {
+      get: "/v1/pool/{txid}"
+    };
+  };
+}
+
+message RegisterPaymentRequest {
+  repeated Input inputs = 1;
+  repeated Output outputs = 2;
+}
+message RegisterPaymentResponse {
+  string vtx = 1;
+}
+
+message FinalizePaymentRequest {
+  string signed_vtx = 1;
+}
+message FinalizePaymentResponse {}
+
+message ListPoolTransactionsRequest {
+  int64 start = 1;
+  int64 end = 2;
+}
+message ListPoolTransactionsResponse {
+  repeated string txs = 1;
+}
+
+message GetPoolTransactionRequest {
+  string txid = 1;
+}
+message GetPoolTransactionResponse {
+  string txhex = 1;
+}
+
+message Input {
+  string txid = 1;
+  uint32 vout = 2;
+}
+message Output {
+  string pubkey = 1;
+  uint64 amount = 2;
+}
