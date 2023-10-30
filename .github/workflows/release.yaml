@@ -1,0 +1,47 @@
+name: release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "*"
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-20.04
+    env:
+      DOCKER_CLI_EXPERIMENTAL: "enabled"
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v3
+        with:
+          go-version: ">1.17.2"
+      - uses: actions/cache@v1
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: release artifacts
+        uses: goreleaser/goreleaser-action@v2
+        with:
+          version: latest
+          args: release --rm-dist --debug
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
+      - uses: bufbuild/buf-setup-action@v1.3.1
+      - name: release protos
+        uses: bufbuild/buf-push-action@v1
+        with:
+          input: api-spec/protobuf
+          buf_token: ${{ secrets.BUF_TOKEN }}
+  

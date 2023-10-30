@@ -1,0 +1,32 @@
+name: ci_unit
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    name: unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@v3
+        with:
+          go-version: ">1.17.2"
+      - uses: actions/checkout@v3
+      - name: check linting
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: v1.54
+      - name: check code integrity
+        uses: securego/gosec@master
+        with:
+          args: '-severity high -quiet ./...'
+      - uses: bufbuild/buf-setup-action@v1.3.1
+      - name: check proto linting
+        run: make proto-lint
+      - run: go get -v -t -d ./...
+      - name: unit testing
+        run: make test
+  
