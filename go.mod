@@ -1,6 +1,6 @@
 module github.com/ark-network/ark
 
-go 1.21.0
+go 1.21
 
 require github.com/sirupsen/logrus v1.9.3
 
