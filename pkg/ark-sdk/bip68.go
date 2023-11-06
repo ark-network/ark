@@ -6,19 +6,20 @@ import (
 )
 
 const (
-	SEQUENCE_LOCKTIME_MASK        = 0x0000ffff
-	SEQUENCE_LOCKTIME_TYPE_FLAG   = 1 << 22
-	SEQUENCE_LOCKTIME_GRANULARITY = 9
-	SECONDS_MOD                   = 1 << SEQUENCE_LOCKTIME_GRANULARITY
-	SECONDS_MAX                   = SEQUENCE_LOCKTIME_MASK << SEQUENCE_LOCKTIME_GRANULARITY
+	SEQUENCE_LOCKTIME_MASK         = 0x0000ffff
+	SEQUENCE_LOCKTIME_TYPE_FLAG    = 1 << 22
+	SEQUENCE_LOCKTIME_GRANULARITY  = 9
+	SECONDS_MOD                    = 1 << SEQUENCE_LOCKTIME_GRANULARITY
+	SECONDS_MAX                    = SEQUENCE_LOCKTIME_MASK << SEQUENCE_LOCKTIME_GRANULARITY
+	SEQUENCE_LOCKTIME_DISABLE_FLAG = 1 << 31
 )
 
-func closerToModulo512(x int) int {
+func closerToModulo512(x uint) uint {
 	return x - (x % 512)
 }
 
 // BIP68 returns the encoded sequence locktime for the given number of seconds.
-func BIP68(seconds int) ([]byte, error) {
+func BIP68(seconds uint) ([]byte, error) {
 	seconds = closerToModulo512(seconds)
 	if seconds > SECONDS_MAX {
 		return nil, fmt.Errorf("seconds too large, max is %d", SECONDS_MAX)
@@ -37,4 +38,21 @@ func BIP68(seconds int) ([]byte, error) {
 		reversed[i], reversed[j] = reversed[j], reversed[i]
 	}
 	return reversed, nil
+}
+
+func DecodeBIP68(sequence []byte) (uint, error) {
+	// sequence to int
+	var asNumber int64
+	for i := len(sequence) - 1; i >= 0; i-- {
+		asNumber = asNumber<<8 | int64(sequence[i])
+	}
+
+	if asNumber&SEQUENCE_LOCKTIME_DISABLE_FLAG != 0 {
+		return 0, fmt.Errorf("sequence is disabled")
+	}
+	if asNumber&SEQUENCE_LOCKTIME_TYPE_FLAG != 0 {
+		seconds := asNumber & SEQUENCE_LOCKTIME_MASK << SEQUENCE_LOCKTIME_GRANULARITY
+		return uint(seconds), nil
+	}
+	return 0, fmt.Errorf("sequence is encoded as block number")
 }

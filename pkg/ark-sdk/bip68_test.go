@@ -2,7 +2,7 @@ package sdk_test
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	sdk "github.com/ark-network/ark-sdk"
@@ -10,11 +10,11 @@ import (
 )
 
 func TestBIP68(t *testing.T) {
-	data, err := ioutil.ReadFile("fixtures/bip68.json")
+	data, err := os.ReadFile("fixtures/bip68.json")
 	require.NoError(t, err)
 
 	var testCases []struct {
-		Input    int    `json:"seconds"`
+		Input    uint   `json:"seconds"`
 		Expected int64  `json:"sequence"`
 		Desc     string `json:"description"`
 	}
@@ -33,6 +33,11 @@ func TestBIP68(t *testing.T) {
 			}
 
 			require.Equal(t, tc.Expected, asNumber)
+
+			decoded, err := sdk.DecodeBIP68(actual)
+			require.NoError(t, err)
+
+			require.Equal(t, tc.Input, decoded)
 		})
 	}
 }
