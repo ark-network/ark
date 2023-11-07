@@ -11,57 +11,78 @@ service CoordinatorService {
       body: "*"
     };
   };
+  rpc ClaimPayment(ClaimPaymentRequest) returns (ClaimPaymentResponse) {
+    option (google.api.http) = {
+      post: "/v1/payment/claim"
+      body: "*"
+    };
+  };
   rpc FinalizePayment(FinalizePaymentRequest) returns (FinalizePaymentResponse) {
     option (google.api.http) = {
       post: "/v1/payment/finalize"
       body: "*"
     };
   };
-  rpc ListPoolTransactions(ListPoolTransactionsRequest) returns (ListPoolTransactionsResponse) {
+  rpc ListRounds(ListRoundsRequest) returns (ListRoundsResponse) {
     option (google.api.http) = {
-      post: "/v1/pools"
+      post: "/v1/rounds"
       body: "*"
     };
   };
-  rpc GetPoolTransaction(GetPoolTransactionRequest) returns (GetPoolTransactionResponse) {
+  rpc GetRound(GetRoundRequest) returns (GetRoundResponse) {
     option (google.api.http) = {
-      get: "/v1/pool/{txid}"
+      get: "/v1/round/{txid}"
     };
   };
 }
 
 message RegisterPaymentRequest {
-  repeated Input inputs = 1;
-  repeated Output outputs = 2;
-}
-message RegisterPaymentResponse {
+  // Unsigned forfeit tx sending all funds back to the ASP.
   string vtx = 1;
 }
+message RegisterPaymentResponse {
+  // Mocks wabisabi's credentials.
+  string id = 1;
+  // Forfeit tx signed by the ASP.
+  string signed_vtx = 2;
+}
+
+message ClaimPaymentRequest {
+  // Mocks wabisabi's credentials.
+  string id = 1;
+  // List of receivers for a registered payment. 
+  repeated Output outputs = 2;
+}
+message ClaimPaymentResponse {}
 
 message FinalizePaymentRequest {
+  // Forfeit tx signed also by the user. 
   string signed_vtx = 1;
 }
 message FinalizePaymentResponse {}
 
-message ListPoolTransactionsRequest {
+message ListRoundsRequest {
   int64 start = 1;
   int64 end = 2;
 }
-message ListPoolTransactionsResponse {
-  repeated string txs = 1;
+message ListRoundsResponse {
+  repeated Round rounds = 1;
 }
 
-message GetPoolTransactionRequest {
+message GetRoundRequest {
   string txid = 1;
 }
-message GetPoolTransactionResponse {
-  string txhex = 1;
+message GetRoundResponse {
+  Round round = 1;
 }
 
-message Input {
-  string txid = 1;
-  uint32 vout = 2;
+message Round {
+  int64 start = 1;
+  int64 end = 2;
+  string txid = 3;
+  repeated Output outputs = 4;
 }
+
 message Output {
   string pubkey = 1;
   uint64 amount = 2;
