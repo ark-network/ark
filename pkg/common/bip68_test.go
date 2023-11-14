@@ -1,11 +1,11 @@
-package sdk_test
+package common_test
 
 import (
 	"encoding/json"
 	"os"
 	"testing"
 
-	sdk "github.com/ark-network/ark-sdk"
+	sdk "github.com/ark-network/common"
 	"github.com/stretchr/testify/require"
 )
 

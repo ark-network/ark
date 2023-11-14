@@ -1,4 +1,4 @@
-package sdk
+package common
 
 import (
 	"encoding/hex"
