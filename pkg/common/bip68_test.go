@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	sdk "github.com/ark-network/common"
+	sdk "github.com/ark-network/ark/common"
 	"github.com/stretchr/testify/require"
 )
 
@@ -24,7 +24,7 @@ func TestBIP68(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.Desc, func(t *testing.T) {
-			actual, err := sdk.BIP68(tc.Input)
+			actual, err := sdk.BIP68Encode(tc.Input)
 			require.NoError(t, err)
 
 			var asNumber int64
@@ -34,7 +34,7 @@ func TestBIP68(t *testing.T) {
 
 			require.Equal(t, tc.Expected, asNumber)
 
-			decoded, err := sdk.DecodeBIP68(actual)
+			decoded, err := sdk.BIP68Decode(actual)
 			require.NoError(t, err)
 
 			require.Equal(t, tc.Input, decoded)
