@@ -1,4 +1,4 @@
-module github.com/ark-network/ark-sdk
+module github.com/ark-network/common
 
 go 1.21.0
 
