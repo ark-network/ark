@@ -2,7 +2,7 @@
   "secretKey": {
     "valid": [
       {
-        "key": "arksec1n9grggypds323l5fkw4t6kpf6trz26an8wv44qqr8ctp4t3dp52qun9kjh",
+        "key": "asec1n9grggypds323l5fkw4t6kpf6trz26an8wv44qqr8ctp4t3dp52q5zkzz4",
         "expected": "99503420816c22a8fe89b3aabd5829d2c6256bb33b995a80033e161aae2d0d14"
       }
     ],
@@ -16,7 +16,7 @@
   "publicKey": {
     "valid": [
       {
-        "key": "arkpub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22vsp3wfz",
+        "key": "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
         "expected": "0218d5ca8b58797b7dbd65c075dd7ba7784b3f38ab71b1a5a8e3f94ba0257654a6"
       }
     ],
@@ -30,8 +30,9 @@
   "address": {
     "valid": [
       {
-        "addr": "arkaddr1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22vcax450",
-        "expected": "0218d5ca8b58797b7dbd65c075dd7ba7784b3f38ab71b1a5a8e3f94ba0257654a6"
+        "addr": "ark1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22vqa7mdkrrulzu48law4zzvzz8k59hul0ayl2urt905we5wf6gee68sfrfj35",
+        "expectedUserKey": "apub1qwldkmp3703w2nl7h23pxpprm2zm70h7j04wp4jh68v68yayvuarcc28uv5",
+        "expectedAspKey": "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x"
       }
     ],
     "invalid": [
@@ -44,7 +45,7 @@
   "relayKey": {
     "valid": [
       {
-        "key": "arkrelay1qt6f8p7h5f6tm7fv2z5wg92sz92rn9desfhd5733se4lkrptqtdrqfse7vh",
+        "key": "arelay1qt6f8p7h5f6tm7fv2z5wg92sz92rn9desfhd5733se4lkrptqtdrq65987l",
         "expected": "02f49387d7a274bdf92c50a8e4155011543995b9826eda7a31866bfb0c2b02da30"
       }
     ],
@@ -58,25 +59,25 @@
   "url": {
     "valid": [
       {
-        "url": "ark://arkpub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22vsp3wfz?relays=arkrelay1qvyh3c97d3nqca6n3cjnh3xws2lw2qcqn07uj0mcw9rvpt3skl3ysczhquh-arkrelay1qvyh3c97d3nqca6n3cjnh3xws2lw2qcqn07uj0mcw9rvpt3skl3ysczhquh",
-        "expectedPubkey": "arkpub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22vsp3wfz",
+        "url": "ark://apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x?relays=arelay1qt6f8p7h5f6tm7fv2z5wg92sz92rn9desfhd5733se4lkrptqtdrq65987l-arelay1qt6f8p7h5f6tm7fv2z5wg92sz92rn9desfhd5733se4lkrptqtdrq65987l",
+        "expectedPubkey": "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
         "expectedRelays": [
-          "arkrelay1qvyh3c97d3nqca6n3cjnh3xws2lw2qcqn07uj0mcw9rvpt3skl3ysczhquh",
-          "arkrelay1qvyh3c97d3nqca6n3cjnh3xws2lw2qcqn07uj0mcw9rvpt3skl3ysczhquh"
+          "arelay1qt6f8p7h5f6tm7fv2z5wg92sz92rn9desfhd5733se4lkrptqtdrq65987l",
+          "arelay1qt6f8p7h5f6tm7fv2z5wg92sz92rn9desfhd5733se4lkrptqtdrq65987l"
         ]
       }
     ],
     "invalid": [
       {
-        "url": "wrong://arkpub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22vsp3wfz?relays=arkrelay1qvyh3c97d3nqca6n3cjnh3xws2lw2qcqn07uj0mcw9rvpt3skl3ysczhquh-arkrelay1qvyh3c97d3nqca6n3cjnh3xws2lw2qcqn07uj0mcw9rvpt3skl3ysczhquh",
+        "url": "wrong://apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x?relays=arelay1qt6f8p7h5f6tm7fv2z5wg92sz92rn9desfhd5733se4lkrptqtdrq65987l-arelay1qt6f8p7h5f6tm7fv2z5wg92sz92rn9desfhd5733se4lkrptqtdrq65987l",
         "expectedError": "invalid proto"
       },
       {
-        "url": "ark://arksec1n9grggypds323l5fkw4t6kpf6trz26an8wv44qqr8ctp4t3dp52qun9kjh",
+        "url": "ark://asec1n9grggypds323l5fkw4t6kpf6trz26an8wv44qqr8ctp4t3dp52qun9kjh",
         "expectedError": "invalid public key"
       },
       {
-        "url": "ark://arkpub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22vsp3wfz?relays=arkpub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22vsp3wfz",
+        "url": "ark://apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x?relays=apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
         "expectedError": "invalid relay public key"
       }
     ]

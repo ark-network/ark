@@ -105,8 +105,9 @@ func TestAddressEncoding(t *testing.T) {
 	fixtures := struct {
 		Address struct {
 			Valid []struct {
-				Addr     string `json:"addr"`
-				Expected string `json:"expected"`
+				Addr            string `json:"addr"`
+				ExpectedUserKey string `json:"expectedUserKey"`
+				ExpectedAspKey  string `json:"expectedAspKey"`
 			} `json:"valid"`
 			Invalid []struct {
 				Addr          string `json:"addr"`
@@ -119,14 +120,20 @@ func TestAddressEncoding(t *testing.T) {
 
 	t.Run("valid", func(t *testing.T) {
 		for _, f := range fixtures.Address.Valid {
-			key, err := common.DecodeAddress(f.Addr)
+			userKey, aspKey, err := common.DecodeAddress(f.Addr)
 			require.NoError(t, err)
-			require.NotNil(t, key)
+			require.NotNil(t, userKey)
+			require.NotNil(t, aspKey)
 
-			keyHex := hex.EncodeToString(key.SerializeCompressed())
-			require.Equal(t, keyHex, f.Expected)
+			userKeyStr, err := common.EncodePubKey(userKey)
+			require.NoError(t, err)
+			require.Equal(t, userKeyStr, f.ExpectedUserKey)
 
-			addr, err := common.EncodeAddress(key)
+			aspKeyStr, err := common.EncodePubKey(aspKey)
+			require.NoError(t, err)
+			require.Equal(t, aspKeyStr, f.ExpectedAspKey)
+
+			addr, err := common.EncodeAddress(userKey, aspKey)
 			require.NoError(t, err)
 			require.Equal(t, addr, f.Addr)
 		}
@@ -134,9 +141,10 @@ func TestAddressEncoding(t *testing.T) {
 
 	t.Run("invalid", func(t *testing.T) {
 		for _, f := range fixtures.Address.Invalid {
-			key, err := common.DecodeAddress(f.Addr)
+			userKey, aspKey, err := common.DecodeAddress(f.Addr)
 			require.EqualError(t, err, f.ExpectedError)
-			require.Nil(t, key)
+			require.Nil(t, userKey)
+			require.Nil(t, aspKey)
 		}
 	})
 }
