@@ -10,10 +10,10 @@ import (
 )
 
 const (
-	PubKeyPrefix  = "arkpub"
-	SecKeyPrefix  = "arksec"
-	AddressPrefix = "arkaddr"
-	RelayPrefix   = "arkrelay"
+	PubKeyPrefix  = "apub"
+	SecKeyPrefix  = "asec"
+	AddressPrefix = "ark"
+	RelayPrefix   = "arelay"
 	ProtoKey      = "ark"
 	RelayKey      = "relays"
 	RelaySep      = "-"
@@ -27,7 +27,7 @@ func EncodeSecKey(key *secp256k1.PrivateKey) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return bech32.Encode(SecKeyPrefix, grp)
+	return bech32.EncodeM(SecKeyPrefix, grp)
 }
 
 func DecodeSecKey(key string) (*secp256k1.PrivateKey, error) {
@@ -53,7 +53,7 @@ func EncodePubKey(key *secp256k1.PublicKey) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return bech32.Encode(PubKeyPrefix, grp)
+	return bech32.EncodeM(PubKeyPrefix, grp)
 }
 
 func DecodePubKey(key string) (*secp256k1.PublicKey, error) {
@@ -74,30 +74,42 @@ func DecodePubKey(key string) (*secp256k1.PublicKey, error) {
 	return secp256k1.ParsePubKey(grp)
 }
 
-func EncodeAddress(key *secp256k1.PublicKey) (string, error) {
-	if key == nil {
+func EncodeAddress(userKey, aspKey *secp256k1.PublicKey) (string, error) {
+	if userKey == nil {
 		return "", fmt.Errorf("missing public key")
 	}
-	grp, err := bech32.ConvertBits(key.SerializeCompressed(), 8, 5, true)
+	if aspKey == nil {
+		return "", fmt.Errorf("missing asp public key")
+	}
+	combinedKey := append(aspKey.SerializeCompressed(), userKey.SerializeCompressed()...)
+	grp, err := bech32.ConvertBits(combinedKey, 8, 5, true)
 	if err != nil {
 		return "", err
 	}
-	return bech32.Encode(AddressPrefix, grp)
+	return bech32.EncodeM(AddressPrefix, grp)
 }
 
-func DecodeAddress(addr string) (*secp256k1.PublicKey, error) {
-	hrp, buf, err := bech32.Decode(addr)
+func DecodeAddress(addr string) (*secp256k1.PublicKey, *secp256k1.PublicKey, error) {
+	hrp, buf, err := bech32.DecodeNoLimit(addr)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if hrp != AddressPrefix {
-		return nil, fmt.Errorf("invalid prefix")
+		return nil, nil, fmt.Errorf("invalid prefix")
 	}
 	grp, err := bech32.ConvertBits(buf, 5, 8, false)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return secp256k1.ParsePubKey(grp)
+	aspKey, err := secp256k1.ParsePubKey(grp[:33])
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse public key: %s", err)
+	}
+	userKey, err := secp256k1.ParsePubKey(grp[33:])
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse asp public key: %s", err)
+	}
+	return userKey, aspKey, nil
 }
 
 func EncodeRelayKey(key *secp256k1.PublicKey) (string, error) {
@@ -108,7 +120,7 @@ func EncodeRelayKey(key *secp256k1.PublicKey) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return bech32.Encode(RelayPrefix, grp)
+	return bech32.EncodeM(RelayPrefix, grp)
 }
 
 func DecodeRelayKey(key string) (*secp256k1.PublicKey, error) {
