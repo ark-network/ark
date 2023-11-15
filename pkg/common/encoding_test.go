@@ -39,24 +39,26 @@ func TestSecretKeyEncoding(t *testing.T) {
 
 	t.Run("valid", func(t *testing.T) {
 		for _, f := range fixtures.SecretKey.Valid {
-			key, err := common.DecodeSecKey(f.Key)
+			hrp, key, err := common.DecodeSecKey(f.Key)
 			require.NoError(t, err)
-			require.NotEmpty(t, key)
+			require.NotEmpty(t, hrp)
+			require.NotNil(t, key)
 
 			keyHex := hex.EncodeToString(key.Serialize())
-			require.Equal(t, keyHex, f.Expected)
+			require.Equal(t, f.Expected, keyHex)
 
-			keyStr, err := common.EncodeSecKey(key)
+			keyStr, err := common.EncodeSecKey(hrp, key)
 			require.NoError(t, err)
-			require.Equal(t, keyStr, f.Key)
+			require.Equal(t, f.Key, keyStr)
 		}
 	})
 
 	t.Run("invalid", func(t *testing.T) {
 		for _, f := range fixtures.SecretKey.Invalid {
-			key, err := common.DecodeSecKey(f.Key)
+			hrp, key, err := common.DecodeSecKey(f.Key)
 			require.EqualError(t, err, f.ExpectedError)
-			require.Empty(t, key)
+			require.Empty(t, hrp)
+			require.Nil(t, key)
 		}
 	})
 }
@@ -79,23 +81,25 @@ func TestPublicKeyEncoding(t *testing.T) {
 
 	t.Run("valid", func(t *testing.T) {
 		for _, f := range fixtures.PublicKey.Valid {
-			key, err := common.DecodePubKey(f.Key)
+			hrp, key, err := common.DecodePubKey(f.Key)
 			require.NoError(t, err)
+			require.NotEmpty(t, hrp)
 			require.NotNil(t, key)
 
 			keyHex := hex.EncodeToString(key.SerializeCompressed())
-			require.Equal(t, keyHex, f.Expected)
+			require.Equal(t, f.Expected, keyHex)
 
-			keyStr, err := common.EncodePubKey(key)
+			keyStr, err := common.EncodePubKey(hrp, key)
 			require.NoError(t, err)
-			require.Equal(t, keyStr, f.Key)
+			require.Equal(t, f.Key, keyStr)
 		}
 	})
 
 	t.Run("invalid", func(t *testing.T) {
 		for _, f := range fixtures.PublicKey.Invalid {
-			key, err := common.DecodePubKey(f.Key)
+			hrp, key, err := common.DecodePubKey(f.Key)
 			require.EqualError(t, err, f.ExpectedError)
+			require.Empty(t, hrp)
 			require.Nil(t, key)
 		}
 	})
@@ -120,29 +124,31 @@ func TestAddressEncoding(t *testing.T) {
 
 	t.Run("valid", func(t *testing.T) {
 		for _, f := range fixtures.Address.Valid {
-			userKey, aspKey, err := common.DecodeAddress(f.Addr)
+			hrp, userKey, aspKey, err := common.DecodeAddress(f.Addr)
 			require.NoError(t, err)
+			require.NotEmpty(t, hrp)
 			require.NotNil(t, userKey)
 			require.NotNil(t, aspKey)
 
-			userKeyStr, err := common.EncodePubKey(userKey)
+			userKeyStr, err := common.EncodePubKey(common.MainNet.PubKey, userKey)
 			require.NoError(t, err)
-			require.Equal(t, userKeyStr, f.ExpectedUserKey)
+			require.Equal(t, f.ExpectedUserKey, userKeyStr)
 
-			aspKeyStr, err := common.EncodePubKey(aspKey)
+			aspKeyStr, err := common.EncodePubKey(common.MainNet.PubKey, aspKey)
 			require.NoError(t, err)
-			require.Equal(t, aspKeyStr, f.ExpectedAspKey)
+			require.Equal(t, f.ExpectedAspKey, aspKeyStr)
 
-			addr, err := common.EncodeAddress(userKey, aspKey)
+			addr, err := common.EncodeAddress(hrp, userKey, aspKey)
 			require.NoError(t, err)
-			require.Equal(t, addr, f.Addr)
+			require.Equal(t, f.Addr, addr)
 		}
 	})
 
 	t.Run("invalid", func(t *testing.T) {
 		for _, f := range fixtures.Address.Invalid {
-			userKey, aspKey, err := common.DecodeAddress(f.Addr)
+			hrp, userKey, aspKey, err := common.DecodeAddress(f.Addr)
 			require.EqualError(t, err, f.ExpectedError)
+			require.Empty(t, hrp)
 			require.Nil(t, userKey)
 			require.Nil(t, aspKey)
 		}
@@ -167,23 +173,25 @@ func TestRelayKeyEncoding(t *testing.T) {
 
 	t.Run("valid", func(t *testing.T) {
 		for _, f := range fixtures.RelayKey.Valid {
-			key, err := common.DecodeRelayKey(f.Key)
+			hrp, key, err := common.DecodeRelayKey(f.Key)
 			require.NoError(t, err)
+			require.NotEmpty(t, hrp)
 			require.NotNil(t, key)
 
 			keyHex := hex.EncodeToString(key.SerializeCompressed())
-			require.Equal(t, keyHex, f.Expected)
+			require.Equal(t, f.Expected, keyHex)
 
-			keyStr, err := common.EncodeRelayKey(key)
+			keyStr, err := common.EncodeRelayKey(hrp, key)
 			require.NoError(t, err)
-			require.Equal(t, keyStr, f.Key)
+			require.Equal(t, f.Key, keyStr)
 		}
 	})
 
 	t.Run("invalid", func(t *testing.T) {
 		for _, f := range fixtures.RelayKey.Invalid {
-			key, err := common.DecodeRelayKey(f.Key)
+			hrp, key, err := common.DecodeRelayKey(f.Key)
 			require.EqualError(t, err, f.ExpectedError)
+			require.Empty(t, hrp)
 			require.Nil(t, key)
 		}
 	})
@@ -213,18 +221,19 @@ func TestUrlEncoding(t *testing.T) {
 			require.NotEmpty(t, pubkey)
 			require.NotNil(t, relays)
 
-			require.Equal(t, pubkey, f.ExpectedPubkey)
+			require.Equal(t, f.ExpectedPubkey, pubkey)
 			require.Exactly(t, relays, f.ExpectedRelays)
 
 			url, err := common.EncodeUrl(pubkey, relays...)
 			require.NoError(t, err)
-			require.Equal(t, url, f.Url)
+			require.Equal(t, f.Url, url)
 		}
 	})
 
 	t.Run("invalid", func(t *testing.T) {
 		for _, f := range fixtures.Url.Invalid {
 			pubkey, relays, err := common.DecodeUrl(f.Url)
+			require.Error(t, err)
 			require.Contains(t, err.Error(), f.ExpectedError)
 			require.Empty(t, pubkey)
 			require.Nil(t, relays)
