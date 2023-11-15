@@ -15,7 +15,7 @@ const (
 	RelaySep = "-"
 )
 
-func EncodeSecKey(hrp string, key *secp256k1.PrivateKey) (string, error) {
+func EncodeSecKey(hrp string, key *secp256k1.PrivateKey) (seckey string, err error) {
 	if key == nil {
 		return "", fmt.Errorf("missing secret key")
 	}
@@ -26,171 +26,211 @@ func EncodeSecKey(hrp string, key *secp256k1.PrivateKey) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return bech32.EncodeM(hrp, grp)
+	seckey, err = bech32.EncodeM(hrp, grp)
+	return
 }
 
-func DecodeSecKey(key string) (string, *secp256k1.PrivateKey, error) {
-	hrp, buf, err := bech32.DecodeNoLimit(key)
+func DecodeSecKey(key string) (hrp string, seckey *secp256k1.PrivateKey, err error) {
+	prefix, buf, err := bech32.DecodeNoLimit(key)
 	if err != nil {
-		return "", nil, fmt.Errorf("invalid secret key: %s", err)
+		err = fmt.Errorf("invalid secret key: %s", err)
+		return
 	}
-	if hrp != MainNet.SecKey && hrp != TestNet.SecKey {
-		return "", nil, fmt.Errorf("invalid prefix")
+	if prefix != MainNet.SecKey && prefix != TestNet.SecKey {
+		err = fmt.Errorf("invalid prefix")
+		return
 	}
 	grp, err := bech32.ConvertBits(buf, 5, 8, false)
 	if err != nil {
-		return "", nil, err
+		return
 	}
-	return hrp, secp256k1.PrivKeyFromBytes(grp), nil
+	hrp = prefix
+	seckey = secp256k1.PrivKeyFromBytes(grp)
+	return
 }
 
-func EncodePubKey(hrp string, key *secp256k1.PublicKey) (string, error) {
+func EncodePubKey(hrp string, key *secp256k1.PublicKey) (pubkey string, err error) {
 	if key == nil {
-		return "", fmt.Errorf("missing public key")
+		err = fmt.Errorf("missing public key")
+		return
 	}
 	if hrp != MainNet.PubKey && hrp != TestNet.PubKey {
-		return "", fmt.Errorf("invalid prefix")
+		err = fmt.Errorf("invalid prefix")
+		return
 	}
 	grp, err := bech32.ConvertBits(key.SerializeCompressed(), 8, 5, true)
 	if err != nil {
-		return "", err
+		return
 	}
-	return bech32.EncodeM(hrp, grp)
+	pubkey, err = bech32.EncodeM(hrp, grp)
+	return
 }
 
-func DecodePubKey(key string) (string, *secp256k1.PublicKey, error) {
-	hrp, buf, err := bech32.DecodeNoLimit(key)
+func DecodePubKey(key string) (hrp string, pubkey *secp256k1.PublicKey, err error) {
+	prefix, buf, err := bech32.DecodeNoLimit(key)
 	if err != nil {
-		return "", nil, err
+		return
 	}
-	if hrp != MainNet.PubKey && hrp != TestNet.PubKey {
-		return "", nil, fmt.Errorf("invalid prefix")
+	if prefix != MainNet.PubKey && prefix != TestNet.PubKey {
+		err = fmt.Errorf("invalid prefix")
+		return
 	}
 	grp, err := bech32.ConvertBits(buf, 5, 8, false)
 	if err != nil {
-		return "", nil, err
+		return
 	}
 	if len(grp) < 32 {
-		return "", nil, fmt.Errorf("invalid public key length")
+		err = fmt.Errorf("invalid public key length")
+		return
 	}
-	pubkey, err := secp256k1.ParsePubKey(grp)
+	pubkey, err = secp256k1.ParsePubKey(grp)
 	if err != nil {
-		return "", nil, err
+		return
 	}
-	return hrp, pubkey, nil
+	hrp = prefix
+	return
 }
 
-func EncodeAddress(hrp string, userKey, aspKey *secp256k1.PublicKey) (string, error) {
+func EncodeAddress(hrp string, userKey, aspKey *secp256k1.PublicKey) (addr string, err error) {
 	if userKey == nil {
-		return "", fmt.Errorf("missing public key")
+		err = fmt.Errorf("missing public key")
+		return
 	}
 	if aspKey == nil {
-		return "", fmt.Errorf("missing asp public key")
+		err = fmt.Errorf("missing asp public key")
+		return
 	}
 	if hrp != MainNet.Addr && hrp != TestNet.Addr {
-		return "", fmt.Errorf("invalid prefix")
+		err = fmt.Errorf("invalid prefix")
+		return
 	}
 	combinedKey := append(aspKey.SerializeCompressed(), userKey.SerializeCompressed()...)
 	grp, err := bech32.ConvertBits(combinedKey, 8, 5, true)
 	if err != nil {
-		return "", err
+		return
 	}
-	return bech32.EncodeM(hrp, grp)
+	addr, err = bech32.EncodeM(hrp, grp)
+	return
 }
 
-func DecodeAddress(addr string) (string, *secp256k1.PublicKey, *secp256k1.PublicKey, error) {
-	hrp, buf, err := bech32.DecodeNoLimit(addr)
+func DecodeAddress(addr string) (hrp string, userKey *secp256k1.PublicKey, aspKey *secp256k1.PublicKey, err error) {
+	prefix, buf, err := bech32.DecodeNoLimit(addr)
 	if err != nil {
-		return "", nil, nil, err
+		return
 	}
-	if hrp != MainNet.Addr && hrp != TestNet.Addr {
-		return "", nil, nil, fmt.Errorf("invalid prefix")
+	if prefix != MainNet.Addr && prefix != TestNet.Addr {
+		err = fmt.Errorf("invalid prefix")
+		return
 	}
 	grp, err := bech32.ConvertBits(buf, 5, 8, false)
 	if err != nil {
-		return "", nil, nil, err
+		return
 	}
-	aspKey, err := secp256k1.ParsePubKey(grp[:33])
+	aKey, err := secp256k1.ParsePubKey(grp[:33])
 	if err != nil {
-		return "", nil, nil, fmt.Errorf("failed to parse public key: %s", err)
+		err = fmt.Errorf("failed to parse public key: %s", err)
+		return
 	}
-	userKey, err := secp256k1.ParsePubKey(grp[33:])
+	uKey, err := secp256k1.ParsePubKey(grp[33:])
 	if err != nil {
-		return "", nil, nil, fmt.Errorf("failed to parse asp public key: %s", err)
+		err = fmt.Errorf("failed to parse asp public key: %s", err)
+		return
 	}
-	return hrp, userKey, aspKey, nil
+	hrp = prefix
+	userKey = uKey
+	aspKey = aKey
+	return
 }
 
-func EncodeRelayKey(hrp string, key *secp256k1.PublicKey) (string, error) {
+func EncodeRelayKey(hrp string, key *secp256k1.PublicKey) (pubkey string, err error) {
 	if key == nil {
-		return "", fmt.Errorf("missing relay key")
+		err = fmt.Errorf("missing relay key")
+		return
 	}
 	if hrp != MainNet.RelayKey && hrp != TestNet.RelayKey {
-		return "", fmt.Errorf("invalid prefix")
+		err = fmt.Errorf("invalid prefix")
+		return
 	}
 	grp, err := bech32.ConvertBits(key.SerializeCompressed(), 8, 5, true)
 	if err != nil {
-		return "", err
+		return
 	}
-	return bech32.EncodeM(hrp, grp)
+	pubkey, err = bech32.EncodeM(hrp, grp)
+	return
 }
 
-func DecodeRelayKey(key string) (string, *secp256k1.PublicKey, error) {
-	hrp, buf, err := bech32.DecodeNoLimit(key)
+func DecodeRelayKey(key string) (hrp string, pubkey *secp256k1.PublicKey, err error) {
+	prefix, buf, err := bech32.DecodeNoLimit(key)
 	if err != nil {
-		return "", nil, err
+		return
 	}
-	if hrp != MainNet.RelayKey && hrp != TestNet.RelayKey {
-		return "", nil, fmt.Errorf("invalid prefix")
+	if prefix != MainNet.RelayKey && prefix != TestNet.RelayKey {
+		err = fmt.Errorf("invalid prefix")
+		return
 	}
 	grp, err := bech32.ConvertBits(buf, 5, 8, false)
 	if err != nil {
-		return "", nil, err
+		return
 	}
 	if len(grp) < 32 {
-		return "", nil, fmt.Errorf("invalid public key length")
+		err = fmt.Errorf("invalid public key length")
+		return
 	}
-	pubkey, err := secp256k1.ParsePubKey(grp)
+	pubkey, err = secp256k1.ParsePubKey(grp)
 	if err != nil {
-		return "", nil, err
+		return
 	}
-	return hrp, pubkey, nil
+	hrp = prefix
+	return
 }
 
-func EncodeUrl(pubkey string, relays ...string) (string, error) {
-	if _, _, err := DecodePubKey(pubkey); err != nil {
-		return "", fmt.Errorf("invalid public key: %s", err)
+func EncodeUrl(host string, relays ...string) (arkurl string, err error) {
+	_, _, err = DecodePubKey(host)
+	if err != nil {
+		err = fmt.Errorf("invalid public key: %s", err)
+		return
 	}
 	for _, r := range relays {
-		if _, _, err := DecodeRelayKey(r); err != nil {
-			return "", fmt.Errorf("invalid relay public key: %s", err)
+		_, _, err = DecodeRelayKey(r)
+		if err != nil {
+			err = fmt.Errorf("invalid relay public key: %s", err)
+			return
 		}
 	}
-	u := url.URL{Scheme: ProtoKey, Host: pubkey}
+	u := url.URL{Scheme: ProtoKey, Host: host}
 	q := u.Query()
 	if len(relays) > 0 {
 		q.Add(RelayKey, strings.Join(relays, RelaySep))
 	}
 	u.RawQuery = q.Encode()
-	return u.String(), nil
+	arkurl = u.String()
+	return
 }
 
-func DecodeUrl(arkurl string) (string, []string, error) {
+func DecodeUrl(arkurl string) (host string, relays []string, err error) {
 	u, err := url.Parse(arkurl)
 	if err != nil {
-		return "", nil, err
+		return
 	}
 	if u.Scheme != ProtoKey {
-		return "", nil, fmt.Errorf("invalid proto")
+		err = fmt.Errorf("invalid proto")
+		return
 	}
-	if _, _, err := DecodePubKey(u.Host); err != nil {
-		return "", nil, fmt.Errorf("invalid public key: %s", err)
+	_, _, err = DecodePubKey(u.Host)
+	if err != nil {
+		err = fmt.Errorf("invalid public key: %s", err)
+		return
 	}
-	relays := strings.Split(u.Query().Get(RelayKey), RelaySep)
-	for _, r := range relays {
-		if _, _, err := DecodeRelayKey(r); err != nil {
-			return "", nil, fmt.Errorf("invalid relay public key: %s", err)
+	list := strings.Split(u.Query().Get(RelayKey), RelaySep)
+	for _, r := range list {
+		_, _, err = DecodeRelayKey(r)
+		if err != nil {
+			err = fmt.Errorf("invalid relay public key: %s", err)
+			return
 		}
 	}
-	return u.Host, relays, nil
+	host = u.Host
+	relays = make([]string, len(list))
+	copy(relays, list)
+	return
 }
