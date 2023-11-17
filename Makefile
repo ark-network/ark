@@ -45,10 +45,10 @@ vet:
 	@echo "Running code analysis..."
 	@go vet ./...
 	
-	
 ## proto: compile proto stubs
 proto: proto-lint
 	@echo "Compiling stubs..."
+	@buf generate buf.build/vulpemventures/ocean
 	@buf generate
 
 ## proto-lint: lint protos
