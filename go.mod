@@ -8,7 +8,7 @@ require (
 	github.com/ark-network/ark/common v0.0.0-00010101000000-000000000000
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/viper v1.17.0
-	github.com/vulpemventures/go-elements v0.4.6
+	github.com/vulpemventures/go-elements v0.4.7
 	google.golang.org/grpc v1.59.0
 	google.golang.org/protobuf v1.31.0
 )
