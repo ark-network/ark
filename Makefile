@@ -33,7 +33,8 @@ lint:
 ## run: run in dev mode
 run: clean
 	@echo "Running coordinatord in dev mode..."
-	@go run ./cmd/coordinatord
+	@export ARK_COORDINATOR_WALLET_ADDR=localhost:18000; \
+	go run ./cmd/coordinatord
 
 ## test: runs unit and component tests
 test:
