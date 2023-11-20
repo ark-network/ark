@@ -12,4 +12,7 @@ type RoundRepository interface {
 	GetCurrentRound(ctx context.Context) (*Round, error)
 	GetRoundWithId(ctx, id string) (*Round, error)
 	GetRoundWithTxid(ctx, txid string) (*Round, error)
+	UpdateRound(
+		ctx context.Context, id string, updateFn func(r *Round) (*Round, error),
+	) error
 }
