@@ -118,7 +118,6 @@ func (l outputList) toProto() []*pb.Output {
 	list := make([]*pb.Output, 0, len(l))
 	for _, out := range l {
 		list = append(list, &pb.Output{
-			Asset:  out.GetAsset(),
 			Amount: out.GetAmount(),
 			Script: out.GetScript(),
 		})
