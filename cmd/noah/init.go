@@ -66,8 +66,11 @@ func initAction(ctx *cli.Context) error {
 		return err
 	}
 
+	passwordHash := hashPassword([]byte(password))
+
 	state := map[string]string{
 		"encrypted_private_key": hex.EncodeToString(encryptedPrivateKey),
+		"password_hash":         hex.EncodeToString(passwordHash),
 	}
 
 	if err := setState(state); err != nil {

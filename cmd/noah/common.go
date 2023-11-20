@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"syscall"
@@ -9,9 +11,50 @@ import (
 	"golang.org/x/term"
 )
 
+func hashPassword(password []byte) []byte {
+	hash := sha256.Sum256(password)
+	return hash[:]
+}
+
+func verifyPassword(password []byte) error {
+	state, err := getState()
+	if err != nil {
+		return err
+	}
+
+	passwordHashString, ok := state["password_hash"]
+	if !ok {
+		return fmt.Errorf("password hash not found")
+	}
+
+	passwordHash, err := hex.DecodeString(passwordHashString)
+	if err != nil {
+		return err
+	}
+
+	currentPassHash := hashPassword(password)
+
+	if !bytes.Equal(passwordHash, currentPassHash) {
+		return fmt.Errorf("invalid password")
+	}
+
+	return nil
+}
+
 func readPassword() ([]byte, error) {
 	fmt.Print("password: ")
-	return term.ReadPassword(int(syscall.Stdin))
+	passwordInput, err := term.ReadPassword(int(syscall.Stdin))
+	fmt.Println() // new line
+	if err != nil {
+		return nil, err
+	}
+
+	err = verifyPassword(passwordInput)
+	if err != nil {
+		return nil, err
+	}
+
+	return passwordInput, nil
 }
 
 func privateKeyFromPassword() (*secp256k1.PrivateKey, error) {

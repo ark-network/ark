@@ -27,6 +27,7 @@ var (
 	initialState = map[string]string{
 		"ark_url":               defaultArkURL,
 		"encrypted_private_key": "",
+		"password_hash":         "",
 	}
 )
 
@@ -67,7 +68,8 @@ func main() {
 
 	err := app.Run(os.Args)
 	if err != nil {
-		panic(err)
+		fmt.Println(fmt.Errorf("error: %v", err))
+		os.Exit(1)
 	}
 }
 
