@@ -5,6 +5,10 @@ build:
 	@echo "Building coordinatord binary..."
 	@bash ./scripts/build
 
+build-noah:
+	@echo "Building noah binary..."
+	@bash ./scripts/build-noah
+
 ## clean: cleans the binary
 clean:
 	@echo "Cleaning..."
