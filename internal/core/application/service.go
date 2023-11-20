@@ -118,8 +118,8 @@ func (s *service) endRoundAndFinalization() {
 		return
 	}
 
-	round.EndFinalization(txid)
-	if err := s.repoManager.Events().Save(ctx, round.Changes...); err != nil {
+	changes, _ := round.EndFinalization(txid)
+	if err := s.repoManager.Events().Save(ctx, changes...); err != nil {
 		log.WithError(err).Warn("failed to store new round events")
 		return
 	}
