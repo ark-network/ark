@@ -35,18 +35,18 @@ func printConfigAction(ctx *cli.Context) error {
 
 func connectAction(ctx *cli.Context) error {
 	if ctx.NArg() != 1 {
-		return cli.Exit("connect <ARK_URL>", 1)
+		return fmt.Errorf("missing ark URL")
 	}
 
 	url := ctx.Args().Get(0)
 
 	_, _, err := common.DecodeUrl(url)
 	if err != nil {
-		return cli.Exit(err, 1)
+		return err
 	}
 
 	if err := setState(map[string]string{"ark_url": url}); err != nil {
-		return cli.Exit(err, 1)
+		return err
 	}
 
 	fmt.Println("Connected to " + url)

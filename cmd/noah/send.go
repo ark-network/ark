@@ -34,11 +34,11 @@ func sendAction(ctx *cli.Context) error {
 	amount := ctx.Uint64("amount")
 
 	if len(recipient) <= 0 {
-		return cli.Exit("recipient cannot be empty", 1)
+		return fmt.Errorf("missing recipient flag (--to)")
 	}
 
 	if amount <= 0 {
-		return cli.Exit("amount must be greater than 0", 1)
+		return fmt.Errorf("missing amount flag")
 	}
 
 	fmt.Println("send command is not implemented yet")

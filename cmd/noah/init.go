@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/hex"
+	"fmt"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -39,7 +40,7 @@ func initAction(ctx *cli.Context) error {
 	password := ctx.String("password")
 
 	if len(password) <= 0 {
-		return cli.Exit("password cannot be empty", 1)
+		return fmt.Errorf("missing password flag")
 	}
 
 	var privateKey *secp256k1.PrivateKey
