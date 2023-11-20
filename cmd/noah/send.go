@@ -26,6 +26,7 @@ var sendCommand = cli.Command{
 	Name:   "send",
 	Usage:  "Send VTXOs to an ark public key",
 	Action: sendAction,
+	Flags:  []cli.Flag{&recipientFlag, &amountFlag},
 }
 
 func sendAction(ctx *cli.Context) error {
