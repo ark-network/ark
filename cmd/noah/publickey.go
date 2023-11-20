@@ -1,9 +1,9 @@
 package main
 
 import (
-	"encoding/hex"
 	"fmt"
 
+	"github.com/ark-network/ark/common"
 	"github.com/urfave/cli/v2"
 )
 
@@ -20,9 +20,12 @@ func publicKeyAction(ctx *cli.Context) error {
 	}
 
 	publicKey := privateKey.PubKey()
-	publicKeyBytes := publicKey.SerializeCompressed()
+	pubkey, err := common.EncodePubKey(common.MainNet.PubKey, publicKey)
+	if err != nil {
+		return err
+	}
 
-	fmt.Println(hex.EncodeToString(publicKeyBytes))
+	fmt.Println(pubkey)
 
 	return nil
 }
