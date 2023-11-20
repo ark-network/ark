@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/ark-network/ark/common"
 	"github.com/urfave/cli/v2"
 )
 
@@ -37,16 +38,18 @@ func connectAction(ctx *cli.Context) error {
 		return cli.Exit("connect <ARK_URL>", 1)
 	}
 
-	arg := ctx.Args().Get(0)
-	if err := validateURL(arg); err != nil {
+	url := ctx.Args().Get(0)
+
+	_, _, err := common.DecodeUrl(url)
+	if err != nil {
 		return cli.Exit(err, 1)
 	}
 
-	if err := setState(map[string]string{"ark_url": arg}); err != nil {
+	if err := setState(map[string]string{"ark_url": url}); err != nil {
 		return cli.Exit(err, 1)
 	}
 
-	fmt.Println("Connected to " + arg)
+	fmt.Println("Connected to " + url)
 	return nil
 }
 
