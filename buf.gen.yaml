@@ -3,18 +3,19 @@ managed:
   enabled: true
   go_package_prefix:
     default: github.com/ark-network/ark/api-spec/protobuf/gen
+    except:
+      - buf.build/googleapis/googleapis
 plugins:
   # Golang
-  - remote: buf.build/protocolbuffers/plugins/go
-    out: api-spec/protobuf/gen/go
+  - plugin: go
+    out: api-spec/protobuf/gen
     opt: paths=source_relative
-  - remote: buf.build/grpc/plugins/go
-    out: api-spec/protobuf/gen/go
+  - plugin: go-grpc
+    out: api-spec/protobuf/gen
     opt: paths=source_relative,require_unimplemented_servers=false
-  - remote: buf.build/grpc-ecosystem/plugins/grpc-gateway
+  - plugin: grpc-gateway
     out: api-spec/protobuf/gen
     opt: paths=source_relative
   #OpenApi
-  - remote: buf.build/grpc-ecosystem/plugins/openapiv2
+  - plugin: openapiv2
     out: api-spec/openapi/swagger
-    

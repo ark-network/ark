@@ -8,19 +8,20 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/btcsuite/btcd/btcutil"
+	"github.com/ark-network/ark/common"
 	"github.com/urfave/cli/v2"
 )
 
 const (
 	DATADIR_ENVVAR = "NOAH_DATADIR"
 	STATE_FILE     = "state.json"
+	defaultArkURL  = "localhost:9000"
 )
 
 var (
 	version = "alpha"
 
-	noahDataDirectory = btcutil.AppDataDir("noah", false)
+	noahDataDirectory = common.AppDataDir("noah", false)
 	statePath         = filepath.Join(noahDataDirectory, STATE_FILE)
 
 	initialState = map[string]string{

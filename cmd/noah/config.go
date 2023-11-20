@@ -6,10 +6,6 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-var (
-	defaultArkURL = "localhost:9000"
-)
-
 var configCommand = cli.Command{
 	Name:   "config",
 	Usage:  "Print local configuration of the Noah CLI",

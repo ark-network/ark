@@ -37,7 +37,8 @@ lint:
 ## run: run in dev mode
 run: clean
 	@echo "Running coordinatord in dev mode..."
-	@go run ./cmd/coordinatord
+	@export ARK_COORDINATOR_WALLET_ADDR=localhost:18000; \
+	go run ./cmd/coordinatord
 
 ## test: runs unit and component tests
 test:
@@ -49,10 +50,10 @@ vet:
 	@echo "Running code analysis..."
 	@go vet ./...
 	
-	
 ## proto: compile proto stubs
 proto: proto-lint
 	@echo "Compiling stubs..."
+	@buf generate buf.build/vulpemventures/ocean
 	@buf generate
 
 ## proto-lint: lint protos
