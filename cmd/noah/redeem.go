@@ -18,7 +18,7 @@ var (
 		Name:     "amount",
 		Usage:    "amount to redeem",
 		Value:    0,
-		Required: true,
+		Required: false,
 	}
 
 	forceFlag = cli.BoolFlag{
@@ -45,12 +45,12 @@ func redeemAction(ctx *cli.Context) error {
 		return fmt.Errorf("missing address flag")
 	}
 
-	if amount <= 0 {
+	if !force && amount <= 0 {
 		return fmt.Errorf("missing amount flag")
 	}
 
 	if force {
-		return unilateralRedeem(address, amount)
+		return unilateralRedeem(address)
 	}
 
 	return collaborativeRedeem(address, amount)
@@ -61,7 +61,7 @@ func collaborativeRedeem(address string, amount uint64) error {
 	return nil
 }
 
-func unilateralRedeem(address string, amount uint64) error {
+func unilateralRedeem(address string) error {
 	fmt.Println("unilateral redeem is not implemented yet")
 	return nil
 }
