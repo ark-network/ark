@@ -59,7 +59,9 @@ func initAction(ctx *cli.Context) error {
 		privateKey = secp256k1.PrivKeyFromBytes(privKeyBytes)
 	}
 
-	encryptedPrivateKey, err := encrypt([]byte(password), privateKey.Serialize())
+	cypher := NewAES128Cypher()
+
+	encryptedPrivateKey, err := cypher.Encrypt(privateKey.Serialize(), []byte(password))
 	if err != nil {
 		return err
 	}
