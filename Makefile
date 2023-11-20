@@ -1,4 +1,4 @@
-.PHONY: build clean cov help intergrationtest lint run test vet proto proto-lint
+.PHONY: build build-noah clean cov help intergrationtest lint run test vet proto proto-lint
 
 ## build: build for all platforms
 build:
