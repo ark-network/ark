@@ -4,37 +4,34 @@ type RoundEvent interface {
 	isEvent()
 }
 
-func (r PaymentRegistrationStarted) isEvent() {}
-func (r PaymentRegistrationEnded) isEvent()   {}
-func (r PaymentFinalizationStarted) isEvent() {}
-func (r PaymentFinalizationEnded) isEvent()   {}
-func (r RoundFailed) isEvent()                {}
-func (r InputsRegistered) isEvent()           {}
-func (r OutputsRegistered) isEvent()          {}
+func (r RoundStarted) isEvent()             {}
+func (r RoundFinalizationStarted) isEvent() {}
+func (r RoundFinalized) isEvent()           {}
+func (r RoundFailed) isEvent()              {}
+func (r InputsRegistered) isEvent()         {}
+func (r OutputsRegistered) isEvent()        {}
 
-type PaymentRegistrationStarted struct {
+type RoundStarted struct {
 	Id        string
 	Timestamp int64
 }
 
-type PaymentRegistrationEnded struct {
+type RoundFinalizationStarted struct {
 	Id             string
 	ForfeitTxs     []string
 	CongestionTree []string
 }
 
-type PaymentFinalizationStarted struct {
-	Id string
-}
-
-type PaymentFinalizationEnded struct {
-	Id   string
-	Txid string
+type RoundFinalized struct {
+	Id        string
+	Txid      string
+	Timestamp int64
 }
 
 type RoundFailed struct {
-	Id  string
-	Err error
+	Id        string
+	Err       error
+	Timestamp int64
 }
 
 type InputsRegistered struct {

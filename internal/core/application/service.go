@@ -60,10 +60,7 @@ func (s *service) startFinalization() {
 	}
 
 	// TODO: create forfeit txs and congestion tree from registered payments
-	events, _ := round.EndRegistration(nil, nil)
-	changes := append([]domain.RoundEvent{}, events...)
-	events, _ = round.StartFinalization()
-	changes = append(changes, events...)
+	changes, _ := round.StartFinalization(nil, nil)
 
 	if err := s.repoManager.Events().Save(ctx, changes...); err != nil {
 		log.WithError(err).Warn("failed to store new round events")

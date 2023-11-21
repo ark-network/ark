@@ -9,8 +9,8 @@ import (
 
 const (
 	UndefinedStage RoundStage = iota
-	PaymentRegistrationStage
-	PaymentFinalizationStage
+	RegistrationStage
+	FinalizationStage
 
 	dustAmount = 450
 )
@@ -19,9 +19,9 @@ type RoundStage int
 
 func (s RoundStage) String() string {
 	switch s {
-	case PaymentRegistrationStage:
+	case RegistrationStage:
 		return "REGISTRATION_STAGE"
-	case PaymentFinalizationStage:
+	case FinalizationStage:
 		return "FINALIZATION_STAGE"
 	default:
 		return "UNDEFINED_STAGE"
@@ -69,21 +69,21 @@ func NewRoundFromEvents(events []RoundEvent) *Round {
 
 func (r *Round) On(event RoundEvent, replayed bool) {
 	switch e := event.(type) {
-	case PaymentRegistrationStarted:
-		r.Stage.Code = PaymentRegistrationStage
+	case RoundStarted:
+		r.Stage.Code = RegistrationStage
 		r.Id = e.Id
 		r.StartingTimestamp = e.Timestamp
-	case PaymentRegistrationEnded:
-		r.Stage.Ended = true
+	case RoundFinalizationStarted:
+		r.Stage.Code = FinalizationStage
 		r.ForfeitTxs = append([]string{}, e.ForfeitTxs...)
 		r.CongestionTree = append([]string{}, e.CongestionTree...)
-	case PaymentFinalizationStarted:
-		r.Stage.Code = PaymentFinalizationStage
-	case PaymentFinalizationEnded:
+	case RoundFinalized:
 		r.Stage.Ended = true
 		r.Txid = e.Txid
+		r.EndingTimestamp = e.Timestamp
 	case RoundFailed:
 		r.Stage.Failed = true
+		r.EndingTimestamp = e.Timestamp
 	case InputsRegistered:
 		if r.Payments == nil {
 			r.Payments = make(map[string]Payment)
@@ -111,7 +111,7 @@ func (r *Round) StartRegistration() ([]RoundEvent, error) {
 		return nil, fmt.Errorf("not in a valid stage to start payment registration")
 	}
 
-	event := PaymentRegistrationStarted{
+	event := RoundStarted{
 		Id:        r.Id,
 		Timestamp: time.Now().Unix(),
 	}
@@ -120,15 +120,12 @@ func (r *Round) StartRegistration() ([]RoundEvent, error) {
 	return []RoundEvent{event}, nil
 }
 
-func (r *Round) EndRegistration(txs, tree []string) ([]RoundEvent, error) {
-	if r.Stage.Code != PaymentRegistrationStage || r.IsFailed() {
-		return nil, fmt.Errorf("not in a valid stage to end payment registration")
-	}
-	if r.Stage.Ended {
-		return nil, fmt.Errorf("payment registration already ended")
+func (r *Round) StartFinalization(txs, tree []string) ([]RoundEvent, error) {
+	if r.Stage.Code != RegistrationStage || r.IsFailed() {
+		return nil, fmt.Errorf("not in a valid stage to start payment finalization")
 	}
 
-	event := PaymentRegistrationEnded{
+	event := RoundFinalizationStarted{
 		Id:             r.Id,
 		ForfeitTxs:     txs,
 		CongestionTree: tree,
@@ -138,29 +135,17 @@ func (r *Round) EndRegistration(txs, tree []string) ([]RoundEvent, error) {
 	return []RoundEvent{event}, nil
 }
 
-func (r *Round) StartFinalization() ([]RoundEvent, error) {
-	if r.Stage.Code != PaymentRegistrationStage || r.IsFailed() {
-		return nil, fmt.Errorf("not in a valid stage to start payment finalization")
-	}
-	if !r.Stage.Ended {
-		return nil, fmt.Errorf("payment registration did not ended yet")
-	}
-	event := PaymentFinalizationStarted{Id: r.Id}
-	r.raise(event)
-
-	return []RoundEvent{event}, nil
-}
-
 func (r *Round) EndFinalization(txid string) ([]RoundEvent, error) {
-	if r.Stage.Code != PaymentFinalizationStage || r.IsFailed() {
+	if r.Stage.Code != FinalizationStage || r.IsFailed() {
 		return nil, fmt.Errorf("not in a valid stage to end payment finalization")
 	}
 	if r.Stage.Ended {
 		return nil, fmt.Errorf("payment finalization already ended")
 	}
-	event := PaymentFinalizationEnded{
-		Id:   r.Id,
-		Txid: txid,
+	event := RoundFinalized{
+		Id:        r.Id,
+		Txid:      txid,
+		Timestamp: time.Now().Unix(),
 	}
 	r.raise(event)
 
@@ -171,14 +156,18 @@ func (r *Round) Fail(err error) []RoundEvent {
 	if r.Stage.Failed {
 		return nil
 	}
-	event := RoundFailed{Id: r.Id, Err: err}
+	event := RoundFailed{
+		Id:        r.Id,
+		Err:       err,
+		Timestamp: time.Now().Unix(),
+	}
 	r.raise(event)
 
 	return []RoundEvent{event}
 }
 
 func (r *Round) RegisterInputs(id string, ins []Vtxo) ([]RoundEvent, error) {
-	if r.Stage.Code != PaymentRegistrationStage || r.IsFailed() {
+	if r.Stage.Code != RegistrationStage || r.IsFailed() {
 		return nil, fmt.Errorf("not in a valid stage to register inputs")
 	}
 	if r.Stage.Ended {
@@ -196,7 +185,7 @@ func (r *Round) RegisterInputs(id string, ins []Vtxo) ([]RoundEvent, error) {
 }
 
 func (r *Round) RegisterOutputs(id string, outs []Receiver) ([]RoundEvent, error) {
-	if r.Stage.Code != PaymentRegistrationStage || r.IsFailed() {
+	if r.Stage.Code != RegistrationStage || r.IsFailed() {
 		return nil, fmt.Errorf("not in a valid stage to register inputs")
 	}
 	if r.Stage.Ended {
@@ -219,7 +208,7 @@ func (r *Round) IsStarted() bool {
 }
 
 func (r *Round) IsEnded() bool {
-	return !r.IsFailed() && (r.Stage.Code == PaymentFinalizationStage && r.Stage.Ended)
+	return !r.IsFailed() && (r.Stage.Code == FinalizationStage && r.Stage.Ended)
 }
 
 func (r *Round) IsFailed() bool {
