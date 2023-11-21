@@ -51,12 +51,12 @@ func main() {
 	app.Usage = "Command line interface for Ark wallet"
 	app.Commands = append(
 		app.Commands,
+		&balanceCommand,
 		&configCommand,
 		&initCommand,
 		&publicKeyCommand,
-		&balanceCommand,
-		&sendCommand,
 		&redeemCommand,
+		&sendCommand,
 	)
 
 	app.Before = func(ctx *cli.Context) error {
