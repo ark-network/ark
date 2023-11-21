@@ -52,8 +52,3 @@ func connectAction(ctx *cli.Context) error {
 	fmt.Println("Connected to " + url)
 	return nil
 }
-
-// TODO
-func validateURL(url string) error {
-	return nil
-}
