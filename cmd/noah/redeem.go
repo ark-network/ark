@@ -42,7 +42,7 @@ func redeemAction(ctx *cli.Context) error {
 	force := ctx.Bool("force")
 
 	if len(address) <= 0 {
-		return fmt.Errorf("missing address flag")
+		return fmt.Errorf("missing address flag (--address)")
 	}
 
 	if !force && amount <= 0 {
