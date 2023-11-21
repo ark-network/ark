@@ -38,7 +38,7 @@ func sendAction(ctx *cli.Context) error {
 	}
 
 	if amount <= 0 {
-		return fmt.Errorf("missing amount flag")
+		return fmt.Errorf("missing amount flag (--amount)")
 	}
 
 	fmt.Println("send command is not implemented yet")
