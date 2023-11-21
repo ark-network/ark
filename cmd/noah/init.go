@@ -40,7 +40,7 @@ func initAction(ctx *cli.Context) error {
 	password := ctx.String("password")
 
 	if len(password) <= 0 {
-		return fmt.Errorf("missing password flag")
+		return fmt.Errorf("missing password flag (--password)")
 	}
 
 	var privateKey *secp256k1.PrivateKey
