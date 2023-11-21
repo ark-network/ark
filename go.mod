@@ -6,6 +6,7 @@ replace github.com/ark-network/ark/common => ./pkg/common
 
 require (
 	github.com/ark-network/ark/common v0.0.0-00010101000000-000000000000
+	github.com/google/uuid v1.3.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/viper v1.17.0
 	github.com/vulpemventures/go-elements v0.4.7
