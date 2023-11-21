@@ -46,7 +46,7 @@ func redeemAction(ctx *cli.Context) error {
 	}
 
 	if !force && amount <= 0 {
-		return fmt.Errorf("missing amount flag")
+		return fmt.Errorf("missing amount flag (--amount)")
 	}
 
 	if force {
