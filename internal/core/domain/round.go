@@ -41,8 +41,10 @@ type Round struct {
 	Stage             Stage
 	Payments          map[string]Payment
 	Txid              string
+	TxHex             string
 	ForfeitTxs        []string
 	CongestionTree    []string
+	Connectors        []string
 	Version           uint
 	Changes           []RoundEvent
 }
@@ -77,6 +79,8 @@ func (r *Round) On(event RoundEvent, replayed bool) {
 		r.Stage.Code = FinalizationStage
 		r.ForfeitTxs = append([]string{}, e.ForfeitTxs...)
 		r.CongestionTree = append([]string{}, e.CongestionTree...)
+		r.Connectors = append([]string{}, e.Connectors...)
+		r.TxHex = e.PoolTx
 	case RoundFinalized:
 		r.Stage.Ended = true
 		r.Txid = e.Txid
@@ -120,7 +124,7 @@ func (r *Round) StartRegistration() ([]RoundEvent, error) {
 	return []RoundEvent{event}, nil
 }
 
-func (r *Round) StartFinalization(txs, tree []string) ([]RoundEvent, error) {
+func (r *Round) StartFinalization(connectors, txs, tree []string, poolTx string) ([]RoundEvent, error) {
 	if r.Stage.Code != RegistrationStage || r.IsFailed() {
 		return nil, fmt.Errorf("not in a valid stage to start payment finalization")
 	}
@@ -129,6 +133,8 @@ func (r *Round) StartFinalization(txs, tree []string) ([]RoundEvent, error) {
 		Id:             r.Id,
 		ForfeitTxs:     txs,
 		CongestionTree: tree,
+		Connectors:     connectors,
+		PoolTx:         poolTx,
 	}
 	r.raise(event)
 

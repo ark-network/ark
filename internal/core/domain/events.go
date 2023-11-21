@@ -20,6 +20,8 @@ type RoundFinalizationStarted struct {
 	Id             string
 	ForfeitTxs     []string
 	CongestionTree []string
+	Connectors     []string
+	PoolTx         string
 }
 
 type RoundFinalized struct {

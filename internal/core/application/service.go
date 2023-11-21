@@ -7,7 +7,6 @@ import (
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	log "github.com/sirupsen/logrus"
-	"github.com/vulpemventures/go-elements/address"
 )
 
 type service struct {
@@ -16,13 +15,15 @@ type service struct {
 	wallet      ports.WalletService
 	scheduler   ports.SchedulerService
 	repoManager ports.RepoManager
+	builder     ports.TxBuilder
 }
 
 func NewService(
 	interval int64,
-	walletSvc ports.WalletService, schedulerSvc ports.SchedulerService, repoManager ports.RepoManager,
+	walletSvc ports.WalletService, schedulerSvc ports.SchedulerService,
+	repoManager ports.RepoManager, builder ports.TxBuilder,
 ) *service {
-	return &service{interval, walletSvc, schedulerSvc, repoManager}
+	return &service{interval, walletSvc, schedulerSvc, repoManager, builder}
 }
 
 func (s *service) Start() {
@@ -32,12 +33,12 @@ func (s *service) Start() {
 func (s *service) start() {
 	startImmediately := true
 	finalizationInterval := int64(s.roundInterval / 2)
-	s.scheduler.ScheduleTask(s.roundInterval, startImmediately, s.startRoundAndRegistration)
+	s.scheduler.ScheduleTask(s.roundInterval, startImmediately, s.startRound)
 	s.scheduler.ScheduleTask(finalizationInterval, !startImmediately, s.startFinalization)
-	s.scheduler.ScheduleTask(s.roundInterval-1, !startImmediately, s.endRoundAndFinalization)
+	s.scheduler.ScheduleTask(s.roundInterval-1, !startImmediately, s.finalizeRound)
 }
 
-func (s *service) startRoundAndRegistration() {
+func (s *service) startRound() {
 	round := domain.NewRound()
 	changes, _ := round.StartRegistration()
 	if err := s.repoManager.Events().Save(context.Background(), changes...); err != nil {
@@ -59,19 +60,43 @@ func (s *service) startFinalization() {
 		return
 	}
 
-	// TODO: create forfeit txs and congestion tree from registered payments
-	changes, _ := round.StartFinalization(nil, nil)
+	allPayments := make([]domain.Payment, 0, len(round.Payments))
+	for _, p := range round.Payments {
+		allPayments = append(allPayments, p)
+	}
+
+	signedPoolTx, err := s.builder.BuildPoolTx(s.wallet, allPayments)
+	if err != nil {
+		round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
+		log.WithError(err).Warn("failed to create pool tx")
+		return
+	}
+
+	tree, err := s.builder.BuildCongestionTree(signedPoolTx, allPayments)
+	if err != nil {
+		round.Fail(fmt.Errorf("failed to create congestion tree: %s", err))
+		log.WithError(err).Warn("failed to create congestion tree")
+		return
+	}
+
+	connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(signedPoolTx, allPayments)
+	if err != nil {
+		round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
+		log.WithError(err).Warn("failed to create connectors and forfeit txs")
+		return
+	}
+
+	changes, _ := round.StartFinalization(connectors, forfeitTxs, tree, signedPoolTx)
 
 	if err := s.repoManager.Events().Save(ctx, changes...); err != nil {
 		log.WithError(err).Warn("failed to store new round events")
 		return
 	}
 
-	log.Debugf("ended registration stage for round: %s", round.Id)
 	log.Debugf("started finalization stage for round: %s", round.Id)
 }
 
-func (s *service) endRoundAndFinalization() {
+func (s *service) finalizeRound() {
 	ctx := context.Background()
 	round, err := s.repoManager.Rounds().GetCurrentRound(ctx)
 	if err != nil {
@@ -82,33 +107,7 @@ func (s *service) endRoundAndFinalization() {
 		return
 	}
 
-	addresses, err := s.wallet.Account().DeriveAddresses(ctx, 2)
-	if err != nil {
-		round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
-		log.WithError(err).Warn("failed to create pool tx")
-		return
-	}
-
-	sharedOutScript, _ := address.ToOutputScript(addresses[0])
-	connectorOutScript, _ := address.ToOutputScript(addresses[1])
-	outs := []ports.TxOutput{
-		output{
-			script: sharedOutScript,
-			amount: round.TotOutputAmount(),
-		},
-		output{
-			script: connectorOutScript,
-			amount: round.TotInputAmount(),
-		},
-	}
-	txhex, err := s.wallet.Transaction().Transfer(ctx, outs)
-	if err != nil {
-		round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
-		log.WithError(err).Warn("failed to create pool tx")
-		return
-	}
-
-	txid, err := s.wallet.Transaction().BroadcastTransaction(ctx, txhex)
+	txid, err := s.wallet.Transaction().BroadcastTransaction(ctx, round.TxHex)
 	if err != nil {
 		round.Fail(fmt.Errorf("failed to broadcast pool tx: %s", err))
 		log.WithError(err).Warn("failed to broadcast pool tx")
@@ -121,5 +120,5 @@ func (s *service) endRoundAndFinalization() {
 		return
 	}
 
-	log.Debugf("ended round %s with pool tx %s", round.Id, round.Txid)
+	log.Debugf("finalized round %s with pool tx %s", round.Id, round.Txid)
 }
