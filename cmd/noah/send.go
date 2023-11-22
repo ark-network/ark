@@ -19,7 +19,7 @@ var (
 
 var sendCommand = cli.Command{
 	Name:   "send",
-	Usage:  "Send VTXOs to an ark public key",
+	Usage:  "Send VTXOs to a list of addresses",
 	Action: sendAction,
 	Flags:  []cli.Flag{&receiversFlag},
 }
