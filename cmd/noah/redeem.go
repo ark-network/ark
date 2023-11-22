@@ -31,7 +31,7 @@ var (
 
 var redeemCommand = cli.Command{
 	Name:   "redeem",
-	Usage:  "Redeem VTXO(s)",
+	Usage:  "Redeem VTXO(s) to onchain",
 	Flags:  []cli.Flag{&addressFlag, &amountToRedeemFlag, &forceFlag},
 	Action: redeemAction,
 }
