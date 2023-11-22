@@ -54,7 +54,7 @@ func main() {
 		&balanceCommand,
 		&configCommand,
 		&initCommand,
-		&publicKeyCommand,
+		&receiveCommand,
 		&redeemCommand,
 		&sendCommand,
 	)

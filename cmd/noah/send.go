@@ -1,23 +1,18 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 
+	"github.com/ark-network/ark/common"
 	"github.com/urfave/cli/v2"
 )
 
 var (
-	recipientFlag = cli.StringFlag{
-		Name:     "to",
-		Usage:    "recipient ark public key",
+	receiversFlag = cli.StringFlag{
+		Name:     "receivers",
+		Usage:    "receivers of the send transaction, JSON encoded",
 		Value:    "",
-		Required: true,
-	}
-
-	amountFlag = cli.Uint64Flag{
-		Name:     "amount",
-		Usage:    "amount to send",
-		Value:    0,
 		Required: true,
 	}
 )
@@ -26,22 +21,40 @@ var sendCommand = cli.Command{
 	Name:   "send",
 	Usage:  "Send VTXOs to an ark public key",
 	Action: sendAction,
-	Flags:  []cli.Flag{&recipientFlag, &amountFlag},
+	Flags:  []cli.Flag{&receiversFlag},
 }
 
 func sendAction(ctx *cli.Context) error {
-	recipient := ctx.String("to")
-	amount := ctx.Uint64("amount")
+	receivers := ctx.String("receivers")
 
-	if len(recipient) <= 0 {
-		return fmt.Errorf("missing recipient flag (--to)")
+	// parse json encoded receivers
+	var receiversJSON []receiverJSON
+	if err := json.Unmarshal([]byte(receivers), &receiversJSON); err != nil {
+		return fmt.Errorf("invalid receivers: %s", err)
 	}
 
-	if amount <= 0 {
-		return fmt.Errorf("missing amount flag (--amount)")
+	if len(receiversJSON) <= 0 {
+		return fmt.Errorf("no receivers specified")
+	}
+
+	for _, receiver := range receiversJSON {
+		// TODO: check if receiver asp public key is valid
+		_, _, _, err := common.DecodeAddress(receiver.To)
+		if err != nil {
+			return fmt.Errorf("invalid receiver address: %s", err)
+		}
+
+		if receiver.Amount <= 0 {
+			return fmt.Errorf("invalid amount: %d", receiver.Amount)
+		}
 	}
 
 	fmt.Println("send command is not implemented yet")
 
 	return nil
+}
+
+type receiverJSON struct {
+	To     string `json:"to"`
+	Amount int64  `json:"amount"`
 }

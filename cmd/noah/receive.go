@@ -7,13 +7,13 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-var publicKeyCommand = cli.Command{
-	Name:   "publickey",
-	Usage:  "Print public key of the Noah wallet",
-	Action: publicKeyAction,
+var receiveCommand = cli.Command{
+	Name:   "receive",
+	Usage:  "Print the Ark address associated with your wallet and the connected Ark",
+	Action: receiveAction,
 }
 
-func publicKeyAction(ctx *cli.Context) error {
+func receiveAction(ctx *cli.Context) error {
 	privateKey, err := privateKeyFromPassword()
 	if err != nil {
 		return err
@@ -25,6 +25,8 @@ func publicKeyAction(ctx *cli.Context) error {
 		return err
 	}
 
+	// todo: fetch asp public key from ark
+	fmt.Println("Ark address not implemented yet: printing pubkey instead")
 	fmt.Println(pubkey)
 
 	return nil
