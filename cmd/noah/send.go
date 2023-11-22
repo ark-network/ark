@@ -11,7 +11,7 @@ import (
 var (
 	receiversFlag = cli.StringFlag{
 		Name:     "receivers",
-		Usage:    "receivers of the send transaction, JSON encoded",
+		Usage:    "receivers of the send transaction, JSON encoded: '[{\"to\": \"<...>\", \"amount\": <...>}, ...]'",
 		Value:    "",
 		Required: true,
 	}
