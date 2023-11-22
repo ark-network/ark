@@ -9,14 +9,17 @@ import (
 )
 
 type Config struct {
-	WalletAddr string
+	WalletAddr    string
+	RoundInterval int64
 }
 
 var (
-	Datadir    = "DATADIR"
-	WalletAddr = "WALLET_ADDR"
+	Datadir       = "DATADIR"
+	WalletAddr    = "WALLET_ADDR"
+	RoundInterval = "ROUND_INTERVAL"
 
-	defaultDatadir = common.AppDataDir("coordinatord", false)
+	defaultDatadir       = common.AppDataDir("coordinatord", false)
+	defaultRoundInterval = 60
 )
 
 func LoadConfig() (*Config, error) {
@@ -24,13 +27,15 @@ func LoadConfig() (*Config, error) {
 	viper.AutomaticEnv()
 
 	viper.SetDefault(Datadir, defaultDatadir)
+	viper.SetDefault(RoundInterval, defaultRoundInterval)
 
 	if err := initDatadir(); err != nil {
 		return nil, fmt.Errorf("error while creating datadir: %s", err)
 	}
 
 	cfg := &Config{
-		WalletAddr: viper.GetString(WalletAddr),
+		WalletAddr:    viper.GetString(WalletAddr),
+		RoundInterval: viper.GetInt64(RoundInterval),
 	}
 
 	if err := cfg.validate(); err != nil {
@@ -42,6 +47,9 @@ func LoadConfig() (*Config, error) {
 func (c *Config) validate() error {
 	if len(c.WalletAddr) <= 0 {
 		return fmt.Errorf("missing wallet address")
+	}
+	if c.RoundInterval < 5 {
+		return fmt.Errorf("round interval must be at least 5 seconds")
 	}
 	return nil
 }

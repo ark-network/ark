@@ -108,7 +108,6 @@ type TxInput interface {
 }
 
 type TxOutput interface {
-	GetAsset() string
 	GetAmount() uint64
 	GetScript() string
 }

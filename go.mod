@@ -8,6 +8,7 @@ require (
 	github.com/ark-network/ark/common v0.0.0-00010101000000-000000000000
 	github.com/btcsuite/btcd/btcec/v2 v2.2.0
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0
+	github.com/google/uuid v1.3.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/viper v1.17.0
 	github.com/urfave/cli/v2 v2.25.7
