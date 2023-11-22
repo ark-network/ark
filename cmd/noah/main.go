@@ -15,7 +15,7 @@ import (
 const (
 	DATADIR_ENVVAR = "NOAH_DATADIR"
 	STATE_FILE     = "state.json"
-	defaultArkURL  = "localhost:9000"
+	defaultArkURL  = "ark://apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x?relays=arelay1qt6f8p7h5f6tm7fv2z5wg92sz92rn9desfhd5733se4lkrptqtdrq65987l-arelay1qt6f8p7h5f6tm7fv2z5wg92sz92rn9desfhd5733se4lkrptqtdrq65987l"
 )
 
 var (

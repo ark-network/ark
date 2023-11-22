@@ -20,14 +20,18 @@ func receiveAction(ctx *cli.Context) error {
 	}
 
 	publicKey := privateKey.PubKey()
-	pubkey, err := common.EncodePubKey(common.MainNet.PubKey, publicKey)
+
+	aspPublicKey, err := getServiceProviderPublicKey()
 	if err != nil {
 		return err
 	}
 
-	// todo: fetch asp public key from ark
-	fmt.Println("Ark address not implemented yet: printing pubkey instead")
-	fmt.Println(pubkey)
+	addr, err := common.EncodeAddress(common.MainNet.Addr, publicKey, aspPublicKey)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(addr)
 
 	return nil
 }

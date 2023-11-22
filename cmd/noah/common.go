@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"syscall"
 
+	"github.com/ark-network/ark/common"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"golang.org/x/term"
 )
@@ -86,4 +87,28 @@ func privateKeyFromPassword() (*secp256k1.PrivateKey, error) {
 
 	privateKey := secp256k1.PrivKeyFromBytes(privateKeyBytes)
 	return privateKey, nil
+}
+
+func getServiceProviderPublicKey() (*secp256k1.PublicKey, error) {
+	state, err := getState()
+	if err != nil {
+		return nil, err
+	}
+
+	arkURL, ok := state["ark_url"]
+	if !ok {
+		return nil, fmt.Errorf("ark url not found")
+	}
+
+	arkPubKey, _, err := common.DecodeUrl(arkURL)
+	if err != nil {
+		return nil, err
+	}
+
+	_, publicKey, err := common.DecodePubKey(arkPubKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return publicKey, nil
 }
