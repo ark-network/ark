@@ -50,7 +50,7 @@ func (s *service) SpendVtxos(ctx context.Context, inputs []domain.VtxoKey) (stri
 		}
 	}
 
-	payment := domain.NewPayment(inputs)
+	payment := domain.NewPayment(vtxos)
 	if err := s.paymentRequests.push(payment); err != nil {
 		return "", err
 	}
@@ -65,7 +65,11 @@ func (s *service) ClaimVtxos(ctx context.Context, creds string, receivers []doma
 	}
 
 	// Check that input and output and output amounts match.
-	vtxos, err := s.repoManager.Vtxos().GetVtxos(ctx, payment.Inputs)
+	ins := make([]domain.VtxoKey, 0, len(payment.Inputs))
+	for _, in := range payment.Inputs {
+		ins = append(ins, in.VtxoKey)
+	}
+	vtxos, err := s.repoManager.Vtxos().GetVtxos(ctx, ins)
 	if err != nil {
 		return err
 	}

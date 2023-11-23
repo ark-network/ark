@@ -8,11 +8,11 @@ import (
 
 type Payment struct {
 	Id        string
-	Inputs    []VtxoKey
+	Inputs    []Vtxo
 	Receivers []Receiver
 }
 
-func NewPayment(inputs []VtxoKey) Payment {
+func NewPayment(inputs []Vtxo) Payment {
 	return Payment{
 		Id:     uuid.New().String(),
 		Inputs: inputs,
