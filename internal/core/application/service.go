@@ -179,7 +179,7 @@ func (s *service) finalizeRound() {
 
 	forfeitTxs, leftUnsigned := s.forfeitTxs.pop()
 	if len(leftUnsigned) > 0 {
-		err := fmt.Errorf("%d forfeit txs left so sign", len(leftUnsigned))
+		err := fmt.Errorf("%d forfeit txs left to sign", len(leftUnsigned))
 		round.Fail(fmt.Errorf("failed to finalize round: %s", err))
 		log.WithError(err).Warn("failed to finalize round")
 		return
