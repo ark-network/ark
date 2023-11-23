@@ -1,9 +1,13 @@
-.PHONY: build clean cov help intergrationtest lint run test vet proto proto-lint
+.PHONY: build build-noah clean cov help intergrationtest lint run test vet proto proto-lint
 
 ## build: build for all platforms
 build:
 	@echo "Building coordinatord binary..."
 	@bash ./scripts/build
+
+build-noah:
+	@echo "Building noah binary..."
+	@bash ./scripts/build-noah
 
 ## clean: cleans the binary
 clean:
