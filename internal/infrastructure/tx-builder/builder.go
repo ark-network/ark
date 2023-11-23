@@ -56,7 +56,6 @@ func (b *txBuilder) BuildForfeitTxs(poolTx string, payments []domain.Payment) (c
 		return nil, nil, err
 	}
 
-	receivers := receiversFromPayments(payments)
 	numberOfConnectors := numberOfVTXOs(payments)
 
 	connectors, err = createConnectors(
@@ -80,6 +79,8 @@ func (b *txBuilder) BuildForfeitTxs(poolTx string, payments []domain.Payment) (c
 		return nil, nil, err
 	}
 
+	forfeitTxs = make([]string, 0)
+
 	for _, payment := range payments {
 		for _, vtxo := range payment.Inputs {
 			for _, connector := range connectorsAsInputs {
@@ -87,16 +88,23 @@ func (b *txBuilder) BuildForfeitTxs(poolTx string, payments []domain.Payment) (c
 					connector,
 					psetv2.InputArgs{
 						Txid:    vtxo.Txid,
-						TxIndex: vtxo.Vout,
+						TxIndex: vtxo.VOut,
 					},
+					500, // TODO Vtxo amount
+					feeAmount,
+					aspScript,
+					b.net,
 				)
 				if err != nil {
 					return nil, nil, err
 				}
+
+				forfeitTxs = append(forfeitTxs, forfeitTx)
 			}
 		}
 	}
 
+	return connectors, forfeitTxs, nil
 }
 
 // BuildPoolTx implements ports.TxBuilder.
