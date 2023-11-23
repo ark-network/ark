@@ -16,3 +16,9 @@ type RoundRepository interface {
 		ctx context.Context, id string, updateFn func(r *Round) (*Round, error),
 	) error
 }
+
+type VtxoRepository interface {
+	AddVtxos(ctx context.Context, vtxos []Vtxo) error
+	SpendVtxos(ctx context.Context, vtxos []VtxoKey) error
+	GetVtxos(ctx context.Context, vtxos []VtxoKey) ([]Vtxo, error)
+}
