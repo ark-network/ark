@@ -24,10 +24,11 @@ func (s *service) Stop() {
 	s.scheduler.Stop()
 }
 
-func (s *service) ScheduleTask(interval int64, immediate bool, task func()) {
+func (s *service) ScheduleTask(interval int64, immediate bool, task func()) error {
 	if immediate {
-		s.scheduler.Every(interval).Seconds().Do(task)
-		return
+		_, err := s.scheduler.Every(interval).Seconds().Do(task)
+		return err
 	}
-	s.scheduler.Every(interval).Seconds().WaitForSchedule().Do(task)
+	_, err := s.scheduler.Every(interval).Seconds().WaitForSchedule().Do(task)
+	return err
 }

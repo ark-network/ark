@@ -35,8 +35,8 @@ func NewService(
 	}
 }
 
-func (s *service) Start() {
-	s.start()
+func (s *service) Start() error {
+	return s.start()
 }
 
 func (s *service) SpendVtxos(ctx context.Context, inputs []domain.VtxoKey) (string, error) {
@@ -98,12 +98,22 @@ func (s *service) SignVtxos(ctx context.Context, forfeitTxs map[string]string) e
 	return nil
 }
 
-func (s *service) start() {
+func (s *service) start() error {
 	startImmediately := true
 	finalizationInterval := int64(s.roundInterval / 2)
-	s.scheduler.ScheduleTask(s.roundInterval, startImmediately, s.startRound)
-	s.scheduler.ScheduleTask(finalizationInterval, !startImmediately, s.startFinalization)
-	s.scheduler.ScheduleTask(s.roundInterval-1, !startImmediately, s.finalizeRound)
+	if err := s.scheduler.ScheduleTask(
+		s.roundInterval, startImmediately, s.startRound,
+	); err != nil {
+		return err
+	}
+	if err := s.scheduler.ScheduleTask(
+		finalizationInterval, !startImmediately, s.startFinalization,
+	); err != nil {
+		return err
+	}
+	return s.scheduler.ScheduleTask(
+		s.roundInterval-1, !startImmediately, s.finalizeRound,
+	)
 }
 
 func (s *service) startRound() {
