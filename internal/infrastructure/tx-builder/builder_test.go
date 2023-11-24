@@ -25,7 +25,7 @@ func createTestTxBuilder() (ports.TxBuilder, error) {
 		return nil, err
 	}
 
-	return txbuilder.NewTxBuilder(key, &network.Regtest), nil
+	return txbuilder.NewTxBuilder(key, common.MainNet), nil
 }
 
 func createTestPoolTx(sharedOutputAmount, numberOfInputs uint64) (string, error) {
@@ -136,7 +136,7 @@ func TestBuildCongestionTree(t *testing.T) {
 	tree, err := builder.BuildCongestionTree(poolTx, payments)
 	require.NoError(t, err)
 
-	require.Equal(t, 3, len(tree))
+	require.Len(t, tree, 3)
 
 	// decode all psbt
 
@@ -147,8 +147,8 @@ func TestBuildCongestionTree(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	require.Equal(t, 2, len(psets[0].Outputs))
-	require.Equal(t, 1, len(psets[0].Inputs))
+	require.Len(t, psets[0].Inputs, 1)
+	require.Len(t, psets[0].Outputs, 2)
 
 	// first tx input should be the pool tx shared output
 	inputTxID0, err := chainhash.NewHash(psets[0].Inputs[0].PreviousTxid)
@@ -162,8 +162,8 @@ func TestBuildCongestionTree(t *testing.T) {
 	txID0 := unsignedTx0.TxHash().String()
 
 	// first tx input should be the first tx0 output
-	require.Equal(t, 1, len(psets[1].Outputs))
-	require.Equal(t, 1, len(psets[1].Inputs))
+	require.Len(t, psets[1].Inputs, 1)
+	require.Len(t, psets[1].Outputs, 1)
 	inputTxID1, err := chainhash.NewHash(psets[1].Inputs[0].PreviousTxid)
 	require.NoError(t, err)
 	require.Equal(t, txID0, inputTxID1.String())
@@ -172,8 +172,8 @@ func TestBuildCongestionTree(t *testing.T) {
 	require.Equal(t, uint64(600), psets[1].Outputs[0].Value)
 
 	// second tx input should be the second tx0 output
-	require.Equal(t, 1, len(psets[2].Outputs))
-	require.Equal(t, 1, len(psets[2].Inputs))
+	require.Len(t, psets[2].Inputs, 1)
+	require.Len(t, psets[2].Outputs, 1)
 
 	inputTxID2, err := chainhash.NewHash(psets[2].Inputs[0].PreviousTxid)
 	require.NoError(t, err)
@@ -239,8 +239,8 @@ func TestBuildForfeitTxs(t *testing.T) {
 	connectors, forfeitTxs, err := builder.BuildForfeitTxs(poolTx, payments)
 	require.NoError(t, err)
 
-	require.Equal(t, 2, len(connectors))
-	require.Equal(t, 2*2, len(forfeitTxs)) // should have inputs*numOfConnectors forfeits
+	require.Len(t, connectors, 2)
+	require.Len(t, forfeitTxs, 2*2)
 
 	// decode and check connectors
 	connectorsPsets := make([]*psetv2.Pset, 2)
@@ -250,8 +250,8 @@ func TestBuildForfeitTxs(t *testing.T) {
 	}
 
 	// the first connector should have 1 input and 3 outputs
-	require.Equal(t, 1, len(connectorsPsets[0].Inputs))
-	require.Equal(t, 3, len(connectorsPsets[0].Outputs))
+	require.Len(t, connectorsPsets[0].Inputs, 1)
+	require.Len(t, connectorsPsets[0].Outputs, 3)
 	// the input should be pool tx connectors output
 	inputTxID0, err := chainhash.NewHash(connectorsPsets[0].Inputs[0].PreviousTxid)
 	require.NoError(t, err)
@@ -259,8 +259,8 @@ func TestBuildForfeitTxs(t *testing.T) {
 	require.Equal(t, uint32(1), connectorsPsets[0].Inputs[0].PreviousTxIndex)
 
 	// the second connector should have 1 input and 2 outputs
-	require.Equal(t, 1, len(connectorsPsets[1].Inputs))
-	require.Equal(t, 2, len(connectorsPsets[1].Outputs))
+	require.Len(t, connectorsPsets[1].Inputs, 1)
+	require.Len(t, connectorsPsets[1].Outputs, 2)
 	// must spend the first connector tx change (last output)
 	unsignedFirstConnectorTx, err := connectorsPsets[0].UnsignedTx()
 	require.NoError(t, err)
@@ -279,7 +279,7 @@ func TestBuildForfeitTxs(t *testing.T) {
 
 	// each forfeit tx should have 2 inputs and 2 outputs
 	for _, pset := range forfeitTxsPsets {
-		require.Equal(t, 2, len(pset.Inputs))
-		require.Equal(t, 2, len(pset.Outputs))
+		require.Len(t, pset.Inputs, 2)
+		require.Len(t, pset.Outputs, 2)
 	}
 }

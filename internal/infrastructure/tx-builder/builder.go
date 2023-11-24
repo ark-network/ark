@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -21,10 +22,21 @@ type txBuilder struct {
 	aspPublicKey *secp256k1.PublicKey
 }
 
-func NewTxBuilder(aspPublicKey *secp256k1.PublicKey, net *network.Network) *txBuilder {
+func toElementsNetwork(net common.Network) *network.Network {
+	switch net {
+	case common.MainNet:
+		return &network.Liquid
+	case common.TestNet:
+		return &network.Testnet
+	default:
+		return nil
+	}
+}
+
+func NewTxBuilder(aspPublicKey *secp256k1.PublicKey, net common.Network) ports.TxBuilder {
 	return &txBuilder{
 		aspPublicKey: aspPublicKey,
-		net:          net,
+		net:          toElementsNetwork(net),
 	}
 }
 
@@ -132,8 +144,8 @@ func (b *txBuilder) BuildPoolTx(wallet ports.WalletService, payments []domain.Pa
 }
 
 func connectorsToInputArgs(connectors []string) ([]psetv2.InputArgs, error) {
-	inputs := make([]psetv2.InputArgs, len(connectors))
-	for i, psetb64 := range connectors {
+	inputs := make([]psetv2.InputArgs, 0, len(connectors))
+	for _, psetb64 := range connectors {
 		txID, err := getTxID(psetb64)
 		if err != nil {
 			return nil, err
@@ -144,7 +156,7 @@ func connectorsToInputArgs(connectors []string) ([]psetv2.InputArgs, error) {
 			TxIndex: 0,
 		}
 
-		inputs[i] = input
+		inputs = append(inputs, input)
 	}
 	return inputs, nil
 }
@@ -186,8 +198,6 @@ func sumReceivers(receivers []domain.Receiver) uint64 {
 	}
 	return sum
 }
-
-var _ ports.TxBuilder = (*txBuilder)(nil)
 
 type output struct {
 	script string
