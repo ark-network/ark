@@ -110,8 +110,14 @@ func TestBuildCongestionTree(t *testing.T) {
 			Id: "0",
 			Inputs: []domain.Vtxo{
 				{
-					Txid: "fd68e3c5796cc7db0a8036d486d5f625b6b2f2c014810ac020e1ac23e82c59d6",
-					VOut: 0,
+					VtxoKey: domain.VtxoKey{
+						Txid: "fd68e3c5796cc7db0a8036d486d5f625b6b2f2c014810ac020e1ac23e82c59d6",
+						VOut: 0,
+					},
+					Receiver: domain.Receiver{
+						Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+						Amount: 600,
+					},
 				},
 			},
 			Receivers: []domain.Receiver{
@@ -197,12 +203,24 @@ func TestBuildForfeitTxs(t *testing.T) {
 			Id: "0",
 			Inputs: []domain.Vtxo{
 				{
-					Txid: "fd68e3c5796cc7db0a8036d486d5f625b6b2f2c014810ac020e1ac23e82c59d6",
-					VOut: 0,
+					VtxoKey: domain.VtxoKey{
+						Txid: "fd68e3c5796cc7db0a8036d486d5f625b6b2f2c014810ac020e1ac23e82c59d6",
+						VOut: 0,
+					},
+					Receiver: domain.Receiver{
+						Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+						Amount: 600,
+					},
 				},
 				{
-					Txid: "fd68e3c5796cc7db0a8036d486d5f625b6b2f2c014810ac020e1ac23e82c59d6",
-					VOut: 1,
+					VtxoKey: domain.VtxoKey{
+						Txid: "fd68e3c5796cc7db0a8036d486d5f625b6b2f2c014810ac020e1ac23e82c59d6",
+						VOut: 1,
+					},
+					Receiver: domain.Receiver{
+						Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+						Amount: 400,
+					},
 				},
 			},
 			Receivers: []domain.Receiver{

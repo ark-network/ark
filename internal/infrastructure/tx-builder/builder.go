@@ -91,7 +91,7 @@ func (b *txBuilder) BuildForfeitTxs(poolTx string, payments []domain.Payment) (c
 						Txid:    vtxo.Txid,
 						TxIndex: vtxo.VOut,
 					},
-					500, // TODO Vtxo amount
+					vtxo.Amount,
 					feeAmount,
 					aspScript,
 					b.net,
