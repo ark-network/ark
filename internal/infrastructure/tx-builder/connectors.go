@@ -24,7 +24,7 @@ func createConnectors(
 
 	remainingAmount := (connectorOutput.Amount + feeAmount) * numberOfConnectors
 
-	connectorsPset := make([]string, numberOfConnectors, numberOfConnectors)
+	connectorsPset := make([]string, numberOfConnectors)
 
 	for i := uint64(0); i < numberOfConnectors; i++ {
 		// create a new pset

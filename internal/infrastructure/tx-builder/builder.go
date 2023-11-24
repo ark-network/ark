@@ -132,7 +132,7 @@ func (b *txBuilder) BuildPoolTx(wallet ports.WalletService, payments []domain.Pa
 }
 
 func connectorsToInputArgs(connectors []string) ([]psetv2.InputArgs, error) {
-	inputs := make([]psetv2.InputArgs, len(connectors), len(connectors))
+	inputs := make([]psetv2.InputArgs, len(connectors))
 	for i, psetb64 := range connectors {
 		txID, err := getTxID(psetb64)
 		if err != nil {

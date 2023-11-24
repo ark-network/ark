@@ -318,6 +318,9 @@ func (n *node) psets(input psetv2.InputArgs) ([]*psetv2.Pset, error) {
 		Txid:    txID,
 		TxIndex: 1,
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	return append(psetsLeft, psetsRight...), nil
 }
