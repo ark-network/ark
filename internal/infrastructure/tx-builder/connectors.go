@@ -8,25 +8,19 @@ func createConnectors(
 	poolTxID string,
 	connectorOutputIndex uint32,
 	connectorOutput psetv2.OutputArgs,
-	feeAmount uint64,
 	changeScript []byte,
 	numberOfConnectors uint64,
 ) (connectorsPsets []string, err error) {
-	feeOutput := psetv2.OutputArgs{
-		Asset:  connectorOutput.Asset,
-		Amount: feeAmount,
-	}
-
 	previousInput := psetv2.InputArgs{
 		Txid:    poolTxID,
 		TxIndex: connectorOutputIndex,
 	}
 
-	remainingAmount := (connectorOutput.Amount + feeAmount) * numberOfConnectors
+	// compute the initial amount of the connectors output in pool transaction
+	remainingAmount := connectorAmount * numberOfConnectors
 
-	connectorsPset := make([]string, numberOfConnectors)
-
-	for i := uint64(0); i < numberOfConnectors; i++ {
+	connectorsPset := make([]string, 0, numberOfConnectors-1)
+	for i := uint64(0); i < numberOfConnectors-1; i++ {
 		// create a new pset
 		pset, err := psetv2.New(nil, nil, nil)
 		if err != nil {
@@ -43,22 +37,29 @@ func createConnectors(
 			return nil, err
 		}
 
-		// compute the right change
-		changeOutput := psetv2.OutputArgs{
-			Asset:  connectorOutput.Asset,
-			Amount: remainingAmount - connectorOutput.Amount - feeAmount,
-			Script: changeScript,
-		}
-
-		err = updater.AddOutputs([]psetv2.OutputArgs{connectorOutput, feeOutput})
+		err = updater.AddOutputs([]psetv2.OutputArgs{connectorOutput})
 		if err != nil {
 			return nil, err
 		}
 
-		if changeOutput.Amount > 0 {
+		changeAmount := remainingAmount - connectorOutput.Amount
+		if changeAmount > 0 {
+			changeOutput := psetv2.OutputArgs{
+				Asset:  connectorOutput.Asset,
+				Amount: changeAmount,
+				Script: changeScript,
+			}
 			err = updater.AddOutputs([]psetv2.OutputArgs{changeOutput})
 			if err != nil {
 				return nil, err
+			}
+			tx, _ := pset.UnsignedTx()
+			txid := tx.TxHash().String()
+
+			// make the change the next previousInput
+			previousInput = psetv2.InputArgs{
+				Txid:    txid,
+				TxIndex: 1,
 			}
 		}
 
@@ -67,28 +68,7 @@ func createConnectors(
 			return nil, err
 		}
 
-		connectorsPset[i] = base64
-
-		if changeOutput.Amount > 0 {
-			// update the previous input
-			utx, err := pset.UnsignedTx()
-			if err != nil {
-				return nil, err
-			}
-
-			txID := utx.TxHash().String()
-
-			previousInput = psetv2.InputArgs{
-				Txid:    txID,
-				TxIndex: 3, // the change output is always the third one
-			}
-
-			remainingAmount = changeOutput.Amount
-			// continue only if there are a change
-			continue
-		}
-
-		break
+		connectorsPset = append(connectorsPset, base64)
 	}
 
 	return connectorsPset, nil

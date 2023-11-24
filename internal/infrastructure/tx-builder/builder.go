@@ -13,7 +13,6 @@ import (
 )
 
 const (
-	feeAmount       = 500
 	connectorAmount = 450
 )
 
@@ -50,7 +49,7 @@ func (b *txBuilder) BuildCongestionTree(poolTx string, payments []domain.Payment
 	receivers := receiversFromPayments(payments)
 
 	return buildCongestionTree(
-		centralizedOutputScriptFactory(b.aspPublicKey, b.net),
+		newOutputScriptFactory(b.aspPublicKey, b.net),
 		b.net,
 		poolTxID,
 		receivers,
@@ -79,7 +78,6 @@ func (b *txBuilder) BuildForfeitTxs(poolTx string, payments []domain.Payment) (c
 			Amount: connectorAmount,
 			Script: aspScript,
 		},
-		feeAmount,
 		aspScript,
 		numberOfConnectors,
 	)
@@ -93,7 +91,6 @@ func (b *txBuilder) BuildForfeitTxs(poolTx string, payments []domain.Payment) (c
 	}
 
 	forfeitTxs = make([]string, 0)
-
 	for _, payment := range payments {
 		for _, vtxo := range payment.Inputs {
 			for _, connector := range connectorsAsInputs {
@@ -104,7 +101,6 @@ func (b *txBuilder) BuildForfeitTxs(poolTx string, payments []domain.Payment) (c
 						TxIndex: vtxo.VOut,
 					},
 					vtxo.Amount,
-					feeAmount,
 					aspScript,
 					b.net,
 				)
@@ -133,7 +129,7 @@ func (b *txBuilder) BuildPoolTx(wallet ports.WalletService, payments []domain.Pa
 	sharedOutputAmount := sumReceivers(receivers)
 
 	numberOfConnectors := numberOfVTXOs(payments)
-	connectorOutputAmount := (connectorAmount + feeAmount) * numberOfConnectors
+	connectorOutputAmount := connectorAmount * numberOfConnectors
 
 	ctx := context.Background()
 
@@ -144,8 +140,8 @@ func (b *txBuilder) BuildPoolTx(wallet ports.WalletService, payments []domain.Pa
 }
 
 func connectorsToInputArgs(connectors []string) ([]psetv2.InputArgs, error) {
-	inputs := make([]psetv2.InputArgs, 0, len(connectors))
-	for _, psetb64 := range connectors {
+	inputs := make([]psetv2.InputArgs, 0, len(connectors)+1)
+	for i, psetb64 := range connectors {
 		txID, err := getTxID(psetb64)
 		if err != nil {
 			return nil, err
@@ -155,8 +151,15 @@ func connectorsToInputArgs(connectors []string) ([]psetv2.InputArgs, error) {
 			Txid:    txID,
 			TxIndex: 0,
 		}
-
 		inputs = append(inputs, input)
+
+		if i == len(connectors)-1 {
+			input := psetv2.InputArgs{
+				Txid:    txID,
+				TxIndex: 1,
+			}
+			inputs = append(inputs, input)
+		}
 	}
 	return inputs, nil
 }

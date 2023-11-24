@@ -26,8 +26,8 @@ func p2wpkhScript(publicKey *secp256k1.PublicKey, net *network.Network) ([]byte,
 	return address.ToOutputScript(addr)
 }
 
-// centralizedOutputScriptFactory returns an output script factory func that lock funds using the ASP public key only on all branches psbt. The leaves are instead locked by the leaf public key.
-func centralizedOutputScriptFactory(aspPublicKey *secp256k1.PublicKey, net *network.Network) outputScriptFactory {
+// newOtputScriptFactory returns an output script factory func that lock funds using the ASP public key only on all branches psbt. The leaves are instead locked by the leaf public key.
+func newOutputScriptFactory(aspPublicKey *secp256k1.PublicKey, net *network.Network) outputScriptFactory {
 	return func(leaves []domain.Receiver) ([]byte, error) {
 		aspScript, err := p2wpkhScript(aspPublicKey, net)
 		if err != nil {
@@ -64,8 +64,8 @@ func buildCongestionTree(
 		nodes = append(nodes, newLeaf(createOutputScript, net, r))
 	}
 
-	for len(nodes) > 2 {
-		nodes, err = pairNodes(nodes)
+	for len(nodes) > 1 {
+		nodes, err = createTreeLevel(nodes)
 		if err != nil {
 			return nil, err
 		}
@@ -73,71 +73,15 @@ func buildCongestionTree(
 
 	var tree []string
 
-	initialPset, err := psetv2.New(nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	updater, err := psetv2.NewUpdater(initialPset)
-	if err != nil {
-		return nil, err
-	}
-
-	err = updater.AddInputs([]psetv2.InputArgs{
-		{
-			Txid:    poolTxID,
-			TxIndex: sharedOutputIndex,
-		},
+	psets, err := nodes[0].psets(psetv2.InputArgs{
+		Txid:    poolTxID,
+		TxIndex: sharedOutputIndex,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	outputLeft, err := nodes[0].output()
-	if err != nil {
-		return nil, err
-	}
-
-	outputRight, err := nodes[1].output()
-	if err != nil {
-		return nil, err
-	}
-
-	err = updater.AddOutputs([]psetv2.OutputArgs{*outputLeft, *outputRight})
-	if err != nil {
-		return nil, err
-	}
-
-	initialPsetB64, err := initialPset.ToBase64()
-	if err != nil {
-		return nil, err
-	}
-	tree = append(tree, initialPsetB64)
-
-	unsignedInitialTx, err := initialPset.UnsignedTx()
-	if err != nil {
-		return nil, err
-	}
-
-	initialTxID := unsignedInitialTx.TxHash().String()
-
-	psetsLeft, err := nodes[0].psets(psetv2.InputArgs{
-		Txid:    initialTxID,
-		TxIndex: 0,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	psetsRight, err := nodes[1].psets(psetv2.InputArgs{
-		Txid:    initialTxID,
-		TxIndex: 1,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	for _, pset := range append(psetsLeft, psetsRight...) {
+	for _, pset := range psets {
 		psetB64, err := pset.ToBase64()
 		if err != nil {
 			return nil, err
@@ -148,10 +92,10 @@ func buildCongestionTree(
 	return tree, nil
 }
 
-func pairNodes(nodes []*node) ([]*node, error) {
+func createTreeLevel(nodes []*node) ([]*node, error) {
 	if len(nodes)%2 != 0 {
 		last := nodes[len(nodes)-1]
-		pairs, err := pairNodes(nodes[:len(nodes)-1])
+		pairs, err := createTreeLevel(nodes[:len(nodes)-1])
 		if err != nil {
 			return nil, err
 		}
@@ -322,5 +266,5 @@ func (n *node) psets(input psetv2.InputArgs) ([]*psetv2.Pset, error) {
 		return nil, err
 	}
 
-	return append(psetsLeft, psetsRight...), nil
+	return append([]*psetv2.Pset{pset}, append(psetsLeft, psetsRight...)...), nil
 }

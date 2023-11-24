@@ -9,7 +9,6 @@ func createForfeitTx(
 	connectorInput psetv2.InputArgs,
 	vtxoInput psetv2.InputArgs,
 	vtxoAmount uint64,
-	feeAmount uint64,
 	aspScript []byte,
 	net *network.Network,
 ) (forfeitTx string, err error) {
@@ -31,12 +30,8 @@ func createForfeitTx(
 	err = updater.AddOutputs([]psetv2.OutputArgs{
 		{
 			Asset:  net.AssetID,
-			Amount: vtxoAmount - feeAmount,
+			Amount: vtxoAmount,
 			Script: aspScript,
-		},
-		{
-			Asset:  net.AssetID,
-			Amount: feeAmount,
 		},
 	})
 	if err != nil {
