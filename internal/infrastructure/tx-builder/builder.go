@@ -23,7 +23,8 @@ type txBuilder struct {
 
 func NewTxBuilder(aspPublicKey *secp256k1.PublicKey, net *network.Network) *txBuilder {
 	return &txBuilder{
-		net: net,
+		aspPublicKey: aspPublicKey,
+		net:          net,
 	}
 }
 
