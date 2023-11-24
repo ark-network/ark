@@ -8,8 +8,8 @@ func (r RoundStarted) isEvent()             {}
 func (r RoundFinalizationStarted) isEvent() {}
 func (r RoundFinalized) isEvent()           {}
 func (r RoundFailed) isEvent()              {}
-func (r InputsRegistered) isEvent()         {}
-func (r OutputsRegistered) isEvent()        {}
+func (r PaymentsRegistered) isEvent()       {}
+func (r PaymentsClaimed) isEvent()          {}
 
 type RoundStarted struct {
 	Id        string
@@ -18,16 +18,16 @@ type RoundStarted struct {
 
 type RoundFinalizationStarted struct {
 	Id             string
-	ForfeitTxs     []string
 	CongestionTree []string
 	Connectors     []string
 	PoolTx         string
 }
 
 type RoundFinalized struct {
-	Id        string
-	Txid      string
-	Timestamp int64
+	Id         string
+	Txid       string
+	ForfeitTxs []string
+	Timestamp  int64
 }
 
 type RoundFailed struct {
@@ -36,14 +36,12 @@ type RoundFailed struct {
 	Timestamp int64
 }
 
-type InputsRegistered struct {
-	Id            string
-	PaymentId     string
-	PaymentInputs []Vtxo
+type PaymentsRegistered struct {
+	Id       string
+	Payments []Payment
 }
 
-type OutputsRegistered struct {
-	Id             string
-	PaymentId      string
-	PaymentOutputs []Receiver
+type PaymentsClaimed struct {
+	Id       string
+	Payments []Payment
 }

@@ -77,30 +77,31 @@ func (r *Round) On(event RoundEvent, replayed bool) {
 		r.StartingTimestamp = e.Timestamp
 	case RoundFinalizationStarted:
 		r.Stage.Code = FinalizationStage
-		r.ForfeitTxs = append([]string{}, e.ForfeitTxs...)
 		r.CongestionTree = append([]string{}, e.CongestionTree...)
 		r.Connectors = append([]string{}, e.Connectors...)
 		r.TxHex = e.PoolTx
 	case RoundFinalized:
 		r.Stage.Ended = true
 		r.Txid = e.Txid
+		r.ForfeitTxs = append([]string{}, e.ForfeitTxs...)
 		r.EndingTimestamp = e.Timestamp
 	case RoundFailed:
 		r.Stage.Failed = true
 		r.EndingTimestamp = e.Timestamp
-	case InputsRegistered:
+	case PaymentsRegistered:
 		if r.Payments == nil {
 			r.Payments = make(map[string]Payment)
 		}
-		r.Payments[e.PaymentId] = Payment{
-			Id:     e.PaymentId,
-			Inputs: e.PaymentInputs,
+		for _, p := range e.Payments {
+			r.Payments[p.Id] = p
 		}
-	case OutputsRegistered:
-		r.Payments[e.PaymentId] = Payment{
-			Id:        e.PaymentId,
-			Inputs:    r.Payments[e.PaymentId].Inputs,
-			Receivers: e.PaymentOutputs,
+	case PaymentsClaimed:
+		for _, p := range e.Payments {
+			r.Payments[p.Id] = Payment{
+				Id:        p.Id,
+				Inputs:    r.Payments[p.Id].Inputs,
+				Receivers: p.Receivers,
+			}
 		}
 	}
 
@@ -124,14 +125,13 @@ func (r *Round) StartRegistration() ([]RoundEvent, error) {
 	return []RoundEvent{event}, nil
 }
 
-func (r *Round) StartFinalization(connectors, txs, tree []string, poolTx string) ([]RoundEvent, error) {
+func (r *Round) StartFinalization(connectors, tree []string, poolTx string) ([]RoundEvent, error) {
 	if r.Stage.Code != RegistrationStage || r.IsFailed() {
 		return nil, fmt.Errorf("not in a valid stage to start payment finalization")
 	}
 
 	event := RoundFinalizationStarted{
 		Id:             r.Id,
-		ForfeitTxs:     txs,
 		CongestionTree: tree,
 		Connectors:     connectors,
 		PoolTx:         poolTx,
@@ -141,7 +141,7 @@ func (r *Round) StartFinalization(connectors, txs, tree []string, poolTx string)
 	return []RoundEvent{event}, nil
 }
 
-func (r *Round) EndFinalization(txid string) ([]RoundEvent, error) {
+func (r *Round) EndFinalization(forfeitTxs []string, txid string) ([]RoundEvent, error) {
 	if r.Stage.Code != FinalizationStage || r.IsFailed() {
 		return nil, fmt.Errorf("not in a valid stage to end payment finalization")
 	}
@@ -149,9 +149,10 @@ func (r *Round) EndFinalization(txid string) ([]RoundEvent, error) {
 		return nil, fmt.Errorf("payment finalization already ended")
 	}
 	event := RoundFinalized{
-		Id:        r.Id,
-		Txid:      txid,
-		Timestamp: time.Now().Unix(),
+		Id:         r.Id,
+		Txid:       txid,
+		ForfeitTxs: forfeitTxs,
+		Timestamp:  time.Now().Unix(),
 	}
 	r.raise(event)
 
@@ -172,36 +173,48 @@ func (r *Round) Fail(err error) []RoundEvent {
 	return []RoundEvent{event}
 }
 
-func (r *Round) RegisterInputs(id string, ins []Vtxo) ([]RoundEvent, error) {
-	if r.Stage.Code != RegistrationStage || r.IsFailed() {
-		return nil, fmt.Errorf("not in a valid stage to register inputs")
+func (r *Round) RegisterPayments(payments []Payment) ([]RoundEvent, error) {
+	if !r.IsStarted() {
+		return nil, fmt.Errorf("not in a valid stage to register payments")
 	}
-	if r.Stage.Ended {
-		return nil, fmt.Errorf("payment registration already ended")
+	if len(payments) <= 0 {
+		return nil, fmt.Errorf("missing payments to register")
+	}
+	for _, p := range payments {
+		ignoreOuts := true
+		if err := p.validate(ignoreOuts); err != nil {
+			return nil, err
+		}
 	}
 
-	event := InputsRegistered{
-		Id:            r.Id,
-		PaymentId:     id,
-		PaymentInputs: ins,
+	event := PaymentsRegistered{
+		Id:       r.Id,
+		Payments: payments,
 	}
 	r.raise(event)
 
 	return []RoundEvent{event}, nil
 }
 
-func (r *Round) RegisterOutputs(id string, outs []Receiver) ([]RoundEvent, error) {
+func (r *Round) ClaimPaymenys(payments []Payment) ([]RoundEvent, error) {
 	if r.Stage.Code != RegistrationStage || r.IsFailed() {
 		return nil, fmt.Errorf("not in a valid stage to register inputs")
 	}
 	if r.Stage.Ended {
 		return nil, fmt.Errorf("payment registration already ended")
 	}
+	for _, p := range payments {
+		if err := p.validate(false); err != nil {
+			return nil, fmt.Errorf("invalid payment: %s", err)
+		}
+		if _, ok := r.Payments[p.Id]; !ok {
+			return nil, fmt.Errorf("payment %s not registered", p.Id)
+		}
+	}
 
-	event := OutputsRegistered{
-		Id:             r.Id,
-		PaymentId:      id,
-		PaymentOutputs: outs,
+	event := PaymentsClaimed{
+		Id:       r.Id,
+		Payments: payments,
 	}
 	r.raise(event)
 
@@ -209,12 +222,11 @@ func (r *Round) RegisterOutputs(id string, outs []Receiver) ([]RoundEvent, error
 }
 
 func (r *Round) IsStarted() bool {
-	empty := Stage{}
-	return !r.IsFailed() && (r.Stage != empty && !r.IsEnded())
+	return !r.IsFailed() && r.Stage.Code == RegistrationStage
 }
 
 func (r *Round) IsEnded() bool {
-	return !r.IsFailed() && (r.Stage.Code == FinalizationStage && r.Stage.Ended)
+	return !r.IsFailed() && r.Stage.Code == FinalizationStage && r.Stage.Ended
 }
 
 func (r *Round) IsFailed() bool {
