@@ -27,6 +27,7 @@ jobs:
         uses: golangci/golangci-lint-action@v3
         with:
           version: v1.54
+          working-directory: ./asp
       - name: check code integrity
         uses: securego/gosec@master
         with:
