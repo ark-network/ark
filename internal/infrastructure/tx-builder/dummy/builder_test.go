@@ -6,7 +6,7 @@ import (
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
-	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder"
+	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/dummy"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/stretchr/testify/require"
 	"github.com/vulpemventures/go-elements/address"
