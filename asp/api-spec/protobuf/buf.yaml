@@ -1,0 +1,12 @@
+version: v1
+name: buf.build/ark-network/ark
+deps:
+  - buf.build/googleapis/googleapis
+breaking:
+  use:
+    - FILE
+  ignore_unstable_packages: true
+lint:
+  use:
+    - DEFAULT
+  
