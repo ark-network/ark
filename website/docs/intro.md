@@ -16,11 +16,12 @@ Ark is a second-layer solution designed to help scale Bitcoin transactions by us
 
 Ark is a scaling category of its own and is not a state channel design or a rollup. Ark is a liquidity network like Lightning that operates without introducing liquidity constraints or a direct link between the sender and receiver. It uses virtual utxos, to enable anonymous, scalable, off-chain payments.
 
-## Get started
+## How does it work?
 
-### [Join the Ark](user/intro.md)
-
-### [Create the Ark](provider/intro.md)
+- [Nomenclature](intro/nomenclature.md)
+- [Boarding the Ark](intro/boarding.md)
+- [Sendinf Payments](intro/payments.md)
+- [Leaving the Ark](intro/leaving.md)
 
 ## Protocol Specifications
 
