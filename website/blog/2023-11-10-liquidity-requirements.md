@@ -18,7 +18,7 @@ All transactions within Ark must be funded by the Ark Service Provider (ASP) in 
 
 This post discusses some considerations on this topic and calculates the funding needs of the ASP.
 
-Refer to [nomenclature docs](./docs/specs/nomenclature) for any doubt
+Refer to [nomenclature docs](./docs/intro/nomenclature) for any doubt
 
 ## Ark liquidity requirements
 
