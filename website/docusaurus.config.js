@@ -29,13 +29,13 @@ const config = {
           sidebarPath: require.resolve('./sidebars.js'),
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
-          editUrl: 'https://github.com/ark-network/edit/main/website/',
+          editUrl: 'https://github.com/ark-network/edit/master/website/',
         },
         blog: {
           showReadingTime: true,
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
-          editUrl: 'https://github.com/ark-network/edit/main/website/blog/',
+          editUrl: 'https://github.com/ark-network/edit/master/website/blog/',
         },
         theme: {
           customCss: require.resolve('./src/css/custom.css'),
