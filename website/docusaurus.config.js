@@ -12,7 +12,7 @@ const config = {
   url: 'https://dev.arkpill.me',
   baseUrl: '/',
   organizationName: 'Ark',
-  projectName: 'dev_portal',
+  projectName: 'Ark Website',
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'warn',
   i18n: {
@@ -29,13 +29,13 @@ const config = {
           sidebarPath: require.resolve('./sidebars.js'),
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
-          editUrl: 'https://github.com/ark-network/edit/master/dev_portal/',
+          editUrl: 'https://github.com/ark-network/edit/main/website/',
         },
         blog: {
           showReadingTime: true,
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
-          editUrl: 'https://github.com/ark-network/edit/main/dev_portal/blog/',
+          editUrl: 'https://github.com/ark-network/edit/main/website/blog/',
         },
         theme: {
           customCss: require.resolve('./src/css/custom.css'),
