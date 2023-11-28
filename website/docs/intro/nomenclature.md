@@ -19,13 +19,13 @@ Ark has a UTXO set that lives off the chain. These utxos are referred to as virt
 
 ## Moments
 
-### Onboarding the Ark
+### Boarding the Ark
 
 When a User sends funds to the Ark and gets VTXOs in return.
 
 ### Unilateral exit
 
-When a user decides to withdraw his funds from the Ark to mainchain, without asking the ASP.
+When a user decides to withdraw his funds from the Ark to mainchain, without asking the ASP for permission.
 
 ### Round
 
@@ -45,8 +45,8 @@ Periodic transaction crafted by the ASP that hits mainchain and creates new VTXO
 
 ### Redeem transaction \*
 
-- Insurance for Alice, in case the ASP stops responding
-- Allows Alice to receive funds back from the Ark
+- Insurance for Alice, in case the ASP denies boarding on the Ark
+- Allows Alice to receive funds back from the Ark after a grace period ie. 24 hours
 
 | Inputs                                     | Outputs                                |
 | ------------------------------------------ | -------------------------------------- |
