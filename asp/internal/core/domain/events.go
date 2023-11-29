@@ -9,7 +9,6 @@ func (r RoundFinalizationStarted) isEvent() {}
 func (r RoundFinalized) isEvent()           {}
 func (r RoundFailed) isEvent()              {}
 func (r PaymentsRegistered) isEvent()       {}
-func (r PaymentsClaimed) isEvent()          {}
 
 type RoundStarted struct {
 	Id        string
@@ -37,11 +36,6 @@ type RoundFailed struct {
 }
 
 type PaymentsRegistered struct {
-	Id       string
-	Payments []Payment
-}
-
-type PaymentsClaimed struct {
 	Id       string
 	Payments []Payment
 }

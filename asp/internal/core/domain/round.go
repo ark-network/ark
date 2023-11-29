@@ -46,14 +46,14 @@ type Round struct {
 	CongestionTree    []string
 	Connectors        []string
 	Version           uint
-	Changes           []RoundEvent
+	changes           []RoundEvent
 }
 
 func NewRound() *Round {
 	return &Round{
 		Id:       uuid.New().String(),
 		Payments: make(map[string]Payment),
-		Changes:  make([]RoundEvent, 0),
+		changes:  make([]RoundEvent, 0),
 	}
 }
 
@@ -64,9 +64,13 @@ func NewRoundFromEvents(events []RoundEvent) *Round {
 		r.On(event, true)
 	}
 
-	r.Changes = append([]RoundEvent{}, events...)
+	r.changes = append([]RoundEvent{}, events...)
 
 	return r
+}
+
+func (r *Round) Events() []RoundEvent {
+	return r.changes
 }
 
 func (r *Round) On(event RoundEvent, replayed bool) {
@@ -94,14 +98,6 @@ func (r *Round) On(event RoundEvent, replayed bool) {
 		}
 		for _, p := range e.Payments {
 			r.Payments[p.Id] = p
-		}
-	case PaymentsClaimed:
-		for _, p := range e.Payments {
-			r.Payments[p.Id] = Payment{
-				Id:        p.Id,
-				Inputs:    r.Payments[p.Id].Inputs,
-				Receivers: p.Receivers,
-			}
 		}
 	}
 
@@ -181,38 +177,12 @@ func (r *Round) RegisterPayments(payments []Payment) ([]RoundEvent, error) {
 		return nil, fmt.Errorf("missing payments to register")
 	}
 	for _, p := range payments {
-		ignoreOuts := true
-		if err := p.validate(ignoreOuts); err != nil {
+		if err := p.validate(false); err != nil {
 			return nil, err
 		}
 	}
 
 	event := PaymentsRegistered{
-		Id:       r.Id,
-		Payments: payments,
-	}
-	r.raise(event)
-
-	return []RoundEvent{event}, nil
-}
-
-func (r *Round) ClaimPaymenys(payments []Payment) ([]RoundEvent, error) {
-	if r.Stage.Code != RegistrationStage || r.IsFailed() {
-		return nil, fmt.Errorf("not in a valid stage to register inputs")
-	}
-	if r.Stage.Ended {
-		return nil, fmt.Errorf("payment registration already ended")
-	}
-	for _, p := range payments {
-		if err := p.validate(false); err != nil {
-			return nil, fmt.Errorf("invalid payment: %s", err)
-		}
-		if _, ok := r.Payments[p.Id]; !ok {
-			return nil, fmt.Errorf("payment %s not registered", p.Id)
-		}
-	}
-
-	event := PaymentsClaimed{
 		Id:       r.Id,
 		Payments: payments,
 	}
@@ -246,9 +216,9 @@ func (r *Round) TotOutputAmount() uint64 {
 }
 
 func (r *Round) raise(event RoundEvent) {
-	if r.Changes == nil {
-		r.Changes = make([]RoundEvent, 0)
+	if r.changes == nil {
+		r.changes = make([]RoundEvent, 0)
 	}
-	r.Changes = append(r.Changes, event)
+	r.changes = append(r.changes, event)
 	r.On(event, false)
 }
