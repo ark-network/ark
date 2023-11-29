@@ -43,7 +43,7 @@ Periodic transaction crafted by the ASP that hits mainchain and creates new VTXO
 | ------------------- | ----------------------------------- |
 | Alice’s segwit UTXO | `(Alice + ASP) or (ASP in 1 month)` |
 
-### Redeem transaction \*
+### Redeem transaction\*
 
 - Insurance for Alice, in case the ASP denies boarding on the Ark
 - Allows Alice to receive funds back from the Ark after a grace period ie. 24 hours
@@ -52,7 +52,7 @@ Periodic transaction crafted by the ASP that hits mainchain and creates new VTXO
 | ------------------------------------------ | -------------------------------------- |
 | Funding transaction spending `Alice + ASP` | `(Alice + ASP) or (Alice in 24 hours)` |
 
-### Forfeit transaction \*
+### Forfeit transaction\*
 
 - Insurance for the ASP, in case Alice tries to double spend her VTXO after spending it inside Ark
 - Before the ASP funds Bob’s VTXO in the next Pool transaction, he must receive this transaction signed by Alice
@@ -81,7 +81,7 @@ Periodic transaction crafted by the ASP that hits mainchain and creates new VTXO
 
 ![Docusaurus Plushie](../img/shared_output.png)
 
-### VTXO \*
+### VTXO\*
 
 - Similar to Redeem transaction
 - Can be broadcasted anytime, on the condition that previous transactions on the transaction tree (up to the Pool transaction) are confirmed or broadcasted at the same time
