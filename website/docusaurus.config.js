@@ -26,6 +26,7 @@ const config = {
       /** @type {import('@docusaurus/preset-classic').Options} */
       ({
         docs: {
+          routeBasePath: "/",
           sidebarPath: require.resolve('./sidebars.js'),
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
@@ -36,9 +37,6 @@ const config = {
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
           editUrl: 'https://github.com/ark-network/edit/master/website/blog/',
-        },
-        theme: {
-          customCss: require.resolve('./src/css/custom.css'),
         },
       }),
     ],
@@ -78,15 +76,15 @@ const config = {
             items: [
               {
                 label: 'What Ark is',
-                to: '/docs/specs/index',
+                to: '/specs/index',
               },
               {
                 label: 'Join the Ark',
-                to: '/docs/user/intro',
+                to: '/user/intro',
               },
               {
                 label: 'Create an Ark',
-                to: '/docs/provider/intro',
+                to: '/provider/intro',
               },
             ],
           },
