@@ -7,7 +7,6 @@ import (
 	"hash"
 
 	"github.com/google/uuid"
-	"golang.org/x/crypto/ripemd160"
 )
 
 type Payment struct {
@@ -89,7 +88,7 @@ func (k VtxoKey) Hash() string {
 	}
 
 	hash160 := func(buf []byte) []byte {
-		return calcHash(calcHash(buf, sha256.New()), ripemd160.New())
+		return calcHash(calcHash(buf, sha256.New()), sha256.New())
 	}
 
 	buf, _ := hex.DecodeString(k.Txid)
