@@ -12,7 +12,7 @@ Bitcoin is the most secure and censorship blockchain in the world. However, it i
 
 ## 👷‍♂️ How does it work?
 
- Start by reading the [Nomenclature](/docs/nomenclature.md) section to understand the key concepts and terminology used in Ark. Then, you can learn how to [Board the Ark](intro/boarding.md) and [Send Payments](intro/payments.md). Finally, you can learn how to [Leave the Ark](intro/leaving.md) and withdraw your funds back to the Bitcoin blockchain if the server is unresponsive.
+ Start by reading the [Nomenclature](/nomenclature.md) section to understand the key concepts and terminology used in Ark. Then, you can learn how to [Board the Ark](intro/boarding.md) and [Send Payments](intro/payments.md). Finally, you can learn how to [Leave the Ark](intro/leaving.md) and withdraw your funds back to the Bitcoin blockchain if the server is unresponsive.
 
 ## 👶🏼 ELI5
 

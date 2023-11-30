@@ -9,7 +9,7 @@ const config = {
   title: 'Ark',
   tagline: 'TBD',
   favicon: 'img/ark-logo.png',
-  url: 'https://dev.arkpill.me',
+  url: 'https://arkdev.info',
   baseUrl: '/',
   organizationName: 'Ark',
   projectName: 'Ark Website',
@@ -26,6 +26,7 @@ const config = {
       /** @type {import('@docusaurus/preset-classic').Options} */
       ({
         docs: {
+          routeBasePath: "/",
           sidebarPath: require.resolve('./sidebars.js'),
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
@@ -37,9 +38,6 @@ const config = {
           // Remove this to remove the "edit this page" links.
           editUrl: 'https://github.com/ark-network/edit/master/website/blog/',
         },
-        theme: {
-          customCss: require.resolve('./src/css/custom.css'),
-        },
       }),
     ],
   ],
@@ -50,7 +48,7 @@ const config = {
       // Replace with your project's social card
       image: 'img/ark-og-image.png',
       navbar: {
-        title: 'Developer Portal',
+        title: 'Ark',
         logo: {
           alt: 'Ark Logo',
           src: 'img/ark-logo.png',
@@ -78,15 +76,15 @@ const config = {
             items: [
               {
                 label: 'What Ark is',
-                to: '/docs/specs/index',
+                to: '/specs/index',
               },
               {
                 label: 'Join the Ark',
-                to: '/docs/user/intro',
+                to: '/user/intro',
               },
               {
                 label: 'Create an Ark',
-                to: '/docs/provider/intro',
+                to: '/provider/intro',
               },
             ],
           },
