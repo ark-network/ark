@@ -11,6 +11,12 @@ import (
 
 const paymentsThreshold = 128
 
+type Service interface {
+	SpendVtxos(ctx context.Context, inputs []domain.VtxoKey) (string, error)
+	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error
+	SignVtxos(ctx context.Context, forfeitTxs map[string]string) error
+}
+
 type service struct {
 	roundInterval int64
 
@@ -26,7 +32,7 @@ func NewService(
 	interval int64,
 	walletSvc ports.WalletService, schedulerSvc ports.SchedulerService,
 	repoManager ports.RepoManager, builder ports.TxBuilder,
-) *service {
+) Service {
 	paymentRequests := newPaymentsMap(nil)
 	forfeitTxs := newForfeitTxsMap()
 	return &service{

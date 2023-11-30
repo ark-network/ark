@@ -16,6 +16,45 @@
     "application/json"
   ],
   "paths": {
+    "/v1/events/{id}": {
+      "get": {
+        "operationId": "ArkService_GetEventStream",
+        "responses": {
+          "200": {
+            "description": "A successful response.(streaming responses)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "$ref": "#/definitions/v1GetEventStreamResponse"
+                },
+                "error": {
+                  "$ref": "#/definitions/rpcStatus"
+                }
+              },
+              "title": "Stream result of v1GetEventStreamResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
     "/v1/payment/claim": {
       "post": {
         "operationId": "ArkService_ClaimPayment",
@@ -198,6 +237,7 @@
         "details": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/protobufAny"
           }
         }
@@ -213,6 +253,7 @@
         "outputs": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/v1Output"
           },
           "description": "List of receivers for a registered payment."
@@ -225,14 +266,28 @@
     "v1FinalizePaymentRequest": {
       "type": "object",
       "properties": {
-        "signedVtx": {
-          "type": "string",
-          "description": "Forfeit tx signed also by the user."
+        "signedForfeits": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Forfeit txs signed by the user."
         }
       }
     },
     "v1FinalizePaymentResponse": {
       "type": "object"
+    },
+    "v1GetEventStreamResponse": {
+      "type": "object",
+      "properties": {
+        "roundFinalization": {
+          "$ref": "#/definitions/v1RoundFinalizationEvent"
+        },
+        "roundFinalized": {
+          "$ref": "#/definitions/v1RoundFinalizedEvent"
+        }
+      }
     },
     "v1GetRoundResponse": {
       "type": "object",
@@ -242,16 +297,26 @@
         }
       }
     },
+    "v1Input": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "vout": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
     "v1ListRoundsRequest": {
       "type": "object",
       "properties": {
-        "start": {
-          "type": "string",
-          "format": "int64"
-        },
-        "end": {
-          "type": "string",
-          "format": "int64"
+        "ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -261,6 +326,7 @@
         "rounds": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/v1Round"
           }
         }
@@ -281,9 +347,12 @@
     "v1RegisterPaymentRequest": {
       "type": "object",
       "properties": {
-        "vtx": {
-          "type": "string",
-          "description": "Unsigned forfeit tx sending all funds back to the ASP."
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Input"
+          }
         }
       }
     },
@@ -293,16 +362,15 @@
         "id": {
           "type": "string",
           "description": "Mocks wabisabi's credentials."
-        },
-        "signedVtx": {
-          "type": "string",
-          "description": "Forfeit tx signed by the ASP."
         }
       }
     },
     "v1Round": {
       "type": "object",
       "properties": {
+        "id": {
+          "type": "string"
+        },
         "start": {
           "type": "string",
           "format": "int64"
@@ -317,8 +385,43 @@
         "outputs": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/v1Output"
           }
+        }
+      }
+    },
+    "v1RoundFinalizationEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "poolPartialTx": {
+          "type": "string"
+        },
+        "forfeitTxs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "congestionTree": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "v1RoundFinalizedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "poolTxid": {
+          "type": "string"
         }
       }
     }

@@ -10,8 +10,8 @@ type RoundEventRepository interface {
 type RoundRepository interface {
 	AddRound(ctx context.Context, round *Round) error
 	GetCurrentRound(ctx context.Context) (*Round, error)
-	GetRoundWithId(ctx, id string) (*Round, error)
-	GetRoundWithTxid(ctx, txid string) (*Round, error)
+	GetRoundWithId(ctx context.Context, id string) (*Round, error)
+	GetRoundWithTxid(ctx context.Context, txid string) (*Round, error)
 	UpdateRound(
 		ctx context.Context, id string, updateFn func(r *Round) (*Round, error),
 	) error
