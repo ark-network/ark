@@ -18,7 +18,7 @@ All transactions within Ark must be funded by the Ark Service Provider (ASP) in 
 
 This post discusses some considerations on this topic and calculates the funding needs of the ASP.
 
-Refer to [nomenclature docs](./docs/intro/nomenclature) for any doubt
+Refer to [nomenclature docs](/docs/intro/nomenclature) for any doubt
 
 ## Ark liquidity requirements
 
@@ -319,6 +319,10 @@ Comparison table:
 Dividing the initial UTXO into more VTXOs decreases the need for funding.
 
 :::
+
+## Simulator
+
+You can run your own simulations with the <a href="/liquidity-simulator/" target="_blank">Ark liquidity simulator</a>.
 
 ## Conclusion
 
