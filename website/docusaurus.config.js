@@ -9,7 +9,7 @@ const config = {
   title: 'Ark',
   tagline: 'TBD',
   favicon: 'img/ark-logo.png',
-  url: 'https://dev.arkpill.me',
+  url: 'https://arkdev.info',
   baseUrl: '/',
   organizationName: 'Ark',
   projectName: 'Ark Website',
@@ -48,7 +48,7 @@ const config = {
       // Replace with your project's social card
       image: 'img/ark-og-image.png',
       navbar: {
-        title: 'Developer Portal',
+        title: 'Ark',
         logo: {
           alt: 'Ark Logo',
           src: 'img/ark-logo.png',
