@@ -64,7 +64,7 @@ func (m *paymentsMap) pop(num int64) []domain.Payment {
 			continue
 		}
 		// Skip payments for which users didn't notify to be online in the last minute.
-		if p.pingTimestamp.IsZero() || time.Now().Sub(p.pingTimestamp).Minutes() > 1 {
+		if p.pingTimestamp.IsZero() || time.Since(p.pingTimestamp).Minutes() > 1 {
 			continue
 		}
 		paymentsByTime = append(paymentsByTime, *p)
