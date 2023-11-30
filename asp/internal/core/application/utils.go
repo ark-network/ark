@@ -12,18 +12,19 @@ import (
 
 type timedPayment struct {
 	domain.Payment
-	timestamp time.Time
+	timestamp     time.Time
+	pingTimestamp time.Time
 }
 
 type paymentsMap struct {
 	lock     *sync.RWMutex
-	payments map[string]timedPayment
+	payments map[string]*timedPayment
 }
 
 func newPaymentsMap(payments []domain.Payment) *paymentsMap {
-	paymentsById := make(map[string]timedPayment)
+	paymentsById := make(map[string]*timedPayment)
 	for _, p := range payments {
-		paymentsById[p.Id] = timedPayment{p, time.Now()}
+		paymentsById[p.Id] = &timedPayment{p, time.Now(), time.Time{}}
 	}
 	lock := &sync.RWMutex{}
 	return &paymentsMap{lock, paymentsById}
@@ -44,7 +45,7 @@ func (m *paymentsMap) push(payment domain.Payment) error {
 		return fmt.Errorf("duplicated inputs")
 	}
 
-	m.payments[payment.Id] = timedPayment{payment, time.Now()}
+	m.payments[payment.Id] = &timedPayment{payment, time.Now(), time.Time{}}
 	return nil
 }
 
@@ -62,7 +63,11 @@ func (m *paymentsMap) pop(num int64) []domain.Payment {
 		if len(p.Receivers) <= 0 {
 			continue
 		}
-		paymentsByTime = append(paymentsByTime, p)
+		// Skip payments for which users didn't notify to be online in the last minute.
+		if p.pingTimestamp.IsZero() || time.Now().Sub(p.pingTimestamp).Minutes() > 1 {
+			continue
+		}
+		paymentsByTime = append(paymentsByTime, *p)
 	}
 	sort.SliceStable(paymentsByTime, func(i, j int) bool {
 		return paymentsByTime[i].timestamp.Before(paymentsByTime[j].timestamp)
@@ -80,11 +85,25 @@ func (m *paymentsMap) update(payment domain.Payment) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	if _, ok := m.payments[payment.Id]; !ok {
+	p, ok := m.payments[payment.Id]
+	if !ok {
 		return fmt.Errorf("payment %s not found", payment.Id)
 	}
 
-	m.payments[payment.Id] = timedPayment{payment, m.payments[payment.Id].timestamp}
+	p.Payment = payment
+	return nil
+}
+
+func (m *paymentsMap) updatePingTimestamp(id string) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	payment, ok := m.payments[id]
+	if !ok {
+		return fmt.Errorf("payment %s not found", id)
+	}
+
+	payment.pingTimestamp = time.Now()
 	return nil
 }
 
