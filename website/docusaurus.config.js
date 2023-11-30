@@ -98,9 +98,9 @@ const config = {
                 href: 'https://bitcoin.stackexchange.com/questions/tagged/ark',
               },
               {
-                label: 'Twitter',
-                href: 'https://twitter.com/ark-network',
-              },
+                label: 'Github',
+                href: 'https://github.com/ark-network',
+              }
             ],
           },
           {
@@ -109,11 +109,7 @@ const config = {
               {
                 label: 'Blog',
                 to: '/blog',
-              },
-              {
-                label: 'GitHub',
-                href: 'https://github.com/ark-network',
-              },
+              }
             ],
           },
         ],

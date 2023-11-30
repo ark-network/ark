@@ -79,7 +79,7 @@ Periodic transaction crafted by the ASP that hits mainchain and creates new VTXO
 - Represents a binary tree of transactions
 - In an optimistic scenario, this tree is never revealed
 
-![Docusaurus Plushie](../img/shared_output.png)
+![Docusaurus Plushie](./img/shared_output.png)
 
 ### VTXO\*
 
