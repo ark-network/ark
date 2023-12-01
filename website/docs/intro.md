@@ -55,7 +55,7 @@ We welcome contributions from the community. If you'd like to contribute to the 
 
 Follow the [BOATS GitHub repository](https://github.com/ark-network/boats) for updates.
 
-### Stay in the Loop
+### ➰ Stay in the Loop
 
 - Join our community on [Telegram](https://t.me/ark_network_community).
 - Ask questions or get help on [Stack Overflow](https://bitcoin.stackexchange.com/questions/tagged/ark).
