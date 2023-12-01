@@ -21,6 +21,15 @@ import (
 
 const paymentsThreshold = 128
 
+type Service interface {
+	SpendVtxos(ctx context.Context, inputs []domain.VtxoKey) (string, error)
+	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error
+	SignVtxos(ctx context.Context, forfeitTxs map[string]string) error
+	GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error)
+	GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
+	UpdatePaymenStatus(ctx context.Context, id string) error
+}
+
 type service struct {
 	roundInterval int64
 	network       common.Network
@@ -32,20 +41,28 @@ type service struct {
 	builder         ports.TxBuilder
 	paymentRequests *paymentsMap
 	forfeitTxs      *forfeitTxsMap
+
+	eventsCh chan domain.RoundEvent
 }
 
 func NewService(
 	interval int64, network common.Network, onchainNetwork network.Network,
 	walletSvc ports.WalletService, schedulerSvc ports.SchedulerService,
 	repoManager ports.RepoManager, builder ports.TxBuilder,
-) *service {
+) Service {
 	paymentRequests := newPaymentsMap(nil)
 	forfeitTxs := newForfeitTxsMap()
 	svc := &service{
 		interval, network, onchainNetwork,
 		walletSvc, schedulerSvc, repoManager, builder, paymentRequests, forfeitTxs,
+		make(chan domain.RoundEvent),
 	}
-	repoManager.RegisterEventsHandler(svc.updateProjectionStore)
+	repoManager.RegisterEventsHandler(
+		func(round *domain.Round) {
+			svc.updateProjectionStore(round)
+			svc.propagateEvents(round)
+		},
+	)
 	return svc
 }
 
@@ -98,6 +115,14 @@ func (s *service) SignVtxos(ctx context.Context, forfeitTxs map[string]string) e
 		}
 	}
 	return nil
+}
+
+func (s *service) GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent {
+	return s.eventsCh
+}
+
+func (s *service) GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error) {
+	return s.repoManager.Rounds().GetRoundWithTxid(ctx, poolTxid)
 }
 
 func (s *service) start() error {
@@ -261,6 +286,14 @@ func (s *service) updateProjectionStore(round *domain.Round) {
 			continue
 		}
 		break
+	}
+}
+
+func (s *service) propagateEvents(round *domain.Round) {
+	lastEvent := round.Events()[len(round.Events())-1]
+	switch e := lastEvent.(type) {
+	case domain.RoundFinalizationStarted, domain.RoundFinalized:
+		s.eventsCh <- e
 	}
 }
 

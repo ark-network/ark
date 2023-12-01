@@ -23,28 +23,29 @@ service ArkService {
       body: "*"
     };
   };
-  rpc ListRounds(ListRoundsRequest) returns (ListRoundsResponse) {
-    option (google.api.http) = {
-      post: "/v1/rounds"
-      body: "*"
-    };
-  };
   rpc GetRound(GetRoundRequest) returns (GetRoundResponse) {
     option (google.api.http) = {
       get: "/v1/round/{txid}"
     };
   };
+  rpc GetEventStream(GetEventStreamRequest) returns (stream GetEventStreamResponse) {
+    option (google.api.http) = {
+      get: "/v1/events"
+    };
+  };
+  rpc Ping(PingRequest) returns (PingResponse) {
+    option (google.api.http) = {
+      get: "/v1/ping/{payment_id}"
+    };
+  };
 }
 
 message RegisterPaymentRequest {
-  // Unsigned forfeit tx sending all funds back to the ASP.
-  string vtx = 1;
+  repeated Input inputs = 1;
 }
 message RegisterPaymentResponse {
   // Mocks wabisabi's credentials.
   string id = 1;
-  // Forfeit tx signed by the ASP.
-  string signed_vtx = 2;
 }
 
 message ClaimPaymentRequest {
@@ -56,18 +57,10 @@ message ClaimPaymentRequest {
 message ClaimPaymentResponse {}
 
 message FinalizePaymentRequest {
-  // Forfeit tx signed also by the user. 
-  string signed_vtx = 1;
+  // Forfeit txs signed by the user. 
+  repeated string signed_forfeits = 1;
 }
 message FinalizePaymentResponse {}
-
-message ListRoundsRequest {
-  int64 start = 1;
-  int64 end = 2;
-}
-message ListRoundsResponse {
-  repeated Round rounds = 1;
-}
 
 message GetRoundRequest {
   string txid = 1;
@@ -77,13 +70,53 @@ message GetRoundResponse {
 }
 
 message Round {
-  int64 start = 1;
-  int64 end = 2;
-  string txid = 3;
-  repeated Output outputs = 4;
+  string id = 1;
+  int64 start = 2;
+  int64 end = 3;
+  string txid = 4;
+  repeated string congestion_tree = 5;
+}
+
+message Input {
+  string txid = 1;
+  uint32 vout = 2;
 }
 
 message Output {
   string pubkey = 1;
   uint64 amount = 2;
 }
+
+message RoundFinalizationEvent {
+  string id = 1;
+  string pool_partial_tx = 2;
+  map<string, string> forfeit_txs = 3;
+  repeated string congestion_tree = 4;
+}
+
+message RoundFinalizedEvent {
+  string id = 1;
+  string pool_txid = 2;
+}
+
+message RoundFailed {
+  string id = 1;
+  string reason = 2;
+}
+
+message GetEventStreamRequest {}
+
+message GetEventStreamResponse {
+  oneof event {
+    RoundFinalizationEvent round_finalization = 1;
+    RoundFinalizedEvent round_finalized = 2;
+    RoundFailed round_failed = 3;
+  }
+}
+
+message PingRequest {
+  string payment_id = 1;
+}
+
+message PingResponse {}
+
