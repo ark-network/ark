@@ -48,7 +48,7 @@ Periodic transaction crafted by the ASP that hits mainchain and creates new VTXO
 
 ### Redeem transaction\*
 
-- Insurance for Alice, in case the ASP denies boarding on the Ark
+- Insurance for Alice, in case the ASP becomes unresponsive.
 - Allows Alice to receive funds back from the Ark after a grace period ie. 24 hours
 
 | Inputs                                     | Outputs                                |

@@ -8,7 +8,7 @@ title: 'Boarding the Ark'
 Alice wants to board the Ark of a well-known Ark service provider (ASP). It requires an on-chain transaction.
 
 - Alice must be online **at least once every 4 weeks** to keep her funds safe.
-- If ASP denies Alice's boarding request, Alice can claim her funds back in 24 hours.
+- If ASP is unresponsive, Alice can claim her funds back in 24 hours.
 
 ### Timeline of events
 
