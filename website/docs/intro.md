@@ -2,7 +2,7 @@
 description: Detailed information about the protocol, guidance on providing liquidity, and instructions on how to efficiently spend your coins off-chain in a secure manner
 sidebar_position: 1
 slug: /
-title: Introduction to Ark
+title: Introduction
 ---
 
 **Welcome to Ark's developer hub.** Here, you'll find detailed information about the protocol, guidance on providing liquidity, and instructions on how to efficiently spend your coins off-chain in a secure manner.

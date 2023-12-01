@@ -39,7 +39,7 @@ const config = {
           editUrl:
             'https://github.com/ark-network/ark/edit/master/website/blog',
 
-          blogTitle: 'Ark blog',
+          blogTitle: 'Blog',
           blogDescription: 'Posts about Ark development',
         },
       }),
