@@ -1,7 +1,6 @@
 // @ts-check
 // Note: type annotations allow type checking and IDEs autocompletion
 
-
 const lightCodeTheme = require('prism-react-renderer/themes/synthwave84')
 const darkCodeTheme = require('prism-react-renderer/themes/dracula')
 
@@ -27,7 +26,7 @@ const config = {
       /** @type {import('@docusaurus/preset-classic').Options} */
       ({
         docs: {
-          routeBasePath: "/",
+          routeBasePath: '/',
           sidebarPath: require.resolve('./sidebars.js'),
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
@@ -37,7 +36,11 @@ const config = {
           showReadingTime: true,
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
-          editUrl: 'https://github.com/ark-network/ark/edit/master/website/blog',
+          editUrl:
+            'https://github.com/ark-network/ark/edit/master/website/blog',
+
+          blogTitle: 'Ark blog',
+          blogDescription: 'Posts about Ark development',
         },
       }),
     ],
@@ -90,7 +93,7 @@ const config = {
               {
                 label: 'Leave an Ark',
                 to: '/learn/leaving',
-              }
+              },
             ],
           },
           {
@@ -124,7 +127,7 @@ const config = {
               {
                 label: 'Github',
                 href: 'https://github.com/ark-network',
-              }
+              },
             ],
           },
           {
@@ -133,10 +136,10 @@ const config = {
               {
                 label: 'Blog',
                 to: '/blog',
-              }
+              },
             ],
           },
-        ]
+        ],
       },
       colorMode: {
         defaultMode: 'light',
