@@ -4,35 +4,63 @@ sidebar_position: 1
 slug: /
 ---
 
-Welcome to Ark's documentation. Here you can learn more about the protocol, how to provide liquidity and spend your coins off-chain in a fast and secure way.
+**Welcome to Ark's developer hub.** Here, you'll find detailed information about the protocol, guidance on providing liquidity, and instructions on how to efficiently spend your coins off-chain in a secure manner.
 
-## 🤔 Why Ark?
+<div align="center">
+  <img src="/img/ark-banner.png" alt="Noah designing the ark to onboard Bitcoin users"/>
+</div>
 
-Bitcoin is the most secure and censorship blockchain in the world. However, it is not the fastest or the cheapest. Ark is a **second-layer** solution designed to help **scale Bitcoin transactions** by using a shared utxo model that enables confidential and off-chain payments through an intermediary server that can't steal your funds.
+### 🤔 Why Ark?
 
-## 👷‍♂️ How does it work?
+Bitcoin is the world's most secure and censorship-resistant blockchain. However, it's not the fastest or the cheapest. Ark is a **second-layer solution** designed to **scale Bitcoin transactions**. It uses a shared UTXO model for confidential and off-chain payments through an intermediary server that cannot access your funds.
 
- Start by reading the [Nomenclature](/nomenclature.md) section to understand the key concepts and terminology used in Ark. Then, you can learn how to [Board the Ark](intro/boarding.md) and [Send Payments](intro/payments.md). Finally, you can learn how to [Leave the Ark](intro/leaving.md) and withdraw your funds back to the Bitcoin blockchain if the server is unresponsive.
+### 👶🏼 ELI5: Ark in Simple Terms
 
-## 👶🏼 ELI5
+Consider the early private banks that issued banknotes in exchange for gold deposits. These banknotes were redeemable for gold at any time. The banknotes were more convenient to use than gold, but they were only as good as the bank that issued them. If the bank went bankrupt, the banknotes would become worthless.
 
-Think of early private banks that issued banknotes in exchange for gold deposits. In Ark's case, instead of gold, Bitcoin on the first layer acts as the reserve. The key difference is that the Bitcoin blockchain faces issues like slow transaction times, high fees, and limited capacity for numerous transactions.
+When Alice **deposits Bitcoin with a server** (akin to a digital bank), she receives a digital check, similar to a banknote but with a crucial difference. This check is akin to **a cheque with an expiration date**.
 
-Imagine Alice has some digital gold (Bitcoin) and wants to use it for everyday transactions without actually moving the gold each time. She deposits her digital gold with a digital bank (Server) and gets a promise note. Now, whenever she wants to pay Bob, instead of moving the actual gold, she tells the digital bank to transfer the promise note to Bob. The bank prepares a new promise note for Bob and takes back Alice's note.
+The digital cheque Alice receives comes with an expiration date. To keep her funds secure and the cheque valid, she **must interact with the server at least once every month**. If Alice fails to do this, the server reserves the right to **reclaim the Bitcoin backing the cheque upon its maturity**.
 
-This system is convenient but also has a safety net. If the digital bank disappears or fails, anyone can still get their digital gold back without needing the bank's help. This is like being able to withdraw your gold from the old private bank even if the bank closed down. But unlike the old banks, where you had to physically go and get your gold, in Ark, this process is digital and automated, ensuring that your digital gold is always safe and accessible.
+She can use this check for payment with anyone else using the same digital bank, bypassing the need to use the Bitcoin blockchain. Before expiration, the check can be **redeemed** for Bitcoin, or it can be **refreshed** by interacting with the server.
+
+Should the digital bank cease to exist, **users can still retrieve their digital gold without the bank's assistance**. This is similar to withdrawing gold from a defunct traditional bank, but in Ark's case, the process is enforced and automated by the Bitcoin blockchain. This ensures that your digital gold remains safe and accessible.
+
+### 🔨 How Does it Work?
+
+Start by exploring the [Nomenclature](/docs/learn/nomenclature.md) to familiarize yourself with key concepts and terminology. Then, learn how to [Board the Ark](/docs/learn/boarding.md), [Send Payments](/docs/learn/payments.md), and eventually [Leave the Ark](/docs/learn/leaving.md) to withdraw your funds back to the Bitcoin blockchain in case of server unresponsiveness.
 
 
-## 🤓 Protocol Specifications
+### 👩‍💻 Integrate Ark
 
-[Learn more about Ark](specs/00-index.md)
+You can [integrate Ark](/docs/developers/get-started.md) into your wallet or application to enable your users to send and receive Bitcoin payments off-chain.
 
-## Stay in the loop
+### 🏃‍♀️ Running Ark
 
-- Be part of the community [joining our Telegram channel](https://t.me/ark_network_community).
-- Ask questions and get help [on Stack Overflow](https://bitcoin.stackexchange.com/questions/tagged/ark).
-- To propose improvements on protocol [open an issue on the Github repository](https://github.com/ark-network/boats/issues/new).
+:::info
+🚧 **Work in progress**
+The Ark reference implementation is currently under development. Please check back soon for updates.
+:::
 
-## Copyright
+You can join an existing Ark service provider or run your own.
 
-By contributing to this repository, you agree to license your work under the MIT license unless specified otherwise at the top of the file itself. Any work contributed where you are not the original author must contain its license header with the original author(s) and source.
+- [Join an Ark as User](/user/intro.md)
+- [Operate an Ark as Liquidity Provider](/provider/intro.md)
+
+### ⌨️ Contributing
+
+We welcome contributions from the community. If you'd like to contribute to the reference implementation, please see the [Ark GitHub repository](https://github.com/ark-network/ark) repository.
+
+### 🤓 Protocol Specifications
+
+Follow the [BOATS GitHub repository](https://github.com/ark-network/boats) for updates.
+
+### ➰ Stay in the Loop
+
+- Join our community on [Telegram](https://t.me/ark_network_community).
+- Ask questions or get help on [Stack Overflow](https://bitcoin.stackexchange.com/questions/tagged/ark).
+- To propose protocol improvements, [open an issue on GitHub](https://github.com/ark-network/boats/issues/new).
+
+### ⚖️ License
+
+By contributing to this repository, you agree to license your work under the MIT license, unless specified otherwise. Contributions not originally authored by you must include a license header with the original author(s) and source.

@@ -3,28 +3,47 @@ slug: liquidity-requirements
 title: Understanding Ark Liquidity Requirements
 authors: bordalix
 tags: [liquidity, ark, bitcoin]
+image: ./banner.png
 ---
+<head>
+  <meta name="description" content="Dive into the depths of Ark with our comprehensive guide on Liquidity Requirements. Explore how Ark liquidity intersect with money velocity" />
+  
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Understanding Ark Liquidity Requirements" />
+  <meta property="og:description" content="Dive into the depths of Ark with our comprehensive guide on Liquidity Requirements. Explore how Ark liquidity intersect with money velocity" />
+  <meta property="og:image" content="/assets/images/banner-997debaf19b69b17900ae6413eda20c5.png" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="512" />
+  <meta property="og:image:height" content="512" />
+
+  <meta property="twitter:card" content="summary_large_image" />
+  <meta property="twitter:title" content="Understanding Ark Liquidity Requirements" />
+  <meta property="twitter:description" content="Dive into the depths of Ark with our comprehensive guide on Liquidity Requirements. Explore how Ark liquidity intersect with money velocity" />
+  <meta property="twitter:image" content="/assets/images/banner-997debaf19b69b17900ae6413eda20c5.png" />
+</head>
+
+![Bitcoin agora](./banner.png)
+
+This post discusses the liquidity requirements and calculates the funding needs of Ark Service Provider (ASP), as all transactions within Ark must be funded by the ASP.
+
+<!-- truncate -->
 
 ## What is Ark?
 
 Ark is a promising second-layer solution for Bitcoin that could help improve the scalability and privacy of the network. It offers the following benefits:
 
 - **No incoming liquidity required**: Receivers can accept payments without having to worry about having enough funds in their wallets.
-- **Maintains recipient anonymity**: Ark protects the anonymity of recipients, which is not always possible with other second-layer solutions.
+- **Confidential payments**: Ark protects the confidentiality of recipients, which is not always possible with other second-layer solutions.
 - **Scalable**: Ark is a scalable solution that can help improve the scalability of Bitcoin.
 - **Secure**: Ark is a secure solution that is built on top of the Bitcoin blockchain.
 
-All transactions within Ark must be funded by the Ark Service Provider (ASP) in order to achieve these benefits.
-
-This post discusses some considerations on this topic and calculates the funding needs of the ASP.
-
-Refer to [nomenclature docs](/nomenclature) for any doubt
+:::tip
+It's recommended to read the [nomenclature](/learn/nomenclature) first.
+:::
 
 ## Ark liquidity requirements
 
 How much BTC can an ASP accept from new users without risking not having enough capital to fund transfers inside Ark? In other words, what percentage of BTC in Ark is transferred in a 1-month period?
-
-<!-- truncate -->
 
 This is similar to the definition of money velocity, as defined by the St. Louis Fed:
 
@@ -60,6 +79,10 @@ After one month, all the funds used by the ASP, plus the funds sent by the users
 |          1.327 |  142.97 |          36.93 |            42.97 |           57.03 |
 
 Now, what would happen in a one-year period?
+
+:::info
+You can run your own simulations with the <a href="/liquidity-simulator/" target="_blank">Ark liquidity simulator</a>.
+:::
 
 ### Simulating for 1 year
 
@@ -320,10 +343,6 @@ Dividing the initial UTXO into more VTXOs decreases the need for funding.
 
 :::
 
-## Simulator
-
-You can run your own simulations with the <a href="/liquidity-simulator/" target="_blank">Ark liquidity simulator</a>.
-
 ## Conclusion
 
 The liquidity requirements for an ASP will depend on three major factors:
@@ -336,12 +355,12 @@ The liquidity requirements for an ASP will depend on three major factors:
 
 - Velocity of M2 Money Stock
   by St Louis Fed
-  https://fred.stlouisfed.org/series/M2V
+  <https://fred.stlouisfed.org/series/M2V>
 
 - Lightning Report
   by River
-  https://river.com/learn/files/river-lightning-report-2023.pdf
+  <https://river.com/learn/files/river-lightning-report-2023.pdf>
 
 - Cryptocurrencies and the Velocity of Money
   by Ingolf Gunnar Anton Pernice, Georg Gentzen, and Hermann Elendner
-  https://cryptoeconomicsystems.pubpub.org/pub/pernice-cryptocurrencies-velocity/release/9
+  <https://cryptoeconomicsystems.pubpub.org/pub/pernice-cryptocurrencies-velocity/release/9>

@@ -1,7 +1,8 @@
 // @ts-check
 // Note: type annotations allow type checking and IDEs autocompletion
 
-const lightCodeTheme = require('prism-react-renderer/themes/github')
+
+const lightCodeTheme = require('prism-react-renderer/themes/synthwave84')
 const darkCodeTheme = require('prism-react-renderer/themes/dracula')
 
 /** @type {import('@docusaurus/types').Config} */
@@ -30,13 +31,13 @@ const config = {
           sidebarPath: require.resolve('./sidebars.js'),
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
-          editUrl: 'https://github.com/ark-network/edit/master/website/',
+          editUrl: 'https://github.com/ark-network/ark/edit/master/website/',
         },
         blog: {
           showReadingTime: true,
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
-          editUrl: 'https://github.com/ark-network/edit/master/website/blog/',
+          editUrl: 'https://github.com/ark-network/ark/edit/master/website/blog',
         },
       }),
     ],
@@ -46,7 +47,7 @@ const config = {
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
       // Replace with your project's social card
-      image: 'img/ark-og-image.png',
+      image: 'img/ark-banner.png',
       navbar: {
         title: 'Ark',
         logo: {
@@ -72,14 +73,35 @@ const config = {
       footer: {
         links: [
           {
+            title: 'LEARN',
+            items: [
+              {
+                label: 'Nomenclature',
+                to: '/learn/nomenclature',
+              },
+              {
+                label: 'Board an Ark',
+                to: '/learn/boarding',
+              },
+              {
+                label: 'Send Payments',
+                to: '/learn/payments',
+              },
+              {
+                label: 'Leave an Ark',
+                to: '/learn/leaving',
+              }
+            ],
+          },
+          {
             title: 'DOCS',
             items: [
               {
-                label: 'What Ark is',
-                to: '/specs/index',
+                label: 'Overview',
+                to: '/',
               },
               {
-                label: 'Join the Ark',
+                label: 'Join an Ark',
                 to: '/user/intro',
               },
               {
@@ -91,6 +113,10 @@ const config = {
           {
             title: 'COMMUNITY',
             items: [
+              {
+                label: 'Telegram',
+                href: 'https://t.me/ark_network_community',
+              },
               {
                 label: 'Stack Exchange',
                 href: 'https://bitcoin.stackexchange.com/questions/tagged/ark',
@@ -110,11 +136,12 @@ const config = {
               }
             ],
           },
-        ],
-        copyright: `Copyright © ${new Date().getFullYear()} Ark. Built with Docusaurus.`,
+        ]
       },
       colorMode: {
-        defaultMode: 'dark',
+        defaultMode: 'light',
+        disableSwitch: false,
+        respectPrefersColorScheme: true,
       },
       prism: {
         theme: lightCodeTheme,
