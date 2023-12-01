@@ -11,8 +11,6 @@ const (
 	UndefinedStage RoundStage = iota
 	RegistrationStage
 	FinalizationStage
-
-	dustAmount = 450
 )
 
 type RoundStage int
@@ -45,15 +43,17 @@ type Round struct {
 	ForfeitTxs        []string
 	CongestionTree    []string
 	Connectors        []string
+	DustAmount        uint64
 	Version           uint
 	changes           []RoundEvent
 }
 
-func NewRound() *Round {
+func NewRound(dustAmount uint64) *Round {
 	return &Round{
-		Id:       uuid.New().String(),
-		Payments: make(map[string]Payment),
-		changes:  make([]RoundEvent, 0),
+		Id:         uuid.New().String(),
+		DustAmount: dustAmount,
+		Payments:   make(map[string]Payment),
+		changes:    make([]RoundEvent, 0),
 	}
 }
 
@@ -121,9 +121,43 @@ func (r *Round) StartRegistration() ([]RoundEvent, error) {
 	return []RoundEvent{event}, nil
 }
 
+func (r *Round) RegisterPayments(payments []Payment) ([]RoundEvent, error) {
+	if r.Stage.Code != RegistrationStage || r.IsFailed() {
+		return nil, fmt.Errorf("not in a valid stage to register payments")
+	}
+	if len(payments) <= 0 {
+		return nil, fmt.Errorf("missing payments to register")
+	}
+	for _, p := range payments {
+		if err := p.validate(false); err != nil {
+			return nil, err
+		}
+	}
+
+	event := PaymentsRegistered{
+		Id:       r.Id,
+		Payments: payments,
+	}
+	r.raise(event)
+
+	return []RoundEvent{event}, nil
+}
+
 func (r *Round) StartFinalization(connectors, tree []string, poolTx string) ([]RoundEvent, error) {
+	if len(connectors) <= 0 {
+		return nil, fmt.Errorf("missing list of connectors")
+	}
+	if len(tree) <= 0 {
+		return nil, fmt.Errorf("missing congestion tree")
+	}
+	if len(poolTx) <= 0 {
+		return nil, fmt.Errorf("missing unsigned pool tx")
+	}
 	if r.Stage.Code != RegistrationStage || r.IsFailed() {
 		return nil, fmt.Errorf("not in a valid stage to start payment finalization")
+	}
+	if len(r.Payments) <= 0 {
+		return nil, fmt.Errorf("no payments registered")
 	}
 
 	event := RoundFinalizationStarted{
@@ -138,11 +172,17 @@ func (r *Round) StartFinalization(connectors, tree []string, poolTx string) ([]R
 }
 
 func (r *Round) EndFinalization(forfeitTxs []string, txid string) ([]RoundEvent, error) {
+	if len(forfeitTxs) <= 0 {
+		return nil, fmt.Errorf("missing list of signed forfeit txs")
+	}
+	if len(txid) <= 0 {
+		return nil, fmt.Errorf("missing pool txid")
+	}
 	if r.Stage.Code != FinalizationStage || r.IsFailed() {
 		return nil, fmt.Errorf("not in a valid stage to end payment finalization")
 	}
 	if r.Stage.Ended {
-		return nil, fmt.Errorf("payment finalization already ended")
+		return nil, fmt.Errorf("round already finalized")
 	}
 	event := RoundFinalized{
 		Id:         r.Id,
@@ -169,30 +209,9 @@ func (r *Round) Fail(err error) []RoundEvent {
 	return []RoundEvent{event}
 }
 
-func (r *Round) RegisterPayments(payments []Payment) ([]RoundEvent, error) {
-	if !r.IsStarted() {
-		return nil, fmt.Errorf("not in a valid stage to register payments")
-	}
-	if len(payments) <= 0 {
-		return nil, fmt.Errorf("missing payments to register")
-	}
-	for _, p := range payments {
-		if err := p.validate(false); err != nil {
-			return nil, err
-		}
-	}
-
-	event := PaymentsRegistered{
-		Id:       r.Id,
-		Payments: payments,
-	}
-	r.raise(event)
-
-	return []RoundEvent{event}, nil
-}
-
 func (r *Round) IsStarted() bool {
-	return !r.IsFailed() && r.Stage.Code == RegistrationStage
+	empty := Stage{}
+	return !r.IsFailed() && !r.IsEnded() && r.Stage != empty
 }
 
 func (r *Round) IsEnded() bool {
@@ -204,7 +223,11 @@ func (r *Round) IsFailed() bool {
 }
 
 func (r *Round) TotInputAmount() uint64 {
-	return uint64(len(r.Payments) * dustAmount)
+	totInputs := 0
+	for _, p := range r.Payments {
+		totInputs += len(p.Inputs)
+	}
+	return uint64(totInputs * int(r.DustAmount))
 }
 
 func (r *Round) TotOutputAmount() uint64 {

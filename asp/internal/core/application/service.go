@@ -19,7 +19,10 @@ import (
 	"github.com/vulpemventures/go-elements/psetv2"
 )
 
-const paymentsThreshold = 128
+const (
+	paymentsThreshold = 128
+	dustAmount        = 450
+)
 
 type service struct {
 	roundInterval int64
@@ -119,7 +122,7 @@ func (s *service) start() error {
 }
 
 func (s *service) startRound() {
-	round := domain.NewRound()
+	round := domain.NewRound(dustAmount)
 	changes, _ := round.StartRegistration()
 	if err := s.repoManager.Events().Save(
 		context.Background(), round.Id, changes...,
