@@ -227,7 +227,6 @@
         "details": {
           "type": "array",
           "items": {
-            "type": "object",
             "$ref": "#/definitions/protobufAny"
           }
         }
@@ -243,7 +242,6 @@
         "outputs": {
           "type": "array",
           "items": {
-            "type": "object",
             "$ref": "#/definitions/v1Output"
           },
           "description": "List of receivers for a registered payment."
@@ -323,7 +321,6 @@
         "inputs": {
           "type": "array",
           "items": {
-            "type": "object",
             "$ref": "#/definitions/v1Input"
           }
         }

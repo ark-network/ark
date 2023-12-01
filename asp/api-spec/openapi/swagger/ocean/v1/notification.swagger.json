@@ -39,7 +39,6 @@
         "details": {
           "type": "array",
           "items": {
-            "type": "object",
             "$ref": "#/definitions/protobufAny"
           }
         }
@@ -79,7 +78,6 @@
         "webhookInfo": {
           "type": "array",
           "items": {
-            "type": "object",
             "$ref": "#/definitions/v1WebhookInfo"
           },
           "description": "The list of info about the webhooks regitered for an action."
@@ -215,7 +213,6 @@
         "utxos": {
           "type": "array",
           "items": {
-            "type": "object",
             "$ref": "#/definitions/v1Utxo"
           },
           "description": "List of utxos for which occured the event."

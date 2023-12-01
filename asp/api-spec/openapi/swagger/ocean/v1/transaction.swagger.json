@@ -49,7 +49,6 @@
         "details": {
           "type": "array",
           "items": {
-            "type": "object",
             "$ref": "#/definitions/protobufAny"
           }
         }
@@ -236,7 +235,6 @@
         "utxos": {
           "type": "array",
           "items": {
-            "type": "object",
             "$ref": "#/definitions/v1Utxo"
           },
           "description": "List of selected utxos."
