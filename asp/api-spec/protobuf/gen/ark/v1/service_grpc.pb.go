@@ -21,8 +21,9 @@ type ArkServiceClient interface {
 	RegisterPayment(ctx context.Context, in *RegisterPaymentRequest, opts ...grpc.CallOption) (*RegisterPaymentResponse, error)
 	ClaimPayment(ctx context.Context, in *ClaimPaymentRequest, opts ...grpc.CallOption) (*ClaimPaymentResponse, error)
 	FinalizePayment(ctx context.Context, in *FinalizePaymentRequest, opts ...grpc.CallOption) (*FinalizePaymentResponse, error)
-	ListRounds(ctx context.Context, in *ListRoundsRequest, opts ...grpc.CallOption) (*ListRoundsResponse, error)
 	GetRound(ctx context.Context, in *GetRoundRequest, opts ...grpc.CallOption) (*GetRoundResponse, error)
+	GetEventStream(ctx context.Context, in *GetEventStreamRequest, opts ...grpc.CallOption) (ArkService_GetEventStreamClient, error)
+	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
 }
 
 type arkServiceClient struct {
@@ -60,18 +61,50 @@ func (c *arkServiceClient) FinalizePayment(ctx context.Context, in *FinalizePaym
 	return out, nil
 }
 
-func (c *arkServiceClient) ListRounds(ctx context.Context, in *ListRoundsRequest, opts ...grpc.CallOption) (*ListRoundsResponse, error) {
-	out := new(ListRoundsResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/ListRounds", in, out, opts...)
+func (c *arkServiceClient) GetRound(ctx context.Context, in *GetRoundRequest, opts ...grpc.CallOption) (*GetRoundResponse, error) {
+	out := new(GetRoundResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/GetRound", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *arkServiceClient) GetRound(ctx context.Context, in *GetRoundRequest, opts ...grpc.CallOption) (*GetRoundResponse, error) {
-	out := new(GetRoundResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/GetRound", in, out, opts...)
+func (c *arkServiceClient) GetEventStream(ctx context.Context, in *GetEventStreamRequest, opts ...grpc.CallOption) (ArkService_GetEventStreamClient, error) {
+	stream, err := c.cc.NewStream(ctx, &ArkService_ServiceDesc.Streams[0], "/ark.v1.ArkService/GetEventStream", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &arkServiceGetEventStreamClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type ArkService_GetEventStreamClient interface {
+	Recv() (*GetEventStreamResponse, error)
+	grpc.ClientStream
+}
+
+type arkServiceGetEventStreamClient struct {
+	grpc.ClientStream
+}
+
+func (x *arkServiceGetEventStreamClient) Recv() (*GetEventStreamResponse, error) {
+	m := new(GetEventStreamResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *arkServiceClient) Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error) {
+	out := new(PingResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/Ping", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -85,8 +118,9 @@ type ArkServiceServer interface {
 	RegisterPayment(context.Context, *RegisterPaymentRequest) (*RegisterPaymentResponse, error)
 	ClaimPayment(context.Context, *ClaimPaymentRequest) (*ClaimPaymentResponse, error)
 	FinalizePayment(context.Context, *FinalizePaymentRequest) (*FinalizePaymentResponse, error)
-	ListRounds(context.Context, *ListRoundsRequest) (*ListRoundsResponse, error)
 	GetRound(context.Context, *GetRoundRequest) (*GetRoundResponse, error)
+	GetEventStream(*GetEventStreamRequest, ArkService_GetEventStreamServer) error
+	Ping(context.Context, *PingRequest) (*PingResponse, error)
 }
 
 // UnimplementedArkServiceServer should be embedded to have forward compatible implementations.
@@ -102,11 +136,14 @@ func (UnimplementedArkServiceServer) ClaimPayment(context.Context, *ClaimPayment
 func (UnimplementedArkServiceServer) FinalizePayment(context.Context, *FinalizePaymentRequest) (*FinalizePaymentResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FinalizePayment not implemented")
 }
-func (UnimplementedArkServiceServer) ListRounds(context.Context, *ListRoundsRequest) (*ListRoundsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListRounds not implemented")
-}
 func (UnimplementedArkServiceServer) GetRound(context.Context, *GetRoundRequest) (*GetRoundResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetRound not implemented")
+}
+func (UnimplementedArkServiceServer) GetEventStream(*GetEventStreamRequest, ArkService_GetEventStreamServer) error {
+	return status.Errorf(codes.Unimplemented, "method GetEventStream not implemented")
+}
+func (UnimplementedArkServiceServer) Ping(context.Context, *PingRequest) (*PingResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
 }
 
 // UnsafeArkServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -174,24 +211,6 @@ func _ArkService_FinalizePayment_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ArkService_ListRounds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListRoundsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ArkServiceServer).ListRounds(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/ListRounds",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).ListRounds(ctx, req.(*ListRoundsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _ArkService_GetRound_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetRoundRequest)
 	if err := dec(in); err != nil {
@@ -206,6 +225,45 @@ func _ArkService_GetRound_Handler(srv interface{}, ctx context.Context, dec func
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ArkServiceServer).GetRound(ctx, req.(*GetRoundRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ArkService_GetEventStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(GetEventStreamRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ArkServiceServer).GetEventStream(m, &arkServiceGetEventStreamServer{stream})
+}
+
+type ArkService_GetEventStreamServer interface {
+	Send(*GetEventStreamResponse) error
+	grpc.ServerStream
+}
+
+type arkServiceGetEventStreamServer struct {
+	grpc.ServerStream
+}
+
+func (x *arkServiceGetEventStreamServer) Send(m *GetEventStreamResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _ArkService_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ArkServiceServer).Ping(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.ArkService/Ping",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ArkServiceServer).Ping(ctx, req.(*PingRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -230,14 +288,20 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ArkService_FinalizePayment_Handler,
 		},
 		{
-			MethodName: "ListRounds",
-			Handler:    _ArkService_ListRounds_Handler,
-		},
-		{
 			MethodName: "GetRound",
 			Handler:    _ArkService_GetRound_Handler,
 		},
+		{
+			MethodName: "Ping",
+			Handler:    _ArkService_Ping_Handler,
+		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "GetEventStream",
+			Handler:       _ArkService_GetEventStream_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "ark/v1/service.proto",
 }

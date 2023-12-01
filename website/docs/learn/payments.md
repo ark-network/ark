@@ -1,5 +1,5 @@
 ---
-sidebar_position: 4
+sidebar_position: 3
 title: 'Payments'
 ---
 
@@ -7,7 +7,7 @@ title: 'Payments'
 
 Alice wants to send funds to Bob inside the Ark.
 
-- All Ark payments and ransactions are off-chain.
+- All Ark payments and transactions are off-chain.
 - Bob doesn't need to have funds inside the Ark to receive funds. (ie. inbound liquidity problem)
 - Bob doesn't need to be online to receive funds
 - Bob wil be required to be online **at least once every 4 weeks** to keep her funds safe.

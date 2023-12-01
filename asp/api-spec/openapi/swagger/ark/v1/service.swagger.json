@@ -16,6 +16,37 @@
     "application/json"
   ],
   "paths": {
+    "/v1/events": {
+      "get": {
+        "operationId": "ArkService_GetEventStream",
+        "responses": {
+          "200": {
+            "description": "A successful response.(streaming responses)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "$ref": "#/definitions/v1GetEventStreamResponse"
+                },
+                "error": {
+                  "$ref": "#/definitions/rpcStatus"
+                }
+              },
+              "title": "Stream result of v1GetEventStreamResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
     "/v1/payment/claim": {
       "post": {
         "operationId": "ArkService_ClaimPayment",
@@ -112,6 +143,36 @@
         ]
       }
     },
+    "/v1/ping/{paymentId}": {
+      "get": {
+        "operationId": "ArkService_Ping",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1PingResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "paymentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
     "/v1/round/{txid}": {
       "get": {
         "operationId": "ArkService_GetRound",
@@ -135,38 +196,6 @@
             "in": "path",
             "required": true,
             "type": "string"
-          }
-        ],
-        "tags": [
-          "ArkService"
-        ]
-      }
-    },
-    "/v1/rounds": {
-      "post": {
-        "operationId": "ArkService_ListRounds",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1ListRoundsResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1ListRoundsRequest"
-            }
           }
         ],
         "tags": [
@@ -225,14 +254,31 @@
     "v1FinalizePaymentRequest": {
       "type": "object",
       "properties": {
-        "signedVtx": {
-          "type": "string",
-          "description": "Forfeit tx signed also by the user."
+        "signedForfeits": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Forfeit txs signed by the user."
         }
       }
     },
     "v1FinalizePaymentResponse": {
       "type": "object"
+    },
+    "v1GetEventStreamResponse": {
+      "type": "object",
+      "properties": {
+        "roundFinalization": {
+          "$ref": "#/definitions/v1RoundFinalizationEvent"
+        },
+        "roundFinalized": {
+          "$ref": "#/definitions/v1RoundFinalizedEvent"
+        },
+        "roundFailed": {
+          "$ref": "#/definitions/v1RoundFailed"
+        }
+      }
     },
     "v1GetRoundResponse": {
       "type": "object",
@@ -242,27 +288,15 @@
         }
       }
     },
-    "v1ListRoundsRequest": {
+    "v1Input": {
       "type": "object",
       "properties": {
-        "start": {
-          "type": "string",
-          "format": "int64"
+        "txid": {
+          "type": "string"
         },
-        "end": {
-          "type": "string",
+        "vout": {
+          "type": "integer",
           "format": "int64"
-        }
-      }
-    },
-    "v1ListRoundsResponse": {
-      "type": "object",
-      "properties": {
-        "rounds": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/v1Round"
-          }
         }
       }
     },
@@ -278,12 +312,17 @@
         }
       }
     },
+    "v1PingResponse": {
+      "type": "object"
+    },
     "v1RegisterPaymentRequest": {
       "type": "object",
       "properties": {
-        "vtx": {
-          "type": "string",
-          "description": "Unsigned forfeit tx sending all funds back to the ASP."
+        "inputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1Input"
+          }
         }
       }
     },
@@ -293,16 +332,15 @@
         "id": {
           "type": "string",
           "description": "Mocks wabisabi's credentials."
-        },
-        "signedVtx": {
-          "type": "string",
-          "description": "Forfeit tx signed by the ASP."
         }
       }
     },
     "v1Round": {
       "type": "object",
       "properties": {
+        "id": {
+          "type": "string"
+        },
         "start": {
           "type": "string",
           "format": "int64"
@@ -314,11 +352,56 @@
         "txid": {
           "type": "string"
         },
-        "outputs": {
+        "congestionTree": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/v1Output"
+            "type": "string"
           }
+        }
+      }
+    },
+    "v1RoundFailed": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "v1RoundFinalizationEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "poolPartialTx": {
+          "type": "string"
+        },
+        "forfeitTxs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "congestionTree": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "v1RoundFinalizedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "poolTxid": {
+          "type": "string"
         }
       }
     }
