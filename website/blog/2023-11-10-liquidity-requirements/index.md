@@ -3,7 +3,7 @@ slug: liquidity-requirements
 title: Understanding Ark Liquidity Requirements
 authors: bordalix
 tags: [liquidity, ark, bitcoin]
-image: ./banner.png
+image: /img/ark-agora.png
 ---
 
 <head>
@@ -11,7 +11,7 @@ image: ./banner.png
   <meta property="og:type" content="website" />
   <meta property="og:title" content="Understanding Ark Liquidity Requirements" />
   <meta property="og:description" content="Dive into the depths of Ark with our comprehensive guide on Liquidity Requirements. Explore how Ark liquidity intersect with money velocity" />
-  <meta property="og:image" content="./banner.png" />
+  <meta property="og:image" content="/img/ark-agora.png" />
   <meta property="og:image:type" content="image/png" />
   <meta property="og:image:width" content="896" />
   <meta property="og:image:height" content="512" />
@@ -24,7 +24,7 @@ image: ./banner.png
   <meta name="twitter:data2" content="17 minutes" />
 </head>
 
-![Bitcoin agora](./banner.png)
+![Bitcoin agora](/img/ark-agora.png)
 
 This post discusses the liquidity requirements and calculates the funding needs of Ark Service Provider (ASP), as all transactions within Ark must be funded by the ASP.
 
