@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"sync"
 	"time"
 
 	"github.com/ark-network/ark/common"
@@ -21,10 +22,18 @@ import (
 
 const paymentsThreshold = 128
 
+type EventListener struct {
+	listenerID string
+	Channel    chan<- domain.RoundEvent
+	CloseCh    <-chan interface{}
+	RoundID    string
+}
+
 type Service interface {
 	SpendVtxos(ctx context.Context, inputs []domain.VtxoKey) (string, error)
 	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error
 	SignVtxos(ctx context.Context, forfeitTxs map[string]string) error
+	RegisterEventListener(ctx context.Context, listener *EventListener) error
 }
 
 type service struct {
@@ -38,6 +47,9 @@ type service struct {
 	builder         ports.TxBuilder
 	paymentRequests *paymentsMap
 	forfeitTxs      *forfeitTxsMap
+
+	listenerLock *sync.Mutex
+	listeners    []*EventListener
 }
 
 func NewService(
@@ -50,8 +62,10 @@ func NewService(
 	svc := &service{
 		interval, network, onchainNetwork,
 		walletSvc, schedulerSvc, repoManager, builder, paymentRequests, forfeitTxs,
+		&sync.Mutex{}, make([]*EventListener, 0),
 	}
 	repoManager.RegisterEventsHandler(svc.updateProjectionStore)
+	repoManager.RegisterEventsHandler(svc.propagateEvents)
 	return svc
 }
 
@@ -99,6 +113,49 @@ func (s *service) SignVtxos(ctx context.Context, forfeitTxs map[string]string) e
 			return fmt.Errorf("invalid forfeit tx %s: %s", txid, err)
 		}
 	}
+	return nil
+}
+
+func (s *service) RegisterEventListener(ctx context.Context, listener *EventListener) error {
+	round, err := s.repoManager.Rounds().GetCurrentRound(ctx)
+	if err != nil {
+		return err
+	}
+
+	if round.IsEnded() {
+		return fmt.Errorf("round already ended")
+	}
+
+	if round.IsFailed() {
+		return fmt.Errorf("round failed")
+	}
+
+	if round.Id != listener.RoundID {
+		return fmt.Errorf("invalid round id")
+	}
+
+	for _, l := range s.listeners {
+		if l.listenerID == listener.listenerID {
+			return fmt.Errorf("listener already registered")
+		}
+	}
+
+	s.listenerLock.Lock()
+	s.listeners = append(s.listeners, listener)
+	s.listenerLock.Unlock()
+
+	go func() {
+		<-listener.CloseCh
+		s.listenerLock.Lock()
+		for i, l := range s.listeners {
+			if l.listenerID == listener.listenerID {
+				s.listeners = append(s.listeners[:i], s.listeners[i+1:]...)
+				break
+			}
+		}
+		s.listenerLock.Unlock()
+	}()
+
 	return nil
 }
 
@@ -263,6 +320,21 @@ func (s *service) updateProjectionStore(round *domain.Round) {
 			continue
 		}
 		break
+	}
+}
+
+func (s *service) propagateEvents(round *domain.Round) {
+	lastEvent := round.Events()[len(round.Events())-1]
+	switch e := lastEvent.(type) {
+	case domain.RoundFinalizationStarted:
+	case domain.RoundFinalized:
+		for _, l := range s.listeners {
+			if l.RoundID != round.Id {
+				continue
+			}
+
+			l.Channel <- e
+		}
 	}
 }
 

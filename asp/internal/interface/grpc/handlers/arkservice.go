@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"context"
-	"time"
+	"fmt"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/internal/core/application"
@@ -92,92 +92,70 @@ func (h *handler) GetRound(ctx context.Context, req *arkv1.GetRoundRequest) (*ar
 	}
 
 	return &arkv1.GetRoundResponse{
-		Round: castRound(round),
-	}, nil
-}
-
-func (h *handler) ListRounds(ctx context.Context, req *arkv1.ListRoundsRequest) (*arkv1.ListRoundsResponse, error) {
-	rounds := make([]*domain.Round, 0)
-	for _, id := range req.GetIds() {
-		round, err := h.repoManager.Rounds().GetRoundWithId(ctx, id)
-		if err != nil {
-			return nil, err
-		}
-		rounds = append(rounds, round)
-	}
-
-	return &arkv1.ListRoundsResponse{
-		Rounds: castRounds(rounds),
+		Round: &arkv1.Round{
+			Start: round.StartingTimestamp,
+			End:   round.EndingTimestamp,
+			Txid:  round.Txid,
+		},
 	}, nil
 }
 
 func (h *handler) GetEventStream(req *arkv1.GetEventStreamRequest, stream arkv1.ArkService_GetEventStreamServer) error {
-	roundID := req.GetId()
-	timer := time.NewTimer(5 * time.Second)
+	eventChannel := make(chan domain.RoundEvent)
+	closeChannel := make(chan interface{})
+	defer close(eventChannel)
+	defer close(closeChannel)
+
+	err := h.svc.RegisterEventListener(stream.Context(), &application.EventListener{
+		Channel: eventChannel,
+		CloseCh: closeChannel,
+		RoundID: req.GetId(),
+	})
+	if err != nil {
+		return err
+	}
 
 	for {
 		select {
 		case <-stream.Context().Done():
+			closeChannel <- nil
 			return nil
-		case <-timer.C:
-			round, err := h.repoManager.Rounds().GetRoundWithId(stream.Context(), roundID)
-			if err != nil {
-				return err
-			}
-			events := round.Changes
-			for _, event := range events {
-				switch e := event.(type) {
-				case domain.RoundFinalizationStarted:
-					grpcEvent := arkv1.GetEventStreamResponse_RoundFinalization{
+
+		case event := <-eventChannel:
+			switch e := event.(type) {
+			case domain.RoundFinalizationStarted:
+				err := stream.Send(&arkv1.GetEventStreamResponse{
+					Event: &arkv1.GetEventStreamResponse_RoundFinalization{
 						RoundFinalization: &arkv1.RoundFinalizationEvent{
 							Id:             e.Id,
-							CongestionTree: e.CongestionTree,
 							PoolPartialTx:  e.PoolTx,
-							ForfeitTxs:     nil, // TODO get forfeit associated with the user payment
+							CongestionTree: e.CongestionTree,
+							ForfeitTxs:     nil, // TODO: add forfeit txs
 						},
-					}
-
-					err := stream.Send(&arkv1.GetEventStreamResponse{
-						Event: &grpcEvent,
-					})
-					if err != nil {
-						return err
-					}
-				case domain.RoundFinalized:
-					grpcEvent := arkv1.GetEventStreamResponse_RoundFinalized{
+					},
+				})
+				if err != nil {
+					closeChannel <- nil
+					return err
+				}
+			case domain.RoundFinalized:
+				err := stream.Send(&arkv1.GetEventStreamResponse{
+					Event: &arkv1.GetEventStreamResponse_RoundFinalized{
 						RoundFinalized: &arkv1.RoundFinalizedEvent{
 							Id:       e.Id,
 							PoolTxid: e.Txid,
 						},
-					}
-					err := stream.Send(&arkv1.GetEventStreamResponse{
-						Event: &grpcEvent,
-					})
-					if err != nil {
-						return err
-					}
-				default:
-					continue
+					},
+				})
+				if err != nil {
+					closeChannel <- nil
+					return err
 				}
-				timer.Reset(5 * time.Second)
+			case domain.RoundFailed:
+				closeChannel <- nil
+				return fmt.Errorf("round failed")
 			}
 		}
 	}
 
-}
-
-func castRounds(rounds []*domain.Round) []*arkv1.Round {
-	arkRounds := make([]*arkv1.Round, 0, len(rounds))
-	for _, r := range rounds {
-		arkRounds = append(arkRounds, castRound(r))
-	}
-	return arkRounds
-}
-
-func castRound(round *domain.Round) *arkv1.Round {
-	return &arkv1.Round{
-		Start: round.StartingTimestamp,
-		End:   round.EndingTimestamp,
-		Txid:  round.Txid,
-	}
 }

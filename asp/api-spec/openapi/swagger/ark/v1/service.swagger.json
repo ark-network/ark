@@ -180,38 +180,6 @@
           "ArkService"
         ]
       }
-    },
-    "/v1/rounds": {
-      "post": {
-        "operationId": "ArkService_ListRounds",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1ListRoundsResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1ListRoundsRequest"
-            }
-          }
-        ],
-        "tags": [
-          "ArkService"
-        ]
-      }
     }
   },
   "definitions": {
@@ -309,29 +277,6 @@
         }
       }
     },
-    "v1ListRoundsRequest": {
-      "type": "object",
-      "properties": {
-        "ids": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      }
-    },
-    "v1ListRoundsResponse": {
-      "type": "object",
-      "properties": {
-        "rounds": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1Round"
-          }
-        }
-      }
-    },
     "v1Output": {
       "type": "object",
       "properties": {
@@ -382,11 +327,10 @@
         "txid": {
           "type": "string"
         },
-        "outputs": {
+        "congestionTree": {
           "type": "array",
           "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1Output"
+            "type": "string"
           }
         }
       }

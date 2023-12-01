@@ -23,12 +23,6 @@ service ArkService {
       body: "*"
     };
   };
-  rpc ListRounds(ListRoundsRequest) returns (ListRoundsResponse) {
-    option (google.api.http) = {
-      post: "/v1/rounds"
-      body: "*"
-    };
-  };
   rpc GetRound(GetRoundRequest) returns (GetRoundResponse) {
     option (google.api.http) = {
       get: "/v1/round/{txid}"
@@ -63,13 +57,6 @@ message FinalizePaymentRequest {
 }
 message FinalizePaymentResponse {}
 
-message ListRoundsRequest {
-  repeated string ids = 1;
-}
-message ListRoundsResponse {
-  repeated Round rounds = 1;
-}
-
 message GetRoundRequest {
   string txid = 1;
 }
@@ -82,7 +69,7 @@ message Round {
   int64 start = 2;
   int64 end = 3;
   string txid = 4;
-  repeated Output outputs = 5;
+  repeated string congestion_tree = 5;
 }
 
 message Input {

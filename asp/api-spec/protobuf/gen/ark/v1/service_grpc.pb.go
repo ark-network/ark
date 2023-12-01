@@ -22,7 +22,6 @@ const (
 	ArkService_RegisterPayment_FullMethodName = "/ark.v1.ArkService/RegisterPayment"
 	ArkService_ClaimPayment_FullMethodName    = "/ark.v1.ArkService/ClaimPayment"
 	ArkService_FinalizePayment_FullMethodName = "/ark.v1.ArkService/FinalizePayment"
-	ArkService_ListRounds_FullMethodName      = "/ark.v1.ArkService/ListRounds"
 	ArkService_GetRound_FullMethodName        = "/ark.v1.ArkService/GetRound"
 	ArkService_GetEventStream_FullMethodName  = "/ark.v1.ArkService/GetEventStream"
 )
@@ -34,7 +33,6 @@ type ArkServiceClient interface {
 	RegisterPayment(ctx context.Context, in *RegisterPaymentRequest, opts ...grpc.CallOption) (*RegisterPaymentResponse, error)
 	ClaimPayment(ctx context.Context, in *ClaimPaymentRequest, opts ...grpc.CallOption) (*ClaimPaymentResponse, error)
 	FinalizePayment(ctx context.Context, in *FinalizePaymentRequest, opts ...grpc.CallOption) (*FinalizePaymentResponse, error)
-	ListRounds(ctx context.Context, in *ListRoundsRequest, opts ...grpc.CallOption) (*ListRoundsResponse, error)
 	GetRound(ctx context.Context, in *GetRoundRequest, opts ...grpc.CallOption) (*GetRoundResponse, error)
 	GetEventStream(ctx context.Context, in *GetEventStreamRequest, opts ...grpc.CallOption) (ArkService_GetEventStreamClient, error)
 }
@@ -68,15 +66,6 @@ func (c *arkServiceClient) ClaimPayment(ctx context.Context, in *ClaimPaymentReq
 func (c *arkServiceClient) FinalizePayment(ctx context.Context, in *FinalizePaymentRequest, opts ...grpc.CallOption) (*FinalizePaymentResponse, error) {
 	out := new(FinalizePaymentResponse)
 	err := c.cc.Invoke(ctx, ArkService_FinalizePayment_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *arkServiceClient) ListRounds(ctx context.Context, in *ListRoundsRequest, opts ...grpc.CallOption) (*ListRoundsResponse, error) {
-	out := new(ListRoundsResponse)
-	err := c.cc.Invoke(ctx, ArkService_ListRounds_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +120,6 @@ type ArkServiceServer interface {
 	RegisterPayment(context.Context, *RegisterPaymentRequest) (*RegisterPaymentResponse, error)
 	ClaimPayment(context.Context, *ClaimPaymentRequest) (*ClaimPaymentResponse, error)
 	FinalizePayment(context.Context, *FinalizePaymentRequest) (*FinalizePaymentResponse, error)
-	ListRounds(context.Context, *ListRoundsRequest) (*ListRoundsResponse, error)
 	GetRound(context.Context, *GetRoundRequest) (*GetRoundResponse, error)
 	GetEventStream(*GetEventStreamRequest, ArkService_GetEventStreamServer) error
 }
@@ -148,9 +136,6 @@ func (UnimplementedArkServiceServer) ClaimPayment(context.Context, *ClaimPayment
 }
 func (UnimplementedArkServiceServer) FinalizePayment(context.Context, *FinalizePaymentRequest) (*FinalizePaymentResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FinalizePayment not implemented")
-}
-func (UnimplementedArkServiceServer) ListRounds(context.Context, *ListRoundsRequest) (*ListRoundsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListRounds not implemented")
 }
 func (UnimplementedArkServiceServer) GetRound(context.Context, *GetRoundRequest) (*GetRoundResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetRound not implemented")
@@ -224,24 +209,6 @@ func _ArkService_FinalizePayment_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ArkService_ListRounds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListRoundsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ArkServiceServer).ListRounds(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ArkService_ListRounds_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).ListRounds(ctx, req.(*ListRoundsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _ArkService_GetRound_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetRoundRequest)
 	if err := dec(in); err != nil {
@@ -299,10 +266,6 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "FinalizePayment",
 			Handler:    _ArkService_FinalizePayment_Handler,
-		},
-		{
-			MethodName: "ListRounds",
-			Handler:    _ArkService_ListRounds_Handler,
 		},
 		{
 			MethodName: "GetRound",
