@@ -10,10 +10,9 @@ slug: /
   <img src="/img/ark-banner.png" alt="Noah designing the ark to onboard Bitcoin users"/>
 </div>
 
-### 🤔 Why Ark? 
+### 🤔 Why Ark?
 
 Bitcoin is the world's most secure and censorship-resistant blockchain. However, it's not the fastest or the cheapest. Ark is a **second-layer solution** designed to **scale Bitcoin transactions**. It uses a shared UTXO model for confidential and off-chain payments through an intermediary server that cannot access your funds.
-
 
 ### 👶🏼 ELI5: Ark in Simple Terms
 
@@ -27,14 +26,10 @@ Start by exploring the [Nomenclature](/docs/learn/nomenclature.md) to familiariz
 
 ### 🏃‍♀️ Running Ark
 
-You can join an existing Ark service provider or run your own. 
+You can join an existing Ark service provider or run your own.
 
 - [Join an Ark as User](/user/intro.md)
 - [Operate an Ark as Liquidity Provider](/provider/intro.md)
-
-
-
-
 
 ### ⌨️ Contributing
 
@@ -42,7 +37,7 @@ We welcome contributions from the community. If you'd like to contribute to the 
 
 ### 🤓 Protocol Specifications
 
-🚧 **Work in progress** Follow on the [BOATS](https://github.com/ark-network/boats) repository for updates. 
+🚧 **Work in progress** Follow on the [BOATS](https://github.com/ark-network/boats) repository for updates.
 
 ### Stay in the Loop
 
@@ -50,6 +45,6 @@ We welcome contributions from the community. If you'd like to contribute to the 
 - Ask questions or get help on [Stack Overflow](https://bitcoin.stackexchange.com/questions/tagged/ark).
 - To propose protocol improvements, [open an issue on GitHub](https://github.com/ark-network/boats/issues/new).
 
-### Copyright
+### License
 
 By contributing to this repository, you agree to license your work under the MIT license, unless specified otherwise. Contributions not originally authored by you must include a license header with the original author(s) and source.
