@@ -19,7 +19,7 @@ image: ./banner.png
   <meta property="twitter:title" content="Understanding Ark Liquidity Requirements" />
   <meta property="twitter:description" content="Dive into the depths of Ark with our comprehensive guide on Liquidity Requirements. Explore how Ark liquidity intersect with money velocity" />
   <meta name="twitter:label1" content="Author" />
-  <meta name="twitter:data1" content="bordalix" />
+  <meta name="twitter:data1" content="João Bordalo" />
   <meta name="twitter:label2" content="Reading time" />
   <meta name="twitter:data2" content="17 minutes" />
 </head>
