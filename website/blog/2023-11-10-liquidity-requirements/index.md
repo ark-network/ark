@@ -8,13 +8,13 @@ image: ./banner.png
 <head>
   <meta property="twitter:card" content="summary_large_image" />
   <meta property="twitter:title" content="Understanding Ark Liquidity Requirements" />
-  <meta property="twitter:description" content="All transactions within Ark must be funded by the Ark Service Provider (ASP) in order to achieve these benefits" />
+  <meta property="twitter:description" content="Dive into the depths of Ark with our comprehensive guide on Liquidity Requirements. Explore how Ark liquidity intersect with money velocity" />
   <meta property="twitter:image" content="/assets/images/banner-997debaf19b69b17900ae6413eda20c5.png" />
 </head>
 
 ![Bitcoin agora](./banner.png)
 
-All transactions within Ark must be funded by the Ark Service Provider (ASP) in order to achieve these benefits. This post discusses some considerations on this topic and calculates the funding needs of the ASP.
+This post discusses the liquidity requirements and calculates the funding needs of Ark Service Provider (ASP), as all transactions within Ark must be funded by the ASP.
 
 <!-- truncate -->
 
