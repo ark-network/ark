@@ -61,6 +61,6 @@ Follow the [BOATS GitHub repository](https://github.com/ark-network/boats) for u
 - Ask questions or get help on [Stack Overflow](https://bitcoin.stackexchange.com/questions/tagged/ark).
 - To propose protocol improvements, [open an issue on GitHub](https://github.com/ark-network/boats/issues/new).
 
-### License
+### ⚖️ License
 
 By contributing to this repository, you agree to license your work under the MIT license, unless specified otherwise. Contributions not originally authored by you must include a license header with the original author(s) and source.
