@@ -47,7 +47,7 @@ const config = {
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
       // Replace with your project's social card
-      image: 'img/ark-og-image.png',
+      image: 'img/ark-banner.png',
       navbar: {
         title: 'Ark',
         logo: {
