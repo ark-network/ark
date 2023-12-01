@@ -27,7 +27,7 @@ help:
 ## intergrationtest: runs integration tests
 integrationtest:
 	@echo "Running integration tests..."
-	@go test -v -count=1 -race ./... $(go list ./... | grep internal/test)
+	@find . -name go.mod -execdir go test -v -count=1 -race $(go list ./... | grep internal/test) \;
 
 ## lint: lint codebase
 lint:
