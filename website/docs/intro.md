@@ -16,15 +16,31 @@ Bitcoin is the world's most secure and censorship-resistant blockchain. However,
 
 ### 👶🏼 ELI5: Ark in Simple Terms
 
-Consider the early private banks that issued banknotes for gold deposits. In Ark's ecosystem, Bitcoin acts as this 'gold'. The main difference is that Bitcoin's blockchain, unlike a bank, faces slow transaction times, high fees, and limited transaction capacity.
+Consider the early private banks that issued banknotes in exchange for gold deposits. These banknotes were redeemable for gold at any time. The banknotes were more convenient to use than gold, but they were only as good as the bank that issued them. If the bank went bankrupt, the banknotes would become worthless.
 
-Imagine Alice wants to use her Bitcoin for daily transactions without moving it each time. She deposits it with a server (digital bank) and gets a digital note (akin to a banknote). When she needs to pay Bob, she simply instructs the server to transfer the note to him. This system is not only convenient but also secure. If the server fails, users can still retrieve their Bitcoin, akin to withdrawing gold from a bank, but with a digital and automated process.
+When Alice **deposits Bitcoin with a server** (akin to a digital bank), she receives a digital check, similar to a banknote but with a crucial difference. This check is akin to **a cheque with an expiration date**.
+
+The digital cheque Alice receives comes with an expiration date. To keep her funds secure and the cheque valid, she **must interact with the server at least once every month**. If Alice fails to do this, the server reserves the right to **reclaim the Bitcoin backing the cheque upon its maturity**.
+
+She can use this check for payment with anyone else using the same digital bank, bypassing the need to use the Bitcoin blockchain. Before expiration, the check can be **redeemed** for Bitcoin, or it can be **refreshed** by interacting with the server.
+
+Should the digital bank cease to exist, **users can still retrieve their digital gold without the bank's assistance**. This is similar to withdrawing gold from a defunct traditional bank, but in Ark's case, the process is enforced and automated by the Bitcoin blockchain. This ensures that your digital gold remains safe and accessible.
 
 ### 🔨 How Does it Work?
 
 Start by exploring the [Nomenclature](/docs/learn/nomenclature.md) to familiarize yourself with key concepts and terminology. Then, learn how to [Board the Ark](/docs/learn/boarding.md), [Send Payments](/docs/learn/payments.md), and eventually [Leave the Ark](/docs/learn/leaving.md) to withdraw your funds back to the Bitcoin blockchain in case of server unresponsiveness.
 
+
+### 👩‍💻 Integrate Ark
+
+You can [integrate Ark](/docs/developers/get-started.md) into your wallet or application to enable your users to send and receive Bitcoin payments off-chain.
+
 ### 🏃‍♀️ Running Ark
+
+:::info
+🚧 **Work in progress**
+The Ark reference implementation is currently under development. Please check back soon for updates.
+:::
 
 You can join an existing Ark service provider or run your own.
 
@@ -33,11 +49,11 @@ You can join an existing Ark service provider or run your own.
 
 ### ⌨️ Contributing
 
-We welcome contributions from the community. If you'd like to contribute to the reference implementation, please see the [ark](https://github.com/ark-network/ark) repository.
+We welcome contributions from the community. If you'd like to contribute to the reference implementation, please see the [Ark GitHub repository](https://github.com/ark-network/ark) repository.
 
 ### 🤓 Protocol Specifications
 
-🚧 **Work in progress** Follow on the [BOATS](https://github.com/ark-network/boats) repository for updates.
+Follow the [BOATS GitHub repository](https://github.com/ark-network/boats) for updates.
 
 ### Stay in the Loop
 
