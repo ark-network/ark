@@ -6,6 +6,11 @@ tags: [liquidity, ark, bitcoin]
 image: ./banner.png
 ---
 <head>
+  <meta name="description" content="Dive into the depths of Ark with our comprehensive guide on Liquidity Requirements. Explore how Ark liquidity intersect with money velocity">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Understanding Ark Liquidity Requirements">
+  <meta property="og:description" content="Dive into the depths of Ark with our comprehensive guide on Liquidity Requirements. Explore how Ark liquidity intersect with money velocity">
+  <meta property="og:image" content="/assets/images/banner-997debaf19b69b17900ae6413eda20c5.png">
   <meta property="twitter:card" content="summary_large_image" />
   <meta property="twitter:title" content="Understanding Ark Liquidity Requirements" />
   <meta property="twitter:description" content="Dive into the depths of Ark with our comprehensive guide on Liquidity Requirements. Explore how Ark liquidity intersect with money velocity" />
