@@ -3,28 +3,39 @@ slug: liquidity-requirements
 title: Understanding Ark Liquidity Requirements
 authors: bordalix
 tags: [liquidity, ark, bitcoin]
+image: ./banner.png
 ---
+<head>
+  <meta property="twitter:card" content="summary_large_image" />
+  <meta property="twitter:title" content="Understanding Ark Liquidity Requirements" />
+  <meta property="twitter:description" content="All transactions within Ark must be funded by the Ark Service Provider (ASP) in order to achieve these benefits" />
+  <meta property="twitter:image" content="/assets/images/banner-997debaf19b69b17900ae6413eda20c5.png" />
+</head>
+
+![Bitcoin agora](./banner.png)
+
+All transactions within Ark must be funded by the Ark Service Provider (ASP) in order to achieve these benefits. This post discusses some considerations on this topic and calculates the funding needs of the ASP.
+
+<!-- truncate -->
 
 ## What is Ark?
 
 Ark is a promising second-layer solution for Bitcoin that could help improve the scalability and privacy of the network. It offers the following benefits:
 
 - **No incoming liquidity required**: Receivers can accept payments without having to worry about having enough funds in their wallets.
-- **Maintains recipient anonymity**: Ark protects the anonymity of recipients, which is not always possible with other second-layer solutions.
+- **Confidential payments**: Ark protects the confidentiality of recipients, which is not always possible with other second-layer solutions.
 - **Scalable**: Ark is a scalable solution that can help improve the scalability of Bitcoin.
 - **Secure**: Ark is a secure solution that is built on top of the Bitcoin blockchain.
 
-All transactions within Ark must be funded by the Ark Service Provider (ASP) in order to achieve these benefits.
 
-This post discusses some considerations on this topic and calculates the funding needs of the ASP.
 
-Refer to [nomenclature docs](/nomenclature) for any doubt
+:::tip
+It's recommended to read the [nomenclature](/learn/nomenclature) first.
+:::
 
 ## Ark liquidity requirements
 
 How much BTC can an ASP accept from new users without risking not having enough capital to fund transfers inside Ark? In other words, what percentage of BTC in Ark is transferred in a 1-month period?
-
-<!-- truncate -->
 
 This is similar to the definition of money velocity, as defined by the St. Louis Fed:
 
@@ -60,6 +71,10 @@ After one month, all the funds used by the ASP, plus the funds sent by the users
 |          1.327 |  142.97 |          36.93 |            42.97 |           57.03 |
 
 Now, what would happen in a one-year period?
+
+:::info
+You can run your own simulations with the <a href="/liquidity-simulator/" target="_blank">Ark liquidity simulator</a>.
+:::
 
 ### Simulating for 1 year
 
@@ -320,9 +335,6 @@ Dividing the initial UTXO into more VTXOs decreases the need for funding.
 
 :::
 
-## Simulator
-
-You can run your own simulations with the <a href="/liquidity-simulator/" target="_blank">Ark liquidity simulator</a>.
 
 ## Conclusion
 

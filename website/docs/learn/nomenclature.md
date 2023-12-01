@@ -1,13 +1,16 @@
 ---
-sidebar_position: 2
+sidebar_position: 1
 title: 'Nomenclature'
 ---
+:::info
+🚧 This page is currently under development, and some concepts may not be entirely accurate. We greatly value your feedback and contributions. If you have any suggestions, corrections, or would like to submit edits, please do so through the pull request link available at the bottom of each page.
+:::
 
 ## Intervenients
 
 ### ASP
 
-Ark is a second-layer solution designed to help scale Bitcoin transactions by using a shared UTXO model that enables anonymous, off-chain payments through an untrusted intermediary called the **Ark Service Provider** (ASP). ASPs are always-on servers that provide liquidity to the network, similar to how Lightning service providers work.
+ASPs are always-on servers that provide liquidity to the network, similar to how Lightning service providers work.
 
 ### Users
 
@@ -79,7 +82,7 @@ Periodic transaction crafted by the ASP that hits mainchain and creates new VTXO
 - Represents a binary tree of transactions
 - In an optimistic scenario, this tree is never revealed
 
-![Docusaurus Plushie](./img/shared_output.png)
+![Chart of a Shared Output](/img/shared_output.png)
 
 ### VTXO\*
 

@@ -1,7 +1,8 @@
 // @ts-check
 // Note: type annotations allow type checking and IDEs autocompletion
 
-const lightCodeTheme = require('prism-react-renderer/themes/github')
+
+const lightCodeTheme = require('prism-react-renderer/themes/synthwave84')
 const darkCodeTheme = require('prism-react-renderer/themes/dracula')
 
 /** @type {import('@docusaurus/types').Config} */
@@ -72,14 +73,35 @@ const config = {
       footer: {
         links: [
           {
+            title: 'LEARN',
+            items: [
+              {
+                label: 'Nomenclature',
+                to: '/learn/nomenclature',
+              },
+              {
+                label: 'Board an Ark',
+                to: '/learn/boarding',
+              },
+              {
+                label: 'Send Payments',
+                to: '/learn/payments',
+              },
+              {
+                label: 'Leave an Ark',
+                to: '/learn/leaving',
+              }
+            ],
+          },
+          {
             title: 'DOCS',
             items: [
               {
-                label: 'What Ark is',
-                to: '/specs/index',
+                label: 'Overview',
+                to: '/',
               },
               {
-                label: 'Join the Ark',
+                label: 'Join an Ark',
                 to: '/user/intro',
               },
               {
@@ -91,6 +113,10 @@ const config = {
           {
             title: 'COMMUNITY',
             items: [
+              {
+                label: 'Telegram',
+                href: 'https://t.me/ark_network_community',
+              },
               {
                 label: 'Stack Exchange',
                 href: 'https://bitcoin.stackexchange.com/questions/tagged/ark',
@@ -110,11 +136,12 @@ const config = {
               }
             ],
           },
-        ],
-        copyright: `Copyright © ${new Date().getFullYear()} Ark. Built with Docusaurus.`,
+        ]
       },
       colorMode: {
-        defaultMode: 'dark',
+        defaultMode: 'light',
+        disableSwitch: false,
+        respectPrefersColorScheme: false,
       },
       prism: {
         theme: lightCodeTheme,
