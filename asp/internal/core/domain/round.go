@@ -222,7 +222,7 @@ func (r *Round) IsFailed() bool {
 	return r.Stage.Failed
 }
 
-func (r *Round) TotInputAmount() uint64 {
+func (r *Round) TotalInputAmount() uint64 {
 	totInputs := 0
 	for _, p := range r.Payments {
 		totInputs += len(p.Inputs)
@@ -230,10 +230,10 @@ func (r *Round) TotInputAmount() uint64 {
 	return uint64(totInputs * int(r.DustAmount))
 }
 
-func (r *Round) TotOutputAmount() uint64 {
+func (r *Round) TotalOutputAmount() uint64 {
 	tot := uint64(0)
 	for _, p := range r.Payments {
-		tot += p.TotOutputAmount()
+		tot += p.TotalOutputAmount()
 	}
 	return tot
 }
