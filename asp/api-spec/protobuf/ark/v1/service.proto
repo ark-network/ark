@@ -30,7 +30,12 @@ service ArkService {
   };
   rpc GetEventStream(GetEventStreamRequest) returns (stream GetEventStreamResponse) {
     option (google.api.http) = {
-      get: "/v1/events/{id}"
+      get: "/v1/events"
+    };
+  };
+  rpc Ping(PingRequest) returns (PingResponse) {
+    option (google.api.http) = {
+      get: "/v1/ping/{payment_id}"
     };
   };
 }
@@ -94,13 +99,24 @@ message RoundFinalizedEvent {
   string pool_txid = 2;
 }
 
-message GetEventStreamRequest {
+message RoundFailed {
   string id = 1;
+  string reason = 2;
 }
+
+message GetEventStreamRequest {}
 
 message GetEventStreamResponse {
   oneof event {
     RoundFinalizationEvent round_finalization = 1;
     RoundFinalizedEvent round_finalized = 2;
+    RoundFailed round_failed = 3;
   }
 }
+
+message PingRequest {
+  string payment_id = 1;
+}
+
+message PingResponse {}
+

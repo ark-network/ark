@@ -24,6 +24,7 @@ const (
 	ArkService_FinalizePayment_FullMethodName = "/ark.v1.ArkService/FinalizePayment"
 	ArkService_GetRound_FullMethodName        = "/ark.v1.ArkService/GetRound"
 	ArkService_GetEventStream_FullMethodName  = "/ark.v1.ArkService/GetEventStream"
+	ArkService_Ping_FullMethodName            = "/ark.v1.ArkService/Ping"
 )
 
 // ArkServiceClient is the client API for ArkService service.
@@ -35,6 +36,7 @@ type ArkServiceClient interface {
 	FinalizePayment(ctx context.Context, in *FinalizePaymentRequest, opts ...grpc.CallOption) (*FinalizePaymentResponse, error)
 	GetRound(ctx context.Context, in *GetRoundRequest, opts ...grpc.CallOption) (*GetRoundResponse, error)
 	GetEventStream(ctx context.Context, in *GetEventStreamRequest, opts ...grpc.CallOption) (ArkService_GetEventStreamClient, error)
+	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
 }
 
 type arkServiceClient struct {
@@ -113,6 +115,15 @@ func (x *arkServiceGetEventStreamClient) Recv() (*GetEventStreamResponse, error)
 	return m, nil
 }
 
+func (c *arkServiceClient) Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error) {
+	out := new(PingResponse)
+	err := c.cc.Invoke(ctx, ArkService_Ping_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ArkServiceServer is the server API for ArkService service.
 // All implementations should embed UnimplementedArkServiceServer
 // for forward compatibility
@@ -122,6 +133,7 @@ type ArkServiceServer interface {
 	FinalizePayment(context.Context, *FinalizePaymentRequest) (*FinalizePaymentResponse, error)
 	GetRound(context.Context, *GetRoundRequest) (*GetRoundResponse, error)
 	GetEventStream(*GetEventStreamRequest, ArkService_GetEventStreamServer) error
+	Ping(context.Context, *PingRequest) (*PingResponse, error)
 }
 
 // UnimplementedArkServiceServer should be embedded to have forward compatible implementations.
@@ -142,6 +154,9 @@ func (UnimplementedArkServiceServer) GetRound(context.Context, *GetRoundRequest)
 }
 func (UnimplementedArkServiceServer) GetEventStream(*GetEventStreamRequest, ArkService_GetEventStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method GetEventStream not implemented")
+}
+func (UnimplementedArkServiceServer) Ping(context.Context, *PingRequest) (*PingResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
 }
 
 // UnsafeArkServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -248,6 +263,24 @@ func (x *arkServiceGetEventStreamServer) Send(m *GetEventStreamResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
+func _ArkService_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ArkServiceServer).Ping(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ArkService_Ping_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ArkServiceServer).Ping(ctx, req.(*PingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ArkService_ServiceDesc is the grpc.ServiceDesc for ArkService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -270,6 +303,10 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetRound",
 			Handler:    _ArkService_GetRound_Handler,
+		},
+		{
+			MethodName: "Ping",
+			Handler:    _ArkService_Ping_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

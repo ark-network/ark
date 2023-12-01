@@ -16,7 +16,7 @@
     "application/json"
   ],
   "paths": {
-    "/v1/events/{id}": {
+    "/v1/events": {
       "get": {
         "operationId": "ArkService_GetEventStream",
         "responses": {
@@ -42,14 +42,6 @@
             }
           }
         },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
         "tags": [
           "ArkService"
         ]
@@ -144,6 +136,36 @@
             "schema": {
               "$ref": "#/definitions/v1RegisterPaymentRequest"
             }
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
+    "/v1/ping/{paymentId}": {
+      "get": {
+        "operationId": "ArkService_Ping",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1PingResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "paymentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
           }
         ],
         "tags": [
@@ -254,6 +276,9 @@
         },
         "roundFinalized": {
           "$ref": "#/definitions/v1RoundFinalizedEvent"
+        },
+        "roundFailed": {
+          "$ref": "#/definitions/v1RoundFailed"
         }
       }
     },
@@ -288,6 +313,9 @@
           "format": "uint64"
         }
       }
+    },
+    "v1PingResponse": {
+      "type": "object"
     },
     "v1RegisterPaymentRequest": {
       "type": "object",
@@ -332,6 +360,17 @@
           "items": {
             "type": "string"
           }
+        }
+      }
+    },
+    "v1RoundFailed": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
         }
       }
     },
