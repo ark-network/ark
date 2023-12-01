@@ -107,6 +107,10 @@ func (s *service) ClaimVtxos(ctx context.Context, creds string, receivers []doma
 	return s.paymentRequests.update(*payment)
 }
 
+func (s *service) UpdatePaymenStatus(_ context.Context, id string) error {
+	return s.paymentRequests.updatePingTimestamp(id)
+}
+
 func (s *service) SignVtxos(ctx context.Context, forfeitTxs map[string]string) error {
 	for txid, tx := range forfeitTxs {
 		if err := s.forfeitTxs.sign(txid, tx); err != nil {
