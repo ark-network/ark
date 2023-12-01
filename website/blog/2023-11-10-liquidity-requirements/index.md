@@ -6,11 +6,11 @@ tags: [liquidity, ark, bitcoin]
 image: ./banner.png
 ---
 <head>
-  <meta name="description" content="Dive into the depths of Ark with our comprehensive guide on Liquidity Requirements. Explore how Ark liquidity intersect with money velocity">
-  <meta property="og:type" content="website">
-  <meta property="og:title" content="Understanding Ark Liquidity Requirements">
-  <meta property="og:description" content="Dive into the depths of Ark with our comprehensive guide on Liquidity Requirements. Explore how Ark liquidity intersect with money velocity">
-  <meta property="og:image" content="/assets/images/banner-997debaf19b69b17900ae6413eda20c5.png">
+  <meta name="description" content="Dive into the depths of Ark with our comprehensive guide on Liquidity Requirements. Explore how Ark liquidity intersect with money velocity" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Understanding Ark Liquidity Requirements" />
+  <meta property="og:description" content="Dive into the depths of Ark with our comprehensive guide on Liquidity Requirements. Explore how Ark liquidity intersect with money velocity" />
+  <meta property="og:image" content="/assets/images/banner-997debaf19b69b17900ae6413eda20c5.png" />
   <meta property="twitter:card" content="summary_large_image" />
   <meta property="twitter:title" content="Understanding Ark Liquidity Requirements" />
   <meta property="twitter:description" content="Dive into the depths of Ark with our comprehensive guide on Liquidity Requirements. Explore how Ark liquidity intersect with money velocity" />
@@ -31,8 +31,6 @@ Ark is a promising second-layer solution for Bitcoin that could help improve the
 - **Confidential payments**: Ark protects the confidentiality of recipients, which is not always possible with other second-layer solutions.
 - **Scalable**: Ark is a scalable solution that can help improve the scalability of Bitcoin.
 - **Secure**: Ark is a secure solution that is built on top of the Bitcoin blockchain.
-
-
 
 :::tip
 It's recommended to read the [nomenclature](/learn/nomenclature) first.
@@ -340,7 +338,6 @@ Dividing the initial UTXO into more VTXOs decreases the need for funding.
 
 :::
 
-
 ## Conclusion
 
 The liquidity requirements for an ASP will depend on three major factors:
@@ -353,12 +350,12 @@ The liquidity requirements for an ASP will depend on three major factors:
 
 - Velocity of M2 Money Stock
   by St Louis Fed
-  https://fred.stlouisfed.org/series/M2V
+  <https://fred.stlouisfed.org/series/M2V>
 
 - Lightning Report
   by River
-  https://river.com/learn/files/river-lightning-report-2023.pdf
+  <https://river.com/learn/files/river-lightning-report-2023.pdf>
 
 - Cryptocurrencies and the Velocity of Money
   by Ingolf Gunnar Anton Pernice, Georg Gentzen, and Hermann Elendner
-  https://cryptoeconomicsystems.pubpub.org/pub/pernice-cryptocurrencies-velocity/release/9
+  <https://cryptoeconomicsystems.pubpub.org/pub/pernice-cryptocurrencies-velocity/release/9>
