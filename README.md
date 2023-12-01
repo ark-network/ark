@@ -1,9 +1,13 @@
-# Ark monorepo
+# Ark
 
-This is the monorepo containing the initial Ark products.
+![noah desiging the ark to scale Bitcoin](https://github.com/ark-network/ark/assets/3596602/5f51dde8-33d3-404f-bacf-6975131c9509)
+
+Welcome to the Ark monorepo.
 
 In this repository you can find:
 
 - `asp` - a proof of concept of an Ark Service Provider.
 - `website` - the website where to find documentation about Ark protocol and products.
 - `noah` - the initial Ark wallet, served as CLI.
+
+
