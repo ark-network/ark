@@ -13,6 +13,19 @@ var balanceCommand = cli.Command{
 }
 
 func balanceAction(ctx *cli.Context) error {
-	fmt.Println("balance is not implemented yet")
+	client, close, err := getArkClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer close()
+
+	vtxos, err := getVtxos(ctx, client)
+	if err != nil {
+		return err
+	}
+
+	balance := computeBalance(vtxos)
+	fmt.Println(balance)
+
 	return nil
 }

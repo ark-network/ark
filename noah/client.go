@@ -1,0 +1,53 @@
+package main
+
+import (
+	"fmt"
+
+	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+	"github.com/urfave/cli/v2"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+)
+
+type vtxo struct {
+	amount uint64
+	txid   string
+	vout   uint32
+}
+
+// TODO: implement
+func getVtxos(ctx *cli.Context, client arkv1.ArkServiceClient) ([]vtxo, error) {
+	panic("not implemented")
+}
+
+// get the ark client and a function closing the connection
+func getArkClient(ctx *cli.Context) (arkv1.ArkServiceClient, func() error, error) {
+	conn, err := getConn(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	client := arkv1.NewArkServiceClient(conn)
+
+	return client, conn.Close, nil
+}
+
+// connect to the ark rpc URL specified in the config
+func getConn(ctx *cli.Context) (*grpc.ClientConn, error) {
+	state, err := getState()
+	if err != nil {
+		return nil, err
+	}
+
+	rpcUrl, ok := state["rpc_url"]
+	if !ok {
+		return nil, fmt.Errorf("missing rpc_url")
+	}
+
+	conn, err := grpc.Dial(rpcUrl, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, err
+	}
+
+	return conn, nil
+}

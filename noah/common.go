@@ -112,3 +112,33 @@ func getServiceProviderPublicKey() (*secp256k1.PublicKey, error) {
 
 	return publicKey, nil
 }
+
+func coinSelect(vtxos []vtxo, amount uint64) ([]vtxo, uint64, error) {
+	selected := make([]vtxo, 0)
+	selectedAmount := uint64(0)
+
+	for _, vtxo := range vtxos {
+		if selectedAmount >= amount {
+			break
+		}
+
+		selected = append(selected, vtxo)
+		selectedAmount += vtxo.amount
+	}
+
+	if selectedAmount < amount {
+		return nil, 0, fmt.Errorf("insufficient balance: %d to cover %d", selectedAmount, amount)
+	}
+
+	change := selectedAmount - amount
+
+	return selected, change, nil
+}
+
+func computeBalance(vtxos []vtxo) uint64 {
+	var balance uint64
+	for _, vtxo := range vtxos {
+		balance += vtxo.amount
+	}
+	return balance
+}

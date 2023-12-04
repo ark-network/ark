@@ -25,6 +25,7 @@ var (
 	statePath         = filepath.Join(noahDataDirectory, STATE_FILE)
 
 	initialState = map[string]string{
+		"rpc_url":               "http://localhost:9000",
 		"ark_url":               defaultArkURL,
 		"encrypted_private_key": "",
 		"password_hash":         "",

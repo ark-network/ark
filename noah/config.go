@@ -7,6 +7,12 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+var rpcUrlFlag = cli.StringFlag{
+	Name:  "rpc",
+	Usage: "ark rpc URL",
+	Value: "",
+}
+
 var configCommand = cli.Command{
 	Name:   "config",
 	Usage:  "Print local configuration of the Noah CLI",
@@ -14,8 +20,11 @@ var configCommand = cli.Command{
 	Subcommands: []*cli.Command{
 		{
 			Name:   "connect",
-			Usage:  "connect <ARK_URL>",
+			Usage:  "connect <ARK_URL> [--rpc <RPC_URL>]",
 			Action: connectAction,
+			Flags: []cli.Flag{
+				&rpcUrlFlag,
+			},
 		},
 	},
 }
@@ -45,7 +54,15 @@ func connectAction(ctx *cli.Context) error {
 		return err
 	}
 
-	if err := setState(map[string]string{"ark_url": url}); err != nil {
+	updateState := map[string]string{
+		"ark_url": url,
+	}
+
+	if ctx.String("rpc") != "" {
+		updateState["rpc_url"] = ctx.String("rpc")
+	}
+
+	if err := setState(updateState); err != nil {
 		return err
 	}
 
