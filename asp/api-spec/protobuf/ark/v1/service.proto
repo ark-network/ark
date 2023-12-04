@@ -38,6 +38,16 @@ service ArkService {
       get: "/v1/ping/{payment_id}"
     };
   };
+  rpc Faucet(FaucetRequest) returns (FaucetResponse) {
+    option (google.api.http) = {
+      post: "/v1/faucet/{address}"
+    };
+  }
+  rpc ListVtxos(ListVtxosRequest) returns (ListVtxosResponse) {
+    option (google.api.http) = {
+      get: "/v1/vtxos/{address}"
+    };
+  }
 }
 
 message RegisterPaymentRequest {
@@ -58,7 +68,7 @@ message ClaimPaymentResponse {}
 
 message FinalizePaymentRequest {
   // Forfeit txs signed by the user. 
-  repeated string signed_forfeits = 1;
+  repeated string signed_forfeit_txs = 1;
 }
 message FinalizePaymentResponse {}
 
@@ -119,4 +129,24 @@ message PingRequest {
 }
 
 message PingResponse {}
+
+message FaucetRequest {
+  string address = 1;
+}
+
+message FaucetResponse {}
+
+message ListVtxosRequest {
+  string address = 1;
+}
+
+message ListVtxosResponse {
+  repeated Vtxo vtxos = 1;
+}
+
+message Vtxo {
+  Input outpoint = 1;
+  Output receiver = 2;
+  bool spent = 3;
+}
 

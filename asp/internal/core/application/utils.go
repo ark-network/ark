@@ -148,14 +148,22 @@ func (m *forfeitTxsMap) push(txs []string) {
 	}
 }
 
-func (m *forfeitTxsMap) sign(txid, tx string) error {
+func (m *forfeitTxsMap) sign(txs []string) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	if _, ok := m.forfeitTxs[txid]; !ok {
-		return fmt.Errorf("forfeit tx %s not found ", txid)
+	for _, tx := range txs {
+		ptx, err := psetv2.NewPsetFromBase64(tx)
+		if err != nil {
+			return fmt.Errorf("invalid forfeit tx format")
+		}
+		utx, _ := ptx.UnsignedTx()
+		txid := utx.TxHash().String()
+		if _, ok := m.forfeitTxs[txid]; !ok {
+			return fmt.Errorf("forfeit tx %s not found", txid)
+		}
+		m.forfeitTxs[txid].signed = true
 	}
-	m.forfeitTxs[txid].signed = true
 	return nil
 }
 

@@ -47,6 +47,36 @@
         ]
       }
     },
+    "/v1/faucet/{address}": {
+      "post": {
+        "operationId": "ArkService_Faucet",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1FaucetResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
     "/v1/payment/claim": {
       "post": {
         "operationId": "ArkService_ClaimPayment",
@@ -202,6 +232,36 @@
           "ArkService"
         ]
       }
+    },
+    "/v1/vtxos/{address}": {
+      "get": {
+        "operationId": "ArkService_ListVtxos",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListVtxosResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
     }
   },
   "definitions": {
@@ -251,10 +311,13 @@
     "v1ClaimPaymentResponse": {
       "type": "object"
     },
+    "v1FaucetResponse": {
+      "type": "object"
+    },
     "v1FinalizePaymentRequest": {
       "type": "object",
       "properties": {
-        "signedForfeits": {
+        "signedForfeitTxs": {
           "type": "array",
           "items": {
             "type": "string"
@@ -297,6 +360,17 @@
         "vout": {
           "type": "integer",
           "format": "int64"
+        }
+      }
+    },
+    "v1ListVtxosResponse": {
+      "type": "object",
+      "properties": {
+        "vtxos": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1Vtxo"
+          }
         }
       }
     },
@@ -402,6 +476,20 @@
         },
         "poolTxid": {
           "type": "string"
+        }
+      }
+    },
+    "v1Vtxo": {
+      "type": "object",
+      "properties": {
+        "outpoint": {
+          "$ref": "#/definitions/v1Input"
+        },
+        "receiver": {
+          "$ref": "#/definitions/v1Output"
+        },
+        "spent": {
+          "type": "boolean"
         }
       }
     }

@@ -18,4 +18,5 @@ type VtxoRepository interface {
 	AddVtxos(ctx context.Context, vtxos []Vtxo) error
 	SpendVtxos(ctx context.Context, vtxos []VtxoKey) error
 	GetVtxos(ctx context.Context, vtxos []VtxoKey) ([]Vtxo, error)
+	GetSpendableVtxosWithPubkey(ctx context.Context, pubkey string) ([]Vtxo, error)
 }

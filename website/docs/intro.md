@@ -21,7 +21,7 @@ Consider the early private banks that issued banknotes in exchange for gold depo
 
 When Alice **deposits Bitcoin with a server** (akin to a digital bank), she receives a digital check, similar to a banknote but with a crucial difference. This check is akin to **a cheque with an expiration date**.
 
-The digital cheque Alice receives comes with an expiration date. To keep her funds secure and the cheque valid, she **must interact with the server at least once every month**. If Alice fails to do this, the server reserves the right to **reclaim the Bitcoin backing the cheque upon its maturity**.
+The digital cheque Alice receives comes with an expiration date. To keep her funds secure and the cheque valid, she **must interact with the server at least once every month**. If Alice fails to do this, the server reserves the right to **claim the Bitcoin backing the cheque upon its maturity**.
 
 She can use this check for payment with anyone else using the same digital bank, bypassing the need to use the Bitcoin blockchain. Before expiration, the check can be **redeemed** for Bitcoin, or it can be **refreshed** by interacting with the server.
 
@@ -30,10 +30,6 @@ Should the digital bank cease to exist, **users can still retrieve their digital
 ### 🔨 How Does it Work?
 
 Start by exploring the [Nomenclature](/docs/learn/nomenclature.md) to familiarize yourself with key concepts and terminology. Then, learn how to [Board the Ark](/docs/learn/boarding.md), [Send Payments](/docs/learn/payments.md), and eventually [Leave the Ark](/docs/learn/leaving.md) to withdraw your funds back to the Bitcoin blockchain in case of server unresponsiveness.
-
-### 👩‍💻 Integrate Ark
-
-You can [integrate Ark](/docs/developers/get-started.md) into your wallet or application to enable your users to send and receive Bitcoin payments off-chain.
 
 ### 🏃‍♀️ Running Ark
 
@@ -46,6 +42,15 @@ You can join an existing Ark service provider or run your own.
 
 - [Join an Ark as User](/user/intro.md)
 - [Operate an Ark as Liquidity Provider](/provider/intro.md)
+
+### 👩‍💻 Integrate Ark
+
+:::info
+🚧 **Work in progress**
+The Ark libraries and developer tools are currently under development. Please check back soon for updates.
+:::
+
+You can [integrate Ark](/docs/developers/get-started.md) into your wallet or application to enable your users to send and receive Bitcoin payments off-chain.
 
 ### ⌨️ Contributing
 
