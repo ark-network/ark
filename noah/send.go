@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
 	"github.com/urfave/cli/v2"
 )
@@ -48,6 +49,8 @@ func sendAction(ctx *cli.Context) error {
 			return fmt.Errorf("invalid amount: %d", receiver.Amount)
 		}
 	}
+
+	req := &arkv1.RegisterPayment{}
 
 	fmt.Println("send command is not implemented yet")
 
