@@ -142,3 +142,24 @@ func computeBalance(vtxos []vtxo) uint64 {
 	}
 	return balance
 }
+
+func getAddress() (string, error) {
+	privateKey, err := privateKeyFromPassword()
+	if err != nil {
+		return "", err
+	}
+
+	publicKey := privateKey.PubKey()
+
+	aspPublicKey, err := getServiceProviderPublicKey()
+	if err != nil {
+		return "", err
+	}
+
+	addr, err := common.EncodeAddress(common.MainNet.Addr, publicKey, aspPublicKey)
+	if err != nil {
+		return "", err
+	}
+
+	return addr, nil
+}

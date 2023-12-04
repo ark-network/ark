@@ -165,7 +165,6 @@ func sendAction(ctx *cli.Context) error {
 
 		if event.GetRoundFinalization() != nil {
 			forfeits := event.GetRoundFinalization().GetForfeitTxs()
-			fmt.Printf("number of forfeits in the round: %d\n", len(forfeits))
 			signedForfeits := make([]string, 0)
 
 			for _, forfeit := range forfeits {
@@ -180,7 +179,7 @@ func sendAction(ctx *cli.Context) error {
 
 					for _, coin := range selectedCoins {
 						if inputTxid == coin.txid {
-							// to sign
+							// TODO: sign the vtxo input
 							signedForfeits = append(signedForfeits, forfeit)
 						}
 					}
@@ -192,7 +191,7 @@ func sendAction(ctx *cli.Context) error {
 			}
 
 			_, err := client.FinalizePayment(ctx.Context, &arkv1.FinalizePaymentRequest{
-				SignedForfeits: signedForfeits,
+				SignedForfeitTxs: signedForfeits,
 			})
 			if err != nil {
 				return err
