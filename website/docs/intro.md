@@ -1,7 +1,8 @@
 ---
-title: 'Introduction'
+description: Detailed information about the protocol, guidance on providing liquidity, and instructions on how to efficiently spend your coins off-chain in a secure manner
 sidebar_position: 1
 slug: /
+title: Introduction
 ---
 
 **Welcome to Ark's developer hub.** Here, you'll find detailed information about the protocol, guidance on providing liquidity, and instructions on how to efficiently spend your coins off-chain in a secure manner.
@@ -29,7 +30,6 @@ Should the digital bank cease to exist, **users can still retrieve their digital
 ### 🔨 How Does it Work?
 
 Start by exploring the [Nomenclature](/docs/learn/nomenclature.md) to familiarize yourself with key concepts and terminology. Then, learn how to [Board the Ark](/docs/learn/boarding.md), [Send Payments](/docs/learn/payments.md), and eventually [Leave the Ark](/docs/learn/leaving.md) to withdraw your funds back to the Bitcoin blockchain in case of server unresponsiveness.
-
 
 ### 👩‍💻 Integrate Ark
 
