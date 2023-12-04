@@ -9,7 +9,6 @@ import (
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/google/uuid"
-	"github.com/vulpemventures/go-elements/psetv2"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -43,7 +42,7 @@ func (h *handler) Ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.Ping
 		return nil, status.Error(codes.InvalidArgument, "missing payment id")
 	}
 
-	if err := h.svc.UpdatePaymenStatus(ctx, req.GetPaymentId()); err != nil {
+	if err := h.svc.UpdatePaymentStatus(ctx, req.GetPaymentId()); err != nil {
 		return nil, err
 	}
 
@@ -87,28 +86,28 @@ func (h *handler) ClaimPayment(ctx context.Context, req *arkv1.ClaimPaymentReque
 }
 
 func (h *handler) FinalizePayment(ctx context.Context, req *arkv1.FinalizePaymentRequest) (*arkv1.FinalizePaymentResponse, error) {
-	forfeits := make(map[string]string)
-
-	for _, b64 := range req.GetSignedForfeits() {
-		pset, err := psetv2.NewPsetFromBase64(b64)
-		if err != nil {
-			return nil, err
-		}
-
-		unsignedTx, err := pset.UnsignedTx()
-		if err != nil {
-			return nil, err
-		}
-
-		forfeits[unsignedTx.TxHash().String()] = b64
-	}
-
-	err := h.svc.SignVtxos(ctx, forfeits)
+	forfeitTxs, err := parseTxs(req.GetSignedForfeitTxs())
 	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	if err := h.svc.SignVtxos(ctx, forfeitTxs); err != nil {
 		return nil, err
 	}
 
 	return &arkv1.FinalizePaymentResponse{}, nil
+}
+
+func (h *handler) Faucet(ctx context.Context, req *arkv1.FaucetRequest) (*arkv1.FaucetResponse, error) {
+	pubkey, err := parseAddress(req.GetAddress())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	if err := h.svc.FaucetVtxos(ctx, pubkey); err != nil {
+		return nil, err
+	}
+
+	return &arkv1.FaucetResponse{}, nil
 }
 
 func (h *handler) GetRound(ctx context.Context, req *arkv1.GetRoundRequest) (*arkv1.GetRoundResponse, error) {

@@ -38,6 +38,11 @@ service ArkService {
       get: "/v1/ping/{payment_id}"
     };
   };
+  rpc Faucet(FaucetRequest) returns (FaucetResponse) {
+    option (google.api.http) = {
+      post: "/v1/faucet/{address}"
+    };
+  }
 }
 
 message RegisterPaymentRequest {
@@ -58,7 +63,7 @@ message ClaimPaymentResponse {}
 
 message FinalizePaymentRequest {
   // Forfeit txs signed by the user. 
-  repeated string signed_forfeits = 1;
+  repeated string signed_forfeit_txs = 1;
 }
 message FinalizePaymentResponse {}
 
@@ -119,4 +124,10 @@ message PingRequest {
 }
 
 message PingResponse {}
+
+message FaucetRequest {
+  string address = 1;
+}
+
+message FaucetResponse {}
 
