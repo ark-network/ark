@@ -232,6 +232,36 @@
           "ArkService"
         ]
       }
+    },
+    "/v1/vtxos/{address}": {
+      "get": {
+        "operationId": "ArkService_ListVtxos",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListVtxosResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
     }
   },
   "definitions": {
@@ -330,6 +360,17 @@
         "vout": {
           "type": "integer",
           "format": "int64"
+        }
+      }
+    },
+    "v1ListVtxosResponse": {
+      "type": "object",
+      "properties": {
+        "vtxos": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v1Vtxo"
+          }
         }
       }
     },
@@ -435,6 +476,20 @@
         },
         "poolTxid": {
           "type": "string"
+        }
+      }
+    },
+    "v1Vtxo": {
+      "type": "object",
+      "properties": {
+        "outpoint": {
+          "$ref": "#/definitions/v1Input"
+        },
+        "receiver": {
+          "$ref": "#/definitions/v1Output"
+        },
+        "spent": {
+          "type": "boolean"
         }
       }
     }
