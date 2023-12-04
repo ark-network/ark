@@ -160,6 +160,22 @@ func (h *handler) GetEventStream(_ *arkv1.GetEventStreamRequest, stream arkv1.Ar
 	}
 }
 
+func (h *handler) ListVtxos(ctx context.Context, req *arkv1.ListVtxosRequest) (*arkv1.ListVtxosResponse, error) {
+	pubkey, err := parseAddress(req.GetAddress())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	vtxos, err := h.svc.ListVtxos(ctx, pubkey)
+	if err != nil {
+		return nil, err
+	}
+
+	return &arkv1.ListVtxosResponse{
+		Vtxos: vtxoList(vtxos).toProto(),
+	}, nil
+}
+
 func (h *handler) pushListener(l *listener) {
 	h.listenersLock.Lock()
 	defer h.listenersLock.Unlock()
@@ -223,4 +239,24 @@ func (h *handler) listenToEvents() {
 			}
 		}
 	}
+}
+
+type vtxoList []domain.Vtxo
+
+func (v vtxoList) toProto() []*arkv1.Vtxo {
+	list := make([]*arkv1.Vtxo, 0, len(v))
+	for _, vv := range v {
+		list = append(list, &arkv1.Vtxo{
+			Outpoint: &arkv1.Input{
+				Txid: vv.Txid,
+				Vout: vv.VOut,
+			},
+			Receiver: &arkv1.Output{
+				Pubkey: vv.Pubkey,
+				Amount: vv.Amount,
+			},
+			Spent: vv.Spent,
+		})
+	}
+	return list
 }

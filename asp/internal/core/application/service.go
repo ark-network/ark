@@ -36,6 +36,7 @@ type Service interface {
 	GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error)
 	GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
 	UpdatePaymentStatus(ctx context.Context, id string) error
+	ListVtxos(ctx context.Context, pubkey string) ([]domain.Vtxo, error)
 }
 
 type service struct {
@@ -156,6 +157,10 @@ func (s *service) SignVtxos(ctx context.Context, forfeitTxs []string) error {
 		return fmt.Errorf("invalid forfeit tx: %s", err)
 	}
 	return nil
+}
+
+func (s *service) ListVtxos(ctx context.Context, pubkey string) ([]domain.Vtxo, error) {
+	return s.repoManager.Vtxos().GetSpendableVtxosWithPubkey(ctx, pubkey)
 }
 
 func (s *service) GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent {
