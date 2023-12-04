@@ -43,6 +43,11 @@ service ArkService {
       post: "/v1/faucet/{address}"
     };
   }
+  rpc ListVtxos(ListVtxosRequest) returns (ListVtxosResponse) {
+    option (google.api.http) = {
+      get: "/v1/vtxos/{address}"
+    };
+  }
 }
 
 message RegisterPaymentRequest {
@@ -130,4 +135,18 @@ message FaucetRequest {
 }
 
 message FaucetResponse {}
+
+message ListVtxosRequest {
+  string address = 1;
+}
+
+message ListVtxosResponse {
+  repeated Vtxo vtxos = 1;
+}
+
+message Vtxo {
+  Input outpoint = 1;
+  Output receiver = 2;
+  bool spent = 3;
+}
 
