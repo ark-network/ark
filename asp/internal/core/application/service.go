@@ -130,7 +130,7 @@ func (s *service) FaucetVtxos(ctx context.Context, pubkey string) error {
 		return err
 	}
 
-	payment.AddReceivers([]domain.Receiver{
+	if err := payment.AddReceivers([]domain.Receiver{
 		{Pubkey: pubkey, Amount: 10000},
 		{Pubkey: pubkey, Amount: 10000},
 		{Pubkey: pubkey, Amount: 10000},
@@ -141,7 +141,9 @@ func (s *service) FaucetVtxos(ctx context.Context, pubkey string) error {
 		{Pubkey: pubkey, Amount: 10000},
 		{Pubkey: pubkey, Amount: 10000},
 		{Pubkey: pubkey, Amount: 10000},
-	})
+	}); err != nil {
+		return err
+	}
 
 	if err := s.paymentRequests.push(*payment); err != nil {
 		return err
