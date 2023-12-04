@@ -74,6 +74,13 @@ func (r *vtxoRepository) GetVtxos(
 	return vtxos, nil
 }
 
+func (r *vtxoRepository) GetSpendableVtxosWithPubkey(
+	ctx context.Context, pubkey string,
+) ([]domain.Vtxo, error) {
+	query := badgerhold.Where("Pubkey").Eq(pubkey).And("Spent").Eq(false)
+	return r.findVtxos(ctx, query)
+}
+
 func (r *vtxoRepository) Close() {
 	r.store.Close()
 }
@@ -131,4 +138,18 @@ func (r *vtxoRepository) spendVtxo(ctx context.Context, vtxoKey domain.VtxoKey) 
 		err = r.store.Update(vtxoKey.Hash(), *vtxo)
 	}
 	return err
+}
+
+func (r *vtxoRepository) findVtxos(ctx context.Context, query *badgerhold.Query) ([]domain.Vtxo, error) {
+	var vtxos []domain.Vtxo
+	var err error
+
+	if ctx.Value("tx") != nil {
+		tx := ctx.Value("tx").(*badger.Txn)
+		err = r.store.TxFind(tx, &vtxos, query)
+	} else {
+		err = r.store.Find(&vtxos, query)
+	}
+
+	return vtxos, err
 }
