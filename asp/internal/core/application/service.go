@@ -19,18 +19,22 @@ import (
 	"github.com/vulpemventures/go-elements/psetv2"
 )
 
-const (
-	paymentsThreshold = 128
-	dustAmount        = 450
+var (
+	paymentsThreshold = int64(128)
+	dustAmount        = uint64(450)
+	faucetVtxo        = domain.VtxoKey{
+		Txid: "0000000000000000000000000000000000000000000000000000000000000000",
+		VOut: 0,
+	}
 )
 
 type Service interface {
 	SpendVtxos(ctx context.Context, inputs []domain.VtxoKey) (string, error)
 	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error
-	SignVtxos(ctx context.Context, forfeitTxs map[string]string) error
+	SignVtxos(ctx context.Context, forfeitTxs []string) error
 	GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error)
 	GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
-	UpdatePaymenStatus(ctx context.Context, id string) error
+	UpdatePaymentStatus(ctx context.Context, id string) error
 }
 
 type service struct {
@@ -107,15 +111,46 @@ func (s *service) ClaimVtxos(ctx context.Context, creds string, receivers []doma
 	return s.paymentRequests.update(*payment)
 }
 
-func (s *service) UpdatePaymenStatus(_ context.Context, id string) error {
+func (s *service) UpdatePaymentStatus(_ context.Context, id string) error {
 	return s.paymentRequests.updatePingTimestamp(id)
 }
 
-func (s *service) SignVtxos(ctx context.Context, forfeitTxs map[string]string) error {
-	for txid, tx := range forfeitTxs {
-		if err := s.forfeitTxs.sign(txid, tx); err != nil {
-			return fmt.Errorf("invalid forfeit tx %s: %s", txid, err)
-		}
+func (s *service) FaucetVtxos(ctx context.Context, pubkey string) error {
+	payment, err := domain.NewPayment([]domain.Vtxo{
+		{
+			VtxoKey: faucetVtxo,
+			Receiver: domain.Receiver{
+				Pubkey: pubkey,
+				Amount: 100000,
+			},
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	payment.AddReceivers([]domain.Receiver{
+		{Pubkey: pubkey, Amount: 10000},
+		{Pubkey: pubkey, Amount: 10000},
+		{Pubkey: pubkey, Amount: 10000},
+		{Pubkey: pubkey, Amount: 10000},
+		{Pubkey: pubkey, Amount: 10000},
+		{Pubkey: pubkey, Amount: 10000},
+		{Pubkey: pubkey, Amount: 10000},
+		{Pubkey: pubkey, Amount: 10000},
+		{Pubkey: pubkey, Amount: 10000},
+		{Pubkey: pubkey, Amount: 10000},
+	})
+
+	if err := s.paymentRequests.push(*payment); err != nil {
+		return err
+	}
+	return s.paymentRequests.updatePingTimestamp(payment.Id)
+}
+
+func (s *service) SignVtxos(ctx context.Context, forfeitTxs []string) error {
+	if err := s.forfeitTxs.sign(forfeitTxs); err != nil {
+		return fmt.Errorf("invalid forfeit tx: %s", err)
 	}
 	return nil
 }
@@ -170,11 +205,19 @@ func (s *service) startFinalization() {
 		return
 	}
 
+	var changes []domain.RoundEvent
+	defer func() {
+		if err := s.repoManager.Events().Save(ctx, round.Id, changes...); err != nil {
+			log.WithError(err).Warn("failed to store new round events")
+			return
+		}
+	}()
+
 	// TODO: understand how many payments must be popped from the queue and actually registered for the round
 	num := s.paymentRequests.len()
 	if num == 0 {
 		err := fmt.Errorf("no payments registered")
-		round.Fail(fmt.Errorf("round aborted: %s", err))
+		changes = round.Fail(fmt.Errorf("round aborted: %s", err))
 		log.WithError(err).Debugf("round %s aborted", round.Id)
 		return
 	}
@@ -182,36 +225,31 @@ func (s *service) startFinalization() {
 		num = paymentsThreshold
 	}
 	payments := s.paymentRequests.pop(num)
-	changes, _ := round.RegisterPayments(payments)
+	changes, _ = round.RegisterPayments(payments)
 
 	signedPoolTx, err := s.builder.BuildPoolTx(s.wallet, payments)
 	if err != nil {
-		round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
+		changes = round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
 		log.WithError(err).Warn("failed to create pool tx")
 		return
 	}
 
 	tree, err := s.builder.BuildCongestionTree(signedPoolTx, payments)
 	if err != nil {
-		round.Fail(fmt.Errorf("failed to create congestion tree: %s", err))
+		changes = round.Fail(fmt.Errorf("failed to create congestion tree: %s", err))
 		log.WithError(err).Warn("failed to create congestion tree")
 		return
 	}
 
 	connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(signedPoolTx, payments)
 	if err != nil {
-		round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
+		changes = round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
 		log.WithError(err).Warn("failed to create connectors and forfeit txs")
 		return
 	}
 
 	events, _ := round.StartFinalization(connectors, tree, signedPoolTx)
 	changes = append(changes, events...)
-
-	if err := s.repoManager.Events().Save(ctx, round.Id, changes...); err != nil {
-		log.WithError(err).Warn("failed to store new round events")
-		return
-	}
 
 	s.forfeitTxs.push(forfeitTxs)
 
@@ -341,6 +379,9 @@ func getSpentVtxos(payments map[string]domain.Payment) []domain.VtxoKey {
 	vtxos := make([]domain.VtxoKey, 0)
 	for _, p := range payments {
 		for _, vtxo := range p.Inputs {
+			if vtxo.VtxoKey == faucetVtxo {
+				continue
+			}
 			vtxos = append(vtxos, vtxo.VtxoKey)
 		}
 	}
