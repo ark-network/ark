@@ -24,6 +24,7 @@ type ArkServiceClient interface {
 	GetRound(ctx context.Context, in *GetRoundRequest, opts ...grpc.CallOption) (*GetRoundResponse, error)
 	GetEventStream(ctx context.Context, in *GetEventStreamRequest, opts ...grpc.CallOption) (ArkService_GetEventStreamClient, error)
 	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
+	Faucet(ctx context.Context, in *FaucetRequest, opts ...grpc.CallOption) (*FaucetResponse, error)
 }
 
 type arkServiceClient struct {
@@ -111,6 +112,15 @@ func (c *arkServiceClient) Ping(ctx context.Context, in *PingRequest, opts ...gr
 	return out, nil
 }
 
+func (c *arkServiceClient) Faucet(ctx context.Context, in *FaucetRequest, opts ...grpc.CallOption) (*FaucetResponse, error) {
+	out := new(FaucetResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/Faucet", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ArkServiceServer is the server API for ArkService service.
 // All implementations should embed UnimplementedArkServiceServer
 // for forward compatibility
@@ -121,6 +131,7 @@ type ArkServiceServer interface {
 	GetRound(context.Context, *GetRoundRequest) (*GetRoundResponse, error)
 	GetEventStream(*GetEventStreamRequest, ArkService_GetEventStreamServer) error
 	Ping(context.Context, *PingRequest) (*PingResponse, error)
+	Faucet(context.Context, *FaucetRequest) (*FaucetResponse, error)
 }
 
 // UnimplementedArkServiceServer should be embedded to have forward compatible implementations.
@@ -144,6 +155,9 @@ func (UnimplementedArkServiceServer) GetEventStream(*GetEventStreamRequest, ArkS
 }
 func (UnimplementedArkServiceServer) Ping(context.Context, *PingRequest) (*PingResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
+}
+func (UnimplementedArkServiceServer) Faucet(context.Context, *FaucetRequest) (*FaucetResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Faucet not implemented")
 }
 
 // UnsafeArkServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -268,6 +282,24 @@ func _ArkService_Ping_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ArkService_Faucet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FaucetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ArkServiceServer).Faucet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.ArkService/Faucet",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ArkServiceServer).Faucet(ctx, req.(*FaucetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ArkService_ServiceDesc is the grpc.ServiceDesc for ArkService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -294,6 +326,10 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Ping",
 			Handler:    _ArkService_Ping_Handler,
+		},
+		{
+			MethodName: "Faucet",
+			Handler:    _ArkService_Faucet_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
