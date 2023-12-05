@@ -166,7 +166,7 @@ func getAddress() (string, error) {
 }
 
 func printJSON(resp interface{}) error {
-	jsonBytes, err := json.Marshal(resp)
+	jsonBytes, err := json.MarshalIndent(resp, "", "\t")
 	if err != nil {
 		return err
 	}
