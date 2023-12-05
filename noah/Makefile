@@ -1,4 +1,4 @@
-.PHONY: build clean cov help lint vet
+.PHONY: build clean help lint vet
 
 build:
 	@echo "Building noah binary..."
@@ -8,11 +8,6 @@ build:
 clean:
 	@echo "Cleaning..."
 	@go clean
-
-## cov: generates coverage report
-cov:
-	@echo "Coverage..."
-	@go test -cover ./...
 
 ## help: prints this help message
 help:
