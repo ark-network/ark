@@ -37,12 +37,14 @@ type Service interface {
 	GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
 	UpdatePaymentStatus(ctx context.Context, id string) error
 	ListVtxos(ctx context.Context, pubkey string) ([]domain.Vtxo, error)
+	GetPubkey(ctx context.Context) (string, error)
 }
 
 type service struct {
 	roundInterval int64
 	network       common.Network
 	onchainNework network.Network
+	pubkey        string
 
 	wallet          ports.WalletService
 	scheduler       ports.SchedulerService
@@ -59,12 +61,14 @@ func NewService(
 	walletSvc ports.WalletService, schedulerSvc ports.SchedulerService,
 	repoManager ports.RepoManager, builder ports.TxBuilder,
 ) Service {
+	pubkey := ""
+	eventsCh := make(chan domain.RoundEvent)
 	paymentRequests := newPaymentsMap(nil)
 	forfeitTxs := newForfeitTxsMap()
 	svc := &service{
-		interval, network, onchainNetwork,
+		interval, network, onchainNetwork, pubkey,
 		walletSvc, schedulerSvc, repoManager, builder, paymentRequests, forfeitTxs,
-		make(chan domain.RoundEvent),
+		eventsCh,
 	}
 	repoManager.RegisterEventsHandler(
 		func(round *domain.Round) {
@@ -169,6 +173,21 @@ func (s *service) GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
 
 func (s *service) GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error) {
 	return s.repoManager.Rounds().GetRoundWithTxid(ctx, poolTxid)
+}
+
+func (s *service) GetPubkey(ctx context.Context) (string, error) {
+	if s.pubkey == "" {
+		pubkey, err := s.wallet.GetPubkey(ctx)
+		if err != nil {
+			return "", err
+		}
+		serializedPubkey, err := common.EncodePubKey(s.network.PubKey, pubkey)
+		if err != nil {
+			return "", err
+		}
+		s.pubkey = serializedPubkey
+	}
+	return s.pubkey, nil
 }
 
 func (s *service) start() error {
@@ -283,7 +302,7 @@ func (s *service) finalizeRound() {
 		return
 	}
 
-	txid, err := s.wallet.Transaction().BroadcastTransaction(ctx, round.TxHex)
+	txid, err := s.wallet.BroadcastTransaction(ctx, round.TxHex)
 	if err != nil {
 		round.Fail(fmt.Errorf("failed to broadcast pool tx: %s", err))
 		log.WithError(err).Warn("failed to broadcast pool tx")

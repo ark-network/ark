@@ -48,6 +48,11 @@ service ArkService {
       get: "/v1/vtxos/{address}"
     };
   }
+  rpc GetPubkey(GetPubkeyRequest) returns (GetPubkeyResponse) {
+    option (google.api.http) = {
+      get: "/v1/pubkey"
+    };
+  }
 }
 
 message RegisterPaymentRequest {
@@ -150,3 +155,8 @@ message Vtxo {
   bool spent = 3;
 }
 
+message GetPubkeyRequest {}
+
+message GetPubkeyResponse {
+  string pubkey = 1;
+}

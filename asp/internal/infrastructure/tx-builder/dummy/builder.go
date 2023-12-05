@@ -133,7 +133,7 @@ func (b *txBuilder) BuildPoolTx(wallet ports.WalletService, payments []domain.Pa
 
 	ctx := context.Background()
 
-	return wallet.Transaction().Transfer(ctx, []ports.TxOutput{
+	return wallet.Transfer(ctx, []ports.TxOutput{
 		newOutput(aspScript, sharedOutputAmount),
 		newOutput(aspScript, connectorOutputAmount),
 	})

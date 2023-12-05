@@ -176,6 +176,17 @@ func (h *handler) ListVtxos(ctx context.Context, req *arkv1.ListVtxosRequest) (*
 	}, nil
 }
 
+func (h *handler) GetPubkey(ctx context.Context, req *arkv1.GetPubkeyRequest) (*arkv1.GetPubkeyResponse, error) {
+	pubkey, err := h.svc.GetPubkey(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &arkv1.GetPubkeyResponse{
+		Pubkey: pubkey,
+	}, nil
+}
+
 func (h *handler) pushListener(l *listener) {
 	h.listenersLock.Lock()
 	defer h.listenersLock.Unlock()

@@ -203,6 +203,28 @@
         ]
       }
     },
+    "/v1/pubkey": {
+      "get": {
+        "operationId": "ArkService_GetPubkey",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetPubkeyResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
     "/v1/round/{txid}": {
       "get": {
         "operationId": "ArkService_GetRound",
@@ -340,6 +362,14 @@
         },
         "roundFailed": {
           "$ref": "#/definitions/v1RoundFailed"
+        }
+      }
+    },
+    "v1GetPubkeyResponse": {
+      "type": "object",
+      "properties": {
+        "pubkey": {
+          "type": "string"
         }
       }
     },

@@ -2,20 +2,20 @@ package oceanwallet
 
 import (
 	"context"
+	"fmt"
 
+	pb "github.com/ark-network/ark/api-spec/protobuf/gen/ocean/v1"
 	"github.com/ark-network/ark/internal/core/ports"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 type service struct {
-	addr string
-	conn *grpc.ClientConn
-
-	wallet  *wallet
-	account *account
-	tx      *tx
-	notify  *notify
+	addr          string
+	conn          *grpc.ClientConn
+	walletClient  pb.WalletServiceClient
+	accountClient pb.AccountServiceClient
+	txClient      pb.TransactionServiceClient
 }
 
 func NewService(addr string) (ports.WalletService, error) {
@@ -23,35 +23,25 @@ func NewService(addr string) (ports.WalletService, error) {
 	if err != nil {
 		return nil, err
 	}
+	walletClient := pb.NewWalletServiceClient(conn)
+	accountClient := pb.NewAccountServiceClient(conn)
+	txClient := pb.NewTransactionServiceClient(conn)
 	svc := &service{
-		addr:    addr,
-		conn:    conn,
-		wallet:  newWallet(conn),
-		account: newAccount(conn),
-		tx:      newTx(conn),
+		addr:          addr,
+		conn:          conn,
+		walletClient:  walletClient,
+		accountClient: accountClient,
+		txClient:      txClient,
 	}
-	if _, err := svc.Wallet().Status(context.Background()); err != nil {
+	status, err := svc.Status(context.Background())
+	if err != nil {
 		return nil, err
 	}
-	svc.notify, _ = newNotify(conn)
+	if !(status.IsInitialized() && status.IsUnlocked()) {
+		return nil, fmt.Errorf("wallet must be already initialized and unlocked")
+	}
 
 	return svc, nil
-}
-
-func (s *service) Wallet() ports.Wallet {
-	return s.wallet
-}
-
-func (s *service) Account() ports.Account {
-	return s.account
-}
-
-func (s *service) Transaction() ports.Transaction {
-	return s.tx
-}
-
-func (s *service) Notification() ports.Notification {
-	return s.notify
 }
 
 func (s *service) Close() {
