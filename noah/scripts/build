@@ -12,5 +12,5 @@ ARCH=$(eval "go env GOARCH")
 
 pushd $PARENT_PATH
 mkdir -p build
-GO111MODULE=on go build -ldflags="-s -w" -o build/noah-$OS-$ARCH ./cmd/noah
+GO111MODULE=on go build -ldflags="-s -w" -o build/noah-$OS-$ARCH .
 popd

@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/urfave/cli/v2"
 )
 
@@ -25,7 +23,8 @@ func balanceAction(ctx *cli.Context) error {
 	}
 
 	balance := computeBalance(vtxos)
-	fmt.Println(balance)
 
-	return nil
+	return printJSON(map[string]interface{}{
+		"balance": balance,
+	})
 }

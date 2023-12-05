@@ -35,11 +35,7 @@ func printConfigAction(ctx *cli.Context) error {
 		return err
 	}
 
-	for key, value := range state {
-		fmt.Println(key + ": " + value)
-	}
-
-	return nil
+	return printJSON(state)
 }
 
 func connectAction(ctx *cli.Context) error {

@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/urfave/cli/v2"
 )
 
@@ -18,7 +16,7 @@ func receiveAction(ctx *cli.Context) error {
 		return err
 	}
 
-	fmt.Println(addr)
-
-	return nil
+	return printJSON(map[string]interface{}{
+		"address": addr,
+	})
 }

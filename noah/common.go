@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"syscall"
 
@@ -162,4 +163,14 @@ func getAddress() (string, error) {
 	}
 
 	return addr, nil
+}
+
+func printJSON(resp interface{}) error {
+	jsonBytes, err := json.Marshal(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(string(jsonBytes))
+	return nil
 }

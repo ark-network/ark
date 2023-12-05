@@ -41,7 +41,7 @@ func getVtxos(ctx *cli.Context, client arkv1.ArkServiceClient) ([]vtxo, error) {
 }
 
 // get the ark client and a function closing the connection
-func getArkClient(ctx *cli.Context) (arkv1.ArkServiceClient, func() error, error) {
+func getArkClient(ctx *cli.Context) (arkv1.ArkServiceClient, func(), error) {
 	conn, err := getConn(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -49,7 +49,14 @@ func getArkClient(ctx *cli.Context) (arkv1.ArkServiceClient, func() error, error
 
 	client := arkv1.NewArkServiceClient(conn)
 
-	return client, conn.Close, nil
+	closeFn := func() {
+		err := conn.Close()
+		if err != nil {
+			fmt.Printf("error closing connection: %s\n", err)
+		}
+	}
+
+	return client, closeFn, nil
 }
 
 // connect to the ark rpc URL specified in the config
