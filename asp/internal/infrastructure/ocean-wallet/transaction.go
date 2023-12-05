@@ -60,22 +60,6 @@ func (s *service) BroadcastTransaction(
 	return res.GetTxid(), nil
 }
 
-type inputList []ports.TxInput
-
-func (l inputList) toProto() []*pb.Input {
-	list := make([]*pb.Input, 0, len(l))
-	for _, in := range l {
-		list = append(list, &pb.Input{
-			Txid:          in.GetTxid(),
-			Index:         in.GetIndex(),
-			Script:        in.GetScript(),
-			ScriptsigSize: uint64(in.GetScriptSigSize()),
-			WitnessSize:   uint64(in.GetWitnessSize()),
-		})
-	}
-	return list
-}
-
 type outputList []ports.TxOutput
 
 func (l outputList) toProto() []*pb.Output {
