@@ -186,7 +186,7 @@ func sendAction(ctx *cli.Context) error {
 			}
 
 			if len(signedForfeits) == 0 {
-				return fmt.Errorf("no forfeit to sign")
+				continue
 			}
 
 			_, err := client.FinalizePayment(ctx.Context, &arkv1.FinalizePaymentRequest{
