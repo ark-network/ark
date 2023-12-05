@@ -2,80 +2,42 @@ package oceanwallet
 
 import (
 	"context"
-	"strings"
+	"fmt"
 
 	pb "github.com/ark-network/ark/api-spec/protobuf/gen/ocean/v1"
 	"github.com/ark-network/ark/internal/core/ports"
-	"google.golang.org/grpc"
+	"github.com/btcsuite/btcd/btcutil/hdkeychain"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
 const accountLabel = "ark"
 
-type wallet struct {
-	client        pb.WalletServiceClient
-	accountClient pb.AccountServiceClient
-}
-
-func newWallet(conn *grpc.ClientConn) *wallet {
-	return &wallet{
-		pb.NewWalletServiceClient(conn),
-		pb.NewAccountServiceClient(conn),
-	}
-}
-
-func (m *wallet) GenSeed(ctx context.Context) ([]string, error) {
-	res, err := m.client.GenSeed(ctx, &pb.GenSeedRequest{})
+func (s *service) GetPubkey(ctx context.Context) (*secp256k1.PublicKey, error) {
+	res, err := s.walletClient.GetInfo(ctx, &pb.GetInfoRequest{})
 	if err != nil {
 		return nil, err
 	}
-	mnemonic := strings.Split(res.GetMnemonic(), " ")
-
-	return mnemonic, nil
-}
-
-func (m *wallet) InitWallet(
-	ctx context.Context, mnemonic []string, password string,
-) error {
-	_, err := m.client.CreateWallet(ctx, &pb.CreateWalletRequest{
-		Mnemonic: strings.Join(mnemonic, " "),
-		Password: password,
-	})
-	return err
-}
-
-func (m *wallet) Unlock(ctx context.Context, password string) error {
-	if _, err := m.client.Unlock(ctx, &pb.UnlockRequest{
-		Password: password,
-	}); err != nil {
-		return err
+	if len(res.GetAccounts()) <= 0 {
+		return nil, fmt.Errorf("wallet is locked")
 	}
-	// Let's always make sure the 'ark' account is created after unlocking.
-	info, err := m.client.GetInfo(ctx, &pb.GetInfoRequest{})
+	xpub := res.GetAccounts()[0].GetXpubs()[0]
+	node, err := hdkeychain.NewKeyFromString(xpub)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if len(info.GetAccounts()) <= 0 {
-		_, err := m.accountClient.CreateAccountBIP44(
-			ctx, &pb.CreateAccountBIP44Request{
-				Label: accountLabel,
-			},
-		)
-		return err
+	for i := 0; i < 2; i++ {
+		node, err = node.Derive(0)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return nil
+	return node.ECPubKey()
 }
 
-func (m *wallet) Lock(ctx context.Context, password string) error {
-	_, err := m.client.Lock(ctx, &pb.LockRequest{
-		Password: password,
-	})
-	return err
-}
-
-func (m *wallet) Status(
+func (s *service) Status(
 	ctx context.Context,
 ) (ports.WalletStatus, error) {
-	res, err := m.client.Status(ctx, &pb.StatusRequest{})
+	res, err := s.walletClient.Status(ctx, &pb.StatusRequest{})
 	if err != nil {
 		return nil, err
 	}
