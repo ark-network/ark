@@ -7,22 +7,39 @@ title: 'Boarding the Ark'
 
 Alice wants to board the Ark of a well-known Ark service provider (ASP). It requires an on-chain transaction.
 
-- Alice must be online **at least once every 4 weeks** to keep her funds safe.
-- If ASP is unresponsive, Alice can claim her funds back in 24 hours.
+Depending the type of [Boarding transaction](./nomenclature#boarding-transaction) chosen by the ASP, the timeline is different.
 
-### Timeline of events
+### With luggage
 
-1. Alice creates a [Funding transaction](./nomenclature#funding-transaction)
+- Alice must be online **at least once every 4 weeks** to keep her funds safe
+- If ASP is unresponsive, Alice can claim her funds back in **24 hours**
+- Easier for the ASP since all VTXOs are born equal
 
-2. Alice adds any inputs she wants to cover the values the [VTXO](./nomenclature#vtxo-1) she will receive, plus on-chain fees.
+#### Timeline of events
 
-3. Alice adds an output with **two spending conditions**:
-
-   - `(ASP in 1 month)`
-   - A covenant output that forces coins to be spent by a [Redeem transaction](./nomenclature#redeem-transaction) with an output with **two** spending conditions:
+1. Alice creates a [Boarding transaction](./nomenclature#with-luggage)
+2. Alice adds any inputs she wants to cover the values the [VTXO](./nomenclature#vtxo-1) she will receive, plus on-chain fees
+3. Alice adds an output with **2 spending paths**:
+   - This funds will belong to the ASP after 4 weeks:
+     - `(ASP after 4w)`
+   - A covenant output that forces coins to be spent by a [VTXO](./nomenclature#vtxo) with an output with **2** spending paths:
      - `(Alice + ASP)`
-     - `(Alice in 24 hours)`
+     - `(Alice after 24h)`
+4. Alice notifies ASP about the [Boarding transaction](./nomenclature#with-luggage)
+5. Alice has now a promise of a [VTXO](./nomenclature#vtxo-1)
 
-4. Alice notifies ASP about the [Funding transaction](./nomenclature#funding-transaction)
+### Without luggage
 
-5. Alice has now a [VTXO](./nomenclature#vtxo-1).
+- Alice don't need to worry about loosing funds after boarding
+- If ASP is unresponsive, Alice can claim her funds back in **1 year**
+- ASP must be aware of the timeout on the [Boarding transaction](./nomenclature#with-luggage) to prevent double spending
+
+#### Timeline of events
+
+1. Alice creates a [Boarding transaction](./nomenclature#without-luggage)
+2. Alice adds any inputs she wants to cover the values the [VTXO](./nomenclature#vtxo-1) she will receive, plus on-chain fees.
+3. Alice adds an output that forces coins to be spent by a [VTXO](./nomenclature#vtxo):
+   - `(Alice + ASP)`
+   - `(Alice after 1y)`
+4. Alice notifies ASP about the [Boarding transaction](./nomenclature#withput-luggage)
+5. Alice has now an onchain [VTXO](./nomenclature#vtxo-1)
