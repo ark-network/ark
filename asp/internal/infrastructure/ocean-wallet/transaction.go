@@ -7,50 +7,14 @@ import (
 	pb "github.com/ark-network/ark/api-spec/protobuf/gen/ocean/v1"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/vulpemventures/go-elements/psetv2"
-	"google.golang.org/grpc"
 )
 
 const msatsPerByte = 110
 
-type tx struct {
-	client pb.TransactionServiceClient
-}
-
-func newTx(conn *grpc.ClientConn) *tx {
-	return &tx{pb.NewTransactionServiceClient(conn)}
-}
-
-func (m *tx) GetTransaction(
-	ctx context.Context, txid string,
-) (string, error) {
-	res, err := m.client.GetTransaction(ctx, &pb.GetTransactionRequest{
-		Txid: txid,
-	})
-	if err != nil {
-		return "", err
-	}
-	return res.GetTxHex(), nil
-}
-
-func (m *tx) UpdatePset(
-	ctx context.Context, pset string,
-	ins []ports.TxInput, outs []ports.TxOutput,
-) (string, error) {
-	res, err := m.client.UpdatePset(ctx, &pb.UpdatePsetRequest{
-		Pset:    pset,
-		Inputs:  inputList(ins).toProto(),
-		Outputs: outputList(outs).toProto(),
-	})
-	if err != nil {
-		return "", err
-	}
-	return res.GetPset(), nil
-}
-
-func (m *tx) SignPset(
+func (s *service) SignPset(
 	ctx context.Context, pset string, extractRawTx bool,
 ) (string, error) {
-	res, err := m.client.SignPset(ctx, &pb.SignPsetRequest{
+	res, err := s.txClient.SignPset(ctx, &pb.SignPsetRequest{
 		Pset: pset,
 	})
 	if err != nil {
@@ -68,10 +32,10 @@ func (m *tx) SignPset(
 	return ptx.ToBase64()
 }
 
-func (m *tx) Transfer(
+func (s *service) Transfer(
 	ctx context.Context, outs []ports.TxOutput,
 ) (string, error) {
-	res, err := m.client.Transfer(ctx, &pb.TransferRequest{
+	res, err := s.txClient.Transfer(ctx, &pb.TransferRequest{
 		AccountName:      accountLabel,
 		Receivers:        outputList(outs).toProto(),
 		MillisatsPerByte: msatsPerByte,
@@ -82,10 +46,10 @@ func (m *tx) Transfer(
 	return res.GetTxHex(), nil
 }
 
-func (m *tx) BroadcastTransaction(
+func (s *service) BroadcastTransaction(
 	ctx context.Context, txHex string,
 ) (string, error) {
-	res, err := m.client.BroadcastTransaction(
+	res, err := s.txClient.BroadcastTransaction(
 		ctx, &pb.BroadcastTransactionRequest{
 			TxHex: txHex,
 		},
