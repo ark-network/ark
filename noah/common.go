@@ -96,22 +96,17 @@ func getServiceProviderPublicKey() (*secp256k1.PublicKey, error) {
 		return nil, err
 	}
 
-	arkURL, ok := state["ark_url"]
+	arkPubKey, ok := state["ark_pubkey"]
 	if !ok {
-		return nil, fmt.Errorf("ark url not found")
+		return nil, fmt.Errorf("ark public key not found")
 	}
 
-	arkPubKey, _, err := common.DecodeUrl(arkURL)
+	_, pubKey, err := common.DecodePubKey(arkPubKey)
 	if err != nil {
 		return nil, err
 	}
 
-	_, publicKey, err := common.DecodePubKey(arkPubKey)
-	if err != nil {
-		return nil, err
-	}
-
-	return publicKey, nil
+	return pubKey, nil
 }
 
 func coinSelect(vtxos []vtxo, amount uint64) ([]vtxo, uint64, error) {

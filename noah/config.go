@@ -3,15 +3,9 @@ package main
 import (
 	"fmt"
 
-	"github.com/ark-network/ark/common"
+	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/urfave/cli/v2"
 )
-
-var rpcUrlFlag = cli.StringFlag{
-	Name:  "rpc",
-	Usage: "ark rpc URL",
-	Value: "",
-}
 
 var configCommand = cli.Command{
 	Name:   "config",
@@ -20,11 +14,8 @@ var configCommand = cli.Command{
 	Subcommands: []*cli.Command{
 		{
 			Name:   "connect",
-			Usage:  "connect <ARK_URL> [--rpc <RPC_URL>]",
+			Usage:  "connect <ARK_URL>",
 			Action: connectAction,
-			Flags: []cli.Flag{
-				&rpcUrlFlag,
-			},
 		},
 	},
 }
@@ -43,25 +34,37 @@ func connectAction(ctx *cli.Context) error {
 		return fmt.Errorf("missing ark URL")
 	}
 
-	url := ctx.Args().Get(0)
-
-	_, _, err := common.DecodeUrl(url)
-	if err != nil {
-		return err
-	}
+	url := ctx.Args().First()
 
 	updateState := map[string]string{
 		"ark_url": url,
-	}
-
-	if ctx.String("rpc") != "" {
-		updateState["rpc_url"] = ctx.String("rpc")
 	}
 
 	if err := setState(updateState); err != nil {
 		return err
 	}
 
-	fmt.Println("Connected to " + url)
-	return nil
+	client, close, err := getArkClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer close()
+
+	resp, err := client.GetPubkey(ctx.Context, &arkv1.GetPubkeyRequest{})
+	if err != nil {
+		return err
+	}
+
+	updateState = map[string]string{
+		"ark_pubkey": resp.Pubkey,
+	}
+
+	if err := setState(updateState); err != nil {
+		return err
+	}
+
+	return printJSON(map[string]string{
+		"ark_url":    url,
+		"ark_pubkey": resp.Pubkey,
+	})
 }
