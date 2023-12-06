@@ -74,7 +74,7 @@ Different ASPs can use different ways for users to board their Ark.
 - Initially proposed by [Steven Roose](https://roose.io/presentations/understanding-ark.pdf)
 - Alice funds an output that can be **accepted as a VTXO** in a future round
 - A covenant forces the creation of an output with the same script as [**VTXO**](#VTXO). No need for interactivity after funding it, anyone can spend.
-- **ASP** can unlock after a timeout ie. *8 weeks*
+- **ASP** can unlock after a timeout ie. _8 weeks_
 - Alice is **required to be online** to maintain access to funds: after the timeout, ASP becomes the only owner funds
 
 | Inputs       | Outputs                                                     |
@@ -85,7 +85,7 @@ Different ASPs can use different ways for users to board their Ark.
 
 - Initially proposed by [Burak](https://lists.linuxfoundation.org/pipermail/bitcoin-dev/2023-May/021694.html)
 - Alice funds an output that can be **accepted as a VTXO** in a future round
-- If ASP is not cooperative, **Alice** can unlock after a timeout ie. *8 weeks*
+- If ASP is not cooperative, **Alice** can unlock after a timeout ie. _8 weeks_
 - Alice is **not required to be online** to maintain access to funds: after the timeout, she becomes the only owner of the funds
 
 | Inputs       | Outputs                             |
@@ -122,4 +122,18 @@ Different ASPs can use different ways for users to board their Ark.
 - In an optimistic scenario, this tree is never revealed
 - Each leaf on this tree represents a VTXO
 
-![Chart of a Shared Output](/img/shared_output.png)
+```mermaid
+flowchart LR
+    subgraph Onchain
+        shared(Shared output)
+    end
+    subgraph Virtual
+        tx1(TX 1) --> tx2(TX 2)
+        tx1 --> tx3(TX 3)
+        tx2 --> v1(VTXO 1)
+        tx2 --> v2(VTXO 2)
+        tx3 --> v3(VTXO 3)
+        tx3 --> v4(VTXO 4)
+    end
+    shared --> tx1
+```
