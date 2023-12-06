@@ -14,6 +14,7 @@ Depending the type of [Boarding transaction](./nomenclature#boarding-transaction
 - Alice must be online **at least once every 4 weeks** to keep her funds safe
 - If ASP is unresponsive, Alice can claim her funds back in **24 hours**
 - Easier for the ASP since all VTXOs are born equal
+- Alice to unlock the boarding address needs to make two transactions: 1. Covenant > 2. VTXO's timeout after 24 hrs
 
 #### Timeline of events
 
