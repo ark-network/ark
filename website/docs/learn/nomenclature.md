@@ -72,7 +72,10 @@ Different ASPs can use different ways for users to board their Ark.
 #### With luggage
 
 - Initially proposed by [Steven Roose](https://roose.io/presentations/understanding-ark.pdf)
-- Alice funds a transaction that will be **spent to fund a VTXO** or will belong to the **ASP** after **4 weeks**
+- Alice funds an output that can be **accepted as a VTXO** in a future round
+- A covenant forces the creation of an output with the same script as [**VTXO**](#VTXO). No need for interactivity after funding it, anyone can spend.
+- **ASP** can unlock after a timeout ie. *8 weeks*
+- Alice is **required to be online** to maintain access to funds: after the timeout, ASP becomes the only owner funds
 
 | Inputs       | Outputs                                                     |
 | ------------ | ----------------------------------------------------------- |
