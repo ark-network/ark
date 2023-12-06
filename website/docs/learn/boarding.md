@@ -9,7 +9,7 @@ Alice wants to board the Ark of a well-known Ark service provider (ASP). It requ
 
 Depending the type of [Boarding transaction](./nomenclature#boarding-transaction) chosen by the ASP, the timeline is different.
 
-### With luggage
+### 🧳 With luggage
 
 - Alice must be online **at least once every 4 weeks** to keep her funds safe
 - If ASP is unresponsive, Alice can claim her funds back in **24 hours**
