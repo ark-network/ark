@@ -42,5 +42,5 @@ Depending the type of [Boarding transaction](./nomenclature#boarding-transaction
 3. Alice adds an output with **2** spending paths:
    - `(Alice + ASP)`
    - `(Alice after 1y)`
-4. Alice notifies ASP about the [Boarding transaction](./nomenclature#withput-luggage)
+4. Alice notifies ASP about the [Boarding transaction](./nomenclature#without-luggage)
 5. Alice can have this deposit to be accepted as if it were a normal [VTXO](./nomenclature#vtxo-1) born in an Ark [Pool transaction](./nomenclature#pool-transaction-aka-ark-transaction) 
