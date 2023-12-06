@@ -9,7 +9,7 @@ Alice wants to board the Ark of a well-known Ark service provider (ASP). It requ
 
 Depending on the type of [Boarding transaction](./nomenclature#boarding-transaction) chosen by the ASP, the timeline is different.
 
-### 🧳 With luggage
+### 🧳 Boarding with Luggage
 
 - Alice must be online **at least once every 4 weeks** to keep her funds safe
 - If ASP is unresponsive, Alice can claim her funds back in **24 hours**
@@ -35,7 +35,7 @@ flowchart LR
 4. Alice notifies ASP about the [Boarding transaction](./nomenclature#with-luggage)
 5. Alice has now a promise of a [VTXO](./nomenclature#vtxo-1) enforced by a covenant
 
-### 🎒Without luggage
+### 🎒 Boarding without Luggage
 
 - Alice don't need to worry about being online to maintain access to her funds after boarding
 - If ASP is unresponsive, Alice can claim her funds back in **1 year**
