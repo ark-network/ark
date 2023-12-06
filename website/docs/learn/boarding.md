@@ -39,7 +39,7 @@ Depending the type of [Boarding transaction](./nomenclature#boarding-transaction
 
 1. Alice creates a [Boarding transaction](./nomenclature#without-luggage)
 2. Alice adds any inputs she wants to cover the values the [VTXO](./nomenclature#vtxo-1) she will receive, plus on-chain fees.
-3. Alice adds an output that forces coins to be spent by a [VTXO](./nomenclature#vtxo):
+3. Alice adds an output with **2** spending paths:
    - `(Alice + ASP)`
    - `(Alice after 1y)`
 4. Alice notifies ASP about the [Boarding transaction](./nomenclature#withput-luggage)
