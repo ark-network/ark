@@ -62,7 +62,7 @@ Periodic transaction crafted by the ASP that hits mainchain and creates new VTXO
 
 ### Boarding transaction
 
-There are 2 different ways a user can onboard the Ark:
+There are 2 different ways a user can board the Ark:
 
 - With luggage
 - Without luggage
