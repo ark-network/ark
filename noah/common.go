@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"syscall"
 
@@ -95,20 +96,76 @@ func getServiceProviderPublicKey() (*secp256k1.PublicKey, error) {
 		return nil, err
 	}
 
-	arkURL, ok := state["ark_url"]
+	arkPubKey, ok := state["ark_pubkey"]
 	if !ok {
-		return nil, fmt.Errorf("ark url not found")
+		return nil, fmt.Errorf("ark public key not found")
 	}
 
-	arkPubKey, _, err := common.DecodeUrl(arkURL)
+	_, pubKey, err := common.DecodePubKey(arkPubKey)
 	if err != nil {
 		return nil, err
 	}
 
-	_, publicKey, err := common.DecodePubKey(arkPubKey)
-	if err != nil {
-		return nil, err
+	return pubKey, nil
+}
+
+func coinSelect(vtxos []vtxo, amount uint64) ([]vtxo, uint64, error) {
+	selected := make([]vtxo, 0)
+	selectedAmount := uint64(0)
+
+	for _, vtxo := range vtxos {
+		if selectedAmount >= amount {
+			break
+		}
+
+		selected = append(selected, vtxo)
+		selectedAmount += vtxo.amount
 	}
 
-	return publicKey, nil
+	if selectedAmount < amount {
+		return nil, 0, fmt.Errorf("insufficient balance: %d to cover %d", selectedAmount, amount)
+	}
+
+	change := selectedAmount - amount
+
+	return selected, change, nil
+}
+
+func computeBalance(vtxos []vtxo) uint64 {
+	var balance uint64
+	for _, vtxo := range vtxos {
+		balance += vtxo.amount
+	}
+	return balance
+}
+
+func getAddress() (string, error) {
+	privateKey, err := privateKeyFromPassword()
+	if err != nil {
+		return "", err
+	}
+
+	publicKey := privateKey.PubKey()
+
+	aspPublicKey, err := getServiceProviderPublicKey()
+	if err != nil {
+		return "", err
+	}
+
+	addr, err := common.EncodeAddress(common.MainNet.Addr, publicKey, aspPublicKey)
+	if err != nil {
+		return "", err
+	}
+
+	return addr, nil
+}
+
+func printJSON(resp interface{}) error {
+	jsonBytes, err := json.MarshalIndent(resp, "", "\t")
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(string(jsonBytes))
+	return nil
 }

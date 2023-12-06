@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/urfave/cli/v2"
 )
 
@@ -13,6 +11,20 @@ var balanceCommand = cli.Command{
 }
 
 func balanceAction(ctx *cli.Context) error {
-	fmt.Println("balance is not implemented yet")
-	return nil
+	client, close, err := getArkClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer close()
+
+	vtxos, err := getVtxos(ctx, client)
+	if err != nil {
+		return err
+	}
+
+	balance := computeBalance(vtxos)
+
+	return printJSON(map[string]interface{}{
+		"balance": balance,
+	})
 }

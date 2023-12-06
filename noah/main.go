@@ -26,6 +26,7 @@ var (
 
 	initialState = map[string]string{
 		"ark_url":               defaultArkURL,
+		"ark_pubkey":            "",
 		"encrypted_private_key": "",
 		"password_hash":         "",
 	}
@@ -53,6 +54,7 @@ func main() {
 		app.Commands,
 		&balanceCommand,
 		&configCommand,
+		&faucetCommand,
 		&initCommand,
 		&receiveCommand,
 		&redeemCommand,

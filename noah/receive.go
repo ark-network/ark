@@ -1,9 +1,6 @@
 package main
 
 import (
-	"fmt"
-
-	"github.com/ark-network/ark/common"
 	"github.com/urfave/cli/v2"
 )
 
@@ -14,24 +11,12 @@ var receiveCommand = cli.Command{
 }
 
 func receiveAction(ctx *cli.Context) error {
-	privateKey, err := privateKeyFromPassword()
+	addr, err := getAddress()
 	if err != nil {
 		return err
 	}
 
-	publicKey := privateKey.PubKey()
-
-	aspPublicKey, err := getServiceProviderPublicKey()
-	if err != nil {
-		return err
-	}
-
-	addr, err := common.EncodeAddress(common.MainNet.Addr, publicKey, aspPublicKey)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println(addr)
-
-	return nil
+	return printJSON(map[string]interface{}{
+		"address": addr,
+	})
 }

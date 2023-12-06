@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/ark-network/ark/common"
+	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/urfave/cli/v2"
 )
 
@@ -26,11 +26,7 @@ func printConfigAction(ctx *cli.Context) error {
 		return err
 	}
 
-	for key, value := range state {
-		fmt.Println(key + ": " + value)
-	}
-
-	return nil
+	return printJSON(state)
 }
 
 func connectAction(ctx *cli.Context) error {
@@ -38,17 +34,37 @@ func connectAction(ctx *cli.Context) error {
 		return fmt.Errorf("missing ark URL")
 	}
 
-	url := ctx.Args().Get(0)
+	url := ctx.Args().First()
 
-	_, _, err := common.DecodeUrl(url)
+	updateState := map[string]string{
+		"ark_url": url,
+	}
+
+	if err := setState(updateState); err != nil {
+		return err
+	}
+
+	client, close, err := getArkClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer close()
+
+	resp, err := client.GetPubkey(ctx.Context, &arkv1.GetPubkeyRequest{})
 	if err != nil {
 		return err
 	}
 
-	if err := setState(map[string]string{"ark_url": url}); err != nil {
+	updateState = map[string]string{
+		"ark_pubkey": resp.Pubkey,
+	}
+
+	if err := setState(updateState); err != nil {
 		return err
 	}
 
-	fmt.Println("Connected to " + url)
-	return nil
+	return printJSON(map[string]string{
+		"ark_url":    url,
+		"ark_pubkey": resp.Pubkey,
+	})
 }
