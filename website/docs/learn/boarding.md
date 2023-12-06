@@ -7,7 +7,7 @@ title: 'Boarding the Ark'
 
 Alice wants to board the Ark of a well-known Ark service provider (ASP). It requires an on-chain transaction.
 
-Depending the type of [Boarding transaction](./nomenclature#boarding-transaction) chosen by the ASP, the timeline is different.
+Depending on the type of [Boarding transaction](./nomenclature#boarding-transaction) chosen by the ASP, the timeline is different.
 
 ### 🧳 With luggage
 
