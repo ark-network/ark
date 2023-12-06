@@ -31,7 +31,7 @@ Depending the type of [Boarding transaction](./nomenclature#boarding-transaction
 
 ### 🎒Without luggage
 
-- Alice don't need to worry about loosing funds after boarding
+- Alice don't need to worry about being online to maintain access to her funds after boarding
 - If ASP is unresponsive, Alice can claim her funds back in **1 year**
 - ASP must be aware of the timeout on the [Boarding transaction](./nomenclature#with-luggage) to prevent double spending
 
