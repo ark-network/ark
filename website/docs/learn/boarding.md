@@ -14,7 +14,13 @@ Depending the type of [Boarding transaction](./nomenclature#boarding-transaction
 - Alice must be online **at least once every 4 weeks** to keep her funds safe
 - If ASP is unresponsive, Alice can claim her funds back in **24 hours**
 - Easier for the ASP since all VTXOs are born equal
-- Alice to unlock the boarding address needs to make two transactions: 1. Covenant > 2. VTXO's timeout after 24 hrs
+- To unlock the boarding address Alice needs to make two transactions:
+
+```mermaid
+flowchart LR
+  V["VTXO's timeout after 24 hrs"]
+  Covenant --> V
+```
 
 #### Timeline of events
 
@@ -43,4 +49,4 @@ Depending the type of [Boarding transaction](./nomenclature#boarding-transaction
    - `(Alice + ASP)`
    - `(Alice after 1y)`
 4. Alice notifies ASP about the [Boarding transaction](./nomenclature#without-luggage)
-5. Alice can have this deposit to be accepted as if it were a normal [VTXO](./nomenclature#vtxo-1) born in an Ark [Pool transaction](./nomenclature#pool-transaction-aka-ark-transaction) 
+5. Alice can have this deposit to be accepted as if it were a normal [VTXO](./nomenclature#vtxo-1) born in an Ark [Pool transaction](./nomenclature#pool-transaction-aka-ark-transaction)
