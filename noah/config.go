@@ -7,6 +7,13 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+var networkFlag = cli.StringFlag{
+	Name:     "network",
+	Usage:    "network to use (mainnet, testnet)",
+	Value:    "mainnet",
+	Required: false,
+}
+
 var configCommand = cli.Command{
 	Name:   "config",
 	Usage:  "Print local configuration of the Noah CLI",
@@ -14,8 +21,11 @@ var configCommand = cli.Command{
 	Subcommands: []*cli.Command{
 		{
 			Name:   "connect",
-			Usage:  "connect <ARK_URL>",
+			Usage:  "connect <ARK_URL> [--network <NETWORK>]",
 			Action: connectAction,
+			Flags: []cli.Flag{
+				&networkFlag,
+			},
 		},
 	},
 }
@@ -35,9 +45,15 @@ func connectAction(ctx *cli.Context) error {
 	}
 
 	url := ctx.Args().First()
+	network := ctx.String("network")
+
+	if network != "mainnet" && network != "testnet" {
+		return fmt.Errorf("invalid network: %s", network)
+	}
 
 	updateState := map[string]string{
 		"ark_url": url,
+		"network": network,
 	}
 
 	if err := setState(updateState); err != nil {
@@ -66,5 +82,6 @@ func connectAction(ctx *cli.Context) error {
 	return printJSON(map[string]string{
 		"ark_url":    url,
 		"ark_pubkey": resp.Pubkey,
+		"network":    network,
 	})
 }

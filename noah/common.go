@@ -90,6 +90,25 @@ func privateKeyFromPassword() (*secp256k1.PrivateKey, error) {
 	return privateKey, nil
 }
 
+func getWalletPublicKey() (*secp256k1.PublicKey, error) {
+	state, err := getState()
+	if err != nil {
+		return nil, err
+	}
+
+	publicKeyString, ok := state["public_key"]
+	if !ok {
+		return nil, fmt.Errorf("public key not found")
+	}
+
+	_, publicKey, err := common.DecodePubKey(publicKeyString)
+	if err != nil {
+		return nil, err
+	}
+
+	return publicKey, nil
+}
+
 func getServiceProviderPublicKey() (*secp256k1.PublicKey, error) {
 	state, err := getState()
 	if err != nil {
@@ -139,20 +158,36 @@ func computeBalance(vtxos []vtxo) uint64 {
 	return balance
 }
 
+func getNetwork() common.Network {
+	state, err := getState()
+	if err != nil {
+		return common.MainNet
+	}
+
+	network, ok := state["network"]
+	if !ok {
+		return common.MainNet
+	}
+	if network == "testnet" {
+		return common.TestNet
+	}
+	return common.MainNet
+}
+
 func getAddress() (string, error) {
-	privateKey, err := privateKeyFromPassword()
+	publicKey, err := getWalletPublicKey()
 	if err != nil {
 		return "", err
 	}
-
-	publicKey := privateKey.PubKey()
 
 	aspPublicKey, err := getServiceProviderPublicKey()
 	if err != nil {
 		return "", err
 	}
 
-	addr, err := common.EncodeAddress(common.MainNet.Addr, publicKey, aspPublicKey)
+	net := getNetwork()
+
+	addr, err := common.EncodeAddress(net.Addr, publicKey, aspPublicKey)
 	if err != nil {
 		return "", err
 	}
