@@ -81,7 +81,9 @@ Different ASPs can use different ways for users to board their Ark.
 #### Without luggage
 
 - Initially proposed by [Burak](https://lists.linuxfoundation.org/pipermail/bitcoin-dev/2023-May/021694.html)
-- Alice funds a transaction that will be **spent as a VTXO** or will belong to **Alice** after **1 year**
+- Alice funds an output that can be **accepted as a VTXO** in a future round
+- If ASP is not cooperative, **Alice** can unlock after a timeout ie. *8 weeks*
+- Alice is **not required to be online** to maintain access to funds: after the timeout, she becomes the only owner of the funds
 
 | Inputs       | Outputs                             |
 | ------------ | ----------------------------------- |
