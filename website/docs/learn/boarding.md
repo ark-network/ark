@@ -23,7 +23,7 @@ Depending the type of [Boarding transaction](./nomenclature#boarding-transaction
 3. Alice adds an output with **2 spending paths**:
    - This funds will belong to the ASP after 4 weeks:
      - `(ASP after 4w)`
-   - A covenant output that forces coins to be spent by a [VTXO](./nomenclature#vtxo) with an output with **2** spending paths:
+   - A covenant output that forces coins to be spent by a [VTXO](./nomenclature#vtxo) with an output script with **2** spending paths:
      - `(Alice + ASP)`
      - `(Alice after 24h)`
 4. Alice notifies ASP about the [Boarding transaction](./nomenclature#with-luggage)
