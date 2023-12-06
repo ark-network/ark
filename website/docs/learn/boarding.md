@@ -26,7 +26,7 @@ Depending the type of [Boarding transaction](./nomenclature#boarding-transaction
      - `(Alice + ASP)`
      - `(Alice after 24h)`
 4. Alice notifies ASP about the [Boarding transaction](./nomenclature#with-luggage)
-5. Alice has now a promise of a [VTXO](./nomenclature#vtxo-1)
+5. Alice has now a promise of a [VTXO](./nomenclature#vtxo-1) enforced by a covenant
 
 ### Without luggage
 
