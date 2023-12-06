@@ -32,7 +32,8 @@ const config = {
           // Remove this to remove the "edit this page" links.
           editUrl: 'https://github.com/ark-network/ark/edit/master/website/',
         },
-        blog: {
+        blog: false,
+        /* blog: {
           showReadingTime: true,
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
@@ -41,7 +42,7 @@ const config = {
 
           blogTitle: 'Blog',
           blogDescription: 'Posts about Ark development',
-        },
+        }, */
       }),
     ],
   ],
@@ -65,7 +66,7 @@ const config = {
             position: 'left',
             label: 'Docs',
           },
-          { to: '/blog', label: 'Blog', position: 'left' },
+          /*{ to: '/blog', label: 'Blog', position: 'left' },*/
           {
             href: 'https://github.com/ark-network',
             label: 'GitHub',
@@ -130,7 +131,7 @@ const config = {
               },
             ],
           },
-          {
+          /* {
             title: 'MORE',
             items: [
               {
@@ -138,7 +139,7 @@ const config = {
                 to: '/blog',
               },
             ],
-          },
+          }, */
         ],
       },
       colorMode: {
