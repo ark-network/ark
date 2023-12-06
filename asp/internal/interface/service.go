@@ -21,13 +21,13 @@ type service struct {
 }
 
 type Options struct {
-	applicationService application.Service
-	repositoryManager  ports.RepoManager
+	ApplicationService application.Service
+	RepositoryManager  ports.RepoManager
 }
 
 func NewService(opts Options) (Service, error) {
 	return &service{
-		grpcService: handlers.NewHandler(opts.applicationService, opts.repositoryManager),
+		grpcService: handlers.NewHandler(opts.ApplicationService, opts.RepositoryManager),
 	}, nil
 }
 

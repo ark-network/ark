@@ -38,6 +38,7 @@ type Service interface {
 	UpdatePaymentStatus(ctx context.Context, id string) error
 	ListVtxos(ctx context.Context, pubkey string) ([]domain.Vtxo, error)
 	GetPubkey(ctx context.Context) (string, error)
+	Start() error
 }
 
 type service struct {
