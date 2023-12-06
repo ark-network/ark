@@ -29,7 +29,7 @@ Depending the type of [Boarding transaction](./nomenclature#boarding-transaction
 4. Alice notifies ASP about the [Boarding transaction](./nomenclature#with-luggage)
 5. Alice has now a promise of a [VTXO](./nomenclature#vtxo-1) enforced by a covenant
 
-### Without luggage
+### 🎒Without luggage
 
 - Alice don't need to worry about loosing funds after boarding
 - If ASP is unresponsive, Alice can claim her funds back in **1 year**
