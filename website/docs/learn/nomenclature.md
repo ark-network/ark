@@ -47,7 +47,7 @@ Periodic transaction crafted by the ASP that hits mainchain and creates new VTXO
 
 - **A**: Alice pubkey
 - **ASP**: ASP pubkey
-- **cov\*\*(script)**: covenant of script
+- **cov\*\*(script)**: covenant that forces the spending transaction to have a mandatory first output with the **script**
 - **and(A,B)**: both conditions needed to unlock
 - **or(A,B)**: only one condition needed to unlock
 - **and(A, or(S, after(24h)**: (Alice and Server) or (Alice after 24h)
