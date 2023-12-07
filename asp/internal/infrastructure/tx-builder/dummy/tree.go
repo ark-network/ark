@@ -3,6 +3,7 @@ package txbuilder
 import (
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/internal/core/domain"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/network"
@@ -57,7 +58,7 @@ func buildCongestionTree(
 	net *network.Network,
 	poolTxID string,
 	receivers []domain.Receiver,
-) (congestionTree []string, err error) {
+) (congestionTree domain.CongestionTree, err error) {
 	var nodes []*node
 
 	for _, r := range receivers {
@@ -71,22 +72,43 @@ func buildCongestionTree(
 		}
 	}
 
-	var tree []string
-
 	psets, err := nodes[0].psets(psetv2.InputArgs{
 		Txid:    poolTxID,
 		TxIndex: sharedOutputIndex,
-	})
+	}, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, pset := range psets {
-		psetB64, err := pset.ToBase64()
+	maxLevel := 0
+	for _, psetWithLevel := range psets {
+		if psetWithLevel.level > maxLevel {
+			maxLevel = psetWithLevel.level
+		}
+	}
+
+	tree := make(domain.CongestionTree, maxLevel+1)
+
+	for _, psetWithLevel := range psets {
+		utx, err := psetWithLevel.pset.UnsignedTx()
 		if err != nil {
 			return nil, err
 		}
-		tree = append(tree, psetB64)
+
+		txid := utx.TxHash().String()
+
+		psetB64, err := psetWithLevel.pset.ToBase64()
+		if err != nil {
+			return nil, err
+		}
+
+		parentTxid := chainhash.Hash(psetWithLevel.pset.Inputs[0].PreviousTxid).String()
+
+		tree[psetWithLevel.level] = append(tree[psetWithLevel.level], domain.Node{
+			Txid:       txid,
+			Pset:       psetB64,
+			ParentTxid: parentTxid,
+		})
 	}
 
 	return tree, nil
@@ -231,16 +253,25 @@ func (n *node) pset(input psetv2.InputArgs) (*psetv2.Pset, error) {
 	return pset, nil
 }
 
+type psetWithLevel struct {
+	pset  *psetv2.Pset
+	level int
+}
+
 // create the node pset and all the psets of its children recursively, updating the input arg at each step
 // the function stops when it reaches a leaf node
-func (n *node) psets(input psetv2.InputArgs) ([]*psetv2.Pset, error) {
+func (n *node) psets(input psetv2.InputArgs, level int) ([]psetWithLevel, error) {
 	pset, err := n.pset(input)
 	if err != nil {
 		return nil, err
 	}
 
+	nodeResult := []psetWithLevel{
+		{pset, level},
+	}
+
 	if n.isLeaf() {
-		return []*psetv2.Pset{pset}, nil
+		return nodeResult, nil
 	}
 
 	unsignedTx, err := pset.UnsignedTx()
@@ -253,7 +284,7 @@ func (n *node) psets(input psetv2.InputArgs) ([]*psetv2.Pset, error) {
 	psetsLeft, err := n.left.psets(psetv2.InputArgs{
 		Txid:    txID,
 		TxIndex: 0,
-	})
+	}, level+1)
 	if err != nil {
 		return nil, err
 	}
@@ -261,10 +292,10 @@ func (n *node) psets(input psetv2.InputArgs) ([]*psetv2.Pset, error) {
 	psetsRight, err := n.right.psets(psetv2.InputArgs{
 		Txid:    txID,
 		TxIndex: 1,
-	})
+	}, level+1)
 	if err != nil {
 		return nil, err
 	}
 
-	return append([]*psetv2.Pset{pset}, append(psetsLeft, psetsRight...)...), nil
+	return append(nodeResult, append(psetsLeft, psetsRight...)...), nil
 }

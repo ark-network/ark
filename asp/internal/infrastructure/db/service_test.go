@@ -21,6 +21,50 @@ const (
 	pubkey   = "0300000000000000000000000000000000000000000000000000000000000000001"
 )
 
+var congestionTree = [][]domain.Node{
+	{
+		{
+			Txid:       txid,
+			Pset:       emptyPtx,
+			ParentTxid: txid,
+		},
+	},
+	{
+		{
+			Txid:       txid,
+			Pset:       emptyPtx,
+			ParentTxid: txid,
+		},
+		{
+			Txid:       txid,
+			Pset:       emptyPtx,
+			ParentTxid: txid,
+		},
+	},
+	{
+		{
+			Txid:       txid,
+			Pset:       emptyPtx,
+			ParentTxid: txid,
+		},
+		{
+			Txid:       txid,
+			Pset:       emptyPtx,
+			ParentTxid: txid,
+		},
+		{
+			Txid:       txid,
+			Pset:       emptyPtx,
+			ParentTxid: txid,
+		},
+		{
+			Txid:       txid,
+			Pset:       emptyPtx,
+			ParentTxid: txid,
+		},
+	},
+}
+
 func TestService(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -86,7 +130,7 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 					},
 					domain.RoundFinalizationStarted{
 						Id:             "1ea610ff-bf3e-4068-9bfd-b6c3f553467e",
-						CongestionTree: []string{emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx},
+						CongestionTree: congestionTree,
 						Connectors:     []string{emptyPtx, emptyPtx},
 						PoolTx:         emptyTx,
 					},
@@ -107,7 +151,7 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 					},
 					domain.RoundFinalizationStarted{
 						Id:             "7578231e-428d-45ae-aaa4-e62c77ad5cec",
-						CongestionTree: []string{emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx},
+						CongestionTree: congestionTree,
 						Connectors:     []string{emptyPtx, emptyPtx},
 						PoolTx:         emptyTx,
 					},
@@ -194,7 +238,7 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 			},
 			domain.RoundFinalizationStarted{
 				Id:             roundId,
-				CongestionTree: []string{emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx},
+				CongestionTree: congestionTree,
 				Connectors:     []string{emptyPtx, emptyPtx},
 				PoolTx:         emptyTx,
 			},

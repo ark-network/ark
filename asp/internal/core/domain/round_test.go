@@ -25,10 +25,52 @@ var (
 	emptyPtx       = "cHNldP8BAgQCAAAAAQQBAAEFAQABBgEDAfsEAgAAAAA="
 	emptyTx        = "0200000000000000000000"
 	txid           = "0000000000000000000000000000000000000000000000000000000000000000"
-	congestionTree = []string{emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx}
-	connectors     = []string{emptyPtx, emptyPtx, emptyPtx}
-	forfeitTxs     = []string{emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx}
-	poolTx         = emptyTx
+	congestionTree = domain.CongestionTree{
+		{
+			{
+				Txid:       txid,
+				Pset:       emptyPtx,
+				ParentTxid: txid,
+			},
+		},
+		{
+			{
+				Txid:       txid,
+				Pset:       emptyPtx,
+				ParentTxid: txid,
+			},
+			{
+				Txid:       txid,
+				Pset:       emptyPtx,
+				ParentTxid: txid,
+			},
+		},
+		{
+			{
+				Txid:       txid,
+				Pset:       emptyPtx,
+				ParentTxid: txid,
+			},
+			{
+				Txid:       txid,
+				Pset:       emptyPtx,
+				ParentTxid: txid,
+			},
+			{
+				Txid:       txid,
+				Pset:       emptyPtx,
+				ParentTxid: txid,
+			},
+			{
+				Txid:       txid,
+				Pset:       emptyPtx,
+				ParentTxid: txid,
+			},
+		},
+	}
+	connectors = []string{emptyPtx, emptyPtx, emptyPtx}
+	forfeitTxs = []string{emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx}
+	poolTx     = emptyTx
 )
 
 func TestRound(t *testing.T) {
@@ -229,7 +271,7 @@ func testStartFinalization(t *testing.T) {
 			fixtures := []struct {
 				round       *domain.Round
 				connectors  []string
-				tree        []string
+				tree        domain.CongestionTree
 				poolTx      string
 				expectedErr string
 			}{

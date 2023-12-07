@@ -126,7 +126,7 @@ func (h *handler) GetRound(ctx context.Context, req *arkv1.GetRoundRequest) (*ar
 			Start:          round.StartingTimestamp,
 			End:            round.EndingTimestamp,
 			Txid:           round.Txid,
-			CongestionTree: round.CongestionTree,
+			CongestionTree: congestionTreeAsList(round.CongestionTree),
 		},
 	}, nil
 }
@@ -219,7 +219,7 @@ func (h *handler) listenToEvents() {
 					RoundFinalization: &arkv1.RoundFinalizationEvent{
 						Id:             e.Id,
 						PoolPartialTx:  e.PoolTx,
-						CongestionTree: e.CongestionTree,
+						CongestionTree: congestionTreeAsList(e.CongestionTree),
 						ForfeitTxs:     nil, // TODO: add forfeit txs
 					},
 				},
@@ -270,4 +270,14 @@ func (v vtxoList) toProto() []*arkv1.Vtxo {
 		})
 	}
 	return list
+}
+
+func congestionTreeAsList(tree domain.CongestionTree) []string {
+	congestionTreeAsList := make([]string, 0)
+	for _, level := range tree {
+		for _, node := range level {
+			congestionTreeAsList = append(congestionTreeAsList, node.Txid)
+		}
+	}
+	return congestionTreeAsList
 }

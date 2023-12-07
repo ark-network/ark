@@ -144,18 +144,20 @@ func TestBuildCongestionTree(t *testing.T) {
 	for _, f := range fixtures {
 		tree, err := builder.BuildCongestionTree(poolTx, f.payments)
 		require.NoError(t, err)
-		require.Len(t, tree, f.expectedNodesNum)
 
 		// decode all psbt
 		psets := make([]*psetv2.Pset, 0, f.expectedNodesNum)
 
-		for _, pset := range tree {
-			pset, err := psetv2.NewPsetFromBase64(pset)
-			require.NoError(t, err)
-			require.NotNil(t, pset)
+		for _, psetLevel := range tree {
+			for _, node := range psetLevel {
+				pset, err := psetv2.NewPsetFromBase64(node.Pset)
+				require.NoError(t, err)
+				require.NotNil(t, pset)
 
-			psets = append(psets, pset)
+				psets = append(psets, pset)
+			}
 		}
+		require.Len(t, psets, f.expectedNodesNum)
 
 		require.Len(t, psets[0].Inputs, 1)
 		require.Len(t, psets[0].Outputs, 2)
