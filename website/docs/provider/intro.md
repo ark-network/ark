@@ -2,7 +2,7 @@
 sidebar_position: 1
 ---
 
-# Ark Service Provider
+# Introduction
 
 The Ark Service Provider (ASP) is composed by 3 services that have different responsibilities:
 

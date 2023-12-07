@@ -28,15 +28,17 @@ const config = {
         docs: {
           routeBasePath: '/',
           sidebarPath: require.resolve('./sidebars.js'),
-          // Please change this to your repo.
-          // Remove this to remove the "edit this page" links.
           editUrl: 'https://github.com/ark-network/ark/edit/master/website/',
+          exclude: [
+            '**/provider/gateway/**',
+            '**/provider/coordinator/**', 
+            '**/provider/treasury/**',
+            '**/user/noah-cli.md'
+          ]
         },
         blog: false,
         /* blog: {
           showReadingTime: true,
-          // Please change this to your repo.
-          // Remove this to remove the "edit this page" links.
           editUrl:
             'https://github.com/ark-network/ark/edit/master/website/blog',
 

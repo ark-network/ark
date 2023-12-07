@@ -3,6 +3,4 @@ sidebar_position: 1
 title: Overview
 ---
 
-You can join the Ark with one of the following apps:
-- [Noah CLI](noah-cli.md)
-
+An Ark client is a software that allows users to interact with the Ark Service Provider. It can be a Browser Extension, a Progressive Web Application, a desktop or mobile app.
