@@ -7,7 +7,9 @@ title: 'Leaving the Ark'
 
 Alice wants to leave the Ark and get her funds back on-chain. It requires an on-chain transaction.
 
-### Timeline of events
+### Cooperative exit
+
+#### Timeline of events
 
 1. Alice tells ASP she wants to trade [VTXO](#vtxo) for UTXO
 2. ASP (with Alice) prepares next [Pool transaction](#pool-transaction-aka-ark-transaction):
@@ -19,3 +21,12 @@ Alice wants to leave the Ark and get her funds back on-chain. It requires an on-
 4. ASP broadcasts [Pool transaction](#pool-transaction-aka-ark-transaction)
 5. Alice has now a new UTXO
 6. For at most 4 weeks, Alice will be able to double spend her’s [VTXO](#vtxo), but if she does it, the ASP will have time (24 hours) to grab the funds from the [VTXO](#vtxo) to itself using the [Forfeit transaction](#forfeit-transaction-)
+
+
+### Non-cooperative exit
+
+If ASP is unresponsive, Alice can unilaterally exit revealing the branch of the Pool transaction that locks her funds.
+
+#### Timeline of events
+
+TBD
