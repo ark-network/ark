@@ -89,7 +89,7 @@ message Round {
   int64 start = 2;
   int64 end = 3;
   string txid = 4;
-  repeated string congestion_tree = 5;
+  repeated TreeLevel congestion_tree = 5;
 }
 
 message Input {
@@ -116,7 +116,7 @@ message TreeLevel {
 message Node {
   string txid = 1;
   string tx = 2;
-  string parentTxid = 3;
+  string parent_txid = 3;
 }
 
 message RoundFinalizedEvent {
