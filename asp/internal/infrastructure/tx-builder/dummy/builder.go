@@ -40,7 +40,7 @@ func NewTxBuilder(aspPublicKey *secp256k1.PublicKey, net common.Network) ports.T
 }
 
 // BuildCongestionTree implements ports.TxBuilder.
-func (b *txBuilder) BuildCongestionTree(poolTx string, payments []domain.Payment) (congestionTree []string, err error) {
+func (b *txBuilder) BuildCongestionTree(poolTx string, payments []domain.Payment) (congestionTree domain.CongestionTree, err error) {
 	poolTxID, err := getTxID(poolTx)
 	if err != nil {
 		return nil, err

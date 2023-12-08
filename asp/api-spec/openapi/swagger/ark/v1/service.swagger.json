@@ -407,6 +407,20 @@
         }
       }
     },
+    "v1Node": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "tx": {
+          "type": "string"
+        },
+        "parentTxid": {
+          "type": "string"
+        }
+      }
+    },
     "v1Output": {
       "type": "object",
       "properties": {
@@ -461,10 +475,7 @@
           "type": "string"
         },
         "congestionTree": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
+          "$ref": "#/definitions/v1Tree"
         }
       }
     },
@@ -489,16 +500,13 @@
           "type": "string"
         },
         "forfeitTxs": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
-        },
-        "congestionTree": {
           "type": "array",
           "items": {
             "type": "string"
           }
+        },
+        "congestionTree": {
+          "$ref": "#/definitions/v1Tree"
         }
       }
     },
@@ -510,6 +518,30 @@
         },
         "poolTxid": {
           "type": "string"
+        }
+      }
+    },
+    "v1Tree": {
+      "type": "object",
+      "properties": {
+        "levels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1TreeLevel"
+          }
+        }
+      }
+    },
+    "v1TreeLevel": {
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Node"
+          }
         }
       }
     },

@@ -41,7 +41,7 @@ type Round struct {
 	Txid              string
 	TxHex             string
 	ForfeitTxs        []string
-	CongestionTree    []string
+	CongestionTree    CongestionTree
 	Connectors        []string
 	DustAmount        uint64
 	Version           uint
@@ -81,7 +81,7 @@ func (r *Round) On(event RoundEvent, replayed bool) {
 		r.StartingTimestamp = e.Timestamp
 	case RoundFinalizationStarted:
 		r.Stage.Code = FinalizationStage
-		r.CongestionTree = append([]string{}, e.CongestionTree...)
+		r.CongestionTree = e.CongestionTree
 		r.Connectors = append([]string{}, e.Connectors...)
 		r.TxHex = e.PoolTx
 	case RoundFinalized:
@@ -143,7 +143,7 @@ func (r *Round) RegisterPayments(payments []Payment) ([]RoundEvent, error) {
 	return []RoundEvent{event}, nil
 }
 
-func (r *Round) StartFinalization(connectors, tree []string, poolTx string) ([]RoundEvent, error) {
+func (r *Round) StartFinalization(connectors []string, tree CongestionTree, poolTx string) ([]RoundEvent, error) {
 	if len(connectors) <= 0 {
 		return nil, fmt.Errorf("missing list of connectors")
 	}

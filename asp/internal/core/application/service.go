@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/ark-network/ark/common"
@@ -366,13 +365,10 @@ func (s *service) propagateEvents(round *domain.Round) {
 }
 
 func getNewVtxos(net network.Network, round *domain.Round) []domain.Vtxo {
-	treeDepth := math.Log2(float64(len(round.CongestionTree) + 1))
-	leaves := round.CongestionTree[int(math.Pow(2, treeDepth)-1):]
+	leaves := round.CongestionTree.Leaves()
 	vtxos := make([]domain.Vtxo, 0)
-	for _, ptx := range leaves {
-		tx, _ := psetv2.NewPsetFromBase64(ptx)
-		utx, _ := tx.UnsignedTx()
-		txid := utx.TxHash().String()
+	for _, node := range leaves {
+		tx, _ := psetv2.NewPsetFromBase64(node.Tx)
 		for i, out := range tx.Outputs {
 			for _, p := range round.Payments {
 				var pubkey string
@@ -391,7 +387,7 @@ func getNewVtxos(net network.Network, round *domain.Round) []domain.Vtxo {
 				}
 				if found {
 					vtxos = append(vtxos, domain.Vtxo{
-						VtxoKey:  domain.VtxoKey{Txid: txid, VOut: uint32(i)},
+						VtxoKey:  domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
 						Receiver: domain.Receiver{Pubkey: pubkey, Amount: out.Value},
 					})
 					break

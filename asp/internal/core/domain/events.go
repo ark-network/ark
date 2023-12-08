@@ -17,7 +17,7 @@ type RoundStarted struct {
 
 type RoundFinalizationStarted struct {
 	Id             string
-	CongestionTree []string
+	CongestionTree CongestionTree
 	Connectors     []string
 	PoolTx         string
 }
