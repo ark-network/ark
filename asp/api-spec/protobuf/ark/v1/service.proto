@@ -106,7 +106,17 @@ message RoundFinalizationEvent {
   string id = 1;
   string pool_partial_tx = 2;
   map<string, string> forfeit_txs = 3;
-  repeated string congestion_tree = 4;
+  repeated TreeLevel congestion_tree = 4;
+}
+
+message TreeLevel {
+  repeated Node nodes = 1;
+}
+
+message Node {
+  string txid = 1;
+  string tx = 2;
+  string parentTxid = 3;
 }
 
 message RoundFinalizedEvent {
