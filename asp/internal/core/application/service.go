@@ -369,8 +369,6 @@ func getNewVtxos(net network.Network, round *domain.Round) []domain.Vtxo {
 	vtxos := make([]domain.Vtxo, 0)
 	for _, node := range leaves {
 		tx, _ := psetv2.NewPsetFromBase64(node.Tx)
-		utx, _ := tx.UnsignedTx()
-		txid := utx.TxHash().String()
 		for i, out := range tx.Outputs {
 			for _, p := range round.Payments {
 				var pubkey string
@@ -389,7 +387,7 @@ func getNewVtxos(net network.Network, round *domain.Round) []domain.Vtxo {
 				}
 				if found {
 					vtxos = append(vtxos, domain.Vtxo{
-						VtxoKey:  domain.VtxoKey{Txid: txid, VOut: uint32(i)},
+						VtxoKey:  domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
 						Receiver: domain.Receiver{Pubkey: pubkey, Amount: out.Value},
 					})
 					break
