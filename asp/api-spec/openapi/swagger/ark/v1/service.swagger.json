@@ -475,11 +475,7 @@
           "type": "string"
         },
         "congestionTree": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1TreeLevel"
-          }
+          "$ref": "#/definitions/v1Tree"
         }
       }
     },
@@ -504,17 +500,13 @@
           "type": "string"
         },
         "forfeitTxs": {
-          "type": "object",
-          "additionalProperties": {
+          "type": "array",
+          "items": {
             "type": "string"
           }
         },
         "congestionTree": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1TreeLevel"
-          }
+          "$ref": "#/definitions/v1Tree"
         }
       }
     },
@@ -526,6 +518,18 @@
         },
         "poolTxid": {
           "type": "string"
+        }
+      }
+    },
+    "v1Tree": {
+      "type": "object",
+      "properties": {
+        "levels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1TreeLevel"
+          }
         }
       }
     },

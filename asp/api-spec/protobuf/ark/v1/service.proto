@@ -89,7 +89,7 @@ message Round {
   int64 start = 2;
   int64 end = 3;
   string txid = 4;
-  repeated TreeLevel congestion_tree = 5;
+  Tree congestion_tree = 5;
 }
 
 message Input {
@@ -105,8 +105,12 @@ message Output {
 message RoundFinalizationEvent {
   string id = 1;
   string pool_partial_tx = 2;
-  map<string, string> forfeit_txs = 3;
-  repeated TreeLevel congestion_tree = 4;
+  repeated string forfeit_txs = 3;
+  Tree congestion_tree = 4;
+}
+
+message Tree {
+  repeated TreeLevel levels = 1;
 }
 
 message TreeLevel {

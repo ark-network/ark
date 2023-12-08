@@ -273,8 +273,8 @@ func (v vtxoList) toProto() []*arkv1.Vtxo {
 }
 
 // castCongestionTree converts a domain.CongestionTree to a repeated arkv1.TreeLevel
-func castCongestionTree(tree domain.CongestionTree) []*arkv1.TreeLevel {
-	treeProto := make([]*arkv1.TreeLevel, 0, len(tree))
+func castCongestionTree(tree domain.CongestionTree) *arkv1.Tree {
+	levels := make([]*arkv1.TreeLevel, 0, len(tree))
 	for _, level := range tree {
 		levelProto := &arkv1.TreeLevel{
 			Nodes: make([]*arkv1.Node, 0, len(level)),
@@ -288,7 +288,9 @@ func castCongestionTree(tree domain.CongestionTree) []*arkv1.TreeLevel {
 			})
 		}
 
-		treeProto = append(treeProto, levelProto)
+		levels = append(levels, levelProto)
 	}
-	return treeProto
+	return &arkv1.Tree{
+		Levels: levels,
+	}
 }
