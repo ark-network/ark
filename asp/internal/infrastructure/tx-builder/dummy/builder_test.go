@@ -139,12 +139,96 @@ func TestBuildCongestionTree(t *testing.T) {
 			},
 			expectedNodesNum: 3,
 		},
+		{
+			payments: []domain.Payment{
+				{
+					Id: "0",
+					Inputs: []domain.Vtxo{
+						{
+							VtxoKey: domain.VtxoKey{
+								Txid: "fd68e3c5796cc7db0a8036d486d5f625b6b2f2c014810ac020e1ac23e82c59d6",
+								VOut: 0,
+							},
+							Receiver: domain.Receiver{
+								Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+								Amount: 600,
+							},
+						},
+					},
+					Receivers: []domain.Receiver{
+						{
+							Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+							Amount: 600,
+						},
+						{
+							Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+							Amount: 400,
+						},
+					},
+				},
+				{
+					Id: "0",
+					Inputs: []domain.Vtxo{
+						{
+							VtxoKey: domain.VtxoKey{
+								Txid: "fd68e3c5796cc7db0a8036d486d5f625b6b2f2c014810ac020e1ac23e82c59d6",
+								VOut: 0,
+							},
+							Receiver: domain.Receiver{
+								Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+								Amount: 600,
+							},
+						},
+					},
+					Receivers: []domain.Receiver{
+						{
+							Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+							Amount: 600,
+						},
+						{
+							Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+							Amount: 400,
+						},
+					},
+				},
+				{
+					Id: "0",
+					Inputs: []domain.Vtxo{
+						{
+							VtxoKey: domain.VtxoKey{
+								Txid: "fd68e3c5796cc7db0a8036d486d5f625b6b2f2c014810ac020e1ac23e82c59d6",
+								VOut: 0,
+							},
+							Receiver: domain.Receiver{
+								Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+								Amount: 600,
+							},
+						},
+					},
+					Receivers: []domain.Receiver{
+						{
+							Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+							Amount: 600,
+						},
+						{
+							Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+							Amount: 400,
+						},
+					},
+				},
+			},
+			expectedNodesNum: 11,
+		},
 	}
 
 	for _, f := range fixtures {
 		tree, err := builder.BuildCongestionTree(poolTx, f.payments)
 		require.NoError(t, err)
-		require.Len(t, tree.NumberOfNodes(), f.expectedNodesNum)
+		require.Equal(t, f.expectedNodesNum, tree.NumberOfNodes())
+
+		// check the root
+		require.Len(t, tree[0], 1)
+		require.Equal(t, poolTxID, tree[0][0].ParentTxid)
 
 		// check the leaves
 		for _, leaf := range tree.Leaves() {
@@ -158,37 +242,28 @@ func TestBuildCongestionTree(t *testing.T) {
 			require.Equal(t, leaf.ParentTxid, inputTxID)
 		}
 
-		// first tx input  should be the pool tx shared output
-		inputTxID0, err := chainhash.NewHash(psets[0].Inputs[0].PreviousTxid)
-		require.NoError(t, err)
-		require.Equal(t, poolTxID, inputTxID0.String())
-		require.Equal(t, uint32(0), psets[0].Inputs[0].PreviousTxIndex)
+		// check the nodes
+		for i, level := range tree[:len(tree)-2] {
+			for _, node := range level {
+				pset, err := psetv2.NewPsetFromBase64(node.Tx)
+				require.NoError(t, err)
 
-		unsignedTx0, err := psets[0].UnsignedTx()
-		require.NoError(t, err)
+				require.Len(t, pset.Inputs, 1)
+				require.Len(t, pset.Outputs, 2)
 
-		txID0 := unsignedTx0.TxHash().String()
+				inputTxID := chainhash.Hash(pset.Inputs[0].PreviousTxid).String()
+				require.Equal(t, node.ParentTxid, inputTxID)
 
-		// first tx input should be the first tx0 output
-		require.Len(t, psets[1].Inputs, 1)
-		require.Len(t, psets[1].Outputs, 1)
-		inputTxID1, err := chainhash.NewHash(psets[1].Inputs[0].PreviousTxid)
-		require.NoError(t, err)
-		require.Equal(t, txID0, inputTxID1.String())
-		require.Equal(t, uint32(0), psets[1].Inputs[0].PreviousTxIndex)
-		// check the output amount (should be 600, the first receiver amount)
-		require.Equal(t, uint64(600), psets[1].Outputs[0].Value)
-
-		// second tx input should be the second tx0 output
-		require.Len(t, psets[2].Inputs, 1)
-		require.Len(t, psets[2].Outputs, 1)
-
-		inputTxID2, err := chainhash.NewHash(psets[2].Inputs[0].PreviousTxid)
-		require.NoError(t, err)
-		require.Equal(t, txID0, inputTxID2.String())
-		require.Equal(t, uint32(1), psets[2].Inputs[0].PreviousTxIndex)
-		// check the output amount (should be 400, the second receiver amount)
-		require.Equal(t, uint64(400), psets[2].Outputs[0].Value)
+				nextLevel := tree[i+1]
+				childs := 0
+				for _, n := range nextLevel {
+					if n.ParentTxid == node.Txid {
+						childs++
+					}
+				}
+				require.Equal(t, 2, childs)
+			}
+		}
 	}
 }
 
