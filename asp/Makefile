@@ -46,10 +46,6 @@ vet:
 	@echo "Running code analysis..."
 	@go vet ./...
 
-build-buf:
-	@echo "Building dockerized buf..."
-	@docker build -t buf -f buf.Dockerfile .
-
 ## proto: compile proto stubs
 proto: proto-lint
 	@echo "Compiling stubs..."
@@ -59,5 +55,6 @@ proto: proto-lint
 ## proto-lint: lint protos
 proto-lint:
 	@echo "Linting protos..."
+	@docker build -q -t buf -f buf.Dockerfile . &> /dev/null
 	@docker run --volume "$(shell pwd):/workspace" --workdir /workspace buf lint
 		
