@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/urfave/cli/v2"
@@ -62,6 +63,13 @@ func initAction(ctx *cli.Context) error {
 
 	cypher := NewAES128Cypher()
 
+	net := getNetwork()
+
+	publicKey, err := common.EncodePubKey(net.PubKey, privateKey.PubKey())
+	if err != nil {
+		return err
+	}
+
 	encryptedPrivateKey, err := cypher.Encrypt(privateKey.Serialize(), []byte(password))
 	if err != nil {
 		return err
@@ -72,6 +80,7 @@ func initAction(ctx *cli.Context) error {
 	state := map[string]string{
 		"encrypted_private_key": hex.EncodeToString(encryptedPrivateKey),
 		"password_hash":         hex.EncodeToString(passwordHash),
+		"public_key":            publicKey,
 	}
 
 	if err := setState(state); err != nil {
