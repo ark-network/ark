@@ -805,6 +805,7 @@ type GetEventStreamResponse struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Event:
+	//
 	//	*GetEventStreamResponse_RoundFinalization
 	//	*GetEventStreamResponse_RoundFinalized
 	//	*GetEventStreamResponse_RoundFailed

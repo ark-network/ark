@@ -55,6 +55,7 @@ func sendAction(ctx *cli.Context) error {
 
 	receiversOutput := make([]*arkv1.Output, 0)
 	sumOfReceivers := uint64(0)
+	net := getNetwork()
 
 	for _, receiver := range receiversJSON {
 		_, userKey, aspKey, err := common.DecodeAddress(receiver.To)
@@ -70,7 +71,7 @@ func sendAction(ctx *cli.Context) error {
 			return fmt.Errorf("invalid amount: %d", receiver.Amount)
 		}
 
-		encodedKey, err := common.EncodePubKey(common.MainNet.PubKey, userKey)
+		encodedKey, err := common.EncodePubKey(net.PubKey, userKey)
 		if err != nil {
 			return err
 		}
@@ -103,7 +104,7 @@ func sendAction(ctx *cli.Context) error {
 		}
 
 		walletPubKey := walletPrvKey.PubKey()
-		encodedPubKey, err := common.EncodePubKey(common.MainNet.PubKey, walletPubKey)
+		encodedPubKey, err := common.EncodePubKey(net.PubKey, walletPubKey)
 		if err != nil {
 			return err
 		}

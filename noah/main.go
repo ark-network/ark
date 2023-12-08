@@ -29,6 +29,8 @@ var (
 		"ark_pubkey":            "",
 		"encrypted_private_key": "",
 		"password_hash":         "",
+		"public_key":            "",
+		"network":               "mainnet",
 	}
 )
 
