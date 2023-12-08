@@ -368,7 +368,7 @@ func getNewVtxos(net network.Network, round *domain.Round) []domain.Vtxo {
 	leaves := round.CongestionTree.Leaves()
 	vtxos := make([]domain.Vtxo, 0)
 	for _, node := range leaves {
-		tx, _ := psetv2.NewPsetFromBase64(node.Pset)
+		tx, _ := psetv2.NewPsetFromBase64(node.Tx)
 		utx, _ := tx.UnsignedTx()
 		txid := utx.TxHash().String()
 		for i, out := range tx.Outputs {

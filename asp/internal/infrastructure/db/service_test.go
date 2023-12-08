@@ -25,41 +25,41 @@ var congestionTree = [][]domain.Node{
 	{
 		{
 			Txid:       txid,
-			Pset:       emptyPtx,
+			Tx:         emptyPtx,
 			ParentTxid: txid,
 		},
 	},
 	{
 		{
 			Txid:       txid,
-			Pset:       emptyPtx,
+			Tx:         emptyPtx,
 			ParentTxid: txid,
 		},
 		{
 			Txid:       txid,
-			Pset:       emptyPtx,
+			Tx:         emptyPtx,
 			ParentTxid: txid,
 		},
 	},
 	{
 		{
 			Txid:       txid,
-			Pset:       emptyPtx,
+			Tx:         emptyPtx,
 			ParentTxid: txid,
 		},
 		{
 			Txid:       txid,
-			Pset:       emptyPtx,
+			Tx:         emptyPtx,
 			ParentTxid: txid,
 		},
 		{
 			Txid:       txid,
-			Pset:       emptyPtx,
+			Tx:         emptyPtx,
 			ParentTxid: txid,
 		},
 		{
 			Txid:       txid,
-			Pset:       emptyPtx,
+			Tx:         emptyPtx,
 			ParentTxid: txid,
 		},
 	},

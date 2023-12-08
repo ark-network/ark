@@ -2,7 +2,7 @@ package domain
 
 type Node struct {
 	Txid       string
-	Pset       string
+	Tx         string
 	ParentTxid string
 }
 
@@ -15,4 +15,12 @@ func (c CongestionTree) Leaves() []Node {
 	}
 
 	return c[length-1]
+}
+
+func (c CongestionTree) NumberOfNodes() int {
+	var count int
+	for _, level := range c {
+		count += len(level)
+	}
+	return count
 }

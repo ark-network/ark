@@ -106,7 +106,7 @@ func buildCongestionTree(
 
 		tree[psetWithLevel.level] = append(tree[psetWithLevel.level], domain.Node{
 			Txid:       txid,
-			Pset:       psetB64,
+			Tx:         psetB64,
 			ParentTxid: parentTxid,
 		})
 	}

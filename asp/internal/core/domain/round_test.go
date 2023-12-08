@@ -29,41 +29,41 @@ var (
 		{
 			{
 				Txid:       txid,
-				Pset:       emptyPtx,
+				Tx:         emptyPtx,
 				ParentTxid: txid,
 			},
 		},
 		{
 			{
 				Txid:       txid,
-				Pset:       emptyPtx,
+				Tx:         emptyPtx,
 				ParentTxid: txid,
 			},
 			{
 				Txid:       txid,
-				Pset:       emptyPtx,
+				Tx:         emptyPtx,
 				ParentTxid: txid,
 			},
 		},
 		{
 			{
 				Txid:       txid,
-				Pset:       emptyPtx,
+				Tx:         emptyPtx,
 				ParentTxid: txid,
 			},
 			{
 				Txid:       txid,
-				Pset:       emptyPtx,
+				Tx:         emptyPtx,
 				ParentTxid: txid,
 			},
 			{
 				Txid:       txid,
-				Pset:       emptyPtx,
+				Tx:         emptyPtx,
 				ParentTxid: txid,
 			},
 			{
 				Txid:       txid,
-				Pset:       emptyPtx,
+				Tx:         emptyPtx,
 				ParentTxid: txid,
 			},
 		},

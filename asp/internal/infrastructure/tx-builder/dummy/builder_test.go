@@ -144,25 +144,21 @@ func TestBuildCongestionTree(t *testing.T) {
 	for _, f := range fixtures {
 		tree, err := builder.BuildCongestionTree(poolTx, f.payments)
 		require.NoError(t, err)
+		require.Len(t, tree.NumberOfNodes(), f.expectedNodesNum)
 
-		// decode all psbt
-		psets := make([]*psetv2.Pset, 0, f.expectedNodesNum)
+		// check the leaves
+		for _, leaf := range tree.Leaves() {
+			pset, err := psetv2.NewPsetFromBase64(leaf.Tx)
+			require.NoError(t, err)
 
-		for _, psetLevel := range tree {
-			for _, node := range psetLevel {
-				pset, err := psetv2.NewPsetFromBase64(node.Pset)
-				require.NoError(t, err)
-				require.NotNil(t, pset)
+			require.Len(t, pset.Inputs, 1)
+			require.Len(t, pset.Outputs, 1)
 
-				psets = append(psets, pset)
-			}
+			inputTxID := chainhash.Hash(pset.Inputs[0].PreviousTxid).String()
+			require.Equal(t, leaf.ParentTxid, inputTxID)
 		}
-		require.Len(t, psets, f.expectedNodesNum)
 
-		require.Len(t, psets[0].Inputs, 1)
-		require.Len(t, psets[0].Outputs, 2)
-
-		// first tx input should be the pool tx shared output
+		// first tx input  should be the pool tx shared output
 		inputTxID0, err := chainhash.NewHash(psets[0].Inputs[0].PreviousTxid)
 		require.NoError(t, err)
 		require.Equal(t, poolTxID, inputTxID0.String())
