@@ -45,15 +45,16 @@ test:
 vet:
 	@echo "Running code analysis..."
 	@go vet ./...
-	
+
 ## proto: compile proto stubs
 proto: proto-lint
 	@echo "Compiling stubs..."
-	@buf generate buf.build/vulpemventures/ocean
-	@buf generate
+	@docker run --volume "$(shell pwd):/workspace" --workdir /workspace buf generate buf.build/vulpemventures/ocean
+	@docker run --volume "$(shell pwd):/workspace" --workdir /workspace buf generate
 
 ## proto-lint: lint protos
 proto-lint:
 	@echo "Linting protos..."
-	@buf lint
+	@docker build -q -t buf -f buf.Dockerfile . &> /dev/null
+	@docker run --volume "$(shell pwd):/workspace" --workdir /workspace buf lint
 		
