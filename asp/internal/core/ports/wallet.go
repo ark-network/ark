@@ -15,6 +15,7 @@ type WalletService interface {
 	) (string, error)
 	Transfer(ctx context.Context, outs []TxOutput) (string, error)
 	BroadcastTransaction(ctx context.Context, txHex string) (string, error)
+	Close()
 }
 
 type WalletStatus interface {
@@ -33,5 +34,6 @@ type TxInput interface {
 
 type TxOutput interface {
 	GetAmount() uint64
+	GetAsset() string
 	GetScript() string
 }
