@@ -26,9 +26,9 @@ func (s *service) Stop() {
 
 func (s *service) ScheduleTask(interval int64, immediate bool, task func()) error {
 	if immediate {
-		_, err := s.scheduler.Every(interval).Seconds().Do(task)
+		_, err := s.scheduler.Every(int(interval)).Seconds().Do(task)
 		return err
 	}
-	_, err := s.scheduler.Every(interval).Seconds().WaitForSchedule().Do(task)
+	_, err := s.scheduler.Every(int(interval)).Seconds().WaitForSchedule().Do(task)
 	return err
 }
