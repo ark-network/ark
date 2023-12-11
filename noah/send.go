@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,7 +17,7 @@ import (
 
 type receiver struct {
 	To     string `json:"to"`
-	Amount int64  `json:"amount"`
+	Amount uint64 `json:"amount"`
 }
 
 var (
@@ -55,7 +56,6 @@ func sendAction(ctx *cli.Context) error {
 
 	receiversOutput := make([]*arkv1.Output, 0)
 	sumOfReceivers := uint64(0)
-	net := getNetwork()
 
 	for _, receiver := range receiversJSON {
 		_, userKey, aspKey, err := common.DecodeAddress(receiver.To)
@@ -71,15 +71,12 @@ func sendAction(ctx *cli.Context) error {
 			return fmt.Errorf("invalid amount: %d", receiver.Amount)
 		}
 
-		encodedKey, err := common.EncodePubKey(net.PubKey, userKey)
-		if err != nil {
-			return err
-		}
-
+		encodedKey := hex.EncodeToString(userKey.SerializeCompressed())
 		receiversOutput = append(receiversOutput, &arkv1.Output{
 			Pubkey: encodedKey,
 			Amount: uint64(receiver.Amount),
 		})
+		sumOfReceivers += receiver.Amount
 	}
 	client, close, err := getArkClient(ctx)
 	if err != nil {
@@ -104,10 +101,7 @@ func sendAction(ctx *cli.Context) error {
 		}
 
 		walletPubKey := walletPrvKey.PubKey()
-		encodedPubKey, err := common.EncodePubKey(net.PubKey, walletPubKey)
-		if err != nil {
-			return err
-		}
+		encodedPubKey := hex.EncodeToString(walletPubKey.SerializeCompressed())
 
 		changeReceiver := &arkv1.Output{
 			Pubkey: encodedPubKey,
