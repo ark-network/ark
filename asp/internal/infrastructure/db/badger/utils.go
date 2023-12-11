@@ -82,36 +82,32 @@ func serializeEvent(event domain.RoundEvent) ([]byte, error) {
 
 func deserializeEvent(buf []byte) (domain.RoundEvent, error) {
 	{
-		var event = domain.RoundStarted{}
-		if err := json.Unmarshal(buf, &event); err == nil {
+		var event = domain.RoundFailed{}
+		if err := json.Unmarshal(buf, &event); err == nil && len(event.Err) > 0 {
 			return event, nil
 		}
 	}
-
-	{
-		var event = domain.RoundFinalizationStarted{}
-		if err := json.Unmarshal(buf, &event); err == nil {
-			return event, nil
-		}
-	}
-
 	{
 		var event = domain.RoundFinalized{}
-		if err := json.Unmarshal(buf, &event); err == nil {
+		if err := json.Unmarshal(buf, &event); err == nil && len(event.Txid) > 0 {
 			return event, nil
 		}
 	}
-
 	{
-		var event = domain.RoundFailed{}
-		if err := json.Unmarshal(buf, &event); err == nil {
+		var event = domain.RoundFinalizationStarted{}
+		if err := json.Unmarshal(buf, &event); err == nil && len(event.CongestionTree) > 0 {
 			return event, nil
 		}
 	}
-
 	{
 		var event = domain.PaymentsRegistered{}
-		if err := json.Unmarshal(buf, &event); err == nil {
+		if err := json.Unmarshal(buf, &event); err == nil && len(event.Payments) > 0 {
+			return event, nil
+		}
+	}
+	{
+		var event = domain.RoundStarted{}
+		if err := json.Unmarshal(buf, &event); err == nil && event.Timestamp > 0 {
 			return event, nil
 		}
 	}

@@ -11,6 +11,8 @@ import (
 	"github.com/timshannon/badgerhold/v4"
 )
 
+const vtxoStoreDir = "vtxos"
+
 type vtxoRepository struct {
 	store *badgerhold.Store
 }
@@ -33,7 +35,7 @@ func NewVtxoRepository(config ...interface{}) (dbtypes.VtxoStore, error) {
 
 	var dir string
 	if len(baseDir) > 0 {
-		dir = filepath.Join(baseDir, eventStoreDir)
+		dir = filepath.Join(baseDir, vtxoStoreDir)
 	}
 	store, err := createDB(dir, logger)
 	if err != nil {
