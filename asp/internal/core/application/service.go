@@ -388,7 +388,7 @@ func (s *service) propagateEvents(round *domain.Round) {
 			PoolTx:             e.PoolTx,
 			UnsignedForfeitTxs: forfeitTxs,
 		}
-	case domain.RoundFinalized:
+	case domain.RoundFinalized, domain.RoundFailed:
 		s.eventsCh <- e
 	}
 }
