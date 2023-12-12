@@ -53,10 +53,6 @@ func (m *paymentsMap) pop(num int64) []domain.Payment {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	if num < 0 || num > int64(len(m.payments)) {
-		num = int64(len(m.payments))
-	}
-
 	paymentsByTime := make([]timedPayment, 0, len(m.payments))
 	for _, p := range m.payments {
 		// Skip payments without registered receivers.
@@ -72,6 +68,10 @@ func (m *paymentsMap) pop(num int64) []domain.Payment {
 	sort.SliceStable(paymentsByTime, func(i, j int) bool {
 		return paymentsByTime[i].timestamp.Before(paymentsByTime[j].timestamp)
 	})
+
+	if num < 0 || num > int64(len(paymentsByTime)) {
+		num = int64(len(paymentsByTime))
+	}
 
 	payments := make([]domain.Payment, 0, num)
 	for _, p := range paymentsByTime[:num] {
