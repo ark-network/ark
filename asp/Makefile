@@ -34,6 +34,7 @@ lint:
 run: clean
 	@echo "Running arkd in dev mode..."
 	@export ARK_WALLET_ADDR=localhost:18000; \
+	export ARK_ROUND_INTERVAL=30; \
 	go run ./cmd/arkd
 
 ## test: runs unit and component tests

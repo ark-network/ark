@@ -9,7 +9,6 @@ import (
 	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/dummy"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/stretchr/testify/require"
-	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
@@ -20,12 +19,7 @@ const (
 )
 
 func createTestTxBuilder() (ports.TxBuilder, error) {
-	_, key, err := common.DecodePubKey(testingKey)
-	if err != nil {
-		return nil, err
-	}
-
-	return txbuilder.NewTxBuilder(key, common.MainNet), nil
+	return txbuilder.NewTxBuilder(network.Liquid), nil
 }
 
 func createTestPoolTx(sharedOutputAmount, numberOfInputs uint64) (string, error) {
@@ -34,16 +28,8 @@ func createTestPoolTx(sharedOutputAmount, numberOfInputs uint64) (string, error)
 		return "", err
 	}
 
-	payment := payment.FromPublicKey(key, &network.Regtest, nil)
-	addr, err := payment.WitnessPubKeyHash()
-	if err != nil {
-		return "", err
-	}
-
-	script, err := address.ToOutputScript(addr)
-	if err != nil {
-		return "", err
-	}
+	payment := payment.FromPublicKey(key, &network.Testnet, nil)
+	script := payment.WitnessScript
 
 	pset, err := psetv2.New(nil, nil, nil)
 	if err != nil {
@@ -106,8 +92,9 @@ func TestBuildCongestionTree(t *testing.T) {
 	poolTxID := poolTxUnsigned.TxHash().String()
 
 	fixtures := []struct {
-		payments         []domain.Payment
-		expectedNodesNum int // 2*len(receivers)-1
+		payments          []domain.Payment
+		expectedNodesNum  int // 2*len(receivers)-1
+		expectedLeavesNum int
 	}{
 		{
 			payments: []domain.Payment{
@@ -120,24 +107,25 @@ func TestBuildCongestionTree(t *testing.T) {
 								VOut: 0,
 							},
 							Receiver: domain.Receiver{
-								Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+								Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
 								Amount: 600,
 							},
 						},
 					},
 					Receivers: []domain.Receiver{
 						{
-							Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
 							Amount: 600,
 						},
 						{
-							Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
 							Amount: 400,
 						},
 					},
 				},
 			},
-			expectedNodesNum: 3,
+			expectedNodesNum:  3,
+			expectedLeavesNum: 2,
 		},
 		{
 			payments: []domain.Payment{
@@ -150,18 +138,18 @@ func TestBuildCongestionTree(t *testing.T) {
 								VOut: 0,
 							},
 							Receiver: domain.Receiver{
-								Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+								Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
 								Amount: 600,
 							},
 						},
 					},
 					Receivers: []domain.Receiver{
 						{
-							Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
 							Amount: 600,
 						},
 						{
-							Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
 							Amount: 400,
 						},
 					},
@@ -175,18 +163,18 @@ func TestBuildCongestionTree(t *testing.T) {
 								VOut: 0,
 							},
 							Receiver: domain.Receiver{
-								Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+								Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
 								Amount: 600,
 							},
 						},
 					},
 					Receivers: []domain.Receiver{
 						{
-							Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
 							Amount: 600,
 						},
 						{
-							Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
 							Amount: 400,
 						},
 					},
@@ -200,31 +188,37 @@ func TestBuildCongestionTree(t *testing.T) {
 								VOut: 0,
 							},
 							Receiver: domain.Receiver{
-								Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+								Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
 								Amount: 600,
 							},
 						},
 					},
 					Receivers: []domain.Receiver{
 						{
-							Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
 							Amount: 600,
 						},
 						{
-							Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
 							Amount: 400,
 						},
 					},
 				},
 			},
-			expectedNodesNum: 11,
+			expectedNodesNum:  11,
+			expectedLeavesNum: 6,
 		},
 	}
 
+	_, key, err := common.DecodePubKey(testingKey)
+	require.NoError(t, err)
+	require.NotNil(t, key)
+
 	for _, f := range fixtures {
-		tree, err := builder.BuildCongestionTree(poolTx, f.payments)
+		tree, err := builder.BuildCongestionTree(key, poolTx, f.payments)
 		require.NoError(t, err)
 		require.Equal(t, f.expectedNodesNum, tree.NumberOfNodes())
+		require.Len(t, tree.Leaves(), f.expectedLeavesNum)
 
 		// check the root
 		require.Len(t, tree[0], 1)
@@ -298,7 +292,7 @@ func TestBuildForfeitTxs(t *testing.T) {
 								VOut: 0,
 							},
 							Receiver: domain.Receiver{
-								Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+								Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
 								Amount: 600,
 							},
 						},
@@ -308,18 +302,18 @@ func TestBuildForfeitTxs(t *testing.T) {
 								VOut: 1,
 							},
 							Receiver: domain.Receiver{
-								Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+								Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
 								Amount: 400,
 							},
 						},
 					},
 					Receivers: []domain.Receiver{
 						{
-							Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
 							Amount: 600,
 						},
 						{
-							Pubkey: "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
+							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
 							Amount: 400,
 						},
 					},
@@ -330,10 +324,15 @@ func TestBuildForfeitTxs(t *testing.T) {
 		},
 	}
 
-	for _, f := range fixtures {
-		connectors, forfeitTxs, err := builder.BuildForfeitTxs(poolTx, f.payments)
-		require.NoError(t, err)
+	_, key, err := common.DecodePubKey(testingKey)
+	require.NoError(t, err)
+	require.NotNil(t, key)
 
+	for _, f := range fixtures {
+		connectors, forfeitTxs, err := builder.BuildForfeitTxs(
+			key, poolTx, f.payments,
+		)
+		require.NoError(t, err)
 		require.Len(t, connectors, f.expectedNumOfConnectors)
 		require.Len(t, forfeitTxs, f.expectedNumOfForfeitTxs)
 

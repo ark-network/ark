@@ -91,6 +91,7 @@ func (m *paymentsMap) update(payment domain.Payment) error {
 	}
 
 	p.Payment = payment
+
 	return nil
 }
 
@@ -181,4 +182,15 @@ func (m *forfeitTxsMap) pop() (signed, unsigned []string) {
 
 	m.forfeitTxs = make(map[string]*signedTx)
 	return signed, unsigned
+}
+
+func (m *forfeitTxsMap) view() []string {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	txs := make([]string, 0, len(m.forfeitTxs))
+	for _, tx := range m.forfeitTxs {
+		txs = append(txs, tx.tx)
+	}
+	return txs
 }

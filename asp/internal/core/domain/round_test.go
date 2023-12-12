@@ -508,8 +508,8 @@ func testFail(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			reason := "some valid reason"
-			events = round.Fail(fmt.Errorf(reason))
+			reason := fmt.Errorf("some valid reason")
+			events = round.Fail(reason)
 			require.Len(t, events, 1)
 			require.False(t, round.IsStarted())
 			require.False(t, round.IsEnded())
@@ -519,9 +519,9 @@ func testFail(t *testing.T) {
 			require.True(t, ok)
 			require.Exactly(t, round.Id, event.Id)
 			require.Exactly(t, round.EndingTimestamp, event.Timestamp)
-			require.EqualError(t, event.Err, reason)
+			require.EqualError(t, reason, event.Err)
 
-			events = round.Fail(fmt.Errorf(reason))
+			events = round.Fail(reason)
 			require.Empty(t, events)
 		})
 	})

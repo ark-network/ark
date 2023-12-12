@@ -11,6 +11,8 @@ import (
 	"github.com/timshannon/badgerhold/v4"
 )
 
+const roundStoreDir = "rounds"
+
 type roundRepository struct {
 	store *badgerhold.Store
 }
@@ -33,7 +35,7 @@ func NewRoundRepository(config ...interface{}) (dbtypes.RoundStore, error) {
 
 	var dir string
 	if len(baseDir) > 0 {
-		dir = filepath.Join(baseDir, eventStoreDir)
+		dir = filepath.Join(baseDir, roundStoreDir)
 	}
 	store, err := createDB(dir, logger)
 	if err != nil {
@@ -58,7 +60,7 @@ func (r *roundRepository) GetCurrentRound(
 		return nil, err
 	}
 	if len(rounds) <= 0 {
-		return nil, nil
+		return nil, fmt.Errorf("ongoing round not found")
 	}
 	return &rounds[0], nil
 }

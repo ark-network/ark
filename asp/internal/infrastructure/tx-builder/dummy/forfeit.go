@@ -10,7 +10,7 @@ func createForfeitTx(
 	vtxoInput psetv2.InputArgs,
 	vtxoAmount uint64,
 	aspScript []byte,
-	net *network.Network,
+	net network.Network,
 ) (forfeitTx string, err error) {
 	pset, err := psetv2.New(nil, nil, nil)
 	if err != nil {

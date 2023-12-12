@@ -16,6 +16,34 @@ func createConnectors(
 		TxIndex: connectorOutputIndex,
 	}
 
+	if numberOfConnectors == 1 {
+		pset, err := psetv2.New(nil, nil, nil)
+		if err != nil {
+			return nil, err
+		}
+		updater, err := psetv2.NewUpdater(pset)
+		if err != nil {
+			return nil, err
+		}
+
+		err = updater.AddInputs([]psetv2.InputArgs{previousInput})
+		if err != nil {
+			return nil, err
+		}
+
+		err = updater.AddOutputs([]psetv2.OutputArgs{connectorOutput})
+		if err != nil {
+			return nil, err
+		}
+
+		base64, err := pset.ToBase64()
+		if err != nil {
+			return nil, err
+		}
+
+		return []string{base64}, nil
+	}
+
 	// compute the initial amount of the connectors output in pool transaction
 	remainingAmount := connectorAmount * numberOfConnectors
 

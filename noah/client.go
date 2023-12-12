@@ -66,9 +66,9 @@ func getConn(ctx *cli.Context) (*grpc.ClientConn, error) {
 		return nil, err
 	}
 
-	rpcUrl, ok := state["rpc_url"]
+	rpcUrl, ok := state["ark_url"]
 	if !ok {
-		return nil, fmt.Errorf("missing rpc_url")
+		return nil, fmt.Errorf("missing ark_url")
 	}
 
 	conn, err := grpc.Dial(rpcUrl, grpc.WithTransportCredentials(insecure.NewCredentials()))
