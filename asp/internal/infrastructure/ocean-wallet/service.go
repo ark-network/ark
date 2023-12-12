@@ -33,12 +33,27 @@ func NewService(addr string) (ports.WalletService, error) {
 		accountClient: accountClient,
 		txClient:      txClient,
 	}
-	status, err := svc.Status(context.Background())
+
+	ctx := context.Background()
+	status, err := svc.Status(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if !(status.IsInitialized() && status.IsUnlocked()) {
 		return nil, fmt.Errorf("wallet must be already initialized and unlocked")
+	}
+
+	// Create ark account at startup if needed.
+	info, err := walletClient.GetInfo(ctx, &pb.GetInfoRequest{})
+	if err != nil {
+		return nil, err
+	}
+	if len(info.GetAccounts()) <= 0 {
+		if _, err := accountClient.CreateAccountBIP44(ctx, &pb.CreateAccountBIP44Request{
+			Label: accountLabel,
+		}); err != nil {
+			return nil, err
+		}
 	}
 
 	return svc, nil
