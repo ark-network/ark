@@ -1,7 +1,8 @@
 package txbuilder
 
 import (
-	"github.com/ark-network/ark/common"
+	"encoding/hex"
+
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -17,8 +18,8 @@ const (
 
 type outputScriptFactory func(leaves []domain.Receiver) ([]byte, error)
 
-func p2wpkhScript(publicKey *secp256k1.PublicKey, net *network.Network) ([]byte, error) {
-	payment := payment.FromPublicKey(publicKey, net, nil)
+func p2wpkhScript(publicKey *secp256k1.PublicKey, net network.Network) ([]byte, error) {
+	payment := payment.FromPublicKey(publicKey, &net, nil)
 	addr, err := payment.WitnessPubKeyHash()
 	if err != nil {
 		return nil, err
@@ -28,7 +29,7 @@ func p2wpkhScript(publicKey *secp256k1.PublicKey, net *network.Network) ([]byte,
 }
 
 // newOtputScriptFactory returns an output script factory func that lock funds using the ASP public key only on all branches psbt. The leaves are instead locked by the leaf public key.
-func newOutputScriptFactory(aspPublicKey *secp256k1.PublicKey, net *network.Network) outputScriptFactory {
+func newOutputScriptFactory(aspPublicKey *secp256k1.PublicKey, net network.Network) outputScriptFactory {
 	return func(leaves []domain.Receiver) ([]byte, error) {
 		aspScript, err := p2wpkhScript(aspPublicKey, net)
 		if err != nil {
@@ -39,7 +40,11 @@ func newOutputScriptFactory(aspPublicKey *secp256k1.PublicKey, net *network.Netw
 		case 0:
 			return nil, nil
 		case 1: // it's a leaf
-			_, key, err := common.DecodePubKey(leaves[0].Pubkey)
+			buf, err := hex.DecodeString(leaves[0].Pubkey)
+			if err != nil {
+				return nil, err
+			}
+			key, err := secp256k1.ParsePubKey(buf)
 			if err != nil {
 				return nil, err
 			}
@@ -55,7 +60,7 @@ func newOutputScriptFactory(aspPublicKey *secp256k1.PublicKey, net *network.Netw
 // it also expect createOutputScript func managing the output script creation and the network to use (mainly for L-BTC asset id)
 func buildCongestionTree(
 	createOutputScript outputScriptFactory,
-	net *network.Network,
+	net network.Network,
 	poolTxID string,
 	receivers []domain.Receiver,
 ) (congestionTree domain.CongestionTree, err error) {
@@ -108,6 +113,7 @@ func buildCongestionTree(
 			Txid:       txid,
 			Tx:         psetB64,
 			ParentTxid: parentTxid,
+			Leaf:       psetWithLevel.leaf,
 		})
 	}
 
@@ -138,13 +144,13 @@ type node struct {
 	left               *node
 	right              *node
 	createOutputScript outputScriptFactory
-	network            *network.Network
+	network            network.Network
 }
 
 // create a node from a single receiver
 func newLeaf(
 	createOutputScript outputScriptFactory,
-	network *network.Network,
+	network network.Network,
 	receiver domain.Receiver,
 ) *node {
 	return &node{
@@ -172,7 +178,7 @@ func newBranch(
 
 // is it the final node of the tree
 func (n *node) isLeaf() bool {
-	return len(n.receivers) == 1
+	return n.left == nil && n.right == nil
 }
 
 // compute the output amount of a node
@@ -256,6 +262,7 @@ func (n *node) pset(input psetv2.InputArgs) (*psetv2.Pset, error) {
 type psetWithLevel struct {
 	pset  *psetv2.Pset
 	level int
+	leaf  bool
 }
 
 // create the node pset and all the psets of its children recursively, updating the input arg at each step
@@ -267,7 +274,7 @@ func (n *node) psets(input psetv2.InputArgs, level int) ([]psetWithLevel, error)
 	}
 
 	nodeResult := []psetWithLevel{
-		{pset, level},
+		{pset, level, n.isLeaf()},
 	}
 
 	if n.isLeaf() {

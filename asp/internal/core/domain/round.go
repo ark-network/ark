@@ -201,7 +201,7 @@ func (r *Round) Fail(err error) []RoundEvent {
 	}
 	event := RoundFailed{
 		Id:        r.Id,
-		Err:       err,
+		Err:       err.Error(),
 		Timestamp: time.Now().Unix(),
 	}
 	r.raise(event)

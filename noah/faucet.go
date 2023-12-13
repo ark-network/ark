@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 
@@ -45,6 +46,14 @@ func faucetAction(ctx *cli.Context) error {
 		}
 		if err != nil {
 			return err
+		}
+
+		if event.GetRoundFinalization() != nil {
+			if _, err := client.FinalizePayment(context.Background(), &arkv1.FinalizePaymentRequest{
+				SignedForfeitTxs: event.GetRoundFinalization().GetForfeitTxs(),
+			}); err != nil {
+				return err
+			}
 		}
 
 		if event.GetRoundFailed() != nil {

@@ -5,7 +5,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	service_interface "github.com/ark-network/ark/internal/interface"
+	appconfig "github.com/ark-network/ark/internal/app-config"
+	"github.com/ark-network/ark/internal/config"
+	grpcservice "github.com/ark-network/ark/internal/interface/grpc"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -17,7 +19,27 @@ var (
 )
 
 func main() {
-	svc, err := service_interface.NewService(service_interface.Options{}) // TODO populate options
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		log.WithError(err).Fatal("invalid config")
+	}
+
+	log.SetLevel(log.Level(cfg.LogLevel))
+
+	svcConfig := grpcservice.Config{
+		Port:  cfg.Port,
+		NoTLS: cfg.NoTLS,
+	}
+	appConfig := &appconfig.Config{
+		DbType:        cfg.DbType,
+		DbDir:         cfg.DbDir,
+		RoundInterval: cfg.RoundInterval,
+		Network:       cfg.Network,
+		SchedulerType: cfg.SchedulerType,
+		TxBuilderType: cfg.TxBuilderType,
+		WalletAddr:    cfg.WalletAddr,
+	}
+	svc, err := grpcservice.NewService(svcConfig, appConfig)
 	if err != nil {
 		log.Fatal(err)
 	}

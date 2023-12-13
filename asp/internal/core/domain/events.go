@@ -16,10 +16,11 @@ type RoundStarted struct {
 }
 
 type RoundFinalizationStarted struct {
-	Id             string
-	CongestionTree CongestionTree
-	Connectors     []string
-	PoolTx         string
+	Id                 string
+	CongestionTree     CongestionTree
+	Connectors         []string
+	UnsignedForfeitTxs []string
+	PoolTx             string
 }
 
 type RoundFinalized struct {
@@ -31,7 +32,7 @@ type RoundFinalized struct {
 
 type RoundFailed struct {
 	Id        string
-	Err       error
+	Err       string
 	Timestamp int64
 }
 

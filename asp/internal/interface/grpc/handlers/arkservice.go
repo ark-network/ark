@@ -7,7 +7,6 @@ import (
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/internal/core/application"
 	"github.com/ark-network/ark/internal/core/domain"
-	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -25,7 +24,7 @@ type handler struct {
 	listeners     []*listener
 }
 
-func NewHandler(service application.Service, repoManager ports.RepoManager) arkv1.ArkServiceServer {
+func NewHandler(service application.Service) arkv1.ArkServiceServer {
 	h := &handler{
 		svc:           service,
 		listenersLock: &sync.Mutex{},
@@ -154,6 +153,9 @@ func (h *handler) GetEventStream(_ *arkv1.GetEventStreamRequest, stream arkv1.Ar
 
 			switch ev.Event.(type) {
 			case *arkv1.GetEventStreamResponse_RoundFinalized, *arkv1.GetEventStreamResponse_RoundFailed:
+				if err := stream.Send(ev); err != nil {
+					return err
+				}
 				return nil
 			}
 		}
@@ -220,7 +222,7 @@ func (h *handler) listenToEvents() {
 						Id:             e.Id,
 						PoolPartialTx:  e.PoolTx,
 						CongestionTree: castCongestionTree(e.CongestionTree),
-						ForfeitTxs:     nil, // TODO: add forfeit txs
+						ForfeitTxs:     e.UnsignedForfeitTxs,
 					},
 				},
 			}
@@ -238,7 +240,7 @@ func (h *handler) listenToEvents() {
 				Event: &arkv1.GetEventStreamResponse_RoundFailed{
 					RoundFailed: &arkv1.RoundFailed{
 						Id:     e.Id,
-						Reason: e.Err.Error(),
+						Reason: e.Err,
 					},
 				},
 			}

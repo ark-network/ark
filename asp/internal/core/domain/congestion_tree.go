@@ -4,17 +4,22 @@ type Node struct {
 	Txid       string
 	Tx         string
 	ParentTxid string
+	Leaf       bool
 }
 
 type CongestionTree [][]Node
 
 func (c CongestionTree) Leaves() []Node {
-	length := len(c)
-	if length == 0 {
-		return nil
+	leaves := c[len(c)-1]
+	for _, level := range c[:len(c)-1] {
+		for _, node := range level {
+			if node.Leaf {
+				leaves = append(leaves, node)
+			}
+		}
 	}
 
-	return c[length-1]
+	return leaves
 }
 
 func (c CongestionTree) NumberOfNodes() int {

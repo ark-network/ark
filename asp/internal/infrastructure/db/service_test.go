@@ -138,7 +138,8 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 				handler: func(round *domain.Round) {
 					require.NotNil(t, round)
 					require.Len(t, round.Events(), 2)
-					require.Len(t, round.CongestionTree, 7)
+					require.Len(t, round.CongestionTree, 3)
+					require.Equal(t, round.CongestionTree.NumberOfNodes(), 7)
 					require.Len(t, round.Connectors, 2)
 				},
 			},
@@ -274,7 +275,7 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 		require.NoError(t, err)
 
 		currentRound, err = svc.Rounds().GetCurrentRound(ctx)
-		require.NoError(t, err)
+		require.Error(t, err)
 		require.Nil(t, currentRound)
 
 		roundById, err = svc.Rounds().GetRoundWithId(ctx, roundId)

@@ -68,6 +68,7 @@ func (l outputList) toProto() []*pb.Output {
 		list = append(list, &pb.Output{
 			Amount: out.GetAmount(),
 			Script: out.GetScript(),
+			Asset:  out.GetAsset(),
 		})
 	}
 	return list

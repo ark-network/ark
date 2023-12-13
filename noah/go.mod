@@ -28,7 +28,6 @@ require (
 require (
 	github.com/btcsuite/btcd/btcutil v1.1.3 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.3 // indirect
-	github.com/gogo/protobuf v1.3.2
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.18.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
