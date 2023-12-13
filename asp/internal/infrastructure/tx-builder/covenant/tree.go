@@ -400,7 +400,6 @@ func (n *node) taprootKey() (*secp256k1.PublicKey, *taproot.IndexedElementsTapSc
 
 	rightKey, _, err := n.right.taprootKey()
 	if err != nil {
-		fmt.Println("E")
 		return nil, nil, err
 	}
 
@@ -530,7 +529,6 @@ func (n *node) psets(inputArgs *psetArgs, level int) ([]psetWithLevel, error) {
 
 	unsignedTx, err := pset.UnsignedTx()
 	if err != nil {
-		fmt.Println("C")
 		return nil, err
 	}
 
