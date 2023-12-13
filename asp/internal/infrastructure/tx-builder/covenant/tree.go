@@ -166,6 +166,7 @@ func buildCongestionTree(
 			Txid:       txid,
 			Tx:         psetB64,
 			ParentTxid: parentTxid,
+			Leaf:       psetWithLevel.leaf,
 		})
 	}
 
@@ -412,6 +413,7 @@ func (n *node) pset(args psetArgs) (*psetv2.Pset, error) {
 type psetWithLevel struct {
 	pset  *psetv2.Pset
 	level int
+	leaf  bool
 }
 
 // create the node pset and all the psets of its children recursively, updating the input arg at each step
@@ -423,7 +425,7 @@ func (n *node) psets(inputArgs psetArgs, level int) ([]psetWithLevel, error) {
 	}
 
 	nodeResult := []psetWithLevel{
-		{pset, level},
+		{pset, level, n.isLeaf()},
 	}
 
 	if n.isLeaf() {
