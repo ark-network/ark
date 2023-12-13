@@ -12,4 +12,5 @@ type TxBuilder interface {
 	BuildForfeitTxs(
 		aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment,
 	) (connectors []string, forfeitTxs []string, err error)
+	GetLeafOutputScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error)
 }

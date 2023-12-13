@@ -359,14 +359,12 @@ func (n *node) taprootKey() (*secp256k1.PublicKey, *taproot.IndexedElementsTapSc
 
 	sweepTaprootLeaf, err := sweepTapLeaf(n.sweepKey)
 	if err != nil {
-		fmt.Println("A")
 		return nil, nil, err
 	}
 
 	if n.isLeaf() {
 		key, err := hex.DecodeString(n.receivers[0].Pubkey)
 		if err != nil {
-			fmt.Println("B")
 			return nil, nil, err
 		}
 
@@ -377,7 +375,6 @@ func (n *node) taprootKey() (*secp256k1.PublicKey, *taproot.IndexedElementsTapSc
 
 		leafScript, err := checksigScript(pubkey)
 		if err != nil {
-			fmt.Println("C")
 			return nil, nil, err
 		}
 
@@ -398,7 +395,6 @@ func (n *node) taprootKey() (*secp256k1.PublicKey, *taproot.IndexedElementsTapSc
 
 	leftKey, _, err := n.left.taprootKey()
 	if err != nil {
-		fmt.Println("D")
 		return nil, nil, err
 	}
 

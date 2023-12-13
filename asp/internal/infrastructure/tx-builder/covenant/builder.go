@@ -11,6 +11,7 @@ import (
 	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
+	"github.com/vulpemventures/go-elements/taproot"
 	"github.com/vulpemventures/go-elements/transaction"
 )
 
@@ -54,6 +55,32 @@ func getTxid(txStr string) (string, error) {
 	}
 
 	return utx.TxHash().String(), nil
+}
+
+func (b *txBuilder) GetLeafOutputScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error) {
+	unspendableKeyBytes, _ := hex.DecodeString(unspendablePoint)
+	unspendableKey, _ := secp256k1.ParsePubKey(unspendableKeyBytes)
+
+	sweepTaprootLeaf, err := sweepTapLeaf(aspPubkey)
+	if err != nil {
+		return nil, err
+	}
+
+	leafScript, err := checksigScript(userPubkey)
+	if err != nil {
+		return nil, err
+	}
+
+	leafTaprootLeaf := taproot.NewBaseTapElementsLeaf(leafScript)
+	leafTaprootTree := taproot.AssembleTaprootScriptTree(leafTaprootLeaf, *sweepTaprootLeaf)
+	root := leafTaprootTree.RootNode.TapHash()
+
+	taprootKey := taproot.ComputeTaprootOutputKey(
+		unspendableKey,
+		root[:],
+	)
+
+	return taprootOutputScript(taprootKey)
 }
 
 // BuildForfeitTxs implements ports.TxBuilder.
@@ -104,7 +131,7 @@ func (b *txBuilder) BuildForfeitTxs(
 					},
 					vtxo.Amount,
 					aspScript,
-					b.net,
+					*b.net,
 				)
 				if err != nil {
 					return nil, nil, err

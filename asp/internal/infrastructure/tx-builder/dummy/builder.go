@@ -7,7 +7,9 @@ import (
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/network"
+	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/transaction"
 )
@@ -126,6 +128,12 @@ func (b *txBuilder) BuildPoolTx(
 	)
 
 	return poolTx, congestionTree, err
+}
+
+func (b *txBuilder) GetLeafOutputScript(userPubkey, _ *secp256k1.PublicKey) ([]byte, error) {
+	p2wpkh := payment.FromPublicKey(userPubkey, &b.net, nil)
+	addr, _ := p2wpkh.WitnessPubKeyHash()
+	return address.ToOutputScript(addr)
 }
 
 func connectorsToInputArgs(connectors []string) ([]psetv2.InputArgs, error) {
