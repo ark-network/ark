@@ -21,7 +21,7 @@ const (
 	OP_INSPECTOUTPUTVALUE        = 0xcf
 	OP_PUSHCURRENTINPUTINDEX     = 0xcd
 	unspendablePoint             = "50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0"
-	timeDelta                    = 60 * 60 * 24 * 7 // 7 days in seconds
+	timeDelta                    = 60 * 60 * 24 * 14 // 14 days in seconds
 )
 
 type outputScriptFactory func(leaves []domain.Receiver) ([]byte, error)
@@ -133,7 +133,6 @@ func buildCongestionTree(
 				TxIndex: sharedOutputIndex,
 			},
 			taprootTree: nil,
-			nodeTimeout: timeDelta,
 		}, 0)
 	if err != nil {
 		return nil, err
@@ -248,12 +247,12 @@ func (n *node) amount() uint32 {
 	return amount
 }
 
-func (n *node) taprootKey(timeoutSeconds uint) (*secp256k1.PublicKey, *taproot.IndexedElementsTapScriptTree, error) {
+func (n *node) taprootKey() (*secp256k1.PublicKey, *taproot.IndexedElementsTapScriptTree, error) {
 	if n._taprootKey != nil && n._taprootTree != nil {
 		return n._taprootKey, n._taprootTree, nil
 	}
 
-	sweepScript, err := csvChecksigScript(n.sweepKey, timeoutSeconds)
+	sweepScript, err := csvChecksigScript(n.sweepKey, timeDelta)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -285,12 +284,12 @@ func (n *node) taprootKey(timeoutSeconds uint) (*secp256k1.PublicKey, *taproot.I
 		return taprootKey, leafTaprootTree, nil
 	}
 
-	leftKey, _, err := n.left.taprootKey(timeoutSeconds)
+	leftKey, _, err := n.left.taprootKey()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	rightKey, _, err := n.right.taprootKey(timeoutSeconds)
+	rightKey, _, err := n.right.taprootKey()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -315,8 +314,8 @@ func (n *node) taprootKey(timeoutSeconds uint) (*secp256k1.PublicKey, *taproot.I
 }
 
 // compute the output script of a node
-func (n *node) script(timeoutSeconds uint) ([]byte, error) {
-	taprootKey, _, err := n.taprootKey(timeoutSeconds)
+func (n *node) script() ([]byte, error) {
+	taprootKey, _, err := n.taprootKey()
 	if err != nil {
 		return nil, err
 	}
@@ -325,8 +324,8 @@ func (n *node) script(timeoutSeconds uint) ([]byte, error) {
 }
 
 // use script & amount to create OutputArgs
-func (n *node) output(timeoutSeconds uint) (*psetv2.OutputArgs, error) {
-	script, err := n.script(timeoutSeconds)
+func (n *node) output() (*psetv2.OutputArgs, error) {
+	script, err := n.script()
 	if err != nil {
 		return nil, err
 	}
@@ -341,7 +340,6 @@ func (n *node) output(timeoutSeconds uint) (*psetv2.OutputArgs, error) {
 type psetArgs struct {
 	input       psetv2.InputArgs
 	taprootTree *taproot.IndexedElementsTapScriptTree
-	nodeTimeout uint
 }
 
 // create the node Pset from the previous node Pset represented by input arg
@@ -381,7 +379,7 @@ func (n *node) pset(args psetArgs) (*psetv2.Pset, error) {
 	}
 
 	if n.isLeaf() {
-		output, err := n.output(args.nodeTimeout)
+		output, err := n.output()
 		if err != nil {
 			return nil, err
 		}
@@ -393,12 +391,12 @@ func (n *node) pset(args psetArgs) (*psetv2.Pset, error) {
 		return pset, nil
 	}
 
-	outputLeft, err := n.left.output(args.nodeTimeout)
+	outputLeft, err := n.left.output()
 	if err != nil {
 		return nil, err
 	}
 
-	outputRight, err := n.right.output(args.nodeTimeout)
+	outputRight, err := n.right.output()
 	if err != nil {
 		return nil, err
 	}
@@ -439,7 +437,7 @@ func (n *node) psets(inputArgs psetArgs, level int) ([]psetWithLevel, error) {
 
 	txID := unsignedTx.TxHash().String()
 
-	_, taprootTree, err := n.taprootKey(inputArgs.nodeTimeout)
+	_, taprootTree, err := n.taprootKey()
 
 	psetsLeft, err := n.left.psets(psetArgs{
 		input: psetv2.InputArgs{
@@ -447,7 +445,6 @@ func (n *node) psets(inputArgs psetArgs, level int) ([]psetWithLevel, error) {
 			TxIndex: 0,
 		},
 		taprootTree: taprootTree,
-		nodeTimeout: inputArgs.nodeTimeout + timeDelta,
 	}, level+1)
 	if err != nil {
 		return nil, err
@@ -459,7 +456,6 @@ func (n *node) psets(inputArgs psetArgs, level int) ([]psetWithLevel, error) {
 			TxIndex: 1,
 		},
 		taprootTree: taprootTree,
-		nodeTimeout: inputArgs.nodeTimeout + timeDelta,
 	}, level+1)
 	if err != nil {
 		return nil, err
