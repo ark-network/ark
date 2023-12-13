@@ -114,10 +114,7 @@ func sweepTapLeaf(sweepKey *secp256k1.PublicKey) (*taproot.TapElementsLeaf, erro
 // forceSplitCoinTapLeaf returns a taproot leaf that enforces a split into two outputs
 // each output (left and right) will have the given amount and the given taproot key as witness program
 func forceSplitCoinTapLeaf(
-	leftKey *secp256k1.PublicKey,
-	leftAmount uint32,
-	rightKey *secp256k1.PublicKey,
-	rightAmount uint32,
+	leftKey, rightKey *secp256k1.PublicKey, leftAmount, rightAmount uint32,
 ) taproot.TapElementsLeaf {
 	nextScriptLeft := withOutput(0, schnorr.SerializePubKey(leftKey), leftAmount, true)
 	nextScriptRight := withOutput(1, schnorr.SerializePubKey(rightKey), rightAmount, false)
@@ -193,77 +190,38 @@ func buildCongestionTree(
 		return nil, nil, err
 	}
 
-	maxLevel := 0
+	// find the root
+	var rootPset *psetv2.Pset
 	for _, psetWithLevel := range psets {
-		if psetWithLevel.level > maxLevel {
-			maxLevel = psetWithLevel.level
+		if psetWithLevel.level == 0 {
+			rootPset = psetWithLevel.pset
+			break
 		}
-	}
-
-	tree := make(domain.CongestionTree, maxLevel+1)
-
-	for _, psetWithLevel := range psets {
-		utx, err := psetWithLevel.pset.UnsignedTx()
-		if err != nil {
-			fmt.Println("F")
-			return nil, nil, err
-		}
-
-		txid := utx.TxHash().String()
-
-		psetB64, err := psetWithLevel.pset.ToBase64()
-		if err != nil {
-			fmt.Println("G")
-			return nil, nil, err
-		}
-
-		parentTxid := chainhash.Hash(psetWithLevel.pset.Inputs[0].PreviousTxid).String()
-
-		tree[psetWithLevel.level] = append(tree[psetWithLevel.level], domain.Node{
-			Txid: txid,
-
-			Tx:         psetB64,
-			ParentTxid: parentTxid,
-			Leaf:       psetWithLevel.leaf,
-		})
 	}
 
 	// compute the shared output script
 	sweepLeaf, err := sweepTapLeaf(aspPublicKey)
 	if err != nil {
-		fmt.Println("H")
 		return nil, nil, err
 	}
 
-	treeRootNode := tree[0][0]
-	pset, err := psetv2.NewPsetFromBase64(treeRootNode.Tx)
-	if err != nil {
-		fmt.Println("I")
-		return nil, nil, err
-	}
-
-	leftOutput := pset.Outputs[0]
-	rightOutput := pset.Outputs[1]
+	leftOutput := rootPset.Outputs[0]
+	rightOutput := rootPset.Outputs[1]
 
 	leftWitnessProgram := leftOutput.Script[2:]
 	leftKey, err := schnorr.ParsePubKey(leftWitnessProgram)
 	if err != nil {
-		fmt.Println("L")
 		return nil, nil, err
 	}
 
 	rightWitnessProgram := rightOutput.Script[2:]
 	rightKey, err := schnorr.ParsePubKey(rightWitnessProgram)
 	if err != nil {
-		fmt.Println("M")
 		return nil, nil, err
 	}
 
 	goToTreeScript := forceSplitCoinTapLeaf(
-		leftKey,
-		uint32(leftOutput.Value),
-		rightKey,
-		uint32(rightOutput.Value),
+		leftKey, rightKey, uint32(leftOutput.Value), uint32(rightOutput.Value),
 	)
 
 	taprootTree := taproot.AssembleTaprootScriptTree(goToTreeScript, *sweepLeaf)
@@ -271,45 +229,49 @@ func buildCongestionTree(
 	taprootKey := taproot.ComputeTaprootOutputKey(unspendableKey, root[:])
 	outputScript, err := taprootOutputScript(taprootKey)
 	if err != nil {
-		fmt.Println("N")
 		return nil, nil, err
 	}
 
 	return func(outpoint psetv2.InputArgs) (domain.CongestionTree, error) {
-		root := tree[0][0]
-		psetRoot, err := psetv2.NewPsetFromBase64(root.Tx)
+		psets, err := nodes[0].psets(&psetArgs{
+			input:       outpoint,
+			taprootTree: taprootTree,
+		}, 0)
 		if err != nil {
 			return nil, err
 		}
 
-		updater, err := psetv2.NewUpdater(psetRoot)
-		if err != nil {
-			return nil, err
+		maxLevel := 0
+		for _, p := range psets {
+			if p.level > maxLevel {
+				maxLevel = p.level
+			}
 		}
 
-		if err := addTaprootInput(updater, outpoint, unspendableKey, taprootTree); err != nil {
-			return nil, err
+		tree := make(domain.CongestionTree, maxLevel+1)
+
+		for _, psetWithLevel := range psets {
+			utx, err := psetWithLevel.pset.UnsignedTx()
+			if err != nil {
+				return nil, err
+			}
+
+			txid := utx.TxHash().String()
+
+			psetB64, err := psetWithLevel.pset.ToBase64()
+			if err != nil {
+				return nil, err
+			}
+
+			parentTxid := chainhash.Hash(psetWithLevel.pset.Inputs[0].PreviousTxid).String()
+
+			tree[psetWithLevel.level] = append(tree[psetWithLevel.level], domain.Node{
+				Txid:       txid,
+				Tx:         psetB64,
+				ParentTxid: parentTxid,
+				Leaf:       psetWithLevel.leaf,
+			})
 		}
-
-		newRootB64, err := updater.Pset.ToBase64()
-		if err != nil {
-			return nil, err
-		}
-
-		utx, err := psetRoot.UnsignedTx()
-		if err != nil {
-			return nil, err
-		}
-
-		txid := utx.TxHash().String()
-
-		tree[0][0] = domain.Node{
-			Txid:       txid,
-			Tx:         newRootB64,
-			ParentTxid: outpoint.Txid,
-			Leaf:       false,
-		}
-
 		return tree, nil
 	}, outputScript, nil
 }
@@ -397,17 +359,25 @@ func (n *node) taprootKey() (*secp256k1.PublicKey, *taproot.IndexedElementsTapSc
 
 	sweepTaprootLeaf, err := sweepTapLeaf(n.sweepKey)
 	if err != nil {
+		fmt.Println("A")
 		return nil, nil, err
 	}
 
 	if n.isLeaf() {
-		_, key, err := common.DecodePubKey(n.receivers[0].Pubkey)
+		key, err := hex.DecodeString(n.receivers[0].Pubkey)
+		if err != nil {
+			fmt.Println("B")
+			return nil, nil, err
+		}
+
+		pubkey, err := secp256k1.ParsePubKey(key)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		leafScript, err := checksigScript(key)
+		leafScript, err := checksigScript(pubkey)
 		if err != nil {
+			fmt.Println("C")
 			return nil, nil, err
 		}
 
@@ -428,19 +398,18 @@ func (n *node) taprootKey() (*secp256k1.PublicKey, *taproot.IndexedElementsTapSc
 
 	leftKey, _, err := n.left.taprootKey()
 	if err != nil {
+		fmt.Println("D")
 		return nil, nil, err
 	}
 
 	rightKey, _, err := n.right.taprootKey()
 	if err != nil {
+		fmt.Println("E")
 		return nil, nil, err
 	}
 
 	branchTaprootLeaf := forceSplitCoinTapLeaf(
-		leftKey,
-		n.left.amount(),
-		rightKey,
-		n.right.amount(),
+		leftKey, rightKey, n.left.amount(), n.right.amount(),
 	)
 
 	branchTaprootTree := taproot.AssembleTaprootScriptTree(branchTaprootLeaf, *sweepTaprootLeaf)
@@ -565,6 +534,7 @@ func (n *node) psets(inputArgs *psetArgs, level int) ([]psetWithLevel, error) {
 
 	unsignedTx, err := pset.UnsignedTx()
 	if err != nil {
+		fmt.Println("C")
 		return nil, err
 	}
 

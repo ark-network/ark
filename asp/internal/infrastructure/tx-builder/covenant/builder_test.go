@@ -14,15 +14,12 @@ import (
 	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
+	"github.com/vulpemventures/go-elements/transaction"
 )
 
 const (
 	testingKey = "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x"
 )
-
-func createTestTxBuilder() (ports.TxBuilder, error) {
-	return txbuilder.NewTxBuilder(&network.Liquid), nil
-}
 
 func createTestPoolTx(sharedOutputAmount, numberOfInputs uint64) (string, error) {
 	_, key, err := common.DecodePubKey(testingKey)
@@ -75,7 +72,12 @@ func createTestPoolTx(sharedOutputAmount, numberOfInputs uint64) (string, error)
 		return "", err
 	}
 
-	return pset.ToBase64()
+	utx, err := pset.UnsignedTx()
+	if err != nil {
+		return "", err
+	}
+
+	return utx.ToHex()
 }
 
 type mockedWalletService struct{}
@@ -116,8 +118,7 @@ func (*mockedWalletService) Transfer(ctx context.Context, outs []ports.TxOutput)
 }
 
 func TestBuildCongestionTree(t *testing.T) {
-	builder, err := createTestTxBuilder()
-	require.NoError(t, err)
+	builder := txbuilder.NewTxBuilder(network.Liquid)
 
 	fixtures := []struct {
 		payments          []domain.Payment
@@ -248,13 +249,10 @@ func TestBuildCongestionTree(t *testing.T) {
 		require.Equal(t, f.expectedNodesNum, tree.NumberOfNodes())
 		require.Len(t, tree.Leaves(), f.expectedLeavesNum)
 
-		poolPset, err := psetv2.NewPsetFromBase64(poolTx)
+		poolTransaction, err := transaction.NewTxFromHex(poolTx)
 		require.NoError(t, err)
 
-		poolTxUnsigned, err := poolPset.UnsignedTx()
-		require.NoError(t, err)
-
-		poolTxID := poolTxUnsigned.TxHash().String()
+		poolTxID := poolTransaction.TxHash().String()
 
 		// check the root
 		require.Len(t, tree[0], 1)
@@ -273,7 +271,7 @@ func TestBuildCongestionTree(t *testing.T) {
 		}
 
 		// check the nodes
-		for i, level := range tree[:len(tree)-2] {
+		for _, level := range tree[:len(tree)-2] {
 			for _, node := range level {
 				pset, err := psetv2.NewPsetFromBase64(node.Tx)
 				require.NoError(t, err)
@@ -284,22 +282,15 @@ func TestBuildCongestionTree(t *testing.T) {
 				inputTxID := chainhash.Hash(pset.Inputs[0].PreviousTxid).String()
 				require.Equal(t, node.ParentTxid, inputTxID)
 
-				nextLevel := tree[i+1]
-				childs := 0
-				for _, n := range nextLevel {
-					if n.ParentTxid == node.Txid {
-						childs++
-					}
-				}
-				require.Equal(t, 2, childs)
+				children := tree.Children(node.Txid)
+				require.Len(t, children, 2)
 			}
 		}
 	}
 }
 
 func TestBuildForfeitTxs(t *testing.T) {
-	builder, err := createTestTxBuilder()
-	require.NoError(t, err)
+	builder := txbuilder.NewTxBuilder(network.Liquid)
 
 	poolTx, err := createTestPoolTx(1000, 450*2)
 	require.NoError(t, err)

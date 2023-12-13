@@ -22,9 +22,9 @@ type txBuilder struct {
 	net *network.Network
 }
 
-func NewTxBuilder(net *network.Network) ports.TxBuilder {
+func NewTxBuilder(net network.Network) ports.TxBuilder {
 	return &txBuilder{
-		net,
+		net: &net,
 	}
 }
 
@@ -38,13 +38,29 @@ func p2wpkhScript(publicKey *secp256k1.PublicKey, net *network.Network) ([]byte,
 	return address.ToOutputScript(addr)
 }
 
+func getTxid(txStr string) (string, error) {
+	pset, err := psetv2.NewPsetFromBase64(txStr)
+	if err != nil {
+		tx, err := transaction.NewTxFromHex(txStr)
+		if err != nil {
+			return "", err
+		}
+		return tx.TxHash().String(), nil
+	}
+
+	utx, err := pset.UnsignedTx()
+	if err != nil {
+		return "", err
+	}
+
+	return utx.TxHash().String(), nil
+}
+
 // BuildForfeitTxs implements ports.TxBuilder.
 func (b *txBuilder) BuildForfeitTxs(
-	aspPubkey *secp256k1.PublicKey,
-	poolTx string,
-	payments []domain.Payment,
+	aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment,
 ) (connectors []string, forfeitTxs []string, err error) {
-	poolTxID, err := getTxID(poolTx)
+	poolTxID, err := getTxid(poolTx)
 	if err != nil {
 		return nil, nil, err
 	}

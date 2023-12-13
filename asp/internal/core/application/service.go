@@ -280,7 +280,9 @@ func (s *service) startFinalization() {
 		log.WithError(err).Warn("failed to create connectors and forfeit txs")
 		return
 	}
-	events, _ := round.StartFinalization(connectors, tree, signedPoolTx)
+
+	events, err := round.StartFinalization(connectors, tree, signedPoolTx)
+	fmt.Println(len(events), err)
 	changes = append(changes, events...)
 
 	s.forfeitTxs.push(forfeitTxs)
