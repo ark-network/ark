@@ -24,25 +24,6 @@ func NewTxBuilder(net network.Network) ports.TxBuilder {
 	return &txBuilder{net}
 }
 
-// BuildCongestionTree implements ports.TxBuilder.
-func (b *txBuilder) BuildCongestionTree(
-	aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment,
-) (congestionTree domain.CongestionTree, err error) {
-	poolTxID, err := getTxid(poolTx)
-	if err != nil {
-		return nil, err
-	}
-
-	receivers := receiversFromPayments(payments)
-
-	return buildCongestionTree(
-		newOutputScriptFactory(aspPubkey, b.net),
-		b.net,
-		poolTxID,
-		receivers,
-	)
-}
-
 // BuildForfeitTxs implements ports.TxBuilder.
 func (b *txBuilder) BuildForfeitTxs(
 	aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment,
@@ -108,10 +89,10 @@ func (b *txBuilder) BuildForfeitTxs(
 // BuildPoolTx implements ports.TxBuilder.
 func (b *txBuilder) BuildPoolTx(
 	aspPubkey *secp256k1.PublicKey, wallet ports.WalletService, payments []domain.Payment,
-) (poolTx string, err error) {
+) (poolTx string, congestionTree domain.CongestionTree, err error) {
 	aspScriptBytes, err := p2wpkhScript(aspPubkey, b.net)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	aspScript := hex.EncodeToString(aspScriptBytes)
@@ -124,10 +105,27 @@ func (b *txBuilder) BuildPoolTx(
 
 	ctx := context.Background()
 
-	return wallet.Transfer(ctx, []ports.TxOutput{
+	poolTx, err = wallet.Transfer(ctx, []ports.TxOutput{
 		newOutput(aspScript, sharedOutputAmount, b.net.AssetID),
 		newOutput(aspScript, connectorOutputAmount, b.net.AssetID),
 	})
+	if err != nil {
+		return "", nil, err
+	}
+
+	poolTxID, err := getTxid(poolTx)
+	if err != nil {
+		return "", nil, err
+	}
+
+	congestionTree, err = buildCongestionTree(
+		newOutputScriptFactory(aspPubkey, b.net),
+		b.net,
+		poolTxID,
+		receivers,
+	)
+
+	return poolTx, congestionTree, err
 }
 
 func connectorsToInputArgs(connectors []string) ([]psetv2.InputArgs, error) {

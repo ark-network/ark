@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/hex"
 
-	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/network"
+	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
+	"github.com/vulpemventures/go-elements/transaction"
 )
 
 const (
@@ -17,51 +19,37 @@ const (
 )
 
 type txBuilder struct {
-	net          *network.Network
-	aspPublicKey *secp256k1.PublicKey
+	net *network.Network
 }
 
-func toElementsNetwork(net common.Network) *network.Network {
-	switch net {
-	case common.MainNet:
-		return &network.Liquid
-	case common.TestNet:
-		return &network.Testnet
-	default:
-		return nil
-	}
-}
-
-func NewTxBuilder(aspPublicKey *secp256k1.PublicKey, net common.Network) ports.TxBuilder {
+func NewTxBuilder(net *network.Network) ports.TxBuilder {
 	return &txBuilder{
-		aspPublicKey: aspPublicKey,
-		net:          toElementsNetwork(net),
+		net,
 	}
 }
 
-// BuildCongestionTree implements ports.TxBuilder.
-func (b *txBuilder) BuildCongestionTree(poolTx string, payments []domain.Payment) (congestionTree domain.CongestionTree, err error) {
-	poolTxID, err := getTxID(poolTx)
+func p2wpkhScript(publicKey *secp256k1.PublicKey, net *network.Network) ([]byte, error) {
+	payment := payment.FromPublicKey(publicKey, net, nil)
+	addr, err := payment.WitnessPubKeyHash()
 	if err != nil {
 		return nil, err
 	}
 
-	receivers := receiversFromPayments(payments)
-
-	return buildCongestionTree(
-		poolTxID,
-		receivers,
-	)
+	return address.ToOutputScript(addr)
 }
 
 // BuildForfeitTxs implements ports.TxBuilder.
-func (b *txBuilder) BuildForfeitTxs(poolTx string, payments []domain.Payment) (connectors []string, forfeitTxs []string, err error) {
+func (b *txBuilder) BuildForfeitTxs(
+	aspPubkey *secp256k1.PublicKey,
+	poolTx string,
+	payments []domain.Payment,
+) (connectors []string, forfeitTxs []string, err error) {
 	poolTxID, err := getTxID(poolTx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	aspScript, err := p2wpkhScript(b.aspPublicKey, b.net)
+	aspScript, err := p2wpkhScript(aspPubkey, b.net)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -115,10 +103,14 @@ func (b *txBuilder) BuildForfeitTxs(poolTx string, payments []domain.Payment) (c
 }
 
 // BuildPoolTx implements ports.TxBuilder.
-func (b *txBuilder) BuildPoolTx(wallet ports.WalletService, payments []domain.Payment) (poolTx string, err error) {
-	aspScriptBytes, err := p2wpkhScript(b.aspPublicKey, b.net)
+func (b *txBuilder) BuildPoolTx(
+	aspPubkey *secp256k1.PublicKey,
+	wallet ports.WalletService,
+	payments []domain.Payment,
+) (poolTx string, congestionTree domain.CongestionTree, err error) {
+	aspScriptBytes, err := p2wpkhScript(aspPubkey, b.net)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	aspScript := hex.EncodeToString(aspScriptBytes)
@@ -131,10 +123,39 @@ func (b *txBuilder) BuildPoolTx(wallet ports.WalletService, payments []domain.Pa
 
 	ctx := context.Background()
 
-	return wallet.Transfer(ctx, []ports.TxOutput{
-		newOutput(aspScript, sharedOutputAmount),
-		newOutput(aspScript, connectorOutputAmount),
+	makeTree, sharedOutputScript, err := buildCongestionTree(
+		b.net,
+		aspPubkey,
+		receivers,
+	)
+	if err != nil {
+		return "", nil, err
+	}
+
+	sharedOutputScriptHex := hex.EncodeToString(sharedOutputScript)
+
+	poolTx, err = wallet.Transfer(ctx, []ports.TxOutput{
+		newOutput(sharedOutputScriptHex, sharedOutputAmount, b.net.AssetID),
+		newOutput(aspScript, connectorOutputAmount, b.net.AssetID),
 	})
+	if err != nil {
+		return "", nil, err
+	}
+
+	poolTransaction, err := transaction.NewTxFromHex(poolTx)
+	if err != nil {
+		return "", nil, err
+	}
+
+	congestionTree, err = makeTree(psetv2.InputArgs{
+		Txid:    poolTransaction.TxHash().String(),
+		TxIndex: 0,
+	})
+	if err != nil {
+		return "", nil, err
+	}
+
+	return poolTx, congestionTree, nil
 }
 
 func connectorsToInputArgs(connectors []string) ([]psetv2.InputArgs, error) {
@@ -203,13 +224,19 @@ func sumReceivers(receivers []domain.Receiver) uint64 {
 type output struct {
 	script string
 	amount uint64
+	asset  string
 }
 
-func newOutput(script string, amount uint64) ports.TxOutput {
+func newOutput(script string, amount uint64, asset string) ports.TxOutput {
 	return &output{
 		script: script,
 		amount: amount,
+		asset:  asset,
 	}
+}
+
+func (o *output) GetAsset() string {
+	return o.asset
 }
 
 func (o *output) GetAmount() uint64 {

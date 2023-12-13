@@ -267,17 +267,10 @@ func (s *service) startFinalization() {
 		return
 	}
 
-	signedPoolTx, err := s.builder.BuildPoolTx(s.pubkey, s.wallet, payments)
+	signedPoolTx, tree, err := s.builder.BuildPoolTx(s.pubkey, s.wallet, payments)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
 		log.WithError(err).Warn("failed to create pool tx")
-		return
-	}
-
-	tree, err := s.builder.BuildCongestionTree(s.pubkey, signedPoolTx, payments)
-	if err != nil {
-		changes = round.Fail(fmt.Errorf("failed to create congestion tree: %s", err))
-		log.WithError(err).Warn("failed to create congestion tree")
 		return
 	}
 

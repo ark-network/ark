@@ -1,6 +1,7 @@
 package txbuilder_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/ark-network/ark/common"
@@ -8,6 +9,7 @@ import (
 	"github.com/ark-network/ark/internal/core/ports"
 	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/dummy"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/require"
 	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/payment"
@@ -76,20 +78,46 @@ func createTestPoolTx(sharedOutputAmount, numberOfInputs uint64) (string, error)
 	return pset.ToBase64()
 }
 
+type mockedWalletService struct{}
+
+// BroadcastTransaction implements ports.WalletService.
+func (*mockedWalletService) BroadcastTransaction(ctx context.Context, txHex string) (string, error) {
+	panic("unimplemented")
+}
+
+// Close implements ports.WalletService.
+func (*mockedWalletService) Close() {
+	panic("unimplemented")
+}
+
+// DeriveAddresses implements ports.WalletService.
+func (*mockedWalletService) DeriveAddresses(ctx context.Context, num int) ([]string, error) {
+	panic("unimplemented")
+}
+
+// GetPubkey implements ports.WalletService.
+func (*mockedWalletService) GetPubkey(ctx context.Context) (*secp256k1.PublicKey, error) {
+	panic("unimplemented")
+}
+
+// SignPset implements ports.WalletService.
+func (*mockedWalletService) SignPset(ctx context.Context, pset string, extractRawTx bool) (string, error) {
+	panic("unimplemented")
+}
+
+// Status implements ports.WalletService.
+func (*mockedWalletService) Status(ctx context.Context) (ports.WalletStatus, error) {
+	panic("unimplemented")
+}
+
+// Transfer implements ports.WalletService.
+func (*mockedWalletService) Transfer(ctx context.Context, outs []ports.TxOutput) (string, error) {
+	return createTestPoolTx(1000, (450+500)*1)
+}
+
 func TestBuildCongestionTree(t *testing.T) {
 	builder, err := createTestTxBuilder()
 	require.NoError(t, err)
-
-	poolTx, err := createTestPoolTx(1000, (450+500)*1)
-	require.NoError(t, err)
-
-	poolPset, err := psetv2.NewPsetFromBase64(poolTx)
-	require.NoError(t, err)
-
-	poolTxUnsigned, err := poolPset.UnsignedTx()
-	require.NoError(t, err)
-
-	poolTxID := poolTxUnsigned.TxHash().String()
 
 	fixtures := []struct {
 		payments          []domain.Payment
@@ -215,10 +243,18 @@ func TestBuildCongestionTree(t *testing.T) {
 	require.NotNil(t, key)
 
 	for _, f := range fixtures {
-		tree, err := builder.BuildCongestionTree(key, poolTx, f.payments)
+		poolTx, tree, err := builder.BuildPoolTx(key, &mockedWalletService{}, f.payments)
 		require.NoError(t, err)
 		require.Equal(t, f.expectedNodesNum, tree.NumberOfNodes())
 		require.Len(t, tree.Leaves(), f.expectedLeavesNum)
+
+		poolPset, err := psetv2.NewPsetFromBase64(poolTx)
+		require.NoError(t, err)
+
+		poolTxUnsigned, err := poolPset.UnsignedTx()
+		require.NoError(t, err)
+
+		poolTxID := poolTxUnsigned.TxHash().String()
 
 		// check the root
 		require.Len(t, tree[0], 1)
