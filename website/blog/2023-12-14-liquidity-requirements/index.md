@@ -16,7 +16,7 @@ This post discusses the liquidity requirements and calculates the funding needs 
 
 ## What is Ark?
 
-Ark is a promising second-layer solution for Bitcoin that could help improve the scalability and privacy of the network. It offers the following benefits:
+Ark is a promising second-layer solution for Bitcoin that improves the scalability and privacy of the network. It offers the following benefits:
 
 - **No incoming liquidity required**: Receivers can accept payments without having to worry about having enough funds in their wallets.
 - **Confidential payments**: Ark protects the confidentiality of recipients, which is not always possible with other second-layer solutions.
