@@ -12,9 +12,7 @@ import (
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	log "github.com/sirupsen/logrus"
-	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/network"
-	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
 )
 
@@ -267,17 +265,10 @@ func (s *service) startFinalization() {
 		return
 	}
 
-	signedPoolTx, err := s.builder.BuildPoolTx(s.pubkey, s.wallet, payments)
+	signedPoolTx, tree, err := s.builder.BuildPoolTx(s.pubkey, s.wallet, payments)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
 		log.WithError(err).Warn("failed to create pool tx")
-		return
-	}
-
-	tree, err := s.builder.BuildCongestionTree(s.pubkey, signedPoolTx, payments)
-	if err != nil {
-		changes = round.Fail(fmt.Errorf("failed to create congestion tree: %s", err))
-		log.WithError(err).Warn("failed to create congestion tree")
 		return
 	}
 
@@ -287,6 +278,7 @@ func (s *service) startFinalization() {
 		log.WithError(err).Warn("failed to create connectors and forfeit txs")
 		return
 	}
+
 	events, _ := round.StartFinalization(connectors, tree, signedPoolTx)
 	changes = append(changes, events...)
 
@@ -354,7 +346,7 @@ func (s *service) updateProjectionStore(round *domain.Round) {
 			}
 		}
 
-		newVtxos := getNewVtxos(s.onchainNework, round)
+		newVtxos := s.getNewVtxos(round)
 		for {
 			if err := repo.AddVtxos(ctx, newVtxos); err != nil {
 				log.WithError(err).Warn("failed to add new vtxos, retrying soon")
@@ -393,7 +385,7 @@ func (s *service) propagateEvents(round *domain.Round) {
 	}
 }
 
-func getNewVtxos(net network.Network, round *domain.Round) []domain.Vtxo {
+func (s *service) getNewVtxos(round *domain.Round) []domain.Vtxo {
 	leaves := round.CongestionTree.Leaves()
 	vtxos := make([]domain.Vtxo, 0)
 	for _, node := range leaves {
@@ -405,9 +397,7 @@ func getNewVtxos(net network.Network, round *domain.Round) []domain.Vtxo {
 				for _, r := range p.Receivers {
 					buf, _ := hex.DecodeString(r.Pubkey)
 					pk, _ := secp256k1.ParsePubKey(buf)
-					p2wpkh := payment.FromPublicKey(pk, &net, nil)
-					addr, _ := p2wpkh.WitnessPubKeyHash()
-					script, _ := address.ToOutputScript(addr)
+					script, _ := s.builder.GetLeafOutputScript(pk, s.pubkey)
 					if bytes.Equal(script, out.Script) {
 						found = true
 						pubkey = r.Pubkey

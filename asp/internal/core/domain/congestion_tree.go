@@ -22,6 +22,19 @@ func (c CongestionTree) Leaves() []Node {
 	return leaves
 }
 
+func (c CongestionTree) Children(nodeTxid string) []Node {
+	var children []Node
+	for _, level := range c {
+		for _, node := range level {
+			if node.ParentTxid == nodeTxid {
+				children = append(children, node)
+			}
+		}
+	}
+
+	return children
+}
+
 func (c CongestionTree) NumberOfNodes() int {
 	var count int
 	for _, level := range c {

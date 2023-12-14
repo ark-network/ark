@@ -11,6 +11,7 @@ import (
 	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
+	"github.com/vulpemventures/go-elements/taproot"
 	"github.com/vulpemventures/go-elements/transaction"
 )
 
@@ -19,11 +20,67 @@ const (
 )
 
 type txBuilder struct {
-	net network.Network
+	net *network.Network
 }
 
 func NewTxBuilder(net network.Network) ports.TxBuilder {
-	return &txBuilder{net}
+	return &txBuilder{
+		net: &net,
+	}
+}
+
+func p2wpkhScript(publicKey *secp256k1.PublicKey, net *network.Network) ([]byte, error) {
+	payment := payment.FromPublicKey(publicKey, net, nil)
+	addr, err := payment.WitnessPubKeyHash()
+	if err != nil {
+		return nil, err
+	}
+
+	return address.ToOutputScript(addr)
+}
+
+func getTxid(txStr string) (string, error) {
+	pset, err := psetv2.NewPsetFromBase64(txStr)
+	if err != nil {
+		tx, err := transaction.NewTxFromHex(txStr)
+		if err != nil {
+			return "", err
+		}
+		return tx.TxHash().String(), nil
+	}
+
+	utx, err := pset.UnsignedTx()
+	if err != nil {
+		return "", err
+	}
+
+	return utx.TxHash().String(), nil
+}
+
+func (b *txBuilder) GetLeafOutputScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error) {
+	unspendableKeyBytes, _ := hex.DecodeString(unspendablePoint)
+	unspendableKey, _ := secp256k1.ParsePubKey(unspendableKeyBytes)
+
+	sweepTaprootLeaf, err := sweepTapLeaf(aspPubkey)
+	if err != nil {
+		return nil, err
+	}
+
+	leafScript, err := checksigScript(userPubkey)
+	if err != nil {
+		return nil, err
+	}
+
+	leafTaprootLeaf := taproot.NewBaseTapElementsLeaf(leafScript)
+	leafTaprootTree := taproot.AssembleTaprootScriptTree(leafTaprootLeaf, *sweepTaprootLeaf)
+	root := leafTaprootTree.RootNode.TapHash()
+
+	taprootKey := taproot.ComputeTaprootOutputKey(
+		unspendableKey,
+		root[:],
+	)
+
+	return taprootOutputScript(taprootKey)
 }
 
 // BuildForfeitTxs implements ports.TxBuilder.
@@ -74,7 +131,7 @@ func (b *txBuilder) BuildForfeitTxs(
 					},
 					vtxo.Amount,
 					aspScript,
-					b.net,
+					*b.net,
 				)
 				if err != nil {
 					return nil, nil, err
@@ -90,7 +147,9 @@ func (b *txBuilder) BuildForfeitTxs(
 
 // BuildPoolTx implements ports.TxBuilder.
 func (b *txBuilder) BuildPoolTx(
-	aspPubkey *secp256k1.PublicKey, wallet ports.WalletService, payments []domain.Payment,
+	aspPubkey *secp256k1.PublicKey,
+	wallet ports.WalletService,
+	payments []domain.Payment,
 ) (poolTx string, congestionTree domain.CongestionTree, err error) {
 	aspScriptBytes, err := p2wpkhScript(aspPubkey, b.net)
 	if err != nil {
@@ -107,68 +166,70 @@ func (b *txBuilder) BuildPoolTx(
 
 	ctx := context.Background()
 
+	makeTree, sharedOutputScript, err := buildCongestionTree(
+		b.net,
+		aspPubkey,
+		receivers,
+	)
+	if err != nil {
+		return "", nil, err
+	}
+
+	sharedOutputScriptHex := hex.EncodeToString(sharedOutputScript)
+
 	poolTx, err = wallet.Transfer(ctx, []ports.TxOutput{
-		newOutput(aspScript, sharedOutputAmount, b.net.AssetID),
+		newOutput(sharedOutputScriptHex, sharedOutputAmount, b.net.AssetID),
 		newOutput(aspScript, connectorOutputAmount, b.net.AssetID),
 	})
 	if err != nil {
 		return "", nil, err
 	}
 
-	poolTxID, err := getTxid(poolTx)
+	poolTransaction, err := transaction.NewTxFromHex(poolTx)
 	if err != nil {
 		return "", nil, err
 	}
 
-	congestionTree, err = buildCongestionTree(
-		newOutputScriptFactory(aspPubkey, b.net),
-		b.net,
-		poolTxID,
-		receivers,
-	)
+	congestionTree, err = makeTree(psetv2.InputArgs{
+		Txid:    poolTransaction.TxHash().String(),
+		TxIndex: 0,
+	})
+	if err != nil {
+		return "", nil, err
+	}
 
-	return poolTx, congestionTree, err
-}
-
-func (b *txBuilder) GetLeafOutputScript(userPubkey, _ *secp256k1.PublicKey) ([]byte, error) {
-	p2wpkh := payment.FromPublicKey(userPubkey, &b.net, nil)
-	addr, _ := p2wpkh.WitnessPubKeyHash()
-	return address.ToOutputScript(addr)
+	return poolTx, congestionTree, nil
 }
 
 func connectorsToInputArgs(connectors []string) ([]psetv2.InputArgs, error) {
 	inputs := make([]psetv2.InputArgs, 0, len(connectors)+1)
 	for i, psetb64 := range connectors {
-		tx, err := psetv2.NewPsetFromBase64(psetb64)
+		txID, err := getTxID(psetb64)
 		if err != nil {
 			return nil, err
 		}
-		utx, err := tx.UnsignedTx()
-		if err != nil {
-			return nil, err
+
+		input := psetv2.InputArgs{
+			Txid:    txID,
+			TxIndex: 0,
 		}
-		txid := utx.TxHash().String()
-		for j := range tx.Outputs {
-			inputs = append(inputs, psetv2.InputArgs{
-				Txid:    txid,
-				TxIndex: uint32(j),
-			})
-			if i != len(connectors)-1 {
-				break
+		inputs = append(inputs, input)
+
+		if i == len(connectors)-1 {
+			input := psetv2.InputArgs{
+				Txid:    txID,
+				TxIndex: 1,
 			}
+			inputs = append(inputs, input)
 		}
 	}
 	return inputs, nil
 }
 
-func getTxid(txStr string) (string, error) {
-	pset, err := psetv2.NewPsetFromBase64(txStr)
+func getTxID(psetBase64 string) (string, error) {
+	pset, err := psetv2.NewPsetFromBase64(psetBase64)
 	if err != nil {
-		tx, err := transaction.NewTxFromHex(txStr)
-		if err != nil {
-			return "", err
-		}
-		return tx.TxHash().String(), nil
+		return "", err
 	}
 
 	utx, err := pset.UnsignedTx()
@@ -217,12 +278,12 @@ func newOutput(script string, amount uint64, asset string) ports.TxOutput {
 	}
 }
 
-func (o *output) GetAmount() uint64 {
-	return o.amount
-}
-
 func (o *output) GetAsset() string {
 	return o.asset
+}
+
+func (o *output) GetAmount() uint64 {
+	return o.amount
 }
 
 func (o *output) GetScript() string {

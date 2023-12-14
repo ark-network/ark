@@ -9,7 +9,8 @@ import (
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/ark-network/ark/internal/infrastructure/db"
 	oceanwallet "github.com/ark-network/ark/internal/infrastructure/ocean-wallet"
-	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/dummy"
+	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenant"
+	txbuilderdummy "github.com/ark-network/ark/internal/infrastructure/tx-builder/dummy"
 	log "github.com/sirupsen/logrus"
 	"github.com/vulpemventures/go-elements/network"
 )
@@ -22,7 +23,8 @@ var (
 		"gocron": {},
 	}
 	supportedTxBuilders = supportedType{
-		"dummy": {},
+		"dummy":    {},
+		"covenant": {},
 	}
 )
 
@@ -121,9 +123,11 @@ func (c *Config) txBuilderService() error {
 	net := c.mainChain()
 	switch c.TxBuilderType {
 	case "dummy":
+		svc = txbuilderdummy.NewTxBuilder(net)
+	case "covenant":
 		svc = txbuilder.NewTxBuilder(net)
 	default:
-		err = fmt.Errorf("unknown db type")
+		err = fmt.Errorf("unknown tx builder type")
 	}
 	if err != nil {
 		return err

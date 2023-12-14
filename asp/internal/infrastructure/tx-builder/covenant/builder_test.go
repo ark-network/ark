@@ -7,13 +7,14 @@ import (
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
-	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/dummy"
+	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenant"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/require"
 	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
+	"github.com/vulpemventures/go-elements/transaction"
 )
 
 const (
@@ -71,7 +72,12 @@ func createTestPoolTx(sharedOutputAmount, numberOfInputs uint64) (string, error)
 		return "", err
 	}
 
-	return pset.ToBase64()
+	utx, err := pset.UnsignedTx()
+	if err != nil {
+		return "", err
+	}
+
+	return utx.ToHex()
 }
 
 type mockedWalletService struct{}
@@ -243,13 +249,10 @@ func TestBuildCongestionTree(t *testing.T) {
 		require.Equal(t, f.expectedNodesNum, tree.NumberOfNodes())
 		require.Len(t, tree.Leaves(), f.expectedLeavesNum)
 
-		poolPset, err := psetv2.NewPsetFromBase64(poolTx)
+		poolTransaction, err := transaction.NewTxFromHex(poolTx)
 		require.NoError(t, err)
 
-		poolTxUnsigned, err := poolPset.UnsignedTx()
-		require.NoError(t, err)
-
-		poolTxID := poolTxUnsigned.TxHash().String()
+		poolTxID := poolTransaction.TxHash().String()
 
 		// check the root
 		require.Len(t, tree[0], 1)

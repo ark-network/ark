@@ -40,7 +40,7 @@ var (
 	defaultPort          = 6000
 	defaultDbType        = "badger"
 	defaultSchedulerType = "gocron"
-	defaultTxBuilderType = "dummy"
+	defaultTxBuilderType = "covenant"
 	defaultInsecure      = true
 	defaultNetwork       = "testnet"
 	defaultLogLevel      = 5
