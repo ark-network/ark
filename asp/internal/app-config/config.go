@@ -127,7 +127,7 @@ func (c *Config) txBuilderService() error {
 	case "covenant":
 		svc = txbuilder.NewTxBuilder(net)
 	default:
-		err = fmt.Errorf("unknown db type")
+		err = fmt.Errorf("unknown tx builder type")
 	}
 	if err != nil {
 		return err
