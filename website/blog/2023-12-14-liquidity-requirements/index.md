@@ -20,7 +20,7 @@ Ark is a promising second-layer solution for Bitcoin that improves the scalabili
 
 - **No incoming liquidity required**: Receivers can accept payments without having to worry about having enough funds in their wallets.
 - **Confidential payments**: Ark protects the confidentiality of recipients, which is not always possible with other second-layer solutions.
-- **Scalable**: Ark is a scalable solution that can help improve the scalability of Bitcoin.
+- **Scalable**: Ark is a solution for enabling the scalability of Bitcoin and applications and services which utilize the Bitcoin infrastructure.
 - **Secure**: Ark is a secure solution that is built on top of the Bitcoin blockchain.
 
 :::tip
