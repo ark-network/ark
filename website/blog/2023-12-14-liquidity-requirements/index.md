@@ -42,7 +42,7 @@ Here are some money velocity numbers:
 - USD (Q3 2023): 1.327
 - Lightning (August 2023): 0.59 per month
 
-If we use a money velocity of 1.00 (for simplicity), this means that each BTC inside the Ark will be spent 1.00 of the time on a given period. Since the ASP must fund all transactions and onboarding, this means that for each 1 BTC added to the Ark, the ASP will need 1 BTC to fund the onboarding and 1 BTC to fund the transfers inside the Ark. With an initial balance of 100 BTC, this results in a limit of 50 BTC allowed to onboard (100 = 50 for onboarding + 50 for trades).
+If we use a money velocity of 1.00 (for simplicity), this means that each BTC inside the Ark will be spent once (1.00) during that given period. Since the ASP must fund all transactions and onboarding, this means that for each 1 BTC added to the Ark, the ASP will need 1 BTC to fund the onboarding and 1 BTC to fund the transfers inside the Ark. With an initial balance of 100 BTC, this results in a limit of 50 BTC allowed to onboard (100 = 50 for onboarding + 50 for trades).
 
 If MV = 0.59, this means that those initial 100 BTC would allow for 62.89 BTC of onboarding, where (100 = 62.89 for onboarding + (69.89 \* 0.59 = 37.11) for trades).
 
