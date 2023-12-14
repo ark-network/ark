@@ -1,6 +1,6 @@
 ---
 authors: bordalix
-description: Dive into the depths of Ark with our comprehensive guide on Liquidity Requirements. Explore how Ark liquidity intersect with money velocity
+description: Dive into the depths of Ark with our comprehensive guide on Liquidity Requirements. Explore how Ark liquidity intersect with Money Velocity
 image: /img/ark-agora.png
 slug: liquidity-requirements
 tags: [liquidity, ark, bitcoin]
@@ -31,26 +31,26 @@ It's recommended to read the [nomenclature](/learn/nomenclature) first.
 
 How much BTC can an ASP accept from new users without risking not having enough capital to fund transfers inside Ark? In other words, what percentage of BTC in Ark is transferred in a 1-month period?
 
-This is similar to the definition of money velocity, as defined by the St. Louis Fed:
+This is similar to the definition of Money Velocity, as defined by the St. Louis Fed:
 
 > The velocity of money is the frequency at which one unit of currency is used to purchase domestically-produced goods and services within a given time period.
 
-### Money velocity (MV)
+### Money Velocity (MV)
 
-Here are some money velocity numbers:
+Here are some Money Velocity numbers:
 
 - USD (Q3 2023): 1.327
 - Lightning (August 2023): 0.59 per month
 
-If we use a money velocity of 1.00 (for simplicity), this means that each BTC inside the Ark will be spent once (1.00) during that given period. Since the ASP must fund all transactions and onboarding, this means that for each 1 BTC added to the Ark, the ASP will need 1 BTC to fund the onboarding and 1 BTC to fund the transfers inside the Ark. With an initial balance of 100 BTC, this results in a limit of 50 BTC allowed to onboard (100 = 50 for onboarding + 50 for trades).
+If we use a Money Velocity of 1.00 (for simplicity), this means that each BTC inside the Ark will be spent once (1.00) during that given period. Since the ASP must fund all transactions and onboarding, this means that for each 1 BTC added to the Ark, the ASP will need 1 BTC to fund the onboarding and 1 BTC to fund the transfers inside the Ark. With an initial balance of 100 BTC, this results in a limit of 50 BTC allowed to onboard (100 = 50 for onboarding + 50 for trades).
 
 If MV = 0.59, this means that those initial 100 BTC would allow for 62.89 BTC of onboarding, where (100 = 62.89 for onboarding + (69.89 \* 0.59 = 37.11) for trades).
 
-In reality, the money velocity of Ark is likely to be somewhere between 1.00 and 0.59. This means that the ASP will need to have a certain amount of liquidity on hand to fund both onboarded BTC and transfers inside the Ark. The amount of liquidity required will depend on the specific money velocity of Ark, which is not yet known for sure.
+In reality, the Money Velocity of Ark is likely to be somewhere between 1.00 and 0.59. This means that the ASP will need to have a certain amount of liquidity on hand to fund both onboarded BTC and transfers inside the Ark. The amount of liquidity required will depend on the specific Money Velocity of Ark, which is not yet known for sure.
 
 Comparison table:
 
-| Money velocity | Balance | +Onboard (BTC) | Inside Ark (BTC) | Transfers (BTC) |
+| Money Velocity | Balance | +Onboard (BTC) | Inside Ark (BTC) | Transfers (BTC) |
 | -------------: | ------: | -------------: | ---------------: | --------------: |
 |           0.59 |  100.00 |          62.89 |             0.00 |           37.11 |
 |           1.00 |  100.00 |          50.00 |             0.00 |           50.00 |
@@ -58,7 +58,7 @@ Comparison table:
 
 After one month, all the funds used by the ASP, plus the funds sent by the users, become available again. This means that the ASP will have more available liquidity, so it can increase the allowed value for onboards. On the other hand, there is now more capital inside the Ark, so the ASP needs to reserve more capital to fund the transfers:
 
-| Money velocity | Balance | +Onboard (BTC) | Inside Ark (BTC) | Transfers (BTC) |
+| Money Velocity | Balance | +Onboard (BTC) | Inside Ark (BTC) | Transfers (BTC) |
 | -------------: | ------: | -------------: | ---------------: | --------------: |
 |           0.59 |  162.89 |          79.11 |            62.89 |           83.78 |
 |           1.00 |     150 |          50.00 |            50.00 |          100.00 |
@@ -146,7 +146,7 @@ Simulating the three different MV values over a one-year period, we can conclude
 
 :::note
 
-The money velocity (MV) for USD is quarterly. Assuming that M2 is constant and GDP is evenly distributed over the three months, the MV for one month should be ⅓ of the MV for the quarter, or 0.33.
+The Money Velocity (MV) for USD is quarterly. Assuming that M2 is constant and GDP is evenly distributed over the three months, the MV for one month should be ⅓ of the MV for the quarter, or 0.33.
 
 :::
 
@@ -168,7 +168,7 @@ Where:
 - User’s funds = All BTC onboarded by users until now
 - MV = Money Velocity
 
-#### Money velocity
+#### Money Velocity
 
 To calculate the value of Money Velocity:
 
@@ -180,7 +180,7 @@ Average for the last N rounds of (amount transferred / user’s funds)
 
 #### Rational
 
-The ASP keeps records of onboarded and transferred amounts from previous rounds, and uses them to calculate the money velocity (MV) for the current round. It then uses the MV to calculate the maximum amount that can be onboarded in the current round.
+The ASP keeps records of onboarded and transferred amounts from previous rounds, and uses them to calculate the Money Velocity (MV) for the current round. It then uses the MV to calculate the maximum amount that can be onboarded in the current round.
 
 If you've read this far, thank you! But now it's time for the bad news.
 
@@ -333,7 +333,7 @@ Dividing the initial UTXO into more VTXOs decreases the need for funding.
 
 The liquidity requirements for an ASP will depend on three major factors:
 
-- **Money velocity**: This is not under the control of the ASP, and if it is higher than 1, the Ark capacity will converge to a fixed value.
+- **Money Velocity**: This is not under the control of the ASP, and if it is higher than 1, the Ark capacity will converge to a fixed value.
 - **The locktime period on VTXOs**: Reducing the locktime period will return the locked liquidity sooner. However, this also means that users will need to "recycle" their VTXOs sooner, which can be seen as a worse user experience.
 - **The VTXO ratio**: In other words, this is the maximum allowed value for a given VTXO. At one extreme, the ASP could force all VTXOs to be of 1 sat, which would eliminate any "wasted" liquidity on change. However, this would also require millions of signatures from the user and ASP to construct a payment, which would cause a worse user experience.
 
