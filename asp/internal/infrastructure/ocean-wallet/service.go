@@ -48,9 +48,17 @@ func NewService(addr string) (ports.WalletService, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(info.GetAccounts()) <= 0 {
+	found := false
+	for _, account := range info.GetAccounts() {
+		if account.GetLabel() == accountLabel {
+			found = true
+			break
+		}
+	}
+	if !found {
 		if _, err := accountClient.CreateAccountBIP44(ctx, &pb.CreateAccountBIP44Request{
-			Label: accountLabel,
+			Label:          accountLabel,
+			Unconfidential: true,
 		}); err != nil {
 			return nil, err
 		}
