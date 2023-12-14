@@ -535,6 +535,9 @@ func (n *node) psets(inputArgs *psetArgs, level int) ([]psetWithLevel, error) {
 	txID := unsignedTx.TxHash().String()
 
 	_, taprootTree, err := n.taprootKey()
+	if err != nil {
+		return nil, err
+	}
 
 	psetsLeft, err := n.left.psets(&psetArgs{
 		input: psetv2.InputArgs{
