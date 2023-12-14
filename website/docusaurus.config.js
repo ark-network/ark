@@ -36,15 +36,14 @@ const config = {
             '**/user/noah-cli.md'
           ]
         },
-        blog: false,
-        /* blog: {
+        blog: {
           showReadingTime: true,
           editUrl:
             'https://github.com/ark-network/ark/edit/master/website/blog',
 
           blogTitle: 'Blog',
           blogDescription: 'Posts about Ark development',
-        }, */
+        },
       }),
     ],
   ],
@@ -68,7 +67,7 @@ const config = {
             position: 'left',
             label: 'Docs',
           },
-          /*{ to: '/blog', label: 'Blog', position: 'left' },*/
+          { to: '/blog', label: 'Blog', position: 'left' },
           {
             href: 'https://github.com/ark-network',
             label: 'GitHub',
@@ -133,7 +132,7 @@ const config = {
               },
             ],
           },
-          /* {
+          {
             title: 'MORE',
             items: [
               {
@@ -141,7 +140,7 @@ const config = {
                 to: '/blog',
               },
             ],
-          }, */
+          },
         ],
       },
       colorMode: {
