@@ -3,6 +3,7 @@ package txbuilder
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
@@ -20,12 +21,14 @@ const (
 )
 
 type txBuilder struct {
-	net *network.Network
+	net           *network.Network
+	roundLifetime uint // in seconds
 }
 
-func NewTxBuilder(net network.Network) ports.TxBuilder {
+func NewTxBuilder(net network.Network, roundLifetime uint) ports.TxBuilder {
 	return &txBuilder{
-		net: &net,
+		net:           &net,
+		roundLifetime: roundLifetime,
 	}
 }
 
@@ -57,11 +60,31 @@ func getTxid(txStr string) (string, error) {
 	return utx.TxHash().String(), nil
 }
 
+// GetLifetime decodes the tree root input script to get the sweepLeaf sequence timeout
+func (b *txBuilder) GetLifetime(tree domain.CongestionTree) (int64, error) {
+	rootPset := tree.Root().Tx
+	pset, err := psetv2.NewPsetFromBase64(rootPset)
+	if err != nil {
+		return 0, err
+	}
+
+	input := pset.Inputs[0]
+
+	for _, leaf := range input.TapLeafScript {
+		isSweep, lifetime := decodeSweepScript(leaf.Script)
+		if isSweep {
+			return int64(lifetime), nil
+		}
+	}
+
+	return 0, fmt.Errorf("no sweep script found")
+}
+
 func (b *txBuilder) GetLeafOutputScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error) {
 	unspendableKeyBytes, _ := hex.DecodeString(unspendablePoint)
 	unspendableKey, _ := secp256k1.ParsePubKey(unspendableKeyBytes)
 
-	sweepTaprootLeaf, err := sweepTapLeaf(aspPubkey)
+	sweepTaprootLeaf, err := sweepTapLeaf(aspPubkey, b.roundLifetime)
 	if err != nil {
 		return nil, err
 	}
@@ -170,6 +193,7 @@ func (b *txBuilder) BuildPoolTx(
 		b.net,
 		aspPubkey,
 		receivers,
+		b.roundLifetime,
 	)
 	if err != nil {
 		return "", nil, err

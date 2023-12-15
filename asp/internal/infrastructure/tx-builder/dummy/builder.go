@@ -16,6 +16,7 @@ import (
 
 const (
 	connectorAmount = 450
+	sevenDays       = 7 * 24 * 60 * 60
 )
 
 type txBuilder struct {
@@ -24,6 +25,18 @@ type txBuilder struct {
 
 func NewTxBuilder(net network.Network) ports.TxBuilder {
 	return &txBuilder{net}
+}
+
+func (*txBuilder) BuildSweepTx(
+	wallet ports.WalletService,
+	tree domain.CongestionTree,
+) (signedSweepTx string, err error) {
+	return "", nil
+}
+
+// GetLifetime always returns 7days for dummy tx builder (no timeout to sweep)
+func (*txBuilder) GetLifetime(_ domain.CongestionTree) (int64, error) {
+	return sevenDays, nil
 }
 
 // BuildForfeitTxs implements ports.TxBuilder.

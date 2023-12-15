@@ -33,19 +33,21 @@ type Stage struct {
 }
 
 type Round struct {
-	Id                string
-	StartingTimestamp int64
-	EndingTimestamp   int64
-	Stage             Stage
-	Payments          map[string]Payment
-	Txid              string
-	TxHex             string
-	ForfeitTxs        []string
-	CongestionTree    CongestionTree
-	Connectors        []string
-	DustAmount        uint64
-	Version           uint
-	changes           []RoundEvent
+	Id                  string
+	StartingTimestamp   int64
+	EndingTimestamp     int64
+	Stage               Stage
+	Payments            map[string]Payment
+	Txid                string
+	TxHex               string
+	ForfeitTxs          []string
+	CongestionTree      CongestionTree
+	Connectors          []string
+	DustAmount          uint64
+	Version             uint
+	changes             []RoundEvent
+	ExpirationTimestamp int64
+	SweepTxid           string
 }
 
 func NewRound(dustAmount uint64) *Round {
@@ -89,6 +91,7 @@ func (r *Round) On(event RoundEvent, replayed bool) {
 		r.Txid = e.Txid
 		r.ForfeitTxs = append([]string{}, e.ForfeitTxs...)
 		r.EndingTimestamp = e.Timestamp
+		r.ExpirationTimestamp = e.ExpirationTimestamp
 	case RoundFailed:
 		r.Stage.Failed = true
 		r.EndingTimestamp = e.Timestamp
@@ -171,7 +174,7 @@ func (r *Round) StartFinalization(connectors []string, tree CongestionTree, pool
 	return []RoundEvent{event}, nil
 }
 
-func (r *Round) EndFinalization(forfeitTxs []string, txid string) ([]RoundEvent, error) {
+func (r *Round) EndFinalization(forfeitTxs []string, txid string, expirationTimeStamp int64) ([]RoundEvent, error) {
 	if len(forfeitTxs) <= 0 {
 		return nil, fmt.Errorf("missing list of signed forfeit txs")
 	}
@@ -185,10 +188,27 @@ func (r *Round) EndFinalization(forfeitTxs []string, txid string) ([]RoundEvent,
 		return nil, fmt.Errorf("round already finalized")
 	}
 	event := RoundFinalized{
-		Id:         r.Id,
-		Txid:       txid,
-		ForfeitTxs: forfeitTxs,
-		Timestamp:  time.Now().Unix(),
+		Id:                  r.Id,
+		Txid:                txid,
+		ForfeitTxs:          forfeitTxs,
+		Timestamp:           time.Now().Unix(),
+		ExpirationTimestamp: expirationTimeStamp,
+	}
+	r.raise(event)
+
+	return []RoundEvent{event}, nil
+}
+
+func (r *Round) Sweep(txid string) ([]RoundEvent, error) {
+	if len(txid) <= 0 {
+		return nil, fmt.Errorf("missing sweep txid")
+	}
+	if r.IsFailed() || !r.IsEnded() {
+		return nil, fmt.Errorf("not in a valid stage to sweep")
+	}
+	event := RoundSweeped{
+		Id:   r.Id,
+		Txid: txid,
 	}
 	r.raise(event)
 
@@ -220,6 +240,10 @@ func (r *Round) IsEnded() bool {
 
 func (r *Round) IsFailed() bool {
 	return r.Stage.Failed
+}
+
+func (r *Round) IsSweeped() bool {
+	return len(r.SweepTxid) > 0
 }
 
 func (r *Round) TotalInputAmount() uint64 {

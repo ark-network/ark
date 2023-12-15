@@ -394,7 +394,7 @@ func testEndFinalization(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			events, err = round.EndFinalization(forfeitTxs, txid)
+			events, err = round.EndFinalization(forfeitTxs, txid, 0)
 			require.NoError(t, err)
 			require.Len(t, events, 1)
 			require.False(t, round.IsStarted())
@@ -407,6 +407,7 @@ func testEndFinalization(t *testing.T) {
 			require.Exactly(t, txid, event.Txid)
 			require.Exactly(t, forfeitTxs, event.ForfeitTxs)
 			require.Exactly(t, round.EndingTimestamp, event.Timestamp)
+			require.Exactly(t, round.ExpirationTimestamp, event.ExpirationTimestamp)
 		})
 
 		t.Run("invalid", func(t *testing.T) {
@@ -488,7 +489,7 @@ func testEndFinalization(t *testing.T) {
 			}
 
 			for _, f := range fixtures {
-				events, err := f.round.EndFinalization(f.forfeitTxs, f.txid)
+				events, err := f.round.EndFinalization(f.forfeitTxs, f.txid, 0)
 				require.EqualError(t, err, f.expectedErr)
 				require.Empty(t, events)
 			}

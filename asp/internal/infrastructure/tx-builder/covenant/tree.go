@@ -21,7 +21,6 @@ const (
 	OP_INSPECTOUTPUTVALUE        = 0xcf
 	OP_PUSHCURRENTINPUTINDEX     = 0xcd
 	unspendablePoint             = "0250929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0"
-	timeDelta                    = 60 * 60 * 24 * 14 // 14 days in seconds
 )
 
 // the private method buildCongestionTree returns a function letting to plug in the pool transaction output as input of the tree's root node
@@ -86,7 +85,7 @@ func checkSequenceVerifyScript(seconds uint) ([]byte, error) {
 }
 
 // checkSequenceVerifyScript + checksig
-func csvChecksigScript(pubkey *secp256k1.PublicKey, seconds uint) ([]byte, error) {
+func sweepScript(pubkey *secp256k1.PublicKey, seconds uint) ([]byte, error) {
 	script, err := checksigScript(pubkey)
 	if err != nil {
 		return nil, err
@@ -100,9 +99,30 @@ func csvChecksigScript(pubkey *secp256k1.PublicKey, seconds uint) ([]byte, error
 	return append(csvScript, script...), nil
 }
 
+// decodeSweepScript returns the lifetime of the sweep script if it is valid
+func decodeSweepScript(script []byte) (isSweepLeaf bool, lifetime uint) {
+	checkSequenceVerifyOpcodeIndex := -1
+	for i, op := range script {
+		if op == txscript.OP_CHECKSEQUENCEVERIFY {
+			checkSequenceVerifyOpcodeIndex = i
+			break
+		}
+	}
+	if checkSequenceVerifyOpcodeIndex == -1 {
+		return false, 0
+	}
+
+	lifetime, err := common.BIP68Decode(script[:checkSequenceVerifyOpcodeIndex])
+	if err != nil {
+		return false, 0
+	}
+
+	return true, lifetime
+}
+
 // sweepTapLeaf returns a taproot leaf letting the owner of the key to spend the output after a given timeDelta
-func sweepTapLeaf(sweepKey *secp256k1.PublicKey) (*taproot.TapElementsLeaf, error) {
-	sweepScript, err := csvChecksigScript(sweepKey, timeDelta)
+func sweepTapLeaf(sweepKey *secp256k1.PublicKey, lifetime uint) (*taproot.TapElementsLeaf, error) {
+	sweepScript, err := sweepScript(sweepKey, lifetime)
 	if err != nil {
 		return nil, err
 	}
@@ -161,6 +181,7 @@ func buildCongestionTree(
 	net *network.Network,
 	aspPublicKey *secp256k1.PublicKey,
 	receivers []domain.Receiver,
+	roundLifetime uint,
 ) (pluggableTree pluggableCongestionTree, sharedOutputScript []byte, err error) {
 	unspendableKeyBytes, err := hex.DecodeString(unspendablePoint)
 	if err != nil {
@@ -175,7 +196,7 @@ func buildCongestionTree(
 	var nodes []*node
 
 	for _, r := range receivers {
-		nodes = append(nodes, newLeaf(net, unspendableKey, aspPublicKey, r))
+		nodes = append(nodes, newLeaf(net, unspendableKey, aspPublicKey, r, roundLifetime))
 	}
 
 	for len(nodes) > 1 {
@@ -200,7 +221,7 @@ func buildCongestionTree(
 	}
 
 	// compute the shared output script
-	sweepLeaf, err := sweepTapLeaf(aspPublicKey)
+	sweepLeaf, err := sweepTapLeaf(aspPublicKey, roundLifetime)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -302,6 +323,7 @@ type node struct {
 	left               *node
 	right              *node
 	network            *network.Network
+	roundLifetime      uint
 
 	// cached values
 	_taprootKey  *secp256k1.PublicKey
@@ -314,12 +336,14 @@ func newLeaf(
 	internalKey *secp256k1.PublicKey,
 	sweepKey *secp256k1.PublicKey,
 	receiver domain.Receiver,
+	roundLifetime uint,
 ) *node {
 	return &node{
 		sweepKey:           sweepKey,
 		internalTaprootKey: internalKey,
 		receivers:          []domain.Receiver{receiver},
 		network:            network,
+		roundLifetime:      roundLifetime,
 	}
 }
 
@@ -335,6 +359,7 @@ func newBranch(
 		left:               left,
 		right:              right,
 		network:            left.network,
+		roundLifetime:      left.roundLifetime,
 	}
 }
 
@@ -357,7 +382,7 @@ func (n *node) taprootKey() (*secp256k1.PublicKey, *taproot.IndexedElementsTapSc
 		return n._taprootKey, n._taprootTree, nil
 	}
 
-	sweepTaprootLeaf, err := sweepTapLeaf(n.sweepKey)
+	sweepTaprootLeaf, err := sweepTapLeaf(n.sweepKey, n.roundLifetime)
 	if err != nil {
 		return nil, nil, err
 	}

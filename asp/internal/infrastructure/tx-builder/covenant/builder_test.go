@@ -117,8 +117,12 @@ func (*mockedWalletService) Transfer(ctx context.Context, outs []ports.TxOutput)
 	return createTestPoolTx(1000, (450+500)*1)
 }
 
+func (*mockedWalletService) SignPsetWithKey(ctx context.Context, pset string, inputIndex int) (string, error) {
+	panic("unimplemented")
+}
+
 func TestBuildCongestionTree(t *testing.T) {
-	builder := txbuilder.NewTxBuilder(network.Liquid)
+	builder := txbuilder.NewTxBuilder(network.Liquid, 60*60*24*7)
 
 	fixtures := []struct {
 		payments          []domain.Payment
@@ -290,7 +294,7 @@ func TestBuildCongestionTree(t *testing.T) {
 }
 
 func TestBuildForfeitTxs(t *testing.T) {
-	builder := txbuilder.NewTxBuilder(network.Liquid)
+	builder := txbuilder.NewTxBuilder(network.Liquid, 60*60*24*7)
 
 	poolTx, err := createTestPoolTx(1000, 450*2)
 	require.NoError(t, err)

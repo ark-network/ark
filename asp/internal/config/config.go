@@ -21,6 +21,7 @@ type Config struct {
 	NoTLS         bool
 	Network       common.Network
 	LogLevel      int
+	RoundLifetime uint
 }
 
 var (
@@ -34,6 +35,7 @@ var (
 	Insecure      = "INSECURE"
 	LogLevel      = "LOG_LEVEL"
 	Network       = "NETWORK"
+	RoundLifetime = "ROUND_LIFETIME"
 
 	defaultDatadir       = common.AppDataDir("arkd", false)
 	defaultRoundInterval = 60
@@ -44,6 +46,7 @@ var (
 	defaultInsecure      = true
 	defaultNetwork       = "testnet"
 	defaultLogLevel      = 5
+	defaultRoundLifetime = 60 * 60 * 24 * 14 // 2 weeks in seconds
 )
 
 func LoadConfig() (*Config, error) {
@@ -59,6 +62,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(Insecure, defaultInsecure)
 	viper.SetDefault(LogLevel, defaultLogLevel)
 	viper.SetDefault(Network, defaultNetwork)
+	viper.SetDefault(RoundLifetime, defaultRoundLifetime)
 
 	net, err := getNetwork()
 	if err != nil {
@@ -80,6 +84,7 @@ func LoadConfig() (*Config, error) {
 		DbDir:         filepath.Join(viper.GetString(Datadir), "db"),
 		LogLevel:      viper.GetInt(LogLevel),
 		Network:       net,
+		RoundLifetime: viper.GetUint(RoundLifetime),
 	}, nil
 }
 

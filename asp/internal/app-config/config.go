@@ -36,6 +36,7 @@ type Config struct {
 	SchedulerType string
 	TxBuilderType string
 	WalletAddr    string
+	RoundLifetime uint
 
 	repo      ports.RepoManager
 	svc       application.Service
@@ -73,6 +74,9 @@ func (c *Config) Validate() error {
 	}
 	if err := c.appService(); err != nil {
 		return err
+	}
+	if c.RoundLifetime <= 0 {
+		return fmt.Errorf("invalid round lifetime, must be greater than 0")
 	}
 	return nil
 }
@@ -125,7 +129,7 @@ func (c *Config) txBuilderService() error {
 	case "dummy":
 		svc = txbuilderdummy.NewTxBuilder(net)
 	case "covenant":
-		svc = txbuilder.NewTxBuilder(net)
+		svc = txbuilder.NewTxBuilder(net, c.RoundLifetime)
 	default:
 		err = fmt.Errorf("unknown tx builder type")
 	}

@@ -323,7 +323,16 @@ func (s *service) finalizeRound() {
 		return
 	}
 
-	changes, _ = round.EndFinalization(forfeitTxs, txid)
+	now := time.Now().Unix()
+
+	lifetime, err := s.builder.GetLifetime(round.CongestionTree)
+	if err != nil {
+		changes = round.Fail(fmt.Errorf("failed to calculate round lifetime: %s", err))
+		log.WithError(err).Warn("failed to calculate round lifetime")
+		return
+	}
+
+	changes, _ = round.EndFinalization(forfeitTxs, txid, now+lifetime)
 	log.Debugf("finalized round %s with pool tx %s", round.Id, round.Txid)
 }
 

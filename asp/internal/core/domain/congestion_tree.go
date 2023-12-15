@@ -9,6 +9,10 @@ type Node struct {
 
 type CongestionTree [][]Node
 
+func (c CongestionTree) Root() Node {
+	return c[0][0]
+}
+
 func (c CongestionTree) Leaves() []Node {
 	leaves := c[len(c)-1]
 	for _, level := range c[:len(c)-1] {
