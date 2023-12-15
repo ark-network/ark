@@ -74,7 +74,7 @@ Different ASPs can use different ways for users to board their Ark.
 - Initially proposed by [Steven Roose](https://roose.io/presentations/understanding-ark.pdf)
 - Alice funds an output that can be **accepted as a VTXO** in a future round
 - A covenant forces the creation of an output with the same script as [**VTXO**](#VTXO). No need for interactivity after funding it, anyone can spend.
-- **ASP** can unlock after a timeout ie. _8 weeks_
+- **ASP** can unlock after a timeout ie. _4 weeks_
 - Alice is **required to be online** to maintain access to funds: after the timeout, ASP becomes the only owner funds
 
 | Inputs       | Outputs                                                     |
@@ -85,7 +85,7 @@ Different ASPs can use different ways for users to board their Ark.
 
 - Initially proposed by [Burak](https://lists.linuxfoundation.org/pipermail/bitcoin-dev/2023-May/021694.html)
 - Alice funds an output that can be **accepted as a VTXO** in a future round
-- If ASP is not cooperative, **Alice** can unlock after a timeout ie. _8 weeks_
+- If ASP is not cooperative, **Alice** can unlock after a timeout ie. _1 year_
 - Alice is **not required to be online** to maintain access to funds: after the timeout, she becomes the only owner of the funds
 
 | Inputs       | Outputs                             |
