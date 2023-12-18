@@ -110,7 +110,7 @@ func (h *handler) Faucet(ctx context.Context, req *arkv1.FaucetRequest) (*arkv1.
 }
 
 func (h *handler) GetRound(ctx context.Context, req *arkv1.GetRoundRequest) (*arkv1.GetRoundResponse, error) {
-	if req.GetTxid() != "" {
+	if len(req.GetTxid()) <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "missing pool txid")
 	}
 
