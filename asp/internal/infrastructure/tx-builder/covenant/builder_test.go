@@ -117,7 +117,11 @@ func (*mockedWalletService) Transfer(ctx context.Context, outs []ports.TxOutput)
 	return createTestPoolTx(1000, (450+500)*1)
 }
 
-func (*mockedWalletService) SignPsetWithKey(ctx context.Context, pset string, inputIndex int) (string, error) {
+func (*mockedWalletService) SignPsetWithKey(ctx context.Context, pset string, inputIndex []int) (string, error) {
+	panic("unimplemented")
+}
+
+func (*mockedWalletService) GetTransaction(ctx context.Context, txid string) (string, uint64, error) {
 	panic("unimplemented")
 }
 

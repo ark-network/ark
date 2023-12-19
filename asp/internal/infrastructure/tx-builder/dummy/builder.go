@@ -27,11 +27,9 @@ func NewTxBuilder(net network.Network) ports.TxBuilder {
 	return &txBuilder{net}
 }
 
-func (*txBuilder) BuildSweepTx(
-	wallet ports.WalletService,
-	tree domain.CongestionTree,
-) (signedSweepTx string, err error) {
-	return "", nil
+// BuildSweepTx implements ports.TxBuilder.
+func (*txBuilder) BuildSweepTx(wallet ports.WalletService, inputs []ports.SweepInput) (signedSweepTx string, err error) {
+	panic("unimplemented")
 }
 
 // GetLifetime always returns 7days for dummy tx builder (no timeout to sweep)

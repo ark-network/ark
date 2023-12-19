@@ -46,3 +46,58 @@ func (c CongestionTree) NumberOfNodes() int {
 	}
 	return count
 }
+
+func (c CongestionTree) SubTree(newRootTxid string) CongestionTree {
+	var newRoot Node
+	found := false
+	levelIndex := 0
+
+	for index, level := range c {
+		for _, node := range level {
+			if node.Txid == newRootTxid {
+				newRoot = Node{
+					Txid: node.Txid,
+					Tx:   node.Tx,
+					Leaf: node.Leaf,
+				}
+
+				if newRoot.Leaf {
+					return [][]Node{{newRoot}}
+				}
+
+				levelIndex = index
+				found = true
+				break
+			}
+		}
+
+		if found {
+			break
+		}
+	}
+
+	if !found {
+		return nil
+	}
+
+	subTree := CongestionTree{[]Node{newRoot}}
+
+	for i := levelIndex + 1; i < len(c); i++ {
+		children := make([]Node, 0)
+
+		for _, node := range subTree[len(subTree)-1] {
+			if node.Leaf {
+				continue
+			}
+
+			children = append(children, c.Children(node.Txid)...)
+		}
+
+		if len(children) == 0 {
+			break
+		}
+		subTree = append(subTree, children)
+	}
+
+	return subTree
+}

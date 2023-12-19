@@ -6,7 +6,10 @@ import (
 
 	pb "github.com/ark-network/ark/api-spec/protobuf/gen/ocean/v1"
 	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/vulpemventures/go-elements/psetv2"
+	"github.com/vulpemventures/go-elements/transaction"
 )
 
 const msatsPerByte = 110
@@ -46,6 +49,18 @@ func (s *service) Transfer(
 	return res.GetTxHex(), nil
 }
 
+func (s *service) GetTransaction(
+	ctx context.Context, txid string,
+) (string, uint64, error) {
+	res, err := s.txClient.GetTransaction(ctx, &pb.GetTransactionRequest{
+		Txid: txid,
+	})
+	if err != nil {
+		return "", 0, err
+	}
+	return res.GetTxHex(), uint64(res.GetBlockDetails().Timestamp), nil
+}
+
 func (s *service) BroadcastTransaction(
 	ctx context.Context, txHex string,
 ) (string, error) {
@@ -58,6 +73,99 @@ func (s *service) BroadcastTransaction(
 		return "", err
 	}
 	return res.GetTxid(), nil
+}
+
+func (s *service) SignPsetWithKey(ctx context.Context, b64 string, indexes []int) (string, error) {
+	pset, err := psetv2.NewPsetFromBase64(b64)
+	if err != nil {
+		return "", err
+	}
+
+	if indexes == nil {
+		for i := 0; i < len(pset.Inputs); i++ {
+			indexes = append(indexes, i)
+		}
+	}
+
+	key, extendedKey, err := s.getPubkey(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	extendedKeyPubKey, err := extendedKey.ECPubKey()
+	if err != nil {
+		return "", err
+	}
+
+	pset.Global.Xpubs = []psetv2.Xpub{{
+		ExtendedKey:       extendedKeyPubKey.SerializeCompressed(),
+		MasterFingerprint: extendedKey.ParentFingerprint(),
+		DerivationPath:    derivationPath,
+	}}
+
+	updater, err := psetv2.NewUpdater(pset)
+	if err != nil {
+		return "", err
+	}
+
+	bip32derivation := psetv2.DerivationPathWithPubKey{
+		PubKey:               key.SerializeCompressed(),
+		MasterKeyFingerprint: extendedKey.ParentFingerprint(),
+		Bip32Path:            derivationPath,
+	}
+
+	for _, i := range indexes {
+		if len(pset.Inputs[i].TapLeafScript) == 0 {
+			return "", fmt.Errorf("no tap leaf script found for input %d", i)
+		}
+
+		leafHash := pset.Inputs[i].TapLeafScript[0].TapHash()
+
+		if err := updater.AddInTapBip32Derivation(i, psetv2.TapDerivationPathWithPubKey{
+			DerivationPathWithPubKey: bip32derivation,
+			LeafHashes:               [][]byte{leafHash[:]},
+		}); err != nil {
+			return "", err
+		}
+
+		if err := updater.AddInSighashType(i, txscript.SigHashDefault); err != nil {
+			return "", err
+		}
+
+		prevoutHex, _, err := s.GetTransaction(
+			ctx,
+			chainhash.Hash(pset.Inputs[i].PreviousTxid).String(),
+		)
+		if err != nil {
+			return "", err
+		}
+
+		prevoutTx, err := transaction.NewTxFromHex(prevoutHex)
+		if err != nil {
+			return "", err
+		}
+
+		prevoutOutput := prevoutTx.Outputs[pset.Inputs[i].PreviousTxIndex]
+
+		if err := updater.AddInWitnessUtxo(i, prevoutOutput); err != nil {
+			return "", err
+		}
+	}
+
+	unsignedPset, err := pset.ToBase64()
+	if err != nil {
+		return "", err
+	}
+
+	signedPset, err := s.txClient.SignPsetWithSchnorrKey(ctx, &pb.SignPsetWithSchnorrKeyRequest{
+		Tx:          unsignedPset,
+		SighashType: uint32(txscript.SigHashDefault),
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return signedPset.GetSignedTx(), nil
 }
 
 type outputList []ports.TxOutput

@@ -100,7 +100,7 @@ func sweepScript(pubkey *secp256k1.PublicKey, seconds uint) ([]byte, error) {
 }
 
 // decodeSweepScript returns the lifetime of the sweep script if it is valid
-func decodeSweepScript(script []byte) (isSweepLeaf bool, lifetime uint) {
+func decodeSweepScript(script []byte) (isSweepLeaf bool, sequence []byte) {
 	checkSequenceVerifyOpcodeIndex := -1
 	for i, op := range script {
 		if op == txscript.OP_CHECKSEQUENCEVERIFY {
@@ -109,15 +109,12 @@ func decodeSweepScript(script []byte) (isSweepLeaf bool, lifetime uint) {
 		}
 	}
 	if checkSequenceVerifyOpcodeIndex == -1 {
-		return false, 0
+		return false, nil
 	}
 
-	lifetime, err := common.BIP68Decode(script[:checkSequenceVerifyOpcodeIndex])
-	if err != nil {
-		return false, 0
-	}
+	sequence = script[:checkSequenceVerifyOpcodeIndex]
 
-	return true, lifetime
+	return true, sequence
 }
 
 // sweepTapLeaf returns a taproot leaf letting the owner of the key to spend the output after a given timeDelta

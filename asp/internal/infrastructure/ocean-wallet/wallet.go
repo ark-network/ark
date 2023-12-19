@@ -12,26 +12,39 @@ import (
 
 const accountLabel = "ark"
 
-func (s *service) GetPubkey(ctx context.Context) (*secp256k1.PublicKey, error) {
+var derivationPath = []uint32{0, 0}
+
+func (s *service) getPubkey(ctx context.Context) (*secp256k1.PublicKey, *hdkeychain.ExtendedKey, error) {
 	res, err := s.walletClient.GetInfo(ctx, &pb.GetInfoRequest{})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(res.GetAccounts()) <= 0 {
-		return nil, fmt.Errorf("wallet is locked")
+		return nil, nil, fmt.Errorf("wallet is locked")
 	}
 	xpub := res.GetAccounts()[0].GetXpubs()[0]
 	node, err := hdkeychain.NewKeyFromString(xpub)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	for i := 0; i < 2; i++ {
-		node, err = node.Derive(0)
+	for _, i := range derivationPath {
+		node, err = node.Derive(i)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
-	return node.ECPubKey()
+	key, err := node.ECPubKey()
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return key, node, nil
+}
+
+func (s *service) GetPubkey(ctx context.Context) (*secp256k1.PublicKey, error) {
+	key, _, err := s.getPubkey(ctx)
+	return key, err
 }
 
 func (s *service) Status(

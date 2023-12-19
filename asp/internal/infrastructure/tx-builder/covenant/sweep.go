@@ -1,63 +1,77 @@
 package txbuilder
 
 import (
+	"encoding/binary"
 	"fmt"
 
 	"github.com/ark-network/ark/internal/core/ports"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/vulpemventures/go-elements/address"
-	"github.com/vulpemventures/go-elements/elementsutil"
 	"github.com/vulpemventures/go-elements/psetv2"
 )
 
 func sweepTransaction(
-	wallet ports.WalletService,
-	input psetv2.Input,
+	sweepInputs []ports.SweepInput,
 	receivingAddress string,
+	lbtc string,
 	fees uint64,
-) (string, error) {
+) (*psetv2.Pset, error) {
 	sweepPset, err := psetv2.New(nil, nil, nil)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	updater, err := psetv2.NewUpdater(sweepPset)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	updater.AddInputs([]psetv2.InputArgs{
-		{
-			Txid:     chainhash.Hash(input.PreviousTxid).String(),
-			TxIndex:  input.PreviousTxIndex,
-			Sequence: 1,
-		},
-	})
+	amount := uint64(0)
+
+	for i, input := range sweepInputs {
+		if err := updater.AddInputs([]psetv2.InputArgs{input.InputArgs}); err != nil {
+			return nil, err
+		}
+
+		var sweepLeaf psetv2.TapLeafScript
+		for _, leaf := range input.Leaves {
+			if isSweep, sequence := decodeSweepScript(leaf.Script); isSweep {
+				sweepLeaf = leaf
+				updater.Pset.Inputs[i].Sequence = binary.LittleEndian.Uint32(sequence)
+				break
+			}
+		}
+
+		if sweepLeaf.Script == nil {
+			return nil, fmt.Errorf("sweep leaf not found")
+		}
+
+		if err := updater.AddInTapLeafScript(i, sweepLeaf); err != nil {
+			return nil, err
+		}
+
+		amount += input.Amount
+	}
 
 	script, err := address.ToOutputScript(receivingAddress)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	value, err := elementsutil.ValueFromBytes(input.WitnessUtxo.Value)
-	if err != nil {
-		return "", err
-	}
-
-	if value-fees < 0 {
-		return "", fmt.Errorf("insufficient funds")
+	if amount-fees < 0 {
+		return nil, fmt.Errorf("insufficient funds")
 	}
 
 	updater.AddOutputs([]psetv2.OutputArgs{
 		{
-			Asset:  elementsutil.AssetHashFromBytes(input.WitnessUtxo.Asset),
-			Amount: value - fees,
+			Asset:  lbtc,
+			Amount: amount - fees,
 			Script: script,
 		},
 		{
-			Asset:  elementsutil.AssetHashFromBytes(input.WitnessUtxo.Asset),
+			Asset:  lbtc,
 			Amount: fees,
 		},
 	})
 
+	return sweepPset, nil
 }

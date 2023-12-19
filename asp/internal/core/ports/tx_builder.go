@@ -3,7 +3,14 @@ package ports
 import (
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/vulpemventures/go-elements/psetv2"
 )
+
+type SweepInput struct {
+	InputArgs psetv2.InputArgs
+	Leaves    []psetv2.TapLeafScript
+	Amount    uint64
+}
 
 type TxBuilder interface {
 	BuildPoolTx(
@@ -16,6 +23,6 @@ type TxBuilder interface {
 	GetLifetime(tree domain.CongestionTree) (int64, error)
 	BuildSweepTx(
 		wallet WalletService,
-		tree domain.CongestionTree,
+		inputs []SweepInput,
 	) (signedSweepTx string, err error)
 }

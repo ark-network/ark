@@ -15,7 +15,8 @@ type WalletService interface {
 	) (string, error)
 	Transfer(ctx context.Context, outs []TxOutput) (string, error)
 	BroadcastTransaction(ctx context.Context, txHex string) (string, error)
-	SignPsetWithKey(ctx context.Context, pset string, inputIndex int) (string, error)
+	SignPsetWithKey(ctx context.Context, pset string, inputIndexes []int) (string, error) // inputIndexes == nil means sign all inputs
+	GetTransaction(ctx context.Context, txid string) (txhex string, blocktime uint64, err error)
 	Close()
 }
 

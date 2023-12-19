@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"github.com/ark-network/ark/internal/core/domain"
 	dbtypes "github.com/ark-network/ark/internal/infrastructure/db/types"
@@ -93,6 +94,25 @@ func (r *roundRepository) GetRoundWithTxid(
 	}
 	round := &rounds[0]
 	return round, nil
+}
+
+func (r *roundRepository) GetExpiredRounds(
+	ctx context.Context,
+) ([]*domain.Round, error) {
+	nowTimestamp := time.Now().Unix()
+	query := badgerhold.Where("Stage.Ended").Eq(true).And("Stage.Failed").Eq(false).And("SweepTxid").Ne("").And("ExpirationTimestamp").Lt(nowTimestamp)
+	rounds, err := r.findRound(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*domain.Round, 0, len(rounds))
+
+	for _, round := range rounds {
+		result = append(result, &round)
+	}
+
+	return result, nil
 }
 
 func (r *roundRepository) Close() {

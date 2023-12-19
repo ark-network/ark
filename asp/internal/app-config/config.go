@@ -9,6 +9,7 @@ import (
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/ark-network/ark/internal/infrastructure/db"
 	oceanwallet "github.com/ark-network/ark/internal/infrastructure/ocean-wallet"
+	"github.com/ark-network/ark/internal/infrastructure/sweeper/covenant"
 	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenant"
 	txbuilderdummy "github.com/ark-network/ark/internal/infrastructure/tx-builder/dummy"
 	log "github.com/sirupsen/logrus"
@@ -42,6 +43,7 @@ type Config struct {
 	svc       application.Service
 	wallet    ports.WalletService
 	txBuilder ports.TxBuilder
+	sweeper   ports.SweeperService
 }
 
 func (c *Config) Validate() error {
@@ -75,6 +77,9 @@ func (c *Config) Validate() error {
 	if err := c.appService(); err != nil {
 		return err
 	}
+	if err := c.sweeperService(); err != nil {
+		return err
+	}
 	if c.RoundLifetime <= 0 {
 		return fmt.Errorf("invalid round lifetime, must be greater than 0")
 	}
@@ -83,6 +88,14 @@ func (c *Config) Validate() error {
 
 func (c *Config) AppService() application.Service {
 	return c.svc
+}
+
+func (c *Config) SweeperEnabled() bool {
+	return c.sweeper != nil
+}
+
+func (c *Config) SweeperService() ports.SweeperService {
+	return c.sweeper
 }
 
 func (c *Config) repoManager() error {
@@ -138,6 +151,25 @@ func (c *Config) txBuilderService() error {
 	}
 
 	c.txBuilder = svc
+	return nil
+}
+
+func (c *Config) sweeperService() error {
+	var svc ports.SweeperService
+	var err error
+	switch c.TxBuilderType {
+	case "covenant":
+		svc = covenant.NewSweeper(c.wallet, c.repo, c.txBuilder, func(err error) {
+			log.Println(err.Error())
+		})
+	default:
+		return fmt.Errorf("unknown sweeper type")
+	}
+	if err != nil {
+		return err
+	}
+
+	c.sweeper = svc
 	return nil
 }
 

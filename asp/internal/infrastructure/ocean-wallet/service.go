@@ -67,10 +67,6 @@ func NewService(addr string) (ports.WalletService, error) {
 	return svc, nil
 }
 
-func (s *service) SignPsetWithKey(ctx context.Context, pset string, inputIndex int) (string, error) {
-	return "", fmt.Errorf("not implemented")
-}
-
 func (s *service) Close() {
 	s.conn.Close()
 }

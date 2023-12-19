@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -30,6 +31,52 @@ func NewTxBuilder(net network.Network, roundLifetime uint) ports.TxBuilder {
 		net:           &net,
 		roundLifetime: roundLifetime,
 	}
+}
+
+// BuildSweepTx implements ports.TxBuilder.
+func (b *txBuilder) BuildSweepTx(wallet ports.WalletService, inputs []ports.SweepInput) (signedSweepTx string, err error) {
+	ctx := context.Background()
+
+	sweepAddress, err := wallet.DeriveAddresses(ctx, 1)
+	if err != nil {
+		return "", err
+	}
+
+	sweepPset, err := sweepTransaction(
+		inputs,
+		sweepAddress[0],
+		b.net.AssetID,
+		400,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	sweepPsetBase64, err := sweepPset.ToBase64()
+	if err != nil {
+		return "", err
+	}
+
+	signedSweepPsetB64, err := wallet.SignPsetWithKey(ctx, sweepPsetBase64, nil)
+	if err != nil {
+		return "", err
+	}
+
+	signedPset, err := psetv2.NewPsetFromBase64(signedSweepPsetB64)
+	if err != nil {
+		return "", err
+	}
+
+	if err := psetv2.FinalizeAll(signedPset); err != nil {
+		return "", err
+	}
+
+	extractedTx, err := psetv2.Extract(signedPset)
+	if err != nil {
+		return "", err
+	}
+
+	return extractedTx.ToHex()
 }
 
 func p2wpkhScript(publicKey *secp256k1.PublicKey, net *network.Network) ([]byte, error) {
@@ -71,8 +118,13 @@ func (b *txBuilder) GetLifetime(tree domain.CongestionTree) (int64, error) {
 	input := pset.Inputs[0]
 
 	for _, leaf := range input.TapLeafScript {
-		isSweep, lifetime := decodeSweepScript(leaf.Script)
+		isSweep, sequence := decodeSweepScript(leaf.Script)
 		if isSweep {
+			lifetime, err := common.BIP68Decode(sequence)
+			if err != nil {
+				return 0, err
+			}
+
 			return int64(lifetime), nil
 		}
 	}
