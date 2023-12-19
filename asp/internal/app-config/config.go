@@ -80,7 +80,8 @@ func (c *Config) Validate() error {
 	if err := c.sweeperService(); err != nil {
 		return err
 	}
-	if c.RoundLifetime <= 0 {
+	// round life time must be a multiple of 512
+	if c.RoundLifetime <= 0 && c.RoundLifetime%512 != 0 {
 		return fmt.Errorf("invalid round lifetime, must be greater than 0")
 	}
 	return nil
@@ -159,9 +160,17 @@ func (c *Config) sweeperService() error {
 	var err error
 	switch c.TxBuilderType {
 	case "covenant":
-		svc = covenant.NewSweeper(c.wallet, c.repo, c.txBuilder, func(err error) {
-			log.Println(err.Error())
-		})
+		svc = covenant.NewSweeper(
+			c.wallet,
+			c.repo,
+			c.txBuilder,
+			func(err error) {
+				log.Println(err.Error())
+			},
+			func(msg string) {
+				log.Debug(msg)
+			})
+
 	default:
 		return fmt.Errorf("unknown sweeper type")
 	}

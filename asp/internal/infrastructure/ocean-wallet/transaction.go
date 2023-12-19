@@ -2,6 +2,7 @@ package oceanwallet
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 
 	pb "github.com/ark-network/ark/api-spec/protobuf/gen/ocean/v1"
@@ -87,19 +88,20 @@ func (s *service) SignPsetWithKey(ctx context.Context, b64 string, indexes []int
 		}
 	}
 
-	key, extendedKey, err := s.getPubkey(ctx)
+	key, masterKey, err := s.getPubkey(ctx)
 	if err != nil {
 		return "", err
 	}
 
-	extendedKeyPubKey, err := extendedKey.ECPubKey()
+	fingerprint := binary.LittleEndian.Uint32(masterKey.FingerPrint)
+	extendedKey, err := masterKey.Serialize()
 	if err != nil {
 		return "", err
 	}
 
 	pset.Global.Xpubs = []psetv2.Xpub{{
-		ExtendedKey:       extendedKeyPubKey.SerializeCompressed(),
-		MasterFingerprint: extendedKey.ParentFingerprint(),
+		ExtendedKey:       extendedKey[:len(extendedKey)-4],
+		MasterFingerprint: fingerprint,
 		DerivationPath:    derivationPath,
 	}}
 
@@ -110,7 +112,7 @@ func (s *service) SignPsetWithKey(ctx context.Context, b64 string, indexes []int
 
 	bip32derivation := psetv2.DerivationPathWithPubKey{
 		PubKey:               key.SerializeCompressed(),
-		MasterKeyFingerprint: extendedKey.ParentFingerprint(),
+		MasterKeyFingerprint: fingerprint,
 		Bip32Path:            derivationPath,
 	}
 

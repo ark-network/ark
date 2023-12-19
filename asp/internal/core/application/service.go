@@ -333,7 +333,7 @@ func (s *service) finalizeRound() {
 	}
 
 	changes, _ = round.EndFinalization(forfeitTxs, txid, now+lifetime)
-	log.Debugf("finalized round %s with pool tx %s", round.Id, round.Txid)
+	log.Debugf("finalized round %s with pool tx %s (expire %d)", round.Id, round.Txid, round.ExpirationTimestamp)
 }
 
 func (s *service) updateProjectionStore(round *domain.Round) {

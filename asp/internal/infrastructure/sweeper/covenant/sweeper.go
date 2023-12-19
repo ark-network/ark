@@ -19,23 +19,27 @@ type sweeper struct {
 	stop chan struct{}
 
 	logError func(err error)
+	logDebug func(msg string)
 }
 
 // Start implements ports.SweeperService.
 func (s *sweeper) Start() error {
 	s.stop = make(chan struct{}, 1)
-	timer := time.NewTicker(1 * time.Minute)
+	timer := time.NewTicker(5 * time.Second)
 
 	go func() {
 		for {
 			select {
 			case <-timer.C:
+				s.logDebug("sweeping routine started at " + fmt.Sprint(time.Now().Unix()))
+
 				// find outputs to sweep, build sweep tx and broadcast it
 				toSweepOutputs, rounds, err := s.findOutputsToSweep()
 				if err != nil {
 					s.logError(fmt.Errorf("error while finding outputs to sweep: %w", err))
 					continue
 				}
+				s.logDebug(fmt.Sprintf("found %d outputs to sweep", len(toSweepOutputs)))
 
 				if len(toSweepOutputs) == 0 {
 					continue
@@ -49,13 +53,7 @@ func (s *sweeper) Start() error {
 
 				ctx := context.Background()
 
-				signedSweepTx, err := s.wallet.SignPsetWithKey(ctx, sweepTx, nil)
-				if err != nil {
-					s.logError(fmt.Errorf("error while signing sweep tx: %w", err))
-					continue
-				}
-
-				txid, err := s.wallet.BroadcastTransaction(ctx, signedSweepTx)
+				txid, err := s.wallet.BroadcastTransaction(ctx, sweepTx)
 				if err != nil {
 					s.logError(fmt.Errorf("error while broadcasting sweep tx: %w", err))
 					continue
@@ -76,7 +74,7 @@ func (s *sweeper) Start() error {
 						continue
 					}
 
-					if err := roundsRepo.AddOrUpdateRound(ctx, *r); err != nil {
+					if err := roundsRepo.AddOrUpdateRound(ctx, r); err != nil {
 						s.logError(fmt.Errorf("error while updating round: %w", err))
 						continue
 					}
@@ -102,26 +100,29 @@ func NewSweeper(
 	repoManager ports.RepoManager,
 	builder ports.TxBuilder,
 	log func(error),
+	debug func(string),
 ) ports.SweeperService {
 	return &sweeper{
 		wallet:      wallet,
 		repoManager: repoManager,
 		builder:     builder,
 		logError:    log,
+		logDebug:    debug,
 	}
 }
 
 // find outputs to sweep search for expired rounds and check their congestion tree in order to find outputs to sweep
 // it also update round information if the tree has been spent
 // TODO handle the case where the whole tree is on-chain: should be removed from the db?
-func (s *sweeper) findOutputsToSweep() ([]ports.SweepInput, []*domain.Round, error) {
+func (s *sweeper) findOutputsToSweep() ([]ports.SweepInput, []domain.Round, error) {
 	expiredRounds, err := s.repoManager.Rounds().GetExpiredRounds(context.Background())
 	if err != nil {
 		return nil, nil, err
 	}
+	s.logDebug(fmt.Sprintf("found %d expired rounds", len(expiredRounds)))
 
 	toSweep := make([]ports.SweepInput, 0)
-	rounds := make([]*domain.Round, 0)
+	rounds := make([]domain.Round, 0)
 
 	for _, round := range expiredRounds {
 		node := round.CongestionTree.Root()
@@ -169,7 +170,7 @@ func (s *sweeper) findOutputsToSweep() ([]ports.SweepInput, []*domain.Round, err
 
 			round.ExpirationTimestamp = int64(rootTxBlocktime) + lifetime
 
-			if err := s.repoManager.Rounds().AddOrUpdateRound(context.Background(), *round); err != nil {
+			if err := s.repoManager.Rounds().AddOrUpdateRound(context.Background(), round); err != nil {
 				s.logError(fmt.Errorf("AddOrUpdateRound error: %w", err))
 				continue
 			}
@@ -189,7 +190,7 @@ func (s *sweeper) findOutputsToSweep() ([]ports.SweepInput, []*domain.Round, err
 
 			round.ExpirationTimestamp = int64(rootTxBlocktime) + lifetime
 
-			if err := s.repoManager.Rounds().AddOrUpdateRound(context.Background(), *round); err != nil {
+			if err := s.repoManager.Rounds().AddOrUpdateRound(context.Background(), round); err != nil {
 				s.logError(fmt.Errorf("AddOrUpdateRound error: %w", err))
 				continue
 			}
