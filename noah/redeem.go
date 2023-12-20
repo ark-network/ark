@@ -7,6 +7,7 @@ import (
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/urfave/cli/v2"
+	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/psetv2"
 )
 
@@ -41,12 +42,26 @@ var redeemCommand = cli.Command{
 }
 
 func redeemAction(ctx *cli.Context) error {
-	address := ctx.String("address")
+	addr := ctx.String("address")
 	amount := ctx.Uint64("amount")
 	force := ctx.Bool("force")
 
-	if len(address) <= 0 {
+	if len(addr) <= 0 {
 		return fmt.Errorf("missing address flag (--address)")
+	}
+	if _, err := address.ToOutputScript(addr); err != nil {
+		return fmt.Errorf("invalid onchain address")
+	}
+	if isConf, _ := address.IsConfidential(addr); isConf {
+		return fmt.Errorf("invalid onchain address: must be unconfidential")
+	}
+	net, err := address.NetworkForAddress(addr)
+	if err != nil {
+		return fmt.Errorf("invalid onchain address: unknown network")
+	}
+	_, liquidNet, _ := getNetwork()
+	if net.Name != liquidNet.Name {
+		return fmt.Errorf("invalid onchain address: must be for %s network", liquidNet.Name)
 	}
 
 	if !force && amount <= 0 {
@@ -54,10 +69,10 @@ func redeemAction(ctx *cli.Context) error {
 	}
 
 	if force {
-		return unilateralRedeem(address)
+		return unilateralRedeem(addr)
 	}
 
-	return collaborativeRedeem(ctx, address, amount)
+	return collaborativeRedeem(ctx, addr, amount)
 }
 
 func collaborativeRedeem(ctx *cli.Context, address string, amount uint64) error {
