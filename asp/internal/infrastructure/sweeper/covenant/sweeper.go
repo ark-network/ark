@@ -25,7 +25,7 @@ type sweeper struct {
 // Start implements ports.SweeperService.
 func (s *sweeper) Start() error {
 	s.stop = make(chan struct{}, 1)
-	timer := time.NewTicker(5 * time.Second)
+	timer := time.NewTicker(30 * time.Second)
 
 	go func() {
 		for {
@@ -52,6 +52,8 @@ func (s *sweeper) Start() error {
 				}
 
 				ctx := context.Background()
+
+				s.logDebug(fmt.Sprintf("broadcasting sweep tx: %s", sweepTx))
 
 				txid, err := s.wallet.BroadcastTransaction(ctx, sweepTx)
 				if err != nil {

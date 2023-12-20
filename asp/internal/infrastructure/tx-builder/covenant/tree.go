@@ -71,17 +71,17 @@ func checksigScript(pubkey *secp256k1.PublicKey) ([]byte, error) {
 	return txscript.NewScriptBuilder().AddData(key).AddOp(txscript.OP_CHECKSIG).Script()
 }
 
-// checkSequenceVerifyScript without checksig
+// simple csv script assuming seconds is modulo 512
 func checkSequenceVerifyScript(seconds uint) ([]byte, error) {
 	sequence, err := common.BIP68Encode(seconds)
 	if err != nil {
 		return nil, err
 	}
 
-	return append(sequence, []byte{
+	return txscript.NewScriptBuilder().AddData(sequence).AddOps([]byte{
 		txscript.OP_CHECKSEQUENCEVERIFY,
 		txscript.OP_DROP,
-	}...), nil
+	}).Script()
 }
 
 // checkSequenceVerifyScript + checksig
@@ -112,7 +112,9 @@ func decodeSweepScript(script []byte) (isSweepLeaf bool, sequence []byte) {
 		return false, nil
 	}
 
-	sequence = script[:checkSequenceVerifyOpcodeIndex]
+	// sequence is the byte array before OP_CHECKSEQUENCEVERIFY
+	// remove the first byte (OP_DATA_X)
+	sequence = script[1:checkSequenceVerifyOpcodeIndex]
 
 	return true, sequence
 }
