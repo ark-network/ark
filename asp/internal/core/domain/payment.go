@@ -99,8 +99,13 @@ func (k VtxoKey) Hash() string {
 }
 
 type Receiver struct {
-	Pubkey string
-	Amount uint64
+	Pubkey         string
+	Amount         uint64
+	OnchainAddress string
+}
+
+func (r Receiver) IsOnchain() bool {
+	return len(r.OnchainAddress) > 0
 }
 
 type Vtxo struct {
