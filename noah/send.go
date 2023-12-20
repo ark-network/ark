@@ -191,8 +191,7 @@ func sendAction(ctx *cli.Context) error {
 
 		if event.GetRoundFinalized() != nil {
 			return printJSON(map[string]interface{}{
-				"paymentId": registerResponse.GetId(),
-				"poolTxId":  event.GetRoundFinalized().GetPoolTxid(),
+				"pool_txid": event.GetRoundFinalized().GetPoolTxid(),
 			})
 		}
 	}

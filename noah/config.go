@@ -80,8 +80,7 @@ func connectAction(ctx *cli.Context) error {
 	}
 
 	return printJSON(map[string]string{
-		"ark_url":    url,
-		"ark_pubkey": resp.Pubkey,
-		"network":    network,
+		"ark_url": url,
+		"network": network,
 	})
 }

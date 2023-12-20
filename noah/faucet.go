@@ -62,7 +62,7 @@ func faucetAction(ctx *cli.Context) error {
 
 		if event.GetRoundFinalized() != nil {
 			return printJSON(map[string]interface{}{
-				"poolTxId": event.GetRoundFinalized().GetPoolTxid(),
+				"pool_txid": event.GetRoundFinalized().GetPoolTxid(),
 			})
 		}
 	}
