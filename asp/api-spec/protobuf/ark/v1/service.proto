@@ -98,7 +98,9 @@ message Input {
 }
 
 message Output {
-  string pubkey = 1;
+  // Either the offchain or onchain address.
+  string address = 1;
+  // Amount to send in satoshis.
   uint64 amount = 2;
 }
 
