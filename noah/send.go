@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -49,7 +48,12 @@ func sendAction(ctx *cli.Context) error {
 		return fmt.Errorf("no receivers specified")
 	}
 
-	aspPubKey, err := getServiceProviderPublicKey()
+	offchainAddr, _, err := getAddress()
+	if err != nil {
+		return err
+	}
+
+	_, _, aspPubKey, err := common.DecodeAddress(offchainAddr)
 	if err != nil {
 		return err
 	}
@@ -58,7 +62,7 @@ func sendAction(ctx *cli.Context) error {
 	sumOfReceivers := uint64(0)
 
 	for _, receiver := range receiversJSON {
-		_, userKey, aspKey, err := common.DecodeAddress(receiver.To)
+		_, _, aspKey, err := common.DecodeAddress(receiver.To)
 		if err != nil {
 			return fmt.Errorf("invalid receiver address: %s", err)
 		}
@@ -71,10 +75,9 @@ func sendAction(ctx *cli.Context) error {
 			return fmt.Errorf("invalid amount: %d", receiver.Amount)
 		}
 
-		encodedKey := hex.EncodeToString(userKey.SerializeCompressed())
 		receiversOutput = append(receiversOutput, &arkv1.Output{
-			Pubkey: encodedKey,
-			Amount: uint64(receiver.Amount),
+			Address: receiver.To,
+			Amount:  uint64(receiver.Amount),
 		})
 		sumOfReceivers += receiver.Amount
 	}
@@ -95,17 +98,9 @@ func sendAction(ctx *cli.Context) error {
 	}
 
 	if changeAmount > 0 {
-		walletPrvKey, err := privateKeyFromPassword()
-		if err != nil {
-			return err
-		}
-
-		walletPubKey := walletPrvKey.PubKey()
-		encodedPubKey := hex.EncodeToString(walletPubKey.SerializeCompressed())
-
 		changeReceiver := &arkv1.Output{
-			Pubkey: encodedPubKey,
-			Amount: changeAmount,
+			Address: offchainAddr,
+			Amount:  changeAmount,
 		}
 		receiversOutput = append(receiversOutput, changeReceiver)
 	}

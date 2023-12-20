@@ -16,7 +16,7 @@ type vtxo struct {
 }
 
 func getVtxos(ctx *cli.Context, client arkv1.ArkServiceClient) ([]vtxo, error) {
-	addr, err := getAddress()
+	addr, _, err := getAddress()
 	if err != nil {
 		return nil, err
 	}

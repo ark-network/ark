@@ -10,6 +10,8 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/vulpemventures/go-elements/network"
+	"github.com/vulpemventures/go-elements/payment"
 	"golang.org/x/term"
 )
 
@@ -158,41 +160,53 @@ func computeBalance(vtxos []vtxo) uint64 {
 	return balance
 }
 
-func getNetwork() common.Network {
+func getNetwork() (*common.Network, *network.Network, error) {
 	state, err := getState()
 	if err != nil {
-		return common.MainNet
+		return nil, nil, err
 	}
 
-	network, ok := state["network"]
+	net, ok := state["network"]
 	if !ok {
-		return common.MainNet
+		return &common.MainNet, &network.Liquid, nil
 	}
-	if network == "testnet" {
-		return common.TestNet
+	if net == "testnet" {
+		return &common.TestNet, &network.Testnet, nil
 	}
-	return common.MainNet
+	return &common.MainNet, &network.Liquid, nil
 }
 
-func getAddress() (string, error) {
+func getAddress() (offchainAddr, onchainAddr string, err error) {
 	publicKey, err := getWalletPublicKey()
 	if err != nil {
-		return "", err
+		return
 	}
 
 	aspPublicKey, err := getServiceProviderPublicKey()
 	if err != nil {
-		return "", err
+		return
 	}
 
-	net := getNetwork()
-
-	addr, err := common.EncodeAddress(net.Addr, publicKey, aspPublicKey)
+	arkNet, liquidNet, err := getNetwork()
 	if err != nil {
-		return "", err
+		return
 	}
 
-	return addr, nil
+	arkAddr, err := common.EncodeAddress(arkNet.Addr, publicKey, aspPublicKey)
+	if err != nil {
+		return
+	}
+
+	p2wpkh := payment.FromPublicKey(publicKey, liquidNet, nil)
+	liquidAddr, err := p2wpkh.WitnessPubKeyHash()
+	if err != nil {
+		return
+	}
+
+	offchainAddr = arkAddr
+	onchainAddr = liquidAddr
+
+	return
 }
 
 func printJSON(resp interface{}) error {

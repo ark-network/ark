@@ -63,7 +63,10 @@ func initAction(ctx *cli.Context) error {
 
 	cypher := NewAES128Cypher()
 
-	net := getNetwork()
+	net, _, err := getNetwork()
+	if err != nil {
+		return err
+	}
 
 	publicKey, err := common.EncodePubKey(net.PubKey, privateKey.PubKey())
 	if err != nil {

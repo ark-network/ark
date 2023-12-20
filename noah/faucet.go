@@ -16,7 +16,7 @@ var faucetCommand = cli.Command{
 }
 
 func faucetAction(ctx *cli.Context) error {
-	addr, err := getAddress()
+	addr, _, err := getAddress()
 	if err != nil {
 		return err
 	}
