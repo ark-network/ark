@@ -1,6 +1,8 @@
 package domain
 
-import "context"
+import (
+	"context"
+)
 
 type RoundEventRepository interface {
 	Save(ctx context.Context, id string, events ...RoundEvent) error
@@ -20,4 +22,5 @@ type VtxoRepository interface {
 	SpendVtxos(ctx context.Context, vtxos []VtxoKey) error
 	GetVtxos(ctx context.Context, vtxos []VtxoKey) ([]Vtxo, error)
 	GetSpendableVtxosWithPubkey(ctx context.Context, pubkey string) ([]Vtxo, error)
+	DeleteVtxos(ctx context.Context, vtxos []VtxoKey) error
 }

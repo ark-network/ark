@@ -66,6 +66,10 @@ func (s *sweeper) Start() error {
 				eventsRepo := s.repoManager.Events()
 				roundsRepo := s.repoManager.Rounds()
 
+				// for each round:
+				// - update round info with sweep txid
+				// - update round events
+				// - delete vtxos
 				for _, r := range rounds {
 					events, err := r.Sweep(txid)
 					if err != nil {
@@ -80,6 +84,21 @@ func (s *sweeper) Start() error {
 
 					if err := roundsRepo.AddOrUpdateRound(ctx, r); err != nil {
 						s.logError(fmt.Errorf("error while updating round: %w", err))
+						continue
+					}
+
+					roundLeaves := r.CongestionTree.Leaves()
+					vtxoKeys := make([]domain.VtxoKey, 0, len(roundLeaves))
+
+					for _, leaf := range roundLeaves {
+						vtxoKeys = append(vtxoKeys, domain.VtxoKey{
+							Txid: leaf.Txid,
+							VOut: 0,
+						})
+					}
+
+					if err := s.repoManager.Vtxos().DeleteVtxos(ctx, vtxoKeys); err != nil {
+						s.logError(fmt.Errorf("error while deleting vtxos: %w", err))
 						continue
 					}
 				}

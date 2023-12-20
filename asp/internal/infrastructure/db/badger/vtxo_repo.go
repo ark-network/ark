@@ -83,6 +83,25 @@ func (r *vtxoRepository) GetSpendableVtxosWithPubkey(
 	return r.findVtxos(ctx, query)
 }
 
+func (r *vtxoRepository) DeleteVtxos(
+	ctx context.Context, vtxoKeys []domain.VtxoKey,
+) (err error) {
+	for _, vtxoKey := range vtxoKeys {
+		key := vtxoKey.Hash()
+		if ctx.Value("tx") != nil {
+			tx := ctx.Value("tx").(*badger.Txn)
+			err = r.store.TxDelete(tx, key, &domain.Vtxo{})
+		} else {
+			err = r.store.Delete(key, &domain.Vtxo{})
+		}
+	}
+
+	if err != nil && err == badgerhold.ErrNotFound {
+		err = nil
+	}
+	return
+}
+
 func (r *vtxoRepository) Close() {
 	r.store.Close()
 }
