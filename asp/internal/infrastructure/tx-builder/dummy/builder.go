@@ -209,18 +209,6 @@ func receiversFromPayments(
 	return
 }
 
-func getOnchainReceivers(payments []domain.Payment) []domain.Receiver {
-	receivers := make([]domain.Receiver, 0)
-	for _, payment := range payments {
-		for _, receiver := range payment.Receivers {
-			if receiver.IsOnchain() {
-				receivers = append(receivers, receiver)
-			}
-		}
-	}
-	return receivers
-}
-
 func sumReceivers(receivers []domain.Receiver) uint64 {
 	var sum uint64
 	for _, r := range receivers {
