@@ -102,6 +102,8 @@ func (r *Round) On(event RoundEvent, replayed bool) {
 		for _, p := range e.Payments {
 			r.Payments[p.Id] = p
 		}
+	case RoundSwept:
+		r.SweepTxid = e.Txid
 	}
 
 	if replayed {
@@ -206,7 +208,7 @@ func (r *Round) Sweep(txid string) ([]RoundEvent, error) {
 	if r.IsFailed() || !r.IsEnded() {
 		return nil, fmt.Errorf("not in a valid stage to sweep")
 	}
-	event := RoundSweeped{
+	event := RoundSwept{
 		Id:   r.Id,
 		Txid: txid,
 	}
@@ -240,10 +242,6 @@ func (r *Round) IsEnded() bool {
 
 func (r *Round) IsFailed() bool {
 	return r.Stage.Failed
-}
-
-func (r *Round) IsSweeped() bool {
-	return len(r.SweepTxid) > 0
 }
 
 func (r *Round) TotalInputAmount() uint64 {

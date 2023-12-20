@@ -408,6 +408,15 @@ func testEndFinalization(t *testing.T) {
 			require.Exactly(t, forfeitTxs, event.ForfeitTxs)
 			require.Exactly(t, round.EndingTimestamp, event.Timestamp)
 			require.Exactly(t, round.ExpirationTimestamp, event.ExpirationTimestamp)
+
+			events, err = round.Sweep(txid)
+			require.NoError(t, err)
+
+			eventSwept, ok := events[0].(domain.RoundSwept)
+			require.True(t, ok)
+			require.Equal(t, round.Id, eventSwept.Id)
+			require.Equal(t, txid, eventSwept.Txid)
+			require.Equal(t, round.SweepTxid, eventSwept.Txid)
 		})
 
 		t.Run("invalid", func(t *testing.T) {

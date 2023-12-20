@@ -31,7 +31,8 @@ func (s *sweeper) Start() error {
 		for {
 			select {
 			case <-timer.C:
-				s.logDebug("sweeping routine started at " + fmt.Sprint(time.Now().Unix()))
+				// fancy format data
+				timestamp := time.Now().Format("15:04:05")
 
 				// find outputs to sweep, build sweep tx and broadcast it
 				toSweepOutputs, rounds, err := s.findOutputsToSweep()
@@ -39,7 +40,8 @@ func (s *sweeper) Start() error {
 					s.logError(fmt.Errorf("error while finding outputs to sweep: %w", err))
 					continue
 				}
-				s.logDebug(fmt.Sprintf("found %d outputs to sweep", len(toSweepOutputs)))
+
+				s.logDebug(fmt.Sprintf("sweep routine start at %s (%d expired rounds, %d outputs)", timestamp, len(rounds), len(toSweepOutputs)))
 
 				if len(toSweepOutputs) == 0 {
 					continue
@@ -121,8 +123,6 @@ func (s *sweeper) findOutputsToSweep() ([]ports.SweepInput, []domain.Round, erro
 	if err != nil {
 		return nil, nil, err
 	}
-	s.logDebug(fmt.Sprintf("found %d expired rounds", len(expiredRounds)))
-
 	toSweep := make([]ports.SweepInput, 0)
 	rounds := make([]domain.Round, 0)
 

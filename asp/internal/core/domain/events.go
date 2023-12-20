@@ -9,7 +9,7 @@ func (r RoundFinalizationStarted) isEvent() {}
 func (r RoundFinalized) isEvent()           {}
 func (r RoundFailed) isEvent()              {}
 func (r PaymentsRegistered) isEvent()       {}
-func (r RoundSweeped) isEvent()             {}
+func (r RoundSwept) isEvent()               {}
 
 type RoundStarted struct {
 	Id        string
@@ -43,7 +43,7 @@ type PaymentsRegistered struct {
 	Payments []Payment
 }
 
-type RoundSweeped struct {
+type RoundSwept struct {
 	Id   string
 	Txid string
 }
