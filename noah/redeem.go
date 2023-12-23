@@ -140,9 +140,13 @@ func collaborativeRedeem(ctx *cli.Context, address string, amount uint64) error 
 		return err
 	}
 
-	pingStop := ping(ctx, client, &arkv1.PingRequest{
+	var pingStop func()
+	pingReq := &arkv1.PingRequest{
 		PaymentId: registerResponse.GetId(),
-	})
+	}
+	for pingStop == nil {
+		pingStop = ping(ctx, client, pingReq)
+	}
 
 	for {
 		event, err := stream.Recv()
@@ -158,6 +162,7 @@ func collaborativeRedeem(ctx *cli.Context, address string, amount uint64) error 
 		}
 
 		if event.GetRoundFinalization() != nil {
+			// stop pinging as soon as we receive some forfeit txs
 			pingStop()
 			forfeits := event.GetRoundFinalization().GetForfeitTxs()
 			signedForfeits := make([]string, 0)
@@ -181,7 +186,12 @@ func collaborativeRedeem(ctx *cli.Context, address string, amount uint64) error 
 				}
 			}
 
+			// if no forfeit txs have been signed, start pinging again and wait for the next round
 			if len(signedForfeits) == 0 {
+				pingStop = nil
+				for pingStop == nil {
+					pingStop = ping(ctx, client, pingReq)
+				}
 				continue
 			}
 

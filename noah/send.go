@@ -134,9 +134,13 @@ func sendAction(ctx *cli.Context) error {
 		return err
 	}
 
-	pingStop := ping(ctx, client, &arkv1.PingRequest{
+	var pingStop func()
+	pingReq := &arkv1.PingRequest{
 		PaymentId: registerResponse.GetId(),
-	})
+	}
+	for pingStop == nil {
+		pingStop = ping(ctx, client, pingReq)
+	}
 
 	for {
 		event, err := stream.Recv()
@@ -152,6 +156,7 @@ func sendAction(ctx *cli.Context) error {
 		}
 
 		if event.GetRoundFinalization() != nil {
+			// stop pinging as soon as we receive some forfeit txs
 			pingStop()
 			forfeits := event.GetRoundFinalization().GetForfeitTxs()
 			signedForfeits := make([]string, 0)
@@ -175,7 +180,12 @@ func sendAction(ctx *cli.Context) error {
 				}
 			}
 
+			// if no forfeit txs have been signed, start pinging again and wait for the next round
 			if len(signedForfeits) == 0 {
+				pingStop = nil
+				for pingStop == nil {
+					pingStop = ping(ctx, client, pingReq)
+				}
 				continue
 			}
 
@@ -202,14 +212,16 @@ func sendAction(ctx *cli.Context) error {
 // send 1 ping message every 5 seconds to signal to the ark service that we are still alive
 // returns a function that can be used to stop the pinging
 func ping(ctx *cli.Context, client arkv1.ArkServiceClient, req *arkv1.PingRequest) func() {
+	_, err := client.Ping(ctx.Context, req)
+	if err != nil {
+		return nil
+	}
+
 	ticker := time.NewTicker(5 * time.Second)
 
 	go func(t *time.Ticker) {
 		for range t.C {
-			_, err := client.Ping(ctx.Context, req)
-			if err != nil {
-				return
-			}
+			client.Ping(ctx.Context, req)
 		}
 	}(ticker)
 
