@@ -395,6 +395,10 @@ func (s *service) getNewVtxos(round *domain.Round) []domain.Vtxo {
 				var pubkey string
 				found := false
 				for _, r := range p.Receivers {
+					if r.IsOnchain() {
+						continue
+					}
+
 					buf, _ := hex.DecodeString(r.Pubkey)
 					pk, _ := secp256k1.ParsePubKey(buf)
 					script, _ := s.builder.GetLeafOutputScript(pk, s.pubkey)
