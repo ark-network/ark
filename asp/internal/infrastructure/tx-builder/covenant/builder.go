@@ -153,7 +153,7 @@ func (b *txBuilder) BuildPoolTx(
 ) (poolTx string, congestionTree domain.CongestionTree, err error) {
 	aspScriptBytes, err := p2wpkhScript(aspPubkey, b.net)
 	if err != nil {
-		return "", nil, err
+		return
 	}
 
 	aspScript := hex.EncodeToString(aspScriptBytes)
@@ -172,7 +172,7 @@ func (b *txBuilder) BuildPoolTx(
 		offchainReceivers,
 	)
 	if err != nil {
-		return "", nil, err
+		return
 	}
 
 	sharedOutputScriptHex := hex.EncodeToString(sharedOutputScript)
@@ -188,25 +188,27 @@ func (b *txBuilder) BuildPoolTx(
 		poolTxOuts = append(poolTxOuts, newOutput(script, receiver.Amount, b.net.AssetID))
 	}
 
-	poolTx, err = wallet.Transfer(ctx, poolTxOuts)
+	txHex, err := wallet.Transfer(ctx, poolTxOuts)
 	if err != nil {
-		return "", nil, err
+		return
 	}
 
-	poolTransaction, err := transaction.NewTxFromHex(poolTx)
+	tx, err := transaction.NewTxFromHex(txHex)
 	if err != nil {
-		return "", nil, err
+		return
 	}
 
-	congestionTree, err = makeTree(psetv2.InputArgs{
-		Txid:    poolTransaction.TxHash().String(),
+	tree, err := makeTree(psetv2.InputArgs{
+		Txid:    tx.TxHash().String(),
 		TxIndex: 0,
 	})
 	if err != nil {
-		return "", nil, err
+		return
 	}
 
-	return poolTx, congestionTree, nil
+	poolTx = txHex
+	congestionTree = tree
+	return
 }
 
 func connectorsToInputArgs(connectors []string) ([]psetv2.InputArgs, error) {
