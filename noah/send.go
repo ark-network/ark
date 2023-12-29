@@ -81,13 +81,13 @@ func sendAction(ctx *cli.Context) error {
 		})
 		sumOfReceivers += receiver.Amount
 	}
-	client, close, err := getArkClient(ctx)
+	client, close, err := getClientFromState(ctx)
 	if err != nil {
 		return err
 	}
 	defer close()
 
-	vtxos, err := getVtxos(ctx, client)
+	vtxos, err := getVtxos(ctx, client, offchainAddr)
 	if err != nil {
 		return err
 	}

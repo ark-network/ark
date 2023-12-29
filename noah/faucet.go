@@ -21,7 +21,7 @@ func faucetAction(ctx *cli.Context) error {
 		return err
 	}
 
-	client, close, err := getArkClient(ctx)
+	client, close, err := getClientFromState(ctx)
 	if err != nil {
 		return err
 	}

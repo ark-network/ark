@@ -15,12 +15,9 @@ type vtxo struct {
 	vout   uint32
 }
 
-func getVtxos(ctx *cli.Context, client arkv1.ArkServiceClient) ([]vtxo, error) {
-	addr, _, err := getAddress()
-	if err != nil {
-		return nil, err
-	}
-
+func getVtxos(
+	ctx *cli.Context, client arkv1.ArkServiceClient, addr string,
+) ([]vtxo, error) {
 	response, err := client.ListVtxos(ctx.Context, &arkv1.ListVtxosRequest{
 		Address: addr,
 	})
@@ -40,9 +37,20 @@ func getVtxos(ctx *cli.Context, client arkv1.ArkServiceClient) ([]vtxo, error) {
 	return vtxos, nil
 }
 
-// get the ark client and a function closing the connection
-func getArkClient(ctx *cli.Context) (arkv1.ArkServiceClient, func(), error) {
-	conn, err := getConn(ctx)
+func getClientFromState(ctx *cli.Context) (arkv1.ArkServiceClient, func(), error) {
+	state, err := getState()
+	if err != nil {
+		return nil, nil, err
+	}
+	addr, ok := state["ark_url"]
+	if !ok {
+		return nil, nil, fmt.Errorf("missing ark_url")
+	}
+	return getClient(ctx, addr)
+}
+
+func getClient(ctx *cli.Context, addr string) (arkv1.ArkServiceClient, func(), error) {
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -57,24 +65,4 @@ func getArkClient(ctx *cli.Context) (arkv1.ArkServiceClient, func(), error) {
 	}
 
 	return client, closeFn, nil
-}
-
-// connect to the ark rpc URL specified in the config
-func getConn(ctx *cli.Context) (*grpc.ClientConn, error) {
-	state, err := getState()
-	if err != nil {
-		return nil, err
-	}
-
-	rpcUrl, ok := state["ark_url"]
-	if !ok {
-		return nil, fmt.Errorf("missing ark_url")
-	}
-
-	conn, err := grpc.Dial(rpcUrl, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return nil, err
-	}
-
-	return conn, nil
 }
