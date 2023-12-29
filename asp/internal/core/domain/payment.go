@@ -9,6 +9,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const dustAmount = 450
+
 type Payment struct {
 	Id        string
 	Inputs    []Vtxo
@@ -71,7 +73,16 @@ func (p Payment) validate(ignoreOuts bool) error {
 	}
 	// Check that input and output and output amounts match.
 	inAmount := p.TotalInputAmount()
-	outAmount := p.TotalOutputAmount()
+	outAmount := uint64(0)
+	for _, r := range p.Receivers {
+		if len(r.OnchainAddress) <= 0 && len(r.Pubkey) <= 0 {
+			return fmt.Errorf("missing receiver destination")
+		}
+		if r.Amount < dustAmount {
+			return fmt.Errorf("receiver amount must be greater than dust")
+		}
+		outAmount += r.Amount
+	}
 	if inAmount != outAmount {
 		return fmt.Errorf("input and output amounts mismatch")
 	}
@@ -99,8 +110,13 @@ func (k VtxoKey) Hash() string {
 }
 
 type Receiver struct {
-	Pubkey string
-	Amount uint64
+	Pubkey         string
+	Amount         uint64
+	OnchainAddress string
+}
+
+func (r Receiver) IsOnchain() bool {
+	return len(r.OnchainAddress) > 0
 }
 
 type Vtxo struct {

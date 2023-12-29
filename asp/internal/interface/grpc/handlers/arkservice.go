@@ -2,11 +2,14 @@ package handlers
 
 import (
 	"context"
+	"encoding/hex"
 	"sync"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/internal/core/application"
 	"github.com/ark-network/ark/internal/core/domain"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -68,16 +71,12 @@ func (h *handler) RegisterPayment(ctx context.Context, req *arkv1.RegisterPaymen
 }
 
 func (h *handler) ClaimPayment(ctx context.Context, req *arkv1.ClaimPaymentRequest) (*arkv1.ClaimPaymentResponse, error) {
-	receivers := make([]domain.Receiver, 0, len(req.GetOutputs()))
-	for _, output := range req.GetOutputs() {
-		receivers = append(receivers, domain.Receiver{
-			Pubkey: output.GetPubkey(),
-			Amount: output.GetAmount(),
-		})
+	receivers, err := parseReceivers(req.GetOutputs())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	err := h.svc.ClaimVtxos(ctx, req.GetId(), receivers)
-	if err != nil {
+	if err := h.svc.ClaimVtxos(ctx, req.GetId(), receivers); err != nil {
 		return nil, err
 	}
 
@@ -97,7 +96,7 @@ func (h *handler) FinalizePayment(ctx context.Context, req *arkv1.FinalizePaymen
 }
 
 func (h *handler) Faucet(ctx context.Context, req *arkv1.FaucetRequest) (*arkv1.FaucetResponse, error) {
-	pubkey, err := parseAddress(req.GetAddress())
+	_, pubkey, _, err := parseAddress(req.GetAddress())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -163,18 +162,18 @@ func (h *handler) GetEventStream(_ *arkv1.GetEventStreamRequest, stream arkv1.Ar
 }
 
 func (h *handler) ListVtxos(ctx context.Context, req *arkv1.ListVtxosRequest) (*arkv1.ListVtxosResponse, error) {
-	pubkey, err := parseAddress(req.GetAddress())
+	hrp, userPubkey, aspPubkey, err := parseAddress(req.GetAddress())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	vtxos, err := h.svc.ListVtxos(ctx, pubkey)
+	vtxos, err := h.svc.ListVtxos(ctx, userPubkey)
 	if err != nil {
 		return nil, err
 	}
 
 	return &arkv1.ListVtxosResponse{
-		Vtxos: vtxoList(vtxos).toProto(),
+		Vtxos: vtxoList(vtxos).toProto(hrp, aspPubkey),
 	}, nil
 }
 
@@ -256,17 +255,23 @@ func (h *handler) listenToEvents() {
 
 type vtxoList []domain.Vtxo
 
-func (v vtxoList) toProto() []*arkv1.Vtxo {
+func (v vtxoList) toProto(hrp string, aspKey *secp256k1.PublicKey) []*arkv1.Vtxo {
 	list := make([]*arkv1.Vtxo, 0, len(v))
 	for _, vv := range v {
+		addr := vv.OnchainAddress
+		if vv.Pubkey != "" {
+			buf, _ := hex.DecodeString(vv.Pubkey)
+			key, _ := secp256k1.ParsePubKey(buf)
+			addr, _ = common.EncodeAddress(hrp, key, aspKey)
+		}
 		list = append(list, &arkv1.Vtxo{
 			Outpoint: &arkv1.Input{
 				Txid: vv.Txid,
 				Vout: vv.VOut,
 			},
 			Receiver: &arkv1.Output{
-				Pubkey: vv.Pubkey,
-				Amount: vv.Amount,
+				Address: addr,
+				Amount:  vv.Amount,
 			},
 			Spent: vv.Spent,
 		})

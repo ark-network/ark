@@ -116,9 +116,12 @@ func sweepTapLeaf(sweepKey *secp256k1.PublicKey) (*taproot.TapElementsLeaf, erro
 func forceSplitCoinTapLeaf(
 	leftKey, rightKey *secp256k1.PublicKey, leftAmount, rightAmount uint32,
 ) taproot.TapElementsLeaf {
-	nextScriptLeft := withOutput(0, schnorr.SerializePubKey(leftKey), leftAmount, true)
-	nextScriptRight := withOutput(1, schnorr.SerializePubKey(rightKey), rightAmount, false)
-	branchScript := append(nextScriptLeft, nextScriptRight...)
+	nextScriptLeft := withOutput(0, schnorr.SerializePubKey(leftKey), leftAmount, rightKey != nil)
+	branchScript := append([]byte{}, nextScriptLeft...)
+	if rightKey != nil {
+		nextScriptRight := withOutput(1, schnorr.SerializePubKey(rightKey), rightAmount, false)
+		branchScript = append(branchScript, nextScriptRight...)
+	}
 	return taproot.NewBaseTapElementsLeaf(branchScript)
 }
 
@@ -204,9 +207,7 @@ func buildCongestionTree(
 	if err != nil {
 		return nil, nil, err
 	}
-
 	leftOutput := rootPset.Outputs[0]
-	rightOutput := rootPset.Outputs[1]
 
 	leftWitnessProgram := leftOutput.Script[2:]
 	leftKey, err := schnorr.ParsePubKey(leftWitnessProgram)
@@ -214,14 +215,19 @@ func buildCongestionTree(
 		return nil, nil, err
 	}
 
-	rightWitnessProgram := rightOutput.Script[2:]
-	rightKey, err := schnorr.ParsePubKey(rightWitnessProgram)
-	if err != nil {
-		return nil, nil, err
+	var rightAmount uint32
+	var rightKey *secp256k1.PublicKey
+
+	if len(rootPset.Outputs) > 1 {
+		rightAmount = uint32(rootPset.Outputs[1].Value)
+		rightKey, err = schnorr.ParsePubKey(rootPset.Outputs[1].Script[2:])
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	goToTreeScript := forceSplitCoinTapLeaf(
-		leftKey, rightKey, uint32(leftOutput.Value), uint32(rightOutput.Value),
+		leftKey, rightKey, uint32(leftOutput.Value), rightAmount,
 	)
 
 	taprootTree := taproot.AssembleTaprootScriptTree(goToTreeScript, *sweepLeaf)

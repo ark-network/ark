@@ -11,12 +11,19 @@ var receiveCommand = cli.Command{
 }
 
 func receiveAction(ctx *cli.Context) error {
-	addr, err := getAddress()
+	offchainAddr, onchainAddr, err := getAddress()
 	if err != nil {
 		return err
 	}
+	state, err := getState()
+	if err != nil {
+		return err
+	}
+	relays := []string{state["ark_url"]}
 
 	return printJSON(map[string]interface{}{
-		"address": addr,
+		"offchain_address": offchainAddr,
+		"onchain_address":  onchainAddr,
+		"relays":           relays,
 	})
 }

@@ -10,12 +10,14 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/urfave/cli/v2"
+	"github.com/vulpemventures/go-elements/network"
 )
 
 const (
 	DATADIR_ENVVAR = "NOAH_DATADIR"
 	STATE_FILE     = "state.json"
-	defaultArkURL  = "ark://apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x?relays=arelay1qt6f8p7h5f6tm7fv2z5wg92sz92rn9desfhd5733se4lkrptqtdrq65987l-arelay1qt6f8p7h5f6tm7fv2z5wg92sz92rn9desfhd5733se4lkrptqtdrq65987l"
+	defaultArkURL  = "localhost:6000"
+	defaultNetwork = "testnet"
 )
 
 var (
@@ -23,6 +25,10 @@ var (
 
 	noahDataDirectory = common.AppDataDir("noah", false)
 	statePath         = filepath.Join(noahDataDirectory, STATE_FILE)
+	explorerUrl       = map[string]string{
+		network.Liquid.Name:  "https://blockstream.info/liquid/api",
+		network.Testnet.Name: "https://blockstream.info/liquidtestnet/api",
+	}
 
 	initialState = map[string]string{
 		"ark_url":               defaultArkURL,
@@ -30,7 +36,7 @@ var (
 		"encrypted_private_key": "",
 		"password_hash":         "",
 		"public_key":            "",
-		"network":               "mainnet",
+		"network":               defaultNetwork,
 	}
 )
 

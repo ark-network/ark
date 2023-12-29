@@ -153,13 +153,13 @@ func (b *txBuilder) BuildPoolTx(
 ) (poolTx string, congestionTree domain.CongestionTree, err error) {
 	aspScriptBytes, err := p2wpkhScript(aspPubkey, b.net)
 	if err != nil {
-		return "", nil, err
+		return
 	}
 
 	aspScript := hex.EncodeToString(aspScriptBytes)
 
-	receivers := receiversFromPayments(payments)
-	sharedOutputAmount := sumReceivers(receivers)
+	offchainReceivers, onchainReceivers := receiversFromPayments(payments)
+	sharedOutputAmount := sumReceivers(offchainReceivers)
 
 	numberOfConnectors := numberOfVTXOs(payments)
 	connectorOutputAmount := connectorAmount * numberOfConnectors
@@ -169,36 +169,46 @@ func (b *txBuilder) BuildPoolTx(
 	makeTree, sharedOutputScript, err := buildCongestionTree(
 		b.net,
 		aspPubkey,
-		receivers,
+		offchainReceivers,
 	)
 	if err != nil {
-		return "", nil, err
+		return
 	}
 
 	sharedOutputScriptHex := hex.EncodeToString(sharedOutputScript)
 
-	poolTx, err = wallet.Transfer(ctx, []ports.TxOutput{
+	poolTxOuts := []ports.TxOutput{
 		newOutput(sharedOutputScriptHex, sharedOutputAmount, b.net.AssetID),
 		newOutput(aspScript, connectorOutputAmount, b.net.AssetID),
-	})
-	if err != nil {
-		return "", nil, err
 	}
 
-	poolTransaction, err := transaction.NewTxFromHex(poolTx)
-	if err != nil {
-		return "", nil, err
+	for _, receiver := range onchainReceivers {
+		buf, _ := address.ToOutputScript(receiver.OnchainAddress)
+		script := hex.EncodeToString(buf)
+		poolTxOuts = append(poolTxOuts, newOutput(script, receiver.Amount, b.net.AssetID))
 	}
 
-	congestionTree, err = makeTree(psetv2.InputArgs{
-		Txid:    poolTransaction.TxHash().String(),
+	txHex, err := wallet.Transfer(ctx, poolTxOuts)
+	if err != nil {
+		return
+	}
+
+	tx, err := transaction.NewTxFromHex(txHex)
+	if err != nil {
+		return
+	}
+
+	tree, err := makeTree(psetv2.InputArgs{
+		Txid:    tx.TxHash().String(),
 		TxIndex: 0,
 	})
 	if err != nil {
-		return "", nil, err
+		return
 	}
 
-	return poolTx, congestionTree, nil
+	poolTx = txHex
+	congestionTree = tree
+	return
 }
 
 func connectorsToInputArgs(connectors []string) ([]psetv2.InputArgs, error) {
@@ -248,12 +258,19 @@ func numberOfVTXOs(payments []domain.Payment) uint64 {
 	return sum
 }
 
-func receiversFromPayments(payments []domain.Payment) []domain.Receiver {
-	receivers := make([]domain.Receiver, 0)
+func receiversFromPayments(
+	payments []domain.Payment,
+) (offchainReceivers, onchainReceivers []domain.Receiver) {
 	for _, payment := range payments {
-		receivers = append(receivers, payment.Receivers...)
+		for _, receiver := range payment.Receivers {
+			if receiver.IsOnchain() {
+				onchainReceivers = append(onchainReceivers, receiver)
+			} else {
+				offchainReceivers = append(offchainReceivers, receiver)
+			}
+		}
 	}
-	return receivers
+	return
 }
 
 func sumReceivers(receivers []domain.Receiver) uint64 {

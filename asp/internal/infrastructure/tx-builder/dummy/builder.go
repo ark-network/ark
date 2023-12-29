@@ -99,18 +99,25 @@ func (b *txBuilder) BuildPoolTx(
 
 	aspScript := hex.EncodeToString(aspScriptBytes)
 
-	receivers := receiversFromPayments(payments)
-	sharedOutputAmount := sumReceivers(receivers)
+	offchainReceivers, onchainReceivers := receiversFromPayments(payments)
+	sharedOutputAmount := sumReceivers(offchainReceivers)
 
 	numberOfConnectors := numberOfVTXOs(payments)
 	connectorOutputAmount := connectorAmount * numberOfConnectors
 
-	ctx := context.Background()
-
-	poolTx, err = wallet.Transfer(ctx, []ports.TxOutput{
+	poolTxOuts := []ports.TxOutput{
 		newOutput(aspScript, sharedOutputAmount, b.net.AssetID),
 		newOutput(aspScript, connectorOutputAmount, b.net.AssetID),
-	})
+	}
+	for _, receiver := range onchainReceivers {
+		buf, _ := address.ToOutputScript(receiver.OnchainAddress)
+		script := hex.EncodeToString(buf)
+		poolTxOuts = append(poolTxOuts, newOutput(script, receiver.Amount, b.net.AssetID))
+	}
+
+	ctx := context.Background()
+
+	poolTx, err = wallet.Transfer(ctx, poolTxOuts)
 	if err != nil {
 		return "", nil, err
 	}
@@ -124,7 +131,7 @@ func (b *txBuilder) BuildPoolTx(
 		newOutputScriptFactory(aspPubkey, b.net),
 		b.net,
 		poolTxID,
-		receivers,
+		offchainReceivers,
 	)
 
 	return poolTx, congestionTree, err
@@ -187,12 +194,19 @@ func numberOfVTXOs(payments []domain.Payment) uint64 {
 	return sum
 }
 
-func receiversFromPayments(payments []domain.Payment) []domain.Receiver {
-	receivers := make([]domain.Receiver, 0)
+func receiversFromPayments(
+	payments []domain.Payment,
+) (offchainReceivers, onchainReceivers []domain.Receiver) {
 	for _, payment := range payments {
-		receivers = append(receivers, payment.Receivers...)
+		for _, receiver := range payment.Receivers {
+			if receiver.IsOnchain() {
+				onchainReceivers = append(onchainReceivers, receiver)
+			} else {
+				offchainReceivers = append(offchainReceivers, receiver)
+			}
+		}
 	}
-	return receivers
+	return
 }
 
 func sumReceivers(receivers []domain.Receiver) uint64 {

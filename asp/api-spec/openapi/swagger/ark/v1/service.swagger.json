@@ -424,12 +424,14 @@
     "v1Output": {
       "type": "object",
       "properties": {
-        "pubkey": {
-          "type": "string"
+        "address": {
+          "type": "string",
+          "description": "Either the offchain or onchain address."
         },
         "amount": {
           "type": "string",
-          "format": "uint64"
+          "format": "uint64",
+          "description": "Amount to send in satoshis."
         }
       }
     },

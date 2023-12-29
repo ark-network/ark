@@ -6,10 +6,16 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"syscall"
 
+	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/urfave/cli/v2"
+	"github.com/vulpemventures/go-elements/network"
+	"github.com/vulpemventures/go-elements/payment"
 	"golang.org/x/term"
 )
 
@@ -150,49 +156,103 @@ func coinSelect(vtxos []vtxo, amount uint64) ([]vtxo, uint64, error) {
 	return selected, change, nil
 }
 
-func computeBalance(vtxos []vtxo) uint64 {
+func getOffchainBalance(
+	ctx *cli.Context, client arkv1.ArkServiceClient, addr string,
+) (uint64, error) {
+	vtxos, err := getVtxos(ctx, client, addr)
+	if err != nil {
+		return 0, err
+	}
 	var balance uint64
 	for _, vtxo := range vtxos {
 		balance += vtxo.amount
 	}
-	return balance
+	return balance, nil
 }
 
-func getNetwork() common.Network {
+func getOnchainBalance(addr string) (uint64, error) {
+	_, net, err := getNetwork()
+	if err != nil {
+		return 0, err
+	}
+
+	baseUrl := explorerUrl[net.Name]
+	resp, err := http.Get(fmt.Sprintf("%s/address/%s/utxo", baseUrl, addr))
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf(string(body))
+	}
+	payload := []interface{}{}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return 0, err
+	}
+	balance := uint64(0)
+	for _, p := range payload {
+		utxo := p.(map[string]interface{})
+		asset, ok := utxo["asset"].(string)
+		if !ok || asset != net.AssetID {
+			continue
+		}
+		balance += uint64(utxo["value"].(float64))
+
+	}
+	return balance, nil
+}
+
+func getNetwork() (*common.Network, *network.Network, error) {
 	state, err := getState()
 	if err != nil {
-		return common.MainNet
+		return nil, nil, err
 	}
 
-	network, ok := state["network"]
+	net, ok := state["network"]
 	if !ok {
-		return common.MainNet
+		return &common.MainNet, &network.Liquid, nil
 	}
-	if network == "testnet" {
-		return common.TestNet
+	if net == "testnet" {
+		return &common.TestNet, &network.Testnet, nil
 	}
-	return common.MainNet
+	return &common.MainNet, &network.Liquid, nil
 }
 
-func getAddress() (string, error) {
+func getAddress() (offchainAddr, onchainAddr string, err error) {
 	publicKey, err := getWalletPublicKey()
 	if err != nil {
-		return "", err
+		return
 	}
 
 	aspPublicKey, err := getServiceProviderPublicKey()
 	if err != nil {
-		return "", err
+		return
 	}
 
-	net := getNetwork()
-
-	addr, err := common.EncodeAddress(net.Addr, publicKey, aspPublicKey)
+	arkNet, liquidNet, err := getNetwork()
 	if err != nil {
-		return "", err
+		return
 	}
 
-	return addr, nil
+	arkAddr, err := common.EncodeAddress(arkNet.Addr, publicKey, aspPublicKey)
+	if err != nil {
+		return
+	}
+
+	p2wpkh := payment.FromPublicKey(publicKey, liquidNet, nil)
+	liquidAddr, err := p2wpkh.WitnessPubKeyHash()
+	if err != nil {
+		return
+	}
+
+	offchainAddr = arkAddr
+	onchainAddr = liquidAddr
+
+	return
 }
 
 func printJSON(resp interface{}) error {

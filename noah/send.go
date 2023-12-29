@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -49,7 +48,12 @@ func sendAction(ctx *cli.Context) error {
 		return fmt.Errorf("no receivers specified")
 	}
 
-	aspPubKey, err := getServiceProviderPublicKey()
+	offchainAddr, _, err := getAddress()
+	if err != nil {
+		return err
+	}
+
+	_, _, aspPubKey, err := common.DecodeAddress(offchainAddr)
 	if err != nil {
 		return err
 	}
@@ -58,7 +62,7 @@ func sendAction(ctx *cli.Context) error {
 	sumOfReceivers := uint64(0)
 
 	for _, receiver := range receiversJSON {
-		_, userKey, aspKey, err := common.DecodeAddress(receiver.To)
+		_, _, aspKey, err := common.DecodeAddress(receiver.To)
 		if err != nil {
 			return fmt.Errorf("invalid receiver address: %s", err)
 		}
@@ -71,20 +75,19 @@ func sendAction(ctx *cli.Context) error {
 			return fmt.Errorf("invalid amount: %d", receiver.Amount)
 		}
 
-		encodedKey := hex.EncodeToString(userKey.SerializeCompressed())
 		receiversOutput = append(receiversOutput, &arkv1.Output{
-			Pubkey: encodedKey,
-			Amount: uint64(receiver.Amount),
+			Address: receiver.To,
+			Amount:  uint64(receiver.Amount),
 		})
 		sumOfReceivers += receiver.Amount
 	}
-	client, close, err := getArkClient(ctx)
+	client, close, err := getClientFromState(ctx)
 	if err != nil {
 		return err
 	}
 	defer close()
 
-	vtxos, err := getVtxos(ctx, client)
+	vtxos, err := getVtxos(ctx, client, offchainAddr)
 	if err != nil {
 		return err
 	}
@@ -95,17 +98,9 @@ func sendAction(ctx *cli.Context) error {
 	}
 
 	if changeAmount > 0 {
-		walletPrvKey, err := privateKeyFromPassword()
-		if err != nil {
-			return err
-		}
-
-		walletPubKey := walletPrvKey.PubKey()
-		encodedPubKey := hex.EncodeToString(walletPubKey.SerializeCompressed())
-
 		changeReceiver := &arkv1.Output{
-			Pubkey: encodedPubKey,
-			Amount: changeAmount,
+			Address: offchainAddr,
+			Amount:  changeAmount,
 		}
 		receiversOutput = append(receiversOutput, changeReceiver)
 	}
@@ -139,9 +134,13 @@ func sendAction(ctx *cli.Context) error {
 		return err
 	}
 
-	pingStop := ping(ctx, client, &arkv1.PingRequest{
+	var pingStop func()
+	pingReq := &arkv1.PingRequest{
 		PaymentId: registerResponse.GetId(),
-	})
+	}
+	for pingStop == nil {
+		pingStop = ping(ctx, client, pingReq)
+	}
 
 	for {
 		event, err := stream.Recv()
@@ -157,6 +156,7 @@ func sendAction(ctx *cli.Context) error {
 		}
 
 		if event.GetRoundFinalization() != nil {
+			// stop pinging as soon as we receive some forfeit txs
 			pingStop()
 			forfeits := event.GetRoundFinalization().GetForfeitTxs()
 			signedForfeits := make([]string, 0)
@@ -180,7 +180,12 @@ func sendAction(ctx *cli.Context) error {
 				}
 			}
 
+			// if no forfeit txs have been signed, start pinging again and wait for the next round
 			if len(signedForfeits) == 0 {
+				pingStop = nil
+				for pingStop == nil {
+					pingStop = ping(ctx, client, pingReq)
+				}
 				continue
 			}
 
@@ -196,8 +201,7 @@ func sendAction(ctx *cli.Context) error {
 
 		if event.GetRoundFinalized() != nil {
 			return printJSON(map[string]interface{}{
-				"paymentId": registerResponse.GetId(),
-				"poolTxId":  event.GetRoundFinalized().GetPoolTxid(),
+				"pool_txid": event.GetRoundFinalized().GetPoolTxid(),
 			})
 		}
 	}
@@ -208,14 +212,16 @@ func sendAction(ctx *cli.Context) error {
 // send 1 ping message every 5 seconds to signal to the ark service that we are still alive
 // returns a function that can be used to stop the pinging
 func ping(ctx *cli.Context, client arkv1.ArkServiceClient, req *arkv1.PingRequest) func() {
+	_, err := client.Ping(ctx.Context, req)
+	if err != nil {
+		return nil
+	}
+
 	ticker := time.NewTicker(5 * time.Second)
 
 	go func(t *time.Ticker) {
 		for range t.C {
-			_, err := client.Ping(ctx.Context, req)
-			if err != nil {
-				return
-			}
+			client.Ping(ctx.Context, req)
 		}
 	}(ticker)
 
