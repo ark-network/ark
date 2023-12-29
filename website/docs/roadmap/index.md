@@ -8,7 +8,6 @@ For the latest updates and progress reports, please check the [Roadmap](/roadmap
 
 ### ☁️ `arkd` - Ark Service Provider Daemon
 - Status: Pre-Alpha
-- Code: [Github](https://github.com/ark-network/ark/tree/master/server)
 
 The `arkd` it's the Ark daemon, the initial implementation of an ASP (Ark Service Provider) as a standalone always-on server. 
 It uses [Ocean](https://github.com/vulpemventures/ocean) as Bitcoin and Liquid wallet backend. 
@@ -36,7 +35,6 @@ The Ark Explorer module will consist of a console and an Electrum-like server. I
 
 ### 👩‍💻 `ark` - Ark CLI
 - Status: Pre-Alpha
-- Code: [Github](https://github.com/ark-network/ark/tree/master/client)
 
 The `ark` module will be an Ark wallet implemented as a command line interface (CLI). It will also be in the alpha status, indicating that it is still being developed and may have some limitations.
 
