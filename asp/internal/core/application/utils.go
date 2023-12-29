@@ -34,7 +34,13 @@ func (m *paymentsMap) len() int64 {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
-	return int64(len(m.payments))
+	count := int64(0)
+	for _, p := range m.payments {
+		if len(p.Receivers) > 0 {
+			count++
+		}
+	}
+	return count
 }
 
 func (m *paymentsMap) push(payment domain.Payment) error {
