@@ -52,9 +52,6 @@ func redeemAction(ctx *cli.Context) error {
 	if _, err := address.ToOutputScript(addr); err != nil {
 		return fmt.Errorf("invalid onchain address")
 	}
-	if isConf, _ := address.IsConfidential(addr); isConf {
-		return fmt.Errorf("invalid onchain address: must be unconfidential")
-	}
 	net, err := address.NetworkForAddress(addr)
 	if err != nil {
 		return fmt.Errorf("invalid onchain address: unknown network")
@@ -75,7 +72,12 @@ func redeemAction(ctx *cli.Context) error {
 	return collaborativeRedeem(ctx, addr, amount)
 }
 
-func collaborativeRedeem(ctx *cli.Context, address string, amount uint64) error {
+func collaborativeRedeem(ctx *cli.Context, addr string, amount uint64) error {
+	if isConf, _ := address.IsConfidential(addr); isConf {
+		info, _ := address.FromConfidential(addr)
+		addr = info.Address
+	}
+
 	offchainAddr, _, err := getAddress()
 	if err != nil {
 		return err
@@ -83,7 +85,7 @@ func collaborativeRedeem(ctx *cli.Context, address string, amount uint64) error 
 
 	receivers := []*arkv1.Output{
 		{
-			Address: address,
+			Address: addr,
 			Amount:  amount,
 		},
 	}

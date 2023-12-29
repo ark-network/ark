@@ -26,22 +26,43 @@ var (
 		Value:    "",
 		Required: true,
 	}
+	toFlag = cli.StringFlag{
+		Name:  "to",
+		Usage: "ark address of the recipient",
+	}
+	amountFlag = cli.Uint64Flag{
+		Name:  "amount",
+		Usage: "amount to send in sats",
+	}
 )
 
 var sendCommand = cli.Command{
 	Name:   "send",
 	Usage:  "Send VTXOs to a list of addresses",
 	Action: sendAction,
-	Flags:  []cli.Flag{&receiversFlag},
+	Flags:  []cli.Flag{&receiversFlag, &toFlag, &amountFlag},
 }
 
 func sendAction(ctx *cli.Context) error {
+	if !ctx.IsSet("receivers") && !ctx.IsSet("to") && !ctx.IsSet("amount") {
+		return fmt.Errorf("missing destination, either use --to and --amount to send or --receivers to send to many")
+	}
 	receivers := ctx.String("receivers")
+	to := ctx.String("to")
+	amount := ctx.Uint64("amount")
 
-	// parse json encoded receivers
 	var receiversJSON []receiver
-	if err := json.Unmarshal([]byte(receivers), &receiversJSON); err != nil {
-		return fmt.Errorf("invalid receivers: %s", err)
+	if len(receivers) > 0 {
+		if err := json.Unmarshal([]byte(receivers), &receiversJSON); err != nil {
+			return fmt.Errorf("invalid receivers: %s", err)
+		}
+	} else {
+		receiversJSON = []receiver{
+			{
+				To:     to,
+				Amount: amount,
+			},
+		}
 	}
 
 	if len(receiversJSON) <= 0 {
