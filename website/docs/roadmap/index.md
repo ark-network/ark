@@ -31,7 +31,7 @@ It exposes a gRPC interface that Ark wallets can use to interact with the Provid
 ### 🌐 Ark Explorer
 Status: Not started yet
 
-The Ark Explorer module will consist of a console and an Electrum-like server. It will allow users to retrieve VTXOs (Verified Transaction Outputs), pool transactions, and access transaction data. More details about this module will be provided as development progresses.
+The Ark Explorer module will consist of a console and an Electrum-like server. It will allow users to retrieve VTXOs, pool transactions, and access transaction data. More details about this module will be provided as development progresses.
 
 ### 👩‍💻 `ark` - Ark CLI
 - Status: Pre-Alpha
