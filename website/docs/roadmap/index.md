@@ -42,7 +42,7 @@ The `ark` module will be an Ark wallet implemented as a command line interface (
 - [x] Connect to an Ark Service Provider.
 - [ ] Send and receive Ark transactions
   - [x] Join a round
-  - [ ] Validate Tree and Sign forfait transaction
+  - [ ] Validate Tree and Sign forfeit transaction
   - [x] Finalize a Tree
 - [ ] on-boarding
   - [ ] Boarding address Script
