@@ -29,24 +29,23 @@ type pluggableCongestionTree func(outpoint psetv2.InputArgs) (domain.CongestionT
 
 // withOutput returns an introspection script that checks the script and the amount of the output at the given index
 // verify will add an OP_EQUALVERIFY at the end of the script, otherwise it will add an OP_EQUAL
-func withOutput(outputIndex uint64, taprootWitnessProgram []byte, amount uint32, verify bool) []byte {
+func withOutput(index byte, taprootWitnessProgram []byte, amount uint32, verify bool) []byte {
 	amountBuffer := make([]byte, 8)
 	binary.LittleEndian.PutUint32(amountBuffer, amount)
 
-	index := scriptNum(outputIndex).Bytes()
-
-	script := append(index, []byte{
+	script := []byte{
+		byte(index),
 		OP_INSPECTOUTPUTSCRIPTPUBKEY,
 		txscript.OP_1,
 		txscript.OP_EQUALVERIFY,
 		txscript.OP_DATA_32,
-	}...)
+	}
 
 	script = append(script, taprootWitnessProgram...)
 	script = append(script, []byte{
 		txscript.OP_EQUALVERIFY,
 	}...)
-	script = append(script, index...)
+	script = append(script, byte(index))
 	script = append(script, []byte{
 		OP_INSPECTOUTPUTVALUE,
 		txscript.OP_1,
@@ -116,10 +115,10 @@ func sweepTapLeaf(sweepKey *secp256k1.PublicKey) (*taproot.TapElementsLeaf, erro
 func forceSplitCoinTapLeaf(
 	leftKey, rightKey *secp256k1.PublicKey, leftAmount, rightAmount uint32,
 ) taproot.TapElementsLeaf {
-	nextScriptLeft := withOutput(0, schnorr.SerializePubKey(leftKey), leftAmount, rightKey != nil)
+	nextScriptLeft := withOutput(txscript.OP_0, schnorr.SerializePubKey(leftKey), leftAmount, rightKey != nil)
 	branchScript := append([]byte{}, nextScriptLeft...)
 	if rightKey != nil {
-		nextScriptRight := withOutput(1, schnorr.SerializePubKey(rightKey), rightAmount, false)
+		nextScriptRight := withOutput(txscript.OP_1, schnorr.SerializePubKey(rightKey), rightAmount, false)
 		branchScript = append(branchScript, nextScriptRight...)
 	}
 	return taproot.NewBaseTapElementsLeaf(branchScript)
@@ -540,7 +539,7 @@ func (n *node) psets(inputArgs *psetArgs, level int) ([]psetWithLevel, error) {
 
 	txID := unsignedTx.TxHash().String()
 
-	_, taprootTree, err := n.taprootKey()
+	_, leftTaprootTree, err := n.left.taprootKey()
 	if err != nil {
 		return nil, err
 	}
@@ -550,8 +549,13 @@ func (n *node) psets(inputArgs *psetArgs, level int) ([]psetWithLevel, error) {
 			Txid:    txID,
 			TxIndex: 0,
 		},
-		taprootTree: taprootTree,
+		taprootTree: leftTaprootTree,
 	}, level+1)
+	if err != nil {
+		return nil, err
+	}
+
+	_, rightTaprootTree, err := n.right.taprootKey()
 	if err != nil {
 		return nil, err
 	}
@@ -561,7 +565,7 @@ func (n *node) psets(inputArgs *psetArgs, level int) ([]psetWithLevel, error) {
 			Txid:    txID,
 			TxIndex: 1,
 		},
-		taprootTree: taprootTree,
+		taprootTree: rightTaprootTree,
 	}, level+1)
 	if err != nil {
 		return nil, err

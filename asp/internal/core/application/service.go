@@ -11,6 +11,7 @@ import (
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/psetv2"
@@ -412,7 +413,9 @@ func (s *service) getNewVtxos(round *domain.Round) []domain.Vtxo {
 					vtxos = append(vtxos, domain.Vtxo{
 						VtxoKey:  domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
 						Receiver: domain.Receiver{Pubkey: pubkey, Amount: out.Value},
+						PoolTx:   round.Txid,
 					})
+					logrus.Debugf("pool %s", round.Txid)
 					break
 				}
 			}

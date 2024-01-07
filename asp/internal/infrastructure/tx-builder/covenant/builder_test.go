@@ -8,12 +8,14 @@ import (
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenant"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/require"
 	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
+	"github.com/vulpemventures/go-elements/taproot"
 	"github.com/vulpemventures/go-elements/transaction"
 )
 
@@ -284,6 +286,21 @@ func TestBuildCongestionTree(t *testing.T) {
 
 				children := tree.Children(node.Txid)
 				require.Len(t, children, 2)
+
+				for i, child := range children {
+					childTx, err := psetv2.NewPsetFromBase64(child.Tx)
+					require.NoError(t, err)
+
+					for _, leaf := range childTx.Inputs[0].TapLeafScript {
+						key := leaf.ControlBlock.InternalKey
+						rootHash := leaf.ControlBlock.RootHash(leaf.Script)
+
+						outputScript := taproot.ComputeTaprootOutputKey(key, rootHash)
+						previousScriptKey := pset.Outputs[i].Script[2:]
+						require.Len(t, previousScriptKey, 32)
+						require.Equal(t, schnorr.SerializePubKey(outputScript), previousScriptKey)
+					}
+				}
 			}
 		}
 	}

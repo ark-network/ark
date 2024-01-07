@@ -273,7 +273,8 @@ func (v vtxoList) toProto(hrp string, aspKey *secp256k1.PublicKey) []*arkv1.Vtxo
 				Address: addr,
 				Amount:  vv.Amount,
 			},
-			Spent: vv.Spent,
+			PoolTxid: vv.PoolTx,
+			Spent:    vv.Spent,
 		})
 	}
 	return list

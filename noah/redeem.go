@@ -1,14 +1,18 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+	"github.com/ark-network/noah/pkg/bufferutil"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/urfave/cli/v2"
 	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/psetv2"
+	"github.com/vulpemventures/go-elements/taproot"
 )
 
 var (
@@ -66,7 +70,7 @@ func redeemAction(ctx *cli.Context) error {
 	}
 
 	if force {
-		return unilateralRedeem(addr)
+		return unilateralRedeem(ctx, addr, amount)
 	}
 
 	return collaborativeRedeem(ctx, addr, amount)
@@ -217,7 +221,277 @@ func collaborativeRedeem(ctx *cli.Context, addr string, amount uint64) error {
 	return nil
 }
 
-func unilateralRedeem(address string) error {
-	fmt.Println("unilateral redeem is not implemented yet")
+func unilateralRedeem(ctx *cli.Context, addr string, amount uint64) error {
+	onchainScript, err := address.ToOutputScript(addr)
+	if err != nil {
+		return err
+	}
+
+	client, close, err := getClientFromState(ctx)
+	if err != nil {
+		return err
+	}
+	defer close()
+
+	offchainAddr, onchainAddr, err := getAddress()
+	if err != nil {
+		return err
+	}
+
+	vtxos, err := getVtxos(ctx, client, offchainAddr)
+	if err != nil {
+		return err
+	}
+
+	selectedCoins, changeAmount, err := coinSelect(vtxos, amount)
+	if err != nil {
+		return err
+	}
+
+	if changeAmount > 0 {
+		return fmt.Errorf("unilateral redemption does not allow change, it will redeem all the selected VTXOs for a value of %d", amount+changeAmount)
+	}
+
+	fmt.Println("following VTXO will be redeemed:")
+	for _, coin := range selectedCoins {
+		fmt.Printf("  - %s:%d \t %d sats\n", coin.txid, coin.vout, coin.amount)
+	}
+
+	psets := make([][]*psetv2.Pset, 0)
+
+	totalAmount := uint64(0)
+
+	finalPset, err := psetv2.New(nil, nil, nil)
+	if err != nil {
+		return err
+	}
+	updater, err := psetv2.NewUpdater(finalPset)
+	if err != nil {
+		return err
+	}
+
+	walletPubkey, err := getWalletPublicKey()
+	if err != nil {
+		return err
+	}
+
+	for _, vtxo := range selectedCoins {
+		redeemBranch, err := newRedeemBranch(ctx, client, vtxo)
+		if err != nil {
+			return err
+		}
+
+		if err := redeemBranch.UpdateBranch(); err != nil {
+			return err
+		}
+
+		feesAmount, err := redeemBranch.EstimateFees()
+		if err != nil {
+			return err
+		}
+
+		if feesAmount > 0 {
+			utxos, change, err := coinSelectOnchain(onchainAddr, feesAmount)
+			if err != nil {
+				return err
+			}
+
+			branchPsets, branchInputs, err := redeemBranch.Redeem(toInputArgs(utxos), feesAmount+change, onchainAddr)
+			if err != nil {
+				return err
+			}
+
+			if err := updater.AddInputs(branchInputs); err != nil {
+				return err
+			}
+
+			psets = append(psets, branchPsets)
+			totalAmount += change
+		}
+
+		totalAmount += vtxo.amount
+
+		nextInputIndex := len(updater.Pset.Inputs)
+
+		if err := updater.AddInputs([]psetv2.InputArgs{redeemBranch.VtxoInput()}); err != nil {
+			return err
+		}
+
+		// add taproot tree letting to spend the vtxo
+		checksigLeaf, err := checksigTapLeafScript(walletPubkey)
+		if err != nil {
+			return nil
+		}
+
+		sweepLeaf := redeemBranch.SweepTapLeaf()
+
+		vtxoTaprootTree := taproot.AssembleTaprootScriptTree(
+			*checksigLeaf,
+			*sweepLeaf,
+		)
+
+		proofIndex := vtxoTaprootTree.LeafProofIndex[checksigLeaf.TapHash()]
+
+		if err := updater.AddInTapLeafScript(
+			nextInputIndex,
+			psetv2.NewTapLeafScript(
+				vtxoTaprootTree.LeafMerkleProofs[proofIndex],
+				redeemBranch.InternalTaprootKey(),
+			),
+		); err != nil {
+			return err
+		}
+
+	}
+
+	fmt.Printf("total number of transactions: %d\n", len(psets)+1)
+
+	_, net, err := getNetwork()
+	if err != nil {
+		return err
+	}
+
+	if err := updater.AddOutputs([]psetv2.OutputArgs{
+		{
+			Asset:  net.AssetID,
+			Amount: totalAmount - 400,
+			Script: onchainScript,
+		},
+		{
+			Asset:  net.AssetID,
+			Amount: 400,
+		},
+	}); err != nil {
+		return err
+	}
+
+	prvKey, err := privateKeyFromPassword()
+	if err != nil {
+		return err
+	}
+
+	explorer := NewExplorer()
+
+	for _, branch := range psets {
+		for _, pset := range branch {
+			if err := signPset(pset, explorer, prvKey); err != nil {
+				return err
+			}
+
+			for i, input := range pset.Inputs {
+				if len(input.PartialSigs) > 0 {
+					if err := psetv2.Finalize(pset, i); err != nil {
+						return err
+					}
+				} else {
+					if len(input.TapLeafScript) > 0 {
+						for _, leaf := range input.TapLeafScript {
+							if !bytes.Contains(leaf.Script, []byte{0xcf}) || !bytes.Contains(leaf.Script, []byte{0xd1}) {
+								continue
+							}
+
+							controlBlock, err := leaf.ControlBlock.ToBytes()
+							if err != nil {
+								return err
+							}
+
+							key := leaf.ControlBlock.InternalKey
+							rootHash := leaf.ControlBlock.RootHash(leaf.Script)
+
+							outputScript := taproot.ComputeTaprootOutputKey(key, rootHash)
+							previousScriptKey := input.WitnessUtxo.Script[2:]
+							if !bytes.Equal(schnorr.SerializePubKey(outputScript), previousScriptKey) {
+								return fmt.Errorf("invalid taproot script")
+							}
+
+							vector := [][]byte{
+								leaf.Script,
+								controlBlock[:],
+							}
+
+							// encode vector
+							witness, err := writeTxWitness(vector)
+							if err != nil {
+								return err
+							}
+
+							pset.Inputs[i].FinalScriptWitness = witness
+							break
+						}
+					}
+				}
+
+			}
+
+			signedTx, err := psetv2.Extract(pset)
+			if err != nil {
+				return err
+			}
+
+			hex, err := signedTx.ToHex()
+			if err != nil {
+				return err
+			}
+
+			fmt.Println(hex)
+
+			id, err := explorer.Broadcast(hex)
+			if err != nil {
+				return err
+			}
+
+			fmt.Printf("broadcasted tx %s\n", id)
+		}
+	}
+
+	if err := signPset(finalPset, explorer, prvKey); err != nil {
+		return err
+	}
+
+	for i, input := range finalPset.Inputs {
+		if len(input.TapScriptSig) > 0 || len(input.PartialSigs) > 0 {
+			if err := psetv2.Finalize(finalPset, i); err != nil {
+				return err
+			}
+		}
+	}
+
+	signedTx, err := psetv2.Extract(finalPset)
+	if err != nil {
+		return err
+	}
+
+	hex, err := signedTx.ToHex()
+	if err != nil {
+		return err
+	}
+
+	id, err := explorer.Broadcast(hex)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("(final) broadcasted tx %s\n", id)
+
 	return nil
+}
+
+func writeTxWitness(wit [][]byte) ([]byte, error) {
+	s := bufferutil.NewSerializer(nil)
+
+	if err := s.WriteVector(wit); err != nil {
+		return nil, err
+	}
+	return s.Bytes(), nil
+}
+
+func toInputArgs(utxos []utxo) []psetv2.InputArgs {
+	inputs := make([]psetv2.InputArgs, 0, len(utxos))
+	for _, utxo := range utxos {
+		inputs = append(inputs, psetv2.InputArgs{
+			Txid:    utxo.Txid,
+			TxIndex: utxo.Vout,
+		})
+	}
+	return inputs
 }

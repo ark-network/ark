@@ -558,6 +558,9 @@
         },
         "spent": {
           "type": "boolean"
+        },
+        "poolTxid": {
+          "type": "string"
         }
       }
     }

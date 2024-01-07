@@ -56,9 +56,6 @@ type TransactionServiceClient interface {
 	// ClaimPegIn returns a transaction to claim funds pegged on the Bitcoin
 	// main-chain to have them available on the Liquid side-chain.
 	ClaimPegIn(ctx context.Context, in *ClaimPegInRequest, opts ...grpc.CallOption) (*ClaimPegInResponse, error)
-	// SignPsetWithSchnorrKey signs all taproot inputs of the provided tx with
-	// the key at the given derivation path.
-	SignPsetWithSchnorrKey(ctx context.Context, in *SignPsetWithSchnorrKeyRequest, opts ...grpc.CallOption) (*SignPsetWithSchnorrKeyResponse, error)
 }
 
 type transactionServiceClient struct {
@@ -204,15 +201,6 @@ func (c *transactionServiceClient) ClaimPegIn(ctx context.Context, in *ClaimPegI
 	return out, nil
 }
 
-func (c *transactionServiceClient) SignPsetWithSchnorrKey(ctx context.Context, in *SignPsetWithSchnorrKeyRequest, opts ...grpc.CallOption) (*SignPsetWithSchnorrKeyResponse, error) {
-	out := new(SignPsetWithSchnorrKeyResponse)
-	err := c.cc.Invoke(ctx, "/ocean.v1.TransactionService/SignPsetWithSchnorrKey", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // TransactionServiceServer is the server API for TransactionService service.
 // All implementations should embed UnimplementedTransactionServiceServer
 // for forward compatibility
@@ -255,9 +243,6 @@ type TransactionServiceServer interface {
 	// ClaimPegIn returns a transaction to claim funds pegged on the Bitcoin
 	// main-chain to have them available on the Liquid side-chain.
 	ClaimPegIn(context.Context, *ClaimPegInRequest) (*ClaimPegInResponse, error)
-	// SignPsetWithSchnorrKey signs all taproot inputs of the provided tx with
-	// the key at the given derivation path.
-	SignPsetWithSchnorrKey(context.Context, *SignPsetWithSchnorrKeyRequest) (*SignPsetWithSchnorrKeyResponse, error)
 }
 
 // UnimplementedTransactionServiceServer should be embedded to have forward compatible implementations.
@@ -308,9 +293,6 @@ func (UnimplementedTransactionServiceServer) PegInAddress(context.Context, *PegI
 }
 func (UnimplementedTransactionServiceServer) ClaimPegIn(context.Context, *ClaimPegInRequest) (*ClaimPegInResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ClaimPegIn not implemented")
-}
-func (UnimplementedTransactionServiceServer) SignPsetWithSchnorrKey(context.Context, *SignPsetWithSchnorrKeyRequest) (*SignPsetWithSchnorrKeyResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SignPsetWithSchnorrKey not implemented")
 }
 
 // UnsafeTransactionServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -594,24 +576,6 @@ func _TransactionService_ClaimPegIn_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TransactionService_SignPsetWithSchnorrKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SignPsetWithSchnorrKeyRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(TransactionServiceServer).SignPsetWithSchnorrKey(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ocean.v1.TransactionService/SignPsetWithSchnorrKey",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TransactionServiceServer).SignPsetWithSchnorrKey(ctx, req.(*SignPsetWithSchnorrKeyRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // TransactionService_ServiceDesc is the grpc.ServiceDesc for TransactionService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -678,10 +642,6 @@ var TransactionService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ClaimPegIn",
 			Handler:    _TransactionService_ClaimPegIn_Handler,
-		},
-		{
-			MethodName: "SignPsetWithSchnorrKey",
-			Handler:    _TransactionService_SignPsetWithSchnorrKey_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

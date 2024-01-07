@@ -170,40 +170,136 @@ func getOffchainBalance(
 	return balance, nil
 }
 
-func getOnchainBalance(addr string) (uint64, error) {
+type utxo struct {
+	Txid   string `json:"txid"`
+	Vout   uint32 `json:"vout"`
+	Amount uint64 `json:"value"`
+	Asset  string `json:"asset"`
+}
+
+func coinSelectOnchain(addr string, amount uint64) ([]utxo, uint64, error) {
+	utxos, err := getOnchainUtxos(addr)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	selected := make([]utxo, 0)
+	selectedAmount := uint64(0)
+
+	for _, utxo := range utxos {
+		if selectedAmount >= amount {
+			break
+		}
+
+		selected = append(selected, utxo)
+		selectedAmount += utxo.Amount
+	}
+
+	if selectedAmount < amount {
+		return nil, 0, fmt.Errorf("insufficient balance: %d to cover %d", selectedAmount, amount)
+	}
+
+	change := selectedAmount - amount
+
+	return selected, change, nil
+}
+
+func getOnchainUtxos(addr string) ([]utxo, error) {
 	_, net, err := getNetwork()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	baseUrl := explorerUrl[net.Name]
 	resp, err := http.Get(fmt.Sprintf("%s/address/%s/utxo", baseUrl, addr))
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf(string(body))
+		return nil, fmt.Errorf(string(body))
 	}
-	payload := []interface{}{}
+	payload := []utxo{}
 	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, err
+	}
+
+	return payload, nil
+}
+
+func getOnchainBalance(addr string) (uint64, error) {
+	payload, err := getOnchainUtxos(addr)
+	if err != nil {
 		return 0, err
 	}
+
+	_, net, err := getNetwork()
+	if err != nil {
+		return 0, err
+	}
+
 	balance := uint64(0)
 	for _, p := range payload {
-		utxo := p.(map[string]interface{})
-		asset, ok := utxo["asset"].(string)
-		if !ok || asset != net.AssetID {
+		if p.Asset != net.AssetID {
 			continue
 		}
-		balance += uint64(utxo["value"].(float64))
-
+		balance += p.Amount
 	}
 	return balance, nil
+}
+
+func getTxHex(txid string) (string, error) {
+	_, net, err := getNetwork()
+	if err != nil {
+		return "", err
+	}
+
+	baseUrl := explorerUrl[net.Name]
+	resp, err := http.Get(fmt.Sprintf("%s/tx/%s/hex", baseUrl, txid))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf(string(body))
+	}
+
+	return string(body), nil
+}
+
+func broadcast(txHex string) (string, error) {
+	_, net, err := getNetwork()
+	if err != nil {
+		return "", err
+	}
+
+	body := bytes.NewBuffer([]byte(txHex))
+
+	baseUrl := explorerUrl[net.Name]
+	resp, err := http.Post(fmt.Sprintf("%s/tx", baseUrl), "text/plain", body)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	bodyResponse, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf(string(bodyResponse))
+	}
+
+	return string(bodyResponse), nil
 }
 
 func getNetwork() (*common.Network, *network.Network, error) {
