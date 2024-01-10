@@ -163,33 +163,34 @@ func buildCongestionTree(
 	net *network.Network,
 	aspPublicKey *secp256k1.PublicKey,
 	receivers []domain.Receiver,
-) (pluggableTree pluggableCongestionTree, sharedOutputScript []byte, err error) {
+	feeSatsPerNode uint32,
+) (pluggableTree pluggableCongestionTree, sharedOutputScript []byte, feesAmount uint64, err error) {
 	unspendableKeyBytes, err := hex.DecodeString(unspendablePoint)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 
 	unspendableKey, err := secp256k1.ParsePubKey(unspendableKeyBytes)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 
 	var nodes []*node
 
 	for _, r := range receivers {
-		nodes = append(nodes, newLeaf(net, unspendableKey, aspPublicKey, r))
+		nodes = append(nodes, newLeaf(net, unspendableKey, aspPublicKey, r, feeSatsPerNode))
 	}
 
 	for len(nodes) > 1 {
 		nodes, err = createTreeLevel(nodes)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, 0, err
 		}
 	}
 
 	psets, err := nodes[0].psets(nil, 0)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 
 	// find the root
@@ -204,14 +205,13 @@ func buildCongestionTree(
 	// compute the shared output script
 	sweepLeaf, err := sweepTapLeaf(aspPublicKey)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 	leftOutput := rootPset.Outputs[0]
-
 	leftWitnessProgram := leftOutput.Script[2:]
 	leftKey, err := schnorr.ParsePubKey(leftWitnessProgram)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 
 	var rightAmount uint32
@@ -221,7 +221,7 @@ func buildCongestionTree(
 		rightAmount = uint32(rootPset.Outputs[1].Value)
 		rightKey, err = schnorr.ParsePubKey(rootPset.Outputs[1].Script[2:])
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, 0, err
 		}
 	}
 
@@ -234,7 +234,7 @@ func buildCongestionTree(
 	taprootKey := taproot.ComputeTaprootOutputKey(unspendableKey, root[:])
 	outputScript, err := taprootOutputScript(taprootKey)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 
 	return func(outpoint psetv2.InputArgs) (domain.CongestionTree, error) {
@@ -278,7 +278,7 @@ func buildCongestionTree(
 			})
 		}
 		return tree, nil
-	}, outputScript, nil
+	}, outputScript, uint64(numberOfNodes(len(receivers))), nil
 }
 
 func createTreeLevel(nodes []*node) ([]*node, error) {
@@ -307,6 +307,7 @@ type node struct {
 	left               *node
 	right              *node
 	network            *network.Network
+	feeSats            uint32
 
 	// cached values
 	_taprootKey  *secp256k1.PublicKey
@@ -319,12 +320,14 @@ func newLeaf(
 	internalKey *secp256k1.PublicKey,
 	sweepKey *secp256k1.PublicKey,
 	receiver domain.Receiver,
+	feeSats uint32,
 ) *node {
 	return &node{
 		sweepKey:           sweepKey,
 		internalTaprootKey: internalKey,
 		receivers:          []domain.Receiver{receiver},
 		network:            network,
+		feeSats:            feeSats,
 	}
 }
 
@@ -340,6 +343,7 @@ func newBranch(
 		left:               left,
 		right:              right,
 		network:            left.network,
+		feeSats:            left.feeSats,
 	}
 }
 
@@ -349,12 +353,28 @@ func (n *node) isLeaf() bool {
 }
 
 // compute the output amount of a node
-func (n *node) amount() uint32 {
+func (n *node) vtxoAmount() uint32 {
 	var amount uint32
 	for _, r := range n.receivers {
 		amount += uint32(r.Amount)
 	}
 	return amount
+}
+
+// compute the amount required to pay the miner fees of the node's children
+// this "change" is directly added to the node's output
+func (n *node) changeForFees() uint32 {
+	change := uint32(0)
+
+	if n.left != nil {
+		change += n.left.changeForFees() + n.feeSats
+	}
+
+	if n.right != nil {
+		change += n.right.changeForFees() + n.feeSats
+	}
+
+	return change
 }
 
 func (n *node) taprootKey() (*secp256k1.PublicKey, *taproot.IndexedElementsTapScriptTree, error) {
@@ -409,7 +429,7 @@ func (n *node) taprootKey() (*secp256k1.PublicKey, *taproot.IndexedElementsTapSc
 	}
 
 	branchTaprootLeaf := forceSplitCoinTapLeaf(
-		leftKey, rightKey, n.left.amount(), n.right.amount(),
+		leftKey, rightKey, n.left.vtxoAmount(), n.right.vtxoAmount(),
 	)
 
 	branchTaprootTree := taproot.AssembleTaprootScriptTree(branchTaprootLeaf, *sweepTaprootLeaf)
@@ -436,7 +456,7 @@ func (n *node) script() ([]byte, error) {
 	return taprootOutputScript(taprootKey)
 }
 
-// use script & amount to create OutputArgs
+// use script & vtxoAmount() to create OutputArgs
 func (n *node) output() (*psetv2.OutputArgs, error) {
 	script, err := n.script()
 	if err != nil {
@@ -445,7 +465,7 @@ func (n *node) output() (*psetv2.OutputArgs, error) {
 
 	return &psetv2.OutputArgs{
 		Asset:  n.network.AssetID,
-		Amount: uint64(n.amount()),
+		Amount: uint64(n.vtxoAmount() + n.changeForFees()),
 		Script: script,
 	}, nil
 }
@@ -453,6 +473,7 @@ func (n *node) output() (*psetv2.OutputArgs, error) {
 type psetArgs struct {
 	input       psetv2.InputArgs
 	taprootTree *taproot.IndexedElementsTapScriptTree
+	level       int
 }
 
 // create the node Pset from the previous node Pset represented by input arg
@@ -475,13 +496,18 @@ func (n *node) pset(args *psetArgs) (*psetv2.Pset, error) {
 		}
 	}
 
+	feeOutput := psetv2.OutputArgs{
+		Amount: uint64(n.feeSats),
+		Asset:  n.network.AssetID,
+	}
+
 	if n.isLeaf() {
 		output, err := n.output()
 		if err != nil {
 			return nil, err
 		}
 
-		err = updater.AddOutputs([]psetv2.OutputArgs{*output})
+		err = updater.AddOutputs([]psetv2.OutputArgs{*output, feeOutput})
 		if err != nil {
 			return nil, err
 		}
@@ -498,7 +524,7 @@ func (n *node) pset(args *psetArgs) (*psetv2.Pset, error) {
 		return nil, err
 	}
 
-	err = updater.AddOutputs([]psetv2.OutputArgs{*outputLeft, *outputRight})
+	err = updater.AddOutputs([]psetv2.OutputArgs{*outputLeft, *outputRight, feeOutput})
 	if err != nil {
 		return nil, err
 	}
@@ -572,4 +598,8 @@ func (n *node) psets(inputArgs *psetArgs, level int) ([]psetWithLevel, error) {
 	}
 
 	return append(nodeResult, append(psetsLeft, psetsRight...)...), nil
+}
+
+func numberOfNodes(numberOfVtxos int) int {
+	return 2*numberOfVtxos - 1
 }

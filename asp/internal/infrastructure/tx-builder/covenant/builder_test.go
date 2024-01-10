@@ -266,7 +266,7 @@ func TestBuildCongestionTree(t *testing.T) {
 			require.NoError(t, err)
 
 			require.Len(t, pset.Inputs, 1)
-			require.Len(t, pset.Outputs, 1)
+			require.Len(t, pset.Outputs, 2)
 
 			inputTxID := chainhash.Hash(pset.Inputs[0].PreviousTxid).String()
 			require.Equal(t, leaf.ParentTxid, inputTxID)
@@ -279,7 +279,7 @@ func TestBuildCongestionTree(t *testing.T) {
 				require.NoError(t, err)
 
 				require.Len(t, pset.Inputs, 1)
-				require.Len(t, pset.Outputs, 2)
+				require.Len(t, pset.Outputs, 3)
 
 				inputTxID := chainhash.Hash(pset.Inputs[0].PreviousTxid).String()
 				require.Equal(t, node.ParentTxid, inputTxID)

@@ -5,24 +5,25 @@ import (
 	"fmt"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+	"github.com/ark-network/noah/pkg/bufferutil"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4/schnorr"
 	"github.com/urfave/cli/v2"
-	"github.com/vulpemventures/go-elements/address"
-	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/taproot"
 )
 
+const minRelayFee = 400
+
 type RedeemBranch interface {
-	Redeem(feesCoins []psetv2.InputArgs, feeCoinsAmount uint64, changeAddr string) ([]*psetv2.Pset, []psetv2.InputArgs, error)
-	EstimateFees() (uint64, error)
-	VtxoInput() psetv2.InputArgs
-	SweepTapLeaf() *taproot.TapElementsLeaf
-	InternalTaprootKey() *secp256k1.PublicKey
-	UpdateBranch() error
+	// UpdatePath checks for transactions of the branch onchain and updates the branch accordingly
+	UpdatePath() error
+	// Redeem will sign the branch of the tree and return the associated signed pset + the vtxo input
+	RedeemPath() ([]string, error)
+	// AddInput adds the vtxo input created by the branch
+	AddVtxoInput(updater *psetv2.Updater) error
 }
 
 type redeemBranch struct {
@@ -90,121 +91,139 @@ func newRedeemBranch(ctx *cli.Context, client arkv1.ArkServiceClient, vtxo vtxo)
 	return nil, fmt.Errorf("vtxo not found")
 }
 
-func (r *redeemBranch) InternalTaprootKey() *secp256k1.PublicKey {
-	return r.internalKey
-}
-
-func (r *redeemBranch) SweepTapLeaf() *taproot.TapElementsLeaf {
-	return r.sweepTapLeaf
-}
-
-func (r *redeemBranch) VtxoInput() psetv2.InputArgs {
-	if r.vtxoInput == nil {
-		return psetv2.InputArgs{}
-	}
-	return *r.vtxoInput
-}
-
-func (r *redeemBranch) UpdateBranch() error {
-	_, liquidNet, err := getNetwork()
-	if err != nil {
-		return err
-	}
-
-	// reverse iteration
+func (r *redeemBranch) UpdatePath() error {
 	for i := len(r.branch) - 1; i >= 0; i-- {
 		pset := r.branch[i]
-		for _, output := range pset.Outputs {
-			pay, err := payment.FromScript(output.Script, liquidNet, nil)
-			if err != nil {
-				return err
-			}
-
-			addr, err := pay.TaprootAddress()
-			if err != nil {
-				return err
-			}
-
-			utxos, err := getOnchainUtxos(addr)
-			if err != nil {
-				return err
-			}
-
-			if len(utxos) > 0 {
-				utx, _ := pset.UnsignedTx()
-				txid := utx.TxHash().String()
-
-				utxo := utxos[0]
-
-				if err := r.rename(txid, utxo.Txid); err != nil {
-					return err
-				}
-
-				if i+1 >= len(r.branch) {
-					r.vtxoInput = &psetv2.InputArgs{
-						Txid:    utxo.Txid,
-						TxIndex: utxo.Vout,
-					}
-
-					r.branch = []*psetv2.Pset{}
-				} else {
-					r.branch = r.branch[i+1:]
-				}
-				return nil
-			}
+		unsignedTx, err := pset.UnsignedTx()
+		if err != nil {
+			return err
 		}
+
+		txHash := unsignedTx.TxHash().String()
+
+		_, err = getTxHex(txHash)
+		if err != nil {
+			continue
+		}
+
+		// if no error, the tx exists onchain, so we can remove it (+ the parents) from the branch
+		if i == len(r.branch)-1 {
+			r.branch = []*psetv2.Pset{}
+		} else {
+			r.branch = r.branch[i+1:]
+		}
+		break
 	}
 
 	return nil
 }
 
-func (r *redeemBranch) Redeem(feesCoins []psetv2.InputArgs, feeCoinsAmount uint64, changeAddr string) ([]*psetv2.Pset, []psetv2.InputArgs, error) {
-	if len(r.branch) == 0 {
-		return []*psetv2.Pset{}, feesCoins, nil
-	}
+func (r *redeemBranch) RedeemPath() ([]string, error) {
+	transactions := make([]string, 0, len(r.branch))
 
-	changeScript, err := address.ToOutputScript(changeAddr)
-	if err != nil {
-		return nil, nil, err
-	}
+	for _, pset := range r.branch {
+		for i, input := range pset.Inputs {
+			foundUnrollingLeaf := false
 
-	change, err := r.addFee(0, feesCoins, feeCoinsAmount, 400, changeScript)
-	if err != nil {
-		return nil, nil, err
-	}
+			if len(input.TapLeafScript) > 0 {
+				for _, leaf := range input.TapLeafScript {
+					if !bytes.Contains(leaf.Script, []byte{0xcf}) || !bytes.Contains(leaf.Script, []byte{0xd1}) {
+						continue
+					}
 
-	for i := range r.branch[1:] {
-		if change == nil {
-			return nil, nil, fmt.Errorf("change is nil")
+					controlBlock, err := leaf.ControlBlock.ToBytes()
+					if err != nil {
+						return nil, err
+					}
+
+					key := leaf.ControlBlock.InternalKey
+					rootHash := leaf.ControlBlock.RootHash(leaf.Script)
+
+					outputScript := taproot.ComputeTaprootOutputKey(key, rootHash)
+					previousScriptKey := input.WitnessUtxo.Script[2:]
+					if !bytes.Equal(schnorr.SerializePubKey(outputScript), previousScriptKey) {
+						return nil, fmt.Errorf("invalid taproot script")
+					}
+
+					vector := [][]byte{
+						leaf.Script,
+						controlBlock[:],
+					}
+
+					// encode vector
+					witness, err := writeTxWitness(vector)
+					if err != nil {
+						return nil, err
+					}
+
+					pset.Inputs[i].FinalScriptWitness = witness
+					break
+				}
+			}
+
+			if !foundUnrollingLeaf {
+				return nil, fmt.Errorf("unrolling leaf not found on input #%d", i)
+			}
 		}
 
-		change, err = r.addFee(i+1, []psetv2.InputArgs{*change}, feeCoinsAmount-400*(uint64(i)+1), 400, changeScript)
+		// extract
+
+		tx, err := psetv2.Extract(pset)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
+
+		hex, err := tx.ToHex()
+		if err != nil {
+			return nil, err
+		}
+
+		transactions = append(transactions, hex)
 	}
 
-	plugInInputs := make([]psetv2.InputArgs, 0, 2)
-
-	utx, err := r.branch[len(r.branch)-1].UnsignedTx()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	r.vtxoInput = &psetv2.InputArgs{
-		Txid:    utx.TxHash().String(),
-		TxIndex: 0,
-	}
-
-	if change != nil {
-		plugInInputs = append(plugInInputs, *change)
-	}
-
-	return r.branch, plugInInputs, nil
+	return transactions, nil
 }
 
-func (r *redeemBranch) EstimateFees() (uint64, error) {
-	return 400 * uint64(len(r.branch)), nil
+func (r *redeemBranch) AddVtxoInput(updater *psetv2.Updater) error {
+	walletPubkey, err := getWalletPublicKey()
+	if err != nil {
+		return err
+	}
+
+	nextInputIndex := len(updater.Pset.Inputs)
+	if err := updater.AddInputs([]psetv2.InputArgs{
+		{
+			Txid:    r.vtxo.txid,
+			TxIndex: r.vtxo.vout,
+		},
+	}); err != nil {
+		return err
+	}
+
+	// add taproot tree letting to spend the vtxo
+	checksigLeaf, err := checksigTapLeafScript(walletPubkey)
+	if err != nil {
+		return nil
+	}
+
+	vtxoTaprootTree := taproot.AssembleTaprootScriptTree(
+		*checksigLeaf,
+		*r.sweepTapLeaf,
+	)
+
+	proofIndex := vtxoTaprootTree.LeafProofIndex[checksigLeaf.TapHash()]
+
+	if err := updater.AddInTapLeafScript(
+		nextInputIndex,
+		psetv2.NewTapLeafScript(
+			vtxoTaprootTree.LeafMerkleProofs[proofIndex],
+			r.internalKey,
+		),
+	); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func findParents(ls []*arkv1.Node, tree *arkv1.Tree) ([]*arkv1.Node, error) {
@@ -254,79 +273,6 @@ func (r *redeemBranch) rename(oldTxid string, newTxID string) error {
 	return nil
 }
 
-func (r *redeemBranch) addFee(index int, inputs []psetv2.InputArgs, amount uint64, fee uint64, changeScript []byte) (*psetv2.InputArgs, error) {
-	if index >= len(r.branch) {
-		return nil, fmt.Errorf("index out of range")
-	}
-
-	pset := r.branch[index]
-	utx, err := pset.UnsignedTx()
-	if err != nil {
-		return nil, err
-	}
-
-	oldTxid := utx.TxHash().String()
-
-	fmt.Println("add fee to: ", oldTxid)
-
-	_, net, err := getNetwork()
-	if err != nil {
-		return nil, err
-	}
-
-	asset := net.AssetID
-
-	updater, err := psetv2.NewUpdater(pset)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := updater.AddInputs(inputs); err != nil {
-		return nil, err
-	}
-
-	if err := updater.AddOutputs([]psetv2.OutputArgs{
-		{
-			Asset:  asset,
-			Amount: fee,
-		},
-	}); err != nil {
-		return nil, err
-	}
-
-	if amount-fee > 0 {
-		if err := updater.AddOutputs([]psetv2.OutputArgs{
-			{
-				Asset:  asset,
-				Amount: amount - fee,
-				Script: changeScript,
-			},
-		}); err != nil {
-			return nil, err
-		}
-	}
-
-	r.branch[index] = updater.Pset
-
-	utx, err = updater.Pset.UnsignedTx()
-	if err != nil {
-		return nil, err
-	}
-
-	if err := r.rename(oldTxid, utx.TxHash().String()); err != nil {
-		return nil, err
-	}
-
-	if amount-fee > 0 {
-		return &psetv2.InputArgs{
-			Txid:    utx.TxHash().String(),
-			TxIndex: uint32(len(utx.Outputs) - 1),
-		}, nil
-	}
-
-	return nil, nil
-}
-
 func findSweepLeafScript(leaves []psetv2.TapLeafScript) (*taproot.TapElementsLeaf, error) {
 	for _, leaf := range leaves {
 		if len(leaf.Script) == 0 {
@@ -340,4 +286,13 @@ func findSweepLeafScript(leaves []psetv2.TapLeafScript) (*taproot.TapElementsLea
 
 	}
 	return nil, fmt.Errorf("sweep leaf not found")
+}
+
+func writeTxWitness(wit [][]byte) ([]byte, error) {
+	s := bufferutil.NewSerializer(nil)
+
+	if err := s.WriteVector(wit); err != nil {
+		return nil, err
+	}
+	return s.Bytes(), nil
 }

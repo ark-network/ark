@@ -166,10 +166,11 @@ func (b *txBuilder) BuildPoolTx(
 
 	ctx := context.Background()
 
-	makeTree, sharedOutputScript, err := buildCongestionTree(
+	makeTree, sharedOutputScript, feesAmount, err := buildCongestionTree(
 		b.net,
 		aspPubkey,
 		offchainReceivers,
+		300,
 	)
 	if err != nil {
 		return
@@ -178,7 +179,7 @@ func (b *txBuilder) BuildPoolTx(
 	sharedOutputScriptHex := hex.EncodeToString(sharedOutputScript)
 
 	poolTxOuts := []ports.TxOutput{
-		newOutput(sharedOutputScriptHex, sharedOutputAmount, b.net.AssetID),
+		newOutput(sharedOutputScriptHex, sharedOutputAmount+feesAmount, b.net.AssetID),
 		newOutput(aspScript, connectorOutputAmount, b.net.AssetID),
 	}
 
