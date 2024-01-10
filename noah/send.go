@@ -21,10 +21,8 @@ type receiver struct {
 
 var (
 	receiversFlag = cli.StringFlag{
-		Name:     "receivers",
-		Usage:    "receivers of the send transaction, JSON encoded: '[{\"to\": \"<...>\", \"amount\": <...>}, ...]'",
-		Value:    "",
-		Required: true,
+		Name:  "receivers",
+		Usage: "receivers of the send transaction, JSON encoded: '[{\"to\": \"<...>\", \"amount\": <...>}, ...]'",
 	}
 	toFlag = cli.StringFlag{
 		Name:  "to",
