@@ -235,7 +235,7 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 	}
 	defer close()
 
-	offchainAddr, onchainAddr, err := getAddress()
+	offchainAddr, _, err := getAddress()
 	if err != nil {
 		return err
 	}
@@ -319,53 +319,26 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 		return err
 	}
 
-	feeAmount := uint64(minRelayFee + 50*len(transactions))
+	feeAmount := uint64(200 + 50*len(transactions))
 
-	utxos, change, err := coinSelectOnchain(onchainAddr, feeAmount)
-	if err != nil {
-		return err
-	}
-
-	inputs := make([]psetv2.InputArgs, 0, len(utxos))
-	for _, utxo := range utxos {
-		inputs = append(inputs, psetv2.InputArgs{
-			Txid:    utxo.Txid,
-			TxIndex: utxo.Vout,
-		})
-	}
-
-	if err := updater.AddInputs(inputs); err != nil {
-		return err
-	}
-
-	outputs := make([]psetv2.OutputArgs, 0, len(utxos))
-
-	outputs = append(outputs, psetv2.OutputArgs{
-		Asset:  net.AssetID,
-		Amount: totalVtxosAmount,
-		Script: onchainScript,
-	})
-
-	if change > 0 {
-		script, err := address.ToOutputScript(onchainAddr)
-		if err != nil {
-			return err
-		}
-
-		outputs = append(outputs, psetv2.OutputArgs{
+	outputs := []psetv2.OutputArgs{
+		{
 			Asset:  net.AssetID,
-			Amount: change,
-			Script: script,
-		})
+			Amount: totalVtxosAmount - feeAmount,
+			Script: onchainScript,
+		},
+		{
+			Asset:  net.AssetID,
+			Amount: feeAmount,
+		},
 	}
-
-	outputs = append(outputs, psetv2.OutputArgs{
-		Asset:  net.AssetID,
-		Amount: feeAmount,
-	})
 
 	if err := updater.AddOutputs(outputs); err != nil {
 		return err
+	}
+
+	if totalVtxosAmount-feeAmount <= 0 {
+		return fmt.Errorf("not enough VTXOs to pay the fees (%d sats), aborting unilateral exit", feeAmount)
 	}
 
 	prvKey, err := privateKeyFromPassword()
@@ -423,15 +396,4 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 	fmt.Printf("(final) redeem tx %s\n", id)
 
 	return nil
-}
-
-func toInputArgs(utxos []utxo) []psetv2.InputArgs {
-	inputs := make([]psetv2.InputArgs, 0, len(utxos))
-	for _, utxo := range utxos {
-		inputs = append(inputs, psetv2.InputArgs{
-			Txid:    utxo.Txid,
-			TxIndex: utxo.Vout,
-		})
-	}
-	return inputs
 }

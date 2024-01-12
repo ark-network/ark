@@ -7,15 +7,12 @@ import (
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/urfave/cli/v2"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/taproot"
 )
-
-const minRelayFee = 400
 
 type RedeemBranch interface {
 	// UpdatePath checks for transactions of the branch onchain and updates the branch accordingly
@@ -77,6 +74,7 @@ func newRedeemBranch(ctx *cli.Context, tree *arkv1.Tree, vtxo vtxo) (RedeemBranc
 	return nil, fmt.Errorf("vtxo not found")
 }
 
+// UpdatePath checks for transactions of the branch onchain and updates the branch accordingly
 func (r *redeemBranch) UpdatePath() error {
 	for i := len(r.branch) - 1; i >= 0; i-- {
 		pset := r.branch[i]
@@ -105,6 +103,7 @@ func (r *redeemBranch) UpdatePath() error {
 	return nil
 }
 
+// RedeemPath returns the list of transactions to broadcast in order to access the vtxo output
 func (r *redeemBranch) RedeemPath() ([]string, error) {
 	transactions := make([]string, 0, len(r.branch))
 
@@ -152,6 +151,7 @@ func (r *redeemBranch) RedeemPath() ([]string, error) {
 	return transactions, nil
 }
 
+// AddVtxoInput is a wrapper around psetv2.Updater adding a taproot input letting to spend the vtxo output
 func (r *redeemBranch) AddVtxoInput(updater *psetv2.Updater) error {
 	walletPubkey, err := getWalletPublicKey()
 	if err != nil {
@@ -194,6 +194,8 @@ func (r *redeemBranch) AddVtxoInput(updater *psetv2.Updater) error {
 	return nil
 }
 
+// findParents is a recursive function that finds all the parents of a VTXO in a congestion tree
+// it returns the branch of the tree letting to redeem the VTXO (from pool tx to leaf)
 func findParents(ls []*arkv1.Node, tree *arkv1.Tree) ([]*arkv1.Node, error) {
 	if len(ls) == 0 {
 		return nil, fmt.Errorf("empty list")
@@ -218,29 +220,7 @@ func findParents(ls []*arkv1.Node, tree *arkv1.Tree) ([]*arkv1.Node, error) {
 	return nil, fmt.Errorf("parent not found")
 }
 
-func (r *redeemBranch) rename(oldTxid string, newTxID string) error {
-	newTxHash, err := chainhash.NewHashFromStr(newTxID)
-	if err != nil {
-		return err
-	}
-
-	for _, pset := range r.branch {
-		for i, input := range pset.Inputs {
-			txHash, err := chainhash.NewHash(input.PreviousTxid)
-			if err != nil {
-				return err
-			}
-
-			if txHash.String() == oldTxid {
-				pset.Inputs[i].PreviousTxid = newTxHash.CloneBytes()
-			}
-
-		}
-	}
-
-	return nil
-}
-
+// findSweepLeafScript finds the sweep leaf in a set of tap leaf scripts
 func findSweepLeafScript(leaves []psetv2.TapLeafScript) (*taproot.TapElementsLeaf, error) {
 	for _, leaf := range leaves {
 		if len(leaf.Script) == 0 {

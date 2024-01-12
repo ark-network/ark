@@ -177,33 +177,6 @@ type utxo struct {
 	Asset  string `json:"asset"`
 }
 
-func coinSelectOnchain(addr string, amount uint64) ([]utxo, uint64, error) {
-	utxos, err := getOnchainUtxos(addr)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	selected := make([]utxo, 0)
-	selectedAmount := uint64(0)
-
-	for _, utxo := range utxos {
-		if selectedAmount >= amount {
-			break
-		}
-
-		selected = append(selected, utxo)
-		selectedAmount += utxo.Amount
-	}
-
-	if selectedAmount < amount {
-		return nil, 0, fmt.Errorf("insufficient balance: %d to cover %d", selectedAmount, amount)
-	}
-
-	change := selectedAmount - amount
-
-	return selected, change, nil
-}
-
 func getOnchainUtxos(addr string) ([]utxo, error) {
 	_, net, err := getNetwork()
 	if err != nil {

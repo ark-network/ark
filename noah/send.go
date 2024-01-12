@@ -240,7 +240,11 @@ func ping(ctx *cli.Context, client arkv1.ArkServiceClient, req *arkv1.PingReques
 
 	go func(t *time.Ticker) {
 		for range t.C {
-			client.Ping(ctx.Context, req)
+			_, err := client.Ping(ctx.Context, req)
+			if err != nil {
+				fmt.Printf("error while pinging ASP: %s\n", err)
+				return
+			}
 		}
 	}(ticker)
 

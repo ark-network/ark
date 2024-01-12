@@ -28,7 +28,6 @@ import (
 const binaryFreeListMaxItems = 1024
 
 var (
-	bigEndian    = binary.BigEndian
 	littleEndian = binary.LittleEndian
 	// errNonCanonicalVarInt is the common format string used for non-canonically
 	// encoded variable length integer errors.
