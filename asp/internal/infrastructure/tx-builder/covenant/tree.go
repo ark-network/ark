@@ -311,9 +311,8 @@ type node struct {
 	feeSats            uint64
 
 	// cached values
-	_taprootKey      *secp256k1.PublicKey
-	_taprootTree     *taproot.IndexedElementsTapScriptTree
-	_extraFeesAmount *uint32
+	_taprootKey  *secp256k1.PublicKey
+	_taprootTree *taproot.IndexedElementsTapScriptTree
 }
 
 // create a node from a single receiver
@@ -489,7 +488,6 @@ func (n *node) output() (*psetv2.OutputArgs, error) {
 type psetArgs struct {
 	input       psetv2.InputArgs
 	taprootTree *taproot.IndexedElementsTapScriptTree
-	level       int
 }
 
 // create the node Pset from the previous node Pset represented by input arg
@@ -618,8 +616,4 @@ func (n *node) psets(inputArgs *psetArgs, level int) ([]psetWithLevel, error) {
 	}
 
 	return append(nodeResult, append(psetsLeft, psetsRight...)...), nil
-}
-
-func numberOfNodes(numberOfVtxos int) int {
-	return 2*numberOfVtxos - 1
 }

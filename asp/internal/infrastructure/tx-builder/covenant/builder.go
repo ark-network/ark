@@ -273,14 +273,6 @@ func receiversFromPayments(
 	return
 }
 
-func sumReceivers(receivers []domain.Receiver) uint64 {
-	var sum uint64
-	for _, r := range receivers {
-		sum += r.Amount
-	}
-	return sum
-}
-
 type output struct {
 	script string
 	amount uint64
