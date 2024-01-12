@@ -1,6 +1,8 @@
 package main
 
-import "github.com/vulpemventures/go-elements/transaction"
+import (
+	"github.com/vulpemventures/go-elements/transaction"
+)
 
 type Explorer interface {
 	GetTxHex(txid string) (string, error)

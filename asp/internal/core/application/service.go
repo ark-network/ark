@@ -274,15 +274,6 @@ func (s *service) startFinalization() {
 		return
 	}
 
-	for i, level := range tree {
-		fmt.Println("level:", i)
-		for _, n := range level {
-			fmt.Println("txid:", n.Txid)
-			fmt.Println("parent txid:", n.ParentTxid)
-			fmt.Println("leaf:", n.Leaf)
-		}
-	}
-
 	connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(s.pubkey, signedPoolTx, payments)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))

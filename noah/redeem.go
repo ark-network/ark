@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
@@ -259,9 +260,8 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 		return fmt.Errorf("unilateral redemption does not allow change, it will redeem all the selected VTXOs for a value of %d", totalVtxosAmount)
 	}
 
-	fmt.Printf("redeeming %d VTXOs for a value of %d sats\n", len(selectedCoins), totalVtxosAmount)
-
-	totalAmount := uint64(0)
+	fmt.Printf("WARNING: unilateral exit (--force) will redeem all your VTXOs\n")
+	fmt.Printf("redeeming %d VTXOs (%d sats)...\n", len(selectedCoins), totalVtxosAmount)
 
 	finalPset, err := psetv2.New(nil, nil, nil)
 	if err != nil {
@@ -312,8 +312,6 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 				transactionsMap[txHex] = struct{}{}
 			}
 		}
-
-		totalAmount += vtxo.amount
 	}
 
 	_, net, err := getNetwork()
@@ -344,7 +342,7 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 
 	outputs = append(outputs, psetv2.OutputArgs{
 		Asset:  net.AssetID,
-		Amount: totalAmount,
+		Amount: totalVtxosAmount,
 		Script: onchainScript,
 	})
 
@@ -377,14 +375,22 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 
 	explorer := NewExplorer()
 
-	for _, txHex := range transactions {
-		txid, err := explorer.Broadcast(txHex)
-		if err != nil {
-			return err
-		}
-		time.Sleep(10 * time.Millisecond)
+	for i, txHex := range transactions {
+		for {
+			txid, err := explorer.Broadcast(txHex)
+			if err != nil {
+				if strings.Contains(err.Error(), "bad-txns-inputs-missingorspent") {
+					time.Sleep(1 * time.Second)
+				} else {
+					return err
+				}
+			}
 
-		fmt.Printf("(unilateral exit) broadcasted tx %s\n", txid)
+			if len(txid) > 0 {
+				fmt.Printf("(%d/%d) broadcasted tx %s\n", i+1, len(transactions), txid)
+				break
+			}
+		}
 	}
 
 	if err := signPset(finalPset, explorer, prvKey); err != nil {
@@ -414,7 +420,7 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 		return err
 	}
 
-	fmt.Printf("(unilateral exit) final redeem tx %s\n", id)
+	fmt.Printf("(final) redeem tx %s\n", id)
 
 	return nil
 }
