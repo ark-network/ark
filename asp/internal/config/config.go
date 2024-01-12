@@ -21,6 +21,7 @@ type Config struct {
 	NoTLS         bool
 	Network       common.Network
 	LogLevel      int
+	MinRelayFee   uint64
 }
 
 var (
@@ -34,6 +35,7 @@ var (
 	Insecure      = "INSECURE"
 	LogLevel      = "LOG_LEVEL"
 	Network       = "NETWORK"
+	MinRelayFee   = "MIN_RELAY_FEE"
 
 	defaultDatadir       = common.AppDataDir("arkd", false)
 	defaultRoundInterval = 60
@@ -44,6 +46,7 @@ var (
 	defaultInsecure      = true
 	defaultNetwork       = "testnet"
 	defaultLogLevel      = 5
+	defaultMinRelayFee   = 30
 )
 
 func LoadConfig() (*Config, error) {
@@ -59,6 +62,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(Insecure, defaultInsecure)
 	viper.SetDefault(LogLevel, defaultLogLevel)
 	viper.SetDefault(Network, defaultNetwork)
+	viper.SetDefault(MinRelayFee, defaultMinRelayFee)
 
 	net, err := getNetwork()
 	if err != nil {
@@ -80,6 +84,7 @@ func LoadConfig() (*Config, error) {
 		DbDir:         filepath.Join(viper.GetString(Datadir), "db"),
 		LogLevel:      viper.GetInt(LogLevel),
 		Network:       net,
+		MinRelayFee:   viper.GetUint64(MinRelayFee),
 	}, nil
 }
 

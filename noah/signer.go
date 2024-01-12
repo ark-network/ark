@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
+	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -12,24 +13,8 @@ import (
 	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
-	"github.com/vulpemventures/go-elements/taproot"
 	"github.com/vulpemventures/go-elements/transaction"
 )
-
-func checksigScript(pubkey *secp256k1.PublicKey) ([]byte, error) {
-	key := schnorr.SerializePubKey(pubkey)
-	return txscript.NewScriptBuilder().AddData(key).AddOp(txscript.OP_CHECKSIG).Script()
-}
-
-func checksigTapLeafScript(pubkey *secp256k1.PublicKey) (*taproot.TapElementsLeaf, error) {
-	script, err := checksigScript(pubkey)
-	if err != nil {
-		return nil, err
-	}
-
-	tapLeaf := taproot.NewBaseTapElementsLeaf(script)
-	return &tapLeaf, nil
-}
 
 func signPset(
 	pset *psetv2.Pset,
@@ -145,7 +130,7 @@ func signPset(
 			return err
 		}
 
-		leafScript, err := checksigScript(pubkey)
+		vtxoLeaf, err := common.VtxoScript(pubkey)
 		if err != nil {
 			return err
 		}
@@ -156,9 +141,7 @@ func signPset(
 				return err
 			}
 			for _, leaf := range input.TapLeafScript {
-				if bytes.Equal(leaf.Script, leafScript) {
-					fmt.Println("found tap leaf script")
-
+				if bytes.Equal(leaf.Script, vtxoLeaf.Script) {
 					hash := leaf.TapHash()
 
 					preimage := utx.HashForWitnessV1(

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -66,7 +67,11 @@ func redeemAction(ctx *cli.Context) error {
 	}
 
 	if force {
-		return unilateralRedeem(ctx, addr, amount)
+		if amount > 0 {
+			fmt.Println("amount flag is forbidden when using --force")
+		}
+
+		return unilateralRedeem(ctx, addr)
 	}
 
 	return collaborativeRedeem(ctx, addr, amount)
@@ -217,7 +222,7 @@ func collaborativeRedeem(ctx *cli.Context, addr string, amount uint64) error {
 	return nil
 }
 
-func unilateralRedeem(ctx *cli.Context, addr string, amount uint64) error {
+func unilateralRedeem(ctx *cli.Context, addr string) error {
 	onchainScript, err := address.ToOutputScript(addr)
 	if err != nil {
 		return err
@@ -239,21 +244,22 @@ func unilateralRedeem(ctx *cli.Context, addr string, amount uint64) error {
 		return err
 	}
 
-	selectedCoins, changeAmount, err := coinSelect(vtxos, amount)
+	totalVtxosAmount := uint64(0)
+
+	for _, vtxo := range vtxos {
+		totalVtxosAmount += vtxo.amount
+	}
+
+	selectedCoins, changeAmount, err := coinSelect(vtxos, uint64(totalVtxosAmount))
 	if err != nil {
 		return err
 	}
 
 	if changeAmount > 0 {
-		return fmt.Errorf("unilateral redemption does not allow change, it will redeem all the selected VTXOs for a value of %d", amount+changeAmount)
+		return fmt.Errorf("unilateral redemption does not allow change, it will redeem all the selected VTXOs for a value of %d", totalVtxosAmount)
 	}
 
-	fmt.Println("following VTXO will be redeemed:")
-	for _, coin := range selectedCoins {
-		fmt.Printf("  - %s:%d \t %d sats\n", coin.txid, coin.vout, coin.amount)
-	}
-
-	transactions := make([][]string, 0)
+	fmt.Printf("redeeming %d VTXOs for a value of %d sats\n", len(selectedCoins), totalVtxosAmount)
 
 	totalAmount := uint64(0)
 
@@ -266,8 +272,23 @@ func unilateralRedeem(ctx *cli.Context, addr string, amount uint64) error {
 		return err
 	}
 
+	congestionTrees := make(map[string]*arkv1.Tree, 0)
+	transactionsMap := make(map[string]struct{}, 0)
+	transactions := make([]string, 0)
+
 	for _, vtxo := range selectedCoins {
-		redeemBranch, err := newRedeemBranch(ctx, client, vtxo)
+		if _, ok := congestionTrees[vtxo.poolTxid]; !ok {
+			round, err := client.GetRound(ctx.Context, &arkv1.GetRoundRequest{
+				Txid: vtxo.poolTxid,
+			})
+			if err != nil {
+				return err
+			}
+
+			congestionTrees[vtxo.poolTxid] = round.GetRound().GetCongestionTree()
+		}
+
+		redeemBranch, err := newRedeemBranch(ctx, congestionTrees[vtxo.poolTxid], vtxo)
 		if err != nil {
 			return err
 		}
@@ -276,7 +297,7 @@ func unilateralRedeem(ctx *cli.Context, addr string, amount uint64) error {
 			return err
 		}
 
-		branchTransactions, err := redeemBranch.RedeemPath()
+		branchTxs, err := redeemBranch.RedeemPath()
 		if err != nil {
 			return err
 		}
@@ -285,7 +306,13 @@ func unilateralRedeem(ctx *cli.Context, addr string, amount uint64) error {
 			return err
 		}
 
-		transactions = append(transactions, branchTransactions)
+		for _, txHex := range branchTxs {
+			if _, ok := transactionsMap[txHex]; !ok {
+				transactions = append(transactions, txHex)
+				transactionsMap[txHex] = struct{}{}
+			}
+		}
+
 		totalAmount += vtxo.amount
 	}
 
@@ -322,10 +349,15 @@ func unilateralRedeem(ctx *cli.Context, addr string, amount uint64) error {
 	})
 
 	if change > 0 {
+		script, err := address.ToOutputScript(onchainAddr)
+		if err != nil {
+			return err
+		}
+
 		outputs = append(outputs, psetv2.OutputArgs{
 			Asset:  net.AssetID,
 			Amount: change,
-			Script: onchainScript,
+			Script: script,
 		})
 	}
 
@@ -345,15 +377,14 @@ func unilateralRedeem(ctx *cli.Context, addr string, amount uint64) error {
 
 	explorer := NewExplorer()
 
-	for _, tx := range transactions {
-		for _, txHex := range tx {
-			txid, err := explorer.Broadcast(txHex)
-			if err != nil {
-				return err
-			}
-
-			fmt.Printf("(branch) broadcasted tx %s\n", txid)
+	for _, txHex := range transactions {
+		txid, err := explorer.Broadcast(txHex)
+		if err != nil {
+			return err
 		}
+		time.Sleep(10 * time.Millisecond)
+
+		fmt.Printf("(unilateral exit) broadcasted tx %s\n", txid)
 	}
 
 	if err := signPset(finalPset, explorer, prvKey); err != nil {
@@ -383,7 +414,7 @@ func unilateralRedeem(ctx *cli.Context, addr string, amount uint64) error {
 		return err
 	}
 
-	fmt.Printf("(final) broadcasted tx %s\n", id)
+	fmt.Printf("(unilateral exit) final redeem tx %s\n", id)
 
 	return nil
 }

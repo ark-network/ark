@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
-	"github.com/ark-network/noah/pkg/bufferutil"
+	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
@@ -29,23 +29,11 @@ type RedeemBranch interface {
 type redeemBranch struct {
 	vtxo         *vtxo
 	branch       []*psetv2.Pset
-	vtxoInput    *psetv2.InputArgs
 	sweepTapLeaf *taproot.TapElementsLeaf
 	internalKey  *secp256k1.PublicKey
 }
 
-func newRedeemBranch(ctx *cli.Context, client arkv1.ArkServiceClient, vtxo vtxo) (RedeemBranch, error) {
-	round, err := client.GetRound(ctx.Context, &arkv1.GetRoundRequest{
-		Txid: vtxo.poolTxid,
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	tree := round.GetRound().GetCongestionTree()
-
-	// find vtxo
+func newRedeemBranch(ctx *cli.Context, tree *arkv1.Tree, vtxo vtxo) (RedeemBranch, error) {
 	for _, level := range tree.Levels {
 		for _, node := range level.Nodes {
 			if node.Txid == vtxo.txid {
@@ -70,8 +58,7 @@ func newRedeemBranch(ctx *cli.Context, client arkv1.ArkServiceClient, vtxo vtxo)
 				}
 
 				xOnlyKey := branch[0].Inputs[0].TapInternalKey
-				keyBytes := append([]byte{0x02}, xOnlyKey...)
-				internalKey, err := schnorr.ParsePubKey(keyBytes)
+				internalKey, err := schnorr.ParsePubKey(xOnlyKey)
 				if err != nil {
 					return nil, err
 				}
@@ -79,7 +66,6 @@ func newRedeemBranch(ctx *cli.Context, client arkv1.ArkServiceClient, vtxo vtxo)
 				return &redeemBranch{
 					vtxo:         &vtxo,
 					branch:       branch,
-					vtxoInput:    nil,
 					sweepTapLeaf: sweepTapLeaf,
 					internalKey:  internalKey,
 				}, nil
@@ -112,6 +98,7 @@ func (r *redeemBranch) UpdatePath() error {
 		} else {
 			r.branch = r.branch[i+1:]
 		}
+
 		break
 	}
 
@@ -123,62 +110,43 @@ func (r *redeemBranch) RedeemPath() ([]string, error) {
 
 	for _, pset := range r.branch {
 		for i, input := range pset.Inputs {
-			foundUnrollingLeaf := false
+			if len(input.TapLeafScript) == 0 {
+				return nil, fmt.Errorf("tap leaf script not found on input #%d", i)
+			}
 
-			if len(input.TapLeafScript) > 0 {
-				for _, leaf := range input.TapLeafScript {
-					if !bytes.Contains(leaf.Script, []byte{0xcf}) || !bytes.Contains(leaf.Script, []byte{0xd1}) {
-						continue
-					}
+			sweepTapLeafScript := r.sweepTapLeaf.Script
 
-					controlBlock, err := leaf.ControlBlock.ToBytes()
-					if err != nil {
-						return nil, err
-					}
-
-					key := leaf.ControlBlock.InternalKey
-					rootHash := leaf.ControlBlock.RootHash(leaf.Script)
-
-					outputScript := taproot.ComputeTaprootOutputKey(key, rootHash)
-					previousScriptKey := input.WitnessUtxo.Script[2:]
-					if !bytes.Equal(schnorr.SerializePubKey(outputScript), previousScriptKey) {
-						return nil, fmt.Errorf("invalid taproot script")
-					}
-
-					vector := [][]byte{
-						leaf.Script,
-						controlBlock[:],
-					}
-
-					// encode vector
-					witness, err := writeTxWitness(vector)
-					if err != nil {
-						return nil, err
-					}
-
-					pset.Inputs[i].FinalScriptWitness = witness
-					break
+			for _, leaf := range input.TapLeafScript {
+				if bytes.Equal(leaf.Script, sweepTapLeafScript) {
+					continue
 				}
+
+				controlBlock, err := leaf.ControlBlock.ToBytes()
+				if err != nil {
+					return nil, err
+				}
+
+				unsignedTx, err := pset.UnsignedTx()
+				if err != nil {
+					return nil, err
+				}
+
+				unsignedTx.Inputs[i].Witness = [][]byte{
+					leaf.Script,
+					controlBlock[:],
+				}
+
+				hex, err := unsignedTx.ToHex()
+				if err != nil {
+					return nil, err
+				}
+				transactions = append(transactions, hex)
+
+				break
 			}
 
-			if !foundUnrollingLeaf {
-				return nil, fmt.Errorf("unrolling leaf not found on input #%d", i)
-			}
 		}
 
-		// extract
-
-		tx, err := psetv2.Extract(pset)
-		if err != nil {
-			return nil, err
-		}
-
-		hex, err := tx.ToHex()
-		if err != nil {
-			return nil, err
-		}
-
-		transactions = append(transactions, hex)
 	}
 
 	return transactions, nil
@@ -201,7 +169,7 @@ func (r *redeemBranch) AddVtxoInput(updater *psetv2.Updater) error {
 	}
 
 	// add taproot tree letting to spend the vtxo
-	checksigLeaf, err := checksigTapLeafScript(walletPubkey)
+	checksigLeaf, err := common.VtxoScript(walletPubkey)
 	if err != nil {
 		return nil
 	}
@@ -286,13 +254,4 @@ func findSweepLeafScript(leaves []psetv2.TapLeafScript) (*taproot.TapElementsLea
 
 	}
 	return nil, fmt.Errorf("sweep leaf not found")
-}
-
-func writeTxWitness(wit [][]byte) ([]byte, error) {
-	s := bufferutil.NewSerializer(nil)
-
-	if err := s.WriteVector(wit); err != nil {
-		return nil, err
-	}
-	return s.Bytes(), nil
 }

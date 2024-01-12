@@ -11,7 +11,6 @@ import (
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/psetv2"
@@ -41,6 +40,7 @@ type Service interface {
 }
 
 type service struct {
+	minRelayFee   uint64
 	roundInterval int64
 	network       common.Network
 	onchainNework network.Network
@@ -58,6 +58,7 @@ type service struct {
 func NewService(
 	interval int64, network common.Network, onchainNetwork network.Network,
 	walletSvc ports.WalletService, repoManager ports.RepoManager, builder ports.TxBuilder,
+	minRelayFee uint64,
 ) (Service, error) {
 	eventsCh := make(chan domain.RoundEvent)
 	paymentRequests := newPaymentsMap(nil)
@@ -67,7 +68,7 @@ func NewService(
 		return nil, fmt.Errorf("failed to fetch pubkey: %s", err)
 	}
 	svc := &service{
-		interval, network, onchainNetwork, pubkey,
+		minRelayFee, interval, network, onchainNetwork, pubkey,
 		walletSvc, repoManager, builder, paymentRequests, forfeitTxs,
 		eventsCh,
 	}
@@ -266,11 +267,20 @@ func (s *service) startFinalization() {
 		return
 	}
 
-	signedPoolTx, tree, err := s.builder.BuildPoolTx(s.pubkey, s.wallet, payments)
+	signedPoolTx, tree, err := s.builder.BuildPoolTx(s.pubkey, s.wallet, payments, s.minRelayFee)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
 		log.WithError(err).Warn("failed to create pool tx")
 		return
+	}
+
+	for i, level := range tree {
+		fmt.Println("level:", i)
+		for _, n := range level {
+			fmt.Println("txid:", n.Txid)
+			fmt.Println("parent txid:", n.ParentTxid)
+			fmt.Println("leaf:", n.Leaf)
+		}
 	}
 
 	connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(s.pubkey, signedPoolTx, payments)
@@ -354,7 +364,6 @@ func (s *service) updateProjectionStore(round *domain.Round) {
 				time.Sleep(100 * time.Millisecond)
 				continue
 			}
-			log.Debugf("added %d new vtxos", len(newVtxos))
 			break
 		}
 	}
@@ -415,7 +424,6 @@ func (s *service) getNewVtxos(round *domain.Round) []domain.Vtxo {
 						Receiver: domain.Receiver{Pubkey: pubkey, Amount: out.Value},
 						PoolTx:   round.Txid,
 					})
-					logrus.Debugf("pool %s", round.Txid)
 					break
 				}
 			}

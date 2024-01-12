@@ -150,6 +150,7 @@ func (b *txBuilder) BuildPoolTx(
 	aspPubkey *secp256k1.PublicKey,
 	wallet ports.WalletService,
 	payments []domain.Payment,
+	minRelayFee uint64,
 ) (poolTx string, congestionTree domain.CongestionTree, err error) {
 	aspScriptBytes, err := p2wpkhScript(aspPubkey, b.net)
 	if err != nil {
@@ -159,18 +160,16 @@ func (b *txBuilder) BuildPoolTx(
 	aspScript := hex.EncodeToString(aspScriptBytes)
 
 	offchainReceivers, onchainReceivers := receiversFromPayments(payments)
-	sharedOutputAmount := sumReceivers(offchainReceivers)
-
 	numberOfConnectors := numberOfVTXOs(payments)
 	connectorOutputAmount := connectorAmount * numberOfConnectors
 
 	ctx := context.Background()
 
-	makeTree, sharedOutputScript, feesAmount, err := buildCongestionTree(
+	makeTree, sharedOutputScript, sharedOutputAmount, err := buildCongestionTree(
 		b.net,
 		aspPubkey,
 		offchainReceivers,
-		300,
+		minRelayFee,
 	)
 	if err != nil {
 		return
@@ -179,7 +178,7 @@ func (b *txBuilder) BuildPoolTx(
 	sharedOutputScriptHex := hex.EncodeToString(sharedOutputScript)
 
 	poolTxOuts := []ports.TxOutput{
-		newOutput(sharedOutputScriptHex, sharedOutputAmount+feesAmount, b.net.AssetID),
+		newOutput(sharedOutputScriptHex, sharedOutputAmount, b.net.AssetID),
 		newOutput(aspScript, connectorOutputAmount, b.net.AssetID),
 	}
 
