@@ -18,7 +18,7 @@ func parseTxs(txs []string) ([]string, error) {
 	}
 	for _, tx := range txs {
 		if _, err := psetv2.NewPsetFromBase64(tx); err != nil {
-			return nil, fmt.Errorf("invalid tx format")
+			return nil, fmt.Errorf("invalid tx format %s", err)
 		}
 	}
 	return txs, nil

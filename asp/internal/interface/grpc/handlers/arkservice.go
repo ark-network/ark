@@ -88,7 +88,7 @@ func (h *handler) FinalizePayment(ctx context.Context, req *arkv1.FinalizePaymen
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	if err := h.svc.SignVtxos(ctx, forfeitTxs); err != nil {
+	if err := h.svc.UpdateForfeitTxs(ctx, forfeitTxs); err != nil {
 		return nil, err
 	}
 

@@ -30,7 +30,7 @@ type Service interface {
 	Stop()
 	SpendVtxos(ctx context.Context, inputs []domain.VtxoKey) (string, error)
 	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error
-	SignVtxos(ctx context.Context, forfeitTxs []string) error
+	UpdateForfeitTxs(ctx context.Context, forfeitTxs []string) error
 	FaucetVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) error
 	GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error)
 	GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
@@ -60,7 +60,7 @@ func NewService(
 ) (Service, error) {
 	eventsCh := make(chan domain.RoundEvent)
 	paymentRequests := newPaymentsMap(nil)
-	forfeitTxs := newForfeitTxsMap()
+	forfeitTxs := newForfeitTxsMap(&onchainNetwork)
 	pubkey, err := walletSvc.GetPubkey(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch pubkey: %s", err)
@@ -125,6 +125,10 @@ func (s *service) ClaimVtxos(ctx context.Context, creds string, receivers []doma
 	return s.paymentRequests.update(*payment)
 }
 
+func (s *service) UpdateForfeitTxs(ctx context.Context, forfeitTxs []string) error {
+	return s.forfeitTxs.update(forfeitTxs)
+}
+
 func (s *service) UpdatePaymentStatus(_ context.Context, id string) error {
 	return s.paymentRequests.updatePingTimestamp(id)
 }
@@ -164,13 +168,6 @@ func (s *service) FaucetVtxos(ctx context.Context, userPubkey *secp256k1.PublicK
 		return err
 	}
 	return s.paymentRequests.updatePingTimestamp(payment.Id)
-}
-
-func (s *service) SignVtxos(ctx context.Context, forfeitTxs []string) error {
-	if err := s.forfeitTxs.sign(forfeitTxs); err != nil {
-		return fmt.Errorf("invalid forfeit tx: %s", err)
-	}
-	return nil
 }
 
 func (s *service) ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, error) {
