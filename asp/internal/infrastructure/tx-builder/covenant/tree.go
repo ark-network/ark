@@ -34,7 +34,7 @@ func withOutput(index byte, taprootWitnessProgram []byte, amount uint64, verify 
 	binary.LittleEndian.PutUint64(amountBuffer, amount)
 
 	script := []byte{
-		byte(index),
+		index,
 		OP_INSPECTOUTPUTSCRIPTPUBKEY,
 		txscript.OP_1,
 		txscript.OP_EQUALVERIFY,
@@ -45,7 +45,7 @@ func withOutput(index byte, taprootWitnessProgram []byte, amount uint64, verify 
 	script = append(script, []byte{
 		txscript.OP_EQUALVERIFY,
 	}...)
-	script = append(script, byte(index))
+	script = append(script, index)
 	script = append(script, []byte{
 		OP_INSPECTOUTPUTVALUE,
 		txscript.OP_1,
@@ -349,27 +349,27 @@ func newBranch(
 }
 
 func (n *node) isLeaf() bool {
-	return n.left.isSomething() && (n.right == nil || n.right.isSomething())
+	return n.left.isEmpty() && (n.right == nil || n.right.isEmpty())
 }
 
 // is it the final node of the tree
-func (n *node) isSomething() bool {
+func (n *node) isEmpty() bool {
 	return n.left == nil && n.right == nil
 }
 
 func (n *node) countChildren() int {
-	if n.isSomething() {
+	if n.isEmpty() {
 		return 0
 	}
 
 	result := 0
 
-	if n.left != nil && !n.left.isSomething() {
+	if n.left != nil && !n.left.isEmpty() {
 		result++
 		result += n.left.countChildren()
 	}
 
-	if n.right != nil && !n.right.isSomething() {
+	if n.right != nil && !n.right.isEmpty() {
 		result++
 		result += n.right.countChildren()
 	}
@@ -383,7 +383,7 @@ func (n *node) amount() uint64 {
 	for _, r := range n.receivers {
 		amount += r.Amount
 	}
-	if n.isSomething() {
+	if n.isEmpty() {
 		return amount
 	}
 
@@ -403,7 +403,7 @@ func (n *node) taprootKey() (*secp256k1.PublicKey, *taproot.IndexedElementsTapSc
 		return nil, nil, err
 	}
 
-	if n.isSomething() {
+	if n.isEmpty() {
 		key, err := hex.DecodeString(n.receivers[0].Pubkey)
 		if err != nil {
 			return nil, nil, err
@@ -515,7 +515,7 @@ func (n *node) pset(args *psetArgs) (*psetv2.Pset, error) {
 		Asset:  n.network.AssetID,
 	}
 
-	if n.isSomething() {
+	if n.isEmpty() {
 		output, err := n.output()
 		if err != nil {
 			return nil, err
@@ -568,11 +568,11 @@ func (n *node) psets(inputArgs *psetArgs, level int) ([]psetWithLevel, error) {
 		{pset, level, n.isLeaf()},
 	}
 
-	if n.left.isSomething() && (n.right == nil || n.right.isSomething()) {
+	if n.left.isEmpty() && (n.right == nil || n.right.isEmpty()) {
 		return nodeResult, nil
 	}
 
-	if n.isSomething() {
+	if n.isEmpty() {
 		return nodeResult, nil
 	}
 

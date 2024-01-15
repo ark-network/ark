@@ -1,6 +1,8 @@
 package main
 
 import (
+	"strings"
+
 	"github.com/vulpemventures/go-elements/transaction"
 )
 
@@ -42,5 +44,13 @@ func (e *explorer) Broadcast(txHex string) (string, error) {
 	txid := tx.TxHash().String()
 	e.cache[txid] = txHex
 
-	return broadcast(txHex)
+	txid, err = broadcast(txHex)
+	if err != nil {
+		if strings.Contains(err.Error(), "Transaction already in block chain") {
+			return txid, nil
+		}
+		return "", err
+	}
+
+	return txid, nil
 }

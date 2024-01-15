@@ -355,6 +355,7 @@ func (s *service) updateProjectionStore(round *domain.Round) {
 				time.Sleep(100 * time.Millisecond)
 				continue
 			}
+			log.Debugf("added %d new vtxos", len(newVtxos))
 			break
 		}
 	}

@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io"
+	"log"
+	"math"
+	"os"
 	"strings"
 	"time"
 
@@ -69,7 +73,7 @@ func redeemAction(ctx *cli.Context) error {
 
 	if force {
 		if amount > 0 {
-			fmt.Println("amount flag is forbidden when using --force")
+			fmt.Printf("WARNING: unilateral exit (--force) ignores --amount flag, it will redeem all your VTXOs\n")
 		}
 
 		return unilateralRedeem(ctx, addr)
@@ -251,17 +255,10 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 		totalVtxosAmount += vtxo.amount
 	}
 
-	selectedCoins, changeAmount, err := coinSelect(vtxos, uint64(totalVtxosAmount))
-	if err != nil {
-		return err
+	ok := askForConfirmation(fmt.Sprintf("redeem %d sats to %s ?", totalVtxosAmount, addr))
+	if !ok {
+		return fmt.Errorf("aborting unilateral exit")
 	}
-
-	if changeAmount > 0 {
-		return fmt.Errorf("unilateral redemption does not allow change, it will redeem all the selected VTXOs for a value of %d", totalVtxosAmount)
-	}
-
-	fmt.Printf("WARNING: unilateral exit (--force) will redeem all your VTXOs\n")
-	fmt.Printf("redeeming %d VTXOs (%d sats)...\n", len(selectedCoins), totalVtxosAmount)
 
 	finalPset, err := psetv2.New(nil, nil, nil)
 	if err != nil {
@@ -276,7 +273,7 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 	transactionsMap := make(map[string]struct{}, 0)
 	transactions := make([]string, 0)
 
-	for _, vtxo := range selectedCoins {
+	for _, vtxo := range vtxos {
 		if _, ok := congestionTrees[vtxo.poolTxid]; !ok {
 			round, err := client.GetRound(ctx.Context, &arkv1.GetRoundRequest{
 				Txid: vtxo.poolTxid,
@@ -319,17 +316,11 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 		return err
 	}
 
-	feeAmount := uint64(200 + 50*len(transactions))
-
 	outputs := []psetv2.OutputArgs{
 		{
 			Asset:  net.AssetID,
-			Amount: totalVtxosAmount - feeAmount,
+			Amount: totalVtxosAmount,
 			Script: onchainScript,
-		},
-		{
-			Asset:  net.AssetID,
-			Amount: feeAmount,
 		},
 	}
 
@@ -337,8 +328,27 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 		return err
 	}
 
+	utx, err := updater.Pset.UnsignedTx()
+	if err != nil {
+		return err
+	}
+
+	vBytes := utx.VirtualSize()
+	feeAmount := uint64(math.Ceil(float64(vBytes) * 0.2))
+
 	if totalVtxosAmount-feeAmount <= 0 {
 		return fmt.Errorf("not enough VTXOs to pay the fees (%d sats), aborting unilateral exit", feeAmount)
+	}
+
+	updater.Pset.Outputs[0].Value = totalVtxosAmount - feeAmount
+
+	if err := updater.AddOutputs([]psetv2.OutputArgs{
+		{
+			Asset:  net.AssetID,
+			Amount: feeAmount,
+		},
+	}); err != nil {
+		return err
 	}
 
 	prvKey, err := privateKeyFromPassword()
@@ -396,4 +406,27 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 	fmt.Printf("(final) redeem tx %s\n", id)
 
 	return nil
+}
+
+// askForConfirmation asks the user for confirmation. A user must type in "yes" or "no" and then press enter.
+// if the input is not recognized, it will ask again.
+func askForConfirmation(s string) bool {
+	reader := bufio.NewReader(os.Stdin)
+
+	for {
+		fmt.Printf("%s [y/n]: ", s)
+
+		response, err := reader.ReadString('\n')
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		response = strings.ToLower(strings.TrimSpace(response))
+
+		if response == "y" || response == "yes" {
+			return true
+		} else if response == "n" || response == "no" {
+			return false
+		}
+	}
 }
