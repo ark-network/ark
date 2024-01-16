@@ -8,12 +8,14 @@ import (
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenant"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/require"
 	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
+	"github.com/vulpemventures/go-elements/taproot"
 	"github.com/vulpemventures/go-elements/transaction"
 )
 
@@ -114,7 +116,7 @@ func (*mockedWalletService) Status(ctx context.Context) (ports.WalletStatus, err
 
 // Transfer implements ports.WalletService.
 func (*mockedWalletService) Transfer(ctx context.Context, outs []ports.TxOutput) (string, error) {
-	return createTestPoolTx(1000, (450+500)*1)
+	return createTestPoolTx(outs[0].GetAmount(), (450+500)*1)
 }
 
 func TestBuildCongestionTree(t *testing.T) {
@@ -153,8 +155,8 @@ func TestBuildCongestionTree(t *testing.T) {
 					},
 				},
 			},
-			expectedNodesNum:  3,
-			expectedLeavesNum: 2,
+			expectedNodesNum:  1,
+			expectedLeavesNum: 1,
 		},
 		{
 			payments: []domain.Payment{
@@ -234,8 +236,8 @@ func TestBuildCongestionTree(t *testing.T) {
 					},
 				},
 			},
-			expectedNodesNum:  11,
-			expectedLeavesNum: 6,
+			expectedNodesNum:  5,
+			expectedLeavesNum: 2,
 		},
 	}
 
@@ -244,7 +246,8 @@ func TestBuildCongestionTree(t *testing.T) {
 	require.NotNil(t, key)
 
 	for _, f := range fixtures {
-		poolTx, tree, err := builder.BuildPoolTx(key, &mockedWalletService{}, f.payments)
+		poolTx, tree, err := builder.BuildPoolTx(key, &mockedWalletService{}, f.payments, 30)
+
 		require.NoError(t, err)
 		require.Equal(t, f.expectedNodesNum, tree.NumberOfNodes())
 		require.Len(t, tree.Leaves(), f.expectedLeavesNum)
@@ -258,32 +261,37 @@ func TestBuildCongestionTree(t *testing.T) {
 		require.Len(t, tree[0], 1)
 		require.Equal(t, poolTxID, tree[0][0].ParentTxid)
 
-		// check the leaves
-		for _, leaf := range tree.Leaves() {
-			pset, err := psetv2.NewPsetFromBase64(leaf.Tx)
-			require.NoError(t, err)
-
-			require.Len(t, pset.Inputs, 1)
-			require.Len(t, pset.Outputs, 1)
-
-			inputTxID := chainhash.Hash(pset.Inputs[0].PreviousTxid).String()
-			require.Equal(t, leaf.ParentTxid, inputTxID)
-		}
-
 		// check the nodes
-		for _, level := range tree[:len(tree)-2] {
+		for _, level := range tree {
 			for _, node := range level {
 				pset, err := psetv2.NewPsetFromBase64(node.Tx)
 				require.NoError(t, err)
 
 				require.Len(t, pset.Inputs, 1)
-				require.Len(t, pset.Outputs, 2)
+				require.Len(t, pset.Outputs, 3)
 
 				inputTxID := chainhash.Hash(pset.Inputs[0].PreviousTxid).String()
 				require.Equal(t, node.ParentTxid, inputTxID)
 
 				children := tree.Children(node.Txid)
-				require.Len(t, children, 2)
+				if len(children) > 0 {
+					require.Len(t, children, 2)
+
+					for i, child := range children {
+						childTx, err := psetv2.NewPsetFromBase64(child.Tx)
+						require.NoError(t, err)
+
+						for _, leaf := range childTx.Inputs[0].TapLeafScript {
+							key := leaf.ControlBlock.InternalKey
+							rootHash := leaf.ControlBlock.RootHash(leaf.Script)
+
+							outputScript := taproot.ComputeTaprootOutputKey(key, rootHash)
+							previousScriptKey := pset.Outputs[i].Script[2:]
+							require.Len(t, previousScriptKey, 32)
+							require.Equal(t, schnorr.SerializePubKey(outputScript), previousScriptKey)
+						}
+					}
+				}
 			}
 		}
 	}

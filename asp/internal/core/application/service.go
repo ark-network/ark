@@ -40,6 +40,7 @@ type Service interface {
 }
 
 type service struct {
+	minRelayFee   uint64
 	roundInterval int64
 	network       common.Network
 	onchainNework network.Network
@@ -57,6 +58,7 @@ type service struct {
 func NewService(
 	interval int64, network common.Network, onchainNetwork network.Network,
 	walletSvc ports.WalletService, repoManager ports.RepoManager, builder ports.TxBuilder,
+	minRelayFee uint64,
 ) (Service, error) {
 	eventsCh := make(chan domain.RoundEvent)
 	paymentRequests := newPaymentsMap(nil)
@@ -66,7 +68,7 @@ func NewService(
 		return nil, fmt.Errorf("failed to fetch pubkey: %s", err)
 	}
 	svc := &service{
-		interval, network, onchainNetwork, pubkey,
+		minRelayFee, interval, network, onchainNetwork, pubkey,
 		walletSvc, repoManager, builder, paymentRequests, forfeitTxs,
 		eventsCh,
 	}
@@ -265,7 +267,7 @@ func (s *service) startFinalization() {
 		return
 	}
 
-	signedPoolTx, tree, err := s.builder.BuildPoolTx(s.pubkey, s.wallet, payments)
+	signedPoolTx, tree, err := s.builder.BuildPoolTx(s.pubkey, s.wallet, payments, s.minRelayFee)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
 		log.WithError(err).Warn("failed to create pool tx")
@@ -412,6 +414,7 @@ func (s *service) getNewVtxos(round *domain.Round) []domain.Vtxo {
 					vtxos = append(vtxos, domain.Vtxo{
 						VtxoKey:  domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
 						Receiver: domain.Receiver{Pubkey: pubkey, Amount: out.Value},
+						PoolTx:   round.Txid,
 					})
 					break
 				}

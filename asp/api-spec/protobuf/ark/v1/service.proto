@@ -169,6 +169,7 @@ message Vtxo {
   Input outpoint = 1;
   Output receiver = 2;
   bool spent = 3;
+  string pool_txid = 4;
 }
 
 message GetPubkeyRequest {}

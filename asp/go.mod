@@ -18,15 +18,15 @@ require (
 	github.com/stretchr/testify v1.8.4
 	github.com/timshannon/badgerhold/v4 v4.0.3
 	github.com/urfave/cli/v2 v2.26.0
-	github.com/vulpemventures/go-elements v0.4.7
+	github.com/vulpemventures/go-elements v0.5.1
 	google.golang.org/genproto/googleapis/api v0.0.0-20231106174013-bbf56f31fb17
 	google.golang.org/grpc v1.59.0
 	google.golang.org/protobuf v1.31.0
 )
 
 require (
-	github.com/btcsuite/btcd v0.23.1 // indirect
-	github.com/btcsuite/btcd/btcec/v2 v2.2.0 // indirect
+	github.com/btcsuite/btcd v0.23.1
+	github.com/btcsuite/btcd/btcec/v2 v2.3.2
 	github.com/btcsuite/btcd/btcutil v1.1.3
 	github.com/btcsuite/btcd/btcutil/psbt v1.1.4 // indirect
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.0.1

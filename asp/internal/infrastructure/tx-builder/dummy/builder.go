@@ -91,6 +91,7 @@ func (b *txBuilder) BuildForfeitTxs(
 // BuildPoolTx implements ports.TxBuilder.
 func (b *txBuilder) BuildPoolTx(
 	aspPubkey *secp256k1.PublicKey, wallet ports.WalletService, payments []domain.Payment,
+	minRelayFee uint64,
 ) (poolTx string, congestionTree domain.CongestionTree, err error) {
 	aspScriptBytes, err := p2wpkhScript(aspPubkey, b.net)
 	if err != nil {
