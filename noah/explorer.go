@@ -46,7 +46,7 @@ func (e *explorer) Broadcast(txHex string) (string, error) {
 
 	txid, err = broadcast(txHex)
 	if err != nil {
-		if strings.Contains(err.Error(), "Transaction already in block chain") {
+		if strings.Contains(strings.ToLower(err.Error()), "transaction already in block chain") {
 			return txid, nil
 		}
 		return "", err
