@@ -181,8 +181,9 @@ func (m *forfeitTxsMap) sign(txs []string) error {
 	for _, tx := range txs {
 		ptx, _ := psetv2.NewPsetFromBase64(tx)
 		utx, _ := ptx.UnsignedTx()
+		txid := utx.TxHash().String()
 
-		if _, ok := m.forfeitTxs[utx.TxHash().String()]; ok {
+		if _, ok := m.forfeitTxs[txid]; ok {
 			for index, input := range ptx.Inputs {
 				if len(input.TapScriptSig) > 0 {
 					for _, tapScriptSig := range input.TapScriptSig {
@@ -212,7 +213,7 @@ func (m *forfeitTxsMap) sign(txs []string) error {
 						}
 
 						if sig.Verify(preimage, pubkey) {
-							m.forfeitTxs[utx.TxHash().String()].signed = true
+							m.forfeitTxs[txid].signed = true
 						} else {
 							return fmt.Errorf("invalid signature")
 						}

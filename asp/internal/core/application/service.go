@@ -130,10 +130,6 @@ func (s *service) ClaimVtxos(ctx context.Context, creds string, receivers []doma
 	return s.paymentRequests.update(*payment)
 }
 
-func (s *service) SignVtxos(ctx context.Context, forfeitTxs []string) error {
-	return s.forfeitTxs.sign(forfeitTxs)
-}
-
 func (s *service) UpdatePaymentStatus(_ context.Context, id string) error {
 	return s.paymentRequests.updatePingTimestamp(id)
 }
@@ -173,6 +169,10 @@ func (s *service) FaucetVtxos(ctx context.Context, userPubkey *secp256k1.PublicK
 		return err
 	}
 	return s.paymentRequests.updatePingTimestamp(payment.Id)
+}
+
+func (s *service) SignVtxos(ctx context.Context, forfeitTxs []string) error {
+	return s.forfeitTxs.sign(forfeitTxs)
 }
 
 func (s *service) ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, error) {
