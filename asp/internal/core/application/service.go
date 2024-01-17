@@ -10,6 +10,7 @@ import (
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	log "github.com/sirupsen/logrus"
 	"github.com/vulpemventures/go-elements/network"
@@ -30,7 +31,7 @@ type Service interface {
 	Stop()
 	SpendVtxos(ctx context.Context, inputs []domain.VtxoKey) (string, error)
 	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error
-	UpdateForfeitTxs(ctx context.Context, forfeitTxs []string) error
+	SignVtxos(ctx context.Context, forfeitTxs []string) error
 	FaucetVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) error
 	GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error)
 	GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
@@ -40,6 +41,7 @@ type Service interface {
 }
 
 type service struct {
+	minRelayFee   uint64
 	roundInterval int64
 	network       common.Network
 	onchainNework network.Network
@@ -57,16 +59,19 @@ type service struct {
 func NewService(
 	interval int64, network common.Network, onchainNetwork network.Network,
 	walletSvc ports.WalletService, repoManager ports.RepoManager, builder ports.TxBuilder,
+	minRelayFee uint64,
 ) (Service, error) {
 	eventsCh := make(chan domain.RoundEvent)
 	paymentRequests := newPaymentsMap(nil)
-	forfeitTxs := newForfeitTxsMap(&onchainNetwork)
+
+	genesisHash, _ := chainhash.NewHashFromStr(onchainNetwork.GenesisBlockHash)
+	forfeitTxs := newForfeitTxsMap(genesisHash)
 	pubkey, err := walletSvc.GetPubkey(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch pubkey: %s", err)
 	}
 	svc := &service{
-		interval, network, onchainNetwork, pubkey,
+		minRelayFee, interval, network, onchainNetwork, pubkey,
 		walletSvc, repoManager, builder, paymentRequests, forfeitTxs,
 		eventsCh,
 	}
@@ -125,8 +130,8 @@ func (s *service) ClaimVtxos(ctx context.Context, creds string, receivers []doma
 	return s.paymentRequests.update(*payment)
 }
 
-func (s *service) UpdateForfeitTxs(ctx context.Context, forfeitTxs []string) error {
-	return s.forfeitTxs.update(forfeitTxs)
+func (s *service) SignVtxos(ctx context.Context, forfeitTxs []string) error {
+	return s.forfeitTxs.sign(forfeitTxs)
 }
 
 func (s *service) UpdatePaymentStatus(_ context.Context, id string) error {
@@ -262,7 +267,7 @@ func (s *service) startFinalization() {
 		return
 	}
 
-	signedPoolTx, tree, err := s.builder.BuildPoolTx(s.pubkey, s.wallet, payments)
+	signedPoolTx, tree, err := s.builder.BuildPoolTx(s.pubkey, s.wallet, payments, s.minRelayFee)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
 		log.WithError(err).Warn("failed to create pool tx")
@@ -409,6 +414,7 @@ func (s *service) getNewVtxos(round *domain.Round) []domain.Vtxo {
 					vtxos = append(vtxos, domain.Vtxo{
 						VtxoKey:  domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
 						Receiver: domain.Receiver{Pubkey: pubkey, Amount: out.Value},
+						PoolTx:   round.Txid,
 					})
 					break
 				}

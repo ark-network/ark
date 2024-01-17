@@ -4,14 +4,13 @@ import (
 	"fmt"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/psetv2"
 )
 
-// TaprootPreimage compute the hash for witness v1 input of a pset
+// TaprootPreimage computes the hash for witness v1 input of a pset
 // it implicitly assumes that the pset has witnessUtxo fields populated
 func TaprootPreimage(
-	net *network.Network,
+	genesisBlockHash *chainhash.Hash,
 	pset *psetv2.Pset,
 	inputIndex int,
 	leafHash *chainhash.Hash,
@@ -35,18 +34,13 @@ func TaprootPreimage(
 		return nil, err
 	}
 
-	genesisHash, err := chainhash.NewHashFromStr(net.GenesisBlockHash)
-	if err != nil {
-		return nil, err
-	}
-
 	preimage := utx.HashForWitnessV1(
 		inputIndex,
 		prevoutScripts,
 		prevoutAssets,
 		prevoutValues,
 		pset.Inputs[inputIndex].SigHashType,
-		genesisHash,
+		genesisBlockHash,
 		leafHash,
 		nil,
 	)

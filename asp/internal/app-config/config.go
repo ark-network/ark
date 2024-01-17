@@ -36,6 +36,7 @@ type Config struct {
 	SchedulerType string
 	TxBuilderType string
 	WalletAddr    string
+	MinRelayFee   uint64
 
 	repo      ports.RepoManager
 	svc       application.Service
@@ -61,6 +62,9 @@ func (c *Config) Validate() error {
 	}
 	if len(c.WalletAddr) <= 0 {
 		return fmt.Errorf("missing onchain wallet address")
+	}
+	if c.MinRelayFee < 30 {
+		return fmt.Errorf("invalid min relay fee, must be at least 30 sats")
 	}
 	if err := c.repoManager(); err != nil {
 		return err
@@ -140,7 +144,7 @@ func (c *Config) txBuilderService() error {
 func (c *Config) appService() error {
 	net := c.mainChain()
 	svc, err := application.NewService(
-		c.RoundInterval, c.Network, net, c.wallet, c.repo, c.txBuilder,
+		c.RoundInterval, c.Network, net, c.wallet, c.repo, c.txBuilder, c.MinRelayFee,
 	)
 	if err != nil {
 		return err

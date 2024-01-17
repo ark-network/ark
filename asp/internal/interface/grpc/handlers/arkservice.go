@@ -88,7 +88,7 @@ func (h *handler) FinalizePayment(ctx context.Context, req *arkv1.FinalizePaymen
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	if err := h.svc.UpdateForfeitTxs(ctx, forfeitTxs); err != nil {
+	if err := h.svc.SignVtxos(ctx, forfeitTxs); err != nil {
 		return nil, err
 	}
 
@@ -273,7 +273,8 @@ func (v vtxoList) toProto(hrp string, aspKey *secp256k1.PublicKey) []*arkv1.Vtxo
 				Address: addr,
 				Amount:  vv.Amount,
 			},
-			Spent: vv.Spent,
+			PoolTxid: vv.PoolTx,
+			Spent:    vv.Spent,
 		})
 	}
 	return list

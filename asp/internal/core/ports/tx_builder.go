@@ -7,7 +7,7 @@ import (
 
 type TxBuilder interface {
 	BuildPoolTx(
-		aspPubkey *secp256k1.PublicKey, wallet WalletService, payments []domain.Payment,
+		aspPubkey *secp256k1.PublicKey, wallet WalletService, payments []domain.Payment, minRelayFee uint64,
 	) (poolTx string, congestionTree domain.CongestionTree, err error)
 	BuildForfeitTxs(
 		aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment,

@@ -38,6 +38,7 @@ func main() {
 		SchedulerType: cfg.SchedulerType,
 		TxBuilderType: cfg.TxBuilderType,
 		WalletAddr:    cfg.WalletAddr,
+		MinRelayFee:   cfg.MinRelayFee,
 	}
 	svc, err := grpcservice.NewService(svcConfig, appConfig)
 	if err != nil {

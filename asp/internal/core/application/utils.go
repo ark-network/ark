@@ -12,7 +12,6 @@ import (
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/psetv2"
 )
 
@@ -142,13 +141,13 @@ type signedTx struct {
 }
 
 type forfeitTxsMap struct {
-	lock       *sync.RWMutex
-	forfeitTxs map[string]*signedTx
-	net        *network.Network
+	lock             *sync.RWMutex
+	forfeitTxs       map[string]*signedTx
+	genesisBlockHash *chainhash.Hash
 }
 
-func newForfeitTxsMap(net *network.Network) *forfeitTxsMap {
-	return &forfeitTxsMap{&sync.RWMutex{}, make(map[string]*signedTx), net}
+func newForfeitTxsMap(genesisBlockHash *chainhash.Hash) *forfeitTxsMap {
+	return &forfeitTxsMap{&sync.RWMutex{}, make(map[string]*signedTx), genesisBlockHash}
 }
 
 func (m *forfeitTxsMap) push(txs []string) {
@@ -175,7 +174,7 @@ func (m *forfeitTxsMap) push(txs []string) {
 	}
 }
 
-func (m *forfeitTxsMap) update(txs []string) error {
+func (m *forfeitTxsMap) sign(txs []string) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -193,7 +192,7 @@ func (m *forfeitTxsMap) update(txs []string) error {
 						}
 
 						preimage, err := common.TaprootPreimage(
-							m.net,
+							m.genesisBlockHash,
 							ptx,
 							index,
 							leafHash,

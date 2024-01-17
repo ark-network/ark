@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -59,21 +60,11 @@ func getTxid(txStr string) (string, error) {
 }
 
 func (b *txBuilder) GetLeafOutputScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error) {
-	unspendableKeyBytes, _ := hex.DecodeString(unspendablePoint)
-	unspendableKey, _ := secp256k1.ParsePubKey(unspendableKeyBytes)
-
-	leafTaprootTree, err := b.getLeafTaprootTree(aspPubkey, userPubkey)
+	outputScript, _, err := b.getLeafTaprootTree(userPubkey, aspPubkey)
 	if err != nil {
 		return nil, err
 	}
-	root := leafTaprootTree.RootNode.TapHash()
-
-	taprootKey := taproot.ComputeTaprootOutputKey(
-		unspendableKey,
-		root[:],
-	)
-
-	return taprootOutputScript(taprootKey)
+	return outputScript, nil
 }
 
 // BuildForfeitTxs implements ports.TxBuilder.
@@ -118,7 +109,6 @@ func (b *txBuilder) BuildForfeitTxs(
 
 	for _, payment := range payments {
 		for _, vtxo := range payment.Inputs {
-
 			vtxoAmount, err := elementsutil.ValueToBytes(vtxo.Amount)
 			if err != nil {
 				return nil, nil, err
@@ -134,12 +124,7 @@ func (b *txBuilder) BuildForfeitTxs(
 				return nil, nil, err
 			}
 
-			vtxoOutputScript, err := b.GetLeafOutputScript(vtxoPubkey, aspPubkey)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			vtxoTaprootTree, err := b.getLeafTaprootTree(vtxoPubkey, aspPubkey)
+			vtxoOutputScript, vtxoTaprootTree, err := b.getLeafTaprootTree(vtxoPubkey, aspPubkey)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -179,6 +164,7 @@ func (b *txBuilder) BuildPoolTx(
 	aspPubkey *secp256k1.PublicKey,
 	wallet ports.WalletService,
 	payments []domain.Payment,
+	minRelayFee uint64,
 ) (poolTx string, congestionTree domain.CongestionTree, err error) {
 	aspScriptBytes, err := p2wpkhScript(aspPubkey, b.net)
 	if err != nil {
@@ -188,17 +174,16 @@ func (b *txBuilder) BuildPoolTx(
 	aspScript := hex.EncodeToString(aspScriptBytes)
 
 	offchainReceivers, onchainReceivers := receiversFromPayments(payments)
-	sharedOutputAmount := sumReceivers(offchainReceivers)
-
 	numberOfConnectors := numberOfVTXOs(payments)
 	connectorOutputAmount := connectorAmount * numberOfConnectors
 
 	ctx := context.Background()
 
-	makeTree, sharedOutputScript, err := buildCongestionTree(
+	makeTree, sharedOutputScript, sharedOutputAmount, err := buildCongestionTree(
 		b.net,
 		aspPubkey,
 		offchainReceivers,
+		minRelayFee,
 	)
 	if err != nil {
 		return
@@ -240,19 +225,34 @@ func (b *txBuilder) BuildPoolTx(
 	return
 }
 
-func (b *txBuilder) getLeafTaprootTree(aspPubkey, userPubkey *secp256k1.PublicKey) (*taproot.IndexedElementsTapScriptTree, error) {
+func (b *txBuilder) getLeafTaprootTree(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, *taproot.IndexedElementsTapScriptTree, error) {
 	sweepTaprootLeaf, err := sweepTapLeaf(aspPubkey)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	leafScript, err := checksigScript(userPubkey)
+	vtxoLeaf, err := common.VtxoScript(userPubkey)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	leafTaprootLeaf := taproot.NewBaseTapElementsLeaf(leafScript)
-	return taproot.AssembleTaprootScriptTree(leafTaprootLeaf, *sweepTaprootLeaf), nil
+	leafTaprootTree := taproot.AssembleTaprootScriptTree(*vtxoLeaf, *sweepTaprootLeaf)
+	root := leafTaprootTree.RootNode.TapHash()
+
+	unspendableKeyBytes, _ := hex.DecodeString(unspendablePoint)
+	unspendableKey, _ := secp256k1.ParsePubKey(unspendableKeyBytes)
+
+	taprootKey := taproot.ComputeTaprootOutputKey(
+		unspendableKey,
+		root[:],
+	)
+
+	outputScript, err := taprootOutputScript(taprootKey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return outputScript, leafTaprootTree, nil
 }
 
 type inputWithWitnessUtxo struct {
@@ -319,14 +319,6 @@ func receiversFromPayments(
 		}
 	}
 	return
-}
-
-func sumReceivers(receivers []domain.Receiver) uint64 {
-	var sum uint64
-	for _, r := range receivers {
-		sum += r.Amount
-	}
-	return sum
 }
 
 type output struct {

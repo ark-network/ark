@@ -13,9 +13,7 @@ import (
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
-	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/urfave/cli/v2"
 	"github.com/vulpemventures/go-elements/network"
@@ -176,40 +174,109 @@ func getOffchainBalance(
 	return balance, nil
 }
 
-func getOnchainBalance(addr string) (uint64, error) {
+type utxo struct {
+	Txid   string `json:"txid"`
+	Vout   uint32 `json:"vout"`
+	Amount uint64 `json:"value"`
+	Asset  string `json:"asset"`
+}
+
+func getOnchainUtxos(addr string) ([]utxo, error) {
 	_, net, err := getNetwork()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	baseUrl := explorerUrl[net.Name]
 	resp, err := http.Get(fmt.Sprintf("%s/address/%s/utxo", baseUrl, addr))
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf(string(body))
+		return nil, fmt.Errorf(string(body))
 	}
-	payload := []interface{}{}
+	payload := []utxo{}
 	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, err
+	}
+
+	return payload, nil
+}
+
+func getOnchainBalance(addr string) (uint64, error) {
+	payload, err := getOnchainUtxos(addr)
+	if err != nil {
 		return 0, err
 	}
+
+	_, net, err := getNetwork()
+	if err != nil {
+		return 0, err
+	}
+
 	balance := uint64(0)
 	for _, p := range payload {
-		utxo := p.(map[string]interface{})
-		asset, ok := utxo["asset"].(string)
-		if !ok || asset != net.AssetID {
+		if p.Asset != net.AssetID {
 			continue
 		}
-		balance += uint64(utxo["value"].(float64))
-
+		balance += p.Amount
 	}
 	return balance, nil
+}
+
+func getTxHex(txid string) (string, error) {
+	_, net, err := getNetwork()
+	if err != nil {
+		return "", err
+	}
+
+	baseUrl := explorerUrl[net.Name]
+	resp, err := http.Get(fmt.Sprintf("%s/tx/%s/hex", baseUrl, txid))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf(string(body))
+	}
+
+	return string(body), nil
+}
+
+func broadcast(txHex string) (string, error) {
+	_, net, err := getNetwork()
+	if err != nil {
+		return "", err
+	}
+
+	body := bytes.NewBuffer([]byte(txHex))
+
+	baseUrl := explorerUrl[net.Name]
+	resp, err := http.Post(fmt.Sprintf("%s/tx", baseUrl), "text/plain", body)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	bodyResponse, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf(string(bodyResponse))
+	}
+
+	return string(bodyResponse), nil
 }
 
 func getNetwork() (*common.Network, *network.Network, error) {
@@ -315,10 +382,7 @@ func handleRoundStream(
 
 			fmt.Println("signing forfeit txs...")
 
-			_, net, err := getNetwork()
-			if err != nil {
-				return "", err
-			}
+			explorer := NewExplorer()
 
 			for _, forfeit := range forfeits {
 				pset, err := psetv2.NewPsetFromBase64(forfeit)
@@ -326,47 +390,22 @@ func handleRoundStream(
 					return "", err
 				}
 
-				// check if it contains one of the input to sign
-				for inputIndex, input := range pset.Inputs {
+				for _, input := range pset.Inputs {
 					inputTxid := chainhash.Hash(input.PreviousTxid).String()
 
 					for _, coin := range vtxosToSign {
+						// check if it contains one of the input to sign
 						if inputTxid == coin.txid {
-							signer, err := psetv2.NewSigner(pset)
+							if err := signPset(pset, explorer, secKey); err != nil {
+								return "", err
+							}
+
+							signedPset, err := pset.ToBase64()
 							if err != nil {
 								return "", err
 							}
 
-							for _, tapLeaf := range input.TapLeafScript {
-								if isVtxoScript(tapLeaf.Script) {
-									leafHash := tapLeaf.TapHash()
-									preimage, err := common.TaprootPreimage(net, pset, inputIndex, &leafHash)
-									if err != nil {
-										return "", err
-									}
-
-									signature, err := schnorr.Sign(secKey, preimage)
-									if err != nil {
-										return "", err
-									}
-
-									if err := signer.SignTaprootInputTapscriptSig(inputIndex, psetv2.TapScriptSig{
-										PartialSig: psetv2.PartialSig{
-											PubKey:    schnorr.SerializePubKey(secKey.PubKey()),
-											Signature: signature.Serialize(),
-										},
-										LeafHash: leafHash[:],
-									}); err != nil {
-										return "", err
-									}
-
-									signedPset, err := signer.Pset.ToBase64()
-									if err != nil {
-										return "", err
-									}
-									signedForfeits = append(signedForfeits, signedPset)
-								}
-							}
+							signedForfeits = append(signedForfeits, signedPset)
 						}
 					}
 				}
@@ -419,15 +458,4 @@ func ping(ctx *cli.Context, client arkv1.ArkServiceClient, req *arkv1.PingReques
 	}(ticker)
 
 	return ticker.Stop
-}
-
-func isVtxoScript(script []byte) bool {
-	pubkey, err := getWalletPublicKey()
-	if err != nil {
-		return false
-	}
-
-	keyBytes := schnorr.SerializePubKey(pubkey)
-
-	return bytes.Contains(script, []byte{txscript.OP_CHECKSIG}) && bytes.Contains(script, keyBytes)
 }

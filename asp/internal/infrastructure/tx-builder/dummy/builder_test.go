@@ -238,7 +238,8 @@ func TestBuildCongestionTree(t *testing.T) {
 	require.NotNil(t, key)
 
 	for _, f := range fixtures {
-		poolTx, tree, err := builder.BuildPoolTx(key, &mockedWalletService{}, f.payments)
+		poolTx, tree, err := builder.BuildPoolTx(key, &mockedWalletService{}, f.payments, 30)
+
 		require.NoError(t, err)
 		require.Equal(t, f.expectedNodesNum, tree.NumberOfNodes())
 		require.Len(t, tree.Leaves(), f.expectedLeavesNum)

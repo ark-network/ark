@@ -10,9 +10,10 @@ import (
 )
 
 type vtxo struct {
-	amount uint64
-	txid   string
-	vout   uint32
+	amount   uint64
+	txid     string
+	vout     uint32
+	poolTxid string
 }
 
 func getVtxos(
@@ -28,9 +29,10 @@ func getVtxos(
 	vtxos := make([]vtxo, 0, len(response.Vtxos))
 	for _, v := range response.Vtxos {
 		vtxos = append(vtxos, vtxo{
-			amount: v.Receiver.Amount,
-			txid:   v.Outpoint.Txid,
-			vout:   v.Outpoint.Vout,
+			amount:   v.Receiver.Amount,
+			txid:     v.Outpoint.Txid,
+			vout:     v.Outpoint.Vout,
+			poolTxid: v.PoolTxid,
 		})
 	}
 
