@@ -9,13 +9,16 @@ import (
 	"io"
 	"net/http"
 	"syscall"
+	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/urfave/cli/v2"
 	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/payment"
+	"github.com/vulpemventures/go-elements/psetv2"
 	"golang.org/x/term"
 )
 
@@ -85,6 +88,7 @@ func privateKeyFromPassword() (*secp256k1.PrivateKey, error) {
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("key unlocked")
 
 	cypher := NewAES128Cypher()
 	privateKeyBytes, err := cypher.Decrypt(encryptedPrivateKey, password)
@@ -332,4 +336,126 @@ func printJSON(resp interface{}) error {
 
 	fmt.Println(string(jsonBytes))
 	return nil
+}
+
+func handleRoundStream(
+	ctx *cli.Context,
+	client arkv1.ArkServiceClient,
+	paymentID string,
+	vtxosToSign []vtxo,
+	secKey *secp256k1.PrivateKey,
+) (poolTxID string, err error) {
+	stream, err := client.GetEventStream(ctx.Context, &arkv1.GetEventStreamRequest{})
+	if err != nil {
+		return "", err
+	}
+
+	var pingStop func()
+	pingReq := &arkv1.PingRequest{
+		PaymentId: paymentID,
+	}
+	for pingStop == nil {
+		pingStop = ping(ctx, client, pingReq)
+	}
+
+	defer pingStop()
+
+	for {
+		event, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+
+		if event.GetRoundFailed() != nil {
+			pingStop()
+			return "", fmt.Errorf("round failed: %s", event.GetRoundFailed().GetReason())
+		}
+
+		if event.GetRoundFinalization() != nil {
+			// stop pinging as soon as we receive some forfeit txs
+			pingStop()
+			forfeits := event.GetRoundFinalization().GetForfeitTxs()
+			signedForfeits := make([]string, 0)
+
+			fmt.Println("signing forfeit txs...")
+
+			explorer := NewExplorer()
+
+			for _, forfeit := range forfeits {
+				pset, err := psetv2.NewPsetFromBase64(forfeit)
+				if err != nil {
+					return "", err
+				}
+
+				for _, input := range pset.Inputs {
+					inputTxid := chainhash.Hash(input.PreviousTxid).String()
+
+					for _, coin := range vtxosToSign {
+						// check if it contains one of the input to sign
+						if inputTxid == coin.txid {
+							if err := signPset(pset, explorer, secKey); err != nil {
+								return "", err
+							}
+
+							signedPset, err := pset.ToBase64()
+							if err != nil {
+								return "", err
+							}
+
+							signedForfeits = append(signedForfeits, signedPset)
+						}
+					}
+				}
+			}
+
+			// if no forfeit txs have been signed, start pinging again and wait for the next round
+			if len(signedForfeits) == 0 {
+				fmt.Println("no forfeit txs to sign, waiting for the next round...")
+				pingStop = nil
+				for pingStop == nil {
+					pingStop = ping(ctx, client, pingReq)
+				}
+				continue
+			}
+
+			fmt.Printf("%d forfeit txs signed, finalizing payment...\n", len(signedForfeits))
+			_, err = client.FinalizePayment(ctx.Context, &arkv1.FinalizePaymentRequest{
+				SignedForfeitTxs: signedForfeits,
+			})
+			if err != nil {
+				return "", err
+			}
+
+			continue
+		}
+
+		if event.GetRoundFinalized() != nil {
+			return event.GetRoundFinalized().GetPoolTxid(), nil
+		}
+	}
+
+	return "", fmt.Errorf("stream closed unexpectedly")
+}
+
+// send 1 ping message every 5 seconds to signal to the ark service that we are still alive
+// returns a function that can be used to stop the pinging
+func ping(ctx *cli.Context, client arkv1.ArkServiceClient, req *arkv1.PingRequest) func() {
+	_, err := client.Ping(ctx.Context, req)
+	if err != nil {
+		return nil
+	}
+
+	ticker := time.NewTicker(5 * time.Second)
+
+	go func(t *time.Ticker) {
+		for range t.C {
+			// nolint
+			client.Ping(ctx.Context, req)
+		}
+	}(ticker)
+
+	return ticker.Stop
 }

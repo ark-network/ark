@@ -10,6 +10,7 @@ import (
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	log "github.com/sirupsen/logrus"
 	"github.com/vulpemventures/go-elements/network"
@@ -62,7 +63,9 @@ func NewService(
 ) (Service, error) {
 	eventsCh := make(chan domain.RoundEvent)
 	paymentRequests := newPaymentsMap(nil)
-	forfeitTxs := newForfeitTxsMap()
+
+	genesisHash, _ := chainhash.NewHashFromStr(onchainNetwork.GenesisBlockHash)
+	forfeitTxs := newForfeitTxsMap(genesisHash)
 	pubkey, err := walletSvc.GetPubkey(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch pubkey: %s", err)
@@ -169,10 +172,7 @@ func (s *service) FaucetVtxos(ctx context.Context, userPubkey *secp256k1.PublicK
 }
 
 func (s *service) SignVtxos(ctx context.Context, forfeitTxs []string) error {
-	if err := s.forfeitTxs.sign(forfeitTxs); err != nil {
-		return fmt.Errorf("invalid forfeit tx: %s", err)
-	}
-	return nil
+	return s.forfeitTxs.sign(forfeitTxs)
 }
 
 func (s *service) ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, error) {

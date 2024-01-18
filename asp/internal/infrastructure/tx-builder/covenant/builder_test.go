@@ -300,14 +300,14 @@ func TestBuildCongestionTree(t *testing.T) {
 func TestBuildForfeitTxs(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(network.Liquid)
 
-	// TODO
-	poolTx, err := createTestPoolTx(1000, 2)
+	// TODO: replace with fixture.
+	poolTxHex, err := createTestPoolTx(1000, 2)
 	require.NoError(t, err)
 
-	tx, err := transaction.NewTxFromHex(poolTx)
+	poolTx, err := transaction.NewTxFromHex(poolTxHex)
 	require.NoError(t, err)
 
-	poolTxID := tx.TxHash().String()
+	poolTxid := poolTx.TxHash().String()
 
 	fixtures := []struct {
 		payments                []domain.Payment
@@ -363,7 +363,7 @@ func TestBuildForfeitTxs(t *testing.T) {
 
 	for _, f := range fixtures {
 		connectors, forfeitTxs, err := builder.BuildForfeitTxs(
-			key, poolTx, f.payments,
+			key, poolTxHex, f.payments,
 		)
 		require.NoError(t, err)
 		require.Len(t, connectors, f.expectedNumOfConnectors)
@@ -381,7 +381,7 @@ func TestBuildForfeitTxs(t *testing.T) {
 			require.Len(t, pset.Inputs, 1)
 			require.Len(t, pset.Outputs, 2)
 
-			expectedInputTxid := poolTxID
+			expectedInputTxid := poolTxid
 			expectedInputVout := uint32(1)
 			if i > 0 {
 				tx, err := connectorsPsets[i-1].UnsignedTx()
@@ -406,7 +406,7 @@ func TestBuildForfeitTxs(t *testing.T) {
 		// each forfeit tx should have 2 inputs and 2 outputs
 		for _, pset := range forfeitTxsPsets {
 			require.Len(t, pset.Inputs, 2)
-			require.Len(t, pset.Outputs, 1)
+			require.Len(t, pset.Outputs, 2)
 		}
 	}
 }

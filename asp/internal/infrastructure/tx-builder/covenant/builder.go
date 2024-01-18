@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/hex"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/address"
+	"github.com/vulpemventures/go-elements/elementsutil"
 	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
@@ -58,29 +60,11 @@ func getTxid(txStr string) (string, error) {
 }
 
 func (b *txBuilder) GetLeafOutputScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error) {
-	unspendableKeyBytes, _ := hex.DecodeString(unspendablePoint)
-	unspendableKey, _ := secp256k1.ParsePubKey(unspendableKeyBytes)
-
-	sweepTaprootLeaf, err := sweepTapLeaf(aspPubkey)
+	outputScript, _, err := b.getLeafTaprootTree(userPubkey, aspPubkey)
 	if err != nil {
 		return nil, err
 	}
-
-	leafScript, err := checksigScript(userPubkey)
-	if err != nil {
-		return nil, err
-	}
-
-	leafTaprootLeaf := taproot.NewBaseTapElementsLeaf(leafScript)
-	leafTaprootTree := taproot.AssembleTaprootScriptTree(leafTaprootLeaf, *sweepTaprootLeaf)
-	root := leafTaprootTree.RootNode.TapHash()
-
-	taprootKey := taproot.ComputeTaprootOutputKey(
-		unspendableKey,
-		root[:],
-	)
-
-	return taprootOutputScript(taprootKey)
+	return outputScript, nil
 }
 
 // BuildForfeitTxs implements ports.TxBuilder.
@@ -119,17 +103,46 @@ func (b *txBuilder) BuildForfeitTxs(
 		return nil, nil, err
 	}
 
+	lbtc, _ := elementsutil.AssetHashToBytes(b.net.AssetID)
+
 	forfeitTxs = make([]string, 0)
+
 	for _, payment := range payments {
 		for _, vtxo := range payment.Inputs {
+			vtxoAmount, err := elementsutil.ValueToBytes(vtxo.Amount)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			pubkeyBytes, err := hex.DecodeString(vtxo.Pubkey)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			vtxoPubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			vtxoOutputScript, vtxoTaprootTree, err := b.getLeafTaprootTree(vtxoPubkey, aspPubkey)
+			if err != nil {
+				return nil, nil, err
+			}
+
 			for _, connector := range connectorsAsInputs {
 				forfeitTx, err := createForfeitTx(
-					connector,
+					connector.input,
+					connector.witnessUtxo,
 					psetv2.InputArgs{
 						Txid:    vtxo.Txid,
 						TxIndex: vtxo.VOut,
 					},
-					vtxo.Amount,
+					&transaction.TxOutput{
+						Asset:  lbtc,
+						Value:  vtxoAmount,
+						Script: vtxoOutputScript,
+					},
+					vtxoTaprootTree,
 					aspScript,
 					*b.net,
 				)
@@ -140,6 +153,7 @@ func (b *txBuilder) BuildForfeitTxs(
 				forfeitTxs = append(forfeitTxs, forfeitTx)
 			}
 		}
+
 	}
 
 	return connectors, forfeitTxs, nil
@@ -211,43 +225,77 @@ func (b *txBuilder) BuildPoolTx(
 	return
 }
 
-func connectorsToInputArgs(connectors []string) ([]psetv2.InputArgs, error) {
-	inputs := make([]psetv2.InputArgs, 0, len(connectors)+1)
+func (b *txBuilder) getLeafTaprootTree(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, *taproot.IndexedElementsTapScriptTree, error) {
+	sweepTaprootLeaf, err := sweepTapLeaf(aspPubkey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	vtxoLeaf, err := common.VtxoScript(userPubkey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	leafTaprootTree := taproot.AssembleTaprootScriptTree(*vtxoLeaf, *sweepTaprootLeaf)
+	root := leafTaprootTree.RootNode.TapHash()
+
+	unspendableKeyBytes, _ := hex.DecodeString(unspendablePoint)
+	unspendableKey, _ := secp256k1.ParsePubKey(unspendableKeyBytes)
+
+	taprootKey := taproot.ComputeTaprootOutputKey(
+		unspendableKey,
+		root[:],
+	)
+
+	outputScript, err := taprootOutputScript(taprootKey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return outputScript, leafTaprootTree, nil
+}
+
+type inputWithWitnessUtxo struct {
+	input       psetv2.InputArgs
+	witnessUtxo *transaction.TxOutput
+}
+
+func connectorsToInputArgs(connectors []string) ([]inputWithWitnessUtxo, error) {
+	inputs := make([]inputWithWitnessUtxo, 0, len(connectors)+1)
 	for i, psetb64 := range connectors {
-		txID, err := getTxID(psetb64)
+		pset, err := psetv2.NewPsetFromBase64(psetb64)
 		if err != nil {
 			return nil, err
 		}
+
+		utx, err := pset.UnsignedTx()
+		if err != nil {
+			return nil, err
+		}
+
+		txID := utx.TxHash().String()
 
 		input := psetv2.InputArgs{
 			Txid:    txID,
 			TxIndex: 0,
 		}
-		inputs = append(inputs, input)
+		inputs = append(inputs, inputWithWitnessUtxo{
+			input:       input,
+			witnessUtxo: utx.Outputs[0],
+		})
 
-		if i == len(connectors)-1 {
+		if i == len(connectors)-1 && len(utx.Outputs) > 1 {
 			input := psetv2.InputArgs{
 				Txid:    txID,
 				TxIndex: 1,
 			}
-			inputs = append(inputs, input)
+			inputs = append(inputs, inputWithWitnessUtxo{
+				input:       input,
+				witnessUtxo: utx.Outputs[1],
+			})
 		}
 	}
 	return inputs, nil
-}
-
-func getTxID(psetBase64 string) (string, error) {
-	pset, err := psetv2.NewPsetFromBase64(psetBase64)
-	if err != nil {
-		return "", err
-	}
-
-	utx, err := pset.UnsignedTx()
-	if err != nil {
-		return "", err
-	}
-
-	return utx.TxHash().String(), nil
 }
 
 func numberOfVTXOs(payments []domain.Payment) uint64 {

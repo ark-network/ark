@@ -8,7 +8,7 @@ replace github.com/ark-network/ark => ../asp
 
 require (
 	github.com/ark-network/ark v0.0.0-00010101000000-000000000000
-	github.com/ark-network/ark/common v0.0.0-00010101000000-000000000000
+	github.com/ark-network/ark/common v0.0.0
 	github.com/btcsuite/btcd v0.23.4
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.0.3
@@ -31,7 +31,7 @@ require (
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.18.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
-	github.com/vulpemventures/go-elements v0.5.1
+	github.com/vulpemventures/go-elements v0.5.2
 	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
 	golang.org/x/net v0.19.0 // indirect
 	golang.org/x/sys v0.15.0 // indirect

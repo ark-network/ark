@@ -1,12 +1,17 @@
 package application
 
 import (
+	"bytes"
+	"encoding/hex"
 	"fmt"
 	"sort"
 	"sync"
 	"time"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/internal/core/domain"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/vulpemventures/go-elements/psetv2"
 )
 
@@ -136,22 +141,36 @@ type signedTx struct {
 }
 
 type forfeitTxsMap struct {
-	lock       *sync.RWMutex
-	forfeitTxs map[string]*signedTx
+	lock             *sync.RWMutex
+	forfeitTxs       map[string]*signedTx
+	genesisBlockHash *chainhash.Hash
 }
 
-func newForfeitTxsMap() *forfeitTxsMap {
-	return &forfeitTxsMap{&sync.RWMutex{}, make(map[string]*signedTx)}
+func newForfeitTxsMap(genesisBlockHash *chainhash.Hash) *forfeitTxsMap {
+	return &forfeitTxsMap{&sync.RWMutex{}, make(map[string]*signedTx), genesisBlockHash}
 }
 
 func (m *forfeitTxsMap) push(txs []string) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
+	faucetTxID, _ := hex.DecodeString(faucetVtxo.Txid)
+
 	for _, tx := range txs {
 		ptx, _ := psetv2.NewPsetFromBase64(tx)
 		utx, _ := ptx.UnsignedTx()
-		m.forfeitTxs[utx.TxHash().String()] = &signedTx{tx, false}
+
+		signed := false
+
+		// find the faucet vtxos, and mark them as signed
+		for _, input := range ptx.Inputs {
+			if bytes.Equal(input.PreviousTxid, faucetTxID) {
+				signed = true
+				break
+			}
+		}
+
+		m.forfeitTxs[utx.TxHash().String()] = &signedTx{tx, signed}
 	}
 }
 
@@ -160,17 +179,50 @@ func (m *forfeitTxsMap) sign(txs []string) error {
 	defer m.lock.Unlock()
 
 	for _, tx := range txs {
-		ptx, err := psetv2.NewPsetFromBase64(tx)
-		if err != nil {
-			return fmt.Errorf("invalid forfeit tx format")
-		}
+		ptx, _ := psetv2.NewPsetFromBase64(tx)
 		utx, _ := ptx.UnsignedTx()
 		txid := utx.TxHash().String()
-		if _, ok := m.forfeitTxs[txid]; !ok {
-			return fmt.Errorf("forfeit tx %s not found", txid)
+
+		if _, ok := m.forfeitTxs[txid]; ok {
+			for index, input := range ptx.Inputs {
+				if len(input.TapScriptSig) > 0 {
+					for _, tapScriptSig := range input.TapScriptSig {
+						leafHash, err := chainhash.NewHash(tapScriptSig.LeafHash)
+						if err != nil {
+							return err
+						}
+
+						preimage, err := common.TaprootPreimage(
+							m.genesisBlockHash,
+							ptx,
+							index,
+							leafHash,
+						)
+						if err != nil {
+							return err
+						}
+
+						sig, err := schnorr.ParseSignature(tapScriptSig.Signature)
+						if err != nil {
+							return err
+						}
+
+						pubkey, err := schnorr.ParsePubKey(tapScriptSig.PubKey)
+						if err != nil {
+							return err
+						}
+
+						if sig.Verify(preimage, pubkey) {
+							m.forfeitTxs[txid].signed = true
+						} else {
+							return fmt.Errorf("invalid signature")
+						}
+					}
+				}
+			}
 		}
-		m.forfeitTxs[txid].signed = true
 	}
+
 	return nil
 }
 

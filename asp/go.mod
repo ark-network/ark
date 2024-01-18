@@ -5,7 +5,7 @@ go 1.21.0
 replace github.com/ark-network/ark/common => ../common
 
 require (
-	github.com/ark-network/ark/common v0.0.0-00010101000000-000000000000
+	github.com/ark-network/ark/common v0.0.0
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0
 	github.com/dgraph-io/badger/v4 v4.1.0
 	github.com/go-co-op/gocron v1.36.0
@@ -18,7 +18,7 @@ require (
 	github.com/stretchr/testify v1.8.4
 	github.com/timshannon/badgerhold/v4 v4.0.3
 	github.com/urfave/cli/v2 v2.26.0
-	github.com/vulpemventures/go-elements v0.5.1
+	github.com/vulpemventures/go-elements v0.5.2
 	google.golang.org/genproto/googleapis/api v0.0.0-20231106174013-bbf56f31fb17
 	google.golang.org/grpc v1.59.0
 	google.golang.org/protobuf v1.31.0
