@@ -12,19 +12,66 @@ var (
 	dustAmount = uint64(450)
 	payments   = []domain.Payment{
 		{
-			Id:        "0",
-			Inputs:    []domain.Vtxo{{}},
-			Receivers: []domain.Receiver{{}, {}, {}},
+			Id: "0",
+			Inputs: []domain.Vtxo{{
+				VtxoKey: domain.VtxoKey{
+					Txid: txid,
+					VOut: 0,
+				},
+				Receiver: domain.Receiver{
+					Pubkey: pubkey,
+					Amount: 2000,
+				},
+			}},
+			Receivers: []domain.Receiver{
+				{
+					Pubkey: pubkey,
+					Amount: 700,
+				},
+				{
+					Pubkey: pubkey,
+					Amount: 700,
+				},
+				{
+					Pubkey: pubkey,
+					Amount: 600,
+				},
+			},
 		},
 		{
-			Id:        "1",
-			Inputs:    []domain.Vtxo{{}, {}},
-			Receivers: []domain.Receiver{{}},
+			Id: "1",
+			Inputs: []domain.Vtxo{
+				{
+					VtxoKey: domain.VtxoKey{
+						Txid: txid,
+						VOut: 0,
+					},
+					Receiver: domain.Receiver{
+						Pubkey: pubkey,
+						Amount: 1000,
+					},
+				},
+				{
+					VtxoKey: domain.VtxoKey{
+						Txid: txid,
+						VOut: 0,
+					},
+					Receiver: domain.Receiver{
+						Pubkey: pubkey,
+						Amount: 1000,
+					},
+				},
+			},
+			Receivers: []domain.Receiver{{
+				Pubkey: pubkey,
+				Amount: 2000,
+			}},
 		},
 	}
 	emptyPtx       = "cHNldP8BAgQCAAAAAQQBAAEFAQABBgEDAfsEAgAAAAA="
 	emptyTx        = "0200000000000000000000"
 	txid           = "0000000000000000000000000000000000000000000000000000000000000000"
+	pubkey         = "030000000000000000000000000000000000000000000000000000000000000001"
 	congestionTree = domain.CongestionTree{
 		{
 			{
