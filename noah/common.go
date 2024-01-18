@@ -452,7 +452,7 @@ func ping(ctx *cli.Context, client arkv1.ArkServiceClient, req *arkv1.PingReques
 
 	go func(t *time.Ticker) {
 		for range t.C {
-			// no-lint
+			// nolint
 			client.Ping(ctx.Context, req)
 		}
 	}(ticker)
