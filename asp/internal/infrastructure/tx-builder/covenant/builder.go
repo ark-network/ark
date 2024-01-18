@@ -284,7 +284,7 @@ func connectorsToInputArgs(connectors []string) ([]inputWithWitnessUtxo, error) 
 			witnessUtxo: utx.Outputs[0],
 		})
 
-		if i == len(connectors)-1 && len(connectors) > 1 {
+		if i == len(connectors)-1 && len(utx.Outputs) > 1 {
 			input := psetv2.InputArgs{
 				Txid:    txID,
 				TxIndex: 1,
