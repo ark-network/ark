@@ -301,13 +301,13 @@ func TestBuildForfeitTxs(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(network.Liquid)
 
 	// TODO: replace with fixture.
-	poolTx, err := createTestPoolTx(1000, 2)
+	poolTxHex, err := createTestPoolTx(1000, 2)
 	require.NoError(t, err)
 
-	tx, err := transaction.NewTxFromHex(poolTx)
+	poolTx, err := transaction.NewTxFromHex(poolTxHex)
 	require.NoError(t, err)
 
-	poolTxID := tx.TxHash().String()
+	poolTxid := poolTx.TxHash().String()
 
 	fixtures := []struct {
 		payments                []domain.Payment
@@ -381,7 +381,7 @@ func TestBuildForfeitTxs(t *testing.T) {
 			require.Len(t, pset.Inputs, 1)
 			require.Len(t, pset.Outputs, 2)
 
-			expectedInputTxid := poolTxID
+			expectedInputTxid := poolTxid
 			expectedInputVout := uint32(1)
 			if i > 0 {
 				tx, err := connectorsPsets[i-1].UnsignedTx()
