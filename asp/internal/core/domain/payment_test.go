@@ -15,7 +15,7 @@ var inputs = []domain.Vtxo{
 		},
 		Receiver: domain.Receiver{
 			Pubkey: "030000000000000000000000000000000000000000000000000000000000000001",
-			Amount: 500,
+			Amount: 1000,
 		},
 	},
 }
@@ -59,11 +59,11 @@ func TestPayment(t *testing.T) {
 			err = payment.AddReceivers([]domain.Receiver{
 				{
 					Pubkey: "030000000000000000000000000000000000000000000000000000000000000001",
-					Amount: 200,
+					Amount: 450,
 				},
 				{
 					Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-					Amount: 300,
+					Amount: 550,
 				},
 			})
 			require.NoError(t, err)
@@ -82,7 +82,16 @@ func TestPayment(t *testing.T) {
 					receivers: []domain.Receiver{
 						{
 							Pubkey: "030000000000000000000000000000000000000000000000000000000000000001",
-							Amount: 100,
+							Amount: 400,
+						},
+					},
+					expectedErr: "receiver amount must be greater than dust",
+				},
+				{
+					receivers: []domain.Receiver{
+						{
+							Pubkey: "030000000000000000000000000000000000000000000000000000000000000001",
+							Amount: 600,
 						},
 					},
 					expectedErr: "input and output amounts mismatch",
