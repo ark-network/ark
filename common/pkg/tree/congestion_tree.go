@@ -1,5 +1,6 @@
-package domain
+package tree
 
+// Node is a struct embedding the transaction and the parent txid of a congestion tree node
 type Node struct {
 	Txid       string
 	Tx         string
@@ -7,8 +8,11 @@ type Node struct {
 	Leaf       bool
 }
 
+// CongestionTree is reprensented as a matrix of TreeNode struct
+// the first level of the matrix is the root of the tree
 type CongestionTree [][]Node
 
+// Leaves returns the leaves of the congestion tree (the vtxos txs)
 func (c CongestionTree) Leaves() []Node {
 	leaves := c[len(c)-1]
 	for _, level := range c[:len(c)-1] {
@@ -22,6 +26,7 @@ func (c CongestionTree) Leaves() []Node {
 	return leaves
 }
 
+// Children returns all the nodes that have the given node as parent
 func (c CongestionTree) Children(nodeTxid string) []Node {
 	var children []Node
 	for _, level := range c {

@@ -5,17 +5,17 @@ import (
 	"testing"
 
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/pkg/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenant"
-	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/require"
+	"github.com/vulpemventures/go-elements/elementsutil"
 	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
-	"github.com/vulpemventures/go-elements/taproot"
 	"github.com/vulpemventures/go-elements/transaction"
 )
 
@@ -123,9 +123,7 @@ func TestBuildCongestionTree(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(network.Liquid)
 
 	fixtures := []struct {
-		payments          []domain.Payment
-		expectedNodesNum  int // 2*len(receivers)-1
-		expectedLeavesNum int
+		payments []domain.Payment
 	}{
 		{
 			payments: []domain.Payment{
@@ -155,8 +153,6 @@ func TestBuildCongestionTree(t *testing.T) {
 					},
 				},
 			},
-			expectedNodesNum:  1,
-			expectedLeavesNum: 1,
 		},
 		{
 			payments: []domain.Payment{
@@ -236,8 +232,6 @@ func TestBuildCongestionTree(t *testing.T) {
 					},
 				},
 			},
-			expectedNodesNum:  5,
-			expectedLeavesNum: 2,
 		},
 	}
 
@@ -246,54 +240,26 @@ func TestBuildCongestionTree(t *testing.T) {
 	require.NotNil(t, key)
 
 	for _, f := range fixtures {
-		poolTx, tree, err := builder.BuildPoolTx(key, &mockedWalletService{}, f.payments, 30)
-
+		poolTx, congestionTree, err := builder.BuildPoolTx(key, &mockedWalletService{}, f.payments, 30)
 		require.NoError(t, err)
-		require.Equal(t, f.expectedNodesNum, tree.NumberOfNodes())
-		require.Len(t, tree.Leaves(), f.expectedLeavesNum)
 
 		poolTransaction, err := transaction.NewTxFromHex(poolTx)
 		require.NoError(t, err)
 
 		poolTxID := poolTransaction.TxHash().String()
+		amount, err := elementsutil.ValueFromBytes(poolTransaction.Outputs[0].Value)
+		require.NoError(t, err)
 
-		// check the root
-		require.Len(t, tree[0], 1)
-		require.Equal(t, poolTxID, tree[0][0].ParentTxid)
-
-		// check the nodes
-		for _, level := range tree {
-			for _, node := range level {
-				pset, err := psetv2.NewPsetFromBase64(node.Tx)
-				require.NoError(t, err)
-
-				require.Len(t, pset.Inputs, 1)
-				require.Len(t, pset.Outputs, 3)
-
-				inputTxID := chainhash.Hash(pset.Inputs[0].PreviousTxid).String()
-				require.Equal(t, node.ParentTxid, inputTxID)
-
-				children := tree.Children(node.Txid)
-				if len(children) > 0 {
-					require.Len(t, children, 2)
-
-					for i, child := range children {
-						childTx, err := psetv2.NewPsetFromBase64(child.Tx)
-						require.NoError(t, err)
-
-						for _, leaf := range childTx.Inputs[0].TapLeafScript {
-							key := leaf.ControlBlock.InternalKey
-							rootHash := leaf.ControlBlock.RootHash(leaf.Script)
-
-							outputScript := taproot.ComputeTaprootOutputKey(key, rootHash)
-							previousScriptKey := pset.Outputs[i].Script[2:]
-							require.Len(t, previousScriptKey, 32)
-							require.Equal(t, schnorr.SerializePubKey(outputScript), previousScriptKey)
-						}
-					}
-				}
-			}
-		}
+		// check that the pool tx has the right number of inputs and outputs
+		err = tree.ValidateCongestionTree(
+			congestionTree,
+			poolTxID,
+			0,
+			amount,
+			key,
+			closerToModulo512(60*60*24*14), // 2 weeks
+		)
+		require.NoError(t, err)
 	}
 }
 
@@ -411,4 +377,8 @@ func TestBuildForfeitTxs(t *testing.T) {
 			require.Len(t, pset.Outputs, 1)
 		}
 	}
+}
+
+func closerToModulo512(x uint) uint {
+	return x - (x % 512)
 }

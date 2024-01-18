@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 
+	"github.com/ark-network/ark/common/pkg/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -92,7 +93,7 @@ func (b *txBuilder) BuildForfeitTxs(
 func (b *txBuilder) BuildPoolTx(
 	aspPubkey *secp256k1.PublicKey, wallet ports.WalletService, payments []domain.Payment,
 	minRelayFee uint64,
-) (poolTx string, congestionTree domain.CongestionTree, err error) {
+) (poolTx string, congestionTree tree.CongestionTree, err error) {
 	aspScriptBytes, err := p2wpkhScript(aspPubkey, b.net)
 	if err != nil {
 		return "", nil, err

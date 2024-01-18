@@ -3,6 +3,7 @@ package txbuilder
 import (
 	"encoding/hex"
 
+	"github.com/ark-network/ark/common/pkg/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -63,7 +64,7 @@ func buildCongestionTree(
 	net network.Network,
 	poolTxID string,
 	receivers []domain.Receiver,
-) (congestionTree domain.CongestionTree, err error) {
+) (congestionTree tree.CongestionTree, err error) {
 	var nodes []*node
 
 	for _, r := range receivers {
@@ -92,7 +93,7 @@ func buildCongestionTree(
 		}
 	}
 
-	tree := make(domain.CongestionTree, maxLevel+1)
+	congestionTree = make(tree.CongestionTree, maxLevel+1)
 
 	for _, psetWithLevel := range psets {
 		utx, err := psetWithLevel.pset.UnsignedTx()
@@ -109,7 +110,7 @@ func buildCongestionTree(
 
 		parentTxid := chainhash.Hash(psetWithLevel.pset.Inputs[0].PreviousTxid).String()
 
-		tree[psetWithLevel.level] = append(tree[psetWithLevel.level], domain.Node{
+		congestionTree[psetWithLevel.level] = append(congestionTree[psetWithLevel.level], tree.Node{
 			Txid:       txid,
 			Tx:         psetB64,
 			ParentTxid: parentTxid,
@@ -117,7 +118,7 @@ func buildCongestionTree(
 		})
 	}
 
-	return tree, nil
+	return congestionTree, nil
 }
 
 func createTreeLevel(nodes []*node) ([]*node, error) {

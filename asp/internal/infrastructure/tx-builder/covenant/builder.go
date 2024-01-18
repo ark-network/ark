@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 
+	"github.com/ark-network/ark/common/pkg/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -61,18 +62,16 @@ func (b *txBuilder) GetLeafOutputScript(userPubkey, aspPubkey *secp256k1.PublicK
 	unspendableKeyBytes, _ := hex.DecodeString(unspendablePoint)
 	unspendableKey, _ := secp256k1.ParsePubKey(unspendableKeyBytes)
 
-	sweepTaprootLeaf, err := sweepTapLeaf(aspPubkey)
+	sweepTaprootLeaf, err := tree.SweepScript(aspPubkey, timeDelta)
 	if err != nil {
 		return nil, err
 	}
 
-	leafScript, err := checksigScript(userPubkey)
+	leafTaprootLeaf, err := tree.VtxoScript(userPubkey)
 	if err != nil {
 		return nil, err
 	}
-
-	leafTaprootLeaf := taproot.NewBaseTapElementsLeaf(leafScript)
-	leafTaprootTree := taproot.AssembleTaprootScriptTree(leafTaprootLeaf, *sweepTaprootLeaf)
+	leafTaprootTree := taproot.AssembleTaprootScriptTree(*leafTaprootLeaf, *sweepTaprootLeaf)
 	root := leafTaprootTree.RootNode.TapHash()
 
 	taprootKey := taproot.ComputeTaprootOutputKey(
@@ -151,7 +150,7 @@ func (b *txBuilder) BuildPoolTx(
 	wallet ports.WalletService,
 	payments []domain.Payment,
 	minRelayFee uint64,
-) (poolTx string, congestionTree domain.CongestionTree, err error) {
+) (poolTx string, congestionTree tree.CongestionTree, err error) {
 	aspScriptBytes, err := p2wpkhScript(aspPubkey, b.net)
 	if err != nil {
 		return

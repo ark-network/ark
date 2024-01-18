@@ -76,8 +76,8 @@ github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO
 github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7/go.mod h1:q4W45IWZaF22tdD+VEXcAWRA037jwmWEB5VWYORlTpc=
 github.com/vulpemventures/fastsha256 v0.0.0-20160815193821-637e65642941 h1:CTcw80hz/Sw8hqlKX5ZYvBUF5gAHSHwdjXxRf/cjDcI=
 github.com/vulpemventures/fastsha256 v0.0.0-20160815193821-637e65642941/go.mod h1:GXBJykxW2kUcktGdsgyay7uwwWvkljASfljNcT0mbh8=
-github.com/vulpemventures/go-elements v0.5.1 h1:F83n7dScOnAnpyH9VgWLdC68Qcva+2EWVzzNuW2UKak=
-github.com/vulpemventures/go-elements v0.5.1/go.mod h1:aBGuWXHaiAIUIcwqCdtEh2iQ3kJjKwHU9ywvhlcRSeU=
+github.com/vulpemventures/go-elements v0.5.2 h1:vIDzVpRXG5PnlzHA8tCnr2Tn7raIV5cHy7bRyDrbuM4=
+github.com/vulpemventures/go-elements v0.5.2/go.mod h1:aBGuWXHaiAIUIcwqCdtEh2iQ3kJjKwHU9ywvhlcRSeU=
 github.com/vulpemventures/go-secp256k1-zkp v1.1.6 h1:BmsrmXRLUibwa75Qkk8yELjpzCzlAjYFGLiLiOdq7Xo=
 github.com/vulpemventures/go-secp256k1-zkp v1.1.6/go.mod h1:zo7CpgkuPgoe7fAV+inyxsI9IhGmcoFgyD8nqZaPSOM=
 golang.org/x/crypto v0.0.0-20170930174604-9419663f5a44/go.mod h1:6SG95UA2DQfeDnfUPMdvaQW0Q7yPrPDi9nlGo2tz2b4=
