@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
-	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/pkg/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -169,7 +169,7 @@ func (r *redeemBranch) AddVtxoInput(updater *psetv2.Updater) error {
 	}
 
 	// add taproot tree letting to spend the vtxo
-	checksigLeaf, err := common.VtxoScript(walletPubkey)
+	checksigLeaf, err := tree.VtxoScript(walletPubkey)
 	if err != nil {
 		return nil
 	}
