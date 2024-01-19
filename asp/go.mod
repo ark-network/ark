@@ -5,7 +5,7 @@ go 1.21.0
 replace github.com/ark-network/ark/common => ../common
 
 require (
-	github.com/ark-network/ark/common v0.0.0-00010101000000-000000000000
+	github.com/ark-network/ark/common v0.0.0
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0
 	github.com/dgraph-io/badger/v4 v4.1.0
 	github.com/go-co-op/gocron v1.36.0

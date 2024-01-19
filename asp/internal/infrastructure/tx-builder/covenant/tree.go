@@ -116,7 +116,7 @@ func buildCongestionTree(
 	var rightAmount uint64
 	var rightKey *secp256k1.PublicKey
 
-	if len(rootPset.Outputs) > 1 {
+	if len(rootPset.Outputs) > 2 {
 		rightAmount = rootPset.Outputs[1].Value
 		rightKey, err = schnorr.ParsePubKey(rootPset.Outputs[1].Script[2:])
 		if err != nil {
@@ -248,7 +248,7 @@ func newBranch(
 }
 
 func (n *node) isLeaf() bool {
-	return n.left.isEmpty() && (n.right == nil || n.right.isEmpty())
+	return (n.left == nil || n.left.isEmpty()) && (n.right == nil || n.right.isEmpty())
 }
 
 // is it the final node of the tree
@@ -467,7 +467,7 @@ func (n *node) psets(inputArgs *psetArgs, level int) ([]psetWithLevel, error) {
 		{pset, level, n.isLeaf()},
 	}
 
-	if n.left.isEmpty() && (n.right == nil || n.right.isEmpty()) {
+	if n.isLeaf() {
 		return nodeResult, nil
 	}
 

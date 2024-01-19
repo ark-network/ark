@@ -123,7 +123,10 @@ func (r *Round) StartRegistration() ([]RoundEvent, error) {
 }
 
 func (r *Round) RegisterPayments(payments []Payment) ([]RoundEvent, error) {
-	if r.Stage.Code != RegistrationStage || r.IsFailed() {
+	if r.IsFailed() {
+		return nil, fmt.Errorf("round failed, cannot register payments")
+	}
+	if r.Stage.Code != RegistrationStage {
 		return nil, fmt.Errorf("not in a valid stage to register payments")
 	}
 	if len(payments) <= 0 {

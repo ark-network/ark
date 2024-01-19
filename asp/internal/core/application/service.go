@@ -10,6 +10,7 @@ import (
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	log "github.com/sirupsen/logrus"
 	"github.com/vulpemventures/go-elements/network"
@@ -62,7 +63,9 @@ func NewService(
 ) (Service, error) {
 	eventsCh := make(chan domain.RoundEvent)
 	paymentRequests := newPaymentsMap(nil)
-	forfeitTxs := newForfeitTxsMap()
+
+	genesisHash, _ := chainhash.NewHashFromStr(onchainNetwork.GenesisBlockHash)
+	forfeitTxs := newForfeitTxsMap(genesisHash)
 	pubkey, err := walletSvc.GetPubkey(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch pubkey: %s", err)
@@ -169,10 +172,7 @@ func (s *service) FaucetVtxos(ctx context.Context, userPubkey *secp256k1.PublicK
 }
 
 func (s *service) SignVtxos(ctx context.Context, forfeitTxs []string) error {
-	if err := s.forfeitTxs.sign(forfeitTxs); err != nil {
-		return fmt.Errorf("invalid forfeit tx: %s", err)
-	}
-	return nil
+	return s.forfeitTxs.sign(forfeitTxs)
 }
 
 func (s *service) ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, error) {
@@ -227,15 +227,6 @@ func (s *service) startFinalization() {
 		return
 	}
 
-	defer func() {
-		if round.IsFailed() {
-			s.startRound()
-			return
-		}
-		time.Sleep(time.Duration((s.roundInterval/2)-1) * time.Second)
-		s.finalizeRound()
-	}()
-
 	if round.IsFailed() {
 		return
 	}
@@ -246,6 +237,13 @@ func (s *service) startFinalization() {
 			log.WithError(err).Warn("failed to store new round events")
 			return
 		}
+
+		if round.IsFailed() {
+			s.startRound()
+			return
+		}
+		time.Sleep(time.Duration((s.roundInterval/2)-1) * time.Second)
+		s.finalizeRound()
 	}()
 
 	// TODO: understand how many payments must be popped from the queue and actually registered for the round
@@ -274,6 +272,8 @@ func (s *service) startFinalization() {
 		return
 	}
 
+	log.Debugf("pool tx created for round %s", round.Id)
+
 	connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(s.pubkey, signedPoolTx, payments)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
@@ -281,7 +281,14 @@ func (s *service) startFinalization() {
 		return
 	}
 
-	events, _ := round.StartFinalization(connectors, tree, signedPoolTx)
+	log.Debugf("forfeit transactions created for round %s", round.Id)
+
+	events, err := round.StartFinalization(connectors, tree, signedPoolTx)
+	if err != nil {
+		changes = round.Fail(fmt.Errorf("failed to start finalization: %s", err))
+		log.WithError(err).Warn("failed to start finalization")
+		return
+	}
 	changes = append(changes, events...)
 
 	s.forfeitTxs.push(forfeitTxs)

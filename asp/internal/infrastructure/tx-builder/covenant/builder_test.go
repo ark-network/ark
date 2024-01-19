@@ -52,7 +52,7 @@ func createTestPoolTx(sharedOutputAmount, numberOfInputs uint64) (string, error)
 		return "", err
 	}
 
-	connectorsAmount := numberOfInputs * (450 + 500)
+	connectorsAmount := numberOfInputs*450 + 500
 
 	err = updater.AddOutputs([]psetv2.OutputArgs{
 		{
@@ -116,7 +116,7 @@ func (*mockedWalletService) Status(ctx context.Context) (ports.WalletStatus, err
 
 // Transfer implements ports.WalletService.
 func (*mockedWalletService) Transfer(ctx context.Context, outs []ports.TxOutput) (string, error) {
-	return createTestPoolTx(outs[0].GetAmount(), (450+500)*1)
+	return createTestPoolTx(outs[0].GetAmount(), 1)
 }
 
 func TestBuildCongestionTree(t *testing.T) {
@@ -137,18 +137,14 @@ func TestBuildCongestionTree(t *testing.T) {
 							},
 							Receiver: domain.Receiver{
 								Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-								Amount: 600,
+								Amount: 1100,
 							},
 						},
 					},
 					Receivers: []domain.Receiver{
 						{
 							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-							Amount: 600,
-						},
-						{
-							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-							Amount: 400,
+							Amount: 1100,
 						},
 					},
 				},
@@ -166,7 +162,7 @@ func TestBuildCongestionTree(t *testing.T) {
 							},
 							Receiver: domain.Receiver{
 								Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-								Amount: 600,
+								Amount: 1100,
 							},
 						},
 					},
@@ -177,7 +173,36 @@ func TestBuildCongestionTree(t *testing.T) {
 						},
 						{
 							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-							Amount: 400,
+							Amount: 500,
+						},
+					},
+				},
+			},
+		},
+		{
+			payments: []domain.Payment{
+				{
+					Id: "0",
+					Inputs: []domain.Vtxo{
+						{
+							VtxoKey: domain.VtxoKey{
+								Txid: "fd68e3c5796cc7db0a8036d486d5f625b6b2f2c014810ac020e1ac23e82c59d6",
+								VOut: 0,
+							},
+							Receiver: domain.Receiver{
+								Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
+								Amount: 1100,
+							},
+						},
+					},
+					Receivers: []domain.Receiver{
+						{
+							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
+							Amount: 600,
+						},
+						{
+							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
+							Amount: 500,
 						},
 					},
 				},
@@ -191,7 +216,7 @@ func TestBuildCongestionTree(t *testing.T) {
 							},
 							Receiver: domain.Receiver{
 								Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-								Amount: 600,
+								Amount: 1100,
 							},
 						},
 					},
@@ -202,7 +227,7 @@ func TestBuildCongestionTree(t *testing.T) {
 						},
 						{
 							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-							Amount: 400,
+							Amount: 500,
 						},
 					},
 				},
@@ -216,7 +241,7 @@ func TestBuildCongestionTree(t *testing.T) {
 							},
 							Receiver: domain.Receiver{
 								Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-								Amount: 600,
+								Amount: 1100,
 							},
 						},
 					},
@@ -227,7 +252,7 @@ func TestBuildCongestionTree(t *testing.T) {
 						},
 						{
 							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-							Amount: 400,
+							Amount: 500,
 						},
 					},
 				},
@@ -266,16 +291,14 @@ func TestBuildCongestionTree(t *testing.T) {
 func TestBuildForfeitTxs(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(network.Liquid)
 
-	poolTx, err := createTestPoolTx(1000, 450*2)
+	// TODO: replace with fixture.
+	poolTxHex, err := createTestPoolTx(1000, 2)
 	require.NoError(t, err)
 
-	poolPset, err := psetv2.NewPsetFromBase64(poolTx)
+	poolTx, err := transaction.NewTxFromHex(poolTxHex)
 	require.NoError(t, err)
 
-	poolTxUnsigned, err := poolPset.UnsignedTx()
-	require.NoError(t, err)
-
-	poolTxID := poolTxUnsigned.TxHash().String()
+	poolTxid := poolTx.TxHash().String()
 
 	fixtures := []struct {
 		payments                []domain.Payment
@@ -304,7 +327,7 @@ func TestBuildForfeitTxs(t *testing.T) {
 							},
 							Receiver: domain.Receiver{
 								Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-								Amount: 400,
+								Amount: 500,
 							},
 						},
 					},
@@ -315,7 +338,7 @@ func TestBuildForfeitTxs(t *testing.T) {
 						},
 						{
 							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-							Amount: 400,
+							Amount: 500,
 						},
 					},
 				},
@@ -331,7 +354,7 @@ func TestBuildForfeitTxs(t *testing.T) {
 
 	for _, f := range fixtures {
 		connectors, forfeitTxs, err := builder.BuildForfeitTxs(
-			key, poolTx, f.payments,
+			key, poolTxHex, f.payments,
 		)
 		require.NoError(t, err)
 		require.Len(t, connectors, f.expectedNumOfConnectors)
@@ -349,7 +372,7 @@ func TestBuildForfeitTxs(t *testing.T) {
 			require.Len(t, pset.Inputs, 1)
 			require.Len(t, pset.Outputs, 2)
 
-			expectedInputTxid := poolTxID
+			expectedInputTxid := poolTxid
 			expectedInputVout := uint32(1)
 			if i > 0 {
 				tx, err := connectorsPsets[i-1].UnsignedTx()
@@ -374,7 +397,7 @@ func TestBuildForfeitTxs(t *testing.T) {
 		// each forfeit tx should have 2 inputs and 2 outputs
 		for _, pset := range forfeitTxsPsets {
 			require.Len(t, pset.Inputs, 2)
-			require.Len(t, pset.Outputs, 1)
+			require.Len(t, pset.Outputs, 2)
 		}
 	}
 }

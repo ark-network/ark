@@ -2,6 +2,7 @@ package main
 
 import (
 	"strings"
+	"time"
 
 	"github.com/vulpemventures/go-elements/transaction"
 )
@@ -49,6 +50,12 @@ func (e *explorer) Broadcast(txHex string) (string, error) {
 		if strings.Contains(strings.ToLower(err.Error()), "transaction already in block chain") {
 			return txid, nil
 		}
+
+		if strings.Contains(strings.ToLower(err.Error()), "bad-txns-inputs-missingorspent") {
+			time.Sleep(5 * time.Second)
+			return e.Broadcast(txHex)
+		}
+
 		return "", err
 	}
 

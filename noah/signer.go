@@ -125,10 +125,7 @@ func signPset(
 			continue
 		}
 
-		pubkey, err := getWalletPublicKey()
-		if err != nil {
-			return err
-		}
+		pubkey := prvKey.PubKey()
 
 		vtxoLeaf, err := tree.VtxoScript(pubkey)
 		if err != nil {
@@ -174,8 +171,6 @@ func signPset(
 					if err := signer.SignTaprootInputTapscriptSig(i, tapScriptSig); err != nil {
 						return err
 					}
-
-					continue
 				}
 			}
 		}

@@ -1,5 +1,7 @@
 package tree
 
+import "errors"
+
 // Node is a struct embedding the transaction and the parent txid of a congestion tree node
 type Node struct {
 	Txid       string
@@ -7,6 +9,11 @@ type Node struct {
 	ParentTxid string
 	Leaf       bool
 }
+
+var (
+	ErrParentNotFound = errors.New("parent not found")
+	ErrLeafNotFound   = errors.New("leaf not found in congestion tree")
+)
 
 // CongestionTree is reprensented as a matrix of TreeNode struct
 // the first level of the matrix is the root of the tree
@@ -46,4 +53,45 @@ func (c CongestionTree) NumberOfNodes() int {
 		count += len(level)
 	}
 	return count
+}
+
+func (c CongestionTree) Branch(vtxoTxid string) ([]Node, error) {
+	branch := make([]Node, 0)
+
+	leaves := c.Leaves()
+	// check if the vtxo is a leaf
+	found := false
+	for _, leaf := range leaves {
+		if leaf.Txid == vtxoTxid {
+			found = true
+			branch = append(branch, leaf)
+			break
+		}
+	}
+	if !found {
+		return nil, ErrLeafNotFound
+	}
+
+	rootTxid := c[0][0].Txid
+
+	for branch[0].Txid != rootTxid {
+		parent, err := branch[0].findParent(c)
+		if err != nil {
+			return nil, err
+		}
+		branch = append([]Node{parent}, branch...)
+	}
+
+	return branch, nil
+}
+
+func (n Node) findParent(tree CongestionTree) (Node, error) {
+	for _, level := range tree {
+		for _, node := range level {
+			if node.Txid == n.ParentTxid {
+				return node, nil
+			}
+		}
+	}
+	return Node{}, ErrParentNotFound
 }

@@ -22,7 +22,7 @@ var (
 	ErrNodeParentTxidEmpty      = errors.New("node parent txid is empty")
 	ErrNodeTxidDifferent        = errors.New("node txid differs from node transaction")
 	ErrNumberOfInputs           = errors.New("node transaction should have only one input")
-	ErrNumberOfOutputs          = errors.New("node transaction should have only three outputs")
+	ErrNumberOfOutputs          = errors.New("node transaction should have only three or two outputs")
 	ErrParentTxidInput          = errors.New("parent txid should be the input of the node transaction")
 	ErrNumberOfChildren         = errors.New("node branch transaction should have two children")
 	ErrLeafChildren             = errors.New("leaf node should have no children")
@@ -45,7 +45,7 @@ var (
 )
 
 const (
-	unspendablePoint = "0250929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0"
+	UnspendablePoint = "0250929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0"
 )
 
 // ValidateCongestionTree checks if the given congestion tree is valid
@@ -65,7 +65,7 @@ func ValidateCongestionTree(
 	aspPublicKey *secp256k1.PublicKey,
 	roundLifetimeSeconds uint,
 ) error {
-	unspendableKeyBytes, _ := hex.DecodeString(unspendablePoint)
+	unspendableKeyBytes, _ := hex.DecodeString(UnspendablePoint)
 	unspendableKey, _ := secp256k1.ParsePubKey(unspendableKeyBytes)
 
 	nbNodes := tree.NumberOfNodes()
@@ -164,11 +164,7 @@ func validateNodeTransaction(
 		return ErrParentTxidInput
 	}
 
-	if len(decodedPset.Outputs) != 3 {
-		return ErrNumberOfOutputs
-	}
-
-	feeOutput := decodedPset.Outputs[2]
+	feeOutput := decodedPset.Outputs[len(decodedPset.Outputs)-1]
 	if len(feeOutput.Script) != 0 {
 		return ErrMissingFeeOutput
 	}
@@ -233,6 +229,19 @@ func validateNodeTransaction(
 			if isBranchLeaf {
 				branchLeafFound = true
 
+				// check outputs
+
+				nbOuts := len(childTx.Outputs)
+				if leftKey != nil && rightKey != nil {
+					if nbOuts != 3 {
+						return ErrNumberOfOutputs
+					}
+				} else {
+					if nbOuts != 2 {
+						return ErrNumberOfOutputs
+					}
+				}
+
 				leftWitnessProgram := childTx.Outputs[0].Script[2:]
 				leftOutputAmount := childTx.Outputs[0].Value
 
@@ -244,15 +253,17 @@ func validateNodeTransaction(
 					return ErrInvalidLeftOutput
 				}
 
-				rightWitnessProgram := childTx.Outputs[1].Script[2:]
-				rightOutputAmount := childTx.Outputs[1].Value
+				if rightKey != nil {
+					rightWitnessProgram := childTx.Outputs[1].Script[2:]
+					rightOutputAmount := childTx.Outputs[1].Value
 
-				if !bytes.Equal(rightWitnessProgram, schnorr.SerializePubKey(rightKey)) {
-					return ErrInvalidRightOutput
-				}
+					if !bytes.Equal(rightWitnessProgram, schnorr.SerializePubKey(rightKey)) {
+						return ErrInvalidRightOutput
+					}
 
-				if rightAmount != rightOutputAmount {
-					return ErrInvalidRightOutput
+					if rightAmount != rightOutputAmount {
+						return ErrInvalidRightOutput
+					}
 				}
 			}
 		}

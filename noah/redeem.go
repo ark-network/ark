@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"log"
 	"math"
 	"os"
@@ -11,7 +10,7 @@ import (
 	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/ark-network/ark/common/pkg/tree"
 	"github.com/urfave/cli/v2"
 	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/psetv2"
@@ -132,6 +131,11 @@ func collaborativeRedeem(ctx *cli.Context, addr string, amount uint64) error {
 		})
 	}
 
+	secKey, err := privateKeyFromPassword()
+	if err != nil {
+		return err
+	}
+
 	registerResponse, err := client.RegisterPayment(ctx.Context, &arkv1.RegisterPaymentRequest{
 		Inputs: inputs,
 	})
@@ -147,81 +151,22 @@ func collaborativeRedeem(ctx *cli.Context, addr string, amount uint64) error {
 		return err
 	}
 
-	stream, err := client.GetEventStream(ctx.Context, &arkv1.GetEventStreamRequest{})
+	poolTxID, err := handleRoundStream(
+		ctx,
+		client,
+		registerResponse.GetId(),
+		selectedCoins,
+		secKey,
+		receivers,
+	)
 	if err != nil {
 		return err
 	}
 
-	var pingStop func()
-	pingReq := &arkv1.PingRequest{
-		PaymentId: registerResponse.GetId(),
-	}
-	for pingStop == nil {
-		pingStop = ping(ctx, client, pingReq)
-	}
-
-	for {
-		event, err := stream.Recv()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
-
-		if event.GetRoundFailed() != nil {
-			return fmt.Errorf("round failed: %s", event.GetRoundFailed().GetReason())
-		}
-
-		if event.GetRoundFinalization() != nil {
-			// stop pinging as soon as we receive some forfeit txs
-			pingStop()
-			forfeits := event.GetRoundFinalization().GetForfeitTxs()
-			signedForfeits := make([]string, 0)
-
-			for _, forfeit := range forfeits {
-				pset, err := psetv2.NewPsetFromBase64(forfeit)
-				if err != nil {
-					return err
-				}
-
-				// check if it contains one of the input to sign
-				for _, input := range pset.Inputs {
-					inputTxid := chainhash.Hash(input.PreviousTxid).String()
-
-					for _, coin := range selectedCoins {
-						if inputTxid == coin.txid {
-							// TODO: sign the vtxo input
-							signedForfeits = append(signedForfeits, forfeit)
-						}
-					}
-				}
-			}
-
-			// if no forfeit txs have been signed, start pinging again and wait for the next round
-			if len(signedForfeits) == 0 {
-				pingStop = nil
-				for pingStop == nil {
-					pingStop = ping(ctx, client, pingReq)
-				}
-				continue
-			}
-
-			_, err := client.FinalizePayment(ctx.Context, &arkv1.FinalizePaymentRequest{
-				SignedForfeitTxs: signedForfeits,
-			})
-			if err != nil {
-				return err
-			}
-
-			continue
-		}
-
-		if event.GetRoundFinalized() != nil {
-			return printJSON(map[string]interface{}{
-				"pool_txid": event.GetRoundFinalized().GetPoolTxid(),
-			})
-		}
+	if err := printJSON(map[string]interface{}{
+		"pool_txid": poolTxID,
+	}); err != nil {
+		return err
 	}
 
 	return nil
@@ -269,9 +214,19 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 		return err
 	}
 
-	congestionTrees := make(map[string]*arkv1.Tree, 0)
+	congestionTrees := make(map[string]tree.CongestionTree, 0)
 	transactionsMap := make(map[string]struct{}, 0)
 	transactions := make([]string, 0)
+
+	aspPublicKey, err := getServiceProviderPublicKey()
+	if err != nil {
+		return err
+	}
+
+	sweepLeaf, err := tree.SweepScript(aspPublicKey, 1209344)
+	if err != nil {
+		return err
+	}
 
 	for _, vtxo := range vtxos {
 		if _, ok := congestionTrees[vtxo.poolTxid]; !ok {
@@ -282,10 +237,16 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 				return err
 			}
 
-			congestionTrees[vtxo.poolTxid] = round.GetRound().GetCongestionTree()
+			treeFromRound := round.GetRound().GetCongestionTree()
+			congestionTree, err := toCongestionTree(treeFromRound)
+			if err != nil {
+				return err
+			}
+
+			congestionTrees[vtxo.poolTxid] = congestionTree
 		}
 
-		redeemBranch, err := newRedeemBranch(ctx, congestionTrees[vtxo.poolTxid], vtxo)
+		redeemBranch, err := newRedeemBranch(ctx, congestionTrees[vtxo.poolTxid], vtxo, sweepLeaf)
 		if err != nil {
 			return err
 		}
@@ -334,7 +295,7 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 	}
 
 	vBytes := utx.VirtualSize()
-	feeAmount := uint64(math.Ceil(float64(vBytes) * 0.2))
+	feeAmount := uint64(math.Ceil(float64(vBytes) * 0.25))
 
 	if totalVtxosAmount-feeAmount <= 0 {
 		return fmt.Errorf("not enough VTXOs to pay the fees (%d sats), aborting unilateral exit", feeAmount)
