@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/ark-network/ark/common/pkg/tree"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -16,8 +16,7 @@ import (
 )
 
 const (
-	unspendablePoint = "0250929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0"
-	timeDelta        = 60 * 60 * 24 * 14 // 14 days in seconds
+	expirationTime = 60 * 60 * 24 * 14 // 14 days in seconds
 )
 
 // the private method buildCongestionTree returns a function letting to plug in the pool transaction output as input of the tree's root node
@@ -64,7 +63,7 @@ func buildCongestionTree(
 	receivers []domain.Receiver,
 	feeSatsPerNode uint64,
 ) (pluggableTree pluggableCongestionTree, sharedOutputScript []byte, sharedOutputAmount uint64, err error) {
-	unspendableKeyBytes, err := hex.DecodeString(unspendablePoint)
+	unspendableKeyBytes, err := hex.DecodeString(tree.UnspendablePoint)
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -297,7 +296,7 @@ func (n *node) taprootKey() (*secp256k1.PublicKey, *taproot.IndexedElementsTapSc
 		return n._taprootKey, n._taprootTree, nil
 	}
 
-	sweepTaprootLeaf, err := tree.SweepScript(n.sweepKey, timeDelta)
+	sweepTaprootLeaf, err := tree.SweepScript(n.sweepKey, expirationTime)
 	if err != nil {
 		return nil, nil, err
 	}

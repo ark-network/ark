@@ -7,7 +7,7 @@ import (
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/pkg/tree"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/application"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"

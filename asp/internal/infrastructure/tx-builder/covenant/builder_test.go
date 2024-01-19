@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/pkg/tree"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenant"
@@ -123,7 +123,9 @@ func TestBuildCongestionTree(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(network.Liquid)
 
 	fixtures := []struct {
-		payments []domain.Payment
+		payments          []domain.Payment
+		expectedNodesNum  int // 2*len(receivers) -1
+		expectedLeavesNum int
 	}{
 		{
 			payments: []domain.Payment{
@@ -149,6 +151,8 @@ func TestBuildCongestionTree(t *testing.T) {
 					},
 				},
 			},
+			expectedNodesNum:  1,
+			expectedLeavesNum: 1,
 		},
 		{
 			payments: []domain.Payment{
@@ -178,6 +182,8 @@ func TestBuildCongestionTree(t *testing.T) {
 					},
 				},
 			},
+			expectedNodesNum:  1,
+			expectedLeavesNum: 1,
 		},
 		{
 			payments: []domain.Payment{
@@ -257,6 +263,8 @@ func TestBuildCongestionTree(t *testing.T) {
 					},
 				},
 			},
+			expectedNodesNum:  5,
+			expectedLeavesNum: 3,
 		},
 	}
 
@@ -267,6 +275,8 @@ func TestBuildCongestionTree(t *testing.T) {
 	for _, f := range fixtures {
 		poolTx, congestionTree, err := builder.BuildPoolTx(key, &mockedWalletService{}, f.payments, 30)
 		require.NoError(t, err)
+		require.Equal(t, f.expectedNodesNum, congestionTree.NumberOfNodes())
+		require.Len(t, congestionTree.Leaves(), f.expectedLeavesNum)
 
 		poolTransaction, err := transaction.NewTxFromHex(poolTx)
 		require.NoError(t, err)
@@ -282,7 +292,7 @@ func TestBuildCongestionTree(t *testing.T) {
 			0,
 			amount,
 			key,
-			closerToModulo512(60*60*24*14), // 2 weeks
+			1209344, // 2 weeks - 8 minutes
 		)
 		require.NoError(t, err)
 	}
@@ -400,8 +410,4 @@ func TestBuildForfeitTxs(t *testing.T) {
 			require.Len(t, pset.Outputs, 2)
 		}
 	}
-}
-
-func closerToModulo512(x uint) uint {
-	return x - (x % 512)
 }

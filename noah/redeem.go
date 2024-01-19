@@ -10,7 +10,7 @@ import (
 	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
-	"github.com/ark-network/ark/common/pkg/tree"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/urfave/cli/v2"
 	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/psetv2"
@@ -323,7 +323,7 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 		for {
 			txid, err := explorer.Broadcast(txHex)
 			if err != nil {
-				if strings.Contains(err.Error(), "bad-txns-inputs-missingorspent") {
+				if strings.Contains(strings.ToLower(err.Error()), "bad-txns-inputs-missingorspent") {
 					time.Sleep(1 * time.Second)
 				} else {
 					return err
@@ -359,12 +359,20 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 		return err
 	}
 
-	id, err := explorer.Broadcast(hex)
-	if err != nil {
-		return err
+	for {
+		id, err := explorer.Broadcast(hex)
+		if err != nil {
+			if strings.Contains(strings.ToLower(err.Error()), "bad-txns-inputs-missingorspent") {
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			return err
+		}
+		if id != "" {
+			fmt.Printf("(final) redeem tx %s\n", id)
+			break
+		}
 	}
-
-	fmt.Printf("(final) redeem tx %s\n", id)
 
 	return nil
 }

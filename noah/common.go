@@ -13,7 +13,7 @@ import (
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/pkg/tree"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -401,17 +401,10 @@ func handleRoundStream(
 				return "", err
 			}
 
-			sharedOutputAmount, err := elementsutil.ValueFromBytes(poolTransaction.Outputs[0].Value)
-			if err != nil {
-				return "", err
-			}
-
 			// validate the congestion tree
 			if err := tree.ValidateCongestionTree(
 				congestionTree,
-				poolTransaction.TxHash().String(),
-				0,
-				sharedOutputAmount,
+				poolPartialTx,
 				aspPublicKey,
 				1209344, // ~ 2 weeks
 			); err != nil {
@@ -423,6 +416,7 @@ func handleRoundStream(
 			if err != nil {
 				return "", err
 			}
+
 			for _, receiver := range receivers {
 				isOnChain, onchainScript, userPubKey, err := decodeReceiverAddress(receiver.Address)
 				if err != nil {
@@ -482,7 +476,7 @@ func handleRoundStream(
 					for _, output := range tx.Outputs {
 						if bytes.Equal(output.Script[2:], vtxoTaprootKey) {
 							if output.Value != receiver.Amount {
-								return "", fmt.Errorf("invalid off-chain send output amount: got %d, want %d", output.Value, receiver.Amount)
+								continue
 							}
 
 							found = true

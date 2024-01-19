@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 
-	"github.com/ark-network/ark/common/pkg/tree"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -226,7 +226,7 @@ func (b *txBuilder) BuildPoolTx(
 }
 
 func (b *txBuilder) getLeafTaprootTree(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, *taproot.IndexedElementsTapScriptTree, error) {
-	sweepTaprootLeaf, err := tree.SweepScript(aspPubkey, timeDelta)
+	sweepTaprootLeaf, err := tree.SweepScript(aspPubkey, expirationTime)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -239,7 +239,7 @@ func (b *txBuilder) getLeafTaprootTree(userPubkey, aspPubkey *secp256k1.PublicKe
 	leafTaprootTree := taproot.AssembleTaprootScriptTree(*vtxoLeaf, *sweepTaprootLeaf)
 	root := leafTaprootTree.RootNode.TapHash()
 
-	unspendableKeyBytes, _ := hex.DecodeString(unspendablePoint)
+	unspendableKeyBytes, _ := hex.DecodeString(tree.UnspendablePoint)
 	unspendableKey, _ := secp256k1.ParsePubKey(unspendableKeyBytes)
 
 	taprootKey := taproot.ComputeTaprootOutputKey(

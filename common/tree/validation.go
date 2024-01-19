@@ -9,11 +9,14 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/vulpemventures/go-elements/elementsutil"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/taproot"
+	"github.com/vulpemventures/go-elements/transaction"
 )
 
 var (
+	ErrInvalidPoolTransaction   = errors.New("invalid pool transaction")
 	ErrEmptyTree                = errors.New("empty congestion tree")
 	ErrInvalidRootLevel         = errors.New("root level must have only one node")
 	ErrNoLeaves                 = errors.New("no leaves in the tree")
@@ -45,7 +48,8 @@ var (
 )
 
 const (
-	UnspendablePoint = "0250929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0"
+	UnspendablePoint  = "0250929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0"
+	sharedOutputIndex = 0
 )
 
 // ValidateCongestionTree checks if the given congestion tree is valid
@@ -59,14 +63,24 @@ const (
 // - input and output amounts
 func ValidateCongestionTree(
 	tree CongestionTree,
-	poolTxID string,
-	poolTxIndex uint32,
-	poolTxAmount uint64,
+	poolTxHex string,
 	aspPublicKey *secp256k1.PublicKey,
 	roundLifetimeSeconds uint,
 ) error {
 	unspendableKeyBytes, _ := hex.DecodeString(UnspendablePoint)
 	unspendableKey, _ := secp256k1.ParsePubKey(unspendableKeyBytes)
+
+	poolTransaction, err := transaction.NewTxFromHex(poolTxHex)
+	if err != nil {
+		return ErrInvalidPoolTransaction
+	}
+
+	poolTxAmount, err := elementsutil.ValueFromBytes(poolTransaction.Outputs[sharedOutputIndex].Value)
+	if err != nil {
+		return ErrInvalidPoolTransaction
+	}
+
+	poolTxID := poolTransaction.TxHash().String()
 
 	nbNodes := tree.NumberOfNodes()
 	if nbNodes == 0 {
@@ -89,7 +103,7 @@ func ValidateCongestionTree(
 	}
 
 	rootInput := rootPset.Inputs[0]
-	if chainhash.Hash(rootInput.PreviousTxid).String() != poolTxID || rootInput.PreviousTxIndex != poolTxIndex {
+	if chainhash.Hash(rootInput.PreviousTxid).String() != poolTxID || rootInput.PreviousTxIndex != sharedOutputIndex {
 		return ErrWrongPoolTxID
 	}
 
@@ -230,7 +244,6 @@ func validateNodeTransaction(
 				branchLeafFound = true
 
 				// check outputs
-
 				nbOuts := len(childTx.Outputs)
 				if leftKey != nil && rightKey != nil {
 					if nbOuts != 3 {

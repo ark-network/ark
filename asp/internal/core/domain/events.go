@@ -1,6 +1,6 @@
 package domain
 
-import "github.com/ark-network/ark/common/pkg/tree"
+import "github.com/ark-network/ark/common/tree"
 
 type RoundEvent interface {
 	isEvent()
