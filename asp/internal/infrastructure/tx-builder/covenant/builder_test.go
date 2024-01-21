@@ -12,7 +12,6 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/require"
-	"github.com/vulpemventures/go-elements/elementsutil"
 	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
@@ -278,19 +277,10 @@ func TestBuildCongestionTree(t *testing.T) {
 		require.Equal(t, f.expectedNodesNum, congestionTree.NumberOfNodes())
 		require.Len(t, congestionTree.Leaves(), f.expectedLeavesNum)
 
-		poolTransaction, err := transaction.NewTxFromHex(poolTx)
-		require.NoError(t, err)
-
-		poolTxID := poolTransaction.TxHash().String()
-		amount, err := elementsutil.ValueFromBytes(poolTransaction.Outputs[0].Value)
-		require.NoError(t, err)
-
 		// check that the pool tx has the right number of inputs and outputs
 		err = tree.ValidateCongestionTree(
 			congestionTree,
-			poolTxID,
-			0,
-			amount,
+			poolTx,
 			key,
 			1209344, // 2 weeks - 8 minutes
 		)
