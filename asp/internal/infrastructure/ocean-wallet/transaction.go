@@ -32,18 +32,22 @@ func (s *service) SignPset(
 	return ptx.ToBase64()
 }
 
-func (s *service) Transfer(
-	ctx context.Context, outs []ports.TxOutput,
-) (string, error) {
-	res, err := s.txClient.Transfer(ctx, &pb.TransferRequest{
-		AccountName:      accountLabel,
-		Receivers:        outputList(outs).toProto(),
-		MillisatsPerByte: msatsPerByte,
+func (s *service) SelectUtxos(ctx context.Context, asset string, amount uint64) ([]ports.TxInput, uint64, error) {
+	res, err := s.txClient.SelectUtxos(ctx, &pb.SelectUtxosRequest{
+		AccountName:  accountLabel,
+		TargetAsset:  asset,
+		TargetAmount: amount,
 	})
 	if err != nil {
-		return "", err
+		return nil, 0, err
 	}
-	return res.GetTxHex(), nil
+
+	inputs := make([]ports.TxInput, 0, len(res.GetUtxos()))
+	for _, utxo := range res.GetUtxos() {
+		inputs = append(inputs, utxo)
+	}
+
+	return inputs, res.GetChange(), nil
 }
 
 func (s *service) BroadcastTransaction(
@@ -58,18 +62,4 @@ func (s *service) BroadcastTransaction(
 		return "", err
 	}
 	return res.GetTxid(), nil
-}
-
-type outputList []ports.TxOutput
-
-func (l outputList) toProto() []*pb.Output {
-	list := make([]*pb.Output, 0, len(l))
-	for _, out := range l {
-		list = append(list, &pb.Output{
-			Amount: out.GetAmount(),
-			Script: out.GetScript(),
-			Asset:  out.GetAsset(),
-		})
-	}
-	return list
 }

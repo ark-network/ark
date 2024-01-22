@@ -74,6 +74,19 @@ func createTestPoolTx(sharedOutputAmount, numberOfInputs uint64) (string, error)
 	return pset.ToBase64()
 }
 
+type input struct {
+	txid string
+	vout uint32
+}
+
+func (i *input) GetTxid() string {
+	return i.txid
+}
+
+func (i *input) GetIndex() uint32 {
+	return i.vout
+}
+
 type mockedWalletService struct{}
 
 // BroadcastTransaction implements ports.WalletService.
@@ -106,9 +119,13 @@ func (*mockedWalletService) Status(ctx context.Context) (ports.WalletStatus, err
 	panic("unimplemented")
 }
 
-// Transfer implements ports.WalletService.
-func (*mockedWalletService) Transfer(ctx context.Context, outs []ports.TxOutput) (string, error) {
-	return createTestPoolTx(1000, (450+500)*1)
+func (*mockedWalletService) SelectUtxos(ctx context.Context, asset string, amount uint64) ([]ports.TxInput, uint64, error) {
+	fakeInput := input{
+		txid: "2f8f5733734fd44d581976bd3c1aee098bd606402df2ce02ce908287f1d5ede4",
+		vout: 0,
+	}
+
+	return []ports.TxInput{&fakeInput}, 0, nil
 }
 
 func TestBuildCongestionTree(t *testing.T) {

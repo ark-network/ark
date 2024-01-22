@@ -376,7 +376,7 @@ func roundsMatch(expected, got domain.Round) assert.Comparison {
 		if expected.Txid != got.Txid {
 			return false
 		}
-		if expected.TxHex != got.TxHex {
+		if expected.UnsignedTx != got.UnsignedTx {
 			return false
 		}
 		if !reflect.DeepEqual(expected.ForfeitTxs, got.ForfeitTxs) {

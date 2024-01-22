@@ -39,7 +39,7 @@ type Round struct {
 	Stage             Stage
 	Payments          map[string]Payment
 	Txid              string
-	TxHex             string
+	UnsignedTx        string
 	ForfeitTxs        []string
 	CongestionTree    CongestionTree
 	Connectors        []string
@@ -83,7 +83,7 @@ func (r *Round) On(event RoundEvent, replayed bool) {
 		r.Stage.Code = FinalizationStage
 		r.CongestionTree = e.CongestionTree
 		r.Connectors = append([]string{}, e.Connectors...)
-		r.TxHex = e.PoolTx
+		r.UnsignedTx = e.PoolTx
 	case RoundFinalized:
 		r.Stage.Ended = true
 		r.Txid = e.Txid

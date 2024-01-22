@@ -19,6 +19,7 @@ import (
 
 const (
 	connectorAmount = 450
+	poolTxFeeAmount = 300
 )
 
 type txBuilder struct {
@@ -171,8 +172,6 @@ func (b *txBuilder) BuildPoolTx(
 		return
 	}
 
-	aspScript := hex.EncodeToString(aspScriptBytes)
-
 	offchainReceivers, onchainReceivers := receiversFromPayments(payments)
 	numberOfConnectors := numberOfVTXOs(payments)
 	connectorOutputAmount := connectorAmount * numberOfConnectors
@@ -189,38 +188,76 @@ func (b *txBuilder) BuildPoolTx(
 		return
 	}
 
-	sharedOutputScriptHex := hex.EncodeToString(sharedOutputScript)
-
-	poolTxOuts := []ports.TxOutput{
-		newOutput(sharedOutputScriptHex, sharedOutputAmount, b.net.AssetID),
-		newOutput(aspScript, connectorOutputAmount, b.net.AssetID),
+	outputs := []psetv2.OutputArgs{
+		{
+			Asset:  b.net.AssetID,
+			Amount: sharedOutputAmount,
+			Script: sharedOutputScript,
+		},
+		{
+			Asset:  b.net.AssetID,
+			Amount: connectorOutputAmount,
+			Script: aspScriptBytes,
+		},
+		{
+			Asset:  b.net.AssetID,
+			Amount: poolTxFeeAmount,
+		},
 	}
+
+	amountToSelect := sharedOutputAmount + connectorOutputAmount + poolTxFeeAmount
 
 	for _, receiver := range onchainReceivers {
-		buf, _ := address.ToOutputScript(receiver.OnchainAddress)
-		script := hex.EncodeToString(buf)
-		poolTxOuts = append(poolTxOuts, newOutput(script, receiver.Amount, b.net.AssetID))
+		amountToSelect += receiver.Amount
+
+		receiverScript, err := address.ToOutputScript(receiver.OnchainAddress)
+		if err != nil {
+			return "", nil, err
+		}
+
+		outputs = append(outputs, psetv2.OutputArgs{
+			Asset:  b.net.AssetID,
+			Amount: receiver.Amount,
+			Script: receiverScript,
+		})
 	}
 
-	txHex, err := wallet.Transfer(ctx, poolTxOuts)
+	utxos, change, err := wallet.SelectUtxos(ctx, b.net.AssetID, amountToSelect)
 	if err != nil {
 		return
 	}
 
-	tx, err := transaction.NewTxFromHex(txHex)
+	if change > 0 {
+		outputs = append(outputs, psetv2.OutputArgs{
+			Asset:  b.net.AssetID,
+			Amount: change,
+			Script: aspScriptBytes,
+		})
+	}
+
+	poolPartialTx, err := psetv2.New(toInputArgs(utxos), outputs, nil)
+	if err != nil {
+		return
+	}
+
+	utx, err := poolPartialTx.UnsignedTx()
 	if err != nil {
 		return
 	}
 
 	tree, err := makeTree(psetv2.InputArgs{
-		Txid:    tx.TxHash().String(),
+		Txid:    utx.TxHash().String(),
 		TxIndex: 0,
 	})
 	if err != nil {
 		return
 	}
 
-	poolTx = txHex
+	poolTx, err = poolPartialTx.ToBase64()
+	if err != nil {
+		return
+	}
+
 	congestionTree = tree
 	return
 }
@@ -321,28 +358,15 @@ func receiversFromPayments(
 	return
 }
 
-type output struct {
-	script string
-	amount uint64
-	asset  string
-}
-
-func newOutput(script string, amount uint64, asset string) ports.TxOutput {
-	return &output{
-		script: script,
-		amount: amount,
-		asset:  asset,
+func toInputArgs(
+	ins []ports.TxInput,
+) []psetv2.InputArgs {
+	inputs := make([]psetv2.InputArgs, 0, len(ins))
+	for _, in := range ins {
+		inputs = append(inputs, psetv2.InputArgs{
+			Txid:    in.GetTxid(),
+			TxIndex: in.GetIndex(),
+		})
 	}
-}
-
-func (o *output) GetAsset() string {
-	return o.asset
-}
-
-func (o *output) GetAmount() uint64 {
-	return o.amount
-}
-
-func (o *output) GetScript() string {
-	return o.script
+	return inputs
 }

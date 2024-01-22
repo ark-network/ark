@@ -267,21 +267,21 @@ func (s *service) startFinalization() {
 		return
 	}
 
-	signedPoolTx, tree, err := s.builder.BuildPoolTx(s.pubkey, s.wallet, payments, s.minRelayFee)
+	unsignedPoolTx, tree, err := s.builder.BuildPoolTx(s.pubkey, s.wallet, payments, s.minRelayFee)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
 		log.WithError(err).Warn("failed to create pool tx")
 		return
 	}
 
-	connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(s.pubkey, signedPoolTx, payments)
+	connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(s.pubkey, unsignedPoolTx, payments)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
 		log.WithError(err).Warn("failed to create connectors and forfeit txs")
 		return
 	}
 
-	events, _ := round.StartFinalization(connectors, tree, signedPoolTx)
+	events, _ := round.StartFinalization(connectors, tree, unsignedPoolTx)
 	changes = append(changes, events...)
 
 	s.forfeitTxs.push(forfeitTxs)
@@ -318,7 +318,15 @@ func (s *service) finalizeRound() {
 		return
 	}
 
-	txid, err := s.wallet.BroadcastTransaction(ctx, round.TxHex)
+	log.Debugf("signing round transaction %s\n", round.Id)
+	signedPoolTx, err := s.wallet.SignPset(ctx, round.UnsignedTx, true)
+	if err != nil {
+		changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
+		log.WithError(err).Warn("failed to sign round tx")
+		return
+	}
+
+	txid, err := s.wallet.BroadcastTransaction(ctx, signedPoolTx)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to broadcast pool tx: %s", err))
 		log.WithError(err).Warn("failed to broadcast pool tx")
