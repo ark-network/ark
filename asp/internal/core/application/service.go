@@ -227,15 +227,12 @@ func (s *service) startFinalization() {
 		return
 	}
 
-	if round.IsFailed() {
-		return
-	}
-
 	var changes []domain.RoundEvent
 	defer func() {
-		if err := s.repoManager.Events().Save(ctx, round.Id, changes...); err != nil {
-			log.WithError(err).Warn("failed to store new round events")
-			return
+		if len(changes) > 0 {
+			if err := s.repoManager.Events().Save(ctx, round.Id, changes...); err != nil {
+				log.WithError(err).Warn("failed to store new round events")
+			}
 		}
 
 		if round.IsFailed() {
@@ -245,6 +242,10 @@ func (s *service) startFinalization() {
 		time.Sleep(time.Duration((s.roundInterval/2)-1) * time.Second)
 		s.finalizeRound()
 	}()
+
+	if round.IsFailed() {
+		return
+	}
 
 	// TODO: understand how many payments must be popped from the queue and actually registered for the round
 	num := s.paymentRequests.len()
