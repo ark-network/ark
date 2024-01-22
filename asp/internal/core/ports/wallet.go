@@ -28,9 +28,3 @@ type TxInput interface {
 	GetTxid() string
 	GetIndex() uint32
 }
-
-type TxOutput interface {
-	GetAmount() uint64
-	GetAsset() string
-	GetScript() string
-}
