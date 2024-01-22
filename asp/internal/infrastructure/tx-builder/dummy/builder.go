@@ -164,6 +164,9 @@ func (b *txBuilder) BuildPoolTx(
 		utx.TxHash().String(),
 		offchainReceivers,
 	)
+	if err != nil {
+		return
+	}
 
 	poolTx, err = poolPartialTx.ToBase64()
 	if err != nil {

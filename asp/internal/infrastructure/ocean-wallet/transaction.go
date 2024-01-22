@@ -11,8 +11,6 @@ import (
 	"github.com/vulpemventures/go-elements/transaction"
 )
 
-const msatsPerByte = 110
-
 func (s *service) SignPset(
 	ctx context.Context, pset string, extractRawTx bool,
 ) (string, error) {
