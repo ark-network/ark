@@ -28,7 +28,7 @@ var (
 	ErrNumberOfOutputs          = errors.New("node transaction should have only three or two outputs")
 	ErrParentTxidInput          = errors.New("parent txid should be the input of the node transaction")
 	ErrNumberOfChildren         = errors.New("node branch transaction should have two children")
-	ErrLeafChildren             = errors.New("leaf node should have no children")
+	ErrLeafChildren             = errors.New("leaf node should have max 1 child")
 	ErrInvalidChildTxid         = errors.New("invalid child txid")
 	ErrNumberOfTapscripts       = errors.New("input should have two tapscripts leaves")
 	ErrInternalKey              = errors.New("taproot internal key is not unspendable")
@@ -185,7 +185,7 @@ func validateNodeTransaction(
 
 	children := tree.Children(node.Txid)
 
-	if node.Leaf && len(children) != 0 {
+	if node.Leaf && len(children) > 1 {
 		return ErrLeafChildren
 	}
 

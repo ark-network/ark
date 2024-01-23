@@ -474,6 +474,9 @@ func handleRoundStream(
 					}
 
 					for _, output := range tx.Outputs {
+						if len(output.Script) == 0 {
+							continue
+						}
 						if bytes.Equal(output.Script[2:], vtxoTaprootKey) {
 							if output.Value != receiver.Amount {
 								continue
@@ -599,7 +602,7 @@ func toCongestionTree(treeFromProto *arkv1.Tree) (tree.CongestionTree, error) {
 
 	for j, treeLvl := range levels {
 		for i, node := range treeLvl {
-			if len(levels.Children(node.Txid)) == 0 {
+			if len(levels.Children(node.Txid)) < 2 {
 				levels[j][i].Leaf = true
 			}
 		}

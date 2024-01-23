@@ -463,7 +463,7 @@ func (n *node) psets(inputArgs *psetArgs, level int) ([]psetWithLevel, error) {
 	}
 
 	nodeResult := []psetWithLevel{
-		{pset, level, n.isLeaf()},
+		{pset, level, n.isLeaf() || (n.left.isEmpty() || n.right.isEmpty())},
 	}
 
 	if n.isLeaf() {
@@ -481,37 +481,46 @@ func (n *node) psets(inputArgs *psetArgs, level int) ([]psetWithLevel, error) {
 
 	txID := unsignedTx.TxHash().String()
 
-	_, leftTaprootTree, err := n.left.taprootKey()
-	if err != nil {
-		return nil, err
+	if !n.left.isEmpty() {
+		_, leftTaprootTree, err := n.left.taprootKey()
+		if err != nil {
+			return nil, err
+		}
+
+		psetsLeft, err := n.left.psets(&psetArgs{
+			input: psetv2.InputArgs{
+				Txid:    txID,
+				TxIndex: 0,
+			},
+			taprootTree: leftTaprootTree,
+		}, level+1)
+		if err != nil {
+			return nil, err
+		}
+
+		nodeResult = append(nodeResult, psetsLeft...)
 	}
 
-	psetsLeft, err := n.left.psets(&psetArgs{
-		input: psetv2.InputArgs{
-			Txid:    txID,
-			TxIndex: 0,
-		},
-		taprootTree: leftTaprootTree,
-	}, level+1)
-	if err != nil {
-		return nil, err
+	if !n.right.isEmpty() {
+
+		_, rightTaprootTree, err := n.right.taprootKey()
+		if err != nil {
+			return nil, err
+		}
+
+		psetsRight, err := n.right.psets(&psetArgs{
+			input: psetv2.InputArgs{
+				Txid:    txID,
+				TxIndex: 1,
+			},
+			taprootTree: rightTaprootTree,
+		}, level+1)
+		if err != nil {
+			return nil, err
+		}
+
+		nodeResult = append(nodeResult, psetsRight...)
 	}
 
-	_, rightTaprootTree, err := n.right.taprootKey()
-	if err != nil {
-		return nil, err
-	}
-
-	psetsRight, err := n.right.psets(&psetArgs{
-		input: psetv2.InputArgs{
-			Txid:    txID,
-			TxIndex: 1,
-		},
-		taprootTree: rightTaprootTree,
-	}, level+1)
-	if err != nil {
-		return nil, err
-	}
-
-	return append(nodeResult, append(psetsLeft, psetsRight...)...), nil
+	return nodeResult, nil
 }
