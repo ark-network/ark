@@ -1,5 +1,7 @@
 package domain
 
+import "github.com/ark-network/ark/common/tree"
+
 type RoundEvent interface {
 	isEvent()
 }
@@ -17,7 +19,7 @@ type RoundStarted struct {
 
 type RoundFinalizationStarted struct {
 	Id                 string
-	CongestionTree     CongestionTree
+	CongestionTree     tree.CongestionTree
 	Connectors         []string
 	UnsignedForfeitTxs []string
 	PoolTx             string

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ark-network/ark/common/tree"
 	"github.com/google/uuid"
 )
 
@@ -41,7 +42,7 @@ type Round struct {
 	Txid              string
 	TxHex             string
 	ForfeitTxs        []string
-	CongestionTree    CongestionTree
+	CongestionTree    tree.CongestionTree
 	Connectors        []string
 	DustAmount        uint64
 	Version           uint
@@ -143,11 +144,11 @@ func (r *Round) RegisterPayments(payments []Payment) ([]RoundEvent, error) {
 	return []RoundEvent{event}, nil
 }
 
-func (r *Round) StartFinalization(connectors []string, tree CongestionTree, poolTx string) ([]RoundEvent, error) {
+func (r *Round) StartFinalization(connectors []string, congestionTree tree.CongestionTree, poolTx string) ([]RoundEvent, error) {
 	if len(connectors) <= 0 {
 		return nil, fmt.Errorf("missing list of connectors")
 	}
-	if len(tree) <= 0 {
+	if len(congestionTree) <= 0 {
 		return nil, fmt.Errorf("missing congestion tree")
 	}
 	if len(poolTx) <= 0 {
@@ -162,7 +163,7 @@ func (r *Round) StartFinalization(connectors []string, tree CongestionTree, pool
 
 	event := RoundFinalizationStarted{
 		Id:             r.Id,
-		CongestionTree: tree,
+		CongestionTree: congestionTree,
 		Connectors:     connectors,
 		PoolTx:         poolTx,
 	}

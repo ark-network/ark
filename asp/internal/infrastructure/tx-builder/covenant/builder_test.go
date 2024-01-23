@@ -5,17 +5,16 @@ import (
 	"testing"
 
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenant"
-	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/require"
 	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
-	"github.com/vulpemventures/go-elements/taproot"
 	"github.com/vulpemventures/go-elements/transaction"
 )
 
@@ -124,9 +123,36 @@ func TestBuildCongestionTree(t *testing.T) {
 
 	fixtures := []struct {
 		payments          []domain.Payment
-		expectedNodesNum  int // 2*len(receivers)-1
+		expectedNodesNum  int // 2*len(receivers) -1
 		expectedLeavesNum int
 	}{
+		{
+			payments: []domain.Payment{
+				{
+					Id: "0",
+					Inputs: []domain.Vtxo{
+						{
+							VtxoKey: domain.VtxoKey{
+								Txid: "fd68e3c5796cc7db0a8036d486d5f625b6b2f2c014810ac020e1ac23e82c59d6",
+								VOut: 0,
+							},
+							Receiver: domain.Receiver{
+								Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
+								Amount: 1100,
+							},
+						},
+					},
+					Receivers: []domain.Receiver{
+						{
+							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
+							Amount: 1100,
+						},
+					},
+				},
+			},
+			expectedNodesNum:  1,
+			expectedLeavesNum: 1,
+		},
 		{
 			payments: []domain.Payment{
 				{
@@ -238,6 +264,88 @@ func TestBuildCongestionTree(t *testing.T) {
 			},
 			expectedNodesNum:  5,
 			expectedLeavesNum: 3,
+		}, {
+			payments: []domain.Payment{
+				{
+					Id: "a242cdd8-f3d5-46c0-ae98-94135a2bee3f",
+					Inputs: []domain.Vtxo{
+						{
+							VtxoKey: domain.VtxoKey{
+								Txid: "755c820771284d85ea4bbcc246565b4eddadc44237a7e57a0f9cb78a840d1d41",
+								VOut: 0,
+							},
+							Receiver: domain.Receiver{
+								Pubkey: "02c87e5c1758df5ad42a918ec507b6e8dfcdcebf22f64f58eb4ad5804257d658a5",
+								Amount: 1000,
+							},
+						},
+						{
+							VtxoKey: domain.VtxoKey{
+								Txid: "66a0df86fcdeb84b8877adfe0b2c556dba30305d72ddbd4c49355f6930355357",
+								VOut: 0,
+							},
+							Receiver: domain.Receiver{
+								Pubkey: "02c87e5c1758df5ad42a918ec507b6e8dfcdcebf22f64f58eb4ad5804257d658a5",
+								Amount: 1000,
+							},
+						},
+						{
+							VtxoKey: domain.VtxoKey{
+								Txid: "9913159bc7aa493ca53cbb9cbc88f97ba01137c814009dc7ef520c3fafc67909",
+								VOut: 1,
+							},
+							Receiver: domain.Receiver{
+								Pubkey: "02c87e5c1758df5ad42a918ec507b6e8dfcdcebf22f64f58eb4ad5804257d658a5",
+								Amount: 500,
+							},
+						},
+						{
+							VtxoKey: domain.VtxoKey{
+								Txid: "5e10e77a7cdedc153be5193a4b6055a7802706ded4f2a9efefe86ed2f9a6ae60",
+								VOut: 0,
+							},
+							Receiver: domain.Receiver{
+								Pubkey: "02c87e5c1758df5ad42a918ec507b6e8dfcdcebf22f64f58eb4ad5804257d658a5",
+								Amount: 1000,
+							},
+						},
+						{
+							VtxoKey: domain.VtxoKey{
+								Txid: "5e10e77a7cdedc153be5193a4b6055a7802706ded4f2a9efefe86ed2f9a6ae60",
+								VOut: 1,
+							},
+							Receiver: domain.Receiver{
+								Pubkey: "02c87e5c1758df5ad42a918ec507b6e8dfcdcebf22f64f58eb4ad5804257d658a5",
+								Amount: 1000,
+							},
+						},
+					},
+					Receivers: []domain.Receiver{
+						{
+							Pubkey: "02c87e5c1758df5ad42a918ec507b6e8dfcdcebf22f64f58eb4ad5804257d658a5",
+							Amount: 1000,
+						},
+						{
+							Pubkey: "02c87e5c1758df5ad42a918ec507b6e8dfcdcebf22f64f58eb4ad5804257d658a5",
+							Amount: 1000,
+						},
+						{
+							Pubkey: "02c87e5c1758df5ad42a918ec507b6e8dfcdcebf22f64f58eb4ad5804257d658a5",
+							Amount: 1000,
+						},
+						{
+							Pubkey: "02c87e5c1758df5ad42a918ec507b6e8dfcdcebf22f64f58eb4ad5804257d658a5",
+							Amount: 1000,
+						},
+						{
+							Pubkey: "02c87e5c1758df5ad42a918ec507b6e8dfcdcebf22f64f58eb4ad5804257d658a5",
+							Amount: 500,
+						},
+					},
+				},
+			},
+			expectedNodesNum:  4,
+			expectedLeavesNum: 3,
 		},
 	}
 
@@ -246,54 +354,19 @@ func TestBuildCongestionTree(t *testing.T) {
 	require.NotNil(t, key)
 
 	for _, f := range fixtures {
-		poolTx, tree, err := builder.BuildPoolTx(key, &mockedWalletService{}, f.payments, 30)
-
+		poolTx, congestionTree, err := builder.BuildPoolTx(key, &mockedWalletService{}, f.payments, 30)
 		require.NoError(t, err)
-		require.Equal(t, f.expectedNodesNum, tree.NumberOfNodes())
-		require.Len(t, tree.Leaves(), f.expectedLeavesNum)
+		require.Equal(t, f.expectedNodesNum, congestionTree.NumberOfNodes())
+		require.Len(t, congestionTree.Leaves(), f.expectedLeavesNum)
 
-		poolTransaction, err := transaction.NewTxFromHex(poolTx)
+		// check that the pool tx has the right number of inputs and outputs
+		err = tree.ValidateCongestionTree(
+			congestionTree,
+			poolTx,
+			key,
+			1209344, // 2 weeks - 8 minutes
+		)
 		require.NoError(t, err)
-
-		poolTxID := poolTransaction.TxHash().String()
-
-		// check the root
-		require.Len(t, tree[0], 1)
-		require.Equal(t, poolTxID, tree[0][0].ParentTxid)
-
-		// check the nodes
-		for _, level := range tree {
-			for _, node := range level {
-				pset, err := psetv2.NewPsetFromBase64(node.Tx)
-				require.NoError(t, err)
-
-				require.Len(t, pset.Inputs, 1)
-				require.Len(t, pset.Outputs, 3)
-
-				inputTxID := chainhash.Hash(pset.Inputs[0].PreviousTxid).String()
-				require.Equal(t, node.ParentTxid, inputTxID)
-
-				children := tree.Children(node.Txid)
-				if len(children) > 0 {
-					require.Len(t, children, 2)
-
-					for i, child := range children {
-						childTx, err := psetv2.NewPsetFromBase64(child.Tx)
-						require.NoError(t, err)
-
-						for _, leaf := range childTx.Inputs[0].TapLeafScript {
-							key := leaf.ControlBlock.InternalKey
-							rootHash := leaf.ControlBlock.RootHash(leaf.Script)
-
-							outputScript := taproot.ComputeTaprootOutputKey(key, rootHash)
-							previousScriptKey := pset.Outputs[i].Script[2:]
-							require.Len(t, previousScriptKey, 32)
-							require.Equal(t, schnorr.SerializePubKey(outputScript), previousScriptKey)
-						}
-					}
-				}
-			}
-		}
 	}
 }
 

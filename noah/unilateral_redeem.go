@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"fmt"
 
-	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
-	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
-	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/urfave/cli/v2"
 	"github.com/vulpemventures/go-elements/psetv2"
@@ -30,48 +28,33 @@ type redeemBranch struct {
 	internalKey  *secp256k1.PublicKey
 }
 
-func newRedeemBranch(ctx *cli.Context, tree *arkv1.Tree, vtxo vtxo) (RedeemBranch, error) {
-	for _, level := range tree.Levels {
-		for _, node := range level.Nodes {
-			if node.Txid == vtxo.txid {
-				nodes, err := findParents([]*arkv1.Node{node}, tree)
-				if err != nil {
-					return nil, err
-				}
-
-				branch := make([]*psetv2.Pset, 0, len(nodes))
-				for _, node := range nodes {
-					pset, err := psetv2.NewPsetFromBase64(node.Tx)
-					if err != nil {
-						return nil, err
-					}
-					branch = append(branch, pset)
-				}
-
-				// find sweep tap leaf
-				sweepTapLeaf, err := findSweepLeafScript(branch[0].Inputs[0].TapLeafScript)
-				if err != nil {
-					return nil, err
-				}
-
-				xOnlyKey := branch[0].Inputs[0].TapInternalKey
-				internalKey, err := schnorr.ParsePubKey(xOnlyKey)
-				if err != nil {
-					return nil, err
-				}
-
-				return &redeemBranch{
-					vtxo:         &vtxo,
-					branch:       branch,
-					sweepTapLeaf: sweepTapLeaf,
-					internalKey:  internalKey,
-				}, nil
-
-			}
-		}
+func newRedeemBranch(ctx *cli.Context, congestionTree tree.CongestionTree, vtxo vtxo, sweepLeaf *taproot.TapElementsLeaf) (RedeemBranch, error) {
+	nodes, err := congestionTree.Branch(vtxo.txid)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil, fmt.Errorf("vtxo not found")
+	branch := make([]*psetv2.Pset, 0, len(nodes))
+	for _, node := range nodes {
+		pset, err := psetv2.NewPsetFromBase64(node.Tx)
+		if err != nil {
+			return nil, err
+		}
+		branch = append(branch, pset)
+	}
+
+	xOnlyKey := branch[0].Inputs[0].TapInternalKey
+	internalKey, err := schnorr.ParsePubKey(xOnlyKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return &redeemBranch{
+		vtxo:         &vtxo,
+		branch:       branch,
+		sweepTapLeaf: sweepLeaf,
+		internalKey:  internalKey,
+	}, nil
 }
 
 // UpdatePath checks for transactions of the branch onchain and updates the branch accordingly
@@ -169,7 +152,7 @@ func (r *redeemBranch) AddVtxoInput(updater *psetv2.Updater) error {
 	}
 
 	// add taproot tree letting to spend the vtxo
-	checksigLeaf, err := common.VtxoScript(walletPubkey)
+	checksigLeaf, err := tree.VtxoScript(walletPubkey)
 	if err != nil {
 		return nil
 	}
@@ -192,46 +175,4 @@ func (r *redeemBranch) AddVtxoInput(updater *psetv2.Updater) error {
 	}
 
 	return nil
-}
-
-// findParents is a recursive function that finds all the parents of a VTXO in a congestion tree
-// it returns the branch of the tree letting to redeem the VTXO (from pool tx to leaf)
-func findParents(ls []*arkv1.Node, tree *arkv1.Tree) ([]*arkv1.Node, error) {
-	if len(ls) == 0 {
-		return nil, fmt.Errorf("empty list")
-	}
-
-	for levelIndex, level := range tree.Levels {
-		for _, node := range level.Nodes {
-			if node.Txid == ls[0].ParentTxid {
-				newTree := &arkv1.Tree{
-					Levels: tree.Levels[:levelIndex],
-				}
-
-				newList := append([]*arkv1.Node{node}, ls...)
-				if len(newTree.Levels) > 0 {
-					return findParents(newList, newTree)
-				}
-
-				return newList, nil
-			}
-		}
-	}
-	return nil, fmt.Errorf("parent not found")
-}
-
-// findSweepLeafScript finds the sweep leaf in a set of tap leaf scripts
-func findSweepLeafScript(leaves []psetv2.TapLeafScript) (*taproot.TapElementsLeaf, error) {
-	for _, leaf := range leaves {
-		if len(leaf.Script) == 0 {
-			continue
-		}
-
-		if bytes.Contains(leaf.Script, []byte{txscript.OP_CHECKSIG}) && bytes.Contains(leaf.Script, []byte{txscript.OP_CHECKSEQUENCEVERIFY}) {
-			tapLeaf := taproot.NewBaseTapElementsLeaf(leaf.Script)
-			return &tapLeaf, nil
-		}
-
-	}
-	return nil, fmt.Errorf("sweep leaf not found")
 }

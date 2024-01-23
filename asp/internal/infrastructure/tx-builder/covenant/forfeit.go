@@ -3,6 +3,7 @@ package txbuilder
 import (
 	"encoding/hex"
 
+	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/elementsutil"
@@ -51,7 +52,7 @@ func createForfeitTx(
 		return "", err
 	}
 
-	unspendableKeyBytes, _ := hex.DecodeString(unspendablePoint)
+	unspendableKeyBytes, _ := hex.DecodeString(tree.UnspendablePoint)
 	unspendableKey, _ := secp256k1.ParsePubKey(unspendableKeyBytes)
 
 	for _, proof := range vtxoTaprootTree.LeafMerkleProofs {

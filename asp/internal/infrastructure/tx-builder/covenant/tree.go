@@ -1,11 +1,10 @@
 package txbuilder
 
 import (
-	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 
-	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -17,112 +16,11 @@ import (
 )
 
 const (
-	OP_INSPECTOUTPUTSCRIPTPUBKEY = 0xd1
-	OP_INSPECTOUTPUTVALUE        = 0xcf
-	OP_PUSHCURRENTINPUTINDEX     = 0xcd
-	unspendablePoint             = "0250929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0"
-	timeDelta                    = 60 * 60 * 24 * 14 // 14 days in seconds
+	expirationTime = 60 * 60 * 24 * 14 // 14 days in seconds
 )
 
 // the private method buildCongestionTree returns a function letting to plug in the pool transaction output as input of the tree's root node
-type pluggableCongestionTree func(outpoint psetv2.InputArgs) (domain.CongestionTree, error)
-
-// withOutput returns an introspection script that checks the script and the amount of the output at the given index
-// verify will add an OP_EQUALVERIFY at the end of the script, otherwise it will add an OP_EQUAL
-func withOutput(index byte, taprootWitnessProgram []byte, amount uint64, verify bool) []byte {
-	amountBuffer := make([]byte, 8)
-	binary.LittleEndian.PutUint64(amountBuffer, amount)
-
-	script := []byte{
-		index,
-		OP_INSPECTOUTPUTSCRIPTPUBKEY,
-		txscript.OP_1,
-		txscript.OP_EQUALVERIFY,
-		txscript.OP_DATA_32,
-	}
-
-	script = append(script, taprootWitnessProgram...)
-	script = append(script, []byte{
-		txscript.OP_EQUALVERIFY,
-	}...)
-	script = append(script, index)
-	script = append(script, []byte{
-		OP_INSPECTOUTPUTVALUE,
-		txscript.OP_1,
-		txscript.OP_EQUALVERIFY,
-		txscript.OP_DATA_8,
-	}...)
-	script = append(script, amountBuffer...)
-	if verify {
-		script = append(script, []byte{
-			txscript.OP_EQUALVERIFY,
-		}...)
-	} else {
-		script = append(script, []byte{
-			txscript.OP_EQUAL,
-		}...)
-	}
-
-	return script
-}
-
-func checksigScript(pubkey *secp256k1.PublicKey) ([]byte, error) {
-	key := schnorr.SerializePubKey(pubkey)
-	return txscript.NewScriptBuilder().AddData(key).AddOp(txscript.OP_CHECKSIG).Script()
-}
-
-// checkSequenceVerifyScript without checksig
-func checkSequenceVerifyScript(seconds uint) ([]byte, error) {
-	sequence, err := common.BIP68Encode(seconds)
-	if err != nil {
-		return nil, err
-	}
-
-	return append(sequence, []byte{
-		txscript.OP_CHECKSEQUENCEVERIFY,
-		txscript.OP_DROP,
-	}...), nil
-}
-
-// checkSequenceVerifyScript + checksig
-func csvChecksigScript(pubkey *secp256k1.PublicKey, seconds uint) ([]byte, error) {
-	script, err := checksigScript(pubkey)
-	if err != nil {
-		return nil, err
-	}
-
-	csvScript, err := checkSequenceVerifyScript(seconds)
-	if err != nil {
-		return nil, err
-	}
-
-	return append(csvScript, script...), nil
-}
-
-// sweepTapLeaf returns a taproot leaf letting the owner of the key to spend the output after a given timeDelta
-func sweepTapLeaf(sweepKey *secp256k1.PublicKey) (*taproot.TapElementsLeaf, error) {
-	sweepScript, err := csvChecksigScript(sweepKey, timeDelta)
-	if err != nil {
-		return nil, err
-	}
-
-	tapLeaf := taproot.NewBaseTapElementsLeaf(sweepScript)
-	return &tapLeaf, nil
-}
-
-// forceSplitCoinTapLeaf returns a taproot leaf that enforces a split into two outputs
-// each output (left and right) will have the given amount and the given taproot key as witness program
-func forceSplitCoinTapLeaf(
-	leftKey, rightKey *secp256k1.PublicKey, leftAmount, rightAmount uint64,
-) taproot.TapElementsLeaf {
-	nextScriptLeft := withOutput(txscript.OP_0, schnorr.SerializePubKey(leftKey), leftAmount, rightKey != nil)
-	branchScript := append([]byte{}, nextScriptLeft...)
-	if rightKey != nil {
-		nextScriptRight := withOutput(txscript.OP_1, schnorr.SerializePubKey(rightKey), rightAmount, false)
-		branchScript = append(branchScript, nextScriptRight...)
-	}
-	return taproot.NewBaseTapElementsLeaf(branchScript)
-}
+type pluggableCongestionTree func(outpoint psetv2.InputArgs) (tree.CongestionTree, error)
 
 func taprootOutputScript(taprootKey *secp256k1.PublicKey) ([]byte, error) {
 	return txscript.NewScriptBuilder().AddOp(txscript.OP_1).AddData(schnorr.SerializePubKey(taprootKey)).Script()
@@ -165,7 +63,7 @@ func buildCongestionTree(
 	receivers []domain.Receiver,
 	feeSatsPerNode uint64,
 ) (pluggableTree pluggableCongestionTree, sharedOutputScript []byte, sharedOutputAmount uint64, err error) {
-	unspendableKeyBytes, err := hex.DecodeString(unspendablePoint)
+	unspendableKeyBytes, err := hex.DecodeString(tree.UnspendablePoint)
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -203,7 +101,7 @@ func buildCongestionTree(
 	}
 
 	// compute the shared output script
-	sweepLeaf, err := sweepTapLeaf(aspPublicKey)
+	sweepLeaf, err := tree.VtxoScript(aspPublicKey)
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -217,7 +115,7 @@ func buildCongestionTree(
 	var rightAmount uint64
 	var rightKey *secp256k1.PublicKey
 
-	if len(rootPset.Outputs) > 1 {
+	if len(rootPset.Outputs) > 2 {
 		rightAmount = rootPset.Outputs[1].Value
 		rightKey, err = schnorr.ParsePubKey(rootPset.Outputs[1].Script[2:])
 		if err != nil {
@@ -225,7 +123,7 @@ func buildCongestionTree(
 		}
 	}
 
-	goToTreeScript := forceSplitCoinTapLeaf(
+	goToTreeScript := tree.BranchScript(
 		leftKey, rightKey, leftOutput.Value, rightAmount,
 	)
 
@@ -237,7 +135,7 @@ func buildCongestionTree(
 		return nil, nil, 0, err
 	}
 
-	return func(outpoint psetv2.InputArgs) (domain.CongestionTree, error) {
+	return func(outpoint psetv2.InputArgs) (tree.CongestionTree, error) {
 		psets, err := nodes[0].psets(&psetArgs{
 			input:       outpoint,
 			taprootTree: taprootTree,
@@ -253,7 +151,7 @@ func buildCongestionTree(
 			}
 		}
 
-		tree := make(domain.CongestionTree, maxLevel+1)
+		congestionTree := make(tree.CongestionTree, maxLevel+1)
 
 		for _, psetWithLevel := range psets {
 			utx, err := psetWithLevel.pset.UnsignedTx()
@@ -270,7 +168,7 @@ func buildCongestionTree(
 
 			parentTxid := chainhash.Hash(psetWithLevel.pset.Inputs[0].PreviousTxid).String()
 
-			tree[psetWithLevel.level] = append(tree[psetWithLevel.level], domain.Node{
+			congestionTree[psetWithLevel.level] = append(congestionTree[psetWithLevel.level], tree.Node{
 				Txid:       txid,
 				Tx:         psetB64,
 				ParentTxid: parentTxid,
@@ -278,7 +176,7 @@ func buildCongestionTree(
 			})
 		}
 
-		return tree, nil
+		return congestionTree, nil
 	}, outputScript, uint64(rightAmount) + leftOutput.Value + uint64(feeSatsPerNode), nil
 }
 
@@ -349,7 +247,7 @@ func newBranch(
 }
 
 func (n *node) isLeaf() bool {
-	return n.left.isEmpty() && (n.right == nil || n.right.isEmpty())
+	return (n.left == nil || n.left.isEmpty()) && (n.right == nil || n.right.isEmpty())
 }
 
 // is it the final node of the tree
@@ -398,7 +296,7 @@ func (n *node) taprootKey() (*secp256k1.PublicKey, *taproot.IndexedElementsTapSc
 		return n._taprootKey, n._taprootTree, nil
 	}
 
-	sweepTaprootLeaf, err := sweepTapLeaf(n.sweepKey)
+	sweepTaprootLeaf, err := tree.SweepScript(n.sweepKey, expirationTime)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -414,7 +312,7 @@ func (n *node) taprootKey() (*secp256k1.PublicKey, *taproot.IndexedElementsTapSc
 			return nil, nil, err
 		}
 
-		vtxoLeaf, err := common.VtxoScript(pubkey)
+		vtxoLeaf, err := tree.VtxoScript(pubkey)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -443,7 +341,7 @@ func (n *node) taprootKey() (*secp256k1.PublicKey, *taproot.IndexedElementsTapSc
 		return nil, nil, err
 	}
 
-	branchTaprootLeaf := forceSplitCoinTapLeaf(
+	branchTaprootLeaf := tree.BranchScript(
 		leftKey, rightKey, n.left.amount(), n.right.amount(),
 	)
 
@@ -565,10 +463,10 @@ func (n *node) psets(inputArgs *psetArgs, level int) ([]psetWithLevel, error) {
 	}
 
 	nodeResult := []psetWithLevel{
-		{pset, level, n.isLeaf()},
+		{pset, level, n.isLeaf() || (n.left.isEmpty() || n.right.isEmpty())},
 	}
 
-	if n.left.isEmpty() && (n.right == nil || n.right.isEmpty()) {
+	if n.isLeaf() {
 		return nodeResult, nil
 	}
 
@@ -583,37 +481,46 @@ func (n *node) psets(inputArgs *psetArgs, level int) ([]psetWithLevel, error) {
 
 	txID := unsignedTx.TxHash().String()
 
-	_, leftTaprootTree, err := n.left.taprootKey()
-	if err != nil {
-		return nil, err
+	if !n.left.isEmpty() {
+		_, leftTaprootTree, err := n.left.taprootKey()
+		if err != nil {
+			return nil, err
+		}
+
+		psetsLeft, err := n.left.psets(&psetArgs{
+			input: psetv2.InputArgs{
+				Txid:    txID,
+				TxIndex: 0,
+			},
+			taprootTree: leftTaprootTree,
+		}, level+1)
+		if err != nil {
+			return nil, err
+		}
+
+		nodeResult = append(nodeResult, psetsLeft...)
 	}
 
-	psetsLeft, err := n.left.psets(&psetArgs{
-		input: psetv2.InputArgs{
-			Txid:    txID,
-			TxIndex: 0,
-		},
-		taprootTree: leftTaprootTree,
-	}, level+1)
-	if err != nil {
-		return nil, err
+	if !n.right.isEmpty() {
+
+		_, rightTaprootTree, err := n.right.taprootKey()
+		if err != nil {
+			return nil, err
+		}
+
+		psetsRight, err := n.right.psets(&psetArgs{
+			input: psetv2.InputArgs{
+				Txid:    txID,
+				TxIndex: 1,
+			},
+			taprootTree: rightTaprootTree,
+		}, level+1)
+		if err != nil {
+			return nil, err
+		}
+
+		nodeResult = append(nodeResult, psetsRight...)
 	}
 
-	_, rightTaprootTree, err := n.right.taprootKey()
-	if err != nil {
-		return nil, err
-	}
-
-	psetsRight, err := n.right.psets(&psetArgs{
-		input: psetv2.InputArgs{
-			Txid:    txID,
-			TxIndex: 1,
-		},
-		taprootTree: rightTaprootTree,
-	}, level+1)
-	if err != nil {
-		return nil, err
-	}
-
-	return append(nodeResult, append(psetsLeft, psetsRight...)...), nil
+	return nodeResult, nil
 }

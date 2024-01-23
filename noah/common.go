@@ -13,12 +13,18 @@ import (
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/tree"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/urfave/cli/v2"
+	"github.com/vulpemventures/go-elements/address"
+	"github.com/vulpemventures/go-elements/elementsutil"
 	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
+	"github.com/vulpemventures/go-elements/taproot"
+	"github.com/vulpemventures/go-elements/transaction"
 	"golang.org/x/term"
 )
 
@@ -344,6 +350,7 @@ func handleRoundStream(
 	paymentID string,
 	vtxosToSign []vtxo,
 	secKey *secp256k1.PrivateKey,
+	receivers []*arkv1.Output,
 ) (poolTxID string, err error) {
 	stream, err := client.GetEventStream(ctx.Context, &arkv1.GetEventStreamRequest{})
 	if err != nil {
@@ -377,6 +384,121 @@ func handleRoundStream(
 		if event.GetRoundFinalization() != nil {
 			// stop pinging as soon as we receive some forfeit txs
 			pingStop()
+
+			poolPartialTx := event.GetRoundFinalization().GetPoolPartialTx()
+			poolTransaction, err := transaction.NewTxFromHex(poolPartialTx)
+			if err != nil {
+				return "", err
+			}
+
+			congestionTree, err := toCongestionTree(event.GetRoundFinalization().GetCongestionTree())
+			if err != nil {
+				return "", err
+			}
+
+			aspPublicKey, err := getServiceProviderPublicKey()
+			if err != nil {
+				return "", err
+			}
+
+			// validate the congestion tree
+			if err := tree.ValidateCongestionTree(
+				congestionTree,
+				poolPartialTx,
+				aspPublicKey,
+				1209344, // ~ 2 weeks
+			); err != nil {
+				return "", err
+			}
+
+			// validate the receivers
+			sweepLeaf, err := tree.SweepScript(aspPublicKey, 1209344)
+			if err != nil {
+				return "", err
+			}
+
+			for _, receiver := range receivers {
+				isOnChain, onchainScript, userPubKey, err := decodeReceiverAddress(receiver.Address)
+				if err != nil {
+					return "", err
+				}
+
+				if isOnChain {
+					// collaborative exit case
+					// search for the output in the pool tx
+					found := false
+					for _, output := range poolTransaction.Outputs {
+						if bytes.Equal(output.Script, onchainScript) {
+							outputValue, err := elementsutil.ValueFromBytes(output.Value)
+							if err != nil {
+								return "", err
+							}
+
+							if outputValue != receiver.Amount {
+								return "", fmt.Errorf("invalid collaborative exit output amount: got %d, want %d", outputValue, receiver.Amount)
+							}
+
+							found = true
+							break
+						}
+					}
+
+					if !found {
+						return "", fmt.Errorf("collaborative exit output not found: %s", receiver.Address)
+					}
+
+					continue
+				}
+
+				// off-chain send case
+				// search for the output in congestion tree
+				found := false
+
+				// compute the receiver output taproot key
+				vtxoScript, err := tree.VtxoScript(userPubKey)
+				if err != nil {
+					return "", err
+				}
+
+				vtxoTaprootTree := taproot.AssembleTaprootScriptTree(*vtxoScript, *sweepLeaf)
+				root := vtxoTaprootTree.RootNode.TapHash()
+				unspendableKeyBytes, _ := hex.DecodeString(tree.UnspendablePoint)
+				unspendableKey, _ := secp256k1.ParsePubKey(unspendableKeyBytes)
+				vtxoTaprootKey := schnorr.SerializePubKey(taproot.ComputeTaprootOutputKey(unspendableKey, root[:]))
+
+				leaves := congestionTree.Leaves()
+				for _, leaf := range leaves {
+					tx, err := psetv2.NewPsetFromBase64(leaf.Tx)
+					if err != nil {
+						return "", err
+					}
+
+					for _, output := range tx.Outputs {
+						if len(output.Script) == 0 {
+							continue
+						}
+						if bytes.Equal(output.Script[2:], vtxoTaprootKey) {
+							if output.Value != receiver.Amount {
+								continue
+							}
+
+							found = true
+							break
+						}
+					}
+
+					if found {
+						break
+					}
+				}
+
+				if !found {
+					return "", fmt.Errorf("off-chain send output not found: %s", receiver.Address)
+				}
+			}
+
+			fmt.Println("congestion tree validated")
+
 			forfeits := event.GetRoundFinalization().GetForfeitTxs()
 			signedForfeits := make([]string, 0)
 
@@ -458,4 +580,51 @@ func ping(ctx *cli.Context, client arkv1.ArkServiceClient, req *arkv1.PingReques
 	}(ticker)
 
 	return ticker.Stop
+}
+
+func toCongestionTree(treeFromProto *arkv1.Tree) (tree.CongestionTree, error) {
+	levels := make(tree.CongestionTree, 0, len(treeFromProto.Levels))
+
+	for _, level := range treeFromProto.Levels {
+		nodes := make([]tree.Node, 0, len(level.Nodes))
+
+		for _, node := range level.Nodes {
+			nodes = append(nodes, tree.Node{
+				Txid:       node.Txid,
+				Tx:         node.Tx,
+				ParentTxid: node.ParentTxid,
+				Leaf:       false,
+			})
+		}
+
+		levels = append(levels, nodes)
+	}
+
+	for j, treeLvl := range levels {
+		for i, node := range treeLvl {
+			if len(levels.Children(node.Txid)) < 2 {
+				levels[j][i].Leaf = true
+			}
+		}
+	}
+
+	return levels, nil
+}
+
+func decodeReceiverAddress(addr string) (
+	isOnChainAddress bool,
+	onchainScript []byte,
+	userPubKey *secp256k1.PublicKey,
+	err error,
+) {
+	outputScript, err := address.ToOutputScript(addr)
+	if err != nil {
+		_, userPubKey, _, err = common.DecodeAddress(addr)
+		if err != nil {
+			return
+		}
+		return false, nil, userPubKey, nil
+	}
+
+	return true, outputScript, nil, nil
 }
