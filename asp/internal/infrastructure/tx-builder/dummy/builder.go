@@ -148,12 +148,12 @@ func (b *txBuilder) BuildPoolTx(
 		})
 	}
 
-	poolPartialTx, err := psetv2.New(toInputArgs(utxos), outputs, nil)
+	ptx, err := psetv2.New(toInputArgs(utxos), outputs, nil)
 	if err != nil {
 		return
 	}
 
-	utx, err := poolPartialTx.UnsignedTx()
+	utx, err := ptx.UnsignedTx()
 	if err != nil {
 		return
 	}
@@ -168,7 +168,7 @@ func (b *txBuilder) BuildPoolTx(
 		return
 	}
 
-	poolTx, err = poolPartialTx.ToBase64()
+	poolTx, err = ptx.ToBase64()
 	if err != nil {
 		return
 	}

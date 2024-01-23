@@ -205,10 +205,10 @@ func (b *txBuilder) BuildPoolTx(
 		},
 	}
 
-	amountToSelect := sharedOutputAmount + connectorOutputAmount + poolTxFeeAmount
+	targetAmount := sharedOutputAmount + connectorOutputAmount + poolTxFeeAmount
 
 	for _, receiver := range onchainReceivers {
-		amountToSelect += receiver.Amount
+		targetAmount += receiver.Amount
 
 		receiverScript, err := address.ToOutputScript(receiver.OnchainAddress)
 		if err != nil {
@@ -222,7 +222,7 @@ func (b *txBuilder) BuildPoolTx(
 		})
 	}
 
-	utxos, change, err := wallet.SelectUtxos(ctx, b.net.AssetID, amountToSelect)
+	utxos, change, err := wallet.SelectUtxos(ctx, b.net.AssetID, targetAmount)
 	if err != nil {
 		return
 	}
@@ -235,12 +235,12 @@ func (b *txBuilder) BuildPoolTx(
 		})
 	}
 
-	poolPartialTx, err := psetv2.New(toInputArgs(utxos), outputs, nil)
+	ptx, err := psetv2.New(toInputArgs(utxos), outputs, nil)
 	if err != nil {
 		return
 	}
 
-	utx, err := poolPartialTx.UnsignedTx()
+	utx, err := ptx.UnsignedTx()
 	if err != nil {
 		return
 	}
@@ -253,7 +253,7 @@ func (b *txBuilder) BuildPoolTx(
 		return
 	}
 
-	poolTx, err = poolPartialTx.ToBase64()
+	poolTx, err = ptx.ToBase64()
 	if err != nil {
 		return
 	}
