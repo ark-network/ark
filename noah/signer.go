@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -127,7 +127,7 @@ func signPset(
 
 		pubkey := prvKey.PubKey()
 
-		vtxoLeaf, err := common.VtxoScript(pubkey)
+		vtxoLeaf, err := tree.VtxoScript(pubkey)
 		if err != nil {
 			return err
 		}

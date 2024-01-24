@@ -155,6 +155,7 @@ func sendAction(ctx *cli.Context) error {
 		registerResponse.GetId(),
 		selectedCoins,
 		secKey,
+		receiversOutput,
 	)
 	if err != nil {
 		return err

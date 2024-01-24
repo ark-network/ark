@@ -7,6 +7,7 @@ import (
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/application"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -280,10 +281,10 @@ func (v vtxoList) toProto(hrp string, aspKey *secp256k1.PublicKey) []*arkv1.Vtxo
 	return list
 }
 
-// castCongestionTree converts a domain.CongestionTree to a repeated arkv1.TreeLevel
-func castCongestionTree(tree domain.CongestionTree) *arkv1.Tree {
-	levels := make([]*arkv1.TreeLevel, 0, len(tree))
-	for _, level := range tree {
+// castCongestionTree converts a tree.CongestionTree to a repeated arkv1.TreeLevel
+func castCongestionTree(congestionTree tree.CongestionTree) *arkv1.Tree {
+	levels := make([]*arkv1.TreeLevel, 0, len(congestionTree))
+	for _, level := range congestionTree {
 		levelProto := &arkv1.TreeLevel{
 			Nodes: make([]*arkv1.Node, 0, len(level)),
 		}

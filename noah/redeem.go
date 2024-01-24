@@ -10,6 +10,7 @@ import (
 	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/urfave/cli/v2"
 	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/psetv2"
@@ -156,6 +157,7 @@ func collaborativeRedeem(ctx *cli.Context, addr string, amount uint64) error {
 		registerResponse.GetId(),
 		selectedCoins,
 		secKey,
+		receivers,
 	)
 	if err != nil {
 		return err
@@ -212,9 +214,19 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 		return err
 	}
 
-	congestionTrees := make(map[string]*arkv1.Tree, 0)
+	congestionTrees := make(map[string]tree.CongestionTree, 0)
 	transactionsMap := make(map[string]struct{}, 0)
 	transactions := make([]string, 0)
+
+	aspPublicKey, err := getServiceProviderPublicKey()
+	if err != nil {
+		return err
+	}
+
+	sweepLeaf, err := tree.SweepScript(aspPublicKey, 1209344)
+	if err != nil {
+		return err
+	}
 
 	for _, vtxo := range vtxos {
 		if _, ok := congestionTrees[vtxo.poolTxid]; !ok {
@@ -225,10 +237,16 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 				return err
 			}
 
-			congestionTrees[vtxo.poolTxid] = round.GetRound().GetCongestionTree()
+			treeFromRound := round.GetRound().GetCongestionTree()
+			congestionTree, err := toCongestionTree(treeFromRound)
+			if err != nil {
+				return err
+			}
+
+			congestionTrees[vtxo.poolTxid] = congestionTree
 		}
 
-		redeemBranch, err := newRedeemBranch(ctx, congestionTrees[vtxo.poolTxid], vtxo)
+		redeemBranch, err := newRedeemBranch(ctx, congestionTrees[vtxo.poolTxid], vtxo, sweepLeaf)
 		if err != nil {
 			return err
 		}
@@ -277,7 +295,7 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 	}
 
 	vBytes := utx.VirtualSize()
-	feeAmount := uint64(math.Ceil(float64(vBytes) * 0.2))
+	feeAmount := uint64(math.Ceil(float64(vBytes) * 0.25))
 
 	if totalVtxosAmount-feeAmount <= 0 {
 		return fmt.Errorf("not enough VTXOs to pay the fees (%d sats), aborting unilateral exit", feeAmount)
@@ -305,7 +323,7 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 		for {
 			txid, err := explorer.Broadcast(txHex)
 			if err != nil {
-				if strings.Contains(err.Error(), "bad-txns-inputs-missingorspent") {
+				if strings.Contains(strings.ToLower(err.Error()), "bad-txns-inputs-missingorspent") {
 					time.Sleep(1 * time.Second)
 				} else {
 					return err
@@ -341,12 +359,20 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 		return err
 	}
 
-	id, err := explorer.Broadcast(hex)
-	if err != nil {
-		return err
+	for {
+		id, err := explorer.Broadcast(hex)
+		if err != nil {
+			if strings.Contains(strings.ToLower(err.Error()), "bad-txns-inputs-missingorspent") {
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			return err
+		}
+		if id != "" {
+			fmt.Printf("(final) redeem tx %s\n", id)
+			break
+		}
 	}
-
-	fmt.Printf("(final) redeem tx %s\n", id)
 
 	return nil
 }

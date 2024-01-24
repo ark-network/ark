@@ -227,7 +227,14 @@ func (s *service) startFinalization() {
 		return
 	}
 
+	var changes []domain.RoundEvent
 	defer func() {
+		if len(changes) > 0 {
+			if err := s.repoManager.Events().Save(ctx, round.Id, changes...); err != nil {
+				log.WithError(err).Warn("failed to store new round events")
+			}
+		}
+
 		if round.IsFailed() {
 			s.startRound()
 			return
@@ -239,14 +246,6 @@ func (s *service) startFinalization() {
 	if round.IsFailed() {
 		return
 	}
-
-	var changes []domain.RoundEvent
-	defer func() {
-		if err := s.repoManager.Events().Save(ctx, round.Id, changes...); err != nil {
-			log.WithError(err).Warn("failed to store new round events")
-			return
-		}
-	}()
 
 	// TODO: understand how many payments must be popped from the queue and actually registered for the round
 	num := s.paymentRequests.len()
@@ -274,6 +273,8 @@ func (s *service) startFinalization() {
 		return
 	}
 
+	log.Debugf("pool tx created for round %s", round.Id)
+
 	connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(s.pubkey, unsignedPoolTx, payments)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
@@ -281,7 +282,14 @@ func (s *service) startFinalization() {
 		return
 	}
 
-	events, _ := round.StartFinalization(connectors, tree, unsignedPoolTx)
+	log.Debugf("forfeit transactions created for round %s", round.Id)
+
+	events, err := round.StartFinalization(connectors, tree, unsignedPoolTx)
+	if err != nil {
+		changes = round.Fail(fmt.Errorf("failed to start finalization: %s", err))
+		log.WithError(err).Warn("failed to start finalization")
+		return
+	}
 	changes = append(changes, events...)
 
 	s.forfeitTxs.push(forfeitTxs)

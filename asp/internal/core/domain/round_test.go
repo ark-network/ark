@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/stretchr/testify/require"
 )
@@ -72,7 +73,7 @@ var (
 	emptyTx        = "0200000000000000000000"
 	txid           = "0000000000000000000000000000000000000000000000000000000000000000"
 	pubkey         = "030000000000000000000000000000000000000000000000000000000000000001"
-	congestionTree = domain.CongestionTree{
+	congestionTree = tree.CongestionTree{
 		{
 			{
 				Txid:       txid,
@@ -318,7 +319,7 @@ func testStartFinalization(t *testing.T) {
 			fixtures := []struct {
 				round       *domain.Round
 				connectors  []string
-				tree        domain.CongestionTree
+				tree        tree.CongestionTree
 				poolTx      string
 				expectedErr string
 			}{
