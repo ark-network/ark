@@ -21,7 +21,6 @@ import (
 
 const (
 	connectorAmount = 450
-	poolTxFeeAmount = 300
 )
 
 var emptyNonce = []byte{0x00}
@@ -199,13 +198,9 @@ func (b *txBuilder) BuildPoolTx(
 			Amount: connectorOutputAmount,
 			Script: aspScriptBytes,
 		},
-		{
-			Asset:  b.net.AssetID,
-			Amount: poolTxFeeAmount,
-		},
 	}
 
-	targetAmount := sharedOutputAmount + connectorOutputAmount + poolTxFeeAmount
+	targetAmount := sharedOutputAmount + connectorOutputAmount
 
 	for _, receiver := range onchainReceivers {
 		targetAmount += receiver.Amount
@@ -258,6 +253,79 @@ func (b *txBuilder) BuildPoolTx(
 		if err := updater.AddInSighashType(i, txscript.SigHashAll); err != nil {
 			return "", nil, err
 		}
+	}
+
+	b64, err := ptx.ToBase64()
+	if err != nil {
+		return
+	}
+
+	feesAmount, err := wallet.EstimateFees(ctx, b64)
+	if err != nil {
+		return
+	}
+
+	if feesAmount == change {
+		// fees = change, remove change output
+		updater.Pset.Outputs = ptx.Outputs[:len(ptx.Outputs)-1]
+	} else if feesAmount < change {
+		// change covers the fees, reduce change amount
+		updater.Pset.Outputs[len(ptx.Outputs)-1].Value = change - feesAmount
+	} else {
+		// change is not enough to cover fees, re-select utxos
+		if change > 0 {
+			// remove change output if present
+			updater.Pset.Outputs = ptx.Outputs[:len(ptx.Outputs)-1]
+		}
+		newUtxos, newChange, err := wallet.SelectUtxos(ctx, b.net.AssetID, feesAmount-change)
+		if err != nil {
+			return "", nil, err
+		}
+
+		if err := updater.AddInputs(toInputArgs(newUtxos)); err != nil {
+			return "", nil, err
+		}
+
+		if newChange > 0 {
+			if err := updater.AddOutputs([]psetv2.OutputArgs{
+				{
+					Asset:  b.net.AssetID,
+					Amount: newChange,
+					Script: aspScriptBytes,
+				},
+			}); err != nil {
+				return "", nil, err
+			}
+		}
+
+		nbInputs := len(utxos)
+
+		for i, utxo := range newUtxos {
+
+			witnessUtxo, err := toWitnessUtxo(utxo)
+			if err != nil {
+				return "", nil, err
+			}
+
+			if err := updater.AddInWitnessUtxo(i+nbInputs, witnessUtxo); err != nil {
+				return "", nil, err
+			}
+
+			if err := updater.AddInSighashType(i+nbInputs, txscript.SigHashAll); err != nil {
+				return "", nil, err
+			}
+		}
+
+	}
+
+	// add fee output
+	if err := updater.AddOutputs([]psetv2.OutputArgs{
+		{
+			Asset:  b.net.AssetID,
+			Amount: feesAmount,
+		},
+	}); err != nil {
+		return "", nil, err
 	}
 
 	utx, err := ptx.UnsignedTx()

@@ -2,10 +2,13 @@ package oceanwallet
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 
 	pb "github.com/ark-network/ark/api-spec/protobuf/gen/ocean/v1"
 	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/vulpemventures/go-elements/elementsutil"
 	"github.com/vulpemventures/go-elements/psetv2"
 )
 
@@ -85,4 +88,52 @@ func (s *service) BroadcastTransaction(
 		return "", err
 	}
 	return res.GetTxid(), nil
+}
+
+func (s *service) EstimateFees(
+	ctx context.Context, pset string,
+) (uint64, error) {
+	tx, err := psetv2.NewPsetFromBase64(pset)
+	if err != nil {
+		return 0, err
+	}
+
+	inputs := make([]*pb.Input, 0, len(tx.Inputs))
+	outputs := make([]*pb.Output, 0, len(tx.Outputs))
+
+	for _, in := range tx.Inputs {
+		if in.WitnessUtxo == nil {
+			return 0, fmt.Errorf("missing witness utxo, cannot estimate fees")
+		}
+
+		inputs = append(inputs, &pb.Input{
+			Txid:   chainhash.Hash(in.PreviousTxid).String(),
+			Index:  in.PreviousTxIndex,
+			Script: hex.EncodeToString(in.WitnessUtxo.Script),
+		})
+	}
+
+	for _, out := range tx.Outputs {
+		outputs = append(outputs, &pb.Output{
+			Asset: elementsutil.AssetHashFromBytes(
+				append([]byte{0x01}, out.Asset...),
+			),
+			Amount: out.Value,
+			Script: hex.EncodeToString(out.Script),
+		})
+	}
+
+	fee, err := s.txClient.EstimateFees(
+		ctx,
+		&pb.EstimateFeesRequest{
+			Inputs:  inputs,
+			Outputs: outputs,
+		},
+	)
+	if err != nil {
+		return 0, fmt.Errorf("failed to estimate fees: %s", err)
+	}
+
+	// we add 5 sats in order to avoid min-relay-fee not met errors
+	return fee.GetFeeAmount() + 5, nil
 }

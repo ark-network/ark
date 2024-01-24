@@ -15,6 +15,7 @@ type WalletService interface {
 	) (string, error)
 	SelectUtxos(ctx context.Context, asset string, amount uint64) ([]TxInput, uint64, error)
 	BroadcastTransaction(ctx context.Context, txHex string) (string, error)
+	EstimateFees(ctx context.Context, pset string) (uint64, error)
 	Close()
 }
 

@@ -2,6 +2,8 @@ package txbuilder_test
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"testing"
 
 	"github.com/ark-network/ark/common"
@@ -133,12 +135,21 @@ func (*mockedWalletService) Status(ctx context.Context) (ports.WalletStatus, err
 }
 
 func (*mockedWalletService) SelectUtxos(ctx context.Context, asset string, amount uint64) ([]ports.TxInput, uint64, error) {
+	// random txid
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return nil, 0, err
+	}
 	fakeInput := input{
-		txid: "2f8f5733734fd44d581976bd3c1aee098bd606402df2ce02ce908287f1d5ede4",
+		txid: hex.EncodeToString(bytes),
 		vout: 0,
 	}
 
 	return []ports.TxInput{&fakeInput}, 0, nil
+}
+
+func (*mockedWalletService) EstimateFees(ctx context.Context, pset string) (uint64, error) {
+	return 100, nil
 }
 
 func TestBuildCongestionTree(t *testing.T) {
