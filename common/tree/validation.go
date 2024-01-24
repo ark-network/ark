@@ -9,42 +9,41 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/vulpemventures/go-elements/elementsutil"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/taproot"
-	"github.com/vulpemventures/go-elements/transaction"
 )
 
 var (
-	ErrInvalidPoolTransaction   = errors.New("invalid pool transaction")
-	ErrEmptyTree                = errors.New("empty congestion tree")
-	ErrInvalidRootLevel         = errors.New("root level must have only one node")
-	ErrNoLeaves                 = errors.New("no leaves in the tree")
-	ErrNodeTransactionEmpty     = errors.New("node transaction is empty")
-	ErrNodeTxidEmpty            = errors.New("node txid is empty")
-	ErrNodeParentTxidEmpty      = errors.New("node parent txid is empty")
-	ErrNodeTxidDifferent        = errors.New("node txid differs from node transaction")
-	ErrNumberOfInputs           = errors.New("node transaction should have only one input")
-	ErrNumberOfOutputs          = errors.New("node transaction should have only three or two outputs")
-	ErrParentTxidInput          = errors.New("parent txid should be the input of the node transaction")
-	ErrNumberOfChildren         = errors.New("node branch transaction should have two children")
-	ErrLeafChildren             = errors.New("leaf node should have max 1 child")
-	ErrInvalidChildTxid         = errors.New("invalid child txid")
-	ErrNumberOfTapscripts       = errors.New("input should have two tapscripts leaves")
-	ErrInternalKey              = errors.New("taproot internal key is not unspendable")
-	ErrInvalidTaprootScript     = errors.New("invalid taproot script")
-	ErrInvalidLeafTaprootScript = errors.New("invalid leaf taproot script")
-	ErrInvalidAmount            = errors.New("children amount is different from parent amount")
-	ErrInvalidAsset             = errors.New("invalid output asset")
-	ErrInvalidSweepSequence     = errors.New("invalid sweep sequence")
-	ErrInvalidASP               = errors.New("invalid ASP")
-	ErrMissingFeeOutput         = errors.New("missing fee output")
-	ErrInvalidLeftOutput        = errors.New("invalid left output")
-	ErrInvalidRightOutput       = errors.New("invalid right output")
-	ErrMissingSweepTapscript    = errors.New("missing sweep tapscript")
-	ErrMissingBranchTapscript   = errors.New("missing branch tapscript")
-	ErrInvalidLeaf              = errors.New("leaf node shouldn't have children")
-	ErrWrongPoolTxID            = errors.New("root input should be the pool tx outpoint")
+	ErrInvalidPoolTransaction        = errors.New("invalid pool transaction")
+	ErrInvalidPoolTransactionOutputs = errors.New("invalid number of outputs in pool transaction")
+	ErrEmptyTree                     = errors.New("empty congestion tree")
+	ErrInvalidRootLevel              = errors.New("root level must have only one node")
+	ErrNoLeaves                      = errors.New("no leaves in the tree")
+	ErrNodeTransactionEmpty          = errors.New("node transaction is empty")
+	ErrNodeTxidEmpty                 = errors.New("node txid is empty")
+	ErrNodeParentTxidEmpty           = errors.New("node parent txid is empty")
+	ErrNodeTxidDifferent             = errors.New("node txid differs from node transaction")
+	ErrNumberOfInputs                = errors.New("node transaction should have only one input")
+	ErrNumberOfOutputs               = errors.New("node transaction should have only three or two outputs")
+	ErrParentTxidInput               = errors.New("parent txid should be the input of the node transaction")
+	ErrNumberOfChildren              = errors.New("node branch transaction should have two children")
+	ErrLeafChildren                  = errors.New("leaf node should have max 1 child")
+	ErrInvalidChildTxid              = errors.New("invalid child txid")
+	ErrNumberOfTapscripts            = errors.New("input should have two tapscripts leaves")
+	ErrInternalKey                   = errors.New("taproot internal key is not unspendable")
+	ErrInvalidTaprootScript          = errors.New("invalid taproot script")
+	ErrInvalidLeafTaprootScript      = errors.New("invalid leaf taproot script")
+	ErrInvalidAmount                 = errors.New("children amount is different from parent amount")
+	ErrInvalidAsset                  = errors.New("invalid output asset")
+	ErrInvalidSweepSequence          = errors.New("invalid sweep sequence")
+	ErrInvalidASP                    = errors.New("invalid ASP")
+	ErrMissingFeeOutput              = errors.New("missing fee output")
+	ErrInvalidLeftOutput             = errors.New("invalid left output")
+	ErrInvalidRightOutput            = errors.New("invalid right output")
+	ErrMissingSweepTapscript         = errors.New("missing sweep tapscript")
+	ErrMissingBranchTapscript        = errors.New("missing branch tapscript")
+	ErrInvalidLeaf                   = errors.New("leaf node shouldn't have children")
+	ErrWrongPoolTxID                 = errors.New("root input should be the pool tx outpoint")
 )
 
 const (
@@ -63,24 +62,30 @@ const (
 // - input and output amounts
 func ValidateCongestionTree(
 	tree CongestionTree,
-	poolTxHex string,
+	poolTx string,
 	aspPublicKey *secp256k1.PublicKey,
 	roundLifetimeSeconds uint,
 ) error {
 	unspendableKeyBytes, _ := hex.DecodeString(UnspendablePoint)
 	unspendableKey, _ := secp256k1.ParsePubKey(unspendableKeyBytes)
 
-	poolTransaction, err := transaction.NewTxFromHex(poolTxHex)
+	poolTransaction, err := psetv2.NewPsetFromBase64(poolTx)
 	if err != nil {
 		return ErrInvalidPoolTransaction
 	}
 
-	poolTxAmount, err := elementsutil.ValueFromBytes(poolTransaction.Outputs[sharedOutputIndex].Value)
+	if len(poolTransaction.Outputs) < sharedOutputIndex+1 {
+		return ErrInvalidPoolTransactionOutputs
+	}
+
+	poolTxAmount := poolTransaction.Outputs[sharedOutputIndex].Value
+
+	utx, err := poolTransaction.UnsignedTx()
 	if err != nil {
 		return ErrInvalidPoolTransaction
 	}
 
-	poolTxID := poolTransaction.TxHash().String()
+	poolTxID := utx.TxHash().String()
 
 	nbNodes := tree.NumberOfNodes()
 	if nbNodes == 0 {

@@ -19,12 +19,10 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/urfave/cli/v2"
 	"github.com/vulpemventures/go-elements/address"
-	"github.com/vulpemventures/go-elements/elementsutil"
 	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/taproot"
-	"github.com/vulpemventures/go-elements/transaction"
 	"golang.org/x/term"
 )
 
@@ -87,7 +85,7 @@ func privateKeyFromPassword() (*secp256k1.PrivateKey, error) {
 
 	encryptedPrivateKey, err := hex.DecodeString(encryptedPrivateKeyString)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid encrypted private key: %s", err)
 	}
 
 	password, err := readPassword()
@@ -384,9 +382,10 @@ func handleRoundStream(
 		if event.GetRoundFinalization() != nil {
 			// stop pinging as soon as we receive some forfeit txs
 			pingStop()
+			fmt.Println("round finalization started")
 
 			poolPartialTx := event.GetRoundFinalization().GetPoolPartialTx()
-			poolTransaction, err := transaction.NewTxFromHex(poolPartialTx)
+			poolTransaction, err := psetv2.NewPsetFromBase64(poolPartialTx)
 			if err != nil {
 				return "", err
 			}
@@ -429,13 +428,8 @@ func handleRoundStream(
 					found := false
 					for _, output := range poolTransaction.Outputs {
 						if bytes.Equal(output.Script, onchainScript) {
-							outputValue, err := elementsutil.ValueFromBytes(output.Value)
-							if err != nil {
-								return "", err
-							}
-
-							if outputValue != receiver.Amount {
-								return "", fmt.Errorf("invalid collaborative exit output amount: got %d, want %d", outputValue, receiver.Amount)
+							if output.Value != receiver.Amount {
+								return "", fmt.Errorf("invalid collaborative exit output amount: got %d, want %d", output.Value, receiver.Amount)
 							}
 
 							found = true

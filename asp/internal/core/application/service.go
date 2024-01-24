@@ -266,7 +266,7 @@ func (s *service) startFinalization() {
 		return
 	}
 
-	signedPoolTx, tree, err := s.builder.BuildPoolTx(s.pubkey, s.wallet, payments, s.minRelayFee)
+	unsignedPoolTx, tree, err := s.builder.BuildPoolTx(s.pubkey, s.wallet, payments, s.minRelayFee)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
 		log.WithError(err).Warn("failed to create pool tx")
@@ -275,7 +275,7 @@ func (s *service) startFinalization() {
 
 	log.Debugf("pool tx created for round %s", round.Id)
 
-	connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(s.pubkey, signedPoolTx, payments)
+	connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(s.pubkey, unsignedPoolTx, payments)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
 		log.WithError(err).Warn("failed to create connectors and forfeit txs")
@@ -284,7 +284,7 @@ func (s *service) startFinalization() {
 
 	log.Debugf("forfeit transactions created for round %s", round.Id)
 
-	events, err := round.StartFinalization(connectors, tree, signedPoolTx)
+	events, err := round.StartFinalization(connectors, tree, unsignedPoolTx)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to start finalization: %s", err))
 		log.WithError(err).Warn("failed to start finalization")
@@ -326,7 +326,15 @@ func (s *service) finalizeRound() {
 		return
 	}
 
-	txid, err := s.wallet.BroadcastTransaction(ctx, round.TxHex)
+	log.Debugf("signing round transaction %s\n", round.Id)
+	signedPoolTx, err := s.wallet.SignPset(ctx, round.UnsignedTx, true)
+	if err != nil {
+		changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
+		log.WithError(err).Warn("failed to sign round tx")
+		return
+	}
+
+	txid, err := s.wallet.BroadcastTransaction(ctx, signedPoolTx)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to broadcast pool tx: %s", err))
 		log.WithError(err).Warn("failed to broadcast pool tx")

@@ -2,6 +2,8 @@ package txbuilder_test
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"testing"
 
 	"github.com/ark-network/ark/common"
@@ -13,75 +15,40 @@ import (
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/require"
 	"github.com/vulpemventures/go-elements/network"
-	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
-	"github.com/vulpemventures/go-elements/transaction"
 )
 
 const (
 	testingKey = "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x"
+	fakePoolTx = "cHNldP8BAgQCAAAAAQQBAQEFAQMBBgEDAfsEAgAAAAABDiDk7dXxh4KQzgLO8i1ABtaLCe4aPL12GVhN1E9zM1ePLwEPBAAAAAABEAT/////AAEDCOgDAAAAAAAAAQQWABSNnpy01UJqd99eTg2M1IpdKId11gf8BHBzZXQCICWyUQcOKcoZBDzzPM1zJOLdqwPsxK4LXnfE/A5c9slaB/wEcHNldAgEAAAAAAABAwh4BQAAAAAAAAEEFgAUjZ6ctNVCanffXk4NjNSKXSiHddYH/ARwc2V0AiAlslEHDinKGQQ88zzNcyTi3asD7MSuC153xPwOXPbJWgf8BHBzZXQIBAAAAAAAAQMI9AEAAAAAAAABBAAH/ARwc2V0AiAlslEHDinKGQQ88zzNcyTi3asD7MSuC153xPwOXPbJWgf8BHBzZXQIBAAAAAAA"
 )
 
-func createTestPoolTx(sharedOutputAmount, numberOfInputs uint64) (string, error) {
-	_, key, err := common.DecodePubKey(testingKey)
-	if err != nil {
-		return "", err
-	}
+type mockedWalletService struct{}
 
-	payment := payment.FromPublicKey(key, &network.Testnet, nil)
-	script := payment.WitnessScript
-
-	pset, err := psetv2.New(nil, nil, nil)
-	if err != nil {
-		return "", err
-	}
-
-	updater, err := psetv2.NewUpdater(pset)
-	if err != nil {
-		return "", err
-	}
-
-	err = updater.AddInputs([]psetv2.InputArgs{
-		{
-			Txid:    "2f8f5733734fd44d581976bd3c1aee098bd606402df2ce02ce908287f1d5ede4",
-			TxIndex: 0,
-		},
-	})
-	if err != nil {
-		return "", err
-	}
-
-	connectorsAmount := numberOfInputs*450 + 500
-
-	err = updater.AddOutputs([]psetv2.OutputArgs{
-		{
-			Asset:  network.Regtest.AssetID,
-			Amount: sharedOutputAmount,
-			Script: script,
-		},
-		{
-			Asset:  network.Regtest.AssetID,
-			Amount: connectorsAmount,
-			Script: script,
-		},
-		{
-			Asset:  network.Regtest.AssetID,
-			Amount: 500,
-		},
-	})
-	if err != nil {
-		return "", err
-	}
-
-	utx, err := pset.UnsignedTx()
-	if err != nil {
-		return "", err
-	}
-
-	return utx.ToHex()
+type input struct {
+	txid string
+	vout uint32
 }
 
-type mockedWalletService struct{}
+func (i *input) GetTxid() string {
+	return i.txid
+}
+
+func (i *input) GetIndex() uint32 {
+	return i.vout
+}
+
+func (i *input) GetScript() string {
+	return "a914ea9f486e82efb3dd83a69fd96e3f0113757da03c87"
+}
+
+func (i *input) GetAsset() string {
+	return "5ac9f65c0efcc4775e0baec4ec03abdde22473cd3cf33c0419ca290e0751b225"
+}
+
+func (i *input) GetValue() uint64 {
+	return 1000
+}
 
 // BroadcastTransaction implements ports.WalletService.
 func (*mockedWalletService) BroadcastTransaction(ctx context.Context, txHex string) (string, error) {
@@ -113,9 +80,22 @@ func (*mockedWalletService) Status(ctx context.Context) (ports.WalletStatus, err
 	panic("unimplemented")
 }
 
-// Transfer implements ports.WalletService.
-func (*mockedWalletService) Transfer(ctx context.Context, outs []ports.TxOutput) (string, error) {
-	return createTestPoolTx(outs[0].GetAmount(), 1)
+func (*mockedWalletService) SelectUtxos(ctx context.Context, asset string, amount uint64) ([]ports.TxInput, uint64, error) {
+	// random txid
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return nil, 0, err
+	}
+	fakeInput := input{
+		txid: hex.EncodeToString(bytes),
+		vout: 0,
+	}
+
+	return []ports.TxInput{&fakeInput}, 0, nil
+}
+
+func (*mockedWalletService) EstimateFees(ctx context.Context, pset string) (uint64, error) {
+	return 100, nil
 }
 
 func TestBuildCongestionTree(t *testing.T) {
@@ -373,14 +353,13 @@ func TestBuildCongestionTree(t *testing.T) {
 func TestBuildForfeitTxs(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(network.Liquid)
 
-	// TODO: replace with fixture.
-	poolTxHex, err := createTestPoolTx(1000, 2)
+	poolTx, err := psetv2.NewPsetFromBase64(fakePoolTx)
 	require.NoError(t, err)
 
-	poolTx, err := transaction.NewTxFromHex(poolTxHex)
+	utx, err := poolTx.UnsignedTx()
 	require.NoError(t, err)
 
-	poolTxid := poolTx.TxHash().String()
+	poolTxid := utx.TxHash().String()
 
 	fixtures := []struct {
 		payments                []domain.Payment
@@ -436,7 +415,7 @@ func TestBuildForfeitTxs(t *testing.T) {
 
 	for _, f := range fixtures {
 		connectors, forfeitTxs, err := builder.BuildForfeitTxs(
-			key, poolTxHex, f.payments,
+			key, fakePoolTx, f.payments,
 		)
 		require.NoError(t, err)
 		require.Len(t, connectors, f.expectedNumOfConnectors)
