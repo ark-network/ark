@@ -15,67 +15,13 @@ import (
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/require"
 	"github.com/vulpemventures/go-elements/network"
-	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
 )
 
 const (
 	testingKey = "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x"
+	fakePoolTx = "cHNldP8BAgQCAAAAAQQBAQEFAQMBBgEDAfsEAgAAAAABDiDk7dXxh4KQzgLO8i1ABtaLCe4aPL12GVhN1E9zM1ePLwEPBAAAAAABEAT/////AAEDCOgDAAAAAAAAAQQWABSNnpy01UJqd99eTg2M1IpdKId11gf8BHBzZXQCICWyUQcOKcoZBDzzPM1zJOLdqwPsxK4LXnfE/A5c9slaB/wEcHNldAgEAAAAAAABAwh4BQAAAAAAAAEEFgAUjZ6ctNVCanffXk4NjNSKXSiHddYH/ARwc2V0AiAlslEHDinKGQQ88zzNcyTi3asD7MSuC153xPwOXPbJWgf8BHBzZXQIBAAAAAAAAQMI9AEAAAAAAAABBAAH/ARwc2V0AiAlslEHDinKGQQ88zzNcyTi3asD7MSuC153xPwOXPbJWgf8BHBzZXQIBAAAAAAA"
 )
-
-func createTestPoolTx(sharedOutputAmount, numberOfInputs uint64) (string, error) {
-	_, key, err := common.DecodePubKey(testingKey)
-	if err != nil {
-		return "", err
-	}
-
-	payment := payment.FromPublicKey(key, &network.Testnet, nil)
-	script := payment.WitnessScript
-
-	pset, err := psetv2.New(nil, nil, nil)
-	if err != nil {
-		return "", err
-	}
-
-	updater, err := psetv2.NewUpdater(pset)
-	if err != nil {
-		return "", err
-	}
-
-	err = updater.AddInputs([]psetv2.InputArgs{
-		{
-			Txid:    "2f8f5733734fd44d581976bd3c1aee098bd606402df2ce02ce908287f1d5ede4",
-			TxIndex: 0,
-		},
-	})
-	if err != nil {
-		return "", err
-	}
-
-	connectorsAmount := numberOfInputs*450 + 500
-
-	err = updater.AddOutputs([]psetv2.OutputArgs{
-		{
-			Asset:  network.Regtest.AssetID,
-			Amount: sharedOutputAmount,
-			Script: script,
-		},
-		{
-			Asset:  network.Regtest.AssetID,
-			Amount: connectorsAmount,
-			Script: script,
-		},
-		{
-			Asset:  network.Regtest.AssetID,
-			Amount: 500,
-		},
-	})
-	if err != nil {
-		return "", err
-	}
-
-	return pset.ToBase64()
-}
 
 type mockedWalletService struct{}
 
@@ -407,11 +353,7 @@ func TestBuildCongestionTree(t *testing.T) {
 func TestBuildForfeitTxs(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(network.Liquid)
 
-	// TODO: replace with fixture.
-	poolTxBase64, err := createTestPoolTx(1000, 2)
-	require.NoError(t, err)
-
-	poolTx, err := psetv2.NewPsetFromBase64(poolTxBase64)
+	poolTx, err := psetv2.NewPsetFromBase64(fakePoolTx)
 	require.NoError(t, err)
 
 	utx, err := poolTx.UnsignedTx()
@@ -473,7 +415,7 @@ func TestBuildForfeitTxs(t *testing.T) {
 
 	for _, f := range fixtures {
 		connectors, forfeitTxs, err := builder.BuildForfeitTxs(
-			key, poolTxBase64, f.payments,
+			key, fakePoolTx, f.payments,
 		)
 		require.NoError(t, err)
 		require.Len(t, connectors, f.expectedNumOfConnectors)
