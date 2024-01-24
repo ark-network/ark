@@ -3,10 +3,12 @@ package txbuilder
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/elementsutil"
@@ -21,6 +23,8 @@ const (
 	connectorAmount = 450
 	poolTxFeeAmount = 300
 )
+
+var emptyNonce = []byte{0x00}
 
 type txBuilder struct {
 	net *network.Network
@@ -45,11 +49,7 @@ func p2wpkhScript(publicKey *secp256k1.PublicKey, net *network.Network) ([]byte,
 func getTxid(txStr string) (string, error) {
 	pset, err := psetv2.NewPsetFromBase64(txStr)
 	if err != nil {
-		tx, err := transaction.NewTxFromHex(txStr)
-		if err != nil {
-			return "", err
-		}
-		return tx.TxHash().String(), nil
+		return "", err
 	}
 
 	utx, err := pset.UnsignedTx()
@@ -117,7 +117,7 @@ func (b *txBuilder) BuildForfeitTxs(
 
 			pubkeyBytes, err := hex.DecodeString(vtxo.Pubkey)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, fmt.Errorf("failed to decode pubkey: %s", err)
 			}
 
 			vtxoPubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
@@ -238,6 +238,26 @@ func (b *txBuilder) BuildPoolTx(
 	ptx, err := psetv2.New(toInputArgs(utxos), outputs, nil)
 	if err != nil {
 		return
+	}
+
+	updater, err := psetv2.NewUpdater(ptx)
+	if err != nil {
+		return
+	}
+
+	for i, utxo := range utxos {
+		witnessUtxo, err := toWitnessUtxo(utxo)
+		if err != nil {
+			return "", nil, err
+		}
+
+		if err := updater.AddInWitnessUtxo(i, witnessUtxo); err != nil {
+			return "", nil, err
+		}
+
+		if err := updater.AddInSighashType(i, txscript.SigHashAll); err != nil {
+			return "", nil, err
+		}
 	}
 
 	utx, err := ptx.UnsignedTx()
@@ -369,4 +389,30 @@ func toInputArgs(
 		})
 	}
 	return inputs
+}
+
+func toWitnessUtxo(in ports.TxInput) (*transaction.TxOutput, error) {
+	valueBytes, err := elementsutil.ValueToBytes(in.GetValue())
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert value to bytes: %s", err)
+	}
+
+	assetBytes, err := elementsutil.AssetHashToBytes(in.GetAsset())
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert asset to bytes: %s", err)
+	}
+
+	scriptBytes, err := hex.DecodeString(in.GetScript())
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode script: %s", err)
+	}
+
+	return &transaction.TxOutput{
+		Asset:           assetBytes,
+		Value:           valueBytes,
+		Script:          scriptBytes,
+		Nonce:           emptyNonce,
+		RangeProof:      nil,
+		SurjectionProof: nil,
+	}, err
 }

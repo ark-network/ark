@@ -15,7 +15,6 @@ import (
 	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
-	"github.com/vulpemventures/go-elements/transaction"
 )
 
 const (
@@ -73,12 +72,7 @@ func createTestPoolTx(sharedOutputAmount, numberOfInputs uint64) (string, error)
 		return "", err
 	}
 
-	utx, err := pset.UnsignedTx()
-	if err != nil {
-		return "", err
-	}
-
-	return utx.ToHex()
+	return pset.ToBase64()
 }
 
 type mockedWalletService struct{}
@@ -94,6 +88,18 @@ func (i *input) GetTxid() string {
 
 func (i *input) GetIndex() uint32 {
 	return i.vout
+}
+
+func (i *input) GetScript() string {
+	return "a914ea9f486e82efb3dd83a69fd96e3f0113757da03c87"
+}
+
+func (i *input) GetAsset() string {
+	return "5ac9f65c0efcc4775e0baec4ec03abdde22473cd3cf33c0419ca290e0751b225"
+}
+
+func (i *input) GetValue() uint64 {
+	return 1000
 }
 
 // BroadcastTransaction implements ports.WalletService.
@@ -391,13 +397,16 @@ func TestBuildForfeitTxs(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(network.Liquid)
 
 	// TODO: replace with fixture.
-	poolTxHex, err := createTestPoolTx(1000, 2)
+	poolTxBase64, err := createTestPoolTx(1000, 2)
 	require.NoError(t, err)
 
-	poolTx, err := transaction.NewTxFromHex(poolTxHex)
+	poolTx, err := psetv2.NewPsetFromBase64(poolTxBase64)
 	require.NoError(t, err)
 
-	poolTxid := poolTx.TxHash().String()
+	utx, err := poolTx.UnsignedTx()
+	require.NoError(t, err)
+
+	poolTxid := utx.TxHash().String()
 
 	fixtures := []struct {
 		payments                []domain.Payment
@@ -453,7 +462,7 @@ func TestBuildForfeitTxs(t *testing.T) {
 
 	for _, f := range fixtures {
 		connectors, forfeitTxs, err := builder.BuildForfeitTxs(
-			key, poolTxHex, f.payments,
+			key, poolTxBase64, f.payments,
 		)
 		require.NoError(t, err)
 		require.Len(t, connectors, f.expectedNumOfConnectors)

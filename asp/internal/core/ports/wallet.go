@@ -27,4 +27,7 @@ type WalletStatus interface {
 type TxInput interface {
 	GetTxid() string
 	GetIndex() uint32
+	GetScript() string
+	GetAsset() string
+	GetValue() uint64
 }

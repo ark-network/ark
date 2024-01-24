@@ -6,56 +6,18 @@ import (
 
 	pb "github.com/ark-network/ark/api-spec/protobuf/gen/ocean/v1"
 	"github.com/ark-network/ark/internal/core/ports"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/vulpemventures/go-elements/psetv2"
-	"github.com/vulpemventures/go-elements/transaction"
+)
+
+const (
+	zero32 = "0000000000000000000000000000000000000000000000000000000000000000"
 )
 
 func (s *service) SignPset(
 	ctx context.Context, pset string, extractRawTx bool,
 ) (string, error) {
-	ptx, err := psetv2.NewPsetFromBase64(pset)
-	if err != nil {
-		return "", err
-	}
-
-	updater, err := psetv2.NewUpdater(ptx)
-	if err != nil {
-		return "", err
-	}
-
-	for inputIndex, in := range ptx.Inputs {
-		if in.WitnessUtxo == nil {
-			resp, err := s.txClient.GetTransaction(ctx, &pb.GetTransactionRequest{
-				Txid: chainhash.Hash(in.PreviousTxid).String(),
-			})
-			if err != nil {
-				return "", err
-			}
-
-			txHex := resp.GetTxHex()
-			tx, err := transaction.NewTxFromHex(txHex)
-			if err != nil {
-				return "", err
-			}
-
-			if len(tx.Outputs) <= int(in.PreviousTxIndex) {
-				return "", fmt.Errorf("invalid previous tx index, cannot set witness utxo")
-			}
-
-			if err := updater.AddInWitnessUtxo(inputIndex, tx.Outputs[in.PreviousTxIndex]); err != nil {
-				return "", err
-			}
-		}
-	}
-
-	updatedPset, err := updater.Pset.ToBase64()
-	if err != nil {
-		return "", err
-	}
-
 	res, err := s.txClient.SignPset(ctx, &pb.SignPsetRequest{
-		Pset: updatedPset,
+		Pset: pset,
 	})
 	if err != nil {
 		return "", err
@@ -66,7 +28,7 @@ func (s *service) SignPset(
 		return signedPset, nil
 	}
 
-	ptx, err = psetv2.NewPsetFromBase64(signedPset)
+	ptx, err := psetv2.NewPsetFromBase64(signedPset)
 	if err != nil {
 		return "", err
 	}
@@ -100,6 +62,11 @@ func (s *service) SelectUtxos(ctx context.Context, asset string, amount uint64) 
 
 	inputs := make([]ports.TxInput, 0, len(res.GetUtxos()))
 	for _, utxo := range res.GetUtxos() {
+		// check that the utxos are not confidential
+		if utxo.GetAssetBlinder() != zero32 || utxo.GetValueBlinder() != zero32 {
+			return nil, 0, fmt.Errorf("utxo is confidential")
+		}
+
 		inputs = append(inputs, utxo)
 	}
 

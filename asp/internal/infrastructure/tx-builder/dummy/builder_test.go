@@ -87,6 +87,18 @@ func (i *input) GetIndex() uint32 {
 	return i.vout
 }
 
+func (i *input) GetScript() string {
+	return "a914ea9f486e82efb3dd83a69fd96e3f0113757da03c87"
+}
+
+func (i *input) GetAsset() string {
+	return "5ac9f65c0efcc4775e0baec4ec03abdde22473cd3cf33c0419ca290e0751b225"
+}
+
+func (i *input) GetValue() uint64 {
+	return 1000
+}
+
 type mockedWalletService struct{}
 
 // BroadcastTransaction implements ports.WalletService.

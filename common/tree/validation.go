@@ -9,10 +9,8 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/vulpemventures/go-elements/elementsutil"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/taproot"
-	"github.com/vulpemventures/go-elements/transaction"
 )
 
 var (
@@ -70,17 +68,23 @@ func ValidateCongestionTree(
 	unspendableKeyBytes, _ := hex.DecodeString(UnspendablePoint)
 	unspendableKey, _ := secp256k1.ParsePubKey(unspendableKeyBytes)
 
-	poolTransaction, err := transaction.NewTxFromHex(poolTxHex)
+	poolTransaction, err := psetv2.NewPsetFromBase64(poolTxHex)
 	if err != nil {
 		return ErrInvalidPoolTransaction
 	}
 
-	poolTxAmount, err := elementsutil.ValueFromBytes(poolTransaction.Outputs[sharedOutputIndex].Value)
+	if len(poolTransaction.Outputs) < sharedOutputIndex+1 {
+		return ErrInvalidPoolTransaction
+	}
+
+	poolTxAmount := poolTransaction.Outputs[sharedOutputIndex].Value
+
+	utx, err := poolTransaction.UnsignedTx()
 	if err != nil {
 		return ErrInvalidPoolTransaction
 	}
 
-	poolTxID := poolTransaction.TxHash().String()
+	poolTxID := utx.TxHash().String()
 
 	nbNodes := tree.NumberOfNodes()
 	if nbNodes == 0 {
