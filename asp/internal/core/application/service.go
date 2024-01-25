@@ -362,8 +362,8 @@ func (s *service) listenToRedemptions() {
 			}
 			log.Debugf("redeemed %d vtxos", len(vtxos))
 			// Keep in mind that different vtxos can be owned by the same script and
-			// therefore not all vtxos may be to be unwatched. For now it's ok since
-			// the client supports unilateral redeem of all vtxos only.
+			// therefore not all vtxos locing scripts may need to be unwatched.
+			// For now it's ok as the client supports unilateral redeem of all vtxos only.
 			s.stopWatchingVtxos(vtxos)
 			break
 		}
