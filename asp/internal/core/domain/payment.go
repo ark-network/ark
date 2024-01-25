@@ -122,6 +122,7 @@ func (r Receiver) IsOnchain() bool {
 type Vtxo struct {
 	VtxoKey
 	Receiver
-	Spent  bool
-	PoolTx string
+	PoolTx   string
+	Spent    bool
+	Redeemed bool
 }
