@@ -106,6 +106,18 @@ func (*mockedWalletService) Status(ctx context.Context) (ports.WalletStatus, err
 	panic("unimplemented")
 }
 
+func (*mockedWalletService) WatchScripts(ctx context.Context, scripts []string) error {
+	panic("unimplemented")
+}
+
+func (*mockedWalletService) UnwatchScripts(ctx context.Context, scripts []string) error {
+	panic("unimplemented")
+}
+
+func (*mockedWalletService) GetNotificationChannel(ctx context.Context) chan []domain.VtxoKey {
+	panic("unimplemented")
+}
+
 // Transfer implements ports.WalletService.
 func (*mockedWalletService) Transfer(ctx context.Context, outs []ports.TxOutput) (string, error) {
 	return createTestPoolTx(1000, (450+500)*1)

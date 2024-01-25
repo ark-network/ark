@@ -17,16 +17,7 @@
   ],
   "paths": {},
   "definitions": {
-    "protobufAny": {
-      "type": "object",
-      "properties": {
-        "@type": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": {}
-    },
-    "rpcStatus": {
+    "googlerpcStatus": {
       "type": "object",
       "properties": {
         "code": {
@@ -44,6 +35,15 @@
           }
         }
       }
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
     },
     "v1AddWebhookResponse": {
       "type": "object",
@@ -127,6 +127,9 @@
       ],
       "default": "TX_EVENT_TYPE_UNSPECIFIED",
       "description": " - TX_EVENT_TYPE_BROADCASTED: Tx broadcasted.\n - TX_EVENT_TYPE_UNCONFIRMED: Tx unconfirmed.\n - TX_EVENT_TYPE_CONFIRMED: Tx confirmed."
+    },
+    "v1UnwatchExternalScriptResponse": {
+      "type": "object"
     },
     "v1Utxo": {
       "type": "object",
@@ -219,6 +222,14 @@
             "$ref": "#/definitions/v1Utxo"
           },
           "description": "List of utxos for which occured the event."
+        }
+      }
+    },
+    "v1WatchExternalScriptResponse": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string"
         }
       }
     },

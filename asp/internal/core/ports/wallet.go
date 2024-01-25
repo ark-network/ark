@@ -7,6 +7,7 @@ import (
 )
 
 type WalletService interface {
+	BlockchainScanner
 	Status(ctx context.Context) (WalletStatus, error)
 	GetPubkey(ctx context.Context) (*secp256k1.PublicKey, error)
 	DeriveAddresses(ctx context.Context, num int) ([]string, error)
