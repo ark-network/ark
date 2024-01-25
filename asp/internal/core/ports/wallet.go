@@ -14,8 +14,9 @@ type WalletService interface {
 	SignPset(
 		ctx context.Context, pset string, extractRawTx bool,
 	) (string, error)
-	Transfer(ctx context.Context, outs []TxOutput) (string, error)
+	SelectUtxos(ctx context.Context, asset string, amount uint64) ([]TxInput, uint64, error)
 	BroadcastTransaction(ctx context.Context, txHex string) (string, error)
+	EstimateFees(ctx context.Context, pset string) (uint64, error)
 	Close()
 }
 
@@ -29,12 +30,6 @@ type TxInput interface {
 	GetTxid() string
 	GetIndex() uint32
 	GetScript() string
-	GetScriptSigSize() int
-	GetWitnessSize() int
-}
-
-type TxOutput interface {
-	GetAmount() uint64
 	GetAsset() string
-	GetScript() string
+	GetValue() uint64
 }

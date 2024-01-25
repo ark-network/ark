@@ -3,10 +3,12 @@ package txbuilder
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/elementsutil"
@@ -20,6 +22,8 @@ import (
 const (
 	connectorAmount = 450
 )
+
+var emptyNonce = []byte{0x00}
 
 type txBuilder struct {
 	net *network.Network
@@ -44,11 +48,7 @@ func p2wpkhScript(publicKey *secp256k1.PublicKey, net *network.Network) ([]byte,
 func getTxid(txStr string) (string, error) {
 	pset, err := psetv2.NewPsetFromBase64(txStr)
 	if err != nil {
-		tx, err := transaction.NewTxFromHex(txStr)
-		if err != nil {
-			return "", err
-		}
-		return tx.TxHash().String(), nil
+		return "", err
 	}
 
 	utx, err := pset.UnsignedTx()
@@ -116,7 +116,7 @@ func (b *txBuilder) BuildForfeitTxs(
 
 			pubkeyBytes, err := hex.DecodeString(vtxo.Pubkey)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, fmt.Errorf("failed to decode pubkey: %s", err)
 			}
 
 			vtxoPubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
@@ -171,8 +171,6 @@ func (b *txBuilder) BuildPoolTx(
 		return
 	}
 
-	aspScript := hex.EncodeToString(aspScriptBytes)
-
 	offchainReceivers, onchainReceivers := receiversFromPayments(payments)
 	numberOfConnectors := numberOfVTXOs(payments)
 	connectorOutputAmount := connectorAmount * numberOfConnectors
@@ -189,38 +187,165 @@ func (b *txBuilder) BuildPoolTx(
 		return
 	}
 
-	sharedOutputScriptHex := hex.EncodeToString(sharedOutputScript)
-
-	poolTxOuts := []ports.TxOutput{
-		newOutput(sharedOutputScriptHex, sharedOutputAmount, b.net.AssetID),
-		newOutput(aspScript, connectorOutputAmount, b.net.AssetID),
+	outputs := []psetv2.OutputArgs{
+		{
+			Asset:  b.net.AssetID,
+			Amount: sharedOutputAmount,
+			Script: sharedOutputScript,
+		},
+		{
+			Asset:  b.net.AssetID,
+			Amount: connectorOutputAmount,
+			Script: aspScriptBytes,
+		},
 	}
+
+	targetAmount := sharedOutputAmount + connectorOutputAmount
 
 	for _, receiver := range onchainReceivers {
-		buf, _ := address.ToOutputScript(receiver.OnchainAddress)
-		script := hex.EncodeToString(buf)
-		poolTxOuts = append(poolTxOuts, newOutput(script, receiver.Amount, b.net.AssetID))
+		targetAmount += receiver.Amount
+
+		receiverScript, err := address.ToOutputScript(receiver.OnchainAddress)
+		if err != nil {
+			return "", nil, err
+		}
+
+		outputs = append(outputs, psetv2.OutputArgs{
+			Asset:  b.net.AssetID,
+			Amount: receiver.Amount,
+			Script: receiverScript,
+		})
 	}
 
-	txHex, err := wallet.Transfer(ctx, poolTxOuts)
+	utxos, change, err := wallet.SelectUtxos(ctx, b.net.AssetID, targetAmount)
 	if err != nil {
 		return
 	}
 
-	tx, err := transaction.NewTxFromHex(txHex)
+	if change > 0 {
+		outputs = append(outputs, psetv2.OutputArgs{
+			Asset:  b.net.AssetID,
+			Amount: change,
+			Script: aspScriptBytes,
+		})
+	}
+
+	ptx, err := psetv2.New(toInputArgs(utxos), outputs, nil)
+	if err != nil {
+		return
+	}
+
+	updater, err := psetv2.NewUpdater(ptx)
+	if err != nil {
+		return
+	}
+
+	for i, utxo := range utxos {
+		witnessUtxo, err := toWitnessUtxo(utxo)
+		if err != nil {
+			return "", nil, err
+		}
+
+		if err := updater.AddInWitnessUtxo(i, witnessUtxo); err != nil {
+			return "", nil, err
+		}
+
+		if err := updater.AddInSighashType(i, txscript.SigHashAll); err != nil {
+			return "", nil, err
+		}
+	}
+
+	b64, err := ptx.ToBase64()
+	if err != nil {
+		return
+	}
+
+	feesAmount, err := wallet.EstimateFees(ctx, b64)
+	if err != nil {
+		return
+	}
+
+	if feesAmount == change {
+		// fees = change, remove change output
+		updater.Pset.Outputs = ptx.Outputs[:len(ptx.Outputs)-1]
+	} else if feesAmount < change {
+		// change covers the fees, reduce change amount
+		updater.Pset.Outputs[len(ptx.Outputs)-1].Value = change - feesAmount
+	} else {
+		// change is not enough to cover fees, re-select utxos
+		if change > 0 {
+			// remove change output if present
+			updater.Pset.Outputs = ptx.Outputs[:len(ptx.Outputs)-1]
+		}
+		newUtxos, newChange, err := wallet.SelectUtxos(ctx, b.net.AssetID, feesAmount-change)
+		if err != nil {
+			return "", nil, err
+		}
+
+		if err := updater.AddInputs(toInputArgs(newUtxos)); err != nil {
+			return "", nil, err
+		}
+
+		if newChange > 0 {
+			if err := updater.AddOutputs([]psetv2.OutputArgs{
+				{
+					Asset:  b.net.AssetID,
+					Amount: newChange,
+					Script: aspScriptBytes,
+				},
+			}); err != nil {
+				return "", nil, err
+			}
+		}
+
+		nbInputs := len(utxos)
+
+		for i, utxo := range newUtxos {
+
+			witnessUtxo, err := toWitnessUtxo(utxo)
+			if err != nil {
+				return "", nil, err
+			}
+
+			if err := updater.AddInWitnessUtxo(i+nbInputs, witnessUtxo); err != nil {
+				return "", nil, err
+			}
+
+			if err := updater.AddInSighashType(i+nbInputs, txscript.SigHashAll); err != nil {
+				return "", nil, err
+			}
+		}
+
+	}
+
+	// add fee output
+	if err := updater.AddOutputs([]psetv2.OutputArgs{
+		{
+			Asset:  b.net.AssetID,
+			Amount: feesAmount,
+		},
+	}); err != nil {
+		return "", nil, err
+	}
+
+	utx, err := ptx.UnsignedTx()
 	if err != nil {
 		return
 	}
 
 	tree, err := makeTree(psetv2.InputArgs{
-		Txid:    tx.TxHash().String(),
+		Txid:    utx.TxHash().String(),
 		TxIndex: 0,
 	})
 	if err != nil {
 		return
 	}
 
-	poolTx = txHex
+	poolTx, err = ptx.ToBase64()
+	if err != nil {
+		return
+	}
+
 	congestionTree = tree
 	return
 }
@@ -321,28 +446,41 @@ func receiversFromPayments(
 	return
 }
 
-type output struct {
-	script string
-	amount uint64
-	asset  string
-}
-
-func newOutput(script string, amount uint64, asset string) ports.TxOutput {
-	return &output{
-		script: script,
-		amount: amount,
-		asset:  asset,
+func toInputArgs(
+	ins []ports.TxInput,
+) []psetv2.InputArgs {
+	inputs := make([]psetv2.InputArgs, 0, len(ins))
+	for _, in := range ins {
+		inputs = append(inputs, psetv2.InputArgs{
+			Txid:    in.GetTxid(),
+			TxIndex: in.GetIndex(),
+		})
 	}
+	return inputs
 }
 
-func (o *output) GetAsset() string {
-	return o.asset
-}
+func toWitnessUtxo(in ports.TxInput) (*transaction.TxOutput, error) {
+	valueBytes, err := elementsutil.ValueToBytes(in.GetValue())
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert value to bytes: %s", err)
+	}
 
-func (o *output) GetAmount() uint64 {
-	return o.amount
-}
+	assetBytes, err := elementsutil.AssetHashToBytes(in.GetAsset())
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert asset to bytes: %s", err)
+	}
 
-func (o *output) GetScript() string {
-	return o.script
+	scriptBytes, err := hex.DecodeString(in.GetScript())
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode script: %s", err)
+	}
+
+	return &transaction.TxOutput{
+		Asset:           assetBytes,
+		Value:           valueBytes,
+		Script:          scriptBytes,
+		Nonce:           emptyNonce,
+		RangeProof:      nil,
+		SurjectionProof: nil,
+	}, err
 }
