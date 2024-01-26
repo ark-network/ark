@@ -6,10 +6,23 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"syscall"
+	"time"
 
+	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/tree"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/urfave/cli/v2"
+	"github.com/vulpemventures/go-elements/address"
+	"github.com/vulpemventures/go-elements/network"
+	"github.com/vulpemventures/go-elements/payment"
+	"github.com/vulpemventures/go-elements/psetv2"
+	"github.com/vulpemventures/go-elements/taproot"
 	"golang.org/x/term"
 )
 
@@ -72,13 +85,14 @@ func privateKeyFromPassword() (*secp256k1.PrivateKey, error) {
 
 	encryptedPrivateKey, err := hex.DecodeString(encryptedPrivateKeyString)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid encrypted private key: %s", err)
 	}
 
 	password, err := readPassword()
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("key unlocked")
 
 	cypher := NewAES128Cypher()
 	privateKeyBytes, err := cypher.Decrypt(encryptedPrivateKey, password)
@@ -150,49 +164,172 @@ func coinSelect(vtxos []vtxo, amount uint64) ([]vtxo, uint64, error) {
 	return selected, change, nil
 }
 
-func computeBalance(vtxos []vtxo) uint64 {
+func getOffchainBalance(
+	ctx *cli.Context, client arkv1.ArkServiceClient, addr string,
+) (uint64, error) {
+	vtxos, err := getVtxos(ctx, client, addr)
+	if err != nil {
+		return 0, err
+	}
 	var balance uint64
 	for _, vtxo := range vtxos {
 		balance += vtxo.amount
 	}
-	return balance
+	return balance, nil
 }
 
-func getNetwork() common.Network {
-	state, err := getState()
+type utxo struct {
+	Txid   string `json:"txid"`
+	Vout   uint32 `json:"vout"`
+	Amount uint64 `json:"value"`
+	Asset  string `json:"asset"`
+}
+
+func getOnchainUtxos(addr string) ([]utxo, error) {
+	_, net, err := getNetwork()
 	if err != nil {
-		return common.MainNet
+		return nil, err
 	}
 
-	network, ok := state["network"]
-	if !ok {
-		return common.MainNet
+	baseUrl := explorerUrl[net.Name]
+	resp, err := http.Get(fmt.Sprintf("%s/address/%s/utxo", baseUrl, addr))
+	if err != nil {
+		return nil, err
 	}
-	if network == "testnet" {
-		return common.TestNet
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
 	}
-	return common.MainNet
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf(string(body))
+	}
+	payload := []utxo{}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, err
+	}
+
+	return payload, nil
 }
 
-func getAddress() (string, error) {
-	publicKey, err := getWalletPublicKey()
+func getOnchainBalance(addr string) (uint64, error) {
+	payload, err := getOnchainUtxos(addr)
+	if err != nil {
+		return 0, err
+	}
+
+	_, net, err := getNetwork()
+	if err != nil {
+		return 0, err
+	}
+
+	balance := uint64(0)
+	for _, p := range payload {
+		if p.Asset != net.AssetID {
+			continue
+		}
+		balance += p.Amount
+	}
+	return balance, nil
+}
+
+func getTxHex(txid string) (string, error) {
+	_, net, err := getNetwork()
 	if err != nil {
 		return "", err
+	}
+
+	baseUrl := explorerUrl[net.Name]
+	resp, err := http.Get(fmt.Sprintf("%s/tx/%s/hex", baseUrl, txid))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf(string(body))
+	}
+
+	return string(body), nil
+}
+
+func broadcast(txHex string) (string, error) {
+	_, net, err := getNetwork()
+	if err != nil {
+		return "", err
+	}
+
+	body := bytes.NewBuffer([]byte(txHex))
+
+	baseUrl := explorerUrl[net.Name]
+	resp, err := http.Post(fmt.Sprintf("%s/tx", baseUrl), "text/plain", body)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	bodyResponse, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf(string(bodyResponse))
+	}
+
+	return string(bodyResponse), nil
+}
+
+func getNetwork() (*common.Network, *network.Network, error) {
+	state, err := getState()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	net, ok := state["network"]
+	if !ok {
+		return &common.MainNet, &network.Liquid, nil
+	}
+	if net == "testnet" {
+		return &common.TestNet, &network.Testnet, nil
+	}
+	return &common.MainNet, &network.Liquid, nil
+}
+
+func getAddress() (offchainAddr, onchainAddr string, err error) {
+	publicKey, err := getWalletPublicKey()
+	if err != nil {
+		return
 	}
 
 	aspPublicKey, err := getServiceProviderPublicKey()
 	if err != nil {
-		return "", err
+		return
 	}
 
-	net := getNetwork()
-
-	addr, err := common.EncodeAddress(net.Addr, publicKey, aspPublicKey)
+	arkNet, liquidNet, err := getNetwork()
 	if err != nil {
-		return "", err
+		return
 	}
 
-	return addr, nil
+	arkAddr, err := common.EncodeAddress(arkNet.Addr, publicKey, aspPublicKey)
+	if err != nil {
+		return
+	}
+
+	p2wpkh := payment.FromPublicKey(publicKey, liquidNet, nil)
+	liquidAddr, err := p2wpkh.WitnessPubKeyHash()
+	if err != nil {
+		return
+	}
+
+	offchainAddr = arkAddr
+	onchainAddr = liquidAddr
+
+	return
 }
 
 func printJSON(resp interface{}) error {
@@ -203,4 +340,285 @@ func printJSON(resp interface{}) error {
 
 	fmt.Println(string(jsonBytes))
 	return nil
+}
+
+func handleRoundStream(
+	ctx *cli.Context,
+	client arkv1.ArkServiceClient,
+	paymentID string,
+	vtxosToSign []vtxo,
+	secKey *secp256k1.PrivateKey,
+	receivers []*arkv1.Output,
+) (poolTxID string, err error) {
+	stream, err := client.GetEventStream(ctx.Context, &arkv1.GetEventStreamRequest{})
+	if err != nil {
+		return "", err
+	}
+
+	var pingStop func()
+	pingReq := &arkv1.PingRequest{
+		PaymentId: paymentID,
+	}
+	for pingStop == nil {
+		pingStop = ping(ctx, client, pingReq)
+	}
+
+	defer pingStop()
+
+	for {
+		event, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+
+		if event.GetRoundFailed() != nil {
+			pingStop()
+			return "", fmt.Errorf("round failed: %s", event.GetRoundFailed().GetReason())
+		}
+
+		if event.GetRoundFinalization() != nil {
+			// stop pinging as soon as we receive some forfeit txs
+			pingStop()
+			fmt.Println("round finalization started")
+
+			poolPartialTx := event.GetRoundFinalization().GetPoolPartialTx()
+			poolTransaction, err := psetv2.NewPsetFromBase64(poolPartialTx)
+			if err != nil {
+				return "", err
+			}
+
+			congestionTree, err := toCongestionTree(event.GetRoundFinalization().GetCongestionTree())
+			if err != nil {
+				return "", err
+			}
+
+			aspPublicKey, err := getServiceProviderPublicKey()
+			if err != nil {
+				return "", err
+			}
+
+			// validate the congestion tree
+			if err := tree.ValidateCongestionTree(
+				congestionTree,
+				poolPartialTx,
+				aspPublicKey,
+				1209344, // ~ 2 weeks
+			); err != nil {
+				return "", err
+			}
+
+			// validate the receivers
+			sweepLeaf, err := tree.SweepScript(aspPublicKey, 1209344)
+			if err != nil {
+				return "", err
+			}
+
+			for _, receiver := range receivers {
+				isOnChain, onchainScript, userPubKey, err := decodeReceiverAddress(receiver.Address)
+				if err != nil {
+					return "", err
+				}
+
+				if isOnChain {
+					// collaborative exit case
+					// search for the output in the pool tx
+					found := false
+					for _, output := range poolTransaction.Outputs {
+						if bytes.Equal(output.Script, onchainScript) {
+							if output.Value != receiver.Amount {
+								return "", fmt.Errorf("invalid collaborative exit output amount: got %d, want %d", output.Value, receiver.Amount)
+							}
+
+							found = true
+							break
+						}
+					}
+
+					if !found {
+						return "", fmt.Errorf("collaborative exit output not found: %s", receiver.Address)
+					}
+
+					continue
+				}
+
+				// off-chain send case
+				// search for the output in congestion tree
+				found := false
+
+				// compute the receiver output taproot key
+				vtxoScript, err := tree.VtxoScript(userPubKey)
+				if err != nil {
+					return "", err
+				}
+
+				vtxoTaprootTree := taproot.AssembleTaprootScriptTree(*vtxoScript, *sweepLeaf)
+				root := vtxoTaprootTree.RootNode.TapHash()
+				unspendableKeyBytes, _ := hex.DecodeString(tree.UnspendablePoint)
+				unspendableKey, _ := secp256k1.ParsePubKey(unspendableKeyBytes)
+				vtxoTaprootKey := schnorr.SerializePubKey(taproot.ComputeTaprootOutputKey(unspendableKey, root[:]))
+
+				leaves := congestionTree.Leaves()
+				for _, leaf := range leaves {
+					tx, err := psetv2.NewPsetFromBase64(leaf.Tx)
+					if err != nil {
+						return "", err
+					}
+
+					for _, output := range tx.Outputs {
+						if len(output.Script) == 0 {
+							continue
+						}
+						if bytes.Equal(output.Script[2:], vtxoTaprootKey) {
+							if output.Value != receiver.Amount {
+								continue
+							}
+
+							found = true
+							break
+						}
+					}
+
+					if found {
+						break
+					}
+				}
+
+				if !found {
+					return "", fmt.Errorf("off-chain send output not found: %s", receiver.Address)
+				}
+			}
+
+			fmt.Println("congestion tree validated")
+
+			forfeits := event.GetRoundFinalization().GetForfeitTxs()
+			signedForfeits := make([]string, 0)
+
+			fmt.Println("signing forfeit txs...")
+
+			explorer := NewExplorer()
+
+			for _, forfeit := range forfeits {
+				pset, err := psetv2.NewPsetFromBase64(forfeit)
+				if err != nil {
+					return "", err
+				}
+
+				for _, input := range pset.Inputs {
+					inputTxid := chainhash.Hash(input.PreviousTxid).String()
+
+					for _, coin := range vtxosToSign {
+						// check if it contains one of the input to sign
+						if inputTxid == coin.txid {
+							if err := signPset(pset, explorer, secKey); err != nil {
+								return "", err
+							}
+
+							signedPset, err := pset.ToBase64()
+							if err != nil {
+								return "", err
+							}
+
+							signedForfeits = append(signedForfeits, signedPset)
+						}
+					}
+				}
+			}
+
+			// if no forfeit txs have been signed, start pinging again and wait for the next round
+			if len(signedForfeits) == 0 {
+				fmt.Println("no forfeit txs to sign, waiting for the next round...")
+				pingStop = nil
+				for pingStop == nil {
+					pingStop = ping(ctx, client, pingReq)
+				}
+				continue
+			}
+
+			fmt.Printf("%d forfeit txs signed, finalizing payment...\n", len(signedForfeits))
+			_, err = client.FinalizePayment(ctx.Context, &arkv1.FinalizePaymentRequest{
+				SignedForfeitTxs: signedForfeits,
+			})
+			if err != nil {
+				return "", err
+			}
+
+			continue
+		}
+
+		if event.GetRoundFinalized() != nil {
+			return event.GetRoundFinalized().GetPoolTxid(), nil
+		}
+	}
+
+	return "", fmt.Errorf("stream closed unexpectedly")
+}
+
+// send 1 ping message every 5 seconds to signal to the ark service that we are still alive
+// returns a function that can be used to stop the pinging
+func ping(ctx *cli.Context, client arkv1.ArkServiceClient, req *arkv1.PingRequest) func() {
+	_, err := client.Ping(ctx.Context, req)
+	if err != nil {
+		return nil
+	}
+
+	ticker := time.NewTicker(5 * time.Second)
+
+	go func(t *time.Ticker) {
+		for range t.C {
+			// nolint
+			client.Ping(ctx.Context, req)
+		}
+	}(ticker)
+
+	return ticker.Stop
+}
+
+func toCongestionTree(treeFromProto *arkv1.Tree) (tree.CongestionTree, error) {
+	levels := make(tree.CongestionTree, 0, len(treeFromProto.Levels))
+
+	for _, level := range treeFromProto.Levels {
+		nodes := make([]tree.Node, 0, len(level.Nodes))
+
+		for _, node := range level.Nodes {
+			nodes = append(nodes, tree.Node{
+				Txid:       node.Txid,
+				Tx:         node.Tx,
+				ParentTxid: node.ParentTxid,
+				Leaf:       false,
+			})
+		}
+
+		levels = append(levels, nodes)
+	}
+
+	for j, treeLvl := range levels {
+		for i, node := range treeLvl {
+			if len(levels.Children(node.Txid)) < 2 {
+				levels[j][i].Leaf = true
+			}
+		}
+	}
+
+	return levels, nil
+}
+
+func decodeReceiverAddress(addr string) (
+	isOnChainAddress bool,
+	onchainScript []byte,
+	userPubKey *secp256k1.PublicKey,
+	err error,
+) {
+	outputScript, err := address.ToOutputScript(addr)
+	if err != nil {
+		_, userPubKey, _, err = common.DecodeAddress(addr)
+		if err != nil {
+			return
+		}
+		return false, nil, userPubKey, nil
+	}
+
+	return true, outputScript, nil, nil
 }

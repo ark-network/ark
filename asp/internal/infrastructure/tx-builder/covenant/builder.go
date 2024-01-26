@@ -5,11 +5,13 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/address"
+	"github.com/vulpemventures/go-elements/elementsutil"
 	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
@@ -20,6 +22,8 @@ import (
 const (
 	connectorAmount = 450
 )
+
+var emptyNonce = []byte{0x00}
 
 type txBuilder struct {
 	net           *network.Network
@@ -92,11 +96,7 @@ func p2wpkhScript(publicKey *secp256k1.PublicKey, net *network.Network) ([]byte,
 func getTxid(txStr string) (string, error) {
 	pset, err := psetv2.NewPsetFromBase64(txStr)
 	if err != nil {
-		tx, err := transaction.NewTxFromHex(txStr)
-		if err != nil {
-			return "", err
-		}
-		return tx.TxHash().String(), nil
+		return "", err
 	}
 
 	utx, err := pset.UnsignedTx()
@@ -108,8 +108,8 @@ func getTxid(txStr string) (string, error) {
 }
 
 // GetLifetime decodes the tree root input script to get the sweepLeaf sequence timeout
-func (b *txBuilder) GetLifetime(tree domain.CongestionTree) (int64, error) {
-	rootPset := tree.Root().Tx
+func (b *txBuilder) GetLifetime(congestionTree tree.CongestionTree) (uint, error) {
+	rootPset := congestionTree[0][0].Tx
 	pset, err := psetv2.NewPsetFromBase64(rootPset)
 	if err != nil {
 		return 0, err
@@ -118,14 +118,13 @@ func (b *txBuilder) GetLifetime(tree domain.CongestionTree) (int64, error) {
 	input := pset.Inputs[0]
 
 	for _, leaf := range input.TapLeafScript {
-		isSweep, sequence := decodeSweepScript(leaf.Script)
-		if isSweep {
-			lifetime, err := common.BIP68Decode(sequence)
-			if err != nil {
-				return 0, err
-			}
+		isSweep, _, lifetime, err := tree.DecodeSweepScript(leaf.Script)
+		if err != nil {
+			return 0, err
+		}
 
-			return int64(lifetime), nil
+		if isSweep {
+			return lifetime, nil
 		}
 	}
 
@@ -133,29 +132,11 @@ func (b *txBuilder) GetLifetime(tree domain.CongestionTree) (int64, error) {
 }
 
 func (b *txBuilder) GetLeafOutputScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error) {
-	unspendableKeyBytes, _ := hex.DecodeString(unspendablePoint)
-	unspendableKey, _ := secp256k1.ParsePubKey(unspendableKeyBytes)
-
-	sweepTaprootLeaf, err := sweepTapLeaf(aspPubkey, b.roundLifetime)
+	outputScript, _, err := b.getLeafTaprootTree(userPubkey, aspPubkey)
 	if err != nil {
 		return nil, err
 	}
-
-	leafScript, err := checksigScript(userPubkey)
-	if err != nil {
-		return nil, err
-	}
-
-	leafTaprootLeaf := taproot.NewBaseTapElementsLeaf(leafScript)
-	leafTaprootTree := taproot.AssembleTaprootScriptTree(leafTaprootLeaf, *sweepTaprootLeaf)
-	root := leafTaprootTree.RootNode.TapHash()
-
-	taprootKey := taproot.ComputeTaprootOutputKey(
-		unspendableKey,
-		root[:],
-	)
-
-	return taprootOutputScript(taprootKey)
+	return outputScript, nil
 }
 
 // BuildForfeitTxs implements ports.TxBuilder.
@@ -194,17 +175,46 @@ func (b *txBuilder) BuildForfeitTxs(
 		return nil, nil, err
 	}
 
+	lbtc, _ := elementsutil.AssetHashToBytes(b.net.AssetID)
+
 	forfeitTxs = make([]string, 0)
+
 	for _, payment := range payments {
 		for _, vtxo := range payment.Inputs {
+			vtxoAmount, err := elementsutil.ValueToBytes(vtxo.Amount)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			pubkeyBytes, err := hex.DecodeString(vtxo.Pubkey)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to decode pubkey: %s", err)
+			}
+
+			vtxoPubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			vtxoOutputScript, vtxoTaprootTree, err := b.getLeafTaprootTree(vtxoPubkey, aspPubkey)
+			if err != nil {
+				return nil, nil, err
+			}
+
 			for _, connector := range connectorsAsInputs {
 				forfeitTx, err := createForfeitTx(
-					connector,
+					connector.input,
+					connector.witnessUtxo,
 					psetv2.InputArgs{
 						Txid:    vtxo.Txid,
 						TxIndex: vtxo.VOut,
 					},
-					vtxo.Amount,
+					&transaction.TxOutput{
+						Asset:  lbtc,
+						Value:  vtxoAmount,
+						Script: vtxoOutputScript,
+					},
+					vtxoTaprootTree,
 					aspScript,
 					*b.net,
 				)
@@ -215,6 +225,7 @@ func (b *txBuilder) BuildForfeitTxs(
 				forfeitTxs = append(forfeitTxs, forfeitTx)
 			}
 		}
+
 	}
 
 	return connectors, forfeitTxs, nil
@@ -225,95 +236,264 @@ func (b *txBuilder) BuildPoolTx(
 	aspPubkey *secp256k1.PublicKey,
 	wallet ports.WalletService,
 	payments []domain.Payment,
-) (poolTx string, congestionTree domain.CongestionTree, err error) {
+	minRelayFee uint64,
+) (poolTx string, congestionTree tree.CongestionTree, err error) {
 	aspScriptBytes, err := p2wpkhScript(aspPubkey, b.net)
 	if err != nil {
-		return "", nil, err
+		return
 	}
 
-	aspScript := hex.EncodeToString(aspScriptBytes)
-
-	receivers := receiversFromPayments(payments)
-	sharedOutputAmount := sumReceivers(receivers)
-
+	offchainReceivers, onchainReceivers := receiversFromPayments(payments)
 	numberOfConnectors := numberOfVTXOs(payments)
 	connectorOutputAmount := connectorAmount * numberOfConnectors
 
 	ctx := context.Background()
 
-	makeTree, sharedOutputScript, err := buildCongestionTree(
+	makeTree, sharedOutputScript, sharedOutputAmount, err := buildCongestionTree(
 		b.net,
 		aspPubkey,
-		receivers,
+		offchainReceivers,
 		b.roundLifetime,
+		minRelayFee,
 	)
 	if err != nil {
-		return "", nil, err
+		return
 	}
 
-	sharedOutputScriptHex := hex.EncodeToString(sharedOutputScript)
+	outputs := []psetv2.OutputArgs{
+		{
+			Asset:  b.net.AssetID,
+			Amount: sharedOutputAmount,
+			Script: sharedOutputScript,
+		},
+		{
+			Asset:  b.net.AssetID,
+			Amount: connectorOutputAmount,
+			Script: aspScriptBytes,
+		},
+	}
 
-	poolTx, err = wallet.Transfer(ctx, []ports.TxOutput{
-		newOutput(sharedOutputScriptHex, sharedOutputAmount, b.net.AssetID),
-		newOutput(aspScript, connectorOutputAmount, b.net.AssetID),
-	})
+	targetAmount := sharedOutputAmount + connectorOutputAmount
+
+	for _, receiver := range onchainReceivers {
+		targetAmount += receiver.Amount
+
+		receiverScript, err := address.ToOutputScript(receiver.OnchainAddress)
+		if err != nil {
+			return "", nil, err
+		}
+
+		outputs = append(outputs, psetv2.OutputArgs{
+			Asset:  b.net.AssetID,
+			Amount: receiver.Amount,
+			Script: receiverScript,
+		})
+	}
+
+	utxos, change, err := wallet.SelectUtxos(ctx, b.net.AssetID, targetAmount)
 	if err != nil {
-		return "", nil, err
+		return
 	}
 
-	poolTransaction, err := transaction.NewTxFromHex(poolTx)
+	if change > 0 {
+		outputs = append(outputs, psetv2.OutputArgs{
+			Asset:  b.net.AssetID,
+			Amount: change,
+			Script: aspScriptBytes,
+		})
+	}
+
+	ptx, err := psetv2.New(toInputArgs(utxos), outputs, nil)
 	if err != nil {
+		return
+	}
+
+	updater, err := psetv2.NewUpdater(ptx)
+	if err != nil {
+		return
+	}
+
+	for i, utxo := range utxos {
+		witnessUtxo, err := toWitnessUtxo(utxo)
+		if err != nil {
+			return "", nil, err
+		}
+
+		if err := updater.AddInWitnessUtxo(i, witnessUtxo); err != nil {
+			return "", nil, err
+		}
+
+		if err := updater.AddInSighashType(i, txscript.SigHashAll); err != nil {
+			return "", nil, err
+		}
+	}
+
+	b64, err := ptx.ToBase64()
+	if err != nil {
+		return
+	}
+
+	feesAmount, err := wallet.EstimateFees(ctx, b64)
+	if err != nil {
+		return
+	}
+
+	if feesAmount == change {
+		// fees = change, remove change output
+		updater.Pset.Outputs = ptx.Outputs[:len(ptx.Outputs)-1]
+	} else if feesAmount < change {
+		// change covers the fees, reduce change amount
+		updater.Pset.Outputs[len(ptx.Outputs)-1].Value = change - feesAmount
+	} else {
+		// change is not enough to cover fees, re-select utxos
+		if change > 0 {
+			// remove change output if present
+			updater.Pset.Outputs = ptx.Outputs[:len(ptx.Outputs)-1]
+		}
+		newUtxos, newChange, err := wallet.SelectUtxos(ctx, b.net.AssetID, feesAmount-change)
+		if err != nil {
+			return "", nil, err
+		}
+
+		if err := updater.AddInputs(toInputArgs(newUtxos)); err != nil {
+			return "", nil, err
+		}
+
+		if newChange > 0 {
+			if err := updater.AddOutputs([]psetv2.OutputArgs{
+				{
+					Asset:  b.net.AssetID,
+					Amount: newChange,
+					Script: aspScriptBytes,
+				},
+			}); err != nil {
+				return "", nil, err
+			}
+		}
+
+		nbInputs := len(utxos)
+
+		for i, utxo := range newUtxos {
+
+			witnessUtxo, err := toWitnessUtxo(utxo)
+			if err != nil {
+				return "", nil, err
+			}
+
+			if err := updater.AddInWitnessUtxo(i+nbInputs, witnessUtxo); err != nil {
+				return "", nil, err
+			}
+
+			if err := updater.AddInSighashType(i+nbInputs, txscript.SigHashAll); err != nil {
+				return "", nil, err
+			}
+		}
+
+	}
+
+	// add fee output
+	if err := updater.AddOutputs([]psetv2.OutputArgs{
+		{
+			Asset:  b.net.AssetID,
+			Amount: feesAmount,
+		},
+	}); err != nil {
 		return "", nil, err
 	}
 
-	congestionTree, err = makeTree(psetv2.InputArgs{
-		Txid:    poolTransaction.TxHash().String(),
+	utx, err := ptx.UnsignedTx()
+	if err != nil {
+		return
+	}
+
+	tree, err := makeTree(psetv2.InputArgs{
+		Txid:    utx.TxHash().String(),
 		TxIndex: 0,
 	})
 	if err != nil {
-		return "", nil, err
+		return
 	}
 
-	return poolTx, congestionTree, nil
+	poolTx, err = ptx.ToBase64()
+	if err != nil {
+		return
+	}
+
+	congestionTree = tree
+	return
 }
 
-func connectorsToInputArgs(connectors []string) ([]psetv2.InputArgs, error) {
-	inputs := make([]psetv2.InputArgs, 0, len(connectors)+1)
+func (b *txBuilder) getLeafTaprootTree(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, *taproot.IndexedElementsTapScriptTree, error) {
+	sweepTaprootLeaf, err := tree.SweepScript(aspPubkey, b.roundLifetime)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	vtxoLeaf, err := tree.VtxoScript(userPubkey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	leafTaprootTree := taproot.AssembleTaprootScriptTree(*vtxoLeaf, *sweepTaprootLeaf)
+	root := leafTaprootTree.RootNode.TapHash()
+
+	unspendableKeyBytes, _ := hex.DecodeString(tree.UnspendablePoint)
+	unspendableKey, _ := secp256k1.ParsePubKey(unspendableKeyBytes)
+
+	taprootKey := taproot.ComputeTaprootOutputKey(
+		unspendableKey,
+		root[:],
+	)
+
+	outputScript, err := taprootOutputScript(taprootKey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return outputScript, leafTaprootTree, nil
+}
+
+type inputWithWitnessUtxo struct {
+	input       psetv2.InputArgs
+	witnessUtxo *transaction.TxOutput
+}
+
+func connectorsToInputArgs(connectors []string) ([]inputWithWitnessUtxo, error) {
+	inputs := make([]inputWithWitnessUtxo, 0, len(connectors)+1)
 	for i, psetb64 := range connectors {
-		txID, err := getTxID(psetb64)
+		pset, err := psetv2.NewPsetFromBase64(psetb64)
 		if err != nil {
 			return nil, err
 		}
+
+		utx, err := pset.UnsignedTx()
+		if err != nil {
+			return nil, err
+		}
+
+		txID := utx.TxHash().String()
 
 		input := psetv2.InputArgs{
 			Txid:    txID,
 			TxIndex: 0,
 		}
-		inputs = append(inputs, input)
+		inputs = append(inputs, inputWithWitnessUtxo{
+			input:       input,
+			witnessUtxo: utx.Outputs[0],
+		})
 
-		if i == len(connectors)-1 {
+		if i == len(connectors)-1 && len(utx.Outputs) > 1 {
 			input := psetv2.InputArgs{
 				Txid:    txID,
 				TxIndex: 1,
 			}
-			inputs = append(inputs, input)
+			inputs = append(inputs, inputWithWitnessUtxo{
+				input:       input,
+				witnessUtxo: utx.Outputs[1],
+			})
 		}
 	}
 	return inputs, nil
-}
-
-func getTxID(psetBase64 string) (string, error) {
-	pset, err := psetv2.NewPsetFromBase64(psetBase64)
-	if err != nil {
-		return "", err
-	}
-
-	utx, err := pset.UnsignedTx()
-	if err != nil {
-		return "", err
-	}
-
-	return utx.TxHash().String(), nil
 }
 
 func numberOfVTXOs(payments []domain.Payment) uint64 {
@@ -324,44 +504,56 @@ func numberOfVTXOs(payments []domain.Payment) uint64 {
 	return sum
 }
 
-func receiversFromPayments(payments []domain.Payment) []domain.Receiver {
-	receivers := make([]domain.Receiver, 0)
+func receiversFromPayments(
+	payments []domain.Payment,
+) (offchainReceivers, onchainReceivers []domain.Receiver) {
 	for _, payment := range payments {
-		receivers = append(receivers, payment.Receivers...)
+		for _, receiver := range payment.Receivers {
+			if receiver.IsOnchain() {
+				onchainReceivers = append(onchainReceivers, receiver)
+			} else {
+				offchainReceivers = append(offchainReceivers, receiver)
+			}
+		}
 	}
-	return receivers
+	return
 }
 
-func sumReceivers(receivers []domain.Receiver) uint64 {
-	var sum uint64
-	for _, r := range receivers {
-		sum += r.Amount
+func toInputArgs(
+	ins []ports.TxInput,
+) []psetv2.InputArgs {
+	inputs := make([]psetv2.InputArgs, 0, len(ins))
+	for _, in := range ins {
+		inputs = append(inputs, psetv2.InputArgs{
+			Txid:    in.GetTxid(),
+			TxIndex: in.GetIndex(),
+		})
 	}
-	return sum
+	return inputs
 }
 
-type output struct {
-	script string
-	amount uint64
-	asset  string
-}
-
-func newOutput(script string, amount uint64, asset string) ports.TxOutput {
-	return &output{
-		script: script,
-		amount: amount,
-		asset:  asset,
+func toWitnessUtxo(in ports.TxInput) (*transaction.TxOutput, error) {
+	valueBytes, err := elementsutil.ValueToBytes(in.GetValue())
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert value to bytes: %s", err)
 	}
-}
 
-func (o *output) GetAsset() string {
-	return o.asset
-}
+	assetBytes, err := elementsutil.AssetHashToBytes(in.GetAsset())
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert asset to bytes: %s", err)
+	}
 
-func (o *output) GetAmount() uint64 {
-	return o.amount
-}
+	scriptBytes, err := hex.DecodeString(in.GetScript())
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode script: %s", err)
+	}
 
-func (o *output) GetScript() string {
-	return o.script
+	return &transaction.TxOutput{
+		Asset:           assetBytes,
+		Value:           valueBytes,
+		Script:          scriptBytes,
+		Nonce:           emptyNonce,
+		RangeProof:      nil,
+		SurjectionProof: nil,
+	}, err
 }

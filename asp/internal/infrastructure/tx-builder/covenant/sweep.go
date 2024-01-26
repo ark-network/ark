@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/ports"
-	"github.com/sirupsen/logrus"
 	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/psetv2"
 )
@@ -29,23 +29,13 @@ func sweepTransaction(
 	amount := uint64(0)
 
 	for i, input := range sweepInputs {
-
 		for _, leaf := range input.Leaves {
-			if isSweep, sequence := decodeSweepScript(leaf.Script); isSweep {
-				var asNumber int64
-				for i := len(sequence) - 1; i >= 0; i-- {
-					asNumber = asNumber<<8 | int64(sequence[i])
-				}
+			isSweep, _, lifetime, err := tree.DecodeSweepScript(leaf.Script)
+			if err != nil {
+				return nil, err
+			}
 
-				lifetime, err := common.BIP68Decode(sequence)
-				if err != nil {
-					return nil, err
-				}
-
-				logrus.Debug("lifetime: ", lifetime)
-
-				logrus.Debug("sequence: ", asNumber)
-
+			if isSweep {
 				if err := updater.AddInputs([]psetv2.InputArgs{input.InputArgs}); err != nil {
 					return nil, err
 				}
@@ -54,7 +44,12 @@ func sweepTransaction(
 					return nil, err
 				}
 
-				updater.Pset.Inputs[i].Sequence = uint32(asNumber)
+				sequence, err := common.BIP68EncodeAsNumber(lifetime)
+				if err != nil {
+					return nil, err
+				}
+
+				updater.Pset.Inputs[i].Sequence = sequence
 				break
 			}
 		}
@@ -67,11 +62,11 @@ func sweepTransaction(
 		return nil, err
 	}
 
-	if amount-fees < 0 {
-		return nil, fmt.Errorf("insufficient funds")
+	if amount < fees {
+		return nil, fmt.Errorf("insufficient funds to cover fees for sweep transaction")
 	}
 
-	updater.AddOutputs([]psetv2.OutputArgs{
+	if err := updater.AddOutputs([]psetv2.OutputArgs{
 		{
 			Asset:  lbtc,
 			Amount: amount - fees,
@@ -81,7 +76,9 @@ func sweepTransaction(
 			Asset:  lbtc,
 			Amount: fees,
 		},
-	})
+	}); err != nil {
+		return nil, err
+	}
 
 	return sweepPset, nil
 }

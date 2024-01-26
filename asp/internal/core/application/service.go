@@ -10,6 +10,7 @@ import (
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	log "github.com/sirupsen/logrus"
 	"github.com/vulpemventures/go-elements/network"
@@ -40,6 +41,7 @@ type Service interface {
 }
 
 type service struct {
+	minRelayFee   uint64
 	roundInterval int64
 	network       common.Network
 	onchainNework network.Network
@@ -52,23 +54,36 @@ type service struct {
 	forfeitTxs      *forfeitTxsMap
 
 	eventsCh chan domain.RoundEvent
+
+	sweeper *sweeper
 }
 
 func NewService(
 	interval int64, network common.Network, onchainNetwork network.Network,
 	walletSvc ports.WalletService, repoManager ports.RepoManager, builder ports.TxBuilder,
+	minRelayFee uint64,
 ) (Service, error) {
 	eventsCh := make(chan domain.RoundEvent)
 	paymentRequests := newPaymentsMap(nil)
-	forfeitTxs := newForfeitTxsMap()
+
+	genesisHash, _ := chainhash.NewHashFromStr(onchainNetwork.GenesisBlockHash)
+	forfeitTxs := newForfeitTxsMap(genesisHash)
 	pubkey, err := walletSvc.GetPubkey(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch pubkey: %s", err)
 	}
+
+	sweeperSvc := newSweeper(
+		walletSvc,
+		repoManager,
+		builder,
+	)
+
 	svc := &service{
-		interval, network, onchainNetwork, pubkey,
+		minRelayFee, interval, network, onchainNetwork, pubkey,
 		walletSvc, repoManager, builder, paymentRequests, forfeitTxs,
 		eventsCh,
+		sweeperSvc,
 	}
 	repoManager.RegisterEventsHandler(
 		func(round *domain.Round) {
@@ -80,8 +95,17 @@ func NewService(
 }
 
 func (s *service) Start() error {
+	log.Debug("starting sweeper service")
+	if err := s.sweeper.Start(); err != nil {
+		return err
+	}
+
 	log.Debug("starting app service")
-	return s.start()
+	if err := s.start(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *service) Stop() {
@@ -167,10 +191,7 @@ func (s *service) FaucetVtxos(ctx context.Context, userPubkey *secp256k1.PublicK
 }
 
 func (s *service) SignVtxos(ctx context.Context, forfeitTxs []string) error {
-	if err := s.forfeitTxs.sign(forfeitTxs); err != nil {
-		return fmt.Errorf("invalid forfeit tx: %s", err)
-	}
-	return nil
+	return s.forfeitTxs.sign(forfeitTxs)
 }
 
 func (s *service) ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, error) {
@@ -225,7 +246,14 @@ func (s *service) startFinalization() {
 		return
 	}
 
+	var changes []domain.RoundEvent
 	defer func() {
+		if len(changes) > 0 {
+			if err := s.repoManager.Events().Save(ctx, round.Id, changes...); err != nil {
+				log.WithError(err).Warn("failed to store new round events")
+			}
+		}
+
 		if round.IsFailed() {
 			s.startRound()
 			return
@@ -237,14 +265,6 @@ func (s *service) startFinalization() {
 	if round.IsFailed() {
 		return
 	}
-
-	var changes []domain.RoundEvent
-	defer func() {
-		if err := s.repoManager.Events().Save(ctx, round.Id, changes...); err != nil {
-			log.WithError(err).Warn("failed to store new round events")
-			return
-		}
-	}()
 
 	// TODO: understand how many payments must be popped from the queue and actually registered for the round
 	num := s.paymentRequests.len()
@@ -265,21 +285,30 @@ func (s *service) startFinalization() {
 		return
 	}
 
-	signedPoolTx, tree, err := s.builder.BuildPoolTx(s.pubkey, s.wallet, payments)
+	unsignedPoolTx, tree, err := s.builder.BuildPoolTx(s.pubkey, s.wallet, payments, s.minRelayFee)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
 		log.WithError(err).Warn("failed to create pool tx")
 		return
 	}
 
-	connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(s.pubkey, signedPoolTx, payments)
+	log.Debugf("pool tx created for round %s", round.Id)
+
+	connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(s.pubkey, unsignedPoolTx, payments)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
 		log.WithError(err).Warn("failed to create connectors and forfeit txs")
 		return
 	}
 
-	events, _ := round.StartFinalization(connectors, tree, signedPoolTx)
+	log.Debugf("forfeit transactions created for round %s", round.Id)
+
+	events, err := round.StartFinalization(connectors, tree, unsignedPoolTx)
+	if err != nil {
+		changes = round.Fail(fmt.Errorf("failed to start finalization: %s", err))
+		log.WithError(err).Warn("failed to start finalization")
+		return
+	}
 	changes = append(changes, events...)
 
 	s.forfeitTxs.push(forfeitTxs)
@@ -316,7 +345,15 @@ func (s *service) finalizeRound() {
 		return
 	}
 
-	txid, err := s.wallet.BroadcastTransaction(ctx, round.TxHex)
+	log.Debugf("signing round transaction %s\n", round.Id)
+	signedPoolTx, err := s.wallet.SignPset(ctx, round.UnsignedTx, true)
+	if err != nil {
+		changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
+		log.WithError(err).Warn("failed to sign round tx")
+		return
+	}
+
+	txid, err := s.wallet.BroadcastTransaction(ctx, signedPoolTx)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to broadcast pool tx: %s", err))
 		log.WithError(err).Warn("failed to broadcast pool tx")
@@ -332,8 +369,9 @@ func (s *service) finalizeRound() {
 		return
 	}
 
-	changes, _ = round.EndFinalization(forfeitTxs, txid, now+lifetime)
-	log.Debugf("finalized round %s with pool tx %s (expire %d)", round.Id, round.Txid, round.ExpirationTimestamp)
+	changes, _ = round.EndFinalization(forfeitTxs, txid, now+int64(lifetime))
+
+	log.Debugf("finalized round %s with pool tx %s", round.Id, round.Txid)
 }
 
 func (s *service) updateProjectionStore(round *domain.Round) {
@@ -404,9 +442,18 @@ func (s *service) getNewVtxos(round *domain.Round) []domain.Vtxo {
 				var pubkey string
 				found := false
 				for _, r := range p.Receivers {
+					if r.IsOnchain() {
+						continue
+					}
+
 					buf, _ := hex.DecodeString(r.Pubkey)
 					pk, _ := secp256k1.ParsePubKey(buf)
-					script, _ := s.builder.GetLeafOutputScript(pk, s.pubkey)
+					script, err := s.builder.GetLeafOutputScript(pk, s.pubkey)
+					if err != nil {
+						log.WithError(err).Warn("failed to get leaf output script")
+						continue
+					}
+
 					if bytes.Equal(script, out.Script) {
 						found = true
 						pubkey = r.Pubkey
@@ -417,6 +464,7 @@ func (s *service) getNewVtxos(round *domain.Round) []domain.Vtxo {
 					vtxos = append(vtxos, domain.Vtxo{
 						VtxoKey:  domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
 						Receiver: domain.Receiver{Pubkey: pubkey, Amount: out.Value},
+						PoolTx:   round.Txid,
 					})
 					break
 				}

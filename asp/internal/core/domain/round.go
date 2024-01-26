@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ark-network/ark/common/tree"
 	"github.com/google/uuid"
 )
 
@@ -32,22 +33,29 @@ type Stage struct {
 	Failed bool
 }
 
-type Round struct {
-	Id                  string
-	StartingTimestamp   int64
-	EndingTimestamp     int64
-	Stage               Stage
-	Payments            map[string]Payment
+type SharedOutput struct {
 	Txid                string
-	TxHex               string
-	ForfeitTxs          []string
-	CongestionTree      CongestionTree
-	Connectors          []string
-	DustAmount          uint64
-	Version             uint
-	changes             []RoundEvent
+	Index               uint32
 	ExpirationTimestamp int64
 	SweepTxid           string
+	Spent               bool
+}
+
+type Round struct {
+	Id                string
+	StartingTimestamp int64
+	EndingTimestamp   int64
+	Stage             Stage
+	Payments          map[string]Payment
+	Txid              string
+	UnsignedTx        string
+	ForfeitTxs        []string
+	CongestionTree    tree.CongestionTree
+	Connectors        []string
+	DustAmount        uint64
+	Version           uint
+	changes           []RoundEvent
+	SharedOutputs     []SharedOutput
 }
 
 func NewRound(dustAmount uint64) *Round {
@@ -85,13 +93,20 @@ func (r *Round) On(event RoundEvent, replayed bool) {
 		r.Stage.Code = FinalizationStage
 		r.CongestionTree = e.CongestionTree
 		r.Connectors = append([]string{}, e.Connectors...)
-		r.TxHex = e.PoolTx
+		r.UnsignedTx = e.PoolTx
 	case RoundFinalized:
 		r.Stage.Ended = true
 		r.Txid = e.Txid
 		r.ForfeitTxs = append([]string{}, e.ForfeitTxs...)
 		r.EndingTimestamp = e.Timestamp
-		r.ExpirationTimestamp = e.ExpirationTimestamp
+		r.SharedOutputs = []SharedOutput{
+			{
+				Txid:                e.Txid,
+				Index:               0,
+				ExpirationTimestamp: e.ExpirationTimestamp,
+				SweepTxid:           "",
+			},
+		}
 	case RoundFailed:
 		r.Stage.Failed = true
 		r.EndingTimestamp = e.Timestamp
@@ -102,8 +117,13 @@ func (r *Round) On(event RoundEvent, replayed bool) {
 		for _, p := range e.Payments {
 			r.Payments[p.Id] = p
 		}
-	case RoundSwept:
-		r.SweepTxid = e.Txid
+	case SharedOutputSwept:
+		for i, sharedOutput := range r.SharedOutputs {
+			if sharedOutput.Txid == e.SharedOutputTxid && sharedOutput.Index == e.SharedOutputIndex {
+				r.SharedOutputs[i].SweepTxid = e.SweepTxid
+				break
+			}
+		}
 	}
 
 	if replayed {
@@ -148,11 +168,11 @@ func (r *Round) RegisterPayments(payments []Payment) ([]RoundEvent, error) {
 	return []RoundEvent{event}, nil
 }
 
-func (r *Round) StartFinalization(connectors []string, tree CongestionTree, poolTx string) ([]RoundEvent, error) {
+func (r *Round) StartFinalization(connectors []string, congestionTree tree.CongestionTree, poolTx string) ([]RoundEvent, error) {
 	if len(connectors) <= 0 {
 		return nil, fmt.Errorf("missing list of connectors")
 	}
-	if len(tree) <= 0 {
+	if len(congestionTree) <= 0 {
 		return nil, fmt.Errorf("missing congestion tree")
 	}
 	if len(poolTx) <= 0 {
@@ -167,7 +187,7 @@ func (r *Round) StartFinalization(connectors []string, tree CongestionTree, pool
 
 	event := RoundFinalizationStarted{
 		Id:             r.Id,
-		CongestionTree: tree,
+		CongestionTree: congestionTree,
 		Connectors:     connectors,
 		PoolTx:         poolTx,
 	}
@@ -201,16 +221,18 @@ func (r *Round) EndFinalization(forfeitTxs []string, txid string, expirationTime
 	return []RoundEvent{event}, nil
 }
 
-func (r *Round) Sweep(txid string) ([]RoundEvent, error) {
+func (r *Round) Sweep(sharedOutputTxid string, sharedOutputIndex uint32, txid string) ([]RoundEvent, error) {
 	if len(txid) <= 0 {
 		return nil, fmt.Errorf("missing sweep txid")
 	}
 	if r.IsFailed() || !r.IsEnded() {
 		return nil, fmt.Errorf("not in a valid stage to sweep")
 	}
-	event := RoundSwept{
-		Id:   r.Id,
-		Txid: txid,
+	event := SharedOutputSwept{
+		Id:                r.Id,
+		SweepTxid:         txid,
+		SharedOutputTxid:  sharedOutputTxid,
+		SharedOutputIndex: sharedOutputIndex,
 	}
 	r.raise(event)
 

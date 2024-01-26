@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/ark-network/ark/internal/infrastructure/db"
@@ -21,7 +22,7 @@ const (
 	pubkey   = "0300000000000000000000000000000000000000000000000000000000000000001"
 )
 
-var congestionTree = [][]domain.Node{
+var congestionTree = [][]tree.Node{
 	{
 		{
 			Txid:       txid,
@@ -376,7 +377,7 @@ func roundsMatch(expected, got domain.Round) assert.Comparison {
 		if expected.Txid != got.Txid {
 			return false
 		}
-		if expected.TxHex != got.TxHex {
+		if expected.UnsignedTx != got.UnsignedTx {
 			return false
 		}
 		if !reflect.DeepEqual(expected.ForfeitTxs, got.ForfeitTxs) {

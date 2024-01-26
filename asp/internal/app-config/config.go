@@ -9,7 +9,6 @@ import (
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/ark-network/ark/internal/infrastructure/db"
 	oceanwallet "github.com/ark-network/ark/internal/infrastructure/ocean-wallet"
-	"github.com/ark-network/ark/internal/infrastructure/sweeper/covenant"
 	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenant"
 	txbuilderdummy "github.com/ark-network/ark/internal/infrastructure/tx-builder/dummy"
 	log "github.com/sirupsen/logrus"
@@ -38,12 +37,12 @@ type Config struct {
 	TxBuilderType string
 	WalletAddr    string
 	RoundLifetime uint
+	MinRelayFee   uint64
 
 	repo      ports.RepoManager
 	svc       application.Service
 	wallet    ports.WalletService
 	txBuilder ports.TxBuilder
-	sweeper   ports.SweeperService
 }
 
 func (c *Config) Validate() error {
@@ -65,6 +64,9 @@ func (c *Config) Validate() error {
 	if len(c.WalletAddr) <= 0 {
 		return fmt.Errorf("missing onchain wallet address")
 	}
+	if c.MinRelayFee < 30 {
+		return fmt.Errorf("invalid min relay fee, must be at least 30 sats")
+	}
 	if err := c.repoManager(); err != nil {
 		return err
 	}
@@ -75,9 +77,6 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.appService(); err != nil {
-		return err
-	}
-	if err := c.sweeperService(); err != nil {
 		return err
 	}
 	// round life time must be a multiple of 512
@@ -103,14 +102,6 @@ func (c *Config) Validate() error {
 
 func (c *Config) AppService() application.Service {
 	return c.svc
-}
-
-func (c *Config) SweeperEnabled() bool {
-	return c.sweeper != nil
-}
-
-func (c *Config) SweeperService() ports.SweeperService {
-	return c.sweeper
 }
 
 func (c *Config) repoManager() error {
@@ -169,37 +160,10 @@ func (c *Config) txBuilderService() error {
 	return nil
 }
 
-func (c *Config) sweeperService() error {
-	var svc ports.SweeperService
-	var err error
-	switch c.TxBuilderType {
-	case "covenant":
-		svc = covenant.NewSweeper(
-			c.wallet,
-			c.repo,
-			c.txBuilder,
-			func(err error) {
-				log.Println(err.Error())
-			},
-			func(msg string) {
-				log.Debug(msg)
-			})
-
-	default:
-		return fmt.Errorf("unknown sweeper type")
-	}
-	if err != nil {
-		return err
-	}
-
-	c.sweeper = svc
-	return nil
-}
-
 func (c *Config) appService() error {
 	net := c.mainChain()
 	svc, err := application.NewService(
-		c.RoundInterval, c.Network, net, c.wallet, c.repo, c.txBuilder,
+		c.RoundInterval, c.Network, net, c.wallet, c.repo, c.txBuilder, c.MinRelayFee,
 	)
 	if err != nil {
 		return err

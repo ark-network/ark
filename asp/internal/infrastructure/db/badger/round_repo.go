@@ -96,17 +96,44 @@ func (r *roundRepository) GetRoundWithTxid(
 	return round, nil
 }
 
-func (r *roundRepository) GetExpiredRounds(
+func (r *roundRepository) GetExpiredOutputs(
 	ctx context.Context,
-) ([]domain.Round, error) {
+) ([]domain.ExpiredRound, error) {
 	nowTimestamp := time.Now().Unix()
-	query := badgerhold.Where("Stage.Ended").Eq(true).And("Stage.Failed").Eq(false).And("SweepTxid").Eq("").And("ExpirationTimestamp").Lt(nowTimestamp)
+	query := badgerhold.Where("Stage.Ended").Eq(true).And("Stage.Failed").Eq(false).And("SharedOutputs").MatchFunc(func(val *badgerhold.RecordAccess) (bool, error) {
+		sharedOutputs, ok := val.Field().([]domain.SharedOutput)
+		if !ok {
+			return false, fmt.Errorf("invalid shared outputs")
+		}
+
+		for _, sharedOutput := range sharedOutputs {
+			if !sharedOutput.Spent && len(sharedOutput.SweepTxid) == 0 && sharedOutput.ExpirationTimestamp < nowTimestamp {
+				return true, nil
+			}
+		}
+		return false, nil
+	})
 	rounds, err := r.findRound(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 
-	return rounds, nil
+	expiredRounds := make([]domain.ExpiredRound, 0, len(rounds))
+
+	for _, round := range rounds {
+		indexes := make([]int, 0, len(round.SharedOutputs))
+		for i, sharedOutput := range round.SharedOutputs {
+			if len(sharedOutput.SweepTxid) == 0 && sharedOutput.ExpirationTimestamp <= nowTimestamp {
+				indexes = append(indexes, i)
+			}
+		}
+		expiredRounds = append(expiredRounds, domain.ExpiredRound{
+			Round:          round,
+			ExpiredOutputs: indexes,
+		})
+	}
+
+	return expiredRounds, nil
 }
 
 func (r *roundRepository) Close() {

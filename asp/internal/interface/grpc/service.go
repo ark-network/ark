@@ -48,15 +48,6 @@ func (s *service) Start() error {
 	go s.server.Serve(s.config.listener())
 	log.Infof("started listening at %s", s.config.address())
 
-	if s.appConfig.SweeperEnabled() {
-		if err := s.appConfig.SweeperService().Start(); err != nil {
-			return fmt.Errorf("failed to start sweeper service: %s", err)
-		}
-		log.Info("started sweeper service")
-	} else {
-		log.Info("sweeper service disabled")
-	}
-
 	if err := s.appConfig.AppService().Start(); err != nil {
 		return fmt.Errorf("failed to start app service: %s", err)
 	}

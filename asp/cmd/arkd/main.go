@@ -39,6 +39,7 @@ func main() {
 		TxBuilderType: cfg.TxBuilderType,
 		WalletAddr:    cfg.WalletAddr,
 		RoundLifetime: cfg.RoundLifetime,
+		MinRelayFee:   cfg.MinRelayFee,
 	}
 	svc, err := grpcservice.NewService(svcConfig, appConfig)
 	if err != nil {

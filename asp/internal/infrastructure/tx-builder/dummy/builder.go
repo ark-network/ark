@@ -2,8 +2,8 @@ package txbuilder
 
 import (
 	"context"
-	"encoding/hex"
 
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -33,7 +33,7 @@ func (*txBuilder) BuildSweepTx(wallet ports.WalletService, inputs []ports.SweepI
 }
 
 // GetLifetime always returns 7days for dummy tx builder (no timeout to sweep)
-func (*txBuilder) GetLifetime(_ domain.CongestionTree) (int64, error) {
+func (*txBuilder) GetLifetime(_ tree.CongestionTree) (uint, error) {
 	return sevenDays, nil
 }
 
@@ -102,41 +102,88 @@ func (b *txBuilder) BuildForfeitTxs(
 // BuildPoolTx implements ports.TxBuilder.
 func (b *txBuilder) BuildPoolTx(
 	aspPubkey *secp256k1.PublicKey, wallet ports.WalletService, payments []domain.Payment,
-) (poolTx string, congestionTree domain.CongestionTree, err error) {
+	minRelayFee uint64,
+) (poolTx string, congestionTree tree.CongestionTree, err error) {
 	aspScriptBytes, err := p2wpkhScript(aspPubkey, b.net)
 	if err != nil {
 		return "", nil, err
 	}
 
-	aspScript := hex.EncodeToString(aspScriptBytes)
-
-	receivers := receiversFromPayments(payments)
-	sharedOutputAmount := sumReceivers(receivers)
+	offchainReceivers, onchainReceivers := receiversFromPayments(payments)
+	sharedOutputAmount := sumReceivers(offchainReceivers)
 
 	numberOfConnectors := numberOfVTXOs(payments)
 	connectorOutputAmount := connectorAmount * numberOfConnectors
 
 	ctx := context.Background()
 
-	poolTx, err = wallet.Transfer(ctx, []ports.TxOutput{
-		newOutput(aspScript, sharedOutputAmount, b.net.AssetID),
-		newOutput(aspScript, connectorOutputAmount, b.net.AssetID),
-	})
-	if err != nil {
-		return "", nil, err
+	outputs := []psetv2.OutputArgs{
+		{
+			Asset:  b.net.AssetID,
+			Amount: sharedOutputAmount,
+			Script: aspScriptBytes,
+		},
+		{
+			Asset:  b.net.AssetID,
+			Amount: connectorOutputAmount,
+			Script: aspScriptBytes,
+		},
 	}
 
-	poolTxID, err := getTxid(poolTx)
+	amountToSelect := sharedOutputAmount + connectorOutputAmount
+
+	for _, receiver := range onchainReceivers {
+		amountToSelect += receiver.Amount
+
+		receiverScript, err := address.ToOutputScript(receiver.OnchainAddress)
+		if err != nil {
+			return "", nil, err
+		}
+
+		outputs = append(outputs, psetv2.OutputArgs{
+			Asset:  b.net.AssetID,
+			Amount: receiver.Amount,
+			Script: receiverScript,
+		})
+	}
+
+	utxos, change, err := wallet.SelectUtxos(ctx, b.net.AssetID, amountToSelect)
 	if err != nil {
-		return "", nil, err
+		return
+	}
+
+	if change > 0 {
+		outputs = append(outputs, psetv2.OutputArgs{
+			Asset:  b.net.AssetID,
+			Amount: change,
+			Script: aspScriptBytes,
+		})
+	}
+
+	ptx, err := psetv2.New(toInputArgs(utxos), outputs, nil)
+	if err != nil {
+		return
+	}
+
+	utx, err := ptx.UnsignedTx()
+	if err != nil {
+		return
 	}
 
 	congestionTree, err = buildCongestionTree(
 		newOutputScriptFactory(aspPubkey, b.net),
 		b.net,
-		poolTxID,
-		receivers,
+		utx.TxHash().String(),
+		offchainReceivers,
 	)
+	if err != nil {
+		return
+	}
+
+	poolTx, err = ptx.ToBase64()
+	if err != nil {
+		return
+	}
 
 	return poolTx, congestionTree, err
 }
@@ -198,12 +245,19 @@ func numberOfVTXOs(payments []domain.Payment) uint64 {
 	return sum
 }
 
-func receiversFromPayments(payments []domain.Payment) []domain.Receiver {
-	receivers := make([]domain.Receiver, 0)
+func receiversFromPayments(
+	payments []domain.Payment,
+) (offchainReceivers, onchainReceivers []domain.Receiver) {
 	for _, payment := range payments {
-		receivers = append(receivers, payment.Receivers...)
+		for _, receiver := range payment.Receivers {
+			if receiver.IsOnchain() {
+				onchainReceivers = append(onchainReceivers, receiver)
+			} else {
+				offchainReceivers = append(offchainReceivers, receiver)
+			}
+		}
 	}
-	return receivers
+	return
 }
 
 func sumReceivers(receivers []domain.Receiver) uint64 {
@@ -214,28 +268,15 @@ func sumReceivers(receivers []domain.Receiver) uint64 {
 	return sum
 }
 
-type output struct {
-	script string
-	amount uint64
-	asset  string
-}
-
-func newOutput(script string, amount uint64, asset string) ports.TxOutput {
-	return &output{
-		script: script,
-		amount: amount,
-		asset:  asset,
+func toInputArgs(
+	ins []ports.TxInput,
+) []psetv2.InputArgs {
+	inputs := make([]psetv2.InputArgs, 0, len(ins))
+	for _, in := range ins {
+		inputs = append(inputs, psetv2.InputArgs{
+			Txid:    in.GetTxid(),
+			TxIndex: in.GetIndex(),
+		})
 	}
-}
-
-func (o *output) GetAmount() uint64 {
-	return o.amount
-}
-
-func (o *output) GetAsset() string {
-	return o.asset
-}
-
-func (o *output) GetScript() string {
-	return o.script
+	return inputs
 }

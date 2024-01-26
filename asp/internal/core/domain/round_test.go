@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/stretchr/testify/require"
 )
@@ -12,20 +13,67 @@ var (
 	dustAmount = uint64(450)
 	payments   = []domain.Payment{
 		{
-			Id:        "0",
-			Inputs:    []domain.Vtxo{{}},
-			Receivers: []domain.Receiver{{}, {}, {}},
+			Id: "0",
+			Inputs: []domain.Vtxo{{
+				VtxoKey: domain.VtxoKey{
+					Txid: txid,
+					VOut: 0,
+				},
+				Receiver: domain.Receiver{
+					Pubkey: pubkey,
+					Amount: 2000,
+				},
+			}},
+			Receivers: []domain.Receiver{
+				{
+					Pubkey: pubkey,
+					Amount: 700,
+				},
+				{
+					Pubkey: pubkey,
+					Amount: 700,
+				},
+				{
+					Pubkey: pubkey,
+					Amount: 600,
+				},
+			},
 		},
 		{
-			Id:        "1",
-			Inputs:    []domain.Vtxo{{}, {}},
-			Receivers: []domain.Receiver{{}},
+			Id: "1",
+			Inputs: []domain.Vtxo{
+				{
+					VtxoKey: domain.VtxoKey{
+						Txid: txid,
+						VOut: 0,
+					},
+					Receiver: domain.Receiver{
+						Pubkey: pubkey,
+						Amount: 1000,
+					},
+				},
+				{
+					VtxoKey: domain.VtxoKey{
+						Txid: txid,
+						VOut: 0,
+					},
+					Receiver: domain.Receiver{
+						Pubkey: pubkey,
+						Amount: 1000,
+					},
+				},
+			},
+			Receivers: []domain.Receiver{{
+				Pubkey: pubkey,
+				Amount: 2000,
+			}},
 		},
 	}
 	emptyPtx       = "cHNldP8BAgQCAAAAAQQBAAEFAQABBgEDAfsEAgAAAAA="
 	emptyTx        = "0200000000000000000000"
 	txid           = "0000000000000000000000000000000000000000000000000000000000000000"
-	congestionTree = domain.CongestionTree{
+	pubkey         = "030000000000000000000000000000000000000000000000000000000000000001"
+	congestionTree = tree.CongestionTree{
 		{
 			{
 				Txid:       txid,
@@ -271,7 +319,7 @@ func testStartFinalization(t *testing.T) {
 			fixtures := []struct {
 				round       *domain.Round
 				connectors  []string
-				tree        domain.CongestionTree
+				tree        tree.CongestionTree
 				poolTx      string
 				expectedErr string
 			}{
@@ -407,16 +455,16 @@ func testEndFinalization(t *testing.T) {
 			require.Exactly(t, txid, event.Txid)
 			require.Exactly(t, forfeitTxs, event.ForfeitTxs)
 			require.Exactly(t, round.EndingTimestamp, event.Timestamp)
-			require.Exactly(t, round.ExpirationTimestamp, event.ExpirationTimestamp)
+			require.Exactly(t, round.SharedOutputs[0].ExpirationTimestamp, event.ExpirationTimestamp)
 
-			events, err = round.Sweep(txid)
+			events, err = round.Sweep(round.Txid, 0, txid)
 			require.NoError(t, err)
 
-			eventSwept, ok := events[0].(domain.RoundSwept)
+			eventSwept, ok := events[0].(domain.SharedOutputSwept)
 			require.True(t, ok)
 			require.Equal(t, round.Id, eventSwept.Id)
-			require.Equal(t, txid, eventSwept.Txid)
-			require.Equal(t, round.SweepTxid, eventSwept.Txid)
+			require.Equal(t, txid, eventSwept.SweepTxid)
+			require.Equal(t, round.SharedOutputs[0].SweepTxid, eventSwept.SweepTxid)
 		})
 
 		t.Run("invalid", func(t *testing.T) {

@@ -22,6 +22,7 @@ type Config struct {
 	Network       common.Network
 	LogLevel      int
 	RoundLifetime uint
+	MinRelayFee   uint64
 }
 
 var (
@@ -36,6 +37,7 @@ var (
 	LogLevel      = "LOG_LEVEL"
 	Network       = "NETWORK"
 	RoundLifetime = "ROUND_LIFETIME"
+	MinRelayFee   = "MIN_RELAY_FEE"
 
 	defaultDatadir       = common.AppDataDir("arkd", false)
 	defaultRoundInterval = 60
@@ -47,6 +49,7 @@ var (
 	defaultNetwork       = "testnet"
 	defaultLogLevel      = 5
 	defaultRoundLifetime = (60 * 60 * 24 * 14) - 256 // ~2 weeks in seconds (modulus 512 for sequence)
+	defaultMinRelayFee   = 30
 )
 
 func LoadConfig() (*Config, error) {
@@ -63,6 +66,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(LogLevel, defaultLogLevel)
 	viper.SetDefault(Network, defaultNetwork)
 	viper.SetDefault(RoundLifetime, defaultRoundLifetime)
+	viper.SetDefault(MinRelayFee, defaultMinRelayFee)
 
 	net, err := getNetwork()
 	if err != nil {
@@ -85,6 +89,7 @@ func LoadConfig() (*Config, error) {
 		LogLevel:      viper.GetInt(LogLevel),
 		Network:       net,
 		RoundLifetime: viper.GetUint(RoundLifetime),
+		MinRelayFee:   viper.GetUint64(MinRelayFee),
 	}, nil
 }
 

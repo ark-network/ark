@@ -17,10 +17,12 @@ func (s *service) DeriveAddresses(
 	if err != nil {
 		return nil, err
 	}
-	// By default, ocean generates confidential addresses. Since we're going to
-	// create unconfidential txs only, let's return unconf addresses.
 	addresses := make([]string, 0, numOfAddresses)
 	for _, addr := range res.GetAddresses() {
+		if isConf, _ := address.IsConfidential(addr); !isConf {
+			addresses = append(addresses, addr)
+			continue
+		}
 		info, _ := address.FromConfidential(addr)
 		addresses = append(addresses, info.Address)
 	}

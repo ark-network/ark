@@ -16,12 +16,12 @@ var faucetCommand = cli.Command{
 }
 
 func faucetAction(ctx *cli.Context) error {
-	addr, err := getAddress()
+	addr, _, err := getAddress()
 	if err != nil {
 		return err
 	}
 
-	client, close, err := getArkClient(ctx)
+	client, close, err := getClientFromState(ctx)
 	if err != nil {
 		return err
 	}
@@ -62,7 +62,7 @@ func faucetAction(ctx *cli.Context) error {
 
 		if event.GetRoundFinalized() != nil {
 			return printJSON(map[string]interface{}{
-				"poolTxId": event.GetRoundFinalized().GetPoolTxid(),
+				"pool_txid": event.GetRoundFinalized().GetPoolTxid(),
 			})
 		}
 	}

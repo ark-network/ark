@@ -1,5 +1,7 @@
 package domain
 
+import "github.com/ark-network/ark/common/tree"
+
 type RoundEvent interface {
 	isEvent()
 }
@@ -9,7 +11,7 @@ func (r RoundFinalizationStarted) isEvent() {}
 func (r RoundFinalized) isEvent()           {}
 func (r RoundFailed) isEvent()              {}
 func (r PaymentsRegistered) isEvent()       {}
-func (r RoundSwept) isEvent()               {}
+func (r SharedOutputSwept) isEvent()        {}
 
 type RoundStarted struct {
 	Id        string
@@ -18,7 +20,7 @@ type RoundStarted struct {
 
 type RoundFinalizationStarted struct {
 	Id                 string
-	CongestionTree     CongestionTree
+	CongestionTree     tree.CongestionTree
 	Connectors         []string
 	UnsignedForfeitTxs []string
 	PoolTx             string
@@ -43,7 +45,9 @@ type PaymentsRegistered struct {
 	Payments []Payment
 }
 
-type RoundSwept struct {
-	Id   string
-	Txid string
+type SharedOutputSwept struct {
+	Id                string
+	SharedOutputTxid  string
+	SharedOutputIndex uint32
+	SweepTxid         string
 }
