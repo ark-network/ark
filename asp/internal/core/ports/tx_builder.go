@@ -22,7 +22,6 @@ type TxBuilder interface {
 		aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment,
 	) (connectors []string, forfeitTxs []string, err error)
 	GetLeafOutputScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error)
-	GetLifetime(congestionTree tree.CongestionTree) (uint, error)
 	BuildSweepTx(
 		wallet WalletService,
 		inputs []SweepInput,

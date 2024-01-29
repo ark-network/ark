@@ -163,7 +163,7 @@ func (c *Config) txBuilderService() error {
 func (c *Config) appService() error {
 	net := c.mainChain()
 	svc, err := application.NewService(
-		c.RoundInterval, c.Network, net, c.wallet, c.repo, c.txBuilder, c.MinRelayFee,
+		c.RoundInterval, c.Network, net, c.wallet, c.repo, c.txBuilder, c.MinRelayFee, int64(c.RoundLifetime),
 	)
 	if err != nil {
 		return err

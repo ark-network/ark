@@ -107,30 +107,6 @@ func getTxid(txStr string) (string, error) {
 	return utx.TxHash().String(), nil
 }
 
-// GetLifetime decodes the tree root input script to get the sweepLeaf sequence timeout
-func (b *txBuilder) GetLifetime(congestionTree tree.CongestionTree) (uint, error) {
-	rootPset := congestionTree[0][0].Tx
-	pset, err := psetv2.NewPsetFromBase64(rootPset)
-	if err != nil {
-		return 0, err
-	}
-
-	input := pset.Inputs[0]
-
-	for _, leaf := range input.TapLeafScript {
-		isSweep, _, lifetime, err := tree.DecodeSweepScript(leaf.Script)
-		if err != nil {
-			return 0, err
-		}
-
-		if isSweep {
-			return lifetime, nil
-		}
-	}
-
-	return 0, fmt.Errorf("no sweep script found")
-}
-
 func (b *txBuilder) GetLeafOutputScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error) {
 	outputScript, _, err := b.getLeafTaprootTree(userPubkey, aspPubkey)
 	if err != nil {

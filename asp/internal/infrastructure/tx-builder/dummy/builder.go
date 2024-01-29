@@ -32,11 +32,6 @@ func (*txBuilder) BuildSweepTx(wallet ports.WalletService, inputs []ports.SweepI
 	panic("unimplemented")
 }
 
-// GetLifetime always returns 7days for dummy tx builder (no timeout to sweep)
-func (*txBuilder) GetLifetime(_ tree.CongestionTree) (uint, error) {
-	return sevenDays, nil
-}
-
 // BuildForfeitTxs implements ports.TxBuilder.
 func (b *txBuilder) BuildForfeitTxs(
 	aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment,

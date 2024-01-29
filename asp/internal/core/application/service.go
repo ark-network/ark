@@ -43,6 +43,7 @@ type Service interface {
 type service struct {
 	minRelayFee   uint64
 	roundInterval int64
+	roundLifetime int64
 	network       common.Network
 	onchainNework network.Network
 	pubkey        *secp256k1.PublicKey
@@ -61,7 +62,7 @@ type service struct {
 func NewService(
 	interval int64, network common.Network, onchainNetwork network.Network,
 	walletSvc ports.WalletService, repoManager ports.RepoManager, builder ports.TxBuilder,
-	minRelayFee uint64,
+	minRelayFee uint64, roundLifetime int64,
 ) (Service, error) {
 	eventsCh := make(chan domain.RoundEvent)
 	paymentRequests := newPaymentsMap(nil)
@@ -80,7 +81,7 @@ func NewService(
 	)
 
 	svc := &service{
-		minRelayFee, interval, network, onchainNetwork, pubkey,
+		minRelayFee, interval, roundLifetime, network, onchainNetwork, pubkey,
 		walletSvc, repoManager, builder, paymentRequests, forfeitTxs,
 		eventsCh,
 		sweeperSvc,
@@ -362,14 +363,7 @@ func (s *service) finalizeRound() {
 
 	now := time.Now().Unix()
 
-	lifetime, err := s.builder.GetLifetime(round.CongestionTree)
-	if err != nil {
-		changes = round.Fail(fmt.Errorf("failed to calculate round lifetime: %s", err))
-		log.WithError(err).Warn("failed to calculate round lifetime")
-		return
-	}
-
-	changes, _ = round.EndFinalization(forfeitTxs, txid, now+int64(lifetime))
+	changes, _ = round.EndFinalization(forfeitTxs, txid, now+s.roundLifetime)
 
 	log.Debugf("finalized round %s with pool tx %s", round.Id, round.Txid)
 }
@@ -448,11 +442,7 @@ func (s *service) getNewVtxos(round *domain.Round) []domain.Vtxo {
 
 					buf, _ := hex.DecodeString(r.Pubkey)
 					pk, _ := secp256k1.ParsePubKey(buf)
-					script, err := s.builder.GetLeafOutputScript(pk, s.pubkey)
-					if err != nil {
-						log.WithError(err).Warn("failed to get leaf output script")
-						continue
-					}
+					script, _ := s.builder.GetLeafOutputScript(pk, s.pubkey)
 
 					if bytes.Equal(script, out.Script) {
 						found = true
