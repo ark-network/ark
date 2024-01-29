@@ -48,7 +48,7 @@ var (
 	defaultInsecure      = true
 	defaultNetwork       = "testnet"
 	defaultLogLevel      = 5
-	defaultRoundLifetime = (60 * 60 * 24 * 14) - 256 // ~2 weeks in seconds (modulus 512 for sequence)
+	defaultRoundLifetime = 512
 	defaultMinRelayFee   = 30
 )
 
