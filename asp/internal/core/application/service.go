@@ -10,6 +10,7 @@ import (
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
+	scheduler "github.com/ark-network/ark/internal/infrastructure/scheduler/gocron"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	log "github.com/sirupsen/logrus"
@@ -78,6 +79,7 @@ func NewService(
 		walletSvc,
 		repoManager,
 		builder,
+		scheduler.NewScheduler(),
 	)
 
 	svc := &service{
@@ -97,7 +99,7 @@ func NewService(
 
 func (s *service) Start() error {
 	log.Debug("starting sweeper service")
-	if err := s.sweeper.Start(); err != nil {
+	if err := s.sweeper.start(); err != nil {
 		return err
 	}
 
@@ -110,6 +112,7 @@ func (s *service) Start() error {
 }
 
 func (s *service) Stop() {
+	s.sweeper.stop()
 	s.wallet.Close()
 	log.Debug("closed connection to wallet")
 	s.repoManager.Close()
@@ -362,8 +365,15 @@ func (s *service) finalizeRound() {
 	}
 
 	now := time.Now().Unix()
+	expirationTimestamp := now + s.roundLifetime + 90 // add 1min30 to handle the time to confirm the tx
 
-	changes, _ = round.EndFinalization(forfeitTxs, txid, now+s.roundLifetime)
+	if err := s.sweeper.schedule(expirationTimestamp, sweepEvent{round.CongestionTree}); err != nil {
+		changes = round.Fail(fmt.Errorf("failed to schedule sweep tx: %s", err))
+		log.WithError(err).Warn("failed to schedule sweep tx")
+		return
+	}
+
+	changes, _ = round.EndFinalization(forfeitTxs, txid)
 
 	log.Debugf("finalized round %s with pool tx %s", round.Id, round.Txid)
 }

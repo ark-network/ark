@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"time"
 
 	"github.com/ark-network/ark/internal/core/domain"
 	dbtypes "github.com/ark-network/ark/internal/infrastructure/db/types"
@@ -96,44 +95,20 @@ func (r *roundRepository) GetRoundWithTxid(
 	return round, nil
 }
 
-func (r *roundRepository) GetExpiredOutputs(
+func (r *roundRepository) GetAllRounds(
 	ctx context.Context,
-) ([]domain.ExpiredRound, error) {
-	nowTimestamp := time.Now().Unix()
-	query := badgerhold.Where("Stage.Ended").Eq(true).And("Stage.Failed").Eq(false).And("SharedOutputs").MatchFunc(func(val *badgerhold.RecordAccess) (bool, error) {
-		sharedOutputs, ok := val.Field().([]domain.SharedOutput)
-		if !ok {
-			return false, fmt.Errorf("invalid shared outputs")
-		}
-
-		for _, sharedOutput := range sharedOutputs {
-			if !sharedOutput.Spent && len(sharedOutput.SweepTxid) == 0 && sharedOutput.ExpirationTimestamp < nowTimestamp {
-				return true, nil
-			}
-		}
-		return false, nil
-	})
+) ([]domain.Round, error) {
+	// TODO: switch to ForEach to handle large number of rounds without memory issues
+	query := badgerhold.Where("Id").Ne("").And("Stage.Ended").Eq(true).And("CongestionTree").MatchFunc(
+		func(tree *badgerhold.RecordAccess) (bool, error) {
+			return tree != nil, nil
+		},
+	)
 	rounds, err := r.findRound(ctx, query)
 	if err != nil {
 		return nil, err
 	}
-
-	expiredRounds := make([]domain.ExpiredRound, 0, len(rounds))
-
-	for _, round := range rounds {
-		indexes := make([]int, 0, len(round.SharedOutputs))
-		for i, sharedOutput := range round.SharedOutputs {
-			if len(sharedOutput.SweepTxid) == 0 && sharedOutput.ExpirationTimestamp <= nowTimestamp {
-				indexes = append(indexes, i)
-			}
-		}
-		expiredRounds = append(expiredRounds, domain.ExpiredRound{
-			Round:          round,
-			ExpiredOutputs: indexes,
-		})
-	}
-
-	return expiredRounds, nil
+	return rounds, nil
 }
 
 func (r *roundRepository) Close() {

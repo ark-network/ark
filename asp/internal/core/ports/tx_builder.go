@@ -9,9 +9,8 @@ import (
 
 type SweepInput struct {
 	InputArgs psetv2.InputArgs
-	Leaves    []psetv2.TapLeafScript
+	SweepLeaf psetv2.TapLeafScript
 	Amount    uint64
-	Round     domain.Round
 }
 
 type TxBuilder interface {

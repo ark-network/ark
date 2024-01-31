@@ -19,7 +19,7 @@ type RoundRepository interface {
 	GetCurrentRound(ctx context.Context) (*Round, error)
 	GetRoundWithId(ctx context.Context, id string) (*Round, error)
 	GetRoundWithTxid(ctx context.Context, txid string) (*Round, error)
-	GetExpiredOutputs(ctx context.Context) ([]ExpiredRound, error)
+	GetAllRounds(ctx context.Context) ([]Round, error)
 }
 
 type VtxoRepository interface {

@@ -4,19 +4,27 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"strings"
+	"time"
 
 	pb "github.com/ark-network/ark/api-spec/protobuf/gen/ocean/v1"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/vulpemventures/go-elements/elementsutil"
 	"github.com/vulpemventures/go-elements/psetv2"
-	"github.com/vulpemventures/go-elements/transaction"
 )
 
 const (
 	zero32 = "0000000000000000000000000000000000000000000000000000000000000000"
+)
+
+var (
+	NonBIP68Final = fmt.Errorf("non-BIP68-final")
 )
 
 func (s *service) SignPset(
@@ -81,14 +89,14 @@ func (s *service) SelectUtxos(ctx context.Context, asset string, amount uint64) 
 
 func (s *service) GetTransaction(
 	ctx context.Context, txid string,
-) (string, uint64, error) {
+) (string, int64, error) {
 	res, err := s.txClient.GetTransaction(ctx, &pb.GetTransactionRequest{
 		Txid: txid,
 	})
 	if err != nil {
 		return "", 0, err
 	}
-	return res.GetTxHex(), uint64(res.GetBlockDetails().Timestamp), nil
+	return res.GetTxHex(), res.GetBlockDetails().GetTimestamp(), nil
 }
 
 func (s *service) BroadcastTransaction(
@@ -100,9 +108,54 @@ func (s *service) BroadcastTransaction(
 		},
 	)
 	if err != nil {
+		if strings.Contains(err.Error(), "non-BIP68-final") {
+			return "", NonBIP68Final
+		}
+
 		return "", err
 	}
 	return res.GetTxid(), nil
+}
+
+func (s *service) TransactionExists(
+	ctx context.Context, txid string,
+) (bool, int64, error) {
+	if len(txid) != 64 {
+		return false, 0, fmt.Errorf("invalid txid")
+	}
+
+	_, err := hex.DecodeString(txid)
+	if err != nil {
+		return false, 0, fmt.Errorf("invalid txid")
+	}
+
+	url := fmt.Sprintf("%s/tx/%s", s.electrumAddr, txid)
+
+	res, err := http.Get(url)
+	if err != nil {
+		return false, 0, err
+	}
+
+	if res.StatusCode == http.StatusNotFound {
+		return false, 0, nil
+	}
+
+	if res.StatusCode != http.StatusOK {
+		return false, 0, fmt.Errorf("unexpected status code: %d", res.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
+		return false, 0, err
+	}
+
+	status := result["status"].(map[string]interface{})
+	if status["confirmed"].(bool) {
+		blocktime := int64(status["block_time"].(float64))
+		return true, blocktime, nil
+	}
+
+	return true, time.Now().Unix() + 30, nil
 }
 
 func (s *service) SignPsetWithKey(ctx context.Context, b64 string, indexes []int) (string, error) {
@@ -162,25 +215,6 @@ func (s *service) SignPsetWithKey(ctx context.Context, b64 string, indexes []int
 		if err := updater.AddInSighashType(i, txscript.SigHashDefault); err != nil {
 			return "", err
 		}
-
-		prevoutHex, _, err := s.GetTransaction(
-			ctx,
-			chainhash.Hash(pset.Inputs[i].PreviousTxid).String(),
-		)
-		if err != nil {
-			return "", err
-		}
-
-		prevoutTx, err := transaction.NewTxFromHex(prevoutHex)
-		if err != nil {
-			return "", err
-		}
-
-		prevoutOutput := prevoutTx.Outputs[pset.Inputs[i].PreviousTxIndex]
-
-		if err := updater.AddInWitnessUtxo(i, prevoutOutput); err != nil {
-			return "", err
-		}
 	}
 
 	unsignedPset, err := pset.ToBase64()
@@ -211,15 +245,30 @@ func (s *service) EstimateFees(
 	outputs := make([]*pb.Output, 0, len(tx.Outputs))
 
 	for _, in := range tx.Inputs {
-		if in.WitnessUtxo == nil {
-			return 0, fmt.Errorf("missing witness utxo, cannot estimate fees")
+		pbInput := &pb.Input{
+			Txid:  chainhash.Hash(in.PreviousTxid).String(),
+			Index: in.PreviousTxIndex,
 		}
 
-		inputs = append(inputs, &pb.Input{
-			Txid:   chainhash.Hash(in.PreviousTxid).String(),
-			Index:  in.PreviousTxIndex,
-			Script: hex.EncodeToString(in.WitnessUtxo.Script),
-		})
+		if len(in.TapLeafScript) == 1 {
+			isSweep, _, _, err := tree.DecodeSweepScript(in.TapLeafScript[0].Script)
+			if err != nil {
+				return 0, err
+			}
+
+			if isSweep {
+				pbInput.WitnessSize = 64
+				pbInput.ScriptsigSize = 0
+			}
+		} else {
+			if in.WitnessUtxo == nil {
+				return 0, fmt.Errorf("missing witness utxo, cannot estimate fees")
+			}
+
+			pbInput.Script = hex.EncodeToString(in.WitnessUtxo.Script)
+		}
+
+		inputs = append(inputs, pbInput)
 	}
 
 	for _, out := range tx.Outputs {

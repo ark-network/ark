@@ -128,12 +128,12 @@ func decodeWithOutputScript(script []byte, expectedIndex byte, isVerify bool) (v
 }
 
 func decodeChecksigScript(script []byte) (valid bool, pubkey *secp256k1.PublicKey, err error) {
-	checksigIndex := bytes.Index(script, []byte{txscript.OP_CHECKSIG})
-	if checksigIndex == -1 || checksigIndex == 0 {
+	data32Index := bytes.Index(script, []byte{txscript.OP_DATA_32})
+	if data32Index == -1 {
 		return false, nil, nil
 	}
 
-	key := script[1:checksigIndex]
+	key := script[data32Index+1 : data32Index+33]
 	if len(key) != 32 {
 		return false, nil, nil
 	}
@@ -172,6 +172,10 @@ func DecodeSweepScript(script []byte) (valid bool, aspPubKey *secp256k1.PublicKe
 	valid, aspPubKey, err = decodeChecksigScript(checksigScript)
 	if err != nil {
 		return false, nil, 0, err
+	}
+
+	if !valid {
+		return false, nil, 0, nil
 	}
 
 	rebuilt, err := csvChecksigScript(aspPubKey, seconds)

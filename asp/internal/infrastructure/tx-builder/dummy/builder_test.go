@@ -101,7 +101,11 @@ func (*mockedWalletService) SignPsetWithKey(ctx context.Context, pset string, in
 	panic("unimplemented")
 }
 
-func (*mockedWalletService) GetTransaction(ctx context.Context, txid string) (string, uint64, error) {
+func (*mockedWalletService) GetTransaction(ctx context.Context, txid string) (string, int64, error) {
+	panic("unimplemented")
+}
+
+func (*mockedWalletService) TransactionExists(ctx context.Context, txid string) (bool, int64, error) {
 	panic("unimplemented")
 }
 

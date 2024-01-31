@@ -11,7 +11,6 @@ func (r RoundFinalizationStarted) isEvent() {}
 func (r RoundFinalized) isEvent()           {}
 func (r RoundFailed) isEvent()              {}
 func (r PaymentsRegistered) isEvent()       {}
-func (r SharedOutputSwept) isEvent()        {}
 
 type RoundStarted struct {
 	Id        string
@@ -27,11 +26,10 @@ type RoundFinalizationStarted struct {
 }
 
 type RoundFinalized struct {
-	Id                  string
-	Txid                string
-	ForfeitTxs          []string
-	Timestamp           int64
-	ExpirationTimestamp int64
+	Id         string
+	Txid       string
+	ForfeitTxs []string
+	Timestamp  int64
 }
 
 type RoundFailed struct {
@@ -43,11 +41,4 @@ type RoundFailed struct {
 type PaymentsRegistered struct {
 	Id       string
 	Payments []Payment
-}
-
-type SharedOutputSwept struct {
-	Id                string
-	SharedOutputTxid  string
-	SharedOutputIndex uint32
-	SweepTxid         string
 }

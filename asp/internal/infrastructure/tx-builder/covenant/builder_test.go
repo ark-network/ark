@@ -102,12 +102,12 @@ func (*mockedWalletService) SignPsetWithKey(ctx context.Context, pset string, in
 	panic("unimplemented")
 }
 
-func (*mockedWalletService) GetTransaction(ctx context.Context, txid string) (string, uint64, error) {
+func (*mockedWalletService) TransactionExists(ctx context.Context, txid string) (bool, int64, error) {
 	panic("unimplemented")
 }
 
 func TestBuildCongestionTree(t *testing.T) {
-	builder := txbuilder.NewTxBuilder(network.Liquid, 60*60*24*7)
+	builder := txbuilder.NewTxBuilder(network.Liquid, 1209344)
 
 	fixtures := []struct {
 		payments          []domain.Payment

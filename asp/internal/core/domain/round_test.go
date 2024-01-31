@@ -442,7 +442,7 @@ func testEndFinalization(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			events, err = round.EndFinalization(forfeitTxs, txid, 0)
+			events, err = round.EndFinalization(forfeitTxs, txid)
 			require.NoError(t, err)
 			require.Len(t, events, 1)
 			require.False(t, round.IsStarted())
@@ -455,16 +455,6 @@ func testEndFinalization(t *testing.T) {
 			require.Exactly(t, txid, event.Txid)
 			require.Exactly(t, forfeitTxs, event.ForfeitTxs)
 			require.Exactly(t, round.EndingTimestamp, event.Timestamp)
-			require.Exactly(t, round.SharedOutputs[0].ExpirationTimestamp, event.ExpirationTimestamp)
-
-			events, err = round.Sweep(round.Txid, 0, txid)
-			require.NoError(t, err)
-
-			eventSwept, ok := events[0].(domain.SharedOutputSwept)
-			require.True(t, ok)
-			require.Equal(t, round.Id, eventSwept.Id)
-			require.Equal(t, txid, eventSwept.SweepTxid)
-			require.Equal(t, round.SharedOutputs[0].SweepTxid, eventSwept.SweepTxid)
 		})
 
 		t.Run("invalid", func(t *testing.T) {
@@ -546,7 +536,7 @@ func testEndFinalization(t *testing.T) {
 			}
 
 			for _, f := range fixtures {
-				events, err := f.round.EndFinalization(f.forfeitTxs, f.txid, 0)
+				events, err := f.round.EndFinalization(f.forfeitTxs, f.txid)
 				require.EqualError(t, err, f.expectedErr)
 				require.Empty(t, events)
 			}

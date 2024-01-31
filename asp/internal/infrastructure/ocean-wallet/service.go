@@ -16,6 +16,7 @@ type service struct {
 	walletClient  pb.WalletServiceClient
 	accountClient pb.AccountServiceClient
 	txClient      pb.TransactionServiceClient
+	electrumAddr  string
 }
 
 func NewService(addr string) (ports.WalletService, error) {
@@ -48,6 +49,17 @@ func NewService(addr string) (ports.WalletService, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	net := info.GetNetwork()
+	switch net {
+	case pb.GetInfoResponse_NETWORK_MAINNET:
+		svc.electrumAddr = "https://blockstream.info/liquid/api/"
+	case pb.GetInfoResponse_NETWORK_TESTNET:
+		svc.electrumAddr = "https://blockstream.info/liquidtestnet/api/"
+	default:
+		return nil, fmt.Errorf("unsupported network: %s", net)
+	}
+
 	found := false
 	for _, account := range info.GetAccounts() {
 		if account.GetLabel() == accountLabel {

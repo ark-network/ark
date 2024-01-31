@@ -39,18 +39,10 @@ func NewTxBuilder(net network.Network, roundLifetime uint) ports.TxBuilder {
 
 // BuildSweepTx implements ports.TxBuilder.
 func (b *txBuilder) BuildSweepTx(wallet ports.WalletService, inputs []ports.SweepInput) (signedSweepTx string, err error) {
-	ctx := context.Background()
-
-	sweepAddress, err := wallet.DeriveAddresses(ctx, 1)
-	if err != nil {
-		return "", err
-	}
-
 	sweepPset, err := sweepTransaction(
+		wallet,
 		inputs,
-		sweepAddress[0],
 		b.net.AssetID,
-		400,
 	)
 	if err != nil {
 		return "", err
@@ -61,6 +53,7 @@ func (b *txBuilder) BuildSweepTx(wallet ports.WalletService, inputs []ports.Swee
 		return "", err
 	}
 
+	ctx := context.Background()
 	signedSweepPsetB64, err := wallet.SignPsetWithKey(ctx, sweepPsetBase64, nil)
 	if err != nil {
 		return "", err

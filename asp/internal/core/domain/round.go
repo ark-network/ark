@@ -33,14 +33,6 @@ type Stage struct {
 	Failed bool
 }
 
-type SharedOutput struct {
-	Txid                string
-	Index               uint32
-	ExpirationTimestamp int64
-	SweepTxid           string
-	Spent               bool
-}
-
 type Round struct {
 	Id                string
 	StartingTimestamp int64
@@ -55,7 +47,6 @@ type Round struct {
 	DustAmount        uint64
 	Version           uint
 	changes           []RoundEvent
-	SharedOutputs     []SharedOutput
 }
 
 func NewRound(dustAmount uint64) *Round {
@@ -99,14 +90,6 @@ func (r *Round) On(event RoundEvent, replayed bool) {
 		r.Txid = e.Txid
 		r.ForfeitTxs = append([]string{}, e.ForfeitTxs...)
 		r.EndingTimestamp = e.Timestamp
-		r.SharedOutputs = []SharedOutput{
-			{
-				Txid:                e.Txid,
-				Index:               0,
-				ExpirationTimestamp: e.ExpirationTimestamp,
-				SweepTxid:           "",
-			},
-		}
 	case RoundFailed:
 		r.Stage.Failed = true
 		r.EndingTimestamp = e.Timestamp
@@ -116,13 +99,6 @@ func (r *Round) On(event RoundEvent, replayed bool) {
 		}
 		for _, p := range e.Payments {
 			r.Payments[p.Id] = p
-		}
-	case SharedOutputSwept:
-		for i, sharedOutput := range r.SharedOutputs {
-			if sharedOutput.Txid == e.SharedOutputTxid && sharedOutput.Index == e.SharedOutputIndex {
-				r.SharedOutputs[i].SweepTxid = e.SweepTxid
-				break
-			}
 		}
 	}
 
@@ -196,7 +172,7 @@ func (r *Round) StartFinalization(connectors []string, congestionTree tree.Conge
 	return []RoundEvent{event}, nil
 }
 
-func (r *Round) EndFinalization(forfeitTxs []string, txid string, expirationTimeStamp int64) ([]RoundEvent, error) {
+func (r *Round) EndFinalization(forfeitTxs []string, txid string) ([]RoundEvent, error) {
 	if len(forfeitTxs) <= 0 {
 		return nil, fmt.Errorf("missing list of signed forfeit txs")
 	}
@@ -210,29 +186,10 @@ func (r *Round) EndFinalization(forfeitTxs []string, txid string, expirationTime
 		return nil, fmt.Errorf("round already finalized")
 	}
 	event := RoundFinalized{
-		Id:                  r.Id,
-		Txid:                txid,
-		ForfeitTxs:          forfeitTxs,
-		Timestamp:           time.Now().Unix(),
-		ExpirationTimestamp: expirationTimeStamp,
-	}
-	r.raise(event)
-
-	return []RoundEvent{event}, nil
-}
-
-func (r *Round) Sweep(sharedOutputTxid string, sharedOutputIndex uint32, txid string) ([]RoundEvent, error) {
-	if len(txid) <= 0 {
-		return nil, fmt.Errorf("missing sweep txid")
-	}
-	if r.IsFailed() || !r.IsEnded() {
-		return nil, fmt.Errorf("not in a valid stage to sweep")
-	}
-	event := SharedOutputSwept{
-		Id:                r.Id,
-		SweepTxid:         txid,
-		SharedOutputTxid:  sharedOutputTxid,
-		SharedOutputIndex: sharedOutputIndex,
+		Id:         r.Id,
+		Txid:       txid,
+		ForfeitTxs: forfeitTxs,
+		Timestamp:  time.Now().Unix(),
 	}
 	r.raise(event)
 

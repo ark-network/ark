@@ -233,6 +233,7 @@ func validateNodeTransaction(
 				}
 
 				if seconds != expectedSequenceSeconds {
+					fmt.Println(seconds, expectedSequenceSeconds)
 					return ErrInvalidSweepSequence
 				}
 
