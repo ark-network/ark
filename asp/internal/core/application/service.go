@@ -365,7 +365,7 @@ func (s *service) finalizeRound() {
 	}
 
 	now := time.Now().Unix()
-	expirationTimestamp := now + s.roundLifetime + 90 // add 1min30 to handle the time to confirm the tx
+	expirationTimestamp := now + s.roundLifetime + 30 // add 30 secs to be sure that the tx is confirmed
 
 	if err := s.sweeper.schedule(expirationTimestamp, sweepEvent{round.CongestionTree}); err != nil {
 		changes = round.Fail(fmt.Errorf("failed to schedule sweep tx: %s", err))

@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -96,7 +94,13 @@ func (s *service) GetTransaction(
 	if err != nil {
 		return "", 0, err
 	}
-	return res.GetTxHex(), res.GetBlockDetails().GetTimestamp(), nil
+
+	if len(res.GetBlockDetails().GetHash()) > 0 {
+		return res.GetTxHex(), res.BlockDetails.GetTimestamp(), nil
+	}
+
+	// if not confirmed, we return now + 30 secs to estimate the next blocktime
+	return res.GetTxHex(), time.Now().Unix() + 30, nil
 }
 
 func (s *service) BroadcastTransaction(
@@ -120,42 +124,15 @@ func (s *service) BroadcastTransaction(
 func (s *service) TransactionExists(
 	ctx context.Context, txid string,
 ) (bool, int64, error) {
-	if len(txid) != 64 {
-		return false, 0, fmt.Errorf("invalid txid")
-	}
-
-	_, err := hex.DecodeString(txid)
+	_, blocktime, err := s.GetTransaction(ctx, txid)
 	if err != nil {
-		return false, 0, fmt.Errorf("invalid txid")
-	}
-
-	url := fmt.Sprintf("%s/tx/%s", s.electrumAddr, txid)
-
-	res, err := http.Get(url)
-	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "missing transaction") {
+			return false, 0, nil
+		}
 		return false, 0, err
 	}
 
-	if res.StatusCode == http.StatusNotFound {
-		return false, 0, nil
-	}
-
-	if res.StatusCode != http.StatusOK {
-		return false, 0, fmt.Errorf("unexpected status code: %d", res.StatusCode)
-	}
-
-	var result map[string]interface{}
-	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
-		return false, 0, err
-	}
-
-	status := result["status"].(map[string]interface{})
-	if status["confirmed"].(bool) {
-		blocktime := int64(status["block_time"].(float64))
-		return true, blocktime, nil
-	}
-
-	return true, time.Now().Unix() + 30, nil
+	return true, blocktime, nil
 }
 
 func (s *service) SignPsetWithKey(ctx context.Context, b64 string, indexes []int) (string, error) {
