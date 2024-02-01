@@ -68,9 +68,7 @@ func (s *sweeper) stop() {
 
 // removeTask update the cached map of scheduled tasks
 func (s *sweeper) removeTask(treeRootTxid string) {
-	if _, scheduled := s.scheduledTasks[treeRootTxid]; scheduled {
-		delete(s.scheduledTasks, treeRootTxid)
-	}
+	delete(s.scheduledTasks, treeRootTxid)
 }
 
 // schedule set up a task to be executed once at the given timestamp
