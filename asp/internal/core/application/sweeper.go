@@ -17,21 +17,17 @@ import (
 	"github.com/vulpemventures/go-elements/taproot"
 )
 
-type sharedOutput struct {
-	txid  string
-	index uint32
-}
-
-type sweepEvent struct {
-	congestionTree tree.CongestionTree
-}
-
+// sweeper is an unexported service running while the main application service is started
+// it is responsible for sweeping onchain shared outputs that expired
+// it also handles delaying the sweep events in case some parts of the tree are broadcasted
+// when a round is finalized, the main application service schedules a sweep event on the newly created congestion tree
 type sweeper struct {
 	wallet      ports.WalletService
 	repoManager ports.RepoManager
 	builder     ports.TxBuilder
 	scheduler   ports.SchedulerService
 
+	// cache of scheduled tasks, avoid scheduling the same sweep event multiple times
 	scheduledTasks map[string]struct{}
 }
 
@@ -59,7 +55,7 @@ func (s *sweeper) start() error {
 	}
 
 	for _, round := range allRounds {
-		task := s.createTask(sweepEvent{round.CongestionTree})
+		task := s.createTask(round.CongestionTree)
 		task()
 	}
 
@@ -70,31 +66,55 @@ func (s *sweeper) stop() {
 	s.scheduler.Stop()
 }
 
+// removeTask update the cached map of scheduled tasks
 func (s *sweeper) removeTask(treeRootTxid string) {
 	if _, scheduled := s.scheduledTasks[treeRootTxid]; scheduled {
 		delete(s.scheduledTasks, treeRootTxid)
 	}
 }
 
-func (s *sweeper) createTask(event sweepEvent) func() {
+// schedule set up a task to be executed once at the given timestamp
+func (s *sweeper) schedule(expirationTimestamp int64, congestionTree tree.CongestionTree) error {
+	root, err := congestionTree.Root()
+	if err != nil {
+		return err
+	}
+
+	if _, scheduled := s.scheduledTasks[root.Txid]; scheduled {
+		return nil
+	}
+
+	task := s.createTask(congestionTree)
+	fancyTime := time.Unix(expirationTimestamp, 0).Format("2006-01-02 15:04:05")
+	log.Debugf("scheduled sweep task at %s", fancyTime)
+	if err := s.scheduler.ScheduleTaskOnce(expirationTimestamp, task); err != nil {
+		return err
+	}
+
+	s.scheduledTasks[root.Txid] = struct{}{}
+	return nil
+}
+
+// createTask returns a function executed when the event is triggered
+// it tries to craft a sweep tx containing the onchain outputs of the given congestion tree
+// if some parts of the tree have been broadcasted in the meantine, it will schedule the next task for the remaining parts of the tree
+func (s *sweeper) createTask(congestionTree tree.CongestionTree) func() {
 	return func() {
-		root, err := event.congestionTree.Root()
+		ctx := context.Background()
+		root, err := congestionTree.Root()
 		if err != nil {
 			log.WithError(err).Error("error while getting root node")
 			return
 		}
 
 		defer s.removeTask(root.Txid)
-
-		ctx := context.Background()
-
 		log.Debugf("sweeper: %s", root.Txid)
 
 		sweepInputs := make([]ports.SweepInput, 0)
 		vtxoKeys := make([]domain.VtxoKey, 0) // vtxos associated to the sweep inputs
 
 		// inspect the congestion tree to find onchain shared outputs
-		sharedOutputs, err := onchainOutputs(ctx, s.wallet, s.repoManager.Vtxos(), event.congestionTree)
+		sharedOutputs, err := onchainOutputs(ctx, s.wallet, s.repoManager.Vtxos(), congestionTree)
 		if err != nil {
 			log.WithError(err).Error("error while inspecting congestion tree")
 			return
@@ -105,8 +125,10 @@ func (s *sweeper) createTask(event sweepEvent) func() {
 			if expiredAt > time.Now().Unix() {
 				subTrees := make([]tree.CongestionTree, 0)
 
+				// for each sweepable input, create a sub congestion tree
+				// it allows to skip the part of the tree that has been broadcasted in the next task
 				for _, input := range inputs {
-					subTree, err := subTree(event.congestionTree, input.InputArgs.Txid)
+					subTree, err := subTree(congestionTree, input.InputArgs.Txid)
 					if err != nil {
 						log.WithError(err).Error("error while finding sub tree")
 						continue
@@ -141,7 +163,7 @@ func (s *sweeper) createTask(event sweepEvent) func() {
 				}
 
 				for _, subTree := range filteredSubTrees {
-					if err := s.schedule(int64(expiredAt)+30, sweepEvent{subTree}); err != nil {
+					if err := s.schedule(int64(expiredAt)+30, subTree); err != nil {
 						log.WithError(err).Error("error while scheduling sweep task")
 						continue
 					}
@@ -149,11 +171,12 @@ func (s *sweeper) createTask(event sweepEvent) func() {
 				continue
 			}
 
-			// check if the shared output has been swept
+			// check if the shared output has been swept in the past
 			for _, input := range inputs {
-				// check if input is the vtxo itself
+				// vtxos related to the sweep input
 				vtxos := make([]domain.VtxoKey, 0)
 
+				// check if input is the vtxo itself
 				vtxo, err := s.repoManager.Vtxos().GetVtxos(
 					ctx,
 					[]domain.VtxoKey{
@@ -164,7 +187,8 @@ func (s *sweeper) createTask(event sweepEvent) func() {
 					},
 				)
 				if err != nil {
-					vtxosLeaves, err := event.congestionTree.FindLeaves(input.InputArgs.Txid, input.InputArgs.TxIndex)
+					// if it's not a vtxo, find all the vtxos leaves reachable from that input
+					vtxosLeaves, err := congestionTree.FindLeaves(input.InputArgs.Txid, input.InputArgs.TxIndex)
 					if err != nil {
 						log.WithError(err).Error("error while finding vtxos leaves")
 						continue
@@ -177,21 +201,13 @@ func (s *sweeper) createTask(event sweepEvent) func() {
 							continue
 						}
 
-						switch len(pset.Outputs) {
-						case 2:
-							vtxos = append(vtxos, domain.VtxoKey{
-								Txid: leaf.Txid,
-								VOut: 0,
-							})
-						case 3:
-							vtxos = append(vtxos, domain.VtxoKey{
-								Txid: leaf.Txid,
-								VOut: 0,
-							}, domain.VtxoKey{
-								Txid: leaf.Txid,
-								VOut: 1,
-							})
+						vtxosInLeaf, err := extractVtxosOutputs(pset)
+						if err != nil {
+							log.Error(fmt.Errorf("error while extracting vtxos outputs: %w", err))
+							continue
 						}
+
+						vtxos = append(vtxos, vtxosInLeaf...)
 					}
 
 				} else {
@@ -211,6 +227,7 @@ func (s *sweeper) createTask(event sweepEvent) func() {
 
 				// TODO: check if it has been redeemed
 				if firstVtxo[0].Swept {
+					// we assume that if the first vtxo is swept, all the others are too
 					// skip, the output is already swept
 					continue
 				}
@@ -220,9 +237,8 @@ func (s *sweeper) createTask(event sweepEvent) func() {
 			}
 		}
 
-		// build and broadcast the sweep tx
-		// mark the vtxos as swept
 		if len(sweepInputs) > 0 {
+			// build the sweep transaction with all the expired non-swept shared outputs
 			sweepTx, err := s.builder.BuildSweepTx(s.wallet, sweepInputs)
 			if err != nil {
 				log.WithError(err).Error("error while building sweep tx")
@@ -248,6 +264,7 @@ func (s *sweeper) createTask(event sweepEvent) func() {
 			if len(txid) > 0 {
 				log.Debugln("sweep tx broadcasted:", txid)
 
+				// mark the vtxos as swept
 				if err := s.repoManager.Vtxos().SweepVtxos(ctx, vtxoKeys); err != nil {
 					log.Error(fmt.Errorf("error while deleting vtxos: %w", err))
 					return
@@ -259,28 +276,8 @@ func (s *sweeper) createTask(event sweepEvent) func() {
 	}
 }
 
-func (s *sweeper) schedule(expirationTimestamp int64, sweepEvent sweepEvent) error {
-	root, err := sweepEvent.congestionTree.Root()
-	if err != nil {
-		return err
-	}
-
-	if _, scheduled := s.scheduledTasks[root.Txid]; scheduled {
-		return nil
-	}
-
-	task := s.createTask(sweepEvent)
-	fancyTime := time.Unix(expirationTimestamp, 0).Format("2006-01-02 15:04:05")
-	log.Debugf("scheduled sweep task at %s", fancyTime)
-	if err := s.scheduler.ScheduleTaskOnce(expirationTimestamp, task); err != nil {
-		return err
-	}
-
-	s.scheduledTasks[root.Txid] = struct{}{}
-	return nil
-}
-
-// onchainOutputs inspects the given congestion tree and returns a map of onchain outputs where key is their expiration time
+// onchainOutputs iterates over all the nodes' outputs in the congestion tree and checks their onchain state
+// returns the sweepable outputs as ports.SweepInput mapped by their expiration time
 func onchainOutputs(
 	ctx context.Context,
 	wallet ports.WalletService,
@@ -317,16 +314,9 @@ func onchainOutputs(
 
 				// if the node is a leaf, the vtxos outputs should added as onchain outputs if they are not swept yet
 				if node.Leaf {
-					vtxos := make([]domain.VtxoKey, 0)
-					vtxos = append(vtxos, domain.VtxoKey{
-						Txid: node.Txid,
-						VOut: 0,
-					})
-					if len(pset.Outputs) == 3 {
-						vtxos = append(vtxos, domain.VtxoKey{
-							Txid: node.Txid,
-							VOut: 1,
-						})
+					vtxos, err := extractVtxosOutputs(pset)
+					if err != nil {
+						return nil, err
 					}
 
 					for _, vtxo := range vtxos {
@@ -347,20 +337,11 @@ func onchainOutputs(
 
 						// if the vtxo is not swept or redeemed, add it to the onchain outputs
 
-						// find the sweepTapLeaf (and lifetime to compute the expiration time)
 						input := pset.Inputs[0]
-						var lifetime int64
-						var sweepLeaf *psetv2.TapLeafScript
-						for _, leaf := range input.TapLeafScript {
-							isSweep, _, seconds, err := tree.DecodeSweepScript(leaf.Script)
-							if err != nil {
-								return nil, err
-							}
-							if isSweep {
-								lifetime = int64(seconds)
-								sweepLeaf = &leaf
-								break
-							}
+
+						sweepLeaf, lifetime, err := extractSweepLeaf(input)
+						if err != nil {
+							return nil, err
 						}
 
 						pubKeyBytes, err := hex.DecodeString(fromRepo[0].Pubkey)
@@ -424,23 +405,9 @@ func onchainOutputs(
 			txid := chainhash.Hash(input.PreviousTxid).String()
 			index := input.PreviousTxIndex
 
-			var lifetime int64
-			var sweepLeaf *psetv2.TapLeafScript
-			for _, leaf := range input.TapLeafScript {
-				isSweep, _, seconds, err := tree.DecodeSweepScript(leaf.Script)
-				if err != nil {
-					log.WithError(err).Error("error while decoding sweep script")
-					continue
-				}
-				if isSweep {
-					lifetime = int64(seconds)
-					sweepLeaf = &leaf
-					break
-				}
-			}
-
-			if sweepLeaf == nil || lifetime == 0 {
-				return nil, fmt.Errorf("sweep leaf not found")
+			sweepLeaf, lifetime, err := extractSweepLeaf(input)
+			if err != nil {
+				return nil, err
 			}
 
 			if _, ok := blocktimeCache[txid]; !ok {
@@ -525,4 +492,59 @@ func containsTree(tr0 tree.CongestionTree, tr1 tree.CongestionTree) (bool, error
 	}
 
 	return false, nil
+}
+
+// given a congestion tree input, searches and returns the sweep leaf and its lifetime in seconds
+func extractSweepLeaf(input psetv2.Input) (sweepLeaf *psetv2.TapLeafScript, lifetime int64, err error) {
+	for _, leaf := range input.TapLeafScript {
+		isSweep, _, seconds, err := tree.DecodeSweepScript(leaf.Script)
+		if err != nil {
+			return nil, 0, err
+		}
+		if isSweep {
+			lifetime = int64(seconds)
+			sweepLeaf = &leaf
+			break
+		}
+	}
+
+	if sweepLeaf == nil {
+		return nil, 0, fmt.Errorf("sweep leaf not found")
+	}
+
+	if lifetime == 0 {
+		return nil, 0, fmt.Errorf("invalid lifetime")
+	}
+
+	return sweepLeaf, lifetime, nil
+}
+
+// assuming the pset is a leaf in the congestion tree, returns the vtxos outputs
+func extractVtxosOutputs(pset *psetv2.Pset) ([]domain.VtxoKey, error) {
+	if len(pset.Inputs) != 2 && len(pset.Outputs) != 3 {
+		return nil, fmt.Errorf("invalid leaf pset, expect 2 or 3 outputs, got %d", len(pset.Outputs))
+	}
+
+	utx, err := pset.UnsignedTx()
+	if err != nil {
+		return nil, err
+	}
+
+	txid := utx.TxHash().String()
+
+	vtxos := []domain.VtxoKey{
+		{
+			Txid: txid,
+			VOut: 0,
+		},
+	}
+
+	if len(pset.Outputs) == 3 {
+		vtxos = append(vtxos, domain.VtxoKey{
+			Txid: txid,
+			VOut: 1,
+		})
+	}
+
+	return vtxos, nil
 }
