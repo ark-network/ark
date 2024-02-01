@@ -367,7 +367,7 @@ func (s *service) finalizeRound() {
 	now := time.Now().Unix()
 	expirationTimestamp := now + s.roundLifetime + 30 // add 30 secs to be sure that the tx is confirmed
 
-	if err := s.sweeper.schedule(expirationTimestamp, round.CongestionTree); err != nil {
+	if err := s.sweeper.schedule(expirationTimestamp, txid, round.CongestionTree); err != nil {
 		changes = round.Fail(fmt.Errorf("failed to schedule sweep tx: %s", err))
 		log.WithError(err).Warn("failed to schedule sweep tx")
 		return
@@ -452,7 +452,7 @@ func (s *service) getNewVtxos(round *domain.Round) []domain.Vtxo {
 
 					buf, _ := hex.DecodeString(r.Pubkey)
 					pk, _ := secp256k1.ParsePubKey(buf)
-					script, _ := s.builder.GetLeafOutputScript(pk, s.pubkey)
+					script, _ := s.builder.GetLeafRedeemClosure(pk, s.pubkey)
 
 					if bytes.Equal(script, out.Script) {
 						found = true

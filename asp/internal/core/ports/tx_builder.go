@@ -20,9 +20,10 @@ type TxBuilder interface {
 	BuildForfeitTxs(
 		aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment,
 	) (connectors []string, forfeitTxs []string, err error)
-	GetLeafOutputScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error)
 	BuildSweepTx(
 		wallet WalletService,
 		inputs []SweepInput,
 	) (signedSweepTx string, err error)
+	GetLeafRedeemClosure(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error)
+	GetLeafSweepClosure(node tree.Node, userPubKey *secp256k1.PublicKey) (*psetv2.TapLeafScript, int64, error)
 }

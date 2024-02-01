@@ -100,7 +100,46 @@ func getTxid(txStr string) (string, error) {
 	return utx.TxHash().String(), nil
 }
 
-func (b *txBuilder) GetLeafOutputScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error) {
+func (b *txBuilder) GetLeafSweepClosure(
+	node tree.Node, userPubKey *secp256k1.PublicKey,
+) (*psetv2.TapLeafScript, int64, error) {
+	if !node.Leaf {
+		return nil, 0, fmt.Errorf("node is not a leaf")
+	}
+
+	pset, err := psetv2.NewPsetFromBase64(node.Tx)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	input := pset.Inputs[0]
+
+	sweepLeaf, lifetime, err := extractSweepLeaf(input)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// craft the vtxo taproot tree
+	vtxoScript, err := tree.VtxoScript(userPubKey)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	vtxoTaprootTree := taproot.AssembleTaprootScriptTree(
+		*vtxoScript,
+		sweepLeaf.TapElementsLeaf,
+	)
+
+	proofIndex := vtxoTaprootTree.LeafProofIndex[sweepLeaf.TapHash()]
+	proof := vtxoTaprootTree.LeafMerkleProofs[proofIndex]
+
+	return &psetv2.TapLeafScript{
+		TapElementsLeaf: proof.TapElementsLeaf,
+		ControlBlock:    proof.ToControlBlock(sweepLeaf.ControlBlock.InternalKey),
+	}, lifetime, nil
+}
+
+func (b *txBuilder) GetLeafRedeemClosure(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error) {
 	outputScript, _, err := b.getLeafTaprootTree(userPubkey, aspPubkey)
 	if err != nil {
 		return nil, err
@@ -525,4 +564,25 @@ func toWitnessUtxo(in ports.TxInput) (*transaction.TxOutput, error) {
 		RangeProof:      nil,
 		SurjectionProof: nil,
 	}, err
+}
+
+// given a congestion tree input, searches and returns the sweep leaf and its lifetime in seconds
+func extractSweepLeaf(input psetv2.Input) (sweepLeaf *psetv2.TapLeafScript, lifetime int64, err error) {
+	for _, leaf := range input.TapLeafScript {
+		isSweep, _, seconds, err := tree.DecodeSweepScript(leaf.Script)
+		if err != nil {
+			return nil, 0, err
+		}
+		if isSweep {
+			lifetime = int64(seconds)
+			sweepLeaf = &leaf
+			break
+		}
+	}
+
+	if sweepLeaf == nil {
+		return nil, 0, fmt.Errorf("sweep leaf not found")
+	}
+
+	return sweepLeaf, lifetime, nil
 }

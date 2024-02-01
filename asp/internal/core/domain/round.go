@@ -46,6 +46,7 @@ type Round struct {
 	Connectors        []string
 	DustAmount        uint64
 	Version           uint
+	Swept             bool // true if all the vtxos are vtxo.Swept
 	changes           []RoundEvent
 }
 
@@ -237,6 +238,10 @@ func (r *Round) TotalOutputAmount() uint64 {
 		tot += p.TotalOutputAmount()
 	}
 	return tot
+}
+
+func (r *Round) Sweep() {
+	r.Swept = true
 }
 
 func (r *Round) raise(event RoundEvent) {

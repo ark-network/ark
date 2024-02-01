@@ -101,7 +101,7 @@ func (*mockedWalletService) SignPsetWithKey(ctx context.Context, pset string, in
 	panic("unimplemented")
 }
 
-func (*mockedWalletService) TransactionExists(ctx context.Context, txid string) (bool, int64, error) {
+func (*mockedWalletService) IsTransactionPublished(ctx context.Context, txid string) (bool, int64, error) {
 	panic("unimplemented")
 }
 

@@ -95,15 +95,11 @@ func (r *roundRepository) GetRoundWithTxid(
 	return round, nil
 }
 
-func (r *roundRepository) GetAllRounds(
+func (r *roundRepository) GetSweepableRounds(
 	ctx context.Context,
 ) ([]domain.Round, error) {
-	// TODO: switch to ForEach to handle large number of rounds without memory issues
-	query := badgerhold.Where("Id").Ne("").And("Stage.Ended").Eq(true).And("CongestionTree").MatchFunc(
-		func(tree *badgerhold.RecordAccess) (bool, error) {
-			return tree != nil, nil
-		},
-	)
+	query := badgerhold.Where("Stage.Code").Eq(domain.FinalizationStage).
+		And("Stage.Ended").Eq(true).And("Swept").Eq(false)
 	rounds, err := r.findRound(ctx, query)
 	if err != nil {
 		return nil, err

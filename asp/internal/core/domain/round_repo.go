@@ -4,11 +4,6 @@ import (
 	"context"
 )
 
-type ExpiredRound struct {
-	Round
-	ExpiredOutputs []int // indexes of Round.SharedOutputs that are expired
-}
-
 type RoundEventRepository interface {
 	Save(ctx context.Context, id string, events ...RoundEvent) error
 	Load(ctx context.Context, id string) (*Round, error)
@@ -19,13 +14,14 @@ type RoundRepository interface {
 	GetCurrentRound(ctx context.Context) (*Round, error)
 	GetRoundWithId(ctx context.Context, id string) (*Round, error)
 	GetRoundWithTxid(ctx context.Context, txid string) (*Round, error)
-	GetAllRounds(ctx context.Context) ([]Round, error)
+	GetSweepableRounds(ctx context.Context) ([]Round, error)
 }
 
 type VtxoRepository interface {
 	AddVtxos(ctx context.Context, vtxos []Vtxo) error
 	SpendVtxos(ctx context.Context, vtxos []VtxoKey) error
 	GetVtxos(ctx context.Context, vtxos []VtxoKey) ([]Vtxo, error)
+	GetVtxosForRound(ctx context.Context, txid string) ([]Vtxo, error)
 	GetSpendableVtxosWithPubkey(ctx context.Context, pubkey string) ([]Vtxo, error)
 	SweepVtxos(ctx context.Context, vtxos []VtxoKey) error
 }

@@ -183,10 +183,16 @@ func (b *txBuilder) BuildPoolTx(
 	return poolTx, congestionTree, err
 }
 
-func (b *txBuilder) GetLeafOutputScript(userPubkey, _ *secp256k1.PublicKey) ([]byte, error) {
+func (b *txBuilder) GetLeafRedeemClosure(userPubkey, _ *secp256k1.PublicKey) ([]byte, error) {
 	p2wpkh := payment.FromPublicKey(userPubkey, &b.net, nil)
 	addr, _ := p2wpkh.WitnessPubKeyHash()
 	return address.ToOutputScript(addr)
+}
+
+func (b *txBuilder) GetLeafSweepClosure(
+	node tree.Node, userPubKey *secp256k1.PublicKey,
+) (*psetv2.TapLeafScript, int64, error) {
+	panic("unimplemented")
 }
 
 func connectorsToInputArgs(connectors []string) ([]psetv2.InputArgs, error) {
