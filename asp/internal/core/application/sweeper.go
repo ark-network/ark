@@ -108,7 +108,7 @@ func (s *sweeper) createTask(
 			return
 		}
 
-		defer s.removeTask(root.Txid)
+		s.removeTask(root.Txid)
 		log.Debugf("sweeper: %s", root.Txid)
 
 		sweepInputs := make([]ports.SweepInput, 0)
@@ -122,8 +122,8 @@ func (s *sweeper) createTask(
 		}
 
 		for expiredAt, inputs := range sharedOutputs {
-			// if the shared output is not expired, schedule a sweep task for it
-			if expiredAt > time.Now().Unix() {
+			// if the shared outputs are not expired, schedule a sweep task for it
+			if time.Unix(expiredAt, 0).After(time.Now()) {
 				subtrees, err := computeSubTrees(congestionTree, inputs)
 				if err != nil {
 					log.WithError(err).Error("error while computing subtrees")
@@ -132,7 +132,7 @@ func (s *sweeper) createTask(
 
 				for _, subTree := range subtrees {
 					// mitigate the risk to get BIP68 non-final errors by scheduling the task 30 seconds after the expiration time
-					if err := s.schedule(int64(expiredAt)+30, roundTxid, subTree); err != nil {
+					if err := s.schedule(int64(expiredAt), roundTxid, subTree); err != nil {
 						log.WithError(err).Error("error while scheduling sweep task")
 						continue
 					}
@@ -263,7 +263,7 @@ func (s *sweeper) createTask(
 				if allSwept {
 					// update the round
 					roundRepo := s.repoManager.Rounds()
-					round, err := roundRepo.GetRoundWithId(ctx, roundTxid)
+					round, err := roundRepo.GetRoundWithTxid(ctx, roundTxid)
 					if err != nil {
 						log.WithError(err).Error("error while getting round")
 						return
@@ -304,33 +304,26 @@ func (s *sweeper) findSweepableOutputs(
 			var sweepInputs []ports.SweepInput
 
 			if !isPublished {
-				if _, ok := blocktimeCache[node.Txid]; !ok {
-					isPublished, blocktime, err := s.wallet.IsTransactionPublished(ctx, node.Txid)
+				if _, ok := blocktimeCache[node.ParentTxid]; !ok {
+					isPublished, blocktime, err := s.wallet.IsTransactionPublished(ctx, node.ParentTxid)
 					if !isPublished || err != nil {
 						return nil, fmt.Errorf("tx %s not found", node.Txid)
 					}
 
-					if blocktime <= 0 {
-						return nil, fmt.Errorf("invalid blocktime")
-					}
-
-					blocktimeCache[node.Txid] = blocktime
+					blocktimeCache[node.ParentTxid] = blocktime
 				}
-				expirationTime, sweepInputs, err = s.nodeToSweepInputs(blocktimeCache[node.Txid], node)
+
+				expirationTime, sweepInputs, err = s.nodeToSweepInputs(blocktimeCache[node.ParentTxid], node)
 				if err != nil {
 					return nil, err
 				}
 			} else {
-				// if the tx is onchain, it means that the input is spent
-				// add the children to the nodes in order to check them during the next iteration
-				// We will return the error below, but are we going to schedule the tasks for the "children roots"?
-				if blocktime <= 0 {
-					return nil, fmt.Errorf("invalid blocktime")
-				}
-
 				// cache the blocktime for future use
 				blocktimeCache[node.Txid] = int64(blocktime)
 
+				// if the tx is onchain, it means that the input is spent
+				// add the children to the nodes in order to check them during the next iteration
+				// We will return the error below, but are we going to schedule the tasks for the "children roots"?
 				if !node.Leaf {
 					children := congestionTree.Children(node.Txid)
 					newNodesToCheck = append(newNodesToCheck, children...)
@@ -373,7 +366,8 @@ func (s *sweeper) leafToSweepInputs(ctx context.Context, txBlocktime int64, node
 	for _, vtxo := range vtxos {
 		fromRepo, err := s.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{vtxo})
 		if err != nil {
-			return -1, nil, err
+			log.WithError(err).Error("error while getting vtxos from repo")
+			continue
 		}
 
 		if len(fromRepo) == 0 {
@@ -421,11 +415,16 @@ func (s *sweeper) leafToSweepInputs(ctx context.Context, txBlocktime int64, node
 	return expirationTime, sweepInputs, nil
 }
 
-func (s *sweeper) nodeToSweepInputs(txBlocktime int64, node tree.Node) (int64, []ports.SweepInput, error) {
+func (s *sweeper) nodeToSweepInputs(parentBlocktime int64, node tree.Node) (int64, []ports.SweepInput, error) {
 	pset, err := psetv2.NewPsetFromBase64(node.Tx)
 	if err != nil {
 		return -1, nil, err
 	}
+
+	if len(pset.Inputs) != 1 {
+		return -1, nil, fmt.Errorf("invalid node pset, expect 1 input, got %d", len(pset.Inputs))
+	}
+
 	// if the tx is not onchain, it means that the input is an existing shared output
 	input := pset.Inputs[0]
 	txid := chainhash.Hash(input.PreviousTxid).String()
@@ -436,7 +435,7 @@ func (s *sweeper) nodeToSweepInputs(txBlocktime int64, node tree.Node) (int64, [
 		return -1, nil, err
 	}
 
-	expirationTime := txBlocktime + lifetime
+	expirationTime := parentBlocktime + lifetime
 
 	amount := uint64(0)
 	for _, out := range pset.Outputs {
@@ -458,7 +457,7 @@ func (s *sweeper) nodeToSweepInputs(txBlocktime int64, node tree.Node) (int64, [
 }
 
 func computeSubTrees(congestionTree tree.CongestionTree, inputs []ports.SweepInput) ([]tree.CongestionTree, error) {
-	subTrees := make([]tree.CongestionTree, 0)
+	subTrees := make(map[string]tree.CongestionTree, 0)
 
 	// for each sweepable input, create a sub congestion tree
 	// it allows to skip the part of the tree that has been broadcasted in the next task
@@ -469,13 +468,19 @@ func computeSubTrees(congestionTree tree.CongestionTree, inputs []ports.SweepInp
 			continue
 		}
 
-		subTrees = append(subTrees, subTree)
+		root, err := subTree.Root()
+		if err != nil {
+			log.WithError(err).Error("error while getting root node")
+			continue
+		}
+
+		subTrees[root.Txid] = subTree
 	}
 
 	// filter out the sub trees, remove the ones that are included in others
 	filteredSubTrees := make([]tree.CongestionTree, 0)
 	for i, subTree := range subTrees {
-		includedInOtherTrees := true
+		notIncludedInOtherTrees := true
 
 		for j, otherSubTree := range subTrees {
 			if i == j {
@@ -486,13 +491,14 @@ func computeSubTrees(congestionTree tree.CongestionTree, inputs []ports.SweepInp
 				log.WithError(err).Error("error while checking if a tree contains another")
 				continue
 			}
+
 			if contains {
-				includedInOtherTrees = false
-				continue
+				notIncludedInOtherTrees = false
+				break
 			}
 		}
 
-		if includedInOtherTrees {
+		if notIncludedInOtherTrees {
 			filteredSubTrees = append(filteredSubTrees, subTree)
 		}
 	}

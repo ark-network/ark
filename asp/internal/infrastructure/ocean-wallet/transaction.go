@@ -95,7 +95,7 @@ func (s *service) GetTransaction(
 		return "", 0, err
 	}
 
-	if len(res.GetBlockDetails().GetHash()) > 0 {
+	if res.GetBlockDetails().GetTimestamp() > 0 {
 		return res.GetTxHex(), res.BlockDetails.GetTimestamp(), nil
 	}
 
