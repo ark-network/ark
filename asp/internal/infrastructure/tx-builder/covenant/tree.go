@@ -57,10 +57,10 @@ func buildCongestionTree(
 	}
 
 	return func(outpoint psetv2.InputArgs) (tree.CongestionTree, error) {
-		psets, err := root.psets(&psetArgs{
+		psets, err := createTreeTransactions(root, psetArgs{
 			input:       outpoint,
 			taprootTree: taprootTree,
-		}, 0)
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -263,7 +263,7 @@ type psetArgs struct {
 // create the node Pset from the previous node Pset represented by input arg
 // if node is a branch, it adds two outputs to the Pset, one for the left branch and one for the right branch
 // if node is a leaf, it only adds one output to the Pset (the node output)
-func (n *node) pset(args *psetArgs) (*psetv2.Pset, error) {
+func (n *node) pset(args psetArgs) (*psetv2.Pset, error) {
 	pset, err := psetv2.New(nil, nil, nil)
 	if err != nil {
 		return nil, err
@@ -274,10 +274,8 @@ func (n *node) pset(args *psetArgs) (*psetv2.Pset, error) {
 		return nil, err
 	}
 
-	if args != nil {
-		if err := addTaprootInput(updater, args.input, n.internalTaprootKey, args.taprootTree); err != nil {
-			return nil, err
-		}
+	if err := addTaprootInput(updater, args.input, n.internalTaprootKey, args.taprootTree); err != nil {
+		return nil, err
 	}
 
 	feeOutput := psetv2.OutputArgs{
@@ -322,79 +320,74 @@ type psetWithLevel struct {
 	leaf  bool
 }
 
-// create the node pset and all the psets of its children recursively, updating the input arg at each step
-// the function stops when it reaches a leaf node
-func (n *node) psets(inputArgs *psetArgs, level int) ([]psetWithLevel, error) {
-	if inputArgs == nil && level != 0 {
-		return nil, fmt.Errorf("only the first level must be pluggable")
+func createTreeTransactions(root *node, poolTxInput psetArgs) ([]psetWithLevel, error) {
+	transactions := make([]psetWithLevel, 0)
+
+	inputArgs := []psetArgs{poolTxInput}
+	nodes := []*node{root}
+
+	level := 0
+
+	for len(nodes) > 0 {
+		nextNodes := make([]*node, 0)
+		nextInputsArgs := make([]psetArgs, 0)
+
+		for i, node := range nodes {
+			pset, err := node.pset(inputArgs[i])
+			if err != nil {
+				return nil, err
+			}
+
+			txid, err := getPsetId(pset)
+			if err != nil {
+				return nil, err
+			}
+
+			isLeaf := node.isLeaf() || node.left.isEmpty() || node.right.isEmpty()
+			transactions = append(transactions, psetWithLevel{pset, level, isLeaf})
+			children := node.children()
+
+			for i, child := range children {
+				_, taprootTree, err := child.taprootKey()
+				if err != nil {
+					return nil, err
+				}
+
+				nextNodes = append(nextNodes, child)
+				nextInputsArgs = append(nextInputsArgs, psetArgs{
+					input: psetv2.InputArgs{
+						Txid:    txid,
+						TxIndex: uint32(i),
+					},
+					taprootTree: taprootTree,
+				})
+			}
+		}
+
+		level++
+		nodes = nextNodes
+		inputArgs = nextInputsArgs
 	}
 
-	pset, err := n.pset(inputArgs)
-	if err != nil {
-		return nil, err
-	}
+	return transactions, nil
+}
 
-	nodeResult := []psetWithLevel{
-		{pset, level, n.isLeaf() || (n.left.isEmpty() || n.right.isEmpty())},
-	}
-
-	if n.isLeaf() {
-		return nodeResult, nil
-	}
-
+func (n *node) children() []*node {
 	if n.isEmpty() {
-		return nodeResult, nil
+		return []*node{}
 	}
 
-	unsignedTx, err := pset.UnsignedTx()
-	if err != nil {
-		return nil, err
-	}
-
-	txID := unsignedTx.TxHash().String()
+	children := make([]*node, 0, 2)
 
 	if !n.left.isEmpty() {
-		_, leftTaprootTree, err := n.left.taprootKey()
-		if err != nil {
-			return nil, err
-		}
-
-		psetsLeft, err := n.left.psets(&psetArgs{
-			input: psetv2.InputArgs{
-				Txid:    txID,
-				TxIndex: 0,
-			},
-			taprootTree: leftTaprootTree,
-		}, level+1)
-		if err != nil {
-			return nil, err
-		}
-
-		nodeResult = append(nodeResult, psetsLeft...)
+		children = append(children, n.left)
 	}
 
 	if !n.right.isEmpty() {
-
-		_, rightTaprootTree, err := n.right.taprootKey()
-		if err != nil {
-			return nil, err
-		}
-
-		psetsRight, err := n.right.psets(&psetArgs{
-			input: psetv2.InputArgs{
-				Txid:    txID,
-				TxIndex: 1,
-			},
-			taprootTree: rightTaprootTree,
-		}, level+1)
-		if err != nil {
-			return nil, err
-		}
-
-		nodeResult = append(nodeResult, psetsRight...)
+		children = append(children, n.right)
 	}
 
-	return nodeResult, nil
+	return children
 }
 
 func craftCongestionTreeMatrix(psetsWithLevel []psetWithLevel) (tree.CongestionTree, error) {
@@ -513,4 +506,13 @@ func addTaprootInput(
 	}
 
 	return nil
+}
+
+func getPsetId(pset *psetv2.Pset) (string, error) {
+	utx, err := pset.UnsignedTx()
+	if err != nil {
+		return "", err
+	}
+
+	return utx.TxHash().String(), nil
 }
