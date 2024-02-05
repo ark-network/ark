@@ -57,7 +57,7 @@ func buildCongestionTree(
 	}
 
 	return func(outpoint psetv2.InputArgs) (tree.CongestionTree, error) {
-		psets, err := createTreeTransactions(root, psetArgs{
+		congestionTree, err := createCongestionTree(root, psetArgs{
 			input:       outpoint,
 			taprootTree: taprootTree,
 		})
@@ -65,7 +65,7 @@ func buildCongestionTree(
 			return nil, err
 		}
 
-		return craftCongestionTreeMatrix(psets)
+		return congestionTree, nil
 	}, sharedOutputScript, sharedOutputAmount, nil
 }
 
@@ -320,17 +320,17 @@ type psetWithLevel struct {
 	leaf  bool
 }
 
-func createTreeTransactions(root *node, poolTxInput psetArgs) ([]psetWithLevel, error) {
-	transactions := make([]psetWithLevel, 0)
+func createCongestionTree(root *node, poolTxInput psetArgs) (tree.CongestionTree, error) {
+	congestionTree := make(tree.CongestionTree, 0)
 
 	inputArgs := []psetArgs{poolTxInput}
 	nodes := []*node{root}
 
-	level := 0
-
 	for len(nodes) > 0 {
 		nextNodes := make([]*node, 0)
 		nextInputsArgs := make([]psetArgs, 0)
+
+		treeLevel := make([]tree.Node, 0)
 
 		for i, node := range nodes {
 			pset, err := node.pset(inputArgs[i])
@@ -343,8 +343,22 @@ func createTreeTransactions(root *node, poolTxInput psetArgs) ([]psetWithLevel, 
 				return nil, err
 			}
 
+			tx, err := pset.ToBase64()
+			if err != nil {
+				return nil, err
+			}
+
+			parentTxid := chainhash.Hash(pset.Inputs[0].PreviousTxid).String()
+
 			isLeaf := node.isLeaf() || node.left.isEmpty() || node.right.isEmpty()
-			transactions = append(transactions, psetWithLevel{pset, level, isLeaf})
+
+			treeLevel = append(treeLevel, tree.Node{
+				Txid:       txid,
+				Tx:         tx,
+				ParentTxid: parentTxid,
+				Leaf:       isLeaf,
+			})
+
 			children := node.children()
 
 			for i, child := range children {
@@ -364,17 +378,17 @@ func createTreeTransactions(root *node, poolTxInput psetArgs) ([]psetWithLevel, 
 			}
 		}
 
-		level++
-		nodes = nextNodes
-		inputArgs = nextInputsArgs
+		congestionTree = append(congestionTree, treeLevel)
+		copy(nodes, nextNodes)
+		copy(inputArgs, nextInputsArgs)
 	}
 
-	return transactions, nil
+	return congestionTree, nil
 }
 
 func (n *node) children() []*node {
 	if n.isEmpty() {
-		return []*node{}
+		return nil
 	}
 
 	children := make([]*node, 0, 2)
@@ -388,46 +402,6 @@ func (n *node) children() []*node {
 	}
 
 	return children
-}
-
-func craftCongestionTreeMatrix(psetsWithLevel []psetWithLevel) (tree.CongestionTree, error) {
-	maxLevel := 0
-	for _, psetWithLevel := range psetsWithLevel {
-		if psetWithLevel.level > maxLevel {
-			maxLevel = psetWithLevel.level
-		}
-	}
-
-	congestionTree := make(tree.CongestionTree, maxLevel+1)
-
-	for _, psetWithLevel := range psetsWithLevel {
-		utx, err := psetWithLevel.pset.UnsignedTx()
-		if err != nil {
-			return nil, err
-		}
-
-		txid := utx.TxHash().String()
-
-		psetB64, err := psetWithLevel.pset.ToBase64()
-		if err != nil {
-			return nil, err
-		}
-
-		parentTxid := chainhash.Hash(psetWithLevel.pset.Inputs[0].PreviousTxid).String()
-
-		if len(congestionTree) <= psetWithLevel.level {
-			congestionTree[psetWithLevel.level] = make([]tree.Node, 0)
-		}
-
-		congestionTree[psetWithLevel.level] = append(congestionTree[psetWithLevel.level], tree.Node{
-			Txid:       txid,
-			Tx:         psetB64,
-			ParentTxid: parentTxid,
-			Leaf:       psetWithLevel.leaf,
-		})
-	}
-
-	return congestionTree, nil
 }
 
 // createBinaryTree returns the root node of a binary tree containing all the receivers
