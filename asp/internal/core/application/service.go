@@ -352,20 +352,24 @@ func (s *service) listenToRedemptions() {
 	ctx := context.Background()
 	chVtxos := s.scanner.GetNotificationChannel(ctx)
 	for vtxoKeys := range chVtxos {
-		for {
-			// TODO: make sure that the vtxos haven't been already spent, otherwise
-			// broadcast the corresponding forfeit tx and connector to prevent
-			// getting cheated.
-			vtxos, err := s.repoManager.Vtxos().RedeemVtxos(ctx, vtxoKeys)
-			if err != nil {
-				continue
+		if len(vtxoKeys) > 0 {
+			for {
+				// TODO: make sure that the vtxos haven't been already spent, otherwise
+				// broadcast the corresponding forfeit tx and connector to prevent
+				// getting cheated.
+				vtxos, err := s.repoManager.Vtxos().RedeemVtxos(ctx, vtxoKeys)
+				if err != nil {
+					log.WithError(err).Warn("failed to redeem vtxos, retrying...")
+					time.Sleep(100 * time.Millisecond)
+					continue
+				}
+				log.Debugf("redeemed %d vtxos", len(vtxos))
+				// Keep in mind that different vtxos can be owned by the same script and
+				// therefore not all vtxos' locking scripts may need to be unwatched.
+				// For now it's ok tho, as the client supports unilateral redeem of all vtxos only.
+				s.stopWatchingVtxos(vtxos)
+				break
 			}
-			log.Debugf("redeemed %d vtxos", len(vtxos))
-			// Keep in mind that different vtxos can be owned by the same script and
-			// therefore not all vtxos locing scripts may need to be unwatched.
-			// For now it's ok as the client supports unilateral redeem of all vtxos only.
-			s.stopWatchingVtxos(vtxos)
-			break
 		}
 	}
 }
@@ -496,6 +500,7 @@ func (s *service) startWatchingVtxos(vtxos []domain.Vtxo) {
 
 	for {
 		if err := s.scanner.WatchScripts(context.Background(), scripts); err != nil {
+			log.WithError(err).Warn("failed to watch vtxos, retrying...")
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
@@ -533,6 +538,7 @@ func (s *service) stopWatchingVtxos(vtxos []domain.Vtxo) {
 
 	for {
 		if err := s.scanner.UnwatchScripts(context.Background(), scripts); err != nil {
+			log.WithError(err).Warn("failed to stop watching vtxos, retrying...")
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
