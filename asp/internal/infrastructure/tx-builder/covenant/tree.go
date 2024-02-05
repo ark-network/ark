@@ -36,7 +36,7 @@ func buildCongestionTree(
 		return nil, nil, 0, err
 	}
 
-	root, err := createRoot(receivers, aspPublicKey, unspendableKey, net, feeSatsPerNode)
+	root, err := createBinaryTree(receivers, aspPublicKey, unspendableKey, net, feeSatsPerNode)
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -437,8 +437,8 @@ func craftCongestionTreeMatrix(psetsWithLevel []psetWithLevel) (tree.CongestionT
 	return congestionTree, nil
 }
 
-// createRoot returns the root node of a binary tree containing all the receivers
-func createRoot(
+// createBinaryTree returns the root node of a binary tree containing all the receivers
+func createBinaryTree(
 	receivers []domain.Receiver,
 	aspPublicKey,
 	unspendableKey *secp256k1.PublicKey,
