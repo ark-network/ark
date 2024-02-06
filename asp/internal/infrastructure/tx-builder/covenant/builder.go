@@ -19,8 +19,6 @@ const (
 	connectorAmount = uint64(450)
 )
 
-var emptyNonce = []byte{0x00}
-
 type txBuilder struct {
 	wallet ports.WalletService
 	net    *network.Network
