@@ -161,8 +161,8 @@ func TestBuildCongestionTree(t *testing.T) {
 					},
 				},
 			},
-			expectedNodesNum:  1,
-			expectedLeavesNum: 1,
+			expectedNodesNum:  3,
+			expectedLeavesNum: 2,
 		},
 		{
 			payments: []domain.Payment{
@@ -242,8 +242,8 @@ func TestBuildCongestionTree(t *testing.T) {
 					},
 				},
 			},
-			expectedNodesNum:  5,
-			expectedLeavesNum: 3,
+			expectedNodesNum:  11,
+			expectedLeavesNum: 6,
 		}, {
 			payments: []domain.Payment{
 				{
@@ -324,8 +324,8 @@ func TestBuildCongestionTree(t *testing.T) {
 					},
 				},
 			},
-			expectedNodesNum:  4,
-			expectedLeavesNum: 3,
+			expectedNodesNum:  9,
+			expectedLeavesNum: 5,
 		},
 	}
 

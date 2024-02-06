@@ -30,8 +30,7 @@ func buildCongestionTree(
 	receivers []domain.Receiver,
 	feeSatsPerNode uint64,
 ) (pluggableTree pluggableCongestionTree, sharedOutputScript []byte, sharedOutputAmount uint64, err error) {
-	unspendableKeyBytes, _ := hex.DecodeString(tree.UnspendablePoint)
-	unspendableKey, err := secp256k1.ParsePubKey(unspendableKeyBytes)
+	unspendableKey, err := secp256k1.ParsePubKey(tree.UnspendablePoint)
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -118,7 +117,7 @@ func newBranch(
 }
 
 func (n *node) isLeaf() bool {
-	return (n.left == nil || n.left.isEmpty()) && (n.right == nil || n.right.isEmpty())
+	return len(n.receivers) == 1
 }
 
 // is it the final node of the tree
@@ -173,7 +172,7 @@ func (n *node) taprootKey() (*secp256k1.PublicKey, *taproot.IndexedElementsTapSc
 		return nil, nil, err
 	}
 
-	if n.isEmpty() {
+	if n.isLeaf() {
 		key, err := hex.DecodeString(n.receivers[0].Pubkey)
 		if err != nil {
 			return nil, nil, err
@@ -283,7 +282,7 @@ func (n *node) pset(args psetArgs) (*psetv2.Pset, error) {
 		Asset:  n.network.AssetID,
 	}
 
-	if n.isEmpty() {
+	if n.isLeaf() {
 		output, err := n.output()
 		if err != nil {
 			return nil, err
@@ -312,12 +311,6 @@ func (n *node) pset(args psetArgs) (*psetv2.Pset, error) {
 	}
 
 	return pset, nil
-}
-
-type psetWithLevel struct {
-	pset  *psetv2.Pset
-	level int
-	leaf  bool
 }
 
 func createCongestionTree(root *node, poolTxInput psetArgs) (tree.CongestionTree, error) {
@@ -350,13 +343,11 @@ func createCongestionTree(root *node, poolTxInput psetArgs) (tree.CongestionTree
 
 			parentTxid := chainhash.Hash(pset.Inputs[0].PreviousTxid).String()
 
-			isLeaf := node.isLeaf() || node.left.isEmpty() || node.right.isEmpty()
-
 			treeLevel = append(treeLevel, tree.Node{
 				Txid:       txid,
 				Tx:         tx,
 				ParentTxid: parentTxid,
-				Leaf:       isLeaf,
+				Leaf:       node.isLeaf(),
 			})
 
 			children := node.children()
@@ -379,25 +370,25 @@ func createCongestionTree(root *node, poolTxInput psetArgs) (tree.CongestionTree
 		}
 
 		congestionTree = append(congestionTree, treeLevel)
-		copy(nodes, nextNodes)
-		copy(inputArgs, nextInputsArgs)
+		nodes = append([]*node{}, nextNodes...)
+		inputArgs = append([]psetArgs{}, nextInputsArgs...)
 	}
 
 	return congestionTree, nil
 }
 
 func (n *node) children() []*node {
-	if n.isEmpty() {
+	if n.isLeaf() {
 		return nil
 	}
 
 	children := make([]*node, 0, 2)
 
-	if !n.left.isEmpty() {
+	if n.left != nil {
 		children = append(children, n.left)
 	}
 
-	if !n.right.isEmpty() {
+	if n.right != nil {
 		children = append(children, n.right)
 	}
 

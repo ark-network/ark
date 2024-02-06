@@ -1,8 +1,6 @@
 package txbuilder
 
 import (
-	"encoding/hex"
-
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -52,8 +50,7 @@ func createForfeitTx(
 		return "", err
 	}
 
-	unspendableKeyBytes, _ := hex.DecodeString(tree.UnspendablePoint)
-	unspendableKey, _ := secp256k1.ParsePubKey(unspendableKeyBytes)
+	unspendableKey, _ := secp256k1.ParsePubKey(tree.UnspendablePoint)
 
 	for _, proof := range vtxoTaprootTree.LeafMerkleProofs {
 		tapScript := psetv2.NewTapLeafScript(proof, unspendableKey)

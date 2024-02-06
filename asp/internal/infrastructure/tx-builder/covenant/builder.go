@@ -364,8 +364,7 @@ func (b *txBuilder) getLeafTaprootTree(userPubkey, aspPubkey *secp256k1.PublicKe
 	leafTaprootTree := taproot.AssembleTaprootScriptTree(*vtxoLeaf, *sweepTaprootLeaf)
 	root := leafTaprootTree.RootNode.TapHash()
 
-	unspendableKeyBytes, _ := hex.DecodeString(tree.UnspendablePoint)
-	unspendableKey, _ := secp256k1.ParsePubKey(unspendableKeyBytes)
+	unspendableKey, _ := secp256k1.ParsePubKey(tree.UnspendablePoint)
 
 	taprootKey := taproot.ComputeTaprootOutputKey(
 		unspendableKey,
