@@ -125,11 +125,12 @@ func (c *Config) txBuilderService() error {
 	var svc ports.TxBuilder
 	var err error
 	net := c.mainChain()
+
 	switch c.TxBuilderType {
 	case "dummy":
-		svc = txbuilderdummy.NewTxBuilder(net)
+		svc = txbuilderdummy.NewTxBuilder(c.wallet, net)
 	case "covenant":
-		svc = txbuilder.NewTxBuilder(net)
+		svc = txbuilder.NewTxBuilder(c.wallet, net)
 	default:
 		err = fmt.Errorf("unknown tx builder type")
 	}

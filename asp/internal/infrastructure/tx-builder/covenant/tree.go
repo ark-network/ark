@@ -20,20 +20,19 @@ const (
 )
 
 // the private method buildCongestionTree returns a function letting to plug in the pool transaction output as input of the tree's root node
-type pluggableCongestionTree func(outpoint psetv2.InputArgs) (tree.CongestionTree, error)
+type treeFactory func(outpoint psetv2.InputArgs) (tree.CongestionTree, error)
 
-// buildCongestionTree builder iteratively creates a binary tree of Pset from a set of receivers
+// prepareCongestionTree builder iteratively creates a binary tree of Pset from a set of receivers
 // it returns a factory function creating a CongestionTree and the associated output script to be used in the pool transaction
-func buildCongestionTree(
+func prepareCongestionTree(
 	net *network.Network,
 	aspPublicKey *secp256k1.PublicKey,
-	receivers []domain.Receiver,
+	payments []domain.Payment,
 	feeSatsPerNode uint64,
-) (pluggableTree pluggableCongestionTree, sharedOutputScript []byte, sharedOutputAmount uint64, err error) {
-	unspendableKey, err := secp256k1.ParsePubKey(tree.UnspendablePoint)
-	if err != nil {
-		return nil, nil, 0, err
-	}
+) (buildCongestionTree treeFactory, sharedOutputScript []byte, sharedOutputAmount uint64, err error) {
+	unspendableKey := tree.UnspendableKey()
+
+	receivers := getOffchainReceivers(payments)
 
 	root, err := createBinaryTree(receivers, aspPublicKey, unspendableKey, net, feeSatsPerNode)
 	if err != nil {
@@ -523,13 +522,4 @@ func addTaprootInput(
 	}
 
 	return nil
-}
-
-func getPsetId(pset *psetv2.Pset) (string, error) {
-	utx, err := pset.UnsignedTx()
-	if err != nil {
-		return "", err
-	}
-
-	return utx.TxHash().String(), nil
 }

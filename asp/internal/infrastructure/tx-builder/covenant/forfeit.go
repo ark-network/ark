@@ -2,87 +2,103 @@ package txbuilder
 
 import (
 	"github.com/ark-network/ark/common/tree"
+	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/btcsuite/btcd/txscript"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/elementsutil"
-	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/taproot"
 	"github.com/vulpemventures/go-elements/transaction"
 )
 
-func createForfeitTx(
-	connectorInput psetv2.InputArgs,
-	connectorWitnessUtxo *transaction.TxOutput,
-	vtxoInput psetv2.InputArgs,
-	vtxoWitnessUtxo *transaction.TxOutput,
+func craftForfeitTxs(
+	connectorTx *psetv2.Pset,
+	vtxo domain.Vtxo,
 	vtxoTaprootTree *taproot.IndexedElementsTapScriptTree,
-	aspScript []byte,
-	net network.Network,
-) (forfeitTx string, err error) {
-	pset, err := psetv2.New(nil, nil, nil)
-	if err != nil {
-		return "", err
-	}
+	vtxoScript, aspScript []byte,
+) (forfeitTxs []string, err error) {
+	connectors, prevouts := getConnectorInputs(connectorTx)
 
-	updater, err := psetv2.NewUpdater(pset)
-	if err != nil {
-		return "", err
-	}
+	for i, connectorInput := range connectors {
+		connectorPrevout := prevouts[i]
+		asset := elementsutil.AssetHashFromBytes(connectorPrevout.Asset)
 
-	if err = updater.AddInputs([]psetv2.InputArgs{connectorInput, vtxoInput}); err != nil {
-		return "", err
-	}
-
-	if err = updater.AddInWitnessUtxo(0, connectorWitnessUtxo); err != nil {
-		return "", err
-	}
-
-	if err := updater.AddInSighashType(0, txscript.SigHashAll); err != nil {
-		return "", err
-	}
-
-	if err = updater.AddInWitnessUtxo(1, vtxoWitnessUtxo); err != nil {
-		return "", err
-	}
-
-	if err := updater.AddInSighashType(1, txscript.SigHashDefault); err != nil {
-		return "", err
-	}
-
-	unspendableKey, _ := secp256k1.ParsePubKey(tree.UnspendablePoint)
-
-	for _, proof := range vtxoTaprootTree.LeafMerkleProofs {
-		tapScript := psetv2.NewTapLeafScript(proof, unspendableKey)
-		if err := updater.AddInTapLeafScript(1, tapScript); err != nil {
-			return "", err
+		pset, err := psetv2.New(nil, nil, nil)
+		if err != nil {
+			return nil, err
 		}
-	}
 
-	vtxoAmount, err := elementsutil.ValueFromBytes(vtxoWitnessUtxo.Value)
-	if err != nil {
-		return "", err
-	}
+		updater, err := psetv2.NewUpdater(pset)
+		if err != nil {
+			return nil, err
+		}
 
-	connectorAmount, err := elementsutil.ValueFromBytes(connectorWitnessUtxo.Value)
-	if err != nil {
-		return "", err
-	}
+		vtxoInput := psetv2.InputArgs{
+			Txid:    vtxo.Txid,
+			TxIndex: vtxo.VOut,
+		}
 
-	err = updater.AddOutputs([]psetv2.OutputArgs{
-		{
-			Asset:  net.AssetID,
-			Amount: vtxoAmount + connectorAmount - 30,
-			Script: aspScript,
-		},
-		{
-			Asset:  net.AssetID,
-			Amount: 30,
-		},
-	})
-	if err != nil {
-		return "", err
-	}
+		vtxoAmount, _ := elementsutil.ValueToBytes(vtxo.Amount)
+		vtxoPrevout := &transaction.TxOutput{
+			Asset:  connectorPrevout.Asset,
+			Value:  vtxoAmount,
+			Script: vtxoScript,
+		}
 
-	return pset.ToBase64()
+		if err := updater.AddInputs([]psetv2.InputArgs{connectorInput, vtxoInput}); err != nil {
+			return nil, err
+		}
+
+		if err = updater.AddInWitnessUtxo(0, connectorPrevout); err != nil {
+			return nil, err
+		}
+
+		if err := updater.AddInSighashType(0, txscript.SigHashAll); err != nil {
+			return nil, err
+		}
+
+		if err = updater.AddInWitnessUtxo(1, vtxoPrevout); err != nil {
+			return nil, err
+		}
+
+		if err := updater.AddInSighashType(1, txscript.SigHashDefault); err != nil {
+			return nil, err
+		}
+
+		unspendableKey := tree.UnspendableKey()
+
+		for _, proof := range vtxoTaprootTree.LeafMerkleProofs {
+			tapScript := psetv2.NewTapLeafScript(proof, unspendableKey)
+			if err := updater.AddInTapLeafScript(1, tapScript); err != nil {
+				return nil, err
+			}
+		}
+
+		connectorAmount, err := elementsutil.ValueFromBytes(connectorPrevout.Value)
+		if err != nil {
+			return nil, err
+		}
+
+		err = updater.AddOutputs([]psetv2.OutputArgs{
+			{
+				Asset:  asset,
+				Amount: vtxo.Amount + connectorAmount - 30,
+				Script: aspScript,
+			},
+			{
+				Asset:  asset,
+				Amount: 30,
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		tx, err := pset.ToBase64()
+		if err != nil {
+			return nil, err
+		}
+
+		forfeitTxs = append(forfeitTxs, tx)
+	}
+	return forfeitTxs, nil
 }

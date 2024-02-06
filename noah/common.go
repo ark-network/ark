@@ -456,7 +456,7 @@ func handleRoundStream(
 
 				vtxoTaprootTree := taproot.AssembleTaprootScriptTree(*vtxoScript, *sweepLeaf)
 				root := vtxoTaprootTree.RootNode.TapHash()
-				unspendableKey, _ := secp256k1.ParsePubKey(tree.UnspendablePoint)
+				unspendableKey := tree.UnspendableKey()
 				vtxoTaprootKey := schnorr.SerializePubKey(taproot.ComputeTaprootOutputKey(unspendableKey, root[:]))
 
 				leaves := congestionTree.Leaves()

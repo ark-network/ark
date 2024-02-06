@@ -99,7 +99,7 @@ func (*mockedWalletService) EstimateFees(ctx context.Context, pset string) (uint
 }
 
 func TestBuildCongestionTree(t *testing.T) {
-	builder := txbuilder.NewTxBuilder(network.Liquid)
+	builder := txbuilder.NewTxBuilder(&mockedWalletService{}, network.Liquid)
 
 	fixtures := []struct {
 		payments          []domain.Payment
@@ -334,7 +334,7 @@ func TestBuildCongestionTree(t *testing.T) {
 	require.NotNil(t, key)
 
 	for _, f := range fixtures {
-		poolTx, congestionTree, err := builder.BuildPoolTx(key, &mockedWalletService{}, f.payments, 30)
+		poolTx, congestionTree, err := builder.BuildPoolTx(key, f.payments, 30)
 		require.NoError(t, err)
 		require.Equal(t, f.expectedNodesNum, congestionTree.NumberOfNodes())
 		require.Len(t, congestionTree.Leaves(), f.expectedLeavesNum)
@@ -351,7 +351,7 @@ func TestBuildCongestionTree(t *testing.T) {
 }
 
 func TestBuildForfeitTxs(t *testing.T) {
-	builder := txbuilder.NewTxBuilder(network.Liquid)
+	builder := txbuilder.NewTxBuilder(&mockedWalletService{}, network.Liquid)
 
 	poolTx, err := psetv2.NewPsetFromBase64(fakePoolTx)
 	require.NoError(t, err)

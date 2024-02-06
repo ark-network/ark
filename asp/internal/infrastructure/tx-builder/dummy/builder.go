@@ -19,11 +19,14 @@ const (
 )
 
 type txBuilder struct {
-	net network.Network
+	wallet ports.WalletService
+	net    network.Network
 }
 
-func NewTxBuilder(net network.Network) ports.TxBuilder {
-	return &txBuilder{net}
+func NewTxBuilder(
+	wallet ports.WalletService, net network.Network,
+) ports.TxBuilder {
+	return &txBuilder{wallet, net}
 }
 
 // BuildForfeitTxs implements ports.TxBuilder.
@@ -40,7 +43,7 @@ func (b *txBuilder) BuildForfeitTxs(
 		return nil, nil, err
 	}
 
-	numberOfConnectors := numberOfVTXOs(payments)
+	numberOfConnectors := countSpentVtxos(payments)
 
 	connectors, err = createConnectors(
 		poolTxID,
@@ -90,8 +93,7 @@ func (b *txBuilder) BuildForfeitTxs(
 
 // BuildPoolTx implements ports.TxBuilder.
 func (b *txBuilder) BuildPoolTx(
-	aspPubkey *secp256k1.PublicKey, wallet ports.WalletService, payments []domain.Payment,
-	minRelayFee uint64,
+	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, minRelayFee uint64,
 ) (poolTx string, congestionTree tree.CongestionTree, err error) {
 	aspScriptBytes, err := p2wpkhScript(aspPubkey, b.net)
 	if err != nil {
@@ -101,7 +103,7 @@ func (b *txBuilder) BuildPoolTx(
 	offchainReceivers, onchainReceivers := receiversFromPayments(payments)
 	sharedOutputAmount := sumReceivers(offchainReceivers)
 
-	numberOfConnectors := numberOfVTXOs(payments)
+	numberOfConnectors := countSpentVtxos(payments)
 	connectorOutputAmount := connectorAmount * numberOfConnectors
 
 	ctx := context.Background()
@@ -136,7 +138,7 @@ func (b *txBuilder) BuildPoolTx(
 		})
 	}
 
-	utxos, change, err := wallet.SelectUtxos(ctx, b.net.AssetID, amountToSelect)
+	utxos, change, err := b.wallet.SelectUtxos(ctx, b.net.AssetID, amountToSelect)
 	if err != nil {
 		return
 	}
@@ -177,7 +179,7 @@ func (b *txBuilder) BuildPoolTx(
 	return poolTx, congestionTree, err
 }
 
-func (b *txBuilder) GetLeafOutputScript(userPubkey, _ *secp256k1.PublicKey) ([]byte, error) {
+func (b *txBuilder) GetVtxoOutputScript(userPubkey, _ *secp256k1.PublicKey) ([]byte, error) {
 	p2wpkh := payment.FromPublicKey(userPubkey, &b.net, nil)
 	addr, _ := p2wpkh.WitnessPubKeyHash()
 	return address.ToOutputScript(addr)
@@ -226,7 +228,7 @@ func getTxid(txStr string) (string, error) {
 	return utx.TxHash().String(), nil
 }
 
-func numberOfVTXOs(payments []domain.Payment) uint64 {
+func countSpentVtxos(payments []domain.Payment) uint64 {
 	var sum uint64
 	for _, payment := range payments {
 		sum += uint64(len(payment.Inputs))

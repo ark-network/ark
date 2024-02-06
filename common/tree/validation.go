@@ -47,7 +47,7 @@ var (
 )
 
 // 0250929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0
-var UnspendablePoint = []byte{
+var unspendablePoint = []byte{
 	0x02, 0x50, 0x92, 0x9b, 0x74, 0xc1, 0xa0, 0x49, 0x54, 0xb7, 0x8b, 0x4b, 0x60, 0x35, 0xe9, 0x7a,
 	0x5e, 0x07, 0x8a, 0x5a, 0x0f, 0x28, 0xec, 0x96, 0xd5, 0x47, 0xbf, 0xee, 0x9a, 0xce, 0x80, 0x3a, 0xc0,
 }
@@ -55,6 +55,11 @@ var UnspendablePoint = []byte{
 const (
 	sharedOutputIndex = 0
 )
+
+func UnspendableKey() *secp256k1.PublicKey {
+	key, _ := secp256k1.ParsePubKey(unspendablePoint)
+	return key
+}
 
 // ValidateCongestionTree checks if the given congestion tree is valid
 // poolTxID & poolTxIndex & poolTxAmount are used to validate the root input outpoint
@@ -71,10 +76,7 @@ func ValidateCongestionTree(
 	aspPublicKey *secp256k1.PublicKey,
 	roundLifetimeSeconds uint,
 ) error {
-	unspendableKey, err := secp256k1.ParsePubKey(UnspendablePoint)
-	if err != nil {
-		return fmt.Errorf("invalid unspendable key: %w", err)
-	}
+	unspendableKey := UnspendableKey()
 
 	poolTransaction, err := psetv2.NewPsetFromBase64(poolTx)
 	if err != nil {
