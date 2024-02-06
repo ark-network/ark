@@ -31,6 +31,7 @@ var (
 	ErrNumberOfTapscripts            = errors.New("input should have two tapscripts leaves")
 	ErrInternalKey                   = errors.New("taproot internal key is not unspendable")
 	ErrInvalidTaprootScript          = errors.New("invalid taproot script")
+	ErrInvalidTaprootScriptLen       = errors.New("invalid taproot script length (expected 32 bytes)")
 	ErrInvalidLeafTaprootScript      = errors.New("invalid leaf taproot script")
 	ErrInvalidAmount                 = errors.New("children amount is different from parent amount")
 	ErrInvalidAsset                  = errors.New("invalid output asset")
@@ -196,7 +197,7 @@ func validateNodeTransaction(
 
 	children := tree.Children(node.Txid)
 
-	if node.Leaf && len(children) > 1 {
+	if node.Leaf && len(children) >= 1 {
 		return ErrLeafChildren
 	}
 
@@ -248,7 +249,7 @@ func validateNodeTransaction(
 
 			isBranchLeaf, leftKey, rightKey, leftAmount, rightAmount, err := decodeBranchScript(tapLeaf.Script)
 			if err != nil {
-				return fmt.Errorf("invalid vtxo script: %w", err)
+				return fmt.Errorf("invalid branch script: %w", err)
 			}
 
 			if isBranchLeaf {
