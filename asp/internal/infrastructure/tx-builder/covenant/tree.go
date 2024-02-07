@@ -52,10 +52,7 @@ func prepareCongestionTree(
 	sharedOutputAmount = root.inputAmount()
 
 	return func(outpoint psetv2.InputArgs) (tree.CongestionTree, error) {
-		congestionTree, err := createCongestionTree(root, psetArgs{
-			input:       outpoint,
-			taprootTree: taprootTree,
-		})
+		congestionTree, err := createCongestionTree(root, outpoint, taprootTree)
 		if err != nil {
 			return nil, err
 		}
@@ -153,6 +150,7 @@ func (n *node) outputAmount() uint64 {
 
 }
 
+// compute the taproot key locking the parent output of the node
 func (n *node) inputTaprootKey() (*secp256k1.PublicKey, *taproot.IndexedElementsTapScriptTree, error) {
 	sweepTaprootLeaf, err := tree.SweepScript(n.sweepKey, expirationTime)
 	if err != nil {
@@ -160,7 +158,7 @@ func (n *node) inputTaprootKey() (*secp256k1.PublicKey, *taproot.IndexedElements
 	}
 
 	if n.isLeaf() {
-		taprootKey, _, err := n.outputTaprootKey()
+		taprootKey, _, err := n.leafTaprootKey()
 		if err != nil {
 			return nil, nil, err
 		}
@@ -205,41 +203,41 @@ func (n *node) inputTaprootKey() (*secp256k1.PublicKey, *taproot.IndexedElements
 	return taprootKey, branchTaprootTree, nil
 }
 
-func (n *node) outputTaprootKey() (*secp256k1.PublicKey, *taproot.IndexedElementsTapScriptTree, error) {
+func (n *node) leafTaprootKey() (*secp256k1.PublicKey, *taproot.IndexedElementsTapScriptTree, error) {
+	if !n.isLeaf() {
+		return nil, nil, fmt.Errorf("cannot call leafTaprootKey on a non-leaf node")
+	}
+
 	sweepTaprootLeaf, err := tree.SweepScript(n.sweepKey, expirationTime)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if n.isLeaf() {
-		key, err := hex.DecodeString(n.receivers[0].Pubkey)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		pubkey, err := secp256k1.ParsePubKey(key)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		vtxoLeaf, err := tree.VtxoScript(pubkey)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		// TODO: add forfeit path
-		leafTaprootTree := taproot.AssembleTaprootScriptTree(*vtxoLeaf, *sweepTaprootLeaf)
-		root := leafTaprootTree.RootNode.TapHash()
-
-		taprootKey := taproot.ComputeTaprootOutputKey(
-			n.internalTaprootKey,
-			root[:],
-		)
-
-		return taprootKey, leafTaprootTree, nil
+	key, err := hex.DecodeString(n.receivers[0].Pubkey)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	return nil, nil, fmt.Errorf("branch node has no output taproot key")
+	pubkey, err := secp256k1.ParsePubKey(key)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	vtxoLeaf, err := tree.VtxoScript(pubkey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// TODO: add forfeit path
+	leafTaprootTree := taproot.AssembleTaprootScriptTree(*vtxoLeaf, *sweepTaprootLeaf)
+	root := leafTaprootTree.RootNode.TapHash()
+
+	taprootKey := taproot.ComputeTaprootOutputKey(
+		n.internalTaprootKey,
+		root[:],
+	)
+
+	return taprootKey, leafTaprootTree, nil
 }
 
 func (n *node) inputScript() ([]byte, error) {
@@ -251,9 +249,8 @@ func (n *node) inputScript() ([]byte, error) {
 	return taprootOutputScript(taprootKey)
 }
 
-// compute the output outputScript of a node
-func (n *node) outputScript() ([]byte, error) {
-	taprootKey, _, err := n.outputTaprootKey()
+func (n *node) leafOutputScript() ([]byte, error) {
+	taprootKey, _, err := n.leafTaprootKey()
 	if err != nil {
 		return nil, err
 	}
@@ -261,9 +258,8 @@ func (n *node) outputScript() ([]byte, error) {
 	return taprootOutputScript(taprootKey)
 }
 
-// use script & amount() to create OutputArgs
-func (n *node) output() (*psetv2.OutputArgs, error) {
-	script, err := n.outputScript()
+func (n *node) leafOutput() (*psetv2.OutputArgs, error) {
+	script, err := n.leafOutputScript()
 	if err != nil {
 		return nil, err
 	}
@@ -277,9 +273,15 @@ func (n *node) output() (*psetv2.OutputArgs, error) {
 	return output, nil
 }
 
-func (n *node) childrenOutputs() ([]psetv2.OutputArgs, error) {
+// returns the outputs of the node's pset
+func (n *node) outputs() ([]psetv2.OutputArgs, error) {
 	if n.isLeaf() {
-		return nil, fmt.Errorf("leaf node has no children")
+		output, err := n.leafOutput()
+		if err != nil {
+			return nil, err
+		}
+
+		return []psetv2.OutputArgs{*output}, nil
 	}
 
 	outputs := make([]psetv2.OutputArgs, 0, 2)
@@ -312,15 +314,36 @@ func (n *node) childrenOutputs() ([]psetv2.OutputArgs, error) {
 	return outputs, nil
 }
 
-type psetArgs struct {
-	input       psetv2.InputArgs
-	taprootTree *taproot.IndexedElementsTapScriptTree
+func (n *node) toMatrixNode(input psetv2.InputArgs, tapTree *taproot.IndexedElementsTapScriptTree) (tree.Node, error) {
+	pset, err := n.pset(input, tapTree)
+	if err != nil {
+		return tree.Node{}, err
+	}
+
+	txid, err := getPsetId(pset)
+	if err != nil {
+		return tree.Node{}, err
+	}
+
+	tx, err := pset.ToBase64()
+	if err != nil {
+		return tree.Node{}, err
+	}
+
+	parentTxid := chainhash.Hash(pset.Inputs[0].PreviousTxid).String()
+
+	return tree.Node{
+		Txid:       txid,
+		Tx:         tx,
+		ParentTxid: parentTxid,
+		Leaf:       n.isLeaf(),
+	}, nil
 }
 
 // create the node Pset from the previous node Pset represented by input arg
 // if node is a branch, it adds two outputs to the Pset, one for the left branch and one for the right branch
 // if node is a leaf, it only adds one output to the Pset (the node output)
-func (n *node) pset(args psetArgs) (*psetv2.Pset, error) {
+func (n *node) pset(input psetv2.InputArgs, inputTapTree *taproot.IndexedElementsTapScriptTree) (*psetv2.Pset, error) {
 	pset, err := psetv2.New(nil, nil, nil)
 	if err != nil {
 		return nil, err
@@ -331,7 +354,7 @@ func (n *node) pset(args psetArgs) (*psetv2.Pset, error) {
 		return nil, err
 	}
 
-	if err := addTaprootInput(updater, args.input, n.internalTaprootKey, args.taprootTree); err != nil {
+	if err := addTaprootInput(updater, input, n.internalTaprootKey, inputTapTree); err != nil {
 		return nil, err
 	}
 
@@ -340,19 +363,7 @@ func (n *node) pset(args psetArgs) (*psetv2.Pset, error) {
 		Asset:  n.network.AssetID,
 	}
 
-	if n.isLeaf() {
-		output, err := n.output()
-		if err != nil {
-			return nil, err
-		}
-
-		if err := updater.AddOutputs([]psetv2.OutputArgs{*output, feeOutput}); err != nil {
-			return nil, err
-		}
-		return pset, nil
-	}
-
-	outputs, err := n.childrenOutputs()
+	outputs, err := n.outputs()
 	if err != nil {
 		return nil, err
 	}
@@ -364,42 +375,31 @@ func (n *node) pset(args psetArgs) (*psetv2.Pset, error) {
 	return pset, nil
 }
 
-func createCongestionTree(root *node, poolTxInput psetArgs) (tree.CongestionTree, error) {
+func createCongestionTree(
+	root *node,
+	poolTxInput psetv2.InputArgs,
+	poolTxTaprootTree *taproot.IndexedElementsTapScriptTree,
+) (tree.CongestionTree, error) {
 	congestionTree := make(tree.CongestionTree, 0)
 
-	inputArgs := []psetArgs{poolTxInput}
+	inputArgs := []psetv2.InputArgs{poolTxInput}
+	inputTaprootTrees := []*taproot.IndexedElementsTapScriptTree{poolTxTaprootTree}
 	nodes := []*node{root}
 
 	for len(nodes) > 0 {
 		nextNodes := make([]*node, 0)
-		nextInputsArgs := make([]psetArgs, 0)
+		nextInputsArgs := make([]psetv2.InputArgs, 0)
+		nextTaprootTrees := make([]*taproot.IndexedElementsTapScriptTree, 0)
 
 		treeLevel := make([]tree.Node, 0)
 
 		for i, node := range nodes {
-			pset, err := node.pset(inputArgs[i])
+			matrixNode, err := node.toMatrixNode(inputArgs[i], inputTaprootTrees[i])
 			if err != nil {
 				return nil, err
 			}
 
-			txid, err := getPsetId(pset)
-			if err != nil {
-				return nil, err
-			}
-
-			tx, err := pset.ToBase64()
-			if err != nil {
-				return nil, err
-			}
-
-			parentTxid := chainhash.Hash(pset.Inputs[0].PreviousTxid).String()
-
-			treeLevel = append(treeLevel, tree.Node{
-				Txid:       txid,
-				Tx:         tx,
-				ParentTxid: parentTxid,
-				Leaf:       node.isLeaf(),
-			})
+			treeLevel = append(treeLevel, matrixNode)
 
 			children := node.children()
 
@@ -410,19 +410,18 @@ func createCongestionTree(root *node, poolTxInput psetArgs) (tree.CongestionTree
 				}
 
 				nextNodes = append(nextNodes, child)
-				nextInputsArgs = append(nextInputsArgs, psetArgs{
-					input: psetv2.InputArgs{
-						Txid:    txid,
-						TxIndex: uint32(i),
-					},
-					taprootTree: taprootTree,
+				nextInputsArgs = append(nextInputsArgs, psetv2.InputArgs{
+					Txid:    matrixNode.Txid,
+					TxIndex: uint32(i),
 				})
+				nextTaprootTrees = append(nextTaprootTrees, taprootTree)
 			}
 		}
 
 		congestionTree = append(congestionTree, treeLevel)
 		nodes = append([]*node{}, nextNodes...)
-		inputArgs = append([]psetArgs{}, nextInputsArgs...)
+		inputArgs = append([]psetv2.InputArgs{}, nextInputsArgs...)
+		inputTaprootTrees = append([]*taproot.IndexedElementsTapScriptTree{}, nextTaprootTrees...)
 	}
 
 	return congestionTree, nil
