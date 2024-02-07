@@ -285,29 +285,18 @@ func (n *node) outputs() ([]psetv2.OutputArgs, error) {
 	}
 
 	outputs := make([]psetv2.OutputArgs, 0, 2)
+	children := n.children()
 
-	if n.left != nil {
-		leftInputScript, err := n.left.inputScript()
-		if err != nil {
-			return nil, err
-		}
-		outputs = append(outputs, psetv2.OutputArgs{
-			Asset:  n.network.AssetID,
-			Amount: n.left.inputAmount(),
-			Script: leftInputScript,
-		})
-	}
-
-	if n.right != nil {
-		rightInputScript, err := n.right.inputScript()
+	for _, child := range children {
+		script, err := child.inputScript()
 		if err != nil {
 			return nil, err
 		}
 
 		outputs = append(outputs, psetv2.OutputArgs{
 			Asset:  n.network.AssetID,
-			Amount: n.right.inputAmount(),
-			Script: rightInputScript,
+			Amount: child.inputAmount(),
+			Script: script,
 		})
 	}
 
