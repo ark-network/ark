@@ -151,6 +151,7 @@ func randomInput() []ports.TxInput {
 
 func randomHex(len int) string {
 	buf := make([]byte, len)
+	// nolint:errcheck
 	rand.Read(buf)
 	return hex.EncodeToString(buf)
 }
