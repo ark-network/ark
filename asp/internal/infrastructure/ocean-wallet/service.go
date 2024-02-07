@@ -105,7 +105,7 @@ func (s *service) listenToNotificaitons() {
 			return
 		}
 
-		if msg.GetEventType() != pb.UtxoEventType_UTXO_EVENT_TYPE_SPENT {
+		if msg.GetEventType() != pb.UtxoEventType_UTXO_EVENT_TYPE_NEW {
 			continue
 		}
 		vtxos := toVtxos(msg.GetUtxos())
