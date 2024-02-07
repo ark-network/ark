@@ -74,7 +74,7 @@ func ValidateCongestionTree(
 	tree CongestionTree,
 	poolTx string,
 	aspPublicKey *secp256k1.PublicKey,
-	roundLifetimeSeconds uint,
+	roundLifetimeSeconds int64,
 ) error {
 	unspendableKey := UnspendableKey()
 
@@ -151,7 +151,7 @@ func validateNodeTransaction(
 	tree CongestionTree,
 	expectedInternalKey,
 	expectedPublicKeyASP *secp256k1.PublicKey,
-	expectedSequenceSeconds uint,
+	expectedSequenceSeconds int64,
 ) error {
 	if node.Tx == "" {
 		return ErrNodeTransactionEmpty
@@ -241,7 +241,7 @@ func validateNodeTransaction(
 					return ErrInvalidASP
 				}
 
-				if seconds != expectedSequenceSeconds {
+				if int64(seconds) != expectedSequenceSeconds {
 					return ErrInvalidSweepSequence
 				}
 
