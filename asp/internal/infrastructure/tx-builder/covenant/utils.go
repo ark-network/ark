@@ -6,6 +6,7 @@ import (
 
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/address"
@@ -13,6 +14,7 @@ import (
 	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
+	"github.com/vulpemventures/go-elements/taproot"
 	"github.com/vulpemventures/go-elements/transaction"
 )
 
@@ -129,4 +131,37 @@ func addInputs(
 	}
 
 	return nil
+}
+
+// wrapper of updater methods adding a taproot input to the pset with all the necessary data to spend it via any taproot script
+func addTaprootInput(
+	updater *psetv2.Updater,
+	input psetv2.InputArgs,
+	internalTaprootKey *secp256k1.PublicKey,
+	taprootTree *taproot.IndexedElementsTapScriptTree,
+) error {
+	if err := updater.AddInputs([]psetv2.InputArgs{input}); err != nil {
+		return err
+	}
+
+	if err := updater.AddInTapInternalKey(0, schnorr.SerializePubKey(internalTaprootKey)); err != nil {
+		return err
+	}
+
+	for _, proof := range taprootTree.LeafMerkleProofs {
+		controlBlock := proof.ToControlBlock(internalTaprootKey)
+
+		if err := updater.AddInTapLeafScript(0, psetv2.TapLeafScript{
+			TapElementsLeaf: taproot.NewBaseTapElementsLeaf(proof.Script),
+			ControlBlock:    controlBlock,
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func taprootOutputScript(taprootKey *secp256k1.PublicKey) ([]byte, error) {
+	return txscript.NewScriptBuilder().AddOp(txscript.OP_1).AddData(schnorr.SerializePubKey(taprootKey)).Script()
 }

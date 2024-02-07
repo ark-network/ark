@@ -24,6 +24,8 @@ require (
 	google.golang.org/protobuf v1.31.0
 )
 
+require github.com/stretchr/objx v0.5.0 // indirect
+
 require (
 	github.com/btcsuite/btcd v0.23.1
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2

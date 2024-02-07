@@ -64,12 +64,17 @@ func (b *txBuilder) BuildPoolTx(
 	// The creation of the tree and the pool tx are tightly coupled:
 	// - building the tree requires knowing the shared outpoint (txid:vout)
 	// - building the pool tx requires knowing the shared output script and amount
-	// For these reasons, prepareCongestionTree returns...
+	// The idea here is to first create all the data for the outputs of the txs
+	// of the congestion tree to calculate the shared output script and amount.
+	// With these data the pool tx can be created, and once the shared utxo
+	// outpoint is obtained, the congestion tree can be finally created.
+	// The factory function `buildCongestionTree` returned below holds all
+	// outputs data generated in the process and takes the shared utxo outpoint
+	// as argument.
+	// This is safe as the memory allocated for `prepareCongestionTree` is freed
+	// only after `BuildPoolTx` returns.
 	buildCongestionTree, sharedOutputScript, sharedOutputAmount, err := prepareCongestionTree(
-		b.net,
-		aspPubkey,
-		payments,
-		minRelayFee,
+		b.net.AssetID, aspPubkey, payments, minRelayFee,
 	)
 	if err != nil {
 		return

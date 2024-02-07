@@ -76,8 +76,6 @@ func ValidateCongestionTree(
 	aspPublicKey *secp256k1.PublicKey,
 	roundLifetimeSeconds int64,
 ) error {
-	unspendableKey := UnspendableKey()
-
 	poolTransaction, err := psetv2.NewPsetFromBase64(poolTx)
 	if err != nil {
 		return ErrInvalidPoolTransaction
@@ -137,7 +135,7 @@ func ValidateCongestionTree(
 	// iterates over all the nodes of the tree
 	for _, level := range tree {
 		for _, node := range level {
-			if err := validateNodeTransaction(node, tree, unspendableKey, aspPublicKey, roundLifetimeSeconds); err != nil {
+			if err := validateNodeTransaction(node, tree, UnspendableKey(), aspPublicKey, roundLifetimeSeconds); err != nil {
 				return err
 			}
 		}
