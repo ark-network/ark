@@ -106,12 +106,8 @@ func decodeWithOutputScript(script []byte, expectedIndex byte, isVerify bool) (v
 		return false, nil, 0, err
 	}
 
-	inspectOutputValueIndex := bytes.IndexByte(script, OP_INSPECTOUTPUTVALUE)
-	if inspectOutputValueIndex == -1 {
-		return false, nil, 0, nil
-	}
-
-	if script[inspectOutputValueIndex-1] != expectedIndex {
+	// verify the index of INSPECTVALUE
+	if script[38] != expectedIndex {
 		return false, nil, 0, nil
 	}
 
@@ -128,12 +124,12 @@ func decodeWithOutputScript(script []byte, expectedIndex byte, isVerify bool) (v
 }
 
 func decodeChecksigScript(script []byte) (valid bool, pubkey *secp256k1.PublicKey, err error) {
-	checksigIndex := bytes.Index(script, []byte{txscript.OP_CHECKSIG})
-	if checksigIndex == -1 || checksigIndex == 0 {
+	data32Index := bytes.Index(script, []byte{txscript.OP_DATA_32})
+	if data32Index == -1 {
 		return false, nil, nil
 	}
 
-	key := script[1:checksigIndex]
+	key := script[data32Index+1 : data32Index+33]
 	if len(key) != 32 {
 		return false, nil, nil
 	}
@@ -155,13 +151,13 @@ func decodeChecksigScript(script []byte) (valid bool, pubkey *secp256k1.PublicKe
 	return true, pubkey, nil
 }
 
-func decodeSweepScript(script []byte) (valid bool, aspPubKey *secp256k1.PublicKey, seconds uint, err error) {
+func DecodeSweepScript(script []byte) (valid bool, aspPubKey *secp256k1.PublicKey, seconds uint, err error) {
 	csvIndex := bytes.Index(script, []byte{txscript.OP_CHECKSEQUENCEVERIFY, txscript.OP_DROP})
 	if csvIndex == -1 || csvIndex == 0 {
 		return false, nil, 0, nil
 	}
 
-	sequence := script[:csvIndex]
+	sequence := script[1:csvIndex]
 
 	seconds, err = common.BIP68Decode(sequence)
 	if err != nil {
@@ -172,6 +168,10 @@ func decodeSweepScript(script []byte) (valid bool, aspPubKey *secp256k1.PublicKe
 	valid, aspPubKey, err = decodeChecksigScript(checksigScript)
 	if err != nil {
 		return false, nil, 0, err
+	}
+
+	if !valid {
+		return false, nil, 0, nil
 	}
 
 	rebuilt, err := csvChecksigScript(aspPubKey, seconds)
@@ -193,10 +193,10 @@ func checkSequenceVerifyScript(seconds uint) ([]byte, error) {
 		return nil, err
 	}
 
-	return append(sequence, []byte{
+	return txscript.NewScriptBuilder().AddData(sequence).AddOps([]byte{
 		txscript.OP_CHECKSEQUENCEVERIFY,
 		txscript.OP_DROP,
-	}...), nil
+	}).Script()
 }
 
 // checkSequenceVerifyScript + checksig

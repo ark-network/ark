@@ -44,7 +44,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestBuildPoolTx(t *testing.T) {
-	builder := txbuilder.NewTxBuilder(wallet, network.Liquid)
+	builder := txbuilder.NewTxBuilder(wallet, network.Liquid, roundLifetime)
 
 	fixtures, err := parsePoolTxFixtures()
 	require.NoError(t, err)
@@ -79,7 +79,7 @@ func TestBuildPoolTx(t *testing.T) {
 }
 
 func TestBuildForfeitTxs(t *testing.T) {
-	builder := txbuilder.NewTxBuilder(wallet, network.Liquid)
+	builder := txbuilder.NewTxBuilder(wallet, network.Liquid, 1209344)
 
 	fixtures, err := parseForfeitTxsFixtures()
 	require.NoError(t, err)

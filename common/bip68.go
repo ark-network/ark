@@ -18,17 +18,25 @@ func closerToModulo512(x uint) uint {
 	return x - (x % 512)
 }
 
-// BIP68Encode returns the encoded sequence locktime for the given number of seconds.
-func BIP68Encode(seconds uint) ([]byte, error) {
+func BIP68EncodeAsNumber(seconds uint) (uint32, error) {
 	seconds = closerToModulo512(seconds)
 	if seconds > SECONDS_MAX {
-		return nil, fmt.Errorf("seconds too large, max is %d", SECONDS_MAX)
+		return 0, fmt.Errorf("seconds too large, max is %d", SECONDS_MAX)
 	}
 	if seconds%SECONDS_MOD != 0 {
-		return nil, fmt.Errorf("seconds must be a multiple of %d", SECONDS_MOD)
+		return 0, fmt.Errorf("seconds must be a multiple of %d", SECONDS_MOD)
 	}
 
 	asNumber := SEQUENCE_LOCKTIME_TYPE_FLAG | (seconds >> SEQUENCE_LOCKTIME_GRANULARITY)
+	return uint32(asNumber), nil
+}
+
+// BIP68Encode returns the encoded sequence locktime for the given number of seconds.
+func BIP68Encode(seconds uint) ([]byte, error) {
+	asNumber, err := BIP68EncodeAsNumber(seconds)
+	if err != nil {
+		return nil, err
+	}
 	hexString := fmt.Sprintf("%x", asNumber)
 	reversed, err := hex.DecodeString(hexString)
 	if err != nil {

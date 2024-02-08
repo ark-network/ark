@@ -97,6 +97,32 @@ func (m *mockedWallet) EstimateFees(ctx context.Context, pset string) (uint64, e
 	return res, args.Error(1)
 }
 
+func (m *mockedWallet) IsTransactionPublished(ctx context.Context, txid string) (bool, int64, error) {
+	args := m.Called(ctx, txid)
+
+	var res bool
+	if a := args.Get(0); a != nil {
+		res = a.(bool)
+	}
+
+	var blocktime int64
+	if b := args.Get(1); b != nil {
+		blocktime = b.(int64)
+	}
+
+	return res, blocktime, args.Error(2)
+}
+
+func (m *mockedWallet) SignPsetWithKey(ctx context.Context, pset string, inputIndexes []int) (string, error) {
+	args := m.Called(ctx, pset, inputIndexes)
+
+	var res string
+	if a := args.Get(0); a != nil {
+		res = a.(string)
+	}
+	return res, args.Error(1)
+}
+
 func (m *mockedWallet) WatchScripts(
 	ctx context.Context, scripts []string,
 ) error {

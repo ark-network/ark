@@ -229,7 +229,7 @@ func validateNodeTransaction(
 				return ErrInvalidTaprootScript
 			}
 
-			isSweepLeaf, aspKey, seconds, err := decodeSweepScript(tapLeaf.Script)
+			isSweepLeaf, aspKey, seconds, err := DecodeSweepScript(tapLeaf.Script)
 			if err != nil {
 				return fmt.Errorf("invalid sweep script: %w", err)
 			}

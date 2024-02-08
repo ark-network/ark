@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 
 	"github.com/ark-network/ark/common/tree"
@@ -24,14 +23,38 @@ type RedeemBranch interface {
 type redeemBranch struct {
 	vtxo         *vtxo
 	branch       []*psetv2.Pset
-	sweepTapLeaf *taproot.TapElementsLeaf
 	internalKey  *secp256k1.PublicKey
+	sweepClosure *taproot.TapElementsLeaf
 }
 
-func newRedeemBranch(ctx *cli.Context, congestionTree tree.CongestionTree, vtxo vtxo, sweepLeaf *taproot.TapElementsLeaf) (RedeemBranch, error) {
+func newRedeemBranch(ctx *cli.Context, congestionTree tree.CongestionTree, vtxo vtxo) (RedeemBranch, error) {
 	nodes, err := congestionTree.Branch(vtxo.txid)
 	if err != nil {
 		return nil, err
+	}
+
+	// find the sweep closure
+	tx, err := psetv2.NewPsetFromBase64(nodes[0].Tx)
+	if err != nil {
+		return nil, err
+	}
+
+	var sweepClosure *taproot.TapElementsLeaf
+
+	for _, tapLeaf := range tx.Inputs[0].TapLeafScript {
+		isSweep, _, _, err := tree.DecodeSweepScript(tapLeaf.Script)
+		if err != nil {
+			continue
+		}
+
+		if isSweep {
+			sweepClosure = &tapLeaf.TapElementsLeaf
+			break
+		}
+	}
+
+	if sweepClosure == nil {
+		return nil, fmt.Errorf("sweep closure not found")
 	}
 
 	branch := make([]*psetv2.Pset, 0, len(nodes))
@@ -52,8 +75,8 @@ func newRedeemBranch(ctx *cli.Context, congestionTree tree.CongestionTree, vtxo 
 	return &redeemBranch{
 		vtxo:         &vtxo,
 		branch:       branch,
-		sweepTapLeaf: sweepLeaf,
 		internalKey:  internalKey,
+		sweepClosure: sweepClosure,
 	}, nil
 }
 
@@ -96,10 +119,13 @@ func (r *redeemBranch) RedeemPath() ([]string, error) {
 				return nil, fmt.Errorf("tap leaf script not found on input #%d", i)
 			}
 
-			sweepTapLeafScript := r.sweepTapLeaf.Script
-
 			for _, leaf := range input.TapLeafScript {
-				if bytes.Equal(leaf.Script, sweepTapLeafScript) {
+				isSweep, _, _, err := tree.DecodeSweepScript(leaf.Script)
+				if err != nil {
+					return nil, err
+				}
+
+				if isSweep {
 					continue
 				}
 
@@ -159,7 +185,7 @@ func (r *redeemBranch) AddVtxoInput(updater *psetv2.Updater) error {
 
 	vtxoTaprootTree := taproot.AssembleTaprootScriptTree(
 		*checksigLeaf,
-		*r.sweepTapLeaf,
+		*r.sweepClosure,
 	)
 
 	proofIndex := vtxoTaprootTree.LeafProofIndex[checksigLeaf.TapHash()]

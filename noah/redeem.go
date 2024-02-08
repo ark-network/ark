@@ -218,16 +218,6 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 	transactionsMap := make(map[string]struct{}, 0)
 	transactions := make([]string, 0)
 
-	aspPublicKey, err := getServiceProviderPublicKey()
-	if err != nil {
-		return err
-	}
-
-	sweepLeaf, err := tree.SweepScript(aspPublicKey, 1209344)
-	if err != nil {
-		return err
-	}
-
 	for _, vtxo := range vtxos {
 		if _, ok := congestionTrees[vtxo.poolTxid]; !ok {
 			round, err := client.GetRound(ctx.Context, &arkv1.GetRoundRequest{
@@ -246,7 +236,7 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 			congestionTrees[vtxo.poolTxid] = congestionTree
 		}
 
-		redeemBranch, err := newRedeemBranch(ctx, congestionTrees[vtxo.poolTxid], vtxo, sweepLeaf)
+		redeemBranch, err := newRedeemBranch(ctx, congestionTrees[vtxo.poolTxid], vtxo)
 		if err != nil {
 			return err
 		}

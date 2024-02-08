@@ -60,6 +60,7 @@ func NewService(addr string) (ports.WalletService, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	found := false
 	for _, account := range info.GetAccounts() {
 		if account.GetLabel() == accountLabel {

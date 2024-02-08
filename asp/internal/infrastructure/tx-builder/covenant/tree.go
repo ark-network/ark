@@ -12,19 +12,16 @@ import (
 	"github.com/vulpemventures/go-elements/taproot"
 )
 
-const (
-	expirationTime = 60 * 60 * 24 * 14 // 14 days in seconds
-)
-
 type treeFactory func(outpoint psetv2.InputArgs) (tree.CongestionTree, error)
 
 type node struct {
-	sweepKey  *secp256k1.PublicKey
-	receivers []domain.Receiver
-	left      *node
-	right     *node
-	asset     string
-	feeSats   uint64
+	sweepKey      *secp256k1.PublicKey
+	receivers     []domain.Receiver
+	left          *node
+	right         *node
+	asset         string
+	feeSats       uint64
+	roundLifetime int64
 
 	_inputTaprootKey  *secp256k1.PublicKey
 	_inputTaprootTree *taproot.IndexedElementsTapScriptTree
@@ -133,7 +130,7 @@ func (n *node) getWitnessData() (
 		return n._inputTaprootKey, n._inputTaprootTree, nil
 	}
 
-	sweepClosure, err := tree.SweepScript(n.sweepKey, expirationTime)
+	sweepClosure, err := tree.SweepScript(n.sweepKey, uint(n.roundLifetime))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -203,7 +200,7 @@ func (n *node) getVtxoWitnessData() (
 		return nil, nil, fmt.Errorf("cannot call vtxoWitness on a non-leaf node")
 	}
 
-	sweepClosure, err := tree.SweepScript(n.sweepKey, expirationTime)
+	sweepClosure, err := tree.SweepScript(n.sweepKey, uint(n.roundLifetime))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -360,14 +357,14 @@ func (n *node) createFinalCongestionTree() treeFactory {
 
 func craftCongestionTree(
 	asset string, aspPublicKey *secp256k1.PublicKey,
-	payments []domain.Payment, feeSatsPerNode uint64,
+	payments []domain.Payment, feeSatsPerNode uint64, roundLifetime int64,
 ) (
 	buildCongestionTree treeFactory,
 	sharedOutputScript []byte, sharedOutputAmount uint64, err error,
 ) {
 	receivers := getOffchainReceivers(payments)
 	root, err := createPartialCongestionTree(
-		receivers, aspPublicKey, asset, feeSatsPerNode,
+		receivers, aspPublicKey, asset, feeSatsPerNode, roundLifetime,
 	)
 	if err != nil {
 		return
@@ -393,6 +390,7 @@ func createPartialCongestionTree(
 	aspPublicKey *secp256k1.PublicKey,
 	asset string,
 	feeSatsPerNode uint64,
+	roundLifetime int64,
 ) (root *node, err error) {
 	if len(receivers) == 0 {
 		return nil, fmt.Errorf("no receivers provided")
@@ -401,10 +399,11 @@ func createPartialCongestionTree(
 	nodes := make([]*node, 0, len(receivers))
 	for _, r := range receivers {
 		leafNode := &node{
-			sweepKey:  aspPublicKey,
-			receivers: []domain.Receiver{r},
-			asset:     asset,
-			feeSats:   feeSatsPerNode,
+			sweepKey:      aspPublicKey,
+			receivers:     []domain.Receiver{r},
+			asset:         asset,
+			feeSats:       feeSatsPerNode,
+			roundLifetime: roundLifetime,
 		}
 		nodes = append(nodes, leafNode)
 	}
@@ -435,12 +434,13 @@ func createUpperLevel(nodes []*node) ([]*node, error) {
 		left := nodes[i]
 		right := nodes[i+1]
 		branchNode := &node{
-			sweepKey:  left.sweepKey,
-			receivers: append(left.receivers, right.receivers...),
-			left:      left,
-			right:     right,
-			asset:     left.asset,
-			feeSats:   left.feeSats,
+			sweepKey:      left.sweepKey,
+			receivers:     append(left.receivers, right.receivers...),
+			left:          left,
+			right:         right,
+			asset:         left.asset,
+			feeSats:       left.feeSats,
+			roundLifetime: left.roundLifetime,
 		}
 		pairs = append(pairs, branchNode)
 	}

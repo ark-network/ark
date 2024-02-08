@@ -16,6 +16,8 @@ type WalletService interface {
 	) (string, error)
 	SelectUtxos(ctx context.Context, asset string, amount uint64) ([]TxInput, uint64, error)
 	BroadcastTransaction(ctx context.Context, txHex string) (string, error)
+	SignPsetWithKey(ctx context.Context, pset string, inputIndexes []int) (string, error) // inputIndexes == nil means sign all inputs
+	IsTransactionPublished(ctx context.Context, txid string) (isPublished bool, blocktime int64, err error)
 	EstimateFees(ctx context.Context, pset string) (uint64, error)
 	Close()
 }

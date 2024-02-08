@@ -41,27 +41,31 @@ type Service interface {
 }
 
 type service struct {
-	minRelayFee   uint64
-	roundInterval int64
 	network       common.Network
 	onchainNework network.Network
 	pubkey        *secp256k1.PublicKey
+	roundLifetime int64
+	roundInterval int64
+	minRelayFee   uint64
 
 	wallet      ports.WalletService
 	repoManager ports.RepoManager
 	builder     ports.TxBuilder
 	scanner     ports.BlockchainScanner
+	sweeper     *sweeper
 
 	paymentRequests *paymentsMap
 	forfeitTxs      *forfeitTxsMap
-	eventsCh        chan domain.RoundEvent
+
+	eventsCh chan domain.RoundEvent
 }
 
 func NewService(
-	interval int64, network common.Network, onchainNetwork network.Network,
+	network common.Network, onchainNetwork network.Network,
+	roundInterval, roundLifetime int64, minRelayFee uint64,
 	walletSvc ports.WalletService, repoManager ports.RepoManager,
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
-	minRelayFee uint64,
+	scheduler ports.SchedulerService,
 ) (Service, error) {
 	eventsCh := make(chan domain.RoundEvent)
 	paymentRequests := newPaymentsMap(nil)
@@ -72,10 +76,14 @@ func NewService(
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch pubkey: %s", err)
 	}
+
+	sweeper := newSweeper(walletSvc, repoManager, builder, scheduler)
+
 	svc := &service{
-		minRelayFee, interval, network, onchainNetwork, pubkey,
-		walletSvc, repoManager, builder, scanner, paymentRequests, forfeitTxs,
-		eventsCh,
+		network, onchainNetwork, pubkey,
+		roundLifetime, roundInterval, minRelayFee,
+		walletSvc, repoManager, builder, scanner, sweeper,
+		paymentRequests, forfeitTxs, eventsCh,
 	}
 	repoManager.RegisterEventsHandler(
 		func(round *domain.Round) {
@@ -92,12 +100,18 @@ func NewService(
 }
 
 func (s *service) Start() error {
+	log.Debug("starting sweeper service")
+	if err := s.sweeper.start(); err != nil {
+		return err
+	}
+
 	log.Debug("starting app service")
 	go s.start()
 	return nil
 }
 
 func (s *service) Stop() {
+	s.sweeper.stop()
 	// nolint
 	vtxos, _ := s.repoManager.Vtxos().GetSpendableVtxos(
 		context.Background(), "",
@@ -356,7 +370,17 @@ func (s *service) finalizeRound() {
 		return
 	}
 
+	now := time.Now().Unix()
+	expirationTimestamp := now + s.roundLifetime + 30 // add 30 secs to be sure that the tx is confirmed
+
+	if err := s.sweeper.schedule(expirationTimestamp, txid, round.CongestionTree); err != nil {
+		changes = round.Fail(fmt.Errorf("failed to schedule sweep tx: %s", err))
+		log.WithError(err).Warn("failed to schedule sweep tx")
+		return
+	}
+
 	changes, _ = round.EndFinalization(forfeitTxs, txid)
+
 	log.Debugf("finalized round %s with pool tx %s", round.Id, round.Txid)
 }
 

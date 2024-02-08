@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/ark-network/ark/internal/core/ports"
@@ -30,5 +31,15 @@ func (s *service) ScheduleTask(interval int64, immediate bool, task func()) erro
 		return err
 	}
 	_, err := s.scheduler.Every(int(interval)).Seconds().WaitForSchedule().Do(task)
+	return err
+}
+
+func (s *service) ScheduleTaskOnce(at int64, task func()) error {
+	delay := at - time.Now().Unix()
+	if delay < 0 {
+		return fmt.Errorf("cannot schedule task in the past")
+	}
+
+	_, err := s.scheduler.Every(int(delay)).Seconds().WaitForSchedule().LimitRunsTo(1).Do(task)
 	return err
 }

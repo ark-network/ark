@@ -109,6 +109,14 @@ func (*mockedWalletService) EstimateFees(ctx context.Context, pset string) (uint
 	return 100, nil
 }
 
+func (*mockedWalletService) SignPsetWithKey(ctx context.Context, pset string, inputIndex []int) (string, error) {
+	panic("unimplemented")
+}
+
+func (*mockedWalletService) IsTransactionPublished(ctx context.Context, txid string) (bool, int64, error) {
+	panic("unimplemented")
+}
+
 func TestBuildCongestionTree(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(&mockedWalletService{}, network.Liquid)
 

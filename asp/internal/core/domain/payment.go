@@ -125,4 +125,5 @@ type Vtxo struct {
 	PoolTx   string
 	Spent    bool
 	Redeemed bool
+	Swept    bool
 }

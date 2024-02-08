@@ -21,14 +21,15 @@ const (
 )
 
 type txBuilder struct {
-	wallet ports.WalletService
-	net    *network.Network
+	wallet        ports.WalletService
+	net           *network.Network
+	roundLifetime int64 // in seconds
 }
 
 func NewTxBuilder(
-	wallet ports.WalletService, net network.Network,
+	wallet ports.WalletService, net network.Network, roundLifetime int64,
 ) ports.TxBuilder {
-	return &txBuilder{wallet, &net}
+	return &txBuilder{wallet, &net, roundLifetime}
 }
 
 func (b *txBuilder) GetVtxoScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error) {
@@ -37,6 +38,44 @@ func (b *txBuilder) GetVtxoScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([
 		return nil, err
 	}
 	return outputScript, nil
+}
+
+func (b *txBuilder) BuildSweepTx(wallet ports.WalletService, inputs []ports.SweepInput) (signedSweepTx string, err error) {
+	sweepPset, err := sweepTransaction(
+		wallet,
+		inputs,
+		b.net.AssetID,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	sweepPsetBase64, err := sweepPset.ToBase64()
+	if err != nil {
+		return "", err
+	}
+
+	ctx := context.Background()
+	signedSweepPsetB64, err := wallet.SignPsetWithKey(ctx, sweepPsetBase64, nil)
+	if err != nil {
+		return "", err
+	}
+
+	signedPset, err := psetv2.NewPsetFromBase64(signedSweepPsetB64)
+	if err != nil {
+		return "", err
+	}
+
+	if err := psetv2.FinalizeAll(signedPset); err != nil {
+		return "", err
+	}
+
+	extractedTx, err := psetv2.Extract(signedPset)
+	if err != nil {
+		return "", err
+	}
+
+	return extractedTx.ToHex()
 }
 
 func (b *txBuilder) BuildForfeitTxs(
@@ -74,7 +113,7 @@ func (b *txBuilder) BuildPoolTx(
 	// This is safe as the memory allocated for `craftCongestionTree` is freed
 	// only after `BuildPoolTx` returns.
 	treeFactoryFn, sharedOutputScript, sharedOutputAmount, err := craftCongestionTree(
-		b.net.AssetID, aspPubkey, payments, minRelayFee,
+		b.net.AssetID, aspPubkey, payments, minRelayFee, b.roundLifetime,
 	)
 	if err != nil {
 		return
@@ -109,6 +148,45 @@ func (b *txBuilder) BuildPoolTx(
 	return
 }
 
+func (b *txBuilder) GetLeafSweepClosure(
+	node tree.Node, userPubKey *secp256k1.PublicKey,
+) (*psetv2.TapLeafScript, int64, error) {
+	if !node.Leaf {
+		return nil, 0, fmt.Errorf("node is not a leaf")
+	}
+
+	pset, err := psetv2.NewPsetFromBase64(node.Tx)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	input := pset.Inputs[0]
+
+	sweepLeaf, lifetime, err := extractSweepLeaf(input)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// craft the vtxo taproot tree
+	vtxoScript, err := tree.VtxoScript(userPubKey)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	vtxoTaprootTree := taproot.AssembleTaprootScriptTree(
+		*vtxoScript,
+		sweepLeaf.TapElementsLeaf,
+	)
+
+	proofIndex := vtxoTaprootTree.LeafProofIndex[sweepLeaf.TapHash()]
+	proof := vtxoTaprootTree.LeafMerkleProofs[proofIndex]
+
+	return &psetv2.TapLeafScript{
+		TapElementsLeaf: proof.TapElementsLeaf,
+		ControlBlock:    proof.ToControlBlock(sweepLeaf.ControlBlock.InternalKey),
+	}, lifetime, nil
+}
+
 func (b *txBuilder) getLeafScriptAndTree(
 	userPubkey, aspPubkey *secp256k1.PublicKey,
 ) ([]byte, *taproot.IndexedElementsTapScriptTree, error) {
@@ -117,7 +195,7 @@ func (b *txBuilder) getLeafScriptAndTree(
 		return nil, nil, err
 	}
 
-	sweepClosure, err := tree.SweepScript(aspPubkey, expirationTime)
+	sweepClosure, err := tree.SweepScript(aspPubkey, uint(b.roundLifetime))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -381,4 +459,25 @@ func (b *txBuilder) createForfeitTxs(
 		}
 	}
 	return forfeitTxs, nil
+}
+
+// given a congestion tree input, searches and returns the sweep leaf and its lifetime in seconds
+func extractSweepLeaf(input psetv2.Input) (sweepLeaf *psetv2.TapLeafScript, lifetime int64, err error) {
+	for _, leaf := range input.TapLeafScript {
+		isSweep, _, seconds, err := tree.DecodeSweepScript(leaf.Script)
+		if err != nil {
+			return nil, 0, err
+		}
+		if isSweep {
+			lifetime = int64(seconds)
+			sweepLeaf = &leaf
+			break
+		}
+	}
+
+	if sweepLeaf == nil {
+		return nil, 0, fmt.Errorf("sweep leaf not found")
+	}
+
+	return sweepLeaf, lifetime, nil
 }

@@ -16,6 +16,7 @@ import (
 
 const (
 	connectorAmount = 450
+	sevenDays       = 7 * 24 * 60 * 60
 )
 
 type txBuilder struct {
@@ -27,6 +28,11 @@ func NewTxBuilder(
 	wallet ports.WalletService, net network.Network,
 ) ports.TxBuilder {
 	return &txBuilder{wallet, net}
+}
+
+// BuildSweepTx implements ports.TxBuilder.
+func (*txBuilder) BuildSweepTx(wallet ports.WalletService, inputs []ports.SweepInput) (signedSweepTx string, err error) {
+	panic("unimplemented")
 }
 
 // BuildForfeitTxs implements ports.TxBuilder.
@@ -183,6 +189,12 @@ func (b *txBuilder) GetVtxoScript(userPubkey, _ *secp256k1.PublicKey) ([]byte, e
 	p2wpkh := payment.FromPublicKey(userPubkey, &b.net, nil)
 	addr, _ := p2wpkh.WitnessPubKeyHash()
 	return address.ToOutputScript(addr)
+}
+
+func (b *txBuilder) GetLeafSweepClosure(
+	node tree.Node, userPubKey *secp256k1.PublicKey,
+) (*psetv2.TapLeafScript, int64, error) {
+	panic("unimplemented")
 }
 
 func connectorsToInputArgs(connectors []string) ([]psetv2.InputArgs, error) {
