@@ -62,6 +62,8 @@ $ ocean-cli account create --label ark --unconf
 $ ocean-cli account derive --account-name ark
 ```
 
+### Fund wallet
+
 Fund the address with https://liquidtestnet.com/faucet.
 
 ### Start Ark Service Provider
@@ -105,6 +107,8 @@ $ noah2 faucet
 
 Note: `noah2` should always run in the second tab.
 
+### Make payments
+
 You can now try making ark payments between the 2 noah wallets:
 
 ```
@@ -119,7 +123,7 @@ $ noah1 receive
 ```
 
 ```
-$ noah2 send --to <address starting with "tark1q..."> --amount 2100
+$ noah2 send --to <offchain_address> --amount 2100
 ```
 
 Both balances should reflect the payment:
@@ -138,4 +142,26 @@ $ noah2 balance
 	"offchain_balance": 7900,
 	"onchain_balance": 0
 }
+```
+
+### Exiting
+
+User `noah1` can leave the ark collaboratively (i.e. ASP needs to collaborate):
+
+```
+$ noah1 redeem --address <onchain_address> --amount 12100
+```
+
+In the case of the ASP is not responding, `noah1` can leave the ark unilaterally (`--amount` is not necessary since `--force` will redeem all funds):
+
+```
+$ noah1 redeem --address <onchain_address> --force
+```
+
+### Help
+
+You can see all available commands with `help`:
+
+```
+$ noah1 help
 ```

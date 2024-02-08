@@ -26,7 +26,7 @@ Clone this [repo](https://github.com/ark-network/ark) and then change to directo
 $ cd clArk
 ```
 
-You can play around with the tools as follows:
+### Start bitcoind
 
 First you have to setup a regtest bitcoind node, there is a script provided for
 that. If you want to run your own node, keep in mind that for now, we need it
@@ -41,6 +41,8 @@ You can interact with the node using `bitcoin-cli` as follows:
 ```
 $ bitcoin-cli -regtest -rpcuser=user -rpcpassword=pass getnetworkinfo
 ```
+
+### Start Ark Service Provider
 
 Then, you can run an arkd server:
 
@@ -60,6 +62,8 @@ $ bitcoin-cli -regtest -rpcuser=user -rpcpassword=pass generatetoaddress 1 <asp-
 $ bitcoin-cli -regtest -rpcuser=user -rpcpassword=pass generatetoaddress 100 mtDDKi5mDjZqGzmbnfUnVQ8ZhCPMPVsApj
 ```
 
+### Setup noah wallet
+
 Next, you can start some clients. To create a client, use the following command:
 
 ```
@@ -72,6 +76,8 @@ to **fund them the same way as you did for the ASP above**. Note that clients
 can receive offchain Ark transactions without having any onchain balance, but
 a little bit of onchain money is needed to perform unilateral exits.
 
+### Fund noah wallet
+
 To use the onchain wallets, there are a few commands available:
 
 ```
@@ -79,6 +85,8 @@ $ NOAH2_ADDR=$(cargo run --bin noah -- --datadir ./test/noah2 get-address)
 $ cargo run --bin noah -- --datadir ./test/noah1 send-onchain $NOAH2_ADDR "0.1 btc"
 $ cargo run --bin noah -- --datadir ./test/noah2 balance
 ```
+
+### Onboard the ark
 
 Once we have money, we can onboard into the Ark, afterwards the balance will
 also show an offchain element.
@@ -94,6 +102,8 @@ once a while...
 ```
 $ bitcoin-cli -regtest -rpcuser=user -rpcpassword=pass generatetoaddress 1 mtDDKi5mDjZqGzmbnfUnVQ8ZhCPMPVsApj
 ```
+
+### Make payments
 
 Then, let's send some money offchain to a third wallet:
 
@@ -121,6 +131,8 @@ $ cargo run --bin noah -- --datadir ./test/noah1 send ${NOAH3_ONCHAIN_ADDRESS} "
 # sends 0.1 btc from noah1's VTXO balance to noah3 onchain address
 ```
 
+### Exiting
+
 User `noah1` can leave the ark collaboratively (i.e. ASP needs to collaborate):
 
 ```
@@ -137,6 +149,8 @@ $ cargo run --bin noah -- --datadir ./test/noah1 start-exit
 $ bitcoin-cli -regtest -rpcuser=user -rpcpassword=pass generatetoaddress 13 mtDDKi5mDjZqGzmbnfUnVQ8ZhCPMPVsApj
 $ cargo run --bin noah -- --datadir ./test/noah1 claim-exit
 ```
+
+### Help
 
 You can see all available commands with `help`:
 
