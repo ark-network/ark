@@ -18,6 +18,14 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type NotificationServiceClient interface {
+	// WatchExternalScript allows to get notified about utxos/txs related to the given
+	// external script, ie. not derived from a wallet account.
+	// The service answers with the label assigned to the given script.
+	// The label is used as identifier of the utxos/txs received from the streams.
+	WatchExternalScript(ctx context.Context, in *WatchExternalScriptRequest, opts ...grpc.CallOption) (*WatchExternalScriptResponse, error)
+	// UnwatchExternalScript allows to stop watching for the script identified with
+	// the given label.
+	UnwatchExternalScript(ctx context.Context, in *UnwatchExternalScriptRequest, opts ...grpc.CallOption) (*UnwatchExternalScriptResponse, error)
 	// Notifies about events related to wallet transactions.
 	TransactionNotifications(ctx context.Context, in *TransactionNotificationsRequest, opts ...grpc.CallOption) (NotificationService_TransactionNotificationsClient, error)
 	// Notifies about events realted to wallet utxos.
@@ -36,6 +44,24 @@ type notificationServiceClient struct {
 
 func NewNotificationServiceClient(cc grpc.ClientConnInterface) NotificationServiceClient {
 	return &notificationServiceClient{cc}
+}
+
+func (c *notificationServiceClient) WatchExternalScript(ctx context.Context, in *WatchExternalScriptRequest, opts ...grpc.CallOption) (*WatchExternalScriptResponse, error) {
+	out := new(WatchExternalScriptResponse)
+	err := c.cc.Invoke(ctx, "/ocean.v1.NotificationService/WatchExternalScript", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *notificationServiceClient) UnwatchExternalScript(ctx context.Context, in *UnwatchExternalScriptRequest, opts ...grpc.CallOption) (*UnwatchExternalScriptResponse, error) {
+	out := new(UnwatchExternalScriptResponse)
+	err := c.cc.Invoke(ctx, "/ocean.v1.NotificationService/UnwatchExternalScript", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *notificationServiceClient) TransactionNotifications(ctx context.Context, in *TransactionNotificationsRequest, opts ...grpc.CallOption) (NotificationService_TransactionNotificationsClient, error) {
@@ -133,6 +159,14 @@ func (c *notificationServiceClient) ListWebhooks(ctx context.Context, in *ListWe
 // All implementations should embed UnimplementedNotificationServiceServer
 // for forward compatibility
 type NotificationServiceServer interface {
+	// WatchExternalScript allows to get notified about utxos/txs related to the given
+	// external script, ie. not derived from a wallet account.
+	// The service answers with the label assigned to the given script.
+	// The label is used as identifier of the utxos/txs received from the streams.
+	WatchExternalScript(context.Context, *WatchExternalScriptRequest) (*WatchExternalScriptResponse, error)
+	// UnwatchExternalScript allows to stop watching for the script identified with
+	// the given label.
+	UnwatchExternalScript(context.Context, *UnwatchExternalScriptRequest) (*UnwatchExternalScriptResponse, error)
 	// Notifies about events related to wallet transactions.
 	TransactionNotifications(*TransactionNotificationsRequest, NotificationService_TransactionNotificationsServer) error
 	// Notifies about events realted to wallet utxos.
@@ -149,6 +183,12 @@ type NotificationServiceServer interface {
 type UnimplementedNotificationServiceServer struct {
 }
 
+func (UnimplementedNotificationServiceServer) WatchExternalScript(context.Context, *WatchExternalScriptRequest) (*WatchExternalScriptResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WatchExternalScript not implemented")
+}
+func (UnimplementedNotificationServiceServer) UnwatchExternalScript(context.Context, *UnwatchExternalScriptRequest) (*UnwatchExternalScriptResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UnwatchExternalScript not implemented")
+}
 func (UnimplementedNotificationServiceServer) TransactionNotifications(*TransactionNotificationsRequest, NotificationService_TransactionNotificationsServer) error {
 	return status.Errorf(codes.Unimplemented, "method TransactionNotifications not implemented")
 }
@@ -174,6 +214,42 @@ type UnsafeNotificationServiceServer interface {
 
 func RegisterNotificationServiceServer(s grpc.ServiceRegistrar, srv NotificationServiceServer) {
 	s.RegisterService(&NotificationService_ServiceDesc, srv)
+}
+
+func _NotificationService_WatchExternalScript_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WatchExternalScriptRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NotificationServiceServer).WatchExternalScript(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ocean.v1.NotificationService/WatchExternalScript",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NotificationServiceServer).WatchExternalScript(ctx, req.(*WatchExternalScriptRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NotificationService_UnwatchExternalScript_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnwatchExternalScriptRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NotificationServiceServer).UnwatchExternalScript(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ocean.v1.NotificationService/UnwatchExternalScript",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NotificationServiceServer).UnwatchExternalScript(ctx, req.(*UnwatchExternalScriptRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _NotificationService_TransactionNotifications_Handler(srv interface{}, stream grpc.ServerStream) error {
@@ -279,6 +355,14 @@ var NotificationService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "ocean.v1.NotificationService",
 	HandlerType: (*NotificationServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "WatchExternalScript",
+			Handler:    _NotificationService_WatchExternalScript_Handler,
+		},
+		{
+			MethodName: "UnwatchExternalScript",
+			Handler:    _NotificationService_UnwatchExternalScript_Handler,
+		},
 		{
 			MethodName: "AddWebhook",
 			Handler:    _NotificationService_AddWebhook_Handler,

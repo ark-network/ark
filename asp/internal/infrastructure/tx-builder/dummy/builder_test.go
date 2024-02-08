@@ -79,6 +79,18 @@ func (*mockedWalletService) Status(ctx context.Context) (ports.WalletStatus, err
 	panic("unimplemented")
 }
 
+func (*mockedWalletService) WatchScripts(ctx context.Context, scripts []string) error {
+	panic("unimplemented")
+}
+
+func (*mockedWalletService) UnwatchScripts(ctx context.Context, scripts []string) error {
+	panic("unimplemented")
+}
+
+func (*mockedWalletService) GetNotificationChannel(ctx context.Context) chan []domain.VtxoKey {
+	panic("unimplemented")
+}
+
 func (*mockedWalletService) SelectUtxos(ctx context.Context, asset string, amount uint64) ([]ports.TxInput, uint64, error) {
 	// random txid
 	bytes := make([]byte, 32)

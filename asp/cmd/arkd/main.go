@@ -31,14 +31,15 @@ func main() {
 		NoTLS: cfg.NoTLS,
 	}
 	appConfig := &appconfig.Config{
-		DbType:        cfg.DbType,
-		DbDir:         cfg.DbDir,
-		RoundInterval: cfg.RoundInterval,
-		Network:       cfg.Network,
-		SchedulerType: cfg.SchedulerType,
-		TxBuilderType: cfg.TxBuilderType,
-		WalletAddr:    cfg.WalletAddr,
-		MinRelayFee:   cfg.MinRelayFee,
+		DbType:                cfg.DbType,
+		DbDir:                 cfg.DbDir,
+		RoundInterval:         cfg.RoundInterval,
+		Network:               cfg.Network,
+		SchedulerType:         cfg.SchedulerType,
+		TxBuilderType:         cfg.TxBuilderType,
+		BlockchainScannerType: cfg.BlockchainScannerType,
+		WalletAddr:            cfg.WalletAddr,
+		MinRelayFee:           cfg.MinRelayFee,
 	}
 	svc, err := grpcservice.NewService(svcConfig, appConfig)
 	if err != nil {
