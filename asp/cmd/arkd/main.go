@@ -38,15 +38,16 @@ func main() {
 	}
 
 	appConfig := &appconfig.Config{
-		DbType:        cfg.DbType,
-		DbDir:         cfg.DbDir,
-		RoundInterval: cfg.RoundInterval,
-		Network:       cfg.Network,
-		SchedulerType: cfg.SchedulerType,
-		TxBuilderType: cfg.TxBuilderType,
-		WalletAddr:    cfg.WalletAddr,
-		RoundLifetime: cfg.RoundLifetime,
-		MinRelayFee:   cfg.MinRelayFee,
+		DbType:                cfg.DbType,
+		DbDir:                 cfg.DbDir,
+		RoundInterval:         cfg.RoundInterval,
+		Network:               cfg.Network,
+		SchedulerType:         cfg.SchedulerType,
+		TxBuilderType:         cfg.TxBuilderType,
+		BlockchainScannerType: cfg.BlockchainScannerType,
+		WalletAddr:            cfg.WalletAddr,
+		MinRelayFee:           cfg.MinRelayFee,
+		RoundLifetime:         cfg.RoundLifetime,
 	}
 	svc, err := grpcservice.NewService(svcConfig, appConfig)
 	if err != nil {

@@ -25,5 +25,5 @@ type TxBuilder interface {
 		inputs []SweepInput,
 	) (signedSweepTx string, err error)
 	GetLeafSweepClosure(node tree.Node, userPubKey *secp256k1.PublicKey) (*psetv2.TapLeafScript, int64, error)
-	GetVtxoOutputScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error)
+	GetVtxoScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error)
 }

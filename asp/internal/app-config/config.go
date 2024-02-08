@@ -26,23 +26,28 @@ var (
 		"dummy":    {},
 		"covenant": {},
 	}
+	supportedScanners = supportedType{
+		"ocean": {},
+	}
 )
 
 type Config struct {
-	DbType        string
-	DbDir         string
-	RoundInterval int64
-	Network       common.Network
-	SchedulerType string
-	TxBuilderType string
-	WalletAddr    string
-	RoundLifetime int64
-	MinRelayFee   uint64
+	DbType                string
+	DbDir                 string
+	RoundInterval         int64
+	Network               common.Network
+	SchedulerType         string
+	TxBuilderType         string
+	BlockchainScannerType string
+	WalletAddr            string
+	MinRelayFee           uint64
+	RoundLifetime         int64
 
 	repo      ports.RepoManager
 	svc       application.Service
 	wallet    ports.WalletService
 	txBuilder ports.TxBuilder
+	scanner   ports.BlockchainScanner
 }
 
 func (c *Config) Validate() error {
@@ -54,6 +59,9 @@ func (c *Config) Validate() error {
 	}
 	if !supportedTxBuilders.supports(c.TxBuilderType) {
 		return fmt.Errorf("tx builder type not supported, please select one of: %s", supportedTxBuilders)
+	}
+	if !supportedScanners.supports(c.BlockchainScannerType) {
+		return fmt.Errorf("blockchain scanner type not supported, please select one of: %s", supportedScanners)
 	}
 	if c.RoundInterval < 5 {
 		return fmt.Errorf("invalid round interval, must be at least 5 seconds")
@@ -74,6 +82,9 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("failed to connect to wallet: %s", err)
 	}
 	if err := c.txBuilderService(); err != nil {
+		return err
+	}
+	if err := c.scannerService(); err != nil {
 		return err
 	}
 	if err := c.appService(); err != nil {
@@ -161,10 +172,27 @@ func (c *Config) txBuilderService() error {
 	return nil
 }
 
+func (c *Config) scannerService() error {
+	var svc ports.BlockchainScanner
+	var err error
+	switch c.BlockchainScannerType {
+	case "ocean":
+		svc = c.wallet
+	default:
+		err = fmt.Errorf("unknown blockchain scanner type")
+	}
+	if err != nil {
+		return err
+	}
+
+	c.scanner = svc
+	return nil
+}
+
 func (c *Config) appService() error {
 	net := c.mainChain()
 	svc, err := application.NewService(
-		c.RoundInterval, c.Network, net, c.wallet, c.repo, c.txBuilder, c.MinRelayFee, int64(c.RoundLifetime),
+		c.RoundInterval, c.Network, net, c.wallet, c.repo, c.txBuilder, c.scanner, c.MinRelayFee, c.RoundLifetime,
 	)
 	if err != nil {
 		return err

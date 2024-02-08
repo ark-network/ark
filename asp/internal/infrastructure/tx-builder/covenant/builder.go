@@ -31,7 +31,7 @@ func NewTxBuilder(
 	return &txBuilder{wallet, &net, roundLifetime}
 }
 
-func (b *txBuilder) GetVtxoOutputScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error) {
+func (b *txBuilder) GetVtxoScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error) {
 	outputScript, _, err := b.getLeafScriptAndTree(userPubkey, aspPubkey)
 	if err != nil {
 		return nil, err
@@ -236,7 +236,7 @@ func (b *txBuilder) createPoolTx(
 		},
 		{
 			Asset:  b.net.AssetID,
-			Amount: connectorAmount,
+			Amount: connectorsAmount,
 			Script: aspScript,
 		},
 	}

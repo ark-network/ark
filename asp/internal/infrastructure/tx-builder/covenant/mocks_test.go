@@ -3,6 +3,7 @@ package txbuilder_test
 import (
 	"context"
 
+	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/mock"
@@ -120,6 +121,30 @@ func (m *mockedWallet) SignPsetWithKey(ctx context.Context, pset string, inputIn
 		res = a.(string)
 	}
 	return res, args.Error(1)
+}
+
+func (m *mockedWallet) WatchScripts(
+	ctx context.Context, scripts []string,
+) error {
+	args := m.Called(ctx, scripts)
+	return args.Error(0)
+}
+
+func (m *mockedWallet) UnwatchScripts(
+	ctx context.Context, scripts []string,
+) error {
+	args := m.Called(ctx, scripts)
+	return args.Error(0)
+}
+
+func (m *mockedWallet) GetNotificationChannel(ctx context.Context) chan []domain.VtxoKey {
+	args := m.Called(ctx)
+
+	var res chan []domain.VtxoKey
+	if a := args.Get(0); a != nil {
+		res = a.(chan []domain.VtxoKey)
+	}
+	return res
 }
 
 type mockedInput struct {
