@@ -269,7 +269,7 @@ func (s *service) startFinalization() {
 		return
 	}
 
-	unsignedPoolTx, tree, err := s.builder.BuildPoolTx(s.pubkey, s.wallet, payments, s.minRelayFee)
+	unsignedPoolTx, tree, err := s.builder.BuildPoolTx(s.pubkey, payments, s.minRelayFee)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
 		log.WithError(err).Warn("failed to create pool tx")
@@ -450,7 +450,7 @@ func (s *service) getNewVtxos(round *domain.Round) []domain.Vtxo {
 
 					buf, _ := hex.DecodeString(r.Pubkey)
 					pk, _ := secp256k1.ParsePubKey(buf)
-					script, _ := s.builder.GetLeafOutputScript(pk, s.pubkey)
+					script, _ := s.builder.GetVtxoOutputScript(pk, s.pubkey)
 					if bytes.Equal(script, out.Script) {
 						found = true
 						pubkey = r.Pubkey
