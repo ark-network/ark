@@ -262,6 +262,14 @@
         }
       }
     },
+    "v1SignPsetWithSchnorrKeyResponse": {
+      "type": "object",
+      "properties": {
+        "signedTx": {
+          "type": "string"
+        }
+      }
+    },
     "v1SignTransactionResponse": {
       "type": "object",
       "properties": {
