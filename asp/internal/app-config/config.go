@@ -49,6 +49,7 @@ type Config struct {
 	wallet    ports.WalletService
 	txBuilder ports.TxBuilder
 	scanner   ports.BlockchainScanner
+	scheduler ports.SchedulerService
 }
 
 func (c *Config) Validate() error {
@@ -86,6 +87,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.scannerService(); err != nil {
+		return err
+	}
+	if err := c.schedulerService(); err != nil {
 		return err
 	}
 	if err := c.appService(); err != nil {
@@ -190,10 +194,28 @@ func (c *Config) scannerService() error {
 	return nil
 }
 
+func (c *Config) schedulerService() error {
+	var svc ports.SchedulerService
+	var err error
+	switch c.SchedulerType {
+	case "gocron":
+		svc = scheduler.NewScheduler()
+	default:
+		err = fmt.Errorf("unknown scheduler type")
+	}
+	if err != nil {
+		return err
+	}
+
+	c.scheduler = svc
+	return nil
+}
+
 func (c *Config) appService() error {
 	net := c.mainChain()
 	svc, err := application.NewService(
-		c.RoundInterval, c.Network, net, c.wallet, c.repo, c.txBuilder, c.scanner, c.MinRelayFee, c.RoundLifetime, scheduler.NewScheduler(),
+		c.Network, net, c.RoundInterval, c.RoundLifetime, c.MinRelayFee,
+		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler,
 	)
 	if err != nil {
 		return err

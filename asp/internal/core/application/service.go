@@ -41,31 +41,30 @@ type Service interface {
 }
 
 type service struct {
-	minRelayFee   uint64
-	roundLifetime int64
-	roundInterval int64
 	network       common.Network
 	onchainNework network.Network
 	pubkey        *secp256k1.PublicKey
+	roundLifetime int64
+	roundInterval int64
+	minRelayFee   uint64
 
 	wallet      ports.WalletService
 	repoManager ports.RepoManager
 	builder     ports.TxBuilder
 	scanner     ports.BlockchainScanner
+	sweeper     *sweeper
 
 	paymentRequests *paymentsMap
 	forfeitTxs      *forfeitTxsMap
 
 	eventsCh chan domain.RoundEvent
-
-	sweeper *sweeper
 }
 
 func NewService(
-	interval int64, network common.Network, onchainNetwork network.Network,
+	network common.Network, onchainNetwork network.Network,
+	roundInterval, roundLifetime int64, minRelayFee uint64,
 	walletSvc ports.WalletService, repoManager ports.RepoManager,
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
-	minRelayFee uint64, roundLifetime int64,
 	scheduler ports.SchedulerService,
 ) (Service, error) {
 	eventsCh := make(chan domain.RoundEvent)
@@ -78,18 +77,13 @@ func NewService(
 		return nil, fmt.Errorf("failed to fetch pubkey: %s", err)
 	}
 
-	sweeperSvc := newSweeper(
-		walletSvc,
-		repoManager,
-		builder,
-		scheduler,
-	)
+	sweeper := newSweeper(walletSvc, repoManager, builder, scheduler)
 
 	svc := &service{
-		minRelayFee, roundLifetime, interval, network, onchainNetwork, pubkey,
-		walletSvc, repoManager, builder, scanner, paymentRequests, forfeitTxs,
-		eventsCh,
-		sweeperSvc,
+		network, onchainNetwork, pubkey,
+		roundLifetime, roundInterval, minRelayFee,
+		walletSvc, repoManager, builder, scanner, sweeper,
+		paymentRequests, forfeitTxs, eventsCh,
 	}
 	repoManager.RegisterEventsHandler(
 		func(round *domain.Round) {
