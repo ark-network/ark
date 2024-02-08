@@ -1,9 +1,10 @@
 package txbuilder_test
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
+	"os"
 	"testing"
 
 	"github.com/ark-network/ark/common"
@@ -12,453 +13,217 @@ import (
 	"github.com/ark-network/ark/internal/core/ports"
 	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenant"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/psetv2"
 )
 
 const (
-	testingKey = "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x"
-	fakePoolTx = "cHNldP8BAgQCAAAAAQQBAQEFAQMBBgEDAfsEAgAAAAABDiDk7dXxh4KQzgLO8i1ABtaLCe4aPL12GVhN1E9zM1ePLwEPBAAAAAABEAT/////AAEDCOgDAAAAAAAAAQQWABSNnpy01UJqd99eTg2M1IpdKId11gf8BHBzZXQCICWyUQcOKcoZBDzzPM1zJOLdqwPsxK4LXnfE/A5c9slaB/wEcHNldAgEAAAAAAABAwh4BQAAAAAAAAEEFgAUjZ6ctNVCanffXk4NjNSKXSiHddYH/ARwc2V0AiAlslEHDinKGQQ88zzNcyTi3asD7MSuC153xPwOXPbJWgf8BHBzZXQIBAAAAAAAAQMI9AEAAAAAAAABBAAH/ARwc2V0AiAlslEHDinKGQQ88zzNcyTi3asD7MSuC153xPwOXPbJWgf8BHBzZXQIBAAAAAAA"
+	testingKey    = "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x"
+	minRelayFee   = uint64(30)
+	roundLifetime = int64(1209344)
 )
 
-type mockedWalletService struct{}
+var (
+	wallet *mockedWallet
+	pubkey *secp256k1.PublicKey
+)
 
-type input struct {
-	txid string
-	vout uint32
+func TestMain(m *testing.M) {
+	wallet = &mockedWallet{}
+	wallet.On("EstimateFees", mock.Anything, mock.Anything).
+		Return(uint64(100), nil)
+	wallet.On("SelectUtxos", mock.Anything, mock.Anything, mock.Anything).
+		Return(randomInput, uint64(0), nil)
+
+	_, pubkey, _ = common.DecodePubKey(testingKey)
+
+	os.Exit(m.Run())
 }
 
-func (i *input) GetTxid() string {
-	return i.txid
-}
+func TestBuildPoolTx(t *testing.T) {
+	builder := txbuilder.NewTxBuilder(wallet, network.Liquid)
 
-func (i *input) GetIndex() uint32 {
-	return i.vout
-}
-
-func (i *input) GetScript() string {
-	return "a914ea9f486e82efb3dd83a69fd96e3f0113757da03c87"
-}
-
-func (i *input) GetAsset() string {
-	return "5ac9f65c0efcc4775e0baec4ec03abdde22473cd3cf33c0419ca290e0751b225"
-}
-
-func (i *input) GetValue() uint64 {
-	return 1000
-}
-
-// BroadcastTransaction implements ports.WalletService.
-func (*mockedWalletService) BroadcastTransaction(ctx context.Context, txHex string) (string, error) {
-	panic("unimplemented")
-}
-
-// Close implements ports.WalletService.
-func (*mockedWalletService) Close() {
-	panic("unimplemented")
-}
-
-// DeriveAddresses implements ports.WalletService.
-func (*mockedWalletService) DeriveAddresses(ctx context.Context, num int) ([]string, error) {
-	panic("unimplemented")
-}
-
-// GetPubkey implements ports.WalletService.
-func (*mockedWalletService) GetPubkey(ctx context.Context) (*secp256k1.PublicKey, error) {
-	panic("unimplemented")
-}
-
-// SignPset implements ports.WalletService.
-func (*mockedWalletService) SignPset(ctx context.Context, pset string, extractRawTx bool) (string, error) {
-	panic("unimplemented")
-}
-
-// Status implements ports.WalletService.
-func (*mockedWalletService) Status(ctx context.Context) (ports.WalletStatus, error) {
-	panic("unimplemented")
-}
-
-func (*mockedWalletService) SelectUtxos(ctx context.Context, asset string, amount uint64) ([]ports.TxInput, uint64, error) {
-	// random txid
-	bytes := make([]byte, 32)
-	if _, err := rand.Read(bytes); err != nil {
-		return nil, 0, err
-	}
-	fakeInput := input{
-		txid: hex.EncodeToString(bytes),
-		vout: 0,
-	}
-
-	return []ports.TxInput{&fakeInput}, 0, nil
-}
-
-func (*mockedWalletService) EstimateFees(ctx context.Context, pset string) (uint64, error) {
-	return 100, nil
-}
-
-func TestBuildCongestionTree(t *testing.T) {
-	builder := txbuilder.NewTxBuilder(network.Liquid)
-
-	fixtures := []struct {
-		payments          []domain.Payment
-		expectedNodesNum  int // 2*len(receivers) -1
-		expectedLeavesNum int
-	}{
-		{
-			payments: []domain.Payment{
-				{
-					Id: "0",
-					Inputs: []domain.Vtxo{
-						{
-							VtxoKey: domain.VtxoKey{
-								Txid: "fd68e3c5796cc7db0a8036d486d5f625b6b2f2c014810ac020e1ac23e82c59d6",
-								VOut: 0,
-							},
-							Receiver: domain.Receiver{
-								Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-								Amount: 1100,
-							},
-						},
-					},
-					Receivers: []domain.Receiver{
-						{
-							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-							Amount: 1100,
-						},
-					},
-				},
-			},
-			expectedNodesNum:  1,
-			expectedLeavesNum: 1,
-		},
-		{
-			payments: []domain.Payment{
-				{
-					Id: "0",
-					Inputs: []domain.Vtxo{
-						{
-							VtxoKey: domain.VtxoKey{
-								Txid: "fd68e3c5796cc7db0a8036d486d5f625b6b2f2c014810ac020e1ac23e82c59d6",
-								VOut: 0,
-							},
-							Receiver: domain.Receiver{
-								Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-								Amount: 1100,
-							},
-						},
-					},
-					Receivers: []domain.Receiver{
-						{
-							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-							Amount: 600,
-						},
-						{
-							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-							Amount: 500,
-						},
-					},
-				},
-			},
-			expectedNodesNum:  1,
-			expectedLeavesNum: 1,
-		},
-		{
-			payments: []domain.Payment{
-				{
-					Id: "0",
-					Inputs: []domain.Vtxo{
-						{
-							VtxoKey: domain.VtxoKey{
-								Txid: "fd68e3c5796cc7db0a8036d486d5f625b6b2f2c014810ac020e1ac23e82c59d6",
-								VOut: 0,
-							},
-							Receiver: domain.Receiver{
-								Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-								Amount: 1100,
-							},
-						},
-					},
-					Receivers: []domain.Receiver{
-						{
-							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-							Amount: 600,
-						},
-						{
-							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-							Amount: 500,
-						},
-					},
-				},
-				{
-					Id: "0",
-					Inputs: []domain.Vtxo{
-						{
-							VtxoKey: domain.VtxoKey{
-								Txid: "fd68e3c5796cc7db0a8036d486d5f625b6b2f2c014810ac020e1ac23e82c59d6",
-								VOut: 0,
-							},
-							Receiver: domain.Receiver{
-								Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-								Amount: 1100,
-							},
-						},
-					},
-					Receivers: []domain.Receiver{
-						{
-							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-							Amount: 600,
-						},
-						{
-							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-							Amount: 500,
-						},
-					},
-				},
-				{
-					Id: "0",
-					Inputs: []domain.Vtxo{
-						{
-							VtxoKey: domain.VtxoKey{
-								Txid: "fd68e3c5796cc7db0a8036d486d5f625b6b2f2c014810ac020e1ac23e82c59d6",
-								VOut: 0,
-							},
-							Receiver: domain.Receiver{
-								Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-								Amount: 1100,
-							},
-						},
-					},
-					Receivers: []domain.Receiver{
-						{
-							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-							Amount: 600,
-						},
-						{
-							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-							Amount: 500,
-						},
-					},
-				},
-			},
-			expectedNodesNum:  5,
-			expectedLeavesNum: 3,
-		}, {
-			payments: []domain.Payment{
-				{
-					Id: "a242cdd8-f3d5-46c0-ae98-94135a2bee3f",
-					Inputs: []domain.Vtxo{
-						{
-							VtxoKey: domain.VtxoKey{
-								Txid: "755c820771284d85ea4bbcc246565b4eddadc44237a7e57a0f9cb78a840d1d41",
-								VOut: 0,
-							},
-							Receiver: domain.Receiver{
-								Pubkey: "02c87e5c1758df5ad42a918ec507b6e8dfcdcebf22f64f58eb4ad5804257d658a5",
-								Amount: 1000,
-							},
-						},
-						{
-							VtxoKey: domain.VtxoKey{
-								Txid: "66a0df86fcdeb84b8877adfe0b2c556dba30305d72ddbd4c49355f6930355357",
-								VOut: 0,
-							},
-							Receiver: domain.Receiver{
-								Pubkey: "02c87e5c1758df5ad42a918ec507b6e8dfcdcebf22f64f58eb4ad5804257d658a5",
-								Amount: 1000,
-							},
-						},
-						{
-							VtxoKey: domain.VtxoKey{
-								Txid: "9913159bc7aa493ca53cbb9cbc88f97ba01137c814009dc7ef520c3fafc67909",
-								VOut: 1,
-							},
-							Receiver: domain.Receiver{
-								Pubkey: "02c87e5c1758df5ad42a918ec507b6e8dfcdcebf22f64f58eb4ad5804257d658a5",
-								Amount: 500,
-							},
-						},
-						{
-							VtxoKey: domain.VtxoKey{
-								Txid: "5e10e77a7cdedc153be5193a4b6055a7802706ded4f2a9efefe86ed2f9a6ae60",
-								VOut: 0,
-							},
-							Receiver: domain.Receiver{
-								Pubkey: "02c87e5c1758df5ad42a918ec507b6e8dfcdcebf22f64f58eb4ad5804257d658a5",
-								Amount: 1000,
-							},
-						},
-						{
-							VtxoKey: domain.VtxoKey{
-								Txid: "5e10e77a7cdedc153be5193a4b6055a7802706ded4f2a9efefe86ed2f9a6ae60",
-								VOut: 1,
-							},
-							Receiver: domain.Receiver{
-								Pubkey: "02c87e5c1758df5ad42a918ec507b6e8dfcdcebf22f64f58eb4ad5804257d658a5",
-								Amount: 1000,
-							},
-						},
-					},
-					Receivers: []domain.Receiver{
-						{
-							Pubkey: "02c87e5c1758df5ad42a918ec507b6e8dfcdcebf22f64f58eb4ad5804257d658a5",
-							Amount: 1000,
-						},
-						{
-							Pubkey: "02c87e5c1758df5ad42a918ec507b6e8dfcdcebf22f64f58eb4ad5804257d658a5",
-							Amount: 1000,
-						},
-						{
-							Pubkey: "02c87e5c1758df5ad42a918ec507b6e8dfcdcebf22f64f58eb4ad5804257d658a5",
-							Amount: 1000,
-						},
-						{
-							Pubkey: "02c87e5c1758df5ad42a918ec507b6e8dfcdcebf22f64f58eb4ad5804257d658a5",
-							Amount: 1000,
-						},
-						{
-							Pubkey: "02c87e5c1758df5ad42a918ec507b6e8dfcdcebf22f64f58eb4ad5804257d658a5",
-							Amount: 500,
-						},
-					},
-				},
-			},
-			expectedNodesNum:  4,
-			expectedLeavesNum: 3,
-		},
-	}
-
-	_, key, err := common.DecodePubKey(testingKey)
+	fixtures, err := parsePoolTxFixtures()
 	require.NoError(t, err)
-	require.NotNil(t, key)
+	require.NotEmpty(t, fixtures)
 
-	for _, f := range fixtures {
-		poolTx, congestionTree, err := builder.BuildPoolTx(key, &mockedWalletService{}, f.payments, 30)
-		require.NoError(t, err)
-		require.Equal(t, f.expectedNodesNum, congestionTree.NumberOfNodes())
-		require.Len(t, congestionTree.Leaves(), f.expectedLeavesNum)
+	if len(fixtures.Valid) > 0 {
+		t.Run("valid", func(t *testing.T) {
+			for _, f := range fixtures.Valid {
+				poolTx, congestionTree, err := builder.BuildPoolTx(pubkey, f.Payments, minRelayFee)
+				require.NoError(t, err)
+				require.NotEmpty(t, poolTx)
+				require.NotEmpty(t, congestionTree)
+				require.Equal(t, f.ExpectedNumOfNodes, congestionTree.NumberOfNodes())
+				require.Len(t, congestionTree.Leaves(), f.ExpectedNumOfLeaves)
 
-		// check that the pool tx has the right number of inputs and outputs
-		err = tree.ValidateCongestionTree(
-			congestionTree,
-			poolTx,
-			key,
-			1209344, // 2 weeks - 8 minutes
-		)
-		require.NoError(t, err)
+				err = tree.ValidateCongestionTree(congestionTree, poolTx, pubkey, roundLifetime)
+				require.NoError(t, err)
+			}
+		})
+	}
+
+	if len(fixtures.Invalid) > 0 {
+		t.Run("invalid", func(t *testing.T) {
+			for _, f := range fixtures.Invalid {
+				poolTx, congestionTree, err := builder.BuildPoolTx(pubkey, f.Payments, minRelayFee)
+				require.EqualError(t, err, f.ExpectedErr)
+				require.Empty(t, poolTx)
+				require.Empty(t, congestionTree)
+			}
+		})
 	}
 }
 
 func TestBuildForfeitTxs(t *testing.T) {
-	builder := txbuilder.NewTxBuilder(network.Liquid)
+	builder := txbuilder.NewTxBuilder(wallet, network.Liquid)
 
-	poolTx, err := psetv2.NewPsetFromBase64(fakePoolTx)
+	fixtures, err := parseForfeitTxsFixtures()
 	require.NoError(t, err)
+	require.NotEmpty(t, fixtures)
 
-	utx, err := poolTx.UnsignedTx()
-	require.NoError(t, err)
-
-	poolTxid := utx.TxHash().String()
-
-	fixtures := []struct {
-		payments                []domain.Payment
-		expectedNumOfForfeitTxs int
-		expectedNumOfConnectors int
-	}{
-		{
-			payments: []domain.Payment{
-				{
-					Id: "0",
-					Inputs: []domain.Vtxo{
-						{
-							VtxoKey: domain.VtxoKey{
-								Txid: "fd68e3c5796cc7db0a8036d486d5f625b6b2f2c014810ac020e1ac23e82c59d6",
-								VOut: 0,
-							},
-							Receiver: domain.Receiver{
-								Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-								Amount: 600,
-							},
-						},
-						{
-							VtxoKey: domain.VtxoKey{
-								Txid: "fd68e3c5796cc7db0a8036d486d5f625b6b2f2c014810ac020e1ac23e82c59d6",
-								VOut: 1,
-							},
-							Receiver: domain.Receiver{
-								Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-								Amount: 500,
-							},
-						},
-					},
-					Receivers: []domain.Receiver{
-						{
-							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-							Amount: 600,
-						},
-						{
-							Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-							Amount: 500,
-						},
-					},
-				},
-			},
-			expectedNumOfForfeitTxs: 4,
-			expectedNumOfConnectors: 1,
-		},
-	}
-
-	_, key, err := common.DecodePubKey(testingKey)
-	require.NoError(t, err)
-	require.NotNil(t, key)
-
-	for _, f := range fixtures {
-		connectors, forfeitTxs, err := builder.BuildForfeitTxs(
-			key, fakePoolTx, f.payments,
-		)
-		require.NoError(t, err)
-		require.Len(t, connectors, f.expectedNumOfConnectors)
-		require.Len(t, forfeitTxs, f.expectedNumOfForfeitTxs)
-
-		// decode and check connectors
-		connectorsPsets := make([]*psetv2.Pset, 0, f.expectedNumOfConnectors)
-		for _, pset := range connectors {
-			p, err := psetv2.NewPsetFromBase64(pset)
-			require.NoError(t, err)
-			connectorsPsets = append(connectorsPsets, p)
-		}
-
-		for i, pset := range connectorsPsets {
-			require.Len(t, pset.Inputs, 1)
-			require.Len(t, pset.Outputs, 2)
-
-			expectedInputTxid := poolTxid
-			expectedInputVout := uint32(1)
-			if i > 0 {
-				tx, err := connectorsPsets[i-1].UnsignedTx()
+	if len(fixtures.Valid) > 0 {
+		t.Run("valid", func(t *testing.T) {
+			for _, f := range fixtures.Valid {
+				connectors, forfeitTxs, err := builder.BuildForfeitTxs(
+					pubkey, f.PoolTx, f.Payments,
+				)
 				require.NoError(t, err)
-				require.NotNil(t, tx)
-				expectedInputTxid = tx.TxHash().String()
+				require.Len(t, connectors, f.ExpectedNumOfConnectors)
+				require.Len(t, forfeitTxs, f.ExpectedNumOfForfeitTxs)
+
+				expectedInputTxid := f.PoolTxid
+				// Verify the chain of connectors
+				for _, connector := range connectors {
+					tx, err := psetv2.NewPsetFromBase64(connector)
+					require.NoError(t, err)
+					require.NotNil(t, tx)
+
+					require.Len(t, tx.Inputs, 1)
+					require.Len(t, tx.Outputs, 2)
+
+					inputTxid := chainhash.Hash(tx.Inputs[0].PreviousTxid).String()
+					require.Equal(t, expectedInputTxid, inputTxid)
+					require.Equal(t, 1, int(tx.Inputs[0].PreviousTxIndex))
+
+					expectedInputTxid = getTxid(tx)
+				}
+
+				// decode and check forfeit txs
+				for _, forfeitTx := range forfeitTxs {
+					tx, err := psetv2.NewPsetFromBase64(forfeitTx)
+					require.NoError(t, err)
+					require.Len(t, tx.Inputs, 2)
+					require.Len(t, tx.Outputs, 2)
+				}
 			}
-
-			inputTxid := chainhash.Hash(pset.Inputs[0].PreviousTxid).String()
-			require.Equal(t, expectedInputTxid, inputTxid)
-			require.Equal(t, expectedInputVout, pset.Inputs[0].PreviousTxIndex)
-		}
-
-		// decode and check forfeit txs
-		forfeitTxsPsets := make([]*psetv2.Pset, 0, f.expectedNumOfForfeitTxs)
-		for _, pset := range forfeitTxs {
-			p, err := psetv2.NewPsetFromBase64(pset)
-			require.NoError(t, err)
-			forfeitTxsPsets = append(forfeitTxsPsets, p)
-		}
-
-		// each forfeit tx should have 2 inputs and 2 outputs
-		for _, pset := range forfeitTxsPsets {
-			require.Len(t, pset.Inputs, 2)
-			require.Len(t, pset.Outputs, 2)
-		}
+		})
 	}
+
+	if len(fixtures.Invalid) > 0 {
+		t.Run("invalid", func(t *testing.T) {
+			for _, f := range fixtures.Invalid {
+				connectors, forfeitTxs, err := builder.BuildForfeitTxs(
+					pubkey, f.PoolTx, f.Payments,
+				)
+				require.EqualError(t, err, f.ExpectedErr)
+				require.Empty(t, connectors)
+				require.Empty(t, forfeitTxs)
+			}
+		})
+	}
+}
+
+func randomInput() []ports.TxInput {
+	txid := randomHex(32)
+	input := &mockedInput{}
+	input.On("GetAsset").Return("5ac9f65c0efcc4775e0baec4ec03abdde22473cd3cf33c0419ca290e0751b225")
+	input.On("GetValue").Return(uint64(1000))
+	input.On("GetScript").Return("a914ea9f486e82efb3dd83a69fd96e3f0113757da03c87")
+	input.On("GetTxid").Return(txid)
+	input.On("GetIndex").Return(uint32(0))
+
+	return []ports.TxInput{input}
+}
+
+func randomHex(len int) string {
+	buf := make([]byte, len)
+	// nolint
+	rand.Read(buf)
+	return hex.EncodeToString(buf)
+}
+
+type poolTxFixtures struct {
+	Valid []struct {
+		Payments            []domain.Payment
+		ExpectedNumOfNodes  int
+		ExpectedNumOfLeaves int
+	}
+	Invalid []struct {
+		Payments    []domain.Payment
+		ExpectedErr string
+	}
+}
+
+func parsePoolTxFixtures() (*poolTxFixtures, error) {
+	file, err := os.ReadFile("testdata/fixtures.json")
+	if err != nil {
+		return nil, err
+	}
+	v := map[string]interface{}{}
+	if err := json.Unmarshal(file, &v); err != nil {
+		return nil, err
+	}
+
+	vv := v["buildPoolTx"].(map[string]interface{})
+	file, _ = json.Marshal(vv)
+	var fixtures poolTxFixtures
+	if err := json.Unmarshal(file, &fixtures); err != nil {
+		return nil, err
+	}
+
+	return &fixtures, nil
+}
+
+type forfeitTxsFixtures struct {
+	Valid []struct {
+		Payments                []domain.Payment
+		ExpectedNumOfConnectors int
+		ExpectedNumOfForfeitTxs int
+		PoolTx                  string
+		PoolTxid                string
+	}
+	Invalid []struct {
+		Payments    []domain.Payment
+		ExpectedErr string
+		PoolTx      string
+	}
+}
+
+func parseForfeitTxsFixtures() (*forfeitTxsFixtures, error) {
+	file, err := os.ReadFile("testdata/fixtures.json")
+	if err != nil {
+		return nil, err
+	}
+	v := map[string]interface{}{}
+	if err := json.Unmarshal(file, &v); err != nil {
+		return nil, err
+	}
+
+	vv := v["buildForfeitTxs"].(map[string]interface{})
+	file, _ = json.Marshal(vv)
+	var fixtures forfeitTxsFixtures
+	if err := json.Unmarshal(file, &fixtures); err != nil {
+		return nil, err
+	}
+
+	return &fixtures, nil
+}
+
+func getTxid(tx *psetv2.Pset) string {
+	utx, _ := tx.UnsignedTx()
+	return utx.TxHash().String()
 }
