@@ -17,6 +17,7 @@ import (
 
 const (
 	connectorAmount = uint64(450)
+	dustLimit       = uint64(450)
 )
 
 type txBuilder struct {
@@ -184,12 +185,18 @@ func (b *txBuilder) createPoolTx(
 		return nil, err
 	}
 
+	var dust uint64
 	if change > 0 {
-		outputs = append(outputs, psetv2.OutputArgs{
-			Asset:  b.net.AssetID,
-			Amount: change,
-			Script: aspScript,
-		})
+		if change < dustLimit {
+			dust = change
+			change = 0
+		} else {
+			outputs = append(outputs, psetv2.OutputArgs{
+				Asset:  b.net.AssetID,
+				Amount: change,
+				Script: aspScript,
+			})
+		}
 	}
 
 	ptx, err := psetv2.New(nil, outputs, nil)
@@ -216,37 +223,45 @@ func (b *txBuilder) createPoolTx(
 		return nil, err
 	}
 
-	if feeAmount == change {
-		// fees = change, remove change output
-		ptx.Outputs = ptx.Outputs[:len(ptx.Outputs)-1]
-	} else if feeAmount < change {
-		// change covers the fees, reduce change amount
-		ptx.Outputs[len(ptx.Outputs)-1].Value = change - feeAmount
+	if dust > feeAmount {
+		feeAmount = dust
 	} else {
-		// change is not enough to cover fees, re-select utxos
-		if change > 0 {
-			// remove change output if present
-			ptx.Outputs = ptx.Outputs[:len(ptx.Outputs)-1]
-		}
-		newUtxos, change, err := b.wallet.SelectUtxos(ctx, b.net.AssetID, feeAmount-change)
-		if err != nil {
-			return nil, err
-		}
+		feeAmount += dust
+	}
 
-		if change > 0 {
-			if err := updater.AddOutputs([]psetv2.OutputArgs{
-				{
-					Asset:  b.net.AssetID,
-					Amount: change,
-					Script: aspScript,
-				},
-			}); err != nil {
+	if dust == 0 {
+		if feeAmount == change {
+			// fees = change, remove change output
+			ptx.Outputs = ptx.Outputs[:len(ptx.Outputs)-1]
+		} else if feeAmount < change {
+			// change covers the fees, reduce change amount
+			ptx.Outputs[len(ptx.Outputs)-1].Value = change - feeAmount
+		} else {
+			// change is not enough to cover fees, re-select utxos
+			if change > 0 {
+				// remove change output if present
+				ptx.Outputs = ptx.Outputs[:len(ptx.Outputs)-1]
+			}
+			newUtxos, change, err := b.wallet.SelectUtxos(ctx, b.net.AssetID, feeAmount-change)
+			if err != nil {
 				return nil, err
 			}
-		}
 
-		if err := addInputs(updater, newUtxos); err != nil {
-			return nil, err
+			if change > 0 {
+				if err := updater.AddOutputs([]psetv2.OutputArgs{
+					{
+						Asset:  b.net.AssetID,
+						Amount: change,
+						Script: aspScript,
+					},
+				}); err != nil {
+					return nil, err
+				}
+			}
+
+			if err := addInputs(updater, newUtxos); err != nil {
+				return nil, err
+			}
 		}
 	}
 
