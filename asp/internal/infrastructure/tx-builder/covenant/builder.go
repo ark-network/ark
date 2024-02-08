@@ -105,8 +105,6 @@ func (b *txBuilder) BuildPoolTx(
 		return
 	}
 
-	fmt.Println(poolTx)
-
 	congestionTree = tree
 	return
 }
