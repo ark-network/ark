@@ -93,11 +93,13 @@ func (r *vtxoRepository) GetVtxos(
 	return vtxos, nil
 }
 
-func (r *vtxoRepository) GetSpendableVtxosWithPubkey(
+func (r *vtxoRepository) GetSpendableVtxos(
 	ctx context.Context, pubkey string,
 ) ([]domain.Vtxo, error) {
-	query := badgerhold.Where("Pubkey").Eq(pubkey).
-		And("Spent").Eq(false).And("Redeemed").Eq(false)
+	query := badgerhold.Where("Spent").Eq(false).And("Redeemed").Eq(false)
+	if len(pubkey) > 0 {
+		query = query.And("Pubkey").Eq(pubkey)
+	}
 	return r.findVtxos(ctx, query)
 }
 

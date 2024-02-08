@@ -83,16 +83,29 @@ func NewService(
 			svc.propagateEvents(round)
 		},
 	)
+
+	if err := svc.restoreWatchingVtxos(); err != nil {
+		return nil, fmt.Errorf("failed to restore watching vtxos: %s", err)
+	}
 	go svc.listenToRedemptions()
 	return svc, nil
 }
 
 func (s *service) Start() error {
 	log.Debug("starting app service")
-	return s.start()
+	go s.start()
+	return nil
 }
 
 func (s *service) Stop() {
+	// nolint
+	vtxos, _ := s.repoManager.Vtxos().GetSpendableVtxos(
+		context.Background(), "",
+	)
+	if len(vtxos) > 0 {
+		s.stopWatchingVtxos(vtxos)
+	}
+
 	s.wallet.Close()
 	log.Debug("closed connection to wallet")
 	s.repoManager.Close()
@@ -180,7 +193,7 @@ func (s *service) SignVtxos(ctx context.Context, forfeitTxs []string) error {
 
 func (s *service) ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, error) {
 	pk := hex.EncodeToString(pubkey.SerializeCompressed())
-	return s.repoManager.Vtxos().GetSpendableVtxosWithPubkey(ctx, pk)
+	return s.repoManager.Vtxos().GetSpendableVtxos(ctx, pk)
 }
 
 func (s *service) GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent {
@@ -199,9 +212,8 @@ func (s *service) GetPubkey(ctx context.Context) (string, error) {
 	return pubkey, nil
 }
 
-func (s *service) start() error {
+func (s *service) start() {
 	s.startRound()
-	return nil
 }
 
 func (s *service) startRound() {
@@ -364,10 +376,6 @@ func (s *service) listenToRedemptions() {
 					continue
 				}
 				log.Debugf("redeemed %d vtxos", len(vtxos))
-				// Keep in mind that different vtxos can be owned by the same script and
-				// therefore not all vtxos' locking scripts may need to be unwatched.
-				// For now it's ok tho, as the client supports unilateral redeem of all vtxos only.
-				s.stopWatchingVtxos(vtxos)
 				break
 			}
 		}
@@ -404,7 +412,18 @@ func (s *service) updateProjectionStore(round *domain.Round) {
 			break
 		}
 
-		go s.startWatchingVtxos(newVtxos)
+		go func() {
+			for {
+				if err := s.startWatchingVtxos(newVtxos); err != nil {
+					log.WithError(err).Warn(
+						"failed to start watching vtxos, retrying in a moment...",
+					)
+					continue
+				}
+				log.Debugf("started watching %d vtxos", len(newVtxos))
+				return
+			}
+		}()
 	}
 
 	// Always update the status of the round.
@@ -450,7 +469,7 @@ func (s *service) getNewVtxos(round *domain.Round) []domain.Vtxo {
 
 					buf, _ := hex.DecodeString(r.Pubkey)
 					pk, _ := secp256k1.ParsePubKey(buf)
-					script, _ := s.builder.GetVtxoOutputScript(pk, s.pubkey)
+					script, _ := s.builder.GetVtxoScript(pk, s.pubkey)
 					if bytes.Equal(script, out.Script) {
 						found = true
 						pubkey = r.Pubkey
@@ -471,80 +490,75 @@ func (s *service) getNewVtxos(round *domain.Round) []domain.Vtxo {
 	return vtxos
 }
 
-func (s *service) startWatchingVtxos(vtxos []domain.Vtxo) {
-	indexedScripts := make(map[string]struct{})
-	for _, vtxo := range vtxos {
-		buf, err := hex.DecodeString(vtxo.Pubkey)
-		if err != nil {
-			log.WithError(err).Warn("vtxo pubkey invalid format")
-			continue
-		}
-		pk, err := secp256k1.ParsePubKey(buf)
-		if err != nil {
-			log.WithError(err).Warn("failed to parse vtxo pubkey")
-			continue
-		}
-		buf, err = s.builder.GetLeafOutputScript(pk, s.pubkey)
-		if err != nil {
-			log.WithError(err).Warn("failed to generate vtxo script")
-			continue
-		}
-		script := hex.EncodeToString(buf)
-
-		indexedScripts[script] = struct{}{}
-	}
-	scripts := make([]string, 0, len(indexedScripts))
-	for script := range indexedScripts {
-		scripts = append(scripts, script)
+func (s *service) startWatchingVtxos(vtxos []domain.Vtxo) error {
+	scripts, err := s.extractVtxosScripts(vtxos)
+	if err != nil {
+		return err
 	}
 
-	for {
-		if err := s.scanner.WatchScripts(context.Background(), scripts); err != nil {
-			log.WithError(err).Warn("failed to watch vtxos, retrying...")
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-		log.Debugf("started watching %d vtxos", len(vtxos))
-		break
-	}
+	return s.scanner.WatchScripts(context.Background(), scripts)
 }
 
 func (s *service) stopWatchingVtxos(vtxos []domain.Vtxo) {
-	indexedScripts := make(map[string]struct{})
-	for _, vtxo := range vtxos {
-		buf, err := hex.DecodeString(vtxo.Pubkey)
-		if err != nil {
-			log.WithError(err).Warn("vtxo pubkey invalid format")
-			continue
-		}
-		pk, err := secp256k1.ParsePubKey(buf)
-		if err != nil {
-			log.WithError(err).Warn("failed to parse vtxo pubkey")
-			continue
-		}
-		buf, err = s.builder.GetLeafOutputScript(pk, s.pubkey)
-		if err != nil {
-			log.WithError(err).Warn("failed to generate vtxo script")
-			continue
-		}
-		script := hex.EncodeToString(buf)
-
-		indexedScripts[script] = struct{}{}
-	}
-	scripts := make([]string, 0, len(indexedScripts))
-	for script := range indexedScripts {
-		scripts = append(scripts, script)
+	scripts, err := s.extractVtxosScripts(vtxos)
+	if err != nil {
+		log.WithError(err).Warn("failed to extract scripts from vtxos")
+		return
 	}
 
 	for {
 		if err := s.scanner.UnwatchScripts(context.Background(), scripts); err != nil {
-			log.WithError(err).Warn("failed to stop watching vtxos, retrying...")
+			log.WithError(err).Warn("failed to stop watching vtxos, retrying in a moment...")
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 		log.Debugf("stopped watching %d vtxos", len(vtxos))
 		break
 	}
+}
+
+func (s *service) restoreWatchingVtxos() error {
+	vtxos, err := s.repoManager.Vtxos().GetSpendableVtxos(
+		context.Background(), "",
+	)
+	if err != nil {
+		return err
+	}
+	if len(vtxos) <= 0 {
+		return nil
+	}
+
+	if err := s.startWatchingVtxos(vtxos); err != nil {
+		return err
+	}
+
+	log.Debugf("restored watching %d vtxos", len(vtxos))
+	return nil
+}
+
+func (s *service) extractVtxosScripts(vtxos []domain.Vtxo) ([]string, error) {
+	indexedScripts := make(map[string]struct{})
+	for _, vtxo := range vtxos {
+		buf, err := hex.DecodeString(vtxo.Pubkey)
+		if err != nil {
+			return nil, err
+		}
+		userPubkey, err := secp256k1.ParsePubKey(buf)
+		if err != nil {
+			return nil, err
+		}
+		script, err := s.builder.GetVtxoScript(userPubkey, s.pubkey)
+		if err != nil {
+			return nil, err
+		}
+
+		indexedScripts[hex.EncodeToString(script)] = struct{}{}
+	}
+	scripts := make([]string, 0, len(indexedScripts))
+	for script := range indexedScripts {
+		scripts = append(scripts, script)
+	}
+	return scripts, nil
 }
 
 func getSpentVtxos(payments map[string]domain.Payment) []domain.VtxoKey {
