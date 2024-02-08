@@ -363,8 +363,6 @@ func (s *sweeper) leafToSweepInput(ctx context.Context, txBlocktime int64, node 
 		return -1, nil, err
 	}
 
-	expirationTime := int64(-1)
-
 	fromRepo, err := s.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{*vtxo})
 	if err != nil {
 		return -1, nil, err
@@ -407,9 +405,7 @@ func (s *sweeper) leafToSweepInput(ctx context.Context, txBlocktime int64, node 
 		Amount:    fromRepo[0].Amount,
 	}
 
-	expirationTime = txBlocktime + lifetime
-
-	return expirationTime, &sweepInput, nil
+	return txBlocktime + lifetime, &sweepInput, nil
 }
 
 func (s *sweeper) nodeToSweepInputs(parentBlocktime int64, node tree.Node) (int64, []ports.SweepInput, error) {
