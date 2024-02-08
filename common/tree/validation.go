@@ -2,7 +2,6 @@ package tree
 
 import (
 	"bytes"
-	"encoding/hex"
 	"errors"
 	"fmt"
 
@@ -251,10 +250,6 @@ func validateNodeTransaction(
 			isBranchLeaf, leftKey, rightKey, leftAmount, rightAmount, err := decodeBranchScript(tapLeaf.Script)
 			if err != nil {
 				return fmt.Errorf("invalid branch script: %w", err)
-			}
-
-			if !isBranchLeaf {
-				fmt.Println("script", hex.EncodeToString(tapLeaf.Script))
 			}
 
 			if isBranchLeaf {
