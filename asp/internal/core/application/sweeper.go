@@ -156,8 +156,7 @@ func (s *sweeper) createTask(
 					},
 				)
 				if len(vtxos) > 0 {
-					// TODO check if it has been redeemed
-					if !vtxos[0].Swept {
+					if !vtxos[0].Swept && !vtxos[0].Redeemed {
 						sweepableVtxos = append(sweepableVtxos, vtxos[0].VtxoKey)
 					}
 				} else {
@@ -175,30 +174,29 @@ func (s *sweeper) createTask(
 							continue
 						}
 
-						vtxosInLeaf, err := extractVtxosOutputs(pset)
+						vtxo, err := extractVtxoOutpoint(pset)
 						if err != nil {
-							log.Error(fmt.Errorf("error while extracting vtxos outputs: %w", err))
+							log.Error(err)
 							continue
 						}
 
-						sweepableVtxos = append(sweepableVtxos, vtxosInLeaf...)
+						sweepableVtxos = append(sweepableVtxos, *vtxo)
 					}
 
 					if len(sweepableVtxos) <= 0 {
 						continue
 					}
 
-					firstVtxo, err := s.repoManager.Vtxos().GetVtxos(ctx, sweepableVtxos[:1])
+					firstVtxo, err := s.repoManager.Vtxos().GetVtxos(ctx, sweepableVtxos[1:])
 					if err != nil {
 						log.Error(fmt.Errorf("error while getting vtxo: %w", err))
 						sweepInputs = append(sweepInputs, input) // add the input anyway in order to try to sweep it
 						continue
 					}
 
-					// TODO: check if it has been redeemed
-					if firstVtxo[0].Swept {
-						// we assume that if the first vtxo is swept, all the others are too
-						// skip, the output is already swept
+					if firstVtxo[0].Swept || firstVtxo[0].Redeemed {
+						// we assume that if the first vtxo is swept or redeemed, the shared output has been spent
+						// skip, the output is already swept or spent by a unilateral redeem
 						continue
 					}
 				}
@@ -331,9 +329,14 @@ func (s *sweeper) findSweepableOutputs(
 				}
 
 				// if the node is a leaf, the vtxos outputs should added as onchain outputs if they are not swept yet
-				expirationTime, sweepInputs, err = s.leafToSweepInputs(ctx, blocktime, node)
+				vtxoExpiration, sweepInput, err := s.leafToSweepInput(ctx, blocktime, node)
 				if err != nil {
 					return nil, err
+				}
+
+				if sweepInput != nil {
+					expirationTime = vtxoExpiration
+					sweepInputs = []ports.SweepInput{*sweepInput}
 				}
 			}
 
@@ -349,70 +352,64 @@ func (s *sweeper) findSweepableOutputs(
 	return sweepableOutputs, nil
 }
 
-func (s *sweeper) leafToSweepInputs(ctx context.Context, txBlocktime int64, node tree.Node) (int64, []ports.SweepInput, error) {
+func (s *sweeper) leafToSweepInput(ctx context.Context, txBlocktime int64, node tree.Node) (int64, *ports.SweepInput, error) {
 	pset, err := psetv2.NewPsetFromBase64(node.Tx)
 	if err != nil {
 		return -1, nil, err
 	}
 
-	vtxos, err := extractVtxosOutputs(pset)
+	vtxo, err := extractVtxoOutpoint(pset)
 	if err != nil {
 		return -1, nil, err
 	}
 
-	sweepInputs := make([]ports.SweepInput, 0)
 	expirationTime := int64(-1)
 
-	for _, vtxo := range vtxos {
-		fromRepo, err := s.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{vtxo})
-		if err != nil {
-			log.WithError(err).Error("error while getting vtxos from repo")
-			continue
-		}
-
-		if len(fromRepo) == 0 {
-			continue
-		}
-
-		// TODO handle redemption case
-		if fromRepo[0].Swept {
-			continue
-		}
-
-		// if the vtxo is not swept or redeemed, add it to the onchain outputs
-		pubKeyBytes, err := hex.DecodeString(fromRepo[0].Pubkey)
-		if err != nil {
-			return -1, nil, err
-		}
-
-		pubKey, err := secp256k1.ParsePubKey(pubKeyBytes)
-		if err != nil {
-			return -1, nil, err
-		}
-
-		sweepLeaf, lifetime, err := s.builder.GetLeafSweepClosure(node, pubKey)
-		if err != nil {
-			return -1, nil, err
-		}
-
-		sweepInput := ports.SweepInput{
-			InputArgs: psetv2.InputArgs{
-				Txid:    vtxo.Txid,
-				TxIndex: vtxo.VOut,
-			},
-			SweepLeaf: *sweepLeaf,
-			Amount:    fromRepo[0].Amount,
-		}
-
-		expirationTime = txBlocktime + lifetime
-		sweepInputs = append(sweepInputs, sweepInput)
+	fromRepo, err := s.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{*vtxo})
+	if err != nil {
+		return -1, nil, err
 	}
 
-	if len(sweepInputs) <= 0 {
-		return -1, nil, fmt.Errorf("no sweepable vtxos found")
+	if len(fromRepo) == 0 {
+		return -1, nil, fmt.Errorf("vtxo not found")
 	}
 
-	return expirationTime, sweepInputs, nil
+	if fromRepo[0].Swept {
+		return -1, nil, nil
+	}
+
+	if fromRepo[0].Redeemed {
+		return -1, nil, nil
+	}
+
+	// if the vtxo is not swept or redeemed, add it to the onchain outputs
+	pubKeyBytes, err := hex.DecodeString(fromRepo[0].Pubkey)
+	if err != nil {
+		return -1, nil, err
+	}
+
+	pubKey, err := secp256k1.ParsePubKey(pubKeyBytes)
+	if err != nil {
+		return -1, nil, err
+	}
+
+	sweepLeaf, lifetime, err := s.builder.GetLeafSweepClosure(node, pubKey)
+	if err != nil {
+		return -1, nil, err
+	}
+
+	sweepInput := ports.SweepInput{
+		InputArgs: psetv2.InputArgs{
+			Txid:    vtxo.Txid,
+			TxIndex: vtxo.VOut,
+		},
+		SweepLeaf: *sweepLeaf,
+		Amount:    fromRepo[0].Amount,
+	}
+
+	expirationTime = txBlocktime + lifetime
+
+	return expirationTime, &sweepInput, nil
 }
 
 func (s *sweeper) nodeToSweepInputs(parentBlocktime int64, node tree.Node) (int64, []ports.SweepInput, error) {
@@ -570,9 +567,9 @@ func extractSweepLeaf(input psetv2.Input) (sweepLeaf *psetv2.TapLeafScript, life
 }
 
 // assuming the pset is a leaf in the congestion tree, returns the vtxos outputs
-func extractVtxosOutputs(pset *psetv2.Pset) ([]domain.VtxoKey, error) {
-	if len(pset.Inputs) != 2 && len(pset.Outputs) != 3 {
-		return nil, fmt.Errorf("invalid leaf pset, expect 2 or 3 outputs, got %d", len(pset.Outputs))
+func extractVtxoOutpoint(pset *psetv2.Pset) (*domain.VtxoKey, error) {
+	if len(pset.Outputs) != 2 {
+		return nil, fmt.Errorf("invalid leaf pset, expect 2 outputs, got %d", len(pset.Outputs))
 	}
 
 	utx, err := pset.UnsignedTx()
@@ -580,21 +577,8 @@ func extractVtxosOutputs(pset *psetv2.Pset) ([]domain.VtxoKey, error) {
 		return nil, err
 	}
 
-	txid := utx.TxHash().String()
-
-	vtxos := []domain.VtxoKey{
-		{
-			Txid: txid,
-			VOut: 0,
-		},
-	}
-
-	if len(pset.Outputs) == 3 {
-		vtxos = append(vtxos, domain.VtxoKey{
-			Txid: txid,
-			VOut: 1,
-		})
-	}
-
-	return vtxos, nil
+	return &domain.VtxoKey{
+		Txid: utx.TxHash().String(),
+		VOut: 0,
+	}, nil
 }

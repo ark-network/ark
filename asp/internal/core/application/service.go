@@ -43,8 +43,8 @@ type Service interface {
 
 type service struct {
 	minRelayFee   uint64
-	roundInterval int64
 	roundLifetime int64
+	roundInterval int64
 	network       common.Network
 	onchainNework network.Network
 	pubkey        *secp256k1.PublicKey
