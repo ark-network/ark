@@ -11,7 +11,9 @@ import (
 	"github.com/ark-network/ark/internal/core/ports"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 type service struct {
@@ -98,7 +100,7 @@ func (s *service) listenToNotificaitons() {
 	for {
 		msg, err := stream.Recv()
 		if err != nil {
-			if err == io.EOF {
+			if err == io.EOF || status.Convert(err).Code() == codes.Canceled {
 				return
 			}
 			log.WithError(err).Warn("received unexpected error from source")

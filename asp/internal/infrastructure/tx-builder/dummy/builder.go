@@ -179,7 +179,7 @@ func (b *txBuilder) BuildPoolTx(
 	return poolTx, congestionTree, err
 }
 
-func (b *txBuilder) GetVtxoOutputScript(userPubkey, _ *secp256k1.PublicKey) ([]byte, error) {
+func (b *txBuilder) GetVtxoScript(userPubkey, _ *secp256k1.PublicKey) ([]byte, error) {
 	p2wpkh := payment.FromPublicKey(userPubkey, &b.net, nil)
 	addr, _ := p2wpkh.WitnessPubKeyHash()
 	return address.ToOutputScript(addr)
