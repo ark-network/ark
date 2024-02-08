@@ -27,16 +27,7 @@
       "default": "STRATEGY_UNSPECIFIED",
       "description": "Coin-selection algorithm."
     },
-    "protobufAny": {
-      "type": "object",
-      "properties": {
-        "@type": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": {}
-    },
-    "rpcStatus": {
+    "googlerpcStatus": {
       "type": "object",
       "properties": {
         "code": {
@@ -54,6 +45,15 @@
           }
         }
       }
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
     },
     "v1BlindPsetResponse": {
       "type": "object",
@@ -259,6 +259,14 @@
         "pset": {
           "type": "string",
           "description": "Signed partial transaction in base64 format."
+        }
+      }
+    },
+    "v1SignPsetWithSchnorrKeyResponse": {
+      "type": "object",
+      "properties": {
+        "signedTx": {
+          "type": "string"
         }
       }
     },

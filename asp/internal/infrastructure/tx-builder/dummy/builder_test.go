@@ -79,6 +79,18 @@ func (*mockedWalletService) Status(ctx context.Context) (ports.WalletStatus, err
 	panic("unimplemented")
 }
 
+func (*mockedWalletService) WatchScripts(ctx context.Context, scripts []string) error {
+	panic("unimplemented")
+}
+
+func (*mockedWalletService) UnwatchScripts(ctx context.Context, scripts []string) error {
+	panic("unimplemented")
+}
+
+func (*mockedWalletService) GetNotificationChannel(ctx context.Context) chan []domain.VtxoKey {
+	panic("unimplemented")
+}
+
 func (*mockedWalletService) SelectUtxos(ctx context.Context, asset string, amount uint64) ([]ports.TxInput, uint64, error) {
 	// random txid
 	bytes := make([]byte, 32)
@@ -97,8 +109,16 @@ func (*mockedWalletService) EstimateFees(ctx context.Context, pset string) (uint
 	return 100, nil
 }
 
+func (*mockedWalletService) SignPsetWithKey(ctx context.Context, pset string, inputIndex []int) (string, error) {
+	panic("unimplemented")
+}
+
+func (*mockedWalletService) IsTransactionPublished(ctx context.Context, txid string) (bool, int64, error) {
+	panic("unimplemented")
+}
+
 func TestBuildCongestionTree(t *testing.T) {
-	builder := txbuilder.NewTxBuilder(network.Liquid)
+	builder := txbuilder.NewTxBuilder(&mockedWalletService{}, network.Liquid)
 
 	fixtures := []struct {
 		payments          []domain.Payment
@@ -224,7 +244,7 @@ func TestBuildCongestionTree(t *testing.T) {
 	require.NotNil(t, key)
 
 	for _, f := range fixtures {
-		poolTx, tree, err := builder.BuildPoolTx(key, &mockedWalletService{}, f.payments, 30)
+		poolTx, tree, err := builder.BuildPoolTx(key, f.payments, 30)
 
 		require.NoError(t, err)
 		require.Equal(t, f.expectedNodesNum, tree.NumberOfNodes())
@@ -274,7 +294,7 @@ func TestBuildCongestionTree(t *testing.T) {
 }
 
 func TestBuildForfeitTxs(t *testing.T) {
-	builder := txbuilder.NewTxBuilder(network.Liquid)
+	builder := txbuilder.NewTxBuilder(&mockedWalletService{}, network.Liquid)
 
 	poolPset, err := psetv2.NewPsetFromBase64(fakePoolTx)
 	require.NoError(t, err)

@@ -19,7 +19,8 @@ const (
 	emptyPtx = "cHNldP8BAgQCAAAAAQQBAAEFAQABBgEDAfsEAgAAAAA="
 	emptyTx  = "0200000000000000000000"
 	txid     = "00000000000000000000000000000000000000000000000000000000000000000"
-	pubkey   = "0300000000000000000000000000000000000000000000000000000000000000001"
+	pubkey1  = "0300000000000000000000000000000000000000000000000000000000000000001"
+	pubkey2  = "0200000000000000000000000000000000000000000000000000000000000000002"
 )
 
 var congestionTree = [][]tree.Node{
@@ -295,14 +296,14 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 	t.Run("test_vtxo_repository", func(t *testing.T) {
 		ctx := context.Background()
 
-		newVtxos := []domain.Vtxo{
+		userVtxos := []domain.Vtxo{
 			{
 				VtxoKey: domain.VtxoKey{
 					Txid: txid,
 					VOut: 0,
 				},
 				Receiver: domain.Receiver{
-					Pubkey: pubkey,
+					Pubkey: pubkey1,
 					Amount: 1000,
 				},
 			},
@@ -312,13 +313,24 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 					VOut: 1,
 				},
 				Receiver: domain.Receiver{
-					Pubkey: pubkey,
+					Pubkey: pubkey1,
 					Amount: 2000,
 				},
 			},
 		}
-		vtxoKeys := make([]domain.VtxoKey, 0, len(newVtxos))
-		for _, v := range newVtxos {
+		newVtxos := append(userVtxos, domain.Vtxo{
+			VtxoKey: domain.VtxoKey{
+				Txid: txid,
+				VOut: 1,
+			},
+			Receiver: domain.Receiver{
+				Pubkey: pubkey2,
+				Amount: 2000,
+			},
+		})
+
+		vtxoKeys := make([]domain.VtxoKey, 0, len(userVtxos))
+		for _, v := range userVtxos {
 			vtxoKeys = append(vtxoKeys, v.VtxoKey)
 		}
 
@@ -326,7 +338,11 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 		require.Error(t, err)
 		require.Empty(t, vtxos)
 
-		spendableVtxos, err := svc.Vtxos().GetSpendableVtxosWithPubkey(ctx, pubkey)
+		spendableVtxos, err := svc.Vtxos().GetSpendableVtxos(ctx, pubkey1)
+		require.NoError(t, err)
+		require.Empty(t, spendableVtxos)
+
+		spendableVtxos, err = svc.Vtxos().GetSpendableVtxos(ctx, "")
 		require.NoError(t, err)
 		require.Empty(t, spendableVtxos)
 
@@ -335,11 +351,15 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 
 		vtxos, err = svc.Vtxos().GetVtxos(ctx, vtxoKeys)
 		require.NoError(t, err)
-		require.Exactly(t, vtxos, newVtxos)
+		require.Exactly(t, userVtxos, vtxos)
 
-		spendableVtxos, err = svc.Vtxos().GetSpendableVtxosWithPubkey(ctx, pubkey)
+		spendableVtxos, err = svc.Vtxos().GetSpendableVtxos(ctx, pubkey1)
 		require.NoError(t, err)
 		require.Exactly(t, vtxos, spendableVtxos)
+
+		spendableVtxos, err = svc.Vtxos().GetSpendableVtxos(ctx, "")
+		require.NoError(t, err)
+		require.Exactly(t, userVtxos, spendableVtxos)
 
 		err = svc.Vtxos().SpendVtxos(ctx, vtxoKeys[:1])
 		require.NoError(t, err)
@@ -351,7 +371,7 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 			require.True(t, v.Spent)
 		}
 
-		spendableVtxos, err = svc.Vtxos().GetSpendableVtxosWithPubkey(ctx, pubkey)
+		spendableVtxos, err = svc.Vtxos().GetSpendableVtxos(ctx, pubkey1)
 		require.NoError(t, err)
 		require.Exactly(t, vtxos[1:], spendableVtxos)
 	})

@@ -9,6 +9,7 @@ import (
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/ark-network/ark/internal/infrastructure/db"
 	oceanwallet "github.com/ark-network/ark/internal/infrastructure/ocean-wallet"
+	scheduler "github.com/ark-network/ark/internal/infrastructure/scheduler/gocron"
 	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenant"
 	txbuilderdummy "github.com/ark-network/ark/internal/infrastructure/tx-builder/dummy"
 	log "github.com/sirupsen/logrus"
@@ -26,22 +27,29 @@ var (
 		"dummy":    {},
 		"covenant": {},
 	}
+	supportedScanners = supportedType{
+		"ocean": {},
+	}
 )
 
 type Config struct {
-	DbType        string
-	DbDir         string
-	RoundInterval int64
-	Network       common.Network
-	SchedulerType string
-	TxBuilderType string
-	WalletAddr    string
-	MinRelayFee   uint64
+	DbType                string
+	DbDir                 string
+	RoundInterval         int64
+	Network               common.Network
+	SchedulerType         string
+	TxBuilderType         string
+	BlockchainScannerType string
+	WalletAddr            string
+	MinRelayFee           uint64
+	RoundLifetime         int64
 
 	repo      ports.RepoManager
 	svc       application.Service
 	wallet    ports.WalletService
 	txBuilder ports.TxBuilder
+	scanner   ports.BlockchainScanner
+	scheduler ports.SchedulerService
 }
 
 func (c *Config) Validate() error {
@@ -53,6 +61,9 @@ func (c *Config) Validate() error {
 	}
 	if !supportedTxBuilders.supports(c.TxBuilderType) {
 		return fmt.Errorf("tx builder type not supported, please select one of: %s", supportedTxBuilders)
+	}
+	if !supportedScanners.supports(c.BlockchainScannerType) {
+		return fmt.Errorf("blockchain scanner type not supported, please select one of: %s", supportedScanners)
 	}
 	if c.RoundInterval < 5 {
 		return fmt.Errorf("invalid round interval, must be at least 5 seconds")
@@ -75,9 +86,33 @@ func (c *Config) Validate() error {
 	if err := c.txBuilderService(); err != nil {
 		return err
 	}
+	if err := c.scannerService(); err != nil {
+		return err
+	}
+	if err := c.schedulerService(); err != nil {
+		return err
+	}
 	if err := c.appService(); err != nil {
 		return err
 	}
+	// round life time must be a multiple of 512
+	if c.RoundLifetime <= 0 || c.RoundLifetime%512 != 0 {
+		return fmt.Errorf("invalid round lifetime, must be greater than 0 and a multiple of 512")
+	}
+	seq, err := common.BIP68Encode(uint(c.RoundLifetime))
+	if err != nil {
+		return fmt.Errorf("invalid round lifetime, %s", err)
+	}
+
+	seconds, err := common.BIP68Decode(seq)
+	if err != nil {
+		return fmt.Errorf("invalid round lifetime, %s", err)
+	}
+
+	if seconds != uint(c.RoundLifetime) {
+		return fmt.Errorf("invalid round lifetime, must be a multiple of 512")
+	}
+
 	return nil
 }
 
@@ -125,11 +160,12 @@ func (c *Config) txBuilderService() error {
 	var svc ports.TxBuilder
 	var err error
 	net := c.mainChain()
+
 	switch c.TxBuilderType {
 	case "dummy":
-		svc = txbuilderdummy.NewTxBuilder(net)
+		svc = txbuilderdummy.NewTxBuilder(c.wallet, net)
 	case "covenant":
-		svc = txbuilder.NewTxBuilder(net)
+		svc = txbuilder.NewTxBuilder(c.wallet, net, c.RoundLifetime)
 	default:
 		err = fmt.Errorf("unknown tx builder type")
 	}
@@ -141,10 +177,45 @@ func (c *Config) txBuilderService() error {
 	return nil
 }
 
+func (c *Config) scannerService() error {
+	var svc ports.BlockchainScanner
+	var err error
+	switch c.BlockchainScannerType {
+	case "ocean":
+		svc = c.wallet
+	default:
+		err = fmt.Errorf("unknown blockchain scanner type")
+	}
+	if err != nil {
+		return err
+	}
+
+	c.scanner = svc
+	return nil
+}
+
+func (c *Config) schedulerService() error {
+	var svc ports.SchedulerService
+	var err error
+	switch c.SchedulerType {
+	case "gocron":
+		svc = scheduler.NewScheduler()
+	default:
+		err = fmt.Errorf("unknown scheduler type")
+	}
+	if err != nil {
+		return err
+	}
+
+	c.scheduler = svc
+	return nil
+}
+
 func (c *Config) appService() error {
 	net := c.mainChain()
 	svc, err := application.NewService(
-		c.RoundInterval, c.Network, net, c.wallet, c.repo, c.txBuilder, c.MinRelayFee,
+		c.Network, net, c.RoundInterval, c.RoundLifetime, c.MinRelayFee,
+		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler,
 	)
 	if err != nil {
 		return err

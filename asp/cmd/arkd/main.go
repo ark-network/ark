@@ -30,15 +30,24 @@ func main() {
 		Port:  cfg.Port,
 		NoTLS: cfg.NoTLS,
 	}
+
+	if cfg.RoundLifetime%512 != 0 {
+		setLifetime := cfg.RoundLifetime
+		cfg.RoundLifetime = cfg.RoundLifetime - (cfg.RoundLifetime % 512)
+		log.Infof("round lifetime must be a multiple of 512, %d -> %d", setLifetime, cfg.RoundLifetime)
+	}
+
 	appConfig := &appconfig.Config{
-		DbType:        cfg.DbType,
-		DbDir:         cfg.DbDir,
-		RoundInterval: cfg.RoundInterval,
-		Network:       cfg.Network,
-		SchedulerType: cfg.SchedulerType,
-		TxBuilderType: cfg.TxBuilderType,
-		WalletAddr:    cfg.WalletAddr,
-		MinRelayFee:   cfg.MinRelayFee,
+		DbType:                cfg.DbType,
+		DbDir:                 cfg.DbDir,
+		RoundInterval:         cfg.RoundInterval,
+		Network:               cfg.Network,
+		SchedulerType:         cfg.SchedulerType,
+		TxBuilderType:         cfg.TxBuilderType,
+		BlockchainScannerType: cfg.BlockchainScannerType,
+		WalletAddr:            cfg.WalletAddr,
+		MinRelayFee:           cfg.MinRelayFee,
+		RoundLifetime:         cfg.RoundLifetime,
 	}
 	svc, err := grpcservice.NewService(svcConfig, appConfig)
 	if err != nil {

@@ -2,7 +2,6 @@ package tree
 
 import (
 	"bytes"
-	"encoding/hex"
 	"errors"
 	"fmt"
 
@@ -32,6 +31,7 @@ var (
 	ErrNumberOfTapscripts            = errors.New("input should have two tapscripts leaves")
 	ErrInternalKey                   = errors.New("taproot internal key is not unspendable")
 	ErrInvalidTaprootScript          = errors.New("invalid taproot script")
+	ErrInvalidTaprootScriptLen       = errors.New("invalid taproot script length (expected 32 bytes)")
 	ErrInvalidLeafTaprootScript      = errors.New("invalid leaf taproot script")
 	ErrInvalidAmount                 = errors.New("children amount is different from parent amount")
 	ErrInvalidAsset                  = errors.New("invalid output asset")
@@ -46,10 +46,20 @@ var (
 	ErrWrongPoolTxID                 = errors.New("root input should be the pool tx outpoint")
 )
 
+// 0250929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0
+var unspendablePoint = []byte{
+	0x02, 0x50, 0x92, 0x9b, 0x74, 0xc1, 0xa0, 0x49, 0x54, 0xb7, 0x8b, 0x4b, 0x60, 0x35, 0xe9, 0x7a,
+	0x5e, 0x07, 0x8a, 0x5a, 0x0f, 0x28, 0xec, 0x96, 0xd5, 0x47, 0xbf, 0xee, 0x9a, 0xce, 0x80, 0x3a, 0xc0,
+}
+
 const (
-	UnspendablePoint  = "0250929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0"
 	sharedOutputIndex = 0
 )
+
+func UnspendableKey() *secp256k1.PublicKey {
+	key, _ := secp256k1.ParsePubKey(unspendablePoint)
+	return key
+}
 
 // ValidateCongestionTree checks if the given congestion tree is valid
 // poolTxID & poolTxIndex & poolTxAmount are used to validate the root input outpoint
@@ -64,11 +74,8 @@ func ValidateCongestionTree(
 	tree CongestionTree,
 	poolTx string,
 	aspPublicKey *secp256k1.PublicKey,
-	roundLifetimeSeconds uint,
+	roundLifetimeSeconds int64,
 ) error {
-	unspendableKeyBytes, _ := hex.DecodeString(UnspendablePoint)
-	unspendableKey, _ := secp256k1.ParsePubKey(unspendableKeyBytes)
-
 	poolTransaction, err := psetv2.NewPsetFromBase64(poolTx)
 	if err != nil {
 		return ErrInvalidPoolTransaction
@@ -128,7 +135,7 @@ func ValidateCongestionTree(
 	// iterates over all the nodes of the tree
 	for _, level := range tree {
 		for _, node := range level {
-			if err := validateNodeTransaction(node, tree, unspendableKey, aspPublicKey, roundLifetimeSeconds); err != nil {
+			if err := validateNodeTransaction(node, tree, UnspendableKey(), aspPublicKey, roundLifetimeSeconds); err != nil {
 				return err
 			}
 		}
@@ -142,7 +149,7 @@ func validateNodeTransaction(
 	tree CongestionTree,
 	expectedInternalKey,
 	expectedPublicKeyASP *secp256k1.PublicKey,
-	expectedSequenceSeconds uint,
+	expectedSequenceSeconds int64,
 ) error {
 	if node.Tx == "" {
 		return ErrNodeTransactionEmpty
@@ -190,7 +197,7 @@ func validateNodeTransaction(
 
 	children := tree.Children(node.Txid)
 
-	if node.Leaf && len(children) > 1 {
+	if node.Leaf && len(children) >= 1 {
 		return ErrLeafChildren
 	}
 
@@ -222,7 +229,7 @@ func validateNodeTransaction(
 				return ErrInvalidTaprootScript
 			}
 
-			isSweepLeaf, aspKey, seconds, err := decodeSweepScript(tapLeaf.Script)
+			isSweepLeaf, aspKey, seconds, err := DecodeSweepScript(tapLeaf.Script)
 			if err != nil {
 				return fmt.Errorf("invalid sweep script: %w", err)
 			}
@@ -232,7 +239,7 @@ func validateNodeTransaction(
 					return ErrInvalidASP
 				}
 
-				if seconds != expectedSequenceSeconds {
+				if int64(seconds) != expectedSequenceSeconds {
 					return ErrInvalidSweepSequence
 				}
 
@@ -242,7 +249,7 @@ func validateNodeTransaction(
 
 			isBranchLeaf, leftKey, rightKey, leftAmount, rightAmount, err := decodeBranchScript(tapLeaf.Script)
 			if err != nil {
-				return fmt.Errorf("invalid vtxo script: %w", err)
+				return fmt.Errorf("invalid branch script: %w", err)
 			}
 
 			if isBranchLeaf {

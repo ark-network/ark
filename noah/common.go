@@ -456,8 +456,7 @@ func handleRoundStream(
 
 				vtxoTaprootTree := taproot.AssembleTaprootScriptTree(*vtxoScript, *sweepLeaf)
 				root := vtxoTaprootTree.RootNode.TapHash()
-				unspendableKeyBytes, _ := hex.DecodeString(tree.UnspendablePoint)
-				unspendableKey, _ := secp256k1.ParsePubKey(unspendableKeyBytes)
+				unspendableKey := tree.UnspendableKey()
 				vtxoTaprootKey := schnorr.SerializePubKey(taproot.ComputeTaprootOutputKey(unspendableKey, root[:]))
 
 				leaves := congestionTree.Leaves()
@@ -596,7 +595,7 @@ func toCongestionTree(treeFromProto *arkv1.Tree) (tree.CongestionTree, error) {
 
 	for j, treeLvl := range levels {
 		for i, node := range treeLvl {
-			if len(levels.Children(node.Txid)) < 2 {
+			if len(levels.Children(node.Txid)) == 0 {
 				levels[j][i].Leaf = true
 			}
 		}

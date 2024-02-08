@@ -52,6 +52,7 @@ func (s *service) Start() error {
 		return fmt.Errorf("failed to start app service: %s", err)
 	}
 	log.Info("started app service")
+
 	return nil
 }
 

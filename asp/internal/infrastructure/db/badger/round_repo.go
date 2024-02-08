@@ -95,6 +95,18 @@ func (r *roundRepository) GetRoundWithTxid(
 	return round, nil
 }
 
+func (r *roundRepository) GetSweepableRounds(
+	ctx context.Context,
+) ([]domain.Round, error) {
+	query := badgerhold.Where("Stage.Code").Eq(domain.FinalizationStage).
+		And("Stage.Ended").Eq(true).And("Swept").Eq(false)
+	rounds, err := r.findRound(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	return rounds, nil
+}
+
 func (r *roundRepository) Close() {
 	r.store.Close()
 }

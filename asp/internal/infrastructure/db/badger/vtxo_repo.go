@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/ark-network/ark/internal/core/domain"
 	dbtypes "github.com/ark-network/ark/internal/infrastructure/db/types"
@@ -62,6 +63,22 @@ func (r *vtxoRepository) SpendVtxos(
 	return nil
 }
 
+func (r *vtxoRepository) RedeemVtxos(
+	ctx context.Context, vtxoKeys []domain.VtxoKey,
+) ([]domain.Vtxo, error) {
+	vtxos := make([]domain.Vtxo, 0, len(vtxoKeys))
+	for _, vtxoKey := range vtxoKeys {
+		vtxo, err := r.redeemVtxo(ctx, vtxoKey)
+		if err != nil {
+			return nil, err
+		}
+		if vtxo != nil {
+			vtxos = append(vtxos, *vtxo)
+		}
+	}
+	return vtxos, nil
+}
+
 func (r *vtxoRepository) GetVtxos(
 	ctx context.Context, vtxoKeys []domain.VtxoKey,
 ) ([]domain.Vtxo, error) {
@@ -76,11 +93,32 @@ func (r *vtxoRepository) GetVtxos(
 	return vtxos, nil
 }
 
-func (r *vtxoRepository) GetSpendableVtxosWithPubkey(
+func (r *vtxoRepository) GetVtxosForRound(
+	ctx context.Context, txid string,
+) ([]domain.Vtxo, error) {
+	query := badgerhold.Where("Txid").Eq(txid)
+	return r.findVtxos(ctx, query)
+}
+
+func (r *vtxoRepository) GetSpendableVtxos(
 	ctx context.Context, pubkey string,
 ) ([]domain.Vtxo, error) {
-	query := badgerhold.Where("Pubkey").Eq(pubkey).And("Spent").Eq(false)
+	query := badgerhold.Where("Spent").Eq(false).And("Redeemed").Eq(false).And("Swept").Eq(false)
+	if len(pubkey) > 0 {
+		query = query.And("Pubkey").Eq(pubkey)
+	}
 	return r.findVtxos(ctx, query)
+}
+
+func (r *vtxoRepository) SweepVtxos(
+	ctx context.Context, vtxoKeys []domain.VtxoKey,
+) error {
+	for _, vtxoKey := range vtxoKeys {
+		if err := r.sweepVtxo(ctx, vtxoKey); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *vtxoRepository) Close() {
@@ -126,6 +164,9 @@ func (r *vtxoRepository) getVtxo(
 func (r *vtxoRepository) spendVtxo(ctx context.Context, vtxoKey domain.VtxoKey) error {
 	vtxo, err := r.getVtxo(ctx, vtxoKey)
 	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return nil
+		}
 		return err
 	}
 	if vtxo.Spent {
@@ -142,6 +183,31 @@ func (r *vtxoRepository) spendVtxo(ctx context.Context, vtxoKey domain.VtxoKey) 
 	return err
 }
 
+func (r *vtxoRepository) redeemVtxo(ctx context.Context, vtxoKey domain.VtxoKey) (*domain.Vtxo, error) {
+	vtxo, err := r.getVtxo(ctx, vtxoKey)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if vtxo.Redeemed {
+		return nil, nil
+	}
+
+	vtxo.Redeemed = true
+	if ctx.Value("tx") != nil {
+		tx := ctx.Value("tx").(*badger.Txn)
+		err = r.store.TxUpdate(tx, vtxoKey.Hash(), *vtxo)
+	} else {
+		err = r.store.Update(vtxoKey.Hash(), *vtxo)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return vtxo, nil
+}
+
 func (r *vtxoRepository) findVtxos(ctx context.Context, query *badgerhold.Query) ([]domain.Vtxo, error) {
 	var vtxos []domain.Vtxo
 	var err error
@@ -154,4 +220,26 @@ func (r *vtxoRepository) findVtxos(ctx context.Context, query *badgerhold.Query)
 	}
 
 	return vtxos, err
+}
+
+func (r *vtxoRepository) sweepVtxo(ctx context.Context, vtxoKey domain.VtxoKey) error {
+	vtxo, err := r.getVtxo(ctx, vtxoKey)
+	if err != nil {
+		return err
+	}
+	if vtxo.Swept {
+		return nil
+	}
+
+	vtxo.Swept = true
+	if ctx.Value("tx") != nil {
+		tx := ctx.Value("tx").(*badger.Txn)
+		err = r.store.TxUpdate(tx, vtxoKey.Hash(), *vtxo)
+	} else {
+		err = r.store.Update(vtxoKey.Hash(), *vtxo)
+	}
+	if err != nil {
+		return err
+	}
+	return nil
 }
