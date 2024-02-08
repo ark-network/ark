@@ -11,6 +11,8 @@ title: 'clArk (Bitcoin)'
 
 Covenant Less Ark (or `clArk` for short) is a Rust implementation of Ark without using covenants (i.e. based on pre-signed transactions).
 
+This is a Proof of Concept in a very early phase of development.
+
 ## Requirements
 
 - [Rust](https://www.rust-lang.org/tools/install)

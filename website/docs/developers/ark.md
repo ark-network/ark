@@ -11,6 +11,8 @@ title: 'Ark (Liquid)'
 
 Ark is a Go implementation of Ark that uses covenants (on the Liquid network).
 
+This is a Proof of Concept in a very early phase of development.
+
 ## Requirements
 
 - [Go](https://go.dev/doc/install)
@@ -42,17 +44,21 @@ run: clean
 	go run ./cmd/oceand
 ```
 
-Start ocean with `make run`.
+Start ocean:
+
+```
+$ make run
+```
 
 Setup the wallet:
 
 ```
 $ make build-cli
-$ alias ocean-cli=$(pwd)/build/ocean-cli-darwin-$(arch)
+$ alias ocean-cli=$(pwd)/build/ocean-cli-<os>-<arch>
 $ ocean-cli config init --no-tls
 $ ocean-cli wallet create --password password
 $ ocean-cli wallet unlock --password password
-$ ocean-cli account create --label ark
+$ ocean-cli account create --label ark --unconf
 $ ocean-cli account derive --account-name ark
 ```
 
@@ -81,17 +87,55 @@ Setup noah wallet with:
 ```
 $ cd noah
 $ make build
-$ alias noah-cli=$(pwd)/build/noah-darwin-$(arch)
-$ noah-cli config connect localhost:6000 --network testnet
-$ noah-cli init --password password --ark-url localhost:6000 --network testnet
-$ noah-cli faucet
+$ alias noah1=$(pwd)/build/noah-<os>-<arch>
+$ noah1 init --password password --ark-url localhost:6000
+$ noah1 faucet
+# noah1 now has 10000 sats on ark
 ```
 
-In another tab, setup another noah wallet with:
+In **another tab**, setup another noah wallet with:
 
 ```
 $ export NOAH_DATADIR=./datadir
-# repeat above steps
+$ alias noah2=$(pwd)/build/noah-<os>-<arch>
+$ noah2 init --password password --ark-url localhost:6000
+$ noah2 faucet
+# noah2 now has 10000 sats on ark
 ```
 
-You can now try making ark payments between the 2 noah wallets.
+Note: `noah2` should always run in the second tab.
+
+You can now try making ark payments between the 2 noah wallets:
+
+```
+$ noah1 receive
+{
+	"offchain_address": <address starting with "tark1q...">,
+	"onchain_address": <address starting with "tex1q...">,
+	"relays": [
+		"localhost:6000"
+	]
+}
+```
+
+```
+$ noah2 send --to <address starting with "tark1q..."> --amount 2100
+```
+
+Both balances should reflect the payment:
+
+```
+$ noah1 balance
+{
+	"offchain_balance": 12100,
+	"onchain_balance": 0
+}
+```
+
+```
+$ noah2 balance
+{
+	"offchain_balance": 7900,
+	"onchain_balance": 0
+}
+```
