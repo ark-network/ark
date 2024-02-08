@@ -36,7 +36,7 @@ type Config struct {
 	SchedulerType string
 	TxBuilderType string
 	WalletAddr    string
-	RoundLifetime uint
+	RoundLifetime int64
 	MinRelayFee   uint64
 
 	repo      ports.RepoManager
@@ -83,7 +83,7 @@ func (c *Config) Validate() error {
 	if c.RoundLifetime <= 0 || c.RoundLifetime%512 != 0 {
 		return fmt.Errorf("invalid round lifetime, must be greater than 0 and a multiple of 512")
 	}
-	seq, err := common.BIP68Encode(c.RoundLifetime)
+	seq, err := common.BIP68Encode(uint(c.RoundLifetime))
 	if err != nil {
 		return fmt.Errorf("invalid round lifetime, %s", err)
 	}
@@ -93,7 +93,7 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("invalid round lifetime, %s", err)
 	}
 
-	if seconds != c.RoundLifetime {
+	if seconds != uint(c.RoundLifetime) {
 		return fmt.Errorf("invalid round lifetime, must be a multiple of 512")
 	}
 
@@ -144,11 +144,12 @@ func (c *Config) txBuilderService() error {
 	var svc ports.TxBuilder
 	var err error
 	net := c.mainChain()
+
 	switch c.TxBuilderType {
 	case "dummy":
-		svc = txbuilderdummy.NewTxBuilder(net)
+		svc = txbuilderdummy.NewTxBuilder(c.wallet, net)
 	case "covenant":
-		svc = txbuilder.NewTxBuilder(net, c.RoundLifetime)
+		svc = txbuilder.NewTxBuilder(c.wallet, net, c.RoundLifetime)
 	default:
 		err = fmt.Errorf("unknown tx builder type")
 	}

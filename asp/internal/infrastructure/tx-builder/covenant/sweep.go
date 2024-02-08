@@ -66,12 +66,7 @@ func sweepTransaction(
 				return nil, err
 			}
 
-			witnessUtxo := &transaction.TxOutput{
-				Asset:  assetHash,
-				Value:  value,
-				Script: script,
-				Nonce:  emptyNonce,
-			}
+			witnessUtxo := transaction.NewTxOutput(assetHash, value, script)
 
 			if err := updater.AddInWitnessUtxo(i, witnessUtxo); err != nil {
 				return nil, err

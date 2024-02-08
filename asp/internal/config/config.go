@@ -21,7 +21,7 @@ type Config struct {
 	NoTLS         bool
 	Network       common.Network
 	LogLevel      int
-	RoundLifetime uint
+	RoundLifetime int64
 	MinRelayFee   uint64
 }
 
@@ -88,7 +88,7 @@ func LoadConfig() (*Config, error) {
 		DbDir:         filepath.Join(viper.GetString(Datadir), "db"),
 		LogLevel:      viper.GetInt(LogLevel),
 		Network:       net,
-		RoundLifetime: viper.GetUint(RoundLifetime),
+		RoundLifetime: viper.GetInt64(RoundLifetime),
 		MinRelayFee:   viper.GetUint64(MinRelayFee),
 	}, nil
 }

@@ -15,7 +15,7 @@ type SweepInput struct {
 
 type TxBuilder interface {
 	BuildPoolTx(
-		aspPubkey *secp256k1.PublicKey, wallet WalletService, payments []domain.Payment, minRelayFee uint64,
+		aspPubkey *secp256k1.PublicKey, payments []domain.Payment, minRelayFee uint64,
 	) (poolTx string, congestionTree tree.CongestionTree, err error)
 	BuildForfeitTxs(
 		aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment,
@@ -24,6 +24,6 @@ type TxBuilder interface {
 		wallet WalletService,
 		inputs []SweepInput,
 	) (signedSweepTx string, err error)
-	GetLeafRedeemClosure(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error)
 	GetLeafSweepClosure(node tree.Node, userPubKey *secp256k1.PublicKey) (*psetv2.TapLeafScript, int64, error)
+	GetVtxoOutputScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error)
 }

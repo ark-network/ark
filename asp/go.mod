@@ -24,6 +24,8 @@ require (
 	google.golang.org/protobuf v1.31.0
 )
 
+require github.com/stretchr/objx v0.5.0 // indirect
+
 require (
 	github.com/FactomProject/basen v0.0.0-20150613233007-fe3947df716e // indirect
 	github.com/FactomProject/btcutilecc v0.0.0-20130527213604-d3a63a5752ec // indirect

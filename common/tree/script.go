@@ -3,6 +3,7 @@ package tree
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 
 	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -93,10 +94,12 @@ func decodeBranchScript(script []byte) (valid bool, leftKey, rightKey *secp256k1
 
 func decodeWithOutputScript(script []byte, expectedIndex byte, isVerify bool) (valid bool, pubkey *secp256k1.PublicKey, amount uint64, err error) {
 	if len(script) != 52 {
+		fmt.Println("AAAAA")
 		return false, nil, 0, nil
 	}
 
 	if script[0] != expectedIndex {
+		fmt.Println("BBBBB")
 		return false, nil, 0, nil
 	}
 
@@ -106,12 +109,8 @@ func decodeWithOutputScript(script []byte, expectedIndex byte, isVerify bool) (v
 		return false, nil, 0, err
 	}
 
-	inspectOutputValueIndex := bytes.IndexByte(script, OP_INSPECTOUTPUTVALUE)
-	if inspectOutputValueIndex == -1 {
-		return false, nil, 0, nil
-	}
-
-	if script[inspectOutputValueIndex-1] != expectedIndex {
+	// verify the index of INSPECTVALUE
+	if script[38] != expectedIndex {
 		return false, nil, 0, nil
 	}
 
