@@ -375,7 +375,9 @@ func (s *service) listenToRedemptions() {
 					time.Sleep(100 * time.Millisecond)
 					continue
 				}
-				log.Debugf("redeemed %d vtxos", len(vtxos))
+				if len(vtxos) > 0 {
+					log.Debugf("redeemed %d vtxos", len(vtxos))
+				}
 				break
 			}
 		}
