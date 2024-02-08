@@ -21,10 +21,6 @@ const (
 	zero32 = "0000000000000000000000000000000000000000000000000000000000000000"
 )
 
-var (
-	NonBIP68Final = fmt.Errorf("non-BIP68-final")
-)
-
 func (s *service) SignPset(
 	ctx context.Context, pset string, extractRawTx bool,
 ) (string, error) {
@@ -113,7 +109,7 @@ func (s *service) BroadcastTransaction(
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "non-BIP68-final") {
-			return "", NonBIP68Final
+			return "", fmt.Errorf("non-BIP68-final")
 		}
 
 		return "", err

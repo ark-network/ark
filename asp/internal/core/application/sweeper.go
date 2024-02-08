@@ -9,7 +9,6 @@ import (
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
-	oceanwallet "github.com/ark-network/ark/internal/infrastructure/ocean-wallet"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	log "github.com/sirupsen/logrus"
@@ -219,7 +218,7 @@ func (s *sweeper) createTask(
 			err = nil
 			txid := ""
 			// retry until the tx is broadcasted or the error is not BIP68 final
-			for len(txid) == 0 && (err == nil || err == oceanwallet.NonBIP68Final) {
+			for len(txid) == 0 && (err == nil || err == fmt.Errorf("non-BIP68-final")) {
 				if err != nil {
 					log.Debugln("sweep tx not BIP68 final, retrying in 5 seconds")
 					time.Sleep(5 * time.Second)

@@ -9,6 +9,7 @@ import (
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/ark-network/ark/internal/infrastructure/db"
 	oceanwallet "github.com/ark-network/ark/internal/infrastructure/ocean-wallet"
+	scheduler "github.com/ark-network/ark/internal/infrastructure/scheduler/gocron"
 	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenant"
 	txbuilderdummy "github.com/ark-network/ark/internal/infrastructure/tx-builder/dummy"
 	log "github.com/sirupsen/logrus"
@@ -192,7 +193,7 @@ func (c *Config) scannerService() error {
 func (c *Config) appService() error {
 	net := c.mainChain()
 	svc, err := application.NewService(
-		c.RoundInterval, c.Network, net, c.wallet, c.repo, c.txBuilder, c.scanner, c.MinRelayFee, c.RoundLifetime,
+		c.RoundInterval, c.Network, net, c.wallet, c.repo, c.txBuilder, c.scanner, c.MinRelayFee, c.RoundLifetime, scheduler.NewScheduler(),
 	)
 	if err != nil {
 		return err

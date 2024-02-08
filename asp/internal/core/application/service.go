@@ -10,7 +10,6 @@ import (
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
-	scheduler "github.com/ark-network/ark/internal/infrastructure/scheduler/gocron"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	log "github.com/sirupsen/logrus"
@@ -67,6 +66,7 @@ func NewService(
 	walletSvc ports.WalletService, repoManager ports.RepoManager,
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	minRelayFee uint64, roundLifetime int64,
+	scheduler ports.SchedulerService,
 ) (Service, error) {
 	eventsCh := make(chan domain.RoundEvent)
 	paymentRequests := newPaymentsMap(nil)
@@ -82,7 +82,7 @@ func NewService(
 		walletSvc,
 		repoManager,
 		builder,
-		scheduler.NewScheduler(),
+		scheduler,
 	)
 
 	svc := &service{
