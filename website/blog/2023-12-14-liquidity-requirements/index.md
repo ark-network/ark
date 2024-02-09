@@ -155,13 +155,15 @@ While onboarding does not require any liquidity from the ASP, next payments will
 
 ### The liquidity problem
 
-If the ASP exhausts its liquidity, it will have to cease accepting new payments and will be compelled to wait for the timelocks on the on-chain transactions to expire in order to regain liquidity.
+If the ASP exhausts its liquidity, it will have to cease accepting new payments and will be compelled to wait for the timelocks (4 weeks) on the on-chain transactions to expire in order to regain liquidity.
 
-To avoid the ASP from running out of funds, it must be able to anticipate how much liquidity will be required throughout that period.
+To avoid the ASP from running out of funds, it must be able to anticipate how much liquidity will be required throughout a 4 week period.
 
-As we observed, the liquidity necessary will rely on the capital onboarded and then some; so, let's suppose it will be the consequence of a function of capital onboarded and a percentage of this capital utilized during a round.
+As we observed, the liquidity necessary during a period will rely on the capital onboarded and the number and value of payments made with that capital
 
-Therefore, how much BTC can an ASP accept from new users without risking not having enough capital to finance transfers within Ark? In other words, what proportion of BTC in Ark is transferred in a 1-month period?
+Given this, we can assume the liquidity needed will be the consequence of a function of capital onboarded and a percentage of this capital utilized during the 4 weeks period.
+
+Therefore, how much capital can an ASP accept from users without risking not having enough capital to finance payments inside Ark? In other words, what proportion of the capital inside an Ark is transferred in a 4 week period?
 
 This is similar to the definition of Money Velocity, as defined by the St. Louis Fed:
 
