@@ -6,14 +6,14 @@ on:
     tags:
       - "*"
     paths:
-      - "asp/**"
+      - "server/**"
 
 jobs:
   goreleaser:
     runs-on: ubuntu-20.04
     defaults:
       run:
-        working-directory: ./asp
+        working-directory: ./server
     env:
       DOCKER_CLI_EXPERIMENTAL: "enabled"
 

@@ -14,24 +14,23 @@ import (
 )
 
 const (
-	DATADIR_ENVVAR = "NOAH_DATADIR"
+	DATADIR_ENVVAR = "ARK_WALLET_DATADIR"
 	STATE_FILE     = "state.json"
-	defaultArkURL  = "localhost:6000"
 	defaultNetwork = "testnet"
 )
 
 var (
 	version = "alpha"
 
-	noahDataDirectory = common.AppDataDir("noah", false)
-	statePath         = filepath.Join(noahDataDirectory, STATE_FILE)
-	explorerUrl       = map[string]string{
+	datadir     = common.AppDataDir("ark-cli", false)
+	statePath   = filepath.Join(datadir, STATE_FILE)
+	explorerUrl = map[string]string{
 		network.Liquid.Name:  "https://blockstream.info/liquid/api",
 		network.Testnet.Name: "https://blockstream.info/liquidtestnet/api",
 	}
 
 	initialState = map[string]string{
-		"ark_url":               defaultArkURL,
+		"ark_url":               "",
 		"ark_pubkey":            "",
 		"encrypted_private_key": "",
 		"password_hash":         "",
@@ -41,13 +40,13 @@ var (
 )
 
 func initCLIEnv() {
-	dataDir := cleanAndExpandPath(os.Getenv(DATADIR_ENVVAR))
-	if len(dataDir) <= 0 {
+	dir := cleanAndExpandPath(os.Getenv(DATADIR_ENVVAR))
+	if len(dir) <= 0 {
 		return
 	}
 
-	noahDataDirectory = dataDir
-	statePath = filepath.Join(noahDataDirectory, STATE_FILE)
+	datadir = dir
+	statePath = filepath.Join(datadir, STATE_FILE)
 }
 
 func main() {
@@ -56,8 +55,8 @@ func main() {
 	app := cli.NewApp()
 
 	app.Version = version
-	app.Name = "noah CLI"
-	app.Usage = "Command line interface for Ark wallet"
+	app.Name = "Ark CLI"
+	app.Usage = "command line interface for Ark wallet"
 	app.Commands = append(
 		app.Commands,
 		&balanceCommand,
@@ -70,8 +69,8 @@ func main() {
 	)
 
 	app.Before = func(ctx *cli.Context) error {
-		if _, err := os.Stat(noahDataDirectory); os.IsNotExist(err) {
-			return os.Mkdir(noahDataDirectory, os.ModeDir|0755)
+		if _, err := os.Stat(datadir); os.IsNotExist(err) {
+			return os.Mkdir(datadir, os.ModeDir|0755)
 		}
 		return nil
 	}

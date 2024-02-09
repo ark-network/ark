@@ -8,7 +8,7 @@ import (
 
 var balanceCommand = cli.Command{
 	Name:   "balance",
-	Usage:  "Print balance of the Noah wallet",
+	Usage:  "Print balance of the Ark wallet",
 	Action: balanceAction,
 }
 

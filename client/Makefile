@@ -1,8 +1,12 @@
-.PHONY: build clean help lint vet
+.PHONY: build build-all clean help lint vet
 
 build:
-	@echo "Building noah binary..."
+	@echo "Building binary..."
 	@bash ./scripts/build
+
+build-all:
+	@echo "Building binary..."
+	@bash ./scripts/build-all
 
 ## clean: cleans the binary
 clean:

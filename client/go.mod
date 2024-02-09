@@ -1,10 +1,10 @@
-module github.com/ark-network/noah
+module github.com/ark-network/ark-cli
 
 go 1.21.0
 
 replace github.com/ark-network/ark/common => ../common
 
-replace github.com/ark-network/ark => ../asp
+replace github.com/ark-network/ark => ../server
 
 require (
 	github.com/ark-network/ark v0.0.0-00010101000000-000000000000
