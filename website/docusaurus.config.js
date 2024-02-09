@@ -31,10 +31,9 @@ const config = {
           editUrl: 'https://github.com/ark-network/ark/edit/master/website/',
           exclude: [
             '**/provider/gateway/**',
-            '**/provider/coordinator/**', 
+            '**/provider/coordinator/**',
             '**/provider/treasury/**',
-            '**/user/ark-cli.md'
-          ]
+          ],
         },
         blog: {
           showReadingTime: true,
