@@ -186,7 +186,7 @@ func (s *sweeper) createTask(
 						continue
 					}
 
-					firstVtxo, err := s.repoManager.Vtxos().GetVtxos(ctx, sweepableVtxos[1:])
+					firstVtxo, err := s.repoManager.Vtxos().GetVtxos(ctx, sweepableVtxos[:1])
 					if err != nil {
 						log.Error(fmt.Errorf("error while getting vtxo: %w", err))
 						sweepInputs = append(sweepInputs, input) // add the input anyway in order to try to sweep it
