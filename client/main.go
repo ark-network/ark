@@ -23,7 +23,7 @@ var (
 	version = "alpha"
 
 	datadir     = common.AppDataDir("ark-cli", false)
-	statePath   = filepath.Join(defaultDatadir, STATE_FILE)
+	statePath   = filepath.Join(datadir, STATE_FILE)
 	explorerUrl = map[string]string{
 		network.Liquid.Name:  "https://blockstream.info/liquid/api",
 		network.Testnet.Name: "https://blockstream.info/liquidtestnet/api",
