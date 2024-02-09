@@ -405,10 +405,6 @@ func handleRoundStream(
 				return "", err
 			}
 
-			if ok := askForConfirmation(fmt.Sprintf("ASP sets vtxos lifetime to %d seconds, continue?", seconds)); !ok {
-				return "", fmt.Errorf("aborting payment")
-			}
-
 			// validate the congestion tree
 			if err := tree.ValidateCongestionTree(
 				congestionTree,
