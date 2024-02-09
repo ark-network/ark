@@ -400,18 +400,27 @@ func handleRoundStream(
 				return "", err
 			}
 
+			_, seconds, err := findSweepClosure(congestionTree)
+			if err != nil {
+				return "", err
+			}
+
+			if ok := askForConfirmation(fmt.Sprintf("ASP sets vtxos lifetime to %d seconds, continue?", seconds)); !ok {
+				return "", fmt.Errorf("aborting payment")
+			}
+
 			// validate the congestion tree
 			if err := tree.ValidateCongestionTree(
 				congestionTree,
 				poolPartialTx,
 				aspPublicKey,
-				1209344, // ~ 2 weeks
+				int64(seconds),
 			); err != nil {
 				return "", err
 			}
 
 			// validate the receivers
-			sweepLeaf, err := tree.SweepScript(aspPublicKey, 1209344)
+			sweepLeaf, err := tree.SweepScript(aspPublicKey, seconds)
 			if err != nil {
 				return "", err
 			}
@@ -620,4 +629,38 @@ func decodeReceiverAddress(addr string) (
 	}
 
 	return true, outputScript, nil, nil
+}
+
+func findSweepClosure(
+	congestionTree tree.CongestionTree,
+) (sweepClosure *taproot.TapElementsLeaf, seconds uint, err error) {
+	root, err := congestionTree.Root()
+	if err != nil {
+		return
+	}
+
+	// find the sweep closure
+	tx, err := psetv2.NewPsetFromBase64(root.Tx)
+	if err != nil {
+		return
+	}
+
+	for _, tapLeaf := range tx.Inputs[0].TapLeafScript {
+		isSweep, _, lifetime, err := tree.DecodeSweepScript(tapLeaf.Script)
+		if err != nil {
+			continue
+		}
+
+		if isSweep {
+			seconds = lifetime
+			sweepClosure = &tapLeaf.TapElementsLeaf
+			break
+		}
+	}
+
+	if sweepClosure == nil {
+		return nil, 0, fmt.Errorf("sweep closure not found")
+	}
+
+	return
 }
