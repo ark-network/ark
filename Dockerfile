@@ -1,4 +1,4 @@
-# first image used to build the sources
+# First image used to build the sources
 FROM golang:1.21.0 AS builder
 
 ARG VERSION
@@ -16,26 +16,15 @@ RUN cd server && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -l
 # Second image, running the arkd executable
 FROM debian:buster-slim
 
-# $USER name, and data $DIR to be used in the 'final' image
-ARG USER=ark
-ARG DIR=/home/ark
+WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
+COPY --from=builder /app/bin/* /app
 
-COPY --from=builder /app/bin/* /usr/local/bin/
-
-# NOTE: Default GID == UID == 1000
-RUN adduser --disabled-password \
-						--home "$DIR/" \
-						--gecos "" \
-						"$USER"
-USER $USER
-
-# Prevents 'VOLUME $DIR/.arkd/' being created as owned by 'root'
-RUN mkdir -p "$DIR/.arkd/"
+ENV PATH="/app:${PATH}"
+ENV ARK_DATADIR=/app/data
 
 # Expose volume containing all 'arkd' data
-VOLUME $DIR/.arkd/
+VOLUME /app/data
 
 ENTRYPOINT [ "arkd" ]
     

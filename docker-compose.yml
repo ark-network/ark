@@ -5,7 +5,6 @@ services:
     container_name: oceand
     image: ghcr.io/vulpemventures/oceand:latest
     restart: unless-stopped
-    user: 0:0
     environment:
       - OCEAN_LOG_LEVEL=5
       - OCEAN_NO_TLS=true
@@ -17,8 +16,8 @@ services:
     ports:
       - "18000:18000"
     volumes:
-      - oceand-volume:/home/ocean/.oceand
-      - ocean-cli-volume:/home/ocean/.ocean-cli
+      - oceand:/app/data/oceand
+      - ocean:/app/data/ocean
   arkd:
     container_name: arkd
     build: 
@@ -33,14 +32,14 @@ services:
     ports:
       - "6000:6000"
     volumes:
-      - arkd-volume:/home/ark/.arkd
+      - arkd:/app/data
 
 volumes:
-  oceand-volume:
+  oceand:
     external: false
-  ocean-cli-volume:
+  ocean:
     external: false
-  arkd-volume:
+  arkd:
     external: false
 
 networks:

@@ -118,7 +118,7 @@ Different ASPs can use different ways for users to board their Ark.
 
 ### Shared output (aka Shared UTXO)
 
-- Represents a binary tree of transactions
+- Represents a tree of transactions
 - In an optimistic scenario, this tree is never revealed
 - Each leaf on this tree represents a VTXO
 
@@ -134,6 +134,22 @@ flowchart LR
         tx2 --> v2(VTXO 2)
         tx3 --> v3(VTXO 3)
         tx3 --> v4(VTXO 4)
+    end
+    shared --> tx1
+```
+
+- Tree can have a radix higher than 2 (ex: radix 4)
+
+```mermaid
+flowchart LR
+    subgraph Onchain
+        shared(Shared output)
+    end
+    subgraph Virtual
+        tx1(TX 1) --> v1(VTXO 1)
+        tx1 --> v2(VTXO 2)
+        tx1 --> v3(VTXO 3)
+        tx1 --> v4(VTXO 4)
     end
     shared --> tx1
 ```

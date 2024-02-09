@@ -28,33 +28,14 @@ type redeemBranch struct {
 }
 
 func newRedeemBranch(ctx *cli.Context, congestionTree tree.CongestionTree, vtxo vtxo) (RedeemBranch, error) {
+	sweepClosure, _, err := findSweepClosure(congestionTree)
+	if err != nil {
+		return nil, err
+	}
+
 	nodes, err := congestionTree.Branch(vtxo.txid)
 	if err != nil {
 		return nil, err
-	}
-
-	// find the sweep closure
-	tx, err := psetv2.NewPsetFromBase64(nodes[0].Tx)
-	if err != nil {
-		return nil, err
-	}
-
-	var sweepClosure *taproot.TapElementsLeaf
-
-	for _, tapLeaf := range tx.Inputs[0].TapLeafScript {
-		isSweep, _, _, err := tree.DecodeSweepScript(tapLeaf.Script)
-		if err != nil {
-			continue
-		}
-
-		if isSweep {
-			sweepClosure = &tapLeaf.TapElementsLeaf
-			break
-		}
-	}
-
-	if sweepClosure == nil {
-		return nil, fmt.Errorf("sweep closure not found")
 	}
 
 	branch := make([]*psetv2.Pset, 0, len(nodes))
