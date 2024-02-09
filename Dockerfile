@@ -1,5 +1,5 @@
 # first image used to build the sources
-FROM golang:1.21 AS builder
+FROM golang:1.21.0 AS builder
 
 ARG VERSION
 ARG COMMIT
@@ -11,7 +11,7 @@ WORKDIR /app
 
 COPY . .
 
-RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-X 'main.Version=${COMMIT}' -X 'main.Commit=${COMMIT}' -X 'main.Date=${COMMIT}'" -o bin/arkd cmd/arkd/main.go
+RUN cd asp && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-X 'main.Version=${COMMIT}' -X 'main.Commit=${COMMIT}' -X 'main.Date=${COMMIT}'" -o ../bin/arkd cmd/arkd/main.go
 
 # Second image, running the arkd executable
 FROM debian:buster-slim
