@@ -1,0 +1,10 @@
+.git
+.github/
+website/
+noah/
+**/dist/
+**/build/
+**/*.yml
+**/*.yaml
+**/*.md
+**/*Dockerfile
