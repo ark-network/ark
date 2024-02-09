@@ -6,7 +6,7 @@ import (
 
 var configCommand = cli.Command{
 	Name:   "config",
-	Usage:  "Print local configuration of the Noah CLI",
+	Usage:  "Print local configuration of the Ark CLI",
 	Action: printConfigAction,
 }
 

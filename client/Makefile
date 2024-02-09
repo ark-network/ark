@@ -1,7 +1,7 @@
 .PHONY: build clean help lint vet
 
 build:
-	@echo "Building noah binary..."
+	@echo "Building binary..."
 	@bash ./scripts/build
 
 ## clean: cleans the binary

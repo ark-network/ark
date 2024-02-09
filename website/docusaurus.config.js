@@ -33,7 +33,7 @@ const config = {
             '**/provider/gateway/**',
             '**/provider/coordinator/**', 
             '**/provider/treasury/**',
-            '**/user/noah-cli.md'
+            '**/user/ark-cli.md'
           ]
         },
         blog: {
