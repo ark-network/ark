@@ -5,6 +5,10 @@ slug: /
 title: Introduction
 ---
 
+:::danger Alpha version is out
+[Download the CLI](/user/ark_cli) and connect to the genesis ASP.
+:::
+
 **Welcome to Ark's developer hub.** Here, you'll find detailed information about the protocol, guidance on providing liquidity, and instructions on how to efficiently spend your coins off-chain in a secure manner.
 
 <div align="center">
