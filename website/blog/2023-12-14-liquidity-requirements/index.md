@@ -134,7 +134,7 @@ flowchart LR
   pool3 --> new_VTXOs
 ```
 
-Summary:
+### Summary
 
 - 10 BTC initial onboard from Alice
 - 4 payments:
