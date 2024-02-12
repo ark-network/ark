@@ -133,5 +133,10 @@ func initWallet(ctx *cli.Context, key, password string) error {
 		"public_key":            publicKey,
 	}
 
-	return setState(state)
+	if err := setState(state); err != nil {
+		return err
+	}
+
+	fmt.Println("wallet initialized")
+	return nil
 }
