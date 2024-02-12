@@ -180,10 +180,11 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 		for _, f := range fixtures {
 			svc.RegisterEventsHandler(f.handler)
 
-			err := svc.Events().Save(ctx, f.roundId, f.events...)
+			round, err := svc.Events().Save(ctx, f.roundId, f.events...)
 			require.NoError(t, err)
+			require.NotNil(t, round)
 
-			round, err := svc.Events().Load(ctx, f.roundId)
+			round, err = svc.Events().Load(ctx, f.roundId)
 			require.NoError(t, err)
 			require.NotNil(t, round)
 			require.Equal(t, f.roundId, round.Id)

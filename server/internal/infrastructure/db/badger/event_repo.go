@@ -59,18 +59,18 @@ func NewRoundEventRepository(config ...interface{}) (dbtypes.EventStore, error) 
 
 func (r *eventRepository) Save(
 	ctx context.Context, id string, events ...domain.RoundEvent,
-) error {
+) (*domain.Round, error) {
 	allEvents, err := r.get(ctx, id)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	allEvents = append(allEvents, events...)
 	if err := r.upsert(ctx, id, allEvents); err != nil {
-		return err
+		return nil, err
 	}
 	go r.publishEvents(allEvents)
-	return nil
+	return domain.NewRoundFromEvents(allEvents), nil
 }
 func (r *eventRepository) Load(
 	ctx context.Context, id string,
