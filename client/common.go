@@ -561,7 +561,7 @@ func handleRoundStream(
 			if err != nil {
 				return "", err
 			}
-			fmt.Print("done. \n")
+			fmt.Print("done.\n")
 			fmt.Println("waiting for round finalization...")
 
 			continue
