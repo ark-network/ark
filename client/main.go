@@ -61,6 +61,7 @@ func main() {
 		app.Commands,
 		&balanceCommand,
 		&configCommand,
+		&dumpCommand,
 		&faucetCommand,
 		&initCommand,
 		&receiveCommand,
