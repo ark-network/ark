@@ -233,8 +233,8 @@ func (s *service) start() {
 func (s *service) startRound() {
 	round := domain.NewRound(dustAmount)
 	changes, _ := round.StartRegistration()
-	if err := s.repoManager.Events().Save(
-		context.Background(), round.Id, changes...,
+	if err := s.saveEvents(
+		context.Background(), round.Id, changes,
 	); err != nil {
 		log.WithError(err).Warn("failed to store new round events")
 		return
@@ -258,10 +258,8 @@ func (s *service) startFinalization() {
 
 	var changes []domain.RoundEvent
 	defer func() {
-		if len(changes) > 0 {
-			if err := s.repoManager.Events().Save(ctx, round.Id, changes...); err != nil {
-				log.WithError(err).Warn("failed to store new round events")
-			}
+		if err := s.saveEvents(ctx, round.Id, changes); err != nil {
+			log.WithError(err).Warn("failed to store new round events")
 		}
 
 		if round.IsFailed() {
@@ -341,7 +339,7 @@ func (s *service) finalizeRound() {
 
 	var changes []domain.RoundEvent
 	defer func() {
-		if err := s.repoManager.Events().Save(ctx, round.Id, changes...); err != nil {
+		if err := s.saveEvents(ctx, round.Id, changes); err != nil {
 			log.WithError(err).Warn("failed to store new round events")
 			return
 		}
@@ -450,15 +448,6 @@ func (s *service) updateProjectionStore(round *domain.Round) {
 				return
 			}
 		}()
-	}
-
-	// Always update the status of the round.
-	for {
-		if err := s.repoManager.Rounds().AddOrUpdateRound(ctx, *round); err != nil {
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-		break
 	}
 }
 
@@ -585,6 +574,19 @@ func (s *service) extractVtxosScripts(vtxos []domain.Vtxo) ([]string, error) {
 		scripts = append(scripts, script)
 	}
 	return scripts, nil
+}
+
+func (s *service) saveEvents(
+	ctx context.Context, id string, events []domain.RoundEvent,
+) error {
+	if len(events) <= 0 {
+		return nil
+	}
+	round, err := s.repoManager.Events().Save(ctx, id, events...)
+	if err != nil {
+		return err
+	}
+	return s.repoManager.Rounds().AddOrUpdateRound(ctx, *round)
 }
 
 func getSpentVtxos(payments map[string]domain.Payment) []domain.VtxoKey {

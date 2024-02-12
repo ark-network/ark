@@ -5,7 +5,7 @@ import (
 )
 
 type RoundEventRepository interface {
-	Save(ctx context.Context, id string, events ...RoundEvent) error
+	Save(ctx context.Context, id string, events ...RoundEvent) (*Round, error)
 	Load(ctx context.Context, id string) (*Round, error)
 }
 
