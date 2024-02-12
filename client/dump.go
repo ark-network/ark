@@ -7,7 +7,7 @@ import (
 )
 
 var dumpCommand = cli.Command{
-	Name:   "dumpPrivKey",
+	Name:   "dump-privkey",
 	Usage:  "Dump private key of the Ark wallet",
 	Action: dumpAction,
 }
