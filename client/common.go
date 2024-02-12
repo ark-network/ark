@@ -26,6 +26,10 @@ import (
 	"golang.org/x/term"
 )
 
+const (
+	DUST = 450
+)
+
 func hashPassword(password []byte) []byte {
 	hash := sha256.Sum256(password)
 	return hash[:]
@@ -57,15 +61,14 @@ func verifyPassword(password []byte) error {
 }
 
 func readPassword() ([]byte, error) {
-	fmt.Print("password: ")
+	fmt.Print("unlock your wallet with password: ")
 	passwordInput, err := term.ReadPassword(int(syscall.Stdin))
 	fmt.Println() // new line
 	if err != nil {
 		return nil, err
 	}
 
-	err = verifyPassword(passwordInput)
-	if err != nil {
+	if err := verifyPassword(passwordInput); err != nil {
 		return nil, err
 	}
 
@@ -92,7 +95,7 @@ func privateKeyFromPassword() (*secp256k1.PrivateKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("key unlocked")
+	fmt.Println("wallet unlocked")
 
 	cypher := NewAES128Cypher()
 	privateKeyBytes, err := cypher.Decrypt(encryptedPrivateKey, password)
@@ -144,10 +147,12 @@ func getServiceProviderPublicKey() (*secp256k1.PublicKey, error) {
 
 func coinSelect(vtxos []vtxo, amount uint64) ([]vtxo, uint64, error) {
 	selected := make([]vtxo, 0)
+	notSelected := make([]vtxo, 0)
 	selectedAmount := uint64(0)
 
 	for _, vtxo := range vtxos {
 		if selectedAmount >= amount {
+			notSelected = append(notSelected, vtxo)
 			break
 		}
 
@@ -160,6 +165,13 @@ func coinSelect(vtxos []vtxo, amount uint64) ([]vtxo, uint64, error) {
 	}
 
 	change := selectedAmount - amount
+
+	if change < DUST {
+		if len(notSelected) > 0 {
+			selected = append(selected, notSelected[0])
+			change += notSelected[0].amount
+		}
+	}
 
 	return selected, change, nil
 }
@@ -500,7 +512,7 @@ func handleRoundStream(
 			forfeits := event.GetRoundFinalization().GetForfeitTxs()
 			signedForfeits := make([]string, 0)
 
-			fmt.Println("signing forfeit txs...")
+			fmt.Print("signing forfeit txs... ")
 
 			explorer := NewExplorer()
 
@@ -533,7 +545,7 @@ func handleRoundStream(
 
 			// if no forfeit txs have been signed, start pinging again and wait for the next round
 			if len(signedForfeits) == 0 {
-				fmt.Println("no forfeit txs to sign, waiting for the next round...")
+				fmt.Printf("\nno forfeit txs to sign, waiting for the next round...\n")
 				pingStop = nil
 				for pingStop == nil {
 					pingStop = ping(ctx, client, pingReq)
@@ -541,13 +553,16 @@ func handleRoundStream(
 				continue
 			}
 
-			fmt.Printf("%d forfeit txs signed, finalizing payment...\n", len(signedForfeits))
+			fmt.Printf("%d signed\n", len(signedForfeits))
+			fmt.Print("finalizing payment... ")
 			_, err = client.FinalizePayment(ctx.Context, &arkv1.FinalizePaymentRequest{
 				SignedForfeitTxs: signedForfeits,
 			})
 			if err != nil {
 				return "", err
 			}
+			fmt.Print("done. \n")
+			fmt.Println("waiting for round finalization...")
 
 			continue
 		}

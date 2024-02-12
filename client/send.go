@@ -86,8 +86,8 @@ func sendAction(ctx *cli.Context) error {
 			return fmt.Errorf("invalid receiver address '%s': must be associated with the connected service provider", receiver.To)
 		}
 
-		if receiver.Amount <= 0 {
-			return fmt.Errorf("invalid amount: %d", receiver.Amount)
+		if receiver.Amount < DUST {
+			return fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount, DUST)
 		}
 
 		receiversOutput = append(receiversOutput, &arkv1.Output{
