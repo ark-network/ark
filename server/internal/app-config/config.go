@@ -65,8 +65,8 @@ func (c *Config) Validate() error {
 	if !supportedScanners.supports(c.BlockchainScannerType) {
 		return fmt.Errorf("blockchain scanner type not supported, please select one of: %s", supportedScanners)
 	}
-	if c.RoundInterval < 5 {
-		return fmt.Errorf("invalid round interval, must be at least 5 seconds")
+	if c.RoundInterval < 2 {
+		return fmt.Errorf("invalid round interval, must be at least 2 seconds")
 	}
 	if c.Network.Name != "liquid" && c.Network.Name != "testnet" {
 		return fmt.Errorf("invalid network, must be either liquid or testnet")

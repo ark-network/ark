@@ -20,7 +20,7 @@ type eventsDTO struct {
 
 type eventRepository struct {
 	store     *badgerhold.Store
-	lock      *sync.RWMutex
+	lock      *sync.Mutex
 	chUpdates chan *domain.Round
 	handler   func(round *domain.Round)
 }
@@ -51,7 +51,7 @@ func NewRoundEventRepository(config ...interface{}) (dbtypes.EventStore, error) 
 		return nil, fmt.Errorf("failed to open round events store: %s", err)
 	}
 	chEvents := make(chan *domain.Round)
-	lock := &sync.RWMutex{}
+	lock := &sync.Mutex{}
 	repo := &eventRepository{store, lock, chEvents, nil}
 	go repo.listen()
 	return repo, nil
@@ -137,18 +137,22 @@ func (r *eventRepository) upsert(
 }
 
 func (r *eventRepository) listen() {
-	for updatedRound := range r.chUpdates {
-		r.lock.RLock()
-		if r.handler != nil {
-			r.handler(updatedRound)
-		}
-		r.lock.RUnlock()
+	for round := range r.chUpdates {
+		r.runHandler(round)
 	}
 }
 
 func (r *eventRepository) publishEvents(events []domain.RoundEvent) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
 	round := domain.NewRoundFromEvents(events)
 	r.chUpdates <- round
+}
+
+func (r *eventRepository) runHandler(round *domain.Round) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	if r.handler == nil {
+		return
+	}
+	r.handler(round)
 }
