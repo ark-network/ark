@@ -42,7 +42,7 @@ var (
 	RoundLifetime         = "ROUND_LIFETIME"
 
 	defaultDatadir               = common.AppDataDir("arkd", false)
-	defaultRoundInterval         = 60
+	defaultRoundInterval         = 10
 	defaultPort                  = 6000
 	defaultDbType                = "badger"
 	defaultSchedulerType         = "gocron"
