@@ -17,7 +17,9 @@ Available binaries:
 - ark-linux-arm64
 
 ```bash
-$ curl -Ls https://install-latest-cli.arkdev.info/latest-release/<binary_name>
+$ OS=$(eval "go env GOOS")
+$ ARCH=$(eval "go env GOARCH")
+$ curl -Ls https://install-latest-cli.arkdev.info/latest-release/ark-$OS-$ARCH
 ```
 
 Move it to somewhere on your PATH
