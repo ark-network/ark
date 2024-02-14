@@ -17,8 +17,8 @@ type RedeemBranch interface {
 	RedeemPath() ([]string, error)
 	// AddInput adds the vtxo input created by the branch
 	AddVtxoInput(updater *psetv2.Updater) error
-	// ExpirateAt returns the expiration time of the branch
-	ExpirateAt() (*time.Time, error)
+	// ExpireAt returns the expiration time of the branch
+	ExpireAt() (*time.Time, error)
 }
 
 type redeemBranch struct {
@@ -41,7 +41,10 @@ func newRedeemBranch(
 		return nil, err
 	}
 
-	lifetime := time.Duration(int64(seconds))
+	lifetime, err := time.ParseDuration(fmt.Sprintf("%ds", seconds))
+	if err != nil {
+		return nil, err
+	}
 
 	nodes, err := congestionTree.Branch(vtxo.txid)
 	if err != nil {
@@ -172,13 +175,10 @@ func (r *redeemBranch) AddVtxoInput(updater *psetv2.Updater) error {
 	return nil
 }
 
-func (r *redeemBranch) ExpirateAt() (*time.Time, error) {
+func (r *redeemBranch) ExpireAt() (*time.Time, error) {
 	lastKnownBlocktime := int64(0)
 
-	confirmed, blocktime, err := getTxBlocktime(r.vtxo.poolTxid)
-	if err != nil {
-		return nil, err
-	}
+	confirmed, blocktime, _ := getTxBlocktime(r.vtxo.poolTxid)
 
 	if confirmed {
 		lastKnownBlocktime = blocktime

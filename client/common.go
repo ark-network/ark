@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"syscall"
 	"time"
 
@@ -145,10 +146,33 @@ func getServiceProviderPublicKey() (*secp256k1.PublicKey, error) {
 	return pubKey, nil
 }
 
+// vtxoList implements sort.Interface
+type vtxoList []vtxo
+
+func (ls vtxoList) Len() int {
+	return len(ls)
+}
+
+// older vtxos first
+func (ls vtxoList) Less(i, j int) bool {
+	if ls[i].expireAt == nil || ls[j].expireAt == nil {
+		return false
+	}
+
+	return ls[i].expireAt.Before(*ls[j].expireAt)
+}
+
+func (ls vtxoList) Swap(i, j int) {
+	ls[i], ls[j] = ls[j], ls[i]
+}
+
 func coinSelect(vtxos []vtxo, amount uint64) ([]vtxo, uint64, error) {
 	selected := make([]vtxo, 0)
 	notSelected := make([]vtxo, 0)
 	selectedAmount := uint64(0)
+
+	// sort vtxos by expiration (older first)
+	sort.Sort(vtxoList(vtxos))
 
 	for _, vtxo := range vtxos {
 		if selectedAmount >= amount {

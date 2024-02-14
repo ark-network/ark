@@ -54,7 +54,7 @@ func getVtxos(
 	}
 
 	for vtxoTxid, branch := range redeemBranches {
-		expiration, err := branch.ExpirateAt()
+		expiration, err := branch.ExpireAt()
 		if err != nil {
 			return nil, err
 		}
