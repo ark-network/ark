@@ -20,7 +20,7 @@ Available binaries:
 $ OS=$(uname | tr '[:upper:]' '[:lower:]')
 $ ARCH=$(uname -m)
 $ if [ $ARCH = 'x86_64' ]; then GOARCH='amd64'; else GOARCH=$ARCH; fi
-$ curl -Ls https://install-latest-cli.arkdev.info/latest-release/ark-$OS-$GOARCH
+$ curl -O https://install-latest-cli.arkdev.info/latest-release/ark-$OS-$GOARCH
 ```
 
 Move it to somewhere on your PATH
