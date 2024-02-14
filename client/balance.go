@@ -42,7 +42,7 @@ func balanceAction(ctx *cli.Context) error {
 	go func() {
 		defer wg.Done()
 		explorer := NewExplorer()
-		balance, amountByExpiration, err := getOffchainBalance(ctx, explorer, client, offchainAddr, expiryDetails)
+		balance, amountByExpiration, err := getOffchainBalance(ctx, explorer, client, offchainAddr, true)
 		if err != nil {
 			chRes <- balanceRes{0, 0, nil, err}
 			return
@@ -64,6 +64,7 @@ func balanceAction(ctx *cli.Context) error {
 
 	details := make([]map[string]interface{}, 0)
 	offchainBalance, onchainBalance := uint64(0), uint64(0)
+	nextExpiration := int64(0)
 	count := 0
 	for res := range chRes {
 		if res.err != nil {
@@ -77,6 +78,10 @@ func balanceAction(ctx *cli.Context) error {
 		}
 		if res.amountByExpiration != nil {
 			for timestamp, amount := range res.amountByExpiration {
+				if nextExpiration == 0 || timestamp < nextExpiration {
+					nextExpiration = timestamp
+				}
+
 				fancyTime := time.Unix(timestamp, 0).Format("2006-01-02 15:04:05")
 				details = append(
 					details,
@@ -105,7 +110,13 @@ func balanceAction(ctx *cli.Context) error {
 
 	}
 
+	fancyTimeExpiration := ""
+	if nextExpiration != 0 {
+		fancyTimeExpiration = time.Unix(nextExpiration, 0).Format("2006-01-02 15:04:05")
+	}
+
 	return printJSON(map[string]interface{}{
+		"next_expiration":  fancyTimeExpiration,
 		"offchain_balance": offchainBalance,
 		"onchain_balance":  onchainBalance,
 	})
