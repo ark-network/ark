@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/urfave/cli/v2"
@@ -16,10 +17,15 @@ type vtxo struct {
 	txid     string
 	vout     uint32
 	poolTxid string
+	expireAt *time.Time
 }
 
 func getVtxos(
-	ctx *cli.Context, client arkv1.ArkServiceClient, addr string,
+	ctx *cli.Context,
+	explorer Explorer,
+	client arkv1.ArkServiceClient,
+	addr string,
+	withExpiration bool,
 ) ([]vtxo, error) {
 	response, err := client.ListVtxos(ctx.Context, &arkv1.ListVtxosRequest{
 		Address: addr,
@@ -36,6 +42,29 @@ func getVtxos(
 			vout:     v.Outpoint.Vout,
 			poolTxid: v.PoolTxid,
 		})
+	}
+
+	if !withExpiration {
+		return vtxos, nil
+	}
+
+	redeemBranches, err := getRedeemBranches(ctx, explorer, client, vtxos)
+	if err != nil {
+		return nil, err
+	}
+
+	for vtxoTxid, branch := range redeemBranches {
+		expiration, err := branch.ExpirateAt()
+		if err != nil {
+			return nil, err
+		}
+
+		for i, vtxo := range vtxos {
+			if vtxo.txid == vtxoTxid {
+				vtxos[i].expireAt = expiration
+				break
+			}
+		}
 	}
 
 	return vtxos, nil

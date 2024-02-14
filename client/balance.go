@@ -2,17 +2,28 @@ package main
 
 import (
 	"sync"
+	"time"
 
 	"github.com/urfave/cli/v2"
 )
+
+var expiryDetailsFlag = cli.BoolFlag{
+	Name:     "expiry-details",
+	Usage:    "show cumulative balance by expiry time",
+	Value:    false,
+	Required: false,
+}
 
 var balanceCommand = cli.Command{
 	Name:   "balance",
 	Usage:  "Print balance of the Ark wallet",
 	Action: balanceAction,
+	Flags:  []cli.Flag{&expiryDetailsFlag},
 }
 
 func balanceAction(ctx *cli.Context) error {
+	expiryDetails := ctx.Bool("expiry-details")
+
 	client, cancel, err := getClientFromState(ctx)
 	if err != nil {
 		return err
@@ -30,25 +41,28 @@ func balanceAction(ctx *cli.Context) error {
 	chRes := make(chan balanceRes, 2)
 	go func() {
 		defer wg.Done()
-		balance, err := getOffchainBalance(ctx, client, offchainAddr)
+		explorer := NewExplorer()
+		balance, amountByExpiration, err := getOffchainBalance(ctx, explorer, client, offchainAddr, expiryDetails)
 		if err != nil {
-			chRes <- balanceRes{0, 0, err}
+			chRes <- balanceRes{0, 0, nil, err}
 			return
 		}
-		chRes <- balanceRes{balance, 0, nil}
+
+		chRes <- balanceRes{balance, 0, amountByExpiration, nil}
 	}()
 	go func() {
 		defer wg.Done()
 		balance, err := getOnchainBalance(onchainAddr)
 		if err != nil {
-			chRes <- balanceRes{0, 0, err}
+			chRes <- balanceRes{0, 0, nil, err}
 			return
 		}
-		chRes <- balanceRes{0, balance, nil}
+		chRes <- balanceRes{0, balance, nil, nil}
 	}()
 
 	wg.Wait()
 
+	details := make([]map[string]interface{}, 0)
 	offchainBalance, onchainBalance := uint64(0), uint64(0)
 	count := 0
 	for res := range chRes {
@@ -61,10 +75,34 @@ func balanceAction(ctx *cli.Context) error {
 		if res.onchainBalance > 0 {
 			onchainBalance = res.onchainBalance
 		}
+		if res.amountByExpiration != nil {
+			for timestamp, amount := range res.amountByExpiration {
+				fancyTime := time.Unix(timestamp, 0).Format("2006-01-02 15:04:05")
+				details = append(
+					details,
+					map[string]interface{}{
+						"expiry_time": fancyTime,
+						"amount":      amount,
+					},
+				)
+			}
+		}
+
 		count++
 		if count == 2 {
 			break
 		}
+	}
+
+	if expiryDetails {
+		return printJSON(map[string]interface{}{
+			"offchain_balance": map[string]interface{}{
+				"total":   offchainBalance,
+				"details": details,
+			},
+			"onchain_balance": onchainBalance,
+		})
+
 	}
 
 	return printJSON(map[string]interface{}{
@@ -74,7 +112,8 @@ func balanceAction(ctx *cli.Context) error {
 }
 
 type balanceRes struct {
-	offchainBalance uint64
-	onchainBalance  uint64
-	err             error
+	offchainBalance    uint64
+	onchainBalance     uint64
+	amountByExpiration map[int64]uint64
+	err                error
 }

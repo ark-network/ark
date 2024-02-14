@@ -110,10 +110,7 @@ func initWallet(ctx *cli.Context, key, password string) error {
 
 	cypher := NewAES128Cypher()
 
-	arkNetwork, _, err := getNetwork()
-	if err != nil {
-		return err
-	}
+	arkNetwork, _ := getNetwork()
 
 	publicKey, err := common.EncodePubKey(arkNetwork.PubKey, privateKey.PubKey())
 	if err != nil {

@@ -81,10 +81,7 @@ func signPset(
 		return err
 	}
 
-	_, liquidNet, err := getNetwork()
-	if err != nil {
-		return err
-	}
+	_, liquidNet := getNetwork()
 
 	prevoutsScripts := make([][]byte, 0)
 	prevoutsValues := make([][]byte, 0)
