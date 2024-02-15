@@ -1,6 +1,6 @@
 ### Overview
 
-This is a Go implementation of Ark that uses covenants (on the Liquid network).
+This is a Go implementation of Ark Service Provider that uses covenants (on the Liquid network).
 
 This is a Proof of Concept in a early phase of development.
 
