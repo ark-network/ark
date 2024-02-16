@@ -29,7 +29,7 @@ Should the digital bank cease to exist, **users can still retrieve their digital
 
 ### 🔨 How Does it Work?
 
-Start by exploring the [Nomenclature](/docs/learn/nomenclature.md) to familiarize yourself with key concepts and terminology. Then, learn how to [Board the Ark](/docs/learn/boarding.md), [Send Payments](/docs/learn/payments.md), and eventually [Leave the Ark](/docs/learn/leaving.md) to withdraw your funds back to the Bitcoin blockchain in case of server unresponsiveness.
+Start by exploring the [Nomenclature](./learn/nomenclature.md) to familiarize yourself with key concepts and terminology. Then, learn how to [Board the Ark](./learn/boarding.md), [Send Payments](./learn/payments.md), and eventually [Leave the Ark](./learn/leaving.md) to withdraw your funds back to the Bitcoin blockchain in case of server unresponsiveness.
 
 ### 🏃‍♀️ Running Ark
 
@@ -40,8 +40,8 @@ The Ark reference implementation is currently under development. Please check ba
 
 You can join an existing Ark service provider or run your own.
 
-- [Join an Ark as User](/user/intro.md)
-- [Operate an Ark as Liquidity Provider](/provider/intro.md)
+- [Join an Ark as User](./user/intro.md)
+- [Operate an Ark as Liquidity Provider](./provider/intro.md)
 
 ### 👩‍💻 Integrate Ark
 
@@ -50,7 +50,7 @@ You can join an existing Ark service provider or run your own.
 The Ark libraries and developer tools are currently under development. Please check back soon for updates.
 :::
 
-You can [integrate Ark](/docs/developers/get-started.md) into your wallet or application to enable your users to send and receive Bitcoin payments off-chain.
+You can [integrate Ark](./developers/get-started.md) into your wallet or application to enable your users to send and receive Bitcoin payments off-chain.
 
 ### ⌨️ Contributing
 
