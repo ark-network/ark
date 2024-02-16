@@ -9,6 +9,12 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+// the faucet command is not included by default in the main.go file
+// it lets to include the command if and only if the faucet.go file is included in binary
+func init() {
+	commands = append(commands, &faucetCommand)
+}
+
 var faucetCommand = cli.Command{
 	Name:   "faucet",
 	Usage:  "Faucet your wallet",

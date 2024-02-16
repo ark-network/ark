@@ -49,6 +49,16 @@ func initCLIEnv() {
 	statePath = filepath.Join(datadir, STATE_FILE)
 }
 
+var commands = []*cli.Command{
+	&balanceCommand,
+	&configCommand,
+	&dumpCommand,
+	&initCommand,
+	&receiveCommand,
+	&redeemCommand,
+	&sendCommand,
+}
+
 func main() {
 	initCLIEnv()
 
@@ -59,14 +69,7 @@ func main() {
 	app.Usage = "command line interface for Ark wallet"
 	app.Commands = append(
 		app.Commands,
-		&balanceCommand,
-		&configCommand,
-		&dumpCommand,
-		&faucetCommand,
-		&initCommand,
-		&receiveCommand,
-		&redeemCommand,
-		&sendCommand,
+		commands...,
 	)
 
 	app.Before = func(ctx *cli.Context) error {

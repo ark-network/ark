@@ -7,10 +7,25 @@ PARENT_PATH=$(dirname $(
 	pwd -P
 ))
 
-OS=$(eval "go env GOOS")
-ARCH=$(eval "go env GOARCH")
+if [[ -z $GOOS ]]; then
+	GOOS=$(eval "go env GOOS")
+fi
+
+if [[ -z $GOARCH ]]; then
+	GOARCH=$(eval "go env GOARCH")
+fi
+
+echo "Building for $GOOS $GOARCH"
 
 pushd $PARENT_PATH
 mkdir -p build
-GO111MODULE=on go build -ldflags="-s -w" -o build/ark-cli-$OS-$ARCH .
+
+
+if [[ $1 == *-faucet* ]]; then
+    GO111MODULE=on go build -ldflags="-s -w" -o build/ark-cli-$GOOS-$GOARCH .
+else
+	FILES=$(find . -type f -name '*.go' ! -name 'faucet.go')
+    GO111MODULE=on go build -ldflags="-s -w" -o build/ark-cli-$GOOS-$GOARCH $FILES
+fi
+
 popd
