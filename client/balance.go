@@ -99,27 +99,26 @@ func balanceAction(ctx *cli.Context) error {
 		}
 	}
 
-	if expiryDetails {
-		return printJSON(map[string]interface{}{
-			"offchain_balance": map[string]interface{}{
-				"total":   offchainBalance,
-				"details": details,
-			},
-			"onchain_balance": onchainBalance,
-		})
+	response := make(map[string]interface{})
+	response["onchain_balance"] = onchainBalance
 
+	offchainBalanceJSON := map[string]interface{}{
+		"total": offchainBalance,
 	}
 
 	fancyTimeExpiration := ""
 	if nextExpiration != 0 {
 		fancyTimeExpiration = time.Unix(nextExpiration, 0).Format("2006-01-02 15:04:05")
+		offchainBalanceJSON["next_expiration"] = fancyTimeExpiration
 	}
 
-	return printJSON(map[string]interface{}{
-		"next_expiration":  fancyTimeExpiration,
-		"offchain_balance": offchainBalance,
-		"onchain_balance":  onchainBalance,
-	})
+	if expiryDetails {
+		offchainBalanceJSON["details"] = details
+	}
+
+	response["offchain_balance"] = offchainBalanceJSON
+
+	return printJSON(response)
 }
 
 type balanceRes struct {
