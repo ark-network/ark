@@ -29,7 +29,7 @@ flowchart LR
 3. Alice adds an output with **2 spending paths**:
    - This funds will belong to the ASP after 4 weeks:
      - `(ASP after 4w)`
-   - A covenant output that forces coins to be spent by a [VTXO](./nomenclature#vtxo) with an output script with **2** spending paths:
+   - A covenant output that forces coins to be spent by a [VTXO](./nomenclature#vtxo-1) with an output script with **2** spending paths:
      - `(Alice + ASP)`
      - `(Alice after 24h)`
 4. Alice notifies ASP about the [Boarding transaction](./nomenclature#with-luggage)
@@ -39,7 +39,7 @@ flowchart LR
 
 - Alice don't need to worry about being online to maintain access to her funds after boarding
 - If ASP is unresponsive, Alice can claim her funds back in **1 year**
-- ASP must be aware of the timeout on the [Boarding transaction](./nomenclature#with-luggage) to prevent double spending
+- ASP must be aware of the timeout on the [Boarding transaction](./nomenclature#without-luggage) to prevent double spending
 
 #### Timeline of events
 
