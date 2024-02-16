@@ -15,40 +15,6 @@ const (
 	RelaySep = "-"
 )
 
-func EncodeSecKey(hrp string, key *secp256k1.PrivateKey) (seckey string, err error) {
-	if key == nil {
-		return "", fmt.Errorf("missing secret key")
-	}
-	if hrp != MainNet.SecKey && hrp != TestNet.SecKey {
-		return "", fmt.Errorf("invalid prefix")
-	}
-	grp, err := bech32.ConvertBits(key.Serialize(), 8, 5, true)
-	if err != nil {
-		return "", err
-	}
-	seckey, err = bech32.EncodeM(hrp, grp)
-	return
-}
-
-func DecodeSecKey(key string) (hrp string, seckey *secp256k1.PrivateKey, err error) {
-	prefix, buf, err := bech32.DecodeNoLimit(key)
-	if err != nil {
-		err = fmt.Errorf("invalid secret key: %s", err)
-		return
-	}
-	if prefix != MainNet.SecKey && prefix != TestNet.SecKey {
-		err = fmt.Errorf("invalid prefix")
-		return
-	}
-	grp, err := bech32.ConvertBits(buf, 5, 8, false)
-	if err != nil {
-		return
-	}
-	hrp = prefix
-	seckey = secp256k1.PrivKeyFromBytes(grp)
-	return
-}
-
 func EncodePubKey(hrp string, key *secp256k1.PublicKey) (pubkey string, err error) {
 	if key == nil {
 		err = fmt.Errorf("missing public key")

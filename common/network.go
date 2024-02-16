@@ -10,7 +10,6 @@ type Network struct {
 
 var MainNet = Network{
 	Name:     "mainnet",
-	SecKey:   "asec",
 	PubKey:   "apub",
 	RelayKey: "arelay",
 	Addr:     "ark",
@@ -18,7 +17,6 @@ var MainNet = Network{
 
 var TestNet = Network{
 	Name:     "testnet",
-	SecKey:   "tasec",
 	PubKey:   "tapub",
 	RelayKey: "tarelay",
 	Addr:     "tark",

@@ -21,48 +21,6 @@ func init() {
 	}
 }
 
-func TestSecretKeyEncoding(t *testing.T) {
-	fixtures := struct {
-		SecretKey struct {
-			Valid []struct {
-				Key      string `json:"key"`
-				Expected string `json:"expected"`
-			} `json:"valid"`
-			Invalid []struct {
-				Key           string `json:"key"`
-				ExpectedError string `json:"expectedError"`
-			} `json:"invalid"`
-		} `json:"secretKey"`
-	}{}
-	err := json.Unmarshal(f, &fixtures)
-	require.NoError(t, err)
-
-	t.Run("valid", func(t *testing.T) {
-		for _, f := range fixtures.SecretKey.Valid {
-			hrp, key, err := common.DecodeSecKey(f.Key)
-			require.NoError(t, err)
-			require.NotEmpty(t, hrp)
-			require.NotNil(t, key)
-
-			keyHex := hex.EncodeToString(key.Serialize())
-			require.Equal(t, f.Expected, keyHex)
-
-			keyStr, err := common.EncodeSecKey(hrp, key)
-			require.NoError(t, err)
-			require.Equal(t, f.Key, keyStr)
-		}
-	})
-
-	t.Run("invalid", func(t *testing.T) {
-		for _, f := range fixtures.SecretKey.Invalid {
-			hrp, key, err := common.DecodeSecKey(f.Key)
-			require.EqualError(t, err, f.ExpectedError)
-			require.Empty(t, hrp)
-			require.Nil(t, key)
-		}
-	})
-}
-
 func TestPublicKeyEncoding(t *testing.T) {
 	fixtures := struct {
 		PublicKey struct {
