@@ -24,7 +24,7 @@ Ark is a promising second-layer solution for Bitcoin that improves the scalabili
 - **Secure**: Ark is a secure solution that is built on top of the Bitcoin blockchain.
 
 :::tip
-It's recommended to read the [nomenclature](/learn/nomenclature) first.
+It's recommended to read the [nomenclature](/docs/learn/nomenclature) first.
 :::
 
 ## Ark liquidity requirements
