@@ -16,7 +16,9 @@ const isArm = async () => {
 }
 
 const Button = ({ children, onClick, colored }) => {
-  const backgroundColor = colored ? 'var(--ifm-color-primary-lightest)' : 'none'
+  const backgroundColor = colored
+    ? 'var(--ifm-color-primary-lightest)'
+    : 'var(--ifm-color-emphasis-200)'
   return (
     <button
       onClick={onClick}
