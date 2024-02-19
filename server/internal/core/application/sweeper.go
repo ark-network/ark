@@ -543,14 +543,14 @@ func containsTree(tr0 tree.CongestionTree, tr1 tree.CongestionTree) (bool, error
 // given a congestion tree input, searches and returns the sweep leaf and its lifetime in seconds
 func extractSweepLeaf(input psetv2.Input) (sweepLeaf *psetv2.TapLeafScript, lifetime int64, err error) {
 	for _, leaf := range input.TapLeafScript {
-		isSweep, _, seconds, err := tree.DecodeSweepScript(leaf.Script)
+		close := &tree.DelayedSigClose{}
+		valid, err := close.Decode(leaf.Script)
 		if err != nil {
 			return nil, 0, err
 		}
-		if isSweep {
-			lifetime = int64(seconds)
+		if valid && close.Seconds > uint(lifetime) {
 			sweepLeaf = &leaf
-			break
+			lifetime = int64(close.Seconds)
 		}
 	}
 

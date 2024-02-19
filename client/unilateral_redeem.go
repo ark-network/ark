@@ -101,41 +101,36 @@ func (r *redeemBranch) RedeemPath() ([]string, error) {
 			}
 
 			for _, leaf := range input.TapLeafScript {
-				isSweep, _, _, err := tree.DecodeSweepScript(leaf.Script)
+				close, err := tree.DecodeClose(leaf.Script)
 				if err != nil {
 					return nil, err
 				}
 
-				if isSweep {
-					continue
-				}
+				switch close.(type) {
+				case *tree.UnrollClose:
+					controlBlock, err := leaf.ControlBlock.ToBytes()
+					if err != nil {
+						return nil, err
+					}
 
-				controlBlock, err := leaf.ControlBlock.ToBytes()
-				if err != nil {
-					return nil, err
-				}
+					unsignedTx, err := pset.UnsignedTx()
+					if err != nil {
+						return nil, err
+					}
 
-				unsignedTx, err := pset.UnsignedTx()
-				if err != nil {
-					return nil, err
-				}
+					unsignedTx.Inputs[i].Witness = [][]byte{
+						leaf.Script,
+						controlBlock[:],
+					}
 
-				unsignedTx.Inputs[i].Witness = [][]byte{
-					leaf.Script,
-					controlBlock[:],
+					hex, err := unsignedTx.ToHex()
+					if err != nil {
+						return nil, err
+					}
+					transactions = append(transactions, hex)
 				}
-
-				hex, err := unsignedTx.ToHex()
-				if err != nil {
-					return nil, err
-				}
-				transactions = append(transactions, hex)
-
-				break
 			}
-
 		}
-
 	}
 
 	return transactions, nil
@@ -158,18 +153,39 @@ func (r *redeemBranch) AddVtxoInput(updater *psetv2.Updater) error {
 		return err
 	}
 
-	// add taproot tree letting to spend the vtxo
-	checksigLeaf, err := tree.VtxoScript(walletPubkey)
+	sweepClosure := &tree.DelayedSigClose{}
+	_, err = sweepClosure.Decode(r.sweepClosure.Script)
+	if err != nil {
+		return err
+	}
+
+	redeemClosure := &tree.DelayedSigClose{
+		Pubkey:  walletPubkey,
+		Seconds: sweepClosure.Seconds / 2,
+	}
+
+	forfeitClosure := &tree.ForfeitClose{
+		Pubkey:    walletPubkey,
+		AspPubkey: sweepClosure.Pubkey,
+	}
+
+	redeemLeaf, err := redeemClosure.Leaf()
+	if err != nil {
+		return nil
+	}
+
+	forfeitLeaf, err := forfeitClosure.Leaf()
 	if err != nil {
 		return nil
 	}
 
 	vtxoTaprootTree := taproot.AssembleTaprootScriptTree(
-		*checksigLeaf,
+		*redeemLeaf,
+		*forfeitLeaf,
 		*r.sweepClosure,
 	)
 
-	proofIndex := vtxoTaprootTree.LeafProofIndex[checksigLeaf.TapHash()]
+	proofIndex := vtxoTaprootTree.LeafProofIndex[redeemLeaf.TapHash()]
 
 	if err := updater.AddInTapLeafScript(
 		nextInputIndex,

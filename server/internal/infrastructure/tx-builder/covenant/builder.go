@@ -168,13 +168,18 @@ func (b *txBuilder) GetLeafSweepClosure(
 	}
 
 	// craft the vtxo taproot tree
-	vtxoScript, err := tree.VtxoScript(userPubKey)
+	redeemClosure := &tree.DelayedSigClose{
+		Pubkey:  userPubKey,
+		Seconds: uint(lifetime) / 2,
+	}
+
+	redeemLeaf, err := redeemClosure.Leaf()
 	if err != nil {
 		return nil, 0, err
 	}
 
 	vtxoTaprootTree := taproot.AssembleTaprootScriptTree(
-		*vtxoScript,
+		*redeemLeaf,
 		sweepLeaf.TapElementsLeaf,
 	)
 
@@ -190,18 +195,38 @@ func (b *txBuilder) GetLeafSweepClosure(
 func (b *txBuilder) getLeafScriptAndTree(
 	userPubkey, aspPubkey *secp256k1.PublicKey,
 ) ([]byte, *taproot.IndexedElementsTapScriptTree, error) {
-	redeemClosure, err := tree.VtxoScript(userPubkey)
+	redeemClosure := &tree.DelayedSigClose{
+		Pubkey:  userPubkey,
+		Seconds: uint(b.roundLifetime) / 2,
+	}
+
+	redeemLeaf, err := redeemClosure.Leaf()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	sweepClosure, err := tree.SweepScript(aspPubkey, uint(b.roundLifetime))
+	sweepClosure := &tree.DelayedSigClose{
+		Pubkey:  aspPubkey,
+		Seconds: uint(b.roundLifetime),
+	}
+
+	sweepLeaf, err := sweepClosure.Leaf()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	forfeitClosure := &tree.ForfeitClose{
+		Pubkey:    userPubkey,
+		AspPubkey: aspPubkey,
+	}
+
+	forfeitLeaf, err := forfeitClosure.Leaf()
 	if err != nil {
 		return nil, nil, err
 	}
 
 	taprootTree := taproot.AssembleTaprootScriptTree(
-		*redeemClosure, *sweepClosure,
+		*redeemLeaf, *sweepLeaf, *forfeitLeaf,
 	)
 
 	root := taprootTree.RootNode.TapHash()
@@ -446,9 +471,25 @@ func (b *txBuilder) createForfeitTxs(
 				return nil, err
 			}
 
+			var forfeitProof *taproot.TapscriptElementsProof
+
+			for _, proof := range vtxoTaprootTree.LeafMerkleProofs {
+				isForfeit, err := (&tree.ForfeitClose{}).Decode(proof.Script)
+				if !isForfeit || err != nil {
+					continue
+				}
+
+				forfeitProof = &proof
+				break
+			}
+
+			if forfeitProof == nil {
+				return nil, fmt.Errorf("forfeit proof not found")
+			}
+
 			for _, connector := range connectors {
 				txs, err := craftForfeitTxs(
-					connector, vtxo, vtxoTaprootTree, vtxoScript, aspScript,
+					connector, vtxo, *forfeitProof, vtxoScript, aspScript,
 				)
 				if err != nil {
 					return nil, err
@@ -464,20 +505,12 @@ func (b *txBuilder) createForfeitTxs(
 // given a congestion tree input, searches and returns the sweep leaf and its lifetime in seconds
 func extractSweepLeaf(input psetv2.Input) (sweepLeaf *psetv2.TapLeafScript, lifetime int64, err error) {
 	for _, leaf := range input.TapLeafScript {
-		isSweep, _, seconds, err := tree.DecodeSweepScript(leaf.Script)
-		if err != nil {
-			return nil, 0, err
-		}
+		sweepClosure := &tree.DelayedSigClose{}
+		isSweep, _ := sweepClosure.Decode(leaf.Script)
 		if isSweep {
-			lifetime = int64(seconds)
-			sweepLeaf = &leaf
-			break
+			return &leaf, int64(sweepClosure.Seconds), nil
 		}
 	}
 
-	if sweepLeaf == nil {
-		return nil, 0, fmt.Errorf("sweep leaf not found")
-	}
-
-	return sweepLeaf, lifetime, nil
+	return nil, 0, fmt.Errorf("sweep leaf not found")
 }

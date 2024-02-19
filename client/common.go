@@ -428,7 +428,12 @@ func handleRoundStream(
 			}
 
 			// validate the receivers
-			sweepLeaf, err := tree.SweepScript(aspPublicKey, seconds)
+			sweepClosure := &tree.DelayedSigClose{
+				Pubkey:  aspPublicKey,
+				Seconds: seconds,
+			}
+
+			sweepLeaf, err := sweepClosure.Leaf()
 			if err != nil {
 				return "", err
 			}
@@ -466,13 +471,31 @@ func handleRoundStream(
 				found := false
 
 				// compute the receiver output taproot key
-				vtxoScript, err := tree.VtxoScript(userPubKey)
+				redeemClose := &tree.DelayedSigClose{
+					Pubkey:  userPubKey,
+					Seconds: seconds / 2,
+				}
+
+				forfeitClose := &tree.ForfeitClose{
+					Pubkey:    userPubKey,
+					AspPubkey: aspPublicKey,
+				}
+
+				redeemLeaf, err := redeemClose.Leaf()
 				if err != nil {
 					return "", err
 				}
 
-				vtxoTaprootTree := taproot.AssembleTaprootScriptTree(*vtxoScript, *sweepLeaf)
+				forfeitLeaf, err := forfeitClose.Leaf()
+				if err != nil {
+					return "", err
+				}
+
+				vtxoTaprootTree := taproot.AssembleTaprootScriptTree(*redeemLeaf, *sweepLeaf, *forfeitLeaf)
 				root := vtxoTaprootTree.RootNode.TapHash()
+
+				fmt.Println("root: ", root.String())
+
 				unspendableKey := tree.UnspendableKey()
 				vtxoTaprootKey := schnorr.SerializePubKey(taproot.ComputeTaprootOutputKey(unspendableKey, root[:]))
 
@@ -657,15 +680,15 @@ func findSweepClosure(
 	}
 
 	for _, tapLeaf := range tx.Inputs[0].TapLeafScript {
-		isSweep, _, lifetime, err := tree.DecodeSweepScript(tapLeaf.Script)
+		close := &tree.DelayedSigClose{}
+		valid, err := close.Decode(tapLeaf.Script)
 		if err != nil {
 			continue
 		}
 
-		if isSweep {
-			seconds = lifetime
+		if valid && close.Seconds > seconds {
+			seconds = close.Seconds
 			sweepClosure = &tapLeaf.TapElementsLeaf
-			break
 		}
 	}
 

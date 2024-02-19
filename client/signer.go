@@ -125,20 +125,29 @@ func signPset(
 			continue
 		}
 
-		pubkey := prvKey.PubKey()
-
-		vtxoLeaf, err := tree.VtxoScript(pubkey)
-		if err != nil {
-			return err
-		}
-
 		if len(input.TapLeafScript) > 0 {
 			genesis, err := chainhash.NewHashFromStr(liquidNet.GenesisBlockHash)
 			if err != nil {
 				return err
 			}
+
+			pubkey := prvKey.PubKey()
 			for _, leaf := range input.TapLeafScript {
-				if bytes.Equal(leaf.Script, vtxoLeaf.Script) {
+				close, err := tree.DecodeClose(leaf.Script)
+				if err != nil {
+					return err
+				}
+
+				sign := false
+
+				switch c := close.(type) {
+				case *tree.DelayedSigClose:
+					sign = c.Pubkey.IsEqual(pubkey)
+				case *tree.ForfeitClose:
+					sign = c.Pubkey.IsEqual(pubkey)
+				}
+
+				if sign {
 					hash := leaf.TapHash()
 
 					preimage := utx.HashForWitnessV1(

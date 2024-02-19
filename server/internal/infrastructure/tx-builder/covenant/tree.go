@@ -130,7 +130,12 @@ func (n *node) getWitnessData() (
 		return n._inputTaprootKey, n._inputTaprootTree, nil
 	}
 
-	sweepClosure, err := tree.SweepScript(n.sweepKey, uint(n.roundLifetime))
+	sweepClose := &tree.DelayedSigClose{
+		Pubkey:  n.sweepKey,
+		Seconds: uint(n.roundLifetime),
+	}
+
+	sweepLeaf, err := sweepClose.Leaf()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -141,12 +146,18 @@ func (n *node) getWitnessData() (
 			return nil, nil, err
 		}
 
-		branchTaprootScript := tree.BranchScript(
-			taprootKey, nil, n.getAmount(), 0,
-		)
+		unrollClose := &tree.UnrollClose{
+			LeftKey:    taprootKey,
+			LeftAmount: n.getAmount(),
+		}
+
+		unrollLeaf, err := unrollClose.Leaf()
+		if err != nil {
+			return nil, nil, err
+		}
 
 		branchTaprootTree := taproot.AssembleTaprootScriptTree(
-			branchTaprootScript, *sweepClosure,
+			*unrollLeaf, *sweepLeaf,
 		)
 		root := branchTaprootTree.RootNode.TapHash()
 
@@ -173,12 +184,21 @@ func (n *node) getWitnessData() (
 
 	leftAmount := n.left.getAmount() + n.feeSats
 	rightAmount := n.right.getAmount() + n.feeSats
-	branchTaprootLeaf := tree.BranchScript(
-		leftKey, rightKey, leftAmount, rightAmount,
-	)
+
+	unrollClose := &tree.UnrollClose{
+		LeftKey:     leftKey,
+		LeftAmount:  leftAmount,
+		RightKey:    rightKey,
+		RightAmount: rightAmount,
+	}
+
+	unrollLeaf, err := unrollClose.Leaf()
+	if err != nil {
+		return nil, nil, err
+	}
 
 	branchTaprootTree := taproot.AssembleTaprootScriptTree(
-		branchTaprootLeaf, *sweepClosure,
+		*unrollLeaf, *sweepLeaf,
 	)
 	root := branchTaprootTree.RootNode.TapHash()
 
@@ -200,7 +220,12 @@ func (n *node) getVtxoWitnessData() (
 		return nil, nil, fmt.Errorf("cannot call vtxoWitness on a non-leaf node")
 	}
 
-	sweepClosure, err := tree.SweepScript(n.sweepKey, uint(n.roundLifetime))
+	sweepClose := &tree.DelayedSigClose{
+		Pubkey:  n.sweepKey,
+		Seconds: uint(n.roundLifetime),
+	}
+
+	sweepLeaf, err := sweepClose.Leaf()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -215,16 +240,32 @@ func (n *node) getVtxoWitnessData() (
 		return nil, nil, err
 	}
 
-	vtxoLeaf, err := tree.VtxoScript(pubkey)
+	redeemClose := &tree.DelayedSigClose{
+		Pubkey:  pubkey,
+		Seconds: uint(n.roundLifetime) / 2,
+	}
+
+	redeemLeaf, err := redeemClose.Leaf()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// TODO: add forfeit path
+	forfeitClose := &tree.ForfeitClose{
+		Pubkey:    pubkey,
+		AspPubkey: n.sweepKey,
+	}
+
+	forfeitLeaf, err := forfeitClose.Leaf()
+	if err != nil {
+		return nil, nil, err
+	}
+
 	leafTaprootTree := taproot.AssembleTaprootScriptTree(
-		*vtxoLeaf, *sweepClosure,
+		*redeemLeaf, *sweepLeaf, *forfeitLeaf,
 	)
 	root := leafTaprootTree.RootNode.TapHash()
+
+	fmt.Println("root taproot hash: ", root.String())
 
 	taprootKey := taproot.ComputeTaprootOutputKey(
 		tree.UnspendableKey(),

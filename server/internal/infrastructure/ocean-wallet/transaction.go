@@ -224,7 +224,7 @@ func (s *service) EstimateFees(
 		}
 
 		if len(in.TapLeafScript) == 1 {
-			isSweep, _, _, err := tree.DecodeSweepScript(in.TapLeafScript[0].Script)
+			isSweep, err := (&tree.DelayedSigClose{}).Decode(in.TapLeafScript[0].Script)
 			if err != nil {
 				return 0, err
 			}
