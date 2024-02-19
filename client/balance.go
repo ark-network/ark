@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -108,7 +110,27 @@ func balanceAction(ctx *cli.Context) error {
 
 	fancyTimeExpiration := ""
 	if nextExpiration != 0 {
-		fancyTimeExpiration = time.Unix(nextExpiration, 0).Format("2006-01-02 15:04:05")
+		t := time.Unix(nextExpiration, 0)
+		if t.Before(time.Now().Add(48 * time.Hour)) {
+			// print the duration instead of the absolute time
+			until := time.Until(t)
+			seconds := math.Abs(until.Seconds())
+			minutes := math.Abs(until.Minutes())
+			hours := math.Abs(until.Hours())
+
+			if hours < 1 {
+				if minutes < 1 {
+					fancyTimeExpiration = fmt.Sprintf("%d seconds", int(seconds))
+				} else {
+					fancyTimeExpiration = fmt.Sprintf("%d minutes", int(minutes))
+				}
+			} else {
+				fancyTimeExpiration = fmt.Sprintf("%d hours", int(hours))
+			}
+		} else {
+			fancyTimeExpiration = t.Format("2006-01-02 15:04:05")
+		}
+
 		offchainBalanceJSON["next_expiration"] = fancyTimeExpiration
 	}
 
