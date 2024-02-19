@@ -52,7 +52,7 @@ var (
 	defaultNetwork               = "testnet"
 	defaultLogLevel              = 5
 	defaultMinRelayFee           = 30
-	defaultRoundLifetime         = 512
+	defaultRoundLifetime         = 512 * 2 // 16 minutes
 )
 
 func LoadConfig() (*Config, error) {

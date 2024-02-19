@@ -96,8 +96,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	// round life time must be a multiple of 512
-	if c.RoundLifetime <= 0 || c.RoundLifetime%512 != 0 {
-		return fmt.Errorf("invalid round lifetime, must be greater than 0 and a multiple of 512")
+	// cannot be less than 1024 (2 * 512) seconds to allow delay via CSV on the exit close
+	if c.RoundLifetime < 1024 || c.RoundLifetime%512 != 0 {
+		return fmt.Errorf("invalid round lifetime, must be greater or equal than 1024 and a multiple of 512")
 	}
 	seq, err := common.BIP68Encode(uint(c.RoundLifetime))
 	if err != nil {
