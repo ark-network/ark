@@ -35,12 +35,12 @@ const SpaceBetween = ({ children }) => (
 
 export default function Buttons() {
   const [binaryUrl, setBinaryUrl] = useState('')
-  const [downloadText, setDownloadText] = useState('Download alpha')
+  const [downloadText, setDownloadText] = useState('Download binary')
 
   const isArm = () => {
-    var w = document.createElement('canvas').getContext('webgl')
-    var d = w.getExtension('WEBGL_debug_renderer_info')
-    var g = (d && w.getParameter(d.UNMASKED_RENDERER_WEBGL)) || ''
+    const w = document.createElement('canvas').getContext('webgl')
+    const d = w.getExtension('WEBGL_debug_renderer_info')
+    const g = (d && w.getParameter(d.UNMASKED_RENDERER_WEBGL)) || ''
     return Boolean(g.match(/Apple M[123]/)) // TODO: Linux
   }
 
@@ -48,9 +48,12 @@ export default function Buttons() {
     `https://install-latest-cli.arkdev.info/latest-release/${filename}`
 
   useEffect(() => {
-    const isMacOS = Boolean(navigator.userAgent.match(/OS X /))
-    const isLinux = Boolean(navigator.userAgent.match(/Linux/))
-    if (!isMacOS && !isLinux) return
+    const nua = navigator.userAgent
+    const isMacOS = Boolean(nua.match(/OS X /))
+    const isLinux = Boolean(nua.match(/Linux/))
+    const isSafari = Boolean(nua.includes('Safari') && !nua.includes('Chrome'))
+    if (!isMacOS && !isLinux) return // no binaries available
+    if (isSafari) return // Safari hides the CPU architecture
     const os = isMacOS ? 'darwin' : 'linux'
     const arch = isArm() ? 'arm64' : 'amd64'
     const file = `ark-${os}-${arch}`
@@ -76,15 +79,15 @@ export default function Buttons() {
           <SpaceBetween>
             View on Github
             <svg
-              class='github_svg__lucide github_svg__lucide-github'
+              className='github_svg__lucide github_svg__lucide-github'
               xmlns='http://www.w3.org/2000/svg'
-              width='1rem'
-              height='1rem'
+              width='1em'
+              height='1em'
               fill='none'
               stroke='currentColor'
-              stroke-linecap='round'
-              stroke-linejoin='round'
-              stroke-width='2'
+              strokeLinecap='round'
+              strokeLinejoin='round'
+              strokeWidth='2'
               viewBox='0 0 24 24'>
               <path d='M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65S8.93 17.38 9 18v4'></path>
               <path d='M9 18c-4.51 2-5-2-7-2'></path>
@@ -95,15 +98,15 @@ export default function Buttons() {
           <SpaceBetween>
             {downloadText}
             <svg
-              class='download_svg__lucide download_svg__lucide-download'
+              className='download_svg__lucide download_svg__lucide-download'
               xmlns='http://www.w3.org/2000/svg'
               width='1em'
               height='1em'
               fill='none'
               stroke='currentColor'
-              stroke-linecap='round'
-              stroke-linejoin='round'
-              stroke-width='2'
+              strokeLinecap='round'
+              strokeLinejoin='round'
+              strokeWidth='2'
               viewBox='0 0 24 24'>
               <path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3'></path>
             </svg>
