@@ -1,5 +1,20 @@
 import React, { useEffect, useState } from 'react'
 
+const isArm = async () => {
+  // available on Chrome, Edge and Opera
+  if (typeof navigator.userAgentData?.getHighEntropyValues === 'function') {
+    const { architecture } = await navigator.userAgentData.getHighEntropyValues(
+      ['architecture']
+    )
+    return architecture === 'arm'
+  }
+  // for Firefox
+  const w = document.createElement('canvas').getContext('webgl')
+  const d = w.getExtension('WEBGL_debug_renderer_info')
+  const g = (d && w.getParameter(d.UNMASKED_RENDERER_WEBGL)) || ''
+  return Boolean(g.match(/Apple M[123]/)) // TODO: Linux
+}
+
 const Button = ({ children, onClick, colored }) => {
   const backgroundColor = colored ? 'var(--ifm-color-primary-lightest)' : 'none'
   return (
@@ -37,17 +52,10 @@ export default function Buttons() {
   const [binaryUrl, setBinaryUrl] = useState('')
   const [downloadText, setDownloadText] = useState('Download binary')
 
-  const isArm = () => {
-    const w = document.createElement('canvas').getContext('webgl')
-    const d = w.getExtension('WEBGL_debug_renderer_info')
-    const g = (d && w.getParameter(d.UNMASKED_RENDERER_WEBGL)) || ''
-    return Boolean(g.match(/Apple M[123]/)) // TODO: Linux
-  }
-
   const fileURL = (filename) =>
     `https://install-latest-cli.arkdev.info/latest-release/${filename}`
 
-  useEffect(() => {
+  useEffect(async () => {
     const nua = navigator.userAgent
     const isMacOS = Boolean(nua.match(/OS X /))
     const isLinux = Boolean(nua.match(/Linux/))
@@ -55,7 +63,7 @@ export default function Buttons() {
     if (!isMacOS && !isLinux) return // no binaries available
     if (isSafari) return // Safari hides the CPU architecture
     const os = isMacOS ? 'darwin' : 'linux'
-    const arch = isArm() ? 'arm64' : 'amd64'
+    const arch = (await isArm()) ? 'arm64' : 'amd64'
     const file = `ark-${os}-${arch}`
     setBinaryUrl(fileURL(file))
     setDownloadText(`Download ${file}`)
