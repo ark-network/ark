@@ -68,11 +68,11 @@ This will add a `state.json` file to the following directory:
 - Windows: %LOCALAPPDATA%\Ark-cli
 - Plan 9: $home/Ark-cli
 
-**Note:** uou can use a different datadir with the `--datadir` option or by defining the env var `ARK_WALLET_DATADIR`
+**Note:** you can use a different datadir by exporting the env var `ARK_WALLET_DATADIR` like:
 
-```
-$ ark init --datadir ./datadir --password <password> --ark-url localhost:6000
-```
+```bash
+$ export ARK_WALLET_DATADIR=path/to/custom 
+$ ark init --password <password> --ark-url localhost:6000
 
 Add funds to the ark wallet:
 
