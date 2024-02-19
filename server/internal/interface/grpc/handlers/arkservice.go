@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/hex"
+	"net"
 	"sync"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
@@ -13,6 +14,7 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
 
@@ -97,6 +99,15 @@ func (h *handler) FinalizePayment(ctx context.Context, req *arkv1.FinalizePaymen
 }
 
 func (h *handler) Faucet(ctx context.Context, req *arkv1.FaucetRequest) (*arkv1.FaucetResponse, error) {
+	p, ok := peer.FromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Internal, "Unable to get peer from context")
+	}
+
+	if host, _, err := net.SplitHostPort(p.Addr.String()); err != nil || host != "127.0.0.1" {
+		return nil, status.Error(codes.PermissionDenied, "Faucet requests are only allowed from localhost")
+	}
+
 	_, pubkey, _, err := parseAddress(req.GetAddress())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
