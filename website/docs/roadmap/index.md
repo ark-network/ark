@@ -17,14 +17,14 @@ It exposes a gRPC interface that Ark wallets can use to interact with the Provid
 - [x] Setup Ocean Wallet for funding rounds
 - [ ] Start producing rounds from Ark wallets
   - [x] Register VTXOs to be spent & new VTXOs to be created
-  - [ ] Build congestion control tree
+  - [x] Build congestion control tree
     - [x] Root node
     - [x] VTXOs Script
-    - [ ] Tap Leaf Script Validation
-    - [ ] Unroll Clause Transaction Builder.
+    - [x] Tap Leaf Script Validation
+    - [x] Unroll Clause Transaction Builder.
   - [ ] Verifiy forfeit transactions
 - [x] Sign & Broadcast Pool transactions
-- [ ] Sweep expired VTXOs
+- [x] Sweep expired VTXOs
 - [ ] Accept VTXOs from Boarding transactions
 - [ ] Detect double spends to recover with forfeit transactions
 
