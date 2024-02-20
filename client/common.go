@@ -146,33 +146,19 @@ func getServiceProviderPublicKey() (*secp256k1.PublicKey, error) {
 	return pubKey, nil
 }
 
-// olderFirst implements sort.Interface
-type olderFirst []vtxo
-
-func (ls olderFirst) Len() int {
-	return len(ls)
-}
-
-// older vtxos first
-func (ls olderFirst) Less(i, j int) bool {
-	if ls[i].expireAt == nil || ls[j].expireAt == nil {
-		return false
-	}
-
-	return ls[i].expireAt.Before(*ls[j].expireAt)
-}
-
-func (ls olderFirst) Swap(i, j int) {
-	ls[i], ls[j] = ls[j], ls[i]
-}
-
 func coinSelect(vtxos []vtxo, amount uint64) ([]vtxo, uint64, error) {
 	selected := make([]vtxo, 0)
 	notSelected := make([]vtxo, 0)
 	selectedAmount := uint64(0)
 
 	// sort vtxos by expiration (older first)
-	sort.Sort(olderFirst(vtxos))
+	sort.SliceStable(vtxos, func(i, j int) bool {
+		if vtxos[i].expireAt == nil || vtxos[j].expireAt == nil {
+			return false
+		}
+
+		return vtxos[i].expireAt.Before(*vtxos[j].expireAt)
+	})
 
 	for _, vtxo := range vtxos {
 		if selectedAmount >= amount {
