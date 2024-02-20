@@ -21,7 +21,7 @@ pushd $PARENT_PATH
 mkdir -p build
 
 
-if [[ $1 == *-faucet* ]]; then
+if [[ $1 == *with-faucet* ]]; then
     GO111MODULE=on go build -ldflags="-s -w" -o build/ark-cli-$GOOS-$GOARCH .
 else
 	FILES=$(find . -type f -name '*.go' ! -name 'faucet.go')
