@@ -1,14 +1,12 @@
 .PHONY: build build-all clean help lint vet
 
-BUILD_ARGS=
-
 build:
 	@echo "Building binary..."
-	@bash ./scripts/build ${BUILD_ARGS}
+	@bash ./scripts/build
 
 build-all:
 	@echo "Building binary..."
-	@bash ./scripts/build-all ${BUILD_ARGS}
+	@bash ./scripts/build-all
 
 ## clean: cleans the binary
 clean:

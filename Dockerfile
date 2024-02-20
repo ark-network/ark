@@ -23,9 +23,11 @@ COPY --from=builder /app/bin/* /app
 
 ENV PATH="/app:${PATH}"
 ENV ARK_DATADIR=/app/data
+ENV ARK_WALLET_DATADIR=/app/wallet-data
 
 # Expose volume containing all 'arkd' data
 VOLUME /app/data
+VOLUME /app/wallet-data
 
 ENTRYPOINT [ "arkd" ]
     
