@@ -1,84 +1,16 @@
 {
-  "secretKey": {
-    "valid": [
-      {
-        "key": "asec1n9grggypds323l5fkw4t6kpf6trz26an8wv44qqr8ctp4t3dp52q5zkzz4",
-        "expected": "99503420816c22a8fe89b3aabd5829d2c6256bb33b995a80033e161aae2d0d14"
-      }
-    ],
-    "invalid": [
-      {
-        "key": "wrongprefix1c02kjhr4egxvh0ajua0ylv9vl3kyegxmrl2djh4pn63m948ecs4qchx9zx",
-        "expectedError": "invalid prefix"
-      }
-    ]
-  },
-  "publicKey": {
-    "valid": [
-      {
-        "key": "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
-        "expected": "0218d5ca8b58797b7dbd65c075dd7ba7784b3f38ab71b1a5a8e3f94ba0257654a6"
-      }
-    ],
-    "invalid": [
-      {
-        "key": "wrongprefix1q0yn8cskp7lv0lxq3unfynmju68smh69lu90yyv37wzetu6upp76vg4ef6n",
-        "expectedError": "invalid prefix"
-      }
-    ]
-  },
   "address": {
     "valid": [
       {
         "addr": "ark1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22vqa7mdkrrulzu48law4zzvzz8k59hul0ayl2urt905we5wf6gee68sfrfj35",
-        "expectedUserKey": "apub1qwldkmp3703w2nl7h23pxpprm2zm70h7j04wp4jh68v68yayvuarcc28uv5",
-        "expectedAspKey": "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x"
+        "expectedUserKey": "03bedb6c31f3e2e54ffebaa2130423da85bf3efe93eae0d657d1d9a393a4673a3c",
+        "expectedAspKey": "0218d5ca8b58797b7dbd65c075dd7ba7784b3f38ab71b1a5a8e3f94ba0257654a6"
       }
     ],
     "invalid": [
       {
         "addr": "wrongprefix1qt9tfh7c09hlsstzq5y9tzuwyaesrwr8gpy8cn29cxv0flp64958s0n0yd0",
         "expectedError": "invalid prefix"
-      }
-    ]
-  },
-  "relayKey": {
-    "valid": [
-      {
-        "key": "arelay1qt6f8p7h5f6tm7fv2z5wg92sz92rn9desfhd5733se4lkrptqtdrq65987l",
-        "expected": "02f49387d7a274bdf92c50a8e4155011543995b9826eda7a31866bfb0c2b02da30"
-      }
-    ],
-    "invalid": [
-      {
-        "key": "wrongprefix1q2g64uehct5zdkhdull6ultevfmuu62nzwucec6q8su85eqpezxdvsf2mfd",
-        "expectedError": "invalid prefix"
-      }
-    ]
-  },
-  "url": {
-    "valid": [
-      {
-        "url": "ark://apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x?relays=arelay1qt6f8p7h5f6tm7fv2z5wg92sz92rn9desfhd5733se4lkrptqtdrq65987l-arelay1qt6f8p7h5f6tm7fv2z5wg92sz92rn9desfhd5733se4lkrptqtdrq65987l",
-        "expectedPubkey": "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
-        "expectedRelays": [
-          "arelay1qt6f8p7h5f6tm7fv2z5wg92sz92rn9desfhd5733se4lkrptqtdrq65987l",
-          "arelay1qt6f8p7h5f6tm7fv2z5wg92sz92rn9desfhd5733se4lkrptqtdrq65987l"
-        ]
-      }
-    ],
-    "invalid": [
-      {
-        "url": "wrong://apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x?relays=arelay1qt6f8p7h5f6tm7fv2z5wg92sz92rn9desfhd5733se4lkrptqtdrq65987l-arelay1qt6f8p7h5f6tm7fv2z5wg92sz92rn9desfhd5733se4lkrptqtdrq65987l",
-        "expectedError": "invalid proto"
-      },
-      {
-        "url": "ark://asec1n9grggypds323l5fkw4t6kpf6trz26an8wv44qqr8ctp4t3dp52qun9kjh",
-        "expectedError": "invalid public key"
-      },
-      {
-        "url": "ark://apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x?relays=apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x",
-        "expectedError": "invalid relay public key"
       }
     ]
   }
