@@ -14,7 +14,7 @@ pushd $PARENT_PATH
 
 for os in "${OS[@]}"; do
   for arch in "${ARCH[@]}"; do
-    GOOS=$os GOARCH=$arch ./scripts/build $1
+    GOOS=$os GOARCH=$arch ./scripts/build
   done
 done
 
