@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"syscall"
 	"time"
 
@@ -150,6 +151,15 @@ func coinSelect(vtxos []vtxo, amount uint64) ([]vtxo, uint64, error) {
 	notSelected := make([]vtxo, 0)
 	selectedAmount := uint64(0)
 
+	// sort vtxos by expiration (older first)
+	sort.SliceStable(vtxos, func(i, j int) bool {
+		if vtxos[i].expireAt == nil || vtxos[j].expireAt == nil {
+			return false
+		}
+
+		return vtxos[i].expireAt.Before(*vtxos[j].expireAt)
+	})
+
 	for _, vtxo := range vtxos {
 		if selectedAmount >= amount {
 			notSelected = append(notSelected, vtxo)
@@ -177,17 +187,30 @@ func coinSelect(vtxos []vtxo, amount uint64) ([]vtxo, uint64, error) {
 }
 
 func getOffchainBalance(
-	ctx *cli.Context, client arkv1.ArkServiceClient, addr string,
-) (uint64, error) {
-	vtxos, err := getVtxos(ctx, client, addr)
+	ctx *cli.Context, explorer Explorer, client arkv1.ArkServiceClient, addr string, withExpiration bool,
+) (uint64, map[int64]uint64, error) {
+	amountByExpiration := make(map[int64]uint64, 0)
+
+	vtxos, err := getVtxos(ctx, explorer, client, addr, withExpiration)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	var balance uint64
 	for _, vtxo := range vtxos {
 		balance += vtxo.amount
+
+		if withExpiration {
+			expiration := vtxo.expireAt.Unix()
+
+			if _, ok := amountByExpiration[expiration]; !ok {
+				amountByExpiration[expiration] = 0
+			}
+
+			amountByExpiration[expiration] += vtxo.amount
+		}
 	}
-	return balance, nil
+
+	return balance, amountByExpiration, nil
 }
 
 type utxo struct {
@@ -198,11 +221,7 @@ type utxo struct {
 }
 
 func getOnchainUtxos(addr string) ([]utxo, error) {
-	_, net, err := getNetwork()
-	if err != nil {
-		return nil, err
-	}
-
+	_, net := getNetwork()
 	baseUrl := explorerUrl[net.Name]
 	resp, err := http.Get(fmt.Sprintf("%s/address/%s/utxo", baseUrl, addr))
 	if err != nil {
@@ -230,11 +249,7 @@ func getOnchainBalance(addr string) (uint64, error) {
 		return 0, err
 	}
 
-	_, net, err := getNetwork()
-	if err != nil {
-		return 0, err
-	}
-
+	_, net := getNetwork()
 	balance := uint64(0)
 	for _, p := range payload {
 		if p.Asset != net.AssetID {
@@ -245,36 +260,43 @@ func getOnchainBalance(addr string) (uint64, error) {
 	return balance, nil
 }
 
-func getTxHex(txid string) (string, error) {
-	_, net, err := getNetwork()
-	if err != nil {
-		return "", err
-	}
-
+func getTxBlocktime(txid string) (confirmed bool, blocktime int64, err error) {
+	_, net := getNetwork()
 	baseUrl := explorerUrl[net.Name]
-	resp, err := http.Get(fmt.Sprintf("%s/tx/%s/hex", baseUrl, txid))
+	resp, err := http.Get(fmt.Sprintf("%s/tx/%s", baseUrl, txid))
 	if err != nil {
-		return "", err
+		return false, 0, err
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return false, 0, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf(string(body))
+		return false, 0, fmt.Errorf(string(body))
 	}
 
-	return string(body), nil
+	var tx struct {
+		Status struct {
+			Confirmed bool  `json:"confirmed"`
+			Blocktime int64 `json:"block_time"`
+		} `json:"status"`
+	}
+	if err := json.Unmarshal(body, &tx); err != nil {
+		return false, 0, err
+	}
+
+	if !tx.Status.Confirmed {
+		return false, -1, nil
+	}
+
+	return true, tx.Status.Blocktime, nil
+
 }
 
 func broadcast(txHex string) (string, error) {
-	_, net, err := getNetwork()
-	if err != nil {
-		return "", err
-	}
-
+	_, net := getNetwork()
 	body := bytes.NewBuffer([]byte(txHex))
 
 	baseUrl := explorerUrl[net.Name]
@@ -295,20 +317,20 @@ func broadcast(txHex string) (string, error) {
 	return string(bodyResponse), nil
 }
 
-func getNetwork() (*common.Network, *network.Network, error) {
+func getNetwork() (*common.Network, *network.Network) {
 	state, err := getState()
 	if err != nil {
-		return nil, nil, err
+		return &common.TestNet, &network.Testnet
 	}
 
 	net, ok := state["network"]
 	if !ok {
-		return &common.MainNet, &network.Liquid, nil
+		return &common.MainNet, &network.Liquid
 	}
 	if net == "testnet" {
-		return &common.TestNet, &network.Testnet, nil
+		return &common.TestNet, &network.Testnet
 	}
-	return &common.MainNet, &network.Liquid, nil
+	return &common.MainNet, &network.Liquid
 }
 
 func getAddress() (offchainAddr, onchainAddr string, err error) {
@@ -322,10 +344,7 @@ func getAddress() (offchainAddr, onchainAddr string, err error) {
 		return
 	}
 
-	arkNet, liquidNet, err := getNetwork()
-	if err != nil {
-		return
-	}
+	arkNet, liquidNet := getNetwork()
 
 	arkAddr, err := common.EncodeAddress(arkNet.Addr, publicKey, aspPublicKey)
 	if err != nil {
@@ -674,4 +693,42 @@ func findSweepClosure(
 	}
 
 	return
+}
+
+func getRedeemBranches(
+	ctx *cli.Context,
+	explorer Explorer,
+	client arkv1.ArkServiceClient,
+	vtxos []vtxo,
+) (map[string]RedeemBranch, error) {
+	congestionTrees := make(map[string]tree.CongestionTree, 0) // poolTxid -> congestionTree
+	redeemBranches := make(map[string]RedeemBranch, 0)         // vtxo.txid -> redeemBranch
+
+	for _, vtxo := range vtxos {
+		if _, ok := congestionTrees[vtxo.poolTxid]; !ok {
+			round, err := client.GetRound(ctx.Context, &arkv1.GetRoundRequest{
+				Txid: vtxo.poolTxid,
+			})
+			if err != nil {
+				return nil, err
+			}
+
+			treeFromRound := round.GetRound().GetCongestionTree()
+			congestionTree, err := toCongestionTree(treeFromRound)
+			if err != nil {
+				return nil, err
+			}
+
+			congestionTrees[vtxo.poolTxid] = congestionTree
+		}
+
+		redeemBranch, err := newRedeemBranch(ctx, explorer, congestionTrees[vtxo.poolTxid], vtxo)
+		if err != nil {
+			return nil, err
+		}
+
+		redeemBranches[vtxo.txid] = redeemBranch
+	}
+
+	return redeemBranches, nil
 }
