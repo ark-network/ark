@@ -15,7 +15,7 @@ RUN cd server && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -l
 RUN cd client && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-X 'main.Version=${COMMIT}' -X 'main.Commit=${COMMIT}' -X 'main.Date=${COMMIT}'" -o ../bin/ark .
 
 # Second image, running the arkd executable
-FROM debian:buster-slim
+FROM alpine:3.12
 
 WORKDIR /app
 
