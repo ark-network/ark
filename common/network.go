@@ -1,9 +1,8 @@
 package common
 
 type Network struct {
-	Name   string
-	SecKey string
-	Addr   string
+	Name string
+	Addr string
 }
 
 var MainNet = Network{
