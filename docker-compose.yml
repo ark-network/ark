@@ -33,6 +33,7 @@ services:
       - "6000:6000"
     volumes:
       - arkd:/app/data
+      - ark:/app/wallet-data
 
 volumes:
   oceand:
@@ -40,6 +41,8 @@ volumes:
   ocean:
     external: false
   arkd:
+    external: false
+  ark:
     external: false
 
 networks:

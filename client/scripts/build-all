@@ -11,12 +11,10 @@ declare -a OS=("darwin" "linux")
 declare -a ARCH=("amd64" "arm64")
 
 pushd $PARENT_PATH
-mkdir -p build
 
 for os in "${OS[@]}"; do
   for arch in "${ARCH[@]}"; do
-    echo "Building for $os $arch"
-    GOOS=$os GOARCH=$arch go build -o build/ark-$os-$arch .
+    GOOS=$os GOARCH=$arch ./scripts/build
   done
 done
 
