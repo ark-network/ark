@@ -102,7 +102,9 @@ func sendAction(ctx *cli.Context) error {
 	}
 	defer close()
 
-	vtxos, err := getVtxos(ctx, client, offchainAddr)
+	explorer := NewExplorer()
+
+	vtxos, err := getVtxos(ctx, explorer, client, offchainAddr, true)
 	if err != nil {
 		return err
 	}

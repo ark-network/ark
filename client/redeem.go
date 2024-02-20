@@ -10,7 +10,6 @@ import (
 	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
-	"github.com/ark-network/ark/common/tree"
 	"github.com/urfave/cli/v2"
 	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/psetv2"
@@ -61,7 +60,7 @@ func redeemAction(ctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("invalid onchain address: unknown network")
 	}
-	_, liquidNet, _ := getNetwork()
+	_, liquidNet := getNetwork()
 	if net.Name != liquidNet.Name {
 		return fmt.Errorf("invalid onchain address: must be for %s network", liquidNet.Name)
 	}
@@ -105,7 +104,9 @@ func collaborativeRedeem(ctx *cli.Context, addr string, amount uint64) error {
 	}
 	defer close()
 
-	vtxos, err := getVtxos(ctx, client, offchainAddr)
+	explorer := NewExplorer()
+
+	vtxos, err := getVtxos(ctx, explorer, client, offchainAddr, true)
 	if err != nil {
 		return err
 	}
@@ -189,7 +190,8 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 		return err
 	}
 
-	vtxos, err := getVtxos(ctx, client, offchainAddr)
+	explorer := NewExplorer()
+	vtxos, err := getVtxos(ctx, explorer, client, offchainAddr, false)
 	if err != nil {
 		return err
 	}
@@ -214,43 +216,22 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 		return err
 	}
 
-	congestionTrees := make(map[string]tree.CongestionTree, 0)
+	// transactionsMap avoid duplicates
 	transactionsMap := make(map[string]struct{}, 0)
 	transactions := make([]string, 0)
 
-	for _, vtxo := range vtxos {
-		if _, ok := congestionTrees[vtxo.poolTxid]; !ok {
-			round, err := client.GetRound(ctx.Context, &arkv1.GetRoundRequest{
-				Txid: vtxo.poolTxid,
-			})
-			if err != nil {
-				return err
-			}
+	redeemBranches, err := getRedeemBranches(ctx, explorer, client, vtxos)
+	if err != nil {
+		return err
+	}
 
-			treeFromRound := round.GetRound().GetCongestionTree()
-			congestionTree, err := toCongestionTree(treeFromRound)
-			if err != nil {
-				return err
-			}
-
-			congestionTrees[vtxo.poolTxid] = congestionTree
+	for _, branch := range redeemBranches {
+		if err := branch.AddVtxoInput(updater); err != nil {
+			return err
 		}
 
-		redeemBranch, err := newRedeemBranch(ctx, congestionTrees[vtxo.poolTxid], vtxo)
+		branchTxs, err := branch.RedeemPath()
 		if err != nil {
-			return err
-		}
-
-		if err := redeemBranch.UpdatePath(); err != nil {
-			return err
-		}
-
-		branchTxs, err := redeemBranch.RedeemPath()
-		if err != nil {
-			return err
-		}
-
-		if err := redeemBranch.AddVtxoInput(updater); err != nil {
 			return err
 		}
 
@@ -262,10 +243,7 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 		}
 	}
 
-	_, net, err := getNetwork()
-	if err != nil {
-		return err
-	}
+	_, net := getNetwork()
 
 	outputs := []psetv2.OutputArgs{
 		{
@@ -306,8 +284,6 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 	if err != nil {
 		return err
 	}
-
-	explorer := NewExplorer()
 
 	for i, txHex := range transactions {
 		for {

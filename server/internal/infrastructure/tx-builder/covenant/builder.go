@@ -341,6 +341,31 @@ func (b *txBuilder) createPoolTx(
 				return nil, err
 			}
 		}
+	} else if feeAmount-dust > 0 {
+		newUtxos, change, err := b.wallet.SelectUtxos(ctx, b.net.AssetID, feeAmount-dust)
+		if err != nil {
+			return nil, err
+		}
+
+		if change > 0 {
+			if change < dustLimit {
+				feeAmount += change
+			} else {
+				if err := updater.AddOutputs([]psetv2.OutputArgs{
+					{
+						Asset:  b.net.AssetID,
+						Amount: change,
+						Script: aspScript,
+					},
+				}); err != nil {
+					return nil, err
+				}
+			}
+		}
+
+		if err := addInputs(updater, newUtxos); err != nil {
+			return nil, err
+		}
 	}
 
 	// add fee output
