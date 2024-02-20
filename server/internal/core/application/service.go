@@ -219,11 +219,7 @@ func (s *service) GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.
 }
 
 func (s *service) GetPubkey(ctx context.Context) (string, error) {
-	pubkey, err := common.EncodePubKey(s.network.PubKey, s.pubkey)
-	if err != nil {
-		return "", err
-	}
-	return pubkey, nil
+	return hex.EncodeToString(s.pubkey.SerializeCompressed()), nil
 }
 
 func (s *service) start() {

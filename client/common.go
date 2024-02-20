@@ -119,12 +119,12 @@ func getWalletPublicKey() (*secp256k1.PublicKey, error) {
 		return nil, fmt.Errorf("public key not found")
 	}
 
-	_, publicKey, err := common.DecodePubKey(publicKeyString)
+	publicKeyBytes, err := hex.DecodeString(publicKeyString)
 	if err != nil {
 		return nil, err
 	}
 
-	return publicKey, nil
+	return secp256k1.ParsePubKey(publicKeyBytes)
 }
 
 func getServiceProviderPublicKey() (*secp256k1.PublicKey, error) {
@@ -138,12 +138,12 @@ func getServiceProviderPublicKey() (*secp256k1.PublicKey, error) {
 		return nil, fmt.Errorf("ark public key not found")
 	}
 
-	_, pubKey, err := common.DecodePubKey(arkPubKey)
+	pubKeyBytes, err := hex.DecodeString(arkPubKey)
 	if err != nil {
 		return nil, err
 	}
 
-	return pubKey, nil
+	return secp256k1.ParsePubKey(pubKeyBytes)
 }
 
 func coinSelect(vtxos []vtxo, amount uint64) ([]vtxo, uint64, error) {
