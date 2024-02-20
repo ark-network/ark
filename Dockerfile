@@ -12,9 +12,10 @@ WORKDIR /app
 COPY . .
 
 RUN cd server && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-X 'main.Version=${COMMIT}' -X 'main.Commit=${COMMIT}' -X 'main.Date=${COMMIT}'" -o ../bin/arkd cmd/arkd/main.go
+RUN cd client && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-X 'main.Version=${COMMIT}' -X 'main.Commit=${COMMIT}' -X 'main.Date=${COMMIT}'" -o ../bin/ark .
 
 # Second image, running the arkd executable
-FROM debian:buster-slim
+FROM alpine:3.12
 
 WORKDIR /app
 
@@ -22,9 +23,11 @@ COPY --from=builder /app/bin/* /app
 
 ENV PATH="/app:${PATH}"
 ENV ARK_DATADIR=/app/data
+ENV ARK_WALLET_DATADIR=/app/wallet-data
 
 # Expose volume containing all 'arkd' data
 VOLUME /app/data
+VOLUME /app/wallet-data
 
 ENTRYPOINT [ "arkd" ]
     

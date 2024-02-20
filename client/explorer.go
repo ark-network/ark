@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+	"io"
+	"net/http"
 	"strings"
 
 	"github.com/vulpemventures/go-elements/transaction"
@@ -12,12 +15,17 @@ type Explorer interface {
 }
 
 type explorer struct {
-	cache map[string]string
+	cache   map[string]string
+	baseUrl string
 }
 
 func NewExplorer() Explorer {
+	_, net := getNetwork()
+	baseUrl := explorerUrl[net.Name]
+
 	return &explorer{
-		cache: make(map[string]string),
+		cache:   make(map[string]string),
+		baseUrl: baseUrl,
 	}
 }
 
@@ -26,7 +34,7 @@ func (e *explorer) GetTxHex(txid string) (string, error) {
 		return hex, nil
 	}
 
-	txHex, err := getTxHex(txid)
+	txHex, err := e.getTxHex(txid)
 	if err != nil {
 		return "", err
 	}
@@ -54,4 +62,24 @@ func (e *explorer) Broadcast(txHex string) (string, error) {
 	}
 
 	return txid, nil
+}
+
+func (e *explorer) getTxHex(txid string) (string, error) {
+	resp, err := http.Get(fmt.Sprintf("%s/tx/%s/hex", e.baseUrl, txid))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf(string(body))
+	}
+
+	hex := string(body)
+	e.cache[txid] = hex
+	return hex, nil
 }
