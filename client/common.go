@@ -161,6 +161,20 @@ func getLifetime() (int64, error) {
 	return int64(lifetime), nil
 }
 
+func getExitDelay() (int64, error) {
+	state, err := getState()
+	if err != nil {
+		return 0, err
+	}
+
+	exitDelay, ok := state["exit_delay"].(float64)
+	if !ok {
+		return 0, fmt.Errorf("exit delay not found")
+	}
+
+	return int64(exitDelay), nil
+}
+
 func coinSelect(vtxos []vtxo, amount uint64) ([]vtxo, uint64, error) {
 	selected := make([]vtxo, 0)
 	notSelected := make([]vtxo, 0)
@@ -281,11 +295,6 @@ func getOnchainBalance(addr string) (uint64, error) {
 }
 
 func getOnchainVtxosBalance() (availableBalance uint64, futureBalance map[int64]uint64, err error) {
-	lifetime, err := getLifetime()
-	if err != nil {
-		return
-	}
-
 	userPubKey, err := getWalletPublicKey()
 	if err != nil {
 		return
@@ -296,7 +305,12 @@ func getOnchainVtxosBalance() (availableBalance uint64, futureBalance map[int64]
 		return
 	}
 
-	vtxoTapKey, _, err := computeVtxoTaprootScript(userPubKey, aspPublicKey, lifetime)
+	exitDelay, err := getExitDelay()
+	if err != nil {
+		return
+	}
+
+	vtxoTapKey, _, err := computeVtxoTaprootScript(userPubKey, aspPublicKey, uint(exitDelay))
 	if err != nil {
 		return
 	}
@@ -327,7 +341,7 @@ func getOnchainVtxosBalance() (availableBalance uint64, futureBalance map[int64]
 			blocktime = time.Unix(utxo.Status.Blocktime, 0)
 		}
 
-		availableAt := blocktime.Add(time.Duration(lifetime/2) * time.Second)
+		availableAt := blocktime.Add(time.Duration(exitDelay) * time.Second)
 		if availableAt.After(now) {
 			if _, ok := futureBalance[availableAt.Unix()]; !ok {
 				futureBalance[availableAt.Unix()] = 0
@@ -528,6 +542,11 @@ func handleRoundStream(
 				return "", err
 			}
 
+			exitDelay, err := getExitDelay()
+			if err != nil {
+				return "", err
+			}
+
 			for _, receiver := range receivers {
 				isOnChain, onchainScript, userPubKey, err := decodeReceiverAddress(receiver.Address)
 				if err != nil {
@@ -561,7 +580,7 @@ func handleRoundStream(
 				found := false
 
 				// compute the receiver output taproot key
-				outputTapKey, _, err := computeVtxoTaprootScript(userPubKey, aspPublicKey, seconds)
+				outputTapKey, _, err := computeVtxoTaprootScript(userPubKey, aspPublicKey, uint(exitDelay))
 				if err != nil {
 					return "", err
 				}
@@ -807,11 +826,11 @@ func getRedeemBranches(
 func computeVtxoTaprootScript(
 	userPubKey *secp256k1.PublicKey,
 	aspPublicKey *secp256k1.PublicKey,
-	lifetime int64,
+	exitDelay uint,
 ) (*secp256k1.PublicKey, *taproot.TapscriptElementsProof, error) {
 	redeemClose := &tree.DelayedSigClose{
 		Pubkey:  userPubKey,
-		Seconds: uint(lifetime / 2),
+		Seconds: exitDelay,
 	}
 
 	forfeitClose := &tree.ForfeitClose{
@@ -845,10 +864,10 @@ func computeVtxoTaprootScript(
 func addVtxoInput(
 	updater *psetv2.Updater,
 	inputArgs psetv2.InputArgs,
-	lifetime int64,
+	exitDelay uint,
 	tapLeafProof *taproot.TapscriptElementsProof,
 ) error {
-	sequence, err := common.BIP68EncodeAsNumber(uint(lifetime / 2))
+	sequence, err := common.BIP68EncodeAsNumber(exitDelay)
 	if err != nil {
 		return nil
 	}
@@ -911,12 +930,12 @@ func coinSelectOnchain(targetAmount uint64, exclude []utxo) (utxos []utxo, delay
 		return nil, nil, 0, err
 	}
 
-	lifetime, err := getLifetime()
+	exitDelay, err := getExitDelay()
 	if err != nil {
 		return nil, nil, 0, err
 	}
 
-	vtxoTapKey, _, err := computeVtxoTaprootScript(userPubKey, aspPublicKey, lifetime)
+	vtxoTapKey, _, err := computeVtxoTaprootScript(userPubKey, aspPublicKey, uint(exitDelay))
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -944,7 +963,7 @@ func coinSelectOnchain(targetAmount uint64, exclude []utxo) (utxos []utxo, delay
 			break
 		}
 
-		availableAt := time.Unix(utxo.Status.Blocktime, 0).Add(time.Duration(lifetime/2) * time.Second)
+		availableAt := time.Unix(utxo.Status.Blocktime, 0).Add(time.Duration(exitDelay) * time.Second)
 		if availableAt.After(time.Now()) {
 			continue
 		}
@@ -1026,12 +1045,12 @@ func addInputs(
 			return err
 		}
 
-		lifetime, err := getLifetime()
+		exitDelay, err := getExitDelay()
 		if err != nil {
 			return err
 		}
 
-		vtxoTapKey, leafProof, err := computeVtxoTaprootScript(userPubKey, aspPublicKey, lifetime)
+		vtxoTapKey, leafProof, err := computeVtxoTaprootScript(userPubKey, aspPublicKey, uint(exitDelay))
 		if err != nil {
 			return err
 		}
@@ -1058,7 +1077,7 @@ func addInputs(
 					Txid:    coin.Txid,
 					TxIndex: coin.Vout,
 				},
-				lifetime,
+				uint(exitDelay),
 				leafProof,
 			); err != nil {
 				return err

@@ -51,17 +51,6 @@ func redeemAction(ctx *cli.Context) error {
 	if len(addr) <= 0 && !force {
 		return fmt.Errorf("missing address flag (--address)")
 	}
-	if _, err := address.ToOutputScript(addr); err != nil {
-		return fmt.Errorf("invalid onchain address")
-	}
-	net, err := address.NetworkForAddress(addr)
-	if err != nil {
-		return fmt.Errorf("invalid onchain address: unknown network")
-	}
-	_, liquidNet := getNetwork()
-	if net.Name != liquidNet.Name {
-		return fmt.Errorf("invalid onchain address: must be for %s network", liquidNet.Name)
-	}
 
 	if !force && amount <= 0 {
 		return fmt.Errorf("missing amount flag (--amount)")
@@ -79,6 +68,19 @@ func redeemAction(ctx *cli.Context) error {
 }
 
 func collaborativeRedeem(ctx *cli.Context, addr string, amount uint64) error {
+	if _, err := address.ToOutputScript(addr); err != nil {
+		return fmt.Errorf("invalid onchain address")
+	}
+
+	net, err := address.NetworkForAddress(addr)
+	if err != nil {
+		return fmt.Errorf("invalid onchain address: unknown network")
+	}
+	_, liquidNet := getNetwork()
+	if net.Name != liquidNet.Name {
+		return fmt.Errorf("invalid onchain address: must be for %s network", liquidNet.Name)
+	}
+
 	if isConf, _ := address.IsConfidential(addr); isConf {
 		info, _ := address.FromConfidential(addr)
 		addr = info.Address

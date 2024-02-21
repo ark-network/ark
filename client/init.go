@@ -88,6 +88,7 @@ func connectToAsp(ctx *cli.Context, net, url string) error {
 		"network":      net,
 		"ark_pubkey":   resp.Pubkey,
 		"ark_lifetime": resp.Lifetime,
+		"exit_delay":   resp.ExitDelay,
 	})
 }
 

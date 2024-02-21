@@ -22,6 +22,7 @@ type node struct {
 	asset         string
 	feeSats       uint64
 	roundLifetime int64
+	exitDelay     int64
 
 	_inputTaprootKey  *secp256k1.PublicKey
 	_inputTaprootTree *taproot.IndexedElementsTapScriptTree
@@ -232,7 +233,7 @@ func (n *node) getVtxoWitnessData() (
 
 	redeemClose := &tree.DelayedSigClose{
 		Pubkey:  pubkey,
-		Seconds: uint(n.roundLifetime) / 2,
+		Seconds: uint(n.exitDelay),
 	}
 
 	redeemLeaf, err := redeemClose.Leaf()
@@ -386,14 +387,14 @@ func (n *node) createFinalCongestionTree() treeFactory {
 
 func craftCongestionTree(
 	asset string, aspPublicKey *secp256k1.PublicKey,
-	payments []domain.Payment, feeSatsPerNode uint64, roundLifetime int64,
+	payments []domain.Payment, feeSatsPerNode uint64, roundLifetime int64, exitDelay int64,
 ) (
 	buildCongestionTree treeFactory,
 	sharedOutputScript []byte, sharedOutputAmount uint64, err error,
 ) {
 	receivers := getOffchainReceivers(payments)
 	root, err := createPartialCongestionTree(
-		receivers, aspPublicKey, asset, feeSatsPerNode, roundLifetime,
+		receivers, aspPublicKey, asset, feeSatsPerNode, roundLifetime, exitDelay,
 	)
 	if err != nil {
 		return
@@ -420,6 +421,7 @@ func createPartialCongestionTree(
 	asset string,
 	feeSatsPerNode uint64,
 	roundLifetime int64,
+	exitDelay int64,
 ) (root *node, err error) {
 	if len(receivers) == 0 {
 		return nil, fmt.Errorf("no receivers provided")
@@ -433,6 +435,7 @@ func createPartialCongestionTree(
 			asset:         asset,
 			feeSats:       feeSatsPerNode,
 			roundLifetime: roundLifetime,
+			exitDelay:     exitDelay,
 		}
 		nodes = append(nodes, leafNode)
 	}

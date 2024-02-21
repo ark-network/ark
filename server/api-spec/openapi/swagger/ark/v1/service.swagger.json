@@ -376,6 +376,10 @@
         "lifetime": {
           "type": "string",
           "format": "int64"
+        },
+        "exitDelay": {
+          "type": "string",
+          "format": "int64"
         }
       }
     },

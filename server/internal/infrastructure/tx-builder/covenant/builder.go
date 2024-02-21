@@ -24,12 +24,13 @@ type txBuilder struct {
 	wallet        ports.WalletService
 	net           *network.Network
 	roundLifetime int64 // in seconds
+	exitDelay     int64 // in seconds
 }
 
 func NewTxBuilder(
-	wallet ports.WalletService, net network.Network, roundLifetime int64,
+	wallet ports.WalletService, net network.Network, roundLifetime int64, exitDelay int64,
 ) ports.TxBuilder {
-	return &txBuilder{wallet, &net, roundLifetime}
+	return &txBuilder{wallet, &net, roundLifetime, exitDelay}
 }
 
 func (b *txBuilder) GetVtxoScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error) {
@@ -113,7 +114,7 @@ func (b *txBuilder) BuildPoolTx(
 	// This is safe as the memory allocated for `craftCongestionTree` is freed
 	// only after `BuildPoolTx` returns.
 	treeFactoryFn, sharedOutputScript, sharedOutputAmount, err := craftCongestionTree(
-		b.net.AssetID, aspPubkey, payments, minRelayFee, b.roundLifetime,
+		b.net.AssetID, aspPubkey, payments, minRelayFee, b.roundLifetime, b.exitDelay,
 	)
 	if err != nil {
 		return
@@ -153,7 +154,7 @@ func (b *txBuilder) getLeafScriptAndTree(
 ) ([]byte, *taproot.IndexedElementsTapScriptTree, error) {
 	redeemClosure := &tree.DelayedSigClose{
 		Pubkey:  userPubkey,
-		Seconds: uint(b.roundLifetime) / 2,
+		Seconds: uint(b.exitDelay),
 	}
 
 	redeemLeaf, err := redeemClosure.Leaf()

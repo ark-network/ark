@@ -177,4 +177,5 @@ message GetInfoRequest {}
 message GetInfoResponse {
   string pubkey = 1;
   int64 lifetime = 2;
+  int64 exit_delay = 3;
 }
