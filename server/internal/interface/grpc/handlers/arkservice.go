@@ -178,14 +178,15 @@ func (h *handler) ListVtxos(ctx context.Context, req *arkv1.ListVtxosRequest) (*
 	}, nil
 }
 
-func (h *handler) GetPubkey(ctx context.Context, req *arkv1.GetPubkeyRequest) (*arkv1.GetPubkeyResponse, error) {
-	pubkey, err := h.svc.GetPubkey(ctx)
+func (h *handler) GetInfo(ctx context.Context, req *arkv1.GetInfoRequest) (*arkv1.GetInfoResponse, error) {
+	pubkey, lifetime, err := h.svc.GetInfo(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return &arkv1.GetPubkeyResponse{
-		Pubkey: pubkey,
+	return &arkv1.GetInfoResponse{
+		Pubkey:   pubkey,
+		Lifetime: lifetime,
 	}, nil
 }
 

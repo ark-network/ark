@@ -75,7 +75,7 @@ func getClientFromState(ctx *cli.Context) (arkv1.ArkServiceClient, func(), error
 	if err != nil {
 		return nil, nil, err
 	}
-	addr, ok := state["ark_url"]
+	addr, ok := state["ark_url"].(string)
 	if !ok {
 		return nil, nil, fmt.Errorf("missing ark_url")
 	}

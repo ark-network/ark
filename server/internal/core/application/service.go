@@ -37,7 +37,7 @@ type Service interface {
 	GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
 	UpdatePaymentStatus(ctx context.Context, id string) error
 	ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, error)
-	GetPubkey(ctx context.Context) (string, error)
+	GetInfo(ctx context.Context) (string, int64, error)
 }
 
 type service struct {
@@ -218,8 +218,8 @@ func (s *service) GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.
 	return s.repoManager.Rounds().GetRoundWithTxid(ctx, poolTxid)
 }
 
-func (s *service) GetPubkey(ctx context.Context) (string, error) {
-	return hex.EncodeToString(s.pubkey.SerializeCompressed()), nil
+func (s *service) GetInfo(ctx context.Context) (string, int64, error) {
+	return hex.EncodeToString(s.pubkey.SerializeCompressed()), s.roundLifetime, nil
 }
 
 func (s *service) start() {

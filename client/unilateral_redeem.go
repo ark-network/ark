@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -16,8 +15,6 @@ import (
 type RedeemBranch interface {
 	// RedeemPath returns the list of transactions to broadcast in order to access the vtxo output
 	RedeemPath() ([]string, error)
-	// AddInput adds the vtxo input created by the branch
-	AddVtxoInput(updater *psetv2.Updater) error
 	// ExpireAt returns the expiration time of the branch
 	ExpireAt() (*time.Time, error)
 }
@@ -126,77 +123,6 @@ func (r *redeemBranch) RedeemPath() ([]string, error) {
 	}
 
 	return transactions, nil
-}
-
-// AddVtxoInput is a wrapper around psetv2.Updater adding a taproot input letting to spend the vtxo output
-func (r *redeemBranch) AddVtxoInput(updater *psetv2.Updater) error {
-	walletPubkey, err := getWalletPublicKey()
-	if err != nil {
-		return err
-	}
-
-	nextInputIndex := len(updater.Pset.Inputs)
-	if err := updater.AddInputs([]psetv2.InputArgs{
-		{
-			Txid:    r.vtxo.txid,
-			TxIndex: r.vtxo.vout,
-		},
-	}); err != nil {
-		return err
-	}
-
-	sweepClosure := &tree.DelayedSigClose{}
-	_, err = sweepClosure.Decode(r.sweepClosure.Script)
-	if err != nil {
-		return err
-	}
-
-	redeemClosure := &tree.DelayedSigClose{
-		Pubkey:  walletPubkey,
-		Seconds: sweepClosure.Seconds / 2,
-	}
-
-	forfeitClosure := &tree.ForfeitClose{
-		Pubkey:    walletPubkey,
-		AspPubkey: sweepClosure.Pubkey,
-	}
-
-	redeemLeaf, err := redeemClosure.Leaf()
-	if err != nil {
-		return nil
-	}
-
-	forfeitLeaf, err := forfeitClosure.Leaf()
-	if err != nil {
-		return nil
-	}
-
-	vtxoTaprootTree := taproot.AssembleTaprootScriptTree(
-		*redeemLeaf,
-		*forfeitLeaf,
-		*r.sweepClosure,
-	)
-
-	proofIndex := vtxoTaprootTree.LeafProofIndex[redeemLeaf.TapHash()]
-
-	sequence, err := common.BIP68EncodeAsNumber(sweepClosure.Seconds / 2)
-	if err != nil {
-		return nil
-	}
-
-	updater.Pset.Inputs[nextInputIndex].Sequence = sequence
-
-	if err := updater.AddInTapLeafScript(
-		nextInputIndex,
-		psetv2.NewTapLeafScript(
-			vtxoTaprootTree.LeafMerkleProofs[proofIndex],
-			r.internalKey,
-		),
-	); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (r *redeemBranch) ExpireAt() (*time.Time, error) {

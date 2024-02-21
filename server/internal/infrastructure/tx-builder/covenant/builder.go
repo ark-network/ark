@@ -148,50 +148,6 @@ func (b *txBuilder) BuildPoolTx(
 	return
 }
 
-func (b *txBuilder) GetLeafSweepClosure(
-	node tree.Node, userPubKey *secp256k1.PublicKey,
-) (*psetv2.TapLeafScript, int64, error) {
-	if !node.Leaf {
-		return nil, 0, fmt.Errorf("node is not a leaf")
-	}
-
-	pset, err := psetv2.NewPsetFromBase64(node.Tx)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	input := pset.Inputs[0]
-
-	sweepLeaf, lifetime, err := extractSweepLeaf(input)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	// craft the vtxo taproot tree
-	redeemClosure := &tree.DelayedSigClose{
-		Pubkey:  userPubKey,
-		Seconds: uint(lifetime) / 2,
-	}
-
-	redeemLeaf, err := redeemClosure.Leaf()
-	if err != nil {
-		return nil, 0, err
-	}
-
-	vtxoTaprootTree := taproot.AssembleTaprootScriptTree(
-		*redeemLeaf,
-		sweepLeaf.TapElementsLeaf,
-	)
-
-	proofIndex := vtxoTaprootTree.LeafProofIndex[sweepLeaf.TapHash()]
-	proof := vtxoTaprootTree.LeafMerkleProofs[proofIndex]
-
-	return &psetv2.TapLeafScript{
-		TapElementsLeaf: proof.TapElementsLeaf,
-		ControlBlock:    proof.ToControlBlock(sweepLeaf.ControlBlock.InternalKey),
-	}, lifetime, nil
-}
-
 func (b *txBuilder) getLeafScriptAndTree(
 	userPubkey, aspPubkey *secp256k1.PublicKey,
 ) ([]byte, *taproot.IndexedElementsTapScriptTree, error) {
@@ -201,16 +157,6 @@ func (b *txBuilder) getLeafScriptAndTree(
 	}
 
 	redeemLeaf, err := redeemClosure.Leaf()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	sweepClosure := &tree.DelayedSigClose{
-		Pubkey:  aspPubkey,
-		Seconds: uint(b.roundLifetime),
-	}
-
-	sweepLeaf, err := sweepClosure.Leaf()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -226,7 +172,7 @@ func (b *txBuilder) getLeafScriptAndTree(
 	}
 
 	taprootTree := taproot.AssembleTaprootScriptTree(
-		*redeemLeaf, *sweepLeaf, *forfeitLeaf,
+		*redeemLeaf, *forfeitLeaf,
 	)
 
 	root := taprootTree.RootNode.TapHash()
@@ -525,17 +471,4 @@ func (b *txBuilder) createForfeitTxs(
 		}
 	}
 	return forfeitTxs, nil
-}
-
-// given a congestion tree input, searches and returns the sweep leaf and its lifetime in seconds
-func extractSweepLeaf(input psetv2.Input) (sweepLeaf *psetv2.TapLeafScript, lifetime int64, err error) {
-	for _, leaf := range input.TapLeafScript {
-		sweepClosure := &tree.DelayedSigClose{}
-		isSweep, _ := sweepClosure.Decode(leaf.Script)
-		if isSweep {
-			return &leaf, int64(sweepClosure.Seconds), nil
-		}
-	}
-
-	return nil, 0, fmt.Errorf("sweep leaf not found")
 }

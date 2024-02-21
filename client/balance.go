@@ -38,32 +38,46 @@ func balanceAction(ctx *cli.Context) error {
 	}
 
 	wg := &sync.WaitGroup{}
-	wg.Add(2)
+	wg.Add(3)
 
-	chRes := make(chan balanceRes, 2)
+	chRes := make(chan balanceRes, 3)
 	go func() {
 		defer wg.Done()
 		explorer := NewExplorer()
 		balance, amountByExpiration, err := getOffchainBalance(ctx, explorer, client, offchainAddr, true)
+
 		if err != nil {
-			chRes <- balanceRes{0, 0, nil, err}
+			chRes <- balanceRes{0, 0, nil, nil, err}
 			return
 		}
 
-		chRes <- balanceRes{balance, 0, amountByExpiration, nil}
+		chRes <- balanceRes{balance, 0, nil, amountByExpiration, nil}
 	}()
+
 	go func() {
 		defer wg.Done()
 		balance, err := getOnchainBalance(onchainAddr)
 		if err != nil {
-			chRes <- balanceRes{0, 0, nil, err}
+			chRes <- balanceRes{0, 0, nil, nil, err}
 			return
 		}
-		chRes <- balanceRes{0, balance, nil, nil}
+		chRes <- balanceRes{0, balance, nil, nil, nil}
+	}()
+
+	go func() {
+		defer wg.Done()
+		availableBalance, futureBalance, err := getOnchainVtxosBalance()
+		if err != nil {
+			chRes <- balanceRes{0, 0, nil, nil, err}
+			return
+		}
+
+		chRes <- balanceRes{0, availableBalance, futureBalance, nil, err}
 	}()
 
 	wg.Wait()
 
+	futureOnchainBalance := []map[string]interface{}{}
 	details := make([]map[string]interface{}, 0)
 	offchainBalance, onchainBalance := uint64(0), uint64(0)
 	nextExpiration := int64(0)
@@ -76,7 +90,7 @@ func balanceAction(ctx *cli.Context) error {
 			offchainBalance = res.offchainBalance
 		}
 		if res.onchainBalance > 0 {
-			onchainBalance = res.onchainBalance
+			onchainBalance += res.onchainBalance
 		}
 		if res.amountByExpiration != nil {
 			for timestamp, amount := range res.amountByExpiration {
@@ -94,15 +108,30 @@ func balanceAction(ctx *cli.Context) error {
 				)
 			}
 		}
+		if res.futureBalance != nil {
+			for timestamp, amount := range res.futureBalance {
+				fancyTime := time.Unix(timestamp, 0).Format("2006-01-02 15:04:05")
+				futureOnchainBalance = append(
+					futureOnchainBalance,
+					map[string]interface{}{
+						"free":   fancyTime,
+						"amount": amount,
+					},
+				)
+			}
+		}
 
 		count++
-		if count == 2 {
+		if count == 3 {
 			break
 		}
 	}
 
 	response := make(map[string]interface{})
-	response["onchain_balance"] = onchainBalance
+	response["onchain_balance"] = map[string]interface{}{
+		"amount": onchainBalance,
+		"future": futureOnchainBalance,
+	}
 
 	offchainBalanceJSON := map[string]interface{}{
 		"total": offchainBalance,
@@ -146,6 +175,7 @@ func balanceAction(ctx *cli.Context) error {
 type balanceRes struct {
 	offchainBalance    uint64
 	onchainBalance     uint64
-	amountByExpiration map[int64]uint64
+	futureBalance      map[int64]uint64 // availableAt -> onchain balance
+	amountByExpiration map[int64]uint64 // expireAt -> offchain balance
 	err                error
 }

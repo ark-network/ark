@@ -2,7 +2,6 @@ package application
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -10,7 +9,6 @@ import (
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	log "github.com/sirupsen/logrus"
 	"github.com/vulpemventures/go-elements/psetv2"
 )
@@ -326,17 +324,6 @@ func (s *sweeper) findSweepableOutputs(
 					newNodesToCheck = append(newNodesToCheck, children...)
 					continue
 				}
-
-				// if the node is a leaf, the vtxos outputs should added as onchain outputs if they are not swept yet
-				vtxoExpiration, sweepInput, err := s.leafToSweepInput(ctx, blocktime, node)
-				if err != nil {
-					return nil, err
-				}
-
-				if sweepInput != nil {
-					expirationTime = vtxoExpiration
-					sweepInputs = []ports.SweepInput{*sweepInput}
-				}
 			}
 
 			if _, ok := sweepableOutputs[expirationTime]; !ok {
@@ -349,62 +336,6 @@ func (s *sweeper) findSweepableOutputs(
 	}
 
 	return sweepableOutputs, nil
-}
-
-func (s *sweeper) leafToSweepInput(ctx context.Context, txBlocktime int64, node tree.Node) (int64, *ports.SweepInput, error) {
-	pset, err := psetv2.NewPsetFromBase64(node.Tx)
-	if err != nil {
-		return -1, nil, err
-	}
-
-	vtxo, err := extractVtxoOutpoint(pset)
-	if err != nil {
-		return -1, nil, err
-	}
-
-	fromRepo, err := s.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{*vtxo})
-	if err != nil {
-		return -1, nil, err
-	}
-
-	if len(fromRepo) == 0 {
-		return -1, nil, fmt.Errorf("vtxo not found")
-	}
-
-	if fromRepo[0].Swept {
-		return -1, nil, nil
-	}
-
-	if fromRepo[0].Redeemed {
-		return -1, nil, nil
-	}
-
-	// if the vtxo is not swept or redeemed, add it to the onchain outputs
-	pubKeyBytes, err := hex.DecodeString(fromRepo[0].Pubkey)
-	if err != nil {
-		return -1, nil, err
-	}
-
-	pubKey, err := secp256k1.ParsePubKey(pubKeyBytes)
-	if err != nil {
-		return -1, nil, err
-	}
-
-	sweepLeaf, lifetime, err := s.builder.GetLeafSweepClosure(node, pubKey)
-	if err != nil {
-		return -1, nil, err
-	}
-
-	sweepInput := ports.SweepInput{
-		InputArgs: psetv2.InputArgs{
-			Txid:    vtxo.Txid,
-			TxIndex: vtxo.VOut,
-		},
-		SweepLeaf: *sweepLeaf,
-		Amount:    fromRepo[0].Amount,
-	}
-
-	return txBlocktime + lifetime, &sweepInput, nil
 }
 
 func (s *sweeper) nodeToSweepInputs(parentBlocktime int64, node tree.Node) (int64, []ports.SweepInput, error) {

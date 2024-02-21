@@ -139,9 +139,9 @@ func signPset(
 
 				switch c := close.(type) {
 				case *tree.DelayedSigClose:
-					sign = c.Pubkey.IsEqual(pubkey)
+					sign = bytes.Equal(c.Pubkey.SerializeCompressed()[1:], pubkey.SerializeCompressed()[1:])
 				case *tree.ForfeitClose:
-					sign = c.Pubkey.IsEqual(pubkey)
+					sign = bytes.Equal(c.Pubkey.SerializeCompressed()[1:], pubkey.SerializeCompressed()[1:])
 				}
 
 				if sign {

@@ -220,16 +220,6 @@ func (n *node) getVtxoWitnessData() (
 		return nil, nil, fmt.Errorf("cannot call vtxoWitness on a non-leaf node")
 	}
 
-	sweepClose := &tree.DelayedSigClose{
-		Pubkey:  n.sweepKey,
-		Seconds: uint(n.roundLifetime),
-	}
-
-	sweepLeaf, err := sweepClose.Leaf()
-	if err != nil {
-		return nil, nil, err
-	}
-
 	key, err := hex.DecodeString(n.receivers[0].Pubkey)
 	if err != nil {
 		return nil, nil, err
@@ -261,7 +251,7 @@ func (n *node) getVtxoWitnessData() (
 	}
 
 	leafTaprootTree := taproot.AssembleTaprootScriptTree(
-		*redeemLeaf, *sweepLeaf, *forfeitLeaf,
+		*redeemLeaf, *forfeitLeaf,
 	)
 	root := leafTaprootTree.RootNode.TapHash()
 
