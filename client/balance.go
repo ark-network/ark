@@ -115,8 +115,8 @@ func balanceAction(ctx *cli.Context) error {
 				lockedOnchainBalance = append(
 					lockedOnchainBalance,
 					map[string]interface{}{
-						"free":   fancyTime,
-						"amount": amount,
+						"spendable_at": fancyTime,
+						"amount":       amount,
 					},
 				)
 			}
@@ -130,8 +130,8 @@ func balanceAction(ctx *cli.Context) error {
 
 	response := make(map[string]interface{})
 	response["onchain_balance"] = map[string]interface{}{
-		"amount": onchainBalance,
-		"locked": lockedOnchainBalance,
+		"spendable_amount": onchainBalance,
+		"locked_amount":    lockedOnchainBalance,
 	}
 
 	offchainBalanceJSON := map[string]interface{}{
