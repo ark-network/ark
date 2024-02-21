@@ -24,7 +24,7 @@ var balanceCommand = cli.Command{
 }
 
 func balanceAction(ctx *cli.Context) error {
-	expiryDetails := ctx.Bool("expiry-details")
+	withExpiryDetails := ctx.Bool("expiry-details")
 
 	client, cancel, err := getClientFromState(ctx)
 	if err != nil {
@@ -44,8 +44,9 @@ func balanceAction(ctx *cli.Context) error {
 	go func() {
 		defer wg.Done()
 		explorer := NewExplorer()
-		balance, amountByExpiration, err := getOffchainBalance(ctx, explorer, client, offchainAddr, true)
-
+		balance, amountByExpiration, err := getOffchainBalance(
+			ctx, explorer, client, offchainAddr, withExpiryDetails,
+		)
 		if err != nil {
 			chRes <- balanceRes{0, 0, nil, nil, err}
 			return
@@ -163,7 +164,7 @@ func balanceAction(ctx *cli.Context) error {
 		offchainBalanceJSON["next_expiration"] = fancyTimeExpiration
 	}
 
-	if expiryDetails {
+	if withExpiryDetails {
 		offchainBalanceJSON["details"] = details
 	}
 
