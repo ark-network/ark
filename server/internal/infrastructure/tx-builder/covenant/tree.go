@@ -265,8 +265,6 @@ func (n *node) getVtxoWitnessData() (
 	)
 	root := leafTaprootTree.RootNode.TapHash()
 
-	fmt.Println("root taproot hash: ", root.String())
-
 	taprootKey := taproot.ComputeTaprootOutputKey(
 		tree.UnspendableKey(),
 		root[:],

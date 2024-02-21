@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -177,6 +178,13 @@ func (r *redeemBranch) AddVtxoInput(updater *psetv2.Updater) error {
 	)
 
 	proofIndex := vtxoTaprootTree.LeafProofIndex[redeemLeaf.TapHash()]
+
+	sequence, err := common.BIP68EncodeAsNumber(sweepClosure.Seconds / 2)
+	if err != nil {
+		return nil
+	}
+
+	updater.Pset.Inputs[nextInputIndex].Sequence = sequence
 
 	if err := updater.AddInTapLeafScript(
 		nextInputIndex,
