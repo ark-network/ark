@@ -77,7 +77,7 @@ func balanceAction(ctx *cli.Context) error {
 
 	wg.Wait()
 
-	futureOnchainBalance := []map[string]interface{}{}
+	lockedOnchainBalance := []map[string]interface{}{}
 	details := make([]map[string]interface{}, 0)
 	offchainBalance, onchainBalance := uint64(0), uint64(0)
 	nextExpiration := int64(0)
@@ -111,8 +111,8 @@ func balanceAction(ctx *cli.Context) error {
 		if res.futureBalance != nil {
 			for timestamp, amount := range res.futureBalance {
 				fancyTime := time.Unix(timestamp, 0).Format("2006-01-02 15:04:05")
-				futureOnchainBalance = append(
-					futureOnchainBalance,
+				lockedOnchainBalance = append(
+					lockedOnchainBalance,
 					map[string]interface{}{
 						"free":   fancyTime,
 						"amount": amount,
@@ -130,7 +130,7 @@ func balanceAction(ctx *cli.Context) error {
 	response := make(map[string]interface{})
 	response["onchain_balance"] = map[string]interface{}{
 		"amount": onchainBalance,
-		"future": futureOnchainBalance,
+		"locked": lockedOnchainBalance,
 	}
 
 	offchainBalanceJSON := map[string]interface{}{
