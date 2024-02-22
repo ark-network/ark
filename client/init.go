@@ -78,15 +78,17 @@ func connectToAsp(ctx *cli.Context, net, url string) error {
 	}
 	defer close()
 
-	resp, err := client.GetPubkey(ctx.Context, &arkv1.GetPubkeyRequest{})
+	resp, err := client.GetInfo(ctx.Context, &arkv1.GetInfoRequest{})
 	if err != nil {
 		return err
 	}
 
-	return setState(map[string]string{
-		"ark_url":    url,
-		"network":    net,
-		"ark_pubkey": resp.Pubkey,
+	return setState(map[string]interface{}{
+		"ark_url":      url,
+		"network":      net,
+		"ark_pubkey":   resp.Pubkey,
+		"ark_lifetime": resp.Lifetime,
+		"exit_delay":   resp.ExitDelay,
 	})
 }
 
@@ -114,7 +116,7 @@ func initWallet(ctx *cli.Context, key, password string) error {
 
 	passwordHash := hashPassword([]byte(password))
 
-	state := map[string]string{
+	state := map[string]interface{}{
 		"encrypted_private_key": hex.EncodeToString(encryptedPrivateKey),
 		"password_hash":         hex.EncodeToString(passwordHash),
 		"public_key":            hex.EncodeToString(privateKey.PubKey().SerializeCompressed()),

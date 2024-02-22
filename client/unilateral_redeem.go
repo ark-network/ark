@@ -15,8 +15,6 @@ import (
 type RedeemBranch interface {
 	// RedeemPath returns the list of transactions to broadcast in order to access the vtxo output
 	RedeemPath() ([]string, error)
-	// AddInput adds the vtxo input created by the branch
-	AddVtxoInput(updater *psetv2.Updater) error
 	// ExpireAt returns the expiration time of the branch
 	ExpireAt() (*time.Time, error)
 }
@@ -92,87 +90,39 @@ func (r *redeemBranch) RedeemPath() ([]string, error) {
 			}
 
 			for _, leaf := range input.TapLeafScript {
-				isSweep, _, _, err := tree.DecodeSweepScript(leaf.Script)
+				closure, err := tree.DecodeClosure(leaf.Script)
 				if err != nil {
 					return nil, err
 				}
 
-				if isSweep {
-					continue
-				}
+				switch closure.(type) {
+				case *tree.UnrollClosure:
+					controlBlock, err := leaf.ControlBlock.ToBytes()
+					if err != nil {
+						return nil, err
+					}
 
-				controlBlock, err := leaf.ControlBlock.ToBytes()
-				if err != nil {
-					return nil, err
-				}
+					unsignedTx, err := pset.UnsignedTx()
+					if err != nil {
+						return nil, err
+					}
 
-				unsignedTx, err := pset.UnsignedTx()
-				if err != nil {
-					return nil, err
-				}
+					unsignedTx.Inputs[i].Witness = [][]byte{
+						leaf.Script,
+						controlBlock[:],
+					}
 
-				unsignedTx.Inputs[i].Witness = [][]byte{
-					leaf.Script,
-					controlBlock[:],
+					hex, err := unsignedTx.ToHex()
+					if err != nil {
+						return nil, err
+					}
+					transactions = append(transactions, hex)
 				}
-
-				hex, err := unsignedTx.ToHex()
-				if err != nil {
-					return nil, err
-				}
-				transactions = append(transactions, hex)
-
-				break
 			}
-
 		}
-
 	}
 
 	return transactions, nil
-}
-
-// AddVtxoInput is a wrapper around psetv2.Updater adding a taproot input letting to spend the vtxo output
-func (r *redeemBranch) AddVtxoInput(updater *psetv2.Updater) error {
-	walletPubkey, err := getWalletPublicKey()
-	if err != nil {
-		return err
-	}
-
-	nextInputIndex := len(updater.Pset.Inputs)
-	if err := updater.AddInputs([]psetv2.InputArgs{
-		{
-			Txid:    r.vtxo.txid,
-			TxIndex: r.vtxo.vout,
-		},
-	}); err != nil {
-		return err
-	}
-
-	// add taproot tree letting to spend the vtxo
-	checksigLeaf, err := tree.VtxoScript(walletPubkey)
-	if err != nil {
-		return nil
-	}
-
-	vtxoTaprootTree := taproot.AssembleTaprootScriptTree(
-		*checksigLeaf,
-		*r.sweepClosure,
-	)
-
-	proofIndex := vtxoTaprootTree.LeafProofIndex[checksigLeaf.TapHash()]
-
-	if err := updater.AddInTapLeafScript(
-		nextInputIndex,
-		psetv2.NewTapLeafScript(
-			vtxoTaprootTree.LeafMerkleProofs[proofIndex],
-			r.internalKey,
-		),
-	); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (r *redeemBranch) ExpireAt() (*time.Time, error) {

@@ -13,7 +13,7 @@ import (
 func craftForfeitTxs(
 	connectorTx *psetv2.Pset,
 	vtxo domain.Vtxo,
-	vtxoTaprootTree *taproot.IndexedElementsTapScriptTree,
+	vtxoForfeitTapleaf taproot.TapscriptElementsProof,
 	vtxoScript, aspScript []byte,
 ) (forfeitTxs []string, err error) {
 	connectors, prevouts := getConnectorInputs(connectorTx)
@@ -66,11 +66,9 @@ func craftForfeitTxs(
 
 		unspendableKey := tree.UnspendableKey()
 
-		for _, proof := range vtxoTaprootTree.LeafMerkleProofs {
-			tapScript := psetv2.NewTapLeafScript(proof, unspendableKey)
-			if err := updater.AddInTapLeafScript(1, tapScript); err != nil {
-				return nil, err
-			}
+		tapScript := psetv2.NewTapLeafScript(vtxoForfeitTapleaf, unspendableKey)
+		if err := updater.AddInTapLeafScript(1, tapScript); err != nil {
+			return nil, err
 		}
 
 		connectorAmount, err := elementsutil.ValueFromBytes(connectorPrevout.Value)

@@ -26,7 +26,7 @@ type ArkServiceClient interface {
 	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
 	Faucet(ctx context.Context, in *FaucetRequest, opts ...grpc.CallOption) (*FaucetResponse, error)
 	ListVtxos(ctx context.Context, in *ListVtxosRequest, opts ...grpc.CallOption) (*ListVtxosResponse, error)
-	GetPubkey(ctx context.Context, in *GetPubkeyRequest, opts ...grpc.CallOption) (*GetPubkeyResponse, error)
+	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error)
 }
 
 type arkServiceClient struct {
@@ -132,9 +132,9 @@ func (c *arkServiceClient) ListVtxos(ctx context.Context, in *ListVtxosRequest, 
 	return out, nil
 }
 
-func (c *arkServiceClient) GetPubkey(ctx context.Context, in *GetPubkeyRequest, opts ...grpc.CallOption) (*GetPubkeyResponse, error) {
-	out := new(GetPubkeyResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/GetPubkey", in, out, opts...)
+func (c *arkServiceClient) GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error) {
+	out := new(GetInfoResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/GetInfo", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +153,7 @@ type ArkServiceServer interface {
 	Ping(context.Context, *PingRequest) (*PingResponse, error)
 	Faucet(context.Context, *FaucetRequest) (*FaucetResponse, error)
 	ListVtxos(context.Context, *ListVtxosRequest) (*ListVtxosResponse, error)
-	GetPubkey(context.Context, *GetPubkeyRequest) (*GetPubkeyResponse, error)
+	GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error)
 }
 
 // UnimplementedArkServiceServer should be embedded to have forward compatible implementations.
@@ -184,8 +184,8 @@ func (UnimplementedArkServiceServer) Faucet(context.Context, *FaucetRequest) (*F
 func (UnimplementedArkServiceServer) ListVtxos(context.Context, *ListVtxosRequest) (*ListVtxosResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListVtxos not implemented")
 }
-func (UnimplementedArkServiceServer) GetPubkey(context.Context, *GetPubkeyRequest) (*GetPubkeyResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetPubkey not implemented")
+func (UnimplementedArkServiceServer) GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetInfo not implemented")
 }
 
 // UnsafeArkServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -346,20 +346,20 @@ func _ArkService_ListVtxos_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ArkService_GetPubkey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetPubkeyRequest)
+func _ArkService_GetInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetInfoRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ArkServiceServer).GetPubkey(ctx, in)
+		return srv.(ArkServiceServer).GetInfo(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/GetPubkey",
+		FullMethod: "/ark.v1.ArkService/GetInfo",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).GetPubkey(ctx, req.(*GetPubkeyRequest))
+		return srv.(ArkServiceServer).GetInfo(ctx, req.(*GetInfoRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -400,8 +400,8 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ArkService_ListVtxos_Handler,
 		},
 		{
-			MethodName: "GetPubkey",
-			Handler:    _ArkService_GetPubkey_Handler,
+			MethodName: "GetInfo",
+			Handler:    _ArkService_GetInfo_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

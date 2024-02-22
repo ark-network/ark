@@ -77,6 +77,28 @@
         ]
       }
     },
+    "/v1/info": {
+      "get": {
+        "operationId": "ArkService_GetInfo",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetInfoResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
     "/v1/payment/claim": {
       "post": {
         "operationId": "ArkService_ClaimPayment",
@@ -198,28 +220,6 @@
             "type": "string"
           }
         ],
-        "tags": [
-          "ArkService"
-        ]
-      }
-    },
-    "/v1/pubkey": {
-      "get": {
-        "operationId": "ArkService_GetPubkey",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetPubkeyResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
         "tags": [
           "ArkService"
         ]
@@ -367,11 +367,19 @@
         }
       }
     },
-    "v1GetPubkeyResponse": {
+    "v1GetInfoResponse": {
       "type": "object",
       "properties": {
         "pubkey": {
           "type": "string"
+        },
+        "lifetime": {
+          "type": "string",
+          "format": "int64"
+        },
+        "exitDelay": {
+          "type": "string",
+          "format": "int64"
         }
       }
     },

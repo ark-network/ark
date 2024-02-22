@@ -29,9 +29,10 @@ var (
 		network.Testnet.Name: "https://blockstream.info/liquidtestnet/api",
 	}
 
-	initialState = map[string]string{
+	initialState = map[string]interface{}{
 		"ark_url":               "",
 		"ark_pubkey":            "",
+		"ark_lifetime":          0,
 		"encrypted_private_key": "",
 		"password_hash":         "",
 		"public_key":            "",
@@ -109,7 +110,7 @@ func cleanAndExpandPath(path string) string {
 	return filepath.Clean(os.ExpandEnv(path))
 }
 
-func getState() (map[string]string, error) {
+func getState() (map[string]interface{}, error) {
 	file, err := os.ReadFile(statePath)
 	if err != nil {
 		if !os.IsNotExist(err) {
@@ -121,7 +122,7 @@ func getState() (map[string]string, error) {
 		return initialState, nil
 	}
 
-	data := map[string]string{}
+	data := map[string]interface{}{}
 	if err := json.Unmarshal(file, &data); err != nil {
 		return nil, err
 	}
@@ -137,7 +138,7 @@ func setInitialState() error {
 	return os.WriteFile(statePath, jsonString, 0755)
 }
 
-func setState(data map[string]string) error {
+func setState(data map[string]interface{}) error {
 	currentData, err := getState()
 	if err != nil {
 		return err
@@ -157,8 +158,8 @@ func setState(data map[string]string) error {
 	return nil
 }
 
-func merge(maps ...map[string]string) map[string]string {
-	merge := make(map[string]string, 0)
+func merge(maps ...map[string]interface{}) map[string]interface{} {
+	merge := make(map[string]interface{}, 0)
 	for _, m := range maps {
 		for k, v := range m {
 			merge[k] = v

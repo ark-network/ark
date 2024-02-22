@@ -24,12 +24,13 @@ type txBuilder struct {
 	wallet        ports.WalletService
 	net           *network.Network
 	roundLifetime int64 // in seconds
+	exitDelay     int64 // in seconds
 }
 
 func NewTxBuilder(
-	wallet ports.WalletService, net network.Network, roundLifetime int64,
+	wallet ports.WalletService, net network.Network, roundLifetime int64, exitDelay int64,
 ) ports.TxBuilder {
-	return &txBuilder{wallet, &net, roundLifetime}
+	return &txBuilder{wallet, &net, roundLifetime, exitDelay}
 }
 
 func (b *txBuilder) GetVtxoScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error) {
@@ -113,7 +114,7 @@ func (b *txBuilder) BuildPoolTx(
 	// This is safe as the memory allocated for `craftCongestionTree` is freed
 	// only after `BuildPoolTx` returns.
 	treeFactoryFn, sharedOutputScript, sharedOutputAmount, err := craftCongestionTree(
-		b.net.AssetID, aspPubkey, payments, minRelayFee, b.roundLifetime,
+		b.net.AssetID, aspPubkey, payments, minRelayFee, b.roundLifetime, b.exitDelay,
 	)
 	if err != nil {
 		return
@@ -148,60 +149,31 @@ func (b *txBuilder) BuildPoolTx(
 	return
 }
 
-func (b *txBuilder) GetLeafSweepClosure(
-	node tree.Node, userPubKey *secp256k1.PublicKey,
-) (*psetv2.TapLeafScript, int64, error) {
-	if !node.Leaf {
-		return nil, 0, fmt.Errorf("node is not a leaf")
-	}
-
-	pset, err := psetv2.NewPsetFromBase64(node.Tx)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	input := pset.Inputs[0]
-
-	sweepLeaf, lifetime, err := extractSweepLeaf(input)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	// craft the vtxo taproot tree
-	vtxoScript, err := tree.VtxoScript(userPubKey)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	vtxoTaprootTree := taproot.AssembleTaprootScriptTree(
-		*vtxoScript,
-		sweepLeaf.TapElementsLeaf,
-	)
-
-	proofIndex := vtxoTaprootTree.LeafProofIndex[sweepLeaf.TapHash()]
-	proof := vtxoTaprootTree.LeafMerkleProofs[proofIndex]
-
-	return &psetv2.TapLeafScript{
-		TapElementsLeaf: proof.TapElementsLeaf,
-		ControlBlock:    proof.ToControlBlock(sweepLeaf.ControlBlock.InternalKey),
-	}, lifetime, nil
-}
-
 func (b *txBuilder) getLeafScriptAndTree(
 	userPubkey, aspPubkey *secp256k1.PublicKey,
 ) ([]byte, *taproot.IndexedElementsTapScriptTree, error) {
-	redeemClosure, err := tree.VtxoScript(userPubkey)
+	redeemClosure := &tree.CSVSigClosure{
+		Pubkey:  userPubkey,
+		Seconds: uint(b.exitDelay),
+	}
+
+	redeemLeaf, err := redeemClosure.Leaf()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	sweepClosure, err := tree.SweepScript(aspPubkey, uint(b.roundLifetime))
+	forfeitClosure := &tree.ForfeitClosure{
+		Pubkey:    userPubkey,
+		AspPubkey: aspPubkey,
+	}
+
+	forfeitLeaf, err := forfeitClosure.Leaf()
 	if err != nil {
 		return nil, nil, err
 	}
 
 	taprootTree := taproot.AssembleTaprootScriptTree(
-		*redeemClosure, *sweepClosure,
+		*redeemLeaf, *forfeitLeaf,
 	)
 
 	root := taprootTree.RootNode.TapHash()
@@ -471,9 +443,25 @@ func (b *txBuilder) createForfeitTxs(
 				return nil, err
 			}
 
+			var forfeitProof *taproot.TapscriptElementsProof
+
+			for _, proof := range vtxoTaprootTree.LeafMerkleProofs {
+				isForfeit, err := (&tree.ForfeitClosure{}).Decode(proof.Script)
+				if !isForfeit || err != nil {
+					continue
+				}
+
+				forfeitProof = &proof
+				break
+			}
+
+			if forfeitProof == nil {
+				return nil, fmt.Errorf("forfeit proof not found")
+			}
+
 			for _, connector := range connectors {
 				txs, err := craftForfeitTxs(
-					connector, vtxo, vtxoTaprootTree, vtxoScript, aspScript,
+					connector, vtxo, *forfeitProof, vtxoScript, aspScript,
 				)
 				if err != nil {
 					return nil, err
@@ -484,25 +472,4 @@ func (b *txBuilder) createForfeitTxs(
 		}
 	}
 	return forfeitTxs, nil
-}
-
-// given a congestion tree input, searches and returns the sweep leaf and its lifetime in seconds
-func extractSweepLeaf(input psetv2.Input) (sweepLeaf *psetv2.TapLeafScript, lifetime int64, err error) {
-	for _, leaf := range input.TapLeafScript {
-		isSweep, _, seconds, err := tree.DecodeSweepScript(leaf.Script)
-		if err != nil {
-			return nil, 0, err
-		}
-		if isSweep {
-			lifetime = int64(seconds)
-			sweepLeaf = &leaf
-			break
-		}
-	}
-
-	if sweepLeaf == nil {
-		return nil, 0, fmt.Errorf("sweep leaf not found")
-	}
-
-	return sweepLeaf, lifetime, nil
 }
