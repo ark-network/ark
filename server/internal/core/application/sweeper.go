@@ -84,7 +84,7 @@ func (s *sweeper) schedule(
 
 	task := s.createTask(roundTxid, congestionTree)
 	fancyTime := time.Unix(expirationTimestamp, 0).Format("2006-01-02 15:04:05")
-	log.Debugf("scheduled sweep task at %s", fancyTime)
+	log.Debugf("scheduled sweep for round %s at %s", roundTxid, fancyTime)
 	if err := s.scheduler.ScheduleTaskOnce(expirationTimestamp, task); err != nil {
 		return err
 	}
@@ -292,7 +292,7 @@ func (s *sweeper) findSweepableOutputs(
 		newNodesToCheck := make([]tree.Node, 0)
 
 		for _, node := range nodesToCheck {
-			isPublished, blocktime, err := s.wallet.IsTransactionPublished(ctx, node.Txid)
+			isConfirmed, blocktime, err := s.wallet.IsTransactionConfirmed(ctx, node.Txid)
 			if err != nil {
 				return nil, err
 			}
@@ -300,10 +300,10 @@ func (s *sweeper) findSweepableOutputs(
 			var expirationTime int64
 			var sweepInputs []ports.SweepInput
 
-			if !isPublished {
+			if !isConfirmed {
 				if _, ok := blocktimeCache[node.ParentTxid]; !ok {
-					isPublished, blocktime, err := s.wallet.IsTransactionPublished(ctx, node.ParentTxid)
-					if !isPublished || err != nil {
+					isConfirmed, blocktime, err := s.wallet.IsTransactionConfirmed(ctx, node.ParentTxid)
+					if !isConfirmed || err != nil {
 						return nil, fmt.Errorf("tx %s not found", node.Txid)
 					}
 
