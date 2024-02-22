@@ -67,6 +67,7 @@ func main() {
 		&receiveCommand,
 		&redeemCommand,
 		&sendCommand,
+		&onboardCommand,
 	)
 
 	app.Before = func(ctx *cli.Context) error {
