@@ -113,8 +113,8 @@ func (b *txBuilder) BuildPoolTx(
 	// generated in the process and takes the shared utxo outpoint as argument.
 	// This is safe as the memory allocated for `craftCongestionTree` is freed
 	// only after `BuildPoolTx` returns.
-	treeFactoryFn, sharedOutputScript, sharedOutputAmount, err := craftCongestionTree(
-		b.net.AssetID, aspPubkey, payments, minRelayFee, b.roundLifetime, b.exitDelay,
+	treeFactoryFn, sharedOutputScript, sharedOutputAmount, err := tree.CraftCongestionTree(
+		b.net.AssetID, aspPubkey, getOffchainReceivers(payments), minRelayFee, b.roundLifetime, b.exitDelay,
 	)
 	if err != nil {
 		return

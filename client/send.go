@@ -83,7 +83,19 @@ func sendAction(ctx *cli.Context) error {
 	}
 
 	if len(onchainReceivers) > 0 {
-		if err := sendOnchain(ctx, onchainReceivers); err != nil {
+		pset, err := sendOnchain(ctx, onchainReceivers)
+		if err != nil {
+			return err
+		}
+
+		txid, err := broadcastPset(pset)
+		if err != nil {
+			return err
+		}
+
+		if err := printJSON(map[string]interface{}{
+			"txid": txid,
+		}); err != nil {
 			return err
 		}
 	}
@@ -203,14 +215,14 @@ func sendOffchain(ctx *cli.Context, receivers []receiver) error {
 	})
 }
 
-func sendOnchain(ctx *cli.Context, receivers []receiver) error {
+func sendOnchain(ctx *cli.Context, receivers []receiver) (string, error) {
 	pset, err := psetv2.New(nil, nil, nil)
 	if err != nil {
-		return err
+		return "", err
 	}
 	updater, err := psetv2.NewUpdater(pset)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	_, net := getNetwork()
@@ -219,12 +231,12 @@ func sendOnchain(ctx *cli.Context, receivers []receiver) error {
 	for _, receiver := range receivers {
 		targetAmount += receiver.Amount
 		if receiver.Amount < DUST {
-			return fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount, DUST)
+			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount, DUST)
 		}
 
 		script, err := address.ToOutputScript(receiver.To)
 		if err != nil {
-			return err
+			return "", err
 		}
 
 		if err := updater.AddOutputs([]psetv2.OutputArgs{
@@ -234,28 +246,28 @@ func sendOnchain(ctx *cli.Context, receivers []receiver) error {
 				Script: script,
 			},
 		}); err != nil {
-			return err
+			return "", err
 		}
 	}
 
 	selected, delayedSelected, change, err := coinSelectOnchain(targetAmount, nil)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if err := addInputs(updater, selected, delayedSelected, net); err != nil {
-		return err
+		return "", err
 	}
 
 	if change > 0 {
 		_, changeAddr, err := getAddress()
 		if err != nil {
-			return err
+			return "", err
 		}
 
 		changeScript, err := address.ToOutputScript(changeAddr)
 		if err != nil {
-			return err
+			return "", err
 		}
 
 		if err := updater.AddOutputs([]psetv2.OutputArgs{
@@ -265,13 +277,13 @@ func sendOnchain(ctx *cli.Context, receivers []receiver) error {
 				Script: changeScript,
 			},
 		}); err != nil {
-			return err
+			return "", err
 		}
 	}
 
-	utx, err := updater.Pset.UnsignedTx()
+	utx, err := pset.UnsignedTx()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	vBytes := utx.VirtualSize()
@@ -291,22 +303,22 @@ func sendOnchain(ctx *cli.Context, receivers []receiver) error {
 			append(selected, delayedSelected...),
 		)
 		if err != nil {
-			return err
+			return "", err
 		}
 
 		if err := addInputs(updater, selected, delayedSelected, net); err != nil {
-			return err
+			return "", err
 		}
 
 		if newChange > 0 {
 			_, changeAddr, err := getAddress()
 			if err != nil {
-				return err
+				return "", err
 			}
 
 			changeScript, err := address.ToOutputScript(changeAddr)
 			if err != nil {
-				return err
+				return "", err
 			}
 
 			if err := updater.AddOutputs([]psetv2.OutputArgs{
@@ -316,7 +328,7 @@ func sendOnchain(ctx *cli.Context, receivers []receiver) error {
 					Script: changeScript,
 				},
 			}); err != nil {
-				return err
+				return "", err
 			}
 		}
 	}
@@ -327,40 +339,42 @@ func sendOnchain(ctx *cli.Context, receivers []receiver) error {
 			Amount: feeAmount,
 		},
 	}); err != nil {
-		return err
+		return "", err
 	}
 
 	prvKey, err := privateKeyFromPassword()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	explorer := NewExplorer()
 
 	if err := signPset(updater.Pset, explorer, prvKey); err != nil {
-		return err
+		return "", err
 	}
 
 	if err := psetv2.FinalizeAll(updater.Pset); err != nil {
-		return err
+		return "", err
+	}
+
+	return updater.Pset.ToBase64()
+}
+
+func broadcastPset(psetB64 string) (string, error) {
+	pset, err := psetv2.NewPsetFromBase64(psetB64)
+	if err != nil {
+		return "", err
 	}
 
 	extracted, err := psetv2.Extract(pset)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	hex, err := extracted.ToHex()
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	txid, err := explorer.Broadcast(hex)
-	if err != nil {
-		return err
-	}
-
-	return printJSON(map[string]interface{}{
-		"txid": txid,
-	})
+	return NewExplorer().Broadcast(hex)
 }

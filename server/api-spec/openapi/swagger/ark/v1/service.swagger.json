@@ -99,6 +99,38 @@
         ]
       }
     },
+    "/v1/onboard": {
+      "post": {
+        "operationId": "ArkService_Onboard",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1OnboardResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1OnboardRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
     "/v1/payment/claim": {
       "post": {
         "operationId": "ArkService_ClaimPayment",
@@ -428,6 +460,23 @@
           "type": "string"
         }
       }
+    },
+    "v1OnboardRequest": {
+      "type": "object",
+      "properties": {
+        "boardingTx": {
+          "type": "string"
+        },
+        "congestionTree": {
+          "$ref": "#/definitions/v1Tree"
+        },
+        "userPubkey": {
+          "type": "string"
+        }
+      }
+    },
+    "v1OnboardResponse": {
+      "type": "object"
     },
     "v1Output": {
       "type": "object",

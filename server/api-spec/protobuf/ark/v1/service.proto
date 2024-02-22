@@ -53,6 +53,21 @@ service ArkService {
       get: "/v1/info"
     };
   }
+  rpc Onboard(OnboardRequest) returns (OnboardResponse) {
+    option (google.api.http) = {
+      post: "/v1/onboard"
+      body: "*"
+    };
+  }
+}
+
+message OnboardRequest {
+  string boarding_tx = 1;
+  Tree congestion_tree = 2;
+  string user_pubkey = 3;
+}
+
+message OnboardResponse {
 }
 
 message RegisterPaymentRequest {

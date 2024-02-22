@@ -39,6 +39,7 @@ type Service interface {
 	UpdatePaymentStatus(ctx context.Context, id string) error
 	ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, error)
 	GetInfo(ctx context.Context) (string, int64, int64, error)
+	Onboard(ctx context.Context, boardingTx string, congestionTree tree.CongestionTree, userPubkey *secp256k1.PublicKey) error
 }
 
 type service struct {
