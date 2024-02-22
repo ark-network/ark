@@ -7,7 +7,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
@@ -21,9 +20,10 @@ import (
 )
 
 const (
-	testingKey    = "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x"
+	testingKey    = "0218d5ca8b58797b7dbd65c075dd7ba7784b3f38ab71b1a5a8e3f94ba0257654a6"
 	minRelayFee   = uint64(30)
 	roundLifetime = int64(1209344)
+	exitDelay     = int64(512)
 )
 
 var (
@@ -38,13 +38,14 @@ func TestMain(m *testing.M) {
 	wallet.On("SelectUtxos", mock.Anything, mock.Anything, mock.Anything).
 		Return(randomInput, uint64(0), nil)
 
-	_, pubkey, _ = common.DecodePubKey(testingKey)
+	pubkeyBytes, _ := hex.DecodeString(testingKey)
+	pubkey, _ = secp256k1.ParsePubKey(pubkeyBytes)
 
 	os.Exit(m.Run())
 }
 
 func TestBuildPoolTx(t *testing.T) {
-	builder := txbuilder.NewTxBuilder(wallet, network.Liquid, roundLifetime)
+	builder := txbuilder.NewTxBuilder(wallet, network.Liquid, roundLifetime, exitDelay)
 
 	fixtures, err := parsePoolTxFixtures()
 	require.NoError(t, err)
@@ -79,7 +80,7 @@ func TestBuildPoolTx(t *testing.T) {
 }
 
 func TestBuildForfeitTxs(t *testing.T) {
-	builder := txbuilder.NewTxBuilder(wallet, network.Liquid, 1209344)
+	builder := txbuilder.NewTxBuilder(wallet, network.Liquid, 1209344, exitDelay)
 
 	fixtures, err := parseForfeitTxsFixtures()
 	require.NoError(t, err)

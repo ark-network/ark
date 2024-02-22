@@ -29,7 +29,141 @@ It's recommended to read the [nomenclature](/docs/learn/nomenclature) first.
 
 ## Ark liquidity requirements
 
-How much BTC can an ASP accept from new users without risking not having enough capital to fund transfers inside Ark? In other words, what percentage of BTC in Ark is transferred in a 1-month period?
+### Introduction
+
+When Alice wishes to board an Ark, she finances an output that is eligible to be recognized as a VTXO in a future round. This does **not** necessitate any liquidity from the ASP:
+
+```mermaid
+flowchart LR
+    subgraph Onchain
+        direction LR
+        Alice
+        vtxo(10 BTC VTXO*)
+        Alice --> vtxo
+    end
+```
+
+:::info
+Since this an onchain transaction, and VTXOs should be virtual, we marked it as VTXO\*.
+:::
+
+When Alice makes her initial payment, for example, 1 BTC to Bob, the VTXO\* will be utilized to finance the [Pool transaction](/learn/nomenclature#pool-transaction-aka-ark-transaction), so again, the ASP will **not** need to supply any additional liquidity:
+
+```mermaid
+flowchart LR
+  subgraph Onchain
+    direction LR
+    vtxo(10 BTC VTXO*)
+    pool(Pool transaction)
+    vtxo --> pool
+  end
+  subgraph Virtual
+    subgraph VTXOs
+      direction LR
+      change(9 BTC Alice)
+      bob(1 BTC Bob)
+    end
+  end
+  pool --> VTXOs
+```
+
+But if Alice tries to make a second payment, for example, 1 BTC to Charlie, she will now be utilizing a genuine virtual VTXO. In this case, the ASP will need to finance the following [Pool transaction](/learn/nomenclature#pool-transaction-aka-ark-transaction):
+
+```mermaid
+flowchart LR
+  subgraph Onchain
+    direction LR
+    vtxo(10 BTC VTXO*)
+    pool(Pool transaction)
+    vtxo --> pool
+    ASP(9 BTC ASP)
+    pool2(Pool transaction 2)
+    ASP --> pool2
+  end
+  subgraph Virtual
+    subgraph VTXOs
+      direction LR
+      change(9 BTC Alice)
+      bob(1 BTC Bob)
+    end
+    subgraph new_VTXOs
+      direction LR
+      charlie(1 BTC Charlie)
+      change2(8 BTC Alice)
+    end
+    forfeit(Forfeit to ASP)
+    change --> forfeit
+  end
+  pool --> VTXOs
+  pool2 --> new_VTXOs
+```
+
+Finally, let's assume Alice also pays 1 BTC to Dave:
+
+```mermaid
+flowchart LR
+  subgraph Onchain
+    direction LR
+    vtxo(10 BTC VTXO*)
+    pool(Pool transaction)
+    vtxo --> pool
+    ASP(9 BTC ASP)
+    pool2(Pool transaction 2)
+    ASP --> pool2
+    ASP2(8 BTC ASP)
+    pool3(Pool transaction 3)
+    ASP2 --> pool3
+  end
+  subgraph Virtual
+    subgraph VTXOs
+      direction LR
+      bob(1 BTC Bob)
+      charlie(1 BTC Charlie)
+      change2(8 BTC Alice)
+    end
+    subgraph new_VTXOs
+      direction LR
+      dave(1 BTC Dave)
+      change3(7 BTC Alice)
+    end
+    forfeit(Forfeit to ASP)
+    change2 --> forfeit
+  end
+  pool --> VTXOs
+  pool2 --> VTXOs
+  pool3 --> new_VTXOs
+```
+
+### Summary
+
+- 10 BTC initial onboard from Alice
+- 4 payments:
+  - Alice => Bob 1 BTC
+  - Alice => Charlie 1 BTC
+  - Alice => Dave 1 BTC
+- total payments = 3 BTC
+- ASP liquidity needed = 17 BTC
+
+As we can see, the liquidity needs for the ASP depends on the following factors:
+
+- Capital onboarded
+- Value of the payments
+
+:::tip
+While onboarding does not require any liquidity from the ASP, next payments will.
+:::
+
+### The liquidity problem
+
+If the ASP exhausts its liquidity, it will have to cease accepting new payments and will be compelled to wait for the timelocks (4 weeks) on the on-chain transactions to expire in order to regain liquidity.
+
+To avoid the ASP from running out of funds, it must be able to anticipate how much liquidity will be required throughout a 4 week period.
+
+As we observed, the liquidity necessary during a period will rely on the capital onboarded and the number and value of payments made with that capital
+
+Given this, we can assume the liquidity needed will be the consequence of a function of capital onboarded and a percentage of this capital utilized during the 4 weeks period.
+
+Therefore, how much capital can an ASP accept from users without risking not having enough capital to finance payments inside Ark? In other words, what proportion of the capital inside an Ark is transferred in a 4 week period?
 
 This is similar to the definition of Money Velocity, as defined by the St. Louis Fed:
 

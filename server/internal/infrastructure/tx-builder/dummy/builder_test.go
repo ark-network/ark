@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/dummy"
@@ -18,7 +17,7 @@ import (
 )
 
 const (
-	testingKey = "apub1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22v3hrs4x"
+	testingKey = "0218d5ca8b58797b7dbd65c075dd7ba7784b3f38ab71b1a5a8e3f94ba0257654a6"
 	fakePoolTx = "cHNldP8BAgQCAAAAAQQBAQEFAQMBBgEDAfsEAgAAAAABDiDk7dXxh4KQzgLO8i1ABtaLCe4aPL12GVhN1E9zM1ePLwEPBAAAAAABEAT/////AAEDCOgDAAAAAAAAAQQWABSNnpy01UJqd99eTg2M1IpdKId11gf8BHBzZXQCICWyUQcOKcoZBDzzPM1zJOLdqwPsxK4LXnfE/A5c9slaB/wEcHNldAgEAAAAAAABAwh4BQAAAAAAAAEEFgAUjZ6ctNVCanffXk4NjNSKXSiHddYH/ARwc2V0AiAlslEHDinKGQQ88zzNcyTi3asD7MSuC153xPwOXPbJWgf8BHBzZXQIBAAAAAAAAQMI9AEAAAAAAAABBAAH/ARwc2V0AiAlslEHDinKGQQ88zzNcyTi3asD7MSuC153xPwOXPbJWgf8BHBzZXQIBAAAAAAA"
 )
 
@@ -238,13 +237,11 @@ func TestBuildCongestionTree(t *testing.T) {
 			expectedLeavesNum: 6,
 		},
 	}
-
-	_, key, err := common.DecodePubKey(testingKey)
-	require.NoError(t, err)
-	require.NotNil(t, key)
+	pubkeyBytes, _ := hex.DecodeString(testingKey)
+	pubkey, _ := secp256k1.ParsePubKey(pubkeyBytes)
 
 	for _, f := range fixtures {
-		poolTx, tree, err := builder.BuildPoolTx(key, f.payments, 30)
+		poolTx, tree, err := builder.BuildPoolTx(pubkey, f.payments, 30)
 
 		require.NoError(t, err)
 		require.Equal(t, f.expectedNodesNum, tree.NumberOfNodes())
@@ -352,13 +349,12 @@ func TestBuildForfeitTxs(t *testing.T) {
 		},
 	}
 
-	_, key, err := common.DecodePubKey(testingKey)
-	require.NoError(t, err)
-	require.NotNil(t, key)
+	pubkeyBytes, _ := hex.DecodeString(testingKey)
+	pubkey, _ := secp256k1.ParsePubKey(pubkeyBytes)
 
 	for _, f := range fixtures {
 		connectors, forfeitTxs, err := builder.BuildForfeitTxs(
-			key, fakePoolTx, f.payments,
+			pubkey, fakePoolTx, f.payments,
 		)
 		require.NoError(t, err)
 		require.Len(t, connectors, f.expectedNumOfConnectors)

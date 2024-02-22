@@ -37,7 +37,7 @@ type Service interface {
 	GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
 	UpdatePaymentStatus(ctx context.Context, id string) error
 	ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, error)
-	GetPubkey(ctx context.Context) (string, error)
+	GetInfo(ctx context.Context) (string, int64, int64, error)
 }
 
 type service struct {
@@ -47,6 +47,7 @@ type service struct {
 	roundLifetime int64
 	roundInterval int64
 	minRelayFee   uint64
+	exitDelay     int64
 
 	wallet      ports.WalletService
 	repoManager ports.RepoManager
@@ -62,7 +63,7 @@ type service struct {
 
 func NewService(
 	network common.Network, onchainNetwork network.Network,
-	roundInterval, roundLifetime int64, minRelayFee uint64,
+	roundInterval, roundLifetime int64, exitDelay int64, minRelayFee uint64,
 	walletSvc ports.WalletService, repoManager ports.RepoManager,
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	scheduler ports.SchedulerService,
@@ -81,7 +82,7 @@ func NewService(
 
 	svc := &service{
 		network, onchainNetwork, pubkey,
-		roundLifetime, roundInterval, minRelayFee,
+		roundLifetime, roundInterval, minRelayFee, exitDelay,
 		walletSvc, repoManager, builder, scanner, sweeper,
 		paymentRequests, forfeitTxs, eventsCh,
 	}
@@ -218,12 +219,8 @@ func (s *service) GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.
 	return s.repoManager.Rounds().GetRoundWithTxid(ctx, poolTxid)
 }
 
-func (s *service) GetPubkey(ctx context.Context) (string, error) {
-	pubkey, err := common.EncodePubKey(s.network.PubKey, s.pubkey)
-	if err != nil {
-		return "", err
-	}
-	return pubkey, nil
+func (s *service) GetInfo(ctx context.Context) (string, int64, int64, error) {
+	return hex.EncodeToString(s.pubkey.SerializeCompressed()), s.roundLifetime, s.exitDelay, nil
 }
 
 func (s *service) start() {

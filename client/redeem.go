@@ -4,16 +4,13 @@ import (
 	"bufio"
 	"fmt"
 	"log"
-	"math"
 	"os"
 	"strings"
 	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
-	"github.com/ark-network/ark/common/tree"
 	"github.com/urfave/cli/v2"
 	"github.com/vulpemventures/go-elements/address"
-	"github.com/vulpemventures/go-elements/psetv2"
 )
 
 var (
@@ -21,7 +18,7 @@ var (
 		Name:     "address",
 		Usage:    "main chain address receiving the redeeemed VTXO",
 		Value:    "",
-		Required: true,
+		Required: false,
 	}
 
 	amountToRedeemFlag = cli.Uint64Flag{
@@ -51,19 +48,8 @@ func redeemAction(ctx *cli.Context) error {
 	amount := ctx.Uint64("amount")
 	force := ctx.Bool("force")
 
-	if len(addr) <= 0 {
+	if len(addr) <= 0 && !force {
 		return fmt.Errorf("missing address flag (--address)")
-	}
-	if _, err := address.ToOutputScript(addr); err != nil {
-		return fmt.Errorf("invalid onchain address")
-	}
-	net, err := address.NetworkForAddress(addr)
-	if err != nil {
-		return fmt.Errorf("invalid onchain address: unknown network")
-	}
-	_, liquidNet, _ := getNetwork()
-	if net.Name != liquidNet.Name {
-		return fmt.Errorf("invalid onchain address: must be for %s network", liquidNet.Name)
 	}
 
 	if !force && amount <= 0 {
@@ -75,13 +61,26 @@ func redeemAction(ctx *cli.Context) error {
 			fmt.Printf("WARNING: unilateral exit (--force) ignores --amount flag, it will redeem all your VTXOs\n")
 		}
 
-		return unilateralRedeem(ctx, addr)
+		return unilateralRedeem(ctx)
 	}
 
 	return collaborativeRedeem(ctx, addr, amount)
 }
 
 func collaborativeRedeem(ctx *cli.Context, addr string, amount uint64) error {
+	if _, err := address.ToOutputScript(addr); err != nil {
+		return fmt.Errorf("invalid onchain address")
+	}
+
+	net, err := address.NetworkForAddress(addr)
+	if err != nil {
+		return fmt.Errorf("invalid onchain address: unknown network")
+	}
+	_, liquidNet := getNetwork()
+	if net.Name != liquidNet.Name {
+		return fmt.Errorf("invalid onchain address: must be for %s network", liquidNet.Name)
+	}
+
 	if isConf, _ := address.IsConfidential(addr); isConf {
 		info, _ := address.FromConfidential(addr)
 		addr = info.Address
@@ -105,7 +104,9 @@ func collaborativeRedeem(ctx *cli.Context, addr string, amount uint64) error {
 	}
 	defer close()
 
-	vtxos, err := getVtxos(ctx, client, offchainAddr)
+	explorer := NewExplorer()
+
+	vtxos, err := getVtxos(ctx, explorer, client, offchainAddr, true)
 	if err != nil {
 		return err
 	}
@@ -172,12 +173,7 @@ func collaborativeRedeem(ctx *cli.Context, addr string, amount uint64) error {
 	return nil
 }
 
-func unilateralRedeem(ctx *cli.Context, addr string) error {
-	onchainScript, err := address.ToOutputScript(addr)
-	if err != nil {
-		return err
-	}
-
+func unilateralRedeem(ctx *cli.Context) error {
 	client, close, err := getClientFromState(ctx)
 	if err != nil {
 		return err
@@ -189,7 +185,8 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 		return err
 	}
 
-	vtxos, err := getVtxos(ctx, client, offchainAddr)
+	explorer := NewExplorer()
+	vtxos, err := getVtxos(ctx, explorer, client, offchainAddr, false)
 	if err != nil {
 		return err
 	}
@@ -200,57 +197,23 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 		totalVtxosAmount += vtxo.amount
 	}
 
-	ok := askForConfirmation(fmt.Sprintf("redeem %d sats to %s ?", totalVtxosAmount, addr))
+	ok := askForConfirmation(fmt.Sprintf("redeem %d sats ?", totalVtxosAmount))
 	if !ok {
 		return fmt.Errorf("aborting unilateral exit")
 	}
 
-	finalPset, err := psetv2.New(nil, nil, nil)
-	if err != nil {
-		return err
-	}
-	updater, err := psetv2.NewUpdater(finalPset)
-	if err != nil {
-		return err
-	}
-
-	congestionTrees := make(map[string]tree.CongestionTree, 0)
+	// transactionsMap avoid duplicates
 	transactionsMap := make(map[string]struct{}, 0)
 	transactions := make([]string, 0)
 
-	for _, vtxo := range vtxos {
-		if _, ok := congestionTrees[vtxo.poolTxid]; !ok {
-			round, err := client.GetRound(ctx.Context, &arkv1.GetRoundRequest{
-				Txid: vtxo.poolTxid,
-			})
-			if err != nil {
-				return err
-			}
+	redeemBranches, err := getRedeemBranches(ctx, explorer, client, vtxos)
+	if err != nil {
+		return err
+	}
 
-			treeFromRound := round.GetRound().GetCongestionTree()
-			congestionTree, err := toCongestionTree(treeFromRound)
-			if err != nil {
-				return err
-			}
-
-			congestionTrees[vtxo.poolTxid] = congestionTree
-		}
-
-		redeemBranch, err := newRedeemBranch(ctx, congestionTrees[vtxo.poolTxid], vtxo)
+	for _, branch := range redeemBranches {
+		branchTxs, err := branch.RedeemPath()
 		if err != nil {
-			return err
-		}
-
-		if err := redeemBranch.UpdatePath(); err != nil {
-			return err
-		}
-
-		branchTxs, err := redeemBranch.RedeemPath()
-		if err != nil {
-			return err
-		}
-
-		if err := redeemBranch.AddVtxoInput(updater); err != nil {
 			return err
 		}
 
@@ -261,53 +224,6 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 			}
 		}
 	}
-
-	_, net, err := getNetwork()
-	if err != nil {
-		return err
-	}
-
-	outputs := []psetv2.OutputArgs{
-		{
-			Asset:  net.AssetID,
-			Amount: totalVtxosAmount,
-			Script: onchainScript,
-		},
-	}
-
-	if err := updater.AddOutputs(outputs); err != nil {
-		return err
-	}
-
-	utx, err := updater.Pset.UnsignedTx()
-	if err != nil {
-		return err
-	}
-
-	vBytes := utx.VirtualSize()
-	feeAmount := uint64(math.Ceil(float64(vBytes) * 0.25))
-
-	if totalVtxosAmount-feeAmount <= 0 {
-		return fmt.Errorf("not enough VTXOs to pay the fees (%d sats), aborting unilateral exit", feeAmount)
-	}
-
-	updater.Pset.Outputs[0].Value = totalVtxosAmount - feeAmount
-
-	if err := updater.AddOutputs([]psetv2.OutputArgs{
-		{
-			Asset:  net.AssetID,
-			Amount: feeAmount,
-		},
-	}); err != nil {
-		return err
-	}
-
-	prvKey, err := privateKeyFromPassword()
-	if err != nil {
-		return err
-	}
-
-	explorer := NewExplorer()
 
 	for i, txHex := range transactions {
 		for {
@@ -324,43 +240,6 @@ func unilateralRedeem(ctx *cli.Context, addr string) error {
 				fmt.Printf("(%d/%d) broadcasted tx %s\n", i+1, len(transactions), txid)
 				break
 			}
-		}
-	}
-
-	if err := signPset(finalPset, explorer, prvKey); err != nil {
-		return err
-	}
-
-	for i, input := range finalPset.Inputs {
-		if len(input.TapScriptSig) > 0 || len(input.PartialSigs) > 0 {
-			if err := psetv2.Finalize(finalPset, i); err != nil {
-				return err
-			}
-		}
-	}
-
-	signedTx, err := psetv2.Extract(finalPset)
-	if err != nil {
-		return err
-	}
-
-	hex, err := signedTx.ToHex()
-	if err != nil {
-		return err
-	}
-
-	for {
-		id, err := explorer.Broadcast(hex)
-		if err != nil {
-			if strings.Contains(strings.ToLower(err.Error()), "bad-txns-inputs-missingorspent") {
-				time.Sleep(1 * time.Second)
-				continue
-			}
-			return err
-		}
-		if id != "" {
-			fmt.Printf("(final) redeem tx %s\n", id)
-			break
 		}
 	}
 

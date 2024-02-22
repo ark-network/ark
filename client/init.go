@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
-	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/urfave/cli/v2"
@@ -79,15 +78,17 @@ func connectToAsp(ctx *cli.Context, net, url string) error {
 	}
 	defer close()
 
-	resp, err := client.GetPubkey(ctx.Context, &arkv1.GetPubkeyRequest{})
+	resp, err := client.GetInfo(ctx.Context, &arkv1.GetInfoRequest{})
 	if err != nil {
 		return err
 	}
 
-	return setState(map[string]string{
-		"ark_url":    url,
-		"network":    net,
-		"ark_pubkey": resp.Pubkey,
+	return setState(map[string]interface{}{
+		"ark_url":      url,
+		"network":      net,
+		"ark_pubkey":   resp.Pubkey,
+		"ark_lifetime": resp.Lifetime,
+		"exit_delay":   resp.ExitDelay,
 	})
 }
 
@@ -108,29 +109,17 @@ func initWallet(ctx *cli.Context, key, password string) error {
 		privateKey = secp256k1.PrivKeyFromBytes(privKeyBytes)
 	}
 
-	cypher := NewAES128Cypher()
-
-	arkNetwork, _, err := getNetwork()
-	if err != nil {
-		return err
-	}
-
-	publicKey, err := common.EncodePubKey(arkNetwork.PubKey, privateKey.PubKey())
-	if err != nil {
-		return err
-	}
-
-	encryptedPrivateKey, err := cypher.Encrypt(privateKey.Serialize(), []byte(password))
+	encryptedPrivateKey, err := NewAES128Cypher().Encrypt(privateKey.Serialize(), []byte(password))
 	if err != nil {
 		return err
 	}
 
 	passwordHash := hashPassword([]byte(password))
 
-	state := map[string]string{
+	state := map[string]interface{}{
 		"encrypted_private_key": hex.EncodeToString(encryptedPrivateKey),
 		"password_hash":         hex.EncodeToString(passwordHash),
-		"public_key":            publicKey,
+		"public_key":            hex.EncodeToString(privateKey.PubKey().SerializeCompressed()),
 	}
 
 	if err := setState(state); err != nil {

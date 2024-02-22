@@ -229,35 +229,33 @@ func validateNodeTransaction(
 				return ErrInvalidTaprootScript
 			}
 
-			isSweepLeaf, aspKey, seconds, err := DecodeSweepScript(tapLeaf.Script)
+			close, err := DecodeClosure(tapLeaf.Script)
 			if err != nil {
-				return fmt.Errorf("invalid sweep script: %w", err)
-			}
-
-			if isSweepLeaf {
-				if !aspKey.IsEqual(aspKey) {
-					return ErrInvalidASP
-				}
-
-				if int64(seconds) != expectedSequenceSeconds {
-					return ErrInvalidSweepSequence
-				}
-
-				sweepLeafFound = true
 				continue
 			}
 
-			isBranchLeaf, leftKey, rightKey, leftAmount, rightAmount, err := decodeBranchScript(tapLeaf.Script)
-			if err != nil {
-				return fmt.Errorf("invalid branch script: %w", err)
-			}
+			switch c := close.(type) {
+			case *CSVSigClosure:
+				isASP := c.Pubkey.IsEqual(expectedPublicKeyASP)
+				isSweepDelay := int64(c.Seconds) == expectedSequenceSeconds
 
-			if isBranchLeaf {
+				if isASP && !isSweepDelay {
+					return ErrInvalidSweepSequence
+				}
+
+				if isSweepDelay && !isASP {
+					return ErrInvalidASP
+				}
+
+				if isASP && isSweepDelay {
+					sweepLeafFound = true
+				}
+			case *UnrollClosure:
 				branchLeafFound = true
 
 				// check outputs
 				nbOuts := len(childTx.Outputs)
-				if leftKey != nil && rightKey != nil {
+				if c.LeftKey != nil && c.RightKey != nil {
 					if nbOuts != 3 {
 						return ErrNumberOfOutputs
 					}
@@ -270,26 +268,29 @@ func validateNodeTransaction(
 				leftWitnessProgram := childTx.Outputs[0].Script[2:]
 				leftOutputAmount := childTx.Outputs[0].Value
 
-				if !bytes.Equal(leftWitnessProgram, schnorr.SerializePubKey(leftKey)) {
+				if !bytes.Equal(leftWitnessProgram, schnorr.SerializePubKey(c.LeftKey)) {
 					return ErrInvalidLeftOutput
 				}
 
-				if leftAmount != leftOutputAmount {
+				if c.LeftAmount != leftOutputAmount {
 					return ErrInvalidLeftOutput
 				}
 
-				if rightKey != nil {
+				if c.RightKey != nil {
 					rightWitnessProgram := childTx.Outputs[1].Script[2:]
 					rightOutputAmount := childTx.Outputs[1].Value
 
-					if !bytes.Equal(rightWitnessProgram, schnorr.SerializePubKey(rightKey)) {
+					if !bytes.Equal(rightWitnessProgram, schnorr.SerializePubKey(c.RightKey)) {
 						return ErrInvalidRightOutput
 					}
 
-					if rightAmount != rightOutputAmount {
+					if c.RightAmount != rightOutputAmount {
 						return ErrInvalidRightOutput
 					}
 				}
+
+			default:
+				continue
 			}
 		}
 
