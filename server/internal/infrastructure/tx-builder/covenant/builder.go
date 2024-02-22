@@ -152,7 +152,7 @@ func (b *txBuilder) BuildPoolTx(
 func (b *txBuilder) getLeafScriptAndTree(
 	userPubkey, aspPubkey *secp256k1.PublicKey,
 ) ([]byte, *taproot.IndexedElementsTapScriptTree, error) {
-	redeemClosure := &tree.DelayedSigClose{
+	redeemClosure := &tree.CSVSigClosure{
 		Pubkey:  userPubkey,
 		Seconds: uint(b.exitDelay),
 	}
@@ -162,7 +162,7 @@ func (b *txBuilder) getLeafScriptAndTree(
 		return nil, nil, err
 	}
 
-	forfeitClosure := &tree.ForfeitClose{
+	forfeitClosure := &tree.ForfeitClosure{
 		Pubkey:    userPubkey,
 		AspPubkey: aspPubkey,
 	}
@@ -446,7 +446,7 @@ func (b *txBuilder) createForfeitTxs(
 			var forfeitProof *taproot.TapscriptElementsProof
 
 			for _, proof := range vtxoTaprootTree.LeafMerkleProofs {
-				isForfeit, err := (&tree.ForfeitClose{}).Decode(proof.Script)
+				isForfeit, err := (&tree.ForfeitClosure{}).Decode(proof.Script)
 				if !isForfeit || err != nil {
 					continue
 				}

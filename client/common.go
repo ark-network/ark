@@ -766,7 +766,7 @@ func findSweepClosure(
 	}
 
 	for _, tapLeaf := range tx.Inputs[0].TapLeafScript {
-		close := &tree.DelayedSigClose{}
+		close := &tree.CSVSigClosure{}
 		valid, err := close.Decode(tapLeaf.Script)
 		if err != nil {
 			continue
@@ -828,22 +828,22 @@ func computeVtxoTaprootScript(
 	aspPublicKey *secp256k1.PublicKey,
 	exitDelay uint,
 ) (*secp256k1.PublicKey, *taproot.TapscriptElementsProof, error) {
-	redeemClose := &tree.DelayedSigClose{
+	redeemClosure := &tree.CSVSigClosure{
 		Pubkey:  userPubKey,
 		Seconds: exitDelay,
 	}
 
-	forfeitClose := &tree.ForfeitClose{
+	forfeitClosure := &tree.ForfeitClosure{
 		Pubkey:    userPubKey,
 		AspPubkey: aspPublicKey,
 	}
 
-	redeemLeaf, err := redeemClose.Leaf()
+	redeemLeaf, err := redeemClosure.Leaf()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	forfeitLeaf, err := forfeitClose.Leaf()
+	forfeitLeaf, err := forfeitClosure.Leaf()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1004,7 +1004,7 @@ func addInputs(
 	for _, coin := range selected {
 		fmt.Println("adding input", coin.Txid, coin.Vout)
 		if err := updater.AddInputs([]psetv2.InputArgs{
-			psetv2.InputArgs{
+			{
 				Txid:    coin.Txid,
 				TxIndex: coin.Vout,
 			},

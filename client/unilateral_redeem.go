@@ -90,13 +90,13 @@ func (r *redeemBranch) RedeemPath() ([]string, error) {
 			}
 
 			for _, leaf := range input.TapLeafScript {
-				close, err := tree.DecodeClose(leaf.Script)
+				closure, err := tree.DecodeClosure(leaf.Script)
 				if err != nil {
 					return nil, err
 				}
 
-				switch close.(type) {
-				case *tree.UnrollClose:
+				switch closure.(type) {
+				case *tree.UnrollClosure:
 					controlBlock, err := leaf.ControlBlock.ToBytes()
 					if err != nil {
 						return nil, err

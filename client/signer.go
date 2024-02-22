@@ -130,17 +130,17 @@ func signPset(
 
 			pubkey := prvKey.PubKey()
 			for _, leaf := range input.TapLeafScript {
-				close, err := tree.DecodeClose(leaf.Script)
+				closure, err := tree.DecodeClosure(leaf.Script)
 				if err != nil {
 					return err
 				}
 
 				sign := false
 
-				switch c := close.(type) {
-				case *tree.DelayedSigClose:
+				switch c := closure.(type) {
+				case *tree.CSVSigClosure:
 					sign = bytes.Equal(c.Pubkey.SerializeCompressed()[1:], pubkey.SerializeCompressed()[1:])
-				case *tree.ForfeitClose:
+				case *tree.ForfeitClosure:
 					sign = bytes.Equal(c.Pubkey.SerializeCompressed()[1:], pubkey.SerializeCompressed()[1:])
 				}
 

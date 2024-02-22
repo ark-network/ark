@@ -33,7 +33,7 @@ func sweepTransaction(
 
 	for i, input := range sweepInputs {
 		leaf := input.SweepLeaf
-		sweepClosure := &tree.DelayedSigClose{}
+		sweepClosure := &tree.CSVSigClosure{}
 		isSweep, err := sweepClosure.Decode(leaf.Script)
 		if err != nil {
 			return nil, err

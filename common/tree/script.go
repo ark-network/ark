@@ -18,40 +18,40 @@ const (
 	OP_PUSHCURRENTINPUTINDEX     = 0xcd
 )
 
-type Close interface {
+type Closure interface {
 	Leaf() (*taproot.TapElementsLeaf, error)
 	Decode(script []byte) (bool, error)
 }
 
-type UnrollClose struct {
+type UnrollClosure struct {
 	LeftKey, RightKey       *secp256k1.PublicKey
 	LeftAmount, RightAmount uint64
 }
 
-type DelayedSigClose struct {
+type CSVSigClosure struct {
 	Pubkey  *secp256k1.PublicKey
 	Seconds uint
 }
 
-type ForfeitClose struct {
+type ForfeitClosure struct {
 	Pubkey    *secp256k1.PublicKey
 	AspPubkey *secp256k1.PublicKey
 }
 
-func DecodeClose(script []byte) (Close, error) {
-	var close Close
+func DecodeClosure(script []byte) (Closure, error) {
+	var close Closure
 
-	close = &UnrollClose{}
+	close = &UnrollClosure{}
 	if valid, err := close.Decode(script); err == nil && valid {
 		return close, nil
 	}
 
-	close = &DelayedSigClose{}
+	close = &CSVSigClosure{}
 	if valid, err := close.Decode(script); err == nil && valid {
 		return close, nil
 	}
 
-	close = &ForfeitClose{}
+	close = &ForfeitClosure{}
 	if valid, err := close.Decode(script); err == nil && valid {
 		return close, nil
 	}
@@ -60,7 +60,7 @@ func DecodeClose(script []byte) (Close, error) {
 
 }
 
-func (f *ForfeitClose) Leaf() (*taproot.TapElementsLeaf, error) {
+func (f *ForfeitClosure) Leaf() (*taproot.TapElementsLeaf, error) {
 	aspKeyBytes := schnorr.SerializePubKey(f.AspPubkey)
 	userKeyBytes := schnorr.SerializePubKey(f.Pubkey)
 
@@ -73,7 +73,7 @@ func (f *ForfeitClose) Leaf() (*taproot.TapElementsLeaf, error) {
 	return &tapLeaf, nil
 }
 
-func (f *ForfeitClose) Decode(script []byte) (bool, error) {
+func (f *ForfeitClosure) Decode(script []byte) (bool, error) {
 	valid, aspPubKey, err := decodeChecksigScript(script)
 	if err != nil {
 		return false, err
@@ -107,7 +107,7 @@ func (f *ForfeitClose) Decode(script []byte) (bool, error) {
 	return true, nil
 }
 
-func (d *DelayedSigClose) Leaf() (*taproot.TapElementsLeaf, error) {
+func (d *CSVSigClosure) Leaf() (*taproot.TapElementsLeaf, error) {
 	script, err := csvChecksigScript(d.Pubkey, d.Seconds)
 	if err != nil {
 		return nil, err
@@ -117,7 +117,7 @@ func (d *DelayedSigClose) Leaf() (*taproot.TapElementsLeaf, error) {
 	return &tapLeaf, nil
 }
 
-func (d *DelayedSigClose) Decode(script []byte) (bool, error) {
+func (d *CSVSigClosure) Decode(script []byte) (bool, error) {
 	csvIndex := bytes.Index(script, []byte{txscript.OP_CHECKSEQUENCEVERIFY, txscript.OP_DROP})
 	if csvIndex == -1 || csvIndex == 0 {
 		return false, nil
@@ -155,7 +155,7 @@ func (d *DelayedSigClose) Decode(script []byte) (bool, error) {
 	return valid, nil
 }
 
-func (c *UnrollClose) Leaf() (*taproot.TapElementsLeaf, error) {
+func (c *UnrollClosure) Leaf() (*taproot.TapElementsLeaf, error) {
 	if c.LeftKey == nil || c.LeftAmount == 0 {
 		return nil, fmt.Errorf("left key and amount are required")
 	}
@@ -174,7 +174,7 @@ func (c *UnrollClose) Leaf() (*taproot.TapElementsLeaf, error) {
 	return &leaf, nil
 }
 
-func (c *UnrollClose) Decode(script []byte) (valid bool, err error) {
+func (c *UnrollClosure) Decode(script []byte) (valid bool, err error) {
 	if len(script) != 52 && len(script) != 104 {
 		return false, nil
 	}

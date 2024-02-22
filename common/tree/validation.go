@@ -229,13 +229,13 @@ func validateNodeTransaction(
 				return ErrInvalidTaprootScript
 			}
 
-			close, err := DecodeClose(tapLeaf.Script)
+			close, err := DecodeClosure(tapLeaf.Script)
 			if err != nil {
 				continue
 			}
 
 			switch c := close.(type) {
-			case *DelayedSigClose:
+			case *CSVSigClosure:
 				isASP := c.Pubkey.IsEqual(expectedPublicKeyASP)
 				isSweepDelay := int64(c.Seconds) == expectedSequenceSeconds
 
@@ -250,7 +250,7 @@ func validateNodeTransaction(
 				if isASP && isSweepDelay {
 					sweepLeafFound = true
 				}
-			case *UnrollClose:
+			case *UnrollClosure:
 				branchLeafFound = true
 
 				// check outputs

@@ -131,12 +131,12 @@ func (n *node) getWitnessData() (
 		return n._inputTaprootKey, n._inputTaprootTree, nil
 	}
 
-	sweepClose := &tree.DelayedSigClose{
+	sweepClosure := &tree.CSVSigClosure{
 		Pubkey:  n.sweepKey,
 		Seconds: uint(n.roundLifetime),
 	}
 
-	sweepLeaf, err := sweepClose.Leaf()
+	sweepLeaf, err := sweepClosure.Leaf()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -147,12 +147,12 @@ func (n *node) getWitnessData() (
 			return nil, nil, err
 		}
 
-		unrollClose := &tree.UnrollClose{
+		unrollClosure := &tree.UnrollClosure{
 			LeftKey:    taprootKey,
 			LeftAmount: n.getAmount(),
 		}
 
-		unrollLeaf, err := unrollClose.Leaf()
+		unrollLeaf, err := unrollClosure.Leaf()
 		if err != nil {
 			return nil, nil, err
 		}
@@ -186,14 +186,14 @@ func (n *node) getWitnessData() (
 	leftAmount := n.left.getAmount() + n.feeSats
 	rightAmount := n.right.getAmount() + n.feeSats
 
-	unrollClose := &tree.UnrollClose{
+	unrollClosure := &tree.UnrollClosure{
 		LeftKey:     leftKey,
 		LeftAmount:  leftAmount,
 		RightKey:    rightKey,
 		RightAmount: rightAmount,
 	}
 
-	unrollLeaf, err := unrollClose.Leaf()
+	unrollLeaf, err := unrollClosure.Leaf()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -231,22 +231,22 @@ func (n *node) getVtxoWitnessData() (
 		return nil, nil, err
 	}
 
-	redeemClose := &tree.DelayedSigClose{
+	redeemClosure := &tree.CSVSigClosure{
 		Pubkey:  pubkey,
 		Seconds: uint(n.exitDelay),
 	}
 
-	redeemLeaf, err := redeemClose.Leaf()
+	redeemLeaf, err := redeemClosure.Leaf()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	forfeitClose := &tree.ForfeitClose{
+	forfeitClosure := &tree.ForfeitClosure{
 		Pubkey:    pubkey,
 		AspPubkey: n.sweepKey,
 	}
 
-	forfeitLeaf, err := forfeitClose.Leaf()
+	forfeitLeaf, err := forfeitClosure.Leaf()
 	if err != nil {
 		return nil, nil, err
 	}

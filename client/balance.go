@@ -131,7 +131,10 @@ func balanceAction(ctx *cli.Context) error {
 	response := make(map[string]interface{})
 	response["onchain_balance"] = map[string]interface{}{
 		"spendable_amount": onchainBalance,
-		"locked_amount":    lockedOnchainBalance,
+	}
+
+	if len(lockedOnchainBalance) > 0 {
+		response["onchain_balance"].(map[string]interface{})["locked_amount"] = lockedOnchainBalance
 	}
 
 	offchainBalanceJSON := map[string]interface{}{
