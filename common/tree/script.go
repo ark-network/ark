@@ -39,24 +39,24 @@ type ForfeitClosure struct {
 }
 
 func DecodeClosure(script []byte) (Closure, error) {
-	var close Closure
+	var closure Closure
 
-	close = &UnrollClosure{}
-	if valid, err := close.Decode(script); err == nil && valid {
-		return close, nil
+	closure = &UnrollClosure{}
+	if valid, err := closure.Decode(script); err == nil && valid {
+		return closure, nil
 	}
 
-	close = &CSVSigClosure{}
-	if valid, err := close.Decode(script); err == nil && valid {
-		return close, nil
+	closure = &CSVSigClosure{}
+	if valid, err := closure.Decode(script); err == nil && valid {
+		return closure, nil
 	}
 
-	close = &ForfeitClosure{}
-	if valid, err := close.Decode(script); err == nil && valid {
-		return close, nil
+	closure = &ForfeitClosure{}
+	if valid, err := closure.Decode(script); err == nil && valid {
+		return closure, nil
 	}
 
-	return nil, fmt.Errorf("invalid close script")
+	return nil, fmt.Errorf("invalid closure script")
 
 }
 

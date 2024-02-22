@@ -766,14 +766,14 @@ func findSweepClosure(
 	}
 
 	for _, tapLeaf := range tx.Inputs[0].TapLeafScript {
-		close := &tree.CSVSigClosure{}
-		valid, err := close.Decode(tapLeaf.Script)
+		closure := &tree.CSVSigClosure{}
+		valid, err := closure.Decode(tapLeaf.Script)
 		if err != nil {
 			continue
 		}
 
-		if valid && close.Seconds > seconds {
-			seconds = close.Seconds
+		if valid && closure.Seconds > seconds {
+			seconds = closure.Seconds
 			sweepClosure = &tapLeaf.TapElementsLeaf
 		}
 	}
