@@ -60,14 +60,22 @@ You can see both the onchain and offchain balance of the wallet with:
 $ ark balance
 ```
 
-### Send VTXO(s)
-
-You can make an offchain payment by sending to either one or many receivers:
+To see your balance with your VTXOs expiration details:
 
 ```bash
-$ ark send --to <ark_address> --amount <amount>
-$ ark send --receivers '[{"to": "<ark_address>", "amount": <amount>}, ...]'
+$ ark balance --expiry-details
 ```
+
+### Send VTXO(s)
+
+You can make a payment by sending to either one or many receivers:
+
+```bash
+$ ark send --to <address> --amount <amount>
+$ ark send --receivers '[{"to": "<address>", "amount": <amount>}, ...]'
+```
+
+You can send funds to onchain or offchain addresses.
 
 The amount must be specified in _sats_ unit.
 
@@ -88,3 +96,5 @@ If the ASP is unresponsive you can redeem all your offchain funds unilaterally w
 ```bash
 $ ark redeem --address <onchain_address> --force
 ```
+
+Unilateral exit flag `--force` ignores the `--amount` flag, it will redeem all your VTXOs.
