@@ -22,6 +22,7 @@ type node struct {
 	asset         string
 	feeSats       uint64
 	roundLifetime int64
+	exitDelay     int64
 
 	_inputTaprootKey  *secp256k1.PublicKey
 	_inputTaprootTree *taproot.IndexedElementsTapScriptTree
@@ -130,7 +131,12 @@ func (n *node) getWitnessData() (
 		return n._inputTaprootKey, n._inputTaprootTree, nil
 	}
 
-	sweepClosure, err := tree.SweepScript(n.sweepKey, uint(n.roundLifetime))
+	sweepClosure := &tree.CSVSigClosure{
+		Pubkey:  n.sweepKey,
+		Seconds: uint(n.roundLifetime),
+	}
+
+	sweepLeaf, err := sweepClosure.Leaf()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -141,12 +147,18 @@ func (n *node) getWitnessData() (
 			return nil, nil, err
 		}
 
-		branchTaprootScript := tree.BranchScript(
-			taprootKey, nil, n.getAmount(), 0,
-		)
+		unrollClosure := &tree.UnrollClosure{
+			LeftKey:    taprootKey,
+			LeftAmount: n.getAmount(),
+		}
+
+		unrollLeaf, err := unrollClosure.Leaf()
+		if err != nil {
+			return nil, nil, err
+		}
 
 		branchTaprootTree := taproot.AssembleTaprootScriptTree(
-			branchTaprootScript, *sweepClosure,
+			*unrollLeaf, *sweepLeaf,
 		)
 		root := branchTaprootTree.RootNode.TapHash()
 
@@ -173,12 +185,21 @@ func (n *node) getWitnessData() (
 
 	leftAmount := n.left.getAmount() + n.feeSats
 	rightAmount := n.right.getAmount() + n.feeSats
-	branchTaprootLeaf := tree.BranchScript(
-		leftKey, rightKey, leftAmount, rightAmount,
-	)
+
+	unrollClosure := &tree.UnrollClosure{
+		LeftKey:     leftKey,
+		LeftAmount:  leftAmount,
+		RightKey:    rightKey,
+		RightAmount: rightAmount,
+	}
+
+	unrollLeaf, err := unrollClosure.Leaf()
+	if err != nil {
+		return nil, nil, err
+	}
 
 	branchTaprootTree := taproot.AssembleTaprootScriptTree(
-		branchTaprootLeaf, *sweepClosure,
+		*unrollLeaf, *sweepLeaf,
 	)
 	root := branchTaprootTree.RootNode.TapHash()
 
@@ -200,11 +221,6 @@ func (n *node) getVtxoWitnessData() (
 		return nil, nil, fmt.Errorf("cannot call vtxoWitness on a non-leaf node")
 	}
 
-	sweepClosure, err := tree.SweepScript(n.sweepKey, uint(n.roundLifetime))
-	if err != nil {
-		return nil, nil, err
-	}
-
 	key, err := hex.DecodeString(n.receivers[0].Pubkey)
 	if err != nil {
 		return nil, nil, err
@@ -215,14 +231,28 @@ func (n *node) getVtxoWitnessData() (
 		return nil, nil, err
 	}
 
-	vtxoLeaf, err := tree.VtxoScript(pubkey)
+	redeemClosure := &tree.CSVSigClosure{
+		Pubkey:  pubkey,
+		Seconds: uint(n.exitDelay),
+	}
+
+	redeemLeaf, err := redeemClosure.Leaf()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// TODO: add forfeit path
+	forfeitClosure := &tree.ForfeitClosure{
+		Pubkey:    pubkey,
+		AspPubkey: n.sweepKey,
+	}
+
+	forfeitLeaf, err := forfeitClosure.Leaf()
+	if err != nil {
+		return nil, nil, err
+	}
+
 	leafTaprootTree := taproot.AssembleTaprootScriptTree(
-		*vtxoLeaf, *sweepClosure,
+		*redeemLeaf, *forfeitLeaf,
 	)
 	root := leafTaprootTree.RootNode.TapHash()
 
@@ -357,14 +387,14 @@ func (n *node) createFinalCongestionTree() treeFactory {
 
 func craftCongestionTree(
 	asset string, aspPublicKey *secp256k1.PublicKey,
-	payments []domain.Payment, feeSatsPerNode uint64, roundLifetime int64,
+	payments []domain.Payment, feeSatsPerNode uint64, roundLifetime int64, exitDelay int64,
 ) (
 	buildCongestionTree treeFactory,
 	sharedOutputScript []byte, sharedOutputAmount uint64, err error,
 ) {
 	receivers := getOffchainReceivers(payments)
 	root, err := createPartialCongestionTree(
-		receivers, aspPublicKey, asset, feeSatsPerNode, roundLifetime,
+		receivers, aspPublicKey, asset, feeSatsPerNode, roundLifetime, exitDelay,
 	)
 	if err != nil {
 		return
@@ -391,6 +421,7 @@ func createPartialCongestionTree(
 	asset string,
 	feeSatsPerNode uint64,
 	roundLifetime int64,
+	exitDelay int64,
 ) (root *node, err error) {
 	if len(receivers) == 0 {
 		return nil, fmt.Errorf("no receivers provided")
@@ -404,6 +435,7 @@ func createPartialCongestionTree(
 			asset:         asset,
 			feeSats:       feeSatsPerNode,
 			roundLifetime: roundLifetime,
+			exitDelay:     exitDelay,
 		}
 		nodes = append(nodes, leafNode)
 	}

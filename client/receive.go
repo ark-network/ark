@@ -15,15 +15,9 @@ func receiveAction(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	state, err := getState()
-	if err != nil {
-		return err
-	}
-	relays := []string{state["ark_url"]}
 
 	return printJSON(map[string]interface{}{
 		"offchain_address": offchainAddr,
 		"onchain_address":  onchainAddr,
-		"relays":           relays,
 	})
 }

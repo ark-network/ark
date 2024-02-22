@@ -3,6 +3,7 @@ package tree
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 
 	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -17,9 +18,53 @@ const (
 	OP_PUSHCURRENTINPUTINDEX     = 0xcd
 )
 
-// VtxoScript returns a simple checksig script for a given pubkey
-func VtxoScript(pubkey *secp256k1.PublicKey) (*taproot.TapElementsLeaf, error) {
-	script, err := checksigScript(pubkey)
+type Closure interface {
+	Leaf() (*taproot.TapElementsLeaf, error)
+	Decode(script []byte) (bool, error)
+}
+
+type UnrollClosure struct {
+	LeftKey, RightKey       *secp256k1.PublicKey
+	LeftAmount, RightAmount uint64
+}
+
+type CSVSigClosure struct {
+	Pubkey  *secp256k1.PublicKey
+	Seconds uint
+}
+
+type ForfeitClosure struct {
+	Pubkey    *secp256k1.PublicKey
+	AspPubkey *secp256k1.PublicKey
+}
+
+func DecodeClosure(script []byte) (Closure, error) {
+	var closure Closure
+
+	closure = &UnrollClosure{}
+	if valid, err := closure.Decode(script); err == nil && valid {
+		return closure, nil
+	}
+
+	closure = &CSVSigClosure{}
+	if valid, err := closure.Decode(script); err == nil && valid {
+		return closure, nil
+	}
+
+	closure = &ForfeitClosure{}
+	if valid, err := closure.Decode(script); err == nil && valid {
+		return closure, nil
+	}
+
+	return nil, fmt.Errorf("invalid closure script")
+
+}
+
+func (f *ForfeitClosure) Leaf() (*taproot.TapElementsLeaf, error) {
+	aspKeyBytes := schnorr.SerializePubKey(f.AspPubkey)
+	userKeyBytes := schnorr.SerializePubKey(f.Pubkey)
+
+	script, err := txscript.NewScriptBuilder().AddData(aspKeyBytes).AddOp(txscript.OP_CHECKSIGVERIFY).AddData(userKeyBytes).AddOp(txscript.OP_CHECKSIG).Script()
 	if err != nil {
 		return nil, err
 	}
@@ -28,67 +73,152 @@ func VtxoScript(pubkey *secp256k1.PublicKey) (*taproot.TapElementsLeaf, error) {
 	return &tapLeaf, nil
 }
 
-// SweepScript returns a taproot leaf letting the owner of the key to spend the output after a given timeDelta
-func SweepScript(sweepKey *secp256k1.PublicKey, seconds uint) (*taproot.TapElementsLeaf, error) {
-	sweepScript, err := csvChecksigScript(sweepKey, seconds)
+func (f *ForfeitClosure) Decode(script []byte) (bool, error) {
+	valid, aspPubKey, err := decodeChecksigScript(script)
+	if err != nil {
+		return false, err
+	}
+
+	if !valid {
+		return false, nil
+	}
+
+	valid, pubkey, err := decodeChecksigScript(script[33:])
+	if err != nil {
+		return false, err
+	}
+
+	if !valid {
+		return false, nil
+	}
+
+	f.Pubkey = pubkey
+	f.AspPubkey = aspPubKey
+
+	rebuilt, err := f.Leaf()
+	if err != nil {
+		return false, err
+	}
+
+	if !bytes.Equal(rebuilt.Script, script) {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func (d *CSVSigClosure) Leaf() (*taproot.TapElementsLeaf, error) {
+	script, err := csvChecksigScript(d.Pubkey, d.Seconds)
 	if err != nil {
 		return nil, err
 	}
 
-	tapLeaf := taproot.NewBaseTapElementsLeaf(sweepScript)
+	tapLeaf := taproot.NewBaseTapElementsLeaf(script)
 	return &tapLeaf, nil
 }
 
-// BranchScript returns a taproot leaf that will split the coin in two outputs
-// each output (left and right) will have the given amount and the given taproot key as witness program
-func BranchScript(
-	leftKey, rightKey *secp256k1.PublicKey, leftAmount, rightAmount uint64,
-) taproot.TapElementsLeaf {
-	nextScriptLeft := withOutput(txscript.OP_0, schnorr.SerializePubKey(leftKey), leftAmount, rightKey != nil)
-	branchScript := append([]byte{}, nextScriptLeft...)
-	if rightKey != nil {
-		nextScriptRight := withOutput(txscript.OP_1, schnorr.SerializePubKey(rightKey), rightAmount, false)
-		branchScript = append(branchScript, nextScriptRight...)
+func (d *CSVSigClosure) Decode(script []byte) (bool, error) {
+	csvIndex := bytes.Index(script, []byte{txscript.OP_CHECKSEQUENCEVERIFY, txscript.OP_DROP})
+	if csvIndex == -1 || csvIndex == 0 {
+		return false, nil
 	}
-	return taproot.NewBaseTapElementsLeaf(branchScript)
+
+	sequence := script[1:csvIndex]
+
+	seconds, err := common.BIP68Decode(sequence)
+	if err != nil {
+		return false, err
+	}
+
+	checksigScript := script[csvIndex+2:]
+	valid, pubkey, err := decodeChecksigScript(checksigScript)
+	if err != nil {
+		return false, err
+	}
+
+	if !valid {
+		return false, nil
+	}
+
+	rebuilt, err := csvChecksigScript(pubkey, seconds)
+	if err != nil {
+		return false, err
+	}
+
+	if !bytes.Equal(rebuilt, script) {
+		return false, nil
+	}
+
+	d.Pubkey = pubkey
+	d.Seconds = seconds
+
+	return valid, nil
 }
 
-func decodeBranchScript(script []byte) (valid bool, leftKey, rightKey *secp256k1.PublicKey, leftAmount, rightAmount uint64, err error) {
+func (c *UnrollClosure) Leaf() (*taproot.TapElementsLeaf, error) {
+	if c.LeftKey == nil || c.LeftAmount == 0 {
+		return nil, fmt.Errorf("left key and amount are required")
+	}
+
+	nextScriptLeft := withOutput(txscript.OP_0, schnorr.SerializePubKey(c.LeftKey), c.LeftAmount, c.RightKey != nil)
+	branchScript := append([]byte{}, nextScriptLeft...)
+	if c.RightKey != nil {
+		if c.RightAmount == 0 {
+			return nil, fmt.Errorf("right amount is required")
+		}
+
+		nextScriptRight := withOutput(txscript.OP_1, schnorr.SerializePubKey(c.RightKey), c.RightAmount, false)
+		branchScript = append(branchScript, nextScriptRight...)
+	}
+	leaf := taproot.NewBaseTapElementsLeaf(branchScript)
+	return &leaf, nil
+}
+
+func (c *UnrollClosure) Decode(script []byte) (valid bool, err error) {
 	if len(script) != 52 && len(script) != 104 {
-		return false, nil, nil, 0, 0, nil
+		return false, nil
 	}
 
 	isLeftOnly := len(script) == 52
 
 	validLeft, leftKey, leftAmount, err := decodeWithOutputScript(script[:52], txscript.OP_0, !isLeftOnly)
 	if err != nil {
-		return false, nil, nil, 0, 0, err
+		return false, err
 	}
 
 	if !validLeft {
-		return false, nil, nil, 0, 0, nil
+		return false, nil
 	}
 
+	c.LeftAmount = leftAmount
+	c.LeftKey = leftKey
+
 	if isLeftOnly {
-		return true, leftKey, nil, leftAmount, 0, nil
+		return true, nil
 	}
 
 	validRight, rightKey, rightAmount, err := decodeWithOutputScript(script[52:], txscript.OP_1, false)
 	if err != nil {
-		return false, nil, nil, 0, 0, err
+		return false, err
 	}
 
 	if !validRight {
-		return false, nil, nil, 0, 0, nil
+		return false, nil
 	}
 
-	rebuilt := BranchScript(leftKey, rightKey, leftAmount, rightAmount)
+	c.RightAmount = rightAmount
+	c.RightKey = rightKey
+
+	rebuilt, err := c.Leaf()
+	if err != nil {
+		return false, err
+	}
 
 	if !bytes.Equal(rebuilt.Script, script) {
-		return false, nil, nil, 0, 0, nil
+		return false, nil
 	}
 
-	return true, leftKey, rightKey, leftAmount, rightAmount, nil
+	return true, nil
 }
 
 func decodeWithOutputScript(script []byte, expectedIndex byte, isVerify bool) (valid bool, pubkey *secp256k1.PublicKey, amount uint64, err error) {
@@ -139,51 +269,7 @@ func decodeChecksigScript(script []byte) (valid bool, pubkey *secp256k1.PublicKe
 		return false, nil, err
 	}
 
-	rebuilt, err := checksigScript(pubkey)
-	if err != nil {
-		return false, nil, err
-	}
-
-	if !bytes.Equal(rebuilt, script) {
-		return false, nil, nil
-	}
-
 	return true, pubkey, nil
-}
-
-func DecodeSweepScript(script []byte) (valid bool, aspPubKey *secp256k1.PublicKey, seconds uint, err error) {
-	csvIndex := bytes.Index(script, []byte{txscript.OP_CHECKSEQUENCEVERIFY, txscript.OP_DROP})
-	if csvIndex == -1 || csvIndex == 0 {
-		return false, nil, 0, nil
-	}
-
-	sequence := script[1:csvIndex]
-
-	seconds, err = common.BIP68Decode(sequence)
-	if err != nil {
-		return false, nil, 0, err
-	}
-
-	checksigScript := script[csvIndex+2:]
-	valid, aspPubKey, err = decodeChecksigScript(checksigScript)
-	if err != nil {
-		return false, nil, 0, err
-	}
-
-	if !valid {
-		return false, nil, 0, nil
-	}
-
-	rebuilt, err := csvChecksigScript(aspPubKey, seconds)
-	if err != nil {
-		return false, nil, 0, err
-	}
-
-	if !bytes.Equal(rebuilt, script) {
-		return false, nil, 0, nil
-	}
-
-	return valid, aspPubKey, seconds, nil
 }
 
 // checkSequenceVerifyScript without checksig

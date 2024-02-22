@@ -33,55 +33,56 @@ func sweepTransaction(
 
 	for i, input := range sweepInputs {
 		leaf := input.SweepLeaf
-		isSweep, _, lifetime, err := tree.DecodeSweepScript(leaf.Script)
+		sweepClosure := &tree.CSVSigClosure{}
+		isSweep, err := sweepClosure.Decode(leaf.Script)
 		if err != nil {
 			return nil, err
 		}
 
-		if isSweep {
-			amount += input.Amount
-
-			if err := updater.AddInputs([]psetv2.InputArgs{input.InputArgs}); err != nil {
-				return nil, err
-			}
-
-			if err := updater.AddInTapLeafScript(i, leaf); err != nil {
-				return nil, err
-			}
-
-			assetHash, err := elementsutil.AssetHashToBytes(lbtc)
-			if err != nil {
-				return nil, err
-			}
-
-			value, err := elementsutil.ValueToBytes(input.Amount)
-			if err != nil {
-				return nil, err
-			}
-
-			root := leaf.ControlBlock.RootHash(leaf.Script)
-			taprootKey := taproot.ComputeTaprootOutputKey(leaf.ControlBlock.InternalKey, root)
-			script, err := taprootOutputScript(taprootKey)
-			if err != nil {
-				return nil, err
-			}
-
-			witnessUtxo := transaction.NewTxOutput(assetHash, value, script)
-
-			if err := updater.AddInWitnessUtxo(i, witnessUtxo); err != nil {
-				return nil, err
-			}
-
-			sequence, err := common.BIP68EncodeAsNumber(lifetime)
-			if err != nil {
-				return nil, err
-			}
-
-			updater.Pset.Inputs[i].Sequence = sequence
-			continue
+		if !isSweep {
+			return nil, fmt.Errorf("invalid sweep script")
 		}
 
-		return nil, fmt.Errorf("invalid sweep script")
+		amount += input.Amount
+
+		if err := updater.AddInputs([]psetv2.InputArgs{input.InputArgs}); err != nil {
+			return nil, err
+		}
+
+		if err := updater.AddInTapLeafScript(i, leaf); err != nil {
+			return nil, err
+		}
+
+		assetHash, err := elementsutil.AssetHashToBytes(lbtc)
+		if err != nil {
+			return nil, err
+		}
+
+		value, err := elementsutil.ValueToBytes(input.Amount)
+		if err != nil {
+			return nil, err
+		}
+
+		root := leaf.ControlBlock.RootHash(leaf.Script)
+		taprootKey := taproot.ComputeTaprootOutputKey(leaf.ControlBlock.InternalKey, root)
+		script, err := taprootOutputScript(taprootKey)
+		if err != nil {
+			return nil, err
+		}
+
+		witnessUtxo := transaction.NewTxOutput(assetHash, value, script)
+
+		if err := updater.AddInWitnessUtxo(i, witnessUtxo); err != nil {
+			return nil, err
+		}
+
+		sequence, err := common.BIP68EncodeAsNumber(sweepClosure.Seconds)
+		if err != nil {
+			return nil, err
+		}
+
+		updater.Pset.Inputs[i].Sequence = sequence
+		continue
 	}
 
 	ctx := context.Background()
