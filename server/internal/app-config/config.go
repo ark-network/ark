@@ -98,7 +98,7 @@ func (c *Config) Validate() error {
 	}
 	// round life time must be a multiple of 512
 	if c.RoundLifetime < 512 || c.RoundLifetime%512 != 0 {
-		return fmt.Errorf("invalid round lifetime, must be greater or equal than 1024 and a multiple of 512")
+		return fmt.Errorf("invalid round lifetime, must be greater or equal than 512 and a multiple of 512")
 	}
 	seq, err := common.BIP68Encode(uint(c.RoundLifetime))
 	if err != nil {
