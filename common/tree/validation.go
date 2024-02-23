@@ -63,7 +63,7 @@ func UnspendableKey() *secp256k1.PublicKey {
 
 // ValidateCongestionTree checks if the given congestion tree is valid
 // poolTxID & poolTxIndex & poolTxAmount are used to validate the root input outpoint
-// aspPublicKey & roundLifetimeSeconds are used to validate the sweep tapscript leaves
+// aspPublicKey & roundLifetime are used to validate the sweep tapscript leaves
 // besides that, the function validates:
 // - the number of nodes
 // - the number of leaves
@@ -71,10 +71,8 @@ func UnspendableKey() *secp256k1.PublicKey {
 // - every control block and taproot output scripts
 // - input and output amounts
 func ValidateCongestionTree(
-	tree CongestionTree,
-	poolTx string,
-	aspPublicKey *secp256k1.PublicKey,
-	roundLifetimeSeconds int64,
+	tree CongestionTree, poolTx string, aspPublicKey *secp256k1.PublicKey,
+	roundLifetime int64,
 ) error {
 	poolTransaction, err := psetv2.NewPsetFromBase64(poolTx)
 	if err != nil {
@@ -115,7 +113,8 @@ func ValidateCongestionTree(
 	}
 
 	rootInput := rootPset.Inputs[0]
-	if chainhash.Hash(rootInput.PreviousTxid).String() != poolTxID || rootInput.PreviousTxIndex != sharedOutputIndex {
+	if chainhash.Hash(rootInput.PreviousTxid).String() != poolTxID ||
+		rootInput.PreviousTxIndex != sharedOutputIndex {
 		return ErrWrongPoolTxID
 	}
 
@@ -135,7 +134,9 @@ func ValidateCongestionTree(
 	// iterates over all the nodes of the tree
 	for _, level := range tree {
 		for _, node := range level {
-			if err := validateNodeTransaction(node, tree, UnspendableKey(), aspPublicKey, roundLifetimeSeconds); err != nil {
+			if err := validateNodeTransaction(
+				node, tree, UnspendableKey(), aspPublicKey, roundLifetime,
+			); err != nil {
 				return err
 			}
 		}
@@ -145,11 +146,9 @@ func ValidateCongestionTree(
 }
 
 func validateNodeTransaction(
-	node Node,
-	tree CongestionTree,
-	expectedInternalKey,
-	expectedPublicKeyASP *secp256k1.PublicKey,
-	expectedSequenceSeconds int64,
+	node Node, tree CongestionTree,
+	expectedInternalKey, expectedPublicKeyASP *secp256k1.PublicKey,
+	expectedSequence int64,
 ) error {
 	if node.Tx == "" {
 		return ErrNodeTransactionEmpty
@@ -186,7 +185,8 @@ func validateNodeTransaction(
 		return ErrNumberOfTapscripts
 	}
 
-	if chainhash.Hash(decodedPset.Inputs[0].PreviousTxid).String() != node.ParentTxid {
+	prevTxid := chainhash.Hash(decodedPset.Inputs[0].PreviousTxid).String()
+	if prevTxid != node.ParentTxid {
 		return ErrParentTxidInput
 	}
 
@@ -225,19 +225,24 @@ func validateNodeTransaction(
 			rootHash := tapLeaf.ControlBlock.RootHash(tapLeaf.Script)
 			outputScript := taproot.ComputeTaprootOutputKey(key, rootHash)
 
-			if !bytes.Equal(schnorr.SerializePubKey(outputScript), previousScriptKey) {
+			if !bytes.Equal(
+				schnorr.SerializePubKey(outputScript), previousScriptKey,
+			) {
 				return ErrInvalidTaprootScript
 			}
 
-			close, err := DecodeClosure(tapLeaf.Script)
+			closure, err := DecodeClosure(tapLeaf.Script)
 			if err != nil {
 				continue
 			}
 
-			switch c := close.(type) {
+			switch c := closure.(type) {
 			case *CSVSigClosure:
-				isASP := bytes.Equal(schnorr.SerializePubKey(c.Pubkey), schnorr.SerializePubKey(expectedPublicKeyASP))
-				isSweepDelay := int64(c.Seconds) == expectedSequenceSeconds
+				isASP := bytes.Equal(
+					schnorr.SerializePubKey(c.Pubkey),
+					schnorr.SerializePubKey(expectedPublicKeyASP),
+				)
+				isSweepDelay := int64(c.Seconds) == expectedSequence
 
 				if isASP && !isSweepDelay {
 					return ErrInvalidSweepSequence
@@ -268,7 +273,9 @@ func validateNodeTransaction(
 				leftWitnessProgram := childTx.Outputs[0].Script[2:]
 				leftOutputAmount := childTx.Outputs[0].Value
 
-				if !bytes.Equal(leftWitnessProgram, schnorr.SerializePubKey(c.LeftKey)) {
+				if !bytes.Equal(
+					leftWitnessProgram, schnorr.SerializePubKey(c.LeftKey),
+				) {
 					return ErrInvalidLeftOutput
 				}
 
@@ -280,7 +287,9 @@ func validateNodeTransaction(
 					rightWitnessProgram := childTx.Outputs[1].Script[2:]
 					rightOutputAmount := childTx.Outputs[1].Value
 
-					if !bytes.Equal(rightWitnessProgram, schnorr.SerializePubKey(c.RightKey)) {
+					if !bytes.Equal(
+						rightWitnessProgram, schnorr.SerializePubKey(c.RightKey),
+					) {
 						return ErrInvalidRightOutput
 					}
 

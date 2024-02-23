@@ -10,9 +10,7 @@ import (
 // TaprootPreimage computes the hash for witness v1 input of a pset
 // it implicitly assumes that the pset has witnessUtxo fields populated
 func TaprootPreimage(
-	genesisBlockHash *chainhash.Hash,
-	pset *psetv2.Pset,
-	inputIndex int,
+	genesisBlockHash *chainhash.Hash, pset *psetv2.Pset, inputIndex int,
 	leafHash *chainhash.Hash,
 ) ([]byte, error) {
 	prevoutScripts := make([][]byte, 0)
@@ -35,14 +33,8 @@ func TaprootPreimage(
 	}
 
 	preimage := utx.HashForWitnessV1(
-		inputIndex,
-		prevoutScripts,
-		prevoutAssets,
-		prevoutValues,
-		pset.Inputs[inputIndex].SigHashType,
-		genesisBlockHash,
-		leafHash,
-		nil,
+		inputIndex, prevoutScripts, prevoutAssets, prevoutValues,
+		pset.Inputs[inputIndex].SigHashType, genesisBlockHash, leafHash, nil,
 	)
 	return preimage[:], nil
 }

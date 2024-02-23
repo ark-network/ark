@@ -7,7 +7,9 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-func EncodeAddress(hrp string, userKey, aspKey *secp256k1.PublicKey) (addr string, err error) {
+func EncodeAddress(
+	hrp string, userKey, aspKey *secp256k1.PublicKey,
+) (addr string, err error) {
 	if userKey == nil {
 		err = fmt.Errorf("missing public key")
 		return
@@ -20,7 +22,9 @@ func EncodeAddress(hrp string, userKey, aspKey *secp256k1.PublicKey) (addr strin
 		err = fmt.Errorf("invalid prefix")
 		return
 	}
-	combinedKey := append(aspKey.SerializeCompressed(), userKey.SerializeCompressed()...)
+	combinedKey := append(
+		aspKey.SerializeCompressed(), userKey.SerializeCompressed()...,
+	)
 	grp, err := bech32.ConvertBits(combinedKey, 8, 5, true)
 	if err != nil {
 		return
@@ -29,7 +33,9 @@ func EncodeAddress(hrp string, userKey, aspKey *secp256k1.PublicKey) (addr strin
 	return
 }
 
-func DecodeAddress(addr string) (hrp string, userKey *secp256k1.PublicKey, aspKey *secp256k1.PublicKey, err error) {
+func DecodeAddress(
+	addr string,
+) (hrp string, userKey *secp256k1.PublicKey, aspKey *secp256k1.PublicKey, err error) {
 	prefix, buf, err := bech32.DecodeNoLimit(addr)
 	if err != nil {
 		return
