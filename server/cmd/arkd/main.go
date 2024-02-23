@@ -31,18 +31,6 @@ func main() {
 		NoTLS: cfg.NoTLS,
 	}
 
-	if cfg.RoundLifetime%512 != 0 {
-		setLifetime := cfg.RoundLifetime
-		cfg.RoundLifetime = cfg.RoundLifetime - (cfg.RoundLifetime % 512)
-		log.Infof("round lifetime must be a multiple of 512, %d -> %d", setLifetime, cfg.RoundLifetime)
-	}
-
-	if cfg.ExitDelay%512 != 0 {
-		setExitDelay := cfg.ExitDelay
-		cfg.ExitDelay = cfg.ExitDelay - (cfg.ExitDelay % 512)
-		log.Infof("exit delay must be a multiple of 512, %d -> %d", setExitDelay, cfg.ExitDelay)
-	}
-
 	appConfig := &appconfig.Config{
 		DbType:                cfg.DbType,
 		DbDir:                 cfg.DbDir,
@@ -54,7 +42,7 @@ func main() {
 		WalletAddr:            cfg.WalletAddr,
 		MinRelayFee:           cfg.MinRelayFee,
 		RoundLifetime:         cfg.RoundLifetime,
-		ExitDelay:             cfg.ExitDelay,
+		UnilateralExitDelay:   cfg.UnilateralExitDelay,
 	}
 	svc, err := grpcservice.NewService(svcConfig, appConfig)
 	if err != nil {
