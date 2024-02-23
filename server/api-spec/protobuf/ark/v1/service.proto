@@ -38,11 +38,6 @@ service ArkService {
       get: "/v1/ping/{payment_id}"
     };
   };
-  rpc Faucet(FaucetRequest) returns (FaucetResponse) {
-    option (google.api.http) = {
-      post: "/v1/faucet/{address}"
-    };
-  }
   rpc ListVtxos(ListVtxosRequest) returns (ListVtxosResponse) {
     option (google.api.http) = {
       get: "/v1/vtxos/{address}"
@@ -165,12 +160,6 @@ message PingRequest {
 }
 
 message PingResponse {}
-
-message FaucetRequest {
-  string address = 1;
-}
-
-message FaucetResponse {}
 
 message ListVtxosRequest {
   string address = 1;

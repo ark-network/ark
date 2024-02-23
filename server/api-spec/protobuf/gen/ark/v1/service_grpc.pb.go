@@ -24,7 +24,6 @@ type ArkServiceClient interface {
 	GetRound(ctx context.Context, in *GetRoundRequest, opts ...grpc.CallOption) (*GetRoundResponse, error)
 	GetEventStream(ctx context.Context, in *GetEventStreamRequest, opts ...grpc.CallOption) (ArkService_GetEventStreamClient, error)
 	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
-	Faucet(ctx context.Context, in *FaucetRequest, opts ...grpc.CallOption) (*FaucetResponse, error)
 	ListVtxos(ctx context.Context, in *ListVtxosRequest, opts ...grpc.CallOption) (*ListVtxosResponse, error)
 	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error)
 	Onboard(ctx context.Context, in *OnboardRequest, opts ...grpc.CallOption) (*OnboardResponse, error)
@@ -115,15 +114,6 @@ func (c *arkServiceClient) Ping(ctx context.Context, in *PingRequest, opts ...gr
 	return out, nil
 }
 
-func (c *arkServiceClient) Faucet(ctx context.Context, in *FaucetRequest, opts ...grpc.CallOption) (*FaucetResponse, error) {
-	out := new(FaucetResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/Faucet", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *arkServiceClient) ListVtxos(ctx context.Context, in *ListVtxosRequest, opts ...grpc.CallOption) (*ListVtxosResponse, error) {
 	out := new(ListVtxosResponse)
 	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/ListVtxos", in, out, opts...)
@@ -161,7 +151,6 @@ type ArkServiceServer interface {
 	GetRound(context.Context, *GetRoundRequest) (*GetRoundResponse, error)
 	GetEventStream(*GetEventStreamRequest, ArkService_GetEventStreamServer) error
 	Ping(context.Context, *PingRequest) (*PingResponse, error)
-	Faucet(context.Context, *FaucetRequest) (*FaucetResponse, error)
 	ListVtxos(context.Context, *ListVtxosRequest) (*ListVtxosResponse, error)
 	GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error)
 	Onboard(context.Context, *OnboardRequest) (*OnboardResponse, error)
@@ -188,9 +177,6 @@ func (UnimplementedArkServiceServer) GetEventStream(*GetEventStreamRequest, ArkS
 }
 func (UnimplementedArkServiceServer) Ping(context.Context, *PingRequest) (*PingResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
-}
-func (UnimplementedArkServiceServer) Faucet(context.Context, *FaucetRequest) (*FaucetResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Faucet not implemented")
 }
 func (UnimplementedArkServiceServer) ListVtxos(context.Context, *ListVtxosRequest) (*ListVtxosResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListVtxos not implemented")
@@ -324,24 +310,6 @@ func _ArkService_Ping_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ArkService_Faucet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(FaucetRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ArkServiceServer).Faucet(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/Faucet",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).Faucet(ctx, req.(*FaucetRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _ArkService_ListVtxos_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListVtxosRequest)
 	if err := dec(in); err != nil {
@@ -422,10 +390,6 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Ping",
 			Handler:    _ArkService_Ping_Handler,
-		},
-		{
-			MethodName: "Faucet",
-			Handler:    _ArkService_Faucet_Handler,
 		},
 		{
 			MethodName: "ListVtxos",

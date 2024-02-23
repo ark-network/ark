@@ -21,10 +21,6 @@ import (
 var (
 	paymentsThreshold = int64(128)
 	dustAmount        = uint64(450)
-	faucetVtxo        = domain.VtxoKey{
-		Txid: "0000000000000000000000000000000000000000000000000000000000000000",
-		VOut: 0,
-	}
 )
 
 type Service interface {
@@ -33,7 +29,6 @@ type Service interface {
 	SpendVtxos(ctx context.Context, inputs []domain.VtxoKey) (string, error)
 	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error
 	SignVtxos(ctx context.Context, forfeitTxs []string) error
-	FaucetVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) error
 	GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error)
 	GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
 	UpdatePaymentStatus(ctx context.Context, id string) error
@@ -166,43 +161,6 @@ func (s *service) ClaimVtxos(ctx context.Context, creds string, receivers []doma
 
 func (s *service) UpdatePaymentStatus(_ context.Context, id string) error {
 	return s.paymentRequests.updatePingTimestamp(id)
-}
-
-func (s *service) FaucetVtxos(ctx context.Context, userPubkey *secp256k1.PublicKey) error {
-	pubkey := hex.EncodeToString(userPubkey.SerializeCompressed())
-
-	payment, err := domain.NewPayment([]domain.Vtxo{
-		{
-			VtxoKey: faucetVtxo,
-			Receiver: domain.Receiver{
-				Pubkey: pubkey,
-				Amount: 10000,
-			},
-		},
-	})
-	if err != nil {
-		return err
-	}
-
-	if err := payment.AddReceivers([]domain.Receiver{
-		{Pubkey: pubkey, Amount: 1000},
-		{Pubkey: pubkey, Amount: 1000},
-		{Pubkey: pubkey, Amount: 1000},
-		{Pubkey: pubkey, Amount: 1000},
-		{Pubkey: pubkey, Amount: 1000},
-		{Pubkey: pubkey, Amount: 1000},
-		{Pubkey: pubkey, Amount: 1000},
-		{Pubkey: pubkey, Amount: 1000},
-		{Pubkey: pubkey, Amount: 1000},
-		{Pubkey: pubkey, Amount: 1000},
-	}); err != nil {
-		return err
-	}
-
-	if err := s.paymentRequests.push(*payment); err != nil {
-		return err
-	}
-	return s.paymentRequests.updatePingTimestamp(payment.Id)
 }
 
 func (s *service) SignVtxos(ctx context.Context, forfeitTxs []string) error {
@@ -636,9 +594,6 @@ func getSpentVtxos(payments map[string]domain.Payment) []domain.VtxoKey {
 	vtxos := make([]domain.VtxoKey, 0)
 	for _, p := range payments {
 		for _, vtxo := range p.Inputs {
-			if vtxo.VtxoKey == faucetVtxo {
-				continue
-			}
 			vtxos = append(vtxos, vtxo.VtxoKey)
 		}
 	}

@@ -47,36 +47,6 @@
         ]
       }
     },
-    "/v1/faucet/{address}": {
-      "post": {
-        "operationId": "ArkService_Faucet",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1FaucetResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "address",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "ArkService"
-        ]
-      }
-    },
     "/v1/info": {
       "get": {
         "operationId": "ArkService_GetInfo",
@@ -365,9 +335,6 @@
       }
     },
     "v1ClaimPaymentResponse": {
-      "type": "object"
-    },
-    "v1FaucetResponse": {
       "type": "object"
     },
     "v1FinalizePaymentRequest": {

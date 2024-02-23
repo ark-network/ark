@@ -127,19 +127,6 @@ func (h *handler) FinalizePayment(ctx context.Context, req *arkv1.FinalizePaymen
 	return &arkv1.FinalizePaymentResponse{}, nil
 }
 
-func (h *handler) Faucet(ctx context.Context, req *arkv1.FaucetRequest) (*arkv1.FaucetResponse, error) {
-	_, pubkey, _, err := parseAddress(req.GetAddress())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-
-	if err := h.svc.FaucetVtxos(ctx, pubkey); err != nil {
-		return nil, err
-	}
-
-	return &arkv1.FaucetResponse{}, nil
-}
-
 func (h *handler) GetRound(ctx context.Context, req *arkv1.GetRoundRequest) (*arkv1.GetRoundResponse, error) {
 	if len(req.GetTxid()) <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "missing pool txid")
