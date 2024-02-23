@@ -310,6 +310,8 @@ func (s *service) startFinalization() {
 
 	log.Debugf("forfeit transactions created for round %s", round.Id)
 
+	fmt.Println("connectors = ", len(connectors))
+
 	events, err := round.StartFinalization(connectors, tree, unsignedPoolTx)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to start finalization: %s", err))
@@ -389,11 +391,13 @@ func (s *service) listenToRedemptions() {
 
 				for _, vtxo := range vtxos {
 					if vtxo.Spent {
-						connectorTx, connectorVout, err := roundRepo.GetNextConnectorTx(ctx, vtxo.PoolTx)
+						connectorTx, connectorVout, err := roundRepo.GetNextConnectorTx(ctx, vtxo.SpentBy)
 						if err != nil {
 							log.WithError(err).Warn("failed to retrieve next connector tx, retrying...")
 							continue
 						}
+
+						// TODO: lock utxos to be able to sign the tx
 
 						// sign & broadcast the connector tx
 						signedConnectorTx, err := s.wallet.SignPset(ctx, connectorTx, true)
@@ -410,12 +414,12 @@ func (s *service) listenToRedemptions() {
 						log.Debugf("broadcasted connector tx %s:%d", connectorTxid, connectorVout)
 
 						// shift the connector
-						if err := roundRepo.ShiftConnector(ctx, vtxo.PoolTx); err != nil {
+						if err := roundRepo.ShiftConnector(ctx, vtxo.SpentBy); err != nil {
 							log.WithError(err).Warn("failed to shift connector, retrying...")
 							continue
 						}
 
-						forfeitTx, err := roundRepo.GetForfeitTx(ctx, vtxo.PoolTx, vtxo.Txid, connectorTxid, connectorVout)
+						forfeitTx, err := roundRepo.GetForfeitTx(ctx, vtxo.SpentBy, vtxo.Txid, connectorTxid, connectorVout)
 						if err != nil {
 							log.WithError(err).Warn("failed to retrieve forfeit tx, retrying...")
 							continue
@@ -480,7 +484,7 @@ func (s *service) updateVtxoSet(round *domain.Round) {
 	spentVtxos := getSpentVtxos(round.Payments)
 	if len(spentVtxos) > 0 {
 		for {
-			if err := repo.SpendVtxos(ctx, spentVtxos); err != nil {
+			if err := repo.SpendVtxos(ctx, spentVtxos, round.Txid); err != nil {
 				log.WithError(err).Warn("failed to add new vtxos, retrying soon")
 				time.Sleep(100 * time.Millisecond)
 				continue

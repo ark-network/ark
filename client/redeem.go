@@ -39,7 +39,7 @@ var (
 var redeemCommand = cli.Command{
 	Name:   "redeem",
 	Usage:  "Redeem your offchain funds, either collaboratively or unilaterally",
-	Flags:  []cli.Flag{&addressFlag, &amountToRedeemFlag, &forceFlag},
+	Flags:  []cli.Flag{&addressFlag, &amountToRedeemFlag, &forceFlag, &cheatFlag},
 	Action: redeemAction,
 }
 
@@ -47,6 +47,7 @@ func redeemAction(ctx *cli.Context) error {
 	addr := ctx.String("address")
 	amount := ctx.Uint64("amount")
 	force := ctx.Bool("force")
+	cheat := ctx.Bool("cheat")
 
 	if len(addr) <= 0 && !force {
 		return fmt.Errorf("missing address flag (--address)")
@@ -61,7 +62,7 @@ func redeemAction(ctx *cli.Context) error {
 			fmt.Printf("WARNING: unilateral exit (--force) ignores --amount flag, it will redeem all your VTXOs\n")
 		}
 
-		return unilateralRedeem(ctx)
+		return unilateralRedeem(ctx, cheat)
 	}
 
 	return collaborativeRedeem(ctx, addr, amount)
@@ -173,7 +174,7 @@ func collaborativeRedeem(ctx *cli.Context, addr string, amount uint64) error {
 	return nil
 }
 
-func unilateralRedeem(ctx *cli.Context) error {
+func unilateralRedeem(ctx *cli.Context, cheat bool) error {
 	client, close, err := getClientFromState(ctx)
 	if err != nil {
 		return err
@@ -185,11 +186,22 @@ func unilateralRedeem(ctx *cli.Context) error {
 		return err
 	}
 
+	vtxos := make([]vtxo, 0)
+	if cheat {
+		vtxosFromState, err := getVtxosInState()
+		if err != nil {
+			return err
+		}
+		vtxos = append(vtxosFromState, vtxos...)
+	}
+
 	explorer := NewExplorer()
-	vtxos, err := getVtxos(ctx, explorer, client, offchainAddr, false)
+	vtxosFromServer, err := getVtxos(ctx, explorer, client, offchainAddr, false)
 	if err != nil {
 		return err
 	}
+
+	vtxos = append(vtxos, vtxosFromServer...)
 
 	totalVtxosAmount := uint64(0)
 

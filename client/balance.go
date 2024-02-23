@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"sync"
@@ -16,14 +17,22 @@ var expiryDetailsFlag = cli.BoolFlag{
 	Required: false,
 }
 
+var cheatFlag = cli.BoolFlag{
+	Name:     "cheat",
+	Usage:    "cheat",
+	Value:    false,
+	Required: false,
+}
+
 var balanceCommand = cli.Command{
 	Name:   "balance",
 	Usage:  "Shows the onchain and offchain balance of the Ark wallet",
 	Action: balanceAction,
-	Flags:  []cli.Flag{&expiryDetailsFlag},
+	Flags:  []cli.Flag{&expiryDetailsFlag, &cheatFlag},
 }
 
 func balanceAction(ctx *cli.Context) error {
+	cheat := ctx.Bool("cheat")
 	withExpiryDetails := ctx.Bool("expiry-details")
 
 	client, cancel, err := getClientFromState(ctx)
@@ -31,6 +40,36 @@ func balanceAction(ctx *cli.Context) error {
 		return err
 	}
 	defer cancel()
+
+	if cheat {
+		offchainAddr, _, err := getAddress()
+		if err != nil {
+			return err
+		}
+
+		vtxos, err := getVtxos(ctx, NewExplorer(), client, offchainAddr, false)
+		if err != nil {
+			return err
+		}
+
+		jsonVtxos := make([]JSONVtxo, 0, len(vtxos))
+		for _, v := range vtxos {
+			jsonVtxos = append(jsonVtxos, v.toJSON())
+		}
+
+		marshalled, err := json.Marshal(jsonVtxos)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(string(marshalled))
+
+		if err := setState(map[string]interface{}{
+			"vtxos": string(marshalled),
+		}); err != nil {
+			return err
+		}
+	}
 
 	offchainAddr, onchainAddr, err := getAddress()
 	if err != nil {

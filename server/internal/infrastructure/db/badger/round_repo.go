@@ -122,6 +122,8 @@ func (r *roundRepository) GetNextConnectorTx(
 		connectorVout = 2
 	}
 
+	fmt.Println("round.Connectors", round.Connectors)
+
 	return round.Connectors[0], connectorVout, nil
 }
 

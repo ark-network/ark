@@ -131,6 +131,7 @@ type Vtxo struct {
 	VtxoKey
 	Receiver
 	PoolTx   string
+	SpentBy  string
 	Spent    bool
 	Redeemed bool
 	Swept    bool

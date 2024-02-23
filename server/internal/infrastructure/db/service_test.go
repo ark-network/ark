@@ -362,7 +362,7 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 		require.NoError(t, err)
 		require.Exactly(t, userVtxos, spendableVtxos)
 
-		err = svc.Vtxos().SpendVtxos(ctx, vtxoKeys[:1])
+		err = svc.Vtxos().SpendVtxos(ctx, vtxoKeys[:1], txid)
 		require.NoError(t, err)
 
 		spentVtxos, err := svc.Vtxos().GetVtxos(ctx, vtxoKeys[:1])
