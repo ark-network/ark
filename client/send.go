@@ -40,7 +40,7 @@ var (
 
 var sendCommand = cli.Command{
 	Name:   "send",
-	Usage:  "Send VTXOs to a list of addresses",
+	Usage:  "Send your onchain or offchain funds to one or many receivers",
 	Action: sendAction,
 	Flags:  []cli.Flag{&receiversFlag, &toFlag, &amountFlag},
 }
@@ -93,11 +93,9 @@ func sendAction(ctx *cli.Context) error {
 			return err
 		}
 
-		if err := printJSON(map[string]interface{}{
+		return printJSON(map[string]interface{}{
 			"txid": txid,
-		}); err != nil {
-			return err
-		}
+		})
 	}
 
 	if len(offchainReceivers) > 0 {

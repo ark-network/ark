@@ -57,13 +57,12 @@ func main() {
 
 	app.Version = version
 	app.Name = "Ark CLI"
-	app.Usage = "command line interface for Ark wallet"
+	app.Usage = "ark wallet command line interface"
 	app.Commands = append(
 		app.Commands,
 		&balanceCommand,
 		&configCommand,
 		&dumpCommand,
-		&faucetCommand,
 		&initCommand,
 		&receiveCommand,
 		&redeemCommand,

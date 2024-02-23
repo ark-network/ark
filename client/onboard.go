@@ -26,7 +26,7 @@ var (
 
 var onboardCommand = cli.Command{
 	Name:   "onboard",
-	Usage:  "onboard VTXOs to the Ark network",
+	Usage:  "Onboard the Ark by lifting your funds",
 	Action: onboardAction,
 	Flags:  []cli.Flag{&amountOnboardFlag},
 }

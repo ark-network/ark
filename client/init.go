@@ -36,7 +36,7 @@ var (
 
 var initCommand = cli.Command{
 	Name:   "init",
-	Usage:  "initialize the wallet with an encryption password, and connect it to an ASP",
+	Usage:  "Initialize your Ark wallet with an encryption password, and connect it to an ASP",
 	Action: initAction,
 	Flags:  []cli.Flag{&passwordFlag, &privateKeyFlag, &networkFlag, &urlFlag},
 }

@@ -6,7 +6,7 @@ import (
 
 var receiveCommand = cli.Command{
 	Name:   "receive",
-	Usage:  "Print the Ark address associated with your wallet and the connected Ark",
+	Usage:  "Shows both onchain and offchain addresses",
 	Action: receiveAction,
 }
 
