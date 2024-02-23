@@ -10,8 +10,23 @@ import (
 func (s *service) DeriveAddresses(
 	ctx context.Context, numOfAddresses int,
 ) ([]string, error) {
+	return s.deriveAddresses(ctx, numOfAddresses, accountLabel)
+}
+
+func (s *service) DeriveConnectorAddress(ctx context.Context) (string, error) {
+	addresses, err := s.deriveAddresses(ctx, 1, connectorAccountLabel)
+	if err != nil {
+		return "", err
+	}
+
+	return addresses[0], nil
+}
+
+func (s *service) deriveAddresses(
+	ctx context.Context, numOfAddresses int, account string,
+) ([]string, error) {
 	res, err := s.accountClient.DeriveAddresses(ctx, &pb.DeriveAddressesRequest{
-		AccountName:    accountLabel,
+		AccountName:    account,
 		NumOfAddresses: uint64(numOfAddresses),
 	})
 	if err != nil {

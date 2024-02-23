@@ -41,9 +41,9 @@ func (b *txBuilder) GetVtxoScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([
 	return outputScript, nil
 }
 
-func (b *txBuilder) BuildSweepTx(wallet ports.WalletService, inputs []ports.SweepInput) (signedSweepTx string, err error) {
+func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (signedSweepTx string, err error) {
 	sweepPset, err := sweepTransaction(
-		wallet,
+		b.wallet,
 		inputs,
 		b.net.AssetID,
 	)
@@ -57,7 +57,7 @@ func (b *txBuilder) BuildSweepTx(wallet ports.WalletService, inputs []ports.Swee
 	}
 
 	ctx := context.Background()
-	signedSweepPsetB64, err := wallet.SignPsetWithKey(ctx, sweepPsetBase64, nil)
+	signedSweepPsetB64, err := b.wallet.SignPsetWithKey(ctx, sweepPsetBase64, nil)
 	if err != nil {
 		return "", err
 	}
@@ -80,9 +80,10 @@ func (b *txBuilder) BuildSweepTx(wallet ports.WalletService, inputs []ports.Swee
 }
 
 func (b *txBuilder) BuildForfeitTxs(
-	aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment,
+	connectorAddress string, aspPubkey *secp256k1.PublicKey,
+	poolTx string, payments []domain.Payment, minRelayFee uint64,
 ) (connectors []string, forfeitTxs []string, err error) {
-	connectorTxs, err := b.createConnectors(poolTx, payments, aspPubkey)
+	connectorTxs, err := b.createConnectors(poolTx, payments, connectorAddress, minRelayFee)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -100,7 +101,7 @@ func (b *txBuilder) BuildForfeitTxs(
 }
 
 func (b *txBuilder) BuildPoolTx(
-	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, minRelayFee uint64,
+	connectorAddress string, aspPubkey *secp256k1.PublicKey, payments []domain.Payment, minRelayFee uint64,
 ) (poolTx string, congestionTree tree.CongestionTree, err error) {
 	// The creation of the tree and the pool tx are tightly coupled:
 	// - building the tree requires knowing the shared outpoint (txid:vout)
@@ -121,7 +122,7 @@ func (b *txBuilder) BuildPoolTx(
 	}
 
 	ptx, err := b.createPoolTx(
-		sharedOutputAmount, sharedOutputScript, payments, aspPubkey,
+		sharedOutputAmount, sharedOutputScript, payments, aspPubkey, connectorAddress, minRelayFee,
 	)
 	if err != nil {
 		return
@@ -190,15 +191,20 @@ func (b *txBuilder) getLeafScriptAndTree(
 
 func (b *txBuilder) createPoolTx(
 	sharedOutputAmount uint64, sharedOutputScript []byte,
-	payments []domain.Payment, aspPubKey *secp256k1.PublicKey,
+	payments []domain.Payment, aspPubKey *secp256k1.PublicKey, connectorAddress string, minRelayFee uint64,
 ) (*psetv2.Pset, error) {
 	aspScript, err := p2wpkhScript(aspPubKey, b.net)
 	if err != nil {
 		return nil, err
 	}
 
+	connectorScript, err := address.ToOutputScript(connectorAddress)
+	if err != nil {
+		return nil, err
+	}
+
 	receivers := getOnchainReceivers(payments)
-	connectorsAmount := connectorAmount * countSpentVtxos(payments)
+	connectorsAmount := (connectorAmount+minRelayFee)*countSpentVtxos(payments) - minRelayFee
 	targetAmount := sharedOutputAmount + connectorsAmount
 
 	outputs := []psetv2.OutputArgs{
@@ -210,7 +216,7 @@ func (b *txBuilder) createPoolTx(
 		{
 			Asset:  b.net.AssetID,
 			Amount: connectorsAmount,
-			Script: aspScript,
+			Script: connectorScript,
 		},
 	}
 
@@ -354,11 +360,11 @@ func (b *txBuilder) createPoolTx(
 }
 
 func (b *txBuilder) createConnectors(
-	poolTx string, payments []domain.Payment, aspPubkey *secp256k1.PublicKey,
+	poolTx string, payments []domain.Payment, connectorAddress string, minRelayFee uint64,
 ) ([]*psetv2.Pset, error) {
 	txid, _ := getTxid(poolTx)
 
-	aspScript, err := p2wpkhScript(aspPubkey, b.net)
+	aspScript, err := address.ToOutputScript(connectorAddress)
 	if err != nil {
 		return nil, err
 	}
@@ -378,7 +384,7 @@ func (b *txBuilder) createConnectors(
 
 	if numberOfConnectors == 1 {
 		outputs := []psetv2.OutputArgs{connectorOutput}
-		connectorTx, err := craftConnectorTx(previousInput, outputs)
+		connectorTx, err := craftConnectorTx(previousInput, aspScript, outputs, minRelayFee)
 		if err != nil {
 			return nil, err
 		}
@@ -386,12 +392,13 @@ func (b *txBuilder) createConnectors(
 		return []*psetv2.Pset{connectorTx}, nil
 	}
 
-	totalConnectorAmount := connectorAmount * numberOfConnectors
+	totalConnectorAmount := (connectorAmount+minRelayFee)*numberOfConnectors - minRelayFee
 
 	connectors := make([]*psetv2.Pset, 0, numberOfConnectors-1)
 	for i := uint64(0); i < numberOfConnectors-1; i++ {
 		outputs := []psetv2.OutputArgs{connectorOutput}
 		totalConnectorAmount -= connectorAmount
+		totalConnectorAmount -= minRelayFee
 		if totalConnectorAmount > 0 {
 			outputs = append(outputs, psetv2.OutputArgs{
 				Asset:  b.net.AssetID,
@@ -399,7 +406,7 @@ func (b *txBuilder) createConnectors(
 				Amount: totalConnectorAmount,
 			})
 		}
-		connectorTx, err := craftConnectorTx(previousInput, outputs)
+		connectorTx, err := craftConnectorTx(previousInput, aspScript, outputs, minRelayFee)
 		if err != nil {
 			return nil, err
 		}

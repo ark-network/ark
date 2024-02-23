@@ -207,7 +207,7 @@ func (s *sweeper) createTask(
 
 		if len(sweepInputs) > 0 {
 			// build the sweep transaction with all the expired non-swept shared outputs
-			sweepTx, err := s.builder.BuildSweepTx(s.wallet, sweepInputs)
+			sweepTx, err := s.builder.BuildSweepTx(sweepInputs)
 			if err != nil {
 				log.WithError(err).Error("error while building sweep tx")
 				return

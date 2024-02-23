@@ -11,7 +11,10 @@ import (
 	"github.com/vulpemventures/go-bip32"
 )
 
-const accountLabel = "ark"
+const (
+	accountLabel          = "ark"
+	connectorAccountLabel = "ark-connector"
+)
 
 var derivationPath = []uint32{0, 0}
 

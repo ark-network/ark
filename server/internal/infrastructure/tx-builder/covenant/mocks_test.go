@@ -40,6 +40,17 @@ func (m *mockedWallet) DeriveAddresses(ctx context.Context, num int) ([]string, 
 	return res, args.Error(1)
 }
 
+// DeriveConnectorAddress implements ports.WalletService.
+func (m *mockedWallet) DeriveConnectorAddress(ctx context.Context) (string, error) {
+	args := m.Called(ctx)
+
+	var res string
+	if a := args.Get(0); a != nil {
+		res = a.(string)
+	}
+	return res, args.Error(1)
+}
+
 // GetPubkey implements ports.WalletService.
 func (m *mockedWallet) GetPubkey(ctx context.Context) (*secp256k1.PublicKey, error) {
 	args := m.Called(ctx)

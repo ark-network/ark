@@ -10,6 +10,7 @@ type WalletService interface {
 	BlockchainScanner
 	Status(ctx context.Context) (WalletStatus, error)
 	GetPubkey(ctx context.Context) (*secp256k1.PublicKey, error)
+	DeriveConnectorAddress(ctx context.Context) (string, error)
 	DeriveAddresses(ctx context.Context, num int) ([]string, error)
 	SignPset(
 		ctx context.Context, pset string, extractRawTx bool,

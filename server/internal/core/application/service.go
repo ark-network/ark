@@ -290,7 +290,14 @@ func (s *service) startFinalization() {
 		return
 	}
 
-	unsignedPoolTx, tree, err := s.builder.BuildPoolTx(s.pubkey, payments, s.minRelayFee)
+	connectorAddress, err := s.wallet.DeriveConnectorAddress(ctx)
+	if err != nil {
+		changes = round.Fail(fmt.Errorf("failed to derive connector address: %s", err))
+		log.WithError(err).Warn("failed to derive connector address")
+		return
+	}
+
+	unsignedPoolTx, tree, err := s.builder.BuildPoolTx(connectorAddress, s.pubkey, payments, s.minRelayFee)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
 		log.WithError(err).Warn("failed to create pool tx")
@@ -299,7 +306,7 @@ func (s *service) startFinalization() {
 
 	log.Debugf("pool tx created for round %s", round.Id)
 
-	connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(s.pubkey, unsignedPoolTx, payments)
+	connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(connectorAddress, s.pubkey, unsignedPoolTx, payments, s.minRelayFee)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
 		log.WithError(err).Warn("failed to create connectors and forfeit txs")
@@ -385,10 +392,83 @@ func (s *service) listenToRedemptions() {
 	for vtxoKeys := range chVtxos {
 		if len(vtxoKeys) > 0 {
 			for {
+				vtxos, err := s.repoManager.Vtxos().GetVtxos(ctx, vtxoKeys)
+				if err != nil {
+					log.WithError(err).Warn("failed to retrieve vtxos, retrying...")
+					time.Sleep(100 * time.Millisecond)
+					continue
+				}
+
+				roundRepo := s.repoManager.Rounds()
+
+				for _, vtxo := range vtxos {
+					if vtxo.Spent {
+						connectorTx, connectorVout, err := roundRepo.GetNextConnectorTx(ctx, vtxo.PoolTx)
+						if err != nil {
+							log.WithError(err).Warn("failed to retrieve next connector tx, retrying...")
+							continue
+						}
+
+						// sign & broadcast the connector tx
+						signedConnectorTx, err := s.wallet.SignPset(ctx, connectorTx, true)
+						if err != nil {
+							log.WithError(err).Warn("failed to sign connector tx, retrying...")
+							continue
+						}
+
+						connectorTxid, err := s.wallet.BroadcastTransaction(ctx, signedConnectorTx)
+						if err != nil {
+							log.WithError(err).Warn("failed to broadcast connector tx, retrying...")
+							continue
+						}
+						log.Debugf("broadcasted connector tx %s:%d", connectorTxid, connectorVout)
+
+						// shift the connector
+						if err := roundRepo.ShiftConnector(ctx, vtxo.PoolTx); err != nil {
+							log.WithError(err).Warn("failed to shift connector, retrying...")
+							continue
+						}
+
+						forfeitTx, err := roundRepo.GetForfeitTx(ctx, vtxo.PoolTx, vtxo.Txid, connectorTxid, connectorVout)
+						if err != nil {
+							log.WithError(err).Warn("failed to retrieve forfeit tx, retrying...")
+							continue
+						}
+
+						// sign & broadcast the forfeit tx
+						signedForfeitTx, err := s.wallet.SignPset(ctx, forfeitTx, false)
+						if err != nil {
+							log.WithError(err).Warn("failed to sign forfeit tx, retrying...")
+							continue
+						}
+
+						signedForfeitTx, err = s.wallet.SignPsetWithKey(ctx, signedForfeitTx, []int{1})
+						if err != nil {
+							log.WithError(err).Warn("failed to sign forfeit tx, retrying...")
+							continue
+						}
+
+						extractedForfeitTx, err := finalizeAndExtractForfeit(signedForfeitTx)
+						if err != nil {
+							log.WithError(err).Warn("failed to extract forfeit tx, retrying...")
+							continue
+						}
+
+						forfeitTxid, err := s.wallet.BroadcastTransaction(ctx, extractedForfeitTx)
+						if err != nil {
+							log.WithError(err).Warn("failed to broadcast forfeit tx, retrying...")
+							continue
+						}
+
+						log.Debugf("broadcasted forfeit tx %s", forfeitTxid)
+					}
+
+				}
+
 				// TODO: make sure that the vtxos haven't been already spent, otherwise
 				// broadcast the corresponding forfeit tx and connector to prevent
 				// getting cheated.
-				vtxos, err := s.repoManager.Vtxos().RedeemVtxos(ctx, vtxoKeys)
+				_, err = s.repoManager.Vtxos().RedeemVtxos(ctx, vtxoKeys)
 				if err != nil {
 					log.WithError(err).Warn("failed to redeem vtxos, retrying...")
 					time.Sleep(100 * time.Millisecond)
@@ -597,4 +677,24 @@ func getSpentVtxos(payments map[string]domain.Payment) []domain.VtxoKey {
 		}
 	}
 	return vtxos
+}
+
+func finalizeAndExtractForfeit(b64 string) (string, error) {
+	p, err := psetv2.NewPsetFromBase64(b64)
+	if err != nil {
+		return "", err
+	}
+
+	// finalize connector input
+	if err := psetv2.FinalizeAll(p); err != nil {
+		return "", err
+	}
+
+	// extract the forfeit tx
+	extracted, err := psetv2.Extract(p)
+	if err != nil {
+		return "", err
+	}
+
+	return extracted.ToHex()
 }
