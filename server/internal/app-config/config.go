@@ -11,7 +11,6 @@ import (
 	oceanwallet "github.com/ark-network/ark/internal/infrastructure/ocean-wallet"
 	scheduler "github.com/ark-network/ark/internal/infrastructure/scheduler/gocron"
 	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenant"
-	txbuilderdummy "github.com/ark-network/ark/internal/infrastructure/tx-builder/dummy"
 	log "github.com/sirupsen/logrus"
 	"github.com/vulpemventures/go-elements/network"
 )
@@ -24,7 +23,6 @@ var (
 		"gocron": {},
 	}
 	supportedTxBuilders = supportedType{
-		"dummy":    {},
 		"covenant": {},
 	}
 	supportedScanners = supportedType{
@@ -167,8 +165,6 @@ func (c *Config) txBuilderService() error {
 	net := c.mainChain()
 
 	switch c.TxBuilderType {
-	case "dummy":
-		svc = txbuilderdummy.NewTxBuilder(c.wallet, net)
 	case "covenant":
 		svc = txbuilder.NewTxBuilder(c.wallet, net, c.RoundLifetime, c.ExitDelay)
 	default:
