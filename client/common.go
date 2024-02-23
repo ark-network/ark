@@ -15,6 +15,7 @@ import (
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/urfave/cli/v2"
@@ -596,7 +597,7 @@ func handleRoundStream(
 						if len(output.Script) == 0 {
 							continue
 						}
-						if bytes.Equal(output.Script[2:], outputTapKey.SerializeCompressed()) {
+						if bytes.Equal(output.Script[2:], schnorr.SerializePubKey(outputTapKey)) {
 							if output.Value != receiver.Amount {
 								continue
 							}
