@@ -59,6 +59,39 @@ func NewRound(dustAmount uint64) *Round {
 	}
 }
 
+func NewFinalizedRound(
+	dustAmount uint64, userKey, poolTxid, poolTx string,
+	congestionTree tree.CongestionTree, payments []Payment,
+) *Round {
+	r := NewRound(dustAmount)
+	events := []RoundEvent{
+		RoundStarted{
+			Id:        r.Id,
+			Timestamp: time.Now().Unix(),
+		},
+		PaymentsRegistered{
+			Id:       r.Id,
+			Payments: payments,
+		},
+		RoundFinalizationStarted{
+			Id:             r.Id,
+			CongestionTree: congestionTree,
+			PoolTx:         poolTx,
+		},
+		RoundFinalized{
+			Id:        r.Id,
+			Txid:      poolTxid,
+			Timestamp: time.Now().Unix(),
+		},
+	}
+
+	for _, event := range events {
+		r.raise(event)
+	}
+
+	return r
+}
+
 func NewRoundFromEvents(events []RoundEvent) *Round {
 	r := &Round{}
 

@@ -15,6 +15,7 @@ import (
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/urfave/cli/v2"
@@ -596,7 +597,7 @@ func handleRoundStream(
 						if len(output.Script) == 0 {
 							continue
 						}
-						if bytes.Equal(output.Script[2:], outputTapKey.SerializeCompressed()) {
+						if bytes.Equal(output.Script[2:], schnorr.SerializePubKey(outputTapKey)) {
 							if output.Value != receiver.Amount {
 								continue
 							}
@@ -731,6 +732,29 @@ func toCongestionTree(treeFromProto *arkv1.Tree) (tree.CongestionTree, error) {
 	}
 
 	return levels, nil
+}
+
+// castCongestionTree converts a tree.CongestionTree to a repeated arkv1.TreeLevel
+func castCongestionTree(congestionTree tree.CongestionTree) *arkv1.Tree {
+	levels := make([]*arkv1.TreeLevel, 0, len(congestionTree))
+	for _, level := range congestionTree {
+		levelProto := &arkv1.TreeLevel{
+			Nodes: make([]*arkv1.Node, 0, len(level)),
+		}
+
+		for _, node := range level {
+			levelProto.Nodes = append(levelProto.Nodes, &arkv1.Node{
+				Txid:       node.Txid,
+				Tx:         node.Tx,
+				ParentTxid: node.ParentTxid,
+			})
+		}
+
+		levels = append(levels, levelProto)
+	}
+	return &arkv1.Tree{
+		Levels: levels,
+	}
 }
 
 func decodeReceiverAddress(addr string) (

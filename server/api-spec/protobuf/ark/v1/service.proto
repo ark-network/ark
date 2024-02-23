@@ -38,11 +38,6 @@ service ArkService {
       get: "/v1/ping/{payment_id}"
     };
   };
-  rpc Faucet(FaucetRequest) returns (FaucetResponse) {
-    option (google.api.http) = {
-      post: "/v1/faucet/{address}"
-    };
-  }
   rpc ListVtxos(ListVtxosRequest) returns (ListVtxosResponse) {
     option (google.api.http) = {
       get: "/v1/vtxos/{address}"
@@ -53,6 +48,21 @@ service ArkService {
       get: "/v1/info"
     };
   }
+  rpc Onboard(OnboardRequest) returns (OnboardResponse) {
+    option (google.api.http) = {
+      post: "/v1/onboard"
+      body: "*"
+    };
+  }
+}
+
+message OnboardRequest {
+  string boarding_tx = 1;
+  Tree congestion_tree = 2;
+  string user_pubkey = 3;
+}
+
+message OnboardResponse {
 }
 
 message RegisterPaymentRequest {
@@ -150,12 +160,6 @@ message PingRequest {
 }
 
 message PingResponse {}
-
-message FaucetRequest {
-  string address = 1;
-}
-
-message FaucetResponse {}
 
 message ListVtxosRequest {
   string address = 1;

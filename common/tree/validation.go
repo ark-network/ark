@@ -236,7 +236,7 @@ func validateNodeTransaction(
 
 			switch c := close.(type) {
 			case *CSVSigClosure:
-				isASP := c.Pubkey.IsEqual(expectedPublicKeyASP)
+				isASP := bytes.Equal(schnorr.SerializePubKey(c.Pubkey), schnorr.SerializePubKey(expectedPublicKeyASP))
 				isSweepDelay := int64(c.Seconds) == expectedSequenceSeconds
 
 				if isASP && !isSweepDelay {

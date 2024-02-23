@@ -1,8 +1,6 @@
 package application
 
 import (
-	"bytes"
-	"encoding/hex"
 	"fmt"
 	"sort"
 	"sync"
@@ -154,23 +152,13 @@ func (m *forfeitTxsMap) push(txs []string) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	faucetTxID, _ := hex.DecodeString(faucetVtxo.Txid)
-
 	for _, tx := range txs {
 		ptx, _ := psetv2.NewPsetFromBase64(tx)
 		utx, _ := ptx.UnsignedTx()
-
+		txid := utx.TxHash().String()
 		signed := false
 
-		// find the faucet vtxos, and mark them as signed
-		for _, input := range ptx.Inputs {
-			if bytes.Equal(input.PreviousTxid, faucetTxID) {
-				signed = true
-				break
-			}
-		}
-
-		m.forfeitTxs[utx.TxHash().String()] = &signedTx{tx, signed}
+		m.forfeitTxs[txid] = &signedTx{tx, signed}
 	}
 }
 

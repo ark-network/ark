@@ -71,15 +71,29 @@ This will add a `state.json` file to the following directory:
 **Note:** you can use a different datadir by exporting the env var `ARK_WALLET_DATADIR` like:
 
 ```bash
-$ export ARK_WALLET_DATADIR=path/to/custom 
+$ export ARK_WALLET_DATADIR=path/to/custom
 $ ark init --password <password> --ark-url localhost:6000
+```
 
 Add funds to the ark wallet:
 
 ```
-$ ark faucet
-# ark now has 10000 sats on its offchain balance
+$ ark receive
+{
+	"offchain_address": <address starting with "tark1q...">,
+	"onchain_address": <address starting with "tex1q...">
+}
 ```
+
+Fund the `onchain_address` with https://liquidtestnet.com/faucet.
+
+Onboard the ark:
+
+```
+$ ark onboard --amount 21000
+```
+
+After confirmation, ark wallet will be funded and ready to spend offchain.
 
 In **another tab**, setup another ark wallet with:
 
@@ -87,8 +101,6 @@ In **another tab**, setup another ark wallet with:
 $ export ARK_WALLET_DATADIR=./datadir
 $ alias ark2=$(pwd)/build/ark-cli-<os>-<arch>
 $ ark2 init --password <password> --ark-url localhost:6000
-$ ark2 faucet
-# ark2 now has 10000 sats on ark
 ```
 
 **Note:** `ark2` should always run in the second tab.
@@ -98,7 +110,7 @@ $ ark2 faucet
 You can now make ark payments between the 2 ark wallets:
 
 ```
-$ ark receive
+$ ark2 receive
 {
 	"offchain_address": <address starting with "tark1q...">,
 	"onchain_address": <address starting with "tex1q...">,
@@ -109,7 +121,7 @@ $ ark receive
 ```
 
 ```
-$ ark2 send --to <offchain_address> --amount 2100
+$ ark send --to <ark2 offchain address> --amount 2100
 ```
 
 Both balances should reflect the payment:
@@ -117,15 +129,15 @@ Both balances should reflect the payment:
 ```
 $ ark balance
 {
-	"offchain_balance": 12100,
-	"onchain_balance": 0
+	"offchain_balance": 18900,
+	"onchain_balance": 78872
 }
 ```
 
 ```
 $ ark2 balance
 {
-	"offchain_balance": 7900,
+	"offchain_balance": 2100,
 	"onchain_balance": 0
 }
 ```

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -20,10 +21,6 @@ import (
 var (
 	paymentsThreshold = int64(128)
 	dustAmount        = uint64(450)
-	faucetVtxo        = domain.VtxoKey{
-		Txid: "0000000000000000000000000000000000000000000000000000000000000000",
-		VOut: 0,
-	}
 )
 
 type Service interface {
@@ -32,12 +29,12 @@ type Service interface {
 	SpendVtxos(ctx context.Context, inputs []domain.VtxoKey) (string, error)
 	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error
 	SignVtxos(ctx context.Context, forfeitTxs []string) error
-	FaucetVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) error
 	GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error)
 	GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
 	UpdatePaymentStatus(ctx context.Context, id string) error
 	ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, error)
 	GetInfo(ctx context.Context) (string, int64, int64, error)
+	Onboard(ctx context.Context, boardingTx string, congestionTree tree.CongestionTree, userPubkey *secp256k1.PublicKey) error
 }
 
 type service struct {
@@ -88,8 +85,9 @@ func NewService(
 	}
 	repoManager.RegisterEventsHandler(
 		func(round *domain.Round) {
-			svc.updateProjectionStore(round)
-			svc.propagateEvents(round)
+			go svc.updateVtxoSet(round)
+			go svc.propagateEvents(round)
+			go svc.scheduleSweepVtxosForRound(round)
 		},
 	)
 
@@ -165,43 +163,6 @@ func (s *service) UpdatePaymentStatus(_ context.Context, id string) error {
 	return s.paymentRequests.updatePingTimestamp(id)
 }
 
-func (s *service) FaucetVtxos(ctx context.Context, userPubkey *secp256k1.PublicKey) error {
-	pubkey := hex.EncodeToString(userPubkey.SerializeCompressed())
-
-	payment, err := domain.NewPayment([]domain.Vtxo{
-		{
-			VtxoKey: faucetVtxo,
-			Receiver: domain.Receiver{
-				Pubkey: pubkey,
-				Amount: 10000,
-			},
-		},
-	})
-	if err != nil {
-		return err
-	}
-
-	if err := payment.AddReceivers([]domain.Receiver{
-		{Pubkey: pubkey, Amount: 1000},
-		{Pubkey: pubkey, Amount: 1000},
-		{Pubkey: pubkey, Amount: 1000},
-		{Pubkey: pubkey, Amount: 1000},
-		{Pubkey: pubkey, Amount: 1000},
-		{Pubkey: pubkey, Amount: 1000},
-		{Pubkey: pubkey, Amount: 1000},
-		{Pubkey: pubkey, Amount: 1000},
-		{Pubkey: pubkey, Amount: 1000},
-		{Pubkey: pubkey, Amount: 1000},
-	}); err != nil {
-		return err
-	}
-
-	if err := s.paymentRequests.push(*payment); err != nil {
-		return err
-	}
-	return s.paymentRequests.updatePingTimestamp(payment.Id)
-}
-
 func (s *service) SignVtxos(ctx context.Context, forfeitTxs []string) error {
 	return s.forfeitTxs.sign(forfeitTxs)
 }
@@ -221,6 +182,40 @@ func (s *service) GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.
 
 func (s *service) GetInfo(ctx context.Context) (string, int64, int64, error) {
 	return hex.EncodeToString(s.pubkey.SerializeCompressed()), s.roundLifetime, s.exitDelay, nil
+}
+
+func (s *service) Onboard(
+	ctx context.Context, boardingTx string,
+	congestionTree tree.CongestionTree, userPubkey *secp256k1.PublicKey,
+) error {
+	if err := tree.ValidateCongestionTree(
+		congestionTree, boardingTx, s.pubkey, s.roundLifetime,
+	); err != nil {
+		return err
+	}
+	ptx, err := psetv2.NewPsetFromBase64(boardingTx)
+	if err != nil {
+		return fmt.Errorf("failed to parse boarding tx: %s", err)
+	}
+
+	utx, _ := ptx.UnsignedTx()
+	txid := utx.TxHash().String()
+
+	isConfirmed, _, err := s.wallet.IsTransactionConfirmed(ctx, txid)
+	if err != nil {
+		return fmt.Errorf("failed to fetch confirmation info for boaridng tx: %s", err)
+	}
+	if !isConfirmed {
+		return fmt.Errorf("boarding tx not confirmed yet, please retry later")
+	}
+
+	pubkey := hex.EncodeToString(userPubkey.SerializeCompressed())
+	payments := getPaymentsFromOnboarding(congestionTree, pubkey)
+	round := domain.NewFinalizedRound(
+		dustAmount, pubkey, txid, boardingTx, congestionTree, payments,
+	)
+
+	return s.saveEvents(ctx, round.Id, round.Events())
 }
 
 func (s *service) start() {
@@ -365,15 +360,6 @@ func (s *service) finalizeRound() {
 		return
 	}
 
-	now := time.Now().Unix()
-	expirationTimestamp := now + s.roundLifetime + 30 // add 30 secs to be sure that the tx is confirmed
-
-	if err := s.sweeper.schedule(expirationTimestamp, txid, round.CongestionTree); err != nil {
-		changes = round.Fail(fmt.Errorf("failed to schedule sweep tx: %s", err))
-		log.WithError(err).Warn("failed to schedule sweep tx")
-		return
-	}
-
 	changes, _ = round.EndFinalization(forfeitTxs, txid)
 
 	log.Debugf("finalized round %s with pool tx %s", round.Id, round.Txid)
@@ -403,49 +389,50 @@ func (s *service) listenToRedemptions() {
 	}
 }
 
-func (s *service) updateProjectionStore(round *domain.Round) {
-	ctx := context.Background()
-	lastChange := round.Events()[len(round.Events())-1]
+func (s *service) updateVtxoSet(round *domain.Round) {
 	// Update the vtxo set only after a round is finalized.
-	if _, ok := lastChange.(domain.RoundFinalized); ok {
-		repo := s.repoManager.Vtxos()
-		spentVtxos := getSpentVtxos(round.Payments)
-		if len(spentVtxos) > 0 {
-			for {
-				if err := repo.SpendVtxos(ctx, spentVtxos); err != nil {
-					log.WithError(err).Warn("failed to add new vtxos, retrying soon")
-					time.Sleep(100 * time.Millisecond)
-					continue
-				}
-				log.Debugf("spent %d vtxos", len(spentVtxos))
-				break
-			}
-		}
+	if !round.IsEnded() {
+		return
+	}
 
-		newVtxos := s.getNewVtxos(round)
+	ctx := context.Background()
+	repo := s.repoManager.Vtxos()
+	spentVtxos := getSpentVtxos(round.Payments)
+	if len(spentVtxos) > 0 {
 		for {
-			if err := repo.AddVtxos(ctx, newVtxos); err != nil {
+			if err := repo.SpendVtxos(ctx, spentVtxos); err != nil {
 				log.WithError(err).Warn("failed to add new vtxos, retrying soon")
 				time.Sleep(100 * time.Millisecond)
 				continue
 			}
-			log.Debugf("added %d new vtxos", len(newVtxos))
+			log.Debugf("spent %d vtxos", len(spentVtxos))
 			break
 		}
-
-		go func() {
-			for {
-				if err := s.startWatchingVtxos(newVtxos); err != nil {
-					log.WithError(err).Warn(
-						"failed to start watching vtxos, retrying in a moment...",
-					)
-					continue
-				}
-				log.Debugf("started watching %d vtxos", len(newVtxos))
-				return
-			}
-		}()
 	}
+
+	newVtxos := s.getNewVtxos(round)
+	for {
+		if err := repo.AddVtxos(ctx, newVtxos); err != nil {
+			log.WithError(err).Warn("failed to add new vtxos, retrying soon")
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		log.Debugf("added %d new vtxos", len(newVtxos))
+		break
+	}
+
+	go func() {
+		for {
+			if err := s.startWatchingVtxos(newVtxos); err != nil {
+				log.WithError(err).Warn(
+					"failed to start watching vtxos, retrying in a moment...",
+				)
+				continue
+			}
+			log.Debugf("started watching %d vtxos", len(newVtxos))
+			return
+		}
+	}()
 }
 
 func (s *service) propagateEvents(round *domain.Round) {
@@ -462,6 +449,23 @@ func (s *service) propagateEvents(round *domain.Round) {
 		}
 	case domain.RoundFinalized, domain.RoundFailed:
 		s.eventsCh <- e
+	}
+}
+
+func (s *service) scheduleSweepVtxosForRound(round *domain.Round) {
+	// Schedule the sweeping procedure only for completed round.
+	if !round.IsEnded() {
+		return
+	}
+
+	expirationTimestamp := time.Now().Add(
+		time.Duration(s.roundLifetime+30) * time.Second,
+	)
+
+	if err := s.sweeper.schedule(
+		expirationTimestamp.Unix(), round.Txid, round.CongestionTree,
+	); err != nil {
+		log.WithError(err).Warn("failed to schedule sweep tx")
 	}
 }
 
@@ -590,11 +594,25 @@ func getSpentVtxos(payments map[string]domain.Payment) []domain.VtxoKey {
 	vtxos := make([]domain.VtxoKey, 0)
 	for _, p := range payments {
 		for _, vtxo := range p.Inputs {
-			if vtxo.VtxoKey == faucetVtxo {
-				continue
-			}
 			vtxos = append(vtxos, vtxo.VtxoKey)
 		}
 	}
 	return vtxos
+}
+
+func getPaymentsFromOnboarding(
+	congestionTree tree.CongestionTree, userKey string,
+) []domain.Payment {
+	leaves := congestionTree.Leaves()
+	receivers := make([]domain.Receiver, 0, len(leaves))
+	for _, node := range leaves {
+		ptx, _ := psetv2.NewPsetFromBase64(node.Tx)
+		receiver := domain.Receiver{
+			Pubkey: userKey,
+			Amount: ptx.Outputs[0].Value,
+		}
+		receivers = append(receivers, receiver)
+	}
+	payment := domain.NewPaymentUnsafe(nil, receivers)
+	return []domain.Payment{*payment}
 }

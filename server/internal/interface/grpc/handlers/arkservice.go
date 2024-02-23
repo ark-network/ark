@@ -40,6 +40,37 @@ func NewHandler(service application.Service) arkv1.ArkServiceServer {
 	return h
 }
 
+func (h *handler) Onboard(ctx context.Context, req *arkv1.OnboardRequest) (*arkv1.OnboardResponse, error) {
+	if req.GetUserPubkey() == "" {
+		return nil, status.Error(codes.InvalidArgument, "missing user pubkey")
+	}
+
+	pubKey, err := hex.DecodeString(req.GetUserPubkey())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid user pubkey")
+	}
+
+	decodedPubKey, err := secp256k1.ParsePubKey(pubKey)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid user pubkey")
+	}
+
+	if req.GetBoardingTx() == "" {
+		return nil, status.Error(codes.InvalidArgument, "missing boarding tx id")
+	}
+
+	tree, err := toCongestionTree(req.GetCongestionTree())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	if err := h.svc.Onboard(ctx, req.GetBoardingTx(), tree, decodedPubKey); err != nil {
+		return nil, err
+	}
+
+	return &arkv1.OnboardResponse{}, nil
+}
+
 func (h *handler) Ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.PingResponse, error) {
 	if req.GetPaymentId() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing payment id")
@@ -94,19 +125,6 @@ func (h *handler) FinalizePayment(ctx context.Context, req *arkv1.FinalizePaymen
 	}
 
 	return &arkv1.FinalizePaymentResponse{}, nil
-}
-
-func (h *handler) Faucet(ctx context.Context, req *arkv1.FaucetRequest) (*arkv1.FaucetResponse, error) {
-	_, pubkey, _, err := parseAddress(req.GetAddress())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-
-	if err := h.svc.FaucetVtxos(ctx, pubkey); err != nil {
-		return nil, err
-	}
-
-	return &arkv1.FaucetResponse{}, nil
 }
 
 func (h *handler) GetRound(ctx context.Context, req *arkv1.GetRoundRequest) (*arkv1.GetRoundResponse, error) {
@@ -304,4 +322,33 @@ func castCongestionTree(congestionTree tree.CongestionTree) *arkv1.Tree {
 	return &arkv1.Tree{
 		Levels: levels,
 	}
+}
+
+func toCongestionTree(treeFromProto *arkv1.Tree) (tree.CongestionTree, error) {
+	levels := make(tree.CongestionTree, 0, len(treeFromProto.Levels))
+
+	for _, level := range treeFromProto.Levels {
+		nodes := make([]tree.Node, 0, len(level.Nodes))
+
+		for _, node := range level.Nodes {
+			nodes = append(nodes, tree.Node{
+				Txid:       node.Txid,
+				Tx:         node.Tx,
+				ParentTxid: node.ParentTxid,
+				Leaf:       false,
+			})
+		}
+
+		levels = append(levels, nodes)
+	}
+
+	for j, treeLvl := range levels {
+		for i, node := range treeLvl {
+			if len(levels.Children(node.Txid)) == 0 {
+				levels[j][i].Leaf = true
+			}
+		}
+	}
+
+	return levels, nil
 }

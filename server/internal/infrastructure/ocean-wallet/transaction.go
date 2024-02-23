@@ -117,7 +117,7 @@ func (s *service) BroadcastTransaction(
 	return res.GetTxid(), nil
 }
 
-func (s *service) IsTransactionPublished(
+func (s *service) IsTransactionConfirmed(
 	ctx context.Context, txid string,
 ) (bool, int64, error) {
 	_, blocktime, err := s.GetTransaction(ctx, txid)
