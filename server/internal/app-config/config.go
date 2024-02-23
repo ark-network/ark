@@ -23,7 +23,6 @@ var (
 		"gocron": {},
 	}
 	supportedTxBuilders = supportedType{
-		"dummy":    {},
 		"covenant": {},
 	}
 	supportedScanners = supportedType{

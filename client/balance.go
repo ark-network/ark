@@ -18,7 +18,7 @@ var expiryDetailsFlag = cli.BoolFlag{
 
 var balanceCommand = cli.Command{
 	Name:   "balance",
-	Usage:  "Print balance of the Ark wallet",
+	Usage:  "Shows the onchain and offchain balance of the Ark wallet",
 	Action: balanceAction,
 	Flags:  []cli.Flag{&expiryDetailsFlag},
 }

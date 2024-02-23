@@ -6,7 +6,7 @@ import (
 
 var configCommand = cli.Command{
 	Name:   "config",
-	Usage:  "Print local configuration of the Ark CLI",
+	Usage:  "Shows configuration of the Ark wallet",
 	Action: printConfigAction,
 }
 

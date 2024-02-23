@@ -8,12 +8,12 @@ import (
 
 var dumpCommand = cli.Command{
 	Name:   "dump-privkey",
-	Usage:  "Dump private key of the Ark wallet",
+	Usage:  "Dumps private key of the Ark wallet",
 	Action: dumpAction,
 }
 
 func dumpAction(ctx *cli.Context) error {
-  privateKey, err := privateKeyFromPassword()
+	privateKey, err := privateKeyFromPassword()
 	if err != nil {
 		return err
 	}

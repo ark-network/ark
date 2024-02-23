@@ -108,7 +108,7 @@ func (m *mockedWallet) EstimateFees(ctx context.Context, pset string) (uint64, e
 	return res, args.Error(1)
 }
 
-func (m *mockedWallet) IsTransactionPublished(ctx context.Context, txid string) (bool, int64, error) {
+func (m *mockedWallet) IsTransactionConfirmed(ctx context.Context, txid string) (bool, int64, error) {
 	args := m.Called(ctx, txid)
 
 	var res bool
