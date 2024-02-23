@@ -17,6 +17,15 @@ const (
 	DATADIR_ENVVAR = "ARK_WALLET_DATADIR"
 	STATE_FILE     = "state.json"
 	defaultNetwork = "testnet"
+
+	ASP_URL               = "asp_url"
+	ASP_PUBKEY            = "asp_public_key"
+	ROUND_LIFETIME        = "round_lifetime"
+	UNILATERAL_EXIT_DELAY = "unilateral_exit_delay "
+	ENCRYPTED_PRVKEY      = "encrypted_private_key "
+	PASSWORD_HASH         = "password_hash "
+	PUBKEY                = "public_key "
+	NETWORK               = "network "
 )
 
 var (
@@ -29,14 +38,15 @@ var (
 		network.Testnet.Name: "https://blockstream.info/liquidtestnet/api",
 	}
 
-	initialState = map[string]interface{}{
-		"ark_url":               "",
-		"ark_pubkey":            "",
-		"ark_lifetime":          0,
-		"encrypted_private_key": "",
-		"password_hash":         "",
-		"public_key":            "",
-		"network":               defaultNetwork,
+	initialState = map[string]string{
+		ASP_URL:               "",
+		ASP_PUBKEY:            "",
+		ROUND_LIFETIME:        "",
+		UNILATERAL_EXIT_DELAY: "",
+		ENCRYPTED_PRVKEY:      "",
+		PASSWORD_HASH:         "",
+		PUBKEY:                "",
+		NETWORK:               defaultNetwork,
 	}
 )
 
@@ -110,7 +120,7 @@ func cleanAndExpandPath(path string) string {
 	return filepath.Clean(os.ExpandEnv(path))
 }
 
-func getState() (map[string]interface{}, error) {
+func getState() (map[string]string, error) {
 	file, err := os.ReadFile(statePath)
 	if err != nil {
 		if !os.IsNotExist(err) {
@@ -122,7 +132,7 @@ func getState() (map[string]interface{}, error) {
 		return initialState, nil
 	}
 
-	data := map[string]interface{}{}
+	data := map[string]string{}
 	if err := json.Unmarshal(file, &data); err != nil {
 		return nil, err
 	}
@@ -138,7 +148,7 @@ func setInitialState() error {
 	return os.WriteFile(statePath, jsonString, 0755)
 }
 
-func setState(data map[string]interface{}) error {
+func setState(data map[string]string) error {
 	currentData, err := getState()
 	if err != nil {
 		return err
@@ -158,8 +168,8 @@ func setState(data map[string]interface{}) error {
 	return nil
 }
 
-func merge(maps ...map[string]interface{}) map[string]interface{} {
-	merge := make(map[string]interface{}, 0)
+func merge(maps ...map[string]string) map[string]string {
+	merge := make(map[string]string, 0)
 	for _, m := range maps {
 		for k, v := range m {
 			merge[k] = v

@@ -1,23 +1,16 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/urfave/cli/v2"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/taproot"
 )
-
-type RedeemBranch interface {
-	// RedeemPath returns the list of transactions to broadcast in order to access the vtxo output
-	RedeemPath() ([]string, error)
-	// ExpireAt returns the expiration time of the branch
-	ExpireAt() (*time.Time, error)
-}
 
 type redeemBranch struct {
 	vtxo         *vtxo
@@ -29,11 +22,9 @@ type redeemBranch struct {
 }
 
 func newRedeemBranch(
-	ctx *cli.Context,
-	explorer Explorer,
-	congestionTree tree.CongestionTree,
-	vtxo vtxo,
-) (RedeemBranch, error) {
+	ctx context.Context, explorer Explorer,
+	congestionTree tree.CongestionTree, vtxo vtxo,
+) (*redeemBranch, error) {
 	sweepClosure, seconds, err := findSweepClosure(congestionTree)
 	if err != nil {
 		return nil, err
@@ -75,7 +66,7 @@ func newRedeemBranch(
 }
 
 // RedeemPath returns the list of transactions to broadcast in order to access the vtxo output
-func (r *redeemBranch) RedeemPath() ([]string, error) {
+func (r *redeemBranch) redeemPath() ([]string, error) {
 	transactions := make([]string, 0, len(r.branch))
 
 	offchainPath, err := r.offchainPath()
@@ -125,7 +116,7 @@ func (r *redeemBranch) RedeemPath() ([]string, error) {
 	return transactions, nil
 }
 
-func (r *redeemBranch) ExpireAt() (*time.Time, error) {
+func (r *redeemBranch) expireAt() (*time.Time, error) {
 	lastKnownBlocktime := int64(0)
 
 	confirmed, blocktime, _ := getTxBlocktime(r.vtxo.poolTxid)

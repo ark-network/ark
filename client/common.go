@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -18,7 +20,6 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/urfave/cli/v2"
 	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/elementsutil"
 	"github.com/vulpemventures/go-elements/network"
@@ -44,9 +45,9 @@ func verifyPassword(password []byte) error {
 		return err
 	}
 
-	passwordHashString, ok := state["password_hash"].(string)
-	if !ok {
-		return fmt.Errorf("password hash not found")
+	passwordHashString := state[PASSWORD_HASH]
+	if len(passwordHashString) <= 0 {
+		return fmt.Errorf("missing password hash")
 	}
 
 	passwordHash, err := hex.DecodeString(passwordHashString)
@@ -84,9 +85,9 @@ func privateKeyFromPassword() (*secp256k1.PrivateKey, error) {
 		return nil, err
 	}
 
-	encryptedPrivateKeyString, ok := state["encrypted_private_key"].(string)
-	if !ok {
-		return nil, fmt.Errorf("encrypted private key not found")
+	encryptedPrivateKeyString := state[ENCRYPTED_PRVKEY]
+	if len(encryptedPrivateKeyString) <= 0 {
+		return nil, fmt.Errorf("missing encrypted private key")
 	}
 
 	encryptedPrivateKey, err := hex.DecodeString(encryptedPrivateKeyString)
@@ -100,8 +101,8 @@ func privateKeyFromPassword() (*secp256k1.PrivateKey, error) {
 	}
 	fmt.Println("wallet unlocked")
 
-	cypher := NewAES128Cypher()
-	privateKeyBytes, err := cypher.Decrypt(encryptedPrivateKey, password)
+	cypher := newAES128Cypher()
+	privateKeyBytes, err := cypher.decrypt(encryptedPrivateKey, password)
 	if err != nil {
 		return nil, err
 	}
@@ -116,9 +117,9 @@ func getWalletPublicKey() (*secp256k1.PublicKey, error) {
 		return nil, err
 	}
 
-	publicKeyString, ok := state["public_key"].(string)
-	if !ok {
-		return nil, fmt.Errorf("public key not found")
+	publicKeyString := state[PUBKEY]
+	if len(publicKeyString) <= 0 {
+		return nil, fmt.Errorf("missing public key")
 	}
 
 	publicKeyBytes, err := hex.DecodeString(publicKeyString)
@@ -129,15 +130,15 @@ func getWalletPublicKey() (*secp256k1.PublicKey, error) {
 	return secp256k1.ParsePubKey(publicKeyBytes)
 }
 
-func getServiceProviderPublicKey() (*secp256k1.PublicKey, error) {
+func getAspPublicKey() (*secp256k1.PublicKey, error) {
 	state, err := getState()
 	if err != nil {
 		return nil, err
 	}
 
-	arkPubKey, ok := state["ark_pubkey"].(string)
-	if !ok {
-		return nil, fmt.Errorf("ark public key not found")
+	arkPubKey := state[ASP_PUBKEY]
+	if len(arkPubKey) <= 0 {
+		return nil, fmt.Errorf("missing asp public key")
 	}
 
 	pubKeyBytes, err := hex.DecodeString(arkPubKey)
@@ -148,32 +149,41 @@ func getServiceProviderPublicKey() (*secp256k1.PublicKey, error) {
 	return secp256k1.ParsePubKey(pubKeyBytes)
 }
 
-func getLifetime() (int64, error) {
+func getRoundLifetime() (int64, error) {
 	state, err := getState()
 	if err != nil {
-		return 0, err
+		return -1, err
 	}
 
-	lifetime, ok := state["ark_lifetime"].(float64)
-	if !ok {
-		return 0, fmt.Errorf("lifetime not found")
+	lifetime := state[ROUND_LIFETIME]
+	if len(lifetime) <= 0 {
+		return -1, fmt.Errorf("missing round lifetime")
 	}
 
-	return int64(lifetime), nil
+	roundLifetime, err := strconv.Atoi(lifetime)
+	if err != nil {
+		return -1, err
+	}
+	return int64(roundLifetime), nil
 }
 
-func getExitDelay() (int64, error) {
+func getUnilateralExitDelay() (int64, error) {
 	state, err := getState()
 	if err != nil {
-		return 0, err
+		return -1, err
 	}
 
-	exitDelay, ok := state["exit_delay"].(float64)
-	if !ok {
-		return 0, fmt.Errorf("exit delay not found")
+	delay := state[UNILATERAL_EXIT_DELAY]
+	if len(delay) <= 0 {
+		return -1, fmt.Errorf("missing unilateral exit delay")
 	}
 
-	return int64(exitDelay), nil
+	redeemDelay, err := strconv.Atoi(delay)
+	if err != nil {
+		return -1, err
+	}
+
+	return int64(redeemDelay), nil
 }
 
 func coinSelect(vtxos []vtxo, amount uint64) ([]vtxo, uint64, error) {
@@ -217,7 +227,8 @@ func coinSelect(vtxos []vtxo, amount uint64) ([]vtxo, uint64, error) {
 }
 
 func getOffchainBalance(
-	ctx *cli.Context, explorer Explorer, client arkv1.ArkServiceClient, addr string, withExpiration bool,
+	ctx context.Context, explorer Explorer, client arkv1.ArkServiceClient,
+	addr string, withExpiration bool,
 ) (uint64, map[int64]uint64, error) {
 	amountByExpiration := make(map[int64]uint64, 0)
 
@@ -241,120 +252,6 @@ func getOffchainBalance(
 	}
 
 	return balance, amountByExpiration, nil
-}
-
-type utxo struct {
-	Txid   string `json:"txid"`
-	Vout   uint32 `json:"vout"`
-	Amount uint64 `json:"value"`
-	Asset  string `json:"asset"`
-	Status struct {
-		Confirmed bool  `json:"confirmed"`
-		Blocktime int64 `json:"block_time"`
-	} `json:"status"`
-}
-
-func getOnchainUtxos(addr string) ([]utxo, error) {
-	_, net := getNetwork()
-	baseUrl := explorerUrl[net.Name]
-	resp, err := http.Get(fmt.Sprintf("%s/address/%s/utxo", baseUrl, addr))
-	if err != nil {
-		return nil, err
-	}
-
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf(string(body))
-	}
-	payload := []utxo{}
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil, err
-	}
-
-	return payload, nil
-}
-
-func getOnchainBalance(addr string) (uint64, error) {
-	payload, err := getOnchainUtxos(addr)
-	if err != nil {
-		return 0, err
-	}
-
-	_, net := getNetwork()
-	balance := uint64(0)
-	for _, p := range payload {
-		if p.Asset != net.AssetID {
-			continue
-		}
-		balance += p.Amount
-	}
-	return balance, nil
-}
-
-func getOnchainVtxosBalance() (availableBalance uint64, futureBalance map[int64]uint64, err error) {
-	userPubKey, err := getWalletPublicKey()
-	if err != nil {
-		return
-	}
-
-	aspPublicKey, err := getServiceProviderPublicKey()
-	if err != nil {
-		return
-	}
-
-	exitDelay, err := getExitDelay()
-	if err != nil {
-		return
-	}
-
-	vtxoTapKey, _, err := computeVtxoTaprootScript(userPubKey, aspPublicKey, uint(exitDelay))
-	if err != nil {
-		return
-	}
-
-	_, net := getNetwork()
-
-	payment, err := payment.FromTweakedKey(vtxoTapKey, net, nil)
-	if err != nil {
-		return
-	}
-
-	addr, err := payment.TaprootAddress()
-	if err != nil {
-		return
-	}
-
-	utxos, err := getOnchainUtxos(addr)
-	if err != nil {
-		return
-	}
-
-	availableBalance = uint64(0)
-	futureBalance = make(map[int64]uint64, 0)
-	now := time.Now()
-	for _, utxo := range utxos {
-		blocktime := now
-		if utxo.Status.Confirmed {
-			blocktime = time.Unix(utxo.Status.Blocktime, 0)
-		}
-
-		availableAt := blocktime.Add(time.Duration(exitDelay) * time.Second)
-		if availableAt.After(now) {
-			if _, ok := futureBalance[availableAt.Unix()]; !ok {
-				futureBalance[availableAt.Unix()] = 0
-			}
-
-			futureBalance[availableAt.Unix()] += utxo.Amount
-		} else {
-			availableBalance += utxo.Amount
-		}
-	}
-
-	return
 }
 
 func getTxBlocktime(txid string) (confirmed bool, blocktime int64, err error) {
@@ -392,35 +289,13 @@ func getTxBlocktime(txid string) (confirmed bool, blocktime int64, err error) {
 
 }
 
-func broadcast(txHex string) (string, error) {
-	_, net := getNetwork()
-	body := bytes.NewBuffer([]byte(txHex))
-
-	baseUrl := explorerUrl[net.Name]
-	resp, err := http.Post(fmt.Sprintf("%s/tx", baseUrl), "text/plain", body)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	bodyResponse, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf(string(bodyResponse))
-	}
-
-	return string(bodyResponse), nil
-}
-
 func getNetwork() (*common.Network, *network.Network) {
 	state, err := getState()
 	if err != nil {
 		return &common.TestNet, &network.Testnet
 	}
 
-	net, ok := state["network"]
+	net, ok := state[NETWORK]
 	if !ok {
 		return &common.MainNet, &network.Liquid
 	}
@@ -430,26 +305,50 @@ func getNetwork() (*common.Network, *network.Network) {
 	return &common.MainNet, &network.Liquid
 }
 
-func getAddress() (offchainAddr, onchainAddr string, err error) {
-	publicKey, err := getWalletPublicKey()
+func getAddress() (offchainAddr, onchainAddr, redemptionAddr string, err error) {
+	userPubkey, err := getWalletPublicKey()
 	if err != nil {
 		return
 	}
 
-	aspPublicKey, err := getServiceProviderPublicKey()
+	aspPubkey, err := getAspPublicKey()
+	if err != nil {
+		return
+	}
+
+	unilateralExitDelay, err := getUnilateralExitDelay()
 	if err != nil {
 		return
 	}
 
 	arkNet, liquidNet := getNetwork()
 
-	arkAddr, err := common.EncodeAddress(arkNet.Addr, publicKey, aspPublicKey)
+	arkAddr, err := common.EncodeAddress(arkNet.Addr, userPubkey, aspPubkey)
 	if err != nil {
 		return
 	}
 
-	p2wpkh := payment.FromPublicKey(publicKey, liquidNet, nil)
+	p2wpkh := payment.FromPublicKey(userPubkey, liquidNet, nil)
 	liquidAddr, err := p2wpkh.WitnessPubKeyHash()
+	if err != nil {
+		return
+	}
+
+	vtxoTapKey, _, err := computeVtxoTaprootScript(
+		userPubkey, aspPubkey, uint(unilateralExitDelay),
+	)
+	if err != nil {
+		return
+	}
+
+	_, net := getNetwork()
+
+	payment, err := payment.FromTweakedKey(vtxoTapKey, net, nil)
+	if err != nil {
+		return
+	}
+
+	redemptionAddr, err = payment.TaprootAddress()
 	if err != nil {
 		return
 	}
@@ -471,14 +370,10 @@ func printJSON(resp interface{}) error {
 }
 
 func handleRoundStream(
-	ctx *cli.Context,
-	client arkv1.ArkServiceClient,
-	paymentID string,
-	vtxosToSign []vtxo,
-	secKey *secp256k1.PrivateKey,
-	receivers []*arkv1.Output,
+	ctx context.Context, client arkv1.ArkServiceClient, paymentID string,
+	vtxosToSign []vtxo, secKey *secp256k1.PrivateKey, receivers []*arkv1.Output,
 ) (poolTxID string, err error) {
-	stream, err := client.GetEventStream(ctx.Context, &arkv1.GetEventStreamRequest{})
+	stream, err := client.GetEventStream(ctx, &arkv1.GetEventStreamRequest{})
 	if err != nil {
 		return "", err
 	}
@@ -512,8 +407,8 @@ func handleRoundStream(
 			pingStop()
 			fmt.Println("round finalization started")
 
-			poolPartialTx := event.GetRoundFinalization().GetPoolPartialTx()
-			poolTransaction, err := psetv2.NewPsetFromBase64(poolPartialTx)
+			poolTxStr := event.GetRoundFinalization().GetPoolPartialTx()
+			poolTx, err := psetv2.NewPsetFromBase64(poolTxStr)
 			if err != nil {
 				return "", err
 			}
@@ -523,33 +418,30 @@ func handleRoundStream(
 				return "", err
 			}
 
-			aspPublicKey, err := getServiceProviderPublicKey()
+			aspPubkey, err := getAspPublicKey()
 			if err != nil {
 				return "", err
 			}
 
-			seconds, err := getLifetime()
+			roundLifetime, err := getRoundLifetime()
 			if err != nil {
 				return "", err
 			}
 
 			// validate the congestion tree
 			if err := tree.ValidateCongestionTree(
-				congestionTree,
-				poolPartialTx,
-				aspPublicKey,
-				int64(seconds),
+				congestionTree, poolTxStr, aspPubkey, int64(roundLifetime),
 			); err != nil {
 				return "", err
 			}
 
-			exitDelay, err := getExitDelay()
+			exitDelay, err := getUnilateralExitDelay()
 			if err != nil {
 				return "", err
 			}
 
 			for _, receiver := range receivers {
-				isOnChain, onchainScript, userPubKey, err := decodeReceiverAddress(receiver.Address)
+				isOnChain, onchainScript, userPubkey, err := decodeReceiverAddress(receiver.Address)
 				if err != nil {
 					return "", err
 				}
@@ -558,7 +450,7 @@ func handleRoundStream(
 					// collaborative exit case
 					// search for the output in the pool tx
 					found := false
-					for _, output := range poolTransaction.Outputs {
+					for _, output := range poolTx.Outputs {
 						if bytes.Equal(output.Script, onchainScript) {
 							if output.Value != receiver.Amount {
 								return "", fmt.Errorf("invalid collaborative exit output amount: got %d, want %d", output.Value, receiver.Amount)
@@ -581,7 +473,7 @@ func handleRoundStream(
 				found := false
 
 				// compute the receiver output taproot key
-				outputTapKey, _, err := computeVtxoTaprootScript(userPubKey, aspPublicKey, uint(exitDelay))
+				outputTapKey, _, err := computeVtxoTaprootScript(userPubkey, aspPubkey, uint(exitDelay))
 				if err != nil {
 					return "", err
 				}
@@ -665,7 +557,7 @@ func handleRoundStream(
 
 			fmt.Printf("%d signed\n", len(signedForfeits))
 			fmt.Print("finalizing payment... ")
-			_, err = client.FinalizePayment(ctx.Context, &arkv1.FinalizePaymentRequest{
+			_, err = client.FinalizePayment(ctx, &arkv1.FinalizePaymentRequest{
 				SignedForfeitTxs: signedForfeits,
 			})
 			if err != nil {
@@ -687,8 +579,10 @@ func handleRoundStream(
 
 // send 1 ping message every 5 seconds to signal to the ark service that we are still alive
 // returns a function that can be used to stop the pinging
-func ping(ctx *cli.Context, client arkv1.ArkServiceClient, req *arkv1.PingRequest) func() {
-	_, err := client.Ping(ctx.Context, req)
+func ping(
+	ctx context.Context, client arkv1.ArkServiceClient, req *arkv1.PingRequest,
+) func() {
+	_, err := client.Ping(ctx, req)
 	if err != nil {
 		return nil
 	}
@@ -698,7 +592,7 @@ func ping(ctx *cli.Context, client arkv1.ArkServiceClient, req *arkv1.PingReques
 	go func(t *time.Ticker) {
 		for range t.C {
 			// nolint
-			client.Ping(ctx.Context, req)
+			client.Ping(ctx, req)
 		}
 	}(ticker)
 
@@ -758,18 +652,15 @@ func castCongestionTree(congestionTree tree.CongestionTree) *arkv1.Tree {
 }
 
 func decodeReceiverAddress(addr string) (
-	isOnChainAddress bool,
-	onchainScript []byte,
-	userPubKey *secp256k1.PublicKey,
-	err error,
+	bool, []byte, *secp256k1.PublicKey, error,
 ) {
 	outputScript, err := address.ToOutputScript(addr)
 	if err != nil {
-		_, userPubKey, _, err = common.DecodeAddress(addr)
+		_, userPubkey, _, err := common.DecodeAddress(addr)
 		if err != nil {
-			return
+			return false, nil, nil, err
 		}
-		return false, nil, userPubKey, nil
+		return false, nil, userPubkey, nil
 	}
 
 	return true, outputScript, nil, nil
@@ -777,18 +668,20 @@ func decodeReceiverAddress(addr string) (
 
 func findSweepClosure(
 	congestionTree tree.CongestionTree,
-) (sweepClosure *taproot.TapElementsLeaf, seconds uint, err error) {
+) (*taproot.TapElementsLeaf, uint, error) {
 	root, err := congestionTree.Root()
 	if err != nil {
-		return
+		return nil, 0, err
 	}
 
 	// find the sweep closure
 	tx, err := psetv2.NewPsetFromBase64(root.Tx)
 	if err != nil {
-		return
+		return nil, 0, err
 	}
 
+	var seconds uint
+	var sweepClosure *taproot.TapElementsLeaf
 	for _, tapLeaf := range tx.Inputs[0].TapLeafScript {
 		closure := &tree.CSVSigClosure{}
 		valid, err := closure.Decode(tapLeaf.Script)
@@ -806,21 +699,19 @@ func findSweepClosure(
 		return nil, 0, fmt.Errorf("sweep closure not found")
 	}
 
-	return
+	return sweepClosure, seconds, nil
 }
 
 func getRedeemBranches(
-	ctx *cli.Context,
-	explorer Explorer,
-	client arkv1.ArkServiceClient,
+	ctx context.Context, explorer Explorer, client arkv1.ArkServiceClient,
 	vtxos []vtxo,
-) (map[string]RedeemBranch, error) {
-	congestionTrees := make(map[string]tree.CongestionTree, 0) // poolTxid -> congestionTree
-	redeemBranches := make(map[string]RedeemBranch, 0)         // vtxo.txid -> redeemBranch
+) (map[string]*redeemBranch, error) {
+	congestionTrees := make(map[string]tree.CongestionTree, 0)
+	redeemBranches := make(map[string]*redeemBranch, 0)
 
 	for _, vtxo := range vtxos {
 		if _, ok := congestionTrees[vtxo.poolTxid]; !ok {
-			round, err := client.GetRound(ctx.Context, &arkv1.GetRoundRequest{
+			round, err := client.GetRound(ctx, &arkv1.GetRoundRequest{
 				Txid: vtxo.poolTxid,
 			})
 			if err != nil {
@@ -848,18 +739,16 @@ func getRedeemBranches(
 }
 
 func computeVtxoTaprootScript(
-	userPubKey *secp256k1.PublicKey,
-	aspPublicKey *secp256k1.PublicKey,
-	exitDelay uint,
+	userPubkey, aspPubkey *secp256k1.PublicKey, exitDelay uint,
 ) (*secp256k1.PublicKey, *taproot.TapscriptElementsProof, error) {
 	redeemClosure := &tree.CSVSigClosure{
-		Pubkey:  userPubKey,
+		Pubkey:  userPubkey,
 		Seconds: exitDelay,
 	}
 
 	forfeitClosure := &tree.ForfeitClosure{
-		Pubkey:    userPubKey,
-		AspPubkey: aspPublicKey,
+		Pubkey:    userPubkey,
+		AspPubkey: aspPubkey,
 	}
 
 	redeemLeaf, err := redeemClosure.Leaf()
@@ -886,9 +775,7 @@ func computeVtxoTaprootScript(
 }
 
 func addVtxoInput(
-	updater *psetv2.Updater,
-	inputArgs psetv2.InputArgs,
-	exitDelay uint,
+	updater *psetv2.Updater, inputArgs psetv2.InputArgs, exitDelay uint,
 	tapLeafProof *taproot.TapscriptElementsProof,
 ) error {
 	sequence, err := common.BIP68EncodeAsNumber(exitDelay)
@@ -912,18 +799,20 @@ func addVtxoInput(
 	)
 }
 
-func coinSelectOnchain(targetAmount uint64, exclude []utxo) (utxos []utxo, delayedUtxos []utxo, change uint64, err error) {
-	_, onchainAddr, err := getAddress()
+func coinSelectOnchain(
+	explorer Explorer, targetAmount uint64, exclude []utxo,
+) ([]utxo, []utxo, uint64, error) {
+	_, onchainAddr, _, err := getAddress()
 	if err != nil {
 		return nil, nil, 0, err
 	}
 
-	fromExplorer, err := getOnchainUtxos(onchainAddr)
+	fromExplorer, err := explorer.GetUtxos(onchainAddr)
 	if err != nil {
 		return nil, nil, 0, err
 	}
 
-	utxos = make([]utxo, 0)
+	utxos := make([]utxo, 0)
 	selectedAmount := uint64(0)
 	for _, utxo := range fromExplorer {
 		if selectedAmount >= targetAmount {
@@ -944,22 +833,22 @@ func coinSelectOnchain(targetAmount uint64, exclude []utxo) (utxos []utxo, delay
 		return utxos, nil, selectedAmount - targetAmount, nil
 	}
 
-	userPubKey, err := getWalletPublicKey()
+	userPubkey, err := getWalletPublicKey()
 	if err != nil {
 		return nil, nil, 0, err
 	}
 
-	aspPublicKey, err := getServiceProviderPublicKey()
+	aspPubkey, err := getAspPublicKey()
 	if err != nil {
 		return nil, nil, 0, err
 	}
 
-	exitDelay, err := getExitDelay()
+	exitDelay, err := getUnilateralExitDelay()
 	if err != nil {
 		return nil, nil, 0, err
 	}
 
-	vtxoTapKey, _, err := computeVtxoTaprootScript(userPubKey, aspPublicKey, uint(exitDelay))
+	vtxoTapKey, _, err := computeVtxoTaprootScript(userPubkey, aspPubkey, uint(exitDelay))
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -976,12 +865,12 @@ func coinSelectOnchain(targetAmount uint64, exclude []utxo) (utxos []utxo, delay
 		return nil, nil, 0, err
 	}
 
-	fromExplorer, err = getOnchainUtxos(addr)
+	fromExplorer, err = explorer.GetUtxos(addr)
 	if err != nil {
 		return nil, nil, 0, err
 	}
 
-	delayedUtxos = make([]utxo, 0)
+	delayedUtxos := make([]utxo, 0)
 	for _, utxo := range fromExplorer {
 		if selectedAmount >= targetAmount {
 			break
@@ -1010,12 +899,9 @@ func coinSelectOnchain(targetAmount uint64, exclude []utxo) (utxos []utxo, delay
 }
 
 func addInputs(
-	updater *psetv2.Updater,
-	selected []utxo, // the utxos to add owned by the P2WPKH script
-	delayedSelected []utxo, // the utxos to add owned by the VTXO script
-	net *network.Network,
+	updater *psetv2.Updater, utxos, delayedUtxos []utxo, net *network.Network,
 ) error {
-	_, onchainAddr, err := getAddress()
+	_, onchainAddr, _, err := getAddress()
 	if err != nil {
 		return err
 	}
@@ -1025,23 +911,23 @@ func addInputs(
 		return err
 	}
 
-	for _, coin := range selected {
-		fmt.Println("adding input", coin.Txid, coin.Vout)
+	for _, utxo := range utxos {
+		fmt.Println("adding input", utxo.Txid, utxo.Vout)
 		if err := updater.AddInputs([]psetv2.InputArgs{
 			{
-				Txid:    coin.Txid,
-				TxIndex: coin.Vout,
+				Txid:    utxo.Txid,
+				TxIndex: utxo.Vout,
 			},
 		}); err != nil {
 			return err
 		}
 
-		assetID, err := elementsutil.AssetHashToBytes(coin.Asset)
+		assetID, err := elementsutil.AssetHashToBytes(utxo.Asset)
 		if err != nil {
 			return err
 		}
 
-		value, err := elementsutil.ValueToBytes(coin.Amount)
+		value, err := elementsutil.ValueToBytes(utxo.Amount)
 		if err != nil {
 			return err
 		}
@@ -1058,23 +944,23 @@ func addInputs(
 		}
 	}
 
-	if len(delayedSelected) > 0 {
-		userPubKey, err := getWalletPublicKey()
+	if len(delayedUtxos) > 0 {
+		userPubkey, err := getWalletPublicKey()
 		if err != nil {
 			return err
 		}
 
-		aspPublicKey, err := getServiceProviderPublicKey()
+		aspPubkey, err := getAspPublicKey()
 		if err != nil {
 			return err
 		}
 
-		exitDelay, err := getExitDelay()
+		exitDelay, err := getUnilateralExitDelay()
 		if err != nil {
 			return err
 		}
 
-		vtxoTapKey, leafProof, err := computeVtxoTaprootScript(userPubKey, aspPublicKey, uint(exitDelay))
+		vtxoTapKey, leafProof, err := computeVtxoTaprootScript(userPubkey, aspPubkey, uint(exitDelay))
 		if err != nil {
 			return err
 		}
@@ -1094,12 +980,12 @@ func addInputs(
 			return err
 		}
 
-		for _, coin := range delayedSelected {
+		for _, utxo := range delayedUtxos {
 			if err := addVtxoInput(
 				updater,
 				psetv2.InputArgs{
-					Txid:    coin.Txid,
-					TxIndex: coin.Vout,
+					Txid:    utxo.Txid,
+					TxIndex: utxo.Vout,
 				},
 				uint(exitDelay),
 				leafProof,
@@ -1107,12 +993,12 @@ func addInputs(
 				return err
 			}
 
-			assetID, err := elementsutil.AssetHashToBytes(coin.Asset)
+			assetID, err := elementsutil.AssetHashToBytes(utxo.Asset)
 			if err != nil {
 				return err
 			}
 
-			value, err := elementsutil.ValueToBytes(coin.Amount)
+			value, err := elementsutil.ValueToBytes(utxo.Amount)
 			if err != nil {
 				return err
 			}

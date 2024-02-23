@@ -26,16 +26,20 @@ var balanceCommand = cli.Command{
 func balanceAction(ctx *cli.Context) error {
 	withExpiryDetails := ctx.Bool("expiry-details")
 
-	client, cancel, err := getClientFromState(ctx)
+	client, cancel, err := getClientFromState()
 	if err != nil {
 		return err
 	}
 	defer cancel()
 
-	offchainAddr, onchainAddr, err := getAddress()
+	offchainAddr, onchainAddr, redemptionAddr, err := getAddress()
 	if err != nil {
 		return err
 	}
+	_, network := getNetwork()
+	// No need to check for error here becuase this function is called also by getAddress().
+	// nolint:all
+	unilateralExitDelay, _ := getUnilateralExitDelay()
 
 	wg := &sync.WaitGroup{}
 	wg.Add(3)
@@ -45,7 +49,7 @@ func balanceAction(ctx *cli.Context) error {
 		defer wg.Done()
 		explorer := NewExplorer()
 		balance, amountByExpiration, err := getOffchainBalance(
-			ctx, explorer, client, offchainAddr, withExpiryDetails,
+			ctx.Context, explorer, client, offchainAddr, withExpiryDetails,
 		)
 		if err != nil {
 			chRes <- balanceRes{0, 0, nil, nil, err}
@@ -57,7 +61,8 @@ func balanceAction(ctx *cli.Context) error {
 
 	go func() {
 		defer wg.Done()
-		balance, err := getOnchainBalance(onchainAddr)
+		explorer := NewExplorer()
+		balance, err := explorer.GetBalance(onchainAddr, network.AssetID)
 		if err != nil {
 			chRes <- balanceRes{0, 0, nil, nil, err}
 			return
@@ -67,13 +72,17 @@ func balanceAction(ctx *cli.Context) error {
 
 	go func() {
 		defer wg.Done()
-		availableBalance, futureBalance, err := getOnchainVtxosBalance()
+		explorer := NewExplorer()
+
+		spendableBalance, lockedBalance, err := explorer.GetRedeemedVtxosBalance(
+			redemptionAddr, unilateralExitDelay,
+		)
 		if err != nil {
 			chRes <- balanceRes{0, 0, nil, nil, err}
 			return
 		}
 
-		chRes <- balanceRes{0, availableBalance, futureBalance, nil, err}
+		chRes <- balanceRes{0, spendableBalance, lockedBalance, nil, err}
 	}()
 
 	wg.Wait()
@@ -90,11 +99,11 @@ func balanceAction(ctx *cli.Context) error {
 		if res.offchainBalance > 0 {
 			offchainBalance = res.offchainBalance
 		}
-		if res.onchainBalance > 0 {
-			onchainBalance += res.onchainBalance
+		if res.onchainSpendableBalance > 0 {
+			onchainBalance += res.onchainSpendableBalance
 		}
-		if res.amountByExpiration != nil {
-			for timestamp, amount := range res.amountByExpiration {
+		if res.offchainBalanceByExpiration != nil {
+			for timestamp, amount := range res.offchainBalanceByExpiration {
 				if nextExpiration == 0 || timestamp < nextExpiration {
 					nextExpiration = timestamp
 				}
@@ -109,8 +118,8 @@ func balanceAction(ctx *cli.Context) error {
 				)
 			}
 		}
-		if res.futureBalance != nil {
-			for timestamp, amount := range res.futureBalance {
+		if res.onchainLockedBalance != nil {
+			for timestamp, amount := range res.onchainLockedBalance {
 				fancyTime := time.Unix(timestamp, 0).Format("2006-01-02 15:04:05")
 				lockedOnchainBalance = append(
 					lockedOnchainBalance,
@@ -177,9 +186,9 @@ func balanceAction(ctx *cli.Context) error {
 }
 
 type balanceRes struct {
-	offchainBalance    uint64
-	onchainBalance     uint64
-	futureBalance      map[int64]uint64 // availableAt -> onchain balance
-	amountByExpiration map[int64]uint64 // expireAt -> offchain balance
-	err                error
+	offchainBalance             uint64
+	onchainSpendableBalance     uint64
+	onchainLockedBalance        map[int64]uint64
+	offchainBalanceByExpiration map[int64]uint64
+	err                         error
 }

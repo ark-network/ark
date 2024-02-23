@@ -40,17 +40,17 @@ func onboardAction(ctx *cli.Context) error {
 
 	_, net := getNetwork()
 
-	aspPubkey, err := getServiceProviderPublicKey()
+	aspPubkey, err := getAspPublicKey()
 	if err != nil {
 		return err
 	}
 
-	lifetime, err := getLifetime()
+	roundLifetime, err := getRoundLifetime()
 	if err != nil {
 		return err
 	}
 
-	exitDelay, err := getExitDelay()
+	unilateralExitDelay, err := getUnilateralExitDelay()
 	if err != nil {
 		return err
 	}
@@ -66,7 +66,8 @@ func onboardAction(ctx *cli.Context) error {
 	}
 
 	treeFactoryFn, sharedOutputScript, sharedOutputAmount, err := tree.CraftCongestionTree(
-		net.AssetID, aspPubkey, []tree.Receiver{congestionTreeLeaf}, minRelayFee, lifetime, exitDelay,
+		net.AssetID, aspPubkey, []tree.Receiver{congestionTreeLeaf},
+		minRelayFee, roundLifetime, unilateralExitDelay,
 	)
 	if err != nil {
 		return err
@@ -92,7 +93,8 @@ func onboardAction(ctx *cli.Context) error {
 		return err
 	}
 
-	txid, err := broadcastPset(pset)
+	explorer := NewExplorer()
+	txid, err := explorer.Broadcast(pset)
 	if err != nil {
 		return err
 	}
@@ -116,11 +118,11 @@ func onboardAction(ctx *cli.Context) error {
 		return err
 	}
 
-	client, close, err := getClientFromState(ctx)
+	client, cancel, err := getClientFromState()
 	if err != nil {
 		return err
 	}
-	defer close()
+	defer cancel()
 
 	_, err = client.Onboard(ctx.Context, &arkv1.OnboardRequest{
 		BoardingTx:     pset,

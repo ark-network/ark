@@ -17,9 +17,7 @@ import (
 )
 
 func signPset(
-	pset *psetv2.Pset,
-	explorer Explorer,
-	prvKey *secp256k1.PrivateKey,
+	pset *psetv2.Pset, explorer Explorer, prvKey *secp256k1.PrivateKey,
 ) error {
 	updater, err := psetv2.NewUpdater(pset)
 	if err != nil {
@@ -66,7 +64,7 @@ func signPset(
 		return err
 	}
 
-	_, onchainAddr, err := getAddress()
+	_, onchainAddr, _, err := getAddress()
 	if err != nil {
 		return err
 	}
