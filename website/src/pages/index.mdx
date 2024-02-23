@@ -38,21 +38,7 @@ $ ark init --password <password> --ark-url https://asp.arkdev.info
 
 You can also restore a wallet by specifying the hex encoded private key with the `--prvkey` flag.
 
-### Receive VTXO
-
-You can print your onchain and offchain receiving addresses to receive funds with:
-
-```bash
-$ ark receive
-```
-
-This command also shows the list of relays used to reach the ASP.
-
-### Faucet your wallet
-
-Go to https://faucet.arkdev.info and use the `offchain_address` from the previous command to faucet your wallet with some sats.
-
-### Print balance
+### View balance
 
 You can see both the onchain and offchain balance of the wallet with:
 
@@ -60,13 +46,39 @@ You can see both the onchain and offchain balance of the wallet with:
 $ ark balance
 ```
 
-To see your balance with your VTXOs expiration details:
+To see your balance with your VTXOs expiration details use `--expiry-details`:
 
 ```bash
 $ ark balance --expiry-details
 ```
 
-### Send VTXO(s)
+### Receive funds
+
+You can print your onchain and offchain receiving addresses with:
+
+```bash
+$ ark receive
+```
+
+#### Add funds to the ark wallet:
+
+Fund the `onchain_address` from previous command with https://liquidtestnet.com/faucet.
+
+### Onboard the ark
+
+```
+$ ark onboard --amount <amount>
+```
+
+This command will send funds from your onchain balance to your offchain balance.
+
+After confirmation, your ark wallet will be funded and ready to spend offchain.
+
+:::danger Use sats
+Amount is always specified in _sats_ unit.
+:::
+
+### Make payments
 
 You can make a payment by sending to either one or many receivers:
 
@@ -75,26 +87,62 @@ $ ark send --to <address> --amount <amount>
 $ ark send --receivers '[{"to": "<address>", "amount": <amount>}, ...]'
 ```
 
-You can send funds to onchain or offchain addresses.
+:::tip
+You can send funds to onchain or offchain addresses:
 
-The amount must be specified in _sats_ unit.
+- funds to onchain addresses will come from your onchain balance
+- funds to offchain addresses will come from your offchain balance
+
+:::
 
 ### Collaborative redemption
 
-You can redeem onchain your funds by collaborating with the ASP with:
+You can redeem your funds onchain collaborating with the ASP:
 
 ```bash
 $ ark redeem --address <onchain_address> --amount <amount>
 ```
 
+This command will send funds from your offchain balance to your onchain balance.
+
+:::info
 Any change produced with this operation goes to your offchain address.
+:::
 
 ### Unilateral redemption
 
-If the ASP is unresponsive you can redeem all your offchain funds unilaterally with:
+If the ASP is unresponsive you can redeem all your offchain funds unilaterally:
 
 ```bash
 $ ark redeem --address <onchain_address> --force
 ```
 
-Unilateral exit flag `--force` ignores the `--amount` flag, it will redeem all your VTXOs.
+:::danger  
+The tag `--force` will make ark ignore `--amount` and redeem all funds.
+:::
+
+### Help
+
+You can see all available commands with `help`:
+
+```
+$ ark help
+```
+
+### Create a second CLI
+
+To create a second CLI, on a different terminal use a different datadir by exporting the env var `ARK_WALLET_DATADIR`:
+
+```bash
+$ export ARK_WALLET_DATADIR=path/to/custom
+$ ark init --password <password> --ark-url https://asp.arkdev.info
+```
+
+:::info
+By default the CLI uses the following datadir:
+
+- POSIX (Linux/BSD): ~/.Ark-cli
+- Mac OS: $HOME/Library/Application Support/Ark-cli
+- Windows: %LOCALAPPDATA%\Ark-cli
+- Plan 9: $home/Ark-cli
+  :::
