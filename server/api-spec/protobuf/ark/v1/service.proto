@@ -56,15 +56,6 @@ service ArkService {
   }
 }
 
-message OnboardRequest {
-  string boarding_tx = 1;
-  Tree congestion_tree = 2;
-  string user_pubkey = 3;
-}
-
-message OnboardResponse {
-}
-
 message RegisterPaymentRequest {
   repeated Input inputs = 1;
 }
@@ -94,6 +85,63 @@ message GetRoundResponse {
   Round round = 1;
 }
 
+message GetEventStreamRequest {}
+message GetEventStreamResponse {
+  oneof event {
+    RoundFinalizationEvent round_finalization = 1;
+    RoundFinalizedEvent round_finalized = 2;
+    RoundFailed round_failed = 3;
+  }
+}
+
+message PingRequest {
+  string payment_id = 1;
+}
+message PingResponse {}
+
+message ListVtxosRequest {
+  string address = 1;
+}
+message ListVtxosResponse {
+  repeated Vtxo vtxos = 1;
+}
+
+message GetInfoRequest {}
+message GetInfoResponse {
+  string pubkey = 1;
+  int64 round_lifetime = 2;
+  int64 unilateral_exit_delay = 3;
+}
+
+message OnboardRequest {
+  string boarding_tx = 1;
+  Tree congestion_tree = 2;
+  string user_pubkey = 3;
+}
+message OnboardResponse {
+}
+
+// EVENT TYPES
+
+message RoundFinalizationEvent {
+  string id = 1;
+  string pool_partial_tx = 2;
+  repeated string forfeit_txs = 3;
+  Tree congestion_tree = 4;
+}
+
+message RoundFinalizedEvent {
+  string id = 1;
+  string pool_txid = 2;
+}
+
+message RoundFailed {
+  string id = 1;
+  string reason = 2;
+}
+
+// TYPES
+
 message Round {
   string id = 1;
   int64 start = 2;
@@ -114,13 +162,6 @@ message Output {
   uint64 amount = 2;
 }
 
-message RoundFinalizationEvent {
-  string id = 1;
-  string pool_partial_tx = 2;
-  repeated string forfeit_txs = 3;
-  Tree congestion_tree = 4;
-}
-
 message Tree {
   repeated TreeLevel levels = 1;
 }
@@ -135,51 +176,9 @@ message Node {
   string parent_txid = 3;
 }
 
-message RoundFinalizedEvent {
-  string id = 1;
-  string pool_txid = 2;
-}
-
-message RoundFailed {
-  string id = 1;
-  string reason = 2;
-}
-
-message GetEventStreamRequest {}
-
-message GetEventStreamResponse {
-  oneof event {
-    RoundFinalizationEvent round_finalization = 1;
-    RoundFinalizedEvent round_finalized = 2;
-    RoundFailed round_failed = 3;
-  }
-}
-
-message PingRequest {
-  string payment_id = 1;
-}
-
-message PingResponse {}
-
-message ListVtxosRequest {
-  string address = 1;
-}
-
-message ListVtxosResponse {
-  repeated Vtxo vtxos = 1;
-}
-
 message Vtxo {
   Input outpoint = 1;
   Output receiver = 2;
   bool spent = 3;
   string pool_txid = 4;
-}
-
-message GetInfoRequest {}
-
-message GetInfoResponse {
-  string pubkey = 1;
-  int64 round_lifetime = 2;
-  int64 unilateral_exit_delay = 3;
 }

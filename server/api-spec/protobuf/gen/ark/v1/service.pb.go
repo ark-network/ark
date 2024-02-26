@@ -21,107 +21,6 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type OnboardRequest struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	BoardingTx     string `protobuf:"bytes,1,opt,name=boarding_tx,json=boardingTx,proto3" json:"boarding_tx,omitempty"`
-	CongestionTree *Tree  `protobuf:"bytes,2,opt,name=congestion_tree,json=congestionTree,proto3" json:"congestion_tree,omitempty"`
-	UserPubkey     string `protobuf:"bytes,3,opt,name=user_pubkey,json=userPubkey,proto3" json:"user_pubkey,omitempty"`
-}
-
-func (x *OnboardRequest) Reset() {
-	*x = OnboardRequest{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[0]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *OnboardRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*OnboardRequest) ProtoMessage() {}
-
-func (x *OnboardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[0]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use OnboardRequest.ProtoReflect.Descriptor instead.
-func (*OnboardRequest) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *OnboardRequest) GetBoardingTx() string {
-	if x != nil {
-		return x.BoardingTx
-	}
-	return ""
-}
-
-func (x *OnboardRequest) GetCongestionTree() *Tree {
-	if x != nil {
-		return x.CongestionTree
-	}
-	return nil
-}
-
-func (x *OnboardRequest) GetUserPubkey() string {
-	if x != nil {
-		return x.UserPubkey
-	}
-	return ""
-}
-
-type OnboardResponse struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-}
-
-func (x *OnboardResponse) Reset() {
-	*x = OnboardResponse{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[1]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *OnboardResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*OnboardResponse) ProtoMessage() {}
-
-func (x *OnboardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[1]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use OnboardResponse.ProtoReflect.Descriptor instead.
-func (*OnboardResponse) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{1}
-}
-
 type RegisterPaymentRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -133,7 +32,7 @@ type RegisterPaymentRequest struct {
 func (x *RegisterPaymentRequest) Reset() {
 	*x = RegisterPaymentRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[2]
+		mi := &file_ark_v1_service_proto_msgTypes[0]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -146,7 +45,7 @@ func (x *RegisterPaymentRequest) String() string {
 func (*RegisterPaymentRequest) ProtoMessage() {}
 
 func (x *RegisterPaymentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[2]
+	mi := &file_ark_v1_service_proto_msgTypes[0]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -159,7 +58,7 @@ func (x *RegisterPaymentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterPaymentRequest.ProtoReflect.Descriptor instead.
 func (*RegisterPaymentRequest) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{2}
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *RegisterPaymentRequest) GetInputs() []*Input {
@@ -181,7 +80,7 @@ type RegisterPaymentResponse struct {
 func (x *RegisterPaymentResponse) Reset() {
 	*x = RegisterPaymentResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[3]
+		mi := &file_ark_v1_service_proto_msgTypes[1]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -194,7 +93,7 @@ func (x *RegisterPaymentResponse) String() string {
 func (*RegisterPaymentResponse) ProtoMessage() {}
 
 func (x *RegisterPaymentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[3]
+	mi := &file_ark_v1_service_proto_msgTypes[1]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -207,7 +106,7 @@ func (x *RegisterPaymentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterPaymentResponse.ProtoReflect.Descriptor instead.
 func (*RegisterPaymentResponse) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{3}
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *RegisterPaymentResponse) GetId() string {
@@ -231,7 +130,7 @@ type ClaimPaymentRequest struct {
 func (x *ClaimPaymentRequest) Reset() {
 	*x = ClaimPaymentRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[4]
+		mi := &file_ark_v1_service_proto_msgTypes[2]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -244,7 +143,7 @@ func (x *ClaimPaymentRequest) String() string {
 func (*ClaimPaymentRequest) ProtoMessage() {}
 
 func (x *ClaimPaymentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[4]
+	mi := &file_ark_v1_service_proto_msgTypes[2]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -257,7 +156,7 @@ func (x *ClaimPaymentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimPaymentRequest.ProtoReflect.Descriptor instead.
 func (*ClaimPaymentRequest) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{4}
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ClaimPaymentRequest) GetId() string {
@@ -283,7 +182,7 @@ type ClaimPaymentResponse struct {
 func (x *ClaimPaymentResponse) Reset() {
 	*x = ClaimPaymentResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[5]
+		mi := &file_ark_v1_service_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -296,7 +195,7 @@ func (x *ClaimPaymentResponse) String() string {
 func (*ClaimPaymentResponse) ProtoMessage() {}
 
 func (x *ClaimPaymentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[5]
+	mi := &file_ark_v1_service_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -309,7 +208,7 @@ func (x *ClaimPaymentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimPaymentResponse.ProtoReflect.Descriptor instead.
 func (*ClaimPaymentResponse) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{5}
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{3}
 }
 
 type FinalizePaymentRequest struct {
@@ -324,7 +223,7 @@ type FinalizePaymentRequest struct {
 func (x *FinalizePaymentRequest) Reset() {
 	*x = FinalizePaymentRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[6]
+		mi := &file_ark_v1_service_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -337,7 +236,7 @@ func (x *FinalizePaymentRequest) String() string {
 func (*FinalizePaymentRequest) ProtoMessage() {}
 
 func (x *FinalizePaymentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[6]
+	mi := &file_ark_v1_service_proto_msgTypes[4]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -350,7 +249,7 @@ func (x *FinalizePaymentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FinalizePaymentRequest.ProtoReflect.Descriptor instead.
 func (*FinalizePaymentRequest) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{6}
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *FinalizePaymentRequest) GetSignedForfeitTxs() []string {
@@ -369,7 +268,7 @@ type FinalizePaymentResponse struct {
 func (x *FinalizePaymentResponse) Reset() {
 	*x = FinalizePaymentResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[7]
+		mi := &file_ark_v1_service_proto_msgTypes[5]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -382,7 +281,7 @@ func (x *FinalizePaymentResponse) String() string {
 func (*FinalizePaymentResponse) ProtoMessage() {}
 
 func (x *FinalizePaymentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[7]
+	mi := &file_ark_v1_service_proto_msgTypes[5]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -395,7 +294,7 @@ func (x *FinalizePaymentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FinalizePaymentResponse.ProtoReflect.Descriptor instead.
 func (*FinalizePaymentResponse) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{7}
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{5}
 }
 
 type GetRoundRequest struct {
@@ -409,7 +308,7 @@ type GetRoundRequest struct {
 func (x *GetRoundRequest) Reset() {
 	*x = GetRoundRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[8]
+		mi := &file_ark_v1_service_proto_msgTypes[6]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -422,7 +321,7 @@ func (x *GetRoundRequest) String() string {
 func (*GetRoundRequest) ProtoMessage() {}
 
 func (x *GetRoundRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[8]
+	mi := &file_ark_v1_service_proto_msgTypes[6]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -435,7 +334,7 @@ func (x *GetRoundRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRoundRequest.ProtoReflect.Descriptor instead.
 func (*GetRoundRequest) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{8}
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *GetRoundRequest) GetTxid() string {
@@ -456,7 +355,7 @@ type GetRoundResponse struct {
 func (x *GetRoundResponse) Reset() {
 	*x = GetRoundResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[9]
+		mi := &file_ark_v1_service_proto_msgTypes[7]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -469,7 +368,7 @@ func (x *GetRoundResponse) String() string {
 func (*GetRoundResponse) ProtoMessage() {}
 
 func (x *GetRoundResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[9]
+	mi := &file_ark_v1_service_proto_msgTypes[7]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -482,7 +381,7 @@ func (x *GetRoundResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRoundResponse.ProtoReflect.Descriptor instead.
 func (*GetRoundResponse) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{9}
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *GetRoundResponse) GetRound() *Round {
@@ -490,535 +389,6 @@ func (x *GetRoundResponse) GetRound() *Round {
 		return x.Round
 	}
 	return nil
-}
-
-type Round struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Id             string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Start          int64  `protobuf:"varint,2,opt,name=start,proto3" json:"start,omitempty"`
-	End            int64  `protobuf:"varint,3,opt,name=end,proto3" json:"end,omitempty"`
-	Txid           string `protobuf:"bytes,4,opt,name=txid,proto3" json:"txid,omitempty"`
-	CongestionTree *Tree  `protobuf:"bytes,5,opt,name=congestion_tree,json=congestionTree,proto3" json:"congestion_tree,omitempty"`
-}
-
-func (x *Round) Reset() {
-	*x = Round{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[10]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *Round) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Round) ProtoMessage() {}
-
-func (x *Round) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[10]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Round.ProtoReflect.Descriptor instead.
-func (*Round) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{10}
-}
-
-func (x *Round) GetId() string {
-	if x != nil {
-		return x.Id
-	}
-	return ""
-}
-
-func (x *Round) GetStart() int64 {
-	if x != nil {
-		return x.Start
-	}
-	return 0
-}
-
-func (x *Round) GetEnd() int64 {
-	if x != nil {
-		return x.End
-	}
-	return 0
-}
-
-func (x *Round) GetTxid() string {
-	if x != nil {
-		return x.Txid
-	}
-	return ""
-}
-
-func (x *Round) GetCongestionTree() *Tree {
-	if x != nil {
-		return x.CongestionTree
-	}
-	return nil
-}
-
-type Input struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Txid string `protobuf:"bytes,1,opt,name=txid,proto3" json:"txid,omitempty"`
-	Vout uint32 `protobuf:"varint,2,opt,name=vout,proto3" json:"vout,omitempty"`
-}
-
-func (x *Input) Reset() {
-	*x = Input{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[11]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *Input) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Input) ProtoMessage() {}
-
-func (x *Input) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[11]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Input.ProtoReflect.Descriptor instead.
-func (*Input) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{11}
-}
-
-func (x *Input) GetTxid() string {
-	if x != nil {
-		return x.Txid
-	}
-	return ""
-}
-
-func (x *Input) GetVout() uint32 {
-	if x != nil {
-		return x.Vout
-	}
-	return 0
-}
-
-type Output struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	// Either the offchain or onchain address.
-	Address string `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
-	// Amount to send in satoshis.
-	Amount uint64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
-}
-
-func (x *Output) Reset() {
-	*x = Output{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[12]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *Output) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Output) ProtoMessage() {}
-
-func (x *Output) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[12]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Output.ProtoReflect.Descriptor instead.
-func (*Output) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{12}
-}
-
-func (x *Output) GetAddress() string {
-	if x != nil {
-		return x.Address
-	}
-	return ""
-}
-
-func (x *Output) GetAmount() uint64 {
-	if x != nil {
-		return x.Amount
-	}
-	return 0
-}
-
-type RoundFinalizationEvent struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Id             string   `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	PoolPartialTx  string   `protobuf:"bytes,2,opt,name=pool_partial_tx,json=poolPartialTx,proto3" json:"pool_partial_tx,omitempty"`
-	ForfeitTxs     []string `protobuf:"bytes,3,rep,name=forfeit_txs,json=forfeitTxs,proto3" json:"forfeit_txs,omitempty"`
-	CongestionTree *Tree    `protobuf:"bytes,4,opt,name=congestion_tree,json=congestionTree,proto3" json:"congestion_tree,omitempty"`
-}
-
-func (x *RoundFinalizationEvent) Reset() {
-	*x = RoundFinalizationEvent{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[13]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *RoundFinalizationEvent) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RoundFinalizationEvent) ProtoMessage() {}
-
-func (x *RoundFinalizationEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[13]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RoundFinalizationEvent.ProtoReflect.Descriptor instead.
-func (*RoundFinalizationEvent) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{13}
-}
-
-func (x *RoundFinalizationEvent) GetId() string {
-	if x != nil {
-		return x.Id
-	}
-	return ""
-}
-
-func (x *RoundFinalizationEvent) GetPoolPartialTx() string {
-	if x != nil {
-		return x.PoolPartialTx
-	}
-	return ""
-}
-
-func (x *RoundFinalizationEvent) GetForfeitTxs() []string {
-	if x != nil {
-		return x.ForfeitTxs
-	}
-	return nil
-}
-
-func (x *RoundFinalizationEvent) GetCongestionTree() *Tree {
-	if x != nil {
-		return x.CongestionTree
-	}
-	return nil
-}
-
-type Tree struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Levels []*TreeLevel `protobuf:"bytes,1,rep,name=levels,proto3" json:"levels,omitempty"`
-}
-
-func (x *Tree) Reset() {
-	*x = Tree{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[14]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *Tree) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Tree) ProtoMessage() {}
-
-func (x *Tree) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[14]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Tree.ProtoReflect.Descriptor instead.
-func (*Tree) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{14}
-}
-
-func (x *Tree) GetLevels() []*TreeLevel {
-	if x != nil {
-		return x.Levels
-	}
-	return nil
-}
-
-type TreeLevel struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Nodes []*Node `protobuf:"bytes,1,rep,name=nodes,proto3" json:"nodes,omitempty"`
-}
-
-func (x *TreeLevel) Reset() {
-	*x = TreeLevel{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[15]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *TreeLevel) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*TreeLevel) ProtoMessage() {}
-
-func (x *TreeLevel) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[15]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use TreeLevel.ProtoReflect.Descriptor instead.
-func (*TreeLevel) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{15}
-}
-
-func (x *TreeLevel) GetNodes() []*Node {
-	if x != nil {
-		return x.Nodes
-	}
-	return nil
-}
-
-type Node struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Txid       string `protobuf:"bytes,1,opt,name=txid,proto3" json:"txid,omitempty"`
-	Tx         string `protobuf:"bytes,2,opt,name=tx,proto3" json:"tx,omitempty"`
-	ParentTxid string `protobuf:"bytes,3,opt,name=parent_txid,json=parentTxid,proto3" json:"parent_txid,omitempty"`
-}
-
-func (x *Node) Reset() {
-	*x = Node{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[16]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *Node) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Node) ProtoMessage() {}
-
-func (x *Node) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[16]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Node.ProtoReflect.Descriptor instead.
-func (*Node) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{16}
-}
-
-func (x *Node) GetTxid() string {
-	if x != nil {
-		return x.Txid
-	}
-	return ""
-}
-
-func (x *Node) GetTx() string {
-	if x != nil {
-		return x.Tx
-	}
-	return ""
-}
-
-func (x *Node) GetParentTxid() string {
-	if x != nil {
-		return x.ParentTxid
-	}
-	return ""
-}
-
-type RoundFinalizedEvent struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Id       string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	PoolTxid string `protobuf:"bytes,2,opt,name=pool_txid,json=poolTxid,proto3" json:"pool_txid,omitempty"`
-}
-
-func (x *RoundFinalizedEvent) Reset() {
-	*x = RoundFinalizedEvent{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[17]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *RoundFinalizedEvent) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RoundFinalizedEvent) ProtoMessage() {}
-
-func (x *RoundFinalizedEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[17]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RoundFinalizedEvent.ProtoReflect.Descriptor instead.
-func (*RoundFinalizedEvent) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{17}
-}
-
-func (x *RoundFinalizedEvent) GetId() string {
-	if x != nil {
-		return x.Id
-	}
-	return ""
-}
-
-func (x *RoundFinalizedEvent) GetPoolTxid() string {
-	if x != nil {
-		return x.PoolTxid
-	}
-	return ""
-}
-
-type RoundFailed struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Id     string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Reason string `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
-}
-
-func (x *RoundFailed) Reset() {
-	*x = RoundFailed{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[18]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *RoundFailed) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RoundFailed) ProtoMessage() {}
-
-func (x *RoundFailed) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[18]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RoundFailed.ProtoReflect.Descriptor instead.
-func (*RoundFailed) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{18}
-}
-
-func (x *RoundFailed) GetId() string {
-	if x != nil {
-		return x.Id
-	}
-	return ""
-}
-
-func (x *RoundFailed) GetReason() string {
-	if x != nil {
-		return x.Reason
-	}
-	return ""
 }
 
 type GetEventStreamRequest struct {
@@ -1030,7 +400,7 @@ type GetEventStreamRequest struct {
 func (x *GetEventStreamRequest) Reset() {
 	*x = GetEventStreamRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[19]
+		mi := &file_ark_v1_service_proto_msgTypes[8]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1043,7 +413,7 @@ func (x *GetEventStreamRequest) String() string {
 func (*GetEventStreamRequest) ProtoMessage() {}
 
 func (x *GetEventStreamRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[19]
+	mi := &file_ark_v1_service_proto_msgTypes[8]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1056,7 +426,7 @@ func (x *GetEventStreamRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEventStreamRequest.ProtoReflect.Descriptor instead.
 func (*GetEventStreamRequest) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{19}
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{8}
 }
 
 type GetEventStreamResponse struct {
@@ -1075,7 +445,7 @@ type GetEventStreamResponse struct {
 func (x *GetEventStreamResponse) Reset() {
 	*x = GetEventStreamResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[20]
+		mi := &file_ark_v1_service_proto_msgTypes[9]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1088,7 +458,7 @@ func (x *GetEventStreamResponse) String() string {
 func (*GetEventStreamResponse) ProtoMessage() {}
 
 func (x *GetEventStreamResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[20]
+	mi := &file_ark_v1_service_proto_msgTypes[9]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1101,7 +471,7 @@ func (x *GetEventStreamResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEventStreamResponse.ProtoReflect.Descriptor instead.
 func (*GetEventStreamResponse) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{20}
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{9}
 }
 
 func (m *GetEventStreamResponse) GetEvent() isGetEventStreamResponse_Event {
@@ -1165,7 +535,7 @@ type PingRequest struct {
 func (x *PingRequest) Reset() {
 	*x = PingRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[21]
+		mi := &file_ark_v1_service_proto_msgTypes[10]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1178,7 +548,7 @@ func (x *PingRequest) String() string {
 func (*PingRequest) ProtoMessage() {}
 
 func (x *PingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[21]
+	mi := &file_ark_v1_service_proto_msgTypes[10]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1191,7 +561,7 @@ func (x *PingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingRequest.ProtoReflect.Descriptor instead.
 func (*PingRequest) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{21}
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *PingRequest) GetPaymentId() string {
@@ -1210,7 +580,7 @@ type PingResponse struct {
 func (x *PingResponse) Reset() {
 	*x = PingResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[22]
+		mi := &file_ark_v1_service_proto_msgTypes[11]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1223,7 +593,7 @@ func (x *PingResponse) String() string {
 func (*PingResponse) ProtoMessage() {}
 
 func (x *PingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[22]
+	mi := &file_ark_v1_service_proto_msgTypes[11]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1236,7 +606,7 @@ func (x *PingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingResponse.ProtoReflect.Descriptor instead.
 func (*PingResponse) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{22}
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{11}
 }
 
 type ListVtxosRequest struct {
@@ -1250,7 +620,7 @@ type ListVtxosRequest struct {
 func (x *ListVtxosRequest) Reset() {
 	*x = ListVtxosRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[23]
+		mi := &file_ark_v1_service_proto_msgTypes[12]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1263,7 +633,7 @@ func (x *ListVtxosRequest) String() string {
 func (*ListVtxosRequest) ProtoMessage() {}
 
 func (x *ListVtxosRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[23]
+	mi := &file_ark_v1_service_proto_msgTypes[12]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1276,7 +646,7 @@ func (x *ListVtxosRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListVtxosRequest.ProtoReflect.Descriptor instead.
 func (*ListVtxosRequest) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{23}
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ListVtxosRequest) GetAddress() string {
@@ -1297,7 +667,7 @@ type ListVtxosResponse struct {
 func (x *ListVtxosResponse) Reset() {
 	*x = ListVtxosResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[24]
+		mi := &file_ark_v1_service_proto_msgTypes[13]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1310,7 +680,7 @@ func (x *ListVtxosResponse) String() string {
 func (*ListVtxosResponse) ProtoMessage() {}
 
 func (x *ListVtxosResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[24]
+	mi := &file_ark_v1_service_proto_msgTypes[13]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1323,7 +693,7 @@ func (x *ListVtxosResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListVtxosResponse.ProtoReflect.Descriptor instead.
 func (*ListVtxosResponse) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{24}
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ListVtxosResponse) GetVtxos() []*Vtxo {
@@ -1331,6 +701,737 @@ func (x *ListVtxosResponse) GetVtxos() []*Vtxo {
 		return x.Vtxos
 	}
 	return nil
+}
+
+type GetInfoRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *GetInfoRequest) Reset() {
+	*x = GetInfoRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_ark_v1_service_proto_msgTypes[14]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *GetInfoRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetInfoRequest) ProtoMessage() {}
+
+func (x *GetInfoRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ark_v1_service_proto_msgTypes[14]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetInfoRequest.ProtoReflect.Descriptor instead.
+func (*GetInfoRequest) Descriptor() ([]byte, []int) {
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{14}
+}
+
+type GetInfoResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Pubkey              string `protobuf:"bytes,1,opt,name=pubkey,proto3" json:"pubkey,omitempty"`
+	RoundLifetime       int64  `protobuf:"varint,2,opt,name=round_lifetime,json=roundLifetime,proto3" json:"round_lifetime,omitempty"`
+	UnilateralExitDelay int64  `protobuf:"varint,3,opt,name=unilateral_exit_delay,json=unilateralExitDelay,proto3" json:"unilateral_exit_delay,omitempty"`
+}
+
+func (x *GetInfoResponse) Reset() {
+	*x = GetInfoResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_ark_v1_service_proto_msgTypes[15]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *GetInfoResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetInfoResponse) ProtoMessage() {}
+
+func (x *GetInfoResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ark_v1_service_proto_msgTypes[15]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetInfoResponse.ProtoReflect.Descriptor instead.
+func (*GetInfoResponse) Descriptor() ([]byte, []int) {
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *GetInfoResponse) GetPubkey() string {
+	if x != nil {
+		return x.Pubkey
+	}
+	return ""
+}
+
+func (x *GetInfoResponse) GetRoundLifetime() int64 {
+	if x != nil {
+		return x.RoundLifetime
+	}
+	return 0
+}
+
+func (x *GetInfoResponse) GetUnilateralExitDelay() int64 {
+	if x != nil {
+		return x.UnilateralExitDelay
+	}
+	return 0
+}
+
+type OnboardRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	BoardingTx     string `protobuf:"bytes,1,opt,name=boarding_tx,json=boardingTx,proto3" json:"boarding_tx,omitempty"`
+	CongestionTree *Tree  `protobuf:"bytes,2,opt,name=congestion_tree,json=congestionTree,proto3" json:"congestion_tree,omitempty"`
+	UserPubkey     string `protobuf:"bytes,3,opt,name=user_pubkey,json=userPubkey,proto3" json:"user_pubkey,omitempty"`
+}
+
+func (x *OnboardRequest) Reset() {
+	*x = OnboardRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_ark_v1_service_proto_msgTypes[16]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *OnboardRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OnboardRequest) ProtoMessage() {}
+
+func (x *OnboardRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ark_v1_service_proto_msgTypes[16]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OnboardRequest.ProtoReflect.Descriptor instead.
+func (*OnboardRequest) Descriptor() ([]byte, []int) {
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *OnboardRequest) GetBoardingTx() string {
+	if x != nil {
+		return x.BoardingTx
+	}
+	return ""
+}
+
+func (x *OnboardRequest) GetCongestionTree() *Tree {
+	if x != nil {
+		return x.CongestionTree
+	}
+	return nil
+}
+
+func (x *OnboardRequest) GetUserPubkey() string {
+	if x != nil {
+		return x.UserPubkey
+	}
+	return ""
+}
+
+type OnboardResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *OnboardResponse) Reset() {
+	*x = OnboardResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_ark_v1_service_proto_msgTypes[17]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *OnboardResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OnboardResponse) ProtoMessage() {}
+
+func (x *OnboardResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ark_v1_service_proto_msgTypes[17]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OnboardResponse.ProtoReflect.Descriptor instead.
+func (*OnboardResponse) Descriptor() ([]byte, []int) {
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{17}
+}
+
+type RoundFinalizationEvent struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Id             string   `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	PoolPartialTx  string   `protobuf:"bytes,2,opt,name=pool_partial_tx,json=poolPartialTx,proto3" json:"pool_partial_tx,omitempty"`
+	ForfeitTxs     []string `protobuf:"bytes,3,rep,name=forfeit_txs,json=forfeitTxs,proto3" json:"forfeit_txs,omitempty"`
+	CongestionTree *Tree    `protobuf:"bytes,4,opt,name=congestion_tree,json=congestionTree,proto3" json:"congestion_tree,omitempty"`
+}
+
+func (x *RoundFinalizationEvent) Reset() {
+	*x = RoundFinalizationEvent{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_ark_v1_service_proto_msgTypes[18]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RoundFinalizationEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RoundFinalizationEvent) ProtoMessage() {}
+
+func (x *RoundFinalizationEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_ark_v1_service_proto_msgTypes[18]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RoundFinalizationEvent.ProtoReflect.Descriptor instead.
+func (*RoundFinalizationEvent) Descriptor() ([]byte, []int) {
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *RoundFinalizationEvent) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *RoundFinalizationEvent) GetPoolPartialTx() string {
+	if x != nil {
+		return x.PoolPartialTx
+	}
+	return ""
+}
+
+func (x *RoundFinalizationEvent) GetForfeitTxs() []string {
+	if x != nil {
+		return x.ForfeitTxs
+	}
+	return nil
+}
+
+func (x *RoundFinalizationEvent) GetCongestionTree() *Tree {
+	if x != nil {
+		return x.CongestionTree
+	}
+	return nil
+}
+
+type RoundFinalizedEvent struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Id       string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	PoolTxid string `protobuf:"bytes,2,opt,name=pool_txid,json=poolTxid,proto3" json:"pool_txid,omitempty"`
+}
+
+func (x *RoundFinalizedEvent) Reset() {
+	*x = RoundFinalizedEvent{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_ark_v1_service_proto_msgTypes[19]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RoundFinalizedEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RoundFinalizedEvent) ProtoMessage() {}
+
+func (x *RoundFinalizedEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_ark_v1_service_proto_msgTypes[19]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RoundFinalizedEvent.ProtoReflect.Descriptor instead.
+func (*RoundFinalizedEvent) Descriptor() ([]byte, []int) {
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *RoundFinalizedEvent) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *RoundFinalizedEvent) GetPoolTxid() string {
+	if x != nil {
+		return x.PoolTxid
+	}
+	return ""
+}
+
+type RoundFailed struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Id     string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Reason string `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+}
+
+func (x *RoundFailed) Reset() {
+	*x = RoundFailed{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_ark_v1_service_proto_msgTypes[20]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RoundFailed) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RoundFailed) ProtoMessage() {}
+
+func (x *RoundFailed) ProtoReflect() protoreflect.Message {
+	mi := &file_ark_v1_service_proto_msgTypes[20]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RoundFailed.ProtoReflect.Descriptor instead.
+func (*RoundFailed) Descriptor() ([]byte, []int) {
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *RoundFailed) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *RoundFailed) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+type Round struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Id             string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Start          int64  `protobuf:"varint,2,opt,name=start,proto3" json:"start,omitempty"`
+	End            int64  `protobuf:"varint,3,opt,name=end,proto3" json:"end,omitempty"`
+	Txid           string `protobuf:"bytes,4,opt,name=txid,proto3" json:"txid,omitempty"`
+	CongestionTree *Tree  `protobuf:"bytes,5,opt,name=congestion_tree,json=congestionTree,proto3" json:"congestion_tree,omitempty"`
+}
+
+func (x *Round) Reset() {
+	*x = Round{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_ark_v1_service_proto_msgTypes[21]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Round) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Round) ProtoMessage() {}
+
+func (x *Round) ProtoReflect() protoreflect.Message {
+	mi := &file_ark_v1_service_proto_msgTypes[21]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Round.ProtoReflect.Descriptor instead.
+func (*Round) Descriptor() ([]byte, []int) {
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *Round) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Round) GetStart() int64 {
+	if x != nil {
+		return x.Start
+	}
+	return 0
+}
+
+func (x *Round) GetEnd() int64 {
+	if x != nil {
+		return x.End
+	}
+	return 0
+}
+
+func (x *Round) GetTxid() string {
+	if x != nil {
+		return x.Txid
+	}
+	return ""
+}
+
+func (x *Round) GetCongestionTree() *Tree {
+	if x != nil {
+		return x.CongestionTree
+	}
+	return nil
+}
+
+type Input struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Txid string `protobuf:"bytes,1,opt,name=txid,proto3" json:"txid,omitempty"`
+	Vout uint32 `protobuf:"varint,2,opt,name=vout,proto3" json:"vout,omitempty"`
+}
+
+func (x *Input) Reset() {
+	*x = Input{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_ark_v1_service_proto_msgTypes[22]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Input) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Input) ProtoMessage() {}
+
+func (x *Input) ProtoReflect() protoreflect.Message {
+	mi := &file_ark_v1_service_proto_msgTypes[22]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Input.ProtoReflect.Descriptor instead.
+func (*Input) Descriptor() ([]byte, []int) {
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *Input) GetTxid() string {
+	if x != nil {
+		return x.Txid
+	}
+	return ""
+}
+
+func (x *Input) GetVout() uint32 {
+	if x != nil {
+		return x.Vout
+	}
+	return 0
+}
+
+type Output struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// Either the offchain or onchain address.
+	Address string `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
+	// Amount to send in satoshis.
+	Amount uint64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
+}
+
+func (x *Output) Reset() {
+	*x = Output{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_ark_v1_service_proto_msgTypes[23]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Output) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Output) ProtoMessage() {}
+
+func (x *Output) ProtoReflect() protoreflect.Message {
+	mi := &file_ark_v1_service_proto_msgTypes[23]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Output.ProtoReflect.Descriptor instead.
+func (*Output) Descriptor() ([]byte, []int) {
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *Output) GetAddress() string {
+	if x != nil {
+		return x.Address
+	}
+	return ""
+}
+
+func (x *Output) GetAmount() uint64 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
+type Tree struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Levels []*TreeLevel `protobuf:"bytes,1,rep,name=levels,proto3" json:"levels,omitempty"`
+}
+
+func (x *Tree) Reset() {
+	*x = Tree{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_ark_v1_service_proto_msgTypes[24]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Tree) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Tree) ProtoMessage() {}
+
+func (x *Tree) ProtoReflect() protoreflect.Message {
+	mi := &file_ark_v1_service_proto_msgTypes[24]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Tree.ProtoReflect.Descriptor instead.
+func (*Tree) Descriptor() ([]byte, []int) {
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *Tree) GetLevels() []*TreeLevel {
+	if x != nil {
+		return x.Levels
+	}
+	return nil
+}
+
+type TreeLevel struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Nodes []*Node `protobuf:"bytes,1,rep,name=nodes,proto3" json:"nodes,omitempty"`
+}
+
+func (x *TreeLevel) Reset() {
+	*x = TreeLevel{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_ark_v1_service_proto_msgTypes[25]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *TreeLevel) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TreeLevel) ProtoMessage() {}
+
+func (x *TreeLevel) ProtoReflect() protoreflect.Message {
+	mi := &file_ark_v1_service_proto_msgTypes[25]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TreeLevel.ProtoReflect.Descriptor instead.
+func (*TreeLevel) Descriptor() ([]byte, []int) {
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *TreeLevel) GetNodes() []*Node {
+	if x != nil {
+		return x.Nodes
+	}
+	return nil
+}
+
+type Node struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Txid       string `protobuf:"bytes,1,opt,name=txid,proto3" json:"txid,omitempty"`
+	Tx         string `protobuf:"bytes,2,opt,name=tx,proto3" json:"tx,omitempty"`
+	ParentTxid string `protobuf:"bytes,3,opt,name=parent_txid,json=parentTxid,proto3" json:"parent_txid,omitempty"`
+}
+
+func (x *Node) Reset() {
+	*x = Node{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_ark_v1_service_proto_msgTypes[26]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Node) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Node) ProtoMessage() {}
+
+func (x *Node) ProtoReflect() protoreflect.Message {
+	mi := &file_ark_v1_service_proto_msgTypes[26]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Node.ProtoReflect.Descriptor instead.
+func (*Node) Descriptor() ([]byte, []int) {
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *Node) GetTxid() string {
+	if x != nil {
+		return x.Txid
+	}
+	return ""
+}
+
+func (x *Node) GetTx() string {
+	if x != nil {
+		return x.Tx
+	}
+	return ""
+}
+
+func (x *Node) GetParentTxid() string {
+	if x != nil {
+		return x.ParentTxid
+	}
+	return ""
 }
 
 type Vtxo struct {
@@ -1347,7 +1448,7 @@ type Vtxo struct {
 func (x *Vtxo) Reset() {
 	*x = Vtxo{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[25]
+		mi := &file_ark_v1_service_proto_msgTypes[27]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1360,7 +1461,7 @@ func (x *Vtxo) String() string {
 func (*Vtxo) ProtoMessage() {}
 
 func (x *Vtxo) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[25]
+	mi := &file_ark_v1_service_proto_msgTypes[27]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1373,7 +1474,7 @@ func (x *Vtxo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Vtxo.ProtoReflect.Descriptor instead.
 func (*Vtxo) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{25}
+	return file_ark_v1_service_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *Vtxo) GetOutpoint() *Input {
@@ -1404,195 +1505,39 @@ func (x *Vtxo) GetPoolTxid() string {
 	return ""
 }
 
-type GetInfoRequest struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-}
-
-func (x *GetInfoRequest) Reset() {
-	*x = GetInfoRequest{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[26]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *GetInfoRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetInfoRequest) ProtoMessage() {}
-
-func (x *GetInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[26]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetInfoRequest.ProtoReflect.Descriptor instead.
-func (*GetInfoRequest) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{26}
-}
-
-type GetInfoResponse struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Pubkey              string `protobuf:"bytes,1,opt,name=pubkey,proto3" json:"pubkey,omitempty"`
-	RoundLifetime       int64  `protobuf:"varint,2,opt,name=round_lifetime,json=roundLifetime,proto3" json:"round_lifetime,omitempty"`
-	UnilateralExitDelay int64  `protobuf:"varint,3,opt,name=unilateral_exit_delay,json=unilateralExitDelay,proto3" json:"unilateral_exit_delay,omitempty"`
-}
-
-func (x *GetInfoResponse) Reset() {
-	*x = GetInfoResponse{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_service_proto_msgTypes[27]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *GetInfoResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetInfoResponse) ProtoMessage() {}
-
-func (x *GetInfoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_service_proto_msgTypes[27]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetInfoResponse.ProtoReflect.Descriptor instead.
-func (*GetInfoResponse) Descriptor() ([]byte, []int) {
-	return file_ark_v1_service_proto_rawDescGZIP(), []int{27}
-}
-
-func (x *GetInfoResponse) GetPubkey() string {
-	if x != nil {
-		return x.Pubkey
-	}
-	return ""
-}
-
-func (x *GetInfoResponse) GetRoundLifetime() int64 {
-	if x != nil {
-		return x.RoundLifetime
-	}
-	return 0
-}
-
-func (x *GetInfoResponse) GetUnilateralExitDelay() int64 {
-	if x != nil {
-		return x.UnilateralExitDelay
-	}
-	return 0
-}
-
 var File_ark_v1_service_proto protoreflect.FileDescriptor
 
 var file_ark_v1_service_proto_rawDesc = []byte{
 	0x0a, 0x14, 0x61, 0x72, 0x6b, 0x2f, 0x76, 0x31, 0x2f, 0x73, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65,
 	0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12, 0x06, 0x61, 0x72, 0x6b, 0x2e, 0x76, 0x31, 0x1a, 0x1c,
 	0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2f, 0x61, 0x70, 0x69, 0x2f, 0x61, 0x6e, 0x6e, 0x6f, 0x74,
-	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x22, 0x89, 0x01, 0x0a,
-	0x0e, 0x4f, 0x6e, 0x62, 0x6f, 0x61, 0x72, 0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12,
-	0x1f, 0x0a, 0x0b, 0x62, 0x6f, 0x61, 0x72, 0x64, 0x69, 0x6e, 0x67, 0x5f, 0x74, 0x78, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x0a, 0x62, 0x6f, 0x61, 0x72, 0x64, 0x69, 0x6e, 0x67, 0x54, 0x78,
-	0x12, 0x35, 0x0a, 0x0f, 0x63, 0x6f, 0x6e, 0x67, 0x65, 0x73, 0x74, 0x69, 0x6f, 0x6e, 0x5f, 0x74,
-	0x72, 0x65, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x61, 0x72, 0x6b, 0x2e,
-	0x76, 0x31, 0x2e, 0x54, 0x72, 0x65, 0x65, 0x52, 0x0e, 0x63, 0x6f, 0x6e, 0x67, 0x65, 0x73, 0x74,
-	0x69, 0x6f, 0x6e, 0x54, 0x72, 0x65, 0x65, 0x12, 0x1f, 0x0a, 0x0b, 0x75, 0x73, 0x65, 0x72, 0x5f,
-	0x70, 0x75, 0x62, 0x6b, 0x65, 0x79, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0a, 0x75, 0x73,
-	0x65, 0x72, 0x50, 0x75, 0x62, 0x6b, 0x65, 0x79, 0x22, 0x11, 0x0a, 0x0f, 0x4f, 0x6e, 0x62, 0x6f,
-	0x61, 0x72, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x3f, 0x0a, 0x16, 0x52,
-	0x65, 0x67, 0x69, 0x73, 0x74, 0x65, 0x72, 0x50, 0x61, 0x79, 0x6d, 0x65, 0x6e, 0x74, 0x52, 0x65,
-	0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x25, 0x0a, 0x06, 0x69, 0x6e, 0x70, 0x75, 0x74, 0x73, 0x18,
-	0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0d, 0x2e, 0x61, 0x72, 0x6b, 0x2e, 0x76, 0x31, 0x2e, 0x49,
-	0x6e, 0x70, 0x75, 0x74, 0x52, 0x06, 0x69, 0x6e, 0x70, 0x75, 0x74, 0x73, 0x22, 0x29, 0x0a, 0x17,
+	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x22, 0x3f, 0x0a, 0x16,
 	0x52, 0x65, 0x67, 0x69, 0x73, 0x74, 0x65, 0x72, 0x50, 0x61, 0x79, 0x6d, 0x65, 0x6e, 0x74, 0x52,
-	0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20,
-	0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x22, 0x4f, 0x0a, 0x13, 0x43, 0x6c, 0x61, 0x69, 0x6d,
-	0x50, 0x61, 0x79, 0x6d, 0x65, 0x6e, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x0e,
-	0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x12, 0x28,
-	0x0a, 0x07, 0x6f, 0x75, 0x74, 0x70, 0x75, 0x74, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32,
-	0x0e, 0x2e, 0x61, 0x72, 0x6b, 0x2e, 0x76, 0x31, 0x2e, 0x4f, 0x75, 0x74, 0x70, 0x75, 0x74, 0x52,
-	0x07, 0x6f, 0x75, 0x74, 0x70, 0x75, 0x74, 0x73, 0x22, 0x16, 0x0a, 0x14, 0x43, 0x6c, 0x61, 0x69,
-	0x6d, 0x50, 0x61, 0x79, 0x6d, 0x65, 0x6e, 0x74, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
-	0x22, 0x46, 0x0a, 0x16, 0x46, 0x69, 0x6e, 0x61, 0x6c, 0x69, 0x7a, 0x65, 0x50, 0x61, 0x79, 0x6d,
-	0x65, 0x6e, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x2c, 0x0a, 0x12, 0x73, 0x69,
-	0x67, 0x6e, 0x65, 0x64, 0x5f, 0x66, 0x6f, 0x72, 0x66, 0x65, 0x69, 0x74, 0x5f, 0x74, 0x78, 0x73,
-	0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x10, 0x73, 0x69, 0x67, 0x6e, 0x65, 0x64, 0x46, 0x6f,
-	0x72, 0x66, 0x65, 0x69, 0x74, 0x54, 0x78, 0x73, 0x22, 0x19, 0x0a, 0x17, 0x46, 0x69, 0x6e, 0x61,
-	0x6c, 0x69, 0x7a, 0x65, 0x50, 0x61, 0x79, 0x6d, 0x65, 0x6e, 0x74, 0x52, 0x65, 0x73, 0x70, 0x6f,
-	0x6e, 0x73, 0x65, 0x22, 0x25, 0x0a, 0x0f, 0x47, 0x65, 0x74, 0x52, 0x6f, 0x75, 0x6e, 0x64, 0x52,
-	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x74, 0x78, 0x69, 0x64, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x74, 0x78, 0x69, 0x64, 0x22, 0x37, 0x0a, 0x10, 0x47, 0x65,
-	0x74, 0x52, 0x6f, 0x75, 0x6e, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x23,
-	0x0a, 0x05, 0x72, 0x6f, 0x75, 0x6e, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0d, 0x2e,
-	0x61, 0x72, 0x6b, 0x2e, 0x76, 0x31, 0x2e, 0x52, 0x6f, 0x75, 0x6e, 0x64, 0x52, 0x05, 0x72, 0x6f,
-	0x75, 0x6e, 0x64, 0x22, 0x8a, 0x01, 0x0a, 0x05, 0x52, 0x6f, 0x75, 0x6e, 0x64, 0x12, 0x0e, 0x0a,
-	0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x12, 0x14, 0x0a,
-	0x05, 0x73, 0x74, 0x61, 0x72, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x05, 0x73, 0x74,
-	0x61, 0x72, 0x74, 0x12, 0x10, 0x0a, 0x03, 0x65, 0x6e, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x03,
-	0x52, 0x03, 0x65, 0x6e, 0x64, 0x12, 0x12, 0x0a, 0x04, 0x74, 0x78, 0x69, 0x64, 0x18, 0x04, 0x20,
-	0x01, 0x28, 0x09, 0x52, 0x04, 0x74, 0x78, 0x69, 0x64, 0x12, 0x35, 0x0a, 0x0f, 0x63, 0x6f, 0x6e,
-	0x67, 0x65, 0x73, 0x74, 0x69, 0x6f, 0x6e, 0x5f, 0x74, 0x72, 0x65, 0x65, 0x18, 0x05, 0x20, 0x01,
-	0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x61, 0x72, 0x6b, 0x2e, 0x76, 0x31, 0x2e, 0x54, 0x72, 0x65, 0x65,
-	0x52, 0x0e, 0x63, 0x6f, 0x6e, 0x67, 0x65, 0x73, 0x74, 0x69, 0x6f, 0x6e, 0x54, 0x72, 0x65, 0x65,
-	0x22, 0x2f, 0x0a, 0x05, 0x49, 0x6e, 0x70, 0x75, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x74, 0x78, 0x69,
-	0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x74, 0x78, 0x69, 0x64, 0x12, 0x12, 0x0a,
-	0x04, 0x76, 0x6f, 0x75, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x04, 0x76, 0x6f, 0x75,
-	0x74, 0x22, 0x3a, 0x0a, 0x06, 0x4f, 0x75, 0x74, 0x70, 0x75, 0x74, 0x12, 0x18, 0x0a, 0x07, 0x61,
-	0x64, 0x64, 0x72, 0x65, 0x73, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x61, 0x64,
-	0x64, 0x72, 0x65, 0x73, 0x73, 0x12, 0x16, 0x0a, 0x06, 0x61, 0x6d, 0x6f, 0x75, 0x6e, 0x74, 0x18,
-	0x02, 0x20, 0x01, 0x28, 0x04, 0x52, 0x06, 0x61, 0x6d, 0x6f, 0x75, 0x6e, 0x74, 0x22, 0xa8, 0x01,
-	0x0a, 0x16, 0x52, 0x6f, 0x75, 0x6e, 0x64, 0x46, 0x69, 0x6e, 0x61, 0x6c, 0x69, 0x7a, 0x61, 0x74,
-	0x69, 0x6f, 0x6e, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x12, 0x26, 0x0a, 0x0f, 0x70, 0x6f, 0x6f, 0x6c,
-	0x5f, 0x70, 0x61, 0x72, 0x74, 0x69, 0x61, 0x6c, 0x5f, 0x74, 0x78, 0x18, 0x02, 0x20, 0x01, 0x28,
-	0x09, 0x52, 0x0d, 0x70, 0x6f, 0x6f, 0x6c, 0x50, 0x61, 0x72, 0x74, 0x69, 0x61, 0x6c, 0x54, 0x78,
-	0x12, 0x1f, 0x0a, 0x0b, 0x66, 0x6f, 0x72, 0x66, 0x65, 0x69, 0x74, 0x5f, 0x74, 0x78, 0x73, 0x18,
-	0x03, 0x20, 0x03, 0x28, 0x09, 0x52, 0x0a, 0x66, 0x6f, 0x72, 0x66, 0x65, 0x69, 0x74, 0x54, 0x78,
-	0x73, 0x12, 0x35, 0x0a, 0x0f, 0x63, 0x6f, 0x6e, 0x67, 0x65, 0x73, 0x74, 0x69, 0x6f, 0x6e, 0x5f,
-	0x74, 0x72, 0x65, 0x65, 0x18, 0x04, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x61, 0x72, 0x6b,
-	0x2e, 0x76, 0x31, 0x2e, 0x54, 0x72, 0x65, 0x65, 0x52, 0x0e, 0x63, 0x6f, 0x6e, 0x67, 0x65, 0x73,
-	0x74, 0x69, 0x6f, 0x6e, 0x54, 0x72, 0x65, 0x65, 0x22, 0x31, 0x0a, 0x04, 0x54, 0x72, 0x65, 0x65,
-	0x12, 0x29, 0x0a, 0x06, 0x6c, 0x65, 0x76, 0x65, 0x6c, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b,
-	0x32, 0x11, 0x2e, 0x61, 0x72, 0x6b, 0x2e, 0x76, 0x31, 0x2e, 0x54, 0x72, 0x65, 0x65, 0x4c, 0x65,
-	0x76, 0x65, 0x6c, 0x52, 0x06, 0x6c, 0x65, 0x76, 0x65, 0x6c, 0x73, 0x22, 0x2f, 0x0a, 0x09, 0x54,
-	0x72, 0x65, 0x65, 0x4c, 0x65, 0x76, 0x65, 0x6c, 0x12, 0x22, 0x0a, 0x05, 0x6e, 0x6f, 0x64, 0x65,
-	0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x61, 0x72, 0x6b, 0x2e, 0x76, 0x31,
-	0x2e, 0x4e, 0x6f, 0x64, 0x65, 0x52, 0x05, 0x6e, 0x6f, 0x64, 0x65, 0x73, 0x22, 0x4b, 0x0a, 0x04,
-	0x4e, 0x6f, 0x64, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x74, 0x78, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x04, 0x74, 0x78, 0x69, 0x64, 0x12, 0x0e, 0x0a, 0x02, 0x74, 0x78, 0x18, 0x02,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x74, 0x78, 0x12, 0x1f, 0x0a, 0x0b, 0x70, 0x61, 0x72, 0x65,
-	0x6e, 0x74, 0x5f, 0x74, 0x78, 0x69, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0a, 0x70,
-	0x61, 0x72, 0x65, 0x6e, 0x74, 0x54, 0x78, 0x69, 0x64, 0x22, 0x42, 0x0a, 0x13, 0x52, 0x6f, 0x75,
-	0x6e, 0x64, 0x46, 0x69, 0x6e, 0x61, 0x6c, 0x69, 0x7a, 0x65, 0x64, 0x45, 0x76, 0x65, 0x6e, 0x74,
-	0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64,
-	0x12, 0x1b, 0x0a, 0x09, 0x70, 0x6f, 0x6f, 0x6c, 0x5f, 0x74, 0x78, 0x69, 0x64, 0x18, 0x02, 0x20,
-	0x01, 0x28, 0x09, 0x52, 0x08, 0x70, 0x6f, 0x6f, 0x6c, 0x54, 0x78, 0x69, 0x64, 0x22, 0x35, 0x0a,
-	0x0b, 0x52, 0x6f, 0x75, 0x6e, 0x64, 0x46, 0x61, 0x69, 0x6c, 0x65, 0x64, 0x12, 0x0e, 0x0a, 0x02,
-	0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x12, 0x16, 0x0a, 0x06,
-	0x72, 0x65, 0x61, 0x73, 0x6f, 0x6e, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x72, 0x65,
-	0x61, 0x73, 0x6f, 0x6e, 0x22, 0x17, 0x0a, 0x15, 0x47, 0x65, 0x74, 0x45, 0x76, 0x65, 0x6e, 0x74,
+	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x25, 0x0a, 0x06, 0x69, 0x6e, 0x70, 0x75, 0x74, 0x73,
+	0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0d, 0x2e, 0x61, 0x72, 0x6b, 0x2e, 0x76, 0x31, 0x2e,
+	0x49, 0x6e, 0x70, 0x75, 0x74, 0x52, 0x06, 0x69, 0x6e, 0x70, 0x75, 0x74, 0x73, 0x22, 0x29, 0x0a,
+	0x17, 0x52, 0x65, 0x67, 0x69, 0x73, 0x74, 0x65, 0x72, 0x50, 0x61, 0x79, 0x6d, 0x65, 0x6e, 0x74,
+	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x22, 0x4f, 0x0a, 0x13, 0x43, 0x6c, 0x61, 0x69,
+	0x6d, 0x50, 0x61, 0x79, 0x6d, 0x65, 0x6e, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12,
+	0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x12,
+	0x28, 0x0a, 0x07, 0x6f, 0x75, 0x74, 0x70, 0x75, 0x74, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b,
+	0x32, 0x0e, 0x2e, 0x61, 0x72, 0x6b, 0x2e, 0x76, 0x31, 0x2e, 0x4f, 0x75, 0x74, 0x70, 0x75, 0x74,
+	0x52, 0x07, 0x6f, 0x75, 0x74, 0x70, 0x75, 0x74, 0x73, 0x22, 0x16, 0x0a, 0x14, 0x43, 0x6c, 0x61,
+	0x69, 0x6d, 0x50, 0x61, 0x79, 0x6d, 0x65, 0x6e, 0x74, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
+	0x65, 0x22, 0x46, 0x0a, 0x16, 0x46, 0x69, 0x6e, 0x61, 0x6c, 0x69, 0x7a, 0x65, 0x50, 0x61, 0x79,
+	0x6d, 0x65, 0x6e, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x2c, 0x0a, 0x12, 0x73,
+	0x69, 0x67, 0x6e, 0x65, 0x64, 0x5f, 0x66, 0x6f, 0x72, 0x66, 0x65, 0x69, 0x74, 0x5f, 0x74, 0x78,
+	0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x10, 0x73, 0x69, 0x67, 0x6e, 0x65, 0x64, 0x46,
+	0x6f, 0x72, 0x66, 0x65, 0x69, 0x74, 0x54, 0x78, 0x73, 0x22, 0x19, 0x0a, 0x17, 0x46, 0x69, 0x6e,
+	0x61, 0x6c, 0x69, 0x7a, 0x65, 0x50, 0x61, 0x79, 0x6d, 0x65, 0x6e, 0x74, 0x52, 0x65, 0x73, 0x70,
+	0x6f, 0x6e, 0x73, 0x65, 0x22, 0x25, 0x0a, 0x0f, 0x47, 0x65, 0x74, 0x52, 0x6f, 0x75, 0x6e, 0x64,
+	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x74, 0x78, 0x69, 0x64, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x74, 0x78, 0x69, 0x64, 0x22, 0x37, 0x0a, 0x10, 0x47,
+	0x65, 0x74, 0x52, 0x6f, 0x75, 0x6e, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12,
+	0x23, 0x0a, 0x05, 0x72, 0x6f, 0x75, 0x6e, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0d,
+	0x2e, 0x61, 0x72, 0x6b, 0x2e, 0x76, 0x31, 0x2e, 0x52, 0x6f, 0x75, 0x6e, 0x64, 0x52, 0x05, 0x72,
+	0x6f, 0x75, 0x6e, 0x64, 0x22, 0x17, 0x0a, 0x15, 0x47, 0x65, 0x74, 0x45, 0x76, 0x65, 0x6e, 0x74,
 	0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0xf4, 0x01,
 	0x0a, 0x16, 0x47, 0x65, 0x74, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d,
 	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x4f, 0x0a, 0x12, 0x72, 0x6f, 0x75, 0x6e,
@@ -1619,26 +1564,81 @@ var file_ark_v1_service_proto_rawDesc = []byte{
 	0x22, 0x37, 0x0a, 0x11, 0x4c, 0x69, 0x73, 0x74, 0x56, 0x74, 0x78, 0x6f, 0x73, 0x52, 0x65, 0x73,
 	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x22, 0x0a, 0x05, 0x76, 0x74, 0x78, 0x6f, 0x73, 0x18, 0x01,
 	0x20, 0x03, 0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x61, 0x72, 0x6b, 0x2e, 0x76, 0x31, 0x2e, 0x56, 0x74,
-	0x78, 0x6f, 0x52, 0x05, 0x76, 0x74, 0x78, 0x6f, 0x73, 0x22, 0x90, 0x01, 0x0a, 0x04, 0x56, 0x74,
-	0x78, 0x6f, 0x12, 0x29, 0x0a, 0x08, 0x6f, 0x75, 0x74, 0x70, 0x6f, 0x69, 0x6e, 0x74, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x0b, 0x32, 0x0d, 0x2e, 0x61, 0x72, 0x6b, 0x2e, 0x76, 0x31, 0x2e, 0x49, 0x6e,
-	0x70, 0x75, 0x74, 0x52, 0x08, 0x6f, 0x75, 0x74, 0x70, 0x6f, 0x69, 0x6e, 0x74, 0x12, 0x2a, 0x0a,
-	0x08, 0x72, 0x65, 0x63, 0x65, 0x69, 0x76, 0x65, 0x72, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32,
-	0x0e, 0x2e, 0x61, 0x72, 0x6b, 0x2e, 0x76, 0x31, 0x2e, 0x4f, 0x75, 0x74, 0x70, 0x75, 0x74, 0x52,
-	0x08, 0x72, 0x65, 0x63, 0x65, 0x69, 0x76, 0x65, 0x72, 0x12, 0x14, 0x0a, 0x05, 0x73, 0x70, 0x65,
-	0x6e, 0x74, 0x18, 0x03, 0x20, 0x01, 0x28, 0x08, 0x52, 0x05, 0x73, 0x70, 0x65, 0x6e, 0x74, 0x12,
-	0x1b, 0x0a, 0x09, 0x70, 0x6f, 0x6f, 0x6c, 0x5f, 0x74, 0x78, 0x69, 0x64, 0x18, 0x04, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x08, 0x70, 0x6f, 0x6f, 0x6c, 0x54, 0x78, 0x69, 0x64, 0x22, 0x10, 0x0a, 0x0e,
-	0x47, 0x65, 0x74, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x84,
-	0x01, 0x0a, 0x0f, 0x47, 0x65, 0x74, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
-	0x73, 0x65, 0x12, 0x16, 0x0a, 0x06, 0x70, 0x75, 0x62, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x06, 0x70, 0x75, 0x62, 0x6b, 0x65, 0x79, 0x12, 0x25, 0x0a, 0x0e, 0x72, 0x6f,
-	0x75, 0x6e, 0x64, 0x5f, 0x6c, 0x69, 0x66, 0x65, 0x74, 0x69, 0x6d, 0x65, 0x18, 0x02, 0x20, 0x01,
-	0x28, 0x03, 0x52, 0x0d, 0x72, 0x6f, 0x75, 0x6e, 0x64, 0x4c, 0x69, 0x66, 0x65, 0x74, 0x69, 0x6d,
-	0x65, 0x12, 0x32, 0x0a, 0x15, 0x75, 0x6e, 0x69, 0x6c, 0x61, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x5f,
-	0x65, 0x78, 0x69, 0x74, 0x5f, 0x64, 0x65, 0x6c, 0x61, 0x79, 0x18, 0x03, 0x20, 0x01, 0x28, 0x03,
-	0x52, 0x13, 0x75, 0x6e, 0x69, 0x6c, 0x61, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x45, 0x78, 0x69, 0x74,
-	0x44, 0x65, 0x6c, 0x61, 0x79, 0x32, 0xf2, 0x06, 0x0a, 0x0a, 0x41, 0x72, 0x6b, 0x53, 0x65, 0x72,
+	0x78, 0x6f, 0x52, 0x05, 0x76, 0x74, 0x78, 0x6f, 0x73, 0x22, 0x10, 0x0a, 0x0e, 0x47, 0x65, 0x74,
+	0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x84, 0x01, 0x0a, 0x0f,
+	0x47, 0x65, 0x74, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12,
+	0x16, 0x0a, 0x06, 0x70, 0x75, 0x62, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x06, 0x70, 0x75, 0x62, 0x6b, 0x65, 0x79, 0x12, 0x25, 0x0a, 0x0e, 0x72, 0x6f, 0x75, 0x6e, 0x64,
+	0x5f, 0x6c, 0x69, 0x66, 0x65, 0x74, 0x69, 0x6d, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52,
+	0x0d, 0x72, 0x6f, 0x75, 0x6e, 0x64, 0x4c, 0x69, 0x66, 0x65, 0x74, 0x69, 0x6d, 0x65, 0x12, 0x32,
+	0x0a, 0x15, 0x75, 0x6e, 0x69, 0x6c, 0x61, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x5f, 0x65, 0x78, 0x69,
+	0x74, 0x5f, 0x64, 0x65, 0x6c, 0x61, 0x79, 0x18, 0x03, 0x20, 0x01, 0x28, 0x03, 0x52, 0x13, 0x75,
+	0x6e, 0x69, 0x6c, 0x61, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x45, 0x78, 0x69, 0x74, 0x44, 0x65, 0x6c,
+	0x61, 0x79, 0x22, 0x89, 0x01, 0x0a, 0x0e, 0x4f, 0x6e, 0x62, 0x6f, 0x61, 0x72, 0x64, 0x52, 0x65,
+	0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1f, 0x0a, 0x0b, 0x62, 0x6f, 0x61, 0x72, 0x64, 0x69, 0x6e,
+	0x67, 0x5f, 0x74, 0x78, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0a, 0x62, 0x6f, 0x61, 0x72,
+	0x64, 0x69, 0x6e, 0x67, 0x54, 0x78, 0x12, 0x35, 0x0a, 0x0f, 0x63, 0x6f, 0x6e, 0x67, 0x65, 0x73,
+	0x74, 0x69, 0x6f, 0x6e, 0x5f, 0x74, 0x72, 0x65, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32,
+	0x0c, 0x2e, 0x61, 0x72, 0x6b, 0x2e, 0x76, 0x31, 0x2e, 0x54, 0x72, 0x65, 0x65, 0x52, 0x0e, 0x63,
+	0x6f, 0x6e, 0x67, 0x65, 0x73, 0x74, 0x69, 0x6f, 0x6e, 0x54, 0x72, 0x65, 0x65, 0x12, 0x1f, 0x0a,
+	0x0b, 0x75, 0x73, 0x65, 0x72, 0x5f, 0x70, 0x75, 0x62, 0x6b, 0x65, 0x79, 0x18, 0x03, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x0a, 0x75, 0x73, 0x65, 0x72, 0x50, 0x75, 0x62, 0x6b, 0x65, 0x79, 0x22, 0x11,
+	0x0a, 0x0f, 0x4f, 0x6e, 0x62, 0x6f, 0x61, 0x72, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
+	0x65, 0x22, 0xa8, 0x01, 0x0a, 0x16, 0x52, 0x6f, 0x75, 0x6e, 0x64, 0x46, 0x69, 0x6e, 0x61, 0x6c,
+	0x69, 0x7a, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x12, 0x0e, 0x0a, 0x02,
+	0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x12, 0x26, 0x0a, 0x0f,
+	0x70, 0x6f, 0x6f, 0x6c, 0x5f, 0x70, 0x61, 0x72, 0x74, 0x69, 0x61, 0x6c, 0x5f, 0x74, 0x78, 0x18,
+	0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0d, 0x70, 0x6f, 0x6f, 0x6c, 0x50, 0x61, 0x72, 0x74, 0x69,
+	0x61, 0x6c, 0x54, 0x78, 0x12, 0x1f, 0x0a, 0x0b, 0x66, 0x6f, 0x72, 0x66, 0x65, 0x69, 0x74, 0x5f,
+	0x74, 0x78, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x09, 0x52, 0x0a, 0x66, 0x6f, 0x72, 0x66, 0x65,
+	0x69, 0x74, 0x54, 0x78, 0x73, 0x12, 0x35, 0x0a, 0x0f, 0x63, 0x6f, 0x6e, 0x67, 0x65, 0x73, 0x74,
+	0x69, 0x6f, 0x6e, 0x5f, 0x74, 0x72, 0x65, 0x65, 0x18, 0x04, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0c,
+	0x2e, 0x61, 0x72, 0x6b, 0x2e, 0x76, 0x31, 0x2e, 0x54, 0x72, 0x65, 0x65, 0x52, 0x0e, 0x63, 0x6f,
+	0x6e, 0x67, 0x65, 0x73, 0x74, 0x69, 0x6f, 0x6e, 0x54, 0x72, 0x65, 0x65, 0x22, 0x42, 0x0a, 0x13,
+	0x52, 0x6f, 0x75, 0x6e, 0x64, 0x46, 0x69, 0x6e, 0x61, 0x6c, 0x69, 0x7a, 0x65, 0x64, 0x45, 0x76,
+	0x65, 0x6e, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x02, 0x69, 0x64, 0x12, 0x1b, 0x0a, 0x09, 0x70, 0x6f, 0x6f, 0x6c, 0x5f, 0x74, 0x78, 0x69, 0x64,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x70, 0x6f, 0x6f, 0x6c, 0x54, 0x78, 0x69, 0x64,
+	0x22, 0x35, 0x0a, 0x0b, 0x52, 0x6f, 0x75, 0x6e, 0x64, 0x46, 0x61, 0x69, 0x6c, 0x65, 0x64, 0x12,
+	0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x12,
+	0x16, 0x0a, 0x06, 0x72, 0x65, 0x61, 0x73, 0x6f, 0x6e, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x06, 0x72, 0x65, 0x61, 0x73, 0x6f, 0x6e, 0x22, 0x8a, 0x01, 0x0a, 0x05, 0x52, 0x6f, 0x75, 0x6e,
+	0x64, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69,
+	0x64, 0x12, 0x14, 0x0a, 0x05, 0x73, 0x74, 0x61, 0x72, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03,
+	0x52, 0x05, 0x73, 0x74, 0x61, 0x72, 0x74, 0x12, 0x10, 0x0a, 0x03, 0x65, 0x6e, 0x64, 0x18, 0x03,
+	0x20, 0x01, 0x28, 0x03, 0x52, 0x03, 0x65, 0x6e, 0x64, 0x12, 0x12, 0x0a, 0x04, 0x74, 0x78, 0x69,
+	0x64, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x74, 0x78, 0x69, 0x64, 0x12, 0x35, 0x0a,
+	0x0f, 0x63, 0x6f, 0x6e, 0x67, 0x65, 0x73, 0x74, 0x69, 0x6f, 0x6e, 0x5f, 0x74, 0x72, 0x65, 0x65,
+	0x18, 0x05, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x61, 0x72, 0x6b, 0x2e, 0x76, 0x31, 0x2e,
+	0x54, 0x72, 0x65, 0x65, 0x52, 0x0e, 0x63, 0x6f, 0x6e, 0x67, 0x65, 0x73, 0x74, 0x69, 0x6f, 0x6e,
+	0x54, 0x72, 0x65, 0x65, 0x22, 0x2f, 0x0a, 0x05, 0x49, 0x6e, 0x70, 0x75, 0x74, 0x12, 0x12, 0x0a,
+	0x04, 0x74, 0x78, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x74, 0x78, 0x69,
+	0x64, 0x12, 0x12, 0x0a, 0x04, 0x76, 0x6f, 0x75, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0d, 0x52,
+	0x04, 0x76, 0x6f, 0x75, 0x74, 0x22, 0x3a, 0x0a, 0x06, 0x4f, 0x75, 0x74, 0x70, 0x75, 0x74, 0x12,
+	0x18, 0x0a, 0x07, 0x61, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x07, 0x61, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73, 0x12, 0x16, 0x0a, 0x06, 0x61, 0x6d, 0x6f,
+	0x75, 0x6e, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x04, 0x52, 0x06, 0x61, 0x6d, 0x6f, 0x75, 0x6e,
+	0x74, 0x22, 0x31, 0x0a, 0x04, 0x54, 0x72, 0x65, 0x65, 0x12, 0x29, 0x0a, 0x06, 0x6c, 0x65, 0x76,
+	0x65, 0x6c, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x11, 0x2e, 0x61, 0x72, 0x6b, 0x2e,
+	0x76, 0x31, 0x2e, 0x54, 0x72, 0x65, 0x65, 0x4c, 0x65, 0x76, 0x65, 0x6c, 0x52, 0x06, 0x6c, 0x65,
+	0x76, 0x65, 0x6c, 0x73, 0x22, 0x2f, 0x0a, 0x09, 0x54, 0x72, 0x65, 0x65, 0x4c, 0x65, 0x76, 0x65,
+	0x6c, 0x12, 0x22, 0x0a, 0x05, 0x6e, 0x6f, 0x64, 0x65, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b,
+	0x32, 0x0c, 0x2e, 0x61, 0x72, 0x6b, 0x2e, 0x76, 0x31, 0x2e, 0x4e, 0x6f, 0x64, 0x65, 0x52, 0x05,
+	0x6e, 0x6f, 0x64, 0x65, 0x73, 0x22, 0x4b, 0x0a, 0x04, 0x4e, 0x6f, 0x64, 0x65, 0x12, 0x12, 0x0a,
+	0x04, 0x74, 0x78, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x74, 0x78, 0x69,
+	0x64, 0x12, 0x0e, 0x0a, 0x02, 0x74, 0x78, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x74,
+	0x78, 0x12, 0x1f, 0x0a, 0x0b, 0x70, 0x61, 0x72, 0x65, 0x6e, 0x74, 0x5f, 0x74, 0x78, 0x69, 0x64,
+	0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0a, 0x70, 0x61, 0x72, 0x65, 0x6e, 0x74, 0x54, 0x78,
+	0x69, 0x64, 0x22, 0x90, 0x01, 0x0a, 0x04, 0x56, 0x74, 0x78, 0x6f, 0x12, 0x29, 0x0a, 0x08, 0x6f,
+	0x75, 0x74, 0x70, 0x6f, 0x69, 0x6e, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0d, 0x2e,
+	0x61, 0x72, 0x6b, 0x2e, 0x76, 0x31, 0x2e, 0x49, 0x6e, 0x70, 0x75, 0x74, 0x52, 0x08, 0x6f, 0x75,
+	0x74, 0x70, 0x6f, 0x69, 0x6e, 0x74, 0x12, 0x2a, 0x0a, 0x08, 0x72, 0x65, 0x63, 0x65, 0x69, 0x76,
+	0x65, 0x72, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0e, 0x2e, 0x61, 0x72, 0x6b, 0x2e, 0x76,
+	0x31, 0x2e, 0x4f, 0x75, 0x74, 0x70, 0x75, 0x74, 0x52, 0x08, 0x72, 0x65, 0x63, 0x65, 0x69, 0x76,
+	0x65, 0x72, 0x12, 0x14, 0x0a, 0x05, 0x73, 0x70, 0x65, 0x6e, 0x74, 0x18, 0x03, 0x20, 0x01, 0x28,
+	0x08, 0x52, 0x05, 0x73, 0x70, 0x65, 0x6e, 0x74, 0x12, 0x1b, 0x0a, 0x09, 0x70, 0x6f, 0x6f, 0x6c,
+	0x5f, 0x74, 0x78, 0x69, 0x64, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x70, 0x6f, 0x6f,
+	0x6c, 0x54, 0x78, 0x69, 0x64, 0x32, 0xf2, 0x06, 0x0a, 0x0a, 0x41, 0x72, 0x6b, 0x53, 0x65, 0x72,
 	0x76, 0x69, 0x63, 0x65, 0x12, 0x73, 0x0a, 0x0f, 0x52, 0x65, 0x67, 0x69, 0x73, 0x74, 0x65, 0x72,
 	0x50, 0x61, 0x79, 0x6d, 0x65, 0x6e, 0x74, 0x12, 0x1e, 0x2e, 0x61, 0x72, 0x6b, 0x2e, 0x76, 0x31,
 	0x2e, 0x52, 0x65, 0x67, 0x69, 0x73, 0x74, 0x65, 0x72, 0x50, 0x61, 0x79, 0x6d, 0x65, 0x6e, 0x74,
@@ -1720,68 +1720,68 @@ func file_ark_v1_service_proto_rawDescGZIP() []byte {
 
 var file_ark_v1_service_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
 var file_ark_v1_service_proto_goTypes = []interface{}{
-	(*OnboardRequest)(nil),          // 0: ark.v1.OnboardRequest
-	(*OnboardResponse)(nil),         // 1: ark.v1.OnboardResponse
-	(*RegisterPaymentRequest)(nil),  // 2: ark.v1.RegisterPaymentRequest
-	(*RegisterPaymentResponse)(nil), // 3: ark.v1.RegisterPaymentResponse
-	(*ClaimPaymentRequest)(nil),     // 4: ark.v1.ClaimPaymentRequest
-	(*ClaimPaymentResponse)(nil),    // 5: ark.v1.ClaimPaymentResponse
-	(*FinalizePaymentRequest)(nil),  // 6: ark.v1.FinalizePaymentRequest
-	(*FinalizePaymentResponse)(nil), // 7: ark.v1.FinalizePaymentResponse
-	(*GetRoundRequest)(nil),         // 8: ark.v1.GetRoundRequest
-	(*GetRoundResponse)(nil),        // 9: ark.v1.GetRoundResponse
-	(*Round)(nil),                   // 10: ark.v1.Round
-	(*Input)(nil),                   // 11: ark.v1.Input
-	(*Output)(nil),                  // 12: ark.v1.Output
-	(*RoundFinalizationEvent)(nil),  // 13: ark.v1.RoundFinalizationEvent
-	(*Tree)(nil),                    // 14: ark.v1.Tree
-	(*TreeLevel)(nil),               // 15: ark.v1.TreeLevel
-	(*Node)(nil),                    // 16: ark.v1.Node
-	(*RoundFinalizedEvent)(nil),     // 17: ark.v1.RoundFinalizedEvent
-	(*RoundFailed)(nil),             // 18: ark.v1.RoundFailed
-	(*GetEventStreamRequest)(nil),   // 19: ark.v1.GetEventStreamRequest
-	(*GetEventStreamResponse)(nil),  // 20: ark.v1.GetEventStreamResponse
-	(*PingRequest)(nil),             // 21: ark.v1.PingRequest
-	(*PingResponse)(nil),            // 22: ark.v1.PingResponse
-	(*ListVtxosRequest)(nil),        // 23: ark.v1.ListVtxosRequest
-	(*ListVtxosResponse)(nil),       // 24: ark.v1.ListVtxosResponse
-	(*Vtxo)(nil),                    // 25: ark.v1.Vtxo
-	(*GetInfoRequest)(nil),          // 26: ark.v1.GetInfoRequest
-	(*GetInfoResponse)(nil),         // 27: ark.v1.GetInfoResponse
+	(*RegisterPaymentRequest)(nil),  // 0: ark.v1.RegisterPaymentRequest
+	(*RegisterPaymentResponse)(nil), // 1: ark.v1.RegisterPaymentResponse
+	(*ClaimPaymentRequest)(nil),     // 2: ark.v1.ClaimPaymentRequest
+	(*ClaimPaymentResponse)(nil),    // 3: ark.v1.ClaimPaymentResponse
+	(*FinalizePaymentRequest)(nil),  // 4: ark.v1.FinalizePaymentRequest
+	(*FinalizePaymentResponse)(nil), // 5: ark.v1.FinalizePaymentResponse
+	(*GetRoundRequest)(nil),         // 6: ark.v1.GetRoundRequest
+	(*GetRoundResponse)(nil),        // 7: ark.v1.GetRoundResponse
+	(*GetEventStreamRequest)(nil),   // 8: ark.v1.GetEventStreamRequest
+	(*GetEventStreamResponse)(nil),  // 9: ark.v1.GetEventStreamResponse
+	(*PingRequest)(nil),             // 10: ark.v1.PingRequest
+	(*PingResponse)(nil),            // 11: ark.v1.PingResponse
+	(*ListVtxosRequest)(nil),        // 12: ark.v1.ListVtxosRequest
+	(*ListVtxosResponse)(nil),       // 13: ark.v1.ListVtxosResponse
+	(*GetInfoRequest)(nil),          // 14: ark.v1.GetInfoRequest
+	(*GetInfoResponse)(nil),         // 15: ark.v1.GetInfoResponse
+	(*OnboardRequest)(nil),          // 16: ark.v1.OnboardRequest
+	(*OnboardResponse)(nil),         // 17: ark.v1.OnboardResponse
+	(*RoundFinalizationEvent)(nil),  // 18: ark.v1.RoundFinalizationEvent
+	(*RoundFinalizedEvent)(nil),     // 19: ark.v1.RoundFinalizedEvent
+	(*RoundFailed)(nil),             // 20: ark.v1.RoundFailed
+	(*Round)(nil),                   // 21: ark.v1.Round
+	(*Input)(nil),                   // 22: ark.v1.Input
+	(*Output)(nil),                  // 23: ark.v1.Output
+	(*Tree)(nil),                    // 24: ark.v1.Tree
+	(*TreeLevel)(nil),               // 25: ark.v1.TreeLevel
+	(*Node)(nil),                    // 26: ark.v1.Node
+	(*Vtxo)(nil),                    // 27: ark.v1.Vtxo
 }
 var file_ark_v1_service_proto_depIdxs = []int32{
-	14, // 0: ark.v1.OnboardRequest.congestion_tree:type_name -> ark.v1.Tree
-	11, // 1: ark.v1.RegisterPaymentRequest.inputs:type_name -> ark.v1.Input
-	12, // 2: ark.v1.ClaimPaymentRequest.outputs:type_name -> ark.v1.Output
-	10, // 3: ark.v1.GetRoundResponse.round:type_name -> ark.v1.Round
-	14, // 4: ark.v1.Round.congestion_tree:type_name -> ark.v1.Tree
-	14, // 5: ark.v1.RoundFinalizationEvent.congestion_tree:type_name -> ark.v1.Tree
-	15, // 6: ark.v1.Tree.levels:type_name -> ark.v1.TreeLevel
-	16, // 7: ark.v1.TreeLevel.nodes:type_name -> ark.v1.Node
-	13, // 8: ark.v1.GetEventStreamResponse.round_finalization:type_name -> ark.v1.RoundFinalizationEvent
-	17, // 9: ark.v1.GetEventStreamResponse.round_finalized:type_name -> ark.v1.RoundFinalizedEvent
-	18, // 10: ark.v1.GetEventStreamResponse.round_failed:type_name -> ark.v1.RoundFailed
-	25, // 11: ark.v1.ListVtxosResponse.vtxos:type_name -> ark.v1.Vtxo
-	11, // 12: ark.v1.Vtxo.outpoint:type_name -> ark.v1.Input
-	12, // 13: ark.v1.Vtxo.receiver:type_name -> ark.v1.Output
-	2,  // 14: ark.v1.ArkService.RegisterPayment:input_type -> ark.v1.RegisterPaymentRequest
-	4,  // 15: ark.v1.ArkService.ClaimPayment:input_type -> ark.v1.ClaimPaymentRequest
-	6,  // 16: ark.v1.ArkService.FinalizePayment:input_type -> ark.v1.FinalizePaymentRequest
-	8,  // 17: ark.v1.ArkService.GetRound:input_type -> ark.v1.GetRoundRequest
-	19, // 18: ark.v1.ArkService.GetEventStream:input_type -> ark.v1.GetEventStreamRequest
-	21, // 19: ark.v1.ArkService.Ping:input_type -> ark.v1.PingRequest
-	23, // 20: ark.v1.ArkService.ListVtxos:input_type -> ark.v1.ListVtxosRequest
-	26, // 21: ark.v1.ArkService.GetInfo:input_type -> ark.v1.GetInfoRequest
-	0,  // 22: ark.v1.ArkService.Onboard:input_type -> ark.v1.OnboardRequest
-	3,  // 23: ark.v1.ArkService.RegisterPayment:output_type -> ark.v1.RegisterPaymentResponse
-	5,  // 24: ark.v1.ArkService.ClaimPayment:output_type -> ark.v1.ClaimPaymentResponse
-	7,  // 25: ark.v1.ArkService.FinalizePayment:output_type -> ark.v1.FinalizePaymentResponse
-	9,  // 26: ark.v1.ArkService.GetRound:output_type -> ark.v1.GetRoundResponse
-	20, // 27: ark.v1.ArkService.GetEventStream:output_type -> ark.v1.GetEventStreamResponse
-	22, // 28: ark.v1.ArkService.Ping:output_type -> ark.v1.PingResponse
-	24, // 29: ark.v1.ArkService.ListVtxos:output_type -> ark.v1.ListVtxosResponse
-	27, // 30: ark.v1.ArkService.GetInfo:output_type -> ark.v1.GetInfoResponse
-	1,  // 31: ark.v1.ArkService.Onboard:output_type -> ark.v1.OnboardResponse
+	22, // 0: ark.v1.RegisterPaymentRequest.inputs:type_name -> ark.v1.Input
+	23, // 1: ark.v1.ClaimPaymentRequest.outputs:type_name -> ark.v1.Output
+	21, // 2: ark.v1.GetRoundResponse.round:type_name -> ark.v1.Round
+	18, // 3: ark.v1.GetEventStreamResponse.round_finalization:type_name -> ark.v1.RoundFinalizationEvent
+	19, // 4: ark.v1.GetEventStreamResponse.round_finalized:type_name -> ark.v1.RoundFinalizedEvent
+	20, // 5: ark.v1.GetEventStreamResponse.round_failed:type_name -> ark.v1.RoundFailed
+	27, // 6: ark.v1.ListVtxosResponse.vtxos:type_name -> ark.v1.Vtxo
+	24, // 7: ark.v1.OnboardRequest.congestion_tree:type_name -> ark.v1.Tree
+	24, // 8: ark.v1.RoundFinalizationEvent.congestion_tree:type_name -> ark.v1.Tree
+	24, // 9: ark.v1.Round.congestion_tree:type_name -> ark.v1.Tree
+	25, // 10: ark.v1.Tree.levels:type_name -> ark.v1.TreeLevel
+	26, // 11: ark.v1.TreeLevel.nodes:type_name -> ark.v1.Node
+	22, // 12: ark.v1.Vtxo.outpoint:type_name -> ark.v1.Input
+	23, // 13: ark.v1.Vtxo.receiver:type_name -> ark.v1.Output
+	0,  // 14: ark.v1.ArkService.RegisterPayment:input_type -> ark.v1.RegisterPaymentRequest
+	2,  // 15: ark.v1.ArkService.ClaimPayment:input_type -> ark.v1.ClaimPaymentRequest
+	4,  // 16: ark.v1.ArkService.FinalizePayment:input_type -> ark.v1.FinalizePaymentRequest
+	6,  // 17: ark.v1.ArkService.GetRound:input_type -> ark.v1.GetRoundRequest
+	8,  // 18: ark.v1.ArkService.GetEventStream:input_type -> ark.v1.GetEventStreamRequest
+	10, // 19: ark.v1.ArkService.Ping:input_type -> ark.v1.PingRequest
+	12, // 20: ark.v1.ArkService.ListVtxos:input_type -> ark.v1.ListVtxosRequest
+	14, // 21: ark.v1.ArkService.GetInfo:input_type -> ark.v1.GetInfoRequest
+	16, // 22: ark.v1.ArkService.Onboard:input_type -> ark.v1.OnboardRequest
+	1,  // 23: ark.v1.ArkService.RegisterPayment:output_type -> ark.v1.RegisterPaymentResponse
+	3,  // 24: ark.v1.ArkService.ClaimPayment:output_type -> ark.v1.ClaimPaymentResponse
+	5,  // 25: ark.v1.ArkService.FinalizePayment:output_type -> ark.v1.FinalizePaymentResponse
+	7,  // 26: ark.v1.ArkService.GetRound:output_type -> ark.v1.GetRoundResponse
+	9,  // 27: ark.v1.ArkService.GetEventStream:output_type -> ark.v1.GetEventStreamResponse
+	11, // 28: ark.v1.ArkService.Ping:output_type -> ark.v1.PingResponse
+	13, // 29: ark.v1.ArkService.ListVtxos:output_type -> ark.v1.ListVtxosResponse
+	15, // 30: ark.v1.ArkService.GetInfo:output_type -> ark.v1.GetInfoResponse
+	17, // 31: ark.v1.ArkService.Onboard:output_type -> ark.v1.OnboardResponse
 	23, // [23:32] is the sub-list for method output_type
 	14, // [14:23] is the sub-list for method input_type
 	14, // [14:14] is the sub-list for extension type_name
@@ -1796,30 +1796,6 @@ func file_ark_v1_service_proto_init() {
 	}
 	if !protoimpl.UnsafeEnabled {
 		file_ark_v1_service_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*OnboardRequest); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ark_v1_service_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*OnboardResponse); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ark_v1_service_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*RegisterPaymentRequest); i {
 			case 0:
 				return &v.state
@@ -1831,7 +1807,7 @@ func file_ark_v1_service_proto_init() {
 				return nil
 			}
 		}
-		file_ark_v1_service_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
+		file_ark_v1_service_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*RegisterPaymentResponse); i {
 			case 0:
 				return &v.state
@@ -1843,7 +1819,7 @@ func file_ark_v1_service_proto_init() {
 				return nil
 			}
 		}
-		file_ark_v1_service_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+		file_ark_v1_service_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*ClaimPaymentRequest); i {
 			case 0:
 				return &v.state
@@ -1855,7 +1831,7 @@ func file_ark_v1_service_proto_init() {
 				return nil
 			}
 		}
-		file_ark_v1_service_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+		file_ark_v1_service_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*ClaimPaymentResponse); i {
 			case 0:
 				return &v.state
@@ -1867,7 +1843,7 @@ func file_ark_v1_service_proto_init() {
 				return nil
 			}
 		}
-		file_ark_v1_service_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
+		file_ark_v1_service_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*FinalizePaymentRequest); i {
 			case 0:
 				return &v.state
@@ -1879,7 +1855,7 @@ func file_ark_v1_service_proto_init() {
 				return nil
 			}
 		}
-		file_ark_v1_service_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
+		file_ark_v1_service_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*FinalizePaymentResponse); i {
 			case 0:
 				return &v.state
@@ -1891,7 +1867,7 @@ func file_ark_v1_service_proto_init() {
 				return nil
 			}
 		}
-		file_ark_v1_service_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
+		file_ark_v1_service_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*GetRoundRequest); i {
 			case 0:
 				return &v.state
@@ -1903,7 +1879,7 @@ func file_ark_v1_service_proto_init() {
 				return nil
 			}
 		}
-		file_ark_v1_service_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
+		file_ark_v1_service_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*GetRoundResponse); i {
 			case 0:
 				return &v.state
@@ -1915,115 +1891,7 @@ func file_ark_v1_service_proto_init() {
 				return nil
 			}
 		}
-		file_ark_v1_service_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Round); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ark_v1_service_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Input); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ark_v1_service_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Output); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ark_v1_service_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RoundFinalizationEvent); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ark_v1_service_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Tree); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ark_v1_service_proto_msgTypes[15].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*TreeLevel); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ark_v1_service_proto_msgTypes[16].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Node); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ark_v1_service_proto_msgTypes[17].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RoundFinalizedEvent); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ark_v1_service_proto_msgTypes[18].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RoundFailed); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ark_v1_service_proto_msgTypes[19].Exporter = func(v interface{}, i int) interface{} {
+		file_ark_v1_service_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*GetEventStreamRequest); i {
 			case 0:
 				return &v.state
@@ -2035,7 +1903,7 @@ func file_ark_v1_service_proto_init() {
 				return nil
 			}
 		}
-		file_ark_v1_service_proto_msgTypes[20].Exporter = func(v interface{}, i int) interface{} {
+		file_ark_v1_service_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*GetEventStreamResponse); i {
 			case 0:
 				return &v.state
@@ -2047,7 +1915,7 @@ func file_ark_v1_service_proto_init() {
 				return nil
 			}
 		}
-		file_ark_v1_service_proto_msgTypes[21].Exporter = func(v interface{}, i int) interface{} {
+		file_ark_v1_service_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*PingRequest); i {
 			case 0:
 				return &v.state
@@ -2059,7 +1927,7 @@ func file_ark_v1_service_proto_init() {
 				return nil
 			}
 		}
-		file_ark_v1_service_proto_msgTypes[22].Exporter = func(v interface{}, i int) interface{} {
+		file_ark_v1_service_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*PingResponse); i {
 			case 0:
 				return &v.state
@@ -2071,7 +1939,7 @@ func file_ark_v1_service_proto_init() {
 				return nil
 			}
 		}
-		file_ark_v1_service_proto_msgTypes[23].Exporter = func(v interface{}, i int) interface{} {
+		file_ark_v1_service_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*ListVtxosRequest); i {
 			case 0:
 				return &v.state
@@ -2083,7 +1951,7 @@ func file_ark_v1_service_proto_init() {
 				return nil
 			}
 		}
-		file_ark_v1_service_proto_msgTypes[24].Exporter = func(v interface{}, i int) interface{} {
+		file_ark_v1_service_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*ListVtxosResponse); i {
 			case 0:
 				return &v.state
@@ -2095,19 +1963,7 @@ func file_ark_v1_service_proto_init() {
 				return nil
 			}
 		}
-		file_ark_v1_service_proto_msgTypes[25].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Vtxo); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ark_v1_service_proto_msgTypes[26].Exporter = func(v interface{}, i int) interface{} {
+		file_ark_v1_service_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*GetInfoRequest); i {
 			case 0:
 				return &v.state
@@ -2119,7 +1975,7 @@ func file_ark_v1_service_proto_init() {
 				return nil
 			}
 		}
-		file_ark_v1_service_proto_msgTypes[27].Exporter = func(v interface{}, i int) interface{} {
+		file_ark_v1_service_proto_msgTypes[15].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*GetInfoResponse); i {
 			case 0:
 				return &v.state
@@ -2131,8 +1987,152 @@ func file_ark_v1_service_proto_init() {
 				return nil
 			}
 		}
+		file_ark_v1_service_proto_msgTypes[16].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*OnboardRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ark_v1_service_proto_msgTypes[17].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*OnboardResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ark_v1_service_proto_msgTypes[18].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RoundFinalizationEvent); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ark_v1_service_proto_msgTypes[19].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RoundFinalizedEvent); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ark_v1_service_proto_msgTypes[20].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RoundFailed); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ark_v1_service_proto_msgTypes[21].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Round); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ark_v1_service_proto_msgTypes[22].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Input); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ark_v1_service_proto_msgTypes[23].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Output); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ark_v1_service_proto_msgTypes[24].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Tree); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ark_v1_service_proto_msgTypes[25].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*TreeLevel); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ark_v1_service_proto_msgTypes[26].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Node); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ark_v1_service_proto_msgTypes[27].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Vtxo); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
-	file_ark_v1_service_proto_msgTypes[20].OneofWrappers = []interface{}{
+	file_ark_v1_service_proto_msgTypes[9].OneofWrappers = []interface{}{
 		(*GetEventStreamResponse_RoundFinalization)(nil),
 		(*GetEventStreamResponse_RoundFinalized)(nil),
 		(*GetEventStreamResponse_RoundFailed)(nil),
