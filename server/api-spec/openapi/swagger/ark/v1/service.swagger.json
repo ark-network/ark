@@ -522,7 +522,7 @@
         "id": {
           "type": "string"
         },
-        "poolPartialTx": {
+        "poolTx": {
           "type": "string"
         },
         "forfeitTxs": {
@@ -533,6 +533,12 @@
         },
         "congestionTree": {
           "$ref": "#/definitions/v1Tree"
+        },
+        "connectors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },

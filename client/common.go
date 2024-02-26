@@ -512,8 +512,8 @@ func handleRoundStream(
 			pingStop()
 			fmt.Println("round finalization started")
 
-			poolPartialTx := event.GetRoundFinalization().GetPoolPartialTx()
-			poolTransaction, err := psetv2.NewPsetFromBase64(poolPartialTx)
+			poolTx := event.GetRoundFinalization().GetPoolTx()
+			ptx, err := psetv2.NewPsetFromBase64(poolTx)
 			if err != nil {
 				return "", err
 			}
@@ -522,6 +522,7 @@ func handleRoundStream(
 			if err != nil {
 				return "", err
 			}
+			connectors := event.GetRoundFinalization().GetConnectors()
 
 			aspPublicKey, err := getServiceProviderPublicKey()
 			if err != nil {
@@ -536,10 +537,14 @@ func handleRoundStream(
 			// validate the congestion tree
 			if err := tree.ValidateCongestionTree(
 				congestionTree,
-				poolPartialTx,
+				poolTx,
 				aspPublicKey,
 				int64(seconds),
 			); err != nil {
+				return "", err
+			}
+
+			if err := common.ValidateConnectors(poolTx, connectors); err != nil {
 				return "", err
 			}
 
@@ -558,7 +563,7 @@ func handleRoundStream(
 					// collaborative exit case
 					// search for the output in the pool tx
 					found := false
-					for _, output := range poolTransaction.Outputs {
+					for _, output := range ptx.Outputs {
 						if bytes.Equal(output.Script, onchainScript) {
 							if output.Value != receiver.Amount {
 								return "", fmt.Errorf("invalid collaborative exit output amount: got %d, want %d", output.Value, receiver.Amount)
