@@ -110,7 +110,7 @@ func (f *ForfeitClosure) Decode(script []byte) (bool, error) {
 }
 
 func (d *CSVSigClosure) Leaf() (*taproot.TapElementsLeaf, error) {
-	script, err := csvChecksigScript(d.Pubkey, d.Seconds)
+	script, err := encodeCsvWithChecksigScript(d.Pubkey, d.Seconds)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +144,7 @@ func (d *CSVSigClosure) Decode(script []byte) (bool, error) {
 		return false, nil
 	}
 
-	rebuilt, err := csvChecksigScript(pubkey, seconds)
+	rebuilt, err := encodeCsvWithChecksigScript(pubkey, seconds)
 	if err != nil {
 		return false, err
 	}
@@ -164,7 +164,7 @@ func (c *UnrollClosure) Leaf() (*taproot.TapElementsLeaf, error) {
 		return nil, fmt.Errorf("left key and amount are required")
 	}
 
-	nextScriptLeft := getIntrospectionScript(
+	nextScriptLeft := encodeIntrospectionScript(
 		txscript.OP_0,
 		schnorr.SerializePubKey(c.LeftKey), c.LeftAmount, c.RightKey != nil,
 	)
@@ -174,7 +174,7 @@ func (c *UnrollClosure) Leaf() (*taproot.TapElementsLeaf, error) {
 			return nil, fmt.Errorf("right amount is required")
 		}
 
-		nextScriptRight := getIntrospectionScript(
+		nextScriptRight := encodeIntrospectionScript(
 			txscript.OP_1, schnorr.SerializePubKey(c.RightKey), c.RightAmount, false,
 		)
 		branchScript = append(branchScript, nextScriptRight...)
@@ -190,7 +190,7 @@ func (c *UnrollClosure) Decode(script []byte) (valid bool, err error) {
 
 	isLeftOnly := len(script) == 52
 
-	validLeft, leftKey, leftAmount, err := decodeWithOutputScript(
+	validLeft, leftKey, leftAmount, err := decodeIntrospectionScript(
 		script[:52], txscript.OP_0, !isLeftOnly,
 	)
 	if err != nil {
@@ -208,7 +208,7 @@ func (c *UnrollClosure) Decode(script []byte) (valid bool, err error) {
 		return true, nil
 	}
 
-	validRight, rightKey, rightAmount, err := decodeWithOutputScript(
+	validRight, rightKey, rightAmount, err := decodeIntrospectionScript(
 		script[52:], txscript.OP_1, false,
 	)
 	if err != nil {
@@ -234,7 +234,7 @@ func (c *UnrollClosure) Decode(script []byte) (valid bool, err error) {
 	return true, nil
 }
 
-func decodeWithOutputScript(
+func decodeIntrospectionScript(
 	script []byte, expectedIndex byte, isVerify bool,
 ) (bool, *secp256k1.PublicKey, uint64, error) {
 	if len(script) != 52 {
@@ -260,7 +260,7 @@ func decodeWithOutputScript(
 	amountBytes := script[len(script)-9 : len(script)-1]
 	amount := binary.LittleEndian.Uint64(amountBytes)
 
-	rebuilt := getIntrospectionScript(
+	rebuilt := encodeIntrospectionScript(
 		expectedIndex, schnorr.SerializePubKey(pubkey), amount, isVerify,
 	)
 	if !bytes.Equal(rebuilt, script) {
@@ -290,7 +290,7 @@ func decodeChecksigScript(script []byte) (bool, *secp256k1.PublicKey, error) {
 }
 
 // checkSequenceVerifyScript without checksig
-func checkSequenceVerifyScript(seconds uint) ([]byte, error) {
+func encodeCsvScript(seconds uint) ([]byte, error) {
 	sequence, err := common.BIP68Encode(seconds)
 	if err != nil {
 		return nil, err
@@ -303,15 +303,15 @@ func checkSequenceVerifyScript(seconds uint) ([]byte, error) {
 }
 
 // checkSequenceVerifyScript + checksig
-func csvChecksigScript(
+func encodeCsvWithChecksigScript(
 	pubkey *secp256k1.PublicKey, seconds uint,
 ) ([]byte, error) {
-	script, err := checksigScript(pubkey)
+	script, err := encodeChecksigScript(pubkey)
 	if err != nil {
 		return nil, err
 	}
 
-	csvScript, err := checkSequenceVerifyScript(seconds)
+	csvScript, err := encodeCsvScript(seconds)
 	if err != nil {
 		return nil, err
 	}
@@ -319,7 +319,7 @@ func csvChecksigScript(
 	return append(csvScript, script...), nil
 }
 
-func checksigScript(pubkey *secp256k1.PublicKey) ([]byte, error) {
+func encodeChecksigScript(pubkey *secp256k1.PublicKey) ([]byte, error) {
 	key := schnorr.SerializePubKey(pubkey)
 	return txscript.NewScriptBuilder().AddData(key).
 		AddOp(txscript.OP_CHECKSIG).Script()
@@ -329,7 +329,7 @@ func checksigScript(pubkey *secp256k1.PublicKey) ([]byte, error) {
 // script and the amount of the output at the given index verify will add an
 // OP_EQUALVERIFY at the end of the script, otherwise it will add an OP_EQUAL
 // length = 52 bytes
-func getIntrospectionScript(
+func encodeIntrospectionScript(
 	index byte, taprootWitnessProgram []byte, amount uint64, verify bool,
 ) []byte {
 	amountBuffer := make([]byte, 8)
