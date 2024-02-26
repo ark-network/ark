@@ -211,7 +211,7 @@ func coinSelect(vtxos []vtxo, amount uint64) ([]vtxo, uint64, error) {
 	}
 
 	if selectedAmount < amount {
-		return nil, 0, fmt.Errorf("insufficient balance: %d to cover %d", selectedAmount, amount)
+		return nil, 0, fmt.Errorf("not enough funds to cover amount%d", amount)
 	}
 
 	change := selectedAmount - amount
@@ -397,23 +397,23 @@ func handleRoundStream(
 			return "", err
 		}
 
-		if event.GetRoundFailed() != nil {
+		if e := event.GetRoundFailed(); e != nil {
 			pingStop()
-			return "", fmt.Errorf("round failed: %s", event.GetRoundFailed().GetReason())
+			return "", fmt.Errorf("round failed: %s", e.GetReason())
 		}
 
-		if event.GetRoundFinalization() != nil {
+		if e := event.GetRoundFinalization(); e != nil {
 			// stop pinging as soon as we receive some forfeit txs
 			pingStop()
 			fmt.Println("round finalization started")
 
-			poolTxStr := event.GetRoundFinalization().GetPoolPartialTx()
+			poolTxStr := e.GetPoolPartialTx()
 			poolTx, err := psetv2.NewPsetFromBase64(poolTxStr)
 			if err != nil {
 				return "", err
 			}
 
-			congestionTree, err := toCongestionTree(event.GetRoundFinalization().GetCongestionTree())
+			congestionTree, err := toCongestionTree(e.GetCongestionTree())
 			if err != nil {
 				return "", err
 			}
@@ -441,7 +441,9 @@ func handleRoundStream(
 			}
 
 			for _, receiver := range receivers {
-				isOnChain, onchainScript, userPubkey, err := decodeReceiverAddress(receiver.Address)
+				isOnChain, onchainScript, userPubkey, err := decodeReceiverAddress(
+					receiver.Address,
+				)
 				if err != nil {
 					return "", err
 				}
@@ -453,7 +455,10 @@ func handleRoundStream(
 					for _, output := range poolTx.Outputs {
 						if bytes.Equal(output.Script, onchainScript) {
 							if output.Value != receiver.Amount {
-								return "", fmt.Errorf("invalid collaborative exit output amount: got %d, want %d", output.Value, receiver.Amount)
+								return "", fmt.Errorf(
+									"invalid collaborative exit output amount: got %d, want %d",
+									output.Value, receiver.Amount,
+								)
 							}
 
 							found = true
@@ -462,7 +467,9 @@ func handleRoundStream(
 					}
 
 					if !found {
-						return "", fmt.Errorf("collaborative exit output not found: %s", receiver.Address)
+						return "", fmt.Errorf(
+							"collaborative exit output not found: %s", receiver.Address,
+						)
 					}
 
 					continue
@@ -473,7 +480,9 @@ func handleRoundStream(
 				found := false
 
 				// compute the receiver output taproot key
-				outputTapKey, _, err := computeVtxoTaprootScript(userPubkey, aspPubkey, uint(exitDelay))
+				outputTapKey, _, err := computeVtxoTaprootScript(
+					userPubkey, aspPubkey, uint(exitDelay),
+				)
 				if err != nil {
 					return "", err
 				}
@@ -489,7 +498,9 @@ func handleRoundStream(
 						if len(output.Script) == 0 {
 							continue
 						}
-						if bytes.Equal(output.Script[2:], schnorr.SerializePubKey(outputTapKey)) {
+						if bytes.Equal(
+							output.Script[2:], schnorr.SerializePubKey(outputTapKey),
+						) {
 							if output.Value != receiver.Amount {
 								continue
 							}
@@ -505,13 +516,15 @@ func handleRoundStream(
 				}
 
 				if !found {
-					return "", fmt.Errorf("off-chain send output not found: %s", receiver.Address)
+					return "", fmt.Errorf(
+						"off-chain send output not found: %s", receiver.Address,
+					)
 				}
 			}
 
 			fmt.Println("congestion tree validated")
 
-			forfeits := event.GetRoundFinalization().GetForfeitTxs()
+			forfeits := e.GetForfeitTxs()
 			signedForfeits := make([]string, 0)
 
 			fmt.Print("signing forfeit txs... ")
@@ -727,7 +740,9 @@ func getRedeemBranches(
 			congestionTrees[vtxo.poolTxid] = congestionTree
 		}
 
-		redeemBranch, err := newRedeemBranch(ctx, explorer, congestionTrees[vtxo.poolTxid], vtxo)
+		redeemBranch, err := newRedeemBranch(
+			ctx, explorer, congestionTrees[vtxo.poolTxid], vtxo,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -761,7 +776,9 @@ func computeVtxoTaprootScript(
 		return nil, nil, err
 	}
 
-	vtxoTaprootTree := taproot.AssembleTaprootScriptTree(*redeemLeaf, *forfeitLeaf)
+	vtxoTaprootTree := taproot.AssembleTaprootScriptTree(
+		*redeemLeaf, *forfeitLeaf,
+	)
 	root := vtxoTaprootTree.RootNode.TapHash()
 
 	unspendableKey := tree.UnspendableKey()
@@ -843,12 +860,14 @@ func coinSelectOnchain(
 		return nil, nil, 0, err
 	}
 
-	exitDelay, err := getUnilateralExitDelay()
+	unilateralExitDelay, err := getUnilateralExitDelay()
 	if err != nil {
 		return nil, nil, 0, err
 	}
 
-	vtxoTapKey, _, err := computeVtxoTaprootScript(userPubkey, aspPubkey, uint(exitDelay))
+	vtxoTapKey, _, err := computeVtxoTaprootScript(
+		userPubkey, aspPubkey, uint(unilateralExitDelay),
+	)
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -876,7 +895,9 @@ func coinSelectOnchain(
 			break
 		}
 
-		availableAt := time.Unix(utxo.Status.Blocktime, 0).Add(time.Duration(exitDelay) * time.Second)
+		availableAt := time.Unix(utxo.Status.Blocktime, 0).Add(
+			time.Duration(unilateralExitDelay) * time.Second,
+		)
 		if availableAt.After(time.Now()) {
 			continue
 		}
@@ -892,7 +913,9 @@ func coinSelectOnchain(
 	}
 
 	if selectedAmount < targetAmount {
-		return nil, nil, 0, fmt.Errorf("insufficient balance: %d to cover %d", selectedAmount, targetAmount)
+		return nil, nil, 0, fmt.Errorf(
+			"not enough funds to cover amount %d", targetAmount,
+		)
 	}
 
 	return utxos, delayedUtxos, selectedAmount - targetAmount, nil
@@ -939,7 +962,9 @@ func addInputs(
 			Nonce:  []byte{0x00},
 		}
 
-		if err := updater.AddInWitnessUtxo(len(updater.Pset.Inputs)-1, &witnessUtxo); err != nil {
+		if err := updater.AddInWitnessUtxo(
+			len(updater.Pset.Inputs)-1, &witnessUtxo,
+		); err != nil {
 			return err
 		}
 	}
@@ -955,12 +980,14 @@ func addInputs(
 			return err
 		}
 
-		exitDelay, err := getUnilateralExitDelay()
+		unilateralExitDelay, err := getUnilateralExitDelay()
 		if err != nil {
 			return err
 		}
 
-		vtxoTapKey, leafProof, err := computeVtxoTaprootScript(userPubkey, aspPubkey, uint(exitDelay))
+		vtxoTapKey, leafProof, err := computeVtxoTaprootScript(
+			userPubkey, aspPubkey, uint(unilateralExitDelay),
+		)
 		if err != nil {
 			return err
 		}
@@ -987,7 +1014,7 @@ func addInputs(
 					Txid:    utxo.Txid,
 					TxIndex: utxo.Vout,
 				},
-				uint(exitDelay),
+				uint(unilateralExitDelay),
 				leafProof,
 			); err != nil {
 				return err
@@ -1010,7 +1037,9 @@ func addInputs(
 				Nonce:  []byte{0x00},
 			}
 
-			if err := updater.AddInWitnessUtxo(len(updater.Pset.Inputs)-1, &witnessUtxo); err != nil {
+			if err := updater.AddInWitnessUtxo(
+				len(updater.Pset.Inputs)-1, &witnessUtxo,
+			); err != nil {
 				return err
 			}
 		}
