@@ -935,7 +935,6 @@ func addInputs(
 	}
 
 	for _, utxo := range utxos {
-		fmt.Println("adding input", utxo.Txid, utxo.Vout)
 		if err := updater.AddInputs([]psetv2.InputArgs{
 			{
 				Txid:    utxo.Txid,
