@@ -59,6 +59,7 @@ func (s *service) SignPset(
 }
 
 func (s *service) SelectUtxos(ctx context.Context, asset string, amount uint64) ([]ports.TxInput, uint64, error) {
+	// TODO: select coins from the connector account IF the round is swept
 	res, err := s.txClient.SelectUtxos(ctx, &pb.SelectUtxosRequest{
 		AccountName:  accountLabel,
 		TargetAsset:  asset,
