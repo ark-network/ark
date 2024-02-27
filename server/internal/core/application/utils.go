@@ -1,7 +1,6 @@
 package application
 
 import (
-	"encoding/hex"
 	"fmt"
 	"sort"
 	"sync"
@@ -200,10 +199,6 @@ func (m *forfeitTxsMap) sign(txs []string) error {
 						if err != nil {
 							return err
 						}
-
-						fmt.Println("pubkey", hex.EncodeToString(tapScriptSig.PubKey))
-						fmt.Println("sig", hex.EncodeToString(tapScriptSig.Signature))
-						fmt.Println("preimage", hex.EncodeToString(preimage))
 
 						if sig.Verify(preimage, pubkey) {
 							m.forfeitTxs[txid].tx = tx

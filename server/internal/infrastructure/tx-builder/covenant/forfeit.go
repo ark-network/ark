@@ -42,6 +42,7 @@ func craftForfeitTxs(
 			Asset:  connectorPrevout.Asset,
 			Value:  vtxoAmount,
 			Script: vtxoScript,
+			Nonce:  []byte{0x00},
 		}
 
 		if err := updater.AddInputs([]psetv2.InputArgs{connectorInput, vtxoInput}); err != nil {

@@ -216,16 +216,6 @@ func (s *service) SignPsetWithKey(ctx context.Context, b64 string, indexes []int
 		return "", err
 	}
 
-	p, err := psetv2.NewPsetFromBase64(signedPset.GetSignedTx())
-	if err != nil {
-		return "", err
-	}
-
-	for _, sig := range p.Inputs[1].TapScriptSig {
-		fmt.Println("pubkey", hex.EncodeToString(sig.PubKey))
-		fmt.Println("sig", hex.EncodeToString(sig.Signature))
-	}
-
 	return signedPset.GetSignedTx(), nil
 }
 

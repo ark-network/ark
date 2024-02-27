@@ -168,6 +168,22 @@ func (m *mockedWallet) GetNotificationChannel(ctx context.Context) chan []domain
 	return res
 }
 
+func (m *mockedWallet) ListConnectorUtxos(ctx context.Context, addr string) ([]ports.TxInput, error) {
+	args := m.Called(ctx)
+
+	var res []ports.TxInput
+	if a := args.Get(0); a != nil {
+		res = a.([]ports.TxInput)
+	}
+
+	return res, args.Error(1)
+}
+
+func (m *mockedWallet) WaitForConfirmation(ctx context.Context, txid string) error {
+	args := m.Called(ctx, txid)
+	return args.Error(0)
+}
+
 type mockedInput struct {
 	mock.Mock
 }

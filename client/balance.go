@@ -62,8 +62,6 @@ func balanceAction(ctx *cli.Context) error {
 			return err
 		}
 
-		fmt.Println(string(marshalled))
-
 		if err := setState(map[string]interface{}{
 			"vtxos": string(marshalled),
 		}); err != nil {

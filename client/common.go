@@ -1026,7 +1026,6 @@ func addInputs(
 	}
 
 	for _, coin := range selected {
-		fmt.Println("adding input", coin.Txid, coin.Vout)
 		if err := updater.AddInputs([]psetv2.InputArgs{
 			{
 				Txid:    coin.Txid,
