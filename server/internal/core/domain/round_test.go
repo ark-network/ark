@@ -296,7 +296,7 @@ func testStartFinalization(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			events, err = round.StartFinalization(connectors, congestionTree, poolTx)
+			events, err = round.StartFinalization("", connectors, congestionTree, poolTx)
 			require.NoError(t, err)
 			require.Len(t, events, 1)
 			require.True(t, round.IsStarted())
@@ -418,7 +418,7 @@ func testStartFinalization(t *testing.T) {
 			}
 
 			for _, f := range fixtures {
-				events, err := f.round.StartFinalization(f.connectors, f.tree, f.poolTx)
+				events, err := f.round.StartFinalization("", f.connectors, f.tree, f.poolTx)
 				require.EqualError(t, err, f.expectedErr)
 				require.Empty(t, events)
 			}
@@ -438,7 +438,7 @@ func testEndFinalization(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			events, err = round.StartFinalization(connectors, congestionTree, poolTx)
+			events, err = round.StartFinalization("", connectors, congestionTree, poolTx)
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 

@@ -81,22 +81,22 @@ func (s *service) SelectUtxos(ctx context.Context, asset string, amount uint64) 
 	return inputs, res.GetChange(), nil
 }
 
-func (s *service) GetTransaction(
+func (s *service) getTransaction(
 	ctx context.Context, txid string,
-) (string, int64, error) {
+) (string, bool, int64, error) {
 	res, err := s.txClient.GetTransaction(ctx, &pb.GetTransactionRequest{
 		Txid: txid,
 	})
 	if err != nil {
-		return "", 0, err
+		return "", false, 0, err
 	}
 
 	if res.GetBlockDetails().GetTimestamp() > 0 {
-		return res.GetTxHex(), res.BlockDetails.GetTimestamp(), nil
+		return res.GetTxHex(), true, res.BlockDetails.GetTimestamp(), nil
 	}
 
 	// if not confirmed, we return now + 30 secs to estimate the next blocktime
-	return res.GetTxHex(), time.Now().Unix() + 30, nil
+	return res.GetTxHex(), false, time.Now().Unix() + 30, nil
 }
 
 func (s *service) BroadcastTransaction(
@@ -120,15 +120,28 @@ func (s *service) BroadcastTransaction(
 func (s *service) IsTransactionConfirmed(
 	ctx context.Context, txid string,
 ) (bool, int64, error) {
-	_, blocktime, err := s.GetTransaction(ctx, txid)
+	_, isConfirmed, blocktime, err := s.getTransaction(ctx, txid)
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "missing transaction") {
-			return false, 0, nil
+			return isConfirmed, 0, nil
 		}
-		return false, 0, err
+		return isConfirmed, 0, err
 	}
 
-	return true, blocktime, nil
+	return isConfirmed, blocktime, nil
+}
+func (s *service) WaitForConfirmation(ctx context.Context, txid string) error {
+	for {
+		isConfirmed, _, err := s.IsTransactionConfirmed(context.Background(), txid)
+		if err != nil {
+			return err
+		}
+		if isConfirmed {
+			break
+		}
+		time.Sleep(5 * time.Second)
+	}
+	return nil
 }
 
 func (s *service) SignPsetWithKey(ctx context.Context, b64 string, indexes []int) (string, error) {
@@ -203,7 +216,49 @@ func (s *service) SignPsetWithKey(ctx context.Context, b64 string, indexes []int
 		return "", err
 	}
 
+	p, err := psetv2.NewPsetFromBase64(signedPset.GetSignedTx())
+	if err != nil {
+		return "", err
+	}
+
+	for _, sig := range p.Inputs[1].TapScriptSig {
+		fmt.Println("pubkey", hex.EncodeToString(sig.PubKey))
+		fmt.Println("sig", hex.EncodeToString(sig.Signature))
+	}
+
 	return signedPset.GetSignedTx(), nil
+}
+
+func (s *service) SignConnectorInput(ctx context.Context, pset string, inputIndexes []int, extract bool) (string, error) {
+	decodedTx, err := psetv2.NewPsetFromBase64(pset)
+	if err != nil {
+		return "", err
+	}
+
+	utxos := make([]*pb.Input, 0, len(decodedTx.Inputs))
+
+	for i := range inputIndexes {
+		if i >= len(decodedTx.Inputs) {
+			return "", fmt.Errorf("input index %d out of range", i)
+		}
+
+		input := decodedTx.Inputs[i]
+
+		utxos = append(utxos, &pb.Input{
+			Txid:  chainhash.Hash(input.PreviousTxid).String(),
+			Index: input.PreviousTxIndex,
+		})
+	}
+
+	_, err = s.txClient.LockUtxos(ctx, &pb.LockUtxosRequest{
+		AccountName: connectorAccountLabel,
+		Utxos:       utxos,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return s.SignPset(ctx, pset, extract)
 }
 
 func (s *service) EstimateFees(

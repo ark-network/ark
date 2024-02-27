@@ -109,49 +109,9 @@ func (r *roundRepository) GetSweepableRounds(
 	return rounds, nil
 }
 
-func (r *roundRepository) GetNextConnectorTx(
-	ctx context.Context, roundTxId string,
-) (string, int, error) {
-	round, err := r.GetRoundWithTxid(ctx, roundTxId)
-	if err != nil {
-		return "", 0, err
-	}
-
-	connectorVout := 1
-	if !round.HasOneConnector() && round.IsLastConnector {
-		connectorVout = 2
-	}
-
-	fmt.Println("round.Connectors", round.Connectors)
-
-	return round.Connectors[0], connectorVout, nil
-}
-
-func (r *roundRepository) ShiftConnector(
-	ctx context.Context, roundTxId string,
-) error {
-	round, err := r.GetRoundWithTxid(ctx, roundTxId)
-	if err != nil {
-		return err
-	}
-
-	if len(round.Connectors) == 1 {
-		if round.IsLastConnector || round.HasOneConnector() {
-			round.Connectors = []string{}
-		}
-
-		round.IsLastConnector = true
-		return r.addOrUpdateRound(ctx, *round)
-	}
-
-	round.Connectors = round.Connectors[1:]
-
-	return r.addOrUpdateRound(ctx, *round)
-}
-
 func (r *roundRepository) GetForfeitTx(
 	ctx context.Context, roundTxId string, vtxoTxid string,
-	connectorTxid string, connectorVout int,
+	connectorTxid string, connectorVout uint32,
 ) (string, error) {
 	round, err := r.GetRoundWithTxid(ctx, roundTxId)
 	if err != nil {
@@ -168,7 +128,7 @@ func (r *roundRepository) GetForfeitTx(
 		vtxoInput := forfeitTx.Inputs[1]
 
 		if chainhash.Hash(connector.PreviousTxid).String() == connectorTxid &&
-			connector.PreviousTxIndex == uint32(connectorVout) &&
+			connector.PreviousTxIndex == connectorVout &&
 			chainhash.Hash(vtxoInput.PreviousTxid).String() == vtxoTxid {
 			return forfeit, nil
 		}

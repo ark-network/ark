@@ -21,6 +21,7 @@ type RoundFinalizationStarted struct {
 	Id                 string
 	CongestionTree     tree.CongestionTree
 	Connectors         []string
+	ConnectorAddress   string
 	UnsignedForfeitTxs []string
 	PoolTx             string
 }

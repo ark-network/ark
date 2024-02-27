@@ -44,7 +44,7 @@ type Round struct {
 	ForfeitTxs        []string
 	CongestionTree    tree.CongestionTree
 	Connectors        []string
-	IsLastConnector   bool
+	ConnectorAddress  string
 	DustAmount        uint64
 	Version           uint
 	Swept             bool // true if all the vtxos are vtxo.Swept
@@ -119,6 +119,7 @@ func (r *Round) On(event RoundEvent, replayed bool) {
 		r.Stage.Code = FinalizationStage
 		r.CongestionTree = e.CongestionTree
 		r.Connectors = append([]string{}, e.Connectors...)
+		r.ConnectorAddress = e.ConnectorAddress
 		r.UnsignedTx = e.PoolTx
 	case RoundFinalized:
 		r.Stage.Ended = true
@@ -179,7 +180,7 @@ func (r *Round) RegisterPayments(payments []Payment) ([]RoundEvent, error) {
 	return []RoundEvent{event}, nil
 }
 
-func (r *Round) StartFinalization(connectors []string, congestionTree tree.CongestionTree, poolTx string) ([]RoundEvent, error) {
+func (r *Round) StartFinalization(connectorAddress string, connectors []string, congestionTree tree.CongestionTree, poolTx string) ([]RoundEvent, error) {
 	if len(connectors) <= 0 {
 		return nil, fmt.Errorf("missing list of connectors")
 	}
@@ -197,10 +198,11 @@ func (r *Round) StartFinalization(connectors []string, congestionTree tree.Conge
 	}
 
 	event := RoundFinalizationStarted{
-		Id:             r.Id,
-		CongestionTree: congestionTree,
-		Connectors:     connectors,
-		PoolTx:         poolTx,
+		Id:               r.Id,
+		CongestionTree:   congestionTree,
+		Connectors:       connectors,
+		ConnectorAddress: connectorAddress,
+		PoolTx:           poolTx,
 	}
 	r.raise(event)
 

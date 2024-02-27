@@ -134,6 +134,16 @@ func (m *mockedWallet) SignPsetWithKey(ctx context.Context, pset string, inputIn
 	return res, args.Error(1)
 }
 
+func (m *mockedWallet) SignConnectorInput(ctx context.Context, pset string, inputIndexes []int, extract bool) (string, error) {
+	args := m.Called(ctx, pset)
+
+	var res string
+	if a := args.Get(0); a != nil {
+		res = a.(string)
+	}
+	return res, args.Error(1)
+}
+
 func (m *mockedWallet) WatchScripts(
 	ctx context.Context, scripts []string,
 ) error {

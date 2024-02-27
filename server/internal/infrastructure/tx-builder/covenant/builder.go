@@ -204,7 +204,11 @@ func (b *txBuilder) createPoolTx(
 	}
 
 	receivers := getOnchainReceivers(payments)
-	connectorsAmount := (connectorAmount+minRelayFee)*countSpentVtxos(payments) - minRelayFee
+	nbOfInputs := countSpentVtxos(payments)
+	connectorsAmount := (connectorAmount + minRelayFee) * nbOfInputs
+	if nbOfInputs > 1 {
+		connectorsAmount -= minRelayFee
+	}
 	targetAmount := sharedOutputAmount + connectorsAmount
 
 	outputs := []psetv2.OutputArgs{
@@ -392,7 +396,10 @@ func (b *txBuilder) createConnectors(
 		return []*psetv2.Pset{connectorTx}, nil
 	}
 
-	totalConnectorAmount := (connectorAmount+minRelayFee)*numberOfConnectors - minRelayFee
+	totalConnectorAmount := (connectorAmount + minRelayFee) * numberOfConnectors
+	if numberOfConnectors > 1 {
+		totalConnectorAmount -= minRelayFee
+	}
 
 	connectors := make([]*psetv2.Pset, 0, numberOfConnectors-1)
 	for i := uint64(0); i < numberOfConnectors-1; i++ {

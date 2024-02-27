@@ -310,9 +310,7 @@ func (s *service) startFinalization() {
 
 	log.Debugf("forfeit transactions created for round %s", round.Id)
 
-	fmt.Println("connectors = ", len(connectors))
-
-	events, err := round.StartFinalization(connectors, tree, unsignedPoolTx)
+	events, err := round.StartFinalization(connectorAddress, connectors, tree, unsignedPoolTx)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to start finalization: %s", err))
 		log.WithError(err).Warn("failed to start finalization")
@@ -378,99 +376,136 @@ func (s *service) listenToRedemptions() {
 	ctx := context.Background()
 	chVtxos := s.scanner.GetNotificationChannel(ctx)
 	for vtxoKeys := range chVtxos {
-		if len(vtxoKeys) > 0 {
-			for {
-				vtxos, err := s.repoManager.Vtxos().GetVtxos(ctx, vtxoKeys)
+		vtxosRepo := s.repoManager.Vtxos()
+		roundRepo := s.repoManager.Rounds()
+
+		for _, v := range vtxoKeys {
+			vtxos, err := vtxosRepo.GetVtxos(ctx, []domain.VtxoKey{v})
+			if err != nil {
+				log.WithError(err).Warn("failed to retrieve vtxos, skipping...")
+				continue
+			}
+
+			vtxo := vtxos[0]
+
+			if vtxo.Spent {
+				round, err := roundRepo.GetRoundWithTxid(ctx, vtxo.SpentBy)
 				if err != nil {
-					log.WithError(err).Warn("failed to retrieve vtxos, retrying...")
-					time.Sleep(100 * time.Millisecond)
+					log.WithError(err).Warn("failed to retrieve round")
 					continue
 				}
 
-				roundRepo := s.repoManager.Rounds()
+				connectorTxid, connectorVout, err := s.getNextConnector(ctx, *round)
+				if err != nil {
+					log.WithError(err).Warn("failed to retrieve next connector")
+					continue
+				}
 
-				for _, vtxo := range vtxos {
-					if vtxo.Spent {
-						connectorTx, connectorVout, err := roundRepo.GetNextConnectorTx(ctx, vtxo.SpentBy)
-						if err != nil {
-							log.WithError(err).Warn("failed to retrieve next connector tx, retrying...")
-							continue
-						}
+				forfeitTx, err := roundRepo.GetForfeitTx(ctx, vtxo.SpentBy, vtxo.Txid, connectorTxid, connectorVout)
+				if err != nil {
+					log.WithError(err).Warn("failed to retrieve forfeit tx")
+					continue
+				}
 
-						// TODO: lock utxos to be able to sign the tx
+				signedForfeitTx, err := s.wallet.SignConnectorInput(ctx, forfeitTx, []int{0}, false)
+				if err != nil {
+					log.WithError(err).Warn("failed to sign connector input in forfeit tx")
+					continue
+				}
 
+				signedForfeitTx, err = s.wallet.SignPsetWithKey(ctx, signedForfeitTx, []int{1})
+				if err != nil {
+					log.WithError(err).Warn("failed to sign vtxo input in forfeit tx")
+					continue
+				}
+
+				forfeitTxHex, err := finalizeAndExtractForfeit(signedForfeitTx)
+				if err != nil {
+					log.WithError(err).Warn("failed to finalize forfeit tx")
+					continue
+				}
+
+				fmt.Println(forfeitTxHex)
+
+				forfeitTxid, err := s.wallet.BroadcastTransaction(ctx, forfeitTxHex)
+				if err != nil {
+					log.WithError(err).Warn("failed to broadcast forfeit tx")
+					continue
+				}
+
+				log.Debugf("broadcasted forfeit tx %s", forfeitTxid)
+			}
+
+			if _, err := s.repoManager.Vtxos().RedeemVtxos(ctx, vtxoKeys); err != nil {
+				log.WithError(err).Warn("failed to redeem vtxos, retrying...")
+				continue
+			}
+			log.Debugf("%s redeemed", vtxo.Txid)
+		}
+	}
+}
+
+func (s *service) getNextConnector(
+	ctx context.Context,
+	round domain.Round,
+) (string, uint32, error) {
+	connectorTx, err := psetv2.NewPsetFromBase64(round.Connectors[0])
+	if err != nil {
+		return "", 0, err
+	}
+
+	prevout := connectorTx.Inputs[0].WitnessUtxo
+	if prevout == nil {
+		return "", 0, fmt.Errorf("connector prevout not found")
+	}
+
+	utxos, err := s.wallet.ListConnectorUtxos(ctx, round.ConnectorAddress)
+	if err != nil {
+		return "", 0, err
+	}
+
+	// search for an already existing connector
+	for _, u := range utxos {
+		if u.GetValue() == 450 {
+			return u.GetTxid(), u.GetIndex(), nil
+		}
+	}
+
+	for _, u := range utxos {
+		if u.GetValue() > 450 {
+			for _, b64 := range round.Connectors {
+				pset, err := psetv2.NewPsetFromBase64(b64)
+				if err != nil {
+					return "", 0, err
+				}
+
+				for _, i := range pset.Inputs {
+					if chainhash.Hash(i.PreviousTxid).String() == u.GetTxid() && i.PreviousTxIndex == u.GetIndex() {
 						// sign & broadcast the connector tx
-						signedConnectorTx, err := s.wallet.SignPset(ctx, connectorTx, true)
+						signedConnectorTx, err := s.wallet.SignConnectorInput(ctx, b64, []int{0}, true)
 						if err != nil {
-							log.WithError(err).Warn("failed to sign connector tx, retrying...")
-							continue
+							return "", 0, err
 						}
 
 						connectorTxid, err := s.wallet.BroadcastTransaction(ctx, signedConnectorTx)
 						if err != nil {
-							log.WithError(err).Warn("failed to broadcast connector tx, retrying...")
-							continue
-						}
-						log.Debugf("broadcasted connector tx %s:%d", connectorTxid, connectorVout)
-
-						// shift the connector
-						if err := roundRepo.ShiftConnector(ctx, vtxo.SpentBy); err != nil {
-							log.WithError(err).Warn("failed to shift connector, retrying...")
-							continue
+							return "", 0, err
 						}
 
-						forfeitTx, err := roundRepo.GetForfeitTx(ctx, vtxo.SpentBy, vtxo.Txid, connectorTxid, connectorVout)
-						if err != nil {
-							log.WithError(err).Warn("failed to retrieve forfeit tx, retrying...")
-							continue
+						if err := s.wallet.WaitForConfirmation(ctx, connectorTxid); err != nil {
+							return "", 0, err
 						}
 
-						// sign & broadcast the forfeit tx
-						signedForfeitTx, err := s.wallet.SignPset(ctx, forfeitTx, false)
-						if err != nil {
-							log.WithError(err).Warn("failed to sign forfeit tx, retrying...")
-							continue
-						}
+						log.Debugf("broadcasted connector tx %s", connectorTxid)
 
-						signedForfeitTx, err = s.wallet.SignPsetWithKey(ctx, signedForfeitTx, []int{1})
-						if err != nil {
-							log.WithError(err).Warn("failed to sign forfeit tx, retrying...")
-							continue
-						}
-
-						extractedForfeitTx, err := finalizeAndExtractForfeit(signedForfeitTx)
-						if err != nil {
-							log.WithError(err).Warn("failed to extract forfeit tx, retrying...")
-							continue
-						}
-
-						forfeitTxid, err := s.wallet.BroadcastTransaction(ctx, extractedForfeitTx)
-						if err != nil {
-							log.WithError(err).Warn("failed to broadcast forfeit tx, retrying...")
-							continue
-						}
-
-						log.Debugf("broadcasted forfeit tx %s", forfeitTxid)
+						return connectorTxid, 0, nil
 					}
-
 				}
-
-				// TODO: make sure that the vtxos haven't been already spent, otherwise
-				// broadcast the corresponding forfeit tx and connector to prevent
-				// getting cheated.
-				_, err = s.repoManager.Vtxos().RedeemVtxos(ctx, vtxoKeys)
-				if err != nil {
-					log.WithError(err).Warn("failed to redeem vtxos, retrying...")
-					time.Sleep(100 * time.Millisecond)
-					continue
-				}
-				if len(vtxos) > 0 {
-					log.Debugf("redeemed %d vtxos", len(vtxos))
-				}
-				break
 			}
 		}
 	}
+
+	return "", 0, fmt.Errorf("no connector utxos found")
 }
 
 func (s *service) updateVtxoSet(round *domain.Round) {
@@ -591,12 +626,35 @@ func (s *service) getNewVtxos(round *domain.Round) []domain.Vtxo {
 }
 
 func (s *service) startWatchingVtxos(vtxos []domain.Vtxo) error {
-	scripts, err := s.extractVtxosScripts(vtxos)
-	if err != nil {
-		return err
+	mapByTxid := make(map[string][]domain.Vtxo)
+	for _, v := range vtxos {
+		if _, ok := mapByTxid[v.PoolTx]; !ok {
+			mapByTxid[v.PoolTx] = make([]domain.Vtxo, 0)
+		}
+
+		mapByTxid[v.PoolTx] = append(mapByTxid[v.PoolTx], v)
 	}
 
-	return s.scanner.WatchScripts(context.Background(), scripts)
+	for txid, vtxos := range mapByTxid {
+		go func(txid string, vtxos []domain.Vtxo) {
+			if err := s.wallet.WaitForConfirmation(context.Background(), txid); err != nil {
+				log.WithError(err).Warn("failed to wait for confirmation")
+				return
+			}
+			scripts, err := s.extractVtxosScripts(vtxos)
+			if err != nil {
+				log.WithError(err).Warn("failed to extract scripts from vtxos")
+				return
+			}
+
+			if err := s.scanner.WatchScripts(context.Background(), scripts); err != nil {
+				log.WithError(err).Warn("failed to start watching vtxos, retrying in a moment...")
+				return
+			}
+		}(txid, vtxos)
+	}
+
+	return nil
 }
 
 func (s *service) stopWatchingVtxos(vtxos []domain.Vtxo) {
@@ -618,12 +676,28 @@ func (s *service) stopWatchingVtxos(vtxos []domain.Vtxo) {
 }
 
 func (s *service) restoreWatchingVtxos() error {
-	vtxos, err := s.repoManager.Vtxos().GetSpendableVtxos(
-		context.Background(), "",
-	)
+	sweepableRounds, err := s.repoManager.Rounds().GetSweepableRounds(context.Background())
 	if err != nil {
 		return err
 	}
+
+	vtxos := make([]domain.Vtxo, 0)
+
+	for _, round := range sweepableRounds {
+		fromRound, err := s.repoManager.Vtxos().GetVtxosForRound(
+			context.Background(), round.Txid,
+		)
+		if err != nil {
+			log.WithError(err).Warnf("failed to retrieve vtxos for round %s", round.Txid)
+			continue
+		}
+		for _, v := range fromRound {
+			if !v.Swept && !v.Redeemed {
+				vtxos = append(vtxos, v)
+			}
+		}
+	}
+
 	if len(vtxos) <= 0 {
 		return nil
 	}
@@ -684,6 +758,23 @@ func getSpentVtxos(payments map[string]domain.Payment) []domain.VtxoKey {
 	return vtxos
 }
 
+func getPaymentsFromOnboarding(
+	congestionTree tree.CongestionTree, userKey string,
+) []domain.Payment {
+	leaves := congestionTree.Leaves()
+	receivers := make([]domain.Receiver, 0, len(leaves))
+	for _, node := range leaves {
+		ptx, _ := psetv2.NewPsetFromBase64(node.Tx)
+		receiver := domain.Receiver{
+			Pubkey: userKey,
+			Amount: ptx.Outputs[0].Value,
+		}
+		receivers = append(receivers, receiver)
+	}
+	payment := domain.NewPaymentUnsafe(nil, receivers)
+	return []domain.Payment{*payment}
+}
+
 func finalizeAndExtractForfeit(b64 string) (string, error) {
 	p, err := psetv2.NewPsetFromBase64(b64)
 	if err != nil {
@@ -702,21 +793,4 @@ func finalizeAndExtractForfeit(b64 string) (string, error) {
 	}
 
 	return extracted.ToHex()
-}
-
-func getPaymentsFromOnboarding(
-	congestionTree tree.CongestionTree, userKey string,
-) []domain.Payment {
-	leaves := congestionTree.Leaves()
-	receivers := make([]domain.Receiver, 0, len(leaves))
-	for _, node := range leaves {
-		ptx, _ := psetv2.NewPsetFromBase64(node.Tx)
-		receiver := domain.Receiver{
-			Pubkey: userKey,
-			Amount: ptx.Outputs[0].Value,
-		}
-		receivers = append(receivers, receiver)
-	}
-	payment := domain.NewPaymentUnsafe(nil, receivers)
-	return []domain.Payment{*payment}
 }
