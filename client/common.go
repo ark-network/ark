@@ -1131,23 +1131,3 @@ func addInputs(
 
 	return nil
 }
-
-func getVtxosInState() ([]vtxo, error) {
-	state, err := getState()
-	if err != nil {
-		return nil, err
-	}
-
-	vtxosList := make([]JSONVtxo, 0)
-
-	if err := json.Unmarshal([]byte(state["vtxos"].(string)), &vtxosList); err != nil {
-		return nil, err
-	}
-
-	vtxos := make([]vtxo, 0, len(vtxosList))
-	for _, v := range vtxosList {
-		vtxos = append(vtxos, v.toVtxo())
-	}
-
-	return vtxos, nil
-}

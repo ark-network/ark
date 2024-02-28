@@ -20,39 +20,6 @@ type vtxo struct {
 	expireAt *time.Time
 }
 
-type JSONVtxo struct {
-	Amount   uint64
-	Txid     string
-	Vout     uint32
-	PoolTxid string
-	ExpireAt int64
-}
-
-func (v *vtxo) toJSON() JSONVtxo {
-	expireAt := int64(0)
-	if v.expireAt != nil {
-		expireAt = v.expireAt.Unix()
-	}
-	return JSONVtxo{
-		Amount:   v.amount,
-		Txid:     v.txid,
-		Vout:     v.vout,
-		PoolTxid: v.poolTxid,
-		ExpireAt: expireAt,
-	}
-}
-
-func (v *JSONVtxo) toVtxo() vtxo {
-	expireAt := time.Unix(v.ExpireAt, 0)
-	return vtxo{
-		amount:   v.Amount,
-		txid:     v.Txid,
-		vout:     v.Vout,
-		poolTxid: v.PoolTxid,
-		expireAt: &expireAt,
-	}
-}
-
 func getVtxos(
 	ctx *cli.Context,
 	explorer Explorer,
