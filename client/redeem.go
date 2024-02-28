@@ -185,15 +185,11 @@ func unilateralRedeem(ctx *cli.Context) error {
 		return err
 	}
 
-	vtxos := make([]vtxo, 0)
-
 	explorer := NewExplorer()
-	vtxosFromServer, err := getVtxos(ctx, explorer, client, offchainAddr, false)
+	vtxos, err := getVtxos(ctx, explorer, client, offchainAddr, false)
 	if err != nil {
 		return err
 	}
-
-	vtxos = append(vtxos, vtxosFromServer...)
 
 	totalVtxosAmount := uint64(0)
 
