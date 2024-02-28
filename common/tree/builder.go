@@ -13,14 +13,14 @@ import (
 )
 
 func CraftCongestionTree(
-	asset string, aspPublicKey *secp256k1.PublicKey,
-	receivers []Receiver, feeSatsPerNode uint64, roundLifetime int64, exitDelay int64,
+	asset string, aspPubkey *secp256k1.PublicKey, receivers []Receiver,
+	feeSatsPerNode uint64, roundLifetime, unilateralExitDelay int64,
 ) (
 	buildCongestionTree TreeFactory,
 	sharedOutputScript []byte, sharedOutputAmount uint64, err error,
 ) {
 	root, err := createPartialCongestionTree(
-		receivers, aspPublicKey, asset, feeSatsPerNode, roundLifetime, exitDelay,
+		asset, aspPubkey, receivers, feeSatsPerNode, roundLifetime, unilateralExitDelay,
 	)
 	if err != nil {
 		return
@@ -42,14 +42,14 @@ func CraftCongestionTree(
 }
 
 type node struct {
-	sweepKey      *secp256k1.PublicKey
-	receivers     []Receiver
-	left          *node
-	right         *node
-	asset         string
-	feeSats       uint64
-	roundLifetime int64
-	exitDelay     int64
+	sweepKey            *secp256k1.PublicKey
+	receivers           []Receiver
+	left                *node
+	right               *node
+	asset               string
+	feeSats             uint64
+	roundLifetime       int64
+	unilateralExitDelay int64
 
 	_inputTaprootKey  *secp256k1.PublicKey
 	_inputTaprootTree *taproot.IndexedElementsTapScriptTree
@@ -260,7 +260,7 @@ func (n *node) getVtxoWitnessData() (
 
 	redeemClosure := &CSVSigClosure{
 		Pubkey:  pubkey,
-		Seconds: uint(n.exitDelay),
+		Seconds: uint(n.unilateralExitDelay),
 	}
 
 	redeemLeaf, err := redeemClosure.Leaf()
@@ -412,12 +412,8 @@ func (n *node) createFinalCongestionTree() TreeFactory {
 }
 
 func createPartialCongestionTree(
-	receivers []Receiver,
-	aspPublicKey *secp256k1.PublicKey,
-	asset string,
-	feeSatsPerNode uint64,
-	roundLifetime int64,
-	exitDelay int64,
+	asset string, aspPubkey *secp256k1.PublicKey, receivers []Receiver,
+	feeSatsPerNode uint64, roundLifetime, unilateralExitDelay int64,
 ) (root *node, err error) {
 	if len(receivers) == 0 {
 		return nil, fmt.Errorf("no receivers provided")
@@ -426,12 +422,12 @@ func createPartialCongestionTree(
 	nodes := make([]*node, 0, len(receivers))
 	for _, r := range receivers {
 		leafNode := &node{
-			sweepKey:      aspPublicKey,
-			receivers:     []Receiver{r},
-			asset:         asset,
-			feeSats:       feeSatsPerNode,
-			roundLifetime: roundLifetime,
-			exitDelay:     exitDelay,
+			sweepKey:            aspPubkey,
+			receivers:           []Receiver{r},
+			asset:               asset,
+			feeSats:             feeSatsPerNode,
+			roundLifetime:       roundLifetime,
+			unilateralExitDelay: unilateralExitDelay,
 		}
 		nodes = append(nodes, leafNode)
 	}
@@ -476,7 +472,9 @@ func createUpperLevel(nodes []*node) ([]*node, error) {
 }
 
 func taprootOutputScript(taprootKey *secp256k1.PublicKey) ([]byte, error) {
-	return txscript.NewScriptBuilder().AddOp(txscript.OP_1).AddData(schnorr.SerializePubKey(taprootKey)).Script()
+	return txscript.NewScriptBuilder().AddOp(txscript.OP_1).AddData(
+		schnorr.SerializePubKey(taprootKey),
+	).Script()
 }
 
 func getPsetId(pset *psetv2.Pset) (string, error) {
@@ -488,10 +486,8 @@ func getPsetId(pset *psetv2.Pset) (string, error) {
 	return utx.TxHash().String(), nil
 }
 
-// wrapper of updater methods adding a taproot input to the pset with all the necessary data to spend it via any taproot script
 func addTaprootInput(
-	updater *psetv2.Updater,
-	input psetv2.InputArgs,
+	updater *psetv2.Updater, input psetv2.InputArgs,
 	internalTaprootKey *secp256k1.PublicKey,
 	taprootTree *taproot.IndexedElementsTapScriptTree,
 ) error {
@@ -499,7 +495,9 @@ func addTaprootInput(
 		return err
 	}
 
-	if err := updater.AddInTapInternalKey(0, schnorr.SerializePubKey(internalTaprootKey)); err != nil {
+	if err := updater.AddInTapInternalKey(
+		0, schnorr.SerializePubKey(internalTaprootKey),
+	); err != nil {
 		return err
 	}
 

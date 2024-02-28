@@ -203,9 +203,9 @@ func (h *handler) GetInfo(ctx context.Context, req *arkv1.GetInfoRequest) (*arkv
 	}
 
 	return &arkv1.GetInfoResponse{
-		Pubkey:    pubkey,
-		Lifetime:  lifetime,
-		ExitDelay: delay,
+		Pubkey:              pubkey,
+		RoundLifetime:       lifetime,
+		UnilateralExitDelay: delay,
 	}, nil
 }
 

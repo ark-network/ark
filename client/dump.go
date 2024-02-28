@@ -19,6 +19,6 @@ func dumpAction(ctx *cli.Context) error {
 	}
 
 	return printJSON(map[string]interface{}{
-		"privateKey": hex.EncodeToString(privateKey.Serialize()),
+		"private_key": hex.EncodeToString(privateKey.Serialize()),
 	})
 }

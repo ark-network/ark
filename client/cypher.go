@@ -10,13 +10,13 @@ import (
 	"golang.org/x/crypto/scrypt"
 )
 
-type Cypher struct{}
+type cypher struct{}
 
-func NewAES128Cypher() *Cypher {
-	return &Cypher{}
+func newAES128Cypher() *cypher {
+	return &cypher{}
 }
 
-func (c *Cypher) Encrypt(privateKey, password []byte) ([]byte, error) {
+func (c *cypher) encrypt(privateKey, password []byte) ([]byte, error) {
 	// Due to https://github.com/golang/go/issues/7168.
 	// This call makes sure that memory is freed in case the GC doesn't do that
 	// right after the encryption/decryption.
@@ -53,7 +53,7 @@ func (c *Cypher) Encrypt(privateKey, password []byte) ([]byte, error) {
 	return ciphertext, nil
 }
 
-func (c *Cypher) Decrypt(encrypted, password []byte) ([]byte, error) {
+func (c *cypher) decrypt(encrypted, password []byte) ([]byte, error) {
 	defer debug.FreeOSMemory()
 
 	if len(encrypted) == 0 {

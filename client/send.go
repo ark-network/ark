@@ -18,7 +18,7 @@ type receiver struct {
 	Amount uint64 `json:"amount"`
 }
 
-func (r *receiver) IsOnchain() bool {
+func (r *receiver) isOnchain() bool {
 	_, err := address.ToOutputScript(r.To)
 	return err == nil
 }
@@ -75,12 +75,14 @@ func sendAction(ctx *cli.Context) error {
 	offchainReceivers := make([]receiver, 0)
 
 	for _, receiver := range receiversJSON {
-		if receiver.IsOnchain() {
+		if receiver.isOnchain() {
 			onchainReceivers = append(onchainReceivers, receiver)
 		} else {
 			offchainReceivers = append(offchainReceivers, receiver)
 		}
 	}
+
+	explorer := NewExplorer()
 
 	if len(onchainReceivers) > 0 {
 		pset, err := sendOnchain(ctx, onchainReceivers)
@@ -88,7 +90,7 @@ func sendAction(ctx *cli.Context) error {
 			return err
 		}
 
-		txid, err := broadcastPset(pset)
+		txid, err := explorer.Broadcast(pset)
 		if err != nil {
 			return err
 		}
@@ -108,7 +110,7 @@ func sendAction(ctx *cli.Context) error {
 }
 
 func sendOffchain(ctx *cli.Context, receivers []receiver) error {
-	offchainAddr, _, err := getAddress()
+	offchainAddr, _, _, err := getAddress()
 	if err != nil {
 		return err
 	}
@@ -127,7 +129,9 @@ func sendOffchain(ctx *cli.Context, receivers []receiver) error {
 			return fmt.Errorf("invalid receiver address: %s", err)
 		}
 
-		if !bytes.Equal(aspPubKey.SerializeCompressed(), aspKey.SerializeCompressed()) {
+		if !bytes.Equal(
+			aspPubKey.SerializeCompressed(), aspKey.SerializeCompressed(),
+		) {
 			return fmt.Errorf("invalid receiver address '%s': must be associated with the connected service provider", receiver.To)
 		}
 
@@ -141,7 +145,7 @@ func sendOffchain(ctx *cli.Context, receivers []receiver) error {
 		})
 		sumOfReceivers += receiver.Amount
 	}
-	client, close, err := getClientFromState(ctx)
+	client, close, err := getClientFromState()
 	if err != nil {
 		return err
 	}
@@ -149,7 +153,7 @@ func sendOffchain(ctx *cli.Context, receivers []receiver) error {
 
 	explorer := NewExplorer()
 
-	vtxos, err := getVtxos(ctx, explorer, client, offchainAddr, true)
+	vtxos, err := getVtxos(ctx.Context, explorer, client, offchainAddr, true)
 	if err != nil {
 		return err
 	}
@@ -181,9 +185,9 @@ func sendOffchain(ctx *cli.Context, receivers []receiver) error {
 		return err
 	}
 
-	registerResponse, err := client.RegisterPayment(ctx.Context, &arkv1.RegisterPaymentRequest{
-		Inputs: inputs,
-	})
+	registerResponse, err := client.RegisterPayment(
+		ctx.Context, &arkv1.RegisterPaymentRequest{Inputs: inputs},
+	)
 	if err != nil {
 		return err
 	}
@@ -197,12 +201,8 @@ func sendOffchain(ctx *cli.Context, receivers []receiver) error {
 	}
 
 	poolTxID, err := handleRoundStream(
-		ctx,
-		client,
-		registerResponse.GetId(),
-		selectedCoins,
-		secKey,
-		receiversOutput,
+		ctx.Context, client, registerResponse.GetId(),
+		selectedCoins, secKey, receiversOutput,
 	)
 	if err != nil {
 		return err
@@ -248,17 +248,21 @@ func sendOnchain(ctx *cli.Context, receivers []receiver) (string, error) {
 		}
 	}
 
-	selected, delayedSelected, change, err := coinSelectOnchain(targetAmount, nil)
+	explorer := NewExplorer()
+
+	utxos, delayedUtxos, change, err := coinSelectOnchain(
+		explorer, targetAmount, nil,
+	)
 	if err != nil {
 		return "", err
 	}
 
-	if err := addInputs(updater, selected, delayedSelected, net); err != nil {
+	if err := addInputs(updater, utxos, delayedUtxos, net); err != nil {
 		return "", err
 	}
 
 	if change > 0 {
-		_, changeAddr, err := getAddress()
+		_, changeAddr, _, err := getAddress()
 		if err != nil {
 			return "", err
 		}
@@ -297,8 +301,7 @@ func sendOnchain(ctx *cli.Context, receivers []receiver) (string, error) {
 		}
 		// reselect the difference
 		selected, delayedSelected, newChange, err := coinSelectOnchain(
-			feeAmount-change,
-			append(selected, delayedSelected...),
+			explorer, feeAmount-change, append(utxos, delayedUtxos...),
 		)
 		if err != nil {
 			return "", err
@@ -309,7 +312,7 @@ func sendOnchain(ctx *cli.Context, receivers []receiver) (string, error) {
 		}
 
 		if newChange > 0 {
-			_, changeAddr, err := getAddress()
+			_, changeAddr, _, err := getAddress()
 			if err != nil {
 				return "", err
 			}
@@ -345,8 +348,6 @@ func sendOnchain(ctx *cli.Context, receivers []receiver) (string, error) {
 		return "", err
 	}
 
-	explorer := NewExplorer()
-
 	if err := signPset(updater.Pset, explorer, prvKey); err != nil {
 		return "", err
 	}
@@ -356,23 +357,4 @@ func sendOnchain(ctx *cli.Context, receivers []receiver) (string, error) {
 	}
 
 	return updater.Pset.ToBase64()
-}
-
-func broadcastPset(psetB64 string) (string, error) {
-	pset, err := psetv2.NewPsetFromBase64(psetB64)
-	if err != nil {
-		return "", err
-	}
-
-	extracted, err := psetv2.Extract(pset)
-	if err != nil {
-		return "", err
-	}
-
-	hex, err := extracted.ToHex()
-	if err != nil {
-		return "", err
-	}
-
-	return NewExplorer().Broadcast(hex)
 }

@@ -20,11 +20,11 @@ import (
 )
 
 const (
-	testingKey       = "0218d5ca8b58797b7dbd65c075dd7ba7784b3f38ab71b1a5a8e3f94ba0257654a6"
-	connectorAddress = "tex1qekd5u0qj8jl07vy60830xy7n9qtmcx9u3s0cqc"
-	minRelayFee      = uint64(30)
-	roundLifetime    = int64(1209344)
-	exitDelay        = int64(512)
+	testingKey          = "0218d5ca8b58797b7dbd65c075dd7ba7784b3f38ab71b1a5a8e3f94ba0257654a6"
+	connectorAddress    = "tex1qekd5u0qj8jl07vy60830xy7n9qtmcx9u3s0cqc"
+	minRelayFee         = uint64(30)
+	roundLifetime       = int64(1209344)
+	unilateralExitDelay = int64(512)
 )
 
 var (
@@ -48,7 +48,9 @@ func TestMain(m *testing.M) {
 }
 
 func TestBuildPoolTx(t *testing.T) {
-	builder := txbuilder.NewTxBuilder(wallet, network.Liquid, roundLifetime, exitDelay)
+	builder := txbuilder.NewTxBuilder(
+		wallet, network.Liquid, roundLifetime, unilateralExitDelay,
+	)
 
 	fixtures, err := parsePoolTxFixtures()
 	require.NoError(t, err)
@@ -57,7 +59,9 @@ func TestBuildPoolTx(t *testing.T) {
 	if len(fixtures.Valid) > 0 {
 		t.Run("valid", func(t *testing.T) {
 			for _, f := range fixtures.Valid {
-				poolTx, congestionTree, connAddr, err := builder.BuildPoolTx(pubkey, f.Payments, minRelayFee)
+				poolTx, congestionTree, connAddr, err := builder.BuildPoolTx(
+					pubkey, f.Payments, minRelayFee,
+				)
 				require.NoError(t, err)
 				require.NotEmpty(t, poolTx)
 				require.NotEmpty(t, congestionTree)
@@ -65,7 +69,9 @@ func TestBuildPoolTx(t *testing.T) {
 				require.Equal(t, f.ExpectedNumOfNodes, congestionTree.NumberOfNodes())
 				require.Len(t, congestionTree.Leaves(), f.ExpectedNumOfLeaves)
 
-				err = tree.ValidateCongestionTree(congestionTree, poolTx, pubkey, roundLifetime)
+				err = tree.ValidateCongestionTree(
+					congestionTree, poolTx, pubkey, roundLifetime,
+				)
 				require.NoError(t, err)
 			}
 		})
@@ -74,7 +80,9 @@ func TestBuildPoolTx(t *testing.T) {
 	if len(fixtures.Invalid) > 0 {
 		t.Run("invalid", func(t *testing.T) {
 			for _, f := range fixtures.Invalid {
-				poolTx, congestionTree, connAddr, err := builder.BuildPoolTx(pubkey, f.Payments, minRelayFee)
+				poolTx, congestionTree, connAddr, err := builder.BuildPoolTx(
+					pubkey, f.Payments, minRelayFee,
+				)
 				require.EqualError(t, err, f.ExpectedErr)
 				require.Empty(t, poolTx)
 				require.Empty(t, connAddr)
@@ -85,7 +93,9 @@ func TestBuildPoolTx(t *testing.T) {
 }
 
 func TestBuildForfeitTxs(t *testing.T) {
-	builder := txbuilder.NewTxBuilder(wallet, network.Liquid, 1209344, exitDelay)
+	builder := txbuilder.NewTxBuilder(
+		wallet, network.Liquid, 1209344, unilateralExitDelay,
+	)
 
 	fixtures, err := parseForfeitTxsFixtures()
 	require.NoError(t, err)

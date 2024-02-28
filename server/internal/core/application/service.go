@@ -39,13 +39,13 @@ type Service interface {
 }
 
 type service struct {
-	network       common.Network
-	onchainNework network.Network
-	pubkey        *secp256k1.PublicKey
-	roundLifetime int64
-	roundInterval int64
-	minRelayFee   uint64
-	exitDelay     int64
+	network             common.Network
+	onchainNework       network.Network
+	pubkey              *secp256k1.PublicKey
+	roundLifetime       int64
+	roundInterval       int64
+	unilateralExitDelay int64
+	minRelayFee         uint64
 
 	wallet      ports.WalletService
 	repoManager ports.RepoManager
@@ -61,7 +61,7 @@ type service struct {
 
 func NewService(
 	network common.Network, onchainNetwork network.Network,
-	roundInterval, roundLifetime int64, exitDelay int64, minRelayFee uint64,
+	roundInterval, roundLifetime, unilateralExitDelay int64, minRelayFee uint64,
 	walletSvc ports.WalletService, repoManager ports.RepoManager,
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	scheduler ports.SchedulerService,
@@ -80,7 +80,7 @@ func NewService(
 
 	svc := &service{
 		network, onchainNetwork, pubkey,
-		roundLifetime, roundInterval, minRelayFee, exitDelay,
+		roundLifetime, roundInterval, unilateralExitDelay, minRelayFee,
 		walletSvc, repoManager, builder, scanner, sweeper,
 		paymentRequests, forfeitTxs, eventsCh,
 	}
@@ -182,7 +182,8 @@ func (s *service) GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.
 }
 
 func (s *service) GetInfo(ctx context.Context) (string, int64, int64, error) {
-	return hex.EncodeToString(s.pubkey.SerializeCompressed()), s.roundLifetime, s.exitDelay, nil
+	pubkey := hex.EncodeToString(s.pubkey.SerializeCompressed())
+	return pubkey, s.roundLifetime, s.unilateralExitDelay, nil
 }
 
 func (s *service) Onboard(

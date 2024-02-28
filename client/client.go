@@ -1,12 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
-	"github.com/urfave/cli/v2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -21,13 +21,10 @@ type vtxo struct {
 }
 
 func getVtxos(
-	ctx *cli.Context,
-	explorer Explorer,
-	client arkv1.ArkServiceClient,
-	addr string,
-	withExpiration bool,
+	ctx context.Context, explorer Explorer, client arkv1.ArkServiceClient,
+	addr string, withExpiration bool,
 ) ([]vtxo, error) {
-	response, err := client.ListVtxos(ctx.Context, &arkv1.ListVtxosRequest{
+	response, err := client.ListVtxos(ctx, &arkv1.ListVtxosRequest{
 		Address: addr,
 	})
 	if err != nil {
@@ -54,7 +51,7 @@ func getVtxos(
 	}
 
 	for vtxoTxid, branch := range redeemBranches {
-		expiration, err := branch.ExpireAt()
+		expiration, err := branch.expireAt()
 		if err != nil {
 			return nil, err
 		}
@@ -70,19 +67,19 @@ func getVtxos(
 	return vtxos, nil
 }
 
-func getClientFromState(ctx *cli.Context) (arkv1.ArkServiceClient, func(), error) {
+func getClientFromState() (arkv1.ArkServiceClient, func(), error) {
 	state, err := getState()
 	if err != nil {
 		return nil, nil, err
 	}
-	addr, ok := state["ark_url"].(string)
-	if !ok {
-		return nil, nil, fmt.Errorf("missing ark_url")
+	addr := state[ASP_URL]
+	if len(addr) <= 0 {
+		return nil, nil, fmt.Errorf("missing asp url")
 	}
-	return getClient(ctx, addr)
+	return getClient(addr)
 }
 
-func getClient(ctx *cli.Context, addr string) (arkv1.ArkServiceClient, func(), error) {
+func getClient(addr string) (arkv1.ArkServiceClient, func(), error) {
 	creds := insecure.NewCredentials()
 	port := 80
 	if strings.HasPrefix(addr, "https://") {

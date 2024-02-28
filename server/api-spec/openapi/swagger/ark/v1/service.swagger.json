@@ -372,11 +372,11 @@
         "pubkey": {
           "type": "string"
         },
-        "lifetime": {
+        "roundLifetime": {
           "type": "string",
           "format": "int64"
         },
-        "exitDelay": {
+        "unilateralExitDelay": {
           "type": "string",
           "format": "int64"
         }

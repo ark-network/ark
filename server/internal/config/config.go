@@ -24,7 +24,7 @@ type Config struct {
 	LogLevel              int
 	MinRelayFee           uint64
 	RoundLifetime         int64
-	ExitDelay             int64
+	UnilateralExitDelay   int64
 }
 
 var (
@@ -41,7 +41,7 @@ var (
 	Network               = "NETWORK"
 	MinRelayFee           = "MIN_RELAY_FEE"
 	RoundLifetime         = "ROUND_LIFETIME"
-	ExitDelay             = "EXIT_DELAY"
+	UnilateralExitDelay   = "UNILATERAL_EXIT_DELAY"
 
 	defaultDatadir               = common.AppDataDir("arkd", false)
 	defaultRoundInterval         = 10
@@ -55,7 +55,7 @@ var (
 	defaultLogLevel              = 5
 	defaultMinRelayFee           = 30
 	defaultRoundLifetime         = 512
-	defaultExitDelay             = 512
+	defaultUnilateralExitDelay   = 512
 )
 
 func LoadConfig() (*Config, error) {
@@ -74,7 +74,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(Network, defaultNetwork)
 	viper.SetDefault(RoundLifetime, defaultRoundLifetime)
 	viper.SetDefault(MinRelayFee, defaultMinRelayFee)
-	viper.SetDefault(ExitDelay, defaultExitDelay)
+	viper.SetDefault(UnilateralExitDelay, defaultUnilateralExitDelay)
 
 	net, err := getNetwork()
 	if err != nil {
@@ -99,7 +99,7 @@ func LoadConfig() (*Config, error) {
 		Network:               net,
 		MinRelayFee:           viper.GetUint64(MinRelayFee),
 		RoundLifetime:         viper.GetInt64(RoundLifetime),
-		ExitDelay:             viper.GetInt64(ExitDelay),
+		UnilateralExitDelay:   viper.GetInt64(UnilateralExitDelay),
 	}, nil
 }
 
