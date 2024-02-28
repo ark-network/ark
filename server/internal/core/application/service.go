@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/ark-network/ark/common"
@@ -368,77 +369,86 @@ func (s *service) finalizeRound() {
 func (s *service) listenToRedemptions() {
 	ctx := context.Background()
 	chVtxos := s.scanner.GetNotificationChannel(ctx)
+
+	mutx := &sync.Mutex{}
 	for vtxoKeys := range chVtxos {
-		vtxosRepo := s.repoManager.Vtxos()
-		roundRepo := s.repoManager.Rounds()
+		go func(vtxoKeys []domain.VtxoKey) {
+			vtxosRepo := s.repoManager.Vtxos()
+			roundRepo := s.repoManager.Rounds()
 
-		for _, v := range vtxoKeys {
-			vtxos, err := vtxosRepo.GetVtxos(ctx, []domain.VtxoKey{v})
-			if err != nil {
-				log.WithError(err).Warn("failed to retrieve vtxos, skipping...")
-				continue
+			for _, v := range vtxoKeys {
+				vtxos, err := vtxosRepo.GetVtxos(ctx, []domain.VtxoKey{v})
+				if err != nil {
+					log.WithError(err).Warn("failed to retrieve vtxos, skipping...")
+					continue
+				}
+
+				vtxo := vtxos[0]
+
+				if vtxo.Redeemed {
+					continue
+				}
+
+				if _, err := s.repoManager.Vtxos().RedeemVtxos(ctx, []domain.VtxoKey{vtxo.VtxoKey}); err != nil {
+					log.WithError(err).Warn("failed to redeem vtxos, retrying...")
+					continue
+				}
+				log.Debugf("vtxo %s redeemed", vtxo.Txid)
+
+				if !vtxo.Spent {
+					continue
+				}
+
+				log.Debugf("fraud detected on vtxo %s", vtxo.Txid)
+
+				round, err := roundRepo.GetRoundWithTxid(ctx, vtxo.SpentBy)
+				if err != nil {
+					log.WithError(err).Warn("failed to retrieve round")
+					continue
+				}
+
+				mutx.Lock()
+				defer mutx.Unlock()
+
+				connectorTxid, connectorVout, err := s.getNextConnector(ctx, *round)
+				if err != nil {
+					log.WithError(err).Warn("failed to retrieve next connector")
+					continue
+				}
+
+				forfeitTx, err := findForfeitTx(round.ForfeitTxs, connectorTxid, connectorVout, vtxo.Txid)
+				if err != nil {
+					log.WithError(err).Warn("failed to retrieve forfeit tx")
+					continue
+				}
+
+				signedForfeitTx, err := s.wallet.SignConnectorInput(ctx, forfeitTx, []int{0}, false)
+				if err != nil {
+					log.WithError(err).Warn("failed to sign connector input in forfeit tx")
+					continue
+				}
+
+				signedForfeitTx, err = s.wallet.SignPsetWithKey(ctx, signedForfeitTx, []int{1})
+				if err != nil {
+					log.WithError(err).Warn("failed to sign vtxo input in forfeit tx")
+					continue
+				}
+
+				forfeitTxHex, err := finalizeAndExtractForfeit(signedForfeitTx)
+				if err != nil {
+					log.WithError(err).Warn("failed to finalize forfeit tx")
+					continue
+				}
+
+				forfeitTxid, err := s.wallet.BroadcastTransaction(ctx, forfeitTxHex)
+				if err != nil {
+					log.WithError(err).Warn("failed to broadcast forfeit tx")
+					continue
+				}
+
+				log.Debugf("broadcasted forfeit tx %s", forfeitTxid)
 			}
-
-			vtxo := vtxos[0]
-
-			if vtxo.Redeemed {
-				continue
-			}
-
-			if _, err := s.repoManager.Vtxos().RedeemVtxos(ctx, []domain.VtxoKey{vtxo.VtxoKey}); err != nil {
-				log.WithError(err).Warn("failed to redeem vtxos, retrying...")
-				continue
-			}
-			log.Debugf("vtxo %s redeemed", vtxo.Txid)
-
-			if !vtxo.Spent {
-				continue
-			}
-
-			round, err := roundRepo.GetRoundWithTxid(ctx, vtxo.SpentBy)
-			if err != nil {
-				log.WithError(err).Warn("failed to retrieve round")
-				continue
-			}
-
-			connectorTxid, connectorVout, err := s.getNextConnector(ctx, *round)
-			if err != nil {
-				log.WithError(err).Warn("failed to retrieve next connector")
-				continue
-			}
-
-			forfeitTx, err := findForfeitTx(round.ForfeitTxs, connectorTxid, connectorVout, vtxo.Txid)
-			if err != nil {
-				log.WithError(err).Warn("failed to retrieve forfeit tx")
-				continue
-			}
-
-			signedForfeitTx, err := s.wallet.SignConnectorInput(ctx, forfeitTx, []int{0}, false)
-			if err != nil {
-				log.WithError(err).Warn("failed to sign connector input in forfeit tx")
-				continue
-			}
-
-			signedForfeitTx, err = s.wallet.SignPsetWithKey(ctx, signedForfeitTx, []int{1})
-			if err != nil {
-				log.WithError(err).Warn("failed to sign vtxo input in forfeit tx")
-				continue
-			}
-
-			forfeitTxHex, err := finalizeAndExtractForfeit(signedForfeitTx)
-			if err != nil {
-				log.WithError(err).Warn("failed to finalize forfeit tx")
-				continue
-			}
-
-			forfeitTxid, err := s.wallet.BroadcastTransaction(ctx, forfeitTxHex)
-			if err != nil {
-				log.WithError(err).Warn("failed to broadcast forfeit tx")
-				continue
-			}
-
-			log.Debugf("broadcasted forfeit tx %s", forfeitTxid)
-		}
+		}(vtxoKeys)
 	}
 }
 
@@ -500,12 +510,11 @@ func (s *service) getNextConnector(
 						if err != nil {
 							return "", 0, err
 						}
+						log.Debugf("broadcasted connector tx %s", connectorTxid)
 
 						if err := s.wallet.WaitForConfirmation(ctx, connectorTxid); err != nil {
 							return "", 0, err
 						}
-
-						log.Debugf("broadcasted connector tx %s", connectorTxid)
 
 						return connectorTxid, 0, nil
 					}

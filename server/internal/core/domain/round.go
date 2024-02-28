@@ -47,7 +47,7 @@ type Round struct {
 	ConnectorAddress  string
 	DustAmount        uint64
 	Version           uint
-	Swept             bool // true if all the vtxos are vtxo.Swept
+	Swept             bool // true if all the vtxos are vtxo.Swept or vtxo.Redeemed
 	changes           []RoundEvent
 }
 
