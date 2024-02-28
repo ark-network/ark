@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	accountLabel          = "ark"
-	connectorAccountLabel = "ark-connector"
+	arkAccount       = "ark"
+	connectorAccount = "ark-connector"
 )
 
 var derivationPath = []uint32{0, 0}
@@ -66,7 +66,7 @@ func (s *service) findAccount(ctx context.Context, label string) (*pb.AccountInf
 }
 
 func (s *service) getPubkey(ctx context.Context) (*secp256k1.PublicKey, *bip32.Key, error) {
-	account, err := s.findAccount(ctx, accountLabel)
+	account, err := s.findAccount(ctx, arkAccount)
 	if err != nil {
 		return nil, nil, err
 	}

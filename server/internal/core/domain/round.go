@@ -287,19 +287,3 @@ func (r *Round) raise(event RoundEvent) {
 	r.changes = append(r.changes, event)
 	r.On(event, false)
 }
-
-func (r *Round) HasOneConnector() bool {
-	if len(r.Connectors) > 1 {
-		return false
-	}
-
-	nbOfInputs := 0
-	for _, payment := range r.Payments {
-		nbOfInputs += len(payment.Inputs)
-		if nbOfInputs > 1 {
-			return false
-		}
-	}
-
-	return true
-}

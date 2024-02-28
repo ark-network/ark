@@ -53,10 +53,10 @@ func (r *vtxoRepository) AddVtxos(
 }
 
 func (r *vtxoRepository) SpendVtxos(
-	ctx context.Context, vtxoKeys []domain.VtxoKey, spendBy string,
+	ctx context.Context, vtxoKeys []domain.VtxoKey, spentBy string,
 ) error {
 	for _, vtxoKey := range vtxoKeys {
-		if err := r.spendVtxo(ctx, vtxoKey, spendBy); err != nil {
+		if err := r.spendVtxo(ctx, vtxoKey, spentBy); err != nil {
 			return err
 		}
 	}

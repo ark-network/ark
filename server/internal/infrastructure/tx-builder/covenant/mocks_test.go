@@ -135,12 +135,13 @@ func (m *mockedWallet) SignPsetWithKey(ctx context.Context, pset string, inputIn
 }
 
 func (m *mockedWallet) SignConnectorInput(ctx context.Context, pset string, inputIndexes []int, extract bool) (string, error) {
-	args := m.Called(ctx, pset)
+	args := m.Called(ctx, pset, inputIndexes, extract)
 
 	var res string
 	if a := args.Get(0); a != nil {
 		res = a.(string)
 	}
+
 	return res, args.Error(1)
 }
 
@@ -169,7 +170,7 @@ func (m *mockedWallet) GetNotificationChannel(ctx context.Context) chan []domain
 }
 
 func (m *mockedWallet) ListConnectorUtxos(ctx context.Context, addr string) ([]ports.TxInput, error) {
-	args := m.Called(ctx)
+	args := m.Called(ctx, addr)
 
 	var res []ports.TxInput
 	if a := args.Get(0); a != nil {

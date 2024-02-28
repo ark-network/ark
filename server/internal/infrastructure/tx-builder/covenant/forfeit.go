@@ -38,12 +38,6 @@ func craftForfeitTxs(
 		}
 
 		vtxoAmount, _ := elementsutil.ValueToBytes(vtxo.Amount)
-		vtxoPrevout := &transaction.TxOutput{
-			Asset:  connectorPrevout.Asset,
-			Value:  vtxoAmount,
-			Script: vtxoScript,
-			Nonce:  []byte{0x00},
-		}
 
 		if err := updater.AddInputs([]psetv2.InputArgs{connectorInput, vtxoInput}); err != nil {
 			return nil, err
@@ -56,6 +50,8 @@ func craftForfeitTxs(
 		if err := updater.AddInSighashType(0, txscript.SigHashAll); err != nil {
 			return nil, err
 		}
+
+		vtxoPrevout := transaction.NewTxOutput(connectorPrevout.Asset, vtxoAmount, vtxoScript)
 
 		if err = updater.AddInWitnessUtxo(1, vtxoPrevout); err != nil {
 			return nil, err

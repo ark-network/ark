@@ -7,10 +7,8 @@ import (
 
 	"github.com/ark-network/ark/internal/core/domain"
 	dbtypes "github.com/ark-network/ark/internal/infrastructure/db/types"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/dgraph-io/badger/v4"
 	"github.com/timshannon/badgerhold/v4"
-	"github.com/vulpemventures/go-elements/psetv2"
 )
 
 const roundStoreDir = "rounds"
@@ -107,34 +105,6 @@ func (r *roundRepository) GetSweepableRounds(
 		return nil, err
 	}
 	return rounds, nil
-}
-
-func (r *roundRepository) GetForfeitTx(
-	ctx context.Context, roundTxId string, vtxoTxid string,
-	connectorTxid string, connectorVout uint32,
-) (string, error) {
-	round, err := r.GetRoundWithTxid(ctx, roundTxId)
-	if err != nil {
-		return "", err
-	}
-
-	for _, forfeit := range round.ForfeitTxs {
-		forfeitTx, err := psetv2.NewPsetFromBase64(forfeit)
-		if err != nil {
-			return "", err
-		}
-
-		connector := forfeitTx.Inputs[0]
-		vtxoInput := forfeitTx.Inputs[1]
-
-		if chainhash.Hash(connector.PreviousTxid).String() == connectorTxid &&
-			connector.PreviousTxIndex == connectorVout &&
-			chainhash.Hash(vtxoInput.PreviousTxid).String() == vtxoTxid {
-			return forfeit, nil
-		}
-	}
-
-	return "", fmt.Errorf("forfeit tx not found")
 }
 
 func (r *roundRepository) Close() {

@@ -36,16 +36,7 @@ func craftConnectorTx(
 		return nil, err
 	}
 
-	witnessUtxo := transaction.TxOutput{
-		Asset:  asset,
-		Value:  value,
-		Script: inputScript,
-		Nonce:  []byte{0x00},
-	}
-
-	if err := updater.AddInWitnessUtxo(
-		0, &witnessUtxo,
-	); err != nil {
+	if err := updater.AddInWitnessUtxo(0, transaction.NewTxOutput(asset, value, inputScript)); err != nil {
 		return nil, err
 	}
 

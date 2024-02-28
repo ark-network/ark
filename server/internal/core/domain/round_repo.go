@@ -15,7 +15,6 @@ type RoundRepository interface {
 	GetRoundWithId(ctx context.Context, id string) (*Round, error)
 	GetRoundWithTxid(ctx context.Context, txid string) (*Round, error)
 	GetSweepableRounds(ctx context.Context) ([]Round, error)
-	GetForfeitTx(ctx context.Context, roundTxId string, vtxoTxid string, connectorTxid string, connectorVout uint32) (string, error)
 }
 
 type VtxoRepository interface {

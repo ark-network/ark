@@ -12,11 +12,11 @@ import (
 func (s *service) DeriveAddresses(
 	ctx context.Context, numOfAddresses int,
 ) ([]string, error) {
-	return s.deriveAddresses(ctx, numOfAddresses, accountLabel)
+	return s.deriveAddresses(ctx, numOfAddresses, arkAccount)
 }
 
 func (s *service) DeriveConnectorAddress(ctx context.Context) (string, error) {
-	addresses, err := s.deriveAddresses(ctx, 1, connectorAccountLabel)
+	addresses, err := s.deriveAddresses(ctx, 1, connectorAccount)
 	if err != nil {
 		return "", err
 	}
@@ -28,7 +28,7 @@ func (s *service) ListConnectorUtxos(
 	ctx context.Context, connectorAddress string,
 ) ([]ports.TxInput, error) {
 	res, err := s.accountClient.ListUtxos(ctx, &pb.ListUtxosRequest{
-		AccountName: connectorAccountLabel,
+		AccountName: connectorAccount,
 		Addresses:   []string{connectorAddress},
 	})
 	if err != nil {

@@ -64,12 +64,12 @@ func NewService(addr string) (ports.WalletService, error) {
 	mainAccountFound, connectorAccountFound := false, false
 
 	for _, account := range info.GetAccounts() {
-		if account.GetLabel() == accountLabel {
+		if account.GetLabel() == arkAccount {
 			mainAccountFound = true
 			continue
 		}
 
-		if account.GetLabel() == connectorAccountLabel {
+		if account.GetLabel() == connectorAccount {
 			connectorAccountFound = true
 			continue
 		}
@@ -80,7 +80,7 @@ func NewService(addr string) (ports.WalletService, error) {
 	}
 	if !mainAccountFound {
 		if _, err := accountClient.CreateAccountBIP44(ctx, &pb.CreateAccountBIP44Request{
-			Label:          accountLabel,
+			Label:          arkAccount,
 			Unconfidential: true,
 		}); err != nil {
 			return nil, err
@@ -89,7 +89,7 @@ func NewService(addr string) (ports.WalletService, error) {
 
 	if !connectorAccountFound {
 		if _, err := accountClient.CreateAccountBIP44(ctx, &pb.CreateAccountBIP44Request{
-			Label:          connectorAccountLabel,
+			Label:          connectorAccount,
 			Unconfidential: true,
 		}); err != nil {
 			return nil, err

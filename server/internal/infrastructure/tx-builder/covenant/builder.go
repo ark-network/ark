@@ -11,6 +11,7 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/network"
+	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/taproot"
 )
@@ -80,9 +81,13 @@ func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (signedSweepTx strin
 }
 
 func (b *txBuilder) BuildForfeitTxs(
-	connectorAddress string, aspPubkey *secp256k1.PublicKey,
-	poolTx string, payments []domain.Payment, minRelayFee uint64,
+	aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment, minRelayFee uint64,
 ) (connectors []string, forfeitTxs []string, err error) {
+	connectorAddress, err := b.getConnectorAddress(poolTx)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	connectorTxs, err := b.createConnectors(poolTx, payments, connectorAddress, minRelayFee)
 	if err != nil {
 		return nil, nil, err
@@ -101,8 +106,8 @@ func (b *txBuilder) BuildForfeitTxs(
 }
 
 func (b *txBuilder) BuildPoolTx(
-	connectorAddress string, aspPubkey *secp256k1.PublicKey, payments []domain.Payment, minRelayFee uint64,
-) (poolTx string, congestionTree tree.CongestionTree, err error) {
+	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, minRelayFee uint64,
+) (poolTx string, congestionTree tree.CongestionTree, connectorAddress string, err error) {
 	// The creation of the tree and the pool tx are tightly coupled:
 	// - building the tree requires knowing the shared outpoint (txid:vout)
 	// - building the pool tx requires knowing the shared output script and amount
@@ -117,6 +122,11 @@ func (b *txBuilder) BuildPoolTx(
 	treeFactoryFn, sharedOutputScript, sharedOutputAmount, err := tree.CraftCongestionTree(
 		b.net.AssetID, aspPubkey, getOffchainReceivers(payments), minRelayFee, b.roundLifetime, b.exitDelay,
 	)
+	if err != nil {
+		return
+	}
+
+	connectorAddress, err = b.wallet.DeriveConnectorAddress(context.Background())
 	if err != nil {
 		return
 	}
@@ -486,4 +496,24 @@ func (b *txBuilder) createForfeitTxs(
 		}
 	}
 	return forfeitTxs, nil
+}
+
+func (b *txBuilder) getConnectorAddress(poolTx string) (string, error) {
+	pset, err := psetv2.NewPsetFromBase64(poolTx)
+	if err != nil {
+		return "", err
+	}
+
+	if len(pset.Outputs) < 1 {
+		return "", fmt.Errorf("connector output not found in pool tx")
+	}
+
+	connectorOutput := pset.Outputs[1]
+
+	pay, err := payment.FromScript(connectorOutput.Script, b.net, nil)
+	if err != nil {
+		return "", err
+	}
+
+	return pay.WitnessPubKeyHash()
 }

@@ -285,14 +285,7 @@ func (s *service) startFinalization() {
 		return
 	}
 
-	connectorAddress, err := s.wallet.DeriveConnectorAddress(ctx)
-	if err != nil {
-		changes = round.Fail(fmt.Errorf("failed to derive connector address: %s", err))
-		log.WithError(err).Warn("failed to derive connector address")
-		return
-	}
-
-	unsignedPoolTx, tree, err := s.builder.BuildPoolTx(connectorAddress, s.pubkey, payments, s.minRelayFee)
+	unsignedPoolTx, tree, connectorAddress, err := s.builder.BuildPoolTx(s.pubkey, payments, s.minRelayFee)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
 		log.WithError(err).Warn("failed to create pool tx")
@@ -301,7 +294,7 @@ func (s *service) startFinalization() {
 
 	log.Debugf("pool tx created for round %s", round.Id)
 
-	connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(connectorAddress, s.pubkey, unsignedPoolTx, payments, s.minRelayFee)
+	connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(s.pubkey, unsignedPoolTx, payments, s.minRelayFee)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
 		log.WithError(err).Warn("failed to create connectors and forfeit txs")
@@ -414,7 +407,7 @@ func (s *service) listenToRedemptions() {
 				continue
 			}
 
-			forfeitTx, err := roundRepo.GetForfeitTx(ctx, vtxo.SpentBy, vtxo.Txid, connectorTxid, connectorVout)
+			forfeitTx, err := findForfeitTx(round.ForfeitTxs, connectorTxid, connectorVout, vtxo.Txid)
 			if err != nil {
 				log.WithError(err).Warn("failed to retrieve forfeit tx")
 				continue
@@ -786,4 +779,26 @@ func finalizeAndExtractForfeit(b64 string) (string, error) {
 	}
 
 	return extracted.ToHex()
+}
+
+func findForfeitTx(
+	forfeits []string, connectorTxid string, connectorVout uint32, vtxoTxid string,
+) (string, error) {
+	for _, forfeit := range forfeits {
+		forfeitTx, err := psetv2.NewPsetFromBase64(forfeit)
+		if err != nil {
+			return "", err
+		}
+
+		connector := forfeitTx.Inputs[0]
+		vtxoInput := forfeitTx.Inputs[1]
+
+		if chainhash.Hash(connector.PreviousTxid).String() == connectorTxid &&
+			connector.PreviousTxIndex == connectorVout &&
+			chainhash.Hash(vtxoInput.PreviousTxid).String() == vtxoTxid {
+			return forfeit, nil
+		}
+	}
+
+	return "", fmt.Errorf("forfeit tx not found")
 }

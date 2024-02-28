@@ -418,6 +418,7 @@ func testStartFinalization(t *testing.T) {
 			}
 
 			for _, f := range fixtures {
+				// TODO fix this
 				events, err := f.round.StartFinalization("", f.connectors, f.tree, f.poolTx)
 				require.EqualError(t, err, f.expectedErr)
 				require.Empty(t, events)

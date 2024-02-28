@@ -61,7 +61,7 @@ func (s *service) SignPset(
 func (s *service) SelectUtxos(ctx context.Context, asset string, amount uint64) ([]ports.TxInput, uint64, error) {
 	// TODO: select coins from the connector account IF the round is swept
 	res, err := s.txClient.SelectUtxos(ctx, &pb.SelectUtxosRequest{
-		AccountName:  accountLabel,
+		AccountName:  arkAccount,
 		TargetAsset:  asset,
 		TargetAmount: amount,
 	})
@@ -96,8 +96,8 @@ func (s *service) getTransaction(
 		return res.GetTxHex(), true, res.BlockDetails.GetTimestamp(), nil
 	}
 
-	// if not confirmed, we return now + 30 secs to estimate the next blocktime
-	return res.GetTxHex(), false, time.Now().Unix() + 30, nil
+	// if not confirmed, we return now + 1 min to estimate the next blocktime
+	return res.GetTxHex(), false, time.Now().Add(time.Minute).Unix(), nil
 }
 
 func (s *service) BroadcastTransaction(
@@ -126,7 +126,7 @@ func (s *service) IsTransactionConfirmed(
 		if strings.Contains(strings.ToLower(err.Error()), "missing transaction") {
 			return isConfirmed, 0, nil
 		}
-		return isConfirmed, 0, err
+		return false, 0, err
 	}
 
 	return isConfirmed, blocktime, nil
@@ -242,7 +242,7 @@ func (s *service) SignConnectorInput(ctx context.Context, pset string, inputInde
 	}
 
 	_, err = s.txClient.LockUtxos(ctx, &pb.LockUtxosRequest{
-		AccountName: connectorAccountLabel,
+		AccountName: connectorAccount,
 		Utxos:       utxos,
 	})
 	if err != nil {
