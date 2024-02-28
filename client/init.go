@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
+	"strconv"
 	"strings"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
@@ -57,7 +59,7 @@ func initAction(ctx *cli.Context) error {
 		return fmt.Errorf("invalid network")
 	}
 
-	if err := connectToAsp(ctx, net, url); err != nil {
+	if err := connectToAsp(ctx.Context, net, url); err != nil {
 		return err
 	}
 	return initWallet(ctx, key, password)
@@ -71,24 +73,24 @@ func generateRandomPrivateKey() (*secp256k1.PrivateKey, error) {
 	return privKey, nil
 }
 
-func connectToAsp(ctx *cli.Context, net, url string) error {
-	client, close, err := getClient(ctx, url)
+func connectToAsp(ctx context.Context, net, url string) error {
+	client, close, err := getClient(url)
 	if err != nil {
 		return err
 	}
 	defer close()
 
-	resp, err := client.GetInfo(ctx.Context, &arkv1.GetInfoRequest{})
+	resp, err := client.GetInfo(ctx, &arkv1.GetInfoRequest{})
 	if err != nil {
 		return err
 	}
 
-	return setState(map[string]interface{}{
-		"ark_url":      url,
-		"network":      net,
-		"ark_pubkey":   resp.Pubkey,
-		"ark_lifetime": resp.Lifetime,
-		"exit_delay":   resp.ExitDelay,
+	return setState(map[string]string{
+		ASP_URL:               url,
+		NETWORK:               net,
+		ASP_PUBKEY:            resp.Pubkey,
+		ROUND_LIFETIME:        strconv.Itoa(int(resp.GetRoundLifetime())),
+		UNILATERAL_EXIT_DELAY: strconv.Itoa(int(resp.GetUnilateralExitDelay())),
 	})
 }
 
@@ -109,17 +111,20 @@ func initWallet(ctx *cli.Context, key, password string) error {
 		privateKey = secp256k1.PrivKeyFromBytes(privKeyBytes)
 	}
 
-	encryptedPrivateKey, err := NewAES128Cypher().Encrypt(privateKey.Serialize(), []byte(password))
+	cypher := newAES128Cypher()
+	buf := privateKey.Serialize()
+	encryptedPrivateKey, err := cypher.encrypt(buf, []byte(password))
 	if err != nil {
 		return err
 	}
 
 	passwordHash := hashPassword([]byte(password))
 
-	state := map[string]interface{}{
-		"encrypted_private_key": hex.EncodeToString(encryptedPrivateKey),
-		"password_hash":         hex.EncodeToString(passwordHash),
-		"public_key":            hex.EncodeToString(privateKey.PubKey().SerializeCompressed()),
+	pubkey := privateKey.PubKey().SerializeCompressed()
+	state := map[string]string{
+		ENCRYPTED_PRVKEY: hex.EncodeToString(encryptedPrivateKey),
+		PASSWORD_HASH:    hex.EncodeToString(passwordHash),
+		PUBKEY:           hex.EncodeToString(pubkey),
 	}
 
 	if err := setState(state); err != nil {

@@ -15,6 +15,8 @@ import (
 	"github.com/vulpemventures/go-elements/network"
 )
 
+const minAllowedSequence = 512
+
 var (
 	supportedDbs = supportedType{
 		"badger": {},
@@ -41,7 +43,7 @@ type Config struct {
 	WalletAddr            string
 	MinRelayFee           uint64
 	RoundLifetime         int64
-	ExitDelay             int64
+	UnilateralExitDelay   int64
 
 	repo      ports.RepoManager
 	svc       application.Service
@@ -95,25 +97,32 @@ func (c *Config) Validate() error {
 		return err
 	}
 	// round life time must be a multiple of 512
-	if c.RoundLifetime < 512 || c.RoundLifetime%512 != 0 {
-		return fmt.Errorf("invalid round lifetime, must be greater or equal than 512 and a multiple of 512")
-	}
-	seq, err := common.BIP68Encode(uint(c.RoundLifetime))
-	if err != nil {
-		return fmt.Errorf("invalid round lifetime, %s", err)
+	if c.RoundLifetime < minAllowedSequence {
+		return fmt.Errorf(
+			"invalid round lifetime, must be a at least %d", minAllowedSequence,
+		)
 	}
 
-	seconds, err := common.BIP68Decode(seq)
-	if err != nil {
-		return fmt.Errorf("invalid round lifetime, %s", err)
+	if c.UnilateralExitDelay < minAllowedSequence {
+		return fmt.Errorf(
+			"invalid unilateral exit delay, must at least %d", minAllowedSequence,
+		)
 	}
 
-	if seconds != uint(c.RoundLifetime) {
-		return fmt.Errorf("invalid round lifetime, must be a multiple of 512")
+	if c.RoundLifetime%minAllowedSequence != 0 {
+		c.RoundLifetime -= c.RoundLifetime % minAllowedSequence
+		log.Infof(
+			"round lifetime must be a multiple of %d, rounded to %d",
+			minAllowedSequence, c.RoundLifetime,
+		)
 	}
 
-	if c.ExitDelay < 512 || c.ExitDelay%512 != 0 {
-		return fmt.Errorf("invalid exit delay, must be greater or equal than 512 and a multiple of 512")
+	if c.UnilateralExitDelay%minAllowedSequence != 0 {
+		c.UnilateralExitDelay -= c.UnilateralExitDelay % minAllowedSequence
+		log.Infof(
+			"unilateral exit delay must be a multiple of %d, rounded to %d",
+			minAllowedSequence, c.UnilateralExitDelay,
+		)
 	}
 
 	return nil
@@ -166,7 +175,9 @@ func (c *Config) txBuilderService() error {
 
 	switch c.TxBuilderType {
 	case "covenant":
-		svc = txbuilder.NewTxBuilder(c.wallet, net, c.RoundLifetime, c.ExitDelay)
+		svc = txbuilder.NewTxBuilder(
+			c.wallet, net, c.RoundLifetime, c.UnilateralExitDelay,
+		)
 	default:
 		err = fmt.Errorf("unknown tx builder type")
 	}
@@ -215,7 +226,8 @@ func (c *Config) schedulerService() error {
 func (c *Config) appService() error {
 	net := c.mainChain()
 	svc, err := application.NewService(
-		c.Network, net, c.RoundInterval, c.RoundLifetime, c.ExitDelay, c.MinRelayFee,
+		c.Network, net,
+		c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.MinRelayFee,
 		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler,
 	)
 	if err != nil {

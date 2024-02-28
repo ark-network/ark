@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -56,18 +57,26 @@ func redeemAction(ctx *cli.Context) error {
 		return fmt.Errorf("missing amount flag (--amount)")
 	}
 
+	client, clean, err := getClientFromState()
+	if err != nil {
+		return err
+	}
+	defer clean()
+
 	if force {
 		if amount > 0 {
 			fmt.Printf("WARNING: unilateral exit (--force) ignores --amount flag, it will redeem all your VTXOs\n")
 		}
 
-		return unilateralRedeem(ctx)
+		return unilateralRedeem(client, ctx.Context)
 	}
 
-	return collaborativeRedeem(ctx, addr, amount)
+	return collaborativeRedeem(client, ctx.Context, addr, amount)
 }
 
-func collaborativeRedeem(ctx *cli.Context, addr string, amount uint64) error {
+func collaborativeRedeem(
+	client arkv1.ArkServiceClient, ctx context.Context, addr string, amount uint64,
+) error {
 	if _, err := address.ToOutputScript(addr); err != nil {
 		return fmt.Errorf("invalid onchain address")
 	}
@@ -86,7 +95,7 @@ func collaborativeRedeem(ctx *cli.Context, addr string, amount uint64) error {
 		addr = info.Address
 	}
 
-	offchainAddr, _, err := getAddress()
+	offchainAddr, _, _, err := getAddress()
 	if err != nil {
 		return err
 	}
@@ -97,12 +106,6 @@ func collaborativeRedeem(ctx *cli.Context, addr string, amount uint64) error {
 			Amount:  amount,
 		},
 	}
-
-	client, close, err := getClientFromState(ctx)
-	if err != nil {
-		return err
-	}
-	defer close()
 
 	explorer := NewExplorer()
 
@@ -137,14 +140,14 @@ func collaborativeRedeem(ctx *cli.Context, addr string, amount uint64) error {
 		return err
 	}
 
-	registerResponse, err := client.RegisterPayment(ctx.Context, &arkv1.RegisterPaymentRequest{
+	registerResponse, err := client.RegisterPayment(ctx, &arkv1.RegisterPaymentRequest{
 		Inputs: inputs,
 	})
 	if err != nil {
 		return err
 	}
 
-	_, err = client.ClaimPayment(ctx.Context, &arkv1.ClaimPaymentRequest{
+	_, err = client.ClaimPayment(ctx, &arkv1.ClaimPaymentRequest{
 		Id:      registerResponse.GetId(),
 		Outputs: receivers,
 	})
@@ -173,14 +176,8 @@ func collaborativeRedeem(ctx *cli.Context, addr string, amount uint64) error {
 	return nil
 }
 
-func unilateralRedeem(ctx *cli.Context) error {
-	client, close, err := getClientFromState(ctx)
-	if err != nil {
-		return err
-	}
-	defer close()
-
-	offchainAddr, _, err := getAddress()
+func unilateralRedeem(client arkv1.ArkServiceClient, ctx context.Context) error {
+	offchainAddr, _, _, err := getAddress()
 	if err != nil {
 		return err
 	}
@@ -212,7 +209,7 @@ func unilateralRedeem(ctx *cli.Context) error {
 	}
 
 	for _, branch := range redeemBranches {
-		branchTxs, err := branch.RedeemPath()
+		branchTxs, err := branch.redeemPath()
 		if err != nil {
 			return err
 		}
