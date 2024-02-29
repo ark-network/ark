@@ -131,16 +131,17 @@ func (s *service) IsTransactionConfirmed(
 
 	return isConfirmed, blocktime, nil
 }
-func (s *service) WaitForConfirmation(ctx context.Context, txid string) error {
+func (s *service) WaitForSync(ctx context.Context, txid string) error {
 	for {
-		isConfirmed, _, err := s.IsTransactionConfirmed(context.Background(), txid)
+		time.Sleep(5 * time.Second)
+		_, _, _, err := s.getTransaction(ctx, txid)
 		if err != nil {
+			if strings.Contains(strings.ToLower(err.Error()), "missing transaction") {
+				continue
+			}
 			return err
 		}
-		if isConfirmed {
-			break
-		}
-		time.Sleep(5 * time.Second)
+		break
 	}
 	return nil
 }

@@ -474,7 +474,7 @@ func (s *service) getNextConnector(
 
 	// if we do not find any utxos, we make sure to wait for the connector outpoint to be confirmed then we retry
 	if len(utxos) <= 0 {
-		if err := s.wallet.WaitForConfirmation(ctx, round.Txid); err != nil {
+		if err := s.wallet.WaitForSync(ctx, round.Txid); err != nil {
 			return "", 0, err
 		}
 
@@ -513,7 +513,8 @@ func (s *service) getNextConnector(
 						}
 						log.Debugf("broadcasted connector tx %s", connectorTxid)
 
-						if err := s.wallet.WaitForConfirmation(ctx, connectorTxid); err != nil {
+						// wait for the connector tx to be in the mempool
+						if err := s.wallet.WaitForSync(ctx, connectorTxid); err != nil {
 							return "", 0, err
 						}
 

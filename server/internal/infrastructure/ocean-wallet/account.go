@@ -41,9 +41,6 @@ func (s *service) ListConnectorUtxos(
 	for _, utxo := range res.GetLockedUtxos().GetUtxos() {
 		utxos = append(utxos, utxo)
 	}
-	for _, utxo := range res.GetUnconfirmedUtxos().GetUtxos() {
-		utxos = append(utxos, utxo)
-	}
 
 	return utxos, nil
 }

@@ -180,7 +180,7 @@ func (m *mockedWallet) ListConnectorUtxos(ctx context.Context, addr string) ([]p
 	return res, args.Error(1)
 }
 
-func (m *mockedWallet) WaitForConfirmation(ctx context.Context, txid string) error {
+func (m *mockedWallet) WaitForSync(ctx context.Context, txid string) error {
 	args := m.Called(ctx, txid)
 	return args.Error(0)
 }
