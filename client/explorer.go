@@ -72,11 +72,14 @@ func (e *explorer) Broadcast(txStr string) (string, error) {
 			return "", err
 		}
 
-		extracted, err := psetv2.Extract(pset)
+		tx, err = psetv2.Extract(pset)
 		if err != nil {
 			return "", err
 		}
-		txStr, _ = extracted.ToHex()
+		txStr, err = tx.ToHex()
+		if err != nil {
+			return "", err
+		}
 	}
 	txid := tx.TxHash().String()
 	e.cache[txid] = txStr
