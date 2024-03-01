@@ -125,9 +125,10 @@ message OnboardResponse {
 
 message RoundFinalizationEvent {
   string id = 1;
-  string pool_partial_tx = 2;
+  string pool_tx = 2;
   repeated string forfeit_txs = 3;
   Tree congestion_tree = 4;
+  repeated string connectors = 5;
 }
 
 message RoundFinalizedEvent {

@@ -407,8 +407,8 @@ func handleRoundStream(
 			pingStop()
 			fmt.Println("round finalization started")
 
-			poolTxStr := e.GetPoolPartialTx()
-			poolTx, err := psetv2.NewPsetFromBase64(poolTxStr)
+			poolTx := e.GetPoolTx()
+			ptx, err := psetv2.NewPsetFromBase64(poolTx)
 			if err != nil {
 				return "", err
 			}
@@ -417,6 +417,8 @@ func handleRoundStream(
 			if err != nil {
 				return "", err
 			}
+
+			connectors := e.GetConnectors()
 
 			aspPubkey, err := getAspPublicKey()
 			if err != nil {
@@ -430,12 +432,16 @@ func handleRoundStream(
 
 			// validate the congestion tree
 			if err := tree.ValidateCongestionTree(
-				congestionTree, poolTxStr, aspPubkey, int64(roundLifetime),
+				congestionTree, poolTx, aspPubkey, int64(roundLifetime),
 			); err != nil {
 				return "", err
 			}
 
-			exitDelay, err := getUnilateralExitDelay()
+			if err := common.ValidateConnectors(poolTx, connectors); err != nil {
+				return "", err
+			}
+
+			unilateralExitDelay, err := getUnilateralExitDelay()
 			if err != nil {
 				return "", err
 			}
@@ -452,7 +458,7 @@ func handleRoundStream(
 					// collaborative exit case
 					// search for the output in the pool tx
 					found := false
-					for _, output := range poolTx.Outputs {
+					for _, output := range ptx.Outputs {
 						if bytes.Equal(output.Script, onchainScript) {
 							if output.Value != receiver.Amount {
 								return "", fmt.Errorf(
@@ -481,7 +487,7 @@ func handleRoundStream(
 
 				// compute the receiver output taproot key
 				outputTapKey, _, err := computeVtxoTaprootScript(
-					userPubkey, aspPubkey, uint(exitDelay),
+					userPubkey, aspPubkey, uint(unilateralExitDelay),
 				)
 				if err != nil {
 					return "", err
