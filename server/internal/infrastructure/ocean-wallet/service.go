@@ -133,9 +133,7 @@ func (s *service) listenToNotificaitons() {
 		}
 		vtxos := toVtxos(msg.GetUtxos())
 		if len(vtxos) > 0 {
-			go func() {
-				s.chVtxos <- vtxos
-			}()
+			s.chVtxos <- vtxos
 		}
 	}
 }
