@@ -129,7 +129,7 @@ The steps are as follows:
 ## Storage Requirements
 
 A final big difference between clArk and covenant Ark is that in the VTXO tree,
-the commitments to child transactionis are the signatures of the transcations
+the commitments to child transactions are the signatures of the transactions
 and not the transaction templates. In Ark, child transactions are encoded into
 the output covenants of the parent, so they can just be deterministically
 created and spent as such.
