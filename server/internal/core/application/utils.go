@@ -201,6 +201,7 @@ func (m *forfeitTxsMap) sign(txs []string) error {
 						}
 
 						if sig.Verify(preimage, pubkey) {
+							m.forfeitTxs[txid].tx = tx
 							m.forfeitTxs[txid].signed = true
 						} else {
 							return fmt.Errorf("invalid signature")

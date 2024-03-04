@@ -205,9 +205,10 @@ func (s *sweeper) createTask(
 			}
 		}
 
+		vtxosRepository := s.repoManager.Vtxos()
 		if len(sweepInputs) > 0 {
 			// build the sweep transaction with all the expired non-swept shared outputs
-			sweepTx, err := s.builder.BuildSweepTx(s.wallet, sweepInputs)
+			sweepTx, err := s.builder.BuildSweepTx(sweepInputs)
 			if err != nil {
 				log.WithError(err).Error("error while building sweep tx")
 				return
@@ -231,7 +232,6 @@ func (s *sweeper) createTask(
 			}
 			if len(txid) > 0 {
 				log.Debugln("sweep tx broadcasted:", txid)
-				vtxosRepository := s.repoManager.Vtxos()
 
 				// mark the vtxos as swept
 				if err := vtxosRepository.SweepVtxos(ctx, vtxoKeys); err != nil {
@@ -240,37 +240,38 @@ func (s *sweeper) createTask(
 				}
 
 				log.Debugf("%d vtxos swept", len(vtxoKeys))
+			}
+		}
 
-				roundVtxos, err := vtxosRepository.GetVtxosForRound(ctx, roundTxid)
-				if err != nil {
-					log.WithError(err).Error("error while getting vtxos for round")
-					return
-				}
+		roundVtxos, err := vtxosRepository.GetVtxosForRound(ctx, roundTxid)
+		if err != nil {
+			log.WithError(err).Error("error while getting vtxos for round")
+			return
+		}
 
-				allSwept := true
-				for _, vtxo := range roundVtxos {
-					allSwept = allSwept && vtxo.Swept
-					if !allSwept {
-						break
-					}
-				}
+		allSwept := true
+		for _, vtxo := range roundVtxos {
+			allSwept = allSwept && (vtxo.Swept || vtxo.Redeemed)
+			if !allSwept {
+				break
+			}
+		}
 
-				if allSwept {
-					// update the round
-					roundRepo := s.repoManager.Rounds()
-					round, err := roundRepo.GetRoundWithTxid(ctx, roundTxid)
-					if err != nil {
-						log.WithError(err).Error("error while getting round")
-						return
-					}
+		if allSwept {
+			// update the round
+			roundRepo := s.repoManager.Rounds()
+			round, err := roundRepo.GetRoundWithTxid(ctx, roundTxid)
+			if err != nil {
+				log.WithError(err).Error("error while getting round")
+				return
+			}
 
-					round.Sweep()
+			log.Debugf("round %s fully swept", roundTxid)
+			round.Sweep()
 
-					if err := roundRepo.AddOrUpdateRound(ctx, *round); err != nil {
-						log.WithError(err).Error("error while marking round as swept")
-						return
-					}
-				}
+			if err := roundRepo.AddOrUpdateRound(ctx, *round); err != nil {
+				log.WithError(err).Error("error while marking round as swept")
+				return
 			}
 		}
 	}

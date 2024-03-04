@@ -61,16 +61,35 @@ func NewService(addr string) (ports.WalletService, error) {
 		return nil, err
 	}
 
-	found := false
+	mainAccountFound, connectorAccountFound := false, false
+
 	for _, account := range info.GetAccounts() {
-		if account.GetLabel() == accountLabel {
-			found = true
+		if account.GetLabel() == arkAccount {
+			mainAccountFound = true
+			continue
+		}
+
+		if account.GetLabel() == connectorAccount {
+			connectorAccountFound = true
+			continue
+		}
+
+		if mainAccountFound && connectorAccountFound {
 			break
 		}
 	}
-	if !found {
+	if !mainAccountFound {
 		if _, err := accountClient.CreateAccountBIP44(ctx, &pb.CreateAccountBIP44Request{
-			Label:          accountLabel,
+			Label:          arkAccount,
+			Unconfidential: true,
+		}); err != nil {
+			return nil, err
+		}
+	}
+
+	if !connectorAccountFound {
+		if _, err := accountClient.CreateAccountBIP44(ctx, &pb.CreateAccountBIP44Request{
+			Label:          connectorAccount,
 			Unconfidential: true,
 		}); err != nil {
 			return nil, err
@@ -114,9 +133,7 @@ func (s *service) listenToNotificaitons() {
 		}
 		vtxos := toVtxos(msg.GetUtxos())
 		if len(vtxos) > 0 {
-			go func() {
-				s.chVtxos <- vtxos
-			}()
+			s.chVtxos <- vtxos
 		}
 	}
 }
