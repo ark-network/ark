@@ -6,6 +6,11 @@ on:
       - master
     paths:
       - "server/**"
+  pull_request:
+    branches: 
+      - master
+    paths:
+      - "server/**"
 
 jobs:
   test:
