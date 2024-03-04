@@ -20,6 +20,10 @@ jobs:
           go-version: ">1.17.2"
       - uses: actions/checkout@v3
       - run: go get -v -t -d ./...
+      
+      - name: Run Nigiri
+        uses: vulpemventures/nigiri-github-action@v1
+
       - name: integration testing
         run: make integrationtest
   
