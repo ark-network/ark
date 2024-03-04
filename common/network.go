@@ -14,3 +14,8 @@ var TestNet = Network{
 	Name: "testnet",
 	Addr: "tark",
 }
+
+var RegTest = Network{
+	Name: "regtest",
+	Addr: TestNet.Addr,
+}

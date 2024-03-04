@@ -23,7 +23,7 @@ help:
 ## intergrationtest: runs integration tests
 integrationtest:
 	@echo "Running integration tests..."
-	@find . -name go.mod -execdir go test -v -count=1 -race $(go list ./... | grep internal/test) \;
+	@go test -timeout 200s github.com/ark-network/ark/test/e2e
 
 ## lint: lint codebase
 lint:

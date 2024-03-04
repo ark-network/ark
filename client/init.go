@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	passwordFlag = cli.StringFlag{
+	passwordSetFlag = cli.StringFlag{
 		Name:     "password",
 		Usage:    "password to encrypt private key",
 		Required: true,
@@ -34,13 +34,17 @@ var (
 		Usage:    "the url of the ASP to connect to",
 		Required: true,
 	}
+	explorerFlag = cli.StringFlag{
+		Name:  "explorer",
+		Usage: "the url of the explorer to use",
+	}
 )
 
 var initCommand = cli.Command{
 	Name:   "init",
 	Usage:  "Initialize your Ark wallet with an encryption password, and connect it to an ASP",
 	Action: initAction,
-	Flags:  []cli.Flag{&passwordFlag, &privateKeyFlag, &networkFlag, &urlFlag},
+	Flags:  []cli.Flag{&passwordSetFlag, &privateKeyFlag, &networkFlag, &urlFlag, &explorerFlag},
 }
 
 func initAction(ctx *cli.Context) error {
@@ -48,6 +52,9 @@ func initAction(ctx *cli.Context) error {
 	password := ctx.String("password")
 	net := strings.ToLower(ctx.String("network"))
 	url := ctx.String("ark-url")
+	explorer := ctx.String("explorer")
+
+	var explorerURL string
 
 	if len(password) <= 0 {
 		return fmt.Errorf("invalid password")
@@ -55,13 +62,20 @@ func initAction(ctx *cli.Context) error {
 	if len(url) <= 0 {
 		return fmt.Errorf("invalid ark url")
 	}
-	if net != "mainnet" && net != "testnet" {
+	if net != "mainnet" && net != "testnet" && net != "regtest" {
 		return fmt.Errorf("invalid network")
 	}
 
-	if err := connectToAsp(ctx.Context, net, url); err != nil {
+	if len(explorer) > 0 {
+		explorerURL = explorer
+	} else {
+		explorerURL = explorerUrl[net]
+	}
+
+	if err := connectToAsp(ctx.Context, net, url, explorerURL); err != nil {
 		return err
 	}
+
 	return initWallet(ctx, key, password)
 }
 
@@ -73,7 +87,7 @@ func generateRandomPrivateKey() (*secp256k1.PrivateKey, error) {
 	return privKey, nil
 }
 
-func connectToAsp(ctx context.Context, net, url string) error {
+func connectToAsp(ctx context.Context, net, url, explorer string) error {
 	client, close, err := getClient(url)
 	if err != nil {
 		return err
@@ -91,6 +105,7 @@ func connectToAsp(ctx context.Context, net, url string) error {
 		ASP_PUBKEY:            resp.Pubkey,
 		ROUND_LIFETIME:        strconv.Itoa(int(resp.GetRoundLifetime())),
 		UNILATERAL_EXIT_DELAY: strconv.Itoa(int(resp.GetUnilateralExitDelay())),
+		EXPLORER:              explorer,
 	})
 }
 

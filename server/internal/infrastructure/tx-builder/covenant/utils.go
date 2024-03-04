@@ -139,3 +139,14 @@ func addInputs(
 func taprootOutputScript(taprootKey *secp256k1.PublicKey) ([]byte, error) {
 	return txscript.NewScriptBuilder().AddOp(txscript.OP_1).AddData(schnorr.SerializePubKey(taprootKey)).Script()
 }
+
+func isOnchainOnly(payments []domain.Payment) bool {
+	for _, p := range payments {
+		for _, r := range p.Receivers {
+			if !r.IsOnchain() {
+				return false
+			}
+		}
+	}
+	return true
+}

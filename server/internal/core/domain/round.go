@@ -179,12 +179,6 @@ func (r *Round) RegisterPayments(payments []Payment) ([]RoundEvent, error) {
 }
 
 func (r *Round) StartFinalization(connectors []string, congestionTree tree.CongestionTree, poolTx string) ([]RoundEvent, error) {
-	if len(connectors) <= 0 {
-		return nil, fmt.Errorf("missing list of connectors")
-	}
-	if len(congestionTree) <= 0 {
-		return nil, fmt.Errorf("missing congestion tree")
-	}
 	if len(poolTx) <= 0 {
 		return nil, fmt.Errorf("missing unsigned pool tx")
 	}

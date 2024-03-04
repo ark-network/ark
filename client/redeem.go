@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"log"
 	"os"
@@ -40,7 +39,7 @@ var (
 var redeemCommand = cli.Command{
 	Name:   "redeem",
 	Usage:  "Redeem your offchain funds, either collaboratively or unilaterally",
-	Flags:  []cli.Flag{&addressFlag, &amountToRedeemFlag, &forceFlag},
+	Flags:  []cli.Flag{&addressFlag, &amountToRedeemFlag, &forceFlag, &passwordFlag},
 	Action: redeemAction,
 }
 
@@ -68,14 +67,14 @@ func redeemAction(ctx *cli.Context) error {
 			fmt.Printf("WARNING: unilateral exit (--force) ignores --amount flag, it will redeem all your VTXOs\n")
 		}
 
-		return unilateralRedeem(client, ctx.Context)
+		return unilateralRedeem(client, ctx)
 	}
 
-	return collaborativeRedeem(client, ctx.Context, addr, amount)
+	return collaborativeRedeem(client, ctx, addr, amount)
 }
 
 func collaborativeRedeem(
-	client arkv1.ArkServiceClient, ctx context.Context, addr string, amount uint64,
+	client arkv1.ArkServiceClient, ctx *cli.Context, addr string, amount uint64,
 ) error {
 	if _, err := address.ToOutputScript(addr); err != nil {
 		return fmt.Errorf("invalid onchain address")
@@ -109,7 +108,7 @@ func collaborativeRedeem(
 
 	explorer := NewExplorer()
 
-	vtxos, err := getVtxos(ctx, explorer, client, offchainAddr, true)
+	vtxos, err := getVtxos(ctx.Context, explorer, client, offchainAddr, true)
 	if err != nil {
 		return err
 	}
@@ -135,19 +134,19 @@ func collaborativeRedeem(
 		})
 	}
 
-	secKey, err := privateKeyFromPassword()
+	secKey, err := privateKeyFromPassword(ctx)
 	if err != nil {
 		return err
 	}
 
-	registerResponse, err := client.RegisterPayment(ctx, &arkv1.RegisterPaymentRequest{
+	registerResponse, err := client.RegisterPayment(ctx.Context, &arkv1.RegisterPaymentRequest{
 		Inputs: inputs,
 	})
 	if err != nil {
 		return err
 	}
 
-	_, err = client.ClaimPayment(ctx, &arkv1.ClaimPaymentRequest{
+	_, err = client.ClaimPayment(ctx.Context, &arkv1.ClaimPaymentRequest{
 		Id:      registerResponse.GetId(),
 		Outputs: receivers,
 	})
@@ -156,7 +155,7 @@ func collaborativeRedeem(
 	}
 
 	poolTxID, err := handleRoundStream(
-		ctx,
+		ctx.Context,
 		client,
 		registerResponse.GetId(),
 		selectedCoins,
@@ -176,14 +175,14 @@ func collaborativeRedeem(
 	return nil
 }
 
-func unilateralRedeem(client arkv1.ArkServiceClient, ctx context.Context) error {
+func unilateralRedeem(client arkv1.ArkServiceClient, ctx *cli.Context) error {
 	offchainAddr, _, _, err := getAddress()
 	if err != nil {
 		return err
 	}
 
 	explorer := NewExplorer()
-	vtxos, err := getVtxos(ctx, explorer, client, offchainAddr, false)
+	vtxos, err := getVtxos(ctx.Context, explorer, client, offchainAddr, false)
 	if err != nil {
 		return err
 	}
@@ -194,16 +193,18 @@ func unilateralRedeem(client arkv1.ArkServiceClient, ctx context.Context) error 
 		totalVtxosAmount += vtxo.amount
 	}
 
-	ok := askForConfirmation(fmt.Sprintf("redeem %d sats ?", totalVtxosAmount))
-	if !ok {
-		return fmt.Errorf("aborting unilateral exit")
+	if len(ctx.String("password")) == 0 {
+		ok := askForConfirmation(fmt.Sprintf("redeem %d sats ?", totalVtxosAmount))
+		if !ok {
+			return fmt.Errorf("aborting unilateral exit")
+		}
 	}
 
 	// transactionsMap avoid duplicates
 	transactionsMap := make(map[string]struct{}, 0)
 	transactions := make([]string, 0)
 
-	redeemBranches, err := getRedeemBranches(ctx, explorer, client, vtxos)
+	redeemBranches, err := getRedeemBranches(ctx.Context, explorer, client, vtxos)
 	if err != nil {
 		return err
 	}

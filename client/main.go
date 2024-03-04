@@ -21,11 +21,12 @@ const (
 	ASP_URL               = "asp_url"
 	ASP_PUBKEY            = "asp_public_key"
 	ROUND_LIFETIME        = "round_lifetime"
-	UNILATERAL_EXIT_DELAY = "unilateral_exit_delay "
-	ENCRYPTED_PRVKEY      = "encrypted_private_key "
-	PASSWORD_HASH         = "password_hash "
-	PUBKEY                = "public_key "
-	NETWORK               = "network "
+	UNILATERAL_EXIT_DELAY = "unilateral_exit_delay"
+	ENCRYPTED_PRVKEY      = "encrypted_private_key"
+	PASSWORD_HASH         = "password_hash"
+	PUBKEY                = "public_key"
+	NETWORK               = "network"
+	EXPLORER              = "explorer"
 )
 
 var (
@@ -36,6 +37,7 @@ var (
 	explorerUrl = map[string]string{
 		network.Liquid.Name:  "https://blockstream.info/liquid/api",
 		network.Testnet.Name: "https://blockstream.info/liquidtestnet/api",
+		network.Regtest.Name: "http://localhost:3001",
 	}
 
 	initialState = map[string]string{

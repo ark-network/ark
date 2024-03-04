@@ -412,28 +412,30 @@ func (s *service) updateVtxoSet(round *domain.Round) {
 	}
 
 	newVtxos := s.getNewVtxos(round)
-	for {
-		if err := repo.AddVtxos(ctx, newVtxos); err != nil {
-			log.WithError(err).Warn("failed to add new vtxos, retrying soon")
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-		log.Debugf("added %d new vtxos", len(newVtxos))
-		break
-	}
-
-	go func() {
+	if len(newVtxos) > 0 {
 		for {
-			if err := s.startWatchingVtxos(newVtxos); err != nil {
-				log.WithError(err).Warn(
-					"failed to start watching vtxos, retrying in a moment...",
-				)
+			if err := repo.AddVtxos(ctx, newVtxos); err != nil {
+				log.WithError(err).Warn("failed to add new vtxos, retrying soon")
+				time.Sleep(100 * time.Millisecond)
 				continue
 			}
-			log.Debugf("started watching %d vtxos", len(newVtxos))
-			return
+			log.Debugf("added %d new vtxos", len(newVtxos))
+			break
 		}
-	}()
+
+		go func() {
+			for {
+				if err := s.startWatchingVtxos(newVtxos); err != nil {
+					log.WithError(err).Warn(
+						"failed to start watching vtxos, retrying in a moment...",
+					)
+					continue
+				}
+				log.Debugf("started watching %d vtxos", len(newVtxos))
+				return
+			}
+		}()
+	}
 }
 
 func (s *service) propagateEvents(round *domain.Round) {
@@ -471,6 +473,10 @@ func (s *service) scheduleSweepVtxosForRound(round *domain.Round) {
 }
 
 func (s *service) getNewVtxos(round *domain.Round) []domain.Vtxo {
+	if len(round.CongestionTree) <= 0 {
+		return nil
+	}
+
 	leaves := round.CongestionTree.Leaves()
 	vtxos := make([]domain.Vtxo, 0)
 	for _, node := range leaves {

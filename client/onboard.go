@@ -28,7 +28,7 @@ var onboardCommand = cli.Command{
 	Name:   "onboard",
 	Usage:  "Onboard the Ark by lifting your funds",
 	Action: onboardAction,
-	Flags:  []cli.Flag{&amountOnboardFlag},
+	Flags:  []cli.Flag{&amountOnboardFlag, &passwordFlag},
 }
 
 func onboardAction(ctx *cli.Context) error {

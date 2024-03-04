@@ -40,8 +40,10 @@ type explorer struct {
 }
 
 func NewExplorer() Explorer {
-	_, net := getNetwork()
-	baseUrl := explorerUrl[net.Name]
+	baseUrl, err := getBaseURL()
+	if err != nil {
+		panic(err)
+	}
 
 	return &explorer{
 		cache:   make(map[string]string),
@@ -72,11 +74,11 @@ func (e *explorer) Broadcast(txStr string) (string, error) {
 			return "", err
 		}
 
-		extracted, err := psetv2.Extract(pset)
+		tx, err = psetv2.Extract(pset)
 		if err != nil {
 			return "", err
 		}
-		txStr, _ = extracted.ToHex()
+		txStr, _ = tx.ToHex()
 	}
 	txid := tx.TxHash().String()
 	e.cache[txid] = txStr
