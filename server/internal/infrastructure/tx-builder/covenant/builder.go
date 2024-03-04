@@ -11,6 +11,7 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/network"
+	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/taproot"
 )
@@ -41,9 +42,9 @@ func (b *txBuilder) GetVtxoScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([
 	return outputScript, nil
 }
 
-func (b *txBuilder) BuildSweepTx(wallet ports.WalletService, inputs []ports.SweepInput) (signedSweepTx string, err error) {
+func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (signedSweepTx string, err error) {
 	sweepPset, err := sweepTransaction(
-		wallet,
+		b.wallet,
 		inputs,
 		b.net.AssetID,
 	)
@@ -57,7 +58,7 @@ func (b *txBuilder) BuildSweepTx(wallet ports.WalletService, inputs []ports.Swee
 	}
 
 	ctx := context.Background()
-	signedSweepPsetB64, err := wallet.SignPsetWithKey(ctx, sweepPsetBase64, nil)
+	signedSweepPsetB64, err := b.wallet.SignPsetWithKey(ctx, sweepPsetBase64, nil)
 	if err != nil {
 		return "", err
 	}
@@ -80,9 +81,14 @@ func (b *txBuilder) BuildSweepTx(wallet ports.WalletService, inputs []ports.Swee
 }
 
 func (b *txBuilder) BuildForfeitTxs(
-	aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment,
+	aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment, minRelayFee uint64,
 ) (connectors []string, forfeitTxs []string, err error) {
-	connectorTxs, err := b.createConnectors(poolTx, payments, aspPubkey)
+	connectorAddress, err := b.getConnectorAddress(poolTx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	connectorTxs, err := b.createConnectors(poolTx, payments, connectorAddress, minRelayFee)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -101,7 +107,7 @@ func (b *txBuilder) BuildForfeitTxs(
 
 func (b *txBuilder) BuildPoolTx(
 	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, minRelayFee uint64,
-) (poolTx string, congestionTree tree.CongestionTree, err error) {
+) (poolTx string, congestionTree tree.CongestionTree, connectorAddress string, err error) {
 	// The creation of the tree and the pool tx are tightly coupled:
 	// - building the tree requires knowing the shared outpoint (txid:vout)
 	// - building the pool tx requires knowing the shared output script and amount
@@ -127,8 +133,13 @@ func (b *txBuilder) BuildPoolTx(
 		}
 	}
 
+	connectorAddress, err = b.wallet.DeriveConnectorAddress(context.Background())
+	if err != nil {
+		return
+	}
+
 	ptx, err := b.createPoolTx(
-		sharedOutputAmount, sharedOutputScript, payments, aspPubkey,
+		sharedOutputAmount, sharedOutputScript, payments, aspPubkey, connectorAddress, minRelayFee,
 	)
 	if err != nil {
 		return
@@ -198,16 +209,24 @@ func (b *txBuilder) getLeafScriptAndTree(
 
 func (b *txBuilder) createPoolTx(
 	sharedOutputAmount uint64, sharedOutputScript []byte,
-	payments []domain.Payment, aspPubKey *secp256k1.PublicKey,
+	payments []domain.Payment, aspPubKey *secp256k1.PublicKey, connectorAddress string, minRelayFee uint64,
 ) (*psetv2.Pset, error) {
 	aspScript, err := p2wpkhScript(aspPubKey, b.net)
 	if err != nil {
 		return nil, err
 	}
 
-	receivers := getOnchainReceivers(payments)
+	connectorScript, err := address.ToOutputScript(connectorAddress)
+	if err != nil {
+		return nil, err
+	}
 
-	connectorsAmount := connectorAmount * countSpentVtxos(payments)
+	receivers := getOnchainReceivers(payments)
+	nbOfInputs := countSpentVtxos(payments)
+	connectorsAmount := (connectorAmount + minRelayFee) * nbOfInputs
+	if nbOfInputs > 1 {
+		connectorsAmount -= minRelayFee
+	}
 	targetAmount := connectorsAmount
 
 	outputs := make([]psetv2.OutputArgs, 0)
@@ -225,7 +244,7 @@ func (b *txBuilder) createPoolTx(
 	outputs = append(outputs, psetv2.OutputArgs{
 		Asset:  b.net.AssetID,
 		Amount: connectorsAmount,
-		Script: aspScript,
+		Script: connectorScript,
 	})
 
 	for _, receiver := range receivers {
@@ -368,11 +387,11 @@ func (b *txBuilder) createPoolTx(
 }
 
 func (b *txBuilder) createConnectors(
-	poolTx string, payments []domain.Payment, aspPubkey *secp256k1.PublicKey,
+	poolTx string, payments []domain.Payment, connectorAddress string, minRelayFee uint64,
 ) ([]*psetv2.Pset, error) {
 	txid, _ := getTxid(poolTx)
 
-	aspScript, err := p2wpkhScript(aspPubkey, b.net)
+	aspScript, err := address.ToOutputScript(connectorAddress)
 	if err != nil {
 		return nil, err
 	}
@@ -392,7 +411,7 @@ func (b *txBuilder) createConnectors(
 
 	if numberOfConnectors == 1 {
 		outputs := []psetv2.OutputArgs{connectorOutput}
-		connectorTx, err := craftConnectorTx(previousInput, outputs)
+		connectorTx, err := craftConnectorTx(previousInput, aspScript, outputs, minRelayFee)
 		if err != nil {
 			return nil, err
 		}
@@ -400,12 +419,16 @@ func (b *txBuilder) createConnectors(
 		return []*psetv2.Pset{connectorTx}, nil
 	}
 
-	totalConnectorAmount := connectorAmount * numberOfConnectors
+	totalConnectorAmount := (connectorAmount + minRelayFee) * numberOfConnectors
+	if numberOfConnectors > 1 {
+		totalConnectorAmount -= minRelayFee
+	}
 
 	connectors := make([]*psetv2.Pset, 0, numberOfConnectors-1)
 	for i := uint64(0); i < numberOfConnectors-1; i++ {
 		outputs := []psetv2.OutputArgs{connectorOutput}
 		totalConnectorAmount -= connectorAmount
+		totalConnectorAmount -= minRelayFee
 		if totalConnectorAmount > 0 {
 			outputs = append(outputs, psetv2.OutputArgs{
 				Asset:  b.net.AssetID,
@@ -413,7 +436,7 @@ func (b *txBuilder) createConnectors(
 				Amount: totalConnectorAmount,
 			})
 		}
-		connectorTx, err := craftConnectorTx(previousInput, outputs)
+		connectorTx, err := craftConnectorTx(previousInput, aspScript, outputs, minRelayFee)
 		if err != nil {
 			return nil, err
 		}
@@ -486,4 +509,24 @@ func (b *txBuilder) createForfeitTxs(
 		}
 	}
 	return forfeitTxs, nil
+}
+
+func (b *txBuilder) getConnectorAddress(poolTx string) (string, error) {
+	pset, err := psetv2.NewPsetFromBase64(poolTx)
+	if err != nil {
+		return "", err
+	}
+
+	if len(pset.Outputs) < 1 {
+		return "", fmt.Errorf("connector output not found in pool tx")
+	}
+
+	connectorOutput := pset.Outputs[1]
+
+	pay, err := payment.FromScript(connectorOutput.Script, b.net, nil)
+	if err != nil {
+		return "", err
+	}
+
+	return pay.WitnessPubKeyHash()
 }

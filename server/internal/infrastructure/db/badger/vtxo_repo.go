@@ -53,10 +53,10 @@ func (r *vtxoRepository) AddVtxos(
 }
 
 func (r *vtxoRepository) SpendVtxos(
-	ctx context.Context, vtxoKeys []domain.VtxoKey,
+	ctx context.Context, vtxoKeys []domain.VtxoKey, spentBy string,
 ) error {
 	for _, vtxoKey := range vtxoKeys {
-		if err := r.spendVtxo(ctx, vtxoKey); err != nil {
+		if err := r.spendVtxo(ctx, vtxoKey, spentBy); err != nil {
 			return err
 		}
 	}
@@ -96,7 +96,7 @@ func (r *vtxoRepository) GetVtxos(
 func (r *vtxoRepository) GetVtxosForRound(
 	ctx context.Context, txid string,
 ) ([]domain.Vtxo, error) {
-	query := badgerhold.Where("Txid").Eq(txid)
+	query := badgerhold.Where("PoolTx").Eq(txid)
 	return r.findVtxos(ctx, query)
 }
 
@@ -161,7 +161,7 @@ func (r *vtxoRepository) getVtxo(
 	return &vtxo, nil
 }
 
-func (r *vtxoRepository) spendVtxo(ctx context.Context, vtxoKey domain.VtxoKey) error {
+func (r *vtxoRepository) spendVtxo(ctx context.Context, vtxoKey domain.VtxoKey, spendBy string) error {
 	vtxo, err := r.getVtxo(ctx, vtxoKey)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
@@ -174,6 +174,7 @@ func (r *vtxoRepository) spendVtxo(ctx context.Context, vtxoKey domain.VtxoKey) 
 	}
 
 	vtxo.Spent = true
+	vtxo.SpentBy = spendBy
 	if ctx.Value("tx") != nil {
 		tx := ctx.Value("tx").(*badger.Txn)
 		err = r.store.TxUpdate(tx, vtxoKey.Hash(), *vtxo)

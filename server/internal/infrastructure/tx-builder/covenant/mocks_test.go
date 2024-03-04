@@ -40,6 +40,17 @@ func (m *mockedWallet) DeriveAddresses(ctx context.Context, num int) ([]string, 
 	return res, args.Error(1)
 }
 
+// DeriveConnectorAddress implements ports.WalletService.
+func (m *mockedWallet) DeriveConnectorAddress(ctx context.Context) (string, error) {
+	args := m.Called(ctx)
+
+	var res string
+	if a := args.Get(0); a != nil {
+		res = a.(string)
+	}
+	return res, args.Error(1)
+}
+
 // GetPubkey implements ports.WalletService.
 func (m *mockedWallet) GetPubkey(ctx context.Context) (*secp256k1.PublicKey, error) {
 	args := m.Called(ctx)
@@ -123,6 +134,17 @@ func (m *mockedWallet) SignPsetWithKey(ctx context.Context, pset string, inputIn
 	return res, args.Error(1)
 }
 
+func (m *mockedWallet) SignConnectorInput(ctx context.Context, pset string, inputIndexes []int, extract bool) (string, error) {
+	args := m.Called(ctx, pset, inputIndexes, extract)
+
+	var res string
+	if a := args.Get(0); a != nil {
+		res = a.(string)
+	}
+
+	return res, args.Error(1)
+}
+
 func (m *mockedWallet) WatchScripts(
 	ctx context.Context, scripts []string,
 ) error {
@@ -145,6 +167,22 @@ func (m *mockedWallet) GetNotificationChannel(ctx context.Context) chan []domain
 		res = a.(chan []domain.VtxoKey)
 	}
 	return res
+}
+
+func (m *mockedWallet) ListConnectorUtxos(ctx context.Context, addr string) ([]ports.TxInput, error) {
+	args := m.Called(ctx, addr)
+
+	var res []ports.TxInput
+	if a := args.Get(0); a != nil {
+		res = a.([]ports.TxInput)
+	}
+
+	return res, args.Error(1)
+}
+
+func (m *mockedWallet) WaitForSync(ctx context.Context, txid string) error {
+	args := m.Called(ctx, txid)
+	return args.Error(0)
 }
 
 type mockedInput struct {
