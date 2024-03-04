@@ -537,6 +537,15 @@ func handleRoundStream(
 
 			explorer := NewExplorer()
 
+			connectorsTxids := make([]string, 0, len(connectors))
+			for _, connector := range connectors {
+				p, _ := psetv2.NewPsetFromBase64(connector)
+				utx, _ := p.UnsignedTx()
+				txid := utx.TxHash().String()
+
+				connectorsTxids = append(connectorsTxids, txid)
+			}
+
 			for _, forfeit := range forfeits {
 				pset, err := psetv2.NewPsetFromBase64(forfeit)
 				if err != nil {
@@ -549,6 +558,20 @@ func handleRoundStream(
 					for _, coin := range vtxosToSign {
 						// check if it contains one of the input to sign
 						if inputTxid == coin.txid {
+							// verify that the connector is in the connectors list
+							connectorTxid := chainhash.Hash(pset.Inputs[0].PreviousTxid).String()
+							connectorFound := false
+							for _, txid := range connectorsTxids {
+								if txid == connectorTxid {
+									connectorFound = true
+									break
+								}
+							}
+
+							if !connectorFound {
+								return "", fmt.Errorf("connector txid %s not found in the connectors list", connectorTxid)
+							}
+
 							if err := signPset(pset, explorer, secKey); err != nil {
 								return "", err
 							}
