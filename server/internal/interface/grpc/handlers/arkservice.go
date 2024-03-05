@@ -240,9 +240,10 @@ func (h *handler) listenToEvents() {
 				Event: &arkv1.GetEventStreamResponse_RoundFinalization{
 					RoundFinalization: &arkv1.RoundFinalizationEvent{
 						Id:             e.Id,
-						PoolPartialTx:  e.PoolTx,
+						PoolTx:         e.PoolTx,
 						CongestionTree: castCongestionTree(e.CongestionTree),
 						ForfeitTxs:     e.UnsignedForfeitTxs,
+						Connectors:     e.Connectors,
 					},
 				},
 			}

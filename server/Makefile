@@ -50,12 +50,12 @@ vet:
 ## proto: compile proto stubs
 proto: proto-lint
 	@echo "Compiling stubs..."
-	@docker run --volume "$(shell pwd):/workspace" --workdir /workspace buf generate buf.build/vulpemventures/ocean
-	@docker run --volume "$(shell pwd):/workspace" --workdir /workspace buf generate
+	@docker run --rm --volume "$(shell pwd):/workspace" --workdir /workspace buf generate buf.build/vulpemventures/ocean
+	@docker run --rm --volume "$(shell pwd):/workspace" --workdir /workspace buf generate
 
 ## proto-lint: lint protos
 proto-lint:
 	@echo "Linting protos..."
 	@docker build -q -t buf -f buf.Dockerfile . &> /dev/null
-	@docker run --volume "$(shell pwd):/workspace" --workdir /workspace buf lint
+	@docker run --rm --volume "$(shell pwd):/workspace" --workdir /workspace buf lint
 		
