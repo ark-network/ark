@@ -26,15 +26,15 @@ const config = {
       /** @type {import('@docusaurus/preset-classic').Options} */
       ({
         docs: {
-          routeBasePath: '/',
+          routeBasePath: '/docs',
           sidebarPath: require.resolve('./sidebars.js'),
           editUrl: 'https://github.com/ark-network/ark/edit/master/website/',
           exclude: [
             '**/provider/gateway/**',
-            '**/provider/coordinator/**', 
+            '**/provider/coordinator/**',
             '**/provider/treasury/**',
-            '**/user/ark-cli.md'
-          ]
+            '**/user/ark-cli.md',
+          ],
         },
         blog: {
           showReadingTime: true,
@@ -82,19 +82,19 @@ const config = {
             items: [
               {
                 label: 'Nomenclature',
-                to: '/learn/nomenclature',
+                to: '/docs/learn/nomenclature',
               },
               {
                 label: 'Board an Ark',
-                to: '/learn/boarding',
+                to: '/docs/learn/boarding',
               },
               {
                 label: 'Send Payments',
-                to: '/learn/payments',
+                to: '/docs/learn/payments',
               },
               {
                 label: 'Leave an Ark',
-                to: '/learn/leaving',
+                to: '/docs/learn/leaving',
               },
             ],
           },
@@ -103,15 +103,15 @@ const config = {
             items: [
               {
                 label: 'Overview',
-                to: '/',
+                to: '/docs',
               },
               {
                 label: 'Join an Ark',
-                to: '/user/intro',
+                to: '/docs/user/intro',
               },
               {
                 label: 'Create an Ark',
-                to: '/provider/intro',
+                to: '/docs/provider/intro',
               },
             ],
           },
