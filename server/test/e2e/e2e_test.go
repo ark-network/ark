@@ -54,19 +54,13 @@ func TestMain(m *testing.M) {
 	}
 
 	if err := json.Unmarshal([]byte(addrJSON), &addr); err != nil {
-		fmt.Printf("error unmarshalling ocean account: %s", err)
+		fmt.Printf("error unmarshalling ocean account: %s (%s)", err, addrJSON)
 		os.Exit(1)
 	}
 
 	_, err = runCommand("nigiri", "faucet", "--liquid", addr.Addresses[0])
 	if err != nil {
 		fmt.Printf("error funding ocean account: %s", err)
-		os.Exit(1)
-	}
-
-	_, err = runCommand("docker", "restart", "arkd")
-	if err != nil {
-		fmt.Printf("error restarting arkd: %s", err)
 		os.Exit(1)
 	}
 

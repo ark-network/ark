@@ -32,7 +32,6 @@ services:
       - "6000:6000"
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    stdin_open: true
 
 volumes:
   oceand:

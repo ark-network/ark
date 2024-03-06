@@ -2,9 +2,9 @@ package oceanwallet
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	pb "github.com/ark-network/ark/api-spec/protobuf/gen/ocean/v1"
 	"github.com/ark-network/ark/internal/core/domain"
@@ -47,12 +47,21 @@ func NewService(addr string) (ports.WalletService, error) {
 	}
 
 	ctx := context.Background()
-	status, err := svc.Status(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if !(status.IsInitialized() && status.IsUnlocked()) {
-		return nil, fmt.Errorf("wallet must be already initialized and unlocked")
+
+	isReady := false
+
+	for !isReady {
+		status, err := svc.Status(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		isReady = status.IsInitialized() && status.IsUnlocked()
+
+		if !isReady {
+			log.Info("Wallet must be initialized and unlocked to proceed. Waiting for wallet to be ready...")
+			time.Sleep(3 * time.Second)
+		}
 	}
 
 	// Create ark account at startup if needed.
