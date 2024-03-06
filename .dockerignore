@@ -1,7 +1,5 @@
 .git
 .github/
-website/
-noah/
 **/dist/
 **/build/
 **/*.yml
