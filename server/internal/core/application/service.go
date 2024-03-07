@@ -415,7 +415,7 @@ func (s *service) handleOnboarding(onboarding onboarding) {
 				return
 			}
 			if !isConfirmed {
-				time.Sleep(5 * time.Second)
+				time.Sleep(30 * time.Second)
 			}
 		}
 	}
