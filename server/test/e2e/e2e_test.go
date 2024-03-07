@@ -13,7 +13,7 @@ import (
 const composePath = "../../../docker-compose.regtest.yml"
 
 func TestMain(m *testing.M) {
-	_, err := runCommand("docker-compose", "-f", composePath, "up", "-d")
+	_, err := runCommand("docker-compose", "-f", composePath, "up", "-d", "--build")
 	if err != nil {
 		fmt.Printf("error starting docker-compose: %s", err)
 		os.Exit(1)
