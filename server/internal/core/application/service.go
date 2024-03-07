@@ -405,7 +405,7 @@ func (s *service) handleOnboarding(onboarding onboarding) {
 	for !isConfirmed {
 		select {
 		case <-timeout.C:
-			log.Warnf("boarding tx %s not confirmed (timed out)", txid)
+			log.WithError(fmt.Errorf("operation timed out").Warnf("failed to get confirmation for boarding tx %s", txid)
 			return
 		default:
 			var err error
