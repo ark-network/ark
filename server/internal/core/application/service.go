@@ -405,16 +405,16 @@ func (s *service) handleOnboarding(onboarding onboarding) {
 	for !isConfirmed {
 		select {
 		case <-timeout.C:
-			log.WithError(fmt.Errorf("operation timed out").Warnf("failed to get confirmation for boarding tx %s", txid)
+			log.WithError(fmt.Errorf("operation timed out")).Warnf("failed to get confirmation for boarding tx %s", txid)
 			return
 		default:
 			var err error
 			isConfirmed, _, err = s.wallet.IsTransactionConfirmed(ctx, txid)
 			if err != nil {
 				log.WithError(err).Warn("failed to check tx confirmation")
-				return
 			}
-			if !isConfirmed {
+
+			if err != nil || !isConfirmed {
 				time.Sleep(30 * time.Second)
 			}
 		}
