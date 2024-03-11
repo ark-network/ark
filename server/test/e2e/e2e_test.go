@@ -13,7 +13,7 @@ import (
 const composePath = "../../../docker-compose.regtest.yml"
 
 func TestMain(m *testing.M) {
-	_, err := runCommand("docker-compose", "-f", composePath, "up", "-d")
+	_, err := runCommand("docker-compose", "-f", composePath, "up", "-d", "--build")
 	if err != nil {
 		fmt.Printf("error starting docker-compose: %s", err)
 		os.Exit(1)
@@ -54,7 +54,7 @@ func TestMain(m *testing.M) {
 	}
 
 	if err := json.Unmarshal([]byte(addrJSON), &addr); err != nil {
-		fmt.Printf("error unmarshalling ocean account: %s", err)
+		fmt.Printf("error unmarshalling ocean account: %s (%s)", err, addrJSON)
 		os.Exit(1)
 	}
 
@@ -64,15 +64,9 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	_, err = runCommand("docker", "restart", "arkd")
-	if err != nil {
-		fmt.Printf("error restarting arkd: %s", err)
-		os.Exit(1)
-	}
-
 	time.Sleep(2 * time.Second)
 
-	_, err = runArkCommand("init", "--ark-url", "localhost:6000", "--password", password, "--network", "regtest", "--explorer", "http://host.docker.internal:3001")
+	_, err = runArkCommand("init", "--ark-url", "localhost:6000", "--password", password, "--network", "regtest", "--explorer", "http://chopsticks-liquid:3000")
 	if err != nil {
 		fmt.Printf("error initializing ark config: %s", err)
 		os.Exit(1)
