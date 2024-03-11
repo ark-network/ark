@@ -112,6 +112,8 @@ func TestOnboard(t *testing.T) {
 
 	_, err = runArkCommand("onboard", "--amount", "1000", "--password", password)
 	require.NoError(t, err)
+	err = generateBlock()
+	require.NoError(t, err)
 
 	balanceStr, err = runArkCommand("balance")
 	require.NoError(t, err)
@@ -122,6 +124,8 @@ func TestOnboard(t *testing.T) {
 
 func TestSendOffchain(t *testing.T) {
 	_, err := runArkCommand("onboard", "--amount", "1000", "--password", password)
+	require.NoError(t, err)
+	err = generateBlock()
 	require.NoError(t, err)
 
 	var receive arkReceive
@@ -142,6 +146,8 @@ func TestSendOffchain(t *testing.T) {
 func TestUnilateralExit(t *testing.T) {
 	_, err := runArkCommand("onboard", "--amount", "1000", "--password", password)
 	require.NoError(t, err)
+	err = generateBlock()
+	require.NoError(t, err)
 
 	var balance arkBalance
 	balanceStr, err := runArkCommand("balance")
@@ -153,7 +159,8 @@ func TestUnilateralExit(t *testing.T) {
 	_, err = runArkCommand("redeem", "--force", "--password", password)
 	require.NoError(t, err)
 
-	time.Sleep(5 * time.Second)
+	err = generateBlock()
+	require.NoError(t, err)
 
 	balanceStr, err = runArkCommand("balance")
 	require.NoError(t, err)
@@ -167,6 +174,8 @@ func TestUnilateralExit(t *testing.T) {
 
 func TestCollaborativeExit(t *testing.T) {
 	_, err := runArkCommand("onboard", "--amount", "1000", "--password", password)
+	require.NoError(t, err)
+	err = generateBlock()
 	require.NoError(t, err)
 
 	var receive arkReceive

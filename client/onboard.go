@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/hex"
 	"fmt"
-	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common/tree"
@@ -93,21 +92,9 @@ func onboardAction(ctx *cli.Context) error {
 		return err
 	}
 
-	explorer := NewExplorer()
-	txid, err := explorer.Broadcast(pset)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("onboard_txid:", txid)
-	fmt.Println("waiting for confirmation... (this may take up to a minute, do not cancel the process)")
-
-	// wait for the transaction to be confirmed
-	if err := waitForTxConfirmation(txid); err != nil {
-		return err
-	}
-
-	fmt.Println("transaction confirmed")
+	ptx, _ := psetv2.NewPsetFromBase64(pset)
+	utx, _ := ptx.UnsignedTx()
+	txid := utx.TxHash().String()
 
 	congestionTree, err := treeFactoryFn(psetv2.InputArgs{
 		Txid:    txid,
@@ -133,17 +120,7 @@ func onboardAction(ctx *cli.Context) error {
 		return err
 	}
 
-	return nil
-}
-
-func waitForTxConfirmation(txid string) error {
-	isConfirmed := false
-
-	for !isConfirmed {
-		time.Sleep(5 * time.Second)
-
-		isConfirmed, _, _ = getTxBlocktime(txid)
-	}
+	fmt.Println("onboard_txid:", txid)
 
 	return nil
 }

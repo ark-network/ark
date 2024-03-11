@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 )
 
 const (
@@ -38,6 +39,15 @@ func runOceanCommand(arg ...string) (string, error) {
 func runArkCommand(arg ...string) (string, error) {
 	args := append([]string{"exec", "-t", "arkd", "ark"}, arg...)
 	return runCommand("docker", args...)
+}
+
+func generateBlock() error {
+	if _, err := runCommand("nigiri", "rpc", "--liquid", "generatetoaddress", "1", "el1qqwk722tghgkgmh3r2ph4d2apwj0dy9xnzlenzklx8jg3z299fpaw56trre9gpk6wmw0u4qycajqeva3t7lzp7wnacvwxha59r"); err != nil {
+		return err
+	}
+
+	time.Sleep(6 * time.Second)
+	return nil
 }
 
 func runCommand(name string, arg ...string) (string, error) {
