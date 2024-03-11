@@ -72,11 +72,11 @@ func verifyPassword(password []byte) error {
 	return nil
 }
 
-func readPassword(ctx *cli.Context) ([]byte, error) {
-	fmt.Print("unlock your wallet with password: ")
+func readPassword(ctx *cli.Context, verify bool) ([]byte, error) {
 	password := []byte(ctx.String("password"))
 
 	if len(password) == 0 {
+		fmt.Print("unlock your wallet with password: ")
 		var err error
 		password, err = term.ReadPassword(int(syscall.Stdin))
 		fmt.Println() // new line
@@ -86,8 +86,10 @@ func readPassword(ctx *cli.Context) ([]byte, error) {
 
 	}
 
-	if err := verifyPassword(password); err != nil {
-		return nil, err
+	if verify {
+		if err := verifyPassword(password); err != nil {
+			return nil, err
+		}
 	}
 
 	return password, nil
@@ -109,7 +111,7 @@ func privateKeyFromPassword(ctx *cli.Context) (*secp256k1.PrivateKey, error) {
 		return nil, fmt.Errorf("invalid encrypted private key: %s", err)
 	}
 
-	password, err := readPassword(ctx)
+	password, err := readPassword(ctx, true)
 	if err != nil {
 		return nil, err
 	}
@@ -329,6 +331,10 @@ func getNetwork() (*common.Network, *network.Network) {
 	if !ok {
 		return &common.MainNet, &network.Liquid
 	}
+	return networkFromString(net)
+}
+
+func networkFromString(net string) (*common.Network, *network.Network) {
 	if net == "testnet" {
 		return &common.TestNet, &network.Testnet
 	}
@@ -1093,15 +1099,10 @@ func addInputs(
 				return err
 			}
 
-			witnessUtxo := transaction.TxOutput{
-				Asset:  assetID,
-				Value:  value,
-				Script: script,
-				Nonce:  []byte{0x00},
-			}
+			witnessUtxo := transaction.NewTxOutput(assetID, value, script)
 
 			if err := updater.AddInWitnessUtxo(
-				len(updater.Pset.Inputs)-1, &witnessUtxo,
+				len(updater.Pset.Inputs)-1, witnessUtxo,
 			); err != nil {
 				return err
 			}

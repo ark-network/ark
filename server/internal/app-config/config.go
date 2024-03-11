@@ -240,8 +240,6 @@ func (c *Config) appService() error {
 
 func (c *Config) mainChain() network.Network {
 	switch c.Network.Name {
-	case "liquid":
-		return network.Liquid
 	case "testnet":
 		return network.Testnet
 	case "regtest":

@@ -103,7 +103,7 @@ func onboardAction(ctx *cli.Context) error {
 	fmt.Println("waiting for confirmation... (this may take up to a minute, do not cancel the process)")
 
 	// wait for the transaction to be confirmed
-	if err := waitForTxConfirmation(ctx, txid); err != nil {
+	if err := waitForTxConfirmation(txid); err != nil {
 		return err
 	}
 
@@ -136,7 +136,7 @@ func onboardAction(ctx *cli.Context) error {
 	return nil
 }
 
-func waitForTxConfirmation(ctx *cli.Context, txid string) error {
+func waitForTxConfirmation(txid string) error {
 	isConfirmed := false
 
 	for !isConfirmed {

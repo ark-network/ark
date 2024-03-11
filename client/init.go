@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"io"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -11,15 +13,10 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/urfave/cli/v2"
+	"github.com/vulpemventures/go-elements/network"
 )
 
 var (
-	passwordSetFlag = cli.StringFlag{
-		Name:     "password",
-		Usage:    "password to encrypt private key",
-		Required: true,
-	}
-
 	privateKeyFlag = cli.StringFlag{
 		Name:  "prvkey",
 		Usage: "optional, private key to encrypt",
@@ -44,21 +41,17 @@ var initCommand = cli.Command{
 	Name:   "init",
 	Usage:  "Initialize your Ark wallet with an encryption password, and connect it to an ASP",
 	Action: initAction,
-	Flags:  []cli.Flag{&passwordSetFlag, &privateKeyFlag, &networkFlag, &urlFlag, &explorerFlag},
+	Flags:  []cli.Flag{&passwordFlag, &privateKeyFlag, &networkFlag, &urlFlag, &explorerFlag},
 }
 
 func initAction(ctx *cli.Context) error {
 	key := ctx.String("prvkey")
-	password := ctx.String("password")
 	net := strings.ToLower(ctx.String("network"))
 	url := ctx.String("ark-url")
 	explorer := ctx.String("explorer")
 
 	var explorerURL string
 
-	if len(password) <= 0 {
-		return fmt.Errorf("invalid password")
-	}
 	if len(url) <= 0 {
 		return fmt.Errorf("invalid ark url")
 	}
@@ -68,6 +61,10 @@ func initAction(ctx *cli.Context) error {
 
 	if len(explorer) > 0 {
 		explorerURL = explorer
+		_, network := networkFromString(net)
+		if err := testEsploraEndpoint(network, explorerURL); err != nil {
+			return err
+		}
 	} else {
 		explorerURL = explorerUrl[net]
 	}
@@ -76,7 +73,12 @@ func initAction(ctx *cli.Context) error {
 		return err
 	}
 
-	return initWallet(ctx, key, password)
+	password, err := readPassword(ctx, false)
+	if err != nil {
+		return err
+	}
+
+	return initWallet(key, password)
 }
 
 func generateRandomPrivateKey() (*secp256k1.PrivateKey, error) {
@@ -109,7 +111,7 @@ func connectToAsp(ctx context.Context, net, url, explorer string) error {
 	})
 }
 
-func initWallet(ctx *cli.Context, key, password string) error {
+func initWallet(key string, password []byte) error {
 	var privateKey *secp256k1.PrivateKey
 	if len(key) <= 0 {
 		privKey, err := generateRandomPrivateKey()
@@ -128,7 +130,7 @@ func initWallet(ctx *cli.Context, key, password string) error {
 
 	cypher := newAES128Cypher()
 	buf := privateKey.Serialize()
-	encryptedPrivateKey, err := cypher.encrypt(buf, []byte(password))
+	encryptedPrivateKey, err := cypher.encrypt(buf, password)
 	if err != nil {
 		return err
 	}
@@ -147,5 +149,22 @@ func initWallet(ctx *cli.Context, key, password string) error {
 	}
 
 	fmt.Println("wallet initialized")
+	return nil
+}
+
+func testEsploraEndpoint(net *network.Network, url string) error {
+	resp, err := http.Get(fmt.Sprintf("%s/asset/%s", url, net.AssetID))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf(string(body))
+	}
+
 	return nil
 }
