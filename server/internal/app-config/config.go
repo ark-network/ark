@@ -78,24 +78,6 @@ func (c *Config) Validate() error {
 	if c.MinRelayFee < 30 {
 		return fmt.Errorf("invalid min relay fee, must be at least 30 sats")
 	}
-	if err := c.repoManager(); err != nil {
-		return err
-	}
-	if err := c.walletService(); err != nil {
-		return fmt.Errorf("failed to connect to wallet: %s", err)
-	}
-	if err := c.txBuilderService(); err != nil {
-		return err
-	}
-	if err := c.scannerService(); err != nil {
-		return err
-	}
-	if err := c.schedulerService(); err != nil {
-		return err
-	}
-	if err := c.appService(); err != nil {
-		return err
-	}
 	// round life time must be a multiple of 512
 	if c.RoundLifetime < minAllowedSequence {
 		return fmt.Errorf(
@@ -125,6 +107,24 @@ func (c *Config) Validate() error {
 		)
 	}
 
+	if err := c.repoManager(); err != nil {
+		return err
+	}
+	if err := c.walletService(); err != nil {
+		return fmt.Errorf("failed to connect to wallet: %s", err)
+	}
+	if err := c.txBuilderService(); err != nil {
+		return err
+	}
+	if err := c.scannerService(); err != nil {
+		return err
+	}
+	if err := c.schedulerService(); err != nil {
+		return err
+	}
+	if err := c.appService(); err != nil {
+		return err
+	}
 	return nil
 }
 
