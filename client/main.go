@@ -21,11 +21,11 @@ const (
 	ASP_URL               = "asp_url"
 	ASP_PUBKEY            = "asp_public_key"
 	ROUND_LIFETIME        = "round_lifetime"
-	UNILATERAL_EXIT_DELAY = "unilateral_exit_delay "
-	ENCRYPTED_PRVKEY      = "encrypted_private_key "
-	PASSWORD_HASH         = "password_hash "
-	PUBKEY                = "public_key "
-	NETWORK               = "network "
+	UNILATERAL_EXIT_DELAY = "unilateral_exit_delay"
+	ENCRYPTED_PRVKEY      = "encrypted_private_key"
+	PASSWORD_HASH         = "password_hash"
+	PUBKEY                = "public_key"
+	NETWORK               = "network"
 )
 
 var (
