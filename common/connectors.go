@@ -35,7 +35,7 @@ func ValidateConnectors(poolTx string, connectors []string) error {
 		}
 		inTxid := elementsutil.TxIDFromBytes(ctx.Inputs[0].PreviousTxid)
 		inVout := ctx.Inputs[0].PreviousTxIndex
-		if inTxid != prevConnectorTxid || inVout != prevConnectorVout {
+		if inTxid != prevConnectorTxid || (inVout != prevConnectorVout && inVout != 0) {
 			return fmt.Errorf(
 				"invalid connector tx #%d: got prevout %s:%d, expected %s:%d",
 				i, inTxid, inVout, prevConnectorTxid, prevConnectorVout,
