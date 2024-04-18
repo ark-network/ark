@@ -117,6 +117,7 @@ func (s *service) Start() error {
 		// nolint:all
 		go s.server.ListenAndServe()
 	} else {
+		// nolint:all
 		go s.server.ListenAndServeTLS("", "")
 	}
 	log.Infof("started listening at %s", s.config.address())
@@ -130,6 +131,7 @@ func (s *service) Start() error {
 }
 
 func (s *service) Stop() {
+	// nolint:all
 	s.server.Shutdown(context.Background())
 	log.Info("stopped grpc server")
 	s.appConfig.AppService().Stop()
