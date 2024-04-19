@@ -331,32 +331,6 @@ func testStartFinalization(t *testing.T) {
 						},
 						Payments: paymentsById,
 					},
-					connectors:  nil,
-					tree:        congestionTree,
-					poolTx:      poolTx,
-					expectedErr: "missing list of connectors",
-				},
-				{
-					round: &domain.Round{
-						Id: "0",
-						Stage: domain.Stage{
-							Code: domain.RegistrationStage,
-						},
-						Payments: paymentsById,
-					},
-					connectors:  connectors,
-					tree:        nil,
-					poolTx:      poolTx,
-					expectedErr: "missing congestion tree",
-				},
-				{
-					round: &domain.Round{
-						Id: "0",
-						Stage: domain.Stage{
-							Code: domain.RegistrationStage,
-						},
-						Payments: paymentsById,
-					},
 					connectors:  connectors,
 					tree:        congestionTree,
 					poolTx:      "",

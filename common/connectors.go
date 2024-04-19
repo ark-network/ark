@@ -43,7 +43,13 @@ func ValidateConnectors(poolTx string, connectors []string) error {
 		}
 
 		prevConnectorTxid = utx.TxHash().String()
-		prevConnectorVout = 0
+
+		// if the last connector is reached, reset to 1
+		if i == len(connectors)-1 {
+			prevConnectorVout = 1
+		} else {
+			prevConnectorVout = 0
+		}
 	}
 	return nil
 }

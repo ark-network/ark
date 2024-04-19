@@ -63,7 +63,7 @@ func initAction(ctx *cli.Context) error {
 		explorerURL = explorer
 		_, network := networkFromString(net)
 		if err := testEsploraEndpoint(network, explorerURL); err != nil {
-			return fmt.Errof("failed to connect with explorer: %s", err)
+			return fmt.Errorf("failed to connect with explorer: %s", err)
 		}
 	} else {
 		explorerURL = explorerUrl[net]

@@ -39,7 +39,7 @@ var (
 var redeemCommand = cli.Command{
 	Name:   "redeem",
 	Usage:  "Redeem your offchain funds, either collaboratively or unilaterally",
-	Flags:  []cli.Flag{&addressFlag, &amountToRedeemFlag, &forceFlag, &passwordFlag},
+	Flags:  []cli.Flag{&addressFlag, &amountToRedeemFlag, &forceFlag, &passwordFlag, &enableExpiryCoinselectFlag},
 	Action: redeemAction,
 }
 
@@ -67,15 +67,17 @@ func redeemAction(ctx *cli.Context) error {
 			fmt.Printf("WARNING: unilateral exit (--force) ignores --amount flag, it will redeem all your VTXOs\n")
 		}
 
-		return unilateralRedeem(client, ctx)
+		return unilateralRedeem(ctx, client)
 	}
 
-	return collaborativeRedeem(client, ctx, addr, amount)
+	return collaborativeRedeem(ctx, client, addr, amount)
 }
 
 func collaborativeRedeem(
-	client arkv1.ArkServiceClient, ctx *cli.Context, addr string, amount uint64,
+	ctx *cli.Context, client arkv1.ArkServiceClient, addr string, amount uint64,
 ) error {
+	withExpiryCoinselect := ctx.Bool("enable-expiry-coinselect")
+
 	if _, err := address.ToOutputScript(addr); err != nil {
 		return fmt.Errorf("invalid onchain address")
 	}
@@ -108,12 +110,12 @@ func collaborativeRedeem(
 
 	explorer := NewExplorer()
 
-	vtxos, err := getVtxos(ctx.Context, explorer, client, offchainAddr, true)
+	vtxos, err := getVtxos(ctx.Context, explorer, client, offchainAddr, withExpiryCoinselect)
 	if err != nil {
 		return err
 	}
 
-	selectedCoins, changeAmount, err := coinSelect(vtxos, amount)
+	selectedCoins, changeAmount, err := coinSelect(vtxos, amount, withExpiryCoinselect)
 	if err != nil {
 		return err
 	}
@@ -175,7 +177,7 @@ func collaborativeRedeem(
 	return nil
 }
 
-func unilateralRedeem(client arkv1.ArkServiceClient, ctx *cli.Context) error {
+func unilateralRedeem(ctx *cli.Context, client arkv1.ArkServiceClient) error {
 	offchainAddr, _, _, err := getAddress()
 	if err != nil {
 		return err

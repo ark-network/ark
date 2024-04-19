@@ -36,13 +36,18 @@ var (
 		Name:  "amount",
 		Usage: "amount to send in sats",
 	}
+	enableExpiryCoinselectFlag = cli.BoolFlag{
+		Name:  "enable-expiry-coinselect",
+		Usage: "select vtxos that are about to expire first",
+		Value: false,
+	}
 )
 
 var sendCommand = cli.Command{
 	Name:   "send",
 	Usage:  "Send your onchain or offchain funds to one or many receivers",
 	Action: sendAction,
-	Flags:  []cli.Flag{&receiversFlag, &toFlag, &amountFlag, &passwordFlag},
+	Flags:  []cli.Flag{&receiversFlag, &toFlag, &amountFlag, &passwordFlag, &enableExpiryCoinselectFlag},
 }
 
 func sendAction(ctx *cli.Context) error {
@@ -110,6 +115,8 @@ func sendAction(ctx *cli.Context) error {
 }
 
 func sendOffchain(ctx *cli.Context, receivers []receiver) error {
+	withExpiryCoinselect := ctx.Bool("enable-expiry-coinselect")
+
 	offchainAddr, _, _, err := getAddress()
 	if err != nil {
 		return err
@@ -153,12 +160,11 @@ func sendOffchain(ctx *cli.Context, receivers []receiver) error {
 
 	explorer := NewExplorer()
 
-	vtxos, err := getVtxos(ctx.Context, explorer, client, offchainAddr, true)
+	vtxos, err := getVtxos(ctx.Context, explorer, client, offchainAddr, withExpiryCoinselect)
 	if err != nil {
 		return err
 	}
-
-	selectedCoins, changeAmount, err := coinSelect(vtxos, sumOfReceivers)
+	selectedCoins, changeAmount, err := coinSelect(vtxos, sumOfReceivers, withExpiryCoinselect)
 	if err != nil {
 		return err
 	}

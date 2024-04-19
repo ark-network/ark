@@ -52,7 +52,7 @@ Build ark client:
 ```
 $ cd client
 $ make build
-$ alias ark=$(pwd)/build/ark-cli-<os>-<arch>
+$ alias ark=$(pwd)/build/ark-<os>-<arch>
 ```
 
 Initialise ark wallet:
@@ -99,7 +99,7 @@ In **another tab**, setup another ark wallet with:
 
 ```
 $ export ARK_WALLET_DATADIR=./datadir
-$ alias ark2=$(pwd)/build/ark-cli-<os>-<arch>
+$ alias ark2=$(pwd)/build/ark-<os>-<arch>
 $ ark2 init --password <password> --ark-url localhost:6000
 ```
 

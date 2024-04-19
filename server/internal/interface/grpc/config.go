@@ -32,13 +32,8 @@ func (c Config) address() string {
 	return fmt.Sprintf(":%d", c.Port)
 }
 
-func (c Config) listener() net.Listener {
-	lis, _ := net.Listen("tcp", c.address())
-
-	if c.insecure() {
-		return lis
-	}
-	return tls.NewListener(lis, c.tlsConfig())
+func (c Config) gatewayAddress() string {
+	return fmt.Sprintf("localhost:%d", c.Port)
 }
 
 func (c Config) tlsConfig() *tls.Config {

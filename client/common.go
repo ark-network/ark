@@ -202,19 +202,21 @@ func getUnilateralExitDelay() (int64, error) {
 	return int64(redeemDelay), nil
 }
 
-func coinSelect(vtxos []vtxo, amount uint64) ([]vtxo, uint64, error) {
+func coinSelect(vtxos []vtxo, amount uint64, sortByExpirationTime bool) ([]vtxo, uint64, error) {
 	selected := make([]vtxo, 0)
 	notSelected := make([]vtxo, 0)
 	selectedAmount := uint64(0)
 
-	// sort vtxos by expiration (older first)
-	sort.SliceStable(vtxos, func(i, j int) bool {
-		if vtxos[i].expireAt == nil || vtxos[j].expireAt == nil {
-			return false
-		}
+	if sortByExpirationTime {
+		// sort vtxos by expiration (older first)
+		sort.SliceStable(vtxos, func(i, j int) bool {
+			if vtxos[i].expireAt == nil || vtxos[j].expireAt == nil {
+				return false
+			}
 
-		return vtxos[i].expireAt.Before(*vtxos[j].expireAt)
-	})
+			return vtxos[i].expireAt.Before(*vtxos[j].expireAt)
+		})
+	}
 
 	for _, vtxo := range vtxos {
 		if selectedAmount >= amount {

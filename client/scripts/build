@@ -21,6 +21,6 @@ pushd $PARENT_PATH
 mkdir -p build
 
 
-GO111MODULE=on go build -ldflags="-s -w" -o build/ark-cli-$GOOS-$GOARCH .
+GO111MODULE=on go build -ldflags="-s -w" -o build/ark-$GOOS-$GOARCH .
 
 popd
