@@ -27,7 +27,7 @@ var onboardCommand = cli.Command{
 	Name:   "onboard",
 	Usage:  "Onboard the Ark by lifting your funds",
 	Action: onboardAction,
-	Flags:  []cli.Flag{&amountOnboardFlag},
+	Flags:  []cli.Flag{&amountOnboardFlag, &passwordFlag},
 }
 
 func onboardAction(ctx *cli.Context) error {
@@ -92,11 +92,9 @@ func onboardAction(ctx *cli.Context) error {
 		return err
 	}
 
-	explorer := NewExplorer()
-	txid, err := explorer.Broadcast(pset)
-	if err != nil {
-		return err
-	}
+	ptx, _ := psetv2.NewPsetFromBase64(pset)
+	utx, _ := ptx.UnsignedTx()
+	txid := utx.TxHash().String()
 
 	congestionTree, err := treeFactoryFn(psetv2.InputArgs{
 		Txid:    txid,

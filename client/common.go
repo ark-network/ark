@@ -20,6 +20,7 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/urfave/cli/v2"
 	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/elementsutil"
 	"github.com/vulpemventures/go-elements/network"
@@ -33,6 +34,13 @@ import (
 const (
 	DUST = 450
 )
+
+var passwordFlag = cli.StringFlag{
+	Name:     "password",
+	Usage:    "password to unlock the wallet",
+	Required: false,
+	Hidden:   true,
+}
 
 func hashPassword(password []byte) []byte {
 	hash := sha256.Sum256(password)
@@ -64,22 +72,30 @@ func verifyPassword(password []byte) error {
 	return nil
 }
 
-func readPassword() ([]byte, error) {
-	fmt.Print("unlock your wallet with password: ")
-	passwordInput, err := term.ReadPassword(int(syscall.Stdin))
-	fmt.Println() // new line
-	if err != nil {
-		return nil, err
+func readPassword(ctx *cli.Context, verify bool) ([]byte, error) {
+	password := []byte(ctx.String("password"))
+
+	if len(password) == 0 {
+		fmt.Print("unlock your wallet with password: ")
+		var err error
+		password, err = term.ReadPassword(int(syscall.Stdin))
+		fmt.Println() // new line
+		if err != nil {
+			return nil, err
+		}
+
 	}
 
-	if err := verifyPassword(passwordInput); err != nil {
-		return nil, err
+	if verify {
+		if err := verifyPassword(password); err != nil {
+			return nil, err
+		}
 	}
 
-	return passwordInput, nil
+	return password, nil
 }
 
-func privateKeyFromPassword() (*secp256k1.PrivateKey, error) {
+func privateKeyFromPassword(ctx *cli.Context) (*secp256k1.PrivateKey, error) {
 	state, err := getState()
 	if err != nil {
 		return nil, err
@@ -95,7 +111,7 @@ func privateKeyFromPassword() (*secp256k1.PrivateKey, error) {
 		return nil, fmt.Errorf("invalid encrypted private key: %s", err)
 	}
 
-	password, err := readPassword()
+	password, err := readPassword(ctx, true)
 	if err != nil {
 		return nil, err
 	}
@@ -256,9 +272,25 @@ func getOffchainBalance(
 	return balance, amountByExpiration, nil
 }
 
+func getBaseURL() (string, error) {
+	state, err := getState()
+	if err != nil {
+		return "", err
+	}
+
+	baseURL := state[EXPLORER]
+	if len(baseURL) <= 0 {
+		return "", fmt.Errorf("missing explorer base url")
+	}
+
+	return baseURL, nil
+}
+
 func getTxBlocktime(txid string) (confirmed bool, blocktime int64, err error) {
-	_, net := getNetwork()
-	baseUrl := explorerUrl[net.Name]
+	baseUrl, err := getBaseURL()
+	if err != nil {
+		return false, 0, err
+	}
 	resp, err := http.Get(fmt.Sprintf("%s/tx/%s", baseUrl, txid))
 	if err != nil {
 		return false, 0, err
@@ -301,8 +333,15 @@ func getNetwork() (*common.Network, *network.Network) {
 	if !ok {
 		return &common.MainNet, &network.Liquid
 	}
+	return networkFromString(net)
+}
+
+func networkFromString(net string) (*common.Network, *network.Network) {
 	if net == "testnet" {
 		return &common.TestNet, &network.Testnet
+	}
+	if net == "regtest" {
+		return &common.RegTest, &network.Regtest
 	}
 	return &common.MainNet, &network.Liquid
 }
@@ -432,11 +471,13 @@ func handleRoundStream(
 				return "", err
 			}
 
-			// validate the congestion tree
-			if err := tree.ValidateCongestionTree(
-				congestionTree, poolTx, aspPubkey, int64(roundLifetime),
-			); err != nil {
-				return "", err
+			if !isOnchainOnly(receivers) {
+				// validate the congestion tree
+				if err := tree.ValidateCongestionTree(
+					congestionTree, poolTx, aspPubkey, int64(roundLifetime),
+				); err != nil {
+					return "", err
+				}
 			}
 
 			if err := common.ValidateConnectors(poolTx, connectors); err != nil {
@@ -772,7 +813,7 @@ func getRedeemBranches(
 		}
 
 		redeemBranch, err := newRedeemBranch(
-			ctx, explorer, congestionTrees[vtxo.poolTxid], vtxo,
+			explorer, congestionTrees[vtxo.poolTxid], vtxo,
 		)
 		if err != nil {
 			return nil, err
@@ -1060,15 +1101,10 @@ func addInputs(
 				return err
 			}
 
-			witnessUtxo := transaction.TxOutput{
-				Asset:  assetID,
-				Value:  value,
-				Script: script,
-				Nonce:  []byte{0x00},
-			}
+			witnessUtxo := transaction.NewTxOutput(assetID, value, script)
 
 			if err := updater.AddInWitnessUtxo(
-				len(updater.Pset.Inputs)-1, &witnessUtxo,
+				len(updater.Pset.Inputs)-1, witnessUtxo,
 			); err != nil {
 				return err
 			}
@@ -1076,4 +1112,19 @@ func addInputs(
 	}
 
 	return nil
+}
+
+func isOnchainOnly(receivers []*arkv1.Output) bool {
+	for _, receiver := range receivers {
+		isOnChain, _, _, err := decodeReceiverAddress(receiver.Address)
+		if err != nil {
+			continue
+		}
+
+		if !isOnChain {
+			return false
+		}
+	}
+
+	return true
 }

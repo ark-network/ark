@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"log"
 	"os"
@@ -40,7 +39,7 @@ var (
 var redeemCommand = cli.Command{
 	Name:   "redeem",
 	Usage:  "Redeem your offchain funds, either collaboratively or unilaterally",
-	Flags:  []cli.Flag{&addressFlag, &amountToRedeemFlag, &forceFlag, &enableExpiryCoinselectFlag},
+	Flags:  []cli.Flag{&addressFlag, &amountToRedeemFlag, &forceFlag, &passwordFlag, &enableExpiryCoinselectFlag},
 	Action: redeemAction,
 }
 
@@ -68,7 +67,7 @@ func redeemAction(ctx *cli.Context) error {
 			fmt.Printf("WARNING: unilateral exit (--force) ignores --amount flag, it will redeem all your VTXOs\n")
 		}
 
-		return unilateralRedeem(ctx.Context, client)
+		return unilateralRedeem(ctx, client)
 	}
 
 	return collaborativeRedeem(ctx, client, addr, amount)
@@ -137,7 +136,7 @@ func collaborativeRedeem(
 		})
 	}
 
-	secKey, err := privateKeyFromPassword()
+	secKey, err := privateKeyFromPassword(ctx)
 	if err != nil {
 		return err
 	}
@@ -178,14 +177,14 @@ func collaborativeRedeem(
 	return nil
 }
 
-func unilateralRedeem(ctx context.Context, client arkv1.ArkServiceClient) error {
+func unilateralRedeem(ctx *cli.Context, client arkv1.ArkServiceClient) error {
 	offchainAddr, _, _, err := getAddress()
 	if err != nil {
 		return err
 	}
 
 	explorer := NewExplorer()
-	vtxos, err := getVtxos(ctx, explorer, client, offchainAddr, false)
+	vtxos, err := getVtxos(ctx.Context, explorer, client, offchainAddr, false)
 	if err != nil {
 		return err
 	}
@@ -196,16 +195,18 @@ func unilateralRedeem(ctx context.Context, client arkv1.ArkServiceClient) error 
 		totalVtxosAmount += vtxo.amount
 	}
 
-	ok := askForConfirmation(fmt.Sprintf("redeem %d sats ?", totalVtxosAmount))
-	if !ok {
-		return fmt.Errorf("aborting unilateral exit")
+	if len(ctx.String("password")) == 0 {
+		ok := askForConfirmation(fmt.Sprintf("redeem %d sats ?", totalVtxosAmount))
+		if !ok {
+			return fmt.Errorf("aborting unilateral exit")
+		}
 	}
 
 	// transactionsMap avoid duplicates
 	transactionsMap := make(map[string]struct{}, 0)
 	transactions := make([]string, 0)
 
-	redeemBranches, err := getRedeemBranches(ctx, explorer, client, vtxos)
+	redeemBranches, err := getRedeemBranches(ctx.Context, explorer, client, vtxos)
 	if err != nil {
 		return err
 	}

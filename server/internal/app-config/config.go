@@ -69,8 +69,8 @@ func (c *Config) Validate() error {
 	if c.RoundInterval < 2 {
 		return fmt.Errorf("invalid round interval, must be at least 2 seconds")
 	}
-	if c.Network.Name != "liquid" && c.Network.Name != "testnet" {
-		return fmt.Errorf("invalid network, must be either liquid or testnet")
+	if c.Network.Name != "liquid" && c.Network.Name != "testnet" && c.Network.Name != "regtest" {
+		return fmt.Errorf("invalid network, must be liquid, testnet or regtest")
 	}
 	if len(c.WalletAddr) <= 0 {
 		return fmt.Errorf("missing onchain wallet address")
@@ -239,11 +239,14 @@ func (c *Config) appService() error {
 }
 
 func (c *Config) mainChain() network.Network {
-	net := network.Liquid
-	if c.Network.Name != "mainnet" {
-		net = network.Testnet
+	switch c.Network.Name {
+	case "testnet":
+		return network.Testnet
+	case "regtest":
+		return network.Regtest
+	default:
+		return network.Liquid
 	}
-	return net
 }
 
 type supportedType map[string]struct{}

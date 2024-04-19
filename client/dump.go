@@ -10,10 +10,11 @@ var dumpCommand = cli.Command{
 	Name:   "dump-privkey",
 	Usage:  "Dumps private key of the Ark wallet",
 	Action: dumpAction,
+	Flags:  []cli.Flag{&passwordFlag},
 }
 
 func dumpAction(ctx *cli.Context) error {
-	privateKey, err := privateKeyFromPassword()
+	privateKey, err := privateKeyFromPassword(ctx)
 	if err != nil {
 		return err
 	}

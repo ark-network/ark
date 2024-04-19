@@ -1,0 +1,47 @@
+version: "3.7"
+
+services:
+  oceand:
+    container_name: oceand
+    image: ghcr.io/vulpemventures/oceand:latest
+    restart: unless-stopped
+    user: 0:0
+    environment:
+      - OCEAN_LOG_LEVEL=5
+      - OCEAN_NO_TLS=true
+      - OCEAN_NO_PROFILER=true
+      - OCEAN_ELECTRUM_URL=tcp://electrs-liquid:50001
+      - OCEAN_NETWORK=regtest
+      - OCEAN_UTXO_EXPIRY_DURATION_IN_SECONDS=60
+      - OCEAN_DB_TYPE=badger
+    ports:
+      - "18000:18000"
+  arkd:
+    container_name: arkd
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - oceand
+    environment:
+      - ARK_WALLET_ADDR=oceand:18000
+      - ARK_ROUND_INTERVAL=10
+      - ARK_NETWORK=regtest
+    ports:
+      - "6000:6000"
+
+volumes:
+  oceand:
+    external: false
+  ocean:
+    external: false
+  arkd:
+    external: false
+  ark:
+    external: false
+
+networks:
+  default:
+    name: nigiri
+    external: true

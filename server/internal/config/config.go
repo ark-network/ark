@@ -121,7 +121,9 @@ func getNetwork() (common.Network, error) {
 		return common.MainNet, nil
 	case "testnet":
 		return common.TestNet, nil
+	case "regtest":
+		return common.RegTest, nil
 	default:
-		return common.Network{}, fmt.Errorf("unknown network")
+		return common.Network{}, fmt.Errorf("unknown network %s", viper.GetString(Network))
 	}
 }

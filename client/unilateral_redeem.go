@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -22,7 +21,7 @@ type redeemBranch struct {
 }
 
 func newRedeemBranch(
-	ctx context.Context, explorer Explorer,
+	explorer Explorer,
 	congestionTree tree.CongestionTree, vtxo vtxo,
 ) (*redeemBranch, error) {
 	sweepClosure, seconds, err := findSweepClosure(congestionTree)

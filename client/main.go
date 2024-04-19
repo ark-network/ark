@@ -26,6 +26,7 @@ const (
 	PASSWORD_HASH         = "password_hash"
 	PUBKEY                = "public_key"
 	NETWORK               = "network"
+	EXPLORER              = "explorer"
 )
 
 var (
@@ -36,6 +37,7 @@ var (
 	explorerUrl = map[string]string{
 		network.Liquid.Name:  "https://blockstream.info/liquid/api",
 		network.Testnet.Name: "https://blockstream.info/liquidtestnet/api",
+		network.Regtest.Name: "http://localhost:3001",
 	}
 
 	initialState = map[string]string{

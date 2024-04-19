@@ -71,6 +71,11 @@ func (s *sweeper) removeTask(treeRootTxid string) {
 func (s *sweeper) schedule(
 	expirationTimestamp int64, roundTxid string, congestionTree tree.CongestionTree,
 ) error {
+	if len(congestionTree) <= 0 { // skip
+		log.Debugf("skipping sweep scheduling (round tx %s), empty congestion tree", roundTxid)
+		return nil
+	}
+
 	root, err := congestionTree.Root()
 	if err != nil {
 		return err

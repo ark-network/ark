@@ -47,7 +47,7 @@ var sendCommand = cli.Command{
 	Name:   "send",
 	Usage:  "Send your onchain or offchain funds to one or many receivers",
 	Action: sendAction,
-	Flags:  []cli.Flag{&receiversFlag, &toFlag, &amountFlag, &enableExpiryCoinselectFlag},
+	Flags:  []cli.Flag{&receiversFlag, &toFlag, &amountFlag, &passwordFlag, &enableExpiryCoinselectFlag},
 }
 
 func sendAction(ctx *cli.Context) error {
@@ -186,7 +186,7 @@ func sendOffchain(ctx *cli.Context, receivers []receiver) error {
 		})
 	}
 
-	secKey, err := privateKeyFromPassword()
+	secKey, err := privateKeyFromPassword(ctx)
 	if err != nil {
 		return err
 	}
@@ -219,7 +219,7 @@ func sendOffchain(ctx *cli.Context, receivers []receiver) error {
 	})
 }
 
-func sendOnchain(_ *cli.Context, receivers []receiver) (string, error) {
+func sendOnchain(ctx *cli.Context, receivers []receiver) (string, error) {
 	pset, err := psetv2.New(nil, nil, nil)
 	if err != nil {
 		return "", err
@@ -349,7 +349,7 @@ func sendOnchain(_ *cli.Context, receivers []receiver) (string, error) {
 		return "", err
 	}
 
-	prvKey, err := privateKeyFromPassword()
+	prvKey, err := privateKeyFromPassword(ctx)
 	if err != nil {
 		return "", err
 	}

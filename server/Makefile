@@ -23,7 +23,7 @@ help:
 ## intergrationtest: runs integration tests
 integrationtest:
 	@echo "Running integration tests..."
-	@find . -name go.mod -execdir go test -v -count=1 -race $(go list ./... | grep internal/test) \;
+	@go test -v -count=1 -race -timeout 200s github.com/ark-network/ark/test/e2e
 
 ## lint: lint codebase
 lint:
@@ -40,7 +40,7 @@ run: clean
 ## test: runs unit and component tests
 test:
 	@echo "Running unit tests..."
-	@find . -name go.mod -execdir go test -v -count=1 -race ./... $(go list ./... | grep -v internal/test) \;
+	@find . -name go.mod -execdir go test -v -count=1 -race ./internal/... \;
 
 ## vet: code analysis
 vet:

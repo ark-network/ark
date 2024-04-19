@@ -119,11 +119,18 @@ func (b *txBuilder) BuildPoolTx(
 	// generated in the process and takes the shared utxo outpoint as argument.
 	// This is safe as the memory allocated for `craftCongestionTree` is freed
 	// only after `BuildPoolTx` returns.
-	treeFactoryFn, sharedOutputScript, sharedOutputAmount, err := tree.CraftCongestionTree(
-		b.net.AssetID, aspPubkey, getOffchainReceivers(payments), minRelayFee, b.roundLifetime, b.exitDelay,
-	)
-	if err != nil {
-		return
+
+	var sharedOutputScript []byte
+	var sharedOutputAmount uint64
+	var treeFactoryFn tree.TreeFactory
+
+	if !isOnchainOnly(payments) {
+		treeFactoryFn, sharedOutputScript, sharedOutputAmount, err = tree.CraftCongestionTree(
+			b.net.AssetID, aspPubkey, getOffchainReceivers(payments), minRelayFee, b.roundLifetime, b.exitDelay,
+		)
+		if err != nil {
+			return
+		}
 	}
 
 	connectorAddress, err = b.wallet.DeriveConnectorAddress(context.Background())
@@ -143,12 +150,14 @@ func (b *txBuilder) BuildPoolTx(
 		return
 	}
 
-	tree, err := treeFactoryFn(psetv2.InputArgs{
-		Txid:    unsignedTx.TxHash().String(),
-		TxIndex: 0,
-	})
-	if err != nil {
-		return
+	if treeFactoryFn != nil {
+		congestionTree, err = treeFactoryFn(psetv2.InputArgs{
+			Txid:    unsignedTx.TxHash().String(),
+			TxIndex: 0,
+		})
+		if err != nil {
+			return
+		}
 	}
 
 	poolTx, err = ptx.ToBase64()
@@ -156,7 +165,6 @@ func (b *txBuilder) BuildPoolTx(
 		return
 	}
 
-	congestionTree = tree
 	return
 }
 
@@ -219,20 +227,25 @@ func (b *txBuilder) createPoolTx(
 	if nbOfInputs > 1 {
 		connectorsAmount -= minRelayFee
 	}
-	targetAmount := sharedOutputAmount + connectorsAmount
+	targetAmount := connectorsAmount
 
-	outputs := []psetv2.OutputArgs{
-		{
+	outputs := make([]psetv2.OutputArgs, 0)
+
+	if sharedOutputScript != nil && sharedOutputAmount > 0 {
+		targetAmount += sharedOutputAmount
+
+		outputs = append(outputs, psetv2.OutputArgs{
 			Asset:  b.net.AssetID,
 			Amount: sharedOutputAmount,
 			Script: sharedOutputScript,
-		},
-		{
-			Asset:  b.net.AssetID,
-			Amount: connectorsAmount,
-			Script: connectorScript,
-		},
+		})
 	}
+
+	outputs = append(outputs, psetv2.OutputArgs{
+		Asset:  b.net.AssetID,
+		Amount: connectorsAmount,
+		Script: connectorScript,
+	})
 
 	for _, receiver := range receivers {
 		targetAmount += receiver.Amount
