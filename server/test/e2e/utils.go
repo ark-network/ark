@@ -75,12 +75,16 @@ func runCommand(name string, arg ...string) (string, error) {
 
 	go func() {
 		defer wg.Done()
-		io.Copy(output, stdout)
+		if _, err := io.Copy(output, stdout); err != nil {
+			fmt.Fprintf(errb, "error reading stdout: %s", err)
+		}
 	}()
 
 	go func() {
 		defer wg.Done()
-		io.Copy(errorb, stderr)
+		if _, err := io.Copy(errorb, stderr); err != nil {
+			fmt.Fprintf(errb, "error reading stderr: %s", err)
+		}
 	}()
 
 	wg.Wait()
