@@ -160,7 +160,22 @@ func (h *handler) FinalizePayment(ctx context.Context, req *arkv1.FinalizePaymen
 
 func (h *handler) GetRound(ctx context.Context, req *arkv1.GetRoundRequest) (*arkv1.GetRoundResponse, error) {
 	if len(req.GetTxid()) <= 0 {
-		return nil, status.Error(codes.InvalidArgument, "missing pool txid")
+		round, err := h.svc.GetCurrentRound(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		return &arkv1.GetRoundResponse{
+			Round: &arkv1.Round{
+				Id:             round.Id,
+				Start:          round.StartingTimestamp,
+				End:            round.EndingTimestamp,
+				PoolTx:         round.UnsignedTx,
+				CongestionTree: castCongestionTree(round.CongestionTree),
+				ForfeitTxs:     round.ForfeitTxs,
+				Connectors:     round.Connectors,
+			},
+		}, nil
 	}
 
 	round, err := h.svc.GetRoundByTxid(ctx, req.GetTxid())
@@ -173,8 +188,10 @@ func (h *handler) GetRound(ctx context.Context, req *arkv1.GetRoundRequest) (*ar
 			Id:             round.Id,
 			Start:          round.StartingTimestamp,
 			End:            round.EndingTimestamp,
-			Txid:           round.Txid,
+			PoolTx:         round.UnsignedTx,
 			CongestionTree: castCongestionTree(round.CongestionTree),
+			ForfeitTxs:     round.ForfeitTxs,
+			Connectors:     round.Connectors,
 		},
 	}, nil
 }
@@ -217,13 +234,14 @@ func (h *handler) ListVtxos(ctx context.Context, req *arkv1.ListVtxosRequest) (*
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	vtxos, err := h.svc.ListVtxos(ctx, userPubkey)
+	spendableVtxos, spentVtxos, err := h.svc.ListVtxos(ctx, userPubkey)
 	if err != nil {
 		return nil, err
 	}
 
 	return &arkv1.ListVtxosResponse{
-		Vtxos: vtxoList(vtxos).toProto(hrp, aspPubkey),
+		SpendableVtxos: vtxoList(spendableVtxos).toProto(hrp, aspPubkey),
+		SpentVtxos:     vtxoList(spentVtxos).toProto(hrp, aspPubkey),
 	}, nil
 }
 

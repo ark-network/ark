@@ -109,7 +109,8 @@ message ListVtxosRequest {
   string address = 1;
 }
 message ListVtxosResponse {
-  repeated Vtxo vtxos = 1;
+  repeated Vtxo spendable_vtxos = 1;
+  repeated Vtxo spent_vtxos = 2;
 }
 
 message GetInfoRequest {}
@@ -162,8 +163,10 @@ message Round {
   string id = 1;
   int64 start = 2;
   int64 end = 3;
-  string txid = 4;
+  string pool_tx = 4;
   Tree congestion_tree = 5;
+  repeated string forfeit_txs = 6;
+  repeated string connectors = 7;
 }
 
 message Input {

@@ -31,8 +31,8 @@ func getVtxos(
 		return nil, err
 	}
 
-	vtxos := make([]vtxo, 0, len(response.Vtxos))
-	for _, v := range response.Vtxos {
+	vtxos := make([]vtxo, 0, len(response.GetSpendableVtxos()))
+	for _, v := range response.GetSpendableVtxos() {
 		vtxos = append(vtxos, vtxo{
 			amount:   v.Receiver.Amount,
 			txid:     v.Outpoint.Txid,

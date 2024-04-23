@@ -32,9 +32,10 @@ type Service interface {
 	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error
 	SignVtxos(ctx context.Context, forfeitTxs []string) error
 	GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error)
+	GetCurrentRound(ctx context.Context) (*domain.Round, error)
 	GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
 	UpdatePaymentStatus(ctx context.Context, id string) error
-	ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, error)
+	ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, []domain.Vtxo, error)
 	GetInfo(ctx context.Context) (string, int64, int64, error)
 	Onboard(ctx context.Context, boardingTx string, congestionTree tree.CongestionTree, userPubkey *secp256k1.PublicKey) error
 	TrustedOnboarding(ctx context.Context, userPubKey *secp256k1.PublicKey, onboardingAmount uint64) (string, uint64, error)
@@ -128,7 +129,7 @@ func (s *service) Start() error {
 func (s *service) Stop() {
 	s.sweeper.stop()
 	// nolint
-	vtxos, _ := s.repoManager.Vtxos().GetSpendableVtxos(
+	vtxos, _, _ := s.repoManager.Vtxos().GetAllVtxos(
 		context.Background(), "",
 	)
 	if len(vtxos) > 0 {
@@ -185,9 +186,9 @@ func (s *service) SignVtxos(ctx context.Context, forfeitTxs []string) error {
 	return s.forfeitTxs.sign(forfeitTxs)
 }
 
-func (s *service) ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, error) {
+func (s *service) ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, []domain.Vtxo, error) {
 	pk := hex.EncodeToString(pubkey.SerializeCompressed())
-	return s.repoManager.Vtxos().GetSpendableVtxos(ctx, pk)
+	return s.repoManager.Vtxos().GetAllVtxos(ctx, pk)
 }
 
 func (s *service) GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent {
@@ -196,6 +197,10 @@ func (s *service) GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
 
 func (s *service) GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error) {
 	return s.repoManager.Rounds().GetRoundWithTxid(ctx, poolTxid)
+}
+
+func (s *service) GetCurrentRound(ctx context.Context) (*domain.Round, error) {
+	return s.repoManager.Rounds().GetCurrentRound(ctx)
 }
 
 func (s *service) GetInfo(ctx context.Context) (string, int64, int64, error) {
