@@ -437,7 +437,14 @@
     "v1ListVtxosResponse": {
       "type": "object",
       "properties": {
-        "vtxos": {
+        "spendableVtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Vtxo"
+          }
+        },
+        "spentVtxos": {
           "type": "array",
           "items": {
             "type": "object",
@@ -529,11 +536,23 @@
           "type": "string",
           "format": "int64"
         },
-        "txid": {
+        "poolTx": {
           "type": "string"
         },
         "congestionTree": {
           "$ref": "#/definitions/v1Tree"
+        },
+        "forfeitTxs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "connectors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
