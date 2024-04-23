@@ -128,7 +128,6 @@ func (s *service) listenToNotifications() {
 
 	for {
 		msg, err := stream.Recv()
-		log.Info("received message from source", msg.GetEventType())
 		if err != nil {
 			if err == io.EOF || status.Convert(err).Code() == codes.Canceled {
 				return
