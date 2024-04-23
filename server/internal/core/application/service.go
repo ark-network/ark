@@ -37,7 +37,7 @@ type Service interface {
 	ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, error)
 	GetInfo(ctx context.Context) (string, int64, int64, error)
 	Onboard(ctx context.Context, boardingTx string, congestionTree tree.CongestionTree, userPubkey *secp256k1.PublicKey) error
-	CreateOnboardingAddress(ctx context.Context, userPubKey *secp256k1.PublicKey, onboardingAmount uint64) (string, uint64, error)
+	TrustedOnboarding(ctx context.Context, userPubKey *secp256k1.PublicKey, onboardingAmount uint64) (string, uint64, error)
 }
 
 type onboarding struct {
@@ -66,6 +66,9 @@ type service struct {
 
 	eventsCh     chan domain.RoundEvent
 	onboardingCh chan onboarding
+
+	trustedOnboardingScriptLock *sync.Mutex
+	trustedOnboardingScripts    map[string]*secp256k1.PublicKey
 }
 
 func NewService(
@@ -93,6 +96,7 @@ func NewService(
 		roundLifetime, roundInterval, unilateralExitDelay, minRelayFee,
 		walletSvc, repoManager, builder, scanner, sweeper,
 		paymentRequests, forfeitTxs, eventsCh, onboardingCh,
+		&sync.Mutex{}, make(map[string]*secp256k1.PublicKey),
 	}
 	repoManager.RegisterEventsHandler(
 		func(round *domain.Round) {
@@ -105,7 +109,7 @@ func NewService(
 	if err := svc.restoreWatchingVtxos(); err != nil {
 		return nil, fmt.Errorf("failed to restore watching vtxos: %s", err)
 	}
-	go svc.listenToRedemptions()
+	go svc.listenToScannerNotifications()
 	go svc.listenToOnboarding()
 	return svc, nil
 }
@@ -208,51 +212,6 @@ func (s *service) Onboard(
 		return fmt.Errorf("failed to parse boarding tx: %s", err)
 	}
 
-	// if the user didn't provide the tree, try to build it
-	if congestionTree == nil {
-		sharedOutput := ptx.Outputs[0]
-
-		congestionTreeLeaf := tree.Receiver{
-			Pubkey: hex.EncodeToString(userPubkey.SerializeCompressed()),
-			Amount: sharedOutput.Value - s.minRelayFee,
-		}
-
-		treeFactoryFn, sharedOutputScript, sharedOutputAmount, err := tree.CraftCongestionTree(
-			s.onchainNework.AssetID, s.pubkey, []tree.Receiver{congestionTreeLeaf},
-			s.minRelayFee, s.roundLifetime, s.unilateralExitDelay,
-		)
-		if err != nil {
-			return err
-		}
-
-		utx, err := ptx.UnsignedTx()
-		if err != nil {
-			return fmt.Errorf("failed to parse boarding tx: %s", err)
-		}
-
-		txid := utx.TxHash().String()
-
-		rebuiltCongestionTree, err := treeFactoryFn(
-			psetv2.InputArgs{
-				Txid:    txid,
-				TxIndex: 0,
-			},
-		)
-		if err != nil {
-			return err
-		}
-
-		if sharedOutputAmount != sharedOutput.Value {
-			return fmt.Errorf("shared output amount mismatch")
-		}
-
-		if !bytes.Equal(sharedOutputScript, sharedOutput.Script) {
-			return fmt.Errorf("shared output script mismatch")
-		}
-
-		congestionTree = rebuiltCongestionTree
-	}
-
 	if err := tree.ValidateCongestionTree(
 		congestionTree, boardingTx, s.pubkey, s.roundLifetime,
 	); err != nil {
@@ -285,7 +244,7 @@ func (s *service) Onboard(
 	return nil
 }
 
-func (s *service) CreateOnboardingAddress(
+func (s *service) TrustedOnboarding(
 	ctx context.Context, userPubKey *secp256k1.PublicKey, onboardingAmount uint64,
 ) (string, uint64, error) {
 	congestionTreeLeaf := tree.Receiver{
@@ -308,6 +267,17 @@ func (s *service) CreateOnboardingAddress(
 
 	address, err := pay.TaprootAddress()
 	if err != nil {
+		return "", 0, err
+	}
+
+	s.trustedOnboardingScriptLock.Lock()
+
+	script := hex.EncodeToString(sharedOutputScript)
+	s.trustedOnboardingScripts[script] = userPubKey
+
+	s.trustedOnboardingScriptLock.Unlock()
+
+	if err := s.scanner.WatchScripts(ctx, []string{script}); err != nil {
 		return "", 0, err
 	}
 
@@ -469,6 +439,7 @@ func (s *service) listenToOnboarding() {
 
 func (s *service) handleOnboarding(onboarding onboarding) {
 	ctx := context.Background()
+
 	ptx, _ := psetv2.NewPsetFromBase64(onboarding.tx)
 	utx, _ := psetv2.Extract(ptx)
 	txid := utx.TxHash().String()
@@ -508,18 +479,77 @@ func (s *service) handleOnboarding(onboarding onboarding) {
 	}
 }
 
-func (s *service) listenToRedemptions() {
+func (s *service) listenToScannerNotifications() {
 	ctx := context.Background()
 	chVtxos := s.scanner.GetNotificationChannel(ctx)
 
 	mutx := &sync.Mutex{}
 	for vtxoKeys := range chVtxos {
-		go func(vtxoKeys []domain.VtxoKey) {
+		go func(vtxoKeys map[string]ports.VtxoWithValue) {
 			vtxosRepo := s.repoManager.Vtxos()
 			roundRepo := s.repoManager.Rounds()
 
-			for _, v := range vtxoKeys {
-				vtxos, err := vtxosRepo.GetVtxos(ctx, []domain.VtxoKey{v})
+			for script, v := range vtxoKeys {
+				if userPubkey, ok := s.trustedOnboardingScripts[script]; ok {
+					// onboarding
+					defer func() {
+						s.trustedOnboardingScriptLock.Lock()
+						delete(s.trustedOnboardingScripts, script)
+						s.trustedOnboardingScriptLock.Unlock()
+					}()
+
+					congestionTreeLeaf := tree.Receiver{
+						Pubkey: hex.EncodeToString(userPubkey.SerializeCompressed()),
+						Amount: v.Value - s.minRelayFee,
+					}
+
+					treeFactoryFn, sharedOutputScript, sharedOutputAmount, err := tree.CraftCongestionTree(
+						s.onchainNework.AssetID, s.pubkey, []tree.Receiver{congestionTreeLeaf},
+						s.minRelayFee, s.roundLifetime, s.unilateralExitDelay,
+					)
+					if err != nil {
+						log.WithError(err).Warn("failed to craft onboarding congestion tree")
+						return
+					}
+
+					congestionTree, err := treeFactoryFn(
+						psetv2.InputArgs{
+							Txid:    v.Txid,
+							TxIndex: v.VOut,
+						},
+					)
+					if err != nil {
+						log.WithError(err).Warn("failed to build onboarding congestion tree")
+						return
+					}
+
+					if sharedOutputAmount != v.Value {
+						log.Errorf("shared output amount mismatch, expected %d, got %d", sharedOutputAmount, v.Value)
+						return
+					}
+
+					precomputedScript, _ := hex.DecodeString(script)
+
+					if !bytes.Equal(sharedOutputScript, precomputedScript) {
+						log.Errorf("shared output script mismatch, expected %x, got %x", sharedOutputScript, precomputedScript)
+						return
+					}
+
+					pubkey := hex.EncodeToString(userPubkey.SerializeCompressed())
+					payments := getPaymentsFromOnboarding(congestionTree, pubkey)
+					round := domain.NewFinalizedRound(
+						dustAmount, pubkey, v.Txid, "", congestionTree, payments,
+					)
+					if err := s.saveEvents(ctx, round.Id, round.Events()); err != nil {
+						log.WithError(err).Warn("failed to store new round events")
+						return
+					}
+
+					return
+				}
+
+				// redeem
+				vtxos, err := vtxosRepo.GetVtxos(ctx, []domain.VtxoKey{v.VtxoKey})
 				if err != nil {
 					log.WithError(err).Warn("failed to retrieve vtxos, skipping...")
 					continue

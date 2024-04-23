@@ -40,7 +40,7 @@ func NewHandler(service application.Service) arkv1.ArkServiceServer {
 	return h
 }
 
-func (h *handler) GetOnboardingAddress(ctx context.Context, req *arkv1.GetOnboardingAddressRequest) (*arkv1.GetOnboardingAddressResponse, error) {
+func (h *handler) TrustedOnboarding(ctx context.Context, req *arkv1.TrustedOnboardingRequest) (*arkv1.TrustedOnboardingResponse, error) {
 	if req.GetUserPubkey() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing user pubkey")
 	}
@@ -60,15 +60,14 @@ func (h *handler) GetOnboardingAddress(ctx context.Context, req *arkv1.GetOnboar
 		return nil, status.Error(codes.InvalidArgument, "invalid amount")
 	}
 
-	address, expectedAmount, err := h.svc.CreateOnboardingAddress(ctx, decodedPubKey, amount)
+	address, expectedAmount, err := h.svc.TrustedOnboarding(ctx, decodedPubKey, amount)
 	if err != nil {
 		return nil, err
 	}
 
-	return &arkv1.GetOnboardingAddressResponse{
-		Address:             address,
-		ExpectedAmount:      expectedAmount,
-		ExpectedOutputIndex: uint32(0),
+	return &arkv1.TrustedOnboardingResponse{
+		Address:        address,
+		ExpectedAmount: expectedAmount,
 	}, nil
 }
 

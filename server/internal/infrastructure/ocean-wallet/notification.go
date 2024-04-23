@@ -6,7 +6,7 @@ import (
 	"encoding/hex"
 
 	pb "github.com/ark-network/ark/api-spec/protobuf/gen/ocean/v1"
-	"github.com/ark-network/ark/internal/core/domain"
+	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
@@ -35,7 +35,7 @@ func (s *service) UnwatchScripts(ctx context.Context, scripts []string) error {
 	return nil
 }
 
-func (s *service) GetNotificationChannel(ctx context.Context) chan []domain.VtxoKey {
+func (s *service) GetNotificationChannel(ctx context.Context) <-chan map[string]ports.VtxoWithValue {
 	return s.chVtxos
 }
 

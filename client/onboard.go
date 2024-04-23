@@ -21,16 +21,22 @@ var (
 		Usage:    "amount to onboard in sats",
 		Required: true,
 	}
+	trustedOnboardFlag = cli.BoolFlag{
+		Name:  "trusted",
+		Usage: "trusted onboard",
+	}
 )
 
 var onboardCommand = cli.Command{
 	Name:   "onboard",
 	Usage:  "Onboard the Ark by lifting your funds",
 	Action: onboardAction,
-	Flags:  []cli.Flag{&amountOnboardFlag, &passwordFlag},
+	Flags:  []cli.Flag{&amountOnboardFlag, &trustedOnboardFlag, &passwordFlag},
 }
 
 func onboardAction(ctx *cli.Context) error {
+	isTrusted := ctx.Bool("trusted")
+
 	amount := ctx.Uint64("amount")
 
 	if amount <= 0 {
@@ -38,6 +44,32 @@ func onboardAction(ctx *cli.Context) error {
 	}
 
 	_, net := getNetwork()
+
+	userPubKey, err := getWalletPublicKey()
+	if err != nil {
+		return err
+	}
+
+	client, cancel, err := getClientFromState()
+	if err != nil {
+		return err
+	}
+	defer cancel()
+
+	if isTrusted {
+		resp, err := client.TrustedOnboarding(ctx.Context, &arkv1.TrustedOnboardingRequest{
+			UserPubkey: hex.EncodeToString(userPubKey.SerializeCompressed()),
+			Amount:     amount,
+		})
+		if err != nil {
+			return err
+		}
+
+		fmt.Println("onboard_address :", resp.Address)
+		fmt.Println("onboard_amount  :", resp.ExpectedAmount)
+
+		return nil
+	}
 
 	aspPubkey, err := getAspPublicKey()
 	if err != nil {
@@ -50,11 +82,6 @@ func onboardAction(ctx *cli.Context) error {
 	}
 
 	unilateralExitDelay, err := getUnilateralExitDelay()
-	if err != nil {
-		return err
-	}
-
-	userPubKey, err := getWalletPublicKey()
 	if err != nil {
 		return err
 	}
@@ -104,12 +131,6 @@ func onboardAction(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-
-	client, cancel, err := getClientFromState()
-	if err != nil {
-		return err
-	}
-	defer cancel()
 
 	_, err = client.Onboard(ctx.Context, &arkv1.OnboardRequest{
 		BoardingTx:     pset,

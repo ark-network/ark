@@ -103,12 +103,12 @@
     },
     "/v1/onboard/address": {
       "post": {
-        "operationId": "ArkService_GetOnboardingAddress",
+        "operationId": "ArkService_TrustedOnboarding",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1GetOnboardingAddressResponse"
+              "$ref": "#/definitions/v1TrustedOnboardingResponse"
             }
           },
           "default": {
@@ -124,7 +124,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/v1GetOnboardingAddressRequest"
+              "$ref": "#/definitions/v1TrustedOnboardingRequest"
             }
           }
         ],
@@ -414,34 +414,6 @@
         }
       }
     },
-    "v1GetOnboardingAddressRequest": {
-      "type": "object",
-      "properties": {
-        "userPubkey": {
-          "type": "string"
-        },
-        "amount": {
-          "type": "string",
-          "format": "uint64"
-        }
-      }
-    },
-    "v1GetOnboardingAddressResponse": {
-      "type": "object",
-      "properties": {
-        "address": {
-          "type": "string"
-        },
-        "expectedAmount": {
-          "type": "string",
-          "format": "uint64"
-        },
-        "expectedOutputIndex": {
-          "type": "integer",
-          "format": "int64"
-        }
-      }
-    },
     "v1GetRoundResponse": {
       "type": "object",
       "properties": {
@@ -634,6 +606,30 @@
             "type": "object",
             "$ref": "#/definitions/v1Node"
           }
+        }
+      }
+    },
+    "v1TrustedOnboardingRequest": {
+      "type": "object",
+      "properties": {
+        "userPubkey": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "string",
+          "format": "uint64"
+        }
+      }
+    },
+    "v1TrustedOnboardingResponse": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "expectedAmount": {
+          "type": "string",
+          "format": "uint64"
         }
       }
     },
