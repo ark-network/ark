@@ -40,6 +40,38 @@ func NewHandler(service application.Service) arkv1.ArkServiceServer {
 	return h
 }
 
+func (h *handler) GetOnboardingAddress(ctx context.Context, req *arkv1.GetOnboardingAddressRequest) (*arkv1.GetOnboardingAddressResponse, error) {
+	if req.GetUserPubkey() == "" {
+		return nil, status.Error(codes.InvalidArgument, "missing user pubkey")
+	}
+
+	pubKey, err := hex.DecodeString(req.GetUserPubkey())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid user pubkey")
+	}
+
+	decodedPubKey, err := secp256k1.ParsePubKey(pubKey)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid user pubkey")
+	}
+
+	amount := req.GetAmount()
+	if amount <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "invalid amount")
+	}
+
+	address, expectedAmount, err := h.svc.CreateOnboardingAddress(ctx, decodedPubKey, amount)
+	if err != nil {
+		return nil, err
+	}
+
+	return &arkv1.GetOnboardingAddressResponse{
+		Address:             address,
+		ExpectedAmount:      expectedAmount,
+		ExpectedOutputIndex: uint32(0),
+	}, nil
+}
+
 func (h *handler) Onboard(ctx context.Context, req *arkv1.OnboardRequest) (*arkv1.OnboardResponse, error) {
 	if req.GetUserPubkey() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing user pubkey")
@@ -326,6 +358,10 @@ func castCongestionTree(congestionTree tree.CongestionTree) *arkv1.Tree {
 }
 
 func toCongestionTree(treeFromProto *arkv1.Tree) (tree.CongestionTree, error) {
+	if treeFromProto == nil {
+		return nil, nil
+	}
+
 	levels := make(tree.CongestionTree, 0, len(treeFromProto.Levels))
 
 	for _, level := range treeFromProto.Levels {

@@ -16,6 +16,7 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	log "github.com/sirupsen/logrus"
 	"github.com/vulpemventures/go-elements/network"
+	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
 )
 
@@ -36,6 +37,7 @@ type Service interface {
 	ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, error)
 	GetInfo(ctx context.Context) (string, int64, int64, error)
 	Onboard(ctx context.Context, boardingTx string, congestionTree tree.CongestionTree, userPubkey *secp256k1.PublicKey) error
+	CreateOnboardingAddress(ctx context.Context, userPubKey *secp256k1.PublicKey, onboardingAmount uint64) (string, uint64, error)
 }
 
 type onboarding struct {
@@ -201,14 +203,60 @@ func (s *service) Onboard(
 	ctx context.Context, boardingTx string,
 	congestionTree tree.CongestionTree, userPubkey *secp256k1.PublicKey,
 ) error {
+	ptx, err := psetv2.NewPsetFromBase64(boardingTx)
+	if err != nil {
+		return fmt.Errorf("failed to parse boarding tx: %s", err)
+	}
+
+	// if the user didn't provide the tree, try to build it
+	if congestionTree == nil {
+		sharedOutput := ptx.Outputs[0]
+
+		congestionTreeLeaf := tree.Receiver{
+			Pubkey: hex.EncodeToString(userPubkey.SerializeCompressed()),
+			Amount: sharedOutput.Value - s.minRelayFee,
+		}
+
+		treeFactoryFn, sharedOutputScript, sharedOutputAmount, err := tree.CraftCongestionTree(
+			s.onchainNework.AssetID, s.pubkey, []tree.Receiver{congestionTreeLeaf},
+			s.minRelayFee, s.roundLifetime, s.unilateralExitDelay,
+		)
+		if err != nil {
+			return err
+		}
+
+		utx, err := ptx.UnsignedTx()
+		if err != nil {
+			return fmt.Errorf("failed to parse boarding tx: %s", err)
+		}
+
+		txid := utx.TxHash().String()
+
+		rebuiltCongestionTree, err := treeFactoryFn(
+			psetv2.InputArgs{
+				Txid:    txid,
+				TxIndex: 0,
+			},
+		)
+		if err != nil {
+			return err
+		}
+
+		if sharedOutputAmount != sharedOutput.Value {
+			return fmt.Errorf("shared output amount mismatch")
+		}
+
+		if !bytes.Equal(sharedOutputScript, sharedOutput.Script) {
+			return fmt.Errorf("shared output script mismatch")
+		}
+
+		congestionTree = rebuiltCongestionTree
+	}
+
 	if err := tree.ValidateCongestionTree(
 		congestionTree, boardingTx, s.pubkey, s.roundLifetime,
 	); err != nil {
 		return err
-	}
-	ptx, err := psetv2.NewPsetFromBase64(boardingTx)
-	if err != nil {
-		return fmt.Errorf("failed to parse boarding tx: %s", err)
 	}
 
 	extracted, err := psetv2.Extract(ptx)
@@ -235,6 +283,35 @@ func (s *service) Onboard(
 	}
 
 	return nil
+}
+
+func (s *service) CreateOnboardingAddress(
+	ctx context.Context, userPubKey *secp256k1.PublicKey, onboardingAmount uint64,
+) (string, uint64, error) {
+	congestionTreeLeaf := tree.Receiver{
+		Pubkey: hex.EncodeToString(userPubKey.SerializeCompressed()),
+		Amount: onboardingAmount,
+	}
+
+	_, sharedOutputScript, sharedOutputAmount, err := tree.CraftCongestionTree(
+		s.onchainNework.AssetID, s.pubkey, []tree.Receiver{congestionTreeLeaf},
+		s.minRelayFee, s.roundLifetime, s.unilateralExitDelay,
+	)
+	if err != nil {
+		return "", 0, err
+	}
+
+	pay, err := payment.FromScript(sharedOutputScript, &s.onchainNework, nil)
+	if err != nil {
+		return "", 0, err
+	}
+
+	address, err := pay.TaprootAddress()
+	if err != nil {
+		return "", 0, err
+	}
+
+	return address, sharedOutputAmount, nil
 }
 
 func (s *service) start() {

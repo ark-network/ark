@@ -27,6 +27,7 @@ type ArkServiceClient interface {
 	ListVtxos(ctx context.Context, in *ListVtxosRequest, opts ...grpc.CallOption) (*ListVtxosResponse, error)
 	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error)
 	Onboard(ctx context.Context, in *OnboardRequest, opts ...grpc.CallOption) (*OnboardResponse, error)
+	GetOnboardingAddress(ctx context.Context, in *GetOnboardingAddressRequest, opts ...grpc.CallOption) (*GetOnboardingAddressResponse, error)
 }
 
 type arkServiceClient struct {
@@ -141,6 +142,15 @@ func (c *arkServiceClient) Onboard(ctx context.Context, in *OnboardRequest, opts
 	return out, nil
 }
 
+func (c *arkServiceClient) GetOnboardingAddress(ctx context.Context, in *GetOnboardingAddressRequest, opts ...grpc.CallOption) (*GetOnboardingAddressResponse, error) {
+	out := new(GetOnboardingAddressResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/GetOnboardingAddress", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ArkServiceServer is the server API for ArkService service.
 // All implementations should embed UnimplementedArkServiceServer
 // for forward compatibility
@@ -154,6 +164,7 @@ type ArkServiceServer interface {
 	ListVtxos(context.Context, *ListVtxosRequest) (*ListVtxosResponse, error)
 	GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error)
 	Onboard(context.Context, *OnboardRequest) (*OnboardResponse, error)
+	GetOnboardingAddress(context.Context, *GetOnboardingAddressRequest) (*GetOnboardingAddressResponse, error)
 }
 
 // UnimplementedArkServiceServer should be embedded to have forward compatible implementations.
@@ -186,6 +197,9 @@ func (UnimplementedArkServiceServer) GetInfo(context.Context, *GetInfoRequest) (
 }
 func (UnimplementedArkServiceServer) Onboard(context.Context, *OnboardRequest) (*OnboardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Onboard not implemented")
+}
+func (UnimplementedArkServiceServer) GetOnboardingAddress(context.Context, *GetOnboardingAddressRequest) (*GetOnboardingAddressResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetOnboardingAddress not implemented")
 }
 
 // UnsafeArkServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -364,6 +378,24 @@ func _ArkService_Onboard_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ArkService_GetOnboardingAddress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetOnboardingAddressRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ArkServiceServer).GetOnboardingAddress(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.ArkService/GetOnboardingAddress",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ArkServiceServer).GetOnboardingAddress(ctx, req.(*GetOnboardingAddressRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ArkService_ServiceDesc is the grpc.ServiceDesc for ArkService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -402,6 +434,10 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Onboard",
 			Handler:    _ArkService_Onboard_Handler,
+		},
+		{
+			MethodName: "GetOnboardingAddress",
+			Handler:    _ArkService_GetOnboardingAddress_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

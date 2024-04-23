@@ -101,6 +101,38 @@
         ]
       }
     },
+    "/v1/onboard/address": {
+      "post": {
+        "operationId": "ArkService_GetOnboardingAddress",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetOnboardingAddressResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1GetOnboardingAddressRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
     "/v1/payment/claim": {
       "post": {
         "operationId": "ArkService_ClaimPayment",
@@ -378,6 +410,34 @@
         },
         "unilateralExitDelay": {
           "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1GetOnboardingAddressRequest": {
+      "type": "object",
+      "properties": {
+        "userPubkey": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "string",
+          "format": "uint64"
+        }
+      }
+    },
+    "v1GetOnboardingAddressResponse": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "expectedAmount": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "expectedOutputIndex": {
+          "type": "integer",
           "format": "int64"
         }
       }

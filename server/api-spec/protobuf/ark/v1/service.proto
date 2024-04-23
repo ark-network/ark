@@ -54,6 +54,12 @@ service ArkService {
       body: "*"
     };
   }
+  rpc GetOnboardingAddress(GetOnboardingAddressRequest) returns (GetOnboardingAddressResponse) {
+    option (google.api.http) = {
+      post: "/v1/onboard/address"
+      body: "*"
+    };
+  }
 }
 
 message RegisterPaymentRequest {
@@ -119,6 +125,16 @@ message OnboardRequest {
   string user_pubkey = 3;
 }
 message OnboardResponse {
+}
+
+message GetOnboardingAddressRequest {
+  string user_pubkey = 1;
+  uint64 amount = 2;
+}
+message GetOnboardingAddressResponse {
+  string address = 1;
+  uint64 expected_amount = 2;
+  uint32 expected_output_index = 3;
 }
 
 // EVENT TYPES
