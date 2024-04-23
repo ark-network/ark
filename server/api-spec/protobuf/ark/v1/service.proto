@@ -54,6 +54,12 @@ service ArkService {
       body: "*"
     };
   }
+  rpc TrustedOnboarding(TrustedOnboardingRequest) returns (TrustedOnboardingResponse) {
+    option (google.api.http) = {
+      post: "/v1/onboard/address"
+      body: "*"
+    };
+  }
 }
 
 message RegisterPaymentRequest {
@@ -119,6 +125,15 @@ message OnboardRequest {
   string user_pubkey = 3;
 }
 message OnboardResponse {
+}
+
+message TrustedOnboardingRequest {
+  string user_pubkey = 1;
+  uint64 amount = 2;
+}
+message TrustedOnboardingResponse {
+  string address = 1;
+  uint64 expected_amount = 2;
 }
 
 // EVENT TYPES

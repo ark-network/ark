@@ -101,6 +101,38 @@
         ]
       }
     },
+    "/v1/onboard/address": {
+      "post": {
+        "operationId": "ArkService_TrustedOnboarding",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1TrustedOnboardingResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1TrustedOnboardingRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
     "/v1/payment/claim": {
       "post": {
         "operationId": "ArkService_ClaimPayment",
@@ -574,6 +606,30 @@
             "type": "object",
             "$ref": "#/definitions/v1Node"
           }
+        }
+      }
+    },
+    "v1TrustedOnboardingRequest": {
+      "type": "object",
+      "properties": {
+        "userPubkey": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "string",
+          "format": "uint64"
+        }
+      }
+    },
+    "v1TrustedOnboardingResponse": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "expectedAmount": {
+          "type": "string",
+          "format": "uint64"
         }
       }
     },

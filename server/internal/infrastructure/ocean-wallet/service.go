@@ -23,7 +23,7 @@ type service struct {
 	accountClient pb.AccountServiceClient
 	txClient      pb.TransactionServiceClient
 	notifyClient  pb.NotificationServiceClient
-	chVtxos       chan []domain.VtxoKey
+	chVtxos       chan map[string]ports.VtxoWithValue
 }
 
 func NewService(addr string) (ports.WalletService, error) {
@@ -35,7 +35,7 @@ func NewService(addr string) (ports.WalletService, error) {
 	accountClient := pb.NewAccountServiceClient(conn)
 	txClient := pb.NewTransactionServiceClient(conn)
 	notifyClient := pb.NewNotificationServiceClient(conn)
-	chVtxos := make(chan []domain.VtxoKey)
+	chVtxos := make(chan map[string]ports.VtxoWithValue)
 	svc := &service{
 		addr:          addr,
 		conn:          conn,
@@ -105,7 +105,7 @@ func NewService(addr string) (ports.WalletService, error) {
 		}
 	}
 
-	go svc.listenToNotificaitons()
+	go svc.listenToNotifications()
 
 	return svc, nil
 }
@@ -115,7 +115,7 @@ func (s *service) Close() {
 	s.conn.Close()
 }
 
-func (s *service) listenToNotificaitons() {
+func (s *service) listenToNotifications() {
 	var stream pb.NotificationService_UtxosNotificationsClient
 	var err error
 	for {
@@ -147,8 +147,8 @@ func (s *service) listenToNotificaitons() {
 	}
 }
 
-func toVtxos(utxos []*pb.Utxo) []domain.VtxoKey {
-	vtxos := make([]domain.VtxoKey, 0, len(utxos))
+func toVtxos(utxos []*pb.Utxo) map[string]ports.VtxoWithValue {
+	vtxos := make(map[string]ports.VtxoWithValue, len(utxos))
 	for _, utxo := range utxos {
 		// We want to notify for activity related to vtxos owner, therefore we skip
 		// returning anything related to the internal accounts of the wallet, like
@@ -157,10 +157,12 @@ func toVtxos(utxos []*pb.Utxo) []domain.VtxoKey {
 			continue
 		}
 
-		vtxos = append(vtxos, domain.VtxoKey{
-			Txid: utxo.GetTxid(),
-			VOut: utxo.GetIndex(),
-		})
+		vtxos[utxo.Script] = ports.VtxoWithValue{
+			VtxoKey: domain.VtxoKey{Txid: utxo.GetTxid(),
+				VOut: utxo.GetIndex(),
+			},
+			Value: utxo.GetValue(),
+		}
 	}
 	return vtxos
 }
