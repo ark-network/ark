@@ -11,6 +11,7 @@ WORKDIR /app
 
 COPY . .
 
+ENV GOPROXY=https://goproxy.io,direct
 RUN cd server && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-X 'main.Version=${VERSION}' -X 'main.Commit=${COMMIT}' -X 'main.Date=${DATE}}'" -o ../bin/arkd cmd/arkd/main.go
 RUN cd client && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-X 'main.Version=${VERSION}}' -X 'main.Commit=${COMMIT}' -X 'main.Date=${DATE}}'" -o ../bin/ark .
 
