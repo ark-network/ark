@@ -18,7 +18,7 @@ func EncodeAddress(
 		err = fmt.Errorf("missing asp public key")
 		return
 	}
-	if hrp != MainNet.Addr && hrp != TestNet.Addr {
+	if hrp != Liquid.Addr && hrp != TestNet.Addr {
 		err = fmt.Errorf("invalid prefix")
 		return
 	}
@@ -40,7 +40,7 @@ func DecodeAddress(
 	if err != nil {
 		return
 	}
-	if prefix != MainNet.Addr && prefix != TestNet.Addr {
+	if prefix != Liquid.Addr && prefix != TestNet.Addr {
 		err = fmt.Errorf("invalid prefix")
 		return
 	}
