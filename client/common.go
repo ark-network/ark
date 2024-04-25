@@ -331,7 +331,7 @@ func getNetwork() (*common.Network, *network.Network) {
 
 	net, ok := state[NETWORK]
 	if !ok {
-		return &common.MainNet, &network.Liquid
+		return &common.Liquid, &network.Liquid
 	}
 	return networkFromString(net)
 }
@@ -343,7 +343,7 @@ func networkFromString(net string) (*common.Network, *network.Network) {
 	if net == "regtest" {
 		return &common.RegTest, &network.Regtest
 	}
-	return &common.MainNet, &network.Liquid
+	return &common.Liquid, &network.Liquid
 }
 
 func getAddress() (offchainAddr, onchainAddr, redemptionAddr string, err error) {
