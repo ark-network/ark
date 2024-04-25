@@ -5,8 +5,8 @@ type Network struct {
 	Addr string
 }
 
-var MainNet = Network{
-	Name: "mainnet",
+var Liquid = Network{
+	Name: "liquid",
 	Addr: "ark",
 }
 

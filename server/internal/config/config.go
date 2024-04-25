@@ -118,7 +118,7 @@ func makeDirectoryIfNotExists(path string) error {
 func getNetwork() (common.Network, error) {
 	switch strings.ToLower(viper.GetString(Network)) {
 	case "liquid":
-		return common.MainNet, nil
+		return common.Liquid, nil
 	case "testnet":
 		return common.TestNet, nil
 	case "regtest":
