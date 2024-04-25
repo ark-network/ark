@@ -23,7 +23,7 @@ var (
 	}
 	networkFlag = cli.StringFlag{
 		Name:  "network",
-		Usage: "network to use (mainnet, testnet)",
+		Usage: "network to use (liquid, testnet, regtest)",
 		Value: "testnet",
 	}
 	urlFlag = cli.StringFlag{
@@ -55,7 +55,7 @@ func initAction(ctx *cli.Context) error {
 	if len(url) <= 0 {
 		return fmt.Errorf("invalid ark url")
 	}
-	if net != "mainnet" && net != "testnet" && net != "regtest" {
+	if net != "liquid" && net != "testnet" && net != "regtest" {
 		return fmt.Errorf("invalid network")
 	}
 
