@@ -43,14 +43,14 @@ func onboardAction(ctx *cli.Context) error {
 		return fmt.Errorf("missing amount flag (--amount)")
 	}
 
-	_, net := getNetwork()
+	_, net := getNetwork(ctx)
 
-	userPubKey, err := getWalletPublicKey()
+	userPubKey, err := getWalletPublicKey(ctx)
 	if err != nil {
 		return err
 	}
 
-	client, cancel, err := getClientFromState()
+	client, cancel, err := getClientFromState(ctx)
 	if err != nil {
 		return err
 	}
@@ -71,17 +71,17 @@ func onboardAction(ctx *cli.Context) error {
 		return nil
 	}
 
-	aspPubkey, err := getAspPublicKey()
+	aspPubkey, err := getAspPublicKey(ctx)
 	if err != nil {
 		return err
 	}
 
-	roundLifetime, err := getRoundLifetime()
+	roundLifetime, err := getRoundLifetime(ctx)
 	if err != nil {
 		return err
 	}
 
-	unilateralExitDelay, err := getUnilateralExitDelay()
+	unilateralExitDelay, err := getUnilateralExitDelay(ctx)
 	if err != nil {
 		return err
 	}

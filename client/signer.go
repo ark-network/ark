@@ -10,6 +10,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/urfave/cli/v2"
 	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
@@ -17,7 +18,7 @@ import (
 )
 
 func signPset(
-	pset *psetv2.Pset, explorer Explorer, prvKey *secp256k1.PrivateKey,
+	ctx *cli.Context, pset *psetv2.Pset, explorer Explorer, prvKey *secp256k1.PrivateKey,
 ) error {
 	updater, err := psetv2.NewUpdater(pset)
 	if err != nil {
@@ -64,7 +65,7 @@ func signPset(
 		return err
 	}
 
-	_, onchainAddr, _, err := getAddress()
+	_, onchainAddr, _, err := getAddress(ctx)
 	if err != nil {
 		return err
 	}
@@ -79,7 +80,7 @@ func signPset(
 		return err
 	}
 
-	_, liquidNet := getNetwork()
+	_, liquidNet := getNetwork(ctx)
 
 	prevoutsScripts := make([][]byte, 0)
 	prevoutsValues := make([][]byte, 0)
