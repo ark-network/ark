@@ -24,7 +24,7 @@ var (
 	networkFlag = cli.StringFlag{
 		Name:  "network",
 		Usage: "network to use (liquid, testnet, regtest)",
-		Value: "testnet",
+		Value: "liquid",
 	}
 	urlFlag = cli.StringFlag{
 		Name:     "ark-url",
