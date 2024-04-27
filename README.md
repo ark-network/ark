@@ -6,8 +6,10 @@ Welcome to the Ark monorepo.
 
 In this repository you can find:
 
-- `server` - always-on daemon that serves as the Ark Service Provider (ASP)
-- `client` - single-key wallet as command-line interface (CLI) to interact with the ASP
+- [`server`](./server/) always-on daemon that serves as the Ark Service Provider (ASP)
+- [`client`](./client/) single-key wallet as command-line interface (CLI) to interact with the ASP
+
+Refer to the README in each directory for more information about development.
 
 ## Get Started with Docker
 
