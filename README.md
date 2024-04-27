@@ -11,7 +11,15 @@ In this repository you can find:
 
 Refer to the README in each directory for more information about development.
 
-## Get Started with Docker
+## Roadmap
+
+- [ ] Progressive Web App (PWA) as client and Ark wallet.
+- [ ] Support Bitcoin with pre-signed transactions
+- [ ] Support Ark out-of-round payments
+- [ ] Add protected admin RPCs for `arkd` to manage rounds and treasury
+- [ ] Add `postgres` as database option for `arkd`
+
+## Build and Run with Docker
 
 Run locally with Docker on Liquid Testnet. It uses `docker-compose` to build the `arkd` docker image from `server` and run the it as container, together with the `oceand` container.
 
