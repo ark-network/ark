@@ -3,6 +3,12 @@ name: Release ark
 on:
   release:
     types: [released]
+
+
+permissions:
+  contents: write
+  packages: write
+    
 jobs:
   build:
     runs-on: ubuntu-latest
