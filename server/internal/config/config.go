@@ -44,18 +44,19 @@ var (
 	UnilateralExitDelay   = "UNILATERAL_EXIT_DELAY"
 
 	defaultDatadir               = common.AppDataDir("arkd", false)
-	defaultRoundInterval         = 10
+	defaultRoundInterval         = 5
 	defaultPort                  = 6000
+	defaultWalletAddr            = "localhost:18000"
 	defaultDbType                = "badger"
 	defaultSchedulerType         = "gocron"
 	defaultTxBuilderType         = "covenant"
 	defaultBlockchainScannerType = "ocean"
 	defaultInsecure              = true
-	defaultNetwork               = "testnet"
-	defaultLogLevel              = 5
-	defaultMinRelayFee           = 30
-	defaultRoundLifetime         = 512
-	defaultUnilateralExitDelay   = 512
+	defaultNetwork               = "liquid"
+	defaultLogLevel              = 4
+	defaultMinRelayFee           = 30     // 0.1 sat/vbyte on Liquid
+	defaultRoundLifetime         = 604800 // 1 week
+	defaultUnilateralExitDelay   = 1440   // 1 day
 )
 
 func LoadConfig() (*Config, error) {
@@ -63,18 +64,19 @@ func LoadConfig() (*Config, error) {
 	viper.AutomaticEnv()
 
 	viper.SetDefault(Datadir, defaultDatadir)
-	viper.SetDefault(RoundInterval, defaultRoundInterval)
 	viper.SetDefault(Port, defaultPort)
 	viper.SetDefault(DbType, defaultDbType)
-	viper.SetDefault(SchedulerType, defaultSchedulerType)
-	viper.SetDefault(TxBuilderType, defaultTxBuilderType)
-	viper.SetDefault(BlockchainScannerType, defaultBlockchainScannerType)
 	viper.SetDefault(Insecure, defaultInsecure)
 	viper.SetDefault(LogLevel, defaultLogLevel)
 	viper.SetDefault(Network, defaultNetwork)
-	viper.SetDefault(RoundLifetime, defaultRoundLifetime)
+	viper.SetDefault(WalletAddr, defaultWalletAddr)
 	viper.SetDefault(MinRelayFee, defaultMinRelayFee)
+	viper.SetDefault(RoundInterval, defaultRoundInterval)
+	viper.SetDefault(RoundLifetime, defaultRoundLifetime)
+	viper.SetDefault(SchedulerType, defaultSchedulerType)
+	viper.SetDefault(TxBuilderType, defaultTxBuilderType)
 	viper.SetDefault(UnilateralExitDelay, defaultUnilateralExitDelay)
+	viper.SetDefault(BlockchainScannerType, defaultBlockchainScannerType)
 
 	net, err := getNetwork()
 	if err != nil {

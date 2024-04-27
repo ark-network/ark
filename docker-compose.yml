@@ -29,6 +29,7 @@ services:
     environment:
       - ARK_WALLET_ADDR=oceand:18000
       - ARK_ROUND_INTERVAL=10
+      - ARK_NETWORK=testnet
     ports:
       - "6000:6000"
     volumes:

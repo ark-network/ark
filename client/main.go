@@ -16,7 +16,7 @@ import (
 const (
 	DATADIR_ENVVAR = "ARK_WALLET_DATADIR"
 	STATE_FILE     = "state.json"
-	defaultNetwork = "testnet"
+	defaultNetwork = "liquid"
 
 	ASP_URL               = "asp_url"
 	ASP_PUBKEY            = "asp_public_key"

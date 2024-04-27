@@ -1,52 +1,122 @@
-name: release
+name: Release ark
 
 on:
-  workflow_dispatch:
-  push:
-    tags:
-      - "*"
-    paths:
-      - "server/**"
-
+  release:
+    types: [released]
 jobs:
-  goreleaser:
-    runs-on: ubuntu-20.04
-    defaults:
-      run:
-        working-directory: ./server
-    env:
-      DOCKER_CLI_EXPERIMENTAL: "enabled"
+  build:
+    runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-go@v3
-        with:
-          go-version: ">1.17.2"
-      - uses: actions/cache@v1
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-      - uses: docker/login-action@v1
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: release artifacts
-        uses: goreleaser/goreleaser-action@v2
-        with:
-          version: latest
-          args: release --rm-dist --debug
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
-      - uses: bufbuild/buf-setup-action@v1.3.1
-      - name: release protos
-        uses: bufbuild/buf-push-action@v1
-        with:
-          input: api-spec/protobuf
-          buf_token: ${{ secrets.BUF_TOKEN }}
-  
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.21.0
+
+    - name: Build binaries
+      run: make build-all
+
+    - name: Upload server binary (Linux, AMD64)
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./server/build/arkd-linux-amd64
+        asset_name: arkd-linux-amd64
+        asset_content_type: application/octet-stream
+
+    - name: Upload server binary (Linux, ARM)
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./server/build/arkd-linux-arm64
+        asset_name: arkd-linux-arm
+        asset_content_type: application/octet-stream
+
+    - name: Upload server binary (Darwin, AMD64)
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./server/build/arkd-darwin-amd64
+        asset_name: arkd-darwin-amd64
+        asset_content_type: application/octet-stream
+
+    - name: Upload server binary (Darwin, ARM)
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./server/build/arkd-darwin-arm64
+        asset_name: arkd-darwin-arm
+        asset_content_type: application/octet-stream
+
+    # CLI
+    - name: Upload client binary (Linux, AMD64)
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./client/build/ark-linux-amd64
+        asset_name: ark-linux-amd64
+        asset_content_type: application/octet-stream
+
+    - name: Upload client binary (Linux, ARM)
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./client/build/ark-linux-arm64
+        asset_name: ark-linux-arm
+        asset_content_type: application/octet-stream
+
+    - name: Upload client binary (Darwin, AMD64)
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./client/build/ark-darwin-amd64
+        asset_name: ark-darwin-amd64
+        asset_content_type: application/octet-stream
+
+    - name: Upload client binary (Darwin, ARM)
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./client/build/ark-darwin-arm64
+        asset_name: ark-darwin-arm
+        asset_content_type: application/octet-stream
+
+
+    # Docker 
+
+    - name: Set up Docker
+      uses: docker/setup-buildx-action@v1
+
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v1 
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v2
+      with:
+        context: .
+        push: true
+        tags: ghcr.io/${{ github.repository }}:${{ github.event.release.tag_name }}
+        platforms: linux/amd64,linux/arm64
