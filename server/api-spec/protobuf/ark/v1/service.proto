@@ -103,7 +103,9 @@ message GetEventStreamResponse {
 message PingRequest {
   string payment_id = 1;
 }
-message PingResponse {}
+message PingResponse {
+  repeated string forfeit_txs = 1;
+}
 
 message ListVtxosRequest {
   string address = 1;

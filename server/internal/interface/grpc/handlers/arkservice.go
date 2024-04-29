@@ -107,11 +107,14 @@ func (h *handler) Ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.Ping
 		return nil, status.Error(codes.InvalidArgument, "missing payment id")
 	}
 
-	if err := h.svc.UpdatePaymentStatus(ctx, req.GetPaymentId()); err != nil {
+	forfeits, err := h.svc.UpdatePaymentStatus(ctx, req.GetPaymentId())
+	if err != nil {
 		return nil, err
 	}
 
-	return &arkv1.PingResponse{}, nil
+	return &arkv1.PingResponse{
+		ForfeitTxs: forfeits,
+	}, nil
 }
 
 func (h *handler) RegisterPayment(ctx context.Context, req *arkv1.RegisterPaymentRequest) (*arkv1.RegisterPaymentResponse, error) {
