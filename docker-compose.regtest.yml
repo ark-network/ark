@@ -28,6 +28,7 @@ services:
       - ARK_WALLET_ADDR=oceand:18000
       - ARK_ROUND_INTERVAL=10
       - ARK_NETWORK=regtest
+      - ARK_LOG_LEVEL=5
     ports:
       - "6000:6000"
 

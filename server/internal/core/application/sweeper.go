@@ -93,6 +93,11 @@ func (s *sweeper) schedule(
 	}
 
 	s.scheduledTasks[root.Txid] = struct{}{}
+
+	if err := s.updateVtxoExpirationTime(congestionTree, expirationTimestamp); err != nil {
+		log.WithError(err).Error("error while updating vtxo expiration time")
+	}
+
 	return nil
 }
 
@@ -385,6 +390,30 @@ func (s *sweeper) nodeToSweepInputs(parentBlocktime int64, node tree.Node) (int6
 	return expirationTime, sweepInputs, nil
 }
 
+func (s *sweeper) updateVtxoExpirationTime(
+	tree tree.CongestionTree,
+	expirationTime int64,
+) error {
+	leaves := tree.Leaves()
+	vtxos := make([]domain.VtxoKey, 0)
+
+	for _, leaf := range leaves {
+		pset, err := psetv2.NewPsetFromBase64(leaf.Tx)
+		if err != nil {
+			return err
+		}
+
+		vtxo, err := extractVtxoOutpoint(pset)
+		if err != nil {
+			return err
+		}
+
+		vtxos = append(vtxos, *vtxo)
+	}
+
+	return s.repoManager.Vtxos().UpdateExpireAt(context.Background(), vtxos, expirationTime)
+}
+
 func computeSubTrees(congestionTree tree.CongestionTree, inputs []ports.SweepInput) ([]tree.CongestionTree, error) {
 	subTrees := make(map[string]tree.CongestionTree, 0)
 
@@ -498,7 +527,7 @@ func extractSweepLeaf(input psetv2.Input) (sweepLeaf *psetv2.TapLeafScript, life
 	return sweepLeaf, lifetime, nil
 }
 
-// assuming the pset is a leaf in the congestion tree, returns the vtxos outputs
+// assuming the pset is a leaf in the congestion tree, returns the vtxo outpoint
 func extractVtxoOutpoint(pset *psetv2.Pset) (*domain.VtxoKey, error) {
 	if len(pset.Outputs) != 2 {
 		return nil, fmt.Errorf("invalid leaf pset, expect 2 outputs, got %d", len(pset.Outputs))

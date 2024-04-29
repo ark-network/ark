@@ -135,6 +135,24 @@ func (r *vtxoRepository) SweepVtxos(
 	return nil
 }
 
+func (r *vtxoRepository) UpdateExpireAt(ctx context.Context, vtxos []domain.VtxoKey, expireAt int64) error {
+	tx := r.store.Badger().NewTransaction(true)
+	defer tx.Discard()
+
+	for _, vtxo := range vtxos {
+		vtxo, err := r.getVtxo(ctx, vtxo)
+		if err != nil {
+			return err
+		}
+		vtxo.ExpireAt = expireAt
+		if err := r.store.TxUpdate(tx, vtxo.Hash(), *vtxo); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
 func (r *vtxoRepository) Close() {
 	r.store.Close()
 }
@@ -211,6 +229,7 @@ func (r *vtxoRepository) redeemVtxo(ctx context.Context, vtxoKey domain.VtxoKey)
 	}
 
 	vtxo.Redeemed = true
+	vtxo.ExpireAt = 0
 	if ctx.Value("tx") != nil {
 		tx := ctx.Value("tx").(*badger.Txn)
 		err = r.store.TxUpdate(tx, vtxoKey.Hash(), *vtxo)
@@ -247,6 +266,7 @@ func (r *vtxoRepository) sweepVtxo(ctx context.Context, vtxoKey domain.VtxoKey) 
 	}
 
 	vtxo.Swept = true
+	vtxo.ExpireAt = 0
 	if ctx.Value("tx") != nil {
 		tx := ctx.Value("tx").(*badger.Txn)
 		err = r.store.TxUpdate(tx, vtxoKey.Hash(), *vtxo)

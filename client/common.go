@@ -246,11 +246,11 @@ func coinSelect(vtxos []vtxo, amount uint64, sortByExpirationTime bool) ([]vtxo,
 
 func getOffchainBalance(
 	ctx context.Context, explorer Explorer, client arkv1.ArkServiceClient,
-	addr string, withExpiration bool,
+	addr string, computeExpiration bool,
 ) (uint64, map[int64]uint64, error) {
 	amountByExpiration := make(map[int64]uint64, 0)
 
-	vtxos, err := getVtxos(ctx, explorer, client, addr, withExpiration)
+	vtxos, err := getVtxos(ctx, explorer, client, addr, computeExpiration)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -258,7 +258,7 @@ func getOffchainBalance(
 	for _, vtxo := range vtxos {
 		balance += vtxo.amount
 
-		if withExpiration {
+		if vtxo.expireAt != nil {
 			expiration := vtxo.expireAt.Unix()
 
 			if _, ok := amountByExpiration[expiration]; !ok {

@@ -10,8 +10,8 @@ import (
 )
 
 var expiryDetailsFlag = cli.BoolFlag{
-	Name:     "expiry-details",
-	Usage:    "show cumulative balance by expiry time",
+	Name:     "compute-expiry-details",
+	Usage:    "compute client-side the VTXOs expiry time",
 	Value:    false,
 	Required: false,
 }
@@ -24,7 +24,7 @@ var balanceCommand = cli.Command{
 }
 
 func balanceAction(ctx *cli.Context) error {
-	withExpiryDetails := ctx.Bool("expiry-details")
+	computeExpiryDetails := ctx.Bool(expiryDetailsFlag.Name)
 
 	client, cancel, err := getClientFromState()
 	if err != nil {
@@ -49,7 +49,7 @@ func balanceAction(ctx *cli.Context) error {
 		defer wg.Done()
 		explorer := NewExplorer()
 		balance, amountByExpiration, err := getOffchainBalance(
-			ctx.Context, explorer, client, offchainAddr, withExpiryDetails,
+			ctx.Context, explorer, client, offchainAddr, computeExpiryDetails,
 		)
 		if err != nil {
 			chRes <- balanceRes{0, 0, nil, nil, err}
@@ -176,9 +176,7 @@ func balanceAction(ctx *cli.Context) error {
 		offchainBalanceJSON["next_expiration"] = fancyTimeExpiration
 	}
 
-	if withExpiryDetails {
-		offchainBalanceJSON["details"] = details
-	}
+	offchainBalanceJSON["details"] = details
 
 	response["offchain_balance"] = offchainBalanceJSON
 

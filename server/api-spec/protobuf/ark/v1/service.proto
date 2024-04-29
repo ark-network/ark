@@ -200,4 +200,5 @@ message Vtxo {
   Output receiver = 2;
   bool spent = 3;
   string pool_txid = 4;
+  int64 expire_at = 5;
 }

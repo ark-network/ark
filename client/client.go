@@ -22,7 +22,7 @@ type vtxo struct {
 
 func getVtxos(
 	ctx context.Context, explorer Explorer, client arkv1.ArkServiceClient,
-	addr string, withExpiration bool,
+	addr string, computeExpiration bool,
 ) ([]vtxo, error) {
 	response, err := client.ListVtxos(ctx, &arkv1.ListVtxosRequest{
 		Address: addr,
@@ -33,15 +33,21 @@ func getVtxos(
 
 	vtxos := make([]vtxo, 0, len(response.GetSpendableVtxos()))
 	for _, v := range response.GetSpendableVtxos() {
+		var expireAt *time.Time
+		if v.ExpireAt > 0 {
+			t := time.Unix(v.ExpireAt, 0)
+			expireAt = &t
+		}
 		vtxos = append(vtxos, vtxo{
 			amount:   v.Receiver.Amount,
 			txid:     v.Outpoint.Txid,
 			vout:     v.Outpoint.Vout,
 			poolTxid: v.PoolTxid,
+			expireAt: expireAt,
 		})
 	}
 
-	if !withExpiration {
+	if !computeExpiration {
 		return vtxos, nil
 	}
 
