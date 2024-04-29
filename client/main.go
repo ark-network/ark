@@ -14,6 +14,8 @@ import (
 )
 
 const (
+	DATADIR_ENVVAR = "ARK_WALLET_DATADIR"
+
 	version = "alpha-0.1.0"
 
 	STATE_FILE     = "state.json"
@@ -55,6 +57,7 @@ var (
 		Usage:    "Specify the data directory",
 		Required: false,
 		Value:    defaultDatadir,
+		EnvVars:  []string{DATADIR_ENVVAR},
 	}
 )
 
