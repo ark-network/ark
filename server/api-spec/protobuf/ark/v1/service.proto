@@ -118,6 +118,9 @@ message GetInfoResponse {
   string pubkey = 1;
   int64 round_lifetime = 2;
   int64 unilateral_exit_delay = 3;
+  int64 round_interval = 4;
+  string network = 5;
+  int64 min_relay_fee = 6;
 }
 
 message OnboardRequest {
