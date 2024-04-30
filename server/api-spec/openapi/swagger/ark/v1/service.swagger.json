@@ -674,6 +674,9 @@
         },
         "poolTxid": {
           "type": "string"
+        },
+        "spentBy": {
+          "type": "string"
         }
       }
     }
