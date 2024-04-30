@@ -62,7 +62,7 @@ jobs:
       with:
         upload_url: ${{ github.event.release.upload_url }}
         asset_path: ./server/build/arkd-darwin-arm64
-        asset_name: arkd-darwin-arm
+        asset_name: arkd-darwin-arm64
         asset_content_type: application/octet-stream
 
     # CLI
@@ -83,7 +83,7 @@ jobs:
       with:
         upload_url: ${{ github.event.release.upload_url }}
         asset_path: ./client/build/ark-linux-arm64
-        asset_name: ark-linux-arm
+        asset_name: ark-linux-arm64
         asset_content_type: application/octet-stream
 
     - name: Upload client binary (Darwin, AMD64)
