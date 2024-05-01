@@ -110,7 +110,7 @@ func (m *paymentsMap) updatePingTimestamp(id string) error {
 
 	payment, ok := m.payments[id]
 	if !ok {
-		return fmt.Errorf("payment %s not found", id)
+		return errPaymentNotFound{id}
 	}
 
 	payment.pingTimestamp = time.Now()

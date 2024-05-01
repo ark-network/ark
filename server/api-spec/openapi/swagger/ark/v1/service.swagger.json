@@ -499,7 +499,15 @@
       }
     },
     "v1PingResponse": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "forfeitTxs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     },
     "v1RegisterPaymentRequest": {
       "type": "object",
@@ -665,6 +673,9 @@
           "type": "boolean"
         },
         "poolTxid": {
+          "type": "string"
+        },
+        "spentBy": {
           "type": "string"
         },
         "expireAt": {

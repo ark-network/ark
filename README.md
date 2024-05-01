@@ -162,7 +162,7 @@ ark redeem --address <onchain_address> --amount 12100
 In the case of the ASP is not responding, you can leave the ark unilaterally (`--amount` is not necessary since `--force` will redeem all funds):
 
 ```bash
-ark redeem --address <onchain_address> --force
+ark redeem --force
 ```
 
 ### Help

@@ -34,7 +34,7 @@ type Service interface {
 	GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error)
 	GetCurrentRound(ctx context.Context) (*domain.Round, error)
 	GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
-	UpdatePaymentStatus(ctx context.Context, id string) error
+	UpdatePaymentStatus(ctx context.Context, id string) (unsignedForfeitTxs []string, err error)
 	ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, []domain.Vtxo, error)
 	GetInfo(ctx context.Context) (string, int64, int64, error)
 	Onboard(ctx context.Context, boardingTx string, congestionTree tree.CongestionTree, userPubkey *secp256k1.PublicKey) error
@@ -181,8 +181,17 @@ func (s *service) ClaimVtxos(ctx context.Context, creds string, receivers []doma
 	return s.paymentRequests.update(*payment)
 }
 
-func (s *service) UpdatePaymentStatus(_ context.Context, id string) error {
-	return s.paymentRequests.updatePingTimestamp(id)
+func (s *service) UpdatePaymentStatus(_ context.Context, id string) ([]string, error) {
+	err := s.paymentRequests.updatePingTimestamp(id)
+	if err != nil {
+		if _, ok := err.(errPaymentNotFound); ok {
+			return s.forfeitTxs.view(), nil
+		}
+
+		return nil, err
+	}
+
+	return nil, nil
 }
 
 func (s *service) SignVtxos(ctx context.Context, forfeitTxs []string) error {
