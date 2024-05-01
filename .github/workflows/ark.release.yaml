@@ -1,4 +1,4 @@
-name: Release ark
+name: release
 
 on:
   release:
@@ -42,7 +42,7 @@ jobs:
       with:
         upload_url: ${{ github.event.release.upload_url }}
         asset_path: ./server/build/arkd-linux-arm64
-        asset_name: arkd-linux-arm
+        asset_name: arkd-linux-arm64
         asset_content_type: application/octet-stream
 
     - name: Upload server binary (Darwin, AMD64)
@@ -103,7 +103,7 @@ jobs:
       with:
         upload_url: ${{ github.event.release.upload_url }}
         asset_path: ./client/build/ark-darwin-arm64
-        asset_name: ark-darwin-arm
+        asset_name: ark-darwin-arm64
         asset_content_type: application/octet-stream
 
 

@@ -54,9 +54,9 @@ var (
 	defaultInsecure              = true
 	defaultNetwork               = "liquid"
 	defaultLogLevel              = 4
-	defaultMinRelayFee           = 30     // 0.1 sat/vbyte on Liquid
-	defaultRoundLifetime         = 604800 // 1 week
-	defaultUnilateralExitDelay   = 1440   // 1 day
+	defaultMinRelayFee           = 30 // 0.1 sat/vbyte on Liquid
+	defaultRoundLifetime         = 604672
+	defaultUnilateralExitDelay   = 1024
 )
 
 func LoadConfig() (*Config, error) {
