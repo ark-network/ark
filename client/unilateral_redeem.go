@@ -7,6 +7,7 @@ import (
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/urfave/cli/v2"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/taproot"
 )
@@ -115,10 +116,10 @@ func (r *redeemBranch) redeemPath() ([]string, error) {
 	return transactions, nil
 }
 
-func (r *redeemBranch) expireAt() (*time.Time, error) {
+func (r *redeemBranch) expireAt(ctx *cli.Context) (*time.Time, error) {
 	lastKnownBlocktime := int64(0)
 
-	confirmed, blocktime, _ := getTxBlocktime(r.vtxo.poolTxid)
+	confirmed, blocktime, _ := getTxBlocktime(ctx, r.vtxo.poolTxid)
 
 	if confirmed {
 		lastKnownBlocktime = blocktime
@@ -131,7 +132,7 @@ func (r *redeemBranch) expireAt() (*time.Time, error) {
 		utx, _ := pset.UnsignedTx()
 		txid := utx.TxHash().String()
 
-		confirmed, blocktime, err := getTxBlocktime(txid)
+		confirmed, blocktime, err := getTxBlocktime(ctx, txid)
 		if err != nil {
 			break
 		}

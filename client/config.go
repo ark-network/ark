@@ -11,7 +11,7 @@ var configCommand = cli.Command{
 }
 
 func printConfigAction(ctx *cli.Context) error {
-	state, err := getState()
+	state, err := getState(ctx)
 	if err != nil {
 		return err
 	}

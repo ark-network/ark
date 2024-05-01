@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/urfave/cli/v2"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/transaction"
 )
@@ -39,8 +40,8 @@ type explorer struct {
 	baseUrl string
 }
 
-func NewExplorer() Explorer {
-	baseUrl, err := getBaseURL()
+func NewExplorer(ctx *cli.Context) Explorer {
+	baseUrl, err := getBaseURL(ctx)
 	if err != nil {
 		panic(err)
 	}

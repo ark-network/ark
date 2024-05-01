@@ -87,7 +87,7 @@ func sendAction(ctx *cli.Context) error {
 		}
 	}
 
-	explorer := NewExplorer()
+	explorer := NewExplorer(ctx)
 
 	if len(onchainReceivers) > 0 {
 		pset, err := sendOnchain(ctx, onchainReceivers)
@@ -117,7 +117,7 @@ func sendAction(ctx *cli.Context) error {
 func sendOffchain(ctx *cli.Context, receivers []receiver) error {
 	withExpiryCoinselect := ctx.Bool("enable-expiry-coinselect")
 
-	offchainAddr, _, _, err := getAddress()
+	offchainAddr, _, _, err := getAddress(ctx)
 	if err != nil {
 		return err
 	}
@@ -152,15 +152,15 @@ func sendOffchain(ctx *cli.Context, receivers []receiver) error {
 		})
 		sumOfReceivers += receiver.Amount
 	}
-	client, close, err := getClientFromState()
+	client, close, err := getClientFromState(ctx)
 	if err != nil {
 		return err
 	}
 	defer close()
 
-	explorer := NewExplorer()
+	explorer := NewExplorer(ctx)
 
-	vtxos, err := getVtxos(ctx.Context, explorer, client, offchainAddr, withExpiryCoinselect)
+	vtxos, err := getVtxos(ctx, explorer, client, offchainAddr, withExpiryCoinselect)
 	if err != nil {
 		return err
 	}
@@ -207,7 +207,7 @@ func sendOffchain(ctx *cli.Context, receivers []receiver) error {
 	}
 
 	poolTxID, err := handleRoundStream(
-		ctx.Context, client, registerResponse.GetId(),
+		ctx, client, registerResponse.GetId(),
 		selectedCoins, secKey, receiversOutput,
 	)
 	if err != nil {
@@ -229,7 +229,7 @@ func sendOnchain(ctx *cli.Context, receivers []receiver) (string, error) {
 		return "", err
 	}
 
-	_, net := getNetwork()
+	_, net := getNetwork(ctx)
 
 	targetAmount := uint64(0)
 	for _, receiver := range receivers {
@@ -254,21 +254,21 @@ func sendOnchain(ctx *cli.Context, receivers []receiver) (string, error) {
 		}
 	}
 
-	explorer := NewExplorer()
+	explorer := NewExplorer(ctx)
 
 	utxos, delayedUtxos, change, err := coinSelectOnchain(
-		explorer, targetAmount, nil,
+		ctx, explorer, targetAmount, nil,
 	)
 	if err != nil {
 		return "", err
 	}
 
-	if err := addInputs(updater, utxos, delayedUtxos, net); err != nil {
+	if err := addInputs(ctx, updater, utxos, delayedUtxos, net); err != nil {
 		return "", err
 	}
 
 	if change > 0 {
-		_, changeAddr, _, err := getAddress()
+		_, changeAddr, _, err := getAddress(ctx)
 		if err != nil {
 			return "", err
 		}
@@ -307,18 +307,18 @@ func sendOnchain(ctx *cli.Context, receivers []receiver) (string, error) {
 		}
 		// reselect the difference
 		selected, delayedSelected, newChange, err := coinSelectOnchain(
-			explorer, feeAmount-change, append(utxos, delayedUtxos...),
+			ctx, explorer, feeAmount-change, append(utxos, delayedUtxos...),
 		)
 		if err != nil {
 			return "", err
 		}
 
-		if err := addInputs(updater, selected, delayedSelected, net); err != nil {
+		if err := addInputs(ctx, updater, selected, delayedSelected, net); err != nil {
 			return "", err
 		}
 
 		if newChange > 0 {
-			_, changeAddr, _, err := getAddress()
+			_, changeAddr, _, err := getAddress(ctx)
 			if err != nil {
 				return "", err
 			}
@@ -354,7 +354,7 @@ func sendOnchain(ctx *cli.Context, receivers []receiver) (string, error) {
 		return "", err
 	}
 
-	if err := signPset(updater.Pset, explorer, prvKey); err != nil {
+	if err := signPset(ctx, updater.Pset, explorer, prvKey); err != nil {
 		return "", err
 	}
 
