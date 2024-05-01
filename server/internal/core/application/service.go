@@ -110,9 +110,12 @@ func NewService(
 	}
 	repoManager.RegisterEventsHandler(
 		func(round *domain.Round) {
-			go svc.updateVtxoSet(round)
 			go svc.propagateEvents(round)
-			go svc.scheduleSweepVtxosForRound(round)
+			go func() {
+				// utxo db must be updated before scheduling the sweep events
+				svc.updateVtxoSet(round)
+				svc.scheduleSweepVtxosForRound(round)
+			}()
 		},
 	)
 

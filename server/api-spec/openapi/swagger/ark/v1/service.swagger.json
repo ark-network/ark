@@ -688,6 +688,10 @@
         },
         "spentBy": {
           "type": "string"
+        },
+        "expireAt": {
+          "type": "string",
+          "format": "int64"
         }
       }
     }

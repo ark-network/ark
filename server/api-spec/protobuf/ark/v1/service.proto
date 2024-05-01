@@ -206,4 +206,5 @@ message Vtxo {
   bool spent = 3;
   string pool_txid = 4;
   string spent_by = 5;
+  int64 expire_at = 6;
 }

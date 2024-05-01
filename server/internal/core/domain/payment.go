@@ -135,4 +135,5 @@ type Vtxo struct {
 	Spent    bool
 	Redeemed bool
 	Swept    bool
+	ExpireAt int64
 }
