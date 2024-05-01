@@ -207,4 +207,5 @@ message Vtxo {
   string pool_txid = 4;
   string spent_by = 5;
   int64 expire_at = 6;
+  bool swept = 7;
 }

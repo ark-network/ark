@@ -354,6 +354,7 @@ func (v vtxoList) toProto(hrp string, aspKey *secp256k1.PublicKey) []*arkv1.Vtxo
 			Spent:    vv.Spent,
 			ExpireAt: vv.ExpireAt,
 			SpentBy:  vv.SpentBy,
+			Swept:    vv.Swept,
 		})
 	}
 	return list
