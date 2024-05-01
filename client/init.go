@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -69,7 +68,7 @@ func initAction(ctx *cli.Context) error {
 		explorerURL = explorerUrl[net]
 	}
 
-	if err := connectToAsp(ctx.Context, net, url, explorerURL); err != nil {
+	if err := connectToAsp(ctx, net, url, explorerURL); err != nil {
 		return err
 	}
 
@@ -78,7 +77,7 @@ func initAction(ctx *cli.Context) error {
 		return err
 	}
 
-	return initWallet(key, password)
+	return initWallet(ctx, key, password)
 }
 
 func generateRandomPrivateKey() (*secp256k1.PrivateKey, error) {
@@ -89,19 +88,19 @@ func generateRandomPrivateKey() (*secp256k1.PrivateKey, error) {
 	return privKey, nil
 }
 
-func connectToAsp(ctx context.Context, net, url, explorer string) error {
+func connectToAsp(ctx *cli.Context, net, url, explorer string) error {
 	client, close, err := getClient(url)
 	if err != nil {
 		return err
 	}
 	defer close()
 
-	resp, err := client.GetInfo(ctx, &arkv1.GetInfoRequest{})
+	resp, err := client.GetInfo(ctx.Context, &arkv1.GetInfoRequest{})
 	if err != nil {
 		return err
 	}
 
-	return setState(map[string]string{
+	return setState(ctx, map[string]string{
 		ASP_URL:               url,
 		NETWORK:               net,
 		ASP_PUBKEY:            resp.Pubkey,
@@ -111,7 +110,7 @@ func connectToAsp(ctx context.Context, net, url, explorer string) error {
 	})
 }
 
-func initWallet(key string, password []byte) error {
+func initWallet(ctx *cli.Context, key string, password []byte) error {
 	var privateKey *secp256k1.PrivateKey
 	if len(key) <= 0 {
 		privKey, err := generateRandomPrivateKey()
@@ -144,7 +143,7 @@ func initWallet(key string, password []byte) error {
 		PUBKEY:           hex.EncodeToString(pubkey),
 	}
 
-	if err := setState(state); err != nil {
+	if err := setState(ctx, state); err != nil {
 		return err
 	}
 

@@ -11,7 +11,7 @@ var receiveCommand = cli.Command{
 }
 
 func receiveAction(ctx *cli.Context) error {
-	offchainAddr, onchainAddr, _, err := getAddress()
+	offchainAddr, onchainAddr, _, err := getAddress(ctx)
 	if err != nil {
 		return err
 	}

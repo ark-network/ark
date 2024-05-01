@@ -56,7 +56,7 @@ func redeemAction(ctx *cli.Context) error {
 		return fmt.Errorf("missing amount flag (--amount)")
 	}
 
-	client, clean, err := getClientFromState()
+	client, clean, err := getClientFromState(ctx)
 	if err != nil {
 		return err
 	}
@@ -86,7 +86,7 @@ func collaborativeRedeem(
 	if err != nil {
 		return fmt.Errorf("invalid onchain address: unknown network")
 	}
-	_, liquidNet := getNetwork()
+	_, liquidNet := getNetwork(ctx)
 	if net.Name != liquidNet.Name {
 		return fmt.Errorf("invalid onchain address: must be for %s network", liquidNet.Name)
 	}
@@ -96,7 +96,7 @@ func collaborativeRedeem(
 		addr = info.Address
 	}
 
-	offchainAddr, _, _, err := getAddress()
+	offchainAddr, _, _, err := getAddress(ctx)
 	if err != nil {
 		return err
 	}
@@ -108,9 +108,9 @@ func collaborativeRedeem(
 		},
 	}
 
-	explorer := NewExplorer()
+	explorer := NewExplorer(ctx)
 
-	vtxos, err := getVtxos(ctx.Context, explorer, client, offchainAddr, withExpiryCoinselect)
+	vtxos, err := getVtxos(ctx, explorer, client, offchainAddr, withExpiryCoinselect)
 	if err != nil {
 		return err
 	}
@@ -157,7 +157,7 @@ func collaborativeRedeem(
 	}
 
 	poolTxID, err := handleRoundStream(
-		ctx.Context,
+		ctx,
 		client,
 		registerResponse.GetId(),
 		selectedCoins,
@@ -178,13 +178,13 @@ func collaborativeRedeem(
 }
 
 func unilateralRedeem(ctx *cli.Context, client arkv1.ArkServiceClient) error {
-	offchainAddr, _, _, err := getAddress()
+	offchainAddr, _, _, err := getAddress(ctx)
 	if err != nil {
 		return err
 	}
 
-	explorer := NewExplorer()
-	vtxos, err := getVtxos(ctx.Context, explorer, client, offchainAddr, false)
+	explorer := NewExplorer(ctx)
+	vtxos, err := getVtxos(ctx, explorer, client, offchainAddr, false)
 	if err != nil {
 		return err
 	}

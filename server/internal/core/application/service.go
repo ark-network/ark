@@ -25,6 +25,15 @@ var (
 	dustAmount        = uint64(450)
 )
 
+type ServiceInfo struct {
+	PubKey              string
+	RoundLifetime       int64
+	UnilateralExitDelay int64
+	RoundInterval       int64
+	Network             string
+	MinRelayFee         int64
+}
+
 type Service interface {
 	Start() error
 	Stop()
@@ -36,7 +45,7 @@ type Service interface {
 	GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
 	UpdatePaymentStatus(ctx context.Context, id string) (unsignedForfeitTxs []string, err error)
 	ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, []domain.Vtxo, error)
-	GetInfo(ctx context.Context) (string, int64, int64, error)
+	GetInfo(ctx context.Context) (*ServiceInfo, error)
 	Onboard(ctx context.Context, boardingTx string, congestionTree tree.CongestionTree, userPubkey *secp256k1.PublicKey) error
 	TrustedOnboarding(ctx context.Context, userPubKey *secp256k1.PublicKey, onboardingAmount uint64) (string, uint64, error)
 }
@@ -215,9 +224,17 @@ func (s *service) GetCurrentRound(ctx context.Context) (*domain.Round, error) {
 	return s.repoManager.Rounds().GetCurrentRound(ctx)
 }
 
-func (s *service) GetInfo(ctx context.Context) (string, int64, int64, error) {
+func (s *service) GetInfo(ctx context.Context) (*ServiceInfo, error) {
 	pubkey := hex.EncodeToString(s.pubkey.SerializeCompressed())
-	return pubkey, s.roundLifetime, s.unilateralExitDelay, nil
+
+	return &ServiceInfo{
+		PubKey:              pubkey,
+		RoundLifetime:       s.roundLifetime,
+		UnilateralExitDelay: s.unilateralExitDelay,
+		RoundInterval:       s.roundInterval,
+		Network:             s.network.Name,
+		MinRelayFee:         int64(s.minRelayFee),
+	}, nil
 }
 
 func (s *service) Onboard(
