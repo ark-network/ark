@@ -103,7 +103,9 @@ message GetEventStreamResponse {
 message PingRequest {
   string payment_id = 1;
 }
-message PingResponse {}
+message PingResponse {
+  repeated string forfeit_txs = 1;
+}
 
 message ListVtxosRequest {
   string address = 1;
@@ -203,4 +205,5 @@ message Vtxo {
   Output receiver = 2;
   bool spent = 3;
   string pool_txid = 4;
+  string spent_by = 5;
 }
