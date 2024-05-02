@@ -68,7 +68,7 @@ Fund the resulting address with [Liquid testnet faucet](https://liquidtestnet.co
 Inside the `arkd` container is shipped the `ark` CLI. You can submit payment to the ASP using the `ark` CLI.
 
 ```bash
-alias ark='docker exec arkd ark'
+alias ark='docker exec -it arkd ark'
 ark init --password <password> --ark-url localhost:6000
 ```
 
