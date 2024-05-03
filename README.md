@@ -25,7 +25,6 @@ Run locally with Docker on Liquid Testnet. It uses `docker-compose` to build the
 
 ### Prerequisites
 
-- [Go](https://go.dev/doc/install)
 - [Docker](https://docs.docker.com/engine/install/)
 
 ### Setup the Ocean wallet
@@ -47,7 +46,7 @@ ocean wallet unlock --password <password>
 
 ### Run arkd connected to Ocean
 
-Build from source `./server` and start the ASP:
+Start the ASP
 
 ```bash
 docker compose up -d arkd
@@ -62,6 +61,12 @@ ocean account derive --account-name ark
 ```
 
 Fund the resulting address with [Liquid testnet faucet](https://liquidtestnet.com/faucet).
+
+Check the balance of the `ark` account:
+
+```bash
+ocean account --account-name=ark balance
+```
 
 ### Ark client
 
