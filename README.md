@@ -83,7 +83,7 @@ This will add a `state.json` file to the following directory:
 
 ```bash
 export ARK_WALLET_DATADIR=path/to/custom
-ark init --password <password> --ark-url localhost:6000
+ark init --password <password> --ark-url localhost:6000 --network testnet
 ```
 
 Add funds to the ark wallet:
