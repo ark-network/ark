@@ -111,7 +111,7 @@ In **another tab**, setup another ark wallet with:
 ```bash
 export ARK_WALLET_DATADIR=./datadir
 alias ark2=$(pwd)/build/ark-<os>-<arch>
-ark2 init --password <password> --ark-url localhost:6000
+ark2 init --password <password> --ark-url localhost:6000 --network testnet
 ```
 
 **Note:** `ark2` should always run in the second tab.
