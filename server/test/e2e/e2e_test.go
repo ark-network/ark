@@ -203,3 +203,30 @@ func TestCollaborativeExit(t *testing.T) {
 	require.Equal(t, balanceBefore-1000, balance.Offchain.Total)
 	require.Equal(t, balanceOnchainBefore+1000, balance.Onchain.Spendable)
 }
+
+func TestSwept(t *testing.T) {
+	_, err := runArkCommand("onboard", "--amount", "1000", "--password", password)
+	require.NoError(t, err)
+	err = generateBlock()
+	require.NoError(t, err)
+
+	var receive arkReceive
+	receiveStr, err := runArkCommand("receive")
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(receiveStr), &receive))
+
+	var balance arkBalance
+	balanceStr, err := runArkCommand("balance")
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
+
+	balanceBefore := balance.Offchain.Total
+	balanceOnchainBefore := balance.Onchain.Spendable
+
+	balanceStr, err = runArkCommand("balance")
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
+
+	require.Equal(t, balanceBefore-1000, balance.Offchain.Total)
+	require.Equal(t, balanceOnchainBefore+1000, balance.Onchain.Spendable)
+}

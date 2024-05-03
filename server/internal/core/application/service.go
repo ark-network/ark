@@ -385,7 +385,14 @@ func (s *service) startFinalization() {
 		return
 	}
 
-	unsignedPoolTx, tree, connectorAddress, err := s.builder.BuildPoolTx(s.pubkey, payments, s.minRelayFee)
+	sweptRounds, err := s.repoManager.Rounds().GetSweptRounds(ctx)
+	if err != nil {
+		changes = round.Fail(fmt.Errorf("failed to retrieve swept rounds: %s", err))
+		log.WithError(err).Warn("failed to retrieve swept rounds")
+		return
+	}
+
+	unsignedPoolTx, tree, connectorAddress, err := s.builder.BuildPoolTx(s.pubkey, payments, s.minRelayFee, sweptRounds)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
 		log.WithError(err).Warn("failed to create pool tx")
@@ -628,7 +635,12 @@ func (s *service) listenToScannerNotifications() {
 					continue
 				}
 
-				signedForfeitTx, err := s.wallet.SignConnectorInput(ctx, forfeitTx, []int{0}, false)
+				if err := s.wallet.LockConnectorUtxos(ctx, []ports.TxOutpoint{txOutpoint{connectorTxid, connectorVout}}); err != nil {
+					log.WithError(err).Warn("failed to lock connector utxos")
+					continue
+				}
+
+				signedForfeitTx, err := s.wallet.SignPset(ctx, forfeitTx, false)
 				if err != nil {
 					log.WithError(err).Warn("failed to sign connector input in forfeit tx")
 					continue
@@ -706,8 +718,14 @@ func (s *service) getNextConnector(
 
 				for _, i := range pset.Inputs {
 					if chainhash.Hash(i.PreviousTxid).String() == u.GetTxid() && i.PreviousTxIndex == u.GetIndex() {
+						connectorOutpoint := newOutpointFromPsetInput(pset.Inputs[0])
+
+						if err := s.wallet.LockConnectorUtxos(ctx, []ports.TxOutpoint{connectorOutpoint}); err != nil {
+							return "", 0, err
+						}
+
 						// sign & broadcast the connector tx
-						signedConnectorTx, err := s.wallet.SignConnectorInput(ctx, b64, []int{0}, true)
+						signedConnectorTx, err := s.wallet.SignPset(ctx, b64, true)
 						if err != nil {
 							return "", 0, err
 						}
@@ -1023,4 +1041,24 @@ func findForfeitTx(
 	}
 
 	return "", fmt.Errorf("forfeit tx not found")
+}
+
+type txOutpoint struct {
+	txid string
+	vout uint32
+}
+
+func newOutpointFromPsetInput(input psetv2.Input) txOutpoint {
+	return txOutpoint{
+		txid: chainhash.Hash(input.PreviousTxid).String(),
+		vout: input.PreviousTxIndex,
+	}
+}
+
+func (outpoint txOutpoint) GetTxid() string {
+	return outpoint.txid
+}
+
+func (outpoint txOutpoint) GetIndex() uint32 {
+	return outpoint.vout
 }
