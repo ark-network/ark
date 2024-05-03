@@ -29,7 +29,6 @@ services:
       - ARK_ROUND_INTERVAL=10
       - ARK_NETWORK=regtest
       - ARK_LOG_LEVEL=5
-      - ARK_ROUND_LIFETIME=513
     ports:
       - "6000:6000"
 
