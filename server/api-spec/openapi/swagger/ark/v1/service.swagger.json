@@ -692,6 +692,9 @@
         "expireAt": {
           "type": "string",
           "format": "int64"
+        },
+        "swept": {
+          "type": "boolean"
         }
       }
     }
