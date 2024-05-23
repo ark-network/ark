@@ -67,6 +67,12 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
+	_, err = runCommand("nigiri", "faucet", "--liquid", addr.Addresses[0])
+	if err != nil {
+		fmt.Printf("error funding ocean account: %s", err)
+		os.Exit(1)
+	}
+
 	time.Sleep(3 * time.Second)
 
 	_, err = runArkCommand("init", "--ark-url", "localhost:6000", "--password", password, "--network", "regtest", "--explorer", "http://chopsticks-liquid:3000")
