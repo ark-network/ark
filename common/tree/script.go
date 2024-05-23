@@ -236,6 +236,7 @@ func (c *UnrollClosure) Decode(script []byte) (valid bool, err error) {
 		return true, nil
 	}
 
+	// len(script) > 52 if we have a right key, this is only for the backward compatibility with the old version of the closure
 	validLeft, leftKey, leftAmount, err := decodeIntrospectionScript(
 		script[:52], txscript.OP_0, len(script) > 52,
 	)
