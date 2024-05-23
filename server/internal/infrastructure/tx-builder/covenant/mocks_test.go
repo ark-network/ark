@@ -184,6 +184,14 @@ func (m *mockedWallet) WaitForSync(ctx context.Context, txid string) error {
 	return args.Error(0)
 }
 
+func (m *mockedWallet) ConnectorsAccountBalance(ctx context.Context) (uint64, error) {
+	panic("not implemented")
+}
+
+func (m *mockedWallet) MainAccountBalance(ctx context.Context) (uint64, error) {
+	panic("not implemented")
+}
+
 type mockedInput struct {
 	mock.Mock
 }

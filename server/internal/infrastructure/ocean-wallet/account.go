@@ -2,6 +2,7 @@ package oceanwallet
 
 import (
 	"context"
+	"errors"
 
 	pb "github.com/ark-network/ark/api-spec/protobuf/gen/ocean/v1"
 	"github.com/ark-network/ark/internal/core/ports"
@@ -43,6 +44,31 @@ func (s *service) ListConnectorUtxos(
 	}
 
 	return utxos, nil
+}
+
+func (s *service) ConnectorsAccountBalance(ctx context.Context) (uint64, error) {
+	return s.getBalance(ctx, connectorAccount)
+}
+
+func (s *service) MainAccountBalance(ctx context.Context) (uint64, error) {
+	return s.getBalance(ctx, arkAccount)
+}
+
+func (s *service) getBalance(ctx context.Context, accountName string) (uint64, error) {
+	res, err := s.accountClient.Balance(ctx, &pb.BalanceRequest{
+		AccountName: accountName,
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	balances := res.GetBalance()
+	accountBalance, ok := balances[accountName]
+	if !ok {
+		return 0, errors.New("account balance not found")
+	}
+
+	return accountBalance.GetConfirmedBalance() + accountBalance.GetUnconfirmedBalance(), nil
 }
 
 func (s *service) deriveAddresses(

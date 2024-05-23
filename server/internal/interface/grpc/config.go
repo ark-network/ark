@@ -7,11 +7,21 @@ import (
 )
 
 type Config struct {
-	Port  uint32
-	NoTLS bool
+	Port     uint32
+	NoTLS    bool
+	AuthUser string
+	AuthPass string
 }
 
 func (c Config) Validate() error {
+	if len(c.AuthUser) == 0 {
+		return fmt.Errorf("missing auth user")
+	}
+
+	if len(c.AuthPass) == 0 {
+		return fmt.Errorf("missing auth password")
+	}
+
 	lis, err := net.Listen("tcp", c.address())
 	if err != nil {
 		return fmt.Errorf("invalid port: %s", err)

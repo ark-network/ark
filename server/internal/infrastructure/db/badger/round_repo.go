@@ -107,6 +107,30 @@ func (r *roundRepository) GetSweepableRounds(
 	return rounds, nil
 }
 
+func (r *roundRepository) GetRoundsIds(ctx context.Context, startedAfter int64, startedBefore int64) ([]string, error) {
+	query := badgerhold.Where("Stage.Ended").Eq(true)
+
+	if startedAfter > 0 {
+		query = query.And("StartingTimestamp").Gt(startedAfter)
+	}
+
+	if startedBefore > 0 {
+		query = query.And("StartingTimestamp").Lt(startedBefore)
+	}
+
+	rounds, err := r.findRound(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	ids := make([]string, 0, len(rounds))
+	for _, round := range rounds {
+		ids = append(ids, round.Id)
+	}
+
+	return ids, nil
+}
+
 func (r *roundRepository) Close() {
 	r.store.Close()
 }

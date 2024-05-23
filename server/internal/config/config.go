@@ -25,6 +25,8 @@ type Config struct {
 	MinRelayFee           uint64
 	RoundLifetime         int64
 	UnilateralExitDelay   int64
+	AuthUser              string
+	AuthPass              string
 }
 
 var (
@@ -42,6 +44,8 @@ var (
 	MinRelayFee           = "MIN_RELAY_FEE"
 	RoundLifetime         = "ROUND_LIFETIME"
 	UnilateralExitDelay   = "UNILATERAL_EXIT_DELAY"
+	AuthUser              = "AUTH_USER"
+	AuthPass              = "AUTH_PASS"
 
 	defaultDatadir               = common.AppDataDir("arkd", false)
 	defaultRoundInterval         = 5
@@ -57,6 +61,8 @@ var (
 	defaultMinRelayFee           = 30 // 0.1 sat/vbyte on Liquid
 	defaultRoundLifetime         = 604672
 	defaultUnilateralExitDelay   = 1024
+	defaultAuthUser              = "admin"
+	defaultAuthPass              = "admin"
 )
 
 func LoadConfig() (*Config, error) {
@@ -77,6 +83,8 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(TxBuilderType, defaultTxBuilderType)
 	viper.SetDefault(UnilateralExitDelay, defaultUnilateralExitDelay)
 	viper.SetDefault(BlockchainScannerType, defaultBlockchainScannerType)
+	viper.SetDefault(AuthUser, defaultAuthUser)
+	viper.SetDefault(AuthPass, defaultAuthPass)
 
 	net, err := getNetwork()
 	if err != nil {
@@ -102,6 +110,8 @@ func LoadConfig() (*Config, error) {
 		MinRelayFee:           viper.GetUint64(MinRelayFee),
 		RoundLifetime:         viper.GetInt64(RoundLifetime),
 		UnilateralExitDelay:   viper.GetInt64(UnilateralExitDelay),
+		AuthUser:              viper.GetString(AuthUser),
+		AuthPass:              viper.GetString(AuthPass),
 	}, nil
 }
 
