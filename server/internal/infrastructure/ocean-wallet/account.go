@@ -63,22 +63,7 @@ func (s *service) getBalance(ctx context.Context, accountName string) (uint64, e
 	}
 
 	balances := res.GetBalance()
-
-	var accountBalance *pb.BalanceInfo
-	ok := true
-
-	accountBalance, ok = balances[network.Liquid.AssetID]
-	if !ok {
-		accountBalance, ok = balances[network.Testnet.AssetID]
-		if !ok {
-			accountBalance, ok = balances[network.Regtest.AssetID]
-			if !ok {
-				return 0, nil
-			}
-		}
-	}
-
-	return accountBalance.GetConfirmedBalance() + accountBalance.GetUnconfirmedBalance(), nil
+	return getLBTCbalance(balances), nil
 }
 
 func (s *service) deriveAddresses(
@@ -101,4 +86,32 @@ func (s *service) deriveAddresses(
 		addresses = append(addresses, info.Address)
 	}
 	return addresses, nil
+}
+
+func getLBTCbalance(balances map[string]*pb.BalanceInfo) uint64 {
+	liquidBalance, found := getBalance(balances, network.Liquid.AssetID)
+	if found {
+		return liquidBalance
+	}
+
+	testnetBalance, found := getBalance(balances, network.Testnet.AssetID)
+	if found {
+		return testnetBalance
+	}
+
+	regtestBalance, found := getBalance(balances, network.Regtest.AssetID)
+	if found {
+		return regtestBalance
+	}
+
+	return 0
+}
+
+func getBalance(balances map[string]*pb.BalanceInfo, assetID string) (uint64, bool) {
+	balance, ok := balances[assetID]
+	if !ok {
+		return 0, false
+	}
+
+	return balance.GetConfirmedBalance() + balance.GetUnconfirmedBalance(), true
 }
