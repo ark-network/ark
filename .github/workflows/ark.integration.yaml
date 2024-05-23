@@ -2,6 +2,10 @@ name: ci_integration
 
 on:
   push:
+    paths:
+      - "server/**"
+    branches: [master]
+  pull_request:
     branches: 
       - master
     paths:
