@@ -2,11 +2,11 @@ package oceanwallet
 
 import (
 	"context"
-	"errors"
 
 	pb "github.com/ark-network/ark/api-spec/protobuf/gen/ocean/v1"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/vulpemventures/go-elements/address"
+	"github.com/vulpemventures/go-elements/network"
 )
 
 func (s *service) DeriveAddresses(
@@ -63,9 +63,19 @@ func (s *service) getBalance(ctx context.Context, accountName string) (uint64, e
 	}
 
 	balances := res.GetBalance()
-	accountBalance, ok := balances[accountName]
+
+	var accountBalance *pb.BalanceInfo
+	ok := true
+
+	accountBalance, ok = balances[network.Liquid.AssetID]
 	if !ok {
-		return 0, errors.New("account balance not found")
+		accountBalance, ok = balances[network.Testnet.AssetID]
+		if !ok {
+			accountBalance, ok = balances[network.Regtest.AssetID]
+			if !ok {
+				return 0, nil
+			}
+		}
 	}
 
 	return accountBalance.GetConfirmedBalance() + accountBalance.GetUnconfirmedBalance(), nil
