@@ -16,6 +16,8 @@ const (
 	OP_INSPECTOUTPUTSCRIPTPUBKEY = 0xd1
 	OP_INSPECTOUTPUTVALUE        = 0xcf
 	OP_PUSHCURRENTINPUTINDEX     = 0xcd
+	OP_INSPECTINPUTVALUE         = 0xc9
+	OP_SUB64                     = 0xd8
 )
 
 type Closure interface {
@@ -26,6 +28,7 @@ type Closure interface {
 type UnrollClosure struct {
 	LeftKey, RightKey       *secp256k1.PublicKey
 	LeftAmount, RightAmount uint64
+	MinRelayFee             uint64
 }
 
 type CSVSigClosure struct {
@@ -159,9 +162,33 @@ func (d *CSVSigClosure) Decode(script []byte) (bool, error) {
 	return valid, nil
 }
 
+func (c *UnrollClosure) isOneChild() bool {
+	return c.RightKey == nil && c.MinRelayFee > 0
+}
+
 func (c *UnrollClosure) Leaf() (*taproot.TapElementsLeaf, error) {
-	if c.LeftKey == nil || c.LeftAmount == 0 {
-		return nil, fmt.Errorf("left key and amount are required")
+	if c.LeftKey == nil {
+		return nil, fmt.Errorf("left key is required")
+	}
+
+	if c.isOneChild() {
+		branchScript := encodeOneChildIntrospectionScript(
+			txscript.OP_0, schnorr.SerializePubKey(c.LeftKey), c.MinRelayFee,
+		)
+		leaf := taproot.NewBaseTapElementsLeaf(branchScript)
+		return &leaf, nil
+	}
+
+	if c.LeftAmount == 0 {
+		return nil, fmt.Errorf("left amount is required")
+	}
+
+	if c.RightKey == nil {
+		return nil, fmt.Errorf("right key is required")
+	}
+
+	if c.RightAmount == 0 {
+		return nil, fmt.Errorf("right amount is required")
 	}
 
 	nextScriptLeft := encodeIntrospectionScript(
@@ -169,29 +196,48 @@ func (c *UnrollClosure) Leaf() (*taproot.TapElementsLeaf, error) {
 		schnorr.SerializePubKey(c.LeftKey), c.LeftAmount, c.RightKey != nil,
 	)
 	branchScript := append([]byte{}, nextScriptLeft...)
-	if c.RightKey != nil {
-		if c.RightAmount == 0 {
-			return nil, fmt.Errorf("right amount is required")
-		}
 
-		nextScriptRight := encodeIntrospectionScript(
-			txscript.OP_1, schnorr.SerializePubKey(c.RightKey), c.RightAmount, false,
-		)
-		branchScript = append(branchScript, nextScriptRight...)
-	}
+	nextScriptRight := encodeIntrospectionScript(
+		txscript.OP_1, schnorr.SerializePubKey(c.RightKey), c.RightAmount, false,
+	)
+	branchScript = append(branchScript, nextScriptRight...)
+
 	leaf := taproot.NewBaseTapElementsLeaf(branchScript)
 	return &leaf, nil
 }
 
 func (c *UnrollClosure) Decode(script []byte) (valid bool, err error) {
-	if len(script) != 52 && len(script) != 104 {
+	if len(script) != 52 && len(script) != 59 && len(script) != 104 {
 		return false, nil
 	}
 
-	isLeftOnly := len(script) == 52
+	if len(script) == 59 {
+		valid, pubkey, minrelayfee, err := decodeOneChildIntrospectionScript(script, txscript.OP_0)
+		if err != nil {
+			return false, err
+		}
+
+		if !valid {
+			return false, nil
+		}
+
+		c.LeftKey = pubkey
+		c.MinRelayFee = minrelayfee
+
+		rebuilt, err := c.Leaf()
+		if err != nil {
+			return false, err
+		}
+
+		if !bytes.Equal(rebuilt.Script, script) {
+			return false, nil
+		}
+
+		return true, nil
+	}
 
 	validLeft, leftKey, leftAmount, err := decodeIntrospectionScript(
-		script[:52], txscript.OP_0, !isLeftOnly,
+		script[:52], txscript.OP_0, len(script) > 52,
 	)
 	if err != nil {
 		return false, err
@@ -204,7 +250,7 @@ func (c *UnrollClosure) Decode(script []byte) (valid bool, err error) {
 	c.LeftAmount = leftAmount
 	c.LeftKey = leftKey
 
-	if isLeftOnly {
+	if len(script) == 52 {
 		return true, nil
 	}
 
@@ -270,6 +316,37 @@ func decodeIntrospectionScript(
 	return true, pubkey, amount, nil
 }
 
+func decodeOneChildIntrospectionScript(
+	script []byte, expectedIndex byte,
+) (bool, *secp256k1.PublicKey, uint64, error) {
+	if len(script) != 59 {
+		return false, nil, 0, nil
+	}
+
+	if script[0] != expectedIndex {
+		return false, nil, 0, nil
+	}
+
+	// 32 bytes for the witness program
+	pubkey, err := schnorr.ParsePubKey(script[5 : 5+32])
+	if err != nil {
+		return false, nil, 0, err
+	}
+
+	value := script[len(script)-12 : len(script)-4]
+	minrelayfee := binary.LittleEndian.Uint64(value)
+
+	rebuilt := encodeOneChildIntrospectionScript(
+		expectedIndex, schnorr.SerializePubKey(pubkey), minrelayfee,
+	)
+
+	if !bytes.Equal(rebuilt, script) {
+		return false, nil, 0, nil
+	}
+
+	return true, pubkey, minrelayfee, nil
+}
+
 func decodeChecksigScript(script []byte) (bool, *secp256k1.PublicKey, error) {
 	data32Index := bytes.Index(script, []byte{txscript.OP_DATA_32})
 	if data32Index == -1 {
@@ -325,7 +402,7 @@ func encodeChecksigScript(pubkey *secp256k1.PublicKey) ([]byte, error) {
 		AddOp(txscript.OP_CHECKSIG).Script()
 }
 
-// getIntrospectionScript returns an introspection script that checks the
+// encodeIntrospectionScript returns an introspection script that checks the
 // script and the amount of the output at the given index verify will add an
 // OP_EQUALVERIFY at the end of the script, otherwise it will add an OP_EQUAL
 // length = 52 bytes
@@ -364,6 +441,51 @@ func encodeIntrospectionScript(
 			txscript.OP_EQUAL,
 		}...)
 	}
+
+	return script
+}
+
+// encodeOneChildIntrospectionScript returns an introspection script that checks
+// if the output at the given index has the correct script
+// if the output has an amount equal to input_amount - minrelayfee
+// length = 59 bytes
+func encodeOneChildIntrospectionScript(
+	index byte, taprootWitnessProgram []byte, minrelayfee uint64,
+) []byte {
+	minRelayFeeAmount := make([]byte, 8)
+	binary.LittleEndian.PutUint64(minRelayFeeAmount, minrelayfee)
+
+	script := []byte{
+		index,
+		OP_INSPECTOUTPUTSCRIPTPUBKEY,
+		txscript.OP_1,
+		txscript.OP_EQUALVERIFY,
+		txscript.OP_DATA_32,
+	}
+
+	script = append(script, taprootWitnessProgram...)
+
+	script = append(script, []byte{
+		txscript.OP_EQUALVERIFY,
+		index,
+		OP_INSPECTOUTPUTVALUE,
+		txscript.OP_1,
+		txscript.OP_EQUALVERIFY,
+		OP_PUSHCURRENTINPUTINDEX,
+		OP_INSPECTINPUTVALUE,
+		txscript.OP_1,
+		txscript.OP_EQUALVERIFY,
+		txscript.OP_DATA_8,
+	}...)
+
+	script = append(script, minRelayFeeAmount...)
+
+	script = append(script, []byte{
+		OP_SUB64,
+		txscript.OP_1,
+		txscript.OP_EQUALVERIFY,
+		txscript.OP_EQUAL,
+	}...)
 
 	return script
 }
