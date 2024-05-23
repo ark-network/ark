@@ -271,7 +271,6 @@ func (r *vtxoRepository) sweepVtxo(ctx context.Context, vtxoKey domain.VtxoKey) 
 	}
 
 	vtxo.Swept = true
-	vtxo.ExpireAt = 0
 	if ctx.Value("tx") != nil {
 		tx := ctx.Value("tx").(*badger.Txn)
 		err = r.store.TxUpdate(tx, vtxoKey.Hash(), *vtxo)
