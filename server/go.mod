@@ -9,7 +9,6 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0
 	github.com/dgraph-io/badger/v4 v4.1.0
 	github.com/go-co-op/gocron v1.36.0
-	github.com/gogo/protobuf v1.3.2
 	github.com/google/uuid v1.4.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.18.1
@@ -17,7 +16,6 @@ require (
 	github.com/spf13/viper v1.17.0
 	github.com/stretchr/testify v1.8.4
 	github.com/timshannon/badgerhold/v4 v4.0.3
-	github.com/urfave/cli/v2 v2.26.0
 	github.com/vulpemventures/go-elements v0.5.3
 	google.golang.org/genproto/googleapis/api v0.0.0-20231106174013-bbf56f31fb17
 	google.golang.org/grpc v1.59.0
@@ -29,17 +27,17 @@ require github.com/stretchr/objx v0.5.0 // indirect
 require (
 	github.com/FactomProject/basen v0.0.0-20150613233007-fe3947df716e // indirect
 	github.com/FactomProject/btcutilecc v0.0.0-20130527213604-d3a63a5752ec // indirect
+	github.com/gogo/protobuf v1.3.2 // indirect
 )
 
 require (
 	github.com/btcsuite/btcd v0.23.5-0.20231215221805-96c9fd8078fd
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
 	github.com/btcsuite/btcd/btcutil v1.1.5
-	github.com/btcsuite/btcd/btcutil/psbt v1.1.4 // indirect
+	github.com/btcsuite/btcd/btcutil/psbt v1.1.4
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0
 	github.com/btcsuite/btclog v0.0.0-20170628155309-84c8d2346e9f // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
-	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/decred/dcrd/crypto/blake256 v1.0.1 // indirect
 	github.com/dgraph-io/ristretto v0.1.1 // indirect
@@ -58,7 +56,6 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
-	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/sagikazarmark/locafero v0.3.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
@@ -68,7 +65,6 @@ require (
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/vulpemventures/fastsha256 v0.0.0-20160815193821-637e65642941 // indirect
 	github.com/vulpemventures/go-bip32 v0.0.0-20200624192635-867c159da4d7
-	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
