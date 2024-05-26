@@ -1,4 +1,4 @@
-package tree
+package bitcointree
 
 import (
 	"bytes"
@@ -41,7 +41,6 @@ var (
 	ErrInvalidLeftOutput             = errors.New("invalid left output")
 	ErrInvalidRightOutput            = errors.New("invalid right output")
 	ErrMissingSweepTapscript         = errors.New("missing sweep tapscript")
-	ErrMissingBranchTapscript        = errors.New("missing branch tapscript")
 	ErrInvalidLeaf                   = errors.New("leaf node shouldn't have children")
 	ErrWrongPoolTxID                 = errors.New("root input should be the pool tx outpoint")
 )
@@ -214,7 +213,6 @@ func validateNodeTransaction(
 		}
 
 		sweepLeafFound := false
-		branchLeafFound := false
 
 		for _, tapLeaf := range childTx.Inputs[0].TapLeafScript {
 			key := tapLeaf.ControlBlock.InternalKey
@@ -255,49 +253,6 @@ func validateNodeTransaction(
 				if isASP && isSweepDelay {
 					sweepLeafFound = true
 				}
-			case *UnrollClosure:
-				branchLeafFound = true
-
-				// check outputs
-				nbOuts := len(childTx.Outputs)
-				if c.LeftKey != nil && c.RightKey != nil {
-					if nbOuts != 3 {
-						return ErrNumberOfOutputs
-					}
-				} else {
-					if nbOuts != 2 {
-						return ErrNumberOfOutputs
-					}
-				}
-
-				leftWitnessProgram := childTx.Outputs[0].Script[2:]
-				leftOutputAmount := childTx.Outputs[0].Value
-
-				if !bytes.Equal(
-					leftWitnessProgram, schnorr.SerializePubKey(c.LeftKey),
-				) {
-					return ErrInvalidLeftOutput
-				}
-
-				if c.LeftAmount != leftOutputAmount {
-					return ErrInvalidLeftOutput
-				}
-
-				if c.RightKey != nil {
-					rightWitnessProgram := childTx.Outputs[1].Script[2:]
-					rightOutputAmount := childTx.Outputs[1].Value
-
-					if !bytes.Equal(
-						rightWitnessProgram, schnorr.SerializePubKey(c.RightKey),
-					) {
-						return ErrInvalidRightOutput
-					}
-
-					if c.RightAmount != rightOutputAmount {
-						return ErrInvalidRightOutput
-					}
-				}
-
 			default:
 				continue
 			}
@@ -305,10 +260,6 @@ func validateNodeTransaction(
 
 		if !sweepLeafFound {
 			return ErrMissingSweepTapscript
-		}
-
-		if !branchLeafFound {
-			return ErrMissingBranchTapscript
 		}
 
 		sumChildAmount := uint64(0)

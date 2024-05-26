@@ -1,4 +1,4 @@
-package tree
+package bitcointree
 
 import (
 	"bytes"
@@ -8,11 +8,10 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/vulpemventures/go-elements/taproot"
 )
 
 type Closure interface {
-	Leaf() (*taproot.TapElementsLeaf, error)
+	Leaf() (*txscript.TapLeaf, error)
 	Decode(script []byte) (bool, error)
 }
 
@@ -43,7 +42,7 @@ func DecodeClosure(script []byte) (Closure, error) {
 
 }
 
-func (f *ForfeitClosure) Leaf() (*taproot.TapElementsLeaf, error) {
+func (f *ForfeitClosure) Leaf() (*txscript.TapLeaf, error) {
 	aspKeyBytes := schnorr.SerializePubKey(f.AspPubkey)
 	userKeyBytes := schnorr.SerializePubKey(f.Pubkey)
 
@@ -54,7 +53,7 @@ func (f *ForfeitClosure) Leaf() (*taproot.TapElementsLeaf, error) {
 		return nil, err
 	}
 
-	tapLeaf := taproot.NewBaseTapElementsLeaf(script)
+	tapLeaf := txscript.NewBaseTapLeaf(script)
 	return &tapLeaf, nil
 }
 
@@ -92,13 +91,13 @@ func (f *ForfeitClosure) Decode(script []byte) (bool, error) {
 	return true, nil
 }
 
-func (d *CSVSigClosure) Leaf() (*taproot.TapElementsLeaf, error) {
+func (d *CSVSigClosure) Leaf() (*txscript.TapLeaf, error) {
 	script, err := encodeCsvWithChecksigScript(d.Pubkey, d.Seconds)
 	if err != nil {
 		return nil, err
 	}
 
-	tapLeaf := taproot.NewBaseTapElementsLeaf(script)
+	tapLeaf := txscript.NewBaseTapLeaf(script)
 	return &tapLeaf, nil
 }
 

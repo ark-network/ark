@@ -1,4 +1,4 @@
-package tree
+package bitcointree
 
 import "github.com/vulpemventures/go-elements/psetv2"
 
