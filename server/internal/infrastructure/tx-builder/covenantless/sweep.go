@@ -19,12 +19,29 @@ func sweepTransaction(
 	sweepInputs []ports.SweepInput,
 ) (*psbt.Packet, error) {
 	ins := make([]*wire.OutPoint, 0)
+	sequences := make([]uint32, 0)
 
 	for _, input := range sweepInputs {
 		ins = append(ins, &wire.OutPoint{
 			Hash:  input.GetHash(),
 			Index: input.GetIndex(),
 		})
+
+		sweepClosure := bitcointree.CSVSigClosure{}
+		valid, err := sweepClosure.Decode(input.GetLeafScript())
+		if err != nil {
+			return nil, err
+		}
+		if !valid {
+			return nil, fmt.Errorf("invalid csv script")
+		}
+
+		sequence, err := common.BIP68EncodeAsNumber(sweepClosure.Seconds)
+		if err != nil {
+			return nil, err
+		}
+
+		sequences = append(sequences, sequence)
 	}
 
 	sweepPartialTx, err := psbt.New(
@@ -32,7 +49,7 @@ func sweepTransaction(
 		nil,
 		2,
 		0,
-		[]uint32{wire.MaxTxInSequenceNum},
+		sequences,
 	)
 	if err != nil {
 		return nil, err
@@ -55,15 +72,6 @@ func sweepTransaction(
 		}
 
 		sweepPartialTx.Inputs[i].TaprootInternalKey = schnorr.SerializePubKey(sweepInput.GetInternalKey())
-
-		sweepClosure := bitcointree.CSVSigClosure{}
-		valid, err := sweepClosure.Decode(sweepInput.GetLeafScript())
-		if err != nil {
-			return nil, err
-		}
-		if !valid {
-			return nil, fmt.Errorf("invalid csv script")
-		}
 
 		amount += int64(sweepInput.GetAmount())
 
@@ -93,12 +101,6 @@ func sweepTransaction(
 			return nil, err
 		}
 
-		sequence, err := common.BIP68EncodeAsNumber(sweepClosure.Seconds)
-		if err != nil {
-			return nil, err
-		}
-
-		sweepPartialTx.UnsignedTx.TxIn[i].Sequence = sequence
 	}
 
 	ctx := context.Background()

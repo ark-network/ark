@@ -10,6 +10,7 @@ import (
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/psetv2"
 )
 
@@ -240,4 +241,37 @@ func (m *forfeitTxsMap) view() []string {
 		txs = append(txs, tx.tx)
 	}
 	return txs
+}
+
+// TODO implement for bitcoin ?
+type sweepInput struct {
+	inputArgs psetv2.InputArgs
+	sweepLeaf *psetv2.TapLeafScript
+	amount    uint64
+}
+
+func (s *sweepInput) GetAmount() uint64 {
+	return s.amount
+}
+
+func (s *sweepInput) GetControlBlock() []byte {
+	ctrlBlock, _ := s.sweepLeaf.ControlBlock.ToBytes()
+	return ctrlBlock
+}
+
+func (s *sweepInput) GetHash() chainhash.Hash {
+	h, _ := chainhash.NewHashFromStr(s.inputArgs.Txid)
+	return *h
+}
+
+func (s *sweepInput) GetIndex() uint32 {
+	return s.inputArgs.TxIndex
+}
+
+func (s *sweepInput) GetInternalKey() *secp256k1.PublicKey {
+	return s.sweepLeaf.ControlBlock.InternalKey
+}
+
+func (s *sweepInput) GetLeafScript() []byte {
+	return s.sweepLeaf.Script
 }

@@ -37,7 +37,7 @@ func craftForfeitTxs(
 			}},
 			2,
 			0,
-			[]uint32{wire.MaxTxInSequenceNum},
+			[]uint32{wire.MaxTxInSequenceNum, wire.MaxTxInSequenceNum},
 		)
 		if err != nil {
 			return nil, err

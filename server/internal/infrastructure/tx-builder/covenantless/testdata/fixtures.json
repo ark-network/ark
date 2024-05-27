@@ -249,9 +249,9 @@
           }
         ],
         "poolTx": "cHNidP8BALICAAAAAnonOnsJBkHUUaKf/7fdS0/sVyBCgDPusYzGSZZiXPbtAAAAAAD/////VLtr81ZII3QJnXgrIwgcnbsq3aa4L3qdHOAn2evlFtEAAAAAAP////8CohIAAAAAAAAiUSBZarBUuSIHnlkuIoel9MmvexqTGK8jCZaRjt8L+Pb3s+gDAAAAAAAAIlEgI95L4kHEn2fAA+vysD+RIR4eD3AIQwc+FyCInJ8HivYAAAAAAAEBIOgDAAAAAAAAF6kU6p9IboLvs92Dpp/Zbj8BE3V9oDyHAAEBIOgDAAAAAAAAF6kU6p9IboLvs92Dpp/Zbj8BE3V9oDyHAAAA",
-        "poolTxid": "7981fce656f266472cc742444527cb32a8bed8c90fed6d47adbfc4c8780d4d9a",
-        "expectedNumOfForfeitTxs": 5,
-			  "expectedNumOfConnectors": 5
+        "poolTxid": "7c0c10756cdb9ab8e605f1c82e25989761308cf4c60e6a6f42b72d46144c4ce0",
+        "expectedNumOfForfeitTxs": 25,
+			  "expectedNumOfConnectors": 4
       }
     ],
     "invalid": []

@@ -549,7 +549,7 @@ func (b *txBuilder) createForfeitTxs(
 			var forfeitProof *txscript.TapscriptProof
 
 			for _, proof := range vtxoTaprootTree.LeafMerkleProofs {
-				isForfeit, err := (&tree.ForfeitClosure{}).Decode(proof.Script)
+				isForfeit, err := (&bitcointree.ForfeitClosure{}).Decode(proof.Script)
 				if !isForfeit || err != nil {
 					continue
 				}

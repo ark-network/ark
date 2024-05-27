@@ -157,8 +157,8 @@ func (s *sweeper) createTask(
 					ctx,
 					[]domain.VtxoKey{
 						{
-							Txid: input.InputArgs.Txid,
-							VOut: input.InputArgs.TxIndex,
+							Txid: input.GetHash().String(),
+							VOut: input.GetIndex(),
 						},
 					},
 				)
@@ -168,7 +168,7 @@ func (s *sweeper) createTask(
 					}
 				} else {
 					// if it's not a vtxo, find all the vtxos leaves reachable from that input
-					vtxosLeaves, err := congestionTree.FindLeaves(input.InputArgs.Txid, input.InputArgs.TxIndex)
+					vtxosLeaves, err := congestionTree.FindLeaves(input.GetHash().String(), input.GetIndex())
 					if err != nil {
 						log.WithError(err).Error("error while finding vtxos leaves")
 						continue
@@ -377,13 +377,13 @@ func (s *sweeper) nodeToSweepInputs(parentBlocktime int64, node tree.Node) (int6
 	}
 
 	sweepInputs := []ports.SweepInput{
-		{
-			InputArgs: psetv2.InputArgs{
+		&sweepInput{
+			inputArgs: psetv2.InputArgs{
 				Txid:    txid,
 				TxIndex: index,
 			},
-			SweepLeaf: *sweepLeaf,
-			Amount:    amount,
+			sweepLeaf: sweepLeaf,
+			amount:    amount,
 		},
 	}
 
@@ -420,7 +420,7 @@ func computeSubTrees(congestionTree tree.CongestionTree, inputs []ports.SweepInp
 	// for each sweepable input, create a sub congestion tree
 	// it allows to skip the part of the tree that has been broadcasted in the next task
 	for _, input := range inputs {
-		subTree, err := computeSubTree(congestionTree, input.InputArgs.Txid)
+		subTree, err := computeSubTree(congestionTree, input.GetHash().String())
 		if err != nil {
 			log.WithError(err).Error("error while finding sub tree")
 			continue
