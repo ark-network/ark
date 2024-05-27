@@ -141,9 +141,7 @@ func (s *service) Start() error {
 func (s *service) Stop() {
 	s.sweeper.stop()
 	// nolint
-	vtxos, _, _ := s.repoManager.Vtxos().GetAllVtxos(
-		context.Background(), "",
-	)
+	vtxos, _ := s.repoManager.Vtxos().GetAllSweepableVtxos(context.Background())
 	if len(vtxos) > 0 {
 		s.stopWatchingVtxos(vtxos)
 	}
