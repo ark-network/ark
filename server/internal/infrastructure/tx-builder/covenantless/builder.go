@@ -18,8 +18,6 @@ import (
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/vulpemventures/go-elements/address"
-	"github.com/vulpemventures/go-elements/taproot"
 )
 
 const (
@@ -96,12 +94,12 @@ func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (signedSweepTx strin
 func (b *txBuilder) BuildForfeitTxs(
 	aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment, minRelayFee uint64,
 ) (connectors []string, forfeitTxs []string, err error) {
-	connectorAddress, err := b.getConnectorAddress(poolTx)
+	connectorPkScript, err := b.getConnectorPkScript(poolTx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	connectorTxs, err := b.createConnectors(poolTx, payments, connectorAddress, minRelayFee)
+	connectorTxs, err := b.createConnectors(poolTx, payments, connectorPkScript, minRelayFee)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -178,8 +176,8 @@ func (b *txBuilder) BuildPoolTx(
 
 func (b *txBuilder) getLeafScriptAndTree(
 	userPubkey, aspPubkey *secp256k1.PublicKey,
-) ([]byte, *taproot.IndexedElementsTapScriptTree, error) {
-	redeemClosure := &tree.CSVSigClosure{
+) ([]byte, *txscript.IndexedTapScriptTree, error) {
+	redeemClosure := &bitcointree.CSVSigClosure{
 		Pubkey:  userPubkey,
 		Seconds: uint(b.exitDelay),
 	}
@@ -189,7 +187,7 @@ func (b *txBuilder) getLeafScriptAndTree(
 		return nil, nil, err
 	}
 
-	forfeitClosure := &tree.ForfeitClosure{
+	forfeitClosure := &bitcointree.ForfeitClosure{
 		Pubkey:    userPubkey,
 		AspPubkey: aspPubkey,
 	}
@@ -199,13 +197,13 @@ func (b *txBuilder) getLeafScriptAndTree(
 		return nil, nil, err
 	}
 
-	taprootTree := taproot.AssembleTaprootScriptTree(
+	taprootTree := txscript.AssembleTaprootScriptTree(
 		*redeemLeaf, *forfeitLeaf,
 	)
 
 	root := taprootTree.RootNode.TapHash()
 	unspendableKey := tree.UnspendableKey()
-	taprootKey := taproot.ComputeTaprootOutputKey(unspendableKey, root[:])
+	taprootKey := txscript.ComputeTaprootOutputKey(unspendableKey, root[:])
 
 	outputScript, err := taprootOutputScript(taprootKey)
 	if err != nil {
@@ -374,6 +372,7 @@ func (b *txBuilder) createPoolTx(
 					Value:    int64(change),
 					PkScript: aspScript,
 				})
+				ptx.Outputs = append(ptx.Outputs, psbt.POutput{})
 			}
 
 			for _, utxo := range newUtxos {
@@ -388,6 +387,7 @@ func (b *txBuilder) createPoolTx(
 				}
 
 				ptx.UnsignedTx.AddTxIn(wire.NewTxIn(outpoint, nil, nil))
+				ptx.Inputs = append(ptx.Inputs, psbt.PInput{})
 
 				scriptBytes, err := hex.DecodeString(utxo.GetScript())
 				if err != nil {
@@ -420,6 +420,7 @@ func (b *txBuilder) createPoolTx(
 					Value:    int64(change),
 					PkScript: aspScript,
 				})
+				ptx.Outputs = append(ptx.Outputs, psbt.POutput{})
 			}
 		}
 
@@ -435,6 +436,7 @@ func (b *txBuilder) createPoolTx(
 			}
 
 			ptx.UnsignedTx.AddTxIn(wire.NewTxIn(outpoint, nil, nil))
+			ptx.Inputs = append(ptx.Inputs, psbt.PInput{})
 
 			scriptBytes, err := hex.DecodeString(utxo.GetScript())
 			if err != nil {
@@ -457,20 +459,15 @@ func (b *txBuilder) createPoolTx(
 }
 
 func (b *txBuilder) createConnectors(
-	poolTx string, payments []domain.Payment, connectorAddress string, minRelayFee uint64,
+	poolTx string, payments []domain.Payment, connectorScript []byte, minRelayFee uint64,
 ) ([]*psbt.Packet, error) {
 	partialTx, err := psbt.NewFromRawBytes(strings.NewReader(poolTx), true)
 	if err != nil {
 		return nil, err
 	}
 
-	aspScript, err := address.ToOutputScript(connectorAddress)
-	if err != nil {
-		return nil, err
-	}
-
 	connectorOutput := &wire.TxOut{
-		PkScript: aspScript,
+		PkScript: connectorScript,
 		Value:    int64(connectorAmount),
 	}
 
@@ -483,7 +480,7 @@ func (b *txBuilder) createConnectors(
 
 	if numberOfConnectors == 1 {
 		outputs := []*wire.TxOut{connectorOutput}
-		connectorTx, err := craftConnectorTx(previousInput, aspScript, outputs, minRelayFee)
+		connectorTx, err := craftConnectorTx(previousInput, connectorScript, outputs, minRelayFee)
 		if err != nil {
 			return nil, err
 		}
@@ -503,11 +500,11 @@ func (b *txBuilder) createConnectors(
 		totalConnectorAmount -= minRelayFee
 		if totalConnectorAmount > 0 {
 			outputs = append(outputs, &wire.TxOut{
-				PkScript: aspScript,
+				PkScript: connectorScript,
 				Value:    int64(totalConnectorAmount),
 			})
 		}
-		connectorTx, err := craftConnectorTx(previousInput, aspScript, outputs, minRelayFee)
+		connectorTx, err := craftConnectorTx(previousInput, connectorScript, outputs, minRelayFee)
 		if err != nil {
 			return nil, err
 		}
@@ -549,7 +546,7 @@ func (b *txBuilder) createForfeitTxs(
 				return nil, err
 			}
 
-			var forfeitProof *taproot.TapscriptElementsProof
+			var forfeitProof *txscript.TapscriptProof
 
 			for _, proof := range vtxoTaprootTree.LeafMerkleProofs {
 				isForfeit, err := (&tree.ForfeitClosure{}).Decode(proof.Script)
@@ -580,22 +577,15 @@ func (b *txBuilder) createForfeitTxs(
 	return forfeitTxs, nil
 }
 
-func (b *txBuilder) getConnectorAddress(poolTx string) (string, error) {
-	pset, err := psbt.NewFromRawBytes(strings.NewReader(poolTx), true)
+func (b *txBuilder) getConnectorPkScript(poolTx string) ([]byte, error) {
+	partialTx, err := psbt.NewFromRawBytes(strings.NewReader(poolTx), true)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	if len(pset.Outputs) < 1 {
-		return "", fmt.Errorf("connector output not found in pool tx")
+	if len(partialTx.Outputs) < 1 {
+		return nil, fmt.Errorf("connector output not found in pool tx")
 	}
 
-	connectorOutputWitnessProgram := pset.Outputs[1].WitnessScript[2:]
-
-	pay, err := btcutil.NewAddressTaproot(connectorOutputWitnessProgram, b.net)
-	if err != nil {
-		return "", err
-	}
-
-	return pay.EncodeAddress(), nil
+	return partialTx.UnsignedTx.TxOut[0].PkScript, nil
 }

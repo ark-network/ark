@@ -69,8 +69,20 @@ func TestBuildPoolTx(t *testing.T) {
 				require.Equal(t, f.ExpectedNumOfNodes, congestionTree.NumberOfNodes())
 				require.Len(t, congestionTree.Leaves(), f.ExpectedNumOfLeaves)
 
+				cosigners := make([]*secp256k1.PublicKey, 0)
+				for _, payment := range f.Payments {
+					for _, input := range payment.Inputs {
+						pubkeyBytes, err := hex.DecodeString(input.Pubkey)
+						require.NoError(t, err)
+						pubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
+						require.NoError(t, err)
+
+						cosigners = append(cosigners, pubkey)
+					}
+				}
+
 				err = bitcointree.ValidateCongestionTree(
-					congestionTree, poolTx, pubkey, roundLifetime,
+					congestionTree, poolTx, pubkey, roundLifetime, cosigners, int64(minRelayFee),
 				)
 				require.NoError(t, err)
 			}

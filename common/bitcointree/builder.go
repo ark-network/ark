@@ -19,7 +19,7 @@ func PreviewCongestionTree(
 	cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, receivers []Receiver,
 	feeSatsPerNode uint64, roundLifetime, unilateralExitDelay int64,
 ) ([]byte, int64, error) {
-	aggregatedKey, err := createAggregatedKeyWithSweep(
+	aggregatedKey, _, err := createAggregatedKeyWithSweep(
 		cosigners, aspPubkey, roundLifetime,
 	)
 	if err != nil {
@@ -46,7 +46,7 @@ func CraftCongestionTree(
 	initialInput *wire.OutPoint, cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, receivers []Receiver,
 	feeSatsPerNode uint64, roundLifetime, unilateralExitDelay int64,
 ) (tree.CongestionTree, error) {
-	aggregatedKey, err := createAggregatedKeyWithSweep(
+	aggregatedKey, sweepTapLeaf, err := createAggregatedKeyWithSweep(
 		cosigners, aspPubkey, roundLifetime,
 	)
 	if err != nil {
@@ -70,7 +70,7 @@ func CraftCongestionTree(
 		treeLevel := make([]tree.Node, 0)
 
 		for i, node := range nodes {
-			treeNode, err := getTreeNode(node, ins[i])
+			treeNode, err := getTreeNode(node, ins[i], schnorr.SerializePubKey(aggregatedKey.PreTweakedKey), sweepTapLeaf)
 			if err != nil {
 				return nil, err
 			}
@@ -205,8 +205,13 @@ func (b *branch) getOutputs() ([]*wire.TxOut, error) {
 	return outputs, nil
 }
 
-func getTreeNode(n node, input *wire.OutPoint) (tree.Node, error) {
-	partialTx, err := getTx(n, input)
+func getTreeNode(
+	n node,
+	input *wire.OutPoint,
+	inputTapInternalKey []byte,
+	inputSweepTapLeaf *psbt.TaprootTapLeafScript,
+) (tree.Node, error) {
+	partialTx, err := getTx(n, input, inputTapInternalKey, inputSweepTapLeaf)
 	if err != nil {
 		return tree.Node{}, err
 	}
@@ -229,6 +234,8 @@ func getTreeNode(n node, input *wire.OutPoint) (tree.Node, error) {
 func getTx(
 	n node,
 	input *wire.OutPoint,
+	inputTapInternalKey []byte,
+	inputSweepTapLeaf *psbt.TaprootTapLeafScript,
 ) (*psbt.Packet, error) {
 	outputs, err := n.getOutputs()
 	if err != nil {
@@ -248,6 +255,9 @@ func getTx(
 	if err := updater.AddInSighashType(0, int(txscript.SigHashDefault)); err != nil {
 		return nil, err
 	}
+
+	tx.Inputs[0].TaprootInternalKey = inputTapInternalKey
+	tx.Inputs[0].TaprootLeafScript = []*psbt.TaprootTapLeafScript{inputSweepTapLeaf}
 
 	return tx, nil
 }
@@ -293,7 +303,7 @@ func createRootNode(
 
 func createAggregatedKeyWithSweep(
 	cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, roundLifetime int64,
-) (*musig2.AggregateKey, error) {
+) (*musig2.AggregateKey, *psbt.TaprootTapLeafScript, error) {
 	sweepClosure := &CSVSigClosure{
 		Pubkey:  aspPubkey,
 		Seconds: uint(roundLifetime),
@@ -301,7 +311,7 @@ func createAggregatedKeyWithSweep(
 
 	sweepLeaf, err := sweepClosure.Leaf()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	tapTree := txscript.AssembleTaprootScriptTree(*sweepLeaf)
@@ -311,10 +321,25 @@ func createAggregatedKeyWithSweep(
 		cosigners, tapTreeRoot[:],
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return aggregatedKey, nil
+	index := tapTree.LeafProofIndex[sweepLeaf.TapHash()]
+	proof := tapTree.LeafMerkleProofs[index]
+
+	controlBlock := proof.ToControlBlock(aggregatedKey.PreTweakedKey)
+	controlBlockBytes, err := controlBlock.ToBytes()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	tapLeaf := &psbt.TaprootTapLeafScript{
+		ControlBlock: controlBlockBytes,
+		Script:       sweepLeaf.Script,
+		LeafVersion:  sweepLeaf.LeafVersion,
+	}
+
+	return aggregatedKey, tapLeaf, nil
 }
 
 func createUpperLevel(nodes []node, aggregatedKey *musig2.AggregateKey, feeAmount int64) ([]node, error) {

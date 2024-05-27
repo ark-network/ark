@@ -4,13 +4,15 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr/musig2"
+	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/vulpemventures/go-elements/psetv2"
-	"github.com/vulpemventures/go-elements/taproot"
 )
 
 var (
@@ -29,13 +31,13 @@ var (
 	ErrNumberOfChildren              = errors.New("node branch transaction should have two children")
 	ErrLeafChildren                  = errors.New("leaf node should have max 1 child")
 	ErrInvalidChildTxid              = errors.New("invalid child txid")
-	ErrNumberOfTapscripts            = errors.New("input should have two tapscripts leaves")
-	ErrInternalKey                   = errors.New("taproot internal key is not unspendable")
+	ErrNumberOfTapscripts            = errors.New("input should have 1 tapscript leaf")
+	ErrInternalKey                   = errors.New("invalid taproot internal key")
 	ErrInvalidTaprootScript          = errors.New("invalid taproot script")
+	ErrInvalidControlBlock           = errors.New("invalid control block")
 	ErrInvalidTaprootScriptLen       = errors.New("invalid taproot script length (expected 32 bytes)")
 	ErrInvalidLeafTaprootScript      = errors.New("invalid leaf taproot script")
 	ErrInvalidAmount                 = errors.New("children amount is different from parent amount")
-	ErrInvalidAsset                  = errors.New("invalid output asset")
 	ErrInvalidSweepSequence          = errors.New("invalid sweep sequence")
 	ErrInvalidASP                    = errors.New("invalid ASP")
 	ErrMissingFeeOutput              = errors.New("missing fee output")
@@ -72,9 +74,9 @@ func UnspendableKey() *secp256k1.PublicKey {
 // - input and output amounts
 func ValidateCongestionTree(
 	tree tree.CongestionTree, poolTx string, aspPublicKey *secp256k1.PublicKey,
-	roundLifetime int64,
+	roundLifetime int64, cosigners []*secp256k1.PublicKey, minRelayFee int64,
 ) error {
-	poolTransaction, err := psetv2.NewPsetFromBase64(poolTx)
+	poolTransaction, err := psbt.NewFromRawBytes(strings.NewReader(poolTx), true)
 	if err != nil {
 		return ErrInvalidPoolTransaction
 	}
@@ -83,14 +85,7 @@ func ValidateCongestionTree(
 		return ErrInvalidPoolTransactionOutputs
 	}
 
-	poolTxAmount := poolTransaction.Outputs[sharedOutputIndex].Value
-
-	utx, err := poolTransaction.UnsignedTx()
-	if err != nil {
-		return ErrInvalidPoolTransaction
-	}
-
-	poolTxID := utx.TxHash().String()
+	poolTxAmount := poolTransaction.UnsignedTx.TxOut[sharedOutputIndex].Value
 
 	nbNodes := tree.NumberOfNodes()
 	if nbNodes == 0 {
@@ -103,7 +98,7 @@ func ValidateCongestionTree(
 
 	// check that root input is connected to the pool tx
 	rootPsetB64 := tree[0][0].Tx
-	rootPset, err := psetv2.NewPsetFromBase64(rootPsetB64)
+	rootPset, err := psbt.NewFromRawBytes(strings.NewReader(rootPsetB64), true)
 	if err != nil {
 		return fmt.Errorf("invalid root transaction: %w", err)
 	}
@@ -112,14 +107,14 @@ func ValidateCongestionTree(
 		return ErrNumberOfInputs
 	}
 
-	rootInput := rootPset.Inputs[0]
-	if chainhash.Hash(rootInput.PreviousTxid).String() != poolTxID ||
-		rootInput.PreviousTxIndex != sharedOutputIndex {
+	rootInput := rootPset.UnsignedTx.TxIn[0]
+	if chainhash.Hash(rootInput.PreviousOutPoint.Hash).String() != poolTransaction.UnsignedTx.TxHash().String() ||
+		rootInput.PreviousOutPoint.Index != sharedOutputIndex {
 		return ErrWrongPoolTxID
 	}
 
-	sumRootValue := uint64(0)
-	for _, output := range rootPset.Outputs {
+	sumRootValue := minRelayFee
+	for _, output := range rootPset.UnsignedTx.TxOut {
 		sumRootValue += output.Value
 	}
 
@@ -131,11 +126,30 @@ func ValidateCongestionTree(
 		return ErrNoLeaves
 	}
 
+	sweepClosure := &CSVSigClosure{
+		Seconds: uint(roundLifetime),
+		Pubkey:  aspPublicKey,
+	}
+
+	sweepLeaf, err := sweepClosure.Leaf()
+	if err != nil {
+		return err
+	}
+
+	tapTree := txscript.AssembleTaprootScriptTree(*sweepLeaf)
+	root := tapTree.RootNode.TapHash()
+
+	signers := append(cosigners, aspPublicKey)
+	aggregatedKey, err := aggregateKeys(signers, root[:])
+	if err != nil {
+		return err
+	}
+
 	// iterates over all the nodes of the tree
 	for _, level := range tree {
 		for _, node := range level {
 			if err := validateNodeTransaction(
-				node, tree, UnspendableKey(), aspPublicKey, roundLifetime,
+				node, tree, aggregatedKey, minRelayFee,
 			); err != nil {
 				return err
 			}
@@ -147,8 +161,7 @@ func ValidateCongestionTree(
 
 func validateNodeTransaction(
 	node tree.Node, tree tree.CongestionTree,
-	expectedInternalKey, expectedPublicKeyASP *secp256k1.PublicKey,
-	expectedSequence int64,
+	expectedAggregatedKey *musig2.AggregateKey, minRelayFee int64,
 ) error {
 	if node.Tx == "" {
 		return ErrNodeTransactionEmpty
@@ -162,17 +175,12 @@ func validateNodeTransaction(
 		return ErrNodeParentTxidEmpty
 	}
 
-	decodedPset, err := psetv2.NewPsetFromBase64(node.Tx)
+	decodedPset, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
 	if err != nil {
 		return fmt.Errorf("invalid node transaction: %w", err)
 	}
 
-	utx, err := decodedPset.UnsignedTx()
-	if err != nil {
-		return fmt.Errorf("invalid node transaction: %w", err)
-	}
-
-	if utx.TxHash().String() != node.Txid {
+	if decodedPset.UnsignedTx.TxHash().String() != node.Txid {
 		return ErrNodeTxidDifferent
 	}
 
@@ -181,18 +189,13 @@ func validateNodeTransaction(
 	}
 
 	input := decodedPset.Inputs[0]
-	if len(input.TapLeafScript) != 2 {
+	if len(input.TaprootLeafScript) != 1 {
 		return ErrNumberOfTapscripts
 	}
 
-	prevTxid := chainhash.Hash(decodedPset.Inputs[0].PreviousTxid).String()
+	prevTxid := decodedPset.UnsignedTx.TxIn[0].PreviousOutPoint.Hash.String()
 	if prevTxid != node.ParentTxid {
 		return ErrParentTxidInput
-	}
-
-	feeOutput := decodedPset.Outputs[len(decodedPset.Outputs)-1]
-	if len(feeOutput.Script) != 0 {
-		return ErrMissingFeeOutput
 	}
 
 	children := tree.Children(node.Txid)
@@ -202,73 +205,45 @@ func validateNodeTransaction(
 	}
 
 	for childIndex, child := range children {
-		childTx, err := psetv2.NewPsetFromBase64(child.Tx)
+		childTx, err := psbt.NewFromRawBytes(strings.NewReader(child.Tx), true)
 		if err != nil {
 			return fmt.Errorf("invalid child transaction: %w", err)
 		}
 
-		parentOutput := decodedPset.Outputs[childIndex]
-		previousScriptKey := parentOutput.Script[2:]
+		parentOutput := decodedPset.UnsignedTx.TxOut[childIndex]
+		previousScriptKey := parentOutput.PkScript[2:]
 		if len(previousScriptKey) != 32 {
 			return ErrInvalidTaprootScript
 		}
 
-		sweepLeafFound := false
+		inputData := decodedPset.Inputs[0]
 
-		for _, tapLeaf := range childTx.Inputs[0].TapLeafScript {
-			key := tapLeaf.ControlBlock.InternalKey
-			if !key.IsEqual(expectedInternalKey) {
-				return ErrInternalKey
-			}
-
-			rootHash := tapLeaf.ControlBlock.RootHash(tapLeaf.Script)
-			outputScript := taproot.ComputeTaprootOutputKey(key, rootHash)
-
-			if !bytes.Equal(
-				schnorr.SerializePubKey(outputScript), previousScriptKey,
-			) {
-				return ErrInvalidTaprootScript
-			}
-
-			closure, err := DecodeClosure(tapLeaf.Script)
-			if err != nil {
-				continue
-			}
-
-			switch c := closure.(type) {
-			case *CSVSigClosure:
-				isASP := bytes.Equal(
-					schnorr.SerializePubKey(c.Pubkey),
-					schnorr.SerializePubKey(expectedPublicKeyASP),
-				)
-				isSweepDelay := int64(c.Seconds) == expectedSequence
-
-				if isASP && !isSweepDelay {
-					return ErrInvalidSweepSequence
-				}
-
-				if isSweepDelay && !isASP {
-					return ErrInvalidASP
-				}
-
-				if isASP && isSweepDelay {
-					sweepLeafFound = true
-				}
-			default:
-				continue
-			}
+		inputTapInternalKey, err := schnorr.ParsePubKey(inputData.TaprootInternalKey)
+		if err != nil {
+			return fmt.Errorf("invalid internal key: %w", err)
 		}
 
-		if !sweepLeafFound {
-			return ErrMissingSweepTapscript
+		if !bytes.Equal(inputData.TaprootInternalKey, schnorr.SerializePubKey(expectedAggregatedKey.PreTweakedKey)) {
+			return ErrInternalKey
 		}
 
-		sumChildAmount := uint64(0)
-		for _, output := range childTx.Outputs {
+		inputTapLeaf := inputData.TaprootLeafScript[0]
+
+		ctrlBlock, err := txscript.ParseControlBlock(inputTapLeaf.ControlBlock)
+		if err != nil {
+			return ErrInvalidControlBlock
+		}
+
+		rootHash := ctrlBlock.RootHash(inputTapLeaf.Script)
+		tapKey := txscript.ComputeTaprootOutputKey(inputTapInternalKey, rootHash)
+
+		if !bytes.Equal(schnorr.SerializePubKey(tapKey), schnorr.SerializePubKey(expectedAggregatedKey.FinalKey)) {
+			return ErrInvalidTaprootScript
+		}
+
+		sumChildAmount := minRelayFee
+		for _, output := range childTx.UnsignedTx.TxOut {
 			sumChildAmount += output.Value
-			if !bytes.Equal(output.Asset, parentOutput.Asset) {
-				return ErrInvalidAsset
-			}
 		}
 
 		if sumChildAmount != parentOutput.Value {

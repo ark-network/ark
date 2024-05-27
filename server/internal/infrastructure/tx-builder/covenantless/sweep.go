@@ -122,6 +122,7 @@ func sweepTransaction(
 		Value:    amount,
 		PkScript: script,
 	})
+	sweepPartialTx.Outputs = append(sweepPartialTx.Outputs, psbt.POutput{})
 
 	b64, err := sweepPartialTx.B64Encode()
 	if err != nil {
