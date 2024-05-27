@@ -1,26 +1,30 @@
 package txbuilder
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
 	"strings"
 
+	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/address"
-	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/taproot"
 )
 
 const (
-	connectorAmount = uint64(450)
-	dustLimit       = uint64(450)
+	connectorAmount = uint64(1000)
+	dustLimit       = uint64(1000)
 )
 
 type txBuilder struct {
@@ -48,13 +52,12 @@ func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (signedSweepTx strin
 	sweepPset, err := sweepTransaction(
 		b.wallet,
 		inputs,
-		b.net.AssetID,
 	)
 	if err != nil {
 		return "", err
 	}
 
-	sweepPsetBase64, err := sweepPset.ToBase64()
+	sweepPsetBase64, err := sweepPset.B64Encode()
 	if err != nil {
 		return "", err
 	}
@@ -65,21 +68,29 @@ func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (signedSweepTx strin
 		return "", err
 	}
 
-	signedPset, err := psetv2.NewPsetFromBase64(signedSweepPsetB64)
+	signedPsbt, err := psbt.NewFromRawBytes(strings.NewReader(signedSweepPsetB64), true)
 	if err != nil {
 		return "", err
 	}
 
-	if err := psetv2.FinalizeAll(signedPset); err != nil {
-		return "", err
+	for i := range inputs {
+		if err := psbt.Finalize(signedPsbt, i); err != nil {
+			return "", err
+		}
 	}
 
-	extractedTx, err := psetv2.Extract(signedPset)
+	tx, err := psbt.Extract(signedPsbt)
 	if err != nil {
 		return "", err
 	}
 
-	return extractedTx.ToHex()
+	buf := new(bytes.Buffer)
+
+	if err := tx.Serialize(buf); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(buf.Bytes()), nil
 }
 
 func (b *txBuilder) BuildForfeitTxs(
@@ -95,13 +106,13 @@ func (b *txBuilder) BuildForfeitTxs(
 		return nil, nil, err
 	}
 
-	forfeitTxs, err = b.createForfeitTxs(aspPubkey, payments, connectorTxs)
+	forfeitTxs, err = b.createForfeitTxs(aspPubkey, payments, connectorTxs, minRelayFee)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	for _, tx := range connectorTxs {
-		buf, _ := tx.ToBase64()
+		buf, _ := tx.B64Encode()
 		connectors = append(connectors, buf)
 	}
 	return connectors, forfeitTxs, nil
@@ -110,25 +121,21 @@ func (b *txBuilder) BuildForfeitTxs(
 func (b *txBuilder) BuildPoolTx(
 	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, minRelayFee uint64,
 ) (poolTx string, congestionTree tree.CongestionTree, connectorAddress string, err error) {
-	// The creation of the tree and the pool tx are tightly coupled:
-	// - building the tree requires knowing the shared outpoint (txid:vout)
-	// - building the pool tx requires knowing the shared output script and amount
-	// The idea here is to first create all the data for the outputs of the txs
-	// of the congestion tree to calculate the shared output script and amount.
-	// With these data the pool tx can be created, and once the shared utxo
-	// outpoint is obtained, the congestion tree can be finally created.
-	// The factory function `treeFactoryFn` returned below holds all outputs data
-	// generated in the process and takes the shared utxo outpoint as argument.
-	// This is safe as the memory allocated for `craftCongestionTree` is freed
-	// only after `BuildPoolTx` returns.
-
 	var sharedOutputScript []byte
-	var sharedOutputAmount uint64
-	var treeFactoryFn tree.TreeFactory
+	var sharedOutputAmount int64
+
+	var senders []*secp256k1.PublicKey
+	senders, err = getCosigners(payments)
+	if err != nil {
+		return
+	}
+
+	cosigners := append(senders, aspPubkey)
+	receivers := getOffchainReceivers(payments)
 
 	if !isOnchainOnly(payments) {
-		treeFactoryFn, sharedOutputScript, sharedOutputAmount, err = tree.CraftCongestionTree(
-			b.net.AssetID, aspPubkey, getOffchainReceivers(payments), minRelayFee, b.roundLifetime, b.exitDelay,
+		sharedOutputScript, sharedOutputAmount, err = bitcointree.PreviewCongestionTree(
+			cosigners, aspPubkey, receivers, minRelayFee, b.roundLifetime, b.exitDelay,
 		)
 		if err != nil {
 			return
@@ -147,24 +154,23 @@ func (b *txBuilder) BuildPoolTx(
 		return
 	}
 
-	unsignedTx, err := ptx.UnsignedTx()
+	poolTx, err = ptx.B64Encode()
 	if err != nil {
 		return
 	}
 
-	if treeFactoryFn != nil {
-		congestionTree, err = treeFactoryFn(psetv2.InputArgs{
-			Txid:    unsignedTx.TxHash().String(),
-			TxIndex: 0,
-		})
+	if !isOnchainOnly(payments) {
+		initialOutpoint := &wire.OutPoint{
+			Hash:  ptx.UnsignedTx.TxHash(),
+			Index: 0,
+		}
+
+		congestionTree, err = bitcointree.CraftCongestionTree(
+			initialOutpoint, cosigners, aspPubkey, receivers, minRelayFee, b.roundLifetime, b.exitDelay,
+		)
 		if err != nil {
 			return
 		}
-	}
-
-	poolTx, err = ptx.ToBase64()
-	if err != nil {
-		return
 	}
 
 	return
@@ -210,15 +216,20 @@ func (b *txBuilder) getLeafScriptAndTree(
 }
 
 func (b *txBuilder) createPoolTx(
-	sharedOutputAmount uint64, sharedOutputScript []byte,
+	sharedOutputAmount int64, sharedOutputScript []byte,
 	payments []domain.Payment, aspPubKey *secp256k1.PublicKey, connectorAddress string, minRelayFee uint64,
-) (*psetv2.Pset, error) {
+) (*psbt.Packet, error) {
 	aspScript, err := p2trScript(aspPubKey, b.net)
 	if err != nil {
 		return nil, err
 	}
 
-	connectorScript, err := address.ToOutputScript(connectorAddress)
+	connectorAddr, err := btcutil.DecodeAddress(connectorAddress, b.net)
+	if err != nil {
+		return nil, err
+	}
+
+	connectorScript, err := txscript.PayToAddrScript(connectorAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -231,41 +242,43 @@ func (b *txBuilder) createPoolTx(
 	}
 	targetAmount := connectorsAmount
 
-	outputs := make([]psetv2.OutputArgs, 0)
+	outputs := make([]*wire.TxOut, 0)
 
 	if sharedOutputScript != nil && sharedOutputAmount > 0 {
-		targetAmount += sharedOutputAmount
+		targetAmount += uint64(sharedOutputAmount)
 
-		outputs = append(outputs, psetv2.OutputArgs{
-			Asset:  b.net.AssetID,
-			Amount: sharedOutputAmount,
-			Script: sharedOutputScript,
+		outputs = append(outputs, &wire.TxOut{
+			Value:    sharedOutputAmount,
+			PkScript: sharedOutputScript,
 		})
 	}
 
-	outputs = append(outputs, psetv2.OutputArgs{
-		Asset:  b.net.AssetID,
-		Amount: connectorsAmount,
-		Script: connectorScript,
+	outputs = append(outputs, &wire.TxOut{
+		Value:    int64(connectorAmount),
+		PkScript: connectorScript,
 	})
 
 	for _, receiver := range receivers {
 		targetAmount += receiver.Amount
 
-		receiverScript, err := address.ToOutputScript(receiver.OnchainAddress)
+		receiverAddr, err := btcutil.DecodeAddress(receiver.OnchainAddress, b.net)
 		if err != nil {
 			return nil, err
 		}
 
-		outputs = append(outputs, psetv2.OutputArgs{
-			Asset:  b.net.AssetID,
-			Amount: receiver.Amount,
-			Script: receiverScript,
+		receiverScript, err := txscript.PayToAddrScript(receiverAddr)
+		if err != nil {
+			return nil, err
+		}
+
+		outputs = append(outputs, &wire.TxOut{
+			Value:    int64(receiver.Amount),
+			PkScript: receiverScript,
 		})
 	}
 
 	ctx := context.Background()
-	utxos, change, err := b.wallet.SelectUtxos(ctx, b.net.AssetID, targetAmount)
+	utxos, change, err := b.wallet.SelectUtxos(ctx, "", targetAmount)
 	if err != nil {
 		return nil, err
 	}
@@ -276,29 +289,51 @@ func (b *txBuilder) createPoolTx(
 			dust = change
 			change = 0
 		} else {
-			outputs = append(outputs, psetv2.OutputArgs{
-				Asset:  b.net.AssetID,
-				Amount: change,
-				Script: aspScript,
+			outputs = append(outputs, &wire.TxOut{
+				Value:    int64(change),
+				PkScript: aspScript,
 			})
 		}
 	}
 
-	ptx, err := psetv2.New(nil, outputs, nil)
+	ins := make([]*wire.OutPoint, 0)
+
+	for _, utxo := range utxos {
+		txhash, err := chainhash.NewHashFromStr(utxo.GetTxid())
+		if err != nil {
+			return nil, err
+		}
+
+		ins = append(ins, &wire.OutPoint{
+			Hash:  *txhash,
+			Index: utxo.GetIndex(),
+		})
+	}
+
+	ptx, err := psbt.New(ins, outputs, 2, 0, []uint32{wire.MaxTxInSequenceNum})
 	if err != nil {
 		return nil, err
 	}
 
-	updater, err := psetv2.NewUpdater(ptx)
+	updater, err := psbt.NewUpdater(ptx)
 	if err != nil {
 		return nil, err
 	}
+	for _, utxo := range utxos {
+		script, err := hex.DecodeString(utxo.GetScript())
+		if err != nil {
+			return nil, err
+		}
 
-	if err := addInputs(updater, utxos); err != nil {
-		return nil, err
+		if err := updater.AddInWitnessUtxo(&wire.TxOut{
+			Value:    int64(utxo.GetValue()),
+			PkScript: script,
+		}, 0); err != nil {
+			return nil, err
+		}
 	}
 
-	b64, err := ptx.ToBase64()
+	b64, err := ptx.B64Encode()
 	if err != nil {
 		return nil, err
 	}
@@ -317,39 +352,62 @@ func (b *txBuilder) createPoolTx(
 	if dust == 0 {
 		if feeAmount == change {
 			// fees = change, remove change output
+			ptx.UnsignedTx.TxOut = ptx.UnsignedTx.TxOut[:len(ptx.UnsignedTx.TxOut)-1]
 			ptx.Outputs = ptx.Outputs[:len(ptx.Outputs)-1]
 		} else if feeAmount < change {
 			// change covers the fees, reduce change amount
-			ptx.Outputs[len(ptx.Outputs)-1].Value = change - feeAmount
+			ptx.UnsignedTx.TxOut[len(ptx.Outputs)-1].Value = int64(change - feeAmount)
 		} else {
 			// change is not enough to cover fees, re-select utxos
 			if change > 0 {
 				// remove change output if present
+				ptx.UnsignedTx.TxOut = ptx.UnsignedTx.TxOut[:len(ptx.UnsignedTx.TxOut)-1]
 				ptx.Outputs = ptx.Outputs[:len(ptx.Outputs)-1]
 			}
-			newUtxos, change, err := b.wallet.SelectUtxos(ctx, b.net.AssetID, feeAmount-change)
+			newUtxos, change, err := b.wallet.SelectUtxos(ctx, "", feeAmount-change)
 			if err != nil {
 				return nil, err
 			}
 
 			if change > 0 {
-				if err := updater.AddOutputs([]psetv2.OutputArgs{
-					{
-						Asset:  b.net.AssetID,
-						Amount: change,
-						Script: aspScript,
+				ptx.UnsignedTx.AddTxOut(&wire.TxOut{
+					Value:    int64(change),
+					PkScript: aspScript,
+				})
+			}
+
+			for _, utxo := range newUtxos {
+				txhash, err := chainhash.NewHashFromStr(utxo.GetTxid())
+				if err != nil {
+					return nil, err
+				}
+
+				outpoint := &wire.OutPoint{
+					Hash:  *txhash,
+					Index: utxo.GetIndex(),
+				}
+
+				ptx.UnsignedTx.AddTxIn(wire.NewTxIn(outpoint, nil, nil))
+
+				scriptBytes, err := hex.DecodeString(utxo.GetScript())
+				if err != nil {
+					return nil, err
+				}
+
+				if err := updater.AddInWitnessUtxo(
+					&wire.TxOut{
+						Value:    int64(utxo.GetValue()),
+						PkScript: scriptBytes,
 					},
-				}); err != nil {
+					len(ptx.UnsignedTx.TxIn)-1,
+				); err != nil {
 					return nil, err
 				}
 			}
 
-			if err := addInputs(updater, newUtxos); err != nil {
-				return nil, err
-			}
 		}
 	} else if feeAmount-dust > 0 {
-		newUtxos, change, err := b.wallet.SelectUtxos(ctx, b.net.AssetID, feeAmount-dust)
+		newUtxos, change, err := b.wallet.SelectUtxos(ctx, "", feeAmount-dust)
 		if err != nil {
 			return nil, err
 		}
@@ -358,31 +416,41 @@ func (b *txBuilder) createPoolTx(
 			if change < dustLimit {
 				feeAmount += change
 			} else {
-				if err := updater.AddOutputs([]psetv2.OutputArgs{
-					{
-						Asset:  b.net.AssetID,
-						Amount: change,
-						Script: aspScript,
-					},
-				}); err != nil {
-					return nil, err
-				}
+				ptx.UnsignedTx.AddTxOut(&wire.TxOut{
+					Value:    int64(change),
+					PkScript: aspScript,
+				})
 			}
 		}
 
-		if err := addInputs(updater, newUtxos); err != nil {
-			return nil, err
-		}
-	}
+		for _, utxo := range newUtxos {
+			txhash, err := chainhash.NewHashFromStr(utxo.GetTxid())
+			if err != nil {
+				return nil, err
+			}
 
-	// add fee output
-	if err := updater.AddOutputs([]psetv2.OutputArgs{
-		{
-			Asset:  b.net.AssetID,
-			Amount: feeAmount,
-		},
-	}); err != nil {
-		return nil, err
+			outpoint := &wire.OutPoint{
+				Hash:  *txhash,
+				Index: utxo.GetIndex(),
+			}
+
+			ptx.UnsignedTx.AddTxIn(wire.NewTxIn(outpoint, nil, nil))
+
+			scriptBytes, err := hex.DecodeString(utxo.GetScript())
+			if err != nil {
+				return nil, err
+			}
+
+			if err := updater.AddInWitnessUtxo(
+				&wire.TxOut{
+					Value:    int64(utxo.GetValue()),
+					PkScript: scriptBytes,
+				},
+				len(ptx.UnsignedTx.TxIn)-1,
+			); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	return ptx, nil
@@ -390,35 +458,37 @@ func (b *txBuilder) createPoolTx(
 
 func (b *txBuilder) createConnectors(
 	poolTx string, payments []domain.Payment, connectorAddress string, minRelayFee uint64,
-) ([]*psetv2.Pset, error) {
-	txid, _ := getTxid(poolTx)
+) ([]*psbt.Packet, error) {
+	partialTx, err := psbt.NewFromRawBytes(strings.NewReader(poolTx), true)
+	if err != nil {
+		return nil, err
+	}
 
 	aspScript, err := address.ToOutputScript(connectorAddress)
 	if err != nil {
 		return nil, err
 	}
 
-	connectorOutput := psetv2.OutputArgs{
-		Asset:  b.net.AssetID,
-		Script: aspScript,
-		Amount: connectorAmount,
+	connectorOutput := &wire.TxOut{
+		PkScript: aspScript,
+		Value:    int64(connectorAmount),
 	}
 
 	numberOfConnectors := countSpentVtxos(payments)
 
-	previousInput := psetv2.InputArgs{
-		Txid:    txid,
-		TxIndex: 1,
+	previousInput := &wire.OutPoint{
+		Hash:  partialTx.UnsignedTx.TxHash(),
+		Index: 1,
 	}
 
 	if numberOfConnectors == 1 {
-		outputs := []psetv2.OutputArgs{connectorOutput}
+		outputs := []*wire.TxOut{connectorOutput}
 		connectorTx, err := craftConnectorTx(previousInput, aspScript, outputs, minRelayFee)
 		if err != nil {
 			return nil, err
 		}
 
-		return []*psetv2.Pset{connectorTx}, nil
+		return []*psbt.Packet{connectorTx}, nil
 	}
 
 	totalConnectorAmount := (connectorAmount + minRelayFee) * numberOfConnectors
@@ -426,16 +496,15 @@ func (b *txBuilder) createConnectors(
 		totalConnectorAmount -= minRelayFee
 	}
 
-	connectors := make([]*psetv2.Pset, 0, numberOfConnectors-1)
+	connectors := make([]*psbt.Packet, 0, numberOfConnectors-1)
 	for i := uint64(0); i < numberOfConnectors-1; i++ {
-		outputs := []psetv2.OutputArgs{connectorOutput}
+		outputs := []*wire.TxOut{connectorOutput}
 		totalConnectorAmount -= connectorAmount
 		totalConnectorAmount -= minRelayFee
 		if totalConnectorAmount > 0 {
-			outputs = append(outputs, psetv2.OutputArgs{
-				Asset:  b.net.AssetID,
-				Script: aspScript,
-				Amount: totalConnectorAmount,
+			outputs = append(outputs, &wire.TxOut{
+				PkScript: aspScript,
+				Value:    int64(totalConnectorAmount),
 			})
 		}
 		connectorTx, err := craftConnectorTx(previousInput, aspScript, outputs, minRelayFee)
@@ -443,11 +512,9 @@ func (b *txBuilder) createConnectors(
 			return nil, err
 		}
 
-		txid, _ := getPsetId(connectorTx)
-
-		previousInput = psetv2.InputArgs{
-			Txid:    txid,
-			TxIndex: 1,
+		previousInput = &wire.OutPoint{
+			Hash:  connectorTx.UnsignedTx.TxHash(),
+			Index: 1,
 		}
 
 		connectors = append(connectors, connectorTx)
@@ -457,9 +524,9 @@ func (b *txBuilder) createConnectors(
 }
 
 func (b *txBuilder) createForfeitTxs(
-	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, connectors []*psetv2.Pset,
+	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, connectors []*psbt.Packet, minRelayFee uint64,
 ) ([]string, error) {
-	aspScript, err := p2wpkhScript(aspPubkey, b.net)
+	aspScript, err := p2trScript(aspPubkey, b.net)
 	if err != nil {
 		return nil, err
 	}
@@ -500,7 +567,7 @@ func (b *txBuilder) createForfeitTxs(
 
 			for _, connector := range connectors {
 				txs, err := craftForfeitTxs(
-					connector, vtxo, *forfeitProof, vtxoScript, aspScript,
+					connector, vtxo, vtxoScript, aspScript, minRelayFee,
 				)
 				if err != nil {
 					return nil, err
@@ -525,7 +592,7 @@ func (b *txBuilder) getConnectorAddress(poolTx string) (string, error) {
 
 	connectorOutputWitnessProgram := pset.Outputs[1].WitnessScript[2:]
 
-	pay, err := btcutil.NewAddressWitnessPubKeyHash(connectorOutputWitnessProgram, b.net)
+	pay, err := btcutil.NewAddressTaproot(connectorOutputWitnessProgram, b.net)
 	if err != nil {
 		return "", err
 	}

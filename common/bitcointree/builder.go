@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr/musig2"
 	"github.com/btcsuite/btcd/btcutil/psbt"
@@ -44,7 +45,7 @@ func PreviewCongestionTree(
 func CraftCongestionTree(
 	initialInput *wire.OutPoint, cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, receivers []Receiver,
 	feeSatsPerNode uint64, roundLifetime, unilateralExitDelay int64,
-) (CongestionTree, error) {
+) (tree.CongestionTree, error) {
 	aggregatedKey, err := createAggregatedKeyWithSweep(
 		cosigners, aspPubkey, roundLifetime,
 	)
@@ -57,7 +58,7 @@ func CraftCongestionTree(
 		return nil, err
 	}
 
-	congestionTree := make(CongestionTree, 0)
+	congestionTree := make(tree.CongestionTree, 0)
 
 	ins := []*wire.OutPoint{initialInput}
 	nodes := []node{root}
@@ -66,7 +67,7 @@ func CraftCongestionTree(
 		nextNodes := make([]node, 0)
 		nextInputsArgs := make([]*wire.OutPoint, 0)
 
-		treeLevel := make([]Node, 0)
+		treeLevel := make([]tree.Node, 0)
 
 		for i, node := range nodes {
 			treeNode, err := getTreeNode(node, ins[i])
@@ -204,20 +205,20 @@ func (b *branch) getOutputs() ([]*wire.TxOut, error) {
 	return outputs, nil
 }
 
-func getTreeNode(n node, input *wire.OutPoint) (Node, error) {
+func getTreeNode(n node, input *wire.OutPoint) (tree.Node, error) {
 	partialTx, err := getTx(n, input)
 	if err != nil {
-		return Node{}, err
+		return tree.Node{}, err
 	}
 
 	txid := partialTx.UnsignedTx.TxHash().String()
 
 	tx, err := partialTx.B64Encode()
 	if err != nil {
-		return Node{}, err
+		return tree.Node{}, err
 	}
 
-	return Node{
+	return tree.Node{
 		Txid:       txid,
 		Tx:         tx,
 		ParentTxid: input.Hash.String(),

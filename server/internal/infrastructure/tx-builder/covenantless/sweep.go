@@ -5,74 +5,91 @@ import (
 	"fmt"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/tree"
+	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/internal/core/ports"
-	"github.com/vulpemventures/go-elements/address"
-	"github.com/vulpemventures/go-elements/elementsutil"
-	"github.com/vulpemventures/go-elements/psetv2"
-	"github.com/vulpemventures/go-elements/taproot"
-	"github.com/vulpemventures/go-elements/transaction"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/btcutil/psbt"
+	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
 )
 
 func sweepTransaction(
 	wallet ports.WalletService,
 	sweepInputs []ports.SweepInput,
-	lbtc string,
-) (*psetv2.Pset, error) {
-	sweepPset, err := psetv2.New(nil, nil, nil)
+) (*psbt.Packet, error) {
+	ins := make([]*wire.OutPoint, 0)
+
+	for _, input := range sweepInputs {
+		ins = append(ins, &wire.OutPoint{
+			Hash:  input.GetHash(),
+			Index: input.GetIndex(),
+		})
+	}
+
+	sweepPartialTx, err := psbt.New(
+		ins,
+		nil,
+		2,
+		0,
+		[]uint32{wire.MaxTxInSequenceNum},
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	updater, err := psetv2.NewUpdater(sweepPset)
+	updater, err := psbt.NewUpdater(sweepPartialTx)
 	if err != nil {
 		return nil, err
 	}
 
-	amount := uint64(0)
+	amount := int64(0)
 
-	for i, input := range sweepInputs {
-		leaf := input.SweepLeaf
-		sweepClosure := &tree.CSVSigClosure{}
-		isSweep, err := sweepClosure.Decode(leaf.Script)
+	for i, sweepInput := range sweepInputs {
+		sweepPartialTx.Inputs[i].TaprootLeafScript = []*psbt.TaprootTapLeafScript{
+			{
+				ControlBlock: sweepInput.GetControlBlock(),
+				Script:       sweepInput.GetLeafScript(),
+				LeafVersion:  txscript.BaseLeafVersion,
+			},
+		}
+
+		sweepPartialTx.Inputs[i].TaprootInternalKey = schnorr.SerializePubKey(sweepInput.GetInternalKey())
+
+		sweepClosure := bitcointree.CSVSigClosure{}
+		valid, err := sweepClosure.Decode(sweepInput.GetLeafScript())
+		if err != nil {
+			return nil, err
+		}
+		if !valid {
+			return nil, fmt.Errorf("invalid csv script")
+		}
+
+		amount += int64(sweepInput.GetAmount())
+
+		ctrlBlock, err := txscript.ParseControlBlock(sweepInput.GetControlBlock())
 		if err != nil {
 			return nil, err
 		}
 
-		if !isSweep {
-			return nil, fmt.Errorf("invalid sweep script")
-		}
+		root := ctrlBlock.RootHash(sweepInput.GetLeafScript())
 
-		amount += input.Amount
+		prevoutTaprootKey := txscript.ComputeTaprootOutputKey(
+			sweepInput.GetInternalKey(),
+			root,
+		)
 
-		if err := updater.AddInputs([]psetv2.InputArgs{input.InputArgs}); err != nil {
-			return nil, err
-		}
-
-		if err := updater.AddInTapLeafScript(i, leaf); err != nil {
-			return nil, err
-		}
-
-		assetHash, err := elementsutil.AssetHashToBytes(lbtc)
+		script, err := taprootOutputScript(prevoutTaprootKey)
 		if err != nil {
 			return nil, err
 		}
 
-		value, err := elementsutil.ValueToBytes(input.Amount)
-		if err != nil {
-			return nil, err
+		prevout := &wire.TxOut{
+			Value:    int64(sweepInput.GetAmount()),
+			PkScript: script,
 		}
 
-		root := leaf.ControlBlock.RootHash(leaf.Script)
-		taprootKey := taproot.ComputeTaprootOutputKey(leaf.ControlBlock.InternalKey, root)
-		script, err := taprootOutputScript(taprootKey)
-		if err != nil {
-			return nil, err
-		}
-
-		witnessUtxo := transaction.NewTxOutput(assetHash, value, script)
-
-		if err := updater.AddInWitnessUtxo(i, witnessUtxo); err != nil {
+		if err := updater.AddInWitnessUtxo(prevout, i); err != nil {
 			return nil, err
 		}
 
@@ -81,8 +98,7 @@ func sweepTransaction(
 			return nil, err
 		}
 
-		updater.Pset.Inputs[i].Sequence = sequence
-		continue
+		sweepPartialTx.UnsignedTx.TxIn[i].Sequence = sequence
 	}
 
 	ctx := context.Background()
@@ -92,22 +108,22 @@ func sweepTransaction(
 		return nil, err
 	}
 
-	script, err := address.ToOutputScript(sweepAddress[0])
+	addr, err := btcutil.DecodeAddress(sweepAddress[0], nil)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := updater.AddOutputs([]psetv2.OutputArgs{
-		{
-			Asset:  lbtc,
-			Amount: amount,
-			Script: script,
-		},
-	}); err != nil {
+	script, err := txscript.PayToAddrScript(addr)
+	if err != nil {
 		return nil, err
 	}
 
-	b64, err := sweepPset.ToBase64()
+	sweepPartialTx.UnsignedTx.AddTxOut(&wire.TxOut{
+		Value:    amount,
+		PkScript: script,
+	})
+
+	b64, err := sweepPartialTx.B64Encode()
 	if err != nil {
 		return nil, err
 	}
@@ -117,20 +133,11 @@ func sweepTransaction(
 		return nil, err
 	}
 
-	if amount < fees {
+	if amount < int64(fees) {
 		return nil, fmt.Errorf("insufficient funds (%d) to cover fees (%d) for sweep transaction", amount, fees)
 	}
 
-	updater.Pset.Outputs[0].Value = amount - fees
+	sweepPartialTx.UnsignedTx.TxOut[0].Value = amount - int64(fees)
 
-	if err := updater.AddOutputs([]psetv2.OutputArgs{
-		{
-			Asset:  lbtc,
-			Amount: fees,
-		},
-	}); err != nil {
-		return nil, err
-	}
-
-	return sweepPset, nil
+	return sweepPartialTx, nil
 }

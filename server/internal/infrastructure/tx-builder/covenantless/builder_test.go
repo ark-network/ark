@@ -5,23 +5,23 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 
-	"github.com/ark-network/ark/common/tree"
+	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
-	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenant"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenantless"
+	"github.com/btcsuite/btcd/btcutil/psbt"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"github.com/vulpemventures/go-elements/network"
-	"github.com/vulpemventures/go-elements/psetv2"
 )
 
 const (
 	testingKey          = "0218d5ca8b58797b7dbd65c075dd7ba7784b3f38ab71b1a5a8e3f94ba0257654a6"
-	connectorAddress    = "tex1qekd5u0qj8jl07vy60830xy7n9qtmcx9u3s0cqc"
+	connectorAddress    = "bc1py00yhcjpcj0k0sqra0etq0u3yy0purmspppsw0shyzyfe8c83tmq5h6kc2"
 	minRelayFee         = uint64(30)
 	roundLifetime       = int64(1209344)
 	unilateralExitDelay = int64(512)
@@ -49,7 +49,7 @@ func TestMain(m *testing.M) {
 
 func TestBuildPoolTx(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(
-		wallet, network.Liquid, roundLifetime, unilateralExitDelay,
+		wallet, &chaincfg.MainNetParams, roundLifetime, unilateralExitDelay,
 	)
 
 	fixtures, err := parsePoolTxFixtures()
@@ -69,7 +69,7 @@ func TestBuildPoolTx(t *testing.T) {
 				require.Equal(t, f.ExpectedNumOfNodes, congestionTree.NumberOfNodes())
 				require.Len(t, congestionTree.Leaves(), f.ExpectedNumOfLeaves)
 
-				err = tree.ValidateCongestionTree(
+				err = bitcointree.ValidateCongestionTree(
 					congestionTree, poolTx, pubkey, roundLifetime,
 				)
 				require.NoError(t, err)
@@ -94,7 +94,7 @@ func TestBuildPoolTx(t *testing.T) {
 
 func TestBuildForfeitTxs(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(
-		wallet, network.Liquid, 1209344, unilateralExitDelay,
+		wallet, &chaincfg.MainNetParams, 1209344, unilateralExitDelay,
 	)
 
 	fixtures, err := parseForfeitTxsFixtures()
@@ -114,26 +114,26 @@ func TestBuildForfeitTxs(t *testing.T) {
 				expectedInputTxid := f.PoolTxid
 				// Verify the chain of connectors
 				for _, connector := range connectors {
-					tx, err := psetv2.NewPsetFromBase64(connector)
+					tx, err := psbt.NewFromRawBytes(strings.NewReader(connector), true)
 					require.NoError(t, err)
 					require.NotNil(t, tx)
 
 					require.Len(t, tx.Inputs, 1)
-					require.Len(t, tx.Outputs, 3)
+					require.Len(t, tx.Outputs, 2)
 
-					inputTxid := chainhash.Hash(tx.Inputs[0].PreviousTxid).String()
+					inputTxid := tx.UnsignedTx.TxIn[0].PreviousOutPoint.Hash.String()
 					require.Equal(t, expectedInputTxid, inputTxid)
-					require.Equal(t, 1, int(tx.Inputs[0].PreviousTxIndex))
+					require.Equal(t, 1, int(tx.UnsignedTx.TxIn[0].PreviousOutPoint.Index))
 
-					expectedInputTxid = getTxid(tx)
+					expectedInputTxid = tx.UnsignedTx.TxHash().String()
 				}
 
 				// decode and check forfeit txs
 				for _, forfeitTx := range forfeitTxs {
-					tx, err := psetv2.NewPsetFromBase64(forfeitTx)
+					tx, err := psbt.NewFromRawBytes(strings.NewReader(forfeitTx), true)
 					require.NoError(t, err)
 					require.Len(t, tx.Inputs, 2)
-					require.Len(t, tx.Outputs, 2)
+					require.Len(t, tx.Outputs, 1)
 				}
 			}
 		})
@@ -237,9 +237,4 @@ func parseForfeitTxsFixtures() (*forfeitTxsFixtures, error) {
 	}
 
 	return &fixtures, nil
-}
-
-func getTxid(tx *psetv2.Pset) string {
-	utx, _ := tx.UnsignedTx()
-	return utx.TxHash().String()
 }

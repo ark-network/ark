@@ -3,14 +3,23 @@ package ports
 import (
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/vulpemventures/go-elements/psetv2"
 )
 
-type SweepInput struct {
-	InputArgs psetv2.InputArgs
-	SweepLeaf psetv2.TapLeafScript
-	Amount    uint64
+// type SweepInput struct {
+// 	InputArgs psetv2.InputArgs
+// 	SweepLeaf psetv2.TapLeafScript
+// 	Amount    uint64
+// }
+
+type SweepInput interface {
+	GetAmount() uint64
+	GetHash() chainhash.Hash
+	GetIndex() uint32
+	GetLeafScript() []byte
+	GetControlBlock() []byte
+	GetInternalKey() *secp256k1.PublicKey
 }
 
 type TxBuilder interface {

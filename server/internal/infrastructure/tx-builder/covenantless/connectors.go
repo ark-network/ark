@@ -1,72 +1,55 @@
 package txbuilder
 
 import (
-	"github.com/vulpemventures/go-elements/elementsutil"
-	"github.com/vulpemventures/go-elements/psetv2"
-	"github.com/vulpemventures/go-elements/transaction"
+	"github.com/btcsuite/btcd/btcutil/psbt"
+	"github.com/btcsuite/btcd/wire"
 )
 
 func craftConnectorTx(
-	input psetv2.InputArgs, inputScript []byte, outputs []psetv2.OutputArgs, feeAmount uint64,
-) (*psetv2.Pset, error) {
-	ptx, _ := psetv2.New(nil, nil, nil)
-	updater, _ := psetv2.NewUpdater(ptx)
-
-	if err := updater.AddInputs(
-		[]psetv2.InputArgs{input},
-	); err != nil {
-		return nil, err
-	}
-
-	var asset []byte
-	amount := feeAmount
-	for _, output := range outputs {
-		amount += output.Amount
-		if asset == nil {
-			var err error
-			asset, err = elementsutil.AssetHashToBytes(output.Asset)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	value, err := elementsutil.ValueToBytes(amount)
+	input *wire.OutPoint, inputScript []byte, outputs []*wire.TxOut, feeAmount uint64,
+) (*psbt.Packet, error) {
+	ptx, err := psbt.New(
+		[]*wire.OutPoint{input},
+		outputs,
+		2,
+		0,
+		[]uint32{wire.MaxTxInSequenceNum},
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := updater.AddInWitnessUtxo(0, transaction.NewTxOutput(asset, value, inputScript)); err != nil {
+	updater, err := psbt.NewUpdater(ptx)
+	if err != nil {
 		return nil, err
 	}
 
-	feeOutput := psetv2.OutputArgs{
-		Asset:  outputs[0].Asset,
-		Amount: feeAmount,
+	inputAmount := int64(feeAmount)
+	for _, output := range outputs {
+		inputAmount += output.Value
 	}
 
-	if err := updater.AddOutputs(append(outputs, feeOutput)); err != nil {
+	if err := updater.AddInWitnessUtxo(&wire.TxOut{
+		Value:    inputAmount,
+		PkScript: inputScript,
+	}, 0); err != nil {
 		return nil, err
 	}
 
 	return ptx, nil
 }
 
-func getConnectorInputs(pset *psetv2.Pset) ([]psetv2.InputArgs, []*transaction.TxOutput) {
-	txID, _ := getPsetId(pset)
+func getConnectorInputs(partialTx *psbt.Packet) ([]*wire.OutPoint, []*wire.TxOut) {
+	inputs := make([]*wire.OutPoint, 0)
+	witnessUtxos := make([]*wire.TxOut, 0)
 
-	inputs := make([]psetv2.InputArgs, 0, len(pset.Outputs))
-	witnessUtxos := make([]*transaction.TxOutput, 0, len(pset.Outputs))
-
-	for i, output := range pset.Outputs {
-		utx, _ := pset.UnsignedTx()
-
-		if output.Value == connectorAmount && len(output.Script) > 0 {
-			inputs = append(inputs, psetv2.InputArgs{
-				Txid:    txID,
-				TxIndex: uint32(i),
+	for i, output := range partialTx.UnsignedTx.TxOut {
+		if output.Value == int64(connectorAmount) {
+			inputs = append(inputs, &wire.OutPoint{
+				Hash:  partialTx.UnsignedTx.TxHash(),
+				Index: uint32(i),
 			})
-			witnessUtxos = append(witnessUtxos, utx.Outputs[i])
+			witnessUtxos = append(witnessUtxos, output)
 		}
 	}
 

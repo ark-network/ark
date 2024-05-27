@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -70,7 +71,7 @@ func UnspendableKey() *secp256k1.PublicKey {
 // - every control block and taproot output scripts
 // - input and output amounts
 func ValidateCongestionTree(
-	tree CongestionTree, poolTx string, aspPublicKey *secp256k1.PublicKey,
+	tree tree.CongestionTree, poolTx string, aspPublicKey *secp256k1.PublicKey,
 	roundLifetime int64,
 ) error {
 	poolTransaction, err := psetv2.NewPsetFromBase64(poolTx)
@@ -145,7 +146,7 @@ func ValidateCongestionTree(
 }
 
 func validateNodeTransaction(
-	node Node, tree CongestionTree,
+	node tree.Node, tree tree.CongestionTree,
 	expectedInternalKey, expectedPublicKeyASP *secp256k1.PublicKey,
 	expectedSequence int64,
 ) error {

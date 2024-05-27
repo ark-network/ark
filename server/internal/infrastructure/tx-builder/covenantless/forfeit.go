@@ -1,94 +1,69 @@
 package txbuilder
 
 import (
-	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
+	"github.com/btcsuite/btcd/btcutil/psbt"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
-	"github.com/vulpemventures/go-elements/elementsutil"
-	"github.com/vulpemventures/go-elements/psetv2"
-	"github.com/vulpemventures/go-elements/taproot"
-	"github.com/vulpemventures/go-elements/transaction"
+	"github.com/btcsuite/btcd/wire"
 )
 
 func craftForfeitTxs(
-	connectorTx *psetv2.Pset,
+	connectorTx *psbt.Packet,
 	vtxo domain.Vtxo,
-	vtxoForfeitTapleaf taproot.TapscriptElementsProof,
 	vtxoScript, aspScript []byte,
+	minRelayFee uint64,
 ) (forfeitTxs []string, err error) {
 	connectors, prevouts := getConnectorInputs(connectorTx)
 
 	for i, connectorInput := range connectors {
 		connectorPrevout := prevouts[i]
-		asset := elementsutil.AssetHashFromBytes(connectorPrevout.Asset)
 
-		pset, err := psetv2.New(nil, nil, nil)
+		vtxoHash, err := chainhash.NewHashFromStr(vtxo.Txid)
 		if err != nil {
 			return nil, err
 		}
 
-		updater, err := psetv2.NewUpdater(pset)
+		vtxoInput := &wire.OutPoint{
+			Hash:  *vtxoHash,
+			Index: vtxo.VOut,
+		}
+
+		partialTx, err := psbt.New(
+			[]*wire.OutPoint{connectorInput, vtxoInput},
+			[]*wire.TxOut{{
+				Value:    int64(vtxo.Amount) + int64(connectorAmount) - int64(minRelayFee),
+				PkScript: aspScript,
+			}},
+			2,
+			0,
+			[]uint32{wire.MaxTxInSequenceNum},
+		)
 		if err != nil {
 			return nil, err
 		}
 
-		vtxoInput := psetv2.InputArgs{
-			Txid:    vtxo.Txid,
-			TxIndex: vtxo.VOut,
-		}
-
-		vtxoAmount, _ := elementsutil.ValueToBytes(vtxo.Amount)
-
-		if err := updater.AddInputs([]psetv2.InputArgs{connectorInput, vtxoInput}); err != nil {
-			return nil, err
-		}
-
-		if err = updater.AddInWitnessUtxo(0, connectorPrevout); err != nil {
-			return nil, err
-		}
-
-		if err := updater.AddInSighashType(0, txscript.SigHashAll); err != nil {
-			return nil, err
-		}
-
-		vtxoPrevout := transaction.NewTxOutput(connectorPrevout.Asset, vtxoAmount, vtxoScript)
-
-		if err = updater.AddInWitnessUtxo(1, vtxoPrevout); err != nil {
-			return nil, err
-		}
-
-		if err := updater.AddInSighashType(1, txscript.SigHashDefault); err != nil {
-			return nil, err
-		}
-
-		unspendableKey := tree.UnspendableKey()
-
-		tapScript := psetv2.NewTapLeafScript(vtxoForfeitTapleaf, unspendableKey)
-		if err := updater.AddInTapLeafScript(1, tapScript); err != nil {
-			return nil, err
-		}
-
-		connectorAmount, err := elementsutil.ValueFromBytes(connectorPrevout.Value)
+		updater, err := psbt.NewUpdater(partialTx)
 		if err != nil {
 			return nil, err
 		}
 
-		err = updater.AddOutputs([]psetv2.OutputArgs{
-			{
-				Asset:  asset,
-				Amount: vtxo.Amount + connectorAmount - 30,
-				Script: aspScript,
-			},
-			{
-				Asset:  asset,
-				Amount: 30,
-			},
-		})
-		if err != nil {
+		if err := updater.AddInWitnessUtxo(connectorPrevout, 0); err != nil {
 			return nil, err
 		}
 
-		tx, err := pset.ToBase64()
+		if err := updater.AddInWitnessUtxo(&wire.TxOut{
+			Value:    int64(vtxo.Amount),
+			PkScript: vtxoScript,
+		}, 1); err != nil {
+			return nil, err
+		}
+
+		if err := updater.AddInSighashType(txscript.SigHashDefault, 1); err != nil {
+			return nil, err
+		}
+
+		tx, err := partialTx.B64Encode()
 		if err != nil {
 			return nil, err
 		}
