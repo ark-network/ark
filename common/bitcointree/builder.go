@@ -14,8 +14,8 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-// PreviewCongestionTree returns the taproot script and the amount of the initial root output
-func PreviewCongestionTree(
+// CraftSharedOutput returns the taproot script and the amount of the initial root output
+func CraftSharedOutput(
 	cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, receivers []Receiver,
 	feeSatsPerNode uint64, roundLifetime, unilateralExitDelay int64,
 ) ([]byte, int64, error) {

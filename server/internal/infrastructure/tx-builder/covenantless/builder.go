@@ -132,7 +132,7 @@ func (b *txBuilder) BuildPoolTx(
 	receivers := getOffchainReceivers(payments)
 
 	if !isOnchainOnly(payments) {
-		sharedOutputScript, sharedOutputAmount, err = bitcointree.PreviewCongestionTree(
+		sharedOutputScript, sharedOutputAmount, err = bitcointree.CraftSharedOutput(
 			cosigners, aspPubkey, receivers, minRelayFee, b.roundLifetime, b.exitDelay,
 		)
 		if err != nil {

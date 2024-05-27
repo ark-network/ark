@@ -7,12 +7,6 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-// type SweepInput struct {
-// 	InputArgs psetv2.InputArgs
-// 	SweepLeaf psetv2.TapLeafScript
-// 	Amount    uint64
-// }
-
 type SweepInput interface {
 	GetAmount() uint64
 	GetHash() chainhash.Hash
