@@ -66,9 +66,8 @@ func NewService(
 		})
 	}
 	gatewayOpts := grpc.WithTransportCredentials(gatewayCreds)
-	ctx := context.Background()
-	conn, err := grpc.DialContext(
-		ctx, svcConfig.gatewayAddress(), gatewayOpts,
+	conn, err := grpc.NewClient(
+		svcConfig.gatewayAddress(), gatewayOpts,
 	)
 	if err != nil {
 		return nil, err
@@ -86,6 +85,7 @@ func NewService(
 			},
 		}),
 	)
+	ctx := context.Background()
 	if err := arkv1.RegisterArkServiceHandler(
 		ctx, gwmux, conn,
 	); err != nil {

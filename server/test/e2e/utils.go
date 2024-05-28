@@ -31,6 +31,10 @@ type arkReceive struct {
 	Onchain  string `json:"onchain_address"`
 }
 
+type arkTrustedOnboard struct {
+	OnboardAddress string `json:"onboard_address"`
+}
+
 func runOceanCommand(arg ...string) (string, error) {
 	args := append([]string{"exec", "oceand", "ocean"}, arg...)
 	return runCommand("docker", args...)
