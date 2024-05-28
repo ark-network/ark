@@ -17,9 +17,8 @@ const (
 
 var (
 	amountOnboardFlag = cli.Uint64Flag{
-		Name:     "amount",
-		Usage:    "amount to onboard in sats",
-		Required: true,
+		Name:  "amount",
+		Usage: "amount to onboard in sats",
 	}
 	trustedOnboardFlag = cli.BoolFlag{
 		Name:  "trusted",
@@ -39,7 +38,7 @@ func onboardAction(ctx *cli.Context) error {
 
 	amount := ctx.Uint64("amount")
 
-	if amount <= 0 {
+	if !isTrusted && amount <= 0 {
 		return fmt.Errorf("missing amount flag (--amount)")
 	}
 
@@ -59,16 +58,14 @@ func onboardAction(ctx *cli.Context) error {
 	if isTrusted {
 		resp, err := client.TrustedOnboarding(ctx.Context, &arkv1.TrustedOnboardingRequest{
 			UserPubkey: hex.EncodeToString(userPubKey.SerializeCompressed()),
-			Amount:     amount,
 		})
 		if err != nil {
 			return err
 		}
 
-		fmt.Println("onboard_address :", resp.Address)
-		fmt.Println("onboard_amount  :", resp.ExpectedAmount)
-
-		return nil
+		return printJSON(map[string]interface{}{
+			"onboard_address": resp.Address,
+		})
 	}
 
 	aspPubkey, err := getAspPublicKey(ctx)
