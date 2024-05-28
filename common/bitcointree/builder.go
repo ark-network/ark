@@ -317,7 +317,7 @@ func createAggregatedKeyWithSweep(
 	tapTree := txscript.AssembleTaprootScriptTree(*sweepLeaf)
 	tapTreeRoot := tapTree.RootNode.TapHash()
 
-	aggregatedKey, err := aggregateKeys(
+	aggregatedKey, err := AggregateKeys(
 		cosigners, tapTreeRoot[:],
 	)
 	if err != nil {

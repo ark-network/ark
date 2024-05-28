@@ -140,7 +140,7 @@ func ValidateCongestionTree(
 	root := tapTree.RootNode.TapHash()
 
 	signers := append(cosigners, aspPublicKey)
-	aggregatedKey, err := aggregateKeys(signers, root[:])
+	aggregatedKey, err := AggregateKeys(signers, root[:])
 	if err != nil {
 		return err
 	}
