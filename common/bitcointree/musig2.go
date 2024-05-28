@@ -1,9 +1,7 @@
 package bitcointree
 
 import (
-	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"strings"
 
@@ -456,8 +454,6 @@ func (t *treeCoordinatorSession) SignTree() (tree.CongestionTree, error) {
 			if !combinedSig.Verify(message, aggregatedKey.FinalKey) {
 				return nil, errors.New("invalid signature")
 			}
-
-			fmt.Println("message", hex.EncodeToString(message))
 
 			partialTx.Inputs[0].TaprootKeySpendSig = combinedSig.Serialize()
 
