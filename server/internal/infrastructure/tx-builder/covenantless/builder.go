@@ -413,9 +413,7 @@ func (b *txBuilder) createPoolTx(
 		}
 
 		if change > 0 {
-			if change < dustLimit {
-				feeAmount += change
-			} else {
+			if change > dustLimit {
 				ptx.UnsignedTx.AddTxOut(&wire.TxOut{
 					Value:    int64(change),
 					PkScript: aspScript,
