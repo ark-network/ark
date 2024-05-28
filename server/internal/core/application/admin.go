@@ -6,9 +6,14 @@ import (
 	"github.com/ark-network/ark/internal/core/ports"
 )
 
+type Balance struct {
+	Locked    uint64
+	Available uint64
+}
+
 type ArkProviderBalance struct {
-	MainAccountBalance       uint64
-	ConnectorsAccountBalance uint64
+	MainAccountBalance       Balance
+	ConnectorsAccountBalance Balance
 }
 
 type SweepableOutput struct {
@@ -55,19 +60,19 @@ func NewAdminService(walletSvc ports.WalletService, repoManager ports.RepoManage
 }
 
 func (a *adminService) GetBalance(ctx context.Context) (*ArkProviderBalance, error) {
-	mainBalance, err := a.walletSvc.MainAccountBalance(ctx)
+	mainBalance, mainBalanceLocked, err := a.walletSvc.MainAccountBalance(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	connectorBalance, err := a.walletSvc.ConnectorsAccountBalance(ctx)
+	connectorBalance, connectorBalanceLocked, err := a.walletSvc.ConnectorsAccountBalance(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	return &ArkProviderBalance{
-		MainAccountBalance:       mainBalance,
-		ConnectorsAccountBalance: connectorBalance,
+		MainAccountBalance:       Balance{Locked: mainBalanceLocked, Available: mainBalance},
+		ConnectorsAccountBalance: Balance{Locked: connectorBalanceLocked, Available: connectorBalance},
 	}, nil
 }
 

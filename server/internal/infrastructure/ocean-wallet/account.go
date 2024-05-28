@@ -46,24 +46,25 @@ func (s *service) ListConnectorUtxos(
 	return utxos, nil
 }
 
-func (s *service) ConnectorsAccountBalance(ctx context.Context) (uint64, error) {
+func (s *service) ConnectorsAccountBalance(ctx context.Context) (uint64, uint64, error) {
 	return s.getBalance(ctx, connectorAccount)
 }
 
-func (s *service) MainAccountBalance(ctx context.Context) (uint64, error) {
+func (s *service) MainAccountBalance(ctx context.Context) (uint64, uint64, error) {
 	return s.getBalance(ctx, arkAccount)
 }
 
-func (s *service) getBalance(ctx context.Context, accountName string) (uint64, error) {
+func (s *service) getBalance(ctx context.Context, accountName string) (uint64, uint64, error) {
 	res, err := s.accountClient.Balance(ctx, &pb.BalanceRequest{
 		AccountName: accountName,
 	})
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 
 	balances := res.GetBalance()
-	return getLBTCbalance(balances), nil
+	available, locked := getLBTCbalance(balances)
+	return available, locked, nil
 }
 
 func (s *service) deriveAddresses(
@@ -88,30 +89,30 @@ func (s *service) deriveAddresses(
 	return addresses, nil
 }
 
-func getLBTCbalance(balances map[string]*pb.BalanceInfo) uint64 {
-	liquidBalance, found := getBalance(balances, network.Liquid.AssetID)
+func getLBTCbalance(balances map[string]*pb.BalanceInfo) (uint64, uint64) {
+	liquidBalance, liquidLockedBalance, found := getBalance(balances, network.Liquid.AssetID)
 	if found {
-		return liquidBalance
+		return liquidBalance, liquidLockedBalance
 	}
 
-	testnetBalance, found := getBalance(balances, network.Testnet.AssetID)
+	testnetBalance, testnetLockedBalance, found := getBalance(balances, network.Testnet.AssetID)
 	if found {
-		return testnetBalance
+		return testnetBalance, testnetLockedBalance
 	}
 
-	regtestBalance, found := getBalance(balances, network.Regtest.AssetID)
+	regtestBalance, regtestLockedBalance, found := getBalance(balances, network.Regtest.AssetID)
 	if found {
-		return regtestBalance
+		return regtestBalance, regtestLockedBalance
 	}
 
-	return 0
+	return 0, 0
 }
 
-func getBalance(balances map[string]*pb.BalanceInfo, assetID string) (uint64, bool) {
+func getBalance(balances map[string]*pb.BalanceInfo, assetID string) (uint64, uint64, bool) {
 	balance, ok := balances[assetID]
 	if !ok {
-		return 0, false
+		return 0, 0, false
 	}
 
-	return balance.GetConfirmedBalance() + balance.GetUnconfirmedBalance(), true
+	return balance.GetConfirmedBalance() + balance.GetUnconfirmedBalance(), balance.GetLockedBalance(), true
 }

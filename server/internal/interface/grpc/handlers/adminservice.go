@@ -25,8 +25,14 @@ func (a *adminHandler) GetBalance(ctx context.Context, _ *arkv1.GetBalanceReques
 	}
 
 	return &arkv1.GetBalanceResponse{
-		MainAccount:       convertSatoshis(balance.MainAccountBalance),
-		ConnectorsAccount: convertSatoshis(balance.ConnectorsAccountBalance),
+		MainAccount: &arkv1.Balance{
+			Locked:    convertSatoshis(balance.MainAccountBalance.Locked),
+			Available: convertSatoshis(balance.MainAccountBalance.Available),
+		},
+		ConnectorsAccount: &arkv1.Balance{
+			Locked:    convertSatoshis(balance.ConnectorsAccountBalance.Locked),
+			Available: convertSatoshis(balance.ConnectorsAccountBalance.Available),
+		},
 	}, nil
 }
 

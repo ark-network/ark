@@ -23,8 +23,8 @@ type WalletService interface {
 	EstimateFees(ctx context.Context, pset string) (uint64, error)
 	SignConnectorInput(ctx context.Context, pset string, inputIndexes []int, extract bool) (string, error)
 	ListConnectorUtxos(ctx context.Context, connectorAddress string) ([]TxInput, error)
-	MainAccountBalance(ctx context.Context) (uint64, error)
-	ConnectorsAccountBalance(ctx context.Context) (uint64, error)
+	MainAccountBalance(ctx context.Context) (uint64, uint64, error)
+	ConnectorsAccountBalance(ctx context.Context) (uint64, uint64, error)
 	Close()
 }
 

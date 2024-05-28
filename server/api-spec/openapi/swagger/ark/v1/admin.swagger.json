@@ -152,14 +152,25 @@
         }
       }
     },
+    "v1Balance": {
+      "type": "object",
+      "properties": {
+        "locked": {
+          "type": "string"
+        },
+        "available": {
+          "type": "string"
+        }
+      }
+    },
     "v1GetBalanceResponse": {
       "type": "object",
       "properties": {
         "mainAccount": {
-          "type": "string"
+          "$ref": "#/definitions/v1Balance"
         },
         "connectorsAccount": {
-          "type": "string"
+          "$ref": "#/definitions/v1Balance"
         }
       }
     },

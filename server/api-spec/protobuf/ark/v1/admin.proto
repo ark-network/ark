@@ -30,9 +30,14 @@ service AdminService {
 
 message GetBalanceRequest {}
 
+message Balance {
+  string locked = 1;
+  string available = 2;
+}
+
 message GetBalanceResponse {
-  string main_account = 1;
-  string connectors_account = 2;
+  Balance main_account = 1;
+  Balance connectors_account = 2;
 }
 
 message GetScheduledSweepRequest {}
