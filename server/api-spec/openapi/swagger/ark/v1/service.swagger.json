@@ -652,10 +652,6 @@
       "properties": {
         "userPubkey": {
           "type": "string"
-        },
-        "amount": {
-          "type": "string",
-          "format": "uint64"
         }
       }
     },
@@ -664,10 +660,6 @@
       "properties": {
         "address": {
           "type": "string"
-        },
-        "expectedAmount": {
-          "type": "string",
-          "format": "uint64"
         }
       }
     },

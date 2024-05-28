@@ -175,8 +175,8 @@ func (n *node) getWitnessData() (
 		}
 
 		unrollClosure := &UnrollClosure{
-			LeftKey:    taprootKey,
-			LeftAmount: n.getAmount(),
+			LeftKey:     taprootKey,
+			MinRelayFee: n.feeSats,
 		}
 
 		unrollLeaf, err := unrollClosure.Leaf()

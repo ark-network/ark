@@ -55,19 +55,13 @@ func (h *handler) TrustedOnboarding(ctx context.Context, req *arkv1.TrustedOnboa
 		return nil, status.Error(codes.InvalidArgument, "invalid user pubkey")
 	}
 
-	amount := req.GetAmount()
-	if amount <= 0 {
-		return nil, status.Error(codes.InvalidArgument, "invalid amount")
-	}
-
-	address, expectedAmount, err := h.svc.TrustedOnboarding(ctx, decodedPubKey, amount)
+	address, err := h.svc.TrustedOnboarding(ctx, decodedPubKey)
 	if err != nil {
 		return nil, err
 	}
 
 	return &arkv1.TrustedOnboardingResponse{
-		Address:        address,
-		ExpectedAmount: expectedAmount,
+		Address: address,
 	}, nil
 }
 

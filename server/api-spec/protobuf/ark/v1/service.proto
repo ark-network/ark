@@ -138,11 +138,10 @@ message OnboardResponse {
 
 message TrustedOnboardingRequest {
   string user_pubkey = 1;
-  uint64 amount = 2;
 }
+
 message TrustedOnboardingResponse {
   string address = 1;
-  uint64 expected_amount = 2;
 }
 
 // EVENT TYPES
