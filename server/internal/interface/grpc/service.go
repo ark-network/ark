@@ -72,7 +72,6 @@ func NewService(
 		})
 	}
 	gatewayOpts := grpc.WithTransportCredentials(gatewayCreds)
-
 	conn, err := grpc.NewClient(
 		svcConfig.gatewayAddress(), gatewayOpts,
 	)

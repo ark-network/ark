@@ -47,7 +47,7 @@ type Service interface {
 	ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, []domain.Vtxo, error)
 	GetInfo(ctx context.Context) (*ServiceInfo, error)
 	Onboard(ctx context.Context, boardingTx string, congestionTree tree.CongestionTree, userPubkey *secp256k1.PublicKey) error
-	TrustedOnboarding(ctx context.Context, userPubKey *secp256k1.PublicKey, onboardingAmount uint64) (string, uint64, error)
+	TrustedOnboarding(ctx context.Context, userPubKey *secp256k1.PublicKey) (string, error)
 }
 
 type onboarding struct {
@@ -277,29 +277,28 @@ func (s *service) Onboard(
 }
 
 func (s *service) TrustedOnboarding(
-	ctx context.Context, userPubKey *secp256k1.PublicKey, onboardingAmount uint64,
-) (string, uint64, error) {
+	ctx context.Context, userPubKey *secp256k1.PublicKey,
+) (string, error) {
 	congestionTreeLeaf := tree.Receiver{
 		Pubkey: hex.EncodeToString(userPubKey.SerializeCompressed()),
-		Amount: onboardingAmount,
 	}
 
-	_, sharedOutputScript, sharedOutputAmount, err := tree.CraftCongestionTree(
+	_, sharedOutputScript, _, err := tree.CraftCongestionTree(
 		s.onchainNework.AssetID, s.pubkey, []tree.Receiver{congestionTreeLeaf},
 		s.minRelayFee, s.roundLifetime, s.unilateralExitDelay,
 	)
 	if err != nil {
-		return "", 0, err
+		return "", err
 	}
 
 	pay, err := payment.FromScript(sharedOutputScript, &s.onchainNework, nil)
 	if err != nil {
-		return "", 0, err
+		return "", err
 	}
 
 	address, err := pay.TaprootAddress()
 	if err != nil {
-		return "", 0, err
+		return "", err
 	}
 
 	s.trustedOnboardingScriptLock.Lock()
@@ -310,10 +309,10 @@ func (s *service) TrustedOnboarding(
 	s.trustedOnboardingScriptLock.Unlock()
 
 	if err := s.scanner.WatchScripts(ctx, []string{script}); err != nil {
-		return "", 0, err
+		return "", err
 	}
 
-	return address, sharedOutputAmount, nil
+	return address, nil
 }
 
 func (s *service) start() {
@@ -522,14 +521,8 @@ func (s *service) listenToScannerNotifications() {
 			roundRepo := s.repoManager.Rounds()
 
 			for script, v := range vtxoKeys {
+				//onboarding
 				if userPubkey, ok := s.trustedOnboardingScripts[script]; ok {
-					// onboarding
-					defer func() {
-						s.trustedOnboardingScriptLock.Lock()
-						delete(s.trustedOnboardingScripts, script)
-						s.trustedOnboardingScriptLock.Unlock()
-					}()
-
 					congestionTreeLeaf := tree.Receiver{
 						Pubkey: hex.EncodeToString(userPubkey.SerializeCompressed()),
 						Amount: v.Value - s.minRelayFee,
