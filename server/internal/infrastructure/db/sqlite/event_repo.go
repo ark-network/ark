@@ -7,14 +7,20 @@ import (
 	"github.com/ark-network/ark/internal/core/domain"
 )
 
+type eventRow struct {
+	id                string
+	startingTimestamp int64
+	endingTimestamp   int64
+}
+
 type eventRepository struct {
 	db *sql.DB
 }
 
-func NewRoundEventRepository(dbPath string) (domain.RoundEventRepository, error) {
+func NewRoundEventRepository(db *sql.DB) (domain.RoundEventRepository, error) {
 	return &eventRepository{
 		db: db,
-	}
+	}, nil
 }
 
 // Load implements domain.RoundEventRepository.

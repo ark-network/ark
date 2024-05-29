@@ -65,18 +65,14 @@ func (r *vtxoRepository) SpendVtxos(
 
 func (r *vtxoRepository) RedeemVtxos(
 	ctx context.Context, vtxoKeys []domain.VtxoKey,
-) ([]domain.Vtxo, error) {
-	vtxos := make([]domain.Vtxo, 0, len(vtxoKeys))
+) error {
 	for _, vtxoKey := range vtxoKeys {
-		vtxo, err := r.redeemVtxo(ctx, vtxoKey)
+		_, err := r.redeemVtxo(ctx, vtxoKey)
 		if err != nil {
-			return nil, err
-		}
-		if vtxo != nil {
-			vtxos = append(vtxos, *vtxo)
+			return err
 		}
 	}
-	return vtxos, nil
+	return nil
 }
 
 func (r *vtxoRepository) GetVtxos(

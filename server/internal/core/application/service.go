@@ -593,7 +593,7 @@ func (s *service) listenToScannerNotifications() {
 					continue
 				}
 
-				if _, err := s.repoManager.Vtxos().RedeemVtxos(ctx, []domain.VtxoKey{vtxo.VtxoKey}); err != nil {
+				if err := s.repoManager.Vtxos().RedeemVtxos(ctx, []domain.VtxoKey{vtxo.VtxoKey}); err != nil {
 					log.WithError(err).Warn("failed to redeem vtxos, retrying...")
 					continue
 				}
