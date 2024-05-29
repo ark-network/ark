@@ -59,7 +59,6 @@ func (s *service) SignPset(
 }
 
 func (s *service) SelectUtxos(ctx context.Context, asset string, amount uint64) ([]ports.TxInput, uint64, error) {
-	// TODO: select coins from the connector account IF the round is swept
 	res, err := s.txClient.SelectUtxos(ctx, &pb.SelectUtxosRequest{
 		AccountName:  arkAccount,
 		TargetAsset:  asset,
@@ -80,24 +79,6 @@ func (s *service) SelectUtxos(ctx context.Context, asset string, amount uint64) 
 	}
 
 	return inputs, res.GetChange(), nil
-}
-
-func (s *service) getTransaction(
-	ctx context.Context, txid string,
-) (string, bool, int64, error) {
-	res, err := s.txClient.GetTransaction(ctx, &pb.GetTransactionRequest{
-		Txid: txid,
-	})
-	if err != nil {
-		return "", false, 0, err
-	}
-
-	if res.GetBlockDetails().GetTimestamp() > 0 {
-		return res.GetTxHex(), true, res.BlockDetails.GetTimestamp(), nil
-	}
-
-	// if not confirmed, we return now + 1 min to estimate the next blocktime
-	return res.GetTxHex(), false, time.Now().Add(time.Minute).Unix(), nil
 }
 
 func (s *service) BroadcastTransaction(
@@ -221,36 +202,20 @@ func (s *service) SignPsetWithKey(ctx context.Context, b64 string, indexes []int
 	return signedPset.GetSignedTx(), nil
 }
 
-func (s *service) SignConnectorInput(ctx context.Context, pset string, inputIndexes []int, extract bool) (string, error) {
-	decodedTx, err := psetv2.NewPsetFromBase64(pset)
-	if err != nil {
-		return "", err
-	}
-
-	utxos := make([]*pb.Input, 0, len(decodedTx.Inputs))
-
-	for i := range inputIndexes {
-		if i >= len(decodedTx.Inputs) {
-			return "", fmt.Errorf("input index %d out of range", i)
-		}
-
-		input := decodedTx.Inputs[i]
-
-		utxos = append(utxos, &pb.Input{
-			Txid:  chainhash.Hash(input.PreviousTxid).String(),
-			Index: input.PreviousTxIndex,
+func (s *service) LockConnectorUtxos(ctx context.Context, utxos []ports.TxOutpoint) error {
+	pbUtxos := make([]*pb.Input, 0, len(utxos))
+	for _, utxo := range utxos {
+		pbUtxos = append(pbUtxos, &pb.Input{
+			Txid:  utxo.GetTxid(),
+			Index: utxo.GetIndex(),
 		})
 	}
 
-	_, err = s.txClient.LockUtxos(ctx, &pb.LockUtxosRequest{
+	_, err := s.txClient.LockUtxos(ctx, &pb.LockUtxosRequest{
 		AccountName: connectorAccount,
-		Utxos:       utxos,
+		Utxos:       pbUtxos,
 	})
-	if err != nil {
-		return "", err
-	}
-
-	return s.SignPset(ctx, pset, extract)
+	return err
 }
 
 func (s *service) EstimateFees(
@@ -314,4 +279,22 @@ func (s *service) EstimateFees(
 
 	// we add 5 sats in order to avoid min-relay-fee not met errors
 	return fee.GetFeeAmount() + 5, nil
+}
+
+func (s *service) getTransaction(
+	ctx context.Context, txid string,
+) (string, bool, int64, error) {
+	res, err := s.txClient.GetTransaction(ctx, &pb.GetTransactionRequest{
+		Txid: txid,
+	})
+	if err != nil {
+		return "", false, 0, err
+	}
+
+	if res.GetBlockDetails().GetTimestamp() > 0 {
+		return res.GetTxHex(), true, res.BlockDetails.GetTimestamp(), nil
+	}
+
+	// if not confirmed, we return now + 1 min to estimate the next blocktime
+	return res.GetTxHex(), false, time.Now().Add(time.Minute).Unix(), nil
 }

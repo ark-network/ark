@@ -29,7 +29,10 @@ type txBuilder struct {
 }
 
 func NewTxBuilder(
-	wallet ports.WalletService, net network.Network, roundLifetime int64, exitDelay int64,
+	wallet ports.WalletService,
+	net network.Network,
+	roundLifetime int64,
+	exitDelay int64,
 ) ports.TxBuilder {
 	return &txBuilder{wallet, &net, roundLifetime, exitDelay}
 }
@@ -106,7 +109,7 @@ func (b *txBuilder) BuildForfeitTxs(
 }
 
 func (b *txBuilder) BuildPoolTx(
-	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, minRelayFee uint64,
+	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, minRelayFee uint64, sweptRounds []domain.Round,
 ) (poolTx string, congestionTree tree.CongestionTree, connectorAddress string, err error) {
 	// The creation of the tree and the pool tx are tightly coupled:
 	// - building the tree requires knowing the shared outpoint (txid:vout)
@@ -139,7 +142,7 @@ func (b *txBuilder) BuildPoolTx(
 	}
 
 	ptx, err := b.createPoolTx(
-		sharedOutputAmount, sharedOutputScript, payments, aspPubkey, connectorAddress, minRelayFee,
+		sharedOutputAmount, sharedOutputScript, payments, aspPubkey, connectorAddress, minRelayFee, sweptRounds,
 	)
 	if err != nil {
 		return
@@ -210,6 +213,7 @@ func (b *txBuilder) getLeafScriptAndTree(
 func (b *txBuilder) createPoolTx(
 	sharedOutputAmount uint64, sharedOutputScript []byte,
 	payments []domain.Payment, aspPubKey *secp256k1.PublicKey, connectorAddress string, minRelayFee uint64,
+	sweptRounds []domain.Round,
 ) (*psetv2.Pset, error) {
 	aspScript, err := p2wpkhScript(aspPubKey, b.net)
 	if err != nil {
@@ -263,7 +267,7 @@ func (b *txBuilder) createPoolTx(
 	}
 
 	ctx := context.Background()
-	utxos, change, err := b.wallet.SelectUtxos(ctx, b.net.AssetID, targetAmount)
+	utxos, change, err := b.selectUtxos(ctx, sweptRounds, targetAmount)
 	if err != nil {
 		return nil, err
 	}
@@ -325,7 +329,7 @@ func (b *txBuilder) createPoolTx(
 				// remove change output if present
 				ptx.Outputs = ptx.Outputs[:len(ptx.Outputs)-1]
 			}
-			newUtxos, change, err := b.wallet.SelectUtxos(ctx, b.net.AssetID, feeAmount-change)
+			newUtxos, change, err := b.selectUtxos(ctx, sweptRounds, feeAmount-change)
 			if err != nil {
 				return nil, err
 			}
@@ -347,7 +351,7 @@ func (b *txBuilder) createPoolTx(
 			}
 		}
 	} else if feeAmount-dust > 0 {
-		newUtxos, change, err := b.wallet.SelectUtxos(ctx, b.net.AssetID, feeAmount-dust)
+		newUtxos, change, err := b.selectUtxos(ctx, sweptRounds, feeAmount-dust)
 		if err != nil {
 			return nil, err
 		}

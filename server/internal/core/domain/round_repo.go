@@ -16,6 +16,7 @@ type RoundRepository interface {
 	GetRoundWithTxid(ctx context.Context, txid string) (*Round, error)
 	GetSweepableRounds(ctx context.Context) ([]Round, error)
 	GetRoundsIds(ctx context.Context, startedAfter int64, startedBefore int64) ([]string, error)
+	GetSweptRounds(ctx context.Context) ([]Round, error)
 }
 
 type VtxoRepository interface {

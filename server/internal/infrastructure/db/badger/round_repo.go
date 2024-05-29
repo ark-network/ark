@@ -100,11 +100,13 @@ func (r *roundRepository) GetSweepableRounds(
 ) ([]domain.Round, error) {
 	query := badgerhold.Where("Stage.Code").Eq(domain.FinalizationStage).
 		And("Stage.Ended").Eq(true).And("Swept").Eq(false)
-	rounds, err := r.findRound(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	return rounds, nil
+	return r.findRound(ctx, query)
+}
+
+func (r *roundRepository) GetSweptRounds(ctx context.Context) ([]domain.Round, error) {
+	query := badgerhold.Where("Stage.Code").Eq(domain.FinalizationStage).
+		And("Stage.Ended").Eq(true).And("Swept").Eq(true).And("ConnectorAddress").Ne("")
+	return r.findRound(ctx, query)
 }
 
 func (r *roundRepository) GetRoundsIds(ctx context.Context, startedAfter int64, startedBefore int64) ([]string, error) {

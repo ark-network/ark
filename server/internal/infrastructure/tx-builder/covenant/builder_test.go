@@ -60,7 +60,7 @@ func TestBuildPoolTx(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
 			for _, f := range fixtures.Valid {
 				poolTx, congestionTree, connAddr, err := builder.BuildPoolTx(
-					pubkey, f.Payments, minRelayFee,
+					pubkey, f.Payments, minRelayFee, []domain.Round{},
 				)
 				require.NoError(t, err)
 				require.NotEmpty(t, poolTx)
@@ -81,7 +81,7 @@ func TestBuildPoolTx(t *testing.T) {
 		t.Run("invalid", func(t *testing.T) {
 			for _, f := range fixtures.Invalid {
 				poolTx, congestionTree, connAddr, err := builder.BuildPoolTx(
-					pubkey, f.Payments, minRelayFee,
+					pubkey, f.Payments, minRelayFee, []domain.Round{},
 				)
 				require.EqualError(t, err, f.ExpectedErr)
 				require.Empty(t, poolTx)

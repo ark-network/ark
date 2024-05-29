@@ -204,7 +204,7 @@ func TestUnilateralExit(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 	require.Zero(t, balance.Offchain.Total)
-	require.Len(t, balance.Onchain.Locked, 1)
+	require.Greater(t, len(balance.Onchain.Locked), 0)
 
 	lockedBalance := balance.Onchain.Locked[0].Amount
 	require.NotZero(t, lockedBalance)

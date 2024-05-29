@@ -14,7 +14,7 @@ type SweepInput struct {
 }
 
 type TxBuilder interface {
-	BuildPoolTx(aspPubkey *secp256k1.PublicKey, payments []domain.Payment, minRelayFee uint64) (poolTx string, congestionTree tree.CongestionTree, connectorAddress string, err error)
+	BuildPoolTx(aspPubkey *secp256k1.PublicKey, payments []domain.Payment, minRelayFee uint64, sweptRounds []domain.Round) (poolTx string, congestionTree tree.CongestionTree, connectorAddress string, err error)
 	BuildForfeitTxs(aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment, minRelayFee uint64) (connectors []string, forfeitTxs []string, err error)
 	BuildSweepTx(inputs []SweepInput) (signedSweepTx string, err error)
 	GetVtxoScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error)
