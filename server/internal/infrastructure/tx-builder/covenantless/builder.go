@@ -117,7 +117,7 @@ func (b *txBuilder) BuildForfeitTxs(
 }
 
 func (b *txBuilder) BuildPoolTx(
-	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, minRelayFee uint64,
+	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, minRelayFee uint64, sweptRounds []domain.Round,
 ) (poolTx string, congestionTree tree.CongestionTree, connectorAddress string, err error) {
 	var sharedOutputScript []byte
 	var sharedOutputAmount int64
@@ -146,7 +146,7 @@ func (b *txBuilder) BuildPoolTx(
 	}
 
 	ptx, err := b.createPoolTx(
-		sharedOutputAmount, sharedOutputScript, payments, aspPubkey, connectorAddress, minRelayFee,
+		sharedOutputAmount, sharedOutputScript, payments, aspPubkey, connectorAddress, minRelayFee, sweptRounds,
 	)
 	if err != nil {
 		return
@@ -216,6 +216,7 @@ func (b *txBuilder) getLeafScriptAndTree(
 func (b *txBuilder) createPoolTx(
 	sharedOutputAmount int64, sharedOutputScript []byte,
 	payments []domain.Payment, aspPubKey *secp256k1.PublicKey, connectorAddress string, minRelayFee uint64,
+	sweptRounds []domain.Round,
 ) (*psbt.Packet, error) {
 	aspScript, err := p2trScript(aspPubKey, b.net)
 	if err != nil {
@@ -276,7 +277,7 @@ func (b *txBuilder) createPoolTx(
 	}
 
 	ctx := context.Background()
-	utxos, change, err := b.wallet.SelectUtxos(ctx, "", targetAmount)
+	utxos, change, err := b.selectUtxos(ctx, sweptRounds, targetAmount)
 	if err != nil {
 		return nil, err
 	}
@@ -362,7 +363,7 @@ func (b *txBuilder) createPoolTx(
 				ptx.UnsignedTx.TxOut = ptx.UnsignedTx.TxOut[:len(ptx.UnsignedTx.TxOut)-1]
 				ptx.Outputs = ptx.Outputs[:len(ptx.Outputs)-1]
 			}
-			newUtxos, change, err := b.wallet.SelectUtxos(ctx, "", feeAmount-change)
+			newUtxos, change, err := b.selectUtxos(ctx, sweptRounds, feeAmount-change)
 			if err != nil {
 				return nil, err
 			}
@@ -407,7 +408,7 @@ func (b *txBuilder) createPoolTx(
 
 		}
 	} else if feeAmount-dust > 0 {
-		newUtxos, change, err := b.wallet.SelectUtxos(ctx, "", feeAmount-dust)
+		newUtxos, change, err := b.selectUtxos(ctx, sweptRounds, feeAmount-dust)
 		if err != nil {
 			return nil, err
 		}
@@ -586,4 +587,53 @@ func (b *txBuilder) getConnectorPkScript(poolTx string) ([]byte, error) {
 	}
 
 	return partialTx.UnsignedTx.TxOut[0].PkScript, nil
+}
+
+func (b *txBuilder) selectUtxos(ctx context.Context, sweptRounds []domain.Round, amount uint64) ([]ports.TxInput, uint64, error) {
+	selectedConnectorsUtxos := make([]ports.TxInput, 0)
+	selectedConnectorsAmount := uint64(0)
+
+	for _, round := range sweptRounds {
+		if selectedConnectorsAmount >= amount {
+			break
+		}
+		connectors, err := b.wallet.ListConnectorUtxos(ctx, round.ConnectorAddress)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		for _, connector := range connectors {
+			if selectedConnectorsAmount >= amount {
+				break
+			}
+
+			selectedConnectorsUtxos = append(selectedConnectorsUtxos, connector)
+			selectedConnectorsAmount += connector.GetValue()
+		}
+	}
+
+	if len(selectedConnectorsUtxos) > 0 {
+		if err := b.wallet.LockConnectorUtxos(ctx, castToOutpoints(selectedConnectorsUtxos)); err != nil {
+			return nil, 0, err
+		}
+	}
+
+	if selectedConnectorsAmount >= amount {
+		return selectedConnectorsUtxos, selectedConnectorsAmount - amount, nil
+	}
+
+	utxos, change, err := b.wallet.SelectUtxos(ctx, "", amount-selectedConnectorsAmount)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return append(selectedConnectorsUtxos, utxos...), change, nil
+}
+
+func castToOutpoints(inputs []ports.TxInput) []ports.TxOutpoint {
+	outpoints := make([]ports.TxOutpoint, 0, len(inputs))
+	for _, input := range inputs {
+		outpoints = append(outpoints, input)
+	}
+	return outpoints
 }
