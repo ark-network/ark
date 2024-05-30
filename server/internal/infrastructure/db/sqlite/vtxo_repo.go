@@ -5,6 +5,7 @@ import (
 	"database/sql"
 
 	"github.com/ark-network/ark/internal/core/domain"
+	dbtypes "github.com/ark-network/ark/internal/infrastructure/db/types"
 )
 
 const (
@@ -85,13 +86,17 @@ type vxtoRepository struct {
 	db *sql.DB
 }
 
-func NewVtxoRepository(db *sql.DB) (domain.VtxoRepository, error) {
+func NewVtxoRepository(db *sql.DB) (dbtypes.VtxoStore, error) {
 	_, err := db.Exec(createVtxoTable)
 	if err != nil {
 		return nil, err
 	}
 
 	return &vxtoRepository{db}, nil
+}
+
+func (v *vxtoRepository) Close() {
+	_ = v.db.Close()
 }
 
 func (v *vxtoRepository) AddVtxos(ctx context.Context, vtxos []domain.Vtxo) error {

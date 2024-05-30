@@ -9,6 +9,7 @@ import (
 
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
+	dbtypes "github.com/ark-network/ark/internal/infrastructure/db/types"
 )
 
 const (
@@ -167,7 +168,7 @@ type roundRepository struct {
 	db *sql.DB
 }
 
-func NewRoundRepository(db *sql.DB) (domain.RoundRepository, error) {
+func NewRoundRepository(db *sql.DB) (dbtypes.RoundStore, error) {
 	if _, err := db.Exec(createRoundTable); err != nil {
 		return nil, err
 	}
@@ -183,6 +184,10 @@ func NewRoundRepository(db *sql.DB) (domain.RoundRepository, error) {
 	return &roundRepository{
 		db: db,
 	}, nil
+}
+
+func (r *roundRepository) Close() {
+	_ = r.db.Close()
 }
 
 func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Round) error {

@@ -1,23 +1,28 @@
 package db
 
 import (
+	"database/sql"
 	"fmt"
 
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	badgerdb "github.com/ark-network/ark/internal/infrastructure/db/badger"
+	sqlitedb "github.com/ark-network/ark/internal/infrastructure/db/sqlite"
 	dbtypes "github.com/ark-network/ark/internal/infrastructure/db/types"
 )
 
 var (
 	eventStoreTypes = map[string]func(...interface{}) (dbtypes.EventStore, error){
 		"badger": badgerdb.NewRoundEventRepository,
+		"sqlite": badgerdb.NewRoundEventRepository,
 	}
 	roundStoreTypes = map[string]func(...interface{}) (dbtypes.RoundStore, error){
 		"badger": badgerdb.NewRoundRepository,
+		"sqlite": newSqliteRoundRepo,
 	}
 	vtxoStoreTypes = map[string]func(...interface{}) (dbtypes.VtxoStore, error){
 		"badger": badgerdb.NewVtxoRepository,
+		"sqlite": newSqliteVtxoRepo,
 	}
 )
 
@@ -87,4 +92,22 @@ func (s *service) Close() {
 	s.eventStore.Close()
 	s.roundStore.Close()
 	s.vtxoStore.Close()
+}
+
+func newSqliteRoundRepo(args ...interface{}) (dbtypes.RoundStore, error) {
+	db, ok := args[0].(*sql.DB)
+	if !ok {
+		return nil, fmt.Errorf("invalid db")
+	}
+
+	return sqlitedb.NewRoundRepository(db)
+}
+
+func newSqliteVtxoRepo(args ...interface{}) (dbtypes.VtxoStore, error) {
+	db, ok := args[0].(*sql.DB)
+	if !ok {
+		return nil, fmt.Errorf("invalid db")
+	}
+
+	return sqlitedb.NewVtxoRepository(db)
 }

@@ -1,6 +1,7 @@
 package appconfig
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/ark-network/ark/internal/core/application"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/ark-network/ark/internal/infrastructure/db"
+	sqlitedb "github.com/ark-network/ark/internal/infrastructure/db/sqlite"
 	oceanwallet "github.com/ark-network/ark/internal/infrastructure/ocean-wallet"
 	scheduler "github.com/ark-network/ark/internal/infrastructure/scheduler/gocron"
 	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenant"
@@ -146,6 +148,22 @@ func (c *Config) repoManager() error {
 			EventStoreConfig: []interface{}{c.DbDir, logger},
 			RoundStoreConfig: []interface{}{c.DbDir, logger},
 			VtxoStoreConfig:  []interface{}{c.DbDir, logger},
+		})
+	case "sqlite":
+		var database *sql.DB
+		database, err = sqlitedb.OpenDB(c.DbDir)
+		if err != nil {
+			return err
+		}
+
+		svc, err = db.NewService(db.ServiceConfig{
+			EventStoreType: c.DbType,
+			RoundStoreType: c.DbType,
+			VtxoStoreType:  c.DbType,
+
+			EventStoreConfig: []interface{}{c.DbDir, log.New()},
+			RoundStoreConfig: []interface{}{database},
+			VtxoStoreConfig:  []interface{}{database},
 		})
 	default:
 		return fmt.Errorf("unknown db type")
