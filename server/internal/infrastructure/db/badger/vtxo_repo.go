@@ -244,7 +244,7 @@ func (r *vtxoRepository) redeemVtxo(ctx context.Context, vtxoKey domain.VtxoKey)
 }
 
 func (r *vtxoRepository) findVtxos(ctx context.Context, query *badgerhold.Query) ([]domain.Vtxo, error) {
-	var vtxos []domain.Vtxo
+	vtxos := make([]domain.Vtxo, 0)
 	var err error
 
 	if ctx.Value("tx") != nil {

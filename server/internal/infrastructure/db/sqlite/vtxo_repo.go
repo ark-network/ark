@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS vtxo (
 	redeemed BOOLEAN NOT NULL,
 	swept BOOLEAN NOT NULL,
 	expire_at INTEGER NOT NULL,
-	payment_id TEXT NOT NULL,
+	payment_id TEXT,
 	FOREIGN KEY (payment_id) REFERENCES payment(id)
 );
 `
@@ -31,23 +31,15 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 `
 
 	selectSweepableVtxos = `
-SELECT * FROM vtxo WHERE spent = false AND redeemed = false AND swept = false
+SELECT * FROM vtxo WHERE redeemed = false AND swept = false
 `
 
-	selectNotRedeemedVtxosSpent = `
-SELECT * FROM vtxo WHERE redeemed = false AND spent = true
+	selectNotRedeemedVtxos = `
+SELECT * FROM vtxo WHERE redeemed = false
 `
 
-	selectNotRedeemedVtxosUnspent = `
-SELECT * FROM vtxo WHERE redeemed = false AND spent = false
-`
-
-	selectNotRedeemedVtxosSpentWithPubkey = `
-SELECT * FROM vtxo WHERE redeemed = false AND spent = true AND pubkey = ?
-`
-
-	selectNotRedeemedVtxosUnspentWithPubkey = `
-SELECT * FROM vtxo WHERE redeemed = false AND spent = false AND pubkey = ?
+	selectNotRedeemedVtxosWithPubkey = `
+SELECT * FROM vtxo WHERE redeemed = false AND pubkey = ?
 `
 
 	selectVtxosByTxids = `
@@ -76,16 +68,17 @@ UPDATE vtxo SET expire_at = ? WHERE txid = ? AND vout = ?
 )
 
 type vtxoRow struct {
-	Txid     string `json:"txid"`
-	Vout     uint32 `json:"vout"`
-	Pubkey   string `json:"pubkey"`
-	Amount   uint64 `json:"amount"`
-	PoolTx   string `json:"pool_tx"`
-	SpentBy  string `json:"spent_by"`
-	Spent    bool   `json:"spent"`
-	Redeemed bool   `json:"redeemed"`
-	Swept    bool   `json:"swept"`
-	ExpireAt int64  `json:"expire_at"`
+	txid      *string
+	vout      *uint32
+	pubkey    *string
+	amount    *uint64
+	poolTx    *string
+	spentBy   *string
+	spent     *bool
+	redeemed  *bool
+	swept     *bool
+	expireAt  *int64
+	paymentID *string
 }
 
 type vxtoRepository struct {
@@ -138,12 +131,10 @@ func (v *vxtoRepository) GetAllSweepableVtxos(ctx context.Context) ([]domain.Vtx
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
 	return readRows(rows)
 }
 
-// GetAllVtxos implements domain.VtxoRepository.
 func (v *vxtoRepository) GetAllVtxos(ctx context.Context, pubkey string) ([]domain.Vtxo, []domain.Vtxo, error) {
 	withPubkey := len(pubkey) > 0
 
@@ -151,40 +142,40 @@ func (v *vxtoRepository) GetAllVtxos(ctx context.Context, pubkey string) ([]doma
 	var err error
 
 	if withPubkey {
-		rows, err = v.db.Query(selectNotRedeemedVtxosSpentWithPubkey, pubkey)
+		rows, err = v.db.Query(selectNotRedeemedVtxosWithPubkey, pubkey)
 	} else {
-		rows, err = v.db.Query(selectNotRedeemedVtxosSpent)
+		rows, err = v.db.Query(selectNotRedeemedVtxos)
 	}
 	if err != nil {
 		return nil, nil, err
 	}
 
-	spentVtxos, err := readRows(rows)
+	vtxos, err := readRows(rows)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if withPubkey {
-		rows, err = v.db.Query(selectNotRedeemedVtxosUnspentWithPubkey, pubkey)
-	} else {
-		rows, err = v.db.Query(selectNotRedeemedVtxosUnspent)
-	}
-	if err != nil {
-		return nil, nil, err
-	}
+	unspentVtxos := make([]domain.Vtxo, 0)
+	spentVtxos := make([]domain.Vtxo, 0)
 
-	unspentVtxos, err := readRows(rows)
-	if err != nil {
-		return nil, nil, err
+	for _, vtxo := range vtxos {
+		if vtxo.Spent {
+			spentVtxos = append(spentVtxos, vtxo)
+		} else {
+			unspentVtxos = append(unspentVtxos, vtxo)
+		}
 	}
 
 	return unspentVtxos, spentVtxos, nil
 }
 
 func (v *vxtoRepository) GetVtxos(ctx context.Context, vtxos []domain.VtxoKey) ([]domain.Vtxo, error) {
-	txids := make([]string, 0, len(vtxos))
-	for _, vtxo := range vtxos {
-		txids = append(txids, vtxo.Txid)
+	txids := ""
+	for i, vtxo := range vtxos {
+		txids += vtxo.Txid
+		if i < len(vtxos)-1 {
+			txids += ","
+		}
 	}
 
 	rows, err := v.db.Query(selectVtxosByTxids, txids)
@@ -291,37 +282,40 @@ func (v *vxtoRepository) UpdateExpireAt(ctx context.Context, vtxos []domain.Vtxo
 func rowToVtxo(row vtxoRow) domain.Vtxo {
 	return domain.Vtxo{
 		VtxoKey: domain.VtxoKey{
-			Txid: row.Txid,
-			VOut: row.Vout,
+			Txid: *row.txid,
+			VOut: *row.vout,
 		},
 		Receiver: domain.Receiver{
-			Pubkey: row.Pubkey,
-			Amount: row.Amount,
+			Pubkey: *row.pubkey,
+			Amount: *row.amount,
 		},
-		PoolTx:   row.PoolTx,
-		SpentBy:  row.SpentBy,
-		Spent:    row.Spent,
-		Redeemed: row.Redeemed,
-		Swept:    row.Swept,
-		ExpireAt: row.ExpireAt,
+		PoolTx:   *row.poolTx,
+		SpentBy:  *row.spentBy,
+		Spent:    *row.spent,
+		Redeemed: *row.redeemed,
+		Swept:    *row.swept,
+		ExpireAt: *row.expireAt,
 	}
 }
 
 func readRows(rows *sql.Rows) ([]domain.Vtxo, error) {
-	var vtxos []domain.Vtxo
+	defer rows.Close()
+	vtxos := make([]domain.Vtxo, 0)
+
 	for rows.Next() {
 		var row vtxoRow
 		if err := rows.Scan(
-			&row.Txid,
-			&row.Vout,
-			&row.Pubkey,
-			&row.Amount,
-			&row.PoolTx,
-			&row.SpentBy,
-			&row.Spent,
-			&row.Redeemed,
-			&row.Swept,
-			&row.ExpireAt,
+			&row.txid,
+			&row.vout,
+			&row.pubkey,
+			&row.amount,
+			&row.poolTx,
+			&row.spentBy,
+			&row.spent,
+			&row.redeemed,
+			&row.swept,
+			&row.expireAt,
+			&row.paymentID,
 		); err != nil {
 			return nil, err
 		}

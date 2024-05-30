@@ -4,20 +4,22 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 )
 
 const (
 	createReceiverTable = `
 CREATE TABLE IF NOT EXISTS receiver (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	payment_id TEXT NOT NULL,
 	pubkey TEXT NOT NULL,
 	amount INTEGER NOT NULL,
 	onchain_address TEXT NOT NULL,
 	FOREIGN KEY (payment_id) REFERENCES payment(id)
+	PRIMARY KEY (payment_id, pubkey)
 );
 `
 
@@ -37,7 +39,7 @@ CREATE TABLE IF NOT EXISTS round (
 	ended BOOLEAN NOT NULL,
 	failed BOOLEAN NOT NULL,
 	stage_code INTEGER NOT NULL,
-	txid TEXT NOT NULL,
+	txid TEXT NOT NULL UNIQUE,
 	unsigned_tx TEXT NOT NULL,
 	congestion_tree TEXT NOT NULL,
 	forfeit_txs TEXT NOT NULL,
@@ -50,7 +52,7 @@ CREATE TABLE IF NOT EXISTS round (
 `
 
 	upsertRound = `
-UPSERT INTO round (
+INSERT INTO round (
 	id, 
 	starting_timestamp, 
 	ending_timestamp, 
@@ -65,37 +67,82 @@ UPSERT INTO round (
 	dust_amount, 
 	version, 
 	swept
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(id) DO UPDATE SET
+	starting_timestamp = EXCLUDED.starting_timestamp,
+	ending_timestamp = EXCLUDED.ending_timestamp,
+	ended = EXCLUDED.ended,
+	failed = EXCLUDED.failed,
+	stage_code = EXCLUDED.stage_code,
+	txid = EXCLUDED.txid,
+	unsigned_tx = EXCLUDED.unsigned_tx,
+	congestion_tree = EXCLUDED.congestion_tree,
+	forfeit_txs = EXCLUDED.forfeit_txs,
+	connectors = EXCLUDED.connectors,
+	connector_address = EXCLUDED.connector_address,
+	dust_amount = EXCLUDED.dust_amount,
+	version = EXCLUDED.version,
+	swept = EXCLUDED.swept;
 `
 
 	upsertPayment = `
-UPSERT INTO payment (id, txid) VALUES (?, ?);
+INSERT INTO payment (id, txid) VALUES (?, ?) ON CONFLICT(id) DO NOTHING
 `
 
-	upserReceiver = `
-UPSERT INTO receiver (payment_id, pubkey, amount, onchain_address) VALUES (?, ?, ?, ?)
+	upsertReceiver = `
+INSERT INTO receiver (payment_id, pubkey, amount, onchain_address) VALUES (?, ?, ?, ?) ON CONFLICT(payment_id, pubkey) DO NOTHING
 `
 
 	updateVtxoPaymentId = `
-UPDATE vtxo SET payment_id = ? WHERE txid = ? AND vout = ? ON CONFLICT(txid, vout) DO NOTHING;
+UPDATE vtxo SET payment_id = ? WHERE txid = ? AND vout = ?
 `
 
 	selectCurrentRound = `
-SELECT * FROM round WHERE ended = false AND failed = false;
+SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, round.unsigned_tx, round.congestion_tree, round.forfeit_txs, round.connectors, round.connector_address, round.dust_amount, round.version, round.swept, payment.id, receiver.payment_id, receiver.pubkey, receiver.amount, receiver.onchain_address, vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.payment_id
+FROM round 
+LEFT OUTER JOIN payment ON round.txid=payment.txid 
+LEFT OUTER JOIN receiver ON payment.id=receiver.payment_id
+LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
+WHERE round.ended = false AND round.failed = false
+`
+
+	selectRoundWithId = `
+SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, round.unsigned_tx, round.congestion_tree, round.forfeit_txs, round.connectors, round.connector_address, round.dust_amount, round.version, round.swept, payment.id, receiver.payment_id, receiver.pubkey, receiver.amount, receiver.onchain_address, vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.payment_id
+FROM round 
+LEFT OUTER JOIN payment ON round.txid=payment.txid 
+LEFT OUTER JOIN receiver ON payment.id=receiver.payment_id
+LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
+WHERE round.id = ?;
+`
+
+	selectRoundWithTxId = `
+SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, round.unsigned_tx, round.congestion_tree, round.forfeit_txs, round.connectors, round.connector_address, round.dust_amount, round.version, round.swept, payment.id, receiver.payment_id, receiver.pubkey, receiver.amount, receiver.onchain_address, vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.payment_id
+FROM round 
+LEFT OUTER JOIN payment ON round.txid=payment.txid 
+LEFT OUTER JOIN receiver ON payment.id=receiver.payment_id
+LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
+WHERE round.txid = ?;
+`
+
+	selectSweepableRounds = `
+SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, round.unsigned_tx, round.congestion_tree, round.forfeit_txs, round.connectors, round.connector_address, round.dust_amount, round.version, round.swept, payment.id, receiver.payment_id, receiver.pubkey, receiver.amount, receiver.onchain_address, vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.payment_id
+FROM round 
+LEFT OUTER JOIN payment ON round.txid=payment.txid 
+LEFT OUTER JOIN receiver ON payment.id=receiver.payment_id
+LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
+WHERE round.swept = false AND round.ended = true AND round.failed = false;
 `
 )
 
 type receiverRow struct {
-	paymentId      string
-	pubkey         string
-	amount         uint64
-	onchainAddress string
+	paymentId      *string
+	pubkey         *string
+	amount         *uint64
+	onchainAddress *string
 }
 
 type paymentRow struct {
-	id        string
-	receivers []receiverRow
-	inputs    []vtxoRow
+	id *string
 }
 
 type roundRow struct {
@@ -106,11 +153,10 @@ type roundRow struct {
 	failed            bool
 	stageCode         domain.RoundStage
 	txid              string
-	payments          []paymentRow
 	unsignedTx        string
-	forfeitTxs        []string
+	forfeitTxs        string
 	congestionTree    string
-	connectors        []string
+	connectors        string
 	connectorAddress  string
 	dustAmount        uint64
 	version           uint
@@ -186,38 +232,40 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 		return err
 	}
 
-	for _, payment := range round.Payments {
-		stmt, err := tx.Prepare(upsertPayment)
-		if err != nil {
-			return err
-		}
-
-		_, err = stmt.Exec(payment.Id, round.Txid)
-		if err != nil {
-			return err
-		}
-
-		stmt, err = tx.Prepare(upserReceiver)
-		if err != nil {
-			return err
-		}
-
-		for _, receiver := range payment.Receivers {
-			_, err := stmt.Exec(payment.Id, receiver.Pubkey, receiver.Amount, receiver.OnchainAddress)
+	if round.Payments != nil {
+		for _, payment := range round.Payments {
+			stmt, err := tx.Prepare(upsertPayment)
 			if err != nil {
 				return err
 			}
-		}
 
-		stmt, err = tx.Prepare(updateVtxoPaymentId)
-		if err != nil {
-			return err
-		}
-
-		for _, input := range payment.Inputs {
-			_, err := stmt.Exec(payment.Id, input.Txid, input.VOut)
+			_, err = stmt.Exec(payment.Id, round.Txid)
 			if err != nil {
 				return err
+			}
+
+			stmt, err = tx.Prepare(upsertReceiver)
+			if err != nil {
+				return err
+			}
+
+			for _, receiver := range payment.Receivers {
+				_, err := stmt.Exec(payment.Id, receiver.Pubkey, receiver.Amount, receiver.OnchainAddress)
+				if err != nil {
+					return err
+				}
+			}
+
+			stmt, err = tx.Prepare(updateVtxoPaymentId)
+			if err != nil {
+				return err
+			}
+
+			for _, input := range payment.Inputs {
+				_, err := stmt.Exec(payment.Id, input.Txid, input.VOut)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -226,22 +274,97 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 }
 
 func (r *roundRepository) GetCurrentRound(ctx context.Context) (*domain.Round, error) {
-	panic("unimplemented")
+	stmt, err := r.db.Prepare(selectCurrentRound)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := stmt.Query()
+	if err != nil {
+		return nil, err
+	}
+
+	rounds, err := readRoundRows(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(rounds) == 0 {
+		return nil, errors.New("no current round")
+	}
+
+	return rounds[0], nil
 }
 
-// GetRoundWithId implements domain.RoundRepository.
 func (r *roundRepository) GetRoundWithId(ctx context.Context, id string) (*domain.Round, error) {
-	panic("unimplemented")
+	stmt, err := r.db.Prepare(selectRoundWithId)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := stmt.Query(id)
+	if err != nil {
+		return nil, err
+	}
+
+	rounds, err := readRoundRows(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(rounds) > 0 {
+		return rounds[0], nil
+	}
+
+	return nil, errors.New("round not found")
 }
 
-// GetRoundWithTxid implements domain.RoundRepository.
 func (r *roundRepository) GetRoundWithTxid(ctx context.Context, txid string) (*domain.Round, error) {
-	panic("unimplemented")
+	stmt, err := r.db.Prepare(selectRoundWithTxId)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := stmt.Query(txid)
+	if err != nil {
+		return nil, err
+	}
+
+	rounds, err := readRoundRows(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(rounds) > 0 {
+		return rounds[0], nil
+	}
+
+	return nil, errors.New("round not found")
 }
 
-// GetSweepableRounds implements domain.RoundRepository.
 func (r *roundRepository) GetSweepableRounds(ctx context.Context) ([]domain.Round, error) {
-	panic("unimplemented")
+	stmt, err := r.db.Prepare(selectSweepableRounds)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := stmt.Query()
+	if err != nil {
+		return nil, err
+	}
+
+	rounds, err := readRoundRows(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	res := make([]domain.Round, 0)
+
+	for _, round := range rounds {
+		res = append(res, *round)
+	}
+
+	return res, nil
 }
 
 func encodeStrings(strs []string) string {
@@ -250,4 +373,153 @@ func encodeStrings(strs []string) string {
 
 func decodeStrings(str string) []string {
 	return strings.Split(str, ",")
+}
+
+func rowToReceiver(row receiverRow) domain.Receiver {
+	return domain.Receiver{
+		Pubkey:         *row.pubkey,
+		Amount:         *row.amount,
+		OnchainAddress: *row.onchainAddress,
+	}
+}
+
+func readRoundRows(rows *sql.Rows) ([]*domain.Round, error) {
+	defer rows.Close()
+
+	rounds := make(map[string]*domain.Round)
+
+	for rows.Next() {
+		var roundRow roundRow
+		var paymentRow paymentRow
+		var receiverRow receiverRow
+		var vtxoRow vtxoRow
+
+		if err := rows.Scan(
+			&roundRow.id,
+			&roundRow.startingTimestamp,
+			&roundRow.endingTimestamp,
+			&roundRow.ended,
+			&roundRow.failed,
+			&roundRow.stageCode,
+			&roundRow.txid,
+			&roundRow.unsignedTx,
+			&roundRow.congestionTree,
+			&roundRow.forfeitTxs,
+			&roundRow.connectors,
+			&roundRow.connectorAddress,
+			&roundRow.dustAmount,
+			&roundRow.version,
+			&roundRow.swept,
+			&paymentRow.id,
+			&receiverRow.paymentId,
+			&receiverRow.pubkey,
+			&receiverRow.amount,
+			&receiverRow.onchainAddress,
+			&vtxoRow.txid,
+			&vtxoRow.vout,
+			&vtxoRow.pubkey,
+			&vtxoRow.amount,
+			&vtxoRow.poolTx,
+			&vtxoRow.spentBy,
+			&vtxoRow.spent,
+			&vtxoRow.redeemed,
+			&vtxoRow.swept,
+			&vtxoRow.expireAt,
+			&vtxoRow.paymentID,
+		); err != nil {
+			return nil, err
+		}
+
+		var round *domain.Round
+		var ok bool
+
+		round, ok = rounds[roundRow.id]
+		if !ok {
+			var congestionTree tree.CongestionTree
+
+			if err := congestionTree.Decode(strings.NewReader(roundRow.congestionTree)); err != nil {
+				return nil, err
+			}
+
+			round = &domain.Round{
+				Id:                roundRow.id,
+				StartingTimestamp: roundRow.startingTimestamp,
+				EndingTimestamp:   roundRow.endingTimestamp,
+				Stage: domain.Stage{
+					Ended:  roundRow.ended,
+					Failed: roundRow.failed,
+					Code:   roundRow.stageCode,
+				},
+				Txid:             roundRow.txid,
+				UnsignedTx:       roundRow.unsignedTx,
+				CongestionTree:   congestionTree,
+				ForfeitTxs:       decodeStrings(roundRow.forfeitTxs),
+				Connectors:       decodeStrings(roundRow.connectors),
+				ConnectorAddress: roundRow.connectorAddress,
+				DustAmount:       roundRow.dustAmount,
+				Version:          roundRow.version,
+				Swept:            roundRow.swept,
+				Payments:         make(map[string]domain.Payment),
+			}
+		}
+
+		if paymentRow.id != nil {
+			payment, ok := round.Payments[*paymentRow.id]
+			if !ok {
+				payment = domain.Payment{
+					Id:        *paymentRow.id,
+					Inputs:    make([]domain.Vtxo, 0),
+					Receivers: make([]domain.Receiver, 0),
+				}
+				round.Payments[*paymentRow.id] = payment
+			}
+
+			payment, ok = round.Payments[*vtxoRow.paymentID]
+			if !ok {
+				payment = domain.Payment{
+					Id:        *vtxoRow.paymentID,
+					Inputs:    make([]domain.Vtxo, 0),
+					Receivers: make([]domain.Receiver, 0),
+				}
+			}
+
+			payment.Inputs = append(payment.Inputs, rowToVtxo(vtxoRow))
+			round.Payments[*vtxoRow.paymentID] = payment
+
+			if receiverRow.paymentId != nil {
+				payment, ok = round.Payments[*receiverRow.paymentId]
+				if !ok {
+					payment = domain.Payment{
+						Id:        *receiverRow.paymentId,
+						Inputs:    make([]domain.Vtxo, 0),
+						Receivers: make([]domain.Receiver, 0),
+					}
+				}
+
+				rcv := rowToReceiver(receiverRow)
+
+				found := false
+				for _, rcv := range payment.Receivers {
+					if rcv.Pubkey == *receiverRow.pubkey && rcv.Amount == *receiverRow.amount {
+						found = true
+						break
+					}
+				}
+				if !found {
+					payment.Receivers = append(payment.Receivers, rcv)
+					round.Payments[*receiverRow.paymentId] = payment
+				}
+			}
+		}
+
+		rounds[roundRow.id] = round
+	}
+
+	var result []*domain.Round
+
+	for _, round := range rounds {
+		result = append(result, round)
+	}
+
+	return result, nil
 }

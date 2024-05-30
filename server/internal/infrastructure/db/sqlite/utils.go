@@ -5,13 +5,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	_ "modernc.org/sqlite"
 )
 
 const (
 	driverName = "sqlite"
 )
 
-func openDB(dbPath string) (*sql.DB, error) {
+func OpenDB(dbPath string) (*sql.DB, error) {
 	dir := filepath.Dir(dbPath)
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		err = os.MkdirAll(dir, 0755)
