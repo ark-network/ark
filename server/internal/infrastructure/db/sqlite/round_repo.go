@@ -133,6 +133,15 @@ LEFT OUTER JOIN receiver ON payment.id=receiver.payment_id
 LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
 WHERE round.swept = false AND round.ended = true AND round.failed = false;
 `
+
+	selectSweptRounds = `
+SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, round.unsigned_tx, round.congestion_tree, round.forfeit_txs, round.connectors, round.connector_address, round.dust_amount, round.version, round.swept, payment.id, receiver.payment_id, receiver.pubkey, receiver.amount, receiver.onchain_address, vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.payment_id
+FROM round 
+LEFT OUTER JOIN payment ON round.txid=payment.txid 
+LEFT OUTER JOIN receiver ON payment.id=receiver.payment_id
+LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
+WHERE round.swept = true AND round.failed = false AND round.ended = true;
+`
 )
 
 type receiverRow struct {
@@ -349,6 +358,31 @@ func (r *roundRepository) GetRoundWithTxid(ctx context.Context, txid string) (*d
 
 func (r *roundRepository) GetSweepableRounds(ctx context.Context) ([]domain.Round, error) {
 	stmt, err := r.db.Prepare(selectSweepableRounds)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := stmt.Query()
+	if err != nil {
+		return nil, err
+	}
+
+	rounds, err := readRoundRows(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	res := make([]domain.Round, 0)
+
+	for _, round := range rounds {
+		res = append(res, *round)
+	}
+
+	return res, nil
+}
+
+func (r *roundRepository) GetSweptRounds(ctx context.Context) ([]domain.Round, error) {
+	stmt, err := r.db.Prepare(selectSweptRounds)
 	if err != nil {
 		return nil, err
 	}

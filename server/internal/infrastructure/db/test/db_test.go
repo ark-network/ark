@@ -378,6 +378,66 @@ func TestRoundRepository(t *testing.T) {
 
 				require.GreaterOrEqual(t, len(sweepable), 1)
 			})
+
+			t.Run("GetSweptRounds", func(t *testing.T) {
+				roundId := randomString(32)
+				txid := randomString(32)
+				round := domain.Round{
+					Id:                roundId,
+					StartingTimestamp: 123,
+					EndingTimestamp:   123,
+					Stage: domain.Stage{
+						Code:   domain.FinalizationStage,
+						Ended:  true,
+						Failed: false,
+					},
+					Txid:       txid,
+					UnsignedTx: "unsignedTx",
+					CongestionTree: tree.CongestionTree{
+						[]tree.Node{
+							{
+								Txid:       "txid",
+								Tx:         "tx",
+								ParentTxid: "parentTxid",
+								Leaf:       false,
+							},
+						},
+						[]tree.Node{
+							{
+								Txid:       "txid",
+								Tx:         "tx",
+								ParentTxid: "parentTxid",
+								Leaf:       true,
+							},
+							{
+								Txid:       "txid",
+								Tx:         "tx",
+								ParentTxid: "parentTxid",
+								Leaf:       true,
+							},
+						},
+					},
+					ForfeitTxs:       []string{"tx1", "tx2"},
+					Connectors:       []string{"connector1", "connector2"},
+					ConnectorAddress: "connectorAddress",
+					DustAmount:       100,
+					Version:          1,
+					Swept:            true,
+				}
+
+				err := repo.AddOrUpdateRound(context.Background(), round)
+				require.NoError(t, err)
+
+				byid, err := repo.GetRoundWithId(context.Background(), roundId)
+				require.NoError(t, err)
+
+				require.Equal(t, roundId, byid.Id)
+
+				swept, err := repo.GetSweptRounds(context.Background())
+				require.NoError(t, err)
+
+				require.GreaterOrEqual(t, len(swept), 1)
+			})
 		})
 	}
 }

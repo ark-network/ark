@@ -10,7 +10,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const composePath = "../../../docker-compose.regtest.yml"
+const (
+	composePath = "../../../docker-compose.regtest.yml"
+	ONE_BTC     = 1_0000_0000
+)
 
 func TestMain(m *testing.M) {
 	_, err := runCommand("docker-compose", "-f", composePath, "up", "-d", "--build")
@@ -64,7 +67,13 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	time.Sleep(2 * time.Second)
+	_, err = runCommand("nigiri", "faucet", "--liquid", addr.Addresses[0])
+	if err != nil {
+		fmt.Printf("error funding ocean account: %s", err)
+		os.Exit(1)
+	}
+
+	time.Sleep(3 * time.Second)
 
 	_, err = runArkCommand("init", "--ark-url", "localhost:6000", "--password", password, "--network", "regtest", "--explorer", "http://chopsticks-liquid:3000")
 	if err != nil {
@@ -122,6 +131,35 @@ func TestOnboard(t *testing.T) {
 	require.Equal(t, balanceBefore+1000, balance.Offchain.Total)
 }
 
+func TestTrustedOnboard(t *testing.T) {
+	var balance arkBalance
+	balanceStr, err := runArkCommand("balance")
+	require.NoError(t, err)
+
+	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
+	balanceBefore := balance.Offchain.Total
+
+	onboardStr, err := runArkCommand("onboard", "--trusted", "--password", password)
+	require.NoError(t, err)
+
+	var result arkTrustedOnboard
+	require.NoError(t, json.Unmarshal([]byte(onboardStr), &result))
+
+	_, err = runCommand("nigiri", "faucet", "--liquid", result.OnboardAddress)
+	require.NoError(t, err)
+
+	_, err = runCommand("nigiri", "faucet", "--liquid", result.OnboardAddress)
+	require.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+
+	balanceStr, err = runArkCommand("balance")
+	require.NoError(t, err)
+
+	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
+	require.Equal(t, balanceBefore+(2*(ONE_BTC-30)), balance.Offchain.Total)
+}
+
 func TestSendOffchain(t *testing.T) {
 	_, err := runArkCommand("onboard", "--amount", "1000", "--password", password)
 	require.NoError(t, err)
@@ -166,7 +204,7 @@ func TestUnilateralExit(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 	require.Zero(t, balance.Offchain.Total)
-	require.Len(t, balance.Onchain.Locked, 1)
+	require.Greater(t, len(balance.Onchain.Locked), 0)
 
 	lockedBalance := balance.Onchain.Locked[0].Amount
 	require.NotZero(t, lockedBalance)

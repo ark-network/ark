@@ -279,11 +279,16 @@ func validateNodeTransaction(
 					return ErrInvalidLeftOutput
 				}
 
-				if c.LeftAmount != leftOutputAmount {
-					return ErrInvalidLeftOutput
-				}
+				if c.RightKey == nil {
+					inputAmount := parentOutput.Value
+					if leftOutputAmount != inputAmount-c.MinRelayFee {
+						return ErrInvalidLeftOutput
+					}
+				} else {
+					if c.LeftAmount != leftOutputAmount {
+						return ErrInvalidLeftOutput
+					}
 
-				if c.RightKey != nil {
 					rightWitnessProgram := childTx.Outputs[1].Script[2:]
 					rightOutputAmount := childTx.Outputs[1].Value
 

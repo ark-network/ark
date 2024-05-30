@@ -47,7 +47,7 @@ type Service interface {
 	ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, []domain.Vtxo, error)
 	GetInfo(ctx context.Context) (*ServiceInfo, error)
 	Onboard(ctx context.Context, boardingTx string, congestionTree tree.CongestionTree, userPubkey *secp256k1.PublicKey) error
-	TrustedOnboarding(ctx context.Context, userPubKey *secp256k1.PublicKey, onboardingAmount uint64) (string, uint64, error)
+	TrustedOnboarding(ctx context.Context, userPubKey *secp256k1.PublicKey) (string, error)
 }
 
 type onboarding struct {
@@ -277,29 +277,28 @@ func (s *service) Onboard(
 }
 
 func (s *service) TrustedOnboarding(
-	ctx context.Context, userPubKey *secp256k1.PublicKey, onboardingAmount uint64,
-) (string, uint64, error) {
+	ctx context.Context, userPubKey *secp256k1.PublicKey,
+) (string, error) {
 	congestionTreeLeaf := tree.Receiver{
 		Pubkey: hex.EncodeToString(userPubKey.SerializeCompressed()),
-		Amount: onboardingAmount,
 	}
 
-	_, sharedOutputScript, sharedOutputAmount, err := tree.CraftCongestionTree(
+	_, sharedOutputScript, _, err := tree.CraftCongestionTree(
 		s.onchainNework.AssetID, s.pubkey, []tree.Receiver{congestionTreeLeaf},
 		s.minRelayFee, s.roundLifetime, s.unilateralExitDelay,
 	)
 	if err != nil {
-		return "", 0, err
+		return "", err
 	}
 
 	pay, err := payment.FromScript(sharedOutputScript, &s.onchainNework, nil)
 	if err != nil {
-		return "", 0, err
+		return "", err
 	}
 
 	address, err := pay.TaprootAddress()
 	if err != nil {
-		return "", 0, err
+		return "", err
 	}
 
 	s.trustedOnboardingScriptLock.Lock()
@@ -310,10 +309,10 @@ func (s *service) TrustedOnboarding(
 	s.trustedOnboardingScriptLock.Unlock()
 
 	if err := s.scanner.WatchScripts(ctx, []string{script}); err != nil {
-		return "", 0, err
+		return "", err
 	}
 
-	return address, sharedOutputAmount, nil
+	return address, nil
 }
 
 func (s *service) start() {
@@ -383,7 +382,14 @@ func (s *service) startFinalization() {
 		return
 	}
 
-	unsignedPoolTx, tree, connectorAddress, err := s.builder.BuildPoolTx(s.pubkey, payments, s.minRelayFee)
+	sweptRounds, err := s.repoManager.Rounds().GetSweptRounds(ctx)
+	if err != nil {
+		changes = round.Fail(fmt.Errorf("failed to retrieve swept rounds: %s", err))
+		log.WithError(err).Warn("failed to retrieve swept rounds")
+		return
+	}
+
+	unsignedPoolTx, tree, connectorAddress, err := s.builder.BuildPoolTx(s.pubkey, payments, s.minRelayFee, sweptRounds)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
 		log.WithError(err).Warn("failed to create pool tx")
@@ -522,14 +528,8 @@ func (s *service) listenToScannerNotifications() {
 			roundRepo := s.repoManager.Rounds()
 
 			for script, v := range vtxoKeys {
+				//onboarding
 				if userPubkey, ok := s.trustedOnboardingScripts[script]; ok {
-					// onboarding
-					defer func() {
-						s.trustedOnboardingScriptLock.Lock()
-						delete(s.trustedOnboardingScripts, script)
-						s.trustedOnboardingScriptLock.Unlock()
-					}()
-
 					congestionTreeLeaf := tree.Receiver{
 						Pubkey: hex.EncodeToString(userPubkey.SerializeCompressed()),
 						Amount: v.Value - s.minRelayFee,
@@ -626,7 +626,12 @@ func (s *service) listenToScannerNotifications() {
 					continue
 				}
 
-				signedForfeitTx, err := s.wallet.SignConnectorInput(ctx, forfeitTx, []int{0}, false)
+				if err := s.wallet.LockConnectorUtxos(ctx, []ports.TxOutpoint{txOutpoint{connectorTxid, connectorVout}}); err != nil {
+					log.WithError(err).Warn("failed to lock connector utxos")
+					continue
+				}
+
+				signedForfeitTx, err := s.wallet.SignPset(ctx, forfeitTx, false)
 				if err != nil {
 					log.WithError(err).Warn("failed to sign connector input in forfeit tx")
 					continue
@@ -704,8 +709,14 @@ func (s *service) getNextConnector(
 
 				for _, i := range pset.Inputs {
 					if chainhash.Hash(i.PreviousTxid).String() == u.GetTxid() && i.PreviousTxIndex == u.GetIndex() {
+						connectorOutpoint := newOutpointFromPsetInput(pset.Inputs[0])
+
+						if err := s.wallet.LockConnectorUtxos(ctx, []ports.TxOutpoint{connectorOutpoint}); err != nil {
+							return "", 0, err
+						}
+
 						// sign & broadcast the connector tx
-						signedConnectorTx, err := s.wallet.SignConnectorInput(ctx, b64, []int{0}, true)
+						signedConnectorTx, err := s.wallet.SignPset(ctx, b64, true)
 						if err != nil {
 							return "", 0, err
 						}
@@ -1021,4 +1032,24 @@ func findForfeitTx(
 	}
 
 	return "", fmt.Errorf("forfeit tx not found")
+}
+
+type txOutpoint struct {
+	txid string
+	vout uint32
+}
+
+func newOutpointFromPsetInput(input psetv2.Input) txOutpoint {
+	return txOutpoint{
+		txid: chainhash.Hash(input.PreviousTxid).String(),
+		vout: input.PreviousTxIndex,
+	}
+}
+
+func (outpoint txOutpoint) GetTxid() string {
+	return outpoint.txid
+}
+
+func (outpoint txOutpoint) GetIndex() uint32 {
+	return outpoint.vout
 }
