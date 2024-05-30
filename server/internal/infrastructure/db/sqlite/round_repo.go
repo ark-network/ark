@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS round (
 	ended BOOLEAN NOT NULL,
 	failed BOOLEAN NOT NULL,
 	stage_code INTEGER NOT NULL,
-	txid TEXT NOT NULL UNIQUE,
+	txid TEXT NOT NULL,
 	unsigned_tx TEXT NOT NULL,
 	congestion_tree TEXT NOT NULL,
 	forfeit_txs TEXT NOT NULL,
@@ -156,21 +156,21 @@ type paymentRow struct {
 }
 
 type roundRow struct {
-	id                string
-	startingTimestamp int64
-	endingTimestamp   int64
-	ended             bool
-	failed            bool
-	stageCode         domain.RoundStage
-	txid              string
-	unsignedTx        string
-	forfeitTxs        string
-	congestionTree    string
-	connectors        string
-	connectorAddress  string
-	dustAmount        uint64
-	version           uint
-	swept             bool
+	id                *string
+	startingTimestamp *int64
+	endingTimestamp   *int64
+	ended             *bool
+	failed            *bool
+	stageCode         *domain.RoundStage
+	txid              *string
+	unsignedTx        *string
+	forfeitTxs        *string
+	congestionTree    *string
+	connectors        *string
+	connectorAddress  *string
+	dustAmount        *uint64
+	version           *uint
+	swept             *bool
 }
 
 type roundRepository struct {
@@ -472,32 +472,34 @@ func readRoundRows(rows *sql.Rows) ([]*domain.Round, error) {
 		var round *domain.Round
 		var ok bool
 
-		round, ok = rounds[roundRow.id]
+		if roundRow.id == nil {
+			continue
+		}
+
+		round, ok = rounds[*roundRow.id]
 		if !ok {
 			var congestionTree tree.CongestionTree
 
-			if err := congestionTree.Decode(strings.NewReader(roundRow.congestionTree)); err != nil {
-				return nil, err
-			}
+			_ = congestionTree.Decode(strings.NewReader(*roundRow.congestionTree))
 
 			round = &domain.Round{
-				Id:                roundRow.id,
-				StartingTimestamp: roundRow.startingTimestamp,
-				EndingTimestamp:   roundRow.endingTimestamp,
+				Id:                *roundRow.id,
+				StartingTimestamp: *roundRow.startingTimestamp,
+				EndingTimestamp:   *roundRow.endingTimestamp,
 				Stage: domain.Stage{
-					Ended:  roundRow.ended,
-					Failed: roundRow.failed,
-					Code:   roundRow.stageCode,
+					Ended:  *roundRow.ended,
+					Failed: *roundRow.failed,
+					Code:   *roundRow.stageCode,
 				},
-				Txid:             roundRow.txid,
-				UnsignedTx:       roundRow.unsignedTx,
+				Txid:             *roundRow.txid,
+				UnsignedTx:       *roundRow.unsignedTx,
 				CongestionTree:   congestionTree,
-				ForfeitTxs:       decodeStrings(roundRow.forfeitTxs),
-				Connectors:       decodeStrings(roundRow.connectors),
-				ConnectorAddress: roundRow.connectorAddress,
-				DustAmount:       roundRow.dustAmount,
-				Version:          roundRow.version,
-				Swept:            roundRow.swept,
+				ForfeitTxs:       decodeStrings(*roundRow.forfeitTxs),
+				Connectors:       decodeStrings(*roundRow.connectors),
+				ConnectorAddress: *roundRow.connectorAddress,
+				DustAmount:       *roundRow.dustAmount,
+				Version:          *roundRow.version,
+				Swept:            *roundRow.swept,
 				Payments:         make(map[string]domain.Payment),
 			}
 		}
@@ -551,7 +553,7 @@ func readRoundRows(rows *sql.Rows) ([]*domain.Round, error) {
 			}
 		}
 
-		rounds[roundRow.id] = round
+		rounds[*roundRow.id] = round
 	}
 
 	var result []*domain.Round

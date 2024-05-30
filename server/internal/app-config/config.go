@@ -22,6 +22,7 @@ const minAllowedSequence = 512
 var (
 	supportedDbs = supportedType{
 		"badger": {},
+		"sqlite": {},
 	}
 	supportedSchedulers = supportedType{
 		"gocron": {},
@@ -151,7 +152,7 @@ func (c *Config) repoManager() error {
 		})
 	case "sqlite":
 		var database *sql.DB
-		database, err = sqlitedb.OpenDB(c.DbDir)
+		database, err = sqlitedb.OpenDB(c.DbDir + "/sqlite.db")
 		if err != nil {
 			return err
 		}
