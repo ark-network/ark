@@ -21,8 +21,8 @@ type WalletService interface {
 	IsTransactionConfirmed(ctx context.Context, txid string) (isConfirmed bool, blocktime int64, err error)
 	WaitForSync(ctx context.Context, txid string) error
 	EstimateFees(ctx context.Context, pset string) (uint64, error)
-	SignConnectorInput(ctx context.Context, pset string, inputIndexes []int, extract bool) (string, error)
 	ListConnectorUtxos(ctx context.Context, connectorAddress string) ([]TxInput, error)
+	LockConnectorUtxos(ctx context.Context, utxos []TxOutpoint) error
 	Close()
 }
 
@@ -38,4 +38,9 @@ type TxInput interface {
 	GetScript() string
 	GetAsset() string
 	GetValue() uint64
+}
+
+type TxOutpoint interface {
+	GetTxid() string
+	GetIndex() uint32
 }

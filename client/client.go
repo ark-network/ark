@@ -38,6 +38,9 @@ func getVtxos(
 			t := time.Unix(v.ExpireAt, 0)
 			expireAt = &t
 		}
+		if v.Swept {
+			continue
+		}
 		vtxos = append(vtxos, vtxo{
 			amount:   v.Receiver.Amount,
 			txid:     v.Outpoint.Txid,
