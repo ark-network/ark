@@ -47,7 +47,7 @@ func (b *txBuilder) GetVtxoScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([
 }
 
 func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (signedSweepTx string, err error) {
-	sweepPset, err := sweepTransaction(
+	sweepPsbt, err := sweepTransaction(
 		b.wallet,
 		inputs,
 	)
@@ -55,18 +55,18 @@ func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (signedSweepTx strin
 		return "", err
 	}
 
-	sweepPsetBase64, err := sweepPset.B64Encode()
+	sweepPsbtBase64, err := sweepPsbt.B64Encode()
 	if err != nil {
 		return "", err
 	}
 
 	ctx := context.Background()
-	signedSweepPsetB64, err := b.wallet.SignPsetWithKey(ctx, sweepPsetBase64, nil)
+	signedSweepPsbtB64, err := b.wallet.SignPsetWithKey(ctx, sweepPsbtBase64, nil)
 	if err != nil {
 		return "", err
 	}
 
-	signedPsbt, err := psbt.NewFromRawBytes(strings.NewReader(signedSweepPsetB64), true)
+	signedPsbt, err := psbt.NewFromRawBytes(strings.NewReader(signedSweepPsbtB64), true)
 	if err != nil {
 		return "", err
 	}
