@@ -680,7 +680,7 @@ func castToOutpoints(inputs []ports.TxInput) []ports.TxOutpoint {
 
 func extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.TaprootTapLeafScript, internalKey *secp256k1.PublicKey, lifetime int64, err error) {
 	for _, leaf := range input.TaprootLeafScript {
-		closure := &tree.CSVSigClosure{}
+		closure := &bitcointree.CSVSigClosure{}
 		valid, err := closure.Decode(leaf.Script)
 		if err != nil {
 			return nil, nil, 0, err
