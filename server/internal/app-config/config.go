@@ -47,6 +47,7 @@ type Config struct {
 
 	repo      ports.RepoManager
 	svc       application.Service
+	adminSvc  application.AdminService
 	wallet    ports.WalletService
 	txBuilder ports.TxBuilder
 	scanner   ports.BlockchainScanner
@@ -125,11 +126,18 @@ func (c *Config) Validate() error {
 	if err := c.appService(); err != nil {
 		return err
 	}
+	if err := c.adminService(); err != nil {
+		return err
+	}
 	return nil
 }
 
 func (c *Config) AppService() application.Service {
 	return c.svc
+}
+
+func (c *Config) AdminService() application.AdminService {
+	return c.adminSvc
 }
 
 func (c *Config) repoManager() error {
@@ -235,6 +243,11 @@ func (c *Config) appService() error {
 	}
 
 	c.svc = svc
+	return nil
+}
+
+func (c *Config) adminService() error {
+	c.adminSvc = application.NewAdminService(c.wallet, c.repo, c.txBuilder)
 	return nil
 }
 

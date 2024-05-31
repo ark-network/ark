@@ -507,6 +507,7 @@ type isGetEventStreamResponse_Event interface {
 }
 
 type GetEventStreamResponse_RoundFinalization struct {
+	// TODO: BTC add "signTree" event
 	RoundFinalization *RoundFinalizationEvent `protobuf:"bytes,1,opt,name=round_finalization,json=roundFinalization,proto3,oneof"`
 }
 
@@ -576,6 +577,7 @@ type PingResponse struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
+	// TODO: improve this response (returns oneof the round event)
 	ForfeitTxs []string `protobuf:"bytes,1,rep,name=forfeit_txs,json=forfeitTxs,proto3" json:"forfeit_txs,omitempty"`
 }
 
