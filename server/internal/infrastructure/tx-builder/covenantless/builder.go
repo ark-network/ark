@@ -18,6 +18,7 @@ import (
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4/schnorr"
 )
 
 const (
@@ -172,6 +173,45 @@ func (b *txBuilder) BuildPoolTx(
 	}
 
 	return
+}
+
+func (b *txBuilder) GetSweepInput(parentblocktime int64, node tree.Node) (expirationtime int64, sweepInput ports.SweepInput, err error) {
+	partialTx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
+	if err != nil {
+		return -1, nil, err
+	}
+
+	if len(partialTx.Inputs) != 1 {
+		return -1, nil, fmt.Errorf("invalid node pset, expect 1 input, got %d", len(partialTx.Inputs))
+	}
+
+	input := partialTx.UnsignedTx.TxIn[0]
+	txid := input.PreviousOutPoint.Hash
+	index := input.PreviousOutPoint.Index
+
+	sweepLeaf, internalKey, lifetime, err := extractSweepLeaf(partialTx.Inputs[0])
+	if err != nil {
+		return -1, nil, err
+	}
+
+	expirationTime := parentblocktime + lifetime
+
+	amount := int64(0)
+	for _, out := range partialTx.UnsignedTx.TxOut {
+		amount += out.Value
+	}
+
+	sweepInput = &sweepBitcoinInput{
+		inputArgs: wire.OutPoint{
+			Hash:  txid,
+			Index: index,
+		},
+		internalPubkey: internalKey,
+		sweepLeaf:      sweepLeaf,
+		amount:         amount,
+	}
+
+	return expirationTime, sweepInput, nil
 }
 
 func (b *txBuilder) getLeafScriptAndTree(
@@ -636,4 +676,60 @@ func castToOutpoints(inputs []ports.TxInput) []ports.TxOutpoint {
 		outpoints = append(outpoints, input)
 	}
 	return outpoints
+}
+
+func extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.TaprootTapLeafScript, internalKey *secp256k1.PublicKey, lifetime int64, err error) {
+	for _, leaf := range input.TaprootLeafScript {
+		closure := &tree.CSVSigClosure{}
+		valid, err := closure.Decode(leaf.Script)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		if valid && closure.Seconds > 0 {
+			sweepLeaf = leaf
+			lifetime = int64(closure.Seconds)
+		}
+	}
+
+	internalKey, err = schnorr.ParsePubKey(input.TaprootInternalKey)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+
+	if sweepLeaf == nil {
+		return nil, nil, 0, fmt.Errorf("sweep leaf not found")
+	}
+
+	return sweepLeaf, internalKey, lifetime, nil
+}
+
+type sweepBitcoinInput struct {
+	inputArgs      wire.OutPoint
+	sweepLeaf      *psbt.TaprootTapLeafScript
+	internalPubkey *secp256k1.PublicKey
+	amount         int64
+}
+
+func (s *sweepBitcoinInput) GetAmount() uint64 {
+	return uint64(s.amount)
+}
+
+func (s *sweepBitcoinInput) GetControlBlock() []byte {
+	return s.sweepLeaf.ControlBlock
+}
+
+func (s *sweepBitcoinInput) GetHash() chainhash.Hash {
+	return s.inputArgs.Hash
+}
+
+func (s *sweepBitcoinInput) GetIndex() uint32 {
+	return s.inputArgs.Index
+}
+
+func (s *sweepBitcoinInput) GetInternalKey() *secp256k1.PublicKey {
+	return s.internalPubkey
+}
+
+func (s *sweepBitcoinInput) GetLeafScript() []byte {
+	return s.sweepLeaf.Script
 }

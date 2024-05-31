@@ -21,4 +21,5 @@ type TxBuilder interface {
 	BuildForfeitTxs(aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment, minRelayFee uint64) (connectors []string, forfeitTxs []string, err error)
 	BuildSweepTx(inputs []SweepInput) (signedSweepTx string, err error)
 	GetVtxoScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error)
+	GetSweepInput(parentblocktime int64, node tree.Node) (expirationtime int64, sweepInput SweepInput, err error)
 }
