@@ -247,7 +247,7 @@ func (c *Config) appService() error {
 }
 
 func (c *Config) adminService() error {
-	c.adminSvc = application.NewAdminService(c.wallet, c.repo)
+	c.adminSvc = application.NewAdminService(c.wallet, c.repo, c.txBuilder)
 	return nil
 }
 

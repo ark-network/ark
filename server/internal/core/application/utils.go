@@ -250,6 +250,7 @@ func (m *forfeitTxsMap) view() []string {
 func findSweepableOutputs(
 	ctx context.Context,
 	walletSvc ports.WalletService,
+	txbuilder ports.TxBuilder,
 	congestionTree tree.CongestionTree,
 ) (map[int64][]ports.SweepInput, error) {
 	sweepableOutputs := make(map[int64][]ports.SweepInput)
@@ -266,7 +267,7 @@ func findSweepableOutputs(
 			}
 
 			var expirationTime int64
-			var sweepInputs []ports.SweepInput
+			var sweepInput ports.SweepInput
 
 			if !isConfirmed {
 				if _, ok := blocktimeCache[node.ParentTxid]; !ok {
@@ -278,7 +279,7 @@ func findSweepableOutputs(
 					blocktimeCache[node.ParentTxid] = blocktime
 				}
 
-				expirationTime, sweepInputs, err = nodeToSweepInputs(blocktimeCache[node.ParentTxid], node)
+				expirationTime, sweepInput, err = txbuilder.GetSweepInput(blocktimeCache[node.ParentTxid], node)
 				if err != nil {
 					return nil, err
 				}
@@ -299,52 +300,11 @@ func findSweepableOutputs(
 			if _, ok := sweepableOutputs[expirationTime]; !ok {
 				sweepableOutputs[expirationTime] = make([]ports.SweepInput, 0)
 			}
-			sweepableOutputs[expirationTime] = append(sweepableOutputs[expirationTime], sweepInputs...)
+			sweepableOutputs[expirationTime] = append(sweepableOutputs[expirationTime], sweepInput)
 		}
 
 		nodesToCheck = newNodesToCheck
 	}
 
 	return sweepableOutputs, nil
-}
-
-func nodeToSweepInputs(parentBlocktime int64, node tree.Node) (int64, []ports.SweepInput, error) {
-	pset, err := psetv2.NewPsetFromBase64(node.Tx)
-	if err != nil {
-		return -1, nil, err
-	}
-
-	if len(pset.Inputs) != 1 {
-		return -1, nil, fmt.Errorf("invalid node pset, expect 1 input, got %d", len(pset.Inputs))
-	}
-
-	// if the tx is not onchain, it means that the input is an existing shared output
-	input := pset.Inputs[0]
-	txid := chainhash.Hash(input.PreviousTxid).String()
-	index := input.PreviousTxIndex
-
-	sweepLeaf, lifetime, err := extractSweepLeaf(input)
-	if err != nil {
-		return -1, nil, err
-	}
-
-	expirationTime := parentBlocktime + lifetime
-
-	amount := uint64(0)
-	for _, out := range pset.Outputs {
-		amount += out.Value
-	}
-
-	sweepInputs := []ports.SweepInput{
-		{
-			InputArgs: psetv2.InputArgs{
-				Txid:    txid,
-				TxIndex: index,
-			},
-			SweepLeaf: *sweepLeaf,
-			Amount:    amount,
-		},
-	}
-
-	return expirationTime, sweepInputs, nil
 }

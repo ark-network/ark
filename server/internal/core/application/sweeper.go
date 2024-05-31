@@ -10,7 +10,6 @@ import (
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	log "github.com/sirupsen/logrus"
-	"github.com/vulpemventures/go-elements/psetv2"
 )
 
 // sweeper is an unexported service running while the main application service is started
@@ -122,7 +121,7 @@ func (s *sweeper) createTask(
 		vtxoKeys := make([]domain.VtxoKey, 0) // vtxos associated to the sweep inputs
 
 		// inspect the congestion tree to find onchain shared outputs
-		sharedOutputs, err := findSweepableOutputs(ctx, s.wallet, congestionTree)
+		sharedOutputs, err := findSweepableOutputs(ctx, s.wallet, s.builder, congestionTree)
 		if err != nil {
 			log.WithError(err).Error("error while inspecting congestion tree")
 			return
@@ -157,8 +156,8 @@ func (s *sweeper) createTask(
 					ctx,
 					[]domain.VtxoKey{
 						{
-							Txid: input.InputArgs.Txid,
-							VOut: input.InputArgs.TxIndex,
+							Txid: input.GetHash().String(),
+							VOut: input.GetIndex(),
 						},
 					},
 				)
@@ -168,20 +167,14 @@ func (s *sweeper) createTask(
 					}
 				} else {
 					// if it's not a vtxo, find all the vtxos leaves reachable from that input
-					vtxosLeaves, err := congestionTree.FindLeaves(input.InputArgs.Txid, input.InputArgs.TxIndex)
+					vtxosLeaves, err := congestionTree.FindLeaves(input.GetHash().String(), input.GetIndex())
 					if err != nil {
 						log.WithError(err).Error("error while finding vtxos leaves")
 						continue
 					}
 
 					for _, leaf := range vtxosLeaves {
-						pset, err := psetv2.NewPsetFromBase64(leaf.Tx)
-						if err != nil {
-							log.Error(fmt.Errorf("error while decoding pset: %w", err))
-							continue
-						}
-
-						vtxo, err := extractVtxoOutpoint(pset)
+						vtxo, err := extractVtxoOutpoint(leaf)
 						if err != nil {
 							log.Error(err)
 							continue
@@ -295,12 +288,7 @@ func (s *sweeper) updateVtxoExpirationTime(
 	vtxos := make([]domain.VtxoKey, 0)
 
 	for _, leaf := range leaves {
-		pset, err := psetv2.NewPsetFromBase64(leaf.Tx)
-		if err != nil {
-			return err
-		}
-
-		vtxo, err := extractVtxoOutpoint(pset)
+		vtxo, err := extractVtxoOutpoint(leaf)
 		if err != nil {
 			return err
 		}
@@ -317,7 +305,7 @@ func computeSubTrees(congestionTree tree.CongestionTree, inputs []ports.SweepInp
 	// for each sweepable input, create a sub congestion tree
 	// it allows to skip the part of the tree that has been broadcasted in the next task
 	for _, input := range inputs {
-		subTree, err := computeSubTree(congestionTree, input.InputArgs.Txid)
+		subTree, err := computeSubTree(congestionTree, input.GetHash().String())
 		if err != nil {
 			log.WithError(err).Error("error while finding sub tree")
 			continue
@@ -403,40 +391,13 @@ func containsTree(tr0 tree.CongestionTree, tr1 tree.CongestionTree) (bool, error
 	return false, nil
 }
 
-// given a congestion tree input, searches and returns the sweep leaf and its lifetime in seconds
-func extractSweepLeaf(input psetv2.Input) (sweepLeaf *psetv2.TapLeafScript, lifetime int64, err error) {
-	for _, leaf := range input.TapLeafScript {
-		closure := &tree.CSVSigClosure{}
-		valid, err := closure.Decode(leaf.Script)
-		if err != nil {
-			return nil, 0, err
-		}
-		if valid && closure.Seconds > uint(lifetime) {
-			sweepLeaf = &leaf
-			lifetime = int64(closure.Seconds)
-		}
-	}
-
-	if sweepLeaf == nil {
-		return nil, 0, fmt.Errorf("sweep leaf not found")
-	}
-
-	return sweepLeaf, lifetime, nil
-}
-
 // assuming the pset is a leaf in the congestion tree, returns the vtxo outpoint
-func extractVtxoOutpoint(pset *psetv2.Pset) (*domain.VtxoKey, error) {
-	if len(pset.Outputs) != 2 {
-		return nil, fmt.Errorf("invalid leaf pset, expect 2 outputs, got %d", len(pset.Outputs))
+func extractVtxoOutpoint(leaf tree.Node) (*domain.VtxoKey, error) {
+	if !leaf.Leaf {
+		return nil, fmt.Errorf("node is not a leaf")
 	}
-
-	utx, err := pset.UnsignedTx()
-	if err != nil {
-		return nil, err
-	}
-
 	return &domain.VtxoKey{
-		Txid: utx.TxHash().String(),
+		Txid: leaf.Txid,
 		VOut: 0,
 	}, nil
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/network"
@@ -169,6 +170,45 @@ func (b *txBuilder) BuildPoolTx(
 	}
 
 	return
+}
+
+func (b *txBuilder) GetSweepInput(parentblocktime int64, node tree.Node) (expirationtime int64, sweepInput ports.SweepInput, err error) {
+	pset, err := psetv2.NewPsetFromBase64(node.Tx)
+	if err != nil {
+		return -1, nil, err
+	}
+
+	if len(pset.Inputs) != 1 {
+		return -1, nil, fmt.Errorf("invalid node pset, expect 1 input, got %d", len(pset.Inputs))
+	}
+
+	// if the tx is not onchain, it means that the input is an existing shared output
+	input := pset.Inputs[0]
+	txid := chainhash.Hash(input.PreviousTxid).String()
+	index := input.PreviousTxIndex
+
+	sweepLeaf, lifetime, err := extractSweepLeaf(input)
+	if err != nil {
+		return -1, nil, err
+	}
+
+	expirationTime := parentblocktime + lifetime
+
+	amount := uint64(0)
+	for _, out := range pset.Outputs {
+		amount += out.Value
+	}
+
+	sweepInput = &sweepLiquidInput{
+		inputArgs: psetv2.InputArgs{
+			Txid:    txid,
+			TxIndex: index,
+		},
+		sweepLeaf: sweepLeaf,
+		amount:    amount,
+	}
+
+	return expirationTime, sweepInput, nil
 }
 
 func (b *txBuilder) getLeafScriptAndTree(
@@ -533,4 +573,56 @@ func (b *txBuilder) getConnectorAddress(poolTx string) (string, error) {
 	}
 
 	return pay.WitnessPubKeyHash()
+}
+
+func extractSweepLeaf(input psetv2.Input) (sweepLeaf *psetv2.TapLeafScript, lifetime int64, err error) {
+	for _, leaf := range input.TapLeafScript {
+		closure := &tree.CSVSigClosure{}
+		valid, err := closure.Decode(leaf.Script)
+		if err != nil {
+			return nil, 0, err
+		}
+		if valid && closure.Seconds > uint(lifetime) {
+			sweepLeaf = &leaf
+			lifetime = int64(closure.Seconds)
+		}
+	}
+
+	if sweepLeaf == nil {
+		return nil, 0, fmt.Errorf("sweep leaf not found")
+	}
+
+	return sweepLeaf, lifetime, nil
+}
+
+type sweepLiquidInput struct {
+	inputArgs psetv2.InputArgs
+	sweepLeaf *psetv2.TapLeafScript
+	amount    uint64
+}
+
+func (s *sweepLiquidInput) GetAmount() uint64 {
+	return s.amount
+}
+
+func (s *sweepLiquidInput) GetControlBlock() []byte {
+	ctrlBlock, _ := s.sweepLeaf.ControlBlock.ToBytes()
+	return ctrlBlock
+}
+
+func (s *sweepLiquidInput) GetHash() chainhash.Hash {
+	h, _ := chainhash.NewHashFromStr(s.inputArgs.Txid)
+	return *h
+}
+
+func (s *sweepLiquidInput) GetIndex() uint32 {
+	return s.inputArgs.TxIndex
+}
+
+func (s *sweepLiquidInput) GetInternalKey() *secp256k1.PublicKey {
+	return s.sweepLeaf.ControlBlock.InternalKey
+}
+
+func (s *sweepLiquidInput) GetLeafScript() []byte {
+	return s.sweepLeaf.Script
 }

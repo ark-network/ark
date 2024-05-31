@@ -50,12 +50,14 @@ type AdminService interface {
 type adminService struct {
 	walletSvc   ports.WalletService
 	repoManager ports.RepoManager
+	txBuilder   ports.TxBuilder
 }
 
-func NewAdminService(walletSvc ports.WalletService, repoManager ports.RepoManager) AdminService {
+func NewAdminService(walletSvc ports.WalletService, repoManager ports.RepoManager, txBuilder ports.TxBuilder) AdminService {
 	return &adminService{
 		walletSvc:   walletSvc,
 		repoManager: repoManager,
+		txBuilder:   txBuilder,
 	}
 }
 
@@ -139,7 +141,7 @@ func (a *adminService) GetScheduledSweeps(ctx context.Context) ([]ScheduledSweep
 
 	for _, round := range sweepableRounds {
 		sweepable, err := findSweepableOutputs(
-			ctx, a.walletSvc, round.CongestionTree,
+			ctx, a.walletSvc, a.txBuilder, round.CongestionTree,
 		)
 		if err != nil {
 			return nil, err
@@ -149,9 +151,9 @@ func (a *adminService) GetScheduledSweeps(ctx context.Context) ([]ScheduledSweep
 		for expirationTime, inputs := range sweepable {
 			for _, input := range inputs {
 				sweepableOutputs = append(sweepableOutputs, SweepableOutput{
-					TxId:        input.InputArgs.Txid,
-					Vout:        input.InputArgs.TxIndex,
-					Amount:      input.Amount,
+					TxId:        input.GetHash().String(),
+					Vout:        input.GetIndex(),
+					Amount:      input.GetAmount(),
 					ScheduledAt: expirationTime,
 				})
 			}
