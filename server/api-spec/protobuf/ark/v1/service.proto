@@ -23,6 +23,7 @@ service ArkService {
       body: "*"
     };
   };
+  // TODO BTC: signTree rpc 
   rpc GetRound(GetRoundRequest) returns (GetRoundResponse) {
     option (google.api.http) = {
       get: "/v1/round/{txid}"
@@ -94,6 +95,7 @@ message GetRoundResponse {
 message GetEventStreamRequest {}
 message GetEventStreamResponse {
   oneof event {
+    // TODO: BTC add "signTree" event
     RoundFinalizationEvent round_finalization = 1;
     RoundFinalizedEvent round_finalized = 2;
     RoundFailed round_failed = 3;
@@ -104,6 +106,7 @@ message PingRequest {
   string payment_id = 1;
 }
 message PingResponse {
+  // TODO: improve this response (returns oneof the round event)
   repeated string forfeit_txs = 1;
 }
 

@@ -32,9 +32,8 @@ func sweepTransaction(
 	amount := uint64(0)
 
 	for i, input := range sweepInputs {
-		leaf := input.SweepLeaf
 		sweepClosure := &tree.CSVSigClosure{}
-		isSweep, err := sweepClosure.Decode(leaf.Script)
+		isSweep, err := sweepClosure.Decode(input.GetLeafScript())
 		if err != nil {
 			return nil, err
 		}
@@ -43,10 +42,25 @@ func sweepTransaction(
 			return nil, fmt.Errorf("invalid sweep script")
 		}
 
-		amount += input.Amount
+		amount += input.GetAmount()
 
-		if err := updater.AddInputs([]psetv2.InputArgs{input.InputArgs}); err != nil {
+		if err := updater.AddInputs([]psetv2.InputArgs{
+			{
+				Txid:    input.GetHash().String(),
+				TxIndex: input.GetIndex(),
+			},
+		}); err != nil {
 			return nil, err
+		}
+
+		ctrlBlock, err := taproot.ParseControlBlock(input.GetControlBlock())
+		if err != nil {
+			return nil, err
+		}
+
+		leaf := psetv2.TapLeafScript{
+			TapElementsLeaf: taproot.NewBaseTapElementsLeaf(input.GetLeafScript()),
+			ControlBlock:    *ctrlBlock,
 		}
 
 		if err := updater.AddInTapLeafScript(i, leaf); err != nil {
@@ -58,7 +72,7 @@ func sweepTransaction(
 			return nil, err
 		}
 
-		value, err := elementsutil.ValueToBytes(input.Amount)
+		value, err := elementsutil.ValueToBytes(input.GetAmount())
 		if err != nil {
 			return nil, err
 		}
