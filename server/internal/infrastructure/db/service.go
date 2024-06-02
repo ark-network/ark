@@ -1,7 +1,6 @@
 package db
 
 import (
-	"database/sql"
 	"fmt"
 
 	"github.com/ark-network/ark/internal/core/domain"
@@ -18,11 +17,11 @@ var (
 	}
 	roundStoreTypes = map[string]func(...interface{}) (dbtypes.RoundStore, error){
 		"badger": badgerdb.NewRoundRepository,
-		"sqlite": newSqliteRoundRepo,
+		"sqlite": sqlitedb.NewRoundRepository,
 	}
 	vtxoStoreTypes = map[string]func(...interface{}) (dbtypes.VtxoStore, error){
 		"badger": badgerdb.NewVtxoRepository,
-		"sqlite": newSqliteVtxoRepo,
+		"sqlite": sqlitedb.NewVtxoRepository,
 	}
 )
 
@@ -92,22 +91,4 @@ func (s *service) Close() {
 	s.eventStore.Close()
 	s.roundStore.Close()
 	s.vtxoStore.Close()
-}
-
-func newSqliteRoundRepo(args ...interface{}) (dbtypes.RoundStore, error) {
-	db, ok := args[0].(*sql.DB)
-	if !ok {
-		return nil, fmt.Errorf("invalid db")
-	}
-
-	return sqlitedb.NewRoundRepository(db)
-}
-
-func newSqliteVtxoRepo(args ...interface{}) (dbtypes.VtxoStore, error) {
-	db, ok := args[0].(*sql.DB)
-	if !ok {
-		return nil, fmt.Errorf("invalid db")
-	}
-
-	return sqlitedb.NewVtxoRepository(db)
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/ark-network/ark/common/tree"
@@ -87,11 +88,16 @@ ON CONFLICT(id) DO UPDATE SET
 `
 
 	upsertPayment = `
-INSERT INTO payment (id, txid) VALUES (?, ?) ON CONFLICT(id) DO NOTHING
+INSERT INTO payment (id, txid) VALUES (?, ?) 
+ON CONFLICT(id) DO UPDATE SET txid = EXCLUDED.txid;
 `
 
 	upsertReceiver = `
-INSERT INTO receiver (payment_id, pubkey, amount, onchain_address) VALUES (?, ?, ?, ?) ON CONFLICT(payment_id, pubkey) DO NOTHING
+INSERT INTO receiver (payment_id, pubkey, amount, onchain_address) VALUES (?, ?, ?, ?) 
+ON CONFLICT(payment_id, pubkey) DO UPDATE SET 
+	amount = EXCLUDED.amount,
+	onchain_address = EXCLUDED.onchain_address,
+	pubkey = EXCLUDED.pubkey;
 `
 
 	updateVtxoPaymentId = `
@@ -177,7 +183,16 @@ type roundRepository struct {
 	db *sql.DB
 }
 
-func NewRoundRepository(db *sql.DB) (dbtypes.RoundStore, error) {
+func NewRoundRepository(args ...interface{}) (dbtypes.RoundStore, error) {
+	db, ok := args[0].(*sql.DB)
+	if !ok {
+		return nil, fmt.Errorf("cannot create new SQLite Round repository: invalid args")
+	}
+
+	return newRoundRepository(db)
+}
+
+func newRoundRepository(db *sql.DB) (dbtypes.RoundStore, error) {
 	if _, err := db.Exec(createRoundTable); err != nil {
 		return nil, err
 	}
@@ -515,17 +530,31 @@ func readRoundRows(rows *sql.Rows) ([]*domain.Round, error) {
 				round.Payments[*paymentRow.id] = payment
 			}
 
-			payment, ok = round.Payments[*vtxoRow.paymentID]
-			if !ok {
-				payment = domain.Payment{
-					Id:        *vtxoRow.paymentID,
-					Inputs:    make([]domain.Vtxo, 0),
-					Receivers: make([]domain.Receiver, 0),
+			if vtxoRow.paymentID != nil {
+				payment, ok = round.Payments[*vtxoRow.paymentID]
+				if !ok {
+					payment = domain.Payment{
+						Id:        *vtxoRow.paymentID,
+						Inputs:    make([]domain.Vtxo, 0),
+						Receivers: make([]domain.Receiver, 0),
+					}
+				}
+
+				vtxo := rowToVtxo(vtxoRow)
+				found := false
+
+				for _, v := range payment.Inputs {
+					if vtxo.Txid == v.Txid && vtxo.VOut == v.VOut {
+						found = true
+						break
+					}
+				}
+
+				if !found {
+					payment.Inputs = append(payment.Inputs, rowToVtxo(vtxoRow))
+					round.Payments[*vtxoRow.paymentID] = payment
 				}
 			}
-
-			payment.Inputs = append(payment.Inputs, rowToVtxo(vtxoRow))
-			round.Payments[*vtxoRow.paymentID] = payment
 
 			if receiverRow.paymentId != nil {
 				payment, ok = round.Payments[*receiverRow.paymentId]

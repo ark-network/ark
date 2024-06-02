@@ -3,6 +3,7 @@ package sqlitedb
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	"github.com/ark-network/ark/internal/core/domain"
 	dbtypes "github.com/ark-network/ark/internal/infrastructure/db/types"
@@ -43,8 +44,8 @@ SELECT * FROM vtxo WHERE redeemed = false
 SELECT * FROM vtxo WHERE redeemed = false AND pubkey = ?
 `
 
-	selectVtxosByTxids = `
-SELECT * FROM vtxo WHERE txid IN (?)
+	selectVtxoByOutpoint = `
+SELECT * FROM vtxo WHERE txid = ? AND vout = ?
 `
 
 	selectVtxosByPoolTxid = `
@@ -86,7 +87,16 @@ type vxtoRepository struct {
 	db *sql.DB
 }
 
-func NewVtxoRepository(db *sql.DB) (dbtypes.VtxoStore, error) {
+func NewVtxoRepository(args ...interface{}) (dbtypes.VtxoStore, error) {
+	db, ok := args[0].(*sql.DB)
+	if !ok {
+		return nil, fmt.Errorf("cannot create new SQLite Vtxo repository: invalid args")
+	}
+
+	return newVtxoRepository(db)
+}
+
+func newVtxoRepository(db *sql.DB) (dbtypes.VtxoStore, error) {
 	_, err := db.Exec(createVtxoTable)
 	if err != nil {
 		return nil, err
@@ -174,21 +184,33 @@ func (v *vxtoRepository) GetAllVtxos(ctx context.Context, pubkey string) ([]doma
 	return unspentVtxos, spentVtxos, nil
 }
 
-func (v *vxtoRepository) GetVtxos(ctx context.Context, vtxos []domain.VtxoKey) ([]domain.Vtxo, error) {
-	txids := ""
-	for i, vtxo := range vtxos {
-		txids += vtxo.Txid
-		if i < len(vtxos)-1 {
-			txids += ","
-		}
-	}
-
-	rows, err := v.db.Query(selectVtxosByTxids, txids)
+func (v *vxtoRepository) GetVtxos(ctx context.Context, outpoints []domain.VtxoKey) ([]domain.Vtxo, error) {
+	stmt, err := v.db.Prepare(selectVtxoByOutpoint)
 	if err != nil {
 		return nil, err
 	}
 
-	return readRows(rows)
+	vtxos := make([]domain.Vtxo, 0, len(outpoints))
+
+	for _, outpoint := range outpoints {
+		rows, err := stmt.Query(outpoint.Txid, outpoint.VOut)
+		if err != nil {
+			return nil, err
+		}
+
+		result, err := readRows(rows)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(result) == 0 {
+			return nil, fmt.Errorf("vtxo not found")
+		}
+
+		vtxos = append(vtxos, result[0])
+	}
+
+	return vtxos, nil
 }
 
 func (v *vxtoRepository) GetVtxosForRound(ctx context.Context, txid string) ([]domain.Vtxo, error) {
