@@ -6,8 +6,11 @@ import (
 )
 
 // UnaryInterceptor returns the unary interceptor
-func UnaryInterceptor() grpc.ServerOption {
-	return grpc.UnaryInterceptor(middleware.ChainUnaryServer(unaryLogger))
+func UnaryInterceptor(user, pass string) grpc.ServerOption {
+	return grpc.UnaryInterceptor(middleware.ChainUnaryServer(
+		unaryAuthenticator(user, pass),
+		unaryLogger,
+	))
 }
 
 // StreamInterceptor returns the stream interceptor with a logrus log

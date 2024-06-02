@@ -40,7 +40,8 @@ func NewService(
 	}
 
 	grpcConfig := []grpc.ServerOption{
-		interceptors.UnaryInterceptor(), interceptors.StreamInterceptor(),
+		interceptors.UnaryInterceptor(svcConfig.AuthUser, svcConfig.AuthPass),
+		interceptors.StreamInterceptor(),
 	}
 	if !svcConfig.NoTLS {
 		return nil, fmt.Errorf("tls termination not supported yet")
@@ -53,8 +54,13 @@ func NewService(
 
 	// Server grpc.
 	grpcServer := grpc.NewServer(grpcConfig...)
+
 	appHandler := handlers.NewHandler(appConfig.AppService())
 	arkv1.RegisterArkServiceServer(grpcServer, appHandler)
+
+	adminHandler := handlers.NewAdminHandler(appConfig.AdminService())
+	arkv1.RegisterAdminServiceServer(grpcServer, adminHandler)
+
 	healthHandler := handlers.NewHealthHandler()
 	grpchealth.RegisterHealthServer(grpcServer, healthHandler)
 
@@ -87,6 +93,11 @@ func NewService(
 	)
 	ctx := context.Background()
 	if err := arkv1.RegisterArkServiceHandler(
+		ctx, gwmux, conn,
+	); err != nil {
+		return nil, err
+	}
+	if err := arkv1.RegisterAdminServiceHandler(
 		ctx, gwmux, conn,
 	); err != nil {
 		return nil, err

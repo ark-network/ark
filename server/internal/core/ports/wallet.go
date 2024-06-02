@@ -22,6 +22,8 @@ type WalletService interface {
 	WaitForSync(ctx context.Context, txid string) error
 	EstimateFees(ctx context.Context, pset string) (uint64, error)
 	ListConnectorUtxos(ctx context.Context, connectorAddress string) ([]TxInput, error)
+	MainAccountBalance(ctx context.Context) (uint64, uint64, error)
+	ConnectorsAccountBalance(ctx context.Context) (uint64, uint64, error)
 	LockConnectorUtxos(ctx context.Context, utxos []TxOutpoint) error
 	Close()
 }

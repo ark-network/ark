@@ -27,8 +27,10 @@ func main() {
 	log.SetLevel(log.Level(cfg.LogLevel))
 
 	svcConfig := grpcservice.Config{
-		Port:  cfg.Port,
-		NoTLS: cfg.NoTLS,
+		Port:     cfg.Port,
+		NoTLS:    cfg.NoTLS,
+		AuthUser: cfg.AuthUser,
+		AuthPass: cfg.AuthPass,
 	}
 
 	appConfig := &appconfig.Config{

@@ -395,8 +395,9 @@ func (s *service) startFinalization() {
 		log.WithError(err).Warn("failed to create pool tx")
 		return
 	}
-
 	log.Debugf("pool tx created for round %s", round.Id)
+
+	// TODO BTC make the senders sign the tree
 
 	connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(s.pubkey, unsignedPoolTx, payments, s.minRelayFee)
 	if err != nil {

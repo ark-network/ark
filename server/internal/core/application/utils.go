@@ -1,13 +1,16 @@
 package application
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
+	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/vulpemventures/go-elements/psetv2"
@@ -240,4 +243,68 @@ func (m *forfeitTxsMap) view() []string {
 		txs = append(txs, tx.tx)
 	}
 	return txs
+}
+
+// onchainOutputs iterates over all the nodes' outputs in the congestion tree and checks their onchain state
+// returns the sweepable outputs as ports.SweepInput mapped by their expiration time
+func findSweepableOutputs(
+	ctx context.Context,
+	walletSvc ports.WalletService,
+	txbuilder ports.TxBuilder,
+	congestionTree tree.CongestionTree,
+) (map[int64][]ports.SweepInput, error) {
+	sweepableOutputs := make(map[int64][]ports.SweepInput)
+	blocktimeCache := make(map[string]int64) // txid -> blocktime
+	nodesToCheck := congestionTree[0]        // init with the root
+
+	for len(nodesToCheck) > 0 {
+		newNodesToCheck := make([]tree.Node, 0)
+
+		for _, node := range nodesToCheck {
+			isConfirmed, blocktime, err := walletSvc.IsTransactionConfirmed(ctx, node.Txid)
+			if err != nil {
+				return nil, err
+			}
+
+			var expirationTime int64
+			var sweepInput ports.SweepInput
+
+			if !isConfirmed {
+				if _, ok := blocktimeCache[node.ParentTxid]; !ok {
+					isConfirmed, blocktime, err := walletSvc.IsTransactionConfirmed(ctx, node.ParentTxid)
+					if !isConfirmed || err != nil {
+						return nil, fmt.Errorf("tx %s not found", node.Txid)
+					}
+
+					blocktimeCache[node.ParentTxid] = blocktime
+				}
+
+				expirationTime, sweepInput, err = txbuilder.GetSweepInput(blocktimeCache[node.ParentTxid], node)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				// cache the blocktime for future use
+				blocktimeCache[node.Txid] = int64(blocktime)
+
+				// if the tx is onchain, it means that the input is spent
+				// add the children to the nodes in order to check them during the next iteration
+				// We will return the error below, but are we going to schedule the tasks for the "children roots"?
+				if !node.Leaf {
+					children := congestionTree.Children(node.Txid)
+					newNodesToCheck = append(newNodesToCheck, children...)
+					continue
+				}
+			}
+
+			if _, ok := sweepableOutputs[expirationTime]; !ok {
+				sweepableOutputs[expirationTime] = make([]ports.SweepInput, 0)
+			}
+			sweepableOutputs[expirationTime] = append(sweepableOutputs[expirationTime], sweepInput)
+		}
+
+		nodesToCheck = newNodesToCheck
+	}
+
+	return sweepableOutputs, nil
 }

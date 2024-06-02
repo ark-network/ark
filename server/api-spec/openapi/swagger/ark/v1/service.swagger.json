@@ -261,6 +261,7 @@
     },
     "/v1/round/{txid}": {
       "get": {
+        "summary": "TODO BTC: signTree rpc",
         "operationId": "ArkService_GetRound",
         "responses": {
           "200": {
@@ -388,7 +389,8 @@
       "type": "object",
       "properties": {
         "roundFinalization": {
-          "$ref": "#/definitions/v1RoundFinalizationEvent"
+          "$ref": "#/definitions/v1RoundFinalizationEvent",
+          "title": "TODO: BTC add \"signTree\" event"
         },
         "roundFinalized": {
           "$ref": "#/definitions/v1RoundFinalizedEvent"
@@ -516,7 +518,8 @@
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "title": "TODO: improve this response (returns oneof the round event)"
         }
       }
     },
