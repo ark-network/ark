@@ -148,6 +148,14 @@ LEFT OUTER JOIN receiver ON payment.id=receiver.payment_id
 LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
 WHERE round.swept = true AND round.failed = false AND round.ended = true;
 `
+
+	selectRoundIdsInRange = `
+SELECT id FROM round WHERE starting_timestamp > ? AND starting_timestamp < ?;
+`
+
+	selectRoundIds = `
+SELECT id FROM round;
+`
 )
 
 type receiverRow struct {
@@ -212,6 +220,49 @@ func newRoundRepository(db *sql.DB) (dbtypes.RoundStore, error) {
 
 func (r *roundRepository) Close() {
 	_ = r.db.Close()
+}
+
+func (r *roundRepository) GetRoundsIds(ctx context.Context, startedAfter int64, startedBefore int64) ([]string, error) {
+	var rows *sql.Rows
+
+	if startedAfter == 0 && startedBefore == 0 {
+		stmt, err := r.db.Prepare(selectRoundIds)
+		if err != nil {
+			return nil, err
+		}
+		defer stmt.Close()
+
+		rows, err = stmt.Query()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		stmt, err := r.db.Prepare(selectRoundIdsInRange)
+		if err != nil {
+			return nil, err
+		}
+		defer stmt.Close()
+
+		rows, err = stmt.Query(startedAfter, startedBefore)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	defer rows.Close()
+
+	ids := make([]string, 0)
+
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+
+		ids = append(ids, id)
+	}
+
+	return ids, nil
 }
 
 func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Round) error {
