@@ -120,6 +120,8 @@ func (v *vxtoRepository) AddVtxos(ctx context.Context, vtxos []domain.Vtxo) erro
 		return err
 	}
 
+	defer stmt.Close()
+
 	for _, vtxo := range vtxos {
 		_, err := stmt.Exec(
 			vtxo.Txid,
@@ -190,6 +192,8 @@ func (v *vxtoRepository) GetVtxos(ctx context.Context, outpoints []domain.VtxoKe
 		return nil, err
 	}
 
+	defer stmt.Close()
+
 	vtxos := make([]domain.Vtxo, 0, len(outpoints))
 
 	for _, outpoint := range outpoints {
@@ -233,6 +237,8 @@ func (v *vxtoRepository) RedeemVtxos(ctx context.Context, vtxos []domain.VtxoKey
 		return err
 	}
 
+	defer stmt.Close()
+
 	for _, vtxo := range vtxos {
 		_, err := stmt.Exec(vtxo.Txid, vtxo.VOut)
 		if err != nil {
@@ -253,6 +259,8 @@ func (v *vxtoRepository) SpendVtxos(ctx context.Context, vtxos []domain.VtxoKey,
 	if err != nil {
 		return err
 	}
+
+	defer stmt.Close()
 
 	for _, vtxo := range vtxos {
 		_, err := stmt.Exec(txid, vtxo.Txid, vtxo.VOut)
@@ -275,6 +283,8 @@ func (v *vxtoRepository) SweepVtxos(ctx context.Context, vtxos []domain.VtxoKey)
 		return err
 	}
 
+	defer stmt.Close()
+
 	for _, vtxo := range vtxos {
 		_, err := stmt.Exec(vtxo.Txid, vtxo.VOut)
 		if err != nil {
@@ -295,6 +305,8 @@ func (v *vxtoRepository) UpdateExpireAt(ctx context.Context, vtxos []domain.Vtxo
 	if err != nil {
 		return err
 	}
+
+	defer stmt.Close()
 
 	for _, vtxo := range vtxos {
 		_, err := stmt.Exec(expireAt, vtxo.Txid, vtxo.VOut)

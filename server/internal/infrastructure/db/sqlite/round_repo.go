@@ -225,6 +225,8 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 		return err
 	}
 
+	defer stmt.Close()
+
 	var congestionTreeJSON string
 
 	if round.CongestionTree != nil {
@@ -268,6 +270,8 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 				return err
 			}
 
+			defer stmt.Close()
+
 			_, err = stmt.Exec(payment.Id, round.Txid)
 			if err != nil {
 				return err
@@ -290,6 +294,8 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 				return err
 			}
 
+			defer stmt.Close()
+
 			for _, input := range payment.Inputs {
 				_, err := stmt.Exec(payment.Id, input.Txid, input.VOut)
 				if err != nil {
@@ -307,6 +313,7 @@ func (r *roundRepository) GetCurrentRound(ctx context.Context) (*domain.Round, e
 	if err != nil {
 		return nil, err
 	}
+	defer stmt.Close()
 
 	rows, err := stmt.Query()
 	if err != nil {
@@ -330,6 +337,7 @@ func (r *roundRepository) GetRoundWithId(ctx context.Context, id string) (*domai
 	if err != nil {
 		return nil, err
 	}
+	defer stmt.Close()
 
 	rows, err := stmt.Query(id)
 	if err != nil {
@@ -353,6 +361,7 @@ func (r *roundRepository) GetRoundWithTxid(ctx context.Context, txid string) (*d
 	if err != nil {
 		return nil, err
 	}
+	defer stmt.Close()
 
 	rows, err := stmt.Query(txid)
 	if err != nil {
@@ -376,6 +385,7 @@ func (r *roundRepository) GetSweepableRounds(ctx context.Context) ([]domain.Roun
 	if err != nil {
 		return nil, err
 	}
+	defer stmt.Close()
 
 	rows, err := stmt.Query()
 	if err != nil {
@@ -401,6 +411,7 @@ func (r *roundRepository) GetSweptRounds(ctx context.Context) ([]domain.Round, e
 	if err != nil {
 		return nil, err
 	}
+	defer stmt.Close()
 
 	rows, err := stmt.Query()
 	if err != nil {
