@@ -1,0 +1,40 @@
+<template id="roundLine">
+  <div class="flex justify-between">
+    <p class="hash"></p>
+    <p class="time"></p>
+  </div>
+</template>
+
+<div class="border border-gray-300 w-full p-4">
+  <h2 class="text-lg font-semibold mb-4">Last rounds</h2>
+  <div class="flex flex-col gap-2" id="roundsListContainer"></div>
+</div>
+
+<script>
+  window.addEventListener('load', (event) => {
+    const container = document.querySelector('#roundsListContainer')
+    const template = document.querySelector('#roundLine')
+    const mockData = [
+      { hash: '38726645552543664777889992', time: '4s' },
+      { hash: '38726645552543664777889992', time: '14s' },
+      { hash: '38726645552543664777889992', time: '24s' },
+      { hash: '38726645552543664777889992', time: '34s' },
+      { hash: '38726645552543664777889992', time: '44s' },
+      { hash: '38726645552543664777889992', time: '54s' },
+      { hash: '38726645552543664777889992', time: '1m' },
+      { hash: '38726645552543664777889992', time: '4s' },
+      { hash: '38726645552543664777889992', time: '14s' },
+      { hash: '38726645552543664777889992', time: '24s' },
+      { hash: '38726645552543664777889992', time: '34s' },
+      { hash: '38726645552543664777889992', time: '44s' },
+      { hash: '38726645552543664777889992', time: '54s' },
+      { hash: '38726645552543664777889992', time: '1m' },
+    ]
+    mockData.forEach((line) => {
+      const clone = template.content.cloneNode(true)
+      clone.querySelector('.hash').innerText = line.hash
+      clone.querySelector('.time').innerText = line.time
+      container.appendChild(clone)
+    })
+  })
+</script>

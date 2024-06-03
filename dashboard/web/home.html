@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ark Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      /* Additional styles if needed */
+    </style>
+  </head>
+  <body class="bg-white text-gray-800 p-10">
+    <div class="grid grid-cols-2 gap-4">
+      <div class="flex flex-col gap-4">{{template "balance.html" .}} {{template "roundDetail.html" .}}</div>
+      <div class="flex flex-col gap-4">{{template "roundsList.html" .}}</div>
+    </div>
+  </body>
+</html>
