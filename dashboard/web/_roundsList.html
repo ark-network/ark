@@ -12,15 +12,18 @@
 
 <script>
   window.addEventListener('load', () => {
-    const txid = window.location.search?.slice(1)
+    let delta = 10 // 10 seconds round time
+    let now = Math.floor(Date.now() / 1000)
+    const hash = window.location.search?.slice(1)
     const container = document.querySelector('#roundsListContainer')
     const roundLine = document.querySelector('#roundLine')
-    mockData.rounds.forEach((line) => {
+    mockData.rounds.forEach(({ txid }) => {
       const clone = roundLine.content.cloneNode(true)
-      if (txid && txid === line.txid) clone.querySelector('div').classList.add('bg-yellow-100')
-      clone.querySelector('.txid').innerHTML = `<a href="/?${line.txid}">${prettyLongText(line.txid)}</a>`
-      clone.querySelector('.time').innerText = line.time
+      if (hash && hash === txid) clone.querySelector('div').classList.add('bg-yellow-100')
+      clone.querySelector('.txid').innerHTML = `<a href="/?${txid}">${prettyLongText(txid)}</a>`
+      clone.querySelector('.time').innerText = prettyTime(now)
       container.appendChild(clone)
+      now += delta
     })
   })
 </script>

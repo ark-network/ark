@@ -1,38 +1,47 @@
 <template id="roundDetails">
   <div class="flex justify-between">
     <p>Round ID:</p>
-    <p class="roundId"></p>
+    <p id="detailsRoundId"></p>
   </div>
   <div class="flex justify-between">
     <p>TX ID:</p>
-    <p class="txId bg-yellow-100"></p>
+    <p id="detailsTxId" class="txId bg-yellow-100"></p>
   </div>
   <div class="flex justify-between">
     <p>Forfeited amount:</p>
-    <p class="forfeitedAmount"></p>
+    <p id="detailsForfeitedAmount"></p>
   </div>
   <div class="flex justify-between">
     <p>VTXOs amount:</p>
-    <p class="vtxosAmount"></p>
+    <p id="detailsVtxosAmount"></p>
   </div>
   <div class="flex justify-between">
-    <p>Exit amount</p>
-    <p class="exitAmount"></p>
+    <p>Exit amount:</p>
+    <p id="detailsExitAmount"></p>
   </div>
   <div class="flex justify-between">
     <p>Fees amount:</p>
-    <p class="feesAmount"></p>
+    <p id="detailsFeesAmount"></p>
   </div>
-  <details class="inputVtxos">
+  <details>
     <summary>Input VTXOs</summary>
-    aaa
+    <div id="detailsInputVtxos"></div>
   </details>
-  <details class="outputVtxos">
+  <details>
     <summary>Output VTXOs</summary>
+    <div id="detailsOutputVtxos"></div>
   </details>
-  <details class="exitAddresses">
+  <details>
     <summary>Exit Addresses</summary>
+    <div id="detailsExitAddresses"></div>
   </details>
+</template>
+
+<template id="vtxo">
+  <div class="flex justify-between mt-2">
+    <p class="outpoint"></p>
+    <p class="satvalue"></p>
+  </div>
 </template>
 
 <div class="border border-gray-300 w-full p-4">
@@ -46,12 +55,39 @@
     const template = document.querySelector('#roundDetails')
     const clone = template.content.cloneNode(true)
     const txid = window.location.search ? window.location.search.slice(1) : mockData.rounds[0].txid
-    clone.querySelector('.roundId').innerText = prettyLongText('d66376d8-0d16-435b-b3ec-960e491b3924')
-    clone.querySelector('.txId').innerText = prettyLongText(txid)
-    clone.querySelector('.forfeitedAmount').innerText = '1'
-    clone.querySelector('.vtxosAmount').innerText = '2'
-    clone.querySelector('.exitAmount').innerText = '3'
-    clone.querySelector('.feesAmount').innerText = '0.1'
+    const forfeitAmount = mockData.roundDetails.inputs.reduce((prev, { sats }) => prev + sats, 0)
+    const vtxosAmount = mockData.roundDetails.outputs.reduce((prev, { sats }) => prev + sats, 0)
+    const exitAmount = mockData.roundDetails.addresses.reduce((prev, { sats }) => prev + sats, 0)
+    const feesAmount = forfeitAmount - vtxosAmount - exitAmount
+
+    clone.querySelector('#detailsRoundId').innerText = prettyLongText('d66376d8-0d16-435b-b3ec-960e491b3924')
+    clone.querySelector('#detailsTxId').innerText = prettyLongText(txid)
+    clone.querySelector('#detailsForfeitedAmount').innerHTML = prettySats(forfeitAmount)
+    clone.querySelector('#detailsVtxosAmount').innerHTML = prettySats(vtxosAmount)
+    clone.querySelector('#detailsExitAmount').innerHTML = prettySats(exitAmount)
+    clone.querySelector('#detailsFeesAmount').innerHTML = prettySats(feesAmount)
+
+    mockData.roundDetails.inputs.map(({ txid, vout, sats }) => {
+      const c = document.querySelector('#vtxo').content.cloneNode(true)
+      c.querySelector('.outpoint').innerText = prettyLongText(`${txid}:${vout}`)
+      c.querySelector('.satvalue').innerHTML = prettySats(sats)
+      clone.querySelector('#detailsInputVtxos').appendChild(c)
+    })
+
+    mockData.roundDetails.outputs.map(({ txid, vout, sats }) => {
+      const c = document.querySelector('#vtxo').content.cloneNode(true)
+      c.querySelector('.outpoint').innerText = prettyLongText(`${txid}:${vout}`)
+      c.querySelector('.satvalue').innerHTML = prettySats(sats)
+      clone.querySelector('#detailsOutputVtxos').appendChild(c)
+    })
+
+    mockData.roundDetails.addresses.map(({ address, sats }) => {
+      const c = document.querySelector('#vtxo').content.cloneNode(true)
+      c.querySelector('.outpoint').innerText = prettyLongText(address)
+      c.querySelector('.satvalue').innerHTML = prettySats(sats)
+      clone.querySelector('#detailsExitAddresses').appendChild(c)
+    })
+
     container.appendChild(clone)
   })
 </script>

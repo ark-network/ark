@@ -1,15 +1,19 @@
 <template id="nextSweep">
   <div class="flex justify-between">
     <p>Round ID:</p>
-    <p class="roundId"></p>
+    <p id="sweepRoundId" class="txid"></p>
   </div>
   <div class="flex justify-between">
     <p>When:</p>
-    <p class="when"></p>
+    <p id="sweepWhen"></p>
+  </div>
+  <div class="flex justify-between">
+    <p>Amount:</p>
+    <p id="sweepAmount"></p>
   </div>
   <details>
     <summary>Outputs</summary>
-    <div class="outputs"></div>
+    <div id="sweepOutputs"></div>
   </details>
 </template>
 
@@ -27,17 +31,20 @@
 
 <script>
   window.addEventListener('load', (event) => {
+    let amount = 0
     const container = document.querySelector('#nextSweepContainer')
     const sweepOutput = document.querySelector('#sweepOutput')
     const clone = document.querySelector('#nextSweep').content.cloneNode(true)
-    clone.querySelector('.roundId').innerText = 'round id'
-    clone.querySelector('.when').innerText = 'soon'
-    mockData.sweep.map(({ txid, vout, sats }) => {
+    clone.querySelector('#sweepRoundId').innerHTML = prettyHash(mockData.sweep.roundId)
+    clone.querySelector('#sweepWhen').innerText = 'in ' + prettyTime(mockData.sweep.timestamp)
+    mockData.sweep.outputs.map(({ txid, vout, sats }) => {
+      amount += sats
       const c = document.querySelector('#sweepOutput').content.cloneNode(true)
       c.querySelector('.outpoint').innerText = prettyLongText(`${txid}:${vout}`)
-      c.querySelector('.satvalue').innerText = prettyNumber(sats)
-      clone.querySelector('.outputs').appendChild(c)
+      c.querySelector('.satvalue').innerHTML = prettySats(sats)
+      clone.querySelector('#sweepOutputs').appendChild(c)
     })
+    clone.querySelector('#sweepAmount').innerHTML = prettySats(amount)
 
     container.appendChild(clone)
   })

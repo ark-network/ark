@@ -5,23 +5,32 @@
       <p>Main</p>
       <div class="flex justify-between">
         <p>Available:</p>
-        <p>42 BTC</p>
+        <p id="mainAvailable" />
       </div>
       <div class="flex justify-between">
         <p>Locked:</p>
-        <p>21 BTC</p>
+        <p id="mainLocked" />
       </div>
     </div>
     <div>
       <p>Connectors</p>
       <div class="flex justify-between">
         <p>Available:</p>
-        <p>42 BTC</p>
+        <p id="connectorsAvailable" />
       </div>
       <div class="flex justify-between">
         <p>Locked:</p>
-        <p>21 BTC</p>
+        <p id="connectorsLocked" />
       </div>
     </div>
   </div>
 </div>
+
+<script>
+  window.addEventListener('load', () => {
+    document.querySelector('#connectorsAvailable').innerHTML = prettySats(mockData.balance.connectors.available)
+    document.querySelector('#connectorsLocked').innerHTML = prettySats(mockData.balance.connectors.locked)
+    document.querySelector('#mainAvailable').innerHTML = prettySats(mockData.balance.main.available)
+    document.querySelector('#mainLocked').innerHTML = prettySats(mockData.balance.main.locked)
+  })
+</script>

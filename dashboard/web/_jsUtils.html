@@ -3,11 +3,66 @@
     if (text.length < 32) return text
     return `${text.substring(0, showChars)}...${text.substring(text.length - showChars, text.length)}`
   }
+
+  const prettyHash = (hash) => {
+    const text = prettyLongText(hash)
+    return `<a href="/?${hash}">${text}</a>`
+  }
+
   const prettyNumber = (num, maximumFractionDigits = 8) => {
     if (!num) return '0'
     return new Intl.NumberFormat('en', { style: 'decimal', maximumFractionDigits }).format(num)
   }
+
+  const prettySats = (num) => {
+    const length = String(num).length
+    if (length > 8) return num
+    let prefix = '0.'
+    for (let i = length; i < 8; i++) prefix += '0'
+    return `<span class="text-gray-400">${prefix}</span>${num}`
+  }
+
+  const prettyTime = (unixtime) => {
+    const minute = 60 // timestamp in seconds
+    const hour = 60 * minute
+    const day = 24 * hour
+    const week = 7 * day
+    const now = Math.floor(Date.now() / 1000)
+    let delta = Math.abs(unixtime - now)
+    let text = ''
+    if (delta > week) {
+      text += `${Math.floor(delta / week)}w`
+      delta = delta % week
+    }
+    if (delta > day) {
+      text += `${Math.floor(delta / day)}d`
+      delta = delta % day
+    }
+    if (delta > hour) {
+      text += `${Math.floor(delta / hour)}h`
+      delta = delta % hour
+    }
+    if (delta > minute) {
+      text += `${Math.floor(delta / minute)}m`
+      delta = delta % minute
+    }
+    if (delta > 0) {
+      text += `${delta}s`
+    }
+    return text
+  }
+
   const mockData = {
+    balance: {
+      main: {
+        available: 1345678,
+        locked: 1453662,
+      },
+      connectors: {
+        available: 55362,
+        locked: 66564,
+      },
+    },
     rounds: [
       { txid: '99d4c3e4258e36f52eeeb3fb79474df504395a394180956e9a82f9cf07f353f5', time: 'now' },
       { txid: '807b4c7d650c8a2be6b9f3d5b79b06afae576b5aadee0661ded9c59cf4c5e766', time: '4s' },
@@ -21,22 +76,44 @@
       { txid: 'dc589c615ef93792f5d5bf644ec61f69a55d7158073f2882e730fe7388af5e37', time: '1m24s' },
       { txid: '92a4c33f03724905e32ceaba4fc517114b5e3a0d93e46942ba236ccec0eadbfd', time: '1m34s' },
       { txid: '5b769201439baaffb095d8d92e494f1831f7b507f36710fbe1fb43761dfc6679', time: '1m44s' },
-      { txid: '40f841c3a2cb4505fbf4ce8559afad7cb4db71c712bf52d22beea5b30590a4b2', time: '54s' },
-      { txid: '08a69f876323f6e3db720a05b8b998b36f260cf4684d7f7339fa9ca7b3c9302c', time: '1m4s' },
-      { txid: '65ebd01e19fa7c0e454eb029c979d3870dfc3a256c3e4678891399927c50bc8f', time: '1m14s' },
+      { txid: '10d3ea26e37f168855db9970289eadb259cc2b711ddadb6e454cae8390617685', time: '54s' },
+      { txid: 'd01a330430dead8370b3aace285111337118c30dffa6a07af45c177de7b5a418', time: '1m4s' },
+      { txid: 'bf59db410a0049b4a9566089e89a55ec6bb4825f8e23c8a06fddb793d5308a37', time: '1m14s' },
     ],
-    sweep: [
-      { txid: '10bcb88c5a14f93dcaf0c982ca7fa8fa7601c5a1bda867a45fa9dd8be8a8ff52', vout: 0, sats: 21000 },
-      { txid: 'd8053da1306627baba4545269188f095f03838273a933289db91113601957eeb', vout: 0, sats: 21000 },
-      { txid: 'c4cd8111d1b4aeaae0a6e66166615f3ce5685024758765db376894b10ab5d434', vout: 0, sats: 21000 },
-      { txid: '24982e308f69a66953d398abe8e9bdb439ffeed514d214636e02a5dcecd72f07', vout: 0, sats: 21000 },
-      { txid: '053778271d18a06304c9f74a6bee6f09af8a9a8ae44b406ea74c0175fdd05859', vout: 0, sats: 21000 },
-      { txid: 'ff3975a31f9ebc14421f820c45456badfd7a406d91d626efe68b4f0888c62a6d', vout: 0, sats: 21000 },
-      { txid: 'e6303ba99cade31233cb0f33fd71b115244cd0589ab4b006fb693464c2103a7d', vout: 0, sats: 21000 },
-      { txid: '1fcd5bf356e04b33b10428fe1675c84e122c9af7029f517b6a8b170b93fa14a7', vout: 0, sats: 21000 },
-      { txid: '325ce2f88a2aa5642dda45274ce408243acfa908cd393356ce0bbc766be2d62a', vout: 0, sats: 21000 },
-      { txid: '93b683e9dc89b153349c13aea49f79dc721020b2516794ecde9222eba9597ccc', vout: 0, sats: 21000 },
-    ],
+    roundDetails: {
+      roundId: '',
+      inputs: [
+        { txid: '6f165e2b0ae69b260a32c505f7204bf8c6e0aef654157136dca9194494b78a81', vout: 1, sats: 21000 },
+        { txid: 'b5f6a61df2c72c32cbee4042848c37a7c268ca424049ebabb6e30d50bd035c71', vout: 1, sats: 42000 },
+        { txid: '0ab565c1f56b60a26c7daf92cc825d40b8675417792b3b7e73784f56d41116b5', vout: 1, sats: 10000 },
+      ],
+      outputs: [
+        { txid: 'aebee95dfbd7d3cbf855432d0c239ec115837467f3051ac986b5c8f5d9fae906', vout: 1, sats: 10000 },
+        { txid: 'c4a35b7b2ce9a4b6996e86e29609f5e8f73f29bacd749b3610e4f89a75c216ca', vout: 1, sats: 11000 },
+        { txid: '3a639ccd65ce60f90b6be07f9209598d2aea76b9938cc30db1de3fa1034ecf9d', vout: 1, sats: 11100 },
+      ],
+      addresses: [
+        { address: 'bc1qr4356l02af8ura6hgxrqa2wx0lesdxfjxdnau0', sats: 14200 },
+        { address: 'bc1q0y6h8xe97pnf85dcd5puwsm5up94aesxrcd8yp', sats: 12100 },
+        { address: 'bc1q83ep02rpedffsn9xm57yd54v48x7xsf6cdwfea', sats: 13000 },
+      ],
+    },
+    sweep: {
+      roundId: '83b54521f2cd2e4dc6265686276641d9918aebdaa86d8d38730adfdb5359c956',
+      timestamp: 1717693499,
+      outputs: [
+        { txid: '10bcb88c5a14f93dcaf0c982ca7fa8fa7601c5a1bda867a45fa9dd8be8a8ff52', vout: 0, sats: 76453 },
+        { txid: 'd8053da1306627baba4545269188f095f03838273a933289db91113601957eeb', vout: 0, sats: 86344 },
+        { txid: 'c4cd8111d1b4aeaae0a6e66166615f3ce5685024758765db376894b10ab5d434', vout: 0, sats: 98632 },
+        { txid: '24982e308f69a66953d398abe8e9bdb439ffeed514d214636e02a5dcecd72f07', vout: 0, sats: 96633 },
+        { txid: '053778271d18a06304c9f74a6bee6f09af8a9a8ae44b406ea74c0175fdd05859', vout: 0, sats: 76535 },
+        { txid: 'ff3975a31f9ebc14421f820c45456badfd7a406d91d626efe68b4f0888c62a6d', vout: 0, sats: 75423 },
+        { txid: 'e6303ba99cade31233cb0f33fd71b115244cd0589ab4b006fb693464c2103a7d', vout: 0, sats: 65543 },
+        { txid: '1fcd5bf356e04b33b10428fe1675c84e122c9af7029f517b6a8b170b93fa14a7', vout: 0, sats: 98653 },
+        { txid: '325ce2f88a2aa5642dda45274ce408243acfa908cd393356ce0bbc766be2d62a', vout: 0, sats: 77566 },
+        { txid: '93b683e9dc89b153349c13aea49f79dc721020b2516794ecde9222eba9597ccc', vout: 0, sats: 54432 },
+      ],
+    },
   }
 
   const getCredentials = () => JSON.parse(window.sessionStorage.getItem('credentials'))

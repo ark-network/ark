@@ -5,9 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Login Page</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-      /* Additional styles if needed */
-    </style>
   </head>
   <body class="bg-white text-gray-600 p-10">
     <div class="min-h-screen flex items-center justify-center">
@@ -38,7 +35,7 @@
           username: document.querySelector('#username').value,
           password: document.querySelector('#password').value,
         }
-        getApi('/balance')
+        getApi('/balance', credentials)
           .then((res) => {
             if (res.ok) {
               setCredentials(credentials)
