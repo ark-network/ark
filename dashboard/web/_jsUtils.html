@@ -1,0 +1,68 @@
+<script>
+  const prettyLongText = (text, showChars = 14) => {
+    if (text.length < 32) return text
+    return `${text.substring(0, showChars)}...${text.substring(text.length - showChars, text.length)}`
+  }
+  const prettyNumber = (num, maximumFractionDigits = 8) => {
+    if (!num) return '0'
+    return new Intl.NumberFormat('en', { style: 'decimal', maximumFractionDigits }).format(num)
+  }
+  const mockData = {
+    rounds: [
+      { txid: '99d4c3e4258e36f52eeeb3fb79474df504395a394180956e9a82f9cf07f353f5', time: 'now' },
+      { txid: '807b4c7d650c8a2be6b9f3d5b79b06afae576b5aadee0661ded9c59cf4c5e766', time: '4s' },
+      { txid: '4606d68e0a1cd77be1a246b69778c65c7693973bf4f000b21d131e8b9d32bc59', time: '14s' },
+      { txid: 'ebb9910661cda95986630d5ad7406aa1d66a3a56c9a57b391c168c9c2e7f0ece', time: '24s' },
+      { txid: '07af8b649c19afbf294aa11cd2e9ca23fb445dbc47cfb8087dfbf2b7bd6b4d16', time: '34s' },
+      { txid: '637c016ccea59d87d4d784f40240cab6098cb74ec3641f6ba19b0122a48b9d97', time: '44s' },
+      { txid: '40f841c3a2cb4505fbf4ce8559afad7cb4db71c712bf52d22beea5b30590a4b2', time: '54s' },
+      { txid: '08a69f876323f6e3db720a05b8b998b36f260cf4684d7f7339fa9ca7b3c9302c', time: '1m4s' },
+      { txid: '65ebd01e19fa7c0e454eb029c979d3870dfc3a256c3e4678891399927c50bc8f', time: '1m14s' },
+      { txid: 'dc589c615ef93792f5d5bf644ec61f69a55d7158073f2882e730fe7388af5e37', time: '1m24s' },
+      { txid: '92a4c33f03724905e32ceaba4fc517114b5e3a0d93e46942ba236ccec0eadbfd', time: '1m34s' },
+      { txid: '5b769201439baaffb095d8d92e494f1831f7b507f36710fbe1fb43761dfc6679', time: '1m44s' },
+      { txid: '40f841c3a2cb4505fbf4ce8559afad7cb4db71c712bf52d22beea5b30590a4b2', time: '54s' },
+      { txid: '08a69f876323f6e3db720a05b8b998b36f260cf4684d7f7339fa9ca7b3c9302c', time: '1m4s' },
+      { txid: '65ebd01e19fa7c0e454eb029c979d3870dfc3a256c3e4678891399927c50bc8f', time: '1m14s' },
+    ],
+    sweep: [
+      { txid: '10bcb88c5a14f93dcaf0c982ca7fa8fa7601c5a1bda867a45fa9dd8be8a8ff52', vout: 0, sats: 21000 },
+      { txid: 'd8053da1306627baba4545269188f095f03838273a933289db91113601957eeb', vout: 0, sats: 21000 },
+      { txid: 'c4cd8111d1b4aeaae0a6e66166615f3ce5685024758765db376894b10ab5d434', vout: 0, sats: 21000 },
+      { txid: '24982e308f69a66953d398abe8e9bdb439ffeed514d214636e02a5dcecd72f07', vout: 0, sats: 21000 },
+      { txid: '053778271d18a06304c9f74a6bee6f09af8a9a8ae44b406ea74c0175fdd05859', vout: 0, sats: 21000 },
+      { txid: 'ff3975a31f9ebc14421f820c45456badfd7a406d91d626efe68b4f0888c62a6d', vout: 0, sats: 21000 },
+      { txid: 'e6303ba99cade31233cb0f33fd71b115244cd0589ab4b006fb693464c2103a7d', vout: 0, sats: 21000 },
+      { txid: '1fcd5bf356e04b33b10428fe1675c84e122c9af7029f517b6a8b170b93fa14a7', vout: 0, sats: 21000 },
+      { txid: '325ce2f88a2aa5642dda45274ce408243acfa908cd393356ce0bbc766be2d62a', vout: 0, sats: 21000 },
+      { txid: '93b683e9dc89b153349c13aea49f79dc721020b2516794ecde9222eba9597ccc', vout: 0, sats: 21000 },
+    ],
+  }
+
+  const getCredentials = () => JSON.parse(window.sessionStorage.getItem('credentials'))
+
+  const setCredentials = (c) => window.sessionStorage.setItem('credentials', JSON.stringify(c))
+
+  const authHeaders = (credentials) => {
+    const { username, password } = credentials ?? getCredentials()
+    if (!username || !password) throw 'Missing credentials'
+    return {
+      Authorization: 'Basic ' + btoa(`${username}:${password}`),
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    }
+  }
+
+  const getApi = async (path, credentials) => {
+    const { origin } = window.location
+    const url = origin + path
+    return await fetch(url, {
+      headers: authHeaders(credentials),
+    })
+  }
+
+  const redirect = (path) => {
+    const { origin } = window.location
+    window.location.replace(origin + path)
+  }
+</script>

@@ -1,0 +1,44 @@
+<template id="nextSweep">
+  <div class="flex justify-between">
+    <p>Round ID:</p>
+    <p class="roundId"></p>
+  </div>
+  <div class="flex justify-between">
+    <p>When:</p>
+    <p class="when"></p>
+  </div>
+  <details>
+    <summary>Outputs</summary>
+    <div class="outputs"></div>
+  </details>
+</template>
+
+<template id="sweepOutput">
+  <div class="flex justify-between mt-2">
+    <p class="outpoint"></p>
+    <p class="satvalue"></p>
+  </div>
+</template>
+
+<div class="border border-gray-300 w-full p-4">
+  <h2 class="text-lg font-semibold mb-4">Next Sweep</h2>
+  <div class="flex flex-col gap-2" id="nextSweepContainer"></div>
+</div>
+
+<script>
+  window.addEventListener('load', (event) => {
+    const container = document.querySelector('#nextSweepContainer')
+    const sweepOutput = document.querySelector('#sweepOutput')
+    const clone = document.querySelector('#nextSweep').content.cloneNode(true)
+    clone.querySelector('.roundId').innerText = 'round id'
+    clone.querySelector('.when').innerText = 'soon'
+    mockData.sweep.map(({ txid, vout, sats }) => {
+      const c = document.querySelector('#sweepOutput').content.cloneNode(true)
+      c.querySelector('.outpoint').innerText = prettyLongText(`${txid}:${vout}`)
+      c.querySelector('.satvalue').innerText = prettyNumber(sats)
+      clone.querySelector('.outputs').appendChild(c)
+    })
+
+    container.appendChild(clone)
+  })
+</script>

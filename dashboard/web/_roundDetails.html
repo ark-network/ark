@@ -1,0 +1,57 @@
+<template id="roundDetails">
+  <div class="flex justify-between">
+    <p>Round ID:</p>
+    <p class="roundId"></p>
+  </div>
+  <div class="flex justify-between">
+    <p>TX ID:</p>
+    <p class="txId bg-yellow-100"></p>
+  </div>
+  <div class="flex justify-between">
+    <p>Forfeited amount:</p>
+    <p class="forfeitedAmount"></p>
+  </div>
+  <div class="flex justify-between">
+    <p>VTXOs amount:</p>
+    <p class="vtxosAmount"></p>
+  </div>
+  <div class="flex justify-between">
+    <p>Exit amount</p>
+    <p class="exitAmount"></p>
+  </div>
+  <div class="flex justify-between">
+    <p>Fees amount:</p>
+    <p class="feesAmount"></p>
+  </div>
+  <details class="inputVtxos">
+    <summary>Input VTXOs</summary>
+    aaa
+  </details>
+  <details class="outputVtxos">
+    <summary>Output VTXOs</summary>
+  </details>
+  <details class="exitAddresses">
+    <summary>Exit Addresses</summary>
+  </details>
+</template>
+
+<div class="border border-gray-300 w-full p-4">
+  <h2 class="text-lg font-semibold mb-4">Round details</h2>
+  <div class="flex flex-col gap-2" id="roundDetailsContainer"></div>
+</div>
+
+<script>
+  window.addEventListener('load', () => {
+    const container = document.querySelector('#roundDetailsContainer')
+    const template = document.querySelector('#roundDetails')
+    const clone = template.content.cloneNode(true)
+    const txid = window.location.search ? window.location.search.slice(1) : mockData.rounds[0].txid
+    clone.querySelector('.roundId').innerText = prettyLongText('d66376d8-0d16-435b-b3ec-960e491b3924')
+    clone.querySelector('.txId').innerText = prettyLongText(txid)
+    clone.querySelector('.forfeitedAmount').innerText = '1'
+    clone.querySelector('.vtxosAmount').innerText = '2'
+    clone.querySelector('.exitAmount').innerText = '3'
+    clone.querySelector('.feesAmount').innerText = '0.1'
+    container.appendChild(clone)
+  })
+</script>

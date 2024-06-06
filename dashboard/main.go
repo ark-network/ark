@@ -31,5 +31,9 @@ func main() {
 		c.HTML(http.StatusOK, "home.html", gin.H{})
 	})
 
+	router.GET("/login", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "login.html", gin.H{})
+	})
+
 	router.Run(":8080")
 }

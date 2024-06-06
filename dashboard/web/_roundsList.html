@@ -1,0 +1,26 @@
+<template id="roundLine">
+  <div class="flex justify-between">
+    <p class="txid"></p>
+    <p class="time"></p>
+  </div>
+</template>
+
+<div class="border border-gray-300 h-full w-full p-4">
+  <h2 class="text-lg font-semibold mb-4">Last rounds</h2>
+  <div class="flex flex-col gap-2" id="roundsListContainer"></div>
+</div>
+
+<script>
+  window.addEventListener('load', () => {
+    const txid = window.location.search?.slice(1)
+    const container = document.querySelector('#roundsListContainer')
+    const roundLine = document.querySelector('#roundLine')
+    mockData.rounds.forEach((line) => {
+      const clone = roundLine.content.cloneNode(true)
+      if (txid && txid === line.txid) clone.querySelector('div').classList.add('bg-yellow-100')
+      clone.querySelector('.txid').innerHTML = `<a href="/?${line.txid}">${prettyLongText(line.txid)}</a>`
+      clone.querySelector('.time').innerText = line.time
+      container.appendChild(clone)
+    })
+  })
+</script>
