@@ -29,6 +29,7 @@
     const week = 7 * day
     const now = Math.floor(Date.now() / 1000)
     let delta = Math.abs(unixtime - now)
+    if (delta === 0) return 'now'
     let text = ''
     if (delta > week) {
       text += `${Math.floor(delta / week)}w`
