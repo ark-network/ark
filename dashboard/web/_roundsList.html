@@ -8,6 +8,7 @@
 <div class="border border-gray-300 h-full w-full p-4">
   <h2 class="text-lg font-semibold mb-4">Last rounds</h2>
   <div class="flex flex-col gap-2" id="roundsListContainer"></div>
+  {{template "_timeSelect.html" .}}
 </div>
 
 <script>
@@ -20,7 +21,7 @@
     mockData.rounds.forEach(({ txid }) => {
       const clone = roundLine.content.cloneNode(true)
       if (hash && hash === txid) clone.querySelector('div').classList.add('bg-yellow-100')
-      clone.querySelector('.txid').innerHTML = `<a href="/?${txid}">${prettyLongText(txid)}</a>`
+      clone.querySelector('.txid').innerHTML = prettyHash(txid)
       clone.querySelector('.time').innerText = prettyTime(now)
       container.appendChild(clone)
       now += delta

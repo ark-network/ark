@@ -1,0 +1,34 @@
+<div class="bg-gray-100 border border-gray-300 mt-10 p-4">
+  <div class="flex justify-between items-center">
+    <div>
+      <p class="text-sm">Time ago</p>
+      <input id="selectTime" class="border border-gray-300 p-2" />
+      <p class="text-gray-400 text-xs">Ex: now, 1w, 1h21m42s</p>
+    </div>
+    <p class="text-sm">or</p>
+    <div>
+      <p class="text-sm">Unix time</p>
+      <input id="selectUnix" class="border border-gray-300 p-2" />
+      <p class="text-gray-400 text-xs">Ex: 1717768339</p>
+    </div>
+    <div>
+      <button id="selectSearch" class="bg-black text-white rounded-md p-2">Search</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  window.addEventListener('load', () => {
+    document.querySelector('#selectTime').addEventListener('keyup', (e) => {
+      const val = e.target.value
+      document.querySelector('#selectUnix').value = val === 'now' || val.match(/(\d+\w)/g) ? toUnixtime(val) : ''
+    })
+    document.querySelector('#selectUnix').addEventListener('keyup', (e) => {
+      const val = e.target.value
+      document.querySelector('#selectTime').value = val && val.length === 10 && !isNaN(val) ? prettyTime(val) : ''
+    })
+    document.querySelector('#selectSearch').addEventListener('click', () => {
+      return redirect(`/?${document.querySelector('#selectUnix').value}`)
+    })
+  })
+</script>

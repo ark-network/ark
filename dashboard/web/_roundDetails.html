@@ -54,14 +54,14 @@
     const container = document.querySelector('#roundDetailsContainer')
     const template = document.querySelector('#roundDetails')
     const clone = template.content.cloneNode(true)
-    const txid = window.location.search ? window.location.search.slice(1) : mockData.rounds[0].txid
+    const txid = window.location.search?.length > 11 ? window.location.search.slice(1) : mockData.rounds[0].txid
     const forfeitAmount = mockData.roundDetails.inputs.reduce((prev, { sats }) => prev + sats, 0)
     const vtxosAmount = mockData.roundDetails.outputs.reduce((prev, { sats }) => prev + sats, 0)
     const exitAmount = mockData.roundDetails.addresses.reduce((prev, { sats }) => prev + sats, 0)
     const feesAmount = forfeitAmount - vtxosAmount - exitAmount
 
     clone.querySelector('#detailsRoundId').innerText = prettyLongText('d66376d8-0d16-435b-b3ec-960e491b3924')
-    clone.querySelector('#detailsTxId').innerText = prettyLongText(txid)
+    clone.querySelector('#detailsTxId').innerHTML = prettyHash(txid)
     clone.querySelector('#detailsForfeitedAmount').innerHTML = prettySats(forfeitAmount)
     clone.querySelector('#detailsVtxosAmount').innerHTML = prettySats(vtxosAmount)
     clone.querySelector('#detailsExitAmount').innerHTML = prettySats(exitAmount)
