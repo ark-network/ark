@@ -36,7 +36,11 @@
     const sweepOutput = document.querySelector('#sweepOutput')
     const clone = document.querySelector('#nextSweep').content.cloneNode(true)
     clone.querySelector('#sweepRoundId').innerHTML = prettyHash(mockData.sweep.roundId)
-    clone.querySelector('#sweepWhen').innerText = 'in ' + prettyTime(mockData.sweep.timestamp)
+    clone.querySelector('#sweepWhen').innerHTML =
+      '<span class="text-gray-400">in</span> ' +
+      prettyTime(mockData.sweep.timestamp) +
+      ' <span class="text-gray-400">or</span> ' +
+      mockData.sweep.timestamp
     mockData.sweep.outputs.map(({ txid, vout, sats }) => {
       amount += sats
       const c = document.querySelector('#sweepOutput').content.cloneNode(true)

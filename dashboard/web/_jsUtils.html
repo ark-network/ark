@@ -4,10 +4,7 @@
     return `${text.substring(0, showChars)}...${text.substring(text.length - showChars, text.length)}`
   }
 
-  const prettyHash = (hash) => {
-    const text = prettyLongText(hash)
-    return `<a href="/?${hash}" class="underline">${text}</a>`
-  }
+  const prettyHash = (hash) => `<a href="/?${hash}" class="underline">${prettyLongText(hash)}</a>`
 
   const prettyNumber = (num, maximumFractionDigits = 8) => {
     if (!num) return '0'
@@ -53,10 +50,11 @@
     return text
   }
 
+  const prettyTimeLink = (unixtime) => `<a href="/?${unixtime}" class="underline">${prettyTime(unixtime)}</a>`
+
   const toUnixtime = (text) => {
     const now = Math.floor(Date.now() / 1000)
     if (text === 'now') return now
-
     const toSeconds = (letter) => {
       if (letter === 's') return 1
       if (letter === 'm') return 60
@@ -65,14 +63,12 @@
       if (letter === 'w') return 60 * 60 * 24 * 7
       return 0
     }
-
     let delta = 0
     const match = text.match(/(\d+\w)/g)
     match.map((label) => {
       const [all, num, letter] = label.match(/(\d+)(\w)/)
       delta += Number(num) * toSeconds(letter)
     })
-
     return now - delta
   }
 

@@ -7,14 +7,14 @@
 
 <div class="border border-gray-300 h-full w-full p-4">
   <h2 class="text-lg font-semibold mb-4">Last rounds</h2>
-  <div class="flex flex-col gap-2" id="roundsListContainer"></div>
   {{template "_timeSelect.html" .}}
+  <div class="flex flex-col gap-2" id="roundsListContainer"></div>
 </div>
 
 <script>
   window.addEventListener('load', () => {
     let delta = 10 // 10 seconds round time
-    let now = Math.floor(Date.now() / 1000)
+    let time = Math.floor(Date.now() / 1000)
     const hash = window.location.search?.slice(1)
     const container = document.querySelector('#roundsListContainer')
     const roundLine = document.querySelector('#roundLine')
@@ -22,9 +22,9 @@
       const clone = roundLine.content.cloneNode(true)
       if (hash && hash === txid) clone.querySelector('div').classList.add('bg-yellow-100')
       clone.querySelector('.txid').innerHTML = prettyHash(txid)
-      clone.querySelector('.time').innerText = prettyTime(now)
+      clone.querySelector('.time').innerHTML = prettyTimeLink(time)
       container.appendChild(clone)
-      now += delta
+      time += delta
     })
   })
 </script>
