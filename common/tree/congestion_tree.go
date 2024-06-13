@@ -1,9 +1,7 @@
 package tree
 
 import (
-	"encoding/json"
 	"errors"
-	"io"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/vulpemventures/go-elements/psetv2"
@@ -25,15 +23,6 @@ var (
 // CongestionTree is reprensented as a matrix of TreeNode struct
 // the first level of the matrix is the root of the tree
 type CongestionTree [][]Node
-
-func (c *CongestionTree) Decode(r io.Reader) error {
-	return json.NewDecoder(r).Decode(c)
-}
-
-// encode to json
-func (c CongestionTree) Encode(w io.Writer) error {
-	return json.NewEncoder(w).Encode(c)
-}
 
 // Root returns the root node of the congestion tree
 func (c CongestionTree) Root() (Node, error) {

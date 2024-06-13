@@ -1,12 +1,10 @@
 package sqlitedb
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
@@ -43,14 +41,40 @@ CREATE TABLE IF NOT EXISTS round (
 	stage_code INTEGER NOT NULL,
 	txid TEXT NOT NULL,
 	unsigned_tx TEXT NOT NULL,
-	congestion_tree TEXT NOT NULL,
-	forfeit_txs TEXT NOT NULL,
-	connectors TEXT NOT NULL,
 	connector_address TEXT NOT NULL,
 	dust_amount INTEGER NOT NULL,
 	version INTEGER NOT NULL,
 	swept BOOLEAN NOT NULL
 );
+`
+
+	createTransactionTable = `
+CREATE TABLE IF NOT EXISTS tx (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	tx TEXT NOT NULL,
+	round_id TEXT NOT NULL,
+	type TEXT NOT NULL,
+	position INTEGER NOT NULL,
+	txid TEXT,
+	tree_level INTEGER,
+	parent_txid TEXT,
+	is_leaf BOOLEAN,
+	FOREIGN KEY (round_id) REFERENCES round(id)
+);
+`
+	upsertTransaction = `
+INSERT INTO tx (
+	tx, round_id, type, position, txid, tree_level, parent_txid, is_leaf
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(id) DO UPDATE SET
+	tx = EXCLUDED.tx,
+	round_id = EXCLUDED.round_id,
+	type = EXCLUDED.type,
+	position = EXCLUDED.position,
+	txid = EXCLUDED.txid,
+	tree_level = EXCLUDED.tree_level,
+	parent_txid = EXCLUDED.parent_txid,
+	is_leaf = EXCLUDED.is_leaf;
 `
 
 	upsertRound = `
@@ -62,14 +86,11 @@ INSERT INTO round (
 	stage_code, 
 	txid, 
 	unsigned_tx, 
-	congestion_tree, 
-	forfeit_txs, 
-	connectors, 
 	connector_address, 
 	dust_amount, 
 	version, 
 	swept
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
 	starting_timestamp = EXCLUDED.starting_timestamp,
 	ending_timestamp = EXCLUDED.ending_timestamp,
@@ -78,9 +99,6 @@ ON CONFLICT(id) DO UPDATE SET
 	stage_code = EXCLUDED.stage_code,
 	txid = EXCLUDED.txid,
 	unsigned_tx = EXCLUDED.unsigned_tx,
-	congestion_tree = EXCLUDED.congestion_tree,
-	forfeit_txs = EXCLUDED.forfeit_txs,
-	connectors = EXCLUDED.connectors,
 	connector_address = EXCLUDED.connector_address,
 	dust_amount = EXCLUDED.dust_amount,
 	version = EXCLUDED.version,
@@ -104,50 +122,25 @@ ON CONFLICT(payment_id, pubkey) DO UPDATE SET
 UPDATE vtxo SET payment_id = ? WHERE txid = ? AND vout = ?
 `
 
-	selectCurrentRound = `
-SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, round.unsigned_tx, round.congestion_tree, round.forfeit_txs, round.connectors, round.connector_address, round.dust_amount, round.version, round.swept, payment.id, receiver.payment_id, receiver.pubkey, receiver.amount, receiver.onchain_address, vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.payment_id
+	selectRound = `
+SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, 
+round.unsigned_tx, round.connector_address, round.dust_amount, round.version, round.swept, payment.id, receiver.payment_id, 
+receiver.pubkey, receiver.amount, receiver.onchain_address, vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, 
+vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.payment_id, 
+tx.tx, tx.type, tx.position, tx.txid, 
+tx.tree_level, tx.parent_txid, tx.is_leaf
 FROM round 
 LEFT OUTER JOIN payment ON round.txid=payment.txid 
+LEFT OUTER JOIN tx ON round.id=tx.round_id
 LEFT OUTER JOIN receiver ON payment.id=receiver.payment_id
 LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
-WHERE round.ended = false AND round.failed = false
 `
 
-	selectRoundWithId = `
-SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, round.unsigned_tx, round.congestion_tree, round.forfeit_txs, round.connectors, round.connector_address, round.dust_amount, round.version, round.swept, payment.id, receiver.payment_id, receiver.pubkey, receiver.amount, receiver.onchain_address, vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.payment_id
-FROM round 
-LEFT OUTER JOIN payment ON round.txid=payment.txid 
-LEFT OUTER JOIN receiver ON payment.id=receiver.payment_id
-LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
-WHERE round.id = ?;
-`
-
-	selectRoundWithTxId = `
-SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, round.unsigned_tx, round.congestion_tree, round.forfeit_txs, round.connectors, round.connector_address, round.dust_amount, round.version, round.swept, payment.id, receiver.payment_id, receiver.pubkey, receiver.amount, receiver.onchain_address, vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.payment_id
-FROM round 
-LEFT OUTER JOIN payment ON round.txid=payment.txid 
-LEFT OUTER JOIN receiver ON payment.id=receiver.payment_id
-LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
-WHERE round.txid = ?;
-`
-
-	selectSweepableRounds = `
-SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, round.unsigned_tx, round.congestion_tree, round.forfeit_txs, round.connectors, round.connector_address, round.dust_amount, round.version, round.swept, payment.id, receiver.payment_id, receiver.pubkey, receiver.amount, receiver.onchain_address, vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.payment_id
-FROM round 
-LEFT OUTER JOIN payment ON round.txid=payment.txid 
-LEFT OUTER JOIN receiver ON payment.id=receiver.payment_id
-LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
-WHERE round.swept = false AND round.ended = true AND round.failed = false;
-`
-
-	selectSweptRounds = `
-SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, round.unsigned_tx, round.congestion_tree, round.forfeit_txs, round.connectors, round.connector_address, round.dust_amount, round.version, round.swept, payment.id, receiver.payment_id, receiver.pubkey, receiver.amount, receiver.onchain_address, vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.payment_id
-FROM round 
-LEFT OUTER JOIN payment ON round.txid=payment.txid 
-LEFT OUTER JOIN receiver ON payment.id=receiver.payment_id
-LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
-WHERE round.swept = true AND round.failed = false AND round.ended = true;
-`
+	selectCurrentRound    = selectRound + " WHERE round.ended = false AND round.failed = false;"
+	selectRoundWithId     = selectRound + " WHERE round.id = ?;"
+	selectRoundWithTxId   = selectRound + " WHERE round.txid = ?;"
+	selectSweepableRounds = selectRound + " WHERE round.swept = false AND round.ended = true AND round.failed = false;"
+	selectSweptRounds     = selectRound + " WHERE round.swept = true AND round.failed = false AND round.ended = true;"
 
 	selectRoundIdsInRange = `
 SELECT id FROM round WHERE starting_timestamp > ? AND starting_timestamp < ?;
@@ -169,6 +162,16 @@ type paymentRow struct {
 	id *string
 }
 
+type transactionRow struct {
+	tx         *string
+	txType     *string
+	position   *int
+	txid       *string
+	treeLevel  *int
+	parentTxid *string
+	isLeaf     *bool
+}
+
 type roundRow struct {
 	id                *string
 	startingTimestamp *int64
@@ -178,9 +181,6 @@ type roundRow struct {
 	stageCode         *domain.RoundStage
 	txid              *string
 	unsignedTx        *string
-	forfeitTxs        *string
-	congestionTree    *string
-	connectors        *string
 	connectorAddress  *string
 	dustAmount        *uint64
 	version           *uint
@@ -213,9 +213,11 @@ func newRoundRepository(db *sql.DB) (dbtypes.RoundStore, error) {
 		return nil, err
 	}
 
-	return &roundRepository{
-		db: db,
-	}, nil
+	if _, err := db.Exec(createTransactionTable); err != nil {
+		return nil, err
+	}
+
+	return &roundRepository{db}, nil
 }
 
 func (r *roundRepository) Close() {
@@ -278,21 +280,7 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 
 	defer stmt.Close()
 
-	var congestionTreeJSON string
-
-	if round.CongestionTree != nil {
-		writer := new(bytes.Buffer)
-
-		if err := round.CongestionTree.Encode(writer); err != nil {
-			return err
-		}
-
-		congestionTreeJSON = writer.String()
-	}
-
-	connectorsCSV := encodeStrings(round.Connectors)
-	forfeitsCSV := encodeStrings(round.ForfeitTxs)
-
+	// insert round row
 	_, err = stmt.Exec(
 		round.Id,
 		round.StartingTimestamp,
@@ -302,9 +290,6 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 		round.Stage.Code,
 		round.Txid,
 		round.UnsignedTx,
-		congestionTreeJSON,
-		forfeitsCSV,
-		connectorsCSV,
 		round.ConnectorAddress,
 		round.DustAmount,
 		round.Version,
@@ -314,41 +299,74 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 		return err
 	}
 
-	if round.Payments != nil {
+	// insert transactions rows
+	if len(round.ForfeitTxs) > 0 || len(round.Connectors) > 0 || len(round.CongestionTree) > 0 {
+		stmt, err = tx.Prepare(upsertTransaction)
+		if err != nil {
+			return err
+		}
+
+		defer stmt.Close()
+
+		for pos, tx := range round.ForfeitTxs {
+			_, err := stmt.Exec(tx, round.Id, "forfeit", pos, nil, nil, nil, nil)
+			if err != nil {
+				return err
+			}
+		}
+
+		for pos, tx := range round.Connectors {
+			_, err := stmt.Exec(tx, round.Id, "connector", pos, nil, nil, nil, nil)
+			if err != nil {
+				return err
+			}
+		}
+
+		for level, levelTxs := range round.CongestionTree {
+			for pos, tx := range levelTxs {
+				_, err := stmt.Exec(tx.Tx, round.Id, "tree", pos, tx.Txid, level, tx.ParentTxid, tx.Leaf)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	// insert payments rows
+	if len(round.Payments) > 0 {
+		stmtUpsertPayment, err := tx.Prepare(upsertPayment)
+		if err != nil {
+			return err
+		}
+		defer stmtUpsertPayment.Close()
+
 		for _, payment := range round.Payments {
-			stmt, err := tx.Prepare(upsertPayment)
+			_, err = stmtUpsertPayment.Exec(payment.Id, round.Txid)
 			if err != nil {
 				return err
 			}
 
-			defer stmt.Close()
-
-			_, err = stmt.Exec(payment.Id, round.Txid)
+			stmtUpsertReceiver, err := tx.Prepare(upsertReceiver)
 			if err != nil {
 				return err
 			}
-
-			stmt, err = tx.Prepare(upsertReceiver)
-			if err != nil {
-				return err
-			}
+			defer stmtUpsertReceiver.Close()
 
 			for _, receiver := range payment.Receivers {
-				_, err := stmt.Exec(payment.Id, receiver.Pubkey, receiver.Amount, receiver.OnchainAddress)
+				_, err := stmtUpsertReceiver.Exec(payment.Id, receiver.Pubkey, receiver.Amount, receiver.OnchainAddress)
 				if err != nil {
 					return err
 				}
 			}
 
-			stmt, err = tx.Prepare(updateVtxoPaymentId)
+			stmtUpdatePaymentId, err := tx.Prepare(updateVtxoPaymentId)
 			if err != nil {
 				return err
 			}
-
-			defer stmt.Close()
+			defer stmtUpdatePaymentId.Close()
 
 			for _, input := range payment.Inputs {
-				_, err := stmt.Exec(payment.Id, input.Txid, input.VOut)
+				_, err := stmtUpdatePaymentId.Exec(payment.Id, input.Txid, input.VOut)
 				if err != nil {
 					return err
 				}
@@ -483,14 +501,6 @@ func (r *roundRepository) GetSweptRounds(ctx context.Context) ([]domain.Round, e
 	return res, nil
 }
 
-func encodeStrings(strs []string) string {
-	return strings.Join(strs, ",")
-}
-
-func decodeStrings(str string) []string {
-	return strings.Split(str, ",")
-}
-
 func rowToReceiver(row receiverRow) domain.Receiver {
 	return domain.Receiver{
 		Pubkey:         *row.pubkey,
@@ -509,6 +519,7 @@ func readRoundRows(rows *sql.Rows) ([]*domain.Round, error) {
 		var paymentRow paymentRow
 		var receiverRow receiverRow
 		var vtxoRow vtxoRow
+		var transactionRow transactionRow
 
 		if err := rows.Scan(
 			&roundRow.id,
@@ -519,9 +530,6 @@ func readRoundRows(rows *sql.Rows) ([]*domain.Round, error) {
 			&roundRow.stageCode,
 			&roundRow.txid,
 			&roundRow.unsignedTx,
-			&roundRow.congestionTree,
-			&roundRow.forfeitTxs,
-			&roundRow.connectors,
 			&roundRow.connectorAddress,
 			&roundRow.dustAmount,
 			&roundRow.version,
@@ -542,6 +550,13 @@ func readRoundRows(rows *sql.Rows) ([]*domain.Round, error) {
 			&vtxoRow.swept,
 			&vtxoRow.expireAt,
 			&vtxoRow.paymentID,
+			&transactionRow.tx,
+			&transactionRow.txType,
+			&transactionRow.position,
+			&transactionRow.txid,
+			&transactionRow.treeLevel,
+			&transactionRow.parentTxid,
+			&transactionRow.isLeaf,
 		); err != nil {
 			return nil, err
 		}
@@ -555,10 +570,6 @@ func readRoundRows(rows *sql.Rows) ([]*domain.Round, error) {
 
 		round, ok = rounds[*roundRow.id]
 		if !ok {
-			var congestionTree tree.CongestionTree
-
-			_ = congestionTree.Decode(strings.NewReader(*roundRow.congestionTree))
-
 			round = &domain.Round{
 				Id:                *roundRow.id,
 				StartingTimestamp: *roundRow.startingTimestamp,
@@ -570,9 +581,6 @@ func readRoundRows(rows *sql.Rows) ([]*domain.Round, error) {
 				},
 				Txid:             *roundRow.txid,
 				UnsignedTx:       *roundRow.unsignedTx,
-				CongestionTree:   congestionTree,
-				ForfeitTxs:       decodeStrings(*roundRow.forfeitTxs),
-				Connectors:       decodeStrings(*roundRow.connectors),
 				ConnectorAddress: *roundRow.connectorAddress,
 				DustAmount:       *roundRow.dustAmount,
 				Version:          *roundRow.version,
@@ -644,6 +652,30 @@ func readRoundRows(rows *sql.Rows) ([]*domain.Round, error) {
 			}
 		}
 
+		if transactionRow.tx != nil {
+			position := *transactionRow.position
+			switch *transactionRow.txType {
+			case "forfeit":
+				round.ForfeitTxs = extendArray(round.ForfeitTxs, position)
+				round.ForfeitTxs[position] = *transactionRow.tx
+			case "connector":
+				round.Connectors = extendArray(round.Connectors, position)
+				round.Connectors[position] = *transactionRow.tx
+			case "tree":
+				level := *transactionRow.treeLevel
+				round.CongestionTree = extendArray(round.CongestionTree, level)
+				round.CongestionTree[level] = extendArray(round.CongestionTree[level], position)
+				if round.CongestionTree[level][position] == (tree.Node{}) {
+					round.CongestionTree[level][position] = tree.Node{
+						Tx:         *transactionRow.tx,
+						Txid:       *transactionRow.txid,
+						ParentTxid: *transactionRow.parentTxid,
+						Leaf:       *transactionRow.isLeaf,
+					}
+				}
+			}
+		}
+
 		rounds[*roundRow.id] = round
 	}
 
@@ -654,4 +686,16 @@ func readRoundRows(rows *sql.Rows) ([]*domain.Round, error) {
 	}
 
 	return result, nil
+}
+
+func extendArray[T any](arr []T, position int) []T {
+	if arr == nil {
+		return make([]T, position+1)
+	}
+
+	if len(arr) <= position {
+		return append(arr, make([]T, position-len(arr)+1)...)
+	}
+
+	return arr
 }
