@@ -26,5 +26,8 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open db: %w", err)
 	}
+
+	db.SetMaxOpenConns(1) // prevent concurrent writes
+
 	return db, nil
 }
