@@ -9,10 +9,10 @@ import (
 
 // Node is a struct embedding the transaction and the parent txid of a congestion tree node
 type Node struct {
-	Txid       string `json:"txid"`
-	Tx         string `json:"tx"`
-	ParentTxid string `json:"parent_txid"`
-	Leaf       bool   `json:"leaf"`
+	Txid       string
+	Tx         string
+	ParentTxid string
+	Leaf       bool
 }
 
 var (
