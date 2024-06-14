@@ -267,10 +267,13 @@ func (s *service) Onboard(
 
 	log.Debugf("broadcasted boarding tx %s", txid)
 
-	s.onboardingCh <- onboarding{
-		tx:             boardingTx,
-		congestionTree: congestionTree,
-		userPubkey:     userPubkey,
+	sharedOutputScript := hex.EncodeToString(extracted.Outputs[0].Script)
+	if _, ok := s.trustedOnboardingScripts[sharedOutputScript]; !ok {
+		s.onboardingCh <- onboarding{
+			tx:             boardingTx,
+			congestionTree: congestionTree,
+			userPubkey:     userPubkey,
+		}
 	}
 
 	return nil

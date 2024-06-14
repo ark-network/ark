@@ -27,9 +27,18 @@ CREATE TABLE IF NOT EXISTS vtxo (
 );
 `
 
-	insertVtxos = `
+	upsertVtxos = `
 INSERT INTO vtxo (txid, vout, pubkey, amount, pool_tx, spent_by, spent, redeemed, swept, expire_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(txid) DO UPDATE SET
+	vout = excluded.vout,
+	pubkey = excluded.pubkey,
+	amount = excluded.amount,
+	pool_tx = excluded.pool_tx,
+	spent_by = excluded.spent_by,
+	spent = excluded.spent,
+	redeemed = excluded.redeemed,
+	swept = excluded.swept,
+	expire_at = excluded.expire_at;
 `
 
 	selectSweepableVtxos = `
@@ -115,7 +124,7 @@ func (v *vxtoRepository) AddVtxos(ctx context.Context, vtxos []domain.Vtxo) erro
 		return err
 	}
 
-	stmt, err := tx.Prepare(insertVtxos)
+	stmt, err := tx.Prepare(upsertVtxos)
 	if err != nil {
 		return err
 	}
