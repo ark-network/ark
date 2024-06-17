@@ -236,6 +236,18 @@ func (r *roundRepository) Close() {
 	_ = r.db.Close()
 }
 
+func extendArray[T any](arr []T, position int) []T {
+	if arr == nil {
+		return make([]T, position+1)
+	}
+
+	if len(arr) <= position {
+		return append(arr, make([]T, position-len(arr)+1)...)
+	}
+
+	return arr
+}
+
 func (r *roundRepository) GetRoundsIds(ctx context.Context, startedAfter int64, startedBefore int64) ([]string, error) {
 	var rows *sql.Rows
 
