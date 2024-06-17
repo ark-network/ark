@@ -13,7 +13,6 @@ import (
 var (
 	eventStoreTypes = map[string]func(...interface{}) (dbtypes.EventStore, error){
 		"badger": badgerdb.NewRoundEventRepository,
-		"sqlite": badgerdb.NewRoundEventRepository,
 	}
 	roundStoreTypes = map[string]func(...interface{}) (dbtypes.RoundStore, error){
 		"badger": badgerdb.NewRoundRepository,
