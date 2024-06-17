@@ -1,7 +1,6 @@
 package appconfig
 
 import (
-	"database/sql"
 	"fmt"
 	"strings"
 
@@ -9,7 +8,6 @@ import (
 	"github.com/ark-network/ark/internal/core/application"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/ark-network/ark/internal/infrastructure/db"
-	sqlitedb "github.com/ark-network/ark/internal/infrastructure/db/sqlite"
 	oceanwallet "github.com/ark-network/ark/internal/infrastructure/ocean-wallet"
 	scheduler "github.com/ark-network/ark/internal/infrastructure/scheduler/gocron"
 	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenant"
@@ -20,6 +18,9 @@ import (
 const minAllowedSequence = 512
 
 var (
+	supportedEventDbs = supportedType{
+		"badger": {},
+	}
 	supportedDbs = supportedType{
 		"badger": {},
 		"sqlite": {},
@@ -37,7 +38,9 @@ var (
 
 type Config struct {
 	DbType                string
+	EventDbType           string
 	DbDir                 string
+	EventDbDir            string
 	RoundInterval         int64
 	Network               common.Network
 	SchedulerType         string
@@ -58,6 +61,9 @@ type Config struct {
 }
 
 func (c *Config) Validate() error {
+	if !supportedEventDbs.supports(c.EventDbType) {
+		return fmt.Errorf("event db type not supported, please select one of: %s", supportedEventDbs)
+	}
 	if !supportedDbs.supports(c.DbType) {
 		return fmt.Errorf("db type not supported, please select one of: %s", supportedDbs)
 	}
@@ -146,37 +152,38 @@ func (c *Config) AdminService() application.AdminService {
 func (c *Config) repoManager() error {
 	var svc ports.RepoManager
 	var err error
+	var eventStoreConfig []interface{}
+	var roundStoreConfig []interface{}
+	var vtxoStoreConfig []interface{}
+	logger := log.New()
+
+	switch c.EventDbType {
+	case "badger":
+		eventStoreConfig = []interface{}{c.EventDbDir, logger}
+	default:
+		return fmt.Errorf("unknown event db type")
+	}
+
 	switch c.DbType {
 	case "badger":
-		logger := log.New()
-		svc, err = db.NewService(db.ServiceConfig{
-			EventStoreType: c.DbType,
-			RoundStoreType: c.DbType,
-			VtxoStoreType:  c.DbType,
-
-			EventStoreConfig: []interface{}{c.DbDir, logger},
-			RoundStoreConfig: []interface{}{c.DbDir, logger},
-			VtxoStoreConfig:  []interface{}{c.DbDir, logger},
-		})
+		roundStoreConfig = []interface{}{c.DbDir, logger}
+		vtxoStoreConfig = []interface{}{c.DbDir, logger}
 	case "sqlite":
-		var database *sql.DB
-		database, err = sqlitedb.OpenDB(c.DbDir + "/sqlite.db")
-		if err != nil {
-			return err
-		}
-
-		svc, err = db.NewService(db.ServiceConfig{
-			EventStoreType: c.DbType,
-			RoundStoreType: c.DbType,
-			VtxoStoreType:  c.DbType,
-
-			EventStoreConfig: []interface{}{c.DbDir, log.New()},
-			RoundStoreConfig: []interface{}{database},
-			VtxoStoreConfig:  []interface{}{database},
-		})
+		roundStoreConfig = []interface{}{c.DbDir}
+		vtxoStoreConfig = []interface{}{c.DbDir}
 	default:
 		return fmt.Errorf("unknown db type")
 	}
+
+	svc, err = db.NewService(db.ServiceConfig{
+		EventStoreType: c.EventDbType,
+		RoundStoreType: c.DbType,
+		VtxoStoreType:  c.DbType,
+
+		EventStoreConfig: eventStoreConfig,
+		RoundStoreConfig: roundStoreConfig,
+		VtxoStoreConfig:  vtxoStoreConfig,
+	})
 	if err != nil {
 		return err
 	}

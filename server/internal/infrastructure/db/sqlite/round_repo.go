@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"path/filepath"
 
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
@@ -26,8 +27,8 @@ CREATE TABLE IF NOT EXISTS receiver (
 	createPaymentTable = `
 CREATE TABLE IF NOT EXISTS payment (
 	id TEXT PRIMARY KEY,
-	txid TEXT NOT NULL,
-	FOREIGN KEY (txid) REFERENCES round(txid)
+	round_id TEXT NOT NULL,
+	FOREIGN KEY (round_id) REFERENCES round(id)
 );
 `
 
@@ -106,8 +107,8 @@ ON CONFLICT(id) DO UPDATE SET
 `
 
 	upsertPayment = `
-INSERT INTO payment (id, txid) VALUES (?, ?) 
-ON CONFLICT(id) DO UPDATE SET txid = EXCLUDED.txid;
+INSERT INTO payment (id, round_id) VALUES (?, ?) 
+ON CONFLICT(id) DO UPDATE SET round_id = EXCLUDED.round_id;
 `
 
 	upsertReceiver = `
@@ -130,7 +131,7 @@ vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_
 tx.tx, tx.type, tx.position, tx.txid, 
 tx.tree_level, tx.parent_txid, tx.is_leaf
 FROM round 
-LEFT OUTER JOIN payment ON round.txid=payment.txid 
+LEFT OUTER JOIN payment ON round.id=payment.round_id 
 LEFT OUTER JOIN tx ON round.id=tx.round_id
 LEFT OUTER JOIN receiver ON payment.id=receiver.payment_id
 LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
@@ -149,6 +150,8 @@ SELECT id FROM round WHERE starting_timestamp > ? AND starting_timestamp < ?;
 	selectRoundIds = `
 SELECT id FROM round;
 `
+
+	dbStoreFile = "sqlite.db"
 )
 
 type receiverRow struct {
@@ -191,10 +194,19 @@ type roundRepository struct {
 	db *sql.DB
 }
 
-func NewRoundRepository(args ...interface{}) (dbtypes.RoundStore, error) {
-	db, ok := args[0].(*sql.DB)
+func NewRoundRepository(config ...interface{}) (dbtypes.RoundStore, error) {
+	if len(config) != 1 {
+		return nil, fmt.Errorf("invalid config")
+	}
+	baseDir, ok := config[0].(string)
 	if !ok {
-		return nil, fmt.Errorf("cannot create new SQLite Round repository: invalid args")
+		return nil, fmt.Errorf("invalid base directory")
+	}
+
+	dir := filepath.Join(baseDir, dbStoreFile)
+	db, err := createDb(dir)
+	if err != nil {
+		return nil, err
 	}
 
 	return newRoundRepository(db)
@@ -341,7 +353,7 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 		defer stmtUpsertPayment.Close()
 
 		for _, payment := range round.Payments {
-			_, err = stmtUpsertPayment.Exec(payment.Id, round.Txid)
+			_, err = stmtUpsertPayment.Exec(payment.Id, round.Id)
 			if err != nil {
 				return err
 			}
@@ -686,16 +698,4 @@ func readRoundRows(rows *sql.Rows) ([]*domain.Round, error) {
 	}
 
 	return result, nil
-}
-
-func extendArray[T any](arr []T, position int) []T {
-	if arr == nil {
-		return make([]T, position+1)
-	}
-
-	if len(arr) <= position {
-		return append(arr, make([]T, position-len(arr)+1)...)
-	}
-
-	return arr
 }

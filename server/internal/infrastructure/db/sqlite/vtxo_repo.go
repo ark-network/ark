@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"path/filepath"
 
 	"github.com/ark-network/ark/internal/core/domain"
 	dbtypes "github.com/ark-network/ark/internal/infrastructure/db/types"
@@ -96,10 +97,19 @@ type vxtoRepository struct {
 	db *sql.DB
 }
 
-func NewVtxoRepository(args ...interface{}) (dbtypes.VtxoStore, error) {
-	db, ok := args[0].(*sql.DB)
+func NewVtxoRepository(config ...interface{}) (dbtypes.VtxoStore, error) {
+	if len(config) != 1 {
+		return nil, fmt.Errorf("invalid config")
+	}
+	baseDir, ok := config[0].(string)
 	if !ok {
-		return nil, fmt.Errorf("cannot create new SQLite Vtxo repository: invalid args")
+		return nil, fmt.Errorf("invalid base directory")
+	}
+
+	dir := filepath.Join(baseDir, dbStoreFile)
+	db, err := createDb(dir)
+	if err != nil {
+		return nil, err
 	}
 
 	return newVtxoRepository(db)

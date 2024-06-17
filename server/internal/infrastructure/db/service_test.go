@@ -14,7 +14,6 @@ import (
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/ark-network/ark/internal/infrastructure/db"
-	sqlitedb "github.com/ark-network/ark/internal/infrastructure/db/sqlite"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -77,8 +76,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestService(t *testing.T) {
-	sqliteDatabase, err := sqlitedb.OpenDB("test.db")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	tests := []struct {
 		name   string
@@ -98,12 +96,12 @@ func TestService(t *testing.T) {
 		{
 			name: "repo_manager_with_sqlite_stores",
 			config: db.ServiceConfig{
-				EventStoreType:   "sqlite",
+				EventStoreType:   "badger",
 				RoundStoreType:   "sqlite",
 				VtxoStoreType:    "sqlite",
 				EventStoreConfig: []interface{}{"", nil},
-				RoundStoreConfig: []interface{}{sqliteDatabase},
-				VtxoStoreConfig:  []interface{}{sqliteDatabase},
+				RoundStoreConfig: []interface{}{dir},
+				VtxoStoreConfig:  []interface{}{dir},
 			},
 		},
 	}
