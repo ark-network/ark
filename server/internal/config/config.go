@@ -54,6 +54,7 @@ var (
 	defaultPort                  = 6000
 	defaultWalletAddr            = "localhost:18000"
 	defaultDbType                = "sqlite"
+	defaultEventDbType           = "badger"
 	defaultSchedulerType         = "gocron"
 	defaultTxBuilderType         = "covenant"
 	defaultBlockchainScannerType = "ocean"
@@ -82,6 +83,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(RoundInterval, defaultRoundInterval)
 	viper.SetDefault(RoundLifetime, defaultRoundLifetime)
 	viper.SetDefault(SchedulerType, defaultSchedulerType)
+	viper.SetDefault(EventDbType, defaultEventDbType)
 	viper.SetDefault(TxBuilderType, defaultTxBuilderType)
 	viper.SetDefault(UnilateralExitDelay, defaultUnilateralExitDelay)
 	viper.SetDefault(BlockchainScannerType, defaultBlockchainScannerType)
