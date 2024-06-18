@@ -54,7 +54,6 @@ var (
 	defaultPort                  = 6000
 	defaultWalletAddr            = "localhost:18000"
 	defaultDbType                = "sqlite"
-	defaultEventDbType           = "badger"
 	defaultSchedulerType         = "gocron"
 	defaultTxBuilderType         = "covenant"
 	defaultBlockchainScannerType = "ocean"
