@@ -35,6 +35,8 @@ run: clean
 	@echo "Running arkd in dev mode..."
 	@export ARK_WALLET_ADDR=localhost:18000; \
 	export ARK_ROUND_INTERVAL=10; \
+	export ARK_LOG_LEVEL=5; \
+	export ARK_NETWORK=regtest; \
 	go run ./cmd/arkd
 
 ## test: runs unit and component tests
