@@ -7,6 +7,8 @@ import (
 type RoundEventRepository interface {
 	Save(ctx context.Context, id string, events ...RoundEvent) (*Round, error)
 	Load(ctx context.Context, id string) (*Round, error)
+	RegisterEventsHandler(func(*Round))
+	Close()
 }
 
 type RoundRepository interface {
@@ -17,6 +19,7 @@ type RoundRepository interface {
 	GetSweepableRounds(ctx context.Context) ([]Round, error)
 	GetRoundsIds(ctx context.Context, startedAfter int64, startedBefore int64) ([]string, error)
 	GetSweptRounds(ctx context.Context) ([]Round, error)
+	Close()
 }
 
 type VtxoRepository interface {
@@ -29,4 +32,5 @@ type VtxoRepository interface {
 	GetAllVtxos(ctx context.Context, pubkey string) ([]Vtxo, []Vtxo, error)
 	GetAllSweepableVtxos(ctx context.Context) ([]Vtxo, error)
 	UpdateExpireAt(ctx context.Context, vtxos []VtxoKey, expireAt int64) error
+	Close()
 }

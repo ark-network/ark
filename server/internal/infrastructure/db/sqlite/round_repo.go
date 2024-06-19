@@ -5,11 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"path/filepath"
 
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
-	dbtypes "github.com/ark-network/ark/internal/infrastructure/db/types"
 )
 
 const (
@@ -150,8 +148,6 @@ SELECT id FROM round WHERE starting_timestamp > ? AND starting_timestamp < ?;
 	selectRoundIds = `
 SELECT id FROM round;
 `
-
-	dbStoreFile = "sqlite.db"
 )
 
 type receiverRow struct {
@@ -194,25 +190,19 @@ type roundRepository struct {
 	db *sql.DB
 }
 
-func NewRoundRepository(config ...interface{}) (dbtypes.RoundStore, error) {
+func NewRoundRepository(config ...interface{}) (domain.RoundRepository, error) {
 	if len(config) != 1 {
 		return nil, fmt.Errorf("invalid config")
 	}
-	baseDir, ok := config[0].(string)
+	db, ok := config[0].(*sql.DB)
 	if !ok {
-		return nil, fmt.Errorf("invalid base directory")
-	}
-
-	dir := filepath.Join(baseDir, dbStoreFile)
-	db, err := createDb(dir)
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot open round repository: invalid config")
 	}
 
 	return newRoundRepository(db)
 }
 
-func newRoundRepository(db *sql.DB) (dbtypes.RoundStore, error) {
+func newRoundRepository(db *sql.DB) (*roundRepository, error) {
 	if _, err := db.Exec(createRoundTable); err != nil {
 		return nil, err
 	}
@@ -234,18 +224,6 @@ func newRoundRepository(db *sql.DB) (dbtypes.RoundStore, error) {
 
 func (r *roundRepository) Close() {
 	_ = r.db.Close()
-}
-
-func extendArray[T any](arr []T, position int) []T {
-	if arr == nil {
-		return make([]T, position+1)
-	}
-
-	if len(arr) <= position {
-		return append(arr, make([]T, position-len(arr)+1)...)
-	}
-
-	return arr
 }
 
 func (r *roundRepository) GetRoundsIds(ctx context.Context, startedAfter int64, startedBefore int64) ([]string, error) {

@@ -153,8 +153,7 @@ func (c *Config) repoManager() error {
 	var svc ports.RepoManager
 	var err error
 	var eventStoreConfig []interface{}
-	var roundStoreConfig []interface{}
-	var vtxoStoreConfig []interface{}
+	var dataStoreConfig []interface{}
 	logger := log.New()
 
 	switch c.EventDbType {
@@ -166,23 +165,19 @@ func (c *Config) repoManager() error {
 
 	switch c.DbType {
 	case "badger":
-		roundStoreConfig = []interface{}{c.DbDir, logger}
-		vtxoStoreConfig = []interface{}{c.DbDir, logger}
+		dataStoreConfig = []interface{}{c.DbDir, logger}
 	case "sqlite":
-		roundStoreConfig = []interface{}{c.DbDir}
-		vtxoStoreConfig = []interface{}{c.DbDir}
+		dataStoreConfig = []interface{}{c.DbDir}
 	default:
 		return fmt.Errorf("unknown db type")
 	}
 
 	svc, err = db.NewService(db.ServiceConfig{
 		EventStoreType: c.EventDbType,
-		RoundStoreType: c.DbType,
-		VtxoStoreType:  c.DbType,
+		DataStoreType:  c.DbType,
 
 		EventStoreConfig: eventStoreConfig,
-		RoundStoreConfig: roundStoreConfig,
-		VtxoStoreConfig:  vtxoStoreConfig,
+		DataStoreConfig:  dataStoreConfig,
 	})
 	if err != nil {
 		return err
