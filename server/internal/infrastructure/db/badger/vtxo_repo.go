@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/ark-network/ark/internal/core/domain"
-	dbtypes "github.com/ark-network/ark/internal/infrastructure/db/types"
 	"github.com/dgraph-io/badger/v4"
 	"github.com/timshannon/badgerhold/v4"
 )
@@ -18,7 +17,7 @@ type vtxoRepository struct {
 	store *badgerhold.Store
 }
 
-func NewVtxoRepository(config ...interface{}) (dbtypes.VtxoStore, error) {
+func NewVtxoRepository(config ...interface{}) (domain.VtxoRepository, error) {
 	if len(config) != 2 {
 		return nil, fmt.Errorf("invalid config")
 	}
@@ -65,18 +64,14 @@ func (r *vtxoRepository) SpendVtxos(
 
 func (r *vtxoRepository) RedeemVtxos(
 	ctx context.Context, vtxoKeys []domain.VtxoKey,
-) ([]domain.Vtxo, error) {
-	vtxos := make([]domain.Vtxo, 0, len(vtxoKeys))
+) error {
 	for _, vtxoKey := range vtxoKeys {
-		vtxo, err := r.redeemVtxo(ctx, vtxoKey)
+		_, err := r.redeemVtxo(ctx, vtxoKey)
 		if err != nil {
-			return nil, err
-		}
-		if vtxo != nil {
-			vtxos = append(vtxos, *vtxo)
+			return err
 		}
 	}
-	return vtxos, nil
+	return nil
 }
 
 func (r *vtxoRepository) GetVtxos(
@@ -248,7 +243,7 @@ func (r *vtxoRepository) redeemVtxo(ctx context.Context, vtxoKey domain.VtxoKey)
 }
 
 func (r *vtxoRepository) findVtxos(ctx context.Context, query *badgerhold.Query) ([]domain.Vtxo, error) {
-	var vtxos []domain.Vtxo
+	vtxos := make([]domain.Vtxo, 0)
 	var err error
 
 	if ctx.Value("tx") != nil {

@@ -34,8 +34,10 @@ func main() {
 	}
 
 	appConfig := &appconfig.Config{
+		EventDbType:           cfg.EventDbType,
 		DbType:                cfg.DbType,
 		DbDir:                 cfg.DbDir,
+		EventDbDir:            cfg.DbDir,
 		RoundInterval:         cfg.RoundInterval,
 		Network:               cfg.Network,
 		SchedulerType:         cfg.SchedulerType,
