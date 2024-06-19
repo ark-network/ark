@@ -13,7 +13,7 @@ const (
 	driverName = "sqlite"
 )
 
-func createDb(dbPath string) (*sql.DB, error) {
+func OpenDb(dbPath string) (*sql.DB, error) {
 	dir := filepath.Dir(dbPath)
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		err = os.MkdirAll(dir, 0755)
@@ -30,4 +30,16 @@ func createDb(dbPath string) (*sql.DB, error) {
 	db.SetMaxOpenConns(1) // prevent concurrent writes
 
 	return db, nil
+}
+
+func extendArray[T any](arr []T, position int) []T {
+	if arr == nil {
+		return make([]T, position+1)
+	}
+
+	if len(arr) <= position {
+		return append(arr, make([]T, position-len(arr)+1)...)
+	}
+
+	return arr
 }

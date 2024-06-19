@@ -76,8 +76,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestService(t *testing.T) {
-	dir := t.TempDir()
-
+	dbDir := t.TempDir()
 	tests := []struct {
 		name   string
 		config db.ServiceConfig
@@ -86,22 +85,18 @@ func TestService(t *testing.T) {
 			name: "repo_manager_with_badger_stores",
 			config: db.ServiceConfig{
 				EventStoreType:   "badger",
-				RoundStoreType:   "badger",
-				VtxoStoreType:    "badger",
+				DataStoreType:    "badger",
 				EventStoreConfig: []interface{}{"", nil},
-				RoundStoreConfig: []interface{}{"", nil},
-				VtxoStoreConfig:  []interface{}{"", nil},
+				DataStoreConfig:  []interface{}{"", nil},
 			},
 		},
 		{
 			name: "repo_manager_with_sqlite_stores",
 			config: db.ServiceConfig{
 				EventStoreType:   "badger",
-				RoundStoreType:   "sqlite",
-				VtxoStoreType:    "sqlite",
+				DataStoreType:    "sqlite",
 				EventStoreConfig: []interface{}{"", nil},
-				RoundStoreConfig: []interface{}{dir},
-				VtxoStoreConfig:  []interface{}{dir},
+				DataStoreConfig:  []interface{}{dbDir},
 			},
 		},
 	}

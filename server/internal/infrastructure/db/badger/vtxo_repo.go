@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/ark-network/ark/internal/core/domain"
-	dbtypes "github.com/ark-network/ark/internal/infrastructure/db/types"
 	"github.com/dgraph-io/badger/v4"
 	"github.com/timshannon/badgerhold/v4"
 )
@@ -18,7 +17,7 @@ type vtxoRepository struct {
 	store *badgerhold.Store
 }
 
-func NewVtxoRepository(config ...interface{}) (dbtypes.VtxoStore, error) {
+func NewVtxoRepository(config ...interface{}) (domain.VtxoRepository, error) {
 	if len(config) != 2 {
 		return nil, fmt.Errorf("invalid config")
 	}

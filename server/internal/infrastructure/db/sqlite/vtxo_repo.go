@@ -4,10 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"path/filepath"
 
 	"github.com/ark-network/ark/internal/core/domain"
-	dbtypes "github.com/ark-network/ark/internal/infrastructure/db/types"
 )
 
 const (
@@ -97,25 +95,19 @@ type vxtoRepository struct {
 	db *sql.DB
 }
 
-func NewVtxoRepository(config ...interface{}) (dbtypes.VtxoStore, error) {
+func NewVtxoRepository(config ...interface{}) (domain.VtxoRepository, error) {
 	if len(config) != 1 {
 		return nil, fmt.Errorf("invalid config")
 	}
-	baseDir, ok := config[0].(string)
+	db, ok := config[0].(*sql.DB)
 	if !ok {
-		return nil, fmt.Errorf("invalid base directory")
-	}
-
-	dir := filepath.Join(baseDir, dbStoreFile)
-	db, err := createDb(dir)
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot open vtxo repository: invalid config")
 	}
 
 	return newVtxoRepository(db)
 }
 
-func newVtxoRepository(db *sql.DB) (dbtypes.VtxoStore, error) {
+func newVtxoRepository(db *sql.DB) (*vxtoRepository, error) {
 	_, err := db.Exec(createVtxoTable)
 	if err != nil {
 		return nil, err

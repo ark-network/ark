@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/ark-network/ark/internal/core/domain"
-	dbtypes "github.com/ark-network/ark/internal/infrastructure/db/types"
 	"github.com/dgraph-io/badger/v4"
 	"github.com/timshannon/badgerhold/v4"
 )
@@ -25,7 +24,7 @@ type eventRepository struct {
 	handler   func(round *domain.Round)
 }
 
-func NewRoundEventRepository(config ...interface{}) (dbtypes.EventStore, error) {
+func NewRoundEventRepository(config ...interface{}) (domain.RoundEventRepository, error) {
 	if len(config) != 2 {
 		return nil, fmt.Errorf("invalid config")
 	}
