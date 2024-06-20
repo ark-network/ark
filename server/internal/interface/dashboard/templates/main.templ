@@ -78,6 +78,11 @@ script BodyScripts() {
     return `${text.substring(0, showChars)}...${text.substring(text.length - showChars, text.length)}`
   }
 
+	const redirect = (path) => {
+    const { origin } = window.location
+    window.location = origin + path
+  }
+
 
   document.querySelectorAll('.sats').forEach((x) => {
 		x.innerHTML = prettySats(x.textContent)
@@ -88,7 +93,9 @@ script BodyScripts() {
 	})
 
 	document.querySelectorAll('.txid').forEach((x) => {
-		x.innerHTML = prettyTxId(x.textContent)
+		const txid = x.textContent
+		x.innerHTML = prettyTxId(txid)
+		x.onclick = () => redirect(`/round/${txid}`)
 	})
 
 	document.querySelectorAll('.uuid').forEach((x) => {

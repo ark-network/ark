@@ -1,0 +1,60 @@
+package components
+
+import (
+	"strconv"
+	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+)
+
+func totalAmount(outputs []*arkv1.SweepableOutput) string {
+	accum := 0
+	for _, o := range outputs {
+		amount, _ := strconv.Atoi(o.Amount)
+		accum = accum + amount
+	}
+	return strconv.Itoa(accum)
+}
+
+templ Sweep(sweep *arkv1.ScheduledSweep) {
+	<div class="flex flex-col gap-1">
+		<div class="flex justify-between">
+			<p>Round ID:</p>
+			<p class="txid">{ sweep.RoundId }</p>
+		</div>
+		<div class="flex justify-between">
+			<p>When:</p>
+			<p class="time">{ strconv.FormatInt(sweep.Outputs[0].ScheduledAt, 10) }</p>
+		</div>
+		<div class="flex justify-between">
+			<p>Amount:</p>
+			<p class="sats">{ totalAmount(sweep.Outputs) }</p>
+		</div>
+		<details>
+			<summary>Outputs</summary>
+			<div class="flex flex-col gap-1 my-2 bg-gray-100">
+				for _, item := range sweep.Outputs {
+					@Vtxo(item.Txid, item.Amount)
+				}
+			</div>
+		</details>
+	</div>
+}
+
+templ NextSweep(data *arkv1.GetScheduledSweepResponse) {
+	<div class="border border-gray-300 w-full p-4">
+		<div class="flex justify-between">
+			<h2 class="text-lg font-semibold mb-4">Next Sweep</h2>
+			<p><a href="/sweeps">All sweeps</a></p>
+		</div>
+		@Sweep(data.Sweeps[0])
+	</div>
+}
+
+templ NextSweeps(data *arkv1.GetScheduledSweepResponse) {
+	<div class="border border-gray-300 w-full p-4">
+		<h2 class="text-lg font-semibold mb-4">Next Sweeps</h2>
+		for _, sweep := range data.Sweeps {
+			@Sweep(sweep)
+			<div class="py-4 last:pb-0"></div>
+		}
+	</div>
+}

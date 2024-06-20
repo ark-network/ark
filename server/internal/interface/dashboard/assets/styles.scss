@@ -90,3 +90,8 @@ button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
+
+.txid {
+  cursor: pointer;
+  text-decoration: underline;
+}

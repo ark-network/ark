@@ -62,8 +62,8 @@ func Layout(bodyContent templ.Component) templ.Component {
 // BodyScripts defines JavaScript code.
 func BodyScripts() templ.ComponentScript {
 	return templ.ComponentScript{
-		Name: `__templ_BodyScripts_65eb`,
-		Function: `function __templ_BodyScripts_65eb(){const prettySats = (num) => {
+		Name: `__templ_BodyScripts_0abf`,
+		Function: `function __templ_BodyScripts_0abf(){const prettySats = (num) => {
     const length = String(num).length
     if (length > 8) return num
     let prefix = "0."
@@ -107,6 +107,11 @@ func BodyScripts() templ.ComponentScript {
     return ` + "`" + `${text.substring(0, showChars)}...${text.substring(text.length - showChars, text.length)}` + "`" + `
   }
 
+	const redirect = (path) => {
+    const { origin } = window.location
+    window.location = origin + path
+  }
+
 
   document.querySelectorAll('.sats').forEach((x) => {
 		x.innerHTML = prettySats(x.textContent)
@@ -117,14 +122,16 @@ func BodyScripts() templ.ComponentScript {
 	})
 
 	document.querySelectorAll('.txid').forEach((x) => {
-		x.innerHTML = prettyTxId(x.textContent)
+		const txid = x.textContent
+		x.innerHTML = prettyTxId(txid)
+		x.onclick = () => redirect(` + "`" + `/round/${txid}` + "`" + `)
 	})
 
 	document.querySelectorAll('.uuid').forEach((x) => {
 		if (window.innerWidth < 600) x.innerHTML = prettyTxId(x.textContent)
 	})
 }`,
-		Call:       templ.SafeScript(`__templ_BodyScripts_65eb`),
-		CallInline: templ.SafeScriptInline(`__templ_BodyScripts_65eb`),
+		Call:       templ.SafeScript(`__templ_BodyScripts_0abf`),
+		CallInline: templ.SafeScriptInline(`__templ_BodyScripts_0abf`),
 	}
 }

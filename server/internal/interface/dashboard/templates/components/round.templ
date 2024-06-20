@@ -2,6 +2,17 @@ package components
 
 import arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 
+templ LastRounds(data *arkv1.GetRoundsResponse) {
+	<div class="border border-gray-300 h-full w-full p-4">
+		<h2 class="text-lg font-semibold mb-4">Last rounds</h2>
+		<div class="flex flex-col gap-2">
+			for _, txid := range data.Rounds {
+				<p class="txid">{ txid }</p>
+			}
+		</div>
+	</div>
+}
+
 templ RoundDetails(details *arkv1.GetRoundDetailsResponse) {
 	<div class="border border-gray-300 w-full p-4">
 		<h2 class="text-lg font-semibold mb-4">Round details</h2>

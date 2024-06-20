@@ -68,6 +68,15 @@ func runServer() error {
 	// Handle index page view.
 	router.GET("/", indexViewHandler)
 
+	// Handle sweeps page view.
+	router.GET("/sweeps", sweepsViewHandler)
+
+	// Handle rounds page view.
+	router.GET("/rounds", roundsViewHandler)
+
+	// Handle rounds page view.
+	router.GET("/round/:txid", roundViewHandler)
+
 	// Handle API endpoints.
 	router.GET("/api/hello-world", showContentAPIHandler)
 
