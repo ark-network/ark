@@ -1,0 +1,90 @@
+package pages
+
+import "github.com/ark-network/ark/internal/interface/dashboard/templates/components"
+import "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+
+// MetaTags defines meta tags.
+templ MetaTags(keywords, description string) {
+	<meta name="keywords" content={ keywords }/>
+	<meta name="description" content={ description }/>
+}
+
+// styledTextStyles defines CSS styles for component.
+
+css styledTextStyles() {
+	color: #02BF87;
+}
+
+func getBalance() *arkv1.GetBalanceResponse {
+	return &arkv1.GetBalanceResponse{
+		MainAccount:       &arkv1.Balance{Available: "675884", Locked: "76523"},
+		ConnectorsAccount: &arkv1.Balance{Available: "65442", Locked: "7653"},
+	}
+}
+
+func getNextSweep() *arkv1.GetScheduledSweepResponse {
+	var vout uint32 = 1
+	var when int64 = 1718891827
+
+	outputs := make([]*arkv1.SweepableOutput, 0)
+	outputs = append(outputs, &arkv1.SweepableOutput{
+		Txid:        "83b54521f2cd2e4dc6265686276641d9918aebdaa86d8d38730adfdb5359c956",
+		Vout:        vout,
+		ScheduledAt: when,
+		Amount:      "4321",
+	})
+	outputs = append(outputs, &arkv1.SweepableOutput{
+		Txid:        "d8053da1306627baba4545269188f095f03838273a933289db91113601957eeb",
+		Vout:        vout,
+		ScheduledAt: when,
+		Amount:      "1234",
+	})
+
+	sweeps := make([]*arkv1.ScheduledSweep, 0)
+	sweeps = append(sweeps, &arkv1.ScheduledSweep{
+		RoundId: "83b54521f2cd2e4dc6265686276641d9918aebdaa86d8d38730adfdb5359c956",
+		Outputs: outputs,
+	})
+
+	return &arkv1.GetScheduledSweepResponse{Sweeps: sweeps}
+}
+
+func getRoundDetails() *arkv1.GetRoundDetailsResponse {
+	inputVtxos := []string{
+		"6f165e2b0ae69b260a32c505f7204bf8c6e0aef654157136dca9194494b78a81", "b5f6a61df2c72c32cbee4042848c37a7c268ca424049ebabb6e30d50bd035c71", "0ab565c1f56b60a26c7daf92cc825d40b8675417792b3b7e73784f56d41116b5",
+	}
+	outputVtxos := []string{
+		"aebee95dfbd7d3cbf855432d0c239ec115837467f3051ac986b5c8f5d9fae906", "c4a35b7b2ce9a4b6996e86e29609f5e8f73f29bacd749b3610e4f89a75c216ca", "3a639ccd65ce60f90b6be07f9209598d2aea76b9938cc30db1de3fa1034ecf9d",
+	}
+	exitAddresses := []string{
+		"bc1qr4356l02af8ura6hgxrqa2wx0lesdxfjxdnau0",
+		"bc1q0y6h8xe97pnf85dcd5puwsm5up94aesxrcd8yp",
+		"bc1q83ep02rpedffsn9xm57yd54v48x7xsf6cdwfea",
+	}
+
+	return &arkv1.GetRoundDetailsResponse{
+		RoundId:          "550e8400-e29b-41d4-a716-446655440000",
+		Txid:             "4606d68e0a1cd77be1a246b69778c65c7693973bf4f000b21d131e8b9d32bc59",
+		ForfeitedAmount:  "21000",
+		TotalVtxosAmount: "42000",
+		TotalExitAmount:  "34333",
+		FeesAmount:       "33317",
+		InputsVtxos:      inputVtxos,
+		OutputsVtxos:     outputVtxos,
+		ExitAddresses:    exitAddresses,
+	}
+}
+
+// BodyContent defines HTML content.
+templ BodyContent(h1, text string) {
+	<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 w-full">
+		<div class="flex flex-col gap-4">
+			@components.Balance(getBalance())
+			@components.NextSweep(getNextSweep().Sweeps[0])
+			@components.RoundDetails(getRoundDetails())
+		</div>
+		<div class="flex flex-col gap-4">
+			@components.LastRounds()
+		</div>
+	</div>
+}

@@ -1,0 +1,25 @@
+package components
+
+templ RoundLine(txid, when string) {
+	<div class="flex justify-between">
+		<p class="txid">{ txid }</p>
+		<p class="time">{ when }</p>
+	</div>
+}
+
+templ LastRounds() {
+	<div class="border border-gray-300 h-full w-full p-4">
+		<h2 class="text-lg font-semibold mb-4">Last rounds</h2>
+		<div class="flex flex-col gap-2">
+			@RoundLine("40f841c3a2cb4505fbf4ce8559afad7cb4db71c712bf52d22beea5b30590a4b2", "1718888727")
+			@RoundLine("08a69f876323f6e3db720a05b8b998b36f260cf4684d7f7339fa9ca7b3c9302c", "1718888627")
+			@RoundLine("65ebd01e19fa7c0e454eb029c979d3870dfc3a256c3e4678891399927c50bc8f", "1718888527")
+			@RoundLine("dc589c615ef93792f5d5bf644ec61f69a55d7158073f2882e730fe7388af5e37", "1718888427")
+			@RoundLine("92a4c33f03724905e32ceaba4fc517114b5e3a0d93e46942ba236ccec0eadbfd", "1718888327")
+			@RoundLine("5b769201439baaffb095d8d92e494f1831f7b507f36710fbe1fb43761dfc6679", "1718888227")
+			@RoundLine("10d3ea26e37f168855db9970289eadb259cc2b711ddadb6e454cae8390617685", "1718888127")
+			@RoundLine("d01a330430dead8370b3aace285111337118c30dffa6a07af45c177de7b5a418", "1718888027")
+			@RoundLine("bf59db410a0049b4a9566089e89a55ec6bb4825f8e23c8a06fddb793d5308a37", "1718887927")
+		</div>
+	</div>
+}

@@ -1,0 +1,97 @@
+package templates
+
+templ Layout(bodyContent templ.Component) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<meta http-equiv="X-UA-Compatible" content="ie=edge"/>
+			<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' ws://localhost:*; img-src 'self' data:*;"/>
+			<meta name="theme-color" content="#FEFEF5"/>
+			<title>Ark dashboard</title>
+			<meta name="keywords" content="ark, dashboard"/>
+			<meta name="description" content="ark dashboard"/>
+			<link rel="dns-prefetch" href="//fonts.googleapis.com"/>
+			<link rel="dns-prefetch" href="//fonts.gstatic.com"/>
+			<link rel="preconnect" href="//fonts.googleapis.com" crossorigin/>
+			<link rel="preconnect" href="//fonts.gstatic.com" crossorigin/>
+			<link rel="manifest" href="/static/manifest.json"/>
+			<link rel="apple-touch-icon" href="/static/apple-touch-icon.png"/>
+			<link rel="shortcut icon" href="/static/favicon.ico" type="image/x-icon"/>
+			<link rel="icon" href="/static/favicon.svg" type="image/svg+xml"/>
+			<link rel="icon" href="/static/favicon.png" sizes="any"/>
+			<link href="https://fonts.googleapis.com/css2?family=Inconsolata:wght@200..900&display=swap" rel="stylesheet"/>
+			<link href="/static/styles.css" rel="stylesheet"/>
+		</head>
+		<body class="bg-white text-gray-800 p-10" onload={ BodyScripts() }>
+			@bodyContent
+			<script src="/static/scripts.js"></script>
+		</body>
+	</html>
+}
+
+// BodyScripts defines JavaScript code.
+
+script BodyScripts() {
+	const prettySats = (num) => {
+    const length = String(num).length
+    if (length > 8) return num
+    let prefix = "0."
+    for (let i = length; i < 8; i++) prefix += "0"
+    return `<span class="text-gray-400">${prefix}</span>${num}`
+  }
+
+	const prettyTime = (unixtime) => {
+    const minute = 60 // timestamp in seconds
+    const hour = 60 * minute
+    const day = 24 * hour
+    const week = 7 * day
+    const now = Math.floor(Date.now() / 1000)
+    let delta = Math.abs(unixtime - now)
+    if (delta === 0) return "now"
+    let text = ""
+    if (delta > week) {
+      text += `${Math.floor(delta / week)}w `
+      delta = delta % week
+    }
+    if (delta > day) {
+      text += `${Math.floor(delta / day)}d `
+      delta = delta % day
+    }
+    if (delta > hour) {
+      text += `${Math.floor(delta / hour)}h `
+      delta = delta % hour
+    }
+    if (delta > minute) {
+      text += `${Math.floor(delta / minute)}m`
+      delta = delta % minute
+    }
+    if (delta > 0) {
+      text += ` ${delta}s`
+    }
+    return unixtime - now > 0 ? `in ${text}` : `${text} ago`
+  }
+
+	const prettyTxId = (text, showChars = 14) => {
+    if (text.length < 32) return text
+    return `${text.substring(0, showChars)}...${text.substring(text.length - showChars, text.length)}`
+  }
+
+
+  document.querySelectorAll('.sats').forEach((x) => {
+		x.innerHTML = prettySats(x.textContent)
+	})
+
+	document.querySelectorAll('.time').forEach((x) => {
+		x.innerHTML = prettyTime(x.textContent)
+	})
+
+	document.querySelectorAll('.txid').forEach((x) => {
+		x.innerHTML = prettyTxId(x.textContent)
+	})
+
+	document.querySelectorAll('.uuid').forEach((x) => {
+		if (window.innerWidth < 600) x.innerHTML = prettyTxId(x.textContent)
+	})
+}

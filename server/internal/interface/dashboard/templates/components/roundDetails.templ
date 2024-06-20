@@ -1,0 +1,59 @@
+package components
+
+import arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+
+templ RoundDetails(details *arkv1.GetRoundDetailsResponse) {
+	<div class="border border-gray-300 w-full p-4">
+		<h2 class="text-lg font-semibold mb-4">Round details</h2>
+		<div class="flex flex-col gap-1">
+			<div class="flex justify-between">
+				<p>Round ID:</p>
+				<p class="uuid">{ details.RoundId }</p>
+			</div>
+			<div class="flex justify-between">
+				<p>TX ID:</p>
+				<p class="txid">{ details.Txid }</p>
+			</div>
+			<div class="flex justify-between">
+				<p>Forfeited amount:</p>
+				<p class="sats">{ details.ForfeitedAmount }</p>
+			</div>
+			<div class="flex justify-between">
+				<p>VTXOs amount:</p>
+				<p class="sats">{ details.TotalVtxosAmount }</p>
+			</div>
+			<div class="flex justify-between">
+				<p>Exit amount:</p>
+				<p class="sats">{ details.TotalExitAmount }</p>
+			</div>
+			<div class="flex justify-between">
+				<p>Fees amount:</p>
+				<p class="sats">{ details.FeesAmount }</p>
+			</div>
+			<details>
+				<summary>Input VTXOs</summary>
+				<div class="flex flex-col gap-1 my-2 bg-gray-100">
+					for _, item := range details.InputsVtxos {
+						<p>{ item }</p>
+					}
+				</div>
+			</details>
+			<details>
+				<summary>Output VTXOs</summary>
+				<div class="flex flex-col gap-1 my-2 bg-gray-100">
+					for _, item := range details.OutputsVtxos {
+						<p>{ item }</p>
+					}
+				</div>
+			</details>
+			<details>
+				<summary>Exit Addresses</summary>
+				<div class="flex flex-col gap-1 my-2 bg-gray-100">
+					for _, item := range details.ExitAddresses {
+						<p>{ item }</p>
+					}
+				</div>
+			</details>
+		</div>
+	</div>
+}

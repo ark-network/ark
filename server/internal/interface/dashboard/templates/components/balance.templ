@@ -1,0 +1,41 @@
+package components
+
+import arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+
+templ Balance(balance *arkv1.GetBalanceResponse) {
+	<div class="border border-gray-300 w-full p-4">
+		<h2 class="text-lg font-semibold mb-4">Balance</h2>
+		<div class="grid grid-cols-2 gap-6">
+			<div class="flex flex-col gap-1">
+				<p class="font-semibold">Main</p>
+				<div class="flex justify-between">
+					<p>Available:</p>
+					<p class="sats">
+						{ balance.MainAccount.Available }
+					</p>
+				</div>
+				<div class="flex justify-between">
+					<p>Locked:</p>
+					<p class="sats">
+						{ balance.MainAccount.Locked }
+					</p>
+				</div>
+			</div>
+			<div class="flex flex-col gap-1">
+				<p class="font-semibold">Connectors</p>
+				<div class="flex justify-between">
+					<p>Available:</p>
+					<p class="sats">
+						{ balance.ConnectorsAccount.Available }
+					</p>
+				</div>
+				<div class="flex justify-between">
+					<p>Locked:</p>
+					<p class="sats">
+						{ balance.ConnectorsAccount.Locked }
+					</p>
+				</div>
+			</div>
+		</div>
+	</div>
+}

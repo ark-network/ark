@@ -1,0 +1,43 @@
+package components
+
+import (
+	"strconv"
+	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+)
+
+func totalAmount(outputs []*arkv1.SweepableOutput) string {
+	accum := 0
+	for _, o := range outputs {
+		amount, _ := strconv.Atoi(o.Amount)
+		accum = accum + amount
+	}
+	return strconv.Itoa(accum)
+}
+
+templ NextSweep(sweep *arkv1.ScheduledSweep) {
+	<div class="border border-gray-300 w-full p-4">
+		<h2 class="text-lg font-semibold mb-4">Next Sweep</h2>
+		<div class="flex flex-col gap-1">
+			<div class="flex justify-between">
+				<p>Round ID:</p>
+				<p class="txid">{ sweep.RoundId }</p>
+			</div>
+			<div class="flex justify-between">
+				<p>When:</p>
+				<p class="time">{ strconv.FormatInt(sweep.Outputs[0].ScheduledAt, 10) }</p>
+			</div>
+			<div class="flex justify-between">
+				<p>Amount:</p>
+				<p class="sats">{ totalAmount(sweep.Outputs) }</p>
+			</div>
+			<details>
+				<summary>Outputs</summary>
+				<div class="flex flex-col gap-1 my-2 bg-gray-100">
+					for _, item := range sweep.Outputs {
+						@Vtxo(item.Txid, item.Amount)
+					}
+				</div>
+			</details>
+		</div>
+	</div>
+}
