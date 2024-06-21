@@ -62,8 +62,9 @@ func Layout(bodyContent templ.Component) templ.Component {
 // BodyScripts defines JavaScript code.
 func BodyScripts() templ.ComponentScript {
 	return templ.ComponentScript{
-		Name: `__templ_BodyScripts_0abf`,
-		Function: `function __templ_BodyScripts_0abf(){const prettySats = (num) => {
+		Name: `__templ_BodyScripts_c198`,
+		Function: `function __templ_BodyScripts_c198(){// from 4321 to 0.00004321 with '0' in gray
+	const prettySats = (num) => {
     const length = String(num).length
     if (length > 8) return num
     let prefix = "0."
@@ -71,6 +72,7 @@ func BodyScripts() templ.ComponentScript {
     return ` + "`" + `<span class="text-gray-400">${prefix}</span>${num}` + "`" + `
   }
 
+  // from 1718963028 to "1w 2d 3h 4m 5s ago" or "in 4m 5s"
 	const prettyTime = (unixtime) => {
     const minute = 60 // timestamp in seconds
     const hour = 60 * minute
@@ -102,11 +104,14 @@ func BodyScripts() templ.ComponentScript {
     return unixtime - now > 0 ? ` + "`" + `in ${text}` + "`" + ` : ` + "`" + `${text} ago` + "`" + `
   }
 
+  // show txid in 31 characters: <first 14 chars>...<last 14 chars>
+	// usefull when window width < 600 pixels
 	const prettyTxId = (text, showChars = 14) => {
     if (text.length < 32) return text
     return ` + "`" + `${text.substring(0, showChars)}...${text.substring(text.length - showChars, text.length)}` + "`" + `
   }
 
+  // redirects browser to local path
 	const redirect = (path) => {
     const { origin } = window.location
     window.location = origin + path
@@ -131,7 +136,7 @@ func BodyScripts() templ.ComponentScript {
 		if (window.innerWidth < 600) x.innerHTML = prettyTxId(x.textContent)
 	})
 }`,
-		Call:       templ.SafeScript(`__templ_BodyScripts_0abf`),
-		CallInline: templ.SafeScriptInline(`__templ_BodyScripts_0abf`),
+		Call:       templ.SafeScript(`__templ_BodyScripts_c198`),
+		CallInline: templ.SafeScriptInline(`__templ_BodyScripts_c198`),
 	}
 }
