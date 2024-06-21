@@ -62,8 +62,8 @@ func Layout(bodyContent templ.Component) templ.Component {
 // BodyScripts defines JavaScript code.
 func BodyScripts() templ.ComponentScript {
 	return templ.ComponentScript{
-		Name: `__templ_BodyScripts_c198`,
-		Function: `function __templ_BodyScripts_c198(){// from 4321 to 0.00004321 with '0' in gray
+		Name: `__templ_BodyScripts_1076`,
+		Function: `function __templ_BodyScripts_1076(){// from 4321 to 0.00004321 with '0' in gray
 	const prettySats = (num) => {
     const length = String(num).length
     if (length > 8) return num
@@ -135,8 +135,14 @@ func BodyScripts() templ.ComponentScript {
 	document.querySelectorAll('.uuid').forEach((x) => {
 		if (window.innerWidth < 600) x.innerHTML = prettyTxId(x.textContent)
 	})
+
+		document.querySelectorAll('.vtxo').forEach((x) => {
+		const outpoint = x.textContent
+		x.innerHTML = prettyTxId(outpoint)
+		x.onclick = () => redirect(` + "`" + `/vtxo/${outpoint}` + "`" + `)
+	})
 }`,
-		Call:       templ.SafeScript(`__templ_BodyScripts_c198`),
-		CallInline: templ.SafeScriptInline(`__templ_BodyScripts_c198`),
+		Call:       templ.SafeScript(`__templ_BodyScripts_1076`),
+		CallInline: templ.SafeScriptInline(`__templ_BodyScripts_1076`),
 	}
 }

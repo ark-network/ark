@@ -77,6 +77,9 @@ func runServer() error {
 	// Handle rounds page view.
 	router.GET("/round/:txid", roundViewHandler)
 
+	// Handle vtxo page view.
+	router.GET("/vtxo/:outpoint", vtxoViewHandler)
+
 	// Handle API endpoints.
 	router.GET("/api/hello-world", showContentAPIHandler)
 

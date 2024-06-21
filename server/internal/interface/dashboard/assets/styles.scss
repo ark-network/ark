@@ -28,8 +28,6 @@ a:hover {
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
   min-width: 320px;
   min-height: 100vh;
   color: #242424;
@@ -91,7 +89,8 @@ button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
-.txid {
+.txid,
+.vtxo {
   cursor: pointer;
   text-decoration: underline;
 }

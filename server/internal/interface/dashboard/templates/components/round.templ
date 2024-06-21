@@ -1,13 +1,20 @@
 package components
 
-import arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+import (
+	"strconv"
+	"time"
+	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+)
 
 templ LastRounds(data *arkv1.GetRoundsResponse) {
 	<div class="border border-gray-300 h-full w-full p-4">
 		<h2 class="text-lg font-semibold mb-4">Last rounds</h2>
 		<div class="flex flex-col gap-2">
-			for _, txid := range data.Rounds {
-				<p class="txid">{ txid }</p>
+			for index, txid := range data.Rounds {
+				<div class="flex justify-between">
+					<p class="txid">{ txid }</p>
+					<p class="time">{ strconv.Itoa(int(time.Now().Unix()) - (index*25)) }</p>
+				</div>
 			}
 		</div>
 	</div>
@@ -42,26 +49,26 @@ templ RoundDetails(details *arkv1.GetRoundDetailsResponse) {
 				<p class="sats">{ details.FeesAmount }</p>
 			</div>
 			<details>
-				<summary>Input VTXOs</summary>
+				<summary>Input VTXOs ({ strconv.Itoa(len(details.InputsVtxos)) })</summary>
 				<div class="flex flex-col gap-1 my-2 bg-gray-100">
 					for _, item := range details.InputsVtxos {
-						<p>{ item }</p>
+						<p class="vtxo">{ item }</p>
 					}
 				</div>
 			</details>
 			<details>
-				<summary>Output VTXOs</summary>
+				<summary>Output VTXOs ({ strconv.Itoa(len(details.OutputsVtxos)) })</summary>
 				<div class="flex flex-col gap-1 my-2 bg-gray-100">
 					for _, item := range details.OutputsVtxos {
-						<p>{ item }</p>
+						<p class="vtxo">{ item }</p>
 					}
 				</div>
 			</details>
 			<details>
-				<summary>Exit Addresses</summary>
+				<summary>Exit Addresses ({ strconv.Itoa(len(details.ExitAddresses)) })</summary>
 				<div class="flex flex-col gap-1 my-2 bg-gray-100">
 					for _, item := range details.ExitAddresses {
-						<p>{ item }</p>
+						<p class="addr">{ item }</p>
 					}
 				</div>
 			</details>

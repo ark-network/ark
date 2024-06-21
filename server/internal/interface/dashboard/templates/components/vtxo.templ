@@ -1,8 +1,14 @@
 package components
 
-templ Vtxo(outpoint, sats string) {
-	<div class="flex justify-between">
-		<p class="txid">{ outpoint }</p>
-		<p class="sats">{ sats }</p>
+// import arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+templ Vtxo(outpoint string) {
+	<div class="border border-gray-300 w-full p-4">
+		<h2 class="text-lg font-semibold mb-4">VTXO</h2>
+		<div class="flex flex-col gap-1">
+			<div class="flex justify-between">
+				<p>Outpoint:</p>
+				<p class="vtxo">{ outpoint }</p>
+			</div>
+		</div>
 	</div>
 }

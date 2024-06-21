@@ -50,3 +50,9 @@ func roundViewHandler(c *gin.Context) {
 	bodyContent := pages.RoundBodyContent(getRoundDetails(c.Param("txid")))
 	viewHandler(bodyContent, c)
 }
+
+// vtxoViewHandler handles a view for the vtxo page: '/vtxo/:outpoint'
+func vtxoViewHandler(c *gin.Context) {
+	bodyContent := pages.VtxoBodyContent(c.Param(("outpoint")))
+	viewHandler(bodyContent, c)
+}

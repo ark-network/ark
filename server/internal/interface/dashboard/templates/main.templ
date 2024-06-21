@@ -106,4 +106,10 @@ script BodyScripts() {
 	document.querySelectorAll('.uuid').forEach((x) => {
 		if (window.innerWidth < 600) x.innerHTML = prettyTxId(x.textContent)
 	})
+
+		document.querySelectorAll('.vtxo').forEach((x) => {
+		const outpoint = x.textContent
+		x.innerHTML = prettyTxId(outpoint)
+		x.onclick = () => redirect(`/vtxo/${outpoint}`)
+	})
 }

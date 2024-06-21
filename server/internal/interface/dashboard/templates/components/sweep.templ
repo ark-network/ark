@@ -29,10 +29,13 @@ templ Sweep(sweep *arkv1.ScheduledSweep) {
 			<p class="sats">{ totalAmount(sweep.Outputs) }</p>
 		</div>
 		<details>
-			<summary>Outputs</summary>
+			<summary>Outputs ({ strconv.Itoa(len(sweep.Outputs)) })</summary>
 			<div class="flex flex-col gap-1 my-2 bg-gray-100">
 				for _, item := range sweep.Outputs {
-					@Vtxo(item.Txid, item.Amount)
+					<div class="flex justify-between">
+						<p class="txid">{ item.Txid }</p>
+						<p class="sats">{ item.Amount }</p>
+					</div>
 				}
 			</div>
 		</details>
