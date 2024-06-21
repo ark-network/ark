@@ -8,9 +8,9 @@ import (
 	"github.com/ark-network/ark/internal/core/application"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/ark-network/ark/internal/infrastructure/db"
-	oceanwallet "github.com/ark-network/ark/internal/infrastructure/ocean-wallet"
 	scheduler "github.com/ark-network/ark/internal/infrastructure/scheduler/gocron"
 	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenant"
+	wallet "github.com/ark-network/ark/internal/infrastructure/wallet/liquid-standalone"
 	log "github.com/sirupsen/logrus"
 	"github.com/vulpemventures/go-elements/network"
 )
@@ -167,7 +167,7 @@ func (c *Config) repoManager() error {
 }
 
 func (c *Config) walletService() error {
-	svc, err := oceanwallet.NewService(c.WalletAddr)
+	svc, err := wallet.NewService(c.WalletAddr)
 	if err != nil {
 		return err
 	}
