@@ -2,6 +2,7 @@ package btcwallet
 
 import (
 	"context"
+	"time"
 
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/btcsuite/btcd/chaincfg"
@@ -10,7 +11,7 @@ import (
 )
 
 type service struct {
-	WalletConfig
+	walletLoader *wallet.Loader
 }
 
 type WalletConfig struct {
@@ -21,15 +22,23 @@ type WalletConfig struct {
 }
 
 func New(cfg WalletConfig) (ports.WalletService, error) {
-	db, err := openOrCreateDB(cfg.Datadir)
+	loader := wallet.NewLoader(cfg.ChainParams, cfg.Datadir, true, 1*time.Minute, 512)
+	exist, err := loader.WalletExists()
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
 
-	w, err := wallet.Open(db, cfg.PublicPassword, nil, cfg.ChainParams)
+	if !exist {
+		if _, err := loader.CreateNewWallet(cfg.PublicPassword, cfg.PrivatePassword, nil, time.Now()); err != nil {
+			return nil, err
+		}
+	} else {
+		if _, err := loader.OpenExistingWallet(cfg.PublicPassword, true); err != nil {
+			return nil, err
+		}
+	}
 
-	return &service{}, nil
+	return &service{loader}, nil
 }
 
 // BroadcastTransaction implements ports.WalletService.
