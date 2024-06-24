@@ -11,7 +11,9 @@ import (
 )
 
 type service struct {
-	walletLoader *wallet.Loader
+	loader          *wallet.Loader
+	PublicPassword  []byte
+	PrivatePassword []byte
 }
 
 type WalletConfig struct {
@@ -38,7 +40,7 @@ func New(cfg WalletConfig) (ports.WalletService, error) {
 		}
 	}
 
-	return &service{loader}, nil
+	return &service{loader, cfg.PublicPassword, cfg.PrivatePassword}, nil
 }
 
 // BroadcastTransaction implements ports.WalletService.
@@ -78,6 +80,11 @@ func (s *service) GetNotificationChannel(ctx context.Context) <-chan map[string]
 
 // GetPubkey implements ports.WalletService.
 func (s *service) GetPubkey(ctx context.Context) (*secp256k1.PublicKey, error) {
+	wallet, err := s.getWallet()
+	if err != nil {
+		return nil, err
+	}
+
 	panic("unimplemented")
 }
 
@@ -134,4 +141,8 @@ func (s *service) WatchScripts(ctx context.Context, scripts []string) error {
 // UnwatchScripts implements ports.WalletService.
 func (s *service) UnwatchScripts(ctx context.Context, scripts []string) error {
 	panic("unimplemented")
+}
+
+func (s *service) getWallet() (*wallet.Wallet, error) {
+	return s.loader.OpenExistingWallet(s.PublicPassword, true)
 }
