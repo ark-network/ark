@@ -2,18 +2,32 @@ package btcwallet
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcwallet/waddrmgr"
 	"github.com/btcsuite/btcwallet/wallet"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/sirupsen/logrus"
 )
+
+type accountName string
+
+const (
+	mainAccount      accountName = "main"
+	connectorAccount accountName = "connector"
+)
+
+var keyScope = waddrmgr.KeyScopeBIP0044
 
 type service struct {
 	loader          *wallet.Loader
-	PublicPassword  []byte
-	PrivatePassword []byte
+	publicPassword  []byte
+	privatePassword []byte
+	accounts        map[accountName]uint32
 }
 
 type WalletConfig struct {
@@ -30,67 +44,131 @@ func New(cfg WalletConfig) (ports.WalletService, error) {
 		return nil, err
 	}
 
+	accounts := make(map[accountName]uint32)
+
 	if !exist {
-		if _, err := loader.CreateNewWallet(cfg.PublicPassword, cfg.PrivatePassword, nil, time.Now()); err != nil {
+		w, err := loader.CreateNewWallet(cfg.PublicPassword, cfg.PrivatePassword, nil, time.Now())
+		if err != nil {
 			return nil, err
 		}
+
+		mainAccountNumber, err := w.NextAccount(keyScope, string(mainAccount))
+		if err != nil {
+			return nil, err
+		}
+
+		connectorAccountNumber, err := w.NextAccount(keyScope, string(connectorAccount))
+		if err != nil {
+			return nil, err
+		}
+
+		accounts[mainAccount] = mainAccountNumber
+		accounts[connectorAccount] = connectorAccountNumber
 	} else {
-		if _, err := loader.OpenExistingWallet(cfg.PublicPassword, true); err != nil {
+		w, err := loader.OpenExistingWallet(cfg.PublicPassword, true)
+		if err != nil {
 			return nil, err
 		}
+
+		mainAccountNumber, err := w.AccountNumber(keyScope, string(mainAccount))
+		if err != nil {
+			return nil, err
+		}
+
+		connectorAccountNumber, err := w.AccountNumber(keyScope, string(connectorAccount))
+		if err != nil {
+			return nil, err
+		}
+
+		accounts[mainAccount] = mainAccountNumber
+		accounts[connectorAccount] = connectorAccountNumber
 	}
 
-	return &service{loader, cfg.PublicPassword, cfg.PrivatePassword}, nil
+	return &service{loader, cfg.PublicPassword, cfg.PrivatePassword, accounts}, nil
 }
 
-// BroadcastTransaction implements ports.WalletService.
+func (s *service) Close() {
+	if err := s.loader.UnloadWallet(); err != nil {
+		logrus.Errorf("error while unloading wallet: %s", err)
+	}
+}
+
 func (s *service) BroadcastTransaction(ctx context.Context, txHex string) (string, error) {
 	panic("unimplemented")
 }
 
-// Close implements ports.WalletService.
-func (s *service) Close() {
-	panic("unimplemented")
-}
-
-// ConnectorsAccountBalance implements ports.WalletService.
 func (s *service) ConnectorsAccountBalance(ctx context.Context) (uint64, uint64, error) {
-	panic("unimplemented")
+	amount, err := s.getBalance(connectorAccount)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return amount, 0, nil
 }
 
-// DeriveAddresses implements ports.WalletService.
+func (s *service) MainAccountBalance(ctx context.Context) (uint64, uint64, error) {
+	amount, err := s.getBalance(mainAccount)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return amount, 0, nil
+}
+
 func (s *service) DeriveAddresses(ctx context.Context, num int) ([]string, error) {
-	panic("unimplemented")
+	addresses := make([]string, 0, num)
+
+	for i := 0; i < num; i++ {
+		addr, err := s.deriveNextAddress(mainAccount)
+		if err != nil {
+			return nil, err
+		}
+
+		addresses = append(addresses, addr.EncodeAddress())
+	}
+
+	return addresses, nil
 }
 
-// DeriveConnectorAddress implements ports.WalletService.
 func (s *service) DeriveConnectorAddress(ctx context.Context) (string, error) {
-	panic("unimplemented")
+	addr, err := s.deriveNextAddress(connectorAccount)
+	if err != nil {
+		return "", err
+	}
+
+	return addr.EncodeAddress(), nil
 }
 
-// EstimateFees implements ports.WalletService.
-func (s *service) EstimateFees(ctx context.Context, pset string) (uint64, error) {
-	panic("unimplemented")
-}
-
-// GetNotificationChannel implements ports.WalletService.
-func (s *service) GetNotificationChannel(ctx context.Context) <-chan map[string]ports.VtxoWithValue {
-	panic("unimplemented")
-}
-
-// GetPubkey implements ports.WalletService.
 func (s *service) GetPubkey(ctx context.Context) (*secp256k1.PublicKey, error) {
-	wallet, err := s.getWallet()
+	w, err := s.getWallet()
 	if err != nil {
 		return nil, err
 	}
 
-	panic("unimplemented")
-}
+	addrs, err := w.AccountAddresses(s.accounts[mainAccount])
+	if err != nil {
+		return nil, err
+	}
 
-// IsTransactionConfirmed implements ports.WalletService.
-func (s *service) IsTransactionConfirmed(ctx context.Context, txid string) (isConfirmed bool, blocktime int64, err error) {
-	panic("unimplemented")
+	var firstAddr btcutil.Address
+
+	if len(addrs) == 0 {
+		addr, err := w.NewAddress(s.accounts[mainAccount], keyScope)
+		if err != nil {
+			return nil, err
+		}
+
+		firstAddr = addr
+	} else {
+		firstAddr = addrs[0]
+	}
+
+	pubKey, err := w.PubKeyForAddress(firstAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	return pubKey, nil
 }
 
 // ListConnectorUtxos implements ports.WalletService.
@@ -100,11 +178,6 @@ func (s *service) ListConnectorUtxos(ctx context.Context, connectorAddress strin
 
 // LockConnectorUtxos implements ports.WalletService.
 func (s *service) LockConnectorUtxos(ctx context.Context, utxos []ports.TxOutpoint) error {
-	panic("unimplemented")
-}
-
-// MainAccountBalance implements ports.WalletService.
-func (s *service) MainAccountBalance(ctx context.Context) (uint64, uint64, error) {
 	panic("unimplemented")
 }
 
@@ -143,6 +216,53 @@ func (s *service) UnwatchScripts(ctx context.Context, scripts []string) error {
 	panic("unimplemented")
 }
 
+func (s *service) EstimateFees(ctx context.Context, pset string) (uint64, error) {
+	panic("unimplemented")
+}
+
+// GetNotificationChannel implements ports.WalletService.
+func (s *service) GetNotificationChannel(ctx context.Context) <-chan map[string]ports.VtxoWithValue {
+	panic("unimplemented")
+}
+
+func (s *service) IsTransactionConfirmed(ctx context.Context, txid string) (isConfirmed bool, blocktime int64, err error) {
+	panic("unimplemented")
+}
+
 func (s *service) getWallet() (*wallet.Wallet, error) {
-	return s.loader.OpenExistingWallet(s.PublicPassword, true)
+	w, isLoaded := s.loader.LoadedWallet()
+	if !isLoaded {
+		return nil, errors.New("wallet is not loaded")
+	}
+
+	return w, nil
+}
+
+func (s *service) getBalance(account accountName) (uint64, error) {
+	w, err := s.getWallet()
+	if err != nil {
+		return 0, err
+	}
+
+	accountsBalances, err := w.AccountBalances(keyScope, 0)
+	if err != nil {
+		return 0, err
+	}
+
+	for _, balance := range accountsBalances {
+		if balance.AccountName == string(account) {
+			return uint64(balance.AccountBalance.ToUnit(btcutil.AmountSatoshi)), nil
+		}
+	}
+
+	return 0, errors.New("account not found")
+}
+
+func (s *service) deriveNextAddress(account accountName) (btcutil.Address, error) {
+	w, err := s.getWallet()
+	if err != nil {
+		return nil, err
+	}
+
+	return w.NewAddress(s.accounts[account], keyScope)
 }
