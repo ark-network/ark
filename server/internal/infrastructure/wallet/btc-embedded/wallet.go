@@ -20,10 +20,21 @@ import (
 	"github.com/btcsuite/btcwallet/waddrmgr"
 	"github.com/btcsuite/btcwallet/wallet"
 	"github.com/btcsuite/btcwallet/wallet/txrules"
+	"github.com/btcsuite/btcwallet/walletdb"
 	"github.com/btcsuite/btcwallet/wtxmgr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightninglabs/neutrino"
 	"github.com/sirupsen/logrus"
 )
+
+type WalletOption func(*service) error
+
+type WalletConfig struct {
+	Datadir         string
+	PublicPassword  []byte
+	PrivatePassword []byte
+	network         string
+}
 
 type accountName string
 
@@ -37,76 +48,139 @@ var (
 	outputLockDuration = time.Minute
 )
 
-type WalletConfig struct {
-	Datadir         string
-	PublicPassword  []byte
-	PrivatePassword []byte
-	ChainParams     *chaincfg.Params
-	ChainSource     chain.Interface
-}
-
 type service struct {
 	loader       *wallet.Loader
 	accounts     map[accountName]uint32
 	cfg          WalletConfig
+	chainSource  chain.Interface
 	feeEstimator *feeEstimator
 }
 
-func New(cfg WalletConfig) (ports.WalletService, error) {
-	loader := wallet.NewLoader(cfg.ChainParams, cfg.Datadir, true, 1*time.Minute, 512)
+func WithChainSource(chainSource chain.Interface) WalletOption {
+	return func(s *service) error {
+		if s.chainSource != nil {
+			return errors.New("chain source already set")
+		}
+
+		s.chainSource = chainSource
+		return nil
+	}
+}
+
+// WithNeutrino creates a start a neutrino node using the provided service datadir
+func WithNeutrino() WalletOption {
+	return func(s *service) error {
+		db, err := walletdb.Create(
+			"bdb", s.cfg.Datadir+"/neutrino.db", true, 60*time.Second,
+		)
+		if err != nil {
+			return err
+		}
+
+		netParams := s.ChainParams()
+
+		config := neutrino.Config{
+			DataDir:     s.cfg.Datadir,
+			ChainParams: *netParams,
+			Database:    db,
+		}
+
+		neutrinoSvc, err := neutrino.NewChainService(config)
+		if err != nil {
+			return err
+		}
+
+		if err := neutrinoSvc.Start(); err != nil {
+			return err
+		}
+
+		return WithChainSource(chain.NewNeutrinoClient(netParams, neutrinoSvc))(s)
+	}
+}
+
+// New creates the wallet service, an option must be set to configure the chain source.
+func New(cfg WalletConfig, options ...WalletOption) (ports.WalletService, error) {
+	svc := &service{
+		loader:       nil,
+		accounts:     make(map[accountName]uint32),
+		cfg:          cfg,
+		feeEstimator: newFeeEstimator(cfg.network),
+	}
+
+	if err := svc.setWalletLoader(); err != nil {
+		return nil, err
+	}
+
+	for _, option := range options {
+		option(svc)
+	}
+
+	w, isLoaded := svc.loader.LoadedWallet()
+	if !isLoaded {
+		return nil, errors.New("wallet not loaded")
+	}
+
+	if svc.chainSource == nil {
+		return nil, errors.New("chain source not provided, please use WalletOption to set it")
+	}
+
+	w.SynchronizeRPC(svc.chainSource)
+
+	return svc, nil
+}
+
+// setWalletLoader init the wallet db and configure the wallet accounts
+func (s *service) setWalletLoader() error {
+	loader := wallet.NewLoader(s.ChainParams(), s.cfg.Datadir, true, 1*time.Minute, 512)
 	exist, err := loader.WalletExists()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	accounts := make(map[accountName]uint32)
 
 	if !exist {
-		w, err := loader.CreateNewWallet(cfg.PublicPassword, cfg.PrivatePassword, nil, time.Now())
+		w, err := loader.CreateNewWallet(s.cfg.PublicPassword, s.cfg.PrivatePassword, nil, time.Now())
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		mainAccountNumber, err := w.NextAccount(keyScope, string(mainAccount))
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		connectorAccountNumber, err := w.NextAccount(keyScope, string(connectorAccount))
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		accounts[mainAccount] = mainAccountNumber
 		accounts[connectorAccount] = connectorAccountNumber
 	} else {
-		w, err := loader.OpenExistingWallet(cfg.PublicPassword, true)
+		w, err := loader.OpenExistingWallet(s.cfg.PublicPassword, true)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		mainAccountNumber, err := w.AccountNumber(keyScope, string(mainAccount))
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		connectorAccountNumber, err := w.AccountNumber(keyScope, string(connectorAccount))
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		accounts[mainAccount] = mainAccountNumber
 		accounts[connectorAccount] = connectorAccountNumber
 	}
 
-	w, isLoaded := loader.LoadedWallet()
-	if !isLoaded {
-		return nil, errors.New("wallet not loaded")
-	}
+	s.loader = loader
+	s.accounts = accounts
 
-	w.SynchronizeRPC(cfg.ChainSource)
-
-	return &service{loader, accounts, cfg, newFeeEstimator(cfg.ChainParams)}, nil
+	return nil
 }
 
 func (s *service) Close() {
@@ -114,8 +188,7 @@ func (s *service) Close() {
 		logrus.Errorf("error while unloading wallet: %s", err)
 	}
 
-	// TODO stop outside ?
-	s.cfg.ChainSource.Stop()
+	s.chainSource.Stop()
 }
 
 func (s *service) BroadcastTransaction(ctx context.Context, txHex string) (string, error) {
@@ -468,6 +541,19 @@ func (s *service) EstimateFees(ctx context.Context, partialTx string) (uint64, e
 	)
 
 	return uint64(fee.ToUnit(btcutil.AmountSatoshi)), nil
+}
+
+func (s *service) ChainParams() *chaincfg.Params {
+	switch s.cfg.network {
+	case "mainnet":
+		return &chaincfg.MainNetParams
+	case "testnet":
+		return &chaincfg.TestNet3Params
+	case "regtest":
+		return &chaincfg.RegressionNetParams
+	default:
+		return &chaincfg.MainNetParams
+	}
 }
 
 // TODO Scanner

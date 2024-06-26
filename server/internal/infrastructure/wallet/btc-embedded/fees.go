@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcwallet/wallet/txrules"
 )
 
@@ -16,13 +15,13 @@ type feeEstimator struct {
 	esploraURL string
 }
 
-func newFeeEstimator(netParams *chaincfg.Params) *feeEstimator {
+func newFeeEstimator(network string) *feeEstimator {
 	var url string
 
-	switch netParams.Name {
+	switch network {
 	case "mainnet":
 		url = "https://blockstream.info/api/"
-	case "testnet3":
+	case "testnet":
 		url = "https://blockstream.info/testnet/api/"
 	case "regtest":
 		url = ""
