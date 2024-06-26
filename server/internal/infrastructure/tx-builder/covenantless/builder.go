@@ -62,7 +62,7 @@ func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (signedSweepTx strin
 	}
 
 	ctx := context.Background()
-	signedSweepPsbtB64, err := b.wallet.SignPsetWithKey(ctx, sweepPsbtBase64, nil)
+	signedSweepPsbtB64, err := b.wallet.SignTransactionTapscript(ctx, sweepPsbtBase64, nil)
 	if err != nil {
 		return "", err
 	}

@@ -296,7 +296,7 @@ func (s *service) SelectUtxos(ctx context.Context, _ string, amount uint64) ([]p
 	return selectedUtxos, change, nil
 }
 
-func (s *service) SignPset(ctx context.Context, partialTx string, extractRawTx bool) (string, error) {
+func (s *service) SignTransaction(ctx context.Context, partialTx string, extractRawTx bool) (string, error) {
 	w, _ := s.loader.LoadedWallet()
 
 	partial, err := psbt.NewFromRawBytes(
@@ -339,7 +339,7 @@ func (s *service) SignPset(ctx context.Context, partialTx string, extractRawTx b
 	return partial.B64Encode()
 }
 
-func (s *service) SignPsetWithKey(ctx context.Context, partialTx string, inputIndexes []int) (string, error) {
+func (s *service) SignTransactionTapscript(ctx context.Context, partialTx string, inputIndexes []int) (string, error) {
 	w, _ := s.loader.LoadedWallet()
 
 	partial, err := psbt.NewFromRawBytes(

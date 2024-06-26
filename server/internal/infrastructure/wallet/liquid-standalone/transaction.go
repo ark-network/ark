@@ -21,7 +21,7 @@ const (
 	zero32 = "0000000000000000000000000000000000000000000000000000000000000000"
 )
 
-func (s *service) SignPset(
+func (s *service) SignTransaction(
 	ctx context.Context, pset string, extractRawTx bool,
 ) (string, error) {
 	res, err := s.txClient.SignPset(ctx, &pb.SignPsetRequest{
@@ -127,7 +127,7 @@ func (s *service) WaitForSync(ctx context.Context, txid string) error {
 	return nil
 }
 
-func (s *service) SignPsetWithKey(ctx context.Context, b64 string, indexes []int) (string, error) {
+func (s *service) SignTransactionTapscript(ctx context.Context, b64 string, indexes []int) (string, error) {
 	pset, err := psetv2.NewPsetFromBase64(b64)
 	if err != nil {
 		return "", err

@@ -451,7 +451,7 @@ func (s *service) finalizeRound() {
 	}
 
 	log.Debugf("signing round transaction %s\n", round.Id)
-	signedPoolTx, err := s.wallet.SignPset(ctx, round.UnsignedTx, true)
+	signedPoolTx, err := s.wallet.SignTransaction(ctx, round.UnsignedTx, true)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
 		log.WithError(err).Warn("failed to sign round tx")
@@ -632,13 +632,13 @@ func (s *service) listenToScannerNotifications() {
 					continue
 				}
 
-				signedForfeitTx, err := s.wallet.SignPset(ctx, forfeitTx, false)
+				signedForfeitTx, err := s.wallet.SignTransaction(ctx, forfeitTx, false)
 				if err != nil {
 					log.WithError(err).Warn("failed to sign connector input in forfeit tx")
 					continue
 				}
 
-				signedForfeitTx, err = s.wallet.SignPsetWithKey(ctx, signedForfeitTx, []int{1})
+				signedForfeitTx, err = s.wallet.SignTransactionTapscript(ctx, signedForfeitTx, []int{1})
 				if err != nil {
 					log.WithError(err).Warn("failed to sign vtxo input in forfeit tx")
 					continue
@@ -717,7 +717,7 @@ func (s *service) getNextConnector(
 						}
 
 						// sign & broadcast the connector tx
-						signedConnectorTx, err := s.wallet.SignPset(ctx, b64, true)
+						signedConnectorTx, err := s.wallet.SignTransaction(ctx, b64, true)
 						if err != nil {
 							return "", 0, err
 						}

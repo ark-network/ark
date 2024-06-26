@@ -61,8 +61,8 @@ func (m *mockedWallet) GetPubkey(ctx context.Context) (*secp256k1.PublicKey, err
 	return res, args.Error(1)
 }
 
-// SignPset implements ports.WalletService.
-func (m *mockedWallet) SignPset(ctx context.Context, pset string, extractRawTx bool) (string, error) {
+// SignTransaction implements ports.WalletService.
+func (m *mockedWallet) SignTransaction(ctx context.Context, pset string, extractRawTx bool) (string, error) {
 	args := m.Called(ctx, pset, extractRawTx)
 
 	var res string
@@ -123,7 +123,7 @@ func (m *mockedWallet) IsTransactionConfirmed(ctx context.Context, txid string) 
 	return res, blocktime, args.Error(2)
 }
 
-func (m *mockedWallet) SignPsetWithKey(ctx context.Context, pset string, inputIndexes []int) (string, error) {
+func (m *mockedWallet) SignTransactionTapscript(ctx context.Context, pset string, inputIndexes []int) (string, error) {
 	args := m.Called(ctx, pset, inputIndexes)
 
 	var res string
