@@ -19,6 +19,7 @@ import (
 	"github.com/btcsuite/btcwallet/chain"
 	"github.com/btcsuite/btcwallet/waddrmgr"
 	"github.com/btcsuite/btcwallet/wallet"
+	"github.com/btcsuite/btcwallet/wallet/txrules"
 	"github.com/btcsuite/btcwallet/wtxmgr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/sirupsen/logrus"
@@ -45,9 +46,10 @@ type WalletConfig struct {
 }
 
 type service struct {
-	loader   *wallet.Loader
-	accounts map[accountName]uint32
-	cfg      WalletConfig
+	loader       *wallet.Loader
+	accounts     map[accountName]uint32
+	cfg          WalletConfig
+	feeEstimator *feeEstimator
 }
 
 func New(cfg WalletConfig) (ports.WalletService, error) {
@@ -104,7 +106,7 @@ func New(cfg WalletConfig) (ports.WalletService, error) {
 
 	w.SynchronizeRPC(cfg.ChainSource)
 
-	return &service{loader, accounts, cfg}, nil
+	return &service{loader, accounts, cfg, newFeeEstimator(cfg.ChainParams)}, nil
 }
 
 func (s *service) Close() {
@@ -446,8 +448,26 @@ func (s *service) WaitForSync(ctx context.Context, txid string) error {
 	}
 }
 
-func (s *service) EstimateFees(ctx context.Context, pset string) (uint64, error) {
-	panic("unimplemented")
+func (s *service) EstimateFees(ctx context.Context, partialTx string) (uint64, error) {
+	feeRate, err := s.feeEstimator.getFeeRate()
+	if err != nil {
+		return 0, err
+	}
+
+	partial, err := psbt.NewFromRawBytes(
+		strings.NewReader(partialTx),
+		true,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	fee := txrules.FeeForSerializeSize(
+		feeRate,
+		partial.UnsignedTx.SerializeSize(),
+	)
+
+	return uint64(fee.ToUnit(btcutil.AmountSatoshi)), nil
 }
 
 // TODO Scanner
