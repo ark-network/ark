@@ -23,7 +23,7 @@ func Layout(bodyContent templ.Component) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<!doctype html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><meta http-equiv=\"X-UA-Compatible\" content=\"ie=edge\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src &#39;self&#39;; style-src &#39;self&#39; &#39;unsafe-inline&#39; https://fonts.googleapis.com; font-src &#39;self&#39; data: https://fonts.gstatic.com; script-src &#39;self&#39; &#39;unsafe-inline&#39; &#39;unsafe-eval&#39;; connect-src &#39;self&#39; ws://localhost:*; img-src &#39;self&#39; data:*;\"><meta name=\"theme-color\" content=\"#FEFEF5\"><title>Ark dashboard</title><meta name=\"keywords\" content=\"ark, dashboard\"><meta name=\"description\" content=\"ark dashboard\"><link rel=\"dns-prefetch\" href=\"//fonts.googleapis.com\"><link rel=\"dns-prefetch\" href=\"//fonts.gstatic.com\"><link rel=\"preconnect\" href=\"//fonts.googleapis.com\" crossorigin><link rel=\"preconnect\" href=\"//fonts.gstatic.com\" crossorigin><link rel=\"manifest\" href=\"/static/manifest.json\"><link rel=\"apple-touch-icon\" href=\"/static/apple-touch-icon.png\"><link rel=\"shortcut icon\" href=\"/static/favicon.ico\" type=\"image/x-icon\"><link rel=\"icon\" href=\"/static/favicon.svg\" type=\"image/svg+xml\"><link rel=\"icon\" href=\"/static/favicon.png\" sizes=\"any\"><link href=\"https://fonts.googleapis.com/css2?family=Inconsolata:wght@200..900&amp;display=swap\" rel=\"stylesheet\"><link href=\"/static/styles.css\" rel=\"stylesheet\"></head>")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<!doctype html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><meta http-equiv=\"X-UA-Compatible\" content=\"ie=edge\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src &#39;self&#39;; style-src &#39;self&#39; &#39;unsafe-inline&#39; https://fonts.googleapis.com; font-src &#39;self&#39; data: https://fonts.gstatic.com; script-src &#39;self&#39; &#39;unsafe-inline&#39; &#39;unsafe-eval&#39;; connect-src &#39;self&#39; ws://localhost:*; img-src &#39;self&#39; data:*;\"><meta name=\"theme-color\" content=\"#FEFEF5\"><title>Ark dashboard</title><meta name=\"keywords\" content=\"ark, dashboard\"><meta name=\"description\" content=\"ark dashboard\"><link rel=\"dns-prefetch\" href=\"//fonts.googleapis.com\"><link rel=\"dns-prefetch\" href=\"//fonts.gstatic.com\"><link rel=\"preconnect\" href=\"//fonts.googleapis.com\" crossorigin><link rel=\"preconnect\" href=\"//fonts.gstatic.com\" crossorigin><link rel=\"manifest\" href=\"static/manifest.json\"><link rel=\"apple-touch-icon\" href=\"static/apple-touch-icon.png\"><link rel=\"shortcut icon\" href=\"static/favicon.ico\" type=\"image/x-icon\"><link rel=\"icon\" href=\"static/favicon.svg\" type=\"image/svg+xml\"><link rel=\"icon\" href=\"static/favicon.png\" sizes=\"any\"><link href=\"https://fonts.googleapis.com/css2?family=Inconsolata:wght@200..900&amp;display=swap\" rel=\"stylesheet\"><link href=\"static/styles.css\" rel=\"stylesheet\"></head>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -48,7 +48,7 @@ func Layout(bodyContent templ.Component) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<script src=\"/static/scripts.js\"></script></body></html>")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<script src=\"static/scripts.js\"></script></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -62,8 +62,8 @@ func Layout(bodyContent templ.Component) templ.Component {
 // BodyScripts defines JavaScript code.
 func BodyScripts() templ.ComponentScript {
 	return templ.ComponentScript{
-		Name: `__templ_BodyScripts_1076`,
-		Function: `function __templ_BodyScripts_1076(){// from 4321 to 0.00004321 with '0' in gray
+		Name: `__templ_BodyScripts_b1d1`,
+		Function: `function __templ_BodyScripts_b1d1(){// from 4321 to 0.00004321 with '0' in gray
 	const prettySats = (num) => {
     const length = String(num).length
     if (length > 8) return num
@@ -113,8 +113,9 @@ func BodyScripts() templ.ComponentScript {
 
   // redirects browser to local path
 	const redirect = (path) => {
-    const { origin } = window.location
-    window.location = origin + path
+    const { origin, pathname } = window.location
+		const prefix = pathname.split('/')[1]
+    window.location = origin + '/' + prefix + path
   }
 
 
@@ -142,7 +143,7 @@ func BodyScripts() templ.ComponentScript {
 		x.onclick = () => redirect(` + "`" + `/vtxo/${outpoint}` + "`" + `)
 	})
 }`,
-		Call:       templ.SafeScript(`__templ_BodyScripts_1076`),
-		CallInline: templ.SafeScriptInline(`__templ_BodyScripts_1076`),
+		Call:       templ.SafeScript(`__templ_BodyScripts_b1d1`),
+		CallInline: templ.SafeScriptInline(`__templ_BodyScripts_b1d1`),
 	}
 }

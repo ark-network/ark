@@ -11,11 +11,10 @@ import "io"
 import "bytes"
 
 import (
-	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/internal/interface/dashboard/templates/components"
 )
 
-func RoundsBodyContent(rounds *arkv1.GetRoundsResponse) templ.Component {
+func RoundsBodyContent(rounds []string) templ.Component {
 	return templ.ComponentFunc(func(ctx context.Context, templ_7745c5c3_W io.Writer) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templ_7745c5c3_W.(*bytes.Buffer)
 		if !templ_7745c5c3_IsBuffer {

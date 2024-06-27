@@ -10,6 +10,7 @@ import (
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	appconfig "github.com/ark-network/ark/internal/app-config"
 	interfaces "github.com/ark-network/ark/internal/interface"
+	"github.com/ark-network/ark/internal/interface/dashboard"
 	"github.com/ark-network/ark/internal/interface/grpc/handlers"
 	"github.com/ark-network/ark/internal/interface/grpc/interceptors"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -104,9 +105,12 @@ func NewService(
 	}
 	grpcGateway := http.Handler(gwmux)
 
+	dashboardHandler := dashboard.NewService(appConfig.AdminService())
+
 	handler := router(grpcServer, grpcGateway)
 	mux := http.NewServeMux()
 	mux.Handle("/", handler)
+	mux.Handle("/dashboard/", http.StripPrefix("/dashboard", dashboardHandler))
 
 	httpServerHandler := http.Handler(mux)
 	if svcConfig.insecure() {
