@@ -18,8 +18,12 @@ import (
 const minAllowedSequence = 512
 
 var (
+	supportedEventDbs = supportedType{
+		"badger": {},
+	}
 	supportedDbs = supportedType{
 		"badger": {},
+		"sqlite": {},
 	}
 	supportedSchedulers = supportedType{
 		"gocron": {},
@@ -34,7 +38,9 @@ var (
 
 type Config struct {
 	DbType                string
+	EventDbType           string
 	DbDir                 string
+	EventDbDir            string
 	RoundInterval         int64
 	Network               common.Network
 	SchedulerType         string
@@ -55,6 +61,9 @@ type Config struct {
 }
 
 func (c *Config) Validate() error {
+	if !supportedEventDbs.supports(c.EventDbType) {
+		return fmt.Errorf("event db type not supported, please select one of: %s", supportedEventDbs)
+	}
 	if !supportedDbs.supports(c.DbType) {
 		return fmt.Errorf("db type not supported, please select one of: %s", supportedDbs)
 	}
@@ -143,21 +152,33 @@ func (c *Config) AdminService() application.AdminService {
 func (c *Config) repoManager() error {
 	var svc ports.RepoManager
 	var err error
+	var eventStoreConfig []interface{}
+	var dataStoreConfig []interface{}
+	logger := log.New()
+
+	switch c.EventDbType {
+	case "badger":
+		eventStoreConfig = []interface{}{c.EventDbDir, logger}
+	default:
+		return fmt.Errorf("unknown event db type")
+	}
+
 	switch c.DbType {
 	case "badger":
-		logger := log.New()
-		svc, err = db.NewService(db.ServiceConfig{
-			EventStoreType: c.DbType,
-			RoundStoreType: c.DbType,
-			VtxoStoreType:  c.DbType,
-
-			EventStoreConfig: []interface{}{c.DbDir, logger},
-			RoundStoreConfig: []interface{}{c.DbDir, logger},
-			VtxoStoreConfig:  []interface{}{c.DbDir, logger},
-		})
+		dataStoreConfig = []interface{}{c.DbDir, logger}
+	case "sqlite":
+		dataStoreConfig = []interface{}{c.DbDir}
 	default:
 		return fmt.Errorf("unknown db type")
 	}
+
+	svc, err = db.NewService(db.ServiceConfig{
+		EventStoreType: c.EventDbType,
+		DataStoreType:  c.DbType,
+
+		EventStoreConfig: eventStoreConfig,
+		DataStoreConfig:  dataStoreConfig,
+	})
 	if err != nil {
 		return err
 	}

@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 
 	"github.com/ark-network/ark/internal/core/domain"
-	dbtypes "github.com/ark-network/ark/internal/infrastructure/db/types"
 	"github.com/dgraph-io/badger/v4"
 	"github.com/timshannon/badgerhold/v4"
 )
@@ -17,7 +16,7 @@ type roundRepository struct {
 	store *badgerhold.Store
 }
 
-func NewRoundRepository(config ...interface{}) (dbtypes.RoundStore, error) {
+func NewRoundRepository(config ...interface{}) (domain.RoundRepository, error) {
 	if len(config) != 2 {
 		return nil, fmt.Errorf("invalid config")
 	}
