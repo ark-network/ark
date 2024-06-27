@@ -11,13 +11,17 @@ import "io"
 import "bytes"
 
 import (
+	"github.com/ark-network/ark/internal/core/application"
 	"github.com/ark-network/ark/internal/interface/dashboard/templates/components"
-
-	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 )
 
 // BodyContent defines HTML content.
-func HomeBodyContent(balance *arkv1.GetBalanceResponse, sweeps *arkv1.GetScheduledSweepResponse, round *arkv1.GetRoundDetailsResponse, rounds *arkv1.GetRoundsResponse) templ.Component {
+func HomeBodyContent(
+	balance *application.ArkProviderBalance,
+	sweeps []application.ScheduledSweep,
+	rounds []string,
+	round *application.RoundDetails,
+) templ.Component {
 	return templ.ComponentFunc(func(ctx context.Context, templ_7745c5c3_W io.Writer) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templ_7745c5c3_W.(*bytes.Buffer)
 		if !templ_7745c5c3_IsBuffer {
@@ -42,9 +46,11 @@ func HomeBodyContent(balance *arkv1.GetBalanceResponse, sweeps *arkv1.GetSchedul
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = components.RoundDetails(round).Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
+		if round != nil {
+			templ_7745c5c3_Err = components.RoundDetails(*round).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("</div><div class=\"flex flex-col gap-4\">")
 		if templ_7745c5c3_Err != nil {

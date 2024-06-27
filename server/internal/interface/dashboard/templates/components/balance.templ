@@ -1,8 +1,11 @@
 package components
 
-import arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+import (
+	"strconv"
+	"github.com/ark-network/ark/internal/core/application"
+)
 
-templ Balance(balance *arkv1.GetBalanceResponse) {
+templ Balance(balance *application.ArkProviderBalance) {
 	<div class="border border-gray-300 w-full p-4">
 		<h2 class="text-lg font-semibold mb-4">Balance</h2>
 		<div class="grid grid-cols-2 gap-6">
@@ -11,13 +14,17 @@ templ Balance(balance *arkv1.GetBalanceResponse) {
 				<div class="flex justify-between">
 					<p>Available:</p>
 					<p class="sats">
-						{ balance.MainAccount.Available }
+						if balance != nil {
+							{ strconv.Itoa(int(balance.MainAccountBalance.Available)) }
+						}
 					</p>
 				</div>
 				<div class="flex justify-between">
 					<p>Locked:</p>
 					<p class="sats">
-						{ balance.MainAccount.Locked }
+						if balance != nil {
+							{ strconv.Itoa(int(balance.MainAccountBalance.Locked)) }
+						}
 					</p>
 				</div>
 			</div>
@@ -26,13 +33,17 @@ templ Balance(balance *arkv1.GetBalanceResponse) {
 				<div class="flex justify-between">
 					<p>Available:</p>
 					<p class="sats">
-						{ balance.ConnectorsAccount.Available }
+						if balance != nil {
+							{ strconv.Itoa(int(balance.ConnectorsAccountBalance.Available)) }
+						}
 					</p>
 				</div>
 				<div class="flex justify-between">
 					<p>Locked:</p>
 					<p class="sats">
-						{ balance.ConnectorsAccount.Locked }
+						if balance != nil {
+							{ strconv.Itoa(int(balance.ConnectorsAccountBalance.Locked)) }
+						}
 					</p>
 				</div>
 			</div>

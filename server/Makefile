@@ -35,6 +35,8 @@ run: clean
 	@echo "Running arkd in dev mode..."
 	@export ARK_WALLET_ADDR=localhost:18000; \
 	export ARK_ROUND_INTERVAL=10; \
+	export ARK_NETWORK=regtest; \
+	export ARK_PORT=8000; \
 	go run ./cmd/arkd
 
 ## test: runs unit and component tests
@@ -58,4 +60,9 @@ proto-lint:
 	@echo "Linting protos..."
 	@docker build -q -t buf -f buf.Dockerfile . &> /dev/null
 	@docker run --rm --volume "$(shell pwd):/workspace" --workdir /workspace buf lint
+
+## build-dashboard-templates: build html templates for embedded dashboard
+build-dashboard-templates:
+	@echo "Building dashboard templates..."
+	@go run github.com/a-h/templ/cmd/templ@latest generate
 		

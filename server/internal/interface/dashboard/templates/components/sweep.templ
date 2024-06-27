@@ -2,19 +2,19 @@ package components
 
 import (
 	"strconv"
-	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+	"time"
+	"github.com/ark-network/ark/internal/core/application"
 )
 
-func totalAmount(outputs []*arkv1.SweepableOutput) string {
+func totalAmount(outputs []application.SweepableOutput) string {
 	accum := 0
 	for _, o := range outputs {
-		amount, _ := strconv.Atoi(o.Amount)
-		accum = accum + amount
+		accum += int(o.Amount)
 	}
 	return strconv.Itoa(accum)
 }
 
-templ Sweep(sweep *arkv1.ScheduledSweep) {
+templ Sweep(sweep application.ScheduledSweep) {
 	<div class="flex flex-col gap-1">
 		<div class="flex justify-between">
 			<p>Round ID:</p>
@@ -22,19 +22,19 @@ templ Sweep(sweep *arkv1.ScheduledSweep) {
 		</div>
 		<div class="flex justify-between">
 			<p>When:</p>
-			<p class="time">{ strconv.FormatInt(sweep.Outputs[0].ScheduledAt, 10) }</p>
+			<p class="time">{ time.Unix(sweep.SweepableOutputs[0].ScheduledAt, 0).Format(time.RFC3339) }</p>
 		</div>
 		<div class="flex justify-between">
 			<p>Amount:</p>
-			<p class="sats">{ totalAmount(sweep.Outputs) }</p>
+			<p class="sats">{ totalAmount(sweep.SweepableOutputs) }</p>
 		</div>
 		<details>
-			<summary>Outputs ({ strconv.Itoa(len(sweep.Outputs)) })</summary>
+			<summary>Outputs ({ strconv.Itoa(len(sweep.SweepableOutputs)) })</summary>
 			<div class="flex flex-col gap-1 my-2 bg-gray-100">
-				for _, item := range sweep.Outputs {
+				for _, item := range sweep.SweepableOutputs {
 					<div class="flex justify-between">
-						<p class="txid">{ item.Txid }</p>
-						<p class="sats">{ item.Amount }</p>
+						<p class="txid">{ item.TxId }</p>
+						<p class="sats">{ strconv.Itoa(int(item.Amount)) }</p>
 					</div>
 				}
 			</div>
@@ -42,20 +42,22 @@ templ Sweep(sweep *arkv1.ScheduledSweep) {
 	</div>
 }
 
-templ NextSweep(data *arkv1.GetScheduledSweepResponse) {
+templ NextSweep(data []application.ScheduledSweep) {
 	<div class="border border-gray-300 w-full p-4">
 		<div class="flex justify-between">
 			<h2 class="text-lg font-semibold mb-4">Next Sweep</h2>
-			<p><a href="/sweeps">All sweeps</a></p>
+			<p><a href="sweeps">All sweeps</a></p>
 		</div>
-		@Sweep(data.Sweeps[0])
+		if len(data) > 0 {
+			@Sweep(data[0])
+		}
 	</div>
 }
 
-templ NextSweeps(data *arkv1.GetScheduledSweepResponse) {
+templ NextSweeps(data []application.ScheduledSweep) {
 	<div class="border border-gray-300 w-full p-4">
 		<h2 class="text-lg font-semibold mb-4">Next Sweeps</h2>
-		for _, sweep := range data.Sweeps {
+		for _, sweep := range data {
 			@Sweep(sweep)
 			<div class="py-4 last:pb-0"></div>
 		}

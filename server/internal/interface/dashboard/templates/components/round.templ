@@ -2,25 +2,23 @@ package components
 
 import (
 	"strconv"
-	"time"
-	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+	"github.com/ark-network/ark/internal/core/application"
 )
 
-templ LastRounds(data *arkv1.GetRoundsResponse) {
+templ LastRounds(rounds []string) {
 	<div class="border border-gray-300 h-full w-full p-4">
 		<h2 class="text-lg font-semibold mb-4">Last rounds</h2>
 		<div class="flex flex-col gap-2">
-			for index, txid := range data.Rounds {
+			for _, txid := range rounds {
 				<div class="flex justify-between">
 					<p class="txid">{ txid }</p>
-					<p class="time">{ strconv.Itoa(int(time.Now().Unix()) - (index*25)) }</p>
 				</div>
 			}
 		</div>
 	</div>
 }
 
-templ RoundDetails(details *arkv1.GetRoundDetailsResponse) {
+templ RoundDetails(details application.RoundDetails) {
 	<div class="border border-gray-300 w-full p-4">
 		<h2 class="text-lg font-semibold mb-4">Round details</h2>
 		<div class="flex flex-col gap-1">
@@ -30,23 +28,23 @@ templ RoundDetails(details *arkv1.GetRoundDetailsResponse) {
 			</div>
 			<div class="flex justify-between">
 				<p>TX ID:</p>
-				<p class="txid">{ details.Txid }</p>
+				<p class="txid">{ details.TxId }</p>
 			</div>
 			<div class="flex justify-between">
 				<p>Forfeited amount:</p>
-				<p class="sats">{ details.ForfeitedAmount }</p>
+				<p class="sats">{ strconv.Itoa(int(details.ForfeitedAmount)) }</p>
 			</div>
 			<div class="flex justify-between">
 				<p>VTXOs amount:</p>
-				<p class="sats">{ details.TotalVtxosAmount }</p>
+				<p class="sats">{ strconv.Itoa(int(details.TotalVtxosAmount)) }</p>
 			</div>
 			<div class="flex justify-between">
 				<p>Exit amount:</p>
-				<p class="sats">{ details.TotalExitAmount }</p>
+				<p class="sats">{ strconv.Itoa(int(details.TotalExitAmount)) }</p>
 			</div>
 			<div class="flex justify-between">
 				<p>Fees amount:</p>
-				<p class="sats">{ details.FeesAmount }</p>
+				<p class="sats">{ strconv.Itoa(int(details.FeesAmount)) }</p>
 			</div>
 			<details>
 				<summary>Input VTXOs ({ strconv.Itoa(len(details.InputsVtxos)) })</summary>

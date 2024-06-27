@@ -11,20 +11,20 @@ import "io"
 import "bytes"
 
 import (
-	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+	"github.com/ark-network/ark/internal/core/application"
 	"strconv"
+	"time"
 )
 
-func totalAmount(outputs []*arkv1.SweepableOutput) string {
+func totalAmount(outputs []application.SweepableOutput) string {
 	accum := 0
 	for _, o := range outputs {
-		amount, _ := strconv.Atoi(o.Amount)
-		accum = accum + amount
+		accum += int(o.Amount)
 	}
 	return strconv.Itoa(accum)
 }
 
-func Sweep(sweep *arkv1.ScheduledSweep) templ.Component {
+func Sweep(sweep application.ScheduledSweep) templ.Component {
 	return templ.ComponentFunc(func(ctx context.Context, templ_7745c5c3_W io.Writer) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templ_7745c5c3_W.(*bytes.Buffer)
 		if !templ_7745c5c3_IsBuffer {
@@ -44,7 +44,7 @@ func Sweep(sweep *arkv1.ScheduledSweep) templ.Component {
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(sweep.RoundId)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `templates/components/sweep.templ`, Line: 21, Col: 34}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/interface/dashboard/templates/components/sweep.templ`, Line: 21, Col: 34}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 		if templ_7745c5c3_Err != nil {
@@ -55,9 +55,9 @@ func Sweep(sweep *arkv1.ScheduledSweep) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var3 string
-		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.FormatInt(sweep.Outputs[0].ScheduledAt, 10))
+		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(time.Unix(sweep.SweepableOutputs[0].ScheduledAt, 0).Format(time.RFC3339))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `templates/components/sweep.templ`, Line: 25, Col: 72}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/interface/dashboard/templates/components/sweep.templ`, Line: 25, Col: 93}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 		if templ_7745c5c3_Err != nil {
@@ -68,9 +68,9 @@ func Sweep(sweep *arkv1.ScheduledSweep) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var4 string
-		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(totalAmount(sweep.Outputs))
+		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(totalAmount(sweep.SweepableOutputs))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `templates/components/sweep.templ`, Line: 29, Col: 47}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/interface/dashboard/templates/components/sweep.templ`, Line: 29, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {
@@ -81,9 +81,9 @@ func Sweep(sweep *arkv1.ScheduledSweep) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var5 string
-		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(len(sweep.Outputs)))
+		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(len(sweep.SweepableOutputs)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `templates/components/sweep.templ`, Line: 32, Col: 55}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/interface/dashboard/templates/components/sweep.templ`, Line: 32, Col: 64}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 		if templ_7745c5c3_Err != nil {
@@ -93,15 +93,15 @@ func Sweep(sweep *arkv1.ScheduledSweep) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		for _, item := range sweep.Outputs {
+		for _, item := range sweep.SweepableOutputs {
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<div class=\"flex justify-between\"><p class=\"txid\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var6 string
-			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(item.Txid)
+			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(item.TxId)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `templates/components/sweep.templ`, Line: 36, Col: 33}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/interface/dashboard/templates/components/sweep.templ`, Line: 36, Col: 33}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
@@ -112,9 +112,9 @@ func Sweep(sweep *arkv1.ScheduledSweep) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var7 string
-			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(item.Amount)
+			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(int(item.Amount)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `templates/components/sweep.templ`, Line: 37, Col: 35}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/interface/dashboard/templates/components/sweep.templ`, Line: 37, Col: 54}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
@@ -136,7 +136,7 @@ func Sweep(sweep *arkv1.ScheduledSweep) templ.Component {
 	})
 }
 
-func NextSweep(data *arkv1.GetScheduledSweepResponse) templ.Component {
+func NextSweep(data []application.ScheduledSweep) templ.Component {
 	return templ.ComponentFunc(func(ctx context.Context, templ_7745c5c3_W io.Writer) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templ_7745c5c3_W.(*bytes.Buffer)
 		if !templ_7745c5c3_IsBuffer {
@@ -149,13 +149,15 @@ func NextSweep(data *arkv1.GetScheduledSweepResponse) templ.Component {
 			templ_7745c5c3_Var8 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<div class=\"border border-gray-300 w-full p-4\"><div class=\"flex justify-between\"><h2 class=\"text-lg font-semibold mb-4\">Next Sweep</h2><p><a href=\"/sweeps\">All sweeps</a></p></div>")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<div class=\"border border-gray-300 w-full p-4\"><div class=\"flex justify-between\"><h2 class=\"text-lg font-semibold mb-4\">Next Sweep</h2><p><a href=\"sweeps\">All sweeps</a></p></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = Sweep(data.Sweeps[0]).Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
+		if len(data) > 0 {
+			templ_7745c5c3_Err = Sweep(data[0]).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("</div>")
 		if templ_7745c5c3_Err != nil {
@@ -168,7 +170,7 @@ func NextSweep(data *arkv1.GetScheduledSweepResponse) templ.Component {
 	})
 }
 
-func NextSweeps(data *arkv1.GetScheduledSweepResponse) templ.Component {
+func NextSweeps(data []application.ScheduledSweep) templ.Component {
 	return templ.ComponentFunc(func(ctx context.Context, templ_7745c5c3_W io.Writer) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templ_7745c5c3_W.(*bytes.Buffer)
 		if !templ_7745c5c3_IsBuffer {
@@ -185,7 +187,7 @@ func NextSweeps(data *arkv1.GetScheduledSweepResponse) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		for _, sweep := range data.Sweeps {
+		for _, sweep := range data {
 			templ_7745c5c3_Err = Sweep(sweep).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err

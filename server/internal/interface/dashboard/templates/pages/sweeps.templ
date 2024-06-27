@@ -1,11 +1,11 @@
 package pages
 
 import (
+	"github.com/ark-network/ark/internal/core/application"
 	"github.com/ark-network/ark/internal/interface/dashboard/templates/components"
-	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 )
 
-templ SweepsBodyContent(sweeps *arkv1.GetScheduledSweepResponse) {
+templ SweepsBodyContent(sweeps []application.ScheduledSweep) {
 	<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 w-full">
 		<div class="flex flex-col gap-4">
 			@components.NextSweeps(sweeps)
