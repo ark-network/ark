@@ -1,0 +1,21 @@
+package pages
+
+// BodyContent defines HTML content.
+templ LoginBodyContent() {
+	<form hx-post="/dashboard/authenticate">
+		<div class="flex justify-center mt-10 w-full">
+			<div class="flex flex-col gap-4 border border-gray-100 p-4 mx-auto">
+				<p>Login</p>
+				<div>
+					<p>Username</p>
+					<input name="username"/>
+				</div>
+				<div>
+					<p>Password</p>
+					<input name="password"/>
+				</div>
+				<button type="submit">Login</button>
+			</div>
+		</div>
+	</form>
+}

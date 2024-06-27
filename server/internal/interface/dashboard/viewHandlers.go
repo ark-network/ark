@@ -59,6 +59,12 @@ func (svc *service) indexViewHandler(c *gin.Context) {
 	viewHandler(bodyContent, c)
 }
 
+// loginViewHandler handles a view for the login page: '/login'
+func (svc *service) loginViewHandler(c *gin.Context) {
+	bodyContent := pages.LoginBodyContent()
+	viewHandler(bodyContent, c)
+}
+
 // sweepsViewHandler handles a view for the sweeps page: '/sweeps'
 func (svc *service) sweepsViewHandler(c *gin.Context) {
 	nextSweeps, err := svc.adminSvc.GetScheduledSweeps(c.Request.Context())
