@@ -14,6 +14,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func reverseArray(arr []string) {
+	for i, j := 0, len(arr)-1; i < j; i, j = i+1, j-1 {
+		arr[i], arr[j] = arr[j], arr[i]
+	}
+}
+
 func viewHandler(bodyContent templ.Component, c *gin.Context) {
 	indexTemplate := templates.Layout(bodyContent)
 	// Render index page template.
@@ -41,6 +47,7 @@ func (svc *service) indexViewHandler(c *gin.Context) {
 	if err != nil {
 		// TODO: handle
 	}
+	reverseArray(lastRounds)
 
 	var round *application.RoundDetails
 	if len(lastRounds) > 0 {
@@ -68,6 +75,7 @@ func (svc *service) roundsViewHandler(c *gin.Context) {
 	if err != nil {
 		// TODO: handle
 	}
+	reverseArray(lastRounds)
 	bodyContent := pages.RoundsBodyContent(lastRounds)
 	viewHandler(bodyContent, c)
 }
