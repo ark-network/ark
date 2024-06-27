@@ -111,6 +111,7 @@ func NewService(
 	mux := http.NewServeMux()
 	mux.Handle("/", handler)
 	mux.Handle("/dashboard/", http.StripPrefix("/dashboard", dashboardHandler))
+	mux.Handle("/static/", dashboardHandler)
 
 	httpServerHandler := http.Handler(mux)
 	if svcConfig.insecure() {
