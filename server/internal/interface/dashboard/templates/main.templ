@@ -26,7 +26,7 @@ templ Layout(bodyContent templ.Component) {
 		</head>
 		<body class="bg-white text-gray-800 p-10" onload={ BodyScripts() }>
 			<div class="flex justify-end w-full">
-				<p hx-get="/dashboard/logout">Logout</p>
+				<p class="px-2 border border-gray-300 mb-4 cursor-pointer" hx-get="/dashboard/logout">Logout</p>
 			</div>
 			@bodyContent
 			<script src="/static/scripts.js"></script>

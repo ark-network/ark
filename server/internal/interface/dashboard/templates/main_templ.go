@@ -43,7 +43,7 @@ func Layout(bodyContent templ.Component) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("\"><div class=\"flex justify-end w-full\"><p hx-get=\"/dashboard/logout\">Logout</p></div>")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("\"><div class=\"flex justify-end w-full\"><p class=\"px-2 border border-gray-300 mb-4 cursor-pointer\" hx-get=\"/dashboard/logout\">Logout</p></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
