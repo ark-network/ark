@@ -27,7 +27,7 @@ func LoginBodyContent() templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<form hx-post=\"/dashboard/authenticate\"><div class=\"flex justify-center mt-10 w-full\"><div class=\"flex flex-col gap-4 border border-gray-100 p-4 mx-auto\"><p>Login</p><div><p>Username</p><input name=\"username\"></div><div><p>Password</p><input name=\"password\"></div><button type=\"submit\">Login</button></div></div></form>")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<form hx-post=\"/dashboard/authenticate\"><div class=\"flex justify-center mt-10 w-full\"><div class=\"flex flex-col gap-4 border border-gray-100 p-4 mx-auto\"><p>Login</p><div><p>Username</p><input name=\"username\"></div><div><p>Password</p><input name=\"password\" type=\"password\"></div><button type=\"submit\">Login</button></div></div></form>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
