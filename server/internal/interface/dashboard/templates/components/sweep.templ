@@ -1,0 +1,65 @@
+package components
+
+import (
+	"strconv"
+	"time"
+	"github.com/ark-network/ark/internal/core/application"
+)
+
+func totalAmount(outputs []application.SweepableOutput) string {
+	accum := 0
+	for _, o := range outputs {
+		accum += int(o.Amount)
+	}
+	return strconv.Itoa(accum)
+}
+
+templ Sweep(sweep application.ScheduledSweep) {
+	<div class="flex flex-col gap-1">
+		<div class="flex justify-between">
+			<p>Round ID:</p>
+			<p class="txid">{ sweep.RoundId }</p>
+		</div>
+		<div class="flex justify-between">
+			<p>When:</p>
+			<p class="time">{ time.Unix(sweep.SweepableOutputs[0].ScheduledAt, 0).Format(time.RFC3339) }</p>
+		</div>
+		<div class="flex justify-between">
+			<p>Amount:</p>
+			<p class="sats">{ totalAmount(sweep.SweepableOutputs) }</p>
+		</div>
+		<details>
+			<summary>Outputs ({ strconv.Itoa(len(sweep.SweepableOutputs)) })</summary>
+			<div class="flex flex-col gap-1 my-2 bg-gray-100">
+				for _, item := range sweep.SweepableOutputs {
+					<div class="flex justify-between">
+						<p class="txid">{ item.TxId }</p>
+						<p class="sats">{ strconv.Itoa(int(item.Amount)) }</p>
+					</div>
+				}
+			</div>
+		</details>
+	</div>
+}
+
+templ NextSweep(data []application.ScheduledSweep) {
+	<div class="border border-gray-300 w-full p-4">
+		<div class="flex justify-between">
+			<h2 class="text-lg font-semibold mb-4">Next Sweep</h2>
+			<p><a href="sweeps">All sweeps</a></p>
+		</div>
+		if len(data) > 0 {
+			@Sweep(data[0])
+		}
+	</div>
+}
+
+templ NextSweeps(data []application.ScheduledSweep) {
+	<div class="border border-gray-300 w-full p-4">
+		<h2 class="text-lg font-semibold mb-4">Next Sweeps</h2>
+		for _, sweep := range data {
+			@Sweep(sweep)
+			<div class="py-4 last:pb-0"></div>
+		}
+	</div>
+}

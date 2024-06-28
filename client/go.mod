@@ -1,6 +1,8 @@
 module github.com/ark-network/ark-cli
 
-go 1.21.0
+go 1.22
+
+toolchain go1.22.4
 
 replace github.com/ark-network/ark/common => ../common
 

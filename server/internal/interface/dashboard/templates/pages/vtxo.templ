@@ -1,0 +1,15 @@
+package pages
+
+import (
+	"github.com/ark-network/ark/internal/interface/dashboard/templates/components"
+
+	// arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+)
+
+templ VtxoBodyContent(outpoint string) {
+	<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 w-full">
+		<div class="flex flex-col gap-4">
+			@components.Vtxo(outpoint)
+		</div>
+	</div>
+}

@@ -1,0 +1,52 @@
+package components
+
+import (
+	"strconv"
+	"github.com/ark-network/ark/internal/core/application"
+)
+
+templ Balance(balance *application.ArkProviderBalance) {
+	<div class="border border-gray-300 w-full p-4">
+		<h2 class="text-lg font-semibold mb-4">Balance</h2>
+		<div class="grid grid-cols-2 gap-6">
+			<div class="flex flex-col gap-1">
+				<p class="font-semibold">Main</p>
+				<div class="flex justify-between">
+					<p>Available:</p>
+					<p class="sats">
+						if balance != nil {
+							{ strconv.Itoa(int(balance.MainAccountBalance.Available)) }
+						}
+					</p>
+				</div>
+				<div class="flex justify-between">
+					<p>Locked:</p>
+					<p class="sats">
+						if balance != nil {
+							{ strconv.Itoa(int(balance.MainAccountBalance.Locked)) }
+						}
+					</p>
+				</div>
+			</div>
+			<div class="flex flex-col gap-1">
+				<p class="font-semibold">Connectors</p>
+				<div class="flex justify-between">
+					<p>Available:</p>
+					<p class="sats">
+						if balance != nil {
+							{ strconv.Itoa(int(balance.ConnectorsAccountBalance.Available)) }
+						}
+					</p>
+				</div>
+				<div class="flex justify-between">
+					<p>Locked:</p>
+					<p class="sats">
+						if balance != nil {
+							{ strconv.Itoa(int(balance.ConnectorsAccountBalance.Locked)) }
+						}
+					</p>
+				</div>
+			</div>
+		</div>
+	</div>
+}

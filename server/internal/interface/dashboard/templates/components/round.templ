@@ -1,0 +1,75 @@
+package components
+
+import (
+	"strconv"
+	"github.com/ark-network/ark/internal/core/application"
+)
+
+templ LastRounds(rounds []string) {
+	<div class="border border-gray-300 h-full w-full p-4">
+		<h2 class="text-lg font-semibold mb-4">Last rounds</h2>
+		<div class="flex flex-col gap-2">
+			for _, txid := range rounds {
+				<div class="flex justify-between">
+					<p class="txid">{ txid }</p>
+				</div>
+			}
+		</div>
+	</div>
+}
+
+templ RoundDetails(details application.RoundDetails) {
+	<div class="border border-gray-300 w-full p-4">
+		<h2 class="text-lg font-semibold mb-4">Round details</h2>
+		<div class="flex flex-col gap-1">
+			<div class="flex justify-between">
+				<p>Round ID:</p>
+				<p class="uuid">{ details.RoundId }</p>
+			</div>
+			<div class="flex justify-between">
+				<p>TX ID:</p>
+				<p class="txid">{ details.TxId }</p>
+			</div>
+			<div class="flex justify-between">
+				<p>Forfeited amount:</p>
+				<p class="sats">{ strconv.Itoa(int(details.ForfeitedAmount)) }</p>
+			</div>
+			<div class="flex justify-between">
+				<p>VTXOs amount:</p>
+				<p class="sats">{ strconv.Itoa(int(details.TotalVtxosAmount)) }</p>
+			</div>
+			<div class="flex justify-between">
+				<p>Exit amount:</p>
+				<p class="sats">{ strconv.Itoa(int(details.TotalExitAmount)) }</p>
+			</div>
+			<div class="flex justify-between">
+				<p>Fees amount:</p>
+				<p class="sats">{ strconv.Itoa(int(details.FeesAmount)) }</p>
+			</div>
+			<details>
+				<summary>Input VTXOs ({ strconv.Itoa(len(details.InputsVtxos)) })</summary>
+				<div class="flex flex-col gap-1 my-2 bg-gray-100">
+					for _, item := range details.InputsVtxos {
+						<p class="vtxo">{ item }</p>
+					}
+				</div>
+			</details>
+			<details>
+				<summary>Output VTXOs ({ strconv.Itoa(len(details.OutputsVtxos)) })</summary>
+				<div class="flex flex-col gap-1 my-2 bg-gray-100">
+					for _, item := range details.OutputsVtxos {
+						<p class="vtxo">{ item }</p>
+					}
+				</div>
+			</details>
+			<details>
+				<summary>Exit Addresses ({ strconv.Itoa(len(details.ExitAddresses)) })</summary>
+				<div class="flex flex-col gap-1 my-2 bg-gray-100">
+					for _, item := range details.ExitAddresses {
+						<p class="addr">{ item }</p>
+					}
+				</div>
+			</details>
+		</div>
+	</div>
+}
