@@ -35,17 +35,17 @@ func (svc *service) indexViewHandler(c *gin.Context) {
 	ctx := c.Request.Context()
 	balance, err := svc.adminSvc.GetBalance(ctx)
 	if err != nil {
-		// TODO: handle
+		return
 	}
 	nextSweeps, err := svc.adminSvc.GetScheduledSweeps(ctx)
 	if err != nil {
-		// TODO: handle
+		return
 	}
 	now := time.Now()
 	oneHourAgo := now.Add(-time.Hour)
 	lastRounds, err := svc.adminSvc.GetRounds(ctx, oneHourAgo.Unix(), now.Unix())
 	if err != nil {
-		// TODO: handle
+		return
 	}
 	reverseArray(lastRounds)
 
@@ -69,7 +69,7 @@ func (svc *service) loginViewHandler(c *gin.Context) {
 func (svc *service) sweepsViewHandler(c *gin.Context) {
 	nextSweeps, err := svc.adminSvc.GetScheduledSweeps(c.Request.Context())
 	if err != nil {
-		// TODO: handle
+		return
 	}
 	bodyContent := pages.SweepsBodyContent(nextSweeps)
 	viewHandler(bodyContent, c)
@@ -79,7 +79,7 @@ func (svc *service) sweepsViewHandler(c *gin.Context) {
 func (svc *service) roundsViewHandler(c *gin.Context) {
 	lastRounds, err := svc.adminSvc.GetRounds(c.Request.Context(), 0, 0)
 	if err != nil {
-		// TODO: handle
+		return
 	}
 	reverseArray(lastRounds)
 	bodyContent := pages.RoundsBodyContent(lastRounds)
@@ -90,7 +90,7 @@ func (svc *service) roundsViewHandler(c *gin.Context) {
 func (svc *service) roundViewHandler(c *gin.Context) {
 	round, err := svc.adminSvc.GetRoundDetails(c.Request.Context(), c.Param("txid"))
 	if err != nil {
-		// TODO: handle
+		return
 	}
 	bodyContent := pages.RoundBodyContent(*round)
 	viewHandler(bodyContent, c)
