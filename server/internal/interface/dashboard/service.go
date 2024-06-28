@@ -16,7 +16,7 @@ import (
 
 const userkey = "admin"
 
-var secret = []byte("admin")
+var secret = []byte("secret_session_key_should_be_passed_by_env") // TODO
 
 func init() {
 	gin.SetMode(gin.ReleaseMode)
