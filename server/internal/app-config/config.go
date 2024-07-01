@@ -25,10 +25,12 @@ var (
 		"gocron": {},
 	}
 	supportedTxBuilders = supportedType{
-		"covenant": {},
+		"covenant":     {},
+		"covenantless": {},
 	}
 	supportedScanners = supportedType{
-		"ocean": {},
+		"ocean":     {},
+		"btcwallet": {},
 	}
 )
 
@@ -233,7 +235,7 @@ func (c *Config) schedulerService() error {
 
 func (c *Config) appService() error {
 	net := c.mainChain()
-	svc, err := application.NewService(
+	svc, err := application.NewCovenantService(
 		c.Network, net,
 		c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.MinRelayFee,
 		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler,

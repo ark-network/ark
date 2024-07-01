@@ -129,12 +129,18 @@ func makeDirectoryIfNotExists(path string) error {
 
 func getNetwork() (common.Network, error) {
 	switch strings.ToLower(viper.GetString(Network)) {
-	case "liquid":
+	case common.Liquid.Name:
 		return common.Liquid, nil
-	case "testnet":
-		return common.TestNet, nil
-	case "regtest":
-		return common.RegTest, nil
+	case common.LiquidTestNet.Name:
+		return common.LiquidTestNet, nil
+	case common.LiquidRegTest.Name:
+		return common.LiquidRegTest, nil
+	case common.Bitcoin.Name:
+		return common.Bitcoin, nil
+	case common.BitcoinTestNet.Name:
+		return common.BitcoinTestNet, nil
+	case common.BitcoinRegTest.Name:
+		return common.BitcoinRegTest, nil
 	default:
 		return common.Network{}, fmt.Errorf("unknown network %s", viper.GetString(Network))
 	}
