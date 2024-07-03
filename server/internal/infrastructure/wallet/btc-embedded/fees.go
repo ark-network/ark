@@ -5,39 +5,55 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcwallet/wallet/txrules"
 )
 
 var errFeeEstimator = errors.New("failed to get fee rate")
 
-type feeEstimator struct {
-	esploraURL string
+type esploraClient struct {
+	url string
 }
 
-func newFeeEstimator(network string) *feeEstimator {
+func newEsploraClient(network common.Network) *esploraClient {
 	var url string
 
-	switch network {
-	case "mainnet":
+	switch network.Name {
+	case common.Bitcoin.Name:
 		url = "https://blockstream.info/api/"
-	case "testnet":
+	case common.BitcoinTestNet.Name:
 		url = "https://blockstream.info/testnet/api/"
-	case "regtest":
-		url = ""
+	case common.BitcoinRegTest.Name:
+		url = "http://localhost:3000/" // nigiri chopsticks
 	}
 
-	return &feeEstimator{
+	return &esploraClient{
 		url,
 	}
 }
 
-func (f *feeEstimator) getFeeRate() (btcutil.Amount, error) {
-	if len(f.esploraURL) == 0 {
-		return txrules.DefaultRelayFeePerKb, nil
+func (f *esploraClient) getTxStatus(txid string) (isConfirmed bool, blocktime int64, err error) {
+	resp, err := http.DefaultClient.Get(f.url + "tx/" + txid)
+	if err != nil {
+		return false, 0, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return false, 0, err
 	}
 
-	resp, err := http.DefaultClient.Get(f.esploraURL + "fee-estimates")
+	var response esploraTx
+
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return false, 0, err
+	}
+
+	return response.Status.Confirmed, response.Status.BlockTime, nil
+}
+
+func (f *esploraClient) getFeeRate() (btcutil.Amount, error) {
+	resp, err := http.DefaultClient.Get(f.url + "fee-estimates")
 	if err != nil {
 		return 0, err
 	}
@@ -59,4 +75,11 @@ func (f *feeEstimator) getFeeRate() (btcutil.Amount, error) {
 	}
 
 	return btcutil.Amount(feeRate * 1000), nil
+}
+
+type esploraTx struct {
+	Status struct {
+		Confirmed bool  `json:"confirmed"`
+		BlockTime int64 `json:"block_time"`
+	} `json:"status"`
 }

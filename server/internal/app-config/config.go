@@ -10,9 +10,11 @@ import (
 	"github.com/ark-network/ark/internal/infrastructure/db"
 	scheduler "github.com/ark-network/ark/internal/infrastructure/scheduler/gocron"
 	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenant"
-	wallet "github.com/ark-network/ark/internal/infrastructure/wallet/liquid-standalone"
+	cltxbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenantless"
+	btcwallet "github.com/ark-network/ark/internal/infrastructure/wallet/btc-embedded"
+	liquidwallet "github.com/ark-network/ark/internal/infrastructure/wallet/liquid-standalone"
+
 	log "github.com/sirupsen/logrus"
-	"github.com/vulpemventures/go-elements/network"
 )
 
 const minAllowedSequence = 512
@@ -169,7 +171,23 @@ func (c *Config) repoManager() error {
 }
 
 func (c *Config) walletService() error {
-	svc, err := wallet.NewService(c.WalletAddr)
+	if common.IsLiquid(c.Network) {
+		svc, err := liquidwallet.NewService(c.WalletAddr)
+		if err != nil {
+			return err
+		}
+
+		c.wallet = svc
+		return nil
+	}
+
+	svc, err := btcwallet.NewService(btcwallet.WalletConfig{
+		Datadir: c.DbDir,
+		// TODO let the operator set the passwords
+		PublicPassword:  []byte("publicpass"),
+		PrivatePassword: []byte("privatepass"),
+		Network:         c.Network,
+	})
 	if err != nil {
 		return err
 	}
@@ -181,12 +199,14 @@ func (c *Config) walletService() error {
 func (c *Config) txBuilderService() error {
 	var svc ports.TxBuilder
 	var err error
-	net := c.mainChain()
-
 	switch c.TxBuilderType {
 	case "covenant":
 		svc = txbuilder.NewTxBuilder(
-			c.wallet, net, c.RoundLifetime, c.UnilateralExitDelay,
+			c.wallet, c.Network, c.RoundLifetime, c.UnilateralExitDelay,
+		)
+	case "covenantless":
+		svc = cltxbuilder.NewTxBuilder(
+			c.wallet, c.Network, c.RoundLifetime, c.UnilateralExitDelay,
 		)
 	default:
 		err = fmt.Errorf("unknown tx builder type")
@@ -234,11 +254,22 @@ func (c *Config) schedulerService() error {
 }
 
 func (c *Config) appService() error {
-	net := c.mainChain()
-	svc, err := application.NewCovenantService(
-		c.Network, net,
-		c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.MinRelayFee,
-		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler,
+	if common.IsLiquid(c.Network) {
+		svc, err := application.NewCovenantService(
+			c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay,
+			c.MinRelayFee, c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler,
+		)
+		if err != nil {
+			return err
+		}
+
+		c.svc = svc
+		return nil
+	}
+
+	svc, err := application.NewCovenantlessService(
+		c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay,
+		c.MinRelayFee, c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler,
 	)
 	if err != nil {
 		return err
@@ -251,17 +282,6 @@ func (c *Config) appService() error {
 func (c *Config) adminService() error {
 	c.adminSvc = application.NewAdminService(c.wallet, c.repo, c.txBuilder)
 	return nil
-}
-
-func (c *Config) mainChain() network.Network {
-	switch c.Network.Name {
-	case "testnet":
-		return network.Testnet
-	case "regtest":
-		return network.Regtest
-	default:
-		return network.Liquid
-	}
 }
 
 type supportedType map[string]struct{}

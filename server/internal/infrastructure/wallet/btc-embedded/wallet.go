@@ -7,8 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/psbt"
@@ -33,7 +36,7 @@ type WalletConfig struct {
 	Datadir         string
 	PublicPassword  []byte
 	PrivatePassword []byte
-	network         string
+	Network         common.Network
 }
 
 type accountName string
@@ -49,11 +52,16 @@ var (
 )
 
 type service struct {
-	loader       *wallet.Loader
-	accounts     map[accountName]uint32
-	cfg          WalletConfig
-	chainSource  chain.Interface
-	feeEstimator *feeEstimator
+	loader   *wallet.Loader
+	accounts map[accountName]uint32
+	cfg      WalletConfig
+
+	chainSource chain.Interface
+
+	esploraClient *esploraClient
+
+	watchedScriptsLock sync.Mutex
+	watchedScripts     map[string]struct{}
 }
 
 func WithChainSource(chainSource chain.Interface) WalletOption {
@@ -77,7 +85,7 @@ func WithNeutrino() WalletOption {
 			return err
 		}
 
-		netParams := s.ChainParams()
+		netParams := s.chainParams()
 
 		config := neutrino.Config{
 			DataDir:     s.cfg.Datadir,
@@ -98,13 +106,15 @@ func WithNeutrino() WalletOption {
 	}
 }
 
-// New creates the wallet service, an option must be set to configure the chain source.
-func New(cfg WalletConfig, options ...WalletOption) (ports.WalletService, error) {
+// NewService creates the wallet service, an option must be set to configure the chain source.
+func NewService(cfg WalletConfig, options ...WalletOption) (ports.WalletService, error) {
 	svc := &service{
-		loader:       nil,
-		accounts:     make(map[accountName]uint32),
-		cfg:          cfg,
-		feeEstimator: newFeeEstimator(cfg.network),
+		loader:             nil,
+		accounts:           make(map[accountName]uint32),
+		cfg:                cfg,
+		esploraClient:      newEsploraClient(cfg.Network),
+		watchedScriptsLock: sync.Mutex{},
+		watchedScripts:     make(map[string]struct{}),
 	}
 
 	if err := svc.setWalletLoader(); err != nil {
@@ -131,7 +141,7 @@ func New(cfg WalletConfig, options ...WalletOption) (ports.WalletService, error)
 
 // setWalletLoader init the wallet db and configure the wallet accounts
 func (s *service) setWalletLoader() error {
-	loader := wallet.NewLoader(s.ChainParams(), s.cfg.Datadir, true, 1*time.Minute, 512)
+	loader := wallet.NewLoader(s.chainParams(), s.cfg.Datadir, true, 1*time.Minute, 512)
 	exist, err := loader.WalletExists()
 	if err != nil {
 		return err
@@ -522,7 +532,7 @@ func (s *service) WaitForSync(ctx context.Context, txid string) error {
 }
 
 func (s *service) EstimateFees(ctx context.Context, partialTx string) (uint64, error) {
-	feeRate, err := s.feeEstimator.getFeeRate()
+	feeRate, err := s.esploraClient.getFeeRate()
 	if err != nil {
 		return 0, err
 	}
@@ -543,38 +553,105 @@ func (s *service) EstimateFees(ctx context.Context, partialTx string) (uint64, e
 	return uint64(fee.ToUnit(btcutil.AmountSatoshi)), nil
 }
 
-func (s *service) ChainParams() *chaincfg.Params {
-	switch s.cfg.network {
-	case "mainnet":
-		return &chaincfg.MainNetParams
-	case "testnet":
-		return &chaincfg.TestNet3Params
-	case "regtest":
-		return &chaincfg.RegressionNetParams
-	default:
-		return &chaincfg.MainNetParams
-	}
-}
-
-// TODO Scanner
-
-// WatchScripts implements ports.WalletService.
 func (s *service) WatchScripts(ctx context.Context, scripts []string) error {
-	panic("unimplemented")
+	addresses := make([]btcutil.Address, 0, len(scripts))
+
+	for _, script := range scripts {
+		scriptBytes, err := hex.DecodeString(script)
+		if err != nil {
+			return err
+		}
+
+		addr, err := fromOutputScript(scriptBytes, s.chainParams())
+		if err != nil {
+			return err
+		}
+
+		addresses = append(addresses, addr)
+	}
+
+	s.watchedScriptsLock.Lock()
+	for _, script := range scripts {
+		s.watchedScripts[script] = struct{}{}
+	}
+	s.watchedScriptsLock.Unlock()
+
+	if err := s.chainSource.NotifyReceived(addresses); err != nil {
+		if err := s.UnwatchScripts(ctx, scripts); err != nil {
+			return fmt.Errorf("error while unwatching scripts: %w", err)
+		}
+
+		return err
+	}
+
+	return nil
 }
 
-// UnwatchScripts implements ports.WalletService.
 func (s *service) UnwatchScripts(ctx context.Context, scripts []string) error {
-	panic("unimplemented")
+	s.watchedScriptsLock.Lock()
+	defer s.watchedScriptsLock.Unlock()
+	for _, script := range scripts {
+		delete(s.watchedScripts, script)
+	}
+
+	return nil
 }
 
-// GetNotificationChannel implements ports.WalletService.
 func (s *service) GetNotificationChannel(ctx context.Context) <-chan map[string]ports.VtxoWithValue {
-	panic("unimplemented")
+	ch := make(chan map[string]ports.VtxoWithValue)
+
+	go func() {
+		for n := range s.chainSource.Notifications() {
+			switch n := n.(type) {
+			case chain.RelevantTx:
+				notification := s.castNotification(n)
+				ch <- notification
+			}
+		}
+	}()
+
+	return ch
 }
 
 func (s *service) IsTransactionConfirmed(ctx context.Context, txid string) (isConfirmed bool, blocktime int64, err error) {
-	panic("unimplemented")
+	return s.esploraClient.getTxStatus(txid)
+}
+
+func (s status) IsInitialized() bool {
+	return s.initialized
+}
+
+func (s status) IsUnlocked() bool {
+	return s.unlocked
+}
+
+func (s status) IsSynced() bool {
+	return s.synced
+}
+
+func (s *service) castNotification(notif chain.RelevantTx) map[string]ports.VtxoWithValue {
+	vtxos := make(map[string]ports.VtxoWithValue)
+
+	s.watchedScriptsLock.Lock()
+	defer s.watchedScriptsLock.Unlock()
+
+	for outputIndex, txout := range notif.TxRecord.MsgTx.TxOut {
+		script := hex.EncodeToString(txout.PkScript)
+
+		if _, ok := s.watchedScripts[script]; !ok {
+			continue
+		}
+
+		vtxos[script] = ports.VtxoWithValue{
+			VtxoKey: domain.VtxoKey{
+				Txid: notif.TxRecord.Hash.String(),
+				VOut: uint32(outputIndex),
+			},
+			Value: uint64(txout.Value),
+		}
+	}
+
+	return vtxos
 }
 
 func (s *service) getBalance(account accountName) (uint64, error) {
@@ -607,14 +684,19 @@ type status struct {
 	synced      bool
 }
 
-func (s status) IsInitialized() bool {
-	return s.initialized
+func (s *service) chainParams() *chaincfg.Params {
+	switch s.cfg.Network.Name {
+	case common.Bitcoin.Name:
+		return &chaincfg.MainNetParams
+	case common.BitcoinTestNet.Name:
+		return &chaincfg.TestNet3Params
+	case common.BitcoinRegTest.Name:
+		return &chaincfg.RegressionNetParams
+	default:
+		return &chaincfg.MainNetParams
+	}
 }
 
-func (s status) IsUnlocked() bool {
-	return s.unlocked
-}
-
-func (s status) IsSynced() bool {
-	return s.synced
+func fromOutputScript(script []byte, netParams *chaincfg.Params) (btcutil.Address, error) {
+	return btcutil.NewAddressTaproot(script, netParams)
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
@@ -28,15 +29,74 @@ const (
 
 type txBuilder struct {
 	wallet        ports.WalletService
-	net           *chaincfg.Params
+	net           common.Network
 	roundLifetime int64 // in seconds
 	exitDelay     int64 // in seconds
 }
 
 func NewTxBuilder(
-	wallet ports.WalletService, net *chaincfg.Params, roundLifetime int64, exitDelay int64,
+	wallet ports.WalletService, net common.Network, roundLifetime int64, exitDelay int64,
 ) ports.TxBuilder {
 	return &txBuilder{wallet, net, roundLifetime, exitDelay}
+}
+
+func (b *txBuilder) VerifyForfeitTx(tx string) (bool, string, error) {
+	ptx, _ := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+	txid := ptx.UnsignedTx.TxHash().String()
+
+	for index, input := range ptx.Inputs {
+		for _, tapScriptSig := range input.TaprootScriptSpendSig {
+			preimage, err := b.getTaprootPreimage(
+				tx,
+				index,
+				input.TaprootLeafScript[0].Script,
+			)
+			if err != nil {
+				return false, txid, err
+			}
+
+			sig, err := schnorr.ParseSignature(tapScriptSig.Signature)
+			if err != nil {
+				return false, txid, err
+			}
+
+			pubkey, err := schnorr.ParsePubKey(tapScriptSig.XOnlyPubKey)
+			if err != nil {
+				return false, txid, err
+			}
+
+			if sig.Verify(preimage, pubkey) {
+				return true, txid, nil
+			} else {
+				return false, txid, fmt.Errorf("invalid signature")
+			}
+		}
+	}
+
+	return false, txid, nil
+}
+
+func (b *txBuilder) FinalizeAndExtractForfeit(tx string) (string, error) {
+	ptx, _ := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+
+	for i := range ptx.Inputs {
+		if err := psbt.Finalize(ptx, i); err != nil {
+			return "", err
+		}
+	}
+
+	signed, err := psbt.Extract(ptx)
+	if err != nil {
+		return "", err
+	}
+
+	var serialized bytes.Buffer
+
+	if err := signed.Serialize(&serialized); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(serialized.Bytes()), nil
 }
 
 func (b *txBuilder) GetVtxoScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error) {
@@ -118,18 +178,15 @@ func (b *txBuilder) BuildForfeitTxs(
 }
 
 func (b *txBuilder) BuildPoolTx(
-	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, minRelayFee uint64, sweptRounds []domain.Round,
+	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, minRelayFee uint64, sweptRounds []domain.Round, cosigners ...*secp256k1.PublicKey,
 ) (poolTx string, congestionTree tree.CongestionTree, connectorAddress string, err error) {
 	var sharedOutputScript []byte
 	var sharedOutputAmount int64
 
-	var senders []*secp256k1.PublicKey
-	senders, err = getCosigners(payments)
-	if err != nil {
-		return
+	if len(cosigners) == 0 {
+		return "", nil, "", fmt.Errorf("missing cosigners")
 	}
 
-	cosigners := append(senders, aspPubkey)
 	receivers := getOffchainReceivers(payments)
 
 	if !isOnchainOnly(payments) {
@@ -258,12 +315,12 @@ func (b *txBuilder) createPoolTx(
 	payments []domain.Payment, aspPubKey *secp256k1.PublicKey, connectorAddress string, minRelayFee uint64,
 	sweptRounds []domain.Round,
 ) (*psbt.Packet, error) {
-	aspScript, err := p2trScript(aspPubKey, b.net)
+	aspScript, err := p2trScript(aspPubKey, b.onchainNetwork())
 	if err != nil {
 		return nil, err
 	}
 
-	connectorAddr, err := btcutil.DecodeAddress(connectorAddress, b.net)
+	connectorAddr, err := btcutil.DecodeAddress(connectorAddress, b.onchainNetwork())
 	if err != nil {
 		return nil, err
 	}
@@ -300,7 +357,7 @@ func (b *txBuilder) createPoolTx(
 	for _, receiver := range receivers {
 		targetAmount += receiver.Amount
 
-		receiverAddr, err := btcutil.DecodeAddress(receiver.OnchainAddress, b.net)
+		receiverAddr, err := btcutil.DecodeAddress(receiver.OnchainAddress, b.onchainNetwork())
 		if err != nil {
 			return nil, err
 		}
@@ -562,7 +619,7 @@ func (b *txBuilder) createConnectors(
 func (b *txBuilder) createForfeitTxs(
 	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, connectors []*psbt.Packet, minRelayFee uint64,
 ) ([]string, error) {
-	aspScript, err := p2trScript(aspPubkey, b.net)
+	aspScript, err := p2trScript(aspPubkey, b.onchainNetwork())
 	if err != nil {
 		return nil, err
 	}
@@ -668,6 +725,48 @@ func (b *txBuilder) selectUtxos(ctx context.Context, sweptRounds []domain.Round,
 	}
 
 	return append(selectedConnectorsUtxos, utxos...), change, nil
+}
+
+func (b *txBuilder) getTaprootPreimage(tx string, inputIndex int, leafScript []byte) ([]byte, error) {
+	partial, err := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+	if err != nil {
+		return nil, err
+	}
+
+	prevouts := make(map[wire.OutPoint]*wire.TxOut)
+
+	for i, input := range partial.Inputs {
+		if input.WitnessUtxo == nil {
+			return nil, fmt.Errorf("missing witness utxo on input #%d", i)
+		}
+
+		outpoint := partial.UnsignedTx.TxIn[i].PreviousOutPoint
+		prevouts[outpoint] = input.WitnessUtxo
+	}
+
+	prevoutFetcher := txscript.NewMultiPrevOutFetcher(prevouts)
+
+	return txscript.CalcTapscriptSignaturehash(
+		txscript.NewTxSigHashes(partial.UnsignedTx, prevoutFetcher),
+		txscript.SigHashDefault,
+		partial.UnsignedTx,
+		inputIndex,
+		prevoutFetcher,
+		txscript.NewBaseTapLeaf(leafScript),
+	)
+}
+
+func (b *txBuilder) onchainNetwork() *chaincfg.Params {
+	switch b.net.Name {
+	case common.Bitcoin.Name:
+		return &chaincfg.MainNetParams
+	case common.BitcoinTestNet.Name:
+		return &chaincfg.TestNet3Params
+	case common.BitcoinRegTest.Name:
+		return &chaincfg.RegressionNetParams
+	default:
+		return nil
+	}
 }
 
 func castToOutpoints(inputs []ports.TxInput) []ports.TxOutpoint {

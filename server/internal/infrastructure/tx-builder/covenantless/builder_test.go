@@ -8,12 +8,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenantless"
 	"github.com/btcsuite/btcd/btcutil/psbt"
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -49,7 +49,7 @@ func TestMain(m *testing.M) {
 
 func TestBuildPoolTx(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(
-		wallet, &chaincfg.MainNetParams, roundLifetime, unilateralExitDelay,
+		wallet, common.Bitcoin, roundLifetime, unilateralExitDelay,
 	)
 
 	fixtures, err := parsePoolTxFixtures()
@@ -106,7 +106,7 @@ func TestBuildPoolTx(t *testing.T) {
 
 func TestBuildForfeitTxs(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(
-		wallet, &chaincfg.MainNetParams, 1209344, unilateralExitDelay,
+		wallet, common.Bitcoin, 1209344, unilateralExitDelay,
 	)
 
 	fixtures, err := parseForfeitTxsFixtures()

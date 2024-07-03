@@ -1,8 +1,6 @@
 package txbuilder
 
 import (
-	"encoding/hex"
-
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -38,31 +36,6 @@ func getOnchainReceivers(
 		}
 	}
 	return receivers
-}
-
-// TODO: use ephemeral keys ?
-func getCosigners(
-	payments []domain.Payment,
-) ([]*secp256k1.PublicKey, error) {
-	cosigners := make([]*secp256k1.PublicKey, 0)
-
-	for _, payment := range payments {
-		for _, input := range payment.Inputs {
-			pubkeyBytes, err := hex.DecodeString(input.Pubkey)
-			if err != nil {
-				return nil, err
-			}
-
-			pubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
-			if err != nil {
-				return nil, err
-			}
-
-			cosigners = append(cosigners, pubkey)
-		}
-	}
-
-	return cosigners, nil
 }
 
 func getOffchainReceivers(

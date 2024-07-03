@@ -40,7 +40,7 @@ func (b *txBuilder) selectUtxos(ctx context.Context, sweptRounds []domain.Round,
 		return selectedConnectorsUtxos, selectedConnectorsAmount - amount, nil
 	}
 
-	utxos, change, err := b.wallet.SelectUtxos(ctx, b.net.AssetID, amount-selectedConnectorsAmount)
+	utxos, change, err := b.wallet.SelectUtxos(ctx, b.onchainNetwork().AssetID, amount-selectedConnectorsAmount)
 	if err != nil {
 		return nil, 0, err
 	}

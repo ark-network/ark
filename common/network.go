@@ -1,5 +1,7 @@
 package common
 
+import "strings"
+
 type Network struct {
 	Name string
 	Addr string
@@ -33,4 +35,8 @@ var BitcoinTestNet = Network{
 var BitcoinRegTest = Network{
 	Name: "regtest",
 	Addr: BitcoinTestNet.Addr,
+}
+
+func IsLiquid(network Network) bool {
+	return strings.Contains(network.Name, "liquid")
 }

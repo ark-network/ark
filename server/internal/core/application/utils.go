@@ -7,13 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
-	"github.com/btcsuite/btcd/btcec/v2/schnorr"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/vulpemventures/go-elements/psetv2"
 )
 
 type timedPayment struct {
@@ -142,13 +138,13 @@ type signedTx struct {
 }
 
 type forfeitTxsMap struct {
-	lock             *sync.RWMutex
-	forfeitTxs       map[string]*signedTx
-	genesisBlockHash *chainhash.Hash
+	lock       *sync.RWMutex
+	forfeitTxs map[string]*signedTx
+	builder    ports.TxBuilder
 }
 
-func newForfeitTxsMap(genesisBlockHash *chainhash.Hash) *forfeitTxsMap {
-	return &forfeitTxsMap{&sync.RWMutex{}, make(map[string]*signedTx), genesisBlockHash}
+func newForfeitTxsMap(txBuilder ports.TxBuilder) *forfeitTxsMap {
+	return &forfeitTxsMap{&sync.RWMutex{}, make(map[string]*signedTx), txBuilder}
 }
 
 func (m *forfeitTxsMap) push(txs []string) {
@@ -156,11 +152,7 @@ func (m *forfeitTxsMap) push(txs []string) {
 	defer m.lock.Unlock()
 
 	for _, tx := range txs {
-		ptx, _ := psetv2.NewPsetFromBase64(tx)
-		utx, _ := ptx.UnsignedTx()
-		txid := utx.TxHash().String()
-		signed := false
-
+		signed, txid, _ := m.builder.VerifyForfeitTx(tx)
 		m.forfeitTxs[txid] = &signedTx{tx, signed}
 	}
 }
@@ -170,47 +162,14 @@ func (m *forfeitTxsMap) sign(txs []string) error {
 	defer m.lock.Unlock()
 
 	for _, tx := range txs {
-		ptx, _ := psetv2.NewPsetFromBase64(tx)
-		utx, _ := ptx.UnsignedTx()
-		txid := utx.TxHash().String()
+		valid, txid, err := m.builder.VerifyForfeitTx(tx)
 
 		if _, ok := m.forfeitTxs[txid]; ok {
-			for index, input := range ptx.Inputs {
-				if len(input.TapScriptSig) > 0 {
-					for _, tapScriptSig := range input.TapScriptSig {
-						leafHash, err := chainhash.NewHash(tapScriptSig.LeafHash)
-						if err != nil {
-							return err
-						}
-
-						preimage, err := common.TaprootPreimage(
-							m.genesisBlockHash,
-							ptx,
-							index,
-							leafHash,
-						)
-						if err != nil {
-							return err
-						}
-
-						sig, err := schnorr.ParseSignature(tapScriptSig.Signature)
-						if err != nil {
-							return err
-						}
-
-						pubkey, err := schnorr.ParsePubKey(tapScriptSig.PubKey)
-						if err != nil {
-							return err
-						}
-
-						if sig.Verify(preimage, pubkey) {
-							m.forfeitTxs[txid].tx = tx
-							m.forfeitTxs[txid].signed = true
-						} else {
-							return fmt.Errorf("invalid signature")
-						}
-					}
-				}
+			if err == nil && valid {
+				m.forfeitTxs[txid].tx = tx
+				m.forfeitTxs[txid].signed = true
+			} else {
+				return err
 			}
 		}
 	}
@@ -307,4 +266,14 @@ func findSweepableOutputs(
 	}
 
 	return sweepableOutputs, nil
+}
+
+func getSpentVtxos(payments map[string]domain.Payment) []domain.VtxoKey {
+	vtxos := make([]domain.VtxoKey, 0)
+	for _, p := range payments {
+		for _, vtxo := range p.Inputs {
+			vtxos = append(vtxos, vtxo.VtxoKey)
+		}
+	}
+	return vtxos
 }
