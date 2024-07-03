@@ -19,11 +19,13 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btclog"
 	"github.com/btcsuite/btcwallet/chain"
 	"github.com/btcsuite/btcwallet/waddrmgr"
 	"github.com/btcsuite/btcwallet/wallet"
 	"github.com/btcsuite/btcwallet/wallet/txrules"
 	"github.com/btcsuite/btcwallet/walletdb"
+	_ "github.com/btcsuite/btcwallet/walletdb/bdb"
 	"github.com/btcsuite/btcwallet/wtxmgr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightninglabs/neutrino"
@@ -93,6 +95,13 @@ func WithNeutrino() WalletOption {
 			Database:    db,
 		}
 
+		neutrino.UseLogger(logger())
+
+		if s.cfg.Network.Name == common.BitcoinRegTest.Name {
+			logrus.Debug("adding regtest peer")
+			config.AddPeers = []string{"bitcoin:18444"}
+		}
+
 		neutrinoSvc, err := neutrino.NewChainService(config)
 		if err != nil {
 			return err
@@ -102,7 +111,15 @@ func WithNeutrino() WalletOption {
 			return err
 		}
 
-		return WithChainSource(chain.NewNeutrinoClient(netParams, neutrinoSvc))(s)
+		chainSrc := chain.NewNeutrinoClient(netParams, neutrinoSvc)
+
+		fmt.Println(chainSrc.GetBestBlock())
+		for !chainSrc.IsCurrent() {
+			time.Sleep(3 * time.Second)
+			fmt.Println(chainSrc.GetBestBlock())
+		}
+
+		return WithChainSource(chainSrc)(s)
 	}
 }
 
@@ -150,10 +167,16 @@ func (s *service) setWalletLoader() error {
 	accounts := make(map[accountName]uint32)
 
 	if !exist {
+		logrus.Info("wallet does not exist, creating new wallet")
 		w, err := loader.CreateNewWallet(s.cfg.PublicPassword, s.cfg.PrivatePassword, nil, time.Now())
 		if err != nil {
 			return err
 		}
+
+		if err := w.Unlock(s.cfg.PrivatePassword, nil); err != nil {
+			return err
+		}
+		defer w.Lock()
 
 		mainAccountNumber, err := w.NextAccount(keyScope, string(mainAccount))
 		if err != nil {
@@ -168,18 +191,42 @@ func (s *service) setWalletLoader() error {
 		accounts[mainAccount] = mainAccountNumber
 		accounts[connectorAccount] = connectorAccountNumber
 	} else {
+		logrus.Info("wallet exists, opening wallet")
 		w, err := loader.OpenExistingWallet(s.cfg.PublicPassword, true)
 		if err != nil {
 			return err
 		}
 
-		mainAccountNumber, err := w.AccountNumber(keyScope, string(mainAccount))
-		if err != nil {
+		if err := w.Unlock(s.cfg.PrivatePassword, nil); err != nil {
 			return err
 		}
+		defer w.Lock()
 
-		connectorAccountNumber, err := w.AccountNumber(keyScope, string(connectorAccount))
+		var mainAccountNumber, connectorAccountNumber uint32
+
+		mainAccountNumber, err = w.AccountNumber(keyScope, string(mainAccount))
 		if err != nil {
+			if mgrErr := err.(waddrmgr.ManagerError); mgrErr.ErrorCode == waddrmgr.ErrAccountNotFound {
+				mainAccountNumber, err = w.NextAccount(keyScope, string(mainAccount))
+				if err != nil {
+					return err
+				}
+			} else {
+				return err
+			}
+		}
+
+		connectorAccountNumber, err = w.AccountNumber(keyScope, string(connectorAccount))
+		if err != nil {
+			if mgrErr := err.(waddrmgr.ManagerError); mgrErr.ErrorCode == waddrmgr.ErrAccountNotFound {
+				connectorAccountNumber, err = w.NextAccount(keyScope, string(connectorAccount))
+				if err != nil {
+					return err
+				}
+			} else {
+				return err
+			}
+		} else {
 			return err
 		}
 
@@ -699,4 +746,8 @@ func (s *service) chainParams() *chaincfg.Params {
 
 func fromOutputScript(script []byte, netParams *chaincfg.Params) (btcutil.Address, error) {
 	return btcutil.NewAddressTaproot(script, netParams)
+}
+
+func logger() btclog.Logger {
+	return btclog.NewBackend(logrus.StandardLogger().Writer()).Logger("neutrino")
 }

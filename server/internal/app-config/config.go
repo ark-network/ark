@@ -187,7 +187,9 @@ func (c *Config) walletService() error {
 		PublicPassword:  []byte("publicpass"),
 		PrivatePassword: []byte("privatepass"),
 		Network:         c.Network,
-	})
+	},
+		btcwallet.WithNeutrino(),
+	)
 	if err != nil {
 		return err
 	}
@@ -221,15 +223,9 @@ func (c *Config) txBuilderService() error {
 
 func (c *Config) scannerService() error {
 	var svc ports.BlockchainScanner
-	var err error
 	switch c.BlockchainScannerType {
-	case "ocean":
-		svc = c.wallet
 	default:
-		err = fmt.Errorf("unknown blockchain scanner type")
-	}
-	if err != nil {
-		return err
+		svc = c.wallet
 	}
 
 	c.scanner = svc

@@ -14,6 +14,15 @@ type adminHandler struct {
 	adminService application.AdminService
 }
 
+func (a *adminHandler) GetWalletAddress(ctx context.Context, _ *arkv1.GetWalletAddressRequest) (*arkv1.GetWalletAddressResponse, error) {
+	addr, err := a.adminService.GetWalletAddress(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &arkv1.GetWalletAddressResponse{Address: addr}, nil
+}
+
 func NewAdminHandler(adminService application.AdminService) arkv1.AdminServiceServer {
 	return &adminHandler{adminService}
 }

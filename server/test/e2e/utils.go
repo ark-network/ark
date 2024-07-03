@@ -10,10 +10,10 @@ import (
 )
 
 const (
-	password = "password"
+	Password = "password"
 )
 
-type arkBalance struct {
+type ArkBalance struct {
 	Offchain struct {
 		Total int `json:"total"`
 	} `json:"offchain_balance"`
@@ -26,27 +26,27 @@ type arkBalance struct {
 	} `json:"onchain_balance"`
 }
 
-type arkReceive struct {
+type ArkReceive struct {
 	Offchain string `json:"offchain_address"`
 	Onchain  string `json:"onchain_address"`
 }
 
-type arkTrustedOnboard struct {
+type ArkTrustedOnboard struct {
 	OnboardAddress string `json:"onboard_address"`
 }
 
-func runOceanCommand(arg ...string) (string, error) {
+func RunOceanCommand(arg ...string) (string, error) {
 	args := append([]string{"exec", "oceand", "ocean"}, arg...)
-	return runCommand("docker", args...)
+	return RunCommand("docker", args...)
 }
 
-func runArkCommand(arg ...string) (string, error) {
+func RunArkCommand(arg ...string) (string, error) {
 	args := append([]string{"exec", "-t", "arkd", "ark"}, arg...)
-	return runCommand("docker", args...)
+	return RunCommand("docker", args...)
 }
 
-func generateBlock() error {
-	if _, err := runCommand("nigiri", "rpc", "--liquid", "generatetoaddress", "1", "el1qqwk722tghgkgmh3r2ph4d2apwj0dy9xnzlenzklx8jg3z299fpaw56trre9gpk6wmw0u4qycajqeva3t7lzp7wnacvwxha59r"); err != nil {
+func GenerateBlock() error {
+	if _, err := RunCommand("nigiri", "rpc", "--liquid", "generatetoaddress", "1", "el1qqwk722tghgkgmh3r2ph4d2apwj0dy9xnzlenzklx8jg3z299fpaw56trre9gpk6wmw0u4qycajqeva3t7lzp7wnacvwxha59r"); err != nil {
 		return err
 	}
 
@@ -54,7 +54,7 @@ func generateBlock() error {
 	return nil
 }
 
-func runCommand(name string, arg ...string) (string, error) {
+func RunCommand(name string, arg ...string) (string, error) {
 	errb := new(strings.Builder)
 	cmd := newCommand(name, arg...)
 

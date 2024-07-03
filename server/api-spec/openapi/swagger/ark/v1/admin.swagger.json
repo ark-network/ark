@@ -16,6 +16,28 @@
     "application/json"
   ],
   "paths": {
+    "/v1/admin/address": {
+      "get": {
+        "operationId": "AdminService_GetWalletAddress",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetWalletAddressResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
     "/v1/admin/balance": {
       "get": {
         "operationId": "AdminService_GetBalance",
@@ -248,6 +270,14 @@
             "type": "object",
             "$ref": "#/definitions/v1ScheduledSweep"
           }
+        }
+      }
+    },
+    "v1GetWalletAddressResponse": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string"
         }
       }
     },

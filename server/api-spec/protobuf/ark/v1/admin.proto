@@ -26,6 +26,11 @@ service AdminService {
       body: "*"
     };
   }
+  rpc GetWalletAddress(GetWalletAddressRequest) returns (GetWalletAddressResponse) {
+    option (google.api.http) = {
+      get: "/v1/admin/address"
+    };
+  }
 }
 
 message GetBalanceRequest {}
@@ -81,4 +86,10 @@ message GetRoundsRequest {
 
 message GetRoundsResponse {
   repeated string rounds = 1;
+}
+
+message GetWalletAddressRequest {}
+
+message GetWalletAddressResponse {
+  string address = 1;
 }

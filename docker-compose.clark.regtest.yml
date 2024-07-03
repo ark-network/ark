@@ -1,0 +1,28 @@
+version: "3.7"
+
+services:
+  clarkd:
+    container_name: clarkd 
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - ARK_ROUND_INTERVAL=10
+      - ARK_NETWORK=regtest
+      - ARK_LOG_LEVEL=5
+      - ARK_ROUND_LIFETIME=512
+      - ARK_TX_BUILDER_TYPE=covenantless
+    ports:
+      - "6000:6000"
+
+volumes:
+  clarkd:
+    external: false
+  clark:
+    external: false
+
+networks:
+  default:
+    name: nigiri
+    external: true
