@@ -1,30 +1,21 @@
 package main
 
 import (
-	"context"
-	"net/http"
-	"time"
+	"os"
 
-	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
-	arkclient "github.com/ark-network/ark/common/client-sdk"
+	adminclient "github.com/ark-network/ark/common/client-sdk/rest/admin/client"
+	httptransport "github.com/go-openapi/runtime/client"
+	"github.com/go-openapi/strfmt"
 	log "github.com/sirupsen/logrus"
 )
 
 func main() {
-	httpClient := &http.Client{
-		Timeout: 10 * time.Second,
-	}
-	client, err := arkclient.NewRestClient("your-asp-url", httpClient)
-	if err != nil {
-		log.Fatalf("error creating rest client: %s", err)
-	}
-
-	resp, err := client.Admin().GetBalance(
-		context.Background(), &arkv1.GetBalanceRequest{},
-	)
+	transport := httptransport.New(os.Getenv("TODOLIST_HOST"), "", nil)
+	client := adminclient.New(transport, strfmt.Default)
+	resp, err := client.AdminService.AdminServiceGetBalance(nil)
 	if err != nil {
 		log.Fatalf("error getting balance: %s", err)
 	}
 
-	log.Infof("balance: %s", resp.GetMainAccount().GetAvailable())
+	log.Infof("balance: %s", resp.Payload.MainAccount.Available)
 }

@@ -4,12 +4,12 @@ import (
 	"context"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
-	arkclient "github.com/ark-network/ark/common/client-sdk"
+	"github.com/ark-network/ark/common/client-sdk/grpc"
 	log "github.com/sirupsen/logrus"
 )
 
 func main() {
-	client, cleanFn, err := arkclient.NewGrpcClient("your-asp-url")
+	client, cleanFn, err := arkgrpcclient.New("your-asp-url")
 	if err != nil {
 		log.Fatalf("error creating grpc client: %s", err)
 	}

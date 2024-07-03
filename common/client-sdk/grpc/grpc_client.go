@@ -1,6 +1,7 @@
-package arkclient
+package arkgrpcclient
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -10,7 +11,11 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-func NewGrpcClient(aspUrl string) (ArkGrpcClient, func(), error) {
+var (
+	errAspUrlEmpty = errors.New("asp url is empty")
+)
+
+func New(aspUrl string) (ArkGrpcClient, func(), error) {
 	if aspUrl == "" {
 		return nil, nil, errAspUrlEmpty
 	}
