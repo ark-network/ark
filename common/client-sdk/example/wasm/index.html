@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Wasm Test</title>
+</head>
+<body>
+<h1>Wasm Test</h1>
+<button id="logButton">Log Message</button>
+<button id="getUserButton">Get User Info</button>
+
+<script src="wasm_exec.js"></script>
+<script>
+    const go = new Go();
+    WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject).then((result) => {
+        go.run(result.instance);
+
+        // Logging
+        document.getElementById("logButton").addEventListener("click", () => {
+            globalThis.Log();
+        });
+
+        // GetUser example
+        document.getElementById("getUserButton").addEventListener("click", () => {
+            const invokeMethod = globalThis.InvokeRestServiceClientMethod();
+
+            // Define the request parameters
+            const req = {
+                Name: "dusan",
+                Surname: "sekulic"
+            };
+
+            // Invoke the GetUser method
+            const getUserPromise = invokeMethod("GetUser", JSON.stringify(req));
+
+            // Handle the promise
+            getUserPromise.then(response => {
+                console.log("GetUser response:", response);
+            }).catch(error => {
+                console.error("GetUser error:", error);
+            });
+        });
+    });
+</script>
+</body>
+</html>
