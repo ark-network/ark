@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenant"
 	"sync"
 	"time"
 
@@ -385,41 +386,78 @@ func (s *service) startFinalization() {
 		return
 	}
 
-	sweptRounds, err := s.repoManager.Rounds().GetSweptRounds(ctx)
-	if err != nil {
-		changes = round.Fail(fmt.Errorf("failed to retrieve swept rounds: %s", err))
-		log.WithError(err).Warn("failed to retrieve swept rounds")
-		return
+	if round.RequiresLiquidityProvider {
+		fmt.Println("This round requires a liquidity provider.")
+
+		liquidityTxBuilder := txbuilder.NewLiquidityTxBuilder(s.builder)
+
+		unsignedPoolTx, tree, connectorAddress, err := liquidityTxBuilder.BuildPoolTxFromLiquidityProvider(payments, s.minRelayFee, round.LiquidityProvider, s.pubkey)
+		if err != nil {
+			changes = round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
+			log.WithError(err).Warn("failed to create pool tx")
+			return
+		}
+		log.Debugf("pool tx created for round %s", round.Id)
+
+		// TODO BTC make the senders sign the tree
+
+		connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(round.LiquidityProvider.PubKey, unsignedPoolTx, payments, s.minRelayFee)
+		if err != nil {
+			changes = round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
+			log.WithError(err).Warn("failed to create connectors and forfeit txs")
+			return
+		}
+
+		log.Debugf("forfeit transactions created for round %s", round.Id)
+
+		events, err := round.StartFinalization(connectorAddress, connectors, tree, unsignedPoolTx)
+		if err != nil {
+			changes = round.Fail(fmt.Errorf("failed to start finalization: %s", err))
+			log.WithError(err).Warn("failed to start finalization")
+			return
+		}
+		changes = append(changes, events...)
+
+		s.forfeitTxs.push(forfeitTxs)
+	} else {
+		fmt.Println("This round does not require a liquidity provider.")
+
+		sweptRounds, err := s.repoManager.Rounds().GetSweptRounds(ctx)
+		if err != nil {
+			changes = round.Fail(fmt.Errorf("failed to retrieve swept rounds: %s", err))
+			log.WithError(err).Warn("failed to retrieve swept rounds")
+			return
+		}
+
+		unsignedPoolTx, tree, connectorAddress, err := s.builder.BuildPoolTx(s.pubkey, payments, s.minRelayFee, sweptRounds)
+		if err != nil {
+			changes = round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
+			log.WithError(err).Warn("failed to create pool tx")
+			return
+		}
+		log.Debugf("pool tx created for round %s", round.Id)
+
+		// TODO BTC make the senders sign the tree
+
+		connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(s.pubkey, unsignedPoolTx, payments, s.minRelayFee)
+		if err != nil {
+			changes = round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
+			log.WithError(err).Warn("failed to create connectors and forfeit txs")
+			return
+		}
+
+		log.Debugf("forfeit transactions created for round %s", round.Id)
+
+		events, err := round.StartFinalization(connectorAddress, connectors, tree, unsignedPoolTx)
+		if err != nil {
+			changes = round.Fail(fmt.Errorf("failed to start finalization: %s", err))
+			log.WithError(err).Warn("failed to start finalization")
+			return
+		}
+		changes = append(changes, events...)
+
+		s.forfeitTxs.push(forfeitTxs)
 	}
-
-	unsignedPoolTx, tree, connectorAddress, err := s.builder.BuildPoolTx(s.pubkey, payments, s.minRelayFee, sweptRounds)
-	if err != nil {
-		changes = round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
-		log.WithError(err).Warn("failed to create pool tx")
-		return
-	}
-	log.Debugf("pool tx created for round %s", round.Id)
-
-	// TODO BTC make the senders sign the tree
-
-	connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(s.pubkey, unsignedPoolTx, payments, s.minRelayFee)
-	if err != nil {
-		changes = round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
-		log.WithError(err).Warn("failed to create connectors and forfeit txs")
-		return
-	}
-
-	log.Debugf("forfeit transactions created for round %s", round.Id)
-
-	events, err := round.StartFinalization(connectorAddress, connectors, tree, unsignedPoolTx)
-	if err != nil {
-		changes = round.Fail(fmt.Errorf("failed to start finalization: %s", err))
-		log.WithError(err).Warn("failed to start finalization")
-		return
-	}
-	changes = append(changes, events...)
-
-	s.forfeitTxs.push(forfeitTxs)
 
 	log.Debugf("started finalization stage for round: %s", round.Id)
 }
