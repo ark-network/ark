@@ -34,21 +34,23 @@ type Stage struct {
 }
 
 type Round struct {
-	Id                string
-	StartingTimestamp int64
-	EndingTimestamp   int64
-	Stage             Stage
-	Payments          map[string]Payment
-	Txid              string
-	UnsignedTx        string
-	ForfeitTxs        []string
-	CongestionTree    tree.CongestionTree
-	Connectors        []string
-	ConnectorAddress  string
-	DustAmount        uint64
-	Version           uint
-	Swept             bool // true if all the vtxos are vtxo.Swept or vtxo.Redeemed
-	changes           []RoundEvent
+	Id                        string
+	StartingTimestamp         int64
+	EndingTimestamp           int64
+	Stage                     Stage
+	Payments                  map[string]Payment
+	Txid                      string
+	UnsignedTx                string
+	ForfeitTxs                []string
+	CongestionTree            tree.CongestionTree
+	Connectors                []string
+	ConnectorAddress          string
+	DustAmount                uint64
+	Version                   uint
+	Swept                     bool // true if all the vtxos are vtxo.Swept or vtxo.Redeemed
+	RequiresLiquidityProvider bool // true if this round requires a liquidity provider
+	LiquidityProvider         *LiquidityProvider
+	changes                   []RoundEvent
 }
 
 func NewRound(dustAmount uint64) *Round {

@@ -29,6 +29,16 @@ type txBuilder struct {
 	exitDelay     int64 // in seconds
 }
 
+type LiquidityTxBuilder struct {
+	o *txBuilder
+}
+
+func NewLiquidityTxBuilder(builder ports.TxBuilder) *LiquidityTxBuilder {
+	return &LiquidityTxBuilder{
+		o: builder.(*txBuilder),
+	}
+}
+
 func NewTxBuilder(
 	wallet ports.WalletService,
 	net network.Network,
@@ -172,6 +182,57 @@ func (b *txBuilder) BuildPoolTx(
 	return
 }
 
+func (l *LiquidityTxBuilder) BuildPoolTxFromLiquidityProvider(payments []domain.Payment, minRelayFee uint64, liquidityProvider *domain.LiquidityProvider, aspPubKey *secp256k1.PublicKey,
+) (poolTx string, congestionTree tree.CongestionTree, connectorAddress string, err error) {
+
+	var sharedOutputScript []byte
+	var sharedOutputAmount uint64
+	var treeFactoryFn tree.TreeFactory
+
+	if !isOnchainOnly(payments) {
+		treeFactoryFn, sharedOutputScript, sharedOutputAmount, err = tree.CraftCongestionTree(
+			l.o.net.AssetID, liquidityProvider.PubKey, getOffchainReceivers(payments), minRelayFee, l.o.roundLifetime, l.o.exitDelay,
+		)
+		if err != nil {
+			return
+		}
+	}
+
+	connectorAddress, err = l.o.wallet.DeriveConnectorAddress(context.Background())
+	if err != nil {
+		return
+	}
+
+	ptx, err := l.createLiquidityPoolTx(
+		sharedOutputAmount, sharedOutputScript, payments, connectorAddress, minRelayFee, *liquidityProvider, aspPubKey,
+	)
+	if err != nil {
+		return
+	}
+
+	unsignedTx, err := ptx.UnsignedTx()
+	if err != nil {
+		return
+	}
+
+	if treeFactoryFn != nil {
+		congestionTree, err = treeFactoryFn(psetv2.InputArgs{
+			Txid:    unsignedTx.TxHash().String(),
+			TxIndex: 0,
+		})
+		if err != nil {
+			return
+		}
+	}
+
+	poolTx, err = ptx.ToBase64()
+	if err != nil {
+		return
+	}
+
+	return
+}
+
 func (b *txBuilder) GetSweepInput(parentblocktime int64, node tree.Node) (expirationtime int64, sweepInput ports.SweepInput, err error) {
 	pset, err := psetv2.NewPsetFromBase64(node.Tx)
 	if err != nil {
@@ -248,6 +309,172 @@ func (b *txBuilder) getLeafScriptAndTree(
 	}
 
 	return outputScript, taprootTree, nil
+}
+
+func (l *LiquidityTxBuilder) createLiquidityPoolTx(
+	sharedOutputAmount uint64,
+	sharedOutputScript []byte,
+	payments []domain.Payment,
+	connectorAddress string,
+	minRelayFee uint64,
+	provider domain.LiquidityProvider,
+	aspPubKey *secp256k1.PublicKey,
+) (*psetv2.Pset, error) {
+
+	connectorScript, err := address.ToOutputScript(connectorAddress)
+	if err != nil {
+		return nil, err
+	}
+
+	receivers := getOnchainReceivers(payments)
+	nbOfInputs := countSpentVtxos(payments)
+	connectorsAmount := (connectorAmount + minRelayFee) * nbOfInputs
+	if nbOfInputs > 1 {
+		connectorsAmount -= minRelayFee
+	}
+	targetAmount := connectorsAmount
+
+	outputs := make([]psetv2.OutputArgs, 0)
+
+	if sharedOutputScript != nil && sharedOutputAmount > 0 {
+		targetAmount += sharedOutputAmount
+
+		outputs = append(outputs, psetv2.OutputArgs{
+			Asset:  l.o.net.AssetID,
+			Amount: sharedOutputAmount,
+			Script: sharedOutputScript,
+		})
+	}
+
+	outputs = append(outputs, psetv2.OutputArgs{
+		Asset:  l.o.net.AssetID,
+		Amount: connectorsAmount,
+		Script: connectorScript,
+	})
+
+	for _, receiver := range receivers {
+		targetAmount += receiver.Amount
+
+		receiverScript, err := address.ToOutputScript(receiver.OnchainAddress)
+		if err != nil {
+			return nil, err
+		}
+
+		outputs = append(outputs, psetv2.OutputArgs{
+			Asset:  l.o.net.AssetID,
+			Amount: receiver.Amount,
+			Script: receiverScript,
+		})
+	}
+
+	ctx := context.Background()
+
+	// Initialize the partial transaction
+	ptx, err := psetv2.New(nil, outputs, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	updater, err := psetv2.NewUpdater(ptx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add inputs from the liquidity provider
+	if err := addInputs(updater, provider.UTXO); err != nil {
+		return nil, err
+	}
+
+	// Estimate the fees
+	b64, err := ptx.ToBase64()
+	if err != nil {
+		return nil, err
+	}
+
+	feeAmount, err := l.o.wallet.EstimateFees(ctx, b64)
+	if err != nil {
+		return nil, err
+	}
+
+	// Calculate the provider's fee
+	providerFee := targetAmount * provider.FeeRate / 1000000
+	feeAmount += providerFee
+
+	// Calculate the ASP fee
+	aspFee := feeAmount - providerFee
+
+	// Calculate the total amount of provided UTXOs
+	totalProvided := uint64(0)
+	for _, utxo := range provider.UTXO {
+		totalProvided += utxo.GetValue()
+	}
+
+	// Calculate the change amount
+	changeAmount := totalProvided - targetAmount - feeAmount
+
+	// If there is change, add a change output
+	if changeAmount > 0 {
+		changeScript, err := p2wpkhScript(provider.PubKey, l.o.net)
+		if err != nil {
+			return nil, err
+		}
+
+		if changeAmount < dustLimit {
+			// If change is less than dust limit, add it to fee
+			aspFee += changeAmount
+		} else {
+			// Add change output
+			outputs = append(outputs, psetv2.OutputArgs{
+				Asset:  l.o.net.AssetID,
+				Amount: changeAmount,
+				Script: changeScript,
+			})
+
+			if err := updater.AddOutputs([]psetv2.OutputArgs{
+				{
+					Asset:  l.o.net.AssetID,
+					Amount: changeAmount,
+					Script: changeScript,
+				},
+			}); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// Add fee output for the ASP
+	aspScript, err := p2wpkhScript(aspPubKey, l.o.net)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := updater.AddOutputs([]psetv2.OutputArgs{
+		{
+			Asset:  l.o.net.AssetID,
+			Amount: aspFee,
+			Script: aspScript, // ASP's script
+		},
+	}); err != nil {
+		return nil, err
+	}
+
+	// Add fee output for the Liquidity Provider
+	providerScript, err := p2wpkhScript(provider.PubKey, l.o.net)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := updater.AddOutputs([]psetv2.OutputArgs{
+		{
+			Asset:  l.o.net.AssetID,
+			Amount: providerFee,
+			Script: providerScript,
+		},
+	}); err != nil {
+		return nil, err
+	}
+
+	return ptx, nil
 }
 
 func (b *txBuilder) createPoolTx(
