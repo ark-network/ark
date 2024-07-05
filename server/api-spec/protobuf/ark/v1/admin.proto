@@ -31,6 +31,11 @@ service AdminService {
       get: "/v1/admin/address"
     };
   }
+  rpc GetWalletBalance(GetWalletBalancesRequest) returns (GetWalletBalancesResponse) {
+    option (google.api.http) = {
+      get: "/v1/admin/balance"
+    };
+  }
 }
 
 message GetBalanceRequest {}
@@ -89,7 +94,11 @@ message GetRoundsResponse {
 }
 
 message GetWalletAddressRequest {}
-
 message GetWalletAddressResponse {
   string address = 1;
+}
+
+message GetWalletBalanceRequest {}
+message GetWalletBalanceResponse {
+  uint64 balance = 1;
 }

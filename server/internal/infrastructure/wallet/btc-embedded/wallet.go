@@ -113,10 +113,8 @@ func WithNeutrino() WalletOption {
 
 		chainSrc := chain.NewNeutrinoClient(netParams, neutrinoSvc)
 
-		fmt.Println(chainSrc.GetBestBlock())
 		for !chainSrc.IsCurrent() {
 			time.Sleep(3 * time.Second)
-			fmt.Println(chainSrc.GetBestBlock())
 		}
 
 		return WithChainSource(chainSrc)(s)
@@ -249,15 +247,12 @@ func (s *service) Close() {
 }
 
 func (s *service) BroadcastTransaction(ctx context.Context, txHex string) (string, error) {
-	w, _ := s.loader.LoadedWallet()
-
-	tx := &wire.MsgTx{}
-
-	if err := tx.Deserialize(hex.NewDecoder(strings.NewReader(txHex))); err != nil {
+	if err := s.esploraClient.broadcast(txHex); err != nil {
 		return "", err
 	}
 
-	if err := w.PublishTransaction(tx, ""); err != nil {
+	var tx wire.MsgTx
+	if err := tx.Deserialize(hex.NewDecoder(strings.NewReader(txHex))); err != nil {
 		return "", err
 	}
 
@@ -601,6 +596,7 @@ func (s *service) EstimateFees(ctx context.Context, partialTx string) (uint64, e
 }
 
 func (s *service) WatchScripts(ctx context.Context, scripts []string) error {
+	fmt.Println("watching scripts")
 	addresses := make([]btcutil.Address, 0, len(scripts))
 
 	for _, script := range scripts {
@@ -635,6 +631,7 @@ func (s *service) WatchScripts(ctx context.Context, scripts []string) error {
 }
 
 func (s *service) UnwatchScripts(ctx context.Context, scripts []string) error {
+	fmt.Println("unwatching scripts")
 	s.watchedScriptsLock.Lock()
 	defer s.watchedScriptsLock.Unlock()
 	for _, script := range scripts {
@@ -649,6 +646,7 @@ func (s *service) GetNotificationChannel(ctx context.Context) <-chan map[string]
 
 	go func() {
 		for n := range s.chainSource.Notifications() {
+			fmt.Println("notification received")
 			switch n := n.(type) {
 			case chain.RelevantTx:
 				notification := s.castNotification(n)

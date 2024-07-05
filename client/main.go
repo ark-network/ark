@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/ark-network/ark-cli/covenant"
+	"github.com/ark-network/ark-cli/covenantless"
 	"github.com/ark-network/ark-cli/flags"
 	"github.com/ark-network/ark-cli/interfaces"
 	"github.com/ark-network/ark-cli/utils"
@@ -182,7 +183,7 @@ func getCLI(ctx *cli.Context) (interfaces.CLI, error) {
 	case common.Liquid.Name, common.LiquidTestNet.Name, common.LiquidRegTest.Name:
 		return covenant.New(), nil
 	case common.Bitcoin.Name, common.BitcoinTestNet.Name, common.BitcoinRegTest.Name:
-		return nil, fmt.Errorf("network not supported")
+		return covenantless.New(), nil
 	default:
 		return nil, fmt.Errorf("unknown network (%s)", networkName)
 	}

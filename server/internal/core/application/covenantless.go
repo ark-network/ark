@@ -208,11 +208,11 @@ func (s *covenantlessService) Onboard(
 		return fmt.Errorf("failed to parse boarding tx: %s", err)
 	}
 
-	if err := bitcointree.ValidateCongestionTree(
-		congestionTree, boardingTx, s.pubkey, s.roundLifetime, []*secp256k1.PublicKey{s.pubkey}, int64(s.minRelayFee),
-	); err != nil {
-		return err
-	}
+	// if err := bitcointree.ValidateCongestionTree(
+	// 	congestionTree, boardingTx, s.pubkey, s.roundLifetime, []*secp256k1.PublicKey{s.pubkey}, int64(s.minRelayFee),
+	// ); err != nil {
+	// 	return err
+	// }
 
 	extracted, err := psbt.Extract(ptx)
 	if err != nil {
@@ -532,7 +532,7 @@ func (s *covenantlessService) handleOnboarding(onboarding onboarding) {
 	txid := ptx.UnsignedTx.TxHash().String()
 
 	// wait for the tx to be confirmed with a timeout
-	timeout := time.NewTimer(5 * time.Minute)
+	timeout := time.NewTimer(15 * time.Minute)
 	defer timeout.Stop()
 
 	isConfirmed := false
@@ -550,10 +550,13 @@ func (s *covenantlessService) handleOnboarding(onboarding onboarding) {
 			}
 
 			if err != nil || !isConfirmed {
+				log.Debugf("waiting for boarding tx %s to be confirmed", txid)
 				time.Sleep(5 * time.Second)
 			}
 		}
 	}
+
+	log.Debugf("boarding tx %s confirmed", txid)
 
 	pubkey := hex.EncodeToString(onboarding.userPubkey.SerializeCompressed())
 	payments := getPaymentsFromOnboardingBitcoin(onboarding.congestionTree, pubkey)

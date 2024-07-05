@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcutil"
@@ -24,7 +25,7 @@ func newEsploraClient(network common.Network) *esploraClient {
 	case common.BitcoinTestNet.Name:
 		url = "https://blockstream.info/testnet/api/"
 	case common.BitcoinRegTest.Name:
-		url = "http://localhost:3000/" // nigiri chopsticks
+		url = "http://chopsticks:3000/" // nigiri chopsticks
 	}
 
 	return &esploraClient{
@@ -75,6 +76,20 @@ func (f *esploraClient) getFeeRate() (btcutil.Amount, error) {
 	}
 
 	return btcutil.Amount(feeRate * 1000), nil
+}
+
+func (f *esploraClient) broadcast(txHex string) error {
+	resp, err := http.DefaultClient.Post(f.url+"tx", "text/plain", strings.NewReader(txHex))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return err
+	}
+
+	return nil
 }
 
 type esploraTx struct {

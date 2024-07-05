@@ -18,7 +18,7 @@ type Utxo struct {
 	Txid   string `json:"txid"`
 	Vout   uint32 `json:"vout"`
 	Amount uint64 `json:"value"`
-	Asset  string `json:"asset"`
+	Asset  string `json:"asset,omitempty"` // optional
 	Status struct {
 		Confirmed bool  `json:"confirmed"`
 		Blocktime int64 `json:"block_time"`
@@ -129,8 +129,10 @@ func (e *explorer) GetBalance(addr, asset string) (uint64, error) {
 
 	balance := uint64(0)
 	for _, p := range payload {
-		if p.Asset != asset {
-			continue
+		if len(asset) > 0 {
+			if p.Asset != asset {
+				continue
+			}
 		}
 		balance += p.Amount
 	}
