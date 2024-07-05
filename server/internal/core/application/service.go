@@ -437,6 +437,8 @@ func (s *service) finalizeRound() {
 		return
 	}
 
+	fmt.Printf("%+v\n", *round)
+
 	var changes []domain.RoundEvent
 	defer func() {
 		if err := s.saveEvents(ctx, round.Id, changes); err != nil {
