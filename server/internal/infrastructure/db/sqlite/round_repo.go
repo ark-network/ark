@@ -139,7 +139,7 @@ LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
 	selectRoundWithId     = selectRound + " WHERE round.id = ?;"
 	selectRoundWithTxId   = selectRound + " WHERE round.txid = ?;"
 	selectSweepableRounds = selectRound + " WHERE round.swept = false AND round.ended = true AND round.failed = false;"
-	selectSweptRounds     = selectRound + " WHERE round.swept = true AND round.failed = false AND round.ended = true;"
+	selectSweptRounds     = selectRound + " WHERE round.swept = true AND round.failed = false AND round.ended = true AND round.connect_address <> '';"
 
 	selectRoundIdsInRange = `
 SELECT id FROM round WHERE starting_timestamp > ? AND starting_timestamp < ?;
