@@ -1,63 +1,130 @@
 package main
 
 import (
-	"encoding/json"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
 
+	"github.com/ark-network/ark-cli/covenant"
+	"github.com/ark-network/ark-cli/flags"
+	"github.com/ark-network/ark-cli/interfaces"
+	"github.com/ark-network/ark-cli/utils"
 	"github.com/ark-network/ark/common"
 	"github.com/urfave/cli/v2"
-	"github.com/vulpemventures/go-elements/network"
 )
 
-const (
-	DATADIR_ENVVAR = "ARK_WALLET_DATADIR"
-
-	STATE_FILE     = "state.json"
-	defaultNetwork = "liquid"
-
-	ASP_URL               = "asp_url"
-	ASP_PUBKEY            = "asp_public_key"
-	ROUND_LIFETIME        = "round_lifetime"
-	UNILATERAL_EXIT_DELAY = "unilateral_exit_delay"
-	ENCRYPTED_PRVKEY      = "encrypted_private_key"
-	PASSWORD_HASH         = "password_hash"
-	PUBKEY                = "public_key"
-	NETWORK               = "network"
-	EXPLORER              = "explorer"
-)
+var version = "alpha"
 
 var (
-	version = "alpha"
-
-	defaultDatadir = common.AppDataDir("ark-cli", false)
-
-	explorerUrl = map[string]string{
-		network.Liquid.Name:  "https://blockstream.info/liquid/api",
-		network.Testnet.Name: "https://blockstream.info/liquidtestnet/api",
-		network.Regtest.Name: "http://localhost:3001",
+	balanceCommand = cli.Command{
+		Name:  "balance",
+		Usage: "Shows the onchain and offchain balance of the Ark wallet",
+		Action: func(ctx *cli.Context) error {
+			cli, err := getCLI(ctx)
+			if err != nil {
+				return err
+			}
+			return cli.Balance(ctx)
+		},
+		Flags: []cli.Flag{&flags.ExpiryDetailsFlag},
 	}
 
-	initialState = map[string]string{
-		ASP_URL:               "",
-		ASP_PUBKEY:            "",
-		ROUND_LIFETIME:        "",
-		UNILATERAL_EXIT_DELAY: "",
-		ENCRYPTED_PRVKEY:      "",
-		PASSWORD_HASH:         "",
-		PUBKEY:                "",
-		NETWORK:               defaultNetwork,
+	configCommand = cli.Command{
+		Name:  "config",
+		Usage: "Shows configuration of the Ark wallet",
+		Action: func(ctx *cli.Context) error {
+			state, err := utils.GetState(ctx)
+			if err != nil {
+				return err
+			}
+
+			return utils.PrintJSON(state)
+		},
 	}
 
-	datadirFlag = &cli.StringFlag{
-		Name:     "datadir",
-		Usage:    "Specify the data directory",
-		Required: false,
-		Value:    defaultDatadir,
-		EnvVars:  []string{DATADIR_ENVVAR},
+	dumpCommand = cli.Command{
+		Name:  "dump-privkey",
+		Usage: "Dumps private key of the Ark wallet",
+		Action: func(ctx *cli.Context) error {
+			privKey, err := utils.PrivateKeyFromPassword(ctx)
+			if err != nil {
+				return err
+			}
+
+			return utils.PrintJSON(map[string]interface{}{
+				"private_key": hex.EncodeToString(privKey.Serialize()),
+			})
+		},
+		Flags: []cli.Flag{&flags.PasswordFlag},
+	}
+
+	initCommand = cli.Command{
+		Name:  "init",
+		Usage: "Initialize your Ark wallet with an encryption password, and connect it to an ASP",
+		Action: func(ctx *cli.Context) error {
+			cli, err := getCLI(ctx)
+			if err != nil {
+				return err
+			}
+
+			return cli.Init(ctx)
+		},
+		Flags: []cli.Flag{&flags.PasswordFlag, &flags.PrivateKeyFlag, &flags.NetworkFlag, &flags.UrlFlag, &flags.ExplorerFlag},
+	}
+
+	onboardCommand = cli.Command{
+		Name:  "onboard",
+		Usage: "Onboard the Ark by lifting your funds",
+		Action: func(ctx *cli.Context) error {
+			cli, err := getCLI(ctx)
+			if err != nil {
+				return err
+			}
+			return cli.Onboard(ctx)
+		},
+		Flags: []cli.Flag{&flags.AmountOnboardFlag, &flags.TrustedOnboardFlag, &flags.PasswordFlag},
+	}
+
+	sendCommand = cli.Command{
+		Name:  "send",
+		Usage: "Send your onchain or offchain funds to one or many receivers",
+		Action: func(ctx *cli.Context) error {
+			cli, err := getCLI(ctx)
+			if err != nil {
+				return err
+			}
+			return cli.Send(ctx)
+		},
+		Flags: []cli.Flag{&flags.ReceiversFlag, &flags.ToFlag, &flags.AmountFlag, &flags.PasswordFlag, &flags.EnableExpiryCoinselectFlag},
+	}
+
+	receiveCommand = cli.Command{
+		Name:  "receive",
+		Usage: "Shows both onchain and offchain addresses",
+		Action: func(ctx *cli.Context) error {
+			cli, err := getCLI(ctx)
+			if err != nil {
+				return err
+			}
+
+			return cli.Receive(ctx)
+		},
+	}
+
+	redeemCommand = cli.Command{
+		Name:  "redeem",
+		Usage: "Redeem your offchain funds, either collaboratively or unilaterally",
+		Flags: []cli.Flag{&flags.AddressFlag, &flags.AmountToRedeemFlag, &flags.ForceFlag, &flags.PasswordFlag, &flags.EnableExpiryCoinselectFlag},
+		Action: func(ctx *cli.Context) error {
+			cli, err := getCLI(ctx)
+			if err != nil {
+				return err
+			}
+			return cli.Redeem(ctx)
+		},
 	}
 )
 
@@ -79,7 +146,7 @@ func main() {
 		&onboardCommand,
 	)
 	app.Flags = []cli.Flag{
-		datadirFlag,
+		flags.DatadirFlag,
 	}
 
 	app.Before = func(ctx *cli.Context) error {
@@ -99,6 +166,25 @@ func main() {
 	if err != nil {
 		fmt.Println(fmt.Errorf("error: %v", err))
 		os.Exit(1)
+	}
+}
+
+// getCLI returns the associated CLI implementation based on the network
+func getCLI(ctx *cli.Context) (interfaces.CLI, error) {
+	state, err := utils.GetState(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	networkName := state[utils.NETWORK]
+
+	switch networkName {
+	case common.Liquid.Name, common.LiquidTestNet.Name, common.LiquidRegTest.Name:
+		return covenant.New(), nil
+	case common.Bitcoin.Name, common.BitcoinTestNet.Name, common.BitcoinRegTest.Name:
+		return nil, fmt.Errorf("network not supported")
+	default:
+		return nil, fmt.Errorf("unknown network (%s)", networkName)
 	}
 }
 
@@ -126,68 +212,4 @@ func cleanAndExpandPath(path string) string {
 	// NOTE: The os.ExpandEnv doesn't work with Windows-style %VARIABLE%,
 	// but the variables can still be expanded via POSIX-style $VARIABLE.
 	return filepath.Clean(os.ExpandEnv(path))
-}
-
-func getState(ctx *cli.Context) (map[string]string, error) {
-	datadir := ctx.String("datadir")
-	stateFilePath := filepath.Join(datadir, STATE_FILE)
-	file, err := os.ReadFile(stateFilePath)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return nil, err
-		}
-		if err := setInitialState(stateFilePath); err != nil {
-			return nil, err
-		}
-		return initialState, nil
-	}
-
-	data := map[string]string{}
-	if err := json.Unmarshal(file, &data); err != nil {
-		return nil, err
-	}
-
-	return data, nil
-}
-
-func setInitialState(stateFilePath string) error {
-	jsonString, err := json.Marshal(initialState)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(stateFilePath, jsonString, 0755)
-}
-
-func setState(ctx *cli.Context, data map[string]string) error {
-	currentData, err := getState(ctx)
-	if err != nil {
-		return err
-	}
-
-	mergedData := merge(currentData, data)
-
-	jsonString, err := json.Marshal(mergedData)
-	if err != nil {
-		return err
-	}
-
-	datadir := ctx.String("datadir")
-	statePath := filepath.Join(datadir, STATE_FILE)
-
-	err = os.WriteFile(statePath, jsonString, 0755)
-	if err != nil {
-		return fmt.Errorf("writing to file: %w", err)
-	}
-
-	return nil
-}
-
-func merge(maps ...map[string]string) map[string]string {
-	merge := make(map[string]string, 0)
-	for _, m := range maps {
-		for k, v := range m {
-			merge[k] = v
-		}
-	}
-	return merge
 }

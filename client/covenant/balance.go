@@ -1,4 +1,4 @@
-package main
+package covenant
 
 import (
 	"fmt"
@@ -6,25 +6,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ark-network/ark-cli/flags"
+	"github.com/ark-network/ark-cli/utils"
+	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/urfave/cli/v2"
 )
 
-var expiryDetailsFlag = cli.BoolFlag{
-	Name:     "compute-expiry-details",
-	Usage:    "compute client-side the VTXOs expiry time",
-	Value:    false,
-	Required: false,
-}
-
-var balanceCommand = cli.Command{
-	Name:   "balance",
-	Usage:  "Shows the onchain and offchain balance of the Ark wallet",
-	Action: balanceAction,
-	Flags:  []cli.Flag{&expiryDetailsFlag},
-}
-
-func balanceAction(ctx *cli.Context) error {
-	computeExpiryDetails := ctx.Bool(expiryDetailsFlag.Name)
+func (*covenantLiquidCLI) Balance(ctx *cli.Context) error {
+	computeExpiryDetails := ctx.Bool(flags.ExpiryDetailsFlag.Name)
 
 	client, cancel, err := getClientFromState(ctx)
 	if err != nil {
@@ -36,10 +25,13 @@ func balanceAction(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	_, network := getNetwork(ctx)
+	network, err := utils.GetNetwork(ctx)
+	if err != nil {
+		return err
+	}
 	// No need to check for error here becuase this function is called also by getAddress().
 	// nolint:all
-	unilateralExitDelay, _ := getUnilateralExitDelay(ctx)
+	unilateralExitDelay, _ := utils.GetUnilateralExitDelay(ctx)
 
 	wg := &sync.WaitGroup{}
 	wg.Add(3)
@@ -47,7 +39,7 @@ func balanceAction(ctx *cli.Context) error {
 	chRes := make(chan balanceRes, 3)
 	go func() {
 		defer wg.Done()
-		explorer := NewExplorer(ctx)
+		explorer := utils.NewExplorer(ctx)
 		balance, amountByExpiration, err := getOffchainBalance(
 			ctx, explorer, client, offchainAddr, computeExpiryDetails,
 		)
@@ -61,8 +53,8 @@ func balanceAction(ctx *cli.Context) error {
 
 	go func() {
 		defer wg.Done()
-		explorer := NewExplorer(ctx)
-		balance, err := explorer.GetBalance(onchainAddr, network.AssetID)
+		explorer := utils.NewExplorer(ctx)
+		balance, err := explorer.GetBalance(onchainAddr, toElementsNetwork(network).AssetID)
 		if err != nil {
 			chRes <- balanceRes{0, 0, nil, nil, err}
 			return
@@ -72,7 +64,7 @@ func balanceAction(ctx *cli.Context) error {
 
 	go func() {
 		defer wg.Done()
-		explorer := NewExplorer(ctx)
+		explorer := utils.NewExplorer(ctx)
 
 		spendableBalance, lockedBalance, err := explorer.GetRedeemedVtxosBalance(
 			redemptionAddr, unilateralExitDelay,
@@ -180,7 +172,7 @@ func balanceAction(ctx *cli.Context) error {
 
 	response["offchain_balance"] = offchainBalanceJSON
 
-	return printJSON(response)
+	return utils.PrintJSON(response)
 }
 
 type balanceRes struct {
@@ -189,4 +181,32 @@ type balanceRes struct {
 	onchainLockedBalance        map[int64]uint64
 	offchainBalanceByExpiration map[int64]uint64
 	err                         error
+}
+
+func getOffchainBalance(
+	ctx *cli.Context, explorer utils.Explorer, client arkv1.ArkServiceClient,
+	addr string, computeExpiration bool,
+) (uint64, map[int64]uint64, error) {
+	amountByExpiration := make(map[int64]uint64, 0)
+
+	vtxos, err := getVtxos(ctx, explorer, client, addr, computeExpiration)
+	if err != nil {
+		return 0, nil, err
+	}
+	var balance uint64
+	for _, vtxo := range vtxos {
+		balance += vtxo.amount
+
+		if vtxo.expireAt != nil {
+			expiration := vtxo.expireAt.Unix()
+
+			if _, ok := amountByExpiration[expiration]; !ok {
+				amountByExpiration[expiration] = 0
+			}
+
+			amountByExpiration[expiration] += vtxo.amount
+		}
+	}
+
+	return balance, amountByExpiration, nil
 }

@@ -1,4 +1,4 @@
-package main
+package covenant
 
 import (
 	"bufio"
@@ -8,70 +8,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ark-network/ark-cli/utils"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/urfave/cli/v2"
 	"github.com/vulpemventures/go-elements/address"
 )
-
-var (
-	addressFlag = cli.StringFlag{
-		Name:     "address",
-		Usage:    "main chain address receiving the redeeemed VTXO",
-		Value:    "",
-		Required: false,
-	}
-
-	amountToRedeemFlag = cli.Uint64Flag{
-		Name:     "amount",
-		Usage:    "amount to redeem",
-		Value:    0,
-		Required: false,
-	}
-
-	forceFlag = cli.BoolFlag{
-		Name:     "force",
-		Usage:    "force redemption without collaborate with the Ark service provider",
-		Value:    false,
-		Required: false,
-	}
-)
-
-var redeemCommand = cli.Command{
-	Name:   "redeem",
-	Usage:  "Redeem your offchain funds, either collaboratively or unilaterally",
-	Flags:  []cli.Flag{&addressFlag, &amountToRedeemFlag, &forceFlag, &passwordFlag, &enableExpiryCoinselectFlag},
-	Action: redeemAction,
-}
-
-func redeemAction(ctx *cli.Context) error {
-	addr := ctx.String("address")
-	amount := ctx.Uint64("amount")
-	force := ctx.Bool("force")
-
-	if len(addr) <= 0 && !force {
-		return fmt.Errorf("missing address flag (--address)")
-	}
-
-	if !force && amount <= 0 {
-		return fmt.Errorf("missing amount flag (--amount)")
-	}
-
-	client, clean, err := getClientFromState(ctx)
-	if err != nil {
-		return err
-	}
-	defer clean()
-
-	if force {
-		if amount > 0 {
-			fmt.Printf("WARNING: unilateral exit (--force) ignores --amount flag, it will redeem all your VTXOs\n")
-		}
-
-		return unilateralRedeem(ctx, client)
-	}
-
-	return collaborativeRedeem(ctx, client, addr, amount)
-}
 
 func collaborativeRedeem(
 	ctx *cli.Context, client arkv1.ArkServiceClient, addr string, amount uint64,
@@ -86,7 +27,13 @@ func collaborativeRedeem(
 	if err != nil {
 		return fmt.Errorf("invalid onchain address: unknown network")
 	}
-	_, liquidNet := getNetwork(ctx)
+	netinstate, err := utils.GetNetwork(ctx)
+	if err != nil {
+		return err
+	}
+
+	liquidNet := toElementsNetwork(netinstate)
+
 	if net.Name != liquidNet.Name {
 		return fmt.Errorf("invalid onchain address: must be for %s network", liquidNet.Name)
 	}
@@ -108,7 +55,7 @@ func collaborativeRedeem(
 		},
 	}
 
-	explorer := NewExplorer(ctx)
+	explorer := utils.NewExplorer(ctx)
 
 	vtxos, err := getVtxos(ctx, explorer, client, offchainAddr, withExpiryCoinselect)
 	if err != nil {
@@ -136,7 +83,7 @@ func collaborativeRedeem(
 		})
 	}
 
-	secKey, err := privateKeyFromPassword(ctx)
+	secKey, err := utils.PrivateKeyFromPassword(ctx)
 	if err != nil {
 		return err
 	}
@@ -168,13 +115,9 @@ func collaborativeRedeem(
 		return err
 	}
 
-	if err := printJSON(map[string]interface{}{
+	return utils.PrintJSON(map[string]interface{}{
 		"pool_txid": poolTxID,
-	}); err != nil {
-		return err
-	}
-
-	return nil
+	})
 }
 
 func unilateralRedeem(ctx *cli.Context, client arkv1.ArkServiceClient) error {
@@ -183,7 +126,7 @@ func unilateralRedeem(ctx *cli.Context, client arkv1.ArkServiceClient) error {
 		return err
 	}
 
-	explorer := NewExplorer(ctx)
+	explorer := utils.NewExplorer(ctx)
 	vtxos, err := getVtxos(ctx, explorer, client, offchainAddr, false)
 	if err != nil {
 		return err

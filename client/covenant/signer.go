@@ -1,9 +1,10 @@
-package main
+package covenant
 
 import (
 	"bytes"
 	"fmt"
 
+	"github.com/ark-network/ark-cli/utils"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -18,7 +19,7 @@ import (
 )
 
 func signPset(
-	ctx *cli.Context, pset *psetv2.Pset, explorer Explorer, prvKey *secp256k1.PrivateKey,
+	ctx *cli.Context, pset *psetv2.Pset, explorer utils.Explorer, prvKey *secp256k1.PrivateKey,
 ) error {
 	updater, err := psetv2.NewUpdater(pset)
 	if err != nil {
@@ -80,7 +81,10 @@ func signPset(
 		return err
 	}
 
-	_, liquidNet := getNetwork(ctx)
+	net, err := utils.GetNetwork(ctx)
+	if err != nil {
+		return err
+	}
 
 	prevoutsScripts := make([][]byte, 0)
 	prevoutsValues := make([][]byte, 0)
@@ -92,9 +96,11 @@ func signPset(
 		prevoutsAssets = append(prevoutsAssets, input.WitnessUtxo.Asset)
 	}
 
+	liquidNet := toElementsNetwork(net)
+
 	for i, input := range pset.Inputs {
 		if bytes.Equal(input.WitnessUtxo.Script, onchainWalletScript) {
-			p, err := payment.FromScript(input.WitnessUtxo.Script, liquidNet, nil)
+			p, err := payment.FromScript(input.WitnessUtxo.Script, &liquidNet, nil)
 			if err != nil {
 				return err
 			}

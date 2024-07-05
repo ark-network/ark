@@ -1,4 +1,4 @@
-package main
+package utils
 
 import (
 	"crypto/aes"
@@ -12,11 +12,11 @@ import (
 
 type cypher struct{}
 
-func newAES128Cypher() *cypher {
+func NewAES128Cypher() *cypher {
 	return &cypher{}
 }
 
-func (c *cypher) encrypt(privateKey, password []byte) ([]byte, error) {
+func (c *cypher) Encrypt(privateKey, password []byte) ([]byte, error) {
 	// Due to https://github.com/golang/go/issues/7168.
 	// This call makes sure that memory is freed in case the GC doesn't do that
 	// right after the encryption/decryption.

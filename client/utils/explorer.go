@@ -1,4 +1,4 @@
-package main
+package utils
 
 import (
 	"bytes"
@@ -14,7 +14,7 @@ import (
 	"github.com/vulpemventures/go-elements/transaction"
 )
 
-type utxo struct {
+type Utxo struct {
 	Txid   string `json:"txid"`
 	Vout   uint32 `json:"vout"`
 	Amount uint64 `json:"value"`
@@ -28,11 +28,12 @@ type utxo struct {
 type Explorer interface {
 	GetTxHex(txid string) (string, error)
 	Broadcast(txHex string) (string, error)
-	GetUtxos(addr string) ([]utxo, error)
+	GetUtxos(addr string) ([]Utxo, error)
 	GetBalance(addr, asset string) (uint64, error)
 	GetRedeemedVtxosBalance(
 		addr string, unilateralExitDelay int64,
 	) (uint64, map[int64]uint64, error)
+	GetTxBlocktime(txid string) (confirmed bool, blocktime int64, err error)
 }
 
 type explorer struct {
@@ -98,7 +99,7 @@ func (e *explorer) Broadcast(txStr string) (string, error) {
 	return txid, nil
 }
 
-func (e *explorer) GetUtxos(addr string) ([]utxo, error) {
+func (e *explorer) GetUtxos(addr string) ([]Utxo, error) {
 	resp, err := http.Get(fmt.Sprintf("%s/address/%s/utxo", e.baseUrl, addr))
 	if err != nil {
 		return nil, err
@@ -112,7 +113,7 @@ func (e *explorer) GetUtxos(addr string) ([]utxo, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf(string(body))
 	}
-	payload := []utxo{}
+	payload := []Utxo{}
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, err
 	}
@@ -166,6 +167,39 @@ func (e *explorer) GetRedeemedVtxosBalance(
 	}
 
 	return
+}
+
+func (e *explorer) GetTxBlocktime(txid string) (confirmed bool, blocktime int64, err error) {
+	resp, err := http.Get(fmt.Sprintf("%s/tx/%s", e.baseUrl, txid))
+	if err != nil {
+		return false, 0, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, 0, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return false, 0, fmt.Errorf(string(body))
+	}
+
+	var tx struct {
+		Status struct {
+			Confirmed bool  `json:"confirmed"`
+			Blocktime int64 `json:"block_time"`
+		} `json:"status"`
+	}
+	if err := json.Unmarshal(body, &tx); err != nil {
+		return false, 0, err
+	}
+
+	if !tx.Status.Confirmed {
+		return false, -1, nil
+	}
+
+	return true, tx.Status.Blocktime, nil
+
 }
 
 func (e *explorer) getTxHex(txid string) (string, error) {

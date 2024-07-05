@@ -1,9 +1,10 @@
-package main
+package covenant
 
 import (
 	"fmt"
 	"time"
 
+	"github.com/ark-network/ark-cli/utils"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -18,11 +19,11 @@ type redeemBranch struct {
 	internalKey  *secp256k1.PublicKey
 	sweepClosure *taproot.TapElementsLeaf
 	lifetime     time.Duration
-	explorer     Explorer
+	explorer     utils.Explorer
 }
 
 func newRedeemBranch(
-	explorer Explorer,
+	explorer utils.Explorer,
 	congestionTree tree.CongestionTree, vtxo vtxo,
 ) (*redeemBranch, error) {
 	sweepClosure, seconds, err := findSweepClosure(congestionTree)
@@ -116,10 +117,10 @@ func (r *redeemBranch) redeemPath() ([]string, error) {
 	return transactions, nil
 }
 
-func (r *redeemBranch) expireAt(ctx *cli.Context) (*time.Time, error) {
+func (r *redeemBranch) expireAt(*cli.Context) (*time.Time, error) {
 	lastKnownBlocktime := int64(0)
 
-	confirmed, blocktime, _ := getTxBlocktime(ctx, r.vtxo.poolTxid)
+	confirmed, blocktime, _ := r.explorer.GetTxBlocktime(r.vtxo.poolTxid)
 
 	if confirmed {
 		lastKnownBlocktime = blocktime
@@ -132,7 +133,7 @@ func (r *redeemBranch) expireAt(ctx *cli.Context) (*time.Time, error) {
 		utx, _ := pset.UnsignedTx()
 		txid := utx.TxHash().String()
 
-		confirmed, blocktime, err := getTxBlocktime(ctx, txid)
+		confirmed, blocktime, err := r.explorer.GetTxBlocktime(txid)
 		if err != nil {
 			break
 		}
@@ -179,4 +180,40 @@ func (r *redeemBranch) offchainPath() ([]*psetv2.Pset, error) {
 	}
 
 	return offchainPath, nil
+}
+
+func findSweepClosure(
+	congestionTree tree.CongestionTree,
+) (*taproot.TapElementsLeaf, uint, error) {
+	root, err := congestionTree.Root()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// find the sweep closure
+	tx, err := psetv2.NewPsetFromBase64(root.Tx)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var seconds uint
+	var sweepClosure *taproot.TapElementsLeaf
+	for _, tapLeaf := range tx.Inputs[0].TapLeafScript {
+		closure := &tree.CSVSigClosure{}
+		valid, err := closure.Decode(tapLeaf.Script)
+		if err != nil {
+			continue
+		}
+
+		if valid && closure.Seconds > seconds {
+			seconds = closure.Seconds
+			sweepClosure = &tapLeaf.TapElementsLeaf
+		}
+	}
+
+	if sweepClosure == nil {
+		return nil, 0, fmt.Errorf("sweep closure not found")
+	}
+
+	return sweepClosure, seconds, nil
 }

@@ -1,9 +1,10 @@
-package main
+package covenant
 
 import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/ark-network/ark-cli/utils"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/urfave/cli/v2"
@@ -11,29 +12,9 @@ import (
 	"github.com/vulpemventures/go-elements/psetv2"
 )
 
-const (
-	minRelayFee = 30
-)
+const minRelayFee = 30
 
-var (
-	amountOnboardFlag = cli.Uint64Flag{
-		Name:  "amount",
-		Usage: "amount to onboard in sats",
-	}
-	trustedOnboardFlag = cli.BoolFlag{
-		Name:  "trusted",
-		Usage: "trusted onboard",
-	}
-)
-
-var onboardCommand = cli.Command{
-	Name:   "onboard",
-	Usage:  "Onboard the Ark by lifting your funds",
-	Action: onboardAction,
-	Flags:  []cli.Flag{&amountOnboardFlag, &trustedOnboardFlag, &passwordFlag},
-}
-
-func onboardAction(ctx *cli.Context) error {
+func (c *covenantLiquidCLI) Onboard(ctx *cli.Context) error {
 	isTrusted := ctx.Bool("trusted")
 
 	amount := ctx.Uint64("amount")
@@ -42,9 +23,12 @@ func onboardAction(ctx *cli.Context) error {
 		return fmt.Errorf("missing amount flag (--amount)")
 	}
 
-	_, net := getNetwork(ctx)
+	net, err := utils.GetNetwork(ctx)
+	if err != nil {
+		return err
+	}
 
-	userPubKey, err := getWalletPublicKey(ctx)
+	userPubKey, err := utils.GetWalletPublicKey(ctx)
 	if err != nil {
 		return err
 	}
@@ -63,22 +47,22 @@ func onboardAction(ctx *cli.Context) error {
 			return err
 		}
 
-		return printJSON(map[string]interface{}{
+		return utils.PrintJSON(map[string]interface{}{
 			"onboard_address": resp.Address,
 		})
 	}
 
-	aspPubkey, err := getAspPublicKey(ctx)
+	aspPubkey, err := utils.GetAspPublicKey(ctx)
 	if err != nil {
 		return err
 	}
 
-	roundLifetime, err := getRoundLifetime(ctx)
+	roundLifetime, err := utils.GetRoundLifetime(ctx)
 	if err != nil {
 		return err
 	}
 
-	unilateralExitDelay, err := getUnilateralExitDelay(ctx)
+	unilateralExitDelay, err := utils.GetUnilateralExitDelay(ctx)
 	if err != nil {
 		return err
 	}
@@ -88,15 +72,17 @@ func onboardAction(ctx *cli.Context) error {
 		Amount: amount,
 	}
 
+	liquidNet := toElementsNetwork(net)
+
 	treeFactoryFn, sharedOutputScript, sharedOutputAmount, err := tree.CraftCongestionTree(
-		net.AssetID, aspPubkey, []tree.Receiver{congestionTreeLeaf},
+		liquidNet.AssetID, aspPubkey, []tree.Receiver{congestionTreeLeaf},
 		minRelayFee, roundLifetime, unilateralExitDelay,
 	)
 	if err != nil {
 		return err
 	}
 
-	pay, err := payment.FromScript(sharedOutputScript, net, nil)
+	pay, err := payment.FromScript(sharedOutputScript, &liquidNet, nil)
 	if err != nil {
 		return err
 	}
