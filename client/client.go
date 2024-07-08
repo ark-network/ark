@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	arkgrpcclient "github.com/ark-network/ark-sdk/grpc"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
-	arkgrpcclient "github.com/ark-network/ark/common/client-sdk/grpc"
 	"github.com/urfave/cli/v2"
 )
 
