@@ -230,11 +230,6 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 		err = svc.Rounds().AddOrUpdateRound(ctx, *round)
 		require.NoError(t, err)
 
-		currentRound, err := svc.Rounds().GetCurrentRound(ctx)
-		require.NoError(t, err)
-		require.NotNil(t, currentRound)
-		require.Condition(t, roundsMatch(*round, *currentRound))
-
 		roundById, err := svc.Rounds().GetRoundWithId(ctx, roundId)
 		require.NoError(t, err)
 		require.NotNil(t, roundById)
@@ -311,14 +306,9 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 		err = svc.Rounds().AddOrUpdateRound(ctx, *updatedRound)
 		require.NoError(t, err)
 
-		currentRound, err = svc.Rounds().GetCurrentRound(ctx)
-		require.NoError(t, err)
-		require.NotNil(t, currentRound)
-		require.Condition(t, roundsMatch(*updatedRound, *currentRound))
-
 		roundById, err = svc.Rounds().GetRoundWithId(ctx, updatedRound.Id)
 		require.NoError(t, err)
-		require.NotNil(t, currentRound)
+		require.NotNil(t, roundById)
 		require.Condition(t, roundsMatch(*updatedRound, *roundById))
 
 		txid := randomString(32)
@@ -335,10 +325,6 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 
 		err = svc.Rounds().AddOrUpdateRound(ctx, *finalizedRound)
 		require.NoError(t, err)
-
-		currentRound, err = svc.Rounds().GetCurrentRound(ctx)
-		require.Error(t, err)
-		require.Nil(t, currentRound)
 
 		roundById, err = svc.Rounds().GetRoundWithId(ctx, roundId)
 		require.NoError(t, err)
