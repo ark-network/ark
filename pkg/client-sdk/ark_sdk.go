@@ -51,8 +51,8 @@ type ArkClient interface {
 	SendOffChain(
 		ctx context.Context, withExpiryCoinselect bool, receivers []Receiver,
 	) (string, error)
-	UnilateralRedeem(ctx context.Context) error
-	ForceRedeem(
+	ForceRedeem(ctx context.Context) error
+	CollaborativeRedeem(
 		ctx context.Context, addr string, amount uint64, withExpiryCoinselect bool,
 	) (string, error)
 }
@@ -1220,7 +1220,7 @@ func (a *arkClient) handleRoundStream(
 	return "", fmt.Errorf("stream closed unexpectedly")
 }
 
-func (a *arkClient) UnilateralRedeem(ctx context.Context) error {
+func (a *arkClient) ForceRedeem(ctx context.Context) error {
 	offchainAddr, _, _, err := getAddress(
 		a.wallet.PubKeySerializeCompressed(), a.aspPubKey, int64(a.unilateralExitDelay), a.net,
 	)
@@ -1283,7 +1283,7 @@ func (a *arkClient) UnilateralRedeem(ctx context.Context) error {
 	return nil
 }
 
-func (a *arkClient) ForceRedeem(
+func (a *arkClient) CollaborativeRedeem(
 	ctx context.Context, addr string, amount uint64, withExpiryCoinselect bool,
 ) (string, error) {
 	if _, err := address.ToOutputScript(addr); err != nil {
