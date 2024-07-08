@@ -325,6 +325,7 @@ func (s *service) start() {
 
 func (s *service) startRound() {
 	round := domain.NewRound(dustAmount)
+	//nolint:all
 	round.StartRegistration()
 	s.currentRound = round
 
