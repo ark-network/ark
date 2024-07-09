@@ -58,20 +58,30 @@ type ArkClient interface {
 }
 
 func New(
+	ctx context.Context,
 	wallet Wallet,
-	explorerUrl string,
-	protocol TransportProtocol,
-	net string,
-	aspUrl string,
-	aspPubKey string,
+	configStore ConfigStore,
 ) (ArkClient, error) {
+	aspUrl, err := configStore.GetAspUrl(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if len(aspUrl) <= 0 {
 		return nil, errors.New("invalid ark url")
+	}
+
+	net, err := configStore.GetNetwork(ctx)
+	if err != nil {
+		return nil, err
 	}
 	if net != "liquid" && net != "testnet" && net != "regtest" {
 		return nil, fmt.Errorf("invalid network")
 	}
 
+	explorerUrl, err := configStore.GetExplorerUrl(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if len(explorerUrl) > 0 {
 		_, n := networkFromString(net)
 		if err := testEsploraEndpoint(n, explorerUrl); err != nil {
@@ -81,7 +91,16 @@ func New(
 		explorerUrl = explorerUrlMap[net]
 	}
 
+	aspPubKey, err := configStore.GetAspPubKeyHex(ctx)
+	if err != nil {
+		return nil, err
+	}
 	aspPubKeyBytes, err := hex.DecodeString(aspPubKey)
+	if err != nil {
+		return nil, err
+	}
+
+	protocol, err := configStore.GetTransportProtocol(ctx)
 	if err != nil {
 		return nil, err
 	}

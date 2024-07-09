@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os/exec"
@@ -10,8 +11,64 @@ import (
 	"time"
 
 	arksdk "github.com/ark-network/ark-sdk"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	log "github.com/sirupsen/logrus"
 )
+
+type InMemoryConfigStore struct {
+	explorerUrl  string
+	protocol     arksdk.TransportProtocol
+	net          string
+	aspUrl       string
+	aspPubKeyHex string
+}
+
+func (store *InMemoryConfigStore) GetAspUrl(ctx context.Context) (string, error) {
+	return store.aspUrl, nil
+}
+
+func (store *InMemoryConfigStore) GetAspPubKeyHex(ctx context.Context) (string, error) {
+	return store.aspPubKeyHex, nil
+}
+
+func (store *InMemoryConfigStore) GetTransportProtocol(ctx context.Context) (arksdk.TransportProtocol, error) {
+	return store.protocol, nil
+}
+
+func (store *InMemoryConfigStore) GetExplorerUrl(ctx context.Context) (string, error) {
+	return store.explorerUrl, nil
+}
+
+func (store *InMemoryConfigStore) GetNetwork(ctx context.Context) (string, error) {
+	return store.net, nil
+}
+
+func (store *InMemoryConfigStore) Save(ctx context.Context) error {
+	return nil // Implement save logic if needed
+}
+
+type InMemoryWalletStore struct {
+	privateKey *secp256k1.PrivateKey
+}
+
+func (i *InMemoryWalletStore) CreatePrivateKey(
+	ctx context.Context,
+) (*secp256k1.PrivateKey, error) {
+	privKey, err := btcec.NewPrivateKey()
+	if err != nil {
+		return nil, err
+	}
+	return privKey, nil
+}
+
+func (i *InMemoryWalletStore) GetPrivateKeyHex(ctx context.Context) (string, error) {
+	return hex.EncodeToString(i.privateKey.Serialize()), nil
+}
+
+func (i *InMemoryWalletStore) Save(ctx context.Context) error {
+	return nil
+}
 
 func main() {
 	var (
@@ -24,15 +81,32 @@ func main() {
 		explorerSvc = arksdk.NewExplorer(explorerUrl)
 	)
 
-	alice, err := arksdk.NewSingleKeyWallet(
-		explorerSvc, network, "",
+	configStore := &InMemoryConfigStore{
+		explorerUrl:  explorerUrl,
+		protocol:     arksdk.Grpc,
+		net:          network,
+		aspUrl:       aspUrl,
+		aspPubKeyHex: aspPubKey,
+	}
+	defer configStore.Save(ctx)
+
+	aliceWalletStore := &InMemoryWalletStore{}
+	if _, err := aliceWalletStore.CreatePrivateKey(ctx); err != nil {
+		log.Fatal(err)
+	}
+	defer aliceWalletStore.Save(ctx)
+
+	aliceWallet, err := arksdk.NewSingleKeyWallet(
+		ctx, explorerSvc, network, aliceWalletStore,
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	aliceArkClient, err := arksdk.New(
-		alice, explorerUrl, arksdk.Grpc, network, aspUrl, aspPubKey,
+		ctx,
+		aliceWallet,
+		configStore,
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -63,22 +137,31 @@ func main() {
 
 	log.Infof("Alice onboarded with txID: %s", txID)
 
-	bob, err := arksdk.NewSingleKeyWallet(
-		explorerSvc, network, "",
+	bobWalletStore := &InMemoryWalletStore{}
+	if _, err := bobWalletStore.CreatePrivateKey(ctx); err != nil {
+		log.Fatal(err)
+	}
+	defer bobWalletStore.Save(ctx)
+
+	bobWallet, err := arksdk.NewSingleKeyWallet(
+		ctx, explorerSvc, network, bobWalletStore,
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	bobArkClient, err := arksdk.New(
-		bob, explorerUrl, arksdk.Grpc, network, aspUrl, aspPubKey,
+		ctx, bobWallet, configStore,
 	)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	if err := bobArkClient.Connect(ctx); err != nil {
 		log.Fatal(err)
 	}
 
-	bobOffchainAddr, _, err := aliceArkClient.Receive(ctx)
+	bobOffchainAddr, _, err := bobArkClient.Receive(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}

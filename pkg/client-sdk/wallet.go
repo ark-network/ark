@@ -2,11 +2,11 @@ package arksdk
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"fmt"
 
 	"github.com/ark-network/ark/common/tree"
-	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -26,23 +26,35 @@ type Wallet interface {
 }
 
 type singleKeyWallet struct {
-	privateKey *secp256k1.PrivateKey
-	pubkey     *secp256k1.PublicKey
-	explorer   Explorer
-	net        *network.Network
+	privateKey  *secp256k1.PrivateKey
+	pubkey      *secp256k1.PublicKey
+	explorer    Explorer
+	net         *network.Network
+	walletStore WalletStore
 }
 
 func NewSingleKeyWallet(
-	explorer Explorer, network string, privKeyHex string,
+	ctx context.Context,
+	explorer Explorer,
+	network string,
+	walletStore WalletStore,
 ) (Wallet, error) {
 	var privateKey *secp256k1.PrivateKey
 
+	privKeyHex, err := walletStore.GetPrivateKeyHex(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	pkNew := false
 	if len(privKeyHex) <= 0 {
-		pk, err := generateRandomPrivateKey()
+		pk, err := walletStore.CreatePrivateKey(ctx)
 		if err != nil {
 			return nil, err
 		}
+
 		privateKey = pk
+		pkNew = true
 	} else {
 		privKeyBytes, err := hex.DecodeString(privKeyHex)
 		if err != nil {
@@ -50,6 +62,12 @@ func NewSingleKeyWallet(
 		}
 
 		privateKey = secp256k1.PrivKeyFromBytes(privKeyBytes)
+	}
+
+	if pkNew {
+		if err := walletStore.Save(ctx); err != nil {
+			return nil, err
+		}
 	}
 
 	_, liquidNet := networkFromString(network)
@@ -252,12 +270,4 @@ func (s *singleKeyWallet) SignPsetForAddress(pset *psetv2.Pset, addr string) err
 	}
 
 	return nil
-}
-
-func generateRandomPrivateKey() (*secp256k1.PrivateKey, error) {
-	privKey, err := btcec.NewPrivateKey()
-	if err != nil {
-		return nil, err
-	}
-	return privKey, nil
 }
