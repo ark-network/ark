@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 
 	arksdk "github.com/ark-network/ark-sdk"
 	log "github.com/sirupsen/logrus"
@@ -51,6 +52,10 @@ func main() {
 		log.Fatal(err)
 	}
 
+	if err := generateBlock(); err != nil {
+		log.Fatal(err)
+	}
+
 	txID, err := aliceArkClient.Onboard(ctx, 20000)
 	if err != nil {
 		log.Fatal(err)
@@ -92,6 +97,22 @@ func main() {
 	}
 
 	log.Infof("Alice sent 10000 to Bob offchain with txID: %s", txID)
+
+	aliceBalance, err := aliceArkClient.Balance(ctx, false)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Infof("Alice onchain balance: %d", aliceBalance.OnchainBalance.SpendableAmount)
+	log.Infof("Alice offchain balance: %d", aliceBalance.OffchainBalance.Total)
+
+	bobBalance, err := bobArkClient.Balance(ctx, false)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Infof("Bob onchain balance: %d", bobBalance.OnchainBalance.SpendableAmount)
+	log.Infof("Bob offchain balance: %d", bobBalance.OffchainBalance.Total)
 }
 
 func runCommand(name string, arg ...string) (string, error) {
@@ -154,4 +175,18 @@ func runCommand(name string, arg ...string) (string, error) {
 func newCommand(name string, arg ...string) *exec.Cmd {
 	cmd := exec.Command(name, arg...)
 	return cmd
+}
+
+func runArkCommand(arg ...string) (string, error) {
+	args := append([]string{"exec", "-t", "arkd", "ark"}, arg...)
+	return runCommand("docker", args...)
+}
+
+func generateBlock() error {
+	if _, err := runCommand("nigiri", "rpc", "--liquid", "generatetoaddress", "1", "el1qqwk722tghgkgmh3r2ph4d2apwj0dy9xnzlenzklx8jg3z299fpaw56trre9gpk6wmw0u4qycajqeva3t7lzp7wnacvwxha59r"); err != nil {
+		return err
+	}
+
+	time.Sleep(6 * time.Second)
+	return nil
 }
