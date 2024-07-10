@@ -45,6 +45,8 @@ func main() {
 		MinRelayFee:           cfg.MinRelayFee,
 		RoundLifetime:         cfg.RoundLifetime,
 		UnilateralExitDelay:   cfg.UnilateralExitDelay,
+		EsploraURL:            cfg.EsploraURL,
+		NeutrinoPeer:          cfg.NeutrinoPeer,
 	}
 	svc, err := grpcservice.NewService(svcConfig, appConfig)
 	if err != nil {

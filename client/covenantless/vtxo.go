@@ -4,7 +4,6 @@ import (
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/vulpemventures/go-elements/taproot"
 )
 
 func computeVtxoTaprootScript(
@@ -36,7 +35,7 @@ func computeVtxoTaprootScript(
 	root := vtxoTaprootTree.RootNode.TapHash()
 
 	unspendableKey := bitcointree.UnspendableKey()
-	vtxoTaprootKey := taproot.ComputeTaprootOutputKey(unspendableKey, root[:])
+	vtxoTaprootKey := txscript.ComputeTaprootOutputKey(unspendableKey, root[:])
 
 	redeemLeafHash := redeemLeaf.TapHash()
 	proofIndex := vtxoTaprootTree.LeafProofIndex[redeemLeafHash]

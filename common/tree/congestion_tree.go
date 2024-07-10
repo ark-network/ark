@@ -2,9 +2,6 @@ package tree
 
 import (
 	"errors"
-
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/vulpemventures/go-elements/psetv2"
 )
 
 // Node is a struct embedding the transaction and the parent txid of a congestion tree node
@@ -103,37 +100,6 @@ func (c CongestionTree) Branch(vtxoTxid string) ([]Node, error) {
 	}
 
 	return branch, nil
-}
-
-// FindLeaves returns all the leaves that are reachable from the given node output
-func (c CongestionTree) FindLeaves(fromtxid string, vout uint32) ([]Node, error) {
-	allLeaves := c.Leaves()
-	foundLeaves := make([]Node, 0)
-
-	for _, leaf := range allLeaves {
-		branch, err := c.Branch(leaf.Txid)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, node := range branch {
-			pset, err := psetv2.NewPsetFromBase64(node.Tx)
-			if err != nil {
-				return nil, err
-			}
-
-			input := pset.Inputs[0]
-			txid := chainhash.Hash(input.PreviousTxid).String()
-			index := input.PreviousTxIndex
-
-			if txid == fromtxid && index == vout {
-				foundLeaves = append(foundLeaves, leaf)
-				break
-			}
-		}
-	}
-
-	return foundLeaves, nil
 }
 
 func (n Node) findParent(tree CongestionTree) (Node, error) {

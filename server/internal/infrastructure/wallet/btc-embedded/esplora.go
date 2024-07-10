@@ -3,41 +3,31 @@ package btcwallet
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
-	"strings"
+	"net/url"
 
-	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/sirupsen/logrus"
 )
-
-var errFeeEstimator = errors.New("failed to get fee rate")
 
 type esploraClient struct {
 	url string
 }
 
-func newEsploraClient(network common.Network) *esploraClient {
-	var url string
-
-	switch network.Name {
-	case common.Bitcoin.Name:
-		url = "https://blockstream.info/api/"
-	case common.BitcoinTestNet.Name:
-		url = "https://blockstream.info/testnet/api/"
-	case common.BitcoinRegTest.Name:
-		url = "http://chopsticks:3000/" // nigiri chopsticks
-	}
-
-	return &esploraClient{
-		url,
-	}
-}
-
 func (f *esploraClient) getTxStatus(txid string) (isConfirmed bool, blocktime int64, err error) {
-	resp, err := http.DefaultClient.Get(f.url + "tx/" + txid)
+	endpoint, err := url.JoinPath(f.url, "tx", txid)
 	if err != nil {
 		return false, 0, err
 	}
+
+	resp, err := http.DefaultClient.Get(endpoint)
+	if err != nil {
+		return false, 0, err
+	}
+
+	fmt.Println("resp", resp)
+	fmt.Println("endpoint", endpoint)
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
@@ -54,14 +44,19 @@ func (f *esploraClient) getTxStatus(txid string) (isConfirmed bool, blocktime in
 }
 
 func (f *esploraClient) getFeeRate() (btcutil.Amount, error) {
-	resp, err := http.DefaultClient.Get(f.url + "fee-estimates")
+	endpoint, err := url.JoinPath(f.url, "fee-estimates")
+	if err != nil {
+		return 0, err
+	}
+
+	resp, err := http.DefaultClient.Get(endpoint)
 	if err != nil {
 		return 0, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return 0, errFeeEstimator
+		return 0, errors.New("fee-estimates endpoint HTTP error: " + resp.Status)
 	}
 
 	response := make(map[string]float64)
@@ -70,26 +65,17 @@ func (f *esploraClient) getFeeRate() (btcutil.Amount, error) {
 		return 0, err
 	}
 
+	if len(response) == 0 {
+		logrus.Warn("empty response from esplorea fee-estimates endpoint, default to 2 sat/vbyte")
+		return 2.0, nil
+	}
+
 	feeRate, ok := response["1"]
 	if !ok {
-		return 0, errFeeEstimator
+		return 0, errors.New("failed to get fee rate for 1 block")
 	}
 
 	return btcutil.Amount(feeRate * 1000), nil
-}
-
-func (f *esploraClient) broadcast(txHex string) error {
-	resp, err := http.DefaultClient.Post(f.url+"tx", "text/plain", strings.NewReader(txHex))
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return err
-	}
-
-	return nil
 }
 
 type esploraTx struct {

@@ -76,7 +76,7 @@ func (c *clArkBitcoinCLI) Onboard(ctx *cli.Context) error {
 	}
 
 	sharedOutputScript, sharedOutputAmount, err := bitcointree.CraftSharedOutput(
-		[]*secp256k1.PublicKey{userPubKey},
+		[]*secp256k1.PublicKey{userPubKey}, // TODO asp as cosigner
 		aspPubkey,
 		[]bitcointree.Receiver{congestionTreeLeaf},
 		uint64(minRelayFee),

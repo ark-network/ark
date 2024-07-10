@@ -27,6 +27,8 @@ type Config struct {
 	UnilateralExitDelay   int64
 	AuthUser              string
 	AuthPass              string
+	EsploraURL            string
+	NeutrinoPeer          string
 }
 
 var (
@@ -46,6 +48,8 @@ var (
 	UnilateralExitDelay   = "UNILATERAL_EXIT_DELAY"
 	AuthUser              = "AUTH_USER"
 	AuthPass              = "AUTH_PASS"
+	EsploraURL            = "ESPLORA_URL"
+	NeutrinoPeer          = "NEUTRINO_PEER"
 
 	defaultDatadir               = common.AppDataDir("arkd", false)
 	defaultRoundInterval         = 5
@@ -112,6 +116,8 @@ func LoadConfig() (*Config, error) {
 		UnilateralExitDelay:   viper.GetInt64(UnilateralExitDelay),
 		AuthUser:              viper.GetString(AuthUser),
 		AuthPass:              viper.GetString(AuthPass),
+		EsploraURL:            viper.GetString(EsploraURL),
+		NeutrinoPeer:          viper.GetString(NeutrinoPeer),
 	}, nil
 }
 

@@ -12,6 +12,7 @@ import (
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg"
@@ -19,7 +20,6 @@ import (
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4/schnorr"
 )
 
 const (
@@ -68,7 +68,7 @@ func (b *txBuilder) VerifyForfeitTx(tx string) (bool, string, error) {
 			if sig.Verify(preimage, pubkey) {
 				return true, txid, nil
 			} else {
-				return false, txid, fmt.Errorf("invalid signature")
+				return false, txid, fmt.Errorf("invalid signature for tx %s", txid)
 			}
 		}
 	}
@@ -204,7 +204,7 @@ func (b *txBuilder) BuildPoolTx(
 	}
 
 	ptx, err := b.createPoolTx(
-		sharedOutputAmount, sharedOutputScript, payments, aspPubkey, connectorAddress, minRelayFee, sweptRounds,
+		sharedOutputAmount, sharedOutputScript, payments, connectorAddress, minRelayFee, sweptRounds,
 	)
 	if err != nil {
 		return
@@ -271,6 +271,38 @@ func (b *txBuilder) GetSweepInput(parentblocktime int64, node tree.Node) (expira
 	return expirationTime, sweepInput, nil
 }
 
+func (b *txBuilder) FindLeaves(congestionTree tree.CongestionTree, fromtxid string, vout uint32) ([]tree.Node, error) {
+	allLeaves := congestionTree.Leaves()
+	foundLeaves := make([]tree.Node, 0)
+
+	for _, leaf := range allLeaves {
+		branch, err := congestionTree.Branch(leaf.Txid)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, node := range branch {
+			ptx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
+			if err != nil {
+				return nil, err
+			}
+
+			if len(ptx.Inputs) <= 0 {
+				return nil, fmt.Errorf("no input in the pset")
+			}
+
+			parentInput := ptx.UnsignedTx.TxIn[0].PreviousOutPoint
+
+			if parentInput.Hash.String() == fromtxid && parentInput.Index == vout {
+				foundLeaves = append(foundLeaves, leaf)
+				break
+			}
+		}
+	}
+
+	return foundLeaves, nil
+}
+
 func (b *txBuilder) getLeafScriptAndTree(
 	userPubkey, aspPubkey *secp256k1.PublicKey,
 ) ([]byte, *txscript.IndexedTapScriptTree, error) {
@@ -299,7 +331,7 @@ func (b *txBuilder) getLeafScriptAndTree(
 	)
 
 	root := taprootTree.RootNode.TapHash()
-	unspendableKey := tree.UnspendableKey()
+	unspendableKey := bitcointree.UnspendableKey()
 	taprootKey := txscript.ComputeTaprootOutputKey(unspendableKey, root[:])
 
 	outputScript, err := taprootOutputScript(taprootKey)
@@ -312,14 +344,9 @@ func (b *txBuilder) getLeafScriptAndTree(
 
 func (b *txBuilder) createPoolTx(
 	sharedOutputAmount int64, sharedOutputScript []byte,
-	payments []domain.Payment, aspPubKey *secp256k1.PublicKey, connectorAddress string, minRelayFee uint64,
+	payments []domain.Payment, connectorAddress string, minRelayFee uint64,
 	sweptRounds []domain.Round,
 ) (*psbt.Packet, error) {
-	aspScript, err := p2trScript(aspPubKey, b.onchainNetwork())
-	if err != nil {
-		return nil, err
-	}
-
 	connectorAddr, err := btcutil.DecodeAddress(connectorAddress, b.onchainNetwork())
 	if err != nil {
 		return nil, err
@@ -385,6 +412,21 @@ func (b *txBuilder) createPoolTx(
 			dust = change
 			change = 0
 		} else {
+			address, err := b.wallet.DeriveAddresses(ctx, 1)
+			if err != nil {
+				return nil, err
+			}
+
+			addr, err := btcutil.DecodeAddress(address[0], b.onchainNetwork())
+			if err != nil {
+				return nil, err
+			}
+
+			aspScript, err := txscript.PayToAddrScript(addr)
+			if err != nil {
+				return nil, err
+			}
+
 			outputs = append(outputs, &wire.TxOut{
 				Value:    int64(change),
 				PkScript: aspScript,
@@ -393,6 +435,7 @@ func (b *txBuilder) createPoolTx(
 	}
 
 	ins := make([]*wire.OutPoint, 0)
+	nSequences := make([]uint32, 0)
 
 	for _, utxo := range utxos {
 		txhash, err := chainhash.NewHashFromStr(utxo.GetTxid())
@@ -404,9 +447,10 @@ func (b *txBuilder) createPoolTx(
 			Hash:  *txhash,
 			Index: utxo.GetIndex(),
 		})
+		nSequences = append(nSequences, wire.MaxTxInSequenceNum)
 	}
 
-	ptx, err := psbt.New(ins, outputs, 2, 0, []uint32{wire.MaxTxInSequenceNum})
+	ptx, err := psbt.New(ins, outputs, 2, 0, nSequences)
 	if err != nil {
 		return nil, err
 	}
@@ -466,6 +510,21 @@ func (b *txBuilder) createPoolTx(
 			}
 
 			if change > 0 {
+				address, err := b.wallet.DeriveAddresses(ctx, 1)
+				if err != nil {
+					return nil, err
+				}
+
+				addr, err := btcutil.DecodeAddress(address[0], b.onchainNetwork())
+				if err != nil {
+					return nil, err
+				}
+
+				aspScript, err := txscript.PayToAddrScript(addr)
+				if err != nil {
+					return nil, err
+				}
+
 				ptx.UnsignedTx.AddTxOut(&wire.TxOut{
 					Value:    int64(change),
 					PkScript: aspScript,
@@ -512,6 +571,21 @@ func (b *txBuilder) createPoolTx(
 
 		if change > 0 {
 			if change > dustLimit {
+				address, err := b.wallet.DeriveAddresses(ctx, 1)
+				if err != nil {
+					return nil, err
+				}
+
+				addr, err := btcutil.DecodeAddress(address[0], b.onchainNetwork())
+				if err != nil {
+					return nil, err
+				}
+
+				aspScript, err := txscript.PayToAddrScript(addr)
+				if err != nil {
+					return nil, err
+				}
+
 				ptx.UnsignedTx.AddTxOut(&wire.TxOut{
 					Value:    int64(change),
 					PkScript: aspScript,
@@ -619,7 +693,7 @@ func (b *txBuilder) createConnectors(
 func (b *txBuilder) createForfeitTxs(
 	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, connectors []*psbt.Packet, minRelayFee uint64,
 ) ([]string, error) {
-	aspScript, err := p2trScript(aspPubkey, b.onchainNetwork())
+	aspScript, err := p2wpkhScript(aspPubkey, b.onchainNetwork())
 	if err != nil {
 		return nil, err
 	}
@@ -658,9 +732,21 @@ func (b *txBuilder) createForfeitTxs(
 				return nil, fmt.Errorf("forfeit proof not found")
 			}
 
+			controlBlock := forfeitProof.ToControlBlock(bitcointree.UnspendableKey())
+			ctrlBlockBytes, err := controlBlock.ToBytes()
+			if err != nil {
+				return nil, err
+			}
+
 			for _, connector := range connectors {
 				txs, err := craftForfeitTxs(
-					connector, vtxo, vtxoScript, aspScript, minRelayFee,
+					connector, vtxo,
+					&psbt.TaprootTapLeafScript{
+						ControlBlock: ctrlBlockBytes,
+						Script:       forfeitProof.Script,
+						LeafVersion:  forfeitProof.LeafVersion,
+					},
+					vtxoScript, aspScript, minRelayFee,
 				)
 				if err != nil {
 					return nil, err

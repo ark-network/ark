@@ -10,8 +10,8 @@ import (
 
 	"github.com/ark-network/ark-cli/utils"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/urfave/cli/v2"
-	"github.com/vulpemventures/go-elements/address"
 )
 
 func collaborativeRedeem(
@@ -19,28 +19,20 @@ func collaborativeRedeem(
 ) error {
 	withExpiryCoinselect := ctx.Bool("enable-expiry-coinselect")
 
-	if _, err := address.ToOutputScript(addr); err != nil {
+	_, err := btcutil.DecodeAddress(addr, nil)
+	if err != nil {
 		return fmt.Errorf("invalid onchain address")
 	}
 
-	net, err := address.NetworkForAddress(addr)
-	if err != nil {
-		return fmt.Errorf("invalid onchain address: unknown network")
-	}
 	netinstate, err := utils.GetNetwork(ctx)
 	if err != nil {
 		return err
 	}
 
-	liquidNet := toChainParams(netinstate)
+	netParams := toChainParams(netinstate)
 
-	if net.Name != liquidNet.Name {
-		return fmt.Errorf("invalid onchain address: must be for %s network", liquidNet.Name)
-	}
-
-	if isConf, _ := address.IsConfidential(addr); isConf {
-		info, _ := address.FromConfidential(addr)
-		addr = info.Address
+	if netinstate.Name != netParams.Name {
+		return fmt.Errorf("invalid onchain address: must be for %s network", netParams.Name)
 	}
 
 	offchainAddr, _, _, err := getAddress(ctx)

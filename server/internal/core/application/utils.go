@@ -10,6 +10,7 @@ import (
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/sirupsen/logrus"
 )
 
 type timedPayment struct {
@@ -163,13 +164,16 @@ func (m *forfeitTxsMap) sign(txs []string) error {
 
 	for _, tx := range txs {
 		valid, txid, err := m.builder.VerifyForfeitTx(tx)
+		if err != nil {
+			return err
+		}
 
 		if _, ok := m.forfeitTxs[txid]; ok {
-			if err == nil && valid {
+			if valid {
 				m.forfeitTxs[txid].tx = tx
 				m.forfeitTxs[txid].signed = true
 			} else {
-				return err
+				logrus.Warnf("invalid forfeit tx signature (%s)", txid)
 			}
 		}
 	}

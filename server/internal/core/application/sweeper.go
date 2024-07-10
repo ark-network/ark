@@ -167,7 +167,7 @@ func (s *sweeper) createTask(
 					}
 				} else {
 					// if it's not a vtxo, find all the vtxos leaves reachable from that input
-					vtxosLeaves, err := congestionTree.FindLeaves(input.GetHash().String(), input.GetIndex())
+					vtxosLeaves, err := s.builder.FindLeaves(congestionTree, input.GetHash().String(), input.GetIndex())
 					if err != nil {
 						log.WithError(err).Error("error while finding vtxos leaves")
 						continue

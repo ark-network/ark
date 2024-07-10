@@ -275,6 +275,47 @@ func (b *txBuilder) FinalizeAndExtractForfeit(tx string) (string, error) {
 	return extracted.ToHex()
 }
 
+func (b *txBuilder) FindLeaves(
+	congestionTree tree.CongestionTree,
+	fromtxid string,
+	fromvout uint32,
+) ([]tree.Node, error) {
+	allLeaves := congestionTree.Leaves()
+	foundLeaves := make([]tree.Node, 0)
+
+	for _, leaf := range allLeaves {
+		branch, err := congestionTree.Branch(leaf.Txid)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, node := range branch {
+			ptx, err := psetv2.NewPsetFromBase64(node.Tx)
+			if err != nil {
+				return nil, err
+			}
+
+			if len(ptx.Inputs) <= 0 {
+				return nil, fmt.Errorf("no input in the pset")
+			}
+
+			parentInput := ptx.Inputs[0]
+
+			hash, err := chainhash.NewHash(parentInput.PreviousTxid)
+			if err != nil {
+				return nil, err
+			}
+
+			if hash.String() == fromtxid && parentInput.PreviousTxIndex == fromvout {
+				foundLeaves = append(foundLeaves, leaf)
+				break
+			}
+		}
+	}
+
+	return foundLeaves, nil
+}
+
 func (b *txBuilder) getLeafScriptAndTree(
 	userPubkey, aspPubkey *secp256k1.PublicKey,
 ) ([]byte, *taproot.IndexedElementsTapScriptTree, error) {

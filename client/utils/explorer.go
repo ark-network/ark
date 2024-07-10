@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -34,6 +35,7 @@ type Explorer interface {
 		addr string, unilateralExitDelay int64,
 	) (uint64, map[int64]uint64, error)
 	GetTxBlocktime(txid string) (confirmed bool, blocktime int64, err error)
+	GetFeeRate() (float64, error)
 }
 
 type explorer struct {
@@ -51,6 +53,36 @@ func NewExplorer(ctx *cli.Context) Explorer {
 		cache:   make(map[string]string),
 		baseUrl: baseUrl,
 	}
+}
+
+func (e *explorer) GetFeeRate() (float64, error) {
+	endpoint, err := url.JoinPath(e.baseUrl, "fee-estimates")
+	if err != nil {
+		return 0, err
+	}
+
+	resp, err := http.Get(endpoint)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	var response map[string]float64
+
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return 0, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("error getting fee rate: %s", resp.Status)
+	}
+
+	if len(response) == 0 {
+		fmt.Println("empty fee-estimates response, default to 2 sat/vbyte")
+		return 2, nil
+	}
+
+	return response["1"], nil
 }
 
 func (e *explorer) GetTxHex(txid string) (string, error) {
@@ -100,7 +132,12 @@ func (e *explorer) Broadcast(txStr string) (string, error) {
 }
 
 func (e *explorer) GetUtxos(addr string) ([]Utxo, error) {
-	resp, err := http.Get(fmt.Sprintf("%s/address/%s/utxo", e.baseUrl, addr))
+	endpoint, err := url.JoinPath(e.baseUrl, "address", addr, "utxo")
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := http.Get(endpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +209,12 @@ func (e *explorer) GetRedeemedVtxosBalance(
 }
 
 func (e *explorer) GetTxBlocktime(txid string) (confirmed bool, blocktime int64, err error) {
-	resp, err := http.Get(fmt.Sprintf("%s/tx/%s", e.baseUrl, txid))
+	endpoint, err := url.JoinPath(e.baseUrl, "tx", txid)
+	if err != nil {
+		return false, 0, err
+	}
+
+	resp, err := http.Get(endpoint)
 	if err != nil {
 		return false, 0, err
 	}
@@ -205,7 +247,12 @@ func (e *explorer) GetTxBlocktime(txid string) (confirmed bool, blocktime int64,
 }
 
 func (e *explorer) getTxHex(txid string) (string, error) {
-	resp, err := http.Get(fmt.Sprintf("%s/tx/%s/hex", e.baseUrl, txid))
+	endpoint, err := url.JoinPath(e.baseUrl, "tx", txid, "hex")
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := http.Get(endpoint)
 	if err != nil {
 		return "", err
 	}
@@ -227,7 +274,12 @@ func (e *explorer) getTxHex(txid string) (string, error) {
 func (e *explorer) broadcast(txHex string) (string, error) {
 	body := bytes.NewBuffer([]byte(txHex))
 
-	resp, err := http.Post(fmt.Sprintf("%s/tx", e.baseUrl), "text/plain", body)
+	endpoint, err := url.JoinPath(e.baseUrl, "tx")
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := http.Post(endpoint, "text/plain", body)
 	if err != nil {
 		return "", err
 	}

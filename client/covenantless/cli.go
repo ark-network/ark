@@ -84,7 +84,6 @@ func (r *receiver) isOnchain() bool {
 func sendOnchain(ctx *cli.Context, receivers []receiver) (string, error) {
 	ptx, err := psbt.New(nil, nil, 2, 0, nil)
 	if err != nil {
-		fmt.Println(1)
 		return "", err
 	}
 
@@ -112,9 +111,14 @@ func sendOnchain(ctx *cli.Context, receivers []receiver) (string, error) {
 			return "", err
 		}
 
+		pkscript, err := txscript.PayToAddrScript(rcvAddr)
+		if err != nil {
+			return "", err
+		}
+
 		updater.Upsbt.UnsignedTx.AddTxOut(&wire.TxOut{
 			Value:    int64(receiver.Amount),
-			PkScript: rcvAddr.ScriptAddress(),
+			PkScript: pkscript,
 		})
 		updater.Upsbt.Outputs = append(updater.Upsbt.Outputs, psbt.POutput{})
 	}
@@ -138,15 +142,25 @@ func sendOnchain(ctx *cli.Context, receivers []receiver) (string, error) {
 			return "", err
 		}
 
+		pkscript, err := txscript.PayToAddrScript(changeAddr)
+		if err != nil {
+			return "", err
+		}
+
 		updater.Upsbt.UnsignedTx.AddTxOut(&wire.TxOut{
 			Value:    int64(change),
-			PkScript: changeAddr.ScriptAddress(),
+			PkScript: pkscript,
 		})
 		updater.Upsbt.Outputs = append(updater.Upsbt.Outputs, psbt.POutput{})
 	}
 
-	vBytes := updater.Upsbt.UnsignedTx.SerializeSize()
-	feeAmount := uint64(math.Ceil(float64(vBytes) * 1)) // TODO fee rate
+	size := updater.Upsbt.UnsignedTx.SerializeSize()
+	feeRate, err := explorer.GetFeeRate()
+	if err != nil {
+		return "", err
+	}
+
+	feeAmount := uint64(math.Ceil(float64(size) * feeRate))
 
 	if change > feeAmount {
 		updater.Upsbt.UnsignedTx.TxOut[len(updater.Upsbt.Outputs)-1].Value = int64(change - feeAmount)
@@ -174,9 +188,14 @@ func sendOnchain(ctx *cli.Context, receivers []receiver) (string, error) {
 				return "", err
 			}
 
+			pkscript, err := txscript.PayToAddrScript(changeAddr)
+			if err != nil {
+				return "", err
+			}
+
 			updater.Upsbt.UnsignedTx.AddTxOut(&wire.TxOut{
 				Value:    int64(newChange),
-				PkScript: changeAddr.ScriptAddress(),
+				PkScript: pkscript,
 			})
 			updater.Upsbt.Outputs = append(updater.Upsbt.Outputs, psbt.POutput{})
 		}
@@ -197,7 +216,6 @@ func sendOnchain(ctx *cli.Context, receivers []receiver) (string, error) {
 		}
 	}
 
-	fmt.Println("END")
 	return updater.Upsbt.B64Encode()
 }
 
@@ -266,7 +284,7 @@ func coinSelectOnchain(
 	liquidNet := toChainParams(net)
 
 	p2tr, err := btcutil.NewAddressTaproot(
-		vtxoTapKey.SerializeCompressed(),
+		schnorr.SerializePubKey(vtxoTapKey),
 		&liquidNet,
 	)
 	if err != nil {
@@ -323,7 +341,10 @@ func addInputs(
 		return err
 	}
 
-	changeScript := onchainAddr.ScriptAddress()
+	changeScript, err := txscript.PayToAddrScript(onchainAddr)
+	if err != nil {
+		return err
+	}
 
 	for _, utxo := range utxos {
 		previousHash, err := chainhash.NewHashFromStr(utxo.Txid)
@@ -374,12 +395,15 @@ func addInputs(
 			return err
 		}
 
-		p2tr, err := btcutil.NewAddressTaproot(vtxoTapKey.SerializeCompressed(), net)
+		p2tr, err := btcutil.NewAddressTaproot(schnorr.SerializePubKey(vtxoTapKey), net)
 		if err != nil {
 			return err
 		}
 
-		script := p2tr.ScriptAddress()
+		script, err := txscript.PayToAddrScript(p2tr)
+		if err != nil {
+			return err
+		}
 
 		for _, utxo := range delayedUtxos {
 			previousHash, err := chainhash.NewHashFromStr(utxo.Txid)
@@ -387,7 +411,6 @@ func addInputs(
 				return err
 			}
 
-			fmt.Println("ADD IN VTXO")
 			if err := addVtxoInput(
 				updater,
 				&wire.OutPoint{
@@ -400,7 +423,6 @@ func addInputs(
 				return err
 			}
 
-			fmt.Println("ADD IN VXTO WITNESS")
 			if err := updater.AddInWitnessUtxo(
 				&wire.TxOut{
 					Value:    int64(utxo.Amount),
@@ -443,7 +465,12 @@ func decodeReceiverAddress(addr string) (
 		return false, nil, userPubkey, nil
 	}
 
-	return true, decoded.ScriptAddress(), nil, nil
+	pkscript, err := txscript.PayToAddrScript(decoded)
+	if err != nil {
+		return false, nil, nil, err
+	}
+
+	return true, pkscript, nil, nil
 }
 
 func addVtxoInput(

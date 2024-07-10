@@ -253,7 +253,7 @@ func (s *covenantlessService) start() {
 }
 
 func (s *covenantlessService) startRound() {
-	round := domain.NewRound(dustAmount)
+	round := domain.NewRound(dustAmount) // TODO dynamic dust amount?
 	changes, _ := round.StartRegistration()
 	if err := s.saveEvents(
 		context.Background(), round.Id, changes,
@@ -323,6 +323,7 @@ func (s *covenantlessService) startFinalization() {
 	}
 
 	cosigners := make([]*secp256k1.PrivateKey, 0)
+	cosignersPubKeys := make([]*secp256k1.PublicKey, 0, len(cosigners))
 	for range payments {
 		// TODO sender should provide the ephemeral *public* key
 		ephemeralKey, err := secp256k1.GeneratePrivateKey()
@@ -333,6 +334,7 @@ func (s *covenantlessService) startFinalization() {
 		}
 
 		cosigners = append(cosigners, ephemeralKey)
+		cosignersPubKeys = append(cosignersPubKeys, ephemeralKey.PubKey())
 	}
 
 	aspSigningKey, err := secp256k1.GeneratePrivateKey()
@@ -343,11 +345,7 @@ func (s *covenantlessService) startFinalization() {
 	}
 
 	cosigners = append(cosigners, aspSigningKey)
-
-	cosignersPubKeys := make([]*secp256k1.PublicKey, 0, len(cosigners))
-	for _, c := range cosigners {
-		cosignersPubKeys = append(cosignersPubKeys, c.PubKey())
-	}
+	cosignersPubKeys = append(cosignersPubKeys, aspSigningKey.PubKey())
 
 	unsignedPoolTx, tree, connectorAddress, err := s.builder.BuildPoolTx(s.pubkey, payments, s.minRelayFee, sweptRounds, cosignersPubKeys...)
 	if err != nil {
@@ -379,21 +377,20 @@ func (s *covenantlessService) startFinalization() {
 
 	signers := make([]bitcointree.SignerSession, 0)
 
-	for i := range payments {
-		pubkey := cosignersPubKeys[i]
+	for _, seckey := range cosigners {
 		signer := bitcointree.NewTreeSignerSession(
-			tree, int64(s.minRelayFee), root.CloneBytes(),
+			seckey, tree, int64(s.minRelayFee), root.CloneBytes(),
 		)
 
 		// TODO nonces should be sent by the sender
-		nonces, err := signer.GetNonces(pubkey)
+		nonces, err := signer.GetNonces()
 		if err != nil {
 			changes = round.Fail(fmt.Errorf("failed to get nonces: %s", err))
 			log.WithError(err).Warn("failed to get nonces")
 			return
 		}
 
-		if err := coordinator.AddNonce(pubkey, nonces); err != nil {
+		if err := coordinator.AddNonce(seckey.PubKey(), nonces); err != nil {
 			changes = round.Fail(fmt.Errorf("failed to add nonce: %s", err))
 			log.WithError(err).Warn("failed to add nonce")
 			return
@@ -410,7 +407,7 @@ func (s *covenantlessService) startFinalization() {
 	}
 
 	// TODO aggragated nonces and public keys should be sent back to signer
-	// TODO signing should be done client-side
+	// TODO signing should be done client-side (except for the ASP)
 	for i, signer := range signers {
 		if err := signer.SetKeys(cosignersPubKeys, aggragatedNonces); err != nil {
 			changes = round.Fail(fmt.Errorf("failed to set keys: %s", err))
@@ -418,7 +415,7 @@ func (s *covenantlessService) startFinalization() {
 			return
 		}
 
-		sig, err := signer.Sign(cosigners[i])
+		sig, err := signer.Sign()
 		if err != nil {
 			changes = round.Fail(fmt.Errorf("failed to sign: %s", err))
 			log.WithError(err).Warn("failed to sign")
@@ -507,6 +504,7 @@ func (s *covenantlessService) finalizeRound() {
 		return
 	}
 
+	fmt.Println(signedPoolTx)
 	txid, err := s.wallet.BroadcastTransaction(ctx, signedPoolTx)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to broadcast pool tx: %s", err))
@@ -827,7 +825,11 @@ func (s *covenantlessService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 	leaves := round.CongestionTree.Leaves()
 	vtxos := make([]domain.Vtxo, 0)
 	for _, node := range leaves {
-		tx, _ := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
+		tx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
+		if err != nil {
+			log.WithError(err).Warn("failed to parse tx")
+			continue
+		}
 		for i, out := range tx.UnsignedTx.TxOut {
 			for _, p := range round.Payments {
 				var pubkey string
@@ -839,7 +841,12 @@ func (s *covenantlessService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 
 					buf, _ := hex.DecodeString(r.Pubkey)
 					pk, _ := secp256k1.ParsePubKey(buf)
-					script, _ := s.builder.GetVtxoScript(pk, s.pubkey)
+					script, err := s.builder.GetVtxoScript(pk, s.pubkey)
+					if err != nil {
+						log.WithError(err).Warn("failed to get vtxo script")
+						continue
+					}
+
 					if bytes.Equal(script, out.PkScript) {
 						found = true
 						pubkey = r.Pubkey

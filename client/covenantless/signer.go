@@ -66,7 +66,10 @@ func signPsbt(
 		return err
 	}
 
-	onchainWalletScript := onchainAddr.ScriptAddress()
+	onchainWalletScript, err := txscript.PayToAddrScript(onchainAddr)
+	if err != nil {
+		return err
+	}
 
 	prevouts := make(map[wire.OutPoint]*wire.TxOut)
 
@@ -140,12 +143,13 @@ func signPsbt(
 
 					hash := txscript.NewTapLeaf(leaf.LeafVersion, leaf.Script).TapHash()
 
-					preimage, err := txscript.CalcTaprootSignatureHash(
+					preimage, err := txscript.CalcTapscriptSignaturehash(
 						txsighashes,
 						txscript.SigHashDefault,
 						ptx.UnsignedTx,
 						i,
 						prevoutFetcher,
+						txscript.NewBaseTapLeaf(leaf.Script),
 					)
 					if err != nil {
 						return err
@@ -157,6 +161,10 @@ func signPsbt(
 					)
 					if err != nil {
 						return err
+					}
+
+					if !sig.Verify(preimage, prvKey.PubKey()) {
+						return fmt.Errorf("signature verification failed")
 					}
 
 					updater.Upsbt.Inputs[i].TaprootScriptSpendSig = []*psbt.TaprootScriptSpendSig{

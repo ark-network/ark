@@ -10,18 +10,18 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-func p2trScript(publicKey *secp256k1.PublicKey, net *chaincfg.Params) ([]byte, error) {
+func p2wpkhScript(publicKey *secp256k1.PublicKey, net *chaincfg.Params) ([]byte, error) {
 	tapKey := txscript.ComputeTaprootKeyNoScript(publicKey)
 
-	payment, err := btcutil.NewAddressTaproot(
-		schnorr.SerializePubKey(tapKey),
+	payment, err := btcutil.NewAddressWitnessPubKeyHash(
+		btcutil.Hash160(tapKey.SerializeCompressed()),
 		net,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	return payment.ScriptAddress(), nil
+	return txscript.PayToAddrScript(payment)
 }
 
 func getOnchainReceivers(

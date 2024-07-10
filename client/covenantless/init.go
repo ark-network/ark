@@ -9,15 +9,15 @@ import (
 	"github.com/ark-network/ark-cli/utils"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/urfave/cli/v2"
-	"github.com/vulpemventures/go-elements/network"
 )
 
 var explorerUrls = map[string]string{
-	network.Liquid.Name:  "https://blockstream.info/liquid/api",
-	network.Testnet.Name: "https://blockstream.info/liquidtestnet/api",
-	network.Regtest.Name: "http://localhost:3001",
+	chaincfg.MainNetParams.Name:       "https://blockstream.info/liquid/api",
+	chaincfg.TestNet3Params.Name:      "https://blockstream.info/liquidtestnet/api",
+	chaincfg.RegressionNetParams.Name: "http://localhost:3001",
 }
 
 func (c *clArkBitcoinCLI) Init(ctx *cli.Context) error {

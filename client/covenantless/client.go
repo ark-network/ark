@@ -10,13 +10,11 @@ import (
 
 	"github.com/ark-network/ark-cli/utils"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
-	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/urfave/cli/v2"
-	"github.com/vulpemventures/go-elements/psetv2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -252,10 +250,9 @@ func handleRoundStream(
 		if e := event.GetRoundFinalization(); e != nil {
 			// stop pinging as soon as we receive some forfeit txs
 			pingStop()
-			fmt.Println("round finalization started")
 
 			poolTx := e.GetPoolTx()
-			ptx, err := psetv2.NewPsetFromBase64(poolTx)
+			ptx, err := psbt.NewFromRawBytes(strings.NewReader(poolTx), true)
 			if err != nil {
 				return "", err
 			}
@@ -272,23 +269,25 @@ func handleRoundStream(
 				return "", err
 			}
 
-			roundLifetime, err := utils.GetRoundLifetime(ctx)
-			if err != nil {
-				return "", err
-			}
+			// roundLifetime, err := utils.GetRoundLifetime(ctx)
+			// if err != nil {
+			// 	return "", err
+			// }
 
-			if !isOnchainOnly(receivers) {
-				// validate the congestion tree
-				if err := tree.ValidateCongestionTree(
-					congestionTree, poolTx, aspPubkey, int64(roundLifetime),
-				); err != nil {
-					return "", err
-				}
-			}
+			// TODO validate the congestion (need the cosigners pubkeys)
+			// if !isOnchainOnly(receivers) {
+			// validate the congestion tree
+			// if err := bitcointree.ValidateCongestionTree(
+			// 	congestionTree, poolTx, aspPubkey, int64(roundLifetime),
+			// ); err != nil {
+			// 	return "", err
+			// }
+			// }
 
-			if err := common.ValidateConnectors(poolTx, connectors); err != nil {
-				return "", err
-			}
+			// TODO bitcoin validateConnectors
+			// if err := common.ValidateConnectors(poolTx, connectors); err != nil {
+			// 	return "", err
+			// }
 
 			unilateralExitDelay, err := utils.GetUnilateralExitDelay(ctx)
 			if err != nil {
@@ -307,9 +306,9 @@ func handleRoundStream(
 					// collaborative exit case
 					// search for the output in the pool tx
 					found := false
-					for _, output := range ptx.Outputs {
-						if bytes.Equal(output.Script, onchainScript) {
-							if output.Value != receiver.Amount {
+					for _, output := range ptx.UnsignedTx.TxOut {
+						if bytes.Equal(output.PkScript, onchainScript) {
+							if output.Value != int64(receiver.Amount) {
 								return "", fmt.Errorf(
 									"invalid collaborative exit output amount: got %d, want %d",
 									output.Value, receiver.Amount,
@@ -344,19 +343,20 @@ func handleRoundStream(
 
 				leaves := congestionTree.Leaves()
 				for _, leaf := range leaves {
-					tx, err := psetv2.NewPsetFromBase64(leaf.Tx)
+					tx, err := psbt.NewFromRawBytes(strings.NewReader(leaf.Tx), true)
 					if err != nil {
 						return "", err
 					}
 
-					for _, output := range tx.Outputs {
-						if len(output.Script) == 0 {
+					for _, output := range tx.UnsignedTx.TxOut {
+						if len(output.PkScript) == 0 {
 							continue
 						}
+
 						if bytes.Equal(
-							output.Script[2:], schnorr.SerializePubKey(outputTapKey),
+							output.PkScript[2:], schnorr.SerializePubKey(outputTapKey),
 						) {
-							if output.Value != receiver.Amount {
+							if output.Value != int64(receiver.Amount) {
 								continue
 							}
 
@@ -388,9 +388,11 @@ func handleRoundStream(
 
 			connectorsTxids := make([]string, 0, len(connectors))
 			for _, connector := range connectors {
-				p, _ := psetv2.NewPsetFromBase64(connector)
-				utx, _ := p.UnsignedTx()
-				txid := utx.TxHash().String()
+				p, err := psbt.NewFromRawBytes(strings.NewReader(connector), true)
+				if err != nil {
+					return "", err
+				}
+				txid := p.UnsignedTx.TxHash().String()
 
 				connectorsTxids = append(connectorsTxids, txid)
 			}
