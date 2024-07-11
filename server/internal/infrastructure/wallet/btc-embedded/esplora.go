@@ -3,7 +3,6 @@ package btcwallet
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -26,8 +25,6 @@ func (f *esploraClient) getTxStatus(txid string) (isConfirmed bool, blocktime in
 		return false, 0, err
 	}
 
-	fmt.Println("resp", resp)
-	fmt.Println("endpoint", endpoint)
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {

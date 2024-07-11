@@ -504,7 +504,6 @@ func (s *covenantlessService) finalizeRound() {
 		return
 	}
 
-	fmt.Println(signedPoolTx)
 	txid, err := s.wallet.BroadcastTransaction(ctx, signedPoolTx)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to broadcast pool tx: %s", err))

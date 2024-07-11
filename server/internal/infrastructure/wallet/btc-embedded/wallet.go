@@ -149,20 +149,19 @@ func NewService(cfg WalletConfig, options ...WalletOption) (ports.WalletService,
 		option(svc)
 	}
 
-	if err := svc.setWalletLoader(); err != nil {
-		return nil, err
-	}
-
-	w, isLoaded := svc.loader.LoadedWallet()
-	if !isLoaded {
-		return nil, errors.New("wallet not loaded")
-	}
-
 	if svc.chainSource == nil {
 		return nil, errors.New("chain source not provided, please use WalletOption to set it")
 	}
 
-	fmt.Println("chain synced", w.ChainSynced())
+	if err := svc.setWalletLoader(); err != nil {
+		return nil, err
+	}
+
+	// verify that the wallet has been correctly loaded
+	_, isLoaded := svc.loader.LoadedWallet()
+	if !isLoaded {
+		return nil, errors.New("wallet not loaded")
+	}
 
 	return svc, nil
 }
@@ -432,7 +431,7 @@ func (s *service) SelectUtxos(ctx context.Context, _ string, amount uint64) ([]p
 
 	utxos, err := w.UnspentOutputs(wallet.OutputSelectionPolicy{
 		Account:               s.accounts[mainAccount],
-		RequiredConfirmations: 0,
+		RequiredConfirmations: 0, // allow uncomfirmed utxos
 	})
 	if err != nil {
 		return nil, 0, err
@@ -511,8 +510,6 @@ func (s *service) SignTransaction(ctx context.Context, partialTx string, extract
 }
 
 func (s *service) SignTransactionTapscript(ctx context.Context, partialTx string, inputIndexes []int) (string, error) {
-	w, _ := s.loader.LoadedWallet()
-
 	partial, err := psbt.NewFromRawBytes(
 		strings.NewReader(partialTx),
 		true,
@@ -521,43 +518,11 @@ func (s *service) SignTransactionTapscript(ctx context.Context, partialTx string
 		return "", err
 	}
 
-	additionalPrevoutScripts := make(map[wire.OutPoint][]byte)
-
 	if len(inputIndexes) == 0 {
 		inputIndexes = make([]int, len(partial.Inputs))
 		for i := range partial.Inputs {
 			inputIndexes[i] = i
 		}
-	}
-
-	for _, index := range inputIndexes {
-		if index >= len(partial.Inputs) {
-			return "", errors.New("input index out of range")
-		}
-
-		input := partial.Inputs[index]
-		tapLeafScript := input.TaprootLeafScript[0]
-
-		ctrlBlock, err := txscript.ParseControlBlock(tapLeafScript.ControlBlock)
-		if err != nil {
-			return "", err
-		}
-
-		tapscript := &waddrmgr.Tapscript{
-			Type:           waddrmgr.TapscriptTypePartialReveal,
-			ControlBlock:   ctrlBlock,
-			RevealedScript: tapLeafScript.Script,
-		}
-
-		if _, err := w.ImportTaprootScript(keyScope, tapscript, nil, byte(txscript.TaprootWitnessVersion), false); err != nil {
-			return "", err
-		}
-
-		if input.WitnessUtxo == nil {
-			continue
-		}
-
-		additionalPrevoutScripts[partial.UnsignedTx.TxIn[index].PreviousOutPoint] = input.WitnessUtxo.PkScript
 	}
 
 	signedInputs, err := s.signPsbt(partial)
