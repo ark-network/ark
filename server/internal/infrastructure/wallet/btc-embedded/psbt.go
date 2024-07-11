@@ -32,8 +32,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// signMethod defines the different ways a signer can sign, given a specific
-// input.
+// signMethod defines the different ways a signer can sign
 type signMethod uint8
 
 const (

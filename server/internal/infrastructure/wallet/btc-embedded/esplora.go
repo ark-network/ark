@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/sirupsen/logrus"
@@ -12,6 +13,33 @@ import (
 
 type esploraClient struct {
 	url string
+}
+
+type esploraTx struct {
+	Status struct {
+		Confirmed bool  `json:"confirmed"`
+		BlockTime int64 `json:"block_time"`
+	} `json:"status"`
+}
+
+func (f *esploraClient) broadcast(txhex string) error {
+	endpoint, err := url.JoinPath(f.url, "tx")
+	if err != nil {
+		return err
+	}
+
+	resp, err := http.Post(endpoint, "text/plain", strings.NewReader(txhex))
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return errors.New("broadcast endpoint HTTP error: " + resp.Status)
+	}
+
+	return nil
 }
 
 func (f *esploraClient) getTxStatus(txid string) (isConfirmed bool, blocktime int64, err error) {
@@ -73,11 +101,4 @@ func (f *esploraClient) getFeeRate() (btcutil.Amount, error) {
 	}
 
 	return btcutil.Amount(feeRate * 1000), nil
-}
-
-type esploraTx struct {
-	Status struct {
-		Confirmed bool  `json:"confirmed"`
-		BlockTime int64 `json:"block_time"`
-	} `json:"status"`
 }

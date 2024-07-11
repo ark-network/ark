@@ -307,12 +307,14 @@ func (s *service) Close() {
 }
 
 func (s *service) BroadcastTransaction(ctx context.Context, txHex string) (string, error) {
+	if err := s.esploraClient.broadcast(txHex); err != nil {
+		return "", err
+	}
+
 	var tx wire.MsgTx
 	if err := tx.Deserialize(hex.NewDecoder(strings.NewReader(txHex))); err != nil {
 		return "", err
 	}
-
-	// TODO min-relay-fee not met errors are not handled (important)
 
 	w, _ := s.loader.LoadedWallet()
 
