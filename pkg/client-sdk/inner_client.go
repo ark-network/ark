@@ -45,8 +45,8 @@ type arkTransportClient interface {
 		ctx context.Context, req *arkv1.ClaimPaymentRequest,
 	) (*arkv1.ClaimPaymentResponse, error)
 	getEventStream(
-		ctx context.Context, req *arkv1.GetEventStreamRequest,
-	) (arkv1.ArkService_GetEventStreamClient, error)
+		ctx context.Context, paymentID string, req *arkv1.GetEventStreamRequest,
+	) (*EventStream, error)
 	ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.PingResponse, error)
 	finalizePayment(
 		ctx context.Context, req *arkv1.FinalizePaymentRequest,
@@ -77,6 +77,10 @@ func newArkTransportClient(
 		return &arkInnerClient{
 			resClient: resClient,
 			explorer:  explorer,
+			eventStream: &EventStream{
+				eventResp: make(chan *arkv1.GetEventStreamResponse),
+				err:       make(chan error),
+			},
 		}, nil
 	default:
 		return nil, errors.New("unknown protocol")
@@ -90,21 +94,59 @@ type arkInnerClient struct {
 	resClient *arkservicerestclient.ArkV1ServiceProto
 
 	explorer Explorer
+
+	eventStream *EventStream
+}
+
+type EventStream struct {
+	eventResp chan *arkv1.GetEventStreamResponse
+	err       chan error
 }
 
 func (a *arkInnerClient) getEventStream(
-	ctx context.Context, req *arkv1.GetEventStreamRequest,
-) (arkv1.ArkService_GetEventStreamClient, error) {
+	ctx context.Context, paymentID string, req *arkv1.GetEventStreamRequest,
+) (*EventStream, error) {
 	switch {
 	case a.grpcClient != nil:
-		return a.grpcClient.Service().GetEventStream(ctx, req)
-	case a.resClient != nil:
-		//TODO check if possible to implement
+		stream, err := a.grpcClient.Service().GetEventStream(ctx, req)
+		if err != nil {
+			return nil, err
+		}
 
-		return nil, errors.New("not implemented")
+		go func() {
+			defer close(a.eventStream.eventResp)
+			defer close(a.eventStream.err)
+
+			for {
+				resp, err := stream.Recv()
+				if err != nil {
+					a.eventStream.err <- err
+					return
+				}
+
+				a.eventStream.eventResp <- resp
+			}
+		}()
+	case a.resClient != nil:
+		defer close(a.eventStream.eventResp)
+		defer close(a.eventStream.err)
+
+		for {
+			resp, err := a.ping(ctx, &arkv1.PingRequest{
+				PaymentId: paymentID,
+			})
+			if err != nil {
+				a.eventStream.err <- err
+			}
+
+			if resp.GetForfeitTxs() != nil {
+				//TODO
+				a.eventStream.eventResp <- &arkv1.GetEventStreamResponse{}
+			}
+		}
 	}
 
-	return nil, nil
+	return a.eventStream, nil
 }
 
 func (a *arkInnerClient) getInfo(ctx context.Context) (*arkv1.GetInfoResponse, error) {
