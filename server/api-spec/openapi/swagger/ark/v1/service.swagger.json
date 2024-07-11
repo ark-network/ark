@@ -518,8 +518,10 @@
           "type": "array",
           "items": {
             "type": "string"
-          },
-          "title": "TODO: improve this response (returns oneof the round event)"
+          }
+        },
+        "event": {
+          "$ref": "#/definitions/v1RoundFinalizationEvent"
         }
       }
     },
