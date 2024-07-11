@@ -13,7 +13,6 @@ type RoundEventRepository interface {
 
 type RoundRepository interface {
 	AddOrUpdateRound(ctx context.Context, round Round) error
-	GetCurrentRound(ctx context.Context) (*Round, error)
 	GetRoundWithId(ctx context.Context, id string) (*Round, error)
 	GetRoundWithTxid(ctx context.Context, txid string) (*Round, error)
 	GetSweepableRounds(ctx context.Context) ([]Round, error)

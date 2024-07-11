@@ -101,13 +101,24 @@ func (h *handler) Ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.Ping
 		return nil, status.Error(codes.InvalidArgument, "missing payment id")
 	}
 
-	forfeits, err := h.svc.UpdatePaymentStatus(ctx, req.GetPaymentId())
+	forfeits, round, err := h.svc.UpdatePaymentStatus(ctx, req.GetPaymentId())
 	if err != nil {
 		return nil, err
 	}
 
+	var event *arkv1.RoundFinalizationEvent
+	if round != nil {
+		event = &arkv1.RoundFinalizationEvent{
+			Id:             round.Id,
+			PoolTx:         round.UnsignedTx,
+			ForfeitTxs:     round.ForfeitTxs,
+			CongestionTree: castCongestionTree(round.CongestionTree),
+			Connectors:     round.Connectors,
+		}
+	}
 	return &arkv1.PingResponse{
 		ForfeitTxs: forfeits,
+		Event:      event,
 	}, nil
 }
 

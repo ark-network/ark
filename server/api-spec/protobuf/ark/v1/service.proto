@@ -106,8 +106,8 @@ message PingRequest {
   string payment_id = 1;
 }
 message PingResponse {
-  // TODO: improve this response (returns oneof the round event)
   repeated string forfeit_txs = 1;
+  RoundFinalizationEvent event = 2;
 }
 
 message ListVtxosRequest {

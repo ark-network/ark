@@ -43,7 +43,7 @@ type Service interface {
 	GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error)
 	GetCurrentRound(ctx context.Context) (*domain.Round, error)
 	GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
-	UpdatePaymentStatus(ctx context.Context, id string) (unsignedForfeitTxs []string, err error)
+	UpdatePaymentStatus(ctx context.Context, id string) (unsignedForfeitTxs []string, round *domain.Round, err error)
 	ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, []domain.Vtxo, error)
 	GetInfo(ctx context.Context) (*ServiceInfo, error)
 	Onboard(ctx context.Context, boardingTx string, congestionTree tree.CongestionTree, userPubkey *secp256k1.PublicKey) error
@@ -79,6 +79,7 @@ type service struct {
 
 	trustedOnboardingScriptLock *sync.Mutex
 	trustedOnboardingScripts    map[string]*secp256k1.PublicKey
+	currentRound                *domain.Round
 }
 
 func NewService(
@@ -106,7 +107,7 @@ func NewService(
 		roundLifetime, roundInterval, unilateralExitDelay, minRelayFee,
 		walletSvc, repoManager, builder, scanner, sweeper,
 		paymentRequests, forfeitTxs, eventsCh, onboardingCh,
-		&sync.Mutex{}, make(map[string]*secp256k1.PublicKey),
+		&sync.Mutex{}, make(map[string]*secp256k1.PublicKey), nil,
 	}
 	repoManager.RegisterEventsHandler(
 		func(round *domain.Round) {
@@ -188,17 +189,17 @@ func (s *service) ClaimVtxos(ctx context.Context, creds string, receivers []doma
 	return s.paymentRequests.update(*payment)
 }
 
-func (s *service) UpdatePaymentStatus(_ context.Context, id string) ([]string, error) {
+func (s *service) UpdatePaymentStatus(_ context.Context, id string) ([]string, *domain.Round, error) {
 	err := s.paymentRequests.updatePingTimestamp(id)
 	if err != nil {
 		if _, ok := err.(errPaymentNotFound); ok {
-			return s.forfeitTxs.view(), nil
+			return s.forfeitTxs.view(), s.currentRound, nil
 		}
 
-		return nil, err
+		return nil, nil, err
 	}
 
-	return nil, nil
+	return nil, nil, nil
 }
 
 func (s *service) SignVtxos(ctx context.Context, forfeitTxs []string) error {
@@ -219,7 +220,7 @@ func (s *service) GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.
 }
 
 func (s *service) GetCurrentRound(ctx context.Context) (*domain.Round, error) {
-	return s.repoManager.Rounds().GetCurrentRound(ctx)
+	return domain.NewRoundFromEvents(s.currentRound.Events()), nil
 }
 
 func (s *service) GetInfo(ctx context.Context) (*ServiceInfo, error) {
@@ -324,13 +325,9 @@ func (s *service) start() {
 
 func (s *service) startRound() {
 	round := domain.NewRound(dustAmount)
-	changes, _ := round.StartRegistration()
-	if err := s.saveEvents(
-		context.Background(), round.Id, changes,
-	); err != nil {
-		log.WithError(err).Warn("failed to store new round events")
-		return
-	}
+	//nolint:all
+	round.StartRegistration()
+	s.currentRound = round
 
 	defer func() {
 		time.Sleep(time.Duration(s.roundInterval/2) * time.Second)
@@ -342,15 +339,16 @@ func (s *service) startRound() {
 
 func (s *service) startFinalization() {
 	ctx := context.Background()
-	round, err := s.repoManager.Rounds().GetCurrentRound(ctx)
-	if err != nil {
-		log.WithError(err).Warn("failed to retrieve current round")
-		return
-	}
+	round := s.currentRound
 
-	var changes []domain.RoundEvent
+	var roundAborted bool
 	defer func() {
-		if err := s.saveEvents(ctx, round.Id, changes); err != nil {
+		if roundAborted {
+			s.startRound()
+			return
+		}
+
+		if err := s.saveEvents(ctx, round.Id, round.Events()); err != nil {
 			log.WithError(err).Warn("failed to store new round events")
 		}
 
@@ -369,8 +367,9 @@ func (s *service) startFinalization() {
 	// TODO: understand how many payments must be popped from the queue and actually registered for the round
 	num := s.paymentRequests.len()
 	if num == 0 {
+		roundAborted = true
 		err := fmt.Errorf("no payments registered")
-		changes = round.Fail(fmt.Errorf("round aborted: %s", err))
+		round.Fail(fmt.Errorf("round aborted: %s", err))
 		log.WithError(err).Debugf("round %s aborted", round.Id)
 		return
 	}
@@ -378,23 +377,22 @@ func (s *service) startFinalization() {
 		num = paymentsThreshold
 	}
 	payments := s.paymentRequests.pop(num)
-	changes, err = round.RegisterPayments(payments)
-	if err != nil {
-		changes = round.Fail(fmt.Errorf("failed to register payments: %s", err))
+	if _, err := round.RegisterPayments(payments); err != nil {
+		round.Fail(fmt.Errorf("failed to register payments: %s", err))
 		log.WithError(err).Warn("failed to register payments")
 		return
 	}
 
 	sweptRounds, err := s.repoManager.Rounds().GetSweptRounds(ctx)
 	if err != nil {
-		changes = round.Fail(fmt.Errorf("failed to retrieve swept rounds: %s", err))
+		round.Fail(fmt.Errorf("failed to retrieve swept rounds: %s", err))
 		log.WithError(err).Warn("failed to retrieve swept rounds")
 		return
 	}
 
 	unsignedPoolTx, tree, connectorAddress, err := s.builder.BuildPoolTx(s.pubkey, payments, s.minRelayFee, sweptRounds)
 	if err != nil {
-		changes = round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
+		round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
 		log.WithError(err).Warn("failed to create pool tx")
 		return
 	}
@@ -404,20 +402,20 @@ func (s *service) startFinalization() {
 
 	connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(s.pubkey, unsignedPoolTx, payments, s.minRelayFee)
 	if err != nil {
-		changes = round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
+		round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
 		log.WithError(err).Warn("failed to create connectors and forfeit txs")
 		return
 	}
 
 	log.Debugf("forfeit transactions created for round %s", round.Id)
 
-	events, err := round.StartFinalization(connectorAddress, connectors, tree, unsignedPoolTx)
-	if err != nil {
-		changes = round.Fail(fmt.Errorf("failed to start finalization: %s", err))
+	if _, err := round.StartFinalization(
+		connectorAddress, connectors, tree, unsignedPoolTx,
+	); err != nil {
+		round.Fail(fmt.Errorf("failed to start finalization: %s", err))
 		log.WithError(err).Warn("failed to start finalization")
 		return
 	}
-	changes = append(changes, events...)
 
 	s.forfeitTxs.push(forfeitTxs)
 
@@ -428,14 +426,12 @@ func (s *service) finalizeRound() {
 	defer s.startRound()
 
 	ctx := context.Background()
-	round, err := s.repoManager.Rounds().GetCurrentRound(ctx)
-	if err != nil {
-		log.WithError(err).Warn("failed to retrieve current round")
-		return
-	}
+	round := s.currentRound
 	if round.IsFailed() {
 		return
 	}
+
+	fmt.Printf("%+v\n", *round)
 
 	var changes []domain.RoundEvent
 	defer func() {

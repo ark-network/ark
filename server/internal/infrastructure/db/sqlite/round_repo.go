@@ -135,11 +135,10 @@ LEFT OUTER JOIN receiver ON payment.id=receiver.payment_id
 LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
 `
 
-	selectCurrentRound    = selectRound + " WHERE round.ended = false AND round.failed = false;"
 	selectRoundWithId     = selectRound + " WHERE round.id = ?;"
 	selectRoundWithTxId   = selectRound + " WHERE round.txid = ?;"
 	selectSweepableRounds = selectRound + " WHERE round.swept = false AND round.ended = true AND round.failed = false;"
-	selectSweptRounds     = selectRound + " WHERE round.swept = true AND round.failed = false AND round.ended = true;"
+	selectSweptRounds     = selectRound + " WHERE round.swept = true AND round.failed = false AND round.ended = true AND round.connector_address <> '';"
 
 	selectRoundIdsInRange = `
 SELECT id FROM round WHERE starting_timestamp > ? AND starting_timestamp < ?;
@@ -377,30 +376,6 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 	}
 
 	return tx.Commit()
-}
-
-func (r *roundRepository) GetCurrentRound(ctx context.Context) (*domain.Round, error) {
-	stmt, err := r.db.Prepare(selectCurrentRound)
-	if err != nil {
-		return nil, err
-	}
-	defer stmt.Close()
-
-	rows, err := stmt.Query()
-	if err != nil {
-		return nil, err
-	}
-
-	rounds, err := readRoundRows(rows)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(rounds) == 0 {
-		return nil, errors.New("no current round")
-	}
-
-	return rounds[0], nil
 }
 
 func (r *roundRepository) GetRoundWithId(ctx context.Context, id string) (*domain.Round, error) {
