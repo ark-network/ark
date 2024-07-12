@@ -119,6 +119,11 @@ func (h *handler) Ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.Ping
 	return &arkv1.PingResponse{
 		ForfeitTxs: forfeits,
 		Event:      event,
+		RoundStage: &arkv1.Stage{
+			Code:   arkv1.RoundStage(round.Stage.Code),
+			Ended:  round.Stage.Ended,
+			Failed: round.Stage.Failed,
+		},
 	}, nil
 }
 

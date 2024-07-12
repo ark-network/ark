@@ -522,6 +522,9 @@
         },
         "event": {
           "$ref": "#/definitions/v1RoundFinalizationEvent"
+        },
+        "roundStage": {
+          "$ref": "#/definitions/v1Stage"
         }
       }
     },
@@ -625,6 +628,29 @@
         },
         "poolTxid": {
           "type": "string"
+        }
+      }
+    },
+    "v1RoundStage": {
+      "type": "string",
+      "enum": [
+        "ROUND_STAGE_UNSPECIFIED",
+        "ROUND_STAGE_REGISTRATION_STAGE",
+        "ROUND_STAGE_FINALIZATION_STAGE"
+      ],
+      "default": "ROUND_STAGE_UNSPECIFIED"
+    },
+    "v1Stage": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "$ref": "#/definitions/v1RoundStage"
+        },
+        "ended": {
+          "type": "boolean"
+        },
+        "failed": {
+          "type": "boolean"
         }
       }
     },
