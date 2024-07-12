@@ -46,6 +46,7 @@ require (
 	github.com/lightningnetwork/lnd/queue v1.1.1 // indirect
 	github.com/lightningnetwork/lnd/ticker v1.1.1 // indirect
 	github.com/lightningnetwork/lnd/tlv v1.2.6 // indirect
+	github.com/vulpemventures/go-secp256k1-zkp v1.1.6 // indirect
 	go.etcd.io/bbolt v1.3.7 // indirect
 	golang.org/x/term v0.21.0 // indirect
 )

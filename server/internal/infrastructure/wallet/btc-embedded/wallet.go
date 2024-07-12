@@ -67,7 +67,7 @@ type service struct {
 	watchedScriptsLock sync.Mutex
 	watchedScripts     map[string]struct{}
 
-	aspKey *secp256k1.PublicKey
+	aspTaprootAddr waddrmgr.ManagedPubKeyAddress
 }
 
 func WithChainSource(chainSource chain.Interface) WalletOption {
@@ -264,6 +264,7 @@ func (s *service) setWalletLoader() error {
 	// generate the main ASP key
 
 	w, _ := loader.LoadedWallet()
+
 	w.SynchronizeRPC(s.chainSource)
 
 	addrs, err := w.AccountAddresses(accounts[aspKeyAccount])
@@ -277,20 +278,35 @@ func (s *service) setWalletLoader() error {
 			return err
 		}
 
-		pubKey, err := w.PubKeyForAddress(addr)
-		if err != nil {
-			return err
-		}
-
-		s.aspKey = pubKey
-	} else {
-		pubKey, err := w.PubKeyForAddress(addrs[0])
-		if err != nil {
-			return err
-		}
-
-		s.aspKey = pubKey
+		addrs = []btcutil.Address{addr}
 	}
+
+	var firstAddr waddrmgr.ManagedPubKeyAddress
+
+	for _, addr := range addrs {
+		managedAddr, err := w.AddressInfo(addr)
+		if err != nil {
+			return err
+		}
+
+		pkAddr, ok := managedAddr.(waddrmgr.ManagedPubKeyAddress)
+		if !ok {
+			continue
+		}
+
+		_, path, _ := pkAddr.DerivationInfo()
+
+		if path.Index == 0 {
+			firstAddr = pkAddr
+			break
+		}
+	}
+
+	if firstAddr == nil {
+		return errors.New("no address found for asp key")
+	}
+
+	s.aspTaprootAddr = firstAddr
 
 	s.loader = loader
 	s.accounts = accounts
@@ -372,7 +388,7 @@ func (s *service) DeriveConnectorAddress(ctx context.Context) (string, error) {
 }
 
 func (s *service) GetPubkey(ctx context.Context) (*secp256k1.PublicKey, error) {
-	return s.aspKey, nil
+	return s.aspTaprootAddr.PubKey(), nil
 }
 
 func (s *service) ListConnectorUtxos(ctx context.Context, connectorAddress string) ([]ports.TxInput, error) {

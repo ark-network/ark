@@ -3,6 +3,7 @@ package btcwallet
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -36,7 +37,11 @@ func (f *esploraClient) broadcast(txhex string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return errors.New("broadcast endpoint HTTP error: " + resp.Status)
+		var content string // read the response body
+		if _, err := resp.Body.Read([]byte(content)); err != nil {
+			return fmt.Errorf("broadcast endpoint HTTP error: %s, tx = %s , error = %s", resp.Status, txhex, err.Error())
+		}
+		return fmt.Errorf("broadcast endpoint HTTP error: %s, tx = %s , error = %s", resp.Status, txhex, content)
 	}
 
 	return nil

@@ -21,6 +21,7 @@
 package btcwallet
 
 import (
+	"encoding/hex"
 	"fmt"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -30,6 +31,7 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcwallet/wallet"
 	log "github.com/sirupsen/logrus"
+	secp "github.com/vulpemventures/go-secp256k1-zkp"
 )
 
 // signMethod defines the different ways a signer can sign
@@ -120,20 +122,37 @@ func (s *service) signPsbt(packet *psbt.Packet) ([]uint32, error) {
 		var privKey *btcec.PrivateKey
 
 		if len(in.TaprootLeafScript) > 0 && txscript.IsPayToTaproot(in.WitnessUtxo.PkScript) {
-			addrs, err := w.AccountAddresses(s.accounts[aspKeyAccount])
+			privKey, err = s.aspTaprootAddr.PrivKey()
 			if err != nil {
 				return nil, err
 			}
 
-			if len(addrs) == 0 {
-				return nil, fmt.Errorf("no addresses available for " +
-					"signing taproot script spend")
+			if privKey.PubKey().SerializeCompressed()[0] != 0x02 {
+				asBytes := privKey.Serialize()
+
+				success, err := secp.EcPrivKeyNegate(secp.SharedContext(secp.ContextVerify), asBytes)
+				if err != nil {
+					return nil, err
+				}
+				if success != 1 {
+					return nil, fmt.Errorf("error negating private key")
+				}
+
+				privKey, _ = btcec.PrivKeyFromBytes(asBytes)
+
+				fmt.Println("privKey (negated): ", hex.EncodeToString(privKey.Serialize()))
 			}
 
-			privKey, err = w.PrivKeyForAddress(addrs[0])
+			privKey2, err := w.PrivKeyForAddress(s.aspTaprootAddr.Address())
 			if err != nil {
 				return nil, err
 			}
+
+			fmt.Println("privKey2: ", hex.EncodeToString(privKey2.Serialize()))
+			fmt.Println("pubKey2: ", hex.EncodeToString(privKey2.PubKey().SerializeCompressed()))
+
+			fmt.Println("privKey: ", hex.EncodeToString(privKey.Serialize()))
+			fmt.Println("pubKey: ", hex.EncodeToString(privKey.PubKey().SerializeCompressed()))
 		} else {
 			managedAddr, _, _, err := w.ScriptForOutput(in.WitnessUtxo)
 			if err != nil {
@@ -176,6 +195,17 @@ func (s *service) signPsbt(packet *psbt.Packet) ([]uint32, error) {
 			err = signSegWitV1ScriptSpend(
 				in, tx, sigHashes, idx, privKey, leaf,
 			)
+			var sigHash []byte
+			sigHash, err = txscript.CalcTapscriptSignaturehash(
+				sigHashes, in.SighashType, tx, idx,
+				prevOutputFetcher,
+				leaf,
+			)
+
+			s, _ := schnorr.ParseSignature(in.TaprootScriptSpendSig[0].Signature)
+			fmt.Println("verify = ", s.Verify(sigHash, privKey.PubKey()))
+
+			fmt.Println("sigHashBIS: ", hex.EncodeToString(sigHash))
 
 		default:
 			err = fmt.Errorf("unsupported signing method for "+
@@ -267,14 +297,19 @@ func signSegWitV1ScriptSpend(in *psbt.PInput, tx *wire.MsgTx,
 	sigHashes *txscript.TxSigHashes, idx int, privKey *btcec.PrivateKey,
 	leaf txscript.TapLeaf) error {
 
+	fmt.Println(in.WitnessUtxo.Value)
+
 	rawSig, err := txscript.RawTxInTapscriptSignature(
 		tx, sigHashes, idx, in.WitnessUtxo.Value,
 		in.WitnessUtxo.PkScript, leaf, in.SighashType, privKey,
 	)
+
 	if err != nil {
 		return fmt.Errorf("error signing taproot script input %d: %w",
 			idx, err)
 	}
+
+	fmt.Println("rawSig: ", hex.EncodeToString(rawSig))
 
 	leafHash := leaf.TapHash()
 	in.TaprootScriptSpendSig = append(
