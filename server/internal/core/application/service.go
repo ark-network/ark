@@ -41,6 +41,7 @@ type Service interface {
 	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error
 	SignVtxos(ctx context.Context, forfeitTxs []string) error
 	GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error)
+	GetRoundById(ctx context.Context, id string) (*domain.Round, error)
 	GetCurrentRound(ctx context.Context) (*domain.Round, error)
 	GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
 	UpdatePaymentStatus(ctx context.Context, id string) (unsignedForfeitTxs []string, round *domain.Round, err error)
@@ -221,6 +222,10 @@ func (s *service) GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.
 
 func (s *service) GetCurrentRound(ctx context.Context) (*domain.Round, error) {
 	return domain.NewRoundFromEvents(s.currentRound.Events()), nil
+}
+
+func (s *service) GetRoundById(ctx context.Context, id string) (*domain.Round, error) {
+	return s.repoManager.Rounds().GetRoundWithId(ctx, id)
 }
 
 func (s *service) GetInfo(ctx context.Context) (*ServiceInfo, error) {
