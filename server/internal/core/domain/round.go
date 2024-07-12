@@ -12,6 +12,8 @@ const (
 	UndefinedStage RoundStage = iota
 	RegistrationStage
 	FinalizationStage
+	FinalizedStage
+	FailedStage
 )
 
 type RoundStage int
@@ -22,6 +24,10 @@ func (s RoundStage) String() string {
 		return "REGISTRATION_STAGE"
 	case FinalizationStage:
 		return "FINALIZATION_STAGE"
+	case FinalizedStage:
+		return "FINALIZED_STAGE"
+	case FailedStage:
+		return "FAILED_STAGE"
 	default:
 		return "UNDEFINED_STAGE"
 	}
@@ -122,11 +128,13 @@ func (r *Round) On(event RoundEvent, replayed bool) {
 		r.ConnectorAddress = e.ConnectorAddress
 		r.UnsignedTx = e.PoolTx
 	case RoundFinalized:
+		r.Stage.Code = FinalizedStage
 		r.Stage.Ended = true
 		r.Txid = e.Txid
 		r.ForfeitTxs = append([]string{}, e.ForfeitTxs...)
 		r.EndingTimestamp = e.Timestamp
 	case RoundFailed:
+		r.Stage.Code = FailedStage
 		r.Stage.Failed = true
 		r.EndingTimestamp = e.Timestamp
 	case PaymentsRegistered:
