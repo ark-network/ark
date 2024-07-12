@@ -10,11 +10,13 @@ import (
 )
 
 type InMemoryConfigStore struct {
-	ExplorerUrl  string
-	Protocol     arksdk.TransportProtocol
-	Net          string
-	AspUrl       string
-	AspPubKeyHex string
+	ExplorerUrl         string
+	Protocol            arksdk.TransportProtocol
+	Net                 string
+	AspUrl              string
+	AspPubKeyHex        string
+	RoundLifeTime       int
+	UnilateralExitDelay int
 }
 
 func (store *InMemoryConfigStore) GetAspUrl(ctx context.Context) (string, error) {

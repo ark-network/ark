@@ -107,8 +107,10 @@ func New(
 		aspPubKey:   aspPubKeyBytes,
 		net:         net,
 		explorerUrl: explorerUrl,
-		wallet:      wallet,
 		protocol:    protocol,
+		wallet:      wallet,
+		initiated:   false,
+		innerClient: nil,
 		explorer:    NewExplorer(explorerUrl),
 	}, nil
 }

@@ -18,8 +18,8 @@ func main() {
 	var (
 		explorerUrl = "http://localhost:3001"
 		network     = "regtest"
-		aspUrl      = "http://localhost:6000"
-		aspPubKey   = "ASP_PUBKEY"
+		aspUrl      = "localhost:6000"
+		aspPubKey   = "03c70ab921d4cc666c19a1bc93c5bdd0f9c815ba6692ecb218cc3d067242865943"
 
 		ctx         = context.Background()
 		explorerSvc = arksdk.NewExplorer(explorerUrl)
@@ -79,7 +79,19 @@ func main() {
 		log.Fatal(err)
 	}
 
+	if err := generateBlock(); err != nil {
+		log.Fatal(err)
+	}
+
 	log.Infof("Alice onboarded with txID: %s", txID)
+
+	aliceBalance, err := aliceArkClient.Balance(ctx, false)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Infof("Alice onchain balance: %d", aliceBalance.OnchainBalance.SpendableAmount)
+	log.Infof("Alice offchain balance: %d", aliceBalance.OffchainBalance.Total)
 
 	bobWalletStore := &store.InMemoryWalletStore{}
 	if _, err := bobWalletStore.CreatePrivateKey(ctx); err != nil {
@@ -116,7 +128,7 @@ func main() {
 		[]arksdk.Receiver{
 			{
 				To:     bobOffchainAddr,
-				Amount: 10000,
+				Amount: 1000,
 			},
 		})
 	if err != nil {
@@ -125,7 +137,7 @@ func main() {
 
 	log.Infof("Alice sent 10000 to Bob offchain with txID: %s", txID)
 
-	aliceBalance, err := aliceArkClient.Balance(ctx, false)
+	aliceBalance, err = aliceArkClient.Balance(ctx, false)
 	if err != nil {
 		log.Fatal(err)
 	}

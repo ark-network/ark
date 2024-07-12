@@ -67,6 +67,10 @@ func newArkTransportClient(
 			grpcClient:  grpcClient,
 			grpcCloseFn: closeFn,
 			explorer:    explorer,
+			eventStream: &EventStream{
+				eventResp: make(chan *arkv1.GetEventStreamResponse),
+				err:       make(chan error),
+			},
 		}, nil
 	case Rest:
 		resClient, err := newRestClient(aspUrl)
@@ -132,17 +136,18 @@ func (a *arkInnerClient) getEventStream(
 		defer close(a.eventStream.err)
 
 		for {
-			resp, err := a.ping(ctx, &arkv1.PingRequest{
-				PaymentId: paymentID,
-			})
-			if err != nil {
-				a.eventStream.err <- err
-			}
-
-			if resp.GetForfeitTxs() != nil {
-				//TODO
-				a.eventStream.eventResp <- &arkv1.GetEventStreamResponse{}
-			}
+			//TODO
+			//resp, err := a.ping(ctx, &arkv1.PingRequest{
+			//	PaymentId: paymentID,
+			//})
+			//if err != nil {
+			//	a.eventStream.err <- err
+			//}
+			//
+			//if resp.GetForfeitTxs() != nil {
+			//	//TODO
+			//	a.eventStream.eventResp <- &arkv1.GetEventStreamResponse{}
+			//}
 		}
 	}
 
