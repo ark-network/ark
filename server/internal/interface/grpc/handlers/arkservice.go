@@ -182,6 +182,7 @@ func (h *handler) GetRound(ctx context.Context, req *arkv1.GetRoundRequest) (*ar
 				CongestionTree: castCongestionTree(round.CongestionTree),
 				ForfeitTxs:     round.ForfeitTxs,
 				Connectors:     round.Connectors,
+				Stage:          toRoundStage(round.Stage),
 			},
 		}, nil
 	}
@@ -200,6 +201,34 @@ func (h *handler) GetRound(ctx context.Context, req *arkv1.GetRoundRequest) (*ar
 			CongestionTree: castCongestionTree(round.CongestionTree),
 			ForfeitTxs:     round.ForfeitTxs,
 			Connectors:     round.Connectors,
+			Stage:          toRoundStage(round.Stage),
+		},
+	}, nil
+}
+
+func (h *handler) GetRoundById(
+	ctx context.Context, req *arkv1.GetRoundByIdRequest,
+) (*arkv1.GetRoundByIdResponse, error) {
+	id := req.GetId()
+	if len(id) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing round id")
+	}
+
+	round, err := h.svc.GetRoundById(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return &arkv1.GetRoundByIdResponse{
+		Round: &arkv1.Round{
+			Id:             round.Id,
+			Start:          round.StartingTimestamp,
+			End:            round.EndingTimestamp,
+			PoolTx:         round.UnsignedTx,
+			CongestionTree: castCongestionTree(round.CongestionTree),
+			ForfeitTxs:     round.ForfeitTxs,
+			Connectors:     round.Connectors,
+			Stage:          toRoundStage(round.Stage),
 		},
 	}, nil
 }

@@ -23,6 +23,7 @@ type ArkServiceClient interface {
 	FinalizePayment(ctx context.Context, in *FinalizePaymentRequest, opts ...grpc.CallOption) (*FinalizePaymentResponse, error)
 	// TODO BTC: signTree rpc
 	GetRound(ctx context.Context, in *GetRoundRequest, opts ...grpc.CallOption) (*GetRoundResponse, error)
+	GetRoundById(ctx context.Context, in *GetRoundByIdRequest, opts ...grpc.CallOption) (*GetRoundByIdResponse, error)
 	GetEventStream(ctx context.Context, in *GetEventStreamRequest, opts ...grpc.CallOption) (ArkService_GetEventStreamClient, error)
 	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
 	ListVtxos(ctx context.Context, in *ListVtxosRequest, opts ...grpc.CallOption) (*ListVtxosResponse, error)
@@ -69,6 +70,15 @@ func (c *arkServiceClient) FinalizePayment(ctx context.Context, in *FinalizePaym
 func (c *arkServiceClient) GetRound(ctx context.Context, in *GetRoundRequest, opts ...grpc.CallOption) (*GetRoundResponse, error) {
 	out := new(GetRoundResponse)
 	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/GetRound", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *arkServiceClient) GetRoundById(ctx context.Context, in *GetRoundByIdRequest, opts ...grpc.CallOption) (*GetRoundByIdResponse, error) {
+	out := new(GetRoundByIdResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/GetRoundById", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -161,6 +171,7 @@ type ArkServiceServer interface {
 	FinalizePayment(context.Context, *FinalizePaymentRequest) (*FinalizePaymentResponse, error)
 	// TODO BTC: signTree rpc
 	GetRound(context.Context, *GetRoundRequest) (*GetRoundResponse, error)
+	GetRoundById(context.Context, *GetRoundByIdRequest) (*GetRoundByIdResponse, error)
 	GetEventStream(*GetEventStreamRequest, ArkService_GetEventStreamServer) error
 	Ping(context.Context, *PingRequest) (*PingResponse, error)
 	ListVtxos(context.Context, *ListVtxosRequest) (*ListVtxosResponse, error)
@@ -184,6 +195,9 @@ func (UnimplementedArkServiceServer) FinalizePayment(context.Context, *FinalizeP
 }
 func (UnimplementedArkServiceServer) GetRound(context.Context, *GetRoundRequest) (*GetRoundResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetRound not implemented")
+}
+func (UnimplementedArkServiceServer) GetRoundById(context.Context, *GetRoundByIdRequest) (*GetRoundByIdResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetRoundById not implemented")
 }
 func (UnimplementedArkServiceServer) GetEventStream(*GetEventStreamRequest, ArkService_GetEventStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method GetEventStream not implemented")
@@ -283,6 +297,24 @@ func _ArkService_GetRound_Handler(srv interface{}, ctx context.Context, dec func
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ArkServiceServer).GetRound(ctx, req.(*GetRoundRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ArkService_GetRoundById_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRoundByIdRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ArkServiceServer).GetRoundById(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.ArkService/GetRoundById",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ArkServiceServer).GetRoundById(ctx, req.(*GetRoundByIdRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -420,6 +452,10 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetRound",
 			Handler:    _ArkService_GetRound_Handler,
+		},
+		{
+			MethodName: "GetRoundById",
+			Handler:    _ArkService_GetRoundById_Handler,
 		},
 		{
 			MethodName: "Ping",
