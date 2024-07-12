@@ -24,6 +24,7 @@ type arkTransportClient interface {
 		ctx context.Context, addr string, computeExpiryDetails bool,
 	) ([]vtxo, error)
 	getRound(ctx context.Context, txID string) (*arkv1.GetRoundResponse, error)
+	getRoundByID(ctx context.Context, roundID string) (*arkv1.GetRoundByIdResponse, error)
 	getRedeemBranches(
 		ctx context.Context,
 		explorer Explorer,
@@ -135,19 +136,81 @@ func (a *arkInnerClient) getEventStream(
 		defer close(a.eventStream.eventResp)
 		defer close(a.eventStream.err)
 
+	mainloop:
 		for {
-			//TODO
-			//resp, err := a.ping(ctx, &arkv1.PingRequest{
-			//	PaymentId: paymentID,
-			//})
-			//if err != nil {
-			//	a.eventStream.err <- err
-			//}
-			//
-			//if resp.GetForfeitTxs() != nil {
-			//	//TODO
-			//	a.eventStream.eventResp <- &arkv1.GetEventStreamResponse{}
-			//}
+			resp, err := a.ping(ctx, &arkv1.PingRequest{
+				PaymentId: paymentID,
+			})
+			if err != nil {
+				a.eventStream.err <- err
+			}
+
+			if resp.GetEvent() != nil {
+				levels := make([]*arkv1.TreeLevel, 0, len(resp.GetEvent().GetCongestionTree().GetLevels()))
+				for _, l := range resp.GetEvent().GetCongestionTree().GetLevels() {
+					nodes := make([]*arkv1.Node, 0, len(l.Nodes))
+					for _, n := range l.Nodes {
+						nodes = append(nodes, &arkv1.Node{
+							Txid:       n.Txid,
+							Tx:         n.Tx,
+							ParentTxid: n.ParentTxid,
+						})
+					}
+					levels = append(levels, &arkv1.TreeLevel{
+						Nodes: nodes,
+					})
+				}
+				a.eventStream.eventResp <- &arkv1.GetEventStreamResponse{
+					Event: &arkv1.GetEventStreamResponse_RoundFinalization{
+						RoundFinalization: &arkv1.RoundFinalizationEvent{
+							Id:         resp.GetEvent().GetId(),
+							PoolTx:     resp.GetEvent().GetPoolTx(),
+							ForfeitTxs: resp.GetEvent().GetForfeitTxs(),
+							CongestionTree: &arkv1.Tree{
+								Levels: levels,
+							},
+							Connectors: resp.GetEvent().GetConnectors(),
+						},
+					},
+				}
+
+				for {
+					roundID := resp.GetEvent().GetId()
+					round, err := a.getRoundByID(ctx, roundID)
+					if err != nil {
+						a.eventStream.err <- err
+					}
+
+					if round.GetRound().GetStage() == arkv1.RoundStage_ROUND_STAGE_FINALIZED {
+						a.eventStream.eventResp <- &arkv1.GetEventStreamResponse{
+							Event: &arkv1.GetEventStreamResponse_RoundFinalized{
+								RoundFinalized: &arkv1.RoundFinalizedEvent{
+									PoolTxid: round.GetRound().GetPoolTx(),
+								},
+							},
+						}
+
+						break mainloop
+					}
+
+					if round.GetRound().GetStage() == arkv1.RoundStage_ROUND_STAGE_FAILED {
+						a.eventStream.eventResp <- &arkv1.GetEventStreamResponse{
+							Event: &arkv1.GetEventStreamResponse_RoundFailed{
+								RoundFailed: &arkv1.RoundFailed{
+									Id:     round.GetRound().GetId(),
+									Reason: "unknown reason", //TODO getRoundByID should return the reason
+								},
+							},
+						}
+
+						break mainloop
+					}
+
+					time.Sleep(1 * time.Second)
+				}
+			}
+
+			time.Sleep(1 * time.Second)
 		}
 	}
 
@@ -645,4 +708,83 @@ func (a *arkInnerClient) finalizePayment(
 	}
 
 	return nil, nil
+}
+
+func (a *arkInnerClient) getRoundByID(
+	ctx context.Context, roundID string,
+) (*arkv1.GetRoundByIdResponse, error) {
+	switch {
+	case a.grpcClient != nil:
+		return a.grpcClient.Service().GetRoundById(ctx, &arkv1.GetRoundByIdRequest{
+			Id: roundID,
+		})
+	case a.resClient != nil:
+		resp, err := a.resClient.ArkService.ArkServiceGetRoundByID(
+			ark_service.NewArkServiceGetRoundByIDParams().WithID(roundID),
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		start, err := strconv.Atoi(resp.Payload.Round.Start)
+		if err != nil {
+			return nil, err
+		}
+
+		end, err := strconv.Atoi(resp.Payload.Round.End)
+		if err != nil {
+			return nil, err
+		}
+
+		levels := make([]*arkv1.TreeLevel, 0, len(resp.Payload.Round.CongestionTree.Levels))
+		for _, l := range resp.Payload.Round.CongestionTree.Levels {
+			nodes := make([]*arkv1.Node, 0, len(l.Nodes))
+			for _, n := range l.Nodes {
+				nodes = append(nodes, &arkv1.Node{
+					Txid:       n.Txid,
+					Tx:         n.Tx,
+					ParentTxid: n.ParentTxid,
+				})
+			}
+			levels = append(levels, &arkv1.TreeLevel{
+				Nodes: nodes,
+			})
+		}
+
+		stage := stageStrToInt(resp.Payload.Round.Stage)
+
+		return &arkv1.GetRoundByIdResponse{
+			Round: &arkv1.Round{
+				Id:     resp.Payload.Round.ID,
+				Start:  int64(start),
+				End:    int64(end),
+				PoolTx: resp.Payload.Round.PoolTx,
+				CongestionTree: &arkv1.Tree{
+					Levels: levels,
+				},
+				ForfeitTxs: resp.Payload.Round.ForfeitTxs,
+				Connectors: resp.Payload.Round.Connectors,
+				Stage:      arkv1.RoundStage(stage),
+			},
+		}, nil
+	}
+
+	return nil, nil
+}
+
+func stageStrToInt(stage models.V1RoundStage) int {
+	switch stage {
+	case models.V1RoundStageROUNDSTAGEUNSPECIFIED:
+		return 0
+	case models.V1RoundStageROUNDSTAGEREGISTRATION:
+		return 1
+	case models.V1RoundStageROUNDSTAGEFINALIZATION:
+		return 2
+	case models.V1RoundStageROUNDSTAGEFINALIZED:
+		return 3
+	case models.V1RoundStageROUNDSTAGEFAILED:
+		return 4
+	}
+
+	return -1
 }

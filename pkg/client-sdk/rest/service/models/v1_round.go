@@ -34,6 +34,9 @@ type V1Round struct {
 	// pool tx
 	PoolTx string `json:"poolTx,omitempty"`
 
+	// stage
+	Stage V1RoundStage `json:"stage,omitempty"`
+
 	// start
 	Start string `json:"start,omitempty"`
 }
@@ -43,6 +46,10 @@ func (m *V1Round) Validate(formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.validateCongestionTree(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.validateStage(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -65,6 +72,22 @@ func (m *V1Round) validateCongestionTree(formats strfmt.Registry) error {
 			}
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (m *V1Round) validateStage(formats strfmt.Registry) error {
+
+	if swag.IsZero(m.Stage) { // not required
+		return nil
+	}
+
+	if err := m.Stage.Validate(formats); err != nil {
+		if ve, ok := err.(*errors.Validation); ok {
+			return ve.ValidateName("stage")
+		}
+		return err
 	}
 
 	return nil

@@ -165,6 +165,34 @@ func (a *Client) ArkServiceGetRound(params *ArkServiceGetRoundParams) (*ArkServi
 }
 
 /*
+ArkServiceGetRoundByID ark service get round by Id API
+*/
+func (a *Client) ArkServiceGetRoundByID(params *ArkServiceGetRoundByIDParams) (*ArkServiceGetRoundByIDOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewArkServiceGetRoundByIDParams()
+	}
+
+	result, err := a.transport.Submit(&runtime.ClientOperation{
+		ID:                 "ArkService_GetRoundById",
+		Method:             "GET",
+		PathPattern:        "/v1/round/id/{id}",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &ArkServiceGetRoundByIDReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ArkServiceGetRoundByIDOK), nil
+
+}
+
+/*
 ArkServiceListVtxos ark service list vtxos API
 */
 func (a *Client) ArkServiceListVtxos(params *ArkServiceListVtxosParams) (*ArkServiceListVtxosOK, error) {

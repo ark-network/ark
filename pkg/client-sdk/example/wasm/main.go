@@ -7,7 +7,7 @@ import (
 	"context"
 
 	arksdk "github.com/ark-network/ark-sdk"
-	"github.com/ark-network/ark-sdk/example/store"
+	inmemorystore "github.com/ark-network/ark-sdk/store/inmemory"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -22,7 +22,7 @@ func main() {
 		explorerSvc = arksdk.NewExplorer(explorerUrl)
 	)
 
-	configStore := &store.InMemoryConfigStore{
+	configStore := &inmemorystore.ConfigStore{
 		ExplorerUrl:  explorerUrl,
 		Protocol:     arksdk.Grpc,
 		Net:          network,
@@ -31,7 +31,7 @@ func main() {
 	}
 	defer configStore.Save(ctx)
 
-	aliceWalletStore := &store.InMemoryWalletStore{}
+	aliceWalletStore := &inmemorystore.WalletStore{}
 	if _, err := aliceWalletStore.CreatePrivateKey(ctx); err != nil {
 		log.Fatal(err)
 	}

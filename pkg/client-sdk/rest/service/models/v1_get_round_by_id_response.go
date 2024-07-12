@@ -12,22 +12,19 @@ import (
 	"github.com/go-openapi/swag"
 )
 
-// V1PingResponse v1 ping response
-// swagger:model v1PingResponse
-type V1PingResponse struct {
+// V1GetRoundByIDResponse v1 get round by Id response
+// swagger:model v1GetRoundByIdResponse
+type V1GetRoundByIDResponse struct {
 
-	// event
-	Event *V1RoundFinalizationEvent `json:"event,omitempty"`
-
-	// forfeit txs
-	ForfeitTxs []string `json:"forfeitTxs"`
+	// round
+	Round *V1Round `json:"round,omitempty"`
 }
 
-// Validate validates this v1 ping response
-func (m *V1PingResponse) Validate(formats strfmt.Registry) error {
+// Validate validates this v1 get round by Id response
+func (m *V1GetRoundByIDResponse) Validate(formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.validateEvent(formats); err != nil {
+	if err := m.validateRound(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -37,16 +34,16 @@ func (m *V1PingResponse) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *V1PingResponse) validateEvent(formats strfmt.Registry) error {
+func (m *V1GetRoundByIDResponse) validateRound(formats strfmt.Registry) error {
 
-	if swag.IsZero(m.Event) { // not required
+	if swag.IsZero(m.Round) { // not required
 		return nil
 	}
 
-	if m.Event != nil {
-		if err := m.Event.Validate(formats); err != nil {
+	if m.Round != nil {
+		if err := m.Round.Validate(formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("event")
+				return ve.ValidateName("round")
 			}
 			return err
 		}
@@ -56,7 +53,7 @@ func (m *V1PingResponse) validateEvent(formats strfmt.Registry) error {
 }
 
 // MarshalBinary interface implementation
-func (m *V1PingResponse) MarshalBinary() ([]byte, error) {
+func (m *V1GetRoundByIDResponse) MarshalBinary() ([]byte, error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -64,8 +61,8 @@ func (m *V1PingResponse) MarshalBinary() ([]byte, error) {
 }
 
 // UnmarshalBinary interface implementation
-func (m *V1PingResponse) UnmarshalBinary(b []byte) error {
-	var res V1PingResponse
+func (m *V1GetRoundByIDResponse) UnmarshalBinary(b []byte) error {
+	var res V1GetRoundByIDResponse
 	if err := swag.ReadJSON(b, &res); err != nil {
 		return err
 	}

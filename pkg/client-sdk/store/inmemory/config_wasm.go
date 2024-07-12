@@ -1,1 +1,1 @@
-package inmemory
+package inmemorystore
