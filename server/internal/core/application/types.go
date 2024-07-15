@@ -38,6 +38,12 @@ type ServiceInfo struct {
 	MinRelayFee         int64
 }
 
+type WalletStatus struct {
+	IsInitialized bool
+	IsUnlocked    bool
+	IsSynced      bool
+}
+
 type onboarding struct {
 	tx             string
 	congestionTree tree.CongestionTree

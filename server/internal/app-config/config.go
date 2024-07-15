@@ -191,10 +191,9 @@ func (c *Config) walletService() error {
 	svc, err := btcwallet.NewService(btcwallet.WalletConfig{
 		Datadir: c.DbDir,
 		// TODO let the operator set the passwords
-		PublicPassword:  []byte("publicpass"),
-		PrivatePassword: []byte("privatepass"),
-		Network:         c.Network,
-		EsploraURL:      c.EsploraURL,
+		Password:   []byte("password"),
+		Network:    c.Network,
+		EsploraURL: c.EsploraURL,
 	},
 		btcwallet.WithNeutrino(c.NeutrinoPeer),
 	)

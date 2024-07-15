@@ -100,12 +100,7 @@ func (s *service) signPsbt(packet *psbt.Packet) ([]uint32, error) {
 		}
 	}
 
-	w, _ := s.loader.LoadedWallet()
-
-	if err := w.Unlock(s.cfg.PrivatePassword, nil); err != nil {
-		return nil, err
-	}
-	defer w.Lock()
+	w := s.wallet.InternalWallet()
 
 	// Go through each input that doesn't have final witness data attached
 	// to it already and try to sign it. If there is nothing more to sign or
