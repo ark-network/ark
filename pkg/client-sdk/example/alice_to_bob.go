@@ -16,33 +16,23 @@ import (
 
 func main() {
 	var (
-		explorerUrl = "http://localhost:3001"
-		network     = "regtest"
-		aspUrl      = "localhost:6000"
-		aspPubKey   = "03c70ab921d4cc666c19a1bc93c5bdd0f9c815ba6692ecb218cc3d067242865943"
+		//grpcAspUrl = "localhost:6000"
+		restAspUrl = "http://localhost:6000"
+		//grpcProtocol = arksdk.Grpc
+		restProtocol = arksdk.Rest
+		ctx          = context.Background()
 
-		ctx         = context.Background()
-		explorerSvc = arksdk.NewExplorer(explorerUrl)
+		aspUrl   = restAspUrl
+		protocol = restProtocol
 	)
 
-	configStore := &inmemorystore.ConfigStore{
-		ExplorerUrl:  explorerUrl,
-		Protocol:     arksdk.Grpc,
-		Net:          network,
-		AspUrl:       aspUrl,
-		AspPubKeyHex: aspPubKey,
-	}
-	defer configStore.Save(ctx)
-
-	aliceWalletStore := &inmemorystore.WalletStore{}
-	if _, err := aliceWalletStore.CreatePrivateKey(ctx); err != nil {
+	aliceConfigStore, err := inmemorystore.New(aspUrl, protocol)
+	if err != nil {
 		log.Fatal(err)
 	}
-	defer aliceWalletStore.Save(ctx)
 
-	aliceWallet, err := arksdk.NewSingleKeyWallet(
-		ctx, explorerSvc, network, aliceWalletStore,
-	)
+	aliceWalletStore := inmemorystore.NewWalletStore()
+	aliceWallet, err := arksdk.NewSingleKeyWallet(ctx, aliceWalletStore)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -50,7 +40,7 @@ func main() {
 	aliceArkClient, err := arksdk.New(
 		ctx,
 		aliceWallet,
-		configStore,
+		aliceConfigStore,
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -83,6 +73,8 @@ func main() {
 		log.Fatal(err)
 	}
 
+	time.Sleep(5 * time.Second)
+
 	log.Infof("Alice onboarded with txID: %s", txID)
 
 	aliceBalance, err := aliceArkClient.Balance(ctx, false)
@@ -93,21 +85,23 @@ func main() {
 	log.Infof("Alice onchain balance: %d", aliceBalance.OnchainBalance.SpendableAmount)
 	log.Infof("Alice offchain balance: %d", aliceBalance.OffchainBalance.Total)
 
-	bobWalletStore := &inmemorystore.WalletStore{}
-	if _, err := bobWalletStore.CreatePrivateKey(ctx); err != nil {
+	bobConfigStore, err := inmemorystore.New(aspUrl, protocol)
+	if err != nil {
 		log.Fatal(err)
 	}
-	defer bobWalletStore.Save(ctx)
 
-	bobWallet, err := arksdk.NewSingleKeyWallet(
-		ctx, explorerSvc, network, bobWalletStore,
-	)
+	bobWalletStore := inmemorystore.NewWalletStore()
+	if _, err := bobWalletStore.CreatePrivateKey(); err != nil {
+		log.Fatal(err)
+	}
+
+	bobWallet, err := arksdk.NewSingleKeyWallet(ctx, bobWalletStore)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	bobArkClient, err := arksdk.New(
-		ctx, bobWallet, configStore,
+		ctx, bobWallet, bobConfigStore,
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -121,6 +115,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	log.Infof("Bob offchain address: %s", bobOffchainAddr)
 
 	txID, err = aliceArkClient.SendOffChain(
 		ctx,
@@ -136,6 +132,12 @@ func main() {
 	}
 
 	log.Infof("Alice sent 10000 to Bob offchain with txID: %s", txID)
+
+	if err := generateBlock(); err != nil {
+		log.Fatal(err)
+	}
+
+	time.Sleep(6 * time.Second)
 
 	aliceBalance, err = aliceArkClient.Balance(ctx, false)
 	if err != nil {

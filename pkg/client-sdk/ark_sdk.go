@@ -67,36 +67,6 @@ func New(
 		return nil, errors.New("invalid ark url")
 	}
 
-	net, err := configStore.GetNetwork(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if net != "liquid" && net != "testnet" && net != "regtest" {
-		return nil, fmt.Errorf("invalid network")
-	}
-
-	explorerUrl, err := configStore.GetExplorerUrl(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if len(explorerUrl) > 0 {
-		_, n := networkFromString(net)
-		if err := testEsploraEndpoint(n, explorerUrl); err != nil {
-			return nil, fmt.Errorf("failed to connect with explorer: %s", err)
-		}
-	} else {
-		explorerUrl = explorerUrlMap[net]
-	}
-
-	aspPubKey, err := configStore.GetAspPubKeyHex(ctx)
-	if err != nil {
-		return nil, err
-	}
-	aspPubKeyBytes, err := hex.DecodeString(aspPubKey)
-	if err != nil {
-		return nil, err
-	}
-
 	protocol, err := configStore.GetTransportProtocol(ctx)
 	if err != nil {
 		return nil, err
@@ -104,14 +74,11 @@ func New(
 
 	return &arkClient{
 		aspUrl:      aspUrl,
-		aspPubKey:   aspPubKeyBytes,
-		net:         net,
-		explorerUrl: explorerUrl,
 		protocol:    protocol,
 		wallet:      wallet,
 		initiated:   false,
 		innerClient: nil,
-		explorer:    NewExplorer(explorerUrl),
+		configStore: configStore,
 	}, nil
 }
 
@@ -129,7 +96,8 @@ type arkClient struct {
 	initiated   bool
 	innerClient arkTransportClient
 
-	explorer Explorer
+	explorerSvc Explorer
+	configStore ConfigStore
 }
 
 const (
@@ -145,7 +113,7 @@ func (a *arkClient) Connect(ctx context.Context) error {
 	}
 
 	transportClient, err := newArkTransportClient(
-		a.aspUrl, a.protocol, a.explorer,
+		a.aspUrl, a.protocol, a.explorerSvc,
 	)
 	if err != nil {
 		return err
@@ -156,9 +124,37 @@ func (a *arkClient) Connect(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	net := resp.GetNetwork()
+	if net != "liquid" && net != "testnet" && net != "regtest" {
+		return fmt.Errorf("invalid network")
+	}
+
+	explorerUrl := explorerUrlMap[net]
+	_, liquidNet := networkFromString(net)
+	if err := testEsploraEndpoint(liquidNet, explorerUrl); err != nil {
+		return fmt.Errorf("failed to connect with explorerSvc: %s", err)
+	}
+
+	explorerSvc := NewExplorer(explorerUrl, net)
+	a.innerClient.setExplorerSvc(explorerSvc)
+
+	aspPubKey := resp.GetPubkey()
+	aspPubKeyBytes, err := hex.DecodeString(aspPubKey)
+	if err != nil {
+		return err
+	}
+
+	a.configStore.SetAspPubKeyHex(aspPubKey)
+	a.configStore.SetNetwork(net)
+	a.configStore.SetExplorerUrl(explorerUrl)
+
+	a.net = net
+	a.explorerUrl = explorerUrl
+	a.explorerSvc = explorerSvc
+	a.aspPubKey = aspPubKeyBytes
 	a.roundLifeTime = int(resp.RoundLifetime)
 	a.unilateralExitDelay = int(resp.UnilateralExitDelay)
-
 	a.initiated = true
 
 	return nil
@@ -241,7 +237,7 @@ func (a *arkClient) Balance(
 
 	go func() {
 		defer wg.Done()
-		balance, err := a.explorer.GetBalance(onchainAddr, liquidNet.AssetID)
+		balance, err := a.explorerSvc.GetBalance(onchainAddr, liquidNet.AssetID)
 		if err != nil {
 			chRes <- balanceRes{
 				0,
@@ -264,7 +260,7 @@ func (a *arkClient) Balance(
 	go func() {
 		defer wg.Done()
 
-		spendableBalance, lockedBalance, err := a.explorer.GetRedeemedVtxosBalance(
+		spendableBalance, lockedBalance, err := a.explorerSvc.GetRedeemedVtxosBalance(
 			redemptionAddr, int64(a.unilateralExitDelay),
 		)
 		if err != nil {
@@ -590,7 +586,7 @@ func (a *arkClient) sendOnchain(receivers []Receiver) (string, error) {
 		a.wallet.PubKeySerializeCompressed(), a.aspPubKey, int64(a.unilateralExitDelay), a.net,
 	)
 
-	if err := a.wallet.SignPsetForAddress(updater.Pset, onchainAddr); err != nil {
+	if err := a.wallet.SignPsetForAddress(a.explorerSvc, updater.Pset, onchainAddr); err != nil {
 		return "", err
 	}
 
@@ -682,6 +678,8 @@ func (a *arkClient) sendOffchain(
 	if err != nil {
 		return "", err
 	}
+
+	log.Infof("Payment registered with id: %s", registerResponse.GetId())
 
 	poolTxID, err := a.handleRoundStream(
 		ctx,
@@ -902,7 +900,7 @@ func (a *arkClient) coinSelectOnchain(
 		return nil, nil, 0, err
 	}
 
-	fromExplorer, err := a.explorer.GetUtxos(onchainAddr)
+	fromExplorer, err := a.explorerSvc.GetUtxos(onchainAddr)
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -952,7 +950,7 @@ func (a *arkClient) coinSelectOnchain(
 		return nil, nil, 0, err
 	}
 
-	fromExplorer, err = a.explorer.GetUtxos(addr)
+	fromExplorer, err = a.explorerSvc.GetUtxos(addr)
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -1012,7 +1010,7 @@ func (a *arkClient) ForceRedeem(ctx context.Context) error {
 	transactionsMap := make(map[string]struct{}, 0)
 	transactions := make([]string, 0)
 
-	redeemBranches, err := a.innerClient.getRedeemBranches(ctx, a.explorer, vtxos)
+	redeemBranches, err := a.innerClient.getRedeemBranches(ctx, a.explorerSvc, vtxos)
 	if err != nil {
 		return err
 	}
@@ -1033,7 +1031,7 @@ func (a *arkClient) ForceRedeem(ctx context.Context) error {
 
 	for i, txHex := range transactions {
 		for {
-			txid, err := a.explorer.Broadcast(txHex)
+			txid, err := a.explorerSvc.Broadcast(txHex)
 			if err != nil {
 				if strings.Contains(strings.ToLower(err.Error()), "bad-txns-inputs-missingorspent") {
 					time.Sleep(1 * time.Second)

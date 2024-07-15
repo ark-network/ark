@@ -10,13 +10,94 @@
             go.run(result.instance);
         });
 
-        function logMessage() {
-            log("Hello from JavaScript!");
+        function logMessage(message) {
+            const logArea = document.getElementById("logArea");
+            logArea.value += message + "\n";
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        async function connect() {
+            try {
+                await connectWallet();
+                logMessage("Connected to ASP");
+                await printConfigInfo();
+            } catch (err) {
+                logMessage("Error: " + err.message);
+            }
+        }
+
+        async function onboard() {
+            try {
+                await onboardWallet();
+                logMessage("Onboarded");
+            } catch (err) {
+                logMessage("Error: " + err.message);
+            }
+        }
+
+        async function balance() {
+            try {
+                const balance = await getBalance();
+                logMessage("Balance: " + JSON.stringify(balance));
+            } catch (err) {
+                logMessage("Error: " + err.message);
+            }
+        }
+
+        async function send() {
+            try {
+                const txID = await sendMoney();
+                logMessage("Money sent, txID: " + txID);
+                const balance = await getBalance();
+                logMessage("Balance after send: " + JSON.stringify(balance));
+            } catch (err) {
+                logMessage("Error: " + err.message);
+            }
+        }
+
+        async function printConfigInfo() {
+            try {
+                const aspUrl = await getAspUrl();
+                logMessage("ASP URL: " + aspUrl);
+                const aspPubKeyHex = await getAspPubKeyHex();
+                logMessage("ASP Public Key Hex: " + aspPubKeyHex);
+                const transportProtocol = await getTransportProtocol();
+                logMessage("Transport Protocol: " + transportProtocol);
+                const explorerUrl = await getExplorerUrl();
+                logMessage("Explorer URL: " + explorerUrl);
+                const network = await getNetwork();
+                logMessage("Network: " + network);
+            } catch (err) {
+                logMessage("Error: " + err.message);
+            }
         }
     </script>
+    <style>
+        .container {
+            padding: 20px;
+        }
+        .buttons {
+            margin-bottom: 20px;
+        }
+        .buttons button {
+            margin-right: 10px;
+        }
+        .logArea {
+            width: 100%;
+            height: 300px;
+        }
+    </style>
 </head>
 <body>
-<h1>Ark SDK WASM Example</h1>
-<button onclick="logMessage()">Log Message</button>
+<div class="container">
+    <h2>Ark SDK Wallet</h2>
+    <div class="buttons">
+        <button onclick="connect()">Connect</button>
+        <button onclick="onboard()">Onboard</button>
+        <button onclick="balance()">Balance</button>
+        <button onclick="send()">Send</button>
+    </div>
+    <textarea id="logArea" class="logArea" readonly></textarea>
+</div>
 </body>
 </html>

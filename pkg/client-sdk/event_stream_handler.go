@@ -298,7 +298,7 @@ func (a *arkClient) signForfeitPset(
 		return err
 	}
 
-	if err := a.wallet.SignPsetForAddress(pset, onchainAddr); err != nil {
+	if err := a.wallet.SignPsetForAddress(a.explorerSvc, pset, onchainAddr); err != nil {
 		return err
 	}
 	return nil

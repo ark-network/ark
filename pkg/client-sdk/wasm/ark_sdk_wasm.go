@@ -1,15 +1,34 @@
-package arksdk
+package arksdkwasm
 
 import (
 	"context"
 	"syscall/js"
+
+	"github.com/ark-network/ark-sdk"
+	inmemorystore "github.com/ark-network/ark-sdk/store/inmemory"
 )
 
-var arkSdkClient ArkClient
+var (
+	arkSdkClient        arksdk.ArkClient
+	inMemoryConfigStore arksdk.ConfigStore
+	inMemoryWalletStore arksdk.WalletStore
+)
 
-func NewArkSdkWasmClient(ctx context.Context, wallet Wallet, configStore ConfigStore) error {
+func New(ctx context.Context, aspUrl string) error {
 	var err error
-	arkSdkClient, err = New(ctx, wallet, configStore)
+
+	inMemoryConfigStore, err = inmemorystore.New(aspUrl, arksdk.Rest)
+	if err != nil {
+		return err
+	}
+
+	inMemoryWalletStore = inmemorystore.NewWalletStore()
+	wallet, err := arksdk.NewSingleKeyWallet(ctx, inMemoryWalletStore)
+	if err != nil {
+		return err
+	}
+
+	arkSdkClient, err = arksdk.New(ctx, wallet, inMemoryConfigStore)
 	if err != nil {
 		js.Global().Get("console").Call("error", err.Error())
 		return err
@@ -25,6 +44,22 @@ func NewArkSdkWasmClient(ctx context.Context, wallet Wallet, configStore ConfigS
 	js.Global().Set("forceRedeem", ForceRedeemWrapper())
 	js.Global().Set("collaborativeRedeem", CollaborativeRedeemWrapper())
 	js.Global().Set("log", LogWrapper())
+
+	js.Global().Set("getAspUrl", GetAspUrlWrapper())
+	js.Global().Set("getAspPubKeyHex", GetAspPubKeyHexWrapper())
+	js.Global().Set("getTransportProtocol", GetTransportProtocolWrapper())
+	js.Global().Set("getExplorerUrl", GetExplorerUrlWrapper())
+	js.Global().Set("getNetwork", GetNetworkWrapper())
+	js.Global().Set("setAspUrl", SetAspUrlWrapper())
+	js.Global().Set("setAspPubKeyHex", SetAspPubKeyHexWrapper())
+	js.Global().Set("setTransportProtocol", SetTransportProtocolWrapper())
+	js.Global().Set("setExplorerUrl", SetExplorerUrlWrapper())
+	js.Global().Set("setNetwork", SetNetworkWrapper())
+	js.Global().Set("saveConfigStore", SaveWrapper())
+
+	js.Global().Set("createPrivateKey", CreatePrivateKeyWrapper())
+	js.Global().Set("getPrivateKeyHex", GetPrivateKeyHexWrapper())
+	js.Global().Set("saveWalletStore", SaveWalletStoreWrapper())
 
 	select {}
 }
@@ -94,10 +129,10 @@ func ReceiveWrapper() js.Func {
 
 func SendOnChainWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		receivers := make([]Receiver, args[0].Length())
+		receivers := make([]arksdk.Receiver, args[0].Length())
 		for i := 0; i < args[0].Length(); i++ {
 			receiver := args[0].Index(i)
-			receivers[i] = Receiver{
+			receivers[i] = arksdk.Receiver{
 				To:     receiver.Get("To").String(),
 				Amount: uint64(receiver.Get("Amount").Int()),
 			}
@@ -113,10 +148,10 @@ func SendOnChainWrapper() js.Func {
 func SendOffChainWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
 		withExpiryCoinselect := args[0].Bool()
-		receivers := make([]Receiver, args[1].Length())
+		receivers := make([]arksdk.Receiver, args[1].Length())
 		for i := 0; i < args[1].Length(); i++ {
 			receiver := args[1].Index(i)
-			receivers[i] = Receiver{
+			receivers[i] = arksdk.Receiver{
 				To:     receiver.Get("To").String(),
 				Amount: uint64(receiver.Get("Amount").Int()),
 			}

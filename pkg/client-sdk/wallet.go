@@ -13,7 +13,6 @@ import (
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/address"
-	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/transaction"
@@ -22,33 +21,29 @@ import (
 type Wallet interface {
 	PubKey() *secp256k1.PublicKey
 	PubKeySerializeCompressed() []byte
-	SignPsetForAddress(pset *psetv2.Pset, address string) error
+	SignPsetForAddress(explorerSvc Explorer, pset *psetv2.Pset, address string) error
 }
 
 type singleKeyWallet struct {
 	privateKey  *secp256k1.PrivateKey
 	pubkey      *secp256k1.PublicKey
-	explorer    Explorer
-	net         *network.Network
 	walletStore WalletStore
 }
 
 func NewSingleKeyWallet(
 	ctx context.Context,
-	explorer Explorer,
-	network string,
 	walletStore WalletStore,
 ) (Wallet, error) {
 	var privateKey *secp256k1.PrivateKey
 
-	privKeyHex, err := walletStore.GetPrivateKeyHex(ctx)
+	privKeyHex, err := walletStore.GetPrivateKeyHex()
 	if err != nil {
 		return nil, err
 	}
 
 	pkNew := false
 	if len(privKeyHex) <= 0 {
-		pk, err := walletStore.CreatePrivateKey(ctx)
+		pk, err := walletStore.CreatePrivateKey()
 		if err != nil {
 			return nil, err
 		}
@@ -70,13 +65,9 @@ func NewSingleKeyWallet(
 		}
 	}
 
-	_, liquidNet := networkFromString(network)
-
 	return &singleKeyWallet{
-		explorer:   explorer,
 		privateKey: privateKey,
 		pubkey:     privateKey.PubKey(),
-		net:        liquidNet,
 	}, nil
 }
 
@@ -92,7 +83,9 @@ func (s *singleKeyWallet) PubKeySerializeCompressed() []byte {
 	return s.pubkey.SerializeCompressed()
 }
 
-func (s *singleKeyWallet) SignPsetForAddress(pset *psetv2.Pset, addr string) error {
+func (s *singleKeyWallet) SignPsetForAddress(
+	explorerSvc Explorer, pset *psetv2.Pset, addr string,
+) error {
 	updater, err := psetv2.NewUpdater(pset)
 	if err != nil {
 		return err
@@ -103,7 +96,7 @@ func (s *singleKeyWallet) SignPsetForAddress(pset *psetv2.Pset, addr string) err
 			continue
 		}
 
-		prevoutTxHex, err := s.explorer.GetTxHex(chainhash.Hash(input.PreviousTxid).String())
+		prevoutTxHex, err := explorerSvc.GetTxHex(chainhash.Hash(input.PreviousTxid).String())
 		if err != nil {
 			return err
 		}
@@ -148,7 +141,7 @@ func (s *singleKeyWallet) SignPsetForAddress(pset *psetv2.Pset, addr string) err
 		return err
 	}
 
-	liquidNet := s.net
+	liquidNet := explorerSvc.GetNetwork()
 
 	prevoutsScripts := make([][]byte, 0)
 	prevoutsValues := make([][]byte, 0)

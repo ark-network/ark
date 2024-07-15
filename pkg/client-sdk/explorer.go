@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/transaction"
 )
@@ -35,18 +36,26 @@ type Explorer interface {
 	GetTxBlockTime(
 		txid string,
 	) (confirmed bool, blocktime int64, err error)
+	GetNetwork() *network.Network
 }
 
 type explorer struct {
 	cache   map[string]string
 	baseUrl string
+	net     string
 }
 
-func NewExplorer(baseUrl string) Explorer {
+func NewExplorer(baseUrl string, net string) Explorer {
 	return &explorer{
 		cache:   make(map[string]string),
 		baseUrl: baseUrl,
+		net:     net,
 	}
+}
+
+func (e *explorer) GetNetwork() *network.Network {
+	_, liquidNet := networkFromString(e.net)
+	return liquidNet
 }
 
 func (e *explorer) GetTxHex(txid string) (string, error) {

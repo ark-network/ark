@@ -12,11 +12,18 @@ type ConfigStore interface {
 	GetTransportProtocol(ctx context.Context) (TransportProtocol, error)
 	GetExplorerUrl(ctx context.Context) (string, error)
 	GetNetwork(ctx context.Context) (string, error)
+
+	SetAspUrl(aspUrl string)
+	SetAspPubKeyHex(aspPubKeyHex string)
+	SetTransportProtocol(protocol TransportProtocol)
+	SetExplorerUrl(explorerUrl string)
+	SetNetwork(net string)
+
 	Save(ctx context.Context) error
 }
 
 type WalletStore interface {
-	CreatePrivateKey(ctx context.Context) (*secp256k1.PrivateKey, error)
-	GetPrivateKeyHex(ctx context.Context) (string, error)
+	CreatePrivateKey() (*secp256k1.PrivateKey, error)
+	GetPrivateKeyHex() (string, error)
 	Save(ctx context.Context) error
 }
