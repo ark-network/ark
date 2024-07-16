@@ -11,7 +11,7 @@ import (
 
 func main() {
 	var (
-		aspUrl = "http://localhost:6000"
+		aspUrl = "http://localhost:8080"
 		ctx    = context.Background()
 	)
 

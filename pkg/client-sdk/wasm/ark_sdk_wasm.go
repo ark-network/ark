@@ -2,6 +2,7 @@ package arksdkwasm
 
 import (
 	"context"
+	"errors"
 	"syscall/js"
 
 	"github.com/ark-network/ark-sdk"
@@ -89,12 +90,34 @@ func BalanceWrapper() js.Func {
 		if err != nil {
 			return nil, err
 		}
-		return js.ValueOf(resp), nil
+
+		var (
+			onchainBalance  int
+			offchainBalance int
+		)
+
+		if resp == nil {
+			onchainBalance = 0
+			offchainBalance = 0
+		} else {
+			onchainBalance = int(resp.OnchainBalance.SpendableAmount)
+			offchainBalance = int(resp.OffchainBalance.Total)
+		}
+
+		result := map[string]interface{}{
+			"onchain_balance":  onchainBalance,
+			"offchain_balance": offchainBalance,
+		}
+
+		return js.ValueOf(result), nil
 	})
 }
 
 func OnboardWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if len(args) == 0 {
+			return nil, errors.New("no amount provided")
+		}
 		amount := uint64(args[0].Int())
 		txID, err := arkSdkClient.Onboard(context.Background(), amount)
 		if err != nil {
@@ -120,10 +143,11 @@ func ReceiveWrapper() js.Func {
 		if err != nil {
 			return nil, err
 		}
-		return js.ValueOf(map[string]string{
+		result := map[string]interface{}{
 			"offchainAddr": offchainAddr,
 			"onchainAddr":  onchainAddr,
-		}), nil
+		}
+		return js.ValueOf(result), nil
 	})
 }
 
@@ -166,8 +190,7 @@ func SendOffChainWrapper() js.Func {
 
 func ForceRedeemWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		err := arkSdkClient.ForceRedeem(context.Background())
-		return nil, err
+		return arkSdkClient.ForceRedeem(context.Background())
 	})
 }
 

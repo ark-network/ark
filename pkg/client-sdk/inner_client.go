@@ -13,7 +13,6 @@ import (
 	"github.com/ark-network/ark-sdk/rest/service/models"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common/tree"
-	"github.com/davecgh/go-spew/spew"
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
 )
@@ -143,81 +142,89 @@ func (a *arkInnerClient) getEventStream(
 			defer close(a.eventStream.eventResp)
 			defer close(a.eventStream.err)
 
+			timeout := time.After(30 * time.Second) // TODO make this configurable
+
 		mainloop:
 			for {
-				resp, err := a.ping(ctx, &arkv1.PingRequest{
-					PaymentId: payID,
-				})
-				if err != nil {
-					a.eventStream.err <- err
-				}
+				select {
+				case <-timeout:
+					a.eventStream.err <- errors.New("timeout reached")
+					break mainloop
+				default:
+					resp, err := a.ping(ctx, &arkv1.PingRequest{
+						PaymentId: payID,
+					})
+					if err != nil {
+						a.eventStream.err <- err
+					}
 
-				if resp.GetEvent() != nil {
-					levels := make([]*arkv1.TreeLevel, 0, len(resp.GetEvent().GetCongestionTree().GetLevels()))
-					for _, l := range resp.GetEvent().GetCongestionTree().GetLevels() {
-						nodes := make([]*arkv1.Node, 0, len(l.Nodes))
-						for _, n := range l.Nodes {
-							nodes = append(nodes, &arkv1.Node{
-								Txid:       n.Txid,
-								Tx:         n.Tx,
-								ParentTxid: n.ParentTxid,
+					if resp.GetEvent() != nil {
+						levels := make([]*arkv1.TreeLevel, 0, len(resp.GetEvent().GetCongestionTree().GetLevels()))
+						for _, l := range resp.GetEvent().GetCongestionTree().GetLevels() {
+							nodes := make([]*arkv1.Node, 0, len(l.Nodes))
+							for _, n := range l.Nodes {
+								nodes = append(nodes, &arkv1.Node{
+									Txid:       n.Txid,
+									Tx:         n.Tx,
+									ParentTxid: n.ParentTxid,
+								})
+							}
+							levels = append(levels, &arkv1.TreeLevel{
+								Nodes: nodes,
 							})
 						}
-						levels = append(levels, &arkv1.TreeLevel{
-							Nodes: nodes,
-						})
-					}
-					a.eventStream.eventResp <- &arkv1.GetEventStreamResponse{
-						Event: &arkv1.GetEventStreamResponse_RoundFinalization{
-							RoundFinalization: &arkv1.RoundFinalizationEvent{
-								Id:         resp.GetEvent().GetId(),
-								PoolTx:     resp.GetEvent().GetPoolTx(),
-								ForfeitTxs: resp.GetEvent().GetForfeitTxs(),
-								CongestionTree: &arkv1.Tree{
-									Levels: levels,
+						a.eventStream.eventResp <- &arkv1.GetEventStreamResponse{
+							Event: &arkv1.GetEventStreamResponse_RoundFinalization{
+								RoundFinalization: &arkv1.RoundFinalizationEvent{
+									Id:         resp.GetEvent().GetId(),
+									PoolTx:     resp.GetEvent().GetPoolTx(),
+									ForfeitTxs: resp.GetEvent().GetForfeitTxs(),
+									CongestionTree: &arkv1.Tree{
+										Levels: levels,
+									},
+									Connectors: resp.GetEvent().GetConnectors(),
 								},
-								Connectors: resp.GetEvent().GetConnectors(),
 							},
-						},
-					}
-
-					for {
-						roundID := resp.GetEvent().GetId()
-						round, err := a.getRoundByID(ctx, roundID)
-						if err != nil {
-							a.eventStream.err <- err
 						}
 
-						if round.GetRound().GetStage() == arkv1.RoundStage_ROUND_STAGE_FINALIZED {
-							a.eventStream.eventResp <- &arkv1.GetEventStreamResponse{
-								Event: &arkv1.GetEventStreamResponse_RoundFinalized{
-									RoundFinalized: &arkv1.RoundFinalizedEvent{
-										PoolTxid: round.GetRound().GetPoolTx(),
-									},
-								},
+						for {
+							roundID := resp.GetEvent().GetId()
+							round, err := a.getRoundByID(ctx, roundID)
+							if err != nil {
+								a.eventStream.err <- err
 							}
 
-							break mainloop
-						}
-
-						if round.GetRound().GetStage() == arkv1.RoundStage_ROUND_STAGE_FAILED {
-							a.eventStream.eventResp <- &arkv1.GetEventStreamResponse{
-								Event: &arkv1.GetEventStreamResponse_RoundFailed{
-									RoundFailed: &arkv1.RoundFailed{
-										Id:     round.GetRound().GetId(),
-										Reason: "unknown reason", //TODO getRoundByID should return the reason
+							if round.GetRound().GetStage() == arkv1.RoundStage_ROUND_STAGE_FINALIZED {
+								a.eventStream.eventResp <- &arkv1.GetEventStreamResponse{
+									Event: &arkv1.GetEventStreamResponse_RoundFinalized{
+										RoundFinalized: &arkv1.RoundFinalizedEvent{
+											PoolTxid: round.GetRound().GetPoolTx(),
+										},
 									},
-								},
+								}
+
+								break mainloop
 							}
 
-							break mainloop
-						}
+							if round.GetRound().GetStage() == arkv1.RoundStage_ROUND_STAGE_FAILED {
+								a.eventStream.eventResp <- &arkv1.GetEventStreamResponse{
+									Event: &arkv1.GetEventStreamResponse_RoundFailed{
+										RoundFailed: &arkv1.RoundFailed{
+											Id:     round.GetRound().GetId(),
+											Reason: "unknown reason", //TODO getRoundByID should return the reason
+										},
+									},
+								}
 
-						time.Sleep(1 * time.Second)
+								break mainloop
+							}
+
+							time.Sleep(1 * time.Second)
+						}
 					}
+
+					time.Sleep(1 * time.Second)
 				}
-
-				time.Sleep(1 * time.Second)
 			}
 		}(paymentID)
 	}
@@ -686,8 +693,6 @@ func (a *arkInnerClient) ping(
 		if err != nil {
 			return nil, err
 		}
-
-		spew.Dump(resp)
 
 		var event *arkv1.RoundFinalizationEvent
 		if resp.Payload.Event != nil &&

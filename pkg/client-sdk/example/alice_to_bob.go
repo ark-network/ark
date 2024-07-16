@@ -17,7 +17,7 @@ import (
 func main() {
 	var (
 		//grpcAspUrl = "localhost:6000"
-		restAspUrl = "http://localhost:6000"
+		restAspUrl = "http://localhost:8080"
 		//grpcProtocol = arksdk.Grpc
 		restProtocol = arksdk.Rest
 		ctx          = context.Background()
@@ -216,11 +216,6 @@ func runCommand(name string, arg ...string) (string, error) {
 func newCommand(name string, arg ...string) *exec.Cmd {
 	cmd := exec.Command(name, arg...)
 	return cmd
-}
-
-func runArkCommand(arg ...string) (string, error) {
-	args := append([]string{"exec", "-t", "arkd", "ark"}, arg...)
-	return runCommand("docker", args...)
 }
 
 func generateBlock() error {
