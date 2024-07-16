@@ -20,7 +20,7 @@ func (a *arkClient) handleRoundStream(
 	paymentID string,
 	vtxosToSign []vtxo,
 	receivers []*arkv1.Output,
-) (poolTxID string, err error) {
+) (string, error) {
 	eventStream, err := a.innerClient.getEventStream(ctx, paymentID, &arkv1.GetEventStreamRequest{})
 	if err != nil {
 		return "", err
