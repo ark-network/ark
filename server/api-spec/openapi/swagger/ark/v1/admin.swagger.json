@@ -122,6 +122,28 @@
         ]
       }
     },
+    "/v1/admin/status": {
+      "get": {
+        "operationId": "AdminService_GetWalletStatus",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetWalletStatusResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
     "/v1/admin/sweeps": {
       "get": {
         "operationId": "AdminService_GetScheduledSweep",
@@ -278,6 +300,20 @@
       "properties": {
         "address": {
           "type": "string"
+        }
+      }
+    },
+    "v1GetWalletStatusResponse": {
+      "type": "object",
+      "properties": {
+        "initialized": {
+          "type": "boolean"
+        },
+        "unlocked": {
+          "type": "boolean"
+        },
+        "synced": {
+          "type": "boolean"
         }
       }
     },

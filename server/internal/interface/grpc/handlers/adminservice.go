@@ -14,15 +14,6 @@ type adminHandler struct {
 	adminService application.AdminService
 }
 
-func (a *adminHandler) GetWalletAddress(ctx context.Context, _ *arkv1.GetWalletAddressRequest) (*arkv1.GetWalletAddressResponse, error) {
-	addr, err := a.adminService.GetWalletAddress(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return &arkv1.GetWalletAddressResponse{Address: addr}, nil
-}
-
 func NewAdminHandler(adminService application.AdminService) arkv1.AdminServiceServer {
 	return &adminHandler{adminService}
 }
@@ -121,6 +112,28 @@ func (a *adminHandler) GetScheduledSweep(ctx context.Context, _ *arkv1.GetSchedu
 	}
 
 	return &arkv1.GetScheduledSweepResponse{Sweeps: sweeps}, nil
+}
+
+func (a *adminHandler) GetWalletAddress(ctx context.Context, _ *arkv1.GetWalletAddressRequest) (*arkv1.GetWalletAddressResponse, error) {
+	addr, err := a.adminService.GetWalletAddress(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &arkv1.GetWalletAddressResponse{Address: addr}, nil
+}
+
+func (a *adminHandler) GetWalletStatus(ctx context.Context, _ *arkv1.GetWalletStatusRequest) (*arkv1.GetWalletStatusResponse, error) {
+	status, err := a.adminService.GetWalletStatus(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &arkv1.GetWalletStatusResponse{
+		Initialized: status.IsInitialized,
+		Unlocked:    status.IsUnlocked,
+		Synced:      status.IsSynced,
+	}, nil
 }
 
 // convert sats to string BTC

@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/btcsuite/btcd/btcutil"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 type esploraClient struct {
@@ -38,6 +38,7 @@ func (f *esploraClient) broadcast(txhex string) error {
 
 	if resp.StatusCode != http.StatusOK {
 		fmt.Printf("+%v\n", resp.Body)
+		fmt.Println(resp.Status)
 		var content string // read the response body
 		if _, err := resp.Body.Read([]byte(content)); err != nil {
 			return fmt.Errorf("broadcast endpoint HTTP error: %s, tx = %s , error = %s", resp.Status, txhex, err.Error())
@@ -97,7 +98,7 @@ func (f *esploraClient) getFeeRate() (btcutil.Amount, error) {
 	}
 
 	if len(response) == 0 {
-		logrus.Warn("empty response from esplorea fee-estimates endpoint, default to 2 sat/vbyte")
+		log.Warn("empty response from esplora fee-estimates endpoint, default to 2 sat/vbyte")
 		return 2.0, nil
 	}
 
