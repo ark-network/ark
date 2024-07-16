@@ -37,6 +37,7 @@ func (f *esploraClient) broadcast(txhex string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("+%v\n", resp.Body)
 		var content string // read the response body
 		if _, err := resp.Body.Read([]byte(content)); err != nil {
 			return fmt.Errorf("broadcast endpoint HTTP error: %s, tx = %s , error = %s", resp.Status, txhex, err.Error())

@@ -272,7 +272,10 @@ func (s *service) setWalletLoader() error {
 		return err
 	}
 
+	logrus.Infof("found %d addresses for asp key", len(addrs))
+
 	if len(addrs) == 0 {
+		logrus.Info("no address found for asp key, generating new address")
 		addr, err := w.NewAddress(accounts[aspKeyAccount], keyScopeASPKey)
 		if err != nil {
 			return err
@@ -296,7 +299,8 @@ func (s *service) setWalletLoader() error {
 
 		_, path, _ := pkAddr.DerivationInfo()
 
-		if path.Index == 0 {
+		if path.Index == 0 && path.Branch == 0 {
+			logrus.Infof("found asp key address (path: %s)", fmt.Sprintf("%d/%d/%d/%d", path.MasterKeyFingerprint, path.Account, path.Branch, path.Index))
 			firstAddr = pkAddr
 			break
 		}
@@ -307,6 +311,8 @@ func (s *service) setWalletLoader() error {
 	}
 
 	s.aspTaprootAddr = firstAddr
+
+	fmt.Println("aspTaprootAddr: ", hex.EncodeToString(s.aspTaprootAddr.PubKey().SerializeCompressed()))
 
 	s.loader = loader
 	s.accounts = accounts

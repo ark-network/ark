@@ -31,7 +31,6 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcwallet/wallet"
 	log "github.com/sirupsen/logrus"
-	secp "github.com/vulpemventures/go-secp256k1-zkp"
 )
 
 // signMethod defines the different ways a signer can sign
@@ -125,22 +124,6 @@ func (s *service) signPsbt(packet *psbt.Packet) ([]uint32, error) {
 			privKey, err = s.aspTaprootAddr.PrivKey()
 			if err != nil {
 				return nil, err
-			}
-
-			if privKey.PubKey().SerializeCompressed()[0] != 0x02 {
-				asBytes := privKey.Serialize()
-
-				success, err := secp.EcPrivKeyNegate(secp.SharedContext(secp.ContextVerify), asBytes)
-				if err != nil {
-					return nil, err
-				}
-				if success != 1 {
-					return nil, fmt.Errorf("error negating private key")
-				}
-
-				privKey, _ = btcec.PrivKeyFromBytes(asBytes)
-
-				fmt.Println("privKey (negated): ", hex.EncodeToString(privKey.Serialize()))
 			}
 
 			privKey2, err := w.PrivKeyForAddress(s.aspTaprootAddr.Address())
