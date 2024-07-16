@@ -60,4 +60,9 @@ proto-lint:
 	@echo "Linting protos..."
 	@docker build -q -t buf -f buf.Dockerfile . &> /dev/null
 	@docker run --rm --volume "$(shell pwd):/workspace" --workdir /workspace buf lint
+
+## build-dashboard-templates: build html templates for embedded dashboard
+build-dashboard-templates:
+	@echo "Building dashboard templates..."
+	@go run github.com/a-h/templ/cmd/templ@latest generate
 		
