@@ -15,6 +15,7 @@ import (
 	"github.com/ark-network/ark/common/tree"
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
+	"github.com/vulpemventures/go-elements/psetv2"
 )
 
 type arkTransportClient interface {
@@ -688,9 +689,24 @@ func (a *arkInnerClient) ping(
 				})
 			}
 
+			poolTx := ""
+			if resp.Payload.Event.PoolTx != "" {
+				p, err := psetv2.NewPsetFromBase64(resp.Payload.Event.PoolTx)
+				if err != nil {
+					return nil, err
+				}
+
+				tx, err := p.UnsignedTx()
+				if err != nil {
+					return nil, err
+				}
+
+				poolTx = tx.TxHash().String()
+			}
+
 			event = &arkv1.RoundFinalizationEvent{
 				Id:         resp.Payload.Event.ID,
-				PoolTx:     resp.Payload.Event.PoolTx,
+				PoolTx:     poolTx,
 				ForfeitTxs: resp.Payload.Event.ForfeitTxs,
 				CongestionTree: &arkv1.Tree{
 					Levels: levels,
