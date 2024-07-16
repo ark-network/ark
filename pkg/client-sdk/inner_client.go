@@ -36,9 +36,6 @@ type arkTransportClient interface {
 	onboard(
 		ctx context.Context, req *arkv1.OnboardRequest,
 	) (*arkv1.OnboardResponse, error)
-	trustedOnboarding(
-		ctx context.Context, req *arkv1.TrustedOnboardingRequest,
-	) (*arkv1.TrustedOnboardingResponse, error)
 	registerPayment(
 		ctx context.Context, req *arkv1.RegisterPaymentRequest,
 	) (*arkv1.RegisterPaymentResponse, error)
@@ -586,31 +583,6 @@ func (a *arkInnerClient) onboard(
 		}
 
 		return &arkv1.OnboardResponse{}, nil
-	}
-
-	return nil, nil
-}
-
-func (a *arkInnerClient) trustedOnboarding(
-	ctx context.Context, req *arkv1.TrustedOnboardingRequest,
-) (*arkv1.TrustedOnboardingResponse, error) {
-	switch {
-	case a.grpcClient != nil:
-		return a.grpcClient.Service().TrustedOnboarding(ctx, req)
-	case a.resClient != nil:
-		body := models.V1TrustedOnboardingRequest{
-			UserPubkey: req.GetUserPubkey(),
-		}
-		resp, err := a.resClient.ArkService.ArkServiceTrustedOnboarding(
-			ark_service.NewArkServiceTrustedOnboardingParams().WithBody(&body),
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		return &arkv1.TrustedOnboardingResponse{
-			Address: resp.Payload.Address,
-		}, nil
 	}
 
 	return nil, nil

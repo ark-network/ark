@@ -42,7 +42,7 @@ func New(ctx context.Context, aspUrl string) error {
 	js.Global().Set("receive", ReceiveWrapper())
 	js.Global().Set("sendOnChain", SendOnChainWrapper())
 	js.Global().Set("sendOffChain", SendOffChainWrapper())
-	js.Global().Set("forceRedeem", ForceRedeemWrapper())
+	js.Global().Set("unilateralRedeem", UnilateralRedeemWrapper())
 	js.Global().Set("collaborativeRedeem", CollaborativeRedeemWrapper())
 	js.Global().Set("log", LogWrapper())
 
@@ -188,9 +188,9 @@ func SendOffChainWrapper() js.Func {
 	})
 }
 
-func ForceRedeemWrapper() js.Func {
+func UnilateralRedeemWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		return arkSdkClient.ForceRedeem(context.Background())
+		return arkSdkClient.UnilateralRedeem(context.Background())
 	})
 }
 

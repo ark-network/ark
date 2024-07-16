@@ -42,13 +42,12 @@ type ArkClient interface {
 	Connect(ctx context.Context) error
 	Balance(ctx context.Context, computeExpiryDetails bool) (*BalanceResp, error)
 	Onboard(ctx context.Context, amount uint64) (string, error)
-	TrustedOnboard(ctx context.Context) (string, error)
 	Receive(ctx context.Context) (string, string, error)
 	SendOnChain(ctx context.Context, receivers []Receiver) (string, error)
 	SendOffChain(
 		ctx context.Context, withExpiryCoinselect bool, receivers []Receiver,
 	) (string, error)
-	ForceRedeem(ctx context.Context) error
+	UnilateralRedeem(ctx context.Context) error
 	CollaborativeRedeem(
 		ctx context.Context, addr string, amount uint64, withExpiryCoinselect bool,
 	) (string, error)
@@ -842,19 +841,6 @@ func (r *Receiver) isOnchain() bool {
 	return err == nil
 }
 
-func (a *arkClient) TrustedOnboard(ctx context.Context) (string, error) {
-	resp, err := a.innerClient.trustedOnboarding(
-		ctx, &arkv1.TrustedOnboardingRequest{
-			UserPubkey: hex.EncodeToString(a.wallet.PubKeySerializeCompressed()),
-		},
-	)
-	if err != nil {
-		return "", err
-	}
-
-	return resp.Address, nil
-}
-
 func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
 	offchainAddr, onchainAddr, _, err := getAddress(
 		a.wallet.PubKeySerializeCompressed(), a.aspPubKey, int64(a.unilateralExitDelay), a.net,
@@ -987,7 +973,7 @@ func (a *arkClient) coinSelectOnchain(
 	return utxos, delayedUtxos, selectedAmount - targetAmount, nil
 }
 
-func (a *arkClient) ForceRedeem(ctx context.Context) error {
+func (a *arkClient) UnilateralRedeem(ctx context.Context) error {
 	offchainAddr, _, _, err := getAddress(
 		a.wallet.PubKeySerializeCompressed(), a.aspPubKey, int64(a.unilateralExitDelay), a.net,
 	)
