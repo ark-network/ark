@@ -111,7 +111,7 @@ func (h *handler) Ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.Ping
 		event = &arkv1.RoundFinalizationEvent{
 			Id:             round.Id,
 			PoolTx:         round.UnsignedTx,
-			ForfeitTxs:     round.ForfeitTxs,
+			ForfeitTxs:     forfeits,
 			CongestionTree: castCongestionTree(round.CongestionTree),
 			Connectors:     round.Connectors,
 		}
