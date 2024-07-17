@@ -10,14 +10,14 @@ import (
 	"time"
 
 	arksdk "github.com/ark-network/ark-sdk"
-	"github.com/ark-network/ark-sdk/store/inmemory"
+	inmemorystore "github.com/ark-network/ark-sdk/store/inmemory"
 	log "github.com/sirupsen/logrus"
 )
 
 func main() {
 	var (
 		//grpcAspUrl = "localhost:8080"
-		restAspUrl = "http://localhost:8080"
+		restAspUrl = "http://localhost:6000"
 		//grpcProtocol = arksdk.Grpc
 		restProtocol = arksdk.Rest
 		ctx          = context.Background()
@@ -26,6 +26,7 @@ func main() {
 		protocol = restProtocol
 	)
 
+	log.Info("alice is setting up her ark wallet...")
 	aliceConfigStore, err := inmemorystore.New(aspUrl, protocol)
 	if err != nil {
 		log.Fatal(err)
@@ -50,13 +51,13 @@ func main() {
 		log.Fatal(err)
 	}
 
+	log.Info("alice is acquiring onchain funds...")
 	_, aliceOnchainAddr, err := aliceArkClient.Receive(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	_, err = runCommand("nigiri", "faucet", "--liquid", aliceOnchainAddr)
-	if err != nil {
+	if _, err := runCommand("nigiri", "faucet", "--liquid", aliceOnchainAddr); err != nil {
 		log.Fatal(err)
 	}
 
@@ -64,7 +65,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	txID, err := aliceArkClient.Onboard(ctx, 20000)
+	onboardAmount := uint64(20000)
+	log.Infof("alice is onboarding with %d sats offchain...", onboardAmount)
+	txid, err := aliceArkClient.Onboard(ctx, onboardAmount)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -75,21 +78,23 @@ func main() {
 
 	time.Sleep(5 * time.Second)
 
-	log.Infof("Alice onboarded with txID: %s", txID)
+	log.Infof("alice onboarded with tx: %s", txid)
 
 	aliceBalance, err := aliceArkClient.Balance(ctx, false)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Infof("Alice onchain balance: %d", aliceBalance.OnchainBalance.SpendableAmount)
-	log.Infof("Alice offchain balance: %d", aliceBalance.OffchainBalance.Total)
+	log.Infof("alice onchain balance: %d", aliceBalance.OnchainBalance.SpendableAmount)
+	log.Infof("alice offchain balance: %d", aliceBalance.OffchainBalance.Total)
 
 	bobConfigStore, err := inmemorystore.New(aspUrl, protocol)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	fmt.Println("")
+	log.Info("bob is setting up his ark wallet...")
 	bobWalletStore := inmemorystore.NewWalletStore()
 	if _, err := bobWalletStore.CreatePrivateKey(); err != nil {
 		log.Fatal(err)
@@ -116,44 +121,54 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Infof("Bob offchain address: %s", bobOffchainAddr)
+	bobBalance, err := bobArkClient.Balance(ctx, false)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	txID, err = aliceArkClient.SendOffChain(
+	log.Infof("bob onchain balance: %d", bobBalance.OnchainBalance.SpendableAmount)
+	log.Infof("bob offchain balance: %d", bobBalance.OffchainBalance.Total)
+
+	amount := uint64(1000)
+	fmt.Println("")
+	log.Infof("alice is sending %d sats to bob offchain...", amount)
+	txid, err = aliceArkClient.SendOffChain(
 		ctx,
 		false,
 		[]arksdk.Receiver{
 			{
 				To:     bobOffchainAddr,
-				Amount: 1000,
+				Amount: amount,
 			},
 		})
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Infof("Alice sent 10000 to Bob offchain with txID: %s", txID)
+	log.Infof("payment completed in round tx: %s", txid)
 
 	if err := generateBlock(); err != nil {
 		log.Fatal(err)
 	}
 
-	time.Sleep(6 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	aliceBalance, err = aliceArkClient.Balance(ctx, false)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Infof("Alice onchain balance: %d", aliceBalance.OnchainBalance.SpendableAmount)
-	log.Infof("Alice offchain balance: %d", aliceBalance.OffchainBalance.Total)
+	fmt.Println("")
+	log.Infof("alice onchain balance: %d", aliceBalance.OnchainBalance.SpendableAmount)
+	log.Infof("alice offchain balance: %d", aliceBalance.OffchainBalance.Total)
 
-	bobBalance, err := bobArkClient.Balance(ctx, false)
+	bobBalance, err = bobArkClient.Balance(ctx, false)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Infof("Bob onchain balance: %d", bobBalance.OnchainBalance.SpendableAmount)
-	log.Infof("Bob offchain balance: %d", bobBalance.OffchainBalance.Total)
+	log.Infof("bob onchain balance: %d", bobBalance.OnchainBalance.SpendableAmount)
+	log.Infof("bob offchain balance: %d", bobBalance.OffchainBalance.Total)
 }
 
 func runCommand(name string, arg ...string) (string, error) {

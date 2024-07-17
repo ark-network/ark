@@ -581,19 +581,25 @@ func (a *arkClient) sendOnchain(receivers []Receiver) (string, error) {
 		return "", err
 	}
 
-	_, onchainAddr, _, err := getAddress(
-		a.wallet.PubKeySerializeCompressed(), a.aspPubKey, int64(a.unilateralExitDelay), a.net,
-	)
-
-	if err := a.wallet.SignPsetForAddress(a.explorerSvc, updater.Pset, onchainAddr); err != nil {
+	tx, err := pset.ToBase64()
+	if err != nil {
+		return "", err
+	}
+	signedTx, err := a.wallet.SignTransaction(a.explorerSvc, tx)
+	if err != nil {
 		return "", err
 	}
 
-	if err := psetv2.FinalizeAll(updater.Pset); err != nil {
+	pset, err = psetv2.NewPsetFromBase64(signedTx)
+	if err != nil {
 		return "", err
 	}
 
-	return updater.Pset.ToBase64()
+	if err := psetv2.FinalizeAll(pset); err != nil {
+		return "", err
+	}
+
+	return pset.ToBase64()
 }
 
 func (a *arkClient) sendOffchain(
@@ -678,7 +684,7 @@ func (a *arkClient) sendOffchain(
 		return "", err
 	}
 
-	log.Infof("Payment registered with id: %s", registerResponse.GetId())
+	log.Infof("payment registered with id: %s", registerResponse.GetId())
 
 	poolTxID, err := a.handleRoundStream(
 		ctx,

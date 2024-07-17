@@ -48,23 +48,30 @@ func (a *arkClient) handleRoundStream(
 
 			if e := event.GetRoundFinalization(); e != nil {
 				pingStop()
-				log.Infoln("round finalization started")
+				log.Info("a round finalization started")
 
-				poolTxID, err := a.handleRoundFinalization(e, vtxosToSign, receivers)
+				signedForfeitTxs, err := a.handleRoundFinalization(
+					e, vtxosToSign, receivers,
+				)
 				if err != nil {
 					return "", err
 				}
 
-				log.Infoln("finalizing payment... ")
+				if len(signedForfeitTxs) <= 0 {
+					log.Info("no forfeit txs to sign, waiting for the next round")
+					continue
+				}
+
+				log.Info("finalizing payment... ")
 				_, err = a.innerClient.finalizePayment(ctx, &arkv1.FinalizePaymentRequest{
-					SignedForfeitTxs: poolTxID,
+					SignedForfeitTxs: signedForfeitTxs,
 				})
 				if err != nil {
 					return "", err
 				}
 
-				log.Infoln("done.")
-				log.Infoln("waiting for round finalization...")
+				log.Info("done.")
+				log.Info("waiting for round finalization...")
 			}
 
 			if event.GetRoundFinalized() != nil {
@@ -82,19 +89,12 @@ func (a *arkClient) handleRoundFinalization(
 	receivers []*arkv1.Output,
 ) ([]string, error) {
 	if err := a.validateCongestionTree(finalization, receivers); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to verify congestion tree: %s", err)
 	}
 
-	signedForfeits, err := a.loopAndSign(
-		finalization.GetForfeitTxs(),
-		vtxosToSign,
-		finalization.GetConnectors(),
+	return a.loopAndSign(
+		finalization.GetForfeitTxs(), vtxosToSign, finalization.GetConnectors(),
 	)
-	if err != nil {
-		return nil, err
-	}
-
-	return signedForfeits, nil
 }
 
 func (a *arkClient) validateCongestionTree(
@@ -233,13 +233,9 @@ func (a *arkClient) validateOffChainReceiver(
 }
 
 func (a *arkClient) loopAndSign(
-	forfeits []string,
-	vtxosToSign []vtxo,
-	connectors []string,
+	forfeitTxs []string, vtxosToSign []vtxo, connectors []string,
 ) ([]string, error) {
 	signedForfeits := make([]string, 0)
-
-	log.Infoln("signing forfeit txs... ")
 
 	connectorsTxids := make([]string, 0, len(connectors))
 	for _, connector := range connectors {
@@ -249,8 +245,8 @@ func (a *arkClient) loopAndSign(
 		connectorsTxids = append(connectorsTxids, txid)
 	}
 
-	for _, forfeit := range forfeits {
-		pset, err := psetv2.NewPsetFromBase64(forfeit)
+	for _, forfeitTx := range forfeitTxs {
+		pset, err := psetv2.NewPsetFromBase64(forfeitTx)
 		if err != nil {
 			return nil, err
 		}
@@ -259,10 +255,7 @@ func (a *arkClient) loopAndSign(
 			inputTxid := chainhash.Hash(input.PreviousTxid).String()
 			for _, coin := range vtxosToSign {
 				if inputTxid == coin.txid {
-					if err := a.signForfeitPset(pset, connectorsTxids); err != nil {
-						return nil, err
-					}
-					signedPset, err := pset.ToBase64()
+					signedPset, err := a.signForfeitTx(forfeitTx, pset, connectorsTxids)
 					if err != nil {
 						return nil, err
 					}
@@ -275,11 +268,10 @@ func (a *arkClient) loopAndSign(
 	return signedForfeits, nil
 }
 
-func (a *arkClient) signForfeitPset(
-	pset *psetv2.Pset,
-	connectorsTxids []string,
-) error {
-	connectorTxid := chainhash.Hash(pset.Inputs[0].PreviousTxid).String()
+func (a *arkClient) signForfeitTx(
+	txStr string, tx *psetv2.Pset, connectorsTxids []string,
+) (string, error) {
+	connectorTxid := chainhash.Hash(tx.Inputs[0].PreviousTxid).String()
 	connectorFound := false
 	for _, id := range connectorsTxids {
 		if id == connectorTxid {
@@ -288,18 +280,8 @@ func (a *arkClient) signForfeitPset(
 		}
 	}
 	if !connectorFound {
-		return fmt.Errorf("connector txid %s not found in the connectors list", connectorTxid)
+		return "", fmt.Errorf("connector txid %s not found in the connectors list", connectorTxid)
 	}
 
-	_, onchainAddr, _, err := getAddress(
-		a.wallet.PubKeySerializeCompressed(), a.aspPubKey, int64(a.unilateralExitDelay), a.net,
-	)
-	if err != nil {
-		return err
-	}
-
-	if err := a.wallet.SignPsetForAddress(a.explorerSvc, pset, onchainAddr); err != nil {
-		return err
-	}
-	return nil
+	return a.wallet.SignTransaction(a.explorerSvc, txStr)
 }
