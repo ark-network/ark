@@ -12,7 +12,6 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/transaction"
@@ -21,7 +20,7 @@ import (
 type Wallet interface {
 	PubKey() *secp256k1.PublicKey
 	PubKeySerializeCompressed() []byte
-	SignPsetForAddress(explorerSvc Explorer, pset *psetv2.Pset, address string) error
+	SignTransaction(explorerSvc Explorer, pset string) (string, error)
 }
 
 type singleKeyWallet struct {
@@ -83,12 +82,16 @@ func (s *singleKeyWallet) PubKeySerializeCompressed() []byte {
 	return s.pubkey.SerializeCompressed()
 }
 
-func (s *singleKeyWallet) SignPsetForAddress(
-	explorerSvc Explorer, pset *psetv2.Pset, addr string,
-) error {
+func (s *singleKeyWallet) SignTransaction(
+	explorerSvc Explorer, tx string,
+) (string, error) {
+	pset, err := psetv2.NewPsetFromBase64(tx)
+	if err != nil {
+		return "", fmt.Errorf("invalid pset: %s", err)
+	}
 	updater, err := psetv2.NewUpdater(pset)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	for i, input := range pset.Inputs {
@@ -98,21 +101,21 @@ func (s *singleKeyWallet) SignPsetForAddress(
 
 		prevoutTxHex, err := explorerSvc.GetTxHex(chainhash.Hash(input.PreviousTxid).String())
 		if err != nil {
-			return err
+			return "", err
 		}
 
 		prevoutTx, err := transaction.NewTxFromHex(prevoutTxHex)
 		if err != nil {
-			return err
+			return "", err
 		}
 
 		utxo := prevoutTx.Outputs[input.PreviousTxIndex]
 		if utxo == nil {
-			return fmt.Errorf("witness utxo not found")
+			return "", fmt.Errorf("witness utxo not found")
 		}
 
 		if err := updater.AddInWitnessUtxo(i, utxo); err != nil {
-			return err
+			return "", err
 		}
 
 		sighashType := txscript.SigHashAll
@@ -122,26 +125,23 @@ func (s *singleKeyWallet) SignPsetForAddress(
 		}
 
 		if err := updater.AddInSighashType(i, sighashType); err != nil {
-			return err
+			return "", err
 		}
 	}
 
 	signer, err := psetv2.NewSigner(updater.Pset)
 	if err != nil {
-		return err
-	}
-
-	onchainWalletScript, err := address.ToOutputScript(addr)
-	if err != nil {
-		return err
-	}
-
-	utx, err := pset.UnsignedTx()
-	if err != nil {
-		return err
+		return "", err
 	}
 
 	liquidNet := explorerSvc.GetNetwork()
+	p2wpkh := payment.FromPublicKey(s.pubkey, liquidNet, nil)
+	onchainWalletScript := p2wpkh.WitnessScript
+
+	utx, err := pset.UnsignedTx()
+	if err != nil {
+		return "", err
+	}
 
 	prevoutsScripts := make([][]byte, 0)
 	prevoutsValues := make([][]byte, 0)
@@ -154,36 +154,29 @@ func (s *singleKeyWallet) SignPsetForAddress(
 	}
 
 	for i, input := range pset.Inputs {
-		if bytes.Equal(input.WitnessUtxo.Script, onchainWalletScript) {
-			p, err := payment.FromScript(input.WitnessUtxo.Script, liquidNet, nil)
+		prevout := input.GetUtxo()
+
+		if bytes.Equal(prevout.Script, onchainWalletScript) {
+			p, err := payment.FromScript(prevout.Script, liquidNet, nil)
 			if err != nil {
-				return err
+				return "", err
 			}
 
 			preimage := utx.HashForWitnessV0(
-				i,
-				p.Script,
-				input.WitnessUtxo.Value,
-				txscript.SigHashAll,
+				i, p.Script, prevout.Value, txscript.SigHashAll,
 			)
 
-			sig := ecdsa.Sign(
-				s.privateKey,
-				preimage[:],
-			)
+			sig := ecdsa.Sign(s.privateKey, preimage[:])
 
-			signatureWithSighashType := append(sig.Serialize(), byte(txscript.SigHashAll))
+			signatureWithSighashType := append(
+				sig.Serialize(), byte(txscript.SigHashAll),
+			)
 
 			err = signer.SignInput(
-				i,
-				signatureWithSighashType,
-				s.PubKeySerializeCompressed(),
-				nil,
-				nil,
+				i, signatureWithSighashType, s.PubKeySerializeCompressed(), nil, nil,
 			)
 			if err != nil {
-				fmt.Println("error signing input: ", err)
-				return err
+				return "", err
 			}
 			continue
 		}
@@ -191,23 +184,21 @@ func (s *singleKeyWallet) SignPsetForAddress(
 		if len(input.TapLeafScript) > 0 {
 			genesis, err := chainhash.NewHashFromStr(liquidNet.GenesisBlockHash)
 			if err != nil {
-				return err
+				return "", err
 			}
 
-			pubkey := s.PubKey()
 			for _, leaf := range input.TapLeafScript {
 				closure, err := tree.DecodeClosure(leaf.Script)
 				if err != nil {
-					return err
+					return "", err
 				}
 
 				sign := false
-
 				switch c := closure.(type) {
 				case *tree.CSVSigClosure:
-					sign = bytes.Equal(c.Pubkey.SerializeCompressed()[1:], pubkey.SerializeCompressed()[1:])
+					sign = bytes.Equal(c.Pubkey.SerializeCompressed()[1:], s.pubkey.SerializeCompressed()[1:])
 				case *tree.ForfeitClosure:
-					sign = bytes.Equal(c.Pubkey.SerializeCompressed()[1:], pubkey.SerializeCompressed()[1:])
+					sign = bytes.Equal(c.Pubkey.SerializeCompressed()[1:], s.pubkey.SerializeCompressed()[1:])
 				}
 
 				if sign {
@@ -224,12 +215,9 @@ func (s *singleKeyWallet) SignPsetForAddress(
 						nil,
 					)
 
-					sig, err := schnorr.Sign(
-						s.PrivKey(),
-						preimage[:],
-					)
+					sig, err := schnorr.Sign(s.PrivKey(), preimage[:])
 					if err != nil {
-						return err
+						return "", err
 					}
 
 					tapScriptSig := psetv2.TapScriptSig{
@@ -241,7 +229,7 @@ func (s *singleKeyWallet) SignPsetForAddress(
 					}
 
 					if err := signer.SignTaprootInputTapscriptSig(i, tapScriptSig); err != nil {
-						return err
+						return "", err
 					}
 				}
 			}
@@ -253,14 +241,14 @@ func (s *singleKeyWallet) SignPsetForAddress(
 		if len(input.PartialSigs) > 0 {
 			valid, err := pset.ValidateInputSignatures(i)
 			if err != nil {
-				return err
+				return "", err
 			}
 
 			if !valid {
-				return fmt.Errorf("invalid signature for input %d", i)
+				return "", fmt.Errorf("invalid signature for input %d", i)
 			}
 		}
 	}
 
-	return nil
+	return pset.ToBase64()
 }

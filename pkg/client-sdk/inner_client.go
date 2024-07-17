@@ -193,10 +193,12 @@ func (a *arkInnerClient) getEventStream(
 							}
 
 							if round.GetRound().GetStage() == arkv1.RoundStage_ROUND_STAGE_FINALIZED {
+								ptx, _ := psetv2.NewPsetFromBase64(round.GetRound().GetPoolTx())
+								utx, _ := ptx.UnsignedTx()
 								a.eventStream.eventResp <- &arkv1.GetEventStreamResponse{
 									Event: &arkv1.GetEventStreamResponse_RoundFinalized{
 										RoundFinalized: &arkv1.RoundFinalizedEvent{
-											PoolTxid: round.GetRound().GetPoolTx(),
+											PoolTxid: utx.TxHash().String(),
 										},
 									},
 								}
@@ -689,24 +691,9 @@ func (a *arkInnerClient) ping(
 				})
 			}
 
-			poolTx := ""
-			if resp.Payload.Event.PoolTx != "" {
-				p, err := psetv2.NewPsetFromBase64(resp.Payload.Event.PoolTx)
-				if err != nil {
-					return nil, err
-				}
-
-				tx, err := p.UnsignedTx()
-				if err != nil {
-					return nil, err
-				}
-
-				poolTx = tx.TxHash().String()
-			}
-
 			event = &arkv1.RoundFinalizationEvent{
 				Id:         resp.Payload.Event.ID,
-				PoolTx:     poolTx,
+				PoolTx:     resp.Payload.Event.PoolTx,
 				ForfeitTxs: resp.Payload.Event.ForfeitTxs,
 				CongestionTree: &arkv1.Tree{
 					Levels: levels,

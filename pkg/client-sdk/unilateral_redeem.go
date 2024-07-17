@@ -156,7 +156,6 @@ func (r *redeemBranch) offchainPath() ([]*psetv2.Pset, error) {
 		pset := r.branch[i]
 		unsignedTx, err := pset.UnsignedTx()
 		if err != nil {
-			fmt.Println("error", err)
 			return nil, err
 		}
 
