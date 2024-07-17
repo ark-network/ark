@@ -167,6 +167,7 @@ func unilateralRedeem(ctx *cli.Context, client arkv1.ArkServiceClient) error {
 				if strings.Contains(strings.ToLower(err.Error()), "bad-txns-inputs-missingorspent") {
 					time.Sleep(1 * time.Second)
 				} else {
+					fmt.Printf("error broadcasting tx %s: %s\n", txHex, err)
 					return err
 				}
 			}

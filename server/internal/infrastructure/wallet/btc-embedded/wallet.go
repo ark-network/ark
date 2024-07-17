@@ -322,8 +322,7 @@ func (s *service) BroadcastTransaction(ctx context.Context, txHex string) (strin
 	if err := tx.Deserialize(hex.NewDecoder(strings.NewReader(txHex))); err != nil {
 		return "", err
 	}
-
-	if err := s.wallet.InternalWallet().PublishTransaction(&tx, ""); err != nil {
+	if err := s.wallet.PublishTransaction(&tx, ""); err != nil {
 		return "", err
 	}
 
@@ -499,7 +498,6 @@ func (s *service) SignTransaction(ctx context.Context, partialTx string, extract
 	if err != nil {
 		return "", err
 	}
-
 	if extractRawTx {
 		// verify that all inputs are signed
 		if len(signedInputs) != len(ptx.Inputs) {

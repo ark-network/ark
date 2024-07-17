@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/btcsuite/btcd/btcutil/psbt"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/urfave/cli/v2"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/transaction"
@@ -101,20 +104,16 @@ func (e *explorer) GetTxHex(txid string) (string, error) {
 }
 
 func (e *explorer) Broadcast(txStr string) (string, error) {
-	tx, err := transaction.NewTxFromHex(txStr)
+	clone := strings.Clone(txStr)
+	txStr, txid, err := parseLiquidTx(txStr)
 	if err != nil {
-		pset, err := psetv2.NewPsetFromBase64(txStr)
+		txStr, txid, err = parseBitcoinTx(clone)
 		if err != nil {
+			fmt.Println("error parsing tx hex")
 			return "", err
 		}
-
-		tx, err = psetv2.Extract(pset)
-		if err != nil {
-			return "", err
-		}
-		txStr, _ = tx.ToHex()
 	}
-	txid := tx.TxHash().String()
+
 	e.cache[txid] = txStr
 
 	txid, err = e.broadcast(txStr)
@@ -294,4 +293,67 @@ func (e *explorer) broadcast(txHex string) (string, error) {
 	}
 
 	return string(bodyResponse), nil
+}
+
+func parseLiquidTx(txStr string) (string, string, error) {
+	tx, err := transaction.NewTxFromHex(txStr)
+	if err != nil {
+		pset, err := psetv2.NewPsetFromBase64(txStr)
+		if err != nil {
+			return "", "", err
+		}
+
+		tx, err = psetv2.Extract(pset)
+		if err != nil {
+			return "", "", err
+		}
+
+		txhex, err := tx.ToHex()
+		if err != nil {
+			return "", "", err
+		}
+
+		txid := tx.TxHash().String()
+
+		return txhex, txid, nil
+	}
+
+	txhex, err := tx.ToHex()
+	if err != nil {
+		return "", "", err
+	}
+
+	txid := tx.TxHash().String()
+
+	return txhex, txid, nil
+}
+
+func parseBitcoinTx(txStr string) (string, string, error) {
+	var tx wire.MsgTx
+
+	if err := tx.Deserialize(hex.NewDecoder(strings.NewReader(txStr))); err != nil {
+		ptx, err := psbt.NewFromRawBytes(strings.NewReader(txStr), true)
+		if err != nil {
+			return "", "", err
+		}
+
+		txFromPartial, err := psbt.Extract(ptx)
+		if err != nil {
+			return "", "", err
+		}
+
+		tx = *txFromPartial
+	}
+
+	var txBuf bytes.Buffer
+
+	if err := tx.Serialize(&txBuf); err != nil {
+		return "", "", err
+	}
+
+	txhex := hex.EncodeToString(txBuf.Bytes())
+	txid := tx.TxHash().String()
+
+	fmt.Println(txhex, txid)
+	return txhex, txid, nil
 }

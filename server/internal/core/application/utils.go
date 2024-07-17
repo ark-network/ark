@@ -256,8 +256,8 @@ func findSweepableOutputs(
 				if !node.Leaf {
 					children := congestionTree.Children(node.Txid)
 					newNodesToCheck = append(newNodesToCheck, children...)
-					continue
 				}
+				continue
 			}
 
 			if _, ok := sweepableOutputs[expirationTime]; !ok {

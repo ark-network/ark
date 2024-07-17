@@ -80,9 +80,11 @@ func (s *service) signPsbt(packet *psbt.Packet) ([]uint32, error) {
 				leafHashes = append(leafHashes, leafHash[:])
 			}
 
+			xonlypubkey := schnorr.SerializePubKey(managedAddress.PubKey())
+
 			packet.Inputs[idx].TaprootBip32Derivation = []*psbt.TaprootBip32Derivation{
 				{
-					XOnlyPubKey:          schnorr.SerializePubKey(managedAddress.PubKey()),
+					XOnlyPubKey:          xonlypubkey,
 					MasterKeyFingerprint: bip32Infos.MasterKeyFingerprint,
 					Bip32Path:            bip32Infos.Bip32Path,
 					LeafHashes:           leafHashes,
@@ -90,6 +92,26 @@ func (s *service) signPsbt(packet *psbt.Packet) ([]uint32, error) {
 			}
 		}
 	}
+
+	// prevOutputFetcher := wallet.PsbtPrevOutputFetcher(packet)
+	// sigHashes := txscript.NewTxSigHashes(tx, prevOutputFetcher)
+
+	// in := packet.Inputs[0]
+
+	// preimage, err := txscript.CalcTapscriptSignaturehash(
+	// 	sigHashes,
+	// 	txscript.SigHashType(in.SighashType),
+	// 	tx,
+	// 	0,
+	// 	txscript.NewCannedPrevOutputFetcher(in.WitnessUtxo.PkScript, in.WitnessUtxo.Value),
+	// 	txscript.NewBaseTapLeaf(in.TaprootLeafScript[0].Script),
+	// )
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// fmt.Println("PREIMAGE", hex.EncodeToString(preimage))
+
 	return s.wallet.SignPsbt(packet)
 }
 

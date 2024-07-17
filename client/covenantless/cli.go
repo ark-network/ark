@@ -7,7 +7,6 @@ import (
 
 	"github.com/ark-network/ark-cli/interfaces"
 	"github.com/ark-network/ark-cli/utils"
-	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -436,21 +435,6 @@ func addInputs(
 	}
 
 	return nil
-}
-
-func isOnchainOnly(receivers []*arkv1.Output) bool {
-	for _, receiver := range receivers {
-		isOnChain, _, _, err := decodeReceiverAddress(receiver.Address)
-		if err != nil {
-			continue
-		}
-
-		if !isOnChain {
-			return false
-		}
-	}
-
-	return true
 }
 
 func decodeReceiverAddress(addr string) (
