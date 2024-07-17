@@ -5,7 +5,7 @@ import (
 	"errors"
 	"syscall/js"
 
-	"github.com/ark-network/ark-sdk"
+	arksdk "github.com/ark-network/ark-sdk"
 	inmemorystore "github.com/ark-network/ark-sdk/store/inmemory"
 )
 
@@ -38,7 +38,6 @@ func New(ctx context.Context, aspUrl string) error {
 	js.Global().Set("connect", ConnectWrapper())
 	js.Global().Set("balance", BalanceWrapper())
 	js.Global().Set("onboard", OnboardWrapper())
-	js.Global().Set("trustedOnboard", TrustedOnboardWrapper())
 	js.Global().Set("receive", ReceiveWrapper())
 	js.Global().Set("sendOnChain", SendOnChainWrapper())
 	js.Global().Set("sendOffChain", SendOffChainWrapper())
@@ -127,16 +126,6 @@ func OnboardWrapper() js.Func {
 	})
 }
 
-func TrustedOnboardWrapper() js.Func {
-	return JSPromise(func(args []js.Value) (interface{}, error) {
-		addr, err := arkSdkClient.TrustedOnboard(context.Background())
-		if err != nil {
-			return nil, err
-		}
-		return js.ValueOf(addr), nil
-	})
-}
-
 func ReceiveWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
 		offchainAddr, onchainAddr, err := arkSdkClient.Receive(context.Background())
@@ -190,7 +179,7 @@ func SendOffChainWrapper() js.Func {
 
 func UnilateralRedeemWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		return arkSdkClient.UnilateralRedeem(context.Background())
+		return nil, arkSdkClient.UnilateralRedeem(context.Background())
 	})
 }
 

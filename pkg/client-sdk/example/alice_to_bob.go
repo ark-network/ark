@@ -17,7 +17,7 @@ import (
 func main() {
 	var (
 		//grpcAspUrl = "localhost:8080"
-		restAspUrl = "http://localhost:6000"
+		restAspUrl = "http://localhost:8080"
 		//grpcProtocol = arksdk.Grpc
 		restProtocol = arksdk.Rest
 		ctx          = context.Background()
