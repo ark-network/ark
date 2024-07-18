@@ -3,7 +3,6 @@ package application
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/ark-network/ark/common/tree"
@@ -221,7 +220,7 @@ func (s *sweeper) createTask(
 			err = nil
 			txid := ""
 			// retry until the tx is broadcasted or the error is not BIP68 final
-			for len(txid) == 0 && (err == nil || strings.Contains(err.Error(), "non-BIP68-final")) {
+			for len(txid) == 0 && (err == nil || err == ports.ErrNonFinalBIP68) {
 				if err != nil {
 					log.Debugln("sweep tx not BIP68 final, retrying in 5 seconds")
 					time.Sleep(5 * time.Second)

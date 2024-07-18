@@ -91,7 +91,7 @@ func (s *service) BroadcastTransaction(
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "non-BIP68-final") {
-			return "", fmt.Errorf("non-BIP68-final")
+			return "", ports.ErrNonFinalBIP68
 		}
 
 		return "", err
