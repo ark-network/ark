@@ -259,6 +259,36 @@
         ]
       }
     },
+    "/v1/round/id/{id}": {
+      "get": {
+        "operationId": "ArkService_GetRoundById",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetRoundByIdResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
     "/v1/round/{txid}": {
       "get": {
         "summary": "TODO BTC: signTree rpc",
@@ -427,6 +457,14 @@
         }
       }
     },
+    "v1GetRoundByIdResponse": {
+      "type": "object",
+      "properties": {
+        "round": {
+          "$ref": "#/definitions/v1Round"
+        }
+      }
+    },
     "v1GetRoundResponse": {
       "type": "object",
       "properties": {
@@ -518,8 +556,10 @@
           "type": "array",
           "items": {
             "type": "string"
-          },
-          "title": "TODO: improve this response (returns oneof the round event)"
+          }
+        },
+        "event": {
+          "$ref": "#/definitions/v1RoundFinalizationEvent"
         }
       }
     },
@@ -575,6 +615,9 @@
           "items": {
             "type": "string"
           }
+        },
+        "stage": {
+          "$ref": "#/definitions/v1RoundStage"
         }
       }
     },
@@ -625,6 +668,17 @@
           "type": "string"
         }
       }
+    },
+    "v1RoundStage": {
+      "type": "string",
+      "enum": [
+        "ROUND_STAGE_UNSPECIFIED",
+        "ROUND_STAGE_REGISTRATION",
+        "ROUND_STAGE_FINALIZATION",
+        "ROUND_STAGE_FINALIZED",
+        "ROUND_STAGE_FAILED"
+      ],
+      "default": "ROUND_STAGE_UNSPECIFIED"
     },
     "v1Tree": {
       "type": "object",

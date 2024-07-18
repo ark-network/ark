@@ -101,13 +101,24 @@ func (h *handler) Ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.Ping
 		return nil, status.Error(codes.InvalidArgument, "missing payment id")
 	}
 
-	forfeits, err := h.svc.UpdatePaymentStatus(ctx, req.GetPaymentId())
+	forfeits, round, err := h.svc.UpdatePaymentStatus(ctx, req.GetPaymentId())
 	if err != nil {
 		return nil, err
 	}
 
+	var event *arkv1.RoundFinalizationEvent
+	if round != nil {
+		event = &arkv1.RoundFinalizationEvent{
+			Id:             round.Id,
+			PoolTx:         round.UnsignedTx,
+			ForfeitTxs:     round.ForfeitTxs,
+			CongestionTree: castCongestionTree(round.CongestionTree),
+			Connectors:     round.Connectors,
+		}
+	}
 	return &arkv1.PingResponse{
 		ForfeitTxs: forfeits,
+		Event:      event,
 	}, nil
 }
 
@@ -171,6 +182,7 @@ func (h *handler) GetRound(ctx context.Context, req *arkv1.GetRoundRequest) (*ar
 				CongestionTree: castCongestionTree(round.CongestionTree),
 				ForfeitTxs:     round.ForfeitTxs,
 				Connectors:     round.Connectors,
+				Stage:          toRoundStage(round.Stage),
 			},
 		}, nil
 	}
@@ -189,6 +201,34 @@ func (h *handler) GetRound(ctx context.Context, req *arkv1.GetRoundRequest) (*ar
 			CongestionTree: castCongestionTree(round.CongestionTree),
 			ForfeitTxs:     round.ForfeitTxs,
 			Connectors:     round.Connectors,
+			Stage:          toRoundStage(round.Stage),
+		},
+	}, nil
+}
+
+func (h *handler) GetRoundById(
+	ctx context.Context, req *arkv1.GetRoundByIdRequest,
+) (*arkv1.GetRoundByIdResponse, error) {
+	id := req.GetId()
+	if len(id) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing round id")
+	}
+
+	round, err := h.svc.GetRoundById(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return &arkv1.GetRoundByIdResponse{
+		Round: &arkv1.Round{
+			Id:             round.Id,
+			Start:          round.StartingTimestamp,
+			End:            round.EndingTimestamp,
+			PoolTx:         round.UnsignedTx,
+			CongestionTree: castCongestionTree(round.CongestionTree),
+			ForfeitTxs:     round.ForfeitTxs,
+			Connectors:     round.Connectors,
+			Stage:          toRoundStage(round.Stage),
 		},
 	}, nil
 }

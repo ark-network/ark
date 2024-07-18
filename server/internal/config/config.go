@@ -14,6 +14,7 @@ type Config struct {
 	WalletAddr            string
 	RoundInterval         int64
 	Port                  uint32
+	EventDbType           string
 	DbType                string
 	DbDir                 string
 	SchedulerType         string
@@ -36,6 +37,7 @@ var (
 	WalletAddr            = "WALLET_ADDR"
 	RoundInterval         = "ROUND_INTERVAL"
 	Port                  = "PORT"
+	EventDbType           = "EVENT_DB_TYPE"
 	DbType                = "DB_TYPE"
 	SchedulerType         = "SCHEDULER_TYPE"
 	TxBuilderType         = "TX_BUILDER_TYPE"
@@ -55,7 +57,8 @@ var (
 	defaultRoundInterval         = 5
 	defaultPort                  = 6000
 	defaultWalletAddr            = "localhost:18000"
-	defaultDbType                = "badger"
+	defaultDbType                = "sqlite"
+	defaultEventDbType           = "badger"
 	defaultSchedulerType         = "gocron"
 	defaultTxBuilderType         = "covenant"
 	defaultBlockchainScannerType = "ocean"
@@ -84,6 +87,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(RoundInterval, defaultRoundInterval)
 	viper.SetDefault(RoundLifetime, defaultRoundLifetime)
 	viper.SetDefault(SchedulerType, defaultSchedulerType)
+	viper.SetDefault(EventDbType, defaultEventDbType)
 	viper.SetDefault(TxBuilderType, defaultTxBuilderType)
 	viper.SetDefault(UnilateralExitDelay, defaultUnilateralExitDelay)
 	viper.SetDefault(BlockchainScannerType, defaultBlockchainScannerType)
@@ -103,6 +107,7 @@ func LoadConfig() (*Config, error) {
 		WalletAddr:            viper.GetString(WalletAddr),
 		RoundInterval:         viper.GetInt64(RoundInterval),
 		Port:                  viper.GetUint32(Port),
+		EventDbType:           viper.GetString(EventDbType),
 		DbType:                viper.GetString(DbType),
 		SchedulerType:         viper.GetString(SchedulerType),
 		TxBuilderType:         viper.GetString(TxBuilderType),

@@ -2,39 +2,44 @@ package db
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	badgerdb "github.com/ark-network/ark/internal/infrastructure/db/badger"
-	dbtypes "github.com/ark-network/ark/internal/infrastructure/db/types"
+	sqlitedb "github.com/ark-network/ark/internal/infrastructure/db/sqlite"
 )
 
 var (
-	eventStoreTypes = map[string]func(...interface{}) (dbtypes.EventStore, error){
+	eventStoreTypes = map[string]func(...interface{}) (domain.RoundEventRepository, error){
 		"badger": badgerdb.NewRoundEventRepository,
 	}
-	roundStoreTypes = map[string]func(...interface{}) (dbtypes.RoundStore, error){
+	roundStoreTypes = map[string]func(...interface{}) (domain.RoundRepository, error){
 		"badger": badgerdb.NewRoundRepository,
+		"sqlite": sqlitedb.NewRoundRepository,
 	}
-	vtxoStoreTypes = map[string]func(...interface{}) (dbtypes.VtxoStore, error){
+	vtxoStoreTypes = map[string]func(...interface{}) (domain.VtxoRepository, error){
 		"badger": badgerdb.NewVtxoRepository,
+		"sqlite": sqlitedb.NewVtxoRepository,
 	}
+)
+
+const (
+	sqliteDbFile = "sqlite.db"
 )
 
 type ServiceConfig struct {
 	EventStoreType string
-	RoundStoreType string
-	VtxoStoreType  string
+	DataStoreType  string
 
 	EventStoreConfig []interface{}
-	RoundStoreConfig []interface{}
-	VtxoStoreConfig  []interface{}
+	DataStoreConfig  []interface{}
 }
 
 type service struct {
-	eventStore dbtypes.EventStore
-	roundStore dbtypes.RoundStore
-	vtxoStore  dbtypes.VtxoStore
+	eventStore domain.RoundEventRepository
+	roundStore domain.RoundRepository
+	vtxoStore  domain.VtxoRepository
 }
 
 func NewService(config ServiceConfig) (ports.RepoManager, error) {
@@ -42,26 +47,62 @@ func NewService(config ServiceConfig) (ports.RepoManager, error) {
 	if !ok {
 		return nil, fmt.Errorf("event store type not supported")
 	}
-	roundStoreFactory, ok := roundStoreTypes[config.RoundStoreType]
+	roundStoreFactory, ok := roundStoreTypes[config.DataStoreType]
 	if !ok {
 		return nil, fmt.Errorf("round store type not supported")
 	}
-	vtxoStoreFactory, ok := vtxoStoreTypes[config.VtxoStoreType]
+	vtxoStoreFactory, ok := vtxoStoreTypes[config.DataStoreType]
 	if !ok {
 		return nil, fmt.Errorf("vtxo store type not supported")
 	}
 
-	eventStore, err := eventStoreFactory(config.EventStoreConfig...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open event store: %s", err)
+	var eventStore domain.RoundEventRepository
+	var roundStore domain.RoundRepository
+	var vtxoStore domain.VtxoRepository
+	var err error
+
+	switch config.EventStoreType {
+	case "badger":
+		eventStore, err = eventStoreFactory(config.EventStoreConfig...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open event store: %s", err)
+		}
+	default:
+		return nil, fmt.Errorf("unknown event store db type")
 	}
-	roundStore, err := roundStoreFactory(config.RoundStoreConfig...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open round store: %s", err)
-	}
-	vtxoStore, err := vtxoStoreFactory(config.VtxoStoreConfig...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open vtxo store: %s", err)
+
+	switch config.DataStoreType {
+	case "badger":
+		roundStore, err = roundStoreFactory(config.DataStoreConfig...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open round store: %s", err)
+		}
+		vtxoStore, err = vtxoStoreFactory(config.DataStoreConfig...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open vtxo store: %s", err)
+		}
+	case "sqlite":
+		if len(config.DataStoreConfig) != 1 {
+			return nil, fmt.Errorf("invalid data store config")
+		}
+		baseDir, ok := config.DataStoreConfig[0].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid base directory")
+		}
+		db, err := sqlitedb.OpenDb(filepath.Join(baseDir, sqliteDbFile))
+		if err != nil {
+			return nil, err
+		}
+
+		roundStore, err = roundStoreFactory(db)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open round store: %s", err)
+		}
+		vtxoStore, err = vtxoStoreFactory(db)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open vtxo store: %s", err)
+		}
+
 	}
 
 	return &service{eventStore, roundStore, vtxoStore}, nil
