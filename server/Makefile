@@ -37,6 +37,7 @@ run: clean
 	export ARK_ROUND_INTERVAL=10; \
 	export ARK_LOG_LEVEL=5; \
 	export ARK_NETWORK=regtest; \
+	export ARK_PORT=8080; \
 	go run ./cmd/arkd
 
 ## test: runs unit and component tests

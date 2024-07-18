@@ -3,13 +3,13 @@ module github.com/ark-network/ark/common
 go 1.21.0
 
 require (
-	github.com/btcsuite/btcd v0.23.1
-	github.com/btcsuite/btcd/btcec/v2 v2.3.2
-	github.com/btcsuite/btcd/btcutil v1.1.3
-	github.com/btcsuite/btcd/btcutil/psbt v1.1.4
-	github.com/btcsuite/btcd/chaincfg/chainhash v1.0.1
-	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0
-	github.com/stretchr/testify v1.8.0
+	github.com/btcsuite/btcd v0.24.2
+	github.com/btcsuite/btcd/btcec/v2 v2.3.4
+	github.com/btcsuite/btcd/btcutil v1.1.5
+	github.com/btcsuite/btcd/btcutil/psbt v1.1.9
+	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0
+	github.com/stretchr/testify v1.9.0
 )
 
 require (

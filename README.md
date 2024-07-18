@@ -74,7 +74,7 @@ Inside the `arkd` container is shipped the `ark` CLI. You can submit payment to 
 
 ```bash
 alias ark='docker exec -it arkd ark'
-ark init --password <password> --ark-url localhost:6000
+ark init --password <password> --ark-url localhost:8080
 ```
 
 This will add a `state.json` file to the following directory:
@@ -88,7 +88,7 @@ This will add a `state.json` file to the following directory:
 
 ```bash
 export ARK_WALLET_DATADIR=path/to/custom
-ark init --password <password> --ark-url localhost:6000 --network testnet
+ark init --password <password> --ark-url localhost:8080 --network testnet
 ```
 
 Add funds to the ark wallet:
@@ -116,7 +116,7 @@ In **another tab**, setup another ark wallet with:
 ```bash
 export ARK_WALLET_DATADIR=./datadir
 alias ark2=$(pwd)/build/ark-<os>-<arch>
-ark2 init --password <password> --ark-url localhost:6000 --network testnet
+ark2 init --password <password> --ark-url localhost:8080 --network testnet
 ```
 
 **Note:** `ark2` should always run in the second tab.
@@ -130,7 +130,7 @@ ark2 receive
 {
   "offchain_address": <address starting with "tark1q...">,
   "onchain_address": <address starting with "tex1q...">,
-  "relays": ["localhost:6000"]
+  "relays": ["localhost:8080"]
 }
 ```
 
