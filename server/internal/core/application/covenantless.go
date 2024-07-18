@@ -255,6 +255,8 @@ func (s *covenantlessService) start() {
 
 func (s *covenantlessService) startRound() {
 	round := domain.NewRound(dustAmount) // TODO dynamic dust amount?
+	//nolint:all
+	round.StartRegistration()
 	s.currentRound = round
 
 	defer func() {
