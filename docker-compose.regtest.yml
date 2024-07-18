@@ -30,6 +30,7 @@ services:
       - ARK_NETWORK=liquidregtest
       - ARK_LOG_LEVEL=5
       - ARK_ROUND_LIFETIME=512
+      - ARK_DB_TYPE=sqlite
     ports:
       - "6000:6000"
 

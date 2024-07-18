@@ -2,7 +2,11 @@ package db_test
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"os"
 	"reflect"
+	"sort"
 	"testing"
 	"time"
 
@@ -18,7 +22,6 @@ import (
 const (
 	emptyPtx = "cHNldP8BAgQCAAAAAQQBAAEFAQABBgEDAfsEAgAAAAA="
 	emptyTx  = "0200000000000000000000"
-	txid     = "00000000000000000000000000000000000000000000000000000000000000000"
 	pubkey1  = "0300000000000000000000000000000000000000000000000000000000000000001"
 	pubkey2  = "0200000000000000000000000000000000000000000000000000000000000000002"
 )
@@ -26,48 +29,54 @@ const (
 var congestionTree = [][]tree.Node{
 	{
 		{
-			Txid:       txid,
+			Txid:       randomString(32),
 			Tx:         emptyPtx,
-			ParentTxid: txid,
+			ParentTxid: randomString(32),
 		},
 	},
 	{
 		{
-			Txid:       txid,
+			Txid:       randomString(32),
 			Tx:         emptyPtx,
-			ParentTxid: txid,
+			ParentTxid: randomString(32),
 		},
 		{
-			Txid:       txid,
+			Txid:       randomString(32),
 			Tx:         emptyPtx,
-			ParentTxid: txid,
+			ParentTxid: randomString(32),
 		},
 	},
 	{
 		{
-			Txid:       txid,
+			Txid:       randomString(32),
 			Tx:         emptyPtx,
-			ParentTxid: txid,
+			ParentTxid: randomString(32),
 		},
 		{
-			Txid:       txid,
+			Txid:       randomString(32),
 			Tx:         emptyPtx,
-			ParentTxid: txid,
+			ParentTxid: randomString(32),
 		},
 		{
-			Txid:       txid,
+			Txid:       randomString(32),
 			Tx:         emptyPtx,
-			ParentTxid: txid,
+			ParentTxid: randomString(32),
 		},
 		{
-			Txid:       txid,
+			Txid:       randomString(32),
 			Tx:         emptyPtx,
-			ParentTxid: txid,
+			ParentTxid: randomString(32),
 		},
 	},
 }
 
+func TestMain(m *testing.M) {
+	m.Run()
+	_ = os.Remove("test.db")
+}
+
 func TestService(t *testing.T) {
+	dbDir := t.TempDir()
 	tests := []struct {
 		name   string
 		config db.ServiceConfig
@@ -76,11 +85,18 @@ func TestService(t *testing.T) {
 			name: "repo_manager_with_badger_stores",
 			config: db.ServiceConfig{
 				EventStoreType:   "badger",
-				RoundStoreType:   "badger",
-				VtxoStoreType:    "badger",
+				DataStoreType:    "badger",
 				EventStoreConfig: []interface{}{"", nil},
-				RoundStoreConfig: []interface{}{"", nil},
-				VtxoStoreConfig:  []interface{}{"", nil},
+				DataStoreConfig:  []interface{}{"", nil},
+			},
+		},
+		{
+			name: "repo_manager_with_sqlite_stores",
+			config: db.ServiceConfig{
+				EventStoreType:   "badger",
+				DataStoreType:    "sqlite",
+				EventStoreConfig: []interface{}{"", nil},
+				DataStoreConfig:  []interface{}{dbDir},
 			},
 		},
 	}
@@ -160,7 +176,7 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 					},
 					domain.RoundFinalized{
 						Id:         "7578231e-428d-45ae-aaa4-e62c77ad5cec",
-						Txid:       txid,
+						Txid:       randomString(32),
 						ForfeitTxs: []string{emptyPtx, emptyPtx, emptyPtx, emptyPtx},
 						Timestamp:  1701190300,
 					},
@@ -214,11 +230,6 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 		err = svc.Rounds().AddOrUpdateRound(ctx, *round)
 		require.NoError(t, err)
 
-		currentRound, err := svc.Rounds().GetCurrentRound(ctx)
-		require.NoError(t, err)
-		require.NotNil(t, currentRound)
-		require.Condition(t, roundsMatch(*round, *currentRound))
-
 		roundById, err := svc.Rounds().GetRoundWithId(ctx, roundId)
 		require.NoError(t, err)
 		require.NotNil(t, roundById)
@@ -229,14 +240,52 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 				Id: roundId,
 				Payments: []domain.Payment{
 					{
-						Id:        uuid.New().String(),
-						Inputs:    []domain.Vtxo{{}},
-						Receivers: []domain.Receiver{{}},
+						Id: uuid.New().String(),
+						Inputs: []domain.Vtxo{
+							{
+								VtxoKey: domain.VtxoKey{
+									Txid: randomString(32),
+									VOut: 0,
+								},
+								PoolTx:   randomString(32),
+								ExpireAt: 7980322,
+								Receiver: domain.Receiver{
+									Pubkey: randomString(36),
+									Amount: 300,
+								},
+							},
+						},
+						Receivers: []domain.Receiver{{
+							Pubkey: randomString(36),
+							Amount: 300,
+						}},
 					},
 					{
-						Id:        uuid.New().String(),
-						Inputs:    []domain.Vtxo{{}},
-						Receivers: []domain.Receiver{{}, {}, {}},
+						Id: uuid.New().String(),
+						Inputs: []domain.Vtxo{
+							{
+								VtxoKey: domain.VtxoKey{
+									Txid: randomString(32),
+									VOut: 0,
+								},
+								PoolTx:   randomString(32),
+								ExpireAt: 7980322,
+								Receiver: domain.Receiver{
+									Pubkey: randomString(36),
+									Amount: 600,
+								},
+							},
+						},
+						Receivers: []domain.Receiver{
+							{
+								Pubkey: randomString(36),
+								Amount: 400,
+							},
+							{
+								Pubkey: randomString(34),
+								Amount: 200,
+							},
+						},
 					},
 				},
 			},
@@ -249,20 +298,20 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 		}
 		events = append(events, newEvents...)
 		updatedRound := domain.NewRoundFromEvents(events)
+		for _, pay := range updatedRound.Payments {
+			err = svc.Vtxos().AddVtxos(ctx, pay.Inputs)
+			require.NoError(t, err)
+		}
 
 		err = svc.Rounds().AddOrUpdateRound(ctx, *updatedRound)
 		require.NoError(t, err)
 
-		currentRound, err = svc.Rounds().GetCurrentRound(ctx)
-		require.NoError(t, err)
-		require.NotNil(t, currentRound)
-		require.Condition(t, roundsMatch(*updatedRound, *currentRound))
-
 		roundById, err = svc.Rounds().GetRoundWithId(ctx, updatedRound.Id)
 		require.NoError(t, err)
-		require.NotNil(t, currentRound)
+		require.NotNil(t, roundById)
 		require.Condition(t, roundsMatch(*updatedRound, *roundById))
 
+		txid := randomString(32)
 		newEvents = []domain.RoundEvent{
 			domain.RoundFinalized{
 				Id:         roundId,
@@ -276,10 +325,6 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 
 		err = svc.Rounds().AddOrUpdateRound(ctx, *finalizedRound)
 		require.NoError(t, err)
-
-		currentRound, err = svc.Rounds().GetCurrentRound(ctx)
-		require.Error(t, err)
-		require.Nil(t, currentRound)
 
 		roundById, err = svc.Rounds().GetRoundWithId(ctx, roundId)
 		require.NoError(t, err)
@@ -300,7 +345,7 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 		userVtxos := []domain.Vtxo{
 			{
 				VtxoKey: domain.VtxoKey{
-					Txid: txid,
+					Txid: randomString(32),
 					VOut: 0,
 				},
 				Receiver: domain.Receiver{
@@ -310,7 +355,7 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 			},
 			{
 				VtxoKey: domain.VtxoKey{
-					Txid: txid,
+					Txid: randomString(32),
 					VOut: 1,
 				},
 				Receiver: domain.Receiver{
@@ -321,7 +366,7 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 		}
 		newVtxos := append(userVtxos, domain.Vtxo{
 			VtxoKey: domain.VtxoKey{
-				Txid: txid,
+				Txid: randomString(32),
 				VOut: 1,
 			},
 			Receiver: domain.Receiver{
@@ -346,8 +391,8 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 
 		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllVtxos(ctx, "")
 		require.NoError(t, err)
-		require.Empty(t, spendableVtxos)
-		require.Empty(t, spentVtxos)
+
+		numberOfVtxos := len(spendableVtxos) + len(spentVtxos)
 
 		err = svc.Vtxos().AddVtxos(ctx, newVtxos)
 		require.NoError(t, err)
@@ -358,15 +403,21 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 
 		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllVtxos(ctx, pubkey1)
 		require.NoError(t, err)
-		require.Exactly(t, vtxos, spendableVtxos)
+
+		sortedVtxos := sortVtxos(userVtxos)
+		sort.Sort(sortedVtxos)
+
+		sortedSpendableVtxos := sortVtxos(spendableVtxos)
+		sort.Sort(sortedSpendableVtxos)
+
+		require.Exactly(t, sortedSpendableVtxos, sortedVtxos)
 		require.Empty(t, spentVtxos)
 
 		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllVtxos(ctx, "")
 		require.NoError(t, err)
-		require.Exactly(t, userVtxos, spendableVtxos)
-		require.Empty(t, spentVtxos)
+		require.Len(t, append(spendableVtxos, spentVtxos...), numberOfVtxos+len(newVtxos))
 
-		err = svc.Vtxos().SpendVtxos(ctx, vtxoKeys[:1], txid)
+		err = svc.Vtxos().SpendVtxos(ctx, vtxoKeys[:1], randomString(32))
 		require.NoError(t, err)
 
 		spentVtxos, err = svc.Vtxos().GetVtxos(ctx, vtxoKeys[:1])
@@ -397,27 +448,92 @@ func roundsMatch(expected, got domain.Round) assert.Comparison {
 		if expected.Stage != got.Stage {
 			return false
 		}
-		if !reflect.DeepEqual(expected.Payments, got.Payments) {
-			return false
+
+		for k, v := range expected.Payments {
+			gotValue, ok := got.Payments[k]
+			if !ok {
+				return false
+			}
+
+			expectedVtxos := sortVtxos(v.Inputs)
+			gotVtxos := sortVtxos(gotValue.Inputs)
+
+			sort.Sort(expectedVtxos)
+			sort.Sort(gotVtxos)
+
+			expectedReceivers := sortReceivers(v.Receivers)
+			gotReceivers := sortReceivers(gotValue.Receivers)
+
+			sort.Sort(expectedReceivers)
+			sort.Sort(gotReceivers)
+
+			if !reflect.DeepEqual(expectedReceivers, gotReceivers) {
+				return false
+			}
+			if !reflect.DeepEqual(expectedVtxos, gotVtxos) {
+				return false
+			}
 		}
+
 		if expected.Txid != got.Txid {
 			return false
 		}
 		if expected.UnsignedTx != got.UnsignedTx {
 			return false
 		}
-		if !reflect.DeepEqual(expected.ForfeitTxs, got.ForfeitTxs) {
-			return false
+
+		if len(expected.ForfeitTxs) > 0 {
+			expectedForfeits := sortStrings(expected.ForfeitTxs)
+			gotForfeits := sortStrings(got.ForfeitTxs)
+
+			sort.Sort(expectedForfeits)
+			sort.Sort(gotForfeits)
+
+			if !reflect.DeepEqual(expectedForfeits, gotForfeits) {
+				return false
+			}
 		}
+
 		if !reflect.DeepEqual(expected.CongestionTree, got.CongestionTree) {
 			return false
 		}
-		if !reflect.DeepEqual(expected.Connectors, got.Connectors) {
-			return false
+
+		if len(expected.Connectors) > 0 {
+			expectedConnectors := sortStrings(expected.Connectors)
+			gotConnectors := sortStrings(got.Connectors)
+
+			sort.Sort(expectedConnectors)
+			sort.Sort(gotConnectors)
+
+			if !reflect.DeepEqual(expectedConnectors, gotConnectors) {
+				return false
+			}
 		}
-		if expected.Version != got.Version {
-			return false
-		}
-		return true
+		return expected.Version == got.Version
 	}
 }
+
+func randomString(len int) string {
+	buf := make([]byte, len)
+	// nolint
+	rand.Read(buf)
+	return hex.EncodeToString(buf)
+}
+
+type sortVtxos []domain.Vtxo
+
+func (a sortVtxos) Len() int           { return len(a) }
+func (a sortVtxos) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a sortVtxos) Less(i, j int) bool { return a[i].Txid < a[j].Txid }
+
+type sortReceivers []domain.Receiver
+
+func (a sortReceivers) Len() int           { return len(a) }
+func (a sortReceivers) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a sortReceivers) Less(i, j int) bool { return a[i].Pubkey < a[j].Pubkey }
+
+type sortStrings []string
+
+func (a sortStrings) Len() int           { return len(a) }
+func (a sortStrings) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a sortStrings) Less(i, j int) bool { return a[i] < a[j] }

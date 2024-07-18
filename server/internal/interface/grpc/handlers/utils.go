@@ -62,3 +62,21 @@ func parseReceivers(outs []*arkv1.Output) ([]domain.Receiver, error) {
 	}
 	return receivers, nil
 }
+
+func toRoundStage(stage domain.Stage) arkv1.RoundStage {
+	if stage.Failed {
+		return arkv1.RoundStage_ROUND_STAGE_FAILED
+	}
+
+	switch stage.Code {
+	case domain.RegistrationStage:
+		return arkv1.RoundStage_ROUND_STAGE_REGISTRATION
+	case domain.FinalizationStage:
+		if stage.Ended {
+			return arkv1.RoundStage_ROUND_STAGE_FINALIZED
+		}
+		return arkv1.RoundStage_ROUND_STAGE_FINALIZATION
+	default:
+		return arkv1.RoundStage_ROUND_STAGE_UNSPECIFIED
+	}
+}

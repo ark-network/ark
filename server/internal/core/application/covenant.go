@@ -22,7 +22,44 @@ import (
 	"github.com/vulpemventures/go-elements/psetv2"
 )
 
-type covenantService struct {
+var (
+	paymentsThreshold = int64(128)
+	dustAmount        = uint64(450)
+)
+
+type ServiceInfo struct {
+	PubKey              string
+	RoundLifetime       int64
+	UnilateralExitDelay int64
+	RoundInterval       int64
+	Network             string
+	MinRelayFee         int64
+}
+
+type Service interface {
+	Start() error
+	Stop()
+	SpendVtxos(ctx context.Context, inputs []domain.VtxoKey) (string, error)
+	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error
+	SignVtxos(ctx context.Context, forfeitTxs []string) error
+	GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error)
+	GetRoundById(ctx context.Context, id string) (*domain.Round, error)
+	GetCurrentRound(ctx context.Context) (*domain.Round, error)
+	GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
+	UpdatePaymentStatus(ctx context.Context, id string) (unsignedForfeitTxs []string, round *domain.Round, err error)
+	ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, []domain.Vtxo, error)
+	GetInfo(ctx context.Context) (*ServiceInfo, error)
+	Onboard(ctx context.Context, boardingTx string, congestionTree tree.CongestionTree, userPubkey *secp256k1.PublicKey) error
+	TrustedOnboarding(ctx context.Context, userPubKey *secp256k1.PublicKey) (string, error)
+}
+
+type onboarding struct {
+	tx             string
+	congestionTree tree.CongestionTree
+	userPubkey     *secp256k1.PublicKey
+}
+
+type service struct {
 	network             common.Network
 	pubkey              *secp256k1.PublicKey
 	roundLifetime       int64
@@ -44,6 +81,7 @@ type covenantService struct {
 
 	trustedOnboardingScriptLock *sync.Mutex
 	trustedOnboardingScripts    map[string]*secp256k1.PublicKey
+	currentRound                *domain.Round
 }
 
 func NewCovenantService(
@@ -70,7 +108,7 @@ func NewCovenantService(
 		roundLifetime, roundInterval, unilateralExitDelay, minRelayFee,
 		walletSvc, repoManager, builder, scanner, sweeper,
 		paymentRequests, forfeitTxs, eventsCh, onboardingCh,
-		&sync.Mutex{}, make(map[string]*secp256k1.PublicKey),
+		&sync.Mutex{}, make(map[string]*secp256k1.PublicKey), nil,
 	}
 	repoManager.RegisterEventsHandler(
 		func(round *domain.Round) {
@@ -152,17 +190,17 @@ func (s *covenantService) ClaimVtxos(ctx context.Context, creds string, receiver
 	return s.paymentRequests.update(*payment)
 }
 
-func (s *covenantService) UpdatePaymentStatus(_ context.Context, id string) ([]string, error) {
+func (s *service) UpdatePaymentStatus(_ context.Context, id string) ([]string, *domain.Round, error) {
 	err := s.paymentRequests.updatePingTimestamp(id)
 	if err != nil {
 		if _, ok := err.(errPaymentNotFound); ok {
-			return s.forfeitTxs.view(), nil
+			return s.forfeitTxs.view(), s.currentRound, nil
 		}
 
-		return nil, err
+		return nil, nil, err
 	}
 
-	return nil, nil
+	return nil, nil, nil
 }
 
 func (s *covenantService) SignVtxos(ctx context.Context, forfeitTxs []string) error {
@@ -182,8 +220,12 @@ func (s *covenantService) GetRoundByTxid(ctx context.Context, poolTxid string) (
 	return s.repoManager.Rounds().GetRoundWithTxid(ctx, poolTxid)
 }
 
-func (s *covenantService) GetCurrentRound(ctx context.Context) (*domain.Round, error) {
-	return s.repoManager.Rounds().GetCurrentRound(ctx)
+func (s *service) GetCurrentRound(ctx context.Context) (*domain.Round, error) {
+	return domain.NewRoundFromEvents(s.currentRound.Events()), nil
+}
+
+func (s *service) GetRoundById(ctx context.Context, id string) (*domain.Round, error) {
+	return s.repoManager.Rounds().GetRoundWithId(ctx, id)
 }
 
 func (s *covenantService) GetInfo(ctx context.Context) (*ServiceInfo, error) {
@@ -231,10 +273,13 @@ func (s *covenantService) Onboard(
 
 	log.Debugf("broadcasted boarding tx %s", txid)
 
-	s.onboardingCh <- onboarding{
-		tx:             boardingTx,
-		congestionTree: congestionTree,
-		userPubkey:     userPubkey,
+	sharedOutputScript := hex.EncodeToString(extracted.Outputs[0].Script)
+	if _, ok := s.trustedOnboardingScripts[sharedOutputScript]; !ok {
+		s.onboardingCh <- onboarding{
+			tx:             boardingTx,
+			congestionTree: congestionTree,
+			userPubkey:     userPubkey,
+		}
 	}
 
 	return nil
@@ -285,13 +330,9 @@ func (s *covenantService) start() {
 
 func (s *covenantService) startRound() {
 	round := domain.NewRound(dustAmount)
-	changes, _ := round.StartRegistration()
-	if err := s.saveEvents(
-		context.Background(), round.Id, changes,
-	); err != nil {
-		log.WithError(err).Warn("failed to store new round events")
-		return
-	}
+	//nolint:all
+	round.StartRegistration()
+	s.currentRound = round
 
 	defer func() {
 		time.Sleep(time.Duration(s.roundInterval/2) * time.Second)
@@ -303,15 +344,16 @@ func (s *covenantService) startRound() {
 
 func (s *covenantService) startFinalization() {
 	ctx := context.Background()
-	round, err := s.repoManager.Rounds().GetCurrentRound(ctx)
-	if err != nil {
-		log.WithError(err).Warn("failed to retrieve current round")
-		return
-	}
+	round := s.currentRound
 
-	var changes []domain.RoundEvent
+	var roundAborted bool
 	defer func() {
-		if err := s.saveEvents(ctx, round.Id, changes); err != nil {
+		if roundAborted {
+			s.startRound()
+			return
+		}
+
+		if err := s.saveEvents(ctx, round.Id, round.Events()); err != nil {
 			log.WithError(err).Warn("failed to store new round events")
 		}
 
@@ -330,8 +372,9 @@ func (s *covenantService) startFinalization() {
 	// TODO: understand how many payments must be popped from the queue and actually registered for the round
 	num := s.paymentRequests.len()
 	if num == 0 {
+		roundAborted = true
 		err := fmt.Errorf("no payments registered")
-		changes = round.Fail(fmt.Errorf("round aborted: %s", err))
+		round.Fail(fmt.Errorf("round aborted: %s", err))
 		log.WithError(err).Debugf("round %s aborted", round.Id)
 		return
 	}
@@ -339,23 +382,22 @@ func (s *covenantService) startFinalization() {
 		num = paymentsThreshold
 	}
 	payments := s.paymentRequests.pop(num)
-	changes, err = round.RegisterPayments(payments)
-	if err != nil {
-		changes = round.Fail(fmt.Errorf("failed to register payments: %s", err))
+	if _, err := round.RegisterPayments(payments); err != nil {
+		round.Fail(fmt.Errorf("failed to register payments: %s", err))
 		log.WithError(err).Warn("failed to register payments")
 		return
 	}
 
 	sweptRounds, err := s.repoManager.Rounds().GetSweptRounds(ctx)
 	if err != nil {
-		changes = round.Fail(fmt.Errorf("failed to retrieve swept rounds: %s", err))
+		round.Fail(fmt.Errorf("failed to retrieve swept rounds: %s", err))
 		log.WithError(err).Warn("failed to retrieve swept rounds")
 		return
 	}
 
 	unsignedPoolTx, tree, connectorAddress, err := s.builder.BuildPoolTx(s.pubkey, payments, s.minRelayFee, sweptRounds)
 	if err != nil {
-		changes = round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
+		round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
 		log.WithError(err).Warn("failed to create pool tx")
 		return
 	}
@@ -365,20 +407,20 @@ func (s *covenantService) startFinalization() {
 
 	connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(s.pubkey, unsignedPoolTx, payments, s.minRelayFee)
 	if err != nil {
-		changes = round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
+		round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
 		log.WithError(err).Warn("failed to create connectors and forfeit txs")
 		return
 	}
 
 	log.Debugf("forfeit transactions created for round %s", round.Id)
 
-	events, err := round.StartFinalization(connectorAddress, connectors, tree, unsignedPoolTx)
-	if err != nil {
-		changes = round.Fail(fmt.Errorf("failed to start finalization: %s", err))
+	if _, err := round.StartFinalization(
+		connectorAddress, connectors, tree, unsignedPoolTx,
+	); err != nil {
+		round.Fail(fmt.Errorf("failed to start finalization: %s", err))
 		log.WithError(err).Warn("failed to start finalization")
 		return
 	}
-	changes = append(changes, events...)
 
 	s.forfeitTxs.push(forfeitTxs)
 
@@ -389,14 +431,12 @@ func (s *covenantService) finalizeRound() {
 	defer s.startRound()
 
 	ctx := context.Background()
-	round, err := s.repoManager.Rounds().GetCurrentRound(ctx)
-	if err != nil {
-		log.WithError(err).Warn("failed to retrieve current round")
-		return
-	}
+	round := s.currentRound
 	if round.IsFailed() {
 		return
 	}
+
+	fmt.Printf("%+v\n", *round)
 
 	var changes []domain.RoundEvent
 	defer func() {
@@ -558,7 +598,7 @@ func (s *covenantService) listenToScannerNotifications() {
 					continue
 				}
 
-				if _, err := s.repoManager.Vtxos().RedeemVtxos(ctx, []domain.VtxoKey{vtxo.VtxoKey}); err != nil {
+				if err := s.repoManager.Vtxos().RedeemVtxos(ctx, []domain.VtxoKey{vtxo.VtxoKey}); err != nil {
 					log.WithError(err).Warn("failed to redeem vtxos, retrying...")
 					continue
 				}

@@ -29,6 +29,11 @@ service ArkService {
       get: "/v1/round/{txid}"
     };
   };
+  rpc GetRoundById(GetRoundByIdRequest) returns (GetRoundByIdResponse) {
+    option (google.api.http) = {
+      get: "/v1/round/id/{id}"
+    };
+  };
   rpc GetEventStream(GetEventStreamRequest) returns (stream GetEventStreamResponse) {
     option (google.api.http) = {
       get: "/v1/events"
@@ -92,6 +97,13 @@ message GetRoundResponse {
   Round round = 1;
 }
 
+message GetRoundByIdRequest {
+  string id = 1;
+}
+message GetRoundByIdResponse {
+  Round round = 1;
+}
+
 message GetEventStreamRequest {}
 message GetEventStreamResponse {
   oneof event {
@@ -106,8 +118,8 @@ message PingRequest {
   string payment_id = 1;
 }
 message PingResponse {
-  // TODO: improve this response (returns oneof the round event)
   repeated string forfeit_txs = 1;
+  RoundFinalizationEvent event = 2;
 }
 
 message ListVtxosRequest {
@@ -166,6 +178,14 @@ message RoundFailed {
 
 // TYPES
 
+enum RoundStage {
+  ROUND_STAGE_UNSPECIFIED = 0;
+  ROUND_STAGE_REGISTRATION = 1;
+  ROUND_STAGE_FINALIZATION = 2;
+  ROUND_STAGE_FINALIZED = 3;
+  ROUND_STAGE_FAILED = 4;
+}
+
 message Round {
   string id = 1;
   int64 start = 2;
@@ -174,6 +194,7 @@ message Round {
   Tree congestion_tree = 5;
   repeated string forfeit_txs = 6;
   repeated string connectors = 7;
+  RoundStage stage = 8;
 }
 
 message Input {

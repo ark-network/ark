@@ -27,9 +27,13 @@ func (s *service) DeriveConnectorAddress(ctx context.Context) (string, error) {
 func (s *service) ListConnectorUtxos(
 	ctx context.Context, connectorAddress string,
 ) ([]ports.TxInput, error) {
+	addresses := make([]string, 0)
+	if len(connectorAddress) > 0 {
+		addresses = append(addresses, connectorAddress)
+	}
 	res, err := s.accountClient.ListUtxos(ctx, &pb.ListUtxosRequest{
 		AccountName: connectorAccount,
-		Addresses:   []string{connectorAddress},
+		Addresses:   addresses,
 	})
 	if err != nil {
 		return nil, err
@@ -37,9 +41,6 @@ func (s *service) ListConnectorUtxos(
 
 	utxos := make([]ports.TxInput, 0)
 	for _, utxo := range res.GetSpendableUtxos().GetUtxos() {
-		utxos = append(utxos, utxo)
-	}
-	for _, utxo := range res.GetLockedUtxos().GetUtxos() {
 		utxos = append(utxos, utxo)
 	}
 

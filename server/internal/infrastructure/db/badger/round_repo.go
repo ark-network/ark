@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 
 	"github.com/ark-network/ark/internal/core/domain"
-	dbtypes "github.com/ark-network/ark/internal/infrastructure/db/types"
 	"github.com/dgraph-io/badger/v4"
 	"github.com/timshannon/badgerhold/v4"
 )
@@ -17,7 +16,7 @@ type roundRepository struct {
 	store *badgerhold.Store
 }
 
-func NewRoundRepository(config ...interface{}) (dbtypes.RoundStore, error) {
+func NewRoundRepository(config ...interface{}) (domain.RoundRepository, error) {
 	if len(config) != 2 {
 		return nil, fmt.Errorf("invalid config")
 	}
@@ -49,20 +48,6 @@ func (r *roundRepository) AddOrUpdateRound(
 	ctx context.Context, round domain.Round,
 ) error {
 	return r.addOrUpdateRound(ctx, round)
-}
-
-func (r *roundRepository) GetCurrentRound(
-	ctx context.Context,
-) (*domain.Round, error) {
-	query := badgerhold.Where("Stage.Ended").Eq(false).And("Stage.Failed").Eq(false)
-	rounds, err := r.findRound(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	if len(rounds) <= 0 {
-		return nil, fmt.Errorf("ongoing round not found")
-	}
-	return &rounds[0], nil
 }
 
 func (r *roundRepository) GetRoundWithId(
