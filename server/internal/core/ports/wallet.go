@@ -2,9 +2,13 @@ package ports
 
 import (
 	"context"
+	"errors"
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
+
+// ErrNonFinalBIP68 is returned when a transaction spending a CSV-locked output is not final.
+var ErrNonFinalBIP68 = errors.New("non-final BIP68 sequence")
 
 type WalletService interface {
 	BlockchainScanner

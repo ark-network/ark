@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
 
+	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/btcsuite/btcd/btcutil"
 	log "github.com/sirupsen/logrus"
 )
@@ -37,13 +39,16 @@ func (f *esploraClient) broadcast(txhex string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		fmt.Printf("+%v\n", resp.Body)
-		fmt.Println(resp.Status)
-		var content string // read the response body
-		if _, err := resp.Body.Read([]byte(content)); err != nil {
-			return fmt.Errorf("broadcast endpoint HTTP error: %s, tx = %s , error = %s", resp.Status, txhex, err.Error())
+		content, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
 		}
-		return fmt.Errorf("broadcast endpoint HTTP error: %s, tx = %s , error = %s", resp.Status, txhex, content)
+
+		if strings.Contains(strings.ToLower(string(content)), "non-BIP68-final") {
+			return ports.ErrNonFinalBIP68
+		}
+
+		return fmt.Errorf("failed to broadcast transaction: %s (%s, %s)", txhex, resp.Status, content)
 	}
 
 	return nil
