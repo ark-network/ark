@@ -2,14 +2,11 @@ package main
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
+	arkgrpcclient "github.com/ark-network/ark-sdk/grpc"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/urfave/cli/v2"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 type vtxo struct {
@@ -89,29 +86,6 @@ func getClientFromState(ctx *cli.Context) (arkv1.ArkServiceClient, func(), error
 }
 
 func getClient(addr string) (arkv1.ArkServiceClient, func(), error) {
-	creds := insecure.NewCredentials()
-	port := 80
-	if strings.HasPrefix(addr, "https://") {
-		addr = strings.TrimPrefix(addr, "https://")
-		creds = credentials.NewTLS(nil)
-		port = 443
-	}
-	if !strings.Contains(addr, ":") {
-		addr = fmt.Sprintf("%s:%d", addr, port)
-	}
-	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(creds))
-	if err != nil {
-		return nil, nil, err
-	}
-
-	client := arkv1.NewArkServiceClient(conn)
-
-	closeFn := func() {
-		err := conn.Close()
-		if err != nil {
-			fmt.Printf("error closing connection: %s\n", err)
-		}
-	}
-
-	return client, closeFn, nil
+	client, cleanFn, err := arkgrpcclient.New(addr)
+	return client.Service(), cleanFn, err
 }
