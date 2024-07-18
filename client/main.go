@@ -24,7 +24,7 @@ var (
 		Name:  "balance",
 		Usage: "Shows the onchain and offchain balance of the Ark wallet",
 		Action: func(ctx *cli.Context) error {
-			cli, err := getCLI(ctx)
+			cli, err := getCLIFromState(ctx)
 			if err != nil {
 				return err
 			}
@@ -66,7 +66,7 @@ var (
 		Name:  "init",
 		Usage: "Initialize your Ark wallet with an encryption password, and connect it to an ASP",
 		Action: func(ctx *cli.Context) error {
-			cli, err := getCLI(ctx)
+			cli, err := getCLIFromFlags(ctx)
 			if err != nil {
 				return err
 			}
@@ -80,7 +80,7 @@ var (
 		Name:  "onboard",
 		Usage: "Onboard the Ark by lifting your funds",
 		Action: func(ctx *cli.Context) error {
-			cli, err := getCLI(ctx)
+			cli, err := getCLIFromState(ctx)
 			if err != nil {
 				return err
 			}
@@ -93,7 +93,7 @@ var (
 		Name:  "send",
 		Usage: "Send your onchain or offchain funds to one or many receivers",
 		Action: func(ctx *cli.Context) error {
-			cli, err := getCLI(ctx)
+			cli, err := getCLIFromState(ctx)
 			if err != nil {
 				return err
 			}
@@ -106,7 +106,7 @@ var (
 		Name:  "receive",
 		Usage: "Shows both onchain and offchain addresses",
 		Action: func(ctx *cli.Context) error {
-			cli, err := getCLI(ctx)
+			cli, err := getCLIFromState(ctx)
 			if err != nil {
 				return err
 			}
@@ -120,7 +120,7 @@ var (
 		Usage: "Redeem your offchain funds, either collaboratively or unilaterally",
 		Flags: []cli.Flag{&flags.AddressFlag, &flags.AmountToRedeemFlag, &flags.ForceFlag, &flags.PasswordFlag, &flags.EnableExpiryCoinselectFlag},
 		Action: func(ctx *cli.Context) error {
-			cli, err := getCLI(ctx)
+			cli, err := getCLIFromState(ctx)
 			if err != nil {
 				return err
 			}
@@ -170,15 +170,22 @@ func main() {
 	}
 }
 
-// getCLI returns the associated CLI implementation based on the network
-func getCLI(ctx *cli.Context) (interfaces.CLI, error) {
+func getCLIFromState(ctx *cli.Context) (interfaces.CLI, error) {
 	state, err := utils.GetState(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	networkName := state[utils.NETWORK]
+	return getCLI(networkName)
+}
 
+func getCLIFromFlags(ctx *cli.Context) (interfaces.CLI, error) {
+	networkName := strings.ToLower(ctx.String("network"))
+	return getCLI(networkName)
+}
+
+func getCLI(networkName string) (interfaces.CLI, error) {
 	switch networkName {
 	case common.Liquid.Name, common.LiquidTestNet.Name, common.LiquidRegTest.Name:
 		return covenant.New(), nil

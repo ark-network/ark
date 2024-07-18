@@ -75,6 +75,7 @@ type service struct {
 	cfg    WalletConfig
 
 	chainSource chain.Interface
+	scanner     chain.Interface
 
 	esploraClient *esploraClient
 
@@ -82,17 +83,6 @@ type service struct {
 	watchedScripts     map[string]struct{}
 
 	aspTaprootAddr waddrmgr.ManagedPubKeyAddress
-}
-
-func WithChainSource(chainSource chain.Interface) WalletOption {
-	return func(s *service) error {
-		if s.chainSource != nil {
-			return errors.New("chain source already set")
-		}
-
-		s.chainSource = chainSource
-		return nil
-	}
 }
 
 // WithNeutrino creates a start a neutrino node using the provided service datadir
@@ -139,8 +129,11 @@ func WithNeutrino(initialPeer string) WalletOption {
 		}
 
 		chainSrc := chain.NewNeutrinoClient(netParams, neutrinoSvc)
-
-		return WithChainSource(chainSrc)(s)
+		scanner := chain.NewNeutrinoClient(netParams, neutrinoSvc)
+		if err := withChainSource(chainSrc)(s); err != nil {
+			return err
+		}
+		return withScanner(scanner)(s)
 	}
 }
 
@@ -636,7 +629,7 @@ func (s *service) WatchScripts(ctx context.Context, scripts []string) error {
 		addresses = append(addresses, addr)
 	}
 
-	if err := s.wallet.InternalWallet().ChainClient().NotifyReceived(addresses); err != nil {
+	if err := s.scanner.NotifyReceived(addresses); err != nil {
 		if err := s.UnwatchScripts(ctx, scripts); err != nil {
 			return fmt.Errorf("error while unwatching scripts: %w", err)
 		}
@@ -664,55 +657,50 @@ func (s *service) UnwatchScripts(ctx context.Context, scripts []string) error {
 	return nil
 }
 
-func (s *service) GetNotificationChannel(ctx context.Context) <-chan map[string]ports.VtxoWithValue {
+func (s *service) GetNotificationChannel(
+	ctx context.Context,
+) <-chan map[string]ports.VtxoWithValue {
 	ch := make(chan map[string]ports.VtxoWithValue)
 
-	// TODO: check if this is enough
-	sub, _ := s.wallet.SubscribeTransactions()
 	go func() {
-		for a := range sub.UnconfirmedTransactions() {
-			notification := s.castNotification(a.RawTx)
-			ch <- notification
+		for n := range s.scanner.Notifications() {
+			switch m := n.(type) {
+			case chain.RelevantTx:
+				notification := s.castNotification(m.TxRecord)
+				ch <- notification
+			case chain.FilteredBlockConnected:
+				for _, tx := range m.RelevantTxs {
+					notification := s.castNotification(tx)
+					ch <- notification
+				}
+			}
 		}
 	}()
 
 	return ch
 }
 
-func (s *service) IsTransactionConfirmed(ctx context.Context, txid string) (isConfirmed bool, blocktime int64, err error) {
+func (s *service) IsTransactionConfirmed(
+	ctx context.Context, txid string,
+) (isConfirmed bool, blocktime int64, err error) {
 	return s.esploraClient.getTxStatus(txid)
 }
 
-func (s status) IsInitialized() bool {
-	return s.initialized
-}
-
-func (s status) IsUnlocked() bool {
-	return s.unlocked
-}
-
-func (s status) IsSynced() bool {
-	return s.synced
-}
-
-func (s *service) castNotification(buf []byte) map[string]ports.VtxoWithValue {
-	tx := &wire.MsgTx{}
-	//nolint:all
-	tx.Deserialize(bytes.NewReader(buf))
+func (s *service) castNotification(tx *wtxmgr.TxRecord) map[string]ports.VtxoWithValue {
 	vtxos := make(map[string]ports.VtxoWithValue)
 
 	s.watchedScriptsLock.RLock()
 	defer s.watchedScriptsLock.RUnlock()
-	for outputIndex, txout := range tx.TxOut {
-		script := hex.EncodeToString(txout.PkScript)
 
+	for outputIndex, txout := range tx.MsgTx.TxOut {
+		script := hex.EncodeToString(txout.PkScript)
 		if _, ok := s.watchedScripts[script]; !ok {
 			continue
 		}
 
 		vtxos[script] = ports.VtxoWithValue{
 			VtxoKey: domain.VtxoKey{
-				Txid: tx.TxHash().String(),
+				Txid: tx.Hash.String(),
 				VOut: uint32(outputIndex),
 			},
 			Value: uint64(txout.Value),
@@ -736,11 +724,48 @@ func (s *service) deriveNextAddress(account accountName) (btcutil.Address, error
 	return s.wallet.NewAddress(lnwallet.WitnessPubKey, false, string(account))
 }
 
+func withChainSource(chainSource chain.Interface) WalletOption {
+	return func(s *service) error {
+		if s.chainSource != nil {
+			return errors.New("chain source already set")
+		}
+
+		s.chainSource = chainSource
+		return nil
+	}
+}
+
+func withScanner(chainSource chain.Interface) WalletOption {
+	return func(s *service) error {
+		if s.scanner != nil {
+			return errors.New("scanner already set")
+		}
+		if err := chainSource.Start(); err != nil {
+			return fmt.Errorf("failed to start scanner: %s", err)
+		}
+
+		s.scanner = chainSource
+		return nil
+	}
+}
+
 // status implements ports.WalletStatus interface
 type status struct {
 	initialized bool
 	unlocked    bool
 	synced      bool
+}
+
+func (s status) IsInitialized() bool {
+	return s.initialized
+}
+
+func (s status) IsUnlocked() bool {
+	return s.unlocked
+}
+
+func (s status) IsSynced() bool {
+	return s.synced
 }
 
 func fromOutputScript(script []byte, netParams *chaincfg.Params) (btcutil.Address, error) {
