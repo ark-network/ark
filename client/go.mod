@@ -12,8 +12,8 @@ require (
 	github.com/ark-network/ark v0.0.0-00010101000000-000000000000
 	github.com/ark-network/ark-sdk v0.0.0-00010101000000-000000000000
 	github.com/ark-network/ark/common v0.0.0
-	github.com/btcsuite/btcd v0.24.0
-	github.com/btcsuite/btcd/btcec/v2 v2.3.3
+	github.com/btcsuite/btcd v0.24.2
+	github.com/btcsuite/btcd/btcec/v2 v2.3.4
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0
 	github.com/urfave/cli/v2 v2.27.2
