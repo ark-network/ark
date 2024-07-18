@@ -20,12 +20,20 @@ type Service interface {
 	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error
 	SignVtxos(ctx context.Context, forfeitTxs []string) error
 	GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error)
+	GetRoundById(ctx context.Context, id string) (*domain.Round, error)
 	GetCurrentRound(ctx context.Context) (*domain.Round, error)
 	GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
-	UpdatePaymentStatus(ctx context.Context, id string) (unsignedForfeitTxs []string, err error)
-	ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, []domain.Vtxo, error)
+	UpdatePaymentStatus(
+		ctx context.Context, paymentId string,
+	) (unsignedForfeitTxs []string, currentRound *domain.Round, err error)
+	ListVtxos(
+		ctx context.Context, pubkey *secp256k1.PublicKey,
+	) (spendableVtxos, spentVtxos []domain.Vtxo, err error)
 	GetInfo(ctx context.Context) (*ServiceInfo, error)
-	Onboard(ctx context.Context, boardingTx string, congestionTree tree.CongestionTree, userPubkey *secp256k1.PublicKey) error
+	Onboard(
+		ctx context.Context, boardingTx string,
+		congestionTree tree.CongestionTree, userPubkey *secp256k1.PublicKey,
+	) error
 	TrustedOnboarding(ctx context.Context, userPubKey *secp256k1.PublicKey) (string, error)
 }
 

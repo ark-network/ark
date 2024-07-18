@@ -22,44 +22,7 @@ import (
 	"github.com/vulpemventures/go-elements/psetv2"
 )
 
-var (
-	paymentsThreshold = int64(128)
-	dustAmount        = uint64(450)
-)
-
-type ServiceInfo struct {
-	PubKey              string
-	RoundLifetime       int64
-	UnilateralExitDelay int64
-	RoundInterval       int64
-	Network             string
-	MinRelayFee         int64
-}
-
-type Service interface {
-	Start() error
-	Stop()
-	SpendVtxos(ctx context.Context, inputs []domain.VtxoKey) (string, error)
-	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error
-	SignVtxos(ctx context.Context, forfeitTxs []string) error
-	GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error)
-	GetRoundById(ctx context.Context, id string) (*domain.Round, error)
-	GetCurrentRound(ctx context.Context) (*domain.Round, error)
-	GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
-	UpdatePaymentStatus(ctx context.Context, id string) (unsignedForfeitTxs []string, round *domain.Round, err error)
-	ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, []domain.Vtxo, error)
-	GetInfo(ctx context.Context) (*ServiceInfo, error)
-	Onboard(ctx context.Context, boardingTx string, congestionTree tree.CongestionTree, userPubkey *secp256k1.PublicKey) error
-	TrustedOnboarding(ctx context.Context, userPubKey *secp256k1.PublicKey) (string, error)
-}
-
-type onboarding struct {
-	tx             string
-	congestionTree tree.CongestionTree
-	userPubkey     *secp256k1.PublicKey
-}
-
-type service struct {
+type covenantService struct {
 	network             common.Network
 	pubkey              *secp256k1.PublicKey
 	roundLifetime       int64
@@ -190,7 +153,7 @@ func (s *covenantService) ClaimVtxos(ctx context.Context, creds string, receiver
 	return s.paymentRequests.update(*payment)
 }
 
-func (s *service) UpdatePaymentStatus(_ context.Context, id string) ([]string, *domain.Round, error) {
+func (s *covenantService) UpdatePaymentStatus(_ context.Context, id string) ([]string, *domain.Round, error) {
 	err := s.paymentRequests.updatePingTimestamp(id)
 	if err != nil {
 		if _, ok := err.(errPaymentNotFound); ok {
@@ -220,11 +183,11 @@ func (s *covenantService) GetRoundByTxid(ctx context.Context, poolTxid string) (
 	return s.repoManager.Rounds().GetRoundWithTxid(ctx, poolTxid)
 }
 
-func (s *service) GetCurrentRound(ctx context.Context) (*domain.Round, error) {
+func (s *covenantService) GetCurrentRound(ctx context.Context) (*domain.Round, error) {
 	return domain.NewRoundFromEvents(s.currentRound.Events()), nil
 }
 
-func (s *service) GetRoundById(ctx context.Context, id string) (*domain.Round, error) {
+func (s *covenantService) GetRoundById(ctx context.Context, id string) (*domain.Round, error) {
 	return s.repoManager.Rounds().GetRoundWithId(ctx, id)
 }
 
@@ -435,8 +398,6 @@ func (s *covenantService) finalizeRound() {
 	if round.IsFailed() {
 		return
 	}
-
-	fmt.Printf("%+v\n", *round)
 
 	var changes []domain.RoundEvent
 	defer func() {
