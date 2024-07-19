@@ -45,6 +45,8 @@ func TestStore(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			datadir := t.TempDir()
 			store, err := tt.getStore(datadir)
 			require.NoError(t, err)
