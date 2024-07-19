@@ -27,7 +27,7 @@ services:
     environment:
       - ARK_WALLET_ADDR=oceand:18000
       - ARK_ROUND_INTERVAL=10
-      - ARK_NETWORK=regtest
+      - ARK_NETWORK=liquidregtest
       - ARK_LOG_LEVEL=5
       - ARK_ROUND_LIFETIME=512
       - ARK_DB_TYPE=sqlite
