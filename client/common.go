@@ -326,7 +326,7 @@ func getTxBlocktime(ctx *cli.Context, txid string) (confirmed bool, blocktime in
 func getNetwork(ctx *cli.Context) (*common.Network, *network.Network) {
 	state, err := getState(ctx)
 	if err != nil {
-		return &common.TestNet, &network.Testnet
+		return &common.LiquidTestNet, &network.Testnet
 	}
 
 	net, ok := state[NETWORK]
@@ -337,11 +337,11 @@ func getNetwork(ctx *cli.Context) (*common.Network, *network.Network) {
 }
 
 func networkFromString(net string) (*common.Network, *network.Network) {
-	if net == "testnet" {
-		return &common.TestNet, &network.Testnet
+	if net == common.LiquidTestNet.Name {
+		return &common.LiquidTestNet, &network.Testnet
 	}
-	if net == "regtest" {
-		return &common.RegTest, &network.Regtest
+	if net == common.LiquidRegTest.Name {
+		return &common.LiquidRegTest, &network.Regtest
 	}
 	return &common.Liquid, &network.Liquid
 }
