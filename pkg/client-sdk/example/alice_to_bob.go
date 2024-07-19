@@ -10,13 +10,15 @@ import (
 	"time"
 
 	arksdk "github.com/ark-network/ark-sdk"
+	"github.com/ark-network/ark-sdk/store"
+	"github.com/ark-network/ark-sdk/wallet"
 	log "github.com/sirupsen/logrus"
 )
 
 var (
 	aspUrl      = "http://localhost:8080"
 	clientType  = "rest"
-	walletType  = "singlekey"
+	walletType  = wallet.SingleKeyWallet
 	network     = "liquidregtest"
 	explorerURL = "http://localhost:3001"
 	password    = "password"
@@ -27,7 +29,7 @@ func main() {
 
 	log.Info("alice is setting up her ark wallet...")
 	aliceArkClient, err := arksdk.New(arksdk.Config{
-		StoreType: "inmemory",
+		StoreType: store.InMemoryStore,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -87,7 +89,7 @@ func main() {
 	fmt.Println("")
 	log.Info("bob is setting up his ark wallet...")
 	bobArkClient, err := arksdk.New(arksdk.Config{
-		StoreType: "inmemory",
+		StoreType: store.InMemoryStore,
 	})
 	if err != nil {
 		log.Fatal(err)

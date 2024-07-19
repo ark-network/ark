@@ -14,11 +14,11 @@ import (
 
 var (
 	supportedWallets = supportedType[wallet.WalletFactory]{
-		"singlekey": wallet.NewSingleKeyWallet,
+		wallet.SingleKeyWallet: wallet.NewSingleKeyWallet,
 	}
 	supportedClients = supportedType[client.ClientFactory]{
-		"grpc": grpcclient.NewClient,
-		"rest": restclient.NewClient,
+		client.GrpcClient: grpcclient.NewClient,
+		client.RestClient: restclient.NewClient,
 	}
 	supportedNetworks = supportedType[string]{
 		common.Liquid.Name:         "https://blockstream.info/liquid/api",

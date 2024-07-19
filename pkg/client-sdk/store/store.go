@@ -7,6 +7,11 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
+const (
+	InMemoryStore = "inmemory"
+	FileStore     = "file"
+)
+
 type StoreData struct {
 	AspUrl              string
 	AspPubkey           *secp256k1.PublicKey

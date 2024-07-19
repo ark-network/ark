@@ -12,8 +12,8 @@ import (
 
 var (
 	supportedStores = supportedType[store.StoreFactory]{
-		"inmemory": inmemorystore.NewStore,
-		"file":     filestore.NewStore,
+		store.InMemoryStore: inmemorystore.NewStore,
+		store.FileStore:     filestore.NewStore,
 	}
 )
 

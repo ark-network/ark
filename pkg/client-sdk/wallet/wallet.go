@@ -16,6 +16,10 @@ import (
 	"github.com/ark-network/ark/common"
 )
 
+const (
+	SingleKeyWallet = "singlekey"
+)
+
 type Wallet interface {
 	Create(ctx context.Context, password, key string) (seed string, err error)
 	Lock(ctx context.Context, password string) (err error)

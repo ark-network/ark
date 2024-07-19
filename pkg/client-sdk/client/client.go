@@ -8,6 +8,11 @@ import (
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 )
 
+const (
+	GrpcClient = "grpc"
+	RestClient = "rest"
+)
+
 type RoundEventChannel struct {
 	Event *arkv1.GetEventStreamResponse
 	Err   error
