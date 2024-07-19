@@ -159,7 +159,7 @@ func sendOnchain(ctx *cli.Context, receivers []receiver) (string, error) {
 		return "", err
 	}
 
-	feeAmount := uint64(math.Ceil(float64(size) * feeRate))
+	feeAmount := uint64(math.Ceil(float64(size)*feeRate) + 50)
 
 	if change > feeAmount {
 		updater.Upsbt.UnsignedTx.TxOut[len(updater.Upsbt.Outputs)-1].Value = int64(change - feeAmount)

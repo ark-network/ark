@@ -1,8 +1,8 @@
 version: "3.7"
 
 services:
-  clarkd:
-    container_name: clarkd 
+  arkd:
+    container_name: arkd 
     build: 
       context: .
       dockerfile: Dockerfile
@@ -13,6 +13,9 @@ services:
       - ARK_LOG_LEVEL=5
       - ARK_ROUND_LIFETIME=512
       - ARK_TX_BUILDER_TYPE=covenantless
+      - ARK_MIN_RELAY_FEE=200
+      - ARK_NEUTRINO_PEER=bitcoin:18444
+      - ARK_ESPLORA_URL=http://chopsticks:3000
     ports:
       - "6000:6000"
 

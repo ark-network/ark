@@ -353,85 +353,89 @@ func (s *covenantlessService) startFinalization() {
 	}
 	log.Debugf("pool tx created for round %s", round.Id)
 
-	sweepClosure := bitcointree.CSVSigClosure{
-		Pubkey:  s.pubkey,
-		Seconds: uint(s.roundLifetime),
-	}
+	if len(tree) > 0 {
+		sweepClosure := bitcointree.CSVSigClosure{
+			Pubkey:  s.pubkey,
+			Seconds: uint(s.roundLifetime),
+		}
 
-	sweepTapLeaf, err := sweepClosure.Leaf()
-	if err != nil {
-		return
-	}
-
-	sweepTapTree := txscript.AssembleTaprootScriptTree(*sweepTapLeaf)
-	root := sweepTapTree.RootNode.TapHash()
-
-	coordinator, err := s.createTreeCoordinatorSession(tree, cosignersPubKeys, root)
-	if err != nil {
-		round.Fail(fmt.Errorf("failed to create tree coordinator: %s", err))
-		log.WithError(err).Warn("failed to create tree coordinator")
-		return
-	}
-
-	signers := make([]bitcointree.SignerSession, 0)
-
-	for _, seckey := range cosigners {
-		signer := bitcointree.NewTreeSignerSession(
-			seckey, tree, int64(s.minRelayFee), root.CloneBytes(),
-		)
-
-		// TODO nonces should be sent by the sender
-		nonces, err := signer.GetNonces()
+		sweepTapLeaf, err := sweepClosure.Leaf()
 		if err != nil {
-			round.Fail(fmt.Errorf("failed to get nonces: %s", err))
-			log.WithError(err).Warn("failed to get nonces")
 			return
 		}
 
-		if err := coordinator.AddNonce(seckey.PubKey(), nonces); err != nil {
-			round.Fail(fmt.Errorf("failed to add nonce: %s", err))
-			log.WithError(err).Warn("failed to add nonce")
-			return
-		}
+		sweepTapTree := txscript.AssembleTaprootScriptTree(*sweepTapLeaf)
+		root := sweepTapTree.RootNode.TapHash()
 
-		signers = append(signers, signer)
-	}
-
-	aggragatedNonces, err := coordinator.AggregateNonces()
-	if err != nil {
-		round.Fail(fmt.Errorf("failed to aggregate nonces: %s", err))
-		log.WithError(err).Warn("failed to aggregate nonces")
-		return
-	}
-
-	// TODO aggragated nonces and public keys should be sent back to signer
-	// TODO signing should be done client-side (except for the ASP)
-	for i, signer := range signers {
-		if err := signer.SetKeys(cosignersPubKeys, aggragatedNonces); err != nil {
-			round.Fail(fmt.Errorf("failed to set keys: %s", err))
-			log.WithError(err).Warn("failed to set keys")
-			return
-		}
-
-		sig, err := signer.Sign()
+		coordinator, err := s.createTreeCoordinatorSession(tree, cosignersPubKeys, root)
 		if err != nil {
-			round.Fail(fmt.Errorf("failed to sign: %s", err))
-			log.WithError(err).Warn("failed to sign")
+			round.Fail(fmt.Errorf("failed to create tree coordinator: %s", err))
+			log.WithError(err).Warn("failed to create tree coordinator")
 			return
 		}
 
-		if err := coordinator.AddSig(cosignersPubKeys[i], sig); err != nil {
-			round.Fail(fmt.Errorf("failed to add sig: %s", err))
-			log.WithError(err).Warn("failed to add sig")
+		signers := make([]bitcointree.SignerSession, 0)
+
+		for _, seckey := range cosigners {
+			signer := bitcointree.NewTreeSignerSession(
+				seckey, tree, int64(s.minRelayFee), root.CloneBytes(),
+			)
+
+			// TODO nonces should be sent by the sender
+			nonces, err := signer.GetNonces()
+			if err != nil {
+				round.Fail(fmt.Errorf("failed to get nonces: %s", err))
+				log.WithError(err).Warn("failed to get nonces")
+				return
+			}
+
+			if err := coordinator.AddNonce(seckey.PubKey(), nonces); err != nil {
+				round.Fail(fmt.Errorf("failed to add nonce: %s", err))
+				log.WithError(err).Warn("failed to add nonce")
+				return
+			}
+
+			signers = append(signers, signer)
+		}
+
+		aggragatedNonces, err := coordinator.AggregateNonces()
+		if err != nil {
+			round.Fail(fmt.Errorf("failed to aggregate nonces: %s", err))
+			log.WithError(err).Warn("failed to aggregate nonces")
 			return
 		}
-	}
 
-	signedTree, err := coordinator.SignTree()
-	if err != nil {
-		round.Fail(fmt.Errorf("failed to sign tree: %s", err))
-		log.WithError(err).Warn("failed to sign tree")
-		return
+		// TODO aggragated nonces and public keys should be sent back to signer
+		// TODO signing should be done client-side (except for the ASP)
+		for i, signer := range signers {
+			if err := signer.SetKeys(cosignersPubKeys, aggragatedNonces); err != nil {
+				round.Fail(fmt.Errorf("failed to set keys: %s", err))
+				log.WithError(err).Warn("failed to set keys")
+				return
+			}
+
+			sig, err := signer.Sign()
+			if err != nil {
+				round.Fail(fmt.Errorf("failed to sign: %s", err))
+				log.WithError(err).Warn("failed to sign")
+				return
+			}
+
+			if err := coordinator.AddSig(cosignersPubKeys[i], sig); err != nil {
+				round.Fail(fmt.Errorf("failed to add sig: %s", err))
+				log.WithError(err).Warn("failed to add sig")
+				return
+			}
+		}
+
+		signedTree, err := coordinator.SignTree()
+		if err != nil {
+			round.Fail(fmt.Errorf("failed to sign tree: %s", err))
+			log.WithError(err).Warn("failed to sign tree")
+			return
+		}
+
+		tree = signedTree
 	}
 
 	connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(s.pubkey, unsignedPoolTx, payments, s.minRelayFee)
@@ -444,7 +448,7 @@ func (s *covenantlessService) startFinalization() {
 	log.Debugf("forfeit transactions created for round %s", round.Id)
 
 	if _, err := round.StartFinalization(
-		connectorAddress, connectors, signedTree, unsignedPoolTx,
+		connectorAddress, connectors, tree, unsignedPoolTx,
 	); err != nil {
 		round.Fail(fmt.Errorf("failed to start finalization: %s", err))
 		log.WithError(err).Warn("failed to start finalization")
