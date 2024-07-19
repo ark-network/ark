@@ -1,4 +1,4 @@
-package e2e
+package e2e_test
 
 import (
 	"encoding/json"
@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	composePath = "../../../docker-compose.regtest.yml"
+	composePath = "../../../../docker-compose.regtest.yml"
 	ONE_BTC     = 1_0000_0000
 )
 
@@ -76,7 +76,7 @@ func TestMain(m *testing.M) {
 
 	time.Sleep(3 * time.Second)
 
-	_, err = utils.RunArkCommand("init", "--ark-url", "localhost:6000", "--password", utils.Password, "--network", "regtest", "--explorer", "http://chopsticks-liquid:3000")
+	_, err = utils.RunArkCommand("init", "--ark-url", "localhost:6000", "--password", utils.Password, "--network", "liquidregtest", "--explorer", "http://chopsticks-liquid:3000")
 	if err != nil {
 		fmt.Printf("error initializing ark config: %s", err)
 		os.Exit(1)

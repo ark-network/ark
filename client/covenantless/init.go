@@ -8,16 +8,16 @@ import (
 
 	"github.com/ark-network/ark-cli/utils"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/urfave/cli/v2"
 )
 
 var explorerUrls = map[string]string{
-	chaincfg.MainNetParams.Name:       "https://blockstream.info/liquid/api",
-	chaincfg.TestNet3Params.Name:      "https://blockstream.info/liquidtestnet/api",
-	chaincfg.RegressionNetParams.Name: "http://localhost:3001",
+	common.Bitcoin.Name:        "https://blockstream.info/api",
+	common.BitcoinTestNet.Name: "https://blockstream.info/testnet/api",
+	common.BitcoinRegTest.Name: "http://localhost:3000",
 }
 
 func (c *clArkBitcoinCLI) Init(ctx *cli.Context) error {
@@ -31,7 +31,7 @@ func (c *clArkBitcoinCLI) Init(ctx *cli.Context) error {
 	if len(url) <= 0 {
 		return fmt.Errorf("invalid ark url")
 	}
-	if net != "liquid" && net != "testnet" && net != "regtest" {
+	if net != common.Bitcoin.Name && net != common.BitcoinTestNet.Name && net != common.BitcoinRegTest.Name {
 		return fmt.Errorf("invalid network")
 	}
 

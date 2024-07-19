@@ -10,6 +10,7 @@ import (
 
 	"github.com/ark-network/ark-cli/utils"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/urfave/cli/v2"
@@ -17,9 +18,9 @@ import (
 )
 
 var explorerUrls = map[string]string{
-	network.Liquid.Name:  "https://blockstream.info/liquid/api",
-	network.Testnet.Name: "https://blockstream.info/liquidtestnet/api",
-	network.Regtest.Name: "http://localhost:3001",
+	common.Liquid.Name:        "https://blockstream.info/liquid/api",
+	common.LiquidTestNet.Name: "https://blockstream.info/liquidtestnet/api",
+	common.LiquidRegTest.Name: "http://localhost:3001",
 }
 
 func (c *covenantLiquidCLI) Init(ctx *cli.Context) error {
@@ -33,18 +34,13 @@ func (c *covenantLiquidCLI) Init(ctx *cli.Context) error {
 	if len(url) <= 0 {
 		return fmt.Errorf("invalid ark url")
 	}
-	if net != "liquid" && net != "testnet" && net != "regtest" {
+	if net != common.Liquid.Name && net != common.LiquidTestNet.Name && net != common.LiquidRegTest.Name {
 		return fmt.Errorf("invalid network")
 	}
 
 	if len(explorer) > 0 {
 		explorerURL = explorer
-		net, err := utils.GetNetwork(ctx)
-		if err != nil {
-			return err
-		}
-
-		if err := testEsploraEndpoint(toElementsNetwork(net), explorerURL); err != nil {
+		if err := testEsploraEndpoint(toElementsNetworkFromName(net), explorerURL); err != nil {
 			return fmt.Errorf("failed to connect with explorer: %s", err)
 		}
 	} else {
@@ -72,9 +68,10 @@ func generateRandomPrivateKey() (*secp256k1.PrivateKey, error) {
 }
 
 func testEsploraEndpoint(net network.Network, url string) error {
-	resp, err := http.Get(fmt.Sprintf("%s/asset/%s", url, net.AssetID))
+	endpoint := fmt.Sprintf("%s/asset/%s", url, net.AssetID)
+	resp, err := http.Get(endpoint)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to connect with explorer: (%s) %s", endpoint, err)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
@@ -82,7 +79,7 @@ func testEsploraEndpoint(net network.Network, url string) error {
 		return err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf(string(body))
+		return fmt.Errorf(endpoint + " " + string(body))
 	}
 
 	return nil

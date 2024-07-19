@@ -31,6 +31,7 @@ services:
       - ARK_LOG_LEVEL=5
       - ARK_ROUND_LIFETIME=512
       - ARK_DB_TYPE=sqlite
+      - ARK_TX_BUILDER_TYPE=covenant
     ports:
       - "8080:6000"
 

@@ -86,8 +86,13 @@ func (c *Config) Validate() error {
 	if c.RoundInterval < 2 {
 		return fmt.Errorf("invalid round interval, must be at least 2 seconds")
 	}
-	if c.Network.Name != "liquid" && c.Network.Name != "testnet" && c.Network.Name != "regtest" {
-		return fmt.Errorf("invalid network, must be liquid, testnet or regtest")
+	if c.Network.Name != common.Liquid.Name &&
+		c.Network.Name != common.LiquidTestNet.Name &&
+		c.Network.Name != common.LiquidRegTest.Name &&
+		c.Network.Name != common.Bitcoin.Name &&
+		c.Network.Name != common.BitcoinTestNet.Name &&
+		c.Network.Name != common.BitcoinRegTest.Name {
+		return fmt.Errorf("invalid network, must be one of: liquid, liquidtestnet, liquidregtest, bitcoin, testnet, regtest")
 	}
 	if len(c.WalletAddr) <= 0 {
 		return fmt.Errorf("missing onchain wallet address")
