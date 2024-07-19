@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ark-network/ark-sdk/internal/utils"
 	"github.com/ark-network/ark-sdk/store"
-	"github.com/ark-network/ark/common"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
@@ -37,7 +37,7 @@ func (d storeData) isEmpty() bool {
 }
 
 func (d storeData) decode() store.StoreData {
-	network := networkFromString(d.Network)
+	network := utils.NetworkFromString(d.Network)
 	roundLifetime, _ := strconv.Atoi(d.RoundLifetime)
 	unilateralExitDelay, _ := strconv.Atoi(d.UnilateralExitDelay)
 	minRelayFee, _ := strconv.Atoi(d.MinRelayFee)
@@ -92,7 +92,7 @@ func NewStore(args ...interface{}) (store.Store, error) {
 	fileStore := &Store{filePath}
 
 	if _, err := fileStore.open(); err != nil {
-		return nil, fmt.Errorf("failed to open store")
+		return nil, fmt.Errorf("failed to open store: %s", err)
 	}
 
 	return fileStore, nil
@@ -102,6 +102,7 @@ func (s *Store) AddData(ctx context.Context, data store.StoreData) error {
 	sd := &storeData{
 		AspUrl:              data.AspUrl,
 		AspPubkey:           hex.EncodeToString(data.AspPubkey.SerializeCompressed()),
+		WalletType:          data.WalletType,
 		ClientType:          data.ClientType,
 		ExplorerURL:         data.ExplorerURL,
 		Network:             data.Network.Name,
@@ -158,11 +159,15 @@ func (s *Store) open() (*storeData, error) {
 func (s *Store) write(data *storeData) error {
 	file, err := os.ReadFile(s.filePath)
 	if err != nil {
-		return err
+		if !os.IsNotExist(err) {
+			return err
+		}
 	}
 	currentData := map[string]string{}
-	if err := json.Unmarshal(file, &data); err != nil {
-		return fmt.Errorf("failed to read file store: %s", err)
+	if len(file) > 0 {
+		if err := json.Unmarshal(file, &currentData); err != nil {
+			return fmt.Errorf("failed to read file store: %s", err)
+		}
 	}
 
 	mergedData := merge(currentData, data.asMap())
@@ -174,6 +179,7 @@ func (s *Store) write(data *storeData) error {
 
 	err = os.WriteFile(s.filePath, jsonString, 0755)
 	if err != nil {
+		fmt.Println("AAAA")
 		return err
 	}
 
@@ -218,23 +224,4 @@ func merge(maps ...map[string]string) map[string]string {
 		}
 	}
 	return merge
-}
-
-func networkFromString(net string) common.Network {
-	switch net {
-	case common.Liquid.Name:
-		return common.Liquid
-	case common.LiquidTestNet.Name:
-		return common.LiquidTestNet
-	case common.LiquidRegTest.Name:
-		return common.LiquidRegTest
-	case common.BitcoinTestNet.Name:
-		return common.BitcoinTestNet
-	case common.BitcoinRegTest.Name:
-		return common.BitcoinRegTest
-	case common.Bitcoin.Name:
-		fallthrough
-	default:
-		return common.Bitcoin
-	}
 }

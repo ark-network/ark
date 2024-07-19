@@ -12,6 +12,7 @@ import (
 
 	"github.com/ark-network/ark-sdk/client"
 	"github.com/ark-network/ark-sdk/explorer"
+	"github.com/ark-network/ark-sdk/internal/utils"
 	"github.com/ark-network/ark-sdk/store"
 	"github.com/ark-network/ark-sdk/wallet"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
@@ -146,7 +147,7 @@ func (a *arkClient) Init(ctx context.Context, args InitArgs) error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to asp: %s", err)
 	}
-	network := networkFromString(resp.GetNetwork())
+	network := utils.NetworkFromString(resp.GetNetwork())
 
 	buf, err := hex.DecodeString(resp.GetPubkey())
 	if err != nil {
@@ -759,7 +760,7 @@ func (a *arkClient) addInputs(
 	}
 
 	if len(delayedUtxos) > 0 {
-		_, leafProof, script, _, err := computeVtxoTaprootScript(
+		_, leafProof, script, _, err := utils.ComputeVtxoTaprootScript(
 			userPubkey, aspPubkey, uint(a.UnilateralExitDelay), net,
 		)
 		if err != nil {
@@ -913,7 +914,7 @@ func (a *arkClient) coinSelectOnchain(
 	fetchedUtxos = make([]explorer.Utxo, 0)
 	for _, offchainAddr := range offchainAddrs {
 		_, userPubkey, aspPubkey, _ := common.DecodeAddress(offchainAddr)
-		_, _, _, addr, err := computeVtxoTaprootScript(
+		_, _, _, addr, err := utils.ComputeVtxoTaprootScript(
 			userPubkey, aspPubkey, uint(a.UnilateralExitDelay), net,
 		)
 		if err != nil {

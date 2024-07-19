@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/ark-network/ark-sdk/client"
+	"github.com/ark-network/ark-sdk/internal/utils"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
@@ -194,7 +195,7 @@ func (a *arkClient) validateOffChainReceiver(
 ) error {
 	found := false
 	net := a.explorer.GetNetwork()
-	outputTapKey, _, _, _, err := computeVtxoTaprootScript(
+	outputTapKey, _, _, _, err := utils.ComputeVtxoTaprootScript(
 		userPubkey, aspPubkey, uint(a.UnilateralExitDelay), net,
 	)
 	if err != nil {

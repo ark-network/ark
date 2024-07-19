@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"syscall/js"
 
+	"github.com/ark-network/ark-sdk/internal/utils"
 	"github.com/ark-network/ark-sdk/store"
 	walletstore "github.com/ark-network/ark-sdk/wallet/singlekey/store"
-	"github.com/ark-network/ark/common"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
@@ -85,7 +85,7 @@ func (s *localStorageStore) GetData(ctx context.Context) (*store.StoreData, erro
 	if err != nil {
 		return nil, err
 	}
-	network := networkFromString(s.store.Call("getItem", "network").String())
+	network := utils.NetworkFromString(s.store.Call("getItem", "network").String())
 	roundLifetime, _ := strconv.Atoi(s.store.Call("getItem", "round_lifetime").String())
 	unilateralExitDelay, _ := strconv.Atoi(s.store.Call("getItem", "unilateral_exit_delay").String())
 	minRelayFee, _ := strconv.Atoi(s.store.Call("getItem", "min_relay_fee").String())
@@ -160,23 +160,4 @@ func (s *localStorageStore) writeWalletData(data *walletData) error {
 		s.store.Call("setItem", key, value)
 	}
 	return nil
-}
-
-func networkFromString(net string) common.Network {
-	switch net {
-	case common.Liquid.Name:
-		return common.Liquid
-	case common.LiquidTestNet.Name:
-		return common.LiquidTestNet
-	case common.LiquidRegTest.Name:
-		return common.LiquidRegTest
-	case common.BitcoinTestNet.Name:
-		return common.BitcoinTestNet
-	case common.BitcoinRegTest.Name:
-		return common.BitcoinRegTest
-	case common.Bitcoin.Name:
-		fallthrough
-	default:
-		return common.Bitcoin
-	}
 }
