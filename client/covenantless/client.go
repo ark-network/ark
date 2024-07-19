@@ -10,6 +10,7 @@ import (
 
 	"github.com/ark-network/ark-cli/utils"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil/psbt"
@@ -269,20 +270,23 @@ func handleRoundStream(
 				return "", err
 			}
 
-			// roundLifetime, err := utils.GetRoundLifetime(ctx)
-			// if err != nil {
-			// 	return "", err
-			// }
+			roundLifetime, err := utils.GetRoundLifetime(ctx)
+			if err != nil {
+				return "", err
+			}
 
-			// TODO validate the congestion (need the cosigners pubkeys)
-			// if !isOnchainOnly(receivers) {
-			// validate the congestion tree
-			// if err := bitcointree.ValidateCongestionTree(
-			// 	congestionTree, poolTx, aspPubkey, int64(roundLifetime),
-			// ); err != nil {
-			// 	return "", err
-			// }
-			// }
+			minRelayFee, err := utils.GetMinRelayFee(ctx)
+			if err != nil {
+				return "", err
+			}
+
+			if !isOnchainOnly(receivers) {
+				if err := bitcointree.ValidateCongestionTree(
+					congestionTree, poolTx, aspPubkey, int64(roundLifetime), int64(minRelayFee),
+				); err != nil {
+					return "", err
+				}
+			}
 
 			// TODO bitcoin validateConnectors
 			// if err := common.ValidateConnectors(poolTx, connectors); err != nil {
@@ -490,4 +494,19 @@ func ping(
 	}(ticker)
 
 	return ticker.Stop
+}
+
+func isOnchainOnly(receivers []*arkv1.Output) bool {
+	for _, receiver := range receivers {
+		isOnChain, _, _, err := decodeReceiverAddress(receiver.Address)
+		if err != nil {
+			continue
+		}
+
+		if !isOnChain {
+			return false
+		}
+	}
+
+	return true
 }

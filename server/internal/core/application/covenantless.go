@@ -210,11 +210,11 @@ func (s *covenantlessService) Onboard(
 		return fmt.Errorf("failed to parse boarding tx: %s", err)
 	}
 
-	// if err := bitcointree.ValidateCongestionTree(
-	// 	congestionTree, boardingTx, s.pubkey, s.roundLifetime, []*secp256k1.PublicKey{s.pubkey}, int64(s.minRelayFee),
-	// ); err != nil {
-	// 	return err
-	// }
+	if err := bitcointree.ValidateCongestionTree(
+		congestionTree, boardingTx, s.pubkey, s.roundLifetime, int64(s.minRelayFee),
+	); err != nil {
+		return err
+	}
 
 	extracted, err := psbt.Extract(ptx)
 	if err != nil {

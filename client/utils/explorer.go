@@ -354,6 +354,5 @@ func parseBitcoinTx(txStr string) (string, string, error) {
 	txhex := hex.EncodeToString(txBuf.Bytes())
 	txid := tx.TxHash().String()
 
-	fmt.Println(txhex, txid)
 	return txhex, txid, nil
 }

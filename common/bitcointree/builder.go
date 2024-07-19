@@ -26,7 +26,7 @@ func CraftSharedOutput(
 		return nil, 0, err
 	}
 
-	root, err := createRootNode(aggregatedKey, aspPubkey, receivers, feeSatsPerNode, unilateralExitDelay)
+	root, err := createRootNode(aggregatedKey, cosigners, aspPubkey, receivers, feeSatsPerNode, unilateralExitDelay)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -53,7 +53,7 @@ func CraftCongestionTree(
 		return nil, err
 	}
 
-	root, err := createRootNode(aggregatedKey, aspPubkey, receivers, feeSatsPerNode, unilateralExitDelay)
+	root, err := createRootNode(aggregatedKey, cosigners, aspPubkey, receivers, feeSatsPerNode, unilateralExitDelay)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func CraftCongestionTree(
 		treeLevel := make([]tree.Node, 0)
 
 		for i, node := range nodes {
-			treeNode, err := getTreeNode(node, ins[i], schnorr.SerializePubKey(aggregatedKey.PreTweakedKey), sweepTapLeaf)
+			treeNode, err := getTreeNode(node, ins[i], schnorr.SerializePubKey(aggregatedKey.PreTweakedKey), sweepTapLeaf, cosigners)
 			if err != nil {
 				return nil, err
 			}
@@ -117,6 +117,7 @@ type leaf struct {
 
 type branch struct {
 	aggregatedKey *musig2.AggregateKey
+	cosigners     []*secp256k1.PublicKey
 	children      []node
 	feeAmount     int64
 }
@@ -210,8 +211,9 @@ func getTreeNode(
 	input *wire.OutPoint,
 	inputTapInternalKey []byte,
 	inputSweepTapLeaf *psbt.TaprootTapLeafScript,
+	cosigners []*secp256k1.PublicKey,
 ) (tree.Node, error) {
-	partialTx, err := getTx(n, input, inputTapInternalKey, inputSweepTapLeaf)
+	partialTx, err := getTx(n, input, inputTapInternalKey, inputSweepTapLeaf, cosigners)
 	if err != nil {
 		return tree.Node{}, err
 	}
@@ -236,6 +238,7 @@ func getTx(
 	input *wire.OutPoint,
 	inputTapInternalKey []byte,
 	inputSweepTapLeaf *psbt.TaprootTapLeafScript,
+	cosigners []*secp256k1.PublicKey,
 ) (*psbt.Packet, error) {
 	outputs, err := n.getOutputs()
 	if err != nil {
@@ -259,11 +262,18 @@ func getTx(
 	tx.Inputs[0].TaprootInternalKey = inputTapInternalKey
 	tx.Inputs[0].TaprootLeafScript = []*psbt.TaprootTapLeafScript{inputSweepTapLeaf}
 
+	for _, cosigner := range cosigners {
+		if err := AddCosignerKey(0, tx, cosigner); err != nil {
+			return nil, err
+		}
+	}
+
 	return tx, nil
 }
 
 func createRootNode(
-	aggregatedKey *musig2.AggregateKey, aspPubkey *secp256k1.PublicKey, receivers []Receiver,
+	aggregatedKey *musig2.AggregateKey, cosigners []*secp256k1.PublicKey,
+	aspPubkey *secp256k1.PublicKey, receivers []Receiver,
 	feeSatsPerNode uint64, unilateralExitDelay int64,
 ) (root node, err error) {
 	if len(receivers) == 0 {
@@ -292,7 +302,7 @@ func createRootNode(
 	}
 
 	for len(nodes) > 1 {
-		nodes, err = createUpperLevel(nodes, aggregatedKey, int64(feeSatsPerNode))
+		nodes, err = createUpperLevel(nodes, aggregatedKey, cosigners, int64(feeSatsPerNode))
 		if err != nil {
 			return
 		}
@@ -342,10 +352,10 @@ func createAggregatedKeyWithSweep(
 	return aggregatedKey, tapLeaf, nil
 }
 
-func createUpperLevel(nodes []node, aggregatedKey *musig2.AggregateKey, feeAmount int64) ([]node, error) {
+func createUpperLevel(nodes []node, aggregatedKey *musig2.AggregateKey, cosigners []*secp256k1.PublicKey, feeAmount int64) ([]node, error) {
 	if len(nodes)%2 != 0 {
 		last := nodes[len(nodes)-1]
-		pairs, err := createUpperLevel(nodes[:len(nodes)-1], aggregatedKey, feeAmount)
+		pairs, err := createUpperLevel(nodes[:len(nodes)-1], aggregatedKey, cosigners, feeAmount)
 		if err != nil {
 			return nil, err
 		}
@@ -359,6 +369,7 @@ func createUpperLevel(nodes []node, aggregatedKey *musig2.AggregateKey, feeAmoun
 		right := nodes[i+1]
 		branchNode := &branch{
 			aggregatedKey: aggregatedKey,
+			cosigners:     cosigners,
 			feeAmount:     feeAmount,
 			children:      []node{left, right},
 		}

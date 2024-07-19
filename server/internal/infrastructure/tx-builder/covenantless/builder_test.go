@@ -59,16 +59,6 @@ func TestBuildPoolTx(t *testing.T) {
 	if len(fixtures.Valid) > 0 {
 		t.Run("valid", func(t *testing.T) {
 			for _, f := range fixtures.Valid {
-				poolTx, congestionTree, connAddr, err := builder.BuildPoolTx(
-					pubkey, f.Payments, minRelayFee, []domain.Round{},
-				)
-				require.NoError(t, err)
-				require.NotEmpty(t, poolTx)
-				require.NotEmpty(t, congestionTree)
-				require.Equal(t, connectorAddress, connAddr)
-				require.Equal(t, f.ExpectedNumOfNodes, congestionTree.NumberOfNodes())
-				require.Len(t, congestionTree.Leaves(), f.ExpectedNumOfLeaves)
-
 				cosigners := make([]*secp256k1.PublicKey, 0)
 				for _, payment := range f.Payments {
 					for _, input := range payment.Inputs {
@@ -81,8 +71,18 @@ func TestBuildPoolTx(t *testing.T) {
 					}
 				}
 
+				poolTx, congestionTree, connAddr, err := builder.BuildPoolTx(
+					pubkey, f.Payments, minRelayFee, []domain.Round{}, cosigners...,
+				)
+				require.NoError(t, err)
+				require.NotEmpty(t, poolTx)
+				require.NotEmpty(t, congestionTree)
+				require.Equal(t, connectorAddress, connAddr)
+				require.Equal(t, f.ExpectedNumOfNodes, congestionTree.NumberOfNodes())
+				require.Len(t, congestionTree.Leaves(), f.ExpectedNumOfLeaves)
+
 				err = bitcointree.ValidateCongestionTree(
-					congestionTree, poolTx, pubkey, roundLifetime, cosigners, int64(minRelayFee),
+					congestionTree, poolTx, pubkey, roundLifetime, int64(minRelayFee),
 				)
 				require.NoError(t, err)
 			}

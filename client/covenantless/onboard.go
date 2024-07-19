@@ -10,12 +10,11 @@ import (
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/psbt"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/urfave/cli/v2"
 )
-
-const minRelayFee = 30
 
 func (c *clArkBitcoinCLI) Onboard(ctx *cli.Context) error {
 	isTrusted := ctx.Bool("trusted")
@@ -70,15 +69,29 @@ func (c *clArkBitcoinCLI) Onboard(ctx *cli.Context) error {
 		return err
 	}
 
+	minRelayFee, err := utils.GetMinRelayFee(ctx)
+	if err != nil {
+		return err
+	}
+
 	congestionTreeLeaf := bitcointree.Receiver{
 		Pubkey: hex.EncodeToString(userPubKey.SerializeCompressed()),
 		Amount: uint64(amount), // Convert amount to uint64
 	}
 
+	leaves := []bitcointree.Receiver{congestionTreeLeaf}
+
+	ephemeralKey, err := secp256k1.GeneratePrivateKey()
+	if err != nil {
+		return err
+	}
+
+	cosigners := []*secp256k1.PublicKey{ephemeralKey.PubKey()} // TODO asp as cosigner
+
 	sharedOutputScript, sharedOutputAmount, err := bitcointree.CraftSharedOutput(
-		[]*secp256k1.PublicKey{userPubKey}, // TODO asp as cosigner
+		cosigners,
 		aspPubkey,
-		[]bitcointree.Receiver{congestionTreeLeaf},
+		leaves,
 		uint64(minRelayFee),
 		roundLifetime,
 		unilateralExitDelay,
@@ -115,9 +128,9 @@ func (c *clArkBitcoinCLI) Onboard(ctx *cli.Context) error {
 			Hash:  ptx.UnsignedTx.TxHash(),
 			Index: 0,
 		},
-		[]*secp256k1.PublicKey{userPubKey},
+		cosigners,
 		aspPubkey,
-		[]bitcointree.Receiver{congestionTreeLeaf},
+		leaves,
 		uint64(minRelayFee),
 		roundLifetime,
 		unilateralExitDelay,
@@ -126,9 +139,71 @@ func (c *clArkBitcoinCLI) Onboard(ctx *cli.Context) error {
 		return err
 	}
 
+	sweepClosure := bitcointree.CSVSigClosure{
+		Pubkey:  aspPubkey,
+		Seconds: uint(roundLifetime),
+	}
+
+	sweepTapLeaf, err := sweepClosure.Leaf()
+	if err != nil {
+		return err
+	}
+
+	sweepTapTree := txscript.AssembleTaprootScriptTree(*sweepTapLeaf)
+	root := sweepTapTree.RootNode.TapHash()
+
+	signer := bitcointree.NewTreeSignerSession(
+		ephemeralKey,
+		congestionTree,
+		minRelayFee,
+		root.CloneBytes(),
+	)
+
+	nonces, err := signer.GetNonces() // TODO send nonces to ASP
+	if err != nil {
+		return err
+	}
+
+	coordinator, err := bitcointree.NewTreeCoordinatorSession(
+		congestionTree,
+		minRelayFee,
+		root.CloneBytes(),
+		cosigners,
+	)
+	if err != nil {
+		return err
+	}
+
+	if err := coordinator.AddNonce(ephemeralKey.PubKey(), nonces); err != nil {
+		return err
+	}
+
+	aggregatedNonces, err := coordinator.AggregateNonces()
+	if err != nil {
+		return err
+	}
+
+	if err := signer.SetKeys(cosigners, aggregatedNonces); err != nil {
+		return err
+	}
+
+	sigs, err := signer.Sign()
+	if err != nil {
+		return err
+	}
+
+	if err := coordinator.AddSig(ephemeralKey.PubKey(), sigs); err != nil {
+		return err
+	}
+
+	signedTree, err := coordinator.SignTree()
+	if err != nil {
+		return err
+	}
+
 	_, err = client.Onboard(ctx.Context, &arkv1.OnboardRequest{
 		BoardingTx:     partialTx,
-		CongestionTree: castCongestionTree(congestionTree),
+		CongestionTree: castCongestionTree(signedTree),
 		UserPubkey:     hex.EncodeToString(userPubKey.SerializeCompressed()),
 	})
 	if err != nil {
