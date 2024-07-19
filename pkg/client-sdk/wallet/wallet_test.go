@@ -103,6 +103,22 @@ func TestWallet(t *testing.T) {
 			require.Len(t, offchainAddrs, expectedNumOfAddresses)
 			require.Len(t, onchainAddrs, expectedNumOfAddresses)
 			require.Len(t, redemptionAddrs, expectedNumOfAddresses)
+
+			// Check no password is required to unlock if wallet is already unlocked.
+			alreadyUnlocked, err := walletSvc.Unlock(ctx, password)
+			require.NoError(t, err)
+			require.False(t, alreadyUnlocked)
+
+			alreadyUnlocked, err = walletSvc.Unlock(ctx, "")
+			require.NoError(t, err)
+			require.True(t, alreadyUnlocked)
+
+			// Check no password is required to lock if wallet is already locked.
+			err = walletSvc.Lock(ctx, password)
+			require.NoError(t, err)
+
+			err = walletSvc.Lock(ctx, "")
+			require.NoError(t, err)
 		})
 	}
 }

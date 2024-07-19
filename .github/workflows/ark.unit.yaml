@@ -58,5 +58,6 @@ jobs:
         uses: securego/gosec@master
         with:
           args: '-severity high -quiet ./...'
+      - run: go get -v -t -d ./...
       - name: unit testing
         run: make test  

@@ -91,6 +91,10 @@ func (w *singlekeyWallet) Lock(_ context.Context, password string) error {
 		return fmt.Errorf("wallet not initialized")
 	}
 
+	if w.privateKey == nil {
+		return nil
+	}
+
 	pwd := []byte(password)
 	currentPassHash := utils.HashPassword(pwd)
 
@@ -109,15 +113,15 @@ func (w *singlekeyWallet) Unlock(
 		return false, fmt.Errorf("wallet not initialized")
 	}
 
+	if w.privateKey != nil {
+		return true, nil
+	}
+
 	pwd := []byte(password)
 	currentPassHash := utils.HashPassword(pwd)
 
 	if !bytes.Equal(w.walletData.PasswordHash, currentPassHash) {
 		return false, fmt.Errorf("invalid password")
-	}
-
-	if w.privateKey != nil {
-		return true, nil
 	}
 
 	privateKeyBytes, err := utils.DecryptAES128(w.walletData.EncryptedPrvkey, pwd)
