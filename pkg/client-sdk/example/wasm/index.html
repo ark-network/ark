@@ -16,10 +16,25 @@
             logArea.scrollTop = logArea.scrollHeight;
         }
 
-        async function conn() {
+        async function initWallet() {
             try {
-                await connect();
-                logMessage("Connected to ASP");
+                const walletType = "singlekey"
+                const clientType = "rest"
+                const network = "liquidregtest"
+                const explorerUrl = "http://localhost:3001"
+                const privateKey = document.getElementById("prvkey").value;
+                const password = document.getElementById("i_password").value;
+                if (!password) {
+                    logMessage("Init error: password is required");
+                    return;
+                }
+                const aspUrl = document.getElementById("aspUrl").value;
+                if (!aspUrl) {
+                    logMessage("Init error: asp url is required");
+                    return;
+                }
+                await init(walletType, clientType, network, aspUrl, explorerUrl, password, privateKey);
+                logMessage("wallet initialized and connected to ASP");
                 await config();
             } catch (err) {
                 logMessage("Connect error: " + err.message);
@@ -51,7 +66,11 @@
                     logMessage("Send error: Address is required");
                     return;
                 }
-
+                const password = document.getElementById("s_password").value;
+                if (!password) {
+                    logMessage("Send error: password is required");
+                    return;
+                }
                 const amountStr = document.getElementById("amountToSend").value;
                 if (!amountStr) {
                     logMessage("Send error: Amount is required");
@@ -59,7 +78,7 @@
                 }
                 const amount = parseInt(amountStr, 10);
 
-                const txID = await sendOffChain(false, [{ To: address, Amount: amount }]);
+                const txID = await sendOffChain(false, [{ To: address, Amount: amount }], password);
                 logMessage("Sent money with tx ID: " + txID);
             } catch (err) {
                 logMessage("Send error: " + err.message);
@@ -72,31 +91,48 @@
                 logMessage("ASP URL: " + aspUrl);
 
                 const aspPubKeyHex = await getAspPubKeyHex();
-                logMessage("ASP PubKey Hex: " + aspPubKeyHex);
+                logMessage("ASP PubKey: " + aspPubKeyHex);
 
-                const transportProtocol = await getTransportProtocol();
-                logMessage("Transport Protocol: " + transportProtocol);
+                const walletType = await getWalletType();
+                logMessage("Wallet Type: " + walletType);
+
+                const clientType = await getClientType();
+                logMessage("Client Type: " + clientType);
 
                 const explorerUrl = await getExplorerUrl();
                 logMessage("Explorer URL: " + explorerUrl);
 
                 const network = await getNetwork();
                 logMessage("Network: " + network);
+
+                const roundLifetime = await getRoundLifetime();
+                logMessage("Round Lifetime: " + roundLifetime);
+
+                const unilateralExitDelay = await getUnilateralExitDelay();
+                logMessage("Unilateral Exit Delay: " + unilateralExitDelay);
+
+                const minRelayFee = await getMinRelayFee();
+                logMessage("Min Relay Fee: " + minRelayFee);
             } catch (err) {
                 logMessage("Config error: " + err.message);
             }
         }
 
         async function board() {
-            logMessage("Board button clicked");
             const amountStr = document.getElementById("amount").value;
             const amount = parseInt(amountStr, 10);
-            logMessage("Amount provided: " + amount);
+            const password = document.getElementById("o_password").value;
+            if (!password) {
+                logMessage("Onboard error: password is required");
+                return;
+            }
+
             try {
-                const txID = await onboard(amount);
+                console.log(amount, password);
+                const txID = await onboard(amount, password);
                 logMessage("Onboarded with amount: " + amount + " and txID: " + txID + ", if in regtest mine a block");
             } catch (err) {
-                logMessage("Board error: " + err.message);
+                logMessage("Onboard error: " + err.message);
             }
         }
     </script>
@@ -106,7 +142,10 @@
 <div>
     <h2>Wallet</h2>
     <div>
-        <button onclick="conn()">Connect</button>
+        <button onclick="initWallet()">Init</button>
+        <input type="text" id="aspUrl" placeholder="http://localhost:8080">
+        <input type="password" id="i_password" placeholder="password">
+        <input type="text" id="prvkey" placeholder="Optional: privkey (hex)">
     </div>
     <div>
         <button onclick="receiveAddresses()">Receive</button>
@@ -117,11 +156,13 @@
     <div>
         <button onclick="board()">Onboard</button>
         <input type="text" id="amount" placeholder="Amount">
+        <input type="password" id="o_password" placeholder="password">
     </div>
     <div>
         <button onclick="send()">Send</button>
         <input type="text" id="sendAddress" placeholder="Offchain Address">
         <input type="text" id="amountToSend" placeholder="Amount">
+        <input type="password" id="s_password" placeholder="password">
     </div>
     <div>
         <button onclick="config()">Config</button>

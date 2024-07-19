@@ -10,46 +10,44 @@ import (
 	"time"
 
 	arksdk "github.com/ark-network/ark-sdk"
-	inmemorystore "github.com/ark-network/ark-sdk/store/inmemory"
 	log "github.com/sirupsen/logrus"
 )
 
-func main() {
-	var (
-		//grpcAspUrl = "localhost:8080"
-		restAspUrl = "http://localhost:8080"
-		//grpcProtocol = arksdk.Grpc
-		restProtocol = arksdk.Rest
-		ctx          = context.Background()
+var (
+	aspUrl      = "http://localhost:8080"
+	clientType  = "rest"
+	walletType  = "singlekey"
+	network     = "liquidregtest"
+	explorerURL = "http://localhost:3001"
+	password    = "password"
+)
 
-		aspUrl   = restAspUrl
-		protocol = restProtocol
-	)
+func main() {
+	ctx := context.Background()
 
 	log.Info("alice is setting up her ark wallet...")
-	aliceConfigStore, err := inmemorystore.New(aspUrl, protocol)
+	aliceArkClient, err := arksdk.New(arksdk.Config{
+		StoreType: "inmemory",
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	aliceWalletStore := inmemorystore.NewWalletStore()
-	aliceWallet, err := arksdk.NewSingleKeyWallet(ctx, aliceWalletStore)
-	if err != nil {
+	if err := aliceArkClient.Init(ctx, arksdk.InitArgs{
+		WalletType:  walletType,
+		ClientType:  clientType,
+		Network:     network,
+		AspUrl:      aspUrl,
+		ExplorerUrl: explorerURL,
+		Password:    password,
+	}); err != nil {
 		log.Fatal(err)
 	}
 
-	aliceArkClient, err := arksdk.New(
-		ctx,
-		aliceWallet,
-		aliceConfigStore,
-	)
-	if err != nil {
+	if err := aliceArkClient.Unlock(ctx, password); err != nil {
 		log.Fatal(err)
 	}
-
-	if err := aliceArkClient.Connect(ctx); err != nil {
-		log.Fatal(err)
-	}
+	defer aliceArkClient.Lock(ctx, password)
 
 	log.Info("alice is acquiring onchain funds...")
 	_, aliceOnchainAddr, err := aliceArkClient.Receive(ctx)
@@ -61,13 +59,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if err := generateBlock(); err != nil {
-		log.Fatal(err)
-	}
+	time.Sleep(5 * time.Second)
 
 	onboardAmount := uint64(20000)
 	log.Infof("alice is onboarding with %d sats offchain...", onboardAmount)
-	txid, err := aliceArkClient.Onboard(ctx, onboardAmount)
+	txid, err := aliceArkClient.Onboard(ctx, onboardAmount, password)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -88,33 +84,30 @@ func main() {
 	log.Infof("alice onchain balance: %d", aliceBalance.OnchainBalance.SpendableAmount)
 	log.Infof("alice offchain balance: %d", aliceBalance.OffchainBalance.Total)
 
-	bobConfigStore, err := inmemorystore.New(aspUrl, protocol)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	fmt.Println("")
 	log.Info("bob is setting up his ark wallet...")
-	bobWalletStore := inmemorystore.NewWalletStore()
-	if _, err := bobWalletStore.CreatePrivateKey(); err != nil {
-		log.Fatal(err)
-	}
-
-	bobWallet, err := arksdk.NewSingleKeyWallet(ctx, bobWalletStore)
+	bobArkClient, err := arksdk.New(arksdk.Config{
+		StoreType: "inmemory",
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	bobArkClient, err := arksdk.New(
-		ctx, bobWallet, bobConfigStore,
-	)
-	if err != nil {
+	if err := bobArkClient.Init(ctx, arksdk.InitArgs{
+		WalletType:  walletType,
+		ClientType:  clientType,
+		Network:     network,
+		AspUrl:      aspUrl,
+		ExplorerUrl: explorerURL,
+		Password:    password,
+	}); err != nil {
 		log.Fatal(err)
 	}
 
-	if err := bobArkClient.Connect(ctx); err != nil {
+	if err := bobArkClient.Unlock(ctx, password); err != nil {
 		log.Fatal(err)
 	}
+	defer bobArkClient.Lock(ctx, password)
 
 	bobOffchainAddr, _, err := bobArkClient.Receive(ctx)
 	if err != nil {
@@ -130,17 +123,17 @@ func main() {
 	log.Infof("bob offchain balance: %d", bobBalance.OffchainBalance.Total)
 
 	amount := uint64(1000)
+	receivers := []arksdk.Receiver{
+		{
+			To:     bobOffchainAddr,
+			Amount: amount,
+		},
+	}
+
 	fmt.Println("")
 	log.Infof("alice is sending %d sats to bob offchain...", amount)
-	txid, err = aliceArkClient.SendOffChain(
-		ctx,
-		false,
-		[]arksdk.Receiver{
-			{
-				To:     bobOffchainAddr,
-				Amount: amount,
-			},
-		})
+
+	txid, err = aliceArkClient.SendOffChain(ctx, false, receivers, password)
 	if err != nil {
 		log.Fatal(err)
 	}
