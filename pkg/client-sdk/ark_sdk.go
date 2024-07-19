@@ -4,13 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"math"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/ark-network/ark-sdk/client"
+	"github.com/ark-network/ark-sdk/explorer"
+	"github.com/ark-network/ark-sdk/store"
+	"github.com/ark-network/ark-sdk/wallet"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
@@ -30,262 +33,240 @@ const (
 	DUST        = 450
 )
 
-var (
-	explorerUrlMap = map[string]string{
-		network.Liquid.Name:  "https://blockstream.info/liquid/api",
-		network.Testnet.Name: "https://blockstream.info/liquidtestnet/api",
-		network.Regtest.Name: "http://localhost:3001",
-	}
-)
-
 type ArkClient interface {
-	Connect(ctx context.Context) error
-	Balance(ctx context.Context, computeExpiryDetails bool) (*BalanceResp, error)
-	Onboard(ctx context.Context, amount uint64) (string, error)
+	Store() store.Store
+	Init(ctx context.Context, args InitArgs) error
+	Unlock(ctx context.Context, password string) error
+	Lock(ctx context.Context, password string) error
+	Balance(ctx context.Context, computeExpiryDetails bool) (*Balance, error)
+	Onboard(ctx context.Context, amount uint64, password string) (string, error)
 	Receive(ctx context.Context) (string, string, error)
-	SendOnChain(ctx context.Context, receivers []Receiver) (string, error)
+	SendOnChain(ctx context.Context, receivers []Receiver, password string) (string, error)
 	SendOffChain(
-		ctx context.Context, withExpiryCoinselect bool, receivers []Receiver,
+		ctx context.Context, withExpiryCoinselect bool, receivers []Receiver, password string,
 	) (string, error)
-	UnilateralRedeem(ctx context.Context) error
+	UnilateralRedeem(ctx context.Context, password string) error
 	CollaborativeRedeem(
-		ctx context.Context, addr string, amount uint64, withExpiryCoinselect bool,
+		ctx context.Context, addr string, amount uint64, withExpiryCoinselect bool, password string,
 	) (string, error)
-}
-
-func New(
-	ctx context.Context,
-	wallet Wallet,
-	configStore ConfigStore,
-) (ArkClient, error) {
-	aspUrl, err := configStore.GetAspUrl(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if len(aspUrl) <= 0 {
-		return nil, errors.New("invalid ark url")
-	}
-
-	protocol, err := configStore.GetTransportProtocol(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return &arkClient{
-		aspUrl:      aspUrl,
-		protocol:    protocol,
-		wallet:      wallet,
-		initiated:   false,
-		innerClient: nil,
-		configStore: configStore,
-	}, nil
 }
 
 type arkClient struct {
-	aspUrl              string
-	aspPubKey           []byte
-	roundLifeTime       int
-	unilateralExitDelay int
-	net                 string
-	explorerUrl         string
-	protocol            TransportProtocol
-
-	wallet Wallet
-
-	initiated   bool
-	innerClient arkTransportClient
-
-	explorerSvc Explorer
-	configStore ConfigStore
+	*store.StoreData
+	cfg      Config
+	wallet   wallet.Wallet
+	store    store.Store
+	explorer explorer.Explorer
+	client   client.Client
 }
 
-const (
-	Grpc TransportProtocol = iota
-	Rest
-)
-
-type TransportProtocol int
-
-func (a *arkClient) Connect(ctx context.Context) error {
-	if a.initiated {
-		return nil
+func New(cfg Config) (ArkClient, error) {
+	if err := cfg.validate(); err != nil {
+		return nil, fmt.Errorf("invalid store config: %s", err)
 	}
 
-	transportClient, err := newArkTransportClient(
-		a.aspUrl, a.protocol, a.explorerSvc,
-	)
+	customStore := cfg.CustomStore
+	var dataStore store.Store
+	if customStore == nil {
+		s, err := cfg.store()
+		if err != nil {
+			return nil, fmt.Errorf("failed to open store: %s", err)
+		}
+		dataStore = s
+	}
+
+	var storeInstance store.Store
+	if customStore != nil {
+		storeInstance = customStore
+	}
+	if dataStore != nil {
+		storeInstance = dataStore
+	}
+
+	data, err := storeInstance.GetData(context.Background())
 	if err != nil {
+		return nil, err
+	}
+
+	var walletSvc wallet.Wallet
+	var clientSvc client.Client
+	var explorerSvc explorer.Explorer
+	if data != nil {
+		args := InitArgs{
+			WalletType:  data.WalletType,
+			ClientType:  data.ClientType,
+			Network:     data.Network.Name,
+			AspUrl:      data.AspUrl,
+			ExplorerUrl: data.ExplorerURL,
+		}
+		clientSvc, err = args.client()
+		if err != nil {
+			return nil, err
+		}
+
+		explorerSvc, err = args.explorer()
+		if err != nil {
+			return nil, err
+		}
+
+		if customStore != nil {
+			walletSvc, err = args.wallet(data.Network, customStore)
+		}
+		if dataStore != nil {
+			walletSvc, err = args.wallet(data.Network, dataStore)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &arkClient{data, cfg, walletSvc, storeInstance, explorerSvc, clientSvc}, nil
+}
+
+func (a *arkClient) Store() store.Store {
+	return a.store
+}
+
+func (a *arkClient) Init(ctx context.Context, args InitArgs) error {
+	if err := args.validate(); err != nil {
+		return fmt.Errorf("invalid args: %s", err)
+	}
+
+	clientSvc, err := args.client()
+	if err != nil {
+		return fmt.Errorf("failed to setup client: %s", err)
+	}
+
+	explorerSvc, err := args.explorer()
+	if err != nil {
+		return fmt.Errorf("failed to setup explorer: %s", err)
+	}
+
+	resp, err := clientSvc.GetInfo(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to connect to asp: %s", err)
+	}
+	network := networkFromString(resp.GetNetwork())
+
+	buf, err := hex.DecodeString(resp.GetPubkey())
+	if err != nil {
+		return fmt.Errorf("failed to parse asp pubkey: %s", err)
+	}
+	aspPubkey, err := secp256k1.ParsePubKey(buf)
+	if err != nil {
+		return fmt.Errorf("failed to parse asp pubkey: %s", err)
+	}
+
+	storeData := store.StoreData{
+		AspUrl:              args.AspUrl,
+		AspPubkey:           aspPubkey,
+		WalletType:          args.WalletType,
+		ClientType:          args.ClientType,
+		ExplorerURL:         explorerSvc.BaseUrl(),
+		Network:             network,
+		RoundLifetime:       resp.GetRoundLifetime(),
+		UnilateralExitDelay: resp.GetUnilateralExitDelay(),
+		MinRelayFee:         uint64(resp.GetMinRelayFee()),
+	}
+	if err := a.store.AddData(ctx, storeData); err != nil {
 		return err
 	}
-	a.innerClient = transportClient
 
-	resp, err := a.innerClient.getInfo(ctx)
+	walletSvc, err := args.wallet(network, a.store)
 	if err != nil {
+		//nolint:all
+		a.store.CleanData(ctx)
+		return fmt.Errorf("failed to setup wallet: %s", err)
+	}
+
+	if _, err := walletSvc.Create(ctx, args.Password, args.PrivateKey); err != nil {
+		//nolint:all
+		a.store.CleanData(ctx)
 		return err
 	}
 
-	net := resp.GetNetwork()
-	if net != "liquid" && net != "testnet" && net != "regtest" {
-		return fmt.Errorf("invalid network")
-	}
-
-	explorerUrl := explorerUrlMap[net]
-	_, liquidNet := networkFromString(net)
-	if err := testEsploraEndpoint(liquidNet, explorerUrl); err != nil {
-		return fmt.Errorf("failed to connect with explorerSvc: %s", err)
-	}
-
-	explorerSvc := NewExplorer(explorerUrl, net)
-	a.innerClient.setExplorerSvc(explorerSvc)
-
-	aspPubKey := resp.GetPubkey()
-	aspPubKeyBytes, err := hex.DecodeString(aspPubKey)
-	if err != nil {
-		return err
-	}
-
-	a.configStore.SetAspPubKeyHex(aspPubKey)
-	a.configStore.SetNetwork(net)
-	a.configStore.SetExplorerUrl(explorerUrl)
-
-	a.net = net
-	a.explorerUrl = explorerUrl
-	a.explorerSvc = explorerSvc
-	a.aspPubKey = aspPubKeyBytes
-	a.roundLifeTime = int(resp.RoundLifetime)
-	a.unilateralExitDelay = int(resp.UnilateralExitDelay)
-	a.initiated = true
+	a.StoreData = &storeData
+	a.wallet = walletSvc
+	a.explorer = explorerSvc
+	a.client = clientSvc
 
 	return nil
 }
 
-type BalanceResp struct {
-	OnchainBalance  OnchainBalanceResp  `json:"onchain_balance"`
-	OffchainBalance OffchainBalanceResp `json:"offchain_balance"`
+func (a *arkClient) Unlock(ctx context.Context, pasword string) error {
+	_, err := a.wallet.Unlock(ctx, pasword)
+	return err
 }
 
-type OnchainBalanceResp struct {
-	SpendableAmount uint64                 `json:"spendable_amount"`
-	LockedAmount    []LockedOnchainBalance `json:"locked_amount,omitempty"`
-}
-
-type LockedOnchainBalance struct {
-	SpendableAt string `json:"spendable_at"`
-	Amount      uint64 `json:"amount"`
-}
-
-type OffchainBalanceResp struct {
-	Total          uint64            `json:"total"`
-	NextExpiration string            `json:"next_expiration,omitempty"`
-	Details        []OffchainDetails `json:"details"`
-}
-
-type OffchainDetails struct {
-	ExpiryTime string `json:"expiry_time"`
-	Amount     uint64 `json:"amount"`
-}
-
-type balanceRes struct {
-	offchainBalance             uint64
-	onchainSpendableBalance     uint64
-	onchainLockedBalance        map[int64]uint64
-	offchainBalanceByExpiration map[int64]uint64
-	err                         error
+func (a *arkClient) Lock(ctx context.Context, pasword string) error {
+	return a.wallet.Lock(ctx, pasword)
 }
 
 func (a *arkClient) Balance(
 	ctx context.Context, computeExpiryDetails bool,
-) (*BalanceResp, error) {
-	offchainAddr, onchainAddr, redemptionAddr, err := getAddress(
-		a.wallet.PubKeySerializeCompressed(), a.aspPubKey, int64(a.unilateralExitDelay), a.net,
-	)
+) (*Balance, error) {
+	offchainAddrs, onchainAddrs, redeemAddrs, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	_, liquidNet := networkFromString(a.net)
-
 	wg := &sync.WaitGroup{}
-	wg.Add(3)
+	wg.Add(3 * len(offchainAddrs))
 
 	chRes := make(chan balanceRes, 3)
-	go func() {
-		defer wg.Done()
-		balance, amountByExpiration, err := a.innerClient.getOffchainBalance(
-			ctx, offchainAddr, computeExpiryDetails,
-		)
-		if err != nil {
-			chRes <- balanceRes{
-				0,
-				0,
-				nil,
-				nil,
-				err,
+	for i := range offchainAddrs {
+		offchainAddr := offchainAddrs[i]
+		onchainAddr := onchainAddrs[i]
+		redeemAddr := redeemAddrs[i]
+		go func(addr string) {
+			defer wg.Done()
+			balance, amountByExpiration, err := a.client.GetOffchainBalance(
+				ctx, addr, a.explorer,
+			)
+			if err != nil {
+				chRes <- balanceRes{err: err}
+				return
 			}
-			return
-		}
 
-		chRes <- balanceRes{
-			balance,
-			0,
-			nil,
-			amountByExpiration,
-			nil,
-		}
-	}()
-
-	go func() {
-		defer wg.Done()
-		balance, err := a.explorerSvc.GetBalance(onchainAddr, liquidNet.AssetID)
-		if err != nil {
 			chRes <- balanceRes{
-				0,
-				0,
-				nil,
-				nil,
-				err,
+				offchainBalance:             balance,
+				offchainBalanceByExpiration: amountByExpiration,
 			}
-			return
-		}
-		chRes <- balanceRes{
-			0,
-			balance,
-			nil,
-			nil,
-			nil,
-		}
-	}()
+		}(offchainAddr)
 
-	go func() {
-		defer wg.Done()
+		go func(addr string) {
+			defer wg.Done()
+			balance, err := a.explorer.GetBalance(addr)
+			if err != nil {
+				chRes <- balanceRes{err: err}
+				return
+			}
+			chRes <- balanceRes{onchainSpendableBalance: balance}
+		}(onchainAddr)
 
-		spendableBalance, lockedBalance, err := a.explorerSvc.GetRedeemedVtxosBalance(
-			redemptionAddr, int64(a.unilateralExitDelay),
-		)
-		if err != nil {
+		go func(addr string) {
+			defer wg.Done()
+
+			spendableBalance, lockedBalance, err := a.explorer.GetRedeemedVtxosBalance(
+				addr, a.UnilateralExitDelay,
+			)
+			if err != nil {
+				chRes <- balanceRes{err: err}
+				return
+			}
+
 			chRes <- balanceRes{
-				0,
-				0,
-				nil,
-				nil,
-				err,
+				onchainSpendableBalance: spendableBalance,
+				onchainLockedBalance:    lockedBalance,
+				err:                     err,
 			}
-			return
-		}
-
-		chRes <- balanceRes{
-			0,
-			spendableBalance,
-			lockedBalance,
-			nil,
-			err,
-		}
-	}()
+		}(redeemAddr)
+	}
 
 	wg.Wait()
 
 	lockedOnchainBalance := []LockedOnchainBalance{}
-	details := make([]OffchainDetails, 0)
+	details := make([]VtxoDetails, 0)
 	offchainBalance, onchainBalance := uint64(0), uint64(0)
 	nextExpiration := int64(0)
 	count := 0
@@ -305,10 +286,10 @@ func (a *arkClient) Balance(
 					nextExpiration = timestamp
 				}
 
-				fancyTime := time.Unix(timestamp, 0).Format("2006-01-02 15:04:05")
+				fancyTime := time.Unix(timestamp, 0).Format(time.RFC3339)
 				details = append(
 					details,
-					OffchainDetails{
+					VtxoDetails{
 						ExpiryTime: fancyTime,
 						Amount:     amount,
 					},
@@ -317,7 +298,7 @@ func (a *arkClient) Balance(
 		}
 		if res.onchainLockedBalance != nil {
 			for timestamp, amount := range res.onchainLockedBalance {
-				fancyTime := time.Unix(timestamp, 0).Format("2006-01-02 15:04:05")
+				fancyTime := time.Unix(timestamp, 0).Format(time.RFC3339)
 				lockedOnchainBalance = append(
 					lockedOnchainBalance,
 					LockedOnchainBalance{
@@ -354,16 +335,16 @@ func (a *arkClient) Balance(
 				fancyTimeExpiration = fmt.Sprintf("%d hours", int(hours))
 			}
 		} else {
-			fancyTimeExpiration = t.Format("2006-01-02 15:04:05")
+			fancyTimeExpiration = t.Format(time.RFC3339)
 		}
 	}
 
-	response := &BalanceResp{
-		OnchainBalance: OnchainBalanceResp{
+	response := &Balance{
+		OnchainBalance: OnchainBalance{
 			SpendableAmount: onchainBalance,
 			LockedAmount:    lockedOnchainBalance,
 		},
-		OffchainBalance: OffchainBalanceResp{
+		OffchainBalance: OffchainBalance{
 			Total:          offchainBalance,
 			NextExpiration: fancyTimeExpiration,
 			Details:        details,
@@ -374,23 +355,23 @@ func (a *arkClient) Balance(
 }
 
 func (a *arkClient) Onboard(
-	ctx context.Context, amount uint64,
+	ctx context.Context, amount uint64, password string,
 ) (string, error) {
 	if amount <= 0 {
 		return "", fmt.Errorf("invalid amount to onboard %d", amount)
 	}
 
-	_, net := networkFromString(a.net)
-	userPubKey := a.wallet.PubKeySerializeCompressed()
-
-	congestionTreeLeaf := tree.Receiver{
-		Pubkey: hex.EncodeToString(userPubKey),
-		Amount: amount,
+	offchainAddr, _, err := a.wallet.NewAddress(ctx, false)
+	if err != nil {
+		return "", err
 	}
 
-	aspPubkey, err := secp256k1.ParsePubKey(a.aspPubKey)
-	if err != nil {
-		return "", nil
+	net := a.explorer.GetNetwork()
+	_, userPubkey, aspPubkey, _ := common.DecodeAddress(offchainAddr)
+	userPubkeyStr := hex.EncodeToString(userPubkey.SerializeCompressed())
+	congestionTreeLeaf := tree.Receiver{
+		Pubkey: userPubkeyStr,
+		Amount: amount,
 	}
 
 	treeFactoryFn, sharedOutputScript, sharedOutputAmount, err := tree.CraftCongestionTree(
@@ -398,14 +379,14 @@ func (a *arkClient) Onboard(
 		aspPubkey,
 		[]tree.Receiver{congestionTreeLeaf},
 		minRelayFee,
-		int64(a.roundLifeTime),
-		int64(a.unilateralExitDelay),
+		a.RoundLifetime,
+		a.UnilateralExitDelay,
 	)
 	if err != nil {
 		return "", err
 	}
 
-	pay, err := payment.FromScript(sharedOutputScript, net, nil)
+	pay, err := payment.FromScript(sharedOutputScript, &net, nil)
 	if err != nil {
 		return "", err
 	}
@@ -420,7 +401,7 @@ func (a *arkClient) Onboard(
 		Amount: sharedOutputAmount,
 	}
 
-	pset, err := a.sendOnchain([]Receiver{onchainReceiver})
+	pset, err := a.SendOnchain(ctx, []Receiver{onchainReceiver}, password)
 	if err != nil {
 		return "", err
 	}
@@ -437,19 +418,28 @@ func (a *arkClient) Onboard(
 		return "", err
 	}
 
-	_, err = a.innerClient.onboard(ctx, &arkv1.OnboardRequest{
+	if _, err = a.client.Onboard(ctx, &arkv1.OnboardRequest{
 		BoardingTx:     pset,
 		CongestionTree: castCongestionTree(congestionTree),
-		UserPubkey:     hex.EncodeToString(userPubKey),
-	})
-	if err != nil {
+		UserPubkey:     userPubkeyStr,
+	}); err != nil {
 		return "", err
 	}
 
 	return txid, nil
 }
 
-func (a *arkClient) sendOnchain(receivers []Receiver) (string, error) {
+func (a *arkClient) SendOnchain(
+	ctx context.Context, receivers []Receiver, password string,
+) (string, error) {
+	alreadyUnlocked, err := a.wallet.Unlock(ctx, password)
+	if err != nil {
+		return "", err
+	}
+	if !alreadyUnlocked {
+		defer a.wallet.Lock(ctx, password)
+	}
+
 	pset, err := psetv2.New(nil, nil, nil)
 	if err != nil {
 		return "", err
@@ -459,7 +449,7 @@ func (a *arkClient) sendOnchain(receivers []Receiver) (string, error) {
 		return "", err
 	}
 
-	_, net := networkFromString(a.net)
+	net := a.explorer.GetNetwork()
 
 	targetAmount := uint64(0)
 	for _, receiver := range receivers {
@@ -485,20 +475,18 @@ func (a *arkClient) sendOnchain(receivers []Receiver) (string, error) {
 	}
 
 	utxos, delayedUtxos, change, err := a.coinSelectOnchain(
-		targetAmount, nil,
+		ctx, targetAmount, nil,
 	)
 	if err != nil {
 		return "", err
 	}
 
-	if err := a.addInputs(updater, utxos, delayedUtxos, net); err != nil {
+	if err := a.addInputs(ctx, updater, utxos, delayedUtxos, net); err != nil {
 		return "", err
 	}
 
 	if change > 0 {
-		_, changeAddr, _, err := getAddress(
-			a.wallet.PubKeySerializeCompressed(), a.aspPubKey, int64(a.unilateralExitDelay), a.net,
-		)
+		_, changeAddr, err := a.wallet.NewAddress(ctx, true)
 		if err != nil {
 			return "", err
 		}
@@ -537,20 +525,18 @@ func (a *arkClient) sendOnchain(receivers []Receiver) (string, error) {
 		}
 		// reselect the difference
 		selected, delayedSelected, newChange, err := a.coinSelectOnchain(
-			feeAmount-change, append(utxos, delayedUtxos...),
+			ctx, feeAmount-change, append(utxos, delayedUtxos...),
 		)
 		if err != nil {
 			return "", err
 		}
 
-		if err := a.addInputs(updater, selected, delayedSelected, net); err != nil {
+		if err := a.addInputs(ctx, updater, selected, delayedSelected, net); err != nil {
 			return "", err
 		}
 
 		if newChange > 0 {
-			_, changeAddr, _, err := getAddress(
-				a.wallet.PubKeySerializeCompressed(), a.aspPubKey, int64(a.unilateralExitDelay), a.net,
-			)
+			_, changeAddr, err := a.wallet.NewAddress(ctx, true)
 			if err != nil {
 				return "", err
 			}
@@ -585,7 +571,7 @@ func (a *arkClient) sendOnchain(receivers []Receiver) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	signedTx, err := a.wallet.SignTransaction(a.explorerSvc, tx)
+	signedTx, err := a.wallet.SignTransaction(ctx, a.explorer, tx)
 	if err != nil {
 		return "", err
 	}
@@ -603,16 +589,26 @@ func (a *arkClient) sendOnchain(receivers []Receiver) (string, error) {
 }
 
 func (a *arkClient) sendOffchain(
-	ctx context.Context, withExpiryCoinselect bool, receivers []Receiver,
+	ctx context.Context,
+	withExpiryCoinselect bool, receivers []Receiver, password string,
 ) (string, error) {
-	offchainAddr, _, _, err := getAddress(
-		a.wallet.PubKeySerializeCompressed(), a.aspPubKey, int64(a.unilateralExitDelay), a.net,
-	)
+	alreadyUnlocked, err := a.wallet.Unlock(ctx, password)
 	if err != nil {
 		return "", err
 	}
+	if !alreadyUnlocked {
+		defer a.wallet.Lock(ctx, password)
+	}
 
-	_, _, aspPubKey, err := common.DecodeAddress(offchainAddr)
+	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return "", err
+	}
+	if len(offchainAddrs) <= 0 {
+		return "", fmt.Errorf("no funds detected")
+	}
+
+	_, _, aspPubKey, err := common.DecodeAddress(offchainAddrs[0])
 	if err != nil {
 		return "", err
 	}
@@ -643,16 +639,30 @@ func (a *arkClient) sendOffchain(
 		sumOfReceivers += receiver.Amount
 	}
 
-	vtxos, err := a.innerClient.getSpendableVtxos(ctx, offchainAddr, withExpiryCoinselect)
-	if err != nil {
-		return "", err
+	var explorerSvc explorer.Explorer
+	if withExpiryCoinselect {
+		explorerSvc = a.explorer
 	}
+
+	vtxos := make([]*client.Vtxo, 0)
+	for _, offchainAddr := range offchainAddrs {
+		fetchedVtxos, err := a.client.GetSpendableVtxos(ctx, offchainAddr, explorerSvc)
+		if err != nil {
+			return "", err
+		}
+		vtxos = append(vtxos, fetchedVtxos...)
+	}
+
 	selectedCoins, changeAmount, err := coinSelect(vtxos, sumOfReceivers, withExpiryCoinselect)
 	if err != nil {
 		return "", err
 	}
 
 	if changeAmount > 0 {
+		offchainAddr, _, err := a.wallet.NewAddress(ctx, true)
+		if err != nil {
+			return "", err
+		}
 		changeReceiver := &arkv1.Output{
 			Address: offchainAddr,
 			Amount:  changeAmount,
@@ -664,19 +674,19 @@ func (a *arkClient) sendOffchain(
 
 	for _, coin := range selectedCoins {
 		inputs = append(inputs, &arkv1.Input{
-			Txid: coin.txid,
-			Vout: coin.vout,
+			Txid: coin.Txid,
+			Vout: coin.VOut,
 		})
 	}
 
-	registerResponse, err := a.innerClient.registerPayment(
+	registerResponse, err := a.client.RegisterPayment(
 		ctx, &arkv1.RegisterPaymentRequest{Inputs: inputs},
 	)
 	if err != nil {
 		return "", err
 	}
 
-	_, err = a.innerClient.claimPayment(ctx, &arkv1.ClaimPaymentRequest{
+	_, err = a.client.ClaimPayment(ctx, &arkv1.ClaimPaymentRequest{
 		Id:      registerResponse.GetId(),
 		Outputs: receiversOutput,
 	})
@@ -700,14 +710,14 @@ func (a *arkClient) sendOffchain(
 }
 
 func (a *arkClient) addInputs(
-	updater *psetv2.Updater, utxos, delayedUtxos []utxo, net *network.Network,
+	ctx context.Context, updater *psetv2.Updater, utxos, delayedUtxos []explorer.Utxo, net network.Network,
 ) error {
-	_, onchainAddr, _, err := getAddress(
-		a.wallet.PubKeySerializeCompressed(), a.aspPubKey, int64(a.unilateralExitDelay), a.net,
-	)
+	offchainAddr, onchainAddr, err := a.wallet.NewAddress(ctx, false)
 	if err != nil {
 		return err
 	}
+
+	_, userPubkey, aspPubkey, _ := common.DecodeAddress(offchainAddr)
 
 	changeScript, err := address.ToOutputScript(onchainAddr)
 	if err != nil {
@@ -749,29 +759,9 @@ func (a *arkClient) addInputs(
 	}
 
 	if len(delayedUtxos) > 0 {
-		aspPubkey, err := secp256k1.ParsePubKey(a.aspPubKey)
-		if err != nil {
-			return err
-		}
-
-		vtxoTapKey, leafProof, err := computeVtxoTaprootScript(
-			a.wallet.PubKey(), aspPubkey, uint(a.unilateralExitDelay),
+		_, leafProof, script, _, err := computeVtxoTaprootScript(
+			userPubkey, aspPubkey, uint(a.UnilateralExitDelay), net,
 		)
-		if err != nil {
-			return err
-		}
-
-		pay, err := payment.FromTweakedKey(vtxoTapKey, net, nil)
-		if err != nil {
-			return err
-		}
-
-		addr, err := pay.TaprootAddress()
-		if err != nil {
-			return err
-		}
-
-		script, err := address.ToOutputScript(addr)
 		if err != nil {
 			return err
 		}
@@ -783,7 +773,7 @@ func (a *arkClient) addInputs(
 					Txid:    utxo.Txid,
 					TxIndex: utxo.Vout,
 				},
-				uint(a.unilateralExitDelay),
+				uint(a.UnilateralExitDelay),
 				leafProof,
 			); err != nil {
 				return err
@@ -848,9 +838,7 @@ func (r *Receiver) isOnchain() bool {
 }
 
 func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
-	offchainAddr, onchainAddr, _, err := getAddress(
-		a.wallet.PubKeySerializeCompressed(), a.aspPubKey, int64(a.unilateralExitDelay), a.net,
-	)
+	offchainAddr, onchainAddr, err := a.wallet.NewAddress(ctx, false)
 	if err != nil {
 		return "", "", err
 	}
@@ -859,7 +847,7 @@ func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
 }
 
 func (a *arkClient) SendOnChain(
-	ctx context.Context, receivers []Receiver,
+	ctx context.Context, receivers []Receiver, password string,
 ) (string, error) {
 	for _, receiver := range receivers {
 		if !receiver.isOnchain() {
@@ -867,11 +855,12 @@ func (a *arkClient) SendOnChain(
 		}
 	}
 
-	return a.sendOnchain(receivers)
+	return a.SendOnchain(ctx, receivers, password)
 }
 
 func (a *arkClient) SendOffChain(
-	ctx context.Context, withExpiryCoinselect bool, receivers []Receiver,
+	ctx context.Context,
+	withExpiryCoinselect bool, receivers []Receiver, password string,
 ) (string, error) {
 	for _, receiver := range receivers {
 		if receiver.isOnchain() {
@@ -879,27 +868,30 @@ func (a *arkClient) SendOffChain(
 		}
 	}
 
-	return a.sendOffchain(ctx, withExpiryCoinselect, receivers)
+	return a.sendOffchain(ctx, withExpiryCoinselect, receivers, password)
 }
 
 func (a *arkClient) coinSelectOnchain(
-	targetAmount uint64, exclude []utxo,
-) ([]utxo, []utxo, uint64, error) {
-	_, onchainAddr, _, err := getAddress(
-		a.wallet.PubKeySerializeCompressed(), a.aspPubKey, int64(a.unilateralExitDelay), a.net,
-	)
+	ctx context.Context, targetAmount uint64, exclude []explorer.Utxo,
+) ([]explorer.Utxo, []explorer.Utxo, uint64, error) {
+	offchainAddrs, onchainAddrs, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return nil, nil, 0, err
 	}
+	net := a.explorer.GetNetwork()
 
-	fromExplorer, err := a.explorerSvc.GetUtxos(onchainAddr)
-	if err != nil {
-		return nil, nil, 0, err
+	fetchedUtxos := make([]explorer.Utxo, 0)
+	for _, onchainAddr := range onchainAddrs {
+		utxos, err := a.explorer.GetUtxos(onchainAddr)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		fetchedUtxos = append(fetchedUtxos, utxos...)
 	}
 
-	utxos := make([]utxo, 0)
+	utxos := make([]explorer.Utxo, 0)
 	selectedAmount := uint64(0)
-	for _, utxo := range fromExplorer {
+	for _, utxo := range fetchedUtxos {
 		if selectedAmount >= targetAmount {
 			break
 		}
@@ -918,43 +910,31 @@ func (a *arkClient) coinSelectOnchain(
 		return utxos, nil, selectedAmount - targetAmount, nil
 	}
 
-	aspPubkey, err := secp256k1.ParsePubKey(a.aspPubKey)
-	if err != nil {
-		return nil, nil, 0, err
+	fetchedUtxos = make([]explorer.Utxo, 0)
+	for _, offchainAddr := range offchainAddrs {
+		_, userPubkey, aspPubkey, _ := common.DecodeAddress(offchainAddr)
+		_, _, _, addr, err := computeVtxoTaprootScript(
+			userPubkey, aspPubkey, uint(a.UnilateralExitDelay), net,
+		)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+
+		utxos, err = a.explorer.GetUtxos(addr)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		fetchedUtxos = append(fetchedUtxos, utxos...)
 	}
 
-	vtxoTapKey, _, err := computeVtxoTaprootScript(
-		a.wallet.PubKey(), aspPubkey, uint(a.unilateralExitDelay),
-	)
-	if err != nil {
-		return nil, nil, 0, err
-	}
-
-	_, net := networkFromString(a.net)
-
-	pay, err := payment.FromTweakedKey(vtxoTapKey, net, nil)
-	if err != nil {
-		return nil, nil, 0, err
-	}
-
-	addr, err := pay.TaprootAddress()
-	if err != nil {
-		return nil, nil, 0, err
-	}
-
-	fromExplorer, err = a.explorerSvc.GetUtxos(addr)
-	if err != nil {
-		return nil, nil, 0, err
-	}
-
-	delayedUtxos := make([]utxo, 0)
-	for _, utxo := range fromExplorer {
+	delayedUtxos := make([]explorer.Utxo, 0)
+	for _, utxo := range fetchedUtxos {
 		if selectedAmount >= targetAmount {
 			break
 		}
 
 		availableAt := time.Unix(utxo.Status.Blocktime, 0).Add(
-			time.Duration(a.unilateralExitDelay) * time.Second,
+			time.Duration(a.UnilateralExitDelay) * time.Second,
 		)
 		if availableAt.After(time.Now()) {
 			continue
@@ -979,36 +959,39 @@ func (a *arkClient) coinSelectOnchain(
 	return utxos, delayedUtxos, selectedAmount - targetAmount, nil
 }
 
-func (a *arkClient) UnilateralRedeem(ctx context.Context) error {
-	offchainAddr, _, _, err := getAddress(
-		a.wallet.PubKeySerializeCompressed(), a.aspPubKey, int64(a.unilateralExitDelay), a.net,
-	)
+func (a *arkClient) UnilateralRedeem(
+	ctx context.Context, password string,
+) error {
+	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return err
 	}
 
-	vtxos, err := a.innerClient.getSpendableVtxos(ctx, offchainAddr, false)
-	if err != nil {
-		return err
+	vtxos := make([]*client.Vtxo, 0)
+	for _, offchainAddr := range offchainAddrs {
+		fetchedVtxos, err := a.client.GetSpendableVtxos(ctx, offchainAddr, nil)
+		if err != nil {
+			return err
+		}
+		vtxos = append(vtxos, fetchedVtxos...)
 	}
 
 	totalVtxosAmount := uint64(0)
-
 	for _, vtxo := range vtxos {
-		totalVtxosAmount += vtxo.amount
+		totalVtxosAmount += vtxo.Amount
 	}
 
 	// transactionsMap avoid duplicates
 	transactionsMap := make(map[string]struct{}, 0)
 	transactions := make([]string, 0)
 
-	redeemBranches, err := a.innerClient.getRedeemBranches(ctx, a.explorerSvc, vtxos)
+	redeemBranches, err := a.client.GetRedeemBranches(ctx, vtxos, a.explorer)
 	if err != nil {
 		return err
 	}
 
 	for _, branch := range redeemBranches {
-		branchTxs, err := branch.redeemPath()
+		branchTxs, err := branch.RedeemPath()
 		if err != nil {
 			return err
 		}
@@ -1023,7 +1006,7 @@ func (a *arkClient) UnilateralRedeem(ctx context.Context) error {
 
 	for i, txHex := range transactions {
 		for {
-			txid, err := a.explorerSvc.Broadcast(txHex)
+			txid, err := a.explorer.Broadcast(txHex)
 			if err != nil {
 				if strings.Contains(strings.ToLower(err.Error()), "bad-txns-inputs-missingorspent") {
 					time.Sleep(1 * time.Second)
@@ -1043,19 +1026,20 @@ func (a *arkClient) UnilateralRedeem(ctx context.Context) error {
 }
 
 func (a *arkClient) CollaborativeRedeem(
-	ctx context.Context, addr string, amount uint64, withExpiryCoinselect bool,
+	ctx context.Context,
+	addr string, amount uint64, withExpiryCoinselect bool, password string,
 ) (string, error) {
 	if _, err := address.ToOutputScript(addr); err != nil {
 		return "", fmt.Errorf("invalid onchain address")
 	}
 
-	net, err := address.NetworkForAddress(addr)
+	addrNet, err := address.NetworkForAddress(addr)
 	if err != nil {
 		return "", fmt.Errorf("invalid onchain address: unknown network")
 	}
-	_, liquidNet := networkFromString(a.net)
-	if net.Name != liquidNet.Name {
-		return "", fmt.Errorf("invalid onchain address: must be for %s network", liquidNet.Name)
+	net := a.explorer.GetNetwork()
+	if net.Name != addrNet.Name {
+		return "", fmt.Errorf("invalid onchain address: must be for %s network", net.Name)
 	}
 
 	if isConf, _ := address.IsConfidential(addr); isConf {
@@ -1063,10 +1047,7 @@ func (a *arkClient) CollaborativeRedeem(
 		addr = info.Address
 	}
 
-	offchainAddr, _, _, err := getAddress(
-		a.wallet.PubKeySerializeCompressed(), a.aspPubKey, int64(a.unilateralExitDelay), a.net,
-	)
-
+	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -1078,9 +1059,17 @@ func (a *arkClient) CollaborativeRedeem(
 		},
 	}
 
-	vtxos, err := a.innerClient.getSpendableVtxos(ctx, offchainAddr, withExpiryCoinselect)
-	if err != nil {
-		return "", err
+	var explorerSvc explorer.Explorer
+	if withExpiryCoinselect {
+		explorerSvc = a.explorer
+	}
+	vtxos := make([]*client.Vtxo, 0)
+	for _, offchainAddr := range offchainAddrs {
+		fetchedVtxos, err := a.client.GetSpendableVtxos(ctx, offchainAddr, explorerSvc)
+		if err != nil {
+			return "", err
+		}
+		vtxos = append(vtxos, fetchedVtxos...)
 	}
 
 	selectedCoins, changeAmount, err := coinSelect(vtxos, amount, withExpiryCoinselect)
@@ -1089,6 +1078,10 @@ func (a *arkClient) CollaborativeRedeem(
 	}
 
 	if changeAmount > 0 {
+		offchainAddr, _, err := a.wallet.NewAddress(ctx, true)
+		if err != nil {
+			return "", err
+		}
 		receivers = append(receivers, &arkv1.Output{
 			Address: offchainAddr,
 			Amount:  changeAmount,
@@ -1099,19 +1092,19 @@ func (a *arkClient) CollaborativeRedeem(
 
 	for _, coin := range selectedCoins {
 		inputs = append(inputs, &arkv1.Input{
-			Txid: coin.txid,
-			Vout: coin.vout,
+			Txid: coin.Txid,
+			Vout: coin.VOut,
 		})
 	}
 
-	registerResponse, err := a.innerClient.registerPayment(ctx, &arkv1.RegisterPaymentRequest{
+	registerResponse, err := a.client.RegisterPayment(ctx, &arkv1.RegisterPaymentRequest{
 		Inputs: inputs,
 	})
 	if err != nil {
 		return "", err
 	}
 
-	_, err = a.innerClient.claimPayment(ctx, &arkv1.ClaimPaymentRequest{
+	_, err = a.client.ClaimPayment(ctx, &arkv1.ClaimPaymentRequest{
 		Id:      registerResponse.GetId(),
 		Outputs: receivers,
 	})
@@ -1135,7 +1128,7 @@ func (a *arkClient) CollaborativeRedeem(
 func (a *arkClient) ping(
 	ctx context.Context, req *arkv1.PingRequest,
 ) func() {
-	_, err := a.innerClient.ping(ctx, req)
+	_, err := a.client.Ping(ctx, req)
 	if err != nil {
 		return nil
 	}
@@ -1145,7 +1138,7 @@ func (a *arkClient) ping(
 	go func(t *time.Ticker) {
 		for range t.C {
 			// nolint
-			a.innerClient.ping(ctx, req)
+			a.client.Ping(ctx, req)
 		}
 	}(ticker)
 

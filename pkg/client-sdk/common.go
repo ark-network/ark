@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"sort"
 
+	"github.com/ark-network/ark-sdk/client"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
@@ -17,63 +18,9 @@ import (
 	"github.com/vulpemventures/go-elements/taproot"
 )
 
-func getAddress(
-	walletPubKey []byte,
-	aspPubKey []byte,
-	unilateralExitDelay int64,
-	net string,
-) (offchainAddr, onchainAddr, redemptionAddr string, err error) {
-	userPubkey, err := secp256k1.ParsePubKey(walletPubKey)
-	if err != nil {
-		return
-	}
-
-	aspPubkey, err := secp256k1.ParsePubKey(aspPubKey)
-	if err != nil {
-		return
-	}
-
-	arkNet, liquidNet := networkFromString(net)
-
-	arkAddr, err := common.EncodeAddress(arkNet.Addr, userPubkey, aspPubkey)
-	if err != nil {
-		return
-	}
-
-	p2wpkh := payment.FromPublicKey(userPubkey, liquidNet, nil)
-	liquidAddr, err := p2wpkh.WitnessPubKeyHash()
-	if err != nil {
-		return
-	}
-
-	vtxoTapKey, _, err := computeVtxoTaprootScript(
-		userPubkey, aspPubkey, uint(unilateralExitDelay),
-	)
-	if err != nil {
-		return
-	}
-
-	_, n := networkFromString(net)
-
-	pay, err := payment.FromTweakedKey(vtxoTapKey, n, nil)
-	if err != nil {
-		return
-	}
-
-	redemptionAddr, err = pay.TaprootAddress()
-	if err != nil {
-		return
-	}
-
-	offchainAddr = arkAddr
-	onchainAddr = liquidAddr
-
-	return
-}
-
 func computeVtxoTaprootScript(
-	userPubkey, aspPubkey *secp256k1.PublicKey, exitDelay uint,
-) (*secp256k1.PublicKey, *taproot.TapscriptElementsProof, error) {
+	userPubkey, aspPubkey *secp256k1.PublicKey, exitDelay uint, net network.Network,
+) (*secp256k1.PublicKey, *taproot.TapscriptElementsProof, []byte, string, error) {
 	redeemClosure := &tree.CSVSigClosure{
 		Pubkey:  userPubkey,
 		Seconds: exitDelay,
@@ -86,12 +33,12 @@ func computeVtxoTaprootScript(
 
 	redeemLeaf, err := redeemClosure.Leaf()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, "", err
 	}
 
 	forfeitLeaf, err := forfeitClosure.Leaf()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, "", err
 	}
 
 	vtxoTaprootTree := taproot.AssembleTaprootScriptTree(
@@ -106,7 +53,22 @@ func computeVtxoTaprootScript(
 	proofIndex := vtxoTaprootTree.LeafProofIndex[redeemLeafHash]
 	proof := vtxoTaprootTree.LeafMerkleProofs[proofIndex]
 
-	return vtxoTaprootKey, &proof, nil
+	pay, err := payment.FromTweakedKey(vtxoTaprootKey, &net, nil)
+	if err != nil {
+		return nil, nil, nil, "", err
+	}
+
+	addr, err := pay.TaprootAddress()
+	if err != nil {
+		return nil, nil, nil, "", err
+	}
+
+	script, err := address.ToOutputScript(addr)
+	if err != nil {
+		return nil, nil, nil, "", err
+	}
+
+	return vtxoTaprootKey, &proof, script, addr, nil
 }
 
 func toCongestionTree(treeFromProto *arkv1.Tree) (tree.CongestionTree, error) {
@@ -138,14 +100,23 @@ func toCongestionTree(treeFromProto *arkv1.Tree) (tree.CongestionTree, error) {
 	return levels, nil
 }
 
-func networkFromString(net string) (*common.Network, *network.Network) {
-	if net == "testnet" {
-		return &common.TestNet, &network.Testnet
+func networkFromString(net string) common.Network {
+	switch net {
+	case common.Liquid.Name:
+		return common.Liquid
+	case common.LiquidTestNet.Name:
+		return common.LiquidTestNet
+	case common.LiquidRegTest.Name:
+		return common.LiquidRegTest
+	case common.BitcoinTestNet.Name:
+		return common.BitcoinTestNet
+	case common.BitcoinRegTest.Name:
+		return common.BitcoinRegTest
+	case common.Bitcoin.Name:
+		fallthrough
+	default:
+		return common.Bitcoin
 	}
-	if net == "regtest" {
-		return &common.RegTest, &network.Regtest
-	}
-	return &common.Liquid, &network.Liquid
 }
 
 func testEsploraEndpoint(net *network.Network, url string) error {
@@ -187,19 +158,19 @@ func castCongestionTree(congestionTree tree.CongestionTree) *arkv1.Tree {
 	}
 }
 
-func coinSelect(vtxos []vtxo, amount uint64, sortByExpirationTime bool) ([]vtxo, uint64, error) {
-	selected := make([]vtxo, 0)
-	notSelected := make([]vtxo, 0)
+func coinSelect(vtxos []*client.Vtxo, amount uint64, sortByExpirationTime bool) ([]*client.Vtxo, uint64, error) {
+	selected := make([]*client.Vtxo, 0)
+	notSelected := make([]*client.Vtxo, 0)
 	selectedAmount := uint64(0)
 
 	if sortByExpirationTime {
 		// sort vtxos by expiration (older first)
 		sort.SliceStable(vtxos, func(i, j int) bool {
-			if vtxos[i].expireAt == nil || vtxos[j].expireAt == nil {
+			if vtxos[i].ExpiresAt == nil || vtxos[j].ExpiresAt == nil {
 				return false
 			}
 
-			return vtxos[i].expireAt.Before(*vtxos[j].expireAt)
+			return vtxos[i].ExpiresAt.Before(*vtxos[j].ExpiresAt)
 		})
 	}
 
@@ -210,7 +181,7 @@ func coinSelect(vtxos []vtxo, amount uint64, sortByExpirationTime bool) ([]vtxo,
 		}
 
 		selected = append(selected, vtxo)
-		selectedAmount += vtxo.amount
+		selectedAmount += vtxo.Amount
 	}
 
 	if selectedAmount < amount {
@@ -222,7 +193,7 @@ func coinSelect(vtxos []vtxo, amount uint64, sortByExpirationTime bool) ([]vtxo,
 	if change < DUST {
 		if len(notSelected) > 0 {
 			selected = append(selected, notSelected[0])
-			change += notSelected[0].amount
+			change += notSelected[0].Amount
 		}
 	}
 

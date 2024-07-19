@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ark-network/ark-sdk/client"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
@@ -17,11 +18,9 @@ import (
 
 func (a *arkClient) handleRoundStream(
 	ctx context.Context,
-	paymentID string,
-	vtxosToSign []vtxo,
-	receivers []*arkv1.Output,
+	paymentID string, vtxosToSign []*client.Vtxo, receivers []*arkv1.Output,
 ) (string, error) {
-	eventStream, err := a.innerClient.getEventStream(ctx, paymentID, &arkv1.GetEventStreamRequest{})
+	eventsCh, err := a.client.GetEventStream(ctx, paymentID, &arkv1.GetEventStreamRequest{})
 	if err != nil {
 		return "", err
 	}
@@ -40,7 +39,12 @@ func (a *arkClient) handleRoundStream(
 		select {
 		case <-ctx.Done():
 			return "", ctx.Err()
-		case event := <-eventStream.eventResp:
+		case notify := <-eventsCh:
+			if notify.Err != nil {
+				return "", err
+			}
+
+			event := notify.Event
 			if e := event.GetRoundFailed(); e != nil {
 				pingStop()
 				return "", fmt.Errorf("round failed: %s", e.GetReason())
@@ -51,7 +55,7 @@ func (a *arkClient) handleRoundStream(
 				log.Info("a round finalization started")
 
 				signedForfeitTxs, err := a.handleRoundFinalization(
-					e, vtxosToSign, receivers,
+					ctx, e, vtxosToSign, receivers,
 				)
 				if err != nil {
 					return "", err
@@ -63,7 +67,7 @@ func (a *arkClient) handleRoundStream(
 				}
 
 				log.Info("finalizing payment... ")
-				_, err = a.innerClient.finalizePayment(ctx, &arkv1.FinalizePaymentRequest{
+				_, err = a.client.FinalizePayment(ctx, &arkv1.FinalizePaymentRequest{
 					SignedForfeitTxs: signedForfeitTxs,
 				})
 				if err != nil {
@@ -77,15 +81,14 @@ func (a *arkClient) handleRoundStream(
 			if event.GetRoundFinalized() != nil {
 				return event.GetRoundFinalized().GetPoolTxid(), nil
 			}
-		case e := <-eventStream.err:
-			return "", e
 		}
 	}
 }
 
 func (a *arkClient) handleRoundFinalization(
+	ctx context.Context,
 	finalization *arkv1.RoundFinalizationEvent,
-	vtxosToSign []vtxo,
+	vtxosToSign []*client.Vtxo,
 	receivers []*arkv1.Output,
 ) ([]string, error) {
 	if err := a.validateCongestionTree(finalization, receivers); err != nil {
@@ -93,7 +96,7 @@ func (a *arkClient) handleRoundFinalization(
 	}
 
 	return a.loopAndSign(
-		finalization.GetForfeitTxs(), vtxosToSign, finalization.GetConnectors(),
+		ctx, finalization.GetForfeitTxs(), vtxosToSign, finalization.GetConnectors(),
 	)
 }
 
@@ -114,14 +117,9 @@ func (a *arkClient) validateCongestionTree(
 
 	connectors := finalization.GetConnectors()
 
-	aspPubkey, err := secp256k1.ParsePubKey(a.aspPubKey)
-	if err != nil {
-		return err
-	}
-
 	if !isOnchainOnly(receivers) {
 		if err := tree.ValidateCongestionTree(
-			congestionTree, poolTx, aspPubkey, int64(a.roundLifeTime),
+			congestionTree, poolTx, a.StoreData.AspPubkey, a.RoundLifetime,
 		); err != nil {
 			return err
 		}
@@ -131,7 +129,7 @@ func (a *arkClient) validateCongestionTree(
 		return err
 	}
 
-	if err := a.validateReceivers(ptx, receivers, &congestionTree, aspPubkey); err != nil {
+	if err := a.validateReceivers(ptx, receivers, &congestionTree, a.StoreData.AspPubkey); err != nil {
 		return err
 	}
 
@@ -195,8 +193,9 @@ func (a *arkClient) validateOffChainReceiver(
 	userPubkey, aspPubkey *secp256k1.PublicKey,
 ) error {
 	found := false
-	outputTapKey, _, err := computeVtxoTaprootScript(
-		userPubkey, aspPubkey, uint(a.unilateralExitDelay),
+	net := a.explorer.GetNetwork()
+	outputTapKey, _, _, _, err := computeVtxoTaprootScript(
+		userPubkey, aspPubkey, uint(a.UnilateralExitDelay), net,
 	)
 	if err != nil {
 		return err
@@ -233,7 +232,8 @@ func (a *arkClient) validateOffChainReceiver(
 }
 
 func (a *arkClient) loopAndSign(
-	forfeitTxs []string, vtxosToSign []vtxo, connectors []string,
+	ctx context.Context,
+	forfeitTxs []string, vtxosToSign []*client.Vtxo, connectors []string,
 ) ([]string, error) {
 	signedForfeits := make([]string, 0)
 
@@ -254,8 +254,8 @@ func (a *arkClient) loopAndSign(
 		for _, input := range pset.Inputs {
 			inputTxid := chainhash.Hash(input.PreviousTxid).String()
 			for _, coin := range vtxosToSign {
-				if inputTxid == coin.txid {
-					signedPset, err := a.signForfeitTx(forfeitTx, pset, connectorsTxids)
+				if inputTxid == coin.Txid {
+					signedPset, err := a.signForfeitTx(ctx, forfeitTx, pset, connectorsTxids)
 					if err != nil {
 						return nil, err
 					}
@@ -269,7 +269,7 @@ func (a *arkClient) loopAndSign(
 }
 
 func (a *arkClient) signForfeitTx(
-	txStr string, tx *psetv2.Pset, connectorsTxids []string,
+	ctx context.Context, txStr string, tx *psetv2.Pset, connectorsTxids []string,
 ) (string, error) {
 	connectorTxid := chainhash.Hash(tx.Inputs[0].PreviousTxid).String()
 	connectorFound := false
@@ -283,5 +283,5 @@ func (a *arkClient) signForfeitTx(
 		return "", fmt.Errorf("connector txid %s not found in the connectors list", connectorTxid)
 	}
 
-	return a.wallet.SignTransaction(a.explorerSvc, txStr)
+	return a.wallet.SignTransaction(ctx, a.explorer, txStr)
 }
