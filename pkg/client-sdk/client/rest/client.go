@@ -38,7 +38,7 @@ func NewClient(args ...interface{}) (client.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	eventsCh := make(chan client.RoundEventChannel, 0)
+	eventsCh := make(chan client.RoundEventChannel)
 	reqTimeout := 15 * time.Second
 
 	return &restClient{svc, eventsCh, reqTimeout}, nil

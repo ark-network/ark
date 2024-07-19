@@ -49,6 +49,7 @@ func main() {
 	if err := aliceArkClient.Unlock(ctx, password); err != nil {
 		log.Fatal(err)
 	}
+	//nolint:all
 	defer aliceArkClient.Lock(ctx, password)
 
 	log.Info("alice is acquiring onchain funds...")
@@ -109,6 +110,7 @@ func main() {
 	if err := bobArkClient.Unlock(ctx, password); err != nil {
 		log.Fatal(err)
 	}
+	//nolint:all
 	defer bobArkClient.Lock(ctx, password)
 
 	bobOffchainAddr, _, err := bobArkClient.Receive(ctx)

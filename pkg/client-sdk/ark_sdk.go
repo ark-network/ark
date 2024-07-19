@@ -438,6 +438,7 @@ func (a *arkClient) SendOnchain(
 		return "", err
 	}
 	if !alreadyUnlocked {
+		//nolint:all
 		defer a.wallet.Lock(ctx, password)
 	}
 
@@ -598,6 +599,7 @@ func (a *arkClient) sendOffchain(
 		return "", err
 	}
 	if !alreadyUnlocked {
+		//nolint:all
 		defer a.wallet.Lock(ctx, password)
 	}
 

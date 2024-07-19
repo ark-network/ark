@@ -2,8 +2,6 @@ package arksdk
 
 import (
 	"fmt"
-	"io"
-	"net/http"
 	"sort"
 
 	"github.com/ark-network/ark-sdk/client"
@@ -12,9 +10,6 @@ import (
 	"github.com/ark-network/ark/common/tree"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/address"
-	"github.com/vulpemventures/go-elements/network"
-	"github.com/vulpemventures/go-elements/psetv2"
-	"github.com/vulpemventures/go-elements/taproot"
 )
 
 func toCongestionTree(treeFromProto *arkv1.Tree) (tree.CongestionTree, error) {
@@ -44,23 +39,6 @@ func toCongestionTree(treeFromProto *arkv1.Tree) (tree.CongestionTree, error) {
 	}
 
 	return levels, nil
-}
-
-func testEsploraEndpoint(net *network.Network, url string) error {
-	resp, err := http.Get(fmt.Sprintf("%s/asset/%s", url, net.AssetID))
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf(string(body))
-	}
-
-	return nil
 }
 
 func castCongestionTree(congestionTree tree.CongestionTree) *arkv1.Tree {
@@ -125,42 +103,6 @@ func coinSelect(vtxos []*client.Vtxo, amount uint64, sortByExpirationTime bool) 
 	}
 
 	return selected, change, nil
-}
-
-func findSweepClosure(
-	congestionTree tree.CongestionTree,
-) (*taproot.TapElementsLeaf, uint, error) {
-	root, err := congestionTree.Root()
-	if err != nil {
-		return nil, 0, err
-	}
-
-	// find the sweep closure
-	tx, err := psetv2.NewPsetFromBase64(root.Tx)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	var seconds uint
-	var sweepClosure *taproot.TapElementsLeaf
-	for _, tapLeaf := range tx.Inputs[0].TapLeafScript {
-		closure := &tree.CSVSigClosure{}
-		valid, err := closure.Decode(tapLeaf.Script)
-		if err != nil {
-			continue
-		}
-
-		if valid && closure.Seconds > seconds {
-			seconds = closure.Seconds
-			sweepClosure = &tapLeaf.TapElementsLeaf
-		}
-	}
-
-	if sweepClosure == nil {
-		return nil, 0, fmt.Errorf("sweep closure not found")
-	}
-
-	return sweepClosure, seconds, nil
 }
 
 func decodeReceiverAddress(addr string) (

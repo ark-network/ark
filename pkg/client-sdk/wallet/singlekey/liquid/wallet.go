@@ -163,7 +163,7 @@ func (w *singlekeyWallet) NewAddresses(
 
 	offchainAddrs := make([]string, 0, num)
 	onchainAddrs := make([]string, 0, num)
-	for range num {
+	for i := 0; i < num; i++ {
 		offchainAddrs = append(offchainAddrs, offchainAddr)
 		onchainAddrs = append(onchainAddrs, onchainAddr)
 	}

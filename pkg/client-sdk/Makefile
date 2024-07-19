@@ -1,4 +1,4 @@
-.PHONY: genrest test vet
+.PHONY: genrest test vet lint
 
 ## genrest: compiles rest client from stub with https://github.com/go-swagger/go-swagger
 genrest:
@@ -14,3 +14,8 @@ test:
 vet:
 	@echo "Running code analysis..."
 	@go vet ./...
+
+## lint: lint codebase
+lint:
+	@echo "Linting code..."
+	@golangci-lint run --fix
