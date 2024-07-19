@@ -16,3 +16,5 @@ type WalletStore interface {
 	AddWallet(data WalletData) error
 	GetWallet() (*WalletData, error)
 }
+
+type WalletStoreFactory func(args ...interface{}) (WalletStore, error)

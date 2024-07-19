@@ -53,9 +53,19 @@ type fileStore struct {
 	filePath string
 }
 
-func NewWalletStore(
-	baseDir string, store store.Store,
-) (walletstore.WalletStore, error) {
+func NewWalletStore(args ...interface{}) (walletstore.WalletStore, error) {
+	if len(args) != 2 {
+		return nil, fmt.Errorf("invalid nuber of args")
+	}
+	baseDir, ok := args[0].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid base url")
+	}
+	store, ok := args[1].(store.Store)
+	if !ok {
+		return nil, fmt.Errorf("invalid store")
+	}
+
 	datadir := cleanAndExpandPath(baseDir)
 	if err := makeDirectoryIfNotExists(datadir); err != nil {
 		return nil, fmt.Errorf("failed to initialize datadir: %s", err)
@@ -65,7 +75,7 @@ func NewWalletStore(
 	fileStore := &fileStore{store, filePath}
 
 	if _, err := fileStore.open(); err != nil {
-		return nil, fmt.Errorf("failed to open file store")
+		return nil, fmt.Errorf("failed to open file store: %s", err)
 	}
 
 	return fileStore, nil
@@ -87,7 +97,13 @@ func (s *fileStore) AddWallet(data walletstore.WalletData) error {
 func (s *fileStore) GetWallet() (*walletstore.WalletData, error) {
 	wd, err := s.open()
 	if err != nil {
-		return nil, err
+		if !os.IsNotExist(err) {
+			return nil, err
+		}
+		if err := s.write(&walletData{}); err != nil {
+			return nil, fmt.Errorf("failed to initialize store: %s", err)
+		}
+		return nil, nil
 	}
 	if wd.isEmpty() {
 		return nil, nil
@@ -119,11 +135,15 @@ func (s *fileStore) open() (*walletData, error) {
 func (s *fileStore) write(data *walletData) error {
 	file, err := os.ReadFile(s.filePath)
 	if err != nil {
-		return err
+		if !os.IsNotExist(err) {
+			return err
+		}
 	}
 	currentData := map[string]string{}
-	if err := json.Unmarshal(file, &data); err != nil {
-		return fmt.Errorf("failed to read file store: %s", err)
+	if len(file) > 0 {
+		if err := json.Unmarshal(file, &currentData); err != nil {
+			return fmt.Errorf("failed to read file store: %s", err)
+		}
 	}
 
 	mergedData := merge(currentData, data.asMap())
