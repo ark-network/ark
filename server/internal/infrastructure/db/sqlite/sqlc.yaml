@@ -1,0 +1,7 @@
+version: 1
+packages:
+  - engine: "sqlite"
+    queries: "sqlc/query.sql"
+    schema: "migration"
+    path: "sqlc/queries"
+    name: "queries"

@@ -9,23 +9,6 @@ import (
 )
 
 const (
-	createVtxoTable = `
-CREATE TABLE IF NOT EXISTS vtxo (
-	txid TEXT NOT NULL PRIMARY KEY,
-	vout INTEGER NOT NULL,
-	pubkey TEXT NOT NULL,
-	amount INTEGER NOT NULL,
-	pool_tx TEXT NOT NULL,
-	spent_by TEXT NOT NULL,
-	spent BOOLEAN NOT NULL,
-	redeemed BOOLEAN NOT NULL,
-	swept BOOLEAN NOT NULL,
-	expire_at INTEGER NOT NULL,
-	payment_id TEXT,
-	FOREIGN KEY (payment_id) REFERENCES payment(id)
-);
-`
-
 	upsertVtxos = `
 INSERT INTO vtxo (txid, vout, pubkey, amount, pool_tx, spent_by, spent, redeemed, swept, expire_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(txid) DO UPDATE SET
@@ -102,15 +85,6 @@ func NewVtxoRepository(config ...interface{}) (domain.VtxoRepository, error) {
 	db, ok := config[0].(*sql.DB)
 	if !ok {
 		return nil, fmt.Errorf("cannot open vtxo repository: invalid config")
-	}
-
-	return newVtxoRepository(db)
-}
-
-func newVtxoRepository(db *sql.DB) (*vxtoRepository, error) {
-	_, err := db.Exec(createVtxoTable)
-	if err != nil {
-		return nil, err
 	}
 
 	return &vxtoRepository{db}, nil

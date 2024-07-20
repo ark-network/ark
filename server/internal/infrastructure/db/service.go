@@ -1,6 +1,7 @@
 package db
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -8,6 +9,10 @@ import (
 	"github.com/ark-network/ark/internal/core/ports"
 	badgerdb "github.com/ark-network/ark/internal/infrastructure/db/badger"
 	sqlitedb "github.com/ark-network/ark/internal/infrastructure/db/sqlite"
+
+	"github.com/golang-migrate/migrate/v4"
+	sqlitemigrate "github.com/golang-migrate/migrate/v4/database/sqlite"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
 var (
@@ -89,8 +94,28 @@ func NewService(config ServiceConfig) (ports.RepoManager, error) {
 		if !ok {
 			return nil, fmt.Errorf("invalid base directory")
 		}
-		db, err := sqlitedb.OpenDb(filepath.Join(baseDir, sqliteDbFile))
+
+		dbFile := filepath.Join(baseDir, sqliteDbFile)
+		db, err := sqlitedb.OpenDb(dbFile)
 		if err != nil {
+			return nil, err
+		}
+
+		driver, err := sqlitemigrate.WithInstance(db, &sqlitemigrate.Config{})
+		if err != nil {
+			return nil, err
+		}
+
+		m, err := migrate.NewWithDatabaseInstance(
+			dbFile,
+			"arkdb",
+			driver,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 			return nil, err
 		}
 
