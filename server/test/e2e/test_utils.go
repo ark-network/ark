@@ -35,16 +35,6 @@ type ArkTrustedOnboard struct {
 	OnboardAddress string `json:"onboard_address"`
 }
 
-func RunOceanCommand(arg ...string) (string, error) {
-	args := append([]string{"exec", "oceand", "ocean"}, arg...)
-	return RunCommand("docker", args...)
-}
-
-func RunArkCommand(arg ...string) (string, error) {
-	args := append([]string{"exec", "-t", "arkd", "ark"}, arg...)
-	return RunCommand("docker", args...)
-}
-
 func GenerateBlock() error {
 	if _, err := RunCommand("nigiri", "rpc", "--liquid", "generatetoaddress", "1", "el1qqwk722tghgkgmh3r2ph4d2apwj0dy9xnzlenzklx8jg3z299fpaw56trre9gpk6wmw0u4qycajqeva3t7lzp7wnacvwxha59r"); err != nil {
 		return err

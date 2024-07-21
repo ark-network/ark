@@ -1,8 +1,6 @@
-version: "3.7"
-
 services:
-  arkd:
-    container_name: arkd 
+  clarkd:
+    container_name: clarkd 
     build: 
       context: .
       dockerfile: Dockerfile
