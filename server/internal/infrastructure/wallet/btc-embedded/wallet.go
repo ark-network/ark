@@ -149,7 +149,9 @@ func NewService(cfg WalletConfig, options ...WalletOption) (ports.WalletService,
 	}
 
 	for _, option := range options {
-		option(svc)
+		if err := option(svc); err != nil {
+			return nil, err
+		}
 	}
 
 	opt := btcwallet.LoaderWithLocalWalletDB(cfg.Datadir, false, time.Minute)
