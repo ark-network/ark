@@ -316,6 +316,10 @@ func (b *txBuilder) FindLeaves(
 	return foundLeaves, nil
 }
 
+func (b *txBuilder) ShortcutVtxoTransactions(_ domain.Vtxo, _, _ *secp256k1.PublicKey) (_ string, _ string, _ string, _ error) {
+	return "", "", "", fmt.Errorf("not implemented")
+}
+
 func (b *txBuilder) getLeafScriptAndTree(
 	userPubkey, aspPubkey *secp256k1.PublicKey,
 ) ([]byte, *taproot.IndexedElementsTapScriptTree, error) {

@@ -30,14 +30,15 @@ const (
 type txBuilder struct {
 	wallet        ports.WalletService
 	net           common.Network
-	roundLifetime int64 // in seconds
-	exitDelay     int64 // in seconds
+	roundLifetime int64 // seconds
+	exitDelay     int64 // seconds
+	shortcutDelay int64 // seconds
 }
 
 func NewTxBuilder(
-	wallet ports.WalletService, net common.Network, roundLifetime int64, exitDelay int64,
+	wallet ports.WalletService, net common.Network, roundLifetime int64, exitDelay int64, shortcutDelay int64,
 ) ports.TxBuilder {
-	return &txBuilder{wallet, net, roundLifetime, exitDelay}
+	return &txBuilder{wallet, net, roundLifetime, exitDelay, shortcutDelay}
 }
 
 func (b *txBuilder) VerifyForfeitTx(tx string) (bool, string, error) {
@@ -303,6 +304,235 @@ func (b *txBuilder) FindLeaves(congestionTree tree.CongestionTree, fromtxid stri
 	return foundLeaves, nil
 }
 
+func (b *txBuilder) ShortcutVtxoTransactions(vtxo domain.Vtxo, aspPubKey, receiver *secp256k1.PublicKey) (receiverRedeemTx, senderRedeemTx, forfeitTx string, err error) {
+	if vtxo.Spent {
+		return "", "", "", fmt.Errorf("vtxo already spent")
+	}
+
+	senderBytes, err := hex.DecodeString(vtxo.Pubkey)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	sender, err := secp256k1.ParsePubKey(senderBytes)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	aspScript, err := p2trScript(aspPubKey, b.onchainNetwork())
+	if err != nil {
+		return "", "", "", err
+	}
+
+	senderCSV := bitcointree.CSVSigClosure{
+		Pubkey:  sender,
+		Seconds: uint(b.shortcutDelay),
+	}
+
+	senderAndASP := bitcointree.MultisigClosure{
+		Pubkey:    sender,
+		AspPubkey: aspPubKey,
+	}
+
+	vtxoTxID, err := chainhash.NewHashFromStr(vtxo.Txid)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	vtxoOutpoint := &wire.OutPoint{
+		Hash:  *vtxoTxID,
+		Index: vtxo.VOut,
+	}
+
+	senderCSVLeaf, err := senderCSV.Leaf()
+	if err != nil {
+		return "", "", "", err
+	}
+
+	senderAndASPLeaf, err := senderAndASP.Leaf()
+	if err != nil {
+		return "", "", "", err
+	}
+
+	tapTreeSenderRedeem := txscript.AssembleTaprootScriptTree(
+		*senderAndASPLeaf, *senderCSVLeaf,
+	)
+
+	root := tapTreeSenderRedeem.RootNode.TapHash()
+
+	pkScript, err := txscript.PayToTaprootScript(
+		txscript.ComputeTaprootOutputKey(
+			bitcointree.UnspendableKey(), root.CloneBytes(),
+		),
+	)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	output := &wire.TxOut{
+		Value:    int64(vtxo.Amount),
+		PkScript: pkScript,
+	}
+
+	senderRedeemPsbt, err := psbt.New(
+		[]*wire.OutPoint{vtxoOutpoint},
+		[]*wire.TxOut{output},
+		2,
+		0,
+		[]uint32{wire.MaxTxInSequenceNum},
+	)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	vtxoScript, vtxoTree, err := b.getLeafScriptAndTree(sender, aspPubKey)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	senderRedeemPsbt.Inputs[0].WitnessUtxo = &wire.TxOut{
+		Value:    int64(vtxo.Amount),
+		PkScript: vtxoScript,
+	}
+
+	forfeitClosure := &bitcointree.MultisigClosure{
+		Pubkey:    sender,
+		AspPubkey: aspPubKey,
+	}
+
+	forfeitLeaf, err := forfeitClosure.Leaf()
+	if err != nil {
+		return "", "", "", err
+	}
+
+	leafProof := vtxoTree.LeafMerkleProofs[vtxoTree.LeafProofIndex[forfeitLeaf.TapHash()]]
+	ctrlBlock := leafProof.ToControlBlock(bitcointree.UnspendableKey())
+	ctrlBlockBytes, err := ctrlBlock.ToBytes()
+	if err != nil {
+		return "", "", "", err
+	}
+
+	senderRedeemPsbt.Inputs[0].TaprootInternalKey = schnorr.SerializePubKey(bitcointree.UnspendableKey())
+	senderRedeemPsbt.Inputs[0].TaprootLeafScript = []*psbt.TaprootTapLeafScript{
+		{
+			ControlBlock: ctrlBlockBytes,
+			Script:       senderCSVLeaf.Script,
+			LeafVersion:  txscript.BaseLeafVersion,
+		},
+	}
+
+	b64, err := senderRedeemPsbt.B64Encode()
+	if err != nil {
+		return "", "", "", err
+	}
+
+	fees, err := b.wallet.EstimateFees(
+		context.Background(),
+		b64,
+	)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	if fees > vtxo.Amount {
+		return "", "", "", fmt.Errorf("fees higher than the vtxo amount amount")
+	}
+
+	senderRedeemPsbt.UnsignedTx.TxOut[0].Value = int64(vtxo.Amount - fees)
+
+	senderRedeemTx, err = senderRedeemPsbt.B64Encode()
+	if err != nil {
+		return "", "", "", err
+	}
+
+	forfeitOutpoint := &wire.OutPoint{
+		Hash:  senderRedeemPsbt.UnsignedTx.TxHash(),
+		Index: 0,
+	}
+
+	output = &wire.TxOut{
+		PkScript: aspScript,
+		Value:    senderRedeemPsbt.UnsignedTx.TxOut[0].Value - int64(fees),
+	}
+
+	unconditionnalForfeitPsbt, err := psbt.New(
+		[]*wire.OutPoint{forfeitOutpoint},
+		[]*wire.TxOut{output},
+		2,
+		0,
+		[]uint32{wire.MaxTxInSequenceNum},
+	)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	ctrlBlock = tapTreeSenderRedeem.LeafMerkleProofs[tapTreeSenderRedeem.LeafProofIndex[senderAndASPLeaf.TapHash()]].ToControlBlock(bitcointree.UnspendableKey())
+	ctrlBlockBytes, err = ctrlBlock.ToBytes()
+	if err != nil {
+		return "", "", "", err
+	}
+
+	unconditionnalForfeitPsbt.Inputs[0].WitnessUtxo = &wire.TxOut{
+		Value:    senderRedeemPsbt.UnsignedTx.TxOut[0].Value,
+		PkScript: senderRedeemPsbt.UnsignedTx.TxOut[0].PkScript,
+	}
+
+	unconditionnalForfeitPsbt.Inputs[0].TaprootInternalKey = schnorr.SerializePubKey(bitcointree.UnspendableKey())
+	unconditionnalForfeitPsbt.Inputs[0].TaprootLeafScript = []*psbt.TaprootTapLeafScript{
+		{
+			ControlBlock: ctrlBlockBytes,
+			Script:       senderAndASPLeaf.Script,
+			LeafVersion:  txscript.BaseLeafVersion,
+		},
+	}
+
+	forfeitTx, err = unconditionnalForfeitPsbt.B64Encode()
+	if err != nil {
+		return "", "", "", err
+	}
+
+	// forfeitClosure := &bitcointree.MultisigClosure{
+	// 	Pubkey:    userPubkey,
+	// 	AspPubkey: aspPubkey,
+	// }
+
+	shortcutedVtxoScript, _, err := b.getLeafScriptAndTree(receiver, aspPubKey)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	receiverRedeemPsbt, err := psbt.New(
+		nil,
+		[]*wire.TxOut{
+			{
+				Value:    senderRedeemPsbt.UnsignedTx.TxOut[0].Value,
+				PkScript: shortcutedVtxoScript,
+			},
+		},
+		2,
+		0,
+		nil,
+	)
+	if err != nil {
+		return "",
+			"",
+			"",
+			err
+	}
+
+	receiverRedeemPsbt.Inputs = senderRedeemPsbt.Inputs
+
+	receiverRedeemTx, err = receiverRedeemPsbt.B64Encode()
+	if err != nil {
+		return "",
+			"",
+			"",
+			err
+	}
+
+	return
+}
+
 func (b *txBuilder) getLeafScriptAndTree(
 	userPubkey, aspPubkey *secp256k1.PublicKey,
 ) ([]byte, *txscript.IndexedTapScriptTree, error) {
@@ -316,7 +546,7 @@ func (b *txBuilder) getLeafScriptAndTree(
 		return nil, nil, err
 	}
 
-	forfeitClosure := &bitcointree.ForfeitClosure{
+	forfeitClosure := &bitcointree.MultisigClosure{
 		Pubkey:    userPubkey,
 		AspPubkey: aspPubkey,
 	}
@@ -693,7 +923,7 @@ func (b *txBuilder) createConnectors(
 func (b *txBuilder) createForfeitTxs(
 	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, connectors []*psbt.Packet, minRelayFee uint64,
 ) ([]string, error) {
-	aspScript, err := p2wpkhScript(aspPubkey, b.onchainNetwork())
+	aspScript, err := p2trScript(aspPubkey, b.onchainNetwork())
 	if err != nil {
 		return nil, err
 	}
@@ -719,7 +949,7 @@ func (b *txBuilder) createForfeitTxs(
 			var forfeitProof *txscript.TapscriptProof
 
 			for _, proof := range vtxoTaprootTree.LeafMerkleProofs {
-				isForfeit, err := (&bitcointree.ForfeitClosure{}).Decode(proof.Script)
+				isForfeit, err := (&bitcointree.MultisigClosure{}).Decode(proof.Script)
 				if !isForfeit || err != nil {
 					continue
 				}

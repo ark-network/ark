@@ -23,7 +23,7 @@ type WalletService interface {
 	SelectUtxos(ctx context.Context, asset string, amount uint64) ([]TxInput, uint64, error)
 	BroadcastTransaction(ctx context.Context, txHex string) (string, error)
 	WaitForSync(ctx context.Context, txid string) error
-	EstimateFees(ctx context.Context, pset string) (uint64, error)
+	EstimateFees(ctx context.Context, psbt string) (uint64, error)
 	ListConnectorUtxos(ctx context.Context, connectorAddress string) ([]TxInput, error)
 	MainAccountBalance(ctx context.Context) (uint64, uint64, error)
 	ConnectorsAccountBalance(ctx context.Context) (uint64, uint64, error)
