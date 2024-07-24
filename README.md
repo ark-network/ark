@@ -57,51 +57,6 @@ Faucet the address using nigiri
 nigiri faucet <ASP_address>
 ```
 
-### Ark with covenants (Liquid only)
-
-#### Setup the Ocean wallet
-
-Run locally with Docker on Liquid Testnet. It uses `docker-compose` to build the `arkd` docker image from `server` and run the it as container, together with the `oceand` container.
-
-Start `oceand` in Liquid Testnet:
-
-```bash
-docker compose up -d oceand
-```
-
-Setup `oceand`:
-
-```bash
-alias ocean='docker exec oceand ocean'
-ocean config init --no-tls
-ocean wallet create --password <password>
-ocean wallet unlock --password <password>
-```
-
-#### Run `arkd` connected to Ocean
-
-Start the ASP
-
-```bash
-docker compose up -d arkd
-```
-
-**Note:** On startup `arkd` will create an account `ark` on oceand.
-
-Get an address from Ocean to add funds to the ASP:
-
-```bash
-ocean account derive --account-name ark
-```
-
-Fund the resulting address with [Liquid testnet faucet](https://liquidtestnet.com/faucet).
-
-Check the balance of the `ark` account:
-
-```bash
-ocean account --account-name=ark balance
-```
-
 ### Ark client
 
 Inside the `arkd` container is shipped the `ark` CLI. You can submit payment to the ASP using the `ark` CLI.
@@ -122,7 +77,7 @@ This will add a `state.json` file to the following directory:
 
 ```bash
 export ARK_WALLET_DATADIR=path/to/custom
-ark init --password <password> --ark-url localhost:8080 --network testnet
+ark init --password <password> --ark-url localhost:8080 --network regtest
 ```
 
 Add funds to the ark wallet:
@@ -134,8 +89,6 @@ ark receive
   "onchain_address": <address starting with "tex1q...">
 }
 ```
-
-Fund the `onchain_address` with https://liquidtestnet.com/faucet.
 
 Onboard the ark:
 
@@ -164,7 +117,6 @@ ark2 receive
 {
   "offchain_address": <address starting with "tark1q...">,
   "onchain_address": <address starting with "tex1q...">,
-  "relays": ["localhost:8080"]
 }
 ```
 
@@ -189,6 +141,13 @@ ark balance
   "onchain_balance": 0
 }
 ```
+
+#### Send async payment
+
+```bash
+ark send --to <ark_address> --async
+``` 
+
 
 ### Exiting
 
