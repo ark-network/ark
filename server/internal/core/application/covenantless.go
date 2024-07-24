@@ -42,6 +42,11 @@ type covenantlessService struct {
 	onboardingCh chan onboarding
 
 	currentRound *domain.Round
+
+	asyncPaymentsCache map[domain.VtxoKey]struct {
+		receiver *secp256k1.PublicKey
+		expireAt int64
+	}
 }
 
 func NewCovenantlessService(
@@ -67,7 +72,10 @@ func NewCovenantlessService(
 		network, pubkey,
 		roundLifetime, roundInterval, unilateralExitDelay, minRelayFee,
 		walletSvc, repoManager, builder, scanner, sweeper,
-		paymentRequests, forfeitTxs, eventsCh, onboardingCh, nil,
+		paymentRequests, forfeitTxs, eventsCh, onboardingCh, nil, make(map[domain.VtxoKey]struct {
+			receiver *secp256k1.PublicKey
+			expireAt int64
+		}),
 	}
 	repoManager.RegisterEventsHandler(
 		func(round *domain.Round) {
@@ -113,6 +121,94 @@ func (s *covenantlessService) Stop() {
 	log.Debug("closed connection to db")
 	close(s.eventsCh)
 	close(s.onboardingCh)
+}
+
+func (s *covenantlessService) CompleteAsyncPayment(ctx context.Context, payment *domain.AsyncPaymentTxs) error {
+	// TODO check that the user signed both transactions
+
+	redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(payment.RedeemTx), true)
+	if err != nil {
+		return fmt.Errorf("failed to parse redeem tx: %s", err)
+	}
+
+	vtxoSpent := domain.VtxoKey{
+		Txid: redeemPtx.UnsignedTx.TxIn[0].PreviousOutPoint.Hash.String(),
+		VOut: redeemPtx.UnsignedTx.TxIn[0].PreviousOutPoint.Index,
+	}
+
+	asyncPayData, ok := s.asyncPaymentsCache[vtxoSpent]
+	if !ok {
+		return fmt.Errorf("async payment not found")
+	}
+
+	newVtxoOutpoint := domain.VtxoKey{
+		Txid: redeemPtx.UnsignedTx.TxID(),
+		VOut: 0,
+	}
+
+	vtxo := domain.Vtxo{
+		VtxoKey: newVtxoOutpoint,
+		Receiver: domain.Receiver{
+			Pubkey: hex.EncodeToString(asyncPayData.receiver.SerializeCompressed()),
+			Amount: uint64(redeemPtx.UnsignedTx.TxOut[0].Value),
+		},
+		ExpireAt:     asyncPayData.expireAt,
+		AsyncPayment: payment,
+	}
+
+	if err := s.repoManager.Vtxos().AddVtxos(ctx, []domain.Vtxo{
+		vtxo,
+	}); err != nil {
+		return fmt.Errorf("failed to add vtxo: %s", err)
+	}
+
+	if err := s.repoManager.Vtxos().SpendVtxos(ctx, []domain.VtxoKey{vtxoSpent}, redeemPtx.UnsignedTx.TxID()); err != nil {
+		return fmt.Errorf("failed to spend vtxo: %s", err)
+	}
+
+	delete(s.asyncPaymentsCache, vtxoSpent)
+
+	return nil
+}
+
+func (s *covenantlessService) CreateAsyncPayment(ctx context.Context, input domain.VtxoKey, receiverPubkey *secp256k1.PublicKey) (*domain.AsyncPaymentTxs, error) {
+	vtxos, err := s.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{input})
+	if err != nil {
+		return nil, err
+	}
+
+	if len(vtxos) == 0 {
+		return nil, fmt.Errorf("vtxo not found")
+	}
+
+	vtxo := vtxos[0]
+
+	if vtxo.Spent {
+		return nil, fmt.Errorf("vtxo already spent")
+	}
+
+	if vtxo.Redeemed {
+		return nil, fmt.Errorf("vtxo is redeemed")
+	}
+
+	if vtxo.Swept {
+		return nil, fmt.Errorf("vtxo is swept")
+	}
+
+	res, err := s.builder.BuildAsyncPaymentTransactions(vtxo, s.pubkey, receiverPubkey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build async payment txs: %s", err)
+	}
+
+	s.asyncPaymentsCache[input] = struct {
+		receiver *secp256k1.PublicKey
+		expireAt int64
+	}{
+		receiver: receiverPubkey,
+		expireAt: vtxo.ExpireAt,
+	}
+
+	return res, nil
 }
 
 func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []domain.VtxoKey) (string, error) {

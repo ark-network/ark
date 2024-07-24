@@ -66,7 +66,38 @@ service ArkService {
       body: "*"
     };
   }
+
+  rpc CreateAsyncPayment(CreateAsyncPaymentRequest) returns (CreateAsyncPaymentResponse) {
+    option (google.api.http) = {
+      post: "/v1/payment/async"
+      body: "*"
+    };
+  }
+
+  rpc CompleteAsyncPayment(CompleteAsyncPaymentRequest) returns (CompleteAsyncPaymentResponse) {
+    option (google.api.http) = {
+      post: "/v1/payment/async/complete"
+      body: "*"
+    };
+  }
 }
+
+message CreateAsyncPaymentRequest {
+  Input input = 1;
+  string receiver_pubkey = 2;
+}
+
+message CreateAsyncPaymentResponse {
+  string signed_redeem_tx = 1; // signed only by the ASP
+  string usigned_unconditional_forfeit_tx = 2;
+}
+
+message CompleteAsyncPaymentRequest {
+  string signed_redeem_tx = 1;
+  string signed_unconditional_forfeit_tx = 2;
+}
+
+message CompleteAsyncPaymentResponse {}
 
 message RegisterPaymentRequest {
   repeated Input inputs = 1;

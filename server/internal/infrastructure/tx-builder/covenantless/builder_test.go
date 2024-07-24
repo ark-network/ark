@@ -25,7 +25,6 @@ const (
 	minRelayFee         = uint64(30)
 	roundLifetime       = int64(1209344)
 	unilateralExitDelay = int64(512)
-	shortcutDelay       = int64(512)
 )
 
 var (
@@ -50,7 +49,7 @@ func TestMain(m *testing.M) {
 
 func TestBuildPoolTx(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(
-		wallet, common.Bitcoin, roundLifetime, unilateralExitDelay, shortcutDelay,
+		wallet, common.Bitcoin, roundLifetime, unilateralExitDelay,
 	)
 
 	fixtures, err := parsePoolTxFixtures()
@@ -107,7 +106,7 @@ func TestBuildPoolTx(t *testing.T) {
 
 func TestBuildForfeitTxs(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(
-		wallet, common.Bitcoin, 1209344, unilateralExitDelay, shortcutDelay,
+		wallet, common.Bitcoin, 1209344, unilateralExitDelay,
 	)
 
 	fixtures, err := parseForfeitTxsFixtures()

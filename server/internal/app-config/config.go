@@ -54,7 +54,6 @@ type Config struct {
 	MinRelayFee           uint64
 	RoundLifetime         int64
 	UnilateralExitDelay   int64
-	ShortcutDelay         int64
 
 	EsploraURL   string
 	NeutrinoPeer string
@@ -120,12 +119,6 @@ func (c *Config) Validate() error {
 		)
 	}
 
-	if c.ShortcutDelay < minAllowedSequence {
-		return fmt.Errorf(
-			"invalid shortcut delay, must at least %d", minAllowedSequence,
-		)
-	}
-
 	if c.RoundLifetime%minAllowedSequence != 0 {
 		c.RoundLifetime -= c.RoundLifetime % minAllowedSequence
 		log.Infof(
@@ -139,14 +132,6 @@ func (c *Config) Validate() error {
 		log.Infof(
 			"unilateral exit delay must be a multiple of %d, rounded to %d",
 			minAllowedSequence, c.UnilateralExitDelay,
-		)
-	}
-
-	if c.ShortcutDelay%minAllowedSequence != 0 {
-		c.ShortcutDelay -= c.ShortcutDelay % minAllowedSequence
-		log.Infof(
-			"shortcut delay must be a multiple of %d, rounded to %d",
-			minAllowedSequence, c.ShortcutDelay,
 		)
 	}
 
@@ -262,7 +247,7 @@ func (c *Config) txBuilderService() error {
 		)
 	case "covenantless":
 		svc = cltxbuilder.NewTxBuilder(
-			c.wallet, c.Network, c.RoundLifetime, c.UnilateralExitDelay, c.ShortcutDelay,
+			c.wallet, c.Network, c.RoundLifetime, c.UnilateralExitDelay,
 		)
 	default:
 		err = fmt.Errorf("unknown tx builder type")

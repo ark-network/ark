@@ -48,7 +48,6 @@ var (
 	MinRelayFee           = "MIN_RELAY_FEE"
 	RoundLifetime         = "ROUND_LIFETIME"
 	UnilateralExitDelay   = "UNILATERAL_EXIT_DELAY"
-	ShortcutDelay         = "SHORTCUT_DELAY"
 	AuthUser              = "AUTH_USER"
 	AuthPass              = "AUTH_PASS"
 	EsploraURL            = "ESPLORA_URL"
@@ -91,7 +90,6 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(EventDbType, defaultEventDbType)
 	viper.SetDefault(TxBuilderType, defaultTxBuilderType)
 	viper.SetDefault(UnilateralExitDelay, defaultUnilateralExitDelay)
-	viper.SetDefault(ShortcutDelay, defaultUnilateralExitDelay)
 	viper.SetDefault(BlockchainScannerType, defaultBlockchainScannerType)
 	viper.SetDefault(AuthUser, defaultAuthUser)
 	viper.SetDefault(AuthPass, defaultAuthPass)
