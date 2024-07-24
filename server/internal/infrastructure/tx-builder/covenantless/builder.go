@@ -426,7 +426,7 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(vtxo domain.Vtxo, aspPubKey, r
 		},
 		2,
 		0,
-		nil,
+		[]uint32{wire.MaxTxInSequenceNum},
 	)
 	if err != nil {
 		return nil, err

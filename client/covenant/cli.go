@@ -25,6 +25,10 @@ const dust = 450
 
 type covenantLiquidCLI struct{}
 
+func (c *covenantLiquidCLI) SendAsync(ctx *cli.Context) error {
+	return fmt.Errorf("not implemented")
+}
+
 func (c *covenantLiquidCLI) Receive(ctx *cli.Context) error {
 	offchainAddr, onchainAddr, _, err := getAddress(ctx)
 	if err != nil {

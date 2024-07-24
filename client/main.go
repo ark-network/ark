@@ -97,9 +97,13 @@ var (
 			if err != nil {
 				return err
 			}
+			if ctx.Bool(flags.AsyncPaymentFlag.Name) {
+				return cli.SendAsync(ctx)
+			}
+
 			return cli.Send(ctx)
 		},
-		Flags: []cli.Flag{&flags.ReceiversFlag, &flags.ToFlag, &flags.AmountFlag, &flags.PasswordFlag, &flags.EnableExpiryCoinselectFlag},
+		Flags: []cli.Flag{&flags.ReceiversFlag, &flags.ToFlag, &flags.AmountFlag, &flags.PasswordFlag, &flags.EnableExpiryCoinselectFlag, &flags.AsyncPaymentFlag},
 	}
 
 	receiveCommand = cli.Command{
