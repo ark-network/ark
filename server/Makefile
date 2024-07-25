@@ -85,3 +85,8 @@ mig_down_yes:
 ## vet_db: check if mig_up and mig_down are ok
 vet_db: recreatedb mig_up mig_down_yes
 	@echo "vet db migration scripts..."
+
+## sqlc: gen sql
+sqlc:
+	@echo "gen sql..."
+	cd ./internal/infrastructure/db/sqlite; sqlc generate

@@ -52,3 +52,85 @@ ON CONFLICT(payment_id, pubkey) DO UPDATE SET
 
 -- name: UpdateVtxoPaymentId :exec
 UPDATE vtxo SET payment_id = ? WHERE txid = ? AND vout = ?;
+
+-- name: SelectRoundWithRoundId :many
+SELECT sqlc.embed(round), sqlc.embed(payment), sqlc.embed(tx), sqlc.embed(receiver), sqlc.embed(vtxo)
+FROM round
+     LEFT OUTER JOIN payment ON round.id=payment.round_id
+     LEFT OUTER JOIN tx ON round.id=tx.round_id
+     LEFT OUTER JOIN receiver ON payment.id=receiver.payment_id
+     LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
+WHERE round.id = ?;
+
+-- name: SelectRoundWithRoundTxId :many
+SELECT sqlc.embed(round), sqlc.embed(payment), sqlc.embed(tx), sqlc.embed(receiver), sqlc.embed(vtxo)
+FROM round
+    LEFT OUTER JOIN payment ON round.id=payment.round_id
+    LEFT OUTER JOIN tx ON round.id=tx.round_id
+    LEFT OUTER JOIN receiver ON payment.id=receiver.payment_id
+    LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
+WHERE round.txid = ?;
+
+-- name: SelectSweepableRounds :many
+SELECT sqlc.embed(round), sqlc.embed(payment), sqlc.embed(tx), sqlc.embed(receiver), sqlc.embed(vtxo)
+FROM round
+     LEFT OUTER JOIN payment ON round.id=payment.round_id
+     LEFT OUTER JOIN tx ON round.id=tx.round_id
+     LEFT OUTER JOIN receiver ON payment.id=receiver.payment_id
+     LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
+WHERE round.swept = false AND round.ended = true AND round.failed = false;
+
+-- name: SelectSweptRounds :many
+SELECT sqlc.embed(round), sqlc.embed(payment), sqlc.embed(tx), sqlc.embed(receiver), sqlc.embed(vtxo)
+FROM round
+     LEFT OUTER JOIN payment ON round.id=payment.round_id
+     LEFT OUTER JOIN tx ON round.id=tx.round_id
+     LEFT OUTER JOIN receiver ON payment.id=receiver.payment_id
+     LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
+WHERE round.swept = true AND round.failed = false AND round.ended = true AND round.connector_address <> '';
+
+-- name: SelectRoundIdsInRange :many
+SELECT id FROM round WHERE starting_timestamp > ? AND starting_timestamp < ?;
+
+-- name: SelectRoundIds :many
+SELECT id FROM round;
+
+-- name: UpsertVtxo :exec
+INSERT INTO vtxo (txid, vout, pubkey, amount, pool_tx, spent_by, spent, redeemed, swept, expire_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(txid) DO UPDATE SET
+    vout = excluded.vout,
+    pubkey = excluded.pubkey,
+    amount = excluded.amount,
+    pool_tx = excluded.pool_tx,
+    spent_by = excluded.spent_by,
+    spent = excluded.spent,
+    redeemed = excluded.redeemed,
+    swept = excluded.swept,
+    expire_at = excluded.expire_at;
+
+-- name: SelectSweepableVtxos :many
+SELECT * FROM vtxo WHERE redeemed = false AND swept = false;
+
+-- name: SelectNotRedeemedVtxos :many
+SELECT * FROM vtxo WHERE redeemed = false;
+
+-- name: SelectNotRedeemedVtxosWithPubkey :many
+SELECT * FROM vtxo WHERE redeemed = false AND pubkey = ?;
+
+-- name: SelectVtxoByOutpoint :one
+SELECT * FROM vtxo WHERE txid = ? AND vout = ?;
+
+-- name: SelectVtxosByPoolTxid :many
+SELECT * FROM vtxo WHERE pool_tx = ?;
+
+-- name: MarkVtxoAsRedeemed :exec
+UPDATE vtxo SET redeemed = true WHERE txid = ? AND vout = ?;
+
+-- name: MarkVtxoAsSwept :exec
+UPDATE vtxo SET swept = true WHERE txid = ? AND vout = ?;
+
+-- name: MarkVtxoAsSpent :exec
+UPDATE vtxo SET spent = true, spent_by = ? WHERE txid = ? AND vout = ?;
+
+-- name: UpdateVtxoExpireAt :exec
+UPDATE vtxo SET expire_at = ? WHERE txid = ? AND vout = ?;
