@@ -103,7 +103,7 @@ func NewService(config ServiceConfig) (ports.RepoManager, error) {
 		dbFile := filepath.Join(baseDir, sqliteDbFile)
 		db, err := sqlitedb.OpenDb(dbFile)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to open db: %s", err)
 		}
 
 		driver, err := sqlitemigrate.WithInstance(db, &sqlitemigrate.Config{})
@@ -117,11 +117,11 @@ func NewService(config ServiceConfig) (ports.RepoManager, error) {
 			driver,
 		)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to create migration instance: %s", err)
 		}
 
 		if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-			return nil, err
+			return nil, fmt.Errorf("failed to run migrations: %s", err)
 		}
 
 		roundStore, err = roundStoreFactory(db)

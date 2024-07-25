@@ -20,8 +20,8 @@ FROM alpine:3.12
 
 WORKDIR /app
 
-COPY --from=builder /app/bin/* /app
-COPY --from=builder /app/server/internal/infrastructure/db/sqlite/migration/* /
+COPY --from=builder /app/bin/* /app/
+COPY --from=builder /app/server/internal/infrastructure/db/sqlite/migration/* /app/
 
 ENV PATH="/app:${PATH}"
 ENV ARK_DATADIR=/app/data
