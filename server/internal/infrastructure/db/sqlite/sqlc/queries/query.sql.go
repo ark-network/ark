@@ -191,21 +191,25 @@ func (q *Queries) SelectRoundIdsInRange(ctx context.Context, arg SelectRoundIdsI
 }
 
 const selectRoundWithRoundId = `-- name: SelectRoundWithRoundId :many
-SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, round.unsigned_tx, round.connector_address, round.dust_amount, round.version, round.swept, payment.id, payment.round_id, tx.id, tx.tx, tx.round_id, tx.type, tx.position, tx.txid, tx.tree_level, tx.parent_txid, tx.is_leaf, receiver.payment_id, receiver.pubkey, receiver.amount, receiver.onchain_address, vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.payment_id
+SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, round.unsigned_tx, round.connector_address, round.dust_amount, round.version, round.swept,
+       round_payment_vw.id, round_payment_vw.round_id,
+       round_tx_vw.id, round_tx_vw.tx, round_tx_vw.round_id, round_tx_vw.type, round_tx_vw.position, round_tx_vw.txid, round_tx_vw.tree_level, round_tx_vw.parent_txid, round_tx_vw.is_leaf,
+       payment_receiver_vw.payment_id, payment_receiver_vw.pubkey, payment_receiver_vw.amount, payment_receiver_vw.onchain_address,
+       payment_vtxo_vw.txid, payment_vtxo_vw.vout, payment_vtxo_vw.pubkey, payment_vtxo_vw.amount, payment_vtxo_vw.pool_tx, payment_vtxo_vw.spent_by, payment_vtxo_vw.spent, payment_vtxo_vw.redeemed, payment_vtxo_vw.swept, payment_vtxo_vw.expire_at, payment_vtxo_vw.payment_id
 FROM round
-     LEFT OUTER JOIN payment ON round.id=payment.round_id
-     LEFT OUTER JOIN tx ON round.id=tx.round_id
-     LEFT OUTER JOIN receiver ON payment.id=receiver.payment_id
-     LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
+         LEFT OUTER JOIN round_payment_vw ON round.id=round_payment_vw.round_id
+         LEFT OUTER JOIN round_tx_vw ON round.id=round_tx_vw.round_id
+         LEFT OUTER JOIN payment_receiver_vw ON round_payment_vw.id=payment_receiver_vw.payment_id
+         LEFT OUTER JOIN payment_vtxo_vw ON round_payment_vw.id=payment_vtxo_vw.payment_id
 WHERE round.id = ?
 `
 
 type SelectRoundWithRoundIdRow struct {
-	Round    Round
-	Payment  Payment
-	Tx       Tx
-	Receiver Receiver
-	Vtxo     Vtxo
+	Round             Round
+	RoundPaymentVw    RoundPaymentVw
+	RoundTxVw         RoundTxVw
+	PaymentReceiverVw PaymentReceiverVw
+	PaymentVtxoVw     PaymentVtxoVw
 }
 
 func (q *Queries) SelectRoundWithRoundId(ctx context.Context, id string) ([]SelectRoundWithRoundIdRow, error) {
@@ -230,32 +234,32 @@ func (q *Queries) SelectRoundWithRoundId(ctx context.Context, id string) ([]Sele
 			&i.Round.DustAmount,
 			&i.Round.Version,
 			&i.Round.Swept,
-			&i.Payment.ID,
-			&i.Payment.RoundID,
-			&i.Tx.ID,
-			&i.Tx.Tx,
-			&i.Tx.RoundID,
-			&i.Tx.Type,
-			&i.Tx.Position,
-			&i.Tx.Txid,
-			&i.Tx.TreeLevel,
-			&i.Tx.ParentTxid,
-			&i.Tx.IsLeaf,
-			&i.Receiver.PaymentID,
-			&i.Receiver.Pubkey,
-			&i.Receiver.Amount,
-			&i.Receiver.OnchainAddress,
-			&i.Vtxo.Txid,
-			&i.Vtxo.Vout,
-			&i.Vtxo.Pubkey,
-			&i.Vtxo.Amount,
-			&i.Vtxo.PoolTx,
-			&i.Vtxo.SpentBy,
-			&i.Vtxo.Spent,
-			&i.Vtxo.Redeemed,
-			&i.Vtxo.Swept,
-			&i.Vtxo.ExpireAt,
-			&i.Vtxo.PaymentID,
+			&i.RoundPaymentVw.ID,
+			&i.RoundPaymentVw.RoundID,
+			&i.RoundTxVw.ID,
+			&i.RoundTxVw.Tx,
+			&i.RoundTxVw.RoundID,
+			&i.RoundTxVw.Type,
+			&i.RoundTxVw.Position,
+			&i.RoundTxVw.Txid,
+			&i.RoundTxVw.TreeLevel,
+			&i.RoundTxVw.ParentTxid,
+			&i.RoundTxVw.IsLeaf,
+			&i.PaymentReceiverVw.PaymentID,
+			&i.PaymentReceiverVw.Pubkey,
+			&i.PaymentReceiverVw.Amount,
+			&i.PaymentReceiverVw.OnchainAddress,
+			&i.PaymentVtxoVw.Txid,
+			&i.PaymentVtxoVw.Vout,
+			&i.PaymentVtxoVw.Pubkey,
+			&i.PaymentVtxoVw.Amount,
+			&i.PaymentVtxoVw.PoolTx,
+			&i.PaymentVtxoVw.SpentBy,
+			&i.PaymentVtxoVw.Spent,
+			&i.PaymentVtxoVw.Redeemed,
+			&i.PaymentVtxoVw.Swept,
+			&i.PaymentVtxoVw.ExpireAt,
+			&i.PaymentVtxoVw.PaymentID,
 		); err != nil {
 			return nil, err
 		}
@@ -271,21 +275,25 @@ func (q *Queries) SelectRoundWithRoundId(ctx context.Context, id string) ([]Sele
 }
 
 const selectRoundWithRoundTxId = `-- name: SelectRoundWithRoundTxId :many
-SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, round.unsigned_tx, round.connector_address, round.dust_amount, round.version, round.swept, payment.id, payment.round_id, tx.id, tx.tx, tx.round_id, tx.type, tx.position, tx.txid, tx.tree_level, tx.parent_txid, tx.is_leaf, receiver.payment_id, receiver.pubkey, receiver.amount, receiver.onchain_address, vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.payment_id
+SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, round.unsigned_tx, round.connector_address, round.dust_amount, round.version, round.swept,
+       round_payment_vw.id, round_payment_vw.round_id,
+       round_tx_vw.id, round_tx_vw.tx, round_tx_vw.round_id, round_tx_vw.type, round_tx_vw.position, round_tx_vw.txid, round_tx_vw.tree_level, round_tx_vw.parent_txid, round_tx_vw.is_leaf,
+       payment_receiver_vw.payment_id, payment_receiver_vw.pubkey, payment_receiver_vw.amount, payment_receiver_vw.onchain_address,
+       payment_vtxo_vw.txid, payment_vtxo_vw.vout, payment_vtxo_vw.pubkey, payment_vtxo_vw.amount, payment_vtxo_vw.pool_tx, payment_vtxo_vw.spent_by, payment_vtxo_vw.spent, payment_vtxo_vw.redeemed, payment_vtxo_vw.swept, payment_vtxo_vw.expire_at, payment_vtxo_vw.payment_id
 FROM round
-    LEFT OUTER JOIN payment ON round.id=payment.round_id
-    LEFT OUTER JOIN tx ON round.id=tx.round_id
-    LEFT OUTER JOIN receiver ON payment.id=receiver.payment_id
-    LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
+         LEFT OUTER JOIN round_payment_vw ON round.id=round_payment_vw.round_id
+         LEFT OUTER JOIN round_tx_vw ON round.id=round_tx_vw.round_id
+         LEFT OUTER JOIN payment_receiver_vw ON round_payment_vw.id=payment_receiver_vw.payment_id
+         LEFT OUTER JOIN payment_vtxo_vw ON round_payment_vw.id=payment_vtxo_vw.payment_id
 WHERE round.txid = ?
 `
 
 type SelectRoundWithRoundTxIdRow struct {
-	Round    Round
-	Payment  Payment
-	Tx       Tx
-	Receiver Receiver
-	Vtxo     Vtxo
+	Round             Round
+	RoundPaymentVw    RoundPaymentVw
+	RoundTxVw         RoundTxVw
+	PaymentReceiverVw PaymentReceiverVw
+	PaymentVtxoVw     PaymentVtxoVw
 }
 
 func (q *Queries) SelectRoundWithRoundTxId(ctx context.Context, txid string) ([]SelectRoundWithRoundTxIdRow, error) {
@@ -310,32 +318,32 @@ func (q *Queries) SelectRoundWithRoundTxId(ctx context.Context, txid string) ([]
 			&i.Round.DustAmount,
 			&i.Round.Version,
 			&i.Round.Swept,
-			&i.Payment.ID,
-			&i.Payment.RoundID,
-			&i.Tx.ID,
-			&i.Tx.Tx,
-			&i.Tx.RoundID,
-			&i.Tx.Type,
-			&i.Tx.Position,
-			&i.Tx.Txid,
-			&i.Tx.TreeLevel,
-			&i.Tx.ParentTxid,
-			&i.Tx.IsLeaf,
-			&i.Receiver.PaymentID,
-			&i.Receiver.Pubkey,
-			&i.Receiver.Amount,
-			&i.Receiver.OnchainAddress,
-			&i.Vtxo.Txid,
-			&i.Vtxo.Vout,
-			&i.Vtxo.Pubkey,
-			&i.Vtxo.Amount,
-			&i.Vtxo.PoolTx,
-			&i.Vtxo.SpentBy,
-			&i.Vtxo.Spent,
-			&i.Vtxo.Redeemed,
-			&i.Vtxo.Swept,
-			&i.Vtxo.ExpireAt,
-			&i.Vtxo.PaymentID,
+			&i.RoundPaymentVw.ID,
+			&i.RoundPaymentVw.RoundID,
+			&i.RoundTxVw.ID,
+			&i.RoundTxVw.Tx,
+			&i.RoundTxVw.RoundID,
+			&i.RoundTxVw.Type,
+			&i.RoundTxVw.Position,
+			&i.RoundTxVw.Txid,
+			&i.RoundTxVw.TreeLevel,
+			&i.RoundTxVw.ParentTxid,
+			&i.RoundTxVw.IsLeaf,
+			&i.PaymentReceiverVw.PaymentID,
+			&i.PaymentReceiverVw.Pubkey,
+			&i.PaymentReceiverVw.Amount,
+			&i.PaymentReceiverVw.OnchainAddress,
+			&i.PaymentVtxoVw.Txid,
+			&i.PaymentVtxoVw.Vout,
+			&i.PaymentVtxoVw.Pubkey,
+			&i.PaymentVtxoVw.Amount,
+			&i.PaymentVtxoVw.PoolTx,
+			&i.PaymentVtxoVw.SpentBy,
+			&i.PaymentVtxoVw.Spent,
+			&i.PaymentVtxoVw.Redeemed,
+			&i.PaymentVtxoVw.Swept,
+			&i.PaymentVtxoVw.ExpireAt,
+			&i.PaymentVtxoVw.PaymentID,
 		); err != nil {
 			return nil, err
 		}
@@ -351,21 +359,25 @@ func (q *Queries) SelectRoundWithRoundTxId(ctx context.Context, txid string) ([]
 }
 
 const selectSweepableRounds = `-- name: SelectSweepableRounds :many
-SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, round.unsigned_tx, round.connector_address, round.dust_amount, round.version, round.swept, payment.id, payment.round_id, tx.id, tx.tx, tx.round_id, tx.type, tx.position, tx.txid, tx.tree_level, tx.parent_txid, tx.is_leaf, receiver.payment_id, receiver.pubkey, receiver.amount, receiver.onchain_address, vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.payment_id
+SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, round.unsigned_tx, round.connector_address, round.dust_amount, round.version, round.swept,
+       round_payment_vw.id, round_payment_vw.round_id,
+       round_tx_vw.id, round_tx_vw.tx, round_tx_vw.round_id, round_tx_vw.type, round_tx_vw.position, round_tx_vw.txid, round_tx_vw.tree_level, round_tx_vw.parent_txid, round_tx_vw.is_leaf,
+       payment_receiver_vw.payment_id, payment_receiver_vw.pubkey, payment_receiver_vw.amount, payment_receiver_vw.onchain_address,
+       payment_vtxo_vw.txid, payment_vtxo_vw.vout, payment_vtxo_vw.pubkey, payment_vtxo_vw.amount, payment_vtxo_vw.pool_tx, payment_vtxo_vw.spent_by, payment_vtxo_vw.spent, payment_vtxo_vw.redeemed, payment_vtxo_vw.swept, payment_vtxo_vw.expire_at, payment_vtxo_vw.payment_id
 FROM round
-     LEFT OUTER JOIN payment ON round.id=payment.round_id
-     LEFT OUTER JOIN tx ON round.id=tx.round_id
-     LEFT OUTER JOIN receiver ON payment.id=receiver.payment_id
-     LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
+         LEFT OUTER JOIN round_payment_vw ON round.id=round_payment_vw.round_id
+         LEFT OUTER JOIN round_tx_vw ON round.id=round_tx_vw.round_id
+         LEFT OUTER JOIN payment_receiver_vw ON round_payment_vw.id=payment_receiver_vw.payment_id
+         LEFT OUTER JOIN payment_vtxo_vw ON round_payment_vw.id=payment_vtxo_vw.payment_id
 WHERE round.swept = false AND round.ended = true AND round.failed = false
 `
 
 type SelectSweepableRoundsRow struct {
-	Round    Round
-	Payment  Payment
-	Tx       Tx
-	Receiver Receiver
-	Vtxo     Vtxo
+	Round             Round
+	RoundPaymentVw    RoundPaymentVw
+	RoundTxVw         RoundTxVw
+	PaymentReceiverVw PaymentReceiverVw
+	PaymentVtxoVw     PaymentVtxoVw
 }
 
 func (q *Queries) SelectSweepableRounds(ctx context.Context) ([]SelectSweepableRoundsRow, error) {
@@ -390,32 +402,32 @@ func (q *Queries) SelectSweepableRounds(ctx context.Context) ([]SelectSweepableR
 			&i.Round.DustAmount,
 			&i.Round.Version,
 			&i.Round.Swept,
-			&i.Payment.ID,
-			&i.Payment.RoundID,
-			&i.Tx.ID,
-			&i.Tx.Tx,
-			&i.Tx.RoundID,
-			&i.Tx.Type,
-			&i.Tx.Position,
-			&i.Tx.Txid,
-			&i.Tx.TreeLevel,
-			&i.Tx.ParentTxid,
-			&i.Tx.IsLeaf,
-			&i.Receiver.PaymentID,
-			&i.Receiver.Pubkey,
-			&i.Receiver.Amount,
-			&i.Receiver.OnchainAddress,
-			&i.Vtxo.Txid,
-			&i.Vtxo.Vout,
-			&i.Vtxo.Pubkey,
-			&i.Vtxo.Amount,
-			&i.Vtxo.PoolTx,
-			&i.Vtxo.SpentBy,
-			&i.Vtxo.Spent,
-			&i.Vtxo.Redeemed,
-			&i.Vtxo.Swept,
-			&i.Vtxo.ExpireAt,
-			&i.Vtxo.PaymentID,
+			&i.RoundPaymentVw.ID,
+			&i.RoundPaymentVw.RoundID,
+			&i.RoundTxVw.ID,
+			&i.RoundTxVw.Tx,
+			&i.RoundTxVw.RoundID,
+			&i.RoundTxVw.Type,
+			&i.RoundTxVw.Position,
+			&i.RoundTxVw.Txid,
+			&i.RoundTxVw.TreeLevel,
+			&i.RoundTxVw.ParentTxid,
+			&i.RoundTxVw.IsLeaf,
+			&i.PaymentReceiverVw.PaymentID,
+			&i.PaymentReceiverVw.Pubkey,
+			&i.PaymentReceiverVw.Amount,
+			&i.PaymentReceiverVw.OnchainAddress,
+			&i.PaymentVtxoVw.Txid,
+			&i.PaymentVtxoVw.Vout,
+			&i.PaymentVtxoVw.Pubkey,
+			&i.PaymentVtxoVw.Amount,
+			&i.PaymentVtxoVw.PoolTx,
+			&i.PaymentVtxoVw.SpentBy,
+			&i.PaymentVtxoVw.Spent,
+			&i.PaymentVtxoVw.Redeemed,
+			&i.PaymentVtxoVw.Swept,
+			&i.PaymentVtxoVw.ExpireAt,
+			&i.PaymentVtxoVw.PaymentID,
 		); err != nil {
 			return nil, err
 		}
@@ -470,21 +482,25 @@ func (q *Queries) SelectSweepableVtxos(ctx context.Context) ([]Vtxo, error) {
 }
 
 const selectSweptRounds = `-- name: SelectSweptRounds :many
-SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, round.unsigned_tx, round.connector_address, round.dust_amount, round.version, round.swept, payment.id, payment.round_id, tx.id, tx.tx, tx.round_id, tx.type, tx.position, tx.txid, tx.tree_level, tx.parent_txid, tx.is_leaf, receiver.payment_id, receiver.pubkey, receiver.amount, receiver.onchain_address, vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.payment_id
+SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, round.unsigned_tx, round.connector_address, round.dust_amount, round.version, round.swept,
+       round_payment_vw.id, round_payment_vw.round_id,
+       round_tx_vw.id, round_tx_vw.tx, round_tx_vw.round_id, round_tx_vw.type, round_tx_vw.position, round_tx_vw.txid, round_tx_vw.tree_level, round_tx_vw.parent_txid, round_tx_vw.is_leaf,
+       payment_receiver_vw.payment_id, payment_receiver_vw.pubkey, payment_receiver_vw.amount, payment_receiver_vw.onchain_address,
+       payment_vtxo_vw.txid, payment_vtxo_vw.vout, payment_vtxo_vw.pubkey, payment_vtxo_vw.amount, payment_vtxo_vw.pool_tx, payment_vtxo_vw.spent_by, payment_vtxo_vw.spent, payment_vtxo_vw.redeemed, payment_vtxo_vw.swept, payment_vtxo_vw.expire_at, payment_vtxo_vw.payment_id
 FROM round
-     LEFT OUTER JOIN payment ON round.id=payment.round_id
-     LEFT OUTER JOIN tx ON round.id=tx.round_id
-     LEFT OUTER JOIN receiver ON payment.id=receiver.payment_id
-     LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
+         LEFT OUTER JOIN round_payment_vw ON round.id=round_payment_vw.round_id
+         LEFT OUTER JOIN round_tx_vw ON round.id=round_tx_vw.round_id
+         LEFT OUTER JOIN payment_receiver_vw ON round_payment_vw.id=payment_receiver_vw.payment_id
+         LEFT OUTER JOIN payment_vtxo_vw ON round_payment_vw.id=payment_vtxo_vw.payment_id
 WHERE round.swept = true AND round.failed = false AND round.ended = true AND round.connector_address <> ''
 `
 
 type SelectSweptRoundsRow struct {
-	Round    Round
-	Payment  Payment
-	Tx       Tx
-	Receiver Receiver
-	Vtxo     Vtxo
+	Round             Round
+	RoundPaymentVw    RoundPaymentVw
+	RoundTxVw         RoundTxVw
+	PaymentReceiverVw PaymentReceiverVw
+	PaymentVtxoVw     PaymentVtxoVw
 }
 
 func (q *Queries) SelectSweptRounds(ctx context.Context) ([]SelectSweptRoundsRow, error) {
@@ -509,32 +525,32 @@ func (q *Queries) SelectSweptRounds(ctx context.Context) ([]SelectSweptRoundsRow
 			&i.Round.DustAmount,
 			&i.Round.Version,
 			&i.Round.Swept,
-			&i.Payment.ID,
-			&i.Payment.RoundID,
-			&i.Tx.ID,
-			&i.Tx.Tx,
-			&i.Tx.RoundID,
-			&i.Tx.Type,
-			&i.Tx.Position,
-			&i.Tx.Txid,
-			&i.Tx.TreeLevel,
-			&i.Tx.ParentTxid,
-			&i.Tx.IsLeaf,
-			&i.Receiver.PaymentID,
-			&i.Receiver.Pubkey,
-			&i.Receiver.Amount,
-			&i.Receiver.OnchainAddress,
-			&i.Vtxo.Txid,
-			&i.Vtxo.Vout,
-			&i.Vtxo.Pubkey,
-			&i.Vtxo.Amount,
-			&i.Vtxo.PoolTx,
-			&i.Vtxo.SpentBy,
-			&i.Vtxo.Spent,
-			&i.Vtxo.Redeemed,
-			&i.Vtxo.Swept,
-			&i.Vtxo.ExpireAt,
-			&i.Vtxo.PaymentID,
+			&i.RoundPaymentVw.ID,
+			&i.RoundPaymentVw.RoundID,
+			&i.RoundTxVw.ID,
+			&i.RoundTxVw.Tx,
+			&i.RoundTxVw.RoundID,
+			&i.RoundTxVw.Type,
+			&i.RoundTxVw.Position,
+			&i.RoundTxVw.Txid,
+			&i.RoundTxVw.TreeLevel,
+			&i.RoundTxVw.ParentTxid,
+			&i.RoundTxVw.IsLeaf,
+			&i.PaymentReceiverVw.PaymentID,
+			&i.PaymentReceiverVw.Pubkey,
+			&i.PaymentReceiverVw.Amount,
+			&i.PaymentReceiverVw.OnchainAddress,
+			&i.PaymentVtxoVw.Txid,
+			&i.PaymentVtxoVw.Vout,
+			&i.PaymentVtxoVw.Pubkey,
+			&i.PaymentVtxoVw.Amount,
+			&i.PaymentVtxoVw.PoolTx,
+			&i.PaymentVtxoVw.SpentBy,
+			&i.PaymentVtxoVw.Spent,
+			&i.PaymentVtxoVw.Redeemed,
+			&i.PaymentVtxoVw.Swept,
+			&i.PaymentVtxoVw.ExpireAt,
+			&i.PaymentVtxoVw.PaymentID,
 		); err != nil {
 			return nil, err
 		}

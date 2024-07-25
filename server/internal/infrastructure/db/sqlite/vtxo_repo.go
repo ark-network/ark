@@ -36,7 +36,7 @@ func (v *vxtoRepository) Close() {
 func (v *vxtoRepository) AddVtxos(ctx context.Context, vtxos []domain.Vtxo) error {
 	txBody := func(querierWithTx *queries.Queries) error {
 		for _, vtxo := range vtxos {
-			if err := v.querier.UpsertVtxo(
+			if err := querierWithTx.UpsertVtxo(
 				ctx,
 				queries.UpsertVtxoParams{
 					Txid:     vtxo.Txid,
@@ -145,7 +145,7 @@ func (v *vxtoRepository) GetVtxosForRound(ctx context.Context, txid string) ([]d
 func (v *vxtoRepository) RedeemVtxos(ctx context.Context, vtxos []domain.VtxoKey) error {
 	txBody := func(querierWithTx *queries.Queries) error {
 		for _, vtxo := range vtxos {
-			if err := v.querier.MarkVtxoAsRedeemed(
+			if err := querierWithTx.MarkVtxoAsRedeemed(
 				ctx,
 				queries.MarkVtxoAsRedeemedParams{
 					Txid: vtxo.Txid,
@@ -165,7 +165,7 @@ func (v *vxtoRepository) RedeemVtxos(ctx context.Context, vtxos []domain.VtxoKey
 func (v *vxtoRepository) SpendVtxos(ctx context.Context, vtxos []domain.VtxoKey, txid string) error {
 	txBody := func(querierWithTx *queries.Queries) error {
 		for _, vtxo := range vtxos {
-			if err := v.querier.MarkVtxoAsSpent(
+			if err := querierWithTx.MarkVtxoAsSpent(
 				ctx,
 				queries.MarkVtxoAsSpentParams{
 					SpentBy: txid,
@@ -186,7 +186,7 @@ func (v *vxtoRepository) SpendVtxos(ctx context.Context, vtxos []domain.VtxoKey,
 func (v *vxtoRepository) SweepVtxos(ctx context.Context, vtxos []domain.VtxoKey) error {
 	txBody := func(querierWithTx *queries.Queries) error {
 		for _, vtxo := range vtxos {
-			if err := v.querier.MarkVtxoAsSwept(
+			if err := querierWithTx.MarkVtxoAsSwept(
 				ctx,
 				queries.MarkVtxoAsSweptParams{
 					Txid: vtxo.Txid,
@@ -206,7 +206,7 @@ func (v *vxtoRepository) SweepVtxos(ctx context.Context, vtxos []domain.VtxoKey)
 func (v *vxtoRepository) UpdateExpireAt(ctx context.Context, vtxos []domain.VtxoKey, expireAt int64) error {
 	txBody := func(querierWithTx *queries.Queries) error {
 		for _, vtxo := range vtxos {
-			if err := v.querier.UpdateVtxoExpireAt(
+			if err := querierWithTx.UpdateVtxoExpireAt(
 				ctx,
 				queries.UpdateVtxoExpireAtParams{
 					ExpireAt: expireAt,

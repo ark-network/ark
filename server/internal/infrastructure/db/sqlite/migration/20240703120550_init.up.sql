@@ -55,3 +55,23 @@ CREATE TABLE IF NOT EXISTS vtxo (
 	payment_id TEXT,
 	FOREIGN KEY (payment_id) REFERENCES payment(id)
 );
+
+CREATE VIEW round_payment_vw AS SELECT payment.*
+FROM round
+LEFT OUTER JOIN payment
+ON round.id=payment.round_id;
+
+CREATE VIEW round_tx_vw AS SELECT tx.*
+FROM round
+LEFT OUTER JOIN tx
+ON round.id=tx.round_id;
+
+CREATE VIEW payment_receiver_vw AS SELECT receiver.*
+FROM payment
+LEFT OUTER JOIN receiver
+ON payment.id=receiver.payment_id;
+
+CREATE VIEW payment_vtxo_vw AS SELECT vtxo.*
+FROM payment
+LEFT OUTER JOIN vtxo
+ON payment.id=vtxo.payment_id;

@@ -54,39 +54,55 @@ ON CONFLICT(payment_id, pubkey) DO UPDATE SET
 UPDATE vtxo SET payment_id = ? WHERE txid = ? AND vout = ?;
 
 -- name: SelectRoundWithRoundId :many
-SELECT sqlc.embed(round), sqlc.embed(payment), sqlc.embed(tx), sqlc.embed(receiver), sqlc.embed(vtxo)
+SELECT sqlc.embed(round),
+       sqlc.embed(round_payment_vw),
+       sqlc.embed(round_tx_vw),
+       sqlc.embed(payment_receiver_vw),
+       sqlc.embed(payment_vtxo_vw)
 FROM round
-     LEFT OUTER JOIN payment ON round.id=payment.round_id
-     LEFT OUTER JOIN tx ON round.id=tx.round_id
-     LEFT OUTER JOIN receiver ON payment.id=receiver.payment_id
-     LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
+         LEFT OUTER JOIN round_payment_vw ON round.id=round_payment_vw.round_id
+         LEFT OUTER JOIN round_tx_vw ON round.id=round_tx_vw.round_id
+         LEFT OUTER JOIN payment_receiver_vw ON round_payment_vw.id=payment_receiver_vw.payment_id
+         LEFT OUTER JOIN payment_vtxo_vw ON round_payment_vw.id=payment_vtxo_vw.payment_id
 WHERE round.id = ?;
 
 -- name: SelectRoundWithRoundTxId :many
-SELECT sqlc.embed(round), sqlc.embed(payment), sqlc.embed(tx), sqlc.embed(receiver), sqlc.embed(vtxo)
+SELECT sqlc.embed(round),
+       sqlc.embed(round_payment_vw),
+       sqlc.embed(round_tx_vw),
+       sqlc.embed(payment_receiver_vw),
+       sqlc.embed(payment_vtxo_vw)
 FROM round
-    LEFT OUTER JOIN payment ON round.id=payment.round_id
-    LEFT OUTER JOIN tx ON round.id=tx.round_id
-    LEFT OUTER JOIN receiver ON payment.id=receiver.payment_id
-    LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
+         LEFT OUTER JOIN round_payment_vw ON round.id=round_payment_vw.round_id
+         LEFT OUTER JOIN round_tx_vw ON round.id=round_tx_vw.round_id
+         LEFT OUTER JOIN payment_receiver_vw ON round_payment_vw.id=payment_receiver_vw.payment_id
+         LEFT OUTER JOIN payment_vtxo_vw ON round_payment_vw.id=payment_vtxo_vw.payment_id
 WHERE round.txid = ?;
 
 -- name: SelectSweepableRounds :many
-SELECT sqlc.embed(round), sqlc.embed(payment), sqlc.embed(tx), sqlc.embed(receiver), sqlc.embed(vtxo)
+SELECT sqlc.embed(round),
+       sqlc.embed(round_payment_vw),
+       sqlc.embed(round_tx_vw),
+       sqlc.embed(payment_receiver_vw),
+       sqlc.embed(payment_vtxo_vw)
 FROM round
-     LEFT OUTER JOIN payment ON round.id=payment.round_id
-     LEFT OUTER JOIN tx ON round.id=tx.round_id
-     LEFT OUTER JOIN receiver ON payment.id=receiver.payment_id
-     LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
+         LEFT OUTER JOIN round_payment_vw ON round.id=round_payment_vw.round_id
+         LEFT OUTER JOIN round_tx_vw ON round.id=round_tx_vw.round_id
+         LEFT OUTER JOIN payment_receiver_vw ON round_payment_vw.id=payment_receiver_vw.payment_id
+         LEFT OUTER JOIN payment_vtxo_vw ON round_payment_vw.id=payment_vtxo_vw.payment_id
 WHERE round.swept = false AND round.ended = true AND round.failed = false;
 
 -- name: SelectSweptRounds :many
-SELECT sqlc.embed(round), sqlc.embed(payment), sqlc.embed(tx), sqlc.embed(receiver), sqlc.embed(vtxo)
+SELECT sqlc.embed(round),
+       sqlc.embed(round_payment_vw),
+       sqlc.embed(round_tx_vw),
+       sqlc.embed(payment_receiver_vw),
+       sqlc.embed(payment_vtxo_vw)
 FROM round
-     LEFT OUTER JOIN payment ON round.id=payment.round_id
-     LEFT OUTER JOIN tx ON round.id=tx.round_id
-     LEFT OUTER JOIN receiver ON payment.id=receiver.payment_id
-     LEFT OUTER JOIN vtxo ON payment.id=vtxo.payment_id
+         LEFT OUTER JOIN round_payment_vw ON round.id=round_payment_vw.round_id
+         LEFT OUTER JOIN round_tx_vw ON round.id=round_tx_vw.round_id
+         LEFT OUTER JOIN payment_receiver_vw ON round_payment_vw.id=payment_receiver_vw.payment_id
+         LEFT OUTER JOIN payment_vtxo_vw ON round_payment_vw.id=payment_vtxo_vw.payment_id
 WHERE round.swept = true AND round.failed = false AND round.ended = true AND round.connector_address <> '';
 
 -- name: SelectRoundIdsInRange :many

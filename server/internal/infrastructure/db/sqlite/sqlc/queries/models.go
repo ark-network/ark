@@ -13,6 +13,27 @@ type Payment struct {
 	RoundID string
 }
 
+type PaymentReceiverVw struct {
+	PaymentID      sql.NullString
+	Pubkey         sql.NullString
+	Amount         sql.NullInt64
+	OnchainAddress sql.NullString
+}
+
+type PaymentVtxoVw struct {
+	Txid      sql.NullString
+	Vout      sql.NullInt64
+	Pubkey    sql.NullString
+	Amount    sql.NullInt64
+	PoolTx    sql.NullString
+	SpentBy   sql.NullString
+	Spent     sql.NullBool
+	Redeemed  sql.NullBool
+	Swept     sql.NullBool
+	ExpireAt  sql.NullInt64
+	PaymentID sql.NullString
+}
+
 type Receiver struct {
 	PaymentID      string
 	Pubkey         string
@@ -33,6 +54,23 @@ type Round struct {
 	DustAmount        int64
 	Version           int64
 	Swept             bool
+}
+
+type RoundPaymentVw struct {
+	ID      sql.NullString
+	RoundID sql.NullString
+}
+
+type RoundTxVw struct {
+	ID         sql.NullInt64
+	Tx         sql.NullString
+	RoundID    sql.NullString
+	Type       sql.NullString
+	Position   sql.NullInt64
+	Txid       sql.NullString
+	TreeLevel  sql.NullInt64
+	ParentTxid sql.NullString
+	IsLeaf     sql.NullBool
 }
 
 type Tx struct {
