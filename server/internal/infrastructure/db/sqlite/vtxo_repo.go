@@ -6,93 +6,12 @@ import (
 	"fmt"
 
 	"github.com/ark-network/ark/internal/core/domain"
+	"github.com/ark-network/ark/internal/infrastructure/db/sqlite/sqlc/queries"
 )
-
-const (
-	createVtxoTable = `
-CREATE TABLE IF NOT EXISTS vtxo (
-	txid TEXT NOT NULL PRIMARY KEY,
-	vout INTEGER NOT NULL,
-	pubkey TEXT NOT NULL,
-	amount INTEGER NOT NULL,
-	pool_tx TEXT NOT NULL,
-	spent_by TEXT NOT NULL,
-	spent BOOLEAN NOT NULL,
-	redeemed BOOLEAN NOT NULL,
-	swept BOOLEAN NOT NULL,
-	expire_at INTEGER NOT NULL,
-	payment_id TEXT,
-	FOREIGN KEY (payment_id) REFERENCES payment(id)
-);
-`
-
-	upsertVtxos = `
-INSERT INTO vtxo (txid, vout, pubkey, amount, pool_tx, spent_by, spent, redeemed, swept, expire_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(txid) DO UPDATE SET
-	vout = excluded.vout,
-	pubkey = excluded.pubkey,
-	amount = excluded.amount,
-	pool_tx = excluded.pool_tx,
-	spent_by = excluded.spent_by,
-	spent = excluded.spent,
-	redeemed = excluded.redeemed,
-	swept = excluded.swept,
-	expire_at = excluded.expire_at;
-`
-
-	selectSweepableVtxos = `
-SELECT * FROM vtxo WHERE redeemed = false AND swept = false
-`
-
-	selectNotRedeemedVtxos = `
-SELECT * FROM vtxo WHERE redeemed = false
-`
-
-	selectNotRedeemedVtxosWithPubkey = `
-SELECT * FROM vtxo WHERE redeemed = false AND pubkey = ?
-`
-
-	selectVtxoByOutpoint = `
-SELECT * FROM vtxo WHERE txid = ? AND vout = ?
-`
-
-	selectVtxosByPoolTxid = `
-SELECT * FROM vtxo WHERE pool_tx = ?
-`
-
-	markVtxoAsRedeemed = `
-UPDATE vtxo SET redeemed = true WHERE txid = ? AND vout = ?
-`
-
-	markVtxoAsSwept = `
-UPDATE vtxo SET swept = true WHERE txid = ? AND vout = ?
-`
-
-	markVtxoAsSpent = `
-UPDATE vtxo SET spent = true, spent_by = ? WHERE txid = ? AND vout = ?
-`
-
-	updateVtxoExpireAt = `
-UPDATE vtxo SET expire_at = ? WHERE txid = ? AND vout = ?
-`
-)
-
-type vtxoRow struct {
-	txid      *string
-	vout      *uint32
-	pubkey    *string
-	amount    *uint64
-	poolTx    *string
-	spentBy   *string
-	spent     *bool
-	redeemed  *bool
-	swept     *bool
-	expireAt  *int64
-	paymentID *string
-}
 
 type vxtoRepository struct {
-	db *sql.DB
+	db      *sql.DB
+	querier *queries.Queries
 }
 
 func NewVtxoRepository(config ...interface{}) (domain.VtxoRepository, error) {
@@ -104,16 +23,10 @@ func NewVtxoRepository(config ...interface{}) (domain.VtxoRepository, error) {
 		return nil, fmt.Errorf("cannot open vtxo repository: invalid config")
 	}
 
-	return newVtxoRepository(db)
-}
-
-func newVtxoRepository(db *sql.DB) (*vxtoRepository, error) {
-	_, err := db.Exec(createVtxoTable)
-	if err != nil {
-		return nil, err
-	}
-
-	return &vxtoRepository{db}, nil
+	return &vxtoRepository{
+		db:      db,
+		querier: queries.New(db),
+	}, nil
 }
 
 func (v *vxtoRepository) Close() {
@@ -121,41 +34,35 @@ func (v *vxtoRepository) Close() {
 }
 
 func (v *vxtoRepository) AddVtxos(ctx context.Context, vtxos []domain.Vtxo) error {
-	tx, err := v.db.Begin()
-	if err != nil {
-		return err
-	}
-
-	stmt, err := tx.Prepare(upsertVtxos)
-	if err != nil {
-		return err
-	}
-
-	defer stmt.Close()
-
-	for _, vtxo := range vtxos {
-		_, err := stmt.Exec(
-			vtxo.Txid,
-			vtxo.VOut,
-			vtxo.Pubkey,
-			vtxo.Amount,
-			vtxo.PoolTx,
-			vtxo.SpentBy,
-			vtxo.Spent,
-			vtxo.Redeemed,
-			vtxo.Swept,
-			vtxo.ExpireAt,
-		)
-		if err != nil {
-			return err
+	txBody := func(querierWithTx *queries.Queries) error {
+		for _, vtxo := range vtxos {
+			if err := querierWithTx.UpsertVtxo(
+				ctx,
+				queries.UpsertVtxoParams{
+					Txid:     vtxo.Txid,
+					Vout:     int64(vtxo.VOut),
+					Pubkey:   vtxo.Pubkey,
+					Amount:   int64(vtxo.Amount),
+					PoolTx:   vtxo.PoolTx,
+					SpentBy:  vtxo.SpentBy,
+					Spent:    vtxo.Spent,
+					Redeemed: vtxo.Redeemed,
+					Swept:    vtxo.Swept,
+					ExpireAt: vtxo.ExpireAt,
+				},
+			); err != nil {
+				return err
+			}
 		}
+
+		return nil
 	}
 
-	return tx.Commit()
+	return execTx(ctx, v.db, txBody)
 }
 
 func (v *vxtoRepository) GetAllSweepableVtxos(ctx context.Context) ([]domain.Vtxo, error) {
-	rows, err := v.db.Query(selectSweepableVtxos)
+	rows, err := v.querier.SelectSweepableVtxos(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -166,13 +73,13 @@ func (v *vxtoRepository) GetAllSweepableVtxos(ctx context.Context) ([]domain.Vtx
 func (v *vxtoRepository) GetAllVtxos(ctx context.Context, pubkey string) ([]domain.Vtxo, []domain.Vtxo, error) {
 	withPubkey := len(pubkey) > 0
 
-	var rows *sql.Rows
+	var rows []queries.Vtxo
 	var err error
 
 	if withPubkey {
-		rows, err = v.db.Query(selectNotRedeemedVtxosWithPubkey, pubkey)
+		rows, err = v.querier.SelectNotRedeemedVtxosWithPubkey(ctx, pubkey)
 	} else {
-		rows, err = v.db.Query(selectNotRedeemedVtxos)
+		rows, err = v.querier.SelectNotRedeemedVtxos(ctx)
 	}
 	if err != nil {
 		return nil, nil, err
@@ -198,22 +105,20 @@ func (v *vxtoRepository) GetAllVtxos(ctx context.Context, pubkey string) ([]doma
 }
 
 func (v *vxtoRepository) GetVtxos(ctx context.Context, outpoints []domain.VtxoKey) ([]domain.Vtxo, error) {
-	stmt, err := v.db.Prepare(selectVtxoByOutpoint)
-	if err != nil {
-		return nil, err
-	}
-
-	defer stmt.Close()
-
 	vtxos := make([]domain.Vtxo, 0, len(outpoints))
-
-	for _, outpoint := range outpoints {
-		rows, err := stmt.Query(outpoint.Txid, outpoint.VOut)
+	for _, o := range outpoints {
+		vtxo, err := v.querier.SelectVtxoByOutpoint(
+			ctx,
+			queries.SelectVtxoByOutpointParams{
+				Txid: o.Txid,
+				Vout: int64(o.VOut),
+			},
+		)
 		if err != nil {
 			return nil, err
 		}
 
-		result, err := readRows(rows)
+		result, err := readRows([]queries.Vtxo{vtxo})
 		if err != nil {
 			return nil, err
 		}
@@ -229,7 +134,7 @@ func (v *vxtoRepository) GetVtxos(ctx context.Context, outpoints []domain.VtxoKe
 }
 
 func (v *vxtoRepository) GetVtxosForRound(ctx context.Context, txid string) ([]domain.Vtxo, error) {
-	rows, err := v.db.Query(selectVtxosByPoolTxid, txid)
+	rows, err := v.querier.SelectVtxosByPoolTxid(ctx, txid)
 	if err != nil {
 		return nil, err
 	}
@@ -238,139 +143,110 @@ func (v *vxtoRepository) GetVtxosForRound(ctx context.Context, txid string) ([]d
 }
 
 func (v *vxtoRepository) RedeemVtxos(ctx context.Context, vtxos []domain.VtxoKey) error {
-	tx, err := v.db.Begin()
-	if err != nil {
-		return err
-	}
-
-	stmt, err := tx.Prepare(markVtxoAsRedeemed)
-	if err != nil {
-		return err
-	}
-
-	defer stmt.Close()
-
-	for _, vtxo := range vtxos {
-		_, err := stmt.Exec(vtxo.Txid, vtxo.VOut)
-		if err != nil {
-			return err
+	txBody := func(querierWithTx *queries.Queries) error {
+		for _, vtxo := range vtxos {
+			if err := querierWithTx.MarkVtxoAsRedeemed(
+				ctx,
+				queries.MarkVtxoAsRedeemedParams{
+					Txid: vtxo.Txid,
+					Vout: int64(vtxo.VOut),
+				},
+			); err != nil {
+				return err
+			}
 		}
+
+		return nil
 	}
 
-	return tx.Commit()
+	return execTx(ctx, v.db, txBody)
 }
 
 func (v *vxtoRepository) SpendVtxos(ctx context.Context, vtxos []domain.VtxoKey, txid string) error {
-	tx, err := v.db.Begin()
-	if err != nil {
-		return err
-	}
-
-	stmt, err := tx.Prepare(markVtxoAsSpent)
-	if err != nil {
-		return err
-	}
-
-	defer stmt.Close()
-
-	for _, vtxo := range vtxos {
-		_, err := stmt.Exec(txid, vtxo.Txid, vtxo.VOut)
-		if err != nil {
-			return err
+	txBody := func(querierWithTx *queries.Queries) error {
+		for _, vtxo := range vtxos {
+			if err := querierWithTx.MarkVtxoAsSpent(
+				ctx,
+				queries.MarkVtxoAsSpentParams{
+					SpentBy: txid,
+					Txid:    vtxo.Txid,
+					Vout:    int64(vtxo.VOut),
+				},
+			); err != nil {
+				return err
+			}
 		}
+
+		return nil
 	}
 
-	return tx.Commit()
+	return execTx(ctx, v.db, txBody)
 }
 
 func (v *vxtoRepository) SweepVtxos(ctx context.Context, vtxos []domain.VtxoKey) error {
-	tx, err := v.db.Begin()
-	if err != nil {
-		return err
-	}
-
-	stmt, err := tx.Prepare(markVtxoAsSwept)
-	if err != nil {
-		return err
-	}
-
-	defer stmt.Close()
-
-	for _, vtxo := range vtxos {
-		_, err := stmt.Exec(vtxo.Txid, vtxo.VOut)
-		if err != nil {
-			return err
+	txBody := func(querierWithTx *queries.Queries) error {
+		for _, vtxo := range vtxos {
+			if err := querierWithTx.MarkVtxoAsSwept(
+				ctx,
+				queries.MarkVtxoAsSweptParams{
+					Txid: vtxo.Txid,
+					Vout: int64(vtxo.VOut),
+				},
+			); err != nil {
+				return err
+			}
 		}
+
+		return nil
 	}
 
-	return tx.Commit()
+	return execTx(ctx, v.db, txBody)
 }
 
 func (v *vxtoRepository) UpdateExpireAt(ctx context.Context, vtxos []domain.VtxoKey, expireAt int64) error {
-	tx, err := v.db.Begin()
-	if err != nil {
-		return err
-	}
-
-	stmt, err := tx.Prepare(updateVtxoExpireAt)
-	if err != nil {
-		return err
-	}
-
-	defer stmt.Close()
-
-	for _, vtxo := range vtxos {
-		_, err := stmt.Exec(expireAt, vtxo.Txid, vtxo.VOut)
-		if err != nil {
-			return err
+	txBody := func(querierWithTx *queries.Queries) error {
+		for _, vtxo := range vtxos {
+			if err := querierWithTx.UpdateVtxoExpireAt(
+				ctx,
+				queries.UpdateVtxoExpireAtParams{
+					ExpireAt: expireAt,
+					Txid:     vtxo.Txid,
+					Vout:     int64(vtxo.VOut),
+				},
+			); err != nil {
+				return err
+			}
 		}
+
+		return nil
 	}
 
-	return tx.Commit()
+	return execTx(ctx, v.db, txBody)
 }
 
-func rowToVtxo(row vtxoRow) domain.Vtxo {
+func rowToVtxo(row queries.Vtxo) domain.Vtxo {
 	return domain.Vtxo{
 		VtxoKey: domain.VtxoKey{
-			Txid: *row.txid,
-			VOut: *row.vout,
+			Txid: row.Txid,
+			VOut: uint32(row.Vout),
 		},
 		Receiver: domain.Receiver{
-			Pubkey: *row.pubkey,
-			Amount: *row.amount,
+			Pubkey: row.Pubkey,
+			Amount: uint64(row.Amount),
 		},
-		PoolTx:   *row.poolTx,
-		SpentBy:  *row.spentBy,
-		Spent:    *row.spent,
-		Redeemed: *row.redeemed,
-		Swept:    *row.swept,
-		ExpireAt: *row.expireAt,
+		PoolTx:   row.PoolTx,
+		SpentBy:  row.SpentBy,
+		Spent:    row.Spent,
+		Redeemed: row.Redeemed,
+		Swept:    row.Swept,
+		ExpireAt: row.ExpireAt,
 	}
 }
 
-func readRows(rows *sql.Rows) ([]domain.Vtxo, error) {
-	defer rows.Close()
-	vtxos := make([]domain.Vtxo, 0)
-
-	for rows.Next() {
-		var row vtxoRow
-		if err := rows.Scan(
-			&row.txid,
-			&row.vout,
-			&row.pubkey,
-			&row.amount,
-			&row.poolTx,
-			&row.spentBy,
-			&row.spent,
-			&row.redeemed,
-			&row.swept,
-			&row.expireAt,
-			&row.paymentID,
-		); err != nil {
-			return nil, err
-		}
-
-		vtxos = append(vtxos, rowToVtxo(row))
+func readRows(rows []queries.Vtxo) ([]domain.Vtxo, error) {
+	vtxos := make([]domain.Vtxo, 0, len(rows))
+	for _, v := range rows {
+		vtxos = append(vtxos, rowToVtxo(v))
 	}
 
 	return vtxos, nil

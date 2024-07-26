@@ -37,6 +37,7 @@ func main() {
 		EventDbType:           cfg.EventDbType,
 		DbType:                cfg.DbType,
 		DbDir:                 cfg.DbDir,
+		DbMigrationPath:       cfg.DbMigrationPath,
 		EventDbDir:            cfg.DbDir,
 		RoundInterval:         cfg.RoundInterval,
 		Network:               cfg.Network,

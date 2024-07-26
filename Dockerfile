@@ -20,11 +20,13 @@ FROM alpine:3.12
 
 WORKDIR /app
 
-COPY --from=builder /app/bin/* /app
+COPY --from=builder /app/bin/* /app/
+COPY --from=builder /app/server/internal/infrastructure/db/sqlite/migration/* /app/
 
 ENV PATH="/app:${PATH}"
 ENV ARK_DATADIR=/app/data
 ENV ARK_WALLET_DATADIR=/app/wallet-data
+ENV ARK_DB_MIGRATION_PATH=file://
 
 # Expose volume containing all 'arkd' data
 VOLUME /app/data

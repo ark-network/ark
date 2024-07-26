@@ -61,4 +61,32 @@ proto-lint:
 	@echo "Linting protos..."
 	@docker build -q -t buf -f buf.Dockerfile . &> /dev/null
 	@docker run --rm --volume "$(shell pwd):/workspace" --workdir /workspace buf lint
-		
+
+
+## mig_file: creates pg migration file(eg. make FILE=init mig_file)
+mig_file:
+	@migrate create -ext sql -dir ./internal/infrastructure/db/sqlite/migration/ $(FILE)
+
+## mig_up: creates db schema for provided db path
+mig_up:
+	@echo "creating db schema..."
+	@migrate -database "sqlite://$(DB_PATH)/sqlite.db" -path ./internal/infrastructure/db/sqlite/migration/ up
+
+## mig_down: apply down migration
+mig_down:
+	@echo "migration down..."
+	@migrate -database "sqlite://$(DB_PATH)/sqlite.db" -path ./internal/infrastructure/db/sqlite/migration/ down
+
+## mig_down_yes: apply down migration without prompt
+mig_down_yes:
+	@echo "migration down..."
+	@"yes" | migrate -database "sqlite://path/to/database" -path ./internal/infrastructure/db/sqlite/migration/ down
+
+## vet_db: check if mig_up and mig_down are ok
+vet_db: recreatedb mig_up mig_down_yes
+	@echo "vet db migration scripts..."
+
+## sqlc: gen sql
+sqlc:
+	@echo "gen sql..."
+	cd ./internal/infrastructure/db/sqlite; sqlc generate
