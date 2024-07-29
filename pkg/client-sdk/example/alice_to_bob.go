@@ -10,39 +10,25 @@ import (
 	"time"
 
 	arksdk "github.com/ark-network/ark-sdk"
-	"github.com/ark-network/ark-sdk/store"
-	"github.com/ark-network/ark-sdk/wallet"
+	inmemorystore "github.com/ark-network/ark-sdk/store/inmemory"
+	liquidwallet "github.com/ark-network/ark-sdk/wallet/singlekey/liquid"
+	walletinmemorystore "github.com/ark-network/ark-sdk/wallet/singlekey/store/inmemory"
 	log "github.com/sirupsen/logrus"
 )
 
 var (
-	aspUrl      = "http://localhost:8080"
-	clientType  = "rest"
-	walletType  = wallet.SingleKeyWallet
-	network     = "liquidregtest"
-	explorerURL = "http://localhost:3001"
-	password    = "password"
+	aspUrl     = "localhost:8080"
+	clientType = arksdk.GrpcClient
+	password   = "password"
 )
 
 func main() {
 	ctx := context.Background()
 
 	log.Info("alice is setting up her ark wallet...")
-	aliceArkClient, err := arksdk.New(arksdk.Config{
-		StoreType: store.InMemoryStore,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
 
-	if err := aliceArkClient.Init(ctx, arksdk.InitArgs{
-		WalletType:  walletType,
-		ClientType:  clientType,
-		Network:     network,
-		AspUrl:      aspUrl,
-		ExplorerUrl: explorerURL,
-		Password:    password,
-	}); err != nil {
+	aliceArkClient, err := setupArkClient()
+	if err != nil {
 		log.Fatal(err)
 	}
 
@@ -66,7 +52,7 @@ func main() {
 
 	onboardAmount := uint64(20000)
 	log.Infof("alice is onboarding with %d sats offchain...", onboardAmount)
-	txid, err := aliceArkClient.Onboard(ctx, onboardAmount, password)
+	txid, err := aliceArkClient.Onboard(ctx, onboardAmount)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -89,21 +75,8 @@ func main() {
 
 	fmt.Println("")
 	log.Info("bob is setting up his ark wallet...")
-	bobArkClient, err := arksdk.New(arksdk.Config{
-		StoreType: store.InMemoryStore,
-	})
+	bobArkClient, err := setupArkClient()
 	if err != nil {
-		log.Fatal(err)
-	}
-
-	if err := bobArkClient.Init(ctx, arksdk.InitArgs{
-		WalletType:  walletType,
-		ClientType:  clientType,
-		Network:     network,
-		AspUrl:      aspUrl,
-		ExplorerUrl: explorerURL,
-		Password:    password,
-	}); err != nil {
 		log.Fatal(err)
 	}
 
@@ -137,7 +110,7 @@ func main() {
 	fmt.Println("")
 	log.Infof("alice is sending %d sats to bob offchain...", amount)
 
-	txid, err = aliceArkClient.SendOffChain(ctx, false, receivers, password)
+	txid, err = aliceArkClient.SendOffChain(ctx, false, receivers)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -166,6 +139,38 @@ func main() {
 
 	log.Infof("bob onchain balance: %d", bobBalance.OnchainBalance.SpendableAmount)
 	log.Infof("bob offchain balance: %d", bobBalance.OffchainBalance.Total)
+}
+
+func setupArkClient() (arksdk.ArkClient, error) {
+	storeSvc, err := inmemorystore.NewStore()
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup store: %s", err)
+	}
+	client, err := arksdk.New(storeSvc, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup ark client: %s", err)
+	}
+
+	walletStoreSvc, err := walletinmemorystore.NewWalletStore()
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup wallet store: %s", err)
+	}
+
+	walletSvc, err := liquidwallet.NewWallet(storeSvc, walletStoreSvc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup wallet: %s", err)
+	}
+
+	if err := client.Init(context.Background(), arksdk.InitArgs{
+		Wallet:     walletSvc,
+		ClientType: clientType,
+		AspUrl:     aspUrl,
+		Password:   password,
+	}); err != nil {
+		return nil, fmt.Errorf("failed to initialize wallet: %s", err)
+	}
+
+	return client, nil
 }
 
 func runCommand(name string, arg ...string) (string, error) {
