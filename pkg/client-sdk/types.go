@@ -31,11 +31,11 @@ var (
 	}
 )
 
-type clientFactory func(string) (client.Client, error)
+type clientFactory func(string) (client.ASPClient, error)
 
 type InitArgs struct {
 	ClientType string
-	Wallet     wallet.Wallet
+	Wallet     wallet.WalletService
 	AspUrl     string
 	Seed       string
 	Password   string
@@ -62,7 +62,7 @@ func (a InitArgs) validate() error {
 	return nil
 }
 
-func (a InitArgs) client() (client.Client, error) {
+func (a InitArgs) client() (client.ASPClient, error) {
 	factory := supportedClients[a.ClientType]
 	return factory(a.AspUrl)
 }

@@ -26,7 +26,7 @@ func main() {
 			fmt.Println(err)
 		}
 	} else {
-		storeSvc, err := inmemorystore.NewStore()
+		storeSvc, err := inmemorystore.NewConfigStore()
 		if err != nil {
 			fmt.Println(err)
 			return

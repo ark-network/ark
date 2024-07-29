@@ -142,7 +142,7 @@ func main() {
 }
 
 func setupArkClient() (arksdk.ArkClient, error) {
-	storeSvc, err := inmemorystore.NewStore()
+	storeSvc, err := inmemorystore.NewConfigStore()
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup store: %s", err)
 	}
@@ -156,7 +156,7 @@ func setupArkClient() (arksdk.ArkClient, error) {
 		return nil, fmt.Errorf("failed to setup wallet store: %s", err)
 	}
 
-	walletSvc, err := liquidwallet.NewWallet(storeSvc, walletStoreSvc)
+	walletSvc, err := liquidwallet.NewWalletService(storeSvc, walletStoreSvc)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup wallet: %s", err)
 	}

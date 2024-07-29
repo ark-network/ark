@@ -33,7 +33,7 @@ type localStorageStore struct {
 	store js.Value
 }
 
-func NewLocalStorageStore() (store.Store, error) {
+func NewLocalStorageStore() (store.ConfigStore, error) {
 	store := js.Global().Get("localStorage")
 	return &localStorageStore{store}, nil
 }

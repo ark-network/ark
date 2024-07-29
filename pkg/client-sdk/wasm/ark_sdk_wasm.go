@@ -15,7 +15,7 @@ import (
 
 var (
 	arkSdkClient arksdk.ArkClient
-	storeSvc     store.Store
+	configStore  store.ConfigStore
 )
 
 func init() {
@@ -42,20 +42,20 @@ func init() {
 }
 
 func New(
-	ctx context.Context, storeService store.Store,
+	ctx context.Context, storeSvc store.ConfigStore,
 ) error {
 	var err error
 
-	data, err := storeService.GetData(ctx)
+	data, err := storeSvc.GetData(ctx)
 	if err != nil {
 		return err
 	}
 
-	var walletSvc wallet.Wallet
+	var walletSvc wallet.WalletService
 	if data != nil {
 		switch data.WalletType {
 		case arksdk.SingleKeyWallet:
-			walletSvc, err = getSingleKeyWallet(storeService, data.Network.Name)
+			walletSvc, err = getSingleKeyWallet(storeSvc, data.Network.Name)
 			if err != nil {
 				return err
 			}
@@ -64,12 +64,12 @@ func New(
 			return fmt.Errorf("unknown wallet type")
 		}
 	}
-	arkSdkClient, err = arksdk.New(storeService, walletSvc)
+	arkSdkClient, err = arksdk.New(storeSvc, walletSvc)
 	if err != nil {
 		js.Global().Get("console").Call("error", err.Error())
 		return err
 	}
-	storeSvc = storeService
+	configStore = storeSvc
 
 	select {}
 }
@@ -83,14 +83,14 @@ func getWalletStore(storeType string) (walletstore.WalletStore, error) {
 }
 
 func getSingleKeyWallet(
-	store store.Store, network string,
-) (wallet.Wallet, error) {
-	walletStore, err := getWalletStore(store.GetType())
+	configStore store.ConfigStore, network string,
+) (wallet.WalletService, error) {
+	walletStore, err := getWalletStore(configStore.GetType())
 	if err != nil {
 		return nil, err
 	}
 	if strings.Contains(network, "liquid") {
-		return liquidwallet.NewWallet(store, walletStore)
+		return liquidwallet.NewWalletService(configStore, walletStore)
 	}
 	// TODO: Support bitcoin wallet
 	return nil, fmt.Errorf("network %s not supported yet", network)

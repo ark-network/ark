@@ -29,14 +29,14 @@ func InitWrapper() js.Func {
 			return nil, errors.New("invalid number of args")
 		}
 
-		var walletSvc wallet.Wallet
+		var walletSvc wallet.WalletService
 		switch args[0].String() {
 		case arksdk.SingleKeyWallet:
-			walletStore, err := getWalletStore(storeSvc.GetType())
+			walletStore, err := getWalletStore(configStore.GetType())
 			if err != nil {
 				return nil, fmt.Errorf("failed to init wallet store: %s", err)
 			}
-			walletSvc, err = liquidwallet.NewWallet(storeSvc, walletStore)
+			walletSvc, err = liquidwallet.NewWalletService(configStore, walletStore)
 			if err != nil {
 				return nil, err
 			}

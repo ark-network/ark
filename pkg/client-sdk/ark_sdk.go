@@ -64,19 +64,19 @@ type ArkClient interface {
 
 type arkClient struct {
 	*store.StoreData
-	wallet   wallet.Wallet
-	store    store.Store
+	wallet   wallet.WalletService
+	store    store.ConfigStore
 	explorer explorer.Explorer
-	client   client.Client
+	client   client.ASPClient
 }
 
-func New(storeSvc store.Store, walletSvc wallet.Wallet) (ArkClient, error) {
+func New(storeSvc store.ConfigStore, walletSvc wallet.WalletService) (ArkClient, error) {
 	data, err := storeSvc.GetData(context.Background())
 	if err != nil {
 		return nil, err
 	}
 
-	var clientSvc client.Client
+	var clientSvc client.ASPClient
 	var explorerSvc explorer.Explorer
 	if data != nil {
 		if walletSvc == nil {
