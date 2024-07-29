@@ -22,7 +22,6 @@ func TestStore(t *testing.T) {
 		AspPubkey:           key.PubKey(),
 		WalletType:          wallet.SingleKeyWallet,
 		ClientType:          client.GrpcClient,
-		ExplorerURL:         "https://example.com",
 		Network:             common.LiquidRegTest,
 		RoundLifetime:       512,
 		UnilateralExitDelay: 512,
@@ -30,16 +29,13 @@ func TestStore(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		getStore store.StoreFactory
+		name string
 	}{
 		{
-			name:     store.InMemoryStore,
-			getStore: inmemorystore.NewStore,
+			name: store.InMemoryStore,
 		},
 		{
-			name:     store.FileStore,
-			getStore: filestore.NewStore,
+			name: store.FileStore,
 		},
 	}
 
@@ -48,40 +44,46 @@ func TestStore(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			datadir := t.TempDir()
-			store, err := tt.getStore(datadir)
+			var storeSvc store.Store
+			var err error
+			switch tt.name {
+			case store.InMemoryStore:
+				storeSvc, err = inmemorystore.NewStore()
+			case store.FileStore:
+				storeSvc, err = filestore.NewStore(t.TempDir())
+			}
 			require.NoError(t, err)
-			require.NotNil(t, store)
+			require.NotNil(t, storeSvc)
 
 			// Check empty data when store is empty.
-			data, err := store.GetData(ctx)
+			data, err := storeSvc.GetData(ctx)
 			require.NoError(t, err)
 			require.Nil(t, data)
 
 			// Check no side effects when cleaning an empty store.
-			err = store.CleanData(ctx)
+			err = storeSvc.CleanData(ctx)
 			require.NoError(t, err)
 
 			// Check add and retrieve data.
-			err = store.AddData(ctx, testStoreData)
+			err = storeSvc.AddData(ctx, testStoreData)
 			require.NoError(t, err)
 
-			data, err = store.GetData(ctx)
+			data, err = storeSvc.GetData(ctx)
 			require.NoError(t, err)
 			require.Equal(t, testStoreData, *data)
 
 			// Check clean and retrieve data.
-			err = store.CleanData(ctx)
+			err = storeSvc.CleanData(ctx)
 			require.NoError(t, err)
 
-			data, err = store.GetData(ctx)
+			data, err = storeSvc.GetData(ctx)
 			require.NoError(t, err)
 			require.Nil(t, data)
 
 			// Check overwriting the store.
-			err = store.AddData(ctx, testStoreData)
+			err = storeSvc.AddData(ctx, testStoreData)
 			require.NoError(t, err)
-			err = store.AddData(ctx, testStoreData)
+			err = storeSvc.AddData(ctx, testStoreData)
 			require.NoError(t, err)
 		})
 	}

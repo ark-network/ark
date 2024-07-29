@@ -12,9 +12,13 @@ type Store struct {
 	lock *sync.RWMutex
 }
 
-func NewStore(_ ...interface{}) (store.Store, error) {
+func NewStore() (store.Store, error) {
 	lock := &sync.RWMutex{}
 	return &Store{lock: lock}, nil
+}
+
+func (s *Store) GetType() string {
+	return store.InMemoryStore
 }
 
 func (s *Store) AddData(

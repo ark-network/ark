@@ -2,6 +2,7 @@ package arksdk
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/ark-network/ark-sdk/client"
 	grpcclient "github.com/ark-network/ark-sdk/client/grpc"
@@ -13,10 +14,10 @@ import (
 )
 
 var (
-	supportedWallets = supportedType[wallet.WalletFactory]{
-		wallet.SingleKeyWallet: wallet.NewSingleKeyWallet,
+	supportedWallets = supportedType[struct{}]{
+		wallet.SingleKeyWallet: struct{}{},
 	}
-	supportedClients = supportedType[client.ClientFactory]{
+	supportedClients = supportedType[clientFactory]{
 		client.GrpcClient: grpcclient.NewClient,
 		client.RestClient: restclient.NewClient,
 	}
@@ -30,22 +31,19 @@ var (
 	}
 )
 
+type clientFactory func(string) (client.Client, error)
+
 type InitArgs struct {
-	WalletType  string
-	ClientType  string
-	Network     string
-	AspUrl      string
-	ExplorerUrl string
-	Password    string
-	PrivateKey  string
+	ClientType string
+	Wallet     wallet.Wallet
+	AspUrl     string
+	Seed       string
+	Password   string
 }
 
 func (a InitArgs) validate() error {
-	if len(a.WalletType) <= 0 {
-		return fmt.Errorf("missing wallet type")
-	}
-	if !supportedWallets.supports(a.WalletType) {
-		return fmt.Errorf("wallet type not supported, please select one of: %s", supportedWallets)
+	if a.Wallet == nil {
+		return fmt.Errorf("missing wallet")
 	}
 
 	if len(a.ClientType) <= 0 {
@@ -55,12 +53,6 @@ func (a InitArgs) validate() error {
 		return fmt.Errorf("client type not supported, please select one of: %s", supportedClients)
 	}
 
-	if len(a.Network) <= 0 {
-		return fmt.Errorf("missing network")
-	}
-	if !supportedNetworks.supports(a.Network) {
-		return fmt.Errorf("network not supported, please select one of: %s", supportedNetworks)
-	}
 	if len(a.AspUrl) <= 0 {
 		return fmt.Errorf("missing asp url")
 	}
@@ -70,25 +62,21 @@ func (a InitArgs) validate() error {
 	return nil
 }
 
-func (a InitArgs) wallet(
-	args ...interface{},
-) (wallet.Wallet, error) {
-	factory := supportedWallets[a.WalletType]
-	return factory(args...)
-}
-
-func (a InitArgs) client(args ...interface{}) (client.Client, error) {
+func (a InitArgs) client() (client.Client, error) {
 	factory := supportedClients[a.ClientType]
-	args = append([]interface{}{a.AspUrl}, args...)
-	return factory(args...)
+	return factory(a.AspUrl)
 }
 
-func (a InitArgs) explorer() (explorer.Explorer, error) {
-	url := supportedNetworks[a.Network]
-	if len(a.ExplorerUrl) > 0 {
-		url = a.ExplorerUrl
+func (a InitArgs) explorer(network string) (explorer.Explorer, error) {
+	url, ok := supportedNetworks[network]
+	if !ok {
+		return nil, fmt.Errorf("invalid network")
 	}
-	return liquidexplorer.NewExplorer(url, a.Network), nil
+	if strings.Contains(network, "liquid") {
+		return liquidexplorer.NewExplorer(url, network), nil
+	}
+	// TODO: support bitcoin explorer
+	return nil, fmt.Errorf("network not supported yet")
 }
 
 type Balance struct {

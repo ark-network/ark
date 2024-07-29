@@ -2,7 +2,6 @@ package grpcclient
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -16,27 +15,15 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-var (
-	errAspUrlEmpty = errors.New("asp url is empty")
-)
-
 type grpcClient struct {
 	conn     *grpc.ClientConn
 	svc      arkv1.ArkServiceClient
 	eventsCh chan client.RoundEventChannel
 }
 
-func NewClient(args ...interface{}) (client.Client, error) {
-	if len(args) != 1 {
-		return nil, fmt.Errorf("invalid number of args")
-	}
-	aspUrl, ok := args[0].(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid asp url")
-	}
-
-	if aspUrl == "" {
-		return nil, errAspUrlEmpty
+func NewClient(aspUrl string) (client.Client, error) {
+	if len(aspUrl) <= 0 {
+		return nil, fmt.Errorf("missing asp url")
 	}
 
 	creds := insecure.NewCredentials()

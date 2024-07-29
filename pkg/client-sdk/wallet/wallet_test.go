@@ -8,6 +8,8 @@ import (
 	"github.com/ark-network/ark-sdk/store"
 	inmemorystore "github.com/ark-network/ark-sdk/store/inmemory"
 	"github.com/ark-network/ark-sdk/wallet"
+	liquidwallet "github.com/ark-network/ark-sdk/wallet/singlekey/liquid"
+	inmemorywalletstore "github.com/ark-network/ark-sdk/wallet/singlekey/store/inmemory"
 	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/stretchr/testify/require"
@@ -22,21 +24,20 @@ func TestWallet(t *testing.T) {
 		AspPubkey:           key.PubKey(),
 		WalletType:          wallet.SingleKeyWallet,
 		ClientType:          client.GrpcClient,
-		ExplorerURL:         "https://example.com",
 		Network:             common.LiquidRegTest,
 		RoundLifetime:       512,
 		UnilateralExitDelay: 512,
 		MinRelayFee:         300,
 	}
 	tests := []struct {
-		name      string
-		getWallet wallet.WalletFactory
-		args      []interface{}
+		name  string
+		chain string
+		args  []interface{}
 	}{
 		{
-			name:      wallet.SingleKeyWallet,
-			getWallet: wallet.NewSingleKeyWallet,
-			args:      []interface{}{common.LiquidRegTest},
+			name:  wallet.SingleKeyWallet,
+			chain: "liquid",
+			args:  []interface{}{common.LiquidRegTest},
 		},
 	}
 
@@ -52,8 +53,14 @@ func TestWallet(t *testing.T) {
 			err = store.AddData(ctx, testStoreData)
 			require.NoError(t, err)
 
-			args := append(tt.args, store)
-			walletSvc, err := tt.getWallet(args...)
+			walletStore, err := inmemorywalletstore.NewWalletStore()
+			require.NoError(t, err)
+			require.NotNil(t, walletStore)
+
+			var walletSvc wallet.Wallet
+			if tt.chain == "liquid" {
+				walletSvc, err = liquidwallet.NewWallet(store, walletStore)
+			}
 			require.NoError(t, err)
 			require.NotNil(t, walletSvc)
 

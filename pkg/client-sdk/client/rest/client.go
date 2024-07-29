@@ -25,15 +25,10 @@ type restClient struct {
 	requestTimeout time.Duration
 }
 
-func NewClient(args ...interface{}) (client.Client, error) {
-	if len(args) != 1 {
-		return nil, fmt.Errorf("invalid number of args")
+func NewClient(aspUrl string) (client.Client, error) {
+	if len(aspUrl) <= 0 {
+		return nil, fmt.Errorf("missing asp url")
 	}
-	aspUrl, ok := args[0].(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid asp url")
-	}
-
 	svc, err := newRestClient(aspUrl)
 	if err != nil {
 		return nil, err

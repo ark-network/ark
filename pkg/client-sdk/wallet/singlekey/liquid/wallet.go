@@ -8,6 +8,8 @@ import (
 
 	"github.com/ark-network/ark-sdk/explorer"
 	sdkutils "github.com/ark-network/ark-sdk/internal/utils"
+	"github.com/ark-network/ark-sdk/store"
+	"github.com/ark-network/ark-sdk/wallet"
 	walletstore "github.com/ark-network/ark-sdk/wallet/singlekey/store"
 	"github.com/ark-network/ark-sdk/wallet/singlekey/utils"
 	"github.com/ark-network/ark/common"
@@ -23,39 +25,36 @@ import (
 )
 
 type singlekeyWallet struct {
-	store      walletstore.WalletStore
-	privateKey *secp256k1.PrivateKey
-	walletData *walletstore.WalletData
+	store       store.Store
+	walletStore walletstore.WalletStore
+	privateKey  *secp256k1.PrivateKey
+	walletData  *walletstore.WalletData
 }
 
-func NewWallet(args ...interface{}) (*singlekeyWallet, error) {
-	if len(args) != 1 {
-		return nil, fmt.Errorf("invalid number of args")
-	}
-	store, ok := args[0].(walletstore.WalletStore)
-	if !ok {
-		return nil, fmt.Errorf("invalid store")
-	}
-	walletData, err := store.GetWallet()
+func NewWallet(store store.Store, walletStore walletstore.WalletStore) (wallet.Wallet, error) {
+	walletData, err := walletStore.GetWallet()
 	if err != nil {
 		return nil, err
 	}
+	return &singlekeyWallet{store, walletStore, nil, walletData}, nil
+}
 
-	return &singlekeyWallet{store, nil, walletData}, nil
+func (w *singlekeyWallet) GetType() string {
+	return wallet.SingleKeyWallet
 }
 
 func (w *singlekeyWallet) Create(
-	_ context.Context, password, key string,
+	_ context.Context, password, seed string,
 ) (string, error) {
 	var privateKey *secp256k1.PrivateKey
-	if len(key) <= 0 {
+	if len(seed) <= 0 {
 		privKey, err := utils.GenerateRandomPrivateKey()
 		if err != nil {
 			return "", err
 		}
 		privateKey = privKey
 	} else {
-		privKeyBytes, err := hex.DecodeString(key)
+		privKeyBytes, err := hex.DecodeString(seed)
 		if err != nil {
 			return "", err
 		}
@@ -77,7 +76,7 @@ func (w *singlekeyWallet) Create(
 		PasswordHash:    passwordHash,
 		Pubkey:          pubkey,
 	}
-	if err := w.store.AddWallet(walletData); err != nil {
+	if err := w.walletStore.AddWallet(walletData); err != nil {
 		return "", err
 	}
 
@@ -131,6 +130,10 @@ func (w *singlekeyWallet) Unlock(
 
 	w.privateKey = secp256k1.PrivKeyFromBytes(privateKeyBytes)
 	return false, nil
+}
+
+func (w *singlekeyWallet) IsLocked() bool {
+	return w.privateKey == nil
 }
 
 func (w *singlekeyWallet) GetAddresses(

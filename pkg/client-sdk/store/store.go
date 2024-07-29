@@ -17,7 +17,6 @@ type StoreData struct {
 	AspPubkey           *secp256k1.PublicKey
 	WalletType          string
 	ClientType          string
-	ExplorerURL         string
 	Network             common.Network
 	RoundLifetime       int64
 	UnilateralExitDelay int64
@@ -25,9 +24,8 @@ type StoreData struct {
 }
 
 type Store interface {
+	GetType() string
 	AddData(ctx context.Context, data StoreData) error
 	GetData(ctx context.Context) (*StoreData, error)
 	CleanData(ctx context.Context) error
 }
-
-type StoreFactory func(args ...interface{}) (Store, error)

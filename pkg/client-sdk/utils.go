@@ -3,6 +3,7 @@ package arksdk
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/ark-network/ark-sdk/client"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
@@ -133,4 +134,19 @@ func isOnchainOnly(receivers []*arkv1.Output) bool {
 	}
 
 	return true
+}
+
+type supportedType[V any] map[string]V
+
+func (t supportedType[V]) String() string {
+	types := make([]string, 0, len(t))
+	for tt := range t {
+		types = append(types, tt)
+	}
+	return strings.Join(types, " | ")
+}
+
+func (t supportedType[V]) supports(typeStr string) bool {
+	_, ok := t[typeStr]
+	return ok
 }

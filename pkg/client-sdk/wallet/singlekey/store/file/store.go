@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ark-network/ark-sdk/store"
 	walletstore "github.com/ark-network/ark-sdk/wallet/singlekey/store"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
@@ -49,30 +48,17 @@ func (d walletData) asMap() map[string]string {
 }
 
 type fileStore struct {
-	store.Store
 	filePath string
 }
 
-func NewWalletStore(args ...interface{}) (walletstore.WalletStore, error) {
-	if len(args) != 2 {
-		return nil, fmt.Errorf("invalid nuber of args")
-	}
-	baseDir, ok := args[0].(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid base url")
-	}
-	store, ok := args[1].(store.Store)
-	if !ok {
-		return nil, fmt.Errorf("invalid store")
-	}
-
+func NewWalletStore(baseDir string) (walletstore.WalletStore, error) {
 	datadir := cleanAndExpandPath(baseDir)
 	if err := makeDirectoryIfNotExists(datadir); err != nil {
 		return nil, fmt.Errorf("failed to initialize datadir: %s", err)
 	}
 	filePath := filepath.Join(datadir, filename)
 
-	fileStore := &fileStore{store, filePath}
+	fileStore := &fileStore{filePath}
 
 	if _, err := fileStore.open(); err != nil {
 		return nil, fmt.Errorf("failed to open file store: %s", err)

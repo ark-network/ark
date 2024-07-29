@@ -58,5 +58,3 @@ type Client interface {
 	) (*arkv1.FinalizePaymentResponse, error)
 	Close()
 }
-
-type ClientFactory func(args ...interface{}) (Client, error)

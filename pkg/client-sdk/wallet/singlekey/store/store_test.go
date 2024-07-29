@@ -1,7 +1,6 @@
 package store_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/ark-network/ark-sdk/store"
@@ -9,7 +8,6 @@ import (
 	filestore "github.com/ark-network/ark-sdk/wallet/singlekey/store/file"
 	inmemorystore "github.com/ark-network/ark-sdk/wallet/singlekey/store/inmemory"
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,19 +20,14 @@ func TestWalletStore(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		getStore walletstore.WalletStoreFactory
-		args     []interface{}
+		name string
+		args []interface{}
 	}{
 		{
-			name:     store.InMemoryStore,
-			getStore: inmemorystore.NewWalletStore,
-			args:     []interface{}{newMockedStore()},
+			name: store.InMemoryStore,
 		},
 		{
-			name:     store.FileStore,
-			getStore: filestore.NewWalletStore,
-			args:     []interface{}{t.TempDir(), newMockedStore()},
+			name: store.FileStore,
 		},
 	}
 
@@ -43,53 +36,32 @@ func TestWalletStore(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			store, err := tt.getStore(tt.args...)
+			var storeSvc walletstore.WalletStore
+			var err error
+			if tt.name == store.InMemoryStore {
+				storeSvc, err = inmemorystore.NewWalletStore()
+			} else {
+				storeSvc, err = filestore.NewWalletStore(t.TempDir())
+			}
 			require.NoError(t, err)
-			require.NotNil(t, store)
+			require.NotNil(t, storeSvc)
 
 			// Check empty data when store is empty.
-			walletData, err := store.GetWallet()
+			walletData, err := storeSvc.GetWallet()
 			require.NoError(t, err)
 			require.Nil(t, walletData)
 
 			// Check add and retrieve data.
-			err = store.AddWallet(testWalletData)
+			err = storeSvc.AddWallet(testWalletData)
 			require.NoError(t, err)
 
-			walletData, err = store.GetWallet()
+			walletData, err = storeSvc.GetWallet()
 			require.NoError(t, err)
 			require.Equal(t, testWalletData, *walletData)
 
 			// Check overwriting the store.
-			err = store.AddWallet(testWalletData)
+			err = storeSvc.AddWallet(testWalletData)
 			require.NoError(t, err)
 		})
 	}
-}
-
-type mockedStore struct {
-	mock.Mock
-}
-
-func newMockedStore() store.Store {
-	return &mockedStore{}
-}
-
-func (m *mockedStore) AddData(ctx context.Context, data store.StoreData) error {
-	args := m.Called(ctx, data)
-	return args.Error(0)
-}
-func (m *mockedStore) GetData(ctx context.Context) (*store.StoreData, error) {
-	args := m.Called(ctx)
-
-	var res *store.StoreData
-	if a := args.Get(0); a != nil {
-		res = a.(*store.StoreData)
-	}
-	return res, args.Error(1)
-}
-
-func (m *mockedStore) CleanData(ctx context.Context) error {
-	args := m.Called(ctx)
-	return args.Error(0)
 }

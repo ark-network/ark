@@ -25,7 +25,6 @@ type storeData struct {
 	AspPubkey           string `json:"asp_pubkey"`
 	WalletType          string `json:"wallet_type"`
 	ClientType          string `json:"client_type"`
-	ExplorerURL         string `json:"explorer_url"`
 	Network             string `json:"network"`
 	RoundLifetime       string `json:"round_lifetime"`
 	UnilateralExitDelay string `json:"unilateral_exit_delay"`
@@ -48,7 +47,6 @@ func (d storeData) decode() store.StoreData {
 		AspPubkey:           aspPubkey,
 		WalletType:          d.WalletType,
 		ClientType:          d.ClientType,
-		ExplorerURL:         d.ExplorerURL,
 		Network:             network,
 		RoundLifetime:       int64(roundLifetime),
 		UnilateralExitDelay: int64(unilateralExitDelay),
@@ -62,7 +60,6 @@ func (d storeData) asMap() map[string]string {
 		"asp_pubkey":            d.AspPubkey,
 		"wallet_type":           d.WalletType,
 		"client_type":           d.ClientType,
-		"explorer_url":          d.ExplorerURL,
 		"network":               d.Network,
 		"round_lifetime":        d.RoundLifetime,
 		"unilateral_exit_delay": d.UnilateralExitDelay,
@@ -74,15 +71,10 @@ type Store struct {
 	filePath string
 }
 
-func NewStore(args ...interface{}) (store.Store, error) {
-	if len(args) != 1 {
-		return nil, fmt.Errorf("invalid number of args")
+func NewStore(baseDir string) (store.Store, error) {
+	if len(baseDir) <= 0 {
+		return nil, fmt.Errorf("missing base directory")
 	}
-	baseDir, ok := args[0].(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid base dir")
-	}
-
 	datadir := cleanAndExpandPath(baseDir)
 	if err := makeDirectoryIfNotExists(datadir); err != nil {
 		return nil, fmt.Errorf("failed to initialize datadir: %s", err)
@@ -98,13 +90,16 @@ func NewStore(args ...interface{}) (store.Store, error) {
 	return fileStore, nil
 }
 
+func (s *Store) GetType() string {
+	return store.FileStore
+}
+
 func (s *Store) AddData(ctx context.Context, data store.StoreData) error {
 	sd := &storeData{
 		AspUrl:              data.AspUrl,
 		AspPubkey:           hex.EncodeToString(data.AspPubkey.SerializeCompressed()),
 		WalletType:          data.WalletType,
 		ClientType:          data.ClientType,
-		ExplorerURL:         data.ExplorerURL,
 		Network:             data.Network.Name,
 		RoundLifetime:       fmt.Sprintf("%d", data.RoundLifetime),
 		UnilateralExitDelay: fmt.Sprintf("%d", data.UnilateralExitDelay),
@@ -179,7 +174,6 @@ func (s *Store) write(data *storeData) error {
 
 	err = os.WriteFile(s.filePath, jsonString, 0755)
 	if err != nil {
-		fmt.Println("AAAA")
 		return err
 	}
 
@@ -187,10 +181,6 @@ func (s *Store) write(data *storeData) error {
 }
 
 func cleanAndExpandPath(path string) string {
-	if path == "" {
-		return ""
-	}
-
 	// Expand initial ~ to OS specific home directory.
 	if strings.HasPrefix(path, "~") {
 		var homeDir string
