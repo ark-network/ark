@@ -12,7 +12,7 @@ type Store struct {
 	lock *sync.RWMutex
 }
 
-func NewStore() (store.Store, error) {
+func NewConfigStore() (store.ConfigStore, error) {
 	lock := &sync.RWMutex{}
 	return &Store{lock: lock}, nil
 }

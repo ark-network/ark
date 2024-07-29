@@ -44,13 +44,13 @@ func TestStore(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			var storeSvc store.Store
+			var storeSvc store.ConfigStore
 			var err error
 			switch tt.name {
 			case store.InMemoryStore:
-				storeSvc, err = inmemorystore.NewStore()
+				storeSvc, err = inmemorystore.NewConfigStore()
 			case store.FileStore:
-				storeSvc, err = filestore.NewStore(t.TempDir())
+				storeSvc, err = filestore.NewConfigStore(t.TempDir())
 			}
 			require.NoError(t, err)
 			require.NotNil(t, storeSvc)

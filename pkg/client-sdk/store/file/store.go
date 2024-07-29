@@ -71,7 +71,7 @@ type Store struct {
 	filePath string
 }
 
-func NewStore(baseDir string) (store.Store, error) {
+func NewConfigStore(baseDir string) (store.ConfigStore, error) {
 	if len(baseDir) <= 0 {
 		return nil, fmt.Errorf("missing base directory")
 	}

@@ -23,7 +23,7 @@ type StoreData struct {
 	MinRelayFee         uint64
 }
 
-type Store interface {
+type ConfigStore interface {
 	GetType() string
 	AddData(ctx context.Context, data StoreData) error
 	GetData(ctx context.Context) (*StoreData, error)
