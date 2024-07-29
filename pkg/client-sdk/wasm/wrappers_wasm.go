@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"syscall/js"
 
 	arksdk "github.com/ark-network/ark-sdk"
+	"github.com/ark-network/ark-sdk/wallet"
+	liquidwallet "github.com/ark-network/ark-sdk/wallet/singlekey/liquid"
 )
 
 func LogWrapper() js.Func {
@@ -22,18 +25,31 @@ func logMsg(msg string) {
 
 func InitWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) != 7 {
+		if len(args) != 5 {
 			return nil, errors.New("invalid number of args")
 		}
 
+		var walletSvc wallet.Wallet
+		switch args[0].String() {
+		case arksdk.SingleKeyWallet:
+			walletStore, err := getWalletStore(storeSvc.GetType())
+			if err != nil {
+				return nil, fmt.Errorf("failed to init wallet store: %s", err)
+			}
+			walletSvc, err = liquidwallet.NewWallet(storeSvc, walletStore)
+			if err != nil {
+				return nil, err
+			}
+		default:
+			return nil, fmt.Errorf("unsupported wallet type")
+		}
+
 		err := arkSdkClient.Init(context.Background(), arksdk.InitArgs{
-			WalletType:  args[0].String(),
-			ClientType:  args[1].String(),
-			Network:     args[2].String(),
-			AspUrl:      args[3].String(),
-			ExplorerUrl: args[4].String(),
-			Password:    args[5].String(),
-			PrivateKey:  args[6].String(),
+			ClientType: args[1].String(),
+			Wallet:     walletSvc,
+			AspUrl:     args[2].String(),
+			Seed:       args[3].String(),
+			Password:   args[4].String(),
 		})
 		return nil, err
 	})
@@ -45,6 +61,7 @@ func UnlockWrapper() js.Func {
 			return nil, errors.New("invalid number of args")
 		}
 		password := args[0].String()
+
 		err := arkSdkClient.Unlock(context.Background(), password)
 		return nil, err
 	})
@@ -56,6 +73,7 @@ func LockWrapper() js.Func {
 			return nil, errors.New("invalid number of args")
 		}
 		password := args[0].String()
+
 		err := arkSdkClient.Unlock(context.Background(), password)
 		return nil, err
 	})
@@ -67,6 +85,7 @@ func BalanceWrapper() js.Func {
 			return nil, errors.New("invalid number of args")
 		}
 		computeExpiryDetails := args[0].Bool()
+
 		resp, err := arkSdkClient.Balance(context.Background(), computeExpiryDetails)
 		if err != nil {
 			return nil, err
@@ -96,12 +115,12 @@ func BalanceWrapper() js.Func {
 
 func OnboardWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) != 2 {
+		if len(args) != 1 {
 			return nil, errors.New("invalid number of args")
 		}
 		amount := uint64(args[0].Int())
-		password := args[1].String()
-		txID, err := arkSdkClient.Onboard(context.Background(), amount, password)
+
+		txID, err := arkSdkClient.Onboard(context.Background(), amount)
 		if err != nil {
 			return nil, err
 		}
@@ -125,7 +144,7 @@ func ReceiveWrapper() js.Func {
 
 func SendOnChainWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) != 2 {
+		if len(args) != 1 {
 			return nil, errors.New("invalid number of args")
 		}
 		receivers := make([]arksdk.Receiver, args[0].Length())
@@ -136,9 +155,9 @@ func SendOnChainWrapper() js.Func {
 				Amount: uint64(receiver.Get("Amount").Int()),
 			}
 		}
-		password := args[1].String()
+
 		txID, err := arkSdkClient.SendOnChain(
-			context.Background(), receivers, password,
+			context.Background(), receivers,
 		)
 		if err != nil {
 			return nil, err
@@ -149,7 +168,7 @@ func SendOnChainWrapper() js.Func {
 
 func SendOffChainWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) != 3 {
+		if len(args) != 2 {
 			return nil, errors.New("invalid number of args")
 		}
 		withExpiryCoinselect := args[0].Bool()
@@ -161,9 +180,9 @@ func SendOffChainWrapper() js.Func {
 				Amount: uint64(receiver.Get("Amount").Int()),
 			}
 		}
-		password := args[2].String()
+
 		txID, err := arkSdkClient.SendOffChain(
-			context.Background(), withExpiryCoinselect, receivers, password,
+			context.Background(), withExpiryCoinselect, receivers,
 		)
 		if err != nil {
 			return nil, err
@@ -174,27 +193,21 @@ func SendOffChainWrapper() js.Func {
 
 func UnilateralRedeemWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) != 1 {
-			return nil, errors.New("invalid number of args")
-		}
-		password := args[0].String()
-		return nil, arkSdkClient.UnilateralRedeem(
-			context.Background(), password,
-		)
+		return nil, arkSdkClient.UnilateralRedeem(context.Background())
 	})
 }
 
 func CollaborativeRedeemWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) != 4 {
+		if len(args) != 3 {
 			return nil, errors.New("invalid number of args")
 		}
 		addr := args[0].String()
 		amount := uint64(args[1].Int())
 		withExpiryCoinselect := args[2].Bool()
-		password := args[3].String()
+
 		txID, err := arkSdkClient.CollaborativeRedeem(
-			context.Background(), addr, amount, withExpiryCoinselect, password,
+			context.Background(), addr, amount, withExpiryCoinselect,
 		)
 		if err != nil {
 			return nil, err
@@ -205,7 +218,7 @@ func CollaborativeRedeemWrapper() js.Func {
 
 func GetAspUrlWrapper() js.Func {
 	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
-		data, _ := arkSdkClient.Store().GetData(context.Background())
+		data, _ := arkSdkClient.GetConfigData(context.Background())
 		var url string
 		if data != nil {
 			url = data.AspUrl
@@ -216,7 +229,7 @@ func GetAspUrlWrapper() js.Func {
 
 func GetAspPubkeyWrapper() js.Func {
 	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
-		data, _ := arkSdkClient.Store().GetData(context.Background())
+		data, _ := arkSdkClient.GetConfigData(context.Background())
 		var aspPubkey string
 		if data != nil {
 			aspPubkey = hex.EncodeToString(data.AspPubkey.SerializeCompressed())
@@ -227,7 +240,7 @@ func GetAspPubkeyWrapper() js.Func {
 
 func GetWalletTypeWrapper() js.Func {
 	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
-		data, _ := arkSdkClient.Store().GetData(context.Background())
+		data, _ := arkSdkClient.GetConfigData(context.Background())
 		var walletType string
 		if data != nil {
 			walletType = data.WalletType
@@ -238,7 +251,7 @@ func GetWalletTypeWrapper() js.Func {
 
 func GetClientTypeWrapper() js.Func {
 	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
-		data, _ := arkSdkClient.Store().GetData(context.Background())
+		data, _ := arkSdkClient.GetConfigData(context.Background())
 		var clientType string
 		if data != nil {
 			clientType = data.ClientType
@@ -247,20 +260,9 @@ func GetClientTypeWrapper() js.Func {
 	})
 }
 
-func GetExplorerUrlWrapper() js.Func {
-	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
-		data, _ := arkSdkClient.Store().GetData(context.Background())
-		var url string
-		if data != nil {
-			url = data.ExplorerURL
-		}
-		return js.ValueOf(url)
-	})
-}
-
 func GetNetworkWrapper() js.Func {
 	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
-		data, _ := arkSdkClient.Store().GetData(context.Background())
+		data, _ := arkSdkClient.GetConfigData(context.Background())
 		var network string
 		if data != nil {
 			network = data.Network.Name
@@ -271,7 +273,7 @@ func GetNetworkWrapper() js.Func {
 
 func GetRoundLifetimeWrapper() js.Func {
 	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
-		data, _ := arkSdkClient.Store().GetData(context.Background())
+		data, _ := arkSdkClient.GetConfigData(context.Background())
 		var roundLifettime int64
 		if data != nil {
 			roundLifettime = data.RoundLifetime
@@ -282,7 +284,7 @@ func GetRoundLifetimeWrapper() js.Func {
 
 func GetUnilateralExitDelayWrapper() js.Func {
 	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
-		data, _ := arkSdkClient.Store().GetData(context.Background())
+		data, _ := arkSdkClient.GetConfigData(context.Background())
 		var unilateralExitDelay int64
 		if data != nil {
 			unilateralExitDelay = data.UnilateralExitDelay
@@ -293,7 +295,7 @@ func GetUnilateralExitDelayWrapper() js.Func {
 
 func GetMinRelayFeeWrapper() js.Func {
 	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
-		data, _ := arkSdkClient.Store().GetData(context.Background())
+		data, _ := arkSdkClient.GetConfigData(context.Background())
 		var minRelayFee uint64
 		if data != nil {
 			minRelayFee = data.MinRelayFee

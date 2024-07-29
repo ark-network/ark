@@ -2,14 +2,20 @@ package arksdkwasm
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"syscall/js"
 
 	arksdk "github.com/ark-network/ark-sdk"
+	"github.com/ark-network/ark-sdk/store"
+	"github.com/ark-network/ark-sdk/wallet"
+	liquidwallet "github.com/ark-network/ark-sdk/wallet/singlekey/liquid"
 	walletstore "github.com/ark-network/ark-sdk/wallet/singlekey/store"
 )
 
 var (
 	arkSdkClient arksdk.ArkClient
+	storeSvc     store.Store
 )
 
 func init() {
@@ -29,39 +35,63 @@ func init() {
 	js.Global().Set("getAspPubKeyHex", GetAspPubkeyWrapper())
 	js.Global().Set("getWalletType", GetWalletTypeWrapper())
 	js.Global().Set("getClientType", GetClientTypeWrapper())
-	js.Global().Set("getExplorerUrl", GetExplorerUrlWrapper())
 	js.Global().Set("getNetwork", GetNetworkWrapper())
 	js.Global().Set("getRoundLifetime", GetRoundLifetimeWrapper())
 	js.Global().Set("getUnilateralExitDelay", GetUnilateralExitDelayWrapper())
 	js.Global().Set("getMinRelayFee", GetMinRelayFeeWrapper())
 }
 
-func New(ctx context.Context, storeType string) error {
+func New(
+	ctx context.Context, storeService store.Store,
+) error {
 	var err error
 
-	arkSdkClient, err = arksdk.New(arksdk.Config{
-		StoreType: storeType,
-	})
+	data, err := storeService.GetData(ctx)
+	if err != nil {
+		return err
+	}
+
+	var walletSvc wallet.Wallet
+	if data != nil {
+		switch data.WalletType {
+		case arksdk.SingleKeyWallet:
+			walletSvc, err = getSingleKeyWallet(storeService, data.Network.Name)
+			if err != nil {
+				return err
+			}
+		// TODO: Support HD wallet
+		default:
+			return fmt.Errorf("unknown wallet type")
+		}
+	}
+	arkSdkClient, err = arksdk.New(storeService, walletSvc)
 	if err != nil {
 		js.Global().Get("console").Call("error", err.Error())
 		return err
 	}
+	storeSvc = storeService
 
 	select {}
 }
 
-func NewWithCustomStore(
-	ctx context.Context, store walletstore.WalletStore,
-) error {
-	var err error
-
-	arkSdkClient, err = arksdk.New(arksdk.Config{
-		CustomStore: store,
-	})
-	if err != nil {
-		js.Global().Get("console").Call("error", err.Error())
-		return err
+func getWalletStore(storeType string) (walletstore.WalletStore, error) {
+	if storeType == LocalStorageStore {
+		return NewLocalStorageWalletStore()
 	}
+	// TODO: Support IndexDB store
+	return nil, fmt.Errorf("unknown wallet store type")
+}
 
-	select {}
+func getSingleKeyWallet(
+	store store.Store, network string,
+) (wallet.Wallet, error) {
+	walletStore, err := getWalletStore(store.GetType())
+	if err != nil {
+		return nil, err
+	}
+	if strings.Contains(network, "liquid") {
+		return liquidwallet.NewWallet(store, walletStore)
+	}
+	// TODO: Support bitcoin wallet
+	return nil, fmt.Errorf("network %s not supported yet", network)
 }

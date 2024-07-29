@@ -10,8 +10,11 @@ import (
 
 	"github.com/ark-network/ark-sdk/internal/utils"
 	"github.com/ark-network/ark-sdk/store"
-	walletstore "github.com/ark-network/ark-sdk/wallet/singlekey/store"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+)
+
+const (
+	LocalStorageStore = "localstorage"
 )
 
 type storeData struct {
@@ -26,31 +29,17 @@ type storeData struct {
 	MinRelayFee         string `json:"min_relay_fee"`
 }
 
-type walletData struct {
-	EncryptedPrvkey string `json:"encrypted_private_key"`
-	PasswordHash    string `json:"password_hash"`
-	Pubkey          string `json:"pubkey"`
-}
-
-func (d walletData) decode() *walletstore.WalletData {
-	encryptedPrvkey, _ := hex.DecodeString(d.EncryptedPrvkey)
-	passwordHash, _ := hex.DecodeString(d.PasswordHash)
-	buf, _ := hex.DecodeString(d.Pubkey)
-	pubkey, _ := secp256k1.ParsePubKey(buf)
-	return &walletstore.WalletData{
-		EncryptedPrvkey: encryptedPrvkey,
-		PasswordHash:    passwordHash,
-		Pubkey:          pubkey,
-	}
-}
-
 type localStorageStore struct {
 	store js.Value
 }
 
-func NewLocalStorageStore() (walletstore.WalletStore, error) {
+func NewLocalStorageStore() (store.Store, error) {
 	store := js.Global().Get("localStorage")
 	return &localStorageStore{store}, nil
+}
+
+func (s *localStorageStore) GetType() string {
+	return LocalStorageStore
 }
 
 func (s *localStorageStore) AddData(ctx context.Context, data store.StoreData) error {
@@ -59,13 +48,12 @@ func (s *localStorageStore) AddData(ctx context.Context, data store.StoreData) e
 		AspPubkey:           hex.EncodeToString(data.AspPubkey.SerializeCompressed()),
 		WalletType:          data.WalletType,
 		ClientType:          data.ClientType,
-		ExplorerURL:         data.ExplorerURL,
 		Network:             data.Network.Name,
 		RoundLifetime:       fmt.Sprintf("%d", data.RoundLifetime),
 		UnilateralExitDelay: fmt.Sprintf("%d", data.UnilateralExitDelay),
 		MinRelayFee:         fmt.Sprintf("%d", data.MinRelayFee),
 	}
-	return s.writeStoreData(sd)
+	return s.writeData(sd)
 }
 
 func (s *localStorageStore) GetData(ctx context.Context) (*store.StoreData, error) {
@@ -95,7 +83,6 @@ func (s *localStorageStore) GetData(ctx context.Context) (*store.StoreData, erro
 		AspPubkey:           aspPubkey,
 		WalletType:          s.store.Call("getItem", "wallet_type").String(),
 		ClientType:          s.store.Call("getItem", "client_type").String(),
-		ExplorerURL:         s.store.Call("getItem", "explorer_url").String(),
 		Network:             network,
 		RoundLifetime:       int64(roundLifetime),
 		UnilateralExitDelay: int64(unilateralExitDelay),
@@ -104,50 +91,13 @@ func (s *localStorageStore) GetData(ctx context.Context) (*store.StoreData, erro
 }
 
 func (s *localStorageStore) CleanData(ctx context.Context) error {
-	if err := s.writeStoreData(&storeData{}); err != nil {
+	if err := s.writeData(&storeData{}); err != nil {
 		return fmt.Errorf("failed to write to store: %s", err)
 	}
 	return nil
 }
 
-func (s *localStorageStore) AddWallet(data walletstore.WalletData) error {
-	wd := &walletData{
-		EncryptedPrvkey: hex.EncodeToString(data.EncryptedPrvkey),
-		PasswordHash:    hex.EncodeToString(data.PasswordHash),
-		Pubkey:          hex.EncodeToString(data.Pubkey.SerializeCompressed()),
-	}
-
-	if err := s.writeWalletData(wd); err != nil {
-		return fmt.Errorf("failed to write to file store: %s", err)
-	}
-	return nil
-}
-
-func (s *localStorageStore) GetWallet() (*walletstore.WalletData, error) {
-	data := walletData{
-		EncryptedPrvkey: s.store.Call("getItem", "encrypted_private_key").String(),
-		PasswordHash:    s.store.Call("getItem", "password_hash").String(),
-		Pubkey:          s.store.Call("getItem", "pubkey").String(),
-	}
-	return data.decode(), nil
-}
-
-func (s *localStorageStore) writeStoreData(data *storeData) error {
-	dataMap := make(map[string]string)
-	buf, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-	if err := json.Unmarshal(buf, &dataMap); err != nil {
-		return err
-	}
-	for key, value := range dataMap {
-		s.store.Call("setItem", key, value)
-	}
-	return nil
-}
-
-func (s *localStorageStore) writeWalletData(data *walletData) error {
+func (s *localStorageStore) writeData(data *storeData) error {
 	dataMap := make(map[string]string)
 	buf, err := json.Marshal(data)
 	if err != nil {
