@@ -14,9 +14,6 @@ import (
 )
 
 var (
-	supportedWallets = supportedType[struct{}]{
-		wallet.SingleKeyWallet: struct{}{},
-	}
 	supportedClients = supportedType[clientFactory]{
 		client.GrpcClient: grpcclient.NewClient,
 		client.RestClient: restclient.NewClient,
