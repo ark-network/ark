@@ -40,7 +40,7 @@ func DecodeAddress(
 	if err != nil {
 		return
 	}
-	if prefix != Liquid.Addr && prefix != LiquidTestNet.Addr {
+	if prefix != Liquid.Addr && prefix != LiquidTestNet.Addr && prefix != LiquidRegTest.Addr {
 		err = fmt.Errorf("invalid prefix")
 		return
 	}
