@@ -2,6 +2,11 @@ package explorer
 
 import "github.com/vulpemventures/go-elements/network"
 
+const (
+	BitcoinExplorer = "bitcoin"
+	LiquidExplorer  = "liquid"
+)
+
 type Utxo struct {
 	Txid   string `json:"txid"`
 	Vout   uint32 `json:"vout"`
