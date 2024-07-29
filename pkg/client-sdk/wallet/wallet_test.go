@@ -46,7 +46,7 @@ func TestWallet(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			store, err := inmemorystore.NewStore()
+			store, err := inmemorystore.NewConfigStore()
 			require.NoError(t, err)
 			require.NotNil(t, store)
 
@@ -57,9 +57,9 @@ func TestWallet(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, walletStore)
 
-			var walletSvc wallet.Wallet
+			var walletSvc wallet.WalletService
 			if tt.chain == "liquid" {
-				walletSvc, err = liquidwallet.NewWallet(store, walletStore)
+				walletSvc, err = liquidwallet.NewWalletService(store, walletStore)
 			}
 			require.NoError(t, err)
 			require.NotNil(t, walletSvc)

@@ -25,18 +25,20 @@ import (
 )
 
 type singlekeyWallet struct {
-	store       store.Store
+	configStore store.ConfigStore
 	walletStore walletstore.WalletStore
 	privateKey  *secp256k1.PrivateKey
 	walletData  *walletstore.WalletData
 }
 
-func NewWallet(store store.Store, walletStore walletstore.WalletStore) (wallet.Wallet, error) {
+func NewWalletService(
+	configStore store.ConfigStore, walletStore walletstore.WalletStore,
+) (wallet.WalletService, error) {
 	walletData, err := walletStore.GetWallet()
 	if err != nil {
 		return nil, err
 	}
-	return &singlekeyWallet{store, walletStore, nil, walletData}, nil
+	return &singlekeyWallet{configStore, walletStore, nil, walletData}, nil
 }
 
 func (w *singlekeyWallet) GetType() string {
@@ -229,7 +231,7 @@ func (s *singlekeyWallet) SignTransaction(
 		return "", err
 	}
 
-	storeData, err := s.store.GetData(ctx)
+	storeData, err := s.configStore.GetData(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -361,7 +363,7 @@ func (w *singlekeyWallet) getAddress(
 		return "", "", "", fmt.Errorf("wallet not initialized")
 	}
 
-	data, err := w.store.GetData(ctx)
+	data, err := w.configStore.GetData(ctx)
 	if err != nil {
 		return "", "", "", err
 	}

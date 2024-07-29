@@ -10,7 +10,7 @@ const (
 	SingleKeyWallet = "singlekey"
 )
 
-type Wallet interface {
+type WalletService interface {
 	GetType() string
 	Create(
 		ctx context.Context, password, seed string,
