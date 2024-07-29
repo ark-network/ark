@@ -25,7 +25,7 @@ type restClient struct {
 	requestTimeout time.Duration
 }
 
-func NewClient(aspUrl string) (client.Client, error) {
+func NewClient(aspUrl string) (client.ASPClient, error) {
 	if len(aspUrl) <= 0 {
 		return nil, fmt.Errorf("missing asp url")
 	}

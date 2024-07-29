@@ -26,7 +26,7 @@ type Vtxo struct {
 	ExpiresAt *time.Time
 }
 
-type Client interface {
+type ASPClient interface {
 	GetInfo(ctx context.Context) (*arkv1.GetInfoResponse, error)
 	ListVtxos(ctx context.Context, addr string) (*arkv1.ListVtxosResponse, error)
 	GetSpendableVtxos(
