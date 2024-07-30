@@ -6,6 +6,14 @@ import (
 	"strings"
 
 	"github.com/ark-network/ark-sdk/client"
+	"github.com/ark-network/ark-sdk/explorer"
+	liquidexplorer "github.com/ark-network/ark-sdk/explorer/liquid"
+	"github.com/ark-network/ark-sdk/store"
+	"github.com/ark-network/ark-sdk/wallet"
+	liquidwallet "github.com/ark-network/ark-sdk/wallet/singlekey/liquid"
+	walletstore "github.com/ark-network/ark-sdk/wallet/singlekey/store"
+	filestore "github.com/ark-network/ark-sdk/wallet/singlekey/store/file"
+	inmemorystore "github.com/ark-network/ark-sdk/wallet/singlekey/store/inmemory"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
@@ -136,17 +144,58 @@ func isOnchainOnly(receivers []*arkv1.Output) bool {
 	return true
 }
 
-type supportedType[V any] map[string]V
-
-func (t supportedType[V]) String() string {
-	types := make([]string, 0, len(t))
-	for tt := range t {
-		types = append(types, tt)
-	}
-	return strings.Join(types, " | ")
+func getClient(clientType, aspUrl string) (client.ASPClient, error) {
+	factory := supportedClients[clientType]
+	return factory(aspUrl)
 }
 
-func (t supportedType[V]) supports(typeStr string) bool {
-	_, ok := t[typeStr]
-	return ok
+func getExplorer(network string) (explorer.Explorer, error) {
+	url, ok := supportedNetworks[network]
+	if !ok {
+		return nil, fmt.Errorf("invalid network")
+	}
+	if strings.Contains(network, "liquid") {
+		return liquidexplorer.NewExplorer(url, network), nil
+	}
+	// TODO: support bitcoin explorer
+	return nil, fmt.Errorf("network not supported yet")
+}
+
+func getWallet(
+	storeSvc store.ConfigStore, data *store.StoreData,
+) (wallet.WalletService, error) {
+	switch data.WalletType {
+	case SingleKeyWallet:
+		return getSingleKeyWallet(storeSvc, data.Network.Name)
+	default:
+		return nil, fmt.Errorf(
+			"unsuported wallet type '%s', please select one of: %s",
+			data.WalletType, supportedWallets,
+		)
+	}
+}
+
+func getSingleKeyWallet(
+	configStore store.ConfigStore, network string,
+) (wallet.WalletService, error) {
+	walletStore, err := getWalletStore(configStore.GetType(), configStore.GetDatadir())
+	if err != nil {
+		return nil, err
+	}
+	if strings.Contains(network, "liquid") {
+		return liquidwallet.NewWalletService(configStore, walletStore)
+	}
+	// TODO: Support bitcoin wallet
+	return nil, fmt.Errorf("network %s not supported yet", network)
+}
+
+func getWalletStore(storeType, datadir string) (walletstore.WalletStore, error) {
+	switch storeType {
+	case InMemoryStore:
+		return inmemorystore.NewWalletStore()
+	case FileStore:
+		return filestore.NewWalletStore(datadir)
+	default:
+		return nil, fmt.Errorf("unknown wallet store type")
+	}
 }

@@ -25,6 +25,7 @@ type StoreData struct {
 
 type ConfigStore interface {
 	GetType() string
+	GetDatadir() string
 	AddData(ctx context.Context, data StoreData) error
 	GetData(ctx context.Context) (*StoreData, error)
 	CleanData(ctx context.Context) error

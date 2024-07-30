@@ -11,8 +11,6 @@ import (
 
 	arksdk "github.com/ark-network/ark-sdk"
 	inmemorystore "github.com/ark-network/ark-sdk/store/inmemory"
-	liquidwallet "github.com/ark-network/ark-sdk/wallet/singlekey/liquid"
-	walletinmemorystore "github.com/ark-network/ark-sdk/wallet/singlekey/store/inmemory"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -20,6 +18,7 @@ var (
 	aspUrl     = "localhost:8080"
 	clientType = arksdk.GrpcClient
 	password   = "password"
+	walletType = arksdk.SingleKeyWallet
 )
 
 func main() {
@@ -146,23 +145,13 @@ func setupArkClient() (arksdk.ArkClient, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup store: %s", err)
 	}
-	client, err := arksdk.New(storeSvc, nil)
+	client, err := arksdk.New(storeSvc)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup ark client: %s", err)
 	}
 
-	walletStoreSvc, err := walletinmemorystore.NewWalletStore()
-	if err != nil {
-		return nil, fmt.Errorf("failed to setup wallet store: %s", err)
-	}
-
-	walletSvc, err := liquidwallet.NewWalletService(storeSvc, walletStoreSvc)
-	if err != nil {
-		return nil, fmt.Errorf("failed to setup wallet: %s", err)
-	}
-
 	if err := client.Init(context.Background(), arksdk.InitArgs{
-		Wallet:     walletSvc,
+		WalletType: walletType,
 		ClientType: clientType,
 		AspUrl:     aspUrl,
 		Password:   password,

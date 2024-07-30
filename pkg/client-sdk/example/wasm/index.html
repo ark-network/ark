@@ -35,7 +35,7 @@
                 logMessage("wallet initialized and connected to ASP");
                 await config();
             } catch (err) {
-                logMessage("Connect error: " + err.message);
+                logMessage("Init error: " + err.message);
             }
         }
 
@@ -58,15 +58,16 @@
 
 
         async function send() {
+            const password = document.getElementById("s_password").value;
+            if (!password) {
+                logMessage("Send error: password is required");
+                return;
+            }
+            
             try {
                 const address = document.getElementById("sendAddress").value;
                 if (!address) {
                     logMessage("Send error: Address is required");
-                    return;
-                }
-                const password = document.getElementById("s_password").value;
-                if (!password) {
-                    logMessage("Send error: password is required");
                     return;
                 }
                 const amountStr = document.getElementById("amountToSend").value;

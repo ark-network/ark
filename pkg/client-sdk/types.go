@@ -7,16 +7,17 @@ import (
 	"github.com/ark-network/ark-sdk/client"
 	grpcclient "github.com/ark-network/ark-sdk/client/grpc"
 	restclient "github.com/ark-network/ark-sdk/client/rest"
-	"github.com/ark-network/ark-sdk/explorer"
-	liquidexplorer "github.com/ark-network/ark-sdk/explorer/liquid"
 	"github.com/ark-network/ark-sdk/wallet"
 	"github.com/ark-network/ark/common"
 )
 
 var (
+	supportedWallets = supportedType[struct{}]{
+		SingleKeyWallet: struct{}{},
+	}
 	supportedClients = supportedType[clientFactory]{
-		client.GrpcClient: grpcclient.NewClient,
-		client.RestClient: restclient.NewClient,
+		GrpcClient: grpcclient.NewClient,
+		RestClient: restclient.NewClient,
 	}
 	supportedNetworks = supportedType[string]{
 		common.Liquid.Name:         "https://blockstream.info/liquid/api",
@@ -32,13 +33,51 @@ type clientFactory func(string) (client.ASPClient, error)
 
 type InitArgs struct {
 	ClientType string
-	Wallet     wallet.WalletService
+	WalletType string
 	AspUrl     string
 	Seed       string
 	Password   string
 }
 
 func (a InitArgs) validate() error {
+	if len(a.WalletType) <= 0 {
+		return fmt.Errorf("missing wallet")
+	}
+	if !supportedWallets.supports(a.WalletType) {
+		return fmt.Errorf(
+			"wallet type '%s' not supported, please select one of: %s",
+			a.WalletType, supportedClients,
+		)
+	}
+
+	if len(a.ClientType) <= 0 {
+		return fmt.Errorf("missing client type")
+	}
+	if !supportedClients.supports(a.ClientType) {
+		return fmt.Errorf(
+			"client type '%s' not supported, please select one of: %s",
+			a.ClientType, supportedClients,
+		)
+	}
+
+	if len(a.AspUrl) <= 0 {
+		return fmt.Errorf("missing asp url")
+	}
+	if len(a.Password) <= 0 {
+		return fmt.Errorf("missing password")
+	}
+	return nil
+}
+
+type InitWithWalletArgs struct {
+	ClientType string
+	Wallet     wallet.WalletService
+	AspUrl     string
+	Seed       string
+	Password   string
+}
+
+func (a InitWithWalletArgs) validate() error {
 	if a.Wallet == nil {
 		return fmt.Errorf("missing wallet")
 	}
@@ -57,23 +96,6 @@ func (a InitArgs) validate() error {
 		return fmt.Errorf("missing password")
 	}
 	return nil
-}
-
-func (a InitArgs) client() (client.ASPClient, error) {
-	factory := supportedClients[a.ClientType]
-	return factory(a.AspUrl)
-}
-
-func (a InitArgs) explorer(network string) (explorer.Explorer, error) {
-	url, ok := supportedNetworks[network]
-	if !ok {
-		return nil, fmt.Errorf("invalid network")
-	}
-	if strings.Contains(network, "liquid") {
-		return liquidexplorer.NewExplorer(url, network), nil
-	}
-	// TODO: support bitcoin explorer
-	return nil, fmt.Errorf("network not supported yet")
 }
 
 type Balance struct {
@@ -108,4 +130,19 @@ type balanceRes struct {
 	onchainLockedBalance        map[int64]uint64
 	offchainBalanceByExpiration map[int64]uint64
 	err                         error
+}
+
+type supportedType[V any] map[string]V
+
+func (t supportedType[V]) String() string {
+	types := make([]string, 0, len(t))
+	for tt := range t {
+		types = append(types, tt)
+	}
+	return strings.Join(types, " | ")
+}
+
+func (t supportedType[V]) supports(typeStr string) bool {
+	_, ok := t[typeStr]
+	return ok
 }

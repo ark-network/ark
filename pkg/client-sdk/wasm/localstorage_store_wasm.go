@@ -42,6 +42,10 @@ func (s *localStorageStore) GetType() string {
 	return LocalStorageStore
 }
 
+func (s *localStorageStore) GetDatadir() string {
+	return ""
+}
+
 func (s *localStorageStore) AddData(ctx context.Context, data store.StoreData) error {
 	sd := &storeData{
 		AspUrl:              data.AspUrl,

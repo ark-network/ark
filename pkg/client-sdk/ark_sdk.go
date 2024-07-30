@@ -44,9 +44,15 @@ const (
 	LiquidExplorer  = explorer.LiquidExplorer
 )
 
+var (
+	ErrAlreadyInitialized = fmt.Errorf("client already initialized")
+	ErrNotInitialized     = fmt.Errorf("client not initialized")
+)
+
 type ArkClient interface {
 	GetConfigData(ctx context.Context) (*store.StoreData, error)
 	Init(ctx context.Context, args InitArgs) error
+	InitWithWallet(ctx context.Context, args InitWithWalletArgs) error
 	Unlock(ctx context.Context, password string) error
 	Lock(ctx context.Context, password string) error
 	Balance(ctx context.Context, computeExpiryDetails bool) (*Balance, error)
@@ -70,34 +76,75 @@ type arkClient struct {
 	client   client.ASPClient
 }
 
-func New(storeSvc store.ConfigStore, walletSvc wallet.WalletService) (ArkClient, error) {
+func New(storeSvc store.ConfigStore) (ArkClient, error) {
 	data, err := storeSvc.GetData(context.Background())
 	if err != nil {
 		return nil, err
 	}
-
-	var clientSvc client.ASPClient
-	var explorerSvc explorer.Explorer
 	if data != nil {
-		if walletSvc == nil {
-			return nil, fmt.Errorf(
-				"client already initialized, please provide a wallet service",
-			)
-		}
-		args := InitArgs{
-			Wallet:     walletSvc,
-			ClientType: data.ClientType,
-			AspUrl:     data.AspUrl,
-		}
-		clientSvc, err = args.client()
-		if err != nil {
-			return nil, err
-		}
+		return nil, ErrAlreadyInitialized
+	}
 
-		explorerSvc, err = args.explorer(data.Network.Name)
-		if err != nil {
-			return nil, err
-		}
+	return &arkClient{store: storeSvc}, nil
+}
+
+func Load(storeSvc store.ConfigStore) (ArkClient, error) {
+	if storeSvc == nil {
+		return nil, fmt.Errorf("missin store service")
+	}
+
+	data, err := storeSvc.GetData(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	if data == nil {
+		return nil, ErrNotInitialized
+	}
+
+	clientSvc, err := getClient(data.ClientType, data.AspUrl)
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup transport client: %s", err)
+	}
+
+	explorerSvc, err := getExplorer(data.Network.Name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup explorer: %s", err)
+	}
+
+	walletSvc, err := getWallet(storeSvc, data)
+	if err != nil {
+		return nil, fmt.Errorf("faile to setup wallet: %s", err)
+	}
+
+	return &arkClient{data, walletSvc, storeSvc, explorerSvc, clientSvc}, nil
+}
+
+func LoadWithWallet(
+	storeSvc store.ConfigStore, walletSvc wallet.WalletService,
+) (ArkClient, error) {
+	if storeSvc == nil {
+		return nil, fmt.Errorf("missin store service")
+	}
+	if walletSvc == nil {
+		return nil, fmt.Errorf("missin wallet service")
+	}
+
+	data, err := storeSvc.GetData(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	if data == nil {
+		return nil, ErrNotInitialized
+	}
+
+	clientSvc, err := getClient(data.ClientType, data.AspUrl)
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup transport client: %s", err)
+	}
+
+	explorerSvc, err := getExplorer(data.Network.Name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
 
 	return &arkClient{data, walletSvc, storeSvc, explorerSvc, clientSvc}, nil
@@ -112,12 +159,14 @@ func (a *arkClient) GetConfigData(
 	return a.StoreData, nil
 }
 
-func (a *arkClient) Init(ctx context.Context, args InitArgs) error {
+func (a *arkClient) InitWithWallet(
+	ctx context.Context, args InitWithWalletArgs,
+) error {
 	if err := args.validate(); err != nil {
 		return fmt.Errorf("invalid args: %s", err)
 	}
 
-	clientSvc, err := args.client()
+	clientSvc, err := getClient(args.ClientType, args.AspUrl)
 	if err != nil {
 		return fmt.Errorf("failed to setup client: %s", err)
 	}
@@ -127,7 +176,7 @@ func (a *arkClient) Init(ctx context.Context, args InitArgs) error {
 		return fmt.Errorf("failed to connect to asp: %s", err)
 	}
 
-	explorerSvc, err := args.explorer(resp.GetNetwork())
+	explorerSvc, err := getExplorer(resp.GetNetwork())
 	if err != nil {
 		return fmt.Errorf("failed to setup explorer: %s", err)
 	}
@@ -165,6 +214,72 @@ func (a *arkClient) Init(ctx context.Context, args InitArgs) error {
 
 	a.StoreData = &storeData
 	a.wallet = args.Wallet
+	a.explorer = explorerSvc
+	a.client = clientSvc
+
+	return nil
+}
+
+func (a *arkClient) Init(
+	ctx context.Context, args InitArgs,
+) error {
+	if err := args.validate(); err != nil {
+		return fmt.Errorf("invalid args: %s", err)
+	}
+
+	clientSvc, err := getClient(args.ClientType, args.AspUrl)
+	if err != nil {
+		return fmt.Errorf("failed to setup client: %s", err)
+	}
+
+	resp, err := clientSvc.GetInfo(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to connect to asp: %s", err)
+	}
+
+	explorerSvc, err := getExplorer(resp.GetNetwork())
+	if err != nil {
+		return fmt.Errorf("failed to setup explorer: %s", err)
+	}
+
+	network := utils.NetworkFromString(resp.GetNetwork())
+
+	buf, err := hex.DecodeString(resp.GetPubkey())
+	if err != nil {
+		return fmt.Errorf("failed to parse asp pubkey: %s", err)
+	}
+	aspPubkey, err := secp256k1.ParsePubKey(buf)
+	if err != nil {
+		return fmt.Errorf("failed to parse asp pubkey: %s", err)
+	}
+
+	storeData := store.StoreData{
+		AspUrl:              args.AspUrl,
+		AspPubkey:           aspPubkey,
+		WalletType:          args.WalletType,
+		ClientType:          args.ClientType,
+		Network:             network,
+		RoundLifetime:       resp.GetRoundLifetime(),
+		UnilateralExitDelay: resp.GetUnilateralExitDelay(),
+		MinRelayFee:         uint64(resp.GetMinRelayFee()),
+	}
+	walletSvc, err := getWallet(a.store, &storeData)
+	if err != nil {
+		return err
+	}
+
+	if err := a.store.AddData(ctx, storeData); err != nil {
+		return err
+	}
+
+	if _, err := walletSvc.Create(ctx, args.Password, args.Seed); err != nil {
+		//nolint:all
+		a.store.CleanData(ctx)
+		return err
+	}
+
+	a.StoreData = &storeData
+	a.wallet = walletSvc
 	a.explorer = explorerSvc
 	a.client = clientSvc
 

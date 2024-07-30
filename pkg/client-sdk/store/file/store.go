@@ -94,6 +94,10 @@ func (s *Store) GetType() string {
 	return store.FileStore
 }
 
+func (s *Store) GetDatadir() string {
+	return filepath.Dir(s.filePath)
+}
+
 func (s *Store) AddData(ctx context.Context, data store.StoreData) error {
 	sd := &storeData{
 		AspUrl:              data.AspUrl,

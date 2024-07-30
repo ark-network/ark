@@ -44,7 +44,7 @@ func InitWrapper() js.Func {
 			return nil, fmt.Errorf("unsupported wallet type")
 		}
 
-		err := arkSdkClient.Init(context.Background(), arksdk.InitArgs{
+		err := arkSdkClient.InitWithWallet(context.Background(), arksdk.InitWithWalletArgs{
 			ClientType: args[1].String(),
 			Wallet:     walletSvc,
 			AspUrl:     args[2].String(),

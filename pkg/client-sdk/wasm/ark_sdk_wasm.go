@@ -51,8 +51,10 @@ func New(
 		return err
 	}
 
-	var walletSvc wallet.WalletService
-	if data != nil {
+	if data == nil {
+		arkSdkClient, err = arksdk.New(storeSvc)
+	} else {
+		var walletSvc wallet.WalletService
 		switch data.WalletType {
 		case arksdk.SingleKeyWallet:
 			walletSvc, err = getSingleKeyWallet(storeSvc, data.Network.Name)
@@ -63,8 +65,8 @@ func New(
 		default:
 			return fmt.Errorf("unknown wallet type")
 		}
+		arkSdkClient, err = arksdk.LoadWithWallet(storeSvc, walletSvc)
 	}
-	arkSdkClient, err = arksdk.New(storeSvc, walletSvc)
 	if err != nil {
 		js.Global().Get("console").Call("error", err.Error())
 		return err

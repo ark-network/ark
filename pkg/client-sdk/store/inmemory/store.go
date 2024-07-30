@@ -21,6 +21,10 @@ func (s *Store) GetType() string {
 	return store.InMemoryStore
 }
 
+func (s *Store) GetDatadir() string {
+	return ""
+}
+
 func (s *Store) AddData(
 	_ context.Context, data store.StoreData,
 ) error {

@@ -18,10 +18,6 @@ func main() {
 
 	store, _ := arksdkwasm.NewLocalStorageStore()
 	if store != nil {
-		// read from local storage
-		// instantiate wallet if local storage is not empty:
-		//    - instantiate local storage WalletStore impl
-		// if err := arksdkwasm.New(ctx, store, walletSvc); err != nil {
 		if err := arksdkwasm.New(ctx, store); err != nil {
 			fmt.Println(err)
 		}
