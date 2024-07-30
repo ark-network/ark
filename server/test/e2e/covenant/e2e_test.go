@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ark-network/ark/common"
 	utils "github.com/ark-network/ark/test/e2e"
 	"github.com/stretchr/testify/require"
 )
@@ -88,7 +89,7 @@ func TestMain(m *testing.M) {
 
 	time.Sleep(3 * time.Second)
 
-	_, err = runArkCommand("init", "--ark-url", "localhost:6000", "--password", utils.Password, "--network", "liquidregtest", "--explorer", "http://chopsticks-liquid:3000")
+	_, err = runArkCommand("init", "--ark-url", "localhost:6000", "--password", utils.Password, "--network", common.LiquidRegTest.Name, "--explorer", "http://chopsticks-liquid:3000")
 	if err != nil {
 		fmt.Printf("error initializing ark config: %s", err)
 		os.Exit(1)

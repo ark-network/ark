@@ -1,8 +1,9 @@
 # Ark
-
-![noah desiging the ark to scale Bitcoin](https://github.com/ark-network/ark/assets/3596602/5f51dde8-33d3-404f-bacf-6975131c9509)
-
 Welcome to the Ark monorepo.
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/169d6ae5-7d90-448d-b768-4e40a412bf70" alt="og image github">
+</p>
 
 In this repository you can find:
 
@@ -11,13 +12,6 @@ In this repository you can find:
 
 Refer to the README in each directory for more information about development.
 
-## Roadmap
-
-- [ ] Progressive Web App (PWA) as client and Ark wallet.
-- [ ] Support Bitcoin with pre-signed transactions
-- [ ] Support Ark out-of-round payments
-- [ ] Add protected admin RPCs for `arkd` to manage rounds and treasury
-- [ ] Add `postgres` as database option for `arkd`
 
 ## Run the Ark Service Provider
 

@@ -12,8 +12,8 @@ on:
       - "server/**"
 
 jobs:
-  test:
-    name: unit tests
+  test-server:
+    name: server unit tests
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -38,4 +38,26 @@ jobs:
       - run: go get -v -t -d ./...
       - name: unit testing
         run: make test
-  
+  test-sdk:
+    name: sdk unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./pkg/client-sdk
+    steps:
+      - uses: actions/setup-go@v3
+        with:
+          go-version: ">1.17.2"
+      - uses: actions/checkout@v3
+      - name: check linting
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: v1.54
+          working-directory: ./pkg/client-sdk
+      - name: check code integrity
+        uses: securego/gosec@master
+        with:
+          args: '-severity high -quiet ./...'
+      - run: go get -v -t -d ./...
+      - name: unit testing
+        run: make test  
