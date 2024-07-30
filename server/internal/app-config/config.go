@@ -40,6 +40,7 @@ type Config struct {
 	DbType                string
 	EventDbType           string
 	DbDir                 string
+	DbMigrationPath       string
 	EventDbDir            string
 	RoundInterval         int64
 	Network               common.Network
@@ -169,7 +170,7 @@ func (c *Config) repoManager() error {
 	case "badger":
 		dataStoreConfig = []interface{}{c.DbDir, logger}
 	case "sqlite":
-		dataStoreConfig = []interface{}{c.DbDir}
+		dataStoreConfig = []interface{}{c.DbDir, c.DbMigrationPath}
 	default:
 		return fmt.Errorf("unknown db type")
 	}
