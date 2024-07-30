@@ -23,7 +23,7 @@ require (
 	github.com/timshannon/badgerhold/v4 v4.0.3
 	github.com/vulpemventures/go-elements v0.5.4
 	google.golang.org/genproto/googleapis/api v0.0.0-20240624140628-dc46fd24d27d
-	google.golang.org/grpc v1.64.0
+	google.golang.org/grpc v1.64.1
 	google.golang.org/protobuf v1.34.2
 	modernc.org/sqlite v1.29.10
 )
