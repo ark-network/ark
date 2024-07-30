@@ -2,24 +2,23 @@ package arksdk
 
 import (
 	"fmt"
-	"strings"
 
-	"github.com/ark-network/ark-sdk/client"
 	grpcclient "github.com/ark-network/ark-sdk/client/grpc"
 	restclient "github.com/ark-network/ark-sdk/client/rest"
+	"github.com/ark-network/ark-sdk/internal/utils"
 	"github.com/ark-network/ark-sdk/wallet"
 	"github.com/ark-network/ark/common"
 )
 
 var (
-	supportedWallets = supportedType[struct{}]{
+	supportedWallets = utils.SupportedType[struct{}]{
 		SingleKeyWallet: struct{}{},
 	}
-	supportedClients = supportedType[clientFactory]{
+	supportedClients = utils.SupportedType[utils.ClientFactory]{
 		GrpcClient: grpcclient.NewClient,
 		RestClient: restclient.NewClient,
 	}
-	supportedNetworks = supportedType[string]{
+	supportedNetworks = utils.SupportedType[string]{
 		common.Liquid.Name:         "https://blockstream.info/liquid/api",
 		common.LiquidTestNet.Name:  "https://blockstream.info/liquidtestnet/api",
 		common.LiquidRegTest.Name:  "http://localhost:3001",
@@ -28,8 +27,6 @@ var (
 		common.BitcoinRegTest.Name: "http://localhost:3000",
 	}
 )
-
-type clientFactory func(string) (client.ASPClient, error)
 
 type InitArgs struct {
 	ClientType string
@@ -43,7 +40,7 @@ func (a InitArgs) validate() error {
 	if len(a.WalletType) <= 0 {
 		return fmt.Errorf("missing wallet")
 	}
-	if !supportedWallets.supports(a.WalletType) {
+	if !supportedWallets.Supports(a.WalletType) {
 		return fmt.Errorf(
 			"wallet type '%s' not supported, please select one of: %s",
 			a.WalletType, supportedClients,
@@ -53,7 +50,7 @@ func (a InitArgs) validate() error {
 	if len(a.ClientType) <= 0 {
 		return fmt.Errorf("missing client type")
 	}
-	if !supportedClients.supports(a.ClientType) {
+	if !supportedClients.Supports(a.ClientType) {
 		return fmt.Errorf(
 			"client type '%s' not supported, please select one of: %s",
 			a.ClientType, supportedClients,
@@ -85,7 +82,7 @@ func (a InitWithWalletArgs) validate() error {
 	if len(a.ClientType) <= 0 {
 		return fmt.Errorf("missing client type")
 	}
-	if !supportedClients.supports(a.ClientType) {
+	if !supportedClients.Supports(a.ClientType) {
 		return fmt.Errorf("client type not supported, please select one of: %s", supportedClients)
 	}
 
@@ -130,19 +127,4 @@ type balanceRes struct {
 	onchainLockedBalance        map[int64]uint64
 	offchainBalanceByExpiration map[int64]uint64
 	err                         error
-}
-
-type supportedType[V any] map[string]V
-
-func (t supportedType[V]) String() string {
-	types := make([]string, 0, len(t))
-	for tt := range t {
-		types = append(types, tt)
-	}
-	return strings.Join(types, " | ")
-}
-
-func (t supportedType[V]) supports(typeStr string) bool {
-	_, ok := t[typeStr]
-	return ok
 }

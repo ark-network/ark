@@ -111,14 +111,16 @@ func (a *arkClient) validateCongestionTree(
 		return err
 	}
 
-	congestionTree, err := toCongestionTree(finalization.GetCongestionTree())
+	congestionTree, err := utils.ToCongestionTree(
+		finalization.GetCongestionTree(),
+	)
 	if err != nil {
 		return err
 	}
 
 	connectors := finalization.GetConnectors()
 
-	if !isOnchainOnly(receivers) {
+	if !utils.IsOnchainOnly(receivers) {
 		if err := tree.ValidateCongestionTree(
 			congestionTree, poolTx, a.StoreData.AspPubkey, a.RoundLifetime,
 		); err != nil {
@@ -130,7 +132,9 @@ func (a *arkClient) validateCongestionTree(
 		return err
 	}
 
-	if err := a.validateReceivers(ptx, receivers, &congestionTree, a.StoreData.AspPubkey); err != nil {
+	if err := a.validateReceivers(
+		ptx, receivers, &congestionTree, a.StoreData.AspPubkey,
+	); err != nil {
 		return err
 	}
 
@@ -146,7 +150,9 @@ func (a *arkClient) validateReceivers(
 	aspPubkey *secp256k1.PublicKey,
 ) error {
 	for _, receiver := range receivers {
-		isOnChain, onchainScript, userPubkey, err := decodeReceiverAddress(receiver.Address)
+		isOnChain, onchainScript, userPubkey, err := utils.DecodeReceiverAddress(
+			receiver.Address,
+		)
 		if err != nil {
 			return err
 		}
@@ -156,7 +162,9 @@ func (a *arkClient) validateReceivers(
 				return err
 			}
 		} else {
-			if err := a.validateOffChainReceiver(congestionTree, receiver, userPubkey, aspPubkey); err != nil {
+			if err := a.validateOffChainReceiver(
+				congestionTree, receiver, userPubkey, aspPubkey,
+			); err != nil {
 				return err
 			}
 		}
@@ -195,7 +203,7 @@ func (a *arkClient) validateOffChainReceiver(
 ) error {
 	found := false
 	net := a.explorer.GetNetwork()
-	outputTapKey, _, _, _, err := utils.ComputeVtxoTaprootScript(
+	outputTapKey, _, _, _, err := tree.ComputeVtxoTaprootScript(
 		userPubkey, aspPubkey, uint(a.UnilateralExitDelay), net,
 	)
 	if err != nil {

@@ -101,17 +101,19 @@ func Load(storeSvc store.ConfigStore) (ArkClient, error) {
 		return nil, ErrNotInitialized
 	}
 
-	clientSvc, err := getClient(data.ClientType, data.AspUrl)
+	clientSvc, err := utils.GetClient(
+		supportedClients, data.ClientType, data.AspUrl,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup transport client: %s", err)
 	}
 
-	explorerSvc, err := getExplorer(data.Network.Name)
+	explorerSvc, err := utils.GetExplorer(supportedNetworks, data.Network.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
 
-	walletSvc, err := getWallet(storeSvc, data)
+	walletSvc, err := utils.GetWallet(storeSvc, data, supportedWallets)
 	if err != nil {
 		return nil, fmt.Errorf("faile to setup wallet: %s", err)
 	}
@@ -137,12 +139,14 @@ func LoadWithWallet(
 		return nil, ErrNotInitialized
 	}
 
-	clientSvc, err := getClient(data.ClientType, data.AspUrl)
+	clientSvc, err := utils.GetClient(
+		supportedClients, data.ClientType, data.AspUrl,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup transport client: %s", err)
 	}
 
-	explorerSvc, err := getExplorer(data.Network.Name)
+	explorerSvc, err := utils.GetExplorer(supportedNetworks, data.Network.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
@@ -166,7 +170,9 @@ func (a *arkClient) InitWithWallet(
 		return fmt.Errorf("invalid args: %s", err)
 	}
 
-	clientSvc, err := getClient(args.ClientType, args.AspUrl)
+	clientSvc, err := utils.GetClient(
+		supportedClients, args.ClientType, args.AspUrl,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to setup client: %s", err)
 	}
@@ -176,7 +182,7 @@ func (a *arkClient) InitWithWallet(
 		return fmt.Errorf("failed to connect to asp: %s", err)
 	}
 
-	explorerSvc, err := getExplorer(resp.GetNetwork())
+	explorerSvc, err := utils.GetExplorer(supportedNetworks, resp.GetNetwork())
 	if err != nil {
 		return fmt.Errorf("failed to setup explorer: %s", err)
 	}
@@ -227,7 +233,9 @@ func (a *arkClient) Init(
 		return fmt.Errorf("invalid args: %s", err)
 	}
 
-	clientSvc, err := getClient(args.ClientType, args.AspUrl)
+	clientSvc, err := utils.GetClient(
+		supportedClients, args.ClientType, args.AspUrl,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to setup client: %s", err)
 	}
@@ -237,7 +245,7 @@ func (a *arkClient) Init(
 		return fmt.Errorf("failed to connect to asp: %s", err)
 	}
 
-	explorerSvc, err := getExplorer(resp.GetNetwork())
+	explorerSvc, err := utils.GetExplorer(supportedNetworks, resp.GetNetwork())
 	if err != nil {
 		return fmt.Errorf("failed to setup explorer: %s", err)
 	}
@@ -263,7 +271,7 @@ func (a *arkClient) Init(
 		UnilateralExitDelay: resp.GetUnilateralExitDelay(),
 		MinRelayFee:         uint64(resp.GetMinRelayFee()),
 	}
-	walletSvc, err := getWallet(a.store, &storeData)
+	walletSvc, err := utils.GetWallet(a.store, &storeData, supportedWallets)
 	if err != nil {
 		return err
 	}
@@ -513,7 +521,7 @@ func (a *arkClient) Onboard(
 
 	if _, err = a.client.Onboard(ctx, &arkv1.OnboardRequest{
 		BoardingTx:     pset,
-		CongestionTree: castCongestionTree(congestionTree),
+		CongestionTree: utils.CastCongestionTree(congestionTree),
 		UserPubkey:     userPubkeyStr,
 	}); err != nil {
 		return "", err
@@ -666,7 +674,9 @@ func (a *arkClient) CollaborativeRedeem(
 		vtxos = append(vtxos, fetchedVtxos...)
 	}
 
-	selectedCoins, changeAmount, err := coinSelect(vtxos, amount, withExpiryCoinselect)
+	selectedCoins, changeAmount, err := utils.CoinSelect(
+		vtxos, amount, DUST, withExpiryCoinselect,
+	)
 	if err != nil {
 		return "", err
 	}
@@ -934,7 +944,9 @@ func (a *arkClient) sendOffchain(
 		vtxos = append(vtxos, fetchedVtxos...)
 	}
 
-	selectedCoins, changeAmount, err := coinSelect(vtxos, sumOfReceivers, withExpiryCoinselect)
+	selectedCoins, changeAmount, err := utils.CoinSelect(
+		vtxos, sumOfReceivers, DUST, withExpiryCoinselect,
+	)
 	if err != nil {
 		return "", err
 	}
@@ -1040,7 +1052,7 @@ func (a *arkClient) addInputs(
 	}
 
 	if len(delayedUtxos) > 0 {
-		_, leafProof, script, _, err := utils.ComputeVtxoTaprootScript(
+		_, leafProof, script, _, err := tree.ComputeVtxoTaprootScript(
 			userPubkey, aspPubkey, uint(a.UnilateralExitDelay), net,
 		)
 		if err != nil {
@@ -1169,7 +1181,7 @@ func (a *arkClient) coinSelectOnchain(
 	fetchedUtxos = make([]explorer.Utxo, 0)
 	for _, offchainAddr := range offchainAddrs {
 		_, userPubkey, aspPubkey, _ := common.DecodeAddress(offchainAddr)
-		_, _, _, addr, err := utils.ComputeVtxoTaprootScript(
+		_, _, _, addr, err := tree.ComputeVtxoTaprootScript(
 			userPubkey, aspPubkey, uint(a.UnilateralExitDelay), net,
 		)
 		if err != nil {

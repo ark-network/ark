@@ -7,7 +7,6 @@ import (
 	"fmt"
 
 	"github.com/ark-network/ark-sdk/explorer"
-	sdkutils "github.com/ark-network/ark-sdk/internal/utils"
 	"github.com/ark-network/ark-sdk/store"
 	"github.com/ark-network/ark-sdk/wallet"
 	walletstore "github.com/ark-network/ark-sdk/wallet/singlekey/store"
@@ -383,7 +382,7 @@ func (w *singlekeyWallet) getAddress(
 		return "", "", "", err
 	}
 
-	_, _, _, redemptionAddr, err := sdkutils.ComputeVtxoTaprootScript(
+	_, _, _, redemptionAddr, err := tree.ComputeVtxoTaprootScript(
 		w.walletData.Pubkey, data.AspPubkey, uint(data.UnilateralExitDelay), liquidNet,
 	)
 	if err != nil {
