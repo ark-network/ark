@@ -8,19 +8,18 @@ import (
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/vulpemventures/go-elements/address"
-	"github.com/vulpemventures/go-elements/psetv2"
 )
 
 func parseTxs(txs []string) ([]string, error) {
 	if len(txs) <= 0 {
 		return nil, fmt.Errorf("missing list of forfeit txs")
 	}
-	for _, tx := range txs {
-		if _, err := psetv2.NewPsetFromBase64(tx); err != nil {
-			return nil, fmt.Errorf("invalid tx format")
-		}
-	}
+	// TODO abstract this ?
+	// for _, tx := range txs {
+	// 	if _, err := psetv2.NewPsetFromBase64(tx); err != nil {
+	// 		return nil, fmt.Errorf("invalid tx format")
+	// 	}
+	// }
 	return txs, nil
 }
 
@@ -43,12 +42,6 @@ func parseReceivers(outs []*arkv1.Output) ([]domain.Receiver, error) {
 		var pubkey, addr string
 		_, pk, _, err := common.DecodeAddress(out.GetAddress())
 		if err != nil {
-			if _, err := address.ToOutputScript(out.GetAddress()); err != nil {
-				return nil, fmt.Errorf("invalid output address: unknown format")
-			}
-			if isConf, _ := address.IsConfidential(out.GetAddress()); isConf {
-				return nil, fmt.Errorf("invalid output address: must be unconfidential")
-			}
 			addr = out.GetAddress()
 		}
 		if pk != nil {

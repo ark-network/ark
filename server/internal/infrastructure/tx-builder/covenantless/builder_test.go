@@ -8,12 +8,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
 	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenantless"
 	"github.com/btcsuite/btcd/btcutil/psbt"
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -49,7 +49,7 @@ func TestMain(m *testing.M) {
 
 func TestBuildPoolTx(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(
-		wallet, &chaincfg.MainNetParams, roundLifetime, unilateralExitDelay,
+		wallet, common.Bitcoin, roundLifetime, unilateralExitDelay,
 	)
 
 	fixtures, err := parsePoolTxFixtures()
@@ -59,16 +59,6 @@ func TestBuildPoolTx(t *testing.T) {
 	if len(fixtures.Valid) > 0 {
 		t.Run("valid", func(t *testing.T) {
 			for _, f := range fixtures.Valid {
-				poolTx, congestionTree, connAddr, err := builder.BuildPoolTx(
-					pubkey, f.Payments, minRelayFee, []domain.Round{},
-				)
-				require.NoError(t, err)
-				require.NotEmpty(t, poolTx)
-				require.NotEmpty(t, congestionTree)
-				require.Equal(t, connectorAddress, connAddr)
-				require.Equal(t, f.ExpectedNumOfNodes, congestionTree.NumberOfNodes())
-				require.Len(t, congestionTree.Leaves(), f.ExpectedNumOfLeaves)
-
 				cosigners := make([]*secp256k1.PublicKey, 0)
 				for _, payment := range f.Payments {
 					for _, input := range payment.Inputs {
@@ -81,8 +71,18 @@ func TestBuildPoolTx(t *testing.T) {
 					}
 				}
 
+				poolTx, congestionTree, connAddr, err := builder.BuildPoolTx(
+					pubkey, f.Payments, minRelayFee, []domain.Round{}, cosigners...,
+				)
+				require.NoError(t, err)
+				require.NotEmpty(t, poolTx)
+				require.NotEmpty(t, congestionTree)
+				require.Equal(t, connectorAddress, connAddr)
+				require.Equal(t, f.ExpectedNumOfNodes, congestionTree.NumberOfNodes())
+				require.Len(t, congestionTree.Leaves(), f.ExpectedNumOfLeaves)
+
 				err = bitcointree.ValidateCongestionTree(
-					congestionTree, poolTx, pubkey, roundLifetime, cosigners, int64(minRelayFee),
+					congestionTree, poolTx, pubkey, roundLifetime, int64(minRelayFee),
 				)
 				require.NoError(t, err)
 			}
@@ -106,7 +106,7 @@ func TestBuildPoolTx(t *testing.T) {
 
 func TestBuildForfeitTxs(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(
-		wallet, &chaincfg.MainNetParams, 1209344, unilateralExitDelay,
+		wallet, common.Bitcoin, 1209344, unilateralExitDelay,
 	)
 
 	fixtures, err := parseForfeitTxsFixtures()

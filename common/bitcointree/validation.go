@@ -8,7 +8,6 @@ import (
 
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
-	"github.com/btcsuite/btcd/btcec/v2/schnorr/musig2"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
@@ -74,7 +73,7 @@ func UnspendableKey() *secp256k1.PublicKey {
 // - input and output amounts
 func ValidateCongestionTree(
 	tree tree.CongestionTree, poolTx string, aspPublicKey *secp256k1.PublicKey,
-	roundLifetime int64, cosigners []*secp256k1.PublicKey, minRelayFee int64,
+	roundLifetime int64, minRelayFee int64,
 ) error {
 	poolTransaction, err := psbt.NewFromRawBytes(strings.NewReader(poolTx), true)
 	if err != nil {
@@ -139,17 +138,11 @@ func ValidateCongestionTree(
 	tapTree := txscript.AssembleTaprootScriptTree(*sweepLeaf)
 	root := tapTree.RootNode.TapHash()
 
-	signers := append(cosigners, aspPublicKey)
-	aggregatedKey, err := AggregateKeys(signers, root[:])
-	if err != nil {
-		return err
-	}
-
 	// iterates over all the nodes of the tree
 	for _, level := range tree {
 		for _, node := range level {
 			if err := validateNodeTransaction(
-				node, tree, aggregatedKey, minRelayFee,
+				node, tree, root.CloneBytes(), minRelayFee,
 			); err != nil {
 				return err
 			}
@@ -159,10 +152,7 @@ func ValidateCongestionTree(
 	return nil
 }
 
-func validateNodeTransaction(
-	node tree.Node, tree tree.CongestionTree,
-	expectedAggregatedKey *musig2.AggregateKey, minRelayFee int64,
-) error {
+func validateNodeTransaction(node tree.Node, tree tree.CongestionTree, tapTreeRoot []byte, minRelayFee int64) error {
 	if node.Tx == "" {
 		return ErrNodeTransactionEmpty
 	}
@@ -175,25 +165,25 @@ func validateNodeTransaction(
 		return ErrNodeParentTxidEmpty
 	}
 
-	decodedPset, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
+	decodedPsbt, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
 	if err != nil {
 		return fmt.Errorf("invalid node transaction: %w", err)
 	}
 
-	if decodedPset.UnsignedTx.TxHash().String() != node.Txid {
+	if decodedPsbt.UnsignedTx.TxHash().String() != node.Txid {
 		return ErrNodeTxidDifferent
 	}
 
-	if len(decodedPset.Inputs) != 1 {
+	if len(decodedPsbt.Inputs) != 1 {
 		return ErrNumberOfInputs
 	}
 
-	input := decodedPset.Inputs[0]
+	input := decodedPsbt.Inputs[0]
 	if len(input.TaprootLeafScript) != 1 {
 		return ErrNumberOfTapscripts
 	}
 
-	prevTxid := decodedPset.UnsignedTx.TxIn[0].PreviousOutPoint.Hash.String()
+	prevTxid := decodedPsbt.UnsignedTx.TxIn[0].PreviousOutPoint.Hash.String()
 	if prevTxid != node.ParentTxid {
 		return ErrParentTxidInput
 	}
@@ -210,20 +200,30 @@ func validateNodeTransaction(
 			return fmt.Errorf("invalid child transaction: %w", err)
 		}
 
-		parentOutput := decodedPset.UnsignedTx.TxOut[childIndex]
+		parentOutput := decodedPsbt.UnsignedTx.TxOut[childIndex]
 		previousScriptKey := parentOutput.PkScript[2:]
 		if len(previousScriptKey) != 32 {
 			return ErrInvalidTaprootScript
 		}
 
-		inputData := decodedPset.Inputs[0]
+		inputData := decodedPsbt.Inputs[0]
 
 		inputTapInternalKey, err := schnorr.ParsePubKey(inputData.TaprootInternalKey)
 		if err != nil {
 			return fmt.Errorf("invalid internal key: %w", err)
 		}
 
-		if !bytes.Equal(inputData.TaprootInternalKey, schnorr.SerializePubKey(expectedAggregatedKey.PreTweakedKey)) {
+		cosigners, err := GetCosignerKeys(decodedPsbt.Inputs[0])
+		if err != nil {
+			return fmt.Errorf("unable to get cosigners keys: %w", err)
+		}
+
+		aggregatedKey, err := AggregateKeys(cosigners, tapTreeRoot)
+		if err != nil {
+			return fmt.Errorf("unable to aggregate keys: %w", err)
+		}
+
+		if !bytes.Equal(inputData.TaprootInternalKey, schnorr.SerializePubKey(aggregatedKey.PreTweakedKey)) {
 			return ErrInternalKey
 		}
 
@@ -237,7 +237,7 @@ func validateNodeTransaction(
 		rootHash := ctrlBlock.RootHash(inputTapLeaf.Script)
 		tapKey := txscript.ComputeTaprootOutputKey(inputTapInternalKey, rootHash)
 
-		if !bytes.Equal(schnorr.SerializePubKey(tapKey), schnorr.SerializePubKey(expectedAggregatedKey.FinalKey)) {
+		if !bytes.Equal(schnorr.SerializePubKey(tapKey), schnorr.SerializePubKey(aggregatedKey.FinalKey)) {
 			return ErrInvalidTaprootScript
 		}
 

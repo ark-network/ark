@@ -8,11 +8,12 @@ import (
 	"github.com/ark-network/ark/internal/core/application"
 	"github.com/ark-network/ark/internal/core/ports"
 	"github.com/ark-network/ark/internal/infrastructure/db"
-	oceanwallet "github.com/ark-network/ark/internal/infrastructure/ocean-wallet"
 	scheduler "github.com/ark-network/ark/internal/infrastructure/scheduler/gocron"
 	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenant"
+	cltxbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenantless"
+	btcwallet "github.com/ark-network/ark/internal/infrastructure/wallet/btc-embedded"
+	liquidwallet "github.com/ark-network/ark/internal/infrastructure/wallet/liquid-standalone"
 	log "github.com/sirupsen/logrus"
-	"github.com/vulpemventures/go-elements/network"
 )
 
 const minAllowedSequence = 512
@@ -29,10 +30,20 @@ var (
 		"gocron": {},
 	}
 	supportedTxBuilders = supportedType{
-		"covenant": {},
+		"covenant":     {},
+		"covenantless": {},
 	}
 	supportedScanners = supportedType{
-		"ocean": {},
+		"ocean":     {},
+		"btcwallet": {},
+	}
+	supportedNetworks = supportedType{
+		common.Bitcoin.Name:        {},
+		common.BitcoinTestNet.Name: {},
+		common.BitcoinRegTest.Name: {},
+		common.Liquid.Name:         {},
+		common.LiquidTestNet.Name:  {},
+		common.LiquidRegTest.Name:  {},
 	}
 )
 
@@ -51,6 +62,10 @@ type Config struct {
 	MinRelayFee           uint64
 	RoundLifetime         int64
 	UnilateralExitDelay   int64
+
+	EsploraURL     string
+	NeutrinoPeer   string
+	WalletPassword string
 
 	repo      ports.RepoManager
 	svc       application.Service
@@ -80,16 +95,20 @@ func (c *Config) Validate() error {
 	if c.RoundInterval < 2 {
 		return fmt.Errorf("invalid round interval, must be at least 2 seconds")
 	}
-	if c.Network.Name != common.Liquid.Name &&
-		c.Network.Name != common.LiquidTestNet.Name &&
-		c.Network.Name != common.LiquidRegTest.Name {
-		return fmt.Errorf("invalid network, must be liquid, testnet or regtest")
+	if !supportedNetworks.supports(c.Network.Name) {
+		return fmt.Errorf("invalid network, must be one of: %s", supportedNetworks)
 	}
 	if len(c.WalletAddr) <= 0 {
 		return fmt.Errorf("missing onchain wallet address")
 	}
-	if c.MinRelayFee < 30 {
-		return fmt.Errorf("invalid min relay fee, must be at least 30 sats")
+	if common.IsLiquid(c.Network) {
+		if c.MinRelayFee < 30 {
+			return fmt.Errorf("invalid min relay fee, must be at least 30 sats")
+		}
+	} else {
+		if c.MinRelayFee < 200 {
+			return fmt.Errorf("invalid min relay fee, must be at least 200 sats")
+		}
 	}
 	// round life time must be a multiple of 512
 	if c.RoundLifetime < minAllowedSequence {
@@ -191,7 +210,31 @@ func (c *Config) repoManager() error {
 }
 
 func (c *Config) walletService() error {
-	svc, err := oceanwallet.NewService(c.WalletAddr)
+	if common.IsLiquid(c.Network) {
+		svc, err := liquidwallet.NewService(c.WalletAddr)
+		if err != nil {
+			return err
+		}
+
+		c.wallet = svc
+		return nil
+	}
+
+	if len(c.EsploraURL) == 0 {
+		return fmt.Errorf("missing esplora url, covenant-less ark requires ARK_ESPLORA_URL to be set")
+	}
+	if len(c.WalletPassword) == 0 {
+		return fmt.Errorf("missing wallet password, covenant-less ark requires ARK_WALLET_PASSWORD to be set")
+	}
+
+	svc, err := btcwallet.NewService(btcwallet.WalletConfig{
+		Datadir:    c.DbDir,
+		Password:   []byte(c.WalletPassword),
+		Network:    c.Network,
+		EsploraURL: c.EsploraURL,
+	},
+		btcwallet.WithNeutrino(c.NeutrinoPeer),
+	)
 	if err != nil {
 		return err
 	}
@@ -203,12 +246,14 @@ func (c *Config) walletService() error {
 func (c *Config) txBuilderService() error {
 	var svc ports.TxBuilder
 	var err error
-	net := c.mainChain()
-
 	switch c.TxBuilderType {
 	case "covenant":
 		svc = txbuilder.NewTxBuilder(
-			c.wallet, net, c.RoundLifetime, c.UnilateralExitDelay,
+			c.wallet, c.Network, c.RoundLifetime, c.UnilateralExitDelay,
+		)
+	case "covenantless":
+		svc = cltxbuilder.NewTxBuilder(
+			c.wallet, c.Network, c.RoundLifetime, c.UnilateralExitDelay,
 		)
 	default:
 		err = fmt.Errorf("unknown tx builder type")
@@ -223,15 +268,9 @@ func (c *Config) txBuilderService() error {
 
 func (c *Config) scannerService() error {
 	var svc ports.BlockchainScanner
-	var err error
 	switch c.BlockchainScannerType {
-	case "ocean":
-		svc = c.wallet
 	default:
-		err = fmt.Errorf("unknown blockchain scanner type")
-	}
-	if err != nil {
-		return err
+		svc = c.wallet
 	}
 
 	c.scanner = svc
@@ -256,11 +295,22 @@ func (c *Config) schedulerService() error {
 }
 
 func (c *Config) appService() error {
-	net := c.mainChain()
-	svc, err := application.NewService(
-		c.Network, net,
-		c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.MinRelayFee,
-		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler,
+	if common.IsLiquid(c.Network) {
+		svc, err := application.NewCovenantService(
+			c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay,
+			c.MinRelayFee, c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler,
+		)
+		if err != nil {
+			return err
+		}
+
+		c.svc = svc
+		return nil
+	}
+
+	svc, err := application.NewCovenantlessService(
+		c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay,
+		c.MinRelayFee, c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler,
 	)
 	if err != nil {
 		return err
@@ -273,17 +323,6 @@ func (c *Config) appService() error {
 func (c *Config) adminService() error {
 	c.adminSvc = application.NewAdminService(c.wallet, c.repo, c.txBuilder)
 	return nil
-}
-
-func (c *Config) mainChain() network.Network {
-	switch c.Network.Name {
-	case common.LiquidTestNet.Name:
-		return network.Testnet
-	case common.LiquidRegTest.Name:
-		return network.Regtest
-	default:
-		return network.Liquid
-	}
 }
 
 type supportedType map[string]struct{}

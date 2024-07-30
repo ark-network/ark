@@ -7,6 +7,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
@@ -15,7 +16,6 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/psetv2"
 )
 
@@ -49,7 +49,7 @@ func TestMain(m *testing.M) {
 
 func TestBuildPoolTx(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(
-		wallet, network.Liquid, roundLifetime, unilateralExitDelay,
+		wallet, common.Liquid, roundLifetime, unilateralExitDelay,
 	)
 
 	fixtures, err := parsePoolTxFixtures()
@@ -94,7 +94,7 @@ func TestBuildPoolTx(t *testing.T) {
 
 func TestBuildForfeitTxs(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(
-		wallet, network.Liquid, 1209344, unilateralExitDelay,
+		wallet, common.Liquid, 1209344, unilateralExitDelay,
 	)
 
 	fixtures, err := parseForfeitTxsFixtures()

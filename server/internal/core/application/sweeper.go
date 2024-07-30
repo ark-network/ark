@@ -3,7 +3,6 @@ package application
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/ark-network/ark/common/tree"
@@ -150,6 +149,7 @@ func (s *sweeper) createTask(
 			for _, input := range inputs {
 				// sweepableVtxos related to the sweep input
 				sweepableVtxos := make([]domain.VtxoKey, 0)
+				fmt.Println("input", input.GetHash().String(), input.GetIndex())
 
 				// check if input is the vtxo itself
 				vtxos, _ := s.repoManager.Vtxos().GetVtxos(
@@ -167,7 +167,7 @@ func (s *sweeper) createTask(
 					}
 				} else {
 					// if it's not a vtxo, find all the vtxos leaves reachable from that input
-					vtxosLeaves, err := congestionTree.FindLeaves(input.GetHash().String(), input.GetIndex())
+					vtxosLeaves, err := s.builder.FindLeaves(congestionTree, input.GetHash().String(), input.GetIndex())
 					if err != nil {
 						log.WithError(err).Error("error while finding vtxos leaves")
 						continue
@@ -220,7 +220,7 @@ func (s *sweeper) createTask(
 			err = nil
 			txid := ""
 			// retry until the tx is broadcasted or the error is not BIP68 final
-			for len(txid) == 0 && (err == nil || strings.Contains(err.Error(), "non-BIP68-final")) {
+			for len(txid) == 0 && (err == nil || err == ports.ErrNonFinalBIP68) {
 				if err != nil {
 					log.Debugln("sweep tx not BIP68 final, retrying in 5 seconds")
 					time.Sleep(5 * time.Second)

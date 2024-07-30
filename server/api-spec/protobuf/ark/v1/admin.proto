@@ -26,6 +26,16 @@ service AdminService {
       body: "*"
     };
   }
+  rpc GetWalletAddress(GetWalletAddressRequest) returns (GetWalletAddressResponse) {
+    option (google.api.http) = {
+      get: "/v1/admin/address"
+    };
+  }
+  rpc GetWalletStatus(GetWalletStatusRequest) returns (GetWalletStatusResponse) {
+    option (google.api.http) = {
+      get: "/v1/admin/status"
+    }; 
+  }
 }
 
 message GetBalanceRequest {}
@@ -81,4 +91,21 @@ message GetRoundsRequest {
 
 message GetRoundsResponse {
   repeated string rounds = 1;
+}
+
+message GetWalletAddressRequest {}
+message GetWalletAddressResponse {
+  string address = 1;
+}
+
+message GetWalletBalanceRequest {}
+message GetWalletBalanceResponse {
+  uint64 balance = 1;
+}
+
+message GetWalletStatusRequest {}
+message GetWalletStatusResponse {
+  bool initialized = 1;
+  bool unlocked = 2;
+  bool synced = 3;
 }

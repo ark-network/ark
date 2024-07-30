@@ -72,17 +72,17 @@ func TestRoundTripSignTree(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		aliceSession := bitcointree.NewTreeSignerSession(tree, minRelayFee, root.CloneBytes())
-		bobSession := bitcointree.NewTreeSignerSession(tree, minRelayFee, root.CloneBytes())
-		aspSession := bitcointree.NewTreeSignerSession(tree, minRelayFee, root.CloneBytes())
+		aliceSession := bitcointree.NewTreeSignerSession(alice, tree, minRelayFee, root.CloneBytes())
+		bobSession := bitcointree.NewTreeSignerSession(bob, tree, minRelayFee, root.CloneBytes())
+		aspSession := bitcointree.NewTreeSignerSession(asp, tree, minRelayFee, root.CloneBytes())
 
-		aliceNonces, err := aliceSession.GetNonces(alice.PubKey())
+		aliceNonces, err := aliceSession.GetNonces()
 		require.NoError(t, err)
 
-		bobNonces, err := bobSession.GetNonces(bob.PubKey())
+		bobNonces, err := bobSession.GetNonces()
 		require.NoError(t, err)
 
-		aspNonces, err := aspSession.GetNonces(asp.PubKey())
+		aspNonces, err := aspSession.GetNonces()
 		require.NoError(t, err)
 
 		err = aspCoordinator.AddNonce(alice.PubKey(), aliceNonces)
@@ -117,13 +117,13 @@ func TestRoundTripSignTree(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		aliceSig, err := aliceSession.Sign(alice)
+		aliceSig, err := aliceSession.Sign()
 		require.NoError(t, err)
 
-		bobSig, err := bobSession.Sign(bob)
+		bobSig, err := bobSession.Sign()
 		require.NoError(t, err)
 
-		aspSig, err := aspSession.Sign(asp)
+		aspSig, err := aspSession.Sign()
 		require.NoError(t, err)
 
 		// coordinator receives the signatures and combines them

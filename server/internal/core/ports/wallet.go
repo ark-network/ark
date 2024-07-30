@@ -2,9 +2,13 @@ package ports
 
 import (
 	"context"
+	"errors"
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
+
+// ErrNonFinalBIP68 is returned when a transaction spending a CSV-locked output is not final.
+var ErrNonFinalBIP68 = errors.New("non-final BIP68 sequence")
 
 type WalletService interface {
 	BlockchainScanner
@@ -12,13 +16,12 @@ type WalletService interface {
 	GetPubkey(ctx context.Context) (*secp256k1.PublicKey, error)
 	DeriveConnectorAddress(ctx context.Context) (string, error)
 	DeriveAddresses(ctx context.Context, num int) ([]string, error)
-	SignPset(
-		ctx context.Context, pset string, extractRawTx bool,
+	SignTransaction(
+		ctx context.Context, partialTx string, extractRawTx bool,
 	) (string, error)
+	SignTransactionTapscript(ctx context.Context, pset string, inputIndexes []int) (string, error) // inputIndexes == nil means sign all inputs
 	SelectUtxos(ctx context.Context, asset string, amount uint64) ([]TxInput, uint64, error)
 	BroadcastTransaction(ctx context.Context, txHex string) (string, error)
-	SignPsetWithKey(ctx context.Context, pset string, inputIndexes []int) (string, error) // inputIndexes == nil means sign all inputs
-	IsTransactionConfirmed(ctx context.Context, txid string) (isConfirmed bool, blocktime int64, err error)
 	WaitForSync(ctx context.Context, txid string) error
 	EstimateFees(ctx context.Context, pset string) (uint64, error)
 	ListConnectorUtxos(ctx context.Context, connectorAddress string) ([]TxInput, error)

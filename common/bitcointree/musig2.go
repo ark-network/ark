@@ -12,7 +12,6 @@ import (
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
 var (
@@ -24,9 +23,9 @@ type TreeNonces [][][66]byte // public nonces
 type TreePartialSigs [][]*musig2.PartialSignature
 
 type SignerSession interface {
-	GetNonces(*btcec.PublicKey) (TreeNonces, error)  // generate of return cached nonce for this session
-	SetKeys([]*btcec.PublicKey, TreeNonces) error    // set the keys for this session (with the combined nonces)
-	Sign(*btcec.PrivateKey) (TreePartialSigs, error) // sign the tree
+	GetNonces() (TreeNonces, error)               // generate of return cached nonce for this session
+	SetKeys([]*btcec.PublicKey, TreeNonces) error // set the keys for this session (with the combined nonces)
+	Sign() (TreePartialSigs, error)               // sign the tree
 }
 
 type CoordinatorSession interface {
@@ -158,11 +157,13 @@ func (n TreePartialSigs) Encode(w io.Writer) error {
 }
 
 func NewTreeSignerSession(
+	signer *btcec.PrivateKey,
 	congestionTree tree.CongestionTree,
 	minRelayFee int64,
 	scriptRoot []byte,
 ) SignerSession {
 	return &treeSignerSession{
+		secretKey:   signer,
 		tree:        congestionTree,
 		minRelayFee: minRelayFee,
 		scriptRoot:  scriptRoot,
@@ -170,6 +171,7 @@ func NewTreeSignerSession(
 }
 
 type treeSignerSession struct {
+	secretKey       *btcec.PrivateKey
 	tree            tree.CongestionTree
 	myNonces        [][]*musig2.Nonces
 	keys            []*btcec.PublicKey
@@ -179,7 +181,7 @@ type treeSignerSession struct {
 	prevoutFetcher  func(*psbt.Packet) txscript.PrevOutputFetcher
 }
 
-func (t *treeSignerSession) generateNonces(key *btcec.PublicKey) error {
+func (t *treeSignerSession) generateNonces() error {
 	if t.tree == nil {
 		return ErrCongestionTreeNotSet
 	}
@@ -190,7 +192,7 @@ func (t *treeSignerSession) generateNonces(key *btcec.PublicKey) error {
 		levelNonces := make([]*musig2.Nonces, 0)
 		for range level {
 			nonce, err := musig2.GenNonces(
-				musig2.WithPublicKey(key),
+				musig2.WithPublicKey(t.secretKey.PubKey()),
 			)
 			if err != nil {
 				return err
@@ -205,13 +207,13 @@ func (t *treeSignerSession) generateNonces(key *btcec.PublicKey) error {
 	return nil
 }
 
-func (t *treeSignerSession) GetNonces(key *btcec.PublicKey) (TreeNonces, error) {
+func (t *treeSignerSession) GetNonces() (TreeNonces, error) {
 	if t.tree == nil {
 		return nil, ErrCongestionTreeNotSet
 	}
 
 	if t.myNonces == nil {
-		if err := t.generateNonces(key); err != nil {
+		if err := t.generateNonces(); err != nil {
 			return nil, err
 		}
 	}
@@ -255,7 +257,7 @@ func (t *treeSignerSession) SetKeys(keys []*btcec.PublicKey, nonces TreeNonces) 
 	return nil
 }
 
-func (t *treeSignerSession) Sign(seckey *secp256k1.PrivateKey) (TreePartialSigs, error) {
+func (t *treeSignerSession) Sign() (TreePartialSigs, error) {
 	if t.tree == nil {
 		return nil, ErrCongestionTreeNotSet
 	}
@@ -279,7 +281,7 @@ func (t *treeSignerSession) Sign(seckey *secp256k1.PrivateKey) (TreePartialSigs,
 				return nil, err
 			}
 			// sign the node
-			sig, err := t.signPartial(partialTx, i, j, seckey)
+			sig, err := t.signPartial(partialTx, i, j, t.secretKey)
 			if err != nil {
 				return nil, err
 			}
@@ -336,12 +338,14 @@ func NewTreeCoordinatorSession(congestionTree tree.CongestionTree, minRelayFee i
 		return nil, err
 	}
 
+	nbOfKeys := len(keys)
+
 	return &treeCoordinatorSession{
 		scriptRoot:     scriptRoot,
 		tree:           congestionTree,
 		keys:           keys,
-		nonces:         make([]TreeNonces, len(keys)),
-		sigs:           make([]TreePartialSigs, len(keys)),
+		nonces:         make([]TreeNonces, nbOfKeys),
+		sigs:           make([]TreePartialSigs, nbOfKeys),
 		prevoutFetcher: prevoutFetcher,
 	}, nil
 }

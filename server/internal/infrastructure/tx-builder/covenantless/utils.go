@@ -1,8 +1,6 @@
 package txbuilder
 
 import (
-	"encoding/hex"
-
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -12,18 +10,18 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-func p2trScript(publicKey *secp256k1.PublicKey, net *chaincfg.Params) ([]byte, error) {
+func p2wpkhScript(publicKey *secp256k1.PublicKey, net *chaincfg.Params) ([]byte, error) {
 	tapKey := txscript.ComputeTaprootKeyNoScript(publicKey)
 
-	payment, err := btcutil.NewAddressTaproot(
-		schnorr.SerializePubKey(tapKey),
+	payment, err := btcutil.NewAddressWitnessPubKeyHash(
+		btcutil.Hash160(tapKey.SerializeCompressed()),
 		net,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	return payment.ScriptAddress(), nil
+	return txscript.PayToAddrScript(payment)
 }
 
 func getOnchainReceivers(
@@ -38,31 +36,6 @@ func getOnchainReceivers(
 		}
 	}
 	return receivers
-}
-
-// TODO: use ephemeral keys ?
-func getCosigners(
-	payments []domain.Payment,
-) ([]*secp256k1.PublicKey, error) {
-	cosigners := make([]*secp256k1.PublicKey, 0)
-
-	for _, payment := range payments {
-		for _, input := range payment.Inputs {
-			pubkeyBytes, err := hex.DecodeString(input.Pubkey)
-			if err != nil {
-				return nil, err
-			}
-
-			pubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
-			if err != nil {
-				return nil, err
-			}
-
-			cosigners = append(cosigners, pubkey)
-		}
-	}
-
-	return cosigners, nil
 }
 
 func getOffchainReceivers(

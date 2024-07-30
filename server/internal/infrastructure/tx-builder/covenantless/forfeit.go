@@ -11,6 +11,7 @@ import (
 func craftForfeitTxs(
 	connectorTx *psbt.Packet,
 	vtxo domain.Vtxo,
+	vtxoForfeitTapLeaf *psbt.TaprootTapLeafScript,
 	vtxoScript, aspScript []byte,
 	minRelayFee uint64,
 ) (forfeitTxs []string, err error) {
@@ -62,6 +63,8 @@ func craftForfeitTxs(
 		if err := updater.AddInSighashType(txscript.SigHashDefault, 1); err != nil {
 			return nil, err
 		}
+
+		updater.Upsbt.Inputs[1].TaprootLeafScript = []*psbt.TaprootTapLeafScript{vtxoForfeitTapLeaf}
 
 		tx, err := partialTx.B64Encode()
 		if err != nil {

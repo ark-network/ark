@@ -13,15 +13,49 @@ In this repository you can find:
 Refer to the README in each directory for more information about development.
 
 
-## Build and Run with Docker
+## Run the Ark Service Provider
+
+|         | Covenant-less          | Covenant                               |
+|---------|------------------------|----------------------------------------|
+| Network | Bitcoin (regtest only)<br/>⚠️ *Mainnet & Testnet coming soon* | Liquid, Liquid testnet, Liquid regtest |
+| Wallet  | Embedded [lnwallet](https://pkg.go.dev/github.com/lightningnetwork/lnd/lnwallet/btcwallet) in `arkd`     | [Ocean](https://github.com/vulpemventures/ocean) wallet                           |
+
+> The covenant version of Ark requires [special tapscript opcodes](https://github.com/ElementsProject/elements/blob/master/doc/tapscript_opcodes.md) only available on Liquid Network.
+
+### Covenant-less Ark
+
+#### Run the daemon (regtest)
+
+Run locally with [Docker](https://docs.docker.com/engine/install/) and [Nigiri](https://nigiri.vulpem.com/).
+
+```
+nigiri start
+docker compose -f ./docker-compose.clark.regtest.yml up -d
+```
+
+the compose file will start a `clarkd` container exposing Ark API on localhost:6000.
+
+#### Fund the embedded wallet
+
+The ASP needs funds to operate. the `v1/admin/address` allows to generate a new address. This endpoint is protected by Basic Authorization token.
+
+```
+curl http://localhost:6000/v1/admin/address -H 'Authorization: Basic YWRtaW46YWRtaW4=' 
+```
+
+> This exemple is using the default USER/PASSWORD credentials. You can customize them by setting the `ARK_AUTH_USER` and `ARK_AUTH_PASS` variables.
+
+Faucet the address using nigiri
+
+```
+nigiri faucet <ASP_address>
+```
+
+### Ark with covenants (Liquid only)
+
+#### Setup the Ocean wallet
 
 Run locally with Docker on Liquid Testnet. It uses `docker-compose` to build the `arkd` docker image from `server` and run the it as container, together with the `oceand` container.
-
-### Prerequisites
-
-- [Docker](https://docs.docker.com/engine/install/)
-
-### Setup the Ocean wallet
 
 Start `oceand` in Liquid Testnet:
 
@@ -38,7 +72,7 @@ ocean wallet create --password <password>
 ocean wallet unlock --password <password>
 ```
 
-### Run arkd connected to Ocean
+#### Run `arkd` connected to Ocean
 
 Start the ASP
 

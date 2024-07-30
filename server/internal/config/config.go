@@ -29,6 +29,9 @@ type Config struct {
 	UnilateralExitDelay   int64
 	AuthUser              string
 	AuthPass              string
+	EsploraURL            string
+	NeutrinoPeer          string
+	WalletPassword        string
 }
 
 var (
@@ -50,6 +53,9 @@ var (
 	UnilateralExitDelay   = "UNILATERAL_EXIT_DELAY"
 	AuthUser              = "AUTH_USER"
 	AuthPass              = "AUTH_PASS"
+	EsploraURL            = "ESPLORA_URL"
+	NeutrinoPeer          = "NEUTRINO_PEER"
+	WalletPassword        = "WALLET_PASSWORD"
 
 	defaultDatadir               = common.AppDataDir("arkd", false)
 	defaultRoundInterval         = 5
@@ -122,6 +128,9 @@ func LoadConfig() (*Config, error) {
 		UnilateralExitDelay:   viper.GetInt64(UnilateralExitDelay),
 		AuthUser:              viper.GetString(AuthUser),
 		AuthPass:              viper.GetString(AuthPass),
+		EsploraURL:            viper.GetString(EsploraURL),
+		NeutrinoPeer:          viper.GetString(NeutrinoPeer),
+		WalletPassword:        viper.GetString(WalletPassword),
 	}, nil
 }
 
@@ -145,6 +154,12 @@ func getNetwork() (common.Network, error) {
 		return common.LiquidTestNet, nil
 	case common.LiquidRegTest.Name:
 		return common.LiquidRegTest, nil
+	case common.Bitcoin.Name:
+		return common.Bitcoin, nil
+	case common.BitcoinTestNet.Name:
+		return common.BitcoinTestNet, nil
+	case common.BitcoinRegTest.Name:
+		return common.BitcoinRegTest, nil
 	default:
 		return common.Network{}, fmt.Errorf("unknown network %s", viper.GetString(Network))
 	}

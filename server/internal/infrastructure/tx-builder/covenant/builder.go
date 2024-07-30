@@ -5,9 +5,11 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/internal/core/domain"
 	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/address"
@@ -24,18 +26,18 @@ const (
 
 type txBuilder struct {
 	wallet        ports.WalletService
-	net           *network.Network
+	net           common.Network
 	roundLifetime int64 // in seconds
 	exitDelay     int64 // in seconds
 }
 
 func NewTxBuilder(
 	wallet ports.WalletService,
-	net network.Network,
+	net common.Network,
 	roundLifetime int64,
 	exitDelay int64,
 ) ports.TxBuilder {
-	return &txBuilder{wallet, &net, roundLifetime, exitDelay}
+	return &txBuilder{wallet, net, roundLifetime, exitDelay}
 }
 
 func (b *txBuilder) GetVtxoScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error) {
@@ -50,7 +52,7 @@ func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (signedSweepTx strin
 	sweepPset, err := sweepTransaction(
 		b.wallet,
 		inputs,
-		b.net.AssetID,
+		b.onchainNetwork().AssetID,
 	)
 	if err != nil {
 		return "", err
@@ -62,7 +64,7 @@ func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (signedSweepTx strin
 	}
 
 	ctx := context.Background()
-	signedSweepPsetB64, err := b.wallet.SignPsetWithKey(ctx, sweepPsetBase64, nil)
+	signedSweepPsetB64, err := b.wallet.SignTransactionTapscript(ctx, sweepPsetBase64, nil)
 	if err != nil {
 		return "", err
 	}
@@ -111,6 +113,7 @@ func (b *txBuilder) BuildForfeitTxs(
 
 func (b *txBuilder) BuildPoolTx(
 	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, minRelayFee uint64, sweptRounds []domain.Round,
+	_ ...*secp256k1.PublicKey, // cosigners are not used in the covenant
 ) (poolTx string, congestionTree tree.CongestionTree, connectorAddress string, err error) {
 	// The creation of the tree and the pool tx are tightly coupled:
 	// - building the tree requires knowing the shared outpoint (txid:vout)
@@ -130,7 +133,7 @@ func (b *txBuilder) BuildPoolTx(
 
 	if !isOnchainOnly(payments) {
 		treeFactoryFn, sharedOutputScript, sharedOutputAmount, err = tree.CraftCongestionTree(
-			b.net.AssetID, aspPubkey, getOffchainReceivers(payments), minRelayFee, b.roundLifetime, b.exitDelay,
+			b.onchainNetwork().AssetID, aspPubkey, getOffchainReceivers(payments), minRelayFee, b.roundLifetime, b.exitDelay,
 		)
 		if err != nil {
 			return
@@ -211,6 +214,108 @@ func (b *txBuilder) GetSweepInput(parentblocktime int64, node tree.Node) (expira
 	return expirationTime, sweepInput, nil
 }
 
+func (b *txBuilder) VerifyForfeitTx(tx string) (bool, string, error) {
+	ptx, _ := psetv2.NewPsetFromBase64(tx)
+	utx, _ := ptx.UnsignedTx()
+	txid := utx.TxHash().String()
+
+	for index, input := range ptx.Inputs {
+		for _, tapScriptSig := range input.TapScriptSig {
+			leafHash, err := chainhash.NewHash(tapScriptSig.LeafHash)
+			if err != nil {
+				return false, txid, err
+			}
+
+			preimage, err := b.getTaprootPreimage(
+				tx,
+				index,
+				leafHash,
+			)
+			if err != nil {
+				return false, txid, err
+			}
+
+			sig, err := schnorr.ParseSignature(tapScriptSig.Signature)
+			if err != nil {
+				return false, txid, err
+			}
+
+			pubkey, err := schnorr.ParsePubKey(tapScriptSig.PubKey)
+			if err != nil {
+				return false, txid, err
+			}
+
+			if sig.Verify(preimage, pubkey) {
+				return true, txid, nil
+			} else {
+				return false, txid, fmt.Errorf("invalid signature")
+			}
+		}
+	}
+
+	return false, txid, nil
+}
+
+func (b *txBuilder) FinalizeAndExtractForfeit(tx string) (string, error) {
+	p, err := psetv2.NewPsetFromBase64(tx)
+	if err != nil {
+		return "", err
+	}
+
+	if err := psetv2.FinalizeAll(p); err != nil {
+		return "", err
+	}
+
+	// extract the forfeit tx
+	extracted, err := psetv2.Extract(p)
+	if err != nil {
+		return "", err
+	}
+
+	return extracted.ToHex()
+}
+
+func (b *txBuilder) FindLeaves(
+	congestionTree tree.CongestionTree,
+	fromtxid string,
+	fromvout uint32,
+) ([]tree.Node, error) {
+	allLeaves := congestionTree.Leaves()
+	foundLeaves := make([]tree.Node, 0)
+
+	for _, leaf := range allLeaves {
+		branch, err := congestionTree.Branch(leaf.Txid)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, node := range branch {
+			ptx, err := psetv2.NewPsetFromBase64(node.Tx)
+			if err != nil {
+				return nil, err
+			}
+
+			if len(ptx.Inputs) <= 0 {
+				return nil, fmt.Errorf("no input in the pset")
+			}
+
+			parentInput := ptx.Inputs[0]
+
+			hash, err := chainhash.NewHash(parentInput.PreviousTxid)
+			if err != nil {
+				return nil, err
+			}
+
+			if hash.String() == fromtxid && parentInput.PreviousTxIndex == fromvout {
+				foundLeaves = append(foundLeaves, leaf)
+				break
+			}
+		}
+	}
+
+	return foundLeaves, nil
+}
+
 func (b *txBuilder) getLeafScriptAndTree(
 	userPubkey, aspPubkey *secp256k1.PublicKey,
 ) ([]byte, *taproot.IndexedElementsTapScriptTree, error) {
@@ -255,7 +360,7 @@ func (b *txBuilder) createPoolTx(
 	payments []domain.Payment, aspPubKey *secp256k1.PublicKey, connectorAddress string, minRelayFee uint64,
 	sweptRounds []domain.Round,
 ) (*psetv2.Pset, error) {
-	aspScript, err := p2wpkhScript(aspPubKey, b.net)
+	aspScript, err := p2wpkhScript(aspPubKey, b.onchainNetwork())
 	if err != nil {
 		return nil, err
 	}
@@ -279,14 +384,14 @@ func (b *txBuilder) createPoolTx(
 		targetAmount += sharedOutputAmount
 
 		outputs = append(outputs, psetv2.OutputArgs{
-			Asset:  b.net.AssetID,
+			Asset:  b.onchainNetwork().AssetID,
 			Amount: sharedOutputAmount,
 			Script: sharedOutputScript,
 		})
 	}
 
 	outputs = append(outputs, psetv2.OutputArgs{
-		Asset:  b.net.AssetID,
+		Asset:  b.onchainNetwork().AssetID,
 		Amount: connectorsAmount,
 		Script: connectorScript,
 	})
@@ -300,7 +405,7 @@ func (b *txBuilder) createPoolTx(
 		}
 
 		outputs = append(outputs, psetv2.OutputArgs{
-			Asset:  b.net.AssetID,
+			Asset:  b.onchainNetwork().AssetID,
 			Amount: receiver.Amount,
 			Script: receiverScript,
 		})
@@ -319,7 +424,7 @@ func (b *txBuilder) createPoolTx(
 			change = 0
 		} else {
 			outputs = append(outputs, psetv2.OutputArgs{
-				Asset:  b.net.AssetID,
+				Asset:  b.onchainNetwork().AssetID,
 				Amount: change,
 				Script: aspScript,
 			})
@@ -377,7 +482,7 @@ func (b *txBuilder) createPoolTx(
 			if change > 0 {
 				if err := updater.AddOutputs([]psetv2.OutputArgs{
 					{
-						Asset:  b.net.AssetID,
+						Asset:  b.onchainNetwork().AssetID,
 						Amount: change,
 						Script: aspScript,
 					},
@@ -402,7 +507,7 @@ func (b *txBuilder) createPoolTx(
 			} else {
 				if err := updater.AddOutputs([]psetv2.OutputArgs{
 					{
-						Asset:  b.net.AssetID,
+						Asset:  b.onchainNetwork().AssetID,
 						Amount: change,
 						Script: aspScript,
 					},
@@ -420,7 +525,7 @@ func (b *txBuilder) createPoolTx(
 	// add fee output
 	if err := updater.AddOutputs([]psetv2.OutputArgs{
 		{
-			Asset:  b.net.AssetID,
+			Asset:  b.onchainNetwork().AssetID,
 			Amount: feeAmount,
 		},
 	}); err != nil {
@@ -441,7 +546,7 @@ func (b *txBuilder) createConnectors(
 	}
 
 	connectorOutput := psetv2.OutputArgs{
-		Asset:  b.net.AssetID,
+		Asset:  b.onchainNetwork().AssetID,
 		Script: aspScript,
 		Amount: connectorAmount,
 	}
@@ -475,7 +580,7 @@ func (b *txBuilder) createConnectors(
 		totalConnectorAmount -= minRelayFee
 		if totalConnectorAmount > 0 {
 			outputs = append(outputs, psetv2.OutputArgs{
-				Asset:  b.net.AssetID,
+				Asset:  b.onchainNetwork().AssetID,
 				Script: aspScript,
 				Amount: totalConnectorAmount,
 			})
@@ -501,7 +606,7 @@ func (b *txBuilder) createConnectors(
 func (b *txBuilder) createForfeitTxs(
 	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, connectors []*psetv2.Pset,
 ) ([]string, error) {
-	aspScript, err := p2wpkhScript(aspPubkey, b.net)
+	aspScript, err := p2wpkhScript(aspPubkey, b.onchainNetwork())
 	if err != nil {
 		return nil, err
 	}
@@ -567,12 +672,59 @@ func (b *txBuilder) getConnectorAddress(poolTx string) (string, error) {
 
 	connectorOutput := pset.Outputs[1]
 
-	pay, err := payment.FromScript(connectorOutput.Script, b.net, nil)
+	pay, err := payment.FromScript(connectorOutput.Script, b.onchainNetwork(), nil)
 	if err != nil {
 		return "", err
 	}
 
 	return pay.WitnessPubKeyHash()
+}
+
+func (b *txBuilder) getTaprootPreimage(tx string, inputIndex int, leafHash *chainhash.Hash) ([]byte, error) {
+	pset, err := psetv2.NewPsetFromBase64(tx)
+	if err != nil {
+		return nil, err
+	}
+
+	prevoutScripts := make([][]byte, 0)
+	prevoutAssets := make([][]byte, 0)
+	prevoutValues := make([][]byte, 0)
+
+	for i, input := range pset.Inputs {
+		if input.WitnessUtxo == nil {
+			return nil, fmt.Errorf("missing witness utxo on input #%d", i)
+		}
+
+		prevoutScripts = append(prevoutScripts, input.WitnessUtxo.Script)
+		prevoutAssets = append(prevoutAssets, input.WitnessUtxo.Asset)
+		prevoutValues = append(prevoutValues, input.WitnessUtxo.Value)
+	}
+
+	utx, err := pset.UnsignedTx()
+	if err != nil {
+		return nil, err
+	}
+
+	genesisHash, _ := chainhash.NewHashFromStr(b.onchainNetwork().GenesisBlockHash)
+
+	preimage := utx.HashForWitnessV1(
+		inputIndex, prevoutScripts, prevoutAssets, prevoutValues,
+		pset.Inputs[inputIndex].SigHashType, genesisHash, leafHash, nil,
+	)
+	return preimage[:], nil
+}
+
+func (b *txBuilder) onchainNetwork() *network.Network {
+	switch b.net.Name {
+	case common.Liquid.Name:
+		return &network.Liquid
+	case common.LiquidTestNet.Name:
+		return &network.Testnet
+	case common.LiquidRegTest.Name:
+		return &network.Regtest
+	default:
+		return &network.Liquid
+	}
 }
 
 func extractSweepLeaf(input psetv2.Input) (sweepLeaf *psetv2.TapLeafScript, lifetime int64, err error) {
