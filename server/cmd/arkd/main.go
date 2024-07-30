@@ -50,6 +50,7 @@ func main() {
 		UnilateralExitDelay:   cfg.UnilateralExitDelay,
 		EsploraURL:            cfg.EsploraURL,
 		NeutrinoPeer:          cfg.NeutrinoPeer,
+		WalletPassword:        cfg.WalletPassword,
 	}
 	svc, err := grpcservice.NewService(svcConfig, appConfig)
 	if err != nil {

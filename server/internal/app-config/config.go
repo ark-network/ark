@@ -63,8 +63,9 @@ type Config struct {
 	RoundLifetime         int64
 	UnilateralExitDelay   int64
 
-	EsploraURL   string
-	NeutrinoPeer string
+	EsploraURL     string
+	NeutrinoPeer   string
+	WalletPassword string
 
 	repo      ports.RepoManager
 	svc       application.Service
@@ -222,11 +223,13 @@ func (c *Config) walletService() error {
 	if len(c.EsploraURL) == 0 {
 		return fmt.Errorf("missing esplora url, covenant-less ark requires ARK_ESPLORA_URL to be set")
 	}
+	if len(c.WalletPassword) == 0 {
+		return fmt.Errorf("missing wallet password, covenant-less ark requires ARK_WALLET_PASSWORD to be set")
+	}
 
 	svc, err := btcwallet.NewService(btcwallet.WalletConfig{
-		Datadir: c.DbDir,
-		// TODO let the operator set the passwords
-		Password:   []byte("password"),
+		Datadir:    c.DbDir,
+		Password:   []byte(c.WalletPassword),
 		Network:    c.Network,
 		EsploraURL: c.EsploraURL,
 	},
