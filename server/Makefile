@@ -36,7 +36,7 @@ run: clean
 	@export ARK_WALLET_ADDR=localhost:18000; \
 	export ARK_ROUND_INTERVAL=10; \
 	export ARK_LOG_LEVEL=5; \
-	export ARK_NETWORK=regtest; \
+	export ARK_NETWORK=liquidregtest; \
 	export ARK_PORT=8080; \
 	go run ./cmd/arkd
 

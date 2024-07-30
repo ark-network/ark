@@ -80,7 +80,9 @@ func (c *Config) Validate() error {
 	if c.RoundInterval < 2 {
 		return fmt.Errorf("invalid round interval, must be at least 2 seconds")
 	}
-	if c.Network.Name != "liquid" && c.Network.Name != "testnet" && c.Network.Name != "regtest" {
+	if c.Network.Name != common.Liquid.Name &&
+		c.Network.Name != common.LiquidTestNet.Name &&
+		c.Network.Name != common.LiquidRegTest.Name {
 		return fmt.Errorf("invalid network, must be liquid, testnet or regtest")
 	}
 	if len(c.WalletAddr) <= 0 {
@@ -275,9 +277,9 @@ func (c *Config) adminService() error {
 
 func (c *Config) mainChain() network.Network {
 	switch c.Network.Name {
-	case "testnet":
+	case common.LiquidTestNet.Name:
 		return network.Testnet
-	case "regtest":
+	case common.LiquidRegTest.Name:
 		return network.Regtest
 	default:
 		return network.Liquid

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/urfave/cli/v2"
@@ -54,7 +55,8 @@ func initAction(ctx *cli.Context) error {
 	if len(url) <= 0 {
 		return fmt.Errorf("invalid ark url")
 	}
-	if net != "liquid" && net != "testnet" && net != "regtest" {
+	if net != common.Liquid.Name && net != common.LiquidTestNet.Name &&
+		net != common.LiquidRegTest.Name {
 		return fmt.Errorf("invalid network")
 	}
 

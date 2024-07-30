@@ -9,6 +9,9 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/vulpemventures/go-elements/address"
+	"github.com/vulpemventures/go-elements/network"
+	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/taproot"
 )
 
@@ -60,7 +63,6 @@ func DecodeClosure(script []byte) (Closure, error) {
 	}
 
 	return nil, fmt.Errorf("invalid closure script")
-
 }
 
 func (f *ForfeitClosure) Leaf() (*taproot.TapElementsLeaf, error) {
@@ -279,6 +281,59 @@ func (c *UnrollClosure) Decode(script []byte) (valid bool, err error) {
 	}
 
 	return true, nil
+}
+
+func ComputeVtxoTaprootScript(
+	userPubkey, aspPubkey *secp256k1.PublicKey, exitDelay uint, net network.Network,
+) (*secp256k1.PublicKey, *taproot.TapscriptElementsProof, []byte, string, error) {
+	redeemClosure := &CSVSigClosure{
+		Pubkey:  userPubkey,
+		Seconds: exitDelay,
+	}
+
+	forfeitClosure := &ForfeitClosure{
+		Pubkey:    userPubkey,
+		AspPubkey: aspPubkey,
+	}
+
+	redeemLeaf, err := redeemClosure.Leaf()
+	if err != nil {
+		return nil, nil, nil, "", err
+	}
+
+	forfeitLeaf, err := forfeitClosure.Leaf()
+	if err != nil {
+		return nil, nil, nil, "", err
+	}
+
+	vtxoTaprootTree := taproot.AssembleTaprootScriptTree(
+		*redeemLeaf, *forfeitLeaf,
+	)
+	root := vtxoTaprootTree.RootNode.TapHash()
+
+	unspendableKey := UnspendableKey()
+	vtxoTaprootKey := taproot.ComputeTaprootOutputKey(unspendableKey, root[:])
+
+	redeemLeafHash := redeemLeaf.TapHash()
+	proofIndex := vtxoTaprootTree.LeafProofIndex[redeemLeafHash]
+	proof := vtxoTaprootTree.LeafMerkleProofs[proofIndex]
+
+	pay, err := payment.FromTweakedKey(vtxoTaprootKey, &net, nil)
+	if err != nil {
+		return nil, nil, nil, "", err
+	}
+
+	addr, err := pay.TaprootAddress()
+	if err != nil {
+		return nil, nil, nil, "", err
+	}
+
+	script, err := address.ToOutputScript(addr)
+	if err != nil {
+		return nil, nil, nil, "", err
+	}
+
+	return vtxoTaprootKey, &proof, script, addr, nil
 }
 
 func decodeIntrospectionScript(
