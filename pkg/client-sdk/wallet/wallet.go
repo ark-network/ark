@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/ark-network/ark-sdk/explorer"
+	"github.com/ark-network/ark-sdk/wallet/singlekey/store"
 )
 
 const (
@@ -30,4 +31,5 @@ type WalletService interface {
 	SignTransaction(
 		ctx context.Context, explorerSvc explorer.Explorer, tx string,
 	) (singedTx string, err error)
+	GetStore(ctx context.Context) (store.WalletStore, error)
 }

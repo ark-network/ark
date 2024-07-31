@@ -391,3 +391,9 @@ func (w *singlekeyWallet) getAddress(
 
 	return offchainAddr, onchainAddr, redemptionAddr, nil
 }
+
+func (w *singlekeyWallet) GetStore(
+	ctx context.Context,
+) (walletstore.WalletStore, error) {
+	return w.walletStore, nil
+}
