@@ -15,6 +15,7 @@ import (
 	"github.com/ark-network/ark-sdk/internal/utils"
 	"github.com/ark-network/ark-sdk/store"
 	"github.com/ark-network/ark-sdk/wallet"
+	walletstore "github.com/ark-network/ark-sdk/wallet/singlekey/store"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
@@ -50,7 +51,6 @@ var (
 )
 
 type ArkClient interface {
-	GetConfigData(ctx context.Context) (*store.StoreData, error)
 	Init(ctx context.Context, args InitArgs) error
 	InitWithWallet(ctx context.Context, args InitWithWalletArgs) error
 	Unlock(ctx context.Context, password string) error
@@ -66,6 +66,8 @@ type ArkClient interface {
 	CollaborativeRedeem(
 		ctx context.Context, addr string, amount uint64, withExpiryCoinselect bool,
 	) (string, error)
+	GetConfigData(ctx context.Context) (*store.StoreData, error)
+	GetWalletStore(ctx context.Context, password string) (walletstore.WalletStore, error)
 }
 
 type arkClient struct {
@@ -534,7 +536,7 @@ func (a *arkClient) SendOnChain(
 	ctx context.Context, receivers []Receiver,
 ) (string, error) {
 	for _, receiver := range receivers {
-		if !receiver.isOnchain() {
+		if !receiver.IsOnChain() {
 			return "", fmt.Errorf("invalid receiver address '%s': must be onchain", receiver.To)
 		}
 	}
@@ -547,7 +549,7 @@ func (a *arkClient) SendOffChain(
 	withExpiryCoinselect bool, receivers []Receiver,
 ) (string, error) {
 	for _, receiver := range receivers {
-		if receiver.isOnchain() {
+		if receiver.IsOnChain() {
 			return "", fmt.Errorf("invalid receiver address '%s': must be offchain", receiver.To)
 		}
 	}
@@ -1125,7 +1127,7 @@ type Receiver struct {
 	Amount uint64 `json:"amount"`
 }
 
-func (r *Receiver) isOnchain() bool {
+func (r *Receiver) IsOnChain() bool {
 	_, err := address.ToOutputScript(r.To)
 	return err == nil
 }
@@ -1245,4 +1247,14 @@ func (a *arkClient) ping(
 	}(ticker)
 
 	return ticker.Stop
+}
+
+func (a *arkClient) GetWalletStore(
+	ctx context.Context, password string,
+) (walletstore.WalletStore, error) {
+	if _, err := a.wallet.Unlock(ctx, password); err != nil {
+		return nil, err
+	}
+
+	return a.wallet.GetStore(ctx)
 }
