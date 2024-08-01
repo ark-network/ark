@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/ark-network/ark-sdk/client"
-	"github.com/ark-network/ark-sdk/explorer"
+	"github.com/ark-network/ark-sdk/internal/utils"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common/tree"
 	"google.golang.org/grpc"
@@ -16,9 +16,10 @@ import (
 )
 
 type grpcClient struct {
-	conn     *grpc.ClientConn
-	svc      arkv1.ArkServiceClient
-	eventsCh chan client.RoundEventChannel
+	conn      *grpc.ClientConn
+	svc       arkv1.ArkServiceClient
+	eventsCh  chan client.RoundEventChannel
+	treeCache *utils.Cache[tree.CongestionTree]
 }
 
 func NewClient(aspUrl string) (client.ASPClient, error) {
@@ -43,8 +44,9 @@ func NewClient(aspUrl string) (client.ASPClient, error) {
 
 	svc := arkv1.NewArkServiceClient(conn)
 	eventsCh := make(chan client.RoundEventChannel)
+	treeCache := utils.NewCache[tree.CongestionTree]()
 
-	return &grpcClient{conn, svc, eventsCh}, nil
+	return &grpcClient{conn, svc, eventsCh, treeCache}, nil
 }
 
 func (c *grpcClient) Close() {
@@ -53,8 +55,9 @@ func (c *grpcClient) Close() {
 }
 
 func (a *grpcClient) GetEventStream(
-	ctx context.Context, paymentID string, req *arkv1.GetEventStreamRequest,
+	ctx context.Context, paymentID string,
 ) (<-chan client.RoundEventChannel, error) {
+	req := &arkv1.GetEventStreamRequest{}
 	stream, err := a.svc.GetEventStream(ctx, req)
 	if err != nil {
 		return nil, err
@@ -70,187 +73,265 @@ func (a *grpcClient) GetEventStream(
 				return
 			}
 
-			a.eventsCh <- client.RoundEventChannel{Event: resp}
+			a.eventsCh <- client.RoundEventChannel{Event: event{resp}.toRoundEvent()}
 		}
 	}()
 
 	return a.eventsCh, nil
 }
 
-func (a *grpcClient) GetInfo(ctx context.Context) (*arkv1.GetInfoResponse, error) {
-	return a.svc.GetInfo(ctx, &arkv1.GetInfoRequest{})
+func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
+	req := &arkv1.GetInfoRequest{}
+	resp, err := a.svc.GetInfo(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return &client.Info{
+		Pubkey:              resp.GetPubkey(),
+		RoundLifetime:       resp.GetRoundLifetime(),
+		UnilateralExitDelay: resp.GetUnilateralExitDelay(),
+		RoundInterval:       resp.GetRoundInterval(),
+		Network:             resp.GetNetwork(),
+		MinRelayFee:         resp.GetMinRelayFee(),
+	}, nil
 }
 
 func (a *grpcClient) ListVtxos(
-	ctx context.Context,
-	addr string,
-) (*arkv1.ListVtxosResponse, error) {
-	return a.svc.ListVtxos(ctx, &arkv1.ListVtxosRequest{Address: addr})
+	ctx context.Context, addr string,
+) ([]client.Vtxo, []client.Vtxo, error) {
+	resp, err := a.svc.ListVtxos(ctx, &arkv1.ListVtxosRequest{Address: addr})
+	if err != nil {
+		return nil, nil, err
+	}
+	return vtxos(resp.GetSpendableVtxos()).toVtxos(), vtxos(resp.GetSpentVtxos()).toVtxos(), nil
 }
 
 func (a *grpcClient) GetRound(
 	ctx context.Context, txID string,
-) (*arkv1.GetRoundResponse, error) {
-	return a.svc.GetRound(ctx, &arkv1.GetRoundRequest{Txid: txID})
-}
-
-func (a *grpcClient) GetSpendableVtxos(
-	ctx context.Context, addr string, explorerSvc explorer.Explorer,
-) ([]*client.Vtxo, error) {
-	allVtxos, err := a.ListVtxos(ctx, addr)
+) (*client.Round, error) {
+	req := &arkv1.GetRoundRequest{Txid: txID}
+	resp, err := a.svc.GetRound(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-
-	vtxos := make([]*client.Vtxo, 0, len(allVtxos.GetSpendableVtxos()))
-	for _, v := range allVtxos.GetSpendableVtxos() {
-		var expireAt *time.Time
-		if v.ExpireAt > 0 {
-			t := time.Unix(v.ExpireAt, 0)
-			expireAt = &t
-		}
-		if v.Swept {
-			continue
-		}
-		vtxos = append(vtxos, &client.Vtxo{
-			Amount:    v.Receiver.Amount,
-			Txid:      v.Outpoint.Txid,
-			VOut:      v.Outpoint.Vout,
-			RoundTxid: v.PoolTxid,
-			ExpiresAt: expireAt,
-		})
+	round := resp.GetRound()
+	startedAt := time.Unix(round.GetStart(), 0)
+	var endedAt *time.Time
+	if round.GetEnd() > 0 {
+		t := time.Unix(round.GetEnd(), 0)
+		endedAt = &t
 	}
-
-	if explorerSvc == nil {
-		return vtxos, nil
-	}
-
-	redeemBranches, err := a.GetRedeemBranches(ctx, vtxos, explorerSvc)
-	if err != nil {
-		return nil, err
-	}
-
-	for vtxoTxid, branch := range redeemBranches {
-		expiration, err := branch.ExpiresAt()
-		if err != nil {
-			return nil, err
-		}
-
-		for i, vtxo := range vtxos {
-			if vtxo.Txid == vtxoTxid {
-				vtxos[i].ExpiresAt = expiration
-				break
-			}
-		}
-	}
-
-	return vtxos, nil
-}
-
-func (a *grpcClient) GetRedeemBranches(
-	ctx context.Context, vtxos []*client.Vtxo, explorerSvc explorer.Explorer,
-) (map[string]*client.RedeemBranch, error) {
-	congestionTrees := make(map[string]tree.CongestionTree, 0)
-	redeemBranches := make(map[string]*client.RedeemBranch, 0)
-
-	for _, vtxo := range vtxos {
-		if _, ok := congestionTrees[vtxo.RoundTxid]; !ok {
-			round, err := a.GetRound(ctx, vtxo.RoundTxid)
-			if err != nil {
-				return nil, err
-			}
-
-			treeFromRound := round.GetRound().GetCongestionTree()
-			congestionTree, err := toCongestionTree(treeFromRound)
-			if err != nil {
-				return nil, err
-			}
-
-			congestionTrees[vtxo.RoundTxid] = congestionTree
-		}
-
-		redeemBranch, err := client.NewRedeemBranch(
-			explorerSvc, congestionTrees[vtxo.RoundTxid], vtxo,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		redeemBranches[vtxo.Txid] = redeemBranch
-	}
-
-	return redeemBranches, nil
-}
-
-func (a *grpcClient) GetOffchainBalance(
-	ctx context.Context, addr string, explorerSvc explorer.Explorer,
-) (uint64, map[int64]uint64, error) {
-	amountByExpiration := make(map[int64]uint64, 0)
-
-	vtxos, err := a.GetSpendableVtxos(ctx, addr, explorerSvc)
-	if err != nil {
-		return 0, nil, err
-	}
-	var balance uint64
-	for _, vtxo := range vtxos {
-		balance += vtxo.Amount
-
-		if vtxo.ExpiresAt != nil {
-			expiration := vtxo.ExpiresAt.Unix()
-
-			if _, ok := amountByExpiration[expiration]; !ok {
-				amountByExpiration[expiration] = 0
-			}
-
-			amountByExpiration[expiration] += vtxo.Amount
-		}
-	}
-
-	return balance, amountByExpiration, nil
+	return &client.Round{
+		ID:         round.GetId(),
+		StartedAt:  &startedAt,
+		EndedAt:    endedAt,
+		Tx:         round.GetPoolTx(),
+		Tree:       treeFromProto{round.GetCongestionTree()}.parse(),
+		ForfeitTxs: round.GetForfeitTxs(),
+		Connectors: round.GetConnectors(),
+		Stage:      client.RoundStage(int(round.GetStage())),
+	}, nil
 }
 
 func (a *grpcClient) Onboard(
-	ctx context.Context, req *arkv1.OnboardRequest,
-) (*arkv1.OnboardResponse, error) {
-	return a.svc.Onboard(ctx, req)
+	ctx context.Context, tx, userPubkey string, congestionTree tree.CongestionTree,
+) error {
+	req := &arkv1.OnboardRequest{
+		BoardingTx:     tx,
+		UserPubkey:     userPubkey,
+		CongestionTree: treeToProto(congestionTree).parse(),
+	}
+	_, err := a.svc.Onboard(ctx, req)
+	return err
 }
 
 func (a *grpcClient) RegisterPayment(
-	ctx context.Context, req *arkv1.RegisterPaymentRequest,
-) (*arkv1.RegisterPaymentResponse, error) {
-	return a.svc.RegisterPayment(ctx, req)
+	ctx context.Context, inputs []client.VtxoKey,
+) (string, error) {
+	req := &arkv1.RegisterPaymentRequest{
+		Inputs: ins(inputs).toProto(),
+	}
+	resp, err := a.svc.RegisterPayment(ctx, req)
+	if err != nil {
+		return "", err
+	}
+	return resp.GetId(), nil
 }
 
 func (a *grpcClient) ClaimPayment(
-	ctx context.Context, req *arkv1.ClaimPaymentRequest,
-) (*arkv1.ClaimPaymentResponse, error) {
-	return a.svc.ClaimPayment(ctx, req)
+	ctx context.Context, paymentID string, outputs []client.Output,
+) error {
+	req := &arkv1.ClaimPaymentRequest{
+		Id:      paymentID,
+		Outputs: outs(outputs).toProto(),
+	}
+	_, err := a.svc.ClaimPayment(ctx, req)
+	return err
 }
 
 func (a *grpcClient) Ping(
-	ctx context.Context, req *arkv1.PingRequest,
-) (*arkv1.PingResponse, error) {
-	return a.svc.Ping(ctx, req)
+	ctx context.Context, paymentID string,
+) (*client.RoundFinalizationEvent, error) {
+	req := &arkv1.PingRequest{
+		PaymentId: paymentID,
+	}
+	resp, err := a.svc.Ping(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	event := resp.GetEvent()
+	return &client.RoundFinalizationEvent{
+		ID:         event.GetId(),
+		Tx:         event.GetPoolTx(),
+		ForfeitTxs: event.GetForfeitTxs(),
+		Tree:       treeFromProto{event.GetCongestionTree()}.parse(),
+		Connectors: event.GetConnectors(),
+	}, nil
 }
 
 func (a *grpcClient) FinalizePayment(
-	ctx context.Context, req *arkv1.FinalizePaymentRequest,
-) (*arkv1.FinalizePaymentResponse, error) {
-	return a.svc.FinalizePayment(ctx, req)
+	ctx context.Context, signedForfeitTxs []string,
+) error {
+	req := &arkv1.FinalizePaymentRequest{
+		SignedForfeitTxs: signedForfeitTxs,
+	}
+	_, err := a.svc.FinalizePayment(ctx, req)
+	return err
 }
 
 func (a *grpcClient) GetRoundByID(
 	ctx context.Context, roundID string,
-) (*arkv1.GetRoundByIdResponse, error) {
-	return a.svc.GetRoundById(ctx, &arkv1.GetRoundByIdRequest{
-		Id: roundID,
-	})
+) (*client.Round, error) {
+	req := &arkv1.GetRoundByIdRequest{Id: roundID}
+	resp, err := a.svc.GetRoundById(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	round := resp.GetRound()
+	startedAt := time.Unix(round.GetStart(), 0)
+	var endedAt *time.Time
+	if round.GetEnd() > 0 {
+		t := time.Unix(round.GetEnd(), 0)
+		endedAt = &t
+	}
+	tree := treeFromProto{round.GetCongestionTree()}.parse()
+	return &client.Round{
+		ID:         round.GetId(),
+		StartedAt:  &startedAt,
+		EndedAt:    endedAt,
+		Tx:         round.GetPoolTx(),
+		Tree:       tree,
+		ForfeitTxs: round.GetForfeitTxs(),
+		Connectors: round.GetConnectors(),
+		Stage:      client.RoundStage(int(round.GetStage())),
+	}, nil
 }
 
-func toCongestionTree(treeFromProto *arkv1.Tree) (tree.CongestionTree, error) {
-	levels := make(tree.CongestionTree, 0, len(treeFromProto.Levels))
+type out client.Output
 
-	for _, level := range treeFromProto.Levels {
+func (o out) toProto() *arkv1.Output {
+	return &arkv1.Output{
+		Address: o.Address,
+		Amount:  o.Amount,
+	}
+}
+
+type outs []client.Output
+
+func (o outs) toProto() []*arkv1.Output {
+	list := make([]*arkv1.Output, 0, len(o))
+	for _, oo := range o {
+		list = append(list, out(oo).toProto())
+	}
+	return list
+}
+
+type event struct {
+	*arkv1.GetEventStreamResponse
+}
+
+func (e event) toRoundEvent() client.RoundEvent {
+	if ee := e.GetRoundFailed(); ee != nil {
+		return client.RoundFailedEvent{
+			ID:     ee.GetId(),
+			Reason: ee.GetReason(),
+		}
+	}
+	if ee := e.GetRoundFinalization(); ee != nil {
+		tree := treeFromProto{ee.GetCongestionTree()}.parse()
+		return client.RoundFinalizationEvent{
+			ID:         ee.GetId(),
+			Tx:         ee.GetPoolTx(),
+			ForfeitTxs: ee.GetForfeitTxs(),
+			Tree:       tree,
+			Connectors: ee.GetConnectors(),
+		}
+	}
+	ee := e.GetRoundFinalized()
+	return client.RoundFinalizedEvent{
+		ID:   ee.GetId(),
+		Txid: ee.GetPoolTxid(),
+	}
+}
+
+type vtxo struct {
+	*arkv1.Vtxo
+}
+
+func (v vtxo) toVtxo() client.Vtxo {
+	var expiresAt *time.Time
+	if v.GetExpireAt() > 0 {
+		t := time.Unix(v.GetExpireAt(), 0)
+		expiresAt = &t
+	}
+	return client.Vtxo{
+		VtxoKey: client.VtxoKey{
+			Txid: v.GetOutpoint().GetTxid(),
+			VOut: v.GetOutpoint().GetVout(),
+		},
+		Amount:    v.GetReceiver().GetAmount(),
+		RoundTxid: v.GetPoolTxid(),
+		ExpiresAt: expiresAt,
+	}
+}
+
+type vtxos []*arkv1.Vtxo
+
+func (v vtxos) toVtxos() []client.Vtxo {
+	list := make([]client.Vtxo, 0, len(v))
+	for _, vv := range v {
+		list = append(list, vtxo{vv}.toVtxo())
+	}
+	return list
+}
+
+type input client.VtxoKey
+
+func (i input) toProto() *arkv1.Input {
+	return &arkv1.Input{
+		Txid: i.Txid,
+		Vout: i.VOut,
+	}
+}
+
+type ins []client.VtxoKey
+
+func (i ins) toProto() []*arkv1.Input {
+	list := make([]*arkv1.Input, 0, len(i))
+	for _, ii := range i {
+		list = append(list, input(ii).toProto())
+	}
+	return list
+}
+
+type treeFromProto struct {
+	*arkv1.Tree
+}
+
+func (t treeFromProto) parse() tree.CongestionTree {
+	levels := make(tree.CongestionTree, 0, len(t.GetLevels()))
+
+	for _, level := range t.GetLevels() {
 		nodes := make([]tree.Node, 0, len(level.Nodes))
 
 		for _, node := range level.Nodes {
@@ -258,7 +339,6 @@ func toCongestionTree(treeFromProto *arkv1.Tree) (tree.CongestionTree, error) {
 				Txid:       node.Txid,
 				Tx:         node.Tx,
 				ParentTxid: node.ParentTxid,
-				Leaf:       false,
 			})
 		}
 
@@ -268,10 +348,39 @@ func toCongestionTree(treeFromProto *arkv1.Tree) (tree.CongestionTree, error) {
 	for j, treeLvl := range levels {
 		for i, node := range treeLvl {
 			if len(levels.Children(node.Txid)) == 0 {
-				levels[j][i].Leaf = true
+				levels[j][i] = tree.Node{
+					Txid:       node.Txid,
+					Tx:         node.Tx,
+					ParentTxid: node.ParentTxid,
+					Leaf:       true,
+				}
 			}
 		}
 	}
 
-	return levels, nil
+	return levels
+}
+
+type treeToProto tree.CongestionTree
+
+func (t treeToProto) parse() *arkv1.Tree {
+	levels := make([]*arkv1.TreeLevel, 0, len(t))
+	for _, level := range t {
+		levelProto := &arkv1.TreeLevel{
+			Nodes: make([]*arkv1.Node, 0, len(level)),
+		}
+
+		for _, node := range level {
+			levelProto.Nodes = append(levelProto.Nodes, &arkv1.Node{
+				Txid:       node.Txid,
+				Tx:         node.Tx,
+				ParentTxid: node.ParentTxid,
+			})
+		}
+
+		levels = append(levels, levelProto)
+	}
+	return &arkv1.Tree{
+		Levels: levels,
+	}
 }

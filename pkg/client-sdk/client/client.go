@@ -4,8 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/ark-network/ark-sdk/explorer"
-	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+	"github.com/ark-network/ark/common/tree"
 )
 
 const (
@@ -13,48 +12,121 @@ const (
 	RestClient = "rest"
 )
 
+type RoundEvent interface {
+	isRoundEvent()
+}
+
+type ASPClient interface {
+	GetInfo(ctx context.Context) (*Info, error)
+	ListVtxos(ctx context.Context, addr string) ([]Vtxo, []Vtxo, error)
+	GetRound(ctx context.Context, txID string) (*Round, error)
+	GetRoundByID(ctx context.Context, roundID string) (*Round, error)
+	Onboard(
+		ctx context.Context, tx, userPubkey string, congestionTree tree.CongestionTree,
+	) error
+	RegisterPayment(
+		ctx context.Context, inputs []VtxoKey,
+	) (string, error)
+	ClaimPayment(
+		ctx context.Context, paymentID string, outputs []Output,
+	) error
+	GetEventStream(
+		ctx context.Context, paymentID string,
+	) (<-chan RoundEventChannel, error)
+	Ping(ctx context.Context, paymentID string) (*RoundFinalizationEvent, error)
+	FinalizePayment(
+		ctx context.Context, signedForfeitTxs []string,
+	) error
+	Close()
+}
+
+type Info struct {
+	Pubkey              string
+	RoundLifetime       int64
+	UnilateralExitDelay int64
+	RoundInterval       int64
+	Network             string
+	MinRelayFee         int64
+}
+
 type RoundEventChannel struct {
-	Event *arkv1.GetEventStreamResponse
+	Event RoundEvent
 	Err   error
 }
 
+type VtxoKey struct {
+	Txid string
+	VOut uint32
+}
+
 type Vtxo struct {
+	VtxoKey
 	Amount    uint64
-	Txid      string
-	VOut      uint32
 	RoundTxid string
 	ExpiresAt *time.Time
 }
 
-type ASPClient interface {
-	GetInfo(ctx context.Context) (*arkv1.GetInfoResponse, error)
-	ListVtxos(ctx context.Context, addr string) (*arkv1.ListVtxosResponse, error)
-	GetSpendableVtxos(
-		ctx context.Context, addr string, explorerSvc explorer.Explorer,
-	) ([]*Vtxo, error)
-	GetRound(ctx context.Context, txID string) (*arkv1.GetRoundResponse, error)
-	GetRoundByID(ctx context.Context, roundID string) (*arkv1.GetRoundByIdResponse, error)
-	GetRedeemBranches(
-		ctx context.Context, vtxos []*Vtxo, explorerSvc explorer.Explorer,
-	) (map[string]*RedeemBranch, error)
-	GetOffchainBalance(
-		ctx context.Context, addr string, explorerSvc explorer.Explorer,
-	) (uint64, map[int64]uint64, error)
-	Onboard(
-		ctx context.Context, req *arkv1.OnboardRequest,
-	) (*arkv1.OnboardResponse, error)
-	RegisterPayment(
-		ctx context.Context, req *arkv1.RegisterPaymentRequest,
-	) (*arkv1.RegisterPaymentResponse, error)
-	ClaimPayment(
-		ctx context.Context, req *arkv1.ClaimPaymentRequest,
-	) (*arkv1.ClaimPaymentResponse, error)
-	GetEventStream(
-		ctx context.Context, paymentID string, req *arkv1.GetEventStreamRequest,
-	) (<-chan RoundEventChannel, error)
-	Ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.PingResponse, error)
-	FinalizePayment(
-		ctx context.Context, req *arkv1.FinalizePaymentRequest,
-	) (*arkv1.FinalizePaymentResponse, error)
-	Close()
+type Output struct {
+	Address string
+	Amount  uint64
 }
+
+type RoundStage int
+
+func (s RoundStage) String() string {
+	switch s {
+	case RoundStageRegistration:
+		return "ROUND_STAGE_REGISTRATION"
+	case RoundStageFinalization:
+		return "ROUND_STAGE_FINALIZATION"
+	case RoundStageFinalized:
+		return "ROUND_STAGE_FINALIZED"
+	case RoundStageFailed:
+		return "ROUND_STAGE_FAILED"
+	default:
+		return "ROUND_STAGE_UNDEFINED"
+	}
+}
+
+const (
+	RoundStageUndefined RoundStage = iota
+	RoundStageRegistration
+	RoundStageFinalization
+	RoundStageFinalized
+	RoundStageFailed
+)
+
+type Round struct {
+	ID         string
+	StartedAt  *time.Time
+	EndedAt    *time.Time
+	Tx         string
+	Tree       tree.CongestionTree
+	ForfeitTxs []string
+	Connectors []string
+	Stage      RoundStage
+}
+
+type RoundFinalizationEvent struct {
+	ID         string
+	Tx         string
+	ForfeitTxs []string
+	Tree       tree.CongestionTree
+	Connectors []string
+}
+
+func (e RoundFinalizationEvent) isRoundEvent() {}
+
+type RoundFinalizedEvent struct {
+	ID   string
+	Txid string
+}
+
+func (e RoundFinalizedEvent) isRoundEvent() {}
+
+type RoundFailedEvent struct {
+	ID     string
+	Reason string
+}
+
+func (e RoundFailedEvent) isRoundEvent() {}
