@@ -269,7 +269,6 @@ func (s *service) initWallet() error {
 			}
 
 			for _, addr := range addrs {
-				fmt.Println(addr.DerivationPath)
 				if addr.Internal {
 					continue
 				}
