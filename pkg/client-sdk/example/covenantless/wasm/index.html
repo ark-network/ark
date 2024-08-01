@@ -18,6 +18,7 @@
 
         async function initWallet() {
             try {
+                const chain = "bitcoin";
                 const walletType = "singlekey"
                 const clientType = "rest"
                 const privateKey = document.getElementById("prvkey").value;
@@ -31,7 +32,7 @@
                     logMessage("Init error: asp url is required");
                     return;
                 }
-                await init(walletType, clientType, aspUrl, privateKey, password);
+                await init(walletType, clientType, aspUrl, privateKey, password, chain);
                 logMessage("wallet initialized and connected to ASP");
                 await config();
             } catch (err) {
