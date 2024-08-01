@@ -2,6 +2,7 @@ package utils
 
 import (
 	"strings"
+	"sync"
 
 	"github.com/ark-network/ark-sdk/client"
 )
@@ -22,3 +23,29 @@ func (t SupportedType[V]) Supports(typeStr string) bool {
 }
 
 type ClientFactory func(string) (client.ASPClient, error)
+
+type Cache[V any] struct {
+	mapping map[string]V
+	lock    *sync.RWMutex
+}
+
+func NewCache[V any]() *Cache[V] {
+	return &Cache[V]{
+		mapping: make(map[string]V),
+		lock:    &sync.RWMutex{},
+	}
+}
+
+func (c Cache[V]) Set(key string, value V) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	c.mapping[key] = value
+}
+
+func (c Cache[V]) Get(key string) V {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	return c.mapping[key]
+}

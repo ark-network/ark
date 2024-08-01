@@ -1,82 +1,29 @@
 package utils
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"crypto/sha256"
 	"fmt"
+	"runtime/debug"
 	"sort"
-	"strings"
 
 	"github.com/ark-network/ark-sdk/client"
-	"github.com/ark-network/ark-sdk/explorer"
-	liquidexplorer "github.com/ark-network/ark-sdk/explorer/liquid"
-	"github.com/ark-network/ark-sdk/store"
-	"github.com/ark-network/ark-sdk/wallet"
-	liquidwallet "github.com/ark-network/ark-sdk/wallet/singlekey/liquid"
-	walletstore "github.com/ark-network/ark-sdk/wallet/singlekey/store"
-	filestore "github.com/ark-network/ark-sdk/wallet/singlekey/store/file"
-	inmemorystore "github.com/ark-network/ark-sdk/wallet/singlekey/store/inmemory"
-	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/tree"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/address"
+	"github.com/vulpemventures/go-elements/network"
+	"golang.org/x/crypto/scrypt"
 )
 
-func ToCongestionTree(treeFromProto *arkv1.Tree) (tree.CongestionTree, error) {
-	levels := make(tree.CongestionTree, 0, len(treeFromProto.Levels))
-
-	for _, level := range treeFromProto.Levels {
-		nodes := make([]tree.Node, 0, len(level.Nodes))
-
-		for _, node := range level.Nodes {
-			nodes = append(nodes, tree.Node{
-				Txid:       node.Txid,
-				Tx:         node.Tx,
-				ParentTxid: node.ParentTxid,
-				Leaf:       false,
-			})
-		}
-
-		levels = append(levels, nodes)
-	}
-
-	for j, treeLvl := range levels {
-		for i, node := range treeLvl {
-			if len(levels.Children(node.Txid)) == 0 {
-				levels[j][i].Leaf = true
-			}
-		}
-	}
-
-	return levels, nil
-}
-
-func CastCongestionTree(congestionTree tree.CongestionTree) *arkv1.Tree {
-	levels := make([]*arkv1.TreeLevel, 0, len(congestionTree))
-	for _, level := range congestionTree {
-		levelProto := &arkv1.TreeLevel{
-			Nodes: make([]*arkv1.Node, 0, len(level)),
-		}
-
-		for _, node := range level {
-			levelProto.Nodes = append(levelProto.Nodes, &arkv1.Node{
-				Txid:       node.Txid,
-				Tx:         node.Tx,
-				ParentTxid: node.ParentTxid,
-			})
-		}
-
-		levels = append(levels, levelProto)
-	}
-	return &arkv1.Tree{
-		Levels: levels,
-	}
-}
-
 func CoinSelect(
-	vtxos []*client.Vtxo, amount, dust uint64, sortByExpirationTime bool,
-) ([]*client.Vtxo, uint64, error) {
-	selected := make([]*client.Vtxo, 0)
-	notSelected := make([]*client.Vtxo, 0)
+	vtxos []client.Vtxo, amount, dust uint64, sortByExpirationTime bool,
+) ([]client.Vtxo, uint64, error) {
+	selected := make([]client.Vtxo, 0)
+	notSelected := make([]client.Vtxo, 0)
 	selectedAmount := uint64(0)
 
 	if sortByExpirationTime {
@@ -131,7 +78,7 @@ func DecodeReceiverAddress(addr string) (
 	return true, outputScript, nil, nil
 }
 
-func IsOnchainOnly(receivers []*arkv1.Output) bool {
+func IsOnchainOnly(receivers []client.Output) bool {
 	for _, receiver := range receivers {
 		isOnChain, _, _, err := DecodeReceiverAddress(receiver.Address)
 		if err != nil {
@@ -144,66 +91,6 @@ func IsOnchainOnly(receivers []*arkv1.Output) bool {
 	}
 
 	return true
-}
-
-func GetClient(
-	supportedClients SupportedType[ClientFactory], clientType, aspUrl string,
-) (client.ASPClient, error) {
-	factory := supportedClients[clientType]
-	return factory(aspUrl)
-}
-
-func GetExplorer(
-	supportedNetworks SupportedType[string], network string,
-) (explorer.Explorer, error) {
-	url, ok := supportedNetworks[network]
-	if !ok {
-		return nil, fmt.Errorf("invalid network")
-	}
-	if strings.Contains(network, "liquid") {
-		return liquidexplorer.NewExplorer(url, network), nil
-	}
-	// TODO: support bitcoin explorer
-	return nil, fmt.Errorf("network not supported yet")
-}
-
-func GetWallet(
-	storeSvc store.ConfigStore, data *store.StoreData, supportedWallets SupportedType[struct{}],
-) (wallet.WalletService, error) {
-	switch data.WalletType {
-	case wallet.SingleKeyWallet:
-		return getSingleKeyWallet(storeSvc, data.Network.Name)
-	default:
-		return nil, fmt.Errorf(
-			"unsuported wallet type '%s', please select one of: %s",
-			data.WalletType, supportedWallets,
-		)
-	}
-}
-
-func getSingleKeyWallet(
-	configStore store.ConfigStore, network string,
-) (wallet.WalletService, error) {
-	walletStore, err := getWalletStore(configStore.GetType(), configStore.GetDatadir())
-	if err != nil {
-		return nil, err
-	}
-	if strings.Contains(network, "liquid") {
-		return liquidwallet.NewWalletService(configStore, walletStore)
-	}
-	// TODO: Support bitcoin wallet
-	return nil, fmt.Errorf("network %s not supported yet", network)
-}
-
-func getWalletStore(storeType, datadir string) (walletstore.WalletStore, error) {
-	switch storeType {
-	case store.InMemoryStore:
-		return inmemorystore.NewWalletStore()
-	case store.FileStore:
-		return filestore.NewWalletStore(datadir)
-	default:
-		return nil, fmt.Errorf("unknown wallet store type")
-	}
 }
 
 func NetworkFromString(net string) common.Network {
@@ -223,4 +110,132 @@ func NetworkFromString(net string) common.Network {
 	default:
 		return common.Bitcoin
 	}
+}
+
+func ToElementsNetwork(net common.Network) network.Network {
+	switch net.Name {
+	case common.Liquid.Name:
+		return network.Liquid
+	case common.LiquidTestNet.Name:
+		return network.Testnet
+	case common.LiquidRegTest.Name:
+		return network.Regtest
+	default:
+		return network.Liquid
+	}
+}
+
+func ToBitcoinNetwork(net common.Network) chaincfg.Params {
+	switch net.Name {
+	case common.Bitcoin.Name:
+		return chaincfg.MainNetParams
+	case common.BitcoinTestNet.Name:
+		return chaincfg.TestNet3Params
+	case common.BitcoinRegTest.Name:
+		return chaincfg.RegressionNetParams
+	default:
+		return chaincfg.MainNetParams
+	}
+}
+
+func GenerateRandomPrivateKey() (*secp256k1.PrivateKey, error) {
+	privKey, err := btcec.NewPrivateKey()
+	if err != nil {
+		return nil, err
+	}
+	return privKey, nil
+}
+
+func HashPassword(password []byte) []byte {
+	hash := sha256.Sum256(password)
+	return hash[:]
+}
+
+func EncryptAES128(privateKey, password []byte) ([]byte, error) {
+	// Due to https://github.com/golang/go/issues/7168.
+	// This call makes sure that memory is freed in case the GC doesn't do that
+	// right after the encryption/decryption.
+	defer debug.FreeOSMemory()
+
+	if len(privateKey) == 0 {
+		return nil, fmt.Errorf("missing plaintext private key")
+	}
+	if len(password) == 0 {
+		return nil, fmt.Errorf("missing encryption password")
+	}
+
+	key, salt, err := deriveKey(password, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	blockCipher, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	gcm, err := cipher.NewGCM(blockCipher)
+	if err != nil {
+		return nil, err
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err = rand.Read(nonce); err != nil {
+		return nil, err
+	}
+
+	ciphertext := gcm.Seal(nonce, nonce, privateKey, nil)
+	ciphertext = append(ciphertext, salt...)
+
+	return ciphertext, nil
+}
+
+func DecryptAES128(encrypted, password []byte) ([]byte, error) {
+	defer debug.FreeOSMemory()
+
+	if len(encrypted) == 0 {
+		return nil, fmt.Errorf("missing encrypted mnemonic")
+	}
+	if len(password) == 0 {
+		return nil, fmt.Errorf("missing decryption password")
+	}
+
+	salt := encrypted[len(encrypted)-32:]
+	data := encrypted[:len(encrypted)-32]
+
+	key, _, err := deriveKey(password, salt)
+	if err != nil {
+		return nil, err
+	}
+
+	blockCipher, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	gcm, err := cipher.NewGCM(blockCipher)
+	if err != nil {
+		return nil, err
+	}
+	nonce, text := data[:gcm.NonceSize()], data[gcm.NonceSize():]
+	plaintext, err := gcm.Open(nil, nonce, text, nil)
+	if err != nil {
+		return nil, fmt.Errorf("invalid password")
+	}
+	return plaintext, nil
+}
+
+// deriveKey derives a 32 byte array key from a custom passhprase
+func deriveKey(password, salt []byte) ([]byte, []byte, error) {
+	if salt == nil {
+		salt = make([]byte, 32)
+		if _, err := rand.Read(salt); err != nil {
+			return nil, nil, err
+		}
+	}
+	// 2^20 = 1048576 recommended length for key-stretching
+	// check the doc for other recommended values:
+	// https://godoc.org/golang.org/x/crypto/scrypt
+	key, err := scrypt.Key(password, salt, 1048576, 8, 1, 32)
+	if err != nil {
+		return nil, nil, err
+	}
+	return key, salt, nil
 }
