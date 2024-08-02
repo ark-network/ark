@@ -128,6 +128,7 @@
                 console.log("unlocking...");
                 await unlock(password);
                 console.log(amount, password);
+                console.log("onboarding...");
                 const txID = await onboard(amount);
                 logMessage("Onboarded with amount: " + amount + " and txID: " + txID + ", if in regtest mine a block");
             } catch (err) {

@@ -804,7 +804,7 @@ func (a *covenantlessArkClient) sendOffchain(
 		}
 
 		if receiver.Amount() < DUST {
-			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount, DUST)
+			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), DUST)
 		}
 
 		receiversOutput = append(receiversOutput, client.Output{

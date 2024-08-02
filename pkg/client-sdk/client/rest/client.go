@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ark-network/ark-sdk/client"
@@ -14,6 +15,7 @@ import (
 	"github.com/ark-network/ark-sdk/internal/utils"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common/tree"
+	"github.com/btcsuite/btcd/btcutil/psbt"
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
 	"github.com/vulpemventures/go-elements/psetv2"
@@ -69,7 +71,7 @@ func (a *restClient) GetEventStream(
 
 				if event != nil {
 					a.eventsCh <- client.RoundEventChannel{
-						Event: event,
+						Event: *event,
 					}
 
 					for {
@@ -83,12 +85,10 @@ func (a *restClient) GetEventStream(
 						}
 
 						if round.Stage == client.RoundStageFinalized {
-							ptx, _ := psetv2.NewPsetFromBase64(round.Tx)
-							utx, _ := ptx.UnsignedTx()
 							a.eventsCh <- client.RoundEventChannel{
 								Event: client.RoundFinalizedEvent{
 									ID:   roundID,
-									Txid: utx.TxHash().String(),
+									Txid: getTxid(round.Tx),
 								},
 							}
 							return
@@ -493,4 +493,14 @@ func (t treeToProto) parse() *models.V1Tree {
 	return &models.V1Tree{
 		Levels: levels,
 	}
+}
+
+func getTxid(tx string) string {
+	if ptx, _ := psetv2.NewPsetFromBase64(tx); ptx != nil {
+		utx, _ := ptx.UnsignedTx()
+		return utx.TxHash().String()
+	}
+
+	ptx, _ := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+	return ptx.UnsignedTx.TxID()
 }
