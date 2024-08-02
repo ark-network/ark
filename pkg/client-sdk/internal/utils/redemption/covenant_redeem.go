@@ -1,4 +1,4 @@
-package utils
+package redemption
 
 import (
 	"fmt"
@@ -70,7 +70,7 @@ func NewCovenantRedeemBranch(
 func (r *CovenantRedeemBranch) RedeemPath() ([]string, error) {
 	transactions := make([]string, 0, len(r.branch))
 
-	offchainPath, err := r.OffchainPath()
+	offchainPath, err := r.offchainPath()
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +151,7 @@ func (r *CovenantRedeemBranch) ExpiresAt() (*time.Time, error) {
 }
 
 // offchainPath checks for transactions of the branch onchain and returns only the offchain part
-func (r *CovenantRedeemBranch) OffchainPath() ([]*psetv2.Pset, error) {
+func (r *CovenantRedeemBranch) offchainPath() ([]*psetv2.Pset, error) {
 	offchainPath := append([]*psetv2.Pset{}, r.branch...)
 
 	for i := len(r.branch) - 1; i >= 0; i-- {

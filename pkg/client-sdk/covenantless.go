@@ -13,6 +13,7 @@ import (
 	"github.com/ark-network/ark-sdk/client"
 	"github.com/ark-network/ark-sdk/explorer"
 	"github.com/ark-network/ark-sdk/internal/utils"
+	"github.com/ark-network/ark-sdk/internal/utils/redemption"
 	"github.com/ark-network/ark-sdk/store"
 	"github.com/ark-network/ark-sdk/wallet"
 	"github.com/ark-network/ark/common"
@@ -1365,9 +1366,9 @@ func (a *covenantlessArkClient) coinSelectOnchain(
 
 func (a *covenantlessArkClient) getRedeemBranches(
 	ctx context.Context, vtxos []client.Vtxo,
-) (map[string]*utils.CovenantlessRedeemBranch, error) {
+) (map[string]*redemption.CovenantlessRedeemBranch, error) {
 	congestionTrees := make(map[string]tree.CongestionTree, 0)
-	redeemBranches := make(map[string]*utils.CovenantlessRedeemBranch, 0)
+	redeemBranches := make(map[string]*redemption.CovenantlessRedeemBranch, 0)
 
 	for i := range vtxos {
 		vtxo := vtxos[i]
@@ -1380,7 +1381,7 @@ func (a *covenantlessArkClient) getRedeemBranches(
 			congestionTrees[vtxo.RoundTxid] = round.Tree
 		}
 
-		redeemBranch, err := utils.NewCovenantlessRedeemBranch(
+		redeemBranch, err := redemption.NewCovenantlessRedeemBranch(
 			a.explorer, congestionTrees[vtxo.RoundTxid], vtxo,
 		)
 		if err != nil {

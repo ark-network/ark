@@ -43,9 +43,10 @@ func (c Cache[V]) Set(key string, value V) {
 	c.mapping[key] = value
 }
 
-func (c Cache[V]) Get(key string) V {
+func (c Cache[V]) Get(key string) (V, bool) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
-	return c.mapping[key]
+	val, ok := c.mapping[key]
+	return val, ok
 }

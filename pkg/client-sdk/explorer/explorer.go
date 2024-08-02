@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ark-network/ark-sdk/internal/utils"
 	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/wire"
@@ -52,14 +53,14 @@ type Explorer interface {
 }
 
 type explorerSvc struct {
-	cache   map[string]string
+	cache   *utils.Cache[string]
 	baseUrl string
 	net     common.Network
 }
 
 func NewExplorer(baseUrl string, net common.Network) Explorer {
 	return &explorerSvc{
-		cache:   make(map[string]string),
+		cache:   utils.NewCache[string](),
 		baseUrl: baseUrl,
 		net:     net,
 	}
@@ -104,7 +105,7 @@ func (e *explorerSvc) GetFeeRate() (float64, error) {
 }
 
 func (e *explorerSvc) GetTxHex(txid string) (string, error) {
-	if hex, ok := e.cache[txid]; ok {
+	if hex, ok := e.cache.Get(txid); ok {
 		return hex, nil
 	}
 
@@ -113,7 +114,7 @@ func (e *explorerSvc) GetTxHex(txid string) (string, error) {
 		return "", err
 	}
 
-	e.cache[txid] = txHex
+	e.cache.Set(txid, txHex)
 
 	return txHex, nil
 }
@@ -128,7 +129,7 @@ func (e *explorerSvc) Broadcast(txStr string) (string, error) {
 		}
 	}
 
-	e.cache[txid] = txStr
+	e.cache.Set(txid, txStr)
 
 	txid, err = e.broadcast(txStr)
 	if err != nil {
@@ -262,7 +263,7 @@ func (e *explorerSvc) getTxHex(txid string) (string, error) {
 	}
 
 	hex := string(body)
-	e.cache[txid] = hex
+	e.cache.Set(txid, hex)
 	return hex, nil
 }
 

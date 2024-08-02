@@ -1,4 +1,4 @@
-package utils
+package redemption
 
 import (
 	"bytes"
