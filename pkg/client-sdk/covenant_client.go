@@ -568,7 +568,7 @@ func (a *covenantArkClient) sendOnchain(
 	targetAmount := uint64(0)
 	for _, receiver := range receivers {
 		if receiver.Amount() < DUST {
-			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount, DUST)
+			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), DUST)
 		}
 		targetAmount += receiver.Amount()
 
@@ -738,7 +738,7 @@ func (a *covenantArkClient) sendOffchain(
 		}
 
 		if receiver.Amount() < DUST {
-			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount, DUST)
+			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), DUST)
 		}
 
 		receiversOutput = append(receiversOutput, client.Output{
