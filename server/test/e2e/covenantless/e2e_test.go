@@ -25,6 +25,8 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
+	time.Sleep(10 * time.Second)
+
 	if err := setupAspWallet(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)

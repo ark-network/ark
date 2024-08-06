@@ -26,6 +26,8 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
+	time.Sleep(10 * time.Second)
+
 	if err := setupAspWallet(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -33,7 +35,7 @@ func TestMain(m *testing.M) {
 
 	time.Sleep(3 * time.Second)
 
-	_, err = runArkCommand("init", "--ark-url", "localhost:6000", "--password", utils.Password, "--network", common.LiquidRegTest.Name, "--explorer", "http://chopsticks-liquid:3000")
+	_, err = runArkCommand("init", "--ark-url", "localhost:8080", "--password", utils.Password, "--network", common.LiquidRegTest.Name, "--explorer", "http://chopsticks-liquid:3000")
 	if err != nil {
 		fmt.Printf("error initializing ark config: %s", err)
 		os.Exit(1)
@@ -274,8 +276,13 @@ func setupAspWallet() error {
 		return fmt.Errorf("failed to parse response: %s", err)
 	}
 
-	_, err = utils.RunCommand("nigiri", "faucet", "--liquid", addr.Address)
-	if err != nil {
+	if _, err := utils.RunCommand("nigiri", "faucet", "--liquid", addr.Address); err != nil {
+		return fmt.Errorf("failed to fund wallet: %s", err)
+	}
+	if _, err := utils.RunCommand("nigiri", "faucet", "--liquid", addr.Address); err != nil {
+		return fmt.Errorf("failed to fund wallet: %s", err)
+	}
+	if _, err := utils.RunCommand("nigiri", "faucet", "--liquid", addr.Address); err != nil {
 		return fmt.Errorf("failed to fund wallet: %s", err)
 	}
 
