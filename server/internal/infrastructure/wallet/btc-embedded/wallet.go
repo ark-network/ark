@@ -32,13 +32,13 @@ import (
 	"github.com/lightningnetwork/lnd/lnwallet"
 	"github.com/lightningnetwork/lnd/lnwallet/btcwallet"
 	log "github.com/sirupsen/logrus"
+	"github.com/vulpemventures/go-bip39"
 )
 
 type WalletOption func(*service) error
 
 type WalletConfig struct {
 	Datadir    string
-	Password   []byte
 	Network    common.Network
 	EsploraURL string
 }
@@ -154,158 +154,38 @@ func NewService(cfg WalletConfig, options ...WalletOption) (ports.WalletService,
 		}
 	}
 
-	opt := btcwallet.LoaderWithLocalWalletDB(cfg.Datadir, false, time.Minute)
-	config := btcwallet.Config{
-		LogDir:                cfg.Datadir,
-		PrivatePass:           cfg.Password,
-		PublicPass:            cfg.Password,
-		Birthday:              time.Now(),
-		RecoveryWindow:        0,
-		NetParams:             cfg.chainParams(),
-		LoaderOptions:         []btcwallet.LoaderOption{opt},
-		CoinSelectionStrategy: wallet.CoinSelectionLargest,
-		ChainSource:           svc.chainSource,
-	}
-	blockCache := blockcache.NewBlockCache(20 * 1024 * 1024)
-	wallet, err := btcwallet.New(config, blockCache)
-	if err != nil {
-		return nil, fmt.Errorf("failed to setup wallet loader: %s", err)
-	}
-	if err := wallet.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start wallet: %s", err)
-	}
-
-	svc.wallet = wallet
-
-	if err := svc.initWallet(); err != nil {
-		return nil, err
-	}
-
-	for {
-		if !wallet.InternalWallet().ChainSynced() {
-			log.Debug("waiting sync....")
-			time.Sleep(3 * time.Second)
-			continue
-		}
-		break
-	}
-	log.Debugf("chain synced")
-
 	return svc, nil
-}
-
-// setWalletLoader init the wallet db and configure the wallet accounts
-func (s *service) initWallet() error {
-	w := s.wallet.InternalWallet()
-
-	walletAccounts, err := w.Accounts(p2wpkhKeyScope)
-	if err != nil {
-		return fmt.Errorf("failed to list wallet accounts: %s", err)
-	}
-	var mainAccountNumber, connectorAccountNumber, aspKeyAccountNumber uint32
-	if walletAccounts != nil {
-		for _, account := range walletAccounts.Accounts {
-			switch account.AccountName {
-			case string(mainAccount):
-				mainAccountNumber = account.AccountNumber
-			case string(connectorAccount):
-				connectorAccountNumber = account.AccountNumber
-			case string(aspKeyAccount):
-				aspKeyAccountNumber = account.AccountNumber
-			default:
-				continue
-			}
-		}
-	}
-
-	if mainAccountNumber == 0 && connectorAccountNumber == 0 && aspKeyAccountNumber == 0 {
-		log.Debug("creating default accounts for ark wallet...")
-		mainAccountNumber, err = w.NextAccount(p2wpkhKeyScope, string(mainAccount))
-		if err != nil {
-			return fmt.Errorf("failed to create %s: %s", mainAccount, err)
-		}
-
-		connectorAccountNumber, err = w.NextAccount(p2wpkhKeyScope, string(connectorAccount))
-		if err != nil {
-			return fmt.Errorf("failed to create %s: %s", connectorAccount, err)
-		}
-
-		aspKeyAccountNumber, err = w.NextAccount(p2trKeyScope, string(aspKeyAccount))
-		if err != nil {
-			return fmt.Errorf("failed to create %s: %s", aspKeyAccount, err)
-		}
-	}
-
-	log.Debugf("main account number: %d", mainAccountNumber)
-	log.Debugf("connector account number: %d", connectorAccountNumber)
-	log.Debugf("asp key account number: %d", aspKeyAccountNumber)
-
-	addrs, err := s.wallet.ListAddresses(string(aspKeyAccount), false)
-	if err != nil {
-		return err
-	}
-
-	if len(addrs) == 0 {
-		aspKeyAddr, err := s.wallet.NewAddress(lnwallet.TaprootPubkey, false, string(aspKeyAccount))
-		if err != nil {
-			return err
-		}
-
-		addrInfos, err := s.wallet.AddressInfo(aspKeyAddr)
-		if err != nil {
-			return err
-		}
-
-		managedAddr, ok := addrInfos.(waddrmgr.ManagedPubKeyAddress)
-		if !ok {
-			return errors.New("failed to cast address to managed pubkey address")
-		}
-
-		s.aspTaprootAddr = managedAddr
-	} else {
-		for info, addrs := range addrs {
-			if info.AccountName != string(aspKeyAccount) {
-				continue
-			}
-
-			for _, addr := range addrs {
-				fmt.Println(addr.DerivationPath)
-				if addr.Internal {
-					continue
-				}
-
-				splittedPath := strings.Split(addr.DerivationPath, "/")
-				last := splittedPath[len(splittedPath)-1]
-				if last == "0" {
-					decoded, err := btcutil.DecodeAddress(addr.Address, s.cfg.chainParams())
-					if err != nil {
-						return err
-					}
-
-					infos, err := s.wallet.AddressInfo(decoded)
-					if err != nil {
-						return err
-					}
-
-					managedPubkeyAddr, ok := infos.(waddrmgr.ManagedPubKeyAddress)
-					if !ok {
-						return errors.New("failed to cast address to managed pubkey address")
-					}
-
-					s.aspTaprootAddr = managedPubkeyAddr
-					break
-				}
-			}
-		}
-	}
-
-	return nil
 }
 
 func (s *service) Close() {
 	if err := s.wallet.Stop(); err != nil {
 		log.WithError(err).Warn("failed to gracefully stop the wallet, forcing shutdown")
 	}
+}
+
+func (s *service) GenSeed(_ context.Context) (string, error) {
+	entropy, err := bip39.NewEntropy(256)
+	if err != nil {
+		return "", err
+	}
+	return bip39.NewMnemonic(entropy)
+}
+
+func (s *service) Create(_ context.Context, seed, password string) error {
+	return s.create(seed, password, 0)
+}
+
+func (s *service) Restore(_ context.Context, seed, password string) error {
+	return s.create(seed, password, 100)
+}
+
+func (s *service) Unlock(_ context.Context, password string) error {
+	return s.wallet.InternalWallet().Unlock([]byte(password), nil)
+}
+
+func (s *service) Lock(_ context.Context, _ string) error {
+	s.wallet.InternalWallet().Lock()
+	return nil
 }
 
 func (s *service) BroadcastTransaction(ctx context.Context, txHex string) (string, error) {
@@ -558,11 +438,14 @@ func (s *service) SignTransactionTapscript(ctx context.Context, partialTx string
 }
 
 func (s *service) Status(ctx context.Context) (ports.WalletStatus, error) {
-	w := s.wallet.InternalWallet()
+	if s.wallet == nil {
+		return status{}, nil
+	}
 
+	w := s.wallet.InternalWallet()
 	return status{
 		true,
-		true,
+		!w.Manager.IsLocked(),
 		w.ChainSynced(),
 	}, nil
 }
@@ -710,6 +593,161 @@ func (s *service) castNotification(tx *wtxmgr.TxRecord) map[string]ports.VtxoWit
 	}
 
 	return vtxos
+}
+
+func (s *service) create(mnemonic, password string, addrGap uint32) error {
+	if len(mnemonic) <= 0 {
+		return fmt.Errorf("missing hd seed")
+	}
+	if len(password) <= 0 {
+		return fmt.Errorf("missing password")
+	}
+	pwd := []byte(password)
+	seed := bip39.NewSeed(mnemonic, password)
+	opt := btcwallet.LoaderWithLocalWalletDB(s.cfg.Datadir, false, time.Minute)
+	config := btcwallet.Config{
+		LogDir:                s.cfg.Datadir,
+		PrivatePass:           pwd,
+		PublicPass:            pwd,
+		Birthday:              time.Now(),
+		RecoveryWindow:        addrGap,
+		HdSeed:                seed,
+		NetParams:             s.cfg.chainParams(),
+		LoaderOptions:         []btcwallet.LoaderOption{opt},
+		CoinSelectionStrategy: wallet.CoinSelectionLargest,
+		ChainSource:           s.chainSource,
+	}
+	blockCache := blockcache.NewBlockCache(20 * 1024 * 1024)
+	wallet, err := btcwallet.New(config, blockCache)
+	if err != nil {
+		return fmt.Errorf("failed to setup wallet loader: %s", err)
+	}
+	if err := wallet.Start(); err != nil {
+		return fmt.Errorf("failed to start wallet: %s", err)
+	}
+	if err := s.initWallet(wallet); err != nil {
+		return err
+	}
+
+	for {
+		if !wallet.InternalWallet().ChainSynced() {
+			log.Debug("waiting sync....")
+			time.Sleep(3 * time.Second)
+			continue
+		}
+		break
+	}
+	log.Debugf("chain synced")
+
+	wallet.InternalWallet().Lock()
+	s.wallet = wallet
+	return nil
+}
+
+func (s *service) initWallet(wallet *btcwallet.BtcWallet) error {
+	w := wallet.InternalWallet()
+
+	walletAccounts, err := w.Accounts(p2wpkhKeyScope)
+	if err != nil {
+		return fmt.Errorf("failed to list wallet accounts: %s", err)
+	}
+	var mainAccountNumber, connectorAccountNumber, aspKeyAccountNumber uint32
+	if walletAccounts != nil {
+		for _, account := range walletAccounts.Accounts {
+			switch account.AccountName {
+			case string(mainAccount):
+				mainAccountNumber = account.AccountNumber
+			case string(connectorAccount):
+				connectorAccountNumber = account.AccountNumber
+			case string(aspKeyAccount):
+				aspKeyAccountNumber = account.AccountNumber
+			default:
+				continue
+			}
+		}
+	}
+
+	if mainAccountNumber == 0 && connectorAccountNumber == 0 && aspKeyAccountNumber == 0 {
+		log.Debug("creating default accounts for ark wallet...")
+		mainAccountNumber, err = w.NextAccount(p2wpkhKeyScope, string(mainAccount))
+		if err != nil {
+			return fmt.Errorf("failed to create %s: %s", mainAccount, err)
+		}
+
+		connectorAccountNumber, err = w.NextAccount(p2wpkhKeyScope, string(connectorAccount))
+		if err != nil {
+			return fmt.Errorf("failed to create %s: %s", connectorAccount, err)
+		}
+
+		aspKeyAccountNumber, err = w.NextAccount(p2trKeyScope, string(aspKeyAccount))
+		if err != nil {
+			return fmt.Errorf("failed to create %s: %s", aspKeyAccount, err)
+		}
+	}
+
+	log.Debugf("main account number: %d", mainAccountNumber)
+	log.Debugf("connector account number: %d", connectorAccountNumber)
+	log.Debugf("asp key account number: %d", aspKeyAccountNumber)
+
+	addrs, err := wallet.ListAddresses(string(aspKeyAccount), false)
+	if err != nil {
+		return err
+	}
+
+	if len(addrs) == 0 {
+		aspKeyAddr, err := wallet.NewAddress(lnwallet.TaprootPubkey, false, string(aspKeyAccount))
+		if err != nil {
+			return err
+		}
+
+		addrInfos, err := wallet.AddressInfo(aspKeyAddr)
+		if err != nil {
+			return err
+		}
+
+		managedAddr, ok := addrInfos.(waddrmgr.ManagedPubKeyAddress)
+		if !ok {
+			return errors.New("failed to cast address to managed pubkey address")
+		}
+
+		s.aspTaprootAddr = managedAddr
+	} else {
+		for info, addrs := range addrs {
+			if info.AccountName != string(aspKeyAccount) {
+				continue
+			}
+
+			for _, addr := range addrs {
+				if addr.Internal {
+					continue
+				}
+
+				splittedPath := strings.Split(addr.DerivationPath, "/")
+				last := splittedPath[len(splittedPath)-1]
+				if last == "0" {
+					decoded, err := btcutil.DecodeAddress(addr.Address, s.cfg.chainParams())
+					if err != nil {
+						return err
+					}
+
+					infos, err := s.wallet.AddressInfo(decoded)
+					if err != nil {
+						return err
+					}
+
+					managedPubkeyAddr, ok := infos.(waddrmgr.ManagedPubKeyAddress)
+					if !ok {
+						return errors.New("failed to cast address to managed pubkey address")
+					}
+
+					s.aspTaprootAddr = managedPubkeyAddr
+					break
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 func (s *service) getBalance(account accountName) (uint64, error) {

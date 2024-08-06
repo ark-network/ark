@@ -18,12 +18,9 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AdminServiceClient interface {
-	GetBalance(ctx context.Context, in *GetBalanceRequest, opts ...grpc.CallOption) (*GetBalanceResponse, error)
 	GetScheduledSweep(ctx context.Context, in *GetScheduledSweepRequest, opts ...grpc.CallOption) (*GetScheduledSweepResponse, error)
 	GetRoundDetails(ctx context.Context, in *GetRoundDetailsRequest, opts ...grpc.CallOption) (*GetRoundDetailsResponse, error)
 	GetRounds(ctx context.Context, in *GetRoundsRequest, opts ...grpc.CallOption) (*GetRoundsResponse, error)
-	GetWalletAddress(ctx context.Context, in *GetWalletAddressRequest, opts ...grpc.CallOption) (*GetWalletAddressResponse, error)
-	GetWalletStatus(ctx context.Context, in *GetWalletStatusRequest, opts ...grpc.CallOption) (*GetWalletStatusResponse, error)
 }
 
 type adminServiceClient struct {
@@ -32,15 +29,6 @@ type adminServiceClient struct {
 
 func NewAdminServiceClient(cc grpc.ClientConnInterface) AdminServiceClient {
 	return &adminServiceClient{cc}
-}
-
-func (c *adminServiceClient) GetBalance(ctx context.Context, in *GetBalanceRequest, opts ...grpc.CallOption) (*GetBalanceResponse, error) {
-	out := new(GetBalanceResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/GetBalance", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 func (c *adminServiceClient) GetScheduledSweep(ctx context.Context, in *GetScheduledSweepRequest, opts ...grpc.CallOption) (*GetScheduledSweepResponse, error) {
@@ -70,43 +58,19 @@ func (c *adminServiceClient) GetRounds(ctx context.Context, in *GetRoundsRequest
 	return out, nil
 }
 
-func (c *adminServiceClient) GetWalletAddress(ctx context.Context, in *GetWalletAddressRequest, opts ...grpc.CallOption) (*GetWalletAddressResponse, error) {
-	out := new(GetWalletAddressResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/GetWalletAddress", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *adminServiceClient) GetWalletStatus(ctx context.Context, in *GetWalletStatusRequest, opts ...grpc.CallOption) (*GetWalletStatusResponse, error) {
-	out := new(GetWalletStatusResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/GetWalletStatus", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // AdminServiceServer is the server API for AdminService service.
 // All implementations should embed UnimplementedAdminServiceServer
 // for forward compatibility
 type AdminServiceServer interface {
-	GetBalance(context.Context, *GetBalanceRequest) (*GetBalanceResponse, error)
 	GetScheduledSweep(context.Context, *GetScheduledSweepRequest) (*GetScheduledSweepResponse, error)
 	GetRoundDetails(context.Context, *GetRoundDetailsRequest) (*GetRoundDetailsResponse, error)
 	GetRounds(context.Context, *GetRoundsRequest) (*GetRoundsResponse, error)
-	GetWalletAddress(context.Context, *GetWalletAddressRequest) (*GetWalletAddressResponse, error)
-	GetWalletStatus(context.Context, *GetWalletStatusRequest) (*GetWalletStatusResponse, error)
 }
 
 // UnimplementedAdminServiceServer should be embedded to have forward compatible implementations.
 type UnimplementedAdminServiceServer struct {
 }
 
-func (UnimplementedAdminServiceServer) GetBalance(context.Context, *GetBalanceRequest) (*GetBalanceResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetBalance not implemented")
-}
 func (UnimplementedAdminServiceServer) GetScheduledSweep(context.Context, *GetScheduledSweepRequest) (*GetScheduledSweepResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetScheduledSweep not implemented")
 }
@@ -115,12 +79,6 @@ func (UnimplementedAdminServiceServer) GetRoundDetails(context.Context, *GetRoun
 }
 func (UnimplementedAdminServiceServer) GetRounds(context.Context, *GetRoundsRequest) (*GetRoundsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetRounds not implemented")
-}
-func (UnimplementedAdminServiceServer) GetWalletAddress(context.Context, *GetWalletAddressRequest) (*GetWalletAddressResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetWalletAddress not implemented")
-}
-func (UnimplementedAdminServiceServer) GetWalletStatus(context.Context, *GetWalletStatusRequest) (*GetWalletStatusResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetWalletStatus not implemented")
 }
 
 // UnsafeAdminServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -132,24 +90,6 @@ type UnsafeAdminServiceServer interface {
 
 func RegisterAdminServiceServer(s grpc.ServiceRegistrar, srv AdminServiceServer) {
 	s.RegisterService(&AdminService_ServiceDesc, srv)
-}
-
-func _AdminService_GetBalance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetBalanceRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AdminServiceServer).GetBalance(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.AdminService/GetBalance",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AdminServiceServer).GetBalance(ctx, req.(*GetBalanceRequest))
-	}
-	return interceptor(ctx, in, info, handler)
 }
 
 func _AdminService_GetScheduledSweep_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -206,42 +146,6 @@ func _AdminService_GetRounds_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
-func _AdminService_GetWalletAddress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetWalletAddressRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AdminServiceServer).GetWalletAddress(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.AdminService/GetWalletAddress",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AdminServiceServer).GetWalletAddress(ctx, req.(*GetWalletAddressRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _AdminService_GetWalletStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetWalletStatusRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AdminServiceServer).GetWalletStatus(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.AdminService/GetWalletStatus",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AdminServiceServer).GetWalletStatus(ctx, req.(*GetWalletStatusRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // AdminService_ServiceDesc is the grpc.ServiceDesc for AdminService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -249,10 +153,6 @@ var AdminService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "ark.v1.AdminService",
 	HandlerType: (*AdminServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "GetBalance",
-			Handler:    _AdminService_GetBalance_Handler,
-		},
 		{
 			MethodName: "GetScheduledSweep",
 			Handler:    _AdminService_GetScheduledSweep_Handler,
@@ -264,14 +164,6 @@ var AdminService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetRounds",
 			Handler:    _AdminService_GetRounds_Handler,
-		},
-		{
-			MethodName: "GetWalletAddress",
-			Handler:    _AdminService_GetWalletAddress_Handler,
-		},
-		{
-			MethodName: "GetWalletStatus",
-			Handler:    _AdminService_GetWalletStatus_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

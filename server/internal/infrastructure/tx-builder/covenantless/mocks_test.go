@@ -12,7 +12,36 @@ type mockedWallet struct {
 	mock.Mock
 }
 
-// BroadcastTransaction implements ports.WalletService.
+func (m *mockedWallet) GenSeed(ctx context.Context) (string, error) {
+	args := m.Called(ctx)
+
+	var res string
+	if a := args.Get(0); a != nil {
+		res = a.(string)
+	}
+	return res, args.Error(1)
+}
+
+func (m *mockedWallet) Create(ctx context.Context, seed, password string) error {
+	args := m.Called(ctx, seed, password)
+	return args.Error(0)
+}
+
+func (m *mockedWallet) Restore(ctx context.Context, seed, password string) error {
+	args := m.Called(ctx, seed, password)
+	return args.Error(0)
+}
+
+func (m *mockedWallet) Unlock(ctx context.Context, password string) error {
+	args := m.Called(ctx, password)
+	return args.Error(0)
+}
+
+func (m *mockedWallet) Lock(ctx context.Context, password string) error {
+	args := m.Called(ctx, password)
+	return args.Error(0)
+}
+
 func (m *mockedWallet) BroadcastTransaction(ctx context.Context, txHex string) (string, error) {
 	args := m.Called(ctx, txHex)
 
@@ -23,12 +52,10 @@ func (m *mockedWallet) BroadcastTransaction(ctx context.Context, txHex string) (
 	return res, args.Error(1)
 }
 
-// Close implements ports.WalletService.
 func (m *mockedWallet) Close() {
 	m.Called()
 }
 
-// DeriveAddresses implements ports.WalletService.
 func (m *mockedWallet) DeriveAddresses(ctx context.Context, num int) ([]string, error) {
 	args := m.Called(ctx, num)
 
@@ -39,7 +66,6 @@ func (m *mockedWallet) DeriveAddresses(ctx context.Context, num int) ([]string, 
 	return res, args.Error(1)
 }
 
-// DeriveConnectorAddress implements ports.WalletService.
 func (m *mockedWallet) DeriveConnectorAddress(ctx context.Context) (string, error) {
 	args := m.Called(ctx)
 
@@ -50,7 +76,6 @@ func (m *mockedWallet) DeriveConnectorAddress(ctx context.Context) (string, erro
 	return res, args.Error(1)
 }
 
-// GetPubkey implements ports.WalletService.
 func (m *mockedWallet) GetPubkey(ctx context.Context) (*secp256k1.PublicKey, error) {
 	args := m.Called(ctx)
 
@@ -61,7 +86,6 @@ func (m *mockedWallet) GetPubkey(ctx context.Context) (*secp256k1.PublicKey, err
 	return res, args.Error(1)
 }
 
-// SignTransaction implements ports.WalletService.
 func (m *mockedWallet) SignTransaction(ctx context.Context, pset string, extractRawTx bool) (string, error) {
 	args := m.Called(ctx, pset, extractRawTx)
 
@@ -72,7 +96,6 @@ func (m *mockedWallet) SignTransaction(ctx context.Context, pset string, extract
 	return res, args.Error(1)
 }
 
-// Status implements ports.WalletService.
 func (m *mockedWallet) Status(ctx context.Context) (ports.WalletStatus, error) {
 	args := m.Called(ctx)
 

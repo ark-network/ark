@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"strings"
-	"time"
 
 	pb "github.com/ark-network/ark/api-spec/protobuf/gen/ocean/v1"
 	"github.com/ark-network/ark/internal/core/domain"
@@ -24,6 +23,7 @@ type service struct {
 	txClient      pb.TransactionServiceClient
 	notifyClient  pb.NotificationServiceClient
 	chVtxos       chan map[string]ports.VtxoWithValue
+	isListening   bool
 }
 
 func NewService(addr string) (ports.WalletService, error) {
@@ -48,26 +48,57 @@ func NewService(addr string) (ports.WalletService, error) {
 
 	ctx := context.Background()
 
-	isReady := false
-
-	for !isReady {
-		status, err := svc.Status(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		isReady = status.IsInitialized() && status.IsUnlocked()
-
-		if !isReady {
-			log.Info("Wallet must be initialized and unlocked to proceed. Waiting for wallet to be ready...")
-			time.Sleep(3 * time.Second)
-		}
-	}
-
-	// Create ark account at startup if needed.
-	info, err := walletClient.GetInfo(ctx, &pb.GetInfoRequest{})
+	status, err := svc.Status(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	if status.IsUnlocked() {
+		go svc.listenToNotifications()
+	}
+
+	return svc, nil
+}
+
+func (s *service) Close() {
+	close(s.chVtxos)
+	s.conn.Close()
+}
+
+func (s *service) GenSeed(ctx context.Context) (string, error) {
+	res, err := s.walletClient.GenSeed(ctx, &pb.GenSeedRequest{})
+	if err != nil {
+		return "", err
+	}
+	return res.GetMnemonic(), nil
+}
+
+func (s *service) Create(ctx context.Context, seed, password string) error {
+	_, err := s.walletClient.CreateWallet(ctx, &pb.CreateWalletRequest{
+		Mnemonic: seed,
+		Password: password,
+	})
+	return err
+}
+
+func (s *service) Restore(ctx context.Context, seed, password string) error {
+	_, err := s.walletClient.RestoreWallet(ctx, &pb.RestoreWalletRequest{
+		Mnemonic: seed,
+		Password: password,
+	})
+	return err
+}
+
+func (s *service) Unlock(ctx context.Context, password string) error {
+	if _, err := s.walletClient.Unlock(ctx, &pb.UnlockRequest{
+		Password: password,
+	}); err != nil {
+		return err
+	}
+
+	info, err := s.walletClient.GetInfo(ctx, &pb.GetInfoRequest{})
+	if err != nil {
+		return err
 	}
 
 	mainAccountFound, connectorAccountFound := false, false
@@ -88,34 +119,42 @@ func NewService(addr string) (ports.WalletService, error) {
 		}
 	}
 	if !mainAccountFound {
-		if _, err := accountClient.CreateAccountBIP44(ctx, &pb.CreateAccountBIP44Request{
+		if _, err := s.accountClient.CreateAccountBIP44(ctx, &pb.CreateAccountBIP44Request{
 			Label:          arkAccount,
 			Unconfidential: true,
 		}); err != nil {
-			return nil, err
+			return err
 		}
 	}
 
 	if !connectorAccountFound {
-		if _, err := accountClient.CreateAccountBIP44(ctx, &pb.CreateAccountBIP44Request{
+		if _, err := s.accountClient.CreateAccountBIP44(ctx, &pb.CreateAccountBIP44Request{
 			Label:          connectorAccount,
 			Unconfidential: true,
 		}); err != nil {
-			return nil, err
+			return err
 		}
 	}
 
-	go svc.listenToNotifications()
-
-	return svc, nil
+	if !s.isListening {
+		go s.listenToNotifications()
+	}
+	return err
 }
 
-func (s *service) Close() {
-	close(s.chVtxos)
-	s.conn.Close()
+func (s *service) Lock(ctx context.Context, password string) error {
+	_, err := s.walletClient.Lock(ctx, &pb.LockRequest{
+		Password: password,
+	})
+	return err
 }
 
 func (s *service) listenToNotifications() {
+	s.isListening = true
+	defer func() {
+		s.isListening = false
+	}()
+
 	var stream pb.NotificationService_UtxosNotificationsClient
 	var err error
 	for {

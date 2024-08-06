@@ -9,6 +9,7 @@ import (
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	appconfig "github.com/ark-network/ark/internal/app-config"
+	"github.com/ark-network/ark/internal/core/application"
 	interfaces "github.com/ark-network/ark/internal/interface"
 	"github.com/ark-network/ark/internal/interface/grpc/handlers"
 	"github.com/ark-network/ark/internal/interface/grpc/interceptors"
@@ -24,9 +25,10 @@ import (
 )
 
 type service struct {
-	config    Config
-	appConfig *appconfig.Config
-	server    *http.Server
+	config     Config
+	appConfig  *appconfig.Config
+	server     *http.Server
+	grpcServer *grpc.Server
 }
 
 func NewService(
@@ -39,44 +41,107 @@ func NewService(
 		return nil, fmt.Errorf("invalid app config: %s", err)
 	}
 
+	return &service{svcConfig, appConfig, nil, nil}, nil
+}
+
+func (s *service) Start() error {
+	withoutAppSvc := false
+	return s.start(withoutAppSvc)
+}
+
+func (s *service) Stop() {
+	withAppSvc := true
+	s.stop(withAppSvc)
+}
+
+func (s *service) start(withAppSvc bool) error {
+	if err := s.newServer(withAppSvc); err != nil {
+		return err
+	}
+
+	if withAppSvc {
+		appSvc, _ := s.appConfig.AppService()
+		if err := appSvc.Start(); err != nil {
+			return fmt.Errorf("failed to start app service: %s", err)
+		}
+		log.Info("started app service")
+	}
+
+	if s.config.insecure() {
+		// nolint:all
+		go s.server.ListenAndServe()
+	} else {
+		// nolint:all
+		go s.server.ListenAndServeTLS("", "")
+	}
+	log.Infof("started listening at %s", s.config.address())
+
+	return nil
+}
+
+func (s *service) stop(withAppSvc bool) {
+	//nolint:all
+	s.server.Shutdown(context.Background())
+	log.Info("stopped grpc server")
+	if withAppSvc {
+		appSvc, _ := s.appConfig.AppService()
+		if appSvc != nil {
+			appSvc.Stop()
+			log.Info("stopped app service")
+		}
+	}
+}
+
+func (s *service) newServer(withAppSvc bool) error {
 	grpcConfig := []grpc.ServerOption{
-		interceptors.UnaryInterceptor(svcConfig.AuthUser, svcConfig.AuthPass),
+		interceptors.UnaryInterceptor(s.config.AuthUser, s.config.AuthPass),
 		interceptors.StreamInterceptor(),
 	}
-	if !svcConfig.NoTLS {
-		return nil, fmt.Errorf("tls termination not supported yet")
+	if !s.config.NoTLS {
+		return fmt.Errorf("tls termination not supported yet")
 	}
 	creds := insecure.NewCredentials()
-	if !svcConfig.insecure() {
-		creds = credentials.NewTLS(svcConfig.tlsConfig())
+	if !s.config.insecure() {
+		creds = credentials.NewTLS(s.config.tlsConfig())
 	}
 	grpcConfig = append(grpcConfig, grpc.Creds(creds))
 
 	// Server grpc.
 	grpcServer := grpc.NewServer(grpcConfig...)
 
-	appHandler := handlers.NewHandler(appConfig.AppService())
-	arkv1.RegisterArkServiceServer(grpcServer, appHandler)
+	var appSvc application.Service
+	if withAppSvc {
+		svc, err := s.appConfig.AppService()
+		if err != nil {
+			return err
+		}
+		appSvc = svc
+		appHandler := handlers.NewHandler(appSvc)
+		arkv1.RegisterArkServiceServer(grpcServer, appHandler)
+	}
 
-	adminHandler := handlers.NewAdminHandler(appConfig.AdminService())
+	adminHandler := handlers.NewAdminHandler(s.appConfig.AdminService(), appSvc)
 	arkv1.RegisterAdminServiceServer(grpcServer, adminHandler)
+
+	walletHandler := handlers.NewWalletHandler(s.appConfig.WalletService(), s.onUnlock)
+	arkv1.RegisterWalletServiceServer(grpcServer, walletHandler)
 
 	healthHandler := handlers.NewHealthHandler()
 	grpchealth.RegisterHealthServer(grpcServer, healthHandler)
 
 	// Creds for grpc gateway reverse proxy.
 	gatewayCreds := insecure.NewCredentials()
-	if !svcConfig.insecure() {
+	if !s.config.insecure() {
 		gatewayCreds = credentials.NewTLS(&tls.Config{
 			InsecureSkipVerify: true, // #nosec
 		})
 	}
 	gatewayOpts := grpc.WithTransportCredentials(gatewayCreds)
 	conn, err := grpc.NewClient(
-		svcConfig.gatewayAddress(), gatewayOpts,
+		s.config.gatewayAddress(), gatewayOpts,
 	)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	// Reverse proxy grpc-gateway.
 	gwmux := runtime.NewServeMux(
@@ -92,15 +157,22 @@ func NewService(
 		}),
 	)
 	ctx := context.Background()
-	if err := arkv1.RegisterArkServiceHandler(
-		ctx, gwmux, conn,
-	); err != nil {
-		return nil, err
-	}
 	if err := arkv1.RegisterAdminServiceHandler(
 		ctx, gwmux, conn,
 	); err != nil {
-		return nil, err
+		return err
+	}
+	if err := arkv1.RegisterWalletServiceHandler(
+		ctx, gwmux, conn,
+	); err != nil {
+		return err
+	}
+	if withAppSvc {
+		if err := arkv1.RegisterArkServiceHandler(
+			ctx, gwmux, conn,
+		); err != nil {
+			return err
+		}
 	}
 	grpcGateway := http.Handler(gwmux)
 
@@ -109,43 +181,27 @@ func NewService(
 	mux.Handle("/", handler)
 
 	httpServerHandler := http.Handler(mux)
-	if svcConfig.insecure() {
+	if s.config.insecure() {
 		httpServerHandler = h2c.NewHandler(httpServerHandler, &http2.Server{})
 	}
 
-	server := &http.Server{
-		Addr:      svcConfig.address(),
+	s.server = &http.Server{
+		Addr:      s.config.address(),
 		Handler:   httpServerHandler,
-		TLSConfig: svcConfig.tlsConfig(),
+		TLSConfig: s.config.tlsConfig(),
 	}
-
-	return &service{svcConfig, appConfig, server}, nil
-}
-
-func (s *service) Start() error {
-	if s.config.insecure() {
-		// nolint:all
-		go s.server.ListenAndServe()
-	} else {
-		// nolint:all
-		go s.server.ListenAndServeTLS("", "")
-	}
-	log.Infof("started listening at %s", s.config.address())
-
-	if err := s.appConfig.AppService().Start(); err != nil {
-		return fmt.Errorf("failed to start app service: %s", err)
-	}
-	log.Info("started app service")
 
 	return nil
 }
 
-func (s *service) Stop() {
-	// nolint:all
-	s.server.Shutdown(context.Background())
-	log.Info("stopped grpc server")
-	s.appConfig.AppService().Stop()
-	log.Info("stopped app service")
+func (s *service) onUnlock() {
+	withoutAppSvc := false
+	s.stop(withoutAppSvc)
+
+	withAppSvc := true
+	if err := s.start(withAppSvc); err != nil {
+		panic(err)
+	}
 }
 
 func router(
