@@ -5,11 +5,6 @@ package ark.v1;
 import "google/api/annotations.proto";
 
 service AdminService {
-  rpc GetBalance(GetBalanceRequest) returns (GetBalanceResponse) {
-    option (google.api.http) = {
-      get: "/v1/admin/balance"
-    };
-  }
   rpc GetScheduledSweep(GetScheduledSweepRequest) returns (GetScheduledSweepResponse) {
     option (google.api.http) = {
       get: "/v1/admin/sweeps"
@@ -25,32 +20,13 @@ service AdminService {
       post: "/v1/admin/rounds"
       body: "*"
     };
-  }
-  rpc GetWalletAddress(GetWalletAddressRequest) returns (GetWalletAddressResponse) {
-    option (google.api.http) = {
-      get: "/v1/admin/address"
-    };
-  }
-  rpc GetWalletStatus(GetWalletStatusRequest) returns (GetWalletStatusResponse) {
-    option (google.api.http) = {
-      get: "/v1/admin/status"
-    }; 
-  }
-}
-
-message GetBalanceRequest {}
-
-message Balance {
-  string locked = 1;
-  string available = 2;
-}
-
-message GetBalanceResponse {
-  Balance main_account = 1;
-  Balance connectors_account = 2;
+  } 
 }
 
 message GetScheduledSweepRequest {}
+message GetScheduledSweepResponse {
+  repeated ScheduledSweep sweeps = 1;
+}
 
 message SweepableOutput {
   string txid = 1;
@@ -62,10 +38,6 @@ message SweepableOutput {
 message ScheduledSweep {
   string round_id = 1;
   repeated SweepableOutput outputs = 2;
-}
-
-message GetScheduledSweepResponse {
-  repeated ScheduledSweep sweeps = 1;
 }
 
 message GetRoundDetailsRequest {
@@ -91,21 +63,4 @@ message GetRoundsRequest {
 
 message GetRoundsResponse {
   repeated string rounds = 1;
-}
-
-message GetWalletAddressRequest {}
-message GetWalletAddressResponse {
-  string address = 1;
-}
-
-message GetWalletBalanceRequest {}
-message GetWalletBalanceResponse {
-  uint64 balance = 1;
-}
-
-message GetWalletStatusRequest {}
-message GetWalletStatusResponse {
-  bool initialized = 1;
-  bool unlocked = 2;
-  bool synced = 3;
 }

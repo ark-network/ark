@@ -31,7 +31,6 @@ type Config struct {
 	AuthPass              string
 	EsploraURL            string
 	NeutrinoPeer          string
-	WalletPassword        string
 }
 
 var (
@@ -55,7 +54,6 @@ var (
 	AuthPass              = "AUTH_PASS"
 	EsploraURL            = "ESPLORA_URL"
 	NeutrinoPeer          = "NEUTRINO_PEER"
-	WalletPassword        = "WALLET_PASSWORD"
 
 	defaultDatadir               = common.AppDataDir("arkd", false)
 	defaultRoundInterval         = 5
@@ -130,7 +128,6 @@ func LoadConfig() (*Config, error) {
 		AuthPass:              viper.GetString(AuthPass),
 		EsploraURL:            viper.GetString(EsploraURL),
 		NeutrinoPeer:          viper.GetString(NeutrinoPeer),
-		WalletPassword:        viper.GetString(WalletPassword),
 	}, nil
 }
 

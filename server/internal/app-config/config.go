@@ -63,9 +63,8 @@ type Config struct {
 	RoundLifetime         int64
 	UnilateralExitDelay   int64
 
-	EsploraURL     string
-	NeutrinoPeer   string
-	WalletPassword string
+	EsploraURL   string
+	NeutrinoPeer string
 
 	repo      ports.RepoManager
 	svc       application.Service
@@ -154,21 +153,27 @@ func (c *Config) Validate() error {
 	if err := c.schedulerService(); err != nil {
 		return err
 	}
-	if err := c.appService(); err != nil {
-		return err
-	}
 	if err := c.adminService(); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (c *Config) AppService() application.Service {
-	return c.svc
+func (c *Config) AppService() (application.Service, error) {
+	if c.svc == nil {
+		if err := c.appService(); err != nil {
+			return nil, err
+		}
+	}
+	return c.svc, nil
 }
 
 func (c *Config) AdminService() application.AdminService {
 	return c.adminSvc
+}
+
+func (c *Config) WalletService() ports.WalletService {
+	return c.wallet
 }
 
 func (c *Config) repoManager() error {
@@ -223,13 +228,9 @@ func (c *Config) walletService() error {
 	if len(c.EsploraURL) == 0 {
 		return fmt.Errorf("missing esplora url, covenant-less ark requires ARK_ESPLORA_URL to be set")
 	}
-	if len(c.WalletPassword) == 0 {
-		return fmt.Errorf("missing wallet password, covenant-less ark requires ARK_WALLET_PASSWORD to be set")
-	}
 
 	svc, err := btcwallet.NewService(btcwallet.WalletConfig{
 		Datadir:    c.DbDir,
-		Password:   []byte(c.WalletPassword),
 		Network:    c.Network,
 		EsploraURL: c.EsploraURL,
 	},

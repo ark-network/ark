@@ -12,6 +12,11 @@ var ErrNonFinalBIP68 = errors.New("non-final BIP68 sequence")
 
 type WalletService interface {
 	BlockchainScanner
+	GenSeed(ctx context.Context) (string, error)
+	Create(ctx context.Context, seed, password string) error
+	Restore(ctx context.Context, seed, password string) error
+	Unlock(ctx context.Context, password string) error
+	Lock(ctx context.Context, password string) error
 	Status(ctx context.Context) (WalletStatus, error)
 	GetPubkey(ctx context.Context) (*secp256k1.PublicKey, error)
 	DeriveConnectorAddress(ctx context.Context) (string, error)
