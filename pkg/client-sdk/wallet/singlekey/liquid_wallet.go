@@ -1,143 +1,43 @@
-package liquidwallet
+package singlekeywallet
 
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"fmt"
 
 	"github.com/ark-network/ark-sdk/explorer"
+	"github.com/ark-network/ark-sdk/internal/utils"
 	"github.com/ark-network/ark-sdk/store"
 	"github.com/ark-network/ark-sdk/wallet"
 	walletstore "github.com/ark-network/ark-sdk/wallet/singlekey/store"
-	"github.com/ark-network/ark-sdk/wallet/singlekey/utils"
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/transaction"
 )
 
-type singlekeyWallet struct {
-	configStore store.ConfigStore
-	walletStore walletstore.WalletStore
-	privateKey  *secp256k1.PrivateKey
-	walletData  *walletstore.WalletData
+type liquidWallet struct {
+	*singlekeyWallet
 }
 
-func NewWalletService(
+func NewLiquidWallet(
 	configStore store.ConfigStore, walletStore walletstore.WalletStore,
 ) (wallet.WalletService, error) {
 	walletData, err := walletStore.GetWallet()
 	if err != nil {
 		return nil, err
 	}
-	return &singlekeyWallet{configStore, walletStore, nil, walletData}, nil
+	return &liquidWallet{
+		&singlekeyWallet{configStore, walletStore, nil, walletData},
+	}, nil
 }
 
-func (w *singlekeyWallet) GetType() string {
-	return wallet.SingleKeyWallet
-}
-
-func (w *singlekeyWallet) Create(
-	_ context.Context, password, seed string,
-) (string, error) {
-	var privateKey *secp256k1.PrivateKey
-	if len(seed) <= 0 {
-		privKey, err := utils.GenerateRandomPrivateKey()
-		if err != nil {
-			return "", err
-		}
-		privateKey = privKey
-	} else {
-		privKeyBytes, err := hex.DecodeString(seed)
-		if err != nil {
-			return "", err
-		}
-
-		privateKey = secp256k1.PrivKeyFromBytes(privKeyBytes)
-	}
-
-	pwd := []byte(password)
-	passwordHash := utils.HashPassword(pwd)
-	pubkey := privateKey.PubKey()
-	buf := privateKey.Serialize()
-	encryptedPrivateKey, err := utils.EncryptAES128(buf, pwd)
-	if err != nil {
-		return "", err
-	}
-
-	walletData := walletstore.WalletData{
-		EncryptedPrvkey: encryptedPrivateKey,
-		PasswordHash:    passwordHash,
-		Pubkey:          pubkey,
-	}
-	if err := w.walletStore.AddWallet(walletData); err != nil {
-		return "", err
-	}
-
-	w.walletData = &walletData
-
-	return hex.EncodeToString(privateKey.Serialize()), nil
-}
-
-func (w *singlekeyWallet) Lock(_ context.Context, password string) error {
-	if w.walletData == nil {
-		return fmt.Errorf("wallet not initialized")
-	}
-
-	if w.privateKey == nil {
-		return nil
-	}
-
-	pwd := []byte(password)
-	currentPassHash := utils.HashPassword(pwd)
-
-	if !bytes.Equal(w.walletData.PasswordHash, currentPassHash) {
-		return fmt.Errorf("invalid password")
-	}
-
-	w.privateKey = nil
-	return nil
-}
-
-func (w *singlekeyWallet) Unlock(
-	_ context.Context, password string,
-) (bool, error) {
-	if w.walletData == nil {
-		return false, fmt.Errorf("wallet not initialized")
-	}
-
-	if w.privateKey != nil {
-		return true, nil
-	}
-
-	pwd := []byte(password)
-	currentPassHash := utils.HashPassword(pwd)
-
-	if !bytes.Equal(w.walletData.PasswordHash, currentPassHash) {
-		return false, fmt.Errorf("invalid password")
-	}
-
-	privateKeyBytes, err := utils.DecryptAES128(w.walletData.EncryptedPrvkey, pwd)
-	if err != nil {
-		return false, err
-	}
-
-	w.privateKey = secp256k1.PrivKeyFromBytes(privateKeyBytes)
-	return false, nil
-}
-
-func (w *singlekeyWallet) IsLocked() bool {
-	return w.privateKey == nil
-}
-
-func (w *singlekeyWallet) GetAddresses(
+func (w *liquidWallet) GetAddresses(
 	ctx context.Context,
 ) ([]string, []string, []string, error) {
 	offchainAddr, onchainAddr, redemptionAddr, err := w.getAddress(ctx)
@@ -151,7 +51,7 @@ func (w *singlekeyWallet) GetAddresses(
 	return offchainAddrs, onchainAddrs, redemptionAddrs, nil
 }
 
-func (w *singlekeyWallet) NewAddress(
+func (w *liquidWallet) NewAddress(
 	ctx context.Context, _ bool,
 ) (string, string, error) {
 	offchainAddr, onchainAddr, _, err := w.getAddress(ctx)
@@ -161,7 +61,7 @@ func (w *singlekeyWallet) NewAddress(
 	return offchainAddr, onchainAddr, nil
 }
 
-func (w *singlekeyWallet) NewAddresses(
+func (w *liquidWallet) NewAddresses(
 	ctx context.Context, _ bool, num int,
 ) ([]string, []string, error) {
 	offchainAddr, onchainAddr, _, err := w.getAddress(ctx)
@@ -178,7 +78,7 @@ func (w *singlekeyWallet) NewAddresses(
 	return offchainAddrs, onchainAddrs, nil
 }
 
-func (s *singlekeyWallet) SignTransaction(
+func (s *liquidWallet) SignTransaction(
 	ctx context.Context, explorerSvc explorer.Explorer, tx string,
 ) (string, error) {
 	pset, err := psetv2.NewPsetFromBase64(tx)
@@ -234,7 +134,7 @@ func (s *singlekeyWallet) SignTransaction(
 	if err != nil {
 		return "", err
 	}
-	liquidNet := toElementsNetwork(storeData.Network)
+	liquidNet := utils.ToElementsNetwork(storeData.Network)
 	p2wpkh := payment.FromPublicKey(s.walletData.Pubkey, &liquidNet, nil)
 	onchainWalletScript := p2wpkh.WitnessScript
 
@@ -355,7 +255,7 @@ func (s *singlekeyWallet) SignTransaction(
 	return pset.ToBase64()
 }
 
-func (w *singlekeyWallet) getAddress(
+func (w *liquidWallet) getAddress(
 	ctx context.Context,
 ) (string, string, string, error) {
 	if w.walletData == nil {
@@ -374,7 +274,7 @@ func (w *singlekeyWallet) getAddress(
 		return "", "", "", err
 	}
 
-	liquidNet := toElementsNetwork(data.Network)
+	liquidNet := utils.ToElementsNetwork(data.Network)
 
 	p2wpkh := payment.FromPublicKey(w.walletData.Pubkey, &liquidNet, nil)
 	onchainAddr, err := p2wpkh.WitnessPubKeyHash()

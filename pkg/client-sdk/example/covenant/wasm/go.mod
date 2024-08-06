@@ -2,11 +2,11 @@ module ark/pkg/client-sdk/example
 
 go 1.22.2
 
-replace github.com/ark-network/ark => ./../../../../server
+replace github.com/ark-network/ark => ./../../../../../server
 
-replace github.com/ark-network/ark/common => ./../../../../common
+replace github.com/ark-network/ark/common => ./../../../../../common
 
-replace github.com/ark-network/ark-sdk => ./../..
+replace github.com/ark-network/ark-sdk => ./../../..
 
 require github.com/ark-network/ark-sdk v0.0.0-00010101000000-000000000000
 

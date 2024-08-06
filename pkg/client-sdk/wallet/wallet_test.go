@@ -2,13 +2,14 @@ package wallet_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/ark-network/ark-sdk/client"
 	"github.com/ark-network/ark-sdk/store"
 	inmemorystore "github.com/ark-network/ark-sdk/store/inmemory"
 	"github.com/ark-network/ark-sdk/wallet"
-	liquidwallet "github.com/ark-network/ark-sdk/wallet/singlekey/liquid"
+	singlekeywallet "github.com/ark-network/ark-sdk/wallet/singlekey"
 	inmemorywalletstore "github.com/ark-network/ark-sdk/wallet/singlekey/store/inmemory"
 	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -35,8 +36,13 @@ func TestWallet(t *testing.T) {
 		args  []interface{}
 	}{
 		{
-			name:  wallet.SingleKeyWallet,
+			name:  "liquid" + wallet.SingleKeyWallet,
 			chain: "liquid",
+			args:  []interface{}{common.LiquidRegTest},
+		},
+		{
+			name:  "bitcoin" + wallet.SingleKeyWallet,
+			chain: "bitcoin",
 			args:  []interface{}{common.LiquidRegTest},
 		},
 	}
@@ -59,7 +65,9 @@ func TestWallet(t *testing.T) {
 
 			var walletSvc wallet.WalletService
 			if tt.chain == "liquid" {
-				walletSvc, err = liquidwallet.NewWalletService(store, walletStore)
+				walletSvc, err = singlekeywallet.NewLiquidWallet(store, walletStore)
+			} else {
+				walletSvc, err = singlekeywallet.NewBitcoinWallet(store, walletStore)
 			}
 			require.NoError(t, err)
 			require.NotNil(t, walletSvc)
@@ -85,7 +93,7 @@ func TestWallet(t *testing.T) {
 			require.NotEmpty(t, onchainAddr)
 
 			expectedNumOfAddresses := 2
-			if tt.name == wallet.SingleKeyWallet {
+			if strings.Contains(tt.name, wallet.SingleKeyWallet) {
 				expectedNumOfAddresses = 1
 			}
 
@@ -102,7 +110,7 @@ func TestWallet(t *testing.T) {
 			require.Len(t, onchainAddrs, num)
 
 			expectedNumOfAddresses += num
-			if tt.name == wallet.SingleKeyWallet {
+			if strings.Contains(tt.name, wallet.SingleKeyWallet) {
 				expectedNumOfAddresses = 1
 			}
 			offchainAddrs, onchainAddrs, redemptionAddrs, err = walletSvc.GetAddresses(ctx)

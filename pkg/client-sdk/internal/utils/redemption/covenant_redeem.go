@@ -1,9 +1,10 @@
-package client
+package redemption
 
 import (
 	"fmt"
 	"time"
 
+	"github.com/ark-network/ark-sdk/client"
 	"github.com/ark-network/ark-sdk/explorer"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -12,8 +13,8 @@ import (
 	"github.com/vulpemventures/go-elements/taproot"
 )
 
-type RedeemBranch struct {
-	vtxo         *Vtxo
+type CovenantRedeemBranch struct {
+	vtxo         client.Vtxo
 	branch       []*psetv2.Pset
 	internalKey  *secp256k1.PublicKey
 	sweepClosure *taproot.TapElementsLeaf
@@ -21,11 +22,11 @@ type RedeemBranch struct {
 	explorer     explorer.Explorer
 }
 
-func NewRedeemBranch(
+func NewCovenantRedeemBranch(
 	explorer explorer.Explorer,
-	congestionTree tree.CongestionTree, vtxo *Vtxo,
-) (*RedeemBranch, error) {
-	sweepClosure, seconds, err := findSweepClosure(congestionTree)
+	congestionTree tree.CongestionTree, vtxo client.Vtxo,
+) (*CovenantRedeemBranch, error) {
+	sweepClosure, seconds, err := findCovenantSweepClosure(congestionTree)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +56,7 @@ func NewRedeemBranch(
 		return nil, err
 	}
 
-	return &RedeemBranch{
+	return &CovenantRedeemBranch{
 		vtxo:         vtxo,
 		branch:       branch,
 		internalKey:  internalKey,
@@ -66,10 +67,10 @@ func NewRedeemBranch(
 }
 
 // RedeemPath returns the list of transactions to broadcast in order to access the vtxo output
-func (r *RedeemBranch) RedeemPath() ([]string, error) {
+func (r *CovenantRedeemBranch) RedeemPath() ([]string, error) {
 	transactions := make([]string, 0, len(r.branch))
 
-	offchainPath, err := r.OffchainPath()
+	offchainPath, err := r.offchainPath()
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +117,7 @@ func (r *RedeemBranch) RedeemPath() ([]string, error) {
 	return transactions, nil
 }
 
-func (r *RedeemBranch) ExpiresAt() (*time.Time, error) {
+func (r *CovenantRedeemBranch) ExpiresAt() (*time.Time, error) {
 	lastKnownBlocktime := int64(0)
 
 	confirmed, blocktime, _ := r.explorer.GetTxBlockTime(r.vtxo.RoundTxid)
@@ -150,7 +151,7 @@ func (r *RedeemBranch) ExpiresAt() (*time.Time, error) {
 }
 
 // offchainPath checks for transactions of the branch onchain and returns only the offchain part
-func (r *RedeemBranch) OffchainPath() ([]*psetv2.Pset, error) {
+func (r *CovenantRedeemBranch) offchainPath() ([]*psetv2.Pset, error) {
 	offchainPath := append([]*psetv2.Pset{}, r.branch...)
 
 	for i := len(r.branch) - 1; i >= 0; i-- {
@@ -180,7 +181,7 @@ func (r *RedeemBranch) OffchainPath() ([]*psetv2.Pset, error) {
 	return offchainPath, nil
 }
 
-func findSweepClosure(
+func findCovenantSweepClosure(
 	congestionTree tree.CongestionTree,
 ) (*taproot.TapElementsLeaf, uint, error) {
 	root, err := congestionTree.Root()

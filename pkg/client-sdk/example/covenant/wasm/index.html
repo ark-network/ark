@@ -18,6 +18,7 @@
 
         async function initWallet() {
             try {
+                const chain = "liquid";
                 const walletType = "singlekey"
                 const clientType = "rest"
                 const privateKey = document.getElementById("prvkey").value;
@@ -31,7 +32,7 @@
                     logMessage("Init error: asp url is required");
                     return;
                 }
-                await init(walletType, clientType, aspUrl, privateKey, password);
+                await init(walletType, clientType, aspUrl, privateKey, password, chain);
                 logMessage("wallet initialized and connected to ASP");
                 await config();
             } catch (err) {
@@ -127,6 +128,7 @@
                 console.log("unlocking...");
                 await unlock(password);
                 console.log(amount, password);
+                console.log("onboarding...");
                 const txID = await onboard(amount);
                 logMessage("Onboarded with amount: " + amount + " and txID: " + txID + ", if in regtest mine a block");
             } catch (err) {

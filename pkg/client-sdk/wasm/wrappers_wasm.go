@@ -9,7 +9,7 @@ import (
 
 	arksdk "github.com/ark-network/ark-sdk"
 	"github.com/ark-network/ark-sdk/wallet"
-	liquidwallet "github.com/ark-network/ark-sdk/wallet/singlekey/liquid"
+	singlekeywallet "github.com/ark-network/ark-sdk/wallet/singlekey"
 )
 
 func LogWrapper() js.Func {
@@ -25,8 +25,12 @@ func logMsg(msg string) {
 
 func InitWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) != 5 {
+		if len(args) != 6 {
 			return nil, errors.New("invalid number of args")
+		}
+		chain := args[5].String()
+		if chain != "bitcoin" && chain != "liquid" {
+			return nil, errors.New("invalid chain, select either 'bitcoin' or 'liquid'")
 		}
 
 		var walletSvc wallet.WalletService
@@ -36,9 +40,16 @@ func InitWrapper() js.Func {
 			if err != nil {
 				return nil, fmt.Errorf("failed to init wallet store: %s", err)
 			}
-			walletSvc, err = liquidwallet.NewWalletService(configStore, walletStore)
-			if err != nil {
-				return nil, err
+			if chain == "liquid" {
+				walletSvc, err = singlekeywallet.NewLiquidWallet(configStore, walletStore)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				walletSvc, err = singlekeywallet.NewBitcoinWallet(configStore, walletStore)
+				if err != nil {
+					return nil, err
+				}
 			}
 		default:
 			return nil, fmt.Errorf("unsupported wallet type")
@@ -150,10 +161,9 @@ func SendOnChainWrapper() js.Func {
 		receivers := make([]arksdk.Receiver, args[0].Length())
 		for i := 0; i < args[0].Length(); i++ {
 			receiver := args[0].Index(i)
-			receivers[i] = arksdk.Receiver{
-				To:     receiver.Get("To").String(),
-				Amount: uint64(receiver.Get("Amount").Int()),
-			}
+			receivers[i] = arksdk.NewLiquidReceiver(
+				receiver.Get("To").String(), uint64(receiver.Get("Amount").Int()),
+			)
 		}
 
 		txID, err := arkSdkClient.SendOnChain(
@@ -175,10 +185,9 @@ func SendOffChainWrapper() js.Func {
 		receivers := make([]arksdk.Receiver, args[1].Length())
 		for i := 0; i < args[1].Length(); i++ {
 			receiver := args[1].Index(i)
-			receivers[i] = arksdk.Receiver{
-				To:     receiver.Get("To").String(),
-				Amount: uint64(receiver.Get("Amount").Int()),
-			}
+			receivers[i] = arksdk.NewLiquidReceiver(
+				receiver.Get("To").String(), uint64(receiver.Get("Amount").Int()),
+			)
 		}
 
 		txID, err := arkSdkClient.SendOffChain(

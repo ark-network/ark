@@ -100,10 +100,7 @@ func main() {
 
 	amount := uint64(1000)
 	receivers := []arksdk.Receiver{
-		{
-			To:     bobOffchainAddr,
-			Amount: amount,
-		},
+		arksdk.NewLiquidReceiver(bobOffchainAddr, amount),
 	}
 
 	fmt.Println("")
@@ -145,7 +142,7 @@ func setupArkClient() (arksdk.ArkClient, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup store: %s", err)
 	}
-	client, err := arksdk.New(storeSvc)
+	client, err := arksdk.NewCovenantClient(storeSvc)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup ark client: %s", err)
 	}

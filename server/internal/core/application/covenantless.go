@@ -497,12 +497,10 @@ func (s *covenantlessService) finalizeRound() {
 	log.Debugf("signing round transaction %s\n", round.Id)
 	signedPoolTx, err := s.wallet.SignTransaction(ctx, round.UnsignedTx, true)
 	if err != nil {
-		fmt.Println(err)
 		changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
 		log.WithError(err).Warn("failed to sign round tx")
 		return
 	}
-	fmt.Println(signedPoolTx)
 
 	txid, err := s.wallet.BroadcastTransaction(ctx, signedPoolTx)
 	if err != nil {

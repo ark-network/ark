@@ -18,7 +18,7 @@ func main() {
 
 	store, _ := arksdkwasm.NewLocalStorageStore()
 	if store != nil {
-		if err := arksdkwasm.New(ctx, store); err != nil {
+		if err := arksdkwasm.NewCovenantlessClient(ctx, store); err != nil {
 			fmt.Println(err)
 		}
 	} else {
@@ -27,7 +27,7 @@ func main() {
 			fmt.Println(err)
 			return
 		}
-		if err := arksdkwasm.New(ctx, storeSvc); err != nil {
+		if err := arksdkwasm.NewCovenantlessClient(ctx, storeSvc); err != nil {
 			fmt.Println(err)
 		}
 	}

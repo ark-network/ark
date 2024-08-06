@@ -9,7 +9,7 @@ import (
 	arksdk "github.com/ark-network/ark-sdk"
 	"github.com/ark-network/ark-sdk/store"
 	"github.com/ark-network/ark-sdk/wallet"
-	liquidwallet "github.com/ark-network/ark-sdk/wallet/singlekey/liquid"
+	singlekeywallet "github.com/ark-network/ark-sdk/wallet/singlekey"
 	walletstore "github.com/ark-network/ark-sdk/wallet/singlekey/store"
 )
 
@@ -41,7 +41,7 @@ func init() {
 	js.Global().Set("getMinRelayFee", GetMinRelayFeeWrapper())
 }
 
-func New(
+func NewCovenantClient(
 	ctx context.Context, storeSvc store.ConfigStore,
 ) error {
 	var err error
@@ -52,7 +52,7 @@ func New(
 	}
 
 	if data == nil {
-		arkSdkClient, err = arksdk.New(storeSvc)
+		arkSdkClient, err = arksdk.NewCovenantClient(storeSvc)
 	} else {
 		var walletSvc wallet.WalletService
 		switch data.WalletType {
@@ -65,7 +65,42 @@ func New(
 		default:
 			return fmt.Errorf("unknown wallet type")
 		}
-		arkSdkClient, err = arksdk.LoadWithWallet(storeSvc, walletSvc)
+		arkSdkClient, err = arksdk.LoadCovenantClientWithWallet(storeSvc, walletSvc)
+	}
+	if err != nil {
+		js.Global().Get("console").Call("error", err.Error())
+		return err
+	}
+	configStore = storeSvc
+
+	select {}
+}
+
+func NewCovenantlessClient(
+	ctx context.Context, storeSvc store.ConfigStore,
+) error {
+	var err error
+
+	data, err := storeSvc.GetData(ctx)
+	if err != nil {
+		return err
+	}
+
+	if data == nil {
+		arkSdkClient, err = arksdk.NewCovenantlessClient(storeSvc)
+	} else {
+		var walletSvc wallet.WalletService
+		switch data.WalletType {
+		case arksdk.SingleKeyWallet:
+			walletSvc, err = getSingleKeyWallet(storeSvc, data.Network.Name)
+			if err != nil {
+				return err
+			}
+		// TODO: Support HD wallet
+		default:
+			return fmt.Errorf("unknown wallet type")
+		}
+		arkSdkClient, err = arksdk.LoadCovenantlessClientWithWallet(storeSvc, walletSvc)
 	}
 	if err != nil {
 		js.Global().Get("console").Call("error", err.Error())
@@ -92,8 +127,7 @@ func getSingleKeyWallet(
 		return nil, err
 	}
 	if strings.Contains(network, "liquid") {
-		return liquidwallet.NewWalletService(configStore, walletStore)
+		return singlekeywallet.NewLiquidWallet(configStore, walletStore)
 	}
-	// TODO: Support bitcoin wallet
-	return nil, fmt.Errorf("network %s not supported yet", network)
+	return singlekeywallet.NewBitcoinWallet(configStore, walletStore)
 }
