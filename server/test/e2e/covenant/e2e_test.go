@@ -160,7 +160,7 @@ func TestUnilateralExit(t *testing.T) {
 	err = utils.GenerateBlock()
 	require.NoError(t, err)
 
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	balanceStr, err = runArkCommand("balance")
 	require.NoError(t, err)
