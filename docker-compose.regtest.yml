@@ -30,8 +30,9 @@ services:
       - ARK_ROUND_LIFETIME=512
       - ARK_DB_TYPE=sqlite
       - ARK_TX_BUILDER_TYPE=covenant
+      - ARK_PORT=8080
     ports:
-      - "8080:6000"
+      - "8080:8080"
 
 volumes:
   oceand:
