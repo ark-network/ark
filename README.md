@@ -1,10 +1,10 @@
 # Ark Monorepo
 
-![GitHub release (latest by date)](https://img.shields.io/github/v/release/ark-network/ark)
-![Docker Image](https://img.shields.io/badge/docker-ghcr.io%2Fark--network%2Fark-blue?logo=docker)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/ark-network/ark)](https://github.com/ark-network/ark/releases)
+[![Docker Image](https://img.shields.io/badge/docker-ghcr.io%2Fark--network%2Fark-blue?logo=docker)](https://github.com/ark-network/ark/pkgs/container/ark)
 [![Integration](https://github.com/ark-network/ark/actions/workflows/ark.integration.yaml/badge.svg)](https://github.com/ark-network/ark/actions/workflows/ark.integration.yaml)
 [![ci_unit](https://github.com/ark-network/ark/actions/workflows/ark.unit.yaml/badge.svg)](https://github.com/ark-network/ark/actions/workflows/ark.unit.yaml)
-![GitHub](https://img.shields.io/github/license/ark-network/ark)
+[![GitHub](https://img.shields.io/github/license/ark-network/ark)](https://github.com/ark-network/ark/blob/master/LICENSE)
 ![Go Reference](https://pkg.go.dev/badge/github.com/ark-network/ark.svg)
 
 Welcome to the Ark monorepo, a comprehensive solution for off-chain Bitcoin and Liquid transactions.
@@ -35,3 +35,7 @@ Welcome to the Ark monorepo, a comprehensive solution for off-chain Bitcoin and 
 ## Development
 
 For detailed development instructions, including building from source, running tests, and contributing guidelines, please refer to the README files in the `server` and `client` directories.
+
+## Security Disclosures
+
+Security is a top priority for Ark. If you discover a security issue, please bring it to our attention right away. Please DO NOT file a public issue, instead send your report privately to `security@arklabs.to`. Security reports are greatly appreciated and we will publicly thank you for it.
