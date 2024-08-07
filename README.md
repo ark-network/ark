@@ -2,7 +2,6 @@
 
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/ark-network/ark)
 ![Docker Image](https://img.shields.io/badge/docker-ghcr.io%2Fark--network%2Fark-blue?logo=docker)
-[![CodeQL](https://github.com/ark-network/ark/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/ark-network/ark/actions/workflows/github-code-scanning/codeql)
 [![Integration](https://github.com/ark-network/ark/actions/workflows/ark.integration.yaml/badge.svg)](https://github.com/ark-network/ark/actions/workflows/ark.integration.yaml)
 [![ci_unit](https://github.com/ark-network/ark/actions/workflows/ark.unit.yaml/badge.svg)](https://github.com/ark-network/ark/actions/workflows/ark.unit.yaml)
 ![GitHub](https://img.shields.io/github/license/ark-network/ark)
