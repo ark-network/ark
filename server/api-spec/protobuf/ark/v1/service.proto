@@ -5,25 +5,30 @@ package ark.v1;
 import "google/api/annotations.proto";
 
 service ArkService {
-  rpc RegisterPayment(RegisterPaymentRequest) returns (RegisterPaymentResponse) {
+  rpc RegisterInputsForNextRound(RegisterPaymentRequest) returns (RegisterPaymentResponse) {
     option (google.api.http) = {
-      post: "/v1/payment/register"
+      post: "/v1/payment/registerInputs"
       body: "*"
     };
   };
-  rpc ClaimPayment(ClaimPaymentRequest) returns (ClaimPaymentResponse) {
+  rpc RegisterOutputsForNextRound(ClaimPaymentRequest) returns (ClaimPaymentResponse) {
     option (google.api.http) = {
-      post: "/v1/payment/claim"
+      post: "/v1/payment/registerOutputs"
       body: "*"
     };
   };
-  rpc FinalizePayment(FinalizePaymentRequest) returns (FinalizePaymentResponse) {
+  rpc SubmitSignedForfeitTransactions(FinalizePaymentRequest) returns (FinalizePaymentResponse) {
     option (google.api.http) = {
-      post: "/v1/payment/finalize"
+      post: "/v1/payment/submitForfeitTransactions"
       body: "*"
     };
   };
-  // TODO BTC: signTree rpc 
+  rpc SubmitSignedVtxoTree(FinalizePaymentRequest) returns (FinalizePaymentResponse) {
+    option (google.api.http) = {
+      post: "/v1/payment/submitForfeitTransactions"
+      body: "*"
+    };
+  };
   rpc GetRound(GetRoundRequest) returns (GetRoundResponse) {
     option (google.api.http) = {
       get: "/v1/round/{txid}"
@@ -60,12 +65,6 @@ service ArkService {
       body: "*"
     };
   }
-  rpc TrustedOnboarding(TrustedOnboardingRequest) returns (TrustedOnboardingResponse) {
-    option (google.api.http) = {
-      post: "/v1/onboard/address"
-      body: "*"
-    };
-  }
 }
 
 message RegisterPaymentRequest {
@@ -77,9 +76,7 @@ message RegisterPaymentResponse {
 }
 
 message ClaimPaymentRequest {
-  // Mocks wabisabi's credentials.
   string id = 1;
-  // List of receivers for a registered payment. 
   repeated Output outputs = 2;
 }
 message ClaimPaymentResponse {}
@@ -138,37 +135,28 @@ message GetInfoResponse {
   int64 round_interval = 4;
   string network = 5;
   int64 min_relay_fee = 6;
+  repeated string supported_script_policies = 7;
 }
 
 message OnboardRequest {
-  string boarding_tx = 1;
-  Tree congestion_tree = 2;
-  string user_pubkey = 3;
+  string boarding_txid = 1;
+  string descriptor = 2;
 }
-message OnboardResponse {
-}
-
-message TrustedOnboardingRequest {
-  string user_pubkey = 1;
-}
-
-message TrustedOnboardingResponse {
-  string address = 1;
-}
+message OnboardResponse {}
 
 // EVENT TYPES
 
 message RoundFinalizationEvent {
   string id = 1;
-  string pool_tx = 2;
+  string round_tx = 2;
   repeated string forfeit_txs = 3;
-  Tree congestion_tree = 4;
+  Tree vtxo_tree = 4;
   repeated string connectors = 5;
 }
 
 message RoundFinalizedEvent {
   string id = 1;
-  string pool_txid = 2;
+  string round_txid = 2;
 }
 
 message RoundFailed {
@@ -188,16 +176,16 @@ enum RoundStage {
 
 message Round {
   string id = 1;
-  int64 start = 2;
-  int64 end = 3;
-  string pool_tx = 4;
-  Tree congestion_tree = 5;
+  int64 start_unix = 2;
+  int64 end_unix = 3;
+  string round_tx = 4;
+  Tree vtxo_tree = 5;
   repeated string forfeit_txs = 6;
   repeated string connectors = 7;
   RoundStage stage = 8;
 }
 
-message Input {
+message Outpoint {
   string txid = 1;
   uint32 vout = 2;
 }
@@ -224,11 +212,13 @@ message Node {
 }
 
 message Vtxo {
-  Input outpoint = 1;
-  Output receiver = 2;
-  bool spent = 3;
-  string pool_txid = 4;
-  string spent_by = 5;
-  int64 expire_at = 6;
-  bool swept = 7;
+  Outpoint outpoint = 1;
+  uint64 value = 2;
+  string asset = 3;
+  string descriptor = 4;
+  bool spent = 5;
+  string round_txid = 6;
+  string spent_by = 7;
+  int64 expire_at = 8;
+  bool swept = 9;
 }
