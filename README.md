@@ -1,208 +1,89 @@
-# Ark
-Welcome to the Ark monorepo.
+# Ark Monorepo
+
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/ark-network/ark)](https://github.com/ark-network/ark/releases)
+[![Docker Image](https://img.shields.io/badge/docker-ghcr.io%2Fark--network%2Fark-blue?logo=docker)](https://github.com/ark-network/ark/pkgs/container/ark)
+[![Integration](https://github.com/ark-network/ark/actions/workflows/ark.integration.yaml/badge.svg)](https://github.com/ark-network/ark/actions/workflows/ark.integration.yaml)
+[![ci_unit](https://github.com/ark-network/ark/actions/workflows/ark.unit.yaml/badge.svg)](https://github.com/ark-network/ark/actions/workflows/ark.unit.yaml)
+[![GitHub](https://img.shields.io/github/license/ark-network/ark)](https://github.com/ark-network/ark/blob/master/LICENSE)
+![Go Reference](https://pkg.go.dev/badge/github.com/ark-network/ark.svg)
+
+Welcome to the Ark monorepo, a comprehensive solution for off-chain Bitcoin and Liquid transactions.
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/169d6ae5-7d90-448d-b768-4e40a412bf70" alt="og image github">
+  <img src="https://github.com/user-attachments/assets/169d6ae5-7d90-448d-b768-4e40a412bf70" alt="Ark logo">
 </p>
 
-In this repository you can find:
+> **⚠️ IMPORTANT DISCLAIMER: ALPHA SOFTWARE**
+> 
+> Ark is currently in alpha stage. This software is experimental and under active development. 
+> **DO NOT ATTEMPT TO USE IN PRODUCTION**. Use at your own risk.
 
-- [`server`](./server/) always-on daemon that serves as the Ark Service Provider (ASP)
-- [`client`](./client/) single-key wallet as command-line interface (CLI) to interact with the ASP
+## Repository Structure
 
-Refer to the README in each directory for more information about development.
+- [`server`](./server/): `arkd` Ark Service Provider (ASP) - the always-on daemon
+- [`client`](./client/): `ark` Single-key wallet CLI for interacting with the ASP
+- [`common`](./common/): Shared code between the server and client
+- [`pkg/client-sdk`](./pkg/client-sdk/): Go SDK for interacting with ASPs running the Ark protocol. It offers WASM bindings to interact with the SDK from the browser and other environments.
 
+## Ark Service Provider (ASP) Setup
 
-## Run the Ark Service Provider
+### Supported Networks and Wallets
 
-|         | Covenant-less          | Covenant                               |
-|---------|------------------------|----------------------------------------|
-| Network | Bitcoin (regtest only)<br/>⚠️ *Mainnet & Testnet coming soon* | Liquid, Liquid testnet, Liquid regtest |
-| Wallet  | Embedded [lnwallet](https://pkg.go.dev/github.com/lightningnetwork/lnd/lnwallet/btcwallet) in `arkd`     | [Ocean](https://github.com/vulpemventures/ocean) wallet                           |
+|         | Covenant-less                | Covenant                               |
+|---------|-----------------------------|-----------------------------------------|
+| Network | Bitcoin signet, Bitcoin regtest | Liquid, Liquid testnet, Liquid regtest |
+| Wallet  | Embedded [lnwallet](https://pkg.go.dev/github.com/lightningnetwork/lnd/lnwallet/btcwallet) | [Ocean](https://github.com/vulpemventures/ocean) wallet |
 
-> The covenant version of Ark requires [special tapscript opcodes](https://github.com/ElementsProject/elements/blob/master/doc/tapscript_opcodes.md) only available on Liquid Network.
+## Usage Documentation
 
-### Covenant-less Ark
+For a comprehensive guide on how to set up and use Ark, please visit our [Developer Portal](https://arkdev.info). 
+For a quick-start with Docker, head over to our [Quick Start guide](https://arkdev.info/docs/quick-start/intro) where you can setup an Ark Server and Clients in a local Bitcoin regtest network.
 
-#### Run the daemon (regtest)
+## Development
 
-Run locally with [Docker](https://docs.docker.com/engine/install/) and [Nigiri](https://nigiri.vulpem.com/).
+For detailed development instructions, including building from source, running tests, and contributing guidelines, please refer to the README files in the `server` and `client` directories.
 
-```
-nigiri start
-docker compose -f ./docker-compose.clark.regtest.yml up -d
-```
+### Contributing Guidelines
 
-the compose file will start a `clarkd` container exposing Ark API on localhost:6000.
+1. **No force pushing in PRs**: Always use `git push --force-with-lease` to avoid overwriting others' work.
+2. **Sign your commits**: Use GPG to sign your commits for verification.
+3. **Squash and merge**: When merging PRs, use the "Squash and merge" option to maintain a clean commit history.
+4. **Testing**: Add tests for each new major feature or bug fix.
+5. **Keep master green**: The master branch should always be in a passing state. All tests must pass before merging.
 
-#### Fund the embedded wallet
+### Local Development Setup
 
-The ASP needs funds to operate. the `v1/admin/address` allows to generate a new address. This endpoint is protected by Basic Authorization token.
+1. Install Go (version 1.18 or later)
+2. Install [Nigiri](https://nigiri.vulpem.com/) for local Bitcoin and Liquid networks
+3. Clone this repository:
+   ```
+   git clone https://github.com/ark-network/ark.git
+   cd ark
+   ```
+4. Install dependencies:
+   ```
+   go mod download
+   ```
+5. Build the project:
+   ```
+   cd server
+   make build
+   cd ../client
+   make build
+   ```
 
-```
-curl http://localhost:6000/v1/admin/address -H 'Authorization: Basic YWRtaW46YWRtaW4=' 
-```
+Note: You need to run `make build` in both the `server` and `client` directories separately.
 
-> This exemple is using the default USER/PASSWORD credentials. You can customize them by setting the `ARK_AUTH_USER` and `ARK_AUTH_PASS` variables.
+## Support
 
-Faucet the address using nigiri
+If you encounter any issues or have questions, please file an issue on our [GitHub Issues](https://github.com/ark-network/ark/issues) page. 
 
-```
-nigiri faucet <ASP_address>
-```
+## Security
 
-### Ark with covenants (Liquid only)
+We take the security of Ark seriously. If you discover a security vulnerability, we appreciate your responsible disclosure.
 
-#### Setup the Ocean wallet
+Currently, we do not have an official bug bounty program. However, we value the efforts of security researchers and will consider offering appropriate compensation for significant, [responsibly disclosed vulnerabilities](./SECURITY.md).
 
-Run locally with Docker on Liquid Testnet. It uses `docker-compose` to build the `arkd` docker image from `server` and run the it as container, together with the `oceand` container.
+## License
 
-Start `oceand` in Liquid Testnet:
-
-```bash
-docker compose up -d oceand
-```
-
-Setup `oceand`:
-
-```bash
-alias ocean='docker exec oceand ocean'
-ocean config init --no-tls
-ocean wallet create --password <password>
-ocean wallet unlock --password <password>
-```
-
-#### Run `arkd` connected to Ocean
-
-Start the ASP
-
-```bash
-docker compose up -d arkd
-```
-
-**Note:** On startup `arkd` will create an account `ark` on oceand.
-
-Get an address from Ocean to add funds to the ASP:
-
-```bash
-ocean account derive --account-name ark
-```
-
-Fund the resulting address with [Liquid testnet faucet](https://liquidtestnet.com/faucet).
-
-Check the balance of the `ark` account:
-
-```bash
-ocean account --account-name=ark balance
-```
-
-### Ark client
-
-Inside the `arkd` container is shipped the `ark` CLI. You can submit payment to the ASP using the `ark` CLI.
-
-```bash
-alias ark='docker exec -it arkd ark'
-ark init --password <password> --ark-url localhost:8080
-```
-
-This will add a `state.json` file to the following directory:
-
-- POSIX (Linux/BSD): ~/.Ark-cli
-- Mac OS: $HOME/Library/Application Support/Ark-cli
-- Windows: %LOCALAPPDATA%\Ark-cli
-- Plan 9: $home/Ark-cli
-
-**Note:** you can use a different datadir by exporting the env var `ARK_WALLET_DATADIR` like:
-
-```bash
-export ARK_WALLET_DATADIR=path/to/custom
-ark init --password <password> --ark-url localhost:8080 --network testnet
-```
-
-Add funds to the ark wallet:
-
-```bash
-ark receive
-{
-  "offchain_address": <address starting with "tark1q...">,
-  "onchain_address": <address starting with "tex1q...">
-}
-```
-
-Fund the `onchain_address` with https://liquidtestnet.com/faucet.
-
-Onboard the ark:
-
-```bash
-ark onboard --amount 21000
-```
-
-After confirmation, ark wallet will be funded and ready to spend offchain.
-
-In **another tab**, setup another ark wallet with:
-
-```bash
-export ARK_WALLET_DATADIR=./datadir
-alias ark2=$(pwd)/build/ark-<os>-<arch>
-ark2 init --password <password> --ark-url localhost:8080 --network testnet
-```
-
-**Note:** `ark2` should always run in the second tab.
-
-### Make payments
-
-You can now make ark payments between the 2 ark wallets:
-
-```bash
-ark2 receive
-{
-  "offchain_address": <address starting with "tark1q...">,
-  "onchain_address": <address starting with "tex1q...">,
-  "relays": ["localhost:8080"]
-}
-```
-
-```bash
-ark send --to <ark2 offchain address> --amount 2100
-```
-
-Both balances should reflect the payment:
-
-```bash
-ark balance
-{
-  "offchain_balance": 18900,
-  "onchain_balance": 0
-}
-```
-
-```bash
-  ark2 balance
-{
-  "offchain_balance": 2100,
-  "onchain_balance": 0
-}
-```
-
-### Exiting
-
-User `ark` can leave the ark collaboratively (i.e. ASP needs to collaborate):
-
-```bash
-ark redeem --address <onchain_address> --amount 12100
-```
-
-In the case of the ASP is not responding, you can leave the ark unilaterally (`--amount` is not necessary since `--force` will redeem all funds):
-
-```bash
-ark redeem --force
-```
-
-### Help
-
-You can see all available commands with `help`:
-
-```bash
-ark help
-```
-
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
