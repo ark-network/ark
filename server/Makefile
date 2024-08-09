@@ -38,6 +38,8 @@ run: clean
 	export ARK_LOG_LEVEL=5; \
 	export ARK_NETWORK=liquidregtest; \
 	export ARK_PORT=8080; \
+	export ARK_NO_TLS=true; \
+	export ARK_NO_MACAROONS=true; \
 	go run ./cmd/arkd
 
 ## test: runs unit and component tests
