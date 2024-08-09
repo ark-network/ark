@@ -91,35 +91,6 @@ func TestOnboard(t *testing.T) {
 	require.Equal(t, balanceBefore+1000, balance.Offchain.Total)
 }
 
-func TestTrustedOnboard(t *testing.T) {
-	var balance utils.ArkBalance
-	balanceStr, err := runArkCommand("balance")
-	require.NoError(t, err)
-
-	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
-	balanceBefore := balance.Offchain.Total
-
-	onboardStr, err := runArkCommand("onboard", "--trusted", "--password", utils.Password)
-	require.NoError(t, err)
-
-	var result utils.ArkTrustedOnboard
-	require.NoError(t, json.Unmarshal([]byte(onboardStr), &result))
-
-	_, err = utils.RunCommand("nigiri", "faucet", "--liquid", result.OnboardAddress)
-	require.NoError(t, err)
-
-	_, err = utils.RunCommand("nigiri", "faucet", "--liquid", result.OnboardAddress)
-	require.NoError(t, err)
-
-	time.Sleep(5 * time.Second)
-
-	balanceStr, err = runArkCommand("balance")
-	require.NoError(t, err)
-
-	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
-	require.Equal(t, balanceBefore+(2*(ONE_BTC-30)), balance.Offchain.Total)
-}
-
 func TestSendOffchain(t *testing.T) {
 	_, err := runArkCommand("onboard", "--amount", "1000", "--password", utils.Password)
 	require.NoError(t, err)

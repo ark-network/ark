@@ -38,12 +38,15 @@ run: clean
 	export ARK_LOG_LEVEL=5; \
 	export ARK_NETWORK=liquidregtest; \
 	export ARK_PORT=8080; \
+	export ARK_NO_TLS=true; \
+	export ARK_NO_MACAROONS=true; \
 	go run ./cmd/arkd
 
 ## test: runs unit and component tests
 test:
 	@echo "Running unit tests..."
-	@find . -name go.mod -execdir go test -v -count=1 -race ./internal/... \;
+	@go test -v -count=1 -race ./internal/...
+	@find ./pkg -name go.mod -execdir go test -v -count=1 -race ./... \;
 
 ## vet: code analysis
 vet:

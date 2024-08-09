@@ -25,10 +25,6 @@ var (
 		Name:  "amount",
 		Usage: "amount to onboard in sats",
 	}
-	TrustedOnboardFlag = cli.BoolFlag{
-		Name:  "trusted",
-		Usage: "trusted onboard",
-	}
 	ExpiryDetailsFlag = cli.BoolFlag{
 		Name:     "compute-expiry-details",
 		Usage:    "compute client-side the VTXOs expiry time",

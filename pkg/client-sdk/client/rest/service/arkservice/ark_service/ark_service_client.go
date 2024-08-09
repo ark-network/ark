@@ -74,8 +74,6 @@ type ClientService interface {
 
 	ArkServiceRegisterPayment(params *ArkServiceRegisterPaymentParams, opts ...ClientOption) (*ArkServiceRegisterPaymentOK, error)
 
-	ArkServiceTrustedOnboarding(params *ArkServiceTrustedOnboardingParams, opts ...ClientOption) (*ArkServiceTrustedOnboardingOK, error)
-
 	SetTransport(transport runtime.ClientTransport)
 }
 
@@ -446,43 +444,6 @@ func (a *Client) ArkServiceRegisterPayment(params *ArkServiceRegisterPaymentPara
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*ArkServiceRegisterPaymentDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
-}
-
-/*
-ArkServiceTrustedOnboarding ark service trusted onboarding API
-*/
-func (a *Client) ArkServiceTrustedOnboarding(params *ArkServiceTrustedOnboardingParams, opts ...ClientOption) (*ArkServiceTrustedOnboardingOK, error) {
-	// TODO: Validate the params before sending
-	if params == nil {
-		params = NewArkServiceTrustedOnboardingParams()
-	}
-	op := &runtime.ClientOperation{
-		ID:                 "ArkService_TrustedOnboarding",
-		Method:             "POST",
-		PathPattern:        "/v1/onboard/address",
-		ProducesMediaTypes: []string{"application/json"},
-		ConsumesMediaTypes: []string{"application/json"},
-		Schemes:            []string{"http"},
-		Params:             params,
-		Reader:             &ArkServiceTrustedOnboardingReader{formats: a.formats},
-		Context:            params.Context,
-		Client:             params.HTTPClient,
-	}
-	for _, opt := range opts {
-		opt(op)
-	}
-
-	result, err := a.transport.Submit(op)
-	if err != nil {
-		return nil, err
-	}
-	success, ok := result.(*ArkServiceTrustedOnboardingOK)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*ArkServiceTrustedOnboardingDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 

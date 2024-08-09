@@ -11,6 +11,7 @@ import (
 )
 
 type Config struct {
+	Datadir               string
 	WalletAddr            string
 	RoundInterval         int64
 	Port                  uint32
@@ -22,15 +23,16 @@ type Config struct {
 	TxBuilderType         string
 	BlockchainScannerType string
 	NoTLS                 bool
+	NoMacaroons           bool
 	Network               common.Network
 	LogLevel              int
 	MinRelayFee           uint64
 	RoundLifetime         int64
 	UnilateralExitDelay   int64
-	AuthUser              string
-	AuthPass              string
 	EsploraURL            string
 	NeutrinoPeer          string
+	TLSExtraIPs           []string
+	TLSExtraDomains       []string
 }
 
 var (
@@ -44,20 +46,21 @@ var (
 	SchedulerType         = "SCHEDULER_TYPE"
 	TxBuilderType         = "TX_BUILDER_TYPE"
 	BlockchainScannerType = "BC_SCANNER_TYPE"
-	Insecure              = "INSECURE"
 	LogLevel              = "LOG_LEVEL"
 	Network               = "NETWORK"
 	MinRelayFee           = "MIN_RELAY_FEE"
 	RoundLifetime         = "ROUND_LIFETIME"
 	UnilateralExitDelay   = "UNILATERAL_EXIT_DELAY"
-	AuthUser              = "AUTH_USER"
-	AuthPass              = "AUTH_PASS"
 	EsploraURL            = "ESPLORA_URL"
 	NeutrinoPeer          = "NEUTRINO_PEER"
+	NoMacaroons           = "NO_MACAROONS"
+	NoTLS                 = "NO_TLS"
+	TLSExtraIP            = "TLS_EXTRA_IP"
+	TLSExtraDomain        = "TLS_EXTRA_DOMAIN"
 
 	defaultDatadir               = common.AppDataDir("arkd", false)
 	defaultRoundInterval         = 5
-	defaultPort                  = 6000
+	DefaultPort                  = 6000
 	defaultWalletAddr            = "localhost:18000"
 	defaultDbType                = "sqlite"
 	defaultDbMigrationPath       = "file://internal/infrastructure/db/sqlite/migration"
@@ -65,14 +68,13 @@ var (
 	defaultSchedulerType         = "gocron"
 	defaultTxBuilderType         = "covenant"
 	defaultBlockchainScannerType = "ocean"
-	defaultInsecure              = true
 	defaultNetwork               = "liquid"
 	defaultLogLevel              = 4
 	defaultMinRelayFee           = 30 // 0.1 sat/vbyte on Liquid
 	defaultRoundLifetime         = 604672
 	defaultUnilateralExitDelay   = 1024
-	defaultAuthUser              = "admin"
-	defaultAuthPass              = "admin"
+	defaultNoMacaroons           = false
+	defaultNoTLS                 = false
 )
 
 func LoadConfig() (*Config, error) {
@@ -80,10 +82,10 @@ func LoadConfig() (*Config, error) {
 	viper.AutomaticEnv()
 
 	viper.SetDefault(Datadir, defaultDatadir)
-	viper.SetDefault(Port, defaultPort)
+	viper.SetDefault(Port, DefaultPort)
 	viper.SetDefault(DbType, defaultDbType)
 	viper.SetDefault(DbMigrationPath, defaultDbMigrationPath)
-	viper.SetDefault(Insecure, defaultInsecure)
+	viper.SetDefault(NoTLS, defaultNoTLS)
 	viper.SetDefault(LogLevel, defaultLogLevel)
 	viper.SetDefault(Network, defaultNetwork)
 	viper.SetDefault(WalletAddr, defaultWalletAddr)
@@ -95,8 +97,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(TxBuilderType, defaultTxBuilderType)
 	viper.SetDefault(UnilateralExitDelay, defaultUnilateralExitDelay)
 	viper.SetDefault(BlockchainScannerType, defaultBlockchainScannerType)
-	viper.SetDefault(AuthUser, defaultAuthUser)
-	viper.SetDefault(AuthPass, defaultAuthPass)
+	viper.SetDefault(NoMacaroons, defaultNoMacaroons)
 
 	net, err := getNetwork()
 	if err != nil {
@@ -108,6 +109,7 @@ func LoadConfig() (*Config, error) {
 	}
 
 	return &Config{
+		Datadir:               viper.GetString(Datadir),
 		WalletAddr:            viper.GetString(WalletAddr),
 		RoundInterval:         viper.GetInt64(RoundInterval),
 		Port:                  viper.GetUint32(Port),
@@ -117,17 +119,18 @@ func LoadConfig() (*Config, error) {
 		SchedulerType:         viper.GetString(SchedulerType),
 		TxBuilderType:         viper.GetString(TxBuilderType),
 		BlockchainScannerType: viper.GetString(BlockchainScannerType),
-		NoTLS:                 viper.GetBool(Insecure),
+		NoTLS:                 viper.GetBool(NoTLS),
 		DbDir:                 filepath.Join(viper.GetString(Datadir), "db"),
 		LogLevel:              viper.GetInt(LogLevel),
 		Network:               net,
 		MinRelayFee:           viper.GetUint64(MinRelayFee),
 		RoundLifetime:         viper.GetInt64(RoundLifetime),
 		UnilateralExitDelay:   viper.GetInt64(UnilateralExitDelay),
-		AuthUser:              viper.GetString(AuthUser),
-		AuthPass:              viper.GetString(AuthPass),
 		EsploraURL:            viper.GetString(EsploraURL),
 		NeutrinoPeer:          viper.GetString(NeutrinoPeer),
+		NoMacaroons:           viper.GetBool(NoMacaroons),
+		TLSExtraIPs:           viper.GetStringSlice(TLSExtraIP),
+		TLSExtraDomains:       viper.GetStringSlice(TLSExtraDomain),
 	}, nil
 }
 

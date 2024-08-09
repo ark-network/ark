@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -89,12 +88,10 @@ type service struct {
 func WithNeutrino(initialPeer string) WalletOption {
 	return func(s *service) error {
 		if s.cfg.Network.Name == common.BitcoinRegTest.Name && len(initialPeer) == 0 {
-			return errors.New("initial neutrino peer required for regtest network, set NEUTRINO_PEER env var")
+			return fmt.Errorf("initial neutrino peer required for regtest network, set NEUTRINO_PEER env var")
 		}
 
-		db, err := walletdb.Create(
-			"bdb", s.cfg.Datadir+"/neutrino.db", true, 60*time.Second,
-		)
+		db, err := createOrOpenWalletDB(s.cfg.Datadir + "/neutrino.db")
 		if err != nil {
 			return err
 		}
@@ -235,7 +232,7 @@ func (s *service) DeriveAddresses(ctx context.Context, num int) ([]string, error
 	}
 
 	if len(addresses) == 0 {
-		return nil, errors.New("no addresses derived")
+		return nil, fmt.Errorf("no addresses derived")
 	}
 
 	return addresses, nil
@@ -376,7 +373,7 @@ func (s *service) SignTransaction(ctx context.Context, partialTx string, extract
 	if extractRawTx {
 		// verify that all inputs are signed
 		if len(signedInputs) != len(ptx.Inputs) {
-			return "", errors.New("not all inputs are signed, unable to finalize the psbt")
+			return "", fmt.Errorf("not all inputs are signed, unable to finalize the psbt")
 		}
 
 		if err := psbt.MaybeFinalizeAll(ptx); err != nil {
@@ -602,6 +599,7 @@ func (s *service) create(mnemonic, password string, addrGap uint32) error {
 	if len(password) <= 0 {
 		return fmt.Errorf("missing password")
 	}
+
 	pwd := []byte(password)
 	seed := bip39.NewSeed(mnemonic, password)
 	opt := btcwallet.LoaderWithLocalWalletDB(s.cfg.Datadir, false, time.Minute)
@@ -618,10 +616,12 @@ func (s *service) create(mnemonic, password string, addrGap uint32) error {
 		ChainSource:           s.chainSource,
 	}
 	blockCache := blockcache.NewBlockCache(20 * 1024 * 1024)
+
 	wallet, err := btcwallet.New(config, blockCache)
 	if err != nil {
 		return fmt.Errorf("failed to setup wallet loader: %s", err)
 	}
+
 	if err := wallet.Start(); err != nil {
 		return fmt.Errorf("failed to start wallet: %s", err)
 	}
@@ -638,6 +638,13 @@ func (s *service) create(mnemonic, password string, addrGap uint32) error {
 		break
 	}
 	log.Debugf("chain synced")
+
+	if addrGap > 0 {
+		// TODO: fix rescan
+		if err := wallet.InternalWallet().Rescan(nil, nil); err != nil {
+			return err
+		}
+	}
 
 	wallet.InternalWallet().Lock()
 	s.wallet = wallet
@@ -707,7 +714,7 @@ func (s *service) initWallet(wallet *btcwallet.BtcWallet) error {
 
 		managedAddr, ok := addrInfos.(waddrmgr.ManagedPubKeyAddress)
 		if !ok {
-			return errors.New("failed to cast address to managed pubkey address")
+			return fmt.Errorf("failed to cast address to managed pubkey address")
 		}
 
 		s.aspTaprootAddr = managedAddr
@@ -737,7 +744,7 @@ func (s *service) initWallet(wallet *btcwallet.BtcWallet) error {
 
 					managedPubkeyAddr, ok := infos.(waddrmgr.ManagedPubKeyAddress)
 					if !ok {
-						return errors.New("failed to cast address to managed pubkey address")
+						return fmt.Errorf("failed to cast address to managed pubkey address")
 					}
 
 					s.aspTaprootAddr = managedPubkeyAddr
@@ -767,7 +774,7 @@ func (s *service) deriveNextAddress(account accountName) (btcutil.Address, error
 func withChainSource(chainSource chain.Interface) WalletOption {
 	return func(s *service) error {
 		if s.chainSource != nil {
-			return errors.New("chain source already set")
+			return fmt.Errorf("chain source already set")
 		}
 
 		s.chainSource = chainSource
@@ -778,15 +785,25 @@ func withChainSource(chainSource chain.Interface) WalletOption {
 func withScanner(chainSource chain.Interface) WalletOption {
 	return func(s *service) error {
 		if s.scanner != nil {
-			return errors.New("scanner already set")
+			return fmt.Errorf("scanner already set")
 		}
 		if err := chainSource.Start(); err != nil {
 			return fmt.Errorf("failed to start scanner: %s", err)
 		}
-
 		s.scanner = chainSource
 		return nil
 	}
+}
+
+func createOrOpenWalletDB(path string) (walletdb.DB, error) {
+	db, err := walletdb.Open("bdb", path, true, 60*time.Second)
+	if err == nil {
+		return db, nil
+	}
+	if err != walletdb.ErrDbDoesNotExist {
+		return nil, err
+	}
+	return walletdb.Create("bdb", path, true, 60*time.Second)
 }
 
 // status implements ports.WalletStatus interface

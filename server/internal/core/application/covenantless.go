@@ -243,12 +243,6 @@ func (s *covenantlessService) Onboard(
 	return nil
 }
 
-func (s *covenantlessService) TrustedOnboarding(
-	ctx context.Context, userPubKey *secp256k1.PublicKey,
-) (string, error) {
-	return "", fmt.Errorf("not implemented")
-}
-
 func (s *covenantlessService) start() {
 	s.startRound()
 }
