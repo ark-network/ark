@@ -132,7 +132,7 @@ func signPsbt(
 				switch c := closure.(type) {
 				case *bitcointree.CSVSigClosure:
 					sign = bytes.Equal(c.Pubkey.SerializeCompressed()[1:], pubkey.SerializeCompressed()[1:])
-				case *bitcointree.ForfeitClosure:
+				case *bitcointree.MultisigClosure:
 					sign = bytes.Equal(c.Pubkey.SerializeCompressed()[1:], pubkey.SerializeCompressed()[1:])
 				}
 

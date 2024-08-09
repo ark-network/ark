@@ -1,7 +1,7 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "ark/v1/service.proto",
+    "title": "clark/v1/service.proto",
     "version": "version not set"
   },
   "tags": [
@@ -93,38 +93,6 @@
             "required": true,
             "schema": {
               "$ref": "#/definitions/v1OnboardRequest"
-            }
-          }
-        ],
-        "tags": [
-          "ArkService"
-        ]
-      }
-    },
-    "/v1/onboard/address": {
-      "post": {
-        "operationId": "ArkService_TrustedOnboarding",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1TrustedOnboardingResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1TrustedOnboardingRequest"
             }
           }
         ],
@@ -467,7 +435,10 @@
     "v1CompleteAsyncPaymentRequest": {
       "type": "object",
       "properties": {
-        "signedRedeemTx": {
+        "signedSenderTx": {
+          "type": "string"
+        },
+        "signedReceiverTx": {
           "type": "string"
         },
         "signedUnconditionalForfeitTx": {
@@ -476,7 +447,18 @@
       }
     },
     "v1CompleteAsyncPaymentResponse": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "senderTx": {
+          "type": "string"
+        },
+        "receiverTx": {
+          "type": "string"
+        },
+        "unconditionalForfeitTx": {
+          "type": "string"
+        }
+      }
     },
     "v1CreateAsyncPaymentRequest": {
       "type": "object",
@@ -492,9 +474,11 @@
     "v1CreateAsyncPaymentResponse": {
       "type": "object",
       "properties": {
-        "signedRedeemTx": {
-          "type": "string",
-          "title": "signed only by the ASP"
+        "unsignedSenderTx": {
+          "type": "string"
+        },
+        "unsignedReceiverTx": {
+          "type": "string"
         },
         "usignedUnconditionalForfeitTx": {
           "type": "string"
@@ -802,22 +786,6 @@
             "type": "object",
             "$ref": "#/definitions/v1Node"
           }
-        }
-      }
-    },
-    "v1TrustedOnboardingRequest": {
-      "type": "object",
-      "properties": {
-        "userPubkey": {
-          "type": "string"
-        }
-      }
-    },
-    "v1TrustedOnboardingResponse": {
-      "type": "object",
-      "properties": {
-        "address": {
-          "type": "string"
         }
       }
     },

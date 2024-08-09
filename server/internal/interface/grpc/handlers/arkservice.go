@@ -40,6 +40,61 @@ func NewHandler(service application.Service) arkv1.ArkServiceServer {
 	return h
 }
 
+func (h *handler) CompleteAsyncPayment(ctx context.Context, req *arkv1.CompleteAsyncPaymentRequest) (*arkv1.CompleteAsyncPaymentResponse, error) {
+	if req.GetSignedRedeemTx() == "" {
+		return nil, status.Error(codes.InvalidArgument, "missing signed redeem tx")
+	}
+
+	if req.GetSignedUnconditionalForfeitTx() == "" {
+		return nil, status.Error(codes.InvalidArgument, "missing signed unconditional forfeit tx")
+	}
+
+	if err := h.svc.CompleteAsyncPayment(ctx, &domain.AsyncPaymentTxs{
+		RedeemTx:               req.GetSignedRedeemTx(),
+		UnconditionalForfeitTx: req.GetSignedUnconditionalForfeitTx(),
+	}); err != nil {
+		return nil, err
+	}
+
+	return &arkv1.CompleteAsyncPaymentResponse{}, nil
+}
+
+func (h *handler) CreateAsyncPayment(ctx context.Context, req *arkv1.CreateAsyncPaymentRequest) (*arkv1.CreateAsyncPaymentResponse, error) {
+	if req.GetInput() == nil {
+		return nil, status.Error(codes.InvalidArgument, "missing input")
+	}
+
+	if req.GetReceiverPubkey() == "" {
+		return nil, status.Error(codes.InvalidArgument, "missing receiver pubkey")
+	}
+
+	input := req.GetInput()
+	vtxoKey := domain.VtxoKey{
+		Txid: input.GetTxid(),
+		VOut: input.GetVout(),
+	}
+
+	receiverPubkey, err := hex.DecodeString(req.GetReceiverPubkey())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid receiver pubkey")
+	}
+
+	receiver, err := secp256k1.ParsePubKey(receiverPubkey)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid receiver pubkey")
+	}
+
+	txs, err := h.svc.CreateAsyncPayment(ctx, vtxoKey, receiver)
+	if err != nil {
+		return nil, err
+	}
+
+	return &arkv1.CreateAsyncPaymentResponse{
+		SignedRedeemTx:                txs.RedeemTx,
+		UsignedUnconditionalForfeitTx: txs.UnconditionalForfeitTx,
+	}, nil
+}
+
 func (h *handler) TrustedOnboarding(ctx context.Context, req *arkv1.TrustedOnboardingRequest) (*arkv1.TrustedOnboardingResponse, error) {
 	if req.GetUserPubkey() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing user pubkey")

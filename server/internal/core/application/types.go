@@ -35,6 +35,14 @@ type Service interface {
 		congestionTree tree.CongestionTree, userPubkey *secp256k1.PublicKey,
 	) error
 	TrustedOnboarding(ctx context.Context, userPubKey *secp256k1.PublicKey) (string, error)
+
+	// Async payments
+	CreateAsyncPayment(
+		ctx context.Context, input domain.VtxoKey, receiverPubkey *secp256k1.PublicKey,
+	) (*domain.AsyncPaymentTxs, error)
+	CompleteAsyncPayment(
+		ctx context.Context, txs *domain.AsyncPaymentTxs,
+	) error
 }
 
 type ServiceInfo struct {

@@ -45,6 +45,8 @@ type AdminService interface {
 	GetScheduledSweeps(ctx context.Context) ([]ScheduledSweep, error)
 	GetRoundDetails(ctx context.Context, roundId string) (*RoundDetails, error)
 	GetRounds(ctx context.Context, after int64, before int64) ([]string, error)
+	GetWalletAddress(ctx context.Context) (string, error)
+	GetWalletStatus(ctx context.Context) (*WalletStatus, error)
 }
 
 type adminService struct {
@@ -153,4 +155,25 @@ func (a *adminService) GetScheduledSweeps(ctx context.Context) ([]ScheduledSweep
 	}
 
 	return scheduledSweeps, nil
+}
+
+func (a *adminService) GetWalletAddress(ctx context.Context) (string, error) {
+	addresses, err := a.walletSvc.DeriveAddresses(ctx, 1)
+	if err != nil {
+		return "", err
+	}
+
+	return addresses[0], nil
+}
+
+func (a *adminService) GetWalletStatus(ctx context.Context) (*WalletStatus, error) {
+	status, err := a.walletSvc.Status(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &WalletStatus{
+		IsInitialized: status.IsInitialized(),
+		IsUnlocked:    status.IsUnlocked(),
+		IsSynced:      status.IsSynced(),
+	}, nil
 }

@@ -303,6 +303,159 @@ func (b *txBuilder) FindLeaves(congestionTree tree.CongestionTree, fromtxid stri
 	return foundLeaves, nil
 }
 
+// TODO add locktimes to txs
+func (b *txBuilder) BuildAsyncPaymentTransactions(vtxo domain.Vtxo, aspPubKey, receiver *secp256k1.PublicKey) (*domain.AsyncPaymentTxs, error) {
+	if vtxo.Spent {
+		return nil, fmt.Errorf("vtxo already spent")
+	}
+
+	senderBytes, err := hex.DecodeString(vtxo.Pubkey)
+	if err != nil {
+		return nil, err
+	}
+
+	sender, err := secp256k1.ParsePubKey(senderBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	aspScript, err := p2trScript(aspPubKey, b.onchainNetwork())
+	if err != nil {
+		return nil, err
+	}
+
+	vtxoTxID, err := chainhash.NewHashFromStr(vtxo.Txid)
+	if err != nil {
+		return nil, err
+	}
+
+	vtxoOutpoint := &wire.OutPoint{
+		Hash:  *vtxoTxID,
+		Index: vtxo.VOut,
+	}
+
+	vtxoScript, vtxoTree, err := b.getLeafScriptAndTree(sender, aspPubKey)
+	if err != nil {
+		return nil, err
+	}
+
+	output := &wire.TxOut{
+		PkScript: aspScript,
+		Value:    int64(vtxo.Amount),
+	}
+
+	forfeitClosure := &bitcointree.MultisigClosure{
+		Pubkey:    sender,
+		AspPubkey: aspPubKey,
+	}
+
+	forfeitLeaf, err := forfeitClosure.Leaf()
+	if err != nil {
+		return nil, err
+	}
+
+	leafProof := vtxoTree.LeafMerkleProofs[vtxoTree.LeafProofIndex[forfeitLeaf.TapHash()]]
+	ctrlBlock := leafProof.ToControlBlock(bitcointree.UnspendableKey())
+	ctrlBlockBytes, err := ctrlBlock.ToBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	unconditionnalForfeitPsbt, err := psbt.New(
+		[]*wire.OutPoint{vtxoOutpoint},
+		[]*wire.TxOut{output},
+		2,
+		0,
+		[]uint32{wire.MaxTxInSequenceNum},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	unconditionnalForfeitPsbt.Inputs[0].WitnessUtxo = &wire.TxOut{
+		Value:    int64(vtxo.Amount),
+		PkScript: vtxoScript,
+	}
+
+	unconditionnalForfeitPsbt.Inputs[0].TaprootInternalKey = schnorr.SerializePubKey(bitcointree.UnspendableKey())
+	unconditionnalForfeitPsbt.Inputs[0].TaprootLeafScript = []*psbt.TaprootTapLeafScript{
+		{
+			ControlBlock: ctrlBlockBytes,
+			Script:       forfeitLeaf.Script,
+			LeafVersion:  txscript.BaseLeafVersion,
+		},
+	}
+
+	forfeitTx, err := unconditionnalForfeitPsbt.B64Encode()
+	if err != nil {
+		return nil, err
+	}
+
+	fees, err := b.wallet.EstimateFees(
+		context.Background(),
+		forfeitTx,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if 2*fees > vtxo.Amount {
+		return nil, fmt.Errorf("fees higher than the vtxo amount")
+	}
+
+	unconditionnalForfeitPsbt.UnsignedTx.TxOut[0].Value = int64(vtxo.Amount) - int64(fees)
+
+	forfeitTx, err = unconditionnalForfeitPsbt.B64Encode()
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO add sender+ASP closure ?
+	shortcutedVtxoScript, _, err := b.getLeafScriptAndTree(receiver, aspPubKey)
+	if err != nil {
+		return nil, err
+	}
+
+	receiverRedeemPsbt, err := psbt.New(
+		[]*wire.OutPoint{vtxoOutpoint},
+		[]*wire.TxOut{
+			{
+				Value:    int64(vtxo.Amount) - int64(fees),
+				PkScript: shortcutedVtxoScript,
+			},
+		},
+		2,
+		0,
+		[]uint32{wire.MaxTxInSequenceNum},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	receiverRedeemPsbt.Inputs[0].WitnessUtxo = unconditionnalForfeitPsbt.Inputs[0].WitnessUtxo
+	receiverRedeemPsbt.Inputs[0].TaprootInternalKey = unconditionnalForfeitPsbt.Inputs[0].TaprootInternalKey
+	receiverRedeemPsbt.Inputs[0].TaprootLeafScript = unconditionnalForfeitPsbt.Inputs[0].TaprootLeafScript
+
+	receiverRedeemTx, err := receiverRedeemPsbt.B64Encode()
+	if err != nil {
+		return nil, err
+	}
+
+	receiverRedeemTx, err = b.wallet.SignTransactionTapscript(
+		context.Background(),
+		receiverRedeemTx,
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &domain.AsyncPaymentTxs{
+		RedeemTx:               receiverRedeemTx,
+		UnconditionalForfeitTx: forfeitTx,
+	}, nil
+}
+
 func (b *txBuilder) getLeafScriptAndTree(
 	userPubkey, aspPubkey *secp256k1.PublicKey,
 ) ([]byte, *txscript.IndexedTapScriptTree, error) {
@@ -316,7 +469,7 @@ func (b *txBuilder) getLeafScriptAndTree(
 		return nil, nil, err
 	}
 
-	forfeitClosure := &bitcointree.ForfeitClosure{
+	forfeitClosure := &bitcointree.MultisigClosure{
 		Pubkey:    userPubkey,
 		AspPubkey: aspPubkey,
 	}
@@ -693,7 +846,9 @@ func (b *txBuilder) createConnectors(
 func (b *txBuilder) createForfeitTxs(
 	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, connectors []*psbt.Packet, minRelayFee uint64,
 ) ([]string, error) {
-	aspScript, err := p2wpkhScript(aspPubkey, b.onchainNetwork())
+	// TODO (@louisinger): are we sure about this change?
+	aspScript, err := p2trScript(aspPubkey, b.onchainNetwork())
+	// aspScript, err := p2wpkhScript(aspPubkey, b.onchainNetwork())
 	if err != nil {
 		return nil, err
 	}
@@ -719,7 +874,7 @@ func (b *txBuilder) createForfeitTxs(
 			var forfeitProof *txscript.TapscriptProof
 
 			for _, proof := range vtxoTaprootTree.LeafMerkleProofs {
-				isForfeit, err := (&bitcointree.ForfeitClosure{}).Decode(proof.Script)
+				isForfeit, err := (&bitcointree.MultisigClosure{}).Decode(proof.Script)
 				if !isForfeit || err != nil {
 					continue
 				}

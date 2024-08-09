@@ -93,7 +93,7 @@ func (s *service) signPsbt(packet *psbt.Packet) ([]uint32, error) {
 		}
 	}
 
-	// TODO: @louisinger shall we delete this code?
+	// TODO (@louisinger): shall we delete this code?
 	// prevOutputFetcher := wallet.PsbtPrevOutputFetcher(packet)
 	// sigHashes := txscript.NewTxSigHashes(tx, prevOutputFetcher)
 

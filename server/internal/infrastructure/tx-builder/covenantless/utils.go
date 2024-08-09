@@ -10,7 +10,7 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-func p2wpkhScript(publicKey *secp256k1.PublicKey, net *chaincfg.Params) ([]byte, error) {
+func p2trScript(publicKey *secp256k1.PublicKey, net *chaincfg.Params) ([]byte, error) {
 	tapKey := txscript.ComputeTaprootKeyNoScript(publicKey)
 
 	payment, err := btcutil.NewAddressWitnessPubKeyHash(

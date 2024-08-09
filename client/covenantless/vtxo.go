@@ -14,7 +14,7 @@ func computeVtxoTaprootScript(
 		Seconds: exitDelay,
 	}
 
-	forfeitClosure := &bitcointree.ForfeitClosure{
+	forfeitClosure := &bitcointree.MultisigClosure{
 		Pubkey:    userPubkey,
 		AspPubkey: aspPubkey,
 	}
