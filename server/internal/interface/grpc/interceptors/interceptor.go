@@ -1,19 +1,23 @@
 package interceptors
 
 import (
+	"github.com/ark-network/tools/macaroons"
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"google.golang.org/grpc"
 )
 
 // UnaryInterceptor returns the unary interceptor
-func UnaryInterceptor(user, pass string) grpc.ServerOption {
+func UnaryInterceptor(svc *macaroons.Service) grpc.ServerOption {
 	return grpc.UnaryInterceptor(middleware.ChainUnaryServer(
-		unaryAuthenticator(user, pass),
 		unaryLogger,
+		unaryMacaroonAuthHandler(svc),
 	))
 }
 
 // StreamInterceptor returns the stream interceptor with a logrus log
-func StreamInterceptor() grpc.ServerOption {
-	return grpc.StreamInterceptor(middleware.ChainStreamServer(streamLogger))
+func StreamInterceptor(svc *macaroons.Service) grpc.ServerOption {
+	return grpc.StreamInterceptor(middleware.ChainStreamServer(
+		streamLogger,
+		streamMacaroonAuthHandler(svc),
+	))
 }
