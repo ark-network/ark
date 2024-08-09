@@ -102,6 +102,19 @@ var (
 		Flags: []cli.Flag{&flags.ReceiversFlag, &flags.ToFlag, &flags.AmountFlag, &flags.PasswordFlag, &flags.EnableExpiryCoinselectFlag, &flags.AsyncPaymentFlag},
 	}
 
+	claimCommand = cli.Command{
+		Name:  "claim",
+		Usage: "Join round to claim pending payments",
+		Action: func(ctx *cli.Context) error {
+			cli, err := getCLIFromState(ctx)
+			if err != nil {
+				return err
+			}
+			return cli.ClaimAsync(ctx)
+		},
+		Flags: []cli.Flag{&flags.PasswordFlag},
+	}
+
 	receiveCommand = cli.Command{
 		Name:  "receive",
 		Usage: "Shows both onchain and offchain addresses",
@@ -144,6 +157,7 @@ func main() {
 		&receiveCommand,
 		&redeemCommand,
 		&sendCommand,
+		&claimCommand,
 		&onboardCommand,
 	)
 	app.Flags = []cli.Flag{
