@@ -15,7 +15,7 @@ import (
 	cr "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
 
-	"github.com/ark-network/ark-sdk/client/rest/service/models"
+	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/models"
 )
 
 // NewArkServiceTrustedOnboardingParams creates a new ArkServiceTrustedOnboardingParams object,

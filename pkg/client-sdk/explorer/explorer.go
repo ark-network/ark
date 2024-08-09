@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ark-network/ark-sdk/internal/utils"
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/wire"
 	log "github.com/sirupsen/logrus"

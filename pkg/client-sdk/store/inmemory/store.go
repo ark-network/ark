@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/ark-network/ark-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/store"
 )
 
 type Store struct {
