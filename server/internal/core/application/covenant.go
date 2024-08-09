@@ -17,7 +17,6 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	log "github.com/sirupsen/logrus"
-	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/psetv2"
 )
 
@@ -831,19 +830,6 @@ func (s *covenantService) saveEvents(
 		return err
 	}
 	return s.repoManager.Rounds().AddOrUpdateRound(ctx, *round)
-}
-
-func (s *covenantService) onchainNework() *network.Network {
-	switch s.network.Name {
-	case common.Liquid.Name:
-		return &network.Liquid
-	case common.LiquidRegTest.Name:
-		return &network.Regtest
-	case common.LiquidTestNet.Name:
-		return &network.Testnet
-	default:
-		return &network.Liquid
-	}
 }
 
 func getPaymentsFromOnboardingLiquid(
