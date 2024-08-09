@@ -16,7 +16,7 @@ import (
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
 
-	"github.com/ark-network/ark-sdk/client/rest/service/models"
+	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/models"
 )
 
 // ArkServiceGetEventStreamReader is a Reader for the ArkServiceGetEventStream structure.

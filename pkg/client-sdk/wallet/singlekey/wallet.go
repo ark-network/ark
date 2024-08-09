@@ -6,10 +6,10 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/ark-network/ark-sdk/internal/utils"
-	"github.com/ark-network/ark-sdk/store"
-	"github.com/ark-network/ark-sdk/wallet"
-	walletstore "github.com/ark-network/ark-sdk/wallet/singlekey/store"
+	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
+	"github.com/ark-network/ark/pkg/client-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/wallet"
+	walletstore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 

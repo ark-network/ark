@@ -3,7 +3,7 @@ package arksdk
 import (
 	"context"
 
-	"github.com/ark-network/ark-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/store"
 )
 
 type ArkClient interface {

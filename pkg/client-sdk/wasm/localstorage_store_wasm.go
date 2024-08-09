@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"syscall/js"
 
-	"github.com/ark-network/ark-sdk/internal/utils"
-	"github.com/ark-network/ark-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
+	"github.com/ark-network/ark/pkg/client-sdk/store"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 

@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	arksdk "github.com/ark-network/ark-sdk"
-	inmemorystore "github.com/ark-network/ark-sdk/store/inmemory"
+	arksdk "github.com/ark-network/ark/pkg/client-sdk"
+	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
 	log "github.com/sirupsen/logrus"
 )
 
