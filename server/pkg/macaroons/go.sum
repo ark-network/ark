@@ -191,8 +191,6 @@ github.com/lightninglabs/neutrino/cache v1.1.0 h1:szZIhVabiQIsGzJjhvo76sj05Au+zV
 github.com/lightninglabs/neutrino/cache v1.1.0/go.mod h1:XJNcgdOw1LQnanGjw8Vj44CvguYA25IMKjWFZczwZuo=
 github.com/lightningnetwork/lnd/healthcheck v1.2.5 h1:aTJy5xeBpcWgRtW/PGBDe+LMQEmNm/HQewlQx2jt7OA=
 github.com/lightningnetwork/lnd/healthcheck v1.2.5/go.mod h1:G7Tst2tVvWo7cx6mSBEToQC5L1XOGxzZTPB29g9Rv2I=
-github.com/lightningnetwork/lnd/kvdb v1.4.10 h1:vK89IVv1oVH9ubQWU+EmoCQFeVRaC8kfmOrqHbY5zoY=
-github.com/lightningnetwork/lnd/kvdb v1.4.10/go.mod h1:J2diNABOoII9UrMnxXS5w7vZwP7CA1CStrl8MnIrb3A=
 github.com/lightningnetwork/lnd/ticker v1.1.0 h1:ShoBiRP3pIxZHaETndfQ5kEe+S4NdAY1hiX7YbZ4QE4=
 github.com/lightningnetwork/lnd/ticker v1.1.0/go.mod h1:ubqbSVCn6RlE0LazXuBr7/Zi6QT0uQo++OgIRBxQUrk=
 github.com/lightningnetwork/lnd/tlv v1.0.2 h1:LG7H3Uw/mHYGnEeHRPg+STavAH+UsFvuBflD0PzcYFQ=

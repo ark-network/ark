@@ -45,7 +45,6 @@ require (
 	github.com/json-iterator/go v1.1.11 // indirect
 	github.com/lightninglabs/neutrino/cache v1.1.0 // indirect
 	github.com/lightningnetwork/lnd/healthcheck v1.2.5 // indirect
-	github.com/lightningnetwork/lnd/kvdb v1.4.10 // indirect
 	github.com/lightningnetwork/lnd/ticker v1.1.0 // indirect
 	github.com/lightningnetwork/lnd/tlv v1.0.2 // indirect
 	github.com/lightningnetwork/lnd/tor v1.0.0 // indirect
