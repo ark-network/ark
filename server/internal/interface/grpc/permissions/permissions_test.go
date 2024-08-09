@@ -18,9 +18,6 @@ func TestRestrictedMethods(t *testing.T) {
 		allMethods = append(allMethods, fmt.Sprintf("/%s/%s", arkv1.AdminService_ServiceDesc.ServiceName, m.MethodName))
 	}
 	for _, m := range arkv1.WalletService_ServiceDesc.Methods {
-		// if strings.Contains(m.MethodName, "Create") || strings.Contains(m.MethodName, "Restore") {
-		// 	continue
-		// }
 		allMethods = append(allMethods, fmt.Sprintf("/%s/%s", arkv1.WalletService_ServiceDesc.ServiceName, m.MethodName))
 	}
 

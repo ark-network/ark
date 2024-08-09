@@ -43,7 +43,8 @@ run: clean
 ## test: runs unit and component tests
 test:
 	@echo "Running unit tests..."
-	@find . -name go.mod -execdir go test -v -count=1 -race ./internal/... \;
+	@go test -v -count=1 -race ./internal/...
+	@find ./pkg -name go.mod -execdir go test -v -count=1 -race ./... \;
 
 ## vet: code analysis
 vet:
