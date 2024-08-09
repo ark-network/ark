@@ -100,43 +100,6 @@ func (c *clArkBitcoinCLI) SendAsync(ctx *cli.Context) error {
 		})
 	}
 
-	// explorer := utils.NewExplorer(ctx)
-	// client, close, err := getClientFromState(ctx)
-	// if err != nil {
-	// 	return err
-	// }
-	// defer close()
-
-	// offchainAddr, _, _, err := getAddress(ctx)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// vtxos, err := getVtxos(ctx, explorer, client, offchainAddr, false)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// // print vtxos to user
-	// fmt.Println("Select the vtxo to send async: ")
-	// for i, vtxo := range vtxos {
-	// 	fmt.Printf("%d: %s (%d sats)\n", i, vtxo.txid, vtxo.amount)
-	// }
-
-	// // get user input
-	// var idx int
-	// fmt.Print("Enter the index of the vtxo to send: ")
-	// _, err = fmt.Scanf("%d", &idx)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// if idx < 0 || idx >= len(vtxos) {
-	// 	return fmt.Errorf("invalid index")
-	// }
-
-	// vtxo := vtxos[idx]
-
 	resp, err := client.CreatePayment(
 		ctx.Context, &arkv1.CreatePaymentRequest{
 			Inputs:  inputs,

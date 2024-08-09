@@ -10,7 +10,7 @@ import (
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
 
-	"github.com/ark-network/ark-sdk/client/rest/service/arkservice/ark_service"
+	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/arkservice/ark_service"
 )
 
 // Default ark v1 service proto HTTP client.

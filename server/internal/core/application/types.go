@@ -34,8 +34,6 @@ type Service interface {
 		ctx context.Context, boardingTx string,
 		congestionTree tree.CongestionTree, userPubkey *secp256k1.PublicKey,
 	) error
-	TrustedOnboarding(ctx context.Context, userPubKey *secp256k1.PublicKey) (string, error)
-
 	// Async payments
 	CreateAsyncPayment(
 		ctx context.Context, inputs []domain.VtxoKey, receivers []domain.Receiver,

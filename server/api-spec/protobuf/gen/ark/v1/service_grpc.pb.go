@@ -29,7 +29,6 @@ type ArkServiceClient interface {
 	ListVtxos(ctx context.Context, in *ListVtxosRequest, opts ...grpc.CallOption) (*ListVtxosResponse, error)
 	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error)
 	Onboard(ctx context.Context, in *OnboardRequest, opts ...grpc.CallOption) (*OnboardResponse, error)
-	TrustedOnboarding(ctx context.Context, in *TrustedOnboardingRequest, opts ...grpc.CallOption) (*TrustedOnboardingResponse, error)
 	CreatePayment(ctx context.Context, in *CreatePaymentRequest, opts ...grpc.CallOption) (*CreatePaymentResponse, error)
 	CompletePayment(ctx context.Context, in *CompletePaymentRequest, opts ...grpc.CallOption) (*CompletePaymentResponse, error)
 }
@@ -155,15 +154,6 @@ func (c *arkServiceClient) Onboard(ctx context.Context, in *OnboardRequest, opts
 	return out, nil
 }
 
-func (c *arkServiceClient) TrustedOnboarding(ctx context.Context, in *TrustedOnboardingRequest, opts ...grpc.CallOption) (*TrustedOnboardingResponse, error) {
-	out := new(TrustedOnboardingResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/TrustedOnboarding", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *arkServiceClient) CreatePayment(ctx context.Context, in *CreatePaymentRequest, opts ...grpc.CallOption) (*CreatePaymentResponse, error) {
 	out := new(CreatePaymentResponse)
 	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/CreatePayment", in, out, opts...)
@@ -197,7 +187,6 @@ type ArkServiceServer interface {
 	ListVtxos(context.Context, *ListVtxosRequest) (*ListVtxosResponse, error)
 	GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error)
 	Onboard(context.Context, *OnboardRequest) (*OnboardResponse, error)
-	TrustedOnboarding(context.Context, *TrustedOnboardingRequest) (*TrustedOnboardingResponse, error)
 	CreatePayment(context.Context, *CreatePaymentRequest) (*CreatePaymentResponse, error)
 	CompletePayment(context.Context, *CompletePaymentRequest) (*CompletePaymentResponse, error)
 }
@@ -235,9 +224,6 @@ func (UnimplementedArkServiceServer) GetInfo(context.Context, *GetInfoRequest) (
 }
 func (UnimplementedArkServiceServer) Onboard(context.Context, *OnboardRequest) (*OnboardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Onboard not implemented")
-}
-func (UnimplementedArkServiceServer) TrustedOnboarding(context.Context, *TrustedOnboardingRequest) (*TrustedOnboardingResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method TrustedOnboarding not implemented")
 }
 func (UnimplementedArkServiceServer) CreatePayment(context.Context, *CreatePaymentRequest) (*CreatePaymentResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreatePayment not implemented")
@@ -440,24 +426,6 @@ func _ArkService_Onboard_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ArkService_TrustedOnboarding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(TrustedOnboardingRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ArkServiceServer).TrustedOnboarding(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/TrustedOnboarding",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).TrustedOnboarding(ctx, req.(*TrustedOnboardingRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _ArkService_CreatePayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreatePaymentRequest)
 	if err := dec(in); err != nil {
@@ -536,10 +504,6 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Onboard",
 			Handler:    _ArkService_Onboard_Handler,
-		},
-		{
-			MethodName: "TrustedOnboarding",
-			Handler:    _ArkService_TrustedOnboarding_Handler,
 		},
 		{
 			MethodName: "CreatePayment",

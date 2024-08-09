@@ -111,6 +111,7 @@ func TestService(t *testing.T) {
 			testRoundRepository(t, svc)
 			testVtxoRepository(t, svc)
 
+			time.Sleep(5 * time.Second)
 			svc.Close()
 		})
 	}

@@ -177,11 +177,6 @@ func (s *covenantlessService) CompleteAsyncPayment(
 		})
 	}
 
-	fmt.Println("AAAA")
-	for _, v := range vtxos {
-		fmt.Println(v.Receiver.Pubkey)
-	}
-
 	if err := s.repoManager.Vtxos().AddVtxos(ctx, vtxos); err != nil {
 		return fmt.Errorf("failed to add vtxos: %s", err)
 	}
@@ -295,7 +290,6 @@ func (s *covenantlessService) SignVtxos(ctx context.Context, forfeitTxs []string
 
 func (s *covenantlessService) ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, []domain.Vtxo, error) {
 	pk := hex.EncodeToString(pubkey.SerializeCompressed())
-	fmt.Println("AAAAAA", pk)
 	return s.repoManager.Vtxos().GetAllVtxos(ctx, pk)
 }
 
@@ -369,12 +363,6 @@ func (s *covenantlessService) Onboard(
 	}
 
 	return nil
-}
-
-func (s *covenantlessService) TrustedOnboarding(
-	ctx context.Context, userPubKey *secp256k1.PublicKey,
-) (string, error) {
-	return "", fmt.Errorf("not implemented")
 }
 
 func (s *covenantlessService) start() {

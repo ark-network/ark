@@ -25,10 +25,6 @@ var (
 		Name:  "amount",
 		Usage: "amount to onboard in sats",
 	}
-	TrustedOnboardFlag = cli.BoolFlag{
-		Name:  "trusted",
-		Usage: "trusted onboard",
-	}
 	ExpiryDetailsFlag = cli.BoolFlag{
 		Name:     "compute-expiry-details",
 		Usage:    "compute client-side the VTXOs expiry time",
@@ -45,7 +41,7 @@ var (
 		Value: "liquid",
 	}
 	UrlFlag = cli.StringFlag{
-		Name:     "ark-url",
+		Name:     "asp-url",
 		Usage:    "the url of the ASP to connect to",
 		Required: true,
 	}

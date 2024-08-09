@@ -35,7 +35,7 @@ func TestMain(m *testing.M) {
 
 	time.Sleep(3 * time.Second)
 
-	_, err = runArkCommand("init", "--ark-url", "localhost:8080", "--password", utils.Password, "--network", common.LiquidRegTest.Name, "--explorer", "http://chopsticks-liquid:3000")
+	_, err = runArkCommand("init", "--asp-url", "localhost:8080", "--password", utils.Password, "--network", common.LiquidRegTest.Name, "--explorer", "http://chopsticks-liquid:3000")
 	if err != nil {
 		fmt.Printf("error initializing ark config: %s", err)
 		os.Exit(1)
@@ -89,35 +89,6 @@ func TestOnboard(t *testing.T) {
 
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 	require.Equal(t, balanceBefore+1000, balance.Offchain.Total)
-}
-
-func TestTrustedOnboard(t *testing.T) {
-	var balance utils.ArkBalance
-	balanceStr, err := runArkCommand("balance")
-	require.NoError(t, err)
-
-	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
-	balanceBefore := balance.Offchain.Total
-
-	onboardStr, err := runArkCommand("onboard", "--trusted", "--password", utils.Password)
-	require.NoError(t, err)
-
-	var result utils.ArkTrustedOnboard
-	require.NoError(t, json.Unmarshal([]byte(onboardStr), &result))
-
-	_, err = utils.RunCommand("nigiri", "faucet", "--liquid", result.OnboardAddress)
-	require.NoError(t, err)
-
-	_, err = utils.RunCommand("nigiri", "faucet", "--liquid", result.OnboardAddress)
-	require.NoError(t, err)
-
-	time.Sleep(5 * time.Second)
-
-	balanceStr, err = runArkCommand("balance")
-	require.NoError(t, err)
-
-	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
-	require.Equal(t, balanceBefore+(2*(ONE_BTC-30)), balance.Offchain.Total)
 }
 
 func TestSendOffchain(t *testing.T) {

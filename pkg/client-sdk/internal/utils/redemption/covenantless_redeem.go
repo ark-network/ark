@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ark-network/ark-sdk/client"
-	"github.com/ark-network/ark-sdk/explorer"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
+	"github.com/ark-network/ark/pkg/client-sdk/client"
+	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/txscript"
 )

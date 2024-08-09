@@ -1,16 +1,14 @@
 package covenantless
 
 import (
-	"github.com/ark-network/ark-cli/flags"
+	"fmt"
+
 	"github.com/ark-network/ark-cli/utils"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/urfave/cli/v2"
 )
 
 func (c *clArkBitcoinCLI) ClaimAsync(ctx *cli.Context) error {
-	computeExpiryDetails := ctx.Bool(flags.ExpiryDetailsFlag.Name)
-
-	explorer := utils.NewExplorer(ctx)
 	client, cancel, err := getClientFromState(ctx)
 	if err != nil {
 		return err
@@ -22,40 +20,37 @@ func (c *clArkBitcoinCLI) ClaimAsync(ctx *cli.Context) error {
 		return err
 	}
 
-	vtxos, err := getVtxos(ctx, explorer, client, myselfOffchain, computeExpiryDetails)
+	vtxos, err := getVtxos(ctx, nil, client, myselfOffchain, false)
 	if err != nil {
 		return err
 	}
 
 	var pendingBalance uint64
 	var pendingVtxos []vtxo
-
 	for _, vtxo := range vtxos {
 		if vtxo.pending {
 			pendingBalance += vtxo.amount
 			pendingVtxos = append(pendingVtxos, vtxo)
 		}
 	}
-
-	if pendingBalance > 0 {
-		if err := selfTransferAllPendingPaymentsToMyself(ctx, pendingVtxos, receiver{
-			To:     myselfOffchain,
-			Amount: pendingBalance,
-		}); err != nil {
-			return err
-		}
+	fmt.Println(pendingBalance, len(pendingVtxos), len(vtxos))
+	if pendingBalance == 0 {
+		return nil
 	}
 
-	return nil
+	receiver := receiver{
+		To:     myselfOffchain,
+		Amount: pendingBalance,
+	}
+	return selfTransferAllPendingPayments(
+		ctx, client, pendingVtxos, receiver,
+	)
 }
 
-func selfTransferAllPendingPaymentsToMyself(ctx *cli.Context, pendingVtxos []vtxo, myself receiver) error {
-	client, close, err := getClientFromState(ctx)
-	if err != nil {
-		return err
-	}
-	defer close()
-
+func selfTransferAllPendingPayments(
+	ctx *cli.Context, client arkv1.ArkServiceClient,
+	pendingVtxos []vtxo, myself receiver,
+) error {
 	inputs := make([]*arkv1.Input, 0, len(pendingVtxos))
 
 	for _, coin := range pendingVtxos {

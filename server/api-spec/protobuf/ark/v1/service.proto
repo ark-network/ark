@@ -60,20 +60,12 @@ service ArkService {
       body: "*"
     };
   }
-  rpc TrustedOnboarding(TrustedOnboardingRequest) returns (TrustedOnboardingResponse) {
-    option (google.api.http) = {
-      post: "/v1/onboard/address"
-      body: "*"
-    };
-  }
-
   rpc CreatePayment(CreatePaymentRequest) returns (CreatePaymentResponse) {
     option (google.api.http) = {
       post: "/v1/payment"
       body: "*"
     };
   }
-
   rpc CompletePayment(CompletePaymentRequest) returns (CompletePaymentResponse) {
     option (google.api.http) = {
       post: "/v1/payment/complete"
@@ -175,14 +167,6 @@ message OnboardRequest {
   string user_pubkey = 3;
 }
 message OnboardResponse {
-}
-
-message TrustedOnboardingRequest {
-  string user_pubkey = 1;
-}
-
-message TrustedOnboardingResponse {
-  string address = 1;
 }
 
 // EVENT TYPES

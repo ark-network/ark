@@ -17,11 +17,9 @@ import (
 )
 
 func (c *clArkBitcoinCLI) Onboard(ctx *cli.Context) error {
-	isTrusted := ctx.Bool("trusted")
-
 	amount := ctx.Uint64("amount")
 
-	if !isTrusted && amount <= 0 {
+	if amount <= 0 {
 		return fmt.Errorf("missing amount flag (--amount)")
 	}
 
@@ -40,19 +38,6 @@ func (c *clArkBitcoinCLI) Onboard(ctx *cli.Context) error {
 		return err
 	}
 	defer cancel()
-
-	if isTrusted {
-		resp, err := client.TrustedOnboarding(ctx.Context, &arkv1.TrustedOnboardingRequest{
-			UserPubkey: hex.EncodeToString(userPubKey.SerializeCompressed()),
-		})
-		if err != nil {
-			return err
-		}
-
-		return utils.PrintJSON(map[string]interface{}{
-			"onboard_address": resp.Address,
-		})
-	}
 
 	aspPubkey, err := utils.GetAspPublicKey(ctx)
 	if err != nil {
