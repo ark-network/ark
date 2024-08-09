@@ -437,5 +437,8 @@ func getTLSConfig(path string) (*tls.Config, error) {
 		return nil, fmt.Errorf("failed to parse tls cert")
 	}
 
-	return &tls.Config{RootCAs: caCertPool}, nil
+	return &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		RootCAs:    caCertPool,
+	}, nil
 }
