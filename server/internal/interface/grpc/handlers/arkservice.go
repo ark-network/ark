@@ -389,6 +389,13 @@ func (v vtxoList) toProto(hrp string, aspKey *secp256k1.PublicKey) []*arkv1.Vtxo
 			key, _ := secp256k1.ParsePubKey(buf)
 			addr, _ = common.EncodeAddress(hrp, key, aspKey)
 		}
+		var pendingData *arkv1.PendingPayment
+		if vv.AsyncPayment != nil {
+			pendingData = &arkv1.PendingPayment{
+				RedeemTx:                vv.AsyncPayment.RedeemTx,
+				UnconditionalForfeitTxs: vv.AsyncPayment.UnconditionalForfeitTxs,
+			}
+		}
 		list = append(list, &arkv1.Vtxo{
 			Outpoint: &arkv1.Input{
 				Txid: vv.Txid,
@@ -398,13 +405,16 @@ func (v vtxoList) toProto(hrp string, aspKey *secp256k1.PublicKey) []*arkv1.Vtxo
 				Address: addr,
 				Amount:  vv.Amount,
 			},
-			PoolTxid: vv.PoolTx,
-			Spent:    vv.Spent,
-			ExpireAt: vv.ExpireAt,
-			SpentBy:  vv.SpentBy,
-			Swept:    vv.Swept,
+			PoolTxid:    vv.PoolTx,
+			Spent:       vv.Spent,
+			ExpireAt:    vv.ExpireAt,
+			SpentBy:     vv.SpentBy,
+			Swept:       vv.Swept,
+			PendingData: pendingData,
+			Pending:     pendingData != nil,
 		})
 	}
+
 	return list
 }
 
