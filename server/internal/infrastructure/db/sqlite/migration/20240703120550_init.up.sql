@@ -41,8 +41,17 @@ CREATE TABLE IF NOT EXISTS tx (
     FOREIGN KEY (round_id) REFERENCES round(id)
 );
 
+CREATE TABLE IF NOT EXISTS uncond_forfeit_tx (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tx TEXT NOT NULL,
+    vtxo_txid TEXT NOT NULL,
+    vtxo_vout INTEGER NOT NULL,
+    position INTEGER NOT NULL,
+    FOREIGN KEY (vtxo_txid, vtxo_vout) REFERENCES vtxo(txid, vout)
+);
+
 CREATE TABLE IF NOT EXISTS vtxo (
-	txid TEXT NOT NULL PRIMARY KEY,
+	txid TEXT NOT NULL,
 	vout INTEGER NOT NULL,
 	pubkey TEXT NOT NULL,
 	amount INTEGER NOT NULL,
@@ -53,6 +62,8 @@ CREATE TABLE IF NOT EXISTS vtxo (
 	swept BOOLEAN NOT NULL,
 	expire_at INTEGER NOT NULL,
 	payment_id TEXT,
+    redeem_tx TEXT,
+    PRIMARY KEY (txid, vout),
 	FOREIGN KEY (payment_id) REFERENCES payment(id)
 );
 
@@ -75,3 +86,8 @@ CREATE VIEW payment_vtxo_vw AS SELECT vtxo.*
 FROM payment
 LEFT OUTER JOIN vtxo
 ON payment.id=vtxo.payment_id;
+
+CREATE VIEW uncond_forfeit_tx_vw AS SELECT uncond_forfeit_tx.*
+FROM vtxo
+LEFT OUTER JOIN uncond_forfeit_tx
+ON vtxo.txid=uncond_forfeit_tx.vtxo_txid AND vtxo.vout=uncond_forfeit_tx.vtxo_vout;
