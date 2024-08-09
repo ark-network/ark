@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ark-network/ark-sdk/client"
-	"github.com/ark-network/ark-sdk/internal/utils"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common/tree"
+	"github.com/ark-network/ark/pkg/client-sdk/client"
+	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"

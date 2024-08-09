@@ -4,12 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"github.com/ark-network/ark-sdk/client"
-	"github.com/ark-network/ark-sdk/store"
-	filestore "github.com/ark-network/ark-sdk/store/file"
-	inmemorystore "github.com/ark-network/ark-sdk/store/inmemory"
-	"github.com/ark-network/ark-sdk/wallet"
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/pkg/client-sdk/client"
+	"github.com/ark-network/ark/pkg/client-sdk/store"
+	filestore "github.com/ark-network/ark/pkg/client-sdk/store/file"
+	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
+	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/stretchr/testify/require"
 )

@@ -13,7 +13,7 @@ import (
 	"github.com/go-openapi/runtime"
 	"github.com/go-openapi/strfmt"
 
-	"github.com/ark-network/ark-sdk/client/rest/service/models"
+	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/models"
 )
 
 // ArkServiceRegisterPaymentReader is a Reader for the ArkServiceRegisterPayment structure.

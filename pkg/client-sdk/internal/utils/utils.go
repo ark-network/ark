@@ -9,8 +9,8 @@ import (
 	"runtime/debug"
 	"sort"
 
-	"github.com/ark-network/ark-sdk/client"
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"

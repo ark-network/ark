@@ -3,7 +3,7 @@ package inmemorystore
 import (
 	"sync"
 
-	walletstore "github.com/ark-network/ark-sdk/wallet/singlekey/store"
+	walletstore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store"
 )
 
 type inmemoryStore struct {

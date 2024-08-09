@@ -1,4 +1,4 @@
-module github.com/ark-network/ark-sdk
+module github.com/ark-network/ark/pkg/client-sdk
 
 go 1.22.4
 

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ark-network/ark-sdk/client"
-	"github.com/ark-network/ark-sdk/explorer"
 	"github.com/ark-network/ark/common/tree"
+	"github.com/ark-network/ark/pkg/client-sdk/client"
+	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/psetv2"
