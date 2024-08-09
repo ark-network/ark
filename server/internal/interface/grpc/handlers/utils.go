@@ -30,6 +30,21 @@ func parseAddress(addr string) (string, *secp256k1.PublicKey, *secp256k1.PublicK
 	return common.DecodeAddress(addr)
 }
 
+func parseInputs(ins []*arkv1.Input) ([]domain.VtxoKey, error) {
+	if len(ins) <= 0 {
+		return nil, fmt.Errorf("missing inputs")
+	}
+
+	vtxos := make([]domain.VtxoKey, 0, len(ins))
+	for _, input := range ins {
+		vtxos = append(vtxos, domain.VtxoKey{
+			Txid: input.GetTxid(),
+			VOut: input.GetVout(),
+		})
+	}
+	return vtxos, nil
+}
+
 func parseReceivers(outs []*arkv1.Output) ([]domain.Receiver, error) {
 	receivers := make([]domain.Receiver, 0, len(outs))
 	for _, out := range outs {

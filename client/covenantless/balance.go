@@ -190,6 +190,7 @@ func getOffchainBalance(
 		return 0, nil, err
 	}
 	var balance uint64
+	fmt.Println("AAAAA", len(vtxos))
 	for _, vtxo := range vtxos {
 		balance += vtxo.amount
 

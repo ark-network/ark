@@ -38,10 +38,10 @@ type Service interface {
 
 	// Async payments
 	CreateAsyncPayment(
-		ctx context.Context, input domain.VtxoKey, receiverPubkey *secp256k1.PublicKey,
-	) (*domain.AsyncPaymentTxs, error)
+		ctx context.Context, inputs []domain.VtxoKey, receivers []domain.Receiver,
+	) (string, []string, error)
 	CompleteAsyncPayment(
-		ctx context.Context, txs *domain.AsyncPaymentTxs,
+		ctx context.Context, redeemTx string, unconditionalForfeitTxs []string,
 	) error
 }
 

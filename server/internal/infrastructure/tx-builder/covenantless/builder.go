@@ -304,155 +304,194 @@ func (b *txBuilder) FindLeaves(congestionTree tree.CongestionTree, fromtxid stri
 }
 
 // TODO add locktimes to txs
-func (b *txBuilder) BuildAsyncPaymentTransactions(vtxo domain.Vtxo, aspPubKey, receiver *secp256k1.PublicKey) (*domain.AsyncPaymentTxs, error) {
-	if vtxo.Spent {
-		return nil, fmt.Errorf("vtxo already spent")
+func (b *txBuilder) BuildAsyncPaymentTransactions(
+	vtxos []domain.Vtxo, aspPubKey *secp256k1.PublicKey, receivers []domain.Receiver,
+) (*domain.AsyncPaymentTxs, error) {
+	if len(vtxos) <= 0 {
+		return nil, fmt.Errorf("missing vtxos")
 	}
 
-	senderBytes, err := hex.DecodeString(vtxo.Pubkey)
-	if err != nil {
-		return nil, err
-	}
+	ins := make([]*wire.OutPoint, 0, len(vtxos))
+	outs := make([]*wire.TxOut, 0, len(receivers))
+	unconditionalForfeitTxs := make([]string, 0, len(vtxos))
+	for _, vtxo := range vtxos {
+		if vtxo.Spent {
+			return nil, fmt.Errorf("all vtxos must be unspent")
+		}
 
-	sender, err := secp256k1.ParsePubKey(senderBytes)
-	if err != nil {
-		return nil, err
-	}
+		senderBytes, err := hex.DecodeString(vtxo.Pubkey)
+		if err != nil {
+			return nil, err
+		}
 
-	aspScript, err := p2trScript(aspPubKey, b.onchainNetwork())
-	if err != nil {
-		return nil, err
-	}
+		sender, err := secp256k1.ParsePubKey(senderBytes)
+		if err != nil {
+			return nil, err
+		}
 
-	vtxoTxID, err := chainhash.NewHashFromStr(vtxo.Txid)
-	if err != nil {
-		return nil, err
-	}
+		aspScript, err := p2trScript(aspPubKey, b.onchainNetwork())
+		if err != nil {
+			return nil, err
+		}
 
-	vtxoOutpoint := &wire.OutPoint{
-		Hash:  *vtxoTxID,
-		Index: vtxo.VOut,
-	}
+		vtxoTxID, err := chainhash.NewHashFromStr(vtxo.Txid)
+		if err != nil {
+			return nil, err
+		}
 
-	vtxoScript, vtxoTree, err := b.getLeafScriptAndTree(sender, aspPubKey)
-	if err != nil {
-		return nil, err
-	}
+		vtxoOutpoint := &wire.OutPoint{
+			Hash:  *vtxoTxID,
+			Index: vtxo.VOut,
+		}
 
-	output := &wire.TxOut{
-		PkScript: aspScript,
-		Value:    int64(vtxo.Amount),
-	}
+		vtxoScript, vtxoTree, err := b.getLeafScriptAndTree(sender, aspPubKey)
+		if err != nil {
+			return nil, err
+		}
 
-	forfeitClosure := &bitcointree.MultisigClosure{
-		Pubkey:    sender,
-		AspPubkey: aspPubKey,
-	}
+		output := &wire.TxOut{
+			PkScript: aspScript,
+			Value:    int64(vtxo.Amount),
+		}
 
-	forfeitLeaf, err := forfeitClosure.Leaf()
-	if err != nil {
-		return nil, err
-	}
+		forfeitClosure := &bitcointree.MultisigClosure{
+			Pubkey:    sender,
+			AspPubkey: aspPubKey,
+		}
 
-	leafProof := vtxoTree.LeafMerkleProofs[vtxoTree.LeafProofIndex[forfeitLeaf.TapHash()]]
-	ctrlBlock := leafProof.ToControlBlock(bitcointree.UnspendableKey())
-	ctrlBlockBytes, err := ctrlBlock.ToBytes()
-	if err != nil {
-		return nil, err
-	}
+		forfeitLeaf, err := forfeitClosure.Leaf()
+		if err != nil {
+			return nil, err
+		}
 
-	unconditionnalForfeitPsbt, err := psbt.New(
-		[]*wire.OutPoint{vtxoOutpoint},
-		[]*wire.TxOut{output},
-		2,
-		0,
-		[]uint32{wire.MaxTxInSequenceNum},
-	)
-	if err != nil {
-		return nil, err
-	}
+		leafProof := vtxoTree.LeafMerkleProofs[vtxoTree.LeafProofIndex[forfeitLeaf.TapHash()]]
+		ctrlBlock := leafProof.ToControlBlock(bitcointree.UnspendableKey())
+		ctrlBlockBytes, err := ctrlBlock.ToBytes()
+		if err != nil {
+			return nil, err
+		}
 
-	unconditionnalForfeitPsbt.Inputs[0].WitnessUtxo = &wire.TxOut{
-		Value:    int64(vtxo.Amount),
-		PkScript: vtxoScript,
-	}
+		unconditionnalForfeitPtx, err := psbt.New(
+			[]*wire.OutPoint{vtxoOutpoint},
+			[]*wire.TxOut{output},
+			2,
+			0,
+			[]uint32{wire.MaxTxInSequenceNum},
+		)
+		if err != nil {
+			return nil, err
+		}
 
-	unconditionnalForfeitPsbt.Inputs[0].TaprootInternalKey = schnorr.SerializePubKey(bitcointree.UnspendableKey())
-	unconditionnalForfeitPsbt.Inputs[0].TaprootLeafScript = []*psbt.TaprootTapLeafScript{
-		{
-			ControlBlock: ctrlBlockBytes,
-			Script:       forfeitLeaf.Script,
-			LeafVersion:  txscript.BaseLeafVersion,
-		},
-	}
+		unconditionnalForfeitPtx.Inputs[0].WitnessUtxo = &wire.TxOut{
+			Value:    int64(vtxo.Amount),
+			PkScript: vtxoScript,
+		}
 
-	forfeitTx, err := unconditionnalForfeitPsbt.B64Encode()
-	if err != nil {
-		return nil, err
-	}
-
-	fees, err := b.wallet.EstimateFees(
-		context.Background(),
-		forfeitTx,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	if 2*fees > vtxo.Amount {
-		return nil, fmt.Errorf("fees higher than the vtxo amount")
-	}
-
-	unconditionnalForfeitPsbt.UnsignedTx.TxOut[0].Value = int64(vtxo.Amount) - int64(fees)
-
-	forfeitTx, err = unconditionnalForfeitPsbt.B64Encode()
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO add sender+ASP closure ?
-	shortcutedVtxoScript, _, err := b.getLeafScriptAndTree(receiver, aspPubKey)
-	if err != nil {
-		return nil, err
-	}
-
-	receiverRedeemPsbt, err := psbt.New(
-		[]*wire.OutPoint{vtxoOutpoint},
-		[]*wire.TxOut{
+		unconditionnalForfeitPtx.Inputs[0].TaprootInternalKey = schnorr.SerializePubKey(bitcointree.UnspendableKey())
+		unconditionnalForfeitPtx.Inputs[0].TaprootLeafScript = []*psbt.TaprootTapLeafScript{
 			{
-				Value:    int64(vtxo.Amount) - int64(fees),
-				PkScript: shortcutedVtxoScript,
+				ControlBlock: ctrlBlockBytes,
+				Script:       forfeitLeaf.Script,
+				LeafVersion:  txscript.BaseLeafVersion,
 			},
-		},
-		2,
-		0,
-		[]uint32{wire.MaxTxInSequenceNum},
+		}
+
+		forfeitTx, err := unconditionnalForfeitPtx.B64Encode()
+		if err != nil {
+			return nil, err
+		}
+
+		fees, err := b.wallet.EstimateFees(context.Background(), forfeitTx)
+		if err != nil {
+			return nil, err
+		}
+
+		fmt.Println("FEEES", fees, vtxo.Amount)
+		if 2*fees > vtxo.Amount {
+			return nil, fmt.Errorf("fees higher than the vtxo amount")
+		}
+
+		unconditionnalForfeitPtx.UnsignedTx.TxOut[0].Value = int64(vtxo.Amount) - int64(fees)
+
+		forfeitTx, err = unconditionnalForfeitPtx.B64Encode()
+		if err != nil {
+			return nil, err
+		}
+
+		unconditionalForfeitTxs = append(unconditionalForfeitTxs, forfeitTx)
+		ins = append(ins, vtxoOutpoint)
+	}
+
+	for _, receiver := range receivers {
+		// TODO add sender+ASP closure ?
+		buf, err := hex.DecodeString(receiver.Pubkey)
+		if err != nil {
+			return nil, err
+		}
+		receiverPk, err := secp256k1.ParsePubKey(buf)
+		if err != nil {
+			return nil, err
+		}
+		shortcutedVtxoScript, _, err := b.getLeafScriptAndTree(receiverPk, aspPubKey)
+		if err != nil {
+			return nil, err
+		}
+
+		outs = append(outs, &wire.TxOut{
+			Value:    int64(receiver.Amount),
+			PkScript: shortcutedVtxoScript,
+		})
+	}
+
+	redeemPtx, err := psbt.New(
+		ins, outs, 2, 0, []uint32{wire.MaxTxInSequenceNum},
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	receiverRedeemPsbt.Inputs[0].WitnessUtxo = unconditionnalForfeitPsbt.Inputs[0].WitnessUtxo
-	receiverRedeemPsbt.Inputs[0].TaprootInternalKey = unconditionnalForfeitPsbt.Inputs[0].TaprootInternalKey
-	receiverRedeemPsbt.Inputs[0].TaprootLeafScript = unconditionnalForfeitPsbt.Inputs[0].TaprootLeafScript
+	for i := range redeemPtx.Inputs {
+		unconditionnalForfeitPsbt, _ := psbt.NewFromRawBytes(
+			strings.NewReader(unconditionalForfeitTxs[i]), true,
+		)
+		redeemPtx.Inputs[i].WitnessUtxo = unconditionnalForfeitPsbt.Inputs[0].WitnessUtxo
+		redeemPtx.Inputs[i].TaprootInternalKey = unconditionnalForfeitPsbt.Inputs[0].TaprootInternalKey
+		redeemPtx.Inputs[i].TaprootLeafScript = unconditionnalForfeitPsbt.Inputs[0].TaprootLeafScript
 
-	receiverRedeemTx, err := receiverRedeemPsbt.B64Encode()
+	}
+
+	redeemTx, err := redeemPtx.B64Encode()
 	if err != nil {
 		return nil, err
 	}
 
-	receiverRedeemTx, err = b.wallet.SignTransactionTapscript(
-		context.Background(),
-		receiverRedeemTx,
-		nil,
+	fees, err := b.wallet.EstimateFees(context.Background(), redeemTx)
+	if err != nil {
+		return nil, err
+	}
+
+	amount := receivers[len(receivers)-1].Amount
+	if 2*fees > amount {
+		return nil, fmt.Errorf("fees higher than the total vtxos amount")
+	}
+
+	redeemPtx.UnsignedTx.TxOut[0].Value = int64(amount) - int64(fees)
+
+	redeemTx, err = redeemPtx.B64Encode()
+	if err != nil {
+		return nil, err
+	}
+
+	signedRedeemTx, err := b.wallet.SignTransactionTapscript(
+		context.Background(), redeemTx, nil,
 	)
 	if err != nil {
 		return nil, err
 	}
 
 	return &domain.AsyncPaymentTxs{
-		RedeemTx:               receiverRedeemTx,
-		UnconditionalForfeitTx: forfeitTx,
+		RedeemTx:                signedRedeemTx,
+		UnconditionalForfeitTxs: unconditionalForfeitTxs,
 	}, nil
 }
 

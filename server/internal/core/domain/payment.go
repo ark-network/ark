@@ -140,6 +140,6 @@ type Vtxo struct {
 }
 
 type AsyncPaymentTxs struct {
-	RedeemTx               string // always signed by the ASP when created
-	UnconditionalForfeitTx string
+	RedeemTx                string // always signed by the ASP when created
+	UnconditionalForfeitTxs []string
 }

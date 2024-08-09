@@ -30,11 +30,7 @@ type TxBuilder interface {
 	// FindLeaves returns all the leaves txs that are reachable from the given outpoint
 	FindLeaves(congestionTree tree.CongestionTree, fromtxid string, vout uint32) (leaves []tree.Node, err error)
 	BuildAsyncPaymentTransactions(
-		vtxoToSpend domain.Vtxo,
-		aspPubKey, // receiver of the unconditional forfeit tx
-		receiver *secp256k1.PublicKey,
-	) (
-		*domain.AsyncPaymentTxs,
-		error,
-	)
+		vtxosToSpend []domain.Vtxo,
+		aspPubKey *secp256k1.PublicKey, receivers []domain.Receiver,
+	) (*domain.AsyncPaymentTxs, error)
 }

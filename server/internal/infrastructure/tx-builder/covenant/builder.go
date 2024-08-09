@@ -316,7 +316,9 @@ func (b *txBuilder) FindLeaves(
 	return foundLeaves, nil
 }
 
-func (b *txBuilder) BuildAsyncPaymentTransactions(_ domain.Vtxo, _, _ *secp256k1.PublicKey) (*domain.AsyncPaymentTxs, error) {
+func (b *txBuilder) BuildAsyncPaymentTransactions(
+	_ []domain.Vtxo, _ *secp256k1.PublicKey, _ []domain.Receiver,
+) (*domain.AsyncPaymentTxs, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 

@@ -30,8 +30,8 @@ type ArkServiceClient interface {
 	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error)
 	Onboard(ctx context.Context, in *OnboardRequest, opts ...grpc.CallOption) (*OnboardResponse, error)
 	TrustedOnboarding(ctx context.Context, in *TrustedOnboardingRequest, opts ...grpc.CallOption) (*TrustedOnboardingResponse, error)
-	CreateAsyncPayment(ctx context.Context, in *CreateAsyncPaymentRequest, opts ...grpc.CallOption) (*CreateAsyncPaymentResponse, error)
-	CompleteAsyncPayment(ctx context.Context, in *CompleteAsyncPaymentRequest, opts ...grpc.CallOption) (*CompleteAsyncPaymentResponse, error)
+	CreatePayment(ctx context.Context, in *CreatePaymentRequest, opts ...grpc.CallOption) (*CreatePaymentResponse, error)
+	CompletePayment(ctx context.Context, in *CompletePaymentRequest, opts ...grpc.CallOption) (*CompletePaymentResponse, error)
 }
 
 type arkServiceClient struct {
@@ -164,18 +164,18 @@ func (c *arkServiceClient) TrustedOnboarding(ctx context.Context, in *TrustedOnb
 	return out, nil
 }
 
-func (c *arkServiceClient) CreateAsyncPayment(ctx context.Context, in *CreateAsyncPaymentRequest, opts ...grpc.CallOption) (*CreateAsyncPaymentResponse, error) {
-	out := new(CreateAsyncPaymentResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/CreateAsyncPayment", in, out, opts...)
+func (c *arkServiceClient) CreatePayment(ctx context.Context, in *CreatePaymentRequest, opts ...grpc.CallOption) (*CreatePaymentResponse, error) {
+	out := new(CreatePaymentResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/CreatePayment", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *arkServiceClient) CompleteAsyncPayment(ctx context.Context, in *CompleteAsyncPaymentRequest, opts ...grpc.CallOption) (*CompleteAsyncPaymentResponse, error) {
-	out := new(CompleteAsyncPaymentResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/CompleteAsyncPayment", in, out, opts...)
+func (c *arkServiceClient) CompletePayment(ctx context.Context, in *CompletePaymentRequest, opts ...grpc.CallOption) (*CompletePaymentResponse, error) {
+	out := new(CompletePaymentResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/CompletePayment", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -198,8 +198,8 @@ type ArkServiceServer interface {
 	GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error)
 	Onboard(context.Context, *OnboardRequest) (*OnboardResponse, error)
 	TrustedOnboarding(context.Context, *TrustedOnboardingRequest) (*TrustedOnboardingResponse, error)
-	CreateAsyncPayment(context.Context, *CreateAsyncPaymentRequest) (*CreateAsyncPaymentResponse, error)
-	CompleteAsyncPayment(context.Context, *CompleteAsyncPaymentRequest) (*CompleteAsyncPaymentResponse, error)
+	CreatePayment(context.Context, *CreatePaymentRequest) (*CreatePaymentResponse, error)
+	CompletePayment(context.Context, *CompletePaymentRequest) (*CompletePaymentResponse, error)
 }
 
 // UnimplementedArkServiceServer should be embedded to have forward compatible implementations.
@@ -239,11 +239,11 @@ func (UnimplementedArkServiceServer) Onboard(context.Context, *OnboardRequest) (
 func (UnimplementedArkServiceServer) TrustedOnboarding(context.Context, *TrustedOnboardingRequest) (*TrustedOnboardingResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method TrustedOnboarding not implemented")
 }
-func (UnimplementedArkServiceServer) CreateAsyncPayment(context.Context, *CreateAsyncPaymentRequest) (*CreateAsyncPaymentResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CreateAsyncPayment not implemented")
+func (UnimplementedArkServiceServer) CreatePayment(context.Context, *CreatePaymentRequest) (*CreatePaymentResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreatePayment not implemented")
 }
-func (UnimplementedArkServiceServer) CompleteAsyncPayment(context.Context, *CompleteAsyncPaymentRequest) (*CompleteAsyncPaymentResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CompleteAsyncPayment not implemented")
+func (UnimplementedArkServiceServer) CompletePayment(context.Context, *CompletePaymentRequest) (*CompletePaymentResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CompletePayment not implemented")
 }
 
 // UnsafeArkServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -458,38 +458,38 @@ func _ArkService_TrustedOnboarding_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ArkService_CreateAsyncPayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CreateAsyncPaymentRequest)
+func _ArkService_CreatePayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreatePaymentRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ArkServiceServer).CreateAsyncPayment(ctx, in)
+		return srv.(ArkServiceServer).CreatePayment(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/CreateAsyncPayment",
+		FullMethod: "/ark.v1.ArkService/CreatePayment",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).CreateAsyncPayment(ctx, req.(*CreateAsyncPaymentRequest))
+		return srv.(ArkServiceServer).CreatePayment(ctx, req.(*CreatePaymentRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ArkService_CompleteAsyncPayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CompleteAsyncPaymentRequest)
+func _ArkService_CompletePayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompletePaymentRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ArkServiceServer).CompleteAsyncPayment(ctx, in)
+		return srv.(ArkServiceServer).CompletePayment(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/CompleteAsyncPayment",
+		FullMethod: "/ark.v1.ArkService/CompletePayment",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).CompleteAsyncPayment(ctx, req.(*CompleteAsyncPaymentRequest))
+		return srv.(ArkServiceServer).CompletePayment(ctx, req.(*CompletePaymentRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -542,12 +542,12 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ArkService_TrustedOnboarding_Handler,
 		},
 		{
-			MethodName: "CreateAsyncPayment",
-			Handler:    _ArkService_CreateAsyncPayment_Handler,
+			MethodName: "CreatePayment",
+			Handler:    _ArkService_CreatePayment_Handler,
 		},
 		{
-			MethodName: "CompleteAsyncPayment",
-			Handler:    _ArkService_CompleteAsyncPayment_Handler,
+			MethodName: "CompletePayment",
+			Handler:    _ArkService_CompletePayment_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

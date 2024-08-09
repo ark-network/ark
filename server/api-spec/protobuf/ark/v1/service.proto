@@ -67,37 +67,35 @@ service ArkService {
     };
   }
 
-  rpc CreateAsyncPayment(CreateAsyncPaymentRequest) returns (CreateAsyncPaymentResponse) {
+  rpc CreatePayment(CreatePaymentRequest) returns (CreatePaymentResponse) {
     option (google.api.http) = {
-      post: "/v1/payment/async"
+      post: "/v1/payment"
       body: "*"
     };
   }
 
-  rpc CompleteAsyncPayment(CompleteAsyncPaymentRequest) returns (CompleteAsyncPaymentResponse) {
+  rpc CompletePayment(CompletePaymentRequest) returns (CompletePaymentResponse) {
     option (google.api.http) = {
-      post: "/v1/payment/async/complete"
+      post: "/v1/payment/complete"
       body: "*"
     };
   }
 }
 
-message CreateAsyncPaymentRequest {
-  Input input = 1;
-  string receiver_pubkey = 2;
+message CreatePaymentRequest {
+  repeated Input inputs = 1;
+  repeated Output outputs = 2;
 }
-
-message CreateAsyncPaymentResponse {
+message CreatePaymentResponse {
   string signed_redeem_tx = 1; // signed only by the ASP
-  string usigned_unconditional_forfeit_tx = 2;
+  repeated string usigned_unconditional_forfeit_txs = 2;
 }
 
-message CompleteAsyncPaymentRequest {
+message CompletePaymentRequest {
   string signed_redeem_tx = 1;
-  string signed_unconditional_forfeit_tx = 2;
+  repeated string signed_unconditional_forfeit_txs = 2;
 }
-
-message CompleteAsyncPaymentResponse {}
+message CompletePaymentResponse {}
 
 message RegisterPaymentRequest {
   repeated Input inputs = 1;
@@ -262,4 +260,11 @@ message Vtxo {
   string spent_by = 5;
   int64 expire_at = 6;
   bool swept = 7;
+  bool pending = 8;
+  PendingPayment pending_data = 9;
+}
+
+message PendingPayment {
+  string redeem_tx = 1;
+  repeated string unconditional_forfeit_txs =2;
 }

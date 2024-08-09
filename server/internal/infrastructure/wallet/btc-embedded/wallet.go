@@ -492,6 +492,7 @@ func (s *service) EstimateFees(ctx context.Context, partialTx string) (uint64, e
 	if err != nil {
 		return 0, err
 	}
+	fmt.Println("SIZE", partial.UnsignedTx.SerializeSize(), feeRate)
 
 	fee := feeRate * btcutil.Amount(partial.UnsignedTx.SerializeSize())
 	return uint64(fee.ToUnit(btcutil.AmountSatoshi)), nil

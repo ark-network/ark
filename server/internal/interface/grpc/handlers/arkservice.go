@@ -40,58 +40,45 @@ func NewHandler(service application.Service) arkv1.ArkServiceServer {
 	return h
 }
 
-func (h *handler) CompleteAsyncPayment(ctx context.Context, req *arkv1.CompleteAsyncPaymentRequest) (*arkv1.CompleteAsyncPaymentResponse, error) {
+func (h *handler) CompletePayment(ctx context.Context, req *arkv1.CompletePaymentRequest) (*arkv1.CompletePaymentResponse, error) {
 	if req.GetSignedRedeemTx() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing signed redeem tx")
 	}
 
-	if req.GetSignedUnconditionalForfeitTx() == "" {
-		return nil, status.Error(codes.InvalidArgument, "missing signed unconditional forfeit tx")
+	if len(req.GetSignedUnconditionalForfeitTxs()) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing signed unconditional forfeit txs")
 	}
 
-	if err := h.svc.CompleteAsyncPayment(ctx, &domain.AsyncPaymentTxs{
-		RedeemTx:               req.GetSignedRedeemTx(),
-		UnconditionalForfeitTx: req.GetSignedUnconditionalForfeitTx(),
-	}); err != nil {
+	if err := h.svc.CompleteAsyncPayment(
+		ctx, req.GetSignedRedeemTx(), req.GetSignedUnconditionalForfeitTxs(),
+	); err != nil {
 		return nil, err
 	}
 
-	return &arkv1.CompleteAsyncPaymentResponse{}, nil
+	return &arkv1.CompletePaymentResponse{}, nil
 }
 
-func (h *handler) CreateAsyncPayment(ctx context.Context, req *arkv1.CreateAsyncPaymentRequest) (*arkv1.CreateAsyncPaymentResponse, error) {
-	if req.GetInput() == nil {
-		return nil, status.Error(codes.InvalidArgument, "missing input")
-	}
-
-	if req.GetReceiverPubkey() == "" {
-		return nil, status.Error(codes.InvalidArgument, "missing receiver pubkey")
-	}
-
-	input := req.GetInput()
-	vtxoKey := domain.VtxoKey{
-		Txid: input.GetTxid(),
-		VOut: input.GetVout(),
-	}
-
-	receiverPubkey, err := hex.DecodeString(req.GetReceiverPubkey())
+func (h *handler) CreatePayment(ctx context.Context, req *arkv1.CreatePaymentRequest) (*arkv1.CreatePaymentResponse, error) {
+	vtxosKeys, err := parseInputs(req.GetInputs())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid receiver pubkey")
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	receiver, err := secp256k1.ParsePubKey(receiverPubkey)
+	receivers, err := parseReceivers(req.GetOutputs())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid receiver pubkey")
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	txs, err := h.svc.CreateAsyncPayment(ctx, vtxoKey, receiver)
+	redeemTx, unconditionalForfeitTxs, err := h.svc.CreateAsyncPayment(
+		ctx, vtxosKeys, receivers,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	return &arkv1.CreateAsyncPaymentResponse{
-		SignedRedeemTx:                txs.RedeemTx,
-		UsignedUnconditionalForfeitTx: txs.UnconditionalForfeitTx,
+	return &arkv1.CreatePaymentResponse{
+		SignedRedeemTx:                 redeemTx,
+		UsignedUnconditionalForfeitTxs: unconditionalForfeitTxs,
 	}, nil
 }
 
@@ -178,12 +165,9 @@ func (h *handler) Ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.Ping
 }
 
 func (h *handler) RegisterPayment(ctx context.Context, req *arkv1.RegisterPaymentRequest) (*arkv1.RegisterPaymentResponse, error) {
-	vtxosKeys := make([]domain.VtxoKey, 0, len(req.GetInputs()))
-	for _, input := range req.GetInputs() {
-		vtxosKeys = append(vtxosKeys, domain.VtxoKey{
-			Txid: input.GetTxid(),
-			VOut: input.GetVout(),
-		})
+	vtxosKeys, err := parseInputs(req.GetInputs())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
 	id, err := h.svc.SpendVtxos(ctx, vtxosKeys)

@@ -35,7 +35,8 @@ func (v *vxtoRepository) Close() {
 
 func (v *vxtoRepository) AddVtxos(ctx context.Context, vtxos []domain.Vtxo) error {
 	txBody := func(querierWithTx *queries.Queries) error {
-		for _, vtxo := range vtxos {
+		for i := range vtxos {
+			vtxo := vtxos[i]
 			if err := querierWithTx.UpsertVtxo(
 				ctx,
 				queries.UpsertVtxoParams{

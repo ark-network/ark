@@ -1,24 +1,27 @@
 package covenantless
 
 import (
-	"encoding/hex"
+	"bytes"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/ark-network/ark-cli/utils"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/urfave/cli/v2"
 )
 
 func (c *clArkBitcoinCLI) SendAsync(ctx *cli.Context) error {
 	receiver := ctx.String("to")
+	amount := ctx.Uint64("amount")
 
 	if receiver == "" {
 		return fmt.Errorf("receiver address is required")
 	}
 
-	isOnchain, _, pubkey, err := decodeReceiverAddress(receiver)
+	isOnchain, _, _, err := decodeReceiverAddress(receiver)
 	if err != nil {
 		return err
 	}
@@ -27,66 +30,148 @@ func (c *clArkBitcoinCLI) SendAsync(ctx *cli.Context) error {
 		return fmt.Errorf("receiver address is onchain")
 	}
 
-	explorer := utils.NewExplorer(ctx)
-	client, close, err := getClientFromState(ctx)
-	if err != nil {
-		return err
-	}
-	defer close()
+	withExpiryCoinselect := ctx.Bool("enable-expiry-coinselect")
 
 	offchainAddr, _, _, err := getAddress(ctx)
 	if err != nil {
 		return err
 	}
 
-	vtxos, err := getVtxos(ctx, explorer, client, offchainAddr, false)
+	_, _, aspPubKey, err := common.DecodeAddress(offchainAddr)
 	if err != nil {
 		return err
 	}
 
-	// print vtxos to user
-	fmt.Println("Select the vtxo to send async: ")
-	for i, vtxo := range vtxos {
-		fmt.Printf("%d: %s (%d sats)\n", i, vtxo.txid, vtxo.amount)
+	receiversOutput := make([]*arkv1.Output, 0)
+	sumOfReceivers := uint64(0)
+
+	_, _, aspKey, err := common.DecodeAddress(receiver)
+	if err != nil {
+		return fmt.Errorf("invalid receiver address: %s", err)
 	}
 
-	// get user input
-	var idx int
-	fmt.Print("Enter the index of the vtxo to send: ")
-	_, err = fmt.Scanf("%d", &idx)
+	if !bytes.Equal(
+		aspPubKey.SerializeCompressed(), aspKey.SerializeCompressed(),
+	) {
+		return fmt.Errorf("invalid receiver address '%s': must be associated with the connected service provider", receiver)
+	}
+
+	if amount < dust {
+		return fmt.Errorf("invalid amount (%d), must be greater than dust %d", amount, dust)
+	}
+
+	receiversOutput = append(receiversOutput, &arkv1.Output{
+		Address: receiver,
+		Amount:  amount,
+	})
+	sumOfReceivers += amount
+
+	client, close, err := getClientFromState(ctx)
+	if err != nil {
+		return err
+	}
+	defer close()
+
+	explorer := utils.NewExplorer(ctx)
+
+	vtxos, err := getVtxos(ctx, explorer, client, offchainAddr, withExpiryCoinselect)
+	if err != nil {
+		return err
+	}
+	selectedCoins, changeAmount, err := coinSelect(vtxos, sumOfReceivers, withExpiryCoinselect)
 	if err != nil {
 		return err
 	}
 
-	if idx < 0 || idx >= len(vtxos) {
-		return fmt.Errorf("invalid index")
+	if changeAmount > 0 {
+		changeReceiver := &arkv1.Output{
+			Address: offchainAddr,
+			Amount:  changeAmount,
+		}
+		receiversOutput = append(receiversOutput, changeReceiver)
 	}
 
-	vtxo := vtxos[idx]
+	inputs := make([]*arkv1.Input, 0, len(selectedCoins))
 
-	resp, err := client.CreateAsyncPayment(
-		ctx.Context, &arkv1.CreateAsyncPaymentRequest{
-			Input: &arkv1.Input{
-				Txid: vtxo.txid,
-				Vout: vtxo.vout,
-			},
-			ReceiverPubkey: hex.EncodeToString(pubkey.SerializeCompressed()),
+	for _, coin := range selectedCoins {
+		inputs = append(inputs, &arkv1.Input{
+			Txid: coin.txid,
+			Vout: coin.vout,
+		})
+	}
+
+	// explorer := utils.NewExplorer(ctx)
+	// client, close, err := getClientFromState(ctx)
+	// if err != nil {
+	// 	return err
+	// }
+	// defer close()
+
+	// offchainAddr, _, _, err := getAddress(ctx)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// vtxos, err := getVtxos(ctx, explorer, client, offchainAddr, false)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// // print vtxos to user
+	// fmt.Println("Select the vtxo to send async: ")
+	// for i, vtxo := range vtxos {
+	// 	fmt.Printf("%d: %s (%d sats)\n", i, vtxo.txid, vtxo.amount)
+	// }
+
+	// // get user input
+	// var idx int
+	// fmt.Print("Enter the index of the vtxo to send: ")
+	// _, err = fmt.Scanf("%d", &idx)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// if idx < 0 || idx >= len(vtxos) {
+	// 	return fmt.Errorf("invalid index")
+	// }
+
+	// vtxo := vtxos[idx]
+
+	resp, err := client.CreatePayment(
+		ctx.Context, &arkv1.CreatePaymentRequest{
+			Inputs:  inputs,
+			Outputs: receiversOutput,
 		})
 	if err != nil {
 		return err
 	}
 
-	fmt.Println("Async payment created")
-	fmt.Printf("Redeem tx: %s\n", resp.SignedRedeemTx)
-	fmt.Printf("Forfeit tx: %s\n", resp.UsignedUnconditionalForfeitTx)
-
 	// TODO verify the redeem tx signature
-
+	fmt.Println("Payment created")
 	fmt.Println("Signing forfeit...")
 
-	forfeitPtx, err := psbt.NewFromRawBytes(strings.NewReader(resp.UsignedUnconditionalForfeitTx), true)
+	seckey, err := utils.PrivateKeyFromPassword(ctx)
 	if err != nil {
 		return err
+	}
+
+	signedUnconditionalForfeitTxs := make([]string, 0, len(resp.UsignedUnconditionalForfeitTxs))
+	for _, tx := range resp.UsignedUnconditionalForfeitTxs {
+		forfeitPtx, err := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+		if err != nil {
+			return err
+		}
+
+		if err := signPsbt(ctx, forfeitPtx, explorer, seckey); err != nil {
+			return err
+		}
+
+		signedForfeitTx, err := forfeitPtx.B64Encode()
+		if err != nil {
+			return err
+		}
+
+		signedUnconditionalForfeitTxs = append(signedUnconditionalForfeitTxs, signedForfeitTx)
 	}
 
 	redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(resp.SignedRedeemTx), true)
@@ -94,21 +179,7 @@ func (c *clArkBitcoinCLI) SendAsync(ctx *cli.Context) error {
 		return err
 	}
 
-	seckey, err := utils.PrivateKeyFromPassword(ctx)
-	if err != nil {
-		return err
-	}
-
-	if err := signPsbt(ctx, forfeitPtx, explorer, seckey); err != nil {
-		return err
-	}
-
 	if err := signPsbt(ctx, redeemPtx, explorer, seckey); err != nil {
-		return err
-	}
-
-	signedForfeit, err := forfeitPtx.B64Encode()
-	if err != nil {
 		return err
 	}
 
@@ -117,14 +188,54 @@ func (c *clArkBitcoinCLI) SendAsync(ctx *cli.Context) error {
 		return err
 	}
 
-	fmt.Printf("Signed forfeit tx: %s\n", signedForfeit)
-
-	if _, err = client.CompleteAsyncPayment(ctx.Context, &arkv1.CompleteAsyncPaymentRequest{
-		SignedRedeemTx:               signedRedeem,
-		SignedUnconditionalForfeitTx: signedForfeit,
+	if _, err = client.CompletePayment(ctx.Context, &arkv1.CompletePaymentRequest{
+		SignedRedeemTx:                signedRedeem,
+		SignedUnconditionalForfeitTxs: signedUnconditionalForfeitTxs,
 	}); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func coinSelect(vtxos []vtxo, amount uint64, sortByExpirationTime bool) ([]vtxo, uint64, error) {
+	selected := make([]vtxo, 0)
+	notSelected := make([]vtxo, 0)
+	selectedAmount := uint64(0)
+
+	if sortByExpirationTime {
+		// sort vtxos by expiration (older first)
+		sort.SliceStable(vtxos, func(i, j int) bool {
+			if vtxos[i].expireAt == nil || vtxos[j].expireAt == nil {
+				return false
+			}
+
+			return vtxos[i].expireAt.Before(*vtxos[j].expireAt)
+		})
+	}
+
+	for _, vtxo := range vtxos {
+		if selectedAmount >= amount {
+			notSelected = append(notSelected, vtxo)
+			break
+		}
+
+		selected = append(selected, vtxo)
+		selectedAmount += vtxo.amount
+	}
+
+	if selectedAmount < amount {
+		return nil, 0, fmt.Errorf("not enough funds to cover amount%d", amount)
+	}
+
+	change := selectedAmount - amount
+
+	if change < dust {
+		if len(notSelected) > 0 {
+			selected = append(selected, notSelected[0])
+			change += notSelected[0].amount
+		}
+	}
+
+	return selected, change, nil
 }
