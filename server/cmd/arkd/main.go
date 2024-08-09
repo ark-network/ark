@@ -29,6 +29,11 @@ var (
 		Usage: "the url where to reach ark server",
 		Value: fmt.Sprintf("http://localhost:%d", config.DefaultPort),
 	}
+	noMacaroonFlag = &cli.BoolFlag{
+		Name:  "no-macaroon",
+		Usage: "don't use macaroon auth",
+		Value: false,
+	}
 	macaroonFlag = &cli.StringFlag{
 		Name:  "macaroon-path",
 		Usage: "the path where to find the admin macaroon file",
@@ -105,7 +110,7 @@ func main() {
 	app.Usage = "arkd command line interface"
 	app.Commands = append(app.Commands, walletCmd)
 	app.Action = mainAction
-	app.Flags = append(app.Flags, urlFlag, macaroonFlag, tlsCertFlag)
+	app.Flags = append(app.Flags, urlFlag, noMacaroonFlag, macaroonFlag, tlsCertFlag)
 
 	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)

@@ -156,15 +156,18 @@ func walletUnlockAction(ctx *cli.Context) error {
 
 func walletAddressAction(ctx *cli.Context) error {
 	baseURL := ctx.String("url")
-	macaroonPath := ctx.String("macaroon-path")
+	var macaroon string
+	if !ctx.Bool("no-macaroon") {
+		macaroonPath := ctx.String("macaroon-path")
+		mac, err := getMacaroon(macaroonPath)
+		if err != nil {
+			return err
+		}
+		macaroon = mac
+	}
 	tlsCertPath := ctx.String("tls-cert-path")
 	if strings.Contains(baseURL, "http://") {
 		tlsCertPath = ""
-	}
-
-	macaroon, err := getMacaroon(macaroonPath)
-	if err != nil {
-		return err
 	}
 
 	url := fmt.Sprintf("%s/v1/admin/wallet/address", baseURL)
@@ -179,15 +182,18 @@ func walletAddressAction(ctx *cli.Context) error {
 
 func walletBalanceAction(ctx *cli.Context) error {
 	baseURL := ctx.String("url")
-	macaroonPath := ctx.String("macaroon-path")
+	var macaroon string
+	if !ctx.Bool("no-macaroon") {
+		macaroonPath := ctx.String("macaroon-path")
+		mac, err := getMacaroon(macaroonPath)
+		if err != nil {
+			return err
+		}
+		macaroon = mac
+	}
 	tlsCertPath := ctx.String("tls-cert-path")
 	if strings.Contains(baseURL, "http://") {
 		tlsCertPath = ""
-	}
-
-	macaroon, err := getMacaroon(macaroonPath)
-	if err != nil {
-		return err
 	}
 
 	url := fmt.Sprintf("%s/v1/admin/wallet/balance", baseURL)
@@ -315,9 +321,6 @@ func getBalance(url, macaroon, tlsCert string) (*balance, error) {
 	tlsConfig, err := getTLSConfig(tlsCert)
 	if err != nil {
 		return nil, err
-	}
-	if len(macaroon) <= 0 {
-		return nil, fmt.Errorf("missing macaroon")
 	}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
