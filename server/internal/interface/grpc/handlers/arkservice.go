@@ -40,31 +40,6 @@ func NewHandler(service application.Service) arkv1.ArkServiceServer {
 	return h
 }
 
-func (h *handler) TrustedOnboarding(ctx context.Context, req *arkv1.TrustedOnboardingRequest) (*arkv1.TrustedOnboardingResponse, error) {
-	if req.GetUserPubkey() == "" {
-		return nil, status.Error(codes.InvalidArgument, "missing user pubkey")
-	}
-
-	pubKey, err := hex.DecodeString(req.GetUserPubkey())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid user pubkey")
-	}
-
-	decodedPubKey, err := secp256k1.ParsePubKey(pubKey)
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid user pubkey")
-	}
-
-	address, err := h.svc.TrustedOnboarding(ctx, decodedPubKey)
-	if err != nil {
-		return nil, err
-	}
-
-	return &arkv1.TrustedOnboardingResponse{
-		Address: address,
-	}, nil
-}
-
 func (h *handler) Onboard(ctx context.Context, req *arkv1.OnboardRequest) (*arkv1.OnboardResponse, error) {
 	if req.GetUserPubkey() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing user pubkey")
