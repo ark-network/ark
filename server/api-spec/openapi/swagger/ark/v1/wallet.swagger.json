@@ -6,6 +6,9 @@
   },
   "tags": [
     {
+      "name": "WalletInitializerService"
+    },
+    {
       "name": "WalletService"
     }
   ],
@@ -62,7 +65,7 @@
     },
     "/v1/admin/wallet/create": {
       "post": {
-        "operationId": "WalletService_Create",
+        "operationId": "WalletInitializerService_Create",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -88,7 +91,7 @@
           }
         ],
         "tags": [
-          "WalletService"
+          "WalletInitializerService"
         ]
       }
     },
@@ -126,7 +129,7 @@
     },
     "/v1/admin/wallet/restore": {
       "post": {
-        "operationId": "WalletService_Restore",
+        "operationId": "WalletInitializerService_Restore",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -152,13 +155,13 @@
           }
         ],
         "tags": [
-          "WalletService"
+          "WalletInitializerService"
         ]
       }
     },
     "/v1/admin/wallet/seed": {
       "get": {
-        "operationId": "WalletService_GenSeed",
+        "operationId": "WalletInitializerService_GenSeed",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -174,13 +177,13 @@
           }
         },
         "tags": [
-          "WalletService"
+          "WalletInitializerService"
         ]
       }
     },
     "/v1/admin/wallet/status": {
       "get": {
-        "operationId": "WalletService_GetStatus",
+        "operationId": "WalletInitializerService_GetStatus",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -196,13 +199,13 @@
           }
         },
         "tags": [
-          "WalletService"
+          "WalletInitializerService"
         ]
       }
     },
     "/v1/admin/wallet/unlock": {
       "post": {
-        "operationId": "WalletService_Unlock",
+        "operationId": "WalletInitializerService_Unlock",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -228,7 +231,7 @@
           }
         ],
         "tags": [
-          "WalletService"
+          "WalletInitializerService"
         ]
       }
     }
@@ -347,6 +350,10 @@
         },
         "password": {
           "type": "string"
+        },
+        "gapLimit": {
+          "type": "string",
+          "format": "uint64"
         }
       }
     },
