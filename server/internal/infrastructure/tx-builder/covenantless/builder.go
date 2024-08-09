@@ -406,7 +406,6 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 			return nil, err
 		}
 
-		fmt.Println("FEEES", fees, vtxo.Amount)
 		if 2*fees > vtxo.Amount {
 			return nil, fmt.Errorf("fees higher than the vtxo amount")
 		}
