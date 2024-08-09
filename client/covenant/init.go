@@ -26,13 +26,13 @@ var explorerUrls = map[string]string{
 func (c *covenantLiquidCLI) Init(ctx *cli.Context) error {
 	key := ctx.String("prvkey")
 	net := strings.ToLower(ctx.String("network"))
-	url := ctx.String("ark-url")
+	url := ctx.String("asp-url")
 	explorer := ctx.String("explorer")
 
 	var explorerURL string
 
 	if len(url) <= 0 {
-		return fmt.Errorf("invalid ark url")
+		return fmt.Errorf("invalid asp-url")
 	}
 	if net != common.Liquid.Name && net != common.LiquidTestNet.Name && net != common.LiquidRegTest.Name {
 		return fmt.Errorf("invalid network")
