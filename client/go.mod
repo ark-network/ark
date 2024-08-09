@@ -6,8 +6,6 @@ replace github.com/ark-network/ark/common => ../common
 
 replace github.com/ark-network/ark => ../server
 
-replace github.com/ark-network/ark-sdk => ../pkg/client-sdk
-
 require (
 	github.com/ark-network/ark v0.0.0-00010101000000-000000000000
 	github.com/ark-network/ark/common v0.0.0
@@ -17,8 +15,8 @@ require (
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0
 	github.com/urfave/cli/v2 v2.27.2
-	golang.org/x/crypto v0.24.0
-	golang.org/x/term v0.21.0
+	golang.org/x/crypto v0.25.0
+	golang.org/x/term v0.22.0
 )
 
 require (
@@ -34,11 +32,11 @@ require (
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/vulpemventures/go-elements v0.5.4
 	github.com/xrash/smetrics v0.0.0-20240312152122-5f08fbb34913 // indirect
-	golang.org/x/net v0.26.0 // indirect
-	golang.org/x/sys v0.21.0 // indirect
+	golang.org/x/net v0.27.0 // indirect
+	golang.org/x/sys v0.22.0 // indirect
 	golang.org/x/text v0.16.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240624140628-dc46fd24d27d // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240624140628-dc46fd24d27d // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240730163845-b1a4ccb954bf // indirect
 	google.golang.org/grpc v1.65.0
 	google.golang.org/protobuf v1.34.2 // indirect
 )

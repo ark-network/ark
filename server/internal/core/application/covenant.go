@@ -47,14 +47,6 @@ type covenantService struct {
 	currentRound                *domain.Round
 }
 
-func (s *covenantService) CompleteAsyncPayment(ctx context.Context, signedTxs *domain.AsyncPaymentTxs) error {
-	return fmt.Errorf("unimplemented")
-}
-
-func (s *covenantService) CreateAsyncPayment(ctx context.Context, input domain.VtxoKey, receiverPubkey *secp256k1.PublicKey) (*domain.AsyncPaymentTxs, error) {
-	return nil, fmt.Errorf("unimplemented")
-}
-
 func NewCovenantService(
 	network common.Network,
 	roundInterval, roundLifetime, unilateralExitDelay int64, minRelayFee uint64,
@@ -172,6 +164,14 @@ func (s *covenantService) UpdatePaymentStatus(_ context.Context, id string) ([]s
 	}
 
 	return nil, nil, nil
+}
+
+func (s *covenantService) CompleteAsyncPayment(ctx context.Context, signedTxs *domain.AsyncPaymentTxs) error {
+	return fmt.Errorf("unimplemented")
+}
+
+func (s *covenantService) CreateAsyncPayment(ctx context.Context, input domain.VtxoKey, receiverPubkey *secp256k1.PublicKey) (*domain.AsyncPaymentTxs, error) {
+	return nil, fmt.Errorf("unimplemented")
 }
 
 func (s *covenantService) SignVtxos(ctx context.Context, forfeitTxs []string) error {

@@ -16,50 +16,6 @@
     "application/json"
   ],
   "paths": {
-    "/v1/admin/address": {
-      "get": {
-        "operationId": "AdminService_GetWalletAddress",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetWalletAddressResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "tags": [
-          "AdminService"
-        ]
-      }
-    },
-    "/v1/admin/balance": {
-      "get": {
-        "operationId": "AdminService_GetBalance",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetBalanceResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "tags": [
-          "AdminService"
-        ]
-      }
-    },
     "/v1/admin/round/{roundId}": {
       "get": {
         "operationId": "AdminService_GetRoundDetails",
@@ -122,28 +78,6 @@
         ]
       }
     },
-    "/v1/admin/status": {
-      "get": {
-        "operationId": "AdminService_GetWalletStatus",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetWalletStatusResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "tags": [
-          "AdminService"
-        ]
-      }
-    },
     "/v1/admin/sweeps": {
       "get": {
         "operationId": "AdminService_GetScheduledSweep",
@@ -193,28 +127,6 @@
             "type": "object",
             "$ref": "#/definitions/protobufAny"
           }
-        }
-      }
-    },
-    "v1Balance": {
-      "type": "object",
-      "properties": {
-        "locked": {
-          "type": "string"
-        },
-        "available": {
-          "type": "string"
-        }
-      }
-    },
-    "v1GetBalanceResponse": {
-      "type": "object",
-      "properties": {
-        "mainAccount": {
-          "$ref": "#/definitions/v1Balance"
-        },
-        "connectorsAccount": {
-          "$ref": "#/definitions/v1Balance"
         }
       }
     },
@@ -292,28 +204,6 @@
             "type": "object",
             "$ref": "#/definitions/v1ScheduledSweep"
           }
-        }
-      }
-    },
-    "v1GetWalletAddressResponse": {
-      "type": "object",
-      "properties": {
-        "address": {
-          "type": "string"
-        }
-      }
-    },
-    "v1GetWalletStatusResponse": {
-      "type": "object",
-      "properties": {
-        "initialized": {
-          "type": "boolean"
-        },
-        "unlocked": {
-          "type": "boolean"
-        },
-        "synced": {
-          "type": "boolean"
         }
       }
     },

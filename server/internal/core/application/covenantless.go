@@ -67,16 +67,30 @@ func NewCovenantlessService(
 	}
 
 	sweeper := newSweeper(walletSvc, repoManager, builder, scheduler)
+	asyncPaymentsCache := make(map[domain.VtxoKey]struct {
+		receiver *secp256k1.PublicKey
+		expireAt int64
+	})
 
 	svc := &covenantlessService{
-		network, pubkey,
-		roundLifetime, roundInterval, unilateralExitDelay, minRelayFee,
-		walletSvc, repoManager, builder, scanner, sweeper,
-		paymentRequests, forfeitTxs, eventsCh, onboardingCh, nil, make(map[domain.VtxoKey]struct {
-			receiver *secp256k1.PublicKey
-			expireAt int64
-		}),
+		network:             network,
+		pubkey:              pubkey,
+		roundLifetime:       roundLifetime,
+		roundInterval:       roundInterval,
+		unilateralExitDelay: unilateralExitDelay,
+		minRelayFee:         minRelayFee,
+		wallet:              walletSvc,
+		repoManager:         repoManager,
+		builder:             builder,
+		scanner:             scanner,
+		sweeper:             sweeper,
+		paymentRequests:     paymentRequests,
+		forfeitTxs:          forfeitTxs,
+		eventsCh:            eventsCh,
+		onboardingCh:        onboardingCh,
+		asyncPaymentsCache:  asyncPaymentsCache,
 	}
+
 	repoManager.RegisterEventsHandler(
 		func(round *domain.Round) {
 			go svc.propagateEvents(round)
@@ -593,12 +607,10 @@ func (s *covenantlessService) finalizeRound() {
 	log.Debugf("signing round transaction %s\n", round.Id)
 	signedPoolTx, err := s.wallet.SignTransaction(ctx, round.UnsignedTx, true)
 	if err != nil {
-		fmt.Println(err)
 		changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
 		log.WithError(err).Warn("failed to sign round tx")
 		return
 	}
-	fmt.Println(signedPoolTx)
 
 	txid, err := s.wallet.BroadcastTransaction(ctx, signedPoolTx)
 	if err != nil {

@@ -1,12 +1,15 @@
 package e2e_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/ark-network/ark/common"
 	utils "github.com/ark-network/ark/test/e2e"
 	"github.com/stretchr/testify/require"
 )
@@ -17,78 +20,22 @@ const (
 )
 
 func TestMain(m *testing.M) {
-	_, err := utils.RunCommand("docker-compose", "-f", composePath, "up", "-d", "--build")
+	_, err := utils.RunCommand("docker", "compose", "-f", composePath, "up", "-d", "--build")
 	if err != nil {
 		fmt.Printf("error starting docker-compose: %s", err)
 		os.Exit(1)
 	}
 
-	_, err = runOceanCommand("config", "init", "--no-tls")
-	if err != nil {
-		fmt.Printf("error initializing ocean config: %s", err)
-		os.Exit(1)
-	}
+	time.Sleep(10 * time.Second)
 
-	_, err = runOceanCommand("wallet", "create", "--password", utils.Password)
-	if err != nil {
-		fmt.Printf("error creating ocean wallet: %s", err)
-		os.Exit(1)
-	}
-
-	_, err = runOceanCommand("wallet", "unlock", "--password", utils.Password)
-	if err != nil {
-		fmt.Printf("error unlocking ocean wallet: %s", err)
-		os.Exit(1)
-	}
-
-	_, err = runOceanCommand("account", "create", "--label", "ark", "--unconf")
-	if err != nil {
-		fmt.Printf("error creating ocean account: %s", err)
-		os.Exit(1)
-	}
-
-	addrJSON, err := runOceanCommand("account", "derive", "--account-name", "ark")
-	if err != nil {
-		fmt.Printf("error deriving ocean account: %s", err)
-		os.Exit(1)
-	}
-
-	var addr struct {
-		Addresses []string `json:"addresses"`
-	}
-
-	if err := json.Unmarshal([]byte(addrJSON), &addr); err != nil {
-		fmt.Printf("error unmarshalling ocean account: %s (%s)", err, addrJSON)
-		os.Exit(1)
-	}
-
-	_, err = utils.RunCommand("nigiri", "faucet", "--liquid", addr.Addresses[0])
-	if err != nil {
-		fmt.Printf("error funding ocean account: %s", err)
-		os.Exit(1)
-	}
-
-	_, err = utils.RunCommand("nigiri", "faucet", "--liquid", addr.Addresses[0])
-	if err != nil {
-		fmt.Printf("error funding ocean account: %s", err)
-		os.Exit(1)
-	}
-
-	_, err = utils.RunCommand("nigiri", "faucet", "--liquid", addr.Addresses[0])
-	if err != nil {
-		fmt.Printf("error funding ocean account: %s", err)
-		os.Exit(1)
-	}
-
-	_, err = utils.RunCommand("nigiri", "faucet", "--liquid", addr.Addresses[0])
-	if err != nil {
-		fmt.Printf("error funding ocean account: %s", err)
+	if err := setupAspWallet(); err != nil {
+		fmt.Println(err)
 		os.Exit(1)
 	}
 
 	time.Sleep(3 * time.Second)
 
-	_, err = runArkCommand("init", "--ark-url", "localhost:6000", "--password", utils.Password, "--network", "liquidregtest", "--explorer", "http://chopsticks-liquid:3000")
+	_, err = runArkCommand("init", "--ark-url", "localhost:8080", "--password", utils.Password, "--network", common.LiquidRegTest.Name, "--explorer", "http://chopsticks-liquid:3000")
 	if err != nil {
 		fmt.Printf("error initializing ark config: %s", err)
 		os.Exit(1)
@@ -116,7 +63,7 @@ func TestMain(m *testing.M) {
 
 	code := m.Run()
 
-	_, err = utils.RunCommand("docker-compose", "-f", composePath, "down")
+	_, err = utils.RunCommand("docker", "compose", "-f", composePath, "down")
 	if err != nil {
 		fmt.Printf("error stopping docker-compose: %s", err)
 		os.Exit(1)
@@ -213,6 +160,8 @@ func TestUnilateralExit(t *testing.T) {
 	err = utils.GenerateBlock()
 	require.NoError(t, err)
 
+	time.Sleep(5 * time.Second)
+
 	balanceStr, err = runArkCommand("balance")
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
@@ -255,12 +204,89 @@ func TestCollaborativeExit(t *testing.T) {
 	require.Equal(t, balanceOnchainBefore+1000, balance.Onchain.Spendable)
 }
 
-func runOceanCommand(arg ...string) (string, error) {
-	args := append([]string{"exec", "oceand", "ocean"}, arg...)
-	return utils.RunCommand("docker", args...)
-}
-
 func runArkCommand(arg ...string) (string, error) {
 	args := append([]string{"exec", "-t", "arkd", "ark"}, arg...)
 	return utils.RunCommand("docker", args...)
+}
+
+func setupAspWallet() error {
+	adminHttpClient := &http.Client{
+		Timeout: 15 * time.Second,
+	}
+
+	req, err := http.NewRequest("GET", "http://localhost:8080/v1/admin/wallet/seed", nil)
+	if err != nil {
+		return fmt.Errorf("failed to prepare generate seed request: %s", err)
+	}
+	req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
+
+	seedResp, err := adminHttpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to generate seed: %s", err)
+	}
+
+	var seed struct {
+		Seed string `json:"seed"`
+	}
+
+	if err := json.NewDecoder(seedResp.Body).Decode(&seed); err != nil {
+		return fmt.Errorf("failed to parse response: %s", err)
+	}
+
+	reqBody := bytes.NewReader([]byte(fmt.Sprintf(`{"seed": "%s", "password": "%s"}`, seed.Seed, utils.Password)))
+	req, err = http.NewRequest("POST", "http://localhost:8080/v1/admin/wallet/create", reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to prepare wallet create request: %s", err)
+	}
+	req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
+	req.Header.Set("Content-Type", "application/json")
+
+	if _, err := adminHttpClient.Do(req); err != nil {
+		return fmt.Errorf("failed to create wallet: %s", err)
+	}
+
+	reqBody = bytes.NewReader([]byte(fmt.Sprintf(`{"password": "%s"}`, utils.Password)))
+	req, err = http.NewRequest("POST", "http://localhost:8080/v1/admin/wallet/unlock", reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to prepare wallet unlock request: %s", err)
+	}
+	req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
+	req.Header.Set("Content-Type", "application/json")
+
+	if _, err := adminHttpClient.Do(req); err != nil {
+		return fmt.Errorf("failed to unlock wallet: %s", err)
+	}
+
+	time.Sleep(time.Second)
+
+	req, err = http.NewRequest("GET", "http://localhost:8080/v1/admin/wallet/address", nil)
+	if err != nil {
+		return fmt.Errorf("failed to prepare new address request: %s", err)
+	}
+	req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
+
+	resp, err := adminHttpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to get new address: %s", err)
+	}
+
+	var addr struct {
+		Address string `json:"address"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&addr); err != nil {
+		return fmt.Errorf("failed to parse response: %s", err)
+	}
+
+	if _, err := utils.RunCommand("nigiri", "faucet", "--liquid", addr.Address); err != nil {
+		return fmt.Errorf("failed to fund wallet: %s", err)
+	}
+	if _, err := utils.RunCommand("nigiri", "faucet", "--liquid", addr.Address); err != nil {
+		return fmt.Errorf("failed to fund wallet: %s", err)
+	}
+	if _, err := utils.RunCommand("nigiri", "faucet", "--liquid", addr.Address); err != nil {
+		return fmt.Errorf("failed to fund wallet: %s", err)
+	}
+
+	return nil
 }

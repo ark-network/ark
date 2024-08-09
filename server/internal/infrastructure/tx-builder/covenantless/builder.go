@@ -30,8 +30,8 @@ const (
 type txBuilder struct {
 	wallet        ports.WalletService
 	net           common.Network
-	roundLifetime int64 // seconds
-	exitDelay     int64 // seconds
+	roundLifetime int64 // in seconds
+	exitDelay     int64 // in seconds
 }
 
 func NewTxBuilder(
@@ -846,7 +846,9 @@ func (b *txBuilder) createConnectors(
 func (b *txBuilder) createForfeitTxs(
 	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, connectors []*psbt.Packet, minRelayFee uint64,
 ) ([]string, error) {
+	// TODO (@louisinger): are we sure about this change?
 	aspScript, err := p2trScript(aspPubkey, b.onchainNetwork())
+	// aspScript, err := p2wpkhScript(aspPubkey, b.onchainNetwork())
 	if err != nil {
 		return nil, err
 	}

@@ -13,7 +13,6 @@ import (
 	cltxbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenantless"
 	btcwallet "github.com/ark-network/ark/internal/infrastructure/wallet/btc-embedded"
 	liquidwallet "github.com/ark-network/ark/internal/infrastructure/wallet/liquid-standalone"
-
 	log "github.com/sirupsen/logrus"
 )
 
@@ -38,12 +37,21 @@ var (
 		"ocean":     {},
 		"btcwallet": {},
 	}
+	supportedNetworks = supportedType{
+		common.Bitcoin.Name:        {},
+		common.BitcoinTestNet.Name: {},
+		common.BitcoinRegTest.Name: {},
+		common.Liquid.Name:         {},
+		common.LiquidTestNet.Name:  {},
+		common.LiquidRegTest.Name:  {},
+	}
 )
 
 type Config struct {
 	DbType                string
 	EventDbType           string
 	DbDir                 string
+	DbMigrationPath       string
 	EventDbDir            string
 	RoundInterval         int64
 	Network               common.Network
@@ -86,13 +94,8 @@ func (c *Config) Validate() error {
 	if c.RoundInterval < 2 {
 		return fmt.Errorf("invalid round interval, must be at least 2 seconds")
 	}
-	if c.Network.Name != common.Liquid.Name &&
-		c.Network.Name != common.LiquidTestNet.Name &&
-		c.Network.Name != common.LiquidRegTest.Name &&
-		c.Network.Name != common.Bitcoin.Name &&
-		c.Network.Name != common.BitcoinTestNet.Name &&
-		c.Network.Name != common.BitcoinRegTest.Name {
-		return fmt.Errorf("invalid network, must be one of: liquid, liquidtestnet, liquidregtest, bitcoin, testnet, regtest")
+	if !supportedNetworks.supports(c.Network.Name) {
+		return fmt.Errorf("invalid network, must be one of: %s", supportedNetworks)
 	}
 	if len(c.WalletAddr) <= 0 {
 		return fmt.Errorf("missing onchain wallet address")
@@ -150,21 +153,27 @@ func (c *Config) Validate() error {
 	if err := c.schedulerService(); err != nil {
 		return err
 	}
-	if err := c.appService(); err != nil {
-		return err
-	}
 	if err := c.adminService(); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (c *Config) AppService() application.Service {
-	return c.svc
+func (c *Config) AppService() (application.Service, error) {
+	if c.svc == nil {
+		if err := c.appService(); err != nil {
+			return nil, err
+		}
+	}
+	return c.svc, nil
 }
 
 func (c *Config) AdminService() application.AdminService {
 	return c.adminSvc
+}
+
+func (c *Config) WalletService() ports.WalletService {
+	return c.wallet
 }
 
 func (c *Config) repoManager() error {
@@ -185,7 +194,7 @@ func (c *Config) repoManager() error {
 	case "badger":
 		dataStoreConfig = []interface{}{c.DbDir, logger}
 	case "sqlite":
-		dataStoreConfig = []interface{}{c.DbDir}
+		dataStoreConfig = []interface{}{c.DbDir, c.DbMigrationPath}
 	default:
 		return fmt.Errorf("unknown db type")
 	}
@@ -221,9 +230,7 @@ func (c *Config) walletService() error {
 	}
 
 	svc, err := btcwallet.NewService(btcwallet.WalletConfig{
-		Datadir: c.DbDir,
-		// TODO let the operator set the passwords
-		Password:   []byte("password"),
+		Datadir:    c.DbDir,
 		Network:    c.Network,
 		EsploraURL: c.EsploraURL,
 	},

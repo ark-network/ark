@@ -93,6 +93,7 @@ func (s *service) signPsbt(packet *psbt.Packet) ([]uint32, error) {
 		}
 	}
 
+	// TODO (@louisinger): shall we delete this code?
 	// prevOutputFetcher := wallet.PsbtPrevOutputFetcher(packet)
 	// sigHashes := txscript.NewTxSigHashes(tx, prevOutputFetcher)
 
@@ -109,8 +110,6 @@ func (s *service) signPsbt(packet *psbt.Packet) ([]uint32, error) {
 	// if err != nil {
 	// 	return nil, err
 	// }
-
-	// fmt.Println("PREIMAGE", hex.EncodeToString(preimage))
 
 	return s.wallet.SignPsbt(packet)
 }

@@ -2,7 +2,6 @@ package txbuilder
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 
 	"github.com/ark-network/ark/common"
@@ -33,8 +32,6 @@ func sweepTransaction(
 		if err != nil {
 			return nil, err
 		}
-
-		fmt.Println("sweepClosure.Pubkey", hex.EncodeToString(sweepClosure.Pubkey.SerializeCompressed()))
 
 		if !valid {
 			return nil, fmt.Errorf("invalid csv script")

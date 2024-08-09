@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	common "github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common"
 	"github.com/spf13/viper"
 )
 
@@ -17,6 +17,7 @@ type Config struct {
 	EventDbType           string
 	DbType                string
 	DbDir                 string
+	DbMigrationPath       string
 	SchedulerType         string
 	TxBuilderType         string
 	BlockchainScannerType string
@@ -39,6 +40,7 @@ var (
 	Port                  = "PORT"
 	EventDbType           = "EVENT_DB_TYPE"
 	DbType                = "DB_TYPE"
+	DbMigrationPath       = "DB_MIGRATION_PATH"
 	SchedulerType         = "SCHEDULER_TYPE"
 	TxBuilderType         = "TX_BUILDER_TYPE"
 	BlockchainScannerType = "BC_SCANNER_TYPE"
@@ -58,6 +60,7 @@ var (
 	defaultPort                  = 6000
 	defaultWalletAddr            = "localhost:18000"
 	defaultDbType                = "sqlite"
+	defaultDbMigrationPath       = "file://internal/infrastructure/db/sqlite/migration"
 	defaultEventDbType           = "badger"
 	defaultSchedulerType         = "gocron"
 	defaultTxBuilderType         = "covenant"
@@ -79,6 +82,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(Datadir, defaultDatadir)
 	viper.SetDefault(Port, defaultPort)
 	viper.SetDefault(DbType, defaultDbType)
+	viper.SetDefault(DbMigrationPath, defaultDbMigrationPath)
 	viper.SetDefault(Insecure, defaultInsecure)
 	viper.SetDefault(LogLevel, defaultLogLevel)
 	viper.SetDefault(Network, defaultNetwork)
@@ -109,6 +113,7 @@ func LoadConfig() (*Config, error) {
 		Port:                  viper.GetUint32(Port),
 		EventDbType:           viper.GetString(EventDbType),
 		DbType:                viper.GetString(DbType),
+		DbMigrationPath:       viper.GetString(DbMigrationPath),
 		SchedulerType:         viper.GetString(SchedulerType),
 		TxBuilderType:         viper.GetString(TxBuilderType),
 		BlockchainScannerType: viper.GetString(BlockchainScannerType),

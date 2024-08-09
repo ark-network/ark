@@ -41,7 +41,7 @@ type RoundDetails struct {
 }
 
 type AdminService interface {
-	GetBalance(ctx context.Context) (*ArkProviderBalance, error)
+	Wallet() ports.WalletService
 	GetScheduledSweeps(ctx context.Context) ([]ScheduledSweep, error)
 	GetRoundDetails(ctx context.Context, roundId string) (*RoundDetails, error)
 	GetRounds(ctx context.Context, after int64, before int64) ([]string, error)
@@ -63,21 +63,8 @@ func NewAdminService(walletSvc ports.WalletService, repoManager ports.RepoManage
 	}
 }
 
-func (a *adminService) GetBalance(ctx context.Context) (*ArkProviderBalance, error) {
-	mainBalance, mainBalanceLocked, err := a.walletSvc.MainAccountBalance(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	connectorBalance, connectorBalanceLocked, err := a.walletSvc.ConnectorsAccountBalance(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ArkProviderBalance{
-		MainAccountBalance:       Balance{Locked: mainBalanceLocked, Available: mainBalance},
-		ConnectorsAccountBalance: Balance{Locked: connectorBalanceLocked, Available: connectorBalance},
-	}, nil
+func (a *adminService) Wallet() ports.WalletService {
+	return a.walletSvc
 }
 
 func (a *adminService) GetRoundDetails(ctx context.Context, roundId string) (*RoundDetails, error) {
