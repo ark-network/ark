@@ -45,7 +45,7 @@ var (
 		Value: "liquid",
 	}
 	UrlFlag = cli.StringFlag{
-		Name:     "ark-url",
+		Name:     "asp-url",
 		Usage:    "the url of the ASP to connect to",
 		Required: true,
 	}
