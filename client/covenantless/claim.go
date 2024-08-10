@@ -1,8 +1,6 @@
 package covenantless
 
 import (
-	"fmt"
-
 	"github.com/ark-network/ark-cli/utils"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/urfave/cli/v2"
