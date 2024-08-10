@@ -33,7 +33,6 @@ func (c *clArkBitcoinCLI) ClaimAsync(ctx *cli.Context) error {
 			pendingVtxos = append(pendingVtxos, vtxo)
 		}
 	}
-	fmt.Println(pendingBalance, len(pendingVtxos), len(vtxos))
 	if pendingBalance == 0 {
 		return nil
 	}
