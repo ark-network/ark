@@ -93,9 +93,18 @@ var (
 		Name:  "send",
 		Usage: "Send your onchain or offchain funds to one or many receivers",
 		Action: func(ctx *cli.Context) error {
-			cli, err := getCLIFromState(ctx)
+			state, err := utils.GetState(ctx)
 			if err != nil {
 				return err
+			}
+
+			networkName := state[utils.NETWORK]
+			cli, err := getCLI(networkName)
+			if err != nil {
+				return err
+			}
+			if strings.Contains("liquid", networkName) {
+				return cli.Send(ctx)
 			}
 			return cli.SendAsync(ctx)
 		},
