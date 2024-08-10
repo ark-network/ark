@@ -16,50 +16,43 @@ import (
 func (c *clArkBitcoinCLI) SendAsync(ctx *cli.Context) error {
 	receiver := ctx.String("to")
 	amount := ctx.Uint64("amount")
+	withExpiryCoinselect := ctx.Bool("enable-expiry-coinselect")
+
+	if amount < dust {
+		return fmt.Errorf("invalid amount (%d), must be greater than dust %d", amount, dust)
+	}
 
 	if receiver == "" {
 		return fmt.Errorf("receiver address is required")
 	}
-
 	isOnchain, _, _, err := decodeReceiverAddress(receiver)
 	if err != nil {
 		return err
 	}
-
 	if isOnchain {
 		return fmt.Errorf("receiver address is onchain")
 	}
-
-	withExpiryCoinselect := ctx.Bool("enable-expiry-coinselect")
 
 	offchainAddr, _, _, err := getAddress(ctx)
 	if err != nil {
 		return err
 	}
-
 	_, _, aspPubKey, err := common.DecodeAddress(offchainAddr)
 	if err != nil {
 		return err
 	}
-
-	receiversOutput := make([]*arkv1.Output, 0)
-	sumOfReceivers := uint64(0)
-
 	_, _, aspKey, err := common.DecodeAddress(receiver)
 	if err != nil {
 		return fmt.Errorf("invalid receiver address: %s", err)
 	}
-
 	if !bytes.Equal(
 		aspPubKey.SerializeCompressed(), aspKey.SerializeCompressed(),
 	) {
 		return fmt.Errorf("invalid receiver address '%s': must be associated with the connected service provider", receiver)
 	}
 
-	if amount < dust {
-		return fmt.Errorf("invalid amount (%d), must be greater than dust %d", amount, dust)
-	}
-
+	receiversOutput := make([]*arkv1.Output, 0)
+	sumOfReceivers := uint64(0)
 	receiversOutput = append(receiversOutput, &arkv1.Output{
 		Address: receiver,
 		Amount:  amount,
@@ -194,7 +187,7 @@ func coinSelect(vtxos []vtxo, amount uint64, sortByExpirationTime bool) ([]vtxo,
 
 	change := selectedAmount - amount
 
-	if change < dust {
+	if change > 0 && change < dust {
 		if len(notSelected) > 0 {
 			selected = append(selected, notSelected[0])
 			change += notSelected[0].amount
