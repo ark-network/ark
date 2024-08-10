@@ -56,6 +56,10 @@ type ClientOption func(*runtime.ClientOperation)
 type ClientService interface {
 	ArkServiceClaimPayment(params *ArkServiceClaimPaymentParams, opts ...ClientOption) (*ArkServiceClaimPaymentOK, error)
 
+	ArkServiceCompletePayment(params *ArkServiceCompletePaymentParams, opts ...ClientOption) (*ArkServiceCompletePaymentOK, error)
+
+	ArkServiceCreatePayment(params *ArkServiceCreatePaymentParams, opts ...ClientOption) (*ArkServiceCreatePaymentOK, error)
+
 	ArkServiceFinalizePayment(params *ArkServiceFinalizePaymentParams, opts ...ClientOption) (*ArkServiceFinalizePaymentOK, error)
 
 	ArkServiceGetEventStream(params *ArkServiceGetEventStreamParams, opts ...ClientOption) (*ArkServiceGetEventStreamOK, error)
@@ -111,6 +115,80 @@ func (a *Client) ArkServiceClaimPayment(params *ArkServiceClaimPaymentParams, op
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*ArkServiceClaimPaymentDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+ArkServiceCompletePayment ark service complete payment API
+*/
+func (a *Client) ArkServiceCompletePayment(params *ArkServiceCompletePaymentParams, opts ...ClientOption) (*ArkServiceCompletePaymentOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewArkServiceCompletePaymentParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "ArkService_CompletePayment",
+		Method:             "POST",
+		PathPattern:        "/v1/payment/complete",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &ArkServiceCompletePaymentReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*ArkServiceCompletePaymentOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*ArkServiceCompletePaymentDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+ArkServiceCreatePayment ark service create payment API
+*/
+func (a *Client) ArkServiceCreatePayment(params *ArkServiceCreatePaymentParams, opts ...ClientOption) (*ArkServiceCreatePaymentOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewArkServiceCreatePaymentParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "ArkService_CreatePayment",
+		Method:             "POST",
+		PathPattern:        "/v1/payment",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &ArkServiceCreatePaymentReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*ArkServiceCreatePaymentOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*ArkServiceCreatePaymentDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 

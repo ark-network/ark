@@ -106,12 +106,11 @@ func main() {
 	fmt.Println("")
 	log.Infof("alice is sending %d sats to bob offchain...", amount)
 
-	txid, err = aliceArkClient.SendOffChain(ctx, false, receivers)
-	if err != nil {
+	if _, err = aliceArkClient.SendAsync(ctx, false, receivers); err != nil {
 		log.Fatal(err)
 	}
 
-	log.Infof("payment completed in round tx: %s", txid)
+	log.Info("payment completed out of round")
 
 	if err := generateBlock(); err != nil {
 		log.Fatal(err)
@@ -135,6 +134,15 @@ func main() {
 
 	log.Infof("bob onchain balance: %d", bobBalance.OnchainBalance.SpendableAmount)
 	log.Infof("bob offchain balance: %d", bobBalance.OffchainBalance.Total)
+
+	fmt.Println("")
+	log.Info("bob is claiming the incoming payment...")
+	roundTxid, err := bobArkClient.ClaimAsync(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Infof("bob claimed the incoming payment in round %s", roundTxid)
 }
 
 func setupArkClient() (arksdk.ArkClient, error) {
