@@ -61,12 +61,14 @@ func (v *vxtoRepository) AddVtxos(ctx context.Context, vtxos []domain.Vtxo) erro
 
 			if vtxo.AsyncPayment != nil {
 				for i, tx := range vtxo.AsyncPayment.UnconditionalForfeitTxs {
-					querierWithTx.UpsertUnconditionalForfeitTx(ctx, queries.UpsertUnconditionalForfeitTxParams{
+					if err := querierWithTx.UpsertUnconditionalForfeitTx(ctx, queries.UpsertUnconditionalForfeitTxParams{
 						Tx:       tx,
 						VtxoTxid: vtxo.Txid,
 						VtxoVout: int64(vtxo.VOut),
 						Position: int64(i),
-					})
+					}); err != nil {
+						return err
+					}
 				}
 			}
 		}
