@@ -110,8 +110,8 @@ func (c *clArkBitcoinCLI) SendAsync(ctx *cli.Context) error {
 	}
 
 	// TODO verify the redeem tx signature
-	fmt.Println("Payment created")
-	fmt.Println("Signing forfeit...")
+	fmt.Println("payment created")
+	fmt.Println("signing redeem and forfeit txs...")
 
 	seckey, err := utils.PrivateKeyFromPassword(ctx)
 	if err != nil {
@@ -158,6 +158,7 @@ func (c *clArkBitcoinCLI) SendAsync(ctx *cli.Context) error {
 		return err
 	}
 
+	fmt.Println("payment completed")
 	return nil
 }
 
