@@ -220,7 +220,7 @@ func post[T any](url, body, key, macaroon, tlsCert string) (result T, err error)
 		req.Header.Add("X-Macaroon", macaroon)
 	}
 	client := &http.Client{
-		Timeout: 15 * time.Second,
+		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,
 		},
@@ -267,7 +267,7 @@ func get[T any](url, key, macaroon, tlsCert string) (result T, err error) {
 	}
 
 	client := &http.Client{
-		Timeout: 15 * time.Second,
+		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,
 		},
@@ -331,7 +331,7 @@ func getBalance(url, macaroon, tlsCert string) (*balance, error) {
 		req.Header.Add("X-Macaroon", macaroon)
 	}
 	client := &http.Client{
-		Timeout: 15 * time.Second,
+		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,
 		},
@@ -384,7 +384,7 @@ func getStatus(url, tlsCert string) (*status, error) {
 	req.Header.Add("Content-Type", "application/json")
 
 	client := &http.Client{
-		Timeout: 15 * time.Second,
+		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,
 		},

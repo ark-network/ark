@@ -27,6 +27,7 @@ type vtxo struct {
 	vout     uint32
 	poolTxid string
 	expireAt *time.Time
+	pending  bool
 }
 
 func getVtxos(
@@ -43,19 +44,20 @@ func getVtxos(
 	vtxos := make([]vtxo, 0, len(response.GetSpendableVtxos()))
 	for _, v := range response.GetSpendableVtxos() {
 		var expireAt *time.Time
-		if v.ExpireAt > 0 {
+		if v.GetExpireAt() > 0 {
 			t := time.Unix(v.ExpireAt, 0)
 			expireAt = &t
 		}
-		if v.Swept {
+		if v.GetSwept() {
 			continue
 		}
 		vtxos = append(vtxos, vtxo{
-			amount:   v.Receiver.Amount,
-			txid:     v.Outpoint.Txid,
-			vout:     v.Outpoint.Vout,
-			poolTxid: v.PoolTxid,
+			amount:   v.GetReceiver().GetAmount(),
+			txid:     v.GetOutpoint().GetTxid(),
+			vout:     v.GetOutpoint().GetVout(),
+			poolTxid: v.GetPoolTxid(),
 			expireAt: expireAt,
+			pending:  v.GetPending(),
 		})
 	}
 
@@ -108,7 +110,7 @@ func getClient(addr string) (arkv1.ArkServiceClient, func(), error) {
 	if !strings.Contains(addr, ":") {
 		addr = fmt.Sprintf("%s:%d", addr, port)
 	}
-	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(creds))
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		return nil, nil, err
 	}

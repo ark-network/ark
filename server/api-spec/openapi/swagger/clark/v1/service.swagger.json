@@ -1,7 +1,7 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "ark/v1/service.proto",
+    "title": "clark/v1/service.proto",
     "version": "version not set"
   },
   "tags": [
@@ -101,14 +101,14 @@
         ]
       }
     },
-    "/v1/payment": {
+    "/v1/payment/async": {
       "post": {
-        "operationId": "ArkService_CreatePayment",
+        "operationId": "ArkService_CreateAsyncPayment",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1CreatePaymentResponse"
+              "$ref": "#/definitions/v1CreateAsyncPaymentResponse"
             }
           },
           "default": {
@@ -124,7 +124,39 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/v1CreatePaymentRequest"
+              "$ref": "#/definitions/v1CreateAsyncPaymentRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
+    "/v1/payment/async/complete": {
+      "post": {
+        "operationId": "ArkService_CompleteAsyncPayment",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CompleteAsyncPaymentResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CompleteAsyncPaymentRequest"
             }
           }
         ],
@@ -157,38 +189,6 @@
             "required": true,
             "schema": {
               "$ref": "#/definitions/v1ClaimPaymentRequest"
-            }
-          }
-        ],
-        "tags": [
-          "ArkService"
-        ]
-      }
-    },
-    "/v1/payment/complete": {
-      "post": {
-        "operationId": "ArkService_CompletePayment",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1CompletePaymentResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1CompletePaymentRequest"
             }
           }
         ],
@@ -432,54 +432,56 @@
     "v1ClaimPaymentResponse": {
       "type": "object"
     },
-    "v1CompletePaymentRequest": {
+    "v1CompleteAsyncPaymentRequest": {
       "type": "object",
       "properties": {
-        "signedRedeemTx": {
+        "signedSenderTx": {
           "type": "string"
         },
-        "signedUnconditionalForfeitTxs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
+        "signedReceiverTx": {
+          "type": "string"
+        },
+        "signedUnconditionalForfeitTx": {
+          "type": "string"
         }
       }
     },
-    "v1CompletePaymentResponse": {
-      "type": "object"
-    },
-    "v1CreatePaymentRequest": {
+    "v1CompleteAsyncPaymentResponse": {
       "type": "object",
       "properties": {
-        "inputs": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1Input"
-          }
+        "senderTx": {
+          "type": "string"
         },
-        "outputs": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1Output"
-          }
+        "receiverTx": {
+          "type": "string"
+        },
+        "unconditionalForfeitTx": {
+          "type": "string"
         }
       }
     },
-    "v1CreatePaymentResponse": {
+    "v1CreateAsyncPaymentRequest": {
       "type": "object",
       "properties": {
-        "signedRedeemTx": {
-          "type": "string",
-          "title": "signed only by the ASP"
+        "input": {
+          "$ref": "#/definitions/v1Input"
         },
-        "usignedUnconditionalForfeitTxs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
+        "receiverPubkey": {
+          "type": "string"
+        }
+      }
+    },
+    "v1CreateAsyncPaymentResponse": {
+      "type": "object",
+      "properties": {
+        "unsignedSenderTx": {
+          "type": "string"
+        },
+        "unsignedReceiverTx": {
+          "type": "string"
+        },
+        "usignedUnconditionalForfeitTx": {
+          "type": "string"
         }
       }
     },
@@ -629,20 +631,6 @@
           "type": "string",
           "format": "uint64",
           "description": "Amount to send in satoshis."
-        }
-      }
-    },
-    "v1PendingPayment": {
-      "type": "object",
-      "properties": {
-        "redeemTx": {
-          "type": "string"
-        },
-        "unconditionalForfeitTxs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
         }
       }
     },
@@ -825,12 +813,6 @@
         },
         "swept": {
           "type": "boolean"
-        },
-        "pending": {
-          "type": "boolean"
-        },
-        "pendingData": {
-          "$ref": "#/definitions/v1PendingPayment"
         }
       }
     }

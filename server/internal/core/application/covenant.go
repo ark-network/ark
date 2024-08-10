@@ -161,6 +161,14 @@ func (s *covenantService) UpdatePaymentStatus(_ context.Context, id string) ([]s
 	return nil, nil, nil
 }
 
+func (s *covenantService) CompleteAsyncPayment(ctx context.Context, redeemTx string, unconditionalForfeitTxs []string) error {
+	return fmt.Errorf("unimplemented")
+}
+
+func (s *covenantService) CreateAsyncPayment(ctx context.Context, inputs []domain.VtxoKey, receivers []domain.Receiver) (string, []string, error) {
+	return "", nil, fmt.Errorf("unimplemented")
+}
+
 func (s *covenantService) SignVtxos(ctx context.Context, forfeitTxs []string) error {
 	return s.forfeitTxs.sign(forfeitTxs)
 }

@@ -177,6 +177,82 @@ func (s *service) Restore(_ context.Context, seed, password string) error {
 }
 
 func (s *service) Unlock(_ context.Context, password string) error {
+	if s.wallet == nil {
+		pwd := []byte(password)
+		opt := btcwallet.LoaderWithLocalWalletDB(s.cfg.Datadir, false, time.Minute)
+		config := btcwallet.Config{
+			LogDir:                s.cfg.Datadir,
+			PrivatePass:           pwd,
+			PublicPass:            pwd,
+			Birthday:              time.Now(),
+			RecoveryWindow:        0,
+			NetParams:             s.cfg.chainParams(),
+			LoaderOptions:         []btcwallet.LoaderOption{opt},
+			CoinSelectionStrategy: wallet.CoinSelectionLargest,
+			ChainSource:           s.chainSource,
+		}
+		blockCache := blockcache.NewBlockCache(20 * 1024 * 1024)
+
+		wallet, err := btcwallet.New(config, blockCache)
+		if err != nil {
+			return fmt.Errorf("failed to setup wallet loader: %s", err)
+		}
+
+		if err := wallet.Start(); err != nil {
+			return fmt.Errorf("failed to start wallet: %s", err)
+		}
+
+		for {
+			if !wallet.InternalWallet().ChainSynced() {
+				log.Debug("waiting sync....")
+				time.Sleep(3 * time.Second)
+				continue
+			}
+			break
+		}
+		log.Debugf("chain synced")
+
+		addrs, err := wallet.ListAddresses(string(aspKeyAccount), false)
+		if err != nil {
+			return err
+		}
+		for info, addrs := range addrs {
+			if info.AccountName != string(aspKeyAccount) {
+				continue
+			}
+
+			for _, addr := range addrs {
+				if addr.Internal {
+					continue
+				}
+
+				splittedPath := strings.Split(addr.DerivationPath, "/")
+				last := splittedPath[len(splittedPath)-1]
+				if last == "0" {
+					decoded, err := btcutil.DecodeAddress(addr.Address, s.cfg.chainParams())
+					if err != nil {
+						return err
+					}
+
+					infos, err := wallet.AddressInfo(decoded)
+					if err != nil {
+						return err
+					}
+
+					managedPubkeyAddr, ok := infos.(waddrmgr.ManagedPubKeyAddress)
+					if !ok {
+						return fmt.Errorf("failed to cast address to managed pubkey address")
+					}
+
+					s.aspTaprootAddr = managedPubkeyAddr
+					break
+				}
+			}
+		}
+
+		s.wallet = wallet
+		return nil
+	}
 	return s.wallet.InternalWallet().Unlock([]byte(password), nil)
 }
 

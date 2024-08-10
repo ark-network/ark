@@ -40,6 +40,48 @@ func NewHandler(service application.Service) arkv1.ArkServiceServer {
 	return h
 }
 
+func (h *handler) CompletePayment(ctx context.Context, req *arkv1.CompletePaymentRequest) (*arkv1.CompletePaymentResponse, error) {
+	if req.GetSignedRedeemTx() == "" {
+		return nil, status.Error(codes.InvalidArgument, "missing signed redeem tx")
+	}
+
+	if len(req.GetSignedUnconditionalForfeitTxs()) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing signed unconditional forfeit txs")
+	}
+
+	if err := h.svc.CompleteAsyncPayment(
+		ctx, req.GetSignedRedeemTx(), req.GetSignedUnconditionalForfeitTxs(),
+	); err != nil {
+		return nil, err
+	}
+
+	return &arkv1.CompletePaymentResponse{}, nil
+}
+
+func (h *handler) CreatePayment(ctx context.Context, req *arkv1.CreatePaymentRequest) (*arkv1.CreatePaymentResponse, error) {
+	vtxosKeys, err := parseInputs(req.GetInputs())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	receivers, err := parseReceivers(req.GetOutputs())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	redeemTx, unconditionalForfeitTxs, err := h.svc.CreateAsyncPayment(
+		ctx, vtxosKeys, receivers,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &arkv1.CreatePaymentResponse{
+		SignedRedeemTx:                 redeemTx,
+		UsignedUnconditionalForfeitTxs: unconditionalForfeitTxs,
+	}, nil
+}
+
 func (h *handler) Onboard(ctx context.Context, req *arkv1.OnboardRequest) (*arkv1.OnboardResponse, error) {
 	if req.GetUserPubkey() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing user pubkey")
@@ -98,12 +140,9 @@ func (h *handler) Ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.Ping
 }
 
 func (h *handler) RegisterPayment(ctx context.Context, req *arkv1.RegisterPaymentRequest) (*arkv1.RegisterPaymentResponse, error) {
-	vtxosKeys := make([]domain.VtxoKey, 0, len(req.GetInputs()))
-	for _, input := range req.GetInputs() {
-		vtxosKeys = append(vtxosKeys, domain.VtxoKey{
-			Txid: input.GetTxid(),
-			VOut: input.GetVout(),
-		})
+	vtxosKeys, err := parseInputs(req.GetInputs())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
 	id, err := h.svc.SpendVtxos(ctx, vtxosKeys)
@@ -350,6 +389,13 @@ func (v vtxoList) toProto(hrp string, aspKey *secp256k1.PublicKey) []*arkv1.Vtxo
 			key, _ := secp256k1.ParsePubKey(buf)
 			addr, _ = common.EncodeAddress(hrp, key, aspKey)
 		}
+		var pendingData *arkv1.PendingPayment
+		if vv.AsyncPayment != nil {
+			pendingData = &arkv1.PendingPayment{
+				RedeemTx:                vv.AsyncPayment.RedeemTx,
+				UnconditionalForfeitTxs: vv.AsyncPayment.UnconditionalForfeitTxs,
+			}
+		}
 		list = append(list, &arkv1.Vtxo{
 			Outpoint: &arkv1.Input{
 				Txid: vv.Txid,
@@ -359,13 +405,16 @@ func (v vtxoList) toProto(hrp string, aspKey *secp256k1.PublicKey) []*arkv1.Vtxo
 				Address: addr,
 				Amount:  vv.Amount,
 			},
-			PoolTxid: vv.PoolTx,
-			Spent:    vv.Spent,
-			ExpireAt: vv.ExpireAt,
-			SpentBy:  vv.SpentBy,
-			Swept:    vv.Swept,
+			PoolTxid:    vv.PoolTx,
+			Spent:       vv.Spent,
+			ExpireAt:    vv.ExpireAt,
+			SpentBy:     vv.SpentBy,
+			Swept:       vv.Swept,
+			PendingData: pendingData,
+			Pending:     pendingData != nil,
 		})
 	}
+
 	return list
 }
 

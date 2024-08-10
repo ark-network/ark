@@ -547,6 +547,17 @@ func (a *covenantArkClient) CollaborativeRedeem(
 	return poolTxID, nil
 }
 
+func (a *covenantArkClient) SendAsync(
+	ctx context.Context,
+	withExpiryCoinselect bool, receivers []Receiver,
+) (string, error) {
+	return "", fmt.Errorf("not implemented")
+}
+
+func (a *covenantArkClient) ClaimAsync(ctx context.Context) (string, error) {
+	return "", fmt.Errorf("not implemented")
+}
+
 func (a *covenantArkClient) sendOnchain(
 	ctx context.Context, receivers []Receiver,
 ) (string, error) {

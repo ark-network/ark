@@ -60,7 +60,34 @@ service ArkService {
       body: "*"
     };
   }
+  rpc CreatePayment(CreatePaymentRequest) returns (CreatePaymentResponse) {
+    option (google.api.http) = {
+      post: "/v1/payment"
+      body: "*"
+    };
+  }
+  rpc CompletePayment(CompletePaymentRequest) returns (CompletePaymentResponse) {
+    option (google.api.http) = {
+      post: "/v1/payment/complete"
+      body: "*"
+    };
+  }
 }
+
+message CreatePaymentRequest {
+  repeated Input inputs = 1;
+  repeated Output outputs = 2;
+}
+message CreatePaymentResponse {
+  string signed_redeem_tx = 1; // signed only by the ASP
+  repeated string usigned_unconditional_forfeit_txs = 2;
+}
+
+message CompletePaymentRequest {
+  string signed_redeem_tx = 1;
+  repeated string signed_unconditional_forfeit_txs = 2;
+}
+message CompletePaymentResponse {}
 
 message RegisterPaymentRequest {
   repeated Input inputs = 1;
@@ -217,4 +244,11 @@ message Vtxo {
   string spent_by = 5;
   int64 expire_at = 6;
   bool swept = 7;
+  bool pending = 8;
+  PendingPayment pending_data = 9;
+}
+
+message PendingPayment {
+  string redeem_tx = 1;
+  repeated string unconditional_forfeit_txs =2;
 }

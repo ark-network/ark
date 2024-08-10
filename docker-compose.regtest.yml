@@ -14,6 +14,9 @@ services:
       - OCEAN_DB_TYPE=badger
     ports:
       - "18000:18000"
+    volumes:
+      - oceand:/app/data/oceand
+      - ocean:/app/data/ocean
   arkd:
     container_name: arkd
     build: 
@@ -35,6 +38,9 @@ services:
       - ARK_NO_MACAROONS=true
     ports:
       - "8080:8080"
+    volumes:
+      - arkd:/app/data
+      - ark:/app/wallet-data
 
 volumes:
   oceand:

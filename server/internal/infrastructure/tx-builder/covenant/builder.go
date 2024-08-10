@@ -316,6 +316,12 @@ func (b *txBuilder) FindLeaves(
 	return foundLeaves, nil
 }
 
+func (b *txBuilder) BuildAsyncPaymentTransactions(
+	_ []domain.Vtxo, _ *secp256k1.PublicKey, _ []domain.Receiver, _ uint64,
+) (*domain.AsyncPaymentTxs, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
 func (b *txBuilder) getLeafScriptAndTree(
 	userPubkey, aspPubkey *secp256k1.PublicKey,
 ) ([]byte, *taproot.IndexedElementsTapScriptTree, error) {

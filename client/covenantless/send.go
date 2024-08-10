@@ -2,118 +2,63 @@ package covenantless
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/ark-network/ark-cli/utils"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
+	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/urfave/cli/v2"
 )
 
-func (c *clArkBitcoinCLI) Send(ctx *cli.Context) error {
-	if !ctx.IsSet("receivers") && !ctx.IsSet("to") && !ctx.IsSet("amount") {
-		return fmt.Errorf("missing destination, either use --to and --amount to send or --receivers to send to many")
-	}
-	receivers := ctx.String("receivers")
-	to := ctx.String("to")
+func (c *clArkBitcoinCLI) SendAsync(ctx *cli.Context) error {
+	receiver := ctx.String("to")
 	amount := ctx.Uint64("amount")
-
-	var receiversJSON []receiver
-	if len(receivers) > 0 {
-		if err := json.Unmarshal([]byte(receivers), &receiversJSON); err != nil {
-			return fmt.Errorf("invalid receivers: %s", err)
-		}
-	} else {
-		receiversJSON = []receiver{
-			{
-				To:     to,
-				Amount: amount,
-			},
-		}
-	}
-
-	if len(receiversJSON) <= 0 {
-		return fmt.Errorf("no receivers specified")
-	}
-
-	onchainReceivers := make([]receiver, 0)
-	offchainReceivers := make([]receiver, 0)
-
-	for _, receiver := range receiversJSON {
-		if receiver.isOnchain() {
-			onchainReceivers = append(onchainReceivers, receiver)
-		} else {
-			offchainReceivers = append(offchainReceivers, receiver)
-		}
-	}
-
-	explorer := utils.NewExplorer(ctx)
-
-	if len(onchainReceivers) > 0 {
-		pset, err := sendOnchain(ctx, onchainReceivers)
-		if err != nil {
-			return err
-		}
-
-		txid, err := explorer.Broadcast(pset)
-		if err != nil {
-			return err
-		}
-
-		return utils.PrintJSON(map[string]interface{}{
-			"txid": txid,
-		})
-	}
-
-	if len(offchainReceivers) > 0 {
-		if err := sendOffchain(ctx, offchainReceivers); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func sendOffchain(ctx *cli.Context, receivers []receiver) error {
 	withExpiryCoinselect := ctx.Bool("enable-expiry-coinselect")
+
+	if amount < dust {
+		return fmt.Errorf("invalid amount (%d), must be greater than dust %d", amount, dust)
+	}
+
+	if receiver == "" {
+		return fmt.Errorf("receiver address is required")
+	}
+	isOnchain, _, _, err := decodeReceiverAddress(receiver)
+	if err != nil {
+		return err
+	}
+	if isOnchain {
+		return fmt.Errorf("receiver address is onchain")
+	}
 
 	offchainAddr, _, _, err := getAddress(ctx)
 	if err != nil {
 		return err
 	}
-
 	_, _, aspPubKey, err := common.DecodeAddress(offchainAddr)
 	if err != nil {
 		return err
 	}
+	_, _, aspKey, err := common.DecodeAddress(receiver)
+	if err != nil {
+		return fmt.Errorf("invalid receiver address: %s", err)
+	}
+	if !bytes.Equal(
+		aspPubKey.SerializeCompressed(), aspKey.SerializeCompressed(),
+	) {
+		return fmt.Errorf("invalid receiver address '%s': must be associated with the connected service provider", receiver)
+	}
 
 	receiversOutput := make([]*arkv1.Output, 0)
 	sumOfReceivers := uint64(0)
+	receiversOutput = append(receiversOutput, &arkv1.Output{
+		Address: receiver,
+		Amount:  amount,
+	})
+	sumOfReceivers += amount
 
-	for _, receiver := range receivers {
-		_, _, aspKey, err := common.DecodeAddress(receiver.To)
-		if err != nil {
-			return fmt.Errorf("invalid receiver address: %s", err)
-		}
-
-		if !bytes.Equal(
-			aspPubKey.SerializeCompressed(), aspKey.SerializeCompressed(),
-		) {
-			return fmt.Errorf("invalid receiver address '%s': must be associated with the connected service provider", receiver.To)
-		}
-
-		if receiver.Amount < dust {
-			return fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount, dust)
-		}
-
-		receiversOutput = append(receiversOutput, &arkv1.Output{
-			Address: receiver.To,
-			Amount:  uint64(receiver.Amount),
-		})
-		sumOfReceivers += receiver.Amount
-	}
 	client, close, err := getClientFromState(ctx)
 	if err != nil {
 		return err
@@ -148,37 +93,66 @@ func sendOffchain(ctx *cli.Context, receivers []receiver) error {
 		})
 	}
 
-	secKey, err := utils.PrivateKeyFromPassword(ctx)
+	resp, err := client.CreatePayment(
+		ctx.Context, &arkv1.CreatePaymentRequest{
+			Inputs:  inputs,
+			Outputs: receiversOutput,
+		})
 	if err != nil {
 		return err
 	}
 
-	registerResponse, err := client.RegisterPayment(
-		ctx.Context, &arkv1.RegisterPaymentRequest{Inputs: inputs},
-	)
+	// TODO verify the redeem tx signature
+	fmt.Println("payment created")
+	fmt.Println("signing redeem and forfeit txs...")
+
+	seckey, err := utils.PrivateKeyFromPassword(ctx)
 	if err != nil {
 		return err
 	}
 
-	_, err = client.ClaimPayment(ctx.Context, &arkv1.ClaimPaymentRequest{
-		Id:      registerResponse.GetId(),
-		Outputs: receiversOutput,
-	})
+	signedUnconditionalForfeitTxs := make([]string, 0, len(resp.UsignedUnconditionalForfeitTxs))
+	for _, tx := range resp.UsignedUnconditionalForfeitTxs {
+		forfeitPtx, err := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+		if err != nil {
+			return err
+		}
+
+		if err := signPsbt(ctx, forfeitPtx, explorer, seckey); err != nil {
+			return err
+		}
+
+		signedForfeitTx, err := forfeitPtx.B64Encode()
+		if err != nil {
+			return err
+		}
+
+		signedUnconditionalForfeitTxs = append(signedUnconditionalForfeitTxs, signedForfeitTx)
+	}
+
+	redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(resp.SignedRedeemTx), true)
 	if err != nil {
 		return err
 	}
 
-	poolTxID, err := handleRoundStream(
-		ctx, client, registerResponse.GetId(),
-		selectedCoins, secKey, receiversOutput,
-	)
+	if err := signPsbt(ctx, redeemPtx, explorer, seckey); err != nil {
+		return err
+	}
+
+	signedRedeem, err := redeemPtx.B64Encode()
 	if err != nil {
 		return err
 	}
 
-	return utils.PrintJSON(map[string]interface{}{
-		"pool_txid": poolTxID,
-	})
+	if _, err = client.CompletePayment(ctx.Context, &arkv1.CompletePaymentRequest{
+		SignedRedeemTx:                signedRedeem,
+		SignedUnconditionalForfeitTxs: signedUnconditionalForfeitTxs,
+	}); err != nil {
+		return err
+	}
+
+	fmt.Println("payment completed")
+	return nil
 }
 
 func coinSelect(vtxos []vtxo, amount uint64, sortByExpirationTime bool) ([]vtxo, uint64, error) {
@@ -213,7 +187,7 @@ func coinSelect(vtxos []vtxo, amount uint64, sortByExpirationTime bool) ([]vtxo,
 
 	change := selectedAmount - amount
 
-	if change < dust {
+	if change > 0 && change < dust {
 		if len(notSelected) > 0 {
 			selected = append(selected, notSelected[0])
 			change += notSelected[0].amount

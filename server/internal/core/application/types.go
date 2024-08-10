@@ -34,6 +34,13 @@ type Service interface {
 		ctx context.Context, boardingTx string,
 		congestionTree tree.CongestionTree, userPubkey *secp256k1.PublicKey,
 	) error
+	// Async payments
+	CreateAsyncPayment(
+		ctx context.Context, inputs []domain.VtxoKey, receivers []domain.Receiver,
+	) (string, []string, error)
+	CompleteAsyncPayment(
+		ctx context.Context, redeemTx string, unconditionalForfeitTxs []string,
+	) error
 }
 
 type ServiceInfo struct {

@@ -33,13 +33,16 @@ lint:
 ## run: run in dev mode
 run: clean
 	@echo "Running arkd in dev mode..."
-	@export ARK_WALLET_ADDR=localhost:18000; \
+	@export ARK_NEUTRINO_PEER=localhost:18444; \
 	export ARK_ROUND_INTERVAL=10; \
 	export ARK_LOG_LEVEL=5; \
-	export ARK_NETWORK=liquidregtest; \
+	export ARK_NETWORK=regtest; \
 	export ARK_PORT=8080; \
 	export ARK_NO_TLS=true; \
 	export ARK_NO_MACAROONS=true; \
+	export ARK_TX_BUILDER_TYPE=covenantless; \
+	export ARK_ESPLORA_URL=http://localhost:3000; \
+	export ARK_MIN_RELAY_FEE=200; \
 	go run ./cmd/arkd
 
 ## test: runs unit and component tests
