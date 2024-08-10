@@ -15,7 +15,6 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/wire"
-	log "github.com/sirupsen/logrus"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/transaction"
 )
@@ -97,8 +96,7 @@ func (e *explorerSvc) GetFeeRate() (float64, error) {
 	}
 
 	if len(response) == 0 {
-		log.Debug("empty fee-estimates response, default to 2 sat/vbyte")
-		return 2, nil
+		return 1, nil
 	}
 
 	return response["1"], nil

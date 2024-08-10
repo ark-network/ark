@@ -1533,17 +1533,20 @@ func (a *covenantlessArkClient) getRedeemBranches(
 	return redeemBranches, nil
 }
 
-// TODO: return pending balance. ATM returns only the balance by expiration of the vtxos built from rounds
+// TODO (@louisinger): return pending balance in dedicated map.
+// Currently, the returned balance is calculated from both spendable and
+// pending vtxos.
 func (a *covenantlessArkClient) getOffchainBalance(
 	ctx context.Context, addr string, computeVtxoExpiration bool,
 ) (uint64, map[int64]uint64, error) {
 	amountByExpiration := make(map[int64]uint64, 0)
 
-	vtxos, _, err := a.getVtxos(ctx, addr, computeVtxoExpiration)
+	spendableVtxos, pendingVtxos, err := a.getVtxos(ctx, addr, computeVtxoExpiration)
 	if err != nil {
 		return 0, nil, err
 	}
 	var balance uint64
+	vtxos := append(spendableVtxos, pendingVtxos...)
 	for _, vtxo := range vtxos {
 		balance += vtxo.Amount
 

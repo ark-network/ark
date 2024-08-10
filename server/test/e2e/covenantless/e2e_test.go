@@ -109,6 +109,14 @@ func TestSendOffchain(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 	require.NotZero(t, balance.Offchain.Total)
+
+	_, err = runClarkCommand("claim", "--password", utils.Password)
+	require.NoError(t, err)
+
+	balanceStr, err = runClarkCommand("balance")
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
+	require.NotZero(t, balance.Offchain.Total)
 }
 
 func TestUnilateralExit(t *testing.T) {

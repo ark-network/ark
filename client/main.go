@@ -103,7 +103,7 @@ var (
 			if err != nil {
 				return err
 			}
-			if strings.Contains("liquid", networkName) {
+			if strings.Contains(networkName, "liquid") {
 				return cli.Send(ctx)
 			}
 			return cli.SendAsync(ctx)
