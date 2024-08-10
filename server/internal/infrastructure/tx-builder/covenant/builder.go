@@ -317,7 +317,7 @@ func (b *txBuilder) FindLeaves(
 }
 
 func (b *txBuilder) BuildAsyncPaymentTransactions(
-	_ []domain.Vtxo, _ *secp256k1.PublicKey, _ []domain.Receiver,
+	_ []domain.Vtxo, _ *secp256k1.PublicKey, _ []domain.Receiver, _ uint64,
 ) (*domain.AsyncPaymentTxs, error) {
 	return nil, fmt.Errorf("not implemented")
 }

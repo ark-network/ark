@@ -31,6 +31,6 @@ type TxBuilder interface {
 	FindLeaves(congestionTree tree.CongestionTree, fromtxid string, vout uint32) (leaves []tree.Node, err error)
 	BuildAsyncPaymentTransactions(
 		vtxosToSpend []domain.Vtxo,
-		aspPubKey *secp256k1.PublicKey, receivers []domain.Receiver,
+		aspPubKey *secp256k1.PublicKey, receivers []domain.Receiver, minRelayFee uint64,
 	) (*domain.AsyncPaymentTxs, error)
 }

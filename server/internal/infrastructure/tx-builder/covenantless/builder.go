@@ -305,7 +305,8 @@ func (b *txBuilder) FindLeaves(congestionTree tree.CongestionTree, fromtxid stri
 
 // TODO add locktimes to txs
 func (b *txBuilder) BuildAsyncPaymentTransactions(
-	vtxos []domain.Vtxo, aspPubKey *secp256k1.PublicKey, receivers []domain.Receiver,
+	vtxos []domain.Vtxo, aspPubKey *secp256k1.PublicKey,
+	receivers []domain.Receiver, minRelayFee uint64,
 ) (*domain.AsyncPaymentTxs, error) {
 	if len(vtxos) <= 0 {
 		return nil, fmt.Errorf("missing vtxos")
@@ -351,7 +352,7 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 
 		output := &wire.TxOut{
 			PkScript: aspScript,
-			Value:    int64(vtxo.Amount),
+			Value:    int64(vtxo.Amount - minRelayFee),
 		}
 
 		forfeitClosure := &bitcointree.MultisigClosure{
@@ -401,28 +402,12 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 			return nil, err
 		}
 
-		fees, err := b.wallet.EstimateFees(context.Background(), forfeitTx)
-		if err != nil {
-			return nil, err
-		}
-
-		if 2*fees > vtxo.Amount {
-			return nil, fmt.Errorf("fees higher than the vtxo amount")
-		}
-
-		unconditionnalForfeitPtx.UnsignedTx.TxOut[0].Value = int64(vtxo.Amount) - int64(fees)
-
-		forfeitTx, err = unconditionnalForfeitPtx.B64Encode()
-		if err != nil {
-			return nil, err
-		}
-
 		unconditionalForfeitTxs = append(unconditionalForfeitTxs, forfeitTx)
 		ins = append(ins, vtxoOutpoint)
 	}
 
-	for _, receiver := range receivers {
-		// TODO add sender+ASP closure ?
+	for i, receiver := range receivers {
+		// TODO (@louisinger): Add revert policy (sender+ASP)
 		buf, err := hex.DecodeString(receiver.Pubkey)
 		if err != nil {
 			return nil, err
@@ -431,14 +416,20 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 		if err != nil {
 			return nil, err
 		}
-		shortcutedVtxoScript, _, err := b.getLeafScriptAndTree(receiverPk, aspPubKey)
+		newVtxoScript, _, err := b.getLeafScriptAndTree(receiverPk, aspPubKey)
 		if err != nil {
 			return nil, err
 		}
 
+		// Deduct the min relay fee from the very last receiver which is supposed
+		// to be the change in case it's not a send-all.
+		value := receiver.Amount
+		if i == len(receivers)-1 {
+			value -= minRelayFee
+		}
 		outs = append(outs, &wire.TxOut{
-			Value:    int64(receiver.Amount),
-			PkScript: shortcutedVtxoScript,
+			Value:    int64(value),
+			PkScript: newVtxoScript,
 		})
 	}
 
@@ -460,23 +451,6 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 	}
 
 	redeemTx, err := redeemPtx.B64Encode()
-	if err != nil {
-		return nil, err
-	}
-
-	fees, err := b.wallet.EstimateFees(context.Background(), redeemTx)
-	if err != nil {
-		return nil, err
-	}
-
-	amount := receivers[len(receivers)-1].Amount
-	if 2*fees > amount {
-		return nil, fmt.Errorf("fees higher than the total vtxos amount")
-	}
-
-	redeemPtx.UnsignedTx.TxOut[0].Value = int64(amount) - int64(fees)
-
-	redeemTx, err = redeemPtx.B64Encode()
 	if err != nil {
 		return nil, err
 	}

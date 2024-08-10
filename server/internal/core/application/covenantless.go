@@ -221,7 +221,9 @@ func (s *covenantlessService) CreateAsyncPayment(
 		}
 	}
 
-	res, err := s.builder.BuildAsyncPaymentTransactions(vtxos, s.pubkey, receivers)
+	res, err := s.builder.BuildAsyncPaymentTransactions(
+		vtxos, s.pubkey, receivers, s.minRelayFee,
+	)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to build async payment txs: %s", err)
 	}
