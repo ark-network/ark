@@ -25,6 +25,7 @@ jobs:
     - name: Build binaries
       run: make build-all
 
+    # Server 
     - name: Upload server binary (Linux, AMD64)
       uses: actions/upload-release-asset@v1
       env:
@@ -106,6 +107,16 @@ jobs:
         asset_name: ark-darwin-arm64
         asset_content_type: application/octet-stream
 
+    # WASM SDK 
+    - name: Upload WASM SDK
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: pkg/client-sdk/build/client-sdk.wasm
+        asset_name: client-sdk.wasm
+        asset_content_type: application/wasm
 
     # Docker 
 

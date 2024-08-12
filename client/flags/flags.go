@@ -25,10 +25,6 @@ var (
 		Name:  "amount",
 		Usage: "amount to onboard in sats",
 	}
-	TrustedOnboardFlag = cli.BoolFlag{
-		Name:  "trusted",
-		Usage: "trusted onboard",
-	}
 	ExpiryDetailsFlag = cli.BoolFlag{
 		Name:     "compute-expiry-details",
 		Usage:    "compute client-side the VTXOs expiry time",
@@ -45,7 +41,7 @@ var (
 		Value: "liquid",
 	}
 	UrlFlag = cli.StringFlag{
-		Name:     "ark-url",
+		Name:     "asp-url",
 		Usage:    "the url of the ASP to connect to",
 		Required: true,
 	}
@@ -76,17 +72,21 @@ var (
 		Value:    "",
 		Required: false,
 	}
-
 	AmountToRedeemFlag = cli.Uint64Flag{
 		Name:     "amount",
 		Usage:    "amount to redeem",
 		Value:    0,
 		Required: false,
 	}
-
 	ForceFlag = cli.BoolFlag{
 		Name:     "force",
 		Usage:    "force redemption without collaborate with the Ark service provider",
+		Value:    false,
+		Required: false,
+	}
+	AsyncPaymentFlag = cli.BoolFlag{
+		Name:     "async",
+		Usage:    "use async payment protocol",
 		Value:    false,
 		Required: false,
 	}

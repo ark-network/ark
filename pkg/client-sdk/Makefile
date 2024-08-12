@@ -18,4 +18,17 @@ vet:
 ## lint: lint codebase
 lint:
 	@echo "Linting code..."
-	@golangci-lint run --fix
+	@golangci-lint run --fix --verbose
+
+## wasm: compiles the client-sdk to wasm
+WASM_DIR = wasm
+BUILD_DIR = build
+VERSION := $(shell git describe --tags --always --dirty)
+GO_VERSION := $(shell go version | cut -d' ' -f3)
+
+.PHONY: build-wasm
+
+build-wasm:
+	@mkdir -p $(BUILD_DIR)
+	@echo "Version: $(VERSION)"
+	@GOOS=js GOARCH=wasm GO111MODULE=on go build -ldflags="-X 'main.Version=$(VERSION)'" -o $(BUILD_DIR)/client-sdk.wasm $(WASM_DIR)/main.go

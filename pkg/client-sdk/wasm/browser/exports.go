@@ -1,4 +1,7 @@
-package arksdkwasm
+//go:build js && wasm
+// +build js,wasm
+
+package browser
 
 import (
 	"context"
@@ -6,11 +9,11 @@ import (
 	"strings"
 	"syscall/js"
 
-	arksdk "github.com/ark-network/ark-sdk"
-	"github.com/ark-network/ark-sdk/store"
-	"github.com/ark-network/ark-sdk/wallet"
-	singlekeywallet "github.com/ark-network/ark-sdk/wallet/singlekey"
-	walletstore "github.com/ark-network/ark-sdk/wallet/singlekey/store"
+	arksdk "github.com/ark-network/ark/pkg/client-sdk"
+	"github.com/ark-network/ark/pkg/client-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/wallet"
+	singlekeywallet "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey"
+	walletstore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store"
 )
 
 var (

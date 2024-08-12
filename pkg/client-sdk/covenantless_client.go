@@ -10,15 +10,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ark-network/ark-sdk/client"
-	"github.com/ark-network/ark-sdk/explorer"
-	"github.com/ark-network/ark-sdk/internal/utils"
-	"github.com/ark-network/ark-sdk/internal/utils/redemption"
-	"github.com/ark-network/ark-sdk/store"
-	"github.com/ark-network/ark-sdk/wallet"
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
+	"github.com/ark-network/ark/pkg/client-sdk/client"
+	"github.com/ark-network/ark/pkg/client-sdk/explorer"
+	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
+	"github.com/ark-network/ark/pkg/client-sdk/internal/utils/redemption"
+	"github.com/ark-network/ark/pkg/client-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/psbt"
@@ -478,7 +478,7 @@ func (a *covenantlessArkClient) UnilateralRedeem(ctx context.Context) error {
 
 	vtxos := make([]client.Vtxo, 0)
 	for _, offchainAddr := range offchainAddrs {
-		spendableVtxos, err := a.getVtxos(ctx, offchainAddr, false)
+		spendableVtxos, _, err := a.getVtxos(ctx, offchainAddr, false)
 		if err != nil {
 			return err
 		}
@@ -574,7 +574,7 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 
 	vtxos := make([]client.Vtxo, 0)
 	for _, offchainAddr := range offchainAddrs {
-		spendableVtxos, err := a.getVtxos(ctx, offchainAddr, withExpiryCoinselect)
+		spendableVtxos, _, err := a.getVtxos(ctx, offchainAddr, withExpiryCoinselect)
 		if err != nil {
 			return "", err
 		}
@@ -625,6 +625,145 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 	}
 
 	return poolTxID, nil
+}
+
+func (a *covenantlessArkClient) SendAsync(
+	ctx context.Context,
+	withExpiryCoinselect bool, receivers []Receiver,
+) (string, error) {
+	if len(receivers) <= 0 {
+		return "", fmt.Errorf("missing receivers")
+	}
+
+	for _, receiver := range receivers {
+		isOnchain, _, _, err := utils.DecodeReceiverAddress(receiver.To())
+		if err != nil {
+			return "", err
+		}
+		if isOnchain {
+			return "", fmt.Errorf("all receiver addresses must be offchain addresses")
+		}
+	}
+
+	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	_, _, aspPubKey, err := common.DecodeAddress(offchainAddrs[0])
+	if err != nil {
+		return "", err
+	}
+
+	receiversOutput := make([]client.Output, 0)
+	sumOfReceivers := uint64(0)
+
+	for _, receiver := range receivers {
+		_, _, aspKey, err := common.DecodeAddress(receiver.To())
+		if err != nil {
+			return "", fmt.Errorf("invalid receiver address: %s", err)
+		}
+
+		if !bytes.Equal(
+			aspPubKey.SerializeCompressed(), aspKey.SerializeCompressed(),
+		) {
+			return "", fmt.Errorf("invalid receiver address '%s': must be associated with the connected service provider", receiver)
+		}
+
+		if receiver.Amount() < DUST {
+			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), DUST)
+		}
+
+		receiversOutput = append(receiversOutput, client.Output{
+			Address: receiver.To(),
+			Amount:  receiver.Amount(),
+		})
+		sumOfReceivers += receiver.Amount()
+	}
+
+	vtxos, _, err := a.getVtxos(ctx, offchainAddrs[0], withExpiryCoinselect)
+	if err != nil {
+		return "", err
+	}
+	selectedCoins, changeAmount, err := utils.CoinSelect(
+		vtxos, sumOfReceivers, DUST, withExpiryCoinselect,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	if changeAmount > 0 {
+		changeReceiver := client.Output{
+			Address: offchainAddrs[0],
+			Amount:  changeAmount,
+		}
+		receiversOutput = append(receiversOutput, changeReceiver)
+	}
+
+	inputs := make([]client.VtxoKey, 0, len(selectedCoins))
+
+	for _, coin := range selectedCoins {
+		inputs = append(inputs, coin.VtxoKey)
+	}
+
+	redeemTx, unconditionalForfeitTxs, err := a.client.CreatePayment(
+		ctx, inputs, receiversOutput)
+	if err != nil {
+		return "", err
+	}
+
+	// TODO verify the redeem tx signature
+
+	signedUnconditionalForfeitTxs := make([]string, 0, len(unconditionalForfeitTxs))
+	for _, tx := range unconditionalForfeitTxs {
+		signedForfeitTx, err := a.wallet.SignTransaction(ctx, a.explorer, tx)
+		if err != nil {
+			return "", err
+		}
+
+		signedUnconditionalForfeitTxs = append(signedUnconditionalForfeitTxs, signedForfeitTx)
+	}
+
+	signedRedeemTx, err := a.wallet.SignTransaction(ctx, a.explorer, redeemTx)
+	if err != nil {
+		return "", err
+	}
+
+	if err = a.client.CompletePayment(
+		ctx, signedRedeemTx, signedUnconditionalForfeitTxs,
+	); err != nil {
+		return "", err
+	}
+
+	return signedRedeemTx, nil
+}
+
+func (a *covenantlessArkClient) ClaimAsync(
+	ctx context.Context,
+) (string, error) {
+	myselfOffchain, _, err := a.wallet.NewAddress(ctx, false)
+	if err != nil {
+		return "", err
+	}
+
+	_, pendingVtxos, err := a.getVtxos(ctx, myselfOffchain, false)
+	if err != nil {
+		return "", err
+	}
+
+	var pendingBalance uint64
+	for _, vtxo := range pendingVtxos {
+		pendingBalance += vtxo.Amount
+	}
+	if pendingBalance == 0 {
+		return "", nil
+	}
+
+	receiver := client.Output{
+		Address: myselfOffchain,
+		Amount:  pendingBalance,
+	}
+	return a.selfTransferAllPendingPayments(ctx, pendingVtxos, receiver)
 }
 
 func (a *covenantlessArkClient) sendOnchain(
@@ -817,7 +956,7 @@ func (a *covenantlessArkClient) sendOffchain(
 
 	vtxos := make([]client.Vtxo, 0)
 	for _, offchainAddr := range offchainAddrs {
-		spendableVtxos, err := a.getVtxos(ctx, offchainAddr, withExpiryCoinselect)
+		spendableVtxos, _, err := a.getVtxos(ctx, offchainAddr, withExpiryCoinselect)
 		if err != nil {
 			return "", err
 		}
@@ -1394,16 +1533,20 @@ func (a *covenantlessArkClient) getRedeemBranches(
 	return redeemBranches, nil
 }
 
+// TODO (@louisinger): return pending balance in dedicated map.
+// Currently, the returned balance is calculated from both spendable and
+// pending vtxos.
 func (a *covenantlessArkClient) getOffchainBalance(
 	ctx context.Context, addr string, computeVtxoExpiration bool,
 ) (uint64, map[int64]uint64, error) {
 	amountByExpiration := make(map[int64]uint64, 0)
 
-	vtxos, err := a.getVtxos(ctx, addr, computeVtxoExpiration)
+	spendableVtxos, pendingVtxos, err := a.getVtxos(ctx, addr, computeVtxoExpiration)
 	if err != nil {
 		return 0, nil, err
 	}
 	var balance uint64
+	vtxos := append(spendableVtxos, pendingVtxos...)
 	for _, vtxo := range vtxos {
 		balance += vtxo.Amount
 
@@ -1423,28 +1566,38 @@ func (a *covenantlessArkClient) getOffchainBalance(
 
 func (a *covenantlessArkClient) getVtxos(
 	ctx context.Context, addr string, computeVtxoExpiration bool,
-) ([]client.Vtxo, error) {
+) ([]client.Vtxo, []client.Vtxo, error) {
 	vtxos, _, err := a.client.ListVtxos(ctx, addr)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+
+	pendingVtxos := make([]client.Vtxo, 0)
+	spendableVtxos := make([]client.Vtxo, 0)
+	for _, vtxo := range vtxos {
+		if vtxo.Pending {
+			pendingVtxos = append(pendingVtxos, vtxo)
+			continue
+		}
+		spendableVtxos = append(spendableVtxos, vtxo)
 	}
 
 	if !computeVtxoExpiration {
-		return vtxos, nil
+		return spendableVtxos, pendingVtxos, nil
 	}
 
-	redeemBranches, err := a.getRedeemBranches(ctx, vtxos)
+	redeemBranches, err := a.getRedeemBranches(ctx, spendableVtxos)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	for vtxoTxid, branch := range redeemBranches {
 		expiration, err := branch.ExpiresAt()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
-		for i, vtxo := range vtxos {
+		for i, vtxo := range spendableVtxos {
 			if vtxo.Txid == vtxoTxid {
 				vtxos[i].ExpiresAt = expiration
 				break
@@ -1452,5 +1605,35 @@ func (a *covenantlessArkClient) getVtxos(
 		}
 	}
 
-	return vtxos, nil
+	return spendableVtxos, pendingVtxos, nil
+}
+
+func (a *covenantlessArkClient) selfTransferAllPendingPayments(
+	ctx context.Context, pendingVtxos []client.Vtxo, myself client.Output,
+) (string, error) {
+	inputs := make([]client.VtxoKey, 0, len(pendingVtxos))
+
+	for _, coin := range pendingVtxos {
+		inputs = append(inputs, coin.VtxoKey)
+	}
+
+	outputs := []client.Output{myself}
+
+	paymentID, err := a.client.RegisterPayment(ctx, inputs)
+	if err != nil {
+		return "", err
+	}
+
+	if err := a.client.ClaimPayment(ctx, paymentID, outputs); err != nil {
+		return "", err
+	}
+
+	roundTxid, err := a.handleRoundStream(
+		ctx, paymentID, pendingVtxos, outputs,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return roundTxid, nil
 }

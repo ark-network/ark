@@ -1,8 +1,5 @@
 # Ark Server
-
-This is a Go implementation of an Ark Service Provider (ASP). An ASP it's an always-on server that provide Bitcoin liquidity to the Ark protocol. It's built using the [Elements introspection opcodes](https://github.com/ElementsProject/elements/blob/master/doc/tapscript_opcodes.md) and currently supports Elements as chain of deployment.
-
-This is in an early phase of development, the goal is to experiment with many possibile use-cases of Ark and adapt quickly based on user feedback early on.
+The Ark Server is a Go implementation of an Ark Service Provider (ASP). An ASP it's an always-on server that provides bitcoin liquidity in the Ark layer-two protocol. It supports Bitcoin and Liquid (with more experimantal features using covenants).
 
 **ALPHA STAGE SOFTWARE: USE AT YOUR OWN RISK!**
 
@@ -11,6 +8,7 @@ This is in an early phase of development, the goal is to experiment with many po
 ### Prerequisites
 
 - [Go](https://go.dev/doc/install)
+- [Bitcoin Core](https://bitcoincore.org) with `compact block filters` enabled
 
 ### Build Server
 

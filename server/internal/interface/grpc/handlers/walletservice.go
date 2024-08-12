@@ -8,16 +8,19 @@ import (
 	"github.com/ark-network/ark/internal/core/ports"
 )
 
-type walletHandler struct {
+type walletInitHandler struct {
 	walletService ports.WalletService
-	onUnlock      func()
+	onInit        func(password string)
+	onUnlock      func(password string)
 }
 
-func NewWalletHandler(walletService ports.WalletService, onUnlock func()) arkv1.WalletServiceServer {
-	return &walletHandler{walletService, onUnlock}
+func NewWalletInitializerHandler(
+	walletService ports.WalletService, onInit, onUnlock func(string),
+) arkv1.WalletInitializerServiceServer {
+	return &walletInitHandler{walletService, onInit, onUnlock}
 }
 
-func (a *walletHandler) GenSeed(ctx context.Context, _ *arkv1.GenSeedRequest) (*arkv1.GenSeedResponse, error) {
+func (a *walletInitHandler) GenSeed(ctx context.Context, _ *arkv1.GenSeedRequest) (*arkv1.GenSeedResponse, error) {
 	seed, err := a.walletService.GenSeed(ctx)
 	if err != nil {
 		return nil, err
@@ -26,7 +29,7 @@ func (a *walletHandler) GenSeed(ctx context.Context, _ *arkv1.GenSeedRequest) (*
 	return &arkv1.GenSeedResponse{Seed: seed}, nil
 }
 
-func (a *walletHandler) Create(ctx context.Context, req *arkv1.CreateRequest) (*arkv1.CreateResponse, error) {
+func (a *walletInitHandler) Create(ctx context.Context, req *arkv1.CreateRequest) (*arkv1.CreateResponse, error) {
 	if len(req.GetSeed()) <= 0 {
 		return nil, fmt.Errorf("missing wallet seed")
 	}
@@ -40,10 +43,12 @@ func (a *walletHandler) Create(ctx context.Context, req *arkv1.CreateRequest) (*
 		return nil, err
 	}
 
+	go a.onInit(req.GetPassword())
+
 	return &arkv1.CreateResponse{}, nil
 }
 
-func (a *walletHandler) Restore(ctx context.Context, req *arkv1.RestoreRequest) (*arkv1.RestoreResponse, error) {
+func (a *walletInitHandler) Restore(ctx context.Context, req *arkv1.RestoreRequest) (*arkv1.RestoreResponse, error) {
 	if len(req.GetSeed()) <= 0 {
 		return nil, fmt.Errorf("missing wallet seed")
 	}
@@ -57,10 +62,12 @@ func (a *walletHandler) Restore(ctx context.Context, req *arkv1.RestoreRequest) 
 		return nil, err
 	}
 
+	go a.onInit(req.GetPassword())
+
 	return &arkv1.RestoreResponse{}, nil
 }
 
-func (a *walletHandler) Unlock(ctx context.Context, req *arkv1.UnlockRequest) (*arkv1.UnlockResponse, error) {
+func (a *walletInitHandler) Unlock(ctx context.Context, req *arkv1.UnlockRequest) (*arkv1.UnlockResponse, error) {
 	if len(req.GetPassword()) <= 0 {
 		return nil, fmt.Errorf("missing wallet password")
 	}
@@ -68,9 +75,30 @@ func (a *walletHandler) Unlock(ctx context.Context, req *arkv1.UnlockRequest) (*
 		return nil, err
 	}
 
-	go a.onUnlock()
+	go a.onUnlock(req.GetPassword())
 
 	return &arkv1.UnlockResponse{}, nil
+}
+
+func (a *walletInitHandler) GetStatus(ctx context.Context, _ *arkv1.GetStatusRequest) (*arkv1.GetStatusResponse, error) {
+	status, err := a.walletService.Status(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &arkv1.GetStatusResponse{
+		Initialized: status.IsInitialized(),
+		Unlocked:    status.IsUnlocked(),
+		Synced:      status.IsSynced(),
+	}, nil
+}
+
+type walletHandler struct {
+	walletService ports.WalletService
+}
+
+func NewWalletHandler(walletService ports.WalletService) arkv1.WalletServiceServer {
+	return &walletHandler{walletService}
 }
 
 func (a *walletHandler) Lock(ctx context.Context, req *arkv1.LockRequest) (*arkv1.LockResponse, error) {
@@ -82,19 +110,6 @@ func (a *walletHandler) Lock(ctx context.Context, req *arkv1.LockRequest) (*arkv
 	}
 
 	return &arkv1.LockResponse{}, nil
-}
-
-func (a *walletHandler) GetStatus(ctx context.Context, _ *arkv1.GetStatusRequest) (*arkv1.GetStatusResponse, error) {
-	status, err := a.walletService.Status(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return &arkv1.GetStatusResponse{
-		Initialized: status.IsInitialized(),
-		Unlocked:    status.IsUnlocked(),
-		Synced:      status.IsSynced(),
-	}, nil
 }
 
 func (a *walletHandler) DeriveAddress(ctx context.Context, _ *arkv1.DeriveAddressRequest) (*arkv1.DeriveAddressResponse, error) {

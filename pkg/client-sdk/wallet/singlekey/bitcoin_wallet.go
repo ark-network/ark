@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ark-network/ark-sdk/explorer"
-	"github.com/ark-network/ark-sdk/internal/utils"
-	"github.com/ark-network/ark-sdk/store"
-	"github.com/ark-network/ark-sdk/wallet"
-	walletstore "github.com/ark-network/ark-sdk/wallet/singlekey/store"
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
+	"github.com/ark-network/ark/pkg/client-sdk/explorer"
+	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
+	"github.com/ark-network/ark/pkg/client-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/wallet"
+	walletstore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
@@ -201,7 +201,7 @@ func (s *bitcoinWallet) SignTransaction(
 				switch c := closure.(type) {
 				case *bitcointree.CSVSigClosure:
 					sign = bytes.Equal(c.Pubkey.SerializeCompressed()[1:], pubkey.SerializeCompressed()[1:])
-				case *bitcointree.ForfeitClosure:
+				case *bitcointree.MultisigClosure:
 					sign = bytes.Equal(c.Pubkey.SerializeCompressed()[1:], pubkey.SerializeCompressed()[1:])
 				}
 

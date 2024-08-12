@@ -1,4 +1,7 @@
-package arksdkwasm
+//go:build js && wasm
+// +build js,wasm
+
+package browser
 
 import (
 	"context"
@@ -7,9 +10,9 @@ import (
 	"fmt"
 	"syscall/js"
 
-	arksdk "github.com/ark-network/ark-sdk"
-	"github.com/ark-network/ark-sdk/wallet"
-	singlekeywallet "github.com/ark-network/ark-sdk/wallet/singlekey"
+	arksdk "github.com/ark-network/ark/pkg/client-sdk"
+	"github.com/ark-network/ark/pkg/client-sdk/wallet"
+	singlekeywallet "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey"
 )
 
 func LogWrapper() js.Func {

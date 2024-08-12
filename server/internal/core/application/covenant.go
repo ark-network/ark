@@ -17,8 +17,6 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	log "github.com/sirupsen/logrus"
-	"github.com/vulpemventures/go-elements/network"
-	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
 )
 
@@ -42,9 +40,7 @@ type covenantService struct {
 	eventsCh     chan domain.RoundEvent
 	onboardingCh chan onboarding
 
-	trustedOnboardingScriptLock *sync.Mutex
-	trustedOnboardingScripts    map[string]*secp256k1.PublicKey
-	currentRound                *domain.Round
+	currentRound *domain.Round
 }
 
 func NewCovenantService(
@@ -70,8 +66,7 @@ func NewCovenantService(
 		network, pubkey,
 		roundLifetime, roundInterval, unilateralExitDelay, minRelayFee,
 		walletSvc, repoManager, builder, scanner, sweeper,
-		paymentRequests, forfeitTxs, eventsCh, onboardingCh,
-		&sync.Mutex{}, make(map[string]*secp256k1.PublicKey), nil,
+		paymentRequests, forfeitTxs, eventsCh, onboardingCh, nil,
 	}
 	repoManager.RegisterEventsHandler(
 		func(round *domain.Round) {
@@ -166,6 +161,14 @@ func (s *covenantService) UpdatePaymentStatus(_ context.Context, id string) ([]s
 	return nil, nil, nil
 }
 
+func (s *covenantService) CompleteAsyncPayment(ctx context.Context, redeemTx string, unconditionalForfeitTxs []string) error {
+	return fmt.Errorf("unimplemented")
+}
+
+func (s *covenantService) CreateAsyncPayment(ctx context.Context, inputs []domain.VtxoKey, receivers []domain.Receiver) (string, []string, error) {
+	return "", nil, fmt.Errorf("unimplemented")
+}
+
 func (s *covenantService) SignVtxos(ctx context.Context, forfeitTxs []string) error {
 	return s.forfeitTxs.sign(forfeitTxs)
 }
@@ -236,55 +239,13 @@ func (s *covenantService) Onboard(
 
 	log.Debugf("broadcasted boarding tx %s", txid)
 
-	sharedOutputScript := hex.EncodeToString(extracted.Outputs[0].Script)
-	if _, ok := s.trustedOnboardingScripts[sharedOutputScript]; !ok {
-		s.onboardingCh <- onboarding{
-			tx:             boardingTx,
-			congestionTree: congestionTree,
-			userPubkey:     userPubkey,
-		}
+	s.onboardingCh <- onboarding{
+		tx:             boardingTx,
+		congestionTree: congestionTree,
+		userPubkey:     userPubkey,
 	}
 
 	return nil
-}
-
-func (s *covenantService) TrustedOnboarding(
-	ctx context.Context, userPubKey *secp256k1.PublicKey,
-) (string, error) {
-	congestionTreeLeaf := tree.Receiver{
-		Pubkey: hex.EncodeToString(userPubKey.SerializeCompressed()),
-	}
-
-	_, sharedOutputScript, _, err := tree.CraftCongestionTree(
-		s.onchainNework().AssetID, s.pubkey, []tree.Receiver{congestionTreeLeaf},
-		s.minRelayFee, s.roundLifetime, s.unilateralExitDelay,
-	)
-	if err != nil {
-		return "", err
-	}
-
-	pay, err := payment.FromScript(sharedOutputScript, s.onchainNework(), nil)
-	if err != nil {
-		return "", err
-	}
-
-	address, err := pay.TaprootAddress()
-	if err != nil {
-		return "", err
-	}
-
-	s.trustedOnboardingScriptLock.Lock()
-
-	script := hex.EncodeToString(sharedOutputScript)
-	s.trustedOnboardingScripts[script] = userPubKey
-
-	s.trustedOnboardingScriptLock.Unlock()
-
-	if err := s.scanner.WatchScripts(ctx, []string{script}); err != nil {
-		return "", err
-	}
-
-	return address, nil
 }
 
 func (s *covenantService) start() {
@@ -493,59 +454,7 @@ func (s *covenantService) listenToScannerNotifications() {
 			vtxosRepo := s.repoManager.Vtxos()
 			roundRepo := s.repoManager.Rounds()
 
-			for script, v := range vtxoKeys {
-				//onboarding
-				if userPubkey, ok := s.trustedOnboardingScripts[script]; ok {
-					congestionTreeLeaf := tree.Receiver{
-						Pubkey: hex.EncodeToString(userPubkey.SerializeCompressed()),
-						Amount: v.Value - s.minRelayFee,
-					}
-
-					treeFactoryFn, sharedOutputScript, sharedOutputAmount, err := tree.CraftCongestionTree(
-						s.onchainNework().AssetID, s.pubkey, []tree.Receiver{congestionTreeLeaf},
-						s.minRelayFee, s.roundLifetime, s.unilateralExitDelay,
-					)
-					if err != nil {
-						log.WithError(err).Warn("failed to craft onboarding congestion tree")
-						return
-					}
-
-					congestionTree, err := treeFactoryFn(
-						psetv2.InputArgs{
-							Txid:    v.Txid,
-							TxIndex: v.VOut,
-						},
-					)
-					if err != nil {
-						log.WithError(err).Warn("failed to build onboarding congestion tree")
-						return
-					}
-
-					if sharedOutputAmount != v.Value {
-						log.Errorf("shared output amount mismatch, expected %d, got %d", sharedOutputAmount, v.Value)
-						return
-					}
-
-					precomputedScript, _ := hex.DecodeString(script)
-
-					if !bytes.Equal(sharedOutputScript, precomputedScript) {
-						log.Errorf("shared output script mismatch, expected %x, got %x", sharedOutputScript, precomputedScript)
-						return
-					}
-
-					pubkey := hex.EncodeToString(userPubkey.SerializeCompressed())
-					payments := getPaymentsFromOnboardingLiquid(congestionTree, pubkey)
-					round := domain.NewFinalizedRound(
-						dustAmount, pubkey, v.Txid, "", congestionTree, payments,
-					)
-					if err := s.saveEvents(ctx, round.Id, round.Events()); err != nil {
-						log.WithError(err).Warn("failed to store new round events")
-						return
-					}
-
-					return
-				}
-
+			for _, v := range vtxoKeys {
 				// redeem
 				vtxos, err := vtxosRepo.GetVtxos(ctx, []domain.VtxoKey{v.VtxoKey})
 				if err != nil {
@@ -929,19 +838,6 @@ func (s *covenantService) saveEvents(
 		return err
 	}
 	return s.repoManager.Rounds().AddOrUpdateRound(ctx, *round)
-}
-
-func (s *covenantService) onchainNework() *network.Network {
-	switch s.network.Name {
-	case common.Liquid.Name:
-		return &network.Liquid
-	case common.LiquidRegTest.Name:
-		return &network.Regtest
-	case common.LiquidTestNet.Name:
-		return &network.Testnet
-	default:
-		return &network.Liquid
-	}
 }
 
 func getPaymentsFromOnboardingLiquid(

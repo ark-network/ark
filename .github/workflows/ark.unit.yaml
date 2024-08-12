@@ -4,12 +4,14 @@ on:
   push:
     paths:
       - "server/**"
+      - "pkg/client-sdk/**"
     branches: [master]
   pull_request:
-    branches: 
+    branches:
       - master
     paths:
       - "server/**"
+      - "pkg/client-sdk/**"
 
 jobs:
   test-server:
@@ -38,6 +40,7 @@ jobs:
       - run: go get -v -t -d ./...
       - name: unit testing
         run: make test
+
   test-sdk:
     name: sdk unit tests
     runs-on: ubuntu-latest
@@ -60,4 +63,4 @@ jobs:
           args: '-severity high -quiet ./...'
       - run: go get -v -t -d ./...
       - name: unit testing
-        run: make test  
+        run: make test

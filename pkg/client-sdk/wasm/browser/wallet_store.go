@@ -1,4 +1,7 @@
-package arksdkwasm
+//go:build js && wasm
+// +build js,wasm
+
+package browser
 
 import (
 	"encoding/hex"
@@ -6,7 +9,7 @@ import (
 	"fmt"
 	"syscall/js"
 
-	walletstore "github.com/ark-network/ark-sdk/wallet/singlekey/store"
+	walletstore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 

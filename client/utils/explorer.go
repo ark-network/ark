@@ -84,7 +84,6 @@ func (e *explorer) GetFeeRate() (float64, error) {
 		fmt.Println("empty fee-estimates response, default to 2 sat/vbyte")
 		return 2, nil
 	}
-	fmt.Println("fee rate", response["1"])
 
 	return response["1"], nil
 }

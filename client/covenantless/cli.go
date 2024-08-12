@@ -70,15 +70,19 @@ func New() interfaces.CLI {
 	return &clArkBitcoinCLI{}
 }
 
+func (c *clArkBitcoinCLI) Send(ctx *cli.Context) error {
+	return fmt.Errorf("not implemented")
+}
+
 type receiver struct {
 	To     string `json:"to"`
 	Amount uint64 `json:"amount"`
 }
 
-func (r *receiver) isOnchain() bool {
-	_, err := btcutil.DecodeAddress(r.To, nil)
-	return err == nil
-}
+// func (r *receiver) isOnchain() bool {
+// 	_, err := btcutil.DecodeAddress(r.To, nil)
+// 	return err == nil
+// }
 
 func sendOnchain(ctx *cli.Context, receivers []receiver) (string, error) {
 	ptx, err := psbt.New(nil, nil, 2, 0, nil)

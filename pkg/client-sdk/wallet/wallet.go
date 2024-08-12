@@ -3,7 +3,7 @@ package wallet
 import (
 	"context"
 
-	"github.com/ark-network/ark-sdk/explorer"
+	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 )
 
 const (

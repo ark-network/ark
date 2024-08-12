@@ -16,5 +16,9 @@ build-all-client:
 	@echo "Building ark binary for all archs..."
 	@bash ./client/scripts/build-all
 
-build: build-server build-client
-build-all: build-all-server build-all-client
+build-wasm:
+	@echo "Building wasm..."
+	@$(MAKE) -C pkg/client-sdk build-wasm
+
+build: build-server build-client build-wasm
+build-all: build-all-server build-all-client build-wasm

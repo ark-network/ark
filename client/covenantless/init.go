@@ -23,7 +23,7 @@ var explorerUrls = map[string]string{
 func (c *clArkBitcoinCLI) Init(ctx *cli.Context) error {
 	key := ctx.String("prvkey")
 	net := strings.ToLower(ctx.String("network"))
-	url := ctx.String("ark-url")
+	url := ctx.String("asp-url")
 	explorer := ctx.String("explorer")
 
 	var explorerURL string

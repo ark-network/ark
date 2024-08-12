@@ -101,14 +101,14 @@
         ]
       }
     },
-    "/v1/onboard/address": {
+    "/v1/payment": {
       "post": {
-        "operationId": "ArkService_TrustedOnboarding",
+        "operationId": "ArkService_CreatePayment",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1TrustedOnboardingResponse"
+              "$ref": "#/definitions/v1CreatePaymentResponse"
             }
           },
           "default": {
@@ -124,7 +124,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/v1TrustedOnboardingRequest"
+              "$ref": "#/definitions/v1CreatePaymentRequest"
             }
           }
         ],
@@ -157,6 +157,38 @@
             "required": true,
             "schema": {
               "$ref": "#/definitions/v1ClaimPaymentRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
+    "/v1/payment/complete": {
+      "post": {
+        "operationId": "ArkService_CompletePayment",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CompletePaymentResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CompletePaymentRequest"
             }
           }
         ],
@@ -400,6 +432,57 @@
     "v1ClaimPaymentResponse": {
       "type": "object"
     },
+    "v1CompletePaymentRequest": {
+      "type": "object",
+      "properties": {
+        "signedRedeemTx": {
+          "type": "string"
+        },
+        "signedUnconditionalForfeitTxs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "v1CompletePaymentResponse": {
+      "type": "object"
+    },
+    "v1CreatePaymentRequest": {
+      "type": "object",
+      "properties": {
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Input"
+          }
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Output"
+          }
+        }
+      }
+    },
+    "v1CreatePaymentResponse": {
+      "type": "object",
+      "properties": {
+        "signedRedeemTx": {
+          "type": "string",
+          "title": "signed only by the ASP"
+        },
+        "usignedUnconditionalForfeitTxs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "v1FinalizePaymentRequest": {
       "type": "object",
       "properties": {
@@ -546,6 +629,20 @@
           "type": "string",
           "format": "uint64",
           "description": "Amount to send in satoshis."
+        }
+      }
+    },
+    "v1PendingPayment": {
+      "type": "object",
+      "properties": {
+        "redeemTx": {
+          "type": "string"
+        },
+        "unconditionalForfeitTxs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -704,22 +801,6 @@
         }
       }
     },
-    "v1TrustedOnboardingRequest": {
-      "type": "object",
-      "properties": {
-        "userPubkey": {
-          "type": "string"
-        }
-      }
-    },
-    "v1TrustedOnboardingResponse": {
-      "type": "object",
-      "properties": {
-        "address": {
-          "type": "string"
-        }
-      }
-    },
     "v1Vtxo": {
       "type": "object",
       "properties": {
@@ -744,6 +825,12 @@
         },
         "swept": {
           "type": "boolean"
+        },
+        "pending": {
+          "type": "boolean"
+        },
+        "pendingData": {
+          "$ref": "#/definitions/v1PendingPayment"
         }
       }
     }

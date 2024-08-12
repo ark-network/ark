@@ -1,5 +1,5 @@
 .DS_Store
 .vscode/
 
-main.wasm
+*.wasm
 wasm_exec.js

@@ -86,20 +86,42 @@ var (
 			}
 			return cli.Onboard(ctx)
 		},
-		Flags: []cli.Flag{&flags.AmountOnboardFlag, &flags.TrustedOnboardFlag, &flags.PasswordFlag},
+		Flags: []cli.Flag{&flags.AmountOnboardFlag, &flags.PasswordFlag},
 	}
 
 	sendCommand = cli.Command{
 		Name:  "send",
 		Usage: "Send your onchain or offchain funds to one or many receivers",
 		Action: func(ctx *cli.Context) error {
+			state, err := utils.GetState(ctx)
+			if err != nil {
+				return err
+			}
+
+			networkName := state[utils.NETWORK]
+			cli, err := getCLI(networkName)
+			if err != nil {
+				return err
+			}
+			if strings.Contains(networkName, "liquid") {
+				return cli.Send(ctx)
+			}
+			return cli.SendAsync(ctx)
+		},
+		Flags: []cli.Flag{&flags.ReceiversFlag, &flags.ToFlag, &flags.AmountFlag, &flags.PasswordFlag, &flags.EnableExpiryCoinselectFlag, &flags.AsyncPaymentFlag},
+	}
+
+	claimCommand = cli.Command{
+		Name:  "claim",
+		Usage: "Join round to claim pending payments",
+		Action: func(ctx *cli.Context) error {
 			cli, err := getCLIFromState(ctx)
 			if err != nil {
 				return err
 			}
-			return cli.Send(ctx)
+			return cli.ClaimAsync(ctx)
 		},
-		Flags: []cli.Flag{&flags.ReceiversFlag, &flags.ToFlag, &flags.AmountFlag, &flags.PasswordFlag, &flags.EnableExpiryCoinselectFlag},
+		Flags: []cli.Flag{&flags.PasswordFlag},
 	}
 
 	receiveCommand = cli.Command{
@@ -144,6 +166,7 @@ func main() {
 		&receiveCommand,
 		&redeemCommand,
 		&sendCommand,
+		&claimCommand,
 		&onboardCommand,
 	)
 	app.Flags = []cli.Flag{

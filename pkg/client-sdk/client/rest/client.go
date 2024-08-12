@@ -8,13 +8,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ark-network/ark-sdk/client"
-	"github.com/ark-network/ark-sdk/client/rest/service/arkservice"
-	"github.com/ark-network/ark-sdk/client/rest/service/arkservice/ark_service"
-	"github.com/ark-network/ark-sdk/client/rest/service/models"
-	"github.com/ark-network/ark-sdk/internal/utils"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common/tree"
+	"github.com/ark-network/ark/pkg/client-sdk/client"
+	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/arkservice"
+	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/arkservice/ark_service"
+	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/models"
+	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
@@ -180,14 +180,24 @@ func (a *restClient) ListVtxos(
 			return nil, nil, err
 		}
 
+		var redeemTx string
+		var uncondForfeitTxs []string
+		if v.PendingData != nil {
+			redeemTx = v.PendingData.RedeemTx
+			uncondForfeitTxs = v.PendingData.UnconditionalForfeitTxs
+		}
+
 		spendableVtxos = append(spendableVtxos, client.Vtxo{
 			VtxoKey: client.VtxoKey{
 				Txid: v.Outpoint.Txid,
 				VOut: uint32(v.Outpoint.Vout),
 			},
-			Amount:    uint64(amount),
-			RoundTxid: v.PoolTxid,
-			ExpiresAt: expiresAt,
+			Amount:                  uint64(amount),
+			RoundTxid:               v.PoolTxid,
+			ExpiresAt:               expiresAt,
+			Pending:                 v.Pending,
+			RedeemTx:                redeemTx,
+			UnconditionalForfeitTxs: uncondForfeitTxs,
 		})
 	}
 
@@ -354,6 +364,53 @@ func (a *restClient) FinalizePayment(
 	}
 	_, err := a.svc.ArkServiceFinalizePayment(
 		ark_service.NewArkServiceFinalizePaymentParams().WithBody(&body),
+	)
+	return err
+}
+
+func (a *restClient) CreatePayment(
+	ctx context.Context, inputs []client.VtxoKey, outputs []client.Output,
+) (string, []string, error) {
+	ins := make([]*models.V1Input, 0, len(inputs))
+	for _, i := range inputs {
+		ins = append(ins, &models.V1Input{
+			Txid: i.Txid,
+			Vout: int64(i.VOut),
+		})
+	}
+	outs := make([]*models.V1Output, 0, len(outputs))
+	for _, o := range outputs {
+		outs = append(outs, &models.V1Output{
+			Address: o.Address,
+			Amount:  strconv.Itoa(int(o.Amount)),
+		})
+	}
+	body := models.V1CreatePaymentRequest{
+		Inputs:  ins,
+		Outputs: outs,
+	}
+	resp, err := a.svc.ArkServiceCreatePayment(
+		ark_service.NewArkServiceCreatePaymentParams().WithBody(&body),
+	)
+	if err != nil {
+		return "", nil, err
+	}
+	return resp.GetPayload().SignedRedeemTx, resp.GetPayload().UsignedUnconditionalForfeitTxs, nil
+}
+
+func (a *restClient) CompletePayment(
+	ctx context.Context, signedRedeemTx string, signedUnconditionalForfeitTxs []string,
+) error {
+	req := &arkv1.CompletePaymentRequest{
+		SignedRedeemTx:                signedRedeemTx,
+		SignedUnconditionalForfeitTxs: signedUnconditionalForfeitTxs,
+	}
+	body := models.V1CompletePaymentRequest{
+		SignedRedeemTx:                req.GetSignedRedeemTx(),
+		SignedUnconditionalForfeitTxs: req.GetSignedUnconditionalForfeitTxs(),
+	}
+	_, err := a.svc.ArkServiceCompletePayment(
+		ark_service.NewArkServiceCompletePaymentParams().WithBody(&body),
 	)
 	return err
 }

@@ -7,8 +7,8 @@ import (
 	"context"
 	"fmt"
 
-	inmemorystore "github.com/ark-network/ark-sdk/store/inmemory"
-	arksdkwasm "github.com/ark-network/ark-sdk/wasm"
+	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
+	arksdkwasm "github.com/ark-network/ark/pkg/client-sdk/wasm"
 )
 
 func main() {

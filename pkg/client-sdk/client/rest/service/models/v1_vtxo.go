@@ -24,6 +24,12 @@ type V1Vtxo struct {
 	// outpoint
 	Outpoint *V1Input `json:"outpoint,omitempty"`
 
+	// pending
+	Pending bool `json:"pending,omitempty"`
+
+	// pending data
+	PendingData *V1PendingPayment `json:"pendingData,omitempty"`
+
 	// pool txid
 	PoolTxid string `json:"poolTxid,omitempty"`
 
@@ -48,6 +54,10 @@ func (m *V1Vtxo) Validate(formats strfmt.Registry) error {
 		res = append(res, err)
 	}
 
+	if err := m.validatePendingData(formats); err != nil {
+		res = append(res, err)
+	}
+
 	if err := m.validateReceiver(formats); err != nil {
 		res = append(res, err)
 	}
@@ -69,6 +79,25 @@ func (m *V1Vtxo) validateOutpoint(formats strfmt.Registry) error {
 				return ve.ValidateName("outpoint")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
 				return ce.ValidateName("outpoint")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *V1Vtxo) validatePendingData(formats strfmt.Registry) error {
+	if swag.IsZero(m.PendingData) { // not required
+		return nil
+	}
+
+	if m.PendingData != nil {
+		if err := m.PendingData.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("pendingData")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("pendingData")
 			}
 			return err
 		}
@@ -104,6 +133,10 @@ func (m *V1Vtxo) ContextValidate(ctx context.Context, formats strfmt.Registry) e
 		res = append(res, err)
 	}
 
+	if err := m.contextValidatePendingData(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
 	if err := m.contextValidateReceiver(ctx, formats); err != nil {
 		res = append(res, err)
 	}
@@ -127,6 +160,27 @@ func (m *V1Vtxo) contextValidateOutpoint(ctx context.Context, formats strfmt.Reg
 				return ve.ValidateName("outpoint")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
 				return ce.ValidateName("outpoint")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *V1Vtxo) contextValidatePendingData(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.PendingData != nil {
+
+		if swag.IsZero(m.PendingData) { // not required
+			return nil
+		}
+
+		if err := m.PendingData.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("pendingData")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("pendingData")
 			}
 			return err
 		}

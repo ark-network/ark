@@ -37,6 +37,12 @@ type ASPClient interface {
 	FinalizePayment(
 		ctx context.Context, signedForfeitTxs []string,
 	) error
+	CreatePayment(
+		ctx context.Context, inputs []VtxoKey, outputs []Output,
+	) (string, []string, error)
+	CompletePayment(
+		ctx context.Context, signedRedeemTx string, signedUnconditionalForfeitTxs []string,
+	) error
 	Close()
 }
 
@@ -61,9 +67,12 @@ type VtxoKey struct {
 
 type Vtxo struct {
 	VtxoKey
-	Amount    uint64
-	RoundTxid string
-	ExpiresAt *time.Time
+	Amount                  uint64
+	RoundTxid               string
+	ExpiresAt               *time.Time
+	RedeemTx                string
+	UnconditionalForfeitTxs []string
+	Pending                 bool
 }
 
 type Output struct {

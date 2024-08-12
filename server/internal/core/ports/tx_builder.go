@@ -29,4 +29,8 @@ type TxBuilder interface {
 	FinalizeAndExtractForfeit(tx string) (txhex string, err error)
 	// FindLeaves returns all the leaves txs that are reachable from the given outpoint
 	FindLeaves(congestionTree tree.CongestionTree, fromtxid string, vout uint32) (leaves []tree.Node, err error)
+	BuildAsyncPaymentTransactions(
+		vtxosToSpend []domain.Vtxo,
+		aspPubKey *secp256k1.PublicKey, receivers []domain.Receiver, minRelayFee uint64,
+	) (*domain.AsyncPaymentTxs, error)
 }

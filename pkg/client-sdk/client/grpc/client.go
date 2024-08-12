@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ark-network/ark-sdk/client"
-	"github.com/ark-network/ark-sdk/internal/utils"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common/tree"
+	"github.com/ark-network/ark/pkg/client-sdk/client"
+	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -199,6 +199,31 @@ func (a *grpcClient) FinalizePayment(
 	return err
 }
 
+func (a *grpcClient) CreatePayment(
+	ctx context.Context, inputs []client.VtxoKey, outputs []client.Output,
+) (string, []string, error) {
+	req := &arkv1.CreatePaymentRequest{
+		Inputs:  ins(inputs).toProto(),
+		Outputs: outs(outputs).toProto(),
+	}
+	resp, err := a.svc.CreatePayment(ctx, req)
+	if err != nil {
+		return "", nil, err
+	}
+	return resp.SignedRedeemTx, resp.UsignedUnconditionalForfeitTxs, nil
+}
+
+func (a *grpcClient) CompletePayment(
+	ctx context.Context, redeemTx string, signedForfeitTxs []string,
+) error {
+	req := &arkv1.CompletePaymentRequest{
+		SignedRedeemTx:                redeemTx,
+		SignedUnconditionalForfeitTxs: signedForfeitTxs,
+	}
+	_, err := a.svc.CompletePayment(ctx, req)
+	return err
+}
+
 func (a *grpcClient) GetRoundByID(
 	ctx context.Context, roundID string,
 ) (*client.Round, error) {
@@ -284,14 +309,23 @@ func (v vtxo) toVtxo() client.Vtxo {
 		t := time.Unix(v.GetExpireAt(), 0)
 		expiresAt = &t
 	}
+	var redeemTx string
+	var uncondForfeitTxs []string
+	if v.GetPendingData() != nil {
+		redeemTx = v.GetPendingData().GetRedeemTx()
+		uncondForfeitTxs = v.GetPendingData().GetUnconditionalForfeitTxs()
+	}
 	return client.Vtxo{
 		VtxoKey: client.VtxoKey{
 			Txid: v.GetOutpoint().GetTxid(),
 			VOut: v.GetOutpoint().GetVout(),
 		},
-		Amount:    v.GetReceiver().GetAmount(),
-		RoundTxid: v.GetPoolTxid(),
-		ExpiresAt: expiresAt,
+		Amount:                  v.GetReceiver().GetAmount(),
+		RoundTxid:               v.GetPoolTxid(),
+		ExpiresAt:               expiresAt,
+		Pending:                 v.GetPending(),
+		RedeemTx:                redeemTx,
+		UnconditionalForfeitTxs: uncondForfeitTxs,
 	}
 }
 
