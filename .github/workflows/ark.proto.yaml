@@ -2,8 +2,16 @@ name: API Spec Changes
 
 on:
   push:
+    branches: 
+      - master
     paths:
-      - 'api-spec/**'
+      - "api-spec/**"
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "api-spec/**"
+
 
 jobs:
   build:
