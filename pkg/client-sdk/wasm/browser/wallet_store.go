@@ -1,4 +1,7 @@
-package arksdkwasm
+//go:build js && wasm
+// +build js,wasm
+
+package browser
 
 import (
 	"encoding/hex"
