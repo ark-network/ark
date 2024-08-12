@@ -31,4 +31,4 @@ GO_VERSION := $(shell go version | cut -d' ' -f3)
 build-wasm:
 	@mkdir -p $(BUILD_DIR)
 	@echo "Version: $(VERSION)"
-	@GOOS=js GOARCH=wasm GO111MODULE=on go build -ldflags="-X 'main.Version=$(VERSION)'" -o $(BUILD_DIR)/client-sdk.wasm $(WASM_DIR)/main.go
+	@GOOS=js GOARCH=wasm GO111MODULE=on go build -ldflags="-X 'main.Version=$(VERSION)'" -o $(BUILD_DIR)/ark-sdk.wasm $(WASM_DIR)/main.go
