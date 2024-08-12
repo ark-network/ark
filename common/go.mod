@@ -1,6 +1,6 @@
 module github.com/ark-network/ark/common
 
-go 1.22.2
+go 1.22.6
 
 require (
 	github.com/btcsuite/btcd v0.24.2

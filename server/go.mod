@@ -3,6 +3,8 @@ module github.com/ark-network/ark/server
 go 1.22.6
 
 require (
+	github.com/ark-network/ark/api-spec v0.0.0-20240812212957-8e763613dda5
+	github.com/ark-network/ark/common v0.0.0-20240812212957-8e763613dda5
 	github.com/btcsuite/btcwallet/walletdb v1.4.2
 	github.com/btcsuite/btcwallet/wtxmgr v1.5.3
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0
