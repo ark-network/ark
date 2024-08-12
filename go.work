@@ -1,0 +1,9 @@
+go 1.22.6
+
+use (
+	./api-spec
+	./client
+	./common
+	./pkg/client-sdk
+	./server
+)

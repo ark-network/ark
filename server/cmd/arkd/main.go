@@ -8,9 +8,9 @@ import (
 	"syscall"
 
 	"github.com/ark-network/ark/common"
-	appconfig "github.com/ark-network/ark/internal/app-config"
-	"github.com/ark-network/ark/internal/config"
-	grpcservice "github.com/ark-network/ark/internal/interface/grpc"
+	appconfig "github.com/ark-network/ark/server/internal/app-config"
+	"github.com/ark-network/ark/server/internal/config"
+	grpcservice "github.com/ark-network/ark/server/internal/interface/grpc"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )

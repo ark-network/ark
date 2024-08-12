@@ -5,8 +5,8 @@ import (
 	"math"
 	"time"
 
-	"github.com/ark-network/ark-cli/interfaces"
-	"github.com/ark-network/ark-cli/utils"
+	"github.com/ark-network/ark/client/interfaces"
+	"github.com/ark-network/ark/client/utils"
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"

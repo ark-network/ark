@@ -1,10 +1,12 @@
-module github.com/ark-network/ark-cli
+module github.com/ark-network/ark/client
 
-go 1.22.4
+go 1.22.6
 
 replace github.com/ark-network/ark/common => ../common
 
-replace github.com/ark-network/ark => ../server
+replace github.com/ark-network/ark/server => ../server
+
+replace github.com/ark-network/ark/api-spec => ../api-spec
 
 require (
 	github.com/ark-network/ark v0.0.0-00010101000000-000000000000

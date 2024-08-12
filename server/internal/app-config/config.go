@@ -5,14 +5,14 @@ import (
 	"strings"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/internal/core/application"
-	"github.com/ark-network/ark/internal/core/ports"
-	"github.com/ark-network/ark/internal/infrastructure/db"
-	scheduler "github.com/ark-network/ark/internal/infrastructure/scheduler/gocron"
-	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenant"
-	cltxbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenantless"
-	btcwallet "github.com/ark-network/ark/internal/infrastructure/wallet/btc-embedded"
-	liquidwallet "github.com/ark-network/ark/internal/infrastructure/wallet/liquid-standalone"
+	"github.com/ark-network/ark/server/internal/core/application"
+	"github.com/ark-network/ark/server/internal/core/ports"
+	"github.com/ark-network/ark/server/internal/infrastructure/db"
+	scheduler "github.com/ark-network/ark/server/internal/infrastructure/scheduler/gocron"
+	txbuilder "github.com/ark-network/ark/server/internal/infrastructure/tx-builder/covenant"
+	cltxbuilder "github.com/ark-network/ark/server/internal/infrastructure/tx-builder/covenantless"
+	btcwallet "github.com/ark-network/ark/server/internal/infrastructure/wallet/btc-embedded"
+	liquidwallet "github.com/ark-network/ark/server/internal/infrastructure/wallet/liquid-standalone"
 	log "github.com/sirupsen/logrus"
 )
 

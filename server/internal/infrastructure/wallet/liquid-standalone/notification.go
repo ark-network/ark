@@ -6,7 +6,7 @@ import (
 	"encoding/hex"
 
 	pb "github.com/ark-network/ark/api-spec/protobuf/gen/ocean/v1"
-	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 

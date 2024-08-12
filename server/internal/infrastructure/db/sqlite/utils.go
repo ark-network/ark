@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ark-network/ark/internal/infrastructure/db/sqlite/sqlc/queries"
+	"github.com/ark-network/ark/server/internal/infrastructure/db/sqlite/sqlc/queries"
 	_ "modernc.org/sqlite"
 )
 
