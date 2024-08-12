@@ -1,6 +1,6 @@
 module example_covenant_wasm
 
-go 1.22.4
+go 1.22.6
 
 replace github.com/ark-network/ark => ./../../../../../server
 
@@ -11,7 +11,7 @@ replace github.com/ark-network/ark/pkg/client-sdk => ./../../..
 require github.com/ark-network/ark/pkg/client-sdk v0.0.0-00010101000000-000000000000
 
 require (
-	github.com/ark-network/ark v0.0.0-00010101000000-000000000000 // indirect
+	github.com/ark-network/ark/api-spec v0.0.0-20240812212957-8e763613dda5 // indirect
 	github.com/ark-network/ark/common v0.0.0 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/btcsuite/btcd v0.24.2 // indirect
@@ -35,7 +35,7 @@ require (
 	github.com/go-openapi/swag v0.23.0 // indirect
 	github.com/go-openapi/validate v0.24.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/grpc-ecosystem/grpc-gateway/v2 v2.20.0 // indirect
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.21.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
@@ -53,7 +53,7 @@ require (
 	golang.org/x/sync v0.7.0 // indirect
 	golang.org/x/sys v0.22.0 // indirect
 	golang.org/x/text v0.16.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20240624140628-dc46fd24d27d // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20240812133136-8ffd90a71988 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240730163845-b1a4ccb954bf // indirect
 	google.golang.org/grpc v1.65.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
