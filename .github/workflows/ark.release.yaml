@@ -114,8 +114,8 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ github.event.release.upload_url }}
-        asset_path: pkg/client-sdk/build/client-sdk.wasm
-        asset_name: client-sdk.wasm
+        asset_path: pkg/client-sdk/build/ark-sdk.wasm
+        asset_name: ark-sdk.wasm
         asset_content_type: application/wasm
 
     # Docker 
