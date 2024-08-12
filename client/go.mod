@@ -2,15 +2,9 @@ module github.com/ark-network/ark/client
 
 go 1.22.6
 
-replace github.com/ark-network/ark/common => ../common
-
-replace github.com/ark-network/ark/server => ../server
-
-replace github.com/ark-network/ark/api-spec => ../api-spec
-
 require (
-	github.com/ark-network/ark/api-spec v0.0.0-00010101000000-000000000000
-	github.com/ark-network/ark/common v0.0.0-00010101000000-000000000000
+	github.com/ark-network/ark/api-spec v0.0.0-20240812180023-c7dee3d82d08
+	github.com/ark-network/ark/common v0.0.0-20240812180023-c7dee3d82d08
 	github.com/btcsuite/btcd v0.24.2
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4
 	github.com/btcsuite/btcd/btcutil/psbt v1.1.9

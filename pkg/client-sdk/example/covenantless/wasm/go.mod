@@ -1,12 +1,6 @@
-module ark/pkg/client-sdk/example
+module example_covenantless_wasm
 
 go 1.22.4
-
-replace github.com/ark-network/ark => ./../../../../../server
-
-replace github.com/ark-network/ark/common => ./../../../../../common
-
-replace github.com/ark-network/ark/pkg/client-sdk => ./../../..
 
 require github.com/ark-network/ark/pkg/client-sdk v0.0.0-00010101000000-000000000000
 

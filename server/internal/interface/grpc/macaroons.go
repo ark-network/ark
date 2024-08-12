@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/ark-network/ark/server/internal/interface/grpc/permissions"
-	"github.com/ark-network/tools/macaroons"
+	"github.com/ark-network/ark/server/pkg/macaroons"
 	"gopkg.in/macaroon-bakery.v2/bakery"
 )
 

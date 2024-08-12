@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/ark-network/tools/kvdb/etcd"
+	"github.com/ark-network/ark/server/pkg/kvdb/etcd"
 	"github.com/btcsuite/btcwallet/walletdb"
 	"github.com/stretchr/testify/require"
 )

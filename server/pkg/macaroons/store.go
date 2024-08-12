@@ -8,7 +8,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/ark-network/tools/kvdb"
+	"github.com/ark-network/ark/server/pkg/kvdb"
 	"github.com/btcsuite/btcwallet/snacl"
 	"github.com/btcsuite/btcwallet/walletdb"
 )

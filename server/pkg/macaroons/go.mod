@@ -1,11 +1,9 @@
-module github.com/ark-network/tools/macaroons
+module github.com/ark-network/ark/server/pkg/macaroons
 
 go 1.22.4
 
-replace github.com/ark-network/tools/kvdb => ../kvdb
-
 require (
-	github.com/ark-network/tools/kvdb v0.0.0-00010101000000-000000000000
+	github.com/ark-network/ark/server/pkg/kvdb v0.0.0-20240812180023-c7dee3d82d08
 	github.com/btcsuite/btcwallet v0.16.9
 	github.com/btcsuite/btcwallet/walletdb v1.4.2
 	github.com/stretchr/testify v1.9.0

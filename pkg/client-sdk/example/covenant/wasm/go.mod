@@ -1,4 +1,4 @@
-module ark/pkg/client-sdk/example
+module example_covenant_wasm
 
 go 1.22.4
 

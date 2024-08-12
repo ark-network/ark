@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/ark-network/ark/server/internal/interface/grpc/permissions"
-	"github.com/ark-network/tools/macaroons"
+	"github.com/ark-network/ark/server/pkg/macaroons"
 	"google.golang.org/grpc"
 )
 

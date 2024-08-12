@@ -1,4 +1,4 @@
-module github.com/ark-network/tools/kvdb
+module github.com/ark-network/ark/server/pkg/kvdb
 
 go 1.22.4
 

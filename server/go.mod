@@ -2,18 +2,7 @@ module github.com/ark-network/ark/server
 
 go 1.22.6
 
-replace (
-	github.com/ark-network/ark/api-spec => ../api-spec
-	github.com/ark-network/ark/common => ../common
-	github.com/ark-network/tools/kvdb => ./pkg/kvdb
-	github.com/ark-network/tools/macaroons => ./pkg/macaroons
-)
-
 require (
-	github.com/ark-network/ark/api-spec v0.0.0-00010101000000-000000000000
-	github.com/ark-network/ark/common v0.0.0-00010101000000-000000000000
-	github.com/ark-network/tools/kvdb v0.0.0-00010101000000-000000000000
-	github.com/ark-network/tools/macaroons v0.0.0-00010101000000-000000000000
 	github.com/btcsuite/btcwallet/walletdb v1.4.2
 	github.com/btcsuite/btcwallet/wtxmgr v1.5.3
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0

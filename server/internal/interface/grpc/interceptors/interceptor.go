@@ -1,7 +1,7 @@
 package interceptors
 
 import (
-	"github.com/ark-network/tools/macaroons"
+	"github.com/ark-network/ark/server/pkg/macaroons"
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"google.golang.org/grpc"
 )

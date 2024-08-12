@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ark-network/tools/macaroons"
+	"github.com/ark-network/ark/server/pkgerver/pkg/macaroons"
 	"github.com/stretchr/testify/require"
 	macaroon "gopkg.in/macaroon.v2"
 )
