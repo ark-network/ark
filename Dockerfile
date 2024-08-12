@@ -1,19 +1,22 @@
-# First image used to build the sources
 FROM golang:1.21.0 AS builder
-
 ARG VERSION
 ARG COMMIT
-ARG DATE
 ARG TARGETOS
 ARG TARGETARCH
-
 WORKDIR /app
-
 COPY . .
-
 ENV GOPROXY=https://goproxy.io,direct
-RUN cd server && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-X 'main.Version=${VERSION}' -X 'main.Commit=${COMMIT}' -X 'main.Date=${DATE}}'" -o ../bin/arkd ./cmd/arkd
-RUN cd client && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-X 'main.Version=${VERSION}}' -X 'main.Commit=${COMMIT}' -X 'main.Date=${DATE}}'" -o ../bin/ark .
+
+RUN BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') && \
+    cd server && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
+    -ldflags="-X 'main.Version=${VERSION}' -X 'main.Commit=${COMMIT}'" \
+    -o ../bin/arkd ./cmd/arkd
+
+RUN BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') && \
+    cd client && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
+    -ldflags="-X 'main.Version=${VERSION}' -X 'main.Commit=${COMMIT}'" \
+    -o ../bin/ark .
+
 
 # Second image, running the arkd executable
 FROM alpine:3.12

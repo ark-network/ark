@@ -14,8 +14,7 @@ Welcome to the Ark monorepo, a comprehensive solution for off-chain Bitcoin and 
 </p>
 
 > **⚠️ IMPORTANT DISCLAIMER: ALPHA SOFTWARE**
-> 
-> Ark is currently in alpha stage. This software is experimental and under active development. 
+> Ark is currently in alpha stage. This software is experimental and under active development.
 > **DO NOT ATTEMPT TO USE IN PRODUCTION**. Use at your own risk.
 
 ## Repository Structure
@@ -36,12 +35,30 @@ Welcome to the Ark monorepo, a comprehensive solution for off-chain Bitcoin and 
 
 ## Usage Documentation
 
-For a comprehensive guide on how to set up and use Ark, please visit our [Developer Portal](https://arkdev.info). 
+For a comprehensive guide on how to set up and use Ark, please visit our [Developer Portal](https://arkdev.info).
 For a quick-start with Docker, head over to our [Quick Start guide](https://arkdev.info/docs/quick-start/intro) where you can setup an Ark Server and Clients in a local Bitcoin regtest network.
 
 ## Development
 
-For detailed development instructions, including building from source, running tests, and contributing guidelines, please refer to the README files in the `server` and `client` directories.
+For detailed development instructions, including running tests, and contributing to the implementations, please refer to the README files in the `server` and `client` directories.
+
+### Compile binary from source
+
+To compile Ark binaries from source, you can use the following Make commands from the root of the monorepo:
+
+- `make build-server`: Builds the `arkd` binary (Ark Service Provider)
+- `make build-client`: Builds the `ark` binary (Single-key wallet CLI)
+- `make build-wasm`: Builds the WebAssembly bindings
+- `make build`: Builds all components for the current architecture (server, client, and WebAssembly SDK)
+- `make build-all`: Cross-compile all components for all supported architectures
+
+For example, to build both the server and client binaries, run:
+
+```sh
+make build
+```
+
+This will compile the `arkd` and `ark` binaries for your current architecture. For more detailed build instructions and options, please refer to the README files in the `server` and `client` directories.
 
 ### Contributing Guidelines
 
@@ -56,16 +73,21 @@ For detailed development instructions, including building from source, running t
 1. Install Go (version 1.18 or later)
 2. Install [Nigiri](https://nigiri.vulpem.com/) for local Bitcoin and Liquid networks
 3. Clone this repository:
-   ```
+
+   ```sh
    git clone https://github.com/ark-network/ark.git
    cd ark
    ```
+
 4. Install dependencies:
-   ```
+
+   ```sh
    go mod download
    ```
+
 5. Build the project:
-   ```
+
+   ```sh
    cd server
    make build
    cd ../client
