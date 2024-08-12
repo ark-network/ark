@@ -1,6 +1,6 @@
 module github.com/ark-network/ark
 
-go 1.22.4
+go 1.22.6
 
 replace github.com/ark-network/ark/common => ../common
 
@@ -9,6 +9,7 @@ replace github.com/ark-network/tools/macaroons => ./pkg/macaroons
 replace github.com/ark-network/tools/kvdb => ./pkg/kvdb
 
 require (
+	github.com/ark-network/ark/api-spec v0.0.0-20240812222508-b097e943fb45
 	github.com/ark-network/ark/common v0.0.0
 	github.com/ark-network/tools/kvdb v0.0.0-00010101000000-000000000000
 	github.com/ark-network/tools/macaroons v0.0.0-00010101000000-000000000000
@@ -20,7 +21,7 @@ require (
 	github.com/golang-migrate/migrate/v4 v4.17.1
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
-	github.com/grpc-ecosystem/grpc-gateway/v2 v2.20.0
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.21.0
 	github.com/lightninglabs/neutrino v0.16.1-0.20240425105051-602843d34ffd
 	github.com/lightningnetwork/lnd v0.18.2-beta
 	github.com/sirupsen/logrus v1.9.3
@@ -30,7 +31,6 @@ require (
 	github.com/urfave/cli/v2 v2.27.3
 	github.com/vulpemventures/go-bip39 v1.0.2
 	github.com/vulpemventures/go-elements v0.5.4
-	google.golang.org/genproto/googleapis/api v0.0.0-20240624140628-dc46fd24d27d
 	google.golang.org/grpc v1.65.0
 	google.golang.org/protobuf v1.34.2
 	gopkg.in/macaroon-bakery.v2 v2.3.0
@@ -164,6 +164,7 @@ require (
 	golang.org/x/time v0.5.0 // indirect
 	golang.org/x/tools v0.22.0 // indirect
 	google.golang.org/genproto v0.0.0-20240213162025-012b6fc9bca9 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20240812133136-8ffd90a71988 // indirect
 	gopkg.in/errgo.v1 v1.0.1 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
