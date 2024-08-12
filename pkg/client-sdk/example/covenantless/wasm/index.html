@@ -6,7 +6,7 @@
     <script src="wasm_exec.js"></script>
     <script>
         const go = new Go();
-        WebAssembly.instantiateStreaming(fetch("client-sdk.wasm"), go.importObject).then((result) => {
+        WebAssembly.instantiateStreaming(fetch("ark-sdk.wasm"), go.importObject).then((result) => {
             go.run(result.instance);
         });
 
