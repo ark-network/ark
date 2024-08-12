@@ -1,0 +1,13 @@
+go 1.22.6
+
+use (
+	./api-spec
+	./client
+	./common
+	./pkg/client-sdk
+	./pkg/client-sdk/example/covenant/wasm
+	./pkg/client-sdk/example/covenantless/wasm
+	./server
+	./server/pkg/kvdb
+	./server/pkg/macaroons
+)

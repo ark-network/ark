@@ -1,8 +1,6 @@
 module github.com/ark-network/tools/macaroons
 
-go 1.22.4
-
-replace github.com/ark-network/tools/kvdb => ../kvdb
+go 1.22.6
 
 require (
 	github.com/ark-network/tools/kvdb v0.0.0-00010101000000-000000000000

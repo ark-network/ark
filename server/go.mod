@@ -2,11 +2,6 @@ module github.com/ark-network/ark
 
 go 1.22.6
 
-replace github.com/ark-network/ark/common => ../common
-
-replace github.com/ark-network/tools/macaroons => ./pkg/macaroons
-
-replace github.com/ark-network/tools/kvdb => ./pkg/kvdb
 
 require (
 	github.com/ark-network/ark/api-spec v0.0.0-20240812222508-b097e943fb45

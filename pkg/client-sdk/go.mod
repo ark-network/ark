@@ -2,10 +2,6 @@ module github.com/ark-network/ark/pkg/client-sdk
 
 go 1.22.6
 
-replace github.com/ark-network/ark/common => ./../../common
-
-replace github.com/ark-network/ark => ./../../server
-
 require (
 	github.com/ark-network/ark/api-spec v0.0.0-20240812222508-b097e943fb45
 	github.com/ark-network/ark/common v0.0.0
