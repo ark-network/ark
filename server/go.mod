@@ -11,7 +11,7 @@ replace (
 
 require (
 	github.com/ark-network/ark/api-spec v0.0.0-00010101000000-000000000000
-	github.com/ark-network/ark/common v0.0.0
+	github.com/ark-network/ark/common v0.0.0-00010101000000-000000000000
 	github.com/ark-network/tools/kvdb v0.0.0-00010101000000-000000000000
 	github.com/ark-network/tools/macaroons v0.0.0-00010101000000-000000000000
 	github.com/btcsuite/btcwallet/walletdb v1.4.2

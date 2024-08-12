@@ -1,14 +1,18 @@
 module github.com/ark-network/ark/pkg/client-sdk
 
-go 1.22.4
+go 1.22.6
+
+replace github.com/ark-network/ark/api-spec => ./../../api-spec
+
+replace github.com/ark-network/ark/client => ./../../client
 
 replace github.com/ark-network/ark/common => ./../../common
 
-replace github.com/ark-network/ark => ./../../server
+replace github.com/ark-network/ark/server => ./../../server
 
 require (
-	github.com/ark-network/ark v0.0.0-00010101000000-000000000000
-	github.com/ark-network/ark/common v0.0.0
+	github.com/ark-network/ark/api-spec v0.0.0-00010101000000-000000000000
+	github.com/ark-network/ark/common v0.0.0-00010101000000-000000000000
 	github.com/btcsuite/btcd v0.24.2
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4
 	github.com/btcsuite/btcd/btcutil v1.1.5
@@ -40,7 +44,7 @@ require (
 	github.com/go-openapi/loads v0.22.0 // indirect
 	github.com/go-openapi/spec v0.21.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/grpc-ecosystem/grpc-gateway/v2 v2.20.0 // indirect
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.21.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
@@ -56,7 +60,7 @@ require (
 	golang.org/x/sync v0.7.0 // indirect
 	golang.org/x/sys v0.22.0 // indirect
 	golang.org/x/text v0.16.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20240624140628-dc46fd24d27d // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20240812133136-8ffd90a71988 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240730163845-b1a4ccb954bf // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
