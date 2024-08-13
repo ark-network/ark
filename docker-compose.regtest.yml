@@ -33,7 +33,7 @@ services:
       - ARK_ROUND_LIFETIME=512
       - ARK_DB_TYPE=sqlite
       - ARK_TX_BUILDER_TYPE=covenant
-      - ARK_PORT=6060
+      - ARK_PORT=7070
       - ARK_NO_TLS=true
       - ARK_NO_MACAROONS=true
     ports:
