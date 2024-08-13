@@ -18,7 +18,7 @@ func TestStore(t *testing.T) {
 	key, _ := btcec.NewPrivateKey()
 	ctx := context.Background()
 	testStoreData := store.StoreData{
-		AspUrl:              "localhost:8080",
+		AspUrl:              "localhost:6060",
 		AspPubkey:           key.PubKey(),
 		WalletType:          wallet.SingleKeyWallet,
 		ClientType:          client.GrpcClient,

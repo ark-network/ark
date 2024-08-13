@@ -37,7 +37,7 @@ run: clean
 	export ARK_ROUND_INTERVAL=10; \
 	export ARK_LOG_LEVEL=5; \
 	export ARK_NETWORK=regtest; \
-	export ARK_PORT=8080; \
+	export ARK_PORT=6060; \
 	export ARK_NO_TLS=true; \
 	export ARK_NO_MACAROONS=true; \
 	export ARK_TX_BUILDER_TYPE=covenantless; \
