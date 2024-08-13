@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ark-network/ark-cli/utils"
+	"github.com/ark-network/ark/client/utils"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"

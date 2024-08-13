@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ark-network/ark-cli/utils"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+	"github.com/ark-network/ark/client/utils"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/urfave/cli/v2"
 )

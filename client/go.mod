@@ -1,22 +1,20 @@
-module github.com/ark-network/ark-cli
+module github.com/ark-network/ark/client
 
 go 1.22.6
 
-replace github.com/ark-network/ark/common => ../common
-
-replace github.com/ark-network/ark => ../server
+replace github.com/btcsuite/btcd/btcec/v2 => github.com/btcsuite/btcd/btcec/v2 v2.3.3
 
 require (
-	github.com/ark-network/ark/api-spec v0.0.0-20240812222508-b097e943fb45
-	github.com/ark-network/ark/common v0.0.0
+	github.com/ark-network/ark/api-spec v0.0.0-20240812233307-18e343b31899
+	github.com/ark-network/ark/common v0.0.0-20240812233307-18e343b31899
 	github.com/btcsuite/btcd v0.24.2
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4
 	github.com/btcsuite/btcd/btcutil/psbt v1.1.9
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0
-	github.com/urfave/cli/v2 v2.27.3
-	golang.org/x/crypto v0.25.0
-	golang.org/x/term v0.22.0
+	github.com/urfave/cli/v2 v2.27.4
+	golang.org/x/crypto v0.26.0
+	golang.org/x/term v0.23.0
 )
 
 require (
@@ -34,11 +32,11 @@ require (
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/vulpemventures/go-elements v0.5.4
 	github.com/xrash/smetrics v0.0.0-20240521201337-686a1a2994c1 // indirect
-	golang.org/x/net v0.27.0 // indirect
-	golang.org/x/sys v0.22.0 // indirect
-	golang.org/x/text v0.16.0 // indirect
+	golang.org/x/net v0.28.0 // indirect
+	golang.org/x/sys v0.24.0 // indirect
+	golang.org/x/text v0.17.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240812133136-8ffd90a71988 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240730163845-b1a4ccb954bf // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240812133136-8ffd90a71988 // indirect
 	google.golang.org/grpc v1.65.0
 	google.golang.org/protobuf v1.34.2 // indirect
 )

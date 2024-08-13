@@ -6,7 +6,7 @@ package kvdb
 import (
 	"fmt"
 
-	"github.com/ark-network/tools/kvdb/etcd"
+	"github.com/ark-network/ark/server/pkg/kvdb/etcd"
 )
 
 // EtcdBackend is conditionally set to false when the kvdb_etcd build tag is not

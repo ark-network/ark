@@ -1,6 +1,6 @@
 package ports
 
-import "github.com/ark-network/ark/internal/core/domain"
+import "github.com/ark-network/ark/server/internal/core/domain"
 
 type RepoManager interface {
 	Events() domain.RoundEventRepository

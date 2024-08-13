@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	pb "github.com/ark-network/ark/api-spec/protobuf/gen/ocean/v1"
-	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-bip32"

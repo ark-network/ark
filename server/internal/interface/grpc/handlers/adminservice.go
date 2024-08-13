@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
-	"github.com/ark-network/ark/internal/core/application"
+	"github.com/ark-network/ark/server/internal/core/application"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

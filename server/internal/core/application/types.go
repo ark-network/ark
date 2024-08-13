@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/ark-network/ark/common/tree"
-	"github.com/ark-network/ark/internal/core/domain"
+	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 

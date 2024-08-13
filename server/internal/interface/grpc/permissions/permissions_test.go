@@ -6,7 +6,7 @@ import (
 
 	grpchealth "google.golang.org/grpc/health/grpc_health_v1"
 
-	"github.com/ark-network/ark/internal/interface/grpc/permissions"
+	"github.com/ark-network/ark/server/internal/interface/grpc/permissions"
 	"github.com/stretchr/testify/require"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"

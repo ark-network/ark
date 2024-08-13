@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/ark-network/ark-cli/utils"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+	"github.com/ark-network/ark/client/utils"
 	"github.com/ark-network/ark/common"
 	"github.com/urfave/cli/v2"
 )

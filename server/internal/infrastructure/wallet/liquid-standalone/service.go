@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	pb "github.com/ark-network/ark/api-spec/protobuf/gen/ocean/v1"
-	"github.com/ark-network/ark/internal/core/domain"
-	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/ark-network/ark/server/internal/core/domain"
+	"github.com/ark-network/ark/server/internal/core/ports"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

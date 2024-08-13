@@ -6,8 +6,8 @@ import (
 	"path"
 	"testing"
 
-	"github.com/ark-network/tools/kvdb"
-	"github.com/ark-network/tools/macaroons"
+	"github.com/ark-network/ark/server/pkg/kvdb"
+	"github.com/ark-network/ark/server/pkg/macaroons"
 	"github.com/btcsuite/btcwallet/snacl"
 	"github.com/stretchr/testify/require"
 )

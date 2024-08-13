@@ -4,8 +4,8 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/ark-network/ark-cli/utils"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+	"github.com/ark-network/ark/client/utils"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/urfave/cli/v2"
 	"github.com/vulpemventures/go-elements/payment"
