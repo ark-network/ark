@@ -60,7 +60,7 @@ var (
 
 	defaultDatadir               = common.AppDataDir("arkd", false)
 	defaultRoundInterval         = 5
-	DefaultPort                  = 6060
+	DefaultPort                  = 6000
 	defaultWalletAddr            = "localhost:18000"
 	defaultDbType                = "sqlite"
 	defaultDbMigrationPath       = "file://internal/infrastructure/db/sqlite/migration"
