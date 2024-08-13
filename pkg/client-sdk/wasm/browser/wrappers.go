@@ -15,15 +15,19 @@ import (
 	singlekeywallet "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey"
 )
 
-func LogWrapper() js.Func {
-	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
-		logMsg(p[0].String())
-		return nil
-	})
+func ConsoleLog(msg string) {
+	js.Global().Get("console").Call("log", msg)
 }
 
-func logMsg(msg string) {
-	js.Global().Get("console").Call("log", msg)
+func ConsoleError(err error) {
+	js.Global().Get("console").Call("error", err.Error())
+}
+
+func LogWrapper() js.Func {
+	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
+		ConsoleLog(p[0].String())
+		return nil
+	})
 }
 
 func InitWrapper() js.Func {
@@ -65,6 +69,9 @@ func InitWrapper() js.Func {
 			Seed:       args[3].String(),
 			Password:   args[4].String(),
 		})
+
+		// Add this log message
+		ConsoleLog("ARK SDK client initialized successfully")
 		return nil, err
 	})
 }
@@ -144,6 +151,9 @@ func OnboardWrapper() js.Func {
 
 func ReceiveWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if arkSdkClient == nil {
+			return nil, errors.New("ARK SDK client is not initialized")
+		}
 		offchainAddr, onchainAddr, err := arkSdkClient.Receive(context.Background())
 		if err != nil {
 			return nil, err
