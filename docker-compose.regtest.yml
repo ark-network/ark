@@ -33,11 +33,11 @@ services:
       - ARK_ROUND_LIFETIME=512
       - ARK_DB_TYPE=sqlite
       - ARK_TX_BUILDER_TYPE=covenant
-      - ARK_PORT=8080
+      - ARK_PORT=6060
       - ARK_NO_TLS=true
       - ARK_NO_MACAROONS=true
     ports:
-      - "8080:8080"
+      - "6060:6060"
     volumes:
       - arkd:/app/data
       - ark:/app/wallet-data

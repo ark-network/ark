@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	aspUrl     = "localhost:8080"
+	aspUrl     = "localhost:7070"
 	clientType = arksdk.GrpcClient
 	password   = "password"
 	walletType = arksdk.SingleKeyWallet
