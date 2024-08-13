@@ -6,7 +6,7 @@ replace github.com/btcsuite/btcd/btcec/v2 => github.com/btcsuite/btcd/btcec/v2 v
 
 require (
 	github.com/btcsuite/btcd v0.24.2
-	github.com/btcsuite/btcd/btcec/v2 v2.3.3
+	github.com/btcsuite/btcd/btcec/v2 v2.3.4
 	github.com/btcsuite/btcd/btcutil v1.1.5
 	github.com/btcsuite/btcd/btcutil/psbt v1.1.9
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0

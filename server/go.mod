@@ -9,7 +9,7 @@ require (
 	github.com/ark-network/ark/common v0.0.0-20240812233307-18e343b31899
 	github.com/ark-network/ark/server/pkg/kvdb v0.0.0-20240812233307-18e343b31899
 	github.com/ark-network/ark/server/pkg/macaroons v0.0.0-20240812233307-18e343b31899
-	github.com/btcsuite/btcd/btcec/v2 v2.3.3
+	github.com/btcsuite/btcd/btcec/v2 v2.3.4
 	github.com/btcsuite/btcwallet/walletdb v1.4.2
 	github.com/btcsuite/btcwallet/wtxmgr v1.5.3
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0
