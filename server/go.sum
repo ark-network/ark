@@ -25,6 +25,7 @@ github.com/antihax/optional v1.0.0/go.mod h1:uupD/76wgC+ih3iEmQUL+0Ugr19nfwCT1kd
 github.com/ark-network/ark/api-spec v0.0.0-20240812233307-18e343b31899 h1:PJL9Pam042F790x3mMovaIIkgeKIVaWm1aFOyH0k4PY=
 github.com/ark-network/ark/api-spec v0.0.0-20240812233307-18e343b31899/go.mod h1:0B5seq/gzuGL8OZGUaO12yj73ZJKAde8L+nmLQAZ7IA=
 github.com/ark-network/ark/common v0.0.0-20240812233307-18e343b31899 h1:PxcHv+KaBdfrZCHoNYSUiCdI2wNIZ3Oxx8ZUewcEesg=
+github.com/ark-network/ark/common v0.0.0-20240812233307-18e343b31899/go.mod h1:8DYeb06Dl8onmrV09xfsdDMGv5HoVtWoKhLBLXOYHew=
 github.com/ark-network/ark/server/pkg/kvdb v0.0.0-20240812233307-18e343b31899 h1:pUtYz5kx/hvm8EiF4aj1BNdLFKMGnV3g4s1lQST9jFg=
 github.com/ark-network/ark/server/pkg/kvdb v0.0.0-20240812233307-18e343b31899/go.mod h1:8DXpdLoJXeIPh3JPd6AoANVTf7Rw63QLL8l+OJkNBlU=
 github.com/ark-network/ark/server/pkg/macaroons v0.0.0-20240812233307-18e343b31899 h1:Vlc9pbGToiqeBbAx3q4Wovg/DK6DJXAE2k5YAQiqza4=
@@ -568,6 +569,7 @@ github.com/vulpemventures/go-bip32 v0.0.0-20200624192635-867c159da4d7/go.mod h1:
 github.com/vulpemventures/go-bip39 v1.0.2 h1:+BgKOVo04okKf1wA4Fhv8ccvql+qFyzVUdVJKkb48r0=
 github.com/vulpemventures/go-bip39 v1.0.2/go.mod h1:mjFmuv9D6BtANI6iscMmbHhmBOwjMCFfny3mxHnuDrk=
 github.com/vulpemventures/go-elements v0.5.4 h1:l94xoa9aYPPWiOB7Pmi08rKYvdk/n/sQIbLkQfEAASc=
+github.com/vulpemventures/go-elements v0.5.4/go.mod h1:Tvhb+rZWv3lxoI5CdK03J3V+e2QVr/7UAnCYILxFSq4=
 github.com/vulpemventures/go-secp256k1-zkp v1.1.6 h1:BmsrmXRLUibwa75Qkk8yELjpzCzlAjYFGLiLiOdq7Xo=
 github.com/vulpemventures/go-secp256k1-zkp v1.1.6/go.mod h1:zo7CpgkuPgoe7fAV+inyxsI9IhGmcoFgyD8nqZaPSOM=
 github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f/go.mod h1:N2zxlSyiKSe5eX1tZViRH5QA0qijqEDrYZiPEAiq3wU=
