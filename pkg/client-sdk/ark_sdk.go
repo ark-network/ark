@@ -10,6 +10,7 @@ type ArkClient interface {
 	GetConfigData(ctx context.Context) (*store.StoreData, error)
 	Init(ctx context.Context, args InitArgs) error
 	InitWithWallet(ctx context.Context, args InitWithWalletArgs) error
+	IsLocked(ctx context.Context) bool
 	Unlock(ctx context.Context, password string) error
 	Lock(ctx context.Context, password string) error
 	Balance(ctx context.Context, computeExpiryDetails bool) (*Balance, error)

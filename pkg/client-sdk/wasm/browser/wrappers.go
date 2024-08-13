@@ -76,6 +76,12 @@ func InitWrapper() js.Func {
 	})
 }
 
+func IsLockedWrapper() js.Func {
+	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
+		return js.ValueOf(arkSdkClient.IsLocked(context.Background()))
+	})
+}
+
 func UnlockWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
 		if len(args) != 1 {
