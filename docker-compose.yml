@@ -31,7 +31,7 @@ services:
       - ARK_ROUND_INTERVAL=10
       - ARK_NETWORK=liquidtestnet
     ports:
-      - "6060:6060"
+      - "7070:7070"
     volumes:
       - arkd:/app/data
       - ark:/app/wallet-data

@@ -34,7 +34,7 @@ func TestMain(m *testing.M) {
 
 	time.Sleep(3 * time.Second)
 
-	_, err = runClarkCommand("init", "--asp-url", "localhost:6060", "--password", utils.Password, "--network", "regtest", "--explorer", "http://chopsticks:3000")
+	_, err = runClarkCommand("init", "--asp-url", "localhost:7070", "--password", utils.Password, "--network", "regtest", "--explorer", "http://chopsticks:3000")
 	if err != nil {
 		fmt.Printf("error initializing ark config: %s", err)
 		os.Exit(1)
@@ -190,7 +190,7 @@ func setupAspWallet() error {
 		Timeout: 15 * time.Second,
 	}
 
-	req, err := http.NewRequest("GET", "http://localhost:6060/v1/admin/wallet/seed", nil)
+	req, err := http.NewRequest("GET", "http://localhost:7070/v1/admin/wallet/seed", nil)
 	if err != nil {
 		return fmt.Errorf("failed to prepare generate seed request: %s", err)
 	}
@@ -210,7 +210,7 @@ func setupAspWallet() error {
 	}
 
 	reqBody := bytes.NewReader([]byte(fmt.Sprintf(`{"seed": "%s", "password": "%s"}`, seed.Seed, utils.Password)))
-	req, err = http.NewRequest("POST", "http://localhost:6060/v1/admin/wallet/create", reqBody)
+	req, err = http.NewRequest("POST", "http://localhost:7070/v1/admin/wallet/create", reqBody)
 	if err != nil {
 		return fmt.Errorf("failed to prepare wallet create request: %s", err)
 	}
@@ -222,7 +222,7 @@ func setupAspWallet() error {
 	}
 
 	reqBody = bytes.NewReader([]byte(fmt.Sprintf(`{"password": "%s"}`, utils.Password)))
-	req, err = http.NewRequest("POST", "http://localhost:6060/v1/admin/wallet/unlock", reqBody)
+	req, err = http.NewRequest("POST", "http://localhost:7070/v1/admin/wallet/unlock", reqBody)
 	if err != nil {
 		return fmt.Errorf("failed to prepare wallet unlock request: %s", err)
 	}
@@ -235,7 +235,7 @@ func setupAspWallet() error {
 
 	time.Sleep(time.Second)
 
-	req, err = http.NewRequest("GET", "http://localhost:6060/v1/admin/wallet/address", nil)
+	req, err = http.NewRequest("GET", "http://localhost:7070/v1/admin/wallet/address", nil)
 	if err != nil {
 		return fmt.Errorf("failed to prepare new address request: %s", err)
 	}
