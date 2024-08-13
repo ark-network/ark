@@ -17,7 +17,7 @@ services:
       - ARK_NO_TLS=true
       - ARK_NO_MACAROONS=true
     ports:
-      - "6000:6000"
+      - "6060:6060"
     volumes:
       - clarkd:/app/data
       - clark:/app/wallet-data
