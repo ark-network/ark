@@ -1,7 +1,7 @@
 package ports
 
 import (
-	"github.com/ark-network/ark/internal/core/domain"
+	"github.com/ark-network/ark/server/internal/core/domain"
 	"golang.org/x/net/context"
 )
 

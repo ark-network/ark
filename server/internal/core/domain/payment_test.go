@@ -3,7 +3,7 @@ package domain_test
 import (
 	"testing"
 
-	"github.com/ark-network/ark/internal/core/domain"
+	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/stretchr/testify/require"
 )
 

@@ -3,7 +3,7 @@ package application
 import (
 	"context"
 
-	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/ark-network/ark/server/internal/core/ports"
 )
 
 type Balance struct {

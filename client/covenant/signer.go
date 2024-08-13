@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/ark-network/ark-cli/utils"
+	"github.com/ark-network/ark/client/utils"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"

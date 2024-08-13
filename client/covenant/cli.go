@@ -5,9 +5,9 @@ import (
 	"math"
 	"time"
 
-	"github.com/ark-network/ark-cli/interfaces"
-	"github.com/ark-network/ark-cli/utils"
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+	"github.com/ark-network/ark/client/interfaces"
+	"github.com/ark-network/ark/client/utils"
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"

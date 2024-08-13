@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ark-network/ark-cli/utils"
+	"github.com/ark-network/ark/client/utils"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcutil/psbt"

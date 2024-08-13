@@ -2,7 +2,7 @@ package txbuilder
 
 import (
 	"github.com/ark-network/ark/common/bitcointree"
-	"github.com/ark-network/ark/internal/core/domain"
+	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"

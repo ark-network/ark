@@ -3,8 +3,8 @@ package txbuilder
 import (
 	"context"
 
-	"github.com/ark-network/ark/internal/core/domain"
-	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/ark-network/ark/server/internal/core/domain"
+	"github.com/ark-network/ark/server/internal/core/ports"
 )
 
 func (b *txBuilder) selectUtxos(ctx context.Context, sweptRounds []domain.Round, amount uint64) ([]ports.TxInput, uint64, error) {

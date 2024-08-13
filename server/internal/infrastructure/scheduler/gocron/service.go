@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/go-co-op/gocron"
 )
 

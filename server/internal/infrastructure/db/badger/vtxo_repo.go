@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ark-network/ark/internal/core/domain"
+	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/dgraph-io/badger/v4"
 	"github.com/timshannon/badgerhold/v4"
 )

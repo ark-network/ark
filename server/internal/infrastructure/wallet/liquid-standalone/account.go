@@ -4,7 +4,7 @@ import (
 	"context"
 
 	pb "github.com/ark-network/ark/api-spec/protobuf/gen/ocean/v1"
-	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/network"
 )

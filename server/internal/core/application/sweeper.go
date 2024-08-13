@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common/tree"
-	"github.com/ark-network/ark/internal/core/domain"
-	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/ark-network/ark/server/internal/core/domain"
+	"github.com/ark-network/ark/server/internal/core/ports"
 	log "github.com/sirupsen/logrus"
 )
 

@@ -10,9 +10,9 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
-	"github.com/ark-network/ark/internal/core/domain"
-	"github.com/ark-network/ark/internal/core/ports"
-	txbuilder "github.com/ark-network/ark/internal/infrastructure/tx-builder/covenantless"
+	"github.com/ark-network/ark/server/internal/core/domain"
+	"github.com/ark-network/ark/server/internal/core/ports"
+	txbuilder "github.com/ark-network/ark/server/internal/infrastructure/tx-builder/covenantless"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/mock"

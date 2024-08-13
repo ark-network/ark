@@ -6,8 +6,8 @@ import (
 	"path"
 	"testing"
 
-	"github.com/ark-network/tools/kvdb"
-	"github.com/ark-network/tools/macaroons"
+	"github.com/ark-network/ark/server/pkg/kvdb"
+	"github.com/ark-network/ark/server/pkg/macaroons"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 	"gopkg.in/macaroon-bakery.v2/bakery"

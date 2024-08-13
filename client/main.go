@@ -8,11 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ark-network/ark-cli/covenant"
-	"github.com/ark-network/ark-cli/covenantless"
-	"github.com/ark-network/ark-cli/flags"
-	"github.com/ark-network/ark-cli/interfaces"
-	"github.com/ark-network/ark-cli/utils"
+	"github.com/ark-network/ark/client/covenant"
+	"github.com/ark-network/ark/client/covenantless"
+	"github.com/ark-network/ark/client/flags"
+	"github.com/ark-network/ark/client/interfaces"
+	"github.com/ark-network/ark/client/utils"
 	"github.com/ark-network/ark/common"
 	"github.com/urfave/cli/v2"
 )

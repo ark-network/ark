@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/btcutil"
 	log "github.com/sirupsen/logrus"
 )
