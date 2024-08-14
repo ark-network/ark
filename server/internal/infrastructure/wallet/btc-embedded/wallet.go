@@ -246,7 +246,7 @@ func (s *service) Unlock(_ context.Context, password string) error {
 			CoinSelectionStrategy: wallet.CoinSelectionLargest,
 			ChainSource:           s.chainSource,
 		}
-		blockCache := blockcache.NewBlockCache(20 * 1024 * 1024)
+		blockCache := blockcache.NewBlockCache(2 * 1024 * 1024 * 1024)
 
 		wallet, err := btcwallet.New(config, blockCache)
 		if err != nil {
@@ -746,7 +746,7 @@ func (s *service) create(mnemonic, password string, addrGap uint32) error {
 		CoinSelectionStrategy: wallet.CoinSelectionLargest,
 		ChainSource:           s.chainSource,
 	}
-	blockCache := blockcache.NewBlockCache(20 * 1024 * 1024)
+	blockCache := blockcache.NewBlockCache(2 * 1024 * 1024 * 1024)
 
 	wallet, err := btcwallet.New(config, blockCache)
 	if err != nil {
