@@ -813,7 +813,7 @@ func (s *service) initWallet(wallet *btcwallet.BtcWallet) error {
 						return err
 					}
 
-					infos, err := s.wallet.AddressInfo(decoded)
+					infos, err := wallet.AddressInfo(decoded)
 					if err != nil {
 						return err
 					}
