@@ -43,6 +43,9 @@ type WalletConfig struct {
 }
 
 func (c WalletConfig) chainParams() *chaincfg.Params {
+	challenge, _ := hex.DecodeString("512102f7561d208dd9ae99bf497273e16f389bdbd6c4742ddb8e6b216e64fa2928ad8f51ae")
+	// we pass nil to have the equivalent of dnssec=0 in bitcoin.conf
+	mutinyNetParams := chaincfg.CustomSignetParams(challenge, nil)
 	switch c.Network.Name {
 	case common.Bitcoin.Name:
 		return &chaincfg.MainNetParams
@@ -50,6 +53,8 @@ func (c WalletConfig) chainParams() *chaincfg.Params {
 		return &chaincfg.TestNet3Params
 	case common.BitcoinRegTest.Name:
 		return &chaincfg.RegressionNetParams
+	case common.BitcoinSigNet.Name:
+		return &mutinyNetParams
 	default:
 		return &chaincfg.MainNetParams
 	}
@@ -102,6 +107,10 @@ func WithNeutrino(initialPeer string) WalletOption {
 			DataDir:     s.cfg.Datadir,
 			ChainParams: *netParams,
 			Database:    db,
+			AddPeers: []string{
+				"45.79.52.207:38333",
+				"ifgqyyapbb.b.voltageapp.io:38333",
+			},
 		}
 
 		if len(initialPeer) > 0 {

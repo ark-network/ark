@@ -41,6 +41,7 @@ var (
 		common.Bitcoin.Name:        {},
 		common.BitcoinTestNet.Name: {},
 		common.BitcoinRegTest.Name: {},
+		common.BitcoinSigNet.Name:  {},
 		common.Liquid.Name:         {},
 		common.LiquidTestNet.Name:  {},
 		common.LiquidRegTest.Name:  {},

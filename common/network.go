@@ -37,6 +37,11 @@ var BitcoinRegTest = Network{
 	Addr: BitcoinTestNet.Addr,
 }
 
+var BitcoinSigNet = Network{
+	Name: "signet",
+	Addr: BitcoinTestNet.Addr,
+}
+
 func IsLiquid(network Network) bool {
 	return strings.Contains(network.Name, "liquid")
 }
