@@ -44,8 +44,11 @@ type WalletConfig struct {
 
 func (c WalletConfig) chainParams() *chaincfg.Params {
 	challenge, _ := hex.DecodeString("512102f7561d208dd9ae99bf497273e16f389bdbd6c4742ddb8e6b216e64fa2928ad8f51ae")
+	println(challenge)
 	// we pass nil to have the equivalent of dnssec=0 in bitcoin.conf
-	mutinyNetParams := chaincfg.CustomSignetParams(challenge, nil)
+	mutinyNetSigNetParams := chaincfg.CustomSignetParams(challenge, nil)
+	mutinyNetSigNetParams.TargetTimePerBlock = time.Second * 30
+
 	switch c.Network.Name {
 	case common.Bitcoin.Name:
 		return &chaincfg.MainNetParams
@@ -54,7 +57,7 @@ func (c WalletConfig) chainParams() *chaincfg.Params {
 	case common.BitcoinRegTest.Name:
 		return &chaincfg.RegressionNetParams
 	case common.BitcoinSigNet.Name:
-		return &mutinyNetParams
+		return &mutinyNetSigNetParams
 	default:
 		return &chaincfg.MainNetParams
 	}
@@ -108,8 +111,8 @@ func WithNeutrino(initialPeer string) WalletOption {
 			ChainParams: *netParams,
 			Database:    db,
 			AddPeers: []string{
+				"ifgqyyapbb.b.voltageapp.io",
 				"45.79.52.207:38333",
-				"ifgqyyapbb.b.voltageapp.io:38333",
 			},
 		}
 
@@ -200,7 +203,7 @@ func (s *service) Unlock(_ context.Context, password string) error {
 			CoinSelectionStrategy: wallet.CoinSelectionLargest,
 			ChainSource:           s.chainSource,
 		}
-		blockCache := blockcache.NewBlockCache(20 * 1024 * 1024)
+		blockCache := blockcache.NewBlockCache(2 * 1024 * 1024 * 1024)
 
 		wallet, err := btcwallet.New(config, blockCache)
 		if err != nil {
@@ -213,7 +216,7 @@ func (s *service) Unlock(_ context.Context, password string) error {
 
 		for {
 			if !wallet.InternalWallet().ChainSynced() {
-				log.Debug("waiting sync....")
+				log.Debugf("waiting sync: current height %d", wallet.InternalWallet().Manager.SyncedTo().Height)
 				time.Sleep(3 * time.Second)
 				continue
 			}
@@ -700,7 +703,7 @@ func (s *service) create(mnemonic, password string, addrGap uint32) error {
 		CoinSelectionStrategy: wallet.CoinSelectionLargest,
 		ChainSource:           s.chainSource,
 	}
-	blockCache := blockcache.NewBlockCache(20 * 1024 * 1024)
+	blockCache := blockcache.NewBlockCache(2 * 1024 * 1024 * 1024)
 
 	wallet, err := btcwallet.New(config, blockCache)
 	if err != nil {
@@ -716,7 +719,7 @@ func (s *service) create(mnemonic, password string, addrGap uint32) error {
 
 	for {
 		if !wallet.InternalWallet().ChainSynced() {
-			log.Debug("waiting sync....")
+			log.Debugf("waiting sync: current height %d", wallet.InternalWallet().Manager.SyncedTo().Height)
 			time.Sleep(3 * time.Second)
 			continue
 		}

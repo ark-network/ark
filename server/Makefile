@@ -45,11 +45,12 @@ run: clean
 	export ARK_MIN_RELAY_FEE=200; \
 	go run ./cmd/arkd
 
+## 	export ARK_NEUTRINO_PEER=44.240.54.180:38333 ; \
+
 ## run: run in signet mode
 run-signet: clean
 	@echo "Running arkd in signet mode..."
-	@export ARK_NEUTRINO_PEER=kvudocdwsa.b.voltageapp.io ; \
-	export ARK_ROUND_INTERVAL=10; \
+	@export ARK_ROUND_INTERVAL=10; \
 	export ARK_LOG_LEVEL=5; \
 	export ARK_NETWORK=signet; \
 	export ARK_PORT=7070; \
@@ -58,6 +59,7 @@ run-signet: clean
 	export ARK_TX_BUILDER_TYPE=covenantless; \
 	export ARK_ESPLORA_URL=https://mutinynet.com/api; \
 	export ARK_MIN_RELAY_FEE=200; \
+	export ARK_DATADIR=./tmp/data/arkd-data; \
 	go run ./cmd/arkd
 
 ## test: runs unit and component tests
