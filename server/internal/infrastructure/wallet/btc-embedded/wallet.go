@@ -43,12 +43,8 @@ type WalletConfig struct {
 }
 
 func (c WalletConfig) chainParams() *chaincfg.Params {
-	challenge, _ := hex.DecodeString("512102f7561d208dd9ae99bf497273e16f389bdbd6c4742ddb8e6b216e64fa2928ad8f51ae")
-	println(challenge)
-	// we pass nil to have the equivalent of dnssec=0 in bitcoin.conf
-	mutinyNetSigNetParams := chaincfg.CustomSignetParams(challenge, nil)
-	mutinyNetSigNetParams.TargetTimePerBlock = time.Second * 30
-
+	mutinyNetSigNetParams := chaincfg.CustomSignetParams(common.MutinyNetChallenge, nil)
+	mutinyNetSigNetParams.TargetTimePerBlock = common.MutinyNetBlockTime
 	switch c.Network.Name {
 	case common.Bitcoin.Name:
 		return &chaincfg.MainNetParams
@@ -114,10 +110,6 @@ func WithNeutrino(initialPeer string) WalletOption {
 				"ifgqyyapbb.b.voltageapp.io",
 				"45.79.52.207:38333",
 			},
-		}
-
-		if len(initialPeer) > 0 {
-			config.AddPeers = []string{initialPeer}
 		}
 
 		neutrino.UseLogger(logger("neutrino"))

@@ -105,6 +105,8 @@ func NetworkFromString(net string) common.Network {
 		return common.BitcoinTestNet
 	case common.BitcoinRegTest.Name:
 		return common.BitcoinRegTest
+	case common.BitcoinSigNet.Name:
+		return common.BitcoinSigNet
 	case common.Bitcoin.Name:
 		fallthrough
 	default:
@@ -126,6 +128,8 @@ func ToElementsNetwork(net common.Network) network.Network {
 }
 
 func ToBitcoinNetwork(net common.Network) chaincfg.Params {
+	mutinyNetSigNetParams := chaincfg.CustomSignetParams(common.MutinyNetChallenge, nil)
+	mutinyNetSigNetParams.TargetTimePerBlock = common.MutinyNetBlockTime
 	switch net.Name {
 	case common.Bitcoin.Name:
 		return chaincfg.MainNetParams
@@ -133,6 +137,8 @@ func ToBitcoinNetwork(net common.Network) chaincfg.Params {
 		return chaincfg.TestNet3Params
 	case common.BitcoinRegTest.Name:
 		return chaincfg.RegressionNetParams
+	case common.BitcoinSigNet.Name:
+		return mutinyNetSigNetParams
 	default:
 		return chaincfg.MainNetParams
 	}
