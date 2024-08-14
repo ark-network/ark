@@ -134,6 +134,15 @@ func TestWallet(t *testing.T) {
 
 			err = walletSvc.Lock(ctx, "")
 			require.NoError(t, err)
+
+			locked := walletSvc.IsLocked()
+			require.True(t, locked)
+
+			_, err = walletSvc.Unlock(ctx, password)
+			require.NoError(t, err)
+
+			locked = walletSvc.IsLocked()
+			require.False(t, locked)
 		})
 	}
 }
