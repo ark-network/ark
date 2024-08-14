@@ -234,7 +234,7 @@ func (c *Config) walletService() error {
 		Network:    c.Network,
 		EsploraURL: c.EsploraURL,
 	},
-		btcwallet.WithBitcoindRPC("localhost:28332", "localhost:28333", "localhost:18443", "admin1", "123"),
+		btcwallet.WithBitcoind("localhost:28332", "localhost:28333", "localhost:18443", "admin1", "123"),
 	)
 	if err != nil {
 		return err
