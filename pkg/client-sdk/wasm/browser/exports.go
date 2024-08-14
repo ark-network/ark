@@ -25,6 +25,7 @@ func init() {
 	js.Global().Set("init", InitWrapper())
 	js.Global().Set("unlock", UnlockWrapper())
 	js.Global().Set("lock", LockWrapper())
+	js.Global().Set("locked", IsLockedWrapper())
 	js.Global().Set("balance", BalanceWrapper())
 	js.Global().Set("onboard", OnboardWrapper())
 	js.Global().Set("receive", ReceiveWrapper())
