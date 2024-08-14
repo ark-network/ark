@@ -134,6 +134,61 @@ func WithNeutrino(initialPeer string) WalletOption {
 	}
 }
 
+func WithBitcoindRPC(zmqBlockHost, zmqTxHost, host, user, pass string) WalletOption {
+	return func(s *service) error {
+		netParams := s.cfg.chainParams()
+		// Create a new bitcoind configuration
+		bitcoindConfig := &chain.BitcoindConfig{
+			ChainParams: netParams,
+			Host:        host,
+			User:        user,
+			Pass:        pass,
+			ZMQConfig: &chain.ZMQConfig{
+				ZMQBlockHost:    zmqBlockHost,
+				ZMQTxHost:       zmqTxHost,
+				ZMQReadDeadline: 10 * time.Second,
+			},
+		}
+
+		chain.UseLogger(logger("chain"))
+
+		// Create the BitcoindConn first
+		bitcoindConn, err := chain.NewBitcoindConn(bitcoindConfig)
+		if err != nil {
+			return fmt.Errorf("failed to create bitcoind connection: %w", err)
+		}
+
+		// Start the bitcoind connection
+		if err := bitcoindConn.Start(); err != nil {
+			return fmt.Errorf("failed to start bitcoind connection: %w", err)
+		}
+
+		// Now create the BitcoindClient using the connection
+		chainClient := bitcoindConn.NewBitcoindClient()
+
+		// Start the chain client
+		if err := chainClient.Start(); err != nil {
+			bitcoindConn.Stop()
+			return fmt.Errorf("failed to start bitcoind client: %w", err)
+		}
+
+		// Set up the wallet as chain source and scanner
+		if err := withChainSource(chainClient)(s); err != nil {
+			chainClient.Stop()
+			bitcoindConn.Stop()
+			return fmt.Errorf("failed to set chain source: %w", err)
+		}
+
+		if err := withScanner(chainClient)(s); err != nil {
+			chainClient.Stop()
+			bitcoindConn.Stop()
+			return fmt.Errorf("failed to set scanner: %w", err)
+		}
+
+		return nil
+	}
+}
+
 // NewService creates the wallet service, an option must be set to configure the chain source.
 func NewService(cfg WalletConfig, options ...WalletOption) (ports.WalletService, error) {
 	wallet.UseLogger(logger("wallet"))
