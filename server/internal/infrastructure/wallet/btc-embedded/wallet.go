@@ -134,7 +134,7 @@ func WithNeutrino(initialPeer string) WalletOption {
 	}
 }
 
-func WithBitcoindRPC(zmqBlockHost, zmqTxHost, host, user, pass string) WalletOption {
+func WithBitcoind(zmqBlockHost, zmqTxHost, host, user, pass string) WalletOption {
 	return func(s *service) error {
 		netParams := s.cfg.chainParams()
 		// Create a new bitcoind configuration
@@ -170,6 +170,11 @@ func WithBitcoindRPC(zmqBlockHost, zmqTxHost, host, user, pass string) WalletOpt
 		if err := chainClient.Start(); err != nil {
 			bitcoindConn.Stop()
 			return fmt.Errorf("failed to start bitcoind client: %w", err)
+		}
+
+		// wait for bitcoind to sync
+		for !chainClient.IsCurrent() {
+			time.Sleep(1 * time.Second)
 		}
 
 		// Set up the wallet as chain source and scanner
