@@ -25,4 +25,4 @@ go.work.sum
 
 .vscode/
 
-tmp/
+data/

@@ -138,6 +138,68 @@ func WithNeutrino(initialPeer string) WalletOption {
 	}
 }
 
+func WithPollingBitcoind(host, user, pass string) WalletOption {
+	return func(s *service) error {
+		netParams := s.cfg.chainParams()
+		// Create a new bitcoind configuration
+		bitcoindConfig := &chain.BitcoindConfig{
+			ChainParams: netParams,
+			Host:        host,
+			User:        user,
+			Pass:        pass,
+			PollingConfig: &chain.PollingConfig{
+				BlockPollingInterval:    10 * time.Second,
+				TxPollingInterval:       5 * time.Second,
+				TxPollingIntervalJitter: 0.1,
+				RPCBatchSize:            20,
+				RPCBatchInterval:        1 * time.Second,
+			},
+		}
+
+		chain.UseLogger(logger("chain"))
+
+		// Create the BitcoindConn first
+		bitcoindConn, err := chain.NewBitcoindConn(bitcoindConfig)
+		if err != nil {
+			return fmt.Errorf("failed to create bitcoind connection: %w", err)
+		}
+
+		// Start the bitcoind connection
+		if err := bitcoindConn.Start(); err != nil {
+			return fmt.Errorf("failed to start bitcoind connection: %w", err)
+		}
+
+		// Now create the BitcoindClient using the connection
+		chainClient := bitcoindConn.NewBitcoindClient()
+
+		// Start the chain client
+		if err := chainClient.Start(); err != nil {
+			bitcoindConn.Stop()
+			return fmt.Errorf("failed to start bitcoind client: %w", err)
+		}
+
+		// wait for bitcoind to sync
+		for !chainClient.IsCurrent() {
+			time.Sleep(1 * time.Second)
+		}
+
+		// Set up the wallet as chain source and scanner
+		if err := withChainSource(chainClient)(s); err != nil {
+			chainClient.Stop()
+			bitcoindConn.Stop()
+			return fmt.Errorf("failed to set chain source: %w", err)
+		}
+
+		if err := withScanner(chainClient)(s); err != nil {
+			chainClient.Stop()
+			bitcoindConn.Stop()
+			return fmt.Errorf("failed to set scanner: %w", err)
+		}
+
+		return nil
+	}
+}
+
 // NewService creates the wallet service, an option must be set to configure the chain source.
 func NewService(cfg WalletConfig, options ...WalletOption) (ports.WalletService, error) {
 	wallet.UseLogger(logger("wallet"))

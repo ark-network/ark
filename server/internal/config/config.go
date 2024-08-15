@@ -31,6 +31,9 @@ type Config struct {
 	UnilateralExitDelay   int64
 	EsploraURL            string
 	NeutrinoPeer          string
+	BitcoindRpcUser       string
+	BitcoindRpcPass       string
+	BitcoindRpcHost       string
 	TLSExtraIPs           []string
 	TLSExtraDomains       []string
 }
@@ -53,6 +56,9 @@ var (
 	UnilateralExitDelay   = "UNILATERAL_EXIT_DELAY"
 	EsploraURL            = "ESPLORA_URL"
 	NeutrinoPeer          = "NEUTRINO_PEER"
+	BitcoindRpcUser       = "BITCOIND_RPC_USER"
+	BitcoindRpcPass       = "BITCOIND_RPC_PASS"
+	BitcoindRpcHost       = "BITCOIND_RPC_HOST"
 	NoMacaroons           = "NO_MACAROONS"
 	NoTLS                 = "NO_TLS"
 	TLSExtraIP            = "TLS_EXTRA_IP"
@@ -128,6 +134,9 @@ func LoadConfig() (*Config, error) {
 		UnilateralExitDelay:   viper.GetInt64(UnilateralExitDelay),
 		EsploraURL:            viper.GetString(EsploraURL),
 		NeutrinoPeer:          viper.GetString(NeutrinoPeer),
+		BitcoindRpcUser:       viper.GetString(BitcoindRpcUser),
+		BitcoindRpcPass:       viper.GetString(BitcoindRpcPass),
+		BitcoindRpcHost:       viper.GetString(BitcoindRpcHost),
 		NoMacaroons:           viper.GetBool(NoMacaroons),
 		TLSExtraIPs:           viper.GetStringSlice(TLSExtraIP),
 		TLSExtraDomains:       viper.GetStringSlice(TLSExtraDomain),
