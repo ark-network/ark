@@ -119,7 +119,6 @@ jobs:
 
   docker-build-and-push:
     runs-on: ubuntu-latest
-    needs: build-and-upload
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
