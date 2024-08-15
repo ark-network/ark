@@ -17,8 +17,6 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-var version = "alpha"
-
 var (
 	balanceCommand = cli.Command{
 		Name:  "balance",
@@ -151,12 +149,14 @@ var (
 	}
 )
 
+var Version string
+
 func main() {
 	app := cli.NewApp()
 
-	app.Version = version
 	app.Name = "Ark CLI"
-	app.Usage = "ark wallet command line interface"
+	app.Version = Version
+	app.Usage = "Ark wallet command line interface"
 	app.Commands = append(
 		app.Commands,
 		&balanceCommand,
@@ -212,7 +212,7 @@ func getCLI(networkName string) (interfaces.CLI, error) {
 	switch networkName {
 	case common.Liquid.Name, common.LiquidTestNet.Name, common.LiquidRegTest.Name:
 		return covenant.New(), nil
-	case common.Bitcoin.Name, common.BitcoinTestNet.Name, common.BitcoinRegTest.Name:
+	case common.Bitcoin.Name, common.BitcoinTestNet.Name, common.BitcoinRegTest.Name, common.BitcoinSigNet.Name:
 		return covenantless.New(), nil
 	default:
 		return nil, fmt.Errorf("unknown network (%s)", networkName)

@@ -1,4 +1,4 @@
-.PHONY: build clean cov help intergrationtest lint run test vet proto proto-lint
+.PHONY: build clean cov help intergrationtest lint run run-signet test vet proto proto-lint
 
 ## build: build for all platforms
 build:
@@ -30,7 +30,7 @@ lint:
 	@echo "Linting code..."
 	@golangci-lint run --fix
 
-## run: run in dev mode
+## run: run in regtest mode
 run: clean
 	@echo "Running arkd in dev mode..."
 	@export ARK_NEUTRINO_PEER=localhost:18444; \
@@ -43,6 +43,24 @@ run: clean
 	export ARK_TX_BUILDER_TYPE=covenantless; \
 	export ARK_ESPLORA_URL=http://localhost:3000; \
 	export ARK_MIN_RELAY_FEE=200; \
+	go run ./cmd/arkd
+
+## 	export ARK_NEUTRINO_PEER=44.240.54.180:38333 ; \
+
+## run: run in signet mode
+run-signet: clean
+	@echo "Running arkd in signet mode..."
+	@export ARK_ROUND_INTERVAL=10; \
+	export ARK_LOG_LEVEL=5; \
+	export ARK_NETWORK=signet; \
+	export ARK_PORT=7070; \
+	export ARK_NO_TLS=true; \
+	export ARK_NO_MACAROONS=true; \
+	export ARK_TX_BUILDER_TYPE=covenantless; \
+	export ARK_ESPLORA_URL=https://mutinynet.com/api; \
+	export ARK_NEUTRINO_PEER=45.79.52.207:38333; \
+	export ARK_MIN_RELAY_FEE=200; \
+	export ARK_DATADIR=./tmp/signet/arkd-data; \
 	go run ./cmd/arkd
 
 ## test: runs unit and component tests

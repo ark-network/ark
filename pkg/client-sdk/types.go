@@ -25,6 +25,7 @@ var (
 		common.Bitcoin.Name:        "https://blockstream.info/api",
 		common.BitcoinTestNet.Name: "https://blockstream.info/testnet/api",
 		common.BitcoinRegTest.Name: "http://localhost:3000",
+		common.BitcoinSigNet.Name:  "https://mutinynet.com/api",
 	}
 )
 

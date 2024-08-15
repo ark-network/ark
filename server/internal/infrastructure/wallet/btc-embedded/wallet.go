@@ -43,6 +43,8 @@ type WalletConfig struct {
 }
 
 func (c WalletConfig) chainParams() *chaincfg.Params {
+	mutinyNetSigNetParams := chaincfg.CustomSignetParams(common.MutinyNetChallenge, nil)
+	mutinyNetSigNetParams.TargetTimePerBlock = common.MutinyNetBlockTime
 	switch c.Network.Name {
 	case common.Bitcoin.Name:
 		return &chaincfg.MainNetParams
@@ -50,6 +52,8 @@ func (c WalletConfig) chainParams() *chaincfg.Params {
 		return &chaincfg.TestNet3Params
 	case common.BitcoinRegTest.Name:
 		return &chaincfg.RegressionNetParams
+	case common.BitcoinSigNet.Name:
+		return &mutinyNetSigNetParams
 	default:
 		return &chaincfg.MainNetParams
 	}
@@ -264,7 +268,7 @@ func (s *service) Unlock(_ context.Context, password string) error {
 
 		for {
 			if !wallet.InternalWallet().ChainSynced() {
-				log.Debug("waiting sync....")
+				log.Debugf("waiting sync: current height %d", wallet.InternalWallet().Manager.SyncedTo().Height)
 				time.Sleep(3 * time.Second)
 				continue
 			}
@@ -767,7 +771,7 @@ func (s *service) create(mnemonic, password string, addrGap uint32) error {
 
 	for {
 		if !wallet.InternalWallet().ChainSynced() {
-			log.Debug("waiting sync....")
+			log.Debugf("waiting sync: current height %d", wallet.InternalWallet().Manager.SyncedTo().Height)
 			time.Sleep(3 * time.Second)
 			continue
 		}

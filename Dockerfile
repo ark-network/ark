@@ -2,8 +2,6 @@
 FROM golang:1.21.0 AS builder
 
 ARG VERSION
-ARG COMMIT
-ARG DATE
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -12,8 +10,8 @@ WORKDIR /app
 COPY . .
 
 ENV GOPROXY=https://goproxy.io,direct
-RUN cd server && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-X 'main.Version=${VERSION}' -X 'main.Commit=${COMMIT}' -X 'main.Date=${DATE}}'" -o ../bin/arkd ./cmd/arkd
-RUN cd client && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-X 'main.Version=${VERSION}}' -X 'main.Commit=${COMMIT}' -X 'main.Date=${DATE}}'" -o ../bin/ark .
+RUN cd server && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-X 'main.Version=${VERSION}'" -o ../bin/arkd ./cmd/arkd
+RUN cd client && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-X 'main.Version=${VERSION}}'" -o ../bin/ark .
 
 # Second image, running the arkd executable
 FROM alpine:3.12

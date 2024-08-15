@@ -1010,6 +1010,8 @@ func (b *txBuilder) getTaprootPreimage(tx string, inputIndex int, leafScript []b
 }
 
 func (b *txBuilder) onchainNetwork() *chaincfg.Params {
+	mutinyNetSigNetParams := chaincfg.CustomSignetParams(common.MutinyNetChallenge, nil)
+	mutinyNetSigNetParams.TargetTimePerBlock = common.MutinyNetBlockTime
 	switch b.net.Name {
 	case common.Bitcoin.Name:
 		return &chaincfg.MainNetParams
@@ -1017,6 +1019,8 @@ func (b *txBuilder) onchainNetwork() *chaincfg.Params {
 		return &chaincfg.TestNet3Params
 	case common.BitcoinRegTest.Name:
 		return &chaincfg.RegressionNetParams
+	case common.BitcoinSigNet.Name:
+		return &mutinyNetSigNetParams
 	default:
 		return nil
 	}

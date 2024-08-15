@@ -239,6 +239,8 @@ func networkFromString(net string) *common.Network {
 		return &common.BitcoinTestNet
 	case common.BitcoinRegTest.Name:
 		return &common.BitcoinRegTest
+	case common.BitcoinSigNet.Name:
+		return &common.BitcoinSigNet
 	default:
 		panic(fmt.Sprintf("unknown network (%s)", net))
 	}
