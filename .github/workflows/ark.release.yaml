@@ -1,18 +1,16 @@
-name: release
+name: Release Binaries and Docker Build
 
 on:
   release:
     types: [released]
 
-
 permissions:
   contents: write
   packages: write
-    
-jobs:
-  build:
-    runs-on: ubuntu-latest
 
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
@@ -22,10 +20,11 @@ jobs:
       with:
         go-version: 1.21.0
 
+    # Build binaries for all architectures
     - name: Build binaries
       run: make build-all
 
-    # Server 
+    # Server binary uploads
     - name: Upload server binary (Linux, AMD64)
       uses: actions/upload-release-asset@v1
       env:
@@ -66,7 +65,7 @@ jobs:
         asset_name: arkd-darwin-arm64
         asset_content_type: application/octet-stream
 
-    # CLI
+    # CLI binary uploads
     - name: Upload client binary (Linux, AMD64)
       uses: actions/upload-release-asset@v1
       env:
@@ -107,7 +106,7 @@ jobs:
         asset_name: ark-darwin-arm64
         asset_content_type: application/octet-stream
 
-    # WASM SDK 
+    # WASM SDK upload
     - name: Upload WASM SDK
       uses: actions/upload-release-asset@v1
       env:
@@ -118,7 +117,12 @@ jobs:
         asset_name: ark-sdk.wasm
         asset_content_type: application/wasm
 
-    # Docker 
+  docker-build-and-push:
+    runs-on: ubuntu-latest
+    needs: build-and-upload
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
 
     - name: Set up Docker
       uses: docker/setup-buildx-action@v1
@@ -137,3 +141,5 @@ jobs:
         push: true
         tags: ghcr.io/${{ github.repository }}:${{ github.event.release.tag_name }},ghcr.io/${{ github.repository }}:latest
         platforms: linux/amd64,linux/arm64
+        build-args: |
+          VERSION=${{ github.event.release.tag_name }}
