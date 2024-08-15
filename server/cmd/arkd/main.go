@@ -15,12 +15,8 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-//nolint:all
-var (
-	version = "dev"
-	commit  = "none"
-	date    = "unknown"
-)
+// Version will be set during build time
+var Version string
 
 // flags
 var (
@@ -105,7 +101,7 @@ func mainAction(_ *cli.Context) error {
 
 func main() {
 	app := cli.NewApp()
-	app.Version = version
+	app.Version = Version
 	app.Name = "Arkd CLI"
 	app.Usage = "arkd command line interface"
 	app.Commands = append(app.Commands, walletCmd)
