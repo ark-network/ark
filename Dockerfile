@@ -11,7 +11,7 @@ COPY . .
 
 ENV GOPROXY=https://goproxy.io,direct
 RUN cd server && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-X 'main.Version=${VERSION}'" -o ../bin/arkd ./cmd/arkd
-RUN cd client && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-X 'main.Version=${VERSION}}'" -o ../bin/ark .
+RUN cd client && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-X 'main.Version=${VERSION}'" -o ../bin/ark .
 
 # Second image, running the arkd executable
 FROM alpine:3.12
