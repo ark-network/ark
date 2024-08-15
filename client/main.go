@@ -212,7 +212,7 @@ func getCLI(networkName string) (interfaces.CLI, error) {
 	switch networkName {
 	case common.Liquid.Name, common.LiquidTestNet.Name, common.LiquidRegTest.Name:
 		return covenant.New(), nil
-	case common.Bitcoin.Name, common.BitcoinTestNet.Name, common.BitcoinRegTest.Name:
+	case common.Bitcoin.Name, common.BitcoinTestNet.Name, common.BitcoinRegTest.Name, common.BitcoinSigNet.Name:
 		return covenantless.New(), nil
 	default:
 		return nil, fmt.Errorf("unknown network (%s)", networkName)

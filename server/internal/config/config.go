@@ -101,7 +101,7 @@ func LoadConfig() (*Config, error) {
 
 	net, err := getNetwork()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error while getting network: %s", err)
 	}
 
 	if err := initDatadir(); err != nil {
@@ -160,6 +160,8 @@ func getNetwork() (common.Network, error) {
 		return common.BitcoinTestNet, nil
 	case common.BitcoinRegTest.Name:
 		return common.BitcoinRegTest, nil
+	case common.BitcoinSigNet.Name:
+		return common.BitcoinSigNet, nil
 	default:
 		return common.Network{}, fmt.Errorf("unknown network %s", viper.GetString(Network))
 	}

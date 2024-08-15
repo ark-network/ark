@@ -18,6 +18,7 @@ var explorerUrls = map[string]string{
 	common.Bitcoin.Name:        "https://blockstream.info/api",
 	common.BitcoinTestNet.Name: "https://blockstream.info/testnet/api",
 	common.BitcoinRegTest.Name: "http://localhost:3000",
+	common.BitcoinSigNet.Name:  "https://mutinynet.com/api",
 }
 
 func (c *clArkBitcoinCLI) Init(ctx *cli.Context) error {
@@ -31,7 +32,7 @@ func (c *clArkBitcoinCLI) Init(ctx *cli.Context) error {
 	if len(url) <= 0 {
 		return fmt.Errorf("invalid ark url")
 	}
-	if net != common.Bitcoin.Name && net != common.BitcoinTestNet.Name && net != common.BitcoinRegTest.Name {
+	if net != common.Bitcoin.Name && net != common.BitcoinTestNet.Name && net != common.BitcoinRegTest.Name && net != common.BitcoinSigNet.Name {
 		return fmt.Errorf("invalid network")
 	}
 
