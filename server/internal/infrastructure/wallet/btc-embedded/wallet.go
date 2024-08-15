@@ -106,10 +106,10 @@ func WithNeutrino(initialPeer string) WalletOption {
 			DataDir:     s.cfg.Datadir,
 			ChainParams: *netParams,
 			Database:    db,
-			AddPeers: []string{
-				"ifgqyyapbb.b.voltageapp.io",
-				"45.79.52.207:38333",
-			},
+		}
+
+		if len(initialPeer) > 0 {
+			config.AddPeers = []string{initialPeer}
 		}
 
 		neutrino.UseLogger(logger("neutrino"))

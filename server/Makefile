@@ -58,8 +58,9 @@ run-signet: clean
 	export ARK_NO_MACAROONS=true; \
 	export ARK_TX_BUILDER_TYPE=covenantless; \
 	export ARK_ESPLORA_URL=https://mutinynet.com/api; \
+	export ARK_NEUTRINO_PEER=45.79.52.207:38333; \
 	export ARK_MIN_RELAY_FEE=200; \
-	export ARK_DATADIR=./tmp/data/arkd-data; \
+	export ARK_DATADIR=./tmp/signet/arkd-data; \
 	go run ./cmd/arkd
 
 ## test: runs unit and component tests
