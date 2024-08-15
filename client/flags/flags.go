@@ -37,7 +37,7 @@ var (
 	}
 	NetworkFlag = cli.StringFlag{
 		Name:  "network",
-		Usage: "network to use (liquid, testnet, regtest)",
+		Usage: "network to use (liquid, testnet, regtest, signet)",
 		Value: "liquid",
 	}
 	UrlFlag = cli.StringFlag{
