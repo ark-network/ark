@@ -1,8 +1,12 @@
 github.com/aead/siphash v1.0.1/go.mod h1:Nywa3cDsYNNK3gaciGTWPwHt0wlpNV15vwmswBAUSII=
 github.com/ark-network/ark/api-spec v0.0.0-20240812230256-910716f72d1a h1:9Jt/77jO6tA6iWe1fuH7sm3M6NefKnBbOm277vapPfc=
 github.com/ark-network/ark/api-spec v0.0.0-20240812230256-910716f72d1a/go.mod h1:0B5seq/gzuGL8OZGUaO12yj73ZJKAde8L+nmLQAZ7IA=
+github.com/ark-network/ark/api-spec v0.0.0-20240815203029-edc4534dfc87 h1:VBY4KqHqxE4q6NnmvEZTLvLZoNA0Q6NhMhjBs1hzy9Y=
+github.com/ark-network/ark/api-spec v0.0.0-20240815203029-edc4534dfc87/go.mod h1:m5H86Dx+k8cQjLXeYL1MV+h3x/XnhJCXJP/PL3KgZqY=
 github.com/ark-network/ark/common v0.0.0-20240812230256-910716f72d1a h1:vjuHW6OF/dPV9CmwpqmWb+KmkdqNeksovhIRojRTpRE=
 github.com/ark-network/ark/common v0.0.0-20240812230256-910716f72d1a/go.mod h1:8DYeb06Dl8onmrV09xfsdDMGv5HoVtWoKhLBLXOYHew=
+github.com/ark-network/ark/common v0.0.0-20240815203029-edc4534dfc87 h1:TIv00zlpxLKmY2LjFAIMF8RxNtn9rFqQsv73Lwoj2ds=
+github.com/ark-network/ark/common v0.0.0-20240815203029-edc4534dfc87/go.mod h1:aYAGDfoeBLofnZt9n85wusFyCkrS7hvwdo5TynBlkuY=
 github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 h1:DklsrG3dyBCFEj5IhUbnKptjxatkF07cF2ak3yi77so=
 github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2/go.mod h1:WaHUgvxTVq04UNunO+XhnAqY/wQc+bxr74GqbsZ/Jqw=
 github.com/btcsuite/btcd v0.20.1-beta/go.mod h1:wVuoA8VJLEcwgqHBwHmzLRazpKxTv13Px/pDuV7OomQ=
