@@ -138,7 +138,7 @@ func WithNeutrino(initialPeer string) WalletOption {
 	}
 }
 
-func WithBitcoind(zmqBlockHost, zmqTxHost, host, user, pass string) WalletOption {
+func WithPollingBitcoind(host, user, pass string) WalletOption {
 	return func(s *service) error {
 		netParams := s.cfg.chainParams()
 		// Create a new bitcoind configuration
@@ -147,10 +147,12 @@ func WithBitcoind(zmqBlockHost, zmqTxHost, host, user, pass string) WalletOption
 			Host:        host,
 			User:        user,
 			Pass:        pass,
-			ZMQConfig: &chain.ZMQConfig{
-				ZMQBlockHost:    zmqBlockHost,
-				ZMQTxHost:       zmqTxHost,
-				ZMQReadDeadline: 10 * time.Second,
+			PollingConfig: &chain.PollingConfig{
+				BlockPollingInterval:    10 * time.Second,
+				TxPollingInterval:       5 * time.Second,
+				TxPollingIntervalJitter: 0.1,
+				RPCBatchSize:            20,
+				RPCBatchInterval:        1 * time.Second,
 			},
 		}
 

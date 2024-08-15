@@ -76,6 +76,9 @@ func mainAction(_ *cli.Context) error {
 		UnilateralExitDelay:   cfg.UnilateralExitDelay,
 		EsploraURL:            cfg.EsploraURL,
 		NeutrinoPeer:          cfg.NeutrinoPeer,
+		BitcoindRpcUser:       cfg.BitcoindRpcUser,
+		BitcoindRpcPass:       cfg.BitcoindRpcPass,
+		BitcoindRpcHost:       cfg.BitcoindRpcHost,
 	}
 	svc, err := grpcservice.NewService(svcConfig, appConfig)
 	if err != nil {
