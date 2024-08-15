@@ -3,8 +3,8 @@ module github.com/ark-network/ark/pkg/client-sdk
 go 1.22.6
 
 require (
-	github.com/ark-network/ark/api-spec v0.0.0-20240812230256-910716f72d1a
-	github.com/ark-network/ark/common v0.0.0-20240812230256-910716f72d1a
+	github.com/ark-network/ark/api-spec v0.0.0-20240815203029-edc4534dfc87
+	github.com/ark-network/ark/common v0.0.0-20240815203029-edc4534dfc87
 	github.com/btcsuite/btcd v0.24.2
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4
 	github.com/btcsuite/btcd/btcutil v1.1.5
