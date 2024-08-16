@@ -221,8 +221,10 @@ func NewService(cfg WalletConfig, options ...WalletOption) (ports.WalletService,
 }
 
 func (s *service) Close() {
-	if err := s.wallet.Stop(); err != nil {
-		log.WithError(err).Warn("failed to gracefully stop the wallet, forcing shutdown")
+	if s.wallet != nil {
+		if err := s.wallet.Stop(); err != nil {
+			log.WithError(err).Warn("failed to gracefully stop the wallet, forcing shutdown")
+		}
 	}
 }
 
@@ -323,6 +325,10 @@ func (s *service) Unlock(_ context.Context, password string) error {
 }
 
 func (s *service) Lock(_ context.Context, _ string) error {
+	if err := s.expectWallet(); err != nil {
+		return err
+	}
+
 	s.wallet.InternalWallet().Lock()
 	return nil
 }
@@ -900,6 +906,10 @@ func (s *service) initWallet(wallet *btcwallet.BtcWallet) error {
 }
 
 func (s *service) getBalance(account accountName) (uint64, error) {
+	if err := s.expectWallet(); err != nil {
+		return 0, err
+	}
+
 	balance, err := s.wallet.ConfirmedBalance(0, string(account))
 	if err != nil {
 		return 0, err
@@ -910,7 +920,18 @@ func (s *service) getBalance(account accountName) (uint64, error) {
 
 // this only supports deriving segwit v0 accounts
 func (s *service) deriveNextAddress(account accountName) (btcutil.Address, error) {
+	if err := s.expectWallet(); err != nil {
+		return nil, err
+	}
+
 	return s.wallet.NewAddress(lnwallet.WitnessPubKey, false, string(account))
+}
+
+func (s *service) expectWallet() error {
+	if s.wallet == nil {
+		return fmt.Errorf("wallet not initialized")
+	}
+	return nil
 }
 
 func withChainSource(chainSource chain.Interface) WalletOption {
