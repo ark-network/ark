@@ -1,4 +1,4 @@
-.PHONY: build clean cov help intergrationtest lint run run-neutrino run-neutrino-signet test vet proto proto-lint
+.PHONY: build clean cov help intergrationtest lint run run-neutrino run-neutrino-signet test vet
 
 ## build: build for all platforms
 build:
@@ -90,19 +90,6 @@ test:
 vet:
 	@echo "Running code analysis..."
 	@go vet ./...
-
-## proto: compile proto stubs
-proto: proto-lint
-	@echo "Compiling stubs..."
-	@docker run --rm --volume "$(shell pwd):/workspace" --workdir /workspace buf generate buf.build/vulpemventures/ocean
-	@docker run --rm --volume "$(shell pwd):/workspace" --workdir /workspace buf generate
-
-## proto-lint: lint protos
-proto-lint:
-	@echo "Linting protos..."
-	@docker build -q -t buf -f buf.Dockerfile . &> /dev/null
-	@docker run --rm --volume "$(shell pwd):/workspace" --workdir /workspace buf lint
-
 
 ## mig_file: creates pg migration file(eg. make FILE=init mig_file)
 mig_file:
