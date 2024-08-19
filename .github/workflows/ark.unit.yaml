@@ -14,6 +14,30 @@ on:
       - "pkg/client-sdk/**"
 
 jobs:
+  check-go-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.20"
+
+      - name: Run go work sync
+        run: go work sync
+
+      - name: Run go mod tidy
+        run: go mod tidy
+
+      - name: Check for changes
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "Changes detected after running go work sync and go mod tidy"
+            git diff
+            exit 1
+          fi
+
   test-server:
     name: server unit tests
     runs-on: ubuntu-latest
@@ -33,7 +57,7 @@ jobs:
       - name: check code integrity
         uses: securego/gosec@master
         with:
-          args: '-severity high -quiet ./...'
+          args: "-severity high -quiet ./..."
       - run: go get -v -t -d ./...
       - name: unit testing
         run: make test
@@ -57,7 +81,7 @@ jobs:
       - name: check code integrity
         uses: securego/gosec@master
         with:
-          args: '-severity high -quiet ./...'
+          args: "-severity high -quiet ./..."
       - run: go get -v -t -d ./...
       - name: unit testing
         run: make test
