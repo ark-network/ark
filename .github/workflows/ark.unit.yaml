@@ -22,7 +22,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: "1.20"
+          go-version: '>=1.22.6'
 
       - name: Run go work sync
         run: go work sync
@@ -45,9 +45,9 @@ jobs:
       run:
         working-directory: ./server
     steps:
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v4
         with:
-          go-version: ">1.17.2"
+          go-version: '>=1.22.6'
       - uses: actions/checkout@v3
       - name: check linting
         uses: golangci/golangci-lint-action@v3
@@ -69,9 +69,9 @@ jobs:
       run:
         working-directory: ./pkg/client-sdk
     steps:
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v4
         with:
-          go-version: ">1.17.2"
+          go-version: '>=1.22.6'
       - uses: actions/checkout@v3
       - name: check linting
         uses: golangci/golangci-lint-action@v3
