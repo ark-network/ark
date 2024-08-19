@@ -586,7 +586,7 @@ func (s *service) SignTransactionTapscript(ctx context.Context, partialTx string
 func (s *service) Status(ctx context.Context) (ports.WalletStatus, error) {
 	if !s.walletLoaded() {
 		return status{
-			initialized: s.walletInitialised(),
+			initialized: s.walletInitialized(),
 		}, nil
 	}
 
@@ -934,7 +934,7 @@ func (s *service) walletLoaded() bool {
 	return s.wallet != nil
 }
 
-func (s *service) walletInitialised() bool {
+func (s *service) walletInitialized() bool {
 	opts := []btcwallet.LoaderOption{btcwallet.LoaderWithLocalWalletDB(s.cfg.Datadir, false, time.Minute)}
 	loader, err := btcwallet.NewWalletLoader(
 		s.cfg.chainParams(), 0, opts...,
