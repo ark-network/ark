@@ -68,9 +68,10 @@ const (
 )
 
 var (
-	p2wpkhKeyScope     = waddrmgr.KeyScopeBIP0084
-	p2trKeyScope       = waddrmgr.KeyScopeBIP0086
-	outputLockDuration = time.Minute
+	ErrWalletNotInitialized = fmt.Errorf("wallet not initialized")
+	p2wpkhKeyScope          = waddrmgr.KeyScopeBIP0084
+	p2trKeyScope            = waddrmgr.KeyScopeBIP0086
+	outputLockDuration      = time.Minute
 )
 
 type service struct {
@@ -221,8 +222,10 @@ func NewService(cfg WalletConfig, options ...WalletOption) (ports.WalletService,
 }
 
 func (s *service) Close() {
-	if err := s.wallet.Stop(); err != nil {
-		log.WithError(err).Warn("failed to gracefully stop the wallet, forcing shutdown")
+	if s.isInitialized() {
+		if err := s.wallet.Stop(); err != nil {
+			log.WithError(err).Warn("failed to gracefully stop the wallet, forcing shutdown")
+		}
 	}
 }
 
@@ -243,7 +246,7 @@ func (s *service) Restore(_ context.Context, seed, password string) error {
 }
 
 func (s *service) Unlock(_ context.Context, password string) error {
-	if s.wallet == nil {
+	if !s.isInitialized() {
 		pwd := []byte(password)
 		opt := btcwallet.LoaderWithLocalWalletDB(s.cfg.Datadir, false, time.Minute)
 		config := btcwallet.Config{
@@ -323,6 +326,10 @@ func (s *service) Unlock(_ context.Context, password string) error {
 }
 
 func (s *service) Lock(_ context.Context, _ string) error {
+	if !s.isInitialized() {
+		return ErrWalletNotInitialized
+	}
+
 	s.wallet.InternalWallet().Lock()
 	return nil
 }
@@ -577,7 +584,7 @@ func (s *service) SignTransactionTapscript(ctx context.Context, partialTx string
 }
 
 func (s *service) Status(ctx context.Context) (ports.WalletStatus, error) {
-	if s.wallet == nil {
+	if !s.isInitialized() {
 		return status{}, nil
 	}
 
@@ -900,6 +907,10 @@ func (s *service) initWallet(wallet *btcwallet.BtcWallet) error {
 }
 
 func (s *service) getBalance(account accountName) (uint64, error) {
+	if !s.isInitialized() {
+		return 0, ErrWalletNotInitialized
+	}
+
 	balance, err := s.wallet.ConfirmedBalance(0, string(account))
 	if err != nil {
 		return 0, err
@@ -910,7 +921,15 @@ func (s *service) getBalance(account accountName) (uint64, error) {
 
 // this only supports deriving segwit v0 accounts
 func (s *service) deriveNextAddress(account accountName) (btcutil.Address, error) {
+	if !s.isInitialized() {
+		return nil, ErrWalletNotInitialized
+	}
+
 	return s.wallet.NewAddress(lnwallet.WitnessPubKey, false, string(account))
+}
+
+func (s *service) isInitialized() bool {
+	return s.wallet != nil
 }
 
 func withChainSource(chainSource chain.Interface) WalletOption {
