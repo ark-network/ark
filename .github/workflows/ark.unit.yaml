@@ -27,9 +27,6 @@ jobs:
       - name: Run go work sync
         run: go work sync
 
-      - name: Run go mod tidy
-        run: go mod tidy
-
       - name: Check for changes
         run: |
           if [[ -n $(git status --porcelain) ]]; then
