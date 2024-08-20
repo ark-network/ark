@@ -261,6 +261,70 @@
         ]
       }
     },
+    "/v1/payment/tree/nonces": {
+      "post": {
+        "operationId": "ArkService_SendTreeNonces",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SendTreeNoncesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1SendTreeNoncesRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
+    "/v1/payment/tree/signatures": {
+      "post": {
+        "operationId": "ArkService_SendTreeSignatures",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SendTreeSignaturesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1SendTreeSignaturesRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
     "/v1/ping/{paymentId}": {
       "get": {
         "operationId": "ArkService_Ping",
@@ -323,7 +387,6 @@
     },
     "/v1/round/{txid}": {
       "get": {
-        "summary": "TODO BTC: signTree rpc",
         "operationId": "ArkService_GetRound",
         "responses": {
           "200": {
@@ -502,14 +565,19 @@
       "type": "object",
       "properties": {
         "roundFinalization": {
-          "$ref": "#/definitions/v1RoundFinalizationEvent",
-          "title": "TODO: BTC add \"signTree\" event"
+          "$ref": "#/definitions/v1RoundFinalizationEvent"
         },
         "roundFinalized": {
           "$ref": "#/definitions/v1RoundFinalizedEvent"
         },
         "roundFailed": {
           "$ref": "#/definitions/v1RoundFailed"
+        },
+        "roundSigning": {
+          "$ref": "#/definitions/v1RoundSigningEvent"
+        },
+        "roundSigningNoncesGenerated": {
+          "$ref": "#/definitions/v1RoundSigningNoncesGeneratedEvent"
         }
       }
     },
@@ -669,6 +737,9 @@
             "type": "object",
             "$ref": "#/definitions/v1Input"
           }
+        },
+        "ephemeralPubkey": {
+          "type": "string"
         }
       }
     },
@@ -766,6 +837,34 @@
         }
       }
     },
+    "v1RoundSigningEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "cosignersPubkeys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unsignedTree": {
+          "$ref": "#/definitions/v1Tree"
+        }
+      }
+    },
+    "v1RoundSigningNoncesGeneratedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "treeNonces": {
+          "type": "string"
+        }
+      }
+    },
     "v1RoundStage": {
       "type": "string",
       "enum": [
@@ -776,6 +875,40 @@
         "ROUND_STAGE_FAILED"
       ],
       "default": "ROUND_STAGE_UNSPECIFIED"
+    },
+    "v1SendTreeNoncesRequest": {
+      "type": "object",
+      "properties": {
+        "roundId": {
+          "type": "string"
+        },
+        "publicKey": {
+          "type": "string"
+        },
+        "treeNonces": {
+          "type": "string"
+        }
+      }
+    },
+    "v1SendTreeNoncesResponse": {
+      "type": "object"
+    },
+    "v1SendTreeSignaturesRequest": {
+      "type": "object",
+      "properties": {
+        "roundId": {
+          "type": "string"
+        },
+        "publicKey": {
+          "type": "string"
+        },
+        "treeSignatures": {
+          "type": "string"
+        }
+      }
+    },
+    "v1SendTreeSignaturesResponse": {
+      "type": "object"
     },
     "v1Tree": {
       "type": "object",
