@@ -3,15 +3,19 @@ package handlers
 import (
 	"context"
 	"encoding/hex"
+	"strings"
 	"sync"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/application"
+	covenantlessevent "github.com/ark-network/ark/server/internal/core/application/covenantless-event"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -145,9 +149,34 @@ func (h *handler) RegisterPayment(ctx context.Context, req *arkv1.RegisterPaymen
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
+	var cosigner *secp256k1.PublicKey
+
+	if h.svc.IsCovenantLess() {
+		pubkey := req.GetEphemeralPubkey()
+		if pubkey == "" {
+			return nil, status.Error(codes.InvalidArgument, "missing cosigner pubkey")
+		}
+
+		buf, err := hex.DecodeString(pubkey)
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, "invalid cosigner pubkey (expect hex)")
+		}
+
+		cosigner, err = secp256k1.ParsePubKey(buf)
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, "invalid cosigner pubkey")
+		}
+	}
+
 	id, err := h.svc.SpendVtxos(ctx, vtxosKeys)
 	if err != nil {
 		return nil, err
+	}
+
+	if cosigner != nil {
+		if err := h.svc.RegisterCosignerPubkey(ctx, id, cosigner); err != nil {
+			return nil, err
+		}
 	}
 
 	return &arkv1.RegisterPaymentResponse{
@@ -312,6 +341,84 @@ func (h *handler) GetInfo(ctx context.Context, req *arkv1.GetInfoRequest) (*arkv
 	}, nil
 }
 
+func (h *handler) SendTreeNonces(ctx context.Context, req *arkv1.SendTreeNoncesRequest) (*arkv1.SendTreeNoncesResponse, error) {
+	pubkey := req.GetPublicKey()
+	serializedNonces := req.GetTreeNonces()
+	roundID := req.GetRoundId()
+
+	if len(pubkey) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing cosigner public key")
+	}
+
+	if len(serializedNonces) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing tree nonces")
+	}
+
+	if len(roundID) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing round id")
+	}
+
+	pubkeyBytes, err := hex.DecodeString(pubkey)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key")
+	}
+
+	cosignerPublicKey, err := secp256k1.ParsePubKey(pubkeyBytes)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key")
+	}
+
+	nonces, err := bitcointree.DecodeNonces(hex.NewDecoder(strings.NewReader(serializedNonces)))
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid tree nonces")
+	}
+
+	if err := h.svc.RegisterCosignerNonces(ctx, roundID, cosignerPublicKey, nonces); err != nil {
+		return nil, err
+	}
+
+	return &arkv1.SendTreeNoncesResponse{}, nil
+}
+
+func (h *handler) SendTreeSignatures(ctx context.Context, req *arkv1.SendTreeSignaturesRequest) (*arkv1.SendTreeSignaturesResponse, error) {
+	roundID := req.GetRoundId()
+	pubkey := req.GetPublicKey()
+	serializedSignatures := req.GetTreeSignatures()
+
+	if len(pubkey) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing cosigner public key")
+	}
+
+	if len(serializedSignatures) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing tree signatures")
+	}
+
+	if len(roundID) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing round id")
+	}
+
+	pubkeyBytes, err := hex.DecodeString(pubkey)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key")
+	}
+
+	cosignerPublicKey, err := secp256k1.ParsePubKey(pubkeyBytes)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key")
+	}
+
+	signatures, err := bitcointree.DecodeSignatures(hex.NewDecoder(strings.NewReader(serializedSignatures)))
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid tree signatures")
+	}
+
+	if err := h.svc.RegisterCosignerSignatures(ctx, roundID, cosignerPublicKey, signatures); err != nil {
+		return nil, err
+	}
+
+	return &arkv1.SendTreeSignaturesResponse{}, nil
+}
+
 func (h *handler) pushListener(l *listener) {
 	h.listenersLock.Lock()
 	defer h.listenersLock.Unlock()
@@ -365,6 +472,36 @@ func (h *handler) listenToEvents() {
 					RoundFailed: &arkv1.RoundFailed{
 						Id:     e.Id,
 						Reason: e.Err,
+					},
+				},
+			}
+		case covenantlessevent.RoundSigningStarted:
+			cosignersKeys := make([]string, 0, len(e.Cosigners))
+			for _, key := range e.Cosigners {
+				cosignersKeys = append(cosignersKeys, hex.EncodeToString(key.SerializeCompressed()))
+			}
+
+			ev = &arkv1.GetEventStreamResponse{
+				Event: &arkv1.GetEventStreamResponse_RoundSigning{
+					RoundSigning: &arkv1.RoundSigningEvent{
+						Id:               e.Id,
+						CosignersPubkeys: cosignersKeys,
+						UnsignedTree:     castCongestionTree(e.UnsignedCongestionTree),
+					},
+				},
+			}
+		case covenantlessevent.RoundSigningNoncesGenerated:
+			serialized, err := e.SerializeNonces()
+			if err != nil {
+				logrus.WithError(err).Error("failed to serialize nonces")
+				continue
+			}
+
+			ev = &arkv1.GetEventStreamResponse{
+				Event: &arkv1.GetEventStreamResponse_RoundSigningNoncesGenerated{
+					RoundSigningNoncesGenerated: &arkv1.RoundSigningNoncesGeneratedEvent{
+						Id:         e.Id,
+						TreeNonces: serialized,
 					},
 				},
 			}

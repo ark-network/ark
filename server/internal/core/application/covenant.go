@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -37,7 +38,7 @@ type covenantService struct {
 	paymentRequests *paymentsMap
 	forfeitTxs      *forfeitTxsMap
 
-	eventsCh     chan domain.RoundEvent
+	eventsCh     chan interface{}
 	onboardingCh chan onboarding
 
 	currentRound *domain.Round
@@ -50,7 +51,7 @@ func NewCovenantService(
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	scheduler ports.SchedulerService,
 ) (Service, error) {
-	eventsCh := make(chan domain.RoundEvent)
+	eventsCh := make(chan interface{})
 	onboardingCh := make(chan onboarding)
 	paymentRequests := newPaymentsMap(nil)
 
@@ -178,7 +179,7 @@ func (s *covenantService) ListVtxos(ctx context.Context, pubkey *secp256k1.Publi
 	return s.repoManager.Vtxos().GetAllVtxos(ctx, pk)
 }
 
-func (s *covenantService) GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent {
+func (s *covenantService) GetEventsChannel(ctx context.Context) <-chan interface{} {
 	return s.eventsCh
 }
 
@@ -248,6 +249,22 @@ func (s *covenantService) Onboard(
 	return nil
 }
 
+func (s *covenantService) IsCovenantLess() bool {
+	return false
+}
+
+func (s *covenantService) RegisterCosignerNonces(ctx context.Context, roundID string, pubkey *secp256k1.PublicKey, nonces bitcointree.TreeNonces) error {
+	return fmt.Errorf("unimplemented")
+}
+
+func (s *covenantService) RegisterCosignerPubkey(ctx context.Context, paymentId string, pubkey *secp256k1.PublicKey) error {
+	return fmt.Errorf("unimplemented")
+}
+
+func (s *covenantService) RegisterCosignerSignatures(ctx context.Context, roundID string, pubkey *secp256k1.PublicKey, signatures bitcointree.TreePartialSigs) error {
+	return fmt.Errorf("unimplemented")
+}
+
 func (s *covenantService) start() {
 	s.startRound()
 }
@@ -305,7 +322,7 @@ func (s *covenantService) startFinalization() {
 	if num > paymentsThreshold {
 		num = paymentsThreshold
 	}
-	payments := s.paymentRequests.pop(num)
+	payments, _ := s.paymentRequests.pop(num)
 	if _, err := round.RegisterPayments(payments); err != nil {
 		round.Fail(fmt.Errorf("failed to register payments: %s", err))
 		log.WithError(err).Warn("failed to register payments")

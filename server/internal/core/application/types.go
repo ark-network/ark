@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 
+	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -22,7 +23,7 @@ type Service interface {
 	GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error)
 	GetRoundById(ctx context.Context, id string) (*domain.Round, error)
 	GetCurrentRound(ctx context.Context) (*domain.Round, error)
-	GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
+	GetEventsChannel(ctx context.Context) <-chan interface{}
 	UpdatePaymentStatus(
 		ctx context.Context, paymentId string,
 	) (unsignedForfeitTxs []string, currentRound *domain.Round, err error)
@@ -40,6 +41,17 @@ type Service interface {
 	) (string, []string, error)
 	CompleteAsyncPayment(
 		ctx context.Context, redeemTx string, unconditionalForfeitTxs []string,
+	) error
+	// Covenant-less only
+	IsCovenantLess() bool
+	RegisterCosignerPubkey(ctx context.Context, paymentId string, pubkey *secp256k1.PublicKey) error
+	RegisterCosignerNonces(
+		ctx context.Context, roundID string,
+		pubkey *secp256k1.PublicKey, nonces bitcointree.TreeNonces,
+	) error
+	RegisterCosignerSignatures(
+		ctx context.Context, roundID string,
+		pubkey *secp256k1.PublicKey, signatures bitcointree.TreePartialSigs,
 	) error
 }
 
