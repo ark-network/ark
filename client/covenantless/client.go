@@ -3,6 +3,7 @@ package covenantless
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil/psbt"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/urfave/cli/v2"
 	"google.golang.org/grpc"
@@ -220,11 +222,14 @@ func castCongestionTree(congestionTree tree.CongestionTree) *arkv1.Tree {
 func handleRoundStream(
 	ctx *cli.Context, client arkv1.ArkServiceClient, paymentID string,
 	vtxosToSign []vtxo, secKey *secp256k1.PrivateKey, receivers []*arkv1.Output,
+	ephemeralKey *secp256k1.PrivateKey,
 ) (poolTxID string, err error) {
 	stream, err := client.GetEventStream(ctx.Context, &arkv1.GetEventStreamRequest{})
 	if err != nil {
 		return "", err
 	}
+
+	myEphemeralPublicKey := hex.EncodeToString(ephemeralKey.PubKey().SerializeCompressed())
 
 	var pingStop func()
 	pingReq := &arkv1.PingRequest{
@@ -235,6 +240,9 @@ func handleRoundStream(
 	}
 
 	defer pingStop()
+
+	var treeSignerSession bitcointree.SignerSession
+	var cosigners []*secp256k1.PublicKey
 
 	for {
 		event, err := stream.Recv()
@@ -248,6 +256,143 @@ func handleRoundStream(
 		if e := event.GetRoundFailed(); e != nil {
 			pingStop()
 			return "", fmt.Errorf("round failed: %s", e.GetReason())
+		}
+
+		if e := event.GetRoundSigning(); e != nil {
+			pingStop()
+			fmt.Println("tree created, generating nonces...")
+
+			cosignersPubKeysHex := e.GetCosignersPubkeys()
+
+			cosigners = make([]*secp256k1.PublicKey, 0, len(cosignersPubKeysHex))
+
+			for _, pubkeyHex := range cosignersPubKeysHex {
+				pubkeyBytes, err := hex.DecodeString(pubkeyHex)
+				if err != nil {
+					return "", err
+				}
+
+				pubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
+				if err != nil {
+					return "", err
+				}
+
+				cosigners = append(cosigners, pubkey)
+			}
+
+			congestionTree, err := toCongestionTree(e.GetUnsignedTree())
+			if err != nil {
+				return "", err
+			}
+
+			minRelayFee, err := utils.GetMinRelayFee(ctx)
+			if err != nil {
+				return "", err
+			}
+
+			aspPubkey, err := utils.GetAspPublicKey(ctx)
+			if err != nil {
+				return "", err
+			}
+
+			lifetime, err := utils.GetRoundLifetime(ctx)
+			if err != nil {
+				return "", err
+			}
+
+			sweepClosure := bitcointree.CSVSigClosure{
+				Pubkey:  aspPubkey,
+				Seconds: uint(lifetime),
+			}
+
+			sweepTapLeaf, err := sweepClosure.Leaf()
+			if err != nil {
+				return "", err
+			}
+
+			sweepTapTree := txscript.AssembleTaprootScriptTree(*sweepTapLeaf)
+			root := sweepTapTree.RootNode.TapHash()
+
+			treeSignerSession = bitcointree.NewTreeSignerSession(
+				ephemeralKey, congestionTree, int64(minRelayFee), root.CloneBytes(),
+			)
+
+			nonces, err := treeSignerSession.GetNonces()
+			if err != nil {
+				return "", err
+			}
+
+			var nonceBuffer bytes.Buffer
+
+			if err := nonces.Encode(&nonceBuffer); err != nil {
+				return "", err
+			}
+
+			serializedNonces := hex.EncodeToString(nonceBuffer.Bytes())
+
+			if _, err := client.SendTreeNonces(ctx.Context, &arkv1.SendTreeNoncesRequest{
+				RoundId:    e.GetId(),
+				PublicKey:  myEphemeralPublicKey,
+				TreeNonces: serializedNonces,
+			}); err != nil {
+				return "", err
+			}
+
+			fmt.Println("nonces sent")
+
+			continue
+		}
+
+		if e := event.GetRoundSigningNoncesGenerated(); e != nil {
+			pingStop()
+			fmt.Println("nonces generated, signing the tree...")
+
+			if len(cosigners) == 0 {
+				return "", fmt.Errorf("cosigners not set")
+			}
+
+			if treeSignerSession == nil {
+				return "", fmt.Errorf("tree signer session not set")
+			}
+
+			combinedNoncesBytes, err := hex.DecodeString(e.GetTreeNonces())
+			if err != nil {
+				return "", err
+			}
+
+			combinedNonces, err := bitcointree.DecodeNonces(bytes.NewReader(combinedNoncesBytes))
+			if err != nil {
+				return "", err
+			}
+
+			if err := treeSignerSession.SetKeys(cosigners, combinedNonces); err != nil {
+				return "", err
+			}
+
+			sigs, err := treeSignerSession.Sign()
+			if err != nil {
+				return "", err
+			}
+
+			var sigBuffer bytes.Buffer
+
+			if err := sigs.Encode(&sigBuffer); err != nil {
+				return "", err
+			}
+
+			serializedSigs := hex.EncodeToString(sigBuffer.Bytes())
+
+			if _, err := client.SendTreeSignatures(ctx.Context, &arkv1.SendTreeSignaturesRequest{
+				RoundId:        e.GetId(),
+				TreeSignatures: serializedSigs,
+				PublicKey:      myEphemeralPublicKey,
+			}); err != nil {
+				return "", err
+			}
+
+			fmt.Println("tree signed")
+
+			continue
 		}
 
 		if e := event.GetRoundFinalization(); e != nil {
