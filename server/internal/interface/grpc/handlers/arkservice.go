@@ -296,14 +296,6 @@ func (h *handler) GetEventStream(_ *arkv1.GetEventStreamRequest, stream arkv1.Ar
 			if err := stream.Send(ev); err != nil {
 				return err
 			}
-
-			switch ev.Event.(type) {
-			case *arkv1.GetEventStreamResponse_RoundFinalized, *arkv1.GetEventStreamResponse_RoundFailed:
-				if err := stream.Send(ev); err != nil {
-					return err
-				}
-				return nil
-			}
 		}
 	}
 }
