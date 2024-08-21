@@ -242,7 +242,6 @@ func handleRoundStream(
 	defer pingStop()
 
 	var treeSignerSession bitcointree.SignerSession
-	var cosigners []*secp256k1.PublicKey
 
 	for {
 		event, err := stream.Recv()
@@ -264,7 +263,7 @@ func handleRoundStream(
 
 			cosignersPubKeysHex := e.GetCosignersPubkeys()
 
-			cosigners = make([]*secp256k1.PublicKey, 0, len(cosignersPubKeysHex))
+			cosigners := make([]*secp256k1.PublicKey, 0, len(cosignersPubKeysHex))
 
 			for _, pubkeyHex := range cosignersPubKeysHex {
 				pubkeyBytes, err := hex.DecodeString(pubkeyHex)
@@ -322,6 +321,10 @@ func handleRoundStream(
 				return "", err
 			}
 
+			if err := treeSignerSession.SetKeys(cosigners); err != nil {
+				return "", err
+			}
+
 			var nonceBuffer bytes.Buffer
 
 			if err := nonces.Encode(&nonceBuffer); err != nil {
@@ -347,10 +350,6 @@ func handleRoundStream(
 			pingStop()
 			fmt.Println("nonces generated, signing the tree...")
 
-			if len(cosigners) == 0 {
-				return "", fmt.Errorf("cosigners not set")
-			}
-
 			if treeSignerSession == nil {
 				return "", fmt.Errorf("tree signer session not set")
 			}
@@ -365,7 +364,7 @@ func handleRoundStream(
 				return "", err
 			}
 
-			if err := treeSignerSession.SetKeys(cosigners, combinedNonces); err != nil {
+			if err := treeSignerSession.SetAggregatedNonces(combinedNonces); err != nil {
 				return "", err
 			}
 
