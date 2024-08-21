@@ -44,12 +44,11 @@ type covenantlessService struct {
 
 	currentRound *domain.Round
 
-	asyncPaymentsCache map[domain.VtxoKey]struct {
+	treeSigningSessions map[string]*musigSigningSession
+	asyncPaymentsCache  map[domain.VtxoKey]struct {
 		receivers []domain.Receiver
 		expireAt  int64
 	}
-
-	treeSigningSessions map[string]*musigSigningSession
 }
 
 func NewCovenantlessService(
@@ -92,6 +91,7 @@ func NewCovenantlessService(
 		eventsCh:            eventsCh,
 		onboardingCh:        onboardingCh,
 		asyncPaymentsCache:  asyncPaymentsCache,
+		treeSigningSessions: make(map[string]*musigSigningSession),
 	}
 
 	repoManager.RegisterEventsHandler(
@@ -395,7 +395,7 @@ func (s *covenantlessService) RegisterCosignerNonces(
 
 	session.nonces[pubkey] = nonces
 
-	if len(session.nonces) == session.nbCosigners {
+	if len(session.nonces) == session.nbCosigners-1 { // exclude the ASP
 		session.nonceDoneC <- struct{}{}
 	}
 
@@ -419,7 +419,7 @@ func (s *covenantlessService) RegisterCosignerSignatures(
 
 	session.signatures[pubkey] = signatures
 
-	if len(session.signatures) == session.nbCosigners {
+	if len(session.signatures) == session.nbCosigners-1 { // exclude the ASP
 		session.sigDoneC <- struct{}{}
 	}
 
@@ -448,8 +448,12 @@ func (s *covenantlessService) startFinalization() {
 	ctx := context.Background()
 	round := s.currentRound
 
+	roundRemainingDuration := time.Duration(s.roundInterval/2-1) * time.Second
+	thirdOfRemainingDuration := time.Duration(roundRemainingDuration / 3)
+
 	var roundAborted bool
 	defer func() {
+		delete(s.treeSigningSessions, round.Id)
 		if roundAborted {
 			s.startRound()
 			return
@@ -463,7 +467,7 @@ func (s *covenantlessService) startFinalization() {
 			s.startRound()
 			return
 		}
-		time.Sleep(time.Duration((s.roundInterval/2)-1) * time.Second)
+		time.Sleep(thirdOfRemainingDuration)
 		s.finalizeRound()
 	}()
 
@@ -527,15 +531,15 @@ func (s *covenantlessService) startFinalization() {
 	log.Debugf("pool tx created for round %s", round.Id)
 
 	if len(tree) > 0 {
+		log.Debugf("signing congestion tree for round %s", round.Id)
+
 		signingSession := newMusigSigningSession(len(cosigners))
 		s.treeSigningSessions[round.Id] = signingSession
-		defer delete(s.treeSigningSessions, round.Id)
+
+		log.Debugf("signing session created for round %s", round.Id)
 
 		// send back the unsigned tree & all cosigners pubkeys
-		go s.propagateRoundSigningStartedEvent(tree, cosigners)
-
-		noncesTimer := time.NewTimer(time.Duration((s.roundInterval/2)-1) * time.Second)
-		defer noncesTimer.Stop()
+		s.propagateRoundSigningStartedEvent(tree, cosigners)
 
 		sweepClosure := bitcointree.CSVSigClosure{
 			Pubkey:  s.pubkey,
@@ -577,6 +581,8 @@ func (s *covenantlessService) startFinalization() {
 			return
 		}
 
+		noncesTimer := time.NewTimer(thirdOfRemainingDuration)
+
 		select {
 		case <-noncesTimer.C:
 			roundAborted = true
@@ -584,6 +590,7 @@ func (s *covenantlessService) startFinalization() {
 			log.Warn("musig2 signing session timed out (nonce collection)")
 			return
 		case <-signingSession.nonceDoneC:
+			noncesTimer.Stop()
 			for pubkey, nonce := range signingSession.nonces {
 				if err := coordinator.AddNonce(pubkey, nonce); err != nil {
 					roundAborted = true
@@ -594,6 +601,8 @@ func (s *covenantlessService) startFinalization() {
 			}
 		}
 
+		log.Debugf("nonces collected for round %s", round.Id)
+
 		aggragatedNonces, err := coordinator.AggregateNonces()
 		if err != nil {
 			roundAborted = true
@@ -602,10 +611,9 @@ func (s *covenantlessService) startFinalization() {
 			return
 		}
 
-		go s.propagateRoundSigningNoncesGeneratedEvent(aggragatedNonces)
+		log.Debugf("nonces aggregated for round %s", round.Id)
 
-		signaturesTimer := time.NewTimer(time.Duration((s.roundInterval/2)-1) * time.Second)
-		defer signaturesTimer.Stop()
+		s.propagateRoundSigningNoncesGeneratedEvent(aggragatedNonces)
 
 		if err := aspSignerSession.SetKeys(cosigners, aggragatedNonces); err != nil {
 			roundAborted = true
@@ -614,6 +622,28 @@ func (s *covenantlessService) startFinalization() {
 			return
 		}
 
+		// sign the tree as ASP
+		aspTreeSigs, err := aspSignerSession.Sign()
+		if err != nil {
+			roundAborted = true
+			round.Fail(fmt.Errorf("failed to sign tree: %s", err))
+			log.WithError(err).Warn("failed to sign tree")
+			return
+		}
+
+		if err := coordinator.AddSig(ephemeralKey.PubKey(), aspTreeSigs); err != nil {
+			roundAborted = true
+			round.Fail(fmt.Errorf("failed to add signature: %s", err))
+			log.WithError(err).Warn("failed to add signature")
+			return
+		}
+
+		log.Debugf("ASP tree signed for round %s", round.Id)
+
+		signaturesTimer := time.NewTimer(thirdOfRemainingDuration)
+
+		log.Debugf("waiting for cosigners to sign the tree")
+
 		select {
 		case <-signaturesTimer.C:
 			roundAborted = true
@@ -621,6 +651,7 @@ func (s *covenantlessService) startFinalization() {
 			log.Warn("musig2 signing session timed out (signatures)")
 			return
 		case <-signingSession.sigDoneC:
+			signaturesTimer.Stop()
 			for pubkey, sig := range signingSession.signatures {
 				if err := coordinator.AddSig(pubkey, sig); err != nil {
 					roundAborted = true
@@ -631,12 +662,17 @@ func (s *covenantlessService) startFinalization() {
 			}
 		}
 
+		log.Debugf("signatures collected for round %s", round.Id)
+
 		signedTree, err := coordinator.SignTree()
 		if err != nil {
-			round.Fail(fmt.Errorf("failed to sign tree: %s", err))
-			log.WithError(err).Warn("failed to sign tree")
+			roundAborted = true
+			round.Fail(fmt.Errorf("failed to aggragate tree signatures: %s", err))
+			log.WithError(err).Warn("failed aggragate tree signatures")
 			return
 		}
+
+		log.Debugf("congestion tree signed for round %s", round.Id)
 
 		tree = signedTree
 	}
