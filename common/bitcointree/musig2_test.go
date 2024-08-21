@@ -128,18 +128,30 @@ func TestRoundTripSignTree(t *testing.T) {
 
 		err = aliceSession.SetKeys(
 			cosigners,
+		)
+		require.NoError(t, err)
+
+		err = aliceSession.SetAggregatedNonces(
 			aggregatedNonce,
 		)
 		require.NoError(t, err)
 
 		err = bobSession.SetKeys(
 			cosigners,
+		)
+		require.NoError(t, err)
+
+		err = bobSession.SetAggregatedNonces(
 			aggregatedNonce,
 		)
 		require.NoError(t, err)
 
 		err = aspSession.SetKeys(
 			cosigners,
+		)
+		require.NoError(t, err)
+
+		err = aspSession.SetAggregatedNonces(
 			aggregatedNonce,
 		)
 		require.NoError(t, err)

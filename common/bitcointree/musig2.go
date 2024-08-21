@@ -49,9 +49,10 @@ type TreeNonces [][]*Musig2Nonce // public nonces
 type TreePartialSigs [][]*musig2.PartialSignature
 
 type SignerSession interface {
-	GetNonces() (TreeNonces, error)               // generate of return cached nonce for this session
-	SetKeys([]*btcec.PublicKey, TreeNonces) error // set the keys for this session (with the combined nonces)
-	Sign() (TreePartialSigs, error)               // sign the tree
+	GetNonces() (TreeNonces, error)       // generate of return cached nonce for this session
+	SetKeys([]*btcec.PublicKey) error     // set the keys for this session
+	SetAggregatedNonces(TreeNonces) error // set the aggregated nonces
+	Sign() (TreePartialSigs, error)       // sign the tree
 }
 
 type CoordinatorSession interface {
@@ -229,13 +230,9 @@ func (t *treeSignerSession) GetNonces() (TreeNonces, error) {
 	return nonces, nil
 }
 
-func (t *treeSignerSession) SetKeys(keys []*btcec.PublicKey, nonces TreeNonces) error {
+func (t *treeSignerSession) SetKeys(keys []*btcec.PublicKey) error {
 	if t.keys != nil {
 		return errors.New("keys already set")
-	}
-
-	if t.aggregateNonces != nil {
-		return errors.New("nonces already set")
 	}
 
 	aggregateKey, err := AggregateKeys(keys, t.scriptRoot)
@@ -249,9 +246,17 @@ func (t *treeSignerSession) SetKeys(keys []*btcec.PublicKey, nonces TreeNonces) 
 	}
 
 	t.prevoutFetcher = prevoutFetcher
-	t.aggregateNonces = nonces
 	t.keys = keys
 
+	return nil
+}
+
+func (t *treeSignerSession) SetAggregatedNonces(nonces TreeNonces) error {
+	if t.aggregateNonces != nil {
+		return errors.New("nonces already set")
+	}
+
+	t.aggregateNonces = nonces
 	return nil
 }
 
