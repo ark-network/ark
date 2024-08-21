@@ -83,7 +83,6 @@ service ArkService {
       body: "*"
     };
   }
- 
 }
 
 message CreatePaymentRequest {
