@@ -26,7 +26,7 @@ type Service interface {
 	GetEventsChannel(ctx context.Context) <-chan interface{}
 	UpdatePaymentStatus(
 		ctx context.Context, paymentId string,
-	) (unsignedForfeitTxs []string, currentRound *domain.Round, err error)
+	) (lastEvent interface{}, err error)
 	ListVtxos(
 		ctx context.Context, pubkey *secp256k1.PublicKey,
 	) (spendableVtxos, spentVtxos []domain.Vtxo, err error)

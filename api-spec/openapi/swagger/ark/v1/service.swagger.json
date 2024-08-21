@@ -717,14 +717,20 @@
     "v1PingResponse": {
       "type": "object",
       "properties": {
-        "forfeitTxs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "event": {
+        "roundFinalization": {
           "$ref": "#/definitions/v1RoundFinalizationEvent"
+        },
+        "roundFinalized": {
+          "$ref": "#/definitions/v1RoundFinalizedEvent"
+        },
+        "roundFailed": {
+          "$ref": "#/definitions/v1RoundFailed"
+        },
+        "roundSigning": {
+          "$ref": "#/definitions/v1RoundSigningEvent"
+        },
+        "roundSigningNoncesGenerated": {
+          "$ref": "#/definitions/v1RoundSigningNoncesGeneratedEvent"
         }
       }
     },

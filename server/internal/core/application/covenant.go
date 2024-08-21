@@ -42,6 +42,7 @@ type covenantService struct {
 	onboardingCh chan onboarding
 
 	currentRound *domain.Round
+	lastEvent    interface{}
 }
 
 func NewCovenantService(
@@ -67,7 +68,7 @@ func NewCovenantService(
 		network, pubkey,
 		roundLifetime, roundInterval, unilateralExitDelay, minRelayFee,
 		walletSvc, repoManager, builder, scanner, sweeper,
-		paymentRequests, forfeitTxs, eventsCh, onboardingCh, nil,
+		paymentRequests, forfeitTxs, eventsCh, onboardingCh, nil, nil,
 	}
 	repoManager.RegisterEventsHandler(
 		func(round *domain.Round) {
@@ -149,17 +150,17 @@ func (s *covenantService) ClaimVtxos(ctx context.Context, creds string, receiver
 	return s.paymentRequests.update(*payment)
 }
 
-func (s *covenantService) UpdatePaymentStatus(_ context.Context, id string) ([]string, *domain.Round, error) {
+func (s *covenantService) UpdatePaymentStatus(_ context.Context, id string) (interface{}, error) {
 	err := s.paymentRequests.updatePingTimestamp(id)
 	if err != nil {
 		if _, ok := err.(errPaymentNotFound); ok {
-			return s.forfeitTxs.view(), s.currentRound, nil
+			return s.lastEvent, nil
 		}
 
-		return nil, nil, err
+		return nil, err
 	}
 
-	return nil, nil, nil
+	return s.lastEvent, nil
 }
 
 func (s *covenantService) CompleteAsyncPayment(ctx context.Context, redeemTx string, unconditionalForfeitTxs []string) error {
@@ -273,6 +274,7 @@ func (s *covenantService) startRound() {
 	round := domain.NewRound(dustAmount)
 	//nolint:all
 	round.StartRegistration()
+	s.lastEvent = nil
 	s.currentRound = round
 
 	defer func() {
@@ -687,14 +689,17 @@ func (s *covenantService) propagateEvents(round *domain.Round) {
 	switch e := lastEvent.(type) {
 	case domain.RoundFinalizationStarted:
 		forfeitTxs := s.forfeitTxs.view()
-		s.eventsCh <- domain.RoundFinalizationStarted{
+		ev := domain.RoundFinalizationStarted{
 			Id:                 e.Id,
 			CongestionTree:     e.CongestionTree,
 			Connectors:         e.Connectors,
 			PoolTx:             e.PoolTx,
 			UnsignedForfeitTxs: forfeitTxs,
 		}
+		s.lastEvent = ev
+		s.eventsCh <- ev
 	case domain.RoundFinalized, domain.RoundFailed:
+		s.lastEvent = e
 		s.eventsCh <- e
 	}
 }

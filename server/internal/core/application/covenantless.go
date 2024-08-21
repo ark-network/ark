@@ -42,6 +42,7 @@ type covenantlessService struct {
 	eventsCh     chan interface{}
 	onboardingCh chan onboarding
 
+	lastEvent    interface{}
 	currentRound *domain.Round
 
 	treeSigningSessions map[string]*musigSigningSession
@@ -276,17 +277,17 @@ func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, rece
 	return s.paymentRequests.update(*payment)
 }
 
-func (s *covenantlessService) UpdatePaymentStatus(_ context.Context, id string) ([]string, *domain.Round, error) {
+func (s *covenantlessService) UpdatePaymentStatus(_ context.Context, id string) (interface{}, error) {
 	err := s.paymentRequests.updatePingTimestamp(id)
 	if err != nil {
 		if _, ok := err.(errPaymentNotFound); ok {
-			return s.forfeitTxs.view(), s.currentRound, nil
+			return s.lastEvent, nil
 		}
 
-		return nil, nil, err
+		return nil, err
 	}
 
-	return nil, nil, nil
+	return s.lastEvent, nil
 }
 
 func (s *covenantlessService) SignVtxos(ctx context.Context, forfeitTxs []string) error {
@@ -434,6 +435,7 @@ func (s *covenantlessService) startRound() {
 	round := domain.NewRound(dustAmount) // TODO dynamic dust amount?
 	//nolint:all
 	round.StartRegistration()
+	s.lastEvent = nil
 	s.currentRound = round
 
 	defer func() {
@@ -615,10 +617,17 @@ func (s *covenantlessService) startFinalization() {
 
 		s.propagateRoundSigningNoncesGeneratedEvent(aggragatedNonces)
 
-		if err := aspSignerSession.SetKeys(cosigners, aggragatedNonces); err != nil {
+		if err := aspSignerSession.SetKeys(cosigners); err != nil {
 			roundAborted = true
 			round.Fail(fmt.Errorf("failed to set keys: %s", err))
 			log.WithError(err).Warn("failed to set keys")
+			return
+		}
+
+		if err := aspSignerSession.SetAggregatedNonces(aggragatedNonces); err != nil {
+			roundAborted = true
+			round.Fail(fmt.Errorf("failed to set aggregated nonces: %s", err))
+			log.WithError(err).Warn("failed to set aggregated nonces")
 			return
 		}
 
@@ -702,18 +711,24 @@ func (s *covenantlessService) startFinalization() {
 func (s *covenantlessService) propagateRoundSigningStartedEvent(
 	unsignedCongestionTree tree.CongestionTree, cosigners []*secp256k1.PublicKey,
 ) {
-	s.eventsCh <- covenantlessevent.RoundSigningStarted{
+	ev := covenantlessevent.RoundSigningStarted{
 		Id:                     s.currentRound.Id,
 		UnsignedCongestionTree: unsignedCongestionTree,
 		Cosigners:              cosigners,
 	}
+
+	s.lastEvent = ev
+	s.eventsCh <- ev
 }
 
 func (s *covenantlessService) propagateRoundSigningNoncesGeneratedEvent(aggragatedNonces bitcointree.TreeNonces) {
-	s.eventsCh <- covenantlessevent.RoundSigningNoncesGenerated{
+	ev := covenantlessevent.RoundSigningNoncesGenerated{
 		Id:     s.currentRound.Id,
 		Nonces: aggragatedNonces,
 	}
+
+	s.lastEvent = ev
+	s.eventsCh <- ev
 }
 
 func (s *covenantlessService) createTreeCoordinatorSession(
@@ -1038,14 +1053,17 @@ func (s *covenantlessService) propagateEvents(round *domain.Round) {
 	switch e := lastEvent.(type) {
 	case domain.RoundFinalizationStarted:
 		forfeitTxs := s.forfeitTxs.view()
-		s.eventsCh <- domain.RoundFinalizationStarted{
+		ev := domain.RoundFinalizationStarted{
 			Id:                 e.Id,
 			CongestionTree:     e.CongestionTree,
 			Connectors:         e.Connectors,
 			PoolTx:             e.PoolTx,
 			UnsignedForfeitTxs: forfeitTxs,
 		}
+		s.lastEvent = ev
+		s.eventsCh <- ev
 	case domain.RoundFinalized, domain.RoundFailed:
+		s.lastEvent = e
 		s.eventsCh <- e
 	}
 }

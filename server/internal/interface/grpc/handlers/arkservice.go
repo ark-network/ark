@@ -122,25 +122,77 @@ func (h *handler) Ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.Ping
 		return nil, status.Error(codes.InvalidArgument, "missing payment id")
 	}
 
-	forfeits, round, err := h.svc.UpdatePaymentStatus(ctx, req.GetPaymentId())
+	lastEvent, err := h.svc.UpdatePaymentStatus(ctx, req.GetPaymentId())
 	if err != nil {
 		return nil, err
 	}
 
-	var event *arkv1.RoundFinalizationEvent
-	if round != nil {
-		event = &arkv1.RoundFinalizationEvent{
-			Id:             round.Id,
-			PoolTx:         round.UnsignedTx,
-			ForfeitTxs:     forfeits,
-			CongestionTree: castCongestionTree(round.CongestionTree),
-			Connectors:     round.Connectors,
+	var resp *arkv1.PingResponse
+
+	switch e := lastEvent.(type) {
+	case domain.RoundFinalizationStarted:
+		resp = &arkv1.PingResponse{
+			Event: &arkv1.PingResponse_RoundFinalization{
+				RoundFinalization: &arkv1.RoundFinalizationEvent{
+					Id:             e.Id,
+					PoolTx:         e.PoolTx,
+					CongestionTree: castCongestionTree(e.CongestionTree),
+					ForfeitTxs:     e.UnsignedForfeitTxs,
+					Connectors:     e.Connectors,
+				},
+			},
+		}
+	case domain.RoundFinalized:
+		resp = &arkv1.PingResponse{
+			Event: &arkv1.PingResponse_RoundFinalized{
+				RoundFinalized: &arkv1.RoundFinalizedEvent{
+					Id:       e.Id,
+					PoolTxid: e.Txid,
+				},
+			},
+		}
+	case domain.RoundFailed:
+		resp = &arkv1.PingResponse{
+			Event: &arkv1.PingResponse_RoundFailed{
+				RoundFailed: &arkv1.RoundFailed{
+					Id:     e.Id,
+					Reason: e.Err,
+				},
+			},
+		}
+	case covenantlessevent.RoundSigningStarted:
+		cosignersKeys := make([]string, 0, len(e.Cosigners))
+		for _, key := range e.Cosigners {
+			cosignersKeys = append(cosignersKeys, hex.EncodeToString(key.SerializeCompressed()))
+		}
+
+		resp = &arkv1.PingResponse{
+			Event: &arkv1.PingResponse_RoundSigning{
+				RoundSigning: &arkv1.RoundSigningEvent{
+					Id:               e.Id,
+					CosignersPubkeys: cosignersKeys,
+					UnsignedTree:     castCongestionTree(e.UnsignedCongestionTree),
+				},
+			},
+		}
+	case covenantlessevent.RoundSigningNoncesGenerated:
+		serialized, err := e.SerializeNonces()
+		if err != nil {
+			logrus.WithError(err).Error("failed to serialize nonces")
+			return nil, status.Error(codes.Internal, "failed to serialize nonces")
+		}
+
+		resp = &arkv1.PingResponse{
+			Event: &arkv1.PingResponse_RoundSigningNoncesGenerated{
+				RoundSigningNoncesGenerated: &arkv1.RoundSigningNoncesGeneratedEvent{
+					Id:         e.Id,
+					TreeNonces: serialized,
+				},
+			},
 		}
 	}
-	return &arkv1.PingResponse{
-		ForfeitTxs: forfeits,
-		Event:      event,
-	}, nil
+
+	return resp, nil
 }
 
 func (h *handler) RegisterPayment(ctx context.Context, req *arkv1.RegisterPaymentRequest) (*arkv1.RegisterPaymentResponse, error) {
