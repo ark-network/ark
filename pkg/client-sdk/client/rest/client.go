@@ -1,7 +1,9 @@
 package restclient
 
 import (
+	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -9,16 +11,16 @@ import (
 	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/arkservice"
 	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/arkservice/ark_service"
 	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/models"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
-	"github.com/btcsuite/btcd/btcutil/psbt"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
-	"github.com/vulpemventures/go-elements/psetv2"
 )
 
 type restClient struct {
@@ -71,39 +73,7 @@ func (a *restClient) GetEventStream(
 
 				if event != nil {
 					a.eventsCh <- client.RoundEventChannel{
-						Event: *event,
-					}
-
-					for {
-						roundID := event.ID
-						round, err := a.GetRoundByID(ctx, roundID)
-						if err != nil {
-							a.eventsCh <- client.RoundEventChannel{
-								Err: err,
-							}
-							return
-						}
-
-						if round.Stage == client.RoundStageFinalized {
-							a.eventsCh <- client.RoundEventChannel{
-								Event: client.RoundFinalizedEvent{
-									ID:   roundID,
-									Txid: getTxid(round.Tx),
-								},
-							}
-							return
-						}
-
-						if round.Stage == client.RoundStageFailed {
-							a.eventsCh <- client.RoundEventChannel{
-								Event: client.RoundFailedEvent{
-									ID: roundID,
-								},
-							}
-							return
-						}
-
-						time.Sleep(1 * time.Second)
+						Event: event,
 					}
 				}
 
@@ -331,7 +301,7 @@ func (a *restClient) ClaimPayment(
 
 func (a *restClient) Ping(
 	ctx context.Context, paymentID string,
-) (*client.RoundFinalizationEvent, error) {
+) (client.RoundEvent, error) {
 	r := ark_service.NewArkServicePingParams()
 	r.SetPaymentID(paymentID)
 	resp, err := a.svc.ArkServicePing(r)
@@ -339,18 +309,65 @@ func (a *restClient) Ping(
 		return nil, err
 	}
 
-	var event *client.RoundFinalizationEvent
-	if resp.Payload.Event != nil {
-		event = &client.RoundFinalizationEvent{
-			ID:         resp.Payload.Event.ID,
-			Tx:         resp.Payload.Event.PoolTx,
-			ForfeitTxs: resp.Payload.Event.ForfeitTxs,
-			Tree:       treeFromProto{resp.Payload.Event.CongestionTree}.parse(),
-			Connectors: resp.Payload.Event.Connectors,
-		}
+	payload := resp.Payload
+
+	if e := payload.RoundFailed; e != nil {
+		return client.RoundFailedEvent{
+			ID:     e.ID,
+			Reason: e.Reason,
+		}, nil
+	}
+	if e := payload.RoundFinalization; e != nil {
+		tree := treeFromProto{e.CongestionTree}.parse()
+		return client.RoundFinalizationEvent{
+			ID:         e.ID,
+			Tx:         e.PoolTx,
+			ForfeitTxs: e.ForfeitTxs,
+			Tree:       tree,
+			Connectors: e.Connectors,
+		}, nil
 	}
 
-	return event, nil
+	if e := payload.RoundFinalized; e != nil {
+		return client.RoundFinalizedEvent{
+			ID:   e.ID,
+			Txid: e.PoolTxid,
+		}, nil
+	}
+
+	if e := payload.RoundSigning; e != nil {
+		pubkeys := make([]*secp256k1.PublicKey, 0, len(e.CosignersPubkeys))
+		for _, pubkey := range e.CosignersPubkeys {
+			p, err := hex.DecodeString(pubkey)
+			if err != nil {
+				return nil, err
+			}
+			pk, err := secp256k1.ParsePubKey(p)
+			if err != nil {
+				return nil, err
+			}
+			pubkeys = append(pubkeys, pk)
+		}
+
+		return client.RoundSigningStartedEvent{
+			ID:                  e.ID,
+			UnsignedTree:        treeFromProto{e.UnsignedTree}.parse(),
+			CosignersPublicKeys: pubkeys,
+		}, nil
+	}
+
+	if e := payload.RoundSigningNoncesGenerated; e != nil {
+		nonces, err := bitcointree.DecodeNonces(hex.NewDecoder(strings.NewReader(e.TreeNonces)))
+		if err != nil {
+			return nil, err
+		}
+		return client.RoundSigningNoncesGeneratedEvent{
+			ID:     e.ID,
+			Nonces: nonces,
+		}, nil
+	}
+
+	return nil, nil
 }
 
 func (a *restClient) FinalizePayment(
@@ -454,6 +471,58 @@ func (a *restClient) GetRoundByID(
 	}, nil
 }
 
+func (a *restClient) SendTreeNonces(
+	ctx context.Context, roundID, cosignerPubkey string, nonces bitcointree.TreeNonces,
+) error {
+	var nonceBuffer bytes.Buffer
+
+	if err := nonces.Encode(&nonceBuffer); err != nil {
+		return err
+	}
+
+	serializedNonces := hex.EncodeToString(nonceBuffer.Bytes())
+
+	body := &models.V1SendTreeNoncesRequest{
+		RoundID:    roundID,
+		PublicKey:  cosignerPubkey,
+		TreeNonces: serializedNonces,
+	}
+
+	if _, err := a.svc.ArkServiceSendTreeNonces(
+		ark_service.NewArkServiceSendTreeNoncesParams().WithBody(body),
+	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (a *restClient) SendTreeSignatures(
+	ctx context.Context, roundID, cosignerPubkey string, signatures bitcointree.TreePartialSigs,
+) error {
+	var sigsBuffer bytes.Buffer
+
+	if err := signatures.Encode(&sigsBuffer); err != nil {
+		return err
+	}
+
+	serializedSigs := hex.EncodeToString(sigsBuffer.Bytes())
+
+	body := &models.V1SendTreeSignaturesRequest{
+		RoundID:        roundID,
+		PublicKey:      cosignerPubkey,
+		TreeSignatures: serializedSigs,
+	}
+
+	if _, err := a.svc.ArkServiceSendTreeSignatures(
+		ark_service.NewArkServiceSendTreeSignaturesParams().WithBody(body),
+	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func newRestClient(
 	serviceURL string,
 ) (ark_service.ClientService, error) {
@@ -550,14 +619,4 @@ func (t treeToProto) parse() *models.V1Tree {
 	return &models.V1Tree{
 		Levels: levels,
 	}
-}
-
-func getTxid(tx string) string {
-	if ptx, _ := psetv2.NewPsetFromBase64(tx); ptx != nil {
-		utx, _ := ptx.UnsignedTx()
-		return utx.TxHash().String()
-	}
-
-	ptx, _ := psbt.NewFromRawBytes(strings.NewReader(tx), true)
-	return ptx.UnsignedTx.TxID()
 }

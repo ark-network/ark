@@ -262,7 +262,11 @@ func (a *covenantlessArkClient) Onboard(
 		return "", err
 	}
 
-	if err := signer.SetKeys(cosigners, aggregatedNonces); err != nil {
+	if err := signer.SetKeys(cosigners); err != nil {
+		return "", err
+	}
+
+	if err := signer.SetAggregatedNonces(aggregatedNonces); err != nil {
 		return "", err
 	}
 
@@ -1158,6 +1162,9 @@ func (a *covenantlessArkClient) handleRoundStream(
 
 	defer pingStop()
 
+	var ephemeralKey *secp256k1.PrivateKey
+	var signerSession bitcointree.SignerSession
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -1172,6 +1179,25 @@ func (a *covenantlessArkClient) handleRoundStream(
 				return event.(client.RoundFinalizedEvent).Txid, nil
 			case client.RoundFailedEvent:
 				return "", fmt.Errorf("round failed: %s", event.(client.RoundFailedEvent).Reason)
+			case client.RoundSigningStartedEvent:
+				pingStop()
+				log.Info("a round signing started")
+				ephemeralKey, signerSession, err = a.handleRoundSigningStarted(
+					ctx, event.(client.RoundSigningStartedEvent),
+				)
+				if err != nil {
+					return "", err
+				}
+				continue
+			case client.RoundSigningNoncesGeneratedEvent:
+				pingStop()
+				log.Info("round combined nonces generated")
+				if err := a.handleRoundSigningNoncesGenerated(
+					ctx, event.(client.RoundSigningNoncesGeneratedEvent), ephemeralKey, signerSession,
+				); err != nil {
+					return "", err
+				}
+				continue
 			case client.RoundFinalizationEvent:
 				pingStop()
 				log.Info("a round finalization started")
@@ -1198,6 +1224,82 @@ func (a *covenantlessArkClient) handleRoundStream(
 			}
 		}
 	}
+}
+
+func (a *covenantlessArkClient) handleRoundSigningStarted(
+	ctx context.Context, event client.RoundSigningStartedEvent,
+) (ephemeralKey *secp256k1.PrivateKey, signerSession bitcointree.SignerSession, err error) {
+	sweepClosure := bitcointree.CSVSigClosure{
+		Pubkey:  a.AspPubkey,
+		Seconds: uint(a.RoundLifetime),
+	}
+
+	sweepTapLeaf, err := sweepClosure.Leaf()
+	if err != nil {
+		return
+	}
+
+	sweepTapTree := txscript.AssembleTaprootScriptTree(*sweepTapLeaf)
+	root := sweepTapTree.RootNode.TapHash()
+
+	signerSession = bitcointree.NewTreeSignerSession(
+		ephemeralKey, event.UnsignedTree, int64(a.MinRelayFee), root.CloneBytes(),
+	)
+
+	if err = signerSession.SetKeys(event.CosignersPublicKeys); err != nil {
+		return
+	}
+
+	nonces, err := signerSession.GetNonces()
+	if err != nil {
+		return
+	}
+
+	ephemeralKey, err = secp256k1.GeneratePrivateKey()
+	if err != nil {
+		return
+	}
+
+	myPubKey := hex.EncodeToString(ephemeralKey.PubKey().SerializeCompressed())
+
+	err = a.arkClient.client.SendTreeNonces(ctx, event.ID, myPubKey, nonces)
+
+	return
+}
+
+func (a *covenantlessArkClient) handleRoundSigningNoncesGenerated(
+	ctx context.Context,
+	event client.RoundSigningNoncesGeneratedEvent,
+	ephemeralKey *secp256k1.PrivateKey,
+	signerSession bitcointree.SignerSession,
+) error {
+	if signerSession == nil {
+		return fmt.Errorf("tree signer session not set")
+	}
+
+	if ephemeralKey == nil {
+		return fmt.Errorf("ephemeral key not set")
+	}
+
+	if err := signerSession.SetAggregatedNonces(event.Nonces); err != nil {
+		return err
+	}
+
+	sigs, err := signerSession.Sign()
+	if err != nil {
+		return err
+	}
+
+	if err := a.arkClient.client.SendTreeSignatures(
+		ctx,
+		event.ID,
+		hex.EncodeToString(ephemeralKey.PubKey().SerializeCompressed()),
+		sigs,
+	); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (a *covenantlessArkClient) handleRoundFinalization(
