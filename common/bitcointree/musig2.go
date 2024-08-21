@@ -3,6 +3,7 @@ package bitcointree
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
 var (
@@ -409,10 +411,15 @@ func (t *treeCoordinatorSession) AggregateNonces() (TreeNonces, error) {
 
 // SignTree implements CoordinatorSession.
 func (t *treeCoordinatorSession) SignTree() (tree.CongestionTree, error) {
+	var missingSigs int
 	for _, sig := range t.sigs {
 		if sig == nil {
-			return nil, errors.New("signatures not set")
+			missingSigs++
 		}
+	}
+
+	if missingSigs > 0 {
+		return nil, fmt.Errorf("missing %d signature(s)", missingSigs)
 	}
 
 	aggregatedKey, err := AggregateKeys(t.keys, t.scriptRoot)
@@ -427,9 +434,18 @@ func (t *treeCoordinatorSession) SignTree() (tree.CongestionTree, error) {
 				return nil, err
 			}
 
+			var combinedNonce *secp256k1.PublicKey
 			sigs := make([]*musig2.PartialSignature, 0)
 			for _, sig := range t.sigs {
-				sigs = append(sigs, sig[i][j])
+				s := sig[i][j]
+				if s.R != nil {
+					combinedNonce = s.R
+				}
+				sigs = append(sigs, s)
+			}
+
+			if combinedNonce == nil {
+				return nil, errors.New("missing combined nonce")
 			}
 
 			inputFetcher := t.prevoutFetcher(partialTx)
@@ -443,7 +459,7 @@ func (t *treeCoordinatorSession) SignTree() (tree.CongestionTree, error) {
 			)
 
 			combinedSig := musig2.CombineSigs(
-				sigs[0].R, sigs,
+				combinedNonce, sigs,
 				musig2.WithTaprootTweakedCombine([32]byte(message), t.keys, t.scriptRoot, true),
 			)
 			if err != nil {
