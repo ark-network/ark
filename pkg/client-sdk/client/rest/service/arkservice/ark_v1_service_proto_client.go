@@ -8,7 +8,8 @@ package arkservice
 import (
 	"github.com/go-openapi/runtime"
 	httptransport "github.com/go-openapi/runtime/client"
-	"github.com/go-openapi/strfmt"
+
+	strfmt "github.com/go-openapi/strfmt"
 
 	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/arkservice/ark_service"
 )
@@ -55,7 +56,9 @@ func New(transport runtime.ClientTransport, formats strfmt.Registry) *ArkV1Servi
 
 	cli := new(ArkV1ServiceProto)
 	cli.Transport = transport
+
 	cli.ArkService = ark_service.New(transport, formats)
+
 	return cli
 }
 
@@ -100,7 +103,7 @@ func (cfg *TransportConfig) WithSchemes(schemes []string) *TransportConfig {
 
 // ArkV1ServiceProto is a client for ark v1 service proto
 type ArkV1ServiceProto struct {
-	ArkService ark_service.ClientService
+	ArkService *ark_service.Client
 
 	Transport runtime.ClientTransport
 }
@@ -108,5 +111,7 @@ type ArkV1ServiceProto struct {
 // SetTransport changes the transport on the client and all its subresources
 func (c *ArkV1ServiceProto) SetTransport(transport runtime.ClientTransport) {
 	c.Transport = transport
+
 	c.ArkService.SetTransport(transport)
+
 }

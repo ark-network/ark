@@ -11,9 +11,21 @@ import (
 	"github.com/go-openapi/swag"
 )
 
-// V1Input v1 input
-// swagger:model v1Input
-type V1Input struct {
+// V1Payment v1 payment
+// swagger:model v1Payment
+type V1Payment struct {
+
+	// amount
+	Amount int64 `json:"amount,omitempty"`
+
+	// pending
+	Pending bool `json:"pending,omitempty"`
+
+	// pubkey
+	Pubkey string `json:"pubkey,omitempty"`
+
+	// spent
+	Spent bool `json:"spent,omitempty"`
 
 	// txid
 	Txid string `json:"txid,omitempty"`
@@ -22,13 +34,13 @@ type V1Input struct {
 	Vout int64 `json:"vout,omitempty"`
 }
 
-// Validate validates this v1 input
-func (m *V1Input) Validate(formats strfmt.Registry) error {
+// Validate validates this v1 payment
+func (m *V1Payment) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
 // MarshalBinary interface implementation
-func (m *V1Input) MarshalBinary() ([]byte, error) {
+func (m *V1Payment) MarshalBinary() ([]byte, error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -36,8 +48,8 @@ func (m *V1Input) MarshalBinary() ([]byte, error) {
 }
 
 // UnmarshalBinary interface implementation
-func (m *V1Input) UnmarshalBinary(b []byte) error {
-	var res V1Input
+func (m *V1Payment) UnmarshalBinary(b []byte) error {
+	var res V1Payment
 	if err := swag.ReadJSON(b, &res); err != nil {
 		return err
 	}

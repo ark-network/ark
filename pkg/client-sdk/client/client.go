@@ -114,6 +114,7 @@ type Round struct {
 	ForfeitTxs []string
 	Connectors []string
 	Stage      RoundStage
+	Payments   []Payment
 }
 
 type RoundFinalizationEvent struct {
@@ -139,3 +140,12 @@ type RoundFailedEvent struct {
 }
 
 func (e RoundFailedEvent) isRoundEvent() {}
+
+type Payment struct {
+	TxID    string
+	VOut    uint32
+	Spent   bool
+	Pending bool
+	Amount  uint64
+	PubKey  string
+}

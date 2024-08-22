@@ -6,16 +6,15 @@ package models
 // Editing this file might prove futile when you re-run the swagger generate command
 
 import (
-	"context"
 	"strconv"
 
+	strfmt "github.com/go-openapi/strfmt"
+
 	"github.com/go-openapi/errors"
-	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
 )
 
 // V1TreeLevel v1 tree level
-//
 // swagger:model v1TreeLevel
 type V1TreeLevel struct {
 
@@ -38,6 +37,7 @@ func (m *V1TreeLevel) Validate(formats strfmt.Registry) error {
 }
 
 func (m *V1TreeLevel) validateNodes(formats strfmt.Registry) error {
+
 	if swag.IsZero(m.Nodes) { // not required
 		return nil
 	}
@@ -51,47 +51,6 @@ func (m *V1TreeLevel) validateNodes(formats strfmt.Registry) error {
 			if err := m.Nodes[i].Validate(formats); err != nil {
 				if ve, ok := err.(*errors.Validation); ok {
 					return ve.ValidateName("nodes" + "." + strconv.Itoa(i))
-				} else if ce, ok := err.(*errors.CompositeError); ok {
-					return ce.ValidateName("nodes" + "." + strconv.Itoa(i))
-				}
-				return err
-			}
-		}
-
-	}
-
-	return nil
-}
-
-// ContextValidate validate this v1 tree level based on the context it is used
-func (m *V1TreeLevel) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
-	var res []error
-
-	if err := m.contextValidateNodes(ctx, formats); err != nil {
-		res = append(res, err)
-	}
-
-	if len(res) > 0 {
-		return errors.CompositeValidationError(res...)
-	}
-	return nil
-}
-
-func (m *V1TreeLevel) contextValidateNodes(ctx context.Context, formats strfmt.Registry) error {
-
-	for i := 0; i < len(m.Nodes); i++ {
-
-		if m.Nodes[i] != nil {
-
-			if swag.IsZero(m.Nodes[i]) { // not required
-				return nil
-			}
-
-			if err := m.Nodes[i].ContextValidate(ctx, formats); err != nil {
-				if ve, ok := err.(*errors.Validation); ok {
-					return ve.ValidateName("nodes" + "." + strconv.Itoa(i))
-				} else if ce, ok := err.(*errors.CompositeError); ok {
-					return ce.ValidateName("nodes" + "." + strconv.Itoa(i))
 				}
 				return err
 			}

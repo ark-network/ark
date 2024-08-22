@@ -766,6 +766,21 @@ func (a *covenantlessArkClient) ClaimAsync(
 	return a.selfTransferAllPendingPayments(ctx, pendingVtxos, receiver)
 }
 
+func (a *covenantlessArkClient) PaymentNotification(
+	ctx context.Context,
+	pubKey string,
+) (<-chan client.Payment, error) {
+	paymentsCh := make(chan client.Payment)
+	go func() {
+		defer close(paymentsCh)
+		err := a.listenForPayments(ctx, pubKey, paymentsCh)
+		if err != nil {
+			log.Printf("Error listening for payments: %v", err)
+		}
+	}()
+	return paymentsCh, nil
+}
+
 func (a *covenantlessArkClient) sendOnchain(
 	ctx context.Context, receivers []Receiver,
 ) (string, error) {

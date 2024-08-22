@@ -6,6 +6,5 @@ package models
 // Editing this file might prove futile when you re-run the swagger generate command
 
 // V1OnboardResponse v1 onboard response
-//
 // swagger:model v1OnboardResponse
 type V1OnboardResponse interface{}

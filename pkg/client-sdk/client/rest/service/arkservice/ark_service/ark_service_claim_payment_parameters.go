@@ -13,77 +13,62 @@ import (
 	"github.com/go-openapi/errors"
 	"github.com/go-openapi/runtime"
 	cr "github.com/go-openapi/runtime/client"
-	"github.com/go-openapi/strfmt"
 
-	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/models"
+	strfmt "github.com/go-openapi/strfmt"
+
+	models "github.com/ark-network/ark/pkg/client-sdk/client/rest/service/models"
 )
 
-// NewArkServiceClaimPaymentParams creates a new ArkServiceClaimPaymentParams object,
-// with the default timeout for this client.
-//
-// Default values are not hydrated, since defaults are normally applied by the API server side.
-//
-// To enforce default values in parameter, use SetDefaults or WithDefaults.
+// NewArkServiceClaimPaymentParams creates a new ArkServiceClaimPaymentParams object
+// with the default values initialized.
 func NewArkServiceClaimPaymentParams() *ArkServiceClaimPaymentParams {
+	var ()
 	return &ArkServiceClaimPaymentParams{
+
 		timeout: cr.DefaultTimeout,
 	}
 }
 
 // NewArkServiceClaimPaymentParamsWithTimeout creates a new ArkServiceClaimPaymentParams object
-// with the ability to set a timeout on a request.
+// with the default values initialized, and the ability to set a timeout on a request
 func NewArkServiceClaimPaymentParamsWithTimeout(timeout time.Duration) *ArkServiceClaimPaymentParams {
+	var ()
 	return &ArkServiceClaimPaymentParams{
+
 		timeout: timeout,
 	}
 }
 
 // NewArkServiceClaimPaymentParamsWithContext creates a new ArkServiceClaimPaymentParams object
-// with the ability to set a context for a request.
+// with the default values initialized, and the ability to set a context for a request
 func NewArkServiceClaimPaymentParamsWithContext(ctx context.Context) *ArkServiceClaimPaymentParams {
+	var ()
 	return &ArkServiceClaimPaymentParams{
+
 		Context: ctx,
 	}
 }
 
 // NewArkServiceClaimPaymentParamsWithHTTPClient creates a new ArkServiceClaimPaymentParams object
-// with the ability to set a custom HTTPClient for a request.
+// with the default values initialized, and the ability to set a custom HTTPClient for a request
 func NewArkServiceClaimPaymentParamsWithHTTPClient(client *http.Client) *ArkServiceClaimPaymentParams {
+	var ()
 	return &ArkServiceClaimPaymentParams{
 		HTTPClient: client,
 	}
 }
 
-/*
-ArkServiceClaimPaymentParams contains all the parameters to send to the API endpoint
-
-	for the ark service claim payment operation.
-
-	Typically these are written to a http.Request.
+/*ArkServiceClaimPaymentParams contains all the parameters to send to the API endpoint
+for the ark service claim payment operation typically these are written to a http.Request
 */
 type ArkServiceClaimPaymentParams struct {
 
-	// Body.
+	/*Body*/
 	Body *models.V1ClaimPaymentRequest
 
 	timeout    time.Duration
 	Context    context.Context
 	HTTPClient *http.Client
-}
-
-// WithDefaults hydrates default values in the ark service claim payment params (not the query body).
-//
-// All values with no default are reset to their zero value.
-func (o *ArkServiceClaimPaymentParams) WithDefaults() *ArkServiceClaimPaymentParams {
-	o.SetDefaults()
-	return o
-}
-
-// SetDefaults hydrates default values in the ark service claim payment params (not the query body).
-//
-// All values with no default are reset to their zero value.
-func (o *ArkServiceClaimPaymentParams) SetDefaults() {
-	// no default values defined for this parameter
 }
 
 // WithTimeout adds the timeout to the ark service claim payment params
@@ -137,6 +122,7 @@ func (o *ArkServiceClaimPaymentParams) WriteToRequest(r runtime.ClientRequest, r
 		return err
 	}
 	var res []error
+
 	if o.Body != nil {
 		if err := r.SetBodyParam(o.Body); err != nil {
 			return err

@@ -13,77 +13,62 @@ import (
 	"github.com/go-openapi/errors"
 	"github.com/go-openapi/runtime"
 	cr "github.com/go-openapi/runtime/client"
-	"github.com/go-openapi/strfmt"
 
-	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/models"
+	strfmt "github.com/go-openapi/strfmt"
+
+	models "github.com/ark-network/ark/pkg/client-sdk/client/rest/service/models"
 )
 
-// NewArkServiceFinalizePaymentParams creates a new ArkServiceFinalizePaymentParams object,
-// with the default timeout for this client.
-//
-// Default values are not hydrated, since defaults are normally applied by the API server side.
-//
-// To enforce default values in parameter, use SetDefaults or WithDefaults.
+// NewArkServiceFinalizePaymentParams creates a new ArkServiceFinalizePaymentParams object
+// with the default values initialized.
 func NewArkServiceFinalizePaymentParams() *ArkServiceFinalizePaymentParams {
+	var ()
 	return &ArkServiceFinalizePaymentParams{
+
 		timeout: cr.DefaultTimeout,
 	}
 }
 
 // NewArkServiceFinalizePaymentParamsWithTimeout creates a new ArkServiceFinalizePaymentParams object
-// with the ability to set a timeout on a request.
+// with the default values initialized, and the ability to set a timeout on a request
 func NewArkServiceFinalizePaymentParamsWithTimeout(timeout time.Duration) *ArkServiceFinalizePaymentParams {
+	var ()
 	return &ArkServiceFinalizePaymentParams{
+
 		timeout: timeout,
 	}
 }
 
 // NewArkServiceFinalizePaymentParamsWithContext creates a new ArkServiceFinalizePaymentParams object
-// with the ability to set a context for a request.
+// with the default values initialized, and the ability to set a context for a request
 func NewArkServiceFinalizePaymentParamsWithContext(ctx context.Context) *ArkServiceFinalizePaymentParams {
+	var ()
 	return &ArkServiceFinalizePaymentParams{
+
 		Context: ctx,
 	}
 }
 
 // NewArkServiceFinalizePaymentParamsWithHTTPClient creates a new ArkServiceFinalizePaymentParams object
-// with the ability to set a custom HTTPClient for a request.
+// with the default values initialized, and the ability to set a custom HTTPClient for a request
 func NewArkServiceFinalizePaymentParamsWithHTTPClient(client *http.Client) *ArkServiceFinalizePaymentParams {
+	var ()
 	return &ArkServiceFinalizePaymentParams{
 		HTTPClient: client,
 	}
 }
 
-/*
-ArkServiceFinalizePaymentParams contains all the parameters to send to the API endpoint
-
-	for the ark service finalize payment operation.
-
-	Typically these are written to a http.Request.
+/*ArkServiceFinalizePaymentParams contains all the parameters to send to the API endpoint
+for the ark service finalize payment operation typically these are written to a http.Request
 */
 type ArkServiceFinalizePaymentParams struct {
 
-	// Body.
+	/*Body*/
 	Body *models.V1FinalizePaymentRequest
 
 	timeout    time.Duration
 	Context    context.Context
 	HTTPClient *http.Client
-}
-
-// WithDefaults hydrates default values in the ark service finalize payment params (not the query body).
-//
-// All values with no default are reset to their zero value.
-func (o *ArkServiceFinalizePaymentParams) WithDefaults() *ArkServiceFinalizePaymentParams {
-	o.SetDefaults()
-	return o
-}
-
-// SetDefaults hydrates default values in the ark service finalize payment params (not the query body).
-//
-// All values with no default are reset to their zero value.
-func (o *ArkServiceFinalizePaymentParams) SetDefaults() {
-	// no default values defined for this parameter
 }
 
 // WithTimeout adds the timeout to the ark service finalize payment params
@@ -137,6 +122,7 @@ func (o *ArkServiceFinalizePaymentParams) WriteToRequest(r runtime.ClientRequest
 		return err
 	}
 	var res []error
+
 	if o.Body != nil {
 		if err := r.SetBodyParam(o.Body); err != nil {
 			return err

@@ -6,14 +6,12 @@ package models
 // Editing this file might prove futile when you re-run the swagger generate command
 
 import (
-	"context"
+	strfmt "github.com/go-openapi/strfmt"
 
-	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
 )
 
 // V1RegisterPaymentResponse v1 register payment response
-//
 // swagger:model v1RegisterPaymentResponse
 type V1RegisterPaymentResponse struct {
 
@@ -23,11 +21,6 @@ type V1RegisterPaymentResponse struct {
 
 // Validate validates this v1 register payment response
 func (m *V1RegisterPaymentResponse) Validate(formats strfmt.Registry) error {
-	return nil
-}
-
-// ContextValidate validates this v1 register payment response based on context it is used
-func (m *V1RegisterPaymentResponse) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	return nil
 }
 

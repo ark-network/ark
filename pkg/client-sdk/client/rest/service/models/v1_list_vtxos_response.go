@@ -6,16 +6,15 @@ package models
 // Editing this file might prove futile when you re-run the swagger generate command
 
 import (
-	"context"
 	"strconv"
 
+	strfmt "github.com/go-openapi/strfmt"
+
 	"github.com/go-openapi/errors"
-	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
 )
 
 // V1ListVtxosResponse v1 list vtxos response
-//
 // swagger:model v1ListVtxosResponse
 type V1ListVtxosResponse struct {
 
@@ -45,6 +44,7 @@ func (m *V1ListVtxosResponse) Validate(formats strfmt.Registry) error {
 }
 
 func (m *V1ListVtxosResponse) validateSpendableVtxos(formats strfmt.Registry) error {
+
 	if swag.IsZero(m.SpendableVtxos) { // not required
 		return nil
 	}
@@ -58,8 +58,6 @@ func (m *V1ListVtxosResponse) validateSpendableVtxos(formats strfmt.Registry) er
 			if err := m.SpendableVtxos[i].Validate(formats); err != nil {
 				if ve, ok := err.(*errors.Validation); ok {
 					return ve.ValidateName("spendableVtxos" + "." + strconv.Itoa(i))
-				} else if ce, ok := err.(*errors.CompositeError); ok {
-					return ce.ValidateName("spendableVtxos" + "." + strconv.Itoa(i))
 				}
 				return err
 			}
@@ -71,6 +69,7 @@ func (m *V1ListVtxosResponse) validateSpendableVtxos(formats strfmt.Registry) er
 }
 
 func (m *V1ListVtxosResponse) validateSpentVtxos(formats strfmt.Registry) error {
+
 	if swag.IsZero(m.SpentVtxos) { // not required
 		return nil
 	}
@@ -84,76 +83,6 @@ func (m *V1ListVtxosResponse) validateSpentVtxos(formats strfmt.Registry) error 
 			if err := m.SpentVtxos[i].Validate(formats); err != nil {
 				if ve, ok := err.(*errors.Validation); ok {
 					return ve.ValidateName("spentVtxos" + "." + strconv.Itoa(i))
-				} else if ce, ok := err.(*errors.CompositeError); ok {
-					return ce.ValidateName("spentVtxos" + "." + strconv.Itoa(i))
-				}
-				return err
-			}
-		}
-
-	}
-
-	return nil
-}
-
-// ContextValidate validate this v1 list vtxos response based on the context it is used
-func (m *V1ListVtxosResponse) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
-	var res []error
-
-	if err := m.contextValidateSpendableVtxos(ctx, formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.contextValidateSpentVtxos(ctx, formats); err != nil {
-		res = append(res, err)
-	}
-
-	if len(res) > 0 {
-		return errors.CompositeValidationError(res...)
-	}
-	return nil
-}
-
-func (m *V1ListVtxosResponse) contextValidateSpendableVtxos(ctx context.Context, formats strfmt.Registry) error {
-
-	for i := 0; i < len(m.SpendableVtxos); i++ {
-
-		if m.SpendableVtxos[i] != nil {
-
-			if swag.IsZero(m.SpendableVtxos[i]) { // not required
-				return nil
-			}
-
-			if err := m.SpendableVtxos[i].ContextValidate(ctx, formats); err != nil {
-				if ve, ok := err.(*errors.Validation); ok {
-					return ve.ValidateName("spendableVtxos" + "." + strconv.Itoa(i))
-				} else if ce, ok := err.(*errors.CompositeError); ok {
-					return ce.ValidateName("spendableVtxos" + "." + strconv.Itoa(i))
-				}
-				return err
-			}
-		}
-
-	}
-
-	return nil
-}
-
-func (m *V1ListVtxosResponse) contextValidateSpentVtxos(ctx context.Context, formats strfmt.Registry) error {
-
-	for i := 0; i < len(m.SpentVtxos); i++ {
-
-		if m.SpentVtxos[i] != nil {
-
-			if swag.IsZero(m.SpentVtxos[i]) { // not required
-				return nil
-			}
-
-			if err := m.SpentVtxos[i].ContextValidate(ctx, formats); err != nil {
-				if ve, ok := err.(*errors.Validation); ok {
-					return ve.ValidateName("spentVtxos" + "." + strconv.Itoa(i))
-				} else if ce, ok := err.(*errors.CompositeError); ok {
-					return ce.ValidateName("spentVtxos" + "." + strconv.Itoa(i))
 				}
 				return err
 			}

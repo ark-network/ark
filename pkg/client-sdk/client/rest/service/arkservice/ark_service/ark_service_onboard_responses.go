@@ -6,14 +6,14 @@ package ark_service
 // Editing this file might prove futile when you re-run the swagger generate command
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 
 	"github.com/go-openapi/runtime"
-	"github.com/go-openapi/strfmt"
 
-	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/models"
+	strfmt "github.com/go-openapi/strfmt"
+
+	models "github.com/ark-network/ark/pkg/client-sdk/client/rest/service/models"
 )
 
 // ArkServiceOnboardReader is a Reader for the ArkServiceOnboard structure.
@@ -24,12 +24,14 @@ type ArkServiceOnboardReader struct {
 // ReadResponse reads a server response into the received o.
 func (o *ArkServiceOnboardReader) ReadResponse(response runtime.ClientResponse, consumer runtime.Consumer) (interface{}, error) {
 	switch response.Code() {
+
 	case 200:
 		result := NewArkServiceOnboardOK()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return result, nil
+
 	default:
 		result := NewArkServiceOnboardDefault(response.Code())
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
@@ -47,8 +49,7 @@ func NewArkServiceOnboardOK() *ArkServiceOnboardOK {
 	return &ArkServiceOnboardOK{}
 }
 
-/*
-ArkServiceOnboardOK describes a response with status code 200, with default header values.
+/*ArkServiceOnboardOK handles this case with default header values.
 
 A successful response.
 */
@@ -56,48 +57,8 @@ type ArkServiceOnboardOK struct {
 	Payload models.V1OnboardResponse
 }
 
-// IsSuccess returns true when this ark service onboard o k response has a 2xx status code
-func (o *ArkServiceOnboardOK) IsSuccess() bool {
-	return true
-}
-
-// IsRedirect returns true when this ark service onboard o k response has a 3xx status code
-func (o *ArkServiceOnboardOK) IsRedirect() bool {
-	return false
-}
-
-// IsClientError returns true when this ark service onboard o k response has a 4xx status code
-func (o *ArkServiceOnboardOK) IsClientError() bool {
-	return false
-}
-
-// IsServerError returns true when this ark service onboard o k response has a 5xx status code
-func (o *ArkServiceOnboardOK) IsServerError() bool {
-	return false
-}
-
-// IsCode returns true when this ark service onboard o k response a status code equal to that given
-func (o *ArkServiceOnboardOK) IsCode(code int) bool {
-	return code == 200
-}
-
-// Code gets the status code for the ark service onboard o k response
-func (o *ArkServiceOnboardOK) Code() int {
-	return 200
-}
-
 func (o *ArkServiceOnboardOK) Error() string {
-	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[POST /v1/onboard][%d] arkServiceOnboardOK %s", 200, payload)
-}
-
-func (o *ArkServiceOnboardOK) String() string {
-	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[POST /v1/onboard][%d] arkServiceOnboardOK %s", 200, payload)
-}
-
-func (o *ArkServiceOnboardOK) GetPayload() models.V1OnboardResponse {
-	return o.Payload
+	return fmt.Sprintf("[POST /v1/onboard][%d] arkServiceOnboardOK  %+v", 200, o.Payload)
 }
 
 func (o *ArkServiceOnboardOK) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
@@ -117,8 +78,7 @@ func NewArkServiceOnboardDefault(code int) *ArkServiceOnboardDefault {
 	}
 }
 
-/*
-ArkServiceOnboardDefault describes a response with status code -1, with default header values.
+/*ArkServiceOnboardDefault handles this case with default header values.
 
 An unexpected error response.
 */
@@ -128,48 +88,13 @@ type ArkServiceOnboardDefault struct {
 	Payload *models.RPCStatus
 }
 
-// IsSuccess returns true when this ark service onboard default response has a 2xx status code
-func (o *ArkServiceOnboardDefault) IsSuccess() bool {
-	return o._statusCode/100 == 2
-}
-
-// IsRedirect returns true when this ark service onboard default response has a 3xx status code
-func (o *ArkServiceOnboardDefault) IsRedirect() bool {
-	return o._statusCode/100 == 3
-}
-
-// IsClientError returns true when this ark service onboard default response has a 4xx status code
-func (o *ArkServiceOnboardDefault) IsClientError() bool {
-	return o._statusCode/100 == 4
-}
-
-// IsServerError returns true when this ark service onboard default response has a 5xx status code
-func (o *ArkServiceOnboardDefault) IsServerError() bool {
-	return o._statusCode/100 == 5
-}
-
-// IsCode returns true when this ark service onboard default response a status code equal to that given
-func (o *ArkServiceOnboardDefault) IsCode(code int) bool {
-	return o._statusCode == code
-}
-
 // Code gets the status code for the ark service onboard default response
 func (o *ArkServiceOnboardDefault) Code() int {
 	return o._statusCode
 }
 
 func (o *ArkServiceOnboardDefault) Error() string {
-	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[POST /v1/onboard][%d] ArkService_Onboard default %s", o._statusCode, payload)
-}
-
-func (o *ArkServiceOnboardDefault) String() string {
-	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[POST /v1/onboard][%d] ArkService_Onboard default %s", o._statusCode, payload)
-}
-
-func (o *ArkServiceOnboardDefault) GetPayload() *models.RPCStatus {
-	return o.Payload
+	return fmt.Sprintf("[POST /v1/onboard][%d] ArkService_Onboard default  %+v", o._statusCode, o.Payload)
 }
 
 func (o *ArkServiceOnboardDefault) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {

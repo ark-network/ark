@@ -6,17 +6,16 @@ package ark_service
 // Editing this file might prove futile when you re-run the swagger generate command
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 
 	"github.com/go-openapi/errors"
 	"github.com/go-openapi/runtime"
-	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
 
-	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/models"
+	strfmt "github.com/go-openapi/strfmt"
+
+	models "github.com/ark-network/ark/pkg/client-sdk/client/rest/service/models"
 )
 
 // ArkServiceGetEventStreamReader is a Reader for the ArkServiceGetEventStream structure.
@@ -27,12 +26,14 @@ type ArkServiceGetEventStreamReader struct {
 // ReadResponse reads a server response into the received o.
 func (o *ArkServiceGetEventStreamReader) ReadResponse(response runtime.ClientResponse, consumer runtime.Consumer) (interface{}, error) {
 	switch response.Code() {
+
 	case 200:
 		result := NewArkServiceGetEventStreamOK()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return result, nil
+
 	default:
 		result := NewArkServiceGetEventStreamDefault(response.Code())
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
@@ -50,8 +51,7 @@ func NewArkServiceGetEventStreamOK() *ArkServiceGetEventStreamOK {
 	return &ArkServiceGetEventStreamOK{}
 }
 
-/*
-ArkServiceGetEventStreamOK describes a response with status code 200, with default header values.
+/*ArkServiceGetEventStreamOK handles this case with default header values.
 
 A successful response.(streaming responses)
 */
@@ -59,48 +59,8 @@ type ArkServiceGetEventStreamOK struct {
 	Payload *ArkServiceGetEventStreamOKBody
 }
 
-// IsSuccess returns true when this ark service get event stream o k response has a 2xx status code
-func (o *ArkServiceGetEventStreamOK) IsSuccess() bool {
-	return true
-}
-
-// IsRedirect returns true when this ark service get event stream o k response has a 3xx status code
-func (o *ArkServiceGetEventStreamOK) IsRedirect() bool {
-	return false
-}
-
-// IsClientError returns true when this ark service get event stream o k response has a 4xx status code
-func (o *ArkServiceGetEventStreamOK) IsClientError() bool {
-	return false
-}
-
-// IsServerError returns true when this ark service get event stream o k response has a 5xx status code
-func (o *ArkServiceGetEventStreamOK) IsServerError() bool {
-	return false
-}
-
-// IsCode returns true when this ark service get event stream o k response a status code equal to that given
-func (o *ArkServiceGetEventStreamOK) IsCode(code int) bool {
-	return code == 200
-}
-
-// Code gets the status code for the ark service get event stream o k response
-func (o *ArkServiceGetEventStreamOK) Code() int {
-	return 200
-}
-
 func (o *ArkServiceGetEventStreamOK) Error() string {
-	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/events][%d] arkServiceGetEventStreamOK %s", 200, payload)
-}
-
-func (o *ArkServiceGetEventStreamOK) String() string {
-	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/events][%d] arkServiceGetEventStreamOK %s", 200, payload)
-}
-
-func (o *ArkServiceGetEventStreamOK) GetPayload() *ArkServiceGetEventStreamOKBody {
-	return o.Payload
+	return fmt.Sprintf("[GET /v1/events][%d] arkServiceGetEventStreamOK  %+v", 200, o.Payload)
 }
 
 func (o *ArkServiceGetEventStreamOK) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
@@ -122,8 +82,7 @@ func NewArkServiceGetEventStreamDefault(code int) *ArkServiceGetEventStreamDefau
 	}
 }
 
-/*
-ArkServiceGetEventStreamDefault describes a response with status code -1, with default header values.
+/*ArkServiceGetEventStreamDefault handles this case with default header values.
 
 An unexpected error response.
 */
@@ -133,48 +92,13 @@ type ArkServiceGetEventStreamDefault struct {
 	Payload *models.RPCStatus
 }
 
-// IsSuccess returns true when this ark service get event stream default response has a 2xx status code
-func (o *ArkServiceGetEventStreamDefault) IsSuccess() bool {
-	return o._statusCode/100 == 2
-}
-
-// IsRedirect returns true when this ark service get event stream default response has a 3xx status code
-func (o *ArkServiceGetEventStreamDefault) IsRedirect() bool {
-	return o._statusCode/100 == 3
-}
-
-// IsClientError returns true when this ark service get event stream default response has a 4xx status code
-func (o *ArkServiceGetEventStreamDefault) IsClientError() bool {
-	return o._statusCode/100 == 4
-}
-
-// IsServerError returns true when this ark service get event stream default response has a 5xx status code
-func (o *ArkServiceGetEventStreamDefault) IsServerError() bool {
-	return o._statusCode/100 == 5
-}
-
-// IsCode returns true when this ark service get event stream default response a status code equal to that given
-func (o *ArkServiceGetEventStreamDefault) IsCode(code int) bool {
-	return o._statusCode == code
-}
-
 // Code gets the status code for the ark service get event stream default response
 func (o *ArkServiceGetEventStreamDefault) Code() int {
 	return o._statusCode
 }
 
 func (o *ArkServiceGetEventStreamDefault) Error() string {
-	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/events][%d] ArkService_GetEventStream default %s", o._statusCode, payload)
-}
-
-func (o *ArkServiceGetEventStreamDefault) String() string {
-	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/events][%d] ArkService_GetEventStream default %s", o._statusCode, payload)
-}
-
-func (o *ArkServiceGetEventStreamDefault) GetPayload() *models.RPCStatus {
-	return o.Payload
+	return fmt.Sprintf("[GET /v1/events][%d] ArkService_GetEventStream default  %+v", o._statusCode, o.Payload)
 }
 
 func (o *ArkServiceGetEventStreamDefault) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
@@ -189,8 +113,7 @@ func (o *ArkServiceGetEventStreamDefault) readResponse(response runtime.ClientRe
 	return nil
 }
 
-/*
-ArkServiceGetEventStreamOKBody Stream result of v1GetEventStreamResponse
+/*ArkServiceGetEventStreamOKBody Stream result of v1GetEventStreamResponse
 swagger:model ArkServiceGetEventStreamOKBody
 */
 type ArkServiceGetEventStreamOKBody struct {
@@ -221,6 +144,7 @@ func (o *ArkServiceGetEventStreamOKBody) Validate(formats strfmt.Registry) error
 }
 
 func (o *ArkServiceGetEventStreamOKBody) validateError(formats strfmt.Registry) error {
+
 	if swag.IsZero(o.Error) { // not required
 		return nil
 	}
@@ -229,8 +153,6 @@ func (o *ArkServiceGetEventStreamOKBody) validateError(formats strfmt.Registry) 
 		if err := o.Error.Validate(formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
 				return ve.ValidateName("arkServiceGetEventStreamOK" + "." + "error")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("arkServiceGetEventStreamOK" + "." + "error")
 			}
 			return err
 		}
@@ -240,6 +162,7 @@ func (o *ArkServiceGetEventStreamOKBody) validateError(formats strfmt.Registry) 
 }
 
 func (o *ArkServiceGetEventStreamOKBody) validateResult(formats strfmt.Registry) error {
+
 	if swag.IsZero(o.Result) { // not required
 		return nil
 	}
@@ -248,68 +171,6 @@ func (o *ArkServiceGetEventStreamOKBody) validateResult(formats strfmt.Registry)
 		if err := o.Result.Validate(formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
 				return ve.ValidateName("arkServiceGetEventStreamOK" + "." + "result")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("arkServiceGetEventStreamOK" + "." + "result")
-			}
-			return err
-		}
-	}
-
-	return nil
-}
-
-// ContextValidate validate this ark service get event stream o k body based on the context it is used
-func (o *ArkServiceGetEventStreamOKBody) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
-	var res []error
-
-	if err := o.contextValidateError(ctx, formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := o.contextValidateResult(ctx, formats); err != nil {
-		res = append(res, err)
-	}
-
-	if len(res) > 0 {
-		return errors.CompositeValidationError(res...)
-	}
-	return nil
-}
-
-func (o *ArkServiceGetEventStreamOKBody) contextValidateError(ctx context.Context, formats strfmt.Registry) error {
-
-	if o.Error != nil {
-
-		if swag.IsZero(o.Error) { // not required
-			return nil
-		}
-
-		if err := o.Error.ContextValidate(ctx, formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("arkServiceGetEventStreamOK" + "." + "error")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("arkServiceGetEventStreamOK" + "." + "error")
-			}
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (o *ArkServiceGetEventStreamOKBody) contextValidateResult(ctx context.Context, formats strfmt.Registry) error {
-
-	if o.Result != nil {
-
-		if swag.IsZero(o.Result) { // not required
-			return nil
-		}
-
-		if err := o.Result.ContextValidate(ctx, formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("arkServiceGetEventStreamOK" + "." + "result")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("arkServiceGetEventStreamOK" + "." + "result")
 			}
 			return err
 		}

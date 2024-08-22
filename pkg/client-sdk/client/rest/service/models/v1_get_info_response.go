@@ -6,14 +6,12 @@ package models
 // Editing this file might prove futile when you re-run the swagger generate command
 
 import (
-	"context"
+	strfmt "github.com/go-openapi/strfmt"
 
-	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
 )
 
 // V1GetInfoResponse v1 get info response
-//
 // swagger:model v1GetInfoResponse
 type V1GetInfoResponse struct {
 
@@ -38,11 +36,6 @@ type V1GetInfoResponse struct {
 
 // Validate validates this v1 get info response
 func (m *V1GetInfoResponse) Validate(formats strfmt.Registry) error {
-	return nil
-}
-
-// ContextValidate validates this v1 get info response based on context it is used
-func (m *V1GetInfoResponse) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	return nil
 }
 

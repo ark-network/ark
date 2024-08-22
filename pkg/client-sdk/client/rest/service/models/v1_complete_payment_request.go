@@ -6,14 +6,12 @@ package models
 // Editing this file might prove futile when you re-run the swagger generate command
 
 import (
-	"context"
+	strfmt "github.com/go-openapi/strfmt"
 
-	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
 )
 
 // V1CompletePaymentRequest v1 complete payment request
-//
 // swagger:model v1CompletePaymentRequest
 type V1CompletePaymentRequest struct {
 
@@ -26,11 +24,6 @@ type V1CompletePaymentRequest struct {
 
 // Validate validates this v1 complete payment request
 func (m *V1CompletePaymentRequest) Validate(formats strfmt.Registry) error {
-	return nil
-}
-
-// ContextValidate validates this v1 complete payment request based on context it is used
-func (m *V1CompletePaymentRequest) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	return nil
 }
 
