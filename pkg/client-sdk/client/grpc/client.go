@@ -156,11 +156,15 @@ func (a *grpcClient) Onboard(
 }
 
 func (a *grpcClient) RegisterPayment(
-	ctx context.Context, inputs []client.VtxoKey,
+	ctx context.Context, inputs []client.VtxoKey, ephemeralPublicKey string,
 ) (string, error) {
 	req := &arkv1.RegisterPaymentRequest{
 		Inputs: ins(inputs).toProto(),
 	}
+	if len(ephemeralPublicKey) > 0 {
+		req.EphemeralPubkey = &ephemeralPublicKey
+	}
+
 	resp, err := a.svc.RegisterPayment(ctx, req)
 	if err != nil {
 		return "", err

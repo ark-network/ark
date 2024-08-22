@@ -27,7 +27,7 @@ type ASPClient interface {
 		ctx context.Context, tx, userPubkey string, congestionTree tree.CongestionTree,
 	) error
 	RegisterPayment(
-		ctx context.Context, inputs []VtxoKey,
+		ctx context.Context, inputs []VtxoKey, ephemeralPublicKey string,
 	) (string, error)
 	ClaimPayment(
 		ctx context.Context, paymentID string, outputs []Output,

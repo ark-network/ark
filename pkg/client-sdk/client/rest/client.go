@@ -256,7 +256,7 @@ func (a *restClient) Onboard(
 }
 
 func (a *restClient) RegisterPayment(
-	ctx context.Context, inputs []client.VtxoKey,
+	ctx context.Context, inputs []client.VtxoKey, ephemeralPublicKey string,
 ) (string, error) {
 	ins := make([]*models.V1Input, 0, len(inputs))
 	for _, i := range inputs {
@@ -265,11 +265,15 @@ func (a *restClient) RegisterPayment(
 			Vout: int64(i.VOut),
 		})
 	}
-	body := models.V1RegisterPaymentRequest{
+	body := &models.V1RegisterPaymentRequest{
 		Inputs: ins,
 	}
+	if len(ephemeralPublicKey) > 0 {
+		body.EphemeralPubkey = ephemeralPublicKey
+	}
+
 	resp, err := a.svc.ArkServiceRegisterPayment(
-		ark_service.NewArkServiceRegisterPaymentParams().WithBody(&body),
+		ark_service.NewArkServiceRegisterPaymentParams().WithBody(body),
 	)
 	if err != nil {
 		return "", err
