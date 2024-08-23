@@ -464,6 +464,7 @@ func (a *restClient) GetRoundByID(
 		ForfeitTxs: resp.Payload.Round.ForfeitTxs,
 		Connectors: resp.Payload.Round.Connectors,
 		Stage:      toRoundStage(resp.Payload.Round.Stage),
+		Payments:   payments,
 	}, nil
 }
 
