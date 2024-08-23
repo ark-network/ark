@@ -25,10 +25,11 @@ const (
 )
 
 type txBuilder struct {
-	wallet        ports.WalletService
-	net           common.Network
-	roundLifetime int64 // in seconds
-	exitDelay     int64 // in seconds
+	wallet                   ports.WalletService
+	net                      common.Network
+	roundLifetime            int64 // in seconds
+	exitDelay                int64 // in seconds
+	reverseBoardingExitDelay int64 // in seconds
 }
 
 func NewTxBuilder(
@@ -36,8 +37,52 @@ func NewTxBuilder(
 	net common.Network,
 	roundLifetime int64,
 	exitDelay int64,
+	reverseBoardingExitDelay int64,
 ) ports.TxBuilder {
-	return &txBuilder{wallet, net, roundLifetime, exitDelay}
+	return &txBuilder{wallet, net, roundLifetime, exitDelay, reverseBoardingExitDelay}
+}
+
+// This method aims to verify and add partial signature from reverse boarding input (unimplemented in covenant version)
+func (b *txBuilder) VerifyAndCombinePartialTx(string, string) (string, error) {
+	return "", fmt.Errorf("not implemented")
+}
+
+func (b *txBuilder) GetReverseBoardingScript(owner, asp *secp256k1.PublicKey) (string, []byte, error) {
+	multisigClosure := tree.ForfeitClosure{
+		Pubkey:    owner,
+		AspPubkey: asp,
+	}
+
+	csvClosure := tree.CSVSigClosure{
+		Pubkey:  owner,
+		Seconds: uint(b.reverseBoardingExitDelay),
+	}
+
+	multisigLeaf, err := multisigClosure.Leaf()
+	if err != nil {
+		return "", nil, err
+	}
+
+	csvLeaf, err := csvClosure.Leaf()
+	if err != nil {
+		return "", nil, err
+	}
+
+	tapTree := taproot.AssembleTaprootScriptTree(*multisigLeaf, *csvLeaf)
+	root := tapTree.RootNode.TapHash()
+	tapKey := taproot.ComputeTaprootOutputKey(tree.UnspendableKey(), root[:])
+
+	p2tr, err := payment.FromTweakedKey(tapKey, b.onchainNetwork(), nil)
+	if err != nil {
+		return "", nil, err
+	}
+
+	addr, err := p2tr.TaprootAddress()
+	if err != nil {
+		return "", nil, err
+	}
+
+	return addr, p2tr.Script, nil
 }
 
 func (b *txBuilder) GetVtxoScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error) {

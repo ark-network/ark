@@ -20,11 +20,12 @@ import (
 )
 
 const (
-	testingKey          = "0218d5ca8b58797b7dbd65c075dd7ba7784b3f38ab71b1a5a8e3f94ba0257654a6"
-	connectorAddress    = "bc1py00yhcjpcj0k0sqra0etq0u3yy0purmspppsw0shyzyfe8c83tmq5h6kc2"
-	minRelayFee         = uint64(30)
-	roundLifetime       = int64(1209344)
-	unilateralExitDelay = int64(512)
+	testingKey               = "0218d5ca8b58797b7dbd65c075dd7ba7784b3f38ab71b1a5a8e3f94ba0257654a6"
+	connectorAddress         = "bc1py00yhcjpcj0k0sqra0etq0u3yy0purmspppsw0shyzyfe8c83tmq5h6kc2"
+	minRelayFee              = uint64(30)
+	roundLifetime            = int64(1209344)
+	unilateralExitDelay      = int64(512)
+	reverseBoardingExitDelay = int64(512)
 )
 
 var (
@@ -49,7 +50,7 @@ func TestMain(m *testing.M) {
 
 func TestBuildPoolTx(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(
-		wallet, common.Bitcoin, roundLifetime, unilateralExitDelay,
+		wallet, common.Bitcoin, roundLifetime, unilateralExitDelay, reverseBoardingExitDelay,
 	)
 
 	fixtures, err := parsePoolTxFixtures()
@@ -106,7 +107,7 @@ func TestBuildPoolTx(t *testing.T) {
 
 func TestBuildForfeitTxs(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(
-		wallet, common.Bitcoin, 1209344, unilateralExitDelay,
+		wallet, common.Bitcoin, 1209344, unilateralExitDelay, reverseBoardingExitDelay,
 	)
 
 	fixtures, err := parseForfeitTxsFixtures()

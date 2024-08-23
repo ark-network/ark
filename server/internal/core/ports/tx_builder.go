@@ -33,4 +33,6 @@ type TxBuilder interface {
 		vtxosToSpend []domain.Vtxo,
 		aspPubKey *secp256k1.PublicKey, receivers []domain.Receiver, minRelayFee uint64,
 	) (*domain.AsyncPaymentTxs, error)
+	GetReverseBoardingScript(userPubkey, aspPubkey *secp256k1.PublicKey) (addr string, script []byte, err error)
+	VerifyAndCombinePartialTx(dest string, src string) (string, error)
 }
