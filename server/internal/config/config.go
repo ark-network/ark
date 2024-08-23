@@ -11,76 +11,79 @@ import (
 )
 
 type Config struct {
-	Datadir               string
-	WalletAddr            string
-	RoundInterval         int64
-	Port                  uint32
-	EventDbType           string
-	DbType                string
-	DbDir                 string
-	DbMigrationPath       string
-	SchedulerType         string
-	TxBuilderType         string
-	BlockchainScannerType string
-	NoTLS                 bool
-	NoMacaroons           bool
-	Network               common.Network
-	LogLevel              int
-	MinRelayFee           uint64
-	RoundLifetime         int64
-	UnilateralExitDelay   int64
-	EsploraURL            string
-	NeutrinoPeer          string
-	BitcoindRpcUser       string
-	BitcoindRpcPass       string
-	BitcoindRpcHost       string
-	TLSExtraIPs           []string
-	TLSExtraDomains       []string
+	Datadir                  string
+	WalletAddr               string
+	RoundInterval            int64
+	Port                     uint32
+	EventDbType              string
+	DbType                   string
+	DbDir                    string
+	DbMigrationPath          string
+	SchedulerType            string
+	TxBuilderType            string
+	BlockchainScannerType    string
+	NoTLS                    bool
+	NoMacaroons              bool
+	Network                  common.Network
+	LogLevel                 int
+	MinRelayFee              uint64
+	RoundLifetime            int64
+	UnilateralExitDelay      int64
+	ReverseBoardingExitDelay int64
+	EsploraURL               string
+	NeutrinoPeer             string
+	BitcoindRpcUser          string
+	BitcoindRpcPass          string
+	BitcoindRpcHost          string
+	TLSExtraIPs              []string
+	TLSExtraDomains          []string
 }
 
 var (
-	Datadir               = "DATADIR"
-	WalletAddr            = "WALLET_ADDR"
-	RoundInterval         = "ROUND_INTERVAL"
-	Port                  = "PORT"
-	EventDbType           = "EVENT_DB_TYPE"
-	DbType                = "DB_TYPE"
-	DbMigrationPath       = "DB_MIGRATION_PATH"
-	SchedulerType         = "SCHEDULER_TYPE"
-	TxBuilderType         = "TX_BUILDER_TYPE"
-	BlockchainScannerType = "BC_SCANNER_TYPE"
-	LogLevel              = "LOG_LEVEL"
-	Network               = "NETWORK"
-	MinRelayFee           = "MIN_RELAY_FEE"
-	RoundLifetime         = "ROUND_LIFETIME"
-	UnilateralExitDelay   = "UNILATERAL_EXIT_DELAY"
-	EsploraURL            = "ESPLORA_URL"
-	NeutrinoPeer          = "NEUTRINO_PEER"
-	BitcoindRpcUser       = "BITCOIND_RPC_USER"
-	BitcoindRpcPass       = "BITCOIND_RPC_PASS"
-	BitcoindRpcHost       = "BITCOIND_RPC_HOST"
-	NoMacaroons           = "NO_MACAROONS"
-	NoTLS                 = "NO_TLS"
-	TLSExtraIP            = "TLS_EXTRA_IP"
-	TLSExtraDomain        = "TLS_EXTRA_DOMAIN"
+	Datadir                  = "DATADIR"
+	WalletAddr               = "WALLET_ADDR"
+	RoundInterval            = "ROUND_INTERVAL"
+	Port                     = "PORT"
+	EventDbType              = "EVENT_DB_TYPE"
+	DbType                   = "DB_TYPE"
+	DbMigrationPath          = "DB_MIGRATION_PATH"
+	SchedulerType            = "SCHEDULER_TYPE"
+	TxBuilderType            = "TX_BUILDER_TYPE"
+	BlockchainScannerType    = "BC_SCANNER_TYPE"
+	LogLevel                 = "LOG_LEVEL"
+	Network                  = "NETWORK"
+	MinRelayFee              = "MIN_RELAY_FEE"
+	RoundLifetime            = "ROUND_LIFETIME"
+	UnilateralExitDelay      = "UNILATERAL_EXIT_DELAY"
+	ReverseBoardingExitDelay = "REVERSE_BOARDING_EXIT_DELAY"
+	EsploraURL               = "ESPLORA_URL"
+	NeutrinoPeer             = "NEUTRINO_PEER"
+	BitcoindRpcUser          = "BITCOIND_RPC_USER"
+	BitcoindRpcPass          = "BITCOIND_RPC_PASS"
+	BitcoindRpcHost          = "BITCOIND_RPC_HOST"
+	NoMacaroons              = "NO_MACAROONS"
+	NoTLS                    = "NO_TLS"
+	TLSExtraIP               = "TLS_EXTRA_IP"
+	TLSExtraDomain           = "TLS_EXTRA_DOMAIN"
 
-	defaultDatadir               = common.AppDataDir("arkd", false)
-	defaultRoundInterval         = 5
-	DefaultPort                  = 7070
-	defaultWalletAddr            = "localhost:18000"
-	defaultDbType                = "sqlite"
-	defaultDbMigrationPath       = "file://internal/infrastructure/db/sqlite/migration"
-	defaultEventDbType           = "badger"
-	defaultSchedulerType         = "gocron"
-	defaultTxBuilderType         = "covenant"
-	defaultBlockchainScannerType = "ocean"
-	defaultNetwork               = "liquid"
-	defaultLogLevel              = 4
-	defaultMinRelayFee           = 30 // 0.1 sat/vbyte on Liquid
-	defaultRoundLifetime         = 604672
-	defaultUnilateralExitDelay   = 1024
-	defaultNoMacaroons           = false
-	defaultNoTLS                 = false
+	defaultDatadir                  = common.AppDataDir("arkd", false)
+	defaultRoundInterval            = 5
+	DefaultPort                     = 7070
+	defaultWalletAddr               = "localhost:18000"
+	defaultDbType                   = "sqlite"
+	defaultDbMigrationPath          = "file://internal/infrastructure/db/sqlite/migration"
+	defaultEventDbType              = "badger"
+	defaultSchedulerType            = "gocron"
+	defaultTxBuilderType            = "covenant"
+	defaultBlockchainScannerType    = "ocean"
+	defaultNetwork                  = "liquid"
+	defaultLogLevel                 = 4
+	defaultMinRelayFee              = 30 // 0.1 sat/vbyte on Liquid
+	defaultRoundLifetime            = 604672
+	defaultUnilateralExitDelay      = 1024
+	defaultReverseBoardingExitDelay = 604672
+	defaultNoMacaroons              = false
+	defaultNoTLS                    = false
 )
 
 func LoadConfig() (*Config, error) {
@@ -104,6 +107,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(UnilateralExitDelay, defaultUnilateralExitDelay)
 	viper.SetDefault(BlockchainScannerType, defaultBlockchainScannerType)
 	viper.SetDefault(NoMacaroons, defaultNoMacaroons)
+	viper.SetDefault(ReverseBoardingExitDelay, defaultReverseBoardingExitDelay)
 
 	net, err := getNetwork()
 	if err != nil {
@@ -115,31 +119,32 @@ func LoadConfig() (*Config, error) {
 	}
 
 	return &Config{
-		Datadir:               viper.GetString(Datadir),
-		WalletAddr:            viper.GetString(WalletAddr),
-		RoundInterval:         viper.GetInt64(RoundInterval),
-		Port:                  viper.GetUint32(Port),
-		EventDbType:           viper.GetString(EventDbType),
-		DbType:                viper.GetString(DbType),
-		DbMigrationPath:       viper.GetString(DbMigrationPath),
-		SchedulerType:         viper.GetString(SchedulerType),
-		TxBuilderType:         viper.GetString(TxBuilderType),
-		BlockchainScannerType: viper.GetString(BlockchainScannerType),
-		NoTLS:                 viper.GetBool(NoTLS),
-		DbDir:                 filepath.Join(viper.GetString(Datadir), "db"),
-		LogLevel:              viper.GetInt(LogLevel),
-		Network:               net,
-		MinRelayFee:           viper.GetUint64(MinRelayFee),
-		RoundLifetime:         viper.GetInt64(RoundLifetime),
-		UnilateralExitDelay:   viper.GetInt64(UnilateralExitDelay),
-		EsploraURL:            viper.GetString(EsploraURL),
-		NeutrinoPeer:          viper.GetString(NeutrinoPeer),
-		BitcoindRpcUser:       viper.GetString(BitcoindRpcUser),
-		BitcoindRpcPass:       viper.GetString(BitcoindRpcPass),
-		BitcoindRpcHost:       viper.GetString(BitcoindRpcHost),
-		NoMacaroons:           viper.GetBool(NoMacaroons),
-		TLSExtraIPs:           viper.GetStringSlice(TLSExtraIP),
-		TLSExtraDomains:       viper.GetStringSlice(TLSExtraDomain),
+		Datadir:                  viper.GetString(Datadir),
+		WalletAddr:               viper.GetString(WalletAddr),
+		RoundInterval:            viper.GetInt64(RoundInterval),
+		Port:                     viper.GetUint32(Port),
+		EventDbType:              viper.GetString(EventDbType),
+		DbType:                   viper.GetString(DbType),
+		DbMigrationPath:          viper.GetString(DbMigrationPath),
+		SchedulerType:            viper.GetString(SchedulerType),
+		TxBuilderType:            viper.GetString(TxBuilderType),
+		BlockchainScannerType:    viper.GetString(BlockchainScannerType),
+		NoTLS:                    viper.GetBool(NoTLS),
+		DbDir:                    filepath.Join(viper.GetString(Datadir), "db"),
+		LogLevel:                 viper.GetInt(LogLevel),
+		Network:                  net,
+		MinRelayFee:              viper.GetUint64(MinRelayFee),
+		RoundLifetime:            viper.GetInt64(RoundLifetime),
+		UnilateralExitDelay:      viper.GetInt64(UnilateralExitDelay),
+		ReverseBoardingExitDelay: viper.GetInt64(ReverseBoardingExitDelay),
+		EsploraURL:               viper.GetString(EsploraURL),
+		NeutrinoPeer:             viper.GetString(NeutrinoPeer),
+		BitcoindRpcUser:          viper.GetString(BitcoindRpcUser),
+		BitcoindRpcPass:          viper.GetString(BitcoindRpcPass),
+		BitcoindRpcHost:          viper.GetString(BitcoindRpcHost),
+		NoMacaroons:              viper.GetBool(NoMacaroons),
+		TLSExtraIPs:              viper.GetStringSlice(TLSExtraIP),
+		TLSExtraDomains:          viper.GetStringSlice(TLSExtraDomain),
 	}, nil
 }
 
