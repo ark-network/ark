@@ -13,75 +13,60 @@ import (
 	"github.com/go-openapi/errors"
 	"github.com/go-openapi/runtime"
 	cr "github.com/go-openapi/runtime/client"
-	"github.com/go-openapi/strfmt"
+
+	strfmt "github.com/go-openapi/strfmt"
 )
 
-// NewArkServiceGetRoundByIDParams creates a new ArkServiceGetRoundByIDParams object,
-// with the default timeout for this client.
-//
-// Default values are not hydrated, since defaults are normally applied by the API server side.
-//
-// To enforce default values in parameter, use SetDefaults or WithDefaults.
+// NewArkServiceGetRoundByIDParams creates a new ArkServiceGetRoundByIDParams object
+// with the default values initialized.
 func NewArkServiceGetRoundByIDParams() *ArkServiceGetRoundByIDParams {
+	var ()
 	return &ArkServiceGetRoundByIDParams{
+
 		timeout: cr.DefaultTimeout,
 	}
 }
 
 // NewArkServiceGetRoundByIDParamsWithTimeout creates a new ArkServiceGetRoundByIDParams object
-// with the ability to set a timeout on a request.
+// with the default values initialized, and the ability to set a timeout on a request
 func NewArkServiceGetRoundByIDParamsWithTimeout(timeout time.Duration) *ArkServiceGetRoundByIDParams {
+	var ()
 	return &ArkServiceGetRoundByIDParams{
+
 		timeout: timeout,
 	}
 }
 
 // NewArkServiceGetRoundByIDParamsWithContext creates a new ArkServiceGetRoundByIDParams object
-// with the ability to set a context for a request.
+// with the default values initialized, and the ability to set a context for a request
 func NewArkServiceGetRoundByIDParamsWithContext(ctx context.Context) *ArkServiceGetRoundByIDParams {
+	var ()
 	return &ArkServiceGetRoundByIDParams{
+
 		Context: ctx,
 	}
 }
 
 // NewArkServiceGetRoundByIDParamsWithHTTPClient creates a new ArkServiceGetRoundByIDParams object
-// with the ability to set a custom HTTPClient for a request.
+// with the default values initialized, and the ability to set a custom HTTPClient for a request
 func NewArkServiceGetRoundByIDParamsWithHTTPClient(client *http.Client) *ArkServiceGetRoundByIDParams {
+	var ()
 	return &ArkServiceGetRoundByIDParams{
 		HTTPClient: client,
 	}
 }
 
-/*
-ArkServiceGetRoundByIDParams contains all the parameters to send to the API endpoint
-
-	for the ark service get round by Id operation.
-
-	Typically these are written to a http.Request.
+/*ArkServiceGetRoundByIDParams contains all the parameters to send to the API endpoint
+for the ark service get round by Id operation typically these are written to a http.Request
 */
 type ArkServiceGetRoundByIDParams struct {
 
-	// ID.
+	/*ID*/
 	ID string
 
 	timeout    time.Duration
 	Context    context.Context
 	HTTPClient *http.Client
-}
-
-// WithDefaults hydrates default values in the ark service get round by Id params (not the query body).
-//
-// All values with no default are reset to their zero value.
-func (o *ArkServiceGetRoundByIDParams) WithDefaults() *ArkServiceGetRoundByIDParams {
-	o.SetDefaults()
-	return o
-}
-
-// SetDefaults hydrates default values in the ark service get round by Id params (not the query body).
-//
-// All values with no default are reset to their zero value.
-func (o *ArkServiceGetRoundByIDParams) SetDefaults() {
-	// no default values defined for this parameter
 }
 
 // WithTimeout adds the timeout to the ark service get round by Id params

@@ -22,7 +22,7 @@ import (
 )
 
 type restClient struct {
-	svc            ark_service.ClientService
+	svc            ark_service.Client
 	eventsCh       chan client.RoundEventChannel
 	requestTimeout time.Duration
 	treeCache      *utils.Cache[tree.CongestionTree]
@@ -267,7 +267,7 @@ func (a *restClient) GetRound(
 		Tree:       treeFromProto{resp.Payload.Round.CongestionTree}.parse(),
 		ForfeitTxs: resp.Payload.Round.ForfeitTxs,
 		Connectors: resp.Payload.Round.Connectors,
-		Stage:      toRoundStage(*resp.Payload.Round.Stage),
+		Stage:      toRoundStage(resp.Payload.Round.Stage),
 	}, nil
 }
 
@@ -395,7 +395,8 @@ func (a *restClient) CreatePayment(
 	if err != nil {
 		return "", nil, err
 	}
-	return resp.GetPayload().SignedRedeemTx, resp.GetPayload().UsignedUnconditionalForfeitTxs, nil
+
+	return resp.Payload.SignedRedeemTx, resp.Payload.UsignedUnconditionalForfeitTxs, nil
 }
 
 func (a *restClient) CompletePayment(
@@ -442,6 +443,18 @@ func (a *restClient) GetRoundByID(
 		endedAt = &t
 	}
 
+	payments := make([]client.Payment, 0, len(resp.Payload.Round.Payments))
+	for _, p := range resp.Payload.Round.Payments {
+		payments = append(payments, client.Payment{
+			TxID:    p.Txid,
+			VOut:    uint32(p.Vout),
+			Spent:   p.Spent,
+			Pending: p.Pending,
+			Amount:  uint64(p.Amount),
+			PubKey:  p.Pubkey,
+		})
+	}
+
 	return &client.Round{
 		ID:         resp.Payload.Round.ID,
 		StartedAt:  &startedAt,
@@ -450,16 +463,17 @@ func (a *restClient) GetRoundByID(
 		Tree:       treeFromProto{resp.Payload.Round.CongestionTree}.parse(),
 		ForfeitTxs: resp.Payload.Round.ForfeitTxs,
 		Connectors: resp.Payload.Round.Connectors,
-		Stage:      toRoundStage(*resp.Payload.Round.Stage),
+		Stage:      toRoundStage(resp.Payload.Round.Stage),
+		Payments:   payments,
 	}, nil
 }
 
 func newRestClient(
 	serviceURL string,
-) (ark_service.ClientService, error) {
+) (ark_service.Client, error) {
 	parsedURL, err := url.Parse(serviceURL)
 	if err != nil {
-		return nil, err
+		return ark_service.Client{}, err
 	}
 
 	schemes := []string{parsedURL.Scheme}
@@ -478,7 +492,7 @@ func newRestClient(
 
 	transport := httptransport.New(cfg.Host, cfg.BasePath, cfg.Schemes)
 	svc := arkservice.New(transport, strfmt.Default)
-	return svc.ArkService, nil
+	return *svc.ArkService, nil
 }
 
 func toRoundStage(stage models.V1RoundStage) client.RoundStage {

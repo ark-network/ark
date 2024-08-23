@@ -6,14 +6,12 @@ package models
 // Editing this file might prove futile when you re-run the swagger generate command
 
 import (
-	"context"
+	strfmt "github.com/go-openapi/strfmt"
 
-	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
 )
 
 // V1RoundFinalizedEvent v1 round finalized event
-//
 // swagger:model v1RoundFinalizedEvent
 type V1RoundFinalizedEvent struct {
 
@@ -26,11 +24,6 @@ type V1RoundFinalizedEvent struct {
 
 // Validate validates this v1 round finalized event
 func (m *V1RoundFinalizedEvent) Validate(formats strfmt.Registry) error {
-	return nil
-}
-
-// ContextValidate validates this v1 round finalized event based on context it is used
-func (m *V1RoundFinalizedEvent) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	return nil
 }
 

@@ -6,16 +6,15 @@ package models
 // Editing this file might prove futile when you re-run the swagger generate command
 
 import (
-	"context"
 	"strconv"
 
+	strfmt "github.com/go-openapi/strfmt"
+
 	"github.com/go-openapi/errors"
-	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
 )
 
 // V1ClaimPaymentRequest v1 claim payment request
-//
 // swagger:model v1ClaimPaymentRequest
 type V1ClaimPaymentRequest struct {
 
@@ -41,6 +40,7 @@ func (m *V1ClaimPaymentRequest) Validate(formats strfmt.Registry) error {
 }
 
 func (m *V1ClaimPaymentRequest) validateOutputs(formats strfmt.Registry) error {
+
 	if swag.IsZero(m.Outputs) { // not required
 		return nil
 	}
@@ -54,47 +54,6 @@ func (m *V1ClaimPaymentRequest) validateOutputs(formats strfmt.Registry) error {
 			if err := m.Outputs[i].Validate(formats); err != nil {
 				if ve, ok := err.(*errors.Validation); ok {
 					return ve.ValidateName("outputs" + "." + strconv.Itoa(i))
-				} else if ce, ok := err.(*errors.CompositeError); ok {
-					return ce.ValidateName("outputs" + "." + strconv.Itoa(i))
-				}
-				return err
-			}
-		}
-
-	}
-
-	return nil
-}
-
-// ContextValidate validate this v1 claim payment request based on the context it is used
-func (m *V1ClaimPaymentRequest) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
-	var res []error
-
-	if err := m.contextValidateOutputs(ctx, formats); err != nil {
-		res = append(res, err)
-	}
-
-	if len(res) > 0 {
-		return errors.CompositeValidationError(res...)
-	}
-	return nil
-}
-
-func (m *V1ClaimPaymentRequest) contextValidateOutputs(ctx context.Context, formats strfmt.Registry) error {
-
-	for i := 0; i < len(m.Outputs); i++ {
-
-		if m.Outputs[i] != nil {
-
-			if swag.IsZero(m.Outputs[i]) { // not required
-				return nil
-			}
-
-			if err := m.Outputs[i].ContextValidate(ctx, formats); err != nil {
-				if ve, ok := err.(*errors.Validation); ok {
-					return ve.ValidateName("outputs" + "." + strconv.Itoa(i))
-				} else if ce, ok := err.(*errors.CompositeError); ok {
-					return ce.ValidateName("outputs" + "." + strconv.Itoa(i))
 				}
 				return err
 			}

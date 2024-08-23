@@ -17,6 +17,7 @@ import (
 	filestore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store/file"
 	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store/inmemory"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -227,6 +228,46 @@ func (a *arkClient) ping(
 	}(ticker)
 
 	return ticker.Stop
+}
+
+func (a *arkClient) listenForPayments(ctx context.Context, pubKey string, paymentsCh chan<- client.Payment) error {
+	eventsCh, err := a.client.GetEventStream(ctx, "")
+	if err != nil {
+		return err
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case notify := <-eventsCh:
+			if notify.Err != nil {
+				return notify.Err
+			}
+
+			switch event := notify.Event.(type) {
+			case client.RoundFinalizedEvent:
+				round, err := a.client.GetRoundByID(ctx, event.ID)
+				if err != nil {
+					log.Printf("Error getting round by ID: %v", err)
+					continue
+				}
+
+				for _, p := range round.Payments {
+					if p.PubKey == pubKey {
+						paymentsCh <- client.Payment{
+							TxID:    p.TxID,
+							VOut:    p.VOut,
+							Spent:   p.Spent,
+							Pending: p.Pending,
+							Amount:  p.Amount,
+							PubKey:  p.PubKey,
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
 func getClient(

@@ -13,71 +13,56 @@ import (
 	"github.com/go-openapi/errors"
 	"github.com/go-openapi/runtime"
 	cr "github.com/go-openapi/runtime/client"
-	"github.com/go-openapi/strfmt"
+
+	strfmt "github.com/go-openapi/strfmt"
 )
 
-// NewArkServiceGetEventStreamParams creates a new ArkServiceGetEventStreamParams object,
-// with the default timeout for this client.
-//
-// Default values are not hydrated, since defaults are normally applied by the API server side.
-//
-// To enforce default values in parameter, use SetDefaults or WithDefaults.
+// NewArkServiceGetEventStreamParams creates a new ArkServiceGetEventStreamParams object
+// with the default values initialized.
 func NewArkServiceGetEventStreamParams() *ArkServiceGetEventStreamParams {
+
 	return &ArkServiceGetEventStreamParams{
+
 		timeout: cr.DefaultTimeout,
 	}
 }
 
 // NewArkServiceGetEventStreamParamsWithTimeout creates a new ArkServiceGetEventStreamParams object
-// with the ability to set a timeout on a request.
+// with the default values initialized, and the ability to set a timeout on a request
 func NewArkServiceGetEventStreamParamsWithTimeout(timeout time.Duration) *ArkServiceGetEventStreamParams {
+
 	return &ArkServiceGetEventStreamParams{
+
 		timeout: timeout,
 	}
 }
 
 // NewArkServiceGetEventStreamParamsWithContext creates a new ArkServiceGetEventStreamParams object
-// with the ability to set a context for a request.
+// with the default values initialized, and the ability to set a context for a request
 func NewArkServiceGetEventStreamParamsWithContext(ctx context.Context) *ArkServiceGetEventStreamParams {
+
 	return &ArkServiceGetEventStreamParams{
+
 		Context: ctx,
 	}
 }
 
 // NewArkServiceGetEventStreamParamsWithHTTPClient creates a new ArkServiceGetEventStreamParams object
-// with the ability to set a custom HTTPClient for a request.
+// with the default values initialized, and the ability to set a custom HTTPClient for a request
 func NewArkServiceGetEventStreamParamsWithHTTPClient(client *http.Client) *ArkServiceGetEventStreamParams {
+
 	return &ArkServiceGetEventStreamParams{
 		HTTPClient: client,
 	}
 }
 
-/*
-ArkServiceGetEventStreamParams contains all the parameters to send to the API endpoint
-
-	for the ark service get event stream operation.
-
-	Typically these are written to a http.Request.
+/*ArkServiceGetEventStreamParams contains all the parameters to send to the API endpoint
+for the ark service get event stream operation typically these are written to a http.Request
 */
 type ArkServiceGetEventStreamParams struct {
 	timeout    time.Duration
 	Context    context.Context
 	HTTPClient *http.Client
-}
-
-// WithDefaults hydrates default values in the ark service get event stream params (not the query body).
-//
-// All values with no default are reset to their zero value.
-func (o *ArkServiceGetEventStreamParams) WithDefaults() *ArkServiceGetEventStreamParams {
-	o.SetDefaults()
-	return o
-}
-
-// SetDefaults hydrates default values in the ark service get event stream params (not the query body).
-//
-// All values with no default are reset to their zero value.
-func (o *ArkServiceGetEventStreamParams) SetDefaults() {
-	// no default values defined for this parameter
 }
 
 // WithTimeout adds the timeout to the ark service get event stream params

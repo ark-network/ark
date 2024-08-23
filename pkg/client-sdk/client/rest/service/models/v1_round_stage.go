@@ -6,27 +6,17 @@ package models
 // Editing this file might prove futile when you re-run the swagger generate command
 
 import (
-	"context"
 	"encoding/json"
 
+	strfmt "github.com/go-openapi/strfmt"
+
 	"github.com/go-openapi/errors"
-	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/validate"
 )
 
 // V1RoundStage v1 round stage
-//
 // swagger:model v1RoundStage
 type V1RoundStage string
-
-func NewV1RoundStage(value V1RoundStage) *V1RoundStage {
-	return &value
-}
-
-// Pointer returns a pointer to a freshly-allocated V1RoundStage.
-func (m V1RoundStage) Pointer() *V1RoundStage {
-	return &m
-}
 
 const (
 
@@ -60,7 +50,7 @@ func init() {
 }
 
 func (m V1RoundStage) validateV1RoundStageEnum(path, location string, value V1RoundStage) error {
-	if err := validate.EnumCase(path, location, value, v1RoundStageEnum, true); err != nil {
+	if err := validate.Enum(path, location, value, v1RoundStageEnum); err != nil {
 		return err
 	}
 	return nil
@@ -78,10 +68,5 @@ func (m V1RoundStage) Validate(formats strfmt.Registry) error {
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)
 	}
-	return nil
-}
-
-// ContextValidate validates this v1 round stage based on context it is used
-func (m V1RoundStage) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	return nil
 }

@@ -6,14 +6,14 @@ package ark_service
 // Editing this file might prove futile when you re-run the swagger generate command
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 
 	"github.com/go-openapi/runtime"
-	"github.com/go-openapi/strfmt"
 
-	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/models"
+	strfmt "github.com/go-openapi/strfmt"
+
+	models "github.com/ark-network/ark/pkg/client-sdk/client/rest/service/models"
 )
 
 // ArkServiceGetRoundReader is a Reader for the ArkServiceGetRound structure.
@@ -24,12 +24,14 @@ type ArkServiceGetRoundReader struct {
 // ReadResponse reads a server response into the received o.
 func (o *ArkServiceGetRoundReader) ReadResponse(response runtime.ClientResponse, consumer runtime.Consumer) (interface{}, error) {
 	switch response.Code() {
+
 	case 200:
 		result := NewArkServiceGetRoundOK()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return result, nil
+
 	default:
 		result := NewArkServiceGetRoundDefault(response.Code())
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
@@ -47,8 +49,7 @@ func NewArkServiceGetRoundOK() *ArkServiceGetRoundOK {
 	return &ArkServiceGetRoundOK{}
 }
 
-/*
-ArkServiceGetRoundOK describes a response with status code 200, with default header values.
+/*ArkServiceGetRoundOK handles this case with default header values.
 
 A successful response.
 */
@@ -56,48 +57,8 @@ type ArkServiceGetRoundOK struct {
 	Payload *models.V1GetRoundResponse
 }
 
-// IsSuccess returns true when this ark service get round o k response has a 2xx status code
-func (o *ArkServiceGetRoundOK) IsSuccess() bool {
-	return true
-}
-
-// IsRedirect returns true when this ark service get round o k response has a 3xx status code
-func (o *ArkServiceGetRoundOK) IsRedirect() bool {
-	return false
-}
-
-// IsClientError returns true when this ark service get round o k response has a 4xx status code
-func (o *ArkServiceGetRoundOK) IsClientError() bool {
-	return false
-}
-
-// IsServerError returns true when this ark service get round o k response has a 5xx status code
-func (o *ArkServiceGetRoundOK) IsServerError() bool {
-	return false
-}
-
-// IsCode returns true when this ark service get round o k response a status code equal to that given
-func (o *ArkServiceGetRoundOK) IsCode(code int) bool {
-	return code == 200
-}
-
-// Code gets the status code for the ark service get round o k response
-func (o *ArkServiceGetRoundOK) Code() int {
-	return 200
-}
-
 func (o *ArkServiceGetRoundOK) Error() string {
-	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/round/{txid}][%d] arkServiceGetRoundOK %s", 200, payload)
-}
-
-func (o *ArkServiceGetRoundOK) String() string {
-	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/round/{txid}][%d] arkServiceGetRoundOK %s", 200, payload)
-}
-
-func (o *ArkServiceGetRoundOK) GetPayload() *models.V1GetRoundResponse {
-	return o.Payload
+	return fmt.Sprintf("[GET /v1/round/{txid}][%d] arkServiceGetRoundOK  %+v", 200, o.Payload)
 }
 
 func (o *ArkServiceGetRoundOK) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
@@ -119,8 +80,7 @@ func NewArkServiceGetRoundDefault(code int) *ArkServiceGetRoundDefault {
 	}
 }
 
-/*
-ArkServiceGetRoundDefault describes a response with status code -1, with default header values.
+/*ArkServiceGetRoundDefault handles this case with default header values.
 
 An unexpected error response.
 */
@@ -130,48 +90,13 @@ type ArkServiceGetRoundDefault struct {
 	Payload *models.RPCStatus
 }
 
-// IsSuccess returns true when this ark service get round default response has a 2xx status code
-func (o *ArkServiceGetRoundDefault) IsSuccess() bool {
-	return o._statusCode/100 == 2
-}
-
-// IsRedirect returns true when this ark service get round default response has a 3xx status code
-func (o *ArkServiceGetRoundDefault) IsRedirect() bool {
-	return o._statusCode/100 == 3
-}
-
-// IsClientError returns true when this ark service get round default response has a 4xx status code
-func (o *ArkServiceGetRoundDefault) IsClientError() bool {
-	return o._statusCode/100 == 4
-}
-
-// IsServerError returns true when this ark service get round default response has a 5xx status code
-func (o *ArkServiceGetRoundDefault) IsServerError() bool {
-	return o._statusCode/100 == 5
-}
-
-// IsCode returns true when this ark service get round default response a status code equal to that given
-func (o *ArkServiceGetRoundDefault) IsCode(code int) bool {
-	return o._statusCode == code
-}
-
 // Code gets the status code for the ark service get round default response
 func (o *ArkServiceGetRoundDefault) Code() int {
 	return o._statusCode
 }
 
 func (o *ArkServiceGetRoundDefault) Error() string {
-	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/round/{txid}][%d] ArkService_GetRound default %s", o._statusCode, payload)
-}
-
-func (o *ArkServiceGetRoundDefault) String() string {
-	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/round/{txid}][%d] ArkService_GetRound default %s", o._statusCode, payload)
-}
-
-func (o *ArkServiceGetRoundDefault) GetPayload() *models.RPCStatus {
-	return o.Payload
+	return fmt.Sprintf("[GET /v1/round/{txid}][%d] ArkService_GetRound default  %+v", o._statusCode, o.Payload)
 }
 
 func (o *ArkServiceGetRoundDefault) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {

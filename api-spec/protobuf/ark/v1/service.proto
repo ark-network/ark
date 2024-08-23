@@ -208,6 +208,7 @@ message Round {
   repeated string forfeit_txs = 6;
   repeated string connectors = 7;
   RoundStage stage = 8;
+  repeated Payment payments = 9;
 }
 
 message Input {
@@ -251,4 +252,13 @@ message Vtxo {
 message PendingPayment {
   string redeem_tx = 1;
   repeated string unconditional_forfeit_txs =2;
+}
+
+message Payment {
+  string txid = 1;
+  uint32 vout = 2;
+  bool spent = 3;
+  bool pending = 4;
+  uint32 amount = 5;
+  string pubkey = 6;
 }

@@ -6,15 +6,13 @@ package models
 // Editing this file might prove futile when you re-run the swagger generate command
 
 import (
-	"context"
+	strfmt "github.com/go-openapi/strfmt"
 
 	"github.com/go-openapi/errors"
-	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
 )
 
 // V1GetEventStreamResponse v1 get event stream response
-//
 // swagger:model v1GetEventStreamResponse
 type V1GetEventStreamResponse struct {
 
@@ -51,6 +49,7 @@ func (m *V1GetEventStreamResponse) Validate(formats strfmt.Registry) error {
 }
 
 func (m *V1GetEventStreamResponse) validateRoundFailed(formats strfmt.Registry) error {
+
 	if swag.IsZero(m.RoundFailed) { // not required
 		return nil
 	}
@@ -59,8 +58,6 @@ func (m *V1GetEventStreamResponse) validateRoundFailed(formats strfmt.Registry) 
 		if err := m.RoundFailed.Validate(formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
 				return ve.ValidateName("roundFailed")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("roundFailed")
 			}
 			return err
 		}
@@ -70,6 +67,7 @@ func (m *V1GetEventStreamResponse) validateRoundFailed(formats strfmt.Registry) 
 }
 
 func (m *V1GetEventStreamResponse) validateRoundFinalization(formats strfmt.Registry) error {
+
 	if swag.IsZero(m.RoundFinalization) { // not required
 		return nil
 	}
@@ -78,8 +76,6 @@ func (m *V1GetEventStreamResponse) validateRoundFinalization(formats strfmt.Regi
 		if err := m.RoundFinalization.Validate(formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
 				return ve.ValidateName("roundFinalization")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("roundFinalization")
 			}
 			return err
 		}
@@ -89,6 +85,7 @@ func (m *V1GetEventStreamResponse) validateRoundFinalization(formats strfmt.Regi
 }
 
 func (m *V1GetEventStreamResponse) validateRoundFinalized(formats strfmt.Registry) error {
+
 	if swag.IsZero(m.RoundFinalized) { // not required
 		return nil
 	}
@@ -97,93 +94,6 @@ func (m *V1GetEventStreamResponse) validateRoundFinalized(formats strfmt.Registr
 		if err := m.RoundFinalized.Validate(formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
 				return ve.ValidateName("roundFinalized")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("roundFinalized")
-			}
-			return err
-		}
-	}
-
-	return nil
-}
-
-// ContextValidate validate this v1 get event stream response based on the context it is used
-func (m *V1GetEventStreamResponse) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
-	var res []error
-
-	if err := m.contextValidateRoundFailed(ctx, formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.contextValidateRoundFinalization(ctx, formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.contextValidateRoundFinalized(ctx, formats); err != nil {
-		res = append(res, err)
-	}
-
-	if len(res) > 0 {
-		return errors.CompositeValidationError(res...)
-	}
-	return nil
-}
-
-func (m *V1GetEventStreamResponse) contextValidateRoundFailed(ctx context.Context, formats strfmt.Registry) error {
-
-	if m.RoundFailed != nil {
-
-		if swag.IsZero(m.RoundFailed) { // not required
-			return nil
-		}
-
-		if err := m.RoundFailed.ContextValidate(ctx, formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("roundFailed")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("roundFailed")
-			}
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (m *V1GetEventStreamResponse) contextValidateRoundFinalization(ctx context.Context, formats strfmt.Registry) error {
-
-	if m.RoundFinalization != nil {
-
-		if swag.IsZero(m.RoundFinalization) { // not required
-			return nil
-		}
-
-		if err := m.RoundFinalization.ContextValidate(ctx, formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("roundFinalization")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("roundFinalization")
-			}
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (m *V1GetEventStreamResponse) contextValidateRoundFinalized(ctx context.Context, formats strfmt.Registry) error {
-
-	if m.RoundFinalized != nil {
-
-		if swag.IsZero(m.RoundFinalized) { // not required
-			return nil
-		}
-
-		if err := m.RoundFinalized.ContextValidate(ctx, formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("roundFinalized")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("roundFinalized")
 			}
 			return err
 		}

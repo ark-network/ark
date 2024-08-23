@@ -13,77 +13,62 @@ import (
 	"github.com/go-openapi/errors"
 	"github.com/go-openapi/runtime"
 	cr "github.com/go-openapi/runtime/client"
-	"github.com/go-openapi/strfmt"
 
-	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/models"
+	strfmt "github.com/go-openapi/strfmt"
+
+	models "github.com/ark-network/ark/pkg/client-sdk/client/rest/service/models"
 )
 
-// NewArkServiceCreatePaymentParams creates a new ArkServiceCreatePaymentParams object,
-// with the default timeout for this client.
-//
-// Default values are not hydrated, since defaults are normally applied by the API server side.
-//
-// To enforce default values in parameter, use SetDefaults or WithDefaults.
+// NewArkServiceCreatePaymentParams creates a new ArkServiceCreatePaymentParams object
+// with the default values initialized.
 func NewArkServiceCreatePaymentParams() *ArkServiceCreatePaymentParams {
+	var ()
 	return &ArkServiceCreatePaymentParams{
+
 		timeout: cr.DefaultTimeout,
 	}
 }
 
 // NewArkServiceCreatePaymentParamsWithTimeout creates a new ArkServiceCreatePaymentParams object
-// with the ability to set a timeout on a request.
+// with the default values initialized, and the ability to set a timeout on a request
 func NewArkServiceCreatePaymentParamsWithTimeout(timeout time.Duration) *ArkServiceCreatePaymentParams {
+	var ()
 	return &ArkServiceCreatePaymentParams{
+
 		timeout: timeout,
 	}
 }
 
 // NewArkServiceCreatePaymentParamsWithContext creates a new ArkServiceCreatePaymentParams object
-// with the ability to set a context for a request.
+// with the default values initialized, and the ability to set a context for a request
 func NewArkServiceCreatePaymentParamsWithContext(ctx context.Context) *ArkServiceCreatePaymentParams {
+	var ()
 	return &ArkServiceCreatePaymentParams{
+
 		Context: ctx,
 	}
 }
 
 // NewArkServiceCreatePaymentParamsWithHTTPClient creates a new ArkServiceCreatePaymentParams object
-// with the ability to set a custom HTTPClient for a request.
+// with the default values initialized, and the ability to set a custom HTTPClient for a request
 func NewArkServiceCreatePaymentParamsWithHTTPClient(client *http.Client) *ArkServiceCreatePaymentParams {
+	var ()
 	return &ArkServiceCreatePaymentParams{
 		HTTPClient: client,
 	}
 }
 
-/*
-ArkServiceCreatePaymentParams contains all the parameters to send to the API endpoint
-
-	for the ark service create payment operation.
-
-	Typically these are written to a http.Request.
+/*ArkServiceCreatePaymentParams contains all the parameters to send to the API endpoint
+for the ark service create payment operation typically these are written to a http.Request
 */
 type ArkServiceCreatePaymentParams struct {
 
-	// Body.
+	/*Body*/
 	Body *models.V1CreatePaymentRequest
 
 	timeout    time.Duration
 	Context    context.Context
 	HTTPClient *http.Client
-}
-
-// WithDefaults hydrates default values in the ark service create payment params (not the query body).
-//
-// All values with no default are reset to their zero value.
-func (o *ArkServiceCreatePaymentParams) WithDefaults() *ArkServiceCreatePaymentParams {
-	o.SetDefaults()
-	return o
-}
-
-// SetDefaults hydrates default values in the ark service create payment params (not the query body).
-//
-// All values with no default are reset to their zero value.
-func (o *ArkServiceCreatePaymentParams) SetDefaults() {
-	// no default values defined for this parameter
 }
 
 // WithTimeout adds the timeout to the ark service create payment params
@@ -137,6 +122,7 @@ func (o *ArkServiceCreatePaymentParams) WriteToRequest(r runtime.ClientRequest, 
 		return err
 	}
 	var res []error
+
 	if o.Body != nil {
 		if err := r.SetBodyParam(o.Body); err != nil {
 			return err

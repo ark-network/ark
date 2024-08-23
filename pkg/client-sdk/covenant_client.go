@@ -558,6 +558,21 @@ func (a *covenantArkClient) ClaimAsync(ctx context.Context) (string, error) {
 	return "", fmt.Errorf("not implemented")
 }
 
+func (a *covenantArkClient) PaymentNotification(
+	ctx context.Context,
+	pubKey string,
+) (<-chan client.Payment, error) {
+	paymentsCh := make(chan client.Payment)
+	go func() {
+		defer close(paymentsCh)
+		err := a.listenForPayments(ctx, pubKey, paymentsCh)
+		if err != nil {
+			log.Printf("Error listening for payments: %v", err)
+		}
+	}()
+	return paymentsCh, nil
+}
+
 func (a *covenantArkClient) sendOnchain(
 	ctx context.Context, receivers []Receiver,
 ) (string, error) {

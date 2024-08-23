@@ -303,8 +303,37 @@ func (s *covenantlessService) GetRoundByTxid(ctx context.Context, poolTxid strin
 	return s.repoManager.Rounds().GetRoundWithTxid(ctx, poolTxid)
 }
 
-func (s *covenantlessService) GetRoundById(ctx context.Context, id string) (*domain.Round, error) {
-	return s.repoManager.Rounds().GetRoundWithId(ctx, id)
+func (s *covenantlessService) GetRoundById(ctx context.Context, id string) (*domain.Round, []Payment, error) {
+	round, err := s.repoManager.Rounds().GetRoundWithId(ctx, id)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	spentVtxo := getSpentVtxos(round.Payments)
+	spendableVtxo := s.getNewVtxos(round)
+
+	payments := make([]Payment, 0, len(spentVtxo)+len(spendableVtxo))
+	for _, v := range spentVtxo {
+		payments = append(payments, Payment{
+			TxID:    v.Txid,
+			VOut:    v.VOut,
+			Spent:   true,
+			Pending: false,
+		})
+	}
+
+	for _, v := range spendableVtxo {
+		payments = append(payments, Payment{
+			TxID:    v.Txid,
+			VOut:    v.VOut,
+			Spent:   false,
+			Pending: v.AsyncPayment != nil,
+			Amount:  v.Receiver.Amount,
+			PubKey:  v.Receiver.Pubkey,
+		})
+	}
+
+	return round, payments, nil
 }
 
 func (s *covenantlessService) GetCurrentRound(ctx context.Context) (*domain.Round, error) {

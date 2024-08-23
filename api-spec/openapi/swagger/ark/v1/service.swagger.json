@@ -632,6 +632,31 @@
         }
       }
     },
+    "v1Payment": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "vout": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "spent": {
+          "type": "boolean"
+        },
+        "pending": {
+          "type": "boolean"
+        },
+        "amount": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "pubkey": {
+          "type": "string"
+        }
+      }
+    },
     "v1PendingPayment": {
       "type": "object",
       "properties": {
@@ -715,6 +740,13 @@
         },
         "stage": {
           "$ref": "#/definitions/v1RoundStage"
+        },
+        "payments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Payment"
+          }
         }
       }
     },

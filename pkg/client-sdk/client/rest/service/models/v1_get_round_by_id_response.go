@@ -6,15 +6,13 @@ package models
 // Editing this file might prove futile when you re-run the swagger generate command
 
 import (
-	"context"
+	strfmt "github.com/go-openapi/strfmt"
 
 	"github.com/go-openapi/errors"
-	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
 )
 
 // V1GetRoundByIDResponse v1 get round by Id response
-//
 // swagger:model v1GetRoundByIdResponse
 type V1GetRoundByIDResponse struct {
 
@@ -37,6 +35,7 @@ func (m *V1GetRoundByIDResponse) Validate(formats strfmt.Registry) error {
 }
 
 func (m *V1GetRoundByIDResponse) validateRound(formats strfmt.Registry) error {
+
 	if swag.IsZero(m.Round) { // not required
 		return nil
 	}
@@ -45,43 +44,6 @@ func (m *V1GetRoundByIDResponse) validateRound(formats strfmt.Registry) error {
 		if err := m.Round.Validate(formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
 				return ve.ValidateName("round")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("round")
-			}
-			return err
-		}
-	}
-
-	return nil
-}
-
-// ContextValidate validate this v1 get round by Id response based on the context it is used
-func (m *V1GetRoundByIDResponse) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
-	var res []error
-
-	if err := m.contextValidateRound(ctx, formats); err != nil {
-		res = append(res, err)
-	}
-
-	if len(res) > 0 {
-		return errors.CompositeValidationError(res...)
-	}
-	return nil
-}
-
-func (m *V1GetRoundByIDResponse) contextValidateRound(ctx context.Context, formats strfmt.Registry) error {
-
-	if m.Round != nil {
-
-		if swag.IsZero(m.Round) { // not required
-			return nil
-		}
-
-		if err := m.Round.ContextValidate(ctx, formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("round")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("round")
 			}
 			return err
 		}

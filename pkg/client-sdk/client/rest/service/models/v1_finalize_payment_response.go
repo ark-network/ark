@@ -6,6 +6,5 @@ package models
 // Editing this file might prove futile when you re-run the swagger generate command
 
 // V1FinalizePaymentResponse v1 finalize payment response
-//
 // swagger:model v1FinalizePaymentResponse
 type V1FinalizePaymentResponse interface{}

@@ -228,9 +228,21 @@ func (h *handler) GetRoundById(
 		return nil, status.Error(codes.InvalidArgument, "missing round id")
 	}
 
-	round, err := h.svc.GetRoundById(ctx, id)
+	round, pts, err := h.svc.GetRoundById(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+
+	payments := make([]*arkv1.Payment, 0, len(pts))
+	for _, p := range pts {
+		payments = append(payments, &arkv1.Payment{
+			Txid:    p.TxID,
+			Vout:    p.VOut,
+			Spent:   p.Spent,
+			Pending: p.Pending,
+			Amount:  uint32(p.Amount),
+			Pubkey:  p.PubKey,
+		})
 	}
 
 	return &arkv1.GetRoundByIdResponse{
@@ -243,6 +255,7 @@ func (h *handler) GetRoundById(
 			ForfeitTxs:     round.ForfeitTxs,
 			Connectors:     round.Connectors,
 			Stage:          toRoundStage(round.Stage),
+			Payments:       payments,
 		},
 	}, nil
 }

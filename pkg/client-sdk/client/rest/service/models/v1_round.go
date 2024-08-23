@@ -6,15 +6,15 @@ package models
 // Editing this file might prove futile when you re-run the swagger generate command
 
 import (
-	"context"
+	"strconv"
+
+	strfmt "github.com/go-openapi/strfmt"
 
 	"github.com/go-openapi/errors"
-	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
 )
 
 // V1Round v1 round
-//
 // swagger:model v1Round
 type V1Round struct {
 
@@ -33,11 +33,14 @@ type V1Round struct {
 	// id
 	ID string `json:"id,omitempty"`
 
+	// payments
+	Payments []*V1Payment `json:"payments"`
+
 	// pool tx
 	PoolTx string `json:"poolTx,omitempty"`
 
 	// stage
-	Stage *V1RoundStage `json:"stage,omitempty"`
+	Stage V1RoundStage `json:"stage,omitempty"`
 
 	// start
 	Start string `json:"start,omitempty"`
@@ -48,6 +51,10 @@ func (m *V1Round) Validate(formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.validateCongestionTree(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.validatePayments(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -62,6 +69,7 @@ func (m *V1Round) Validate(formats strfmt.Registry) error {
 }
 
 func (m *V1Round) validateCongestionTree(formats strfmt.Registry) error {
+
 	if swag.IsZero(m.CongestionTree) { // not required
 		return nil
 	}
@@ -70,90 +78,50 @@ func (m *V1Round) validateCongestionTree(formats strfmt.Registry) error {
 		if err := m.CongestionTree.Validate(formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
 				return ve.ValidateName("congestionTree")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("congestionTree")
 			}
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (m *V1Round) validatePayments(formats strfmt.Registry) error {
+
+	if swag.IsZero(m.Payments) { // not required
+		return nil
+	}
+
+	for i := 0; i < len(m.Payments); i++ {
+		if swag.IsZero(m.Payments[i]) { // not required
+			continue
+		}
+
+		if m.Payments[i] != nil {
+			if err := m.Payments[i].Validate(formats); err != nil {
+				if ve, ok := err.(*errors.Validation); ok {
+					return ve.ValidateName("payments" + "." + strconv.Itoa(i))
+				}
+				return err
+			}
+		}
+
 	}
 
 	return nil
 }
 
 func (m *V1Round) validateStage(formats strfmt.Registry) error {
+
 	if swag.IsZero(m.Stage) { // not required
 		return nil
 	}
 
-	if m.Stage != nil {
-		if err := m.Stage.Validate(formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("stage")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("stage")
-			}
-			return err
+	if err := m.Stage.Validate(formats); err != nil {
+		if ve, ok := err.(*errors.Validation); ok {
+			return ve.ValidateName("stage")
 		}
-	}
-
-	return nil
-}
-
-// ContextValidate validate this v1 round based on the context it is used
-func (m *V1Round) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
-	var res []error
-
-	if err := m.contextValidateCongestionTree(ctx, formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.contextValidateStage(ctx, formats); err != nil {
-		res = append(res, err)
-	}
-
-	if len(res) > 0 {
-		return errors.CompositeValidationError(res...)
-	}
-	return nil
-}
-
-func (m *V1Round) contextValidateCongestionTree(ctx context.Context, formats strfmt.Registry) error {
-
-	if m.CongestionTree != nil {
-
-		if swag.IsZero(m.CongestionTree) { // not required
-			return nil
-		}
-
-		if err := m.CongestionTree.ContextValidate(ctx, formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("congestionTree")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("congestionTree")
-			}
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (m *V1Round) contextValidateStage(ctx context.Context, formats strfmt.Registry) error {
-
-	if m.Stage != nil {
-
-		if swag.IsZero(m.Stage) { // not required
-			return nil
-		}
-
-		if err := m.Stage.ContextValidate(ctx, formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("stage")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("stage")
-			}
-			return err
-		}
+		return err
 	}
 
 	return nil

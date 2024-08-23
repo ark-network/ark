@@ -240,6 +240,17 @@ func (a *grpcClient) GetRoundByID(
 		endedAt = &t
 	}
 	tree := treeFromProto{round.GetCongestionTree()}.parse()
+	payments := make([]client.Payment, 0, len(resp.GetRound().GetPayments()))
+	for _, p := range resp.GetRound().GetPayments() {
+		payments = append(payments, client.Payment{
+			TxID:    p.Txid,
+			VOut:    p.Vout,
+			Spent:   p.Spent,
+			Pending: p.Pending,
+			Amount:  uint64(p.Amount),
+			PubKey:  p.Pubkey,
+		})
+	}
 	return &client.Round{
 		ID:         round.GetId(),
 		StartedAt:  &startedAt,
@@ -249,6 +260,7 @@ func (a *grpcClient) GetRoundByID(
 		ForfeitTxs: round.GetForfeitTxs(),
 		Connectors: round.GetConnectors(),
 		Stage:      client.RoundStage(int(round.GetStage())),
+		Payments:   payments,
 	}, nil
 }
 

@@ -6,15 +6,13 @@ package models
 // Editing this file might prove futile when you re-run the swagger generate command
 
 import (
-	"context"
+	strfmt "github.com/go-openapi/strfmt"
 
 	"github.com/go-openapi/errors"
-	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
 )
 
 // V1PingResponse v1 ping response
-//
 // swagger:model v1PingResponse
 type V1PingResponse struct {
 
@@ -40,6 +38,7 @@ func (m *V1PingResponse) Validate(formats strfmt.Registry) error {
 }
 
 func (m *V1PingResponse) validateEvent(formats strfmt.Registry) error {
+
 	if swag.IsZero(m.Event) { // not required
 		return nil
 	}
@@ -48,43 +47,6 @@ func (m *V1PingResponse) validateEvent(formats strfmt.Registry) error {
 		if err := m.Event.Validate(formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
 				return ve.ValidateName("event")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("event")
-			}
-			return err
-		}
-	}
-
-	return nil
-}
-
-// ContextValidate validate this v1 ping response based on the context it is used
-func (m *V1PingResponse) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
-	var res []error
-
-	if err := m.contextValidateEvent(ctx, formats); err != nil {
-		res = append(res, err)
-	}
-
-	if len(res) > 0 {
-		return errors.CompositeValidationError(res...)
-	}
-	return nil
-}
-
-func (m *V1PingResponse) contextValidateEvent(ctx context.Context, formats strfmt.Registry) error {
-
-	if m.Event != nil {
-
-		if swag.IsZero(m.Event) { // not required
-			return nil
-		}
-
-		if err := m.Event.ContextValidate(ctx, formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("event")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("event")
 			}
 			return err
 		}
