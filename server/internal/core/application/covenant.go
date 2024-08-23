@@ -21,12 +21,13 @@ import (
 )
 
 type covenantService struct {
-	network             common.Network
-	pubkey              *secp256k1.PublicKey
-	roundLifetime       int64
-	roundInterval       int64
-	unilateralExitDelay int64
-	minRelayFee         uint64
+	network                  common.Network
+	pubkey                   *secp256k1.PublicKey
+	roundLifetime            int64
+	roundInterval            int64
+	unilateralExitDelay      int64
+	reverseBoardingExitDelay int64
+	minRelayFee              uint64
 
 	wallet      ports.WalletService
 	repoManager ports.RepoManager
@@ -45,7 +46,7 @@ type covenantService struct {
 
 func NewCovenantService(
 	network common.Network,
-	roundInterval, roundLifetime, unilateralExitDelay int64, minRelayFee uint64,
+	roundInterval, roundLifetime, unilateralExitDelay, reverseBoardingExitDelay int64, minRelayFee uint64,
 	walletSvc ports.WalletService, repoManager ports.RepoManager,
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	scheduler ports.SchedulerService,
@@ -64,7 +65,7 @@ func NewCovenantService(
 
 	svc := &covenantService{
 		network, pubkey,
-		roundLifetime, roundInterval, unilateralExitDelay, minRelayFee,
+		roundLifetime, roundInterval, unilateralExitDelay, reverseBoardingExitDelay, minRelayFee,
 		walletSvc, repoManager, builder, scanner, sweeper,
 		paymentRequests, forfeitTxs, eventsCh, onboardingCh, nil,
 	}
@@ -114,8 +115,25 @@ func (s *covenantService) Stop() {
 	close(s.onboardingCh)
 }
 
-func (s *covenantService) SpendVtxos(ctx context.Context, inputs []domain.VtxoKey) (string, error) {
-	vtxos, err := s.repoManager.Vtxos().GetVtxos(ctx, inputs)
+func (s *covenantService) CreateReverseBoardingAddress(ctx context.Context, userPubkey *secp256k1.PublicKey) (string, error) {
+	return "", fmt.Errorf("unimplemented")
+}
+
+func (s *covenantService) SpendVtxos(ctx context.Context, inputs []Input) (string, error) {
+	vtxosInputs := make([]domain.VtxoKey, 0)
+
+	for _, in := range inputs {
+		if in.IsReverseBoarding() {
+			return "", fmt.Errorf("reverse boarding inputs cannot be spent in covenant version")
+		}
+
+		vtxosInputs = append(vtxosInputs, domain.VtxoKey{
+			Txid: in.GetTxid(),
+			VOut: in.GetIndex(),
+		})
+	}
+
+	vtxos, err := s.repoManager.Vtxos().GetVtxos(ctx, vtxosInputs)
 	if err != nil {
 		return "", err
 	}
@@ -123,9 +141,17 @@ func (s *covenantService) SpendVtxos(ctx context.Context, inputs []domain.VtxoKe
 		if v.Spent {
 			return "", fmt.Errorf("input %s:%d already spent", v.Txid, v.VOut)
 		}
+
+		if v.Redeemed {
+			return "", fmt.Errorf("input %s:%d already redeemed", v.Txid, v.VOut)
+		}
+
+		if v.Spent {
+			return "", fmt.Errorf("input %s:%d already spent", v.Txid, v.VOut)
+		}
 	}
 
-	payment, err := domain.NewPayment(vtxos)
+	payment, err := domain.NewPayment(vtxos, nil)
 	if err != nil {
 		return "", err
 	}
@@ -173,6 +199,10 @@ func (s *covenantService) SignVtxos(ctx context.Context, forfeitTxs []string) er
 	return s.forfeitTxs.sign(forfeitTxs)
 }
 
+func (s *covenantService) SignRoundTx(ctx context.Context, roundTx string) error {
+	return fmt.Errorf("unimplemented")
+}
+
 func (s *covenantService) ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, []domain.Vtxo, error) {
 	pk := hex.EncodeToString(pubkey.SerializeCompressed())
 	return s.repoManager.Vtxos().GetAllVtxos(ctx, pk)
@@ -198,12 +228,13 @@ func (s *covenantService) GetInfo(ctx context.Context) (*ServiceInfo, error) {
 	pubkey := hex.EncodeToString(s.pubkey.SerializeCompressed())
 
 	return &ServiceInfo{
-		PubKey:              pubkey,
-		RoundLifetime:       s.roundLifetime,
-		UnilateralExitDelay: s.unilateralExitDelay,
-		RoundInterval:       s.roundInterval,
-		Network:             s.network.Name,
-		MinRelayFee:         int64(s.minRelayFee),
+		PubKey:                   pubkey,
+		RoundLifetime:            s.roundLifetime,
+		UnilateralExitDelay:      s.unilateralExitDelay,
+		ReverseBoardingExitDelay: s.reverseBoardingExitDelay,
+		RoundInterval:            s.roundInterval,
+		Network:                  s.network.Name,
+		MinRelayFee:              int64(s.minRelayFee),
 	}, nil
 }
 

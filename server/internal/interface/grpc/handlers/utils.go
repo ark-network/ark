@@ -6,22 +6,10 @@ import (
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
-
-func parseTxs(txs []string) ([]string, error) {
-	if len(txs) <= 0 {
-		return nil, fmt.Errorf("missing list of forfeit txs")
-	}
-	// TODO abstract this ?
-	// for _, tx := range txs {
-	// 	if _, err := psetv2.NewPsetFromBase64(tx); err != nil {
-	// 		return nil, fmt.Errorf("invalid tx format")
-	// 	}
-	// }
-	return txs, nil
-}
 
 func parseAddress(addr string) (string, *secp256k1.PublicKey, *secp256k1.PublicKey, error) {
 	if len(addr) <= 0 {
@@ -30,19 +18,43 @@ func parseAddress(addr string) (string, *secp256k1.PublicKey, *secp256k1.PublicK
 	return common.DecodeAddress(addr)
 }
 
-func parseInputs(ins []*arkv1.Input) ([]domain.VtxoKey, error) {
+func parseInputs(ins []*arkv1.Input) ([]application.Input, error) {
 	if len(ins) <= 0 {
 		return nil, fmt.Errorf("missing inputs")
 	}
 
-	vtxos := make([]domain.VtxoKey, 0, len(ins))
+	inputs := make([]application.Input, 0, len(ins))
 	for _, input := range ins {
-		vtxos = append(vtxos, domain.VtxoKey{
+
+		vtxoKey := domain.VtxoKey{
 			Txid: input.GetTxid(),
 			VOut: input.GetVout(),
+		}
+
+		reverseBoardingKey := input.GetReverseBoardingPubkey()
+		if reverseBoardingKey == "" {
+			inputs = append(inputs, application.VtxoInput{
+				VtxoKey: vtxoKey,
+			})
+			continue
+		}
+
+		ownerPubkeyBytes, err := hex.DecodeString(reverseBoardingKey)
+		if err != nil {
+			return nil, fmt.Errorf("invalid reverse boarding pubkey")
+		}
+
+		ownerPubkey, err := secp256k1.ParsePubKey(ownerPubkeyBytes)
+		if err != nil {
+			return nil, fmt.Errorf("invalid reverse boarding pubkey")
+		}
+
+		inputs = append(inputs, application.ReverseBoardingInput{
+			VtxoKey:        vtxoKey,
+			OwnerPublicKey: ownerPubkey,
 		})
 	}
-	return vtxos, nil
+	return inputs, nil
 }
 
 func parseReceivers(outs []*arkv1.Output) ([]domain.Receiver, error) {

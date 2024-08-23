@@ -17,17 +17,19 @@ import (
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	log "github.com/sirupsen/logrus"
 )
 
 type covenantlessService struct {
-	network             common.Network
-	pubkey              *secp256k1.PublicKey
-	roundLifetime       int64
-	roundInterval       int64
-	unilateralExitDelay int64
-	minRelayFee         uint64
+	network                  common.Network
+	pubkey                   *secp256k1.PublicKey
+	roundLifetime            int64
+	roundInterval            int64
+	unilateralExitDelay      int64
+	reverseBoardingExitDelay int64
+	minRelayFee              uint64
 
 	wallet      ports.WalletService
 	repoManager ports.RepoManager
@@ -41,7 +43,8 @@ type covenantlessService struct {
 	eventsCh     chan domain.RoundEvent
 	onboardingCh chan onboarding
 
-	currentRound *domain.Round
+	currentRoundLock sync.Mutex
+	currentRound     *domain.Round
 
 	asyncPaymentsCache map[domain.VtxoKey]struct {
 		receivers []domain.Receiver
@@ -51,7 +54,7 @@ type covenantlessService struct {
 
 func NewCovenantlessService(
 	network common.Network,
-	roundInterval, roundLifetime, unilateralExitDelay int64, minRelayFee uint64,
+	roundInterval, roundLifetime, unilateralExitDelay, reverseBoardingExitDelay int64, minRelayFee uint64,
 	walletSvc ports.WalletService, repoManager ports.RepoManager,
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	scheduler ports.SchedulerService,
@@ -73,22 +76,24 @@ func NewCovenantlessService(
 	})
 
 	svc := &covenantlessService{
-		network:             network,
-		pubkey:              pubkey,
-		roundLifetime:       roundLifetime,
-		roundInterval:       roundInterval,
-		unilateralExitDelay: unilateralExitDelay,
-		minRelayFee:         minRelayFee,
-		wallet:              walletSvc,
-		repoManager:         repoManager,
-		builder:             builder,
-		scanner:             scanner,
-		sweeper:             sweeper,
-		paymentRequests:     paymentRequests,
-		forfeitTxs:          forfeitTxs,
-		eventsCh:            eventsCh,
-		onboardingCh:        onboardingCh,
-		asyncPaymentsCache:  asyncPaymentsCache,
+		network:                  network,
+		pubkey:                   pubkey,
+		roundLifetime:            roundLifetime,
+		roundInterval:            roundInterval,
+		unilateralExitDelay:      unilateralExitDelay,
+		reverseBoardingExitDelay: reverseBoardingExitDelay,
+		minRelayFee:              minRelayFee,
+		wallet:                   walletSvc,
+		repoManager:              repoManager,
+		builder:                  builder,
+		scanner:                  scanner,
+		sweeper:                  sweeper,
+		paymentRequests:          paymentRequests,
+		forfeitTxs:               forfeitTxs,
+		eventsCh:                 eventsCh,
+		onboardingCh:             onboardingCh,
+		asyncPaymentsCache:       asyncPaymentsCache,
+		currentRoundLock:         sync.Mutex{},
 	}
 
 	repoManager.RegisterEventsHandler(
@@ -239,18 +244,64 @@ func (s *covenantlessService) CreateAsyncPayment(
 	return res.RedeemTx, res.UnconditionalForfeitTxs, nil
 }
 
-func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []domain.VtxoKey) (string, error) {
-	vtxos, err := s.repoManager.Vtxos().GetVtxos(ctx, inputs)
+func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []Input) (string, error) {
+	vtxosInputs := make([]domain.VtxoKey, 0)
+	reverseBoardingInputs := make([]Input, 0)
+
+	for _, in := range inputs {
+		if in.IsReverseBoarding() {
+			reverseBoardingInputs = append(reverseBoardingInputs, in)
+			continue
+		}
+		vtxosInputs = append(vtxosInputs, domain.VtxoKey{
+			Txid: in.GetTxid(),
+			VOut: in.GetIndex(),
+		})
+	}
+
+	vtxos, err := s.repoManager.Vtxos().GetVtxos(ctx, vtxosInputs)
 	if err != nil {
 		return "", err
 	}
+
 	for _, v := range vtxos {
 		if v.Spent {
 			return "", fmt.Errorf("input %s:%d already spent", v.Txid, v.VOut)
 		}
+
+		if v.Redeemed {
+			return "", fmt.Errorf("input %s:%d already redeemed", v.Txid, v.VOut)
+		}
+
+		if v.Swept {
+			return "", fmt.Errorf("input %s:%d already swept", v.Txid, v.VOut)
+		}
 	}
 
-	payment, err := domain.NewPayment(vtxos)
+	reverseBoardingTxs := make(map[string]string, 0) // txid -> txhex
+	for _, in := range reverseBoardingInputs {
+		txid := in.GetTxid()
+		if _, ok := reverseBoardingTxs[txid]; !ok {
+			txhex, err := s.wallet.GetTransaction(ctx, txid)
+			if err != nil {
+				return "", fmt.Errorf("failed to get tx %s: %s", txid, err)
+			}
+			reverseBoardingTxs[txid] = txhex
+		}
+	}
+
+	boardingInputs := make([]domain.ReverseBoardingInput, 0, len(reverseBoardingInputs))
+
+	for _, in := range reverseBoardingInputs {
+		input, err := s.newReverseBoardingInput(reverseBoardingTxs[in.GetTxid()], in.GetIndex(), in.GetReverseBoardingPublicKey())
+		if err != nil {
+			return "", fmt.Errorf("input %s:%d is not a valid reverse boarding", in.GetTxid(), in.GetIndex())
+		}
+
+		boardingInputs = append(boardingInputs, *input)
+	}
+
+	payment, err := domain.NewPayment(vtxos, boardingInputs)
 	if err != nil {
 		return "", err
 	}
@@ -258,6 +309,39 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []domain.Vt
 		return "", err
 	}
 	return payment.Id, nil
+}
+
+func (s *covenantlessService) newReverseBoardingInput(txhex string, vout uint32, pubkey *secp256k1.PublicKey) (*domain.ReverseBoardingInput, error) {
+	var tx wire.MsgTx
+
+	if err := tx.Deserialize(hex.NewDecoder(strings.NewReader(txhex))); err != nil {
+		return nil, fmt.Errorf("failed to deserialize tx: %s", err)
+	}
+
+	if len(tx.TxOut) <= int(vout) {
+		return nil, fmt.Errorf("output not found")
+	}
+
+	out := tx.TxOut[vout]
+	script := out.PkScript
+
+	_, expectedScript, err := s.builder.GetReverseBoardingScript(pubkey, s.pubkey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get reverse boarding script: %s", err)
+	}
+
+	if !bytes.Equal(script, expectedScript) {
+		return nil, fmt.Errorf("output script is not a valid reverse boarding")
+	}
+
+	return &domain.ReverseBoardingInput{
+		VtxoKey: domain.VtxoKey{
+			Txid: tx.TxHash().String(),
+			VOut: vout,
+		},
+		OwnerPublicKey: hex.EncodeToString(pubkey.SerializeCompressed()),
+		Value:          out.Value,
+	}, nil
 }
 
 func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error {
@@ -290,6 +374,19 @@ func (s *covenantlessService) SignVtxos(ctx context.Context, forfeitTxs []string
 	return s.forfeitTxs.sign(forfeitTxs)
 }
 
+func (s *covenantlessService) SignRoundTx(ctx context.Context, signedRoundTx string) error {
+	s.currentRoundLock.Lock()
+	defer s.currentRoundLock.Unlock()
+
+	combined, err := s.builder.VerifyAndCombinePartialTx(s.currentRound.UnsignedTx, signedRoundTx)
+	if err != nil {
+		return fmt.Errorf("failed to verify and combine partial tx: %s", err)
+	}
+
+	s.currentRound.UnsignedTx = combined
+	return nil
+}
+
 func (s *covenantlessService) ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, []domain.Vtxo, error) {
 	pk := hex.EncodeToString(pubkey.SerializeCompressed())
 	return s.repoManager.Vtxos().GetAllVtxos(ctx, pk)
@@ -315,12 +412,13 @@ func (s *covenantlessService) GetInfo(ctx context.Context) (*ServiceInfo, error)
 	pubkey := hex.EncodeToString(s.pubkey.SerializeCompressed())
 
 	return &ServiceInfo{
-		PubKey:              pubkey,
-		RoundLifetime:       s.roundLifetime,
-		UnilateralExitDelay: s.unilateralExitDelay,
-		RoundInterval:       s.roundInterval,
-		Network:             s.network.Name,
-		MinRelayFee:         int64(s.minRelayFee),
+		PubKey:                   pubkey,
+		RoundLifetime:            s.roundLifetime,
+		UnilateralExitDelay:      s.unilateralExitDelay,
+		ReverseBoardingExitDelay: s.reverseBoardingExitDelay,
+		RoundInterval:            s.roundInterval,
+		Network:                  s.network.Name,
+		MinRelayFee:              int64(s.minRelayFee),
 	}, nil
 }
 
@@ -365,6 +463,17 @@ func (s *covenantlessService) Onboard(
 	}
 
 	return nil
+}
+
+func (s *covenantlessService) CreateReverseBoardingAddress(
+	ctx context.Context, userPubkey *secp256k1.PublicKey,
+) (string, error) {
+	addr, _, err := s.builder.GetReverseBoardingScript(userPubkey, s.pubkey)
+	if err != nil {
+		return "", fmt.Errorf("failed to get reverse boarding script: %s", err)
+	}
+
+	return addr, nil
 }
 
 func (s *covenantlessService) start() {
@@ -613,14 +722,47 @@ func (s *covenantlessService) finalizeRound() {
 	}
 
 	log.Debugf("signing round transaction %s\n", round.Id)
-	signedPoolTx, err := s.wallet.SignTransaction(ctx, round.UnsignedTx, true)
+
+	reverseBoardingInputs := make([]int, 0)
+	roundTx, err := psbt.NewFromRawBytes(strings.NewReader(round.UnsignedTx), true)
+	if err != nil {
+		changes = round.Fail(fmt.Errorf("failed to parse round tx: %s", err))
+		log.WithError(err).Warn("failed to parse round tx")
+		return
+	}
+
+	for i, in := range roundTx.Inputs {
+		if len(in.TaprootLeafScript) > 0 {
+			if len(in.TaprootScriptSpendSig) == 0 {
+				err = fmt.Errorf("missing tapscript spend sig for input %d", i)
+				changes = round.Fail(err)
+				log.WithError(err).Warn("missing reverse boarding sig")
+				return
+			}
+
+			reverseBoardingInputs = append(reverseBoardingInputs, i)
+		}
+	}
+
+	signedRoundTx := round.UnsignedTx
+
+	if len(reverseBoardingInputs) > 0 {
+		signedRoundTx, err = s.wallet.SignTransactionTapscript(ctx, signedRoundTx, reverseBoardingInputs)
+		if err != nil {
+			changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
+			log.WithError(err).Warn("failed to sign round tx")
+			return
+		}
+	}
+
+	signedRoundTx, err = s.wallet.SignTransaction(ctx, signedRoundTx, true)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
 		log.WithError(err).Warn("failed to sign round tx")
 		return
 	}
 
-	txid, err := s.wallet.BroadcastTransaction(ctx, signedPoolTx)
+	txid, err := s.wallet.BroadcastTransaction(ctx, signedRoundTx)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to broadcast pool tx: %s", err))
 		log.WithError(err).Warn("failed to broadcast pool tx")

@@ -16,9 +16,10 @@ var (
 type Service interface {
 	Start() error
 	Stop()
-	SpendVtxos(ctx context.Context, inputs []domain.VtxoKey) (string, error)
+	SpendVtxos(ctx context.Context, inputs []Input) (string, error)
 	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error
 	SignVtxos(ctx context.Context, forfeitTxs []string) error
+	SignRoundTx(ctx context.Context, roundTx string) error
 	GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error)
 	GetRoundById(ctx context.Context, id string) (*domain.Round, error)
 	GetCurrentRound(ctx context.Context) (*domain.Round, error)
@@ -41,15 +42,24 @@ type Service interface {
 	CompleteAsyncPayment(
 		ctx context.Context, redeemTx string, unconditionalForfeitTxs []string,
 	) error
+	CreateReverseBoardingAddress(ctx context.Context, userPubkey *secp256k1.PublicKey) (string, error)
+}
+
+type Input interface {
+	GetTxid() string
+	GetIndex() uint32
+	IsReverseBoarding() bool
+	GetReverseBoardingPublicKey() *secp256k1.PublicKey // nil if not reverse boarding
 }
 
 type ServiceInfo struct {
-	PubKey              string
-	RoundLifetime       int64
-	UnilateralExitDelay int64
-	RoundInterval       int64
-	Network             string
-	MinRelayFee         int64
+	PubKey                   string
+	RoundLifetime            int64
+	UnilateralExitDelay      int64
+	ReverseBoardingExitDelay int64
+	RoundInterval            int64
+	Network                  string
+	MinRelayFee              int64
 }
 
 type WalletStatus struct {

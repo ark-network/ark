@@ -59,9 +59,21 @@ func (h *handler) CompletePayment(ctx context.Context, req *arkv1.CompletePaymen
 }
 
 func (h *handler) CreatePayment(ctx context.Context, req *arkv1.CreatePaymentRequest) (*arkv1.CreatePaymentResponse, error) {
-	vtxosKeys, err := parseInputs(req.GetInputs())
+	inputs, err := parseInputs(req.GetInputs())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	vtxosKeys := make([]domain.VtxoKey, 0, len(inputs))
+	for _, input := range inputs {
+		if input.IsReverseBoarding() {
+			return nil, status.Error(codes.InvalidArgument, "reverse boarding inputs are not allowed")
+		}
+
+		vtxosKeys = append(vtxosKeys, domain.VtxoKey{
+			Txid: input.GetTxid(),
+			VOut: input.GetIndex(),
+		})
 	}
 
 	receivers, err := parseReceivers(req.GetOutputs())
@@ -140,12 +152,12 @@ func (h *handler) Ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.Ping
 }
 
 func (h *handler) RegisterPayment(ctx context.Context, req *arkv1.RegisterPaymentRequest) (*arkv1.RegisterPaymentResponse, error) {
-	vtxosKeys, err := parseInputs(req.GetInputs())
+	inputs, err := parseInputs(req.GetInputs())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	id, err := h.svc.SpendVtxos(ctx, vtxosKeys)
+	id, err := h.svc.SpendVtxos(ctx, inputs)
 	if err != nil {
 		return nil, err
 	}
@@ -169,12 +181,23 @@ func (h *handler) ClaimPayment(ctx context.Context, req *arkv1.ClaimPaymentReque
 }
 
 func (h *handler) FinalizePayment(ctx context.Context, req *arkv1.FinalizePaymentRequest) (*arkv1.FinalizePaymentResponse, error) {
-	forfeitTxs, err := parseTxs(req.GetSignedForfeitTxs())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+	forfeitTxs := req.GetSignedForfeitTxs()
+	roundTx := req.GetSignedRoundTx()
+
+	if len(forfeitTxs) <= 0 && roundTx == "" {
+		return nil, status.Error(codes.InvalidArgument, "missing forfeit txs or round tx")
 	}
-	if err := h.svc.SignVtxos(ctx, forfeitTxs); err != nil {
-		return nil, err
+
+	if len(forfeitTxs) > 0 {
+		if err := h.svc.SignVtxos(ctx, forfeitTxs); err != nil {
+			return nil, err
+		}
+	}
+
+	if roundTx != "" {
+		if err := h.svc.SignRoundTx(ctx, roundTx); err != nil {
+			return nil, err
+		}
 	}
 
 	return &arkv1.FinalizePaymentResponse{}, nil

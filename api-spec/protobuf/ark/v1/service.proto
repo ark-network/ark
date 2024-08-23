@@ -108,6 +108,8 @@ message ClaimPaymentResponse {}
 message FinalizePaymentRequest {
   // Forfeit txs signed by the user. 
   repeated string signed_forfeit_txs = 1;
+  // If payment has reverse boarding, the user must sign the associated inputs.
+  optional string signed_round_tx = 2;
 }
 message FinalizePaymentResponse {}
 
@@ -213,6 +215,7 @@ message Round {
 message Input {
   string txid = 1;
   uint32 vout = 2;
+  optional string reverse_boarding_pubkey = 3;
 }
 
 message Output {
