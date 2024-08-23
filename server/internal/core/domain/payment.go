@@ -12,15 +12,17 @@ import (
 const dustAmount = 450
 
 type Payment struct {
-	Id        string
-	Inputs    []Vtxo
-	Receivers []Receiver
+	Id                    string
+	Inputs                []Vtxo
+	ReverseBoardingInputs []ReverseBoardingInput
+	Receivers             []Receiver
 }
 
-func NewPayment(inputs []Vtxo) (*Payment, error) {
+func NewPayment(inputs []Vtxo, reverseBoardings []ReverseBoardingInput) (*Payment, error) {
 	p := &Payment{
-		Id:     uuid.New().String(),
-		Inputs: inputs,
+		Id:                    uuid.New().String(),
+		Inputs:                inputs,
+		ReverseBoardingInputs: reverseBoardings,
 	}
 	if err := p.validate(true); err != nil {
 		return nil, err
@@ -54,6 +56,9 @@ func (p Payment) TotalInputAmount() uint64 {
 	tot := uint64(0)
 	for _, in := range p.Inputs {
 		tot += in.Amount
+	}
+	for _, in := range p.ReverseBoardingInputs {
+		tot += uint64(in.Value)
 	}
 	return tot
 }
@@ -142,4 +147,10 @@ type Vtxo struct {
 type AsyncPaymentTxs struct {
 	RedeemTx                string // always signed by the ASP when created
 	UnconditionalForfeitTxs []string
+}
+
+type ReverseBoardingInput struct {
+	VtxoKey
+	Value          int64
+	OwnerPublicKey string
 }

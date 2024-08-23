@@ -23,7 +23,7 @@ var inputs = []domain.Vtxo{
 func TestPayment(t *testing.T) {
 	t.Run("new_payment", func(t *testing.T) {
 		t.Run("vaild", func(t *testing.T) {
-			payment, err := domain.NewPayment(inputs)
+			payment, err := domain.NewPayment(inputs, nil)
 			require.NoError(t, err)
 			require.NotNil(t, payment)
 			require.NotEmpty(t, payment.Id)
@@ -43,7 +43,7 @@ func TestPayment(t *testing.T) {
 			}
 
 			for _, f := range fixtures {
-				payment, err := domain.NewPayment(f.inputs)
+				payment, err := domain.NewPayment(f.inputs, nil)
 				require.EqualError(t, err, f.expectedErr)
 				require.Nil(t, payment)
 			}
@@ -52,7 +52,7 @@ func TestPayment(t *testing.T) {
 
 	t.Run("add_receivers", func(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
-			payment, err := domain.NewPayment(inputs)
+			payment, err := domain.NewPayment(inputs, nil)
 			require.NoError(t, err)
 			require.NotNil(t, payment)
 
@@ -98,7 +98,7 @@ func TestPayment(t *testing.T) {
 				},
 			}
 
-			payment, err := domain.NewPayment(inputs)
+			payment, err := domain.NewPayment(inputs, nil)
 			require.NoError(t, err)
 			require.NotNil(t, payment)
 
