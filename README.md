@@ -81,7 +81,7 @@ This will compile the `arkd` and `ark` binaries for your current architecture. F
 4. Install dependencies:
 
    ```sh
-   go mod download
+   go work sync
    ```
 
 5. Build the project:
@@ -97,7 +97,7 @@ Note: You need to run `make build` in both the `server` and `client` directories
 
 ## Support
 
-If you encounter any issues or have questions, please file an issue on our [GitHub Issues](https://github.com/ark-network/ark/issues) page. 
+If you encounter any issues or have questions, please file an issue on our [GitHub Issues](https://github.com/ark-network/ark/issues) page.
 
 ## Security
 
