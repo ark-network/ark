@@ -54,6 +54,12 @@ service ArkService {
       get: "/v1/info"
     };
   }
+  rpc ReverseBoardingAddress(ReverseBoardingAddressRequest) returns (ReverseBoardingAddressResponse) {
+    option (google.api.http) = {
+      post: "/v1/reverseboarding"
+      body: "*"
+    };
+  };
   rpc Onboard(OnboardRequest) returns (OnboardResponse) {
     option (google.api.http) = {
       post: "/v1/onboard"
@@ -88,6 +94,15 @@ message CompletePaymentRequest {
   repeated string signed_unconditional_forfeit_txs = 2;
 }
 message CompletePaymentResponse {}
+
+message ReverseBoardingAddressRequest {
+  string pubkey = 1;
+}
+
+message ReverseBoardingAddressResponse {
+  string address = 1;
+
+}
 
 message RegisterPaymentRequest {
   repeated Input inputs = 1;
@@ -161,6 +176,7 @@ message GetInfoResponse {
   int64 round_interval = 4;
   string network = 5;
   int64 min_relay_fee = 6;
+  int64 reverse_boarding_exit_delay = 7;
 }
 
 message OnboardRequest {

@@ -326,12 +326,39 @@ func (h *handler) GetInfo(ctx context.Context, req *arkv1.GetInfoRequest) (*arkv
 	}
 
 	return &arkv1.GetInfoResponse{
-		Pubkey:              info.PubKey,
-		RoundLifetime:       info.RoundLifetime,
-		UnilateralExitDelay: info.UnilateralExitDelay,
-		RoundInterval:       info.RoundInterval,
-		Network:             info.Network,
-		MinRelayFee:         info.MinRelayFee,
+		Pubkey:                   info.PubKey,
+		RoundLifetime:            info.RoundLifetime,
+		UnilateralExitDelay:      info.UnilateralExitDelay,
+		RoundInterval:            info.RoundInterval,
+		Network:                  info.Network,
+		MinRelayFee:              info.MinRelayFee,
+		ReverseBoardingExitDelay: info.ReverseBoardingExitDelay,
+	}, nil
+}
+
+func (h *handler) ReverseBoardingAddress(ctx context.Context, req *arkv1.ReverseBoardingAddressRequest) (*arkv1.ReverseBoardingAddressResponse, error) {
+	pubkey := req.GetPubkey()
+	if pubkey == "" {
+		return nil, status.Error(codes.InvalidArgument, "missing pubkey")
+	}
+
+	pubkeyBytes, err := hex.DecodeString(pubkey)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid pubkey (invalid hex)")
+	}
+
+	userPubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid pubkey (parse error)")
+	}
+
+	addr, err := h.svc.CreateReverseBoardingAddress(ctx, userPubkey)
+	if err != nil {
+		return nil, err
+	}
+
+	return &arkv1.ReverseBoardingAddressResponse{
+		Address: addr,
 	}, nil
 }
 

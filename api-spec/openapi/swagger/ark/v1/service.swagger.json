@@ -291,6 +291,38 @@
         ]
       }
     },
+    "/v1/reverseboarding": {
+      "post": {
+        "operationId": "ArkService_ReverseBoardingAddress",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ReverseBoardingAddressResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1ReverseBoardingAddressRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
     "/v1/round/id/{id}": {
       "get": {
         "operationId": "ArkService_GetRoundById",
@@ -541,6 +573,10 @@
         "minRelayFee": {
           "type": "string",
           "format": "int64"
+        },
+        "reverseBoardingExitDelay": {
+          "type": "string",
+          "format": "int64"
         }
       }
     },
@@ -685,6 +721,22 @@
         "id": {
           "type": "string",
           "description": "Mocks wabisabi's credentials."
+        }
+      }
+    },
+    "v1ReverseBoardingAddressRequest": {
+      "type": "object",
+      "properties": {
+        "pubkey": {
+          "type": "string"
+        }
+      }
+    },
+    "v1ReverseBoardingAddressResponse": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string"
         }
       }
     },
