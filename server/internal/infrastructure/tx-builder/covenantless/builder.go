@@ -624,7 +624,7 @@ func (b *txBuilder) createPoolTx(
 	if err != nil {
 		return nil, err
 	}
-	for _, utxo := range utxos {
+	for inIndex, utxo := range utxos {
 		script, err := hex.DecodeString(utxo.GetScript())
 		if err != nil {
 			return nil, err
@@ -633,7 +633,7 @@ func (b *txBuilder) createPoolTx(
 		if err := updater.AddInWitnessUtxo(&wire.TxOut{
 			Value:    int64(utxo.GetValue()),
 			PkScript: script,
-		}, 0); err != nil {
+		}, inIndex); err != nil {
 			return nil, err
 		}
 	}
