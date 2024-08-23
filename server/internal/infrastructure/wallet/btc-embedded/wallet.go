@@ -719,6 +719,20 @@ func (s *service) IsTransactionConfirmed(
 	return s.esploraClient.getTxStatus(txid)
 }
 
+func (s *service) GetTransaction(ctx context.Context, txid string) (string, error) {
+	txhash, err := chainhash.NewHashFromStr(txid)
+	if err != nil {
+		return "", err
+	}
+
+	tx, err := s.wallet.GetTransactionDetails(txhash)
+	if err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(tx.RawTx), nil
+}
+
 func (s *service) castNotification(tx *wtxmgr.TxRecord) map[string]ports.VtxoWithValue {
 	vtxos := make(map[string]ports.VtxoWithValue)
 

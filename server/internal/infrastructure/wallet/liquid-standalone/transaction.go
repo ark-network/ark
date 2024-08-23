@@ -281,6 +281,15 @@ func (s *service) EstimateFees(
 	return fee.GetFeeAmount() + 5, nil
 }
 
+func (s *service) GetTransaction(ctx context.Context, txid string) (string, error) {
+	txHex, _, _, err := s.getTransaction(ctx, txid)
+	if err != nil {
+		return "", err
+	}
+
+	return txHex, nil
+}
+
 func (s *service) getTransaction(
 	ctx context.Context, txid string,
 ) (string, bool, int64, error) {
