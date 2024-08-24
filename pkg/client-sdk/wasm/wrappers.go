@@ -1,7 +1,7 @@
 //go:build js && wasm
 // +build js,wasm
 
-package browser
+package main
 
 import (
 	"context"
@@ -33,17 +33,17 @@ func LogWrapper() js.Func {
 func InitWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
 		if len(args) != 6 {
-			return nil, errors.New("invalid number of args")
+			return nil, errors.New("init: expected 6 arguments, got " + fmt.Sprint(len(args)))
 		}
 		chain := args[5].String()
-		if chain != "bitcoin" && chain != "liquid" {
-			return nil, errors.New("invalid chain, select either 'bitcoin' or 'liquid'")
+		if chain != "bitcoin" && chain != "liquid" && chain != "signet" && chain != "testnet" && chain != "regtest" && chain != "liquidtestnet" && chain != "liquidregtest" {
+			return nil, errors.New("invalid chain, select either 'bitcoin', 'liquid', 'signet', 'testnet', 'regtest', 'liquidtestnet', or 'liquidregtest'")
 		}
 
 		var walletSvc wallet.WalletService
 		switch args[0].String() {
 		case arksdk.SingleKeyWallet:
-			walletStore, err := getWalletStore(configStore.GetType())
+			walletStore, err := getWalletStore(configStore.GetType(), configStore.GetDatadir())
 			if err != nil {
 				return nil, fmt.Errorf("failed to init wallet store: %s", err)
 			}

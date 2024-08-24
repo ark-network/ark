@@ -5,36 +5,25 @@ package main
 
 import (
 	"context"
-	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
-	"github.com/ark-network/ark/pkg/client-sdk/wasm/browser"
+	"syscall/js"
+
+	inmemory "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
 )
 
 func main() {
 	c := make(chan struct{}, 0)
-	var (
-		ctx = context.Background()
-	)
-	store, err := browser.NewLocalStorageStore()
+
+	storeSvc, err := inmemory.NewConfigStore()
 	if err != nil {
-		browser.ConsoleError(err)
+		js.Global().Get("console").Call("error", err.Error())
 		return
 	}
-	if store != nil {
-		if err := browser.NewCovenantlessClient(ctx, store); err != nil {
-			browser.ConsoleError(err)
-			return
-		}
-	} else {
-		storeSvc, err := inmemorystore.NewConfigStore()
-		if err != nil {
-			browser.ConsoleError(err)
-			return
-		}
-		if err := browser.NewCovenantlessClient(ctx, storeSvc); err != nil {
-			browser.ConsoleError(err)
-			return
-		}
+
+	if err := NewCovenantlessClient(context.Background(), storeSvc); err != nil {
+		js.Global().Get("console").Call("error", err.Error())
+		return
 	}
+
 	println("ARK SDK WebAssembly module initialized")
 	<-c
 }

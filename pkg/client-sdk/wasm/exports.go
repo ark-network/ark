@@ -1,7 +1,7 @@
 //go:build js && wasm
 // +build js,wasm
 
-package browser
+package main
 
 import (
 	"context"
@@ -14,6 +14,10 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	singlekeywallet "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey"
 	walletstore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store"
+	walletfilestore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store/file"
+	walletmemstore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store/inmemory"
+
+	browser "github.com/ark-network/ark/pkg/client-sdk/wasm/browser"
 )
 
 var (
@@ -115,9 +119,15 @@ func NewCovenantlessClient(
 	select {}
 }
 
-func getWalletStore(storeType string) (walletstore.WalletStore, error) {
-	if storeType == LocalStorageStore {
-		return NewLocalStorageWalletStore()
+func getWalletStore(storeType string, datadir string) (walletstore.WalletStore, error) {
+	if storeType == browser.LocalStorageStore {
+		return browser.NewLocalStorageWalletStore()
+	}
+	if storeType == store.FileStore {
+		return walletfilestore.NewWalletStore(datadir)
+	}
+	if storeType == store.InMemoryStore {
+		return walletmemstore.NewWalletStore()
 	}
 	// TODO: Support IndexDB store
 	return nil, fmt.Errorf("unknown wallet store type")
@@ -126,7 +136,7 @@ func getWalletStore(storeType string) (walletstore.WalletStore, error) {
 func getSingleKeyWallet(
 	configStore store.ConfigStore, network string,
 ) (wallet.WalletService, error) {
-	walletStore, err := getWalletStore(configStore.GetType())
+	walletStore, err := getWalletStore(configStore.GetType(), configStore.GetDatadir())
 	if err != nil {
 		return nil, err
 	}
