@@ -84,7 +84,7 @@ var (
 			}
 			return cli.Onboard(ctx)
 		},
-		Flags: []cli.Flag{&flags.AmountOnboardFlag, &flags.PasswordFlag},
+		Flags: []cli.Flag{&flags.AmountOnboardFlag, &flags.PasswordFlag, &flags.ReverseOnboardingFlag},
 	}
 
 	sendCommand = cli.Command{

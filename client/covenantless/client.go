@@ -219,7 +219,8 @@ func castCongestionTree(congestionTree tree.CongestionTree) *arkv1.Tree {
 
 func handleRoundStream(
 	ctx *cli.Context, client arkv1.ArkServiceClient, paymentID string,
-	vtxosToSign []vtxo, secKey *secp256k1.PrivateKey, receivers []*arkv1.Output,
+	vtxosToSign []vtxo, mustSignRoundTx bool,
+	secKey *secp256k1.PrivateKey, receivers []*arkv1.Output,
 ) (poolTxID string, err error) {
 	stream, err := client.GetEventStream(ctx.Context, &arkv1.GetEventStreamRequest{})
 	if err != nil {
@@ -254,8 +255,8 @@ func handleRoundStream(
 			// stop pinging as soon as we receive some forfeit txs
 			pingStop()
 
-			poolTx := e.GetPoolTx()
-			ptx, err := psbt.NewFromRawBytes(strings.NewReader(poolTx), true)
+			roundTx := e.GetPoolTx()
+			ptx, err := psbt.NewFromRawBytes(strings.NewReader(roundTx), true)
 			if err != nil {
 				return "", err
 			}
@@ -284,7 +285,7 @@ func handleRoundStream(
 
 			if !isOnchainOnly(receivers) {
 				if err := bitcointree.ValidateCongestionTree(
-					congestionTree, poolTx, aspPubkey, int64(roundLifetime), int64(minRelayFee),
+					congestionTree, roundTx, aspPubkey, int64(roundLifetime), int64(minRelayFee),
 				); err != nil {
 					return "", err
 				}
@@ -445,7 +446,7 @@ func handleRoundStream(
 			}
 
 			// if no forfeit txs have been signed, start pinging again and wait for the next round
-			if len(signedForfeits) == 0 {
+			if len(vtxosToSign) > 0 && len(signedForfeits) == 0 {
 				fmt.Printf("\nno forfeit txs to sign, waiting for the next round...\n")
 				pingStop = nil
 				for pingStop == nil {
@@ -454,11 +455,34 @@ func handleRoundStream(
 				continue
 			}
 
-			fmt.Printf("%d signed\n", len(signedForfeits))
-			fmt.Print("finalizing payment... ")
-			_, err = client.FinalizePayment(ctx.Context, &arkv1.FinalizePaymentRequest{
+			if len(signedForfeits) > 0 {
+				fmt.Printf("%d signed\n", len(signedForfeits))
+			}
+
+			finalizePaymentRequest := &arkv1.FinalizePaymentRequest{
 				SignedForfeitTxs: signedForfeits,
-			})
+			}
+
+			if mustSignRoundTx {
+				ptx, err := psbt.NewFromRawBytes(strings.NewReader(roundTx), true)
+				if err != nil {
+					return "", err
+				}
+
+				if err := signPsbt(ctx, ptx, explorer, secKey); err != nil {
+					return "", err
+				}
+
+				signedRoundTx, err := ptx.B64Encode()
+				if err != nil {
+					return "", err
+				}
+
+				finalizePaymentRequest.SignedRoundTx = &signedRoundTx
+			}
+
+			fmt.Print("finalizing payment... ")
+			_, err = client.FinalizePayment(ctx.Context, finalizePaymentRequest)
 			if err != nil {
 				return "", err
 			}

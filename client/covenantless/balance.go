@@ -1,6 +1,7 @@
 package covenantless
 
 import (
+	"encoding/hex"
 	"fmt"
 	"math"
 	"sync"
@@ -21,6 +22,20 @@ func (*clArkBitcoinCLI) Balance(ctx *cli.Context) error {
 	}
 	defer cancel()
 
+	pubkey, err := utils.GetWalletPublicKey(ctx)
+	if err != nil {
+		return err
+	}
+
+	reverseBoardingResponse, err := client.ReverseBoardingAddress(ctx.Context, &arkv1.ReverseBoardingAddressRequest{
+		Pubkey: hex.EncodeToString(pubkey.SerializeCompressed()),
+	})
+	if err != nil {
+		return err
+	}
+
+	reverseBoardingAddress := reverseBoardingResponse.GetAddress()
+
 	offchainAddr, onchainAddr, redemptionAddr, err := getAddress(ctx)
 	if err != nil {
 		return err
@@ -30,9 +45,9 @@ func (*clArkBitcoinCLI) Balance(ctx *cli.Context) error {
 	unilateralExitDelay, _ := utils.GetUnilateralExitDelay(ctx)
 
 	wg := &sync.WaitGroup{}
-	wg.Add(3)
+	wg.Add(4)
 
-	chRes := make(chan balanceRes, 3)
+	chRes := make(chan balanceRes, 4)
 	go func() {
 		defer wg.Done()
 		explorer := utils.NewExplorer(ctx)
@@ -40,11 +55,22 @@ func (*clArkBitcoinCLI) Balance(ctx *cli.Context) error {
 			ctx, explorer, client, offchainAddr, computeExpiryDetails,
 		)
 		if err != nil {
-			chRes <- balanceRes{0, 0, nil, nil, err}
+			chRes <- balanceRes{0, 0, 0, nil, nil, err}
 			return
 		}
 
-		chRes <- balanceRes{balance, 0, nil, amountByExpiration, nil}
+		chRes <- balanceRes{balance, 0, 0, nil, amountByExpiration, nil}
+	}()
+
+	go func() {
+		defer wg.Done()
+		explorer := utils.NewExplorer(ctx)
+		balance, err := explorer.GetBalance(reverseBoardingAddress, "")
+		if err != nil {
+			chRes <- balanceRes{0, 0, 0, nil, nil, err}
+			return
+		}
+		chRes <- balanceRes{0, 0, balance, nil, nil, nil}
 	}()
 
 	go func() {
@@ -52,10 +78,10 @@ func (*clArkBitcoinCLI) Balance(ctx *cli.Context) error {
 		explorer := utils.NewExplorer(ctx)
 		balance, err := explorer.GetBalance(onchainAddr.EncodeAddress(), "")
 		if err != nil {
-			chRes <- balanceRes{0, 0, nil, nil, err}
+			chRes <- balanceRes{0, 0, 0, nil, nil, err}
 			return
 		}
-		chRes <- balanceRes{0, balance, nil, nil, nil}
+		chRes <- balanceRes{0, balance, 0, nil, nil, nil}
 	}()
 
 	go func() {
@@ -66,18 +92,18 @@ func (*clArkBitcoinCLI) Balance(ctx *cli.Context) error {
 			redemptionAddr.EncodeAddress(), unilateralExitDelay,
 		)
 		if err != nil {
-			chRes <- balanceRes{0, 0, nil, nil, err}
+			chRes <- balanceRes{0, 0, 0, nil, nil, err}
 			return
 		}
 
-		chRes <- balanceRes{0, spendableBalance, lockedBalance, nil, err}
+		chRes <- balanceRes{0, spendableBalance, 0, lockedBalance, nil, err}
 	}()
 
 	wg.Wait()
 
 	lockedOnchainBalance := []map[string]interface{}{}
 	details := make([]map[string]interface{}, 0)
-	offchainBalance, onchainBalance := uint64(0), uint64(0)
+	offchainBalance, onchainBalance, reverseBoardingBalance := uint64(0), uint64(0), uint64(0)
 	nextExpiration := int64(0)
 	count := 0
 	for res := range chRes {
@@ -119,13 +145,20 @@ func (*clArkBitcoinCLI) Balance(ctx *cli.Context) error {
 			}
 		}
 
+		if res.reverseBoardingBalance > 0 {
+			reverseBoardingBalance = res.reverseBoardingBalance
+		}
+
 		count++
-		if count == 3 {
+		if count == 4 {
 			break
 		}
 	}
 
 	response := make(map[string]interface{})
+
+	response["reverse_boarding_balance"] = reverseBoardingBalance
+
 	response["onchain_balance"] = map[string]interface{}{
 		"spendable_amount": onchainBalance,
 	}
@@ -174,6 +207,7 @@ func (*clArkBitcoinCLI) Balance(ctx *cli.Context) error {
 type balanceRes struct {
 	offchainBalance             uint64
 	onchainSpendableBalance     uint64
+	reverseBoardingBalance      uint64
 	onchainLockedBalance        map[int64]uint64
 	offchainBalanceByExpiration map[int64]uint64
 	err                         error

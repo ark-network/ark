@@ -17,6 +17,29 @@ import (
 )
 
 func (c *clArkBitcoinCLI) Onboard(ctx *cli.Context) error {
+	client, cancel, err := getClientFromState(ctx)
+	if err != nil {
+		return err
+	}
+	defer cancel()
+
+	reverseOnboarding := ctx.Bool("reverse")
+	if reverseOnboarding {
+		pubkey, err := utils.GetWalletPublicKey(ctx)
+		if err != nil {
+			return err
+		}
+
+		resp, err := client.ReverseBoardingAddress(ctx.Context, &arkv1.ReverseBoardingAddressRequest{
+			Pubkey: hex.EncodeToString(pubkey.SerializeCompressed()),
+		})
+		if err != nil {
+			return err
+		}
+
+		return utils.PrintJSON(resp)
+	}
+
 	amount := ctx.Uint64("amount")
 
 	if amount <= 0 {
@@ -32,12 +55,6 @@ func (c *clArkBitcoinCLI) Onboard(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-
-	client, cancel, err := getClientFromState(ctx)
-	if err != nil {
-		return err
-	}
-	defer cancel()
 
 	aspPubkey, err := utils.GetAspPublicKey(ctx)
 	if err != nil {
