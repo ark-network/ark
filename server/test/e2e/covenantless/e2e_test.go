@@ -94,6 +94,8 @@ func TestReverseOnboard(t *testing.T) {
 	_, err = utils.RunCommand("nigiri", "faucet", onboardAddressRes.Address)
 	require.NoError(t, err)
 
+	time.Sleep(5 * time.Second)
+
 	balanceStr, err = runClarkCommand("balance")
 	require.NoError(t, err)
 
