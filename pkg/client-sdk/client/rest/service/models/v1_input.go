@@ -17,6 +17,9 @@ import (
 // swagger:model v1Input
 type V1Input struct {
 
+	// reverse boarding pubkey
+	ReverseBoardingPubkey string `json:"reverseBoardingPubkey,omitempty"`
+
 	// txid
 	Txid string `json:"txid,omitempty"`
 

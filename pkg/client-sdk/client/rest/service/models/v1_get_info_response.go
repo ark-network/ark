@@ -26,6 +26,9 @@ type V1GetInfoResponse struct {
 	// pubkey
 	Pubkey string `json:"pubkey,omitempty"`
 
+	// reverse boarding exit delay
+	ReverseBoardingExitDelay string `json:"reverseBoardingExitDelay,omitempty"`
+
 	// round interval
 	RoundInterval string `json:"roundInterval,omitempty"`
 

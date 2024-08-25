@@ -286,13 +286,14 @@ func (a *restClient) Onboard(
 }
 
 func (a *restClient) RegisterPayment(
-	ctx context.Context, inputs []client.VtxoKey,
+	ctx context.Context, inputs []client.Input,
 ) (string, error) {
 	ins := make([]*models.V1Input, 0, len(inputs))
 	for _, i := range inputs {
 		ins = append(ins, &models.V1Input{
-			Txid: i.Txid,
-			Vout: int64(i.VOut),
+			Txid:                  i.GetTxID(),
+			Vout:                  int64(i.GetVOut()),
+			ReverseBoardingPubkey: i.ReverseBoardingPublicKey(),
 		})
 	}
 	body := models.V1RegisterPaymentRequest{
@@ -354,13 +355,11 @@ func (a *restClient) Ping(
 }
 
 func (a *restClient) FinalizePayment(
-	ctx context.Context, signedForfeitTxs []string,
+	ctx context.Context, signedForfeitTxs []string, signedRoundTx string,
 ) error {
-	req := &arkv1.FinalizePaymentRequest{
-		SignedForfeitTxs: signedForfeitTxs,
-	}
 	body := models.V1FinalizePaymentRequest{
-		SignedForfeitTxs: req.GetSignedForfeitTxs(),
+		SignedForfeitTxs: signedForfeitTxs,
+		SignedRoundTx:    signedRoundTx,
 	}
 	_, err := a.svc.ArkServiceFinalizePayment(
 		ark_service.NewArkServiceFinalizePaymentParams().WithBody(&body),
@@ -452,6 +451,23 @@ func (a *restClient) GetRoundByID(
 		Connectors: resp.Payload.Round.Connectors,
 		Stage:      toRoundStage(*resp.Payload.Round.Stage),
 	}, nil
+}
+
+func (a *restClient) ReverseBoardingAddress(
+	ctx context.Context, pubkey string,
+) (string, error) {
+	body := models.V1ReverseBoardingAddressRequest{
+		Pubkey: pubkey,
+	}
+
+	resp, err := a.svc.ArkServiceReverseBoardingAddress(
+		ark_service.NewArkServiceReverseBoardingAddressParams().WithBody(&body),
+	)
+	if err != nil {
+		return "",
+			err
+	}
+	return resp.Payload.Address, nil
 }
 
 func newRestClient(

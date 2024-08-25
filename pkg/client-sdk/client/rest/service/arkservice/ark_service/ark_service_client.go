@@ -78,6 +78,8 @@ type ClientService interface {
 
 	ArkServiceRegisterPayment(params *ArkServiceRegisterPaymentParams, opts ...ClientOption) (*ArkServiceRegisterPaymentOK, error)
 
+	ArkServiceReverseBoardingAddress(params *ArkServiceReverseBoardingAddressParams, opts ...ClientOption) (*ArkServiceReverseBoardingAddressOK, error)
+
 	SetTransport(transport runtime.ClientTransport)
 }
 
@@ -522,6 +524,43 @@ func (a *Client) ArkServiceRegisterPayment(params *ArkServiceRegisterPaymentPara
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*ArkServiceRegisterPaymentDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+ArkServiceReverseBoardingAddress ark service reverse boarding address API
+*/
+func (a *Client) ArkServiceReverseBoardingAddress(params *ArkServiceReverseBoardingAddressParams, opts ...ClientOption) (*ArkServiceReverseBoardingAddressOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewArkServiceReverseBoardingAddressParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "ArkService_ReverseBoardingAddress",
+		Method:             "POST",
+		PathPattern:        "/v1/reverseboarding",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &ArkServiceReverseBoardingAddressReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*ArkServiceReverseBoardingAddressOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*ArkServiceReverseBoardingAddressDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 

@@ -146,7 +146,7 @@ func (a *grpcClient) Onboard(
 }
 
 func (a *grpcClient) RegisterPayment(
-	ctx context.Context, inputs []client.VtxoKey,
+	ctx context.Context, inputs []client.Input,
 ) (string, error) {
 	req := &arkv1.RegisterPaymentRequest{
 		Inputs: ins(inputs).toProto(),
@@ -190,11 +190,16 @@ func (a *grpcClient) Ping(
 }
 
 func (a *grpcClient) FinalizePayment(
-	ctx context.Context, signedForfeitTxs []string,
+	ctx context.Context, signedForfeitTxs []string, signedRoundTx string,
 ) error {
 	req := &arkv1.FinalizePaymentRequest{
 		SignedForfeitTxs: signedForfeitTxs,
 	}
+
+	if len(signedRoundTx) > 0 {
+		req.SignedRoundTx = &signedRoundTx
+	}
+
 	_, err := a.svc.FinalizePayment(ctx, req)
 	return err
 }
@@ -202,8 +207,13 @@ func (a *grpcClient) FinalizePayment(
 func (a *grpcClient) CreatePayment(
 	ctx context.Context, inputs []client.VtxoKey, outputs []client.Output,
 ) (string, []string, error) {
+	insCast := make([]client.Input, 0, len(inputs))
+	for _, in := range inputs {
+		insCast = append(insCast, in)
+	}
+
 	req := &arkv1.CreatePaymentRequest{
-		Inputs:  ins(inputs).toProto(),
+		Inputs:  ins(insCast).toProto(),
 		Outputs: outs(outputs).toProto(),
 	}
 	resp, err := a.svc.CreatePayment(ctx, req)
@@ -250,6 +260,19 @@ func (a *grpcClient) GetRoundByID(
 		Connectors: round.GetConnectors(),
 		Stage:      client.RoundStage(int(round.GetStage())),
 	}, nil
+}
+
+func (a *grpcClient) ReverseBoardingAddress(
+	ctx context.Context, userPubkey string,
+) (string, error) {
+	req := &arkv1.ReverseBoardingAddressRequest{
+		Pubkey: userPubkey,
+	}
+	resp, err := a.svc.ReverseBoardingAddress(ctx, req)
+	if err != nil {
+		return "", err
+	}
+	return resp.GetAddress(), nil
 }
 
 type out client.Output
@@ -339,21 +362,26 @@ func (v vtxos) toVtxos() []client.Vtxo {
 	return list
 }
 
-type input client.VtxoKey
-
-func (i input) toProto() *arkv1.Input {
-	return &arkv1.Input{
-		Txid: i.Txid,
-		Vout: i.VOut,
+func toProtoInput(i client.Input) *arkv1.Input {
+	in := &arkv1.Input{
+		Txid: i.GetTxID(),
+		Vout: i.GetVOut(),
 	}
+	pubkey := i.ReverseBoardingPublicKey()
+
+	if len(pubkey) > 0 {
+		in.ReverseBoardingPubkey = &pubkey
+	}
+
+	return in
 }
 
-type ins []client.VtxoKey
+type ins []client.Input
 
 func (i ins) toProto() []*arkv1.Input {
 	list := make([]*arkv1.Input, 0, len(i))
 	for _, ii := range i {
-		list = append(list, input(ii).toProto())
+		list = append(list, toProtoInput(ii))
 	}
 	return list
 }

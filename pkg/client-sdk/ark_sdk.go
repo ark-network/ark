@@ -15,6 +15,7 @@ type ArkClient interface {
 	Lock(ctx context.Context, password string) error
 	Balance(ctx context.Context, computeExpiryDetails bool) (*Balance, error)
 	Onboard(ctx context.Context, amount uint64) (string, error)
+	ReverseBoardingAddress(ctx context.Context) (string, error)
 	Receive(ctx context.Context) (string, string, error)
 	SendOnChain(ctx context.Context, receivers []Receiver) (string, error)
 	SendOffChain(

@@ -519,7 +519,7 @@ func (a *covenantArkClient) CollaborativeRedeem(
 		})
 	}
 
-	inputs := make([]client.VtxoKey, 0, len(selectedCoins))
+	inputs := make([]client.Input, 0, len(selectedCoins))
 
 	for _, coin := range selectedCoins {
 		inputs = append(inputs, client.VtxoKey{
@@ -545,6 +545,10 @@ func (a *covenantArkClient) CollaborativeRedeem(
 	}
 
 	return poolTxID, nil
+}
+
+func (a *covenantArkClient) ReverseBoardingAddress(context.Context) (string, error) {
+	return "", fmt.Errorf("not implemented")
 }
 
 func (a *covenantArkClient) SendAsync(
@@ -787,7 +791,7 @@ func (a *covenantArkClient) sendOffchain(
 		receiversOutput = append(receiversOutput, changeReceiver)
 	}
 
-	inputs := make([]client.VtxoKey, 0, len(selectedCoins))
+	inputs := make([]client.Input, 0, len(selectedCoins))
 	for _, coin := range selectedCoins {
 		inputs = append(inputs, client.VtxoKey{
 			Txid: coin.Txid,
@@ -985,7 +989,7 @@ func (a *covenantArkClient) handleRoundStream(
 				}
 
 				log.Info("finalizing payment... ")
-				if err := a.client.FinalizePayment(ctx, signedForfeitTxs); err != nil {
+				if err := a.client.FinalizePayment(ctx, signedForfeitTxs, ""); err != nil {
 					return "", err
 				}
 

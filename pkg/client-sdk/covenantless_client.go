@@ -139,6 +139,25 @@ func LoadCovenantlessClientWithWallet(
 	}, nil
 }
 
+func (a *covenantlessArkClient) ReverseBoardingAddress(
+	ctx context.Context,
+) (string, error) {
+	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	_, mypubkey, _, err := common.DecodeAddress(offchainAddrs[0])
+	if err != nil {
+		return "", err
+	}
+
+	return a.client.ReverseBoardingAddress(
+		ctx,
+		hex.EncodeToString(mypubkey.SerializeCompressed()),
+	)
+}
+
 func (a *covenantlessArkClient) Onboard(
 	ctx context.Context, amount uint64,
 ) (string, error) {
@@ -298,13 +317,24 @@ func (a *covenantlessArkClient) Balance(
 	}
 
 	wg := &sync.WaitGroup{}
-	wg.Add(3 * len(offchainAddrs))
+	wg.Add(4 * len(offchainAddrs))
 
-	chRes := make(chan balanceRes, 3)
+	chRes := make(chan balanceRes, 4*len(offchainAddrs))
 	for i := range offchainAddrs {
 		offchainAddr := offchainAddrs[i]
 		onchainAddr := onchainAddrs[i]
 		redeemAddr := redeemAddrs[i]
+		_, mypubkey, _, err := common.DecodeAddress(offchainAddr)
+		if err != nil {
+			return nil, err
+		}
+
+		pubkeyHex := hex.EncodeToString(mypubkey.SerializeCompressed())
+		reverseBoardingAddress, err := a.client.ReverseBoardingAddress(ctx, pubkeyHex)
+		if err != nil {
+			return nil, err
+		}
+
 		go func(addr string) {
 			defer wg.Done()
 			balance, amountByExpiration, err := a.getOffchainBalance(
@@ -333,6 +363,16 @@ func (a *covenantlessArkClient) Balance(
 
 		go func(addr string) {
 			defer wg.Done()
+			balance, err := a.explorer.GetBalance(addr)
+			if err != nil {
+				chRes <- balanceRes{err: err}
+				return
+			}
+			chRes <- balanceRes{reverseBoardingBalance: balance}
+		}(reverseBoardingAddress)
+
+		go func(addr string) {
+			defer wg.Done()
 
 			spendableBalance, lockedBalance, err := a.explorer.GetRedeemedVtxosBalance(
 				addr, a.UnilateralExitDelay,
@@ -354,7 +394,7 @@ func (a *covenantlessArkClient) Balance(
 
 	lockedOnchainBalance := []LockedOnchainBalance{}
 	details := make([]VtxoDetails, 0)
-	offchainBalance, onchainBalance := uint64(0), uint64(0)
+	offchainBalance, onchainBalance, reverseBoardingBalance := uint64(0), uint64(0), uint64(0)
 	nextExpiration := int64(0)
 	count := 0
 	for res := range chRes {
@@ -395,9 +435,12 @@ func (a *covenantlessArkClient) Balance(
 				)
 			}
 		}
+		if res.reverseBoardingBalance > 0 {
+			reverseBoardingBalance += res.reverseBoardingBalance
+		}
 
 		count++
-		if count == 3 {
+		if count == 4 {
 			break
 		}
 	}
@@ -436,6 +479,7 @@ func (a *covenantlessArkClient) Balance(
 			NextExpiration: fancyTimeExpiration,
 			Details:        details,
 		},
+		ReverseBoardingBalance: reverseBoardingBalance,
 	}
 
 	return response, nil
@@ -599,7 +643,7 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 		})
 	}
 
-	inputs := make([]client.VtxoKey, 0, len(selectedCoins))
+	inputs := make([]client.Input, 0, len(selectedCoins))
 
 	for _, coin := range selectedCoins {
 		inputs = append(inputs, client.VtxoKey{
@@ -618,7 +662,7 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 	}
 
 	poolTxID, err := a.handleRoundStream(
-		ctx, paymentID, selectedCoins, receivers,
+		ctx, paymentID, selectedCoins, false, receivers,
 	)
 	if err != nil {
 		return "", err
@@ -751,8 +795,23 @@ func (a *covenantlessArkClient) ClaimAsync(
 		return "", err
 	}
 
+	_, mypubkey, _, err := common.DecodeAddress(myselfOffchain)
+	if err != nil {
+		return "", err
+	}
+
+	mybpubkeyHex := hex.EncodeToString(mypubkey.SerializeCompressed())
+
+	boardingUtxos, err := a.getReverseBoardingUtxos(ctx, mybpubkeyHex)
+	if err != nil {
+		return "", err
+	}
+
 	var pendingBalance uint64
 	for _, vtxo := range pendingVtxos {
+		pendingBalance += vtxo.Amount
+	}
+	for _, vtxo := range boardingUtxos {
 		pendingBalance += vtxo.Amount
 	}
 	if pendingBalance == 0 {
@@ -763,7 +822,7 @@ func (a *covenantlessArkClient) ClaimAsync(
 		Address: myselfOffchain,
 		Amount:  pendingBalance,
 	}
-	return a.selfTransferAllPendingPayments(ctx, pendingVtxos, receiver)
+	return a.selfTransferAllPendingPayments(ctx, pendingVtxos, boardingUtxos, receiver, mybpubkeyHex)
 }
 
 func (a *covenantlessArkClient) sendOnchain(
@@ -982,7 +1041,7 @@ func (a *covenantlessArkClient) sendOffchain(
 		receiversOutput = append(receiversOutput, changeReceiver)
 	}
 
-	inputs := make([]client.VtxoKey, 0, len(selectedCoins))
+	inputs := make([]client.Input, 0, len(selectedCoins))
 	for _, coin := range selectedCoins {
 		inputs = append(inputs, client.VtxoKey{
 			Txid: coin.Txid,
@@ -1006,7 +1065,7 @@ func (a *covenantlessArkClient) sendOffchain(
 	log.Infof("payment registered with id: %s", paymentID)
 
 	poolTxID, err := a.handleRoundStream(
-		ctx, paymentID, selectedCoins, receiversOutput,
+		ctx, paymentID, selectedCoins, false, receiversOutput,
 	)
 	if err != nil {
 		return "", err
@@ -1144,7 +1203,8 @@ func (a *covenantlessArkClient) addVtxoInput(
 
 func (a *covenantlessArkClient) handleRoundStream(
 	ctx context.Context,
-	paymentID string, vtxosToSign []client.Vtxo, receivers []client.Output,
+	paymentID string, vtxosToSign []client.Vtxo, mustSignRoundTx bool,
+	receivers []client.Output,
 ) (string, error) {
 	eventsCh, err := a.client.GetEventStream(ctx, paymentID)
 	if err != nil {
@@ -1176,20 +1236,20 @@ func (a *covenantlessArkClient) handleRoundStream(
 				pingStop()
 				log.Info("a round finalization started")
 
-				signedForfeitTxs, err := a.handleRoundFinalization(
-					ctx, event.(client.RoundFinalizationEvent), vtxosToSign, receivers,
+				signedForfeitTxs, signedRoundTx, err := a.handleRoundFinalization(
+					ctx, event.(client.RoundFinalizationEvent), vtxosToSign, mustSignRoundTx, receivers,
 				)
 				if err != nil {
 					return "", err
 				}
 
-				if len(signedForfeitTxs) <= 0 {
+				if len(signedForfeitTxs) <= 0 && len(vtxosToSign) > 0 {
 					log.Info("no forfeit txs to sign, waiting for the next round")
 					continue
 				}
 
 				log.Info("finalizing payment... ")
-				if err := a.client.FinalizePayment(ctx, signedForfeitTxs); err != nil {
+				if err := a.client.FinalizePayment(ctx, signedForfeitTxs, signedRoundTx); err != nil {
 					return "", err
 				}
 
@@ -1202,15 +1262,29 @@ func (a *covenantlessArkClient) handleRoundStream(
 
 func (a *covenantlessArkClient) handleRoundFinalization(
 	ctx context.Context, event client.RoundFinalizationEvent,
-	vtxos []client.Vtxo, receivers []client.Output,
-) ([]string, error) {
+	vtxos []client.Vtxo, mustSignRoundTx bool, receivers []client.Output,
+) (signedForfeits []string, signedRoundTx string, err error) {
 	if err := a.validateCongestionTree(event, receivers); err != nil {
-		return nil, fmt.Errorf("failed to verify congestion tree: %s", err)
+		return nil, "", fmt.Errorf("failed to verify congestion tree: %s", err)
 	}
 
-	return a.loopAndSign(
-		ctx, event.ForfeitTxs, vtxos, event.Connectors,
-	)
+	if len(vtxos) > 0 {
+		signedForfeits, err = a.loopAndSign(
+			ctx, event.ForfeitTxs, vtxos, event.Connectors,
+		)
+		if err != nil {
+			return
+		}
+	}
+
+	if mustSignRoundTx {
+		signedRoundTx, err = a.wallet.SignTransaction(ctx, a.explorer, event.Tx)
+		if err != nil {
+			return
+		}
+	}
+
+	return
 }
 
 func (a *covenantlessArkClient) validateCongestionTree(
@@ -1564,6 +1638,20 @@ func (a *covenantlessArkClient) getOffchainBalance(
 	return balance, amountByExpiration, nil
 }
 
+func (a *covenantlessArkClient) getReverseBoardingUtxos(ctx context.Context, mypubkey string) ([]explorer.Utxo, error) {
+	reverseBoardingAddr, err := a.client.ReverseBoardingAddress(ctx, mypubkey)
+	if err != nil {
+		return nil, err
+	}
+
+	boardingUtxos, err := a.explorer.GetUtxos(reverseBoardingAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	return boardingUtxos, nil
+}
+
 func (a *covenantlessArkClient) getVtxos(
 	ctx context.Context, addr string, computeVtxoExpiration bool,
 ) ([]client.Vtxo, []client.Vtxo, error) {
@@ -1609,12 +1697,22 @@ func (a *covenantlessArkClient) getVtxos(
 }
 
 func (a *covenantlessArkClient) selfTransferAllPendingPayments(
-	ctx context.Context, pendingVtxos []client.Vtxo, myself client.Output,
+	ctx context.Context, pendingVtxos []client.Vtxo, boardingUtxo []explorer.Utxo, myself client.Output, myPubkey string,
 ) (string, error) {
-	inputs := make([]client.VtxoKey, 0, len(pendingVtxos))
+	inputs := make([]client.Input, 0, len(pendingVtxos)+len(boardingUtxo))
 
 	for _, coin := range pendingVtxos {
 		inputs = append(inputs, coin.VtxoKey)
+	}
+
+	for _, utxo := range boardingUtxo {
+		inputs = append(inputs, client.ReverseBoardingInput{
+			VtxoKey: client.VtxoKey{
+				Txid: utxo.Txid,
+				VOut: utxo.Vout,
+			},
+			UserPubkey: myPubkey,
+		})
 	}
 
 	outputs := []client.Output{myself}
@@ -1629,7 +1727,7 @@ func (a *covenantlessArkClient) selfTransferAllPendingPayments(
 	}
 
 	roundTxid, err := a.handleRoundStream(
-		ctx, paymentID, pendingVtxos, outputs,
+		ctx, paymentID, pendingVtxos, len(boardingUtxo) > 0, outputs,
 	)
 	if err != nil {
 		return "", err

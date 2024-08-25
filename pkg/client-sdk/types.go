@@ -97,8 +97,9 @@ func (a InitWithWalletArgs) validate() error {
 }
 
 type Balance struct {
-	OnchainBalance  OnchainBalance  `json:"onchain_balance"`
-	OffchainBalance OffchainBalance `json:"offchain_balance"`
+	OnchainBalance         OnchainBalance  `json:"onchain_balance"`
+	OffchainBalance        OffchainBalance `json:"offchain_balance"`
+	ReverseBoardingBalance uint64          `json:"reverse_boarding_balance"`
 }
 
 type OnchainBalance struct {
@@ -123,6 +124,7 @@ type VtxoDetails struct {
 }
 
 type balanceRes struct {
+	reverseBoardingBalance      uint64
 	offchainBalance             uint64
 	onchainSpendableBalance     uint64
 	onchainLockedBalance        map[int64]uint64

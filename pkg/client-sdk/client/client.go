@@ -25,7 +25,7 @@ type ASPClient interface {
 		ctx context.Context, tx, userPubkey string, congestionTree tree.CongestionTree,
 	) error
 	RegisterPayment(
-		ctx context.Context, inputs []VtxoKey,
+		ctx context.Context, inputs []Input,
 	) (string, error)
 	ClaimPayment(
 		ctx context.Context, paymentID string, outputs []Output,
@@ -35,7 +35,7 @@ type ASPClient interface {
 	) (<-chan RoundEventChannel, error)
 	Ping(ctx context.Context, paymentID string) (*RoundFinalizationEvent, error)
 	FinalizePayment(
-		ctx context.Context, signedForfeitTxs []string,
+		ctx context.Context, signedForfeitTxs []string, signedRoundTx string,
 	) error
 	CreatePayment(
 		ctx context.Context, inputs []VtxoKey, outputs []Output,
@@ -43,6 +43,7 @@ type ASPClient interface {
 	CompletePayment(
 		ctx context.Context, signedRedeemTx string, signedUnconditionalForfeitTxs []string,
 	) error
+	ReverseBoardingAddress(ctx context.Context, userPubkey string) (string, error)
 	Close()
 }
 
@@ -60,9 +61,36 @@ type RoundEventChannel struct {
 	Err   error
 }
 
+type Input interface {
+	ReverseBoardingPublicKey() string
+	GetTxID() string
+	GetVOut() uint32
+}
+
 type VtxoKey struct {
 	Txid string
 	VOut uint32
+}
+
+func (k VtxoKey) GetTxID() string {
+	return k.Txid
+}
+
+func (k VtxoKey) GetVOut() uint32 {
+	return k.VOut
+}
+
+func (k VtxoKey) ReverseBoardingPublicKey() string {
+	return ""
+}
+
+type ReverseBoardingInput struct {
+	VtxoKey
+	UserPubkey string
+}
+
+func (k ReverseBoardingInput) ReverseBoardingPublicKey() string {
+	return k.UserPubkey
 }
 
 type Vtxo struct {

@@ -29,5 +29,5 @@ type WalletService interface {
 	) (offchainAddresses, onchainAddresses []string, err error)
 	SignTransaction(
 		ctx context.Context, explorerSvc explorer.Explorer, tx string,
-	) (singedTx string, err error)
+	) (signedTx string, err error)
 }
