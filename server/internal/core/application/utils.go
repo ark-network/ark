@@ -127,9 +127,10 @@ func (m *paymentsMap) view(id string) (*domain.Payment, bool) {
 	}
 
 	return &domain.Payment{
-		Id:        payment.Id,
-		Inputs:    payment.Inputs,
-		Receivers: payment.Receivers,
+		Id:                    payment.Id,
+		Inputs:                payment.Inputs,
+		Receivers:             payment.Receivers,
+		ReverseBoardingInputs: payment.ReverseBoardingInputs,
 	}, true
 }
 

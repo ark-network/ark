@@ -75,7 +75,7 @@ func (p Payment) validate(ignoreOuts bool) error {
 	if len(p.Id) <= 0 {
 		return fmt.Errorf("missing id")
 	}
-	if len(p.Inputs) <= 0 {
+	if len(p.Inputs) <= 0 && len(p.ReverseBoardingInputs) <= 0 {
 		return fmt.Errorf("missing inputs")
 	}
 	if ignoreOuts {

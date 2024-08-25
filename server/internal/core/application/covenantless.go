@@ -279,6 +279,8 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []Input) (s
 	}
 
 	reverseBoardingTxs := make(map[string]string, 0) // txid -> txhex
+	now := time.Now().Unix()
+
 	for _, in := range reverseBoardingInputs {
 		txid := in.GetTxid()
 		if _, ok := reverseBoardingTxs[txid]; !ok {
@@ -286,6 +288,20 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []Input) (s
 			if err != nil {
 				return "", fmt.Errorf("failed to get tx %s: %s", txid, err)
 			}
+
+			confirmed, blocktime, err := s.wallet.IsTransactionConfirmed(ctx, txid)
+			if err != nil {
+				return "", fmt.Errorf("failed to check tx %s: %s", txid, err)
+			}
+
+			if !confirmed {
+				return "", fmt.Errorf("tx %s not confirmed", txid)
+			}
+
+			if blocktime+int64(s.reverseBoardingExitDelay) < now {
+				return "", fmt.Errorf("tx %s expired", txid)
+			}
+
 			reverseBoardingTxs[txid] = txhex
 		}
 	}
@@ -665,14 +681,25 @@ func (s *covenantlessService) startFinalization() {
 		tree = signedTree
 	}
 
-	connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(s.pubkey, unsignedPoolTx, payments, s.minRelayFee)
-	if err != nil {
-		round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
-		log.WithError(err).Warn("failed to create connectors and forfeit txs")
-		return
+	needForfeits := false
+	for _, pay := range payments {
+		if len(pay.Inputs) > 0 {
+			needForfeits = true
+			break
+		}
 	}
 
-	log.Debugf("forfeit transactions created for round %s", round.Id)
+	var forfeitTxs, connectors []string
+
+	if needForfeits {
+		connectors, forfeitTxs, err = s.builder.BuildForfeitTxs(s.pubkey, unsignedPoolTx, payments, s.minRelayFee)
+		if err != nil {
+			round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
+			log.WithError(err).Warn("failed to create connectors and forfeit txs")
+			return
+		}
+		log.Debugf("forfeit transactions created for round %s", round.Id)
+	}
 
 	if _, err := round.StartFinalization(
 		connectorAddress, connectors, tree, unsignedPoolTx,
@@ -769,7 +796,12 @@ func (s *covenantlessService) finalizeRound() {
 		return
 	}
 
-	changes, _ = round.EndFinalization(forfeitTxs, txid)
+	changes, err = round.EndFinalization(forfeitTxs, txid)
+	if err != nil {
+		changes = round.Fail(fmt.Errorf("failed to finalize round: %s", err))
+		log.WithError(err).Warn("failed to finalize round")
+		return
+	}
 
 	log.Debugf("finalized round %s with pool tx %s", round.Id, round.Txid)
 }
