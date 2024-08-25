@@ -70,6 +70,47 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+func TestReverseOnboard(t *testing.T) {
+	var balance utils.ArkBalance
+
+	balanceStr, err := runClarkCommand("balance")
+	require.NoError(t, err)
+
+	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
+	require.Zero(t, balance.ReverseBoarding)
+
+	balanceBefore := balance.Offchain.Total
+
+	onboardStr, err := runClarkCommand("onboard", "--reverse")
+	if err != nil {
+		fmt.Printf("error onboarding ark: %s", err)
+		os.Exit(1)
+	}
+
+	var onboardAddressRes utils.ArkOnboardReverse
+
+	require.NoError(t, json.Unmarshal([]byte(onboardStr), &onboardAddressRes))
+
+	_, err = utils.RunCommand("nigiri", "faucet", onboardAddressRes.Address)
+	require.NoError(t, err)
+
+	balanceStr, err = runClarkCommand("balance")
+	require.NoError(t, err)
+
+	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
+	require.NotZero(t, balance.ReverseBoarding)
+
+	_, err = runClarkCommand("claim", "--password", utils.Password)
+	require.NoError(t, err)
+
+	balanceStr, err = runClarkCommand("balance")
+	require.NoError(t, err)
+
+	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
+	require.Zero(t, balance.ReverseBoarding)
+	require.Equal(t, ONE_BTC, balance.Offchain.Total-balanceBefore)
+}
+
 func TestOnboard(t *testing.T) {
 	var balance utils.ArkBalance
 	balanceStr, err := runClarkCommand("balance")

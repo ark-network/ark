@@ -13,6 +13,10 @@ const (
 	Password = "password"
 )
 
+type ArkOnboardReverse struct {
+	Address string `json:"address"`
+}
+
 type ArkBalance struct {
 	Offchain struct {
 		Total int `json:"total"`
@@ -24,6 +28,7 @@ type ArkBalance struct {
 			SpendableAt string `json:"spendable_at"`
 		} `json:"locked_amount"`
 	} `json:"onchain_balance"`
+	ReverseBoarding int `json:"reverse_boarding_balance"`
 }
 
 type ArkReceive struct {
