@@ -1,6 +1,7 @@
 package btcwallet
 
 import (
+	"encoding/hex"
 	"fmt"
 
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -11,7 +12,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func (s *service) signPsbt(packet *psbt.Packet) ([]uint32, error) {
+func (s *service) signPsbt(packet *psbt.Packet, inputsToSign []int) ([]uint32, error) {
 	// iterates over the inputs and set the default sighash flags
 	updater, err := psbt.NewUpdater(packet)
 	if err != nil {
@@ -54,6 +55,19 @@ func (s *service) signPsbt(packet *psbt.Packet) ([]uint32, error) {
 			continue
 		}
 
+		if len(inputsToSign) > 0 {
+			found := false
+			for _, i := range inputsToSign {
+				if i == idx {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+		}
+
 		var managedAddress waddrmgr.ManagedPubKeyAddress
 		var isTaproot bool
 
@@ -73,6 +87,8 @@ func (s *service) signPsbt(packet *psbt.Packet) ([]uint32, error) {
 		bip32Infos := derivationPathForAddress(managedAddress)
 		packet.Inputs[idx].Bip32Derivation = []*psbt.Bip32Derivation{bip32Infos}
 
+		fmt.Println("pubkey", hex.EncodeToString(bip32Infos.PubKey))
+
 		if isTaproot {
 			leafHashes := make([][]byte, 0, len(in.TaprootLeafScript))
 			for _, leafScript := range in.TaprootLeafScript {
@@ -81,6 +97,8 @@ func (s *service) signPsbt(packet *psbt.Packet) ([]uint32, error) {
 			}
 
 			xonlypubkey := schnorr.SerializePubKey(managedAddress.PubKey())
+
+			fmt.Println("xonlypubkey", hex.EncodeToString(xonlypubkey))
 
 			packet.Inputs[idx].TaprootBip32Derivation = []*psbt.TaprootBip32Derivation{
 				{
