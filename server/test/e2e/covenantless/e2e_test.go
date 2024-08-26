@@ -27,6 +27,11 @@ func TestMain(m *testing.M) {
 
 	time.Sleep(10 * time.Second)
 
+	if err := utils.GenerateBlock(); err != nil {
+		fmt.Printf("error generating block: %s", err)
+		os.Exit(1)
+	}
+
 	if err := setupAspWallet(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -301,6 +306,13 @@ func setupAspWallet() error {
 	if err != nil {
 		return fmt.Errorf("failed to fund wallet: %s", err)
 	}
+
+	_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
+	if err != nil {
+		return fmt.Errorf("failed to fund wallet: %s", err)
+	}
+
+	time.Sleep(5 * time.Second)
 
 	return nil
 }
