@@ -41,7 +41,6 @@ run: clean
 	export ARK_NO_MACAROONS=true; \
 	export ARK_MIN_RELAY_FEE=200; \
 	export ARK_TX_BUILDER_TYPE=covenantless; \
-	export ARK_ESPLORA_URL=http://localhost:3000; \
 	export ARK_BITCOIND_RPC_USER=admin1; \
 	export ARK_BITCOIND_RPC_PASS=123; \
 	export ARK_BITCOIND_RPC_HOST=localhost:18443; \

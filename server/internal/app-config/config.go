@@ -229,10 +229,6 @@ func (c *Config) walletService() error {
 		return nil
 	}
 
-	if len(c.EsploraURL) == 0 {
-		return fmt.Errorf("missing esplora url, covenant-less ark requires ARK_ESPLORA_URL to be set")
-	}
-
 	// Check if both Neutrino peer and Bitcoind RPC credentials are provided
 	if c.NeutrinoPeer != "" && (c.BitcoindRpcUser != "" || c.BitcoindRpcPass != "") {
 		return fmt.Errorf("cannot use both Neutrino peer and Bitcoind RPC credentials")
@@ -243,17 +239,18 @@ func (c *Config) walletService() error {
 
 	switch {
 	case c.NeutrinoPeer != "":
+		if len(c.EsploraURL) == 0 {
+			return fmt.Errorf("missing esplora url, covenant-less ark requires ARK_ESPLORA_URL to be set")
+		}
 		svc, err = btcwallet.NewService(btcwallet.WalletConfig{
-			Datadir:    c.DbDir,
-			Network:    c.Network,
-			EsploraURL: c.EsploraURL,
-		}, btcwallet.WithNeutrino(c.NeutrinoPeer))
+			Datadir: c.DbDir,
+			Network: c.Network,
+		}, btcwallet.WithNeutrino(c.NeutrinoPeer, c.EsploraURL))
 
 	case c.BitcoindRpcUser != "" && c.BitcoindRpcPass != "":
 		svc, err = btcwallet.NewService(btcwallet.WalletConfig{
-			Datadir:    c.DbDir,
-			Network:    c.Network,
-			EsploraURL: c.EsploraURL,
+			Datadir: c.DbDir,
+			Network: c.Network,
 		}, btcwallet.WithPollingBitcoind(c.BitcoindRpcHost, c.BitcoindRpcUser, c.BitcoindRpcPass))
 
 	// Placeholder for future initializers like WithBitcoindZMQ

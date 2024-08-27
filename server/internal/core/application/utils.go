@@ -236,7 +236,7 @@ func findSweepableOutputs(
 				if _, ok := blocktimeCache[node.ParentTxid]; !ok {
 					isConfirmed, blocktime, err := walletSvc.IsTransactionConfirmed(ctx, node.ParentTxid)
 					if !isConfirmed || err != nil {
-						return nil, fmt.Errorf("tx %s not found", node.Txid)
+						return nil, fmt.Errorf("tx %s not found", node.ParentTxid)
 					}
 
 					blocktimeCache[node.ParentTxid] = blocktime
