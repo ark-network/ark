@@ -13,6 +13,8 @@ import (
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightningnetwork/lnd/lntypes"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/urfave/cli/v2"
 )
 
@@ -54,14 +56,9 @@ func (c *clArkBitcoinCLI) Onboard(ctx *cli.Context) error {
 		return err
 	}
 
-	minRelayFee, err := utils.GetMinRelayFee(ctx)
-	if err != nil {
-		return err
-	}
-
 	congestionTreeLeaf := bitcointree.Receiver{
 		Pubkey: hex.EncodeToString(userPubKey.SerializeCompressed()),
-		Amount: uint64(amount), // Convert amount to uint64
+		Amount: uint64(amount),
 	}
 
 	leaves := []bitcointree.Receiver{congestionTreeLeaf}
@@ -73,11 +70,12 @@ func (c *clArkBitcoinCLI) Onboard(ctx *cli.Context) error {
 
 	cosigners := []*secp256k1.PublicKey{ephemeralKey.PubKey()} // TODO asp as cosigner
 
+	feePerNode := uint64(chainfee.FeePerKwFloor.FeeForVByte(lntypes.VByte(bitcointree.TreeTxSize)).ToUnit(btcutil.AmountSatoshi))
 	sharedOutputScript, sharedOutputAmount, err := bitcointree.CraftSharedOutput(
 		cosigners,
 		aspPubkey,
 		leaves,
-		uint64(minRelayFee),
+		feePerNode,
 		roundLifetime,
 		unilateralExitDelay,
 	)
@@ -116,7 +114,7 @@ func (c *clArkBitcoinCLI) Onboard(ctx *cli.Context) error {
 		cosigners,
 		aspPubkey,
 		leaves,
-		uint64(minRelayFee),
+		feePerNode,
 		roundLifetime,
 		unilateralExitDelay,
 	)
@@ -139,8 +137,8 @@ func (c *clArkBitcoinCLI) Onboard(ctx *cli.Context) error {
 
 	signer := bitcointree.NewTreeSignerSession(
 		ephemeralKey,
+		sharedOutputAmount,
 		congestionTree,
-		minRelayFee,
 		root.CloneBytes(),
 	)
 
@@ -150,8 +148,8 @@ func (c *clArkBitcoinCLI) Onboard(ctx *cli.Context) error {
 	}
 
 	coordinator, err := bitcointree.NewTreeCoordinatorSession(
+		sharedOutputAmount,
 		congestionTree,
-		minRelayFee,
 		root.CloneBytes(),
 		cosigners,
 	)

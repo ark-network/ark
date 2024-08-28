@@ -87,14 +87,13 @@ func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (signedSweepTx strin
 }
 
 func (b *txBuilder) BuildForfeitTxs(
-	aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment, minRelayFee uint64,
-) (connectors []string, forfeitTxs []string, err error) {
+	aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment) (connectors []string, forfeitTxs []string, err error) {
 	connectorAddress, err := b.getConnectorAddress(poolTx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	connectorTxs, err := b.createConnectors(poolTx, payments, connectorAddress, minRelayFee)
+	connectorTxs, err := b.createConnectors(poolTx, payments, connectorAddress, 30)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -112,7 +111,7 @@ func (b *txBuilder) BuildForfeitTxs(
 }
 
 func (b *txBuilder) BuildPoolTx(
-	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, minRelayFee uint64, sweptRounds []domain.Round,
+	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, sweptRounds []domain.Round,
 	_ ...*secp256k1.PublicKey, // cosigners are not used in the covenant
 ) (poolTx string, congestionTree tree.CongestionTree, connectorAddress string, err error) {
 	// The creation of the tree and the pool tx are tightly coupled:
@@ -133,7 +132,7 @@ func (b *txBuilder) BuildPoolTx(
 
 	if !isOnchainOnly(payments) {
 		treeFactoryFn, sharedOutputScript, sharedOutputAmount, err = tree.CraftCongestionTree(
-			b.onchainNetwork().AssetID, aspPubkey, getOffchainReceivers(payments), minRelayFee, b.roundLifetime, b.exitDelay,
+			b.onchainNetwork().AssetID, aspPubkey, getOffchainReceivers(payments), 30, b.roundLifetime, b.exitDelay,
 		)
 		if err != nil {
 			return
@@ -146,7 +145,7 @@ func (b *txBuilder) BuildPoolTx(
 	}
 
 	ptx, err := b.createPoolTx(
-		sharedOutputAmount, sharedOutputScript, payments, aspPubkey, connectorAddress, minRelayFee, sweptRounds,
+		sharedOutputAmount, sharedOutputScript, payments, aspPubkey, connectorAddress, 30, sweptRounds,
 	)
 	if err != nil {
 		return
@@ -317,7 +316,7 @@ func (b *txBuilder) FindLeaves(
 }
 
 func (b *txBuilder) BuildAsyncPaymentTransactions(
-	_ []domain.Vtxo, _ *secp256k1.PublicKey, _ []domain.Receiver, _ uint64,
+	_ []domain.Vtxo, _ *secp256k1.PublicKey, _ []domain.Receiver,
 ) (*domain.AsyncPaymentTxs, error) {
 	return nil, fmt.Errorf("not implemented")
 }

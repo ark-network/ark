@@ -277,14 +277,9 @@ func handleRoundStream(
 				return "", err
 			}
 
-			minRelayFee, err := utils.GetMinRelayFee(ctx)
-			if err != nil {
-				return "", err
-			}
-
 			if !isOnchainOnly(receivers) {
 				if err := bitcointree.ValidateCongestionTree(
-					congestionTree, poolTx, aspPubkey, int64(roundLifetime), int64(minRelayFee),
+					congestionTree, poolTx, aspPubkey, int64(roundLifetime),
 				); err != nil {
 					return "", err
 				}

@@ -26,7 +26,6 @@ type covenantService struct {
 	roundLifetime       int64
 	roundInterval       int64
 	unilateralExitDelay int64
-	minRelayFee         uint64
 
 	wallet      ports.WalletService
 	repoManager ports.RepoManager
@@ -45,7 +44,7 @@ type covenantService struct {
 
 func NewCovenantService(
 	network common.Network,
-	roundInterval, roundLifetime, unilateralExitDelay int64, minRelayFee uint64,
+	roundInterval, roundLifetime, unilateralExitDelay int64,
 	walletSvc ports.WalletService, repoManager ports.RepoManager,
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	scheduler ports.SchedulerService,
@@ -64,7 +63,7 @@ func NewCovenantService(
 
 	svc := &covenantService{
 		network, pubkey,
-		roundLifetime, roundInterval, unilateralExitDelay, minRelayFee,
+		roundLifetime, roundInterval, unilateralExitDelay,
 		walletSvc, repoManager, builder, scanner, sweeper,
 		paymentRequests, forfeitTxs, eventsCh, onboardingCh, nil,
 	}
@@ -203,7 +202,6 @@ func (s *covenantService) GetInfo(ctx context.Context) (*ServiceInfo, error) {
 		UnilateralExitDelay: s.unilateralExitDelay,
 		RoundInterval:       s.roundInterval,
 		Network:             s.network.Name,
-		MinRelayFee:         int64(s.minRelayFee),
 	}, nil
 }
 
@@ -319,7 +317,7 @@ func (s *covenantService) startFinalization() {
 		return
 	}
 
-	unsignedPoolTx, tree, connectorAddress, err := s.builder.BuildPoolTx(s.pubkey, payments, s.minRelayFee, sweptRounds)
+	unsignedPoolTx, tree, connectorAddress, err := s.builder.BuildPoolTx(s.pubkey, payments, sweptRounds)
 	if err != nil {
 		round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
 		log.WithError(err).Warn("failed to create pool tx")
@@ -329,7 +327,7 @@ func (s *covenantService) startFinalization() {
 
 	// TODO BTC make the senders sign the tree
 
-	connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(s.pubkey, unsignedPoolTx, payments, s.minRelayFee)
+	connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(s.pubkey, unsignedPoolTx, payments)
 	if err != nil {
 		round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
 		log.WithError(err).Warn("failed to create connectors and forfeit txs")

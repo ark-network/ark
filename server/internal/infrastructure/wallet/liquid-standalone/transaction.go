@@ -218,6 +218,12 @@ func (s *service) LockConnectorUtxos(ctx context.Context, utxos []ports.TxOutpoi
 	return err
 }
 
+func (s *service) MinRelayFee(ctx context.Context, vbytes uint64) (uint64, error) {
+	feeRate := 0.25
+	fee := uint64(float64(vbytes) * feeRate)
+	return fee, nil
+}
+
 func (s *service) EstimateFees(
 	ctx context.Context, pset string,
 ) (uint64, error) {

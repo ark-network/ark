@@ -671,6 +671,11 @@ func (s *service) WaitForSync(ctx context.Context, txid string) error {
 	}
 }
 
+func (s *service) MinRelayFee(ctx context.Context, vbytes uint64) (uint64, error) {
+	fee := s.feeEstimator.RelayFeePerKW().FeeForVByte(lntypes.VByte(vbytes))
+	return uint64(fee.ToUnit(btcutil.AmountSatoshi)), nil
+}
+
 func (s *service) EstimateFees(ctx context.Context, partialTx string) (uint64, error) {
 	feeRate, err := s.feeEstimator.EstimateFeePerKW(1)
 	if err != nil {
@@ -743,8 +748,6 @@ func (s *service) EstimateFees(ctx context.Context, partialTx string) (uint64, e
 			return 0, fmt.Errorf("unsupported script type: %v", script.Class())
 		}
 	}
-
-	fmt.Printf("vsize: %d\n", weightEstimator.VSize())
 
 	fee := feeRate.FeeForVByte(lntypes.VByte(weightEstimator.VSize()))
 	return uint64(fee.ToUnit(btcutil.AmountSatoshi)), nil

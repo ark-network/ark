@@ -49,7 +49,6 @@ type ServiceInfo struct {
 	UnilateralExitDelay int64
 	RoundInterval       int64
 	Network             string
-	MinRelayFee         int64
 }
 
 type WalletStatus struct {

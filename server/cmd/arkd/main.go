@@ -71,7 +71,6 @@ func mainAction(_ *cli.Context) error {
 		TxBuilderType:         cfg.TxBuilderType,
 		BlockchainScannerType: cfg.BlockchainScannerType,
 		WalletAddr:            cfg.WalletAddr,
-		MinRelayFee:           cfg.MinRelayFee,
 		RoundLifetime:         cfg.RoundLifetime,
 		UnilateralExitDelay:   cfg.UnilateralExitDelay,
 		EsploraURL:            cfg.EsploraURL,

@@ -23,7 +23,6 @@ const (
 	PUBKEY                = "public_key"
 	NETWORK               = "network"
 	EXPLORER              = "explorer"
-	MIN_RELAY_FEE         = "min_relay_fee"
 
 	defaultNetwork = "liquid"
 	state_file     = "state.json"
@@ -38,7 +37,6 @@ var initialState = map[string]string{
 	PASSWORD_HASH:         "",
 	PUBKEY:                "",
 	NETWORK:               defaultNetwork,
-	MIN_RELAY_FEE:         "",
 }
 
 func GetNetwork(ctx *cli.Context) (*common.Network, error) {
@@ -70,24 +68,6 @@ func GetRoundLifetime(ctx *cli.Context) (int64, error) {
 		return -1, err
 	}
 	return int64(roundLifetime), nil
-}
-
-func GetMinRelayFee(ctx *cli.Context) (int64, error) {
-	state, err := GetState(ctx)
-	if err != nil {
-		return -1, err
-	}
-
-	fee := state[MIN_RELAY_FEE]
-	if len(fee) <= 0 {
-		return -1, fmt.Errorf("missing min relay fee")
-	}
-
-	minRelayFee, err := strconv.Atoi(fee)
-	if err != nil {
-		return -1, err
-	}
-	return int64(minRelayFee), nil
 }
 
 func GetUnilateralExitDelay(ctx *cli.Context) (int64, error) {

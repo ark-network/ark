@@ -39,7 +39,6 @@ run: clean
 	export ARK_PORT=7070; \
 	export ARK_NO_TLS=true; \
 	export ARK_NO_MACAROONS=true; \
-	export ARK_MIN_RELAY_FEE=200; \
 	export ARK_TX_BUILDER_TYPE=covenantless; \
 	export ARK_BITCOIND_RPC_USER=admin1; \
 	export ARK_BITCOIND_RPC_PASS=123; \
@@ -56,7 +55,6 @@ run-neutrino: clean
 	export ARK_PORT=7070; \
 	export ARK_NO_TLS=true; \
 	export ARK_NO_MACAROONS=true; \
-	export ARK_MIN_RELAY_FEE=200; \
 	export ARK_TX_BUILDER_TYPE=covenantless; \
 	export ARK_ESPLORA_URL=http://localhost:3000; \
 	export ARK_NEUTRINO_PEER=localhost:18444; \
@@ -75,7 +73,6 @@ run-neutrino-signet: clean
 	export ARK_TX_BUILDER_TYPE=covenantless; \
 	export ARK_ESPLORA_URL=https://mutinynet.com/api; \
 	export ARK_NEUTRINO_PEER=45.79.52.207:38333; \
-	export ARK_MIN_RELAY_FEE=200; \
 	export ARK_DATADIR=./data/signet; \
 	go run ./cmd/arkd
 
