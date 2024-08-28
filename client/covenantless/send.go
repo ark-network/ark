@@ -18,6 +18,11 @@ func (c *clArkBitcoinCLI) SendAsync(ctx *cli.Context) error {
 	amount := ctx.Uint64("amount")
 	withExpiryCoinselect := ctx.Bool("enable-expiry-coinselect")
 
+	dust, err := utils.GetDust(ctx)
+	if err != nil {
+		return err
+	}
+
 	if amount < dust {
 		return fmt.Errorf("invalid amount (%d), must be greater than dust %d", amount, dust)
 	}
@@ -71,7 +76,7 @@ func (c *clArkBitcoinCLI) SendAsync(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	selectedCoins, changeAmount, err := coinSelect(vtxos, sumOfReceivers, withExpiryCoinselect)
+	selectedCoins, changeAmount, err := coinSelect(vtxos, sumOfReceivers, withExpiryCoinselect, dust)
 	if err != nil {
 		return err
 	}
@@ -155,7 +160,7 @@ func (c *clArkBitcoinCLI) SendAsync(ctx *cli.Context) error {
 	return nil
 }
 
-func coinSelect(vtxos []vtxo, amount uint64, sortByExpirationTime bool) ([]vtxo, uint64, error) {
+func coinSelect(vtxos []vtxo, amount uint64, sortByExpirationTime bool, dust uint64) ([]vtxo, uint64, error) {
 	selected := make([]vtxo, 0)
 	notSelected := make([]vtxo, 0)
 	selectedAmount := uint64(0)

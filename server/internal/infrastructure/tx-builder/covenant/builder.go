@@ -21,7 +21,6 @@ import (
 
 const (
 	connectorAmount = uint64(450)
-	dustLimit       = uint64(450)
 )
 
 type txBuilder struct {
@@ -417,6 +416,12 @@ func (b *txBuilder) createPoolTx(
 	}
 
 	ctx := context.Background()
+
+	dustLimit, err := b.wallet.GetDustAmount(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	utxos, change, err := b.selectUtxos(ctx, sweptRounds, targetAmount)
 	if err != nil {
 		return nil, err

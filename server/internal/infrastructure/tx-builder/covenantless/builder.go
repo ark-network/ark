@@ -24,11 +24,6 @@ import (
 	"github.com/lightningnetwork/lnd/input"
 )
 
-const (
-	connectorAmount = uint64(1000)
-	dustLimit       = uint64(1000)
-)
-
 type txBuilder struct {
 	wallet        ports.WalletService
 	net           common.Network
@@ -583,6 +578,13 @@ func (b *txBuilder) createPoolTx(
 		return nil, err
 	}
 
+	dustLimit, err := b.wallet.GetDustAmount(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	connectorAmount := dustLimit
+
 	receivers := getOnchainReceivers(payments)
 	nbOfInputs := countSpentVtxos(payments)
 	connectorsAmount := (connectorAmount + connectorMinRelayFee) * nbOfInputs
@@ -872,6 +874,11 @@ func (b *txBuilder) createConnectors(
 		return nil, err
 	}
 
+	connectorAmount, err := b.wallet.GetDustAmount(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
 	connectorOutput := &wire.TxOut{
 		PkScript: connectorScript,
 		Value:    int64(connectorAmount),
@@ -1017,6 +1024,11 @@ func (b *txBuilder) createForfeitTxs(
 				return nil, err
 			}
 
+			connectorAmount, err := b.wallet.GetDustAmount(context.Background())
+			if err != nil {
+				return nil, err
+			}
+
 			for _, connector := range connectors {
 				txs, err := craftForfeitTxs(
 					connector, vtxo,
@@ -1025,7 +1037,7 @@ func (b *txBuilder) createForfeitTxs(
 						Script:       forfeitProof.Script,
 						LeafVersion:  forfeitProof.LeafVersion,
 					},
-					vtxoScript, aspScript, feeAmount,
+					vtxoScript, aspScript, feeAmount, int64(connectorAmount),
 				)
 				if err != nil {
 					return nil, err

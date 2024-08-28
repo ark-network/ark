@@ -138,7 +138,7 @@ func (a *restClient) GetInfo(
 		return nil, err
 	}
 
-	minRelayFee, err := strconv.Atoi(resp.Payload.MinRelayFee)
+	dust, err := strconv.Atoi(resp.Payload.Dust)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +149,7 @@ func (a *restClient) GetInfo(
 		UnilateralExitDelay: int64(unilateralExitDelay),
 		RoundInterval:       int64(roundInterval),
 		Network:             resp.Payload.Network,
-		MinRelayFee:         int64(minRelayFee),
+		Dust:                uint64(dust),
 	}, nil
 }
 

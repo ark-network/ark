@@ -21,8 +21,6 @@ import (
 	"github.com/vulpemventures/go-elements/transaction"
 )
 
-const dust = 450
-
 type covenantLiquidCLI struct{}
 
 func (c *covenantLiquidCLI) SendAsync(ctx *cli.Context) error {
@@ -100,6 +98,11 @@ func sendOnchain(ctx *cli.Context, receivers []receiver) (string, error) {
 	}
 
 	net, err := utils.GetNetwork(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	dust, err := utils.GetDust(ctx)
 	if err != nil {
 		return "", err
 	}

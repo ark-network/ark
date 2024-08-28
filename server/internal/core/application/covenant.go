@@ -251,6 +251,11 @@ func (s *covenantService) start() {
 }
 
 func (s *covenantService) startRound() {
+	dustAmount, err := s.wallet.GetDustAmount(context.Background())
+	if err != nil {
+		log.WithError(err).Warn("failed to retrieve dust amount")
+		return
+	}
 	round := domain.NewRound(dustAmount)
 	//nolint:all
 	round.StartRegistration()
@@ -429,6 +434,12 @@ func (s *covenantService) handleOnboarding(onboarding onboarding) {
 				time.Sleep(5 * time.Second)
 			}
 		}
+	}
+
+	dustAmount, err := s.wallet.GetDustAmount(ctx)
+	if err != nil {
+		log.WithError(err).Warn("failed to retrieve dust amount")
+		return
 	}
 
 	pubkey := hex.EncodeToString(onboarding.userPubkey.SerializeCompressed())

@@ -28,7 +28,7 @@ func TestWallet(t *testing.T) {
 		Network:             common.LiquidRegTest,
 		RoundLifetime:       512,
 		UnilateralExitDelay: 512,
-		MinRelayFee:         300,
+		Dust:                1000,
 	}
 	tests := []struct {
 		name  string

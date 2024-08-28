@@ -92,7 +92,7 @@ func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
 		UnilateralExitDelay: resp.GetUnilateralExitDelay(),
 		RoundInterval:       resp.GetRoundInterval(),
 		Network:             resp.GetNetwork(),
-		MinRelayFee:         resp.GetMinRelayFee(),
+		Dust:                uint64(resp.GetDust()),
 	}, nil
 }
 

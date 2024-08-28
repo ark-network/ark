@@ -27,6 +27,8 @@ import (
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightningnetwork/lnd/lntypes"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	log "github.com/sirupsen/logrus"
 	"github.com/vulpemventures/go-elements/address"
 )
@@ -168,11 +170,13 @@ func (a *covenantlessArkClient) Onboard(
 
 	cosigners := []*secp256k1.PublicKey{ephemeralKey.PubKey()} // TODO asp as cosigner
 
+	feePerNode := uint64(chainfee.FeePerKwFloor.FeeForVByte(lntypes.VByte(bitcointree.TreeTxSize)).ToUnit(btcutil.AmountSatoshi))
+
 	sharedOutputScript, sharedOutputAmount, err := bitcointree.CraftSharedOutput(
 		cosigners,
 		aspPubkey,
 		leaves,
-		a.MinRelayFee,
+		feePerNode,
 		a.RoundLifetime,
 		a.UnilateralExitDelay,
 	)
@@ -210,7 +214,7 @@ func (a *covenantlessArkClient) Onboard(
 		cosigners,
 		aspPubkey,
 		leaves,
-		a.MinRelayFee,
+		feePerNode,
 		a.RoundLifetime,
 		a.UnilateralExitDelay,
 	)
@@ -233,8 +237,8 @@ func (a *covenantlessArkClient) Onboard(
 
 	signer := bitcointree.NewTreeSignerSession(
 		ephemeralKey,
+		sharedOutputAmount,
 		congestionTree,
-		int64(a.MinRelayFee),
 		root.CloneBytes(),
 	)
 
@@ -244,8 +248,8 @@ func (a *covenantlessArkClient) Onboard(
 	}
 
 	coordinator, err := bitcointree.NewTreeCoordinatorSession(
+		sharedOutputAmount,
 		congestionTree,
-		int64(a.MinRelayFee),
 		root.CloneBytes(),
 		cosigners,
 	)
@@ -582,7 +586,7 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 	}
 
 	selectedCoins, changeAmount, err := utils.CoinSelect(
-		vtxos, amount, DUST, withExpiryCoinselect,
+		vtxos, amount, a.Dust, withExpiryCoinselect,
 	)
 	if err != nil {
 		return "", err
@@ -670,8 +674,8 @@ func (a *covenantlessArkClient) SendAsync(
 			return "", fmt.Errorf("invalid receiver address '%s': must be associated with the connected service provider", receiver)
 		}
 
-		if receiver.Amount() < DUST {
-			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), DUST)
+		if receiver.Amount() < a.Dust {
+			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), a.Dust)
 		}
 
 		receiversOutput = append(receiversOutput, client.Output{
@@ -686,7 +690,7 @@ func (a *covenantlessArkClient) SendAsync(
 		return "", err
 	}
 	selectedCoins, changeAmount, err := utils.CoinSelect(
-		vtxos, sumOfReceivers, DUST, withExpiryCoinselect,
+		vtxos, sumOfReceivers, a.Dust, withExpiryCoinselect,
 	)
 	if err != nil {
 		return "", err
@@ -788,8 +792,8 @@ func (a *covenantlessArkClient) sendOnchain(
 	targetAmount := uint64(0)
 	for _, receiver := range receivers {
 		targetAmount += receiver.Amount()
-		if receiver.Amount() < DUST {
-			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), DUST)
+		if receiver.Amount() < a.Dust {
+			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), a.Dust)
 		}
 
 		rcvAddr, err := btcutil.DecodeAddress(receiver.To(), &netParams)
@@ -943,8 +947,8 @@ func (a *covenantlessArkClient) sendOffchain(
 			return "", fmt.Errorf("invalid receiver address '%s': must be associated with the connected service provider", receiver.To())
 		}
 
-		if receiver.Amount() < DUST {
-			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), DUST)
+		if receiver.Amount() < a.Dust {
+			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), a.Dust)
 		}
 
 		receiversOutput = append(receiversOutput, client.Output{
@@ -964,7 +968,7 @@ func (a *covenantlessArkClient) sendOffchain(
 	}
 
 	selectedCoins, changeAmount, err := utils.CoinSelect(
-		vtxos, sumOfReceivers, DUST, withExpiryCoinselect,
+		vtxos, sumOfReceivers, a.Dust, withExpiryCoinselect,
 	)
 	if err != nil {
 		return "", err
@@ -1224,7 +1228,7 @@ func (a *covenantlessArkClient) validateCongestionTree(
 
 	if !utils.IsOnchainOnly(receivers) {
 		if err := bitcointree.ValidateCongestionTree(
-			event.Tree, poolTx, a.StoreData.AspPubkey, a.RoundLifetime, int64(a.MinRelayFee),
+			event.Tree, poolTx, a.StoreData.AspPubkey, a.RoundLifetime,
 		); err != nil {
 			return err
 		}

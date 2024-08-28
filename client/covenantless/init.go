@@ -81,6 +81,7 @@ func connectToAsp(ctx *cli.Context, net, url, explorer string) error {
 		utils.ROUND_LIFETIME:        strconv.Itoa(int(resp.GetRoundLifetime())),
 		utils.UNILATERAL_EXIT_DELAY: strconv.Itoa(int(resp.GetUnilateralExitDelay())),
 		utils.EXPLORER:              explorer,
+		utils.DUST:                  strconv.Itoa(int(resp.GetDust())),
 	})
 }
 

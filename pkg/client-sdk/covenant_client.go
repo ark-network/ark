@@ -163,7 +163,7 @@ func (a *covenantArkClient) Onboard(
 		net.AssetID,
 		aspPubkey,
 		[]tree.Receiver{congestionTreeLeaf},
-		a.MinRelayFee,
+		30,
 		a.RoundLifetime,
 		a.UnilateralExitDelay,
 	)
@@ -502,7 +502,7 @@ func (a *covenantArkClient) CollaborativeRedeem(
 	}
 
 	selectedCoins, changeAmount, err := utils.CoinSelect(
-		vtxos, amount, DUST, withExpiryCoinselect,
+		vtxos, amount, a.Dust, withExpiryCoinselect,
 	)
 	if err != nil {
 		return "", err
@@ -578,8 +578,8 @@ func (a *covenantArkClient) sendOnchain(
 
 	targetAmount := uint64(0)
 	for _, receiver := range receivers {
-		if receiver.Amount() < DUST {
-			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), DUST)
+		if receiver.Amount() < a.Dust {
+			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), a.Dust)
 		}
 		targetAmount += receiver.Amount()
 
@@ -748,8 +748,8 @@ func (a *covenantArkClient) sendOffchain(
 			return "", fmt.Errorf("invalid receiver address '%s': must be associated with the connected service provider", receiver.To())
 		}
 
-		if receiver.Amount() < DUST {
-			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), DUST)
+		if receiver.Amount() < a.Dust {
+			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), a.Dust)
 		}
 
 		receiversOutput = append(receiversOutput, client.Output{
@@ -769,7 +769,7 @@ func (a *covenantArkClient) sendOffchain(
 	}
 
 	selectedCoins, changeAmount, err := utils.CoinSelect(
-		vtxos, sumOfReceivers, DUST, withExpiryCoinselect,
+		vtxos, sumOfReceivers, a.Dust, withExpiryCoinselect,
 	)
 	if err != nil {
 		return "", err

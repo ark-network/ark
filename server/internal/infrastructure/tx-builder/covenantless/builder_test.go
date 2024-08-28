@@ -41,6 +41,8 @@ func TestMain(m *testing.M) {
 		Return(connectorAddress, nil)
 	wallet.On("MinRelayFee", mock.Anything, mock.Anything).
 		Return(uint64(30), nil)
+	wallet.On("GetDustAmount", mock.Anything).
+		Return(uint64(1000), nil)
 
 	pubkeyBytes, _ := hex.DecodeString(testingKey)
 	pubkey, _ = secp256k1.ParsePubKey(pubkeyBytes)

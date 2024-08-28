@@ -534,7 +534,7 @@
         "network": {
           "type": "string"
         },
-        "minRelayFee": {
+        "dust": {
           "type": "string",
           "format": "int64"
         }

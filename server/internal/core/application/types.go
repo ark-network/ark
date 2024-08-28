@@ -10,7 +10,6 @@ import (
 
 var (
 	paymentsThreshold = int64(128)
-	dustAmount        = uint64(450)
 )
 
 type Service interface {

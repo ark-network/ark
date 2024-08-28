@@ -158,7 +158,7 @@ message GetInfoResponse {
   int64 unilateral_exit_delay = 3;
   int64 round_interval = 4;
   string network = 5;
-  int64 min_relay_fee = 6;
+  int64 dust = 6;
 }
 
 message OnboardRequest {

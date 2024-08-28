@@ -23,6 +23,7 @@ const (
 	PUBKEY                = "public_key"
 	NETWORK               = "network"
 	EXPLORER              = "explorer"
+	DUST                  = "dust"
 
 	defaultNetwork = "liquid"
 	state_file     = "state.json"
@@ -36,6 +37,7 @@ var initialState = map[string]string{
 	ENCRYPTED_PRVKEY:      "",
 	PASSWORD_HASH:         "",
 	PUBKEY:                "",
+	DUST:                  "546",
 	NETWORK:               defaultNetwork,
 }
 
@@ -125,6 +127,25 @@ func GetAspPublicKey(ctx *cli.Context) (*secp256k1.PublicKey, error) {
 	}
 
 	return secp256k1.ParsePubKey(pubKeyBytes)
+}
+
+func GetDust(ctx *cli.Context) (uint64, error) {
+	state, err := GetState(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	dust := state[DUST]
+	if len(dust) <= 0 {
+		return 0, fmt.Errorf("missing dust")
+	}
+
+	dustAmount, err := strconv.Atoi(dust)
+	if err != nil {
+		return 0, err
+	}
+
+	return uint64(dustAmount), nil
 }
 
 func GetState(ctx *cli.Context) (map[string]string, error) {

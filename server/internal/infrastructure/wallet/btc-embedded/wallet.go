@@ -827,6 +827,13 @@ func (s *service) IsTransactionConfirmed(
 	return s.extraAPI.getTxStatus(txid)
 }
 
+// https://github.com/bitcoin/bitcoin/blob/439e58c4d8194ca37f70346727d31f52e69592ec/src/policy/policy.cpp#L23C8-L23C11
+func (s *service) GetDustAmount(
+	ctx context.Context,
+) (uint64, error) {
+	return s.MinRelayFee(ctx, 182) // non-segwit 1-in-1-out tx
+}
+
 func (s *service) castNotification(tx *wtxmgr.TxRecord) map[string]ports.VtxoWithValue {
 	vtxos := make(map[string]ports.VtxoWithValue)
 

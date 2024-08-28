@@ -140,6 +140,16 @@ func (m *mockedWallet) MinRelayFee(ctx context.Context, vbytes uint64) (uint64, 
 	return res, args.Error(1)
 }
 
+func (m *mockedWallet) GetDustAmount(ctx context.Context) (uint64, error) {
+	args := m.Called(ctx)
+
+	var res uint64
+	if a := args.Get(0); a != nil {
+		res = a.(uint64)
+	}
+	return res, args.Error(1)
+}
+
 func (m *mockedWallet) IsTransactionConfirmed(ctx context.Context, txid string) (bool, int64, error) {
 	args := m.Called(ctx, txid)
 

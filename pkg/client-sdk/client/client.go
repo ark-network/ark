@@ -52,7 +52,7 @@ type Info struct {
 	UnilateralExitDelay int64
 	RoundInterval       int64
 	Network             string
-	MinRelayFee         int64
+	Dust                uint64
 }
 
 type RoundEventChannel struct {

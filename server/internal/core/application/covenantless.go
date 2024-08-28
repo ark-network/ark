@@ -368,7 +368,13 @@ func (s *covenantlessService) start() {
 }
 
 func (s *covenantlessService) startRound() {
-	round := domain.NewRound(dustAmount) // TODO dynamic dust amount?
+	dustAmount, err := s.wallet.GetDustAmount(context.Background())
+	if err != nil {
+		log.WithError(err).Warn("failed to get dust amount")
+		return
+	}
+
+	round := domain.NewRound(dustAmount)
 	//nolint:all
 	round.StartRegistration()
 	s.currentRound = round
@@ -666,6 +672,12 @@ func (s *covenantlessService) handleOnboarding(onboarding onboarding) {
 	}
 
 	log.Debugf("boarding tx %s confirmed", txid)
+
+	dustAmount, err := s.wallet.GetDustAmount(ctx)
+	if err != nil {
+		log.WithError(err).Warn("failed to get dust amount")
+		return
+	}
 
 	pubkey := hex.EncodeToString(onboarding.userPubkey.SerializeCompressed())
 	payments := getPaymentsFromOnboardingBitcoin(onboarding.congestionTree, pubkey)

@@ -40,6 +40,8 @@ func TestMain(m *testing.M) {
 		Return(randomInput, uint64(0), nil)
 	wallet.On("DeriveConnectorAddress", mock.Anything).
 		Return(connectorAddress, nil)
+	wallet.On("GetDustAmount", mock.Anything).
+		Return(uint64(450), nil)
 
 	pubkeyBytes, _ := hex.DecodeString(testingKey)
 	pubkey, _ = secp256k1.ParsePubKey(pubkeyBytes)
