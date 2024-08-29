@@ -48,6 +48,7 @@ type ServiceInfo struct {
 	UnilateralExitDelay int64
 	RoundInterval       int64
 	Network             string
+	Dust                uint64
 }
 
 type WalletStatus struct {

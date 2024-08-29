@@ -245,6 +245,14 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []domain.Vt
 		if v.Spent {
 			return "", fmt.Errorf("input %s:%d already spent", v.Txid, v.VOut)
 		}
+
+		if v.Redeemed {
+			return "", fmt.Errorf("input %s:%d already redeemed", v.Txid, v.VOut)
+		}
+
+		if v.Swept {
+			return "", fmt.Errorf("input %s:%d already swept", v.Txid, v.VOut)
+		}
 	}
 
 	payment, err := domain.NewPayment(vtxos)
@@ -262,6 +270,17 @@ func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, rece
 	payment, ok := s.paymentRequests.view(creds)
 	if !ok {
 		return fmt.Errorf("invalid credentials")
+	}
+
+	dustAmount, err := s.wallet.GetDustAmount(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to verify receiver amount, failed to get dust: %s", err)
+	}
+
+	for _, rcv := range receivers {
+		if rcv.Amount <= dustAmount {
+			return fmt.Errorf("receiver amount must be greater than dust amount %d", dustAmount)
+		}
 	}
 
 	if err := payment.AddReceivers(receivers); err != nil {
@@ -311,12 +330,18 @@ func (s *covenantlessService) GetCurrentRound(ctx context.Context) (*domain.Roun
 func (s *covenantlessService) GetInfo(ctx context.Context) (*ServiceInfo, error) {
 	pubkey := hex.EncodeToString(s.pubkey.SerializeCompressed())
 
+	dust, err := s.wallet.GetDustAmount(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get dust amount: %s", err)
+	}
+
 	return &ServiceInfo{
 		PubKey:              pubkey,
 		RoundLifetime:       s.roundLifetime,
 		UnilateralExitDelay: s.unilateralExitDelay,
 		RoundInterval:       s.roundInterval,
 		Network:             s.network.Name,
+		Dust:                dust,
 	}, nil
 }
 

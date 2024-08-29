@@ -122,6 +122,14 @@ func (s *covenantService) SpendVtxos(ctx context.Context, inputs []domain.VtxoKe
 		if v.Spent {
 			return "", fmt.Errorf("input %s:%d already spent", v.Txid, v.VOut)
 		}
+
+		if v.Redeemed {
+			return "", fmt.Errorf("input %s:%d already redeemed", v.Txid, v.VOut)
+		}
+
+		if v.Swept {
+			return "", fmt.Errorf("input %s:%d already swept", v.Txid, v.VOut)
+		}
 	}
 
 	payment, err := domain.NewPayment(vtxos)
@@ -139,6 +147,17 @@ func (s *covenantService) ClaimVtxos(ctx context.Context, creds string, receiver
 	payment, ok := s.paymentRequests.view(creds)
 	if !ok {
 		return fmt.Errorf("invalid credentials")
+	}
+
+	dustAmount, err := s.wallet.GetDustAmount(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, r := range receivers {
+		if r.Amount <= dustAmount {
+			return fmt.Errorf("receiver amount must be greater than dust amount: %d", dustAmount)
+		}
 	}
 
 	if err := payment.AddReceivers(receivers); err != nil {
@@ -196,12 +215,18 @@ func (s *covenantService) GetRoundById(ctx context.Context, id string) (*domain.
 func (s *covenantService) GetInfo(ctx context.Context) (*ServiceInfo, error) {
 	pubkey := hex.EncodeToString(s.pubkey.SerializeCompressed())
 
+	dust, err := s.wallet.GetDustAmount(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	return &ServiceInfo{
 		PubKey:              pubkey,
 		RoundLifetime:       s.roundLifetime,
 		UnilateralExitDelay: s.unilateralExitDelay,
 		RoundInterval:       s.roundInterval,
 		Network:             s.network.Name,
+		Dust:                dust,
 	}, nil
 }
 

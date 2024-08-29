@@ -308,6 +308,7 @@ func (h *handler) GetInfo(ctx context.Context, req *arkv1.GetInfoRequest) (*arkv
 		UnilateralExitDelay: info.UnilateralExitDelay,
 		RoundInterval:       info.RoundInterval,
 		Network:             info.Network,
+		Dust:                int64(info.Dust),
 	}, nil
 }
 
