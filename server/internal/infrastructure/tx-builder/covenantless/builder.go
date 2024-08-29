@@ -255,9 +255,14 @@ func (b *txBuilder) GetSweepInput(parentblocktime int64, node tree.Node) (expira
 
 	expirationTime := parentblocktime + lifetime
 
-	amount := int64(0)
-	for _, out := range partialTx.UnsignedTx.TxOut {
-		amount += out.Value
+	txhex, err := b.wallet.GetTransaction(context.Background(), txid.String())
+	if err != nil {
+		return -1, nil, err
+	}
+
+	var tx wire.MsgTx
+	if err := tx.Deserialize(hex.NewDecoder(strings.NewReader(txhex))); err != nil {
+		return -1, nil, err
 	}
 
 	sweepInput = &sweepBitcoinInput{
@@ -267,7 +272,7 @@ func (b *txBuilder) GetSweepInput(parentblocktime int64, node tree.Node) (expira
 		},
 		internalPubkey: internalKey,
 		sweepLeaf:      sweepLeaf,
-		amount:         amount,
+		amount:         tx.TxOut[index].Value,
 	}
 
 	return expirationTime, sweepInput, nil
