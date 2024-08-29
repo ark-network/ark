@@ -3,7 +3,6 @@ package application
 import (
 	"context"
 
-	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -46,11 +45,11 @@ type Service interface {
 	RegisterCosignerPubkey(ctx context.Context, paymentId string, ephemeralPublicKey string) error
 	RegisterCosignerNonces(
 		ctx context.Context, roundID string,
-		pubkey *secp256k1.PublicKey, nonces bitcointree.TreeNonces,
+		pubkey *secp256k1.PublicKey, nonces string,
 	) error
 	RegisterCosignerSignatures(
 		ctx context.Context, roundID string,
-		pubkey *secp256k1.PublicKey, signatures bitcointree.TreePartialSigs,
+		pubkey *secp256k1.PublicKey, signatures string,
 	) error
 }
 

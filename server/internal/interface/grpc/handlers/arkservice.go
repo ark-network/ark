@@ -3,12 +3,10 @@ package handlers
 import (
 	"context"
 	"encoding/hex"
-	"strings"
 	"sync"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/domain"
@@ -368,14 +366,14 @@ func (h *handler) GetInfo(ctx context.Context, req *arkv1.GetInfoRequest) (*arkv
 
 func (h *handler) SendTreeNonces(ctx context.Context, req *arkv1.SendTreeNoncesRequest) (*arkv1.SendTreeNoncesResponse, error) {
 	pubkey := req.GetPublicKey()
-	serializedNonces := req.GetTreeNonces()
+	encodedNonces := req.GetTreeNonces()
 	roundID := req.GetRoundId()
 
 	if len(pubkey) <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "missing cosigner public key")
 	}
 
-	if len(serializedNonces) <= 0 {
+	if len(encodedNonces) <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "missing tree nonces")
 	}
 
@@ -393,12 +391,7 @@ func (h *handler) SendTreeNonces(ctx context.Context, req *arkv1.SendTreeNoncesR
 		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key")
 	}
 
-	nonces, err := bitcointree.DecodeNonces(hex.NewDecoder(strings.NewReader(serializedNonces)))
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tree nonces")
-	}
-
-	if err := h.svc.RegisterCosignerNonces(ctx, roundID, cosignerPublicKey, nonces); err != nil {
+	if err := h.svc.RegisterCosignerNonces(ctx, roundID, cosignerPublicKey, encodedNonces); err != nil {
 		return nil, err
 	}
 
@@ -408,13 +401,13 @@ func (h *handler) SendTreeNonces(ctx context.Context, req *arkv1.SendTreeNoncesR
 func (h *handler) SendTreeSignatures(ctx context.Context, req *arkv1.SendTreeSignaturesRequest) (*arkv1.SendTreeSignaturesResponse, error) {
 	roundID := req.GetRoundId()
 	pubkey := req.GetPublicKey()
-	serializedSignatures := req.GetTreeSignatures()
+	encodedSignatures := req.GetTreeSignatures()
 
 	if len(pubkey) <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "missing cosigner public key")
 	}
 
-	if len(serializedSignatures) <= 0 {
+	if len(encodedSignatures) <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "missing tree signatures")
 	}
 
@@ -432,12 +425,7 @@ func (h *handler) SendTreeSignatures(ctx context.Context, req *arkv1.SendTreeSig
 		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key")
 	}
 
-	signatures, err := bitcointree.DecodeSignatures(hex.NewDecoder(strings.NewReader(serializedSignatures)))
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid tree signatures")
-	}
-
-	if err := h.svc.RegisterCosignerSignatures(ctx, roundID, cosignerPublicKey, signatures); err != nil {
+	if err := h.svc.RegisterCosignerSignatures(ctx, roundID, cosignerPublicKey, encodedSignatures); err != nil {
 		return nil, err
 	}
 

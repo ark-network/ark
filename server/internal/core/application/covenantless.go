@@ -385,18 +385,23 @@ func (s *covenantlessService) RegisterCosignerPubkey(ctx context.Context, paymen
 }
 
 func (s *covenantlessService) RegisterCosignerNonces(
-	ctx context.Context, roundID string, pubkey *secp256k1.PublicKey, nonces bitcointree.TreeNonces,
+	ctx context.Context, roundID string, pubkey *secp256k1.PublicKey, encodedNonces string,
 ) error {
 	session, ok := s.treeSigningSessions[roundID]
 	if !ok {
 		return fmt.Errorf(`signing session not found for round "%s"`, roundID)
 	}
 
+	nonces, err := bitcointree.DecodeNonces(hex.NewDecoder(strings.NewReader(encodedNonces)))
+	if err != nil {
+		return fmt.Errorf("failed to decode nonces: %s", err)
+	}
+
 	session.lock.Lock()
 	defer session.lock.Unlock()
 
 	if _, ok := session.nonces[pubkey]; ok {
-		return nil
+		return nil // skip if we already have nonces for this pubkey
 	}
 
 	session.nonces[pubkey] = nonces
@@ -409,18 +414,23 @@ func (s *covenantlessService) RegisterCosignerNonces(
 }
 
 func (s *covenantlessService) RegisterCosignerSignatures(
-	ctx context.Context, roundID string, pubkey *secp256k1.PublicKey, signatures bitcointree.TreePartialSigs,
+	ctx context.Context, roundID string, pubkey *secp256k1.PublicKey, encodedSignatures string,
 ) error {
 	session, ok := s.treeSigningSessions[roundID]
 	if !ok {
 		return fmt.Errorf(`signing session not found for round "%s"`, roundID)
 	}
 
+	signatures, err := bitcointree.DecodeSignatures(hex.NewDecoder(strings.NewReader(encodedSignatures)))
+	if err != nil {
+		return fmt.Errorf("failed to decode signatures: %s", err)
+	}
+
 	session.lock.Lock()
 	defer session.lock.Unlock()
 
 	if _, ok := session.signatures[pubkey]; ok {
-		return nil
+		return nil // skip if we already have signatures for this pubkey
 	}
 
 	session.signatures[pubkey] = signatures

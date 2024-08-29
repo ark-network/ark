@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -264,11 +263,11 @@ func (s *covenantService) RegisterCosignerPubkey(ctx context.Context, paymentId 
 	return ErrTreeSigningNotRequired
 }
 
-func (s *covenantService) RegisterCosignerNonces(ctx context.Context, roundID string, pubkey *secp256k1.PublicKey, nonces bitcointree.TreeNonces) error {
+func (s *covenantService) RegisterCosignerNonces(context.Context, string, *secp256k1.PublicKey, string) error {
 	return ErrTreeSigningNotRequired
 }
 
-func (s *covenantService) RegisterCosignerSignatures(ctx context.Context, roundID string, pubkey *secp256k1.PublicKey, signatures bitcointree.TreePartialSigs) error {
+func (s *covenantService) RegisterCosignerSignatures(context.Context, string, *secp256k1.PublicKey, string) error {
 	return ErrTreeSigningNotRequired
 }
 
