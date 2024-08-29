@@ -966,7 +966,7 @@ func (b *txBuilder) minRelayFeeForfeitTx() (uint64, error) {
 
 	weightEstimator := &input.TxWeightEstimator{}
 	weightEstimator.AddP2WKHInput() // connector input
-	weightEstimator.AddTapscriptInput(64, &waddrmgr.Tapscript{
+	weightEstimator.AddTapscriptInput(64*2, &waddrmgr.Tapscript{
 		RevealedScript: merkleProof.Script,
 		ControlBlock:   &controlBlock,
 	}) // forfeit input
