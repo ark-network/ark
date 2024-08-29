@@ -1,7 +1,9 @@
-// This package contains intermediary events that are used only by the covenantless version
-// they let to sign the congestion tree using musig2 algorithm
-// they are not included in the domain as "RoundEvent" because they don't mutate the Round state and should not be persisted
-package covenantlessevent
+/*
+* This package contains intermediary events that are used only by the covenantless version
+* they let to sign the congestion tree using musig2 algorithm
+* they are not included in domain because they don't mutate the Round state and should not be persisted
+ */
+package application
 
 import (
 	"bytes"
@@ -14,12 +16,12 @@ import (
 
 // signer should react to this event by generating a musig2 nonce for each transaction in the tree
 type RoundSigningStarted struct {
-	Id                     string
-	UnsignedCongestionTree tree.CongestionTree
-	Cosigners              []*secp256k1.PublicKey
+	Id               string
+	UnsignedVtxoTree tree.CongestionTree
+	Cosigners        []*secp256k1.PublicKey
 }
 
-// signer should react to this event by partially signing the congestion tree transactions
+// signer should react to this event by partially signing the vtxo tree transactions
 // then, delete its ephemeral key
 type RoundSigningNoncesGenerated struct {
 	Id     string
@@ -35,3 +37,7 @@ func (e RoundSigningNoncesGenerated) SerializeNonces() (string, error) {
 
 	return hex.EncodeToString(serialized.Bytes()), nil
 }
+
+// implement domain.RoundEvent interface
+func (r RoundSigningStarted) IsEvent()         {}
+func (r RoundSigningNoncesGenerated) IsEvent() {}

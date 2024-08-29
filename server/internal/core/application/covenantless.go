@@ -12,7 +12,6 @@ import (
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
-	covenantlessevent "github.com/ark-network/ark/server/internal/core/application/covenantless-event"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/btcutil/psbt"
@@ -39,7 +38,7 @@ type covenantlessService struct {
 	paymentRequests *paymentsMap
 	forfeitTxs      *forfeitTxsMap
 
-	eventsCh     chan interface{}
+	eventsCh     chan domain.RoundEvent
 	onboardingCh chan onboarding
 
 	lastEvent    interface{}
@@ -59,7 +58,7 @@ func NewCovenantlessService(
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	scheduler ports.SchedulerService,
 ) (Service, error) {
-	eventsCh := make(chan interface{})
+	eventsCh := make(chan domain.RoundEvent)
 	onboardingCh := make(chan onboarding)
 	paymentRequests := newPaymentsMap(nil)
 
@@ -299,7 +298,7 @@ func (s *covenantlessService) ListVtxos(ctx context.Context, pubkey *secp256k1.P
 	return s.repoManager.Vtxos().GetAllVtxos(ctx, pk)
 }
 
-func (s *covenantlessService) GetEventsChannel(ctx context.Context) <-chan interface{} {
+func (s *covenantlessService) GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent {
 	return s.eventsCh
 }
 
@@ -711,20 +710,20 @@ func (s *covenantlessService) startFinalization() {
 func (s *covenantlessService) propagateRoundSigningStartedEvent(
 	unsignedCongestionTree tree.CongestionTree, cosigners []*secp256k1.PublicKey,
 ) {
-	ev := covenantlessevent.RoundSigningStarted{
-		Id:                     s.currentRound.Id,
-		UnsignedCongestionTree: unsignedCongestionTree,
-		Cosigners:              cosigners,
+	ev := RoundSigningStarted{
+		Id:               s.currentRound.Id,
+		UnsignedVtxoTree: unsignedCongestionTree,
+		Cosigners:        cosigners,
 	}
 
 	s.lastEvent = ev
 	s.eventsCh <- ev
 }
 
-func (s *covenantlessService) propagateRoundSigningNoncesGeneratedEvent(aggragatedNonces bitcointree.TreeNonces) {
-	ev := covenantlessevent.RoundSigningNoncesGenerated{
+func (s *covenantlessService) propagateRoundSigningNoncesGeneratedEvent(combinedNonces bitcointree.TreeNonces) {
+	ev := RoundSigningNoncesGenerated{
 		Id:     s.currentRound.Id,
-		Nonces: aggragatedNonces,
+		Nonces: combinedNonces,
 	}
 
 	s.lastEvent = ev

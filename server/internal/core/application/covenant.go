@@ -38,7 +38,7 @@ type covenantService struct {
 	paymentRequests *paymentsMap
 	forfeitTxs      *forfeitTxsMap
 
-	eventsCh     chan interface{}
+	eventsCh     chan domain.RoundEvent
 	onboardingCh chan onboarding
 
 	currentRound *domain.Round
@@ -52,7 +52,7 @@ func NewCovenantService(
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	scheduler ports.SchedulerService,
 ) (Service, error) {
-	eventsCh := make(chan interface{})
+	eventsCh := make(chan domain.RoundEvent)
 	onboardingCh := make(chan onboarding)
 	paymentRequests := newPaymentsMap(nil)
 
@@ -180,7 +180,7 @@ func (s *covenantService) ListVtxos(ctx context.Context, pubkey *secp256k1.Publi
 	return s.repoManager.Vtxos().GetAllVtxos(ctx, pk)
 }
 
-func (s *covenantService) GetEventsChannel(ctx context.Context) <-chan interface{} {
+func (s *covenantService) GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent {
 	return s.eventsCh
 }
 

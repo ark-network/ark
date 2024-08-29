@@ -23,7 +23,7 @@ type Service interface {
 	GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error)
 	GetRoundById(ctx context.Context, id string) (*domain.Round, error)
 	GetCurrentRound(ctx context.Context) (*domain.Round, error)
-	GetEventsChannel(ctx context.Context) <-chan interface{}
+	GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
 	UpdatePaymentStatus(
 		ctx context.Context, paymentId string,
 	) (lastEvent interface{}, err error)

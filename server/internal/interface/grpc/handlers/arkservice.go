@@ -11,7 +11,6 @@ import (
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/application"
-	covenantlessevent "github.com/ark-network/ark/server/internal/core/application/covenantless-event"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/google/uuid"
@@ -160,7 +159,7 @@ func (h *handler) Ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.Ping
 				},
 			},
 		}
-	case covenantlessevent.RoundSigningStarted:
+	case application.RoundSigningStarted:
 		cosignersKeys := make([]string, 0, len(e.Cosigners))
 		for _, key := range e.Cosigners {
 			cosignersKeys = append(cosignersKeys, hex.EncodeToString(key.SerializeCompressed()))
@@ -171,11 +170,11 @@ func (h *handler) Ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.Ping
 				RoundSigning: &arkv1.RoundSigningEvent{
 					Id:               e.Id,
 					CosignersPubkeys: cosignersKeys,
-					UnsignedTree:     castCongestionTree(e.UnsignedCongestionTree),
+					UnsignedTree:     castCongestionTree(e.UnsignedVtxoTree),
 				},
 			},
 		}
-	case covenantlessevent.RoundSigningNoncesGenerated:
+	case application.RoundSigningNoncesGenerated:
 		serialized, err := e.SerializeNonces()
 		if err != nil {
 			logrus.WithError(err).Error("failed to serialize nonces")
@@ -519,7 +518,7 @@ func (h *handler) listenToEvents() {
 					},
 				},
 			}
-		case covenantlessevent.RoundSigningStarted:
+		case application.RoundSigningStarted:
 			cosignersKeys := make([]string, 0, len(e.Cosigners))
 			for _, key := range e.Cosigners {
 				cosignersKeys = append(cosignersKeys, hex.EncodeToString(key.SerializeCompressed()))
@@ -530,11 +529,11 @@ func (h *handler) listenToEvents() {
 					RoundSigning: &arkv1.RoundSigningEvent{
 						Id:               e.Id,
 						CosignersPubkeys: cosignersKeys,
-						UnsignedTree:     castCongestionTree(e.UnsignedCongestionTree),
+						UnsignedTree:     castCongestionTree(e.UnsignedVtxoTree),
 					},
 				},
 			}
-		case covenantlessevent.RoundSigningNoncesGenerated:
+		case application.RoundSigningNoncesGenerated:
 			serialized, err := e.SerializeNonces()
 			if err != nil {
 				logrus.WithError(err).Error("failed to serialize nonces")
