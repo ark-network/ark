@@ -41,8 +41,8 @@ type covenantService struct {
 	eventsCh     chan domain.RoundEvent
 	onboardingCh chan onboarding
 
+	lastEvent    domain.RoundEvent
 	currentRound *domain.Round
-	lastEvent    interface{}
 }
 
 func NewCovenantService(
@@ -150,7 +150,7 @@ func (s *covenantService) ClaimVtxos(ctx context.Context, creds string, receiver
 	return s.paymentRequests.update(*payment)
 }
 
-func (s *covenantService) UpdatePaymentStatus(_ context.Context, id string) (interface{}, error) {
+func (s *covenantService) UpdatePaymentStatus(_ context.Context, id string) (domain.RoundEvent, error) {
 	err := s.paymentRequests.updatePingTimestamp(id)
 	if err != nil {
 		if _, ok := err.(errPaymentNotFound); ok {

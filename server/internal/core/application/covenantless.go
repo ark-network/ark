@@ -41,9 +41,9 @@ type covenantlessService struct {
 	eventsCh     chan domain.RoundEvent
 	onboardingCh chan onboarding
 
-	lastEvent    interface{}
-	currentRound *domain.Round
-
+	// cached data for the current round
+	lastEvent           domain.RoundEvent
+	currentRound        *domain.Round
 	treeSigningSessions map[string]*musigSigningSession
 	asyncPaymentsCache  map[domain.VtxoKey]struct {
 		receivers []domain.Receiver
@@ -276,7 +276,7 @@ func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, rece
 	return s.paymentRequests.update(*payment)
 }
 
-func (s *covenantlessService) UpdatePaymentStatus(_ context.Context, id string) (interface{}, error) {
+func (s *covenantlessService) UpdatePaymentStatus(_ context.Context, id string) (domain.RoundEvent, error) {
 	err := s.paymentRequests.updatePingTimestamp(id)
 	if err != nil {
 		if _, ok := err.(errPaymentNotFound); ok {
@@ -1274,7 +1274,7 @@ func findForfeitTxBitcoin(
 	return "", fmt.Errorf("forfeit tx not found")
 }
 
-// musigSigningSession is a struct that holds the state of nonces and signatures in order to sign the congestion tree
+// musigSigningSession holds the state of ephemeral nonces and signatures in order to coordinate the signing of the tree
 type musigSigningSession struct {
 	lock        sync.Mutex
 	nbCosigners int
