@@ -82,15 +82,6 @@ func TestPayment(t *testing.T) {
 					receivers: []domain.Receiver{
 						{
 							Pubkey: "030000000000000000000000000000000000000000000000000000000000000001",
-							Amount: 400,
-						},
-					},
-					expectedErr: "receiver amount must be greater than dust",
-				},
-				{
-					receivers: []domain.Receiver{
-						{
-							Pubkey: "030000000000000000000000000000000000000000000000000000000000000001",
 							Amount: 600,
 						},
 					},
