@@ -496,7 +496,6 @@ func (s *covenantlessService) startFinalization() {
 	}
 	payments, cosigners := s.paymentRequests.pop(num)
 	if len(payments) > len(cosigners) {
-		roundAborted = true
 		err := fmt.Errorf("missing ephemeral key for payments")
 		round.Fail(fmt.Errorf("round aborted: %s", err))
 		log.WithError(err).Debugf("round %s aborted", round.Id)
@@ -504,7 +503,6 @@ func (s *covenantlessService) startFinalization() {
 	}
 
 	if _, err := round.RegisterPayments(payments); err != nil {
-		roundAborted = true
 		round.Fail(fmt.Errorf("failed to register payments: %s", err))
 		log.WithError(err).Warn("failed to register payments")
 		return
@@ -512,7 +510,6 @@ func (s *covenantlessService) startFinalization() {
 
 	sweptRounds, err := s.repoManager.Rounds().GetSweptRounds(ctx)
 	if err != nil {
-		roundAborted = true
 		round.Fail(fmt.Errorf("failed to retrieve swept rounds: %s", err))
 		log.WithError(err).Warn("failed to retrieve swept rounds")
 		return
@@ -520,7 +517,6 @@ func (s *covenantlessService) startFinalization() {
 
 	ephemeralKey, err := secp256k1.GeneratePrivateKey()
 	if err != nil {
-		roundAborted = true
 		round.Fail(fmt.Errorf("failed to generate ephemeral key: %s", err))
 		log.WithError(err).Warn("failed to generate ephemeral key")
 		return
@@ -530,7 +526,6 @@ func (s *covenantlessService) startFinalization() {
 
 	unsignedPoolTx, tree, connectorAddress, err := s.builder.BuildPoolTx(s.pubkey, payments, s.minRelayFee, sweptRounds, cosigners...)
 	if err != nil {
-		roundAborted = true
 		round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
 		log.WithError(err).Warn("failed to create pool tx")
 		return
@@ -563,7 +558,6 @@ func (s *covenantlessService) startFinalization() {
 
 		coordinator, err := s.createTreeCoordinatorSession(tree, cosigners, root)
 		if err != nil {
-			roundAborted = true
 			round.Fail(fmt.Errorf("failed to create tree coordinator: %s", err))
 			log.WithError(err).Warn("failed to create tree coordinator")
 			return
@@ -575,14 +569,12 @@ func (s *covenantlessService) startFinalization() {
 
 		nonces, err := aspSignerSession.GetNonces()
 		if err != nil {
-			roundAborted = true
 			round.Fail(fmt.Errorf("failed to get nonces: %s", err))
 			log.WithError(err).Warn("failed to get nonces")
 			return
 		}
 
 		if err := coordinator.AddNonce(ephemeralKey.PubKey(), nonces); err != nil {
-			roundAborted = true
 			round.Fail(fmt.Errorf("failed to add nonce: %s", err))
 			log.WithError(err).Warn("failed to add nonce")
 			return
@@ -592,7 +584,6 @@ func (s *covenantlessService) startFinalization() {
 
 		select {
 		case <-noncesTimer.C:
-			roundAborted = true
 			round.Fail(fmt.Errorf("musig2 signing session timed out (nonce collection)"))
 			log.Warn("musig2 signing session timed out (nonce collection)")
 			return
@@ -600,7 +591,6 @@ func (s *covenantlessService) startFinalization() {
 			noncesTimer.Stop()
 			for pubkey, nonce := range signingSession.nonces {
 				if err := coordinator.AddNonce(pubkey, nonce); err != nil {
-					roundAborted = true
 					round.Fail(fmt.Errorf("failed to add nonce: %s", err))
 					log.WithError(err).Warn("failed to add nonce")
 					return
@@ -612,7 +602,6 @@ func (s *covenantlessService) startFinalization() {
 
 		aggragatedNonces, err := coordinator.AggregateNonces()
 		if err != nil {
-			roundAborted = true
 			round.Fail(fmt.Errorf("failed to aggregate nonces: %s", err))
 			log.WithError(err).Warn("failed to aggregate nonces")
 			return
@@ -623,14 +612,12 @@ func (s *covenantlessService) startFinalization() {
 		s.propagateRoundSigningNoncesGeneratedEvent(aggragatedNonces)
 
 		if err := aspSignerSession.SetKeys(cosigners); err != nil {
-			roundAborted = true
 			round.Fail(fmt.Errorf("failed to set keys: %s", err))
 			log.WithError(err).Warn("failed to set keys")
 			return
 		}
 
 		if err := aspSignerSession.SetAggregatedNonces(aggragatedNonces); err != nil {
-			roundAborted = true
 			round.Fail(fmt.Errorf("failed to set aggregated nonces: %s", err))
 			log.WithError(err).Warn("failed to set aggregated nonces")
 			return
@@ -639,14 +626,12 @@ func (s *covenantlessService) startFinalization() {
 		// sign the tree as ASP
 		aspTreeSigs, err := aspSignerSession.Sign()
 		if err != nil {
-			roundAborted = true
 			round.Fail(fmt.Errorf("failed to sign tree: %s", err))
 			log.WithError(err).Warn("failed to sign tree")
 			return
 		}
 
 		if err := coordinator.AddSig(ephemeralKey.PubKey(), aspTreeSigs); err != nil {
-			roundAborted = true
 			round.Fail(fmt.Errorf("failed to add signature: %s", err))
 			log.WithError(err).Warn("failed to add signature")
 			return
@@ -660,7 +645,6 @@ func (s *covenantlessService) startFinalization() {
 
 		select {
 		case <-signaturesTimer.C:
-			roundAborted = true
 			round.Fail(fmt.Errorf("musig2 signing session timed out (signatures)"))
 			log.Warn("musig2 signing session timed out (signatures)")
 			return
@@ -668,7 +652,6 @@ func (s *covenantlessService) startFinalization() {
 			signaturesTimer.Stop()
 			for pubkey, sig := range signingSession.signatures {
 				if err := coordinator.AddSig(pubkey, sig); err != nil {
-					roundAborted = true
 					round.Fail(fmt.Errorf("failed to add signature: %s", err))
 					log.WithError(err).Warn("failed to add signature")
 					return
@@ -680,7 +663,6 @@ func (s *covenantlessService) startFinalization() {
 
 		signedTree, err := coordinator.SignTree()
 		if err != nil {
-			roundAborted = true
 			round.Fail(fmt.Errorf("failed to aggragate tree signatures: %s", err))
 			log.WithError(err).Warn("failed aggragate tree signatures")
 			return
