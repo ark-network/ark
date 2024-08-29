@@ -370,12 +370,18 @@ func (s *covenantlessService) Onboard(
 	return nil
 }
 
-func (s *covenantlessService) IsCovenantLess() bool {
-	return true
-}
+func (s *covenantlessService) RegisterCosignerPubkey(ctx context.Context, paymentId string, pubkey string) error {
+	pubkeyBytes, err := hex.DecodeString(pubkey)
+	if err != nil {
+		return fmt.Errorf("failed to decode hex pubkey: %s", err)
+	}
 
-func (s *covenantlessService) RegisterCosignerPubkey(ctx context.Context, paymentId string, pubkey *secp256k1.PublicKey) error {
-	return s.paymentRequests.pushEphemeralKey(paymentId, pubkey)
+	ephemeralPublicKey, err := secp256k1.ParsePubKey(pubkeyBytes)
+	if err != nil {
+		return fmt.Errorf("failed to parse pubkey: %s", err)
+	}
+
+	return s.paymentRequests.pushEphemeralKey(paymentId, ephemeralPublicKey)
 }
 
 func (s *covenantlessService) RegisterCosignerNonces(

@@ -42,9 +42,8 @@ type Service interface {
 	CompleteAsyncPayment(
 		ctx context.Context, redeemTx string, unconditionalForfeitTxs []string,
 	) error
-	// Covenant-less only
-	IsCovenantLess() bool
-	RegisterCosignerPubkey(ctx context.Context, paymentId string, pubkey *secp256k1.PublicKey) error
+	// Tree signing methods
+	RegisterCosignerPubkey(ctx context.Context, paymentId string, ephemeralPublicKey string) error
 	RegisterCosignerNonces(
 		ctx context.Context, roundID string,
 		pubkey *secp256k1.PublicKey, nonces bitcointree.TreeNonces,

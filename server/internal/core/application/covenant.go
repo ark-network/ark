@@ -21,6 +21,10 @@ import (
 	"github.com/vulpemventures/go-elements/psetv2"
 )
 
+var (
+	ErrTreeSigningNotRequired = fmt.Errorf("tree signing is not required on this ark (covenant)")
+)
+
 type covenantService struct {
 	network             common.Network
 	pubkey              *secp256k1.PublicKey
@@ -250,20 +254,22 @@ func (s *covenantService) Onboard(
 	return nil
 }
 
-func (s *covenantService) IsCovenantLess() bool {
-	return false
+func (s *covenantService) RegisterCosignerPubkey(ctx context.Context, paymentId string, _ string) error {
+	// if the user sends an ephemeral pubkey, something is going wrong client-side
+	// we should delete the associated payment
+	if err := s.paymentRequests.delete(paymentId); err != nil {
+		log.WithError(err).Warn("failed to delete payment")
+	}
+
+	return ErrTreeSigningNotRequired
 }
 
 func (s *covenantService) RegisterCosignerNonces(ctx context.Context, roundID string, pubkey *secp256k1.PublicKey, nonces bitcointree.TreeNonces) error {
-	return fmt.Errorf("unimplemented")
-}
-
-func (s *covenantService) RegisterCosignerPubkey(ctx context.Context, paymentId string, pubkey *secp256k1.PublicKey) error {
-	return fmt.Errorf("unimplemented")
+	return ErrTreeSigningNotRequired
 }
 
 func (s *covenantService) RegisterCosignerSignatures(ctx context.Context, roundID string, pubkey *secp256k1.PublicKey, signatures bitcointree.TreePartialSigs) error {
-	return fmt.Errorf("unimplemented")
+	return ErrTreeSigningNotRequired
 }
 
 func (s *covenantService) start() {

@@ -200,32 +200,14 @@ func (h *handler) RegisterPayment(ctx context.Context, req *arkv1.RegisterPaymen
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	var cosigner *secp256k1.PublicKey
-
-	if h.svc.IsCovenantLess() {
-		pubkey := req.GetEphemeralPubkey()
-		if pubkey == "" {
-			return nil, status.Error(codes.InvalidArgument, "missing cosigner pubkey")
-		}
-
-		buf, err := hex.DecodeString(pubkey)
-		if err != nil {
-			return nil, status.Error(codes.InvalidArgument, "invalid cosigner pubkey (expect hex)")
-		}
-
-		cosigner, err = secp256k1.ParsePubKey(buf)
-		if err != nil {
-			return nil, status.Error(codes.InvalidArgument, "invalid cosigner pubkey")
-		}
-	}
-
 	id, err := h.svc.SpendVtxos(ctx, vtxosKeys)
 	if err != nil {
 		return nil, err
 	}
 
-	if cosigner != nil {
-		if err := h.svc.RegisterCosignerPubkey(ctx, id, cosigner); err != nil {
+	pubkey := req.GetEphemeralPubkey()
+	if len(pubkey) > 0 {
+		if err := h.svc.RegisterCosignerPubkey(ctx, id, pubkey); err != nil {
 			return nil, err
 		}
 	}

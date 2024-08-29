@@ -48,6 +48,18 @@ func (m *paymentsMap) len() int64 {
 	return count
 }
 
+func (m *paymentsMap) delete(id string) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	if _, ok := m.payments[id]; !ok {
+		return errPaymentNotFound{id}
+	}
+
+	delete(m.payments, id)
+	return nil
+}
+
 func (m *paymentsMap) push(payment domain.Payment) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
