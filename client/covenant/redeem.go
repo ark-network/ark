@@ -32,6 +32,11 @@ func collaborativeRedeem(
 		return err
 	}
 
+	dust, err := utils.GetDust(ctx)
+	if err != nil {
+		return err
+	}
+
 	liquidNet := toElementsNetwork(netinstate)
 
 	if net.Name != liquidNet.Name {
@@ -62,7 +67,7 @@ func collaborativeRedeem(
 		return err
 	}
 
-	selectedCoins, changeAmount, err := coinSelect(vtxos, amount, withExpiryCoinselect)
+	selectedCoins, changeAmount, err := coinSelect(vtxos, amount, withExpiryCoinselect, dust)
 	if err != nil {
 		return err
 	}
