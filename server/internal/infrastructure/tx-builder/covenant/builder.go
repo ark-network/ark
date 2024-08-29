@@ -11,12 +11,15 @@ import (
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/address"
+	"github.com/vulpemventures/go-elements/elementsutil"
 	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/taproot"
+	"github.com/vulpemventures/go-elements/transaction"
 )
 
 const (
@@ -42,47 +45,13 @@ func NewTxBuilder(
 	return &txBuilder{wallet, net, roundLifetime, exitDelay, reverseBoardingExitDelay}
 }
 
-// This method aims to verify and add partial signature from reverse boarding input (unimplemented in covenant version)
-func (b *txBuilder) VerifyAndCombinePartialTx(string, string) (string, error) {
-	return "", fmt.Errorf("not implemented")
-}
-
 func (b *txBuilder) GetReverseBoardingScript(owner, asp *secp256k1.PublicKey) (string, []byte, error) {
-	multisigClosure := tree.ForfeitClosure{
-		Pubkey:    owner,
-		AspPubkey: asp,
-	}
-
-	csvClosure := tree.CSVSigClosure{
-		Pubkey:  owner,
-		Seconds: uint(b.reverseBoardingExitDelay),
-	}
-
-	multisigLeaf, err := multisigClosure.Leaf()
+	addr, script, _, err := b.getReverseBoardingTaproot(owner, asp)
 	if err != nil {
 		return "", nil, err
 	}
 
-	csvLeaf, err := csvClosure.Leaf()
-	if err != nil {
-		return "", nil, err
-	}
-
-	tapTree := taproot.AssembleTaprootScriptTree(*multisigLeaf, *csvLeaf)
-	root := tapTree.RootNode.TapHash()
-	tapKey := taproot.ComputeTaprootOutputKey(tree.UnspendableKey(), root[:])
-
-	p2tr, err := payment.FromTweakedKey(tapKey, b.onchainNetwork(), nil)
-	if err != nil {
-		return "", nil, err
-	}
-
-	addr, err := p2tr.TaprootAddress()
-	if err != nil {
-		return "", nil, err
-	}
-
-	return addr, p2tr.Script, nil
+	return addr, script, nil
 }
 
 func (b *txBuilder) GetVtxoScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error) {
@@ -441,11 +410,13 @@ func (b *txBuilder) createPoolTx(
 		})
 	}
 
-	outputs = append(outputs, psetv2.OutputArgs{
-		Asset:  b.onchainNetwork().AssetID,
-		Amount: connectorsAmount,
-		Script: connectorScript,
-	})
+	if connectorsAmount > 0 {
+		outputs = append(outputs, psetv2.OutputArgs{
+			Asset:  b.onchainNetwork().AssetID,
+			Amount: connectorsAmount,
+			Script: connectorScript,
+		})
+	}
 
 	for _, receiver := range receivers {
 		targetAmount += receiver.Amount
@@ -460,6 +431,12 @@ func (b *txBuilder) createPoolTx(
 			Amount: receiver.Amount,
 			Script: receiverScript,
 		})
+	}
+
+	for _, payment := range payments {
+		for _, reverseBoarding := range payment.ReverseBoardingInputs {
+			targetAmount -= uint64(reverseBoarding.Value)
+		}
 	}
 
 	ctx := context.Background()
@@ -490,6 +467,60 @@ func (b *txBuilder) createPoolTx(
 	updater, err := psetv2.NewUpdater(ptx)
 	if err != nil {
 		return nil, err
+	}
+
+	for _, payment := range payments {
+		for _, reverseBoarding := range payment.ReverseBoardingInputs {
+			if err := updater.AddInputs(
+				[]psetv2.InputArgs{
+					{
+						Txid:    reverseBoarding.Txid,
+						TxIndex: reverseBoarding.VOut,
+					},
+				},
+			); err != nil {
+				return nil, err
+			}
+
+			index := len(ptx.Inputs) - 1
+
+			assetBytes, err := elementsutil.AssetHashToBytes(b.onchainNetwork().AssetID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert asset to bytes: %s", err)
+			}
+
+			valueBytes, err := elementsutil.ValueToBytes(uint64(reverseBoarding.Value))
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert value to bytes: %s", err)
+			}
+
+			ownerPubKeyBytes, err := hex.DecodeString(reverseBoarding.OwnerPublicKey)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode owner pubkey: %s", err)
+			}
+
+			ownerPubKey, err := secp256k1.ParsePubKey(ownerPubKeyBytes)
+			if err != nil {
+				return nil, err
+			}
+
+			_, script, tapLeafProof, err := b.getReverseBoardingTaproot(ownerPubKey, aspPubKey)
+			if err != nil {
+				return nil, err
+			}
+
+			if err := updater.AddInWitnessUtxo(index, transaction.NewTxOutput(assetBytes, valueBytes, script)); err != nil {
+				return nil, err
+			}
+
+			if err := updater.AddInTapLeafScript(index, psetv2.NewTapLeafScript(*tapLeafProof, tree.UnspendableKey())); err != nil {
+				return nil, err
+			}
+
+			if err := updater.AddInSighashType(index, txscript.SigHashDefault); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	if err := addInputs(updater, utxos); err != nil {
@@ -584,6 +615,77 @@ func (b *txBuilder) createPoolTx(
 	}
 
 	return ptx, nil
+}
+
+// This method aims to verify and add partial signature from reverse boarding input
+func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, error) {
+	roundPset, err := psetv2.NewPsetFromBase64(dest)
+	if err != nil {
+		return "", err
+	}
+
+	sourcePset, err := psetv2.NewPsetFromBase64(src)
+	if err != nil {
+		return "", err
+	}
+
+	roundUtx, err := roundPset.UnsignedTx()
+	if err != nil {
+		return "", err
+	}
+
+	sourceUtx, err := sourcePset.UnsignedTx()
+	if err != nil {
+		return "", err
+	}
+
+	if roundUtx.TxHash().String() != sourceUtx.TxHash().String() {
+		return "", fmt.Errorf("txid mismatch")
+	}
+
+	roundSigner, err := psetv2.NewSigner(roundPset)
+	if err != nil {
+		return "", err
+	}
+
+	for i, input := range sourcePset.Inputs {
+		if len(input.TapScriptSig) == 0 || len(input.TapLeafScript) == 0 {
+			continue
+		}
+
+		partialSig := input.TapScriptSig[0]
+
+		leafHash, err := chainhash.NewHash(partialSig.LeafHash)
+		if err != nil {
+			return "", err
+		}
+
+		preimage, err := b.getTaprootPreimage(src, i, leafHash)
+		if err != nil {
+			return "", err
+		}
+
+		sig, err := schnorr.ParseSignature(partialSig.Signature)
+		if err != nil {
+			return "", err
+		}
+
+		pubkey, err := schnorr.ParsePubKey(partialSig.PubKey)
+		if err != nil {
+			return "", err
+		}
+
+		if !sig.Verify(preimage, pubkey) {
+			return "", fmt.Errorf("invalid signature")
+		}
+
+		if err := roundSigner.SignTaprootInputTapscriptSig(i, partialSig); err != nil {
+			return "", err
+		}
+
+	}
+
+	return roundSigner.Pset.ToBase64()
 }
 
 func (b *txBuilder) createConnectors(
@@ -776,6 +878,52 @@ func (b *txBuilder) onchainNetwork() *network.Network {
 	default:
 		return &network.Liquid
 	}
+}
+
+func (b *txBuilder) getReverseBoardingTaproot(owner, asp *secp256k1.PublicKey) (string, []byte, *taproot.TapscriptElementsProof, error) {
+	multisigClosure := tree.ForfeitClosure{
+		Pubkey:    owner,
+		AspPubkey: asp,
+	}
+
+	csvClosure := tree.CSVSigClosure{
+		Pubkey:  owner,
+		Seconds: uint(b.reverseBoardingExitDelay),
+	}
+
+	multisigLeaf, err := multisigClosure.Leaf()
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	csvLeaf, err := csvClosure.Leaf()
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	tapTree := taproot.AssembleTaprootScriptTree(*multisigLeaf, *csvLeaf)
+	root := tapTree.RootNode.TapHash()
+	tapKey := taproot.ComputeTaprootOutputKey(tree.UnspendableKey(), root[:])
+
+	p2tr, err := payment.FromTweakedKey(tapKey, b.onchainNetwork(), nil)
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	addr, err := p2tr.TaprootAddress()
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	tapLeaf, err := multisigClosure.Leaf()
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	leafProofIndex := tapTree.LeafProofIndex[tapLeaf.TapHash()]
+	leafProof := tapTree.LeafMerkleProofs[leafProofIndex]
+
+	return addr, p2tr.Script, &leafProof, nil
 }
 
 func extractSweepLeaf(input psetv2.Input) (sweepLeaf *psetv2.TapLeafScript, lifetime int64, err error) {

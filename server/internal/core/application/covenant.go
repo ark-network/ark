@@ -17,7 +17,9 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	log "github.com/sirupsen/logrus"
+	"github.com/vulpemventures/go-elements/elementsutil"
 	"github.com/vulpemventures/go-elements/psetv2"
+	"github.com/vulpemventures/go-elements/transaction"
 )
 
 type covenantService struct {
@@ -41,7 +43,8 @@ type covenantService struct {
 	eventsCh     chan domain.RoundEvent
 	onboardingCh chan onboarding
 
-	currentRound *domain.Round
+	currentRoundLock sync.Mutex
+	currentRound     *domain.Round
 }
 
 func NewCovenantService(
@@ -67,7 +70,7 @@ func NewCovenantService(
 		network, pubkey,
 		roundLifetime, roundInterval, unilateralExitDelay, reverseBoardingExitDelay, minRelayFee,
 		walletSvc, repoManager, builder, scanner, sweeper,
-		paymentRequests, forfeitTxs, eventsCh, onboardingCh, nil,
+		paymentRequests, forfeitTxs, eventsCh, onboardingCh, sync.Mutex{}, nil,
 	}
 	repoManager.RegisterEventsHandler(
 		func(round *domain.Round) {
@@ -116,15 +119,21 @@ func (s *covenantService) Stop() {
 }
 
 func (s *covenantService) CreateReverseBoardingAddress(ctx context.Context, userPubkey *secp256k1.PublicKey) (string, error) {
-	return "", fmt.Errorf("unimplemented")
+	addr, _, err := s.builder.GetReverseBoardingScript(userPubkey, s.pubkey)
+	if err != nil {
+		return "", err
+	}
+	return addr, nil
 }
 
 func (s *covenantService) SpendVtxos(ctx context.Context, inputs []Input) (string, error) {
 	vtxosInputs := make([]domain.VtxoKey, 0)
+	reverseBoardingInputs := make([]Input, 0)
 
 	for _, in := range inputs {
 		if in.IsReverseBoarding() {
-			return "", fmt.Errorf("reverse boarding inputs cannot be spent in covenant version")
+			reverseBoardingInputs = append(reverseBoardingInputs, in)
+			continue
 		}
 
 		vtxosInputs = append(vtxosInputs, domain.VtxoKey{
@@ -151,7 +160,46 @@ func (s *covenantService) SpendVtxos(ctx context.Context, inputs []Input) (strin
 		}
 	}
 
-	payment, err := domain.NewPayment(vtxos, nil)
+	reverseBoardingTxs := make(map[string]string, 0) // txid -> txhex
+	now := time.Now().Unix()
+
+	for _, in := range reverseBoardingInputs {
+		txid := in.GetTxid()
+		if _, ok := reverseBoardingTxs[txid]; !ok {
+			txhex, err := s.wallet.GetTransaction(ctx, txid)
+			if err != nil {
+				return "", fmt.Errorf("failed to get tx %s: %s", txid, err)
+			}
+
+			confirmed, blocktime, err := s.wallet.IsTransactionConfirmed(ctx, txid)
+			if err != nil {
+				return "", fmt.Errorf("failed to check tx %s: %s", txid, err)
+			}
+
+			if !confirmed {
+				return "", fmt.Errorf("tx %s not confirmed", txid)
+			}
+
+			if blocktime+int64(s.reverseBoardingExitDelay) < now {
+				return "", fmt.Errorf("tx %s expired", txid)
+			}
+
+			reverseBoardingTxs[txid] = txhex
+		}
+	}
+
+	boardingInputs := make([]domain.ReverseBoardingInput, 0, len(reverseBoardingInputs))
+
+	for _, in := range reverseBoardingInputs {
+		input, err := s.newReverseBoardingInput(reverseBoardingTxs[in.GetTxid()], in.GetIndex(), in.GetReverseBoardingPublicKey())
+		if err != nil {
+			return "", fmt.Errorf("input %s:%d is not a valid reverse boarding", in.GetTxid(), in.GetIndex())
+		}
+
+		boardingInputs = append(boardingInputs, *input)
+	}
+
+	payment, err := domain.NewPayment(vtxos, boardingInputs)
 	if err != nil {
 		return "", err
 	}
@@ -159,6 +207,47 @@ func (s *covenantService) SpendVtxos(ctx context.Context, inputs []Input) (strin
 		return "", err
 	}
 	return payment.Id, nil
+}
+
+func (s *covenantService) newReverseBoardingInput(txhex string, vout uint32, pubkey *secp256k1.PublicKey) (*domain.ReverseBoardingInput, error) {
+	tx, err := transaction.NewTxFromHex(txhex)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse tx: %s", err)
+	}
+
+	if len(tx.Outputs) <= int(vout) {
+		return nil, fmt.Errorf("output not found")
+	}
+
+	out := tx.Outputs[vout]
+	script := out.Script
+
+	if len(out.RangeProof) > 0 || len(out.SurjectionProof) > 0 {
+		return nil, fmt.Errorf("output is confidential")
+	}
+
+	_, expectedScript, err := s.builder.GetReverseBoardingScript(pubkey, s.pubkey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get reverse boarding script: %s", err)
+	}
+
+	if !bytes.Equal(script, expectedScript) {
+		return nil, fmt.Errorf("output script is not a valid reverse boarding")
+	}
+
+	value, err := elementsutil.ValueFromBytes(out.Value)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse value: %s", err)
+	}
+
+	return &domain.ReverseBoardingInput{
+		VtxoKey: domain.VtxoKey{
+			Txid: tx.TxHash().String(),
+			VOut: vout,
+		},
+		OwnerPublicKey: hex.EncodeToString(pubkey.SerializeCompressed()),
+		Value:          int64(value),
+	}, nil
 }
 
 func (s *covenantService) ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error {
@@ -199,8 +288,17 @@ func (s *covenantService) SignVtxos(ctx context.Context, forfeitTxs []string) er
 	return s.forfeitTxs.sign(forfeitTxs)
 }
 
-func (s *covenantService) SignRoundTx(ctx context.Context, roundTx string) error {
-	return fmt.Errorf("unimplemented")
+func (s *covenantService) SignRoundTx(ctx context.Context, signedRoundTx string) error {
+	s.currentRoundLock.Lock()
+	defer s.currentRoundLock.Unlock()
+
+	combined, err := s.builder.VerifyAndCombinePartialTx(s.currentRound.UnsignedTx, signedRoundTx)
+	if err != nil {
+		return err
+	}
+
+	s.currentRound.UnsignedTx = combined
+	return nil
 }
 
 func (s *covenantService) ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, []domain.Vtxo, error) {
@@ -358,16 +456,26 @@ func (s *covenantService) startFinalization() {
 	}
 	log.Debugf("pool tx created for round %s", round.Id)
 
-	// TODO BTC make the senders sign the tree
-
-	connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(s.pubkey, unsignedPoolTx, payments, s.minRelayFee)
-	if err != nil {
-		round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
-		log.WithError(err).Warn("failed to create connectors and forfeit txs")
-		return
+	needForfeits := false
+	for _, pay := range payments {
+		if len(pay.Inputs) > 0 {
+			needForfeits = true
+			break
+		}
 	}
 
-	log.Debugf("forfeit transactions created for round %s", round.Id)
+	var forfeitTxs, connectors []string
+
+	if needForfeits {
+		connectors, forfeitTxs, err = s.builder.BuildForfeitTxs(s.pubkey, unsignedPoolTx, payments, s.minRelayFee)
+		if err != nil {
+			round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
+			log.WithError(err).Warn("failed to create connectors and forfeit txs")
+			return
+		}
+
+		log.Debugf("forfeit transactions created for round %s", round.Id)
+	}
 
 	if _, err := round.StartFinalization(
 		connectorAddress, connectors, tree, unsignedPoolTx,
@@ -408,21 +516,59 @@ func (s *covenantService) finalizeRound() {
 	}
 
 	log.Debugf("signing round transaction %s\n", round.Id)
-	signedPoolTx, err := s.wallet.SignTransaction(ctx, round.UnsignedTx, true)
+
+	reverseBoardingInputs := make([]int, 0)
+	roundTx, err := psetv2.NewPsetFromBase64(round.UnsignedTx)
+	if err != nil {
+		changes = round.Fail(fmt.Errorf("failed to parse round tx: %s", err))
+		log.WithError(err).Warn("failed to parse round tx")
+		return
+	}
+
+	for i, in := range roundTx.Inputs {
+		if len(in.TapLeafScript) > 0 {
+			if len(in.TapScriptSig) == 0 {
+				err = fmt.Errorf("missing tapscript spend sig for input %d", i)
+				changes = round.Fail(err)
+				log.WithError(err).Warn("missing reverse boarding sig")
+				return
+			}
+
+			reverseBoardingInputs = append(reverseBoardingInputs, i)
+		}
+	}
+
+	signedRoundTx := round.UnsignedTx
+
+	if len(reverseBoardingInputs) > 0 {
+		signedRoundTx, err = s.wallet.SignTransactionTapscript(ctx, signedRoundTx, reverseBoardingInputs)
+		if err != nil {
+			changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
+			log.WithError(err).Warn("failed to sign round tx")
+			return
+		}
+	}
+
+	signedRoundTx, err = s.wallet.SignTransaction(ctx, signedRoundTx, true)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
 		log.WithError(err).Warn("failed to sign round tx")
 		return
 	}
 
-	txid, err := s.wallet.BroadcastTransaction(ctx, signedPoolTx)
+	txid, err := s.wallet.BroadcastTransaction(ctx, signedRoundTx)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to broadcast pool tx: %s", err))
 		log.WithError(err).Warn("failed to broadcast pool tx")
 		return
 	}
 
-	changes, _ = round.EndFinalization(forfeitTxs, txid)
+	changes, err = round.EndFinalization(forfeitTxs, txid)
+	if err != nil {
+		changes = round.Fail(fmt.Errorf("failed to finalize round: %s", err))
+		log.WithError(err).Warn("failed to finalize round")
+		return
+	}
 
 	log.Debugf("finalized round %s with pool tx %s", round.Id, round.Txid)
 }
