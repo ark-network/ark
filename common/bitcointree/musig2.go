@@ -49,8 +49,8 @@ type TreeNonces [][]*Musig2Nonce // public nonces
 type TreePartialSigs [][]*musig2.PartialSignature
 
 type SignerSession interface {
-	GetNonces() (TreeNonces, error)       // generate of return cached nonce for this session
-	SetKeys([]*btcec.PublicKey) error     // set the keys for this session
+	GetNonces() (TreeNonces, error)       // generate tree nonces for this session
+	SetKeys([]*btcec.PublicKey) error     // set the cosigner public keys for this session
 	SetAggregatedNonces(TreeNonces) error // set the aggregated nonces
 	Sign() (TreePartialSigs, error)       // sign the tree
 }
