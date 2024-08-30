@@ -28,7 +28,6 @@ type ArkBalance struct {
 			SpendableAt string `json:"spendable_at"`
 		} `json:"locked_amount"`
 	} `json:"onchain_balance"`
-	ReverseBoarding int `json:"reverse_boarding_balance"`
 }
 
 type ArkReceive struct {

@@ -211,9 +211,19 @@ func (b *txBuilder) GetSweepInput(parentblocktime int64, node tree.Node) (expira
 
 	expirationTime := parentblocktime + lifetime
 
-	amount := uint64(0)
-	for _, out := range pset.Outputs {
-		amount += out.Value
+	txhex, err := b.wallet.GetTransaction(context.Background(), txid)
+	if err != nil {
+		return -1, nil, err
+	}
+
+	tx, err := transaction.NewTxFromHex(txhex)
+	if err != nil {
+		return -1, nil, err
+	}
+
+	inputValue, err := elementsutil.ValueFromBytes(tx.Outputs[index].Value)
+	if err != nil {
+		return -1, nil, err
 	}
 
 	sweepInput = &sweepLiquidInput{
@@ -222,7 +232,7 @@ func (b *txBuilder) GetSweepInput(parentblocktime int64, node tree.Node) (expira
 			TxIndex: index,
 		},
 		sweepLeaf: sweepLeaf,
-		amount:    amount,
+		amount:    inputValue,
 	}
 
 	return expirationTime, sweepInput, nil
@@ -547,14 +557,23 @@ func (b *txBuilder) createPoolTx(
 		if feeAmount == change {
 			// fees = change, remove change output
 			ptx.Outputs = ptx.Outputs[:len(ptx.Outputs)-1]
+			ptx.Global.OutputCount--
+			feeAmount += change
 		} else if feeAmount < change {
 			// change covers the fees, reduce change amount
-			ptx.Outputs[len(ptx.Outputs)-1].Value = change - feeAmount
+			if change-feeAmount < dustLimit {
+				ptx.Outputs = ptx.Outputs[:len(ptx.Outputs)-1]
+				ptx.Global.OutputCount--
+				feeAmount += change
+			} else {
+				ptx.Outputs[len(ptx.Outputs)-1].Value = change - feeAmount
+			}
 		} else {
 			// change is not enough to cover fees, re-select utxos
 			if change > 0 {
 				// remove change output if present
 				ptx.Outputs = ptx.Outputs[:len(ptx.Outputs)-1]
+				ptx.Global.OutputCount--
 			}
 			newUtxos, change, err := b.selectUtxos(ctx, sweptRounds, feeAmount-change)
 			if err != nil {
@@ -562,14 +581,18 @@ func (b *txBuilder) createPoolTx(
 			}
 
 			if change > 0 {
-				if err := updater.AddOutputs([]psetv2.OutputArgs{
-					{
-						Asset:  b.onchainNetwork().AssetID,
-						Amount: change,
-						Script: aspScript,
-					},
-				}); err != nil {
-					return nil, err
+				if change < dustLimit {
+					feeAmount += change
+				} else {
+					if err := updater.AddOutputs([]psetv2.OutputArgs{
+						{
+							Asset:  b.onchainNetwork().AssetID,
+							Amount: change,
+							Script: aspScript,
+						},
+					}); err != nil {
+						return nil, err
+					}
 				}
 			}
 

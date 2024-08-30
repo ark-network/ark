@@ -27,6 +27,8 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
+	fmt.Println("waiting for docker containers to start...")
+
 	time.Sleep(10 * time.Second)
 
 	if err := setupAspWallet(); err != nil {
@@ -62,7 +64,7 @@ func TestSendOffchain(t *testing.T) {
 	_, err = utils.RunCommand("nigiri", "faucet", "--liquid", receive.Onboarding)
 	require.NoError(t, err)
 
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	_, err = runArkCommand("claim", "--password", utils.Password)
 	require.NoError(t, err)
@@ -89,7 +91,7 @@ func TestUnilateralExit(t *testing.T) {
 	_, err = utils.RunCommand("nigiri", "faucet", "--liquid", receive.Onboarding)
 	require.NoError(t, err)
 
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	_, err = runArkCommand("claim", "--password", utils.Password)
 	require.NoError(t, err)
@@ -130,14 +132,14 @@ func TestCollaborativeExit(t *testing.T) {
 	_, err = utils.RunCommand("nigiri", "faucet", "--liquid", receive.Onboarding)
 	require.NoError(t, err)
 
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	_, err = runArkCommand("claim", "--password", utils.Password)
 	require.NoError(t, err)
 
 	time.Sleep(3 * time.Second)
 
-	_, err = runArkCommand("redeem", "--amount", "1000", "--address", redeemAddr, "--password", utils.Password)
+	_, err = runArkCommand("redeem", "--amount", "10000", "--address", redeemAddr, "--password", utils.Password)
 	require.NoError(t, err)
 }
 

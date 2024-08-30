@@ -498,6 +498,7 @@ func (s *covenantService) finalizeRound() {
 	reverseBoardingInputs := make([]int, 0)
 	roundTx, err := psetv2.NewPsetFromBase64(round.UnsignedTx)
 	if err != nil {
+		log.Debugf("failed to parse round tx: %s", round.UnsignedTx)
 		changes = round.Fail(fmt.Errorf("failed to parse round tx: %s", err))
 		log.WithError(err).Warn("failed to parse round tx")
 		return
@@ -536,6 +537,7 @@ func (s *covenantService) finalizeRound() {
 
 	txid, err := s.wallet.BroadcastTransaction(ctx, signedRoundTx)
 	if err != nil {
+		log.Debugf("failed to broadcast round tx: %s", signedRoundTx)
 		changes = round.Fail(fmt.Errorf("failed to broadcast pool tx: %s", err))
 		log.WithError(err).Warn("failed to broadcast pool tx")
 		return

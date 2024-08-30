@@ -66,14 +66,14 @@ func TestSendOffchain(t *testing.T) {
 	_, err = utils.RunCommand("nigiri", "faucet", receive.Onboarding)
 	require.NoError(t, err)
 
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	_, err = runClarkCommand("claim", "--password", utils.Password)
 	require.NoError(t, err)
 
 	time.Sleep(3 * time.Second)
 
-	_, err = runClarkCommand("send", "--amount", "1000", "--to", receive.Offchain, "--password", utils.Password)
+	_, err = runClarkCommand("send", "--amount", "10000", "--to", receive.Offchain, "--password", utils.Password)
 	require.NoError(t, err)
 
 	var balance utils.ArkBalance
@@ -102,7 +102,7 @@ func TestUnilateralExit(t *testing.T) {
 	_, err = utils.RunCommand("nigiri", "faucet", receive.Onboarding)
 	require.NoError(t, err)
 
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	_, err = runClarkCommand("claim", "--password", utils.Password)
 	require.NoError(t, err)
@@ -142,7 +142,7 @@ func TestCollaborativeExit(t *testing.T) {
 	_, err = utils.RunCommand("nigiri", "faucet", receive.Onboarding)
 	require.NoError(t, err)
 
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	_, err = runClarkCommand("claim", "--password", utils.Password)
 	require.NoError(t, err)
