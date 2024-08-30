@@ -209,6 +209,26 @@ func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
 	return offchainAddr, onchainAddr, nil
 }
 
+func (a *arkClient) ListVtxos(
+	ctx context.Context,
+) (spendableVtxos, spentVtxos []client.Vtxo, err error) {
+	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return
+	}
+
+	for _, addr := range offchainAddrs {
+		spendable, spent, err := a.client.ListVtxos(ctx, addr)
+		if err != nil {
+			return nil, nil, err
+		}
+		spendableVtxos = append(spendableVtxos, spendable...)
+		spentVtxos = append(spentVtxos, spent...)
+	}
+
+	return
+}
+
 func (a *arkClient) ping(
 	ctx context.Context, paymentID string,
 ) func() {
