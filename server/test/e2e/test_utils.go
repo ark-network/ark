@@ -32,8 +32,8 @@ type ArkBalance struct {
 }
 
 type ArkReceive struct {
-	Offchain string `json:"offchain_address"`
-	Onchain  string `json:"onchain_address"`
+	Offchain   string `json:"offchain_address"`
+	Onboarding string `json:"onboarding_address"`
 }
 
 type ArkTrustedOnboard struct {
