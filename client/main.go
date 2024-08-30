@@ -117,7 +117,7 @@ var (
 			if err != nil {
 				return err
 			}
-			return cli.ClaimAsync(ctx)
+			return cli.Claim(ctx)
 		},
 		Flags: []cli.Flag{&flags.PasswordFlag},
 	}

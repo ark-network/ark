@@ -386,81 +386,80 @@ func handleRoundStream(
 
 			fmt.Println("congestion tree validated")
 
-			forfeits := e.GetForfeitTxs()
-			signedForfeits := make([]string, 0)
-
-			fmt.Print("signing forfeit txs... ")
-
 			explorer := utils.NewExplorer(ctx)
 
-			connectorsTxids := make([]string, 0, len(connectors))
-			for _, connector := range connectors {
-				p, err := psbt.NewFromRawBytes(strings.NewReader(connector), true)
-				if err != nil {
-					return "", err
+			finalizePaymentRequest := &arkv1.FinalizePaymentRequest{}
+
+			if len(vtxosToSign) > 0 {
+				forfeits := e.GetForfeitTxs()
+				signedForfeits := make([]string, 0)
+
+				fmt.Print("signing forfeit txs... ")
+
+				connectorsTxids := make([]string, 0, len(connectors))
+				for _, connector := range connectors {
+					p, err := psbt.NewFromRawBytes(strings.NewReader(connector), true)
+					if err != nil {
+						return "", err
+					}
+					txid := p.UnsignedTx.TxHash().String()
+
+					connectorsTxids = append(connectorsTxids, txid)
 				}
-				txid := p.UnsignedTx.TxHash().String()
 
-				connectorsTxids = append(connectorsTxids, txid)
-			}
+				for _, forfeit := range forfeits {
+					ptx, err := psbt.NewFromRawBytes(strings.NewReader(forfeit), true)
+					if err != nil {
+						return "", err
+					}
 
-			for _, forfeit := range forfeits {
-				ptx, err := psbt.NewFromRawBytes(strings.NewReader(forfeit), true)
-				if err != nil {
-					return "", err
-				}
+					for _, input := range ptx.UnsignedTx.TxIn {
+						inputTxid := input.PreviousOutPoint.Hash.String()
 
-				for _, input := range ptx.UnsignedTx.TxIn {
-					inputTxid := input.PreviousOutPoint.Hash.String()
-
-					for _, coin := range vtxosToSign {
-						// check if it contains one of the input to sign
-						if inputTxid == coin.txid {
-							// verify that the connector is in the connectors list
-							connectorTxid := ptx.UnsignedTx.TxIn[0].PreviousOutPoint.Hash.String()
-							connectorFound := false
-							for _, txid := range connectorsTxids {
-								if txid == connectorTxid {
-									connectorFound = true
-									break
+						for _, coin := range vtxosToSign {
+							// check if it contains one of the input to sign
+							if inputTxid == coin.txid {
+								// verify that the connector is in the connectors list
+								connectorTxid := ptx.UnsignedTx.TxIn[0].PreviousOutPoint.Hash.String()
+								connectorFound := false
+								for _, txid := range connectorsTxids {
+									if txid == connectorTxid {
+										connectorFound = true
+										break
+									}
 								}
-							}
 
-							if !connectorFound {
-								return "", fmt.Errorf("connector txid %s not found in the connectors list", connectorTxid)
-							}
+								if !connectorFound {
+									return "", fmt.Errorf("connector txid %s not found in the connectors list", connectorTxid)
+								}
 
-							if err := signPsbt(ctx, ptx, explorer, secKey); err != nil {
-								return "", err
-							}
+								if err := signPsbt(ctx, ptx, explorer, secKey); err != nil {
+									return "", err
+								}
 
-							signedPset, err := ptx.B64Encode()
-							if err != nil {
-								return "", err
-							}
+								signedPset, err := ptx.B64Encode()
+								if err != nil {
+									return "", err
+								}
 
-							signedForfeits = append(signedForfeits, signedPset)
+								signedForfeits = append(signedForfeits, signedPset)
+							}
 						}
 					}
 				}
-			}
 
-			// if no forfeit txs have been signed, start pinging again and wait for the next round
-			if len(vtxosToSign) > 0 && len(signedForfeits) == 0 {
-				fmt.Printf("\nno forfeit txs to sign, waiting for the next round...\n")
-				pingStop = nil
-				for pingStop == nil {
-					pingStop = ping(ctx.Context, client, pingReq)
+				// if no forfeit txs have been signed, start pinging again and wait for the next round
+				if len(vtxosToSign) > 0 && len(signedForfeits) == 0 {
+					fmt.Printf("\nno forfeit txs to sign, waiting for the next round...\n")
+					pingStop = nil
+					for pingStop == nil {
+						pingStop = ping(ctx.Context, client, pingReq)
+					}
+					continue
 				}
-				continue
-			}
 
-			if len(signedForfeits) > 0 {
 				fmt.Printf("%d signed\n", len(signedForfeits))
-			}
-
-			finalizePaymentRequest := &arkv1.FinalizePaymentRequest{
-				SignedForfeitTxs: signedForfeits,
+				finalizePaymentRequest.SignedForfeitTxs = signedForfeits
 			}
 
 			if mustSignRoundTx {
@@ -478,6 +477,7 @@ func handleRoundStream(
 					return "", err
 				}
 
+				fmt.Println("round tx signed")
 				finalizePaymentRequest.SignedRoundTx = &signedRoundTx
 			}
 

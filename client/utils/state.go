@@ -18,6 +18,7 @@ const (
 	ASP_PUBKEY            = "asp_public_key"
 	ROUND_LIFETIME        = "round_lifetime"
 	UNILATERAL_EXIT_DELAY = "unilateral_exit_delay"
+	ONBOARDING_EXIT_DELAY = "onboarding_exit_delay"
 	ENCRYPTED_PRVKEY      = "encrypted_private_key"
 	PASSWORD_HASH         = "password_hash"
 	PUBKEY                = "public_key"
@@ -34,6 +35,7 @@ var initialState = map[string]string{
 	ASP_PUBKEY:            "",
 	ROUND_LIFETIME:        "",
 	UNILATERAL_EXIT_DELAY: "",
+	ONBOARDING_EXIT_DELAY: "",
 	ENCRYPTED_PRVKEY:      "",
 	PASSWORD_HASH:         "",
 	PUBKEY:                "",
@@ -107,6 +109,25 @@ func GetUnilateralExitDelay(ctx *cli.Context) (int64, error) {
 	}
 
 	return int64(redeemDelay), nil
+}
+
+func GetOnboardingExitDelay(ctx *cli.Context) (int64, error) {
+	state, err := GetState(ctx)
+	if err != nil {
+		return -1, err
+	}
+
+	delay := state[ONBOARDING_EXIT_DELAY]
+	if len(delay) <= 0 {
+		return -1, fmt.Errorf("missing onboarding exit delay")
+	}
+
+	onboardingDelay, err := strconv.Atoi(delay)
+	if err != nil {
+		return -1, err
+	}
+
+	return int64(onboardingDelay), nil
 }
 
 func GetWalletPublicKey(ctx *cli.Context) (*secp256k1.PublicKey, error) {

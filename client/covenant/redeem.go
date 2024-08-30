@@ -108,6 +108,7 @@ func collaborativeRedeem(
 		client,
 		registerResponse.GetId(),
 		selectedCoins,
+		false,
 		secKey,
 		receivers,
 	)

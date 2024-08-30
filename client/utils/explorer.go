@@ -18,7 +18,7 @@ import (
 	"github.com/vulpemventures/go-elements/transaction"
 )
 
-type Utxo struct {
+type ExplorerUtxo struct {
 	Txid   string `json:"txid"`
 	Vout   uint32 `json:"vout"`
 	Amount uint64 `json:"value"`
@@ -32,9 +32,9 @@ type Utxo struct {
 type Explorer interface {
 	GetTxHex(txid string) (string, error)
 	Broadcast(txHex string) (string, error)
-	GetUtxos(addr string) ([]Utxo, error)
+	GetUtxos(addr string) ([]ExplorerUtxo, error)
 	GetBalance(addr, asset string) (uint64, error)
-	GetRedeemedVtxosBalance(
+	GetDelayedBalance(
 		addr string, unilateralExitDelay int64,
 	) (uint64, map[int64]uint64, error)
 	GetTxBlocktime(txid string) (confirmed bool, blocktime int64, err error)
@@ -130,7 +130,7 @@ func (e *explorer) Broadcast(txStr string) (string, error) {
 	return txid, nil
 }
 
-func (e *explorer) GetUtxos(addr string) ([]Utxo, error) {
+func (e *explorer) GetUtxos(addr string) ([]ExplorerUtxo, error) {
 	endpoint, err := url.JoinPath(e.baseUrl, "address", addr, "utxo")
 	if err != nil {
 		return nil, err
@@ -149,7 +149,7 @@ func (e *explorer) GetUtxos(addr string) ([]Utxo, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf(string(body))
 	}
-	payload := []Utxo{}
+	payload := []ExplorerUtxo{}
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, err
 	}
@@ -175,7 +175,7 @@ func (e *explorer) GetBalance(addr, asset string) (uint64, error) {
 	return balance, nil
 }
 
-func (e *explorer) GetRedeemedVtxosBalance(
+func (e *explorer) GetDelayedBalance(
 	addr string, unilateralExitDelay int64,
 ) (spendableBalance uint64, lockedBalance map[int64]uint64, err error) {
 	utxos, err := e.GetUtxos(addr)

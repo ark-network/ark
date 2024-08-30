@@ -1,4 +1,4 @@
-package covenantless
+package covenant
 
 import (
 	"encoding/hex"
@@ -11,7 +11,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func (c *clArkBitcoinCLI) Claim(ctx *cli.Context) error {
+func (c *covenantLiquidCLI) Claim(ctx *cli.Context) error {
 	client, cancel, err := getClientFromState(ctx)
 	if err != nil {
 		return err
@@ -30,7 +30,7 @@ func (c *clArkBitcoinCLI) Claim(ctx *cli.Context) error {
 
 	explorer := utils.NewExplorer(ctx)
 
-	boardingUtxosFromExplorer, err := explorer.GetUtxos(onboardingAddr.EncodeAddress())
+	boardingUtxosFromExplorer, err := explorer.GetUtxos(onboardingAddr)
 	if err != nil {
 		return err
 	}
@@ -46,26 +46,14 @@ func (c *clArkBitcoinCLI) Claim(ctx *cli.Context) error {
 		boardingUtxos = append(boardingUtxos, u)
 	}
 
-	vtxos, err := getVtxos(ctx, nil, client, offchainAddr, false)
-	if err != nil {
-		return err
-	}
-
 	var pendingBalance uint64
-	var pendingVtxos []vtxo
-	for _, vtxo := range vtxos {
-		if vtxo.pending {
-			pendingBalance += vtxo.amount
-			pendingVtxos = append(pendingVtxos, vtxo)
-		}
-	}
 
 	for _, utxo := range boardingUtxos {
 		pendingBalance += utxo.Amount
 	}
 
 	if pendingBalance == 0 {
-		return nil
+		return fmt.Errorf("no onboarding utxos to claim")
 	}
 
 	receiver := receiver{
@@ -76,8 +64,8 @@ func (c *clArkBitcoinCLI) Claim(ctx *cli.Context) error {
 	if len(ctx.String("password")) == 0 {
 		if ok := askForConfirmation(
 			fmt.Sprintf(
-				"claim %d satoshis from %d pending payments and %d onboarding utxos",
-				pendingBalance, len(pendingVtxos), len(boardingUtxos),
+				"claim %d satoshis from %d onboarding utxos",
+				pendingBalance, len(boardingUtxos),
 			),
 		); !ok {
 			return nil
@@ -85,42 +73,32 @@ func (c *clArkBitcoinCLI) Claim(ctx *cli.Context) error {
 	}
 
 	return selfTransferAllPendingPayments(
-		ctx, client, pendingVtxos, boardingUtxos, receiver,
+		ctx, client, boardingUtxos, receiver,
 	)
 }
 
 func selfTransferAllPendingPayments(
 	ctx *cli.Context,
 	client arkv1.ArkServiceClient,
-	pendingVtxos []vtxo,
 	onboardingUtxos []utils.Utxo,
 	myself receiver,
 ) error {
-	inputs := make([]*arkv1.Input, 0, len(pendingVtxos)+len(onboardingUtxos))
+	inputs := make([]*arkv1.Input, 0, len(onboardingUtxos))
 
-	for _, coin := range pendingVtxos {
-		inputs = append(inputs, &arkv1.Input{
-			Txid: coin.txid,
-			Vout: coin.vout,
-		})
+	// if there are onboarding utxos, we need to include the pubkey
+	_, pubkey, _, err := common.DecodeAddress(myself.To)
+	if err != nil {
+		return err
 	}
 
-	if len(onboardingUtxos) > 0 {
-		// if there are onboarding utxos, we need to include the pubkey
-		_, pubkey, _, err := common.DecodeAddress(myself.To)
-		if err != nil {
-			return err
-		}
+	mypubkey := hex.EncodeToString(pubkey.SerializeCompressed())
 
-		mypubkey := hex.EncodeToString(pubkey.SerializeCompressed())
-
-		for _, outpoint := range onboardingUtxos {
-			inputs = append(inputs, &arkv1.Input{
-				Txid:                  outpoint.Txid,
-				Vout:                  outpoint.Vout,
-				ReverseBoardingPubkey: &mypubkey,
-			})
-		}
+	for _, outpoint := range onboardingUtxos {
+		inputs = append(inputs, &arkv1.Input{
+			Txid:                  outpoint.Txid,
+			Vout:                  outpoint.Vout,
+			ReverseBoardingPubkey: &mypubkey,
+		})
 	}
 
 	receiversOutput := []*arkv1.Output{
@@ -151,7 +129,7 @@ func selfTransferAllPendingPayments(
 	}
 
 	poolTxID, err := handleRoundStream(
-		ctx, client, registerResponse.GetId(), pendingVtxos,
+		ctx, client, registerResponse.GetId(), make([]vtxo, 0),
 		len(onboardingUtxos) > 0, secKey, receiversOutput,
 	)
 	if err != nil {

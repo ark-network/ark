@@ -8,7 +8,7 @@ type CLI interface {
 	Receive(ctx *cli.Context) error
 	Redeem(ctx *cli.Context) error
 	Send(ctx *cli.Context) error
-	ClaimAsync(ctx *cli.Context) error
+	Claim(ctx *cli.Context) error
 	SendAsync(ctx *cli.Context) error
 	Onboard(ctx *cli.Context) error
 }

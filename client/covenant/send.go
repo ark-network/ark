@@ -170,7 +170,7 @@ func sendOffchain(ctx *cli.Context, receivers []receiver) error {
 
 	poolTxID, err := handleRoundStream(
 		ctx, client, registerResponse.GetId(),
-		selectedCoins, secKey, receiversOutput,
+		selectedCoins, false, secKey, receiversOutput,
 	)
 	if err != nil {
 		return err
