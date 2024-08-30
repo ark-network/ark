@@ -47,6 +47,10 @@ type arkClient struct {
 	client   client.ASPClient
 }
 
+func (a *arkClient) Client() client.ASPClient {
+	return a.client
+}
+
 func (a *arkClient) GetConfigData(
 	_ context.Context,
 ) (*store.StoreData, error) {

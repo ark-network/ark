@@ -3,6 +3,7 @@ package arksdk
 import (
 	"context"
 
+	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/store"
 )
 
@@ -26,6 +27,8 @@ type ArkClient interface {
 	) (string, error)
 	SendAsync(ctx context.Context, withExpiryCoinselect bool, receivers []Receiver) (string, error)
 	ClaimAsync(ctx context.Context) (string, error)
+
+	Client() client.ASPClient
 }
 
 type Receiver interface {
