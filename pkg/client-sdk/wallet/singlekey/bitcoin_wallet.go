@@ -14,7 +14,6 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/store"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	walletstore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store"
-	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/psbt"
@@ -41,42 +40,42 @@ func NewBitcoinWallet(
 func (w *bitcoinWallet) GetAddresses(
 	ctx context.Context,
 ) ([]string, []string, []string, error) {
-	offchainAddr, onchainAddr, redemptionAddr, err := w.getAddress(ctx)
+	offchainAddr, onboardingAddr, redemptionAddr, err := w.getAddress(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
 	offchainAddrs := []string{offchainAddr}
-	onchainAddrs := []string{onchainAddr}
+	onboardingAddrs := []string{onboardingAddr}
 	redemptionAddrs := []string{redemptionAddr}
-	return offchainAddrs, onchainAddrs, redemptionAddrs, nil
+	return offchainAddrs, onboardingAddrs, redemptionAddrs, nil
 }
 
 func (w *bitcoinWallet) NewAddress(
 	ctx context.Context, _ bool,
 ) (string, string, error) {
-	offchainAddr, onchainAddr, _, err := w.getAddress(ctx)
+	offchainAddr, onboardingAddr, _, err := w.getAddress(ctx)
 	if err != nil {
 		return "", "", err
 	}
-	return offchainAddr, onchainAddr, nil
+	return offchainAddr, onboardingAddr, nil
 }
 
 func (w *bitcoinWallet) NewAddresses(
 	ctx context.Context, _ bool, num int,
 ) ([]string, []string, error) {
-	offchainAddr, onchainAddr, _, err := w.getAddress(ctx)
+	offchainAddr, onboardingAddr, _, err := w.getAddress(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	offchainAddrs := make([]string, 0, num)
-	onchainAddrs := make([]string, 0, num)
+	onboardingAddrs := make([]string, 0, num)
 	for i := 0; i < num; i++ {
 		offchainAddrs = append(offchainAddrs, offchainAddr)
-		onchainAddrs = append(onchainAddrs, onchainAddr)
+		onboardingAddrs = append(onboardingAddrs, onboardingAddr)
 	}
-	return offchainAddrs, onchainAddrs, nil
+	return offchainAddrs, onboardingAddrs, nil
 }
 
 func (s *bitcoinWallet) SignTransaction(
@@ -88,11 +87,6 @@ func (s *bitcoinWallet) SignTransaction(
 	}
 
 	updater, err := psbt.NewUpdater(ptx)
-	if err != nil {
-		return "", err
-	}
-
-	data, err := s.configStore.GetData(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -122,26 +116,9 @@ func (s *bitcoinWallet) SignTransaction(
 			return "", err
 		}
 
-		sighashType := txscript.SigHashAll
-
-		if utxo.PkScript[0] == txscript.OP_1 {
-			sighashType = txscript.SigHashDefault
-		}
-
-		if err := updater.AddInSighashType(sighashType, i); err != nil {
+		if err := updater.AddInSighashType(txscript.SigHashDefault, i); err != nil {
 			return "", err
 		}
-	}
-
-	_, onchainAddr, _, err := s.getAddress(ctx)
-	if err != nil {
-		return "", err
-	}
-	net := utils.ToBitcoinNetwork(data.Network)
-	addr, _ := btcutil.DecodeAddress(onchainAddr, &net)
-	onchainWalletScript, err := txscript.PayToAddrScript(addr)
-	if err != nil {
-		return "", err
 	}
 
 	prevouts := make(map[wire.OutPoint]*wire.TxOut)
@@ -158,36 +135,6 @@ func (s *bitcoinWallet) SignTransaction(
 	txsighashes := txscript.NewTxSigHashes(updater.Upsbt.UnsignedTx, prevoutFetcher)
 
 	for i, input := range ptx.Inputs {
-		if bytes.Equal(input.WitnessUtxo.PkScript, onchainWalletScript) {
-			if err := updater.AddInSighashType(txscript.SigHashAll, i); err != nil {
-				return "", err
-			}
-
-			preimage, err := txscript.CalcWitnessSigHash(
-				input.WitnessUtxo.PkScript,
-				txsighashes,
-				txscript.SigHashAll,
-				updater.Upsbt.UnsignedTx,
-				i,
-				int64(input.WitnessUtxo.Value),
-			)
-			if err != nil {
-				return "", err
-			}
-
-			sig := ecdsa.Sign(s.privateKey, preimage)
-			signatureWithSighashType := append(sig.Serialize(), byte(txscript.SigHashAll))
-
-			updater.Upsbt.Inputs[i].PartialSigs = []*psbt.PartialSig{
-				{
-					PubKey:    s.walletData.Pubkey.SerializeCompressed(),
-					Signature: signatureWithSighashType,
-				},
-			}
-
-			continue
-		}
-
 		if len(input.TaprootLeafScript) > 0 {
 			pubkey := s.walletData.Pubkey
 			for _, leaf := range input.TaprootLeafScript {
@@ -269,11 +216,6 @@ func (w *bitcoinWallet) getAddress(
 
 	netParams := utils.ToBitcoinNetwork(data.Network)
 
-	onchainAddr, err := btcutil.NewAddressWitnessPubKeyHash(btcutil.Hash160(w.walletData.Pubkey.SerializeCompressed()), &netParams)
-	if err != nil {
-		return "", "", "", err
-	}
-
 	vtxoTapKey, _, err := bitcointree.ComputeVtxoTaprootScript(
 		w.walletData.Pubkey, data.AspPubkey, uint(data.UnilateralExitDelay),
 	)
@@ -289,5 +231,20 @@ func (w *bitcoinWallet) getAddress(
 		return "", "", "", err
 	}
 
-	return offchainAddr, onchainAddr.EncodeAddress(), redemptionAddr.EncodeAddress(), nil
+	onboardingTapKey, _, err := bitcointree.ComputeVtxoTaprootScript(
+		w.walletData.Pubkey, data.AspPubkey, uint(data.OnboardingExitDelay),
+	)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	onboardingAddr, err := btcutil.NewAddressTaproot(
+		schnorr.SerializePubKey(onboardingTapKey),
+		&netParams,
+	)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	return offchainAddr, onboardingAddr.EncodeAddress(), redemptionAddr.EncodeAddress(), nil
 }

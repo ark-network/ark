@@ -27,7 +27,6 @@ func init() {
 	js.Global().Set("lock", LockWrapper())
 	js.Global().Set("locked", IsLockedWrapper())
 	js.Global().Set("balance", BalanceWrapper())
-	js.Global().Set("onboard", OnboardWrapper())
 	js.Global().Set("receive", ReceiveWrapper())
 	js.Global().Set("sendOnChain", SendOnChainWrapper())
 	js.Global().Set("sendOffChain", SendOffChainWrapper())

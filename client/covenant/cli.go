@@ -268,7 +268,7 @@ func coinSelectOnchain(
 
 		utxo := utils.NewUtxo(utxo, uint(onboardingExitDelay))
 
-		if utxo.SpendableAt.After(now) {
+		if utxo.SpendableAt.Before(now) {
 			utxos = append(utxos, utxo)
 			selectedAmount += utxo.Amount
 		}
@@ -301,7 +301,7 @@ func coinSelectOnchain(
 
 		utxo := utils.NewUtxo(utxo, uint(vtxoExitDelay))
 
-		if utxo.SpendableAt.After(now) {
+		if utxo.SpendableAt.Before(now) {
 			utxos = append(utxos, utxo)
 			selectedAmount += utxo.Amount
 		}

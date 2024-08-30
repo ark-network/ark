@@ -93,6 +93,7 @@ func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
 		RoundInterval:       resp.GetRoundInterval(),
 		Network:             resp.GetNetwork(),
 		MinRelayFee:         resp.GetMinRelayFee(),
+		OnboardingExitDelay: resp.GetReverseBoardingExitDelay(),
 	}, nil
 }
 

@@ -100,6 +100,7 @@ func (a *arkClient) InitWithWallet(
 		RoundLifetime:       info.RoundLifetime,
 		UnilateralExitDelay: info.UnilateralExitDelay,
 		MinRelayFee:         uint64(info.MinRelayFee),
+		OnboardingExitDelay: info.OnboardingExitDelay,
 	}
 	if err := a.store.AddData(ctx, storeData); err != nil {
 		return err
@@ -163,6 +164,7 @@ func (a *arkClient) Init(
 		RoundLifetime:       info.RoundLifetime,
 		UnilateralExitDelay: info.UnilateralExitDelay,
 		MinRelayFee:         uint64(info.MinRelayFee),
+		OnboardingExitDelay: info.OnboardingExitDelay,
 	}
 	walletSvc, err := getWallet(a.store, &storeData, supportedWallets)
 	if err != nil {
@@ -201,12 +203,12 @@ func (a *arkClient) IsLocked(ctx context.Context) bool {
 }
 
 func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
-	offchainAddr, onchainAddr, err := a.wallet.NewAddress(ctx, false)
+	offchainAddr, onboardingAddr, err := a.wallet.NewAddress(ctx, false)
 	if err != nil {
 		return "", "", err
 	}
 
-	return offchainAddr, onchainAddr, nil
+	return offchainAddr, onboardingAddr, nil
 }
 
 func (a *arkClient) ping(

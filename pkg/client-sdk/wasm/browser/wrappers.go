@@ -140,33 +140,18 @@ func BalanceWrapper() js.Func {
 	})
 }
 
-func OnboardWrapper() js.Func {
-	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) != 1 {
-			return nil, errors.New("invalid number of args")
-		}
-		amount := uint64(args[0].Int())
-
-		txID, err := arkSdkClient.Onboard(context.Background(), amount)
-		if err != nil {
-			return nil, err
-		}
-		return js.ValueOf(txID), nil
-	})
-}
-
 func ReceiveWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
 		if arkSdkClient == nil {
 			return nil, errors.New("ARK SDK client is not initialized")
 		}
-		offchainAddr, onchainAddr, err := arkSdkClient.Receive(context.Background())
+		offchainAddr, onboardingAddr, err := arkSdkClient.Receive(context.Background())
 		if err != nil {
 			return nil, err
 		}
 		result := map[string]interface{}{
-			"offchainAddr": offchainAddr,
-			"onchainAddr":  onchainAddr,
+			"offchainAddr":   offchainAddr,
+			"onboardingAddr": onboardingAddr,
 		}
 		return js.ValueOf(result), nil
 	})

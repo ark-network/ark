@@ -20,6 +20,7 @@ type StoreData struct {
 	Network             common.Network
 	RoundLifetime       int64
 	UnilateralExitDelay int64
+	OnboardingExitDelay int64
 	MinRelayFee         uint64
 }
 

@@ -14,8 +14,6 @@ type ArkClient interface {
 	Unlock(ctx context.Context, password string) error
 	Lock(ctx context.Context, password string) error
 	Balance(ctx context.Context, computeExpiryDetails bool) (*Balance, error)
-	Onboard(ctx context.Context, amount uint64) (string, error)
-	ReverseBoardingAddress(ctx context.Context) (string, error)
 	Receive(ctx context.Context) (string, string, error)
 	SendOnChain(ctx context.Context, receivers []Receiver) (string, error)
 	SendOffChain(
@@ -26,7 +24,7 @@ type ArkClient interface {
 		ctx context.Context, addr string, amount uint64, withExpiryCoinselect bool,
 	) (string, error)
 	SendAsync(ctx context.Context, withExpiryCoinselect bool, receivers []Receiver) (string, error)
-	ClaimAsync(ctx context.Context) (string, error)
+	Claim(ctx context.Context) (string, error)
 }
 
 type Receiver interface {

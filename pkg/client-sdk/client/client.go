@@ -51,6 +51,7 @@ type Info struct {
 	Pubkey              string
 	RoundLifetime       int64
 	UnilateralExitDelay int64
+	OnboardingExitDelay int64
 	RoundInterval       int64
 	Network             string
 	MinRelayFee         int64
@@ -84,12 +85,12 @@ func (k VtxoKey) ReverseBoardingPublicKey() string {
 	return ""
 }
 
-type ReverseBoardingInput struct {
+type BoardingInput struct {
 	VtxoKey
 	UserPubkey string
 }
 
-func (k ReverseBoardingInput) ReverseBoardingPublicKey() string {
+func (k BoardingInput) ReverseBoardingPublicKey() string {
 	return k.UserPubkey
 }
 

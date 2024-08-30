@@ -143,6 +143,11 @@ func (a *restClient) GetInfo(
 		return nil, err
 	}
 
+	onboardingExitDelay, err := strconv.Atoi(resp.Payload.ReverseBoardingExitDelay)
+	if err != nil {
+		return nil, err
+	}
+
 	return &client.Info{
 		Pubkey:              resp.Payload.Pubkey,
 		RoundLifetime:       int64(roundLifetime),
@@ -150,6 +155,7 @@ func (a *restClient) GetInfo(
 		RoundInterval:       int64(roundInterval),
 		Network:             resp.Payload.Network,
 		MinRelayFee:         int64(minRelayFee),
+		OnboardingExitDelay: int64(onboardingExitDelay),
 	}, nil
 }
 

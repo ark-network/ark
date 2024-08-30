@@ -20,7 +20,7 @@ type WalletService interface {
 	IsLocked() bool
 	GetAddresses(
 		ctx context.Context,
-	) (offchainAddresses, onchainAddresses, redemptionAddresses []string, err error)
+	) (offchainAddresses, onboardingAddresses, redemptionAddresses []string, err error)
 	NewAddress(
 		ctx context.Context, change bool,
 	) (offchainAddr, onchainAddr string, err error)

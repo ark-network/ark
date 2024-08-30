@@ -38,7 +38,7 @@ func main() {
 	defer aliceArkClient.Lock(ctx, password)
 
 	log.Info("alice is acquiring onchain funds...")
-	boardingAddress, err := aliceArkClient.ReverseBoardingAddress(ctx)
+	_, boardingAddress, err := aliceArkClient.Receive(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -59,10 +59,9 @@ func main() {
 
 	log.Infof("alice onchain balance: %d", aliceBalance.OnchainBalance.SpendableAmount)
 	log.Infof("alice offchain balance: %d", aliceBalance.OffchainBalance.Total)
-	log.Infof("alice reverse boarding balance: %d", aliceBalance.ReverseBoardingBalance)
 
 	log.Infof("alice claiming onboarding funds...")
-	txid, err := aliceArkClient.ClaimAsync(ctx)
+	txid, err := aliceArkClient.Claim(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -134,7 +133,7 @@ func main() {
 
 	fmt.Println("")
 	log.Info("bob is claiming the incoming payment...")
-	roundTxid, err := bobArkClient.ClaimAsync(ctx)
+	roundTxid, err := bobArkClient.Claim(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
