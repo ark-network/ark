@@ -17,13 +17,24 @@ service ArkService {
       body: "*"
     };
   };
+  rpc SendTreeNonces(SendTreeNoncesRequest) returns (SendTreeNoncesResponse) {
+    option (google.api.http) = {
+      post: "/v1/payment/tree/nonces"
+      body: "*"
+    };
+  }
+  rpc SendTreeSignatures(SendTreeSignaturesRequest) returns (SendTreeSignaturesResponse) {
+    option (google.api.http) = {
+      post: "/v1/payment/tree/signatures"
+      body: "*"
+    };
+  }
   rpc FinalizePayment(FinalizePaymentRequest) returns (FinalizePaymentResponse) {
     option (google.api.http) = {
       post: "/v1/payment/finalize"
       body: "*"
     };
   };
-  // TODO BTC: signTree rpc 
   rpc GetRound(GetRoundRequest) returns (GetRoundResponse) {
     option (google.api.http) = {
       get: "/v1/round/{txid}"
@@ -100,6 +111,7 @@ message ReverseBoardingAddressResponse {
 
 message RegisterPaymentRequest {
   repeated Input inputs = 1;
+  optional string ephemeral_pubkey = 2;
 }
 message RegisterPaymentResponse {
   // Mocks wabisabi's credentials.
@@ -139,10 +151,11 @@ message GetRoundByIdResponse {
 message GetEventStreamRequest {}
 message GetEventStreamResponse {
   oneof event {
-    // TODO: BTC add "signTree" event
     RoundFinalizationEvent round_finalization = 1;
     RoundFinalizedEvent round_finalized = 2;
     RoundFailed round_failed = 3;
+    RoundSigningEvent round_signing = 4;
+    RoundSigningNoncesGeneratedEvent round_signing_nonces_generated = 5; 
   }
 }
 
@@ -150,8 +163,13 @@ message PingRequest {
   string payment_id = 1;
 }
 message PingResponse {
-  repeated string forfeit_txs = 1;
-  RoundFinalizationEvent event = 2;
+  oneof event {
+    RoundFinalizationEvent round_finalization = 1;
+    RoundFinalizedEvent round_finalized = 2;
+    RoundFailed round_failed = 3;
+    RoundSigningEvent round_signing = 4;
+    RoundSigningNoncesGeneratedEvent round_signing_nonces_generated = 5; 
+  }
 }
 
 message ListVtxosRequest {
@@ -191,6 +209,17 @@ message RoundFinalizedEvent {
 message RoundFailed {
   string id = 1;
   string reason = 2;
+}
+
+message RoundSigningEvent {
+  string id = 1;
+  repeated string cosigners_pubkeys = 2;
+  Tree unsigned_tree = 3;
+}
+
+message RoundSigningNoncesGeneratedEvent {
+  string id = 1;
+  string tree_nonces = 2;
 }
 
 // TYPES
@@ -257,3 +286,19 @@ message PendingPayment {
   string redeem_tx = 1;
   repeated string unconditional_forfeit_txs =2;
 }
+
+message SendTreeNoncesRequest {
+  string round_id = 1;
+  string public_key = 2;
+  string tree_nonces = 3;
+}
+
+message SendTreeNoncesResponse {}
+
+message SendTreeSignaturesRequest {
+  string round_id = 1;
+  string public_key = 2;
+  string tree_signatures = 3;
+}
+
+message SendTreeSignaturesResponse {}

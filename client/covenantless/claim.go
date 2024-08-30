@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ark-network/ark/common"
+
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/client/utils"
-	"github.com/ark-network/ark/common"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/urfave/cli/v2"
 )
 
@@ -135,8 +137,19 @@ func selfTransferAllPendingPayments(
 		return err
 	}
 
+	ephemeralKey, err := secp256k1.GeneratePrivateKey()
+	if err != nil {
+		return err
+	}
+
+	pubkey := hex.EncodeToString(ephemeralKey.PubKey().SerializeCompressed())
+
 	registerResponse, err := client.RegisterPayment(
-		ctx.Context, &arkv1.RegisterPaymentRequest{Inputs: inputs},
+		ctx.Context,
+		&arkv1.RegisterPaymentRequest{
+			Inputs:          inputs,
+			EphemeralPubkey: &pubkey,
+		},
 	)
 	if err != nil {
 		return err
@@ -152,7 +165,7 @@ func selfTransferAllPendingPayments(
 
 	poolTxID, err := handleRoundStream(
 		ctx, client, registerResponse.GetId(), pendingVtxos,
-		len(onboardingUtxos) > 0, secKey, receiversOutput,
+		len(onboardingUtxos) > 0, secKey, receiversOutput, ephemeralKey,
 	)
 	if err != nil {
 		return err

@@ -3,14 +3,14 @@ package domain
 import "github.com/ark-network/ark/common/tree"
 
 type RoundEvent interface {
-	isEvent()
+	IsEvent()
 }
 
-func (r RoundStarted) isEvent()             {}
-func (r RoundFinalizationStarted) isEvent() {}
-func (r RoundFinalized) isEvent()           {}
-func (r RoundFailed) isEvent()              {}
-func (r PaymentsRegistered) isEvent()       {}
+func (r RoundStarted) IsEvent()             {}
+func (r RoundFinalizationStarted) IsEvent() {}
+func (r RoundFinalized) IsEvent()           {}
+func (r RoundFailed) IsEvent()              {}
+func (r PaymentsRegistered) IsEvent()       {}
 
 type RoundStarted struct {
 	Id        string

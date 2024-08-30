@@ -448,7 +448,7 @@ func (a *covenantArkClient) CollaborativeRedeem(
 		})
 	}
 
-	paymentID, err := a.client.RegisterPayment(ctx, inputs)
+	paymentID, err := a.client.RegisterPayment(ctx, inputs, "") // ephemeralPublicKey is not required for covenant
 	if err != nil {
 		return "", err
 	}
@@ -773,7 +773,7 @@ func (a *covenantArkClient) sendOffchain(
 	}
 
 	paymentID, err := a.client.RegisterPayment(
-		ctx, inputs,
+		ctx, inputs, "", // ephemeralPublicKey is not required for covenant
 	)
 	if err != nil {
 		return "", err

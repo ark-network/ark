@@ -20,8 +20,9 @@ const _ = grpc.SupportPackageIsVersion7
 type ArkServiceClient interface {
 	RegisterPayment(ctx context.Context, in *RegisterPaymentRequest, opts ...grpc.CallOption) (*RegisterPaymentResponse, error)
 	ClaimPayment(ctx context.Context, in *ClaimPaymentRequest, opts ...grpc.CallOption) (*ClaimPaymentResponse, error)
+	SendTreeNonces(ctx context.Context, in *SendTreeNoncesRequest, opts ...grpc.CallOption) (*SendTreeNoncesResponse, error)
+	SendTreeSignatures(ctx context.Context, in *SendTreeSignaturesRequest, opts ...grpc.CallOption) (*SendTreeSignaturesResponse, error)
 	FinalizePayment(ctx context.Context, in *FinalizePaymentRequest, opts ...grpc.CallOption) (*FinalizePaymentResponse, error)
-	// TODO BTC: signTree rpc
 	GetRound(ctx context.Context, in *GetRoundRequest, opts ...grpc.CallOption) (*GetRoundResponse, error)
 	GetRoundById(ctx context.Context, in *GetRoundByIdRequest, opts ...grpc.CallOption) (*GetRoundByIdResponse, error)
 	GetEventStream(ctx context.Context, in *GetEventStreamRequest, opts ...grpc.CallOption) (ArkService_GetEventStreamClient, error)
@@ -53,6 +54,24 @@ func (c *arkServiceClient) RegisterPayment(ctx context.Context, in *RegisterPaym
 func (c *arkServiceClient) ClaimPayment(ctx context.Context, in *ClaimPaymentRequest, opts ...grpc.CallOption) (*ClaimPaymentResponse, error) {
 	out := new(ClaimPaymentResponse)
 	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/ClaimPayment", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *arkServiceClient) SendTreeNonces(ctx context.Context, in *SendTreeNoncesRequest, opts ...grpc.CallOption) (*SendTreeNoncesResponse, error) {
+	out := new(SendTreeNoncesResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/SendTreeNonces", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *arkServiceClient) SendTreeSignatures(ctx context.Context, in *SendTreeSignaturesRequest, opts ...grpc.CallOption) (*SendTreeSignaturesResponse, error) {
+	out := new(SendTreeSignaturesResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/SendTreeSignatures", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -178,8 +197,9 @@ func (c *arkServiceClient) CompletePayment(ctx context.Context, in *CompletePaym
 type ArkServiceServer interface {
 	RegisterPayment(context.Context, *RegisterPaymentRequest) (*RegisterPaymentResponse, error)
 	ClaimPayment(context.Context, *ClaimPaymentRequest) (*ClaimPaymentResponse, error)
+	SendTreeNonces(context.Context, *SendTreeNoncesRequest) (*SendTreeNoncesResponse, error)
+	SendTreeSignatures(context.Context, *SendTreeSignaturesRequest) (*SendTreeSignaturesResponse, error)
 	FinalizePayment(context.Context, *FinalizePaymentRequest) (*FinalizePaymentResponse, error)
-	// TODO BTC: signTree rpc
 	GetRound(context.Context, *GetRoundRequest) (*GetRoundResponse, error)
 	GetRoundById(context.Context, *GetRoundByIdRequest) (*GetRoundByIdResponse, error)
 	GetEventStream(*GetEventStreamRequest, ArkService_GetEventStreamServer) error
@@ -200,6 +220,12 @@ func (UnimplementedArkServiceServer) RegisterPayment(context.Context, *RegisterP
 }
 func (UnimplementedArkServiceServer) ClaimPayment(context.Context, *ClaimPaymentRequest) (*ClaimPaymentResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ClaimPayment not implemented")
+}
+func (UnimplementedArkServiceServer) SendTreeNonces(context.Context, *SendTreeNoncesRequest) (*SendTreeNoncesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendTreeNonces not implemented")
+}
+func (UnimplementedArkServiceServer) SendTreeSignatures(context.Context, *SendTreeSignaturesRequest) (*SendTreeSignaturesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendTreeSignatures not implemented")
 }
 func (UnimplementedArkServiceServer) FinalizePayment(context.Context, *FinalizePaymentRequest) (*FinalizePaymentResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FinalizePayment not implemented")
@@ -275,6 +301,42 @@ func _ArkService_ClaimPayment_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ArkServiceServer).ClaimPayment(ctx, req.(*ClaimPaymentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ArkService_SendTreeNonces_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SendTreeNoncesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ArkServiceServer).SendTreeNonces(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.ArkService/SendTreeNonces",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ArkServiceServer).SendTreeNonces(ctx, req.(*SendTreeNoncesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ArkService_SendTreeSignatures_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SendTreeSignaturesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ArkServiceServer).SendTreeSignatures(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.ArkService/SendTreeSignatures",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ArkServiceServer).SendTreeSignatures(ctx, req.(*SendTreeSignaturesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -476,6 +538,14 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ClaimPayment",
 			Handler:    _ArkService_ClaimPayment_Handler,
+		},
+		{
+			MethodName: "SendTreeNonces",
+			Handler:    _ArkService_SendTreeNonces_Handler,
+		},
+		{
+			MethodName: "SendTreeSignatures",
+			Handler:    _ArkService_SendTreeSignatures_Handler,
 		},
 		{
 			MethodName: "FinalizePayment",

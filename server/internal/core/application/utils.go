@@ -10,6 +10,7 @@ import (
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/sirupsen/logrus"
 )
 
@@ -20,8 +21,9 @@ type timedPayment struct {
 }
 
 type paymentsMap struct {
-	lock     *sync.RWMutex
-	payments map[string]*timedPayment
+	lock          *sync.RWMutex
+	payments      map[string]*timedPayment
+	ephemeralKeys map[string]*secp256k1.PublicKey
 }
 
 func newPaymentsMap(payments []domain.Payment) *paymentsMap {
@@ -30,7 +32,7 @@ func newPaymentsMap(payments []domain.Payment) *paymentsMap {
 		paymentsById[p.Id] = &timedPayment{p, time.Now(), time.Time{}}
 	}
 	lock := &sync.RWMutex{}
-	return &paymentsMap{lock, paymentsById}
+	return &paymentsMap{lock, paymentsById, make(map[string]*secp256k1.PublicKey)}
 }
 
 func (m *paymentsMap) len() int64 {
@@ -46,6 +48,18 @@ func (m *paymentsMap) len() int64 {
 	return count
 }
 
+func (m *paymentsMap) delete(id string) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	if _, ok := m.payments[id]; !ok {
+		return errPaymentNotFound{id}
+	}
+
+	delete(m.payments, id)
+	return nil
+}
+
 func (m *paymentsMap) push(payment domain.Payment) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
@@ -58,7 +72,19 @@ func (m *paymentsMap) push(payment domain.Payment) error {
 	return nil
 }
 
-func (m *paymentsMap) pop(num int64) []domain.Payment {
+func (m *paymentsMap) pushEphemeralKey(paymentId string, pubkey *secp256k1.PublicKey) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	if _, ok := m.payments[paymentId]; !ok {
+		return fmt.Errorf("payment %s not found, cannot register signing ephemeral public key", paymentId)
+	}
+
+	m.ephemeralKeys[paymentId] = pubkey
+	return nil
+}
+
+func (m *paymentsMap) pop(num int64) ([]domain.Payment, []*secp256k1.PublicKey) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -83,11 +109,16 @@ func (m *paymentsMap) pop(num int64) []domain.Payment {
 	}
 
 	payments := make([]domain.Payment, 0, num)
+	cosigners := make([]*secp256k1.PublicKey, 0, num)
 	for _, p := range paymentsByTime[:num] {
 		payments = append(payments, p.Payment)
+		if pubkey, ok := m.ephemeralKeys[p.Payment.Id]; ok {
+			cosigners = append(cosigners, pubkey)
+			delete(m.ephemeralKeys, p.Payment.Id)
+		}
 		delete(m.payments, p.Id)
 	}
-	return payments
+	return payments, cosigners
 }
 
 func (m *paymentsMap) update(payment domain.Payment) error {
