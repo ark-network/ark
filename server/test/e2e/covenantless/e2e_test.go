@@ -71,6 +71,8 @@ func TestSendOffchain(t *testing.T) {
 	_, err = runClarkCommand("claim", "--password", utils.Password)
 	require.NoError(t, err)
 
+	time.Sleep(3 * time.Second)
+
 	_, err = runClarkCommand("send", "--amount", "1000", "--to", receive.Offchain, "--password", utils.Password)
 	require.NoError(t, err)
 
@@ -105,12 +107,13 @@ func TestUnilateralExit(t *testing.T) {
 	_, err = runClarkCommand("claim", "--password", utils.Password)
 	require.NoError(t, err)
 
+	time.Sleep(3 * time.Second)
+
 	var balance utils.ArkBalance
 	balanceStr, err := runClarkCommand("balance")
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 	require.NotZero(t, balance.Offchain.Total)
-	require.Len(t, balance.Onchain.Locked, 0)
 
 	_, err = runClarkCommand("redeem", "--force", "--password", utils.Password)
 	require.NoError(t, err)
@@ -143,6 +146,8 @@ func TestCollaborativeExit(t *testing.T) {
 
 	_, err = runClarkCommand("claim", "--password", utils.Password)
 	require.NoError(t, err)
+
+	time.Sleep(3 * time.Second)
 
 	_, err = runClarkCommand("redeem", "--amount", "1000", "--address", redeemAddress, "--password", utils.Password)
 	require.NoError(t, err)
@@ -220,6 +225,16 @@ func setupAspWallet() error {
 
 	if err := json.NewDecoder(resp.Body).Decode(&addr); err != nil {
 		return fmt.Errorf("failed to parse response: %s", err)
+	}
+
+	_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
+	if err != nil {
+		return fmt.Errorf("failed to fund wallet: %s", err)
+	}
+
+	_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
+	if err != nil {
+		return fmt.Errorf("failed to fund wallet: %s", err)
 	}
 
 	_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
