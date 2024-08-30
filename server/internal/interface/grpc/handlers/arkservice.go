@@ -94,37 +94,6 @@ func (h *handler) CreatePayment(ctx context.Context, req *arkv1.CreatePaymentReq
 	}, nil
 }
 
-func (h *handler) Onboard(ctx context.Context, req *arkv1.OnboardRequest) (*arkv1.OnboardResponse, error) {
-	if req.GetUserPubkey() == "" {
-		return nil, status.Error(codes.InvalidArgument, "missing user pubkey")
-	}
-
-	pubKey, err := hex.DecodeString(req.GetUserPubkey())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid user pubkey")
-	}
-
-	decodedPubKey, err := secp256k1.ParsePubKey(pubKey)
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid user pubkey")
-	}
-
-	if req.GetBoardingTx() == "" {
-		return nil, status.Error(codes.InvalidArgument, "missing boarding tx id")
-	}
-
-	tree, err := toCongestionTree(req.GetCongestionTree())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-
-	if err := h.svc.Onboard(ctx, req.GetBoardingTx(), tree, decodedPubKey); err != nil {
-		return nil, err
-	}
-
-	return &arkv1.OnboardResponse{}, nil
-}
-
 func (h *handler) Ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.PingResponse, error) {
 	if req.GetPaymentId() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing payment id")
@@ -489,37 +458,4 @@ func castCongestionTree(congestionTree tree.CongestionTree) *arkv1.Tree {
 	return &arkv1.Tree{
 		Levels: levels,
 	}
-}
-
-func toCongestionTree(treeFromProto *arkv1.Tree) (tree.CongestionTree, error) {
-	if treeFromProto == nil {
-		return nil, nil
-	}
-
-	levels := make(tree.CongestionTree, 0, len(treeFromProto.Levels))
-
-	for _, level := range treeFromProto.Levels {
-		nodes := make([]tree.Node, 0, len(level.Nodes))
-
-		for _, node := range level.Nodes {
-			nodes = append(nodes, tree.Node{
-				Txid:       node.Txid,
-				Tx:         node.Tx,
-				ParentTxid: node.ParentTxid,
-				Leaf:       false,
-			})
-		}
-
-		levels = append(levels, nodes)
-	}
-
-	for j, treeLvl := range levels {
-		for i, node := range treeLvl {
-			if len(levels.Children(node.Txid)) == 0 {
-				levels[j][i].Leaf = true
-			}
-		}
-	}
-
-	return levels, nil
 }

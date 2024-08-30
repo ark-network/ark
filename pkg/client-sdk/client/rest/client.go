@@ -277,20 +277,6 @@ func (a *restClient) GetRound(
 	}, nil
 }
 
-func (a *restClient) Onboard(
-	ctx context.Context, tx, userPubkey string, congestionTree tree.CongestionTree,
-) error {
-	body := models.V1OnboardRequest{
-		BoardingTx:     tx,
-		CongestionTree: treeToProto(congestionTree).parse(),
-		UserPubkey:     userPubkey,
-	}
-	_, err := a.svc.ArkServiceOnboard(
-		ark_service.NewArkServiceOnboardParams().WithBody(&body),
-	)
-	return err
-}
-
 func (a *restClient) RegisterPayment(
 	ctx context.Context, inputs []client.Input,
 ) (string, error) {
@@ -550,28 +536,6 @@ func (t treeFromProto) parse() tree.CongestionTree {
 	}
 
 	return congestionTree
-}
-
-type treeToProto tree.CongestionTree
-
-func (t treeToProto) parse() *models.V1Tree {
-	levels := make([]*models.V1TreeLevel, 0, len(t))
-	for _, level := range t {
-		nodes := make([]*models.V1Node, 0, len(level))
-		for _, n := range level {
-			nodes = append(nodes, &models.V1Node{
-				Txid:       n.Txid,
-				Tx:         n.Tx,
-				ParentTxid: n.ParentTxid,
-			})
-		}
-		levels = append(levels, &models.V1TreeLevel{
-			Nodes: nodes,
-		})
-	}
-	return &models.V1Tree{
-		Levels: levels,
-	}
 }
 
 func getTxid(tx string) string {

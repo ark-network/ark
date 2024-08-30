@@ -3,7 +3,6 @@ package application
 import (
 	"context"
 
-	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
@@ -31,10 +30,6 @@ type Service interface {
 		ctx context.Context, pubkey *secp256k1.PublicKey,
 	) (spendableVtxos, spentVtxos []domain.Vtxo, err error)
 	GetInfo(ctx context.Context) (*ServiceInfo, error)
-	Onboard(
-		ctx context.Context, boardingTx string,
-		congestionTree tree.CongestionTree, userPubkey *secp256k1.PublicKey,
-	) error
 	// Async payments
 	CreateAsyncPayment(
 		ctx context.Context, inputs []domain.VtxoKey, receivers []domain.Receiver,
@@ -66,12 +61,6 @@ type WalletStatus struct {
 	IsInitialized bool
 	IsUnlocked    bool
 	IsSynced      bool
-}
-
-type onboarding struct {
-	tx             string
-	congestionTree tree.CongestionTree
-	userPubkey     *secp256k1.PublicKey
 }
 
 type txOutpoint struct {

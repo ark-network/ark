@@ -30,14 +30,6 @@ func NewPayment(inputs []Vtxo, reverseBoardings []ReverseBoardingInput) (*Paymen
 	return p, nil
 }
 
-func NewPaymentUnsafe(inputs []Vtxo, receivers []Receiver) *Payment {
-	return &Payment{
-		Id:        uuid.New().String(),
-		Inputs:    inputs,
-		Receivers: receivers,
-	}
-}
-
 func (p *Payment) AddReceivers(receivers []Receiver) (err error) {
 	if p.Receivers == nil {
 		p.Receivers = make([]Receiver, 0)

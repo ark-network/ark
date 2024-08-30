@@ -74,19 +74,6 @@ var (
 		Flags: []cli.Flag{&flags.PasswordFlag, &flags.PrivateKeyFlag, &flags.NetworkFlag, &flags.UrlFlag, &flags.ExplorerFlag},
 	}
 
-	onboardCommand = cli.Command{
-		Name:  "onboard",
-		Usage: "Onboard the Ark by lifting your funds",
-		Action: func(ctx *cli.Context) error {
-			cli, err := getCLIFromState(ctx)
-			if err != nil {
-				return err
-			}
-			return cli.Onboard(ctx)
-		},
-		Flags: []cli.Flag{&flags.AmountOnboardFlag, &flags.PasswordFlag, &flags.ReverseOnboardingFlag},
-	}
-
 	sendCommand = cli.Command{
 		Name:  "send",
 		Usage: "Send your onchain or offchain funds to one or many receivers",
@@ -167,7 +154,6 @@ func main() {
 		&redeemCommand,
 		&sendCommand,
 		&claimCommand,
-		&onboardCommand,
 	)
 	app.Flags = []cli.Flag{
 		flags.DatadirFlag,

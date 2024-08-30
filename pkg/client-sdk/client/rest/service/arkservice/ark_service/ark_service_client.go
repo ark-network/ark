@@ -72,8 +72,6 @@ type ClientService interface {
 
 	ArkServiceListVtxos(params *ArkServiceListVtxosParams, opts ...ClientOption) (*ArkServiceListVtxosOK, error)
 
-	ArkServiceOnboard(params *ArkServiceOnboardParams, opts ...ClientOption) (*ArkServiceOnboardOK, error)
-
 	ArkServicePing(params *ArkServicePingParams, opts ...ClientOption) (*ArkServicePingOK, error)
 
 	ArkServiceRegisterPayment(params *ArkServiceRegisterPaymentParams, opts ...ClientOption) (*ArkServiceRegisterPaymentOK, error)
@@ -413,43 +411,6 @@ func (a *Client) ArkServiceListVtxos(params *ArkServiceListVtxosParams, opts ...
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*ArkServiceListVtxosDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
-}
-
-/*
-ArkServiceOnboard ark service onboard API
-*/
-func (a *Client) ArkServiceOnboard(params *ArkServiceOnboardParams, opts ...ClientOption) (*ArkServiceOnboardOK, error) {
-	// TODO: Validate the params before sending
-	if params == nil {
-		params = NewArkServiceOnboardParams()
-	}
-	op := &runtime.ClientOperation{
-		ID:                 "ArkService_Onboard",
-		Method:             "POST",
-		PathPattern:        "/v1/onboard",
-		ProducesMediaTypes: []string{"application/json"},
-		ConsumesMediaTypes: []string{"application/json"},
-		Schemes:            []string{"http"},
-		Params:             params,
-		Reader:             &ArkServiceOnboardReader{formats: a.formats},
-		Context:            params.Context,
-		Client:             params.HTTPClient,
-	}
-	for _, opt := range opts {
-		opt(op)
-	}
-
-	result, err := a.transport.Submit(op)
-	if err != nil {
-		return nil, err
-	}
-	success, ok := result.(*ArkServiceOnboardOK)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*ArkServiceOnboardDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 

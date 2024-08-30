@@ -10,5 +10,4 @@ type CLI interface {
 	Send(ctx *cli.Context) error
 	Claim(ctx *cli.Context) error
 	SendAsync(ctx *cli.Context) error
-	Onboard(ctx *cli.Context) error
 }

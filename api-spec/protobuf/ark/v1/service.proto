@@ -60,12 +60,6 @@ service ArkService {
       body: "*"
     };
   };
-  rpc Onboard(OnboardRequest) returns (OnboardResponse) {
-    option (google.api.http) = {
-      post: "/v1/onboard"
-      body: "*"
-    };
-  }
   rpc CreatePayment(CreatePaymentRequest) returns (CreatePaymentResponse) {
     option (google.api.http) = {
       post: "/v1/payment"
@@ -177,14 +171,6 @@ message GetInfoResponse {
   string network = 5;
   int64 min_relay_fee = 6;
   int64 reverse_boarding_exit_delay = 7;
-}
-
-message OnboardRequest {
-  string boarding_tx = 1;
-  Tree congestion_tree = 2;
-  string user_pubkey = 3;
-}
-message OnboardResponse {
 }
 
 // EVENT TYPES

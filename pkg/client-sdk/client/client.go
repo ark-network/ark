@@ -21,9 +21,6 @@ type ASPClient interface {
 	ListVtxos(ctx context.Context, addr string) ([]Vtxo, []Vtxo, error)
 	GetRound(ctx context.Context, txID string) (*Round, error)
 	GetRoundByID(ctx context.Context, roundID string) (*Round, error)
-	Onboard(
-		ctx context.Context, tx, userPubkey string, congestionTree tree.CongestionTree,
-	) error
 	RegisterPayment(
 		ctx context.Context, inputs []Input,
 	) (string, error)

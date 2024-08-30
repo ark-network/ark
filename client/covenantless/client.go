@@ -194,29 +194,6 @@ func toCongestionTree(treeFromProto *arkv1.Tree) (tree.CongestionTree, error) {
 	return levels, nil
 }
 
-// castCongestionTree converts a tree.CongestionTree to a repeated arkv1.TreeLevel
-func castCongestionTree(congestionTree tree.CongestionTree) *arkv1.Tree {
-	levels := make([]*arkv1.TreeLevel, 0, len(congestionTree))
-	for _, level := range congestionTree {
-		levelProto := &arkv1.TreeLevel{
-			Nodes: make([]*arkv1.Node, 0, len(level)),
-		}
-
-		for _, node := range level {
-			levelProto.Nodes = append(levelProto.Nodes, &arkv1.Node{
-				Txid:       node.Txid,
-				Tx:         node.Tx,
-				ParentTxid: node.ParentTxid,
-			})
-		}
-
-		levels = append(levels, levelProto)
-	}
-	return &arkv1.Tree{
-		Levels: levels,
-	}
-}
-
 func handleRoundStream(
 	ctx *cli.Context, client arkv1.ArkServiceClient, paymentID string,
 	vtxosToSign []vtxo, mustSignRoundTx bool,

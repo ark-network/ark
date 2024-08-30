@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/btcutil/psbt"
@@ -40,8 +39,7 @@ type covenantService struct {
 	paymentRequests *paymentsMap
 	forfeitTxs      *forfeitTxsMap
 
-	eventsCh     chan domain.RoundEvent
-	onboardingCh chan onboarding
+	eventsCh chan domain.RoundEvent
 
 	currentRoundLock sync.Mutex
 	currentRound     *domain.Round
@@ -55,7 +53,6 @@ func NewCovenantService(
 	scheduler ports.SchedulerService,
 ) (Service, error) {
 	eventsCh := make(chan domain.RoundEvent)
-	onboardingCh := make(chan onboarding)
 	paymentRequests := newPaymentsMap(nil)
 
 	forfeitTxs := newForfeitTxsMap(builder)
@@ -70,7 +67,7 @@ func NewCovenantService(
 		network, pubkey,
 		roundLifetime, roundInterval, unilateralExitDelay, reverseBoardingExitDelay, minRelayFee,
 		walletSvc, repoManager, builder, scanner, sweeper,
-		paymentRequests, forfeitTxs, eventsCh, onboardingCh, sync.Mutex{}, nil,
+		paymentRequests, forfeitTxs, eventsCh, sync.Mutex{}, nil,
 	}
 	repoManager.RegisterEventsHandler(
 		func(round *domain.Round) {
@@ -87,7 +84,6 @@ func NewCovenantService(
 		return nil, fmt.Errorf("failed to restore watching vtxos: %s", err)
 	}
 	go svc.listenToScannerNotifications()
-	go svc.listenToOnboarding()
 	return svc, nil
 }
 
@@ -115,7 +111,6 @@ func (s *covenantService) Stop() {
 	s.repoManager.Close()
 	log.Debug("closed connection to db")
 	close(s.eventsCh)
-	close(s.onboardingCh)
 }
 
 func (s *covenantService) CreateReverseBoardingAddress(ctx context.Context, userPubkey *secp256k1.PublicKey) (string, error) {
@@ -336,47 +331,6 @@ func (s *covenantService) GetInfo(ctx context.Context) (*ServiceInfo, error) {
 	}, nil
 }
 
-func (s *covenantService) Onboard(
-	ctx context.Context, boardingTx string,
-	congestionTree tree.CongestionTree, userPubkey *secp256k1.PublicKey,
-) error {
-	ptx, err := psetv2.NewPsetFromBase64(boardingTx)
-	if err != nil {
-		return fmt.Errorf("failed to parse boarding tx: %s", err)
-	}
-
-	if err := tree.ValidateCongestionTree(
-		congestionTree, boardingTx, s.pubkey, s.roundLifetime,
-	); err != nil {
-		return err
-	}
-
-	extracted, err := psetv2.Extract(ptx)
-	if err != nil {
-		return fmt.Errorf("failed to extract boarding tx: %s", err)
-	}
-
-	boardingTxHex, err := extracted.ToHex()
-	if err != nil {
-		return fmt.Errorf("failed to convert boarding tx to hex: %s", err)
-	}
-
-	txid, err := s.wallet.BroadcastTransaction(ctx, boardingTxHex)
-	if err != nil {
-		return fmt.Errorf("failed to broadcast boarding tx: %s", err)
-	}
-
-	log.Debugf("broadcasted boarding tx %s", txid)
-
-	s.onboardingCh <- onboarding{
-		tx:             boardingTx,
-		congestionTree: congestionTree,
-		userPubkey:     userPubkey,
-	}
-
-	return nil
-}
-
 func (s *covenantService) start() {
 	s.startRound()
 }
@@ -571,54 +525,6 @@ func (s *covenantService) finalizeRound() {
 	}
 
 	log.Debugf("finalized round %s with pool tx %s", round.Id, round.Txid)
-}
-
-func (s *covenantService) listenToOnboarding() {
-	for onboarding := range s.onboardingCh {
-		go s.handleOnboarding(onboarding)
-	}
-}
-
-func (s *covenantService) handleOnboarding(onboarding onboarding) {
-	ctx := context.Background()
-
-	ptx, _ := psetv2.NewPsetFromBase64(onboarding.tx)
-	utx, _ := psetv2.Extract(ptx)
-	txid := utx.TxHash().String()
-
-	// wait for the tx to be confirmed with a timeout
-	timeout := time.NewTimer(5 * time.Minute)
-	defer timeout.Stop()
-
-	isConfirmed := false
-
-	for !isConfirmed {
-		select {
-		case <-timeout.C:
-			log.WithError(fmt.Errorf("operation timed out")).Warnf("failed to get confirmation for boarding tx %s", txid)
-			return
-		default:
-			var err error
-			isConfirmed, _, err = s.wallet.IsTransactionConfirmed(ctx, txid)
-			if err != nil {
-				log.WithError(err).Warn("failed to check tx confirmation")
-			}
-
-			if err != nil || !isConfirmed {
-				time.Sleep(5 * time.Second)
-			}
-		}
-	}
-
-	pubkey := hex.EncodeToString(onboarding.userPubkey.SerializeCompressed())
-	payments := getPaymentsFromOnboardingLiquid(onboarding.congestionTree, pubkey)
-	round := domain.NewFinalizedRound(
-		dustAmount, pubkey, txid, onboarding.tx, onboarding.congestionTree, payments,
-	)
-	if err := s.saveEvents(ctx, round.Id, round.Events()); err != nil {
-		log.WithError(err).Warn("failed to store new round events")
-		return
-	}
 }
 
 func (s *covenantService) listenToScannerNotifications() {
@@ -1015,23 +921,6 @@ func (s *covenantService) saveEvents(
 		return err
 	}
 	return s.repoManager.Rounds().AddOrUpdateRound(ctx, *round)
-}
-
-func getPaymentsFromOnboardingLiquid(
-	congestionTree tree.CongestionTree, userKey string,
-) []domain.Payment {
-	leaves := congestionTree.Leaves()
-	receivers := make([]domain.Receiver, 0, len(leaves))
-	for _, node := range leaves {
-		ptx, _ := psetv2.NewPsetFromBase64(node.Tx)
-		receiver := domain.Receiver{
-			Pubkey: userKey,
-			Amount: ptx.Outputs[0].Value,
-		}
-		receivers = append(receivers, receiver)
-	}
-	payment := domain.NewPaymentUnsafe(nil, receivers)
-	return []domain.Payment{*payment}
 }
 
 func findForfeitTxLiquid(

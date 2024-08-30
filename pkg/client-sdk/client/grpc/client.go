@@ -134,18 +134,6 @@ func (a *grpcClient) GetRound(
 	}, nil
 }
 
-func (a *grpcClient) Onboard(
-	ctx context.Context, tx, userPubkey string, congestionTree tree.CongestionTree,
-) error {
-	req := &arkv1.OnboardRequest{
-		BoardingTx:     tx,
-		UserPubkey:     userPubkey,
-		CongestionTree: treeToProto(congestionTree).parse(),
-	}
-	_, err := a.svc.Onboard(ctx, req)
-	return err
-}
-
 func (a *grpcClient) RegisterPayment(
 	ctx context.Context, inputs []client.Input,
 ) (string, error) {
@@ -422,28 +410,4 @@ func (t treeFromProto) parse() tree.CongestionTree {
 	}
 
 	return levels
-}
-
-type treeToProto tree.CongestionTree
-
-func (t treeToProto) parse() *arkv1.Tree {
-	levels := make([]*arkv1.TreeLevel, 0, len(t))
-	for _, level := range t {
-		levelProto := &arkv1.TreeLevel{
-			Nodes: make([]*arkv1.Node, 0, len(level)),
-		}
-
-		for _, node := range level {
-			levelProto.Nodes = append(levelProto.Nodes, &arkv1.Node{
-				Txid:       node.Txid,
-				Tx:         node.Tx,
-				ParentTxid: node.ParentTxid,
-			})
-		}
-
-		levels = append(levels, levelProto)
-	}
-	return &arkv1.Tree{
-		Levels: levels,
-	}
 }
