@@ -12,6 +12,7 @@ import (
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -118,25 +119,77 @@ func (h *handler) Ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.Ping
 		return nil, status.Error(codes.InvalidArgument, "missing payment id")
 	}
 
-	forfeits, round, err := h.svc.UpdatePaymentStatus(ctx, req.GetPaymentId())
+	lastEvent, err := h.svc.UpdatePaymentStatus(ctx, req.GetPaymentId())
 	if err != nil {
 		return nil, err
 	}
 
-	var event *arkv1.RoundFinalizationEvent
-	if round != nil {
-		event = &arkv1.RoundFinalizationEvent{
-			Id:             round.Id,
-			PoolTx:         round.UnsignedTx,
-			ForfeitTxs:     forfeits,
-			CongestionTree: castCongestionTree(round.CongestionTree),
-			Connectors:     round.Connectors,
+	var resp *arkv1.PingResponse
+
+	switch e := lastEvent.(type) {
+	case domain.RoundFinalizationStarted:
+		resp = &arkv1.PingResponse{
+			Event: &arkv1.PingResponse_RoundFinalization{
+				RoundFinalization: &arkv1.RoundFinalizationEvent{
+					Id:             e.Id,
+					PoolTx:         e.PoolTx,
+					CongestionTree: castCongestionTree(e.CongestionTree),
+					ForfeitTxs:     e.UnsignedForfeitTxs,
+					Connectors:     e.Connectors,
+				},
+			},
+		}
+	case domain.RoundFinalized:
+		resp = &arkv1.PingResponse{
+			Event: &arkv1.PingResponse_RoundFinalized{
+				RoundFinalized: &arkv1.RoundFinalizedEvent{
+					Id:       e.Id,
+					PoolTxid: e.Txid,
+				},
+			},
+		}
+	case domain.RoundFailed:
+		resp = &arkv1.PingResponse{
+			Event: &arkv1.PingResponse_RoundFailed{
+				RoundFailed: &arkv1.RoundFailed{
+					Id:     e.Id,
+					Reason: e.Err,
+				},
+			},
+		}
+	case application.RoundSigningStarted:
+		cosignersKeys := make([]string, 0, len(e.Cosigners))
+		for _, key := range e.Cosigners {
+			cosignersKeys = append(cosignersKeys, hex.EncodeToString(key.SerializeCompressed()))
+		}
+
+		resp = &arkv1.PingResponse{
+			Event: &arkv1.PingResponse_RoundSigning{
+				RoundSigning: &arkv1.RoundSigningEvent{
+					Id:               e.Id,
+					CosignersPubkeys: cosignersKeys,
+					UnsignedTree:     castCongestionTree(e.UnsignedVtxoTree),
+				},
+			},
+		}
+	case application.RoundSigningNoncesGenerated:
+		serialized, err := e.SerializeNonces()
+		if err != nil {
+			logrus.WithError(err).Error("failed to serialize nonces")
+			return nil, status.Error(codes.Internal, "failed to serialize nonces")
+		}
+
+		resp = &arkv1.PingResponse{
+			Event: &arkv1.PingResponse_RoundSigningNoncesGenerated{
+				RoundSigningNoncesGenerated: &arkv1.RoundSigningNoncesGeneratedEvent{
+					Id:         e.Id,
+					TreeNonces: serialized,
+				},
+			},
 		}
 	}
-	return &arkv1.PingResponse{
-		ForfeitTxs: forfeits,
-		Event:      event,
-	}, nil
+
+	return resp, nil
 }
 
 func (h *handler) RegisterPayment(ctx context.Context, req *arkv1.RegisterPaymentRequest) (*arkv1.RegisterPaymentResponse, error) {
@@ -148,6 +201,13 @@ func (h *handler) RegisterPayment(ctx context.Context, req *arkv1.RegisterPaymen
 	id, err := h.svc.SpendVtxos(ctx, vtxosKeys)
 	if err != nil {
 		return nil, err
+	}
+
+	pubkey := req.GetEphemeralPubkey()
+	if len(pubkey) > 0 {
+		if err := h.svc.RegisterCosignerPubkey(ctx, id, pubkey); err != nil {
+			return nil, err
+		}
 	}
 
 	return &arkv1.RegisterPaymentResponse{
@@ -267,14 +327,6 @@ func (h *handler) GetEventStream(_ *arkv1.GetEventStreamRequest, stream arkv1.Ar
 			if err := stream.Send(ev); err != nil {
 				return err
 			}
-
-			switch ev.Event.(type) {
-			case *arkv1.GetEventStreamResponse_RoundFinalized, *arkv1.GetEventStreamResponse_RoundFailed:
-				if err := stream.Send(ev); err != nil {
-					return err
-				}
-				return nil
-			}
 		}
 	}
 }
@@ -310,6 +362,74 @@ func (h *handler) GetInfo(ctx context.Context, req *arkv1.GetInfoRequest) (*arkv
 		Network:             info.Network,
 		MinRelayFee:         info.MinRelayFee,
 	}, nil
+}
+
+func (h *handler) SendTreeNonces(ctx context.Context, req *arkv1.SendTreeNoncesRequest) (*arkv1.SendTreeNoncesResponse, error) {
+	pubkey := req.GetPublicKey()
+	encodedNonces := req.GetTreeNonces()
+	roundID := req.GetRoundId()
+
+	if len(pubkey) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing cosigner public key")
+	}
+
+	if len(encodedNonces) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing tree nonces")
+	}
+
+	if len(roundID) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing round id")
+	}
+
+	pubkeyBytes, err := hex.DecodeString(pubkey)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key")
+	}
+
+	cosignerPublicKey, err := secp256k1.ParsePubKey(pubkeyBytes)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key")
+	}
+
+	if err := h.svc.RegisterCosignerNonces(ctx, roundID, cosignerPublicKey, encodedNonces); err != nil {
+		return nil, err
+	}
+
+	return &arkv1.SendTreeNoncesResponse{}, nil
+}
+
+func (h *handler) SendTreeSignatures(ctx context.Context, req *arkv1.SendTreeSignaturesRequest) (*arkv1.SendTreeSignaturesResponse, error) {
+	roundID := req.GetRoundId()
+	pubkey := req.GetPublicKey()
+	encodedSignatures := req.GetTreeSignatures()
+
+	if len(pubkey) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing cosigner public key")
+	}
+
+	if len(encodedSignatures) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing tree signatures")
+	}
+
+	if len(roundID) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing round id")
+	}
+
+	pubkeyBytes, err := hex.DecodeString(pubkey)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key")
+	}
+
+	cosignerPublicKey, err := secp256k1.ParsePubKey(pubkeyBytes)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key")
+	}
+
+	if err := h.svc.RegisterCosignerSignatures(ctx, roundID, cosignerPublicKey, encodedSignatures); err != nil {
+		return nil, err
+	}
+
+	return &arkv1.SendTreeSignaturesResponse{}, nil
 }
 
 func (h *handler) pushListener(l *listener) {
@@ -365,6 +485,36 @@ func (h *handler) listenToEvents() {
 					RoundFailed: &arkv1.RoundFailed{
 						Id:     e.Id,
 						Reason: e.Err,
+					},
+				},
+			}
+		case application.RoundSigningStarted:
+			cosignersKeys := make([]string, 0, len(e.Cosigners))
+			for _, key := range e.Cosigners {
+				cosignersKeys = append(cosignersKeys, hex.EncodeToString(key.SerializeCompressed()))
+			}
+
+			ev = &arkv1.GetEventStreamResponse{
+				Event: &arkv1.GetEventStreamResponse_RoundSigning{
+					RoundSigning: &arkv1.RoundSigningEvent{
+						Id:               e.Id,
+						CosignersPubkeys: cosignersKeys,
+						UnsignedTree:     castCongestionTree(e.UnsignedVtxoTree),
+					},
+				},
+			}
+		case application.RoundSigningNoncesGenerated:
+			serialized, err := e.SerializeNonces()
+			if err != nil {
+				logrus.WithError(err).Error("failed to serialize nonces")
+				continue
+			}
+
+			ev = &arkv1.GetEventStreamResponse{
+				Event: &arkv1.GetEventStreamResponse_RoundSigningNoncesGenerated{
+					RoundSigningNoncesGenerated: &arkv1.RoundSigningNoncesGeneratedEvent{
+						Id:         e.Id,
+						TreeNonces: serialized,
 					},
 				},
 			}

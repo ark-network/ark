@@ -18,18 +18,43 @@ import (
 // swagger:model v1PingResponse
 type V1PingResponse struct {
 
-	// event
-	Event *V1RoundFinalizationEvent `json:"event,omitempty"`
+	// round failed
+	RoundFailed *V1RoundFailed `json:"roundFailed,omitempty"`
 
-	// forfeit txs
-	ForfeitTxs []string `json:"forfeitTxs"`
+	// round finalization
+	RoundFinalization *V1RoundFinalizationEvent `json:"roundFinalization,omitempty"`
+
+	// round finalized
+	RoundFinalized *V1RoundFinalizedEvent `json:"roundFinalized,omitempty"`
+
+	// round signing
+	RoundSigning *V1RoundSigningEvent `json:"roundSigning,omitempty"`
+
+	// round signing nonces generated
+	RoundSigningNoncesGenerated *V1RoundSigningNoncesGeneratedEvent `json:"roundSigningNoncesGenerated,omitempty"`
 }
 
 // Validate validates this v1 ping response
 func (m *V1PingResponse) Validate(formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.validateEvent(formats); err != nil {
+	if err := m.validateRoundFailed(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.validateRoundFinalization(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.validateRoundFinalized(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.validateRoundSigning(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.validateRoundSigningNoncesGenerated(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -39,17 +64,93 @@ func (m *V1PingResponse) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *V1PingResponse) validateEvent(formats strfmt.Registry) error {
-	if swag.IsZero(m.Event) { // not required
+func (m *V1PingResponse) validateRoundFailed(formats strfmt.Registry) error {
+	if swag.IsZero(m.RoundFailed) { // not required
 		return nil
 	}
 
-	if m.Event != nil {
-		if err := m.Event.Validate(formats); err != nil {
+	if m.RoundFailed != nil {
+		if err := m.RoundFailed.Validate(formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("event")
+				return ve.ValidateName("roundFailed")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("event")
+				return ce.ValidateName("roundFailed")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *V1PingResponse) validateRoundFinalization(formats strfmt.Registry) error {
+	if swag.IsZero(m.RoundFinalization) { // not required
+		return nil
+	}
+
+	if m.RoundFinalization != nil {
+		if err := m.RoundFinalization.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("roundFinalization")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("roundFinalization")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *V1PingResponse) validateRoundFinalized(formats strfmt.Registry) error {
+	if swag.IsZero(m.RoundFinalized) { // not required
+		return nil
+	}
+
+	if m.RoundFinalized != nil {
+		if err := m.RoundFinalized.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("roundFinalized")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("roundFinalized")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *V1PingResponse) validateRoundSigning(formats strfmt.Registry) error {
+	if swag.IsZero(m.RoundSigning) { // not required
+		return nil
+	}
+
+	if m.RoundSigning != nil {
+		if err := m.RoundSigning.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("roundSigning")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("roundSigning")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *V1PingResponse) validateRoundSigningNoncesGenerated(formats strfmt.Registry) error {
+	if swag.IsZero(m.RoundSigningNoncesGenerated) { // not required
+		return nil
+	}
+
+	if m.RoundSigningNoncesGenerated != nil {
+		if err := m.RoundSigningNoncesGenerated.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("roundSigningNoncesGenerated")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("roundSigningNoncesGenerated")
 			}
 			return err
 		}
@@ -62,7 +163,23 @@ func (m *V1PingResponse) validateEvent(formats strfmt.Registry) error {
 func (m *V1PingResponse) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.contextValidateEvent(ctx, formats); err != nil {
+	if err := m.contextValidateRoundFailed(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.contextValidateRoundFinalization(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.contextValidateRoundFinalized(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.contextValidateRoundSigning(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.contextValidateRoundSigningNoncesGenerated(ctx, formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -72,19 +189,103 @@ func (m *V1PingResponse) ContextValidate(ctx context.Context, formats strfmt.Reg
 	return nil
 }
 
-func (m *V1PingResponse) contextValidateEvent(ctx context.Context, formats strfmt.Registry) error {
+func (m *V1PingResponse) contextValidateRoundFailed(ctx context.Context, formats strfmt.Registry) error {
 
-	if m.Event != nil {
+	if m.RoundFailed != nil {
 
-		if swag.IsZero(m.Event) { // not required
+		if swag.IsZero(m.RoundFailed) { // not required
 			return nil
 		}
 
-		if err := m.Event.ContextValidate(ctx, formats); err != nil {
+		if err := m.RoundFailed.ContextValidate(ctx, formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("event")
+				return ve.ValidateName("roundFailed")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("event")
+				return ce.ValidateName("roundFailed")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *V1PingResponse) contextValidateRoundFinalization(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.RoundFinalization != nil {
+
+		if swag.IsZero(m.RoundFinalization) { // not required
+			return nil
+		}
+
+		if err := m.RoundFinalization.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("roundFinalization")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("roundFinalization")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *V1PingResponse) contextValidateRoundFinalized(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.RoundFinalized != nil {
+
+		if swag.IsZero(m.RoundFinalized) { // not required
+			return nil
+		}
+
+		if err := m.RoundFinalized.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("roundFinalized")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("roundFinalized")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *V1PingResponse) contextValidateRoundSigning(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.RoundSigning != nil {
+
+		if swag.IsZero(m.RoundSigning) { // not required
+			return nil
+		}
+
+		if err := m.RoundSigning.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("roundSigning")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("roundSigning")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *V1PingResponse) contextValidateRoundSigningNoncesGenerated(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.RoundSigningNoncesGenerated != nil {
+
+		if swag.IsZero(m.RoundSigningNoncesGenerated) { // not required
+			return nil
+		}
+
+		if err := m.RoundSigningNoncesGenerated.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("roundSigningNoncesGenerated")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("roundSigningNoncesGenerated")
 			}
 			return err
 		}

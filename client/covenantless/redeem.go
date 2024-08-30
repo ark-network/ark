@@ -2,6 +2,7 @@ package covenantless
 
 import (
 	"bufio"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
@@ -11,6 +12,7 @@ import (
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/client/utils"
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/urfave/cli/v2"
 )
 
@@ -80,8 +82,16 @@ func collaborativeRedeem(
 		return err
 	}
 
+	ephemeralKey, err := secp256k1.GeneratePrivateKey()
+	if err != nil {
+		return err
+	}
+
+	pubkey := hex.EncodeToString(ephemeralKey.PubKey().SerializeCompressed())
+
 	registerResponse, err := client.RegisterPayment(ctx.Context, &arkv1.RegisterPaymentRequest{
-		Inputs: inputs,
+		Inputs:          inputs,
+		EphemeralPubkey: &pubkey,
 	})
 	if err != nil {
 		return err
@@ -102,6 +112,7 @@ func collaborativeRedeem(
 		selectedCoins,
 		secKey,
 		receivers,
+		ephemeralKey,
 	)
 	if err != nil {
 		return err

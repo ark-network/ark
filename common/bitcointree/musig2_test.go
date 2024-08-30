@@ -1,7 +1,9 @@
 package bitcointree_test
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 
@@ -85,6 +87,31 @@ func TestRoundTripSignTree(t *testing.T) {
 		aspNonces, err := aspSession.GetNonces()
 		require.NoError(t, err)
 
+		s := bytes.NewBuffer(nil)
+
+		err = aspNonces[0][0].Encode(s)
+		require.NoError(t, err)
+
+		bitcointreeNonce := new(bitcointree.Musig2Nonce)
+		err = bitcointreeNonce.Decode(s)
+		require.NoError(t, err)
+
+		require.Equal(t, aspNonces[0][0], bitcointreeNonce)
+
+		var serializedNonces bytes.Buffer
+
+		err = aspNonces.Encode(&serializedNonces)
+		require.NoError(t, err)
+
+		decodedNonces, err := bitcointree.DecodeNonces(&serializedNonces)
+		require.NoError(t, err)
+
+		for i, nonces := range aspNonces {
+			for j, nonce := range nonces {
+				require.Equal(t, nonce.PubNonce, decodedNonces[i][j].PubNonce, fmt.Sprintf("matrix nonce not equal at index i: %d, j: %d", i, j))
+			}
+		}
+
 		err = aspCoordinator.AddNonce(alice.PubKey(), aliceNonces)
 		require.NoError(t, err)
 
@@ -101,18 +128,30 @@ func TestRoundTripSignTree(t *testing.T) {
 
 		err = aliceSession.SetKeys(
 			cosigners,
+		)
+		require.NoError(t, err)
+
+		err = aliceSession.SetAggregatedNonces(
 			aggregatedNonce,
 		)
 		require.NoError(t, err)
 
 		err = bobSession.SetKeys(
 			cosigners,
+		)
+		require.NoError(t, err)
+
+		err = bobSession.SetAggregatedNonces(
 			aggregatedNonce,
 		)
 		require.NoError(t, err)
 
 		err = aspSession.SetKeys(
 			cosigners,
+		)
+		require.NoError(t, err)
+
+		err = aspSession.SetAggregatedNonces(
 			aggregatedNonce,
 		)
 		require.NoError(t, err)
@@ -125,6 +164,22 @@ func TestRoundTripSignTree(t *testing.T) {
 
 		aspSig, err := aspSession.Sign()
 		require.NoError(t, err)
+
+		// check that the sigs are serializable
+
+		serializedSigs := bytes.NewBuffer(nil)
+
+		err = aspSig.Encode(serializedSigs)
+		require.NoError(t, err)
+
+		decodedSigs, err := bitcointree.DecodeSignatures(serializedSigs)
+		require.NoError(t, err)
+
+		for i, sigs := range aspSig {
+			for j, sig := range sigs {
+				require.Equal(t, sig.S, decodedSigs[i][j].S, fmt.Sprintf("matrix sig not equal at index i: %d, j: %d", i, j))
+			}
+		}
 
 		// coordinator receives the signatures and combines them
 		err = aspCoordinator.AddSig(alice.PubKey(), aliceSig)

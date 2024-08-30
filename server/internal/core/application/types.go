@@ -25,7 +25,7 @@ type Service interface {
 	GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
 	UpdatePaymentStatus(
 		ctx context.Context, paymentId string,
-	) (unsignedForfeitTxs []string, currentRound *domain.Round, err error)
+	) (lastEvent domain.RoundEvent, err error)
 	ListVtxos(
 		ctx context.Context, pubkey *secp256k1.PublicKey,
 	) (spendableVtxos, spentVtxos []domain.Vtxo, err error)
@@ -40,6 +40,16 @@ type Service interface {
 	) (string, []string, error)
 	CompleteAsyncPayment(
 		ctx context.Context, redeemTx string, unconditionalForfeitTxs []string,
+	) error
+	// Tree signing methods
+	RegisterCosignerPubkey(ctx context.Context, paymentId string, ephemeralPublicKey string) error
+	RegisterCosignerNonces(
+		ctx context.Context, roundID string,
+		pubkey *secp256k1.PublicKey, nonces string,
+	) error
+	RegisterCosignerSignatures(
+		ctx context.Context, roundID string,
+		pubkey *secp256k1.PublicKey, signatures string,
 	) error
 }
 

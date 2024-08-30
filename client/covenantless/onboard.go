@@ -168,7 +168,11 @@ func (c *clArkBitcoinCLI) Onboard(ctx *cli.Context) error {
 		return err
 	}
 
-	if err := signer.SetKeys(cosigners, aggregatedNonces); err != nil {
+	if err := signer.SetKeys(cosigners); err != nil {
+		return err
+	}
+
+	if err := signer.SetAggregatedNonces(aggregatedNonces); err != nil {
 		return err
 	}
 
