@@ -1313,7 +1313,7 @@ func (a *covenantArkClient) selfTransferAllPendingPayments(
 
 	outputs := []client.Output{myself}
 
-	paymentID, err := a.client.RegisterPayment(ctx, inputs)
+	paymentID, err := a.client.RegisterPayment(ctx, inputs, "") // ephemeralPublicKey is not required for covenant
 	if err != nil {
 		return "", err
 	}
