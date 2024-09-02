@@ -34,6 +34,8 @@ type Config struct {
 	BitcoindRpcUser       string
 	BitcoindRpcPass       string
 	BitcoindRpcHost       string
+	BitcoindZMQBlock      string
+	BitcoindZMQTx         string
 	TLSExtraIPs           []string
 	TLSExtraDomains       []string
 }
@@ -59,6 +61,8 @@ var (
 	BitcoindRpcUser       = "BITCOIND_RPC_USER"
 	BitcoindRpcPass       = "BITCOIND_RPC_PASS"
 	BitcoindRpcHost       = "BITCOIND_RPC_HOST"
+	BitcoindZMQBlock      = "BITCOIND_ZMQ_BLOCK"
+	BitcoindZMQTx         = "BITCOIND_ZMQ_TX"
 	NoMacaroons           = "NO_MACAROONS"
 	NoTLS                 = "NO_TLS"
 	TLSExtraIP            = "TLS_EXTRA_IP"
@@ -137,6 +141,8 @@ func LoadConfig() (*Config, error) {
 		BitcoindRpcUser:       viper.GetString(BitcoindRpcUser),
 		BitcoindRpcPass:       viper.GetString(BitcoindRpcPass),
 		BitcoindRpcHost:       viper.GetString(BitcoindRpcHost),
+		BitcoindZMQBlock:      viper.GetString(BitcoindZMQBlock),
+		BitcoindZMQTx:         viper.GetString(BitcoindZMQTx),
 		NoMacaroons:           viper.GetBool(NoMacaroons),
 		TLSExtraIPs:           viper.GetStringSlice(TLSExtraIP),
 		TLSExtraDomains:       viper.GetStringSlice(TLSExtraDomain),
