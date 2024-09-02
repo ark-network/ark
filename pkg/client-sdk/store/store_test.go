@@ -24,6 +24,7 @@ func TestStore(t *testing.T) {
 		ClientType:          client.GrpcClient,
 		Network:             common.LiquidRegTest,
 		RoundLifetime:       512,
+		RoundInterval:       10,
 		UnilateralExitDelay: 512,
 		MinRelayFee:         300,
 	}

@@ -19,6 +19,7 @@ type StoreData struct {
 	ClientType          string
 	Network             common.Network
 	RoundLifetime       int64
+	RoundInterval       int64
 	UnilateralExitDelay int64
 	MinRelayFee         uint64
 }

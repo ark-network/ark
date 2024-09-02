@@ -27,6 +27,7 @@ type storeData struct {
 	ClientType          string `json:"client_type"`
 	Network             string `json:"network"`
 	RoundLifetime       string `json:"round_lifetime"`
+	RoundInterval       string `json:"round_interval"`
 	UnilateralExitDelay string `json:"unilateral_exit_delay"`
 	MinRelayFee         string `json:"min_relay_fee"`
 }
@@ -38,6 +39,7 @@ func (d storeData) isEmpty() bool {
 func (d storeData) decode() store.StoreData {
 	network := utils.NetworkFromString(d.Network)
 	roundLifetime, _ := strconv.Atoi(d.RoundLifetime)
+	roundInterval, _ := strconv.Atoi(d.RoundInterval)
 	unilateralExitDelay, _ := strconv.Atoi(d.UnilateralExitDelay)
 	minRelayFee, _ := strconv.Atoi(d.MinRelayFee)
 	buf, _ := hex.DecodeString(d.AspPubkey)
@@ -49,6 +51,7 @@ func (d storeData) decode() store.StoreData {
 		ClientType:          d.ClientType,
 		Network:             network,
 		RoundLifetime:       int64(roundLifetime),
+		RoundInterval:       int64(roundInterval),
 		UnilateralExitDelay: int64(unilateralExitDelay),
 		MinRelayFee:         uint64(minRelayFee),
 	}
@@ -62,6 +65,7 @@ func (d storeData) asMap() map[string]string {
 		"client_type":           d.ClientType,
 		"network":               d.Network,
 		"round_lifetime":        d.RoundLifetime,
+		"round_interval":        d.RoundInterval,
 		"unilateral_exit_delay": d.UnilateralExitDelay,
 		"min_relay_fee":         d.MinRelayFee,
 	}
@@ -106,6 +110,7 @@ func (s *Store) AddData(ctx context.Context, data store.StoreData) error {
 		ClientType:          data.ClientType,
 		Network:             data.Network.Name,
 		RoundLifetime:       fmt.Sprintf("%d", data.RoundLifetime),
+		RoundInterval:       fmt.Sprintf("%d", data.RoundInterval),
 		UnilateralExitDelay: fmt.Sprintf("%d", data.UnilateralExitDelay),
 		MinRelayFee:         fmt.Sprintf("%d", data.MinRelayFee),
 	}

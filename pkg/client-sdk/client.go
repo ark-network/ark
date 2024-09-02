@@ -98,6 +98,7 @@ func (a *arkClient) InitWithWallet(
 		ClientType:          args.ClientType,
 		Network:             network,
 		RoundLifetime:       info.RoundLifetime,
+		RoundInterval:       info.RoundInterval,
 		UnilateralExitDelay: info.UnilateralExitDelay,
 		MinRelayFee:         uint64(info.MinRelayFee),
 	}
@@ -161,6 +162,7 @@ func (a *arkClient) Init(
 		ClientType:          args.ClientType,
 		Network:             network,
 		RoundLifetime:       info.RoundLifetime,
+		RoundInterval:       info.RoundInterval,
 		UnilateralExitDelay: info.UnilateralExitDelay,
 		MinRelayFee:         uint64(info.MinRelayFee),
 	}
