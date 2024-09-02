@@ -168,6 +168,7 @@ func (a *restClient) ListVtxos(
 			Pending:                 v.Pending,
 			RedeemTx:                redeemTx,
 			UnconditionalForfeitTxs: uncondForfeitTxs,
+			SpentBy:                 v.SpentBy,
 		})
 	}
 
@@ -196,6 +197,7 @@ func (a *restClient) ListVtxos(
 			Amount:    uint64(amount),
 			RoundTxid: v.PoolTxid,
 			ExpiresAt: expiresAt,
+			SpentBy:   v.SpentBy,
 		})
 	}
 

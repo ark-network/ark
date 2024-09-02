@@ -427,6 +427,7 @@ func (v vtxo) toVtxo() client.Vtxo {
 		Pending:                 v.GetPending(),
 		RedeemTx:                redeemTx,
 		UnconditionalForfeitTxs: uncondForfeitTxs,
+		SpentBy:                 v.GetSpentBy(),
 	}
 }
 
