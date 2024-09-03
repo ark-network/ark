@@ -573,7 +573,7 @@
         },
         "signedRoundTx": {
           "type": "string",
-          "description": "If payment has reverse boarding, the user must sign the associated inputs."
+          "description": "If payment has boarding input, the user must sign the associated inputs."
         }
       }
     },

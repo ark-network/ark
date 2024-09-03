@@ -46,7 +46,7 @@ func NewTxBuilder(
 }
 
 func (b *txBuilder) GetBoardingScript(owner, asp *secp256k1.PublicKey) (string, []byte, error) {
-	addr, script, _, err := b.getReverseBoardingTaproot(owner, asp)
+	addr, script, _, err := b.getBoardingTaproot(owner, asp)
 	if err != nil {
 		return "", nil, err
 	}
@@ -508,7 +508,7 @@ func (b *txBuilder) createPoolTx(
 			return nil, fmt.Errorf("failed to convert value to bytes: %s", err)
 		}
 
-		_, script, tapLeafProof, err := b.getReverseBoardingTaproot(in.GetBoardingPubkey(), aspPubKey)
+		_, script, tapLeafProof, err := b.getBoardingTaproot(in.GetBoardingPubkey(), aspPubKey)
 		if err != nil {
 			return nil, err
 		}
@@ -633,7 +633,7 @@ func (b *txBuilder) createPoolTx(
 	return ptx, nil
 }
 
-// This method aims to verify and add partial signature from reverse boarding input
+// This method aims to verify and add partial signature from boarding input
 func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, error) {
 	roundPset, err := psetv2.NewPsetFromBase64(dest)
 	if err != nil {
@@ -896,7 +896,7 @@ func (b *txBuilder) onchainNetwork() *network.Network {
 	}
 }
 
-func (b *txBuilder) getReverseBoardingTaproot(owner, asp *secp256k1.PublicKey) (string, []byte, *taproot.TapscriptElementsProof, error) {
+func (b *txBuilder) getBoardingTaproot(owner, asp *secp256k1.PublicKey) (string, []byte, *taproot.TapscriptElementsProof, error) {
 	multisigClosure := tree.ForfeitClosure{
 		Pubkey:    owner,
 		AspPubkey: asp,

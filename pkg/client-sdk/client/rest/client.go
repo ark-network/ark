@@ -482,7 +482,7 @@ func (a *restClient) GetRoundByID(
 	}, nil
 }
 
-func (a *restClient) ReverseBoardingAddress(
+func (a *restClient) GetBoardingAddress(
 	ctx context.Context, pubkey string,
 ) (string, error) {
 	body := models.V1GetBoardingAddressRequest{

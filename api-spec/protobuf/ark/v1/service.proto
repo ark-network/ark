@@ -129,7 +129,7 @@ message ClaimPaymentResponse {}
 message FinalizePaymentRequest {
   // Forfeit txs signed by the user. 
   repeated string signed_forfeit_txs = 1;
-  // If payment has reverse boarding, the user must sign the associated inputs.
+  // If payment has boarding input, the user must sign the associated inputs.
   optional string signed_round_tx = 2;
 }
 message FinalizePaymentResponse {}

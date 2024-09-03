@@ -259,7 +259,7 @@ func (a *grpcClient) GetRoundByID(
 	}, nil
 }
 
-func (a *grpcClient) ReverseBoardingAddress(
+func (a *grpcClient) GetBoardingAddress(
 	ctx context.Context, userPubkey string,
 ) (string, error) {
 	req := &arkv1.GetBoardingAddressRequest{

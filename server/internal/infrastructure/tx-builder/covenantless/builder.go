@@ -28,17 +28,17 @@ const (
 )
 
 type txBuilder struct {
-	wallet                   ports.WalletService
-	net                      common.Network
-	roundLifetime            int64 // in seconds
-	exitDelay                int64 // in seconds
-	reverseBoardingExitDelay int64 // in seconds
+	wallet            ports.WalletService
+	net               common.Network
+	roundLifetime     int64 // in seconds
+	exitDelay         int64 // in seconds
+	boardingExitDelay int64 // in seconds
 }
 
 func NewTxBuilder(
-	wallet ports.WalletService, net common.Network, roundLifetime, exitDelay, reverseBoardingExitDelay int64,
+	wallet ports.WalletService, net common.Network, roundLifetime, exitDelay, boardingExitDelay int64,
 ) ports.TxBuilder {
-	return &txBuilder{wallet, net, roundLifetime, exitDelay, reverseBoardingExitDelay}
+	return &txBuilder{wallet, net, roundLifetime, exitDelay, boardingExitDelay}
 }
 
 func (b *txBuilder) VerifyForfeitTx(tx string) (bool, string, error) {
@@ -481,7 +481,7 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 }
 
 func (b *txBuilder) GetBoardingScript(userPubkey, aspPubkey *secp256k1.PublicKey) (string, []byte, error) {
-	addr, script, _, err := b.craftReverseBoardingTaproot(userPubkey, aspPubkey)
+	addr, script, _, err := b.craftBoardingTaproot(userPubkey, aspPubkey)
 	if err != nil {
 		return "", nil, err
 	}
@@ -630,7 +630,7 @@ func (b *txBuilder) createPoolTx(
 	ins := make([]*wire.OutPoint, 0)
 	nSequences := make([]uint32, 0)
 	witnessUtxos := make(map[int]*wire.TxOut)
-	reverseBoardingTapLeaf := make(map[int]*psbt.TaprootTapLeafScript)
+	boardingTapLeaves := make(map[int]*psbt.TaprootTapLeafScript)
 	nextIndex := 0
 
 	for _, utxo := range utxos {
@@ -664,12 +664,12 @@ func (b *txBuilder) createPoolTx(
 		})
 		nSequences = append(nSequences, wire.MaxTxInSequenceNum)
 
-		_, script, tapLeaf, err := b.craftReverseBoardingTaproot(input.GetBoardingPubkey(), aspPubKey)
+		_, script, tapLeaf, err := b.craftBoardingTaproot(input.GetBoardingPubkey(), aspPubKey)
 		if err != nil {
 			return nil, err
 		}
 
-		reverseBoardingTapLeaf[nextIndex] = tapLeaf
+		boardingTapLeaves[nextIndex] = tapLeaf
 		witnessUtxos[nextIndex] = &wire.TxOut{
 			Value:    int64(input.GetAmount()),
 			PkScript: script,
@@ -695,7 +695,7 @@ func (b *txBuilder) createPoolTx(
 
 	unspendableInternalKey := schnorr.SerializePubKey(bitcointree.UnspendableKey())
 
-	for inIndex, tapLeaf := range reverseBoardingTapLeaf {
+	for inIndex, tapLeaf := range boardingTapLeaves {
 		updater.Upsbt.Inputs[inIndex].TaprootLeafScript = []*psbt.TaprootTapLeafScript{tapLeaf}
 		updater.Upsbt.Inputs[inIndex].TaprootInternalKey = unspendableInternalKey
 	}
@@ -1142,8 +1142,8 @@ func (b *txBuilder) onchainNetwork() *chaincfg.Params {
 	}
 }
 
-// craftReverseBoardingTaproot returns the addr, script and the leaf belonging to the ASP
-func (b *txBuilder) craftReverseBoardingTaproot(userPubkey, aspPubkey *secp256k1.PublicKey) (string, []byte, *psbt.TaprootTapLeafScript, error) {
+// craftBoardingTaproot returns the addr, script and the leaf belonging to the ASP
+func (b *txBuilder) craftBoardingTaproot(userPubkey, aspPubkey *secp256k1.PublicKey) (string, []byte, *psbt.TaprootTapLeafScript, error) {
 	multisigClosure := bitcointree.MultisigClosure{
 		Pubkey:    userPubkey,
 		AspPubkey: aspPubkey,
@@ -1151,7 +1151,7 @@ func (b *txBuilder) craftReverseBoardingTaproot(userPubkey, aspPubkey *secp256k1
 
 	csvClosure := bitcointree.CSVSigClosure{
 		Pubkey:  userPubkey,
-		Seconds: uint(b.reverseBoardingExitDelay),
+		Seconds: uint(b.boardingExitDelay),
 	}
 
 	multisigLeaf, err := multisigClosure.Leaf()

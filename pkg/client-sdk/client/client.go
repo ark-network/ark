@@ -42,7 +42,7 @@ type ASPClient interface {
 	CompletePayment(
 		ctx context.Context, signedRedeemTx string, signedUnconditionalForfeitTxs []string,
 	) error
-	ReverseBoardingAddress(ctx context.Context, userPubkey string) (string, error)
+	GetBoardingAddress(ctx context.Context, userPubkey string) (string, error)
 	SendTreeNonces(
 		ctx context.Context, roundID, cosignerPubkey string, nonces bitcointree.TreeNonces,
 	) error
