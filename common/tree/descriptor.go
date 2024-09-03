@@ -3,7 +3,7 @@ package tree
 import (
 	"encoding/hex"
 
-	"github.com/ark-network/ark/pkg/descriptor"
+	"github.com/ark-network/ark/common/descriptor"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/vulpemventures/go-elements/taproot"
 )

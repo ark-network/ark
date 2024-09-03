@@ -9,7 +9,7 @@ import (
 	"github.com/ark-network/ark/client/utils"
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
-	"github.com/ark-network/ark/pkg/descriptor"
+	"github.com/ark-network/ark/common/descriptor"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/psbt"

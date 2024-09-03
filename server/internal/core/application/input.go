@@ -3,7 +3,7 @@ package application
 import (
 	"fmt"
 
-	"github.com/ark-network/ark/pkg/descriptor"
+	"github.com/ark-network/ark/common/descriptor"
 	"github.com/ark-network/ark/server/internal/core/domain"
 )
 

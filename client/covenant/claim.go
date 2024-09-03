@@ -6,7 +6,7 @@ import (
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/client/utils"
-	"github.com/ark-network/ark/pkg/descriptor"
+	"github.com/ark-network/ark/common/descriptor"
 	"github.com/urfave/cli/v2"
 )
 

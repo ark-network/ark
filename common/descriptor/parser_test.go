@@ -3,7 +3,7 @@ package descriptor_test
 import (
 	"testing"
 
-	"github.com/ark-network/ark/pkg/descriptor"
+	"github.com/ark-network/ark/common/descriptor"
 	"github.com/stretchr/testify/require"
 )
 
