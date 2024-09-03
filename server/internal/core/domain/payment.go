@@ -89,7 +89,7 @@ func (p Payment) validate(ignoreOuts bool) error {
 		outAmount += r.Amount
 	}
 	if inAmount != outAmount {
-		return fmt.Errorf("input and output amounts mismatch (output = %d, input = %d)", outAmount, inAmount)
+		return fmt.Errorf("input and output amounts mismatch")
 	}
 	return nil
 }

@@ -157,7 +157,7 @@ func Whitelist() map[string][]bakery.Op {
 			Entity: EntityHealth,
 			Action: "read",
 		}},
-		fmt.Sprintf("/%s/ReverseBoardingAddress", arkv1.ArkService_ServiceDesc.ServiceName): {{
+		fmt.Sprintf("/%s/GetBoardingAddress", arkv1.ArkService_ServiceDesc.ServiceName): {{
 			Entity: EntityArk,
 			Action: "read",
 		}},
