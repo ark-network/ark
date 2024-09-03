@@ -17,6 +17,9 @@ import (
 // swagger:model v1GetInfoResponse
 type V1GetInfoResponse struct {
 
+	// boarding descriptor template
+	BoardingDescriptorTemplate string `json:"boardingDescriptorTemplate,omitempty"`
+
 	// min relay fee
 	MinRelayFee string `json:"minRelayFee,omitempty"`
 
@@ -25,9 +28,6 @@ type V1GetInfoResponse struct {
 
 	// pubkey
 	Pubkey string `json:"pubkey,omitempty"`
-
-	// reverse boarding exit delay
-	ReverseBoardingExitDelay string `json:"reverseBoardingExitDelay,omitempty"`
 
 	// round interval
 	RoundInterval string `json:"roundInterval,omitempty"`

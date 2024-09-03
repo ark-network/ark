@@ -262,21 +262,25 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []Input) (s
 		boardingInputs = append(boardingInputs, boardingInput)
 	}
 
-	vtxos, err := s.repoManager.Vtxos().GetVtxos(ctx, vtxosInputs)
-	if err != nil {
-		return "", err
-	}
-	for _, v := range vtxos {
-		if v.Spent {
-			return "", fmt.Errorf("input %s:%d already spent", v.Txid, v.VOut)
+	vtxos := make([]domain.Vtxo, 0)
+	if len(vtxosInputs) > 0 {
+		var err error
+		vtxos, err = s.repoManager.Vtxos().GetVtxos(ctx, vtxosInputs)
+		if err != nil {
+			return "", err
 		}
+		for _, v := range vtxos {
+			if v.Spent {
+				return "", fmt.Errorf("input %s:%d already spent", v.Txid, v.VOut)
+			}
 
-		if v.Redeemed {
-			return "", fmt.Errorf("input %s:%d already redeemed", v.Txid, v.VOut)
-		}
+			if v.Redeemed {
+				return "", fmt.Errorf("input %s:%d already redeemed", v.Txid, v.VOut)
+			}
 
-		if v.Spent {
-			return "", fmt.Errorf("input %s:%d already spent", v.Txid, v.VOut)
+			if v.Spent {
+				return "", fmt.Errorf("input %s:%d already spent", v.Txid, v.VOut)
+			}
 		}
 	}
 

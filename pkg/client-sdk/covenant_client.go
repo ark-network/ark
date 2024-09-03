@@ -18,6 +18,7 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils/redemption"
 	"github.com/ark-network/ark/pkg/client-sdk/store"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
+	"github.com/ark-network/ark/pkg/descriptor"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -503,18 +504,35 @@ func (a *covenantArkClient) Claim(ctx context.Context) (string, error) {
 		Amount:  pendingBalance,
 	}
 
-	mybpubkeyHex := hex.EncodeToString(mypubkey.SerializeCompressed())
-	return a.selfTransferAllPendingPayments(ctx, boardingUtxos, receiver, mybpubkeyHex)
+	desc := strings.ReplaceAll(a.BoardingDescriptorTemplate, "USER", hex.EncodeToString(schnorr.SerializePubKey(mypubkey)))
+
+	return a.selfTransferAllPendingPayments(ctx, boardingUtxos, receiver, desc)
 }
 
 func (a *covenantArkClient) getClaimableBoardingUtxos(ctx context.Context) ([]explorer.Utxo, error) {
-	_, onboardingAddrs, _, err := a.wallet.GetAddresses(ctx)
+	offchainAddrs, onboardingAddrs, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	claimable := make([]explorer.Utxo, 0)
 	now := time.Now()
+
+	_, mypubkey, _, err := common.DecodeAddress(offchainAddrs[0])
+	if err != nil {
+		return nil, err
+	}
+
+	descriptorStr := strings.ReplaceAll(a.BoardingDescriptorTemplate, "USER", hex.EncodeToString(schnorr.SerializePubKey(mypubkey)))
+	desc, err := descriptor.ParseTaprootDescriptor(descriptorStr)
+	if err != nil {
+		return nil, err
+	}
+
+	_, boardingTimeout, err := descriptor.ParseBoardingDescriptor(desc)
+	if err != nil {
+		return nil, err
+	}
 
 	for _, addr := range onboardingAddrs {
 		boardingUtxos, err := a.explorer.GetUtxos(addr)
@@ -523,7 +541,7 @@ func (a *covenantArkClient) getClaimableBoardingUtxos(ctx context.Context) ([]ex
 		}
 
 		for _, utxo := range boardingUtxos {
-			u := utxo.ToUtxo(uint(a.OnboardingExitDelay))
+			u := utxo.ToUtxo(boardingTimeout)
 
 			if u.SpendableAt.Before(now) {
 				continue
@@ -1123,7 +1141,23 @@ func (a *covenantArkClient) signForfeitTx(
 func (a *covenantArkClient) coinSelectOnchain(
 	ctx context.Context, targetAmount uint64, exclude []explorer.Utxo,
 ) ([]explorer.Utxo, uint64, error) {
-	_, onboardingAddrs, redemptionAddrs, err := a.wallet.GetAddresses(ctx)
+	offchainAddrs, onboardingAddrs, redemptionAddrs, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	_, mypubkey, _, err := common.DecodeAddress(offchainAddrs[0])
+	if err != nil {
+		return nil, 0, err
+	}
+
+	descriptorStr := strings.ReplaceAll(a.BoardingDescriptorTemplate, "USER", hex.EncodeToString(schnorr.SerializePubKey(mypubkey)))
+	desc, err := descriptor.ParseTaprootDescriptor(descriptorStr)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	_, boardingTimeout, err := descriptor.ParseBoardingDescriptor(desc)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1138,7 +1172,7 @@ func (a *covenantArkClient) coinSelectOnchain(
 		}
 
 		for _, utxo := range utxos {
-			u := utxo.ToUtxo(uint(a.OnboardingExitDelay))
+			u := utxo.ToUtxo(boardingTimeout)
 			if u.SpendableAt.Before(now) {
 				fetchedUtxos = append(fetchedUtxos, u)
 			}
@@ -1297,7 +1331,7 @@ func (a *covenantArkClient) getVtxos(
 }
 
 func (a *covenantArkClient) selfTransferAllPendingPayments(
-	ctx context.Context, boardingUtxo []explorer.Utxo, myself client.Output, myPubkey string,
+	ctx context.Context, boardingUtxo []explorer.Utxo, myself client.Output, boardingDescriptor string,
 ) (string, error) {
 	inputs := make([]client.Input, 0, len(boardingUtxo))
 
@@ -1307,7 +1341,7 @@ func (a *covenantArkClient) selfTransferAllPendingPayments(
 				Txid: utxo.Txid,
 				VOut: utxo.Vout,
 			},
-			UserPubkey: myPubkey,
+			Descriptor: boardingDescriptor,
 		})
 	}
 

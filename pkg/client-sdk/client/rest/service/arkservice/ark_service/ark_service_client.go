@@ -62,6 +62,8 @@ type ClientService interface {
 
 	ArkServiceFinalizePayment(params *ArkServiceFinalizePaymentParams, opts ...ClientOption) (*ArkServiceFinalizePaymentOK, error)
 
+	ArkServiceGetBoardingAddress(params *ArkServiceGetBoardingAddressParams, opts ...ClientOption) (*ArkServiceGetBoardingAddressOK, error)
+
 	ArkServiceGetEventStream(params *ArkServiceGetEventStreamParams, opts ...ClientOption) (*ArkServiceGetEventStreamOK, error)
 
 	ArkServiceGetInfo(params *ArkServiceGetInfoParams, opts ...ClientOption) (*ArkServiceGetInfoOK, error)
@@ -75,8 +77,6 @@ type ClientService interface {
 	ArkServicePing(params *ArkServicePingParams, opts ...ClientOption) (*ArkServicePingOK, error)
 
 	ArkServiceRegisterPayment(params *ArkServiceRegisterPaymentParams, opts ...ClientOption) (*ArkServiceRegisterPaymentOK, error)
-
-	ArkServiceReverseBoardingAddress(params *ArkServiceReverseBoardingAddressParams, opts ...ClientOption) (*ArkServiceReverseBoardingAddressOK, error)
 
 	ArkServiceSendTreeNonces(params *ArkServiceSendTreeNoncesParams, opts ...ClientOption) (*ArkServiceSendTreeNoncesOK, error)
 
@@ -230,6 +230,43 @@ func (a *Client) ArkServiceFinalizePayment(params *ArkServiceFinalizePaymentPara
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*ArkServiceFinalizePaymentDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+ArkServiceGetBoardingAddress ark service get boarding address API
+*/
+func (a *Client) ArkServiceGetBoardingAddress(params *ArkServiceGetBoardingAddressParams, opts ...ClientOption) (*ArkServiceGetBoardingAddressOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewArkServiceGetBoardingAddressParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "ArkService_GetBoardingAddress",
+		Method:             "POST",
+		PathPattern:        "/v1/boarding",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &ArkServiceGetBoardingAddressReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*ArkServiceGetBoardingAddressOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*ArkServiceGetBoardingAddressDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 
@@ -489,43 +526,6 @@ func (a *Client) ArkServiceRegisterPayment(params *ArkServiceRegisterPaymentPara
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*ArkServiceRegisterPaymentDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
-}
-
-/*
-ArkServiceReverseBoardingAddress ark service reverse boarding address API
-*/
-func (a *Client) ArkServiceReverseBoardingAddress(params *ArkServiceReverseBoardingAddressParams, opts ...ClientOption) (*ArkServiceReverseBoardingAddressOK, error) {
-	// TODO: Validate the params before sending
-	if params == nil {
-		params = NewArkServiceReverseBoardingAddressParams()
-	}
-	op := &runtime.ClientOperation{
-		ID:                 "ArkService_ReverseBoardingAddress",
-		Method:             "POST",
-		PathPattern:        "/v1/reverseboarding",
-		ProducesMediaTypes: []string{"application/json"},
-		ConsumesMediaTypes: []string{"application/json"},
-		Schemes:            []string{"http"},
-		Params:             params,
-		Reader:             &ArkServiceReverseBoardingAddressReader{formats: a.formats},
-		Context:            params.Context,
-		Client:             params.HTTPClient,
-	}
-	for _, opt := range opts {
-		opt(op)
-	}
-
-	result, err := a.transport.Submit(op)
-	if err != nil {
-		return nil, err
-	}
-	success, ok := result.(*ArkServiceReverseBoardingAddressOK)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*ArkServiceReverseBoardingAddressDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 

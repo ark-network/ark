@@ -3,7 +3,9 @@ package singlekeywallet
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
+	"strings"
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
@@ -12,6 +14,7 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/store"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	walletstore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store"
+	"github.com/ark-network/ark/pkg/descriptor"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
@@ -246,8 +249,20 @@ func (w *liquidWallet) getAddress(
 		return "", "", "", err
 	}
 
+	descriptorStr := strings.ReplaceAll(data.BoardingDescriptorTemplate, "USER", hex.EncodeToString(schnorr.SerializePubKey(w.walletData.Pubkey)))
+
+	desc, err := descriptor.ParseTaprootDescriptor(descriptorStr)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	_, boardingTimeout, err := descriptor.ParseBoardingDescriptor(desc)
+	if err != nil {
+		return "", "", "", err
+	}
+
 	_, _, _, onboardingAddr, err := tree.ComputeVtxoTaprootScript(
-		w.walletData.Pubkey, data.AspPubkey, uint(data.OnboardingExitDelay), liquidNet,
+		w.walletData.Pubkey, data.AspPubkey, boardingTimeout, liquidNet,
 	)
 	if err != nil {
 		return "", "", "", err

@@ -53,13 +53,13 @@ type ASPClient interface {
 }
 
 type Info struct {
-	Pubkey              string
-	RoundLifetime       int64
-	UnilateralExitDelay int64
-	OnboardingExitDelay int64
-	RoundInterval       int64
-	Network             string
-	MinRelayFee         int64
+	Pubkey                     string
+	RoundLifetime              int64
+	UnilateralExitDelay        int64
+	RoundInterval              int64
+	Network                    string
+	MinRelayFee                int64
+	BoardingDescriptorTemplate string
 }
 
 type RoundEventChannel struct {
@@ -68,9 +68,9 @@ type RoundEventChannel struct {
 }
 
 type Input interface {
-	ReverseBoardingPublicKey() string
 	GetTxID() string
 	GetVOut() uint32
+	GetDescriptor() string
 }
 
 type VtxoKey struct {
@@ -86,17 +86,17 @@ func (k VtxoKey) GetVOut() uint32 {
 	return k.VOut
 }
 
-func (k VtxoKey) ReverseBoardingPublicKey() string {
+func (k VtxoKey) GetDescriptor() string {
 	return ""
 }
 
 type BoardingInput struct {
 	VtxoKey
-	UserPubkey string
+	Descriptor string
 }
 
-func (k BoardingInput) ReverseBoardingPublicKey() string {
-	return k.UserPubkey
+func (k BoardingInput) GetDescriptor() string {
+	return k.Descriptor
 }
 
 type Vtxo struct {

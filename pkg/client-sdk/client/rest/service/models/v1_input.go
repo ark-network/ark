@@ -8,6 +8,7 @@ package models
 import (
 	"context"
 
+	"github.com/go-openapi/errors"
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
 )
@@ -17,23 +18,126 @@ import (
 // swagger:model v1Input
 type V1Input struct {
 
-	// reverse boarding pubkey
-	ReverseBoardingPubkey string `json:"reverseBoardingPubkey,omitempty"`
+	// descriptor input
+	DescriptorInput *V1DescriptorInput `json:"descriptorInput,omitempty"`
 
-	// txid
-	Txid string `json:"txid,omitempty"`
-
-	// vout
-	Vout int64 `json:"vout,omitempty"`
+	// vtxo input
+	VtxoInput *V1VtxoInput `json:"vtxoInput,omitempty"`
 }
 
 // Validate validates this v1 input
 func (m *V1Input) Validate(formats strfmt.Registry) error {
+	var res []error
+
+	if err := m.validateDescriptorInput(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.validateVtxoInput(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if len(res) > 0 {
+		return errors.CompositeValidationError(res...)
+	}
 	return nil
 }
 
-// ContextValidate validates this v1 input based on context it is used
+func (m *V1Input) validateDescriptorInput(formats strfmt.Registry) error {
+	if swag.IsZero(m.DescriptorInput) { // not required
+		return nil
+	}
+
+	if m.DescriptorInput != nil {
+		if err := m.DescriptorInput.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("descriptorInput")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("descriptorInput")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *V1Input) validateVtxoInput(formats strfmt.Registry) error {
+	if swag.IsZero(m.VtxoInput) { // not required
+		return nil
+	}
+
+	if m.VtxoInput != nil {
+		if err := m.VtxoInput.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("vtxoInput")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("vtxoInput")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ContextValidate validate this v1 input based on the context it is used
 func (m *V1Input) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
+	var res []error
+
+	if err := m.contextValidateDescriptorInput(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.contextValidateVtxoInput(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
+	if len(res) > 0 {
+		return errors.CompositeValidationError(res...)
+	}
+	return nil
+}
+
+func (m *V1Input) contextValidateDescriptorInput(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.DescriptorInput != nil {
+
+		if swag.IsZero(m.DescriptorInput) { // not required
+			return nil
+		}
+
+		if err := m.DescriptorInput.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("descriptorInput")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("descriptorInput")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *V1Input) contextValidateVtxoInput(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.VtxoInput != nil {
+
+		if swag.IsZero(m.VtxoInput) { // not required
+			return nil
+		}
+
+		if err := m.VtxoInput.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("vtxoInput")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("vtxoInput")
+			}
+			return err
+		}
+	}
+
 	return nil
 }
 

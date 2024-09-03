@@ -97,13 +97,13 @@ func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
 		return nil, err
 	}
 	return &client.Info{
-		Pubkey:              resp.GetPubkey(),
-		RoundLifetime:       resp.GetRoundLifetime(),
-		UnilateralExitDelay: resp.GetUnilateralExitDelay(),
-		RoundInterval:       resp.GetRoundInterval(),
-		Network:             resp.GetNetwork(),
-		MinRelayFee:         resp.GetMinRelayFee(),
-		OnboardingExitDelay: resp.GetReverseBoardingExitDelay(),
+		Pubkey:                     resp.GetPubkey(),
+		RoundLifetime:              resp.GetRoundLifetime(),
+		UnilateralExitDelay:        resp.GetUnilateralExitDelay(),
+		RoundInterval:              resp.GetRoundInterval(),
+		Network:                    resp.GetNetwork(),
+		MinRelayFee:                resp.GetMinRelayFee(),
+		BoardingDescriptorTemplate: resp.GetBoardingDescriptorTemplate(),
 	}, nil
 }
 
@@ -262,10 +262,10 @@ func (a *grpcClient) GetRoundByID(
 func (a *grpcClient) ReverseBoardingAddress(
 	ctx context.Context, userPubkey string,
 ) (string, error) {
-	req := &arkv1.ReverseBoardingAddressRequest{
+	req := &arkv1.GetBoardingAddressRequest{
 		Pubkey: userPubkey,
 	}
-	resp, err := a.svc.ReverseBoardingAddress(ctx, req)
+	resp, err := a.svc.GetBoardingAddress(ctx, req)
 	if err != nil {
 		return "", err
 	}
@@ -430,8 +430,8 @@ func (v vtxo) toVtxo() client.Vtxo {
 	}
 	return client.Vtxo{
 		VtxoKey: client.VtxoKey{
-			Txid: v.GetOutpoint().GetTxid(),
-			VOut: v.GetOutpoint().GetVout(),
+			Txid: v.GetOutpoint().GetVtxoInput().GetTxid(),
+			VOut: v.GetOutpoint().GetVtxoInput().GetVout(),
 		},
 		Amount:                  v.GetReceiver().GetAmount(),
 		RoundTxid:               v.GetPoolTxid(),
@@ -453,17 +453,26 @@ func (v vtxos) toVtxos() []client.Vtxo {
 }
 
 func toProtoInput(i client.Input) *arkv1.Input {
-	in := &arkv1.Input{
-		Txid: i.GetTxID(),
-		Vout: i.GetVOut(),
+	if len(i.GetDescriptor()) > 0 {
+		return &arkv1.Input{
+			Input: &arkv1.Input_DescriptorInput{
+				DescriptorInput: &arkv1.DescriptorInput{
+					Txid:        i.GetTxID(),
+					Vout:        i.GetVOut(),
+					Descriptor_: i.GetDescriptor(),
+				},
+			},
+		}
 	}
-	pubkey := i.ReverseBoardingPublicKey()
 
-	if len(pubkey) > 0 {
-		in.ReverseBoardingPubkey = &pubkey
+	return &arkv1.Input{
+		Input: &arkv1.Input_VtxoInput{
+			VtxoInput: &arkv1.VtxoInput{
+				Txid: i.GetTxID(),
+				Vout: i.GetVOut(),
+			},
+		},
 	}
-
-	return in
 }
 
 type ins []client.Input

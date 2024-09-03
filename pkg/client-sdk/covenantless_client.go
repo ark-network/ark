@@ -19,6 +19,7 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils/redemption"
 	"github.com/ark-network/ark/pkg/client-sdk/store"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
+	"github.com/ark-network/ark/pkg/descriptor"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/psbt"
@@ -628,8 +629,8 @@ func (a *covenantlessArkClient) Claim(ctx context.Context) (string, error) {
 		Amount:  pendingBalance,
 	}
 
-	mybpubkeyHex := hex.EncodeToString(mypubkey.SerializeCompressed())
-	return a.selfTransferAllPendingPayments(ctx, pendingVtxos, boardingUtxos, receiver, mybpubkeyHex)
+	desc := strings.ReplaceAll(a.BoardingDescriptorTemplate, "USER", hex.EncodeToString(schnorr.SerializePubKey(mypubkey)))
+	return a.selfTransferAllPendingPayments(ctx, pendingVtxos, boardingUtxos, receiver, desc)
 }
 
 func (a *covenantlessArkClient) sendOnchain(
@@ -1320,7 +1321,23 @@ func (a *covenantlessArkClient) loopAndSign(
 func (a *covenantlessArkClient) coinSelectOnchain(
 	ctx context.Context, targetAmount uint64, exclude []explorer.Utxo,
 ) ([]explorer.Utxo, uint64, error) {
-	_, onboardingAddrs, redemptionAddrs, err := a.wallet.GetAddresses(ctx)
+	offchainAddrs, onboardingAddrs, redemptionAddrs, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	_, mypubkey, _, err := common.DecodeAddress(offchainAddrs[0])
+	if err != nil {
+		return nil, 0, err
+	}
+
+	descriptorStr := strings.ReplaceAll(a.BoardingDescriptorTemplate, "USER", hex.EncodeToString(schnorr.SerializePubKey(mypubkey)))
+	desc, err := descriptor.ParseTaprootDescriptor(descriptorStr)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	_, boardingTimeout, err := descriptor.ParseBoardingDescriptor(desc)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1335,7 +1352,7 @@ func (a *covenantlessArkClient) coinSelectOnchain(
 		}
 
 		for _, utxo := range utxos {
-			u := utxo.ToUtxo(uint(a.OnboardingExitDelay))
+			u := utxo.ToUtxo(boardingTimeout)
 			if u.SpendableAt.Before(now) {
 				fetchedUtxos = append(fetchedUtxos, u)
 			}
@@ -1464,7 +1481,23 @@ func (a *covenantlessArkClient) getOffchainBalance(
 }
 
 func (a *covenantlessArkClient) getClaimableBoardingUtxos(ctx context.Context) ([]explorer.Utxo, error) {
-	_, onboardingAddrs, _, err := a.wallet.GetAddresses(ctx)
+	offchainAddrs, onboardingAddrs, _, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	_, mypubkey, _, err := common.DecodeAddress(offchainAddrs[0])
+	if err != nil {
+		return nil, err
+	}
+
+	descriptorStr := strings.ReplaceAll(a.BoardingDescriptorTemplate, "USER", hex.EncodeToString(schnorr.SerializePubKey(mypubkey)))
+	desc, err := descriptor.ParseTaprootDescriptor(descriptorStr)
+	if err != nil {
+		return nil, err
+	}
+
+	_, boardingTimeout, err := descriptor.ParseBoardingDescriptor(desc)
 	if err != nil {
 		return nil, err
 	}
@@ -1479,7 +1512,7 @@ func (a *covenantlessArkClient) getClaimableBoardingUtxos(ctx context.Context) (
 		}
 
 		for _, utxo := range boardingUtxos {
-			u := utxo.ToUtxo(uint(a.OnboardingExitDelay))
+			u := utxo.ToUtxo(boardingTimeout)
 			if u.SpendableAt.Before(now) {
 				continue
 			}
@@ -1536,7 +1569,7 @@ func (a *covenantlessArkClient) getVtxos(
 }
 
 func (a *covenantlessArkClient) selfTransferAllPendingPayments(
-	ctx context.Context, pendingVtxos []client.Vtxo, boardingUtxo []explorer.Utxo, myself client.Output, myPubkey string,
+	ctx context.Context, pendingVtxos []client.Vtxo, boardingUtxo []explorer.Utxo, myself client.Output, boardingDescriptor string,
 ) (string, error) {
 	inputs := make([]client.Input, 0, len(pendingVtxos)+len(boardingUtxo))
 
@@ -1545,15 +1578,16 @@ func (a *covenantlessArkClient) selfTransferAllPendingPayments(
 	}
 
 	for _, utxo := range boardingUtxo {
+		fmt.Println(utxo)
+		fmt.Println(boardingDescriptor)
 		inputs = append(inputs, client.BoardingInput{
 			VtxoKey: client.VtxoKey{
 				Txid: utxo.Txid,
 				VOut: utxo.Vout,
 			},
-			UserPubkey: myPubkey,
+			Descriptor: boardingDescriptor,
 		})
 	}
-
 	outputs := []client.Output{myself}
 
 	roundEphemeralKey, err := secp256k1.GeneratePrivateKey()

@@ -113,19 +113,14 @@ func (a *restClient) GetInfo(
 		return nil, err
 	}
 
-	onboardingExitDelay, err := strconv.Atoi(resp.Payload.ReverseBoardingExitDelay)
-	if err != nil {
-		return nil, err
-	}
-
 	return &client.Info{
-		Pubkey:              resp.Payload.Pubkey,
-		RoundLifetime:       int64(roundLifetime),
-		UnilateralExitDelay: int64(unilateralExitDelay),
-		RoundInterval:       int64(roundInterval),
-		Network:             resp.Payload.Network,
-		MinRelayFee:         int64(minRelayFee),
-		OnboardingExitDelay: int64(onboardingExitDelay),
+		Pubkey:                     resp.Payload.Pubkey,
+		RoundLifetime:              int64(roundLifetime),
+		UnilateralExitDelay:        int64(unilateralExitDelay),
+		RoundInterval:              int64(roundInterval),
+		Network:                    resp.Payload.Network,
+		MinRelayFee:                int64(minRelayFee),
+		BoardingDescriptorTemplate: resp.Payload.BoardingDescriptorTemplate,
 	}, nil
 }
 
@@ -165,8 +160,8 @@ func (a *restClient) ListVtxos(
 
 		spendableVtxos = append(spendableVtxos, client.Vtxo{
 			VtxoKey: client.VtxoKey{
-				Txid: v.Outpoint.Txid,
-				VOut: uint32(v.Outpoint.Vout),
+				Txid: v.Outpoint.VtxoInput.Txid,
+				VOut: uint32(v.Outpoint.VtxoInput.Vout),
 			},
 			Amount:                  uint64(amount),
 			RoundTxid:               v.PoolTxid,
@@ -196,8 +191,8 @@ func (a *restClient) ListVtxos(
 
 		spentVtxos = append(spentVtxos, client.Vtxo{
 			VtxoKey: client.VtxoKey{
-				Txid: v.Outpoint.Txid,
-				VOut: uint32(v.Outpoint.Vout),
+				Txid: v.Outpoint.VtxoInput.Txid,
+				VOut: uint32(v.Outpoint.VtxoInput.Vout),
 			},
 			Amount:    uint64(amount),
 			RoundTxid: v.PoolTxid,
@@ -252,11 +247,26 @@ func (a *restClient) RegisterPayment(
 ) (string, error) {
 	ins := make([]*models.V1Input, 0, len(inputs))
 	for _, i := range inputs {
-		ins = append(ins, &models.V1Input{
-			Txid:                  i.GetTxID(),
-			Vout:                  int64(i.GetVOut()),
-			ReverseBoardingPubkey: i.ReverseBoardingPublicKey(),
-		})
+		var input *models.V1Input
+
+		if len(i.GetDescriptor()) > 0 {
+			input = &models.V1Input{
+				DescriptorInput: &models.V1DescriptorInput{
+					Txid:       i.GetTxID(),
+					Vout:       int64(i.GetVOut()),
+					Descriptor: i.GetDescriptor(),
+				},
+			}
+		} else {
+			input = &models.V1Input{
+				VtxoInput: &models.V1VtxoInput{
+					Txid: i.GetTxID(),
+					Vout: int64(i.GetVOut()),
+				},
+			}
+		}
+
+		ins = append(ins, input)
 	}
 	body := &models.V1RegisterPaymentRequest{
 		Inputs: ins,
@@ -385,9 +395,15 @@ func (a *restClient) CreatePayment(
 ) (string, []string, error) {
 	ins := make([]*models.V1Input, 0, len(inputs))
 	for _, i := range inputs {
+		if len(i.GetDescriptor()) > 0 {
+			return "", nil, fmt.Errorf("boarding inputs are not allowed in create payment")
+		}
+
 		ins = append(ins, &models.V1Input{
-			Txid: i.Txid,
-			Vout: int64(i.VOut),
+			VtxoInput: &models.V1VtxoInput{
+				Txid: i.Txid,
+				Vout: int64(i.VOut),
+			},
 		})
 	}
 	outs := make([]*models.V1Output, 0, len(outputs))
@@ -469,12 +485,12 @@ func (a *restClient) GetRoundByID(
 func (a *restClient) ReverseBoardingAddress(
 	ctx context.Context, pubkey string,
 ) (string, error) {
-	body := models.V1ReverseBoardingAddressRequest{
+	body := models.V1GetBoardingAddressRequest{
 		Pubkey: pubkey,
 	}
 
-	resp, err := a.svc.ArkServiceReverseBoardingAddress(
-		ark_service.NewArkServiceReverseBoardingAddressParams().WithBody(&body),
+	resp, err := a.svc.ArkServiceGetBoardingAddress(
+		ark_service.NewArkServiceGetBoardingAddressParams().WithBody(&body),
 	)
 	if err != nil {
 		return "",

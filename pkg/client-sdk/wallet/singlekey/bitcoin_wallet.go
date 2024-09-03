@@ -14,6 +14,7 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/store"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	walletstore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store"
+	"github.com/ark-network/ark/pkg/descriptor"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/psbt"
@@ -231,8 +232,20 @@ func (w *bitcoinWallet) getAddress(
 		return "", "", "", err
 	}
 
+	descriptorStr := strings.ReplaceAll(data.BoardingDescriptorTemplate, "USER", hex.EncodeToString(schnorr.SerializePubKey(w.walletData.Pubkey)))
+
+	desc, err := descriptor.ParseTaprootDescriptor(descriptorStr)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	_, boardingTimeout, err := descriptor.ParseBoardingDescriptor(desc)
+	if err != nil {
+		return "", "", "", err
+	}
+
 	onboardingTapKey, _, err := bitcointree.ComputeVtxoTaprootScript(
-		w.walletData.Pubkey, data.AspPubkey, uint(data.OnboardingExitDelay),
+		w.walletData.Pubkey, data.AspPubkey, boardingTimeout,
 	)
 	if err != nil {
 		return "", "", "", err
