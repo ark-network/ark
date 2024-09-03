@@ -1326,18 +1326,21 @@ func (a *covenantlessArkClient) coinSelectOnchain(
 		return nil, 0, err
 	}
 
-	_, mypubkey, _, err := common.DecodeAddress(offchainAddrs[0])
+	_, myPubkey, _, err := common.DecodeAddress(offchainAddrs[0])
 	if err != nil {
 		return nil, 0, err
 	}
 
-	descriptorStr := strings.ReplaceAll(a.BoardingDescriptorTemplate, "USER", hex.EncodeToString(schnorr.SerializePubKey(mypubkey)))
+	myPubkeyStr := hex.EncodeToString(schnorr.SerializePubKey(myPubkey))
+	descriptorStr := strings.ReplaceAll(
+		a.BoardingDescriptorTemplate, "USER", myPubkeyStr,
+	)
 	desc, err := descriptor.ParseTaprootDescriptor(descriptorStr)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	_, boardingTimeout, err := descriptor.ParseBoardingDescriptor(desc)
+	_, boardingTimeout, err := descriptor.ParseBoardingDescriptor(*desc)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1486,18 +1489,21 @@ func (a *covenantlessArkClient) getClaimableBoardingUtxos(ctx context.Context) (
 		return nil, err
 	}
 
-	_, mypubkey, _, err := common.DecodeAddress(offchainAddrs[0])
+	_, myPubkey, _, err := common.DecodeAddress(offchainAddrs[0])
 	if err != nil {
 		return nil, err
 	}
 
-	descriptorStr := strings.ReplaceAll(a.BoardingDescriptorTemplate, "USER", hex.EncodeToString(schnorr.SerializePubKey(mypubkey)))
+	myPubkeyStr := hex.EncodeToString(schnorr.SerializePubKey(myPubkey))
+	descriptorStr := strings.ReplaceAll(
+		a.BoardingDescriptorTemplate, "USER", myPubkeyStr,
+	)
 	desc, err := descriptor.ParseTaprootDescriptor(descriptorStr)
 	if err != nil {
 		return nil, err
 	}
 
-	_, boardingTimeout, err := descriptor.ParseBoardingDescriptor(desc)
+	_, boardingTimeout, err := descriptor.ParseBoardingDescriptor(*desc)
 	if err != nil {
 		return nil, err
 	}

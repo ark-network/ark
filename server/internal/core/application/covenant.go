@@ -61,7 +61,7 @@ func NewCovenantService(
 	scheduler ports.SchedulerService,
 ) (Service, error) {
 	eventsCh := make(chan domain.RoundEvent)
-	paymentRequests := newPaymentsMap(nil)
+	paymentRequests := newPaymentsMap()
 
 	forfeitTxs := newForfeitTxsMap(builder)
 	pubkey, err := walletSvc.GetPubkey(context.Background())
@@ -131,20 +131,14 @@ func (s *covenantService) GetBoardingAddress(ctx context.Context, userPubkey *se
 
 func (s *covenantService) SpendVtxos(ctx context.Context, inputs []Input) (string, error) {
 	vtxosInputs := make([]domain.VtxoKey, 0)
-	boardingInputs := make([]BoardingInput, 0)
+	boardingInputs := make([]Input, 0)
 
 	for _, in := range inputs {
 		if in.IsVtxo() {
 			vtxosInputs = append(vtxosInputs, in.VtxoKey())
 			continue
 		}
-
-		boardingInput, err := in.AsBoardingInput()
-		if err != nil {
-			return "", err
-		}
-
-		boardingInputs = append(boardingInputs, boardingInput)
+		boardingInputs = append(boardingInputs, in)
 	}
 
 	vtxos := make([]domain.Vtxo, 0)
@@ -197,29 +191,36 @@ func (s *covenantService) SpendVtxos(ctx context.Context, inputs []Input) (strin
 		}
 	}
 
-	utxos := make([]domain.BoardingUtxo, 0, len(boardingInputs))
+	utxos := make([]ports.BoardingInput, 0, len(boardingInputs))
 
 	for _, in := range boardingInputs {
-		input, err := s.newReverseBoardingInput(boardingTxs[in.Txid], in.Index, in.TaprootDescriptor)
+		desc, err := in.GetDescriptor()
 		if err != nil {
-			log.WithError(err).Debugf("failed to create reverse boarding input")
-			return "", fmt.Errorf("input %s:%d is not a valid reverse boarding", in.Txid, in.Index)
+			log.WithError(err).Debugf("failed to parse boarding input descriptor")
+			return "", fmt.Errorf("failed to parse descriptor %s for input %s:%d", in.Descriptor, in.Txid, in.Index)
+		}
+		input, err := s.newBoardingInput(boardingTxs[in.Txid], in.Index, *desc)
+		if err != nil {
+			log.WithError(err).Debugf("failed to create boarding input")
+			return "", fmt.Errorf("input %s:%d is not a valid boarding input", in.Txid, in.Index)
 		}
 
-		utxos = append(utxos, *input)
+		utxos = append(utxos, input)
 	}
 
-	payment, err := domain.NewPayment(vtxos, utxos)
+	payment, err := domain.NewPayment(vtxos)
 	if err != nil {
 		return "", err
 	}
-	if err := s.paymentRequests.push(*payment); err != nil {
+	if err := s.paymentRequests.push(*payment, utxos); err != nil {
 		return "", err
 	}
 	return payment.Id, nil
 }
 
-func (s *covenantService) newReverseBoardingInput(txhex string, vout uint32, desc descriptor.TaprootDescriptor) (*domain.BoardingUtxo, error) {
+func (s *covenantService) newBoardingInput(
+	txhex string, vout uint32, desc descriptor.TaprootDescriptor,
+) (ports.BoardingInput, error) {
 	tx, err := transaction.NewTxFromHex(txhex)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse tx: %s", err)
@@ -256,7 +257,7 @@ func (s *covenantService) newReverseBoardingInput(txhex string, vout uint32, des
 
 	_, expectedScript, err := s.builder.GetBoardingScript(pubkey, s.pubkey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get reverse boarding script: %s", err)
+		return nil, fmt.Errorf("failed to compute boarding script: %s", err)
 	}
 
 	if !bytes.Equal(script, expectedScript) {
@@ -268,13 +269,11 @@ func (s *covenantService) newReverseBoardingInput(txhex string, vout uint32, des
 		return nil, fmt.Errorf("failed to parse value: %s", err)
 	}
 
-	return &domain.BoardingUtxo{
-		VtxoKey: domain.VtxoKey{
-			Txid: tx.TxHash().String(),
-			VOut: vout,
-		},
-		OwnerPublicKey: hex.EncodeToString(pubkey.SerializeCompressed()),
-		Value:          int64(value),
+	return &boardingInput{
+		txId:           tx.TxHash(),
+		vout:           vout,
+		boardingPubKey: pubkey,
+		amount:         value,
 	}, nil
 }
 
@@ -447,7 +446,7 @@ func (s *covenantService) startFinalization() {
 	if num > paymentsThreshold {
 		num = paymentsThreshold
 	}
-	payments, _ := s.paymentRequests.pop(num)
+	payments, boardingInputs, _ := s.paymentRequests.pop(num)
 	if _, err := round.RegisterPayments(payments); err != nil {
 		round.Fail(fmt.Errorf("failed to register payments: %s", err))
 		log.WithError(err).Warn("failed to register payments")
@@ -461,7 +460,7 @@ func (s *covenantService) startFinalization() {
 		return
 	}
 
-	unsignedPoolTx, tree, connectorAddress, err := s.builder.BuildPoolTx(s.pubkey, payments, s.minRelayFee, sweptRounds)
+	unsignedPoolTx, tree, connectorAddress, err := s.builder.BuildPoolTx(s.pubkey, payments, boardingInputs, s.minRelayFee, sweptRounds)
 	if err != nil {
 		round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
 		log.WithError(err).Warn("failed to create pool tx")
@@ -530,7 +529,7 @@ func (s *covenantService) finalizeRound() {
 
 	log.Debugf("signing round transaction %s\n", round.Id)
 
-	reverseBoardingInputs := make([]int, 0)
+	boardingInputs := make([]int, 0)
 	roundTx, err := psetv2.NewPsetFromBase64(round.UnsignedTx)
 	if err != nil {
 		log.Debugf("failed to parse round tx: %s", round.UnsignedTx)
@@ -544,18 +543,18 @@ func (s *covenantService) finalizeRound() {
 			if len(in.TapScriptSig) == 0 {
 				err = fmt.Errorf("missing tapscript spend sig for input %d", i)
 				changes = round.Fail(err)
-				log.WithError(err).Warn("missing reverse boarding sig")
+				log.WithError(err).Warn("missing boarding sig")
 				return
 			}
 
-			reverseBoardingInputs = append(reverseBoardingInputs, i)
+			boardingInputs = append(boardingInputs, i)
 		}
 	}
 
 	signedRoundTx := round.UnsignedTx
 
-	if len(reverseBoardingInputs) > 0 {
-		signedRoundTx, err = s.wallet.SignTransactionTapscript(ctx, signedRoundTx, reverseBoardingInputs)
+	if len(boardingInputs) > 0 {
+		signedRoundTx, err = s.wallet.SignTransactionTapscript(ctx, signedRoundTx, boardingInputs)
 		if err != nil {
 			changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
 			log.WithError(err).Warn("failed to sign round tx")

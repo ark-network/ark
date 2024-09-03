@@ -30,7 +30,7 @@ func parseInputs(ins []*arkv1.Input) ([]application.Input, error) {
 			inputs = append(inputs, application.Input{
 				Txid:       input.GetBoardingInput().GetTxid(),
 				Index:      input.GetBoardingInput().GetVout(),
-				Descriptor: &desc,
+				Descriptor: desc,
 			})
 
 			continue

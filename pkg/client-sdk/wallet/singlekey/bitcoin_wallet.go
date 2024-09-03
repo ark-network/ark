@@ -232,14 +232,17 @@ func (w *bitcoinWallet) getAddress(
 		return "", "", "", err
 	}
 
-	descriptorStr := strings.ReplaceAll(data.BoardingDescriptorTemplate, "USER", hex.EncodeToString(schnorr.SerializePubKey(w.walletData.Pubkey)))
+	myPubkeyStr := hex.EncodeToString(schnorr.SerializePubKey(w.walletData.Pubkey))
+	descriptorStr := strings.ReplaceAll(
+		data.BoardingDescriptorTemplate, "USER", myPubkeyStr,
+	)
 
 	desc, err := descriptor.ParseTaprootDescriptor(descriptorStr)
 	if err != nil {
 		return "", "", "", err
 	}
 
-	_, boardingTimeout, err := descriptor.ParseBoardingDescriptor(desc)
+	_, boardingTimeout, err := descriptor.ParseBoardingDescriptor(*desc)
 	if err != nil {
 		return "", "", "", err
 	}

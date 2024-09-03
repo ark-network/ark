@@ -2,13 +2,68 @@ package descriptor
 
 import (
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"strings"
 )
 
 // UnspendableKey is the x-only pubkey of the secp256k1 base point G
 const UnspendableKey = "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+
+func ParseTaprootDescriptor(desc string) (*TaprootDescriptor, error) {
+	desc = strings.ReplaceAll(desc, " ", "")
+
+	if !strings.HasPrefix(desc, "tr(") || !strings.HasSuffix(desc, ")") {
+		return nil, fmt.Errorf("invalid descriptor format")
+	}
+
+	content := desc[3 : len(desc)-1]
+	parts := strings.SplitN(content, ",", 2)
+
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid descriptor format: missing script tree")
+	}
+
+	internalKey, err := parseKey(parts[0])
+	if err != nil {
+		return nil, err
+	}
+
+	scriptTreeStr := parts[1]
+	if !strings.HasPrefix(scriptTreeStr, "{") || !strings.HasSuffix(scriptTreeStr, "}") {
+		return nil, fmt.Errorf("invalid script tree format")
+	}
+	scriptTreeStr = scriptTreeStr[1 : len(scriptTreeStr)-1]
+
+	scriptTree := []Expression{}
+	if scriptTreeStr != "" {
+		scriptParts, err := splitScriptTree(scriptTreeStr)
+		if err != nil {
+			return nil, err
+		}
+		for _, scriptStr := range scriptParts {
+			leaf, err := parseExpression(scriptStr)
+			if err != nil {
+				return nil, err
+			}
+			scriptTree = append(scriptTree, leaf)
+		}
+	}
+
+	return &TaprootDescriptor{
+		InternalKey: internalKey,
+		ScriptTree:  scriptTree,
+	}, nil
+}
+
+// CompileDescriptor compiles a TaprootDescriptor struct back into a descriptor string
+func CompileDescriptor(desc TaprootDescriptor) string {
+	scriptParts := make([]string, len(desc.ScriptTree))
+	for i, leaf := range desc.ScriptTree {
+		scriptParts[i] = leaf.String()
+	}
+	scriptTree := strings.Join(scriptParts, ",")
+	return fmt.Sprintf("tr(%s,{%s})", desc.InternalKey.Hex, scriptTree)
+}
 
 func parseKey(keyStr string) (Key, error) {
 	decoded, err := hex.DecodeString(keyStr)
@@ -63,64 +118,8 @@ func splitScriptTree(scriptTreeStr string) ([]string, error) {
 	}
 
 	if depth != 0 {
-		return nil, errors.New("mismatched parentheses in script tree")
+		return nil, fmt.Errorf("mismatched parentheses in script tree")
 	}
 
 	return result, nil
-}
-
-func ParseTaprootDescriptor(desc string) (TaprootDescriptor, error) {
-	desc = strings.ReplaceAll(desc, " ", "")
-
-	if !strings.HasPrefix(desc, "tr(") || !strings.HasSuffix(desc, ")") {
-		return TaprootDescriptor{}, errors.New("invalid descriptor format")
-	}
-
-	content := desc[3 : len(desc)-1]
-	parts := strings.SplitN(content, ",", 2)
-
-	if len(parts) != 2 {
-		return TaprootDescriptor{}, errors.New("invalid descriptor format: missing script tree")
-	}
-
-	internalKey, err := parseKey(parts[0])
-	if err != nil {
-		return TaprootDescriptor{}, err
-	}
-
-	scriptTreeStr := parts[1]
-	if !strings.HasPrefix(scriptTreeStr, "{") || !strings.HasSuffix(scriptTreeStr, "}") {
-		return TaprootDescriptor{}, errors.New("invalid script tree format")
-	}
-	scriptTreeStr = scriptTreeStr[1 : len(scriptTreeStr)-1]
-
-	scriptTree := []Expression{}
-	if scriptTreeStr != "" {
-		scriptParts, err := splitScriptTree(scriptTreeStr)
-		if err != nil {
-			return TaprootDescriptor{}, err
-		}
-		for _, scriptStr := range scriptParts {
-			leaf, err := parseExpression(scriptStr)
-			if err != nil {
-				return TaprootDescriptor{}, err
-			}
-			scriptTree = append(scriptTree, leaf)
-		}
-	}
-
-	return TaprootDescriptor{
-		InternalKey: internalKey,
-		ScriptTree:  scriptTree,
-	}, nil
-}
-
-// CompileDescriptor compiles a TaprootDescriptor struct back into a descriptor string
-func CompileDescriptor(desc TaprootDescriptor) string {
-	scriptParts := make([]string, len(desc.ScriptTree))
-	for i, leaf := range desc.ScriptTree {
-		scriptParts[i] = leaf.String()
-	}
-	scriptTree := strings.Join(scriptParts, ",")
-	return fmt.Sprintf("tr(%s,{%s})", desc.InternalKey.Hex, scriptTree)
 }

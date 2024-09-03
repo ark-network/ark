@@ -10,7 +10,9 @@ import (
 
 const BoardingDescriptorTemplate = "tr(%s,{ and(pk(%s), pk(%s)), and(older(%d), pk(%s)) })"
 
-func ParseBoardingDescriptor(desc TaprootDescriptor) (user *secp256k1.PublicKey, timeout uint, err error) {
+func ParseBoardingDescriptor(
+	desc TaprootDescriptor,
+) (user *secp256k1.PublicKey, timeout uint, err error) {
 	for _, leaf := range desc.ScriptTree {
 		if andLeaf, ok := leaf.(*And); ok {
 			if first, ok := andLeaf.First.(*Older); ok {

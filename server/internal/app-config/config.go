@@ -129,7 +129,7 @@ func (c *Config) Validate() error {
 
 	if c.BoardingExitDelay < minAllowedSequence {
 		return fmt.Errorf(
-			"invalid reverse boarding exit delay, must at least %d", minAllowedSequence,
+			"invalid boarding exit delay, must at least %d", minAllowedSequence,
 		)
 	}
 
@@ -152,7 +152,7 @@ func (c *Config) Validate() error {
 	if c.BoardingExitDelay%minAllowedSequence != 0 {
 		c.BoardingExitDelay -= c.BoardingExitDelay % minAllowedSequence
 		log.Infof(
-			"reverse boarding exit delay must be a multiple of %d, rounded to %d",
+			"boarding exit delay must be a multiple of %d, rounded to %d",
 			minAllowedSequence, c.BoardingExitDelay,
 		)
 	}

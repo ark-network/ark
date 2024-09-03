@@ -28,11 +28,11 @@ const (
 )
 
 type txBuilder struct {
-	wallet                   ports.WalletService
-	net                      common.Network
-	roundLifetime            int64 // in seconds
-	exitDelay                int64 // in seconds
-	reverseBoardingExitDelay int64 // in seconds
+	wallet            ports.WalletService
+	net               common.Network
+	roundLifetime     int64 // in seconds
+	exitDelay         int64 // in seconds
+	boardingExitDelay int64 // in seconds
 }
 
 func NewTxBuilder(
@@ -40,9 +40,9 @@ func NewTxBuilder(
 	net common.Network,
 	roundLifetime int64,
 	exitDelay int64,
-	reverseBoardingExitDelay int64,
+	boardingExitDelay int64,
 ) ports.TxBuilder {
-	return &txBuilder{wallet, net, roundLifetime, exitDelay, reverseBoardingExitDelay}
+	return &txBuilder{wallet, net, roundLifetime, exitDelay, boardingExitDelay}
 }
 
 func (b *txBuilder) GetBoardingScript(owner, asp *secp256k1.PublicKey) (string, []byte, error) {
@@ -126,7 +126,11 @@ func (b *txBuilder) BuildForfeitTxs(
 }
 
 func (b *txBuilder) BuildPoolTx(
-	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, minRelayFee uint64, sweptRounds []domain.Round,
+	aspPubkey *secp256k1.PublicKey,
+	payments []domain.Payment,
+	boardingInputs []ports.BoardingInput,
+	minRelayFee uint64,
+	sweptRounds []domain.Round,
 	_ ...*secp256k1.PublicKey, // cosigners are not used in the covenant
 ) (poolTx string, congestionTree tree.CongestionTree, connectorAddress string, err error) {
 	// The creation of the tree and the pool tx are tightly coupled:
@@ -160,7 +164,7 @@ func (b *txBuilder) BuildPoolTx(
 	}
 
 	ptx, err := b.createPoolTx(
-		sharedOutputAmount, sharedOutputScript, payments, aspPubkey, connectorAddress, minRelayFee, sweptRounds,
+		sharedOutputAmount, sharedOutputScript, payments, boardingInputs, aspPubkey, connectorAddress, minRelayFee, sweptRounds,
 	)
 	if err != nil {
 		return
@@ -386,8 +390,11 @@ func (b *txBuilder) getLeafScriptAndTree(
 }
 
 func (b *txBuilder) createPoolTx(
-	sharedOutputAmount uint64, sharedOutputScript []byte,
-	payments []domain.Payment, aspPubKey *secp256k1.PublicKey, connectorAddress string, minRelayFee uint64,
+	sharedOutputAmount uint64,
+	sharedOutputScript []byte,
+	payments []domain.Payment,
+	boardingInputs []ports.BoardingInput,
+	aspPubKey *secp256k1.PublicKey, connectorAddress string, minRelayFee uint64,
 	sweptRounds []domain.Round,
 ) (*psetv2.Pset, error) {
 	aspScript, err := p2wpkhScript(aspPubKey, b.onchainNetwork())
@@ -443,10 +450,8 @@ func (b *txBuilder) createPoolTx(
 		})
 	}
 
-	for _, payment := range payments {
-		for _, reverseBoarding := range payment.ReverseBoardingInputs {
-			targetAmount -= uint64(reverseBoarding.Value)
-		}
+	for _, in := range boardingInputs {
+		targetAmount -= in.GetAmount()
 	}
 
 	ctx := context.Background()
@@ -479,57 +484,45 @@ func (b *txBuilder) createPoolTx(
 		return nil, err
 	}
 
-	for _, payment := range payments {
-		for _, reverseBoarding := range payment.ReverseBoardingInputs {
-			if err := updater.AddInputs(
-				[]psetv2.InputArgs{
-					{
-						Txid:    reverseBoarding.Txid,
-						TxIndex: reverseBoarding.VOut,
-					},
+	for _, in := range boardingInputs {
+		if err := updater.AddInputs(
+			[]psetv2.InputArgs{
+				{
+					Txid:    in.GetHash().String(),
+					TxIndex: in.GetIndex(),
 				},
-			); err != nil {
-				return nil, err
-			}
+			},
+		); err != nil {
+			return nil, err
+		}
 
-			index := len(ptx.Inputs) - 1
+		index := len(ptx.Inputs) - 1
 
-			assetBytes, err := elementsutil.AssetHashToBytes(b.onchainNetwork().AssetID)
-			if err != nil {
-				return nil, fmt.Errorf("failed to convert asset to bytes: %s", err)
-			}
+		assetBytes, err := elementsutil.AssetHashToBytes(b.onchainNetwork().AssetID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert asset to bytes: %s", err)
+		}
 
-			valueBytes, err := elementsutil.ValueToBytes(uint64(reverseBoarding.Value))
-			if err != nil {
-				return nil, fmt.Errorf("failed to convert value to bytes: %s", err)
-			}
+		valueBytes, err := elementsutil.ValueToBytes(in.GetAmount())
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert value to bytes: %s", err)
+		}
 
-			ownerPubKeyBytes, err := hex.DecodeString(reverseBoarding.OwnerPublicKey)
-			if err != nil {
-				return nil, fmt.Errorf("failed to decode owner pubkey: %s", err)
-			}
+		_, script, tapLeafProof, err := b.getReverseBoardingTaproot(in.GetBoardingPubkey(), aspPubKey)
+		if err != nil {
+			return nil, err
+		}
 
-			ownerPubKey, err := secp256k1.ParsePubKey(ownerPubKeyBytes)
-			if err != nil {
-				return nil, err
-			}
+		if err := updater.AddInWitnessUtxo(index, transaction.NewTxOutput(assetBytes, valueBytes, script)); err != nil {
+			return nil, err
+		}
 
-			_, script, tapLeafProof, err := b.getReverseBoardingTaproot(ownerPubKey, aspPubKey)
-			if err != nil {
-				return nil, err
-			}
+		if err := updater.AddInTapLeafScript(index, psetv2.NewTapLeafScript(*tapLeafProof, tree.UnspendableKey())); err != nil {
+			return nil, err
+		}
 
-			if err := updater.AddInWitnessUtxo(index, transaction.NewTxOutput(assetBytes, valueBytes, script)); err != nil {
-				return nil, err
-			}
-
-			if err := updater.AddInTapLeafScript(index, psetv2.NewTapLeafScript(*tapLeafProof, tree.UnspendableKey())); err != nil {
-				return nil, err
-			}
-
-			if err := updater.AddInSighashType(index, txscript.SigHashDefault); err != nil {
-				return nil, err
-			}
+		if err := updater.AddInSighashType(index, txscript.SigHashDefault); err != nil {
+			return nil, err
 		}
 	}
 
@@ -911,7 +904,7 @@ func (b *txBuilder) getReverseBoardingTaproot(owner, asp *secp256k1.PublicKey) (
 
 	csvClosure := tree.CSVSigClosure{
 		Pubkey:  owner,
-		Seconds: uint(b.reverseBoardingExitDelay),
+		Seconds: uint(b.boardingExitDelay),
 	}
 
 	multisigLeaf, err := multisigClosure.Leaf()

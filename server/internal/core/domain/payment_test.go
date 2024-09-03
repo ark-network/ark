@@ -23,7 +23,7 @@ var inputs = []domain.Vtxo{
 func TestPayment(t *testing.T) {
 	t.Run("new_payment", func(t *testing.T) {
 		t.Run("vaild", func(t *testing.T) {
-			payment, err := domain.NewPayment(inputs, nil)
+			payment, err := domain.NewPayment(inputs)
 			require.NoError(t, err)
 			require.NotNil(t, payment)
 			require.NotEmpty(t, payment.Id)
@@ -43,7 +43,7 @@ func TestPayment(t *testing.T) {
 			}
 
 			for _, f := range fixtures {
-				payment, err := domain.NewPayment(f.inputs, nil)
+				payment, err := domain.NewPayment(f.inputs)
 				require.EqualError(t, err, f.expectedErr)
 				require.Nil(t, payment)
 			}
@@ -52,7 +52,7 @@ func TestPayment(t *testing.T) {
 
 	t.Run("add_receivers", func(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
-			payment, err := domain.NewPayment(inputs, nil)
+			payment, err := domain.NewPayment(inputs)
 			require.NoError(t, err)
 			require.NotNil(t, payment)
 
@@ -87,18 +87,9 @@ func TestPayment(t *testing.T) {
 					},
 					expectedErr: "receiver amount must be greater than dust",
 				},
-				{
-					receivers: []domain.Receiver{
-						{
-							Pubkey: "030000000000000000000000000000000000000000000000000000000000000001",
-							Amount: 600,
-						},
-					},
-					expectedErr: "input and output amounts mismatch",
-				},
 			}
 
-			payment, err := domain.NewPayment(inputs, nil)
+			payment, err := domain.NewPayment(inputs)
 			require.NoError(t, err)
 			require.NotNil(t, payment)
 

@@ -40,7 +40,7 @@ func (*clArkBitcoinCLI) Balance(ctx *cli.Context) error {
 		return err
 	}
 
-	_, timeoutBoarding, err := descriptor.ParseBoardingDescriptor(desc)
+	_, timeoutBoarding, err := descriptor.ParseBoardingDescriptor(*desc)
 	if err != nil {
 		return err
 	}

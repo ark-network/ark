@@ -2,7 +2,9 @@ package application
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/ark-network/ark/common/descriptor"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
@@ -64,6 +66,30 @@ type WalletStatus struct {
 	IsInitialized bool
 	IsUnlocked    bool
 	IsSynced      bool
+}
+
+type Input struct {
+	Txid       string
+	Index      uint32
+	Descriptor string
+}
+
+func (i Input) IsVtxo() bool {
+	return len(i.Descriptor) <= 0
+}
+
+func (i Input) VtxoKey() domain.VtxoKey {
+	return domain.VtxoKey{
+		Txid: i.Txid,
+		VOut: i.Index,
+	}
+}
+
+func (i Input) GetDescriptor() (*descriptor.TaprootDescriptor, error) {
+	if i.IsVtxo() {
+		return nil, fmt.Errorf("input is not a boarding input")
+	}
+	return descriptor.ParseTaprootDescriptor(i.Descriptor)
 }
 
 type txOutpoint struct {

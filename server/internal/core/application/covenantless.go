@@ -63,7 +63,7 @@ func NewCovenantlessService(
 	scheduler ports.SchedulerService,
 ) (Service, error) {
 	eventsCh := make(chan domain.RoundEvent)
-	paymentRequests := newPaymentsMap(nil)
+	paymentRequests := newPaymentsMap()
 
 	forfeitTxs := newForfeitTxsMap(builder)
 	pubkey, err := walletSvc.GetPubkey(context.Background())
@@ -246,20 +246,15 @@ func (s *covenantlessService) CreateAsyncPayment(
 
 func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []Input) (string, error) {
 	vtxosInputs := make([]domain.VtxoKey, 0)
-	boardingInputs := make([]BoardingInput, 0)
+	boardingInputs := make([]Input, 0)
 
-	for _, in := range inputs {
-		if in.IsVtxo() {
-			vtxosInputs = append(vtxosInputs, in.VtxoKey())
+	for _, input := range inputs {
+		if input.IsVtxo() {
+			vtxosInputs = append(vtxosInputs, input.VtxoKey())
 			continue
 		}
 
-		boardingInput, err := in.AsBoardingInput()
-		if err != nil {
-			return "", err
-		}
-
-		boardingInputs = append(boardingInputs, boardingInput)
+		boardingInputs = append(boardingInputs, input)
 	}
 
 	vtxos := make([]domain.Vtxo, 0)
@@ -313,29 +308,35 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []Input) (s
 		}
 	}
 
-	utxos := make([]domain.BoardingUtxo, 0, len(boardingInputs))
+	utxos := make([]ports.BoardingInput, 0, len(boardingInputs))
 
 	for _, in := range boardingInputs {
-		input, err := s.newReverseBoardingInput(boardingTxs[in.Txid], in.Index, in.TaprootDescriptor)
+		desc, err := in.GetDescriptor()
 		if err != nil {
-			log.WithError(err).Debugf("failed to create reverse boarding input")
-			return "", fmt.Errorf("input %s:%d is not a valid reverse boarding", in.Txid, in.Index)
+			log.WithError(err).Debugf("failed to parse boarding input descriptor")
+			return "", fmt.Errorf("failed to parse descriptor %s for input %s:%d", in.Descriptor, in.Txid, in.Index)
 		}
 
-		utxos = append(utxos, *input)
+		input, err := s.newBoardingInput(boardingTxs[in.Txid], in.Index, *desc)
+		if err != nil {
+			log.WithError(err).Debugf("failed to create boarding input")
+			return "", fmt.Errorf("input %s:%d is not a valid boarding input", in.Txid, in.Index)
+		}
+
+		utxos = append(utxos, input)
 	}
 
-	payment, err := domain.NewPayment(vtxos, utxos)
+	payment, err := domain.NewPayment(vtxos)
 	if err != nil {
 		return "", err
 	}
-	if err := s.paymentRequests.push(*payment); err != nil {
+	if err := s.paymentRequests.push(*payment, utxos); err != nil {
 		return "", err
 	}
 	return payment.Id, nil
 }
 
-func (s *covenantlessService) newReverseBoardingInput(txhex string, vout uint32, desc descriptor.TaprootDescriptor) (*domain.BoardingUtxo, error) {
+func (s *covenantlessService) newBoardingInput(txhex string, vout uint32, desc descriptor.TaprootDescriptor) (ports.BoardingInput, error) {
 	var tx wire.MsgTx
 
 	if err := tx.Deserialize(hex.NewDecoder(strings.NewReader(txhex))); err != nil {
@@ -369,20 +370,18 @@ func (s *covenantlessService) newReverseBoardingInput(txhex string, vout uint32,
 
 	_, expectedScript, err := s.builder.GetBoardingScript(pubkey, s.pubkey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get reverse boarding script: %s", err)
+		return nil, fmt.Errorf("failed to get boarding script: %s", err)
 	}
 
 	if !bytes.Equal(script, expectedScript) {
-		return nil, fmt.Errorf("output script is not a valid reverse boarding")
+		return nil, fmt.Errorf("invalid boarding input output script")
 	}
 
-	return &domain.BoardingUtxo{
-		VtxoKey: domain.VtxoKey{
-			Txid: tx.TxHash().String(),
-			VOut: vout,
-		},
-		OwnerPublicKey: hex.EncodeToString(pubkey.SerializeCompressed()),
-		Value:          out.Value,
+	return &boardingInput{
+		txId:           tx.TxHash(),
+		vout:           vout,
+		boardingPubKey: pubkey,
+		amount:         uint64(out.Value),
 	}, nil
 }
 
@@ -616,7 +615,7 @@ func (s *covenantlessService) startFinalization() {
 	if num > paymentsThreshold {
 		num = paymentsThreshold
 	}
-	payments, cosigners := s.paymentRequests.pop(num)
+	payments, boardingInputs, cosigners := s.paymentRequests.pop(num)
 	if len(payments) > len(cosigners) {
 		err := fmt.Errorf("missing ephemeral key for payments")
 		round.Fail(fmt.Errorf("round aborted: %s", err))
@@ -646,7 +645,7 @@ func (s *covenantlessService) startFinalization() {
 
 	cosigners = append(cosigners, ephemeralKey.PubKey())
 
-	unsignedPoolTx, tree, connectorAddress, err := s.builder.BuildPoolTx(s.pubkey, payments, s.minRelayFee, sweptRounds, cosigners...)
+	unsignedPoolTx, tree, connectorAddress, err := s.builder.BuildPoolTx(s.pubkey, payments, boardingInputs, s.minRelayFee, sweptRounds, cosigners...)
 	if err != nil {
 		round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
 		log.WithError(err).Warn("failed to create pool tx")
@@ -887,7 +886,7 @@ func (s *covenantlessService) finalizeRound() {
 
 	log.Debugf("signing round transaction %s\n", round.Id)
 
-	reverseBoardingInputs := make([]int, 0)
+	boardingInputs := make([]int, 0)
 	roundTx, err := psbt.NewFromRawBytes(strings.NewReader(round.UnsignedTx), true)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to parse round tx: %s", err))
@@ -900,18 +899,18 @@ func (s *covenantlessService) finalizeRound() {
 			if len(in.TaprootScriptSpendSig) == 0 {
 				err = fmt.Errorf("missing tapscript spend sig for input %d", i)
 				changes = round.Fail(err)
-				log.WithError(err).Warn("missing reverse boarding sig")
+				log.WithError(err).Warn("missing boarding sig")
 				return
 			}
 
-			reverseBoardingInputs = append(reverseBoardingInputs, i)
+			boardingInputs = append(boardingInputs, i)
 		}
 	}
 
 	signedRoundTx := round.UnsignedTx
 
-	if len(reverseBoardingInputs) > 0 {
-		signedRoundTx, err = s.wallet.SignTransactionTapscript(ctx, signedRoundTx, reverseBoardingInputs)
+	if len(boardingInputs) > 0 {
+		signedRoundTx, err = s.wallet.SignTransactionTapscript(ctx, signedRoundTx, boardingInputs)
 		if err != nil {
 			changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
 			log.WithError(err).Warn("failed to sign round tx")

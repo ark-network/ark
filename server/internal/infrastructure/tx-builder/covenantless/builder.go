@@ -180,7 +180,12 @@ func (b *txBuilder) BuildForfeitTxs(
 }
 
 func (b *txBuilder) BuildPoolTx(
-	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, minRelayFee uint64, sweptRounds []domain.Round, cosigners ...*secp256k1.PublicKey,
+	aspPubkey *secp256k1.PublicKey,
+	payments []domain.Payment,
+	boardingInputs []ports.BoardingInput,
+	minRelayFee uint64,
+	sweptRounds []domain.Round,
+	cosigners ...*secp256k1.PublicKey,
 ) (poolTx string, congestionTree tree.CongestionTree, connectorAddress string, err error) {
 	var sharedOutputScript []byte
 	var sharedOutputAmount int64
@@ -206,7 +211,7 @@ func (b *txBuilder) BuildPoolTx(
 	}
 
 	ptx, err := b.createPoolTx(
-		aspPubkey, sharedOutputAmount, sharedOutputScript, payments, connectorAddress, minRelayFee, sweptRounds,
+		aspPubkey, sharedOutputAmount, sharedOutputScript, payments, boardingInputs, connectorAddress, minRelayFee, sweptRounds,
 	)
 	if err != nil {
 		return
@@ -526,7 +531,7 @@ func (b *txBuilder) getLeafScriptAndTree(
 func (b *txBuilder) createPoolTx(
 	aspPubKey *secp256k1.PublicKey,
 	sharedOutputAmount int64, sharedOutputScript []byte,
-	payments []domain.Payment, connectorAddress string, minRelayFee uint64,
+	payments []domain.Payment, boardingInputs []ports.BoardingInput, connectorAddress string, minRelayFee uint64,
 	sweptRounds []domain.Round,
 ) (*psbt.Packet, error) {
 	connectorAddr, err := btcutil.DecodeAddress(connectorAddress, b.onchainNetwork())
@@ -584,10 +589,8 @@ func (b *txBuilder) createPoolTx(
 		})
 	}
 
-	for _, payment := range payments {
-		for _, reverseBoarding := range payment.ReverseBoardingInputs {
-			targetAmount -= uint64(reverseBoarding.Value)
-		}
+	for _, input := range boardingInputs {
+		targetAmount -= input.GetAmount()
 	}
 
 	ctx := context.Background()
@@ -654,41 +657,24 @@ func (b *txBuilder) createPoolTx(
 		nextIndex++
 	}
 
-	for _, payment := range payments {
-		for _, reverseBoarding := range payment.ReverseBoardingInputs {
-			txhash, err := chainhash.NewHashFromStr(reverseBoarding.Txid)
-			if err != nil {
-				return nil, err
-			}
+	for _, input := range boardingInputs {
+		ins = append(ins, &wire.OutPoint{
+			Hash:  input.GetHash(),
+			Index: input.GetIndex(),
+		})
+		nSequences = append(nSequences, wire.MaxTxInSequenceNum)
 
-			ins = append(ins, &wire.OutPoint{
-				Hash:  *txhash,
-				Index: reverseBoarding.VOut,
-			})
-			nSequences = append(nSequences, wire.MaxTxInSequenceNum)
-
-			userPubkeyBytes, err := hex.DecodeString(reverseBoarding.OwnerPublicKey)
-			if err != nil {
-				return nil, err
-			}
-
-			userPubkey, err := secp256k1.ParsePubKey(userPubkeyBytes)
-			if err != nil {
-				return nil, err
-			}
-
-			_, script, tapLeaf, err := b.craftReverseBoardingTaproot(userPubkey, aspPubKey)
-			if err != nil {
-				return nil, err
-			}
-
-			reverseBoardingTapLeaf[nextIndex] = tapLeaf
-			witnessUtxos[nextIndex] = &wire.TxOut{
-				Value:    int64(reverseBoarding.Value),
-				PkScript: script,
-			}
-			nextIndex++
+		_, script, tapLeaf, err := b.craftReverseBoardingTaproot(input.GetBoardingPubkey(), aspPubKey)
+		if err != nil {
+			return nil, err
 		}
+
+		reverseBoardingTapLeaf[nextIndex] = tapLeaf
+		witnessUtxos[nextIndex] = &wire.TxOut{
+			Value:    int64(input.GetAmount()),
+			PkScript: script,
+		}
+		nextIndex++
 	}
 
 	ptx, err := psbt.New(ins, outputs, 2, 0, nSequences)
