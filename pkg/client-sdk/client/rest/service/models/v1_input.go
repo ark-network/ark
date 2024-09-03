@@ -18,8 +18,8 @@ import (
 // swagger:model v1Input
 type V1Input struct {
 
-	// descriptor input
-	BoardingInput *V1BoardingInput `json:"BoardingInput,omitempty"`
+	// boarding input
+	BoardingInput *V1BoardingInput `json:"boardingInput,omitempty"`
 
 	// vtxo input
 	VtxoInput *V1VtxoInput `json:"vtxoInput,omitempty"`
@@ -51,9 +51,9 @@ func (m *V1Input) validateBoardingInput(formats strfmt.Registry) error {
 	if m.BoardingInput != nil {
 		if err := m.BoardingInput.Validate(formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("BoardingInput")
+				return ve.ValidateName("boardingInput")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("BoardingInput")
+				return ce.ValidateName("boardingInput")
 			}
 			return err
 		}
@@ -109,9 +109,9 @@ func (m *V1Input) contextValidateBoardingInput(ctx context.Context, formats strf
 
 		if err := m.BoardingInput.ContextValidate(ctx, formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("BoardingInput")
+				return ve.ValidateName("boardingInput")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("BoardingInput")
+				return ce.ValidateName("boardingInput")
 			}
 			return err
 		}

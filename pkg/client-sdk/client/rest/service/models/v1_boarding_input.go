@@ -12,7 +12,7 @@ import (
 	"github.com/go-openapi/swag"
 )
 
-// V1BoardingInput v1 descriptor input
+// V1BoardingInput v1 boarding input
 //
 // swagger:model v1BoardingInput
 type V1BoardingInput struct {
@@ -27,12 +27,12 @@ type V1BoardingInput struct {
 	Vout int64 `json:"vout,omitempty"`
 }
 
-// Validate validates this v1 descriptor input
+// Validate validates this v1 boarding input
 func (m *V1BoardingInput) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-// ContextValidate validates this v1 descriptor input based on context it is used
+// ContextValidate validates this v1 boarding input based on context it is used
 func (m *V1BoardingInput) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	return nil
 }
