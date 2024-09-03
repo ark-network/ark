@@ -5,6 +5,7 @@ use (
 	./client
 	./common
 	./pkg/client-sdk
+	./pkg/descriptor
 	./server
 	./server/pkg/kvdb
 	./server/pkg/macaroons

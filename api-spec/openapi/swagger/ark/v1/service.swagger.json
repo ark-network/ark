@@ -16,6 +16,38 @@
     "application/json"
   ],
   "paths": {
+    "/v1/boarding": {
+      "post": {
+        "operationId": "ArkService_GetBoardingAddress",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetBoardingAddressResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1GetBoardingAddressRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
     "/v1/events": {
       "get": {
         "operationId": "ArkService_GetEventStream",
@@ -323,38 +355,6 @@
         ]
       }
     },
-    "/v1/reverseboarding": {
-      "post": {
-        "operationId": "ArkService_ReverseBoardingAddress",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1ReverseBoardingAddressResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1ReverseBoardingAddressRequest"
-            }
-          }
-        ],
-        "tags": [
-          "ArkService"
-        ]
-      }
-    },
     "/v1/round/id/{id}": {
       "get": {
         "operationId": "ArkService_GetRoundById",
@@ -546,6 +546,21 @@
         }
       }
     },
+    "v1DescriptorInput": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "vout": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "descriptor": {
+          "type": "string"
+        }
+      }
+    },
     "v1FinalizePaymentRequest": {
       "type": "object",
       "properties": {
@@ -564,6 +579,25 @@
     },
     "v1FinalizePaymentResponse": {
       "type": "object"
+    },
+    "v1GetBoardingAddressRequest": {
+      "type": "object",
+      "properties": {
+        "pubkey": {
+          "type": "string"
+        }
+      }
+    },
+    "v1GetBoardingAddressResponse": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "descriptor": {
+          "type": "string"
+        }
+      }
     },
     "v1GetEventStreamResponse": {
       "type": "object",
@@ -610,9 +644,12 @@
           "type": "string",
           "format": "int64"
         },
-        "reverseBoardingExitDelay": {
+        "boardingExitDelay": {
           "type": "string",
           "format": "int64"
+        },
+        "boardingDescriptorTemplate": {
+          "type": "string"
         }
       }
     },
@@ -635,15 +672,11 @@
     "v1Input": {
       "type": "object",
       "properties": {
-        "txid": {
-          "type": "string"
+        "vtxoInput": {
+          "$ref": "#/definitions/v1VtxoInput"
         },
-        "vout": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "reverseBoardingPubkey": {
-          "type": "string"
+        "descriptorInput": {
+          "$ref": "#/definitions/v1DescriptorInput"
         }
       }
     },
@@ -749,22 +782,6 @@
         "id": {
           "type": "string",
           "description": "Mocks wabisabi's credentials."
-        }
-      }
-    },
-    "v1ReverseBoardingAddressRequest": {
-      "type": "object",
-      "properties": {
-        "pubkey": {
-          "type": "string"
-        }
-      }
-    },
-    "v1ReverseBoardingAddressResponse": {
-      "type": "object",
-      "properties": {
-        "address": {
-          "type": "string"
         }
       }
     },
@@ -980,6 +997,18 @@
         },
         "pendingData": {
           "$ref": "#/definitions/v1PendingPayment"
+        }
+      }
+    },
+    "v1VtxoInput": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "vout": {
+          "type": "integer",
+          "format": "int64"
         }
       }
     }

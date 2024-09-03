@@ -1,13 +1,12 @@
 package covenant
 
 import (
-	"encoding/hex"
 	"fmt"
 	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/client/utils"
-	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/pkg/descriptor"
 	"github.com/urfave/cli/v2"
 )
 
@@ -23,7 +22,17 @@ func (c *covenantLiquidCLI) Claim(ctx *cli.Context) error {
 		return err
 	}
 
-	onboardingExitDelay, err := utils.GetOnboardingExitDelay(ctx)
+	boardingDescriptor, err := utils.GetBoardingDescriptor(ctx)
+	if err != nil {
+		return err
+	}
+
+	desc, err := descriptor.ParseTaprootDescriptor(boardingDescriptor)
+	if err != nil {
+		return err
+	}
+
+	_, timeoutBoarding, err := descriptor.ParseBoardingDescriptor(desc)
 	if err != nil {
 		return err
 	}
@@ -38,7 +47,7 @@ func (c *covenantLiquidCLI) Claim(ctx *cli.Context) error {
 	now := time.Now()
 	boardingUtxos := make([]utils.Utxo, 0, len(boardingUtxosFromExplorer))
 	for _, utxo := range boardingUtxosFromExplorer {
-		u := utils.NewUtxo(utxo, uint(onboardingExitDelay))
+		u := utils.NewUtxo(utxo, uint(timeoutBoarding))
 		if u.SpendableAt.Before(now) {
 			continue // cannot claim if onchain spendable
 		}
@@ -73,7 +82,7 @@ func (c *covenantLiquidCLI) Claim(ctx *cli.Context) error {
 	}
 
 	return selfTransferAllPendingPayments(
-		ctx, client, boardingUtxos, receiver,
+		ctx, client, boardingUtxos, receiver, boardingDescriptor,
 	)
 }
 
@@ -82,22 +91,19 @@ func selfTransferAllPendingPayments(
 	client arkv1.ArkServiceClient,
 	onboardingUtxos []utils.Utxo,
 	myself receiver,
+	desc string,
 ) error {
 	inputs := make([]*arkv1.Input, 0, len(onboardingUtxos))
 
-	// if there are onboarding utxos, we need to include the pubkey
-	_, pubkey, _, err := common.DecodeAddress(myself.To)
-	if err != nil {
-		return err
-	}
-
-	mypubkey := hex.EncodeToString(pubkey.SerializeCompressed())
-
 	for _, outpoint := range onboardingUtxos {
 		inputs = append(inputs, &arkv1.Input{
-			Txid:                  outpoint.Txid,
-			Vout:                  outpoint.Vout,
-			ReverseBoardingPubkey: &mypubkey,
+			Input: &arkv1.Input_DescriptorInput{
+				DescriptorInput: &arkv1.DescriptorInput{
+					Txid:        outpoint.Txid,
+					Vout:        outpoint.Vout,
+					Descriptor_: desc,
+				},
+			},
 		})
 	}
 

@@ -25,35 +25,23 @@ func parseInputs(ins []*arkv1.Input) ([]application.Input, error) {
 
 	inputs := make([]application.Input, 0, len(ins))
 	for _, input := range ins {
-
-		vtxoKey := domain.VtxoKey{
-			Txid: input.GetTxid(),
-			VOut: input.GetVout(),
-		}
-
-		reverseBoardingKey := input.GetReverseBoardingPubkey()
-		if reverseBoardingKey == "" {
-			inputs = append(inputs, application.VtxoInput{
-				VtxoKey: vtxoKey,
+		if input.GetDescriptorInput() != nil {
+			desc := input.GetDescriptorInput().GetDescriptor_()
+			inputs = append(inputs, application.Input{
+				Txid:       input.GetDescriptorInput().GetTxid(),
+				Index:      input.GetDescriptorInput().GetVout(),
+				Descriptor: &desc,
 			})
+
 			continue
 		}
 
-		ownerPubkeyBytes, err := hex.DecodeString(reverseBoardingKey)
-		if err != nil {
-			return nil, fmt.Errorf("invalid reverse boarding pubkey")
-		}
-
-		ownerPubkey, err := secp256k1.ParsePubKey(ownerPubkeyBytes)
-		if err != nil {
-			return nil, fmt.Errorf("invalid reverse boarding pubkey")
-		}
-
-		inputs = append(inputs, application.ReverseBoardingInput{
-			VtxoKey:        vtxoKey,
-			OwnerPublicKey: ownerPubkey,
+		inputs = append(inputs, application.Input{
+			Txid:  input.GetVtxoInput().GetTxid(),
+			Index: input.GetVtxoInput().GetVout(),
 		})
 	}
+
 	return inputs, nil
 }
 

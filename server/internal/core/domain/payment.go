@@ -14,11 +14,11 @@ const dustAmount = 450
 type Payment struct {
 	Id                    string
 	Inputs                []Vtxo
-	ReverseBoardingInputs []ReverseBoardingInput
+	ReverseBoardingInputs []BoardingUtxo
 	Receivers             []Receiver
 }
 
-func NewPayment(inputs []Vtxo, reverseBoardings []ReverseBoardingInput) (*Payment, error) {
+func NewPayment(inputs []Vtxo, reverseBoardings []BoardingUtxo) (*Payment, error) {
 	p := &Payment{
 		Id:                    uuid.New().String(),
 		Inputs:                inputs,
@@ -89,7 +89,7 @@ func (p Payment) validate(ignoreOuts bool) error {
 		outAmount += r.Amount
 	}
 	if inAmount != outAmount {
-		return fmt.Errorf("input and output amounts mismatch")
+		return fmt.Errorf("input and output amounts mismatch (output = %d, input = %d)", outAmount, inAmount)
 	}
 	return nil
 }
@@ -141,7 +141,7 @@ type AsyncPaymentTxs struct {
 	UnconditionalForfeitTxs []string
 }
 
-type ReverseBoardingInput struct {
+type BoardingUtxo struct {
 	VtxoKey
 	Value          int64
 	OwnerPublicKey string

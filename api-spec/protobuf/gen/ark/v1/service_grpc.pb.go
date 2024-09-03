@@ -29,7 +29,7 @@ type ArkServiceClient interface {
 	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
 	ListVtxos(ctx context.Context, in *ListVtxosRequest, opts ...grpc.CallOption) (*ListVtxosResponse, error)
 	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error)
-	ReverseBoardingAddress(ctx context.Context, in *ReverseBoardingAddressRequest, opts ...grpc.CallOption) (*ReverseBoardingAddressResponse, error)
+	GetBoardingAddress(ctx context.Context, in *GetBoardingAddressRequest, opts ...grpc.CallOption) (*GetBoardingAddressResponse, error)
 	CreatePayment(ctx context.Context, in *CreatePaymentRequest, opts ...grpc.CallOption) (*CreatePaymentResponse, error)
 	CompletePayment(ctx context.Context, in *CompletePaymentRequest, opts ...grpc.CallOption) (*CompletePaymentResponse, error)
 }
@@ -164,9 +164,9 @@ func (c *arkServiceClient) GetInfo(ctx context.Context, in *GetInfoRequest, opts
 	return out, nil
 }
 
-func (c *arkServiceClient) ReverseBoardingAddress(ctx context.Context, in *ReverseBoardingAddressRequest, opts ...grpc.CallOption) (*ReverseBoardingAddressResponse, error) {
-	out := new(ReverseBoardingAddressResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/ReverseBoardingAddress", in, out, opts...)
+func (c *arkServiceClient) GetBoardingAddress(ctx context.Context, in *GetBoardingAddressRequest, opts ...grpc.CallOption) (*GetBoardingAddressResponse, error) {
+	out := new(GetBoardingAddressResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/GetBoardingAddress", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +206,7 @@ type ArkServiceServer interface {
 	Ping(context.Context, *PingRequest) (*PingResponse, error)
 	ListVtxos(context.Context, *ListVtxosRequest) (*ListVtxosResponse, error)
 	GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error)
-	ReverseBoardingAddress(context.Context, *ReverseBoardingAddressRequest) (*ReverseBoardingAddressResponse, error)
+	GetBoardingAddress(context.Context, *GetBoardingAddressRequest) (*GetBoardingAddressResponse, error)
 	CreatePayment(context.Context, *CreatePaymentRequest) (*CreatePaymentResponse, error)
 	CompletePayment(context.Context, *CompletePaymentRequest) (*CompletePaymentResponse, error)
 }
@@ -248,8 +248,8 @@ func (UnimplementedArkServiceServer) ListVtxos(context.Context, *ListVtxosReques
 func (UnimplementedArkServiceServer) GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetInfo not implemented")
 }
-func (UnimplementedArkServiceServer) ReverseBoardingAddress(context.Context, *ReverseBoardingAddressRequest) (*ReverseBoardingAddressResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ReverseBoardingAddress not implemented")
+func (UnimplementedArkServiceServer) GetBoardingAddress(context.Context, *GetBoardingAddressRequest) (*GetBoardingAddressResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetBoardingAddress not implemented")
 }
 func (UnimplementedArkServiceServer) CreatePayment(context.Context, *CreatePaymentRequest) (*CreatePaymentResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreatePayment not implemented")
@@ -470,20 +470,20 @@ func _ArkService_GetInfo_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ArkService_ReverseBoardingAddress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReverseBoardingAddressRequest)
+func _ArkService_GetBoardingAddress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBoardingAddressRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ArkServiceServer).ReverseBoardingAddress(ctx, in)
+		return srv.(ArkServiceServer).GetBoardingAddress(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/ReverseBoardingAddress",
+		FullMethod: "/ark.v1.ArkService/GetBoardingAddress",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).ReverseBoardingAddress(ctx, req.(*ReverseBoardingAddressRequest))
+		return srv.(ArkServiceServer).GetBoardingAddress(ctx, req.(*GetBoardingAddressRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -572,8 +572,8 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ArkService_GetInfo_Handler,
 		},
 		{
-			MethodName: "ReverseBoardingAddress",
-			Handler:    _ArkService_ReverseBoardingAddress_Handler,
+			MethodName: "GetBoardingAddress",
+			Handler:    _ArkService_GetBoardingAddress_Handler,
 		},
 		{
 			MethodName: "CreatePayment",

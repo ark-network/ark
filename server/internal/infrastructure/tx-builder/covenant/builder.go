@@ -45,7 +45,7 @@ func NewTxBuilder(
 	return &txBuilder{wallet, net, roundLifetime, exitDelay, reverseBoardingExitDelay}
 }
 
-func (b *txBuilder) GetReverseBoardingScript(owner, asp *secp256k1.PublicKey) (string, []byte, error) {
+func (b *txBuilder) GetBoardingScript(owner, asp *secp256k1.PublicKey) (string, []byte, error) {
 	addr, script, _, err := b.getReverseBoardingTaproot(owner, asp)
 	if err != nil {
 		return "", nil, err

@@ -49,21 +49,21 @@ var (
 )
 
 type Config struct {
-	DbType                   string
-	EventDbType              string
-	DbDir                    string
-	DbMigrationPath          string
-	EventDbDir               string
-	RoundInterval            int64
-	Network                  common.Network
-	SchedulerType            string
-	TxBuilderType            string
-	BlockchainScannerType    string
-	WalletAddr               string
-	MinRelayFee              uint64
-	RoundLifetime            int64
-	UnilateralExitDelay      int64
-	ReverseBoardingExitDelay int64
+	DbType                string
+	EventDbType           string
+	DbDir                 string
+	DbMigrationPath       string
+	EventDbDir            string
+	RoundInterval         int64
+	Network               common.Network
+	SchedulerType         string
+	TxBuilderType         string
+	BlockchainScannerType string
+	WalletAddr            string
+	MinRelayFee           uint64
+	RoundLifetime         int64
+	UnilateralExitDelay   int64
+	BoardingExitDelay     int64
 
 	EsploraURL      string
 	NeutrinoPeer    string
@@ -127,7 +127,7 @@ func (c *Config) Validate() error {
 		)
 	}
 
-	if c.ReverseBoardingExitDelay < minAllowedSequence {
+	if c.BoardingExitDelay < minAllowedSequence {
 		return fmt.Errorf(
 			"invalid reverse boarding exit delay, must at least %d", minAllowedSequence,
 		)
@@ -149,11 +149,11 @@ func (c *Config) Validate() error {
 		)
 	}
 
-	if c.ReverseBoardingExitDelay%minAllowedSequence != 0 {
-		c.ReverseBoardingExitDelay -= c.ReverseBoardingExitDelay % minAllowedSequence
+	if c.BoardingExitDelay%minAllowedSequence != 0 {
+		c.BoardingExitDelay -= c.BoardingExitDelay % minAllowedSequence
 		log.Infof(
 			"reverse boarding exit delay must be a multiple of %d, rounded to %d",
-			minAllowedSequence, c.ReverseBoardingExitDelay,
+			minAllowedSequence, c.BoardingExitDelay,
 		)
 	}
 
@@ -290,11 +290,11 @@ func (c *Config) txBuilderService() error {
 	switch c.TxBuilderType {
 	case "covenant":
 		svc = txbuilder.NewTxBuilder(
-			c.wallet, c.Network, c.RoundLifetime, c.UnilateralExitDelay, c.ReverseBoardingExitDelay,
+			c.wallet, c.Network, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay,
 		)
 	case "covenantless":
 		svc = cltxbuilder.NewTxBuilder(
-			c.wallet, c.Network, c.RoundLifetime, c.UnilateralExitDelay, c.ReverseBoardingExitDelay,
+			c.wallet, c.Network, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay,
 		)
 	default:
 		err = fmt.Errorf("unknown tx builder type")
@@ -338,7 +338,7 @@ func (c *Config) schedulerService() error {
 func (c *Config) appService() error {
 	if common.IsLiquid(c.Network) {
 		svc, err := application.NewCovenantService(
-			c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.ReverseBoardingExitDelay,
+			c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay,
 			c.MinRelayFee, c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler,
 		)
 		if err != nil {
@@ -350,7 +350,7 @@ func (c *Config) appService() error {
 	}
 
 	svc, err := application.NewCovenantlessService(
-		c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.ReverseBoardingExitDelay,
+		c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay,
 		c.MinRelayFee, c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler,
 	)
 	if err != nil {

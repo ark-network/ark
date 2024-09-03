@@ -9,6 +9,7 @@ import (
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/client/flags"
 	"github.com/ark-network/ark/client/utils"
+	"github.com/ark-network/ark/pkg/descriptor"
 	"github.com/urfave/cli/v2"
 )
 
@@ -29,7 +30,21 @@ func (*covenantLiquidCLI) Balance(ctx *cli.Context) error {
 	// No need to check for error here becuase this function is called also by getAddress().
 	// nolint:all
 	unilateralExitDelay, _ := utils.GetUnilateralExitDelay(ctx)
-	onboardingExitDelay, _ := utils.GetOnboardingExitDelay(ctx)
+
+	boardingDescriptor, err := utils.GetBoardingDescriptor(ctx)
+	if err != nil {
+		return err
+	}
+
+	desc, err := descriptor.ParseTaprootDescriptor(boardingDescriptor)
+	if err != nil {
+		return err
+	}
+
+	_, timeoutBoarding, err := descriptor.ParseBoardingDescriptor(desc)
+	if err != nil {
+		return err
+	}
 
 	wg := &sync.WaitGroup{}
 	wg.Add(3)
@@ -52,7 +67,7 @@ func (*covenantLiquidCLI) Balance(ctx *cli.Context) error {
 	go func() {
 		defer wg.Done()
 		explorer := utils.NewExplorer(ctx)
-		spendableBalance, lockedBalance, err := explorer.GetDelayedBalance(onboardingAddr, onboardingExitDelay)
+		spendableBalance, lockedBalance, err := explorer.GetDelayedBalance(onboardingAddr, int64(timeoutBoarding))
 		if err != nil {
 			chRes <- balanceRes{0, 0, nil, nil, err}
 			return

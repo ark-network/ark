@@ -10,6 +10,7 @@ import (
 	"github.com/ark-network/ark/client/utils"
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
+	"github.com/ark-network/ark/pkg/descriptor"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/urfave/cli/v2"
 	"github.com/vulpemventures/go-elements/address"
@@ -250,7 +251,17 @@ func coinSelectOnchain(
 	selectedAmount := uint64(0)
 	now := time.Now()
 
-	onboardingExitDelay, err := utils.GetOnboardingExitDelay(ctx)
+	boardingDescriptor, err := utils.GetBoardingDescriptor(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	desc, err := descriptor.ParseTaprootDescriptor(boardingDescriptor)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	_, timeoutBoarding, err := descriptor.ParseBoardingDescriptor(desc)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -266,7 +277,7 @@ func coinSelectOnchain(
 			}
 		}
 
-		utxo := utils.NewUtxo(utxo, uint(onboardingExitDelay))
+		utxo := utils.NewUtxo(utxo, uint(timeoutBoarding))
 
 		if utxo.SpendableAt.Before(now) {
 			utxos = append(utxos, utxo)
@@ -410,7 +421,17 @@ func getAddress(ctx *cli.Context) (offchainAddr, onboardingAddr, redemptionAddr 
 		return
 	}
 
-	onboardingExitDelay, err := utils.GetOnboardingExitDelay(ctx)
+	boardingDescriptor, err := utils.GetBoardingDescriptor(ctx)
+	if err != nil {
+		return
+	}
+
+	desc, err := descriptor.ParseTaprootDescriptor(boardingDescriptor)
+	if err != nil {
+		return
+	}
+
+	_, timeoutBoarding, err := descriptor.ParseBoardingDescriptor(desc)
 	if err != nil {
 		return
 	}
@@ -445,7 +466,7 @@ func getAddress(ctx *cli.Context) (offchainAddr, onboardingAddr, redemptionAddr 
 	}
 
 	onboardingTapKey, _, err := computeVtxoTaprootScript(
-		userPubkey, aspPubkey, uint(onboardingExitDelay),
+		userPubkey, aspPubkey, uint(timeoutBoarding),
 	)
 	if err != nil {
 		return

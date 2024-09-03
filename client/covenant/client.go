@@ -51,13 +51,16 @@ func getVtxos(
 		if v.Swept {
 			continue
 		}
-		vtxos = append(vtxos, vtxo{
-			amount:   v.Receiver.Amount,
-			txid:     v.Outpoint.Txid,
-			vout:     v.Outpoint.Vout,
-			poolTxid: v.PoolTxid,
-			expireAt: expireAt,
-		})
+
+		if v.Outpoint.GetVtxoInput() != nil {
+			vtxos = append(vtxos, vtxo{
+				amount:   v.Receiver.Amount,
+				txid:     v.Outpoint.GetVtxoInput().GetTxid(),
+				vout:     v.Outpoint.GetVtxoInput().GetVout(),
+				poolTxid: v.PoolTxid,
+				expireAt: expireAt,
+			})
+		}
 	}
 
 	if !computeExpiration {

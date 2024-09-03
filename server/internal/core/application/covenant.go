@@ -10,8 +10,11 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/tree"
+	"github.com/ark-network/ark/pkg/descriptor"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -26,13 +29,13 @@ var (
 )
 
 type covenantService struct {
-	network                  common.Network
-	pubkey                   *secp256k1.PublicKey
-	roundLifetime            int64
-	roundInterval            int64
-	unilateralExitDelay      int64
-	reverseBoardingExitDelay int64
-	minRelayFee              uint64
+	network             common.Network
+	pubkey              *secp256k1.PublicKey
+	roundLifetime       int64
+	roundInterval       int64
+	unilateralExitDelay int64
+	boardingExitDelay   int64
+	minRelayFee         uint64
 
 	wallet      ports.WalletService
 	repoManager ports.RepoManager
@@ -52,7 +55,7 @@ type covenantService struct {
 
 func NewCovenantService(
 	network common.Network,
-	roundInterval, roundLifetime, unilateralExitDelay, reverseBoardingExitDelay int64, minRelayFee uint64,
+	roundInterval, roundLifetime, unilateralExitDelay, boardingExitDelay int64, minRelayFee uint64,
 	walletSvc ports.WalletService, repoManager ports.RepoManager,
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	scheduler ports.SchedulerService,
@@ -70,7 +73,7 @@ func NewCovenantService(
 
 	svc := &covenantService{
 		network, pubkey,
-		roundLifetime, roundInterval, unilateralExitDelay, reverseBoardingExitDelay, minRelayFee,
+		roundLifetime, roundInterval, unilateralExitDelay, boardingExitDelay, minRelayFee,
 		walletSvc, repoManager, builder, scanner, sweeper,
 		paymentRequests, forfeitTxs, eventsCh, sync.Mutex{}, nil, nil,
 	}
@@ -118,8 +121,8 @@ func (s *covenantService) Stop() {
 	close(s.eventsCh)
 }
 
-func (s *covenantService) CreateReverseBoardingAddress(ctx context.Context, userPubkey *secp256k1.PublicKey) (string, error) {
-	addr, _, err := s.builder.GetReverseBoardingScript(userPubkey, s.pubkey)
+func (s *covenantService) GetBoardingAddress(ctx context.Context, userPubkey *secp256k1.PublicKey) (string, error) {
+	addr, _, err := s.builder.GetBoardingScript(userPubkey, s.pubkey)
 	if err != nil {
 		return "", err
 	}
@@ -128,18 +131,20 @@ func (s *covenantService) CreateReverseBoardingAddress(ctx context.Context, user
 
 func (s *covenantService) SpendVtxos(ctx context.Context, inputs []Input) (string, error) {
 	vtxosInputs := make([]domain.VtxoKey, 0)
-	reverseBoardingInputs := make([]Input, 0)
+	boardingInputs := make([]BoardingInput, 0)
 
 	for _, in := range inputs {
-		if in.IsReverseBoarding() {
-			reverseBoardingInputs = append(reverseBoardingInputs, in)
+		if in.IsVtxo() {
+			vtxosInputs = append(vtxosInputs, in.VtxoKey())
 			continue
 		}
 
-		vtxosInputs = append(vtxosInputs, domain.VtxoKey{
-			Txid: in.GetTxid(),
-			VOut: in.GetIndex(),
-		})
+		boardingInput, err := in.AsBoardingInput()
+		if err != nil {
+			return "", err
+		}
+
+		boardingInputs = append(boardingInputs, boardingInput)
 	}
 
 	vtxos, err := s.repoManager.Vtxos().GetVtxos(ctx, vtxosInputs)
@@ -160,46 +165,46 @@ func (s *covenantService) SpendVtxos(ctx context.Context, inputs []Input) (strin
 		}
 	}
 
-	reverseBoardingTxs := make(map[string]string, 0) // txid -> txhex
+	boardingTxs := make(map[string]string, 0) // txid -> txhex
 	now := time.Now().Unix()
 
-	for _, in := range reverseBoardingInputs {
-		txid := in.GetTxid()
-		if _, ok := reverseBoardingTxs[txid]; !ok {
-			txhex, err := s.wallet.GetTransaction(ctx, txid)
+	for _, in := range boardingInputs {
+		if _, ok := boardingTxs[in.Txid]; !ok {
+			txhex, err := s.wallet.GetTransaction(ctx, in.Txid)
 			if err != nil {
-				return "", fmt.Errorf("failed to get tx %s: %s", txid, err)
+				return "", fmt.Errorf("failed to get tx %s: %s", in.Txid, err)
 			}
 
-			confirmed, blocktime, err := s.wallet.IsTransactionConfirmed(ctx, txid)
+			confirmed, blocktime, err := s.wallet.IsTransactionConfirmed(ctx, in.Txid)
 			if err != nil {
-				return "", fmt.Errorf("failed to check tx %s: %s", txid, err)
+				return "", fmt.Errorf("failed to check tx %s: %s", in.Txid, err)
 			}
 
 			if !confirmed {
-				return "", fmt.Errorf("tx %s not confirmed", txid)
+				return "", fmt.Errorf("tx %s not confirmed", in.Txid)
 			}
 
-			if blocktime+int64(s.reverseBoardingExitDelay) < now {
-				return "", fmt.Errorf("tx %s expired", txid)
+			if blocktime+int64(s.boardingExitDelay) < now {
+				return "", fmt.Errorf("tx %s expired", in.Txid)
 			}
 
-			reverseBoardingTxs[txid] = txhex
+			boardingTxs[in.Txid] = txhex
 		}
 	}
 
-	boardingInputs := make([]domain.ReverseBoardingInput, 0, len(reverseBoardingInputs))
+	utxos := make([]domain.BoardingUtxo, 0, len(boardingInputs))
 
-	for _, in := range reverseBoardingInputs {
-		input, err := s.newReverseBoardingInput(reverseBoardingTxs[in.GetTxid()], in.GetIndex(), in.GetReverseBoardingPublicKey())
+	for _, in := range boardingInputs {
+		input, err := s.newReverseBoardingInput(boardingTxs[in.Txid], in.Index, in.TaprootDescriptor)
 		if err != nil {
-			return "", fmt.Errorf("input %s:%d is not a valid reverse boarding", in.GetTxid(), in.GetIndex())
+			log.WithError(err).Debugf("failed to create reverse boarding input")
+			return "", fmt.Errorf("input %s:%d is not a valid reverse boarding", in.Txid, in.Index)
 		}
 
-		boardingInputs = append(boardingInputs, *input)
+		utxos = append(utxos, *input)
 	}
 
-	payment, err := domain.NewPayment(vtxos, boardingInputs)
+	payment, err := domain.NewPayment(vtxos, utxos)
 	if err != nil {
 		return "", err
 	}
@@ -209,7 +214,7 @@ func (s *covenantService) SpendVtxos(ctx context.Context, inputs []Input) (strin
 	return payment.Id, nil
 }
 
-func (s *covenantService) newReverseBoardingInput(txhex string, vout uint32, pubkey *secp256k1.PublicKey) (*domain.ReverseBoardingInput, error) {
+func (s *covenantService) newReverseBoardingInput(txhex string, vout uint32, desc descriptor.TaprootDescriptor) (*domain.BoardingUtxo, error) {
 	tx, err := transaction.NewTxFromHex(txhex)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse tx: %s", err)
@@ -226,13 +231,31 @@ func (s *covenantService) newReverseBoardingInput(txhex string, vout uint32, pub
 		return nil, fmt.Errorf("output is confidential")
 	}
 
-	_, expectedScript, err := s.builder.GetReverseBoardingScript(pubkey, s.pubkey)
+	scriptFromDescriptor, err := tree.ComputeOutputScript(desc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compute output script: %s", err)
+	}
+
+	if !bytes.Equal(script, scriptFromDescriptor) {
+		return nil, fmt.Errorf("descriptor does not match script in transaction output")
+	}
+
+	pubkey, timeout, err := descriptor.ParseBoardingDescriptor(desc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse boarding descriptor: %s", err)
+	}
+
+	if timeout != uint(s.boardingExitDelay) {
+		return nil, fmt.Errorf("invalid boarding descriptor, timeout mismatch")
+	}
+
+	_, expectedScript, err := s.builder.GetBoardingScript(pubkey, s.pubkey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get reverse boarding script: %s", err)
 	}
 
 	if !bytes.Equal(script, expectedScript) {
-		return nil, fmt.Errorf("output script is not a valid reverse boarding")
+		return nil, fmt.Errorf("output script mismatch expected script")
 	}
 
 	value, err := elementsutil.ValueFromBytes(out.Value)
@@ -240,7 +263,7 @@ func (s *covenantService) newReverseBoardingInput(txhex string, vout uint32, pub
 		return nil, fmt.Errorf("failed to parse value: %s", err)
 	}
 
-	return &domain.ReverseBoardingInput{
+	return &domain.BoardingUtxo{
 		VtxoKey: domain.VtxoKey{
 			Txid: tx.TxHash().String(),
 			VOut: vout,
@@ -326,13 +349,21 @@ func (s *covenantService) GetInfo(ctx context.Context) (*ServiceInfo, error) {
 	pubkey := hex.EncodeToString(s.pubkey.SerializeCompressed())
 
 	return &ServiceInfo{
-		PubKey:                   pubkey,
-		RoundLifetime:            s.roundLifetime,
-		UnilateralExitDelay:      s.unilateralExitDelay,
-		ReverseBoardingExitDelay: s.reverseBoardingExitDelay,
-		RoundInterval:            s.roundInterval,
-		Network:                  s.network.Name,
-		MinRelayFee:              int64(s.minRelayFee),
+		PubKey:              pubkey,
+		RoundLifetime:       s.roundLifetime,
+		UnilateralExitDelay: s.unilateralExitDelay,
+		BoardingExitDelay:   s.boardingExitDelay,
+		RoundInterval:       s.roundInterval,
+		Network:             s.network.Name,
+		MinRelayFee:         int64(s.minRelayFee),
+		BoardingDescriptorTemplate: fmt.Sprintf(
+			descriptor.BoardingDescriptorTemplate,
+			hex.EncodeToString(tree.UnspendableKey().SerializeCompressed()),
+			hex.EncodeToString(schnorr.SerializePubKey(s.pubkey)),
+			"USER",
+			s.boardingExitDelay,
+			"USER",
+		),
 	}, nil
 }
 

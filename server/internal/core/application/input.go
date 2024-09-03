@@ -1,47 +1,43 @@
 package application
 
 import (
+	"fmt"
+
+	"github.com/ark-network/ark/pkg/descriptor"
 	"github.com/ark-network/ark/server/internal/core/domain"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-type VtxoInput struct {
-	domain.VtxoKey
+type Input struct {
+	Txid       string
+	Index      uint32
+	Descriptor *string
 }
 
-func (i VtxoInput) GetTxid() string {
-	return i.Txid
+type BoardingInput struct {
+	Input
+	descriptor.TaprootDescriptor
 }
 
-func (i VtxoInput) GetIndex() uint32 {
-	return i.VOut
+func (i Input) IsVtxo() bool {
+	return i.Descriptor == nil
 }
 
-func (i VtxoInput) IsReverseBoarding() bool {
-	return false
+func (i Input) VtxoKey() domain.VtxoKey {
+	return domain.VtxoKey{
+		Txid: i.Txid,
+		VOut: i.Index,
+	}
 }
 
-func (i VtxoInput) GetReverseBoardingPublicKey() *secp256k1.PublicKey {
-	return nil
-}
+func (i Input) AsBoardingInput() (BoardingInput, error) {
+	if i.Descriptor == nil {
+		return BoardingInput{}, fmt.Errorf("input is not a boarding input")
+	}
 
-type ReverseBoardingInput struct {
-	domain.VtxoKey
-	OwnerPublicKey *secp256k1.PublicKey
-}
+	tapDescriptor, err := descriptor.ParseTaprootDescriptor(*i.Descriptor)
+	if err != nil {
+		return BoardingInput{}, err
+	}
 
-func (i ReverseBoardingInput) GetTxid() string {
-	return i.Txid
-}
-
-func (i ReverseBoardingInput) GetIndex() uint32 {
-	return i.VOut
-}
-
-func (i ReverseBoardingInput) IsReverseBoarding() bool {
-	return true
-}
-
-func (i ReverseBoardingInput) GetReverseBoardingPublicKey() *secp256k1.PublicKey {
-	return i.OwnerPublicKey
+	return BoardingInput{i, tapDescriptor}, nil
 }

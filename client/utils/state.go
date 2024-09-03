@@ -7,8 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/ark-network/ark/common"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/urfave/cli/v2"
 )
@@ -18,7 +20,7 @@ const (
 	ASP_PUBKEY            = "asp_public_key"
 	ROUND_LIFETIME        = "round_lifetime"
 	UNILATERAL_EXIT_DELAY = "unilateral_exit_delay"
-	ONBOARDING_EXIT_DELAY = "onboarding_exit_delay"
+	BOARDING_TEMPLATE     = "boarding_template"
 	ENCRYPTED_PRVKEY      = "encrypted_private_key"
 	PASSWORD_HASH         = "password_hash"
 	PUBKEY                = "public_key"
@@ -35,7 +37,6 @@ var initialState = map[string]string{
 	ASP_PUBKEY:            "",
 	ROUND_LIFETIME:        "",
 	UNILATERAL_EXIT_DELAY: "",
-	ONBOARDING_EXIT_DELAY: "",
 	ENCRYPTED_PRVKEY:      "",
 	PASSWORD_HASH:         "",
 	PUBKEY:                "",
@@ -111,23 +112,25 @@ func GetUnilateralExitDelay(ctx *cli.Context) (int64, error) {
 	return int64(redeemDelay), nil
 }
 
-func GetOnboardingExitDelay(ctx *cli.Context) (int64, error) {
+func GetBoardingDescriptor(ctx *cli.Context) (string, error) {
 	state, err := GetState(ctx)
 	if err != nil {
-		return -1, err
+		return "", err
 	}
 
-	delay := state[ONBOARDING_EXIT_DELAY]
-	if len(delay) <= 0 {
-		return -1, fmt.Errorf("missing onboarding exit delay")
-	}
-
-	onboardingDelay, err := strconv.Atoi(delay)
+	pubkey, err := GetWalletPublicKey(ctx)
 	if err != nil {
-		return -1, err
+		return "", err
 	}
 
-	return int64(onboardingDelay), nil
+	template := state[BOARDING_TEMPLATE]
+	if len(template) <= 0 {
+		return "", fmt.Errorf("missing boarding descriptor template")
+	}
+
+	pubkeyhex := hex.EncodeToString(schnorr.SerializePubKey(pubkey))
+
+	return strings.ReplaceAll(template, "USER", pubkeyhex), nil
 }
 
 func GetWalletPublicKey(ctx *cli.Context) (*secp256k1.PublicKey, error) {

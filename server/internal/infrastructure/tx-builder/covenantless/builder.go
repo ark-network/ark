@@ -475,7 +475,7 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 	}, nil
 }
 
-func (b *txBuilder) GetReverseBoardingScript(userPubkey, aspPubkey *secp256k1.PublicKey) (string, []byte, error) {
+func (b *txBuilder) GetBoardingScript(userPubkey, aspPubkey *secp256k1.PublicKey) (string, []byte, error) {
 	addr, script, _, err := b.craftReverseBoardingTaproot(userPubkey, aspPubkey)
 	if err != nil {
 		return "", nil, err

@@ -65,9 +65,9 @@ service ArkService {
       get: "/v1/info"
     };
   }
-  rpc ReverseBoardingAddress(ReverseBoardingAddressRequest) returns (ReverseBoardingAddressResponse) {
+  rpc GetBoardingAddress(GetBoardingAddressRequest) returns (GetBoardingAddressResponse) {
     option (google.api.http) = {
-      post: "/v1/reverseboarding"
+      post: "/v1/boarding"
       body: "*"
     };
   };
@@ -100,13 +100,13 @@ message CompletePaymentRequest {
 }
 message CompletePaymentResponse {}
 
-message ReverseBoardingAddressRequest {
+message GetBoardingAddressRequest {
   string pubkey = 1;
 }
 
-message ReverseBoardingAddressResponse {
+message GetBoardingAddressResponse {
   string address = 1;
-
+  string descriptor = 2;
 }
 
 message RegisterPaymentRequest {
@@ -188,7 +188,8 @@ message GetInfoResponse {
   int64 round_interval = 4;
   string network = 5;
   int64 min_relay_fee = 6;
-  int64 reverse_boarding_exit_delay = 7;
+  int64 boarding_exit_delay = 7;
+  string boarding_descriptor_template = 8;
 }
 
 // EVENT TYPES
@@ -243,10 +244,22 @@ message Round {
   RoundStage stage = 8;
 }
 
-message Input {
+message VtxoInput {
   string txid = 1;
   uint32 vout = 2;
-  optional string reverse_boarding_pubkey = 3;
+}
+
+message DescriptorInput {
+  string txid = 1;
+  uint32 vout = 2;
+  string descriptor = 3;
+}
+
+message Input {
+  oneof input {
+    VtxoInput vtxo_input = 1;
+    DescriptorInput descriptor_input = 2;
+  }
 }
 
 message Output {
