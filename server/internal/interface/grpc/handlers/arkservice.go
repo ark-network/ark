@@ -349,7 +349,6 @@ func (h *handler) GetInfo(ctx context.Context, req *arkv1.GetInfoRequest) (*arkv
 		RoundInterval:              info.RoundInterval,
 		Network:                    info.Network,
 		MinRelayFee:                info.MinRelayFee,
-		BoardingExitDelay:          info.BoardingExitDelay,
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 	}, nil
 }

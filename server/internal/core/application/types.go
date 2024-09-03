@@ -54,7 +54,6 @@ type ServiceInfo struct {
 	PubKey                     string
 	RoundLifetime              int64
 	UnilateralExitDelay        int64
-	BoardingExitDelay          int64
 	RoundInterval              int64
 	Network                    string
 	MinRelayFee                int64

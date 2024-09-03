@@ -188,8 +188,7 @@ message GetInfoResponse {
   int64 round_interval = 4;
   string network = 5;
   int64 min_relay_fee = 6;
-  int64 boarding_exit_delay = 7;
-  string boarding_descriptor_template = 8;
+  string boarding_descriptor_template = 7;
 }
 
 // EVENT TYPES

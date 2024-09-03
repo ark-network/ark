@@ -453,7 +453,6 @@ func (s *covenantlessService) GetInfo(ctx context.Context) (*ServiceInfo, error)
 		PubKey:              pubkey,
 		RoundLifetime:       s.roundLifetime,
 		UnilateralExitDelay: s.unilateralExitDelay,
-		BoardingExitDelay:   s.boardingExitDelay,
 		RoundInterval:       s.roundInterval,
 		Network:             s.network.Name,
 		MinRelayFee:         int64(s.minRelayFee),
