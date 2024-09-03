@@ -61,7 +61,7 @@ func TestSendOffchain(t *testing.T) {
 
 	require.NoError(t, json.Unmarshal([]byte(receiveStr), &receive))
 
-	_, err = utils.RunCommand("nigiri", "faucet", "--liquid", receive.Onboarding)
+	_, err = utils.RunCommand("nigiri", "faucet", "--liquid", receive.Boarding)
 	require.NoError(t, err)
 
 	time.Sleep(5 * time.Second)
@@ -88,7 +88,7 @@ func TestUnilateralExit(t *testing.T) {
 
 	require.NoError(t, json.Unmarshal([]byte(receiveStr), &receive))
 
-	_, err = utils.RunCommand("nigiri", "faucet", "--liquid", receive.Onboarding)
+	_, err = utils.RunCommand("nigiri", "faucet", "--liquid", receive.Boarding)
 	require.NoError(t, err)
 
 	time.Sleep(5 * time.Second)
@@ -129,7 +129,7 @@ func TestCollaborativeExit(t *testing.T) {
 
 	require.NoError(t, json.Unmarshal([]byte(receiveStr), &receive))
 
-	_, err = utils.RunCommand("nigiri", "faucet", "--liquid", receive.Onboarding)
+	_, err = utils.RunCommand("nigiri", "faucet", "--liquid", receive.Boarding)
 	require.NoError(t, err)
 
 	time.Sleep(5 * time.Second)

@@ -25,14 +25,14 @@ const dust = 450
 type clArkBitcoinCLI struct{}
 
 func (c *clArkBitcoinCLI) Receive(ctx *cli.Context) error {
-	offchainAddr, onboardingAddr, _, err := getAddress(ctx)
+	offchainAddr, boardingAddr, _, err := getAddress(ctx)
 	if err != nil {
 		return err
 	}
 
 	return utils.PrintJSON(map[string]interface{}{
-		"offchain_address":   offchainAddr,
-		"onboarding_address": onboardingAddr.EncodeAddress(),
+		"offchain_address": offchainAddr,
+		"boarding_address": boardingAddr.EncodeAddress(),
 	})
 }
 
@@ -221,12 +221,12 @@ func coinSelectOnchain(
 	ctx *cli.Context,
 	explorer utils.Explorer, targetAmount uint64, exclude []utils.Utxo,
 ) ([]utils.Utxo, uint64, error) {
-	_, onboardingAddr, redemptionAddr, err := getAddress(ctx)
+	_, boardingAddr, redemptionAddr, err := getAddress(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	onboardingUtxoFromExplorer, err := explorer.GetUtxos(onboardingAddr.EncodeAddress())
+	boardingUtxosFromExplorer, err := explorer.GetUtxos(boardingAddr.EncodeAddress())
 	if err != nil {
 		return nil, 0, err
 	}
@@ -250,7 +250,7 @@ func coinSelectOnchain(
 		return nil, 0, err
 	}
 
-	for _, utxo := range onboardingUtxoFromExplorer {
+	for _, utxo := range boardingUtxosFromExplorer {
 		if selectedAmount >= targetAmount {
 			break
 		}
@@ -392,7 +392,7 @@ func decodeReceiverAddress(addr string) (
 	return true, pkscript, nil, nil
 }
 
-func getAddress(ctx *cli.Context) (offchainAddr string, onboardingAddr, redemptionAddr btcutil.Address, err error) {
+func getAddress(ctx *cli.Context) (offchainAddr string, boardingAddr, redemptionAddr btcutil.Address, err error) {
 	userPubkey, err := utils.GetWalletPublicKey(ctx)
 	if err != nil {
 		return
@@ -450,20 +450,20 @@ func getAddress(ctx *cli.Context) (offchainAddr string, onboardingAddr, redempti
 		return
 	}
 
-	onboardingTapKey, _, err := computeVtxoTaprootScript(
+	boardingTapKey, _, err := computeVtxoTaprootScript(
 		userPubkey, aspPubkey, uint(timeoutBoarding),
 	)
 	if err != nil {
 		return
 	}
 
-	onboardingP2TR, err := btcutil.NewAddressTaproot(
-		schnorr.SerializePubKey(onboardingTapKey),
+	boardingP2TR, err := btcutil.NewAddressTaproot(
+		schnorr.SerializePubKey(boardingTapKey),
 		&netParams,
 	)
 
 	redemptionAddr = redemptionP2TR
-	onboardingAddr = onboardingP2TR
+	boardingAddr = boardingP2TR
 	offchainAddr = arkAddr
 
 	return

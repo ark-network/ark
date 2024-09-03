@@ -22,7 +22,7 @@ func (*covenantLiquidCLI) Balance(ctx *cli.Context) error {
 	}
 	defer cancel()
 
-	offchainAddr, onboardingAddr, redemptionAddr, err := getAddress(ctx)
+	offchainAddr, boardingAddr, redemptionAddr, err := getAddress(ctx)
 	if err != nil {
 		return err
 	}
@@ -67,7 +67,7 @@ func (*covenantLiquidCLI) Balance(ctx *cli.Context) error {
 	go func() {
 		defer wg.Done()
 		explorer := utils.NewExplorer(ctx)
-		spendableBalance, lockedBalance, err := explorer.GetDelayedBalance(onboardingAddr, int64(timeoutBoarding))
+		spendableBalance, lockedBalance, err := explorer.GetDelayedBalance(boardingAddr, int64(timeoutBoarding))
 		if err != nil {
 			chRes <- balanceRes{0, 0, nil, nil, err}
 			return

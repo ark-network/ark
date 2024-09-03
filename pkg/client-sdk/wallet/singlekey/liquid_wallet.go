@@ -41,42 +41,42 @@ func NewLiquidWallet(
 func (w *liquidWallet) GetAddresses(
 	ctx context.Context,
 ) ([]string, []string, []string, error) {
-	offchainAddr, onboardingAddr, redemptionAddr, err := w.getAddress(ctx)
+	offchainAddr, boardingAddr, redemptionAddr, err := w.getAddress(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
 	offchainAddrs := []string{offchainAddr}
-	onboardingAddrs := []string{onboardingAddr}
+	boardingAddrs := []string{boardingAddr}
 	redemptionAddrs := []string{redemptionAddr}
-	return offchainAddrs, onboardingAddrs, redemptionAddrs, nil
+	return offchainAddrs, boardingAddrs, redemptionAddrs, nil
 }
 
 func (w *liquidWallet) NewAddress(
 	ctx context.Context, _ bool,
 ) (string, string, error) {
-	offchainAddr, onboardingAddr, _, err := w.getAddress(ctx)
+	offchainAddr, boardingAddr, _, err := w.getAddress(ctx)
 	if err != nil {
 		return "", "", err
 	}
-	return offchainAddr, onboardingAddr, nil
+	return offchainAddr, boardingAddr, nil
 }
 
 func (w *liquidWallet) NewAddresses(
 	ctx context.Context, _ bool, num int,
 ) ([]string, []string, error) {
-	offchainAddr, onboardingAddr, _, err := w.getAddress(ctx)
+	offchainAddr, boardingAddr, _, err := w.getAddress(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	offchainAddrs := make([]string, 0, num)
-	onboardingAddrs := make([]string, 0, num)
+	boardingAddrs := make([]string, 0, num)
 	for i := 0; i < num; i++ {
 		offchainAddrs = append(offchainAddrs, offchainAddr)
-		onboardingAddrs = append(onboardingAddrs, onboardingAddr)
+		boardingAddrs = append(boardingAddrs, boardingAddr)
 	}
-	return offchainAddrs, onboardingAddrs, nil
+	return offchainAddrs, boardingAddrs, nil
 }
 
 func (s *liquidWallet) SignTransaction(
@@ -264,12 +264,12 @@ func (w *liquidWallet) getAddress(
 		return "", "", "", err
 	}
 
-	_, _, _, onboardingAddr, err := tree.ComputeVtxoTaprootScript(
+	_, _, _, boardingAddr, err := tree.ComputeVtxoTaprootScript(
 		w.walletData.Pubkey, data.AspPubkey, boardingTimeout, liquidNet,
 	)
 	if err != nil {
 		return "", "", "", err
 	}
 
-	return offchainAddr, onboardingAddr, redemptionAddr, nil
+	return offchainAddr, boardingAddr, redemptionAddr, nil
 }

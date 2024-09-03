@@ -19,7 +19,7 @@ func (c *clArkBitcoinCLI) Claim(ctx *cli.Context) error {
 	}
 	defer cancel()
 
-	offchainAddr, onboardingAddr, _, err := getAddress(ctx)
+	offchainAddr, boardingAddr, _, err := getAddress(ctx)
 	if err != nil {
 		return err
 	}
@@ -41,7 +41,7 @@ func (c *clArkBitcoinCLI) Claim(ctx *cli.Context) error {
 
 	explorer := utils.NewExplorer(ctx)
 
-	boardingUtxosFromExplorer, err := explorer.GetUtxos(onboardingAddr.EncodeAddress())
+	boardingUtxosFromExplorer, err := explorer.GetUtxos(boardingAddr.EncodeAddress())
 	if err != nil {
 		return err
 	}
@@ -87,7 +87,7 @@ func (c *clArkBitcoinCLI) Claim(ctx *cli.Context) error {
 	if len(ctx.String("password")) == 0 {
 		if ok := askForConfirmation(
 			fmt.Sprintf(
-				"claim %d satoshis from %d pending payments and %d onboarding utxos",
+				"claim %d satoshis from %d pending payments and %d boarding utxos",
 				pendingBalance, len(pendingVtxos), len(boardingUtxos),
 			),
 		); !ok {
@@ -104,11 +104,11 @@ func selfTransferAllPendingPayments(
 	ctx *cli.Context,
 	client arkv1.ArkServiceClient,
 	pendingVtxos []vtxo,
-	onboardingUtxos []utils.Utxo,
+	boardingUtxos []utils.Utxo,
 	myself receiver,
 	desc string,
 ) error {
-	inputs := make([]*arkv1.Input, 0, len(pendingVtxos)+len(onboardingUtxos))
+	inputs := make([]*arkv1.Input, 0, len(pendingVtxos)+len(boardingUtxos))
 
 	for _, coin := range pendingVtxos {
 		inputs = append(inputs, &arkv1.Input{
@@ -121,8 +121,8 @@ func selfTransferAllPendingPayments(
 		})
 	}
 
-	if len(onboardingUtxos) > 0 {
-		for _, outpoint := range onboardingUtxos {
+	if len(boardingUtxos) > 0 {
+		for _, outpoint := range boardingUtxos {
 			inputs = append(inputs, &arkv1.Input{
 				Input: &arkv1.Input_BoardingInput{
 					BoardingInput: &arkv1.BoardingInput{
@@ -175,7 +175,7 @@ func selfTransferAllPendingPayments(
 
 	poolTxID, err := handleRoundStream(
 		ctx, client, registerResponse.GetId(), pendingVtxos,
-		len(onboardingUtxos) > 0, secKey, receiversOutput, ephemeralKey,
+		len(boardingUtxos) > 0, secKey, receiversOutput, ephemeralKey,
 	)
 	if err != nil {
 		return err

@@ -203,12 +203,12 @@ func (a *arkClient) IsLocked(ctx context.Context) bool {
 }
 
 func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
-	offchainAddr, onboardingAddr, err := a.wallet.NewAddress(ctx, false)
+	offchainAddr, boardingAddr, err := a.wallet.NewAddress(ctx, false)
 	if err != nil {
 		return "", "", err
 	}
 
-	return offchainAddr, onboardingAddr, nil
+	return offchainAddr, boardingAddr, nil
 }
 
 func (a *arkClient) ListVtxos(

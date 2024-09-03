@@ -41,42 +41,42 @@ func NewBitcoinWallet(
 func (w *bitcoinWallet) GetAddresses(
 	ctx context.Context,
 ) ([]string, []string, []string, error) {
-	offchainAddr, onboardingAddr, redemptionAddr, err := w.getAddress(ctx)
+	offchainAddr, boardingAddr, redemptionAddr, err := w.getAddress(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
 	offchainAddrs := []string{offchainAddr}
-	onboardingAddrs := []string{onboardingAddr}
+	boardingAddrs := []string{boardingAddr}
 	redemptionAddrs := []string{redemptionAddr}
-	return offchainAddrs, onboardingAddrs, redemptionAddrs, nil
+	return offchainAddrs, boardingAddrs, redemptionAddrs, nil
 }
 
 func (w *bitcoinWallet) NewAddress(
 	ctx context.Context, _ bool,
 ) (string, string, error) {
-	offchainAddr, onboardingAddr, _, err := w.getAddress(ctx)
+	offchainAddr, boardingAddr, _, err := w.getAddress(ctx)
 	if err != nil {
 		return "", "", err
 	}
-	return offchainAddr, onboardingAddr, nil
+	return offchainAddr, boardingAddr, nil
 }
 
 func (w *bitcoinWallet) NewAddresses(
 	ctx context.Context, _ bool, num int,
 ) ([]string, []string, error) {
-	offchainAddr, onboardingAddr, _, err := w.getAddress(ctx)
+	offchainAddr, boardingAddr, _, err := w.getAddress(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	offchainAddrs := make([]string, 0, num)
-	onboardingAddrs := make([]string, 0, num)
+	boardingAddrs := make([]string, 0, num)
 	for i := 0; i < num; i++ {
 		offchainAddrs = append(offchainAddrs, offchainAddr)
-		onboardingAddrs = append(onboardingAddrs, onboardingAddr)
+		boardingAddrs = append(boardingAddrs, boardingAddr)
 	}
-	return offchainAddrs, onboardingAddrs, nil
+	return offchainAddrs, boardingAddrs, nil
 }
 
 func (s *bitcoinWallet) SignTransaction(
@@ -247,20 +247,20 @@ func (w *bitcoinWallet) getAddress(
 		return "", "", "", err
 	}
 
-	onboardingTapKey, _, err := bitcointree.ComputeVtxoTaprootScript(
+	boardingTapKey, _, err := bitcointree.ComputeVtxoTaprootScript(
 		w.walletData.Pubkey, data.AspPubkey, boardingTimeout,
 	)
 	if err != nil {
 		return "", "", "", err
 	}
 
-	onboardingAddr, err := btcutil.NewAddressTaproot(
-		schnorr.SerializePubKey(onboardingTapKey),
+	boardingAddr, err := btcutil.NewAddressTaproot(
+		schnorr.SerializePubKey(boardingTapKey),
 		&netParams,
 	)
 	if err != nil {
 		return "", "", "", err
 	}
 
-	return offchainAddr, onboardingAddr.EncodeAddress(), redemptionAddr.EncodeAddress(), nil
+	return offchainAddr, boardingAddr.EncodeAddress(), redemptionAddr.EncodeAddress(), nil
 }

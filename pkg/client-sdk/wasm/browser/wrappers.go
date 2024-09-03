@@ -145,13 +145,13 @@ func ReceiveWrapper() js.Func {
 		if arkSdkClient == nil {
 			return nil, errors.New("ARK SDK client is not initialized")
 		}
-		offchainAddr, onboardingAddr, err := arkSdkClient.Receive(context.Background())
+		offchainAddr, boardingAddr, err := arkSdkClient.Receive(context.Background())
 		if err != nil {
 			return nil, err
 		}
 		result := map[string]interface{}{
-			"offchainAddr":   offchainAddr,
-			"onboardingAddr": onboardingAddr,
+			"offchainAddr": offchainAddr,
+			"boardingAddr": boardingAddr,
 		}
 		return js.ValueOf(result), nil
 	})

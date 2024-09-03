@@ -17,7 +17,7 @@ func (c *covenantLiquidCLI) Claim(ctx *cli.Context) error {
 	}
 	defer cancel()
 
-	offchainAddr, onboardingAddr, _, err := getAddress(ctx)
+	offchainAddr, boardingAddr, _, err := getAddress(ctx)
 	if err != nil {
 		return err
 	}
@@ -39,7 +39,7 @@ func (c *covenantLiquidCLI) Claim(ctx *cli.Context) error {
 
 	explorer := utils.NewExplorer(ctx)
 
-	boardingUtxosFromExplorer, err := explorer.GetUtxos(onboardingAddr)
+	boardingUtxosFromExplorer, err := explorer.GetUtxos(boardingAddr)
 	if err != nil {
 		return err
 	}
@@ -62,7 +62,7 @@ func (c *covenantLiquidCLI) Claim(ctx *cli.Context) error {
 	}
 
 	if pendingBalance == 0 {
-		return fmt.Errorf("no onboarding utxos to claim")
+		return fmt.Errorf("no boarding utxos to claim")
 	}
 
 	receiver := receiver{
@@ -73,7 +73,7 @@ func (c *covenantLiquidCLI) Claim(ctx *cli.Context) error {
 	if len(ctx.String("password")) == 0 {
 		if ok := askForConfirmation(
 			fmt.Sprintf(
-				"claim %d satoshis from %d onboarding utxos",
+				"claim %d satoshis from %d boarding utxos",
 				pendingBalance, len(boardingUtxos),
 			),
 		); !ok {
@@ -89,13 +89,13 @@ func (c *covenantLiquidCLI) Claim(ctx *cli.Context) error {
 func selfTransferAllPendingPayments(
 	ctx *cli.Context,
 	client arkv1.ArkServiceClient,
-	onboardingUtxos []utils.Utxo,
+	boardingUtxos []utils.Utxo,
 	myself receiver,
 	desc string,
 ) error {
-	inputs := make([]*arkv1.Input, 0, len(onboardingUtxos))
+	inputs := make([]*arkv1.Input, 0, len(boardingUtxos))
 
-	for _, outpoint := range onboardingUtxos {
+	for _, outpoint := range boardingUtxos {
 		inputs = append(inputs, &arkv1.Input{
 			Input: &arkv1.Input_BoardingInput{
 				BoardingInput: &arkv1.BoardingInput{
@@ -136,7 +136,7 @@ func selfTransferAllPendingPayments(
 
 	poolTxID, err := handleRoundStream(
 		ctx, client, registerResponse.GetId(), make([]vtxo, 0),
-		len(onboardingUtxos) > 0, secKey, receiversOutput,
+		len(boardingUtxos) > 0, secKey, receiversOutput,
 	)
 	if err != nil {
 		return err

@@ -38,12 +38,12 @@ func main() {
 	defer aliceArkClient.Lock(ctx, password)
 
 	log.Info("alice is acquiring onchain funds...")
-	_, aliceOnboardingAddr, err := aliceArkClient.Receive(ctx)
+	_, aliceBoardingAddr, err := aliceArkClient.Receive(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if _, err := runCommand("nigiri", "faucet", "--liquid", aliceOnboardingAddr); err != nil {
+	if _, err := runCommand("nigiri", "faucet", "--liquid", aliceBoardingAddr); err != nil {
 		log.Fatal(err)
 	}
 

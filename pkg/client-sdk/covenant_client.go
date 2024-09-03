@@ -138,7 +138,7 @@ func LoadCovenantClientWithWallet(
 func (a *covenantArkClient) Balance(
 	ctx context.Context, computeVtxoExpiration bool,
 ) (*Balance, error) {
-	offchainAddrs, onboardingAddrs, redeemAddrs, err := a.wallet.GetAddresses(ctx)
+	offchainAddrs, boardingAddrs, redeemAddrs, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +150,7 @@ func (a *covenantArkClient) Balance(
 	chRes := make(chan balanceRes, nbWorkers*len(offchainAddrs))
 	for i := range offchainAddrs {
 		offchainAddr := offchainAddrs[i]
-		onboardingAddr := onboardingAddrs[i]
+		boardingAddr := boardingAddrs[i]
 		redeemAddr := redeemAddrs[i]
 
 		go func(addr string) {
@@ -187,7 +187,7 @@ func (a *covenantArkClient) Balance(
 			}
 		}
 
-		go getDelayedBalance(onboardingAddr)
+		go getDelayedBalance(boardingAddr)
 		go getDelayedBalance(redeemAddr)
 	}
 
@@ -510,7 +510,7 @@ func (a *covenantArkClient) Claim(ctx context.Context) (string, error) {
 }
 
 func (a *covenantArkClient) getClaimableBoardingUtxos(ctx context.Context) ([]explorer.Utxo, error) {
-	offchainAddrs, onboardingAddrs, _, err := a.wallet.GetAddresses(ctx)
+	offchainAddrs, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -537,7 +537,7 @@ func (a *covenantArkClient) getClaimableBoardingUtxos(ctx context.Context) ([]ex
 		return nil, err
 	}
 
-	for _, addr := range onboardingAddrs {
+	for _, addr := range boardingAddrs {
 		boardingUtxos, err := a.explorer.GetUtxos(addr)
 		if err != nil {
 			return nil, err
@@ -1144,7 +1144,7 @@ func (a *covenantArkClient) signForfeitTx(
 func (a *covenantArkClient) coinSelectOnchain(
 	ctx context.Context, targetAmount uint64, exclude []explorer.Utxo,
 ) ([]explorer.Utxo, uint64, error) {
-	offchainAddrs, onboardingAddrs, redemptionAddrs, err := a.wallet.GetAddresses(ctx)
+	offchainAddrs, boardingAddrs, redemptionAddrs, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1171,7 +1171,7 @@ func (a *covenantArkClient) coinSelectOnchain(
 	now := time.Now()
 
 	fetchedUtxos := make([]explorer.Utxo, 0)
-	for _, addr := range onboardingAddrs {
+	for _, addr := range boardingAddrs {
 		utxos, err := a.explorer.GetUtxos(addr)
 		if err != nil {
 			return nil, 0, err

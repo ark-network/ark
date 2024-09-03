@@ -27,14 +27,14 @@ func (c *covenantLiquidCLI) SendAsync(ctx *cli.Context) error {
 }
 
 func (c *covenantLiquidCLI) Receive(ctx *cli.Context) error {
-	offchainAddr, onboardingAddr, _, err := getAddress(ctx)
+	offchainAddr, boardingAddr, _, err := getAddress(ctx)
 	if err != nil {
 		return err
 	}
 
 	return utils.PrintJSON(map[string]interface{}{
-		"offchain_address":   offchainAddr,
-		"onboarding_address": onboardingAddr,
+		"offchain_address": offchainAddr,
+		"boarding_address": boardingAddr,
 	})
 }
 
@@ -237,12 +237,12 @@ func coinSelectOnchain(
 	ctx *cli.Context,
 	explorer utils.Explorer, targetAmount uint64, exclude []utils.Utxo,
 ) ([]utils.Utxo, uint64, error) {
-	_, onboardingAddr, redemptionAddr, err := getAddress(ctx)
+	_, boardingAddr, redemptionAddr, err := getAddress(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	onboardingUtxoFromExplorer, err := explorer.GetUtxos(onboardingAddr)
+	boardingUtxosFromExplorer, err := explorer.GetUtxos(boardingAddr)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -266,7 +266,7 @@ func coinSelectOnchain(
 		return nil, 0, err
 	}
 
-	for _, utxo := range onboardingUtxoFromExplorer {
+	for _, utxo := range boardingUtxosFromExplorer {
 		if selectedAmount >= targetAmount {
 			break
 		}
@@ -405,7 +405,7 @@ func decodeReceiverAddress(addr string) (
 	return true, outputScript, nil, nil
 }
 
-func getAddress(ctx *cli.Context) (offchainAddr, onboardingAddr, redemptionAddr string, err error) {
+func getAddress(ctx *cli.Context) (offchainAddr, boardingAddr, redemptionAddr string, err error) {
 	userPubkey, err := utils.GetWalletPublicKey(ctx)
 	if err != nil {
 		return
@@ -465,19 +465,19 @@ func getAddress(ctx *cli.Context) (offchainAddr, onboardingAddr, redemptionAddr 
 		return
 	}
 
-	onboardingTapKey, _, err := computeVtxoTaprootScript(
+	boardingTapKey, _, err := computeVtxoTaprootScript(
 		userPubkey, aspPubkey, uint(timeoutBoarding),
 	)
 	if err != nil {
 		return
 	}
 
-	onboardingPay, err := payment.FromTweakedKey(onboardingTapKey, &liquidNet, nil)
+	boardingPay, err := payment.FromTweakedKey(boardingTapKey, &liquidNet, nil)
 	if err != nil {
 		return
 	}
 
-	onboardingAddr, err = onboardingPay.TaprootAddress()
+	boardingAddr, err = boardingPay.TaprootAddress()
 	if err != nil {
 		return
 	}
