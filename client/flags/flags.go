@@ -90,10 +90,4 @@ var (
 		Value:    false,
 		Required: false,
 	}
-	ReverseOnboardingFlag = cli.BoolFlag{
-		Name:     "reverse",
-		Usage:    "reverse onboarding protocol",
-		Value:    false,
-		Required: false,
-	}
 )

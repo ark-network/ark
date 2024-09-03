@@ -25,11 +25,11 @@ func parseInputs(ins []*arkv1.Input) ([]application.Input, error) {
 
 	inputs := make([]application.Input, 0, len(ins))
 	for _, input := range ins {
-		if input.GetDescriptorInput() != nil {
-			desc := input.GetDescriptorInput().GetDescriptor_()
+		if input.GetBoardingInput() != nil {
+			desc := input.GetBoardingInput().GetDescriptor_()
 			inputs = append(inputs, application.Input{
-				Txid:       input.GetDescriptorInput().GetTxid(),
-				Index:      input.GetDescriptorInput().GetVout(),
+				Txid:       input.GetBoardingInput().GetTxid(),
+				Index:      input.GetBoardingInput().GetVout(),
 				Descriptor: &desc,
 			})
 

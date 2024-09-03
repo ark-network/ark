@@ -475,6 +475,21 @@
         }
       }
     },
+    "v1BoardingInput": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "vout": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "descriptor": {
+          "type": "string"
+        }
+      }
+    },
     "v1ClaimPaymentRequest": {
       "type": "object",
       "properties": {
@@ -543,21 +558,6 @@
           "items": {
             "type": "string"
           }
-        }
-      }
-    },
-    "v1DescriptorInput": {
-      "type": "object",
-      "properties": {
-        "txid": {
-          "type": "string"
-        },
-        "vout": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "descriptor": {
-          "type": "string"
         }
       }
     },
@@ -671,8 +671,8 @@
         "vtxoInput": {
           "$ref": "#/definitions/v1VtxoInput"
         },
-        "descriptorInput": {
-          "$ref": "#/definitions/v1DescriptorInput"
+        "boardingInput": {
+          "$ref": "#/definitions/v1BoardingInput"
         }
       }
     },

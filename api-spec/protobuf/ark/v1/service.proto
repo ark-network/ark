@@ -248,7 +248,7 @@ message VtxoInput {
   uint32 vout = 2;
 }
 
-message DescriptorInput {
+message BoardingInput {
   string txid = 1;
   uint32 vout = 2;
   string descriptor = 3;
@@ -257,7 +257,7 @@ message DescriptorInput {
 message Input {
   oneof input {
     VtxoInput vtxo_input = 1;
-    DescriptorInput descriptor_input = 2;
+    BoardingInput boarding_input = 2;
   }
 }
 

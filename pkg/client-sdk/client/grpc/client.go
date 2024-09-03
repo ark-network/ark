@@ -455,8 +455,8 @@ func (v vtxos) toVtxos() []client.Vtxo {
 func toProtoInput(i client.Input) *arkv1.Input {
 	if len(i.GetDescriptor()) > 0 {
 		return &arkv1.Input{
-			Input: &arkv1.Input_DescriptorInput{
-				DescriptorInput: &arkv1.DescriptorInput{
+			Input: &arkv1.Input_BoardingInput{
+				BoardingInput: &arkv1.BoardingInput{
 					Txid:        i.GetTxID(),
 					Vout:        i.GetVOut(),
 					Descriptor_: i.GetDescriptor(),

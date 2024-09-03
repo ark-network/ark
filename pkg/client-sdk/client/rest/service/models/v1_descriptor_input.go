@@ -12,10 +12,10 @@ import (
 	"github.com/go-openapi/swag"
 )
 
-// V1DescriptorInput v1 descriptor input
+// V1BoardingInput v1 descriptor input
 //
-// swagger:model v1DescriptorInput
-type V1DescriptorInput struct {
+// swagger:model v1BoardingInput
+type V1BoardingInput struct {
 
 	// descriptor
 	Descriptor string `json:"descriptor,omitempty"`
@@ -28,17 +28,17 @@ type V1DescriptorInput struct {
 }
 
 // Validate validates this v1 descriptor input
-func (m *V1DescriptorInput) Validate(formats strfmt.Registry) error {
+func (m *V1BoardingInput) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
 // ContextValidate validates this v1 descriptor input based on context it is used
-func (m *V1DescriptorInput) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
+func (m *V1BoardingInput) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	return nil
 }
 
 // MarshalBinary interface implementation
-func (m *V1DescriptorInput) MarshalBinary() ([]byte, error) {
+func (m *V1BoardingInput) MarshalBinary() ([]byte, error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -46,8 +46,8 @@ func (m *V1DescriptorInput) MarshalBinary() ([]byte, error) {
 }
 
 // UnmarshalBinary interface implementation
-func (m *V1DescriptorInput) UnmarshalBinary(b []byte) error {
-	var res V1DescriptorInput
+func (m *V1BoardingInput) UnmarshalBinary(b []byte) error {
+	var res V1BoardingInput
 	if err := swag.ReadJSON(b, &res); err != nil {
 		return err
 	}

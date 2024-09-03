@@ -251,7 +251,7 @@ func (a *restClient) RegisterPayment(
 
 		if len(i.GetDescriptor()) > 0 {
 			input = &models.V1Input{
-				DescriptorInput: &models.V1DescriptorInput{
+				BoardingInput: &models.V1BoardingInput{
 					Txid:       i.GetTxID(),
 					Vout:       int64(i.GetVOut()),
 					Descriptor: i.GetDescriptor(),

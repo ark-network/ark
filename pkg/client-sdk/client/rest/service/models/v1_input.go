@@ -19,7 +19,7 @@ import (
 type V1Input struct {
 
 	// descriptor input
-	DescriptorInput *V1DescriptorInput `json:"descriptorInput,omitempty"`
+	BoardingInput *V1BoardingInput `json:"BoardingInput,omitempty"`
 
 	// vtxo input
 	VtxoInput *V1VtxoInput `json:"vtxoInput,omitempty"`
@@ -29,7 +29,7 @@ type V1Input struct {
 func (m *V1Input) Validate(formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.validateDescriptorInput(formats); err != nil {
+	if err := m.validateBoardingInput(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -43,17 +43,17 @@ func (m *V1Input) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *V1Input) validateDescriptorInput(formats strfmt.Registry) error {
-	if swag.IsZero(m.DescriptorInput) { // not required
+func (m *V1Input) validateBoardingInput(formats strfmt.Registry) error {
+	if swag.IsZero(m.BoardingInput) { // not required
 		return nil
 	}
 
-	if m.DescriptorInput != nil {
-		if err := m.DescriptorInput.Validate(formats); err != nil {
+	if m.BoardingInput != nil {
+		if err := m.BoardingInput.Validate(formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("descriptorInput")
+				return ve.ValidateName("BoardingInput")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("descriptorInput")
+				return ce.ValidateName("BoardingInput")
 			}
 			return err
 		}
@@ -85,7 +85,7 @@ func (m *V1Input) validateVtxoInput(formats strfmt.Registry) error {
 func (m *V1Input) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.contextValidateDescriptorInput(ctx, formats); err != nil {
+	if err := m.contextValidateBoardingInput(ctx, formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -99,19 +99,19 @@ func (m *V1Input) ContextValidate(ctx context.Context, formats strfmt.Registry) 
 	return nil
 }
 
-func (m *V1Input) contextValidateDescriptorInput(ctx context.Context, formats strfmt.Registry) error {
+func (m *V1Input) contextValidateBoardingInput(ctx context.Context, formats strfmt.Registry) error {
 
-	if m.DescriptorInput != nil {
+	if m.BoardingInput != nil {
 
-		if swag.IsZero(m.DescriptorInput) { // not required
+		if swag.IsZero(m.BoardingInput) { // not required
 			return nil
 		}
 
-		if err := m.DescriptorInput.ContextValidate(ctx, formats); err != nil {
+		if err := m.BoardingInput.ContextValidate(ctx, formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("descriptorInput")
+				return ve.ValidateName("BoardingInput")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("descriptorInput")
+				return ce.ValidateName("BoardingInput")
 			}
 			return err
 		}

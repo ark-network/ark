@@ -124,8 +124,8 @@ func selfTransferAllPendingPayments(
 	if len(onboardingUtxos) > 0 {
 		for _, outpoint := range onboardingUtxos {
 			inputs = append(inputs, &arkv1.Input{
-				Input: &arkv1.Input_DescriptorInput{
-					DescriptorInput: &arkv1.DescriptorInput{
+				Input: &arkv1.Input_BoardingInput{
+					BoardingInput: &arkv1.BoardingInput{
 						Txid:        outpoint.Txid,
 						Vout:        outpoint.Vout,
 						Descriptor_: desc,
