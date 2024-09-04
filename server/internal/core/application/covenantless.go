@@ -673,8 +673,8 @@ func (s *covenantlessService) startFinalization() {
 
 		signedTree, err := coordinator.SignTree()
 		if err != nil {
-			round.Fail(fmt.Errorf("failed to aggragate tree signatures: %s", err))
-			log.WithError(err).Warn("failed aggragate tree signatures")
+			round.Fail(fmt.Errorf("failed to aggregate tree signatures: %s", err))
+			log.WithError(err).Warn("failed to aggregate tree signatures")
 			return
 		}
 
