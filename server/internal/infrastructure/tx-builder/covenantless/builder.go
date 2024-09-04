@@ -497,7 +497,6 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 		redeemPtx.Inputs[i].WitnessUtxo = unconditionnalForfeitPsbt.Inputs[0].WitnessUtxo
 		redeemPtx.Inputs[i].TaprootInternalKey = unconditionnalForfeitPsbt.Inputs[0].TaprootInternalKey
 		redeemPtx.Inputs[i].TaprootLeafScript = unconditionnalForfeitPsbt.Inputs[0].TaprootLeafScript
-
 	}
 
 	redeemTx, err := redeemPtx.B64Encode()
