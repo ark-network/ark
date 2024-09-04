@@ -4,7 +4,9 @@ import (
 	"context"
 	"time"
 
+	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
 const (
@@ -25,7 +27,7 @@ type ASPClient interface {
 		ctx context.Context, tx, userPubkey string, congestionTree tree.CongestionTree,
 	) error
 	RegisterPayment(
-		ctx context.Context, inputs []VtxoKey,
+		ctx context.Context, inputs []VtxoKey, ephemeralPublicKey string,
 	) (string, error)
 	ClaimPayment(
 		ctx context.Context, paymentID string, outputs []Output,
@@ -33,7 +35,7 @@ type ASPClient interface {
 	GetEventStream(
 		ctx context.Context, paymentID string,
 	) (<-chan RoundEventChannel, error)
-	Ping(ctx context.Context, paymentID string) (*RoundFinalizationEvent, error)
+	Ping(ctx context.Context, paymentID string) (RoundEvent, error)
 	FinalizePayment(
 		ctx context.Context, signedForfeitTxs []string,
 	) error
@@ -42,6 +44,12 @@ type ASPClient interface {
 	) (string, []string, error)
 	CompletePayment(
 		ctx context.Context, signedRedeemTx string, signedUnconditionalForfeitTxs []string,
+	) error
+	SendTreeNonces(
+		ctx context.Context, roundID, cosignerPubkey string, nonces bitcointree.TreeNonces,
+	) error
+	SendTreeSignatures(
+		ctx context.Context, roundID, cosignerPubkey string, signatures bitcointree.TreePartialSigs,
 	) error
 	Close()
 }
@@ -73,6 +81,7 @@ type Vtxo struct {
 	RedeemTx                string
 	UnconditionalForfeitTxs []string
 	Pending                 bool
+	SpentBy                 string
 }
 
 type Output struct {
@@ -139,3 +148,18 @@ type RoundFailedEvent struct {
 }
 
 func (e RoundFailedEvent) isRoundEvent() {}
+
+type RoundSigningStartedEvent struct {
+	ID                  string
+	UnsignedTree        tree.CongestionTree
+	CosignersPublicKeys []*secp256k1.PublicKey
+}
+
+func (e RoundSigningStartedEvent) isRoundEvent() {}
+
+type RoundSigningNoncesGeneratedEvent struct {
+	ID     string
+	Nonces bitcointree.TreeNonces
+}
+
+func (e RoundSigningNoncesGeneratedEvent) isRoundEvent() {}

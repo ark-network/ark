@@ -1,7 +1,9 @@
 package bitcointree
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 
@@ -12,20 +14,45 @@ import (
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
 var (
 	ErrCongestionTreeNotSet = errors.New("congestion tree not set")
 	ErrAggregateKeyNotSet   = errors.New("aggregate key not set")
+
+	columnSeparator = byte('|')
+	rowSeparator    = byte('/')
 )
 
-type TreeNonces [][][66]byte // public nonces
+type Musig2Nonce struct {
+	PubNonce [66]byte
+}
+
+func (n *Musig2Nonce) Encode(w io.Writer) error {
+	_, err := w.Write(n.PubNonce[:])
+	return err
+}
+
+func (n *Musig2Nonce) Decode(r io.Reader) error {
+	bytes := make([]byte, 66)
+	_, err := r.Read(bytes)
+	if err != nil {
+		return err
+	}
+
+	n.PubNonce = [66]byte(bytes)
+	return nil
+}
+
+type TreeNonces [][]*Musig2Nonce // public nonces
 type TreePartialSigs [][]*musig2.PartialSignature
 
 type SignerSession interface {
-	GetNonces() (TreeNonces, error)               // generate of return cached nonce for this session
-	SetKeys([]*btcec.PublicKey, TreeNonces) error // set the keys for this session (with the combined nonces)
-	Sign() (TreePartialSigs, error)               // sign the tree
+	GetNonces() (TreeNonces, error)       // generate tree nonces for this session
+	SetKeys([]*btcec.PublicKey) error     // set the cosigner public keys for this session
+	SetAggregatedNonces(TreeNonces) error // set the aggregated nonces
+	Sign() (TreePartialSigs, error)       // sign the tree
 }
 
 type CoordinatorSession interface {
@@ -34,6 +61,34 @@ type CoordinatorSession interface {
 	AddSig(*btcec.PublicKey, TreePartialSigs) error
 	// SignTree combines the signatures and add them to the tree's psbts
 	SignTree() (tree.CongestionTree, error)
+}
+
+func (n TreeNonces) Encode(w io.Writer) error {
+	matrix, err := encodeMatrix(n)
+	if err != nil {
+		return err
+	}
+
+	_, err = w.Write(matrix)
+	return err
+}
+
+func DecodeNonces(r io.Reader) (TreeNonces, error) {
+	return decodeMatrix(func() *Musig2Nonce { return new(Musig2Nonce) }, r)
+}
+
+func (s TreePartialSigs) Encode(w io.Writer) error {
+	matrix, err := encodeMatrix(s)
+	if err != nil {
+		return err
+	}
+
+	_, err = w.Write(matrix)
+	return err
+}
+
+func DecodeSignatures(r io.Reader) (TreePartialSigs, error) {
+	return decodeMatrix(func() *musig2.PartialSignature { return new(musig2.PartialSignature) }, r)
 }
 
 func AggregateKeys(
@@ -96,62 +151,6 @@ func ValidateTreeSigs(
 
 			if !schnorrSig.Verify(message, finalAggregatedKey) {
 				return errors.New("invalid signature")
-			}
-		}
-	}
-
-	return nil
-}
-
-func (n TreeNonces) Decode(r io.Reader, matrixFormat []int) error {
-	for i := 0; i < len(matrixFormat); i++ {
-		for j := 0; j < matrixFormat[i]; j++ {
-			// read 66 bytes
-			nonce := make([]byte, 66)
-			_, err := r.Read(nonce)
-			if err != nil {
-				return err
-			}
-
-			n[i][j] = [66]byte(nonce)
-		}
-	}
-
-	return nil
-}
-
-func (n TreeNonces) Encode(w io.Writer) error {
-	for i := 0; i < len(n); i++ {
-		for j := 0; j < len(n[i]); j++ {
-			nonce := n[i][j][:]
-			_, err := w.Write(nonce)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-func (n TreePartialSigs) Decode(r io.Reader, matrixFormat []int) error {
-	for i := 0; i < len(matrixFormat); i++ {
-		for j := 0; j < matrixFormat[i]; j++ {
-			sig := &musig2.PartialSignature{}
-			if err := sig.Decode(r); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-func (n TreePartialSigs) Encode(w io.Writer) error {
-	for i := 0; i < len(n); i++ {
-		for j := 0; j < len(n[i]); j++ {
-			if err := n[i][j].Encode(w); err != nil {
-				return err
 			}
 		}
 	}
@@ -224,9 +223,9 @@ func (t *treeSignerSession) GetNonces() (TreeNonces, error) {
 	nonces := make(TreeNonces, 0)
 
 	for _, level := range t.myNonces {
-		levelNonces := make([][66]byte, 0)
+		levelNonces := make([]*Musig2Nonce, 0)
 		for _, nonce := range level {
-			levelNonces = append(levelNonces, nonce.PubNonce)
+			levelNonces = append(levelNonces, &Musig2Nonce{nonce.PubNonce})
 		}
 		nonces = append(nonces, levelNonces)
 	}
@@ -234,13 +233,9 @@ func (t *treeSignerSession) GetNonces() (TreeNonces, error) {
 	return nonces, nil
 }
 
-func (t *treeSignerSession) SetKeys(keys []*btcec.PublicKey, nonces TreeNonces) error {
+func (t *treeSignerSession) SetKeys(keys []*btcec.PublicKey) error {
 	if t.keys != nil {
 		return errors.New("keys already set")
-	}
-
-	if t.aggregateNonces != nil {
-		return errors.New("nonces already set")
 	}
 
 	aggregateKey, err := AggregateKeys(keys, t.scriptRoot)
@@ -248,15 +243,23 @@ func (t *treeSignerSession) SetKeys(keys []*btcec.PublicKey, nonces TreeNonces) 
 		return err
 	}
 
-	prevoutFetcher, err := prevOutFetcherFactory(aggregateKey.FinalKey, t.tree, t.roundSharedOutputAmount)
+	factory, err := prevOutFetcherFactory(aggregateKey.FinalKey, t.tree, t.roundSharedOutputAmount)
 	if err != nil {
 		return err
 	}
 
-	t.prevoutFetcherFactory = prevoutFetcher
-	t.aggregateNonces = nonces
+	t.prevoutFetcherFactory = factory
 	t.keys = keys
 
+	return nil
+}
+
+func (t *treeSignerSession) SetAggregatedNonces(nonces TreeNonces) error {
+	if t.aggregateNonces != nil {
+		return errors.New("nonces already set")
+	}
+
+	t.aggregateNonces = nonces
 	return nil
 }
 
@@ -319,7 +322,7 @@ func (t *treeSignerSession) signPartial(partialTx *psbt.Packet, posx int, posy i
 	}
 
 	return musig2.Sign(
-		myNonce.SecNonce, seckey, aggregatedNonce, t.keys, [32]byte(message),
+		myNonce.SecNonce, seckey, aggregatedNonce.PubNonce, t.keys, [32]byte(message),
 		musig2.WithSortedKeys(), musig2.WithTaprootSignTweak(t.scriptRoot),
 	)
 }
@@ -401,12 +404,11 @@ func (t *treeCoordinatorSession) AggregateNonces() (TreeNonces, error) {
 	aggregatedNonces := make(TreeNonces, 0)
 
 	for i, level := range t.tree {
-		levelNonces := make([][66]byte, 0)
+		levelNonces := make([]*Musig2Nonce, 0)
 		for j := range level {
-
 			nonces := make([][66]byte, 0)
 			for _, n := range t.nonces {
-				nonces = append(nonces, n[i][j])
+				nonces = append(nonces, n[i][j].PubNonce)
 			}
 
 			aggregatedNonce, err := musig2.AggregateNonces(nonces)
@@ -414,7 +416,7 @@ func (t *treeCoordinatorSession) AggregateNonces() (TreeNonces, error) {
 				return nil, err
 			}
 
-			levelNonces = append(levelNonces, aggregatedNonce)
+			levelNonces = append(levelNonces, &Musig2Nonce{aggregatedNonce})
 		}
 
 		aggregatedNonces = append(aggregatedNonces, levelNonces)
@@ -425,10 +427,15 @@ func (t *treeCoordinatorSession) AggregateNonces() (TreeNonces, error) {
 
 // SignTree implements CoordinatorSession.
 func (t *treeCoordinatorSession) SignTree() (tree.CongestionTree, error) {
+	var missingSigs int
 	for _, sig := range t.sigs {
 		if sig == nil {
-			return nil, errors.New("signatures not set")
+			missingSigs++
 		}
+	}
+
+	if missingSigs > 0 {
+		return nil, fmt.Errorf("missing %d signature(s)", missingSigs)
 	}
 
 	aggregatedKey, err := AggregateKeys(t.keys, t.scriptRoot)
@@ -443,9 +450,18 @@ func (t *treeCoordinatorSession) SignTree() (tree.CongestionTree, error) {
 				return nil, err
 			}
 
+			var combinedNonce *secp256k1.PublicKey
 			sigs := make([]*musig2.PartialSignature, 0)
 			for _, sig := range t.sigs {
-				sigs = append(sigs, sig[i][j])
+				s := sig[i][j]
+				if s.R != nil {
+					combinedNonce = s.R
+				}
+				sigs = append(sigs, s)
+			}
+
+			if combinedNonce == nil {
+				return nil, errors.New("missing combined nonce")
 			}
 
 			prevoutFetcher, err := t.prevoutFetcherFactory(partialTx)
@@ -462,7 +478,7 @@ func (t *treeCoordinatorSession) SignTree() (tree.CongestionTree, error) {
 			)
 
 			combinedSig := musig2.CombineSigs(
-				sigs[0].R, sigs,
+				combinedNonce, sigs,
 				musig2.WithTaprootTweakedCombine([32]byte(message), t.keys, t.scriptRoot, true),
 			)
 			if err != nil {
@@ -554,4 +570,72 @@ type treePrevOutFetcher struct {
 
 func (f *treePrevOutFetcher) FetchPrevOutput(wire.OutPoint) *wire.TxOut {
 	return f.prevout
+}
+
+type writable interface {
+	Encode(w io.Writer) error
+}
+
+type readable interface {
+	Decode(r io.Reader) error
+}
+
+// encodeMatrix encode a matrix of serializable objects into a byte stream
+func encodeMatrix[T writable](matrix [][]T) ([]byte, error) {
+	var buf bytes.Buffer
+
+	for _, row := range matrix {
+		for _, cell := range row {
+			if err := buf.WriteByte(columnSeparator); err != nil {
+				return nil, err
+			}
+
+			if err := cell.Encode(&buf); err != nil {
+				return nil, err
+			}
+		}
+
+		if err := buf.WriteByte(rowSeparator); err != nil {
+			return nil, err
+		}
+	}
+
+	return buf.Bytes(), nil
+}
+
+// decodeMatrix decode a byte stream into a matrix of serializable objects
+func decodeMatrix[T readable](factory func() T, data io.Reader) ([][]T, error) {
+	matrix := make([][]T, 0)
+	row := make([]T, 0)
+
+	for {
+		separator := make([]byte, 1)
+
+		if _, err := data.Read(separator); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+
+		b := separator[0]
+
+		if b == rowSeparator {
+			matrix = append(matrix, row)
+			row = make([]T, 0)
+			continue
+		}
+
+		cell := factory()
+
+		if err := cell.Decode(data); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+		row = append(row, cell)
+	}
+
+	return matrix, nil
 }
