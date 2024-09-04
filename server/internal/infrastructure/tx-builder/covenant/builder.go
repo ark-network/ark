@@ -92,7 +92,12 @@ func (b *txBuilder) BuildForfeitTxs(
 		return nil, nil, err
 	}
 
-	connectorTxs, err := b.createConnectors(poolTx, payments, connectorAddress, 30)
+	connectorFeeAmount, err := b.minRelayFeeConnectorTx()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	connectorTxs, err := b.createConnectors(poolTx, payments, connectorAddress, connectorFeeAmount)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -130,11 +135,16 @@ func (b *txBuilder) BuildPoolTx(
 	var treeFactoryFn tree.TreeFactory
 
 	if !isOnchainOnly(payments) {
+		feeSatsPerNode, err := b.wallet.MinRelayFee(context.Background(), uint64(common.TreeTxSize))
+		if err != nil {
+			return "", nil, "", err
+		}
+
 		treeFactoryFn, sharedOutputScript, sharedOutputAmount, err = tree.CraftCongestionTree(
-			b.onchainNetwork().AssetID, aspPubkey, getOffchainReceivers(payments), 30, b.roundLifetime, b.exitDelay,
+			b.onchainNetwork().AssetID, aspPubkey, getOffchainReceivers(payments), feeSatsPerNode, b.roundLifetime, b.exitDelay,
 		)
 		if err != nil {
-			return
+			return "", nil, "", err
 		}
 	}
 
@@ -144,7 +154,7 @@ func (b *txBuilder) BuildPoolTx(
 	}
 
 	ptx, err := b.createPoolTx(
-		sharedOutputAmount, sharedOutputScript, payments, aspPubkey, connectorAddress, 30, sweptRounds,
+		sharedOutputAmount, sharedOutputScript, payments, aspPubkey, connectorAddress, sweptRounds,
 	)
 	if err != nil {
 		return
@@ -361,7 +371,7 @@ func (b *txBuilder) getLeafScriptAndTree(
 
 func (b *txBuilder) createPoolTx(
 	sharedOutputAmount uint64, sharedOutputScript []byte,
-	payments []domain.Payment, aspPubKey *secp256k1.PublicKey, connectorAddress string, minRelayFee uint64,
+	payments []domain.Payment, aspPubKey *secp256k1.PublicKey, connectorAddress string,
 	sweptRounds []domain.Round,
 ) (*psetv2.Pset, error) {
 	aspScript, err := p2wpkhScript(aspPubKey, b.onchainNetwork())
@@ -374,11 +384,16 @@ func (b *txBuilder) createPoolTx(
 		return nil, err
 	}
 
+	connectorMinRelayFee, err := b.minRelayFeeConnectorTx()
+	if err != nil {
+		return nil, err
+	}
+
 	receivers := getOnchainReceivers(payments)
 	nbOfInputs := countSpentVtxos(payments)
-	connectorsAmount := (connectorAmount + minRelayFee) * nbOfInputs
+	connectorsAmount := (connectorAmount + connectorMinRelayFee) * nbOfInputs
 	if nbOfInputs > 1 {
-		connectorsAmount -= minRelayFee
+		connectorsAmount -= connectorMinRelayFee
 	}
 	targetAmount := connectorsAmount
 
@@ -545,8 +560,12 @@ func (b *txBuilder) createPoolTx(
 	return ptx, nil
 }
 
+func (b *txBuilder) minRelayFeeConnectorTx() (uint64, error) {
+	return b.wallet.MinRelayFee(context.Background(), uint64(common.ConnectorTxSize))
+}
+
 func (b *txBuilder) createConnectors(
-	poolTx string, payments []domain.Payment, connectorAddress string, minRelayFee uint64,
+	poolTx string, payments []domain.Payment, connectorAddress string, feeAmount uint64,
 ) ([]*psetv2.Pset, error) {
 	txid, _ := getTxid(poolTx)
 
@@ -570,7 +589,7 @@ func (b *txBuilder) createConnectors(
 
 	if numberOfConnectors == 1 {
 		outputs := []psetv2.OutputArgs{connectorOutput}
-		connectorTx, err := craftConnectorTx(previousInput, aspScript, outputs, minRelayFee)
+		connectorTx, err := craftConnectorTx(previousInput, aspScript, outputs, feeAmount)
 		if err != nil {
 			return nil, err
 		}
@@ -578,16 +597,16 @@ func (b *txBuilder) createConnectors(
 		return []*psetv2.Pset{connectorTx}, nil
 	}
 
-	totalConnectorAmount := (connectorAmount + minRelayFee) * numberOfConnectors
+	totalConnectorAmount := (connectorAmount + feeAmount) * numberOfConnectors
 	if numberOfConnectors > 1 {
-		totalConnectorAmount -= minRelayFee
+		totalConnectorAmount -= feeAmount
 	}
 
 	connectors := make([]*psetv2.Pset, 0, numberOfConnectors-1)
 	for i := uint64(0); i < numberOfConnectors-1; i++ {
 		outputs := []psetv2.OutputArgs{connectorOutput}
 		totalConnectorAmount -= connectorAmount
-		totalConnectorAmount -= minRelayFee
+		totalConnectorAmount -= feeAmount
 		if totalConnectorAmount > 0 {
 			outputs = append(outputs, psetv2.OutputArgs{
 				Asset:  b.onchainNetwork().AssetID,
@@ -595,7 +614,7 @@ func (b *txBuilder) createConnectors(
 				Amount: totalConnectorAmount,
 			})
 		}
-		connectorTx, err := craftConnectorTx(previousInput, aspScript, outputs, minRelayFee)
+		connectorTx, err := craftConnectorTx(previousInput, aspScript, outputs, feeAmount)
 		if err != nil {
 			return nil, err
 		}
@@ -656,7 +675,7 @@ func (b *txBuilder) createForfeitTxs(
 			}
 
 			for _, connector := range connectors {
-				txs, err := craftForfeitTxs(
+				txs, err := b.craftForfeitTxs(
 					connector, vtxo, *forfeitProof, vtxoScript, aspScript,
 				)
 				if err != nil {

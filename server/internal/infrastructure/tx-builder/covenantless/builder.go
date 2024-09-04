@@ -391,7 +391,7 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 			RevealedScript: leafProof.Script,
 			ControlBlock:   &ctrlBlock,
 		}
-		forfeitTxWeightEstimator.AddTapscriptInput(64, tapscript)
+		forfeitTxWeightEstimator.AddTapscriptInput(64*2, tapscript)
 		forfeitTxWeightEstimator.AddP2TROutput() // ASP output
 
 		forfeitTxFee, err := b.wallet.MinRelayFee(context.Background(), uint64(forfeitTxWeightEstimator.VSize()))
@@ -857,13 +857,7 @@ func (b *txBuilder) createPoolTx(
 }
 
 func (b *txBuilder) minRelayFeeConnectorTx() (uint64, error) {
-	weightEstimator := &input.TxWeightEstimator{}
-	weightEstimator.AddP2WKHInput()
-	weightEstimator.AddP2WKHOutput() // the new connector output
-	weightEstimator.AddP2WKHOutput() // the change output
-	// TODO anchor output
-
-	return b.wallet.MinRelayFee(context.Background(), uint64(weightEstimator.VSize()))
+	return b.wallet.MinRelayFee(context.Background(), uint64(common.ConnectorTxSize))
 }
 
 func (b *txBuilder) createConnectors(
@@ -934,7 +928,7 @@ func (b *txBuilder) createConnectors(
 }
 
 func (b *txBuilder) minRelayFeeTreeTx() (uint64, error) {
-	return b.wallet.MinRelayFee(context.Background(), uint64(bitcointree.TreeTxSize))
+	return b.wallet.MinRelayFee(context.Background(), uint64(common.TreeTxSize))
 }
 
 func (b *txBuilder) minRelayFeeForfeitTx() (uint64, error) {
