@@ -18,17 +18,12 @@ services:
       - ARK_BITCOIND_RPC_HOST=bitcoin:18443
       - ARK_NO_TLS=true
       - ARK_NO_MACAROONS=true
+      - ARK_DATADIR=/app/data
     ports:
       - "7070:7070"
     volumes:
-      - clarkd:/app/data
-      - clark:/app/wallet-data
-
-volumes:
-  clarkd:
-    external: false
-  clark:
-    external: false
+      - type: tmpfs
+        target: /app/data
 
 networks:
   default:
