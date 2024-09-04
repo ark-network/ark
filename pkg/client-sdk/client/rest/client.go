@@ -114,12 +114,13 @@ func (a *restClient) GetInfo(
 	}
 
 	return &client.Info{
-		Pubkey:              resp.Payload.Pubkey,
-		RoundLifetime:       int64(roundLifetime),
-		UnilateralExitDelay: int64(unilateralExitDelay),
-		RoundInterval:       int64(roundInterval),
-		Network:             resp.Payload.Network,
-		MinRelayFee:         int64(minRelayFee),
+		Pubkey:                     resp.Payload.Pubkey,
+		RoundLifetime:              int64(roundLifetime),
+		UnilateralExitDelay:        int64(unilateralExitDelay),
+		RoundInterval:              int64(roundInterval),
+		Network:                    resp.Payload.Network,
+		MinRelayFee:                int64(minRelayFee),
+		BoardingDescriptorTemplate: resp.Payload.BoardingDescriptorTemplate,
 	}, nil
 }
 
@@ -159,8 +160,8 @@ func (a *restClient) ListVtxos(
 
 		spendableVtxos = append(spendableVtxos, client.Vtxo{
 			VtxoKey: client.VtxoKey{
-				Txid: v.Outpoint.Txid,
-				VOut: uint32(v.Outpoint.Vout),
+				Txid: v.Outpoint.VtxoInput.Txid,
+				VOut: uint32(v.Outpoint.VtxoInput.Vout),
 			},
 			Amount:                  uint64(amount),
 			RoundTxid:               v.PoolTxid,
@@ -191,8 +192,8 @@ func (a *restClient) ListVtxos(
 
 		spentVtxos = append(spentVtxos, client.Vtxo{
 			VtxoKey: client.VtxoKey{
-				Txid: v.Outpoint.Txid,
-				VOut: uint32(v.Outpoint.Vout),
+				Txid: v.Outpoint.VtxoInput.Txid,
+				VOut: uint32(v.Outpoint.VtxoInput.Vout),
 			},
 			Amount:    uint64(amount),
 			RoundTxid: v.PoolTxid,
@@ -243,29 +244,31 @@ func (a *restClient) GetRound(
 	}, nil
 }
 
-func (a *restClient) Onboard(
-	ctx context.Context, tx, userPubkey string, congestionTree tree.CongestionTree,
-) error {
-	body := models.V1OnboardRequest{
-		BoardingTx:     tx,
-		CongestionTree: treeToProto(congestionTree).parse(),
-		UserPubkey:     userPubkey,
-	}
-	_, err := a.svc.ArkServiceOnboard(
-		ark_service.NewArkServiceOnboardParams().WithBody(&body),
-	)
-	return err
-}
-
 func (a *restClient) RegisterPayment(
-	ctx context.Context, inputs []client.VtxoKey, ephemeralPublicKey string,
+	ctx context.Context, inputs []client.Input, ephemeralPublicKey string,
 ) (string, error) {
 	ins := make([]*models.V1Input, 0, len(inputs))
 	for _, i := range inputs {
-		ins = append(ins, &models.V1Input{
-			Txid: i.Txid,
-			Vout: int64(i.VOut),
-		})
+		var input *models.V1Input
+
+		if len(i.GetDescriptor()) > 0 {
+			input = &models.V1Input{
+				BoardingInput: &models.V1BoardingInput{
+					Txid:       i.GetTxID(),
+					Vout:       int64(i.GetVOut()),
+					Descriptor: i.GetDescriptor(),
+				},
+			}
+		} else {
+			input = &models.V1Input{
+				VtxoInput: &models.V1VtxoInput{
+					Txid: i.GetTxID(),
+					Vout: int64(i.GetVOut()),
+				},
+			}
+		}
+
+		ins = append(ins, input)
 	}
 	body := &models.V1RegisterPaymentRequest{
 		Inputs: ins,
@@ -377,13 +380,11 @@ func (a *restClient) Ping(
 }
 
 func (a *restClient) FinalizePayment(
-	ctx context.Context, signedForfeitTxs []string,
+	ctx context.Context, signedForfeitTxs []string, signedRoundTx string,
 ) error {
-	req := &arkv1.FinalizePaymentRequest{
-		SignedForfeitTxs: signedForfeitTxs,
-	}
 	body := models.V1FinalizePaymentRequest{
-		SignedForfeitTxs: req.GetSignedForfeitTxs(),
+		SignedForfeitTxs: signedForfeitTxs,
+		SignedRoundTx:    signedRoundTx,
 	}
 	_, err := a.svc.ArkServiceFinalizePayment(
 		ark_service.NewArkServiceFinalizePaymentParams().WithBody(&body),
@@ -396,9 +397,15 @@ func (a *restClient) CreatePayment(
 ) (string, []string, error) {
 	ins := make([]*models.V1Input, 0, len(inputs))
 	for _, i := range inputs {
+		if len(i.GetDescriptor()) > 0 {
+			return "", nil, fmt.Errorf("boarding inputs are not allowed in create payment")
+		}
+
 		ins = append(ins, &models.V1Input{
-			Txid: i.Txid,
-			Vout: int64(i.VOut),
+			VtxoInput: &models.V1VtxoInput{
+				Txid: i.Txid,
+				Vout: int64(i.VOut),
+			},
 		})
 	}
 	outs := make([]*models.V1Output, 0, len(outputs))
@@ -475,6 +482,23 @@ func (a *restClient) GetRoundByID(
 		Connectors: resp.Payload.Round.Connectors,
 		Stage:      toRoundStage(*resp.Payload.Round.Stage),
 	}, nil
+}
+
+func (a *restClient) GetBoardingAddress(
+	ctx context.Context, pubkey string,
+) (string, error) {
+	body := models.V1GetBoardingAddressRequest{
+		Pubkey: pubkey,
+	}
+
+	resp, err := a.svc.ArkServiceGetBoardingAddress(
+		ark_service.NewArkServiceGetBoardingAddressParams().WithBody(&body),
+	)
+	if err != nil {
+		return "",
+			err
+	}
+	return resp.Payload.Address, nil
 }
 
 func (a *restClient) SendTreeNonces(
@@ -603,26 +627,4 @@ func (t treeFromProto) parse() tree.CongestionTree {
 	}
 
 	return congestionTree
-}
-
-type treeToProto tree.CongestionTree
-
-func (t treeToProto) parse() *models.V1Tree {
-	levels := make([]*models.V1TreeLevel, 0, len(t))
-	for _, level := range t {
-		nodes := make([]*models.V1Node, 0, len(level))
-		for _, n := range level {
-			nodes = append(nodes, &models.V1Node{
-				Txid:       n.Txid,
-				Tx:         n.Tx,
-				ParentTxid: n.ParentTxid,
-			})
-		}
-		levels = append(levels, &models.V1TreeLevel{
-			Nodes: nodes,
-		})
-	}
-	return &models.V1Tree{
-		Levels: levels,
-	}
 }

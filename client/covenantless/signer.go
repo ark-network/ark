@@ -8,7 +8,6 @@ import (
 
 	"github.com/ark-network/ark/client/utils"
 	"github.com/ark-network/ark/common/bitcointree"
-	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/txscript"
@@ -18,7 +17,7 @@ import (
 )
 
 func signPsbt(
-	ctx *cli.Context, ptx *psbt.Packet, explorer utils.Explorer, prvKey *secp256k1.PrivateKey,
+	_ *cli.Context, ptx *psbt.Packet, explorer utils.Explorer, prvKey *secp256k1.PrivateKey,
 ) error {
 	updater, err := psbt.NewUpdater(ptx)
 	if err != nil {
@@ -50,25 +49,9 @@ func signPsbt(
 			return err
 		}
 
-		sighashType := txscript.SigHashAll
-
-		if utxo.PkScript[0] == txscript.OP_1 {
-			sighashType = txscript.SigHashDefault
-		}
-
-		if err := updater.AddInSighashType(sighashType, i); err != nil {
+		if err := updater.AddInSighashType(txscript.SigHashDefault, i); err != nil {
 			return err
 		}
-	}
-
-	_, onchainAddr, _, err := getAddress(ctx)
-	if err != nil {
-		return err
-	}
-
-	onchainWalletScript, err := txscript.PayToAddrScript(onchainAddr)
-	if err != nil {
-		return err
 	}
 
 	prevouts := make(map[wire.OutPoint]*wire.TxOut)
@@ -85,40 +68,6 @@ func signPsbt(
 	txsighashes := txscript.NewTxSigHashes(updater.Upsbt.UnsignedTx, prevoutFetcher)
 
 	for i, input := range ptx.Inputs {
-		if bytes.Equal(input.WitnessUtxo.PkScript, onchainWalletScript) {
-			if err := updater.AddInSighashType(txscript.SigHashAll, i); err != nil {
-				return err
-			}
-
-			preimage, err := txscript.CalcWitnessSigHash(
-				input.WitnessUtxo.PkScript,
-				txsighashes,
-				txscript.SigHashAll,
-				updater.Upsbt.UnsignedTx,
-				i,
-				int64(input.WitnessUtxo.Value),
-			)
-			if err != nil {
-				return err
-			}
-
-			sig := ecdsa.Sign(
-				prvKey,
-				preimage,
-			)
-
-			signatureWithSighashType := append(sig.Serialize(), byte(txscript.SigHashAll))
-
-			updater.Upsbt.Inputs[i].PartialSigs = []*psbt.PartialSig{
-				{
-					PubKey:    prvKey.PubKey().SerializeCompressed(),
-					Signature: signatureWithSighashType,
-				},
-			}
-
-			continue
-		}
-
 		if len(input.TaprootLeafScript) > 0 {
 			pubkey := prvKey.PubKey()
 			for _, leaf := range input.TaprootLeafScript {
@@ -178,7 +127,6 @@ func signPsbt(
 				}
 			}
 		}
-
 	}
 
 	return nil

@@ -21,10 +21,6 @@ var (
 		Required: false,
 		Hidden:   true,
 	}
-	AmountOnboardFlag = cli.Uint64Flag{
-		Name:  "amount",
-		Usage: "amount to onboard in sats",
-	}
 	ExpiryDetailsFlag = cli.BoolFlag{
 		Name:     "compute-expiry-details",
 		Usage:    "compute client-side the VTXOs expiry time",

@@ -95,7 +95,7 @@ func deserializeEvent(buf []byte) (domain.RoundEvent, error) {
 	}
 	{
 		var event = domain.RoundFinalizationStarted{}
-		if err := json.Unmarshal(buf, &event); err == nil && len(event.Connectors) > 0 {
+		if err := json.Unmarshal(buf, &event); err == nil && len(event.PoolTx) > 0 {
 			return event, nil
 		}
 	}

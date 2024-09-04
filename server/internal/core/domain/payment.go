@@ -28,14 +28,6 @@ func NewPayment(inputs []Vtxo) (*Payment, error) {
 	return p, nil
 }
 
-func NewPaymentUnsafe(inputs []Vtxo, receivers []Receiver) *Payment {
-	return &Payment{
-		Id:        uuid.New().String(),
-		Inputs:    inputs,
-		Receivers: receivers,
-	}
-}
-
 func (p *Payment) AddReceivers(receivers []Receiver) (err error) {
 	if p.Receivers == nil {
 		p.Receivers = make([]Receiver, 0)
@@ -70,18 +62,13 @@ func (p Payment) validate(ignoreOuts bool) error {
 	if len(p.Id) <= 0 {
 		return fmt.Errorf("missing id")
 	}
-	if len(p.Inputs) <= 0 {
-		return fmt.Errorf("missing inputs")
-	}
 	if ignoreOuts {
 		return nil
 	}
+
 	if len(p.Receivers) <= 0 {
 		return fmt.Errorf("missing outputs")
 	}
-	// Check that input and output and output amounts match.
-	inAmount := p.TotalInputAmount()
-	outAmount := uint64(0)
 	for _, r := range p.Receivers {
 		if len(r.OnchainAddress) <= 0 && len(r.Pubkey) <= 0 {
 			return fmt.Errorf("missing receiver destination")
@@ -89,10 +76,6 @@ func (p Payment) validate(ignoreOuts bool) error {
 		if r.Amount < dustAmount {
 			return fmt.Errorf("receiver amount must be greater than dust")
 		}
-		outAmount += r.Amount
-	}
-	if inAmount != outAmount {
-		return fmt.Errorf("input and output amounts mismatch")
 	}
 	return nil
 }

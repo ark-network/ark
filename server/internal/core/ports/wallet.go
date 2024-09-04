@@ -33,6 +33,7 @@ type WalletService interface {
 	MainAccountBalance(ctx context.Context) (uint64, uint64, error)
 	ConnectorsAccountBalance(ctx context.Context) (uint64, uint64, error)
 	LockConnectorUtxos(ctx context.Context, utxos []TxOutpoint) error
+	GetTransaction(ctx context.Context, txid string) (string, error)
 	Close()
 }
 

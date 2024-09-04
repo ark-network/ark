@@ -25,6 +25,7 @@ const (
 	minRelayFee         = uint64(30)
 	roundLifetime       = int64(1209344)
 	unilateralExitDelay = int64(512)
+	boardingExitDelay   = int64(512)
 )
 
 var (
@@ -49,7 +50,7 @@ func TestMain(m *testing.M) {
 
 func TestBuildPoolTx(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(
-		wallet, common.Liquid, roundLifetime, unilateralExitDelay,
+		wallet, common.Liquid, roundLifetime, unilateralExitDelay, boardingExitDelay,
 	)
 
 	fixtures, err := parsePoolTxFixtures()
@@ -60,7 +61,7 @@ func TestBuildPoolTx(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
 			for _, f := range fixtures.Valid {
 				poolTx, congestionTree, connAddr, err := builder.BuildPoolTx(
-					pubkey, f.Payments, minRelayFee, []domain.Round{},
+					pubkey, f.Payments, []ports.BoardingInput{}, minRelayFee, []domain.Round{},
 				)
 				require.NoError(t, err)
 				require.NotEmpty(t, poolTx)
@@ -81,7 +82,7 @@ func TestBuildPoolTx(t *testing.T) {
 		t.Run("invalid", func(t *testing.T) {
 			for _, f := range fixtures.Invalid {
 				poolTx, congestionTree, connAddr, err := builder.BuildPoolTx(
-					pubkey, f.Payments, minRelayFee, []domain.Round{},
+					pubkey, f.Payments, []ports.BoardingInput{}, minRelayFee, []domain.Round{},
 				)
 				require.EqualError(t, err, f.ExpectedErr)
 				require.Empty(t, poolTx)
@@ -94,7 +95,7 @@ func TestBuildPoolTx(t *testing.T) {
 
 func TestBuildForfeitTxs(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(
-		wallet, common.Liquid, 1209344, unilateralExitDelay,
+		wallet, common.Liquid, 1209344, unilateralExitDelay, boardingExitDelay,
 	)
 
 	fixtures, err := parseForfeitTxsFixtures()

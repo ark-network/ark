@@ -17,6 +17,9 @@ import (
 // swagger:model v1GetInfoResponse
 type V1GetInfoResponse struct {
 
+	// boarding descriptor template
+	BoardingDescriptorTemplate string `json:"boardingDescriptorTemplate,omitempty"`
+
 	// min relay fee
 	MinRelayFee string `json:"minRelayFee,omitempty"`
 

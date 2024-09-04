@@ -38,31 +38,27 @@ func main() {
 	defer aliceArkClient.Lock(ctx, password)
 
 	log.Info("alice is acquiring onchain funds...")
-	_, aliceOnchainAddr, err := aliceArkClient.Receive(ctx)
+	_, aliceBoardingAddr, err := aliceArkClient.Receive(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if _, err := runCommand("nigiri", "faucet", "--liquid", aliceOnchainAddr); err != nil {
+	if _, err := runCommand("nigiri", "faucet", "--liquid", aliceBoardingAddr); err != nil {
 		log.Fatal(err)
 	}
 
 	time.Sleep(5 * time.Second)
 
-	onboardAmount := uint64(20000)
+	onboardAmount := uint64(1_0000_0000) // 1 BTC
 	log.Infof("alice is onboarding with %d sats offchain...", onboardAmount)
-	txid, err := aliceArkClient.Onboard(ctx, onboardAmount)
+
+	log.Infof("alice claiming onboarding funds...")
+	txid, err := aliceArkClient.Claim(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if err := generateBlock(); err != nil {
-		log.Fatal(err)
-	}
-
-	time.Sleep(5 * time.Second)
-
-	log.Infof("alice onboarded with tx: %s", txid)
+	log.Infof("onboarding completed in round tx: %s", txid)
 
 	aliceBalance, err := aliceArkClient.Balance(ctx, false)
 	if err != nil {

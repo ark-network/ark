@@ -3,6 +3,7 @@ package tree
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/ark-network/ark/common"
@@ -62,7 +63,7 @@ func DecodeClosure(script []byte) (Closure, error) {
 		return closure, nil
 	}
 
-	return nil, fmt.Errorf("invalid closure script")
+	return nil, fmt.Errorf("invalid closure script %s", hex.EncodeToString(script))
 }
 
 func (f *ForfeitClosure) Leaf() (*taproot.TapElementsLeaf, error) {

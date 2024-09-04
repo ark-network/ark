@@ -1,6 +1,7 @@
 package oceanwallet
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/hex"
@@ -11,6 +12,8 @@ import (
 	pb "github.com/ark-network/ark/api-spec/protobuf/gen/ocean/v1"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/ports"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/vulpemventures/go-elements/elementsutil"
@@ -22,7 +25,7 @@ const (
 )
 
 func (s *service) SignTransaction(
-	ctx context.Context, pset string, extractRawTx bool,
+	ctx context.Context, pset string, finalizeAndExtractRawTx bool,
 ) (string, error) {
 	res, err := s.txClient.SignPset(ctx, &pb.SignPsetRequest{
 		Pset: pset,
@@ -32,7 +35,7 @@ func (s *service) SignTransaction(
 	}
 	signedPset := res.GetPset()
 
-	if !extractRawTx {
+	if !finalizeAndExtractRawTx {
 		return signedPset, nil
 	}
 
@@ -41,8 +44,61 @@ func (s *service) SignTransaction(
 		return "", err
 	}
 
-	if err := psetv2.MaybeFinalizeAll(ptx); err != nil {
-		return "", fmt.Errorf("failed to finalize signed pset: %s", err)
+	for i, in := range ptx.Inputs {
+		if in.WitnessUtxo == nil {
+			return "", fmt.Errorf("missing witness utxo, cannot finalize tx")
+		}
+
+		if len(in.TapLeafScript) > 0 {
+			tapLeaf := in.TapLeafScript[0]
+
+			closure, err := tree.DecodeClosure(tapLeaf.Script)
+			if err != nil {
+				return "", err
+			}
+
+			switch c := closure.(type) {
+			case *tree.ForfeitClosure:
+				asp := schnorr.SerializePubKey(c.AspPubkey)
+				owner := schnorr.SerializePubKey(c.Pubkey)
+
+				witness := make([][]byte, 4)
+				for _, sig := range in.TapScriptSig {
+					if bytes.Equal(sig.PubKey, owner) {
+						witness[0] = sig.Signature
+						continue
+					}
+
+					if bytes.Equal(sig.PubKey, asp) {
+						witness[1] = sig.Signature
+					}
+				}
+
+				witness[2] = tapLeaf.Script
+
+				controlBlock, err := tapLeaf.ControlBlock.ToBytes()
+				if err != nil {
+					return "", err
+				}
+
+				witness[3] = controlBlock
+
+				var witnessBuf bytes.Buffer
+
+				if err := psbt.WriteTxWitness(&witnessBuf, witness); err != nil {
+					return "", err
+				}
+
+				ptx.Inputs[i].FinalScriptWitness = witnessBuf.Bytes()
+				continue
+			default:
+				return "", fmt.Errorf("unexpected closure type %T", c)
+			}
+		}
+
+		if err := psetv2.Finalize(ptx, i); err != nil {
+			return "", fmt.Errorf("failed to finalize signed pset: %s", err)
+		}
 	}
 
 	extractedTx, err := psetv2.Extract(ptx)
@@ -279,6 +335,15 @@ func (s *service) EstimateFees(
 
 	// we add 5 sats in order to avoid min-relay-fee not met errors
 	return fee.GetFeeAmount() + 5, nil
+}
+
+func (s *service) GetTransaction(ctx context.Context, txid string) (string, error) {
+	txHex, _, _, err := s.getTransaction(ctx, txid)
+	if err != nil {
+		return "", err
+	}
+
+	return txHex, nil
 }
 
 func (s *service) getTransaction(
