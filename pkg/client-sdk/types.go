@@ -129,3 +129,16 @@ type balanceRes struct {
 	offchainBalanceByExpiration map[int64]uint64
 	err                         error
 }
+
+const (
+	TxSent     TxType = "sent"
+	TxReceived TxType = "Received"
+)
+
+type TxType string
+
+type Transaction struct {
+	TxID   string
+	Amount uint64
+	Type   TxType
+}

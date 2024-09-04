@@ -229,6 +229,49 @@ func (a *arkClient) ListVtxos(
 	return
 }
 
+func (a *arkClient) GetTransactionHistory(ctx context.Context) ([]Transaction, error) {
+	var txs []Transaction
+
+	spendableVtxos, spentVtxos, err := a.ListVtxos(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	poolTxIDs := make(map[string]struct{})
+	for _, vtxo := range spendableVtxos {
+		poolTxIDs[vtxo.Txid] = struct{}{}
+		txs = append(
+			txs,
+			Transaction{
+				TxID:   vtxo.RoundTxid,
+				Amount: vtxo.Amount,
+				Type:   TxReceived,
+			},
+		)
+	}
+
+	for _, vtxo := range spentVtxos {
+		// in case bob receives shortcut payment from alice, after claiming the payment,
+		// there will be two vtxos, one in spendable and one in spent vtxo,
+		// with bellow condition we are avoiding to show the spent vtxo in transaction history
+		// as Bob only received the payment and didn't send it to anyone
+		if _, ok := poolTxIDs[vtxo.SpentBy]; ok && vtxo.Pending {
+			continue
+		}
+
+		txs = append(
+			txs,
+			Transaction{
+				TxID:   vtxo.RoundTxid,
+				Amount: vtxo.Amount,
+				Type:   TxSent,
+			},
+		)
+	}
+
+	return txs, nil
+}
+
 func (a *arkClient) ping(
 	ctx context.Context, paymentID string,
 ) func() {

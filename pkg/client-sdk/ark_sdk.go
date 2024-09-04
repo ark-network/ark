@@ -27,7 +27,8 @@ type ArkClient interface {
 	) (string, error)
 	SendAsync(ctx context.Context, withExpiryCoinselect bool, receivers []Receiver) (string, error)
 	ClaimAsync(ctx context.Context) (string, error)
-	ListVtxos(ctx context.Context) ([]client.Vtxo, []client.Vtxo, error)
+	ListVtxos(ctx context.Context) (spendable []client.Vtxo, spent []client.Vtxo, err error)
+	GetTransactionHistory(ctx context.Context) ([]Transaction, error)
 }
 
 type Receiver interface {
