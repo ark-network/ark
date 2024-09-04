@@ -208,7 +208,7 @@ func coinSelect(vtxos []vtxo, amount uint64, sortByExpirationTime bool) ([]vtxo,
 	}
 
 	if selectedAmount < amount {
-		return nil, 0, fmt.Errorf("not enough funds to cover amount%d", amount)
+		return nil, 0, fmt.Errorf("not enough funds to cover amount %d", amount)
 	}
 
 	change := selectedAmount - amount
