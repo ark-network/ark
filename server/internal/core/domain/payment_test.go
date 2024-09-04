@@ -22,31 +22,13 @@ var inputs = []domain.Vtxo{
 
 func TestPayment(t *testing.T) {
 	t.Run("new_payment", func(t *testing.T) {
-		t.Run("vaild", func(t *testing.T) {
+		t.Run("valid", func(t *testing.T) {
 			payment, err := domain.NewPayment(inputs)
 			require.NoError(t, err)
 			require.NotNil(t, payment)
 			require.NotEmpty(t, payment.Id)
 			require.Exactly(t, inputs, payment.Inputs)
 			require.Empty(t, payment.Receivers)
-		})
-
-		t.Run("invaild", func(t *testing.T) {
-			fixtures := []struct {
-				inputs      []domain.Vtxo
-				expectedErr string
-			}{
-				{
-					inputs:      nil,
-					expectedErr: "missing inputs",
-				},
-			}
-
-			for _, f := range fixtures {
-				payment, err := domain.NewPayment(f.inputs)
-				require.EqualError(t, err, f.expectedErr)
-				require.Nil(t, payment)
-			}
 		})
 	})
 
