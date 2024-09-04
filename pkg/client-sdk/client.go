@@ -239,7 +239,7 @@ func (a *arkClient) GetTransactionHistory(ctx context.Context) ([]Transaction, e
 
 	poolTxIDs := make(map[string]struct{})
 	for _, vtxo := range spendableVtxos {
-		poolTxIDs[vtxo.Txid] = struct{}{}
+		poolTxIDs[vtxo.RoundTxid] = struct{}{}
 		txs = append(
 			txs,
 			Transaction{
