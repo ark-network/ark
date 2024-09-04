@@ -330,7 +330,7 @@ func (b boardingInput) GetIndex() uint32 {
 }
 
 func (b boardingInput) GetAmount() uint64 {
-	return 0
+	return b.amount
 }
 
 func (b boardingInput) GetBoardingPubkey() *secp256k1.PublicKey {

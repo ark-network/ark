@@ -503,9 +503,11 @@ func (s *service) SelectUtxos(ctx context.Context, _ string, amount uint64) ([]p
 		selectedUtxos = append(selectedUtxos, coinTxInput{coin})
 	}
 
-	change := selectedAmount - amount
+	if selectedAmount < amount {
+		return nil, 0, fmt.Errorf("insufficient funds to select %d, only %d available", amount, selectedAmount)
+	}
 
-	return selectedUtxos, change, nil
+	return selectedUtxos, selectedAmount - amount, nil
 }
 
 func (s *service) SignTransaction(ctx context.Context, partialTx string, extractRawTx bool) (string, error) {

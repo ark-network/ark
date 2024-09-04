@@ -453,7 +453,6 @@ func (b *txBuilder) createPoolTx(
 	for _, in := range boardingInputs {
 		targetAmount -= in.GetAmount()
 	}
-
 	ctx := context.Background()
 	utxos, change, err := b.selectUtxos(ctx, sweptRounds, targetAmount)
 	if err != nil {
