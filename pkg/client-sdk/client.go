@@ -16,7 +16,6 @@ import (
 	walletstore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store"
 	filestore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store/file"
 	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store/inmemory"
-	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
@@ -230,86 +229,6 @@ func (a *arkClient) ListVtxos(
 	}
 
 	return
-}
-
-func (a *arkClient) GetTransactionHistory(ctx context.Context) ([]Transaction, error) {
-	spendableVtxos, spentVtxos, err := a.ListVtxos(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return vtxosToTxs(spendableVtxos, spentVtxos)
-}
-
-func vtxosToTxs(spendable, spent []client.Vtxo) ([]Transaction, error) {
-	txsMap := make(map[string]Transaction)
-	pendingTxs := make(map[string]string)
-
-	// Process spent transactions
-	for _, vtxo := range spent {
-		txID := vtxo.RoundTxid
-		pending := vtxo.Pending
-
-		if pending {
-			redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(vtxo.RedeemTx), true)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse redeem tx: %s", err)
-			}
-
-			txID = redeemPtx.UnsignedTx.TxID()
-			pendingTxs[vtxo.SpentBy] = txID
-		}
-
-		txsMap[txID] = Transaction{
-			TxID:    txID,
-			Amount:  vtxo.Amount,
-			Type:    TxSent,
-			Pending: pending,
-		}
-	}
-
-	// Process spendable transactions
-	for _, vtxo := range spendable {
-		txID := vtxo.RoundTxid
-
-		if vtxo.Pending {
-			redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(vtxo.RedeemTx), true)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse redeem tx: %s", err)
-			}
-
-			txID = redeemPtx.UnsignedTx.TxID()
-			txsMap[txID] = Transaction{
-				TxID:    txID,
-				Amount:  vtxo.Amount,
-				Type:    TxReceived,
-				Pending: true,
-			}
-		} else if pendingTxID, ok := pendingTxs[txID]; ok {
-			// Update the transaction if it's pending and now claimed
-			if tx, exists := txsMap[pendingTxID]; exists {
-				tx.Pending = false
-				tx.Claimed = true
-				tx.Type = TxReceived
-				txsMap[pendingTxID] = tx
-			}
-		} else {
-			// Regular received transaction
-			txsMap[txID] = Transaction{
-				TxID:   txID,
-				Amount: vtxo.Amount,
-				Type:   TxReceived,
-			}
-		}
-	}
-
-	// Convert map to slice
-	txs := make([]Transaction, 0, len(txsMap))
-	for _, tx := range txsMap {
-		txs = append(txs, tx)
-	}
-
-	return txs, nil
 }
 
 func (a *arkClient) ping(
