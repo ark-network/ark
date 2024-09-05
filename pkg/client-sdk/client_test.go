@@ -89,7 +89,7 @@ func TestVtxosToTxs(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to load fixture: %s", err)
 			}
-			got, err := vtxosToTxsCovenantless(args.spendable, args.spent)
+			got, err := vtxosToTxsCovenantless(30, args.spendable, args.spent)
 			if !tt.wantErr(t, err, fmt.Sprintf("vtxosToTxs(%v, %v)", args.spendable, args.spent)) {
 				return
 			}
