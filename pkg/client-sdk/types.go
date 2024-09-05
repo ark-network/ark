@@ -132,13 +132,15 @@ type balanceRes struct {
 
 const (
 	TxSent     TxType = "sent"
-	TxReceived TxType = "Received"
+	TxReceived TxType = "received"
 )
 
 type TxType string
 
 type Transaction struct {
-	TxID   string
-	Amount uint64
-	Type   TxType
+	TxID    string
+	Amount  uint64
+	Type    TxType
+	Pending bool
+	Claimed bool
 }
