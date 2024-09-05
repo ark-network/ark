@@ -63,6 +63,7 @@ type Config struct {
 	MinRelayFee           uint64
 	RoundLifetime         int64
 	UnilateralExitDelay   int64
+	BoardingExitDelay     int64
 
 	EsploraURL      string
 	NeutrinoPeer    string
@@ -126,6 +127,12 @@ func (c *Config) Validate() error {
 		)
 	}
 
+	if c.BoardingExitDelay < minAllowedSequence {
+		return fmt.Errorf(
+			"invalid boarding exit delay, must at least %d", minAllowedSequence,
+		)
+	}
+
 	if c.RoundLifetime%minAllowedSequence != 0 {
 		c.RoundLifetime -= c.RoundLifetime % minAllowedSequence
 		log.Infof(
@@ -139,6 +146,14 @@ func (c *Config) Validate() error {
 		log.Infof(
 			"unilateral exit delay must be a multiple of %d, rounded to %d",
 			minAllowedSequence, c.UnilateralExitDelay,
+		)
+	}
+
+	if c.BoardingExitDelay%minAllowedSequence != 0 {
+		c.BoardingExitDelay -= c.BoardingExitDelay % minAllowedSequence
+		log.Infof(
+			"boarding exit delay must be a multiple of %d, rounded to %d",
+			minAllowedSequence, c.BoardingExitDelay,
 		)
 	}
 
@@ -275,11 +290,11 @@ func (c *Config) txBuilderService() error {
 	switch c.TxBuilderType {
 	case "covenant":
 		svc = txbuilder.NewTxBuilder(
-			c.wallet, c.Network, c.RoundLifetime, c.UnilateralExitDelay,
+			c.wallet, c.Network, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay,
 		)
 	case "covenantless":
 		svc = cltxbuilder.NewTxBuilder(
-			c.wallet, c.Network, c.RoundLifetime, c.UnilateralExitDelay,
+			c.wallet, c.Network, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay,
 		)
 	default:
 		err = fmt.Errorf("unknown tx builder type")
@@ -323,7 +338,7 @@ func (c *Config) schedulerService() error {
 func (c *Config) appService() error {
 	if common.IsLiquid(c.Network) {
 		svc, err := application.NewCovenantService(
-			c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay,
+			c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay,
 			c.MinRelayFee, c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler,
 		)
 		if err != nil {
@@ -335,7 +350,7 @@ func (c *Config) appService() error {
 	}
 
 	svc, err := application.NewCovenantlessService(
-		c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay,
+		c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay,
 		c.MinRelayFee, c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler,
 	)
 	if err != nil {

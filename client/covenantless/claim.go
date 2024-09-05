@@ -2,26 +2,62 @@ package covenantless
 
 import (
 	"encoding/hex"
+	"fmt"
+	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/client/utils"
+	"github.com/ark-network/ark/common/descriptor"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/urfave/cli/v2"
 )
 
-func (c *clArkBitcoinCLI) ClaimAsync(ctx *cli.Context) error {
+func (c *clArkBitcoinCLI) Claim(ctx *cli.Context) error {
 	client, cancel, err := getClientFromState(ctx)
 	if err != nil {
 		return err
 	}
 	defer cancel()
 
-	myselfOffchain, _, _, err := getAddress(ctx)
+	offchainAddr, boardingAddr, _, err := getAddress(ctx)
 	if err != nil {
 		return err
 	}
 
-	vtxos, err := getVtxos(ctx, nil, client, myselfOffchain, false)
+	boardingDescriptor, err := utils.GetBoardingDescriptor(ctx)
+	if err != nil {
+		return err
+	}
+
+	desc, err := descriptor.ParseTaprootDescriptor(boardingDescriptor)
+	if err != nil {
+		return err
+	}
+
+	_, timeoutBoarding, err := descriptor.ParseBoardingDescriptor(*desc)
+	if err != nil {
+		return err
+	}
+
+	explorer := utils.NewExplorer(ctx)
+
+	boardingUtxosFromExplorer, err := explorer.GetUtxos(boardingAddr.EncodeAddress())
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	boardingUtxos := make([]utils.Utxo, 0, len(boardingUtxosFromExplorer))
+	for _, utxo := range boardingUtxosFromExplorer {
+		u := utils.NewUtxo(utxo, uint(timeoutBoarding))
+		if u.SpendableAt.Before(now) {
+			continue // cannot claim if onchain spendable
+		}
+
+		boardingUtxos = append(boardingUtxos, u)
+	}
+
+	vtxos, err := getVtxos(ctx, nil, client, offchainAddr, false)
 	if err != nil {
 		return err
 	}
@@ -34,30 +70,69 @@ func (c *clArkBitcoinCLI) ClaimAsync(ctx *cli.Context) error {
 			pendingVtxos = append(pendingVtxos, vtxo)
 		}
 	}
+
+	for _, utxo := range boardingUtxos {
+		pendingBalance += utxo.Amount
+	}
+
 	if pendingBalance == 0 {
 		return nil
 	}
 
 	receiver := receiver{
-		To:     myselfOffchain,
+		To:     offchainAddr,
 		Amount: pendingBalance,
 	}
+
+	if len(ctx.String("password")) == 0 {
+		if ok := askForConfirmation(
+			fmt.Sprintf(
+				"claim %d satoshis from %d pending payments and %d boarding utxos",
+				pendingBalance, len(pendingVtxos), len(boardingUtxos),
+			),
+		); !ok {
+			return nil
+		}
+	}
+
 	return selfTransferAllPendingPayments(
-		ctx, client, pendingVtxos, receiver,
+		ctx, client, pendingVtxos, boardingUtxos, receiver, boardingDescriptor,
 	)
 }
 
 func selfTransferAllPendingPayments(
-	ctx *cli.Context, client arkv1.ArkServiceClient,
-	pendingVtxos []vtxo, myself receiver,
+	ctx *cli.Context,
+	client arkv1.ArkServiceClient,
+	pendingVtxos []vtxo,
+	boardingUtxos []utils.Utxo,
+	myself receiver,
+	desc string,
 ) error {
-	inputs := make([]*arkv1.Input, 0, len(pendingVtxos))
+	inputs := make([]*arkv1.Input, 0, len(pendingVtxos)+len(boardingUtxos))
 
 	for _, coin := range pendingVtxos {
 		inputs = append(inputs, &arkv1.Input{
-			Txid: coin.txid,
-			Vout: coin.vout,
+			Input: &arkv1.Input_VtxoInput{
+				VtxoInput: &arkv1.VtxoInput{
+					Txid: coin.txid,
+					Vout: coin.vout,
+				},
+			},
 		})
+	}
+
+	if len(boardingUtxos) > 0 {
+		for _, outpoint := range boardingUtxos {
+			inputs = append(inputs, &arkv1.Input{
+				Input: &arkv1.Input_BoardingInput{
+					BoardingInput: &arkv1.BoardingInput{
+						Txid:        outpoint.Txid,
+						Vout:        outpoint.Vout,
+						Descriptor_: desc,
+					},
+				},
+			})
+		}
 	}
 
 	receiversOutput := []*arkv1.Output{
@@ -99,8 +174,8 @@ func selfTransferAllPendingPayments(
 	}
 
 	poolTxID, err := handleRoundStream(
-		ctx, client, registerResponse.GetId(),
-		pendingVtxos, secKey, receiversOutput, ephemeralKey,
+		ctx, client, registerResponse.GetId(), pendingVtxos,
+		len(boardingUtxos) > 0, secKey, receiversOutput, ephemeralKey,
 	)
 	if err != nil {
 		return err

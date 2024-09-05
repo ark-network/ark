@@ -82,6 +82,7 @@ func connectToAsp(ctx *cli.Context, net, url, explorer string) error {
 		utils.UNILATERAL_EXIT_DELAY: strconv.Itoa(int(resp.GetUnilateralExitDelay())),
 		utils.MIN_RELAY_FEE:         strconv.Itoa(int(resp.MinRelayFee)),
 		utils.EXPLORER:              explorer,
+		utils.BOARDING_TEMPLATE:     resp.GetBoardingDescriptorTemplate(),
 	})
 }
 

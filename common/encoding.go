@@ -35,7 +35,7 @@ func EncodeAddress(
 
 func DecodeAddress(
 	addr string,
-) (hrp string, userKey *secp256k1.PublicKey, aspKey *secp256k1.PublicKey, err error) {
+) (hrp string, userKey, aspKey *secp256k1.PublicKey, err error) {
 	prefix, buf, err := bech32.DecodeNoLimit(addr)
 	if err != nil {
 		return

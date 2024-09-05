@@ -12,11 +12,12 @@ services:
       - OCEAN_NETWORK=regtest
       - OCEAN_UTXO_EXPIRY_DURATION_IN_SECONDS=60
       - OCEAN_DB_TYPE=badger
+      - OCEAN_DATADIR=/app/data
     ports:
       - "18000:18000"
     volumes:
-      - oceand:/app/data/oceand
-      - ocean:/app/data/ocean
+      - type: tmpfs
+        target: /app/data
   arkd:
     container_name: arkd
     build: 
@@ -36,21 +37,12 @@ services:
       - ARK_PORT=6060
       - ARK_NO_TLS=true
       - ARK_NO_MACAROONS=true
+      - ARK_DATADIR=/app/data
     ports:
       - "6060:6060"
     volumes:
-      - arkd:/app/data
-      - ark:/app/wallet-data
-
-volumes:
-  oceand:
-    external: false
-  ocean:
-    external: false
-  arkd:
-    external: false
-  ark:
-    external: false
+      - type: tmpfs
+        target: /app/data
 
 networks:
   default:

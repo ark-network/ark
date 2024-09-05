@@ -28,11 +28,7 @@ type ArkBalance struct {
 
 type ArkReceive struct {
 	Offchain string `json:"offchain_address"`
-	Onchain  string `json:"onchain_address"`
-}
-
-type ArkTrustedOnboard struct {
-	OnboardAddress string `json:"onboard_address"`
+	Boarding string `json:"boarding_address"`
 }
 
 func GenerateBlock() error {

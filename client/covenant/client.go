@@ -51,13 +51,16 @@ func getVtxos(
 		if v.Swept {
 			continue
 		}
-		vtxos = append(vtxos, vtxo{
-			amount:   v.Receiver.Amount,
-			txid:     v.Outpoint.Txid,
-			vout:     v.Outpoint.Vout,
-			poolTxid: v.PoolTxid,
-			expireAt: expireAt,
-		})
+
+		if v.Outpoint.GetVtxoInput() != nil {
+			vtxos = append(vtxos, vtxo{
+				amount:   v.Receiver.Amount,
+				txid:     v.Outpoint.GetVtxoInput().GetTxid(),
+				vout:     v.Outpoint.GetVtxoInput().GetVout(),
+				poolTxid: v.PoolTxid,
+				expireAt: expireAt,
+			})
+		}
 	}
 
 	if !computeExpiration {
@@ -193,32 +196,10 @@ func toCongestionTree(treeFromProto *arkv1.Tree) (tree.CongestionTree, error) {
 	return levels, nil
 }
 
-// castCongestionTree converts a tree.CongestionTree to a repeated arkv1.TreeLevel
-func castCongestionTree(congestionTree tree.CongestionTree) *arkv1.Tree {
-	levels := make([]*arkv1.TreeLevel, 0, len(congestionTree))
-	for _, level := range congestionTree {
-		levelProto := &arkv1.TreeLevel{
-			Nodes: make([]*arkv1.Node, 0, len(level)),
-		}
-
-		for _, node := range level {
-			levelProto.Nodes = append(levelProto.Nodes, &arkv1.Node{
-				Txid:       node.Txid,
-				Tx:         node.Tx,
-				ParentTxid: node.ParentTxid,
-			})
-		}
-
-		levels = append(levels, levelProto)
-	}
-	return &arkv1.Tree{
-		Levels: levels,
-	}
-}
-
 func handleRoundStream(
 	ctx *cli.Context, client arkv1.ArkServiceClient, paymentID string,
-	vtxosToSign []vtxo, secKey *secp256k1.PrivateKey, receivers []*arkv1.Output,
+	vtxosToSign []vtxo, mustSignRoundTx bool,
+	secKey *secp256k1.PrivateKey, receivers []*arkv1.Output,
 ) (poolTxID string, err error) {
 	stream, err := client.GetEventStream(ctx.Context, &arkv1.GetEventStreamRequest{})
 	if err != nil {
@@ -254,8 +235,8 @@ func handleRoundStream(
 			pingStop()
 			fmt.Println("round finalization started")
 
-			poolTx := e.GetPoolTx()
-			ptx, err := psetv2.NewPsetFromBase64(poolTx)
+			roundTx := e.GetPoolTx()
+			ptx, err := psetv2.NewPsetFromBase64(roundTx)
 			if err != nil {
 				return "", err
 			}
@@ -280,13 +261,13 @@ func handleRoundStream(
 			if !isOnchainOnly(receivers) {
 				// validate the congestion tree
 				if err := tree.ValidateCongestionTree(
-					congestionTree, poolTx, aspPubkey, int64(roundLifetime),
+					congestionTree, roundTx, aspPubkey, int64(roundLifetime),
 				); err != nil {
 					return "", err
 				}
 			}
 
-			if err := common.ValidateConnectors(poolTx, connectors); err != nil {
+			if err := common.ValidateConnectors(roundTx, connectors); err != nil {
 				return "", err
 			}
 
@@ -379,78 +360,100 @@ func handleRoundStream(
 
 			fmt.Println("congestion tree validated")
 
-			forfeits := e.GetForfeitTxs()
-			signedForfeits := make([]string, 0)
-
-			fmt.Print("signing forfeit txs... ")
-
 			explorer := utils.NewExplorer(ctx)
+			finalizePaymentRequest := &arkv1.FinalizePaymentRequest{}
 
-			connectorsTxids := make([]string, 0, len(connectors))
-			for _, connector := range connectors {
-				p, _ := psetv2.NewPsetFromBase64(connector)
-				utx, _ := p.UnsignedTx()
-				txid := utx.TxHash().String()
+			if len(vtxosToSign) > 0 {
+				forfeits := e.GetForfeitTxs()
+				signedForfeits := make([]string, 0)
 
-				connectorsTxids = append(connectorsTxids, txid)
+				fmt.Print("signing forfeit txs... ")
+
+				connectorsTxids := make([]string, 0, len(connectors))
+				for _, connector := range connectors {
+					p, _ := psetv2.NewPsetFromBase64(connector)
+					utx, _ := p.UnsignedTx()
+					txid := utx.TxHash().String()
+
+					connectorsTxids = append(connectorsTxids, txid)
+				}
+
+				for _, forfeit := range forfeits {
+					pset, err := psetv2.NewPsetFromBase64(forfeit)
+					if err != nil {
+						return "", err
+					}
+
+					for _, input := range pset.Inputs {
+						inputTxid := chainhash.Hash(input.PreviousTxid).String()
+
+						for _, coin := range vtxosToSign {
+							// check if it contains one of the input to sign
+							if inputTxid == coin.txid {
+								// verify that the connector is in the connectors list
+								connectorTxid := chainhash.Hash(pset.Inputs[0].PreviousTxid).String()
+								connectorFound := false
+								for _, txid := range connectorsTxids {
+									if txid == connectorTxid {
+										connectorFound = true
+										break
+									}
+								}
+
+								if !connectorFound {
+									return "", fmt.Errorf("connector txid %s not found in the connectors list", connectorTxid)
+								}
+
+								if err := signPset(ctx, pset, explorer, secKey); err != nil {
+									return "", err
+								}
+
+								signedPset, err := pset.ToBase64()
+								if err != nil {
+									return "", err
+								}
+
+								signedForfeits = append(signedForfeits, signedPset)
+							}
+						}
+					}
+				}
+
+				// if no forfeit txs have been signed, start pinging again and wait for the next round
+				if len(signedForfeits) == 0 {
+					fmt.Printf("\nno forfeit txs to sign, waiting for the next round...\n")
+					pingStop = nil
+					for pingStop == nil {
+						pingStop = ping(ctx.Context, client, pingReq)
+					}
+					continue
+				}
+
+				fmt.Printf("%d signed\n", len(signedForfeits))
+				finalizePaymentRequest.SignedForfeitTxs = signedForfeits
 			}
 
-			for _, forfeit := range forfeits {
-				pset, err := psetv2.NewPsetFromBase64(forfeit)
+			if mustSignRoundTx {
+				ptx, err := psetv2.NewPsetFromBase64(roundTx)
 				if err != nil {
 					return "", err
 				}
 
-				for _, input := range pset.Inputs {
-					inputTxid := chainhash.Hash(input.PreviousTxid).String()
-
-					for _, coin := range vtxosToSign {
-						// check if it contains one of the input to sign
-						if inputTxid == coin.txid {
-							// verify that the connector is in the connectors list
-							connectorTxid := chainhash.Hash(pset.Inputs[0].PreviousTxid).String()
-							connectorFound := false
-							for _, txid := range connectorsTxids {
-								if txid == connectorTxid {
-									connectorFound = true
-									break
-								}
-							}
-
-							if !connectorFound {
-								return "", fmt.Errorf("connector txid %s not found in the connectors list", connectorTxid)
-							}
-
-							if err := signPset(ctx, pset, explorer, secKey); err != nil {
-								return "", err
-							}
-
-							signedPset, err := pset.ToBase64()
-							if err != nil {
-								return "", err
-							}
-
-							signedForfeits = append(signedForfeits, signedPset)
-						}
-					}
+				if err := signPset(ctx, ptx, explorer, secKey); err != nil {
+					return "", err
 				}
+
+				signedRoundTx, err := ptx.ToBase64()
+				if err != nil {
+					return "", err
+				}
+
+				fmt.Println("round tx signed")
+				finalizePaymentRequest.SignedRoundTx = &signedRoundTx
 			}
 
-			// if no forfeit txs have been signed, start pinging again and wait for the next round
-			if len(signedForfeits) == 0 {
-				fmt.Printf("\nno forfeit txs to sign, waiting for the next round...\n")
-				pingStop = nil
-				for pingStop == nil {
-					pingStop = ping(ctx.Context, client, pingReq)
-				}
-				continue
-			}
-
-			fmt.Printf("%d signed\n", len(signedForfeits))
 			fmt.Print("finalizing payment... ")
-			_, err = client.FinalizePayment(ctx.Context, &arkv1.FinalizePaymentRequest{
-				SignedForfeitTxs: signedForfeits,
-			})
+			_, err = client.FinalizePayment(ctx.Context, finalizePaymentRequest)
 			if err != nil {
 				return "", err
 			}

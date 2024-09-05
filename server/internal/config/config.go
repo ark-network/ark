@@ -29,6 +29,7 @@ type Config struct {
 	MinRelayFee           uint64
 	RoundLifetime         int64
 	UnilateralExitDelay   int64
+	BoardingExitDelay     int64
 	EsploraURL            string
 	NeutrinoPeer          string
 	BitcoindRpcUser       string
@@ -54,6 +55,7 @@ var (
 	MinRelayFee           = "MIN_RELAY_FEE"
 	RoundLifetime         = "ROUND_LIFETIME"
 	UnilateralExitDelay   = "UNILATERAL_EXIT_DELAY"
+	BoardingExitDelay     = "BOARDING_EXIT_DELAY"
 	EsploraURL            = "ESPLORA_URL"
 	NeutrinoPeer          = "NEUTRINO_PEER"
 	BitcoindRpcUser       = "BITCOIND_RPC_USER"
@@ -79,6 +81,7 @@ var (
 	defaultMinRelayFee           = 30 // 0.1 sat/vbyte on Liquid
 	defaultRoundLifetime         = 604672
 	defaultUnilateralExitDelay   = 1024
+	defaultBoardingExitDelay     = 604672
 	defaultNoMacaroons           = false
 	defaultNoTLS                 = false
 )
@@ -104,6 +107,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(UnilateralExitDelay, defaultUnilateralExitDelay)
 	viper.SetDefault(BlockchainScannerType, defaultBlockchainScannerType)
 	viper.SetDefault(NoMacaroons, defaultNoMacaroons)
+	viper.SetDefault(BoardingExitDelay, defaultBoardingExitDelay)
 
 	net, err := getNetwork()
 	if err != nil {
@@ -132,6 +136,7 @@ func LoadConfig() (*Config, error) {
 		MinRelayFee:           viper.GetUint64(MinRelayFee),
 		RoundLifetime:         viper.GetInt64(RoundLifetime),
 		UnilateralExitDelay:   viper.GetInt64(UnilateralExitDelay),
+		BoardingExitDelay:     viper.GetInt64(BoardingExitDelay),
 		EsploraURL:            viper.GetString(EsploraURL),
 		NeutrinoPeer:          viper.GetString(NeutrinoPeer),
 		BitcoindRpcUser:       viper.GetString(BitcoindRpcUser),

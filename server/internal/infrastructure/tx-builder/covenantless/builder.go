@@ -28,16 +28,17 @@ const (
 )
 
 type txBuilder struct {
-	wallet        ports.WalletService
-	net           common.Network
-	roundLifetime int64 // in seconds
-	exitDelay     int64 // in seconds
+	wallet            ports.WalletService
+	net               common.Network
+	roundLifetime     int64 // in seconds
+	exitDelay         int64 // in seconds
+	boardingExitDelay int64 // in seconds
 }
 
 func NewTxBuilder(
-	wallet ports.WalletService, net common.Network, roundLifetime int64, exitDelay int64,
+	wallet ports.WalletService, net common.Network, roundLifetime, exitDelay, boardingExitDelay int64,
 ) ports.TxBuilder {
-	return &txBuilder{wallet, net, roundLifetime, exitDelay}
+	return &txBuilder{wallet, net, roundLifetime, exitDelay, boardingExitDelay}
 }
 
 func (b *txBuilder) VerifyForfeitTx(tx string) (bool, string, error) {
@@ -45,6 +46,7 @@ func (b *txBuilder) VerifyForfeitTx(tx string) (bool, string, error) {
 	txid := ptx.UnsignedTx.TxHash().String()
 
 	for index, input := range ptx.Inputs {
+		// TODO (@louisinger): verify control block
 		for _, tapScriptSig := range input.TaprootScriptSpendSig {
 			preimage, err := b.getTaprootPreimage(
 				tx,
@@ -178,7 +180,12 @@ func (b *txBuilder) BuildForfeitTxs(
 }
 
 func (b *txBuilder) BuildPoolTx(
-	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, minRelayFee uint64, sweptRounds []domain.Round, cosigners ...*secp256k1.PublicKey,
+	aspPubkey *secp256k1.PublicKey,
+	payments []domain.Payment,
+	boardingInputs []ports.BoardingInput,
+	minRelayFee uint64,
+	sweptRounds []domain.Round,
+	cosigners ...*secp256k1.PublicKey,
 ) (poolTx string, congestionTree tree.CongestionTree, connectorAddress string, err error) {
 	var sharedOutputScript []byte
 	var sharedOutputAmount int64
@@ -204,7 +211,7 @@ func (b *txBuilder) BuildPoolTx(
 	}
 
 	ptx, err := b.createPoolTx(
-		sharedOutputAmount, sharedOutputScript, payments, connectorAddress, minRelayFee, sweptRounds,
+		aspPubkey, sharedOutputAmount, sharedOutputScript, payments, boardingInputs, connectorAddress, minRelayFee, sweptRounds,
 	)
 	if err != nil {
 		return
@@ -253,9 +260,14 @@ func (b *txBuilder) GetSweepInput(parentblocktime int64, node tree.Node) (expira
 
 	expirationTime := parentblocktime + lifetime
 
-	amount := int64(0)
-	for _, out := range partialTx.UnsignedTx.TxOut {
-		amount += out.Value
+	txhex, err := b.wallet.GetTransaction(context.Background(), txid.String())
+	if err != nil {
+		return -1, nil, err
+	}
+
+	var tx wire.MsgTx
+	if err := tx.Deserialize(hex.NewDecoder(strings.NewReader(txhex))); err != nil {
+		return -1, nil, err
 	}
 
 	sweepInput = &sweepBitcoinInput{
@@ -265,7 +277,7 @@ func (b *txBuilder) GetSweepInput(parentblocktime int64, node tree.Node) (expira
 		},
 		internalPubkey: internalKey,
 		sweepLeaf:      sweepLeaf,
-		amount:         amount,
+		amount:         tx.TxOut[index].Value,
 	}
 
 	return expirationTime, sweepInput, nil
@@ -468,6 +480,15 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 	}, nil
 }
 
+func (b *txBuilder) GetBoardingScript(userPubkey, aspPubkey *secp256k1.PublicKey) (string, []byte, error) {
+	addr, script, _, err := b.craftBoardingTaproot(userPubkey, aspPubkey)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return addr, script, nil
+}
+
 func (b *txBuilder) getLeafScriptAndTree(
 	userPubkey, aspPubkey *secp256k1.PublicKey,
 ) ([]byte, *txscript.IndexedTapScriptTree, error) {
@@ -508,8 +529,9 @@ func (b *txBuilder) getLeafScriptAndTree(
 }
 
 func (b *txBuilder) createPoolTx(
+	aspPubKey *secp256k1.PublicKey,
 	sharedOutputAmount int64, sharedOutputScript []byte,
-	payments []domain.Payment, connectorAddress string, minRelayFee uint64,
+	payments []domain.Payment, boardingInputs []ports.BoardingInput, connectorAddress string, minRelayFee uint64,
 	sweptRounds []domain.Round,
 ) (*psbt.Packet, error) {
 	connectorAddr, err := btcutil.DecodeAddress(connectorAddress, b.onchainNetwork())
@@ -541,10 +563,12 @@ func (b *txBuilder) createPoolTx(
 		})
 	}
 
-	outputs = append(outputs, &wire.TxOut{
-		Value:    int64(connectorAmount),
-		PkScript: connectorScript,
-	})
+	if connectorsAmount > 0 {
+		outputs = append(outputs, &wire.TxOut{
+			Value:    int64(connectorsAmount),
+			PkScript: connectorScript,
+		})
+	}
 
 	for _, receiver := range receivers {
 		targetAmount += receiver.Amount
@@ -563,6 +587,10 @@ func (b *txBuilder) createPoolTx(
 			Value:    int64(receiver.Amount),
 			PkScript: receiverScript,
 		})
+	}
+
+	for _, input := range boardingInputs {
+		targetAmount -= input.GetAmount()
 	}
 
 	ctx := context.Background()
@@ -601,6 +629,9 @@ func (b *txBuilder) createPoolTx(
 
 	ins := make([]*wire.OutPoint, 0)
 	nSequences := make([]uint32, 0)
+	witnessUtxos := make(map[int]*wire.TxOut)
+	boardingTapLeaves := make(map[int]*psbt.TaprootTapLeafScript)
+	nextIndex := 0
 
 	for _, utxo := range utxos {
 		txhash, err := chainhash.NewHashFromStr(utxo.GetTxid())
@@ -613,6 +644,37 @@ func (b *txBuilder) createPoolTx(
 			Index: utxo.GetIndex(),
 		})
 		nSequences = append(nSequences, wire.MaxTxInSequenceNum)
+
+		script, err := hex.DecodeString(utxo.GetScript())
+		if err != nil {
+			return nil, err
+		}
+
+		witnessUtxos[nextIndex] = &wire.TxOut{
+			Value:    int64(utxo.GetValue()),
+			PkScript: script,
+		}
+		nextIndex++
+	}
+
+	for _, input := range boardingInputs {
+		ins = append(ins, &wire.OutPoint{
+			Hash:  input.GetHash(),
+			Index: input.GetIndex(),
+		})
+		nSequences = append(nSequences, wire.MaxTxInSequenceNum)
+
+		_, script, tapLeaf, err := b.craftBoardingTaproot(input.GetBoardingPubkey(), aspPubKey)
+		if err != nil {
+			return nil, err
+		}
+
+		boardingTapLeaves[nextIndex] = tapLeaf
+		witnessUtxos[nextIndex] = &wire.TxOut{
+			Value:    int64(input.GetAmount()),
+			PkScript: script,
+		}
+		nextIndex++
 	}
 
 	ptx, err := psbt.New(ins, outputs, 2, 0, nSequences)
@@ -624,18 +686,18 @@ func (b *txBuilder) createPoolTx(
 	if err != nil {
 		return nil, err
 	}
-	for inIndex, utxo := range utxos {
-		script, err := hex.DecodeString(utxo.GetScript())
-		if err != nil {
-			return nil, err
-		}
 
-		if err := updater.AddInWitnessUtxo(&wire.TxOut{
-			Value:    int64(utxo.GetValue()),
-			PkScript: script,
-		}, inIndex); err != nil {
+	for inIndex, utxo := range witnessUtxos {
+		if err := updater.AddInWitnessUtxo(utxo, inIndex); err != nil {
 			return nil, err
 		}
+	}
+
+	unspendableInternalKey := schnorr.SerializePubKey(bitcointree.UnspendableKey())
+
+	for inIndex, tapLeaf := range boardingTapLeaves {
+		updater.Upsbt.Inputs[inIndex].TaprootLeafScript = []*psbt.TaprootTapLeafScript{tapLeaf}
+		updater.Upsbt.Inputs[inIndex].TaprootInternalKey = unspendableInternalKey
 	}
 
 	b64, err := ptx.B64Encode()
@@ -793,6 +855,62 @@ func (b *txBuilder) createPoolTx(
 	return ptx, nil
 }
 
+func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, error) {
+	roundTx, err := psbt.NewFromRawBytes(strings.NewReader(dest), true)
+	if err != nil {
+		return "", err
+	}
+
+	sourceTx, err := psbt.NewFromRawBytes(strings.NewReader(src), true)
+	if err != nil {
+		return "", err
+	}
+
+	if sourceTx.UnsignedTx.TxHash().String() != roundTx.UnsignedTx.TxHash().String() {
+		return "", fmt.Errorf("txids do not match")
+	}
+
+	for i, in := range sourceTx.Inputs {
+		isMultisigTaproot := len(in.TaprootLeafScript) > 0
+		if isMultisigTaproot {
+			// check if the source tx signs the leaf
+			sourceInput := sourceTx.Inputs[i]
+
+			if len(sourceInput.TaprootScriptSpendSig) == 0 {
+				continue
+			}
+
+			partialSig := sourceInput.TaprootScriptSpendSig[0]
+			preimage, err := b.getTaprootPreimage(src, i, sourceInput.TaprootLeafScript[0].Script)
+			if err != nil {
+				return "", err
+			}
+
+			sig, err := schnorr.ParseSignature(partialSig.Signature)
+			if err != nil {
+				return "", err
+			}
+
+			pubkey, err := schnorr.ParsePubKey(partialSig.XOnlyPubKey)
+			if err != nil {
+				return "", err
+			}
+
+			if !sig.Verify(preimage, pubkey) {
+				return "", fmt.Errorf(
+					"invalid signature for input %s:%d",
+					sourceTx.UnsignedTx.TxIn[i].PreviousOutPoint.Hash.String(),
+					sourceTx.UnsignedTx.TxIn[i].PreviousOutPoint.Index,
+				)
+			}
+
+			roundTx.Inputs[i].TaprootScriptSpendSig = sourceInput.TaprootScriptSpendSig
+		}
+	}
+
+	return roundTx.B64Encode()
+}
+
 func (b *txBuilder) createConnectors(
 	poolTx string, payments []domain.Payment, connectorScript []byte, minRelayFee uint64,
 ) ([]*psbt.Packet, error) {
@@ -858,9 +976,7 @@ func (b *txBuilder) createConnectors(
 func (b *txBuilder) createForfeitTxs(
 	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, connectors []*psbt.Packet, minRelayFee uint64,
 ) ([]string, error) {
-	// TODO (@louisinger): are we sure about this change?
 	aspScript, err := p2trScript(aspPubkey, b.onchainNetwork())
-	// aspScript, err := p2wpkhScript(aspPubkey, b.onchainNetwork())
 	if err != nil {
 		return nil, err
 	}
@@ -1024,6 +1140,61 @@ func (b *txBuilder) onchainNetwork() *chaincfg.Params {
 	default:
 		return nil
 	}
+}
+
+// craftBoardingTaproot returns the addr, script and the leaf belonging to the ASP
+func (b *txBuilder) craftBoardingTaproot(userPubkey, aspPubkey *secp256k1.PublicKey) (string, []byte, *psbt.TaprootTapLeafScript, error) {
+	multisigClosure := bitcointree.MultisigClosure{
+		Pubkey:    userPubkey,
+		AspPubkey: aspPubkey,
+	}
+
+	csvClosure := bitcointree.CSVSigClosure{
+		Pubkey:  userPubkey,
+		Seconds: uint(b.boardingExitDelay),
+	}
+
+	multisigLeaf, err := multisigClosure.Leaf()
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	csvLeaf, err := csvClosure.Leaf()
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	tree := txscript.AssembleTaprootScriptTree(*multisigLeaf, *csvLeaf)
+
+	root := tree.RootNode.TapHash()
+
+	taprootKey := txscript.ComputeTaprootOutputKey(bitcointree.UnspendableKey(), root[:])
+	script, err := txscript.PayToTaprootScript(taprootKey)
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	addr, err := btcutil.NewAddressTaproot(schnorr.SerializePubKey(taprootKey), b.onchainNetwork())
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	proofIndex := tree.LeafProofIndex[multisigLeaf.TapHash()]
+	proof := tree.LeafMerkleProofs[proofIndex]
+
+	ctrlBlock := proof.ToControlBlock(bitcointree.UnspendableKey())
+	ctrlBlockBytes, err := ctrlBlock.ToBytes()
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	tapLeaf := &psbt.TaprootTapLeafScript{
+		ControlBlock: ctrlBlockBytes,
+		Script:       multisigLeaf.Script,
+		LeafVersion:  txscript.BaseLeafVersion,
+	}
+
+	return addr.String(), script, tapLeaf, nil
 }
 
 func castToOutpoints(inputs []ports.TxInput) []ports.TxOutpoint {

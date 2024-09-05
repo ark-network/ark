@@ -62,6 +62,8 @@ type ClientService interface {
 
 	ArkServiceFinalizePayment(params *ArkServiceFinalizePaymentParams, opts ...ClientOption) (*ArkServiceFinalizePaymentOK, error)
 
+	ArkServiceGetBoardingAddress(params *ArkServiceGetBoardingAddressParams, opts ...ClientOption) (*ArkServiceGetBoardingAddressOK, error)
+
 	ArkServiceGetEventStream(params *ArkServiceGetEventStreamParams, opts ...ClientOption) (*ArkServiceGetEventStreamOK, error)
 
 	ArkServiceGetInfo(params *ArkServiceGetInfoParams, opts ...ClientOption) (*ArkServiceGetInfoOK, error)
@@ -71,8 +73,6 @@ type ClientService interface {
 	ArkServiceGetRoundByID(params *ArkServiceGetRoundByIDParams, opts ...ClientOption) (*ArkServiceGetRoundByIDOK, error)
 
 	ArkServiceListVtxos(params *ArkServiceListVtxosParams, opts ...ClientOption) (*ArkServiceListVtxosOK, error)
-
-	ArkServiceOnboard(params *ArkServiceOnboardParams, opts ...ClientOption) (*ArkServiceOnboardOK, error)
 
 	ArkServicePing(params *ArkServicePingParams, opts ...ClientOption) (*ArkServicePingOK, error)
 
@@ -230,6 +230,43 @@ func (a *Client) ArkServiceFinalizePayment(params *ArkServiceFinalizePaymentPara
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*ArkServiceFinalizePaymentDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+ArkServiceGetBoardingAddress ark service get boarding address API
+*/
+func (a *Client) ArkServiceGetBoardingAddress(params *ArkServiceGetBoardingAddressParams, opts ...ClientOption) (*ArkServiceGetBoardingAddressOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewArkServiceGetBoardingAddressParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "ArkService_GetBoardingAddress",
+		Method:             "POST",
+		PathPattern:        "/v1/boarding",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &ArkServiceGetBoardingAddressReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*ArkServiceGetBoardingAddressOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*ArkServiceGetBoardingAddressDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 
@@ -415,43 +452,6 @@ func (a *Client) ArkServiceListVtxos(params *ArkServiceListVtxosParams, opts ...
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*ArkServiceListVtxosDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
-}
-
-/*
-ArkServiceOnboard ark service onboard API
-*/
-func (a *Client) ArkServiceOnboard(params *ArkServiceOnboardParams, opts ...ClientOption) (*ArkServiceOnboardOK, error) {
-	// TODO: Validate the params before sending
-	if params == nil {
-		params = NewArkServiceOnboardParams()
-	}
-	op := &runtime.ClientOperation{
-		ID:                 "ArkService_Onboard",
-		Method:             "POST",
-		PathPattern:        "/v1/onboard",
-		ProducesMediaTypes: []string{"application/json"},
-		ConsumesMediaTypes: []string{"application/json"},
-		Schemes:            []string{"http"},
-		Params:             params,
-		Reader:             &ArkServiceOnboardReader{formats: a.formats},
-		Context:            params.Context,
-		Client:             params.HTTPClient,
-	}
-	for _, opt := range opts {
-		opt(op)
-	}
-
-	result, err := a.transport.Submit(op)
-	if err != nil {
-		return nil, err
-	}
-	success, ok := result.(*ArkServiceOnboardOK)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*ArkServiceOnboardDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 
