@@ -97,12 +97,13 @@ func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
 		return nil, err
 	}
 	return &client.Info{
-		Pubkey:              resp.GetPubkey(),
-		RoundLifetime:       resp.GetRoundLifetime(),
-		UnilateralExitDelay: resp.GetUnilateralExitDelay(),
-		RoundInterval:       resp.GetRoundInterval(),
-		Network:             resp.GetNetwork(),
-		Dust:                uint64(resp.GetDust()),
+		Pubkey:                     resp.GetPubkey(),
+		RoundLifetime:              resp.GetRoundLifetime(),
+		UnilateralExitDelay:        resp.GetUnilateralExitDelay(),
+		RoundInterval:              resp.GetRoundInterval(),
+		Network:                    resp.GetNetwork(),
+		Dust:                       uint64(resp.GetDust()),
+		BoardingDescriptorTemplate: resp.GetBoardingDescriptorTemplate(),
 	}, nil
 }
 
@@ -143,20 +144,8 @@ func (a *grpcClient) GetRound(
 	}, nil
 }
 
-func (a *grpcClient) Onboard(
-	ctx context.Context, tx, userPubkey string, congestionTree tree.CongestionTree,
-) error {
-	req := &arkv1.OnboardRequest{
-		BoardingTx:     tx,
-		UserPubkey:     userPubkey,
-		CongestionTree: treeToProto(congestionTree).parse(),
-	}
-	_, err := a.svc.Onboard(ctx, req)
-	return err
-}
-
 func (a *grpcClient) RegisterPayment(
-	ctx context.Context, inputs []client.VtxoKey, ephemeralPublicKey string,
+	ctx context.Context, inputs []client.Input, ephemeralPublicKey string,
 ) (string, error) {
 	req := &arkv1.RegisterPaymentRequest{
 		Inputs: ins(inputs).toProto(),
@@ -198,11 +187,16 @@ func (a *grpcClient) Ping(
 }
 
 func (a *grpcClient) FinalizePayment(
-	ctx context.Context, signedForfeitTxs []string,
+	ctx context.Context, signedForfeitTxs []string, signedRoundTx string,
 ) error {
 	req := &arkv1.FinalizePaymentRequest{
 		SignedForfeitTxs: signedForfeitTxs,
 	}
+
+	if len(signedRoundTx) > 0 {
+		req.SignedRoundTx = &signedRoundTx
+	}
+
 	_, err := a.svc.FinalizePayment(ctx, req)
 	return err
 }
@@ -210,8 +204,13 @@ func (a *grpcClient) FinalizePayment(
 func (a *grpcClient) CreatePayment(
 	ctx context.Context, inputs []client.VtxoKey, outputs []client.Output,
 ) (string, []string, error) {
+	insCast := make([]client.Input, 0, len(inputs))
+	for _, in := range inputs {
+		insCast = append(insCast, in)
+	}
+
 	req := &arkv1.CreatePaymentRequest{
-		Inputs:  ins(inputs).toProto(),
+		Inputs:  ins(insCast).toProto(),
 		Outputs: outs(outputs).toProto(),
 	}
 	resp, err := a.svc.CreatePayment(ctx, req)
@@ -258,6 +257,19 @@ func (a *grpcClient) GetRoundByID(
 		Connectors: round.GetConnectors(),
 		Stage:      client.RoundStage(int(round.GetStage())),
 	}, nil
+}
+
+func (a *grpcClient) GetBoardingAddress(
+	ctx context.Context, userPubkey string,
+) (string, error) {
+	req := &arkv1.GetBoardingAddressRequest{
+		Pubkey: userPubkey,
+	}
+	resp, err := a.svc.GetBoardingAddress(ctx, req)
+	if err != nil {
+		return "", err
+	}
+	return resp.GetAddress(), nil
 }
 
 func (a *grpcClient) SendTreeNonces(
@@ -383,6 +395,7 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 			ID:                  ee.GetId(),
 			UnsignedTree:        treeFromProto{ee.GetUnsignedTree()}.parse(),
 			CosignersPublicKeys: pubkeys,
+			UnsignedRoundTx:     ee.GetUnsignedRoundTx(),
 		}, nil
 	}
 
@@ -418,8 +431,8 @@ func (v vtxo) toVtxo() client.Vtxo {
 	}
 	return client.Vtxo{
 		VtxoKey: client.VtxoKey{
-			Txid: v.GetOutpoint().GetTxid(),
-			VOut: v.GetOutpoint().GetVout(),
+			Txid: v.GetOutpoint().GetVtxoInput().GetTxid(),
+			VOut: v.GetOutpoint().GetVtxoInput().GetVout(),
 		},
 		Amount:                  v.GetReceiver().GetAmount(),
 		RoundTxid:               v.GetPoolTxid(),
@@ -441,21 +454,35 @@ func (v vtxos) toVtxos() []client.Vtxo {
 	return list
 }
 
-type input client.VtxoKey
+func toProtoInput(i client.Input) *arkv1.Input {
+	if len(i.GetDescriptor()) > 0 {
+		return &arkv1.Input{
+			Input: &arkv1.Input_BoardingInput{
+				BoardingInput: &arkv1.BoardingInput{
+					Txid:        i.GetTxID(),
+					Vout:        i.GetVOut(),
+					Descriptor_: i.GetDescriptor(),
+				},
+			},
+		}
+	}
 
-func (i input) toProto() *arkv1.Input {
 	return &arkv1.Input{
-		Txid: i.Txid,
-		Vout: i.VOut,
+		Input: &arkv1.Input_VtxoInput{
+			VtxoInput: &arkv1.VtxoInput{
+				Txid: i.GetTxID(),
+				Vout: i.GetVOut(),
+			},
+		},
 	}
 }
 
-type ins []client.VtxoKey
+type ins []client.Input
 
 func (i ins) toProto() []*arkv1.Input {
 	list := make([]*arkv1.Input, 0, len(i))
 	for _, ii := range i {
-		list = append(list, input(ii).toProto())
+		list = append(list, toProtoInput(ii))
 	}
 	return list
 }
@@ -495,28 +522,4 @@ func (t treeFromProto) parse() tree.CongestionTree {
 	}
 
 	return levels
-}
-
-type treeToProto tree.CongestionTree
-
-func (t treeToProto) parse() *arkv1.Tree {
-	levels := make([]*arkv1.TreeLevel, 0, len(t))
-	for _, level := range t {
-		levelProto := &arkv1.TreeLevel{
-			Nodes: make([]*arkv1.Node, 0, len(level)),
-		}
-
-		for _, node := range level {
-			levelProto.Nodes = append(levelProto.Nodes, &arkv1.Node{
-				Txid:       node.Txid,
-				Tx:         node.Tx,
-				ParentTxid: node.ParentTxid,
-			})
-		}
-
-		levels = append(levels, levelProto)
-	}
-	return &arkv1.Tree{
-		Levels: levels,
-	}
 }

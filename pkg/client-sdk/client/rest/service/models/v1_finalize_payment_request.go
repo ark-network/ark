@@ -19,6 +19,9 @@ type V1FinalizePaymentRequest struct {
 
 	// Forfeit txs signed by the user.
 	SignedForfeitTxs []string `json:"signedForfeitTxs"`
+
+	// If payment has boarding input, the user must sign the associated inputs.
+	SignedRoundTx string `json:"signedRoundTx,omitempty"`
 }
 
 // Validate validates this v1 finalize payment request

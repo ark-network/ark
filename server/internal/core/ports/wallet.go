@@ -35,6 +35,7 @@ type WalletService interface {
 	ConnectorsAccountBalance(ctx context.Context) (uint64, uint64, error)
 	LockConnectorUtxos(ctx context.Context, utxos []TxOutpoint) error
 	GetDustAmount(ctx context.Context) (uint64, error)
+	GetTransaction(ctx context.Context, txid string) (string, error)
 	Close()
 }
 

@@ -249,6 +249,16 @@ func (m *mockedWallet) MainAccountBalance(ctx context.Context) (uint64, uint64, 
 	return res, res2, args.Error(2)
 }
 
+func (m *mockedWallet) GetTransaction(ctx context.Context, txid string) (string, error) {
+	args := m.Called(ctx, txid)
+
+	var res string
+	if a := args.Get(0); a != nil {
+		res = a.(string)
+	}
+	return res, args.Error(1)
+}
+
 type mockedInput struct {
 	mock.Mock
 }

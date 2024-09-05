@@ -10,8 +10,10 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg"
@@ -79,6 +81,7 @@ var (
 
 // add additional chain API not supported by the chain.Interface type
 type extraChainAPI interface {
+	getTx(txid string) (*wire.MsgTx, error)
 	getTxStatus(txid string) (isConfirmed bool, blocktime int64, err error)
 	broadcast(txHex string) error
 }
@@ -545,9 +548,11 @@ func (s *service) SelectUtxos(ctx context.Context, _ string, amount uint64) ([]p
 		selectedUtxos = append(selectedUtxos, coinTxInput{coin})
 	}
 
-	change := selectedAmount - amount
+	if selectedAmount < amount {
+		return nil, 0, fmt.Errorf("insufficient funds to select %d, only %d available", amount, selectedAmount)
+	}
 
-	return selectedUtxos, change, nil
+	return selectedUtxos, selectedAmount - amount, nil
 }
 
 func (s *service) SignTransaction(ctx context.Context, partialTx string, extractRawTx bool) (string, error) {
@@ -559,7 +564,7 @@ func (s *service) SignTransaction(ctx context.Context, partialTx string, extract
 		return "", err
 	}
 
-	signedInputs, err := s.signPsbt(ptx)
+	signedInputs, err := s.signPsbt(ptx, nil)
 	if err != nil {
 		return "", err
 	}
@@ -569,8 +574,55 @@ func (s *service) SignTransaction(ctx context.Context, partialTx string, extract
 			return "", fmt.Errorf("not all inputs are signed, unable to finalize the psbt")
 		}
 
-		if err := psbt.MaybeFinalizeAll(ptx); err != nil {
-			return "", err
+		for i, in := range ptx.Inputs {
+			isTaproot := txscript.IsPayToTaproot(in.WitnessUtxo.PkScript)
+			if isTaproot && len(in.TaprootLeafScript) > 0 {
+				closure, err := bitcointree.DecodeClosure(in.TaprootLeafScript[0].Script)
+				if err != nil {
+					return "", err
+				}
+
+				witness := make(wire.TxWitness, 4)
+
+				castClosure, isTaprootMultisig := closure.(*bitcointree.MultisigClosure)
+				if isTaprootMultisig {
+					ownerPubkey := schnorr.SerializePubKey(castClosure.Pubkey)
+					aspKey := schnorr.SerializePubKey(castClosure.AspPubkey)
+
+					for _, sig := range in.TaprootScriptSpendSig {
+						if bytes.Equal(sig.XOnlyPubKey, ownerPubkey) {
+							witness[0] = sig.Signature
+						}
+
+						if bytes.Equal(sig.XOnlyPubKey, aspKey) {
+							witness[1] = sig.Signature
+						}
+					}
+
+					witness[2] = in.TaprootLeafScript[0].Script
+					witness[3] = in.TaprootLeafScript[0].ControlBlock
+
+					for idw, w := range witness {
+						if w == nil {
+							return "", fmt.Errorf("missing witness element %d, cannot finalize taproot mutlisig input %d", idw, i)
+						}
+					}
+
+					var witnessBuf bytes.Buffer
+
+					if err := psbt.WriteTxWitness(&witnessBuf, witness); err != nil {
+						return "", err
+					}
+
+					ptx.Inputs[i].FinalScriptWitness = witnessBuf.Bytes()
+					continue
+				}
+
+			}
+
+			if err := psbt.Finalize(ptx, i); err != nil {
+				return "", fmt.Errorf("failed to finalize input %d: %w", i, err)
+			}
 		}
 
 		extracted, err := psbt.Extract(ptx)
@@ -605,7 +657,7 @@ func (s *service) SignTransactionTapscript(ctx context.Context, partialTx string
 		}
 	}
 
-	signedInputs, err := s.signPsbt(partial)
+	signedInputs, err := s.signPsbt(partial, inputIndexes)
 	if err != nil {
 		return "", err
 	}
@@ -832,6 +884,24 @@ func (s *service) GetDustAmount(
 	ctx context.Context,
 ) (uint64, error) {
 	return s.MinRelayFee(ctx, 182) // non-segwit 1-in-1-out tx
+}
+
+func (s *service) GetTransaction(ctx context.Context, txid string) (string, error) {
+	tx, err := s.extraAPI.getTx(txid)
+	if err != nil {
+		return "", err
+	}
+
+	if tx == nil {
+		return "", fmt.Errorf("transaction not found")
+	}
+
+	var buf bytes.Buffer
+	if err := tx.Serialize(&buf); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(buf.Bytes()), nil
 }
 
 func (s *service) castNotification(tx *wtxmgr.TxRecord) map[string]ports.VtxoWithValue {

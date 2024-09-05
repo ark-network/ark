@@ -17,6 +17,9 @@ import (
 // swagger:model v1GetInfoResponse
 type V1GetInfoResponse struct {
 
+	// boarding descriptor template
+	BoardingDescriptorTemplate string `json:"boardingDescriptorTemplate,omitempty"`
+
 	// dust
 	Dust string `json:"dust,omitempty"`
 

@@ -49,3 +49,17 @@ func (b *bitcoindRPCClient) getTxStatus(txid string) (isConfirmed bool, blocktim
 
 	return tx.Confirmations > 0, tx.Blocktime, nil
 }
+
+func (b *bitcoindRPCClient) getTx(txid string) (*wire.MsgTx, error) {
+	txhash, err := chainhash.NewHashFromStr(txid)
+	if err != nil {
+		return nil, err
+	}
+
+	tx, err := b.chainClient.GetRawTransaction(txhash)
+	if err != nil {
+		return nil, err
+	}
+
+	return tx.MsgTx(), nil
+}

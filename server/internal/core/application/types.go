@@ -2,8 +2,9 @@ package application
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/ark-network/ark/common/tree"
+	"github.com/ark-network/ark/common/descriptor"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
@@ -15,9 +16,10 @@ var (
 type Service interface {
 	Start() error
 	Stop()
-	SpendVtxos(ctx context.Context, inputs []domain.VtxoKey) (string, error)
+	SpendVtxos(ctx context.Context, inputs []Input) (string, error)
 	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error
 	SignVtxos(ctx context.Context, forfeitTxs []string) error
+	SignRoundTx(ctx context.Context, roundTx string) error
 	GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error)
 	GetRoundById(ctx context.Context, id string) (*domain.Round, error)
 	GetCurrentRound(ctx context.Context) (*domain.Round, error)
@@ -29,10 +31,6 @@ type Service interface {
 		ctx context.Context, pubkey *secp256k1.PublicKey,
 	) (spendableVtxos, spentVtxos []domain.Vtxo, err error)
 	GetInfo(ctx context.Context) (*ServiceInfo, error)
-	Onboard(
-		ctx context.Context, boardingTx string,
-		congestionTree tree.CongestionTree, userPubkey *secp256k1.PublicKey,
-	) error
 	// Async payments
 	CreateAsyncPayment(
 		ctx context.Context, inputs []domain.VtxoKey, receivers []domain.Receiver,
@@ -40,6 +38,7 @@ type Service interface {
 	CompleteAsyncPayment(
 		ctx context.Context, redeemTx string, unconditionalForfeitTxs []string,
 	) error
+	GetBoardingAddress(ctx context.Context, userPubkey *secp256k1.PublicKey) (string, error)
 	// Tree signing methods
 	RegisterCosignerPubkey(ctx context.Context, paymentId string, ephemeralPublicKey string) error
 	RegisterCosignerNonces(
@@ -53,12 +52,13 @@ type Service interface {
 }
 
 type ServiceInfo struct {
-	PubKey              string
-	RoundLifetime       int64
-	UnilateralExitDelay int64
-	RoundInterval       int64
-	Network             string
-	Dust                uint64
+	PubKey                     string
+	RoundLifetime              int64
+	UnilateralExitDelay        int64
+	RoundInterval              int64
+	Network                    string
+	Dust                       uint64
+	BoardingDescriptorTemplate string
 }
 
 type WalletStatus struct {
@@ -67,10 +67,28 @@ type WalletStatus struct {
 	IsSynced      bool
 }
 
-type onboarding struct {
-	tx             string
-	congestionTree tree.CongestionTree
-	userPubkey     *secp256k1.PublicKey
+type Input struct {
+	Txid       string
+	Index      uint32
+	Descriptor string
+}
+
+func (i Input) IsVtxo() bool {
+	return len(i.Descriptor) <= 0
+}
+
+func (i Input) VtxoKey() domain.VtxoKey {
+	return domain.VtxoKey{
+		Txid: i.Txid,
+		VOut: i.Index,
+	}
+}
+
+func (i Input) GetDescriptor() (*descriptor.TaprootDescriptor, error) {
+	if i.IsVtxo() {
+		return nil, fmt.Errorf("input is not a boarding input")
+	}
+	return descriptor.ParseTaprootDescriptor(i.Descriptor)
 }
 
 type txOutpoint struct {

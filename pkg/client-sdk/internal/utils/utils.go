@@ -48,7 +48,7 @@ func CoinSelect(
 	}
 
 	if selectedAmount < amount {
-		return nil, 0, fmt.Errorf("not enough funds to cover amount%d", amount)
+		return nil, 0, fmt.Errorf("not enough funds to cover amount %d", amount)
 	}
 
 	change := selectedAmount - amount

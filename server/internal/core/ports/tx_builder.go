@@ -16,9 +16,16 @@ type SweepInput interface {
 	GetInternalKey() *secp256k1.PublicKey
 }
 
+type BoardingInput interface {
+	GetAmount() uint64
+	GetIndex() uint32
+	GetHash() chainhash.Hash
+	GetBoardingPubkey() *secp256k1.PublicKey
+}
+
 type TxBuilder interface {
 	BuildPoolTx(
-		aspPubkey *secp256k1.PublicKey, payments []domain.Payment, sweptRounds []domain.Round,
+		aspPubkey *secp256k1.PublicKey, payments []domain.Payment, boardingInputs []BoardingInput, sweptRounds []domain.Round,
 		cosigners ...*secp256k1.PublicKey,
 	) (poolTx string, congestionTree tree.CongestionTree, connectorAddress string, err error)
 	BuildForfeitTxs(aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment) (connectors []string, forfeitTxs []string, err error)
@@ -33,4 +40,6 @@ type TxBuilder interface {
 		vtxosToSpend []domain.Vtxo,
 		aspPubKey *secp256k1.PublicKey, receivers []domain.Receiver,
 	) (*domain.AsyncPaymentTxs, error)
+	GetBoardingScript(userPubkey, aspPubkey *secp256k1.PublicKey) (addr string, script []byte, err error)
+	VerifyAndCombinePartialTx(dest string, src string) (string, error)
 }

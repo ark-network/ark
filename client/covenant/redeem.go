@@ -83,8 +83,12 @@ func collaborativeRedeem(
 
 	for _, coin := range selectedCoins {
 		inputs = append(inputs, &arkv1.Input{
-			Txid: coin.txid,
-			Vout: coin.vout,
+			Input: &arkv1.Input_VtxoInput{
+				VtxoInput: &arkv1.VtxoInput{
+					Txid: coin.txid,
+					Vout: coin.vout,
+				},
+			},
 		})
 	}
 
@@ -113,6 +117,7 @@ func collaborativeRedeem(
 		client,
 		registerResponse.GetId(),
 		selectedCoins,
+		false,
 		secKey,
 		receivers,
 	)

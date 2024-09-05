@@ -23,11 +23,8 @@ type ASPClient interface {
 	ListVtxos(ctx context.Context, addr string) ([]Vtxo, []Vtxo, error)
 	GetRound(ctx context.Context, txID string) (*Round, error)
 	GetRoundByID(ctx context.Context, roundID string) (*Round, error)
-	Onboard(
-		ctx context.Context, tx, userPubkey string, congestionTree tree.CongestionTree,
-	) error
 	RegisterPayment(
-		ctx context.Context, inputs []VtxoKey, ephemeralPublicKey string,
+		ctx context.Context, inputs []Input, ephemeralKey string,
 	) (string, error)
 	ClaimPayment(
 		ctx context.Context, paymentID string, outputs []Output,
@@ -37,7 +34,7 @@ type ASPClient interface {
 	) (<-chan RoundEventChannel, error)
 	Ping(ctx context.Context, paymentID string) (RoundEvent, error)
 	FinalizePayment(
-		ctx context.Context, signedForfeitTxs []string,
+		ctx context.Context, signedForfeitTxs []string, signedRoundTx string,
 	) error
 	CreatePayment(
 		ctx context.Context, inputs []VtxoKey, outputs []Output,
@@ -45,6 +42,7 @@ type ASPClient interface {
 	CompletePayment(
 		ctx context.Context, signedRedeemTx string, signedUnconditionalForfeitTxs []string,
 	) error
+	GetBoardingAddress(ctx context.Context, userPubkey string) (string, error)
 	SendTreeNonces(
 		ctx context.Context, roundID, cosignerPubkey string, nonces bitcointree.TreeNonces,
 	) error
@@ -55,12 +53,13 @@ type ASPClient interface {
 }
 
 type Info struct {
-	Pubkey              string
-	RoundLifetime       int64
-	UnilateralExitDelay int64
-	RoundInterval       int64
-	Network             string
-	Dust                uint64
+	Pubkey                     string
+	RoundLifetime              int64
+	UnilateralExitDelay        int64
+	RoundInterval              int64
+	Network                    string
+	Dust                       uint64
+	BoardingDescriptorTemplate string
 }
 
 type RoundEventChannel struct {
@@ -68,9 +67,36 @@ type RoundEventChannel struct {
 	Err   error
 }
 
+type Input interface {
+	GetTxID() string
+	GetVOut() uint32
+	GetDescriptor() string
+}
+
 type VtxoKey struct {
 	Txid string
 	VOut uint32
+}
+
+func (k VtxoKey) GetTxID() string {
+	return k.Txid
+}
+
+func (k VtxoKey) GetVOut() uint32 {
+	return k.VOut
+}
+
+func (k VtxoKey) GetDescriptor() string {
+	return ""
+}
+
+type BoardingInput struct {
+	VtxoKey
+	Descriptor string
+}
+
+func (k BoardingInput) GetDescriptor() string {
+	return k.Descriptor
 }
 
 type Vtxo struct {
@@ -153,6 +179,7 @@ type RoundSigningStartedEvent struct {
 	ID                  string
 	UnsignedTree        tree.CongestionTree
 	CosignersPublicKeys []*secp256k1.PublicKey
+	UnsignedRoundTx     string
 }
 
 func (e RoundSigningStartedEvent) isRoundEvent() {}

@@ -11,7 +11,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func (s *service) signPsbt(packet *psbt.Packet) ([]uint32, error) {
+func (s *service) signPsbt(packet *psbt.Packet, inputsToSign []int) ([]uint32, error) {
 	// iterates over the inputs and set the default sighash flags
 	updater, err := psbt.NewUpdater(packet)
 	if err != nil {
@@ -52,6 +52,19 @@ func (s *service) signPsbt(packet *psbt.Packet) ([]uint32, error) {
 		// skip if already signed
 		if len(in.FinalScriptWitness) > 0 {
 			continue
+		}
+
+		if len(inputsToSign) > 0 {
+			found := false
+			for _, i := range inputsToSign {
+				if i == idx {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
 		}
 
 		var managedAddress waddrmgr.ManagedPubKeyAddress

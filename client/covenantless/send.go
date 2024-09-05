@@ -14,7 +14,7 @@ import (
 )
 
 func (c *clArkBitcoinCLI) SendAsync(ctx *cli.Context) error {
-	receiver := ctx.String("to")
+	receiverAddr := ctx.String("to")
 	amount := ctx.Uint64("amount")
 	withExpiryCoinselect := ctx.Bool("enable-expiry-coinselect")
 
@@ -27,15 +27,22 @@ func (c *clArkBitcoinCLI) SendAsync(ctx *cli.Context) error {
 		return fmt.Errorf("invalid amount (%d), must be greater than dust %d", amount, dust)
 	}
 
-	if receiver == "" {
+	if receiverAddr == "" {
 		return fmt.Errorf("receiver address is required")
 	}
-	isOnchain, _, _, err := decodeReceiverAddress(receiver)
+	isOnchain, _, _, err := decodeReceiverAddress(receiverAddr)
 	if err != nil {
 		return err
 	}
 	if isOnchain {
-		return fmt.Errorf("receiver address is onchain")
+		txid, err := sendOnchain(ctx, []receiver{{receiverAddr, amount}})
+		if err != nil {
+			return err
+		}
+
+		return utils.PrintJSON(map[string]interface{}{
+			"txid": txid,
+		})
 	}
 
 	offchainAddr, _, _, err := getAddress(ctx)
@@ -46,20 +53,20 @@ func (c *clArkBitcoinCLI) SendAsync(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	_, _, aspKey, err := common.DecodeAddress(receiver)
+	_, _, aspKey, err := common.DecodeAddress(receiverAddr)
 	if err != nil {
 		return fmt.Errorf("invalid receiver address: %s", err)
 	}
 	if !bytes.Equal(
 		aspPubKey.SerializeCompressed(), aspKey.SerializeCompressed(),
 	) {
-		return fmt.Errorf("invalid receiver address '%s': must be associated with the connected service provider", receiver)
+		return fmt.Errorf("invalid receiver address '%s': must be associated with the connected service provider", receiverAddr)
 	}
 
 	receiversOutput := make([]*arkv1.Output, 0)
 	sumOfReceivers := uint64(0)
 	receiversOutput = append(receiversOutput, &arkv1.Output{
-		Address: receiver,
+		Address: receiverAddr,
 		Amount:  amount,
 	})
 	sumOfReceivers += amount
@@ -93,8 +100,12 @@ func (c *clArkBitcoinCLI) SendAsync(ctx *cli.Context) error {
 
 	for _, coin := range selectedCoins {
 		inputs = append(inputs, &arkv1.Input{
-			Txid: coin.txid,
-			Vout: coin.vout,
+			Input: &arkv1.Input_VtxoInput{
+				VtxoInput: &arkv1.VtxoInput{
+					Txid: coin.txid,
+					Vout: coin.vout,
+				},
+			},
 		})
 	}
 
@@ -187,7 +198,7 @@ func coinSelect(vtxos []vtxo, amount uint64, sortByExpirationTime bool, dust uin
 	}
 
 	if selectedAmount < amount {
-		return nil, 0, fmt.Errorf("not enough funds to cover amount%d", amount)
+		return nil, 0, fmt.Errorf("not enough funds to cover amount %d", amount)
 	}
 
 	change := selectedAmount - amount

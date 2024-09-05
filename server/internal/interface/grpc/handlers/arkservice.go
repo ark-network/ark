@@ -60,9 +60,18 @@ func (h *handler) CompletePayment(ctx context.Context, req *arkv1.CompletePaymen
 }
 
 func (h *handler) CreatePayment(ctx context.Context, req *arkv1.CreatePaymentRequest) (*arkv1.CreatePaymentResponse, error) {
-	vtxosKeys, err := parseInputs(req.GetInputs())
+	inputs, err := parseInputs(req.GetInputs())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	vtxosKeys := make([]domain.VtxoKey, 0, len(inputs))
+	for _, input := range inputs {
+		if !input.IsVtxo() {
+			return nil, status.Error(codes.InvalidArgument, "only vtxos input allowed")
+		}
+
+		vtxosKeys = append(vtxosKeys, input.VtxoKey())
 	}
 
 	receivers, err := parseReceivers(req.GetOutputs())
@@ -81,37 +90,6 @@ func (h *handler) CreatePayment(ctx context.Context, req *arkv1.CreatePaymentReq
 		SignedRedeemTx:                 redeemTx,
 		UsignedUnconditionalForfeitTxs: unconditionalForfeitTxs,
 	}, nil
-}
-
-func (h *handler) Onboard(ctx context.Context, req *arkv1.OnboardRequest) (*arkv1.OnboardResponse, error) {
-	if req.GetUserPubkey() == "" {
-		return nil, status.Error(codes.InvalidArgument, "missing user pubkey")
-	}
-
-	pubKey, err := hex.DecodeString(req.GetUserPubkey())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid user pubkey")
-	}
-
-	decodedPubKey, err := secp256k1.ParsePubKey(pubKey)
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid user pubkey")
-	}
-
-	if req.GetBoardingTx() == "" {
-		return nil, status.Error(codes.InvalidArgument, "missing boarding tx id")
-	}
-
-	tree, err := toCongestionTree(req.GetCongestionTree())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-
-	if err := h.svc.Onboard(ctx, req.GetBoardingTx(), tree, decodedPubKey); err != nil {
-		return nil, err
-	}
-
-	return &arkv1.OnboardResponse{}, nil
 }
 
 func (h *handler) Ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.PingResponse, error) {
@@ -169,6 +147,7 @@ func (h *handler) Ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.Ping
 					Id:               e.Id,
 					CosignersPubkeys: cosignersKeys,
 					UnsignedTree:     castCongestionTree(e.UnsignedVtxoTree),
+					UnsignedRoundTx:  e.UnsignedRoundTx,
 				},
 			},
 		}
@@ -193,12 +172,11 @@ func (h *handler) Ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.Ping
 }
 
 func (h *handler) RegisterPayment(ctx context.Context, req *arkv1.RegisterPaymentRequest) (*arkv1.RegisterPaymentResponse, error) {
-	vtxosKeys, err := parseInputs(req.GetInputs())
+	inputs, err := parseInputs(req.GetInputs())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-
-	id, err := h.svc.SpendVtxos(ctx, vtxosKeys)
+	id, err := h.svc.SpendVtxos(ctx, inputs)
 	if err != nil {
 		return nil, err
 	}
@@ -229,12 +207,23 @@ func (h *handler) ClaimPayment(ctx context.Context, req *arkv1.ClaimPaymentReque
 }
 
 func (h *handler) FinalizePayment(ctx context.Context, req *arkv1.FinalizePaymentRequest) (*arkv1.FinalizePaymentResponse, error) {
-	forfeitTxs, err := parseTxs(req.GetSignedForfeitTxs())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+	forfeitTxs := req.GetSignedForfeitTxs()
+	roundTx := req.GetSignedRoundTx()
+
+	if len(forfeitTxs) <= 0 && roundTx == "" {
+		return nil, status.Error(codes.InvalidArgument, "missing forfeit txs or round tx")
 	}
-	if err := h.svc.SignVtxos(ctx, forfeitTxs); err != nil {
-		return nil, err
+
+	if len(forfeitTxs) > 0 {
+		if err := h.svc.SignVtxos(ctx, forfeitTxs); err != nil {
+			return nil, err
+		}
+	}
+
+	if roundTx != "" {
+		if err := h.svc.SignRoundTx(ctx, roundTx); err != nil {
+			return nil, err
+		}
 	}
 
 	return &arkv1.FinalizePaymentResponse{}, nil
@@ -355,12 +344,39 @@ func (h *handler) GetInfo(ctx context.Context, req *arkv1.GetInfoRequest) (*arkv
 	}
 
 	return &arkv1.GetInfoResponse{
-		Pubkey:              info.PubKey,
-		RoundLifetime:       info.RoundLifetime,
-		UnilateralExitDelay: info.UnilateralExitDelay,
-		RoundInterval:       info.RoundInterval,
-		Network:             info.Network,
-		Dust:                int64(info.Dust),
+		Pubkey:                     info.PubKey,
+		RoundLifetime:              info.RoundLifetime,
+		UnilateralExitDelay:        info.UnilateralExitDelay,
+		RoundInterval:              info.RoundInterval,
+		Network:                    info.Network,
+		Dust:                       int64(info.Dust),
+		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
+	}, nil
+}
+
+func (h *handler) GetBoardingAddress(ctx context.Context, req *arkv1.GetBoardingAddressRequest) (*arkv1.GetBoardingAddressResponse, error) {
+	pubkey := req.GetPubkey()
+	if pubkey == "" {
+		return nil, status.Error(codes.InvalidArgument, "missing pubkey")
+	}
+
+	pubkeyBytes, err := hex.DecodeString(pubkey)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid pubkey (invalid hex)")
+	}
+
+	userPubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid pubkey (parse error)")
+	}
+
+	addr, err := h.svc.GetBoardingAddress(ctx, userPubkey)
+	if err != nil {
+		return nil, err
+	}
+
+	return &arkv1.GetBoardingAddressResponse{
+		Address: addr,
 	}, nil
 }
 
@@ -500,6 +516,7 @@ func (h *handler) listenToEvents() {
 						Id:               e.Id,
 						CosignersPubkeys: cosignersKeys,
 						UnsignedTree:     castCongestionTree(e.UnsignedVtxoTree),
+						UnsignedRoundTx:  e.UnsignedRoundTx,
 					},
 				},
 			}
@@ -548,8 +565,12 @@ func (v vtxoList) toProto(hrp string, aspKey *secp256k1.PublicKey) []*arkv1.Vtxo
 		}
 		list = append(list, &arkv1.Vtxo{
 			Outpoint: &arkv1.Input{
-				Txid: vv.Txid,
-				Vout: vv.VOut,
+				Input: &arkv1.Input_VtxoInput{
+					VtxoInput: &arkv1.VtxoInput{
+						Txid: vv.Txid,
+						Vout: vv.VOut,
+					},
+				},
 			},
 			Receiver: &arkv1.Output{
 				Address: addr,
@@ -589,37 +610,4 @@ func castCongestionTree(congestionTree tree.CongestionTree) *arkv1.Tree {
 	return &arkv1.Tree{
 		Levels: levels,
 	}
-}
-
-func toCongestionTree(treeFromProto *arkv1.Tree) (tree.CongestionTree, error) {
-	if treeFromProto == nil {
-		return nil, nil
-	}
-
-	levels := make(tree.CongestionTree, 0, len(treeFromProto.Levels))
-
-	for _, level := range treeFromProto.Levels {
-		nodes := make([]tree.Node, 0, len(level.Nodes))
-
-		for _, node := range level.Nodes {
-			nodes = append(nodes, tree.Node{
-				Txid:       node.Txid,
-				Tx:         node.Tx,
-				ParentTxid: node.ParentTxid,
-				Leaf:       false,
-			})
-		}
-
-		levels = append(levels, nodes)
-	}
-
-	for j, treeLvl := range levels {
-		for i, node := range treeLvl {
-			if len(levels.Children(node.Txid)) == 0 {
-				levels[j][i].Leaf = true
-			}
-		}
-	}
-
-	return levels, nil
 }

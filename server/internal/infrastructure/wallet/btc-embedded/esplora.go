@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/ark-network/ark/server/internal/core/ports"
+	"github.com/btcsuite/btcd/wire"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -52,6 +53,31 @@ func (f *esploraClient) broadcast(txhex string) error {
 	}
 
 	return nil
+}
+
+func (f *esploraClient) getTx(txid string) (*wire.MsgTx, error) {
+	endpoint, err := url.JoinPath(f.url, "tx", txid, "raw")
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := http.DefaultClient.Get(endpoint)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New("tx endpoint HTTP error: " + resp.Status)
+	}
+
+	var tx wire.MsgTx
+
+	if err := tx.Deserialize(resp.Body); err != nil {
+		return nil, err
+	}
+
+	return &tx, nil
 }
 
 func (f *esploraClient) getTxStatus(txid string) (isConfirmed bool, blocktime int64, err error) {

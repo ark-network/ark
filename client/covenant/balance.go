@@ -9,6 +9,7 @@ import (
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/client/flags"
 	"github.com/ark-network/ark/client/utils"
+	"github.com/ark-network/ark/common/descriptor"
 	"github.com/urfave/cli/v2"
 )
 
@@ -21,17 +22,29 @@ func (*covenantLiquidCLI) Balance(ctx *cli.Context) error {
 	}
 	defer cancel()
 
-	offchainAddr, onchainAddr, redemptionAddr, err := getAddress(ctx)
+	offchainAddr, boardingAddr, redemptionAddr, err := getAddress(ctx)
 	if err != nil {
 		return err
 	}
-	network, err := utils.GetNetwork(ctx)
-	if err != nil {
-		return err
-	}
+
 	// No need to check for error here becuase this function is called also by getAddress().
 	// nolint:all
 	unilateralExitDelay, _ := utils.GetUnilateralExitDelay(ctx)
+
+	boardingDescriptor, err := utils.GetBoardingDescriptor(ctx)
+	if err != nil {
+		return err
+	}
+
+	desc, err := descriptor.ParseTaprootDescriptor(boardingDescriptor)
+	if err != nil {
+		return err
+	}
+
+	_, timeoutBoarding, err := descriptor.ParseBoardingDescriptor(*desc)
+	if err != nil {
+		return err
+	}
 
 	wg := &sync.WaitGroup{}
 	wg.Add(3)
@@ -54,19 +67,19 @@ func (*covenantLiquidCLI) Balance(ctx *cli.Context) error {
 	go func() {
 		defer wg.Done()
 		explorer := utils.NewExplorer(ctx)
-		balance, err := explorer.GetBalance(onchainAddr, toElementsNetwork(network).AssetID)
+		spendableBalance, lockedBalance, err := explorer.GetDelayedBalance(boardingAddr, int64(timeoutBoarding))
 		if err != nil {
 			chRes <- balanceRes{0, 0, nil, nil, err}
 			return
 		}
-		chRes <- balanceRes{0, balance, nil, nil, nil}
+		chRes <- balanceRes{0, spendableBalance, lockedBalance, nil, nil}
 	}()
 
 	go func() {
 		defer wg.Done()
 		explorer := utils.NewExplorer(ctx)
 
-		spendableBalance, lockedBalance, err := explorer.GetRedeemedVtxosBalance(
+		spendableBalance, lockedBalance, err := explorer.GetDelayedBalance(
 			redemptionAddr, unilateralExitDelay,
 		)
 		if err != nil {

@@ -6,14 +6,11 @@ import (
 
 	"github.com/ark-network/ark/client/utils"
 	"github.com/ark-network/ark/common/tree"
-	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/urfave/cli/v2"
-	"github.com/vulpemventures/go-elements/address"
-	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/transaction"
 )
@@ -50,28 +47,12 @@ func signPset(
 			return err
 		}
 
-		sighashType := txscript.SigHashAll
-
-		if utxo.Script[0] == txscript.OP_1 {
-			sighashType = txscript.SigHashDefault
-		}
-
-		if err := updater.AddInSighashType(i, sighashType); err != nil {
+		if err := updater.AddInSighashType(i, txscript.SigHashDefault); err != nil {
 			return err
 		}
 	}
 
 	signer, err := psetv2.NewSigner(updater.Pset)
-	if err != nil {
-		return err
-	}
-
-	_, onchainAddr, _, err := getAddress(ctx)
-	if err != nil {
-		return err
-	}
-
-	onchainWalletScript, err := address.ToOutputScript(onchainAddr)
 	if err != nil {
 		return err
 	}
@@ -99,34 +80,6 @@ func signPset(
 	liquidNet := toElementsNetwork(net)
 
 	for i, input := range pset.Inputs {
-		if bytes.Equal(input.WitnessUtxo.Script, onchainWalletScript) {
-			p, err := payment.FromScript(input.WitnessUtxo.Script, &liquidNet, nil)
-			if err != nil {
-				return err
-			}
-
-			preimage := utx.HashForWitnessV0(
-				i,
-				p.Script,
-				input.WitnessUtxo.Value,
-				txscript.SigHashAll,
-			)
-
-			sig := ecdsa.Sign(
-				prvKey,
-				preimage[:],
-			)
-
-			signatureWithSighashType := append(sig.Serialize(), byte(txscript.SigHashAll))
-
-			err = signer.SignInput(i, signatureWithSighashType, prvKey.PubKey().SerializeCompressed(), nil, nil)
-			if err != nil {
-				fmt.Println("error signing input: ", err)
-				return err
-			}
-			continue
-		}
-
 		if len(input.TapLeafScript) > 0 {
 			genesis, err := chainhash.NewHashFromStr(liquidNet.GenesisBlockHash)
 			if err != nil {

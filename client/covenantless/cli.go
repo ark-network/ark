@@ -9,10 +9,10 @@ import (
 	"github.com/ark-network/ark/client/utils"
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
+	"github.com/ark-network/ark/common/descriptor"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/psbt"
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
@@ -23,14 +23,14 @@ import (
 type clArkBitcoinCLI struct{}
 
 func (c *clArkBitcoinCLI) Receive(ctx *cli.Context) error {
-	offchainAddr, onchainAddr, _, err := getAddress(ctx)
+	offchainAddr, boardingAddr, _, err := getAddress(ctx)
 	if err != nil {
 		return err
 	}
 
 	return utils.PrintJSON(map[string]interface{}{
 		"offchain_address": offchainAddr,
-		"onchain_address":  onchainAddr.EncodeAddress(),
+		"boarding_address": boardingAddr.EncodeAddress(),
 	})
 }
 
@@ -76,11 +76,6 @@ type receiver struct {
 	To     string `json:"to"`
 	Amount uint64 `json:"amount"`
 }
-
-// func (r *receiver) isOnchain() bool {
-// 	_, err := btcutil.DecodeAddress(r.To, nil)
-// 	return err == nil
-// }
 
 func sendOnchain(ctx *cli.Context, receivers []receiver) (string, error) {
 	ptx, err := psbt.New(nil, nil, 2, 0, nil)
@@ -131,14 +126,14 @@ func sendOnchain(ctx *cli.Context, receivers []receiver) (string, error) {
 
 	explorer := utils.NewExplorer(ctx)
 
-	utxos, delayedUtxos, change, err := coinSelectOnchain(
+	utxos, change, err := coinSelectOnchain(
 		ctx, explorer, targetAmount, nil,
 	)
 	if err != nil {
 		return "", err
 	}
 
-	if err := addInputs(ctx, updater, utxos, delayedUtxos, &netParams); err != nil {
+	if err := addInputs(ctx, updater, utxos); err != nil {
 		return "", err
 	}
 
@@ -177,14 +172,14 @@ func sendOnchain(ctx *cli.Context, receivers []receiver) (string, error) {
 			updater.Upsbt.UnsignedTx.TxOut = updater.Upsbt.UnsignedTx.TxOut[:len(updater.Upsbt.UnsignedTx.TxOut)-1]
 		}
 		// reselect the difference
-		selected, delayedSelected, newChange, err := coinSelectOnchain(
-			ctx, explorer, feeAmount-change, append(utxos, delayedUtxos...),
+		selected, newChange, err := coinSelectOnchain(
+			ctx, explorer, feeAmount-change, utxos,
 		)
 		if err != nil {
 			return "", err
 		}
 
-		if err := addInputs(ctx, updater, selected, delayedSelected, &netParams); err != nil {
+		if err := addInputs(ctx, updater, selected); err != nil {
 			return "", err
 		}
 
@@ -228,20 +223,37 @@ func sendOnchain(ctx *cli.Context, receivers []receiver) (string, error) {
 func coinSelectOnchain(
 	ctx *cli.Context,
 	explorer utils.Explorer, targetAmount uint64, exclude []utils.Utxo,
-) ([]utils.Utxo, []utils.Utxo, uint64, error) {
-	_, onchainAddr, _, err := getAddress(ctx)
+) ([]utils.Utxo, uint64, error) {
+	_, boardingAddr, redemptionAddr, err := getAddress(ctx)
 	if err != nil {
-		return nil, nil, 0, err
+		return nil, 0, err
 	}
 
-	fromExplorer, err := explorer.GetUtxos(onchainAddr.EncodeAddress())
+	boardingUtxosFromExplorer, err := explorer.GetUtxos(boardingAddr.EncodeAddress())
 	if err != nil {
-		return nil, nil, 0, err
+		return nil, 0, err
 	}
 
 	utxos := make([]utils.Utxo, 0)
 	selectedAmount := uint64(0)
-	for _, utxo := range fromExplorer {
+	now := time.Now()
+
+	boardingDescriptor, err := utils.GetBoardingDescriptor(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	desc, err := descriptor.ParseTaprootDescriptor(boardingDescriptor)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	_, timeoutBoarding, err := descriptor.ParseBoardingDescriptor(*desc)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	for _, utxo := range boardingUtxosFromExplorer {
 		if selectedAmount >= targetAmount {
 			break
 		}
@@ -252,69 +264,31 @@ func coinSelectOnchain(
 			}
 		}
 
-		utxos = append(utxos, utxo)
-		selectedAmount += utxo.Amount
+		utxo := utils.NewUtxo(utxo, uint(timeoutBoarding))
+
+		if utxo.SpendableAt.After(now) {
+			utxos = append(utxos, utxo)
+			selectedAmount += utxo.Amount
+		}
 	}
 
 	if selectedAmount >= targetAmount {
-		return utxos, nil, selectedAmount - targetAmount, nil
+		return utxos, selectedAmount - targetAmount, nil
 	}
 
-	userPubkey, err := utils.GetWalletPublicKey(ctx)
+	redemptionUtxosFromExplorer, err := explorer.GetUtxos(redemptionAddr.EncodeAddress())
 	if err != nil {
-		return nil, nil, 0, err
+		return nil, 0, err
 	}
 
-	aspPubkey, err := utils.GetAspPublicKey(ctx)
+	vtxoExitDelay, err := utils.GetUnilateralExitDelay(ctx)
 	if err != nil {
-		return nil, nil, 0, err
+		return nil, 0, err
 	}
 
-	unilateralExitDelay, err := utils.GetUnilateralExitDelay(ctx)
-	if err != nil {
-		return nil, nil, 0, err
-	}
-
-	vtxoTapKey, _, err := computeVtxoTaprootScript(
-		userPubkey, aspPubkey, uint(unilateralExitDelay),
-	)
-	if err != nil {
-		return nil, nil, 0, err
-	}
-
-	net, err := utils.GetNetwork(ctx)
-	if err != nil {
-		return nil, nil, 0, err
-	}
-
-	liquidNet := toChainParams(net)
-
-	p2tr, err := btcutil.NewAddressTaproot(
-		schnorr.SerializePubKey(vtxoTapKey),
-		&liquidNet,
-	)
-	if err != nil {
-		return nil, nil, 0, err
-	}
-
-	addr := p2tr.EncodeAddress()
-
-	fromExplorer, err = explorer.GetUtxos(addr)
-	if err != nil {
-		return nil, nil, 0, err
-	}
-
-	delayedUtxos := make([]utils.Utxo, 0)
-	for _, utxo := range fromExplorer {
+	for _, utxo := range redemptionUtxosFromExplorer {
 		if selectedAmount >= targetAmount {
 			break
-		}
-
-		availableAt := time.Unix(utxo.Status.Blocktime, 0).Add(
-			time.Duration(unilateralExitDelay) * time.Second,
-		)
-		if availableAt.After(time.Now()) {
-			continue
 		}
 
 		for _, excluded := range exclude {
@@ -323,31 +297,34 @@ func coinSelectOnchain(
 			}
 		}
 
-		delayedUtxos = append(delayedUtxos, utxo)
-		selectedAmount += utxo.Amount
+		utxo := utils.NewUtxo(utxo, uint(vtxoExitDelay))
+
+		if utxo.SpendableAt.After(now) {
+			utxos = append(utxos, utxo)
+			selectedAmount += utxo.Amount
+		}
 	}
 
 	if selectedAmount < targetAmount {
-		return nil, nil, 0, fmt.Errorf(
+		return nil, 0, fmt.Errorf(
 			"not enough funds to cover amount %d", targetAmount,
 		)
 	}
 
-	return utxos, delayedUtxos, selectedAmount - targetAmount, nil
+	return utxos, selectedAmount - targetAmount, nil
 }
 
 func addInputs(
 	ctx *cli.Context,
 	updater *psbt.Updater,
-	utxos, delayedUtxos []utils.Utxo,
-	net *chaincfg.Params,
+	utxos []utils.Utxo,
 ) error {
-	_, onchainAddr, _, err := getAddress(ctx)
+	userPubkey, err := utils.GetWalletPublicKey(ctx)
 	if err != nil {
 		return err
 	}
 
-	changeScript, err := txscript.PayToAddrScript(onchainAddr)
+	aspPubkey, err := utils.GetAspPublicKey(ctx)
 	if err != nil {
 		return err
 	}
@@ -358,87 +335,41 @@ func addInputs(
 			return err
 		}
 
+		sequence, err := utxo.Sequence()
+		if err != nil {
+			return err
+		}
+
 		updater.Upsbt.UnsignedTx.AddTxIn(&wire.TxIn{
 			PreviousOutPoint: wire.OutPoint{
 				Hash:  *previousHash,
 				Index: utxo.Vout,
 			},
+			Sequence: sequence,
 		})
 
-		updater.Upsbt.Inputs = append(updater.Upsbt.Inputs, psbt.PInput{})
-
-		if err := updater.AddInWitnessUtxo(
-			&wire.TxOut{
-				Value:    int64(utxo.Amount),
-				PkScript: changeScript,
-			},
-			len(updater.Upsbt.UnsignedTx.TxIn)-1,
-		); err != nil {
-			return err
-		}
-	}
-
-	if len(delayedUtxos) > 0 {
-		userPubkey, err := utils.GetWalletPublicKey(ctx)
-		if err != nil {
-			return err
-		}
-
-		aspPubkey, err := utils.GetAspPublicKey(ctx)
-		if err != nil {
-			return err
-		}
-
-		unilateralExitDelay, err := utils.GetUnilateralExitDelay(ctx)
-		if err != nil {
-			return err
-		}
-
-		vtxoTapKey, leafProof, err := computeVtxoTaprootScript(
-			userPubkey, aspPubkey, uint(unilateralExitDelay),
+		_, leafProof, err := computeVtxoTaprootScript(
+			userPubkey, aspPubkey, utxo.Delay,
 		)
 		if err != nil {
 			return err
 		}
 
-		p2tr, err := btcutil.NewAddressTaproot(schnorr.SerializePubKey(vtxoTapKey), net)
+		controlBlock := leafProof.ToControlBlock(bitcointree.UnspendableKey())
+		controlBlockBytes, err := controlBlock.ToBytes()
 		if err != nil {
 			return err
 		}
 
-		script, err := txscript.PayToAddrScript(p2tr)
-		if err != nil {
-			return err
-		}
-
-		for _, utxo := range delayedUtxos {
-			previousHash, err := chainhash.NewHashFromStr(utxo.Txid)
-			if err != nil {
-				return err
-			}
-
-			if err := addVtxoInput(
-				updater,
-				&wire.OutPoint{
-					Hash:  *previousHash,
-					Index: utxo.Vout,
+		updater.Upsbt.Inputs = append(updater.Upsbt.Inputs, psbt.PInput{
+			TaprootLeafScript: []*psbt.TaprootTapLeafScript{
+				{
+					ControlBlock: controlBlockBytes,
+					Script:       leafProof.Script,
+					LeafVersion:  leafProof.LeafVersion,
 				},
-				uint(unilateralExitDelay),
-				leafProof,
-			); err != nil {
-				return err
-			}
-
-			if err := updater.AddInWitnessUtxo(
-				&wire.TxOut{
-					Value:    int64(utxo.Amount),
-					PkScript: script,
-				},
-				len(updater.Upsbt.Inputs)-1,
-			); err != nil {
-				return err
-			}
-		}
+			},
+		})
 	}
 
 	return nil
@@ -464,40 +395,7 @@ func decodeReceiverAddress(addr string) (
 	return true, pkscript, nil, nil
 }
 
-func addVtxoInput(
-	updater *psbt.Updater, inputArgs *wire.OutPoint, exitDelay uint,
-	tapLeafProof *txscript.TapscriptProof,
-) error {
-	sequence, err := common.BIP68EncodeAsNumber(exitDelay)
-	if err != nil {
-		return nil
-	}
-
-	nextInputIndex := len(updater.Upsbt.Inputs)
-	updater.Upsbt.UnsignedTx.AddTxIn(&wire.TxIn{
-		PreviousOutPoint: *inputArgs,
-		Sequence:         sequence,
-	})
-	updater.Upsbt.Inputs = append(updater.Upsbt.Inputs, psbt.PInput{})
-
-	controlBlock := tapLeafProof.ToControlBlock(bitcointree.UnspendableKey())
-	controlBlockBytes, err := controlBlock.ToBytes()
-	if err != nil {
-		return err
-	}
-
-	updater.Upsbt.Inputs[nextInputIndex].TaprootLeafScript = []*psbt.TaprootTapLeafScript{
-		{
-			ControlBlock: controlBlockBytes,
-			Script:       tapLeafProof.Script,
-			LeafVersion:  tapLeafProof.LeafVersion,
-		},
-	}
-
-	return nil
-}
-
-func getAddress(ctx *cli.Context) (offchainAddr string, onchainAddr, redemptionAddr btcutil.Address, err error) {
+func getAddress(ctx *cli.Context) (offchainAddr string, boardingAddr, redemptionAddr btcutil.Address, err error) {
 	userPubkey, err := utils.GetWalletPublicKey(ctx)
 	if err != nil {
 		return
@@ -509,6 +407,21 @@ func getAddress(ctx *cli.Context) (offchainAddr string, onchainAddr, redemptionA
 	}
 
 	unilateralExitDelay, err := utils.GetUnilateralExitDelay(ctx)
+	if err != nil {
+		return
+	}
+
+	boardingDescriptor, err := utils.GetBoardingDescriptor(ctx)
+	if err != nil {
+		return
+	}
+
+	desc, err := descriptor.ParseTaprootDescriptor(boardingDescriptor)
+	if err != nil {
+		return
+	}
+
+	_, timeoutBoarding, err := descriptor.ParseBoardingDescriptor(*desc)
 	if err != nil {
 		return
 	}
@@ -525,11 +438,6 @@ func getAddress(ctx *cli.Context) (offchainAddr string, onchainAddr, redemptionA
 
 	netParams := toChainParams(arkNet)
 
-	p2wpkh, err := btcutil.NewAddressWitnessPubKeyHash(btcutil.Hash160(userPubkey.SerializeCompressed()), &netParams)
-	if err != nil {
-		return
-	}
-
 	vtxoTapKey, _, err := computeVtxoTaprootScript(
 		userPubkey, aspPubkey, uint(unilateralExitDelay),
 	)
@@ -537,7 +445,7 @@ func getAddress(ctx *cli.Context) (offchainAddr string, onchainAddr, redemptionA
 		return
 	}
 
-	p2tr, err := btcutil.NewAddressTaproot(
+	redemptionP2TR, err := btcutil.NewAddressTaproot(
 		schnorr.SerializePubKey(vtxoTapKey),
 		&netParams,
 	)
@@ -545,8 +453,20 @@ func getAddress(ctx *cli.Context) (offchainAddr string, onchainAddr, redemptionA
 		return
 	}
 
-	redemptionAddr = p2tr
-	onchainAddr = p2wpkh
+	boardingTapKey, _, err := computeVtxoTaprootScript(
+		userPubkey, aspPubkey, uint(timeoutBoarding),
+	)
+	if err != nil {
+		return
+	}
+
+	boardingP2TR, err := btcutil.NewAddressTaproot(
+		schnorr.SerializePubKey(boardingTapKey),
+		&netParams,
+	)
+
+	redemptionAddr = redemptionP2TR
+	boardingAddr = boardingP2TR
 	offchainAddr = arkAddr
 
 	return

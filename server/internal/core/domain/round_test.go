@@ -449,6 +449,7 @@ func testEndFinalization(t *testing.T) {
 						Stage: domain.Stage{
 							Code: domain.FinalizationStage,
 						},
+						Payments: paymentsById,
 					},
 					forfeitTxs:  nil,
 					txid:        txid,

@@ -2,6 +2,8 @@ module github.com/ark-network/ark/server
 
 go 1.22.6
 
+replace github.com/ark-network/ark/common => ../common
+
 replace github.com/btcsuite/btcd/btcec/v2 => github.com/btcsuite/btcd/btcec/v2 v2.3.3
 
 require (
