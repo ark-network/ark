@@ -47,7 +47,7 @@ func TestVtxosToTxs(t *testing.T) {
 					TxID:    "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
 					Amount:  19000,
 					Type:    TxReceived,
-					Pending: true,
+					Pending: true, // TODO: expect false once the ASP handles the change properly
 					Claimed: false,
 				},
 			},

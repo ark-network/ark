@@ -639,10 +639,15 @@ func (a *covenantlessArkClient) GetTransactionHistory(ctx context.Context) ([]Tr
 		return nil, err
 	}
 
-	return vtxosToTxs(spendableVtxos, spentVtxos)
+	config, err := a.store.GetData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return vtxosToTxsCovenantless(config.RoundLifetime, spendableVtxos, spentVtxos)
 }
 
-func vtxosToTxs(spendable, spent []client.Vtxo) ([]Transaction, error) {
+func vtxosToTxsCovenantless(roundLifetime int64, spendable, spent []client.Vtxo) ([]Transaction, error) {
 	txsMap := make(map[string]Transaction)
 	pendingTxs := make(map[string]string)
 
@@ -652,21 +657,22 @@ func vtxosToTxs(spendable, spent []client.Vtxo) ([]Transaction, error) {
 		pending := false
 
 		if len(vtxo.UnconditionalForfeitTxs) > 0 && vtxo.RedeemTx != "" {
-			redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(vtxo.RedeemTx), true)
+			tid, err := getRedeemTxIDCovenantless(vtxo.RedeemTx)
 			if err != nil {
-				return nil, fmt.Errorf("failed to parse redeem tx: %s", err)
+				return nil, err
 			}
+			txID = tid
 
 			pending = true
-			txID = redeemPtx.UnsignedTx.TxID()
 			pendingTxs[vtxo.SpentBy] = txID
 		}
 
 		txsMap[txID] = Transaction{
-			TxID:    txID,
-			Amount:  vtxo.Amount,
-			Type:    TxSent,
-			Pending: pending,
+			TxID:      txID,
+			Amount:    vtxo.Amount,
+			Type:      TxSent,
+			Pending:   pending,
+			CreatedAt: getCreatedAtFromExpiry(roundLifetime, *vtxo.ExpiresAt),
 		}
 	}
 
@@ -675,17 +681,18 @@ func vtxosToTxs(spendable, spent []client.Vtxo) ([]Transaction, error) {
 		txID := vtxo.RoundTxid
 
 		if vtxo.Pending {
-			redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(vtxo.RedeemTx), true)
+			tid, err := getRedeemTxIDCovenantless(vtxo.RedeemTx)
 			if err != nil {
-				return nil, fmt.Errorf("failed to parse redeem tx: %s", err)
+				return nil, err
 			}
+			txID = tid
 
-			txID = redeemPtx.UnsignedTx.TxID()
 			txsMap[txID] = Transaction{
-				TxID:    txID,
-				Amount:  vtxo.Amount,
-				Type:    TxReceived,
-				Pending: true,
+				TxID:      txID,
+				Amount:    vtxo.Amount,
+				Type:      TxReceived,
+				Pending:   true,
+				CreatedAt: getCreatedAtFromExpiry(roundLifetime, *vtxo.ExpiresAt),
 			}
 		} else if pendingTxID, ok := pendingTxs[txID]; ok {
 			// Update the transaction if it's pending and now claimed
@@ -698,9 +705,10 @@ func vtxosToTxs(spendable, spent []client.Vtxo) ([]Transaction, error) {
 		} else {
 			// Regular received transaction
 			txsMap[txID] = Transaction{
-				TxID:   txID,
-				Amount: vtxo.Amount,
-				Type:   TxReceived,
+				TxID:      txID,
+				Amount:    vtxo.Amount,
+				Type:      TxReceived,
+				CreatedAt: getCreatedAtFromExpiry(roundLifetime, *vtxo.ExpiresAt),
 			}
 		}
 	}
@@ -712,6 +720,15 @@ func vtxosToTxs(spendable, spent []client.Vtxo) ([]Transaction, error) {
 	}
 
 	return txs, nil
+}
+
+func getRedeemTxIDCovenantless(redeemTx string) (string, error) {
+	redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse redeem tx: %s", err)
+	}
+
+	return redeemPtx.UnsignedTx.TxID(), nil
 }
 
 func (a *covenantlessArkClient) sendOnchain(

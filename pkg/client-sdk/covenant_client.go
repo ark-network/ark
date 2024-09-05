@@ -20,7 +20,6 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/store"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
-	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	log "github.com/sirupsen/logrus"
@@ -516,10 +515,15 @@ func (a *covenantArkClient) GetTransactionHistory(ctx context.Context) ([]Transa
 		return nil, err
 	}
 
-	return vtxosToTxsCovenantless(spendableVtxos, spentVtxos)
+	config, err := a.store.GetData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return vtxosToTxsCovenant(config.RoundLifetime, spendableVtxos, spentVtxos)
 }
 
-func vtxosToTxsCovenantless(spendable, spent []client.Vtxo) ([]Transaction, error) {
+func vtxosToTxsCovenant(roundLifetime int64, spendable, spent []client.Vtxo) ([]Transaction, error) {
 	txsMap := make(map[string]Transaction)
 	pendingTxs := make(map[string]string)
 
@@ -529,21 +533,22 @@ func vtxosToTxsCovenantless(spendable, spent []client.Vtxo) ([]Transaction, erro
 		pending := false
 
 		if len(vtxo.UnconditionalForfeitTxs) > 0 && vtxo.RedeemTx != "" {
-			redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(vtxo.RedeemTx), true)
+			tid, err := getRedeemTxCovenant(vtxo.RedeemTx)
 			if err != nil {
-				return nil, fmt.Errorf("failed to parse redeem tx: %s", err)
+				return nil, err
 			}
+			txID = tid
 
 			pending = true
-			txID = redeemPtx.UnsignedTx.TxID()
 			pendingTxs[vtxo.SpentBy] = txID
 		}
 
 		txsMap[txID] = Transaction{
-			TxID:    txID,
-			Amount:  vtxo.Amount,
-			Type:    TxSent,
-			Pending: pending,
+			TxID:      txID,
+			Amount:    vtxo.Amount,
+			Type:      TxSent,
+			Pending:   pending,
+			CreatedAt: getCreatedAtFromExpiry(roundLifetime, *vtxo.ExpiresAt),
 		}
 	}
 
@@ -552,22 +557,18 @@ func vtxosToTxsCovenantless(spendable, spent []client.Vtxo) ([]Transaction, erro
 		txID := vtxo.RoundTxid
 
 		if vtxo.Pending {
-			redeemPtx, err := psetv2.NewPsetFromBase64(vtxo.RedeemTx)
+			tid, err := getRedeemTxCovenant(vtxo.RedeemTx)
 			if err != nil {
-				return nil, fmt.Errorf("failed to parse redeem tx: %s", err)
+				return nil, err
 			}
+			txID = tid
 
-			tx, err := redeemPtx.UnsignedTx()
-			if err != nil {
-				return nil, fmt.Errorf("failed to get txid from redeem tx: %s", err)
-			}
-
-			txID = tx.TxHash().String()
 			txsMap[txID] = Transaction{
-				TxID:    txID,
-				Amount:  vtxo.Amount,
-				Type:    TxReceived,
-				Pending: true,
+				TxID:      txID,
+				Amount:    vtxo.Amount,
+				Type:      TxReceived,
+				Pending:   true,
+				CreatedAt: getCreatedAtFromExpiry(roundLifetime, *vtxo.ExpiresAt),
 			}
 		} else if pendingTxID, ok := pendingTxs[txID]; ok {
 			// Update the transaction if it's pending and now claimed
@@ -580,9 +581,10 @@ func vtxosToTxsCovenantless(spendable, spent []client.Vtxo) ([]Transaction, erro
 		} else {
 			// Regular received transaction
 			txsMap[txID] = Transaction{
-				TxID:   txID,
-				Amount: vtxo.Amount,
-				Type:   TxReceived,
+				TxID:      txID,
+				Amount:    vtxo.Amount,
+				Type:      TxReceived,
+				CreatedAt: getCreatedAtFromExpiry(roundLifetime, *vtxo.ExpiresAt),
 			}
 		}
 	}
@@ -594,6 +596,20 @@ func vtxosToTxsCovenantless(spendable, spent []client.Vtxo) ([]Transaction, erro
 	}
 
 	return txs, nil
+}
+
+func getRedeemTxCovenant(redeemTx string) (string, error) {
+	redeemPtx, err := psetv2.NewPsetFromBase64(redeemTx)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse redeem tx: %s", err)
+	}
+
+	tx, err := redeemPtx.UnsignedTx()
+	if err != nil {
+		return "", fmt.Errorf("failed to get txid from redeem tx: %s", err)
+	}
+
+	return tx.TxHash().String(), nil
 }
 
 func (a *covenantArkClient) getClaimableBoardingUtxos(ctx context.Context) ([]explorer.Utxo, error) {

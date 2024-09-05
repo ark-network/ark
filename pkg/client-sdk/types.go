@@ -2,6 +2,7 @@ package arksdk
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/ark-network/ark/common"
 	grpcclient "github.com/ark-network/ark/pkg/client-sdk/client/grpc"
@@ -138,9 +139,10 @@ const (
 type TxType string
 
 type Transaction struct {
-	TxID    string
-	Amount  uint64
-	Type    TxType
-	Pending bool
-	Claimed bool
+	TxID      string
+	Amount    uint64
+	Type      TxType
+	Pending   bool
+	Claimed   bool
+	CreatedAt time.Time
 }
