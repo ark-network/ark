@@ -305,5 +305,5 @@ func getWalletStore(storeType, datadir string) (walletstore.WalletStore, error) 
 }
 
 func getCreatedAtFromExpiry(roundLifetime int64, expiry time.Time) time.Time {
-	return expiry.Add(-(time.Duration(roundLifetime) + 30) * time.Second)
+	return expiry.Add(-time.Duration(roundLifetime) * time.Second)
 }

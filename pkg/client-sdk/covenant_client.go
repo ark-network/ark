@@ -575,7 +575,6 @@ func vtxosToTxsCovenant(roundLifetime int64, spendable, spent []client.Vtxo) ([]
 			if tx, exists := txsMap[pendingTxID]; exists {
 				tx.Pending = false
 				tx.Claimed = true
-				tx.Type = TxReceived
 				txsMap[pendingTxID] = tx
 			}
 		} else {
