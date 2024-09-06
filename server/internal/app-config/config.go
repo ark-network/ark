@@ -65,11 +65,13 @@ type Config struct {
 	UnilateralExitDelay   int64
 	BoardingExitDelay     int64
 
-	EsploraURL      string
-	NeutrinoPeer    string
-	BitcoindRpcUser string
-	BitcoindRpcPass string
-	BitcoindRpcHost string
+	EsploraURL       string
+	NeutrinoPeer     string
+	BitcoindRpcUser  string
+	BitcoindRpcPass  string
+	BitcoindRpcHost  string
+	BitcoindZmqBlock string
+	BitcoindZmqTx    string
 
 	repo      ports.RepoManager
 	svc       application.Service
@@ -271,7 +273,13 @@ func (c *Config) walletService() error {
 			EsploraURL: c.EsploraURL,
 		}, btcwallet.WithPollingBitcoind(c.BitcoindRpcHost, c.BitcoindRpcUser, c.BitcoindRpcPass))
 
-	// Placeholder for future initializers like WithBitcoindZMQ
+	case c.BitcoindZmqBlock != "" && c.BitcoindZmqTx != "" && c.BitcoindRpcUser != "" && c.BitcoindRpcPass != "":
+		svc, err = btcwallet.NewService(btcwallet.WalletConfig{
+			Datadir:    c.DbDir,
+			Network:    c.Network,
+			EsploraURL: c.EsploraURL,
+		}, btcwallet.WithBitcoindZMQ(c.BitcoindZmqBlock, c.BitcoindZmqTx, c.BitcoindRpcHost, c.BitcoindRpcUser, c.BitcoindRpcPass))
+
 	default:
 		return fmt.Errorf("either Neutrino peer or Bitcoind RPC credentials must be provided")
 	}
