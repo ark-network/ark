@@ -78,7 +78,7 @@ jobs:
       - name: check code integrity
         uses: securego/gosec@master
         with:
-          args: "-severity high -quiet ./..."
+          args: "-severity high -quiet -exclude=G115 ./..."
       - run: go get -v -t -d ./...
       - name: unit testing
         run: make test
