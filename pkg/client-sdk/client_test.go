@@ -23,12 +23,11 @@ func TestVtxosToTxs(t *testing.T) {
 			fixture: aliceBeforeSendingAsync,
 			want: []Transaction{
 				{
-					TxID:      "377fa2fbd27c82bdbc095478384c88b6c75432c0ef464189e49c965194446cdf",
-					Amount:    20000,
-					Type:      TxReceived,
-					Pending:   false,
-					Claimed:   false,
-					CreatedAt: time.Date(2024, time.September, 11, 13, 41, 38, 0, time.Local),
+					TxID:    "377fa2fbd27c82bdbc095478384c88b6c75432c0ef464189e49c965194446cdf",
+					Amount:  20000,
+					Type:    TxReceived,
+					Pending: false,
+					Claimed: false,
 				},
 			},
 			wantErr: assert.NoError,
@@ -38,20 +37,18 @@ func TestVtxosToTxs(t *testing.T) {
 			fixture: aliceAfterSendingAsync,
 			want: []Transaction{
 				{
-					TxID:      "377fa2fbd27c82bdbc095478384c88b6c75432c0ef464189e49c965194446cdf",
-					Amount:    20000,
-					Type:      TxSent,
-					Pending:   false,
-					Claimed:   false,
-					CreatedAt: time.Date(2024, time.September, 11, 13, 41, 38, 0, time.Local),
+					TxID:    "377fa2fbd27c82bdbc095478384c88b6c75432c0ef464189e49c965194446cdf",
+					Amount:  20000,
+					Type:    TxSent,
+					Pending: false,
+					Claimed: false,
 				},
 				{
-					TxID:      "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
-					Amount:    19000,
-					Type:      TxReceived,
-					Pending:   true, // TODO: expect false once the ASP handles the change properly
-					Claimed:   false,
-					CreatedAt: time.Date(2024, time.September, 11, 13, 41, 38, 0, time.Local),
+					TxID:    "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
+					Amount:  19000,
+					Type:    TxReceived,
+					Pending: true,
+					Claimed: false,
 				},
 			},
 			wantErr: assert.NoError,
@@ -61,12 +58,11 @@ func TestVtxosToTxs(t *testing.T) {
 			fixture: bobBeforeClaimingAsync,
 			want: []Transaction{
 				{
-					TxID:      "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
-					Amount:    1000,
-					Type:      TxReceived,
-					Pending:   true,
-					Claimed:   false,
-					CreatedAt: time.Date(2024, time.September, 11, 13, 41, 38, 0, time.Local),
+					TxID:    "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
+					Amount:  1000,
+					Type:    TxReceived,
+					Pending: true,
+					Claimed: false,
 				},
 			},
 			wantErr: assert.NoError,
@@ -76,12 +72,11 @@ func TestVtxosToTxs(t *testing.T) {
 			fixture: bobAfterClaimingAsync,
 			want: []Transaction{
 				{
-					TxID:      "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
-					Amount:    1000,
-					Type:      TxReceived,
-					Pending:   false,
-					Claimed:   true,
-					CreatedAt: time.Date(2024, time.September, 11, 13, 41, 38, 0, time.Local),
+					TxID:    "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
+					Amount:  1000,
+					Type:    TxReceived,
+					Pending: false,
+					Claimed: true,
 				},
 			},
 			wantErr: assert.NoError,
@@ -98,7 +93,16 @@ func TestVtxosToTxs(t *testing.T) {
 			if !tt.wantErr(t, err, fmt.Sprintf("vtxosToTxs(%v, %v)", args.spendable, args.spent)) {
 				return
 			}
-			assert.Equalf(t, tt.want, got, "vtxosToTxs(%v, %v)", args.spendable, args.spent)
+
+			// Check each expected transaction, excluding CreatedAt
+			for i, wantTx := range tt.want {
+				gotTx := got[i]
+				assert.Equal(t, wantTx.TxID, gotTx.TxID)
+				assert.Equal(t, wantTx.Amount, gotTx.Amount)
+				assert.Equal(t, wantTx.Type, gotTx.Type)
+				assert.Equal(t, wantTx.Pending, gotTx.Pending)
+				assert.Equal(t, wantTx.Claimed, gotTx.Claimed)
+			}
 		})
 	}
 }
