@@ -152,9 +152,7 @@ func (b *txBuilder) BuildPoolTx(
 	var treeFactoryFn tree.TreeFactory
 
 	if !isOnchainOnly(payments) {
-		// liquid node size is 2x the bitcoin node size (avoid min-relay-fee issues with the low fee rate on liquid)
-		liquidTreeTxSize := common.TreeTxSize * 2
-		feeSatsPerNode, err := b.wallet.MinRelayFee(context.Background(), uint64(liquidTreeTxSize))
+		feeSatsPerNode, err := b.wallet.MinRelayFee(context.Background(), uint64(common.CovenantTreeTxSize))
 		if err != nil {
 			return "", nil, "", err
 		}

@@ -12,7 +12,6 @@ import (
 
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/wire"
-	log "github.com/sirupsen/logrus"
 )
 
 type esploraClient struct {
@@ -131,7 +130,6 @@ func (f *esploraClient) GetFeeMap() (map[uint32]uint32, error) {
 	}
 
 	if len(response) == 0 {
-		log.Warn("empty response from esplora fee-estimates endpoint, default to 2 sat/vbyte")
 		response = map[string]float64{"1": 2.0}
 	}
 
