@@ -79,8 +79,8 @@ func (c *cypher) decrypt(encrypted, password []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	// #nosec G407
 	nonce, text := data[:gcm.NonceSize()], data[gcm.NonceSize():]
+	// #nosec G407
 	plaintext, err := gcm.Open(nil, nonce, text, nil)
 	if err != nil {
 		return nil, fmt.Errorf("invalid password")
