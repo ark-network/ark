@@ -17,7 +17,7 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
-	"github.com/ark-network/ark/pkg/client-sdk/internal/utils/redemption"
+	"github.com/ark-network/ark/pkg/client-sdk/redemption"
 	"github.com/ark-network/ark/pkg/client-sdk/store"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -971,6 +971,15 @@ func (a *covenantlessArkClient) handleRoundStream(
 
 	var signerSession bitcointree.SignerSession
 
+	const (
+		start = iota
+		roundSigningStarted
+		roundSigningNoncesGenerated
+		roundFinalization
+	)
+
+	step := start
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -987,6 +996,9 @@ func (a *covenantlessArkClient) handleRoundStream(
 				return "", fmt.Errorf("round failed: %s", event.(client.RoundFailedEvent).Reason)
 			case client.RoundSigningStartedEvent:
 				pingStop()
+				if step != start {
+					continue
+				}
 				log.Info("a round signing started")
 				signerSession, err = a.handleRoundSigningStarted(
 					ctx, roundEphemeralKey, event.(client.RoundSigningStartedEvent),
@@ -994,8 +1006,12 @@ func (a *covenantlessArkClient) handleRoundStream(
 				if err != nil {
 					return "", err
 				}
+				step++
 				continue
 			case client.RoundSigningNoncesGeneratedEvent:
+				if step != roundSigningStarted {
+					continue
+				}
 				pingStop()
 				log.Info("round combined nonces generated")
 				if err := a.handleRoundSigningNoncesGenerated(
@@ -1003,8 +1019,12 @@ func (a *covenantlessArkClient) handleRoundStream(
 				); err != nil {
 					return "", err
 				}
+				step++
 				continue
 			case client.RoundFinalizationEvent:
+				if step != roundSigningNoncesGenerated {
+					continue
+				}
 				pingStop()
 				log.Info("a round finalization started")
 
@@ -1027,6 +1047,8 @@ func (a *covenantlessArkClient) handleRoundStream(
 
 				log.Info("done.")
 				log.Info("waiting for round finalization...")
+				step++
+				continue
 			}
 		}
 	}

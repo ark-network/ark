@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -15,7 +14,6 @@ import (
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
-	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	log "github.com/sirupsen/logrus"
@@ -712,21 +710,26 @@ func (s *covenantService) getNextConnector(
 
 	// search for an already existing connector
 	for _, u := range utxos {
-		if u.GetValue() == 450 {
+		if u.GetValue() == round.DustAmount {
 			return u.GetTxid(), u.GetIndex(), nil
 		}
 	}
 
 	for _, u := range utxos {
-		if u.GetValue() > 450 {
+		if u.GetValue() > round.DustAmount {
 			for _, b64 := range round.Connectors {
-				partial, err := psbt.NewFromRawBytes(strings.NewReader(b64), true)
+				partial, err := psetv2.NewPsetFromBase64(b64)
 				if err != nil {
 					return "", 0, err
 				}
 
-				for _, i := range partial.UnsignedTx.TxIn {
-					if i.PreviousOutPoint.Hash.String() == u.GetTxid() && i.PreviousOutPoint.Index == u.GetIndex() {
+				for _, i := range partial.Inputs {
+					txhash, err := chainhash.NewHash(i.PreviousTxid)
+					if err != nil {
+						return "", 0, err
+					}
+
+					if txhash.String() == u.GetTxid() && i.PreviousTxIndex == u.GetIndex() {
 						connectorOutpoint := txOutpoint{u.GetTxid(), u.GetIndex()}
 
 						if err := s.wallet.LockConnectorUtxos(ctx, []ports.TxOutpoint{connectorOutpoint}); err != nil {

@@ -1006,13 +1006,7 @@ func (s *covenantlessService) listenToScannerNotifications() {
 					continue
 				}
 
-				signedForfeitTx, err := s.wallet.SignTransaction(ctx, forfeitTx, false)
-				if err != nil {
-					log.WithError(err).Warn("failed to sign connector input in forfeit tx")
-					continue
-				}
-
-				signedForfeitTx, err = s.wallet.SignTransactionTapscript(ctx, signedForfeitTx, []int{1})
+				signedForfeitTx, err := s.wallet.SignTransactionTapscript(ctx, forfeitTx, nil)
 				if err != nil {
 					log.WithError(err).Warn("failed to sign vtxo input in forfeit tx")
 					continue
@@ -1059,13 +1053,13 @@ func (s *covenantlessService) getNextConnector(
 
 	// search for an already existing connector
 	for _, u := range utxos {
-		if u.GetValue() == 450 {
+		if u.GetValue() == round.DustAmount {
 			return u.GetTxid(), u.GetIndex(), nil
 		}
 	}
 
 	for _, u := range utxos {
-		if u.GetValue() > 450 {
+		if u.GetValue() > round.DustAmount {
 			for _, b64 := range round.Connectors {
 				ptx, err := psbt.NewFromRawBytes(strings.NewReader(b64), true)
 				if err != nil {
@@ -1354,9 +1348,9 @@ func findForfeitTxBitcoin(
 		connector := forfeitTx.UnsignedTx.TxIn[0]
 		vtxoInput := forfeitTx.UnsignedTx.TxIn[1]
 
-		if connector.PreviousOutPoint.String() == connectorTxid &&
+		if connector.PreviousOutPoint.Hash.String() == connectorTxid &&
 			connector.PreviousOutPoint.Index == connectorVout &&
-			vtxoInput.PreviousOutPoint.String() == vtxoTxid {
+			vtxoInput.PreviousOutPoint.Hash.String() == vtxoTxid {
 			return forfeit, nil
 		}
 	}
