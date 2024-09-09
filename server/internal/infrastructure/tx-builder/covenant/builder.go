@@ -1,6 +1,7 @@
 package txbuilder
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -242,27 +243,46 @@ func (b *txBuilder) GetSweepInput(parentblocktime int64, node tree.Node) (expira
 	return expirationTime, sweepInput, nil
 }
 
-func (b *txBuilder) VerifyForfeitTx(tx string) (bool, string, error) {
+func (b *txBuilder) VerifyTapscriptPartialSigs(tx string) (bool, string, error) {
 	ptx, _ := psetv2.NewPsetFromBase64(tx)
 	utx, _ := ptx.UnsignedTx()
 	txid := utx.TxHash().String()
 
 	for index, input := range ptx.Inputs {
+		if len(input.TapLeafScript) == 0 {
+			continue
+		}
+		if input.WitnessUtxo == nil {
+			return false, txid, fmt.Errorf("missing witness utxo for input %d, cannot verify signature", index)
+		}
+
+		// verify taproot leaf script
+		tapLeaf := input.TapLeafScript[0]
+
+		rootHash := tapLeaf.ControlBlock.RootHash(tapLeaf.Script)
+		tapKeyFromControlBlock := taproot.ComputeTaprootOutputKey(tree.UnspendableKey(), rootHash[:])
+
+		pkscript, err := p2trScript(tapKeyFromControlBlock)
+		if err != nil {
+			return false, txid, err
+		}
+
+		if !bytes.Equal(pkscript, input.WitnessUtxo.Script) {
+			return false, txid, fmt.Errorf("invalid control block for input %d", index)
+		}
+
+		leafHash := taproot.NewBaseTapElementsLeaf(tapLeaf.Script).TapHash()
+
+		preimage, err := b.getTaprootPreimage(
+			tx,
+			index,
+			&leafHash,
+		)
+		if err != nil {
+			return false, txid, err
+		}
+
 		for _, tapScriptSig := range input.TapScriptSig {
-			leafHash, err := chainhash.NewHash(tapScriptSig.LeafHash)
-			if err != nil {
-				return false, txid, err
-			}
-
-			preimage, err := b.getTaprootPreimage(
-				tx,
-				index,
-				leafHash,
-			)
-			if err != nil {
-				return false, txid, err
-			}
-
 			sig, err := schnorr.ParseSignature(tapScriptSig.Signature)
 			if err != nil {
 				return false, txid, err
@@ -273,15 +293,13 @@ func (b *txBuilder) VerifyForfeitTx(tx string) (bool, string, error) {
 				return false, txid, err
 			}
 
-			if sig.Verify(preimage, pubkey) {
-				return true, txid, nil
-			} else {
-				return false, txid, fmt.Errorf("invalid signature")
+			if !sig.Verify(preimage, pubkey) {
+				return false, txid, fmt.Errorf("invalid signature for tx %s", txid)
 			}
 		}
 	}
 
-	return false, txid, nil
+	return true, txid, nil
 }
 
 func (b *txBuilder) FinalizeAndExtractForfeit(tx string) (string, error) {
@@ -381,7 +399,7 @@ func (b *txBuilder) getLeafScriptAndTree(
 	unspendableKey := tree.UnspendableKey()
 	taprootKey := taproot.ComputeTaprootOutputKey(unspendableKey, root[:])
 
-	outputScript, err := taprootOutputScript(taprootKey)
+	outputScript, err := p2trScript(taprootKey)
 	if err != nil {
 		return nil, nil, err
 	}

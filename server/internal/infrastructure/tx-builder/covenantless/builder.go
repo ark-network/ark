@@ -41,22 +41,51 @@ func NewTxBuilder(
 	return &txBuilder{wallet, net, roundLifetime, exitDelay, boardingExitDelay}
 }
 
-func (b *txBuilder) VerifyForfeitTx(tx string) (bool, string, error) {
+func (b *txBuilder) VerifyTapscriptPartialSigs(tx string) (bool, string, error) {
 	ptx, _ := psbt.NewFromRawBytes(strings.NewReader(tx), true)
-	txid := ptx.UnsignedTx.TxHash().String()
+	txid := ptx.UnsignedTx.TxID()
 
 	for index, input := range ptx.Inputs {
-		// TODO (@louisinger): verify control block
-		for _, tapScriptSig := range input.TaprootScriptSpendSig {
-			preimage, err := b.getTaprootPreimage(
-				tx,
-				index,
-				input.TaprootLeafScript[0].Script,
-			)
-			if err != nil {
-				return false, txid, err
-			}
+		if len(input.TaprootLeafScript) == 0 {
+			continue
+		}
 
+		if input.WitnessUtxo == nil {
+			return false, txid, fmt.Errorf("missing witness utxo for input %d, cannot verify signature", index)
+		}
+
+		// verify taproot leaf script
+		tapLeaf := input.TaprootLeafScript[0]
+		if len(tapLeaf.ControlBlock) == 0 {
+			return false, txid, fmt.Errorf("missing control block for input %d", index)
+		}
+
+		controlBlock, err := txscript.ParseControlBlock(tapLeaf.ControlBlock)
+		if err != nil {
+			return false, txid, err
+		}
+
+		rootHash := controlBlock.RootHash(tapLeaf.Script)
+		tapKeyFromControlBlock := txscript.ComputeTaprootOutputKey(bitcointree.UnspendableKey(), rootHash[:])
+		pkscript, err := p2trScript(tapKeyFromControlBlock)
+		if err != nil {
+			return false, txid, err
+		}
+
+		if !bytes.Equal(pkscript, input.WitnessUtxo.PkScript) {
+			return false, txid, fmt.Errorf("invalid control block for input %d", index)
+		}
+
+		preimage, err := b.getTaprootPreimage(
+			tx,
+			index,
+			tapLeaf.Script,
+		)
+		if err != nil {
+			return false, txid, err
+		}
+
+		for _, tapScriptSig := range input.TaprootScriptSpendSig {
 			sig, err := schnorr.ParseSignature(tapScriptSig.Signature)
 			if err != nil {
 				return false, txid, err
@@ -67,15 +96,13 @@ func (b *txBuilder) VerifyForfeitTx(tx string) (bool, string, error) {
 				return false, txid, err
 			}
 
-			if sig.Verify(preimage, pubkey) {
-				return true, txid, nil
-			} else {
+			if !sig.Verify(preimage, pubkey) {
 				return false, txid, fmt.Errorf("invalid signature for tx %s", txid)
 			}
 		}
 	}
 
-	return false, txid, nil
+	return true, txid, nil
 }
 
 func (b *txBuilder) FinalizeAndExtractForfeit(tx string) (string, error) {
@@ -342,7 +369,7 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 			return nil, err
 		}
 
-		aspScript, err := p2trScript(aspPubKey, b.onchainNetwork())
+		aspScript, err := p2trScript(aspPubKey)
 		if err != nil {
 			return nil, err
 		}
@@ -445,8 +472,13 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 		})
 	}
 
+	sequences := make([]uint32, len(ins))
+	for i := range sequences {
+		sequences[i] = wire.MaxTxInSequenceNum
+	}
+
 	redeemPtx, err := psbt.New(
-		ins, outs, 2, 0, []uint32{wire.MaxTxInSequenceNum},
+		ins, outs, 2, 0, sequences,
 	)
 	if err != nil {
 		return nil, err
@@ -976,7 +1008,7 @@ func (b *txBuilder) createConnectors(
 func (b *txBuilder) createForfeitTxs(
 	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, connectors []*psbt.Packet, minRelayFee uint64,
 ) ([]string, error) {
-	aspScript, err := p2trScript(aspPubkey, b.onchainNetwork())
+	aspScript, err := p2trScript(aspPubkey)
 	if err != nil {
 		return nil, err
 	}

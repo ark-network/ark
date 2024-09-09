@@ -49,7 +49,7 @@ type covenantlessService struct {
 	currentRoundLock    sync.Mutex
 	currentRound        *domain.Round
 	treeSigningSessions map[string]*musigSigningSession
-	asyncPaymentsCache  map[domain.VtxoKey]struct {
+	asyncPaymentsCache  map[string]struct { // redeem txid -> receivers
 		receivers []domain.Receiver
 		expireAt  int64
 	}
@@ -72,7 +72,7 @@ func NewCovenantlessService(
 	}
 
 	sweeper := newSweeper(walletSvc, repoManager, builder, scheduler)
-	asyncPaymentsCache := make(map[domain.VtxoKey]struct {
+	asyncPaymentsCache := make(map[string]struct {
 		receivers []domain.Receiver
 		expireAt  int64
 	})
@@ -145,13 +145,113 @@ func (s *covenantlessService) Stop() {
 func (s *covenantlessService) CompleteAsyncPayment(
 	ctx context.Context, redeemTx string, unconditionalForfeitTxs []string,
 ) error {
-	// TODO check that the user signed both transactions
-
 	redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
 	if err != nil {
 		return fmt.Errorf("failed to parse redeem tx: %s", err)
 	}
 	redeemTxid := redeemPtx.UnsignedTx.TxID()
+
+	asyncPayData, ok := s.asyncPaymentsCache[redeemTxid]
+	if !ok {
+		return fmt.Errorf("async payment not found")
+	}
+
+	txs := append([]string{redeemTx}, unconditionalForfeitTxs...)
+	vtxoRepo := s.repoManager.Vtxos()
+
+	for _, tx := range txs {
+		ptx, err := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+		if err != nil {
+			return fmt.Errorf("failed to parse tx: %s", err)
+		}
+
+		for inputIndex, input := range ptx.Inputs {
+			if input.WitnessUtxo == nil {
+				return fmt.Errorf("missing witness utxo")
+			}
+
+			if len(input.TaprootLeafScript) == 0 {
+				return fmt.Errorf("missing tapscript leaf")
+			}
+
+			if len(input.TaprootScriptSpendSig) == 0 {
+				return fmt.Errorf("missing tapscript spend sig")
+			}
+
+			vtxoOutpoint := ptx.UnsignedTx.TxIn[inputIndex].PreviousOutPoint
+
+			// verify that the vtxo is spendable
+
+			vtxo, err := vtxoRepo.GetVtxos(ctx, []domain.VtxoKey{{Txid: vtxoOutpoint.Hash.String(), VOut: vtxoOutpoint.Index}})
+			if err != nil {
+				return fmt.Errorf("failed to get vtxo: %s", err)
+			}
+
+			if len(vtxo) == 0 {
+				return fmt.Errorf("vtxo not found")
+			}
+
+			if vtxo[0].Spent {
+				return fmt.Errorf("vtxo already spent")
+			}
+
+			if vtxo[0].Redeemed {
+				return fmt.Errorf("vtxo already redeemed")
+			}
+
+			if vtxo[0].Swept {
+				return fmt.Errorf("vtxo already swept")
+			}
+
+			// verify that the user signs the tx using the right public key
+
+			vtxoPublicKey, err := hex.DecodeString(vtxo[0].Pubkey)
+			if err != nil {
+				return fmt.Errorf("failed to decode pubkey: %s", err)
+			}
+
+			pubkey, err := secp256k1.ParsePubKey(vtxoPublicKey)
+			if err != nil {
+				return fmt.Errorf("failed to parse pubkey: %s", err)
+			}
+
+			xonlyPubkey := schnorr.SerializePubKey(pubkey)
+
+			// find signature belonging to the pubkey
+			found := false
+
+			for _, sig := range input.TaprootScriptSpendSig {
+				if bytes.Equal(sig.XOnlyPubKey, xonlyPubkey) {
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				return fmt.Errorf("signature not found for pubkey")
+			}
+
+			// verify witness utxo
+
+			pkscript, err := s.builder.GetVtxoScript(pubkey, s.pubkey)
+			if err != nil {
+				return fmt.Errorf("failed to get vtxo script: %s", err)
+			}
+
+			if !bytes.Equal(input.WitnessUtxo.PkScript, pkscript) {
+				return fmt.Errorf("witness utxo script mismatch")
+			}
+
+			if input.WitnessUtxo.Value != int64(vtxo[0].Amount) {
+				return fmt.Errorf("witness utxo value mismatch")
+			}
+		}
+
+		// verify the tapscript signatures
+		if valid, _, err := s.builder.VerifyTapscriptPartialSigs(tx); err != nil || !valid {
+			return fmt.Errorf("invalid tx signature: %s", err)
+		}
+	}
 
 	spentVtxos := make([]domain.VtxoKey, 0, len(unconditionalForfeitTxs))
 	for _, in := range redeemPtx.UnsignedTx.TxIn {
@@ -159,11 +259,6 @@ func (s *covenantlessService) CompleteAsyncPayment(
 			Txid: in.PreviousOutPoint.Hash.String(),
 			VOut: in.PreviousOutPoint.Index,
 		})
-	}
-
-	asyncPayData, ok := s.asyncPaymentsCache[spentVtxos[0]]
-	if !ok {
-		return fmt.Errorf("async payment not found")
 	}
 
 	vtxos := make([]domain.Vtxo, 0, len(asyncPayData.receivers))
@@ -192,7 +287,7 @@ func (s *covenantlessService) CompleteAsyncPayment(
 	}
 	log.Infof("spent %d vtxos", len(spentVtxos))
 
-	delete(s.asyncPaymentsCache, spentVtxos[0])
+	delete(s.asyncPaymentsCache, redeemTxid)
 
 	return nil
 }
@@ -221,6 +316,7 @@ func (s *covenantlessService) CreateAsyncPayment(
 		if vtxo.Swept {
 			return "", nil, fmt.Errorf("all vtxos must be swept")
 		}
+
 		if vtxo.ExpireAt < expiration {
 			expiration = vtxo.ExpireAt
 		}
@@ -233,7 +329,12 @@ func (s *covenantlessService) CreateAsyncPayment(
 		return "", nil, fmt.Errorf("failed to build async payment txs: %s", err)
 	}
 
-	s.asyncPaymentsCache[inputs[0]] = struct {
+	redeemTx, err := psbt.NewFromRawBytes(strings.NewReader(res.RedeemTx), true)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to parse redeem tx: %s", err)
+	}
+
+	s.asyncPaymentsCache[redeemTx.UnsignedTx.TxID()] = struct {
 		receivers []domain.Receiver
 		expireAt  int64
 	}{

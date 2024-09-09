@@ -136,7 +136,7 @@ func addInputs(
 	return nil
 }
 
-func taprootOutputScript(taprootKey *secp256k1.PublicKey) ([]byte, error) {
+func p2trScript(taprootKey *secp256k1.PublicKey) ([]byte, error) {
 	return txscript.NewScriptBuilder().AddOp(txscript.OP_1).AddData(schnorr.SerializePubKey(taprootKey)).Script()
 }
 
