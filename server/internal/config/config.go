@@ -58,13 +58,15 @@ var (
 	BoardingExitDelay     = "BOARDING_EXIT_DELAY"
 	EsploraURL            = "ESPLORA_URL"
 	NeutrinoPeer          = "NEUTRINO_PEER"
-	BitcoindRpcUser       = "BITCOIND_RPC_USER"
-	BitcoindRpcPass       = "BITCOIND_RPC_PASS"
-	BitcoindRpcHost       = "BITCOIND_RPC_HOST"
-	NoMacaroons           = "NO_MACAROONS"
-	NoTLS                 = "NO_TLS"
-	TLSExtraIP            = "TLS_EXTRA_IP"
-	TLSExtraDomain        = "TLS_EXTRA_DOMAIN"
+	// #nosec G101
+	BitcoindRpcUser = "BITCOIND_RPC_USER"
+	// #nosec G101
+	BitcoindRpcPass = "BITCOIND_RPC_PASS"
+	BitcoindRpcHost = "BITCOIND_RPC_HOST"
+	NoMacaroons     = "NO_MACAROONS"
+	NoTLS           = "NO_TLS"
+	TLSExtraIP      = "TLS_EXTRA_IP"
+	TLSExtraDomain  = "TLS_EXTRA_DOMAIN"
 
 	defaultDatadir               = common.AppDataDir("arkd", false)
 	defaultRoundInterval         = 5

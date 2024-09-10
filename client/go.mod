@@ -1,6 +1,6 @@
 module github.com/ark-network/ark/client
 
-go 1.22.6
+go 1.23.1
 
 replace github.com/ark-network/ark/common => ../common
 

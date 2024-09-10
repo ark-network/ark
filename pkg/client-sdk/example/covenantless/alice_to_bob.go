@@ -203,18 +203,18 @@ func runCommand(name string, arg ...string) (string, error) {
 	wg.Wait()
 	if err := cmd.Wait(); err != nil {
 		if errMsg := errorb.String(); len(errMsg) > 0 {
-			return "", fmt.Errorf(errMsg)
+			return "", fmt.Errorf("%s", errMsg)
 		}
 
 		if outMsg := output.String(); len(outMsg) > 0 {
-			return "", fmt.Errorf(outMsg)
+			return "", fmt.Errorf("%s", outMsg)
 		}
 
 		return "", err
 	}
 
 	if errMsg := errb.String(); len(errMsg) > 0 {
-		return "", fmt.Errorf(errMsg)
+		return "", fmt.Errorf("%s", errMsg)
 	}
 
 	return strings.Trim(output.String(), "\n"), nil
