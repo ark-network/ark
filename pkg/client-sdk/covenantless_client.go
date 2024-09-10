@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -631,6 +632,96 @@ func (a *covenantlessArkClient) Claim(ctx context.Context) (string, error) {
 
 	desc := strings.ReplaceAll(a.BoardingDescriptorTemplate, "USER", hex.EncodeToString(schnorr.SerializePubKey(mypubkey)))
 	return a.selfTransferAllPendingPayments(ctx, pendingVtxos, boardingUtxos, receiver, desc)
+}
+
+func (a *covenantlessArkClient) GetTransactionHistory(ctx context.Context) ([]Transaction, error) {
+	spendableVtxos, spentVtxos, err := a.ListVtxos(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	config, err := a.store.GetData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return vtxosToTxsCovenantless(config.RoundLifetime, spendableVtxos, spentVtxos)
+}
+
+func vtxosToTxsCovenantless(roundLifetime int64, spendable, spent []client.Vtxo) ([]Transaction, error) {
+	transactions := make([]Transaction, 0)
+
+	for _, v := range append(spendable, spent...) {
+		// get vtxo amount
+		amount := int(v.Amount)
+		if v.Pending {
+			// find other spent vtxos that spent this one
+			relatedVtxos := findVtxosBySpentBy(spent, v.Txid)
+			for _, r := range relatedVtxos {
+				if r.Amount < math.MaxInt64 {
+					rAmount := int(r.Amount)
+					amount -= rAmount
+				}
+			}
+		} else {
+			// an onboarding tx has pending false and no pending true related txs
+			relatedVtxos := findVtxosBySpentBy(spent, v.RoundTxid)
+			if len(relatedVtxos) > 0 { // not an onboard tx, ignore
+				continue
+			}
+		} // what kind of tx was this? send or receive?
+		txType := TxReceived
+		if amount < 0 {
+			txType = TxSent
+		}
+		// check if is a pending tx
+		pending := false
+		claimed := true
+		if len(v.RoundTxid) == 0 && len(v.SpentBy) == 0 {
+			pending = true
+			claimed = false
+		}
+		redeemTxid := ""
+		if len(v.RedeemTx) > 0 {
+			txid, err := getRedeemTxidCovenantless(v.RedeemTx)
+			if err != nil {
+				return nil, err
+			}
+			redeemTxid = txid
+		}
+
+		// add transaction
+		transactions = append(transactions, Transaction{
+			RoundTxid:  v.RoundTxid,
+			RedeemTxid: redeemTxid,
+			Amount:     uint64(math.Abs(float64(amount))),
+			Type:       txType,
+			Pending:    pending,
+			Claimed:    claimed,
+			CreatedAt:  getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
+		})
+	}
+
+	// Sort the slice by age
+	sort.Slice(transactions, func(i, j int) bool {
+		txi := transactions[i]
+		txj := transactions[j]
+		if txi.CreatedAt.Equal(txj.CreatedAt) {
+			return txi.Type > txj.Type
+		}
+		return txi.CreatedAt.After(txj.CreatedAt)
+	})
+
+	return transactions, nil
+}
+
+func getRedeemTxidCovenantless(redeemTx string) (string, error) {
+	redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse redeem tx: %s", err)
+	}
+
+	return redeemPtx.UnsignedTx.TxID(), nil
 }
 
 func (a *covenantlessArkClient) sendOnchain(
@@ -1584,8 +1675,6 @@ func (a *covenantlessArkClient) selfTransferAllPendingPayments(
 	}
 
 	for _, utxo := range boardingUtxo {
-		fmt.Println(utxo)
-		fmt.Println(boardingDescriptor)
 		inputs = append(inputs, client.BoardingInput{
 			VtxoKey: client.VtxoKey{
 				Txid: utxo.Txid,
@@ -1622,4 +1711,13 @@ func (a *covenantlessArkClient) selfTransferAllPendingPayments(
 	}
 
 	return roundTxid, nil
+}
+
+func findVtxosBySpentBy(allVtxos []client.Vtxo, txid string) (vtxos []client.Vtxo) {
+	for _, v := range allVtxos {
+		if v.SpentBy == txid {
+			vtxos = append(vtxos, v)
+		}
+	}
+	return
 }

@@ -303,3 +303,7 @@ func getWalletStore(storeType, datadir string) (walletstore.WalletStore, error) 
 		return nil, fmt.Errorf("unknown wallet store type")
 	}
 }
+
+func getCreatedAtFromExpiry(roundLifetime int64, expiry time.Time) time.Time {
+	return expiry.Add(-time.Duration(roundLifetime) * time.Second)
+}
