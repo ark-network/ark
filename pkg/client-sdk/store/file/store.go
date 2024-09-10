@@ -28,7 +28,7 @@ type storeData struct {
 	Network                    string `json:"network"`
 	RoundLifetime              string `json:"round_lifetime"`
 	UnilateralExitDelay        string `json:"unilateral_exit_delay"`
-	MinRelayFee                string `json:"min_relay_fee"`
+	Dust                       string `json:"dust"`
 	BoardingDescriptorTemplate string `json:"boarding_descriptor_template"`
 }
 
@@ -40,7 +40,7 @@ func (d storeData) decode() store.StoreData {
 	network := utils.NetworkFromString(d.Network)
 	roundLifetime, _ := strconv.Atoi(d.RoundLifetime)
 	unilateralExitDelay, _ := strconv.Atoi(d.UnilateralExitDelay)
-	minRelayFee, _ := strconv.Atoi(d.MinRelayFee)
+	dust, _ := strconv.Atoi(d.Dust)
 	buf, _ := hex.DecodeString(d.AspPubkey)
 	aspPubkey, _ := secp256k1.ParsePubKey(buf)
 	return store.StoreData{
@@ -51,7 +51,7 @@ func (d storeData) decode() store.StoreData {
 		Network:                    network,
 		RoundLifetime:              int64(roundLifetime),
 		UnilateralExitDelay:        int64(unilateralExitDelay),
-		MinRelayFee:                uint64(minRelayFee),
+		Dust:                       uint64(dust),
 		BoardingDescriptorTemplate: d.BoardingDescriptorTemplate,
 	}
 }
@@ -65,7 +65,7 @@ func (d storeData) asMap() map[string]string {
 		"network":                      d.Network,
 		"round_lifetime":               d.RoundLifetime,
 		"unilateral_exit_delay":        d.UnilateralExitDelay,
-		"min_relay_fee":                d.MinRelayFee,
+		"dust":                         d.Dust,
 		"boarding_descriptor_template": d.BoardingDescriptorTemplate,
 	}
 }
@@ -110,7 +110,7 @@ func (s *Store) AddData(ctx context.Context, data store.StoreData) error {
 		Network:                    data.Network.Name,
 		RoundLifetime:              fmt.Sprintf("%d", data.RoundLifetime),
 		UnilateralExitDelay:        fmt.Sprintf("%d", data.UnilateralExitDelay),
-		MinRelayFee:                fmt.Sprintf("%d", data.MinRelayFee),
+		Dust:                       fmt.Sprintf("%d", data.Dust),
 		BoardingDescriptorTemplate: data.BoardingDescriptorTemplate,
 	}
 

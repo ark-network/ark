@@ -20,7 +20,6 @@ import (
 )
 
 const (
-	DUST = 450
 	// transport
 	GrpcClient = client.GrpcClient
 	RestClient = client.RestClient
@@ -99,7 +98,7 @@ func (a *arkClient) InitWithWallet(
 		Network:                    network,
 		RoundLifetime:              info.RoundLifetime,
 		UnilateralExitDelay:        info.UnilateralExitDelay,
-		MinRelayFee:                uint64(info.MinRelayFee),
+		Dust:                       info.Dust,
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 	}
 	if err := a.store.AddData(ctx, storeData); err != nil {
@@ -163,7 +162,7 @@ func (a *arkClient) Init(
 		Network:                    network,
 		RoundLifetime:              info.RoundLifetime,
 		UnilateralExitDelay:        info.UnilateralExitDelay,
-		MinRelayFee:                uint64(info.MinRelayFee),
+		Dust:                       info.Dust,
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 	}
 	walletSvc, err := getWallet(a.store, &storeData, supportedWallets)

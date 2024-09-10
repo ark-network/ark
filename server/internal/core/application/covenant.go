@@ -35,7 +35,6 @@ type covenantService struct {
 	roundInterval       int64
 	unilateralExitDelay int64
 	boardingExitDelay   int64
-	minRelayFee         uint64
 
 	wallet      ports.WalletService
 	repoManager ports.RepoManager
@@ -55,7 +54,7 @@ type covenantService struct {
 
 func NewCovenantService(
 	network common.Network,
-	roundInterval, roundLifetime, unilateralExitDelay, boardingExitDelay int64, minRelayFee uint64,
+	roundInterval, roundLifetime, unilateralExitDelay, boardingExitDelay int64,
 	walletSvc ports.WalletService, repoManager ports.RepoManager,
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	scheduler ports.SchedulerService,
@@ -73,7 +72,7 @@ func NewCovenantService(
 
 	svc := &covenantService{
 		network, pubkey,
-		roundLifetime, roundInterval, unilateralExitDelay, boardingExitDelay, minRelayFee,
+		roundLifetime, roundInterval, unilateralExitDelay, boardingExitDelay,
 		walletSvc, repoManager, builder, scanner, sweeper,
 		paymentRequests, forfeitTxs, eventsCh, sync.Mutex{}, nil, nil,
 	}
@@ -284,6 +283,17 @@ func (s *covenantService) ClaimVtxos(ctx context.Context, creds string, receiver
 		return fmt.Errorf("invalid credentials")
 	}
 
+	dustAmount, err := s.wallet.GetDustAmount(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, r := range receivers {
+		if r.Amount <= dustAmount {
+			return fmt.Errorf("receiver amount must be greater than dust amount: %d", dustAmount)
+		}
+	}
+
 	if err := payment.AddReceivers(receivers); err != nil {
 		return err
 	}
@@ -352,13 +362,18 @@ func (s *covenantService) GetRoundById(ctx context.Context, id string) (*domain.
 func (s *covenantService) GetInfo(ctx context.Context) (*ServiceInfo, error) {
 	pubkey := hex.EncodeToString(s.pubkey.SerializeCompressed())
 
+	dust, err := s.wallet.GetDustAmount(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	return &ServiceInfo{
 		PubKey:              pubkey,
 		RoundLifetime:       s.roundLifetime,
 		UnilateralExitDelay: s.unilateralExitDelay,
 		RoundInterval:       s.roundInterval,
 		Network:             s.network.Name,
-		MinRelayFee:         int64(s.minRelayFee),
+		Dust:                dust,
 		BoardingDescriptorTemplate: fmt.Sprintf(
 			descriptor.BoardingDescriptorTemplate,
 			hex.EncodeToString(tree.UnspendableKey().SerializeCompressed()),
@@ -393,6 +408,11 @@ func (s *covenantService) start() {
 }
 
 func (s *covenantService) startRound() {
+	dustAmount, err := s.wallet.GetDustAmount(context.Background())
+	if err != nil {
+		log.WithError(err).Warn("failed to retrieve dust amount")
+		return
+	}
 	round := domain.NewRound(dustAmount)
 	//nolint:all
 	round.StartRegistration()
@@ -460,7 +480,7 @@ func (s *covenantService) startFinalization() {
 		return
 	}
 
-	unsignedPoolTx, tree, connectorAddress, err := s.builder.BuildPoolTx(s.pubkey, payments, boardingInputs, s.minRelayFee, sweptRounds)
+	unsignedPoolTx, tree, connectorAddress, err := s.builder.BuildPoolTx(s.pubkey, payments, boardingInputs, sweptRounds)
 	if err != nil {
 		round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
 		log.WithError(err).Warn("failed to create pool tx")
@@ -479,7 +499,7 @@ func (s *covenantService) startFinalization() {
 	var forfeitTxs, connectors []string
 
 	if needForfeits {
-		connectors, forfeitTxs, err = s.builder.BuildForfeitTxs(s.pubkey, unsignedPoolTx, payments, s.minRelayFee)
+		connectors, forfeitTxs, err = s.builder.BuildForfeitTxs(s.pubkey, unsignedPoolTx, payments)
 		if err != nil {
 			round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
 			log.WithError(err).Warn("failed to create connectors and forfeit txs")

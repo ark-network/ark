@@ -9,8 +9,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const dustAmount = 450
-
 type Payment struct {
 	Id        string
 	Inputs    []Vtxo
@@ -72,9 +70,6 @@ func (p Payment) validate(ignoreOuts bool) error {
 	for _, r := range p.Receivers {
 		if len(r.OnchainAddress) <= 0 && len(r.Pubkey) <= 0 {
 			return fmt.Errorf("missing receiver destination")
-		}
-		if r.Amount < dustAmount {
-			return fmt.Errorf("receiver amount must be greater than dust")
 		}
 	}
 	return nil

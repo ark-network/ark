@@ -108,8 +108,6 @@
                 const unilateralExitDelay = await getUnilateralExitDelay();
                 logMessage("Unilateral Exit Delay: " + unilateralExitDelay);
 
-                const minRelayFee = await getMinRelayFee();
-                logMessage("Min Relay Fee: " + minRelayFee);
             } catch (err) {
                 logMessage("Config error: " + err.message);
             }

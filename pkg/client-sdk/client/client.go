@@ -58,7 +58,7 @@ type Info struct {
 	UnilateralExitDelay        int64
 	RoundInterval              int64
 	Network                    string
-	MinRelayFee                int64
+	Dust                       uint64
 	BoardingDescriptorTemplate string
 }
 
@@ -179,6 +179,7 @@ type RoundSigningStartedEvent struct {
 	ID                  string
 	UnsignedTree        tree.CongestionTree
 	CosignersPublicKeys []*secp256k1.PublicKey
+	UnsignedRoundTx     string
 }
 
 func (e RoundSigningStartedEvent) isRoundEvent() {}

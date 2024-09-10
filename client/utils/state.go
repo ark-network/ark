@@ -26,7 +26,7 @@ const (
 	PUBKEY                = "public_key"
 	NETWORK               = "network"
 	EXPLORER              = "explorer"
-	MIN_RELAY_FEE         = "min_relay_fee"
+	DUST                  = "dust"
 
 	defaultNetwork = "liquid"
 	state_file     = "state.json"
@@ -40,8 +40,8 @@ var initialState = map[string]string{
 	ENCRYPTED_PRVKEY:      "",
 	PASSWORD_HASH:         "",
 	PUBKEY:                "",
+	DUST:                  "546",
 	NETWORK:               defaultNetwork,
-	MIN_RELAY_FEE:         "",
 }
 
 func GetNetwork(ctx *cli.Context) (*common.Network, error) {
@@ -73,24 +73,6 @@ func GetRoundLifetime(ctx *cli.Context) (int64, error) {
 		return -1, err
 	}
 	return int64(roundLifetime), nil
-}
-
-func GetMinRelayFee(ctx *cli.Context) (int64, error) {
-	state, err := GetState(ctx)
-	if err != nil {
-		return -1, err
-	}
-
-	fee := state[MIN_RELAY_FEE]
-	if len(fee) <= 0 {
-		return -1, fmt.Errorf("missing min relay fee")
-	}
-
-	minRelayFee, err := strconv.Atoi(fee)
-	if err != nil {
-		return -1, err
-	}
-	return int64(minRelayFee), nil
 }
 
 func GetUnilateralExitDelay(ctx *cli.Context) (int64, error) {
@@ -169,6 +151,25 @@ func GetAspPublicKey(ctx *cli.Context) (*secp256k1.PublicKey, error) {
 	}
 
 	return secp256k1.ParsePubKey(pubKeyBytes)
+}
+
+func GetDust(ctx *cli.Context) (uint64, error) {
+	state, err := GetState(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	dust := state[DUST]
+	if len(dust) <= 0 {
+		return 0, fmt.Errorf("missing dust")
+	}
+
+	dustAmount, err := strconv.Atoi(dust)
+	if err != nil {
+		return 0, err
+	}
+
+	return uint64(dustAmount), nil
 }
 
 func GetState(ctx *cli.Context) (map[string]string, error) {

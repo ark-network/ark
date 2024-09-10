@@ -24,6 +24,9 @@ type V1RoundSigningEvent struct {
 	// id
 	ID string `json:"id,omitempty"`
 
+	// unsigned round tx
+	UnsignedRoundTx string `json:"unsignedRoundTx,omitempty"`
+
 	// unsigned tree
 	UnsignedTree *V1Tree `json:"unsignedTree,omitempty"`
 }

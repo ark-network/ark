@@ -80,8 +80,8 @@ func connectToAsp(ctx *cli.Context, net, url, explorer string) error {
 		utils.ASP_PUBKEY:            resp.Pubkey,
 		utils.ROUND_LIFETIME:        strconv.Itoa(int(resp.GetRoundLifetime())),
 		utils.UNILATERAL_EXIT_DELAY: strconv.Itoa(int(resp.GetUnilateralExitDelay())),
-		utils.MIN_RELAY_FEE:         strconv.Itoa(int(resp.MinRelayFee)),
 		utils.EXPLORER:              explorer,
+		utils.DUST:                  strconv.Itoa(int(resp.GetDust())),
 		utils.BOARDING_TEMPLATE:     resp.GetBoardingDescriptorTemplate(),
 	})
 }
