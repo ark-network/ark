@@ -312,7 +312,7 @@ func (e *explorerSvc) broadcast(txHex string) (string, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf(string(bodyResponse))
+		return "", fmt.Errorf("failed to broadcast: %s", string(bodyResponse))
 	}
 
 	return string(bodyResponse), nil
