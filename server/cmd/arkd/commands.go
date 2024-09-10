@@ -237,7 +237,7 @@ func post[T any](url, body, key, macaroon, tlsCert string) (result T, err error)
 		return
 	}
 	if resp.StatusCode != http.StatusOK {
-		err = fmt.Errorf(string(buf))
+		err = fmt.Errorf("failed to post: %s", string(buf))
 		return
 	}
 	if key == "" {
@@ -283,7 +283,7 @@ func get[T any](url, key, macaroon, tlsCert string) (result T, err error) {
 		return
 	}
 	if resp.StatusCode != http.StatusOK {
-		err = fmt.Errorf(string(buf))
+		err = fmt.Errorf("failed to get: %s", string(buf))
 		return
 	}
 
@@ -347,7 +347,7 @@ func getBalance(url, macaroon, tlsCert string) (*balance, error) {
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		err = fmt.Errorf(string(buf))
+		err = fmt.Errorf("%s", buf)
 		return nil, err
 	}
 
@@ -401,7 +401,7 @@ func getStatus(url, tlsCert string) (*status, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		err = fmt.Errorf(string(buf))
+		err = fmt.Errorf("failed to get status: %s", string(buf))
 		return nil, err
 	}
 

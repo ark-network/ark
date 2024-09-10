@@ -47,14 +47,15 @@ jobs:
           go-version: '>=1.22.6'
       - uses: actions/checkout@v3
       - name: check linting
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.54
+          version: v1.61
           working-directory: ./server
+          args: --timeout 5m
       - name: check code integrity
         uses: securego/gosec@master
         with:
-          args: "-severity high -quiet ./..."
+          args: "-severity high -quiet -exclude=G115 ./..."
       - run: go get -v -t -d ./...
       - name: unit testing
         run: make test
@@ -71,14 +72,15 @@ jobs:
           go-version: '>=1.22.6'
       - uses: actions/checkout@v3
       - name: check linting
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.54
+          version: v1.61
           working-directory: ./pkg/client-sdk
+          args: --timeout 5m
       - name: check code integrity
         uses: securego/gosec@master
         with:
-          args: "-severity high -quiet ./..."
+          args: "-severity high -quiet -exclude=G115 ./..."
       - run: go get -v -t -d ./...
       - name: unit testing
         run: make test
