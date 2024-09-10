@@ -284,7 +284,7 @@ func (b *txBuilder) VerifyForfeitTx(tx string) (bool, string, error) {
 	return false, txid, nil
 }
 
-func (b *txBuilder) FinalizeAndExtractForfeit(tx string) (string, error) {
+func (b *txBuilder) FinalizeAndExtract(tx string) (string, error) {
 	p, err := psetv2.NewPsetFromBase64(tx)
 	if err != nil {
 		return "", err

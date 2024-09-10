@@ -743,8 +743,8 @@ func (s *service) UnwatchScripts(ctx context.Context, scripts []string) error {
 
 func (s *service) GetNotificationChannel(
 	ctx context.Context,
-) <-chan map[string]ports.VtxoWithValue {
-	ch := make(chan map[string]ports.VtxoWithValue)
+) <-chan map[string][]ports.VtxoWithValue {
+	ch := make(chan map[string][]ports.VtxoWithValue)
 
 	go func() {
 		for n := range s.scanner.Notifications() {
@@ -788,8 +788,8 @@ func (s *service) GetTransaction(ctx context.Context, txid string) (string, erro
 	return hex.EncodeToString(buf.Bytes()), nil
 }
 
-func (s *service) castNotification(tx *wtxmgr.TxRecord) map[string]ports.VtxoWithValue {
-	vtxos := make(map[string]ports.VtxoWithValue)
+func (s *service) castNotification(tx *wtxmgr.TxRecord) map[string][]ports.VtxoWithValue {
+	vtxos := make(map[string][]ports.VtxoWithValue)
 
 	s.watchedScriptsLock.RLock()
 	defer s.watchedScriptsLock.RUnlock()
@@ -800,13 +800,17 @@ func (s *service) castNotification(tx *wtxmgr.TxRecord) map[string]ports.VtxoWit
 			continue
 		}
 
-		vtxos[script] = ports.VtxoWithValue{
+		if len(vtxos[script]) <= 0 {
+			vtxos[script] = make([]ports.VtxoWithValue, 0)
+		}
+
+		vtxos[script] = append(vtxos[script], ports.VtxoWithValue{
 			VtxoKey: domain.VtxoKey{
 				Txid: tx.Hash.String(),
 				VOut: uint32(outputIndex),
 			},
 			Value: uint64(txout.Value),
-		}
+		})
 	}
 
 	return vtxos

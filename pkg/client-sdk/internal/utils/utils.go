@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"runtime/debug"
 	"sort"
+	"sync"
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
@@ -228,8 +229,13 @@ func DecryptAES128(encrypted, password []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
+var lock = &sync.Mutex{}
+
 // deriveKey derives a 32 byte array key from a custom passhprase
 func deriveKey(password, salt []byte) ([]byte, []byte, error) {
+	lock.Lock()
+	defer lock.Unlock()
+
 	if salt == nil {
 		salt = make([]byte, 32)
 		if _, err := rand.Read(salt); err != nil {

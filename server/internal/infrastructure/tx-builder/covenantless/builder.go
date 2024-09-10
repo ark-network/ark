@@ -78,7 +78,7 @@ func (b *txBuilder) VerifyForfeitTx(tx string) (bool, string, error) {
 	return false, txid, nil
 }
 
-func (b *txBuilder) FinalizeAndExtractForfeit(tx string) (string, error) {
+func (b *txBuilder) FinalizeAndExtract(tx string) (string, error) {
 	ptx, err := psbt.NewFromRawBytes(strings.NewReader(tx), true)
 	if err != nil {
 		return "", err

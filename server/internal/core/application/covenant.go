@@ -591,87 +591,89 @@ func (s *covenantService) listenToScannerNotifications() {
 
 	mutx := &sync.Mutex{}
 	for vtxoKeys := range chVtxos {
-		go func(vtxoKeys map[string]ports.VtxoWithValue) {
+		go func(vtxoKeys map[string][]ports.VtxoWithValue) {
 			vtxosRepo := s.repoManager.Vtxos()
 			roundRepo := s.repoManager.Rounds()
 
-			for _, v := range vtxoKeys {
-				// redeem
-				vtxos, err := vtxosRepo.GetVtxos(ctx, []domain.VtxoKey{v.VtxoKey})
-				if err != nil {
-					log.WithError(err).Warn("failed to retrieve vtxos, skipping...")
-					continue
+			for _, keys := range vtxoKeys {
+				for _, v := range keys {
+					// redeem
+					vtxos, err := vtxosRepo.GetVtxos(ctx, []domain.VtxoKey{v.VtxoKey})
+					if err != nil {
+						log.WithError(err).Warn("failed to retrieve vtxos, skipping...")
+						continue
+					}
+
+					vtxo := vtxos[0]
+
+					if vtxo.Redeemed {
+						continue
+					}
+
+					if err := s.repoManager.Vtxos().RedeemVtxos(ctx, []domain.VtxoKey{vtxo.VtxoKey}); err != nil {
+						log.WithError(err).Warn("failed to redeem vtxos, retrying...")
+						continue
+					}
+					log.Debugf("vtxo %s redeemed", vtxo.Txid)
+
+					if !vtxo.Spent {
+						continue
+					}
+
+					log.Debugf("fraud detected on vtxo %s", vtxo.Txid)
+
+					round, err := roundRepo.GetRoundWithTxid(ctx, vtxo.SpentBy)
+					if err != nil {
+						log.WithError(err).Warn("failed to retrieve round")
+						continue
+					}
+
+					mutx.Lock()
+					defer mutx.Unlock()
+
+					connectorTxid, connectorVout, err := s.getNextConnector(ctx, *round)
+					if err != nil {
+						log.WithError(err).Warn("failed to retrieve next connector")
+						continue
+					}
+
+					forfeitTx, err := findForfeitTxLiquid(round.ForfeitTxs, connectorTxid, connectorVout, vtxo.Txid)
+					if err != nil {
+						log.WithError(err).Warn("failed to retrieve forfeit tx")
+						continue
+					}
+
+					if err := s.wallet.LockConnectorUtxos(ctx, []ports.TxOutpoint{txOutpoint{connectorTxid, connectorVout}}); err != nil {
+						log.WithError(err).Warn("failed to lock connector utxos")
+						continue
+					}
+
+					signedForfeitTx, err := s.wallet.SignTransaction(ctx, forfeitTx, false)
+					if err != nil {
+						log.WithError(err).Warn("failed to sign connector input in forfeit tx")
+						continue
+					}
+
+					signedForfeitTx, err = s.wallet.SignTransactionTapscript(ctx, signedForfeitTx, []int{1})
+					if err != nil {
+						log.WithError(err).Warn("failed to sign vtxo input in forfeit tx")
+						continue
+					}
+
+					forfeitTxHex, err := s.builder.FinalizeAndExtract(signedForfeitTx)
+					if err != nil {
+						log.WithError(err).Warn("failed to finalize forfeit tx")
+						continue
+					}
+
+					forfeitTxid, err := s.wallet.BroadcastTransaction(ctx, forfeitTxHex)
+					if err != nil {
+						log.WithError(err).Warn("failed to broadcast forfeit tx")
+						continue
+					}
+
+					log.Debugf("broadcasted forfeit tx %s", forfeitTxid)
 				}
-
-				vtxo := vtxos[0]
-
-				if vtxo.Redeemed {
-					continue
-				}
-
-				if err := s.repoManager.Vtxos().RedeemVtxos(ctx, []domain.VtxoKey{vtxo.VtxoKey}); err != nil {
-					log.WithError(err).Warn("failed to redeem vtxos, retrying...")
-					continue
-				}
-				log.Debugf("vtxo %s redeemed", vtxo.Txid)
-
-				if !vtxo.Spent {
-					continue
-				}
-
-				log.Debugf("fraud detected on vtxo %s", vtxo.Txid)
-
-				round, err := roundRepo.GetRoundWithTxid(ctx, vtxo.SpentBy)
-				if err != nil {
-					log.WithError(err).Warn("failed to retrieve round")
-					continue
-				}
-
-				mutx.Lock()
-				defer mutx.Unlock()
-
-				connectorTxid, connectorVout, err := s.getNextConnector(ctx, *round)
-				if err != nil {
-					log.WithError(err).Warn("failed to retrieve next connector")
-					continue
-				}
-
-				forfeitTx, err := findForfeitTxLiquid(round.ForfeitTxs, connectorTxid, connectorVout, vtxo.Txid)
-				if err != nil {
-					log.WithError(err).Warn("failed to retrieve forfeit tx")
-					continue
-				}
-
-				if err := s.wallet.LockConnectorUtxos(ctx, []ports.TxOutpoint{txOutpoint{connectorTxid, connectorVout}}); err != nil {
-					log.WithError(err).Warn("failed to lock connector utxos")
-					continue
-				}
-
-				signedForfeitTx, err := s.wallet.SignTransaction(ctx, forfeitTx, false)
-				if err != nil {
-					log.WithError(err).Warn("failed to sign connector input in forfeit tx")
-					continue
-				}
-
-				signedForfeitTx, err = s.wallet.SignTransactionTapscript(ctx, signedForfeitTx, []int{1})
-				if err != nil {
-					log.WithError(err).Warn("failed to sign vtxo input in forfeit tx")
-					continue
-				}
-
-				forfeitTxHex, err := s.builder.FinalizeAndExtractForfeit(signedForfeitTx)
-				if err != nil {
-					log.WithError(err).Warn("failed to finalize forfeit tx")
-					continue
-				}
-
-				forfeitTxid, err := s.wallet.BroadcastTransaction(ctx, forfeitTxHex)
-				if err != nil {
-					log.WithError(err).Warn("failed to broadcast forfeit tx")
-					continue
-				}
-
-				log.Debugf("broadcasted forfeit tx %s", forfeitTxid)
 			}
 		}(vtxoKeys)
 	}
@@ -681,20 +683,19 @@ func (s *covenantService) getNextConnector(
 	ctx context.Context,
 	round domain.Round,
 ) (string, uint32, error) {
-	connectorTx, err := psetv2.NewPsetFromBase64(round.Connectors[0])
+	lastConnectorPtx, err := psetv2.NewPsetFromBase64(round.Connectors[len(round.Connectors)-1])
 	if err != nil {
 		return "", 0, err
 	}
 
-	prevout := connectorTx.Inputs[0].WitnessUtxo
-	if prevout == nil {
-		return "", 0, fmt.Errorf("connector prevout not found")
-	}
+	lastOutput := lastConnectorPtx.Outputs[len(lastConnectorPtx.Outputs)-1]
+	connectorAmount := lastOutput.Value
 
 	utxos, err := s.wallet.ListConnectorUtxos(ctx, round.ConnectorAddress)
 	if err != nil {
 		return "", 0, err
 	}
+	log.Debugf("found %d connector utxos, dust amount is %d", len(utxos), connectorAmount)
 
 	// if we do not find any utxos, we make sure to wait for the connector outpoint to be confirmed then we retry
 	if len(utxos) <= 0 {
@@ -710,13 +711,13 @@ func (s *covenantService) getNextConnector(
 
 	// search for an already existing connector
 	for _, u := range utxos {
-		if u.GetValue() == round.DustAmount {
+		if u.GetValue() == connectorAmount {
 			return u.GetTxid(), u.GetIndex(), nil
 		}
 	}
 
 	for _, u := range utxos {
-		if u.GetValue() > round.DustAmount {
+		if u.GetValue() > connectorAmount {
 			for _, b64 := range round.Connectors {
 				partial, err := psetv2.NewPsetFromBase64(b64)
 				if err != nil {

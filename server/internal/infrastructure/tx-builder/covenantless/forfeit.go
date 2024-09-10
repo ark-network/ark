@@ -6,6 +6,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/sirupsen/logrus"
 )
 
 func craftForfeitTxs(
@@ -52,6 +53,8 @@ func craftForfeitTxs(
 		if err := updater.AddInWitnessUtxo(connectorPrevout, 0); err != nil {
 			return nil, err
 		}
+
+		logrus.Debugf("vtxo %s:%d amount %d", vtxo.Txid, vtxo.VOut, vtxo.Amount)
 
 		if err := updater.AddInWitnessUtxo(&wire.TxOut{
 			Value:    int64(vtxo.Amount),
