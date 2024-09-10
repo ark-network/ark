@@ -51,6 +51,7 @@ jobs:
         with:
           version: v1.61
           working-directory: ./server
+          args: --timeout 5m
       - name: check code integrity
         uses: securego/gosec@master
         with:
@@ -75,6 +76,7 @@ jobs:
         with:
           version: v1.61
           working-directory: ./pkg/client-sdk
+          args: --timeout 5m
       - name: check code integrity
         uses: securego/gosec@master
         with:
