@@ -17,7 +17,6 @@ import (
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil/psbt"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -31,7 +30,6 @@ type covenantlessService struct {
 	roundInterval       int64
 	unilateralExitDelay int64
 	boardingExitDelay   int64
-	minRelayFee         uint64
 
 	wallet      ports.WalletService
 	repoManager ports.RepoManager
@@ -57,7 +55,7 @@ type covenantlessService struct {
 
 func NewCovenantlessService(
 	network common.Network,
-	roundInterval, roundLifetime, unilateralExitDelay, boardingExitDelay int64, minRelayFee uint64,
+	roundInterval, roundLifetime, unilateralExitDelay, boardingExitDelay int64,
 	walletSvc ports.WalletService, repoManager ports.RepoManager,
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	scheduler ports.SchedulerService,
@@ -83,7 +81,6 @@ func NewCovenantlessService(
 		roundLifetime:       roundLifetime,
 		roundInterval:       roundInterval,
 		unilateralExitDelay: unilateralExitDelay,
-		minRelayFee:         minRelayFee,
 		wallet:              walletSvc,
 		repoManager:         repoManager,
 		builder:             builder,
@@ -227,7 +224,7 @@ func (s *covenantlessService) CreateAsyncPayment(
 	}
 
 	res, err := s.builder.BuildAsyncPaymentTransactions(
-		vtxos, s.pubkey, receivers, s.minRelayFee,
+		vtxos, s.pubkey, receivers,
 	)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to build async payment txs: %s", err)
@@ -392,6 +389,17 @@ func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, rece
 		return fmt.Errorf("invalid credentials")
 	}
 
+	dustAmount, err := s.wallet.GetDustAmount(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to verify receiver amount, failed to get dust: %s", err)
+	}
+
+	for _, rcv := range receivers {
+		if rcv.Amount <= dustAmount {
+			return fmt.Errorf("receiver amount must be greater than dust amount %d", dustAmount)
+		}
+	}
+
 	if err := payment.AddReceivers(receivers); err != nil {
 		return err
 	}
@@ -452,13 +460,18 @@ func (s *covenantlessService) GetCurrentRound(ctx context.Context) (*domain.Roun
 func (s *covenantlessService) GetInfo(ctx context.Context) (*ServiceInfo, error) {
 	pubkey := hex.EncodeToString(s.pubkey.SerializeCompressed())
 
+	dust, err := s.wallet.GetDustAmount(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get dust amount: %s", err)
+	}
+
 	return &ServiceInfo{
 		PubKey:              pubkey,
 		RoundLifetime:       s.roundLifetime,
 		UnilateralExitDelay: s.unilateralExitDelay,
 		RoundInterval:       s.roundInterval,
 		Network:             s.network.Name,
-		MinRelayFee:         int64(s.minRelayFee),
+		Dust:                dust,
 		BoardingDescriptorTemplate: fmt.Sprintf(
 			descriptor.BoardingDescriptorTemplate,
 			hex.EncodeToString(bitcointree.UnspendableKey().SerializeCompressed()),
@@ -558,7 +571,13 @@ func (s *covenantlessService) start() {
 }
 
 func (s *covenantlessService) startRound() {
-	round := domain.NewRound(dustAmount) // TODO dynamic dust amount?
+	dustAmount, err := s.wallet.GetDustAmount(context.Background())
+	if err != nil {
+		log.WithError(err).Warn("failed to get dust amount")
+		return
+	}
+
+	round := domain.NewRound(dustAmount)
 	//nolint:all
 	round.StartRegistration()
 	s.lastEvent = nil
@@ -645,7 +664,7 @@ func (s *covenantlessService) startFinalization() {
 
 	cosigners = append(cosigners, ephemeralKey.PubKey())
 
-	unsignedPoolTx, tree, connectorAddress, err := s.builder.BuildPoolTx(s.pubkey, payments, boardingInputs, s.minRelayFee, sweptRounds, cosigners...)
+	unsignedRoundTx, tree, connectorAddress, err := s.builder.BuildPoolTx(s.pubkey, payments, boardingInputs, sweptRounds, cosigners...)
 	if err != nil {
 		round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
 		log.WithError(err).Warn("failed to create pool tx")
@@ -661,6 +680,7 @@ func (s *covenantlessService) startFinalization() {
 
 		log.Debugf("signing session created for round %s", round.Id)
 
+		s.currentRound.UnsignedTx = unsignedRoundTx
 		// send back the unsigned tree & all cosigners pubkeys
 		s.propagateRoundSigningStartedEvent(tree, cosigners)
 
@@ -674,10 +694,19 @@ func (s *covenantlessService) startFinalization() {
 			return
 		}
 
+		unsignedPsbt, err := psbt.NewFromRawBytes(strings.NewReader(unsignedRoundTx), true)
+		if err != nil {
+			round.Fail(fmt.Errorf("failed to parse round tx: %s", err))
+			log.WithError(err).Warn("failed to parse round tx")
+			return
+		}
+
+		sharedOutputAmount := unsignedPsbt.UnsignedTx.TxOut[0].Value
+
 		sweepTapTree := txscript.AssembleTaprootScriptTree(*sweepTapLeaf)
 		root := sweepTapTree.RootNode.TapHash()
 
-		coordinator, err := s.createTreeCoordinatorSession(tree, cosigners, root)
+		coordinator, err := bitcointree.NewTreeCoordinatorSession(sharedOutputAmount, tree, root.CloneBytes(), cosigners)
 		if err != nil {
 			round.Fail(fmt.Errorf("failed to create tree coordinator: %s", err))
 			log.WithError(err).Warn("failed to create tree coordinator")
@@ -685,7 +714,7 @@ func (s *covenantlessService) startFinalization() {
 		}
 
 		aspSignerSession := bitcointree.NewTreeSignerSession(
-			ephemeralKey, tree, int64(s.minRelayFee), root.CloneBytes(),
+			ephemeralKey, sharedOutputAmount, tree, root.CloneBytes(),
 		)
 
 		nonces, err := aspSignerSession.GetNonces()
@@ -805,7 +834,7 @@ func (s *covenantlessService) startFinalization() {
 	var forfeitTxs, connectors []string
 
 	if needForfeits {
-		connectors, forfeitTxs, err = s.builder.BuildForfeitTxs(s.pubkey, unsignedPoolTx, payments, s.minRelayFee)
+		connectors, forfeitTxs, err = s.builder.BuildForfeitTxs(s.pubkey, unsignedRoundTx, payments)
 		if err != nil {
 			round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
 			log.WithError(err).Warn("failed to create connectors and forfeit txs")
@@ -815,7 +844,7 @@ func (s *covenantlessService) startFinalization() {
 	}
 
 	if _, err := round.StartFinalization(
-		connectorAddress, connectors, tree, unsignedPoolTx,
+		connectorAddress, connectors, tree, unsignedRoundTx,
 	); err != nil {
 		round.Fail(fmt.Errorf("failed to start finalization: %s", err))
 		log.WithError(err).Warn("failed to start finalization")
@@ -834,6 +863,7 @@ func (s *covenantlessService) propagateRoundSigningStartedEvent(
 		Id:               s.currentRound.Id,
 		UnsignedVtxoTree: unsignedCongestionTree,
 		Cosigners:        cosigners,
+		UnsignedRoundTx:  s.currentRound.UnsignedTx,
 	}
 
 	s.lastEvent = ev
@@ -848,15 +878,6 @@ func (s *covenantlessService) propagateRoundSigningNoncesGeneratedEvent(combined
 
 	s.lastEvent = ev
 	s.eventsCh <- ev
-}
-
-func (s *covenantlessService) createTreeCoordinatorSession(
-	congestionTree tree.CongestionTree, cosigners []*secp256k1.PublicKey, root chainhash.Hash,
-) (bitcointree.CoordinatorSession, error) {
-
-	return bitcointree.NewTreeCoordinatorSession(
-		congestionTree, int64(s.minRelayFee), root.CloneBytes(), cosigners,
-	)
 }
 
 func (s *covenantlessService) finalizeRound() {

@@ -11,7 +11,6 @@ import (
 
 var (
 	paymentsThreshold = int64(128)
-	dustAmount        = uint64(450)
 )
 
 type Service interface {
@@ -58,7 +57,7 @@ type ServiceInfo struct {
 	UnilateralExitDelay        int64
 	RoundInterval              int64
 	Network                    string
-	MinRelayFee                int64
+	Dust                       uint64
 	BoardingDescriptorTemplate string
 }
 

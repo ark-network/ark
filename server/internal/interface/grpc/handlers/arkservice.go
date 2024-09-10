@@ -147,6 +147,7 @@ func (h *handler) Ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.Ping
 					Id:               e.Id,
 					CosignersPubkeys: cosignersKeys,
 					UnsignedTree:     castCongestionTree(e.UnsignedVtxoTree),
+					UnsignedRoundTx:  e.UnsignedRoundTx,
 				},
 			},
 		}
@@ -348,7 +349,7 @@ func (h *handler) GetInfo(ctx context.Context, req *arkv1.GetInfoRequest) (*arkv
 		UnilateralExitDelay:        info.UnilateralExitDelay,
 		RoundInterval:              info.RoundInterval,
 		Network:                    info.Network,
-		MinRelayFee:                info.MinRelayFee,
+		Dust:                       int64(info.Dust),
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 	}, nil
 }
@@ -515,6 +516,7 @@ func (h *handler) listenToEvents() {
 						Id:               e.Id,
 						CosignersPubkeys: cosignersKeys,
 						UnsignedTree:     castCongestionTree(e.UnsignedVtxoTree),
+						UnsignedRoundTx:  e.UnsignedRoundTx,
 					},
 				},
 			}

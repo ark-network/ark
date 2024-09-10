@@ -102,7 +102,7 @@ func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
 		UnilateralExitDelay:        resp.GetUnilateralExitDelay(),
 		RoundInterval:              resp.GetRoundInterval(),
 		Network:                    resp.GetNetwork(),
-		MinRelayFee:                resp.GetMinRelayFee(),
+		Dust:                       uint64(resp.GetDust()),
 		BoardingDescriptorTemplate: resp.GetBoardingDescriptorTemplate(),
 	}, nil
 }
@@ -395,6 +395,7 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 			ID:                  ee.GetId(),
 			UnsignedTree:        treeFromProto{ee.GetUnsignedTree()}.parse(),
 			CosignersPublicKeys: pubkeys,
+			UnsignedRoundTx:     ee.GetUnsignedRoundTx(),
 		}, nil
 	}
 

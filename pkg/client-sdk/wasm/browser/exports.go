@@ -41,7 +41,7 @@ func init() {
 	js.Global().Set("getNetwork", GetNetworkWrapper())
 	js.Global().Set("getRoundLifetime", GetRoundLifetimeWrapper())
 	js.Global().Set("getUnilateralExitDelay", GetUnilateralExitDelayWrapper())
-	js.Global().Set("getMinRelayFee", GetMinRelayFeeWrapper())
+	js.Global().Set("getDust", GetDustWrapper())
 }
 
 func NewCovenantClient(

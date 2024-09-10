@@ -26,7 +26,6 @@ type Config struct {
 	NoMacaroons           bool
 	Network               common.Network
 	LogLevel              int
-	MinRelayFee           uint64
 	RoundLifetime         int64
 	UnilateralExitDelay   int64
 	BoardingExitDelay     int64
@@ -52,7 +51,6 @@ var (
 	BlockchainScannerType = "BC_SCANNER_TYPE"
 	LogLevel              = "LOG_LEVEL"
 	Network               = "NETWORK"
-	MinRelayFee           = "MIN_RELAY_FEE"
 	RoundLifetime         = "ROUND_LIFETIME"
 	UnilateralExitDelay   = "UNILATERAL_EXIT_DELAY"
 	BoardingExitDelay     = "BOARDING_EXIT_DELAY"
@@ -80,7 +78,6 @@ var (
 	defaultBlockchainScannerType = "ocean"
 	defaultNetwork               = "liquid"
 	defaultLogLevel              = 4
-	defaultMinRelayFee           = 30 // 0.1 sat/vbyte on Liquid
 	defaultRoundLifetime         = 604672
 	defaultUnilateralExitDelay   = 1024
 	defaultBoardingExitDelay     = 604672
@@ -100,7 +97,6 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(LogLevel, defaultLogLevel)
 	viper.SetDefault(Network, defaultNetwork)
 	viper.SetDefault(WalletAddr, defaultWalletAddr)
-	viper.SetDefault(MinRelayFee, defaultMinRelayFee)
 	viper.SetDefault(RoundInterval, defaultRoundInterval)
 	viper.SetDefault(RoundLifetime, defaultRoundLifetime)
 	viper.SetDefault(SchedulerType, defaultSchedulerType)
@@ -135,7 +131,6 @@ func LoadConfig() (*Config, error) {
 		DbDir:                 filepath.Join(viper.GetString(Datadir), "db"),
 		LogLevel:              viper.GetInt(LogLevel),
 		Network:               net,
-		MinRelayFee:           viper.GetUint64(MinRelayFee),
 		RoundLifetime:         viper.GetInt64(RoundLifetime),
 		UnilateralExitDelay:   viper.GetInt64(UnilateralExitDelay),
 		BoardingExitDelay:     viper.GetInt64(BoardingExitDelay),

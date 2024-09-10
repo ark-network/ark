@@ -89,6 +89,11 @@ func sendOffchain(ctx *cli.Context, receivers []receiver) error {
 		return err
 	}
 
+	dust, err := utils.GetDust(ctx)
+	if err != nil {
+		return err
+	}
+
 	receiversOutput := make([]*arkv1.Output, 0)
 	sumOfReceivers := uint64(0)
 
@@ -126,7 +131,7 @@ func sendOffchain(ctx *cli.Context, receivers []receiver) error {
 	if err != nil {
 		return err
 	}
-	selectedCoins, changeAmount, err := coinSelect(vtxos, sumOfReceivers, withExpiryCoinselect)
+	selectedCoins, changeAmount, err := coinSelect(vtxos, sumOfReceivers, withExpiryCoinselect, dust)
 	if err != nil {
 		return err
 	}
@@ -185,7 +190,7 @@ func sendOffchain(ctx *cli.Context, receivers []receiver) error {
 	})
 }
 
-func coinSelect(vtxos []vtxo, amount uint64, sortByExpirationTime bool) ([]vtxo, uint64, error) {
+func coinSelect(vtxos []vtxo, amount uint64, sortByExpirationTime bool, dust uint64) ([]vtxo, uint64, error) {
 	selected := make([]vtxo, 0)
 	notSelected := make([]vtxo, 0)
 	selectedAmount := uint64(0)

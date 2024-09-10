@@ -20,8 +20,6 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-const dust = 450
-
 type clArkBitcoinCLI struct{}
 
 func (c *clArkBitcoinCLI) Receive(ctx *cli.Context) error {
@@ -91,6 +89,11 @@ func sendOnchain(ctx *cli.Context, receivers []receiver) (string, error) {
 	}
 
 	net, err := utils.GetNetwork(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	dust, err := utils.GetDust(ctx)
 	if err != nil {
 		return "", err
 	}

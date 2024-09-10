@@ -25,10 +25,10 @@ type BoardingInput interface {
 
 type TxBuilder interface {
 	BuildPoolTx(
-		aspPubkey *secp256k1.PublicKey, payments []domain.Payment, boardingInputs []BoardingInput, minRelayFee uint64, sweptRounds []domain.Round,
+		aspPubkey *secp256k1.PublicKey, payments []domain.Payment, boardingInputs []BoardingInput, sweptRounds []domain.Round,
 		cosigners ...*secp256k1.PublicKey,
 	) (poolTx string, congestionTree tree.CongestionTree, connectorAddress string, err error)
-	BuildForfeitTxs(aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment, minRelayFee uint64) (connectors []string, forfeitTxs []string, err error)
+	BuildForfeitTxs(aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment) (connectors []string, forfeitTxs []string, err error)
 	BuildSweepTx(inputs []SweepInput) (signedSweepTx string, err error)
 	GetVtxoScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error)
 	GetSweepInput(parentblocktime int64, node tree.Node) (expirationtime int64, sweepInput SweepInput, err error)
@@ -38,7 +38,7 @@ type TxBuilder interface {
 	FindLeaves(congestionTree tree.CongestionTree, fromtxid string, vout uint32) (leaves []tree.Node, err error)
 	BuildAsyncPaymentTransactions(
 		vtxosToSpend []domain.Vtxo,
-		aspPubKey *secp256k1.PublicKey, receivers []domain.Receiver, minRelayFee uint64,
+		aspPubKey *secp256k1.PublicKey, receivers []domain.Receiver,
 	) (*domain.AsyncPaymentTxs, error)
 	GetBoardingScript(userPubkey, aspPubkey *secp256k1.PublicKey) (addr string, script []byte, err error)
 	VerifyAndCombinePartialTx(dest string, src string) (string, error)

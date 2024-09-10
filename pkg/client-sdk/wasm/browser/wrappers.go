@@ -306,14 +306,14 @@ func GetUnilateralExitDelayWrapper() js.Func {
 	})
 }
 
-func GetMinRelayFeeWrapper() js.Func {
+func GetDustWrapper() js.Func {
 	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
 		data, _ := arkSdkClient.GetConfigData(context.Background())
-		var minRelayFee uint64
+		var dust uint64
 		if data != nil {
-			minRelayFee = data.MinRelayFee
+			dust = data.Dust
 		}
-		return js.ValueOf(minRelayFee)
+		return js.ValueOf(dust)
 	})
 }
 
