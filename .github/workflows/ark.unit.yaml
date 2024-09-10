@@ -47,9 +47,9 @@ jobs:
           go-version: '>=1.22.6'
       - uses: actions/checkout@v3
       - name: check linting
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.54
+          version: v1.60
           working-directory: ./server
       - name: check code integrity
         uses: securego/gosec@master
@@ -71,9 +71,9 @@ jobs:
           go-version: '>=1.22.6'
       - uses: actions/checkout@v3
       - name: check linting
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.54
+          version: v1.60
           working-directory: ./pkg/client-sdk
       - name: check code integrity
         uses: securego/gosec@master
