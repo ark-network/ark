@@ -3,15 +3,15 @@ name: ci_unit
 on:
   push:
     paths:
-      - "server/**"
-      - "pkg/client-sdk/**"
+      - 'server/**'
+      - 'pkg/client-sdk/**'
     branches: [master]
   pull_request:
     branches:
       - master
     paths:
-      - "server/**"
-      - "pkg/client-sdk/**"
+      - 'server/**'
+      - 'pkg/client-sdk/**'
 
 jobs:
   check-go-sync:
@@ -22,7 +22,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: '>=1.22.6'
+          go-version: '>=1.23.1'
 
       - name: Run go work sync
         run: go work sync
@@ -44,7 +44,7 @@ jobs:
     steps:
       - uses: actions/setup-go@v4
         with:
-          go-version: '>=1.22.6'
+          go-version: '>=1.23.1'
       - uses: actions/checkout@v3
       - name: check linting
         uses: golangci/golangci-lint-action@v6
@@ -55,7 +55,7 @@ jobs:
       - name: check code integrity
         uses: securego/gosec@master
         with:
-          args: "-severity high -quiet -exclude=G115 ./..."
+          args: '-severity high -quiet -exclude=G115 ./...'
       - run: go get -v -t -d ./...
       - name: unit testing
         run: make test
@@ -69,7 +69,7 @@ jobs:
     steps:
       - uses: actions/setup-go@v4
         with:
-          go-version: '>=1.22.6'
+          go-version: '>=1.23.1'
       - uses: actions/checkout@v3
       - name: check linting
         uses: golangci/golangci-lint-action@v6
@@ -80,7 +80,7 @@ jobs:
       - name: check code integrity
         uses: securego/gosec@master
         with:
-          args: "-severity high -quiet -exclude=G115 ./..."
+          args: '-severity high -quiet -exclude=G115 ./...'
       - run: go get -v -t -d ./...
       - name: unit testing
         run: make test

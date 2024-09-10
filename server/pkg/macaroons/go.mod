@@ -1,6 +1,6 @@
 module github.com/ark-network/ark/server/pkg/macaroons
 
-go 1.22.6
+go 1.23.1
 
 require (
 	github.com/ark-network/ark/server/pkg/kvdb v0.0.0-20240812233307-18e343b31899
