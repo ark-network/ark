@@ -185,7 +185,7 @@ func (m *forfeitTxsMap) push(txs []string) {
 	defer m.lock.Unlock()
 
 	for _, tx := range txs {
-		signed, txid, _ := m.builder.VerifyForfeitTx(tx)
+		signed, txid, _ := m.builder.VerifyTapscriptPartialSigs(tx)
 		m.forfeitTxs[txid] = &signedTx{tx, signed}
 	}
 }
@@ -195,7 +195,7 @@ func (m *forfeitTxsMap) sign(txs []string) error {
 	defer m.lock.Unlock()
 
 	for _, tx := range txs {
-		valid, txid, err := m.builder.VerifyForfeitTx(tx)
+		valid, txid, err := m.builder.VerifyTapscriptPartialSigs(tx)
 		if err != nil {
 			return err
 		}
