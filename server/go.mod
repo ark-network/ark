@@ -3,6 +3,7 @@ module github.com/ark-network/ark/server
 go 1.23.1
 
 replace github.com/ark-network/ark/common => ../common
+replace github.com/ark-network/ark/pkg/client-sdk => ../pkg/client-sdk
 
 replace github.com/btcsuite/btcd/btcec/v2 => github.com/btcsuite/btcd/btcec/v2 v2.3.3
 
