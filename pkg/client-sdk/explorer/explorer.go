@@ -188,7 +188,7 @@ func (e *explorerSvc) GetUtxos(addr string) ([]ExplorerUtxo, error) {
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf(string(body))
+		return nil, fmt.Errorf("failed to get utxos: %s", string(body))
 	}
 	payload := []ExplorerUtxo{}
 	if err := json.Unmarshal(body, &payload); err != nil {
@@ -257,7 +257,7 @@ func (e *explorerSvc) GetTxBlockTime(
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return false, 0, fmt.Errorf(string(body))
+		return false, 0, fmt.Errorf("failed to get block time: %s", string(body))
 	}
 
 	var tx struct {
@@ -290,7 +290,7 @@ func (e *explorerSvc) getTxHex(txid string) (string, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf(string(body))
+		return "", fmt.Errorf("failed to get tx hex: %s", string(body))
 	}
 
 	hex := string(body)
@@ -312,7 +312,7 @@ func (e *explorerSvc) broadcast(txHex string) (string, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf(string(bodyResponse))
+		return "", fmt.Errorf("failed to broadcast: %s", string(bodyResponse))
 	}
 
 	return string(bodyResponse), nil

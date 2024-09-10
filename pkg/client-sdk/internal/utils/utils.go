@@ -221,6 +221,7 @@ func DecryptAES128(encrypted, password []byte) ([]byte, error) {
 		return nil, err
 	}
 	nonce, text := data[:gcm.NonceSize()], data[gcm.NonceSize():]
+	// #nosec G407
 	plaintext, err := gcm.Open(nil, nonce, text, nil)
 	if err != nil {
 		return nil, fmt.Errorf("invalid password")

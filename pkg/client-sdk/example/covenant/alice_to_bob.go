@@ -195,18 +195,18 @@ func runCommand(name string, arg ...string) (string, error) {
 	wg.Wait()
 	if err := cmd.Wait(); err != nil {
 		if errMsg := errorb.String(); len(errMsg) > 0 {
-			return "", fmt.Errorf(errMsg)
+			return "", fmt.Errorf("failed cmd wait: %v", errMsg)
 		}
 
 		if outMsg := output.String(); len(outMsg) > 0 {
-			return "", fmt.Errorf(outMsg)
+			return "", fmt.Errorf("failed reading output: %v", outMsg)
 		}
 
 		return "", err
 	}
 
 	if errMsg := errb.String(); len(errMsg) > 0 {
-		return "", fmt.Errorf(errMsg)
+		return "", fmt.Errorf("run cmd failed: %v", errMsg)
 	}
 
 	return strings.Trim(output.String(), "\n"), nil

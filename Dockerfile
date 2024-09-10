@@ -1,5 +1,5 @@
 # First image used to build the sources
-FROM golang:1.21.0 AS builder
+FROM golang:1.23.1 AS builder
 
 ARG VERSION
 ARG TARGETOS
@@ -14,7 +14,7 @@ RUN cd server && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -l
 RUN cd client && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-X 'main.Version=${VERSION}'" -o ../bin/ark .
 
 # Second image, running the arkd executable
-FROM alpine:3.18
+FROM alpine:3.20
 
 RUN apk update && apk upgrade
 
