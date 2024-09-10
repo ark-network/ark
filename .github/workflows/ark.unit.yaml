@@ -49,7 +49,7 @@ jobs:
       - name: check linting
         uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.60
+          version: v1.61
           working-directory: ./server
       - name: check code integrity
         uses: securego/gosec@master
@@ -73,7 +73,7 @@ jobs:
       - name: check linting
         uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.60
+          version: v1.61
           working-directory: ./pkg/client-sdk
       - name: check code integrity
         uses: securego/gosec@master
