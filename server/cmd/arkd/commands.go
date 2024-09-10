@@ -347,7 +347,7 @@ func getBalance(url, macaroon, tlsCert string) (*balance, error) {
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		err = fmt.Errorf(string(buf))
+		err = fmt.Errorf("%s", buf)
 		return nil, err
 	}
 
