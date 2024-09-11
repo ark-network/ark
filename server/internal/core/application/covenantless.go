@@ -1081,123 +1081,23 @@ func (s *covenantlessService) listenToScannerNotifications() {
 	mutx := &sync.Mutex{}
 	for vtxoKeys := range chVtxos {
 		go func(vtxoKeys map[string][]ports.VtxoWithValue) {
-			vtxosRepo := s.repoManager.Vtxos()
-			roundRepo := s.repoManager.Rounds()
-
 			for _, keys := range vtxoKeys {
 				for _, v := range keys {
-					// redeem
-					vtxos, err := vtxosRepo.GetVtxos(ctx, []domain.VtxoKey{v.VtxoKey})
+					vtxos, err := s.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{v.VtxoKey})
 					if err != nil {
 						log.WithError(err).Warn("failed to retrieve vtxos, skipping...")
-						continue
+						return
 					}
-
 					vtxo := vtxos[0]
 
-					if vtxo.Redeemed {
-						continue
+					if !vtxo.Redeemed {
+						go s.markAsRedeemed(ctx, vtxo)
 					}
 
-					if err := s.repoManager.Vtxos().RedeemVtxos(
-						ctx, []domain.VtxoKey{vtxo.VtxoKey},
-					); err != nil {
-						log.WithError(err).Warn("failed to redeem vtxos, skipping...")
-						continue
+					if vtxo.Spent {
+						log.Debugf("fraud detected on vtxo %s:%d", vtxo.Txid, vtxo.VOut)
+						go s.reactToFraud(ctx, vtxo, mutx)
 					}
-					log.Debugf("vtxo %s:%d redeemed", vtxo.Txid, vtxo.VOut)
-
-					if !vtxo.Spent {
-						continue
-					}
-
-					log.Debugf("fraud detected on vtxo %s:%d", vtxo.Txid, vtxo.VOut)
-					mutx.Lock()
-
-					round, err := roundRepo.GetRoundWithTxid(ctx, vtxo.SpentBy)
-					if err != nil {
-						// if the round is not found, the utxo may be spent by an async payment redeem tx
-						vtxos, err := vtxosRepo.GetVtxos(ctx, []domain.VtxoKey{
-							{Txid: vtxo.SpentBy, VOut: 0},
-						})
-						if err != nil || len(vtxos) <= 0 {
-							log.WithError(err).Warn("failed to retrieve round")
-							mutx.Unlock()
-							continue
-						}
-
-						asyncPayVtxo := vtxos[0]
-						if asyncPayVtxo.Redeemed { // redeem tx is already onchain
-							mutx.Unlock()
-							continue
-						}
-
-						log.Debugf("vtxo %s has been spent by async payment", vtxo.Txid)
-
-						redeemTxHex, err := s.builder.FinalizeAndExtract(asyncPayVtxo.AsyncPayment.RedeemTx)
-						if err != nil {
-							log.WithError(err).Warn("failed to finalize redeem tx")
-							mutx.Unlock()
-							continue
-						}
-
-						redeemTxid, err := s.wallet.BroadcastTransaction(ctx, redeemTxHex)
-						if err != nil {
-							log.WithError(err).Warn("failed to broadcast redeem tx")
-							mutx.Unlock()
-							continue
-						}
-
-						log.Debugf("broadcasted redeem tx %s", redeemTxid)
-						mutx.Unlock()
-						continue
-					}
-
-					connectorTxid, connectorVout, err := s.getNextConnector(ctx, *round)
-					if err != nil {
-						log.WithError(err).Warn("failed to retrieve next connector")
-						mutx.Unlock()
-						continue
-					}
-
-					log.Debugf("found next connector %s:%d", connectorTxid, connectorVout)
-
-					forfeitTx, err := findForfeitTxBitcoin(round.ForfeitTxs, connectorTxid, connectorVout, vtxo.Txid, vtxo.VOut)
-					if err != nil {
-						log.WithError(err).Warn("failed to retrieve forfeit tx")
-						mutx.Unlock()
-						continue
-					}
-
-					if err := s.wallet.LockConnectorUtxos(ctx, []ports.TxOutpoint{txOutpoint{connectorTxid, connectorVout}}); err != nil {
-						log.WithError(err).Warn("failed to lock connector utxos")
-						mutx.Unlock()
-						continue
-					}
-
-					signedForfeitTx, err := s.wallet.SignTransactionTapscript(ctx, forfeitTx, nil)
-					if err != nil {
-						log.WithError(err).Warn("failed to sign vtxo input in forfeit tx")
-						mutx.Unlock()
-						continue
-					}
-
-					forfeitTxHex, err := s.builder.FinalizeAndExtract(signedForfeitTx)
-					if err != nil {
-						log.WithError(err).Warn("failed to finalize forfeit tx")
-						mutx.Unlock()
-						continue
-					}
-
-					forfeitTxid, err := s.wallet.BroadcastTransaction(ctx, forfeitTxHex)
-					if err != nil {
-						log.WithError(err).Warn("failed to broadcast forfeit tx")
-						mutx.Unlock()
-						continue
-					}
-
-					mutx.Unlock()
-					log.Debugf("broadcasted forfeit tx %s", forfeitTxid)
 				}
 			}
 		}(vtxoKeys)
@@ -1517,6 +1417,100 @@ func (s *covenantlessService) saveEvents(
 		return err
 	}
 	return s.repoManager.Rounds().AddOrUpdateRound(ctx, *round)
+}
+
+func (s *covenantlessService) markAsRedeemed(ctx context.Context, vtxo domain.Vtxo) {
+	vtxosRepo := s.repoManager.Vtxos()
+
+	if err := vtxosRepo.RedeemVtxos(
+		ctx, []domain.VtxoKey{vtxo.VtxoKey},
+	); err != nil {
+		log.WithError(err).Warn("failed to redeem vtxos, skipping...")
+		return
+	}
+
+	log.Debugf("vtxo %s:%d redeemed", vtxo.Txid, vtxo.VOut)
+}
+
+func (s *covenantlessService) reactToFraud(ctx context.Context, vtxo domain.Vtxo, mutx *sync.Mutex) {
+	mutx.Lock()
+	defer mutx.Unlock()
+	roundRepo := s.repoManager.Rounds()
+
+	round, err := roundRepo.GetRoundWithTxid(ctx, vtxo.SpentBy)
+	if err != nil {
+		vtxosRepo := s.repoManager.Vtxos()
+
+		// if the round is not found, the utxo may be spent by an async payment redeem tx
+		vtxos, err := vtxosRepo.GetVtxos(ctx, []domain.VtxoKey{
+			{Txid: vtxo.SpentBy, VOut: 0},
+		})
+		if err != nil || len(vtxos) <= 0 {
+			log.WithError(err).Warn("failed to retrieve round")
+			return
+		}
+
+		asyncPayVtxo := vtxos[0]
+		if asyncPayVtxo.Redeemed { // redeem tx is already onchain
+			return
+		}
+
+		log.Debugf("vtxo %s has been spent by async payment", vtxo.Txid)
+
+		redeemTxHex, err := s.builder.FinalizeAndExtract(asyncPayVtxo.AsyncPayment.RedeemTx)
+		if err != nil {
+			log.WithError(err).Warn("failed to finalize redeem tx")
+			return
+		}
+
+		redeemTxid, err := s.wallet.BroadcastTransaction(ctx, redeemTxHex)
+		if err != nil {
+			log.WithError(err).Warn("failed to broadcast redeem tx")
+			return
+		}
+
+		log.Debugf("broadcasted redeem tx %s", redeemTxid)
+		return
+	}
+
+	connectorTxid, connectorVout, err := s.getNextConnector(ctx, *round)
+	if err != nil {
+		log.WithError(err).Warn("failed to retrieve next connector")
+		return
+	}
+
+	log.Debugf("found next connector %s:%d", connectorTxid, connectorVout)
+
+	forfeitTx, err := findForfeitTxBitcoin(round.ForfeitTxs, connectorTxid, connectorVout, vtxo.Txid, vtxo.VOut)
+	if err != nil {
+		log.WithError(err).Warn("failed to retrieve forfeit tx")
+		return
+	}
+
+	if err := s.wallet.LockConnectorUtxos(ctx, []ports.TxOutpoint{txOutpoint{connectorTxid, connectorVout}}); err != nil {
+		log.WithError(err).Warn("failed to lock connector utxos")
+		return
+	}
+
+	signedForfeitTx, err := s.wallet.SignTransactionTapscript(ctx, forfeitTx, nil)
+	if err != nil {
+		log.WithError(err).Warn("failed to sign vtxo input in forfeit tx")
+		return
+	}
+
+	forfeitTxHex, err := s.builder.FinalizeAndExtract(signedForfeitTx)
+	if err != nil {
+		log.WithError(err).Warn("failed to finalize forfeit tx")
+		return
+	}
+
+	forfeitTxid, err := s.wallet.BroadcastTransaction(ctx, forfeitTxHex)
+	if err != nil {
+		log.WithError(err).Warn("failed to broadcast forfeit tx")
+		return
+	}
+
+	log.Debugf("broadcasted forfeit tx %s", forfeitTxid)
 }
 
 func findForfeitTxBitcoin(
