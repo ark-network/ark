@@ -649,10 +649,12 @@ func (a *covenantlessArkClient) GetTransactionHistory(ctx context.Context) ([]Tr
 	xxx, _ := a.getClaimableBoardingUtxos(ctx)
 	log.Infof("xxx %v", xxx)
 
-	return vtxosToTxsCovenantless(config.RoundLifetime, spendableVtxos, spentVtxos)
+	claimableUtxos, _ := a.getClaimableBoardingUtxos(ctx)
+
+	return vtxosToTxsCovenantless(config.RoundLifetime, spendableVtxos, spentVtxos, claimableUtxos)
 }
 
-func vtxosToTxsCovenantless(roundLifetime int64, spendable, spent []client.Vtxo) ([]Transaction, error) {
+func vtxosToTxsCovenantless(roundLifetime int64, spendable, spent []client.Vtxo, claimableUtxos []explorer.Utxo) ([]Transaction, error) {
 	transactions := make([]Transaction, 0)
 
 	for _, v := range append(spendable, spent...) {
@@ -703,6 +705,17 @@ func vtxosToTxsCovenantless(roundLifetime int64, spendable, spent []client.Vtxo)
 			Pending:    pending,
 			Claimed:    claimed,
 			CreatedAt:  getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
+		})
+	}
+
+	for _, u := range claimableUtxos {
+		transactions = append(transactions, Transaction{
+			Amount:       u.Amount,
+			BoardingTxid: u.Txid,
+			Type:         TxReceived,
+			Pending:      true,
+			Claimed:      false,
+			CreatedAt:    u.CreatedAt,
 		})
 	}
 

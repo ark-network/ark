@@ -521,10 +521,12 @@ func (a *covenantArkClient) GetTransactionHistory(ctx context.Context) ([]Transa
 		return nil, err
 	}
 
-	return vtxosToTxsCovenant(config.RoundLifetime, spendableVtxos, spentVtxos)
+	claimableUtxos, _ := a.getClaimableBoardingUtxos(ctx)
+
+	return vtxosToTxsCovenant(config.RoundLifetime, spendableVtxos, spentVtxos, claimableUtxos)
 }
 
-func vtxosToTxsCovenant(roundLifetime int64, spendable, spent []client.Vtxo) ([]Transaction, error) {
+func vtxosToTxsCovenant(roundLifetime int64, spendable, spent []client.Vtxo, claimableUtxos []explorer.Utxo) ([]Transaction, error) {
 	transactions := make([]Transaction, 0)
 
 	for _, v := range append(spendable, spent...) {
@@ -575,6 +577,17 @@ func vtxosToTxsCovenant(roundLifetime int64, spendable, spent []client.Vtxo) ([]
 			Pending:    pending,
 			Claimed:    claimed,
 			CreatedAt:  getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
+		})
+	}
+
+	for _, u := range claimableUtxos {
+		transactions = append(transactions, Transaction{
+			Amount:       u.Amount,
+			BoardingTxid: u.Txid,
+			Type:         TxReceived,
+			Pending:      true,
+			Claimed:      false,
+			CreatedAt:    u.CreatedAt,
 		})
 	}
 

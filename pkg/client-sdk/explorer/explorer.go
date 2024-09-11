@@ -31,6 +31,7 @@ type Utxo struct {
 	Asset       string // liquid only
 	Delay       uint
 	SpendableAt time.Time
+	CreatedAt   time.Time
 }
 
 func (u *Utxo) Sequence() (uint32, error) {
@@ -39,8 +40,10 @@ func (u *Utxo) Sequence() (uint32, error) {
 
 func newUtxo(explorerUtxo ExplorerUtxo, delay uint) Utxo {
 	utxoTime := explorerUtxo.Status.Blocktime
+	createdAt := time.Unix(utxoTime, 0)
 	if utxoTime == 0 {
-		utxoTime = time.Now().Unix()
+		createdAt = time.Now()
+		utxoTime = createdAt.Unix()
 	}
 
 	return Utxo{
@@ -50,6 +53,7 @@ func newUtxo(explorerUtxo ExplorerUtxo, delay uint) Utxo {
 		Asset:       explorerUtxo.Asset,
 		Delay:       delay,
 		SpendableAt: time.Unix(utxoTime, 0).Add(time.Duration(delay) * time.Second),
+		CreatedAt:   createdAt,
 	}
 }
 

@@ -139,11 +139,12 @@ const (
 type TxType string
 
 type Transaction struct {
-	RoundTxid  string
-	RedeemTxid string
-	Amount     uint64
-	Type       TxType
-	Pending    bool
-	Claimed    bool
-	CreatedAt  time.Time
+	BoardingTxid string
+	RoundTxid    string
+	RedeemTxid   string
+	Amount       uint64
+	Type         TxType
+	Pending      bool
+	Claimed      bool
+	CreatedAt    time.Time
 }
