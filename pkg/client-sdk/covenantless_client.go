@@ -1679,7 +1679,16 @@ func findVtxosBySpentBy(allVtxos []client.Vtxo, txid string) (vtxos []client.Vtx
 func vtxosToTxsCovenantless(
 	roundLifetime int64, spendable, spent []client.Vtxo, boardingTxs []Transaction,
 ) ([]Transaction, error) {
-	transactions := append([]Transaction{}, boardingTxs...)
+	transactions := make([]Transaction, 0)
+	unconfirmedBoardingTxs := make([]Transaction, 0)
+	for _, tx := range boardingTxs {
+		emptyTime := time.Time{}
+		if tx.CreatedAt == emptyTime {
+			unconfirmedBoardingTxs = append(unconfirmedBoardingTxs, tx)
+			continue
+		}
+		transactions = append(transactions, tx)
+	}
 
 	for _, v := range append(spendable, spent...) {
 		// get vtxo amount
@@ -1742,7 +1751,7 @@ func vtxosToTxsCovenantless(
 		return txi.CreatedAt.After(txj.CreatedAt)
 	})
 
-	return transactions, nil
+	return append(unconfirmedBoardingTxs, transactions...), nil
 }
 
 func getRedeemTxidCovenantless(redeemTx string) (string, error) {
