@@ -161,7 +161,7 @@ func TestCollaborativeExit(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestDoubleSpendVtxoCheat(t *testing.T) {
+func TestReactToSpentVtxosRedemption(t *testing.T) {
 	ctx := context.Background()
 	client, grpcClient := setupArkSDK(t)
 
