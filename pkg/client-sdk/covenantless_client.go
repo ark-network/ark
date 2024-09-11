@@ -1508,6 +1508,39 @@ func (a *covenantlessArkClient) getOffchainBalance(
 	return balance, amountByExpiration, nil
 }
 
+func (a *covenantlessArkClient) getAllBoardingUtxos(ctx context.Context) ([]explorer.Utxo, error) {
+	_, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	utxos := []explorer.Utxo{}
+	for _, addr := range boardingAddrs {
+		txs, err := a.explorer.GetTxs(addr)
+		if err != nil {
+			continue
+		}
+		for _, tx := range txs {
+			for i, vout := range tx.Vout {
+				if vout.Address == addr {
+					createdAt := time.Time{}
+					if tx.Status.Confirmed {
+						createdAt = time.Unix(tx.Status.Blocktime, 0)
+					}
+					utxos = append(utxos, explorer.Utxo{
+						Txid:      tx.Txid,
+						Vout:      uint32(i),
+						Amount:    vout.Amount,
+						CreatedAt: createdAt,
+					})
+				}
+			}
+		}
+	}
+
+	return utxos, nil
+}
+
 func (a *covenantlessArkClient) getClaimableBoardingUtxos(ctx context.Context) ([]explorer.Utxo, error) {
 	offchainAddrs, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
@@ -1647,24 +1680,37 @@ func (a *covenantlessArkClient) selfTransferAllPendingPayments(
 	return roundTxid, nil
 }
 
-func (a *covenantlessArkClient) getBoardingTxs(ctx context.Context) []Transaction {
+func (a *covenantlessArkClient) getBoardingTxs(ctx context.Context) (transactions []Transaction) {
 	utxos, err := a.getClaimableBoardingUtxos(ctx)
 	if err != nil {
 		return nil
 	}
 
-	txs := make([]Transaction, 0, len(utxos))
+	isPending := make(map[string]bool)
 	for _, u := range utxos {
-		txs = append(txs, Transaction{
+		isPending[u.Txid] = true
+	}
+
+	allUtxos, err := a.getAllBoardingUtxos(ctx)
+	if err != nil {
+		return nil
+	}
+
+	for _, u := range allUtxos {
+		pending := false
+		if isPending[u.Txid] {
+			pending = true
+		}
+		transactions = append(transactions, Transaction{
 			BoardingTxid: u.Txid,
 			Amount:       u.Amount,
 			Type:         TxReceived,
-			Pending:      true,
-			Claimed:      false,
+			Pending:      pending,
+			Claimed:      !pending,
 			CreatedAt:    u.CreatedAt,
 		})
 	}
-	return txs
+	return
 }
 
 func findVtxosBySpentBy(allVtxos []client.Vtxo, txid string) (vtxos []client.Vtxo) {
