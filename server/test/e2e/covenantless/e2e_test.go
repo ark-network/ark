@@ -210,7 +210,7 @@ func TestDoubleSpendVtxoCheat(t *testing.T) {
 	require.Empty(t, balance.OnchainBalance.LockedAmount)
 }
 
-func TestDoubleSpendAsyncVtxoCheat(t *testing.T) {
+func TestReactToAsyncSpentVtxosRedemption(t *testing.T) {
 	ctx := context.Background()
 	sdkClient, grpcClient := setupArkSDK(t)
 
