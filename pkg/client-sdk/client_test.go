@@ -135,7 +135,7 @@ func TestVtxosToTxs(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to load fixture: %s", err)
 			}
-			got, err := vtxosToTxsCovenantless(30, args.spendable, args.spent)
+			got, err := vtxosToTxsCovenantless(30, args.spendable, args.spent, nil)
 			require.NoError(t, err)
 			require.Len(t, got, len(tt.want))
 

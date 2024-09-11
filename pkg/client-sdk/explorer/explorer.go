@@ -42,8 +42,8 @@ func newUtxo(explorerUtxo ExplorerUtxo, delay uint) Utxo {
 	utxoTime := explorerUtxo.Status.Blocktime
 	createdAt := time.Unix(utxoTime, 0)
 	if utxoTime == 0 {
-		createdAt = time.Now()
-		utxoTime = createdAt.Unix()
+		createdAt = time.Time{}
+		utxoTime = time.Now().Unix()
 	}
 
 	return Utxo{
