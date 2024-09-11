@@ -860,14 +860,33 @@ func (s *service) GetNotificationChannel(
 	ch := make(chan map[string][]ports.VtxoWithValue)
 
 	go func() {
+		const maxCacheSize = 100
+		sentTxs := make(map[chainhash.Hash]struct{})
+
+		cache := func(hash chainhash.Hash) {
+			if len(sentTxs) > maxCacheSize {
+				sentTxs = make(map[chainhash.Hash]struct{})
+			}
+
+			sentTxs[hash] = struct{}{}
+		}
+
 		for n := range s.scanner.Notifications() {
 			switch m := n.(type) {
 			case chain.RelevantTx:
+				if _, sent := sentTxs[m.TxRecord.Hash]; sent {
+					continue
+				}
 				notification := s.castNotification(m.TxRecord)
+				cache(m.TxRecord.Hash)
 				ch <- notification
 			case chain.FilteredBlockConnected:
 				for _, tx := range m.RelevantTxs {
+					if _, sent := sentTxs[tx.Hash]; sent {
+						continue
+					}
 					notification := s.castNotification(tx)
+					cache(tx.Hash)
 					ch <- notification
 				}
 			}
