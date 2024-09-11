@@ -165,7 +165,7 @@ func (s *liquidWallet) SignTransaction(
 				switch c := closure.(type) {
 				case *tree.CSVSigClosure:
 					sign = bytes.Equal(c.Pubkey.SerializeCompressed()[1:], serializedPubKey[1:])
-				case *tree.ForfeitClosure:
+				case *tree.MultisigClosure:
 					sign = bytes.Equal(c.Pubkey.SerializeCompressed()[1:], serializedPubKey[1:])
 				}
 

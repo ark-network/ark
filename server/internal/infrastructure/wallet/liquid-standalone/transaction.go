@@ -58,7 +58,7 @@ func (s *service) SignTransaction(
 			}
 
 			switch c := closure.(type) {
-			case *tree.ForfeitClosure:
+			case *tree.MultisigClosure:
 				asp := schnorr.SerializePubKey(c.AspPubkey)
 				owner := schnorr.SerializePubKey(c.Pubkey)
 

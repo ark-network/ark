@@ -165,7 +165,7 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 						ctx,
 						queries.UpsertReceiverParams{
 							PaymentID:      payment.Id,
-							Pubkey:         receiver.Pubkey,
+							Descriptor:     receiver.Descriptor,
 							Amount:         int64(receiver.Amount),
 							OnchainAddress: receiver.OnchainAddress,
 						},
@@ -187,6 +187,20 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 						},
 					); err != nil {
 						return fmt.Errorf("failed to update vtxo payment id: %w", err)
+					}
+
+					if err := querierWithTx.UpdateVtxoSignerPubkey(
+						ctx,
+						queries.UpdateVtxoSignerPubkeyParams{
+							Txid: input.Txid,
+							Vout: int64(input.VOut),
+							SignerPubkey: sql.NullString{
+								String: input.SignerPubkey,
+								Valid:  true,
+							},
+						},
+					); err != nil {
+						return fmt.Errorf("failed to update vtxo signer pubkey: %w", err)
 					}
 				}
 			}
@@ -320,7 +334,7 @@ func (r *roundRepository) GetSweptRounds(ctx context.Context) ([]domain.Round, e
 
 func rowToReceiver(row queries.PaymentReceiverVw) domain.Receiver {
 	return domain.Receiver{
-		Pubkey:         row.Pubkey.String,
+		Descriptor:     row.Descriptor.String,
 		Amount:         uint64(row.Amount.Int64),
 		OnchainAddress: row.OnchainAddress.String,
 	}
@@ -367,7 +381,7 @@ func readRoundRows(rows []roundPaymentTxReceiverVtxoRow) ([]*domain.Round, error
 			if !ok {
 				payment = domain.Payment{
 					Id:        v.payment.ID.String,
-					Inputs:    make([]domain.Vtxo, 0),
+					Inputs:    make([]domain.VtxoInput, 0),
 					Receivers: make([]domain.Receiver, 0),
 				}
 				round.Payments[v.payment.ID.String] = payment
@@ -378,7 +392,7 @@ func readRoundRows(rows []roundPaymentTxReceiverVtxoRow) ([]*domain.Round, error
 				if !ok {
 					payment = domain.Payment{
 						Id:        v.vtxo.PaymentID.String,
-						Inputs:    make([]domain.Vtxo, 0),
+						Inputs:    make([]domain.VtxoInput, 0),
 						Receivers: make([]domain.Receiver, 0),
 					}
 				}
@@ -394,7 +408,7 @@ func readRoundRows(rows []roundPaymentTxReceiverVtxoRow) ([]*domain.Round, error
 				}
 
 				if !found {
-					payment.Inputs = append(payment.Inputs, rowToPaymentVtxoVw(v.vtxo))
+					payment.Inputs = append(payment.Inputs, rowToPaymentVtxoInputVw(v.vtxo))
 					round.Payments[v.vtxo.PaymentID.String] = payment
 				}
 			}
@@ -404,7 +418,7 @@ func readRoundRows(rows []roundPaymentTxReceiverVtxoRow) ([]*domain.Round, error
 				if !ok {
 					payment = domain.Payment{
 						Id:        v.receiver.PaymentID.String,
-						Inputs:    make([]domain.Vtxo, 0),
+						Inputs:    make([]domain.VtxoInput, 0),
 						Receivers: make([]domain.Receiver, 0),
 					}
 				}
@@ -413,8 +427,8 @@ func readRoundRows(rows []roundPaymentTxReceiverVtxoRow) ([]*domain.Round, error
 
 				found := false
 				for _, rcv := range payment.Receivers {
-					if v.receiver.Pubkey.Valid && v.receiver.Amount.Valid {
-						if rcv.Pubkey == v.receiver.Pubkey.String && int64(rcv.Amount) == v.receiver.Amount.Int64 {
+					if v.receiver.Descriptor.Valid && v.receiver.Amount.Valid {
+						if rcv.Descriptor == v.receiver.Descriptor.String && int64(rcv.Amount) == v.receiver.Amount.Int64 {
 							found = true
 							break
 						}
@@ -470,8 +484,8 @@ func rowToPaymentVtxoVw(row queries.PaymentVtxoVw) domain.Vtxo {
 			VOut: uint32(row.Vout.Int64),
 		},
 		Receiver: domain.Receiver{
-			Pubkey: row.Pubkey.String,
-			Amount: uint64(row.Amount.Int64),
+			Descriptor: row.Descriptor.String,
+			Amount:     uint64(row.Amount.Int64),
 		},
 		PoolTx:   row.PoolTx.String,
 		SpentBy:  row.SpentBy.String,
@@ -479,5 +493,12 @@ func rowToPaymentVtxoVw(row queries.PaymentVtxoVw) domain.Vtxo {
 		Redeemed: row.Redeemed.Bool,
 		Swept:    row.Swept.Bool,
 		ExpireAt: row.ExpireAt.Int64,
+	}
+}
+
+func rowToPaymentVtxoInputVw(row queries.PaymentVtxoVw) domain.VtxoInput {
+	return domain.VtxoInput{
+		Vtxo:         rowToPaymentVtxoVw(row),
+		SignerPubkey: row.SignerPubkey.String,
 	}
 }

@@ -14,7 +14,7 @@ func computeVtxoTaprootScript(
 		Seconds: exitDelay,
 	}
 
-	forfeitClosure := &tree.ForfeitClosure{
+	forfeitClosure := &tree.MultisigClosure{
 		Pubkey:    userPubkey,
 		AspPubkey: aspPubkey,
 	}

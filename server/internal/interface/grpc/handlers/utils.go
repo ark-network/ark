@@ -1,13 +1,12 @@
 package handlers
 
 import (
-	"encoding/hex"
 	"fmt"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/domain"
+	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
@@ -18,27 +17,20 @@ func parseAddress(addr string) (string, *secp256k1.PublicKey, *secp256k1.PublicK
 	return common.DecodeAddress(addr)
 }
 
-func parseInputs(ins []*arkv1.Input) ([]application.Input, error) {
+func parseInputs(ins []*arkv1.Input) ([]ports.Input, error) {
 	if len(ins) <= 0 {
 		return nil, fmt.Errorf("missing inputs")
 	}
 
-	inputs := make([]application.Input, 0, len(ins))
+	inputs := make([]ports.Input, 0, len(ins))
 	for _, input := range ins {
-		if input.GetBoardingInput() != nil {
-			desc := input.GetBoardingInput().GetDescriptor_()
-			inputs = append(inputs, application.Input{
-				Txid:       input.GetBoardingInput().GetTxid(),
-				Index:      input.GetBoardingInput().GetVout(),
-				Descriptor: desc,
-			})
-
-			continue
-		}
-
-		inputs = append(inputs, application.Input{
-			Txid:  input.GetVtxoInput().GetTxid(),
-			Index: input.GetVtxoInput().GetVout(),
+		inputs = append(inputs, ports.Input{
+			VtxoKey: domain.VtxoKey{
+				Txid: input.GetOutpoint().GetTxid(),
+				VOut: input.GetOutpoint().GetVout(),
+			},
+			Descriptor:   input.GetDescriptor_(),
+			SignerPubkey: input.GetSigningPubkey(),
 		})
 	}
 
@@ -51,21 +43,14 @@ func parseReceivers(outs []*arkv1.Output) ([]domain.Receiver, error) {
 		if out.GetAmount() == 0 {
 			return nil, fmt.Errorf("missing output amount")
 		}
-		if len(out.GetAddress()) <= 0 {
-			return nil, fmt.Errorf("missing output address")
+		if len(out.GetAddress()) <= 0 && len(out.GetDescriptor_()) <= 0 {
+			return nil, fmt.Errorf("missing output destination")
 		}
-		var pubkey, addr string
-		_, pk, _, err := common.DecodeAddress(out.GetAddress())
-		if err != nil {
-			addr = out.GetAddress()
-		}
-		if pk != nil {
-			pubkey = hex.EncodeToString(pk.SerializeCompressed())
-		}
+
 		receivers = append(receivers, domain.Receiver{
-			Pubkey:         pubkey,
+			Descriptor:     out.GetDescriptor_(),
 			Amount:         out.GetAmount(),
-			OnchainAddress: addr,
+			OnchainAddress: out.GetAddress(),
 		})
 	}
 	return receivers, nil

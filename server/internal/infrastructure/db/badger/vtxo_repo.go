@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/ark-network/ark/server/internal/core/domain"
@@ -100,7 +101,9 @@ func (r *vtxoRepository) GetAllVtxos(
 ) ([]domain.Vtxo, []domain.Vtxo, error) {
 	query := badgerhold.Where("Redeemed").Eq(false)
 	if len(pubkey) > 0 {
-		query = query.And("Pubkey").Eq(pubkey)
+		query = query.And("Descriptor").RegExp(
+			regexp.MustCompile(fmt.Sprintf(".*%s.*", pubkey)),
+		)
 	}
 	vtxos, err := r.findVtxos(ctx, query)
 	if err != nil {

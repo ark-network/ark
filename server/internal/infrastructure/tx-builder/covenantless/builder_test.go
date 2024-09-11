@@ -20,11 +20,10 @@ import (
 )
 
 const (
-	testingKey          = "0218d5ca8b58797b7dbd65c075dd7ba7784b3f38ab71b1a5a8e3f94ba0257654a6"
-	connectorAddress    = "bc1py00yhcjpcj0k0sqra0etq0u3yy0purmspppsw0shyzyfe8c83tmq5h6kc2"
-	roundLifetime       = int64(1209344)
-	unilateralExitDelay = int64(512)
-	boardingExitDelay   = int64(512)
+	testingKey        = "0218d5ca8b58797b7dbd65c075dd7ba7784b3f38ab71b1a5a8e3f94ba0257654a6"
+	connectorAddress  = "bc1py00yhcjpcj0k0sqra0etq0u3yy0purmspppsw0shyzyfe8c83tmq5h6kc2"
+	roundLifetime     = int64(1209344)
+	boardingExitDelay = int64(512)
 )
 
 var (
@@ -53,7 +52,7 @@ func TestMain(m *testing.M) {
 
 func TestBuildPoolTx(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(
-		wallet, common.Bitcoin, roundLifetime, unilateralExitDelay, boardingExitDelay,
+		wallet, common.Bitcoin, roundLifetime, boardingExitDelay,
 	)
 
 	fixtures, err := parsePoolTxFixtures()
@@ -66,7 +65,7 @@ func TestBuildPoolTx(t *testing.T) {
 				cosigners := make([]*secp256k1.PublicKey, 0)
 				for _, payment := range f.Payments {
 					for _, input := range payment.Inputs {
-						pubkeyBytes, err := hex.DecodeString(input.Pubkey)
+						pubkeyBytes, err := hex.DecodeString(input.SignerPubkey)
 						require.NoError(t, err)
 						pubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
 						require.NoError(t, err)
@@ -110,7 +109,7 @@ func TestBuildPoolTx(t *testing.T) {
 
 func TestBuildForfeitTxs(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(
-		wallet, common.Bitcoin, 1209344, unilateralExitDelay, boardingExitDelay,
+		wallet, common.Bitcoin, 1209344, boardingExitDelay,
 	)
 
 	fixtures, err := parseForfeitTxsFixtures()

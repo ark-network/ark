@@ -10,7 +10,6 @@ import (
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/sirupsen/logrus"
 )
@@ -312,27 +311,4 @@ func getSpentVtxos(payments map[string]domain.Payment) []domain.VtxoKey {
 		}
 	}
 	return vtxos
-}
-
-type boardingInput struct {
-	txId           chainhash.Hash
-	vout           uint32
-	boardingPubKey *secp256k1.PublicKey
-	amount         uint64
-}
-
-func (b boardingInput) GetHash() chainhash.Hash {
-	return b.txId
-}
-
-func (b boardingInput) GetIndex() uint32 {
-	return b.vout
-}
-
-func (b boardingInput) GetAmount() uint64 {
-	return b.amount
-}
-
-func (b boardingInput) GetBoardingPubkey() *secp256k1.PublicKey {
-	return b.boardingPubKey
 }

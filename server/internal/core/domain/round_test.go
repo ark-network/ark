@@ -14,58 +14,67 @@ var (
 	payments   = []domain.Payment{
 		{
 			Id: "0",
-			Inputs: []domain.Vtxo{{
-				VtxoKey: domain.VtxoKey{
-					Txid: txid,
-					VOut: 0,
+			Inputs: []domain.VtxoInput{
+				{
+					Vtxo: domain.Vtxo{
+						VtxoKey: domain.VtxoKey{
+							Txid: txid,
+							VOut: 0,
+						},
+						Receiver: domain.Receiver{
+							Descriptor: desc,
+							Amount:     2000,
+						},
+					},
+					SignerPubkey: pubkey,
 				},
-				Receiver: domain.Receiver{
-					Pubkey: pubkey,
-					Amount: 2000,
-				},
-			}},
+			},
 			Receivers: []domain.Receiver{
 				{
-					Pubkey: pubkey,
-					Amount: 700,
+					Descriptor: desc,
+					Amount:     700,
 				},
 				{
-					Pubkey: pubkey,
-					Amount: 700,
+					Descriptor: desc,
+					Amount:     700,
 				},
 				{
-					Pubkey: pubkey,
-					Amount: 600,
+					Descriptor: desc,
+					Amount:     600,
 				},
 			},
 		},
 		{
 			Id: "1",
-			Inputs: []domain.Vtxo{
+			Inputs: []domain.VtxoInput{
 				{
-					VtxoKey: domain.VtxoKey{
-						Txid: txid,
-						VOut: 0,
-					},
-					Receiver: domain.Receiver{
-						Pubkey: pubkey,
-						Amount: 1000,
+					Vtxo: domain.Vtxo{
+						VtxoKey: domain.VtxoKey{
+							Txid: txid,
+							VOut: 0,
+						},
+						Receiver: domain.Receiver{
+							Descriptor: desc,
+							Amount:     1000,
+						},
 					},
 				},
 				{
-					VtxoKey: domain.VtxoKey{
-						Txid: txid,
-						VOut: 0,
-					},
-					Receiver: domain.Receiver{
-						Pubkey: pubkey,
-						Amount: 1000,
+					Vtxo: domain.Vtxo{
+						VtxoKey: domain.VtxoKey{
+							Txid: txid,
+							VOut: 0,
+						},
+						Receiver: domain.Receiver{
+							Descriptor: desc,
+							Amount:     1000,
+						},
 					},
 				},
 			},
 			Receivers: []domain.Receiver{{
-				Pubkey: pubkey,
-				Amount: 2000,
+				Descriptor: desc,
+				Amount:     2000,
 			}},
 		},
 	}

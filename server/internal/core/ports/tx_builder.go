@@ -16,11 +16,15 @@ type SweepInput interface {
 	GetInternalKey() *secp256k1.PublicKey
 }
 
-type BoardingInput interface {
-	GetAmount() uint64
-	GetIndex() uint32
-	GetHash() chainhash.Hash
-	GetBoardingPubkey() *secp256k1.PublicKey
+type Input struct {
+	domain.VtxoKey
+	Descriptor   string
+	SignerPubkey string
+}
+
+type BoardingInput struct {
+	Input
+	Amount uint64
 }
 
 type TxBuilder interface {
@@ -30,16 +34,14 @@ type TxBuilder interface {
 	) (poolTx string, congestionTree tree.CongestionTree, connectorAddress string, err error)
 	BuildForfeitTxs(aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment) (connectors []string, forfeitTxs []string, err error)
 	BuildSweepTx(inputs []SweepInput) (signedSweepTx string, err error)
-	GetVtxoScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error)
 	GetSweepInput(parentblocktime int64, node tree.Node) (expirationtime int64, sweepInput SweepInput, err error)
 	VerifyTapscriptPartialSigs(tx string) (valid bool, txid string, err error)
 	FinalizeAndExtractForfeit(tx string) (txhex string, err error)
 	// FindLeaves returns all the leaves txs that are reachable from the given outpoint
 	FindLeaves(congestionTree tree.CongestionTree, fromtxid string, vout uint32) (leaves []tree.Node, err error)
 	BuildAsyncPaymentTransactions(
-		vtxosToSpend []domain.Vtxo,
+		vtxosToSpend []domain.VtxoInput,
 		aspPubKey *secp256k1.PublicKey, receivers []domain.Receiver,
 	) (*domain.AsyncPaymentTxs, error)
-	GetBoardingScript(userPubkey, aspPubkey *secp256k1.PublicKey) (addr string, script []byte, err error)
 	VerifyAndCombinePartialTx(dest string, src string) (string, error)
 }

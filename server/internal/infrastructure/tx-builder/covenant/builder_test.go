@@ -20,12 +20,11 @@ import (
 )
 
 const (
-	testingKey          = "0218d5ca8b58797b7dbd65c075dd7ba7784b3f38ab71b1a5a8e3f94ba0257654a6"
-	connectorAddress    = "tex1qekd5u0qj8jl07vy60830xy7n9qtmcx9u3s0cqc"
-	minRelayFee         = uint64(30)
-	roundLifetime       = int64(1209344)
-	unilateralExitDelay = int64(512)
-	boardingExitDelay   = int64(512)
+	testingKey        = "0218d5ca8b58797b7dbd65c075dd7ba7784b3f38ab71b1a5a8e3f94ba0257654a6"
+	connectorAddress  = "tex1qekd5u0qj8jl07vy60830xy7n9qtmcx9u3s0cqc"
+	minRelayFee       = uint64(30)
+	roundLifetime     = int64(1209344)
+	boardingExitDelay = int64(512)
 )
 
 var (
@@ -54,7 +53,7 @@ func TestMain(m *testing.M) {
 
 func TestBuildPoolTx(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(
-		wallet, common.Liquid, roundLifetime, unilateralExitDelay, boardingExitDelay,
+		wallet, common.Liquid, roundLifetime, boardingExitDelay,
 	)
 
 	fixtures, err := parsePoolTxFixtures()
@@ -99,7 +98,7 @@ func TestBuildPoolTx(t *testing.T) {
 
 func TestBuildForfeitTxs(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(
-		wallet, common.Liquid, 1209344, unilateralExitDelay, boardingExitDelay,
+		wallet, common.Liquid, 1209344, boardingExitDelay,
 	)
 
 	fixtures, err := parseForfeitTxsFixtures()

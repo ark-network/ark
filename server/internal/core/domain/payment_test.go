@@ -1,22 +1,36 @@
 package domain_test
 
 import (
+	"fmt"
 	"testing"
 
+	"github.com/ark-network/ark/common/descriptor"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/stretchr/testify/require"
 )
 
-var inputs = []domain.Vtxo{
+var desc = fmt.Sprintf(
+	descriptor.BoardingDescriptorTemplate,
+	"030000000000000000000000000000000000000000000000000000000000000001",
+	"0000000000000000000000000000000000000000000000000000000000000001",
+	"0000000000000000000000000000000000000000000000000000000000000001",
+	512,
+	"0000000000000000000000000000000000000000000000000000000000000001",
+)
+
+var inputs = []domain.VtxoInput{
 	{
-		VtxoKey: domain.VtxoKey{
-			Txid: "0000000000000000000000000000000000000000000000000000000000000000",
-			VOut: 0,
+		Vtxo: domain.Vtxo{
+			VtxoKey: domain.VtxoKey{
+				Txid: "0000000000000000000000000000000000000000000000000000000000000000",
+				VOut: 0,
+			},
+			Receiver: domain.Receiver{
+				Descriptor: desc,
+				Amount:     1000,
+			},
 		},
-		Receiver: domain.Receiver{
-			Pubkey: "030000000000000000000000000000000000000000000000000000000000000001",
-			Amount: 1000,
-		},
+		SignerPubkey: "030000000000000000000000000000000000000000000000000000000000000001",
 	},
 }
 
@@ -40,12 +54,12 @@ func TestPayment(t *testing.T) {
 
 			err = payment.AddReceivers([]domain.Receiver{
 				{
-					Pubkey: "030000000000000000000000000000000000000000000000000000000000000001",
-					Amount: 450,
+					Descriptor: desc,
+					Amount:     450,
 				},
 				{
-					Pubkey: "020000000000000000000000000000000000000000000000000000000000000002",
-					Amount: 550,
+					Descriptor: desc,
+					Amount:     550,
 				},
 			})
 			require.NoError(t, err)

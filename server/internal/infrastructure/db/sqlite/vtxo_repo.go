@@ -43,17 +43,17 @@ func (v *vxtoRepository) AddVtxos(ctx context.Context, vtxos []domain.Vtxo) erro
 			}
 			if err := querierWithTx.UpsertVtxo(
 				ctx, queries.UpsertVtxoParams{
-					Txid:     vtxo.Txid,
-					Vout:     int64(vtxo.VOut),
-					Pubkey:   vtxo.Pubkey,
-					Amount:   int64(vtxo.Amount),
-					PoolTx:   vtxo.PoolTx,
-					SpentBy:  vtxo.SpentBy,
-					Spent:    vtxo.Spent,
-					Redeemed: vtxo.Redeemed,
-					Swept:    vtxo.Swept,
-					ExpireAt: vtxo.ExpireAt,
-					RedeemTx: sql.NullString{String: redeemTx, Valid: true},
+					Txid:       vtxo.Txid,
+					Vout:       int64(vtxo.VOut),
+					Descriptor: sql.NullString{String: vtxo.Descriptor, Valid: true},
+					Amount:     int64(vtxo.Amount),
+					PoolTx:     vtxo.PoolTx,
+					SpentBy:    vtxo.SpentBy,
+					Spent:      vtxo.Spent,
+					Redeemed:   vtxo.Redeemed,
+					Swept:      vtxo.Swept,
+					ExpireAt:   vtxo.ExpireAt,
+					RedeemTx:   sql.NullString{String: redeemTx, Valid: true},
 				},
 			); err != nil {
 				return err
@@ -294,8 +294,8 @@ func rowToVtxo(row queries.Vtxo, uncondForfeitTxs []queries.UncondForfeitTxVw) d
 			VOut: uint32(row.Vout),
 		},
 		Receiver: domain.Receiver{
-			Pubkey: row.Pubkey,
-			Amount: uint64(row.Amount),
+			Descriptor: row.Descriptor.String,
+			Amount:     uint64(row.Amount),
 		},
 		PoolTx:       row.PoolTx,
 		SpentBy:      row.SpentBy,

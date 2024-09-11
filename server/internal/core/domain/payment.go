@@ -9,13 +9,18 @@ import (
 	"github.com/google/uuid"
 )
 
+type VtxoInput struct {
+	Vtxo
+	SignerPubkey string
+}
+
 type Payment struct {
 	Id        string
-	Inputs    []Vtxo
+	Inputs    []VtxoInput
 	Receivers []Receiver
 }
 
-func NewPayment(inputs []Vtxo) (*Payment, error) {
+func NewPayment(inputs []VtxoInput) (*Payment, error) {
 	p := &Payment{
 		Id:     uuid.New().String(),
 		Inputs: inputs,
@@ -68,7 +73,7 @@ func (p Payment) validate(ignoreOuts bool) error {
 		return fmt.Errorf("missing outputs")
 	}
 	for _, r := range p.Receivers {
-		if len(r.OnchainAddress) <= 0 && len(r.Pubkey) <= 0 {
+		if len(r.OnchainAddress) <= 0 && len(r.Descriptor) <= 0 {
 			return fmt.Errorf("missing receiver destination")
 		}
 	}
@@ -96,7 +101,7 @@ func (k VtxoKey) Hash() string {
 }
 
 type Receiver struct {
-	Pubkey         string
+	Descriptor     string
 	Amount         uint64
 	OnchainAddress string
 }

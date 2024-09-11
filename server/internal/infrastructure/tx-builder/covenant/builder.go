@@ -31,7 +31,6 @@ type txBuilder struct {
 	wallet            ports.WalletService
 	net               common.Network
 	roundLifetime     int64 // in seconds
-	exitDelay         int64 // in seconds
 	boardingExitDelay int64 // in seconds
 }
 
@@ -39,27 +38,9 @@ func NewTxBuilder(
 	wallet ports.WalletService,
 	net common.Network,
 	roundLifetime int64,
-	exitDelay int64,
 	boardingExitDelay int64,
 ) ports.TxBuilder {
-	return &txBuilder{wallet, net, roundLifetime, exitDelay, boardingExitDelay}
-}
-
-func (b *txBuilder) GetBoardingScript(owner, asp *secp256k1.PublicKey) (string, []byte, error) {
-	addr, script, _, err := b.getBoardingTaproot(owner, asp)
-	if err != nil {
-		return "", nil, err
-	}
-
-	return addr, script, nil
-}
-
-func (b *txBuilder) GetVtxoScript(userPubkey, aspPubkey *secp256k1.PublicKey) ([]byte, error) {
-	outputScript, _, err := b.getLeafScriptAndTree(userPubkey, aspPubkey)
-	if err != nil {
-		return nil, err
-	}
-	return outputScript, nil
+	return &txBuilder{wallet, net, roundLifetime, boardingExitDelay}
 }
 
 func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (signedSweepTx string, err error) {
@@ -159,7 +140,7 @@ func (b *txBuilder) BuildPoolTx(
 		}
 
 		treeFactoryFn, sharedOutputScript, sharedOutputAmount, err = tree.CraftCongestionTree(
-			b.onchainNetwork().AssetID, aspPubkey, getOffchainReceivers(payments), feeSatsPerNode, b.roundLifetime, b.exitDelay,
+			b.onchainNetwork().AssetID, aspPubkey, getOffchainReceivers(payments), feeSatsPerNode, b.roundLifetime,
 		)
 		if err != nil {
 			return "", nil, "", err
@@ -269,7 +250,7 @@ func (b *txBuilder) VerifyTapscriptPartialSigs(tx string) (bool, string, error) 
 		rootHash := tapLeaf.ControlBlock.RootHash(tapLeaf.Script)
 		tapKeyFromControlBlock := taproot.ComputeTaprootOutputKey(tree.UnspendableKey(), rootHash[:])
 
-		pkscript, err := p2trScript(tapKeyFromControlBlock)
+		pkscript, err := common.P2TRScript(tapKeyFromControlBlock)
 		if err != nil {
 			return false, txid, err
 		}
@@ -370,48 +351,9 @@ func (b *txBuilder) FindLeaves(
 }
 
 func (b *txBuilder) BuildAsyncPaymentTransactions(
-	_ []domain.Vtxo, _ *secp256k1.PublicKey, _ []domain.Receiver,
+	_ []domain.VtxoInput, _ *secp256k1.PublicKey, _ []domain.Receiver,
 ) (*domain.AsyncPaymentTxs, error) {
 	return nil, fmt.Errorf("not implemented")
-}
-
-func (b *txBuilder) getLeafScriptAndTree(
-	userPubkey, aspPubkey *secp256k1.PublicKey,
-) ([]byte, *taproot.IndexedElementsTapScriptTree, error) {
-	redeemClosure := &tree.CSVSigClosure{
-		Pubkey:  userPubkey,
-		Seconds: uint(b.exitDelay),
-	}
-
-	redeemLeaf, err := redeemClosure.Leaf()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	forfeitClosure := &tree.ForfeitClosure{
-		Pubkey:    userPubkey,
-		AspPubkey: aspPubkey,
-	}
-
-	forfeitLeaf, err := forfeitClosure.Leaf()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	taprootTree := taproot.AssembleTaprootScriptTree(
-		*redeemLeaf, *forfeitLeaf,
-	)
-
-	root := taprootTree.RootNode.TapHash()
-	unspendableKey := tree.UnspendableKey()
-	taprootKey := taproot.ComputeTaprootOutputKey(unspendableKey, root[:])
-
-	outputScript, err := p2trScript(taprootKey)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return outputScript, taprootTree, nil
 }
 
 func (b *txBuilder) createPoolTx(
@@ -419,7 +361,8 @@ func (b *txBuilder) createPoolTx(
 	sharedOutputScript []byte,
 	payments []domain.Payment,
 	boardingInputs []ports.BoardingInput,
-	aspPubKey *secp256k1.PublicKey, connectorAddress string,
+	aspPubKey *secp256k1.PublicKey,
+	connectorAddress string,
 	sweptRounds []domain.Round,
 ) (*psetv2.Pset, error) {
 	aspScript, err := p2wpkhScript(aspPubKey, b.onchainNetwork())
@@ -481,7 +424,7 @@ func (b *txBuilder) createPoolTx(
 	}
 
 	for _, in := range boardingInputs {
-		targetAmount -= in.GetAmount()
+		targetAmount -= in.Amount
 	}
 	ctx := context.Background()
 
@@ -523,8 +466,8 @@ func (b *txBuilder) createPoolTx(
 		if err := updater.AddInputs(
 			[]psetv2.InputArgs{
 				{
-					Txid:    in.GetHash().String(),
-					TxIndex: in.GetIndex(),
+					Txid:    in.Txid,
+					TxIndex: in.VtxoKey.VOut,
 				},
 			},
 		); err != nil {
@@ -538,21 +481,64 @@ func (b *txBuilder) createPoolTx(
 			return nil, fmt.Errorf("failed to convert asset to bytes: %s", err)
 		}
 
-		valueBytes, err := elementsutil.ValueToBytes(in.GetAmount())
+		valueBytes, err := elementsutil.ValueToBytes(in.Amount)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert value to bytes: %s", err)
 		}
 
-		_, script, tapLeafProof, err := b.getBoardingTaproot(in.GetBoardingPubkey(), aspPubKey)
+		boardingVtxoScript, err := tree.ParseVtxoScript(in.Descriptor)
 		if err != nil {
 			return nil, err
 		}
 
-		if err := updater.AddInWitnessUtxo(index, transaction.NewTxOutput(assetBytes, valueBytes, script)); err != nil {
+		boardingTapKey, boardingTree, err := boardingVtxoScript.TapTree()
+		if err != nil {
 			return nil, err
 		}
 
-		if err := updater.AddInTapLeafScript(index, psetv2.NewTapLeafScript(*tapLeafProof, tree.UnspendableKey())); err != nil {
+		boardingOutputScript, err := common.P2TRScript(boardingTapKey)
+		if err != nil {
+			return nil, err
+		}
+
+		signerPubKeyBytes, err := hex.DecodeString(in.SignerPubkey)
+		if err != nil {
+			return nil, err
+		}
+
+		signerPubKey, err := secp256k1.ParsePubKey(signerPubKeyBytes)
+		if err != nil {
+			return nil, err
+		}
+
+		forfeitClosure := &tree.MultisigClosure{
+			Pubkey:    signerPubKey,
+			AspPubkey: aspPubKey,
+		}
+
+		forfeitLeaf, err := forfeitClosure.Leaf()
+		if err != nil {
+			return nil, err
+		}
+
+		leafProof, err := boardingTree.GetTaprootMerkleProof(forfeitLeaf.TapHash())
+		if err != nil {
+			return nil, err
+		}
+
+		if err := updater.AddInWitnessUtxo(index, transaction.NewTxOutput(assetBytes, valueBytes, boardingOutputScript)); err != nil {
+			return nil, err
+		}
+
+		controlBlock, err := taproot.ParseControlBlock(leafProof.ControlBlock)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := updater.AddInTapLeafScript(index, psetv2.TapLeafScript{
+			TapElementsLeaf: taproot.NewBaseTapElementsLeaf(leafProof.Script),
+			ControlBlock:    *controlBlock,
+		}); err != nil {
 			return nil, err
 		}
 
@@ -822,40 +808,50 @@ func (b *txBuilder) createForfeitTxs(
 	forfeitTxs := make([]string, 0)
 	for _, payment := range payments {
 		for _, vtxo := range payment.Inputs {
-			pubkeyBytes, err := hex.DecodeString(vtxo.Pubkey)
-			if err != nil {
-				return nil, fmt.Errorf("failed to decode pubkey: %s", err)
-			}
-
-			vtxoPubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
+			offchainScript, err := tree.ParseVtxoScript(vtxo.Descriptor)
 			if err != nil {
 				return nil, err
 			}
 
-			vtxoScript, vtxoTaprootTree, err := b.getLeafScriptAndTree(vtxoPubkey, aspPubkey)
+			vtxoTapKey, vtxoTaprootTree, err := offchainScript.TapTree()
 			if err != nil {
 				return nil, err
 			}
 
-			var forfeitProof *taproot.TapscriptElementsProof
-
-			for _, proof := range vtxoTaprootTree.LeafMerkleProofs {
-				isForfeit, err := (&tree.ForfeitClosure{}).Decode(proof.Script)
-				if !isForfeit || err != nil {
-					continue
-				}
-
-				forfeitProof = &proof
-				break
+			signerBytes, err := hex.DecodeString(vtxo.SignerPubkey)
+			if err != nil {
+				return nil, err
 			}
 
-			if forfeitProof == nil {
-				return nil, fmt.Errorf("forfeit proof not found")
+			signerPubkey, err := secp256k1.ParsePubKey(signerBytes)
+			if err != nil {
+				return nil, err
+			}
+
+			forfeitClosure := tree.MultisigClosure{
+				Pubkey:    signerPubkey,
+				AspPubkey: aspPubkey,
+			}
+
+			forfeitLeaf, err := forfeitClosure.Leaf()
+			if err != nil {
+				return nil, err
+			}
+
+			proofIndex, found := vtxoTaprootTree.LeafProofIndex[forfeitLeaf.TapHash()]
+			if !found {
+				return nil, fmt.Errorf("forfeit leaf not found in taproot tree")
+			}
+			proof := vtxoTaprootTree.LeafMerkleProofs[proofIndex]
+
+			vtxoScript, err := common.P2TRScript(vtxoTapKey)
+			if err != nil {
+				return nil, err
 			}
 
 			for _, connector := range connectors {
 				txs, err := b.craftForfeitTxs(
-					connector, vtxo, *forfeitProof, vtxoScript, aspScript,
+					connector, vtxo.Vtxo, proof, vtxoScript, aspScript,
 				)
 				if err != nil {
 					return nil, err
@@ -933,52 +929,6 @@ func (b *txBuilder) onchainNetwork() *network.Network {
 	default:
 		return &network.Liquid
 	}
-}
-
-func (b *txBuilder) getBoardingTaproot(owner, asp *secp256k1.PublicKey) (string, []byte, *taproot.TapscriptElementsProof, error) {
-	multisigClosure := tree.ForfeitClosure{
-		Pubkey:    owner,
-		AspPubkey: asp,
-	}
-
-	csvClosure := tree.CSVSigClosure{
-		Pubkey:  owner,
-		Seconds: uint(b.boardingExitDelay),
-	}
-
-	multisigLeaf, err := multisigClosure.Leaf()
-	if err != nil {
-		return "", nil, nil, err
-	}
-
-	csvLeaf, err := csvClosure.Leaf()
-	if err != nil {
-		return "", nil, nil, err
-	}
-
-	tapTree := taproot.AssembleTaprootScriptTree(*multisigLeaf, *csvLeaf)
-	root := tapTree.RootNode.TapHash()
-	tapKey := taproot.ComputeTaprootOutputKey(tree.UnspendableKey(), root[:])
-
-	p2tr, err := payment.FromTweakedKey(tapKey, b.onchainNetwork(), nil)
-	if err != nil {
-		return "", nil, nil, err
-	}
-
-	addr, err := p2tr.TaprootAddress()
-	if err != nil {
-		return "", nil, nil, err
-	}
-
-	tapLeaf, err := multisigClosure.Leaf()
-	if err != nil {
-		return "", nil, nil, err
-	}
-
-	leafProofIndex := tapTree.LeafProofIndex[tapLeaf.TapHash()]
-	leafProof := tapTree.LeafMerkleProofs[leafProofIndex]
-
-	return addr, p2tr.Script, &leafProof, nil
 }
 
 func extractSweepLeaf(input psetv2.Input) (sweepLeaf *psetv2.TapLeafScript, lifetime int64, err error) {

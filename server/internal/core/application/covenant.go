@@ -20,6 +20,8 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	log "github.com/sirupsen/logrus"
 	"github.com/vulpemventures/go-elements/elementsutil"
+	"github.com/vulpemventures/go-elements/network"
+	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/transaction"
 )
@@ -120,159 +122,156 @@ func (s *covenantService) Stop() {
 	close(s.eventsCh)
 }
 
-func (s *covenantService) GetBoardingAddress(ctx context.Context, userPubkey *secp256k1.PublicKey) (string, error) {
-	addr, _, err := s.builder.GetBoardingScript(userPubkey, s.pubkey)
-	if err != nil {
-		return "", err
+func (s *covenantService) GetBoardingAddress(ctx context.Context, userPubkey *secp256k1.PublicKey) (string, string, error) {
+	vtxoScript := &tree.DefaultVtxoScript{
+		Asp:       s.pubkey,
+		Owner:     userPubkey,
+		ExitDelay: uint(s.boardingExitDelay),
 	}
-	return addr, nil
+
+	tapKey, _, err := vtxoScript.TapTree()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get taproot key: %s", err)
+	}
+
+	p2tr, err := payment.FromTweakedKey(tapKey, s.onchainNetwork(), nil)
+	if err != nil {
+		return "", "", err
+	}
+
+	addr, err := p2tr.TaprootAddress()
+	if err != nil {
+		return "", "", err
+	}
+
+	return addr, vtxoScript.ToDescriptor(), nil
 }
 
-func (s *covenantService) SpendVtxos(ctx context.Context, inputs []Input) (string, error) {
-	vtxosInputs := make([]domain.VtxoKey, 0)
-	boardingInputs := make([]Input, 0)
+func (s *covenantService) SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error) {
+	vtxosInputs := make([]domain.VtxoInput, 0)
+	boardingInputs := make([]ports.BoardingInput, 0)
 
-	for _, in := range inputs {
-		if in.IsVtxo() {
-			vtxosInputs = append(vtxosInputs, in.VtxoKey())
-			continue
-		}
-		boardingInputs = append(boardingInputs, in)
-	}
-
-	vtxos := make([]domain.Vtxo, 0)
-
-	if len(vtxosInputs) > 0 {
-		var err error
-		vtxos, err = s.repoManager.Vtxos().GetVtxos(ctx, vtxosInputs)
-		if err != nil {
-			return "", err
-		}
-		for _, v := range vtxos {
-			if v.Spent {
-				return "", fmt.Errorf("input %s:%d already spent", v.Txid, v.VOut)
-			}
-
-			if v.Redeemed {
-				return "", fmt.Errorf("input %s:%d already redeemed", v.Txid, v.VOut)
-			}
-
-			if v.Spent {
-				return "", fmt.Errorf("input %s:%d already spent", v.Txid, v.VOut)
-			}
-		}
-	}
-
-	boardingTxs := make(map[string]string, 0) // txid -> txhex
 	now := time.Now().Unix()
 
-	for _, in := range boardingInputs {
-		if _, ok := boardingTxs[in.Txid]; !ok {
-			txhex, err := s.wallet.GetTransaction(ctx, in.Txid)
+	boardingTxs := make(map[string]*transaction.Transaction, 0) // txid -> txhex
+
+	for _, input := range inputs {
+		vtxosResult, err := s.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{input.VtxoKey})
+		if err != nil || len(vtxosResult) == 0 {
+			// vtxo not found in db, check if it exists on-chain
+			if _, ok := boardingTxs[input.Txid]; !ok {
+				// check if the tx exists and is confirmed
+				txhex, err := s.wallet.GetTransaction(ctx, input.Txid)
+				if err != nil {
+					return "", fmt.Errorf("failed to get tx %s: %s", input.Txid, err)
+				}
+
+				tx, err := transaction.NewTxFromHex(txhex)
+				if err != nil {
+					return "", fmt.Errorf("failed to parse tx %s: %s", input.Txid, err)
+				}
+
+				confirmed, blocktime, err := s.wallet.IsTransactionConfirmed(ctx, input.Txid)
+				if err != nil {
+					return "", fmt.Errorf("failed to check tx %s: %s", input.Txid, err)
+				}
+
+				if !confirmed {
+					return "", fmt.Errorf("tx %s not confirmed", input.Txid)
+				}
+
+				// if the exit path is available, forbid registering the boarding utxo
+				if blocktime+int64(s.boardingExitDelay) < now {
+					return "", fmt.Errorf("tx %s expired", input.Txid)
+				}
+
+				boardingTxs[input.Txid] = tx
+			}
+
+			tx := boardingTxs[input.Txid]
+			boardingInput, err := s.newBoardingInput(tx, input)
 			if err != nil {
-				return "", fmt.Errorf("failed to get tx %s: %s", in.Txid, err)
+				return "", err
 			}
 
-			confirmed, blocktime, err := s.wallet.IsTransactionConfirmed(ctx, in.Txid)
-			if err != nil {
-				return "", fmt.Errorf("failed to check tx %s: %s", in.Txid, err)
-			}
+			boardingInputs = append(boardingInputs, *boardingInput)
+			continue
+		}
 
-			if !confirmed {
-				return "", fmt.Errorf("tx %s not confirmed", in.Txid)
-			}
+		vtxo := vtxosResult[0]
+		if vtxo.Spent {
+			return "", fmt.Errorf("input %s:%d already spent", vtxo.Txid, vtxo.VOut)
+		}
 
-			if blocktime+int64(s.boardingExitDelay) < now {
-				return "", fmt.Errorf("tx %s expired", in.Txid)
-			}
+		if vtxo.Redeemed {
+			return "", fmt.Errorf("input %s:%d already redeemed", vtxo.Txid, vtxo.VOut)
+		}
 
-			boardingTxs[in.Txid] = txhex
+		if vtxo.Swept {
+			return "", fmt.Errorf("input %s:%d already swept", vtxo.Txid, vtxo.VOut)
 		}
 	}
 
-	utxos := make([]ports.BoardingInput, 0, len(boardingInputs))
-
-	for _, in := range boardingInputs {
-		desc, err := in.GetDescriptor()
-		if err != nil {
-			log.WithError(err).Debugf("failed to parse boarding input descriptor")
-			return "", fmt.Errorf("failed to parse descriptor %s for input %s:%d", in.Descriptor, in.Txid, in.Index)
-		}
-		input, err := s.newBoardingInput(boardingTxs[in.Txid], in.Index, *desc)
-		if err != nil {
-			log.WithError(err).Debugf("failed to create boarding input")
-			return "", fmt.Errorf("input %s:%d is not a valid boarding input", in.Txid, in.Index)
-		}
-
-		utxos = append(utxos, input)
-	}
-
-	payment, err := domain.NewPayment(vtxos)
+	payment, err := domain.NewPayment(vtxosInputs)
 	if err != nil {
 		return "", err
 	}
-	if err := s.paymentRequests.push(*payment, utxos); err != nil {
+	if err := s.paymentRequests.push(*payment, boardingInputs); err != nil {
 		return "", err
 	}
 	return payment.Id, nil
 }
 
-func (s *covenantService) newBoardingInput(
-	txhex string, vout uint32, desc descriptor.TaprootDescriptor,
-) (ports.BoardingInput, error) {
-	tx, err := transaction.NewTxFromHex(txhex)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse tx: %s", err)
-	}
-
-	if len(tx.Outputs) <= int(vout) {
+func (s *covenantService) newBoardingInput(tx *transaction.Transaction, input ports.Input) (*ports.BoardingInput, error) {
+	if len(tx.Outputs) <= int(input.VtxoKey.VOut) {
 		return nil, fmt.Errorf("output not found")
 	}
 
-	out := tx.Outputs[vout]
-	script := out.Script
+	output := tx.Outputs[input.VtxoKey.VOut]
 
-	if len(out.RangeProof) > 0 || len(out.SurjectionProof) > 0 {
+	if len(output.RangeProof) > 0 || len(output.SurjectionProof) > 0 {
 		return nil, fmt.Errorf("output is confidential")
 	}
 
-	scriptFromDescriptor, err := tree.ComputeOutputScript(desc)
-	if err != nil {
-		return nil, fmt.Errorf("failed to compute output script: %s", err)
-	}
-
-	if !bytes.Equal(script, scriptFromDescriptor) {
-		return nil, fmt.Errorf("descriptor does not match script in transaction output")
-	}
-
-	pubkey, timeout, err := descriptor.ParseBoardingDescriptor(desc)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse boarding descriptor: %s", err)
-	}
-
-	if timeout != uint(s.boardingExitDelay) {
-		return nil, fmt.Errorf("invalid boarding descriptor, timeout mismatch")
-	}
-
-	_, expectedScript, err := s.builder.GetBoardingScript(pubkey, s.pubkey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to compute boarding script: %s", err)
-	}
-
-	if !bytes.Equal(script, expectedScript) {
-		return nil, fmt.Errorf("output script mismatch expected script")
-	}
-
-	value, err := elementsutil.ValueFromBytes(out.Value)
+	amount, err := elementsutil.ValueFromBytes(output.Value)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse value: %s", err)
 	}
 
-	return &boardingInput{
-		txId:           tx.TxHash(),
-		vout:           vout,
-		boardingPubKey: pubkey,
-		amount:         value,
+	boardingScript, err := tree.ParseVtxoScript(input.Descriptor)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse boarding descriptor: %s", err)
+	}
+
+	tapKey, _, err := boardingScript.TapTree()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get taproot key: %s", err)
+	}
+
+	expectedScriptPubKey, err := common.P2TRScript(tapKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get script pubkey: %s", err)
+	}
+
+	if !bytes.Equal(output.Script, expectedScriptPubKey) {
+		return nil, fmt.Errorf("descriptor does not match script in transaction output")
+	}
+
+	if defaultVtxoScript, ok := boardingScript.(*tree.DefaultVtxoScript); ok {
+		if !s.pubkey.IsEqual(defaultVtxoScript.Asp) {
+			return nil, fmt.Errorf("invalid boarding descriptor, ASP mismatch")
+		}
+
+		if defaultVtxoScript.ExitDelay != uint(s.boardingExitDelay) {
+			return nil, fmt.Errorf("invalid boarding descriptor, timeout mismatch")
+		}
+	} else {
+		return nil, fmt.Errorf("only default vtxo script is supported for boarding")
+	}
+
+	return &ports.BoardingInput{
+		Amount: amount,
+		Input:  input,
 	}, nil
 }
 
@@ -317,7 +316,7 @@ func (s *covenantService) CompleteAsyncPayment(ctx context.Context, redeemTx str
 	return fmt.Errorf("unimplemented")
 }
 
-func (s *covenantService) CreateAsyncPayment(ctx context.Context, inputs []domain.VtxoKey, receivers []domain.Receiver) (string, []string, error) {
+func (s *covenantService) CreateAsyncPayment(ctx context.Context, inputs []ports.Input, receivers []domain.Receiver) (string, []string, error) {
 	return "", nil, fmt.Errorf("unimplemented")
 }
 
@@ -875,31 +874,56 @@ func (s *covenantService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 	for _, node := range leaves {
 		tx, _ := psetv2.NewPsetFromBase64(node.Tx)
 		for i, out := range tx.Outputs {
+			if len(out.Script) <= 0 {
+				continue // skip fee outputs
+			}
+
+			desc := ""
+			found := false
+
 			for _, p := range round.Payments {
-				var pubkey string
-				found := false
+				if found {
+					break
+				}
+
 				for _, r := range p.Receivers {
 					if r.IsOnchain() {
 						continue
 					}
 
-					buf, _ := hex.DecodeString(r.Pubkey)
-					pk, _ := secp256k1.ParsePubKey(buf)
-					script, _ := s.builder.GetVtxoScript(pk, s.pubkey)
+					vtxoScript, err := tree.ParseVtxoScript(r.Descriptor)
+					if err != nil {
+						log.WithError(err).Warn("failed to parse vtxo descriptor")
+						continue
+					}
+
+					tapKey, _, err := vtxoScript.TapTree()
+					if err != nil {
+						log.WithError(err).Warn("failed to compute vtxo tap key")
+						continue
+					}
+
+					script, err := common.P2TRScript(tapKey)
+					if err != nil {
+						log.WithError(err).Warn("failed to create vtxo scriptpubkey")
+						continue
+					}
+
 					if bytes.Equal(script, out.Script) {
 						found = true
-						pubkey = r.Pubkey
+						desc = r.Descriptor
 						break
 					}
 				}
-				if found {
-					vtxos = append(vtxos, domain.Vtxo{
-						VtxoKey:  domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
-						Receiver: domain.Receiver{Pubkey: pubkey, Amount: out.Value},
-						PoolTx:   round.Txid,
-					})
-					break
-				}
+			}
+
+			if found {
+				vtxos = append(vtxos, domain.Vtxo{
+					VtxoKey:  domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
+					Receiver: domain.Receiver{Descriptor: desc, Amount: uint64(out.Value)},
+					PoolTx:   round.Txid,
+				})
+				break
 			}
 		}
 	}
@@ -971,15 +995,17 @@ func (s *covenantService) restoreWatchingVtxos() error {
 func (s *covenantService) extractVtxosScripts(vtxos []domain.Vtxo) ([]string, error) {
 	indexedScripts := make(map[string]struct{})
 	for _, vtxo := range vtxos {
-		buf, err := hex.DecodeString(vtxo.Pubkey)
+		vtxoScript, err := tree.ParseVtxoScript(vtxo.Receiver.Descriptor)
 		if err != nil {
 			return nil, err
 		}
-		userPubkey, err := secp256k1.ParsePubKey(buf)
+
+		tapKey, _, err := vtxoScript.TapTree()
 		if err != nil {
 			return nil, err
 		}
-		script, err := s.builder.GetVtxoScript(userPubkey, s.pubkey)
+
+		script, err := common.P2TRScript(tapKey)
 		if err != nil {
 			return nil, err
 		}
@@ -1004,6 +1030,19 @@ func (s *covenantService) saveEvents(
 		return err
 	}
 	return s.repoManager.Rounds().AddOrUpdateRound(ctx, *round)
+}
+
+func (s *covenantService) onchainNetwork() *network.Network {
+	switch s.network {
+	case common.Liquid:
+		return &network.Liquid
+	case common.LiquidTestNet:
+		return &network.Testnet
+	case common.LiquidRegTest:
+		return &network.Regtest
+	default:
+		return nil
+	}
 }
 
 func findForfeitTxLiquid(

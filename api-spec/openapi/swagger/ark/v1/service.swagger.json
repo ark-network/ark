@@ -475,21 +475,6 @@
         }
       }
     },
-    "v1BoardingInput": {
-      "type": "object",
-      "properties": {
-        "txid": {
-          "type": "string"
-        },
-        "vout": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "descriptor": {
-          "type": "string"
-        }
-      }
-    },
     "v1ClaimPaymentRequest": {
       "type": "object",
       "properties": {
@@ -668,11 +653,14 @@
     "v1Input": {
       "type": "object",
       "properties": {
-        "vtxoInput": {
-          "$ref": "#/definitions/v1VtxoInput"
+        "outpoint": {
+          "$ref": "#/definitions/v1Outpoint"
         },
-        "boardingInput": {
-          "$ref": "#/definitions/v1BoardingInput"
+        "descriptor": {
+          "type": "string"
+        },
+        "signingPubkey": {
+          "type": "string"
         }
       }
     },
@@ -709,12 +697,28 @@
         }
       }
     },
+    "v1Outpoint": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "vout": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
     "v1Output": {
       "type": "object",
       "properties": {
         "address": {
           "type": "string",
-          "description": "Either the offchain or onchain address."
+          "title": "onchain"
+        },
+        "descriptor": {
+          "type": "string",
+          "title": "offchain"
         },
         "amount": {
           "type": "string",
@@ -970,10 +974,10 @@
       "type": "object",
       "properties": {
         "outpoint": {
-          "$ref": "#/definitions/v1Input"
+          "$ref": "#/definitions/v1Outpoint"
         },
-        "receiver": {
-          "$ref": "#/definitions/v1Output"
+        "descriptor": {
+          "type": "string"
         },
         "spent": {
           "type": "boolean"
@@ -996,18 +1000,10 @@
         },
         "pendingData": {
           "$ref": "#/definitions/v1PendingPayment"
-        }
-      }
-    },
-    "v1VtxoInput": {
-      "type": "object",
-      "properties": {
-        "txid": {
-          "type": "string"
         },
-        "vout": {
-          "type": "integer",
-          "format": "int64"
+        "amount": {
+          "type": "string",
+          "format": "uint64"
         }
       }
     }

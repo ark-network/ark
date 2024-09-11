@@ -1,7 +1,6 @@
 package bitcointree
 
 import (
-	"encoding/hex"
 	"fmt"
 
 	"github.com/ark-network/ark/common/tree"
@@ -17,7 +16,7 @@ import (
 // CraftSharedOutput returns the taproot script and the amount of the initial root output
 func CraftSharedOutput(
 	cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, receivers []Receiver,
-	feeSatsPerNode uint64, roundLifetime, unilateralExitDelay int64,
+	feeSatsPerNode uint64, roundLifetime int64,
 ) ([]byte, int64, error) {
 	aggregatedKey, _, err := createAggregatedKeyWithSweep(
 		cosigners, aspPubkey, roundLifetime,
@@ -26,7 +25,7 @@ func CraftSharedOutput(
 		return nil, 0, err
 	}
 
-	root, err := createRootNode(aggregatedKey, cosigners, aspPubkey, receivers, feeSatsPerNode, unilateralExitDelay)
+	root, err := createRootNode(aggregatedKey, cosigners, receivers, feeSatsPerNode)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -44,7 +43,7 @@ func CraftSharedOutput(
 // CraftCongestionTree creates all the tree's transactions
 func CraftCongestionTree(
 	initialInput *wire.OutPoint, cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, receivers []Receiver,
-	feeSatsPerNode uint64, roundLifetime, unilateralExitDelay int64,
+	feeSatsPerNode uint64, roundLifetime int64,
 ) (tree.CongestionTree, error) {
 	aggregatedKey, sweepTapLeaf, err := createAggregatedKeyWithSweep(
 		cosigners, aspPubkey, roundLifetime,
@@ -53,7 +52,7 @@ func CraftCongestionTree(
 		return nil, err
 	}
 
-	root, err := createRootNode(aggregatedKey, cosigners, aspPubkey, receivers, feeSatsPerNode, unilateralExitDelay)
+	root, err := createRootNode(aggregatedKey, cosigners, receivers, feeSatsPerNode)
 	if err != nil {
 		return nil, err
 	}
@@ -109,10 +108,8 @@ type node interface {
 }
 
 type leaf struct {
-	aspKey    *secp256k1.PublicKey
-	vtxoKey   *secp256k1.PublicKey
-	exitDelay int64
-	amount    int64
+	vtxoScript VtxoScript
+	amount     int64
 }
 
 type branch struct {
@@ -145,35 +142,10 @@ func (l *leaf) getAmount() int64 {
 }
 
 func (l *leaf) getOutputs() ([]*wire.TxOut, error) {
-	redeemClosure := &CSVSigClosure{
-		Pubkey:  l.vtxoKey,
-		Seconds: uint(l.exitDelay),
-	}
-
-	redeemLeaf, err := redeemClosure.Leaf()
+	taprootKey, _, err := l.vtxoScript.TapTree()
 	if err != nil {
 		return nil, err
 	}
-
-	forfeitClosure := &MultisigClosure{
-		Pubkey:    l.vtxoKey,
-		AspPubkey: l.aspKey,
-	}
-
-	forfeitLeaf, err := forfeitClosure.Leaf()
-	if err != nil {
-		return nil, err
-	}
-
-	leafTaprootTree := txscript.AssembleTaprootScriptTree(
-		*redeemLeaf, *forfeitLeaf,
-	)
-	root := leafTaprootTree.RootNode.TapHash()
-
-	taprootKey := txscript.ComputeTaprootOutputKey(
-		UnspendableKey(),
-		root[:],
-	)
 
 	script, err := taprootOutputScript(taprootKey)
 	if err != nil {
@@ -272,9 +244,10 @@ func getTx(
 }
 
 func createRootNode(
-	aggregatedKey *musig2.AggregateKey, cosigners []*secp256k1.PublicKey,
-	aspPubkey *secp256k1.PublicKey, receivers []Receiver,
-	feeSatsPerNode uint64, unilateralExitDelay int64,
+	aggregatedKey *musig2.AggregateKey,
+	cosigners []*secp256k1.PublicKey,
+	receivers []Receiver,
+	feeSatsPerNode uint64,
 ) (root node, err error) {
 	if len(receivers) == 0 {
 		return nil, fmt.Errorf("no receivers provided")
@@ -282,21 +255,9 @@ func createRootNode(
 
 	nodes := make([]node, 0, len(receivers))
 	for _, r := range receivers {
-		pubkeyBytes, err := hex.DecodeString(r.Pubkey)
-		if err != nil {
-			return nil, err
-		}
-
-		receiverKey, err := secp256k1.ParsePubKey(pubkeyBytes)
-		if err != nil {
-			return nil, err
-		}
-
 		leafNode := &leaf{
-			aspKey:    aspPubkey,
-			vtxoKey:   receiverKey,
-			exitDelay: unilateralExitDelay,
-			amount:    int64(r.Amount),
+			vtxoScript: r.Script,
+			amount:     int64(r.Amount),
 		}
 		nodes = append(nodes, leafNode)
 	}

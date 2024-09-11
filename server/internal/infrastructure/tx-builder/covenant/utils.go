@@ -7,7 +7,6 @@ import (
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
-	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/address"
@@ -67,8 +66,13 @@ func getOffchainReceivers(
 	for _, payment := range payments {
 		for _, receiver := range payment.Receivers {
 			if !receiver.IsOnchain() {
+				vtxoScript, err := tree.ParseVtxoScript(receiver.Descriptor)
+				if err != nil {
+					continue
+				}
+
 				receivers = append(receivers, tree.Receiver{
-					Pubkey: receiver.Pubkey,
+					Script: vtxoScript,
 					Amount: receiver.Amount,
 				})
 			}
@@ -134,10 +138,6 @@ func addInputs(
 	}
 
 	return nil
-}
-
-func p2trScript(taprootKey *secp256k1.PublicKey) ([]byte, error) {
-	return txscript.NewScriptBuilder().AddOp(txscript.OP_1).AddData(schnorr.SerializePubKey(taprootKey)).Script()
 }
 
 func isOnchainOnly(payments []domain.Payment) bool {
