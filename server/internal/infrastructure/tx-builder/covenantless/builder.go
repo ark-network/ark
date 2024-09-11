@@ -525,7 +525,7 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 
 		unconditionalForfeitTxs = append(unconditionalForfeitTxs, forfeitTx)
 		ins = append(ins, vtxoOutpoint)
-		redeemTxWeightEstimator.AddTapscriptInput(64, tapscript)
+		redeemTxWeightEstimator.AddTapscriptInput(64*2, tapscript)
 	}
 
 	for range receivers {
