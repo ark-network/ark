@@ -645,6 +645,10 @@ func (a *covenantlessArkClient) GetTransactionHistory(ctx context.Context) ([]Tr
 		return nil, err
 	}
 
+	log.Infof("ccccccccccc")
+	xxx, _ := a.getClaimableBoardingUtxos(ctx)
+	log.Infof("xxx %v", xxx)
+
 	return vtxosToTxsCovenantless(config.RoundLifetime, spendableVtxos, spentVtxos)
 }
 
