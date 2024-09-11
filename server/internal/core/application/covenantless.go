@@ -1102,7 +1102,7 @@ func (s *covenantlessService) listenToScannerNotifications() {
 					if err := s.repoManager.Vtxos().RedeemVtxos(
 						ctx, []domain.VtxoKey{vtxo.VtxoKey},
 					); err != nil {
-						log.WithError(err).Warn("failed to redeem vtxos, retrying...")
+						log.WithError(err).Warn("failed to redeem vtxos, skipping...")
 						continue
 					}
 					log.Debugf("vtxo %s:%d redeemed", vtxo.Txid, vtxo.VOut)
