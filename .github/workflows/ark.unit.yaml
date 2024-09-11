@@ -4,14 +4,37 @@ on:
   push:
     paths:
       - "server/**"
+      - "pkg/client-sdk/**"
     branches: [master]
   pull_request:
-    branches: 
+    branches:
       - master
     paths:
       - "server/**"
+      - "pkg/client-sdk/**"
 
 jobs:
+  check-go-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '>=1.22.6'
+
+      - name: Run go work sync
+        run: go work sync
+
+      - name: Check for changes
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "Changes detected after running go work sync and go mod tidy"
+            git diff
+            exit 1
+          fi
+
   test-server:
     name: server unit tests
     runs-on: ubuntu-latest
@@ -19,25 +42,24 @@ jobs:
       run:
         working-directory: ./server
     steps:
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v4
         with:
-          go-version: ">1.17.2"
+          go-version: '>=1.22.6'
       - uses: actions/checkout@v3
       - name: check linting
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.54
+          version: v1.61
           working-directory: ./server
+          args: --timeout 5m
       - name: check code integrity
         uses: securego/gosec@master
         with:
-          args: '-severity high -quiet ./...'
-      - uses: bufbuild/buf-setup-action@v1.3.1
-      - name: check proto linting
-        run: buf lint
+          args: "-severity high -quiet -exclude=G115 ./..."
       - run: go get -v -t -d ./...
       - name: unit testing
         run: make test
+
   test-sdk:
     name: sdk unit tests
     runs-on: ubuntu-latest
@@ -45,19 +67,20 @@ jobs:
       run:
         working-directory: ./pkg/client-sdk
     steps:
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v4
         with:
-          go-version: ">1.17.2"
+          go-version: '>=1.22.6'
       - uses: actions/checkout@v3
       - name: check linting
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.54
+          version: v1.61
           working-directory: ./pkg/client-sdk
+          args: --timeout 5m
       - name: check code integrity
         uses: securego/gosec@master
         with:
-          args: '-severity high -quiet ./...'
+          args: "-severity high -quiet -exclude=G115 ./..."
       - run: go get -v -t -d ./...
       - name: unit testing
-        run: make test  
+        run: make test

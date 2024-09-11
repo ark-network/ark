@@ -2,12 +2,13 @@ package arksdk
 
 import (
 	"fmt"
+	"time"
 
-	grpcclient "github.com/ark-network/ark-sdk/client/grpc"
-	restclient "github.com/ark-network/ark-sdk/client/rest"
-	"github.com/ark-network/ark-sdk/internal/utils"
-	"github.com/ark-network/ark-sdk/wallet"
 	"github.com/ark-network/ark/common"
+	grpcclient "github.com/ark-network/ark/pkg/client-sdk/client/grpc"
+	restclient "github.com/ark-network/ark/pkg/client-sdk/client/rest"
+	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
+	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 )
 
 var (
@@ -25,6 +26,7 @@ var (
 		common.Bitcoin.Name:        "https://blockstream.info/api",
 		common.BitcoinTestNet.Name: "https://blockstream.info/testnet/api",
 		common.BitcoinRegTest.Name: "http://localhost:3000",
+		common.BitcoinSigNet.Name:  "https://mutinynet.com/api",
 	}
 )
 
@@ -127,4 +129,21 @@ type balanceRes struct {
 	onchainLockedBalance        map[int64]uint64
 	offchainBalanceByExpiration map[int64]uint64
 	err                         error
+}
+
+const (
+	TxSent     TxType = "sent"
+	TxReceived TxType = "received"
+)
+
+type TxType string
+
+type Transaction struct {
+	RoundTxid  string
+	RedeemTxid string
+	Amount     uint64
+	Type       TxType
+	Pending    bool
+	Claimed    bool
+	CreatedAt  time.Time
 }

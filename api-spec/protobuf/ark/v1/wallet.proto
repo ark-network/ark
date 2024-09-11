@@ -1,0 +1,107 @@
+syntax = "proto3";
+
+package ark.v1;
+
+import "google/api/annotations.proto";
+
+service WalletInitializerService {
+  rpc GenSeed(GenSeedRequest) returns (GenSeedResponse) {
+    option (google.api.http) = {
+      get: "/v1/admin/wallet/seed"
+    };
+  }
+  rpc Create(CreateRequest) returns (CreateResponse) {
+    option (google.api.http) = {
+      post: "/v1/admin/wallet/create"
+      body: "*"
+    };
+  }
+  rpc Restore(RestoreRequest) returns (RestoreResponse) {
+    option (google.api.http) = {
+      post: "/v1/admin/wallet/restore"
+      body: "*"
+    };
+  }
+  rpc Unlock(UnlockRequest) returns (UnlockResponse) {
+    option (google.api.http) = {
+      post: "/v1/admin/wallet/unlock"
+      body: "*"
+    };
+  }
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {
+    option (google.api.http) = {
+      get: "/v1/admin/wallet/status"
+    }; 
+  }
+}
+
+service WalletService {
+  rpc Lock(LockRequest) returns (LockResponse) {
+    option (google.api.http) = {
+      post: "/v1/admin/wallet/lock"
+      body: "*"
+    };
+  }
+  rpc DeriveAddress(DeriveAddressRequest) returns (DeriveAddressResponse) {
+    option (google.api.http) = {
+      get: "/v1/admin/wallet/address"
+    };
+  }
+  rpc GetBalance(GetBalanceRequest) returns (GetBalanceResponse) {
+    option (google.api.http) = {
+      get: "/v1/admin/wallet/balance"
+    };
+  }
+}
+
+message GenSeedRequest {}
+message GenSeedResponse {
+  string seed = 1;
+}
+
+message CreateRequest {
+  string seed = 1;
+  string password = 2;
+}
+message CreateResponse {}
+
+message RestoreRequest {
+  string seed = 1;
+  string password = 2;
+  uint64 gap_limit = 3;
+}
+message RestoreResponse {}
+
+message UnlockRequest {
+  string password = 1;
+}
+message UnlockResponse {}
+
+message LockRequest {
+  string password = 1;
+}
+message LockResponse {}
+
+message GetStatusRequest {}
+message GetStatusResponse {
+  bool initialized = 1;
+  bool unlocked = 2;
+  bool synced = 3;
+}
+
+message DeriveAddressRequest {}
+message DeriveAddressResponse {
+  string address = 1;
+}
+
+message GetBalanceRequest {}
+
+message Balance {
+  string locked = 1;
+  string available = 2;
+}
+
+message GetBalanceResponse {
+  Balance main_account = 1;
+  Balance connectors_account = 2;
+}

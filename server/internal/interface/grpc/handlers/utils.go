@@ -6,28 +6,43 @@ import (
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/internal/core/domain"
+	"github.com/ark-network/ark/server/internal/core/application"
+	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
-
-func parseTxs(txs []string) ([]string, error) {
-	if len(txs) <= 0 {
-		return nil, fmt.Errorf("missing list of forfeit txs")
-	}
-	// TODO abstract this ?
-	// for _, tx := range txs {
-	// 	if _, err := psetv2.NewPsetFromBase64(tx); err != nil {
-	// 		return nil, fmt.Errorf("invalid tx format")
-	// 	}
-	// }
-	return txs, nil
-}
 
 func parseAddress(addr string) (string, *secp256k1.PublicKey, *secp256k1.PublicKey, error) {
 	if len(addr) <= 0 {
 		return "", nil, nil, fmt.Errorf("missing address")
 	}
 	return common.DecodeAddress(addr)
+}
+
+func parseInputs(ins []*arkv1.Input) ([]application.Input, error) {
+	if len(ins) <= 0 {
+		return nil, fmt.Errorf("missing inputs")
+	}
+
+	inputs := make([]application.Input, 0, len(ins))
+	for _, input := range ins {
+		if input.GetBoardingInput() != nil {
+			desc := input.GetBoardingInput().GetDescriptor_()
+			inputs = append(inputs, application.Input{
+				Txid:       input.GetBoardingInput().GetTxid(),
+				Index:      input.GetBoardingInput().GetVout(),
+				Descriptor: desc,
+			})
+
+			continue
+		}
+
+		inputs = append(inputs, application.Input{
+			Txid:  input.GetVtxoInput().GetTxid(),
+			Index: input.GetVtxoInput().GetVout(),
+		})
+	}
+
+	return inputs, nil
 }
 
 func parseReceivers(outs []*arkv1.Output) ([]domain.Receiver, error) {

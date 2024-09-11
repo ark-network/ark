@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common/tree"
-	"github.com/ark-network/ark/internal/core/domain"
-	"github.com/ark-network/ark/internal/core/ports"
-	"github.com/ark-network/ark/internal/infrastructure/db"
+	"github.com/ark-network/ark/server/internal/core/domain"
+	"github.com/ark-network/ark/server/internal/core/ports"
+	"github.com/ark-network/ark/server/internal/infrastructure/db"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -111,6 +111,7 @@ func TestService(t *testing.T) {
 			testRoundRepository(t, svc)
 			testVtxoRepository(t, svc)
 
+			time.Sleep(5 * time.Second)
 			svc.Close()
 		})
 	}

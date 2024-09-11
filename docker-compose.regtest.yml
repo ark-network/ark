@@ -12,8 +12,12 @@ services:
       - OCEAN_NETWORK=regtest
       - OCEAN_UTXO_EXPIRY_DURATION_IN_SECONDS=60
       - OCEAN_DB_TYPE=badger
+      - OCEAN_DATADIR=/app/data
     ports:
       - "18000:18000"
+    volumes:
+      - type: tmpfs
+        target: /app/data
   arkd:
     container_name: arkd
     build: 
@@ -30,18 +34,15 @@ services:
       - ARK_ROUND_LIFETIME=512
       - ARK_DB_TYPE=sqlite
       - ARK_TX_BUILDER_TYPE=covenant
+      - ARK_PORT=6060
+      - ARK_NO_TLS=true
+      - ARK_NO_MACAROONS=true
+      - ARK_DATADIR=/app/data
     ports:
-      - "8080:6000"
-
-volumes:
-  oceand:
-    external: false
-  ocean:
-    external: false
-  arkd:
-    external: false
-  ark:
-    external: false
+      - "6060:6060"
+    volumes:
+      - type: tmpfs
+        target: /app/data
 
 networks:
   default:

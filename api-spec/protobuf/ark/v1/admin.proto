@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package ark.v1;
+
+import "google/api/annotations.proto";
+
+service AdminService {
+  rpc GetScheduledSweep(GetScheduledSweepRequest) returns (GetScheduledSweepResponse) {
+    option (google.api.http) = {
+      get: "/v1/admin/sweeps"
+    };
+  }
+  rpc GetRoundDetails(GetRoundDetailsRequest) returns (GetRoundDetailsResponse) {
+    option (google.api.http) = {
+      get: "/v1/admin/round/{round_id}"
+    };
+  }
+  rpc GetRounds(GetRoundsRequest) returns (GetRoundsResponse) {
+    option (google.api.http) = {
+      post: "/v1/admin/rounds"
+      body: "*"
+    };
+  } 
+}
+
+message GetScheduledSweepRequest {}
+message GetScheduledSweepResponse {
+  repeated ScheduledSweep sweeps = 1;
+}
+
+message SweepableOutput {
+  string txid = 1;
+  uint32 vout = 2;
+  string amount = 3;
+  int64 scheduled_at = 4;
+}
+
+message ScheduledSweep {
+  string round_id = 1;
+  repeated SweepableOutput outputs = 2;
+}
+
+message GetRoundDetailsRequest {
+  string round_id = 1;
+}
+
+message GetRoundDetailsResponse {
+  string round_id = 1;
+  string txid = 2;
+  string forfeited_amount = 3;
+  string total_vtxos_amount = 4;
+  string total_exit_amount = 5;
+  string fees_amount = 6;
+  repeated string inputs_vtxos = 7;
+  repeated string outputs_vtxos = 8;
+  repeated string exit_addresses = 9;
+}
+
+message GetRoundsRequest {
+  int64 after = 1;
+  int64 before = 2;
+}
+
+message GetRoundsResponse {
+  repeated string rounds = 1;
+}

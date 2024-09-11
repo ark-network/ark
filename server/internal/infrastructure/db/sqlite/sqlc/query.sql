@@ -111,33 +111,61 @@ SELECT id FROM round WHERE starting_timestamp > ? AND starting_timestamp < ?;
 -- name: SelectRoundIds :many
 SELECT id FROM round;
 
+-- name: UpsertUnconditionalForfeitTx :exec
+INSERT INTO uncond_forfeit_tx (tx, vtxo_txid, vtxo_vout, position)
+VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET
+    tx = EXCLUDED.tx,
+    vtxo_txid = EXCLUDED.vtxo_txid,
+    vtxo_vout = EXCLUDED.vtxo_vout,
+    position = EXCLUDED.position;
+
 -- name: UpsertVtxo :exec
-INSERT INTO vtxo (txid, vout, pubkey, amount, pool_tx, spent_by, spent, redeemed, swept, expire_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(txid) DO UPDATE SET
-    vout = excluded.vout,
-    pubkey = excluded.pubkey,
-    amount = excluded.amount,
-    pool_tx = excluded.pool_tx,
-    spent_by = excluded.spent_by,
-    spent = excluded.spent,
-    redeemed = excluded.redeemed,
-    swept = excluded.swept,
-    expire_at = excluded.expire_at;
+INSERT INTO vtxo (txid, vout, pubkey, amount, pool_tx, spent_by, spent, redeemed, swept, expire_at, redeem_tx)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(txid, vout) DO UPDATE SET
+    pubkey = EXCLUDED.pubkey,
+    amount = EXCLUDED.amount,
+    pool_tx = EXCLUDED.pool_tx,
+    spent_by = EXCLUDED.spent_by,
+    spent = EXCLUDED.spent,
+    redeemed = EXCLUDED.redeemed,
+    swept = EXCLUDED.swept,
+    expire_at = EXCLUDED.expire_at,
+    redeem_tx = EXCLUDED.redeem_tx;
 
 -- name: SelectSweepableVtxos :many
-SELECT * FROM vtxo WHERE redeemed = false AND swept = false;
+SELECT  sqlc.embed(vtxo),
+        sqlc.embed(uncond_forfeit_tx_vw)
+FROM vtxo
+        LEFT OUTER JOIN uncond_forfeit_tx_vw ON vtxo.txid=uncond_forfeit_tx_vw.vtxo_txid AND vtxo.vout=uncond_forfeit_tx_vw.vtxo_vout
+WHERE redeemed = false AND swept = false;
 
 -- name: SelectNotRedeemedVtxos :many
-SELECT * FROM vtxo WHERE redeemed = false;
+SELECT  sqlc.embed(vtxo),
+        sqlc.embed(uncond_forfeit_tx_vw)
+FROM vtxo
+        LEFT OUTER JOIN uncond_forfeit_tx_vw ON vtxo.txid=uncond_forfeit_tx_vw.vtxo_txid AND vtxo.vout=uncond_forfeit_tx_vw.vtxo_vout
+WHERE redeemed = false;
 
 -- name: SelectNotRedeemedVtxosWithPubkey :many
-SELECT * FROM vtxo WHERE redeemed = false AND pubkey = ?;
+SELECT  sqlc.embed(vtxo),
+        sqlc.embed(uncond_forfeit_tx_vw)
+FROM vtxo
+        LEFT OUTER JOIN uncond_forfeit_tx_vw ON vtxo.txid=uncond_forfeit_tx_vw.vtxo_txid AND vtxo.vout=uncond_forfeit_tx_vw.vtxo_vout
+WHERE redeemed = false AND pubkey = ?;
 
 -- name: SelectVtxoByOutpoint :one
-SELECT * FROM vtxo WHERE txid = ? AND vout = ?;
+SELECT  sqlc.embed(vtxo),
+        sqlc.embed(uncond_forfeit_tx_vw)
+FROM vtxo
+        LEFT OUTER JOIN uncond_forfeit_tx_vw ON vtxo.txid=uncond_forfeit_tx_vw.vtxo_txid AND vtxo.vout=uncond_forfeit_tx_vw.vtxo_vout
+WHERE txid = ? AND vout = ?;
 
 -- name: SelectVtxosByPoolTxid :many
-SELECT * FROM vtxo WHERE pool_tx = ?;
+SELECT  sqlc.embed(vtxo),
+        sqlc.embed(uncond_forfeit_tx_vw)
+FROM vtxo
+        LEFT OUTER JOIN uncond_forfeit_tx_vw ON vtxo.txid=uncond_forfeit_tx_vw.vtxo_txid AND vtxo.vout=uncond_forfeit_tx_vw.vtxo_vout
+WHERE pool_tx = ?;
 
 -- name: MarkVtxoAsRedeemed :exec
 UPDATE vtxo SET redeemed = true WHERE txid = ? AND vout = ?;

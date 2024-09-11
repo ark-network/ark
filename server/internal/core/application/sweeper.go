@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common/tree"
-	"github.com/ark-network/ark/internal/core/domain"
-	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/ark-network/ark/server/internal/core/domain"
+	"github.com/ark-network/ark/server/internal/core/ports"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -149,7 +149,6 @@ func (s *sweeper) createTask(
 			for _, input := range inputs {
 				// sweepableVtxos related to the sweep input
 				sweepableVtxos := make([]domain.VtxoKey, 0)
-				fmt.Println("input", input.GetHash().String(), input.GetIndex())
 
 				// check if input is the vtxo itself
 				vtxos, _ := s.repoManager.Vtxos().GetVtxos(

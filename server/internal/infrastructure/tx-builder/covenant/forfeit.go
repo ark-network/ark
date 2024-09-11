@@ -1,16 +1,20 @@
 package txbuilder
 
 import (
+	"context"
+
 	"github.com/ark-network/ark/common/tree"
-	"github.com/ark-network/ark/internal/core/domain"
+	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcwallet/waddrmgr"
+	"github.com/lightningnetwork/lnd/input"
 	"github.com/vulpemventures/go-elements/elementsutil"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/taproot"
 	"github.com/vulpemventures/go-elements/transaction"
 )
 
-func craftForfeitTxs(
+func (b *txBuilder) craftForfeitTxs(
 	connectorTx *psetv2.Pset,
 	vtxo domain.Vtxo,
 	vtxoForfeitTapleaf taproot.TapscriptElementsProof,
@@ -19,6 +23,8 @@ func craftForfeitTxs(
 	connectors, prevouts := getConnectorInputs(connectorTx)
 
 	for i, connectorInput := range connectors {
+		weightEstimator := &input.TxWeightEstimator{}
+
 		connectorPrevout := prevouts[i]
 		asset := elementsutil.AssetHashFromBytes(connectorPrevout.Asset)
 
@@ -51,6 +57,8 @@ func craftForfeitTxs(
 			return nil, err
 		}
 
+		weightEstimator.AddP2WKHInput()
+
 		vtxoPrevout := transaction.NewTxOutput(connectorPrevout.Asset, vtxoAmount, vtxoScript)
 
 		if err = updater.AddInWitnessUtxo(1, vtxoPrevout); err != nil {
@@ -68,7 +76,20 @@ func craftForfeitTxs(
 			return nil, err
 		}
 
+		weightEstimator.AddTapscriptInput(64*2, &waddrmgr.Tapscript{
+			ControlBlock:   &tapScript.ControlBlock.ControlBlock,
+			RevealedScript: tapScript.TapLeaf.Script,
+		})
+
 		connectorAmount, err := elementsutil.ValueFromBytes(connectorPrevout.Value)
+		if err != nil {
+			return nil, err
+		}
+
+		weightEstimator.AddP2WKHOutput()
+		weightEstimator.AddP2WKHOutput()
+
+		feeAmount, err := b.wallet.MinRelayFee(context.Background(), uint64(weightEstimator.VSize()))
 		if err != nil {
 			return nil, err
 		}
@@ -76,12 +97,12 @@ func craftForfeitTxs(
 		err = updater.AddOutputs([]psetv2.OutputArgs{
 			{
 				Asset:  asset,
-				Amount: vtxo.Amount + connectorAmount - 30,
+				Amount: vtxo.Amount + connectorAmount - feeAmount,
 				Script: aspScript,
 			},
 			{
 				Asset:  asset,
-				Amount: 30,
+				Amount: feeAmount,
 			},
 		})
 		if err != nil {

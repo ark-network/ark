@@ -11,7 +11,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func (s *service) signPsbt(packet *psbt.Packet) ([]uint32, error) {
+func (s *service) signPsbt(packet *psbt.Packet, inputsToSign []int) ([]uint32, error) {
 	// iterates over the inputs and set the default sighash flags
 	updater, err := psbt.NewUpdater(packet)
 	if err != nil {
@@ -54,6 +54,19 @@ func (s *service) signPsbt(packet *psbt.Packet) ([]uint32, error) {
 			continue
 		}
 
+		if len(inputsToSign) > 0 {
+			found := false
+			for _, i := range inputsToSign {
+				if i == idx {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+		}
+
 		var managedAddress waddrmgr.ManagedPubKeyAddress
 		var isTaproot bool
 
@@ -93,6 +106,7 @@ func (s *service) signPsbt(packet *psbt.Packet) ([]uint32, error) {
 		}
 	}
 
+	// TODO (@louisinger): shall we delete this code?
 	// prevOutputFetcher := wallet.PsbtPrevOutputFetcher(packet)
 	// sigHashes := txscript.NewTxSigHashes(tx, prevOutputFetcher)
 
@@ -109,8 +123,6 @@ func (s *service) signPsbt(packet *psbt.Packet) ([]uint32, error) {
 	// if err != nil {
 	// 	return nil, err
 	// }
-
-	// fmt.Println("PREIMAGE", hex.EncodeToString(preimage))
 
 	return s.wallet.SignPsbt(packet)
 }

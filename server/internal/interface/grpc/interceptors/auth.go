@@ -2,41 +2,70 @@ package interceptors
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
-	"strings"
 
-	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
-	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/auth"
+	"github.com/ark-network/ark/server/internal/interface/grpc/permissions"
+	"github.com/ark-network/ark/server/pkg/macaroons"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
-func unaryAuthenticator(user, pass string) grpc.UnaryServerInterceptor {
-	adminToken := fmt.Sprintf("%s:%s", user, pass)
-	adminTokenEncoded := base64.StdEncoding.EncodeToString([]byte(adminToken))
-
+func unaryMacaroonAuthHandler(
+	macaroonSvc *macaroons.Service,
+) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
 		req interface{},
 		info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
 	) (interface{}, error) {
-		// whitelist the ArkService
-		if strings.Contains(info.FullMethod, arkv1.ArkService_ServiceDesc.ServiceName) {
-			return handler(ctx, req)
-		}
-
-		token, err := grpc_auth.AuthFromMD(ctx, "basic")
-		if err != nil {
-			return nil, status.Errorf(codes.Unauthenticated, "no basic header found: %v", err)
-		}
-
-		if token != adminTokenEncoded {
-			return nil, status.Errorf(codes.Unauthenticated, "invalid auth credentials: %v", err)
+		if err := checkMacaroon(ctx, info.FullMethod, macaroonSvc); err != nil {
+			return nil, err
 		}
 
 		return handler(ctx, req)
 	}
+}
+
+func streamMacaroonAuthHandler(
+	macaroonSvc *macaroons.Service,
+) grpc.StreamServerInterceptor {
+	return func(
+		srv interface{},
+		ss grpc.ServerStream,
+		info *grpc.StreamServerInfo,
+		handler grpc.StreamHandler,
+	) error {
+		if err := checkMacaroon(ss.Context(), info.FullMethod, macaroonSvc); err != nil {
+			return err
+		}
+
+		return handler(srv, ss)
+	}
+}
+
+func checkMacaroon(
+	ctx context.Context, fullMethod string, svc *macaroons.Service,
+) error {
+	if svc == nil {
+		return nil
+	}
+	// Check whether the method is whitelisted, if so we'll allow it regardless
+	// of macaroons.
+	if _, ok := permissions.Whitelist()[fullMethod]; ok {
+		return nil
+	}
+
+	uriPermissions, ok := permissions.AllPermissionsByMethod()[fullMethod]
+	if !ok {
+		return fmt.Errorf("%s: unknown permissions required for method", fullMethod)
+	}
+
+	// Find out if there is an external validator registered for
+	// this method. Fall back to the internal one if there isn't.
+	validator, ok := svc.ExternalValidators[fullMethod]
+	if !ok {
+		validator = svc
+	}
+	// Now that we know what validator to use, let it do its work.
+	return validator.ValidateMacaroon(ctx, uriPermissions, fullMethod)
 }

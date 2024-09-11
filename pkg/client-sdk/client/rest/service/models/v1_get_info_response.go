@@ -17,8 +17,11 @@ import (
 // swagger:model v1GetInfoResponse
 type V1GetInfoResponse struct {
 
-	// min relay fee
-	MinRelayFee string `json:"minRelayFee,omitempty"`
+	// boarding descriptor template
+	BoardingDescriptorTemplate string `json:"boardingDescriptorTemplate,omitempty"`
+
+	// dust
+	Dust string `json:"dust,omitempty"`
 
 	// network
 	Network string `json:"network,omitempty"`

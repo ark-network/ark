@@ -56,7 +56,13 @@ type ClientOption func(*runtime.ClientOperation)
 type ClientService interface {
 	ArkServiceClaimPayment(params *ArkServiceClaimPaymentParams, opts ...ClientOption) (*ArkServiceClaimPaymentOK, error)
 
+	ArkServiceCompletePayment(params *ArkServiceCompletePaymentParams, opts ...ClientOption) (*ArkServiceCompletePaymentOK, error)
+
+	ArkServiceCreatePayment(params *ArkServiceCreatePaymentParams, opts ...ClientOption) (*ArkServiceCreatePaymentOK, error)
+
 	ArkServiceFinalizePayment(params *ArkServiceFinalizePaymentParams, opts ...ClientOption) (*ArkServiceFinalizePaymentOK, error)
+
+	ArkServiceGetBoardingAddress(params *ArkServiceGetBoardingAddressParams, opts ...ClientOption) (*ArkServiceGetBoardingAddressOK, error)
 
 	ArkServiceGetEventStream(params *ArkServiceGetEventStreamParams, opts ...ClientOption) (*ArkServiceGetEventStreamOK, error)
 
@@ -68,13 +74,13 @@ type ClientService interface {
 
 	ArkServiceListVtxos(params *ArkServiceListVtxosParams, opts ...ClientOption) (*ArkServiceListVtxosOK, error)
 
-	ArkServiceOnboard(params *ArkServiceOnboardParams, opts ...ClientOption) (*ArkServiceOnboardOK, error)
-
 	ArkServicePing(params *ArkServicePingParams, opts ...ClientOption) (*ArkServicePingOK, error)
 
 	ArkServiceRegisterPayment(params *ArkServiceRegisterPaymentParams, opts ...ClientOption) (*ArkServiceRegisterPaymentOK, error)
 
-	ArkServiceTrustedOnboarding(params *ArkServiceTrustedOnboardingParams, opts ...ClientOption) (*ArkServiceTrustedOnboardingOK, error)
+	ArkServiceSendTreeNonces(params *ArkServiceSendTreeNoncesParams, opts ...ClientOption) (*ArkServiceSendTreeNoncesOK, error)
+
+	ArkServiceSendTreeSignatures(params *ArkServiceSendTreeSignaturesParams, opts ...ClientOption) (*ArkServiceSendTreeSignaturesOK, error)
 
 	SetTransport(transport runtime.ClientTransport)
 }
@@ -117,6 +123,80 @@ func (a *Client) ArkServiceClaimPayment(params *ArkServiceClaimPaymentParams, op
 }
 
 /*
+ArkServiceCompletePayment ark service complete payment API
+*/
+func (a *Client) ArkServiceCompletePayment(params *ArkServiceCompletePaymentParams, opts ...ClientOption) (*ArkServiceCompletePaymentOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewArkServiceCompletePaymentParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "ArkService_CompletePayment",
+		Method:             "POST",
+		PathPattern:        "/v1/payment/complete",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &ArkServiceCompletePaymentReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*ArkServiceCompletePaymentOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*ArkServiceCompletePaymentDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+ArkServiceCreatePayment ark service create payment API
+*/
+func (a *Client) ArkServiceCreatePayment(params *ArkServiceCreatePaymentParams, opts ...ClientOption) (*ArkServiceCreatePaymentOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewArkServiceCreatePaymentParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "ArkService_CreatePayment",
+		Method:             "POST",
+		PathPattern:        "/v1/payment",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &ArkServiceCreatePaymentReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*ArkServiceCreatePaymentOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*ArkServiceCreatePaymentDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
 ArkServiceFinalizePayment ark service finalize payment API
 */
 func (a *Client) ArkServiceFinalizePayment(params *ArkServiceFinalizePaymentParams, opts ...ClientOption) (*ArkServiceFinalizePaymentOK, error) {
@@ -150,6 +230,43 @@ func (a *Client) ArkServiceFinalizePayment(params *ArkServiceFinalizePaymentPara
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*ArkServiceFinalizePaymentDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+ArkServiceGetBoardingAddress ark service get boarding address API
+*/
+func (a *Client) ArkServiceGetBoardingAddress(params *ArkServiceGetBoardingAddressParams, opts ...ClientOption) (*ArkServiceGetBoardingAddressOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewArkServiceGetBoardingAddressParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "ArkService_GetBoardingAddress",
+		Method:             "POST",
+		PathPattern:        "/v1/boarding",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &ArkServiceGetBoardingAddressReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*ArkServiceGetBoardingAddressOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*ArkServiceGetBoardingAddressDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 
@@ -228,7 +345,7 @@ func (a *Client) ArkServiceGetInfo(params *ArkServiceGetInfoParams, opts ...Clie
 }
 
 /*
-ArkServiceGetRound ts o d o b t c sign tree rpc
+ArkServiceGetRound ark service get round API
 */
 func (a *Client) ArkServiceGetRound(params *ArkServiceGetRoundParams, opts ...ClientOption) (*ArkServiceGetRoundOK, error) {
 	// TODO: Validate the params before sending
@@ -339,43 +456,6 @@ func (a *Client) ArkServiceListVtxos(params *ArkServiceListVtxosParams, opts ...
 }
 
 /*
-ArkServiceOnboard ark service onboard API
-*/
-func (a *Client) ArkServiceOnboard(params *ArkServiceOnboardParams, opts ...ClientOption) (*ArkServiceOnboardOK, error) {
-	// TODO: Validate the params before sending
-	if params == nil {
-		params = NewArkServiceOnboardParams()
-	}
-	op := &runtime.ClientOperation{
-		ID:                 "ArkService_Onboard",
-		Method:             "POST",
-		PathPattern:        "/v1/onboard",
-		ProducesMediaTypes: []string{"application/json"},
-		ConsumesMediaTypes: []string{"application/json"},
-		Schemes:            []string{"http"},
-		Params:             params,
-		Reader:             &ArkServiceOnboardReader{formats: a.formats},
-		Context:            params.Context,
-		Client:             params.HTTPClient,
-	}
-	for _, opt := range opts {
-		opt(op)
-	}
-
-	result, err := a.transport.Submit(op)
-	if err != nil {
-		return nil, err
-	}
-	success, ok := result.(*ArkServiceOnboardOK)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*ArkServiceOnboardDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
-}
-
-/*
 ArkServicePing ark service ping API
 */
 func (a *Client) ArkServicePing(params *ArkServicePingParams, opts ...ClientOption) (*ArkServicePingOK, error) {
@@ -450,22 +530,22 @@ func (a *Client) ArkServiceRegisterPayment(params *ArkServiceRegisterPaymentPara
 }
 
 /*
-ArkServiceTrustedOnboarding ark service trusted onboarding API
+ArkServiceSendTreeNonces ark service send tree nonces API
 */
-func (a *Client) ArkServiceTrustedOnboarding(params *ArkServiceTrustedOnboardingParams, opts ...ClientOption) (*ArkServiceTrustedOnboardingOK, error) {
+func (a *Client) ArkServiceSendTreeNonces(params *ArkServiceSendTreeNoncesParams, opts ...ClientOption) (*ArkServiceSendTreeNoncesOK, error) {
 	// TODO: Validate the params before sending
 	if params == nil {
-		params = NewArkServiceTrustedOnboardingParams()
+		params = NewArkServiceSendTreeNoncesParams()
 	}
 	op := &runtime.ClientOperation{
-		ID:                 "ArkService_TrustedOnboarding",
+		ID:                 "ArkService_SendTreeNonces",
 		Method:             "POST",
-		PathPattern:        "/v1/onboard/address",
+		PathPattern:        "/v1/payment/tree/nonces",
 		ProducesMediaTypes: []string{"application/json"},
 		ConsumesMediaTypes: []string{"application/json"},
 		Schemes:            []string{"http"},
 		Params:             params,
-		Reader:             &ArkServiceTrustedOnboardingReader{formats: a.formats},
+		Reader:             &ArkServiceSendTreeNoncesReader{formats: a.formats},
 		Context:            params.Context,
 		Client:             params.HTTPClient,
 	}
@@ -477,12 +557,49 @@ func (a *Client) ArkServiceTrustedOnboarding(params *ArkServiceTrustedOnboarding
 	if err != nil {
 		return nil, err
 	}
-	success, ok := result.(*ArkServiceTrustedOnboardingOK)
+	success, ok := result.(*ArkServiceSendTreeNoncesOK)
 	if ok {
 		return success, nil
 	}
 	// unexpected success response
-	unexpectedSuccess := result.(*ArkServiceTrustedOnboardingDefault)
+	unexpectedSuccess := result.(*ArkServiceSendTreeNoncesDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+ArkServiceSendTreeSignatures ark service send tree signatures API
+*/
+func (a *Client) ArkServiceSendTreeSignatures(params *ArkServiceSendTreeSignaturesParams, opts ...ClientOption) (*ArkServiceSendTreeSignaturesOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewArkServiceSendTreeSignaturesParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "ArkService_SendTreeSignatures",
+		Method:             "POST",
+		PathPattern:        "/v1/payment/tree/signatures",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &ArkServiceSendTreeSignaturesReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*ArkServiceSendTreeSignaturesOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*ArkServiceSendTreeSignaturesDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 

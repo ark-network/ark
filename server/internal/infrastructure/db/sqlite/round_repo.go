@@ -7,8 +7,8 @@ import (
 	"fmt"
 
 	"github.com/ark-network/ark/common/tree"
-	"github.com/ark-network/ark/internal/core/domain"
-	"github.com/ark-network/ark/internal/infrastructure/db/sqlite/sqlc/queries"
+	"github.com/ark-network/ark/server/internal/core/domain"
+	"github.com/ark-network/ark/server/internal/infrastructure/db/sqlite/sqlc/queries"
 )
 
 type roundRepository struct {

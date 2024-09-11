@@ -13,14 +13,15 @@ const (
 )
 
 type StoreData struct {
-	AspUrl              string
-	AspPubkey           *secp256k1.PublicKey
-	WalletType          string
-	ClientType          string
-	Network             common.Network
-	RoundLifetime       int64
-	UnilateralExitDelay int64
-	MinRelayFee         uint64
+	AspUrl                     string
+	AspPubkey                  *secp256k1.PublicKey
+	WalletType                 string
+	ClientType                 string
+	Network                    common.Network
+	RoundLifetime              int64
+	UnilateralExitDelay        int64
+	Dust                       uint64
+	BoardingDescriptorTemplate string
 }
 
 type ConfigStore interface {

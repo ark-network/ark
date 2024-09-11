@@ -20,7 +20,7 @@ type CSVSigClosure struct {
 	Seconds uint
 }
 
-type ForfeitClosure struct {
+type MultisigClosure struct {
 	Pubkey    *secp256k1.PublicKey
 	AspPubkey *secp256k1.PublicKey
 }
@@ -33,7 +33,7 @@ func DecodeClosure(script []byte) (Closure, error) {
 		return closure, nil
 	}
 
-	closure = &ForfeitClosure{}
+	closure = &MultisigClosure{}
 	if valid, err := closure.Decode(script); err == nil && valid {
 		return closure, nil
 	}
@@ -42,7 +42,7 @@ func DecodeClosure(script []byte) (Closure, error) {
 
 }
 
-func (f *ForfeitClosure) Leaf() (*txscript.TapLeaf, error) {
+func (f *MultisigClosure) Leaf() (*txscript.TapLeaf, error) {
 	aspKeyBytes := schnorr.SerializePubKey(f.AspPubkey)
 	userKeyBytes := schnorr.SerializePubKey(f.Pubkey)
 
@@ -57,7 +57,7 @@ func (f *ForfeitClosure) Leaf() (*txscript.TapLeaf, error) {
 	return &tapLeaf, nil
 }
 
-func (f *ForfeitClosure) Decode(script []byte) (bool, error) {
+func (f *MultisigClosure) Decode(script []byte) (bool, error) {
 	valid, aspPubKey, err := decodeChecksigScript(script)
 	if err != nil {
 		return false, err
@@ -139,6 +139,44 @@ func (d *CSVSigClosure) Decode(script []byte) (bool, error) {
 	d.Seconds = seconds
 
 	return valid, nil
+}
+
+func ComputeVtxoTaprootScript(
+	userPubkey, aspPubkey *secp256k1.PublicKey, exitDelay uint,
+) (*secp256k1.PublicKey, *txscript.TapscriptProof, error) {
+	redeemClosure := &CSVSigClosure{
+		Pubkey:  userPubkey,
+		Seconds: exitDelay,
+	}
+
+	forfeitClosure := &MultisigClosure{
+		Pubkey:    userPubkey,
+		AspPubkey: aspPubkey,
+	}
+
+	redeemLeaf, err := redeemClosure.Leaf()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	forfeitLeaf, err := forfeitClosure.Leaf()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	vtxoTaprootTree := txscript.AssembleTaprootScriptTree(
+		*redeemLeaf, *forfeitLeaf,
+	)
+	root := vtxoTaprootTree.RootNode.TapHash()
+
+	unspendableKey := UnspendableKey()
+	vtxoTaprootKey := txscript.ComputeTaprootOutputKey(unspendableKey, root[:])
+
+	redeemLeafHash := redeemLeaf.TapHash()
+	proofIndex := vtxoTaprootTree.LeafProofIndex[redeemLeafHash]
+	proof := vtxoTaprootTree.LeafMerkleProofs[proofIndex]
+
+	return vtxoTaprootKey, &proof, nil
 }
 
 func decodeChecksigScript(script []byte) (bool, *secp256k1.PublicKey, error) {

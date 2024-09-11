@@ -2,12 +2,11 @@ package txbuilder
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
-	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/psbt"
@@ -33,8 +32,6 @@ func sweepTransaction(
 		if err != nil {
 			return nil, err
 		}
-
-		fmt.Println("sweepClosure.Pubkey", hex.EncodeToString(sweepClosure.Pubkey.SerializeCompressed()))
 
 		if !valid {
 			return nil, fmt.Errorf("invalid csv script")

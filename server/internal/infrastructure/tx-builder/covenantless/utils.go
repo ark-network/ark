@@ -2,26 +2,14 @@ package txbuilder
 
 import (
 	"github.com/ark-network/ark/common/bitcointree"
-	"github.com/ark-network/ark/internal/core/domain"
+	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
-	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-func p2wpkhScript(publicKey *secp256k1.PublicKey, net *chaincfg.Params) ([]byte, error) {
-	tapKey := txscript.ComputeTaprootKeyNoScript(publicKey)
-
-	payment, err := btcutil.NewAddressWitnessPubKeyHash(
-		btcutil.Hash160(tapKey.SerializeCompressed()),
-		net,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return txscript.PayToAddrScript(payment)
+func p2trScript(taprootKey *secp256k1.PublicKey) ([]byte, error) {
+	return txscript.NewScriptBuilder().AddOp(txscript.OP_1).AddData(schnorr.SerializePubKey(taprootKey)).Script()
 }
 
 func getOnchainReceivers(

@@ -5,35 +5,20 @@ import (
 	"fmt"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
-	"github.com/ark-network/ark/internal/core/application"
+	"github.com/ark-network/ark/server/internal/core/application"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 type adminHandler struct {
 	adminService application.AdminService
+	aspService   application.Service
 }
 
-func NewAdminHandler(adminService application.AdminService) arkv1.AdminServiceServer {
-	return &adminHandler{adminService}
-}
-
-func (a *adminHandler) GetBalance(ctx context.Context, _ *arkv1.GetBalanceRequest) (*arkv1.GetBalanceResponse, error) {
-	balance, err := a.adminService.GetBalance(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return &arkv1.GetBalanceResponse{
-		MainAccount: &arkv1.Balance{
-			Locked:    convertSatoshis(balance.MainAccountBalance.Locked),
-			Available: convertSatoshis(balance.MainAccountBalance.Available),
-		},
-		ConnectorsAccount: &arkv1.Balance{
-			Locked:    convertSatoshis(balance.ConnectorsAccountBalance.Locked),
-			Available: convertSatoshis(balance.ConnectorsAccountBalance.Available),
-		},
-	}, nil
+func NewAdminHandler(
+	adminService application.AdminService, aspService application.Service,
+) arkv1.AdminServiceServer {
+	return &adminHandler{adminService, aspService}
 }
 
 func (a *adminHandler) GetRoundDetails(ctx context.Context, req *arkv1.GetRoundDetailsRequest) (*arkv1.GetRoundDetailsResponse, error) {
@@ -112,28 +97,6 @@ func (a *adminHandler) GetScheduledSweep(ctx context.Context, _ *arkv1.GetSchedu
 	}
 
 	return &arkv1.GetScheduledSweepResponse{Sweeps: sweeps}, nil
-}
-
-func (a *adminHandler) GetWalletAddress(ctx context.Context, _ *arkv1.GetWalletAddressRequest) (*arkv1.GetWalletAddressResponse, error) {
-	addr, err := a.adminService.GetWalletAddress(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return &arkv1.GetWalletAddressResponse{Address: addr}, nil
-}
-
-func (a *adminHandler) GetWalletStatus(ctx context.Context, _ *arkv1.GetWalletStatusRequest) (*arkv1.GetWalletStatusResponse, error) {
-	status, err := a.adminService.GetWalletStatus(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return &arkv1.GetWalletStatusResponse{
-		Initialized: status.IsInitialized,
-		Unlocked:    status.IsUnlocked,
-		Synced:      status.IsSynced,
-	}, nil
 }
 
 // convert sats to string BTC

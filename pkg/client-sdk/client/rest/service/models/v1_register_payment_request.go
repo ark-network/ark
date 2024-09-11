@@ -19,6 +19,9 @@ import (
 // swagger:model v1RegisterPaymentRequest
 type V1RegisterPaymentRequest struct {
 
+	// ephemeral pubkey
+	EphemeralPubkey string `json:"ephemeralPubkey,omitempty"`
+
 	// inputs
 	Inputs []*V1Input `json:"inputs"`
 }

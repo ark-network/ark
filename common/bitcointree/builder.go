@@ -155,7 +155,7 @@ func (l *leaf) getOutputs() ([]*wire.TxOut, error) {
 		return nil, err
 	}
 
-	forfeitClosure := &ForfeitClosure{
+	forfeitClosure := &MultisigClosure{
 		Pubkey:    l.vtxoKey,
 		AspPubkey: l.aspKey,
 	}

@@ -12,6 +12,11 @@ var ErrNonFinalBIP68 = errors.New("non-final BIP68 sequence")
 
 type WalletService interface {
 	BlockchainScanner
+	GenSeed(ctx context.Context) (string, error)
+	Create(ctx context.Context, seed, password string) error
+	Restore(ctx context.Context, seed, password string) error
+	Unlock(ctx context.Context, password string) error
+	Lock(ctx context.Context, password string) error
 	Status(ctx context.Context) (WalletStatus, error)
 	GetPubkey(ctx context.Context) (*secp256k1.PublicKey, error)
 	DeriveConnectorAddress(ctx context.Context) (string, error)
@@ -23,11 +28,14 @@ type WalletService interface {
 	SelectUtxos(ctx context.Context, asset string, amount uint64) ([]TxInput, uint64, error)
 	BroadcastTransaction(ctx context.Context, txHex string) (string, error)
 	WaitForSync(ctx context.Context, txid string) error
-	EstimateFees(ctx context.Context, pset string) (uint64, error)
+	EstimateFees(ctx context.Context, psbt string) (uint64, error)
+	MinRelayFee(ctx context.Context, vbytes uint64) (uint64, error)
 	ListConnectorUtxos(ctx context.Context, connectorAddress string) ([]TxInput, error)
 	MainAccountBalance(ctx context.Context) (uint64, uint64, error)
 	ConnectorsAccountBalance(ctx context.Context) (uint64, uint64, error)
 	LockConnectorUtxos(ctx context.Context, utxos []TxOutpoint) error
+	GetDustAmount(ctx context.Context) (uint64, error)
+	GetTransaction(ctx context.Context, txid string) (string, error)
 	Close()
 }
 

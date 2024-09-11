@@ -6,7 +6,7 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
-	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/elementsutil"
 	"github.com/vulpemventures/go-elements/psetv2"
@@ -79,7 +79,7 @@ func sweepTransaction(
 
 		root := leaf.ControlBlock.RootHash(leaf.Script)
 		taprootKey := taproot.ComputeTaprootOutputKey(leaf.ControlBlock.InternalKey, root)
-		script, err := taprootOutputScript(taprootKey)
+		script, err := p2trScript(taprootKey)
 		if err != nil {
 			return nil, err
 		}

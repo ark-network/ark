@@ -11,6 +11,7 @@ import (
 )
 
 type Config struct {
+	Datadir               string
 	WalletAddr            string
 	RoundInterval         int64
 	Port                  uint32
@@ -22,16 +23,19 @@ type Config struct {
 	TxBuilderType         string
 	BlockchainScannerType string
 	NoTLS                 bool
+	NoMacaroons           bool
 	Network               common.Network
 	LogLevel              int
-	MinRelayFee           uint64
 	RoundLifetime         int64
 	UnilateralExitDelay   int64
-	AuthUser              string
-	AuthPass              string
+	BoardingExitDelay     int64
 	EsploraURL            string
 	NeutrinoPeer          string
-	WalletPassword        string
+	BitcoindRpcUser       string
+	BitcoindRpcPass       string
+	BitcoindRpcHost       string
+	TLSExtraIPs           []string
+	TLSExtraDomains       []string
 }
 
 var (
@@ -45,21 +49,26 @@ var (
 	SchedulerType         = "SCHEDULER_TYPE"
 	TxBuilderType         = "TX_BUILDER_TYPE"
 	BlockchainScannerType = "BC_SCANNER_TYPE"
-	Insecure              = "INSECURE"
 	LogLevel              = "LOG_LEVEL"
 	Network               = "NETWORK"
-	MinRelayFee           = "MIN_RELAY_FEE"
 	RoundLifetime         = "ROUND_LIFETIME"
 	UnilateralExitDelay   = "UNILATERAL_EXIT_DELAY"
-	AuthUser              = "AUTH_USER"
-	AuthPass              = "AUTH_PASS"
+	BoardingExitDelay     = "BOARDING_EXIT_DELAY"
 	EsploraURL            = "ESPLORA_URL"
 	NeutrinoPeer          = "NEUTRINO_PEER"
-	WalletPassword        = "WALLET_PASSWORD"
+	// #nosec G101
+	BitcoindRpcUser = "BITCOIND_RPC_USER"
+	// #nosec G101
+	BitcoindRpcPass = "BITCOIND_RPC_PASS"
+	BitcoindRpcHost = "BITCOIND_RPC_HOST"
+	NoMacaroons     = "NO_MACAROONS"
+	NoTLS           = "NO_TLS"
+	TLSExtraIP      = "TLS_EXTRA_IP"
+	TLSExtraDomain  = "TLS_EXTRA_DOMAIN"
 
 	defaultDatadir               = common.AppDataDir("arkd", false)
 	defaultRoundInterval         = 5
-	defaultPort                  = 6000
+	DefaultPort                  = 7070
 	defaultWalletAddr            = "localhost:18000"
 	defaultDbType                = "sqlite"
 	defaultDbMigrationPath       = "file://internal/infrastructure/db/sqlite/migration"
@@ -67,14 +76,13 @@ var (
 	defaultSchedulerType         = "gocron"
 	defaultTxBuilderType         = "covenant"
 	defaultBlockchainScannerType = "ocean"
-	defaultInsecure              = true
 	defaultNetwork               = "liquid"
 	defaultLogLevel              = 4
-	defaultMinRelayFee           = 30 // 0.1 sat/vbyte on Liquid
 	defaultRoundLifetime         = 604672
 	defaultUnilateralExitDelay   = 1024
-	defaultAuthUser              = "admin"
-	defaultAuthPass              = "admin"
+	defaultBoardingExitDelay     = 604672
+	defaultNoMacaroons           = false
+	defaultNoTLS                 = false
 )
 
 func LoadConfig() (*Config, error) {
@@ -82,14 +90,13 @@ func LoadConfig() (*Config, error) {
 	viper.AutomaticEnv()
 
 	viper.SetDefault(Datadir, defaultDatadir)
-	viper.SetDefault(Port, defaultPort)
+	viper.SetDefault(Port, DefaultPort)
 	viper.SetDefault(DbType, defaultDbType)
 	viper.SetDefault(DbMigrationPath, defaultDbMigrationPath)
-	viper.SetDefault(Insecure, defaultInsecure)
+	viper.SetDefault(NoTLS, defaultNoTLS)
 	viper.SetDefault(LogLevel, defaultLogLevel)
 	viper.SetDefault(Network, defaultNetwork)
 	viper.SetDefault(WalletAddr, defaultWalletAddr)
-	viper.SetDefault(MinRelayFee, defaultMinRelayFee)
 	viper.SetDefault(RoundInterval, defaultRoundInterval)
 	viper.SetDefault(RoundLifetime, defaultRoundLifetime)
 	viper.SetDefault(SchedulerType, defaultSchedulerType)
@@ -97,12 +104,12 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(TxBuilderType, defaultTxBuilderType)
 	viper.SetDefault(UnilateralExitDelay, defaultUnilateralExitDelay)
 	viper.SetDefault(BlockchainScannerType, defaultBlockchainScannerType)
-	viper.SetDefault(AuthUser, defaultAuthUser)
-	viper.SetDefault(AuthPass, defaultAuthPass)
+	viper.SetDefault(NoMacaroons, defaultNoMacaroons)
+	viper.SetDefault(BoardingExitDelay, defaultBoardingExitDelay)
 
 	net, err := getNetwork()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error while getting network: %s", err)
 	}
 
 	if err := initDatadir(); err != nil {
@@ -110,6 +117,7 @@ func LoadConfig() (*Config, error) {
 	}
 
 	return &Config{
+		Datadir:               viper.GetString(Datadir),
 		WalletAddr:            viper.GetString(WalletAddr),
 		RoundInterval:         viper.GetInt64(RoundInterval),
 		Port:                  viper.GetUint32(Port),
@@ -119,18 +127,21 @@ func LoadConfig() (*Config, error) {
 		SchedulerType:         viper.GetString(SchedulerType),
 		TxBuilderType:         viper.GetString(TxBuilderType),
 		BlockchainScannerType: viper.GetString(BlockchainScannerType),
-		NoTLS:                 viper.GetBool(Insecure),
+		NoTLS:                 viper.GetBool(NoTLS),
 		DbDir:                 filepath.Join(viper.GetString(Datadir), "db"),
 		LogLevel:              viper.GetInt(LogLevel),
 		Network:               net,
-		MinRelayFee:           viper.GetUint64(MinRelayFee),
 		RoundLifetime:         viper.GetInt64(RoundLifetime),
 		UnilateralExitDelay:   viper.GetInt64(UnilateralExitDelay),
-		AuthUser:              viper.GetString(AuthUser),
-		AuthPass:              viper.GetString(AuthPass),
+		BoardingExitDelay:     viper.GetInt64(BoardingExitDelay),
 		EsploraURL:            viper.GetString(EsploraURL),
 		NeutrinoPeer:          viper.GetString(NeutrinoPeer),
-		WalletPassword:        viper.GetString(WalletPassword),
+		BitcoindRpcUser:       viper.GetString(BitcoindRpcUser),
+		BitcoindRpcPass:       viper.GetString(BitcoindRpcPass),
+		BitcoindRpcHost:       viper.GetString(BitcoindRpcHost),
+		NoMacaroons:           viper.GetBool(NoMacaroons),
+		TLSExtraIPs:           viper.GetStringSlice(TLSExtraIP),
+		TLSExtraDomains:       viper.GetStringSlice(TLSExtraDomain),
 	}, nil
 }
 
@@ -160,6 +171,8 @@ func getNetwork() (common.Network, error) {
 		return common.BitcoinTestNet, nil
 	case common.BitcoinRegTest.Name:
 		return common.BitcoinRegTest, nil
+	case common.BitcoinSigNet.Name:
+		return common.BitcoinSigNet, nil
 	default:
 		return common.Network{}, fmt.Errorf("unknown network %s", viper.GetString(Network))
 	}

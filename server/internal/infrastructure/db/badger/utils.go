@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ark-network/ark/internal/core/domain"
+	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/badger/v4/options"
 	"github.com/timshannon/badgerhold/v4"
@@ -95,7 +95,7 @@ func deserializeEvent(buf []byte) (domain.RoundEvent, error) {
 	}
 	{
 		var event = domain.RoundFinalizationStarted{}
-		if err := json.Unmarshal(buf, &event); err == nil && len(event.Connectors) > 0 {
+		if err := json.Unmarshal(buf, &event); err == nil && len(event.PoolTx) > 0 {
 			return event, nil
 		}
 	}

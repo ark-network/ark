@@ -1,0 +1,11 @@
+go 1.23.1
+
+use (
+	./api-spec
+	./client
+	./common
+	./pkg/client-sdk
+	./server
+	./server/pkg/kvdb
+	./server/pkg/macaroons
+)

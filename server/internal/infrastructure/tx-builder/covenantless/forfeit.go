@@ -1,7 +1,7 @@
 package txbuilder
 
 import (
-	"github.com/ark-network/ark/internal/core/domain"
+	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
@@ -14,8 +14,9 @@ func craftForfeitTxs(
 	vtxoForfeitTapLeaf *psbt.TaprootTapLeafScript,
 	vtxoScript, aspScript []byte,
 	minRelayFee uint64,
+	connectorAmount int64,
 ) (forfeitTxs []string, err error) {
-	connectors, prevouts := getConnectorInputs(connectorTx)
+	connectors, prevouts := getConnectorInputs(connectorTx, connectorAmount)
 
 	for i, connectorInput := range connectors {
 		connectorPrevout := prevouts[i]

@@ -8,29 +8,30 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common/tree"
-	"github.com/ark-network/ark/internal/core/domain"
-	"github.com/ark-network/ark/internal/core/ports"
+	"github.com/ark-network/ark/server/internal/core/domain"
+	"github.com/ark-network/ark/server/internal/core/ports"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/sirupsen/logrus"
 )
 
 type timedPayment struct {
 	domain.Payment
-	timestamp     time.Time
-	pingTimestamp time.Time
+	boardingInputs []ports.BoardingInput
+	timestamp      time.Time
+	pingTimestamp  time.Time
 }
 
 type paymentsMap struct {
-	lock     *sync.RWMutex
-	payments map[string]*timedPayment
+	lock          *sync.RWMutex
+	payments      map[string]*timedPayment
+	ephemeralKeys map[string]*secp256k1.PublicKey
 }
 
-func newPaymentsMap(payments []domain.Payment) *paymentsMap {
+func newPaymentsMap() *paymentsMap {
 	paymentsById := make(map[string]*timedPayment)
-	for _, p := range payments {
-		paymentsById[p.Id] = &timedPayment{p, time.Now(), time.Time{}}
-	}
 	lock := &sync.RWMutex{}
-	return &paymentsMap{lock, paymentsById}
+	return &paymentsMap{lock, paymentsById, make(map[string]*secp256k1.PublicKey)}
 }
 
 func (m *paymentsMap) len() int64 {
@@ -46,7 +47,19 @@ func (m *paymentsMap) len() int64 {
 	return count
 }
 
-func (m *paymentsMap) push(payment domain.Payment) error {
+func (m *paymentsMap) delete(id string) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	if _, ok := m.payments[id]; !ok {
+		return errPaymentNotFound{id}
+	}
+
+	delete(m.payments, id)
+	return nil
+}
+
+func (m *paymentsMap) push(payment domain.Payment, boardingInputs []ports.BoardingInput) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -54,11 +67,23 @@ func (m *paymentsMap) push(payment domain.Payment) error {
 		return fmt.Errorf("duplicated inputs")
 	}
 
-	m.payments[payment.Id] = &timedPayment{payment, time.Now(), time.Time{}}
+	m.payments[payment.Id] = &timedPayment{payment, boardingInputs, time.Now(), time.Time{}}
 	return nil
 }
 
-func (m *paymentsMap) pop(num int64) []domain.Payment {
+func (m *paymentsMap) pushEphemeralKey(paymentId string, pubkey *secp256k1.PublicKey) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	if _, ok := m.payments[paymentId]; !ok {
+		return fmt.Errorf("payment %s not found, cannot register signing ephemeral public key", paymentId)
+	}
+
+	m.ephemeralKeys[paymentId] = pubkey
+	return nil
+}
+
+func (m *paymentsMap) pop(num int64) ([]domain.Payment, []ports.BoardingInput, []*secp256k1.PublicKey) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -83,11 +108,18 @@ func (m *paymentsMap) pop(num int64) []domain.Payment {
 	}
 
 	payments := make([]domain.Payment, 0, num)
+	boardingInputs := make([]ports.BoardingInput, 0)
+	cosigners := make([]*secp256k1.PublicKey, 0, num)
 	for _, p := range paymentsByTime[:num] {
+		boardingInputs = append(boardingInputs, p.boardingInputs...)
 		payments = append(payments, p.Payment)
+		if pubkey, ok := m.ephemeralKeys[p.Payment.Id]; ok {
+			cosigners = append(cosigners, pubkey)
+			delete(m.ephemeralKeys, p.Payment.Id)
+		}
 		delete(m.payments, p.Id)
 	}
-	return payments
+	return payments, boardingInputs, cosigners
 }
 
 func (m *paymentsMap) update(payment domain.Payment) error {
@@ -153,7 +185,7 @@ func (m *forfeitTxsMap) push(txs []string) {
 	defer m.lock.Unlock()
 
 	for _, tx := range txs {
-		signed, txid, _ := m.builder.VerifyForfeitTx(tx)
+		signed, txid, _ := m.builder.VerifyTapscriptPartialSigs(tx)
 		m.forfeitTxs[txid] = &signedTx{tx, signed}
 	}
 }
@@ -163,7 +195,7 @@ func (m *forfeitTxsMap) sign(txs []string) error {
 	defer m.lock.Unlock()
 
 	for _, tx := range txs {
-		valid, txid, err := m.builder.VerifyForfeitTx(tx)
+		valid, txid, err := m.builder.VerifyTapscriptPartialSigs(tx)
 		if err != nil {
 			return err
 		}
@@ -236,7 +268,7 @@ func findSweepableOutputs(
 				if _, ok := blocktimeCache[node.ParentTxid]; !ok {
 					isConfirmed, blocktime, err := walletSvc.IsTransactionConfirmed(ctx, node.ParentTxid)
 					if !isConfirmed || err != nil {
-						return nil, fmt.Errorf("tx %s not found", node.Txid)
+						return nil, fmt.Errorf("tx %s not found", node.ParentTxid)
 					}
 
 					blocktimeCache[node.ParentTxid] = blocktime
@@ -280,4 +312,27 @@ func getSpentVtxos(payments map[string]domain.Payment) []domain.VtxoKey {
 		}
 	}
 	return vtxos
+}
+
+type boardingInput struct {
+	txId           chainhash.Hash
+	vout           uint32
+	boardingPubKey *secp256k1.PublicKey
+	amount         uint64
+}
+
+func (b boardingInput) GetHash() chainhash.Hash {
+	return b.txId
+}
+
+func (b boardingInput) GetIndex() uint32 {
+	return b.vout
+}
+
+func (b boardingInput) GetAmount() uint64 {
+	return b.amount
+}
+
+func (b boardingInput) GetBoardingPubkey() *secp256k1.PublicKey {
+	return b.boardingPubKey
 }
