@@ -164,6 +164,7 @@ func TestCollaborativeExit(t *testing.T) {
 func TestReactToSpentVtxosRedemption(t *testing.T) {
 	ctx := context.Background()
 	client, grpcClient := setupArkSDK(t)
+	defer grpcClient.Close()
 
 	offchainAddress, boardingAddress, err := client.Receive(ctx)
 	require.NoError(t, err)
@@ -178,6 +179,8 @@ func TestReactToSpentVtxosRedemption(t *testing.T) {
 
 	_, err = client.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(offchainAddress, 1000)})
 	require.NoError(t, err)
+
+	time.Sleep(2 * time.Second)
 
 	_, spentVtxos, err := client.ListVtxos(ctx)
 	require.NoError(t, err)
@@ -202,7 +205,7 @@ func TestReactToSpentVtxosRedemption(t *testing.T) {
 	}
 
 	// give time for the ASP to detect and process the fraud
-	time.Sleep(18 * time.Second)
+	time.Sleep(20 * time.Second)
 
 	balance, err := client.Balance(ctx, true)
 	require.NoError(t, err)
@@ -213,6 +216,7 @@ func TestReactToSpentVtxosRedemption(t *testing.T) {
 func TestReactToAsyncSpentVtxosRedemption(t *testing.T) {
 	ctx := context.Background()
 	sdkClient, grpcClient := setupArkSDK(t)
+	defer grpcClient.Close()
 
 	offchainAddress, boardingAddress, err := sdkClient.Receive(ctx)
 	require.NoError(t, err)
@@ -267,7 +271,7 @@ func TestReactToAsyncSpentVtxosRedemption(t *testing.T) {
 	}
 
 	// give time for the ASP to detect and process the fraud
-	time.Sleep(60 * time.Second)
+	time.Sleep(20 * time.Second)
 
 	balance, err := sdkClient.Balance(ctx, true)
 	require.NoError(t, err)
