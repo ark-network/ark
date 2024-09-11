@@ -526,6 +526,39 @@ func (a *covenantArkClient) GetTransactionHistory(ctx context.Context) ([]Transa
 	return vtxosToTxsCovenant(config.RoundLifetime, spendableVtxos, spentVtxos, boardingTxs)
 }
 
+func (a *covenantArkClient) getAllBoardingUtxos(ctx context.Context) ([]explorer.Utxo, error) {
+	_, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	utxos := []explorer.Utxo{}
+	for _, addr := range boardingAddrs {
+		txs, err := a.explorer.GetTxs(addr)
+		if err != nil {
+			continue
+		}
+		for _, tx := range txs {
+			for i, vout := range tx.Vout {
+				if vout.Address == addr {
+					createdAt := time.Time{}
+					if tx.Status.Confirmed {
+						createdAt = time.Unix(tx.Status.Blocktime, 0)
+					}
+					utxos = append(utxos, explorer.Utxo{
+						Txid:      tx.Txid,
+						Vout:      uint32(i),
+						Amount:    vout.Amount,
+						CreatedAt: createdAt,
+					})
+				}
+			}
+		}
+	}
+
+	return utxos, nil
+}
+
 func (a *covenantArkClient) getClaimableBoardingUtxos(ctx context.Context) ([]explorer.Utxo, error) {
 	offchainAddrs, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
@@ -1389,24 +1422,37 @@ func (a *covenantArkClient) selfTransferAllPendingPayments(
 	return roundTxid, nil
 }
 
-func (a *covenantArkClient) getBoardingTxs(ctx context.Context) []Transaction {
+func (a *covenantArkClient) getBoardingTxs(ctx context.Context) (transactions []Transaction) {
 	utxos, err := a.getClaimableBoardingUtxos(ctx)
 	if err != nil {
 		return nil
 	}
 
-	txs := make([]Transaction, 0, len(utxos))
+	isPending := make(map[string]bool)
 	for _, u := range utxos {
-		txs = append(txs, Transaction{
+		isPending[u.Txid] = true
+	}
+
+	allUtxos, err := a.getAllBoardingUtxos(ctx)
+	if err != nil {
+		return nil
+	}
+
+	for _, u := range allUtxos {
+		pending := false
+		if isPending[u.Txid] {
+			pending = true
+		}
+		transactions = append(transactions, Transaction{
 			BoardingTxid: u.Txid,
 			Amount:       u.Amount,
 			Type:         TxReceived,
-			Pending:      true,
-			Claimed:      false,
+			Pending:      pending,
+			Claimed:      !pending,
 			CreatedAt:    u.CreatedAt,
 		})
 	}
-	return txs
+	return
 }
 
 func vtxosToTxsCovenant(
@@ -1426,22 +1472,18 @@ func vtxosToTxsCovenant(
 	for _, v := range append(spendable, spent...) {
 		// get vtxo amount
 		amount := int(v.Amount)
-		if v.Pending {
-			// find other spent vtxos that spent this one
-			relatedVtxos := findVtxosBySpentBy(spent, v.Txid)
-			for _, r := range relatedVtxos {
-				if r.Amount < math.MaxInt64 {
-					rAmount := int(r.Amount)
-					amount -= rAmount
-				}
+		if !v.Pending {
+			continue
+		}
+		// find other spent vtxos that spent this one
+		relatedVtxos := findVtxosBySpentBy(spent, v.Txid)
+		for _, r := range relatedVtxos {
+			if r.Amount < math.MaxInt64 {
+				rAmount := int(r.Amount)
+				amount -= rAmount
 			}
-		} else {
-			// an onboarding tx has pending false and no pending true related txs
-			relatedVtxos := findVtxosBySpentBy(spent, v.RoundTxid)
-			if len(relatedVtxos) > 0 { // not an onboard tx, ignore
-				continue
-			}
-		} // what kind of tx was this? send or receive?
+		}
+		// what kind of tx was this? send or receive?
 		txType := TxReceived
 		if amount < 0 {
 			txType = TxSent
@@ -1453,6 +1495,7 @@ func vtxosToTxsCovenant(
 			pending = true
 			claimed = false
 		}
+		// get redeem txid
 		redeemTxid := ""
 		if len(v.RedeemTx) > 0 {
 			txid, err := getRedeemTxidCovenant(v.RedeemTx)
@@ -1461,7 +1504,6 @@ func vtxosToTxsCovenant(
 			}
 			redeemTxid = txid
 		}
-
 		// add transaction
 		transactions = append(transactions, Transaction{
 			RoundTxid:  v.RoundTxid,
