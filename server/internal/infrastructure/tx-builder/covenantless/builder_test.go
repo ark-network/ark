@@ -22,7 +22,6 @@ import (
 const (
 	testingKey          = "0218d5ca8b58797b7dbd65c075dd7ba7784b3f38ab71b1a5a8e3f94ba0257654a6"
 	connectorAddress    = "bc1py00yhcjpcj0k0sqra0etq0u3yy0purmspppsw0shyzyfe8c83tmq5h6kc2"
-	minRelayFee         = uint64(30)
 	roundLifetime       = int64(1209344)
 	unilateralExitDelay = int64(512)
 	boardingExitDelay   = int64(512)
@@ -41,6 +40,10 @@ func TestMain(m *testing.M) {
 		Return(randomInput, uint64(0), nil)
 	wallet.On("DeriveConnectorAddress", mock.Anything).
 		Return(connectorAddress, nil)
+	wallet.On("MinRelayFee", mock.Anything, mock.Anything).
+		Return(uint64(30), nil)
+	wallet.On("GetDustAmount", mock.Anything).
+		Return(uint64(1000), nil)
 
 	pubkeyBytes, _ := hex.DecodeString(testingKey)
 	pubkey, _ = secp256k1.ParsePubKey(pubkeyBytes)
@@ -73,7 +76,7 @@ func TestBuildPoolTx(t *testing.T) {
 				}
 
 				poolTx, congestionTree, connAddr, err := builder.BuildPoolTx(
-					pubkey, f.Payments, []ports.BoardingInput{}, minRelayFee, []domain.Round{}, cosigners...,
+					pubkey, f.Payments, []ports.BoardingInput{}, []domain.Round{}, cosigners...,
 				)
 				require.NoError(t, err)
 				require.NotEmpty(t, poolTx)
@@ -83,7 +86,7 @@ func TestBuildPoolTx(t *testing.T) {
 				require.Len(t, congestionTree.Leaves(), f.ExpectedNumOfLeaves)
 
 				err = bitcointree.ValidateCongestionTree(
-					congestionTree, poolTx, pubkey, roundLifetime, int64(minRelayFee),
+					congestionTree, poolTx, pubkey, roundLifetime,
 				)
 				require.NoError(t, err)
 			}
@@ -94,7 +97,7 @@ func TestBuildPoolTx(t *testing.T) {
 		t.Run("invalid", func(t *testing.T) {
 			for _, f := range fixtures.Invalid {
 				poolTx, congestionTree, connAddr, err := builder.BuildPoolTx(
-					pubkey, f.Payments, []ports.BoardingInput{}, minRelayFee, []domain.Round{},
+					pubkey, f.Payments, []ports.BoardingInput{}, []domain.Round{},
 				)
 				require.EqualError(t, err, f.ExpectedErr)
 				require.Empty(t, poolTx)
@@ -118,7 +121,7 @@ func TestBuildForfeitTxs(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
 			for _, f := range fixtures.Valid {
 				connectors, forfeitTxs, err := builder.BuildForfeitTxs(
-					pubkey, f.PoolTx, f.Payments, minRelayFee,
+					pubkey, f.PoolTx, f.Payments,
 				)
 				require.NoError(t, err)
 				require.Len(t, connectors, f.ExpectedNumOfConnectors)
@@ -156,7 +159,7 @@ func TestBuildForfeitTxs(t *testing.T) {
 		t.Run("invalid", func(t *testing.T) {
 			for _, f := range fixtures.Invalid {
 				connectors, forfeitTxs, err := builder.BuildForfeitTxs(
-					pubkey, f.PoolTx, f.Payments, minRelayFee,
+					pubkey, f.PoolTx, f.Payments,
 				)
 				require.EqualError(t, err, f.ExpectedErr)
 				require.Empty(t, connectors)

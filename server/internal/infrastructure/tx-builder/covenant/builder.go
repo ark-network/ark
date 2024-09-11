@@ -1,6 +1,7 @@
 package txbuilder
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -24,7 +25,6 @@ import (
 
 const (
 	connectorAmount = uint64(450)
-	dustLimit       = uint64(450)
 )
 
 type txBuilder struct {
@@ -101,14 +101,18 @@ func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (signedSweepTx strin
 }
 
 func (b *txBuilder) BuildForfeitTxs(
-	aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment, minRelayFee uint64,
-) (connectors []string, forfeitTxs []string, err error) {
+	aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment) (connectors []string, forfeitTxs []string, err error) {
 	connectorAddress, err := b.getConnectorAddress(poolTx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	connectorTxs, err := b.createConnectors(poolTx, payments, connectorAddress, minRelayFee)
+	connectorFeeAmount, err := b.minRelayFeeConnectorTx()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	connectorTxs, err := b.createConnectors(poolTx, payments, connectorAddress, connectorFeeAmount)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -129,7 +133,6 @@ func (b *txBuilder) BuildPoolTx(
 	aspPubkey *secp256k1.PublicKey,
 	payments []domain.Payment,
 	boardingInputs []ports.BoardingInput,
-	minRelayFee uint64,
 	sweptRounds []domain.Round,
 	_ ...*secp256k1.PublicKey, // cosigners are not used in the covenant
 ) (poolTx string, congestionTree tree.CongestionTree, connectorAddress string, err error) {
@@ -150,11 +153,16 @@ func (b *txBuilder) BuildPoolTx(
 	var treeFactoryFn tree.TreeFactory
 
 	if !isOnchainOnly(payments) {
+		feeSatsPerNode, err := b.wallet.MinRelayFee(context.Background(), uint64(common.CovenantTreeTxSize))
+		if err != nil {
+			return "", nil, "", err
+		}
+
 		treeFactoryFn, sharedOutputScript, sharedOutputAmount, err = tree.CraftCongestionTree(
-			b.onchainNetwork().AssetID, aspPubkey, getOffchainReceivers(payments), minRelayFee, b.roundLifetime, b.exitDelay,
+			b.onchainNetwork().AssetID, aspPubkey, getOffchainReceivers(payments), feeSatsPerNode, b.roundLifetime, b.exitDelay,
 		)
 		if err != nil {
-			return
+			return "", nil, "", err
 		}
 	}
 
@@ -164,7 +172,7 @@ func (b *txBuilder) BuildPoolTx(
 	}
 
 	ptx, err := b.createPoolTx(
-		sharedOutputAmount, sharedOutputScript, payments, boardingInputs, aspPubkey, connectorAddress, minRelayFee, sweptRounds,
+		sharedOutputAmount, sharedOutputScript, payments, boardingInputs, aspPubkey, connectorAddress, sweptRounds,
 	)
 	if err != nil {
 		return
@@ -242,27 +250,46 @@ func (b *txBuilder) GetSweepInput(parentblocktime int64, node tree.Node) (expira
 	return expirationTime, sweepInput, nil
 }
 
-func (b *txBuilder) VerifyForfeitTx(tx string) (bool, string, error) {
+func (b *txBuilder) VerifyTapscriptPartialSigs(tx string) (bool, string, error) {
 	ptx, _ := psetv2.NewPsetFromBase64(tx)
 	utx, _ := ptx.UnsignedTx()
 	txid := utx.TxHash().String()
 
 	for index, input := range ptx.Inputs {
+		if len(input.TapLeafScript) == 0 {
+			continue
+		}
+		if input.WitnessUtxo == nil {
+			return false, txid, fmt.Errorf("missing witness utxo for input %d, cannot verify signature", index)
+		}
+
+		// verify taproot leaf script
+		tapLeaf := input.TapLeafScript[0]
+
+		rootHash := tapLeaf.ControlBlock.RootHash(tapLeaf.Script)
+		tapKeyFromControlBlock := taproot.ComputeTaprootOutputKey(tree.UnspendableKey(), rootHash[:])
+
+		pkscript, err := p2trScript(tapKeyFromControlBlock)
+		if err != nil {
+			return false, txid, err
+		}
+
+		if !bytes.Equal(pkscript, input.WitnessUtxo.Script) {
+			return false, txid, fmt.Errorf("invalid control block for input %d", index)
+		}
+
+		leafHash := taproot.NewBaseTapElementsLeaf(tapLeaf.Script).TapHash()
+
+		preimage, err := b.getTaprootPreimage(
+			tx,
+			index,
+			&leafHash,
+		)
+		if err != nil {
+			return false, txid, err
+		}
+
 		for _, tapScriptSig := range input.TapScriptSig {
-			leafHash, err := chainhash.NewHash(tapScriptSig.LeafHash)
-			if err != nil {
-				return false, txid, err
-			}
-
-			preimage, err := b.getTaprootPreimage(
-				tx,
-				index,
-				leafHash,
-			)
-			if err != nil {
-				return false, txid, err
-			}
-
 			sig, err := schnorr.ParseSignature(tapScriptSig.Signature)
 			if err != nil {
 				return false, txid, err
@@ -273,15 +300,13 @@ func (b *txBuilder) VerifyForfeitTx(tx string) (bool, string, error) {
 				return false, txid, err
 			}
 
-			if sig.Verify(preimage, pubkey) {
-				return true, txid, nil
-			} else {
-				return false, txid, fmt.Errorf("invalid signature")
+			if !sig.Verify(preimage, pubkey) {
+				return false, txid, fmt.Errorf("invalid signature for tx %s", txid)
 			}
 		}
 	}
 
-	return false, txid, nil
+	return true, txid, nil
 }
 
 func (b *txBuilder) FinalizeAndExtract(tx string) (string, error) {
@@ -345,7 +370,7 @@ func (b *txBuilder) FindLeaves(
 }
 
 func (b *txBuilder) BuildAsyncPaymentTransactions(
-	_ []domain.Vtxo, _ *secp256k1.PublicKey, _ []domain.Receiver, _ uint64,
+	_ []domain.Vtxo, _ *secp256k1.PublicKey, _ []domain.Receiver,
 ) (*domain.AsyncPaymentTxs, error) {
 	return nil, fmt.Errorf("not implemented")
 }
@@ -381,7 +406,7 @@ func (b *txBuilder) getLeafScriptAndTree(
 	unspendableKey := tree.UnspendableKey()
 	taprootKey := taproot.ComputeTaprootOutputKey(unspendableKey, root[:])
 
-	outputScript, err := taprootOutputScript(taprootKey)
+	outputScript, err := p2trScript(taprootKey)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -394,7 +419,7 @@ func (b *txBuilder) createPoolTx(
 	sharedOutputScript []byte,
 	payments []domain.Payment,
 	boardingInputs []ports.BoardingInput,
-	aspPubKey *secp256k1.PublicKey, connectorAddress string, minRelayFee uint64,
+	aspPubKey *secp256k1.PublicKey, connectorAddress string,
 	sweptRounds []domain.Round,
 ) (*psetv2.Pset, error) {
 	aspScript, err := p2wpkhScript(aspPubKey, b.onchainNetwork())
@@ -407,11 +432,16 @@ func (b *txBuilder) createPoolTx(
 		return nil, err
 	}
 
+	connectorMinRelayFee, err := b.minRelayFeeConnectorTx()
+	if err != nil {
+		return nil, err
+	}
+
 	receivers := getOnchainReceivers(payments)
 	nbOfInputs := countSpentVtxos(payments)
-	connectorsAmount := (connectorAmount + minRelayFee) * nbOfInputs
+	connectorsAmount := (connectorAmount + connectorMinRelayFee) * nbOfInputs
 	if nbOfInputs > 1 {
-		connectorsAmount -= minRelayFee
+		connectorsAmount -= connectorMinRelayFee
 	}
 	targetAmount := connectorsAmount
 
@@ -454,6 +484,12 @@ func (b *txBuilder) createPoolTx(
 		targetAmount -= in.GetAmount()
 	}
 	ctx := context.Background()
+
+	dustLimit, err := b.wallet.GetDustAmount(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	utxos, change, err := b.selectUtxos(ctx, sweptRounds, targetAmount)
 	if err != nil {
 		return nil, err
@@ -632,6 +668,10 @@ func (b *txBuilder) createPoolTx(
 	return ptx, nil
 }
 
+func (b *txBuilder) minRelayFeeConnectorTx() (uint64, error) {
+	return b.wallet.MinRelayFee(context.Background(), uint64(common.ConnectorTxSize))
+}
+
 // This method aims to verify and add partial signature from boarding input
 func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, error) {
 	roundPset, err := psetv2.NewPsetFromBase64(dest)
@@ -704,7 +744,7 @@ func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, 
 }
 
 func (b *txBuilder) createConnectors(
-	poolTx string, payments []domain.Payment, connectorAddress string, minRelayFee uint64,
+	poolTx string, payments []domain.Payment, connectorAddress string, feeAmount uint64,
 ) ([]*psetv2.Pset, error) {
 	txid, _ := getTxid(poolTx)
 
@@ -728,7 +768,7 @@ func (b *txBuilder) createConnectors(
 
 	if numberOfConnectors == 1 {
 		outputs := []psetv2.OutputArgs{connectorOutput}
-		connectorTx, err := craftConnectorTx(previousInput, aspScript, outputs, minRelayFee)
+		connectorTx, err := craftConnectorTx(previousInput, aspScript, outputs, feeAmount)
 		if err != nil {
 			return nil, err
 		}
@@ -736,16 +776,16 @@ func (b *txBuilder) createConnectors(
 		return []*psetv2.Pset{connectorTx}, nil
 	}
 
-	totalConnectorAmount := (connectorAmount + minRelayFee) * numberOfConnectors
+	totalConnectorAmount := (connectorAmount + feeAmount) * numberOfConnectors
 	if numberOfConnectors > 1 {
-		totalConnectorAmount -= minRelayFee
+		totalConnectorAmount -= feeAmount
 	}
 
 	connectors := make([]*psetv2.Pset, 0, numberOfConnectors-1)
 	for i := uint64(0); i < numberOfConnectors-1; i++ {
 		outputs := []psetv2.OutputArgs{connectorOutput}
 		totalConnectorAmount -= connectorAmount
-		totalConnectorAmount -= minRelayFee
+		totalConnectorAmount -= feeAmount
 		if totalConnectorAmount > 0 {
 			outputs = append(outputs, psetv2.OutputArgs{
 				Asset:  b.onchainNetwork().AssetID,
@@ -753,7 +793,7 @@ func (b *txBuilder) createConnectors(
 				Amount: totalConnectorAmount,
 			})
 		}
-		connectorTx, err := craftConnectorTx(previousInput, aspScript, outputs, minRelayFee)
+		connectorTx, err := craftConnectorTx(previousInput, aspScript, outputs, feeAmount)
 		if err != nil {
 			return nil, err
 		}
@@ -814,7 +854,7 @@ func (b *txBuilder) createForfeitTxs(
 			}
 
 			for _, connector := range connectors {
-				txs, err := craftForfeitTxs(
+				txs, err := b.craftForfeitTxs(
 					connector, vtxo, *forfeitProof, vtxoScript, aspScript,
 				)
 				if err != nil {

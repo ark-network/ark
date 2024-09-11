@@ -31,6 +31,11 @@ func collaborativeRedeem(
 		return err
 	}
 
+	dust, err := utils.GetDust(ctx)
+	if err != nil {
+		return err
+	}
+
 	netParams := toChainParams(netinstate)
 
 	if netinstate.Name != netParams.Name {
@@ -56,7 +61,7 @@ func collaborativeRedeem(
 		return err
 	}
 
-	selectedCoins, changeAmount, err := coinSelect(vtxos, amount, withExpiryCoinselect)
+	selectedCoins, changeAmount, err := coinSelect(vtxos, amount, withExpiryCoinselect, dust)
 	if err != nil {
 		return err
 	}

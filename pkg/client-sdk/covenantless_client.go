@@ -428,7 +428,7 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 	}
 
 	selectedCoins, changeAmount, err := utils.CoinSelect(
-		vtxos, amount, DUST, withExpiryCoinselect,
+		vtxos, amount, a.Dust, withExpiryCoinselect,
 	)
 	if err != nil {
 		return "", err
@@ -525,8 +525,8 @@ func (a *covenantlessArkClient) SendAsync(
 			return "", fmt.Errorf("invalid receiver address '%s': must be associated with the connected service provider", receiver)
 		}
 
-		if receiver.Amount() < DUST {
-			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), DUST)
+		if receiver.Amount() < a.Dust {
+			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), a.Dust)
 		}
 
 		receiversOutput = append(receiversOutput, client.Output{
@@ -541,7 +541,7 @@ func (a *covenantlessArkClient) SendAsync(
 		return "", err
 	}
 	selectedCoins, changeAmount, err := utils.CoinSelect(
-		vtxos, sumOfReceivers, DUST, withExpiryCoinselect,
+		vtxos, sumOfReceivers, a.Dust, withExpiryCoinselect,
 	)
 	if err != nil {
 		return "", err
@@ -746,8 +746,8 @@ func (a *covenantlessArkClient) sendOnchain(
 	targetAmount := uint64(0)
 	for _, receiver := range receivers {
 		targetAmount += receiver.Amount()
-		if receiver.Amount() < DUST {
-			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), DUST)
+		if receiver.Amount() < a.Dust {
+			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), a.Dust)
 		}
 
 		rcvAddr, err := btcutil.DecodeAddress(receiver.To(), &netParams)
@@ -901,8 +901,8 @@ func (a *covenantlessArkClient) sendOffchain(
 			return "", fmt.Errorf("invalid receiver address '%s': must be associated with the connected service provider", receiver.To())
 		}
 
-		if receiver.Amount() < DUST {
-			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), DUST)
+		if receiver.Amount() < a.Dust {
+			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), a.Dust)
 		}
 
 		receiversOutput = append(receiversOutput, client.Output{
@@ -922,7 +922,7 @@ func (a *covenantlessArkClient) sendOffchain(
 	}
 
 	selectedCoins, changeAmount, err := utils.CoinSelect(
-		vtxos, sumOfReceivers, DUST, withExpiryCoinselect,
+		vtxos, sumOfReceivers, a.Dust, withExpiryCoinselect,
 	)
 	if err != nil {
 		return "", err
@@ -1158,11 +1158,19 @@ func (a *covenantlessArkClient) handleRoundSigningStarted(
 		return
 	}
 
+	roundTx, err := psbt.NewFromRawBytes(strings.NewReader(event.UnsignedRoundTx), true)
+	if err != nil {
+		return
+	}
+
+	sharedOutput := roundTx.UnsignedTx.TxOut[0]
+	sharedOutputValue := sharedOutput.Value
+
 	sweepTapTree := txscript.AssembleTaprootScriptTree(*sweepTapLeaf)
 	root := sweepTapTree.RootNode.TapHash()
 
 	signerSession = bitcointree.NewTreeSignerSession(
-		ephemeralKey, event.UnsignedTree, int64(a.MinRelayFee), root.CloneBytes(),
+		ephemeralKey, sharedOutputValue, event.UnsignedTree, root.CloneBytes(),
 	)
 
 	if err = signerSession.SetKeys(event.CosignersPublicKeys); err != nil {
@@ -1250,7 +1258,7 @@ func (a *covenantlessArkClient) validateCongestionTree(
 
 	if !utils.IsOnchainOnly(receivers) {
 		if err := bitcointree.ValidateCongestionTree(
-			event.Tree, poolTx, a.StoreData.AspPubkey, a.RoundLifetime, int64(a.MinRelayFee),
+			event.Tree, poolTx, a.StoreData.AspPubkey, a.RoundLifetime,
 		); err != nil {
 			return err
 		}

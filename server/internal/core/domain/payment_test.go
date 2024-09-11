@@ -60,15 +60,6 @@ func TestPayment(t *testing.T) {
 					receivers:   nil,
 					expectedErr: "missing outputs",
 				},
-				{
-					receivers: []domain.Receiver{
-						{
-							Pubkey: "030000000000000000000000000000000000000000000000000000000000000001",
-							Amount: 400,
-						},
-					},
-					expectedErr: "receiver amount must be greater than dust",
-				},
 			}
 
 			payment, err := domain.NewPayment(inputs)

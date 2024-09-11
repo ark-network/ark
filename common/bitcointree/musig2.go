@@ -106,17 +106,17 @@ func AggregateKeys(
 }
 
 func ValidateTreeSigs(
-	minRelayFee int64,
 	scriptRoot []byte,
 	finalAggregatedKey *btcec.PublicKey,
-	tree tree.CongestionTree,
+	roundSharedOutputAmount int64,
+	vtxoTree tree.CongestionTree,
 ) error {
-	prevoutFetcher, err := prevOutFetcherFactory(minRelayFee, finalAggregatedKey)
+	prevoutFetcherFactory, err := prevOutFetcherFactory(finalAggregatedKey, vtxoTree, roundSharedOutputAmount)
 	if err != nil {
 		return err
 	}
 
-	for _, level := range tree {
+	for _, level := range vtxoTree {
 		for _, node := range level {
 			partialTx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
 			if err != nil {
@@ -133,14 +133,17 @@ func ValidateTreeSigs(
 				return err
 			}
 
-			inputFetcher := prevoutFetcher(partialTx)
+			prevoutFetcher, err := prevoutFetcherFactory(partialTx)
+			if err != nil {
+				return err
+			}
 
 			message, err := txscript.CalcTaprootSignatureHash(
-				txscript.NewTxSigHashes(partialTx.UnsignedTx, inputFetcher),
+				txscript.NewTxSigHashes(partialTx.UnsignedTx, prevoutFetcher),
 				txscript.SigHashDefault,
 				partialTx.UnsignedTx,
 				0,
-				inputFetcher,
+				prevoutFetcher,
 			)
 			if err != nil {
 				return err
@@ -157,27 +160,27 @@ func ValidateTreeSigs(
 
 func NewTreeSignerSession(
 	signer *btcec.PrivateKey,
-	congestionTree tree.CongestionTree,
-	minRelayFee int64,
+	roundSharedOutputAmount int64,
+	vtxoTree tree.CongestionTree,
 	scriptRoot []byte,
 ) SignerSession {
 	return &treeSignerSession{
-		secretKey:   signer,
-		tree:        congestionTree,
-		minRelayFee: minRelayFee,
-		scriptRoot:  scriptRoot,
+		secretKey:               signer,
+		tree:                    vtxoTree,
+		scriptRoot:              scriptRoot,
+		roundSharedOutputAmount: roundSharedOutputAmount,
 	}
 }
 
 type treeSignerSession struct {
-	secretKey       *btcec.PrivateKey
-	tree            tree.CongestionTree
-	myNonces        [][]*musig2.Nonces
-	keys            []*btcec.PublicKey
-	aggregateNonces TreeNonces
-	minRelayFee     int64
-	scriptRoot      []byte
-	prevoutFetcher  func(*psbt.Packet) txscript.PrevOutputFetcher
+	secretKey               *btcec.PrivateKey
+	tree                    tree.CongestionTree
+	myNonces                [][]*musig2.Nonces
+	keys                    []*btcec.PublicKey
+	aggregateNonces         TreeNonces
+	scriptRoot              []byte
+	roundSharedOutputAmount int64
+	prevoutFetcherFactory   func(*psbt.Packet) (txscript.PrevOutputFetcher, error)
 }
 
 func (t *treeSignerSession) generateNonces() error {
@@ -240,12 +243,12 @@ func (t *treeSignerSession) SetKeys(keys []*btcec.PublicKey) error {
 		return err
 	}
 
-	prevoutFetcher, err := prevOutFetcherFactory(t.minRelayFee, aggregateKey.FinalKey)
+	factory, err := prevOutFetcherFactory(aggregateKey.FinalKey, t.tree, t.roundSharedOutputAmount)
 	if err != nil {
 		return err
 	}
 
-	t.prevoutFetcher = prevoutFetcher
+	t.prevoutFetcherFactory = factory
 	t.keys = keys
 
 	return nil
@@ -299,17 +302,20 @@ func (t *treeSignerSession) Sign() (TreePartialSigs, error) {
 }
 
 func (t *treeSignerSession) signPartial(partialTx *psbt.Packet, posx int, posy int, seckey *btcec.PrivateKey) (*musig2.PartialSignature, error) {
-	inputFetcher := t.prevoutFetcher(partialTx)
+	prevoutFetcher, err := t.prevoutFetcherFactory(partialTx)
+	if err != nil {
+		return nil, err
+	}
 
 	myNonce := t.myNonces[posx][posy]
 	aggregatedNonce := t.aggregateNonces[posx][posy]
 
 	message, err := txscript.CalcTaprootSignatureHash(
-		txscript.NewTxSigHashes(partialTx.UnsignedTx, inputFetcher),
+		txscript.NewTxSigHashes(partialTx.UnsignedTx, prevoutFetcher),
 		txscript.SigHashDefault,
 		partialTx.UnsignedTx,
 		0,
-		inputFetcher,
+		prevoutFetcher,
 	)
 	if err != nil {
 		return nil, err
@@ -322,21 +328,26 @@ func (t *treeSignerSession) signPartial(partialTx *psbt.Packet, posx int, posy i
 }
 
 type treeCoordinatorSession struct {
-	scriptRoot     []byte
-	tree           tree.CongestionTree
-	keys           []*btcec.PublicKey
-	nonces         []TreeNonces
-	sigs           []TreePartialSigs
-	prevoutFetcher func(*psbt.Packet) txscript.PrevOutputFetcher
+	scriptRoot            []byte
+	tree                  tree.CongestionTree
+	keys                  []*btcec.PublicKey
+	nonces                []TreeNonces
+	sigs                  []TreePartialSigs
+	prevoutFetcherFactory func(*psbt.Packet) (txscript.PrevOutputFetcher, error)
 }
 
-func NewTreeCoordinatorSession(congestionTree tree.CongestionTree, minRelayFee int64, scriptRoot []byte, keys []*btcec.PublicKey) (CoordinatorSession, error) {
+func NewTreeCoordinatorSession(
+	roundSharedOutputAmount int64,
+	vtxoTree tree.CongestionTree,
+	scriptRoot []byte,
+	keys []*btcec.PublicKey,
+) (CoordinatorSession, error) {
 	aggregateKey, err := AggregateKeys(keys, scriptRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	prevoutFetcher, err := prevOutFetcherFactory(minRelayFee, aggregateKey.FinalKey)
+	prevoutFetcherFactory, err := prevOutFetcherFactory(aggregateKey.FinalKey, vtxoTree, roundSharedOutputAmount)
 	if err != nil {
 		return nil, err
 	}
@@ -344,12 +355,12 @@ func NewTreeCoordinatorSession(congestionTree tree.CongestionTree, minRelayFee i
 	nbOfKeys := len(keys)
 
 	return &treeCoordinatorSession{
-		scriptRoot:     scriptRoot,
-		tree:           congestionTree,
-		keys:           keys,
-		nonces:         make([]TreeNonces, nbOfKeys),
-		sigs:           make([]TreePartialSigs, nbOfKeys),
-		prevoutFetcher: prevoutFetcher,
+		scriptRoot:            scriptRoot,
+		tree:                  vtxoTree,
+		keys:                  keys,
+		nonces:                make([]TreeNonces, nbOfKeys),
+		sigs:                  make([]TreePartialSigs, nbOfKeys),
+		prevoutFetcherFactory: prevoutFetcherFactory,
 	}, nil
 }
 
@@ -453,14 +464,17 @@ func (t *treeCoordinatorSession) SignTree() (tree.CongestionTree, error) {
 				return nil, errors.New("missing combined nonce")
 			}
 
-			inputFetcher := t.prevoutFetcher(partialTx)
+			prevoutFetcher, err := t.prevoutFetcherFactory(partialTx)
+			if err != nil {
+				return nil, err
+			}
 
 			message, err := txscript.CalcTaprootSignatureHash(
-				txscript.NewTxSigHashes(partialTx.UnsignedTx, inputFetcher),
+				txscript.NewTxSigHashes(partialTx.UnsignedTx, prevoutFetcher),
 				txscript.SigHashDefault,
 				partialTx.UnsignedTx,
 				0,
-				inputFetcher,
+				prevoutFetcher,
 			)
 
 			combinedSig := musig2.CombineSigs(
@@ -490,29 +504,63 @@ func (t *treeCoordinatorSession) SignTree() (tree.CongestionTree, error) {
 	return t.tree, nil
 }
 
-// given a final aggregated key and a min-relay-fee, returns the expected prevout
 func prevOutFetcherFactory(
-	feeAmount int64, finalAggregatedKey *btcec.PublicKey,
+	finalAggregatedKey *btcec.PublicKey,
+	vtxoTree tree.CongestionTree,
+	roundSharedOutputAmount int64,
 ) (
-	func(partial *psbt.Packet) txscript.PrevOutputFetcher, error,
+	func(partial *psbt.Packet) (txscript.PrevOutputFetcher, error),
+	error,
 ) {
 	pkscript, err := taprootOutputScript(finalAggregatedKey)
 	if err != nil {
 		return nil, err
 	}
 
-	return func(partial *psbt.Packet) txscript.PrevOutputFetcher {
-		outputsAmount := int64(0)
-		for _, output := range partial.UnsignedTx.TxOut {
-			outputsAmount += output.Value
+	rootNode, err := vtxoTree.Root()
+	if err != nil {
+		return nil, err
+	}
+
+	return func(partial *psbt.Packet) (txscript.PrevOutputFetcher, error) {
+		parentOutpoint := partial.UnsignedTx.TxIn[0].PreviousOutPoint
+		parentTxID := parentOutpoint.Hash.String()
+		if rootNode.ParentTxid == parentTxID {
+			return &treePrevOutFetcher{
+				prevout: &wire.TxOut{
+					Value:    roundSharedOutputAmount,
+					PkScript: pkscript,
+				},
+			}, nil
 		}
+
+		var parent tree.Node
+		for _, level := range vtxoTree {
+			for _, n := range level {
+				if n.Txid == parentTxID {
+					parent = n
+					break
+				}
+			}
+		}
+
+		if parent.Txid == "" {
+			return nil, errors.New("parent tx not found")
+		}
+
+		parentTx, err := psbt.NewFromRawBytes(strings.NewReader(parent.Tx), true)
+		if err != nil {
+			return nil, err
+		}
+
+		parentValue := parentTx.UnsignedTx.TxOut[parentOutpoint.Index].Value
 
 		return &treePrevOutFetcher{
 			prevout: &wire.TxOut{
-				Value:    outputsAmount + feeAmount,
+				Value:    parentValue,
 				PkScript: pkscript,
 			},
-		}
+		}, nil
 	}, nil
 }
 

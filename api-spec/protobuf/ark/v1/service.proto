@@ -187,7 +187,7 @@ message GetInfoResponse {
   int64 unilateral_exit_delay = 3;
   int64 round_interval = 4;
   string network = 5;
-  int64 min_relay_fee = 6;
+  int64 dust = 6;
   string boarding_descriptor_template = 7;
 }
 
@@ -215,6 +215,7 @@ message RoundSigningEvent {
   string id = 1;
   repeated string cosigners_pubkeys = 2;
   Tree unsigned_tree = 3;
+  string unsigned_round_tx = 4;
 }
 
 message RoundSigningNoncesGeneratedEvent {

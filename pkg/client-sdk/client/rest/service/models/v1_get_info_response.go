@@ -20,8 +20,8 @@ type V1GetInfoResponse struct {
 	// boarding descriptor template
 	BoardingDescriptorTemplate string `json:"boardingDescriptorTemplate,omitempty"`
 
-	// min relay fee
-	MinRelayFee string `json:"minRelayFee,omitempty"`
+	// dust
+	Dust string `json:"dust,omitempty"`
 
 	// network
 	Network string `json:"network,omitempty"`

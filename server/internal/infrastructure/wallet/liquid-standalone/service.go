@@ -149,6 +149,10 @@ func (s *service) Lock(ctx context.Context, password string) error {
 	return err
 }
 
+func (s *service) GetDustAmount(ctx context.Context) (uint64, error) {
+	return 450, nil // constant on liquid cause fees are not subject to huge changes
+}
+
 func (s *service) listenToNotifications() {
 	s.isListening = true
 	defer func() {

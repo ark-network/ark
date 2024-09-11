@@ -20,7 +20,7 @@ type V1FinalizePaymentRequest struct {
 	// Forfeit txs signed by the user.
 	SignedForfeitTxs []string `json:"signedForfeitTxs"`
 
-	// If payment has reverse boarding, the user must sign the associated inputs.
+	// If payment has boarding input, the user must sign the associated inputs.
 	SignedRoundTx string `json:"signedRoundTx,omitempty"`
 }
 

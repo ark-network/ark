@@ -640,7 +640,7 @@
         "network": {
           "type": "string"
         },
-        "minRelayFee": {
+        "dust": {
           "type": "string",
           "format": "int64"
         },
@@ -880,6 +880,9 @@
         },
         "unsignedTree": {
           "$ref": "#/definitions/v1Tree"
+        },
+        "unsignedRoundTx": {
+          "type": "string"
         }
       }
     },

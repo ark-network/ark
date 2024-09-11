@@ -7,12 +7,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/ark-network/ark/server/internal/core/ports"
-	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/wire"
-	log "github.com/sirupsen/logrus"
 )
 
 type esploraClient struct {
@@ -106,37 +105,43 @@ func (f *esploraClient) getTxStatus(txid string) (isConfirmed bool, blocktime in
 	return response.Status.Confirmed, response.Status.BlockTime, nil
 }
 
-func (f *esploraClient) getFeeRate() (btcutil.Amount, error) {
+// GetFeeMap returns a map of sat/vbyte fees for different confirmation targets
+// it implements the chainfee.WebAPIFeeSource interface
+func (f *esploraClient) GetFeeMap() (map[uint32]uint32, error) {
 	endpoint, err := url.JoinPath(f.url, "fee-estimates")
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	resp, err := http.DefaultClient.Get(endpoint)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return 0, errors.New("fee-estimates endpoint HTTP error: " + resp.Status)
+		return nil, errors.New("fee-estimates endpoint HTTP error: " + resp.Status)
 	}
 
 	response := make(map[string]float64)
 
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	if len(response) == 0 {
-		log.Warn("empty response from esplora fee-estimates endpoint, default to 2 sat/vbyte")
-		return 2.0, nil
+		response = map[string]float64{"1": 2.0}
 	}
 
-	feeRate, ok := response["1"]
-	if !ok {
-		return 0, errors.New("failed to get fee rate for 1 block")
+	mapResponse := make(map[uint32]uint32)
+	for k, v := range response {
+		key, err := strconv.Atoi(k)
+		if err != nil {
+			return nil, err
+		}
+
+		mapResponse[uint32(key)] = uint32(v * 1000)
 	}
 
-	return btcutil.Amount(feeRate * 1000), nil
+	return mapResponse, nil
 }

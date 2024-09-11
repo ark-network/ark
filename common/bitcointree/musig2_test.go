@@ -40,6 +40,16 @@ func TestRoundTripSignTree(t *testing.T) {
 		cosigners = append(cosigners, bob.PubKey())
 		cosigners = append(cosigners, asp.PubKey())
 
+		_, sharedOutputAmount, err := bitcointree.CraftSharedOutput(
+			cosigners,
+			asp.PubKey(),
+			f.Receivers,
+			minRelayFee,
+			lifetime,
+			exitDelay,
+		)
+		require.NoError(t, err)
+
 		// Create a new tree
 		tree, err := bitcointree.CraftCongestionTree(
 			&wire.OutPoint{
@@ -67,16 +77,16 @@ func TestRoundTripSignTree(t *testing.T) {
 		root := sweepTapTree.RootNode.TapHash()
 
 		aspCoordinator, err := bitcointree.NewTreeCoordinatorSession(
+			sharedOutputAmount,
 			tree,
-			minRelayFee,
 			root.CloneBytes(),
 			[]*secp256k1.PublicKey{alice.PubKey(), bob.PubKey(), asp.PubKey()},
 		)
 		require.NoError(t, err)
 
-		aliceSession := bitcointree.NewTreeSignerSession(alice, tree, minRelayFee, root.CloneBytes())
-		bobSession := bitcointree.NewTreeSignerSession(bob, tree, minRelayFee, root.CloneBytes())
-		aspSession := bitcointree.NewTreeSignerSession(asp, tree, minRelayFee, root.CloneBytes())
+		aliceSession := bitcointree.NewTreeSignerSession(alice, sharedOutputAmount, tree, root.CloneBytes())
+		bobSession := bitcointree.NewTreeSignerSession(bob, sharedOutputAmount, tree, root.CloneBytes())
+		aspSession := bitcointree.NewTreeSignerSession(asp, sharedOutputAmount, tree, root.CloneBytes())
 
 		aliceNonces, err := aliceSession.GetNonces()
 		require.NoError(t, err)
@@ -199,9 +209,9 @@ func TestRoundTripSignTree(t *testing.T) {
 		require.NoError(t, err)
 
 		err = bitcointree.ValidateTreeSigs(
-			minRelayFee,
 			root.CloneBytes(),
 			aggregatedKey.FinalKey,
+			sharedOutputAmount,
 			signedTree,
 		)
 		require.NoError(t, err)

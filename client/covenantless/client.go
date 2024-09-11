@@ -264,11 +264,6 @@ func handleRoundStream(
 				return "", err
 			}
 
-			minRelayFee, err := utils.GetMinRelayFee(ctx)
-			if err != nil {
-				return "", err
-			}
-
 			aspPubkey, err := utils.GetAspPublicKey(ctx)
 			if err != nil {
 				return "", err
@@ -292,8 +287,16 @@ func handleRoundStream(
 			sweepTapTree := txscript.AssembleTaprootScriptTree(*sweepTapLeaf)
 			root := sweepTapTree.RootNode.TapHash()
 
+			roundTx, err := psbt.NewFromRawBytes(strings.NewReader(e.GetUnsignedRoundTx()), true)
+			if err != nil {
+				return "", err
+			}
+
+			sharedOutput := roundTx.UnsignedTx.TxOut[0]
+			sharedOutputValue := sharedOutput.Value
+
 			treeSignerSession = bitcointree.NewTreeSignerSession(
-				ephemeralKey, congestionTree, int64(minRelayFee), root.CloneBytes(),
+				ephemeralKey, sharedOutputValue, congestionTree, root.CloneBytes(),
 			)
 
 			nonces, err := treeSignerSession.GetNonces()
@@ -401,14 +404,9 @@ func handleRoundStream(
 				return "", err
 			}
 
-			minRelayFee, err := utils.GetMinRelayFee(ctx)
-			if err != nil {
-				return "", err
-			}
-
 			if !isOnchainOnly(receivers) {
 				if err := bitcointree.ValidateCongestionTree(
-					congestionTree, roundTx, aspPubkey, int64(roundLifetime), int64(minRelayFee),
+					congestionTree, roundTx, aspPubkey, int64(roundLifetime),
 				); err != nil {
 					return "", err
 				}
