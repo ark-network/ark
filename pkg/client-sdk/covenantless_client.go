@@ -1739,6 +1739,9 @@ func vtxosToTxsCovenantless(
 	for _, v := range append(spendable, spent...) {
 		// get vtxo amount
 		amount := int(v.Amount)
+		if !v.Pending {
+			continue
+		}
 		if v.Pending {
 			// find other spent vtxos that spent this one
 			relatedVtxos := findVtxosBySpentBy(spent, v.Txid)
