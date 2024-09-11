@@ -2,13 +2,11 @@ module github.com/ark-network/ark/server
 
 go 1.23.1
 
-replace github.com/ark-network/ark/common => ../common
-
 replace github.com/btcsuite/btcd/btcec/v2 => github.com/btcsuite/btcd/btcec/v2 v2.3.3
 
 require (
 	github.com/ark-network/ark/api-spec v0.0.0-20240812233307-18e343b31899
-	github.com/ark-network/ark/common v0.0.0-20240812233307-18e343b31899
+	github.com/ark-network/ark/common v0.0.0-20240910195127-ab2c9785d00e
 	github.com/ark-network/ark/server/pkg/kvdb v0.0.0-20240812233307-18e343b31899
 	github.com/ark-network/ark/server/pkg/macaroons v0.0.0-20240812233307-18e343b31899
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4
@@ -93,7 +91,7 @@ require (
 	github.com/jackc/pgtype v1.14.3 // indirect
 	github.com/jackc/pgx/v4 v4.18.3 // indirect
 	github.com/jackc/pgx/v5 v5.6.0 // indirect
-	github.com/jackc/puddle/v2 v2.2.1 // indirect
+	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jessevdk/go-flags v1.6.1 // indirect
 	github.com/jonboulle/clockwork v0.4.0 // indirect
 	github.com/jrick/logrotate v1.0.0 // indirect
@@ -153,12 +151,12 @@ require (
 	go.etcd.io/etcd/raft/v3 v3.5.15 // indirect
 	go.etcd.io/etcd/server/v3 v3.5.15 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0 // indirect
-	go.opentelemetry.io/otel v1.29.0 // indirect
+	go.opentelemetry.io/otel v1.30.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.28.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.28.0 // indirect
-	go.opentelemetry.io/otel/metric v1.29.0 // indirect
+	go.opentelemetry.io/otel/metric v1.30.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.28.0 // indirect
-	go.opentelemetry.io/otel/trace v1.29.0 // indirect
+	go.opentelemetry.io/otel/trace v1.30.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/mod v0.20.0 // indirect
