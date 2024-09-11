@@ -82,8 +82,8 @@ func (s *service) signPsbt(packet *psbt.Packet, inputsToSign []int) ([]uint32, e
 			managedAddress, _, _, err = s.wallet.ScriptForOutput(in.WitnessUtxo)
 			if err != nil {
 				log.WithError(err).Debugf(
-				    "failed to fetch address for input %d with script %s",
-				    idx, hex.EncodeToString(in.WitnessUtxo.PkScript),
+					"failed to fetch address for input %d with script %s",
+					idx, hex.EncodeToString(in.WitnessUtxo.PkScript),
 				)
 				continue
 			}
