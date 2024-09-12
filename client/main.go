@@ -485,6 +485,7 @@ func decrypt(encrypted, password []byte) ([]byte, error) {
 		return nil, err
 	}
 
+	// #nosec G407
 	nonce, text := data[:gcm.NonceSize()], data[gcm.NonceSize():]
 	return gcm.Open(nil, nonce, text, nil)
 }
