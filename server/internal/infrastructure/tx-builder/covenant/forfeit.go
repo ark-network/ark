@@ -16,11 +16,12 @@ import (
 
 func (b *txBuilder) craftForfeitTxs(
 	connectorTx *psetv2.Pset,
+	connectorAmount uint64,
 	vtxo domain.Vtxo,
 	vtxoForfeitTapleaf taproot.TapscriptElementsProof,
 	vtxoScript, aspScript []byte,
 ) (forfeitTxs []string, err error) {
-	connectors, prevouts := getConnectorInputs(connectorTx)
+	connectors, prevouts := getConnectorInputs(connectorTx, connectorAmount)
 
 	for i, connectorInput := range connectors {
 		weightEstimator := &input.TxWeightEstimator{}
