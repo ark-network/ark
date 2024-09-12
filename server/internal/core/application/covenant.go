@@ -624,12 +624,20 @@ func (s *covenantService) listenToScannerNotifications() {
 					vtxo := vtxos[0]
 
 					if !vtxo.Redeemed {
-						go s.markAsRedeemed(ctx, vtxo)
+						go func() {
+							if err := s.markAsRedeemed(ctx, vtxo); err != nil {
+								log.WithError(err).Warnf("failed to mark vtxo %s:%d as redeemed", vtxo.Txid, vtxo.VOut)
+							}
+						}()
 					}
 
 					if vtxo.Spent {
-						log.Infof("fraud detected on vtxo %s", vtxo.Txid)
-						go s.reactToFraud(ctx, vtxo, mutx)
+						log.Infof("fraud detected on vtxo %s:%d", vtxo.Txid, vtxo.VOut)
+						go func() {
+							if err := s.reactToFraud(ctx, vtxo, mutx); err != nil {
+								log.WithError(err).Warnf("failed to prevent fraud for vtxo %s:%d", vtxo.Txid, vtxo.VOut)
+							}
+						}()
 					}
 				}
 			}
@@ -730,11 +738,10 @@ func (s *covenantService) getNextConnector(
 	return "", 0, fmt.Errorf("no connector utxos found")
 }
 
-func (s *covenantService) reactToFraud(ctx context.Context, vtxo domain.Vtxo, mutx *sync.Mutex) {
+func (s *covenantService) reactToFraud(ctx context.Context, vtxo domain.Vtxo, mutx *sync.Mutex) error {
 	round, err := s.repoManager.Rounds().GetRoundWithTxid(ctx, vtxo.SpentBy)
 	if err != nil {
-		log.WithError(err).Warn("failed to retrieve round")
-		return
+		return fmt.Errorf("failed to retrieve round: %s", err)
 	}
 
 	mutx.Lock()
@@ -742,54 +749,48 @@ func (s *covenantService) reactToFraud(ctx context.Context, vtxo domain.Vtxo, mu
 
 	connectorTxid, connectorVout, err := s.getNextConnector(ctx, *round)
 	if err != nil {
-		log.WithError(err).Warn("failed to retrieve next connector")
-		return
+		return fmt.Errorf("failed to retrieve next connector: %s", err)
 	}
 
 	forfeitTx, err := findForfeitTxLiquid(round.ForfeitTxs, connectorTxid, connectorVout, vtxo.Txid)
 	if err != nil {
-		log.WithError(err).Warn("failed to retrieve forfeit tx")
-		return
+		return fmt.Errorf("failed to find forfeit tx: %s", err)
 	}
 
 	if err := s.wallet.LockConnectorUtxos(ctx, []ports.TxOutpoint{txOutpoint{connectorTxid, connectorVout}}); err != nil {
-		log.WithError(err).Warn("failed to lock connector utxos")
-		return
+		return fmt.Errorf("failed to lock connector utxos: %s", err)
 	}
 
 	signedForfeitTx, err := s.wallet.SignTransaction(ctx, forfeitTx, false)
 	if err != nil {
-		log.WithError(err).Warn("failed to sign connector input in forfeit tx")
-		return
+		return fmt.Errorf("failed to sign connector input in forfeit tx: %s", err)
 	}
 
 	signedForfeitTx, err = s.wallet.SignTransactionTapscript(ctx, signedForfeitTx, []int{1})
 	if err != nil {
-		log.WithError(err).Warn("failed to sign vtxo input in forfeit tx")
-		return
+		return fmt.Errorf("failed to sign vtxo input in forfeit tx: %s", err)
 	}
 
 	forfeitTxHex, err := s.builder.FinalizeAndExtract(signedForfeitTx)
 	if err != nil {
-		log.WithError(err).Warn("failed to finalize forfeit tx")
-		return
+		return fmt.Errorf("failed to finalize forfeit tx: %s", err)
 	}
 
 	forfeitTxid, err := s.wallet.BroadcastTransaction(ctx, forfeitTxHex)
 	if err != nil {
-		log.WithError(err).Warn("failed to broadcast forfeit tx")
-		return
+		return fmt.Errorf("failed to broadcast forfeit tx: %s", err)
 	}
 
 	log.Debugf("broadcasted forfeit tx %s", forfeitTxid)
+	return nil
 }
 
-func (s *covenantService) markAsRedeemed(ctx context.Context, vtxo domain.Vtxo) {
+func (s *covenantService) markAsRedeemed(ctx context.Context, vtxo domain.Vtxo) error {
 	if err := s.repoManager.Vtxos().RedeemVtxos(ctx, []domain.VtxoKey{vtxo.VtxoKey}); err != nil {
-		log.WithError(err).Warn("failed to redeem vtxos, skipping...")
-		return
+		return err
 	}
 	log.Debugf("vtxo %s redeemed", vtxo.Txid)
+	return nil
 }
 
 func (s *covenantService) updateVtxoSet(round *domain.Round) {
