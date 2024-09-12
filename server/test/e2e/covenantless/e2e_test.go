@@ -214,69 +214,71 @@ func TestReactToSpentVtxosRedemption(t *testing.T) {
 }
 
 func TestReactToAsyncSpentVtxosRedemption(t *testing.T) {
-	ctx := context.Background()
-	sdkClient, grpcClient := setupArkSDK(t)
-	defer grpcClient.Close()
+	t.Run("receveir claimed funds", func(t *testing.T) {
+		ctx := context.Background()
+		sdkClient, grpcClient := setupArkSDK(t)
+		defer grpcClient.Close()
 
-	offchainAddress, boardingAddress, err := sdkClient.Receive(ctx)
-	require.NoError(t, err)
-
-	_, err = utils.RunCommand("nigiri", "faucet", boardingAddress)
-	require.NoError(t, err)
-
-	time.Sleep(5 * time.Second)
-
-	roundId, err := sdkClient.Claim(ctx)
-	require.NoError(t, err)
-
-	err = utils.GenerateBlock()
-	require.NoError(t, err)
-
-	_, err = sdkClient.SendAsync(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(offchainAddress, 1000)})
-	require.NoError(t, err)
-
-	_, err = sdkClient.Claim(ctx)
-	require.NoError(t, err)
-
-	time.Sleep(5 * time.Second)
-
-	_, spentVtxos, err := sdkClient.ListVtxos(ctx)
-	require.NoError(t, err)
-	require.NotEmpty(t, spentVtxos)
-
-	var vtxo client.Vtxo
-
-	for _, v := range spentVtxos {
-		if v.RoundTxid == roundId {
-			vtxo = v
-			break
-		}
-	}
-	require.NotEmpty(t, vtxo)
-
-	round, err := grpcClient.GetRound(ctx, vtxo.RoundTxid)
-	require.NoError(t, err)
-
-	expl := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
-
-	branch, err := redemption.NewCovenantlessRedeemBranch(expl, round.Tree, vtxo)
-	require.NoError(t, err)
-
-	txs, err := branch.RedeemPath()
-	require.NoError(t, err)
-
-	for _, tx := range txs {
-		_, err := expl.Broadcast(tx)
+		offchainAddress, boardingAddress, err := sdkClient.Receive(ctx)
 		require.NoError(t, err)
-	}
 
-	// give time for the ASP to detect and process the fraud
-	time.Sleep(50 * time.Second)
+		_, err = utils.RunCommand("nigiri", "faucet", boardingAddress)
+		require.NoError(t, err)
 
-	balance, err := sdkClient.Balance(ctx, true)
-	require.NoError(t, err)
+		time.Sleep(5 * time.Second)
 
-	require.Empty(t, balance.OnchainBalance.LockedAmount)
+		roundId, err := sdkClient.Claim(ctx)
+		require.NoError(t, err)
+
+		err = utils.GenerateBlock()
+		require.NoError(t, err)
+
+		_, err = sdkClient.SendAsync(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(offchainAddress, 1000)})
+		require.NoError(t, err)
+
+		_, err = sdkClient.Claim(ctx)
+		require.NoError(t, err)
+
+		time.Sleep(5 * time.Second)
+
+		_, spentVtxos, err := sdkClient.ListVtxos(ctx)
+		require.NoError(t, err)
+		require.NotEmpty(t, spentVtxos)
+
+		var vtxo client.Vtxo
+
+		for _, v := range spentVtxos {
+			if v.RoundTxid == roundId {
+				vtxo = v
+				break
+			}
+		}
+		require.NotEmpty(t, vtxo)
+
+		round, err := grpcClient.GetRound(ctx, vtxo.RoundTxid)
+		require.NoError(t, err)
+
+		expl := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
+
+		branch, err := redemption.NewCovenantlessRedeemBranch(expl, round.Tree, vtxo)
+		require.NoError(t, err)
+
+		txs, err := branch.RedeemPath()
+		require.NoError(t, err)
+
+		for _, tx := range txs {
+			_, err := expl.Broadcast(tx)
+			require.NoError(t, err)
+		}
+
+		// give time for the ASP to detect and process the fraud
+		time.Sleep(50 * time.Second)
+
+		balance, err := sdkClient.Balance(ctx, true)
+		require.NoError(t, err)
+
+		require.Empty(t, balance.OnchainBalance.LockedAmount)
+	})
 }
 
 func runClarkCommand(arg ...string) (string, error) {
