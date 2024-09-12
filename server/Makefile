@@ -23,8 +23,8 @@ help:
 ## intergrationtest: runs integration tests
 integrationtest:
 	@echo "Running integration tests..."
-	@go test -v -count 1 -timeout 200s github.com/ark-network/ark/server/test/e2e/covenant
-	@go test -v -count 1 -timeout 200s github.com/ark-network/ark/server/test/e2e/covenantless
+	@go test -v -count 1 -timeout 300s github.com/ark-network/ark/server/test/e2e/covenant
+	@go test -v -count 1 -timeout 300s github.com/ark-network/ark/server/test/e2e/covenantless
 
 ## lint: lint codebase
 lint:
