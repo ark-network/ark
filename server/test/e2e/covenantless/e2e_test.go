@@ -378,6 +378,16 @@ func setupAspWallet() error {
 		return fmt.Errorf("failed to fund wallet: %s", err)
 	}
 
+	_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
+	if err != nil {
+		return fmt.Errorf("failed to fund wallet: %s", err)
+	}
+
+	_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
+	if err != nil {
+		return fmt.Errorf("failed to fund wallet: %s", err)
+	}
+
 	time.Sleep(5 * time.Second)
 
 	return nil

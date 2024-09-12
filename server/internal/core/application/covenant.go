@@ -646,8 +646,16 @@ func (s *covenantService) getNextConnector(
 		return "", 0, err
 	}
 
-	lastOutput := lastConnectorPtx.Outputs[len(lastConnectorPtx.Outputs)-1]
-	connectorAmount := lastOutput.Value
+	var connectorAmount uint64
+	for i := len(lastConnectorPtx.Outputs) - 1; i >= 0; i-- {
+		o := lastConnectorPtx.Outputs[i]
+		if len(o.Script) <= 0 {
+			continue //	skip the fee output
+		}
+
+		connectorAmount = o.Value
+		break
+	}
 
 	utxos, err := s.wallet.ListConnectorUtxos(ctx, round.ConnectorAddress)
 	if err != nil {
