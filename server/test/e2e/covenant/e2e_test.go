@@ -166,14 +166,16 @@ func TestReactToSpentVtxosRedemption(t *testing.T) {
 	_, err = client.Claim(ctx)
 	require.NoError(t, err)
 
+	time.Sleep(3 * time.Second)
+
+	spendable, _, err := client.ListVtxos(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, spendable)
+
+	vtxo := spendable[0]
+
 	_, err = client.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewLiquidReceiver(offchainAddress, 1000)})
 	require.NoError(t, err)
-
-	_, spentVtxos, err := client.ListVtxos(ctx)
-	require.NoError(t, err)
-	require.NotEmpty(t, spentVtxos)
-
-	vtxo := spentVtxos[0]
 
 	round, err := grpcClient.GetRound(ctx, vtxo.RoundTxid)
 	require.NoError(t, err)
