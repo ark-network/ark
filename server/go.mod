@@ -3,7 +3,6 @@ module github.com/ark-network/ark/server
 go 1.23.1
 
 replace github.com/btcsuite/btcd/btcec/v2 => github.com/btcsuite/btcd/btcec/v2 v2.3.3
-replace github.com/ark-network/ark/pkg/client-sdk => ../pkg/client-sdk
 
 require (
 	github.com/ark-network/ark/api-spec v0.0.0-20240812233307-18e343b31899
