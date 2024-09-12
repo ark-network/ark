@@ -30,4 +30,5 @@ type WalletService interface {
 	SignTransaction(
 		ctx context.Context, explorerSvc explorer.Explorer, tx string,
 	) (signedTx string, err error)
+	Dump(ctx context.Context) (seed string, err error)
 }

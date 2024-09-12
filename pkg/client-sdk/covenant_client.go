@@ -45,7 +45,7 @@ func (r liquidReceiver) Amount() uint64 {
 	return r.amount
 }
 
-func (r liquidReceiver) isOnchain() bool {
+func (r liquidReceiver) IsOnchain() bool {
 	_, err := address.ToOutputScript(r.to)
 	return err == nil
 }
@@ -287,7 +287,7 @@ func (a *covenantArkClient) SendOnChain(
 	ctx context.Context, receivers []Receiver,
 ) (string, error) {
 	for _, receiver := range receivers {
-		if !receiver.isOnchain() {
+		if !receiver.IsOnchain() {
 			return "", fmt.Errorf("invalid receiver address '%s': must be onchain", receiver.To())
 		}
 	}
@@ -300,7 +300,7 @@ func (a *covenantArkClient) SendOffChain(
 	withExpiryCoinselect bool, receivers []Receiver,
 ) (string, error) {
 	for _, receiver := range receivers {
-		if receiver.isOnchain() {
+		if receiver.IsOnchain() {
 			return "", fmt.Errorf("invalid receiver address '%s': must be offchain", receiver.To())
 		}
 	}

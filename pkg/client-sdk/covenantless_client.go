@@ -49,7 +49,7 @@ func (r bitcoinReceiver) Amount() uint64 {
 	return r.amount
 }
 
-func (r bitcoinReceiver) isOnchain() bool {
+func (r bitcoinReceiver) IsOnchain() bool {
 	_, err := btcutil.DecodeAddress(r.to, nil)
 	return err == nil
 }
@@ -291,7 +291,7 @@ func (a *covenantlessArkClient) SendOnChain(
 	ctx context.Context, receivers []Receiver,
 ) (string, error) {
 	for _, receiver := range receivers {
-		if !receiver.isOnchain() {
+		if !receiver.IsOnchain() {
 			return "", fmt.Errorf("invalid receiver address '%s': must be onchain", receiver.To())
 		}
 	}
@@ -304,7 +304,7 @@ func (a *covenantlessArkClient) SendOffChain(
 	withExpiryCoinselect bool, receivers []Receiver,
 ) (string, error) {
 	for _, receiver := range receivers {
-		if receiver.isOnchain() {
+		if receiver.IsOnchain() {
 			return "", fmt.Errorf("invalid receiver address '%s': must be offchain", receiver.To())
 		}
 	}

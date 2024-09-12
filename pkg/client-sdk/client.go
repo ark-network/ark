@@ -201,6 +201,10 @@ func (a *arkClient) IsLocked(ctx context.Context) bool {
 	return a.wallet.IsLocked()
 }
 
+func (a *arkClient) Dump(ctx context.Context) (string, error) {
+	return a.wallet.Dump(ctx)
+}
+
 func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
 	offchainAddr, boardingAddr, err := a.wallet.NewAddress(ctx, false)
 	if err != nil {
