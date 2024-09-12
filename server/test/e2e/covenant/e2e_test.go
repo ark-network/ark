@@ -38,7 +38,7 @@ func TestMain(m *testing.M) {
 
 	time.Sleep(3 * time.Second)
 
-	_, err = runArkCommand("init", "--asp-url", "localhost:6060", "--password", utils.Password, "--network", common.LiquidRegTest.Name, "--explorer", "http://chopsticks-liquid:3000")
+	_, err = runArkCommand("init", "--asp-url", "localhost:6060", "--password", utils.Password, "--network", common.LiquidRegTest.Name)
 	if err != nil {
 		fmt.Printf("error initializing ark config: %s", err)
 		os.Exit(1)
