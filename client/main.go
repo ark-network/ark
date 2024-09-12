@@ -51,6 +51,7 @@ func main() {
 	)
 	app.Flags = []cli.Flag{
 		datadirFlag,
+		networkFlag,
 	}
 	app.Before = func(ctx *cli.Context) error {
 		sdk, err := getArkSdkClient(ctx)
@@ -76,6 +77,11 @@ var (
 		Value:    common.AppDataDir("ark-cli", false),
 		EnvVars:  []string{DatadirEnvVar},
 	}
+	networkFlag = &cli.StringFlag{
+		Name:  "network",
+		Usage: "network to use liquid, testnet, regtest, signet for bitcoin, or liquid, liquidtestnet, liquidregtest for liquid)",
+		Value: "liquid",
+	}
 	passwordFlag = &cli.StringFlag{
 		Name:  "password",
 		Usage: "password to unlock the wallet",
@@ -89,7 +95,7 @@ var (
 		Usage: "optional private key to encrypt",
 	}
 	urlFlag = &cli.StringFlag{
-		Name:     "ark-url",
+		Name:     "asp-url",
 		Usage:    "the url of the ASP to connect to",
 		Required: true,
 	}
@@ -130,7 +136,7 @@ var (
 		Action: func(ctx *cli.Context) error {
 			return initArkSdk(ctx)
 		},
-		Flags: []cli.Flag{passwordFlag, privateKeyFlag, urlFlag},
+		Flags: []cli.Flag{networkFlag, passwordFlag, privateKeyFlag, urlFlag},
 	}
 	configCommand = cli.Command{
 		Name:  "config",
@@ -214,7 +220,20 @@ func config(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	return printJSON(cfgData)
+
+	cfg := map[string]interface{}{
+		"asp_url":                      cfgData.AspUrl,
+		"asp_pubkey":                   hex.EncodeToString(cfgData.AspPubkey.SerializeCompressed()),
+		"wallet_type":                  cfgData.WalletType,
+		"client_tyep":                  cfgData.ClientType,
+		"network":                      cfgData.Network.Name,
+		"round_lifetime":               cfgData.RoundLifetime,
+		"unilateral_exit_delay":        cfgData.UnilateralExitDelay,
+		"dust":                         cfgData.Dust,
+		"boarding_descriptor_template": cfgData.BoardingDescriptorTemplate,
+	}
+
+	return printJSON(cfg)
 }
 
 func dumpPrivKey(ctx *cli.Context) error {
@@ -395,7 +414,7 @@ func getConfigStore(dataDir string) (store.ConfigStore, error) {
 
 func getNetwork(ctx *cli.Context, configData *store.StoreData) string {
 	if configData == nil {
-		return strings.ToLower(ctx.String("network"))
+		return strings.ToLower(ctx.String(networkFlag.Name))
 	}
 	return configData.Network.Name
 }
