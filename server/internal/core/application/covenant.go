@@ -628,7 +628,7 @@ func (s *covenantService) listenToScannerNotifications() {
 					}
 
 					if vtxo.Spent {
-						log.Debugf("fraud detected on vtxo %s", vtxo.Txid)
+						log.Infof("fraud detected on vtxo %s", vtxo.Txid)
 						go s.reactToFraud(ctx, vtxo, mutx)
 					}
 				}
