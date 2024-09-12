@@ -1,6 +1,6 @@
 module github.com/ark-network/ark/api-spec
 
-go 1.22.6
+go 1.23.1
 
 require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.21.0
