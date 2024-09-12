@@ -104,6 +104,7 @@ func getClientFromState(ctx *cli.Context) (arkv1.ArkServiceClient, func(), error
 func getClient(addr string) (arkv1.ArkServiceClient, func(), error) {
 	creds := insecure.NewCredentials()
 	port := 80
+	addr = strings.TrimPrefix(addr, "http://")
 	if strings.HasPrefix(addr, "https://") {
 		addr = strings.TrimPrefix(addr, "https://")
 		creds = credentials.NewTLS(nil)
