@@ -3,8 +3,8 @@ package wallet
 import (
 	"context"
 
-	"github.com/ark-network/ark-sdk/explorer"
-	"github.com/ark-network/ark-sdk/wallet/singlekey/store"
+	"github.com/ark-network/ark/pkg/client-sdk/explorer"
+	"github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store"
 )
 
 const (

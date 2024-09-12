@@ -13,10 +13,10 @@ import (
 	"strings"
 	"syscall"
 
-	arksdk "github.com/ark-network/ark-sdk"
-	"github.com/ark-network/ark-sdk/store"
-	filestore "github.com/ark-network/ark-sdk/store/file"
 	"github.com/ark-network/ark/common"
+	arksdk "github.com/ark-network/ark/pkg/client-sdk"
+	"github.com/ark-network/ark/pkg/client-sdk/store"
+	filestore "github.com/ark-network/ark/pkg/client-sdk/store/file"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/crypto/scrypt"
