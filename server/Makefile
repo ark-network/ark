@@ -30,8 +30,7 @@ lint:
 	@echo "Linting code..."
 	@golangci-lint run --fix
 
-## run: run in regtest mode with bitcoind
-run: clean
+ run: clean
 	@echo "Running arkd with Bitcoin Core in regtest mode ..."
 	@export ARK_ROUND_INTERVAL=10; \
 	export ARK_LOG_LEVEL=5; \

@@ -39,7 +39,7 @@ func TestMain(m *testing.M) {
 
 	time.Sleep(3 * time.Second)
 
-	_, err = runClarkCommand("init", "--asp-url", "localhost:7070", "--password", utils.Password, "--network", "regtest", "--explorer", "http://chopsticks:3000")
+	_, err = runClarkCommand("init", "--asp-url", "localhost:7070", "--password", utils.Password, "--network", "regtest")
 	if err != nil {
 		fmt.Printf("error initializing ark config: %s", err)
 		os.Exit(1)
@@ -68,12 +68,12 @@ func TestSendOffchain(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	_, err = runClarkCommand("claim", "--password", utils.Password)
+	_, err = runClarkCommand("claim")
 	require.NoError(t, err)
 
 	time.Sleep(3 * time.Second)
 
-	_, err = runClarkCommand("send", "--amount", "10000", "--to", receive.Offchain, "--password", utils.Password)
+	_, err = runClarkCommand("send", "--amount", "10000", "--to", receive.Offchain)
 	require.NoError(t, err)
 
 	var balance utils.ArkBalance
@@ -82,7 +82,7 @@ func TestSendOffchain(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 	require.NotZero(t, balance.Offchain.Total)
 
-	_, err = runClarkCommand("claim", "--password", utils.Password)
+	_, err = runClarkCommand("claim")
 	require.NoError(t, err)
 
 	balanceStr, err = runClarkCommand("balance")
@@ -104,7 +104,7 @@ func TestUnilateralExit(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	_, err = runClarkCommand("claim", "--password", utils.Password)
+	_, err = runClarkCommand("claim")
 	require.NoError(t, err)
 
 	time.Sleep(3 * time.Second)
@@ -115,7 +115,7 @@ func TestUnilateralExit(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 	require.NotZero(t, balance.Offchain.Total)
 
-	_, err = runClarkCommand("redeem", "--force", "--password", utils.Password)
+	_, err = runClarkCommand("redeem", "--force")
 	require.NoError(t, err)
 
 	err = utils.GenerateBlock()
@@ -144,12 +144,12 @@ func TestCollaborativeExit(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	_, err = runClarkCommand("claim", "--password", utils.Password)
+	_, err = runClarkCommand("claim")
 	require.NoError(t, err)
 
 	time.Sleep(3 * time.Second)
 
-	_, err = runClarkCommand("redeem", "--amount", "1000", "--address", redeemAddress, "--password", utils.Password)
+	_, err = runClarkCommand("redeem", "--amount", "1000", "--address", redeemAddress)
 	require.NoError(t, err)
 }
 
