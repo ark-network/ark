@@ -1481,7 +1481,7 @@ func (s *covenantlessService) reactToFraud(ctx context.Context, vtxo domain.Vtxo
 
 	log.Debugf("found next connector %s:%d", connectorTxid, connectorVout)
 
-	forfeitTx, err := findForfeitTxBitcoin(round.ForfeitTxs, connectorTxid, connectorVout, vtxo.Txid, vtxo.VOut)
+	forfeitTx, err := findForfeitTxBitcoin(round.ForfeitTxs, connectorTxid, connectorVout, vtxo.VtxoKey)
 	if err != nil {
 		log.WithError(err).Warn("failed to retrieve forfeit tx")
 		return
@@ -1514,7 +1514,7 @@ func (s *covenantlessService) reactToFraud(ctx context.Context, vtxo domain.Vtxo
 }
 
 func findForfeitTxBitcoin(
-	forfeits []string, connectorTxid string, connectorVout uint32, vtxoTxid string, vtxoVout uint32,
+	forfeits []string, connectorTxid string, connectorVout uint32, vtxo domain.VtxoKey,
 ) (string, error) {
 	for _, forfeit := range forfeits {
 		forfeitTx, err := psbt.NewFromRawBytes(strings.NewReader(forfeit), true)
@@ -1527,8 +1527,8 @@ func findForfeitTxBitcoin(
 
 		if connector.PreviousOutPoint.Hash.String() == connectorTxid &&
 			connector.PreviousOutPoint.Index == connectorVout &&
-			vtxoInput.PreviousOutPoint.Hash.String() == vtxoTxid &&
-			vtxoInput.PreviousOutPoint.Index == vtxoVout {
+			vtxoInput.PreviousOutPoint.Hash.String() == vtxo.Txid &&
+			vtxoInput.PreviousOutPoint.Index == vtxo.VOut {
 			return forfeit, nil
 		}
 	}
