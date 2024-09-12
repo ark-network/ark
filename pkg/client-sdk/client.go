@@ -272,8 +272,6 @@ func getExplorer(
 		return nil, fmt.Errorf("invalid network")
 	}
 
-	fmt.Println("url", url)
-
 	return explorer.NewExplorer(url, utils.NetworkFromString(network)), nil
 }
 

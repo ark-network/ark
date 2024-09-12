@@ -59,6 +59,7 @@ func main() {
 			return fmt.Errorf("error initializing ark sdk client: %v", err)
 		}
 		arkSdkClient = sdk
+
 		return nil
 	}
 
@@ -166,6 +167,7 @@ var (
 		Action: func(ctx *cli.Context) error {
 			return claim(ctx)
 		},
+		Flags: []cli.Flag{passwordFlag},
 	}
 	balanceCommand = cli.Command{
 		Name:  "balance",
@@ -181,12 +183,12 @@ var (
 		Action: func(ctx *cli.Context) error {
 			return send(ctx)
 		},
-		Flags: []cli.Flag{receiversFlag, toFlag, amountFlag, enableExpiryCoinselectFlag},
+		Flags: []cli.Flag{receiversFlag, toFlag, amountFlag, enableExpiryCoinselectFlag, passwordFlag},
 	}
 	redeemCommand = cli.Command{
 		Name:  "redeem",
 		Usage: "Redeem offchain funds, collaboratively or unilaterally",
-		Flags: []cli.Flag{addressFlag, amountToRedeemFlag, forceFlag},
+		Flags: []cli.Flag{addressFlag, amountToRedeemFlag, forceFlag, passwordFlag},
 		Action: func(ctx *cli.Context) error {
 			return redeem(ctx)
 		},
@@ -278,6 +280,13 @@ func receive(ctx *cli.Context) error {
 }
 
 func claim(ctx *cli.Context) error {
+	if err := arkSdkClient.Unlock(
+		context.Background(),
+		ctx.String(passwordFlag.Name),
+	); err != nil {
+		return err
+	}
+
 	txID, err := arkSdkClient.Claim(context.Background())
 	if err != nil {
 		return err
@@ -288,6 +297,13 @@ func claim(ctx *cli.Context) error {
 }
 
 func send(ctx *cli.Context) error {
+	if err := arkSdkClient.Unlock(
+		context.Background(),
+		ctx.String(passwordFlag.Name),
+	); err != nil {
+		return err
+	}
+
 	rcvrs, to, amount := ctx.String(receiversFlag.Name), ctx.String(toFlag.Name), ctx.Uint64(amountFlag.Name)
 
 	if rcvrs == "" && to == "" && amount == 0 {
@@ -343,6 +359,13 @@ func balance(ctx *cli.Context) error {
 }
 
 func redeem(ctx *cli.Context) error {
+	if err := arkSdkClient.Unlock(
+		context.Background(),
+		ctx.String(passwordFlag.Name),
+	); err != nil {
+		return err
+	}
+
 	address, amount := ctx.String(addressFlag.Name), ctx.Uint64(amountToRedeemFlag.Name)
 	force := ctx.Bool(forceFlag.Name)
 

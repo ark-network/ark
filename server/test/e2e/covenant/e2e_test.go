@@ -66,12 +66,12 @@ func TestSendOffchain(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	_, err = runArkCommand("claim")
+	_, err = runArkCommand("claim", "--password", utils.Password)
 	require.NoError(t, err)
 
 	time.Sleep(3 * time.Second)
 
-	_, err = runArkCommand("send", "--amount", "1000", "--to", receive.Offchain)
+	_, err = runArkCommand("send", "--amount", "1000", "--to", receive.Offchain, "--password", utils.Password)
 	require.NoError(t, err)
 
 	var balance utils.ArkBalance
@@ -93,7 +93,7 @@ func TestUnilateralExit(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	_, err = runArkCommand("claim")
+	_, err = runArkCommand("claim", "--password", utils.Password)
 	require.NoError(t, err)
 
 	time.Sleep(3 * time.Second)
@@ -104,7 +104,7 @@ func TestUnilateralExit(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 	require.NotZero(t, balance.Offchain.Total)
 
-	_, err = runArkCommand("redeem", "--force")
+	_, err = runArkCommand("redeem", "--force", "--password", utils.Password)
 	require.NoError(t, err)
 
 	err = utils.GenerateBlock()
@@ -134,12 +134,12 @@ func TestCollaborativeExit(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	_, err = runArkCommand("claim")
+	_, err = runArkCommand("claim", "--password", utils.Password)
 	require.NoError(t, err)
 
 	time.Sleep(3 * time.Second)
 
-	_, err = runArkCommand("redeem", "--amount", "10000", "--address", redeemAddr)
+	_, err = runArkCommand("redeem", "--amount", "10000", "--address", redeemAddr, "--password", utils.Password)
 	require.NoError(t, err)
 }
 
