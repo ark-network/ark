@@ -2,6 +2,7 @@ package arksdk
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/ark-network/ark/common"
@@ -19,13 +20,16 @@ var (
 		GrpcClient: grpcclient.NewClient,
 		RestClient: restclient.NewClient,
 	}
+
+	liquidRegTestUrl  = getEnv("LIQUID_REGTEST_URL", "http://localhost:3001")
+	bitcoinRegTestUrl = getEnv("BITCOIN_REGTEST_URL", "http://localhost:3000")
 	supportedNetworks = utils.SupportedType[string]{
 		common.Liquid.Name:         "https://blockstream.info/liquid/api",
 		common.LiquidTestNet.Name:  "https://blockstream.info/liquidtestnet/api",
-		common.LiquidRegTest.Name:  "http://localhost:3001",
+		common.LiquidRegTest.Name:  liquidRegTestUrl,
 		common.Bitcoin.Name:        "https://blockstream.info/api",
 		common.BitcoinTestNet.Name: "https://blockstream.info/testnet/api",
-		common.BitcoinRegTest.Name: "http://localhost:3000",
+		common.BitcoinRegTest.Name: bitcoinRegTestUrl,
 		common.BitcoinSigNet.Name:  "https://mutinynet.com/api",
 	}
 )
@@ -146,4 +150,11 @@ type Transaction struct {
 	Pending    bool
 	Claimed    bool
 	CreatedAt  time.Time
+}
+
+func getEnv(key, fallback string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return fallback
 }
