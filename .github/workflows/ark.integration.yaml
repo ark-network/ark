@@ -14,9 +14,6 @@ jobs:
     defaults:
       run:
         working-directory: ./server
-    env:
-      LIQUID_REGTEST_URL: http://chopsticks-liquid:3000
-      BITCOIN_REGTEST_URL: http://chopsticks:3000
     steps:
       - uses: actions/setup-go@v3
         with:
