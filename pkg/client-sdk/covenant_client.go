@@ -521,88 +521,42 @@ func (a *covenantArkClient) GetTransactionHistory(ctx context.Context) ([]Transa
 		return nil, err
 	}
 
-	return vtxosToTxsCovenant(config.RoundLifetime, spendableVtxos, spentVtxos)
+	boardingTxs := a.getBoardingTxs(ctx)
+
+	return vtxosToTxsCovenant(config.RoundLifetime, spendableVtxos, spentVtxos, boardingTxs)
 }
 
-func vtxosToTxsCovenant(roundLifetime int64, spendable, spent []client.Vtxo) ([]Transaction, error) {
-	transactions := make([]Transaction, 0)
+func (a *covenantArkClient) getAllBoardingUtxos(ctx context.Context) ([]explorer.Utxo, error) {
+	_, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-	for _, v := range append(spendable, spent...) {
-		// get vtxo amount
-		amount := int(v.Amount)
-		if v.Pending {
-			// find other spent vtxos that spent this one
-			relatedVtxos := findVtxosBySpentBy(spent, v.Txid)
-			for _, r := range relatedVtxos {
-				if r.Amount < math.MaxInt64 {
-					rAmount := int(r.Amount)
-					amount -= rAmount
+	utxos := []explorer.Utxo{}
+	for _, addr := range boardingAddrs {
+		txs, err := a.explorer.GetTxs(addr)
+		if err != nil {
+			continue
+		}
+		for _, tx := range txs {
+			for i, vout := range tx.Vout {
+				if vout.Address == addr {
+					createdAt := time.Time{}
+					if tx.Status.Confirmed {
+						createdAt = time.Unix(tx.Status.Blocktime, 0)
+					}
+					utxos = append(utxos, explorer.Utxo{
+						Txid:      tx.Txid,
+						Vout:      uint32(i),
+						Amount:    vout.Amount,
+						CreatedAt: createdAt,
+					})
 				}
 			}
-		} else {
-			// an onboarding tx has pending false and no pending true related txs
-			relatedVtxos := findVtxosBySpentBy(spent, v.RoundTxid)
-			if len(relatedVtxos) > 0 { // not an onboard tx, ignore
-				continue
-			}
-		} // what kind of tx was this? send or receive?
-		txType := TxReceived
-		if amount < 0 {
-			txType = TxSent
 		}
-		// check if is a pending tx
-		pending := false
-		claimed := true
-		if len(v.RoundTxid) == 0 && len(v.SpentBy) == 0 {
-			pending = true
-			claimed = false
-		}
-		redeemTxid := ""
-		if len(v.RedeemTx) > 0 {
-			txid, err := getRedeemTxidCovenant(v.RedeemTx)
-			if err != nil {
-				return nil, err
-			}
-			redeemTxid = txid
-		}
-
-		// add transaction
-		transactions = append(transactions, Transaction{
-			RoundTxid:  v.RoundTxid,
-			RedeemTxid: redeemTxid,
-			Amount:     uint64(math.Abs(float64(amount))),
-			Type:       txType,
-			Pending:    pending,
-			Claimed:    claimed,
-			CreatedAt:  getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
-		})
 	}
 
-	// Sort the slice by age
-	sort.Slice(transactions, func(i, j int) bool {
-		txi := transactions[i]
-		txj := transactions[j]
-		if txi.CreatedAt.Equal(txj.CreatedAt) {
-			return txi.Type > txj.Type
-		}
-		return txi.CreatedAt.After(txj.CreatedAt)
-	})
-
-	return transactions, nil
-}
-
-func getRedeemTxidCovenant(redeemTx string) (string, error) {
-	redeemPtx, err := psetv2.NewPsetFromBase64(redeemTx)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse redeem tx: %s", err)
-	}
-
-	tx, err := redeemPtx.UnsignedTx()
-	if err != nil {
-		return "", fmt.Errorf("failed to get txid from redeem tx: %s", err)
-	}
-
-	return tx.TxHash().String(), nil
+	return utxos, nil
 }
 
 func (a *covenantArkClient) getClaimableBoardingUtxos(ctx context.Context) ([]explorer.Utxo, error) {
@@ -1466,4 +1420,125 @@ func (a *covenantArkClient) selfTransferAllPendingPayments(
 	}
 
 	return roundTxid, nil
+}
+
+func (a *covenantArkClient) getBoardingTxs(ctx context.Context) (transactions []Transaction) {
+	utxos, err := a.getClaimableBoardingUtxos(ctx)
+	if err != nil {
+		return nil
+	}
+
+	isPending := make(map[string]bool)
+	for _, u := range utxos {
+		isPending[u.Txid] = true
+	}
+
+	allUtxos, err := a.getAllBoardingUtxos(ctx)
+	if err != nil {
+		return nil
+	}
+
+	for _, u := range allUtxos {
+		pending := false
+		if isPending[u.Txid] {
+			pending = true
+		}
+		transactions = append(transactions, Transaction{
+			BoardingTxid: u.Txid,
+			Amount:       u.Amount,
+			Type:         TxReceived,
+			Pending:      pending,
+			Claimed:      !pending,
+			CreatedAt:    u.CreatedAt,
+		})
+	}
+	return
+}
+
+func vtxosToTxsCovenant(
+	roundLifetime int64, spendable, spent []client.Vtxo, boardingTxs []Transaction,
+) ([]Transaction, error) {
+	transactions := make([]Transaction, 0)
+	unconfirmedBoardingTxs := make([]Transaction, 0)
+	for _, tx := range boardingTxs {
+		emptyTime := time.Time{}
+		if tx.CreatedAt == emptyTime {
+			unconfirmedBoardingTxs = append(unconfirmedBoardingTxs, tx)
+			continue
+		}
+		transactions = append(transactions, tx)
+	}
+
+	for _, v := range append(spendable, spent...) {
+		// get vtxo amount
+		amount := int(v.Amount)
+		if !v.Pending {
+			continue
+		}
+		// find other spent vtxos that spent this one
+		relatedVtxos := findVtxosBySpentBy(spent, v.Txid)
+		for _, r := range relatedVtxos {
+			if r.Amount < math.MaxInt64 {
+				rAmount := int(r.Amount)
+				amount -= rAmount
+			}
+		}
+		// what kind of tx was this? send or receive?
+		txType := TxReceived
+		if amount < 0 {
+			txType = TxSent
+		}
+		// check if is a pending tx
+		pending := false
+		claimed := true
+		if len(v.RoundTxid) == 0 && len(v.SpentBy) == 0 {
+			pending = true
+			claimed = false
+		}
+		// get redeem txid
+		redeemTxid := ""
+		if len(v.RedeemTx) > 0 {
+			txid, err := getRedeemTxidCovenant(v.RedeemTx)
+			if err != nil {
+				return nil, err
+			}
+			redeemTxid = txid
+		}
+		// add transaction
+		transactions = append(transactions, Transaction{
+			RoundTxid:  v.RoundTxid,
+			RedeemTxid: redeemTxid,
+			Amount:     uint64(math.Abs(float64(amount))),
+			Type:       txType,
+			Pending:    pending,
+			Claimed:    claimed,
+			CreatedAt:  getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
+		})
+	}
+
+	// Sort the slice by age
+	sort.Slice(transactions, func(i, j int) bool {
+		txi := transactions[i]
+		txj := transactions[j]
+		if txi.CreatedAt.Equal(txj.CreatedAt) {
+			return txi.Type > txj.Type
+		}
+		return txi.CreatedAt.After(txj.CreatedAt)
+	})
+
+	return append(unconfirmedBoardingTxs, transactions...), nil
+}
+
+func getRedeemTxidCovenant(redeemTx string) (string, error) {
+	redeemPtx, err := psetv2.NewPsetFromBase64(redeemTx)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse redeem tx: %s", err)
+	}
+
+	tx, err := redeemPtx.UnsignedTx()
+	if err != nil {
+		return "", fmt.Errorf("failed to get txid from redeem tx: %s", err)
+	}
+
+	return tx.TxHash().String(), nil
 }
