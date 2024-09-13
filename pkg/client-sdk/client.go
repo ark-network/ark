@@ -177,6 +177,7 @@ func (a *arkClient) Init(
 		UnilateralExitDelay:        info.UnilateralExitDelay,
 		Dust:                       info.Dust,
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
+		ExplorerURL:                args.ExplorerURL,
 	}
 	walletSvc, err := getWallet(a.store, &storeData, supportedWallets)
 	if err != nil {
