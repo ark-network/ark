@@ -29,7 +29,6 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	log "github.com/sirupsen/logrus"
-	"github.com/vulpemventures/go-elements/address"
 )
 
 type bitcoinReceiver struct {
@@ -391,20 +390,6 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 	netParams := utils.ToBitcoinNetwork(a.Network)
 	if _, err := btcutil.DecodeAddress(addr, &netParams); err != nil {
 		return "", fmt.Errorf("invalid onchain address")
-	}
-
-	addrNet, err := address.NetworkForAddress(addr)
-	if err != nil {
-		return "", fmt.Errorf("invalid onchain address: unknown network")
-	}
-	net := utils.ToElementsNetwork(a.Network)
-	if net.Name != addrNet.Name {
-		return "", fmt.Errorf("invalid onchain address: must be for %s network", net.Name)
-	}
-
-	if isConf, _ := address.IsConfidential(addr); isConf {
-		info, _ := address.FromConfidential(addr)
-		addr = info.Address
 	}
 
 	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
