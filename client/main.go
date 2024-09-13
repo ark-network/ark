@@ -231,6 +231,7 @@ func config(ctx *cli.Context) error {
 		"unilateral_exit_delay":        cfgData.UnilateralExitDelay,
 		"dust":                         cfgData.Dust,
 		"boarding_descriptor_template": cfgData.BoardingDescriptorTemplate,
+		"explorer_url":                 cfgData.ExplorerURL,
 	}
 
 	return printJSON(cfg)
