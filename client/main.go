@@ -200,8 +200,7 @@ func initArkSdk(ctx *cli.Context) error {
 	}
 
 	return arkSdkClient.Init(
-		context.Background(),
-		arksdk.InitArgs{
+		ctx.Context, arksdk.InitArgs{
 			ClientType: arksdk.GrpcClient,
 			WalletType: arksdk.SingleKeyWallet,
 			AspUrl:     ctx.String(urlFlag.Name),
@@ -216,7 +215,7 @@ func config(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	cfgData, err := cfgStore.GetData(context.Background())
+	cfgData, err := cfgStore.GetData(ctx.Context)
 	if err != nil {
 		return err
 	}
@@ -241,7 +240,6 @@ func dumpPrivKey(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-
 	if err := arkSdkClient.Unlock(ctx.Context, string(password)); err != nil {
 		return err
 	}
@@ -257,25 +255,26 @@ func dumpPrivKey(ctx *cli.Context) error {
 }
 
 func receive(ctx *cli.Context) error {
-	offchainAddr, boardingAddr, err := arkSdkClient.Receive(context.Background())
+	offchainAddr, boardingAddr, err := arkSdkClient.Receive(ctx.Context)
 	if err != nil {
 		return err
 	}
 	return printJSON(map[string]interface{}{
-		"offchain_address": offchainAddr,
 		"boarding_address": boardingAddr,
+		"offchain_address": offchainAddr,
 	})
 }
 
 func claim(ctx *cli.Context) error {
-	if err := arkSdkClient.Unlock(
-		context.Background(),
-		ctx.String(passwordFlag.Name),
-	); err != nil {
+	password, err := readPassword(ctx)
+	if err != nil {
+		return err
+	}
+	if err := arkSdkClient.Unlock(ctx.Context, string(password)); err != nil {
 		return err
 	}
 
-	txID, err := arkSdkClient.Claim(context.Background())
+	txID, err := arkSdkClient.Claim(ctx.Context)
 	if err != nil {
 		return err
 	}
@@ -285,16 +284,10 @@ func claim(ctx *cli.Context) error {
 }
 
 func send(ctx *cli.Context) error {
-	if err := arkSdkClient.Unlock(
-		context.Background(),
-		ctx.String(passwordFlag.Name),
-	); err != nil {
-		return err
-	}
-
-	rcvrs, to, amount := ctx.String(receiversFlag.Name), ctx.String(toFlag.Name), ctx.Uint64(amountFlag.Name)
-
-	if rcvrs == "" && to == "" && amount == 0 {
+	receiversJSON := ctx.String(receiversFlag.Name)
+	to := ctx.String(toFlag.Name)
+	amount := ctx.Uint64(amountFlag.Name)
+	if receiversJSON == "" && to == "" && amount == 0 {
 		return fmt.Errorf("missing destination, use --to and --amount or --receivers")
 	}
 
@@ -303,43 +296,44 @@ func send(ctx *cli.Context) error {
 		return err
 	}
 
-	cfgData, err := configStore.GetData(context.Background())
+	cfgData, err := configStore.GetData(ctx.Context)
 	if err != nil {
 		return err
 	}
-
 	net := getNetwork(ctx, cfgData)
-	isBitcoin, isLiquid := isBtcChain(net), isLiquidChain(net)
+	isBitcoin := isBtcChain(net)
 
 	var receivers []arksdk.Receiver
-	if isBitcoin || isLiquid {
-		if rcvrs != "" {
-			receivers, err = parseReceivers(rcvrs, isBitcoin)
-			if err != nil {
-				return err
-			}
+	if receiversJSON != "" {
+		receivers, err = parseReceivers(receiversJSON, isBitcoin)
+		if err != nil {
+			return err
+		}
+	} else {
+		if isBitcoin {
+			receivers = []arksdk.Receiver{arksdk.NewBitcoinReceiver(to, amount)}
 		} else {
 			receivers = []arksdk.Receiver{arksdk.NewLiquidReceiver(to, amount)}
 		}
-	} else {
-		return fmt.Errorf("unsupported network: %s", net)
 	}
 
-	if len(receivers) == 0 {
-		return fmt.Errorf("no receivers specified")
+	password, err := readPassword(ctx)
+	if err != nil {
+		return err
+	}
+	if err := arkSdkClient.Unlock(ctx.Context, string(password)); err != nil {
+		return err
 	}
 
 	if isBitcoin {
 		return sendCovenantLess(ctx, receivers)
 	}
-	return sendCovenant(receivers)
+	return sendCovenant(ctx.Context, receivers)
 }
 
 func balance(ctx *cli.Context) error {
-	bal, err := arkSdkClient.Balance(
-		context.Background(),
-		ctx.Bool(expiryDetailsFlag.Name),
-	)
+	computeExpiration := ctx.Bool(expiryDetailsFlag.Name)
+	bal, err := arkSdkClient.Balance(ctx.Context, computeExpiration)
 	if err != nil {
 		return err
 	}
@@ -347,18 +341,20 @@ func balance(ctx *cli.Context) error {
 }
 
 func redeem(ctx *cli.Context) error {
-	if err := arkSdkClient.Unlock(
-		context.Background(),
-		ctx.String(passwordFlag.Name),
-	); err != nil {
+	password, err := readPassword(ctx)
+	if err != nil {
+		return err
+	}
+	if err := arkSdkClient.Unlock(ctx.Context, string(password)); err != nil {
 		return err
 	}
 
-	address, amount := ctx.String(addressFlag.Name), ctx.Uint64(amountToRedeemFlag.Name)
 	force := ctx.Bool(forceFlag.Name)
-
+	address := ctx.String(addressFlag.Name)
+	amount := ctx.Uint64(amountToRedeemFlag.Name)
+	computeExpiration := ctx.Bool(expiryDetailsFlag.Name)
 	if force {
-		err := arkSdkClient.UnilateralRedeem(context.Background())
+		err := arkSdkClient.UnilateralRedeem(ctx.Context)
 		if err != nil {
 			return err
 		}
@@ -366,10 +362,7 @@ func redeem(ctx *cli.Context) error {
 	}
 
 	txID, err := arkSdkClient.CollaborativeRedeem(
-		context.Background(),
-		address,
-		amount,
-		ctx.Bool(expiryDetailsFlag.Name),
+		ctx.Context, address, amount, computeExpiration,
 	)
 	if err != nil {
 		return err
@@ -384,7 +377,7 @@ func getArkSdkClient(ctx *cli.Context) (arksdk.ArkClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfgData, err := cfgStore.GetData(context.Background())
+	cfgData, err := cfgStore.GetData(ctx.Context)
 	if err != nil {
 		return nil, err
 	}
@@ -392,29 +385,24 @@ func getArkSdkClient(ctx *cli.Context) (arksdk.ArkClient, error) {
 
 	if isBtcChain(net) {
 		return loadOrCreateClient(
-			arksdk.LoadCovenantlessClient,
-			arksdk.NewCovenantlessClient,
-			cfgStore,
+			arksdk.LoadCovenantlessClient, arksdk.NewCovenantlessClient, cfgStore,
 		)
 	}
-	if isLiquidChain(net) {
-		return loadOrCreateClient(
-			arksdk.LoadCovenantClient,
-			arksdk.NewCovenantClient,
-			cfgStore,
-		)
-	}
-	return nil, fmt.Errorf("unsupported network: %s", net)
+	return loadOrCreateClient(
+		arksdk.LoadCovenantClient, arksdk.NewCovenantClient, cfgStore,
+	)
 }
 
 func loadOrCreateClient(
-	loadFunc,
-	newFunc func(store.ConfigStore) (arksdk.ArkClient, error),
+	loadFunc, newFunc func(store.ConfigStore) (arksdk.ArkClient, error),
 	store store.ConfigStore,
 ) (arksdk.ArkClient, error) {
 	client, err := loadFunc(store)
-	if errors.Is(err, arksdk.ErrNotInitialized) {
-		client, err = newFunc(store)
+	if err != nil {
+		if errors.Is(err, arksdk.ErrNotInitialized) {
+			return newFunc(store)
+		}
+		return nil, err
 	}
 	return client, err
 }
@@ -433,13 +421,8 @@ func getNetwork(ctx *cli.Context, configData *store.StoreData) string {
 func isBtcChain(network string) bool {
 	return network == common.Bitcoin.Name ||
 		network == common.BitcoinTestNet.Name ||
+		network == common.BitcoinSigNet.Name ||
 		network == common.BitcoinRegTest.Name
-}
-
-func isLiquidChain(network string) bool {
-	return network == common.Liquid.Name ||
-		network == common.LiquidTestNet.Name ||
-		network == common.LiquidRegTest.Name
 }
 
 func parseReceivers(receveirsJSON string, isBitcoin bool) ([]arksdk.Receiver, error) {
@@ -466,10 +449,9 @@ func parseReceivers(receveirsJSON string, isBitcoin bool) ([]arksdk.Receiver, er
 }
 
 func sendCovenantLess(ctx *cli.Context, receivers []arksdk.Receiver) error {
+	computeExpiration := ctx.Bool(enableExpiryCoinselectFlag.Name)
 	txID, err := arkSdkClient.SendAsync(
-		context.Background(),
-		ctx.Bool(enableExpiryCoinselectFlag.Name),
-		receivers,
+		ctx.Context, computeExpiration, receivers,
 	)
 	if err != nil {
 		return err
@@ -477,7 +459,7 @@ func sendCovenantLess(ctx *cli.Context, receivers []arksdk.Receiver) error {
 	return printJSON(map[string]interface{}{"txid": txID})
 }
 
-func sendCovenant(receivers []arksdk.Receiver) error {
+func sendCovenant(ctx context.Context, receivers []arksdk.Receiver) error {
 	var onchainReceivers, offchainReceivers []arksdk.Receiver
 
 	for _, receiver := range receivers {
@@ -489,7 +471,7 @@ func sendCovenant(receivers []arksdk.Receiver) error {
 	}
 
 	if len(onchainReceivers) > 0 {
-		txID, err := arkSdkClient.SendOnChain(context.Background(), onchainReceivers)
+		txID, err := arkSdkClient.SendOnChain(ctx, onchainReceivers)
 		if err != nil {
 			return err
 		}
@@ -497,7 +479,7 @@ func sendCovenant(receivers []arksdk.Receiver) error {
 	}
 
 	if len(offchainReceivers) > 0 {
-		txID, err := arkSdkClient.SendOffChain(context.Background(), false, offchainReceivers)
+		txID, err := arkSdkClient.SendOffChain(ctx, false, offchainReceivers)
 		if err != nil {
 			return err
 		}
