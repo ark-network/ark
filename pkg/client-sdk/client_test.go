@@ -36,20 +36,20 @@ func TestVtxosToTxs(t *testing.T) {
 			fixture: aliceAfterSendingAsync,
 			want: []Transaction{
 				{
-					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
-					Amount:     1000,
-					Type:       TxSent,
-					Pending:    true,
-					Claimed:    false,
-					CreatedAt:  time.Unix(1726054898, 0),
-				},
-				{
 					RoundTxid: "377fa2fbd27c82bdbc095478384c88b6c75432c0ef464189e49c965194446cdf",
 					Amount:    20000,
 					Type:      TxReceived,
 					Pending:   false,
 					Claimed:   true,
 					CreatedAt: time.Unix(1726054898, 0),
+				},
+				{
+					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
+					Amount:     1000,
+					Type:       TxSent,
+					Pending:    true,
+					Claimed:    false,
+					CreatedAt:  time.Unix(1726054898, 0),
 				},
 			},
 		},
@@ -131,11 +131,11 @@ func TestVtxosToTxs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			args, err := loadFixtures(tt.fixture)
+			vtxos, boardingTxs, err := loadFixtures(tt.fixture)
 			if err != nil {
 				t.Fatalf("failed to load fixture: %s", err)
 			}
-			got, err := vtxosToTxsCovenantless(30, args.spendable, args.spent, nil)
+			got, err := vtxosToTxsCovenantless(30, vtxos.spendable, vtxos.spent, boardingTxs)
 			require.NoError(t, err)
 			require.Len(t, got, len(tt.want))
 
@@ -158,8 +158,17 @@ type vtxos struct {
 	spent     []client.Vtxo
 }
 
-func loadFixtures(jsonStr string) (vtxos, error) {
+func loadFixtures(jsonStr string) (vtxos, []Transaction, error) {
 	var data struct {
+		BoardingTxs []struct {
+			BoardingTxid string `json:"boardingTxid"`
+			RoundTxid    string `json:"roundTxid"`
+			Amount       uint64 `json:"amount"`
+			Type         TxType `json:"txType"`
+			Pending      bool   `json:"pending"`
+			Claimed      bool   `json:"claimed"`
+			CreatedAt    string `json:"createdAt"`
+		} `json:"boardingTxs"`
 		SpendableVtxos []struct {
 			Outpoint struct {
 				Txid string `json:"txid"`
@@ -203,18 +212,18 @@ func loadFixtures(jsonStr string) (vtxos, error) {
 	}
 
 	if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
-		return vtxos{}, err
+		return vtxos{}, nil, err
 	}
 
 	spendable := make([]client.Vtxo, len(data.SpendableVtxos))
 	for i, vtxo := range data.SpendableVtxos {
 		expireAt, err := parseTimestamp(vtxo.ExpireAt)
 		if err != nil {
-			return vtxos{}, err
+			return vtxos{}, nil, err
 		}
 		amount, err := parseAmount(vtxo.Receiver.Amount)
 		if err != nil {
-			return vtxos{}, err
+			return vtxos{}, nil, err
 		}
 		spendable[i] = client.Vtxo{
 			VtxoKey: client.VtxoKey{
@@ -235,11 +244,11 @@ func loadFixtures(jsonStr string) (vtxos, error) {
 	for i, vtxo := range data.SpentVtxos {
 		expireAt, err := parseTimestamp(vtxo.ExpireAt)
 		if err != nil {
-			return vtxos{}, err
+			return vtxos{}, nil, err
 		}
 		amount, err := parseAmount(vtxo.Receiver.Amount)
 		if err != nil {
-			return vtxos{}, err
+			return vtxos{}, nil, err
 		}
 		spent[i] = client.Vtxo{
 			VtxoKey: client.VtxoKey{
@@ -256,10 +265,29 @@ func loadFixtures(jsonStr string) (vtxos, error) {
 		}
 	}
 
-	return vtxos{
+	boardingTxs := make([]Transaction, len(data.BoardingTxs))
+	for i, tx := range data.BoardingTxs {
+		createdAt, err := parseTimestamp(tx.CreatedAt)
+		if err != nil {
+			return vtxos{}, nil, err
+		}
+		boardingTxs[i] = Transaction{
+			BoardingTxid: tx.BoardingTxid,
+			RoundTxid:    tx.RoundTxid,
+			Amount:       tx.Amount,
+			Type:         TxReceived,
+			Pending:      tx.Pending,
+			Claimed:      tx.Claimed,
+			CreatedAt:    createdAt,
+		}
+	}
+
+	vtxos := vtxos{
 		spendable: spendable,
 		spent:     spent,
-	}, nil
+	}
+
+	return vtxos, boardingTxs, nil
 }
 
 func parseAmount(amountStr string) (uint64, error) {
@@ -287,6 +315,16 @@ func parseTimestamp(timestamp string) (time.Time, error) {
 var (
 	aliceBeforeSendingAsync = `
 	{
+	  "boardingTxs": [
+		  {
+        "boardingTxid": "69ccb6520e0b91ac1cbaa459b16ec1e3ff5f6349990b0d149dd8e6c6485d316c",
+				"roundTxid": "377fa2fbd27c82bdbc095478384c88b6c75432c0ef464189e49c965194446cdf",
+        "amount": 20000,
+				"pending": false,
+				"claimed": true,
+				"createdAt": "1726503865"
+      }
+		],
 	  "spendableVtxos": [
 			{
 				"outpoint": {
@@ -311,6 +349,16 @@ var (
 
 	aliceAfterSendingAsync = `
 	{
+	  "boardingTxs": [
+		  {
+        "boardingTxid": "69ccb6520e0b91ac1cbaa459b16ec1e3ff5f6349990b0d149dd8e6c6485d316c",
+				"roundTxid": "377fa2fbd27c82bdbc095478384c88b6c75432c0ef464189e49c965194446cdf",
+        "amount": 20000,
+				"pending": false,
+				"claimed": true,
+				"createdAt": "1726503865"
+      }
+		],
 	  "spendableVtxos": [
 			{
 				"outpoint": {
