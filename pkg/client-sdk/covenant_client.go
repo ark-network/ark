@@ -45,7 +45,7 @@ func (r liquidReceiver) Amount() uint64 {
 	return r.amount
 }
 
-func (r liquidReceiver) isOnchain() bool {
+func (r liquidReceiver) IsOnchain() bool {
 	_, err := address.ToOutputScript(r.to)
 	return err == nil
 }
@@ -86,7 +86,7 @@ func LoadCovenantClient(storeSvc store.ConfigStore) (ArkClient, error) {
 		return nil, fmt.Errorf("failed to setup transport client: %s", err)
 	}
 
-	explorerSvc, err := getExplorer(supportedNetworks, data.Network.Name)
+	explorerSvc, err := getExplorer(data.ExplorerURL, data.Network.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
@@ -126,7 +126,7 @@ func LoadCovenantClientWithWallet(
 		return nil, fmt.Errorf("failed to setup transport client: %s", err)
 	}
 
-	explorerSvc, err := getExplorer(supportedNetworks, data.Network.Name)
+	explorerSvc, err := getExplorer(data.ExplorerURL, data.Network.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
@@ -287,7 +287,7 @@ func (a *covenantArkClient) SendOnChain(
 	ctx context.Context, receivers []Receiver,
 ) (string, error) {
 	for _, receiver := range receivers {
-		if !receiver.isOnchain() {
+		if !receiver.IsOnchain() {
 			return "", fmt.Errorf("invalid receiver address '%s': must be onchain", receiver.To())
 		}
 	}
@@ -300,7 +300,7 @@ func (a *covenantArkClient) SendOffChain(
 	withExpiryCoinselect bool, receivers []Receiver,
 ) (string, error) {
 	for _, receiver := range receivers {
-		if receiver.isOnchain() {
+		if receiver.IsOnchain() {
 			return "", fmt.Errorf("invalid receiver address '%s': must be offchain", receiver.To())
 		}
 	}
@@ -1062,7 +1062,7 @@ func (a *covenantArkClient) validateCongestionTree(
 
 	connectors := event.Connectors
 
-	if !utils.IsOnchainOnly(receivers) {
+	if !utils.IsLiquidOnchainOnly(receivers) {
 		if err := tree.ValidateCongestionTree(
 			event.Tree, poolTx, a.StoreData.AspPubkey, a.RoundLifetime,
 		); err != nil {
@@ -1092,7 +1092,7 @@ func (a *covenantArkClient) validateReceivers(
 	aspPubkey *secp256k1.PublicKey,
 ) error {
 	for _, receiver := range receivers {
-		isOnChain, onchainScript, userPubkey, err := utils.DecodeReceiverAddress(
+		isOnChain, onchainScript, userPubkey, err := utils.ParseLiquidAddress(
 			receiver.Address,
 		)
 		if err != nil {

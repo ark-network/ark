@@ -30,6 +30,7 @@ type storeData struct {
 	UnilateralExitDelay        string `json:"unilateral_exit_delay"`
 	Dust                       string `json:"dust"`
 	BoardingDescriptorTemplate string `json:"boarding_descriptor_template"`
+	ExplorerURL                string `json:"explorer_url"`
 }
 
 func (d storeData) isEmpty() bool {
@@ -43,6 +44,7 @@ func (d storeData) decode() store.StoreData {
 	dust, _ := strconv.Atoi(d.Dust)
 	buf, _ := hex.DecodeString(d.AspPubkey)
 	aspPubkey, _ := secp256k1.ParsePubKey(buf)
+	explorerURL := d.ExplorerURL
 	return store.StoreData{
 		AspUrl:                     d.AspUrl,
 		AspPubkey:                  aspPubkey,
@@ -53,6 +55,7 @@ func (d storeData) decode() store.StoreData {
 		UnilateralExitDelay:        int64(unilateralExitDelay),
 		Dust:                       uint64(dust),
 		BoardingDescriptorTemplate: d.BoardingDescriptorTemplate,
+		ExplorerURL:                explorerURL,
 	}
 }
 
@@ -67,6 +70,7 @@ func (d storeData) asMap() map[string]string {
 		"unilateral_exit_delay":        d.UnilateralExitDelay,
 		"dust":                         d.Dust,
 		"boarding_descriptor_template": d.BoardingDescriptorTemplate,
+		"explorer_url":                 d.ExplorerURL,
 	}
 }
 
@@ -112,6 +116,7 @@ func (s *Store) AddData(ctx context.Context, data store.StoreData) error {
 		UnilateralExitDelay:        fmt.Sprintf("%d", data.UnilateralExitDelay),
 		Dust:                       fmt.Sprintf("%d", data.Dust),
 		BoardingDescriptorTemplate: data.BoardingDescriptorTemplate,
+		ExplorerURL:                data.ExplorerURL,
 	}
 
 	if err := s.write(sd); err != nil {

@@ -28,11 +28,12 @@ type ArkClient interface {
 	Claim(ctx context.Context) (string, error)
 	ListVtxos(ctx context.Context) ([]client.Vtxo, []client.Vtxo, error)
 	GetTransactionHistory(ctx context.Context) ([]Transaction, error)
+	Dump(ctx context.Context) (seed string, err error)
 }
 
 type Receiver interface {
 	To() string
 	Amount() uint64
 
-	isOnchain() bool
+	IsOnchain() bool
 }

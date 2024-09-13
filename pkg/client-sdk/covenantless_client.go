@@ -29,7 +29,6 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	log "github.com/sirupsen/logrus"
-	"github.com/vulpemventures/go-elements/address"
 )
 
 type bitcoinReceiver struct {
@@ -49,7 +48,7 @@ func (r bitcoinReceiver) Amount() uint64 {
 	return r.amount
 }
 
-func (r bitcoinReceiver) isOnchain() bool {
+func (r bitcoinReceiver) IsOnchain() bool {
 	_, err := btcutil.DecodeAddress(r.to, nil)
 	return err == nil
 }
@@ -90,7 +89,7 @@ func LoadCovenantlessClient(storeSvc store.ConfigStore) (ArkClient, error) {
 		return nil, fmt.Errorf("failed to setup transport client: %s", err)
 	}
 
-	explorerSvc, err := getExplorer(supportedNetworks, data.Network.Name)
+	explorerSvc, err := getExplorer(data.ExplorerURL, data.Network.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
@@ -130,7 +129,7 @@ func LoadCovenantlessClientWithWallet(
 		return nil, fmt.Errorf("failed to setup transport client: %s", err)
 	}
 
-	explorerSvc, err := getExplorer(supportedNetworks, data.Network.Name)
+	explorerSvc, err := getExplorer(data.ExplorerURL, data.Network.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
@@ -291,7 +290,7 @@ func (a *covenantlessArkClient) SendOnChain(
 	ctx context.Context, receivers []Receiver,
 ) (string, error) {
 	for _, receiver := range receivers {
-		if !receiver.isOnchain() {
+		if !receiver.IsOnchain() {
 			return "", fmt.Errorf("invalid receiver address '%s': must be onchain", receiver.To())
 		}
 	}
@@ -304,7 +303,7 @@ func (a *covenantlessArkClient) SendOffChain(
 	withExpiryCoinselect bool, receivers []Receiver,
 ) (string, error) {
 	for _, receiver := range receivers {
-		if receiver.isOnchain() {
+		if receiver.IsOnchain() {
 			return "", fmt.Errorf("invalid receiver address '%s': must be offchain", receiver.To())
 		}
 	}
@@ -388,22 +387,9 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 		return "", fmt.Errorf("wallet is locked")
 	}
 
-	if _, err := address.ToOutputScript(addr); err != nil {
+	netParams := utils.ToBitcoinNetwork(a.Network)
+	if _, err := btcutil.DecodeAddress(addr, &netParams); err != nil {
 		return "", fmt.Errorf("invalid onchain address")
-	}
-
-	addrNet, err := address.NetworkForAddress(addr)
-	if err != nil {
-		return "", fmt.Errorf("invalid onchain address: unknown network")
-	}
-	net := utils.ToElementsNetwork(a.Network)
-	if net.Name != addrNet.Name {
-		return "", fmt.Errorf("invalid onchain address: must be for %s network", net.Name)
-	}
-
-	if isConf, _ := address.IsConfidential(addr); isConf {
-		info, _ := address.FromConfidential(addr)
-		addr = info.Address
 	}
 
 	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
@@ -490,8 +476,9 @@ func (a *covenantlessArkClient) SendAsync(
 		return "", fmt.Errorf("missing receivers")
 	}
 
+	netParams := utils.ToBitcoinNetwork(a.Network)
 	for _, receiver := range receivers {
-		isOnchain, _, _, err := utils.DecodeReceiverAddress(receiver.To())
+		isOnchain, _, _, err := utils.ParseBitcoinAddress(receiver.To(), netParams)
 		if err != nil {
 			return "", err
 		}
@@ -1234,7 +1221,8 @@ func (a *covenantlessArkClient) validateCongestionTree(
 		return err
 	}
 
-	if !utils.IsOnchainOnly(receivers) {
+	netParams := utils.ToBitcoinNetwork(a.Network)
+	if !utils.IsBitcoinOnchainOnly(receivers, netParams) {
 		if err := bitcointree.ValidateCongestionTree(
 			event.Tree, poolTx, a.StoreData.AspPubkey, a.RoundLifetime,
 		); err != nil {
@@ -1263,9 +1251,10 @@ func (a *covenantlessArkClient) validateReceivers(
 	congestionTree tree.CongestionTree,
 	aspPubkey *secp256k1.PublicKey,
 ) error {
+	netParams := utils.ToBitcoinNetwork(a.Network)
 	for _, receiver := range receivers {
-		isOnChain, onchainScript, userPubkey, err := utils.DecodeReceiverAddress(
-			receiver.Address,
+		isOnChain, onchainScript, userPubkey, err := utils.ParseBitcoinAddress(
+			receiver.Address, netParams,
 		)
 		if err != nil {
 			return err
