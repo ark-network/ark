@@ -201,11 +201,12 @@ func initArkSdk(ctx *cli.Context) error {
 
 	return arkSdkClient.Init(
 		ctx.Context, arksdk.InitArgs{
-			ClientType: arksdk.GrpcClient,
-			WalletType: arksdk.SingleKeyWallet,
-			AspUrl:     ctx.String(urlFlag.Name),
-			Seed:       ctx.String(privateKeyFlag.Name),
-			Password:   string(password),
+			ClientType:  arksdk.GrpcClient,
+			WalletType:  arksdk.SingleKeyWallet,
+			AspUrl:      ctx.String(urlFlag.Name),
+			Seed:        ctx.String(privateKeyFlag.Name),
+			Password:    string(password),
+			ExplorerURL: ctx.String(explorerFlag.Name),
 		},
 	)
 }
