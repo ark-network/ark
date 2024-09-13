@@ -22,6 +22,7 @@ type StoreData struct {
 	UnilateralExitDelay        int64
 	Dust                       uint64
 	BoardingDescriptorTemplate string
+	ExplorerURL                string
 }
 
 type ConfigStore interface {

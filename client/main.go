@@ -2,9 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -18,13 +15,11 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/store"
 	filestore "github.com/ark-network/ark/pkg/client-sdk/store/file"
 	"github.com/urfave/cli/v2"
-	"golang.org/x/crypto/scrypt"
 	"golang.org/x/term"
 )
 
 const (
-	DatadirEnvVar   = "ARK_WALLET_DATADIR"
-	scryptKeyLength = 1048576
+	DatadirEnvVar = "ARK_WALLET_DATADIR"
 )
 
 var (
@@ -82,6 +77,10 @@ var (
 		Usage: "network to use liquid, testnet, regtest, signet for bitcoin, or liquid, liquidtestnet, liquidregtest for liquid)",
 		Value: "liquid",
 	}
+	explorerFlag = &cli.StringFlag{
+		Name:  "explorer",
+		Usage: "the url of the explorer to use",
+	}
 	passwordFlag = &cli.StringFlag{
 		Name:  "password",
 		Usage: "password to unlock the wallet",
@@ -136,7 +135,7 @@ var (
 		Action: func(ctx *cli.Context) error {
 			return initArkSdk(ctx)
 		},
-		Flags: []cli.Flag{networkFlag, passwordFlag, privateKeyFlag, urlFlag},
+		Flags: []cli.Flag{networkFlag, passwordFlag, privateKeyFlag, urlFlag, explorerFlag},
 	}
 	configCommand = cli.Command{
 		Name:  "config",
@@ -506,46 +505,6 @@ func sendCovenant(receivers []arksdk.Receiver) error {
 	}
 
 	return nil
-}
-
-func decrypt(encrypted, password []byte) ([]byte, error) {
-	if len(encrypted) == 0 {
-		return nil, fmt.Errorf("missing encrypted mnemonic")
-	}
-	if len(password) == 0 {
-		return nil, fmt.Errorf("missing decryption password")
-	}
-
-	salt := encrypted[len(encrypted)-32:]
-	data := encrypted[:len(encrypted)-32]
-	key, _, err := deriveKey(password, salt)
-	if err != nil {
-		return nil, err
-	}
-
-	blockCipher, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-	gcm, err := cipher.NewGCM(blockCipher)
-	if err != nil {
-		return nil, err
-	}
-
-	nonce, text := data[:gcm.NonceSize()], data[gcm.NonceSize():]
-	// #nosec G407
-	return gcm.Open(nil, nonce, text, nil)
-}
-
-func deriveKey(password, salt []byte) ([]byte, []byte, error) {
-	if salt == nil {
-		salt = make([]byte, 32)
-		if _, err := rand.Read(salt); err != nil {
-			return nil, nil, err
-		}
-	}
-	key, err := scrypt.Key(password, salt, scryptKeyLength, 8, 1, 32)
-	return key, salt, err
 }
 
 func readPassword(ctx *cli.Context) ([]byte, error) {
