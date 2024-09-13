@@ -1062,7 +1062,7 @@ func (a *covenantArkClient) validateCongestionTree(
 
 	connectors := event.Connectors
 
-	if !utils.IsOnchainOnly(receivers) {
+	if !utils.IsLiquidOnchainOnly(receivers) {
 		if err := tree.ValidateCongestionTree(
 			event.Tree, poolTx, a.StoreData.AspPubkey, a.RoundLifetime,
 		); err != nil {
@@ -1092,7 +1092,7 @@ func (a *covenantArkClient) validateReceivers(
 	aspPubkey *secp256k1.PublicKey,
 ) error {
 	for _, receiver := range receivers {
-		isOnChain, onchainScript, userPubkey, err := utils.DecodeReceiverAddress(
+		isOnChain, onchainScript, userPubkey, err := utils.ParseLiquidAddress(
 			receiver.Address,
 		)
 		if err != nil {

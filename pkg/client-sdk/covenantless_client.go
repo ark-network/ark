@@ -476,8 +476,9 @@ func (a *covenantlessArkClient) SendAsync(
 		return "", fmt.Errorf("missing receivers")
 	}
 
+	netParams := utils.ToBitcoinNetwork(a.Network)
 	for _, receiver := range receivers {
-		isOnchain, _, _, err := utils.DecodeReceiverAddress(receiver.To())
+		isOnchain, _, _, err := utils.ParseBitcoinAddress(receiver.To(), netParams)
 		if err != nil {
 			return "", err
 		}
@@ -1220,7 +1221,8 @@ func (a *covenantlessArkClient) validateCongestionTree(
 		return err
 	}
 
-	if !utils.IsOnchainOnly(receivers) {
+	netParams := utils.ToBitcoinNetwork(a.Network)
+	if !utils.IsBitcoinOnchainOnly(receivers, netParams) {
 		if err := bitcointree.ValidateCongestionTree(
 			event.Tree, poolTx, a.StoreData.AspPubkey, a.RoundLifetime,
 		); err != nil {
@@ -1249,9 +1251,10 @@ func (a *covenantlessArkClient) validateReceivers(
 	congestionTree tree.CongestionTree,
 	aspPubkey *secp256k1.PublicKey,
 ) error {
+	netParams := utils.ToBitcoinNetwork(a.Network)
 	for _, receiver := range receivers {
-		isOnChain, onchainScript, userPubkey, err := utils.DecodeReceiverAddress(
-			receiver.Address,
+		isOnChain, onchainScript, userPubkey, err := utils.ParseBitcoinAddress(
+			receiver.Address, netParams,
 		)
 		if err != nil {
 			return err
