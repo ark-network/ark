@@ -388,7 +388,8 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 		return "", fmt.Errorf("wallet is locked")
 	}
 
-	if _, err := btcutil.DecodeAddress(addr, nil); err != nil {
+	netParams := utils.ToBitcoinNetwork(a.Network)
+	if _, err := btcutil.DecodeAddress(addr, &netParams); err != nil {
 		return "", fmt.Errorf("invalid onchain address")
 	}
 
