@@ -29,7 +29,6 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	log "github.com/sirupsen/logrus"
-	"github.com/vulpemventures/go-elements/address"
 )
 
 type bitcoinReceiver struct {
@@ -49,7 +48,7 @@ func (r bitcoinReceiver) Amount() uint64 {
 	return r.amount
 }
 
-func (r bitcoinReceiver) isOnchain() bool {
+func (r bitcoinReceiver) IsOnchain() bool {
 	_, err := btcutil.DecodeAddress(r.to, nil)
 	return err == nil
 }
@@ -90,7 +89,7 @@ func LoadCovenantlessClient(storeSvc store.ConfigStore) (ArkClient, error) {
 		return nil, fmt.Errorf("failed to setup transport client: %s", err)
 	}
 
-	explorerSvc, err := getExplorer(supportedNetworks, data.Network.Name)
+	explorerSvc, err := getExplorer(data.ExplorerURL, data.Network.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
@@ -130,7 +129,7 @@ func LoadCovenantlessClientWithWallet(
 		return nil, fmt.Errorf("failed to setup transport client: %s", err)
 	}
 
-	explorerSvc, err := getExplorer(supportedNetworks, data.Network.Name)
+	explorerSvc, err := getExplorer(data.ExplorerURL, data.Network.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
@@ -291,7 +290,7 @@ func (a *covenantlessArkClient) SendOnChain(
 	ctx context.Context, receivers []Receiver,
 ) (string, error) {
 	for _, receiver := range receivers {
-		if !receiver.isOnchain() {
+		if !receiver.IsOnchain() {
 			return "", fmt.Errorf("invalid receiver address '%s': must be onchain", receiver.To())
 		}
 	}
@@ -304,7 +303,7 @@ func (a *covenantlessArkClient) SendOffChain(
 	withExpiryCoinselect bool, receivers []Receiver,
 ) (string, error) {
 	for _, receiver := range receivers {
-		if receiver.isOnchain() {
+		if receiver.IsOnchain() {
 			return "", fmt.Errorf("invalid receiver address '%s': must be offchain", receiver.To())
 		}
 	}
@@ -388,22 +387,9 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 		return "", fmt.Errorf("wallet is locked")
 	}
 
-	if _, err := address.ToOutputScript(addr); err != nil {
+	netParams := utils.ToBitcoinNetwork(a.Network)
+	if _, err := btcutil.DecodeAddress(addr, &netParams); err != nil {
 		return "", fmt.Errorf("invalid onchain address")
-	}
-
-	addrNet, err := address.NetworkForAddress(addr)
-	if err != nil {
-		return "", fmt.Errorf("invalid onchain address: unknown network")
-	}
-	net := utils.ToElementsNetwork(a.Network)
-	if net.Name != addrNet.Name {
-		return "", fmt.Errorf("invalid onchain address: must be for %s network", net.Name)
-	}
-
-	if isConf, _ := address.IsConfidential(addr); isConf {
-		info, _ := address.FromConfidential(addr)
-		addr = info.Address
 	}
 
 	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
@@ -490,8 +476,9 @@ func (a *covenantlessArkClient) SendAsync(
 		return "", fmt.Errorf("missing receivers")
 	}
 
+	netParams := utils.ToBitcoinNetwork(a.Network)
 	for _, receiver := range receivers {
-		isOnchain, _, _, err := utils.DecodeReceiverAddress(receiver.To())
+		isOnchain, _, _, err := utils.ParseBitcoinAddress(receiver.To(), netParams)
 		if err != nil {
 			return "", err
 		}
@@ -645,83 +632,9 @@ func (a *covenantlessArkClient) GetTransactionHistory(ctx context.Context) ([]Tr
 		return nil, err
 	}
 
-	return vtxosToTxsCovenantless(config.RoundLifetime, spendableVtxos, spentVtxos)
-}
+	boardingTxs := a.getBoardingTxs(ctx)
 
-func vtxosToTxsCovenantless(roundLifetime int64, spendable, spent []client.Vtxo) ([]Transaction, error) {
-	transactions := make([]Transaction, 0)
-
-	for _, v := range append(spendable, spent...) {
-		// get vtxo amount
-		amount := int(v.Amount)
-		if v.Pending {
-			// find other spent vtxos that spent this one
-			relatedVtxos := findVtxosBySpentBy(spent, v.Txid)
-			for _, r := range relatedVtxos {
-				if r.Amount < math.MaxInt64 {
-					rAmount := int(r.Amount)
-					amount -= rAmount
-				}
-			}
-		} else {
-			// an onboarding tx has pending false and no pending true related txs
-			relatedVtxos := findVtxosBySpentBy(spent, v.RoundTxid)
-			if len(relatedVtxos) > 0 { // not an onboard tx, ignore
-				continue
-			}
-		} // what kind of tx was this? send or receive?
-		txType := TxReceived
-		if amount < 0 {
-			txType = TxSent
-		}
-		// check if is a pending tx
-		pending := false
-		claimed := true
-		if len(v.RoundTxid) == 0 && len(v.SpentBy) == 0 {
-			pending = true
-			claimed = false
-		}
-		redeemTxid := ""
-		if len(v.RedeemTx) > 0 {
-			txid, err := getRedeemTxidCovenantless(v.RedeemTx)
-			if err != nil {
-				return nil, err
-			}
-			redeemTxid = txid
-		}
-
-		// add transaction
-		transactions = append(transactions, Transaction{
-			RoundTxid:  v.RoundTxid,
-			RedeemTxid: redeemTxid,
-			Amount:     uint64(math.Abs(float64(amount))),
-			Type:       txType,
-			Pending:    pending,
-			Claimed:    claimed,
-			CreatedAt:  getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
-		})
-	}
-
-	// Sort the slice by age
-	sort.Slice(transactions, func(i, j int) bool {
-		txi := transactions[i]
-		txj := transactions[j]
-		if txi.CreatedAt.Equal(txj.CreatedAt) {
-			return txi.Type > txj.Type
-		}
-		return txi.CreatedAt.After(txj.CreatedAt)
-	})
-
-	return transactions, nil
-}
-
-func getRedeemTxidCovenantless(redeemTx string) (string, error) {
-	redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse redeem tx: %s", err)
-	}
-
-	return redeemPtx.UnsignedTx.TxID(), nil
+	return vtxosToTxsCovenantless(config.RoundLifetime, spendableVtxos, spentVtxos, boardingTxs)
 }
 
 func (a *covenantlessArkClient) sendOnchain(
@@ -1256,7 +1169,8 @@ func (a *covenantlessArkClient) validateCongestionTree(
 		return err
 	}
 
-	if !utils.IsOnchainOnly(receivers) {
+	netParams := utils.ToBitcoinNetwork(a.Network)
+	if !utils.IsBitcoinOnchainOnly(receivers, netParams) {
 		if err := bitcointree.ValidateCongestionTree(
 			event.Tree, poolTx, a.StoreData.AspPubkey, a.RoundLifetime,
 		); err != nil {
@@ -1285,9 +1199,10 @@ func (a *covenantlessArkClient) validateReceivers(
 	congestionTree tree.CongestionTree,
 	aspPubkey *secp256k1.PublicKey,
 ) error {
+	netParams := utils.ToBitcoinNetwork(a.Network)
 	for _, receiver := range receivers {
-		isOnChain, onchainScript, userPubkey, err := utils.DecodeReceiverAddress(
-			receiver.Address,
+		isOnChain, onchainScript, userPubkey, err := utils.ParseBitcoinAddress(
+			receiver.Address, netParams,
 		)
 		if err != nil {
 			return err
@@ -1604,6 +1519,39 @@ func (a *covenantlessArkClient) getOffchainBalance(
 	return balance, amountByExpiration, nil
 }
 
+func (a *covenantlessArkClient) getAllBoardingUtxos(ctx context.Context) ([]explorer.Utxo, error) {
+	_, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	utxos := []explorer.Utxo{}
+	for _, addr := range boardingAddrs {
+		txs, err := a.explorer.GetTxs(addr)
+		if err != nil {
+			continue
+		}
+		for _, tx := range txs {
+			for i, vout := range tx.Vout {
+				if vout.Address == addr {
+					createdAt := time.Time{}
+					if tx.Status.Confirmed {
+						createdAt = time.Unix(tx.Status.Blocktime, 0)
+					}
+					utxos = append(utxos, explorer.Utxo{
+						Txid:      tx.Txid,
+						Vout:      uint32(i),
+						Amount:    vout.Amount,
+						CreatedAt: createdAt,
+					})
+				}
+			}
+		}
+	}
+
+	return utxos, nil
+}
+
 func (a *covenantlessArkClient) getClaimableBoardingUtxos(ctx context.Context) ([]explorer.Utxo, error) {
 	offchainAddrs, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
@@ -1743,6 +1691,39 @@ func (a *covenantlessArkClient) selfTransferAllPendingPayments(
 	return roundTxid, nil
 }
 
+func (a *covenantlessArkClient) getBoardingTxs(ctx context.Context) (transactions []Transaction) {
+	utxos, err := a.getClaimableBoardingUtxos(ctx)
+	if err != nil {
+		return nil
+	}
+
+	isPending := make(map[string]bool)
+	for _, u := range utxos {
+		isPending[u.Txid] = true
+	}
+
+	allUtxos, err := a.getAllBoardingUtxos(ctx)
+	if err != nil {
+		return nil
+	}
+
+	for _, u := range allUtxos {
+		pending := false
+		if isPending[u.Txid] {
+			pending = true
+		}
+		transactions = append(transactions, Transaction{
+			BoardingTxid: u.Txid,
+			Amount:       u.Amount,
+			Type:         TxReceived,
+			Pending:      pending,
+			Claimed:      !pending,
+			CreatedAt:    u.CreatedAt,
+		})
+	}
+	return
+}
+
 func findVtxosBySpentBy(allVtxos []client.Vtxo, txid string) (vtxos []client.Vtxo) {
 	for _, v := range allVtxos {
 		if v.SpentBy == txid {
@@ -1750,4 +1731,88 @@ func findVtxosBySpentBy(allVtxos []client.Vtxo, txid string) (vtxos []client.Vtx
 		}
 	}
 	return
+}
+
+func vtxosToTxsCovenantless(
+	roundLifetime int64, spendable, spent []client.Vtxo, boardingTxs []Transaction,
+) ([]Transaction, error) {
+	transactions := make([]Transaction, 0)
+	unconfirmedBoardingTxs := make([]Transaction, 0)
+	for _, tx := range boardingTxs {
+		emptyTime := time.Time{}
+		if tx.CreatedAt == emptyTime {
+			unconfirmedBoardingTxs = append(unconfirmedBoardingTxs, tx)
+			continue
+		}
+		transactions = append(transactions, tx)
+	}
+
+	for _, v := range append(spendable, spent...) {
+		// get vtxo amount
+		amount := int(v.Amount)
+		// ignore not pending
+		if !v.Pending {
+			continue
+		}
+		// find other spent vtxos that spent this one
+		relatedVtxos := findVtxosBySpentBy(spent, v.Txid)
+		for _, r := range relatedVtxos {
+			if r.Amount < math.MaxInt64 {
+				rAmount := int(r.Amount)
+				amount -= rAmount
+			}
+		}
+		// what kind of tx was this? send or receive?
+		txType := TxReceived
+		if amount < 0 {
+			txType = TxSent
+		}
+		// check if is a pending tx
+		pending := false
+		claimed := true
+		if len(v.RoundTxid) == 0 && len(v.SpentBy) == 0 {
+			pending = true
+			claimed = false
+		}
+		// get redeem txid
+		redeemTxid := ""
+		if len(v.RedeemTx) > 0 {
+			txid, err := getRedeemTxidCovenantless(v.RedeemTx)
+			if err != nil {
+				return nil, err
+			}
+			redeemTxid = txid
+		}
+		// add transaction
+		transactions = append(transactions, Transaction{
+			RoundTxid:  v.RoundTxid,
+			RedeemTxid: redeemTxid,
+			Amount:     uint64(math.Abs(float64(amount))),
+			Type:       txType,
+			Pending:    pending,
+			Claimed:    claimed,
+			CreatedAt:  getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
+		})
+	}
+
+	// Sort the slice by age
+	sort.Slice(transactions, func(i, j int) bool {
+		txi := transactions[i]
+		txj := transactions[j]
+		if txi.CreatedAt.Equal(txj.CreatedAt) {
+			return txi.Type > txj.Type
+		}
+		return txi.CreatedAt.After(txj.CreatedAt)
+	})
+
+	return append(unconfirmedBoardingTxs, transactions...), nil
+}
+
+func getRedeemTxidCovenantless(redeemTx string) (string, error) {
+	redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse redeem tx: %s", err)
+	}
+
+	return redeemPtx.UnsignedTx.TxID(), nil
 }

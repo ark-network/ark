@@ -129,6 +129,8 @@ func TestUnilateralExit(t *testing.T) {
 	err = utils.GenerateBlock()
 	require.NoError(t, err)
 
+	time.Sleep(5 * time.Second)
+
 	balanceStr, err = runClarkCommand("balance")
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))

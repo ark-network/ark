@@ -31,6 +31,7 @@ type Utxo struct {
 	Asset       string // liquid only
 	Delay       uint
 	SpendableAt time.Time
+	CreatedAt   time.Time
 }
 
 func (u *Utxo) Sequence() (uint32, error) {
@@ -39,7 +40,9 @@ func (u *Utxo) Sequence() (uint32, error) {
 
 func newUtxo(explorerUtxo ExplorerUtxo, delay uint) Utxo {
 	utxoTime := explorerUtxo.Status.Blocktime
+	createdAt := time.Unix(utxoTime, 0)
 	if utxoTime == 0 {
+		createdAt = time.Time{}
 		utxoTime = time.Now().Unix()
 	}
 
@@ -50,7 +53,20 @@ func newUtxo(explorerUtxo ExplorerUtxo, delay uint) Utxo {
 		Asset:       explorerUtxo.Asset,
 		Delay:       delay,
 		SpendableAt: time.Unix(utxoTime, 0).Add(time.Duration(delay) * time.Second),
+		CreatedAt:   createdAt,
 	}
+}
+
+type ExplorerTx struct {
+	Txid string `json:"txid"`
+	Vout []struct {
+		Address string `json:"scriptpubkey_address"`
+		Amount  uint64 `json:"value"`
+	} `json:"vout"`
+	Status struct {
+		Confirmed bool  `json:"confirmed"`
+		Blocktime int64 `json:"block_time"`
+	} `json:"status"`
 }
 
 type ExplorerUtxo struct {
@@ -71,6 +87,7 @@ func (e ExplorerUtxo) ToUtxo(delay uint) Utxo {
 type Explorer interface {
 	GetTxHex(txid string) (string, error)
 	Broadcast(txHex string) (string, error)
+	GetTxs(addr string) ([]ExplorerTx, error)
 	GetUtxos(addr string) ([]ExplorerUtxo, error)
 	GetBalance(addr string) (uint64, error)
 	GetRedeemedVtxosBalance(
@@ -174,6 +191,28 @@ func (e *explorerSvc) Broadcast(txStr string) (string, error) {
 	}
 
 	return txid, nil
+}
+
+func (e *explorerSvc) GetTxs(addr string) ([]ExplorerTx, error) {
+	resp, err := http.Get(fmt.Sprintf("%s/address/%s/txs", e.baseUrl, addr))
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get txs: %s", string(body))
+	}
+	payload := []ExplorerTx{}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, err
+	}
+
+	return payload, nil
 }
 
 func (e *explorerSvc) GetUtxos(addr string) ([]ExplorerUtxo, error) {
