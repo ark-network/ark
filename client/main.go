@@ -23,13 +23,13 @@ const (
 )
 
 var (
-	version      = "alpha"
+	Version      string
 	arkSdkClient arksdk.ArkClient
 )
 
 func main() {
 	app := cli.NewApp()
-	app.Version = version
+	app.Version = Version
 	app.Name = "Ark CLI"
 	app.Usage = "ark wallet command line interface"
 	app.Commands = append(
@@ -216,12 +216,18 @@ func config(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
 	cfgData, err := cfgStore.GetData(ctx.Context)
 	if err != nil {
 		return err
 	}
 
-	cfg := map[string]interface{}{
+	cfg := map[string]interface{}{}
+	if cfgData == nil {
+		return printJSON("no configuration found, run 'init' command")
+	}
+
+	cfg = map[string]interface{}{
 		"asp_url":                      cfgData.AspUrl,
 		"asp_pubkey":                   hex.EncodeToString(cfgData.AspPubkey.SerializeCompressed()),
 		"wallet_type":                  cfgData.WalletType,
