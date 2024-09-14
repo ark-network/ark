@@ -224,7 +224,8 @@ func config(ctx *cli.Context) error {
 
 	cfg := map[string]interface{}{}
 	if cfgData == nil {
-		return printJSON("no configuration found, run 'init' command")
+		fmt.Println("no configuration found, run 'init' command")
+		return nil
 	}
 
 	cfg = map[string]interface{}{
