@@ -412,6 +412,7 @@ github.com/ark-network/ark/common v0.0.0-20240812222508-b097e943fb45/go.mod h1:8
 github.com/ark-network/ark/common v0.0.0-20240812233307-18e343b31899/go.mod h1:8DYeb06Dl8onmrV09xfsdDMGv5HoVtWoKhLBLXOYHew=
 github.com/ark-network/ark/common v0.0.0-20240815203029-edc4534dfc87/go.mod h1:aYAGDfoeBLofnZt9n85wusFyCkrS7hvwdo5TynBlkuY=
 github.com/ark-network/ark/pkg/client-sdk v0.0.0-20240812230256-910716f72d1a/go.mod h1:avKeK73ezowttW3PaycYB4mChaqigAxr4q8pFwIuHww=
+github.com/ark-network/ark/pkg/client-sdk v0.0.0-20240913171921-2174e4b04d86/go.mod h1:CRN5aL3u3Q/3tCQLp/ND7NT34/GRsG1ccLk5aX2r7mQ=
 github.com/ark-network/ark/server/pkg/kvdb v0.0.0-20240812230256-910716f72d1a/go.mod h1:ivr4Qm16kbJMTovsdscYiV1s1vPOYmEBtp9EgrHFGi4=
 github.com/ark-network/ark/server/pkg/macaroons v0.0.0-20240812230256-910716f72d1a/go.mod h1:OtZoQaSumPsVKWq/OkduHZdpAutQYaB2yVf1rlm6vI4=
 github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6 h1:G1bPvciwNyF7IUmKXNt9Ak3m6u9DE1rF+RmtIkBpVdA=
