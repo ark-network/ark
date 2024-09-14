@@ -139,8 +139,13 @@ func (b *txBuilder) BuildPoolTx(
 			return "", nil, "", err
 		}
 
+		receivers, err := getOffchainReceivers(payments)
+		if err != nil {
+			return "", nil, "", err
+		}
+
 		treeFactoryFn, sharedOutputScript, sharedOutputAmount, err = tree.CraftCongestionTree(
-			b.onchainNetwork().AssetID, aspPubkey, getOffchainReceivers(payments), feeSatsPerNode, b.roundLifetime,
+			b.onchainNetwork().AssetID, aspPubkey, receivers, feeSatsPerNode, b.roundLifetime,
 		)
 		if err != nil {
 			return "", nil, "", err

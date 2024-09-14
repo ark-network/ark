@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	testingKey        = "0218d5ca8b58797b7dbd65c075dd7ba7784b3f38ab71b1a5a8e3f94ba0257654a6"
+	testingKey        = "020000000000000000000000000000000000000000000000000000000000000001"
 	connectorAddress  = "bc1py00yhcjpcj0k0sqra0etq0u3yy0purmspppsw0shyzyfe8c83tmq5h6kc2"
 	roundLifetime     = int64(1209344)
 	boardingExitDelay = int64(512)

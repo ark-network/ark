@@ -130,11 +130,13 @@ func TestParseTaprootDescriptor(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := descriptor.ParseTaprootDescriptor(tt.desc)
-			if (err != nil) != tt.wantErr {
-				require.Equal(t, tt.wantErr, err != nil, err)
+			if tt.wantErr {
+				require.Error(t, err)
 				return
 			}
-			require.Equal(t, tt.expected, got)
+			require.NoError(t, err)
+			require.NotNil(t, got)
+			require.Equal(t, tt.expected, *got)
 		})
 	}
 }

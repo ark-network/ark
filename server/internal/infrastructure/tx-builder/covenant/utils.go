@@ -61,14 +61,14 @@ func getOnchainReceivers(
 
 func getOffchainReceivers(
 	payments []domain.Payment,
-) []tree.Receiver {
+) ([]tree.Receiver, error) {
 	receivers := make([]tree.Receiver, 0)
 	for _, payment := range payments {
 		for _, receiver := range payment.Receivers {
 			if !receiver.IsOnchain() {
 				vtxoScript, err := tree.ParseVtxoScript(receiver.Descriptor)
 				if err != nil {
-					continue
+					return nil, err
 				}
 
 				receivers = append(receivers, tree.Receiver{
@@ -78,7 +78,7 @@ func getOffchainReceivers(
 			}
 		}
 	}
-	return receivers
+	return receivers, nil
 }
 
 func toWitnessUtxo(in ports.TxInput) (*transaction.TxOutput, error) {
