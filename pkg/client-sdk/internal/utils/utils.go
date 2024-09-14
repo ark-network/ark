@@ -80,10 +80,7 @@ func DecodeReceiverAddress(addr string) (
 
 func IsOnchainOnly(receivers []client.Output) bool {
 	for _, receiver := range receivers {
-		isOnChain, _, _, err := DecodeReceiverAddress(receiver.Address)
-		if err != nil {
-			continue
-		}
+		isOnChain := len(receiver.Address) > 0
 
 		if !isOnChain {
 			return false

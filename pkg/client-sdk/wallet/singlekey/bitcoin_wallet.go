@@ -9,7 +9,6 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
-	"github.com/ark-network/ark/common/descriptor"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/ark-network/ark/pkg/client-sdk/store"
@@ -217,9 +216,13 @@ func (w *bitcoinWallet) getAddress(
 
 	netParams := utils.ToBitcoinNetwork(data.Network)
 
-	vtxoTapKey, _, err := bitcointree.ComputeVtxoTaprootScript(
-		w.walletData.Pubkey, data.AspPubkey, uint(data.UnilateralExitDelay),
-	)
+	defaultVtxoScript := &bitcointree.DefaultVtxoScript{
+		Asp:       data.AspPubkey,
+		Owner:     w.walletData.Pubkey,
+		ExitDelay: uint(data.UnilateralExitDelay),
+	}
+
+	vtxoTapKey, _, err := defaultVtxoScript.TapTree()
 	if err != nil {
 		return "", "", "", err
 	}
@@ -237,19 +240,12 @@ func (w *bitcoinWallet) getAddress(
 		data.BoardingDescriptorTemplate, "USER", myPubkeyStr,
 	)
 
-	desc, err := descriptor.ParseTaprootDescriptor(descriptorStr)
+	boardingVtxoScript, err := bitcointree.ParseVtxoScript(descriptorStr)
 	if err != nil {
 		return "", "", "", err
 	}
 
-	_, boardingTimeout, err := descriptor.ParseBoardingDescriptor(*desc)
-	if err != nil {
-		return "", "", "", err
-	}
-
-	boardingTapKey, _, err := bitcointree.ComputeVtxoTaprootScript(
-		w.walletData.Pubkey, data.AspPubkey, boardingTimeout,
-	)
+	boardingTapKey, _, err := boardingVtxoScript.TapTree()
 	if err != nil {
 		return "", "", "", err
 	}

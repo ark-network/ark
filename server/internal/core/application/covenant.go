@@ -374,7 +374,7 @@ func (s *covenantService) GetInfo(ctx context.Context) (*ServiceInfo, error) {
 		Network:             s.network.Name,
 		Dust:                dust,
 		BoardingDescriptorTemplate: fmt.Sprintf(
-			descriptor.BoardingDescriptorTemplate,
+			descriptor.DefaultVtxoDescriptorTemplate,
 			hex.EncodeToString(tree.UnspendableKey().SerializeCompressed()),
 			hex.EncodeToString(schnorr.SerializePubKey(s.pubkey)),
 			"USER",

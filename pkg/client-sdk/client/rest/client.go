@@ -146,7 +146,7 @@ func (a *restClient) ListVtxos(
 			expiresAt = &t
 		}
 
-		amount, err := strconv.Atoi(v.Receiver.Amount)
+		amount, err := strconv.Atoi(v.Amount)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -159,9 +159,9 @@ func (a *restClient) ListVtxos(
 		}
 
 		spendableVtxos = append(spendableVtxos, client.Vtxo{
-			VtxoKey: client.VtxoKey{
-				Txid: v.Outpoint.VtxoInput.Txid,
-				VOut: uint32(v.Outpoint.VtxoInput.Vout),
+			Outpoint: client.Outpoint{
+				Txid: v.Outpoint.Txid,
+				VOut: uint32(v.Outpoint.Vout),
 			},
 			Amount:                  uint64(amount),
 			RoundTxid:               v.PoolTxid,
@@ -170,6 +170,7 @@ func (a *restClient) ListVtxos(
 			RedeemTx:                redeemTx,
 			UnconditionalForfeitTxs: uncondForfeitTxs,
 			SpentBy:                 v.SpentBy,
+			Descriptor:              v.Descriptor,
 		})
 	}
 
@@ -185,20 +186,21 @@ func (a *restClient) ListVtxos(
 			expiresAt = &t
 		}
 
-		amount, err := strconv.Atoi(v.Receiver.Amount)
+		amount, err := strconv.Atoi(v.Amount)
 		if err != nil {
 			return nil, nil, err
 		}
 
 		spentVtxos = append(spentVtxos, client.Vtxo{
-			VtxoKey: client.VtxoKey{
-				Txid: v.Outpoint.VtxoInput.Txid,
-				VOut: uint32(v.Outpoint.VtxoInput.Vout),
+			Outpoint: client.Outpoint{
+				Txid: v.Outpoint.Txid,
+				VOut: uint32(v.Outpoint.Vout),
 			},
-			Amount:    uint64(amount),
-			RoundTxid: v.PoolTxid,
-			ExpiresAt: expiresAt,
-			SpentBy:   v.SpentBy,
+			Amount:     uint64(amount),
+			RoundTxid:  v.PoolTxid,
+			ExpiresAt:  expiresAt,
+			SpentBy:    v.SpentBy,
+			Descriptor: v.Descriptor,
 		})
 	}
 
@@ -249,26 +251,14 @@ func (a *restClient) RegisterPayment(
 ) (string, error) {
 	ins := make([]*models.V1Input, 0, len(inputs))
 	for _, i := range inputs {
-		var input *models.V1Input
-
-		if len(i.GetDescriptor()) > 0 {
-			input = &models.V1Input{
-				BoardingInput: &models.V1BoardingInput{
-					Txid:       i.GetTxID(),
-					Vout:       int64(i.GetVOut()),
-					Descriptor: i.GetDescriptor(),
-				},
-			}
-		} else {
-			input = &models.V1Input{
-				VtxoInput: &models.V1VtxoInput{
-					Txid: i.GetTxID(),
-					Vout: int64(i.GetVOut()),
-				},
-			}
-		}
-
-		ins = append(ins, input)
+		ins = append(ins, &models.V1Input{
+			Outpoint: &models.V1Outpoint{
+				Txid: i.Txid,
+				Vout: int64(i.VOut),
+			},
+			Descriptor:    i.Descriptor,
+			SigningPubkey: i.SigningPubkey,
+		})
 	}
 	body := &models.V1RegisterPaymentRequest{
 		Inputs: ins,
@@ -394,26 +384,25 @@ func (a *restClient) FinalizePayment(
 }
 
 func (a *restClient) CreatePayment(
-	ctx context.Context, inputs []client.VtxoKey, outputs []client.Output,
+	ctx context.Context, inputs []client.Input, outputs []client.Output,
 ) (string, []string, error) {
 	ins := make([]*models.V1Input, 0, len(inputs))
 	for _, i := range inputs {
-		if len(i.GetDescriptor()) > 0 {
-			return "", nil, fmt.Errorf("boarding inputs are not allowed in create payment")
-		}
-
 		ins = append(ins, &models.V1Input{
-			VtxoInput: &models.V1VtxoInput{
+			Outpoint: &models.V1Outpoint{
 				Txid: i.Txid,
 				Vout: int64(i.VOut),
 			},
+			Descriptor:    i.Descriptor,
+			SigningPubkey: i.SigningPubkey,
 		})
 	}
 	outs := make([]*models.V1Output, 0, len(outputs))
 	for _, o := range outputs {
 		outs = append(outs, &models.V1Output{
-			Address: o.Address,
-			Amount:  strconv.Itoa(int(o.Amount)),
+			Address:    o.Address,
+			Amount:     strconv.Itoa(int(o.Amount)),
+			Descriptor: o.Descriptor,
 		})
 	}
 	body := models.V1CreatePaymentRequest{

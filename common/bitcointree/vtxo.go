@@ -36,7 +36,7 @@ func (v *DefaultVtxoScript) ToDescriptor() string {
 	owner := hex.EncodeToString(schnorr.SerializePubKey(v.Owner))
 
 	return fmt.Sprintf(
-		descriptor.BoardingDescriptorTemplate,
+		descriptor.DefaultVtxoDescriptorTemplate,
 		hex.EncodeToString(UnspendableKey().SerializeCompressed()),
 		owner,
 		hex.EncodeToString(schnorr.SerializePubKey(v.Asp)),
@@ -51,7 +51,7 @@ func (v *DefaultVtxoScript) FromDescriptor(desc string) error {
 		return err
 	}
 
-	owner, asp, exitDelay, err := descriptor.ParseBoardingDescriptor(*taprootDesc)
+	owner, asp, exitDelay, err := descriptor.ParseDefaultVtxoDescriptor(*taprootDesc)
 	if err != nil {
 		return err
 	}

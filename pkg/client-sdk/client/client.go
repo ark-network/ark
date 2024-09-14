@@ -37,7 +37,7 @@ type ASPClient interface {
 		ctx context.Context, signedForfeitTxs []string, signedRoundTx string,
 	) error
 	CreatePayment(
-		ctx context.Context, inputs []VtxoKey, outputs []Output,
+		ctx context.Context, inputs []Input, outputs []Output,
 	) (string, []string, error)
 	CompletePayment(
 		ctx context.Context, signedRedeemTx string, signedUnconditionalForfeitTxs []string,
@@ -67,40 +67,20 @@ type RoundEventChannel struct {
 	Err   error
 }
 
-type Input interface {
-	GetTxID() string
-	GetVOut() uint32
-	GetDescriptor() string
-}
-
-type VtxoKey struct {
+type Outpoint struct {
 	Txid string
 	VOut uint32
 }
 
-func (k VtxoKey) GetTxID() string {
-	return k.Txid
-}
-
-func (k VtxoKey) GetVOut() uint32 {
-	return k.VOut
-}
-
-func (k VtxoKey) GetDescriptor() string {
-	return ""
-}
-
-type BoardingInput struct {
-	VtxoKey
-	Descriptor string
-}
-
-func (k BoardingInput) GetDescriptor() string {
-	return k.Descriptor
+type Input struct {
+	Outpoint
+	Descriptor    string
+	SigningPubkey string
 }
 
 type Vtxo struct {
-	VtxoKey
+	Outpoint
+	Descriptor              string
 	Amount                  uint64
 	RoundTxid               string
 	ExpiresAt               *time.Time
@@ -111,8 +91,9 @@ type Vtxo struct {
 }
 
 type Output struct {
-	Address string
-	Amount  uint64
+	Address    string // onchain output address
+	Descriptor string // offchain vtxo descriptor
+	Amount     uint64
 }
 
 type RoundStage int

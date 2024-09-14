@@ -29,7 +29,7 @@ const (
 )
 
 var desc1 = fmt.Sprintf(
-	descriptor.BoardingDescriptorTemplate,
+	descriptor.DefaultVtxoDescriptorTemplate,
 	randomString(66),
 	pubkey1,
 	pubkey1,
@@ -38,7 +38,7 @@ var desc1 = fmt.Sprintf(
 )
 
 var desc2 = fmt.Sprintf(
-	descriptor.BoardingDescriptorTemplate,
+	descriptor.DefaultVtxoDescriptorTemplate,
 	randomString(66),
 	pubkey2,
 	pubkey2,

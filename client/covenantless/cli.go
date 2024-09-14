@@ -248,7 +248,7 @@ func coinSelectOnchain(
 		return nil, 0, err
 	}
 
-	_, timeoutBoarding, err := descriptor.ParseBoardingDescriptor(*desc)
+	_, timeoutBoarding, err := descriptor.ParseDefaultVtxoDescriptor(*desc)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -421,7 +421,7 @@ func getAddress(ctx *cli.Context) (offchainAddr string, boardingAddr, redemption
 		return
 	}
 
-	_, timeoutBoarding, err := descriptor.ParseBoardingDescriptor(*desc)
+	_, timeoutBoarding, err := descriptor.ParseDefaultVtxoDescriptor(*desc)
 	if err != nil {
 		return
 	}

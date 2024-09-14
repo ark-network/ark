@@ -9,9 +9,9 @@ import (
 )
 
 // tr(unspendable, { and(pk(user), pk(asp)), and(older(timeout), pk(user)) })
-const BoardingDescriptorTemplate = "tr(%s,{ and(pk(%s), pk(%s)), and(older(%d), pk(%s)) })"
+const DefaultVtxoDescriptorTemplate = "tr(%s,{ and(pk(%s), pk(%s)), and(older(%d), pk(%s)) })"
 
-func ParseBoardingDescriptor(
+func ParseDefaultVtxoDescriptor(
 	desc TaprootDescriptor,
 ) (user, asp *secp256k1.PublicKey, timeout uint, err error) {
 	for _, leaf := range desc.ScriptTree {
