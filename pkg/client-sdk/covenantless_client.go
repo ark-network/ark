@@ -537,8 +537,7 @@ func (a *covenantlessArkClient) SendAsync(
 			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), a.Dust)
 		}
 
-		// TODO reversible vtxo
-		desc, err := a.offchainAddressToDefaultVtxoDescriptor(receiver.To())
+		desc, err := a.offchainAddressToReversibleVtxoDescriptor(offchainAddrs[0], receiver.To())
 		if err != nil {
 			return "", err
 		}
@@ -1785,6 +1784,27 @@ func (a *covenantlessArkClient) selfTransferAllPendingPayments(
 	}
 
 	return roundTxid, nil
+}
+
+func (a *covenantlessArkClient) offchainAddressToReversibleVtxoDescriptor(myaddr string, receiveraddr string) (string, error) {
+	_, receiverPubkey, aspPubkey, err := common.DecodeAddress(receiveraddr)
+	if err != nil {
+		return "", err
+	}
+
+	_, userPubKey, _, err := common.DecodeAddress(myaddr)
+	if err != nil {
+		return "", err
+	}
+
+	vtxoScript := bitcointree.ReversibleVtxoScript{
+		Owner:     receiverPubkey,
+		Sender:    userPubKey,
+		Asp:       aspPubkey,
+		ExitDelay: uint(a.UnilateralExitDelay),
+	}
+
+	return vtxoScript.ToDescriptor(), nil
 }
 
 func (a *covenantlessArkClient) offchainAddressToDefaultVtxoDescriptor(addr string) (string, error) {

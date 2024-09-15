@@ -19,7 +19,11 @@ func ParseVtxoScript(desc string) (VtxoScript, error) {
 	// TODO add other type
 	err := v.FromDescriptor(desc)
 	if err != nil {
-		return nil, fmt.Errorf("unknown vtxo script type: %s (%s)", desc, err)
+		v := &ReversibleVtxoScript{}
+		err = v.FromDescriptor(desc)
+		if err != nil {
+			return nil, fmt.Errorf("invalid vtxo descriptor: %s", desc)
+		}
 	}
 
 	return v, nil
@@ -89,6 +93,99 @@ func (v *DefaultVtxoScript) TapTree() (*secp256k1.PublicKey, bitcoinTapTree, err
 
 	tapTree := txscript.AssembleTaprootScriptTree(
 		*redeemLeaf, *forfeitLeaf,
+	)
+
+	root := tapTree.RootNode.TapHash()
+	taprootKey := txscript.ComputeTaprootOutputKey(
+		UnspendableKey(),
+		root[:],
+	)
+
+	return taprootKey, bitcoinTapTree{tapTree}, nil
+}
+
+/*
+* ReversibleVtxoScript allows sender of the VTXO to revert the transaction
+* unilateral exit is in favor of the sender
+* - Owner and ASP (forfeit owner)
+* - Sender and ASP (forfeit sender)
+*	- Sender after t (unilateral exit)
+ */
+type ReversibleVtxoScript struct {
+	Asp       *secp256k1.PublicKey
+	Sender    *secp256k1.PublicKey
+	Owner     *secp256k1.PublicKey
+	ExitDelay uint
+}
+
+func (v *ReversibleVtxoScript) ToDescriptor() string {
+	owner := hex.EncodeToString(schnorr.SerializePubKey(v.Owner))
+	sender := hex.EncodeToString(schnorr.SerializePubKey(v.Sender))
+	asp := hex.EncodeToString(schnorr.SerializePubKey(v.Asp))
+
+	return fmt.Sprintf(
+		descriptor.ReversibleVtxoScriptTemplate,
+		hex.EncodeToString(UnspendableKey().SerializeCompressed()),
+		sender,
+		asp,
+		v.ExitDelay,
+		sender,
+		owner,
+		asp,
+	)
+}
+
+func (v *ReversibleVtxoScript) FromDescriptor(desc string) error {
+	taprootDesc, err := descriptor.ParseTaprootDescriptor(desc)
+	if err != nil {
+		return err
+	}
+
+	owner, sender, asp, exitDelay, err := descriptor.ParseReversibleVtxoDescriptor(*taprootDesc)
+	if err != nil {
+		return err
+	}
+
+	v.Owner = owner
+	v.Sender = sender
+	v.Asp = asp
+	v.ExitDelay = exitDelay
+	return nil
+}
+
+func (v *ReversibleVtxoScript) TapTree() (*secp256k1.PublicKey, bitcoinTapTree, error) {
+	redeemClosure := &CSVSigClosure{
+		Pubkey:  v.Sender,
+		Seconds: v.ExitDelay,
+	}
+
+	redeemLeaf, err := redeemClosure.Leaf()
+	if err != nil {
+		return nil, bitcoinTapTree{}, err
+	}
+
+	forfeitClosure := &MultisigClosure{
+		Pubkey:    v.Owner,
+		AspPubkey: v.Asp,
+	}
+
+	forfeitLeaf, err := forfeitClosure.Leaf()
+	if err != nil {
+		return nil, bitcoinTapTree{}, err
+	}
+
+	reverseForfeitClosure := &MultisigClosure{
+		Pubkey:    v.Sender,
+		AspPubkey: v.Asp,
+	}
+
+	reverseForfeitLeaf, err := reverseForfeitClosure.Leaf()
+	if err != nil {
+		return nil, bitcoinTapTree{}, err
+	}
+
+	tapTree := txscript.AssembleTaprootScriptTree(
+		*redeemLeaf, *forfeitLeaf, *reverseForfeitLeaf,
 	)
 
 	root := tapTree.RootNode.TapHash()
