@@ -66,37 +66,29 @@ func CoinSelect(
 }
 
 func ParseLiquidAddress(addr string) (
-	bool, []byte, *secp256k1.PublicKey, error,
+	bool, []byte, error,
 ) {
 	outputScript, err := address.ToOutputScript(addr)
 	if err != nil {
-		_, userPubkey, _, err := common.DecodeAddress(addr)
-		if err != nil {
-			return false, nil, nil, err
-		}
-		return false, nil, userPubkey, nil
+		return false, nil, nil
 	}
 
-	return true, outputScript, nil, nil
+	return true, outputScript, nil
 }
 
 func ParseBitcoinAddress(addr string, net chaincfg.Params) (
-	bool, []byte, *secp256k1.PublicKey, error,
+	bool, []byte, error,
 ) {
 	btcAddr, err := btcutil.DecodeAddress(addr, &net)
 	if err != nil {
-		_, userPubkey, _, err := common.DecodeAddress(addr)
-		if err != nil {
-			return false, nil, nil, err
-		}
-		return false, nil, userPubkey, nil
+		return false, nil, nil
 	}
 
 	onchainScript, err := txscript.PayToAddrScript(btcAddr)
 	if err != nil {
-		return false, nil, nil, err
+		return false, nil, err
 	}
-	return true, onchainScript, nil, nil
+	return true, onchainScript, nil
 }
 
 func IsOnchainOnly(receivers []client.Output) bool {

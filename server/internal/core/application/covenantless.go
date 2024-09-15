@@ -495,7 +495,7 @@ func (s *covenantlessService) newBoardingInput(tx wire.MsgTx, input ports.Input)
 	}
 
 	if defaultVtxoScript, ok := boardingScript.(*bitcointree.DefaultVtxoScript); ok {
-		if !s.pubkey.IsEqual(defaultVtxoScript.Asp) {
+		if !bytes.Equal(schnorr.SerializePubKey(defaultVtxoScript.Asp), schnorr.SerializePubKey(s.pubkey)) {
 			return nil, fmt.Errorf("invalid boarding descriptor, ASP mismatch")
 		}
 
@@ -605,8 +605,8 @@ func (s *covenantlessService) GetInfo(ctx context.Context) (*ServiceInfo, error)
 		BoardingDescriptorTemplate: fmt.Sprintf(
 			descriptor.DefaultVtxoDescriptorTemplate,
 			hex.EncodeToString(bitcointree.UnspendableKey().SerializeCompressed()),
-			hex.EncodeToString(schnorr.SerializePubKey(s.pubkey)),
 			"USER",
+			hex.EncodeToString(schnorr.SerializePubKey(s.pubkey)),
 			s.boardingExitDelay,
 			"USER",
 		),

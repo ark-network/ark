@@ -258,7 +258,7 @@ func (s *covenantService) newBoardingInput(tx *transaction.Transaction, input po
 	}
 
 	if defaultVtxoScript, ok := boardingScript.(*tree.DefaultVtxoScript); ok {
-		if !s.pubkey.IsEqual(defaultVtxoScript.Asp) {
+		if !bytes.Equal(schnorr.SerializePubKey(defaultVtxoScript.Asp), schnorr.SerializePubKey(s.pubkey)) {
 			return nil, fmt.Errorf("invalid boarding descriptor, ASP mismatch")
 		}
 
@@ -376,8 +376,8 @@ func (s *covenantService) GetInfo(ctx context.Context) (*ServiceInfo, error) {
 		BoardingDescriptorTemplate: fmt.Sprintf(
 			descriptor.DefaultVtxoDescriptorTemplate,
 			hex.EncodeToString(tree.UnspendableKey().SerializeCompressed()),
-			hex.EncodeToString(schnorr.SerializePubKey(s.pubkey)),
 			"USER",
+			hex.EncodeToString(schnorr.SerializePubKey(s.pubkey)),
 			s.boardingExitDelay,
 			"USER",
 		),

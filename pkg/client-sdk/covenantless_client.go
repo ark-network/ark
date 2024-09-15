@@ -446,7 +446,7 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 		return "", err
 	}
 
-	signingPubkey := hex.EncodeToString(schnorr.SerializePubKey(myKey))
+	signingPubkey := hex.EncodeToString(myKey.SerializeCompressed())
 
 	inputs := make([]client.Input, 0, len(selectedCoins))
 
@@ -499,7 +499,7 @@ func (a *covenantlessArkClient) SendAsync(
 
 	netParams := utils.ToBitcoinNetwork(a.Network)
 	for _, receiver := range receivers {
-		isOnchain, _, _, err := utils.ParseBitcoinAddress(receiver.To(), netParams)
+		isOnchain, _, err := utils.ParseBitcoinAddress(receiver.To(), netParams)
 		if err != nil {
 			return "", err
 		}
@@ -581,7 +581,7 @@ func (a *covenantlessArkClient) SendAsync(
 		return "", err
 	}
 
-	signingPubkey := hex.EncodeToString(schnorr.SerializePubKey(myKey))
+	signingPubkey := hex.EncodeToString(myKey.SerializeCompressed())
 
 	for _, coin := range selectedCoins {
 		inputs = append(inputs, client.Input{
@@ -930,7 +930,7 @@ func (a *covenantlessArkClient) sendOffchain(
 		return "", err
 	}
 
-	signingPubkey := hex.EncodeToString(schnorr.SerializePubKey(myKey))
+	signingPubkey := hex.EncodeToString(myKey.SerializeCompressed())
 
 	inputs := make([]client.Input, 0, len(selectedCoins))
 	for _, coin := range selectedCoins {
@@ -1273,11 +1273,11 @@ func (a *covenantlessArkClient) validateReceivers(
 ) error {
 	netParams := utils.ToBitcoinNetwork(a.Network)
 	for _, receiver := range receivers {
-		isOnChain, onchainScript, _, err := utils.ParseBitcoinAddress(
+		isOnChain, onchainScript, err := utils.ParseBitcoinAddress(
 			receiver.Address, netParams,
 		)
 		if err != nil {
-			return err
+			return fmt.Errorf("invalid receiver address: %s err = %s", receiver.Address, err)
 		}
 
 		if isOnChain {

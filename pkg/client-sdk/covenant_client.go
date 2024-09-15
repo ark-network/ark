@@ -456,7 +456,7 @@ func (a *covenantArkClient) CollaborativeRedeem(
 		return "", err
 	}
 
-	signingPubkey := hex.EncodeToString(schnorr.SerializePubKey(myKey))
+	signingPubkey := hex.EncodeToString(myKey.SerializeCompressed())
 
 	inputs := make([]client.Input, 0, len(selectedCoins))
 
@@ -535,7 +535,7 @@ func (a *covenantArkClient) Claim(ctx context.Context) (string, error) {
 		ctx,
 		boardingUtxos,
 		receiver,
-		hex.EncodeToString(schnorr.SerializePubKey(mypubkey)),
+		hex.EncodeToString(mypubkey.SerializeCompressed()),
 	)
 }
 
@@ -889,7 +889,7 @@ func (a *covenantArkClient) sendOffchain(
 		return "", err
 	}
 
-	signingPubkey := hex.EncodeToString(schnorr.SerializePubKey(myKey))
+	signingPubkey := hex.EncodeToString(myKey.SerializeCompressed())
 
 	inputs := make([]client.Input, 0, len(selectedCoins))
 	for _, coin := range selectedCoins {
@@ -1135,11 +1135,11 @@ func (a *covenantArkClient) validateReceivers(
 	congestionTree tree.CongestionTree,
 ) error {
 	for _, receiver := range receivers {
-		isOnChain, onchainScript, _, err := utils.ParseLiquidAddress(
+		isOnChain, onchainScript, err := utils.ParseLiquidAddress(
 			receiver.Address,
 		)
 		if err != nil {
-			return err
+			return fmt.Errorf("invalid receiver address: %s err = %s", receiver.Address, err)
 		}
 
 		if isOnChain {
@@ -1486,7 +1486,7 @@ func (a *covenantArkClient) selfTransferAllPendingPayments(
 	inputs := make([]client.Input, 0, len(boardingUtxo))
 
 	boardingDescriptor := strings.ReplaceAll(
-		a.BoardingDescriptorTemplate, "USER", mypubkey,
+		a.BoardingDescriptorTemplate, "USER", mypubkey[2:],
 	)
 
 	for _, utxo := range boardingUtxo {
