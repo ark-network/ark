@@ -69,6 +69,20 @@ func (h *handler) CreatePayment(ctx context.Context, req *arkv1.CreatePaymentReq
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
+	for _, receiver := range receivers {
+		if receiver.Amount <= 0 {
+			return nil, status.Error(codes.InvalidArgument, "output amount must be greater than 0")
+		}
+
+		if len(receiver.OnchainAddress) > 0 {
+			return nil, status.Error(codes.InvalidArgument, "onchain address is not supported as async payment destination")
+		}
+
+		if len(receiver.Descriptor) <= 0 {
+			return nil, status.Error(codes.InvalidArgument, "missing output descriptor")
+		}
+	}
+
 	redeemTx, unconditionalForfeitTxs, err := h.svc.CreateAsyncPayment(
 		ctx, inputs, receivers,
 	)

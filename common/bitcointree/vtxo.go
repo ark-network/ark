@@ -18,7 +18,11 @@ func ParseVtxoScript(desc string) (VtxoScript, error) {
 	v := &DefaultVtxoScript{}
 	// TODO add other type
 	err := v.FromDescriptor(desc)
-	return v, err
+	if err != nil {
+		return nil, fmt.Errorf("unknown vtxo script type: %s (%s)", desc, err)
+	}
+
+	return v, nil
 }
 
 /*

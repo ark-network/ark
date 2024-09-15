@@ -839,8 +839,8 @@ func (a *covenantArkClient) sendOffchain(
 		}
 
 		receiversOutput = append(receiversOutput, client.Output{
-			Address: desc,
-			Amount:  receiver.Amount(),
+			Descriptor: desc,
+			Amount:     receiver.Amount(),
 		})
 		sumOfReceivers += receiver.Amount()
 	}

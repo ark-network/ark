@@ -456,6 +456,11 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 		if vtxo.Swept {
 			return "", fmt.Errorf("input %s:%d already swept", vtxo.Txid, vtxo.VOut)
 		}
+
+		vtxosInputs = append(vtxosInputs, domain.VtxoInput{
+			Vtxo:         vtxo,
+			SignerPubkey: input.SignerPubkey,
+		})
 	}
 
 	payment, err := domain.NewPayment(vtxosInputs)

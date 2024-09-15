@@ -28,7 +28,7 @@ services:
       - oceand
     environment:
       - ARK_WALLET_ADDR=oceand:18000
-      - ARK_ROUND_INTERVAL=10
+      - ARK_ROUND_INTERVAL=18
       - ARK_NETWORK=liquidregtest
       - ARK_LOG_LEVEL=5
       - ARK_ROUND_LIFETIME=512

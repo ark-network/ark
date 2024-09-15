@@ -361,7 +361,6 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 	unconditionalForfeitTxs := make([]string, 0, len(vtxos))
 	redeemTxWeightEstimator := &input.TxWeightEstimator{}
 	for _, vtxo := range vtxos {
-
 		if vtxo.Spent || vtxo.Redeemed || vtxo.Swept {
 			return nil, fmt.Errorf("all vtxos must be unspent")
 		}

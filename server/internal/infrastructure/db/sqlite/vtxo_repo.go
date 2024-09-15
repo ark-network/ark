@@ -100,6 +100,10 @@ func (v *vxtoRepository) GetAllVtxos(ctx context.Context, pubkey string) ([]doma
 
 	var rows []vtxoWithUnconditionalForfeitTxs
 	if withPubkey {
+		if len(pubkey) == 66 {
+			pubkey = pubkey[2:]
+		}
+
 		res, err := v.querier.SelectNotRedeemedVtxosWithPubkey(ctx, pubkey)
 		if err != nil {
 			return nil, nil, err

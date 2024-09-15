@@ -33,7 +33,7 @@ lint:
 ## run: run in regtest mode with bitcoind
 run: clean
 	@echo "Running arkd with Bitcoin Core in regtest mode ..."
-	@export ARK_ROUND_INTERVAL=10; \
+	@export ARK_ROUND_INTERVAL=18; \
 	export ARK_LOG_LEVEL=5; \
 	export ARK_NETWORK=regtest; \
 	export ARK_PORT=7070; \
