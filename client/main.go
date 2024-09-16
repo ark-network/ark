@@ -221,10 +221,6 @@ func config(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if cfgData == nil {
-		fmt.Println("no configuration found, run 'init' command")
-		return nil
-	}
 
 	cfg := map[string]interface{}{
 		"asp_url":                      cfgData.AspUrl,
