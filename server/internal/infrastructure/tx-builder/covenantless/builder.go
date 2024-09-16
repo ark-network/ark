@@ -1115,7 +1115,6 @@ func (b *txBuilder) createForfeitTxs(
 	for _, payment := range payments {
 		for _, vtxo := range payment.Inputs {
 
-			fmt.Println("vtxo", vtxo.Descriptor)
 			offchainscript, err := bitcointree.ParseVtxoScript(vtxo.Descriptor)
 			if err != nil {
 				return nil, err
