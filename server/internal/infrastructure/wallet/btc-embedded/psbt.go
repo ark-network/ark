@@ -1,6 +1,7 @@
 package btcwallet
 
 import (
+	"encoding/hex"
 	"fmt"
 
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -41,6 +42,7 @@ func (s *service) signPsbt(packet *psbt.Packet, inputsToSign []int) ([]uint32, e
 	}
 
 	tx := packet.UnsignedTx
+	signedInputs := make([]uint32, 0)
 	for idx := range tx.TxIn {
 		in := &packet.Inputs[idx]
 
@@ -76,13 +78,19 @@ func (s *service) signPsbt(packet *psbt.Packet, inputsToSign []int) ([]uint32, e
 			managedAddress = s.aspTaprootAddr
 		} else {
 			// segwit v0
+			var err error
 			managedAddress, _, _, err = s.wallet.ScriptForOutput(in.WitnessUtxo)
 			if err != nil {
-				log.Debugf("SignPsbt: Skipping input %d, error "+
-					"fetching script for output: %v", idx, err)
+				log.WithError(err).Debugf(
+					"failed to fetch address for input %d with script %s",
+					idx, hex.EncodeToString(in.WitnessUtxo.PkScript),
+				)
 				continue
 			}
 		}
+
+		signedInputs = append(signedInputs, uint32(idx))
+
 		bip32Infos := derivationPathForAddress(managedAddress)
 		packet.Inputs[idx].Bip32Derivation = []*psbt.Bip32Derivation{bip32Infos}
 
@@ -106,25 +114,18 @@ func (s *service) signPsbt(packet *psbt.Packet, inputsToSign []int) ([]uint32, e
 		}
 	}
 
-	// TODO (@louisinger): shall we delete this code?
-	// prevOutputFetcher := wallet.PsbtPrevOutputFetcher(packet)
-	// sigHashes := txscript.NewTxSigHashes(tx, prevOutputFetcher)
+	ins, err := s.wallet.SignPsbt(packet)
+	if err != nil {
+		return nil, err
+	}
 
-	// in := packet.Inputs[0]
+	// delete derivation paths to avoid duplicate keys error
+	for idx := range signedInputs {
+		packet.Inputs[idx].Bip32Derivation = nil
+		packet.Inputs[idx].TaprootBip32Derivation = nil
+	}
 
-	// preimage, err := txscript.CalcTapscriptSignaturehash(
-	// 	sigHashes,
-	// 	txscript.SigHashType(in.SighashType),
-	// 	tx,
-	// 	0,
-	// 	txscript.NewCannedPrevOutputFetcher(in.WitnessUtxo.PkScript, in.WitnessUtxo.Value),
-	// 	txscript.NewBaseTapLeaf(in.TaprootLeafScript[0].Script),
-	// )
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	return s.wallet.SignPsbt(packet)
+	return ins, nil
 }
 
 func derivationPathForAddress(addr waddrmgr.ManagedPubKeyAddress) *psbt.Bip32Derivation {

@@ -28,6 +28,7 @@ type storeData struct {
 	ExplorerURL         string `json:"explorer_url"`
 	Network             string `json:"network"`
 	RoundLifetime       string `json:"round_lifetime"`
+	RoundInterval       string `json:"round_interval"`
 	UnilateralExitDelay string `json:"unilateral_exit_delay"`
 	Dust                string `json:"dust"`
 }
@@ -57,6 +58,7 @@ func (s *localStorageStore) AddData(ctx context.Context, data store.StoreData) e
 		ClientType:          data.ClientType,
 		Network:             data.Network.Name,
 		RoundLifetime:       fmt.Sprintf("%d", data.RoundLifetime),
+		RoundInterval:       fmt.Sprintf("%d", data.RoundInterval),
 		UnilateralExitDelay: fmt.Sprintf("%d", data.UnilateralExitDelay),
 		Dust:                fmt.Sprintf("%d", data.Dust),
 	}
@@ -82,6 +84,7 @@ func (s *localStorageStore) GetData(ctx context.Context) (*store.StoreData, erro
 	}
 	network := utils.NetworkFromString(s.store.Call("getItem", "network").String())
 	roundLifetime, _ := strconv.Atoi(s.store.Call("getItem", "round_lifetime").String())
+	roundInterval, _ := strconv.Atoi(s.store.Call("getItem", "round_interval").String())
 	unilateralExitDelay, _ := strconv.Atoi(s.store.Call("getItem", "unilateral_exit_delay").String())
 	dust, _ := strconv.Atoi(s.store.Call("getItem", "min_relay_fee").String())
 
@@ -92,6 +95,7 @@ func (s *localStorageStore) GetData(ctx context.Context) (*store.StoreData, erro
 		ClientType:          s.store.Call("getItem", "client_type").String(),
 		Network:             network,
 		RoundLifetime:       int64(roundLifetime),
+		RoundInterval:       int64(roundInterval),
 		UnilateralExitDelay: int64(unilateralExitDelay),
 		Dust:                uint64(dust),
 	}, nil

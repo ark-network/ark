@@ -2,6 +2,7 @@ package e2e_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,6 +11,12 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common"
+	arksdk "github.com/ark-network/ark/pkg/client-sdk"
+	"github.com/ark-network/ark/pkg/client-sdk/client"
+	grpcclient "github.com/ark-network/ark/pkg/client-sdk/client/grpc"
+	"github.com/ark-network/ark/pkg/client-sdk/explorer"
+	"github.com/ark-network/ark/pkg/client-sdk/redemption"
+	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
 	utils "github.com/ark-network/ark/server/test/e2e"
 	"github.com/stretchr/testify/require"
 )
@@ -143,6 +150,58 @@ func TestCollaborativeExit(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestReactToSpentVtxosRedemption(t *testing.T) {
+	ctx := context.Background()
+	client, grpcClient := setupArkSDK(t)
+	defer grpcClient.Close()
+
+	offchainAddress, boardingAddress, err := client.Receive(ctx)
+	require.NoError(t, err)
+
+	_, err = utils.RunCommand("nigiri", "faucet", "--liquid", boardingAddress)
+	require.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+
+	_, err = client.Claim(ctx)
+	require.NoError(t, err)
+
+	time.Sleep(3 * time.Second)
+
+	spendable, _, err := client.ListVtxos(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, spendable)
+
+	vtxo := spendable[0]
+
+	_, err = client.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewLiquidReceiver(offchainAddress, 1000)})
+	require.NoError(t, err)
+
+	round, err := grpcClient.GetRound(ctx, vtxo.RoundTxid)
+	require.NoError(t, err)
+
+	expl := explorer.NewExplorer("http://localhost:3001", common.LiquidRegTest)
+
+	branch, err := redemption.NewCovenantRedeemBranch(expl, round.Tree, vtxo)
+	require.NoError(t, err)
+
+	txs, err := branch.RedeemPath()
+	require.NoError(t, err)
+
+	for _, tx := range txs {
+		_, err := expl.Broadcast(tx)
+		require.NoError(t, err)
+	}
+
+	// give time for the ASP to detect and process the fraud
+	time.Sleep(18 * time.Second)
+
+	balance, err := client.Balance(ctx, true)
+	require.NoError(t, err)
+
+	require.Empty(t, balance.OnchainBalance.LockedAmount)
+}
+
 func runArkCommand(arg ...string) (string, error) {
 	args := append([]string{"exec", "-t", "arkd", "ark"}, arg...)
 	return utils.RunCommand("docker", args...)
@@ -236,4 +295,28 @@ func setupAspWallet() error {
 	time.Sleep(5 * time.Second)
 
 	return nil
+}
+
+func setupArkSDK(t *testing.T) (arksdk.ArkClient, client.ASPClient) {
+	storeSvc, err := inmemorystore.NewConfigStore()
+	require.NoError(t, err)
+
+	client, err := arksdk.NewCovenantClient(storeSvc)
+	require.NoError(t, err)
+
+	err = client.Init(context.Background(), arksdk.InitArgs{
+		WalletType: arksdk.SingleKeyWallet,
+		ClientType: arksdk.GrpcClient,
+		AspUrl:     "localhost:6060",
+		Password:   utils.Password,
+	})
+	require.NoError(t, err)
+
+	err = client.Unlock(context.Background(), utils.Password)
+	require.NoError(t, err)
+
+	grpcClient, err := grpcclient.NewClient("localhost:6060")
+	require.NoError(t, err)
+
+	return client, grpcClient
 }

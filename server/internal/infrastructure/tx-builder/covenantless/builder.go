@@ -102,12 +102,60 @@ func (b *txBuilder) VerifyTapscriptPartialSigs(tx string) (bool, string, error) 
 	return true, txid, nil
 }
 
-func (b *txBuilder) FinalizeAndExtractForfeit(tx string) (string, error) {
-	ptx, _ := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+func (b *txBuilder) FinalizeAndExtract(tx string) (string, error) {
+	ptx, err := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+	if err != nil {
+		return "", err
+	}
 
-	for i := range ptx.Inputs {
+	for i, in := range ptx.Inputs {
+		isTaproot := txscript.IsPayToTaproot(in.WitnessUtxo.PkScript)
+		if isTaproot && len(in.TaprootLeafScript) > 0 {
+			closure, err := bitcointree.DecodeClosure(in.TaprootLeafScript[0].Script)
+			if err != nil {
+				return "", err
+			}
+
+			witness := make(wire.TxWitness, 4)
+
+			castClosure, isTaprootMultisig := closure.(*bitcointree.MultisigClosure)
+			if isTaprootMultisig {
+				ownerPubkey := schnorr.SerializePubKey(castClosure.Pubkey)
+				aspKey := schnorr.SerializePubKey(castClosure.AspPubkey)
+
+				for _, sig := range in.TaprootScriptSpendSig {
+					if bytes.Equal(sig.XOnlyPubKey, ownerPubkey) {
+						witness[0] = sig.Signature
+					}
+
+					if bytes.Equal(sig.XOnlyPubKey, aspKey) {
+						witness[1] = sig.Signature
+					}
+				}
+
+				witness[2] = in.TaprootLeafScript[0].Script
+				witness[3] = in.TaprootLeafScript[0].ControlBlock
+
+				for idw, w := range witness {
+					if w == nil {
+						return "", fmt.Errorf("missing witness element %d, cannot finalize taproot mutlisig input %d", idw, i)
+					}
+				}
+
+				var witnessBuf bytes.Buffer
+
+				if err := psbt.WriteTxWitness(&witnessBuf, witness); err != nil {
+					return "", err
+				}
+
+				ptx.Inputs[i].FinalScriptWitness = witnessBuf.Bytes()
+				continue
+			}
+
+		}
+
 		if err := psbt.Finalize(ptx, i); err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to finalize input %d: %w", i, err)
 		}
 	}
 
@@ -477,7 +525,7 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 
 		unconditionalForfeitTxs = append(unconditionalForfeitTxs, forfeitTx)
 		ins = append(ins, vtxoOutpoint)
-		redeemTxWeightEstimator.AddTapscriptInput(64, tapscript)
+		redeemTxWeightEstimator.AddTapscriptInput(64*2, tapscript)
 	}
 
 	for range receivers {
@@ -1199,7 +1247,7 @@ func (b *txBuilder) getConnectorPkScript(poolTx string) ([]byte, error) {
 		return nil, fmt.Errorf("connector output not found in pool tx")
 	}
 
-	return partialTx.UnsignedTx.TxOut[0].PkScript, nil
+	return partialTx.UnsignedTx.TxOut[1].PkScript, nil
 }
 
 func (b *txBuilder) selectUtxos(ctx context.Context, sweptRounds []domain.Round, amount uint64) ([]ports.TxInput, uint64, error) {

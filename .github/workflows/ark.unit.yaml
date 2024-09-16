@@ -2,10 +2,11 @@ name: ci_unit
 
 on:
   push:
+    branches:
+      - master
     paths:
       - 'server/**'
       - 'pkg/client-sdk/**'
-    branches: [master]
   pull_request:
     branches:
       - master
@@ -56,7 +57,8 @@ jobs:
         uses: securego/gosec@master
         with:
           args: '-severity high -quiet -exclude=G115 ./...'
-      - run: go get -v -t -d ./...
+      - name: Run go work sync
+        run: go work sync
       - name: unit testing
         run: make test
 
