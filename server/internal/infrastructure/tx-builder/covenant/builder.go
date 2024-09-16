@@ -23,10 +23,6 @@ import (
 	"github.com/vulpemventures/go-elements/transaction"
 )
 
-const (
-	connectorAmount = uint64(450)
-)
-
 type txBuilder struct {
 	wallet            ports.WalletService
 	net               common.Network
@@ -97,12 +93,17 @@ func (b *txBuilder) BuildForfeitTxs(
 		return nil, nil, err
 	}
 
-	connectorTxs, err := b.createConnectors(poolTx, payments, connectorAddress, connectorFeeAmount)
+	connectorAmount, err := b.wallet.GetDustAmount(context.Background())
 	if err != nil {
 		return nil, nil, err
 	}
 
-	forfeitTxs, err = b.createForfeitTxs(aspPubkey, payments, connectorTxs)
+	connectorTxs, err := b.createConnectors(poolTx, payments, connectorAddress, connectorAmount, connectorFeeAmount)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	forfeitTxs, err = b.createForfeitTxs(aspPubkey, payments, connectorTxs, connectorAmount)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -299,7 +300,7 @@ func (b *txBuilder) VerifyTapscriptPartialSigs(tx string) (bool, string, error) 
 	return true, txid, nil
 }
 
-func (b *txBuilder) FinalizeAndExtractForfeit(tx string) (string, error) {
+func (b *txBuilder) FinalizeAndExtract(tx string) (string, error) {
 	p, err := psetv2.NewPsetFromBase64(tx)
 	if err != nil {
 		return "", err
@@ -389,9 +390,14 @@ func (b *txBuilder) createPoolTx(
 		return nil, err
 	}
 
+	dustAmount, err := b.wallet.GetDustAmount(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
 	receivers := getOnchainReceivers(payments)
 	nbOfInputs := countSpentVtxos(payments)
-	connectorsAmount := (connectorAmount + connectorMinRelayFee) * nbOfInputs
+	connectorsAmount := (dustAmount + connectorMinRelayFee) * nbOfInputs
 	if nbOfInputs > 1 {
 		connectorsAmount -= connectorMinRelayFee
 	}
@@ -739,7 +745,9 @@ func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, 
 }
 
 func (b *txBuilder) createConnectors(
-	poolTx string, payments []domain.Payment, connectorAddress string, feeAmount uint64,
+	poolTx string, payments []domain.Payment,
+	connectorAddress string,
+	connectorAmount, feeAmount uint64,
 ) ([]*psetv2.Pset, error) {
 	txid, _ := getTxid(poolTx)
 
@@ -793,7 +801,10 @@ func (b *txBuilder) createConnectors(
 			return nil, err
 		}
 
-		txid, _ := getPsetId(connectorTx)
+		txid, err := getPsetId(connectorTx)
+		if err != nil {
+			return nil, err
+		}
 
 		previousInput = psetv2.InputArgs{
 			Txid:    txid,
@@ -807,7 +818,7 @@ func (b *txBuilder) createConnectors(
 }
 
 func (b *txBuilder) createForfeitTxs(
-	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, connectors []*psetv2.Pset,
+	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, connectors []*psetv2.Pset, connectorAmount uint64,
 ) ([]string, error) {
 	aspScript, err := p2wpkhScript(aspPubkey, b.onchainNetwork())
 	if err != nil {
@@ -860,7 +871,7 @@ func (b *txBuilder) createForfeitTxs(
 
 			for _, connector := range connectors {
 				txs, err := b.craftForfeitTxs(
-					connector, vtxo.Vtxo, proof, vtxoScript, aspScript,
+					connector, connectorAmount, vtxo, *forfeitProof, vtxoScript, aspScript,
 				)
 				if err != nil {
 					return nil, err

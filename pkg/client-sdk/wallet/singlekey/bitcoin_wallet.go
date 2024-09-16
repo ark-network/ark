@@ -180,14 +180,16 @@ func (s *bitcoinWallet) SignTransaction(
 						return "", fmt.Errorf("signature verification failed")
 					}
 
-					updater.Upsbt.Inputs[i].TaprootScriptSpendSig = []*psbt.TaprootScriptSpendSig{
-						{
-							XOnlyPubKey: schnorr.SerializePubKey(pubkey),
-							LeafHash:    hash.CloneBytes(),
-							Signature:   sig.Serialize(),
-							SigHash:     txscript.SigHashDefault,
-						},
+					if len(updater.Upsbt.Inputs[i].TaprootScriptSpendSig) == 0 {
+						updater.Upsbt.Inputs[i].TaprootScriptSpendSig = make([]*psbt.TaprootScriptSpendSig, 0)
 					}
+
+					updater.Upsbt.Inputs[i].TaprootScriptSpendSig = append(updater.Upsbt.Inputs[i].TaprootScriptSpendSig, &psbt.TaprootScriptSpendSig{
+						XOnlyPubKey: schnorr.SerializePubKey(pubkey),
+						LeafHash:    hash.CloneBytes(),
+						Signature:   sig.Serialize(),
+						SigHash:     txscript.SigHashDefault,
+					})
 				}
 			}
 		}

@@ -262,13 +262,17 @@ func (s *covenantlessService) CompleteAsyncPayment(
 	}
 
 	vtxos := make([]domain.Vtxo, 0, len(asyncPayData.receivers))
-	for i, receiver := range asyncPayData.receivers {
+
+	for outIndex, out := range redeemPtx.UnsignedTx.TxOut {
 		vtxos = append(vtxos, domain.Vtxo{
 			VtxoKey: domain.VtxoKey{
 				Txid: redeemTxid,
-				VOut: uint32(i),
+				VOut: uint32(outIndex),
 			},
-			Receiver: receiver,
+			Receiver: domain.Receiver{
+				Descriptor: asyncPayData.receivers[outIndex].Descriptor,
+				Amount:     uint64(out.Value),
+			},
 			ExpireAt: asyncPayData.expireAt,
 			AsyncPayment: &domain.AsyncPaymentTxs{
 				RedeemTx:                redeemTx,
@@ -281,6 +285,12 @@ func (s *covenantlessService) CompleteAsyncPayment(
 		return fmt.Errorf("failed to add vtxos: %s", err)
 	}
 	log.Infof("added %d vtxos", len(vtxos))
+	if err := s.startWatchingVtxos(vtxos); err != nil {
+		log.WithError(err).Warn(
+			"failed to start watching vtxos",
+		)
+	}
+	log.Debugf("started watching %d vtxos", len(vtxos))
 
 	if err := s.repoManager.Vtxos().SpendVtxos(ctx, spentVtxos, redeemTxid); err != nil {
 		return fmt.Errorf("failed to spend vtxo: %s", err)
@@ -580,8 +590,8 @@ func (s *covenantlessService) GetEventsChannel(ctx context.Context) <-chan domai
 	return s.eventsCh
 }
 
-func (s *covenantlessService) GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error) {
-	return s.repoManager.Rounds().GetRoundWithTxid(ctx, poolTxid)
+func (s *covenantlessService) GetRoundByTxid(ctx context.Context, roundTxid string) (*domain.Round, error) {
+	return s.repoManager.Rounds().GetRoundWithTxid(ctx, roundTxid)
 }
 
 func (s *covenantlessService) GetRoundById(ctx context.Context, id string) (*domain.Round, error) {
@@ -1097,89 +1107,33 @@ func (s *covenantlessService) listenToScannerNotifications() {
 
 	mutx := &sync.Mutex{}
 	for vtxoKeys := range chVtxos {
-		go func(vtxoKeys map[string]ports.VtxoWithValue) {
-			vtxosRepo := s.repoManager.Vtxos()
-			roundRepo := s.repoManager.Rounds()
+		go func(vtxoKeys map[string][]ports.VtxoWithValue) {
+			for _, keys := range vtxoKeys {
+				for _, v := range keys {
+					vtxos, err := s.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{v.VtxoKey})
+					if err != nil {
+						log.WithError(err).Warn("failed to retrieve vtxos, skipping...")
+						return
+					}
+					vtxo := vtxos[0]
 
-			for _, v := range vtxoKeys {
-				// redeem
-				vtxos, err := vtxosRepo.GetVtxos(ctx, []domain.VtxoKey{v.VtxoKey})
-				if err != nil {
-					log.WithError(err).Warn("failed to retrieve vtxos, skipping...")
-					continue
+					if !vtxo.Redeemed {
+						go func() {
+							if err := s.markAsRedeemed(ctx, vtxo); err != nil {
+								log.WithError(err).Warnf("failed to mark vtxo %s:%d as redeemed", vtxo.Txid, vtxo.VOut)
+							}
+						}()
+					}
+
+					if vtxo.Spent {
+						log.Infof("fraud detected on vtxo %s:%d", vtxo.Txid, vtxo.VOut)
+						go func() {
+							if err := s.reactToFraud(ctx, vtxo, mutx); err != nil {
+								log.WithError(err).Warnf("failed to prevent fraud for vtxo %s:%d", vtxo.Txid, vtxo.VOut)
+							}
+						}()
+					}
 				}
-
-				vtxo := vtxos[0]
-
-				if vtxo.Redeemed {
-					continue
-				}
-
-				if err := s.repoManager.Vtxos().RedeemVtxos(
-					ctx, []domain.VtxoKey{vtxo.VtxoKey},
-				); err != nil {
-					log.WithError(err).Warn("failed to redeem vtxos, retrying...")
-					continue
-				}
-				log.Debugf("vtxo %s redeemed", vtxo.Txid)
-
-				if !vtxo.Spent {
-					continue
-				}
-
-				log.Debugf("fraud detected on vtxo %s", vtxo.Txid)
-
-				round, err := roundRepo.GetRoundWithTxid(ctx, vtxo.SpentBy)
-				if err != nil {
-					log.WithError(err).Warn("failed to retrieve round")
-					continue
-				}
-
-				mutx.Lock()
-				defer mutx.Unlock()
-
-				connectorTxid, connectorVout, err := s.getNextConnector(ctx, *round)
-				if err != nil {
-					log.WithError(err).Warn("failed to retrieve next connector")
-					continue
-				}
-
-				forfeitTx, err := findForfeitTxBitcoin(round.ForfeitTxs, connectorTxid, connectorVout, vtxo.Txid)
-				if err != nil {
-					log.WithError(err).Warn("failed to retrieve forfeit tx")
-					continue
-				}
-
-				if err := s.wallet.LockConnectorUtxos(ctx, []ports.TxOutpoint{txOutpoint{connectorTxid, connectorVout}}); err != nil {
-					log.WithError(err).Warn("failed to lock connector utxos")
-					continue
-				}
-
-				signedForfeitTx, err := s.wallet.SignTransaction(ctx, forfeitTx, false)
-				if err != nil {
-					log.WithError(err).Warn("failed to sign connector input in forfeit tx")
-					continue
-				}
-
-				signedForfeitTx, err = s.wallet.SignTransactionTapscript(ctx, signedForfeitTx, []int{1})
-				if err != nil {
-					log.WithError(err).Warn("failed to sign vtxo input in forfeit tx")
-					continue
-				}
-
-				forfeitTxHex, err := s.builder.FinalizeAndExtractForfeit(signedForfeitTx)
-				if err != nil {
-					log.WithError(err).Warn("failed to finalize forfeit tx")
-					continue
-				}
-
-				forfeitTxid, err := s.wallet.BroadcastTransaction(ctx, forfeitTxHex)
-				if err != nil {
-					log.WithError(err).Warn("failed to broadcast forfeit tx")
-					continue
-				}
-
-				log.Debugf("broadcasted forfeit tx %s", forfeitTxid)
 			}
 		}(vtxoKeys)
 	}
@@ -1189,10 +1143,19 @@ func (s *covenantlessService) getNextConnector(
 	ctx context.Context,
 	round domain.Round,
 ) (string, uint32, error) {
+	lastConnectorPtx, err := psbt.NewFromRawBytes(strings.NewReader(round.Connectors[len(round.Connectors)-1]), true)
+	if err != nil {
+		return "", 0, err
+	}
+
+	lastOutput := lastConnectorPtx.UnsignedTx.TxOut[len(lastConnectorPtx.UnsignedTx.TxOut)-1]
+	connectorAmount := lastOutput.Value
+
 	utxos, err := s.wallet.ListConnectorUtxos(ctx, round.ConnectorAddress)
 	if err != nil {
 		return "", 0, err
 	}
+	log.Debugf("found %d connector utxos, dust amount is %d", len(utxos), connectorAmount)
 
 	// if we do not find any utxos, we make sure to wait for the connector outpoint to be confirmed then we retry
 	if len(utxos) <= 0 {
@@ -1208,13 +1171,13 @@ func (s *covenantlessService) getNextConnector(
 
 	// search for an already existing connector
 	for _, u := range utxos {
-		if u.GetValue() == 450 {
+		if u.GetValue() == uint64(connectorAmount) {
 			return u.GetTxid(), u.GetIndex(), nil
 		}
 	}
 
 	for _, u := range utxos {
-		if u.GetValue() > 450 {
+		if u.GetValue() > uint64(connectorAmount) {
 			for _, b64 := range round.Connectors {
 				ptx, err := psbt.NewFromRawBytes(strings.NewReader(b64), true)
 				if err != nil {
@@ -1237,7 +1200,7 @@ func (s *covenantlessService) getNextConnector(
 
 						connectorTxid, err := s.wallet.BroadcastTransaction(ctx, signedConnectorTx)
 						if err != nil {
-							return "", 0, err
+							return "", 0, fmt.Errorf("failed to broadcast connector tx: %s", err)
 						}
 						log.Debugf("broadcasted connector tx %s", connectorTxid)
 
@@ -1523,8 +1486,90 @@ func (s *covenantlessService) chainParams() *chaincfg.Params {
 	}
 }
 
+func (s *covenantlessService) reactToFraud(ctx context.Context, vtxo domain.Vtxo, mutx *sync.Mutex) error {
+	mutx.Lock()
+	defer mutx.Unlock()
+	roundRepo := s.repoManager.Rounds()
+
+	round, err := roundRepo.GetRoundWithTxid(ctx, vtxo.SpentBy)
+	if err != nil {
+		vtxosRepo := s.repoManager.Vtxos()
+
+		// if the round is not found, the utxo may be spent by an async payment redeem tx
+		vtxos, err := vtxosRepo.GetVtxos(ctx, []domain.VtxoKey{
+			{Txid: vtxo.SpentBy, VOut: 0},
+		})
+		if err != nil || len(vtxos) <= 0 {
+			return fmt.Errorf("failed to retrieve round: %s", err)
+		}
+
+		asyncPayVtxo := vtxos[0]
+		if asyncPayVtxo.Redeemed { // redeem tx is already onchain
+			return nil
+		}
+
+		log.Debugf("vtxo %s:%d has been spent by async payment", vtxo.Txid, vtxo.VOut)
+
+		redeemTxHex, err := s.builder.FinalizeAndExtract(asyncPayVtxo.AsyncPayment.RedeemTx)
+		if err != nil {
+			return fmt.Errorf("failed to finalize redeem tx: %s", err)
+		}
+
+		redeemTxid, err := s.wallet.BroadcastTransaction(ctx, redeemTxHex)
+		if err != nil {
+			return fmt.Errorf("failed to broadcast redeem tx: %s", err)
+		}
+
+		log.Debugf("broadcasted redeem tx %s", redeemTxid)
+		return nil
+	}
+
+	connectorTxid, connectorVout, err := s.getNextConnector(ctx, *round)
+	if err != nil {
+		return fmt.Errorf("failed to get next connector: %s", err)
+	}
+
+	log.Debugf("found next connector %s:%d", connectorTxid, connectorVout)
+
+	forfeitTx, err := findForfeitTxBitcoin(round.ForfeitTxs, connectorTxid, connectorVout, vtxo.VtxoKey)
+	if err != nil {
+		return fmt.Errorf("failed to find forfeit tx: %s", err)
+	}
+
+	if err := s.wallet.LockConnectorUtxos(ctx, []ports.TxOutpoint{txOutpoint{connectorTxid, connectorVout}}); err != nil {
+		return fmt.Errorf("failed to lock connector utxos: %s", err)
+	}
+
+	signedForfeitTx, err := s.wallet.SignTransactionTapscript(ctx, forfeitTx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to sign forfeit tx: %s", err)
+	}
+
+	forfeitTxHex, err := s.builder.FinalizeAndExtract(signedForfeitTx)
+	if err != nil {
+		return fmt.Errorf("failed to finalize forfeit tx: %s", err)
+	}
+
+	forfeitTxid, err := s.wallet.BroadcastTransaction(ctx, forfeitTxHex)
+	if err != nil {
+		return fmt.Errorf("failed to broadcast forfeit tx: %s", err)
+	}
+
+	log.Debugf("broadcasted forfeit tx %s", forfeitTxid)
+	return nil
+}
+
+func (s *covenantlessService) markAsRedeemed(ctx context.Context, vtxo domain.Vtxo) error {
+	if err := s.repoManager.Vtxos().RedeemVtxos(ctx, []domain.VtxoKey{vtxo.VtxoKey}); err != nil {
+		return err
+	}
+
+	log.Debugf("vtxo %s:%d redeemed", vtxo.Txid, vtxo.VOut)
+	return nil
+}
+
 func findForfeitTxBitcoin(
-	forfeits []string, connectorTxid string, connectorVout uint32, vtxoTxid string,
+	forfeits []string, connectorTxid string, connectorVout uint32, vtxo domain.VtxoKey,
 ) (string, error) {
 	for _, forfeit := range forfeits {
 		forfeitTx, err := psbt.NewFromRawBytes(strings.NewReader(forfeit), true)
@@ -1535,9 +1580,10 @@ func findForfeitTxBitcoin(
 		connector := forfeitTx.UnsignedTx.TxIn[0]
 		vtxoInput := forfeitTx.UnsignedTx.TxIn[1]
 
-		if connector.PreviousOutPoint.String() == connectorTxid &&
+		if connector.PreviousOutPoint.Hash.String() == connectorTxid &&
 			connector.PreviousOutPoint.Index == connectorVout &&
-			vtxoInput.PreviousOutPoint.String() == vtxoTxid {
+			vtxoInput.PreviousOutPoint.Hash.String() == vtxo.Txid &&
+			vtxoInput.PreviousOutPoint.Index == vtxo.VOut {
 			return forfeit, nil
 		}
 	}
