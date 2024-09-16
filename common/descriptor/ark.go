@@ -73,19 +73,19 @@ func ParseReversibleVtxoDescriptor(
 	}
 
 	if user == nil {
-		return nil, nil, nil, 0, errors.New("boarding descriptor is invalid")
+		return nil, nil, nil, 0, errors.New("descriptor is invalid")
 	}
 
 	if asp == nil {
-		return nil, nil, nil, 0, errors.New("boarding descriptor is invalid")
+		return nil, nil, nil, 0, errors.New("descriptor is invalid")
 	}
 
 	if timeout == 0 {
-		return nil, nil, nil, 0, errors.New("boarding descriptor is invalid")
+		return nil, nil, nil, 0, errors.New("descriptor is invalid")
 	}
 
 	if sender == nil {
-		return nil, nil, nil, 0, errors.New("boarding descriptor is invalid")
+		return nil, nil, nil, 0, errors.New("descriptor is invalid")
 	}
 
 	return

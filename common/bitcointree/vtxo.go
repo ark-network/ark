@@ -24,6 +24,8 @@ func ParseVtxoScript(desc string) (VtxoScript, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid vtxo descriptor: %s", desc)
 		}
+
+		return v, nil
 	}
 
 	return v, nil
