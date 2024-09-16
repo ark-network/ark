@@ -17,6 +17,10 @@ const ReversibleVtxoScriptTemplate = "tr(%s,{ { and(pk(%s), pk(%s)), and(older(%
 func ParseReversibleVtxoDescriptor(
 	desc TaprootDescriptor,
 ) (user, sender, asp *secp256k1.PublicKey, timeout uint, err error) {
+	if len(desc.ScriptTree) != 3 {
+		return nil, nil, nil, 0, errors.New("not a reversible vtxo script descriptor")
+	}
+
 	for _, leaf := range desc.ScriptTree {
 		if andLeaf, ok := leaf.(*And); ok {
 			if first, ok := andLeaf.First.(*PK); ok {
@@ -90,6 +94,10 @@ func ParseReversibleVtxoDescriptor(
 func ParseDefaultVtxoDescriptor(
 	desc TaprootDescriptor,
 ) (user, asp *secp256k1.PublicKey, timeout uint, err error) {
+	if len(desc.ScriptTree) != 2 {
+		return nil, nil, 0, errors.New("not a default vtxo script descriptor")
+	}
+
 	for _, leaf := range desc.ScriptTree {
 		if andLeaf, ok := leaf.(*And); ok {
 			if first, ok := andLeaf.First.(*PK); ok {
