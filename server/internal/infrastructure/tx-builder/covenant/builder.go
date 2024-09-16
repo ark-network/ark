@@ -43,6 +43,10 @@ func NewTxBuilder(
 	return &txBuilder{wallet, net, roundLifetime, boardingExitDelay}
 }
 
+func (b *txBuilder) GetTxID(tx string) (string, error) {
+	return getTxid(tx)
+}
+
 func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (signedSweepTx string, err error) {
 	sweepPset, err := sweepTransaction(
 		b.wallet,

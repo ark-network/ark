@@ -37,6 +37,15 @@ func NewTxBuilder(
 	return &txBuilder{wallet, net, roundLifetime, boardingExitDelay}
 }
 
+func (b *txBuilder) GetTxID(tx string) (string, error) {
+	ptx, err := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+	if err != nil {
+		return "", err
+	}
+
+	return ptx.UnsignedTx.TxHash().String(), nil
+}
+
 func (b *txBuilder) VerifyTapscriptPartialSigs(tx string) (bool, string, error) {
 	ptx, _ := psbt.NewFromRawBytes(strings.NewReader(tx), true)
 	txid := ptx.UnsignedTx.TxID()
@@ -1105,6 +1114,8 @@ func (b *txBuilder) createForfeitTxs(
 	forfeitTxs := make([]string, 0)
 	for _, payment := range payments {
 		for _, vtxo := range payment.Inputs {
+
+			fmt.Println("vtxo", vtxo.Descriptor)
 			offchainscript, err := bitcointree.ParseVtxoScript(vtxo.Descriptor)
 			if err != nil {
 				return nil, err

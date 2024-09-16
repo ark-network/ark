@@ -44,4 +44,5 @@ type TxBuilder interface {
 		aspPubKey *secp256k1.PublicKey, receivers []domain.Receiver,
 	) (*domain.AsyncPaymentTxs, error)
 	VerifyAndCombinePartialTx(dest string, src string) (string, error)
+	GetTxID(tx string) (string, error)
 }

@@ -965,6 +965,12 @@ func (s *covenantlessService) startFinalization() {
 			return
 		}
 		log.Debugf("forfeit transactions created for round %s", round.Id)
+
+		if err := s.forfeitTxs.push(forfeitTxs); err != nil {
+			round.Fail(fmt.Errorf("failed to store forfeit txs: %s", err))
+			log.WithError(err).Warn("failed to store forfeit txs")
+			return
+		}
 	}
 
 	if _, err := round.StartFinalization(
@@ -974,8 +980,6 @@ func (s *covenantlessService) startFinalization() {
 		log.WithError(err).Warn("failed to start finalization")
 		return
 	}
-
-	s.forfeitTxs.push(forfeitTxs)
 
 	log.Debugf("started finalization stage for round: %s", round.Id)
 }

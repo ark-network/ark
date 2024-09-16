@@ -179,14 +179,19 @@ func newForfeitTxsMap(txBuilder ports.TxBuilder) *forfeitTxsMap {
 	return &forfeitTxsMap{&sync.RWMutex{}, make(map[string]*signedTx), txBuilder}
 }
 
-func (m *forfeitTxsMap) push(txs []string) {
+func (m *forfeitTxsMap) push(txs []string) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
 	for _, tx := range txs {
-		signed, txid, _ := m.builder.VerifyTapscriptPartialSigs(tx)
-		m.forfeitTxs[txid] = &signedTx{tx, signed}
+		txid, err := m.builder.GetTxID(tx)
+		if err != nil {
+			return err
+		}
+		m.forfeitTxs[txid] = &signedTx{tx, false}
 	}
+
+	return nil
 }
 
 func (m *forfeitTxsMap) sign(txs []string) error {
