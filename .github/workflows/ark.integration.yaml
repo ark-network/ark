@@ -2,7 +2,8 @@ name: ci_integration
 
 on:
   push:
-    branches: [master]
+    branches:
+      - master
   pull_request:
     branches:
       - master
@@ -15,11 +16,12 @@ jobs:
       run:
         working-directory: ./server
     steps:
-      - uses: actions/setup-go@v3
-        with:
-          go-version: ">1.17.2"
       - uses: actions/checkout@v3
-      - run: go get -v -t -d ./...
+      - uses: actions/setup-go@v4
+        with:
+          go-version: '>=1.23.1'
+      - name: Run go work sync
+        run: go work sync
       
       - name: Run Nigiri
         uses: vulpemventures/nigiri-github-action@v1
