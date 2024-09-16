@@ -70,6 +70,10 @@ const (
 	mainAccount      accountName = "main"
 	connectorAccount accountName = "connector"
 	aspKeyAccount    accountName = "aspkey"
+
+	// https://github.com/bitcoin/bitcoin/blob/439e58c4d8194ca37f70346727d31f52e69592ec/src/policy/policy.cpp#L23C8-L23C11
+	// biggest input size to compute the maximum dust amount
+	biggestInputSize = 148 + 182 // = 330 vbytes
 )
 
 var (
@@ -852,18 +856,37 @@ func (s *service) UnwatchScripts(ctx context.Context, scripts []string) error {
 
 func (s *service) GetNotificationChannel(
 	ctx context.Context,
-) <-chan map[string]ports.VtxoWithValue {
-	ch := make(chan map[string]ports.VtxoWithValue)
+) <-chan map[string][]ports.VtxoWithValue {
+	ch := make(chan map[string][]ports.VtxoWithValue)
 
 	go func() {
+		const maxCacheSize = 100
+		sentTxs := make(map[chainhash.Hash]struct{})
+
+		cache := func(hash chainhash.Hash) {
+			if len(sentTxs) > maxCacheSize {
+				sentTxs = make(map[chainhash.Hash]struct{})
+			}
+
+			sentTxs[hash] = struct{}{}
+		}
+
 		for n := range s.scanner.Notifications() {
 			switch m := n.(type) {
 			case chain.RelevantTx:
+				if _, sent := sentTxs[m.TxRecord.Hash]; sent {
+					continue
+				}
 				notification := s.castNotification(m.TxRecord)
+				cache(m.TxRecord.Hash)
 				ch <- notification
 			case chain.FilteredBlockConnected:
 				for _, tx := range m.RelevantTxs {
+					if _, sent := sentTxs[tx.Hash]; sent {
+						continue
+					}
 					notification := s.castNotification(tx)
+					cache(tx.Hash)
 					ch <- notification
 				}
 			}
@@ -879,11 +902,10 @@ func (s *service) IsTransactionConfirmed(
 	return s.extraAPI.getTxStatus(txid)
 }
 
-// https://github.com/bitcoin/bitcoin/blob/439e58c4d8194ca37f70346727d31f52e69592ec/src/policy/policy.cpp#L23C8-L23C11
 func (s *service) GetDustAmount(
 	ctx context.Context,
 ) (uint64, error) {
-	return s.MinRelayFee(ctx, 182) // non-segwit 1-in-1-out tx
+	return s.MinRelayFee(ctx, biggestInputSize)
 }
 
 func (s *service) GetTransaction(ctx context.Context, txid string) (string, error) {
@@ -904,8 +926,8 @@ func (s *service) GetTransaction(ctx context.Context, txid string) (string, erro
 	return hex.EncodeToString(buf.Bytes()), nil
 }
 
-func (s *service) castNotification(tx *wtxmgr.TxRecord) map[string]ports.VtxoWithValue {
-	vtxos := make(map[string]ports.VtxoWithValue)
+func (s *service) castNotification(tx *wtxmgr.TxRecord) map[string][]ports.VtxoWithValue {
+	vtxos := make(map[string][]ports.VtxoWithValue)
 
 	s.watchedScriptsLock.RLock()
 	defer s.watchedScriptsLock.RUnlock()
@@ -916,13 +938,17 @@ func (s *service) castNotification(tx *wtxmgr.TxRecord) map[string]ports.VtxoWit
 			continue
 		}
 
-		vtxos[script] = ports.VtxoWithValue{
+		if len(vtxos[script]) <= 0 {
+			vtxos[script] = make([]ports.VtxoWithValue, 0)
+		}
+
+		vtxos[script] = append(vtxos[script], ports.VtxoWithValue{
 			VtxoKey: domain.VtxoKey{
 				Txid: tx.Hash.String(),
 				VOut: uint32(outputIndex),
 			},
 			Value: uint64(txout.Value),
-		}
+		})
 	}
 
 	return vtxos

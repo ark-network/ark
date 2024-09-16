@@ -52,7 +52,7 @@ func craftConnectorTx(
 	return ptx, nil
 }
 
-func getConnectorInputs(pset *psetv2.Pset) ([]psetv2.InputArgs, []*transaction.TxOutput) {
+func getConnectorInputs(pset *psetv2.Pset, connectorAmount uint64) ([]psetv2.InputArgs, []*transaction.TxOutput) {
 	txID, _ := getPsetId(pset)
 
 	inputs := make([]psetv2.InputArgs, 0, len(pset.Outputs))
