@@ -537,9 +537,22 @@ func (a *covenantlessArkClient) SendAsync(
 			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), a.Dust)
 		}
 
-		desc, err := a.offchainAddressToReversibleVtxoDescriptor(offchainAddrs[0], receiver.To())
-		if err != nil {
-			return "", err
+		isSelfTransfer := offchainAddrs[0] == receiver.To()
+
+		var desc string
+
+		// reversible vtxo does not make sense for self transfer
+		// if the receiver is the same as the sender, handle the output like the change
+		if !isSelfTransfer {
+			desc, err = a.offchainAddressToReversibleVtxoDescriptor(offchainAddrs[0], receiver.To())
+			if err != nil {
+				return "", err
+			}
+		} else {
+			desc, err = a.offchainAddressToDefaultVtxoDescriptor(receiver.To())
+			if err != nil {
+				return "", err
+			}
 		}
 
 		receiversOutput = append(receiversOutput, client.Output{
