@@ -1215,7 +1215,6 @@ func (a *covenantlessArkClient) handleRoundFinalization(
 	}
 
 	if len(vtxos) > 0 {
-		fmt.Println("vtxos", vtxos)
 		signedForfeits, err = a.loopAndSign(
 			ctx, event.ForfeitTxs, vtxos, event.Connectors,
 		)
