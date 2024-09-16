@@ -27,6 +27,7 @@ type storeData struct {
 	ClientType                 string `json:"client_type"`
 	Network                    string `json:"network"`
 	RoundLifetime              string `json:"round_lifetime"`
+	RoundInterval              string `json:"round_interval"`
 	UnilateralExitDelay        string `json:"unilateral_exit_delay"`
 	Dust                       string `json:"dust"`
 	BoardingDescriptorTemplate string `json:"boarding_descriptor_template"`
@@ -40,6 +41,7 @@ func (d storeData) isEmpty() bool {
 func (d storeData) decode() store.StoreData {
 	network := utils.NetworkFromString(d.Network)
 	roundLifetime, _ := strconv.Atoi(d.RoundLifetime)
+	roundInterval, _ := strconv.Atoi(d.RoundInterval)
 	unilateralExitDelay, _ := strconv.Atoi(d.UnilateralExitDelay)
 	dust, _ := strconv.Atoi(d.Dust)
 	buf, _ := hex.DecodeString(d.AspPubkey)
@@ -53,6 +55,7 @@ func (d storeData) decode() store.StoreData {
 		Network:                    network,
 		RoundLifetime:              int64(roundLifetime),
 		UnilateralExitDelay:        int64(unilateralExitDelay),
+		RoundInterval:              int64(roundInterval),
 		Dust:                       uint64(dust),
 		BoardingDescriptorTemplate: d.BoardingDescriptorTemplate,
 		ExplorerURL:                explorerURL,
@@ -67,6 +70,7 @@ func (d storeData) asMap() map[string]string {
 		"client_type":                  d.ClientType,
 		"network":                      d.Network,
 		"round_lifetime":               d.RoundLifetime,
+		"round_interval":               d.RoundInterval,
 		"unilateral_exit_delay":        d.UnilateralExitDelay,
 		"dust":                         d.Dust,
 		"boarding_descriptor_template": d.BoardingDescriptorTemplate,
@@ -113,6 +117,7 @@ func (s *Store) AddData(ctx context.Context, data store.StoreData) error {
 		ClientType:                 data.ClientType,
 		Network:                    data.Network.Name,
 		RoundLifetime:              fmt.Sprintf("%d", data.RoundLifetime),
+		RoundInterval:              fmt.Sprintf("%d", data.RoundInterval),
 		UnilateralExitDelay:        fmt.Sprintf("%d", data.UnilateralExitDelay),
 		Dust:                       fmt.Sprintf("%d", data.Dust),
 		BoardingDescriptorTemplate: data.BoardingDescriptorTemplate,
