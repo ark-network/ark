@@ -62,7 +62,7 @@ func NewCovenantlessRedeemBranch(
 func (r *CovenantlessRedeemBranch) RedeemPath() ([]string, error) {
 	transactions := make([]string, 0, len(r.branch))
 
-	offchainPath, err := r.OffchainPath()
+	offchainPath, err := r.offchainPath()
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +131,7 @@ func (r *CovenantlessRedeemBranch) ExpiresAt() (*time.Time, error) {
 }
 
 // offchainPath checks for transactions of the branch onchain and returns only the offchain part
-func (r *CovenantlessRedeemBranch) OffchainPath() ([]*psbt.Packet, error) {
+func (r *CovenantlessRedeemBranch) offchainPath() ([]*psbt.Packet, error) {
 	offchainPath := append([]*psbt.Packet{}, r.branch...)
 
 	for i := len(r.branch) - 1; i >= 0; i-- {
