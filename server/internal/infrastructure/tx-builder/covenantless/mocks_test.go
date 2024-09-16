@@ -130,6 +130,26 @@ func (m *mockedWallet) EstimateFees(ctx context.Context, pset string) (uint64, e
 	return res, args.Error(1)
 }
 
+func (m *mockedWallet) MinRelayFee(ctx context.Context, vbytes uint64) (uint64, error) {
+	args := m.Called(ctx, vbytes)
+
+	var res uint64
+	if a := args.Get(0); a != nil {
+		res = a.(uint64)
+	}
+	return res, args.Error(1)
+}
+
+func (m *mockedWallet) GetDustAmount(ctx context.Context) (uint64, error) {
+	args := m.Called(ctx)
+
+	var res uint64
+	if a := args.Get(0); a != nil {
+		res = a.(uint64)
+	}
+	return res, args.Error(1)
+}
+
 func (m *mockedWallet) IsTransactionConfirmed(ctx context.Context, txid string) (bool, int64, error) {
 	args := m.Called(ctx, txid)
 
@@ -170,12 +190,12 @@ func (m *mockedWallet) UnwatchScripts(
 	return args.Error(0)
 }
 
-func (m *mockedWallet) GetNotificationChannel(ctx context.Context) <-chan map[string]ports.VtxoWithValue {
+func (m *mockedWallet) GetNotificationChannel(ctx context.Context) <-chan map[string][]ports.VtxoWithValue {
 	args := m.Called(ctx)
 
-	var res <-chan map[string]ports.VtxoWithValue
+	var res <-chan map[string][]ports.VtxoWithValue
 	if a := args.Get(0); a != nil {
-		res = a.(<-chan map[string]ports.VtxoWithValue)
+		res = a.(<-chan map[string][]ports.VtxoWithValue)
 	}
 	return res
 }
@@ -199,6 +219,16 @@ func (m *mockedWallet) LockConnectorUtxos(ctx context.Context, utxos []ports.TxO
 func (m *mockedWallet) WaitForSync(ctx context.Context, txid string) error {
 	args := m.Called(ctx, txid)
 	return args.Error(0)
+}
+
+func (m *mockedWallet) GetTransaction(ctx context.Context, txid string) (string, error) {
+	args := m.Called(ctx, txid)
+
+	var res string
+	if a := args.Get(0); a != nil {
+		res = a.(string)
+	}
+	return res, args.Error(1)
 }
 
 func (m *mockedWallet) ConnectorsAccountBalance(ctx context.Context) (uint64, uint64, error) {

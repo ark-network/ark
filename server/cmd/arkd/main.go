@@ -71,7 +71,6 @@ func mainAction(_ *cli.Context) error {
 		TxBuilderType:         cfg.TxBuilderType,
 		BlockchainScannerType: cfg.BlockchainScannerType,
 		WalletAddr:            cfg.WalletAddr,
-		MinRelayFee:           cfg.MinRelayFee,
 		RoundLifetime:         cfg.RoundLifetime,
 		UnilateralExitDelay:   cfg.UnilateralExitDelay,
 		EsploraURL:            cfg.EsploraURL,
@@ -79,6 +78,7 @@ func mainAction(_ *cli.Context) error {
 		BitcoindRpcUser:       cfg.BitcoindRpcUser,
 		BitcoindRpcPass:       cfg.BitcoindRpcPass,
 		BitcoindRpcHost:       cfg.BitcoindRpcHost,
+		BoardingExitDelay:     cfg.BoardingExitDelay,
 	}
 	svc, err := grpcservice.NewService(svcConfig, appConfig)
 	if err != nil {

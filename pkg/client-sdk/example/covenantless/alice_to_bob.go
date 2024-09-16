@@ -38,31 +38,19 @@ func main() {
 	defer aliceArkClient.Lock(ctx, password)
 
 	log.Info("alice is acquiring onchain funds...")
-	_, aliceOnchainAddr, err := aliceArkClient.Receive(ctx)
+	_, boardingAddress, err := aliceArkClient.Receive(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if _, err := runCommand("nigiri", "faucet", aliceOnchainAddr); err != nil {
+	if _, err := runCommand("nigiri", "faucet", boardingAddress); err != nil {
 		log.Fatal(err)
 	}
 
 	time.Sleep(5 * time.Second)
 
-	onboardAmount := uint64(20000)
+	onboardAmount := uint64(1_0000_0000) // 1 BTC
 	log.Infof("alice is onboarding with %d sats offchain...", onboardAmount)
-	txid, err := aliceArkClient.Onboard(ctx, onboardAmount)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if err := generateBlock(); err != nil {
-		log.Fatal(err)
-	}
-
-	time.Sleep(5 * time.Second)
-
-	log.Infof("alice onboarded with tx: %s", txid)
 
 	aliceBalance, err := aliceArkClient.Balance(ctx, false)
 	if err != nil {
@@ -71,6 +59,14 @@ func main() {
 
 	log.Infof("alice onchain balance: %d", aliceBalance.OnchainBalance.SpendableAmount)
 	log.Infof("alice offchain balance: %d", aliceBalance.OffchainBalance.Total)
+
+	log.Infof("alice claiming onboarding funds...")
+	txid, err := aliceArkClient.Claim(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Infof("alice claimed onboarding funds in round %s", txid)
 
 	fmt.Println("")
 	log.Info("bob is setting up his ark wallet...")
@@ -137,7 +133,7 @@ func main() {
 
 	fmt.Println("")
 	log.Info("bob is claiming the incoming payment...")
-	roundTxid, err := bobArkClient.ClaimAsync(ctx)
+	roundTxid, err := bobArkClient.Claim(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -207,18 +203,18 @@ func runCommand(name string, arg ...string) (string, error) {
 	wg.Wait()
 	if err := cmd.Wait(); err != nil {
 		if errMsg := errorb.String(); len(errMsg) > 0 {
-			return "", fmt.Errorf(errMsg)
+			return "", fmt.Errorf("%s", errMsg)
 		}
 
 		if outMsg := output.String(); len(outMsg) > 0 {
-			return "", fmt.Errorf(outMsg)
+			return "", fmt.Errorf("%s", outMsg)
 		}
 
 		return "", err
 	}
 
 	if errMsg := errb.String(); len(errMsg) > 0 {
-		return "", fmt.Errorf(errMsg)
+		return "", fmt.Errorf("%s", errMsg)
 	}
 
 	return strings.Trim(output.String(), "\n"), nil

@@ -8,11 +8,14 @@ import (
 	"fmt"
 	"runtime/debug"
 	"sort"
+	"sync"
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/network"
@@ -48,7 +51,7 @@ func CoinSelect(
 	}
 
 	if selectedAmount < amount {
-		return nil, 0, fmt.Errorf("not enough funds to cover amount%d", amount)
+		return nil, 0, fmt.Errorf("not enough funds to cover amount %d", amount)
 	}
 
 	change := selectedAmount - amount
@@ -63,7 +66,7 @@ func CoinSelect(
 	return selected, change, nil
 }
 
-func DecodeReceiverAddress(addr string) (
+func ParseLiquidAddress(addr string) (
 	bool, []byte, *secp256k1.PublicKey, error,
 ) {
 	outputScript, err := address.ToOutputScript(addr)
@@ -78,9 +81,43 @@ func DecodeReceiverAddress(addr string) (
 	return true, outputScript, nil, nil
 }
 
-func IsOnchainOnly(receivers []client.Output) bool {
+func ParseBitcoinAddress(addr string, net chaincfg.Params) (
+	bool, []byte, *secp256k1.PublicKey, error,
+) {
+	btcAddr, err := btcutil.DecodeAddress(addr, &net)
+	if err != nil {
+		_, userPubkey, _, err := common.DecodeAddress(addr)
+		if err != nil {
+			return false, nil, nil, err
+		}
+		return false, nil, userPubkey, nil
+	}
+
+	onchainScript, err := txscript.PayToAddrScript(btcAddr)
+	if err != nil {
+		return false, nil, nil, err
+	}
+	return true, onchainScript, nil, nil
+}
+
+func IsBitcoinOnchainOnly(receivers []client.Output, net chaincfg.Params) bool {
 	for _, receiver := range receivers {
-		isOnChain, _, _, err := DecodeReceiverAddress(receiver.Address)
+		isOnChain, _, _, err := ParseBitcoinAddress(receiver.Address, net)
+		if err != nil {
+			continue
+		}
+
+		if !isOnChain {
+			return false
+		}
+	}
+
+	return true
+}
+
+func IsLiquidOnchainOnly(receivers []client.Output) bool {
+	for _, receiver := range receivers {
+		isOnChain, _, _, err := ParseLiquidAddress(receiver.Address)
 		if err != nil {
 			continue
 		}
@@ -221,6 +258,7 @@ func DecryptAES128(encrypted, password []byte) ([]byte, error) {
 		return nil, err
 	}
 	nonce, text := data[:gcm.NonceSize()], data[gcm.NonceSize():]
+	// #nosec G407
 	plaintext, err := gcm.Open(nil, nonce, text, nil)
 	if err != nil {
 		return nil, fmt.Errorf("invalid password")
@@ -228,8 +266,13 @@ func DecryptAES128(encrypted, password []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
+var lock = &sync.Mutex{}
+
 // deriveKey derives a 32 byte array key from a custom passhprase
 func deriveKey(password, salt []byte) ([]byte, []byte, error) {
+	lock.Lock()
+	defer lock.Unlock()
+
 	if salt == nil {
 		salt = make([]byte, 32)
 		if _, err := rand.Read(salt); err != nil {

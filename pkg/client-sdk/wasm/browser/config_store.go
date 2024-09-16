@@ -30,7 +30,7 @@ type storeData struct {
 	RoundLifetime       string `json:"round_lifetime"`
 	RoundInterval       string `json:"round_interval"`
 	UnilateralExitDelay string `json:"unilateral_exit_delay"`
-	MinRelayFee         string `json:"min_relay_fee"`
+	Dust                string `json:"dust"`
 }
 
 type localStorageStore struct {
@@ -60,7 +60,7 @@ func (s *localStorageStore) AddData(ctx context.Context, data store.StoreData) e
 		RoundLifetime:       fmt.Sprintf("%d", data.RoundLifetime),
 		RoundInterval:       fmt.Sprintf("%d", data.RoundInterval),
 		UnilateralExitDelay: fmt.Sprintf("%d", data.UnilateralExitDelay),
-		MinRelayFee:         fmt.Sprintf("%d", data.MinRelayFee),
+		Dust:                fmt.Sprintf("%d", data.Dust),
 	}
 	return s.writeData(sd)
 }
@@ -86,7 +86,7 @@ func (s *localStorageStore) GetData(ctx context.Context) (*store.StoreData, erro
 	roundLifetime, _ := strconv.Atoi(s.store.Call("getItem", "round_lifetime").String())
 	roundInterval, _ := strconv.Atoi(s.store.Call("getItem", "round_interval").String())
 	unilateralExitDelay, _ := strconv.Atoi(s.store.Call("getItem", "unilateral_exit_delay").String())
-	minRelayFee, _ := strconv.Atoi(s.store.Call("getItem", "min_relay_fee").String())
+	dust, _ := strconv.Atoi(s.store.Call("getItem", "min_relay_fee").String())
 
 	return &store.StoreData{
 		AspUrl:              s.store.Call("getItem", "asp_url").String(),
@@ -97,7 +97,7 @@ func (s *localStorageStore) GetData(ctx context.Context) (*store.StoreData, erro
 		RoundLifetime:       int64(roundLifetime),
 		RoundInterval:       int64(roundInterval),
 		UnilateralExitDelay: int64(unilateralExitDelay),
-		MinRelayFee:         uint64(minRelayFee),
+		Dust:                uint64(dust),
 	}, nil
 }
 

@@ -14,8 +14,9 @@ func craftForfeitTxs(
 	vtxoForfeitTapLeaf *psbt.TaprootTapLeafScript,
 	vtxoScript, aspScript []byte,
 	minRelayFee uint64,
+	connectorAmount int64,
 ) (forfeitTxs []string, err error) {
-	connectors, prevouts := getConnectorInputs(connectorTx)
+	connectors, prevouts := getConnectorInputs(connectorTx, connectorAmount)
 
 	for i, connectorInput := range connectors {
 		connectorPrevout := prevouts[i]

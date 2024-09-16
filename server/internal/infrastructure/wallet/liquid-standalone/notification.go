@@ -35,7 +35,7 @@ func (s *service) UnwatchScripts(ctx context.Context, scripts []string) error {
 	return nil
 }
 
-func (s *service) GetNotificationChannel(ctx context.Context) <-chan map[string]ports.VtxoWithValue {
+func (s *service) GetNotificationChannel(ctx context.Context) <-chan map[string][]ports.VtxoWithValue {
 	return s.chVtxos
 }
 

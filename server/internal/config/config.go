@@ -26,9 +26,9 @@ type Config struct {
 	NoMacaroons           bool
 	Network               common.Network
 	LogLevel              int
-	MinRelayFee           uint64
 	RoundLifetime         int64
 	UnilateralExitDelay   int64
+	BoardingExitDelay     int64
 	EsploraURL            string
 	NeutrinoPeer          string
 	BitcoindRpcUser       string
@@ -51,18 +51,20 @@ var (
 	BlockchainScannerType = "BC_SCANNER_TYPE"
 	LogLevel              = "LOG_LEVEL"
 	Network               = "NETWORK"
-	MinRelayFee           = "MIN_RELAY_FEE"
 	RoundLifetime         = "ROUND_LIFETIME"
 	UnilateralExitDelay   = "UNILATERAL_EXIT_DELAY"
+	BoardingExitDelay     = "BOARDING_EXIT_DELAY"
 	EsploraURL            = "ESPLORA_URL"
 	NeutrinoPeer          = "NEUTRINO_PEER"
-	BitcoindRpcUser       = "BITCOIND_RPC_USER"
-	BitcoindRpcPass       = "BITCOIND_RPC_PASS"
-	BitcoindRpcHost       = "BITCOIND_RPC_HOST"
-	NoMacaroons           = "NO_MACAROONS"
-	NoTLS                 = "NO_TLS"
-	TLSExtraIP            = "TLS_EXTRA_IP"
-	TLSExtraDomain        = "TLS_EXTRA_DOMAIN"
+	// #nosec G101
+	BitcoindRpcUser = "BITCOIND_RPC_USER"
+	// #nosec G101
+	BitcoindRpcPass = "BITCOIND_RPC_PASS"
+	BitcoindRpcHost = "BITCOIND_RPC_HOST"
+	NoMacaroons     = "NO_MACAROONS"
+	NoTLS           = "NO_TLS"
+	TLSExtraIP      = "TLS_EXTRA_IP"
+	TLSExtraDomain  = "TLS_EXTRA_DOMAIN"
 
 	defaultDatadir               = common.AppDataDir("arkd", false)
 	defaultRoundInterval         = 5
@@ -76,9 +78,9 @@ var (
 	defaultBlockchainScannerType = "ocean"
 	defaultNetwork               = "liquid"
 	defaultLogLevel              = 4
-	defaultMinRelayFee           = 30 // 0.1 sat/vbyte on Liquid
 	defaultRoundLifetime         = 604672
 	defaultUnilateralExitDelay   = 1024
+	defaultBoardingExitDelay     = 604672
 	defaultNoMacaroons           = false
 	defaultNoTLS                 = false
 )
@@ -95,7 +97,6 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(LogLevel, defaultLogLevel)
 	viper.SetDefault(Network, defaultNetwork)
 	viper.SetDefault(WalletAddr, defaultWalletAddr)
-	viper.SetDefault(MinRelayFee, defaultMinRelayFee)
 	viper.SetDefault(RoundInterval, defaultRoundInterval)
 	viper.SetDefault(RoundLifetime, defaultRoundLifetime)
 	viper.SetDefault(SchedulerType, defaultSchedulerType)
@@ -104,6 +105,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(UnilateralExitDelay, defaultUnilateralExitDelay)
 	viper.SetDefault(BlockchainScannerType, defaultBlockchainScannerType)
 	viper.SetDefault(NoMacaroons, defaultNoMacaroons)
+	viper.SetDefault(BoardingExitDelay, defaultBoardingExitDelay)
 
 	net, err := getNetwork()
 	if err != nil {
@@ -129,9 +131,9 @@ func LoadConfig() (*Config, error) {
 		DbDir:                 filepath.Join(viper.GetString(Datadir), "db"),
 		LogLevel:              viper.GetInt(LogLevel),
 		Network:               net,
-		MinRelayFee:           viper.GetUint64(MinRelayFee),
 		RoundLifetime:         viper.GetInt64(RoundLifetime),
 		UnilateralExitDelay:   viper.GetInt64(UnilateralExitDelay),
+		BoardingExitDelay:     viper.GetInt64(BoardingExitDelay),
 		EsploraURL:            viper.GetString(EsploraURL),
 		NeutrinoPeer:          viper.GetString(NeutrinoPeer),
 		BitcoindRpcUser:       viper.GetString(BitcoindRpcUser),

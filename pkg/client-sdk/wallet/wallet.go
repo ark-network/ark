@@ -20,7 +20,7 @@ type WalletService interface {
 	IsLocked() bool
 	GetAddresses(
 		ctx context.Context,
-	) (offchainAddresses, onchainAddresses, redemptionAddresses []string, err error)
+	) (offchainAddresses, boardingAddresses, redemptionAddresses []string, err error)
 	NewAddress(
 		ctx context.Context, change bool,
 	) (offchainAddr, onchainAddr string, err error)
@@ -29,5 +29,6 @@ type WalletService interface {
 	) (offchainAddresses, onchainAddresses []string, err error)
 	SignTransaction(
 		ctx context.Context, explorerSvc explorer.Explorer, tx string,
-	) (singedTx string, err error)
+	) (signedTx string, err error)
+	Dump(ctx context.Context) (seed string, err error)
 }

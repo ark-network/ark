@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
@@ -20,7 +21,6 @@ import (
 )
 
 const (
-	DUST = 450
 	// transport
 	GrpcClient = client.GrpcClient
 	RestClient = client.RestClient
@@ -37,6 +37,18 @@ const (
 var (
 	ErrAlreadyInitialized = fmt.Errorf("client already initialized")
 	ErrNotInitialized     = fmt.Errorf("client not initialized")
+)
+
+var (
+	defaultNetworks = utils.SupportedType[string]{
+		common.Liquid.Name:         "https://blockstream.info/liquid/api",
+		common.LiquidTestNet.Name:  "https://blockstream.info/liquidtestnet/api",
+		common.LiquidRegTest.Name:  "http://localhost:3001",
+		common.Bitcoin.Name:        "https://blockstream.info/api",
+		common.BitcoinTestNet.Name: "https://blockstream.info/testnet/api",
+		common.BitcoinRegTest.Name: "http://localhost:3000",
+		common.BitcoinSigNet.Name:  "https://mutinynet.com/api",
+	}
 )
 
 type arkClient struct {
@@ -75,7 +87,7 @@ func (a *arkClient) InitWithWallet(
 		return fmt.Errorf("failed to connect to asp: %s", err)
 	}
 
-	explorerSvc, err := getExplorer(supportedNetworks, info.Network)
+	explorerSvc, err := getExplorer(args.ExplorerURL, info.Network)
 	if err != nil {
 		return fmt.Errorf("failed to setup explorer: %s", err)
 	}
@@ -92,15 +104,16 @@ func (a *arkClient) InitWithWallet(
 	}
 
 	storeData := store.StoreData{
-		AspUrl:              args.AspUrl,
-		AspPubkey:           aspPubkey,
-		WalletType:          args.Wallet.GetType(),
-		ClientType:          args.ClientType,
-		Network:             network,
-		RoundLifetime:       info.RoundLifetime,
-		RoundInterval:       info.RoundInterval,
-		UnilateralExitDelay: info.UnilateralExitDelay,
-		MinRelayFee:         uint64(info.MinRelayFee),
+		AspUrl:                     args.AspUrl,
+		AspPubkey:                  aspPubkey,
+		WalletType:                 args.Wallet.GetType(),
+		ClientType:                 args.ClientType,
+		Network:                    network,
+		RoundLifetime:              info.RoundLifetime,
+		RoundInterval:              info.RoundInterval,
+		UnilateralExitDelay:        info.UnilateralExitDelay,
+		Dust:                       info.Dust,
+		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 	}
 	if err := a.store.AddData(ctx, storeData); err != nil {
 		return err
@@ -139,7 +152,7 @@ func (a *arkClient) Init(
 		return fmt.Errorf("failed to connect to asp: %s", err)
 	}
 
-	explorerSvc, err := getExplorer(supportedNetworks, info.Network)
+	explorerSvc, err := getExplorer(args.ExplorerURL, info.Network)
 	if err != nil {
 		return fmt.Errorf("failed to setup explorer: %s", err)
 	}
@@ -156,15 +169,17 @@ func (a *arkClient) Init(
 	}
 
 	storeData := store.StoreData{
-		AspUrl:              args.AspUrl,
-		AspPubkey:           aspPubkey,
-		WalletType:          args.WalletType,
-		ClientType:          args.ClientType,
-		Network:             network,
-		RoundLifetime:       info.RoundLifetime,
-		RoundInterval:       info.RoundInterval,
-		UnilateralExitDelay: info.UnilateralExitDelay,
-		MinRelayFee:         uint64(info.MinRelayFee),
+		AspUrl:                     args.AspUrl,
+		AspPubkey:                  aspPubkey,
+		WalletType:                 args.WalletType,
+		ClientType:                 args.ClientType,
+		Network:                    network,
+		RoundLifetime:              info.RoundLifetime,
+		RoundInterval:              info.RoundInterval,
+		UnilateralExitDelay:        info.UnilateralExitDelay,
+		Dust:                       info.Dust,
+		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
+		ExplorerURL:                args.ExplorerURL,
 	}
 	walletSvc, err := getWallet(a.store, &storeData, supportedWallets)
 	if err != nil {
@@ -202,13 +217,17 @@ func (a *arkClient) IsLocked(ctx context.Context) bool {
 	return a.wallet.IsLocked()
 }
 
+func (a *arkClient) Dump(ctx context.Context) (string, error) {
+	return a.wallet.Dump(ctx)
+}
+
 func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
-	offchainAddr, onchainAddr, err := a.wallet.NewAddress(ctx, false)
+	offchainAddr, boardingAddr, err := a.wallet.NewAddress(ctx, false)
 	if err != nil {
 		return "", "", err
 	}
 
-	return offchainAddr, onchainAddr, nil
+	return offchainAddr, boardingAddr, nil
 }
 
 func (a *arkClient) ListVtxos(
@@ -234,14 +253,11 @@ func (a *arkClient) ListVtxos(
 func (a *arkClient) ping(
 	ctx context.Context, paymentID string,
 ) func() {
-	_, err := a.client.Ping(ctx, paymentID)
-	if err != nil {
-		return nil
-	}
-
 	ticker := time.NewTicker(5 * time.Second)
 
 	go func(t *time.Ticker) {
+		// nolint
+		a.client.Ping(ctx, paymentID)
 		for range t.C {
 			// nolint
 			a.client.Ping(ctx, paymentID)
@@ -258,15 +274,14 @@ func getClient(
 	return factory(aspUrl)
 }
 
-func getExplorer(
-	supportedNetworks utils.SupportedType[string], network string,
-) (explorer.Explorer, error) {
-	url, ok := supportedNetworks[network]
-	if !ok {
-		return nil, fmt.Errorf("invalid network")
+func getExplorer(explorerURL, network string) (explorer.Explorer, error) {
+	if explorerURL == "" {
+		var ok bool
+		if explorerURL, ok = defaultNetworks[network]; !ok {
+			return nil, fmt.Errorf("invalid network")
+		}
 	}
-
-	return explorer.NewExplorer(url, utils.NetworkFromString(network)), nil
+	return explorer.NewExplorer(explorerURL, utils.NetworkFromString(network)), nil
 }
 
 func getWallet(
@@ -305,4 +320,8 @@ func getWalletStore(storeType, datadir string) (walletstore.WalletStore, error) 
 	default:
 		return nil, fmt.Errorf("unknown wallet store type")
 	}
+}
+
+func getCreatedAtFromExpiry(roundLifetime int64, expiry time.Time) time.Time {
+	return expiry.Add(-time.Duration(roundLifetime) * time.Second)
 }

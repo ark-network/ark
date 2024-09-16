@@ -116,3 +116,16 @@ func (w *singlekeyWallet) Unlock(
 func (w *singlekeyWallet) IsLocked() bool {
 	return w.privateKey == nil
 }
+
+func (w *singlekeyWallet) Dump(ctx context.Context) (string, error) {
+	if w.walletData == nil {
+		return "", fmt.Errorf("wallet not initialized")
+	}
+
+	if w.IsLocked() {
+		return "", fmt.Errorf("wallet is locked")
+	}
+
+	return hex.EncodeToString(w.privateKey.Serialize()), nil
+
+}

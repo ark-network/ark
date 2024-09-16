@@ -10,12 +10,15 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btclog"
@@ -28,8 +31,11 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightninglabs/neutrino"
 	"github.com/lightningnetwork/lnd/blockcache"
+	"github.com/lightningnetwork/lnd/input"
+	"github.com/lightningnetwork/lnd/lntypes"
 	"github.com/lightningnetwork/lnd/lnwallet"
 	"github.com/lightningnetwork/lnd/lnwallet/btcwallet"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	log "github.com/sirupsen/logrus"
 	"github.com/vulpemventures/go-bip39"
 )
@@ -37,9 +43,8 @@ import (
 type WalletOption func(*service) error
 
 type WalletConfig struct {
-	Datadir    string
-	Network    common.Network
-	EsploraURL string
+	Datadir string
+	Network common.Network
 }
 
 func (c WalletConfig) chainParams() *chaincfg.Params {
@@ -65,6 +70,10 @@ const (
 	mainAccount      accountName = "main"
 	connectorAccount accountName = "connector"
 	aspKeyAccount    accountName = "aspkey"
+
+	// https://github.com/bitcoin/bitcoin/blob/439e58c4d8194ca37f70346727d31f52e69592ec/src/policy/policy.cpp#L23C8-L23C11
+	// biggest input size to compute the maximum dust amount
+	biggestInputSize = 148 + 182 // = 330 vbytes
 )
 
 var (
@@ -74,14 +83,21 @@ var (
 	outputLockDuration = time.Minute
 )
 
+// add additional chain API not supported by the chain.Interface type
+type extraChainAPI interface {
+	getTx(txid string) (*wire.MsgTx, error)
+	getTxStatus(txid string) (isConfirmed bool, blocktime int64, err error)
+	broadcast(txHex string) error
+}
+
 type service struct {
 	wallet *btcwallet.BtcWallet
 	cfg    WalletConfig
 
-	chainSource chain.Interface
-	scanner     chain.Interface
-
-	esploraClient *esploraClient
+	chainSource  chain.Interface
+	scanner      chain.Interface
+	extraAPI     extraChainAPI
+	feeEstimator chainfee.Estimator
 
 	watchedScriptsLock sync.RWMutex
 	watchedScripts     map[string]struct{}
@@ -90,7 +106,7 @@ type service struct {
 }
 
 // WithNeutrino creates a start a neutrino node using the provided service datadir
-func WithNeutrino(initialPeer string) WalletOption {
+func WithNeutrino(initialPeer string, esploraURL string) WalletOption {
 	return func(s *service) error {
 		if s.cfg.Network.Name == common.BitcoinRegTest.Name && len(initialPeer) == 0 {
 			return fmt.Errorf("initial neutrino peer required for regtest network, set NEUTRINO_PEER env var")
@@ -132,6 +148,21 @@ func WithNeutrino(initialPeer string) WalletOption {
 
 		chainSrc := chain.NewNeutrinoClient(netParams, neutrinoSvc)
 		scanner := chain.NewNeutrinoClient(netParams, neutrinoSvc)
+
+		esploraClient := &esploraClient{url: esploraURL}
+		estimator, err := chainfee.NewWebAPIEstimator(esploraClient, true, 5*time.Minute, 20*time.Minute)
+		if err != nil {
+			return err
+		}
+
+		if err := withExtraAPI(esploraClient)(s); err != nil {
+			return err
+		}
+
+		if err := withFeeEstimator(estimator)(s); err != nil {
+			return err
+		}
+
 		if err := withChainSource(chainSrc)(s); err != nil {
 			return err
 		}
@@ -184,6 +215,27 @@ func WithPollingBitcoind(host, user, pass string) WalletOption {
 			time.Sleep(1 * time.Second)
 		}
 
+		estimator, err := chainfee.NewBitcoindEstimator(
+			rpcclient.ConnConfig{
+				Host: bitcoindConfig.Host,
+				User: bitcoindConfig.User,
+				Pass: bitcoindConfig.Pass,
+			},
+			"CONSERVATIVE",
+			chainfee.AbsoluteFeePerKwFloor,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to create bitcoind fee estimator: %w", err)
+		}
+
+		if err := withExtraAPI(&bitcoindRPCClient{chainClient})(s); err != nil {
+			return err
+		}
+
+		if err := withFeeEstimator(estimator)(s); err != nil {
+			return err
+		}
+
 		// Set up the wallet as chain source and scanner
 		if err := withChainSource(chainClient)(s); err != nil {
 			chainClient.Stop()
@@ -207,7 +259,6 @@ func NewService(cfg WalletConfig, options ...WalletOption) (ports.WalletService,
 
 	svc := &service{
 		cfg:                cfg,
-		esploraClient:      &esploraClient{url: cfg.EsploraURL},
 		watchedScriptsLock: sync.RWMutex{},
 		watchedScripts:     make(map[string]struct{}),
 	}
@@ -335,7 +386,7 @@ func (s *service) Lock(_ context.Context, _ string) error {
 }
 
 func (s *service) BroadcastTransaction(ctx context.Context, txHex string) (string, error) {
-	if err := s.esploraClient.broadcast(txHex); err != nil {
+	if err := s.extraAPI.broadcast(txHex); err != nil {
 		return "", err
 	}
 
@@ -501,9 +552,11 @@ func (s *service) SelectUtxos(ctx context.Context, _ string, amount uint64) ([]p
 		selectedUtxos = append(selectedUtxos, coinTxInput{coin})
 	}
 
-	change := selectedAmount - amount
+	if selectedAmount < amount {
+		return nil, 0, fmt.Errorf("insufficient funds to select %d, only %d available", amount, selectedAmount)
+	}
 
-	return selectedUtxos, change, nil
+	return selectedUtxos, selectedAmount - amount, nil
 }
 
 func (s *service) SignTransaction(ctx context.Context, partialTx string, extractRawTx bool) (string, error) {
@@ -515,7 +568,7 @@ func (s *service) SignTransaction(ctx context.Context, partialTx string, extract
 		return "", err
 	}
 
-	signedInputs, err := s.signPsbt(ptx)
+	signedInputs, err := s.signPsbt(ptx, nil)
 	if err != nil {
 		return "", err
 	}
@@ -525,8 +578,55 @@ func (s *service) SignTransaction(ctx context.Context, partialTx string, extract
 			return "", fmt.Errorf("not all inputs are signed, unable to finalize the psbt")
 		}
 
-		if err := psbt.MaybeFinalizeAll(ptx); err != nil {
-			return "", err
+		for i, in := range ptx.Inputs {
+			isTaproot := txscript.IsPayToTaproot(in.WitnessUtxo.PkScript)
+			if isTaproot && len(in.TaprootLeafScript) > 0 {
+				closure, err := bitcointree.DecodeClosure(in.TaprootLeafScript[0].Script)
+				if err != nil {
+					return "", err
+				}
+
+				witness := make(wire.TxWitness, 4)
+
+				castClosure, isTaprootMultisig := closure.(*bitcointree.MultisigClosure)
+				if isTaprootMultisig {
+					ownerPubkey := schnorr.SerializePubKey(castClosure.Pubkey)
+					aspKey := schnorr.SerializePubKey(castClosure.AspPubkey)
+
+					for _, sig := range in.TaprootScriptSpendSig {
+						if bytes.Equal(sig.XOnlyPubKey, ownerPubkey) {
+							witness[0] = sig.Signature
+						}
+
+						if bytes.Equal(sig.XOnlyPubKey, aspKey) {
+							witness[1] = sig.Signature
+						}
+					}
+
+					witness[2] = in.TaprootLeafScript[0].Script
+					witness[3] = in.TaprootLeafScript[0].ControlBlock
+
+					for idw, w := range witness {
+						if w == nil {
+							return "", fmt.Errorf("missing witness element %d, cannot finalize taproot mutlisig input %d", idw, i)
+						}
+					}
+
+					var witnessBuf bytes.Buffer
+
+					if err := psbt.WriteTxWitness(&witnessBuf, witness); err != nil {
+						return "", err
+					}
+
+					ptx.Inputs[i].FinalScriptWitness = witnessBuf.Bytes()
+					continue
+				}
+
+			}
+
+			if err := psbt.Finalize(ptx, i); err != nil {
+				return "", fmt.Errorf("failed to finalize input %d: %w", i, err)
+			}
 		}
 
 		extracted, err := psbt.Extract(ptx)
@@ -561,7 +661,7 @@ func (s *service) SignTransactionTapscript(ctx context.Context, partialTx string
 		}
 	}
 
-	signedInputs, err := s.signPsbt(partial)
+	signedInputs, err := s.signPsbt(partial, inputIndexes)
 	if err != nil {
 		return "", err
 	}
@@ -627,8 +727,13 @@ func (s *service) WaitForSync(ctx context.Context, txid string) error {
 	}
 }
 
+func (s *service) MinRelayFee(ctx context.Context, vbytes uint64) (uint64, error) {
+	fee := s.feeEstimator.RelayFeePerKW().FeeForVByte(lntypes.VByte(vbytes))
+	return uint64(fee.ToUnit(btcutil.AmountSatoshi)), nil
+}
+
 func (s *service) EstimateFees(ctx context.Context, partialTx string) (uint64, error) {
-	feeRate, err := s.esploraClient.getFeeRate()
+	feeRate, err := s.feeEstimator.EstimateFeePerKW(1)
 	if err != nil {
 		return 0, err
 	}
@@ -641,7 +746,66 @@ func (s *service) EstimateFees(ctx context.Context, partialTx string) (uint64, e
 		return 0, err
 	}
 
-	fee := feeRate * btcutil.Amount(partial.UnsignedTx.SerializeSize())
+	weightEstimator := &input.TxWeightEstimator{}
+
+	for _, input := range partial.Inputs {
+		if input.WitnessUtxo == nil {
+			return 0, fmt.Errorf("missing witness utxo for input")
+		}
+
+		script, err := txscript.ParsePkScript(input.WitnessUtxo.PkScript)
+		if err != nil {
+			return 0, err
+		}
+
+		switch script.Class() {
+		case txscript.PubKeyHashTy:
+			weightEstimator.AddP2PKHInput()
+		case txscript.WitnessV0PubKeyHashTy:
+			weightEstimator.AddP2WKHInput()
+		case txscript.WitnessV1TaprootTy:
+			if len(input.TaprootLeafScript) > 0 {
+				leaf := input.TaprootLeafScript[0]
+				ctrlBlock, err := txscript.ParseControlBlock(leaf.ControlBlock)
+				if err != nil {
+					return 0, err
+				}
+
+				weightEstimator.AddTapscriptInput(64*2, &waddrmgr.Tapscript{
+					RevealedScript: leaf.Script,
+					ControlBlock:   ctrlBlock,
+				})
+			} else {
+				weightEstimator.AddTaprootKeySpendInput(txscript.SigHashDefault)
+			}
+		default:
+			return 0, fmt.Errorf("unsupported script type: %v", script.Class())
+		}
+	}
+
+	for _, output := range partial.UnsignedTx.TxOut {
+		script, err := txscript.ParsePkScript(output.PkScript)
+		if err != nil {
+			return 0, err
+		}
+
+		switch script.Class() {
+		case txscript.PubKeyHashTy:
+			weightEstimator.AddP2PKHOutput()
+		case txscript.WitnessV0PubKeyHashTy:
+			weightEstimator.AddP2WKHOutput()
+		case txscript.ScriptHashTy:
+			weightEstimator.AddP2SHOutput()
+		case txscript.WitnessV0ScriptHashTy:
+			weightEstimator.AddP2WSHOutput()
+		case txscript.WitnessV1TaprootTy:
+			weightEstimator.AddP2TROutput()
+		default:
+			return 0, fmt.Errorf("unsupported script type: %v", script.Class())
+		}
+	}
+
+	fee := feeRate.FeeForVByte(lntypes.VByte(weightEstimator.VSize()))
 	return uint64(fee.ToUnit(btcutil.AmountSatoshi)), nil
 }
 
@@ -692,18 +856,37 @@ func (s *service) UnwatchScripts(ctx context.Context, scripts []string) error {
 
 func (s *service) GetNotificationChannel(
 	ctx context.Context,
-) <-chan map[string]ports.VtxoWithValue {
-	ch := make(chan map[string]ports.VtxoWithValue)
+) <-chan map[string][]ports.VtxoWithValue {
+	ch := make(chan map[string][]ports.VtxoWithValue)
 
 	go func() {
+		const maxCacheSize = 100
+		sentTxs := make(map[chainhash.Hash]struct{})
+
+		cache := func(hash chainhash.Hash) {
+			if len(sentTxs) > maxCacheSize {
+				sentTxs = make(map[chainhash.Hash]struct{})
+			}
+
+			sentTxs[hash] = struct{}{}
+		}
+
 		for n := range s.scanner.Notifications() {
 			switch m := n.(type) {
 			case chain.RelevantTx:
+				if _, sent := sentTxs[m.TxRecord.Hash]; sent {
+					continue
+				}
 				notification := s.castNotification(m.TxRecord)
+				cache(m.TxRecord.Hash)
 				ch <- notification
 			case chain.FilteredBlockConnected:
 				for _, tx := range m.RelevantTxs {
+					if _, sent := sentTxs[tx.Hash]; sent {
+						continue
+					}
 					notification := s.castNotification(tx)
+					cache(tx.Hash)
 					ch <- notification
 				}
 			}
@@ -716,11 +899,35 @@ func (s *service) GetNotificationChannel(
 func (s *service) IsTransactionConfirmed(
 	ctx context.Context, txid string,
 ) (isConfirmed bool, blocktime int64, err error) {
-	return s.esploraClient.getTxStatus(txid)
+	return s.extraAPI.getTxStatus(txid)
 }
 
-func (s *service) castNotification(tx *wtxmgr.TxRecord) map[string]ports.VtxoWithValue {
-	vtxos := make(map[string]ports.VtxoWithValue)
+func (s *service) GetDustAmount(
+	ctx context.Context,
+) (uint64, error) {
+	return s.MinRelayFee(ctx, biggestInputSize)
+}
+
+func (s *service) GetTransaction(ctx context.Context, txid string) (string, error) {
+	tx, err := s.extraAPI.getTx(txid)
+	if err != nil {
+		return "", err
+	}
+
+	if tx == nil {
+		return "", fmt.Errorf("transaction not found")
+	}
+
+	var buf bytes.Buffer
+	if err := tx.Serialize(&buf); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(buf.Bytes()), nil
+}
+
+func (s *service) castNotification(tx *wtxmgr.TxRecord) map[string][]ports.VtxoWithValue {
+	vtxos := make(map[string][]ports.VtxoWithValue)
 
 	s.watchedScriptsLock.RLock()
 	defer s.watchedScriptsLock.RUnlock()
@@ -731,13 +938,17 @@ func (s *service) castNotification(tx *wtxmgr.TxRecord) map[string]ports.VtxoWit
 			continue
 		}
 
-		vtxos[script] = ports.VtxoWithValue{
+		if len(vtxos[script]) <= 0 {
+			vtxos[script] = make([]ports.VtxoWithValue, 0)
+		}
+
+		vtxos[script] = append(vtxos[script], ports.VtxoWithValue{
 			VtxoKey: domain.VtxoKey{
 				Txid: tx.Hash.String(),
 				VOut: uint32(outputIndex),
 			},
 			Value: uint64(txout.Value),
-		}
+		})
 	}
 
 	return vtxos
@@ -954,6 +1165,10 @@ func withChainSource(chainSource chain.Interface) WalletOption {
 			return fmt.Errorf("chain source already set")
 		}
 
+		if err := chainSource.Start(); err != nil {
+			return fmt.Errorf("failed to start chain source: %s", err)
+		}
+
 		s.chainSource = chainSource
 		return nil
 	}
@@ -968,6 +1183,31 @@ func withScanner(chainSource chain.Interface) WalletOption {
 			return fmt.Errorf("failed to start scanner: %s", err)
 		}
 		s.scanner = chainSource
+		return nil
+	}
+}
+
+func withExtraAPI(api extraChainAPI) WalletOption {
+	return func(s *service) error {
+		if s.extraAPI != nil {
+			return fmt.Errorf("extra chain API already set")
+		}
+		s.extraAPI = api
+		return nil
+	}
+}
+
+func withFeeEstimator(estimator chainfee.Estimator) WalletOption {
+	return func(s *service) error {
+		if s.feeEstimator != nil {
+			return fmt.Errorf("fee estimator already set")
+		}
+
+		if err := estimator.Start(); err != nil {
+			return fmt.Errorf("failed to start fee estimator: %s", err)
+		}
+
+		s.feeEstimator = estimator
 		return nil
 	}
 }

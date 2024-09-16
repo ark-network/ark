@@ -65,12 +65,12 @@ service ArkService {
       get: "/v1/info"
     };
   }
-  rpc Onboard(OnboardRequest) returns (OnboardResponse) {
+  rpc GetBoardingAddress(GetBoardingAddressRequest) returns (GetBoardingAddressResponse) {
     option (google.api.http) = {
-      post: "/v1/onboard"
+      post: "/v1/boarding"
       body: "*"
     };
-  }
+  };
   rpc CreatePayment(CreatePaymentRequest) returns (CreatePaymentResponse) {
     option (google.api.http) = {
       post: "/v1/payment"
@@ -100,6 +100,15 @@ message CompletePaymentRequest {
 }
 message CompletePaymentResponse {}
 
+message GetBoardingAddressRequest {
+  string pubkey = 1;
+}
+
+message GetBoardingAddressResponse {
+  string address = 1;
+  string descriptor = 2;
+}
+
 message RegisterPaymentRequest {
   repeated Input inputs = 1;
   optional string ephemeral_pubkey = 2;
@@ -120,6 +129,8 @@ message ClaimPaymentResponse {}
 message FinalizePaymentRequest {
   // Forfeit txs signed by the user. 
   repeated string signed_forfeit_txs = 1;
+  // If payment has boarding input, the user must sign the associated inputs.
+  optional string signed_round_tx = 2;
 }
 message FinalizePaymentResponse {}
 
@@ -176,15 +187,8 @@ message GetInfoResponse {
   int64 unilateral_exit_delay = 3;
   int64 round_interval = 4;
   string network = 5;
-  int64 min_relay_fee = 6;
-}
-
-message OnboardRequest {
-  string boarding_tx = 1;
-  Tree congestion_tree = 2;
-  string user_pubkey = 3;
-}
-message OnboardResponse {
+  int64 dust = 6;
+  string boarding_descriptor_template = 7;
 }
 
 // EVENT TYPES
@@ -211,6 +215,7 @@ message RoundSigningEvent {
   string id = 1;
   repeated string cosigners_pubkeys = 2;
   Tree unsigned_tree = 3;
+  string unsigned_round_tx = 4;
 }
 
 message RoundSigningNoncesGeneratedEvent {
@@ -239,9 +244,22 @@ message Round {
   RoundStage stage = 8;
 }
 
-message Input {
+message VtxoInput {
   string txid = 1;
   uint32 vout = 2;
+}
+
+message BoardingInput {
+  string txid = 1;
+  uint32 vout = 2;
+  string descriptor = 3;
+}
+
+message Input {
+  oneof input {
+    VtxoInput vtxo_input = 1;
+    BoardingInput boarding_input = 2;
+  }
 }
 
 message Output {

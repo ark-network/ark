@@ -16,6 +16,38 @@
     "application/json"
   ],
   "paths": {
+    "/v1/boarding": {
+      "post": {
+        "operationId": "ArkService_GetBoardingAddress",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetBoardingAddressResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1GetBoardingAddressRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
     "/v1/events": {
       "get": {
         "operationId": "ArkService_GetEventStream",
@@ -64,38 +96,6 @@
             }
           }
         },
-        "tags": [
-          "ArkService"
-        ]
-      }
-    },
-    "/v1/onboard": {
-      "post": {
-        "operationId": "ArkService_Onboard",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1OnboardResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1OnboardRequest"
-            }
-          }
-        ],
         "tags": [
           "ArkService"
         ]
@@ -475,6 +475,21 @@
         }
       }
     },
+    "v1BoardingInput": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "vout": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "descriptor": {
+          "type": "string"
+        }
+      }
+    },
     "v1ClaimPaymentRequest": {
       "type": "object",
       "properties": {
@@ -555,11 +570,34 @@
             "type": "string"
           },
           "description": "Forfeit txs signed by the user."
+        },
+        "signedRoundTx": {
+          "type": "string",
+          "description": "If payment has boarding input, the user must sign the associated inputs."
         }
       }
     },
     "v1FinalizePaymentResponse": {
       "type": "object"
+    },
+    "v1GetBoardingAddressRequest": {
+      "type": "object",
+      "properties": {
+        "pubkey": {
+          "type": "string"
+        }
+      }
+    },
+    "v1GetBoardingAddressResponse": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "descriptor": {
+          "type": "string"
+        }
+      }
     },
     "v1GetEventStreamResponse": {
       "type": "object",
@@ -602,9 +640,12 @@
         "network": {
           "type": "string"
         },
-        "minRelayFee": {
+        "dust": {
           "type": "string",
           "format": "int64"
+        },
+        "boardingDescriptorTemplate": {
+          "type": "string"
         }
       }
     },
@@ -627,12 +668,11 @@
     "v1Input": {
       "type": "object",
       "properties": {
-        "txid": {
-          "type": "string"
+        "vtxoInput": {
+          "$ref": "#/definitions/v1VtxoInput"
         },
-        "vout": {
-          "type": "integer",
-          "format": "int64"
+        "boardingInput": {
+          "$ref": "#/definitions/v1BoardingInput"
         }
       }
     },
@@ -668,23 +708,6 @@
           "type": "string"
         }
       }
-    },
-    "v1OnboardRequest": {
-      "type": "object",
-      "properties": {
-        "boardingTx": {
-          "type": "string"
-        },
-        "congestionTree": {
-          "$ref": "#/definitions/v1Tree"
-        },
-        "userPubkey": {
-          "type": "string"
-        }
-      }
-    },
-    "v1OnboardResponse": {
-      "type": "object"
     },
     "v1Output": {
       "type": "object",
@@ -857,6 +880,9 @@
         },
         "unsignedTree": {
           "$ref": "#/definitions/v1Tree"
+        },
+        "unsignedRoundTx": {
+          "type": "string"
         }
       }
     },
@@ -970,6 +996,18 @@
         },
         "pendingData": {
           "$ref": "#/definitions/v1PendingPayment"
+        }
+      }
+    },
+    "v1VtxoInput": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "vout": {
+          "type": "integer",
+          "format": "int64"
         }
       }
     }

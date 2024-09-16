@@ -140,33 +140,18 @@ func BalanceWrapper() js.Func {
 	})
 }
 
-func OnboardWrapper() js.Func {
-	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) != 1 {
-			return nil, errors.New("invalid number of args")
-		}
-		amount := uint64(args[0].Int())
-
-		txID, err := arkSdkClient.Onboard(context.Background(), amount)
-		if err != nil {
-			return nil, err
-		}
-		return js.ValueOf(txID), nil
-	})
-}
-
 func ReceiveWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
 		if arkSdkClient == nil {
 			return nil, errors.New("ARK SDK client is not initialized")
 		}
-		offchainAddr, onchainAddr, err := arkSdkClient.Receive(context.Background())
+		offchainAddr, boardingAddr, err := arkSdkClient.Receive(context.Background())
 		if err != nil {
 			return nil, err
 		}
 		result := map[string]interface{}{
 			"offchainAddr": offchainAddr,
-			"onchainAddr":  onchainAddr,
+			"boardingAddr": boardingAddr,
 		}
 		return js.ValueOf(result), nil
 	})
@@ -321,14 +306,14 @@ func GetUnilateralExitDelayWrapper() js.Func {
 	})
 }
 
-func GetMinRelayFeeWrapper() js.Func {
+func GetDustWrapper() js.Func {
 	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
 		data, _ := arkSdkClient.GetConfigData(context.Background())
-		var minRelayFee uint64
+		var dust uint64
 		if data != nil {
-			minRelayFee = data.MinRelayFee
+			dust = data.Dust
 		}
-		return js.ValueOf(minRelayFee)
+		return js.ValueOf(dust)
 	})
 }
 

@@ -21,15 +21,17 @@ const (
 )
 
 type storeData struct {
-	AspUrl              string `json:"asp_url"`
-	AspPubkey           string `json:"asp_pubkey"`
-	WalletType          string `json:"wallet_type"`
-	ClientType          string `json:"client_type"`
-	Network             string `json:"network"`
-	RoundLifetime       string `json:"round_lifetime"`
-	RoundInterval       string `json:"round_interval"`
-	UnilateralExitDelay string `json:"unilateral_exit_delay"`
-	MinRelayFee         string `json:"min_relay_fee"`
+	AspUrl                     string `json:"asp_url"`
+	AspPubkey                  string `json:"asp_pubkey"`
+	WalletType                 string `json:"wallet_type"`
+	ClientType                 string `json:"client_type"`
+	Network                    string `json:"network"`
+	RoundLifetime              string `json:"round_lifetime"`
+	RoundInterval              string `json:"round_interval"`
+	UnilateralExitDelay        string `json:"unilateral_exit_delay"`
+	Dust                       string `json:"dust"`
+	BoardingDescriptorTemplate string `json:"boarding_descriptor_template"`
+	ExplorerURL                string `json:"explorer_url"`
 }
 
 func (d storeData) isEmpty() bool {
@@ -41,33 +43,38 @@ func (d storeData) decode() store.StoreData {
 	roundLifetime, _ := strconv.Atoi(d.RoundLifetime)
 	roundInterval, _ := strconv.Atoi(d.RoundInterval)
 	unilateralExitDelay, _ := strconv.Atoi(d.UnilateralExitDelay)
-	minRelayFee, _ := strconv.Atoi(d.MinRelayFee)
+	dust, _ := strconv.Atoi(d.Dust)
 	buf, _ := hex.DecodeString(d.AspPubkey)
 	aspPubkey, _ := secp256k1.ParsePubKey(buf)
+	explorerURL := d.ExplorerURL
 	return store.StoreData{
-		AspUrl:              d.AspUrl,
-		AspPubkey:           aspPubkey,
-		WalletType:          d.WalletType,
-		ClientType:          d.ClientType,
-		Network:             network,
-		RoundLifetime:       int64(roundLifetime),
-		RoundInterval:       int64(roundInterval),
-		UnilateralExitDelay: int64(unilateralExitDelay),
-		MinRelayFee:         uint64(minRelayFee),
+		AspUrl:                     d.AspUrl,
+		AspPubkey:                  aspPubkey,
+		WalletType:                 d.WalletType,
+		ClientType:                 d.ClientType,
+		Network:                    network,
+		RoundLifetime:              int64(roundLifetime),
+		UnilateralExitDelay:        int64(unilateralExitDelay),
+		RoundInterval:              int64(roundInterval),
+		Dust:                       uint64(dust),
+		BoardingDescriptorTemplate: d.BoardingDescriptorTemplate,
+		ExplorerURL:                explorerURL,
 	}
 }
 
 func (d storeData) asMap() map[string]string {
 	return map[string]string{
-		"asp_url":               d.AspUrl,
-		"asp_pubkey":            d.AspPubkey,
-		"wallet_type":           d.WalletType,
-		"client_type":           d.ClientType,
-		"network":               d.Network,
-		"round_lifetime":        d.RoundLifetime,
-		"round_interval":        d.RoundInterval,
-		"unilateral_exit_delay": d.UnilateralExitDelay,
-		"min_relay_fee":         d.MinRelayFee,
+		"asp_url":                      d.AspUrl,
+		"asp_pubkey":                   d.AspPubkey,
+		"wallet_type":                  d.WalletType,
+		"client_type":                  d.ClientType,
+		"network":                      d.Network,
+		"round_lifetime":               d.RoundLifetime,
+		"round_interval":               d.RoundInterval,
+		"unilateral_exit_delay":        d.UnilateralExitDelay,
+		"dust":                         d.Dust,
+		"boarding_descriptor_template": d.BoardingDescriptorTemplate,
+		"explorer_url":                 d.ExplorerURL,
 	}
 }
 
@@ -104,15 +111,17 @@ func (s *Store) GetDatadir() string {
 
 func (s *Store) AddData(ctx context.Context, data store.StoreData) error {
 	sd := &storeData{
-		AspUrl:              data.AspUrl,
-		AspPubkey:           hex.EncodeToString(data.AspPubkey.SerializeCompressed()),
-		WalletType:          data.WalletType,
-		ClientType:          data.ClientType,
-		Network:             data.Network.Name,
-		RoundLifetime:       fmt.Sprintf("%d", data.RoundLifetime),
-		RoundInterval:       fmt.Sprintf("%d", data.RoundInterval),
-		UnilateralExitDelay: fmt.Sprintf("%d", data.UnilateralExitDelay),
-		MinRelayFee:         fmt.Sprintf("%d", data.MinRelayFee),
+		AspUrl:                     data.AspUrl,
+		AspPubkey:                  hex.EncodeToString(data.AspPubkey.SerializeCompressed()),
+		WalletType:                 data.WalletType,
+		ClientType:                 data.ClientType,
+		Network:                    data.Network.Name,
+		RoundLifetime:              fmt.Sprintf("%d", data.RoundLifetime),
+		RoundInterval:              fmt.Sprintf("%d", data.RoundInterval),
+		UnilateralExitDelay:        fmt.Sprintf("%d", data.UnilateralExitDelay),
+		Dust:                       fmt.Sprintf("%d", data.Dust),
+		BoardingDescriptorTemplate: data.BoardingDescriptorTemplate,
+		ExplorerURL:                data.ExplorerURL,
 	}
 
 	if err := s.write(sd); err != nil {

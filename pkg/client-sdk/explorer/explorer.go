@@ -25,6 +25,51 @@ const (
 )
 
 type Utxo struct {
+	Txid        string
+	Vout        uint32
+	Amount      uint64
+	Asset       string // liquid only
+	Delay       uint
+	SpendableAt time.Time
+	CreatedAt   time.Time
+}
+
+func (u *Utxo) Sequence() (uint32, error) {
+	return common.BIP68EncodeAsNumber(u.Delay)
+}
+
+func newUtxo(explorerUtxo ExplorerUtxo, delay uint) Utxo {
+	utxoTime := explorerUtxo.Status.Blocktime
+	createdAt := time.Unix(utxoTime, 0)
+	if utxoTime == 0 {
+		createdAt = time.Time{}
+		utxoTime = time.Now().Unix()
+	}
+
+	return Utxo{
+		Txid:        explorerUtxo.Txid,
+		Vout:        explorerUtxo.Vout,
+		Amount:      explorerUtxo.Amount,
+		Asset:       explorerUtxo.Asset,
+		Delay:       delay,
+		SpendableAt: time.Unix(utxoTime, 0).Add(time.Duration(delay) * time.Second),
+		CreatedAt:   createdAt,
+	}
+}
+
+type ExplorerTx struct {
+	Txid string `json:"txid"`
+	Vout []struct {
+		Address string `json:"scriptpubkey_address"`
+		Amount  uint64 `json:"value"`
+	} `json:"vout"`
+	Status struct {
+		Confirmed bool  `json:"confirmed"`
+		Blocktime int64 `json:"block_time"`
+	} `json:"status"`
+}
+
+type ExplorerUtxo struct {
 	Txid   string `json:"txid"`
 	Vout   uint32 `json:"vout"`
 	Amount uint64 `json:"value"`
@@ -35,10 +80,15 @@ type Utxo struct {
 	} `json:"status"`
 }
 
+func (e ExplorerUtxo) ToUtxo(delay uint) Utxo {
+	return newUtxo(e, delay)
+}
+
 type Explorer interface {
 	GetTxHex(txid string) (string, error)
 	Broadcast(txHex string) (string, error)
-	GetUtxos(addr string) ([]Utxo, error)
+	GetTxs(addr string) ([]ExplorerTx, error)
+	GetUtxos(addr string) ([]ExplorerUtxo, error)
 	GetBalance(addr string) (uint64, error)
 	GetRedeemedVtxosBalance(
 		addr string, unilateralExitDelay int64,
@@ -143,7 +193,29 @@ func (e *explorerSvc) Broadcast(txStr string) (string, error) {
 	return txid, nil
 }
 
-func (e *explorerSvc) GetUtxos(addr string) ([]Utxo, error) {
+func (e *explorerSvc) GetTxs(addr string) ([]ExplorerTx, error) {
+	resp, err := http.Get(fmt.Sprintf("%s/address/%s/txs", e.baseUrl, addr))
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get txs: %s", string(body))
+	}
+	payload := []ExplorerTx{}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, err
+	}
+
+	return payload, nil
+}
+
+func (e *explorerSvc) GetUtxos(addr string) ([]ExplorerUtxo, error) {
 	resp, err := http.Get(fmt.Sprintf("%s/address/%s/utxo", e.baseUrl, addr))
 	if err != nil {
 		return nil, err
@@ -155,9 +227,9 @@ func (e *explorerSvc) GetUtxos(addr string) ([]Utxo, error) {
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf(string(body))
+		return nil, fmt.Errorf("failed to get utxos: %s", string(body))
 	}
-	payload := []Utxo{}
+	payload := []ExplorerUtxo{}
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, err
 	}
@@ -224,7 +296,7 @@ func (e *explorerSvc) GetTxBlockTime(
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return false, 0, fmt.Errorf(string(body))
+		return false, 0, fmt.Errorf("failed to get block time: %s", string(body))
 	}
 
 	var tx struct {
@@ -257,7 +329,7 @@ func (e *explorerSvc) getTxHex(txid string) (string, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf(string(body))
+		return "", fmt.Errorf("failed to get tx hex: %s", string(body))
 	}
 
 	hex := string(body)
@@ -279,7 +351,7 @@ func (e *explorerSvc) broadcast(txHex string) (string, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf(string(bodyResponse))
+		return "", fmt.Errorf("failed to broadcast: %s", string(bodyResponse))
 	}
 
 	return string(bodyResponse), nil

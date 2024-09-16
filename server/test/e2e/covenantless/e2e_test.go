@@ -2,6 +2,7 @@ package e2e_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,13 +10,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ark-network/ark/common"
+	arksdk "github.com/ark-network/ark/pkg/client-sdk"
+	"github.com/ark-network/ark/pkg/client-sdk/client"
+	grpcclient "github.com/ark-network/ark/pkg/client-sdk/client/grpc"
+	"github.com/ark-network/ark/pkg/client-sdk/explorer"
+	"github.com/ark-network/ark/pkg/client-sdk/redemption"
+	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
 	utils "github.com/ark-network/ark/server/test/e2e"
 	"github.com/stretchr/testify/require"
 )
 
 const (
-	composePath = "../../../../docker-compose.clark.regtest.yml"
-	ONE_BTC     = 1_0000_0000
+	composePath   = "../../../../docker-compose.clark.regtest.yml"
+	redeemAddress = "bcrt1q2wrgf2hrkfegt0t97cnv4g5yvfjua9k6vua54d"
 )
 
 func TestMain(m *testing.M) {
@@ -26,6 +34,11 @@ func TestMain(m *testing.M) {
 	}
 
 	time.Sleep(10 * time.Second)
+
+	if err := utils.GenerateBlock(); err != nil {
+		fmt.Printf("error generating block: %s", err)
+		os.Exit(1)
+	}
 
 	if err := setupAspWallet(); err != nil {
 		fmt.Println(err)
@@ -40,26 +53,6 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	var receive utils.ArkReceive
-	receiveStr, err := runClarkCommand("receive")
-	if err != nil {
-		fmt.Printf("error getting ark receive addresses: %s", err)
-		os.Exit(1)
-	}
-
-	if err := json.Unmarshal([]byte(receiveStr), &receive); err != nil {
-		fmt.Printf("error unmarshalling ark receive addresses: %s", err)
-		os.Exit(1)
-	}
-
-	_, err = utils.RunCommand("nigiri", "faucet", receive.Onchain)
-	if err != nil {
-		fmt.Printf("error funding ark account: %s", err)
-		os.Exit(1)
-	}
-
-	time.Sleep(5 * time.Second)
-
 	code := m.Run()
 
 	_, err = utils.RunCommand("docker", "compose", "-f", composePath, "down")
@@ -70,38 +63,25 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func TestOnboard(t *testing.T) {
-	var balance utils.ArkBalance
-	balanceStr, err := runClarkCommand("balance")
-	require.NoError(t, err)
-
-	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
-	balanceBefore := balance.Offchain.Total
-
-	_, err = runClarkCommand("onboard", "--amount", "1000", "--password", utils.Password)
-	require.NoError(t, err)
-	err = utils.GenerateBlock()
-	require.NoError(t, err)
-
-	balanceStr, err = runClarkCommand("balance")
-	require.NoError(t, err)
-
-	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
-	require.Equal(t, balanceBefore+1000, balance.Offchain.Total)
-}
-
 func TestSendOffchain(t *testing.T) {
-	_, err := runClarkCommand("onboard", "--amount", "1000", "--password", utils.Password)
-	require.NoError(t, err)
-	err = utils.GenerateBlock()
-	require.NoError(t, err)
-
 	var receive utils.ArkReceive
 	receiveStr, err := runClarkCommand("receive")
 	require.NoError(t, err)
-	require.NoError(t, json.Unmarshal([]byte(receiveStr), &receive))
 
-	_, err = runClarkCommand("send", "--amount", "1000", "--to", receive.Offchain, "--password", utils.Password)
+	err = json.Unmarshal([]byte(receiveStr), &receive)
+	require.NoError(t, err)
+
+	_, err = utils.RunCommand("nigiri", "faucet", receive.Boarding)
+	require.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+
+	_, err = runClarkCommand("claim", "--password", utils.Password)
+	require.NoError(t, err)
+
+	time.Sleep(3 * time.Second)
+
+	_, err = runClarkCommand("send", "--amount", "10000", "--to", receive.Offchain, "--password", utils.Password)
 	require.NoError(t, err)
 
 	var balance utils.ArkBalance
@@ -120,23 +100,36 @@ func TestSendOffchain(t *testing.T) {
 }
 
 func TestUnilateralExit(t *testing.T) {
-	_, err := runClarkCommand("onboard", "--amount", "1000", "--password", utils.Password)
+	var receive utils.ArkReceive
+	receiveStr, err := runClarkCommand("receive")
 	require.NoError(t, err)
-	err = utils.GenerateBlock()
+
+	err = json.Unmarshal([]byte(receiveStr), &receive)
 	require.NoError(t, err)
+
+	_, err = utils.RunCommand("nigiri", "faucet", receive.Boarding)
+	require.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+
+	_, err = runClarkCommand("claim", "--password", utils.Password)
+	require.NoError(t, err)
+
+	time.Sleep(3 * time.Second)
 
 	var balance utils.ArkBalance
 	balanceStr, err := runClarkCommand("balance")
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 	require.NotZero(t, balance.Offchain.Total)
-	require.Len(t, balance.Onchain.Locked, 0)
 
 	_, err = runClarkCommand("redeem", "--force", "--password", utils.Password)
 	require.NoError(t, err)
 
 	err = utils.GenerateBlock()
 	require.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
 
 	balanceStr, err = runClarkCommand("balance")
 	require.NoError(t, err)
@@ -149,35 +142,145 @@ func TestUnilateralExit(t *testing.T) {
 }
 
 func TestCollaborativeExit(t *testing.T) {
-	_, err := runClarkCommand("onboard", "--amount", "1000", "--password", utils.Password)
-	require.NoError(t, err)
-	err = utils.GenerateBlock()
-	require.NoError(t, err)
-
 	var receive utils.ArkReceive
 	receiveStr, err := runClarkCommand("receive")
 	require.NoError(t, err)
-	require.NoError(t, json.Unmarshal([]byte(receiveStr), &receive))
 
-	var balance utils.ArkBalance
-	balanceStr, err := runClarkCommand("balance")
+	err = json.Unmarshal([]byte(receiveStr), &receive)
 	require.NoError(t, err)
-	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 
-	balanceBefore := balance.Offchain.Total
-	balanceOnchainBefore := balance.Onchain.Spendable
-
-	_, err = runClarkCommand("redeem", "--amount", "1000", "--address", receive.Onchain, "--password", utils.Password)
+	_, err = utils.RunCommand("nigiri", "faucet", receive.Boarding)
 	require.NoError(t, err)
 
 	time.Sleep(5 * time.Second)
 
-	balanceStr, err = runClarkCommand("balance")
+	_, err = runClarkCommand("claim", "--password", utils.Password)
 	require.NoError(t, err)
-	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 
-	require.Equal(t, balanceBefore-1000, balance.Offchain.Total)
-	require.Equal(t, balanceOnchainBefore+1000, balance.Onchain.Spendable)
+	time.Sleep(3 * time.Second)
+
+	_, err = runClarkCommand("redeem", "--amount", "1000", "--address", redeemAddress, "--password", utils.Password)
+	require.NoError(t, err)
+}
+
+func TestReactToSpentVtxosRedemption(t *testing.T) {
+	ctx := context.Background()
+	client, grpcClient := setupArkSDK(t)
+	defer grpcClient.Close()
+
+	offchainAddress, boardingAddress, err := client.Receive(ctx)
+	require.NoError(t, err)
+
+	_, err = utils.RunCommand("nigiri", "faucet", boardingAddress)
+	require.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+
+	_, err = client.Claim(ctx)
+	require.NoError(t, err)
+
+	_, err = client.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(offchainAddress, 1000)})
+	require.NoError(t, err)
+
+	time.Sleep(2 * time.Second)
+
+	_, spentVtxos, err := client.ListVtxos(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, spentVtxos)
+
+	vtxo := spentVtxos[0]
+
+	round, err := grpcClient.GetRound(ctx, vtxo.RoundTxid)
+	require.NoError(t, err)
+
+	expl := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
+
+	branch, err := redemption.NewCovenantlessRedeemBranch(expl, round.Tree, vtxo)
+	require.NoError(t, err)
+
+	txs, err := branch.RedeemPath()
+	require.NoError(t, err)
+
+	for _, tx := range txs {
+		_, err := expl.Broadcast(tx)
+		require.NoError(t, err)
+	}
+
+	// give time for the ASP to detect and process the fraud
+	time.Sleep(20 * time.Second)
+
+	balance, err := client.Balance(ctx, true)
+	require.NoError(t, err)
+
+	require.Empty(t, balance.OnchainBalance.LockedAmount)
+}
+
+func TestReactToAsyncSpentVtxosRedemption(t *testing.T) {
+	t.Run("receveir claimed funds", func(t *testing.T) {
+		ctx := context.Background()
+		sdkClient, grpcClient := setupArkSDK(t)
+		defer grpcClient.Close()
+
+		offchainAddress, boardingAddress, err := sdkClient.Receive(ctx)
+		require.NoError(t, err)
+
+		_, err = utils.RunCommand("nigiri", "faucet", boardingAddress)
+		require.NoError(t, err)
+
+		time.Sleep(5 * time.Second)
+
+		roundId, err := sdkClient.Claim(ctx)
+		require.NoError(t, err)
+
+		err = utils.GenerateBlock()
+		require.NoError(t, err)
+
+		_, err = sdkClient.SendAsync(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(offchainAddress, 1000)})
+		require.NoError(t, err)
+
+		_, err = sdkClient.Claim(ctx)
+		require.NoError(t, err)
+
+		time.Sleep(5 * time.Second)
+
+		_, spentVtxos, err := sdkClient.ListVtxos(ctx)
+		require.NoError(t, err)
+		require.NotEmpty(t, spentVtxos)
+
+		var vtxo client.Vtxo
+
+		for _, v := range spentVtxos {
+			if v.RoundTxid == roundId {
+				vtxo = v
+				break
+			}
+		}
+		require.NotEmpty(t, vtxo)
+
+		round, err := grpcClient.GetRound(ctx, vtxo.RoundTxid)
+		require.NoError(t, err)
+
+		expl := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
+
+		branch, err := redemption.NewCovenantlessRedeemBranch(expl, round.Tree, vtxo)
+		require.NoError(t, err)
+
+		txs, err := branch.RedeemPath()
+		require.NoError(t, err)
+
+		for _, tx := range txs {
+			_, err := expl.Broadcast(tx)
+			require.NoError(t, err)
+		}
+
+		// give time for the ASP to detect and process the fraud
+		time.Sleep(50 * time.Second)
+
+		balance, err := sdkClient.Balance(ctx, true)
+		require.NoError(t, err)
+
+		require.Empty(t, balance.OnchainBalance.LockedAmount)
+	})
 }
 
 func runClarkCommand(arg ...string) (string, error) {
@@ -259,5 +362,61 @@ func setupAspWallet() error {
 		return fmt.Errorf("failed to fund wallet: %s", err)
 	}
 
+	_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
+	if err != nil {
+		return fmt.Errorf("failed to fund wallet: %s", err)
+	}
+
+	_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
+	if err != nil {
+		return fmt.Errorf("failed to fund wallet: %s", err)
+	}
+
+	_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
+	if err != nil {
+		return fmt.Errorf("failed to fund wallet: %s", err)
+	}
+
+	_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
+	if err != nil {
+		return fmt.Errorf("failed to fund wallet: %s", err)
+	}
+
+	_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
+	if err != nil {
+		return fmt.Errorf("failed to fund wallet: %s", err)
+	}
+
+	_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
+	if err != nil {
+		return fmt.Errorf("failed to fund wallet: %s", err)
+	}
+
+	time.Sleep(5 * time.Second)
+
 	return nil
+}
+
+func setupArkSDK(t *testing.T) (arksdk.ArkClient, client.ASPClient) {
+	storeSvc, err := inmemorystore.NewConfigStore()
+	require.NoError(t, err)
+
+	client, err := arksdk.NewCovenantlessClient(storeSvc)
+	require.NoError(t, err)
+
+	err = client.Init(context.Background(), arksdk.InitArgs{
+		WalletType: arksdk.SingleKeyWallet,
+		ClientType: arksdk.GrpcClient,
+		AspUrl:     "localhost:7070",
+		Password:   utils.Password,
+	})
+	require.NoError(t, err)
+
+	err = client.Unlock(context.Background(), utils.Password)
+	require.NoError(t, err)
+
+	grpcClient, err := grpcclient.NewClient("localhost:7070")
+	require.NoError(t, err)
+
+	return client, grpcClient
 }

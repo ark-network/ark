@@ -2,8 +2,8 @@ package arksdk
 
 import (
 	"fmt"
+	"time"
 
-	"github.com/ark-network/ark/common"
 	grpcclient "github.com/ark-network/ark/pkg/client-sdk/client/grpc"
 	restclient "github.com/ark-network/ark/pkg/client-sdk/client/rest"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
@@ -18,23 +18,15 @@ var (
 		GrpcClient: grpcclient.NewClient,
 		RestClient: restclient.NewClient,
 	}
-	supportedNetworks = utils.SupportedType[string]{
-		common.Liquid.Name:         "https://blockstream.info/liquid/api",
-		common.LiquidTestNet.Name:  "https://blockstream.info/liquidtestnet/api",
-		common.LiquidRegTest.Name:  "http://localhost:3001",
-		common.Bitcoin.Name:        "https://blockstream.info/api",
-		common.BitcoinTestNet.Name: "https://blockstream.info/testnet/api",
-		common.BitcoinRegTest.Name: "http://localhost:3000",
-		common.BitcoinSigNet.Name:  "https://mutinynet.com/api",
-	}
 )
 
 type InitArgs struct {
-	ClientType string
-	WalletType string
-	AspUrl     string
-	Seed       string
-	Password   string
+	ClientType  string
+	WalletType  string
+	AspUrl      string
+	Seed        string
+	Password    string
+	ExplorerURL string
 }
 
 func (a InitArgs) validate() error {
@@ -68,11 +60,12 @@ func (a InitArgs) validate() error {
 }
 
 type InitWithWalletArgs struct {
-	ClientType string
-	Wallet     wallet.WalletService
-	AspUrl     string
-	Seed       string
-	Password   string
+	ClientType  string
+	Wallet      wallet.WalletService
+	AspUrl      string
+	Seed        string
+	Password    string
+	ExplorerURL string
 }
 
 func (a InitWithWalletArgs) validate() error {
@@ -128,4 +121,22 @@ type balanceRes struct {
 	onchainLockedBalance        map[int64]uint64
 	offchainBalanceByExpiration map[int64]uint64
 	err                         error
+}
+
+const (
+	TxSent     TxType = "sent"
+	TxReceived TxType = "received"
+)
+
+type TxType string
+
+type Transaction struct {
+	BoardingTxid string
+	RoundTxid    string
+	RedeemTxid   string
+	Amount       uint64
+	Type         TxType
+	Pending      bool
+	Claimed      bool
+	CreatedAt    time.Time
 }
