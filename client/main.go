@@ -221,10 +221,6 @@ func config(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if cfgData == nil {
-		fmt.Println("no configuration found, run 'init' command")
-		return nil
-	}
 
 	cfg := map[string]interface{}{
 		"asp_url":                      cfgData.AspUrl,
@@ -388,6 +384,12 @@ func getArkSdkClient(ctx *cli.Context) (arksdk.ArkClient, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	commandName := ctx.Args().First()
+	if commandName != "init" && cfgData == nil {
+		return nil, fmt.Errorf("CLI not initialized, run 'init' cmd to initialize")
+	}
+
 	net := getNetwork(ctx, cfgData)
 
 	if isBtcChain(net) {
