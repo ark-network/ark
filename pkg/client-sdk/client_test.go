@@ -11,7 +11,57 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestVtxosToTxs(t *testing.T) {
+func TestVtxosToTxsCovenant(t *testing.T) {
+	tests := []struct {
+		name    string
+		fixture string
+		want    []Transaction
+	}{
+		{
+			name:    "Alice Sends to Bob",
+			fixture: aliceToBobCovenant,
+			want: []Transaction{
+				{
+					Amount:  100000000,
+					Type:    TxReceived,
+					Pending: false,
+					Claimed: true,
+				},
+				{
+					Amount:  20000,
+					Type:    TxSent,
+					Pending: false,
+					Claimed: true,
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			vtxos, boardingTxs, err := loadFixtures(tt.fixture)
+			if err != nil {
+				t.Fatalf("failed to load fixture: %s", err)
+			}
+			got, err := vtxosToTxsCovenant(30, vtxos.spendable, vtxos.spent, boardingTxs)
+			require.NoError(t, err)
+			require.Len(t, got, len(tt.want))
+
+			// Check each expected transaction, excluding CreatedAt
+			for i, wantTx := range tt.want {
+				gotTx := got[i]
+				require.Equal(t, wantTx.RoundTxid, gotTx.RoundTxid)
+				require.Equal(t, wantTx.RedeemTxid, gotTx.RedeemTxid)
+				require.Equal(t, int(wantTx.Amount), int(gotTx.Amount))
+				require.Equal(t, wantTx.Type, gotTx.Type)
+				require.Equal(t, wantTx.Pending, gotTx.Pending)
+				require.Equal(t, wantTx.Claimed, gotTx.Claimed)
+			}
+		})
+	}
+}
+
+func TestVtxosToTxsCovenantless(t *testing.T) {
 	tests := []struct {
 		name    string
 		fixture string
@@ -307,6 +357,67 @@ func parseTimestamp(timestamp string) (time.Time, error) {
 
 	return time.Unix(seconds, 0), nil
 }
+
+var (
+	// bellow fixtures are used in bellow scenario:
+	// 1. Alice onboards with 100000000
+	// 2. Alice sends 1000 to Bob
+	aliceToBobCovenant = `
+	{
+		"boardingTxs": [
+			{
+        		"boardingTxid": "69ccb6520e0b91ac1cbaa459b16ec1e3ff5f6349990b0d149dd8e6c6485d316c",
+				"roundTxid": "377fa2fbd27c82bdbc095478384c88b6c75432c0ef464189e49c965194446cdf",
+        		"amount": 20000,
+				"pending": false,
+				"claimed": true,
+				"createdAt": "1726503865"
+      		}
+		],
+	  "spendableVtxos": [
+		{
+		  "outpoint": {
+			"vtxoInput": {
+			  "txid": "979da550421b4c06e584eedf9f6d63fb2d63b569c2e65fe6aa83fa6c3b52df7a",
+			  "vout": 0
+			}
+		  },
+		  "receiver": {
+			"address": "tark1qvv3y4ggp43h7rre628w88zrt6l4f3du8d5dgkalqtzykqa0jwyt7qujxr20fwy8spgdfnfq4cwhs2y8djuwpr4fc4mnwjpqkc4v3kwmzsqk3u3r",
+			"amount": "99980000"
+		  },
+		  "spent": false,
+		  "poolTxid": "31e744a81cdd7fcc5517130a7f35722bea4dbf73faa4f4c580a6b93b2df0746d",
+		  "spentBy": "",
+		  "expireAt": "1726582783",
+		  "swept": false,
+		  "pending": false,
+		  "pendingData": null
+		}
+	  ],
+	  "spentVtxos": [
+		{
+		  "outpoint": {
+			"vtxoInput": {
+			  "txid": "213c5b329e022cacf8b38702b1d51479dfb00c204f696e43ccda0335be92c19a",
+			  "vout": 0
+			}
+		  },
+		  "receiver": {
+			"address": "tark1qvv3y4ggp43h7rre628w88zrt6l4f3du8d5dgkalqtzykqa0jwyt7qujxr20fwy8spgdfnfq4cwhs2y8djuwpr4fc4mnwjpqkc4v3kwmzsqk3u3r",
+			"amount": "100000000"
+		  },
+		  "spent": true,
+		  "poolTxid": "52dd02e90d70e2ca24f3e0d41bf6382ae98efaa99177036dc261df93a5790d7d",
+		  "spentBy": "31e744a81cdd7fcc5517130a7f35722bea4dbf73faa4f4c580a6b93b2df0746d",
+		  "expireAt": "1726582574",
+		  "swept": false,
+		  "pending": false,
+		  "pendingData": null
+		}
+	  ]
+	}`
+)
 
 // bellow fixtures are used in bellow scenario:
 // 1. Alice boards with 20OOO
