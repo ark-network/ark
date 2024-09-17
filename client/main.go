@@ -387,7 +387,7 @@ func getArkSdkClient(ctx *cli.Context) (arksdk.ArkClient, error) {
 
 	commandName := ctx.Args().First()
 	if commandName != "init" && cfgData == nil {
-		return nil, errors.New("CLI not initialized, run 'init' cmd to initialize")
+		return nil, fmt.Errorf("CLI not initialized, run 'init' cmd to initialize")
 	}
 
 	net := getNetwork(ctx, cfgData)
