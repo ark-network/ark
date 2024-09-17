@@ -321,11 +321,7 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 		events = append(events, newEvents...)
 		updatedRound := domain.NewRoundFromEvents(events)
 		for _, pay := range updatedRound.Payments {
-			vtxos := make([]domain.Vtxo, 0, len(pay.Inputs))
-			for _, v := range pay.Inputs {
-				vtxos = append(vtxos, v)
-			}
-			err = svc.Vtxos().AddVtxos(ctx, vtxos)
+			err = svc.Vtxos().AddVtxos(ctx, pay.Inputs)
 			require.NoError(t, err)
 		}
 

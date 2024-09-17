@@ -233,17 +233,6 @@ func (m *forfeitTxsMap) pop() (signed, unsigned []string) {
 	return signed, unsigned
 }
 
-func (m *forfeitTxsMap) view() []string {
-	m.lock.RLock()
-	defer m.lock.RUnlock()
-
-	txs := make([]string, 0, len(m.forfeitTxs))
-	for _, tx := range m.forfeitTxs {
-		txs = append(txs, tx.tx)
-	}
-	return txs
-}
-
 // onchainOutputs iterates over all the nodes' outputs in the congestion tree and checks their onchain state
 // returns the sweepable outputs as ports.SweepInput mapped by their expiration time
 func findSweepableOutputs(
