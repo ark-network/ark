@@ -222,13 +222,7 @@ func config(ctx *cli.Context) error {
 		return err
 	}
 
-	cfg := map[string]interface{}{}
-	if cfgData == nil {
-		fmt.Println("no configuration found, run 'init' command")
-		return nil
-	}
-
-	cfg = map[string]interface{}{
+	cfg := map[string]interface{}{
 		"asp_url":                      cfgData.AspUrl,
 		"asp_pubkey":                   hex.EncodeToString(cfgData.AspPubkey.SerializeCompressed()),
 		"wallet_type":                  cfgData.WalletType,
