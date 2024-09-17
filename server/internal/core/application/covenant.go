@@ -146,7 +146,7 @@ func (s *covenantService) GetBoardingAddress(ctx context.Context, userPubkey *se
 }
 
 func (s *covenantService) SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error) {
-	vtxosInputs := make([]domain.VtxoInput, 0)
+	vtxosInputs := make([]domain.Vtxo, 0)
 	boardingInputs := make([]ports.BoardingInput, 0)
 
 	now := time.Now().Unix()
@@ -209,10 +209,7 @@ func (s *covenantService) SpendVtxos(ctx context.Context, inputs []ports.Input) 
 			return "", fmt.Errorf("input %s:%d already swept", vtxo.Txid, vtxo.VOut)
 		}
 
-		vtxosInputs = append(vtxosInputs, domain.VtxoInput{
-			Vtxo:         vtxo,
-			SignerPubkey: input.SignerPubkey,
-		})
+		vtxosInputs = append(vtxosInputs, vtxo)
 	}
 
 	payment, err := domain.NewPayment(vtxosInputs)
@@ -500,8 +497,10 @@ func (s *covenantService) startFinalization() {
 
 	var forfeitTxs, connectors []string
 
+	minRelayFeeRate := s.wallet.MinRelayFeeRate(ctx)
+
 	if needForfeits {
-		connectors, forfeitTxs, err = s.builder.BuildForfeitTxs(s.pubkey, unsignedPoolTx, payments)
+		connectors, forfeitTxs, err = s.builder.BuildForfeitTxs(s.pubkey, unsignedPoolTx, payments, minRelayFeeRate)
 		if err != nil {
 			round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
 			log.WithError(err).Warn("failed to create connectors and forfeit txs")
@@ -853,13 +852,12 @@ func (s *covenantService) propagateEvents(round *domain.Round) {
 	lastEvent := round.Events()[len(round.Events())-1]
 	switch e := lastEvent.(type) {
 	case domain.RoundFinalizationStarted:
-		forfeitTxs := s.forfeitTxs.view()
 		ev := domain.RoundFinalizationStarted{
-			Id:                 e.Id,
-			CongestionTree:     e.CongestionTree,
-			Connectors:         e.Connectors,
-			PoolTx:             e.PoolTx,
-			UnsignedForfeitTxs: forfeitTxs,
+			Id:              e.Id,
+			CongestionTree:  e.CongestionTree,
+			Connectors:      e.Connectors,
+			PoolTx:          e.PoolTx,
+			MinRelayFeeRate: int64(s.wallet.MinRelayFeeRate(context.Background())),
 		}
 		s.lastEvent = ev
 		s.eventsCh <- ev

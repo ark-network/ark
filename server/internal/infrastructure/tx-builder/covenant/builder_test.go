@@ -109,7 +109,7 @@ func TestBuildForfeitTxs(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
 			for _, f := range fixtures.Valid {
 				connectors, forfeitTxs, err := builder.BuildForfeitTxs(
-					pubkey, f.PoolTx, f.Payments,
+					pubkey, f.PoolTx, f.Payments, 3,
 				)
 				require.NoError(t, err)
 				require.Len(t, connectors, f.ExpectedNumOfConnectors)
@@ -147,7 +147,7 @@ func TestBuildForfeitTxs(t *testing.T) {
 		t.Run("invalid", func(t *testing.T) {
 			for _, f := range fixtures.Invalid {
 				connectors, forfeitTxs, err := builder.BuildForfeitTxs(
-					pubkey, f.PoolTx, f.Payments,
+					pubkey, f.PoolTx, f.Payments, 3,
 				)
 				require.EqualError(t, err, f.ExpectedErr)
 				require.Empty(t, connectors)

@@ -15,7 +15,6 @@ DROP TABLE receiver;
 ALTER TABLE new_receiver RENAME TO receiver;
 
 ALTER TABLE vtxo ADD COLUMN descriptor TEXT;
-ALTER TABLE vtxo ADD COLUMN signer_pubkey TEXT;
 ALTER TABLE vtxo DROP COLUMN pubkey;
 
 CREATE VIEW payment_vtxo_vw AS SELECT vtxo.*

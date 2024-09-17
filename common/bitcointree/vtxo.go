@@ -211,7 +211,7 @@ func (b bitcoinTapTree) GetRoot() chainhash.Hash {
 func (b bitcoinTapTree) GetTaprootMerkleProof(leafhash chainhash.Hash) (*common.TaprootMerkleProof, error) {
 	index, ok := b.LeafProofIndex[leafhash]
 	if !ok {
-		return nil, common.ErrLeafNotFound
+		return nil, fmt.Errorf("leaf %s not found in tree", leafhash.String())
 	}
 	proof := b.LeafMerkleProofs[index]
 
@@ -225,4 +225,12 @@ func (b bitcoinTapTree) GetTaprootMerkleProof(leafhash chainhash.Hash) (*common.
 		ControlBlock: controlBlockBytes,
 		Script:       proof.Script,
 	}, nil
+}
+
+func (b bitcoinTapTree) GetLeaves() []chainhash.Hash {
+	leafHashes := make([]chainhash.Hash, 0)
+	for hash := range b.LeafProofIndex {
+		leafHashes = append(leafHashes, hash)
+	}
+	return leafHashes
 }

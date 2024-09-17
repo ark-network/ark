@@ -14,19 +14,16 @@ var (
 	payments   = []domain.Payment{
 		{
 			Id: "0",
-			Inputs: []domain.VtxoInput{
+			Inputs: []domain.Vtxo{
 				{
-					Vtxo: domain.Vtxo{
-						VtxoKey: domain.VtxoKey{
-							Txid: txid,
-							VOut: 0,
-						},
-						Receiver: domain.Receiver{
-							Descriptor: desc,
-							Amount:     2000,
-						},
+					VtxoKey: domain.VtxoKey{
+						Txid: txid,
+						VOut: 0,
 					},
-					SignerPubkey: pubkey,
+					Receiver: domain.Receiver{
+						Descriptor: desc,
+						Amount:     2000,
+					},
 				},
 			},
 			Receivers: []domain.Receiver{
@@ -46,29 +43,25 @@ var (
 		},
 		{
 			Id: "1",
-			Inputs: []domain.VtxoInput{
+			Inputs: []domain.Vtxo{
 				{
-					Vtxo: domain.Vtxo{
-						VtxoKey: domain.VtxoKey{
-							Txid: txid,
-							VOut: 0,
-						},
-						Receiver: domain.Receiver{
-							Descriptor: desc,
-							Amount:     1000,
-						},
+					VtxoKey: domain.VtxoKey{
+						Txid: txid,
+						VOut: 0,
+					},
+					Receiver: domain.Receiver{
+						Descriptor: desc,
+						Amount:     1000,
 					},
 				},
 				{
-					Vtxo: domain.Vtxo{
-						VtxoKey: domain.VtxoKey{
-							Txid: txid,
-							VOut: 0,
-						},
-						Receiver: domain.Receiver{
-							Descriptor: desc,
-							Amount:     1000,
-						},
+					VtxoKey: domain.VtxoKey{
+						Txid: txid,
+						VOut: 0,
+					},
+					Receiver: domain.Receiver{
+						Descriptor: desc,
+						Amount:     1000,
 					},
 				},
 			},
@@ -81,7 +74,6 @@ var (
 	emptyPtx       = "cHNldP8BAgQCAAAAAQQBAAEFAQABBgEDAfsEAgAAAAA="
 	emptyTx        = "0200000000000000000000"
 	txid           = "0000000000000000000000000000000000000000000000000000000000000000"
-	pubkey         = "030000000000000000000000000000000000000000000000000000000000000001"
 	congestionTree = tree.CongestionTree{
 		{
 			{

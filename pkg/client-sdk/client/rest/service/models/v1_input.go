@@ -23,9 +23,6 @@ type V1Input struct {
 
 	// outpoint
 	Outpoint *V1Outpoint `json:"outpoint,omitempty"`
-
-	// signing pubkey
-	SigningPubkey string `json:"signingPubkey,omitempty"`
 }
 
 // Validate validates this v1 input

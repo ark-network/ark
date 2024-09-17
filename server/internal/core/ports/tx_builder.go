@@ -5,6 +5,7 @@ import (
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
 type SweepInput interface {
@@ -18,8 +19,7 @@ type SweepInput interface {
 
 type Input struct {
 	domain.VtxoKey
-	Descriptor   string
-	SignerPubkey string
+	Descriptor string
 }
 
 type BoardingInput struct {
@@ -32,7 +32,7 @@ type TxBuilder interface {
 		aspPubkey *secp256k1.PublicKey, payments []domain.Payment, boardingInputs []BoardingInput, sweptRounds []domain.Round,
 		cosigners ...*secp256k1.PublicKey,
 	) (poolTx string, congestionTree tree.CongestionTree, connectorAddress string, err error)
-	BuildForfeitTxs(aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment) (connectors []string, forfeitTxs []string, err error)
+	BuildForfeitTxs(aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment, minRelayFeeRate chainfee.SatPerKVByte) (connectors []string, forfeitTxs []string, err error)
 	BuildSweepTx(inputs []SweepInput) (signedSweepTx string, err error)
 	GetSweepInput(parentblocktime int64, node tree.Node) (expirationtime int64, sweepInput SweepInput, err error)
 	FinalizeAndExtract(tx string) (txhex string, err error)
@@ -40,7 +40,7 @@ type TxBuilder interface {
 	// FindLeaves returns all the leaves txs that are reachable from the given outpoint
 	FindLeaves(congestionTree tree.CongestionTree, fromtxid string, vout uint32) (leaves []tree.Node, err error)
 	BuildAsyncPaymentTransactions(
-		vtxosToSpend []domain.VtxoInput,
+		vtxosToSpend []domain.Vtxo,
 		aspPubKey *secp256k1.PublicKey, receivers []domain.Receiver,
 	) (*domain.AsyncPaymentTxs, error)
 	VerifyAndCombinePartialTx(dest string, src string) (string, error)

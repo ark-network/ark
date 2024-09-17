@@ -21,19 +21,18 @@ type PaymentReceiverVw struct {
 }
 
 type PaymentVtxoVw struct {
-	Txid         sql.NullString
-	Vout         sql.NullInt64
-	Amount       sql.NullInt64
-	PoolTx       sql.NullString
-	SpentBy      sql.NullString
-	Spent        sql.NullBool
-	Redeemed     sql.NullBool
-	Swept        sql.NullBool
-	ExpireAt     sql.NullInt64
-	PaymentID    sql.NullString
-	RedeemTx     sql.NullString
-	Descriptor   sql.NullString
-	SignerPubkey sql.NullString
+	Txid       sql.NullString
+	Vout       sql.NullInt64
+	Amount     sql.NullInt64
+	PoolTx     sql.NullString
+	SpentBy    sql.NullString
+	Spent      sql.NullBool
+	Redeemed   sql.NullBool
+	Swept      sql.NullBool
+	ExpireAt   sql.NullInt64
+	PaymentID  sql.NullString
+	RedeemTx   sql.NullString
+	Descriptor sql.NullString
 }
 
 type Receiver struct {
@@ -104,17 +103,16 @@ type UncondForfeitTxVw struct {
 }
 
 type Vtxo struct {
-	Txid         string
-	Vout         int64
-	Amount       int64
-	PoolTx       string
-	SpentBy      string
-	Spent        bool
-	Redeemed     bool
-	Swept        bool
-	ExpireAt     int64
-	PaymentID    sql.NullString
-	RedeemTx     sql.NullString
-	Descriptor   sql.NullString
-	SignerPubkey sql.NullString
+	Txid       string
+	Vout       int64
+	Amount     int64
+	PoolTx     string
+	SpentBy    string
+	Spent      bool
+	Redeemed   bool
+	Swept      bool
+	ExpireAt   int64
+	PaymentID  sql.NullString
+	RedeemTx   sql.NullString
+	Descriptor sql.NullString
 }

@@ -196,9 +196,9 @@ message GetInfoResponse {
 message RoundFinalizationEvent {
   string id = 1;
   string pool_tx = 2;
-  repeated string forfeit_txs = 3;
-  Tree congestion_tree = 4;
-  repeated string connectors = 5;
+  Tree congestion_tree = 3;
+  repeated string connectors = 4;
+  int64 min_relay_fee_rate = 5;
 }
 
 message RoundFinalizedEvent {

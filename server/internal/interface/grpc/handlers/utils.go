@@ -29,8 +29,7 @@ func parseInputs(ins []*arkv1.Input) ([]ports.Input, error) {
 				Txid: input.GetOutpoint().GetTxid(),
 				VOut: input.GetOutpoint().GetVout(),
 			},
-			Descriptor:   input.GetDescriptor_(),
-			SignerPubkey: input.GetSigningPubkey(),
+			Descriptor: input.GetDescriptor_(),
 		})
 	}
 

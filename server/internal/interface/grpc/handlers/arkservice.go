@@ -113,11 +113,11 @@ func (h *handler) Ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.Ping
 		resp = &arkv1.PingResponse{
 			Event: &arkv1.PingResponse_RoundFinalization{
 				RoundFinalization: &arkv1.RoundFinalizationEvent{
-					Id:             e.Id,
-					PoolTx:         e.PoolTx,
-					CongestionTree: castCongestionTree(e.CongestionTree),
-					ForfeitTxs:     e.UnsignedForfeitTxs,
-					Connectors:     e.Connectors,
+					Id:              e.Id,
+					PoolTx:          e.PoolTx,
+					CongestionTree:  castCongestionTree(e.CongestionTree),
+					Connectors:      e.Connectors,
+					MinRelayFeeRate: e.MinRelayFeeRate,
 				},
 			},
 		}
@@ -483,11 +483,11 @@ func (h *handler) listenToEvents() {
 			ev = &arkv1.GetEventStreamResponse{
 				Event: &arkv1.GetEventStreamResponse_RoundFinalization{
 					RoundFinalization: &arkv1.RoundFinalizationEvent{
-						Id:             e.Id,
-						PoolTx:         e.PoolTx,
-						CongestionTree: castCongestionTree(e.CongestionTree),
-						ForfeitTxs:     e.UnsignedForfeitTxs,
-						Connectors:     e.Connectors,
+						Id:              e.Id,
+						PoolTx:          e.PoolTx,
+						CongestionTree:  castCongestionTree(e.CongestionTree),
+						Connectors:      e.Connectors,
+						MinRelayFeeRate: e.MinRelayFeeRate,
 					},
 				},
 			}

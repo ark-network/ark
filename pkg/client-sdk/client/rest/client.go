@@ -21,6 +21,7 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
 type restClient struct {
@@ -256,8 +257,7 @@ func (a *restClient) RegisterPayment(
 				Txid: i.Txid,
 				Vout: int64(i.VOut),
 			},
-			Descriptor:    i.Descriptor,
-			SigningPubkey: i.SigningPubkey,
+			Descriptor: i.Descriptor,
 		})
 	}
 	body := &models.V1RegisterPaymentRequest{
@@ -318,12 +318,18 @@ func (a *restClient) Ping(
 	}
 	if e := payload.RoundFinalization; e != nil {
 		tree := treeFromProto{e.CongestionTree}.parse()
+
+		minRelayFeeRate, err := strconv.Atoi(e.MinRelayFeeRate)
+		if err != nil {
+			return nil, err
+		}
+
 		return client.RoundFinalizationEvent{
-			ID:         e.ID,
-			Tx:         e.PoolTx,
-			ForfeitTxs: e.ForfeitTxs,
-			Tree:       tree,
-			Connectors: e.Connectors,
+			ID:              e.ID,
+			Tx:              e.PoolTx,
+			Tree:            tree,
+			Connectors:      e.Connectors,
+			MinRelayFeeRate: chainfee.SatPerKVByte(minRelayFeeRate),
 		}, nil
 	}
 
@@ -393,8 +399,7 @@ func (a *restClient) CreatePayment(
 				Txid: i.Txid,
 				Vout: int64(i.VOut),
 			},
-			Descriptor:    i.Descriptor,
-			SigningPubkey: i.SigningPubkey,
+			Descriptor: i.Descriptor,
 		})
 	}
 	outs := make([]*models.V1Output, 0, len(outputs))

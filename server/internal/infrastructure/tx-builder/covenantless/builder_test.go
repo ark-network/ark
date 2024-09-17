@@ -63,15 +63,11 @@ func TestBuildPoolTx(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
 			for _, f := range fixtures.Valid {
 				cosigners := make([]*secp256k1.PublicKey, 0)
-				for _, payment := range f.Payments {
-					for _, input := range payment.Inputs {
-						pubkeyBytes, err := hex.DecodeString(input.SignerPubkey)
-						require.NoError(t, err)
-						pubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
-						require.NoError(t, err)
+				for range f.Payments {
+					randKey, err := secp256k1.GeneratePrivateKey()
+					require.NoError(t, err)
 
-						cosigners = append(cosigners, pubkey)
-					}
+					cosigners = append(cosigners, randKey.PubKey())
 				}
 
 				poolTx, congestionTree, connAddr, err := builder.BuildPoolTx(
@@ -120,7 +116,7 @@ func TestBuildForfeitTxs(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
 			for _, f := range fixtures.Valid {
 				connectors, forfeitTxs, err := builder.BuildForfeitTxs(
-					pubkey, f.PoolTx, f.Payments,
+					pubkey, f.PoolTx, f.Payments, 3,
 				)
 				require.NoError(t, err)
 				require.Len(t, connectors, f.ExpectedNumOfConnectors)
@@ -158,7 +154,7 @@ func TestBuildForfeitTxs(t *testing.T) {
 		t.Run("invalid", func(t *testing.T) {
 			for _, f := range fixtures.Invalid {
 				connectors, forfeitTxs, err := builder.BuildForfeitTxs(
-					pubkey, f.PoolTx, f.Payments,
+					pubkey, f.PoolTx, f.Payments, 3,
 				)
 				require.EqualError(t, err, f.ExpectedErr)
 				require.Empty(t, connectors)

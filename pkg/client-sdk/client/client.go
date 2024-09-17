@@ -7,6 +7,7 @@ import (
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
 const (
@@ -74,8 +75,7 @@ type Outpoint struct {
 
 type Input struct {
 	Outpoint
-	Descriptor    string
-	SigningPubkey string
+	Descriptor string
 }
 
 type Vtxo struct {
@@ -133,11 +133,11 @@ type Round struct {
 }
 
 type RoundFinalizationEvent struct {
-	ID         string
-	Tx         string
-	ForfeitTxs []string
-	Tree       tree.CongestionTree
-	Connectors []string
+	ID              string
+	Tx              string
+	Tree            tree.CongestionTree
+	Connectors      []string
+	MinRelayFeeRate chainfee.SatPerKVByte
 }
 
 func (e RoundFinalizationEvent) isRoundEvent() {}

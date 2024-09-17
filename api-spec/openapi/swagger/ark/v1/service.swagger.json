@@ -658,9 +658,6 @@
         },
         "descriptor": {
           "type": "string"
-        },
-        "signingPubkey": {
-          "type": "string"
         }
       }
     },
@@ -842,12 +839,6 @@
         "poolTx": {
           "type": "string"
         },
-        "forfeitTxs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
         "congestionTree": {
           "$ref": "#/definitions/v1Tree"
         },
@@ -856,6 +847,10 @@
           "items": {
             "type": "string"
           }
+        },
+        "minRelayFeeRate": {
+          "type": "string",
+          "format": "int64"
         }
       }
     },

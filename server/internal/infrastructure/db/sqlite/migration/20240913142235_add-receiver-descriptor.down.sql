@@ -14,5 +14,4 @@ DROP TABLE receiver;
 ALTER TABLE old_receiver RENAME TO receiver;
 
 ALTER TABLE vtxo DROP COLUMN descriptor;
-ALTER TABLE vtxo DROP COLUMN signer_pubkey;
 ALTER TABLE vtxo ADD COLUMN pubkey TEXT NOT NULL;

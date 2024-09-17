@@ -14,6 +14,7 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -368,11 +369,11 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 	if ee := e.GetRoundFinalization(); ee != nil {
 		tree := treeFromProto{ee.GetCongestionTree()}.parse()
 		return client.RoundFinalizationEvent{
-			ID:         ee.GetId(),
-			Tx:         ee.GetPoolTx(),
-			ForfeitTxs: ee.GetForfeitTxs(),
-			Tree:       tree,
-			Connectors: ee.GetConnectors(),
+			ID:              ee.GetId(),
+			Tx:              ee.GetPoolTx(),
+			Tree:            tree,
+			Connectors:      ee.GetConnectors(),
+			MinRelayFeeRate: chainfee.SatPerKVByte(ee.MinRelayFeeRate),
 		}, nil
 	}
 
@@ -467,8 +468,7 @@ func toProtoInput(i client.Input) *arkv1.Input {
 			Txid: i.Txid,
 			Vout: i.VOut,
 		},
-		Descriptor_:   i.Descriptor,
-		SigningPubkey: i.SigningPubkey,
+		Descriptor_: i.Descriptor,
 	}
 }
 

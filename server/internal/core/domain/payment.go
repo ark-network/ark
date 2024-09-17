@@ -9,18 +9,13 @@ import (
 	"github.com/google/uuid"
 )
 
-type VtxoInput struct {
-	Vtxo
-	SignerPubkey string
-}
-
 type Payment struct {
 	Id        string
-	Inputs    []VtxoInput
+	Inputs    []Vtxo
 	Receivers []Receiver
 }
 
-func NewPayment(inputs []VtxoInput) (*Payment, error) {
+func NewPayment(inputs []Vtxo) (*Payment, error) {
 	p := &Payment{
 		Id:     uuid.New().String(),
 		Inputs: inputs,

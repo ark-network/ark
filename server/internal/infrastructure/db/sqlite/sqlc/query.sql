@@ -53,9 +53,6 @@ ON CONFLICT(payment_id, descriptor) DO UPDATE SET
 -- name: UpdateVtxoPaymentId :exec
 UPDATE vtxo SET payment_id = ? WHERE txid = ? AND vout = ?;
 
--- name: UpdateVtxoSignerPubkey :exec
-UPDATE vtxo SET signer_pubkey = ? WHERE txid = ? AND vout = ?;
-
 -- name: SelectRoundWithRoundId :many
 SELECT sqlc.embed(round),
        sqlc.embed(round_payment_vw),

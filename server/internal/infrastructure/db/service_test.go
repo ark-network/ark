@@ -262,21 +262,18 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 				Payments: []domain.Payment{
 					{
 						Id: uuid.New().String(),
-						Inputs: []domain.VtxoInput{
+						Inputs: []domain.Vtxo{
 							{
-								Vtxo: domain.Vtxo{
-									VtxoKey: domain.VtxoKey{
-										Txid: randomString(32),
-										VOut: 0,
-									},
-									PoolTx:   randomString(32),
-									ExpireAt: 7980322,
-									Receiver: domain.Receiver{
-										Descriptor: randomString(120),
-										Amount:     300,
-									},
+								VtxoKey: domain.VtxoKey{
+									Txid: randomString(32),
+									VOut: 0,
 								},
-								SignerPubkey: randomString(36),
+								PoolTx:   randomString(32),
+								ExpireAt: 7980322,
+								Receiver: domain.Receiver{
+									Descriptor: randomString(120),
+									Amount:     300,
+								},
 							},
 						},
 						Receivers: []domain.Receiver{{
@@ -286,22 +283,19 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 					},
 					{
 						Id: uuid.New().String(),
-						Inputs: []domain.VtxoInput{
+						Inputs: []domain.Vtxo{
 
 							{
-								Vtxo: domain.Vtxo{
-									VtxoKey: domain.VtxoKey{
-										Txid: randomString(32),
-										VOut: 0,
-									},
-									PoolTx:   randomString(32),
-									ExpireAt: 7980322,
-									Receiver: domain.Receiver{
-										Descriptor: randomString(120),
-										Amount:     600,
-									},
+								VtxoKey: domain.VtxoKey{
+									Txid: randomString(32),
+									VOut: 0,
 								},
-								SignerPubkey: randomString(36),
+								PoolTx:   randomString(32),
+								ExpireAt: 7980322,
+								Receiver: domain.Receiver{
+									Descriptor: randomString(120),
+									Amount:     600,
+								},
 							},
 						},
 						Receivers: []domain.Receiver{
@@ -329,7 +323,7 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 		for _, pay := range updatedRound.Payments {
 			vtxos := make([]domain.Vtxo, 0, len(pay.Inputs))
 			for _, v := range pay.Inputs {
-				vtxos = append(vtxos, v.Vtxo)
+				vtxos = append(vtxos, v)
 			}
 			err = svc.Vtxos().AddVtxos(ctx, vtxos)
 			require.NoError(t, err)
@@ -487,8 +481,8 @@ func roundsMatch(expected, got domain.Round) assert.Comparison {
 				return false
 			}
 
-			expectedVtxos := sortVtxosInputs(v.Inputs)
-			gotVtxos := sortVtxosInputs(gotValue.Inputs)
+			expectedVtxos := sortVtxos(v.Inputs)
+			gotVtxos := sortVtxos(gotValue.Inputs)
 
 			sort.Sort(expectedVtxos)
 			sort.Sort(gotVtxos)
@@ -551,12 +545,6 @@ func randomString(len int) string {
 	rand.Read(buf)
 	return hex.EncodeToString(buf)
 }
-
-type sortVtxosInputs []domain.VtxoInput
-
-func (a sortVtxosInputs) Len() int           { return len(a) }
-func (a sortVtxosInputs) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a sortVtxosInputs) Less(i, j int) bool { return a[i].Vtxo.Txid < a[j].Vtxo.Txid }
 
 type sortVtxos []domain.Vtxo
 

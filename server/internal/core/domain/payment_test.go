@@ -18,19 +18,16 @@ var desc = fmt.Sprintf(
 	"0000000000000000000000000000000000000000000000000000000000000001",
 )
 
-var inputs = []domain.VtxoInput{
+var inputs = []domain.Vtxo{
 	{
-		Vtxo: domain.Vtxo{
-			VtxoKey: domain.VtxoKey{
-				Txid: "0000000000000000000000000000000000000000000000000000000000000000",
-				VOut: 0,
-			},
-			Receiver: domain.Receiver{
-				Descriptor: desc,
-				Amount:     1000,
-			},
+		VtxoKey: domain.VtxoKey{
+			Txid: "0000000000000000000000000000000000000000000000000000000000000000",
+			VOut: 0,
 		},
-		SignerPubkey: "030000000000000000000000000000000000000000000000000000000000000001",
+		Receiver: domain.Receiver{
+			Descriptor: desc,
+			Amount:     1000,
+		},
 	},
 }
 

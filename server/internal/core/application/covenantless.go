@@ -155,10 +155,9 @@ func (s *covenantlessService) CompleteAsyncPayment(
 		return fmt.Errorf("async payment not found")
 	}
 
-	txs := append([]string{redeemTx}, unconditionalForfeitTxs...)
 	vtxoRepo := s.repoManager.Vtxos()
 
-	for _, tx := range txs {
+	for _, tx := range []string{redeemTx} {
 		ptx, err := psbt.NewFromRawBytes(strings.NewReader(tx), true)
 		if err != nil {
 			return fmt.Errorf("failed to parse tx: %s", err)
@@ -253,7 +252,7 @@ func (s *covenantlessService) CompleteAsyncPayment(
 		}
 	}
 
-	spentVtxos := make([]domain.VtxoKey, 0, len(unconditionalForfeitTxs))
+	spentVtxos := make([]domain.VtxoKey, 0)
 	for _, in := range redeemPtx.UnsignedTx.TxIn {
 		spentVtxos = append(spentVtxos, domain.VtxoKey{
 			Txid: in.PreviousOutPoint.Hash.String(),
@@ -318,7 +317,7 @@ func (s *covenantlessService) CreateAsyncPayment(
 		return "", nil, fmt.Errorf("vtxos not found")
 	}
 
-	vtxosInputs := make([]domain.VtxoInput, 0, len(inputs))
+	vtxosInputs := make([]domain.Vtxo, 0, len(inputs))
 
 	expiration := vtxos[0].ExpireAt
 	for _, vtxo := range vtxos {
@@ -338,22 +337,7 @@ func (s *covenantlessService) CreateAsyncPayment(
 			expiration = vtxo.ExpireAt
 		}
 
-		signerPubKey := ""
-		for _, input := range inputs {
-			if input.Txid == vtxo.Txid && input.VOut == vtxo.VOut {
-				signerPubKey = input.SignerPubkey
-				break
-			}
-		}
-
-		if len(signerPubKey) == 0 {
-			return "", nil, fmt.Errorf("missing signer pubkey for input %s:%d", vtxo.Txid, vtxo.VOut)
-		}
-
-		vtxosInputs = append(vtxosInputs, domain.VtxoInput{
-			Vtxo:         vtxo,
-			SignerPubkey: signerPubKey,
-		})
+		vtxosInputs = append(vtxosInputs, vtxo)
 	}
 
 	res, err := s.builder.BuildAsyncPaymentTransactions(
@@ -404,7 +388,7 @@ func (s *covenantlessService) GetBoardingAddress(
 }
 
 func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error) {
-	vtxosInputs := make([]domain.VtxoInput, 0)
+	vtxosInputs := make([]domain.Vtxo, 0)
 	boardingInputs := make([]ports.BoardingInput, 0)
 
 	now := time.Now().Unix()
@@ -467,10 +451,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 			return "", fmt.Errorf("input %s:%d already swept", vtxo.Txid, vtxo.VOut)
 		}
 
-		vtxosInputs = append(vtxosInputs, domain.VtxoInput{
-			Vtxo:         vtxo,
-			SignerPubkey: input.SignerPubkey,
-		})
+		vtxosInputs = append(vtxosInputs, vtxo)
 	}
 
 	payment, err := domain.NewPayment(vtxosInputs)
@@ -967,8 +948,10 @@ func (s *covenantlessService) startFinalization() {
 
 	var forfeitTxs, connectors []string
 
+	minRelayFeeRate := s.wallet.MinRelayFeeRate(ctx)
+
 	if needForfeits {
-		connectors, forfeitTxs, err = s.builder.BuildForfeitTxs(s.pubkey, unsignedRoundTx, payments)
+		connectors, forfeitTxs, err = s.builder.BuildForfeitTxs(s.pubkey, unsignedRoundTx, payments, minRelayFeeRate)
 		if err != nil {
 			round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
 			log.WithError(err).Warn("failed to create connectors and forfeit txs")
@@ -1271,13 +1254,12 @@ func (s *covenantlessService) propagateEvents(round *domain.Round) {
 	lastEvent := round.Events()[len(round.Events())-1]
 	switch e := lastEvent.(type) {
 	case domain.RoundFinalizationStarted:
-		forfeitTxs := s.forfeitTxs.view()
 		ev := domain.RoundFinalizationStarted{
-			Id:                 e.Id,
-			CongestionTree:     e.CongestionTree,
-			Connectors:         e.Connectors,
-			PoolTx:             e.PoolTx,
-			UnsignedForfeitTxs: forfeitTxs,
+			Id:              e.Id,
+			CongestionTree:  e.CongestionTree,
+			Connectors:      e.Connectors,
+			PoolTx:          e.PoolTx,
+			MinRelayFeeRate: int64(s.wallet.MinRelayFeeRate(context.Background())),
 		}
 		s.lastEvent = ev
 		s.eventsCh <- ev

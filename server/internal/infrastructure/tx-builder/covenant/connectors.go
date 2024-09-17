@@ -51,24 +51,3 @@ func craftConnectorTx(
 
 	return ptx, nil
 }
-
-func getConnectorInputs(pset *psetv2.Pset, connectorAmount uint64) ([]psetv2.InputArgs, []*transaction.TxOutput) {
-	txID, _ := getPsetId(pset)
-
-	inputs := make([]psetv2.InputArgs, 0, len(pset.Outputs))
-	witnessUtxos := make([]*transaction.TxOutput, 0, len(pset.Outputs))
-
-	for i, output := range pset.Outputs {
-		utx, _ := pset.UnsignedTx()
-
-		if output.Value == connectorAmount && len(output.Script) > 0 {
-			inputs = append(inputs, psetv2.InputArgs{
-				Txid:    txID,
-				TxIndex: uint32(i),
-			})
-			witnessUtxos = append(witnessUtxos, utx.Outputs[i])
-		}
-	}
-
-	return inputs, witnessUtxos
-}
