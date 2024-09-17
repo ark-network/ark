@@ -1,8 +1,11 @@
 package e2e
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os/exec"
 	"strings"
 	"sync"
@@ -100,4 +103,99 @@ func RunCommand(name string, arg ...string) (string, error) {
 func newCommand(name string, arg ...string) *exec.Cmd {
 	cmd := exec.Command(name, arg...)
 	return cmd
+}
+
+func RunArkCommand(arg ...string) (string, error) {
+	args := append([]string{"exec", "-t", "arkd", "ark"}, arg...)
+	return RunCommand("docker", args...)
+}
+
+func SetupAspWallet() error {
+	adminHttpClient := &http.Client{
+		Timeout: 15 * time.Second,
+	}
+
+	req, err := http.NewRequest("GET", "http://localhost:6060/v1/admin/wallet/seed", nil)
+	if err != nil {
+		return fmt.Errorf("failed to prepare generate seed request: %s", err)
+	}
+	req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
+
+	seedResp, err := adminHttpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to generate seed: %s", err)
+	}
+
+	var seed struct {
+		Seed string `json:"seed"`
+	}
+
+	if err := json.NewDecoder(seedResp.Body).Decode(&seed); err != nil {
+		return fmt.Errorf("failed to parse response: %s", err)
+	}
+
+	reqBody := bytes.NewReader([]byte(fmt.Sprintf(`{"seed": "%s", "password": "%s"}`, seed.Seed, Password)))
+	req, err = http.NewRequest("POST", "http://localhost:6060/v1/admin/wallet/create", reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to prepare wallet create request: %s", err)
+	}
+	req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
+	req.Header.Set("Content-Type", "application/json")
+
+	if _, err := adminHttpClient.Do(req); err != nil {
+		return fmt.Errorf("failed to create wallet: %s", err)
+	}
+
+	reqBody = bytes.NewReader([]byte(fmt.Sprintf(`{"password": "%s"}`, Password)))
+	req, err = http.NewRequest("POST", "http://localhost:6060/v1/admin/wallet/unlock", reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to prepare wallet unlock request: %s", err)
+	}
+	req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
+	req.Header.Set("Content-Type", "application/json")
+
+	if _, err := adminHttpClient.Do(req); err != nil {
+		return fmt.Errorf("failed to unlock wallet: %s", err)
+	}
+
+	time.Sleep(time.Second)
+
+	req, err = http.NewRequest("GET", "http://localhost:6060/v1/admin/wallet/address", nil)
+	if err != nil {
+		return fmt.Errorf("failed to prepare new address request: %s", err)
+	}
+	req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
+
+	resp, err := adminHttpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to get new address: %s", err)
+	}
+
+	var addr struct {
+		Address string `json:"address"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&addr); err != nil {
+		return fmt.Errorf("failed to parse response: %s", err)
+	}
+
+	if _, err := RunCommand("nigiri", "faucet", "--liquid", addr.Address); err != nil {
+		return fmt.Errorf("failed to fund wallet: %s", err)
+	}
+	if _, err := RunCommand("nigiri", "faucet", "--liquid", addr.Address); err != nil {
+		return fmt.Errorf("failed to fund wallet: %s", err)
+	}
+	if _, err := RunCommand("nigiri", "faucet", "--liquid", addr.Address); err != nil {
+		return fmt.Errorf("failed to fund wallet: %s", err)
+	}
+	if _, err := RunCommand("nigiri", "faucet", "--liquid", addr.Address); err != nil {
+		return fmt.Errorf("failed to fund wallet: %s", err)
+	}
+	if _, err := RunCommand("nigiri", "faucet", "--liquid", addr.Address); err != nil {
+		return fmt.Errorf("failed to fund wallet: %s", err)
+	}
+
+	time.Sleep(5 * time.Second)
+
+	return nil
 }

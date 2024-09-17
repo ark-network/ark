@@ -1,6 +1,7 @@
 package arksdk
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -8,8 +9,113 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/pkg/client-sdk/client"
+	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
+	utils "github.com/ark-network/ark/server/test/e2e"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+const (
+	composePath = "../../docker-compose.regtest.yml"
+)
+
+// TestCovenantTxHistory checks the transaction history of a covenant client
+// Use case:
+// before onboarding => empty history
+// after sending sats to the boarding address => 1 PENDING boarding tx
+// after claiming the boarded funds => 1 NON-PENDING boarding tx
+// after sending N sats to bob => 1 NON-PENDING sent tx, 1 NON-PENDING boading tx
+func TestCovenantTxHistory(t *testing.T) {
+	var (
+		ctx  = context.Background()
+		err  error
+		txs  []Transaction
+		pass = "password"
+
+		aliceBoardingAddr = ""
+		bobOfflineAddr    = "tark1qdxhh3c4j2yck88gzf2p542awas6umur47htxjzk630ej77cpwgzsquvtuph3pdtnlrzsncqdlv5kj0hncf67vl5lv9aye78dg8srwzgfczfrzve"
+	)
+	_, err = utils.RunCommand("docker", "compose", "-f", composePath, "up", "-d", "--build")
+	require.NoError(t, err)
+
+	fmt.Println("waiting for docker containers to start...")
+
+	time.Sleep(10 * time.Second)
+
+	err = utils.SetupAspWallet()
+	require.NoError(t, err)
+
+	defer func() {
+		_, err = utils.RunCommand("docker", "compose", "-f", composePath, "down")
+		require.NoError(t, err)
+	}()
+
+	time.Sleep(3 * time.Second)
+
+	storeSvc, err := inmemorystore.NewConfigStore()
+	require.NoError(t, err)
+	aliceClient, err := NewCovenantClient(storeSvc)
+	require.NoError(t, err)
+
+	err = aliceClient.Init(
+		ctx, InitArgs{
+			WalletType: SingleKeyWallet,
+			ClientType: GrpcClient,
+			AspUrl:     "localhost:6060",
+			Password:   pass,
+		})
+	require.NoError(t, err)
+
+	err = aliceClient.Unlock(ctx, pass)
+	require.NoError(t, err)
+
+	_, aliceBoardingAddr, err = aliceClient.Receive(ctx)
+	require.NoError(t, err)
+
+	_, err = utils.RunCommand("nigiri", "faucet", "--liquid", aliceBoardingAddr)
+	require.NoError(t, err)
+
+	time.Sleep(2 * time.Second)
+
+	err = utils.GenerateBlock()
+	require.NoError(t, err)
+
+	time.Sleep(2 * time.Second)
+
+	txs, err = aliceClient.GetTransactionHistory(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, len(txs))
+	assert.Equal(t, true, txs[0].Pending)
+	assert.Equal(t, false, txs[0].Claimed)
+	assert.Equal(t, TxReceived, txs[0].Type)
+	assert.Equal(t, true, txs[0].BoardingTxid != "")
+
+	_, err = aliceClient.Claim(ctx)
+	require.NoError(t, err)
+
+	txs, err = aliceClient.GetTransactionHistory(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, len(txs))
+	assert.Equal(t, false, txs[0].Pending)
+	assert.Equal(t, true, txs[0].Claimed)
+	assert.Equal(t, TxReceived, txs[0].Type)
+	assert.Equal(t, true, txs[0].BoardingTxid != "")
+
+	bob := NewLiquidReceiver(bobOfflineAddr, 1000)
+	_, err = aliceClient.SendOffChain(ctx, false, []Receiver{bob})
+	require.NoError(t, err)
+
+	time.Sleep(12 * time.Second)
+
+	err = utils.GenerateBlock()
+	require.NoError(t, err)
+
+	time.Sleep(2 * time.Second)
+
+	txs, err = aliceClient.GetTransactionHistory(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 2, len(txs))
+}
 
 func TestVtxosToTxs(t *testing.T) {
 	tests := []struct {
