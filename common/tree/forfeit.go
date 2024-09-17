@@ -9,7 +9,7 @@ import (
 	"github.com/vulpemventures/go-elements/transaction"
 )
 
-func MakeForfeitTxs(
+func BuildForfeitTxs(
 	connectorTx *psetv2.Pset,
 	vtxoInput psetv2.InputArgs,
 	vtxoAmount,

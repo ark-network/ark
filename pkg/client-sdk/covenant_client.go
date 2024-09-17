@@ -1349,7 +1349,7 @@ func (a *covenantArkClient) createAndSignForfeits(
 		}
 
 		for _, connectorPset := range connectorsPsets {
-			forfeits, err := tree.MakeForfeitTxs(
+			forfeits, err := tree.BuildForfeitTxs(
 				connectorPset, vtxoInput, vtxo.Amount, a.Dust, feeAmount, vtxoOutputScript, a.AspPubkey,
 			)
 			if err != nil {

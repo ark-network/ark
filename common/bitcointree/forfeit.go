@@ -8,7 +8,7 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-func MakeForfeitTxs(
+func BuildForfeitTxs(
 	connectorTx *psbt.Packet,
 	vtxoInput *wire.OutPoint,
 	vtxoAmount,

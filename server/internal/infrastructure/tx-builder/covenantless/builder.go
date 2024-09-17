@@ -1158,7 +1158,7 @@ func (b *txBuilder) createForfeitTxs(
 			}
 
 			for _, connector := range connectors {
-				txs, err := bitcointree.MakeForfeitTxs(
+				txs, err := bitcointree.BuildForfeitTxs(
 					connector,
 					&wire.OutPoint{
 						Hash:  *vtxoTxHash,

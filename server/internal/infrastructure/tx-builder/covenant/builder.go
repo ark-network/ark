@@ -818,7 +818,7 @@ func (b *txBuilder) createForfeitTxs(
 			}
 
 			for _, connector := range connectors {
-				txs, err := tree.MakeForfeitTxs(
+				txs, err := tree.BuildForfeitTxs(
 					connector,
 					psetv2.InputArgs{
 						Txid:    vtxo.Txid,

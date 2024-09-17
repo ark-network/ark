@@ -1511,7 +1511,7 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 		}
 
 		for _, connectorPset := range connectorsPsets {
-			forfeits, err := bitcointree.MakeForfeitTxs(
+			forfeits, err := bitcointree.BuildForfeitTxs(
 				connectorPset, vtxoInput, vtxo.Amount, a.Dust, feeAmount, vtxoOutputScript, a.AspPubkey,
 			)
 			if err != nil {
