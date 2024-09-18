@@ -283,6 +283,50 @@ func TestReactToAsyncSpentVtxosRedemption(t *testing.T) {
 	})
 }
 
+func TestSuccessAfterFailRound(t *testing.T) {
+	ctx := context.Background()
+	alice, grpcAlice := setupArkSDK(t)
+	defer grpcAlice.Close()
+
+	bob, grpcBob := setupArkSDK(t)
+	defer grpcBob.Close()
+
+	_, boardingAddress, err := alice.Receive(ctx)
+	require.NoError(t, err)
+
+	_, err = utils.RunCommand("nigiri", "faucet", boardingAddress)
+	require.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+
+	_, err = alice.Claim(ctx)
+	require.NoError(t, err)
+
+	bobAddress, _, err := bob.Receive(ctx)
+	require.NoError(t, err)
+
+	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 1000)})
+	require.NoError(t, err)
+
+	_, err = bob.Claim(ctx)
+	require.NoError(t, err)
+
+	_, err = alice.Claim(ctx)
+	require.NoError(t, err)
+
+	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)})
+	require.NoError(t, err)
+
+	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)})
+	require.NoError(t, err)
+
+	_, err = bob.Claim(ctx)
+	require.NoError(t, err)
+
+	_, err = alice.Claim(ctx)
+	require.NoError(t, err)
+}
+
 func runClarkCommand(arg ...string) (string, error) {
 	args := append([]string{"exec", "-t", "clarkd", "ark"}, arg...)
 	return utils.RunCommand("docker", args...)
