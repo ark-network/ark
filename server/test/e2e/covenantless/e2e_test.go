@@ -283,7 +283,7 @@ func TestReactToAsyncSpentVtxosRedemption(t *testing.T) {
 	})
 }
 
-func TestSuccessAfterFailRound(t *testing.T) {
+func TestAliceSeveralPaymentsToBob(t *testing.T) {
 	ctx := context.Background()
 	alice, grpcAlice := setupArkSDK(t)
 	defer grpcAlice.Close()
