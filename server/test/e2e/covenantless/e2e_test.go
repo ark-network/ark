@@ -102,7 +102,7 @@ func TestSendOffchain(t *testing.T) {
 func TestUnilateralExit(t *testing.T) {
 	var receive utils.ArkReceive
 	receiveStr, err := runClarkCommand("receive")
-	require.NoError(t, err, receiveStr)
+	require.NoError(t, err)
 
 	err = json.Unmarshal([]byte(receiveStr), &receive)
 	require.NoError(t, err)
