@@ -16,12 +16,24 @@ type TaprootMerkleProof struct {
 	Script       []byte
 }
 
+// TaprootTree is an interface wrapping the methods needed to spend a vtxo taproot contract
+// the implementation depends on the chain (liquid or bitcoin)
 type TaprootTree interface {
 	GetLeaves() []chainhash.Hash
 	GetTaprootMerkleProof(leafhash chainhash.Hash) (*TaprootMerkleProof, error)
 	GetRoot() chainhash.Hash
 }
 
+/*
+A vtxo script is defined as a taproot contract with at least 1 forfeit closure (User && ASP) and 1 exit closure (A after t).
+It may also contain others closures implementing specific use cases.
+
+VtxoScript abstracts the taproot complexity behind vtxo contracts.
+it is compiled, transferred and parsed using descriptor string.
+
+default vtxo script = tr(_,{ and(pk(USER), pk(ASP)), and(older(T), pk(USER)) })
+reversible vtxo script = tr(_,{ { and(pk(SENDER), pk(ASP)), and(older(T), pk(SENDER)) }, { and(pk(RECEIVER), pk(ASP) } })
+*/
 type VtxoScript[T TaprootTree] interface {
 	TapTree() (taprootKey *secp256k1.PublicKey, taprootScriptTree T, err error)
 	ToDescriptor() string
