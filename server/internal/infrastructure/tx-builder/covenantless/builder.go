@@ -875,27 +875,33 @@ func (b *txBuilder) createPoolTx(
 				return nil, err
 			}
 
+			dust = 0
 			if change > 0 {
-				address, err := b.wallet.DeriveAddresses(ctx, 1)
-				if err != nil {
-					return nil, err
-				}
+				if change < dustLimit {
+					dust = change
+					change = 0
+				} else {
+					address, err := b.wallet.DeriveAddresses(ctx, 1)
+					if err != nil {
+						return nil, err
+					}
 
-				addr, err := btcutil.DecodeAddress(address[0], b.onchainNetwork())
-				if err != nil {
-					return nil, err
-				}
+					addr, err := btcutil.DecodeAddress(address[0], b.onchainNetwork())
+					if err != nil {
+						return nil, err
+					}
 
-				aspScript, err := txscript.PayToAddrScript(addr)
-				if err != nil {
-					return nil, err
-				}
+					aspScript, err := txscript.PayToAddrScript(addr)
+					if err != nil {
+						return nil, err
+					}
 
-				ptx.UnsignedTx.AddTxOut(&wire.TxOut{
-					Value:    int64(change),
-					PkScript: aspScript,
-				})
-				ptx.Outputs = append(ptx.Outputs, psbt.POutput{})
+					ptx.UnsignedTx.AddTxOut(&wire.TxOut{
+						Value:    int64(change),
+						PkScript: aspScript,
+					})
+					ptx.Outputs = append(ptx.Outputs, psbt.POutput{})
+				}
 			}
 
 			for _, utxo := range newUtxos {
@@ -928,6 +934,34 @@ func (b *txBuilder) createPoolTx(
 				}
 			}
 
+			b64, err = ptx.B64Encode()
+			if err != nil {
+				return nil, err
+			}
+
+			feeAmount, err = b.wallet.EstimateFees(ctx, b64)
+			if err != nil {
+				return nil, err
+			}
+
+			if dust > feeAmount {
+				feeAmount = dust
+			} else {
+				feeAmount += dust
+			}
+
+			if dust == 0 {
+				if feeAmount == change {
+					// fees = change, remove change output
+					ptx.UnsignedTx.TxOut = ptx.UnsignedTx.TxOut[:len(ptx.UnsignedTx.TxOut)-1]
+					ptx.Outputs = ptx.Outputs[:len(ptx.Outputs)-1]
+				} else if feeAmount < change {
+					// change covers the fees, reduce change amount
+					ptx.UnsignedTx.TxOut[len(ptx.Outputs)-1].Value = int64(change - feeAmount)
+				} else {
+					return nil, fmt.Errorf("change is not enough to cover fees")
+				}
+			}
 		}
 	} else if feeAmount-dust > 0 {
 		newUtxos, change, err := b.selectUtxos(ctx, sweptRounds, feeAmount-dust)
@@ -935,8 +969,12 @@ func (b *txBuilder) createPoolTx(
 			return nil, err
 		}
 
+		dust = 0
 		if change > 0 {
-			if change > dustLimit {
+			if change < dustLimit {
+				dust = change
+				change = 0
+			} else {
 				address, err := b.wallet.DeriveAddresses(ctx, 1)
 				if err != nil {
 					return nil, err
@@ -987,6 +1025,35 @@ func (b *txBuilder) createPoolTx(
 				len(ptx.UnsignedTx.TxIn)-1,
 			); err != nil {
 				return nil, err
+			}
+		}
+
+		b64, err = ptx.B64Encode()
+		if err != nil {
+			return nil, err
+		}
+
+		feeAmount, err = b.wallet.EstimateFees(ctx, b64)
+		if err != nil {
+			return nil, err
+		}
+
+		if dust > feeAmount {
+			feeAmount = dust
+		} else {
+			feeAmount += dust
+		}
+
+		if dust == 0 {
+			if feeAmount == change {
+				// fees = change, remove change output
+				ptx.UnsignedTx.TxOut = ptx.UnsignedTx.TxOut[:len(ptx.UnsignedTx.TxOut)-1]
+				ptx.Outputs = ptx.Outputs[:len(ptx.Outputs)-1]
+			} else if feeAmount < change {
+				// change covers the fees, reduce change amount
+				ptx.UnsignedTx.TxOut[len(ptx.Outputs)-1].Value = int64(change - feeAmount)
+			} else {
+				return nil, fmt.Errorf("change is not enough to cover fees")
 			}
 		}
 	}
