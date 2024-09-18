@@ -308,6 +308,10 @@ func TestAliceSeveralPaymentsToBob(t *testing.T) {
 	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 1000)})
 	require.NoError(t, err)
 
+	bobVtxos, _, err := bob.ListVtxos(ctx)
+	require.NoError(t, err)
+	require.Len(t, bobVtxos, 1)
+
 	_, err = bob.Claim(ctx)
 	require.NoError(t, err)
 
@@ -317,8 +321,16 @@ func TestAliceSeveralPaymentsToBob(t *testing.T) {
 	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)})
 	require.NoError(t, err)
 
+	bobVtxos, _, err = bob.ListVtxos(ctx)
+	require.NoError(t, err)
+	require.Len(t, bobVtxos, 2)
+
 	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)})
 	require.NoError(t, err)
+
+	bobVtxos, _, err = bob.ListVtxos(ctx)
+	require.NoError(t, err)
+	require.Len(t, bobVtxos, 3)
 
 	_, err = bob.Claim(ctx)
 	require.NoError(t, err)
