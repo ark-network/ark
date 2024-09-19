@@ -445,43 +445,16 @@ func setupAspWallet() error {
 		return fmt.Errorf("failed to parse response: %s", err)
 	}
 
-	_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
-	if err != nil {
-		return fmt.Errorf("failed to fund wallet: %s", err)
-	}
+	const numberOfFaucet = 15 // must cover the liquidity needed for all tests
 
-	_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
-	if err != nil {
-		return fmt.Errorf("failed to fund wallet: %s", err)
-	}
-
-	_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
-	if err != nil {
-		return fmt.Errorf("failed to fund wallet: %s", err)
-	}
-
-	_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
-	if err != nil {
-		return fmt.Errorf("failed to fund wallet: %s", err)
-	}
-
-	_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
-	if err != nil {
-		return fmt.Errorf("failed to fund wallet: %s", err)
-	}
-
-	_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
-	if err != nil {
-		return fmt.Errorf("failed to fund wallet: %s", err)
-	}
-
-	_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
-	if err != nil {
-		return fmt.Errorf("failed to fund wallet: %s", err)
+	for i := 0; i < numberOfFaucet; i++ {
+		_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
+		if err != nil {
+			return fmt.Errorf("failed to fund wallet: %s", err)
+		}
 	}
 
 	time.Sleep(5 * time.Second)
-
 	return nil
 }
 
