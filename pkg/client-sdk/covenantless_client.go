@@ -189,10 +189,13 @@ func (a *covenantlessArkClient) ListVtxos(
 				return nil, nil, err
 			}
 
-			if reversibleVtxo, ok := script.(*bitcointree.ReversibleVtxoScript); ok {
-				if !bytes.Equal(schnorr.SerializePubKey(reversibleVtxo.Sender), myPubkey) {
-					spentVtxos = append(spentVtxos, v)
-				}
+			reversibleVtxo, ok := script.(*bitcointree.ReversibleVtxoScript)
+			if !ok {
+				spentVtxos = append(spentVtxos, v)
+				continue
+			}
+			if !bytes.Equal(schnorr.SerializePubKey(reversibleVtxo.Sender), myPubkey) {
+				spentVtxos = append(spentVtxos, v)
 			}
 		}
 	}
