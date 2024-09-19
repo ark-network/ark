@@ -308,6 +308,8 @@ func TestAliceSeveralPaymentsToBob(t *testing.T) {
 	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 1000)})
 	require.NoError(t, err)
 
+	time.Sleep(2 * time.Second)
+
 	bobVtxos, _, err := bob.ListVtxos(ctx)
 	require.NoError(t, err)
 	require.Len(t, bobVtxos, 1)
@@ -321,6 +323,8 @@ func TestAliceSeveralPaymentsToBob(t *testing.T) {
 	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)})
 	require.NoError(t, err)
 
+	time.Sleep(2 * time.Second)
+
 	bobVtxos, _, err = bob.ListVtxos(ctx)
 	require.NoError(t, err)
 	require.Len(t, bobVtxos, 2)
@@ -328,15 +332,43 @@ func TestAliceSeveralPaymentsToBob(t *testing.T) {
 	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)})
 	require.NoError(t, err)
 
+	time.Sleep(2 * time.Second)
+
 	bobVtxos, _, err = bob.ListVtxos(ctx)
 	require.NoError(t, err)
 	require.Len(t, bobVtxos, 3)
 
-	_, err = bob.Claim(ctx)
+	_, err = alice.SendAsync(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)})
 	require.NoError(t, err)
+
+	time.Sleep(2 * time.Second)
+
+	bobVtxos, _, err = bob.ListVtxos(ctx)
+	require.NoError(t, err)
+	require.Len(t, bobVtxos, 4)
 
 	_, err = alice.Claim(ctx)
 	require.NoError(t, err)
+
+	_, err = alice.SendAsync(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)})
+	require.NoError(t, err)
+
+	time.Sleep(2 * time.Second)
+
+	bobVtxos, _, err = bob.ListVtxos(ctx)
+	require.NoError(t, err)
+	require.Len(t, bobVtxos, 5)
+
+	// bobVtxos should be unique
+	uniqueVtxos := make(map[string]struct{})
+	for _, v := range bobVtxos {
+		uniqueVtxos[fmt.Sprintf("%s:%d", v.Txid, v.VOut)] = struct{}{}
+	}
+	require.Len(t, uniqueVtxos, 5)
+
+	_, err = bob.Claim(ctx)
+	require.NoError(t, err)
+
 }
 
 func runClarkCommand(arg ...string) (string, error) {

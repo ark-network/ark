@@ -14,6 +14,7 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -22,7 +23,6 @@ import (
 type grpcClient struct {
 	conn      *grpc.ClientConn
 	svc       arkv1.ArkServiceClient
-	eventsCh  chan client.RoundEventChannel
 	treeCache *utils.Cache[tree.CongestionTree]
 }
 
@@ -47,10 +47,9 @@ func NewClient(aspUrl string) (client.ASPClient, error) {
 	}
 
 	svc := arkv1.NewArkServiceClient(conn)
-	eventsCh := make(chan client.RoundEventChannel)
 	treeCache := utils.NewCache[tree.CongestionTree]()
 
-	return &grpcClient{conn, svc, eventsCh, treeCache}, nil
+	return &grpcClient{conn, svc, treeCache}, nil
 }
 
 func (c *grpcClient) Close() {
@@ -60,34 +59,47 @@ func (c *grpcClient) Close() {
 
 func (a *grpcClient) GetEventStream(
 	ctx context.Context, paymentID string,
-) (<-chan client.RoundEventChannel, error) {
+) (<-chan client.RoundEventChannel, func(), error) {
 	req := &arkv1.GetEventStreamRequest{}
 	stream, err := a.svc.GetEventStream(ctx, req)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
+	eventsCh := make(chan client.RoundEventChannel)
+
 	go func() {
-		defer close(a.eventsCh)
+		defer close(eventsCh)
 
 		for {
-			resp, err := stream.Recv()
-			if err != nil {
-				a.eventsCh <- client.RoundEventChannel{Err: err}
+			select {
+			case <-stream.Context().Done():
 				return
-			}
+			default:
+				resp, err := stream.Recv()
+				if err != nil {
+					eventsCh <- client.RoundEventChannel{Err: err}
+					return
+				}
 
-			ev, err := event{resp}.toRoundEvent()
-			if err != nil {
-				a.eventsCh <- client.RoundEventChannel{Err: err}
-				return
-			}
+				ev, err := event{resp}.toRoundEvent()
+				if err != nil {
+					eventsCh <- client.RoundEventChannel{Err: err}
+					return
+				}
 
-			a.eventsCh <- client.RoundEventChannel{Event: ev}
+				eventsCh <- client.RoundEventChannel{Event: ev}
+			}
 		}
 	}()
 
-	return a.eventsCh, nil
+	closeFn := func() {
+		if err := stream.CloseSend(); err != nil {
+			logrus.Warnf("failed to close stream: %v", err)
+		}
+	}
+
+	return eventsCh, closeFn, nil
 }
 
 func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
@@ -181,6 +193,10 @@ func (a *grpcClient) Ping(
 	resp, err := a.svc.Ping(ctx, req)
 	if err != nil {
 		return nil, err
+	}
+
+	if resp.GetEvent() == nil {
+		return nil, nil
 	}
 
 	return event{resp}.toRoundEvent()

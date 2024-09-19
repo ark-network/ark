@@ -25,7 +25,6 @@ import (
 
 type restClient struct {
 	svc            ark_service.ClientService
-	eventsCh       chan client.RoundEventChannel
 	requestTimeout time.Duration
 	treeCache      *utils.Cache[tree.CongestionTree]
 }
@@ -38,41 +37,46 @@ func NewClient(aspUrl string) (client.ASPClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	eventsCh := make(chan client.RoundEventChannel)
 	reqTimeout := 15 * time.Second
 	treeCache := utils.NewCache[tree.CongestionTree]()
 
-	return &restClient{svc, eventsCh, reqTimeout, treeCache}, nil
+	return &restClient{svc, reqTimeout, treeCache}, nil
 }
 
 func (c *restClient) Close() {}
 
 func (a *restClient) GetEventStream(
 	ctx context.Context, paymentID string,
-) (<-chan client.RoundEventChannel, error) {
+) (<-chan client.RoundEventChannel, func(), error) {
+	eventsCh := make(chan client.RoundEventChannel)
+	stopCh := make(chan struct{})
+
 	go func(payID string) {
-		defer close(a.eventsCh)
+		defer close(eventsCh)
+		defer close(stopCh)
 
 		timeout := time.After(a.requestTimeout)
 
 		for {
 			select {
+			case <-stopCh:
+				return
 			case <-timeout:
-				a.eventsCh <- client.RoundEventChannel{
+				eventsCh <- client.RoundEventChannel{
 					Err: fmt.Errorf("timeout reached"),
 				}
 				return
 			default:
 				event, err := a.Ping(ctx, payID)
 				if err != nil {
-					a.eventsCh <- client.RoundEventChannel{
+					eventsCh <- client.RoundEventChannel{
 						Err: err,
 					}
 					return
 				}
 
 				if event != nil {
-					a.eventsCh <- client.RoundEventChannel{
+					eventsCh <- client.RoundEventChannel{
 						Event: event,
 					}
 				}
@@ -82,7 +86,11 @@ func (a *restClient) GetEventStream(
 		}
 	}(paymentID)
 
-	return a.eventsCh, nil
+	close := func() {
+		stopCh <- struct{}{}
+	}
+
+	return eventsCh, close, nil
 }
 
 func (a *restClient) GetInfo(

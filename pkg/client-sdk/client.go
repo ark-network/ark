@@ -18,6 +18,7 @@ import (
 	filestore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store/file"
 	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store/inmemory"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -256,11 +257,13 @@ func (a *arkClient) ping(
 	ticker := time.NewTicker(5 * time.Second)
 
 	go func(t *time.Ticker) {
-		// nolint
-		a.client.Ping(ctx, paymentID)
+		if _, err := a.client.Ping(ctx, paymentID); err != nil {
+			logrus.Warnf("failed to ping asp: %s", err)
+		}
 		for range t.C {
-			// nolint
-			a.client.Ping(ctx, paymentID)
+			if _, err := a.client.Ping(ctx, paymentID); err != nil {
+				logrus.Warnf("failed to ping asp: %s", err)
+			}
 		}
 	}(ticker)
 

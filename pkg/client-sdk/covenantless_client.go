@@ -961,7 +961,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 	receivers []client.Output,
 	roundEphemeralKey *secp256k1.PrivateKey,
 ) (string, error) {
-	eventsCh, err := a.client.GetEventStream(ctx, paymentID)
+	eventsCh, close, err := a.client.GetEventStream(ctx, paymentID)
 	if err != nil {
 		return "", err
 	}
@@ -971,7 +971,10 @@ func (a *covenantlessArkClient) handleRoundStream(
 		pingStop = a.ping(ctx, paymentID)
 	}
 
-	defer pingStop()
+	defer func() {
+		pingStop()
+		close()
+	}()
 
 	var signerSession bitcointree.SignerSession
 

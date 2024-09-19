@@ -31,7 +31,7 @@ type ASPClient interface {
 	) error
 	GetEventStream(
 		ctx context.Context, paymentID string,
-	) (<-chan RoundEventChannel, error)
+	) (<-chan RoundEventChannel, func(), error)
 	Ping(ctx context.Context, paymentID string) (RoundEvent, error)
 	FinalizePayment(
 		ctx context.Context, signedForfeitTxs []string, signedRoundTx string,
