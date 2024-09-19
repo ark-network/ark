@@ -263,13 +263,17 @@ func (s *covenantlessService) CompleteAsyncPayment(
 	vtxos := make([]domain.Vtxo, 0, len(asyncPayData.receivers))
 
 	for outIndex, out := range redeemPtx.UnsignedTx.TxOut {
+		desc := asyncPayData.receivers[outIndex].Descriptor
+		_, _, _, _, err := descriptor.ParseReversibleVtxoDescriptor(desc)
+		isPending := err == nil
+
 		vtxos = append(vtxos, domain.Vtxo{
 			VtxoKey: domain.VtxoKey{
 				Txid: redeemTxid,
 				VOut: uint32(outIndex),
 			},
 			Receiver: domain.Receiver{
-				Descriptor: asyncPayData.receivers[outIndex].Descriptor,
+				Descriptor: desc,
 				Amount:     uint64(out.Value),
 			},
 			ExpireAt: asyncPayData.expireAt,
@@ -277,6 +281,7 @@ func (s *covenantlessService) CompleteAsyncPayment(
 				RedeemTx:                redeemTx,
 				UnconditionalForfeitTxs: unconditionalForfeitTxs,
 			},
+			Pending: isPending,
 		})
 	}
 
@@ -331,6 +336,9 @@ func (s *covenantlessService) CreateAsyncPayment(
 
 		if vtxo.Swept {
 			return "", nil, fmt.Errorf("all vtxos must be swept")
+		}
+		if vtxo.Pending {
+			return "", nil, fmt.Errorf("all vtxos must be claimed")
 		}
 
 		if vtxo.ExpireAt < expiration {
