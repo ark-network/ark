@@ -620,6 +620,7 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 	}, nil
 }
 
+// TODO use lnd CoinSelect to craft the pool tx
 func (b *txBuilder) createPoolTx(
 	sharedOutputAmount int64,
 	sharedOutputScript []byte,
