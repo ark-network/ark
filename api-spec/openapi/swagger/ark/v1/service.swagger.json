@@ -999,6 +999,9 @@
         "amount": {
           "type": "string",
           "format": "uint64"
+        },
+        "pendingChange": {
+          "type": "boolean"
         }
       }
     }

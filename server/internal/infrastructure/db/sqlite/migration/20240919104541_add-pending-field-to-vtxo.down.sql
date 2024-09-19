@@ -1,1 +1,1 @@
-ALTER TABLE vtxo DROP COLUMN pending;
+ALTER TABLE vtxo DROP COLUMN pending_change;

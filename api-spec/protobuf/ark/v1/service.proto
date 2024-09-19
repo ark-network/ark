@@ -288,6 +288,7 @@ message Vtxo {
   bool pending = 8;
   PendingPayment pending_data = 9;
   uint64 amount = 10;
+  bool pending_change = 11;
 }
 
 message PendingPayment {
