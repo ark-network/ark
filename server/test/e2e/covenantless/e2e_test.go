@@ -216,7 +216,7 @@ func TestReactToSpentVtxosRedemption(t *testing.T) {
 }
 
 func TestReactToAsyncSpentVtxosRedemption(t *testing.T) {
-	t.Run("receveir claimed funds", func(t *testing.T) {
+	t.Run("receiver claimed funds", func(t *testing.T) {
 		ctx := context.Background()
 		sdkClient, grpcClient := setupArkSDK(t)
 		defer grpcClient.Close()

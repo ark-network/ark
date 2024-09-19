@@ -147,6 +147,13 @@ func (a *covenantlessArkClient) ListVtxos(
 		return
 	}
 
+	_, pubkey, _, err := common.DecodeAddress(offchainAddrs[0])
+	if err != nil {
+		return
+	}
+
+	myPubkey := schnorr.SerializePubKey(pubkey)
+
 	// The ASP returns the vtxos sent to others via async payments as spendable
 	// because they are actually revertable. Since we do not provide any revert
 	// feature, we want to ignore them.
@@ -154,9 +161,6 @@ func (a *covenantlessArkClient) ListVtxos(
 	// the inputs and check if they are owned by us.
 	// The auxiliary variables below are used to make these checks in an
 	// efficient way.
-	indexedSpentVtxos := make(map[string]client.Vtxo)
-	pendingVtxos := make([]client.Vtxo, 0)
-	keyTempl := "%s:%d"
 	for _, addr := range offchainAddrs {
 		spendable, spent, err := a.client.ListVtxos(ctx, addr)
 		if err != nil {
@@ -167,23 +171,29 @@ func (a *covenantlessArkClient) ListVtxos(
 				spendableVtxos = append(spendableVtxos, v)
 				continue
 			}
-			pendingVtxos = append(pendingVtxos, v)
+			script, err := bitcointree.ParseVtxoScript(v.Descriptor)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if reversibleVtxo, ok := script.(*bitcointree.ReversibleVtxoScript); ok {
+				if !bytes.Equal(schnorr.SerializePubKey(reversibleVtxo.Sender), myPubkey) {
+					spendableVtxos = append(spendableVtxos, v)
+				}
+			}
+
 		}
 		for _, v := range spent {
-			indexedSpentVtxos[fmt.Sprintf(keyTempl, v.Txid, v.VOut)] = v
-			spentVtxos = append(spentVtxos, v)
-		}
-	}
+			script, err := bitcointree.ParseVtxoScript(v.Descriptor)
+			if err != nil {
+				return nil, nil, err
+			}
 
-	for _, vtxo := range pendingVtxos {
-		ptx, err := psbt.NewFromRawBytes(strings.NewReader(vtxo.RedeemTx), true)
-		if err != nil {
-			return nil, nil, err
-		}
-		input := ptx.UnsignedTx.TxIn[0].PreviousOutPoint
-		key := fmt.Sprintf(keyTempl, input.Hash.String(), input.Index)
-		if _, ok := indexedSpentVtxos[key]; !ok {
-			spendableVtxos = append(spendableVtxos, vtxo)
+			if reversibleVtxo, ok := script.(*bitcointree.ReversibleVtxoScript); ok {
+				if !bytes.Equal(schnorr.SerializePubKey(reversibleVtxo.Sender), myPubkey) {
+					spentVtxos = append(spentVtxos, v)
+				}
+			}
 		}
 	}
 
