@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
-	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -115,7 +114,7 @@ func (h *handler) Ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.Ping
 				RoundFinalization: &arkv1.RoundFinalizationEvent{
 					Id:              e.Id,
 					PoolTx:          e.PoolTx,
-					CongestionTree:  castCongestionTree(e.CongestionTree),
+					CongestionTree:  congestionTree(e.CongestionTree).toProto(),
 					Connectors:      e.Connectors,
 					MinRelayFeeRate: e.MinRelayFeeRate,
 				},
@@ -150,7 +149,7 @@ func (h *handler) Ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.Ping
 				RoundSigning: &arkv1.RoundSigningEvent{
 					Id:               e.Id,
 					CosignersPubkeys: cosignersKeys,
-					UnsignedTree:     castCongestionTree(e.UnsignedVtxoTree),
+					UnsignedTree:     congestionTree(e.UnsignedVtxoTree).toProto(),
 					UnsignedRoundTx:  e.UnsignedRoundTx,
 				},
 			},
@@ -246,10 +245,10 @@ func (h *handler) GetRound(ctx context.Context, req *arkv1.GetRoundRequest) (*ar
 				Start:          round.StartingTimestamp,
 				End:            round.EndingTimestamp,
 				PoolTx:         round.UnsignedTx,
-				CongestionTree: castCongestionTree(round.CongestionTree),
+				CongestionTree: congestionTree(round.CongestionTree).toProto(),
 				ForfeitTxs:     round.ForfeitTxs,
 				Connectors:     round.Connectors,
-				Stage:          toRoundStage(round.Stage),
+				Stage:          stage(round.Stage).toProto(),
 			},
 		}, nil
 	}
@@ -265,10 +264,10 @@ func (h *handler) GetRound(ctx context.Context, req *arkv1.GetRoundRequest) (*ar
 			Start:          round.StartingTimestamp,
 			End:            round.EndingTimestamp,
 			PoolTx:         round.UnsignedTx,
-			CongestionTree: castCongestionTree(round.CongestionTree),
+			CongestionTree: congestionTree(round.CongestionTree).toProto(),
 			ForfeitTxs:     round.ForfeitTxs,
 			Connectors:     round.Connectors,
-			Stage:          toRoundStage(round.Stage),
+			Stage:          stage(round.Stage).toProto(),
 		},
 	}, nil
 }
@@ -292,10 +291,10 @@ func (h *handler) GetRoundById(
 			Start:          round.StartingTimestamp,
 			End:            round.EndingTimestamp,
 			PoolTx:         round.UnsignedTx,
-			CongestionTree: castCongestionTree(round.CongestionTree),
+			CongestionTree: congestionTree(round.CongestionTree).toProto(),
 			ForfeitTxs:     round.ForfeitTxs,
 			Connectors:     round.Connectors,
-			Stage:          toRoundStage(round.Stage),
+			Stage:          stage(round.Stage).toProto(),
 		},
 	}, nil
 }
@@ -485,7 +484,7 @@ func (h *handler) listenToEvents() {
 					RoundFinalization: &arkv1.RoundFinalizationEvent{
 						Id:              e.Id,
 						PoolTx:          e.PoolTx,
-						CongestionTree:  castCongestionTree(e.CongestionTree),
+						CongestionTree:  congestionTree(e.CongestionTree).toProto(),
 						Connectors:      e.Connectors,
 						MinRelayFeeRate: e.MinRelayFeeRate,
 					},
@@ -520,7 +519,7 @@ func (h *handler) listenToEvents() {
 					RoundSigning: &arkv1.RoundSigningEvent{
 						Id:               e.Id,
 						CosignersPubkeys: cosignersKeys,
-						UnsignedTree:     castCongestionTree(e.UnsignedVtxoTree),
+						UnsignedTree:     congestionTree(e.UnsignedVtxoTree).toProto(),
 						UnsignedRoundTx:  e.UnsignedRoundTx,
 					},
 				},
@@ -547,60 +546,5 @@ func (h *handler) listenToEvents() {
 				listener.ch <- ev
 			}
 		}
-	}
-}
-
-type vtxoList []domain.Vtxo
-
-func (v vtxoList) toProto() []*arkv1.Vtxo {
-	list := make([]*arkv1.Vtxo, 0, len(v))
-	for _, vv := range v {
-		var pendingData *arkv1.PendingPayment
-		if vv.AsyncPayment != nil {
-			pendingData = &arkv1.PendingPayment{
-				RedeemTx:                vv.AsyncPayment.RedeemTx,
-				UnconditionalForfeitTxs: vv.AsyncPayment.UnconditionalForfeitTxs,
-			}
-		}
-		list = append(list, &arkv1.Vtxo{
-			Outpoint: &arkv1.Outpoint{
-				Txid: vv.Txid,
-				Vout: vv.VOut,
-			},
-			Descriptor_: vv.Descriptor,
-			Amount:      vv.Amount,
-			PoolTxid:    vv.PoolTx,
-			Spent:       vv.Spent,
-			ExpireAt:    vv.ExpireAt,
-			SpentBy:     vv.SpentBy,
-			Swept:       vv.Swept,
-			PendingData: pendingData,
-			Pending:     pendingData != nil,
-		})
-	}
-
-	return list
-}
-
-// castCongestionTree converts a tree.CongestionTree to a repeated arkv1.TreeLevel
-func castCongestionTree(congestionTree tree.CongestionTree) *arkv1.Tree {
-	levels := make([]*arkv1.TreeLevel, 0, len(congestionTree))
-	for _, level := range congestionTree {
-		levelProto := &arkv1.TreeLevel{
-			Nodes: make([]*arkv1.Node, 0, len(level)),
-		}
-
-		for _, node := range level {
-			levelProto.Nodes = append(levelProto.Nodes, &arkv1.Node{
-				Txid:       node.Txid,
-				Tx:         node.Tx,
-				ParentTxid: node.ParentTxid,
-			})
-		}
-
-		levels = append(levels, levelProto)
-	}
-	return &arkv1.Tree{
-		Levels: levels,
 	}
 }
