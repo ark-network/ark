@@ -7,6 +7,7 @@ import (
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
 const (
@@ -37,7 +38,7 @@ type ASPClient interface {
 		ctx context.Context, signedForfeitTxs []string, signedRoundTx string,
 	) error
 	CreatePayment(
-		ctx context.Context, inputs []VtxoKey, outputs []Output,
+		ctx context.Context, inputs []Input, outputs []Output,
 	) (string, []string, error)
 	CompletePayment(
 		ctx context.Context, signedRedeemTx string, signedUnconditionalForfeitTxs []string,
@@ -67,40 +68,19 @@ type RoundEventChannel struct {
 	Err   error
 }
 
-type Input interface {
-	GetTxID() string
-	GetVOut() uint32
-	GetDescriptor() string
-}
-
-type VtxoKey struct {
+type Outpoint struct {
 	Txid string
 	VOut uint32
 }
 
-func (k VtxoKey) GetTxID() string {
-	return k.Txid
-}
-
-func (k VtxoKey) GetVOut() uint32 {
-	return k.VOut
-}
-
-func (k VtxoKey) GetDescriptor() string {
-	return ""
-}
-
-type BoardingInput struct {
-	VtxoKey
+type Input struct {
+	Outpoint
 	Descriptor string
 }
 
-func (k BoardingInput) GetDescriptor() string {
-	return k.Descriptor
-}
-
 type Vtxo struct {
-	VtxoKey
+	Outpoint
+	Descriptor              string
 	Amount                  uint64
 	RoundTxid               string
 	ExpiresAt               *time.Time
@@ -111,8 +91,9 @@ type Vtxo struct {
 }
 
 type Output struct {
-	Address string
-	Amount  uint64
+	Address    string // onchain output address
+	Descriptor string // offchain vtxo descriptor
+	Amount     uint64
 }
 
 type RoundStage int
@@ -152,11 +133,11 @@ type Round struct {
 }
 
 type RoundFinalizationEvent struct {
-	ID         string
-	Tx         string
-	ForfeitTxs []string
-	Tree       tree.CongestionTree
-	Connectors []string
+	ID              string
+	Tx              string
+	Tree            tree.CongestionTree
+	Connectors      []string
+	MinRelayFeeRate chainfee.SatPerKVByte
 }
 
 func (e RoundFinalizationEvent) isRoundEvent() {}

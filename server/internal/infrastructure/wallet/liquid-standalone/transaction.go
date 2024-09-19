@@ -16,6 +16,7 @@ import (
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/vulpemventures/go-elements/elementsutil"
 	"github.com/vulpemventures/go-elements/psetv2"
 )
@@ -58,7 +59,7 @@ func (s *service) SignTransaction(
 			}
 
 			switch c := closure.(type) {
-			case *tree.ForfeitClosure:
+			case *tree.MultisigClosure:
 				asp := schnorr.SerializePubKey(c.AspPubkey)
 				owner := schnorr.SerializePubKey(c.Pubkey)
 
@@ -272,6 +273,12 @@ func (s *service) LockConnectorUtxos(ctx context.Context, utxos []ports.TxOutpoi
 		Utxos:       pbUtxos,
 	})
 	return err
+}
+
+var minRate = chainfee.SatPerKVByte(0.2 * 1000)
+
+func (s *service) MinRelayFeeRate(ctx context.Context) chainfee.SatPerKVByte {
+	return minRate
 }
 
 func (s *service) MinRelayFee(ctx context.Context, vbytes uint64) (uint64, error) {

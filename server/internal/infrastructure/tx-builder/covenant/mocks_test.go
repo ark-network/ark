@@ -5,6 +5,7 @@ import (
 
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -257,6 +258,16 @@ func (m *mockedWallet) GetTransaction(ctx context.Context, txid string) (string,
 		res = a.(string)
 	}
 	return res, args.Error(1)
+}
+
+func (m *mockedWallet) MinRelayFeeRate(ctx context.Context) chainfee.SatPerKVByte {
+	args := m.Called(ctx)
+
+	var res chainfee.SatPerKVByte
+	if a := args.Get(0); a != nil {
+		res = a.(chainfee.SatPerKVByte)
+	}
+	return res
 }
 
 type mockedInput struct {

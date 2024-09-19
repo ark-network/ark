@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/descriptor"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
@@ -18,6 +17,7 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
+	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/transaction"
 )
@@ -165,7 +165,7 @@ func (s *liquidWallet) SignTransaction(
 				switch c := closure.(type) {
 				case *tree.CSVSigClosure:
 					sign = bytes.Equal(c.Pubkey.SerializeCompressed()[1:], serializedPubKey[1:])
-				case *tree.ForfeitClosure:
+				case *tree.MultisigClosure:
 					sign = bytes.Equal(c.Pubkey.SerializeCompressed()[1:], serializedPubKey[1:])
 				}
 
@@ -242,9 +242,23 @@ func (w *liquidWallet) getAddress(
 
 	liquidNet := utils.ToElementsNetwork(data.Network)
 
-	_, _, _, redemptionAddr, err := tree.ComputeVtxoTaprootScript(
-		w.walletData.Pubkey, data.AspPubkey, uint(data.UnilateralExitDelay), liquidNet,
-	)
+	vtxoScript := &tree.DefaultVtxoScript{
+		Owner:     w.walletData.Pubkey,
+		Asp:       data.AspPubkey,
+		ExitDelay: uint(data.UnilateralExitDelay),
+	}
+
+	vtxoTapKey, _, err := vtxoScript.TapTree()
+	if err != nil {
+		return "", "", "", err
+	}
+
+	vtxoP2tr, err := payment.FromTweakedKey(vtxoTapKey, &liquidNet, nil)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	redemptionAddr, err := vtxoP2tr.TaprootAddress()
 	if err != nil {
 		return "", "", "", err
 	}
@@ -254,19 +268,22 @@ func (w *liquidWallet) getAddress(
 		data.BoardingDescriptorTemplate, "USER", myPubkeyStr,
 	)
 
-	desc, err := descriptor.ParseTaprootDescriptor(descriptorStr)
+	onboardingScript, err := tree.ParseVtxoScript(descriptorStr)
 	if err != nil {
 		return "", "", "", err
 	}
 
-	_, boardingTimeout, err := descriptor.ParseBoardingDescriptor(*desc)
+	tapKey, _, err := onboardingScript.TapTree()
 	if err != nil {
 		return "", "", "", err
 	}
 
-	_, _, _, boardingAddr, err := tree.ComputeVtxoTaprootScript(
-		w.walletData.Pubkey, data.AspPubkey, boardingTimeout, liquidNet,
-	)
+	p2tr, err := payment.FromTweakedKey(tapKey, &liquidNet, nil)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	boardingAddr, err := p2tr.TaprootAddress()
 	if err != nil {
 		return "", "", "", err
 	}

@@ -8,10 +8,6 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-func p2trScript(taprootKey *secp256k1.PublicKey) ([]byte, error) {
-	return txscript.NewScriptBuilder().AddOp(txscript.OP_1).AddData(schnorr.SerializePubKey(taprootKey)).Script()
-}
-
 func getOnchainReceivers(
 	payments []domain.Payment,
 ) []domain.Receiver {
@@ -28,19 +24,24 @@ func getOnchainReceivers(
 
 func getOffchainReceivers(
 	payments []domain.Payment,
-) []bitcointree.Receiver {
+) ([]bitcointree.Receiver, error) {
 	receivers := make([]bitcointree.Receiver, 0)
 	for _, payment := range payments {
 		for _, receiver := range payment.Receivers {
 			if !receiver.IsOnchain() {
+				vtxoScript, err := bitcointree.ParseVtxoScript(receiver.Descriptor)
+				if err != nil {
+					return nil, err
+				}
+
 				receivers = append(receivers, bitcointree.Receiver{
-					Pubkey: receiver.Pubkey,
+					Script: vtxoScript,
 					Amount: receiver.Amount,
 				})
 			}
 		}
 	}
-	return receivers
+	return receivers, nil
 }
 
 func countSpentVtxos(payments []domain.Payment) uint64 {

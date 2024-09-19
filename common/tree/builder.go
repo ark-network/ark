@@ -1,9 +1,9 @@
 package tree
 
 import (
-	"encoding/hex"
 	"fmt"
 
+	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
@@ -14,13 +14,13 @@ import (
 
 func CraftCongestionTree(
 	asset string, aspPubkey *secp256k1.PublicKey, receivers []Receiver,
-	feeSatsPerNode uint64, roundLifetime, unilateralExitDelay int64,
+	feeSatsPerNode uint64, roundLifetime int64,
 ) (
 	buildCongestionTree TreeFactory,
 	sharedOutputScript []byte, sharedOutputAmount uint64, err error,
 ) {
 	root, err := createPartialCongestionTree(
-		asset, aspPubkey, receivers, feeSatsPerNode, roundLifetime, unilateralExitDelay,
+		asset, aspPubkey, receivers, feeSatsPerNode, roundLifetime,
 	)
 	if err != nil {
 		return
@@ -42,14 +42,13 @@ func CraftCongestionTree(
 }
 
 type node struct {
-	sweepKey            *secp256k1.PublicKey
-	receivers           []Receiver
-	left                *node
-	right               *node
-	asset               string
-	feeSats             uint64
-	roundLifetime       int64
-	unilateralExitDelay int64
+	sweepKey      *secp256k1.PublicKey
+	receivers     []Receiver
+	left          *node
+	right         *node
+	asset         string
+	feeSats       uint64
+	roundLifetime int64
 
 	_inputTaprootKey  *secp256k1.PublicKey
 	_inputTaprootTree *taproot.IndexedElementsTapScriptTree
@@ -242,53 +241,15 @@ func (n *node) getWitnessData() (
 }
 
 func (n *node) getVtxoWitnessData() (
-	*secp256k1.PublicKey, *taproot.IndexedElementsTapScriptTree, error,
+	*secp256k1.PublicKey, common.TaprootTree, error,
 ) {
 	if !n.isLeaf() {
 		return nil, nil, fmt.Errorf("cannot call vtxoWitness on a non-leaf node")
 	}
 
-	key, err := hex.DecodeString(n.receivers[0].Pubkey)
-	if err != nil {
-		return nil, nil, err
-	}
+	receiver := n.receivers[0]
 
-	pubkey, err := secp256k1.ParsePubKey(key)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	redeemClosure := &CSVSigClosure{
-		Pubkey:  pubkey,
-		Seconds: uint(n.unilateralExitDelay),
-	}
-
-	redeemLeaf, err := redeemClosure.Leaf()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	forfeitClosure := &ForfeitClosure{
-		Pubkey:    pubkey,
-		AspPubkey: n.sweepKey,
-	}
-
-	forfeitLeaf, err := forfeitClosure.Leaf()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	leafTaprootTree := taproot.AssembleTaprootScriptTree(
-		*redeemLeaf, *forfeitLeaf,
-	)
-	root := leafTaprootTree.RootNode.TapHash()
-
-	taprootKey := taproot.ComputeTaprootOutputKey(
-		UnspendableKey(),
-		root[:],
-	)
-
-	return taprootKey, leafTaprootTree, nil
+	return receiver.Script.TapTree()
 }
 
 func (n *node) getTreeNode(
@@ -413,7 +374,7 @@ func (n *node) createFinalCongestionTree() TreeFactory {
 
 func createPartialCongestionTree(
 	asset string, aspPubkey *secp256k1.PublicKey, receivers []Receiver,
-	feeSatsPerNode uint64, roundLifetime, unilateralExitDelay int64,
+	feeSatsPerNode uint64, roundLifetime int64,
 ) (root *node, err error) {
 	if len(receivers) == 0 {
 		return nil, fmt.Errorf("no receivers provided")
@@ -422,12 +383,11 @@ func createPartialCongestionTree(
 	nodes := make([]*node, 0, len(receivers))
 	for _, r := range receivers {
 		leafNode := &node{
-			sweepKey:            aspPubkey,
-			receivers:           []Receiver{r},
-			asset:               asset,
-			feeSats:             feeSatsPerNode,
-			roundLifetime:       roundLifetime,
-			unilateralExitDelay: unilateralExitDelay,
+			sweepKey:      aspPubkey,
+			receivers:     []Receiver{r},
+			asset:         asset,
+			feeSats:       feeSatsPerNode,
+			roundLifetime: roundLifetime,
 		}
 		nodes = append(nodes, leafNode)
 	}

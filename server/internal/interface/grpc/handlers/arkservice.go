@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
-	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/domain"
@@ -66,22 +65,27 @@ func (h *handler) CreatePayment(ctx context.Context, req *arkv1.CreatePaymentReq
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	vtxosKeys := make([]domain.VtxoKey, 0, len(inputs))
-	for _, input := range inputs {
-		if !input.IsVtxo() {
-			return nil, status.Error(codes.InvalidArgument, "only vtxos input allowed")
-		}
-
-		vtxosKeys = append(vtxosKeys, input.VtxoKey())
-	}
-
 	receivers, err := parseReceivers(req.GetOutputs())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
+	for _, receiver := range receivers {
+		if receiver.Amount <= 0 {
+			return nil, status.Error(codes.InvalidArgument, "output amount must be greater than 0")
+		}
+
+		if len(receiver.OnchainAddress) > 0 {
+			return nil, status.Error(codes.InvalidArgument, "onchain address is not supported as async payment destination")
+		}
+
+		if len(receiver.Descriptor) <= 0 {
+			return nil, status.Error(codes.InvalidArgument, "missing output descriptor")
+		}
+	}
+
 	redeemTx, unconditionalForfeitTxs, err := h.svc.CreateAsyncPayment(
-		ctx, vtxosKeys, receivers,
+		ctx, inputs, receivers,
 	)
 	if err != nil {
 		return nil, err
@@ -110,11 +114,11 @@ func (h *handler) Ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.Ping
 		resp = &arkv1.PingResponse{
 			Event: &arkv1.PingResponse_RoundFinalization{
 				RoundFinalization: &arkv1.RoundFinalizationEvent{
-					Id:             e.Id,
-					PoolTx:         e.PoolTx,
-					CongestionTree: castCongestionTree(e.CongestionTree),
-					ForfeitTxs:     e.UnsignedForfeitTxs,
-					Connectors:     e.Connectors,
+					Id:              e.Id,
+					PoolTx:          e.PoolTx,
+					CongestionTree:  castCongestionTree(e.CongestionTree),
+					Connectors:      e.Connectors,
+					MinRelayFeeRate: e.MinRelayFeeRate,
 				},
 			},
 		}
@@ -326,7 +330,7 @@ func (h *handler) GetEventStream(_ *arkv1.GetEventStreamRequest, stream arkv1.Ar
 }
 
 func (h *handler) ListVtxos(ctx context.Context, req *arkv1.ListVtxosRequest) (*arkv1.ListVtxosResponse, error) {
-	hrp, userPubkey, aspPubkey, err := parseAddress(req.GetAddress())
+	_, userPubkey, _, err := parseAddress(req.GetAddress())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -337,8 +341,8 @@ func (h *handler) ListVtxos(ctx context.Context, req *arkv1.ListVtxosRequest) (*
 	}
 
 	return &arkv1.ListVtxosResponse{
-		SpendableVtxos: vtxoList(spendableVtxos).toProto(hrp, aspPubkey),
-		SpentVtxos:     vtxoList(spentVtxos).toProto(hrp, aspPubkey),
+		SpendableVtxos: vtxoList(spendableVtxos).toProto(),
+		SpentVtxos:     vtxoList(spentVtxos).toProto(),
 	}, nil
 }
 
@@ -375,13 +379,14 @@ func (h *handler) GetBoardingAddress(ctx context.Context, req *arkv1.GetBoarding
 		return nil, status.Error(codes.InvalidArgument, "invalid pubkey (parse error)")
 	}
 
-	addr, err := h.svc.GetBoardingAddress(ctx, userPubkey)
+	addr, descriptor, err := h.svc.GetBoardingAddress(ctx, userPubkey)
 	if err != nil {
 		return nil, err
 	}
 
 	return &arkv1.GetBoardingAddressResponse{
-		Address: addr,
+		Address:     addr,
+		Descriptor_: descriptor,
 	}, nil
 }
 
@@ -484,11 +489,11 @@ func (h *handler) listenToEvents() {
 			ev = &arkv1.GetEventStreamResponse{
 				Event: &arkv1.GetEventStreamResponse_RoundFinalization{
 					RoundFinalization: &arkv1.RoundFinalizationEvent{
-						Id:             e.Id,
-						PoolTx:         e.PoolTx,
-						CongestionTree: castCongestionTree(e.CongestionTree),
-						ForfeitTxs:     e.UnsignedForfeitTxs,
-						Connectors:     e.Connectors,
+						Id:              e.Id,
+						PoolTx:          e.PoolTx,
+						CongestionTree:  castCongestionTree(e.CongestionTree),
+						Connectors:      e.Connectors,
+						MinRelayFeeRate: e.MinRelayFeeRate,
 					},
 				},
 			}
@@ -561,15 +566,9 @@ func (h *handler) listenToEvents() {
 
 type vtxoList []domain.Vtxo
 
-func (v vtxoList) toProto(hrp string, aspKey *secp256k1.PublicKey) []*arkv1.Vtxo {
+func (v vtxoList) toProto() []*arkv1.Vtxo {
 	list := make([]*arkv1.Vtxo, 0, len(v))
 	for _, vv := range v {
-		addr := vv.OnchainAddress
-		if vv.Pubkey != "" {
-			buf, _ := hex.DecodeString(vv.Pubkey)
-			key, _ := secp256k1.ParsePubKey(buf)
-			addr, _ = common.EncodeAddress(hrp, key, aspKey)
-		}
 		var pendingData *arkv1.PendingPayment
 		if vv.AsyncPayment != nil {
 			pendingData = &arkv1.PendingPayment{
@@ -578,18 +577,12 @@ func (v vtxoList) toProto(hrp string, aspKey *secp256k1.PublicKey) []*arkv1.Vtxo
 			}
 		}
 		list = append(list, &arkv1.Vtxo{
-			Outpoint: &arkv1.Input{
-				Input: &arkv1.Input_VtxoInput{
-					VtxoInput: &arkv1.VtxoInput{
-						Txid: vv.Txid,
-						Vout: vv.VOut,
-					},
-				},
+			Outpoint: &arkv1.Outpoint{
+				Txid: vv.Txid,
+				Vout: vv.VOut,
 			},
-			Receiver: &arkv1.Output{
-				Address: addr,
-				Amount:  vv.Amount,
-			},
+			Descriptor_: vv.Descriptor,
+			Amount:      vv.Amount,
 			PoolTxid:    vv.PoolTx,
 			Spent:       vv.Spent,
 			ExpireAt:    vv.ExpireAt,
