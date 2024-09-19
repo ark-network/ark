@@ -25,8 +25,7 @@ func TestVtxosToTxs(t *testing.T) {
 					RoundTxid: "377fa2fbd27c82bdbc095478384c88b6c75432c0ef464189e49c965194446cdf",
 					Amount:    20000,
 					Type:      TxReceived,
-					Pending:   false,
-					Claimed:   true,
+					IsPending: false,
 					CreatedAt: time.Unix(1726054898, 0),
 				},
 			},
@@ -39,16 +38,14 @@ func TestVtxosToTxs(t *testing.T) {
 					RoundTxid: "377fa2fbd27c82bdbc095478384c88b6c75432c0ef464189e49c965194446cdf",
 					Amount:    20000,
 					Type:      TxReceived,
-					Pending:   false,
-					Claimed:   true,
+					IsPending: false,
 					CreatedAt: time.Unix(1726054898, 0),
 				},
 				{
 					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
 					Amount:     1000,
 					Type:       TxSent,
-					Pending:    true,
-					Claimed:    false,
+					IsPending:  true,
 					CreatedAt:  time.Unix(1726054898, 0),
 				},
 			},
@@ -61,16 +58,14 @@ func TestVtxosToTxs(t *testing.T) {
 					RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
 					Amount:     2000,
 					Type:       TxReceived,
-					Pending:    true,
-					Claimed:    false,
+					IsPending:  true,
 					CreatedAt:  time.Unix(1726486359, 0),
 				},
 				{
 					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
 					Amount:     1000,
 					Type:       TxReceived,
-					Pending:    true,
-					Claimed:    false,
+					IsPending:  true,
 					CreatedAt:  time.Unix(1726054898, 0),
 				},
 			},
@@ -83,16 +78,14 @@ func TestVtxosToTxs(t *testing.T) {
 					RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
 					Amount:     2000,
 					Type:       TxReceived,
-					Pending:    false,
-					Claimed:    true,
+					IsPending:  false,
 					CreatedAt:  time.Unix(1726486359, 0),
 				},
 				{
 					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
 					Amount:     1000,
 					Type:       TxReceived,
-					Pending:    false,
-					Claimed:    true,
+					IsPending:  false,
 					CreatedAt:  time.Unix(1726054898, 0),
 				},
 			},
@@ -105,24 +98,21 @@ func TestVtxosToTxs(t *testing.T) {
 					RedeemTxid: "23c3a885f0ea05f7bdf83f3bf7f8ac9dc3f791ad292f4e63a6f53fa5e4935ab0",
 					Amount:     2100,
 					Type:       TxSent,
-					Pending:    true,
-					Claimed:    false,
+					IsPending:  true,
 					CreatedAt:  time.Unix(1726503865, 0),
 				},
 				{
 					RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
 					Amount:     2000,
 					Type:       TxReceived,
-					Pending:    false,
-					Claimed:    true,
+					IsPending:  false,
 					CreatedAt:  time.Unix(1726486359, 0),
 				},
 				{
 					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
 					Amount:     1000,
 					Type:       TxReceived,
-					Pending:    false,
-					Claimed:    true,
+					IsPending:  false,
 					CreatedAt:  time.Unix(1726054898, 0),
 				},
 			},
@@ -146,8 +136,7 @@ func TestVtxosToTxs(t *testing.T) {
 				require.Equal(t, wantTx.RedeemTxid, gotTx.RedeemTxid)
 				require.Equal(t, int(wantTx.Amount), int(gotTx.Amount))
 				require.Equal(t, wantTx.Type, gotTx.Type)
-				require.Equal(t, wantTx.Pending, gotTx.Pending)
-				require.Equal(t, wantTx.Claimed, gotTx.Claimed)
+				require.Equal(t, wantTx.IsPending, gotTx.IsPending)
 			}
 		})
 	}
@@ -276,8 +265,7 @@ func loadFixtures(jsonStr string) (vtxos, []Transaction, error) {
 			RoundTxid:    tx.RoundTxid,
 			Amount:       tx.Amount,
 			Type:         TxReceived,
-			Pending:      tx.Pending,
-			Claimed:      tx.Claimed,
+			IsPending:    tx.Pending,
 			CreatedAt:    createdAt,
 		}
 	}

@@ -137,6 +137,26 @@ func LoadCovenantClientWithWallet(
 	}, nil
 }
 
+func (a *covenantArkClient) ListVtxos(
+	ctx context.Context,
+) (spendableVtxos, spentVtxos []client.Vtxo, err error) {
+	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return
+	}
+
+	for _, addr := range offchainAddrs {
+		spendable, spent, err := a.client.ListVtxos(ctx, addr)
+		if err != nil {
+			return nil, nil, err
+		}
+		spendableVtxos = append(spendableVtxos, spendable...)
+		spentVtxos = append(spentVtxos, spent...)
+	}
+
+	return
+}
+
 func (a *covenantArkClient) Balance(
 	ctx context.Context, computeVtxoExpiration bool,
 ) (*Balance, error) {
@@ -1654,16 +1674,10 @@ func (a *covenantArkClient) getBoardingTxs(ctx context.Context) (transactions []
 	}
 
 	for _, u := range allUtxos {
-		pending := false
-		if isPending[u.Txid] {
-			pending = true
-		}
 		transactions = append(transactions, Transaction{
 			BoardingTxid: u.Txid,
 			Amount:       u.Amount,
 			Type:         TxReceived,
-			Pending:      pending,
-			Claimed:      !pending,
 			CreatedAt:    u.CreatedAt,
 		})
 	}
@@ -1703,13 +1717,6 @@ func vtxosToTxsCovenant(
 		if amount < 0 {
 			txType = TxSent
 		}
-		// check if is a pending tx
-		pending := false
-		claimed := true
-		if len(v.RoundTxid) == 0 && len(v.SpentBy) == 0 {
-			pending = true
-			claimed = false
-		}
 		// get redeem txid
 		redeemTxid := ""
 		if len(v.RedeemTx) > 0 {
@@ -1725,8 +1732,6 @@ func vtxosToTxsCovenant(
 			RedeemTxid: redeemTxid,
 			Amount:     uint64(math.Abs(float64(amount))),
 			Type:       txType,
-			Pending:    pending,
-			Claimed:    claimed,
 			CreatedAt:  getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
 		})
 	}

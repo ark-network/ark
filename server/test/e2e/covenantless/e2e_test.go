@@ -209,14 +209,14 @@ func TestReactToSpentVtxosRedemption(t *testing.T) {
 	// give time for the ASP to detect and process the fraud
 	time.Sleep(20 * time.Second)
 
-	balance, err := client.Balance(ctx, true)
+	balance, err := client.Balance(ctx, false)
 	require.NoError(t, err)
 
 	require.Empty(t, balance.OnchainBalance.LockedAmount)
 }
 
 func TestReactToAsyncSpentVtxosRedemption(t *testing.T) {
-	t.Run("receveir claimed funds", func(t *testing.T) {
+	t.Run("receiver claimed funds", func(t *testing.T) {
 		ctx := context.Background()
 		sdkClient, grpcClient := setupArkSDK(t)
 		defer grpcClient.Close()
@@ -276,7 +276,7 @@ func TestReactToAsyncSpentVtxosRedemption(t *testing.T) {
 		// give time for the ASP to detect and process the fraud
 		time.Sleep(50 * time.Second)
 
-		balance, err := sdkClient.Balance(ctx, true)
+		balance, err := sdkClient.Balance(ctx, false)
 		require.NoError(t, err)
 
 		require.Empty(t, balance.OnchainBalance.LockedAmount)

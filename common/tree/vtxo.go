@@ -46,12 +46,7 @@ func (v *DefaultVtxoScript) ToDescriptor() string {
 }
 
 func (v *DefaultVtxoScript) FromDescriptor(desc string) error {
-	taprootDesc, err := descriptor.ParseTaprootDescriptor(desc)
-	if err != nil {
-		return err
-	}
-
-	owner, asp, exitDelay, err := descriptor.ParseDefaultVtxoDescriptor(*taprootDesc)
+	owner, asp, exitDelay, err := descriptor.ParseDefaultVtxoDescriptor(desc)
 	if err != nil {
 		return err
 	}

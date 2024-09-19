@@ -407,13 +407,6 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 		return nil, fmt.Errorf("missing vtxos")
 	}
 
-	for _, vtxo := range vtxos {
-		// TODO allow to chain async payment ?
-		if vtxo.AsyncPayment != nil {
-			return nil, fmt.Errorf("vtxo %s is an async payment", vtxo.Txid)
-		}
-	}
-
 	ins := make([]*wire.OutPoint, 0, len(vtxos))
 	outs := make([]*wire.TxOut, 0, len(receivers))
 	unconditionalForfeitTxs := make([]string, 0, len(vtxos))

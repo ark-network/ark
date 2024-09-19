@@ -139,6 +139,73 @@ func LoadCovenantlessClientWithWallet(
 	}, nil
 }
 
+func (a *covenantlessArkClient) ListVtxos(
+	ctx context.Context,
+) (spendableVtxos, spentVtxos []client.Vtxo, err error) {
+	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return
+	}
+
+	_, pubkey, _, err := common.DecodeAddress(offchainAddrs[0])
+	if err != nil {
+		return
+	}
+
+	myPubkey := schnorr.SerializePubKey(pubkey)
+
+	// The ASP returns the vtxos sent to others via async payments as spendable
+	// because they are actually revertable. Since we do not provide any revert
+	// feature, we want to ignore them.
+	// To understand if the output of a redeem tx is sent or received we look at
+	// the inputs and check if they are owned by us.
+	// The auxiliary variables below are used to make these checks in an
+	// efficient way.
+	for _, addr := range offchainAddrs {
+		spendable, spent, err := a.client.ListVtxos(ctx, addr)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, v := range spendable {
+			if !v.Pending {
+				spendableVtxos = append(spendableVtxos, v)
+				continue
+			}
+			script, err := bitcointree.ParseVtxoScript(v.Descriptor)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			reversibleVtxo, ok := script.(*bitcointree.ReversibleVtxoScript)
+			if !ok {
+				spendableVtxos = append(spendableVtxos, v)
+				continue
+			}
+
+			if !bytes.Equal(schnorr.SerializePubKey(reversibleVtxo.Sender), myPubkey) {
+				spendableVtxos = append(spendableVtxos, v)
+			}
+		}
+		for _, v := range spent {
+			script, err := bitcointree.ParseVtxoScript(v.Descriptor)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			reversibleVtxo, ok := script.(*bitcointree.ReversibleVtxoScript)
+			if !ok {
+				spentVtxos = append(spentVtxos, v)
+				continue
+			}
+			if !bytes.Equal(schnorr.SerializePubKey(reversibleVtxo.Sender), myPubkey) {
+				spentVtxos = append(spentVtxos, v)
+			}
+		}
+	}
+
+	return
+}
+
 func (a *covenantlessArkClient) Balance(
 	ctx context.Context, computeVtxoExpiration bool,
 ) (*Balance, error) {
@@ -1690,12 +1757,11 @@ func (a *covenantlessArkClient) getOffchainBalance(
 ) (uint64, map[int64]uint64, error) {
 	amountByExpiration := make(map[int64]uint64, 0)
 
-	spendableVtxos, pendingVtxos, err := a.getVtxos(ctx, addr, computeVtxoExpiration)
+	vtxos, _, err := a.getVtxos(ctx, addr, computeVtxoExpiration)
 	if err != nil {
 		return 0, nil, err
 	}
 	var balance uint64
-	vtxos := append(spendableVtxos, pendingVtxos...)
 	for _, vtxo := range vtxos {
 		balance += vtxo.Amount
 
@@ -1798,21 +1864,18 @@ func (a *covenantlessArkClient) getClaimableBoardingUtxos(ctx context.Context) (
 }
 
 func (a *covenantlessArkClient) getVtxos(
-	ctx context.Context, addr string, computeVtxoExpiration bool,
+	ctx context.Context, _ string, computeVtxoExpiration bool,
 ) ([]client.Vtxo, []client.Vtxo, error) {
-	vtxos, _, err := a.client.ListVtxos(ctx, addr)
+	spendableVtxos, _, err := a.ListVtxos(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	pendingVtxos := make([]client.Vtxo, 0)
-	spendableVtxos := make([]client.Vtxo, 0)
-	for _, vtxo := range vtxos {
+	for _, vtxo := range spendableVtxos {
 		if vtxo.Pending {
 			pendingVtxos = append(pendingVtxos, vtxo)
-			continue
 		}
-		spendableVtxos = append(spendableVtxos, vtxo)
 	}
 
 	if !computeVtxoExpiration {
@@ -1832,7 +1895,7 @@ func (a *covenantlessArkClient) getVtxos(
 
 		for i, vtxo := range spendableVtxos {
 			if vtxo.Txid == vtxoTxid {
-				vtxos[i].ExpiresAt = expiration
+				spendableVtxos[i].ExpiresAt = expiration
 				break
 			}
 		}
@@ -1960,8 +2023,7 @@ func (a *covenantlessArkClient) getBoardingTxs(ctx context.Context) (transaction
 			BoardingTxid: u.Txid,
 			Amount:       u.Amount,
 			Type:         TxReceived,
-			Pending:      pending,
-			Claimed:      !pending,
+			IsPending:    pending,
 			CreatedAt:    u.CreatedAt,
 		})
 	}
@@ -2011,13 +2073,7 @@ func vtxosToTxsCovenantless(
 		if amount < 0 {
 			txType = TxSent
 		}
-		// check if is a pending tx
-		pending := false
-		claimed := true
-		if len(v.RoundTxid) == 0 && len(v.SpentBy) == 0 {
-			pending = true
-			claimed = false
-		}
+
 		// get redeem txid
 		redeemTxid := ""
 		if len(v.RedeemTx) > 0 {
@@ -2029,13 +2085,13 @@ func vtxosToTxsCovenantless(
 		}
 		// add transaction
 		transactions = append(transactions, Transaction{
-			RoundTxid:  v.RoundTxid,
-			RedeemTxid: redeemTxid,
-			Amount:     uint64(math.Abs(float64(amount))),
-			Type:       txType,
-			Pending:    pending,
-			Claimed:    claimed,
-			CreatedAt:  getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
+			RoundTxid:       v.RoundTxid,
+			RedeemTxid:      redeemTxid,
+			Amount:          uint64(math.Abs(float64(amount))),
+			Type:            txType,
+			IsPending:       (v.Pending && len(v.SpentBy) == 0),
+			IsPendingChange: v.PendingChange,
+			CreatedAt:       getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
 		})
 	}
 

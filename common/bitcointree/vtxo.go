@@ -56,12 +56,7 @@ func (v *DefaultVtxoScript) ToDescriptor() string {
 }
 
 func (v *DefaultVtxoScript) FromDescriptor(desc string) error {
-	taprootDesc, err := descriptor.ParseTaprootDescriptor(desc)
-	if err != nil {
-		return err
-	}
-
-	owner, asp, exitDelay, err := descriptor.ParseDefaultVtxoDescriptor(*taprootDesc)
+	owner, asp, exitDelay, err := descriptor.ParseDefaultVtxoDescriptor(desc)
 	if err != nil {
 		return err
 	}
@@ -138,12 +133,7 @@ func (v *ReversibleVtxoScript) ToDescriptor() string {
 }
 
 func (v *ReversibleVtxoScript) FromDescriptor(desc string) error {
-	taprootDesc, err := descriptor.ParseTaprootDescriptor(desc)
-	if err != nil {
-		return err
-	}
-
-	owner, sender, asp, exitDelay, err := descriptor.ParseReversibleVtxoDescriptor(*taprootDesc)
+	owner, sender, asp, exitDelay, err := descriptor.ParseReversibleVtxoDescriptor(desc)
 	if err != nil {
 		return err
 	}
