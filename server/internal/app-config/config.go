@@ -277,11 +277,11 @@ func (c *Config) txBuilderService() error {
 	switch c.TxBuilderType {
 	case "covenant":
 		svc = txbuilder.NewTxBuilder(
-			c.wallet, c.Network, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay,
+			c.wallet, c.Network, c.RoundLifetime, c.BoardingExitDelay,
 		)
 	case "covenantless":
 		svc = cltxbuilder.NewTxBuilder(
-			c.wallet, c.Network, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay,
+			c.wallet, c.Network, c.RoundLifetime, c.BoardingExitDelay,
 		)
 	default:
 		err = fmt.Errorf("unknown tx builder type")

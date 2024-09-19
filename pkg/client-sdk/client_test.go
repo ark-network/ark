@@ -226,7 +226,7 @@ func loadFixtures(jsonStr string) (vtxos, []Transaction, error) {
 			return vtxos{}, nil, err
 		}
 		spendable[i] = client.Vtxo{
-			VtxoKey: client.VtxoKey{
+			Outpoint: client.Outpoint{
 				Txid: vtxo.Outpoint.Txid,
 				VOut: vtxo.Outpoint.Vout,
 			},
@@ -251,7 +251,7 @@ func loadFixtures(jsonStr string) (vtxos, []Transaction, error) {
 			return vtxos{}, nil, err
 		}
 		spent[i] = client.Vtxo{
-			VtxoKey: client.VtxoKey{
+			Outpoint: client.Outpoint{
 				Txid: vtxo.Outpoint.Txid,
 				VOut: vtxo.Outpoint.Vout,
 			},

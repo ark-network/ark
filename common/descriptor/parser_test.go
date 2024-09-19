@@ -62,7 +62,7 @@ func TestParseTaprootDescriptor(t *testing.T) {
 		},
 		{
 			name: "Boarding",
-			desc: "tr(0250929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0,{ and(pk(873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465), pk(79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798)), and(older(604672), pk(79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798)) })",
+			desc: "tr(0250929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0,{ and(pk(973079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465), pk(79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798)), and(older(604672), pk(79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798)) })",
 			expected: descriptor.TaprootDescriptor{
 				InternalKey: descriptor.Key{Hex: "50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0"},
 				ScriptTree: []descriptor.Expression{
@@ -70,7 +70,7 @@ func TestParseTaprootDescriptor(t *testing.T) {
 						First: &descriptor.PK{
 							Key: descriptor.XOnlyKey{
 								descriptor.Key{
-									Hex: "873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465",
+									Hex: "973079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465",
 								},
 							},
 						},
@@ -125,16 +125,72 @@ func TestParseTaprootDescriptor(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "Reversible VTXO",
+			desc: "tr(0250929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0,{ { and(pk(873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465), pk(79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798)), and(older(604672), pk(79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798)) }, {and(pk(873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465), pk(79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798))}})",
+			expected: descriptor.TaprootDescriptor{
+				InternalKey: descriptor.Key{Hex: "50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0"},
+				ScriptTree: []descriptor.Expression{
+					&descriptor.And{
+						First: &descriptor.PK{
+							Key: descriptor.XOnlyKey{
+								descriptor.Key{
+									Hex: "873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465",
+								},
+							},
+						},
+						Second: &descriptor.PK{
+							Key: descriptor.XOnlyKey{
+								descriptor.Key{
+									Hex: "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+								},
+							},
+						},
+					},
+					&descriptor.And{
+						Second: &descriptor.PK{
+							Key: descriptor.XOnlyKey{
+								descriptor.Key{
+									Hex: "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+								},
+							},
+						},
+						First: &descriptor.Older{
+							Timeout: 604672,
+						},
+					},
+					&descriptor.And{
+						First: &descriptor.PK{
+							Key: descriptor.XOnlyKey{
+								descriptor.Key{
+									Hex: "873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465",
+								},
+							},
+						},
+						Second: &descriptor.PK{
+							Key: descriptor.XOnlyKey{
+								descriptor.Key{
+									Hex: "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := descriptor.ParseTaprootDescriptor(tt.desc)
-			if (err != nil) != tt.wantErr {
-				require.Equal(t, tt.wantErr, err != nil, err)
+			if tt.wantErr {
+				require.Error(t, err)
 				return
 			}
-			require.Equal(t, tt.expected, got)
+			require.NoError(t, err)
+			require.NotNil(t, got)
+			require.Equal(t, tt.expected, *got)
 		})
 	}
 }

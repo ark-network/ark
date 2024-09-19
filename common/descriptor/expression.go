@@ -204,6 +204,9 @@ func (e *And) Script(verify bool) (string, error) {
 
 func parseExpression(policy string) (Expression, error) {
 	policy = strings.TrimSpace(policy)
+	if policy[0] == '{' {
+		policy = policy[1:]
+	}
 	expressions := make([]Expression, 0)
 	expressions = append(expressions, &PK{})
 	expressions = append(expressions, &Older{})

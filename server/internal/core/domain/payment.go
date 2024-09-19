@@ -68,7 +68,7 @@ func (p Payment) validate(ignoreOuts bool) error {
 		return fmt.Errorf("missing outputs")
 	}
 	for _, r := range p.Receivers {
-		if len(r.OnchainAddress) <= 0 && len(r.Pubkey) <= 0 {
+		if len(r.OnchainAddress) <= 0 && len(r.Descriptor) <= 0 {
 			return fmt.Errorf("missing receiver destination")
 		}
 	}
@@ -96,7 +96,7 @@ func (k VtxoKey) Hash() string {
 }
 
 type Receiver struct {
-	Pubkey         string
+	Descriptor     string
 	Amount         uint64
 	OnchainAddress string
 }

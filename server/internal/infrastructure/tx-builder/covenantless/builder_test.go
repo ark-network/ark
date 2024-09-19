@@ -20,11 +20,11 @@ import (
 )
 
 const (
-	testingKey          = "0218d5ca8b58797b7dbd65c075dd7ba7784b3f38ab71b1a5a8e3f94ba0257654a6"
-	connectorAddress    = "bc1py00yhcjpcj0k0sqra0etq0u3yy0purmspppsw0shyzyfe8c83tmq5h6kc2"
-	roundLifetime       = int64(1209344)
-	unilateralExitDelay = int64(512)
-	boardingExitDelay   = int64(512)
+	testingKey        = "020000000000000000000000000000000000000000000000000000000000000001"
+	connectorAddress  = "bc1py00yhcjpcj0k0sqra0etq0u3yy0purmspppsw0shyzyfe8c83tmq5h6kc2"
+	roundLifetime     = int64(1209344)
+	boardingExitDelay = int64(512)
+	minRelayFeeRate   = 3
 )
 
 var (
@@ -53,7 +53,7 @@ func TestMain(m *testing.M) {
 
 func TestBuildPoolTx(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(
-		wallet, common.Bitcoin, roundLifetime, unilateralExitDelay, boardingExitDelay,
+		wallet, common.Bitcoin, roundLifetime, boardingExitDelay,
 	)
 
 	fixtures, err := parsePoolTxFixtures()
@@ -64,15 +64,11 @@ func TestBuildPoolTx(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
 			for _, f := range fixtures.Valid {
 				cosigners := make([]*secp256k1.PublicKey, 0)
-				for _, payment := range f.Payments {
-					for _, input := range payment.Inputs {
-						pubkeyBytes, err := hex.DecodeString(input.Pubkey)
-						require.NoError(t, err)
-						pubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
-						require.NoError(t, err)
+				for range f.Payments {
+					randKey, err := secp256k1.GeneratePrivateKey()
+					require.NoError(t, err)
 
-						cosigners = append(cosigners, pubkey)
-					}
+					cosigners = append(cosigners, randKey.PubKey())
 				}
 
 				poolTx, congestionTree, connAddr, err := builder.BuildPoolTx(
@@ -110,7 +106,7 @@ func TestBuildPoolTx(t *testing.T) {
 
 func TestBuildForfeitTxs(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(
-		wallet, common.Bitcoin, 1209344, unilateralExitDelay, boardingExitDelay,
+		wallet, common.Bitcoin, 1209344, boardingExitDelay,
 	)
 
 	fixtures, err := parseForfeitTxsFixtures()
@@ -121,7 +117,7 @@ func TestBuildForfeitTxs(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
 			for _, f := range fixtures.Valid {
 				connectors, forfeitTxs, err := builder.BuildForfeitTxs(
-					pubkey, f.PoolTx, f.Payments,
+					pubkey, f.PoolTx, f.Payments, minRelayFeeRate,
 				)
 				require.NoError(t, err)
 				require.Len(t, connectors, f.ExpectedNumOfConnectors)
@@ -159,7 +155,7 @@ func TestBuildForfeitTxs(t *testing.T) {
 		t.Run("invalid", func(t *testing.T) {
 			for _, f := range fixtures.Invalid {
 				connectors, forfeitTxs, err := builder.BuildForfeitTxs(
-					pubkey, f.PoolTx, f.Payments,
+					pubkey, f.PoolTx, f.Payments, minRelayFeeRate,
 				)
 				require.EqualError(t, err, f.ExpectedErr)
 				require.Empty(t, connectors)
