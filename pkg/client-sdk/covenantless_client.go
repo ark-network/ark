@@ -350,21 +350,6 @@ func (a *covenantlessArkClient) Balance(
 		},
 	}
 
-	history, _ := a.GetTransactionHistory(ctx)
-	log.Info("history ", len(history))
-	for _, v := range history {
-		log.Info("---------")
-		log.Infof("RoundTxid %v", v.RoundTxid)
-		log.Infof("RedeemTxid %v", v.RedeemTxid)
-		log.Infof("BoardingTxid %v", v.BoardingTxid)
-		log.Infof("CreatedAt %s", v.CreatedAt)
-		log.Infof("Type %v", v.Type)
-		log.Infof("Amount %d", v.Amount)
-		log.Infof("Pending %v", v.IsPending)
-		log.Infof("PendingChange %v", v.IsPendingChange)
-		log.Info("---------")
-	}
-
 	return response, nil
 }
 
