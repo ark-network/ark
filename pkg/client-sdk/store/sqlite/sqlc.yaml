@@ -1,0 +1,12 @@
+version: "2"
+sql:
+  - engine: "sqlite"
+    queries: "sqlc/query.sql"
+    schema: "migration"
+    gen:
+      go:
+        package: "queries"
+        out: "sqlc/queries"
+        overrides:
+          - go_type: "int64"
+            column: "vtxo.expires_at"

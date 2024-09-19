@@ -18,6 +18,7 @@ import (
 	filestore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store/file"
 	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store/inmemory"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -51,12 +52,23 @@ var (
 	}
 )
 
+const (
+	vtxoSpent   spent = true
+	vtxoUnspent spent = false
+)
+
+type spent bool
+
 type arkClient struct {
 	*store.StoreData
-	wallet   wallet.WalletService
-	store    store.ConfigStore
-	explorer explorer.Explorer
-	client   client.ASPClient
+	wallet       wallet.WalletService
+	store        store.ConfigStore
+	appDataStore store.AppDataStore
+	explorer     explorer.Explorer
+	client       client.ASPClient
+
+	vtxosChan            chan map[spent]client.Vtxo
+	vtxoListeningStarted bool
 }
 
 func (a *arkClient) GetConfigData(
@@ -130,6 +142,9 @@ func (a *arkClient) InitWithWallet(
 	a.explorer = explorerSvc
 	a.client = clientSvc
 
+	a.vtxosChan = make(chan map[spent]client.Vtxo)
+	a.listenForVtxos(ctx, a.vtxosChan)
+
 	return nil
 }
 
@@ -201,6 +216,9 @@ func (a *arkClient) Init(
 	a.explorer = explorerSvc
 	a.client = clientSvc
 
+	a.vtxosChan = make(chan map[spent]client.Vtxo)
+	a.listenForVtxos(ctx, a.vtxosChan)
+
 	return nil
 }
 
@@ -248,6 +266,51 @@ func (a *arkClient) ListVtxos(
 	}
 
 	return
+}
+
+func (a *arkClient) GetTransactionHistory(
+	ctx context.Context,
+) ([]store.Transaction, error) {
+	return a.appDataStore.TransactionRepository().GetAll(ctx)
+}
+
+func (a *arkClient) listenForVtxos(
+	ctx context.Context,
+	vtxoChan chan<- map[spent]client.Vtxo,
+) {
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				spendableVtxos, spentVtxos, err := a.ListVtxos(ctx)
+				if err != nil {
+					log.Warnf("listenForNewVtxos: failed to list vtxos: %s", err)
+					continue
+				}
+
+				allVtxos := make(map[spent]client.Vtxo)
+				for _, vtxo := range spendableVtxos {
+					allVtxos[vtxoUnspent] = vtxo
+				}
+				for _, vtxo := range spentVtxos {
+					allVtxos[vtxoSpent] = vtxo
+				}
+
+				go func() {
+					if len(allVtxos) > 0 {
+						vtxoChan <- allVtxos
+					}
+				}()
+			}
+		}
+	}()
+
+	a.vtxoListeningStarted = true
 }
 
 func (a *arkClient) ping(

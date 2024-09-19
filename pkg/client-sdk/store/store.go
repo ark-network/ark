@@ -2,9 +2,6 @@ package store
 
 import (
 	"context"
-
-	"github.com/ark-network/ark/common"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
 const (
@@ -12,24 +9,30 @@ const (
 	FileStore     = "file"
 )
 
-type StoreData struct {
-	AspUrl                     string
-	AspPubkey                  *secp256k1.PublicKey
-	WalletType                 string
-	ClientType                 string
-	Network                    common.Network
-	RoundLifetime              int64
-	RoundInterval              int64
-	UnilateralExitDelay        int64
-	Dust                       uint64
-	BoardingDescriptorTemplate string
-	ExplorerURL                string
-}
-
 type ConfigStore interface {
 	GetType() string
 	GetDatadir() string
 	AddData(ctx context.Context, data StoreData) error
 	GetData(ctx context.Context) (*StoreData, error)
 	CleanData(ctx context.Context) error
+}
+
+type AppDataStore interface {
+	TransactionRepository() TransactionRepository
+	VtxoRepository() VtxoRepository
+
+	Stop()
+}
+
+type TransactionRepository interface {
+	InsertTransactions(ctx context.Context, txs []Transaction) error
+	GetAll(ctx context.Context) ([]Transaction, error)
+	GetEventChannel() chan Transaction
+	GetBoardingTxs(ctx context.Context) ([]Transaction, error)
+	Stop()
+}
+
+type VtxoRepository interface {
+	InsertVtxos(ctx context.Context, vtxos []Vtxo) error
+	GetAll(ctx context.Context) (spendable []Vtxo, spent []Vtxo, err error)
 }

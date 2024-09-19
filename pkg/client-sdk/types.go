@@ -2,7 +2,6 @@ package arksdk
 
 import (
 	"fmt"
-	"time"
 
 	grpcclient "github.com/ark-network/ark/pkg/client-sdk/client/grpc"
 	restclient "github.com/ark-network/ark/pkg/client-sdk/client/rest"
@@ -121,22 +120,4 @@ type balanceRes struct {
 	onchainLockedBalance        map[int64]uint64
 	offchainBalanceByExpiration map[int64]uint64
 	err                         error
-}
-
-const (
-	TxSent     TxType = "sent"
-	TxReceived TxType = "received"
-)
-
-type TxType string
-
-type Transaction struct {
-	BoardingTxid string
-	RoundTxid    string
-	RedeemTxid   string
-	Amount       uint64
-	Type         TxType
-	Pending      bool
-	Claimed      bool
-	CreatedAt    time.Time
 }

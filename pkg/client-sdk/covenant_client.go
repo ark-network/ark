@@ -54,7 +54,10 @@ type covenantArkClient struct {
 	*arkClient
 }
 
-func NewCovenantClient(storeSvc store.ConfigStore) (ArkClient, error) {
+func NewCovenantClient(
+	storeSvc store.ConfigStore,
+	appDataStore store.AppDataStore,
+) (ArkClient, error) {
 	data, err := storeSvc.GetData(context.Background())
 	if err != nil {
 		return nil, err
@@ -63,10 +66,24 @@ func NewCovenantClient(storeSvc store.ConfigStore) (ArkClient, error) {
 		return nil, ErrAlreadyInitialized
 	}
 
-	return &covenantArkClient{&arkClient{store: storeSvc}}, nil
+	cvnt := &covenantArkClient{
+		arkClient: &arkClient{
+			store:        storeSvc,
+			appDataStore: appDataStore,
+		},
+	}
+
+	if err := cvnt.listenToVtxoChan(context.Background()); err != nil {
+		return nil, err
+	}
+
+	return cvnt, nil
 }
 
-func LoadCovenantClient(storeSvc store.ConfigStore) (ArkClient, error) {
+func LoadCovenantClient(
+	storeSvc store.ConfigStore,
+	appDataStore store.AppDataStore,
+) (ArkClient, error) {
 	if storeSvc == nil {
 		return nil, fmt.Errorf("missin store service")
 	}
@@ -96,13 +113,28 @@ func LoadCovenantClient(storeSvc store.ConfigStore) (ArkClient, error) {
 		return nil, fmt.Errorf("faile to setup wallet: %s", err)
 	}
 
-	return &covenantArkClient{
-		&arkClient{data, walletSvc, storeSvc, explorerSvc, clientSvc},
-	}, nil
+	cvnt := &covenantArkClient{
+		&arkClient{
+			StoreData:    data,
+			wallet:       walletSvc,
+			store:        storeSvc,
+			appDataStore: appDataStore,
+			explorer:     explorerSvc,
+			client:       clientSvc,
+		},
+	}
+
+	if err := cvnt.listenToVtxoChan(context.Background()); err != nil {
+		return nil, err
+	}
+
+	return cvnt, nil
 }
 
 func LoadCovenantClientWithWallet(
-	storeSvc store.ConfigStore, walletSvc wallet.WalletService,
+	storeSvc store.ConfigStore,
+	appDataStore store.AppDataStore,
+	walletSvc wallet.WalletService,
 ) (ArkClient, error) {
 	if storeSvc == nil {
 		return nil, fmt.Errorf("missin store service")
@@ -131,9 +163,22 @@ func LoadCovenantClientWithWallet(
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
 
-	return &covenantArkClient{
-		&arkClient{data, walletSvc, storeSvc, explorerSvc, clientSvc},
-	}, nil
+	cvnt := &covenantArkClient{
+		&arkClient{
+			StoreData:    data,
+			wallet:       walletSvc,
+			store:        storeSvc,
+			appDataStore: appDataStore,
+			explorer:     explorerSvc,
+			client:       clientSvc,
+		},
+	}
+
+	if err := cvnt.listenToVtxoChan(context.Background()); err != nil {
+		return nil, err
+	}
+
+	return cvnt, nil
 }
 
 func (a *covenantArkClient) Balance(
@@ -510,20 +555,177 @@ func (a *covenantArkClient) Claim(ctx context.Context) (string, error) {
 	return a.selfTransferAllPendingPayments(ctx, boardingUtxos, receiver, desc)
 }
 
-func (a *covenantArkClient) GetTransactionHistory(ctx context.Context) ([]Transaction, error) {
-	spendableVtxos, spentVtxos, err := a.ListVtxos(ctx)
-	if err != nil {
-		return nil, err
-	}
+func (a *covenantArkClient) GetTransactionEventChannel() chan store.Transaction {
+	return a.appDataStore.TransactionRepository().GetEventChannel()
+}
 
-	config, err := a.store.GetData(ctx)
-	if err != nil {
-		return nil, err
-	}
+func (a *covenantArkClient) listenToVtxoChan(ctnx context.Context) error {
+	go func(ctx context.Context) {
+		for {
+			if !a.vtxoListeningStarted {
+				time.Sleep(1 * time.Second)
+				continue
+			}
 
-	boardingTxs := a.getBoardingTxs(ctx)
+			select {
+			case <-ctx.Done():
+				return
+			case allVtxow := <-a.vtxosChan:
+				if len(allVtxow) == 0 {
+					continue
+				}
 
-	return vtxosToTxsCovenant(config.RoundLifetime, spendableVtxos, spentVtxos, boardingTxs)
+				spendableVtxosOld, spentVtxosOld, err := a.appDataStore.VtxoRepository().GetAll(ctx)
+				if err != nil {
+					log.Errorf("failed to get vtxos: %s", err)
+					continue
+				}
+				allBoardingTxs := a.getBoardingTxs(ctx)
+				oldVtxos := append(spendableVtxosOld, spentVtxosOld...)
+				if len(oldVtxos) == 0 {
+					spendableVtxos, spentVtxos := make([]client.Vtxo, 0), make([]client.Vtxo, 0)
+					for isSpent, vtxo := range allVtxow {
+						if isSpent {
+							spentVtxos = append(spentVtxos, vtxo)
+						} else {
+							spendableVtxos = append(spendableVtxos, vtxo)
+						}
+					}
+
+					txs, err := vtxosToTxsCovenant(a.StoreData.RoundInterval, spendableVtxos, spentVtxos, allBoardingTxs)
+					if err != nil {
+						log.Errorf("failed to convert vtxos to txs: %s", err)
+						continue
+					}
+
+					if err := a.appDataStore.TransactionRepository().InsertTransactions(ctx, txs); err != nil {
+						log.Errorf("failed to insert transaction: %s", err)
+						continue
+					}
+
+					vtxos := make([]store.Vtxo, 0, len(allVtxow))
+					for isSpent, v := range allVtxow {
+						vtxos = append(vtxos, store.Vtxo{
+							Txid:                    v.Txid,
+							VOut:                    v.VOut,
+							Amount:                  v.Amount,
+							RoundTxid:               v.RoundTxid,
+							ExpiresAt:               v.ExpiresAt,
+							RedeemTx:                v.RedeemTx,
+							UnconditionalForfeitTxs: v.UnconditionalForfeitTxs,
+							Pending:                 v.Pending,
+							SpentBy:                 v.SpentBy,
+							Spent:                   bool(isSpent),
+						})
+						if err := a.appDataStore.VtxoRepository().InsertVtxos(ctx, vtxos); err != nil {
+							log.Errorf("failed to insert vtxo: %s", err)
+							continue
+						}
+					}
+				} else {
+					// find differece between old and new vtxos
+					allVtxosMap := make(map[string]client.Vtxo, 0)
+					for _, vtxo := range allVtxow {
+						key := fmt.Sprintf("%s:%d", vtxo.Txid, vtxo.VOut)
+						allVtxosMap[key] = vtxo
+					}
+
+					oldVtxosMap := make(map[string]store.Vtxo, 0)
+					for _, vtxo := range oldVtxos {
+						key := fmt.Sprintf("%s:%d", vtxo.Txid, vtxo.VOut)
+						oldVtxosMap[key] = vtxo
+					}
+
+					// find new vtxos
+					newSpendableVtxos, newSpentVtxos := make([]client.Vtxo, 0), make([]client.Vtxo, 0)
+					for isSpent, vtxo := range allVtxow {
+						key := fmt.Sprintf("%s:%d", vtxo.Txid, vtxo.VOut)
+						if _, ok := oldVtxosMap[key]; !ok {
+							if isSpent {
+								newSpentVtxos = append(newSpentVtxos, vtxo)
+							} else {
+								newSpendableVtxos = append(newSpendableVtxos, vtxo)
+							}
+						}
+					}
+
+					oldBardingTxs, err := a.appDataStore.TransactionRepository().GetBoardingTxs(ctx)
+					if err != nil {
+						log.Errorf("failed to get boarding txs: %s", err)
+						continue
+					}
+
+					newBoardingTxs := make([]store.Transaction, 0)
+					if len(oldBardingTxs) > 0 {
+						for _, tx := range allBoardingTxs {
+							found := false
+							for _, oldTx := range oldBardingTxs {
+								if tx.BoardingTxid == oldTx.BoardingTxid {
+									found = true
+									break
+								}
+							}
+							if !found {
+								newBoardingTxs = append(newBoardingTxs, tx)
+							}
+						}
+					}
+
+					txs, err := vtxosToTxsCovenant(a.StoreData.RoundInterval, newSpendableVtxos, newSpentVtxos, newBoardingTxs)
+					if err != nil {
+						log.Errorf("failed to convert vtxos to txs: %s", err)
+						continue
+					}
+
+					if err := a.appDataStore.TransactionRepository().InsertTransactions(ctx, txs); err != nil {
+						log.Errorf("failed to insert transaction: %s", err)
+						continue
+					}
+
+					spendableVtxosToInsert := make([]store.Vtxo, 0, len(newSpendableVtxos))
+					for _, v := range newSpendableVtxos {
+						spendableVtxosToInsert = append(spendableVtxosToInsert, store.Vtxo{
+							Txid:                    v.Txid,
+							VOut:                    v.VOut,
+							Amount:                  v.Amount,
+							RoundTxid:               v.RoundTxid,
+							ExpiresAt:               v.ExpiresAt,
+							RedeemTx:                v.RedeemTx,
+							UnconditionalForfeitTxs: v.UnconditionalForfeitTxs,
+							Pending:                 v.Pending,
+							SpentBy:                 v.SpentBy,
+							Spent:                   false,
+						})
+					}
+
+					spentVtxosToInsert := make([]store.Vtxo, 0, len(newSpentVtxos))
+					for _, v := range newSpentVtxos {
+						spentVtxosToInsert = append(spentVtxosToInsert, store.Vtxo{
+							Txid:                    v.Txid,
+							VOut:                    v.VOut,
+							Amount:                  v.Amount,
+							RoundTxid:               v.RoundTxid,
+							ExpiresAt:               v.ExpiresAt,
+							RedeemTx:                v.RedeemTx,
+							UnconditionalForfeitTxs: v.UnconditionalForfeitTxs,
+							Pending:                 v.Pending,
+							SpentBy:                 v.SpentBy,
+							Spent:                   true,
+						})
+					}
+					if err := a.appDataStore.VtxoRepository().InsertVtxos(
+						ctx,
+						append(spentVtxosToInsert, spendableVtxosToInsert...),
+					); err != nil {
+						log.Errorf("failed to insert vtxo: %s", err)
+						continue
+					}
+				}
+			}
+		}
+	}(ctnx)
+
+	return nil
 }
 
 func (a *covenantArkClient) getAllBoardingUtxos(ctx context.Context) ([]explorer.Utxo, error) {
@@ -1422,7 +1624,7 @@ func (a *covenantArkClient) selfTransferAllPendingPayments(
 	return roundTxid, nil
 }
 
-func (a *covenantArkClient) getBoardingTxs(ctx context.Context) (transactions []Transaction) {
+func (a *covenantArkClient) getBoardingTxs(ctx context.Context) (transactions []store.Transaction) {
 	utxos, err := a.getClaimableBoardingUtxos(ctx)
 	if err != nil {
 		return nil
@@ -1443,10 +1645,10 @@ func (a *covenantArkClient) getBoardingTxs(ctx context.Context) (transactions []
 		if isPending[u.Txid] {
 			pending = true
 		}
-		transactions = append(transactions, Transaction{
+		transactions = append(transactions, store.Transaction{
 			BoardingTxid: u.Txid,
 			Amount:       u.Amount,
-			Type:         TxReceived,
+			Type:         store.TxReceived,
 			Pending:      pending,
 			Claimed:      !pending,
 			CreatedAt:    u.CreatedAt,
@@ -1456,10 +1658,10 @@ func (a *covenantArkClient) getBoardingTxs(ctx context.Context) (transactions []
 }
 
 func vtxosToTxsCovenant(
-	roundLifetime int64, spendable, spent []client.Vtxo, boardingTxs []Transaction,
-) ([]Transaction, error) {
-	transactions := make([]Transaction, 0)
-	unconfirmedBoardingTxs := make([]Transaction, 0)
+	roundLifetime int64, spendable, spent []client.Vtxo, boardingTxs []store.Transaction,
+) ([]store.Transaction, error) {
+	transactions := make([]store.Transaction, 0)
+	unconfirmedBoardingTxs := make([]store.Transaction, 0)
 	for _, tx := range boardingTxs {
 		emptyTime := time.Time{}
 		if tx.CreatedAt == emptyTime {
@@ -1484,9 +1686,9 @@ func vtxosToTxsCovenant(
 			}
 		}
 		// what kind of tx was this? send or receive?
-		txType := TxReceived
+		txType := store.TxReceived
 		if amount < 0 {
-			txType = TxSent
+			txType = store.TxSent
 		}
 		// check if is a pending tx
 		pending := false
@@ -1505,7 +1707,7 @@ func vtxosToTxsCovenant(
 			redeemTxid = txid
 		}
 		// add transaction
-		transactions = append(transactions, Transaction{
+		transactions = append(transactions, store.Transaction{
 			RoundTxid:  v.RoundTxid,
 			RedeemTxid: redeemTxid,
 			Amount:     uint64(math.Abs(float64(amount))),

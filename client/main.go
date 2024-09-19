@@ -14,17 +14,21 @@ import (
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
 	"github.com/ark-network/ark/pkg/client-sdk/store"
 	filestore "github.com/ark-network/ark/pkg/client-sdk/store/file"
+	sqlitestore "github.com/ark-network/ark/pkg/client-sdk/store/sqlite"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/term"
 )
 
 const (
 	DatadirEnvVar = "ARK_WALLET_DATADIR"
+	sqliteDir     = "sqlite"
 )
 
 var (
 	Version      string
 	arkSdkClient arksdk.ArkClient
+
+	appDataStoreMigrationPath = os.Getenv("ARK_APP_DATA_STORE_MIGRATION_PATH")
 )
 
 func main() {
@@ -48,6 +52,9 @@ func main() {
 		networkFlag,
 	}
 	app.Before = func(ctx *cli.Context) error {
+		if appDataStoreMigrationPath == "" {
+			appDataStoreMigrationPath = "file://../pkg/client-sdk/store/sqlite/migrations"
+		}
 		sdk, err := getArkSdkClient(ctx)
 		if err != nil {
 			return fmt.Errorf("error initializing ark sdk client: %v", err)
@@ -382,10 +389,18 @@ func redeem(ctx *cli.Context) error {
 }
 
 func getArkSdkClient(ctx *cli.Context) (arksdk.ArkClient, error) {
-	cfgStore, err := getConfigStore(ctx.String(datadirFlag.Name))
+	dataDir := ctx.String(datadirFlag.Name)
+	cfgStore, err := getConfigStore(dataDir)
 	if err != nil {
 		return nil, err
 	}
+
+	dbDir := fmt.Sprintf("%s/%s", dataDir, sqliteDir)
+	appDataStore, err := sqlitestore.NewAppDataRepository(dbDir, appDataStoreMigrationPath)
+	if err != nil {
+		return nil, err
+	}
+
 	cfgData, err := cfgStore.GetData(ctx.Context)
 	if err != nil {
 		return nil, err
@@ -400,22 +415,23 @@ func getArkSdkClient(ctx *cli.Context) (arksdk.ArkClient, error) {
 
 	if isBtcChain(net) {
 		return loadOrCreateClient(
-			arksdk.LoadCovenantlessClient, arksdk.NewCovenantlessClient, cfgStore,
+			arksdk.LoadCovenantlessClient, arksdk.NewCovenantlessClient, cfgStore, appDataStore,
 		)
 	}
 	return loadOrCreateClient(
-		arksdk.LoadCovenantClient, arksdk.NewCovenantClient, cfgStore,
+		arksdk.LoadCovenantClient, arksdk.NewCovenantClient, cfgStore, appDataStore,
 	)
 }
 
 func loadOrCreateClient(
-	loadFunc, newFunc func(store.ConfigStore) (arksdk.ArkClient, error),
+	loadFunc, newFunc func(store.ConfigStore, store.AppDataStore) (arksdk.ArkClient, error),
 	store store.ConfigStore,
+	appDataStore store.AppDataStore,
 ) (arksdk.ArkClient, error) {
-	client, err := loadFunc(store)
+	client, err := loadFunc(store, appDataStore)
 	if err != nil {
 		if errors.Is(err, arksdk.ErrNotInitialized) {
-			return newFunc(store)
+			return newFunc(store, appDataStore)
 		}
 		return nil, err
 	}

@@ -5,12 +5,16 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/ark-network/ark/common"
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
 	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
+	sqlitestore "github.com/ark-network/ark/pkg/client-sdk/store/sqlite"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -30,6 +34,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	logTxEvents("alice", aliceArkClient)
 
 	if err := aliceArkClient.Unlock(ctx, password); err != nil {
 		log.Fatal(err)
@@ -74,6 +80,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	logTxEvents("bob", bobArkClient)
 
 	if err := bobArkClient.Unlock(ctx, password); err != nil {
 		log.Fatal(err)
@@ -138,7 +145,17 @@ func setupArkClient() (arksdk.ArkClient, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup store: %s", err)
 	}
-	client, err := arksdk.NewCovenantClient(storeSvc)
+
+	dbDir := fmt.Sprintf("%s/%s", common.AppDataDir("ark-example", false), "sqlite")
+	_, currentFile, _, _ := runtime.Caller(0)
+	migrationsDir := filepath.Join(filepath.Dir(currentFile), "..", "..", "store", "sqlite", "migration")
+	appDataStoreMigrationPath := "file://" + migrationsDir
+	appDataStore, err := sqlitestore.NewAppDataRepository(dbDir, appDataStoreMigrationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	client, err := arksdk.NewCovenantClient(storeSvc, appDataStore)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup ark client: %s", err)
 	}
@@ -224,4 +241,14 @@ func generateBlock() error {
 
 	time.Sleep(6 * time.Second)
 	return nil
+}
+
+func logTxEvents(wallet string, client arksdk.ArkClient) {
+	txsChan := client.GetTransactionEventChannel()
+	go func() {
+		for tx := range txsChan {
+			log.Infof("[EVENT]%s: tx event: %s, %d", wallet, tx.Type, tx.Amount)
+		}
+	}()
+	log.Infof("%s tx event listener started", wallet)
 }

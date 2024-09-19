@@ -9,8 +9,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ark-network/ark/common"
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
 	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
+	sqlitestore "github.com/ark-network/ark/pkg/client-sdk/store/sqlite"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -146,7 +148,10 @@ func setupArkClient() (arksdk.ArkClient, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup store: %s", err)
 	}
-	client, err := arksdk.NewCovenantlessClient(storeSvc)
+	dbDir := fmt.Sprintf("%s/%s", common.AppDataDir("ark-example", false), "sqlite")
+	appDataStoreMigrationPath := "file://../../pkg/client-sdk/store/sqlite/migrations"
+	appDataStore, err := sqlitestore.NewAppDataRepository(dbDir, appDataStoreMigrationPath)
+	client, err := arksdk.NewCovenantlessClient(storeSvc, appDataStore)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup ark client: %s", err)
 	}

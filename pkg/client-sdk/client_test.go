@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/pkg/client-sdk/client"
+	"github.com/ark-network/ark/pkg/client-sdk/store"
 	"github.com/stretchr/testify/require"
 )
 
@@ -15,21 +16,21 @@ func TestVtxosToTxsCovenant(t *testing.T) {
 	tests := []struct {
 		name    string
 		fixture string
-		want    []Transaction
+		want    []store.Transaction
 	}{
 		{
 			name:    "Alice Sends to Bob",
 			fixture: aliceToBobCovenant,
-			want: []Transaction{
+			want: []store.Transaction{
 				{
 					Amount:  100000000,
-					Type:    TxReceived,
+					Type:    store.TxReceived,
 					Pending: false,
 					Claimed: true,
 				},
 				{
 					Amount:  20000,
-					Type:    TxSent,
+					Type:    store.TxSent,
 					Pending: false,
 					Claimed: true,
 				},
@@ -65,16 +66,16 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 	tests := []struct {
 		name    string
 		fixture string
-		want    []Transaction
+		want    []store.Transaction
 	}{
 		{
 			name:    "Alice Before Sending Async",
 			fixture: aliceBeforeSendingAsync,
-			want: []Transaction{
+			want: []store.Transaction{
 				{
 					RoundTxid: "377fa2fbd27c82bdbc095478384c88b6c75432c0ef464189e49c965194446cdf",
 					Amount:    20000,
-					Type:      TxReceived,
+					Type:      store.TxReceived,
 					Pending:   false,
 					Claimed:   true,
 					CreatedAt: time.Unix(1726054898, 0),
@@ -84,11 +85,11 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 		{
 			name:    "Alice After Sending Async",
 			fixture: aliceAfterSendingAsync,
-			want: []Transaction{
+			want: []store.Transaction{
 				{
 					RoundTxid: "377fa2fbd27c82bdbc095478384c88b6c75432c0ef464189e49c965194446cdf",
 					Amount:    20000,
-					Type:      TxReceived,
+					Type:      store.TxReceived,
 					Pending:   false,
 					Claimed:   true,
 					CreatedAt: time.Unix(1726054898, 0),
@@ -96,7 +97,7 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 				{
 					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
 					Amount:     1000,
-					Type:       TxSent,
+					Type:       store.TxSent,
 					Pending:    true,
 					Claimed:    false,
 					CreatedAt:  time.Unix(1726054898, 0),
@@ -106,11 +107,11 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 		{
 			name:    "Bob Before Claiming Async",
 			fixture: bobBeforeClaimingAsync,
-			want: []Transaction{
+			want: []store.Transaction{
 				{
 					RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
 					Amount:     2000,
-					Type:       TxReceived,
+					Type:       store.TxReceived,
 					Pending:    true,
 					Claimed:    false,
 					CreatedAt:  time.Unix(1726486359, 0),
@@ -118,7 +119,7 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 				{
 					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
 					Amount:     1000,
-					Type:       TxReceived,
+					Type:       store.TxReceived,
 					Pending:    true,
 					Claimed:    false,
 					CreatedAt:  time.Unix(1726054898, 0),
@@ -128,11 +129,11 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 		{
 			name:    "Bob After Claiming Async",
 			fixture: bobAfterClaimingAsync,
-			want: []Transaction{
+			want: []store.Transaction{
 				{
 					RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
 					Amount:     2000,
-					Type:       TxReceived,
+					Type:       store.TxReceived,
 					Pending:    false,
 					Claimed:    true,
 					CreatedAt:  time.Unix(1726486359, 0),
@@ -140,7 +141,7 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 				{
 					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
 					Amount:     1000,
-					Type:       TxReceived,
+					Type:       store.TxReceived,
 					Pending:    false,
 					Claimed:    true,
 					CreatedAt:  time.Unix(1726054898, 0),
@@ -150,11 +151,11 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 		{
 			name:    "Bob After Sending Async",
 			fixture: bobAfterSendingAsync,
-			want: []Transaction{
+			want: []store.Transaction{
 				{
 					RedeemTxid: "23c3a885f0ea05f7bdf83f3bf7f8ac9dc3f791ad292f4e63a6f53fa5e4935ab0",
 					Amount:     2100,
-					Type:       TxSent,
+					Type:       store.TxSent,
 					Pending:    true,
 					Claimed:    false,
 					CreatedAt:  time.Unix(1726503865, 0),
@@ -162,7 +163,7 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 				{
 					RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
 					Amount:     2000,
-					Type:       TxReceived,
+					Type:       store.TxReceived,
 					Pending:    false,
 					Claimed:    true,
 					CreatedAt:  time.Unix(1726486359, 0),
@@ -170,7 +171,7 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 				{
 					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
 					Amount:     1000,
-					Type:       TxReceived,
+					Type:       store.TxReceived,
 					Pending:    false,
 					Claimed:    true,
 					CreatedAt:  time.Unix(1726054898, 0),
@@ -208,16 +209,16 @@ type vtxos struct {
 	spent     []client.Vtxo
 }
 
-func loadFixtures(jsonStr string) (vtxos, []Transaction, error) {
+func loadFixtures(jsonStr string) (vtxos, []store.Transaction, error) {
 	var data struct {
 		BoardingTxs []struct {
-			BoardingTxid string `json:"boardingTxid"`
-			RoundTxid    string `json:"roundTxid"`
-			Amount       uint64 `json:"amount"`
-			Type         TxType `json:"txType"`
-			Pending      bool   `json:"pending"`
-			Claimed      bool   `json:"claimed"`
-			CreatedAt    string `json:"createdAt"`
+			BoardingTxid string       `json:"boardingTxid"`
+			RoundTxid    string       `json:"roundTxid"`
+			Amount       uint64       `json:"amount"`
+			Type         store.TxType `json:"txType"`
+			Pending      bool         `json:"pending"`
+			Claimed      bool         `json:"claimed"`
+			CreatedAt    string       `json:"createdAt"`
 		} `json:"boardingTxs"`
 		SpendableVtxos []struct {
 			Outpoint struct {
@@ -315,17 +316,17 @@ func loadFixtures(jsonStr string) (vtxos, []Transaction, error) {
 		}
 	}
 
-	boardingTxs := make([]Transaction, len(data.BoardingTxs))
+	boardingTxs := make([]store.Transaction, len(data.BoardingTxs))
 	for i, tx := range data.BoardingTxs {
 		createdAt, err := parseTimestamp(tx.CreatedAt)
 		if err != nil {
 			return vtxos{}, nil, err
 		}
-		boardingTxs[i] = Transaction{
+		boardingTxs[i] = store.Transaction{
 			BoardingTxid: tx.BoardingTxid,
 			RoundTxid:    tx.RoundTxid,
 			Amount:       tx.Amount,
-			Type:         TxReceived,
+			Type:         store.TxReceived,
 			Pending:      tx.Pending,
 			Claimed:      tx.Claimed,
 			CreatedAt:    createdAt,
