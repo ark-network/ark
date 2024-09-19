@@ -2104,7 +2104,7 @@ func vtxosToTxsCovenantless(
 			RedeemTxid:      redeemTxid,
 			Amount:          uint64(math.Abs(float64(amount))),
 			Type:            txType,
-			IsPending:       v.Pending,
+			IsPending:       (v.Pending && len(v.SpentBy) == 0),
 			IsPendingChange: v.PendingChange,
 			CreatedAt:       getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
 		})
