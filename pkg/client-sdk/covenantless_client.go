@@ -139,6 +139,57 @@ func LoadCovenantlessClientWithWallet(
 	}, nil
 }
 
+func (a *covenantlessArkClient) ListVtxos(
+	ctx context.Context,
+) (spendableVtxos, spentVtxos []client.Vtxo, err error) {
+	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return
+	}
+
+	// The ASP returns the vtxos sent to others via async payments as spendable
+	// because they are actually revertable. Since we do not provide any revert
+	// feature, we want to ignore them.
+	// To understand if the output of a redeem tx is sent or received we look at
+	// the inputs and check if they are owned by us.
+	// The auxiliary variables below are used to make these checks in an
+	// efficient way.
+	indexedSpentVtxos := make(map[string]client.Vtxo)
+	pendingVtxos := make([]client.Vtxo, 0)
+	keyTempl := "%s:%d"
+	for _, addr := range offchainAddrs {
+		spendable, spent, err := a.client.ListVtxos(ctx, addr)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, v := range spendable {
+			if !v.Pending {
+				spendableVtxos = append(spendableVtxos, v)
+				continue
+			}
+			pendingVtxos = append(pendingVtxos, v)
+		}
+		for _, v := range spent {
+			indexedSpentVtxos[fmt.Sprintf(keyTempl, v.Txid, v.VOut)] = v
+			spentVtxos = append(spentVtxos, v)
+		}
+	}
+
+	for _, vtxo := range pendingVtxos {
+		ptx, err := psbt.NewFromRawBytes(strings.NewReader(vtxo.RedeemTx), true)
+		if err != nil {
+			return nil, nil, err
+		}
+		input := ptx.UnsignedTx.TxIn[0].PreviousOutPoint
+		key := fmt.Sprintf(keyTempl, input.Hash.String(), input.Index)
+		if _, ok := indexedSpentVtxos[key]; !ok {
+			spendableVtxos = append(spendableVtxos, vtxo)
+		}
+	}
+
+	return
+}
+
 func (a *covenantlessArkClient) Balance(
 	ctx context.Context, computeVtxoExpiration bool,
 ) (*Balance, error) {
@@ -1798,9 +1849,9 @@ func (a *covenantlessArkClient) getClaimableBoardingUtxos(ctx context.Context) (
 }
 
 func (a *covenantlessArkClient) getVtxos(
-	ctx context.Context, addr string, computeVtxoExpiration bool,
+	ctx context.Context, _ string, computeVtxoExpiration bool,
 ) ([]client.Vtxo, []client.Vtxo, error) {
-	vtxos, _, err := a.client.ListVtxos(ctx, addr)
+	vtxos, _, err := a.ListVtxos(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
