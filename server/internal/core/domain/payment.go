@@ -115,6 +115,7 @@ type Vtxo struct {
 	Swept        bool
 	ExpireAt     int64
 	AsyncPayment *AsyncPaymentTxs // nil if not async vtxo
+	Pending      bool
 }
 
 type AsyncPaymentTxs struct {

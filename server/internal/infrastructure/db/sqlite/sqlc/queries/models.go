@@ -33,6 +33,7 @@ type PaymentVtxoVw struct {
 	PaymentID  sql.NullString
 	RedeemTx   sql.NullString
 	Descriptor sql.NullString
+	Pending    sql.NullBool
 }
 
 type Receiver struct {
@@ -115,4 +116,5 @@ type Vtxo struct {
 	PaymentID  sql.NullString
 	RedeemTx   sql.NullString
 	Descriptor sql.NullString
+	Pending    sql.NullBool
 }
