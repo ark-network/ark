@@ -79,8 +79,8 @@ func (m *paymentsMap) push(payment domain.Payment, boardingInputs []ports.Boardi
 	for _, input := range boardingInputs {
 		for _, pay := range m.payments {
 			for _, pBoardingInput := range pay.boardingInputs {
-				if input.GetHash().String() == pBoardingInput.GetHash().String() && input.GetIndex() == pBoardingInput.GetIndex() {
-					return fmt.Errorf("duplicated boarding input, %s:%d already used by payment %s", input.GetHash().String(), input.GetIndex(), pay.Id)
+				if input.Txid == pBoardingInput.Txid && input.VOut == pBoardingInput.VOut {
+					return fmt.Errorf("duplicated boarding input, %s:%d already used by payment %s", input.Txid, input.VOut, pay.Id)
 				}
 			}
 		}
