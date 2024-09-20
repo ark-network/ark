@@ -556,6 +556,18 @@ func (s *service) SelectUtxos(ctx context.Context, _ string, amount uint64) ([]p
 		return nil, 0, fmt.Errorf("insufficient funds to select %d, only %d available", amount, selectedAmount)
 	}
 
+	for _, utxo := range selectedUtxos {
+		if _, err := w.LeaseOutput(
+			wtxmgr.LockID(utxo.(coinTxInput).Hash),
+			wire.OutPoint{
+				Hash:  utxo.(coinTxInput).Hash,
+				Index: utxo.(coinTxInput).Index,
+			},
+			outputLockDuration,
+		); err != nil {
+			return nil, 0, err
+		}
+	}
 	return selectedUtxos, selectedAmount - amount, nil
 }
 

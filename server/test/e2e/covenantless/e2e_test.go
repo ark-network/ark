@@ -283,6 +283,85 @@ func TestReactToAsyncSpentVtxosRedemption(t *testing.T) {
 	})
 }
 
+func TestAliceSeveralPaymentsToBob(t *testing.T) {
+	ctx := context.Background()
+	alice, grpcAlice := setupArkSDK(t)
+	defer grpcAlice.Close()
+
+	bob, grpcBob := setupArkSDK(t)
+	defer grpcBob.Close()
+
+	_, boardingAddress, err := alice.Receive(ctx)
+	require.NoError(t, err)
+
+	_, err = utils.RunCommand("nigiri", "faucet", boardingAddress)
+	require.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+
+	_, err = alice.Claim(ctx)
+	require.NoError(t, err)
+
+	bobAddress, _, err := bob.Receive(ctx)
+	require.NoError(t, err)
+
+	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 1000)})
+	require.NoError(t, err)
+
+	time.Sleep(2 * time.Second)
+
+	bobVtxos, _, err := bob.ListVtxos(ctx)
+	require.NoError(t, err)
+	require.Len(t, bobVtxos, 1)
+
+	_, err = bob.Claim(ctx)
+	require.NoError(t, err)
+
+	_, err = alice.Claim(ctx)
+	require.NoError(t, err)
+
+	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)})
+	require.NoError(t, err)
+
+	time.Sleep(2 * time.Second)
+
+	bobVtxos, _, err = bob.ListVtxos(ctx)
+	require.NoError(t, err)
+	require.Len(t, bobVtxos, 2)
+
+	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)})
+	require.NoError(t, err)
+
+	time.Sleep(2 * time.Second)
+
+	bobVtxos, _, err = bob.ListVtxos(ctx)
+	require.NoError(t, err)
+	require.Len(t, bobVtxos, 3)
+
+	_, err = alice.SendAsync(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)})
+	require.NoError(t, err)
+
+	time.Sleep(2 * time.Second)
+
+	bobVtxos, _, err = bob.ListVtxos(ctx)
+	require.NoError(t, err)
+	require.Len(t, bobVtxos, 4)
+
+	_, err = alice.Claim(ctx)
+	require.NoError(t, err)
+
+	// bobVtxos should be unique
+	uniqueVtxos := make(map[string]struct{})
+	for _, v := range bobVtxos {
+		uniqueVtxos[fmt.Sprintf("%s:%d", v.Txid, v.VOut)] = struct{}{}
+	}
+	require.Len(t, uniqueVtxos, 4)
+
+	_, err = bob.Claim(ctx)
+	require.NoError(t, err)
+
+}
+
 func runClarkCommand(arg ...string) (string, error) {
 	args := append([]string{"exec", "-t", "clarkd", "ark"}, arg...)
 	return utils.RunCommand("docker", args...)
@@ -357,43 +436,16 @@ func setupAspWallet() error {
 		return fmt.Errorf("failed to parse response: %s", err)
 	}
 
-	_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
-	if err != nil {
-		return fmt.Errorf("failed to fund wallet: %s", err)
-	}
+	const numberOfFaucet = 15 // must cover the liquidity needed for all tests
 
-	_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
-	if err != nil {
-		return fmt.Errorf("failed to fund wallet: %s", err)
-	}
-
-	_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
-	if err != nil {
-		return fmt.Errorf("failed to fund wallet: %s", err)
-	}
-
-	_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
-	if err != nil {
-		return fmt.Errorf("failed to fund wallet: %s", err)
-	}
-
-	_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
-	if err != nil {
-		return fmt.Errorf("failed to fund wallet: %s", err)
-	}
-
-	_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
-	if err != nil {
-		return fmt.Errorf("failed to fund wallet: %s", err)
-	}
-
-	_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
-	if err != nil {
-		return fmt.Errorf("failed to fund wallet: %s", err)
+	for i := 0; i < numberOfFaucet; i++ {
+		_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
+		if err != nil {
+			return fmt.Errorf("failed to fund wallet: %s", err)
+		}
 	}
 
 	time.Sleep(5 * time.Second)
-
 	return nil
 }
 

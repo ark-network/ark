@@ -16,8 +16,9 @@ import (
 )
 
 type listener struct {
-	id string
-	ch chan *arkv1.GetEventStreamResponse
+	id   string
+	done chan struct{}
+	ch   chan *arkv1.GetEventStreamResponse
 }
 
 type handler struct {
@@ -300,21 +301,25 @@ func (h *handler) GetRoundById(
 }
 
 func (h *handler) GetEventStream(_ *arkv1.GetEventStreamRequest, stream arkv1.ArkService_GetEventStreamServer) error {
+	doneCh := make(chan struct{})
+
 	listener := &listener{
-		id: uuid.NewString(),
-		ch: make(chan *arkv1.GetEventStreamResponse),
+		id:   uuid.NewString(),
+		done: doneCh,
+		ch:   make(chan *arkv1.GetEventStreamResponse),
 	}
 
+	h.pushListener(listener)
 	defer h.removeListener(listener.id)
 	defer close(listener.ch)
-
-	h.pushListener(listener)
+	defer close(doneCh)
 
 	for {
 		select {
 		case <-stream.Context().Done():
 			return nil
-
+		case <-doneCh:
+			return nil
 		case ev := <-listener.ch:
 			if err := stream.Send(ev); err != nil {
 				return err
@@ -476,6 +481,7 @@ func (h *handler) listenToEvents() {
 	channel := h.svc.GetEventsChannel(context.Background())
 	for event := range channel {
 		var ev *arkv1.GetEventStreamResponse
+		shouldClose := false
 
 		switch e := event.(type) {
 		case domain.RoundFinalizationStarted:
@@ -491,6 +497,7 @@ func (h *handler) listenToEvents() {
 				},
 			}
 		case domain.RoundFinalized:
+			shouldClose = true
 			ev = &arkv1.GetEventStreamResponse{
 				Event: &arkv1.GetEventStreamResponse_RoundFinalized{
 					RoundFinalized: &arkv1.RoundFinalizedEvent{
@@ -500,6 +507,7 @@ func (h *handler) listenToEvents() {
 				},
 			}
 		case domain.RoundFailed:
+			shouldClose = true
 			ev = &arkv1.GetEventStreamResponse{
 				Event: &arkv1.GetEventStreamResponse_RoundFailed{
 					RoundFailed: &arkv1.RoundFailed{
@@ -542,8 +550,14 @@ func (h *handler) listenToEvents() {
 		}
 
 		if ev != nil {
-			for _, listener := range h.listeners {
-				listener.ch <- ev
+			logrus.Debugf("forwarding event to %d listeners", len(h.listeners))
+			for _, l := range h.listeners {
+				go func(l *listener) {
+					l.ch <- ev
+					if shouldClose {
+						l.done <- struct{}{}
+					}
+				}(l)
 			}
 		}
 	}
