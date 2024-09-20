@@ -11,6 +11,9 @@ const UnspendableKey = "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f281
 
 func ParseTaprootDescriptor(desc string) (*TaprootDescriptor, error) {
 	desc = strings.ReplaceAll(desc, " ", "")
+	desc = strings.ReplaceAll(desc, "\n", "")
+	desc = strings.ReplaceAll(desc, "\t", "")
+	desc = strings.ReplaceAll(desc, "\r", "")
 
 	if !strings.HasPrefix(desc, "tr(") || !strings.HasSuffix(desc, ")") {
 		return nil, fmt.Errorf("invalid descriptor format")
@@ -93,6 +96,8 @@ func splitScriptTree(scriptTreeStr string) ([]string, error) {
 
 	for _, char := range scriptTreeStr {
 		switch char {
+		case '{', '}':
+			continue
 		case '(':
 			depth++
 			current.WriteRune(char)

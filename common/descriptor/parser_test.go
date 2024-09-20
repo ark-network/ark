@@ -179,6 +179,161 @@ func TestParseTaprootDescriptor(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "Multiple level descriptor",
+			desc: `
+			tr(
+				0250929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0,
+				{
+						{
+								{
+										and(and(pk(873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465), pk(873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465)), pk(873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465)),
+										and(older(512), and(pk(873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465), pk(873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465)))
+								},
+								{
+										and(and(pk(873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465), pk(873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465)), pk(873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465)),
+										and(older(1024), and(pk(873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465), pk(873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465)))
+								}
+						},
+						{
+								and(older(512), pk(873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465)),
+								and(older(512), and(pk(873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465), pk(873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465)))
+						}
+				}
+			)
+			`,
+			expected: descriptor.TaprootDescriptor{
+				InternalKey: descriptor.Key{Hex: "50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0"},
+				ScriptTree: []descriptor.Expression{
+					&descriptor.And{
+						First: &descriptor.And{
+							First: &descriptor.PK{
+								Key: descriptor.XOnlyKey{
+									descriptor.Key{
+										Hex: "873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465",
+									},
+								},
+							},
+							Second: &descriptor.PK{
+								Key: descriptor.XOnlyKey{
+									descriptor.Key{
+										Hex: "873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465",
+									},
+								},
+							},
+						},
+						Second: &descriptor.PK{
+							Key: descriptor.XOnlyKey{
+								descriptor.Key{
+									Hex: "873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465",
+								},
+							},
+						},
+					},
+					&descriptor.And{
+						First: &descriptor.Older{
+							Timeout: 512,
+						},
+						Second: &descriptor.And{
+							First: &descriptor.PK{
+								Key: descriptor.XOnlyKey{
+									descriptor.Key{
+										Hex: "873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465",
+									},
+								},
+							},
+							Second: &descriptor.PK{
+								Key: descriptor.XOnlyKey{
+									descriptor.Key{
+										Hex: "873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465",
+									},
+								},
+							},
+						},
+					},
+					&descriptor.And{
+						First: &descriptor.And{
+							First: &descriptor.PK{
+								Key: descriptor.XOnlyKey{
+									descriptor.Key{
+										Hex: "873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465",
+									},
+								},
+							},
+							Second: &descriptor.PK{
+								Key: descriptor.XOnlyKey{
+									descriptor.Key{
+										Hex: "873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465",
+									},
+								},
+							},
+						},
+						Second: &descriptor.PK{
+							Key: descriptor.XOnlyKey{
+								descriptor.Key{
+									Hex: "873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465",
+								},
+							},
+						},
+					},
+					&descriptor.And{
+						First: &descriptor.Older{
+							Timeout: 1024,
+						},
+						Second: &descriptor.And{
+							First: &descriptor.PK{
+								Key: descriptor.XOnlyKey{
+									descriptor.Key{
+										Hex: "873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465",
+									},
+								},
+							},
+							Second: &descriptor.PK{
+								Key: descriptor.XOnlyKey{
+									descriptor.Key{
+										Hex: "873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465",
+									},
+								},
+							},
+						},
+					},
+					&descriptor.And{
+						First: &descriptor.Older{
+							Timeout: 512,
+						},
+						Second: &descriptor.PK{
+							Key: descriptor.XOnlyKey{
+								descriptor.Key{
+									Hex: "873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465",
+								},
+							},
+						},
+					},
+					&descriptor.And{
+						First: &descriptor.Older{
+							Timeout: 512,
+						},
+						Second: &descriptor.And{
+							First: &descriptor.PK{
+								Key: descriptor.XOnlyKey{
+									descriptor.Key{
+										Hex: "873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465",
+									},
+								},
+							},
+							Second: &descriptor.PK{
+								Key: descriptor.XOnlyKey{
+									descriptor.Key{
+										Hex: "873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
