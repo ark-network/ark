@@ -18,12 +18,12 @@ type RoundStarted struct {
 }
 
 type RoundFinalizationStarted struct {
-	Id                 string
-	CongestionTree     tree.CongestionTree // BTC: signed
-	Connectors         []string
-	ConnectorAddress   string
-	UnsignedForfeitTxs []string
-	PoolTx             string
+	Id               string
+	CongestionTree   tree.CongestionTree // BTC: signed
+	Connectors       []string
+	ConnectorAddress string
+	PoolTx           string
+	MinRelayFeeRate  int64
 }
 
 type RoundFinalized struct {

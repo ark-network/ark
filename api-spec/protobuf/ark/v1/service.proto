@@ -196,9 +196,9 @@ message GetInfoResponse {
 message RoundFinalizationEvent {
   string id = 1;
   string pool_tx = 2;
-  repeated string forfeit_txs = 3;
-  Tree congestion_tree = 4;
-  repeated string connectors = 5;
+  Tree congestion_tree = 3;
+  repeated string connectors = 4;
+  int64 min_relay_fee_rate = 5;
 }
 
 message RoundFinalizedEvent {
@@ -244,29 +244,23 @@ message Round {
   RoundStage stage = 8;
 }
 
-message VtxoInput {
+message Outpoint {
   string txid = 1;
   uint32 vout = 2;
-}
-
-message BoardingInput {
-  string txid = 1;
-  uint32 vout = 2;
-  string descriptor = 3;
 }
 
 message Input {
-  oneof input {
-    VtxoInput vtxo_input = 1;
-    BoardingInput boarding_input = 2;
-  }
+  Outpoint outpoint = 1;
+  string descriptor = 2;
 }
 
 message Output {
-  // Either the offchain or onchain address.
-  string address = 1;
+  oneof destination {
+    string address = 1; // onchain
+    string descriptor = 2; // offchain
+  }
   // Amount to send in satoshis.
-  uint64 amount = 2;
+  uint64 amount = 3;
 }
 
 message Tree {
@@ -284,8 +278,8 @@ message Node {
 }
 
 message Vtxo {
-  Input outpoint = 1;
-  Output receiver = 2;
+  Outpoint outpoint = 1;
+  string descriptor = 2;
   bool spent = 3;
   string pool_txid = 4;
   string spent_by = 5;
@@ -293,6 +287,8 @@ message Vtxo {
   bool swept = 7;
   bool pending = 8;
   PendingPayment pending_data = 9;
+  uint64 amount = 10;
+  bool pending_change = 11;
 }
 
 message PendingPayment {

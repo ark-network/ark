@@ -2,6 +2,7 @@ package bitcointree_test
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -43,10 +44,9 @@ func TestRoundTripSignTree(t *testing.T) {
 		_, sharedOutputAmount, err := bitcointree.CraftSharedOutput(
 			cosigners,
 			asp.PubKey(),
-			f.Receivers,
+			castReceivers(f.Receivers, asp.PubKey()),
 			minRelayFee,
 			lifetime,
-			exitDelay,
 		)
 		require.NoError(t, err)
 
@@ -58,10 +58,9 @@ func TestRoundTripSignTree(t *testing.T) {
 			},
 			cosigners,
 			asp.PubKey(),
-			f.Receivers,
+			castReceivers(f.Receivers, asp.PubKey()),
 			minRelayFee,
 			lifetime,
-			exitDelay,
 		)
 		require.NoError(t, err)
 
@@ -218,9 +217,43 @@ func TestRoundTripSignTree(t *testing.T) {
 	}
 }
 
+type receiverFixture struct {
+	Amount int64  `json:"amount"`
+	Pubkey string `json:"pubkey"`
+}
+
+func (r receiverFixture) toVtxoScript(asp *secp256k1.PublicKey) bitcointree.VtxoScript {
+	bytesKey, err := hex.DecodeString(r.Pubkey)
+	if err != nil {
+		panic(err)
+	}
+
+	pubkey, err := secp256k1.ParsePubKey(bytesKey)
+	if err != nil {
+		panic(err)
+	}
+
+	return &bitcointree.DefaultVtxoScript{
+		Owner:     pubkey,
+		Asp:       asp,
+		ExitDelay: exitDelay,
+	}
+}
+
+func castReceivers(receivers []receiverFixture, asp *secp256k1.PublicKey) []bitcointree.Receiver {
+	receiversOut := make([]bitcointree.Receiver, 0, len(receivers))
+	for _, r := range receivers {
+		receiversOut = append(receiversOut, bitcointree.Receiver{
+			Script: r.toVtxoScript(asp),
+			Amount: uint64(r.Amount),
+		})
+	}
+	return receiversOut
+}
+
 type fixture struct {
 	Valid []struct {
-		Receivers []bitcointree.Receiver `json:"receivers"`
+		Receivers []receiverFixture `json:"receivers"`
 	} `json:"valid"`
 }
 

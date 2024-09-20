@@ -1,6 +1,6 @@
 package bitcointree
 
 type Receiver struct {
-	Pubkey string
+	Script VtxoScript
 	Amount uint64
 }

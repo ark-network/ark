@@ -14,28 +14,30 @@ var (
 	payments   = []domain.Payment{
 		{
 			Id: "0",
-			Inputs: []domain.Vtxo{{
-				VtxoKey: domain.VtxoKey{
-					Txid: txid,
-					VOut: 0,
+			Inputs: []domain.Vtxo{
+				{
+					VtxoKey: domain.VtxoKey{
+						Txid: txid,
+						VOut: 0,
+					},
+					Receiver: domain.Receiver{
+						Descriptor: desc,
+						Amount:     2000,
+					},
 				},
-				Receiver: domain.Receiver{
-					Pubkey: pubkey,
-					Amount: 2000,
-				},
-			}},
+			},
 			Receivers: []domain.Receiver{
 				{
-					Pubkey: pubkey,
-					Amount: 700,
+					Descriptor: desc,
+					Amount:     700,
 				},
 				{
-					Pubkey: pubkey,
-					Amount: 700,
+					Descriptor: desc,
+					Amount:     700,
 				},
 				{
-					Pubkey: pubkey,
-					Amount: 600,
+					Descriptor: desc,
+					Amount:     600,
 				},
 			},
 		},
@@ -48,8 +50,8 @@ var (
 						VOut: 0,
 					},
 					Receiver: domain.Receiver{
-						Pubkey: pubkey,
-						Amount: 1000,
+						Descriptor: desc,
+						Amount:     1000,
 					},
 				},
 				{
@@ -58,21 +60,20 @@ var (
 						VOut: 0,
 					},
 					Receiver: domain.Receiver{
-						Pubkey: pubkey,
-						Amount: 1000,
+						Descriptor: desc,
+						Amount:     1000,
 					},
 				},
 			},
 			Receivers: []domain.Receiver{{
-				Pubkey: pubkey,
-				Amount: 2000,
+				Descriptor: desc,
+				Amount:     2000,
 			}},
 		},
 	}
 	emptyPtx       = "cHNldP8BAgQCAAAAAQQBAAEFAQABBgEDAfsEAgAAAAA="
 	emptyTx        = "0200000000000000000000"
 	txid           = "0000000000000000000000000000000000000000000000000000000000000000"
-	pubkey         = "030000000000000000000000000000000000000000000000000000000000000001"
 	congestionTree = tree.CongestionTree{
 		{
 			{

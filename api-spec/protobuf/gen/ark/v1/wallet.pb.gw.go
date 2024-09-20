@@ -211,6 +211,7 @@ func local_request_WalletService_GetBalance_0(ctx context.Context, marshaler run
 // UnaryRPC     :call WalletInitializerServiceServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
 // Note that using this registration option will cause many gRPC library features to stop working. Consider using RegisterWalletInitializerServiceHandlerFromEndpoint instead.
+// GRPC interceptors will not work for this type of registration. To use interceptors, you must use the "runtime.WithMiddlewares" option in the "runtime.NewServeMux" call.
 func RegisterWalletInitializerServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux, server WalletInitializerServiceServer) error {
 
 	mux.Handle("GET", pattern_WalletInitializerService_GenSeed_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
@@ -345,6 +346,7 @@ func RegisterWalletInitializerServiceHandlerServer(ctx context.Context, mux *run
 // UnaryRPC     :call WalletServiceServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
 // Note that using this registration option will cause many gRPC library features to stop working. Consider using RegisterWalletServiceHandlerFromEndpoint instead.
+// GRPC interceptors will not work for this type of registration. To use interceptors, you must use the "runtime.WithMiddlewares" option in the "runtime.NewServeMux" call.
 func RegisterWalletServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux, server WalletServiceServer) error {
 
 	mux.Handle("POST", pattern_WalletService_Lock_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
@@ -460,7 +462,7 @@ func RegisterWalletInitializerServiceHandler(ctx context.Context, mux *runtime.S
 // to "mux". The handlers forward requests to the grpc endpoint over the given implementation of "WalletInitializerServiceClient".
 // Note: the gRPC framework executes interceptors within the gRPC handler. If the passed in "WalletInitializerServiceClient"
 // doesn't go through the normal gRPC flow (creating a gRPC client etc.) then it will be up to the passed in
-// "WalletInitializerServiceClient" to call the correct interceptors.
+// "WalletInitializerServiceClient" to call the correct interceptors. This client ignores the HTTP middlewares.
 func RegisterWalletInitializerServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux, client WalletInitializerServiceClient) error {
 
 	mux.Handle("GET", pattern_WalletInitializerService_GenSeed_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
@@ -635,7 +637,7 @@ func RegisterWalletServiceHandler(ctx context.Context, mux *runtime.ServeMux, co
 // to "mux". The handlers forward requests to the grpc endpoint over the given implementation of "WalletServiceClient".
 // Note: the gRPC framework executes interceptors within the gRPC handler. If the passed in "WalletServiceClient"
 // doesn't go through the normal gRPC flow (creating a gRPC client etc.) then it will be up to the passed in
-// "WalletServiceClient" to call the correct interceptors.
+// "WalletServiceClient" to call the correct interceptors. This client ignores the HTTP middlewares.
 func RegisterWalletServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux, client WalletServiceClient) error {
 
 	mux.Handle("POST", pattern_WalletService_Lock_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {

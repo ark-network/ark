@@ -79,7 +79,7 @@ func sweepTransaction(
 
 		root := leaf.ControlBlock.RootHash(leaf.Script)
 		taprootKey := taproot.ComputeTaprootOutputKey(leaf.ControlBlock.InternalKey, root)
-		script, err := p2trScript(taprootKey)
+		script, err := common.P2TRScript(taprootKey)
 		if err != nil {
 			return nil, err
 		}

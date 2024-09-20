@@ -4,12 +4,14 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"os"
 	"reflect"
 	"sort"
 	"testing"
 	"time"
 
+	"github.com/ark-network/ark/common/descriptor"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -22,8 +24,26 @@ import (
 const (
 	emptyPtx = "cHNldP8BAgQCAAAAAQQBAAEFAQABBgEDAfsEAgAAAAA="
 	emptyTx  = "0200000000000000000000"
-	pubkey1  = "0300000000000000000000000000000000000000000000000000000000000000001"
-	pubkey2  = "0200000000000000000000000000000000000000000000000000000000000000002"
+	pubkey1  = "00000000000000000000000000000000000000000000000000000000000000001"
+	pubkey2  = "00000000000000000000000000000000000000000000000000000000000000002"
+)
+
+var desc1 = fmt.Sprintf(
+	descriptor.DefaultVtxoDescriptorTemplate,
+	randomString(66),
+	pubkey1,
+	pubkey1,
+	512,
+	pubkey1,
+)
+
+var desc2 = fmt.Sprintf(
+	descriptor.DefaultVtxoDescriptorTemplate,
+	randomString(66),
+	pubkey2,
+	pubkey2,
+	512,
+	pubkey2,
 )
 
 var congestionTree = [][]tree.Node{
@@ -251,19 +271,20 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 								PoolTx:   randomString(32),
 								ExpireAt: 7980322,
 								Receiver: domain.Receiver{
-									Pubkey: randomString(36),
-									Amount: 300,
+									Descriptor: randomString(120),
+									Amount:     300,
 								},
 							},
 						},
 						Receivers: []domain.Receiver{{
-							Pubkey: randomString(36),
-							Amount: 300,
+							Descriptor: randomString(120),
+							Amount:     300,
 						}},
 					},
 					{
 						Id: uuid.New().String(),
 						Inputs: []domain.Vtxo{
+
 							{
 								VtxoKey: domain.VtxoKey{
 									Txid: randomString(32),
@@ -272,19 +293,19 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 								PoolTx:   randomString(32),
 								ExpireAt: 7980322,
 								Receiver: domain.Receiver{
-									Pubkey: randomString(36),
-									Amount: 600,
+									Descriptor: randomString(120),
+									Amount:     600,
 								},
 							},
 						},
 						Receivers: []domain.Receiver{
 							{
-								Pubkey: randomString(36),
-								Amount: 400,
+								Descriptor: randomString(120),
+								Amount:     400,
 							},
 							{
-								Pubkey: randomString(34),
-								Amount: 200,
+								Descriptor: randomString(120),
+								Amount:     200,
 							},
 						},
 					},
@@ -350,8 +371,8 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 					VOut: 0,
 				},
 				Receiver: domain.Receiver{
-					Pubkey: pubkey1,
-					Amount: 1000,
+					Descriptor: desc1,
+					Amount:     1000,
 				},
 			},
 			{
@@ -360,8 +381,8 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 					VOut: 1,
 				},
 				Receiver: domain.Receiver{
-					Pubkey: pubkey1,
-					Amount: 2000,
+					Descriptor: desc1,
+					Amount:     2000,
 				},
 			},
 		}
@@ -371,8 +392,8 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 				VOut: 1,
 			},
 			Receiver: domain.Receiver{
-				Pubkey: pubkey2,
-				Amount: 2000,
+				Descriptor: desc2,
+				Amount:     2000,
 			},
 		})
 
@@ -531,7 +552,7 @@ type sortReceivers []domain.Receiver
 
 func (a sortReceivers) Len() int           { return len(a) }
 func (a sortReceivers) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a sortReceivers) Less(i, j int) bool { return a[i].Pubkey < a[j].Pubkey }
+func (a sortReceivers) Less(i, j int) bool { return a[i].Amount < a[j].Amount }
 
 type sortStrings []string
 

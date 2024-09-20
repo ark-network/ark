@@ -10,7 +10,6 @@ import (
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/sirupsen/logrus"
 )
@@ -180,14 +179,19 @@ func newForfeitTxsMap(txBuilder ports.TxBuilder) *forfeitTxsMap {
 	return &forfeitTxsMap{&sync.RWMutex{}, make(map[string]*signedTx), txBuilder}
 }
 
-func (m *forfeitTxsMap) push(txs []string) {
+func (m *forfeitTxsMap) push(txs []string) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
 	for _, tx := range txs {
-		signed, txid, _ := m.builder.VerifyTapscriptPartialSigs(tx)
-		m.forfeitTxs[txid] = &signedTx{tx, signed}
+		txid, err := m.builder.GetTxID(tx)
+		if err != nil {
+			return err
+		}
+		m.forfeitTxs[txid] = &signedTx{tx, false}
 	}
+
+	return nil
 }
 
 func (m *forfeitTxsMap) sign(txs []string) error {
@@ -227,17 +231,6 @@ func (m *forfeitTxsMap) pop() (signed, unsigned []string) {
 
 	m.forfeitTxs = make(map[string]*signedTx)
 	return signed, unsigned
-}
-
-func (m *forfeitTxsMap) view() []string {
-	m.lock.RLock()
-	defer m.lock.RUnlock()
-
-	txs := make([]string, 0, len(m.forfeitTxs))
-	for _, tx := range m.forfeitTxs {
-		txs = append(txs, tx.tx)
-	}
-	return txs
 }
 
 // onchainOutputs iterates over all the nodes' outputs in the congestion tree and checks their onchain state
@@ -312,27 +305,4 @@ func getSpentVtxos(payments map[string]domain.Payment) []domain.VtxoKey {
 		}
 	}
 	return vtxos
-}
-
-type boardingInput struct {
-	txId           chainhash.Hash
-	vout           uint32
-	boardingPubKey *secp256k1.PublicKey
-	amount         uint64
-}
-
-func (b boardingInput) GetHash() chainhash.Hash {
-	return b.txId
-}
-
-func (b boardingInput) GetIndex() uint32 {
-	return b.vout
-}
-
-func (b boardingInput) GetAmount() uint64 {
-	return b.amount
-}
-
-func (b boardingInput) GetBoardingPubkey() *secp256k1.PublicKey {
-	return b.boardingPubKey
 }
