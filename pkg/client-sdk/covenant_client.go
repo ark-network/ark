@@ -598,9 +598,11 @@ func (a *covenantArkClient) listenToVtxoChan(ctnx context.Context) error {
 						continue
 					}
 
-					if err := a.appDataStore.TransactionRepository().InsertTransactions(ctx, txs); err != nil {
-						log.Errorf("failed to insert transaction: %s", err)
-						continue
+					if len(txs) > 0 {
+						if err := a.appDataStore.TransactionRepository().InsertTransactions(ctx, txs); err != nil {
+							log.Errorf("failed to insert transaction: %s", err)
+							continue
+						}
 					}
 
 					vtxos := make([]store.Vtxo, 0, len(allVtxow))
@@ -617,9 +619,11 @@ func (a *covenantArkClient) listenToVtxoChan(ctnx context.Context) error {
 							SpentBy:                 v.SpentBy,
 							Spent:                   bool(isSpent),
 						})
-						if err := a.appDataStore.VtxoRepository().InsertVtxos(ctx, vtxos); err != nil {
-							log.Errorf("failed to insert vtxo: %s", err)
-							continue
+						if len(vtxos) > 0 {
+							if err := a.appDataStore.VtxoRepository().InsertVtxos(ctx, vtxos); err != nil {
+								log.Errorf("failed to insert vtxo: %s", err)
+								continue
+							}
 						}
 					}
 				} else {
@@ -677,9 +681,11 @@ func (a *covenantArkClient) listenToVtxoChan(ctnx context.Context) error {
 						continue
 					}
 
-					if err := a.appDataStore.TransactionRepository().InsertTransactions(ctx, txs); err != nil {
-						log.Errorf("failed to insert transaction: %s", err)
-						continue
+					if len(txs) > 0 {
+						if err := a.appDataStore.TransactionRepository().InsertTransactions(ctx, txs); err != nil {
+							log.Errorf("failed to insert transaction: %s", err)
+							continue
+						}
 					}
 
 					spendableVtxosToInsert := make([]store.Vtxo, 0, len(newSpendableVtxos))
@@ -713,12 +719,15 @@ func (a *covenantArkClient) listenToVtxoChan(ctnx context.Context) error {
 							Spent:                   true,
 						})
 					}
-					if err := a.appDataStore.VtxoRepository().InsertVtxos(
-						ctx,
-						append(spentVtxosToInsert, spendableVtxosToInsert...),
-					); err != nil {
-						log.Errorf("failed to insert vtxo: %s", err)
-						continue
+
+					if len(spendableVtxosToInsert) > 0 || len(spentVtxosToInsert) > 0 {
+						if err := a.appDataStore.VtxoRepository().InsertVtxos(
+							ctx,
+							append(spentVtxosToInsert, spendableVtxosToInsert...),
+						); err != nil {
+							log.Errorf("failed to insert vtxo: %s", err)
+							continue
+						}
 					}
 				}
 			}
