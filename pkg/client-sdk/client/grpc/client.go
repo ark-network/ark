@@ -14,6 +14,7 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -202,15 +203,10 @@ func (a *grpcClient) FinalizePayment(
 }
 
 func (a *grpcClient) CreatePayment(
-	ctx context.Context, inputs []client.VtxoKey, outputs []client.Output,
+	ctx context.Context, inputs []client.Input, outputs []client.Output,
 ) (string, []string, error) {
-	insCast := make([]client.Input, 0, len(inputs))
-	for _, in := range inputs {
-		insCast = append(insCast, in)
-	}
-
 	req := &arkv1.CreatePaymentRequest{
-		Inputs:  ins(insCast).toProto(),
+		Inputs:  ins(inputs).toProto(),
 		Outputs: outs(outputs).toProto(),
 	}
 	resp, err := a.svc.CreatePayment(ctx, req)
@@ -323,9 +319,20 @@ func (a *grpcClient) SendTreeSignatures(
 type out client.Output
 
 func (o out) toProto() *arkv1.Output {
+	if len(o.Address) > 0 {
+		return &arkv1.Output{
+			Destination: &arkv1.Output_Address{
+				Address: o.Address,
+			},
+			Amount: o.Amount,
+		}
+	}
+
 	return &arkv1.Output{
-		Address: o.Address,
-		Amount:  o.Amount,
+		Destination: &arkv1.Output_Descriptor_{
+			Descriptor_: o.Descriptor,
+		},
+		Amount: o.Amount,
 	}
 }
 
@@ -362,11 +369,11 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 	if ee := e.GetRoundFinalization(); ee != nil {
 		tree := treeFromProto{ee.GetCongestionTree()}.parse()
 		return client.RoundFinalizationEvent{
-			ID:         ee.GetId(),
-			Tx:         ee.GetPoolTx(),
-			ForfeitTxs: ee.GetForfeitTxs(),
-			Tree:       tree,
-			Connectors: ee.GetConnectors(),
+			ID:              ee.GetId(),
+			Tx:              ee.GetPoolTx(),
+			Tree:            tree,
+			Connectors:      ee.GetConnectors(),
+			MinRelayFeeRate: chainfee.SatPerKVByte(ee.MinRelayFeeRate),
 		}, nil
 	}
 
@@ -430,17 +437,19 @@ func (v vtxo) toVtxo() client.Vtxo {
 		uncondForfeitTxs = v.GetPendingData().GetUnconditionalForfeitTxs()
 	}
 	return client.Vtxo{
-		VtxoKey: client.VtxoKey{
-			Txid: v.GetOutpoint().GetVtxoInput().GetTxid(),
-			VOut: v.GetOutpoint().GetVtxoInput().GetVout(),
+		Outpoint: client.Outpoint{
+			Txid: v.GetOutpoint().GetTxid(),
+			VOut: v.GetOutpoint().GetVout(),
 		},
-		Amount:                  v.GetReceiver().GetAmount(),
+		Amount:                  v.GetAmount(),
 		RoundTxid:               v.GetPoolTxid(),
 		ExpiresAt:               expiresAt,
 		Pending:                 v.GetPending(),
+		PendingChange:           v.GetPendingChange(),
 		RedeemTx:                redeemTx,
 		UnconditionalForfeitTxs: uncondForfeitTxs,
 		SpentBy:                 v.GetSpentBy(),
+		Descriptor:              v.GetDescriptor_(),
 	}
 }
 
@@ -455,25 +464,12 @@ func (v vtxos) toVtxos() []client.Vtxo {
 }
 
 func toProtoInput(i client.Input) *arkv1.Input {
-	if len(i.GetDescriptor()) > 0 {
-		return &arkv1.Input{
-			Input: &arkv1.Input_BoardingInput{
-				BoardingInput: &arkv1.BoardingInput{
-					Txid:        i.GetTxID(),
-					Vout:        i.GetVOut(),
-					Descriptor_: i.GetDescriptor(),
-				},
-			},
-		}
-	}
-
 	return &arkv1.Input{
-		Input: &arkv1.Input_VtxoInput{
-			VtxoInput: &arkv1.VtxoInput{
-				Txid: i.GetTxID(),
-				Vout: i.GetVOut(),
-			},
+		Outpoint: &arkv1.Outpoint{
+			Txid: i.Txid,
+			Vout: i.VOut,
 		},
+		Descriptor_: i.Descriptor,
 	}
 }
 

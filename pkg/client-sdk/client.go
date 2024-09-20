@@ -148,6 +148,71 @@ func (a *arkClient) InitWithWallet(
 	return nil
 }
 
+func (a *arkClient) GetTransactionHistory(
+	ctx context.Context,
+) ([]store.Transaction, error) {
+	return a.appDataStore.TransactionRepository().GetAll(ctx)
+}
+
+func (a *arkClient) ListVtxos(
+	ctx context.Context,
+) (spendableVtxos, spentVtxos []client.Vtxo, err error) {
+	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return
+	}
+
+	for _, addr := range offchainAddrs {
+		spendable, spent, err := a.client.ListVtxos(ctx, addr)
+		if err != nil {
+			return nil, nil, err
+		}
+		spendableVtxos = append(spendableVtxos, spendable...)
+		spentVtxos = append(spentVtxos, spent...)
+	}
+
+	return
+}
+
+func (a *arkClient) listenForVtxos(
+	ctx context.Context,
+	vtxoChan chan<- map[spent]client.Vtxo,
+) {
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				spendableVtxos, spentVtxos, err := a.ListVtxos(ctx)
+				if err != nil {
+					log.Warnf("listenForNewVtxos: failed to list vtxos: %s", err)
+					continue
+				}
+
+				allVtxos := make(map[spent]client.Vtxo)
+				for _, vtxo := range spendableVtxos {
+					allVtxos[vtxoUnspent] = vtxo
+				}
+				for _, vtxo := range spentVtxos {
+					allVtxos[vtxoSpent] = vtxo
+				}
+
+				go func() {
+					if len(allVtxos) > 0 {
+						vtxoChan <- allVtxos
+					}
+				}()
+			}
+		}
+	}()
+
+	a.vtxoListeningStarted = true
+}
+
 func (a *arkClient) Init(
 	ctx context.Context, args InitArgs,
 ) error {
@@ -246,71 +311,6 @@ func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
 	}
 
 	return offchainAddr, boardingAddr, nil
-}
-
-func (a *arkClient) ListVtxos(
-	ctx context.Context,
-) (spendableVtxos, spentVtxos []client.Vtxo, err error) {
-	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
-	if err != nil {
-		return
-	}
-
-	for _, addr := range offchainAddrs {
-		spendable, spent, err := a.client.ListVtxos(ctx, addr)
-		if err != nil {
-			return nil, nil, err
-		}
-		spendableVtxos = append(spendableVtxos, spendable...)
-		spentVtxos = append(spentVtxos, spent...)
-	}
-
-	return
-}
-
-func (a *arkClient) GetTransactionHistory(
-	ctx context.Context,
-) ([]store.Transaction, error) {
-	return a.appDataStore.TransactionRepository().GetAll(ctx)
-}
-
-func (a *arkClient) listenForVtxos(
-	ctx context.Context,
-	vtxoChan chan<- map[spent]client.Vtxo,
-) {
-	go func() {
-		ticker := time.NewTicker(1 * time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				spendableVtxos, spentVtxos, err := a.ListVtxos(ctx)
-				if err != nil {
-					log.Warnf("listenForNewVtxos: failed to list vtxos: %s", err)
-					continue
-				}
-
-				allVtxos := make(map[spent]client.Vtxo)
-				for _, vtxo := range spendableVtxos {
-					allVtxos[vtxoUnspent] = vtxo
-				}
-				for _, vtxo := range spentVtxos {
-					allVtxos[vtxoSpent] = vtxo
-				}
-
-				go func() {
-					if len(allVtxos) > 0 {
-						vtxoChan <- allVtxos
-					}
-				}()
-			}
-		}
-	}()
-
-	a.vtxoListeningStarted = true
 }
 
 func (a *arkClient) ping(

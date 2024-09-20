@@ -21,25 +21,6 @@ type StoreData struct {
 	ExplorerURL                string
 }
 
-const (
-	TxSent     TxType = "sent"
-	TxReceived TxType = "received"
-)
-
-type TxType string
-
-type Transaction struct {
-	ID           string //hash of VtxoKey
-	BoardingTxid string
-	RoundTxid    string
-	RedeemTxid   string
-	Amount       uint64
-	Type         TxType
-	Pending      bool
-	Claimed      bool
-	CreatedAt    time.Time
-}
-
 type Vtxo struct {
 	Txid                    string
 	VOut                    uint32
@@ -51,4 +32,23 @@ type Vtxo struct {
 	Pending                 bool
 	SpentBy                 string
 	Spent                   bool
+}
+
+const (
+	TxSent     TxType = "sent"
+	TxReceived TxType = "received"
+)
+
+type TxType string
+
+type Transaction struct {
+	ID              string
+	BoardingTxid    string
+	RoundTxid       string
+	RedeemTxid      string
+	Amount          uint64
+	Type            TxType
+	IsPending       bool
+	IsPendingChange bool
+	CreatedAt       time.Time
 }

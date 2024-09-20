@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
 // ErrNonFinalBIP68 is returned when a transaction spending a CSV-locked output is not final.
@@ -30,6 +31,7 @@ type WalletService interface {
 	WaitForSync(ctx context.Context, txid string) error
 	EstimateFees(ctx context.Context, psbt string) (uint64, error)
 	MinRelayFee(ctx context.Context, vbytes uint64) (uint64, error)
+	MinRelayFeeRate(ctx context.Context) chainfee.SatPerKVByte
 	ListConnectorUtxos(ctx context.Context, connectorAddress string) ([]TxInput, error)
 	MainAccountBalance(ctx context.Context) (uint64, uint64, error)
 	ConnectorsAccountBalance(ctx context.Context) (uint64, uint64, error)

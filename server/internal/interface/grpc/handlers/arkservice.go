@@ -6,8 +6,6 @@ import (
 	"sync"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
-	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -65,22 +63,27 @@ func (h *handler) CreatePayment(ctx context.Context, req *arkv1.CreatePaymentReq
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	vtxosKeys := make([]domain.VtxoKey, 0, len(inputs))
-	for _, input := range inputs {
-		if !input.IsVtxo() {
-			return nil, status.Error(codes.InvalidArgument, "only vtxos input allowed")
-		}
-
-		vtxosKeys = append(vtxosKeys, input.VtxoKey())
-	}
-
 	receivers, err := parseReceivers(req.GetOutputs())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
+	for _, receiver := range receivers {
+		if receiver.Amount <= 0 {
+			return nil, status.Error(codes.InvalidArgument, "output amount must be greater than 0")
+		}
+
+		if len(receiver.OnchainAddress) > 0 {
+			return nil, status.Error(codes.InvalidArgument, "onchain address is not supported as async payment destination")
+		}
+
+		if len(receiver.Descriptor) <= 0 {
+			return nil, status.Error(codes.InvalidArgument, "missing output descriptor")
+		}
+	}
+
 	redeemTx, unconditionalForfeitTxs, err := h.svc.CreateAsyncPayment(
-		ctx, vtxosKeys, receivers,
+		ctx, inputs, receivers,
 	)
 	if err != nil {
 		return nil, err
@@ -109,11 +112,11 @@ func (h *handler) Ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.Ping
 		resp = &arkv1.PingResponse{
 			Event: &arkv1.PingResponse_RoundFinalization{
 				RoundFinalization: &arkv1.RoundFinalizationEvent{
-					Id:             e.Id,
-					PoolTx:         e.PoolTx,
-					CongestionTree: castCongestionTree(e.CongestionTree),
-					ForfeitTxs:     e.UnsignedForfeitTxs,
-					Connectors:     e.Connectors,
+					Id:              e.Id,
+					PoolTx:          e.PoolTx,
+					CongestionTree:  congestionTree(e.CongestionTree).toProto(),
+					Connectors:      e.Connectors,
+					MinRelayFeeRate: e.MinRelayFeeRate,
 				},
 			},
 		}
@@ -146,7 +149,7 @@ func (h *handler) Ping(ctx context.Context, req *arkv1.PingRequest) (*arkv1.Ping
 				RoundSigning: &arkv1.RoundSigningEvent{
 					Id:               e.Id,
 					CosignersPubkeys: cosignersKeys,
-					UnsignedTree:     castCongestionTree(e.UnsignedVtxoTree),
+					UnsignedTree:     congestionTree(e.UnsignedVtxoTree).toProto(),
 					UnsignedRoundTx:  e.UnsignedRoundTx,
 				},
 			},
@@ -242,10 +245,10 @@ func (h *handler) GetRound(ctx context.Context, req *arkv1.GetRoundRequest) (*ar
 				Start:          round.StartingTimestamp,
 				End:            round.EndingTimestamp,
 				PoolTx:         round.UnsignedTx,
-				CongestionTree: castCongestionTree(round.CongestionTree),
+				CongestionTree: congestionTree(round.CongestionTree).toProto(),
 				ForfeitTxs:     round.ForfeitTxs,
 				Connectors:     round.Connectors,
-				Stage:          toRoundStage(round.Stage),
+				Stage:          stage(round.Stage).toProto(),
 			},
 		}, nil
 	}
@@ -261,10 +264,10 @@ func (h *handler) GetRound(ctx context.Context, req *arkv1.GetRoundRequest) (*ar
 			Start:          round.StartingTimestamp,
 			End:            round.EndingTimestamp,
 			PoolTx:         round.UnsignedTx,
-			CongestionTree: castCongestionTree(round.CongestionTree),
+			CongestionTree: congestionTree(round.CongestionTree).toProto(),
 			ForfeitTxs:     round.ForfeitTxs,
 			Connectors:     round.Connectors,
-			Stage:          toRoundStage(round.Stage),
+			Stage:          stage(round.Stage).toProto(),
 		},
 	}, nil
 }
@@ -288,10 +291,10 @@ func (h *handler) GetRoundById(
 			Start:          round.StartingTimestamp,
 			End:            round.EndingTimestamp,
 			PoolTx:         round.UnsignedTx,
-			CongestionTree: castCongestionTree(round.CongestionTree),
+			CongestionTree: congestionTree(round.CongestionTree).toProto(),
 			ForfeitTxs:     round.ForfeitTxs,
 			Connectors:     round.Connectors,
-			Stage:          toRoundStage(round.Stage),
+			Stage:          stage(round.Stage).toProto(),
 		},
 	}, nil
 }
@@ -321,7 +324,7 @@ func (h *handler) GetEventStream(_ *arkv1.GetEventStreamRequest, stream arkv1.Ar
 }
 
 func (h *handler) ListVtxos(ctx context.Context, req *arkv1.ListVtxosRequest) (*arkv1.ListVtxosResponse, error) {
-	hrp, userPubkey, aspPubkey, err := parseAddress(req.GetAddress())
+	_, userPubkey, _, err := parseAddress(req.GetAddress())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -332,8 +335,8 @@ func (h *handler) ListVtxos(ctx context.Context, req *arkv1.ListVtxosRequest) (*
 	}
 
 	return &arkv1.ListVtxosResponse{
-		SpendableVtxos: vtxoList(spendableVtxos).toProto(hrp, aspPubkey),
-		SpentVtxos:     vtxoList(spentVtxos).toProto(hrp, aspPubkey),
+		SpendableVtxos: vtxoList(spendableVtxos).toProto(),
+		SpentVtxos:     vtxoList(spentVtxos).toProto(),
 	}, nil
 }
 
@@ -370,13 +373,14 @@ func (h *handler) GetBoardingAddress(ctx context.Context, req *arkv1.GetBoarding
 		return nil, status.Error(codes.InvalidArgument, "invalid pubkey (parse error)")
 	}
 
-	addr, err := h.svc.GetBoardingAddress(ctx, userPubkey)
+	addr, descriptor, err := h.svc.GetBoardingAddress(ctx, userPubkey)
 	if err != nil {
 		return nil, err
 	}
 
 	return &arkv1.GetBoardingAddressResponse{
-		Address: addr,
+		Address:     addr,
+		Descriptor_: descriptor,
 	}, nil
 }
 
@@ -478,11 +482,11 @@ func (h *handler) listenToEvents() {
 			ev = &arkv1.GetEventStreamResponse{
 				Event: &arkv1.GetEventStreamResponse_RoundFinalization{
 					RoundFinalization: &arkv1.RoundFinalizationEvent{
-						Id:             e.Id,
-						PoolTx:         e.PoolTx,
-						CongestionTree: castCongestionTree(e.CongestionTree),
-						ForfeitTxs:     e.UnsignedForfeitTxs,
-						Connectors:     e.Connectors,
+						Id:              e.Id,
+						PoolTx:          e.PoolTx,
+						CongestionTree:  congestionTree(e.CongestionTree).toProto(),
+						Connectors:      e.Connectors,
+						MinRelayFeeRate: e.MinRelayFeeRate,
 					},
 				},
 			}
@@ -515,7 +519,7 @@ func (h *handler) listenToEvents() {
 					RoundSigning: &arkv1.RoundSigningEvent{
 						Id:               e.Id,
 						CosignersPubkeys: cosignersKeys,
-						UnsignedTree:     castCongestionTree(e.UnsignedVtxoTree),
+						UnsignedTree:     congestionTree(e.UnsignedVtxoTree).toProto(),
 						UnsignedRoundTx:  e.UnsignedRoundTx,
 					},
 				},
@@ -542,72 +546,5 @@ func (h *handler) listenToEvents() {
 				listener.ch <- ev
 			}
 		}
-	}
-}
-
-type vtxoList []domain.Vtxo
-
-func (v vtxoList) toProto(hrp string, aspKey *secp256k1.PublicKey) []*arkv1.Vtxo {
-	list := make([]*arkv1.Vtxo, 0, len(v))
-	for _, vv := range v {
-		addr := vv.OnchainAddress
-		if vv.Pubkey != "" {
-			buf, _ := hex.DecodeString(vv.Pubkey)
-			key, _ := secp256k1.ParsePubKey(buf)
-			addr, _ = common.EncodeAddress(hrp, key, aspKey)
-		}
-		var pendingData *arkv1.PendingPayment
-		if vv.AsyncPayment != nil {
-			pendingData = &arkv1.PendingPayment{
-				RedeemTx:                vv.AsyncPayment.RedeemTx,
-				UnconditionalForfeitTxs: vv.AsyncPayment.UnconditionalForfeitTxs,
-			}
-		}
-		list = append(list, &arkv1.Vtxo{
-			Outpoint: &arkv1.Input{
-				Input: &arkv1.Input_VtxoInput{
-					VtxoInput: &arkv1.VtxoInput{
-						Txid: vv.Txid,
-						Vout: vv.VOut,
-					},
-				},
-			},
-			Receiver: &arkv1.Output{
-				Address: addr,
-				Amount:  vv.Amount,
-			},
-			PoolTxid:    vv.PoolTx,
-			Spent:       vv.Spent,
-			ExpireAt:    vv.ExpireAt,
-			SpentBy:     vv.SpentBy,
-			Swept:       vv.Swept,
-			PendingData: pendingData,
-			Pending:     pendingData != nil,
-		})
-	}
-
-	return list
-}
-
-// castCongestionTree converts a tree.CongestionTree to a repeated arkv1.TreeLevel
-func castCongestionTree(congestionTree tree.CongestionTree) *arkv1.Tree {
-	levels := make([]*arkv1.TreeLevel, 0, len(congestionTree))
-	for _, level := range congestionTree {
-		levelProto := &arkv1.TreeLevel{
-			Nodes: make([]*arkv1.Node, 0, len(level)),
-		}
-
-		for _, node := range level {
-			levelProto.Nodes = append(levelProto.Nodes, &arkv1.Node{
-				Txid:       node.Txid,
-				Tx:         node.Tx,
-				ParentTxid: node.ParentTxid,
-			})
-		}
-
-		levels = append(levels, levelProto)
-	}
-	return &arkv1.Tree{
-		Levels: levels,
 	}
 }

@@ -62,8 +62,7 @@ func (t *transactionRepository) InsertTransactions(ctx context.Context, txs []st
 			tx.RedeemTxid,
 			int64(tx.Amount),
 			string(tx.Type),
-			tx.Pending,
-			tx.Claimed,
+			tx.IsPending,
 			tx.CreatedAt.Unix(),
 		)
 		if err != nil {
@@ -99,8 +98,7 @@ func (t *transactionRepository) GetAll(
 			RedeemTxid:   row.RedeemTxid,
 			Amount:       uint64(row.Amount),
 			Type:         store.TxType(row.Type),
-			Pending:      row.Pending,
-			Claimed:      row.Claimed,
+			IsPending:    row.Pending,
 			CreatedAt:    time.Unix(row.CreatedAt, 0),
 		})
 	}
@@ -131,8 +129,7 @@ func (t *transactionRepository) GetBoardingTxs(ctx context.Context) ([]store.Tra
 			RedeemTxid:   row.RedeemTxid,
 			Amount:       uint64(row.Amount),
 			Type:         store.TxType(row.Type),
-			Pending:      row.Pending,
-			Claimed:      row.Claimed,
+			IsPending:    row.Pending,
 			CreatedAt:    time.Unix(row.CreatedAt, 0),
 		})
 	}

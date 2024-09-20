@@ -24,11 +24,11 @@ type V1RoundFinalizationEvent struct {
 	// connectors
 	Connectors []string `json:"connectors"`
 
-	// forfeit txs
-	ForfeitTxs []string `json:"forfeitTxs"`
-
 	// id
 	ID string `json:"id,omitempty"`
+
+	// min relay fee rate
+	MinRelayFeeRate string `json:"minRelayFeeRate,omitempty"`
 
 	// pool tx
 	PoolTx string `json:"poolTx,omitempty"`

@@ -41,6 +41,10 @@ func ParseTaprootDescriptor(desc string) (*TaprootDescriptor, error) {
 			return nil, err
 		}
 		for _, scriptStr := range scriptParts {
+			if scriptStr == "}" {
+				continue
+			}
+
 			leaf, err := parseExpression(scriptStr)
 			if err != nil {
 				return nil, err
