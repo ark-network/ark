@@ -1011,7 +1011,7 @@ func (a *covenantArkClient) handleRoundStream(
 	boardingDescriptor string,
 	receivers []client.Output,
 ) (string, error) {
-	eventsCh, err := a.client.GetEventStream(ctx, paymentID)
+	eventsCh, close, err := a.client.GetEventStream(ctx, paymentID)
 	if err != nil {
 		return "", err
 	}
@@ -1021,7 +1021,10 @@ func (a *covenantArkClient) handleRoundStream(
 		pingStop = a.ping(ctx, paymentID)
 	}
 
-	defer pingStop()
+	defer func() {
+		pingStop()
+		close()
+	}()
 
 	for {
 		select {
