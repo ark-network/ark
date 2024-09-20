@@ -63,7 +63,27 @@ func (m *paymentsMap) push(payment domain.Payment, boardingInputs []ports.Boardi
 	defer m.lock.Unlock()
 
 	if _, ok := m.payments[payment.Id]; ok {
-		return fmt.Errorf("duplicated inputs")
+		return fmt.Errorf("duplicated payment %s", payment.Id)
+	}
+
+	for _, input := range payment.Inputs {
+		for _, pay := range m.payments {
+			for _, pInput := range pay.Inputs {
+				if input.VtxoKey.Txid == pInput.VtxoKey.Txid && input.VtxoKey.VOut == pInput.VtxoKey.VOut {
+					return fmt.Errorf("duplicated input, %s:%d already used by payment %s", input.VtxoKey.Txid, input.VtxoKey.VOut, pay.Id)
+				}
+			}
+		}
+	}
+
+	for _, input := range boardingInputs {
+		for _, pay := range m.payments {
+			for _, pBoardingInput := range pay.boardingInputs {
+				if input.Txid == pBoardingInput.Txid && input.VOut == pBoardingInput.VOut {
+					return fmt.Errorf("duplicated boarding input, %s:%d already used by payment %s", input.Txid, input.VOut, pay.Id)
+				}
+			}
+		}
 	}
 
 	m.payments[payment.Id] = &timedPayment{payment, boardingInputs, time.Now(), time.Time{}}

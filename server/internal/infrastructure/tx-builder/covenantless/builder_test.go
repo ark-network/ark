@@ -22,6 +22,7 @@ import (
 const (
 	testingKey        = "020000000000000000000000000000000000000000000000000000000000000001"
 	connectorAddress  = "bc1py00yhcjpcj0k0sqra0etq0u3yy0purmspppsw0shyzyfe8c83tmq5h6kc2"
+	changeAddress     = "bcrt1qhhq55mut9easvrncy4se8q6vg3crlug7yj4j56"
 	roundLifetime     = int64(1209344)
 	boardingExitDelay = int64(512)
 	minRelayFeeRate   = 3
@@ -37,7 +38,9 @@ func TestMain(m *testing.M) {
 	wallet.On("EstimateFees", mock.Anything, mock.Anything).
 		Return(uint64(100), nil)
 	wallet.On("SelectUtxos", mock.Anything, mock.Anything, mock.Anything).
-		Return(randomInput, uint64(0), nil)
+		Return(randomInput, uint64(1000), nil)
+	wallet.On("DeriveAddresses", mock.Anything, mock.Anything).
+		Return([]string{changeAddress}, nil)
 	wallet.On("DeriveConnectorAddress", mock.Anything).
 		Return(connectorAddress, nil)
 	wallet.On("MinRelayFee", mock.Anything, mock.Anything).

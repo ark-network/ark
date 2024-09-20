@@ -643,7 +643,6 @@ func (s *covenantlessService) RegisterCosignerNonces(
 	if err != nil {
 		return fmt.Errorf("failed to decode nonces: %s", err)
 	}
-
 	session.lock.Lock()
 	defer session.lock.Unlock()
 
@@ -654,7 +653,9 @@ func (s *covenantlessService) RegisterCosignerNonces(
 	session.nonces[pubkey] = nonces
 
 	if len(session.nonces) == session.nbCosigners-1 { // exclude the ASP
-		session.nonceDoneC <- struct{}{}
+		go func() {
+			session.nonceDoneC <- struct{}{}
+		}()
 	}
 
 	return nil
@@ -683,7 +684,9 @@ func (s *covenantlessService) RegisterCosignerSignatures(
 	session.signatures[pubkey] = signatures
 
 	if len(session.signatures) == session.nbCosigners-1 { // exclude the ASP
-		session.sigDoneC <- struct{}{}
+		go func() {
+			session.sigDoneC <- struct{}{}
+		}()
 	}
 
 	return nil
@@ -1078,7 +1081,6 @@ func (s *covenantlessService) finalizeRound() {
 	txid, err := s.wallet.BroadcastTransaction(ctx, signedRoundTx)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to broadcast pool tx: %s", err))
-		log.WithError(err).Warn("failed to broadcast pool tx")
 		return
 	}
 
