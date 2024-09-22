@@ -452,11 +452,39 @@ func (s *service) GetPubkey(ctx context.Context) (*secp256k1.PublicKey, error) {
 }
 
 func (s *service) GetForfeitAddress(ctx context.Context) (string, error) {
-	if s.aspTaprootAddr == nil {
-		return "", fmt.Errorf("asp taproot address not set")
+	addrs, err := s.wallet.ListAddresses(string(mainAccount), false)
+	if err != nil {
+		return "", err
 	}
 
-	return s.aspTaprootAddr.Address().EncodeAddress(), nil
+	if len(addrs) == 0 {
+		addr, err := s.deriveNextAddress(mainAccount)
+		if err != nil {
+			return "", err
+		}
+
+		return addr.EncodeAddress(), nil
+	}
+
+	for info, addrs := range addrs {
+		if info.AccountName != string(mainAccount) {
+			continue
+		}
+
+		for _, addr := range addrs {
+			if addr.Internal {
+				continue
+			}
+
+			splittedPath := strings.Split(addr.DerivationPath, "/")
+			last := splittedPath[len(splittedPath)-1]
+			if last == "0" {
+				return addr.Address, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("forfeit address not found")
 }
 
 func (s *service) ListConnectorUtxos(ctx context.Context, connectorAddress string) ([]ports.TxInput, error) {
