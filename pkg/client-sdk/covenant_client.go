@@ -20,7 +20,6 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/store"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
-	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -1310,21 +1309,6 @@ func (a *covenantArkClient) createAndSignForfeits(
 	feeRate chainfee.SatPerKVByte,
 	myPubKey *secp256k1.PublicKey,
 ) ([]string, error) {
-	parsedForfeitAddr, err := btcutil.DecodeAddress(a.ForfeitAddress, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	forfeitPkScript, err := txscript.PayToAddrScript(parsedForfeitAddr)
-	if err != nil {
-		return nil, err
-	}
-
-	parsedScript, err := txscript.ParsePkScript(forfeitPkScript)
-	if err != nil {
-		return nil, err
-	}
-
 	signedForfeits := make([]string, 0)
 	connectorsPsets := make([]*psetv2.Pset, 0, len(connectors))
 
@@ -1348,7 +1332,7 @@ func (a *covenantArkClient) createAndSignForfeits(
 			return nil, err
 		}
 
-		feeAmount, err := common.ComputeForfeitMinRelayFee(feeRate, vtxoTapTree, parsedScript.Class())
+		feeAmount, err := common.ComputeForfeitMinRelayFee(feeRate, vtxoTapTree, txscript.WitnessV0PubKeyHashTy)
 		if err != nil {
 			return nil, err
 		}
