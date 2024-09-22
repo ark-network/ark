@@ -1517,7 +1517,6 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 	feeRate chainfee.SatPerKVByte,
 	myPubkey *secp256k1.PublicKey,
 ) ([]string, error) {
-
 	signedForfeits := make([]string, 0)
 	connectorsPsets := make([]*psbt.Packet, 0, len(connectors))
 
@@ -1541,7 +1540,7 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 			return nil, err
 		}
 
-		feeAmount, err := common.ComputeForfeitMinRelayFee(feeRate, vtxoTapTree)
+		feeAmount, err := common.ComputeForfeitMinRelayFee(feeRate, vtxoTapTree, txscript.WitnessV0PubKeyHashTy)
 		if err != nil {
 			return nil, err
 		}
@@ -1584,7 +1583,7 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 
 		for _, connectorPset := range connectorsPsets {
 			forfeits, err := bitcointree.BuildForfeitTxs(
-				connectorPset, vtxoInput, vtxo.Amount, a.Dust, feeAmount, vtxoOutputScript, a.AspPubkey,
+				connectorPset, vtxoInput, vtxo.Amount, a.Dust, feeAmount, vtxoOutputScript, a.ForfeitAddress,
 			)
 			if err != nil {
 				return nil, err

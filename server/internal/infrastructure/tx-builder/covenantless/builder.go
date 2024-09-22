@@ -228,7 +228,7 @@ func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (signedSweepTx strin
 }
 
 func (b *txBuilder) BuildForfeitTxs(
-	aspPubkey *secp256k1.PublicKey, poolTx string, payments []domain.Payment, minRelayFeeRate chainfee.SatPerKVByte,
+	poolTx string, payments []domain.Payment, minRelayFeeRate chainfee.SatPerKVByte,
 ) (connectors []string, forfeitTxs []string, err error) {
 	connectorPkScript, err := b.getConnectorPkScript(poolTx)
 	if err != nil {
@@ -245,7 +245,7 @@ func (b *txBuilder) BuildForfeitTxs(
 		return nil, nil, err
 	}
 
-	forfeitTxs, err = b.createForfeitTxs(aspPubkey, payments, connectorTxs, minRelayFeeRate)
+	forfeitTxs, err = b.createForfeitTxs(payments, connectorTxs, minRelayFeeRate)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1183,8 +1183,30 @@ func (b *txBuilder) minRelayFeeTreeTx() (uint64, error) {
 }
 
 func (b *txBuilder) createForfeitTxs(
-	aspPubkey *secp256k1.PublicKey, payments []domain.Payment, connectors []*psbt.Packet, minRelayFeeRate chainfee.SatPerKVByte,
+	payments []domain.Payment,
+	connectors []*psbt.Packet,
+	minRelayFeeRate chainfee.SatPerKVByte,
 ) ([]string, error) {
+	forfeitAddress, err := b.wallet.GetForfeitAddress(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	parsedAddr, err := btcutil.DecodeAddress(forfeitAddress, b.onchainNetwork())
+	if err != nil {
+		return nil, err
+	}
+
+	pkScript, err := txscript.PayToAddrScript(parsedAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	scriptParsed, err := txscript.ParsePkScript(pkScript)
+	if err != nil {
+		return nil, err
+	}
+
 	forfeitTxs := make([]string, 0)
 	for _, payment := range payments {
 		for _, vtxo := range payment.Inputs {
@@ -1208,7 +1230,7 @@ func (b *txBuilder) createForfeitTxs(
 				return nil, err
 			}
 
-			feeAmount, err := common.ComputeForfeitMinRelayFee(minRelayFeeRate, tapTree)
+			feeAmount, err := common.ComputeForfeitMinRelayFee(minRelayFeeRate, tapTree, scriptParsed.Class())
 			if err != nil {
 				return nil, err
 			}
@@ -1229,7 +1251,7 @@ func (b *txBuilder) createForfeitTxs(
 					connectorAmount,
 					feeAmount,
 					vtxoScript,
-					aspPubkey,
+					forfeitAddress,
 				)
 				if err != nil {
 					return nil, err

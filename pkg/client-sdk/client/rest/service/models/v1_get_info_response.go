@@ -23,6 +23,9 @@ type V1GetInfoResponse struct {
 	// dust
 	Dust string `json:"dust,omitempty"`
 
+	// forfeit address
+	ForfeitAddress string `json:"forfeitAddress,omitempty"`
+
 	// network
 	Network string `json:"network,omitempty"`
 

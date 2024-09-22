@@ -451,6 +451,14 @@ func (s *service) GetPubkey(ctx context.Context) (*secp256k1.PublicKey, error) {
 	return s.aspTaprootAddr.PubKey(), nil
 }
 
+func (s *service) GetForfeitAddress(ctx context.Context) (string, error) {
+	if s.aspTaprootAddr == nil {
+		return "", fmt.Errorf("asp taproot address not set")
+	}
+
+	return s.aspTaprootAddr.Address().EncodeAddress(), nil
+}
+
 func (s *service) ListConnectorUtxos(ctx context.Context, connectorAddress string) ([]ports.TxInput, error) {
 	w := s.wallet.InternalWallet()
 

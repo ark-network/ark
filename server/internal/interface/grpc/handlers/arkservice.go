@@ -359,6 +359,7 @@ func (h *handler) GetInfo(ctx context.Context, req *arkv1.GetInfoRequest) (*arkv
 		Network:                    info.Network,
 		Dust:                       int64(info.Dust),
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
+		ForfeitAddress:             info.ForfeitAddress,
 	}, nil
 }
 

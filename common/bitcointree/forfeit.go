@@ -1,11 +1,10 @@
 package bitcointree
 
 import (
-	"github.com/ark-network/ark/common"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
 func BuildForfeitTxs(
@@ -15,9 +14,14 @@ func BuildForfeitTxs(
 	connectorAmount,
 	feeAmount uint64,
 	vtxoScript []byte,
-	aspPubKey *secp256k1.PublicKey,
+	aspAddress string,
 ) (forfeitTxs []*psbt.Packet, err error) {
-	aspScript, err := common.P2TRScript(aspPubKey)
+	aspAddr, err := btcutil.DecodeAddress(aspAddress, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	aspScript, err := txscript.PayToAddrScript(aspAddr)
 	if err != nil {
 		return nil, err
 	}
