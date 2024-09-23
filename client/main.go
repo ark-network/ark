@@ -7,14 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"syscall"
 
 	"github.com/ark-network/ark/common"
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
 	"github.com/ark-network/ark/pkg/client-sdk/store"
-	filestore "github.com/ark-network/ark/pkg/client-sdk/store/file"
-	sqlitestore "github.com/ark-network/ark/pkg/client-sdk/store/sqlite"
+	"github.com/ark-network/ark/pkg/client-sdk/store/domain"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/term"
 )
@@ -27,8 +25,6 @@ const (
 var (
 	Version      string
 	arkSdkClient arksdk.ArkClient
-
-	appDataStoreMigrationPath = os.Getenv("ARK_APP_DATA_STORE_MIGRATION_PATH")
 )
 
 func main() {
@@ -52,9 +48,6 @@ func main() {
 		networkFlag,
 	}
 	app.Before = func(ctx *cli.Context) error {
-		if appDataStoreMigrationPath == "" {
-			appDataStoreMigrationPath = "file://../pkg/client-sdk/store/sqlite/migrations"
-		}
 		sdk, err := getArkSdkClient(ctx)
 		if err != nil {
 			return fmt.Errorf("error initializing ark sdk client: %v", err)
@@ -219,12 +212,12 @@ func initArkSdk(ctx *cli.Context) error {
 }
 
 func config(ctx *cli.Context) error {
-	cfgStore, err := getConfigStore(ctx.String(datadirFlag.Name))
+	sdkRepository, err := getSdkRepository(ctx.String(datadirFlag.Name))
 	if err != nil {
 		return err
 	}
 
-	cfgData, err := cfgStore.GetData(ctx.Context)
+	cfgData, err := sdkRepository.ConfigRepository().GetData(ctx.Context)
 	if err != nil {
 		return err
 	}
@@ -307,16 +300,16 @@ func send(ctx *cli.Context) error {
 		return fmt.Errorf("missing destination, use --to and --amount or --receivers")
 	}
 
-	configStore, err := getConfigStore(ctx.String(datadirFlag.Name))
+	sdkRepository, err := getSdkRepository(ctx.String(datadirFlag.Name))
 	if err != nil {
 		return err
 	}
 
-	cfgData, err := configStore.GetData(ctx.Context)
+	net, err := getNetwork(ctx, sdkRepository)
 	if err != nil {
 		return err
 	}
-	net := getNetwork(ctx, cfgData)
+
 	isBitcoin := isBtcChain(net)
 
 	var receivers []arksdk.Receiver
@@ -390,63 +383,69 @@ func redeem(ctx *cli.Context) error {
 
 func getArkSdkClient(ctx *cli.Context) (arksdk.ArkClient, error) {
 	dataDir := ctx.String(datadirFlag.Name)
-	cfgStore, err := getConfigStore(dataDir)
+	sdkRepository, err := getSdkRepository(dataDir)
 	if err != nil {
 		return nil, err
 	}
 
-	dbDir := fmt.Sprintf("%s/%s", dataDir, sqliteDir)
-	appDataStore, err := sqlitestore.NewAppDataRepository(dbDir, appDataStoreMigrationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	cfgData, err := cfgStore.GetData(ctx.Context)
+	configData, err := sdkRepository.ConfigRepository().GetData(context.Background())
 	if err != nil {
 		return nil, err
 	}
 
 	commandName := ctx.Args().First()
-	if commandName != "init" && cfgData == nil {
+	if commandName != "init" && configData == nil {
 		return nil, fmt.Errorf("CLI not initialized, run 'init' cmd to initialize")
 	}
 
-	net := getNetwork(ctx, cfgData)
+	net, err := getNetwork(ctx, sdkRepository)
+	if err != nil {
+		return nil, err
+	}
 
 	if isBtcChain(net) {
 		return loadOrCreateClient(
-			arksdk.LoadCovenantlessClient, arksdk.NewCovenantlessClient, cfgStore, appDataStore,
+			arksdk.LoadCovenantlessClient, arksdk.NewCovenantlessClient, sdkRepository,
 		)
 	}
 	return loadOrCreateClient(
-		arksdk.LoadCovenantClient, arksdk.NewCovenantClient, cfgStore, appDataStore,
+		arksdk.LoadCovenantClient, arksdk.NewCovenantClient, sdkRepository,
 	)
 }
 
 func loadOrCreateClient(
-	loadFunc, newFunc func(store.ConfigStore, store.AppDataStore) (arksdk.ArkClient, error),
-	store store.ConfigStore,
-	appDataStore store.AppDataStore,
+	loadFunc, newFunc func(domain.SdkRepository) (arksdk.ArkClient, error),
+	sdkRepository domain.SdkRepository,
 ) (arksdk.ArkClient, error) {
-	client, err := loadFunc(store, appDataStore)
+	client, err := loadFunc(sdkRepository)
 	if err != nil {
 		if errors.Is(err, arksdk.ErrNotInitialized) {
-			return newFunc(store, appDataStore)
+			return newFunc(sdkRepository)
 		}
 		return nil, err
 	}
 	return client, err
 }
 
-func getConfigStore(dataDir string) (store.ConfigStore, error) {
-	return filestore.NewConfigStore(dataDir)
+func getSdkRepository(dataDir string) (domain.SdkRepository, error) {
+	return store.NewService(store.Config{
+		ConfigStoreType:  store.FileStore,
+		AppDataStoreType: store.Badger,
+		BaseDir:          dataDir,
+	})
 }
 
-func getNetwork(ctx *cli.Context, configData *store.StoreData) string {
-	if configData == nil {
-		return strings.ToLower(ctx.String(networkFlag.Name))
+func getNetwork(ctx *cli.Context, sdkRepository domain.SdkRepository) (string, error) {
+	configData, err := sdkRepository.ConfigRepository().GetData(context.Background())
+	if err != nil {
+		return "", err
 	}
-	return configData.Network.Name
+
+	if configData == nil {
+		return ctx.String(networkFlag.Name), nil
+	}
+
+	return configData.Network.Name, nil
 }
 
 func isBtcChain(network string) bool {

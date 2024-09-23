@@ -18,7 +18,7 @@ import (
 
 var (
 	arkSdkClient arksdk.ArkClient
-	configStore  store.ConfigStore
+	configStore  db.ConfigStore
 )
 
 func init() {
@@ -45,7 +45,7 @@ func init() {
 }
 
 func NewCovenantClient(
-	ctx context.Context, storeSvc store.ConfigStore,
+	ctx context.Context, storeSvc db.ConfigStore,
 ) error {
 	var err error
 
@@ -80,7 +80,7 @@ func NewCovenantClient(
 }
 
 func NewCovenantlessClient(
-	ctx context.Context, storeSvc store.ConfigStore,
+	ctx context.Context, storeSvc db.ConfigStore,
 ) error {
 	var err error
 
@@ -123,7 +123,7 @@ func getWalletStore(storeType string) (walletstore.WalletStore, error) {
 }
 
 func getSingleKeyWallet(
-	configStore store.ConfigStore, network string,
+	configStore db.ConfigStore, network string,
 ) (wallet.WalletService, error) {
 	walletStore, err := getWalletStore(configStore.GetType())
 	if err != nil {

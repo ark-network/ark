@@ -12,13 +12,14 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/ark-network/ark/pkg/client-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/store/domain"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	singlekeywallet "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey"
 	walletstore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store"
 	filestore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store/file"
 	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store/inmemory"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -60,24 +61,22 @@ const (
 type spent bool
 
 type arkClient struct {
-	*store.StoreData
-	wallet       wallet.WalletService
-	store        store.ConfigStore
-	appDataStore store.AppDataStore
-	explorer     explorer.Explorer
-	client       client.ASPClient
+	*domain.ConfigData
+	sdkRepository domain.SdkRepository
+	wallet        wallet.WalletService
+	explorer      explorer.Explorer
+	client        client.ASPClient
 
-	vtxosChan            chan map[spent]client.Vtxo
-	vtxoListeningStarted bool
+	sdkInitialized bool
 }
 
 func (a *arkClient) GetConfigData(
 	_ context.Context,
-) (*store.StoreData, error) {
-	if a.StoreData == nil {
+) (*domain.ConfigData, error) {
+	if a.ConfigData == nil {
 		return nil, fmt.Errorf("client sdk not initialized")
 	}
-	return a.StoreData, nil
+	return a.ConfigData, nil
 }
 
 func (a *arkClient) InitWithWallet(
@@ -115,7 +114,7 @@ func (a *arkClient) InitWithWallet(
 		return fmt.Errorf("failed to parse asp pubkey: %s", err)
 	}
 
-	storeData := store.StoreData{
+	storeData := domain.ConfigData{
 		AspUrl:                     args.AspUrl,
 		AspPubkey:                  aspPubkey,
 		WalletType:                 args.Wallet.GetType(),
@@ -127,90 +126,29 @@ func (a *arkClient) InitWithWallet(
 		Dust:                       info.Dust,
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 	}
-	if err := a.store.AddData(ctx, storeData); err != nil {
+	if err := a.sdkRepository.ConfigRepository().AddData(ctx, storeData); err != nil {
 		return err
 	}
 
 	if _, err := args.Wallet.Create(ctx, args.Password, args.Seed); err != nil {
 		//nolint:all
-		a.store.CleanData(ctx)
+		a.sdkRepository.ConfigRepository().CleanData(ctx)
 		return err
 	}
 
-	a.StoreData = &storeData
+	a.ConfigData = &storeData
 	a.wallet = args.Wallet
 	a.explorer = explorerSvc
 	a.client = clientSvc
-
-	a.vtxosChan = make(chan map[spent]client.Vtxo)
-	a.listenForVtxos(ctx, a.vtxosChan)
+	a.sdkInitialized = true
 
 	return nil
 }
 
 func (a *arkClient) GetTransactionHistory(
 	ctx context.Context,
-) ([]store.Transaction, error) {
-	return a.appDataStore.TransactionRepository().GetAll(ctx)
-}
-
-func (a *arkClient) ListVtxos(
-	ctx context.Context,
-) (spendableVtxos, spentVtxos []client.Vtxo, err error) {
-	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
-	if err != nil {
-		return
-	}
-
-	for _, addr := range offchainAddrs {
-		spendable, spent, err := a.client.ListVtxos(ctx, addr)
-		if err != nil {
-			return nil, nil, err
-		}
-		spendableVtxos = append(spendableVtxos, spendable...)
-		spentVtxos = append(spentVtxos, spent...)
-	}
-
-	return
-}
-
-func (a *arkClient) listenForVtxos(
-	ctx context.Context,
-	vtxoChan chan<- map[spent]client.Vtxo,
-) {
-	go func() {
-		ticker := time.NewTicker(1 * time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				spendableVtxos, spentVtxos, err := a.ListVtxos(ctx)
-				if err != nil {
-					log.Warnf("listenForNewVtxos: failed to list vtxos: %s", err)
-					continue
-				}
-
-				allVtxos := make(map[spent]client.Vtxo)
-				for _, vtxo := range spendableVtxos {
-					allVtxos[vtxoUnspent] = vtxo
-				}
-				for _, vtxo := range spentVtxos {
-					allVtxos[vtxoSpent] = vtxo
-				}
-
-				go func() {
-					if len(allVtxos) > 0 {
-						vtxoChan <- allVtxos
-					}
-				}()
-			}
-		}
-	}()
-
-	a.vtxoListeningStarted = true
+) ([]domain.Transaction, error) {
+	return a.sdkRepository.AppDataRepository().TransactionRepository().GetAll(ctx)
 }
 
 func (a *arkClient) Init(
@@ -248,7 +186,7 @@ func (a *arkClient) Init(
 		return fmt.Errorf("failed to parse asp pubkey: %s", err)
 	}
 
-	storeData := store.StoreData{
+	storeData := domain.ConfigData{
 		AspUrl:                     args.AspUrl,
 		AspPubkey:                  aspPubkey,
 		WalletType:                 args.WalletType,
@@ -261,28 +199,26 @@ func (a *arkClient) Init(
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 		ExplorerURL:                args.ExplorerURL,
 	}
-	walletSvc, err := getWallet(a.store, &storeData, supportedWallets)
+	walletSvc, err := getWallet(a.sdkRepository.ConfigRepository(), &storeData, supportedWallets)
 	if err != nil {
 		return err
 	}
 
-	if err := a.store.AddData(ctx, storeData); err != nil {
+	if err := a.sdkRepository.ConfigRepository().AddData(ctx, storeData); err != nil {
 		return err
 	}
 
 	if _, err := walletSvc.Create(ctx, args.Password, args.Seed); err != nil {
 		//nolint:all
-		a.store.CleanData(ctx)
+		a.sdkRepository.ConfigRepository().CleanData(ctx)
 		return err
 	}
 
-	a.StoreData = &storeData
+	a.ConfigData = &storeData
 	a.wallet = walletSvc
 	a.explorer = explorerSvc
 	a.client = clientSvc
-
-	a.vtxosChan = make(chan map[spent]client.Vtxo)
-	a.listenForVtxos(ctx, a.vtxosChan)
+	a.sdkInitialized = true
 
 	return nil
 }
@@ -320,11 +256,11 @@ func (a *arkClient) ping(
 
 	go func(t *time.Ticker) {
 		if _, err := a.client.Ping(ctx, paymentID); err != nil {
-			logrus.Warnf("failed to ping asp: %s", err)
+			log.Warnf("failed to ping asp: %s", err)
 		}
 		for range t.C {
 			if _, err := a.client.Ping(ctx, paymentID); err != nil {
-				logrus.Warnf("failed to ping asp: %s", err)
+				log.Warnf("failed to ping asp: %s", err)
 			}
 		}
 	}(ticker)
@@ -350,7 +286,7 @@ func getExplorer(explorerURL, network string) (explorer.Explorer, error) {
 }
 
 func getWallet(
-	storeSvc store.ConfigStore, data *store.StoreData, supportedWallets utils.SupportedType[struct{}],
+	storeSvc domain.ConfigRepository, data *domain.ConfigData, supportedWallets utils.SupportedType[struct{}],
 ) (wallet.WalletService, error) {
 	switch data.WalletType {
 	case wallet.SingleKeyWallet:
@@ -364,7 +300,7 @@ func getWallet(
 }
 
 func getSingleKeyWallet(
-	configStore store.ConfigStore, network string,
+	configStore domain.ConfigRepository, network string,
 ) (wallet.WalletService, error) {
 	walletStore, err := getWalletStore(configStore.GetType(), configStore.GetDatadir())
 	if err != nil {
@@ -389,4 +325,56 @@ func getWalletStore(storeType, datadir string) (walletstore.WalletStore, error) 
 
 func getCreatedAtFromExpiry(roundLifetime int64, expiry time.Time) time.Time {
 	return expiry.Add(-time.Duration(roundLifetime) * time.Second)
+}
+
+func getNewVtxos(
+	newVtxosMap map[string]client.Vtxo,
+	oldVtxosMap map[string]domain.Vtxo,
+) []client.Vtxo {
+	newVtxos := make([]client.Vtxo, 0)
+	for key, vtxo := range newVtxosMap {
+		if _, ok := oldVtxosMap[key]; !ok {
+			newVtxos = append(newVtxos, vtxo)
+		}
+	}
+	return newVtxos
+}
+
+func filterNewBoardingTxs(
+	allBoardingTxs []domain.Transaction,
+	oldBoardingTxs []domain.Transaction,
+) []domain.Transaction {
+	newBoardingTxs := make([]domain.Transaction, 0)
+	for _, tx := range allBoardingTxs {
+		found := false
+		for _, oldTx := range oldBoardingTxs {
+			if tx.BoardingTxid == oldTx.BoardingTxid {
+				found = true
+				break
+			}
+		}
+		if !found {
+			newBoardingTxs = append(newBoardingTxs, tx)
+		}
+	}
+	return newBoardingTxs
+}
+
+func convertVtxosToDomainVtxos(vtxos []client.Vtxo, spent bool) []domain.Vtxo {
+	domainVtxos := make([]domain.Vtxo, len(vtxos))
+	for i, v := range vtxos {
+		domainVtxos[i] = domain.Vtxo{
+			Txid:                    v.Txid,
+			VOut:                    v.VOut,
+			Amount:                  v.Amount,
+			RoundTxid:               v.RoundTxid,
+			ExpiresAt:               v.ExpiresAt,
+			RedeemTx:                v.RedeemTx,
+			UnconditionalForfeitTxs: v.UnconditionalForfeitTxs,
+			Pending:                 v.Pending,
+			SpentBy:                 v.SpentBy,
+			Spent:                   spent,
+		}
+	}
+	return domainVtxos
 }

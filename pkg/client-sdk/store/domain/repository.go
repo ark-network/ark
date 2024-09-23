@@ -1,27 +1,25 @@
-package store
+package domain
 
-import (
-	"context"
-)
+import "context"
 
-const (
-	InMemoryStore = "inmemory"
-	FileStore     = "file"
-)
-
-type ConfigStore interface {
-	GetType() string
-	GetDatadir() string
-	AddData(ctx context.Context, data StoreData) error
-	GetData(ctx context.Context) (*StoreData, error)
-	CleanData(ctx context.Context) error
+type SdkRepository interface {
+	AppDataRepository() AppDataRepository
+	ConfigRepository() ConfigRepository
 }
 
-type AppDataStore interface {
+type AppDataRepository interface {
 	TransactionRepository() TransactionRepository
 	VtxoRepository() VtxoRepository
 
 	Stop()
+}
+
+type ConfigRepository interface {
+	GetType() string
+	GetDatadir() string
+	AddData(ctx context.Context, data ConfigData) error
+	GetData(ctx context.Context) (*ConfigData, error)
+	CleanData(ctx context.Context) error
 }
 
 type TransactionRepository interface {

@@ -1,13 +1,14 @@
-package store
+package domain
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/ark-network/ark/common"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-type StoreData struct {
+type ConfigData struct {
 	AspUrl                     string
 	AspPubkey                  *secp256k1.PublicKey
 	WalletType                 string
@@ -32,6 +33,10 @@ type Vtxo struct {
 	Pending                 bool
 	SpentBy                 string
 	Spent                   bool
+}
+
+func (v Vtxo) Key() string {
+	return v.Txid + ":" + strconv.Itoa(int(v.VOut))
 }
 
 const (

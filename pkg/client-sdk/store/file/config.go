@@ -12,13 +12,33 @@ import (
 	"strings"
 
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
-	"github.com/ark-network/ark/pkg/client-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/store/domain"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
 const (
 	filename = "state.json"
 )
+
+func NewConfig(baseDir string) (domain.ConfigRepository, error) {
+	if len(baseDir) <= 0 {
+		return nil, fmt.Errorf("missing base directory")
+	}
+
+	datadir := cleanAndExpandPath(baseDir)
+	if err := makeDirectoryIfNotExists(datadir); err != nil {
+		return nil, fmt.Errorf("failed to initialize datadir: %s", err)
+	}
+	filePath := filepath.Join(datadir, filename)
+
+	fileStore := &Store{filePath}
+
+	if _, err := fileStore.open(); err != nil {
+		return nil, fmt.Errorf("failed to open store: %s", err)
+	}
+
+	return fileStore, nil
+}
 
 type storeData struct {
 	AspUrl                     string `json:"asp_url"`
@@ -38,7 +58,7 @@ func (d storeData) isEmpty() bool {
 	return d == storeData{}
 }
 
-func (d storeData) decode() store.StoreData {
+func (d storeData) decode() domain.ConfigData {
 	network := utils.NetworkFromString(d.Network)
 	roundLifetime, _ := strconv.Atoi(d.RoundLifetime)
 	roundInterval, _ := strconv.Atoi(d.RoundInterval)
@@ -47,7 +67,7 @@ func (d storeData) decode() store.StoreData {
 	buf, _ := hex.DecodeString(d.AspPubkey)
 	aspPubkey, _ := secp256k1.ParsePubKey(buf)
 	explorerURL := d.ExplorerURL
-	return store.StoreData{
+	return domain.ConfigData{
 		AspUrl:                     d.AspUrl,
 		AspPubkey:                  aspPubkey,
 		WalletType:                 d.WalletType,
@@ -82,34 +102,15 @@ type Store struct {
 	filePath string
 }
 
-func NewConfigStore(baseDir string) (store.ConfigStore, error) {
-	if len(baseDir) <= 0 {
-		return nil, fmt.Errorf("missing base directory")
-	}
-	datadir := cleanAndExpandPath(baseDir)
-	if err := makeDirectoryIfNotExists(datadir); err != nil {
-		return nil, fmt.Errorf("failed to initialize datadir: %s", err)
-	}
-	filePath := filepath.Join(datadir, filename)
-
-	fileStore := &Store{filePath}
-
-	if _, err := fileStore.open(); err != nil {
-		return nil, fmt.Errorf("failed to open store: %s", err)
-	}
-
-	return fileStore, nil
-}
-
 func (s *Store) GetType() string {
-	return store.FileStore
+	return "file"
 }
 
 func (s *Store) GetDatadir() string {
 	return filepath.Dir(s.filePath)
 }
 
-func (s *Store) AddData(ctx context.Context, data store.StoreData) error {
+func (s *Store) AddData(ctx context.Context, data domain.ConfigData) error {
 	sd := &storeData{
 		AspUrl:                     data.AspUrl,
 		AspPubkey:                  hex.EncodeToString(data.AspPubkey.SerializeCompressed()),
@@ -130,7 +131,7 @@ func (s *Store) AddData(ctx context.Context, data store.StoreData) error {
 	return nil
 }
 
-func (s *Store) GetData(_ context.Context) (*store.StoreData, error) {
+func (s *Store) GetData(_ context.Context) (*domain.ConfigData, error) {
 	sd, err := s.open()
 	if err != nil {
 		return nil, err
