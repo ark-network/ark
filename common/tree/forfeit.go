@@ -2,7 +2,6 @@ package tree
 
 import (
 	"github.com/btcsuite/btcd/txscript"
-	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/elementsutil"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/transaction"
@@ -14,15 +13,10 @@ func BuildForfeitTxs(
 	vtxoAmount,
 	connectorAmount,
 	feeAmount uint64,
-	vtxoScript []byte,
-	aspAddress string,
+	vtxoScript,
+	aspScript []byte,
 ) (forfeitTxs []*psetv2.Pset, err error) {
 	connectors, prevouts := getConnectorInputs(connectorTx, connectorAmount)
-
-	aspScript, err := address.ToOutputScript(aspAddress)
-	if err != nil {
-		return nil, err
-	}
 
 	for i, connectorInput := range connectors {
 		connectorPrevout := prevouts[i]

@@ -797,6 +797,11 @@ func (b *txBuilder) createForfeitTxs(
 		return nil, err
 	}
 
+	forfeitPkScript, err := address.ToOutputScript(forfeitAddr)
+	if err != nil {
+		return nil, err
+	}
+
 	forfeitTxs := make([]string, 0)
 	for _, payment := range payments {
 		for _, vtxo := range payment.Inputs {
@@ -831,7 +836,7 @@ func (b *txBuilder) createForfeitTxs(
 					connectorAmount,
 					feeAmount,
 					vtxoScript,
-					forfeitAddr,
+					forfeitPkScript,
 				)
 				if err != nil {
 					return nil, err

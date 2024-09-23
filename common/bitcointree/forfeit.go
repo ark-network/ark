@@ -1,7 +1,6 @@
 package bitcointree
 
 import (
-	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
@@ -13,19 +12,9 @@ func BuildForfeitTxs(
 	vtxoAmount,
 	connectorAmount,
 	feeAmount uint64,
-	vtxoScript []byte,
-	aspAddress string,
+	vtxoScript,
+	aspScript []byte,
 ) (forfeitTxs []*psbt.Packet, err error) {
-	aspAddr, err := btcutil.DecodeAddress(aspAddress, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	aspScript, err := txscript.PayToAddrScript(aspAddr)
-	if err != nil {
-		return nil, err
-	}
-
 	connectors, prevouts := getConnectorInputs(connectorTx, int64(connectorAmount))
 
 	for i, connectorInput := range connectors {

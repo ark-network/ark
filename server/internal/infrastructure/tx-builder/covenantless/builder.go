@@ -1251,7 +1251,7 @@ func (b *txBuilder) createForfeitTxs(
 					connectorAmount,
 					feeAmount,
 					vtxoScript,
-					forfeitAddress,
+					pkScript,
 				)
 				if err != nil {
 					return nil, err

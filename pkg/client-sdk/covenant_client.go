@@ -1312,6 +1312,11 @@ func (a *covenantArkClient) createAndSignForfeits(
 	signedForfeits := make([]string, 0)
 	connectorsPsets := make([]*psetv2.Pset, 0, len(connectors))
 
+	forfeitPkScript, err := address.ToOutputScript(a.ForfeitAddress)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, connector := range connectors {
 		p, err := psetv2.NewPsetFromBase64(connector)
 		if err != nil {
@@ -1374,7 +1379,7 @@ func (a *covenantArkClient) createAndSignForfeits(
 
 		for _, connectorPset := range connectorsPsets {
 			forfeits, err := tree.BuildForfeitTxs(
-				connectorPset, vtxoInput, vtxo.Amount, a.Dust, feeAmount, vtxoOutputScript, a.ForfeitAddress,
+				connectorPset, vtxoInput, vtxo.Amount, a.Dust, feeAmount, vtxoOutputScript, forfeitPkScript,
 			)
 			if err != nil {
 				return nil, err
