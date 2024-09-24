@@ -281,9 +281,16 @@ func (b *txBuilder) BuildPoolTx(
 		return "", nil, "", err
 	}
 
+	var dustAmount uint64
+
 	if !isOnchainOnly(payments) {
+		dustAmount, err = b.wallet.GetDustAmount(context.Background())
+		if err != nil {
+			return "", nil, "", err
+		}
+
 		sharedOutputScript, sharedOutputAmount, err = bitcointree.CraftSharedOutput(
-			cosigners, aspPubkey, receivers, feeAmount, b.roundLifetime,
+			cosigners, aspPubkey, receivers, feeAmount, dustAmount, b.roundLifetime,
 		)
 		if err != nil {
 			return
@@ -314,7 +321,7 @@ func (b *txBuilder) BuildPoolTx(
 		}
 
 		congestionTree, err = bitcointree.CraftCongestionTree(
-			initialOutpoint, cosigners, aspPubkey, receivers, feeAmount, b.roundLifetime,
+			initialOutpoint, cosigners, aspPubkey, receivers, feeAmount, dustAmount, b.roundLifetime,
 		)
 		if err != nil {
 			return
@@ -537,6 +544,8 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 		redeemTxWeightEstimator.AddP2TROutput()
 	}
 
+	redeemTxWeightEstimator.AddP2WSHOutput() // anchor output
+
 	redeemTxMinRelayFee, err := b.wallet.MinRelayFee(context.Background(), uint64(redeemTxWeightEstimator.VSize()))
 	if err != nil {
 		return nil, err
@@ -544,6 +553,11 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 
 	if redeemTxMinRelayFee >= receivers[len(receivers)-1].Amount {
 		return nil, fmt.Errorf("redeem tx fee is higher than the amount of the change receiver")
+	}
+
+	dustAmount, err := b.wallet.GetDustAmount(context.Background())
+	if err != nil {
+		return nil, err
 	}
 
 	for i, receiver := range receivers {
@@ -567,12 +581,21 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 		value := receiver.Amount
 		if i == len(receivers)-1 {
 			value -= redeemTxMinRelayFee
+			value -= dustAmount // remove anchor output amount
+			if value <= dustAmount {
+				return nil, fmt.Errorf("change amount is dust amount")
+			}
 		}
 		outs = append(outs, &wire.TxOut{
 			Value:    int64(value),
 			PkScript: newVtxoScript,
 		})
 	}
+
+	outs = append(outs, &wire.TxOut{
+		Value:    int64(dustAmount),
+		PkScript: bitcointree.ANCHOR_PKSCRIPT,
+	})
 
 	sequences := make([]uint32, len(ins))
 	for i := range sequences {

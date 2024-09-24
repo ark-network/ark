@@ -263,6 +263,10 @@ func (s *covenantlessService) CompleteAsyncPayment(
 	vtxos := make([]domain.Vtxo, 0, len(asyncPayData.receivers))
 
 	for outIndex, out := range redeemPtx.UnsignedTx.TxOut {
+		if bytes.Equal(out.PkScript, bitcointree.ANCHOR_PKSCRIPT) {
+			continue // skip anchor output
+		}
+
 		desc := asyncPayData.receivers[outIndex].Descriptor
 		_, _, _, _, err := descriptor.ParseReversibleVtxoDescriptor(desc)
 		isChange := err != nil

@@ -3,10 +3,12 @@ package e2e_test
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,6 +20,14 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/redemption"
 	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
 	utils "github.com/ark-network/ark/server/test/e2e"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/btcutil/psbt"
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/require"
 )
 
@@ -139,6 +149,158 @@ func TestUnilateralExit(t *testing.T) {
 
 	lockedBalance := balance.Onchain.Locked[0].Amount
 	require.NotZero(t, lockedBalance)
+}
+
+func TestUnilateralExitWithAnchorSpend(t *testing.T) {
+	ctx := context.Background()
+	sdkClient, grpcClient := setupArkSDK(t)
+	defer grpcClient.Close()
+
+	_, boardingAddress, err := sdkClient.Receive(ctx)
+	require.NoError(t, err)
+
+	_, err = utils.RunCommand("nigiri", "faucet", boardingAddress)
+	require.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+
+	roundId, err := sdkClient.Claim(ctx)
+	require.NoError(t, err)
+
+	err = utils.GenerateBlock()
+	require.NoError(t, err)
+
+	_, err = sdkClient.Claim(ctx)
+	require.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+
+	vtxos, _, err := sdkClient.ListVtxos(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, vtxos)
+
+	var vtxo client.Vtxo
+
+	for _, v := range vtxos {
+		if v.RoundTxid == roundId {
+			vtxo = v
+			break
+		}
+	}
+	require.NotEmpty(t, vtxo)
+
+	round, err := grpcClient.GetRound(ctx, vtxo.RoundTxid)
+	require.NoError(t, err)
+
+	expl := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
+
+	branch, err := redemption.NewCovenantlessRedeemBranch(expl, round.Tree, vtxo)
+	require.NoError(t, err)
+
+	txs, err := branch.RedeemPath()
+	require.NoError(t, err)
+
+	for _, tx := range txs {
+		_, err := expl.Broadcast(tx)
+		require.NoError(t, err)
+	}
+
+	vtxoHash, err := chainhash.NewHashFromStr(vtxo.Txid)
+	require.NoError(t, err)
+
+	seckey, err := secp256k1.GeneratePrivateKey()
+	require.NoError(t, err)
+
+	addr, err := btcutil.NewAddressTaproot(schnorr.SerializePubKey(seckey.PubKey()), &chaincfg.RegressionNetParams)
+	require.NoError(t, err)
+
+	txid, err := utils.RunCommand("nigiri", "faucet", addr.String())
+	require.NoError(t, err)
+
+	txid = strings.TrimSpace(txid)
+	txid = txid[6:]
+
+	time.Sleep(5 * time.Second)
+
+	faucetTxHex, err := expl.GetTxHex(txid)
+	require.NoError(t, err)
+
+	var faucetTx wire.MsgTx
+	err = faucetTx.Deserialize(hex.NewDecoder(strings.NewReader(faucetTxHex)))
+	require.NoError(t, err)
+
+	pkscript, err := txscript.PayToAddrScript(addr)
+	require.NoError(t, err)
+
+	var output *wire.TxOut
+	var outputIndex int
+	for i, out := range faucetTx.TxOut {
+		if bytes.Equal(out.PkScript, pkscript) {
+			output = out
+			outputIndex = i
+			break
+		}
+	}
+	require.NotNil(t, output)
+
+	// the anchor must be spendable right now so the user can bump the fees if needed
+
+	ptx, err := psbt.New(
+		[]*wire.OutPoint{{
+			Hash:  *vtxoHash,
+			Index: vtxo.VOut + 1,
+		}, {
+			Hash:  faucetTx.TxHash(),
+			Index: uint32(outputIndex),
+		}},
+		[]*wire.TxOut{{
+			Value:    1_0000_0000 - 10_0000,
+			PkScript: pkscript,
+		}},
+		2,
+		0,
+		[]uint32{wire.MaxTxInSequenceNum, wire.MaxTxInSequenceNum},
+	)
+	require.NoError(t, err)
+
+	prevouts := make(map[wire.OutPoint]*wire.TxOut)
+
+	txhex, err := expl.GetTxHex(vtxo.Txid)
+	require.NoError(t, err)
+
+	var vtxoTx wire.MsgTx
+	err = vtxoTx.Deserialize(hex.NewDecoder(strings.NewReader(txhex)))
+	require.NoError(t, err)
+
+	prevouts[ptx.UnsignedTx.TxIn[0].PreviousOutPoint] = vtxoTx.TxOut[vtxo.VOut+1]
+	prevouts[ptx.UnsignedTx.TxIn[1].PreviousOutPoint] = output
+
+	prevoutFetcher := txscript.NewMultiPrevOutFetcher(prevouts)
+
+	preimage, err := txscript.CalcTaprootSignatureHash(
+		txscript.NewTxSigHashes(ptx.UnsignedTx, prevoutFetcher),
+		txscript.SigHashDefault,
+		ptx.UnsignedTx,
+		1,
+		prevoutFetcher,
+	)
+	require.NoError(t, err)
+
+	sig, err := schnorr.Sign(seckey, preimage[:])
+	require.NoError(t, err)
+
+	unsignedTx := ptx.UnsignedTx
+	unsignedTx.TxIn[0].Witness = [][]byte{{txscript.OP_TRUE}}
+	unsignedTx.TxIn[1].Witness = [][]byte{sig.Serialize()}
+
+	var signedTx bytes.Buffer
+
+	err = unsignedTx.Serialize(&signedTx)
+	require.NoError(t, err)
+
+	txhex = hex.EncodeToString(signedTx.Bytes())
+	_, err = expl.Broadcast(txhex)
+	require.NoError(t, err)
 }
 
 func TestCollaborativeExit(t *testing.T) {

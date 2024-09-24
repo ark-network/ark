@@ -1479,24 +1479,30 @@ func (a *covenantlessArkClient) validateOffChainReceiver(
 			return err
 		}
 
+		var amount uint64
+
 		for _, output := range tx.UnsignedTx.TxOut {
 			if len(output.PkScript) == 0 {
 				continue
 			}
 
-			if bytes.Equal(
-				output.PkScript[2:], schnorr.SerializePubKey(outputTapKey),
-			) {
-				if output.Value != int64(receiver.Amount) {
-					continue
-				}
+			if bytes.Equal(output.PkScript, bitcointree.ANCHOR_PKSCRIPT) {
+				amount += uint64(output.Value)
+				continue
+			}
 
-				found = true
-				break
+			if len(output.PkScript) == 34 {
+				if bytes.Equal(output.PkScript[2:], schnorr.SerializePubKey(outputTapKey)) {
+					found = true
+					amount += uint64(output.Value)
+				}
 			}
 		}
 
 		if found {
+			if amount != receiver.Amount {
+				continue
+			}
 			break
 		}
 	}
