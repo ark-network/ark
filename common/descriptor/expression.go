@@ -19,6 +19,10 @@ var (
 	ErrNotExpectedPolicy  = errors.New("not the expected policy")
 )
 
+const (
+	andTokenSize = len("and(")
+)
+
 type Expression interface {
 	Parse(policy string) error
 	Script(verify bool) (string, error)
@@ -156,28 +160,21 @@ func (e *And) Parse(policy string) error {
 		return ErrNotExpectedPolicy
 	}
 
-	index := strings.LastIndexByte(policy, ')')
-	if index == -1 {
+	parts, err := splitScriptTree(policy[andTokenSize : len(policy)-1])
+	if err != nil {
 		return ErrInvalidAndPolicy
 	}
 
-	childrenPolicy := policy[4:index]
-	if len(childrenPolicy) == 0 {
+	if len(parts) != 2 {
 		return ErrInvalidAndPolicy
 	}
 
-	children := strings.Split(childrenPolicy, ",")
-	if len(children) != 2 {
-		fmt.Println(children)
-		return ErrInvalidAndPolicy
-	}
-
-	first, err := parseExpression(children[0])
+	first, err := parseExpression(parts[0])
 	if err != nil {
 		return err
 	}
 
-	second, err := parseExpression(children[1])
+	second, err := parseExpression(parts[1])
 	if err != nil {
 		return err
 	}
