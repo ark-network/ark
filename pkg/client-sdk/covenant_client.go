@@ -621,12 +621,21 @@ func (a *covenantArkClient) listenToVtxoChan(ctnx context.Context) error {
 				allBoardingTxs := a.getBoardingTxs(ctx)
 				oldVtxos := append(spendableVtxosOld, spentVtxosOld...)
 
-				if len(oldVtxos) == 0 {
+				oldBoardingTxs, err := a.sdkRepository.AppDataRepository().
+					TransactionRepository().GetBoardingTxs(ctx)
+				if err != nil {
+					log.Errorf("failed to get boarding txs: %s", err)
+					continue
+				}
+
+				newBoardingTxs := filterNewBoardingTxs(allBoardingTxs, oldBoardingTxs)
+
+				if len(oldVtxos) == 0 && len(newBoardingTxs) > 0 {
 					err = a.insertInitialVtxosAndTransactions(
 						ctx,
 						allSpendableVtxos,
 						allSpentVtxos,
-						allBoardingTxs,
+						newBoardingTxs,
 					)
 					if err != nil {
 						log.Errorf("failed to process new vtxos: %s", err)
@@ -637,7 +646,7 @@ func (a *covenantArkClient) listenToVtxoChan(ctnx context.Context) error {
 						allSpendableVtxos,
 						allSpentVtxos,
 						oldVtxos,
-						allBoardingTxs,
+						newBoardingTxs,
 					)
 					if err != nil {
 						log.Errorf("failed to update vtxos: %s", err)
@@ -689,7 +698,7 @@ func (a *covenantArkClient) insertNewTxsAndTransactions(
 	allSpendableVtxos,
 	allSpentVtxos []client.Vtxo,
 	oldVtxos []domain.Vtxo,
-	allBoardingTxs []domain.Transaction,
+	newBoardingTxs []domain.Transaction,
 ) error {
 	spendableVtxosMap := make(map[string]client.Vtxo)
 	spentVtxosMap := make(map[string]client.Vtxo)
@@ -712,14 +721,6 @@ func (a *covenantArkClient) insertNewTxsAndTransactions(
 
 	newSpendableVtxos := getNewVtxos(spendableVtxosMap, oldVtxosMap)
 	newSpentVtxos := getNewVtxos(spentVtxosMap, oldVtxosMap)
-
-	oldBoardingTxs, err := a.sdkRepository.AppDataRepository().
-		TransactionRepository().GetBoardingTxs(ctx)
-	if err != nil {
-		return err
-	}
-
-	newBoardingTxs := filterNewBoardingTxs(allBoardingTxs, oldBoardingTxs)
 
 	txs, err := vtxosToTxsCovenant(
 		a.ConfigData.RoundInterval,

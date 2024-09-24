@@ -46,9 +46,9 @@ func (t *transactionRepository) InsertTransactions(ctx context.Context, txs []do
 		if err := t.db.Insert(tx.ID, &tx); err != nil {
 			return err
 		}
-		go func() {
-			t.eventCh <- tx
-		}()
+		go func(trx domain.Transaction) {
+			t.eventCh <- trx
+		}(tx)
 	}
 	return nil
 }
