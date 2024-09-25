@@ -24,6 +24,7 @@ type StoreData struct {
 	Dust                       uint64
 	BoardingDescriptorTemplate string
 	ExplorerURL                string
+	ForfeitAddress             string
 }
 
 type ConfigStore interface {

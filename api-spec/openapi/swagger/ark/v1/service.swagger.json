@@ -631,6 +631,9 @@
         },
         "boardingDescriptorTemplate": {
           "type": "string"
+        },
+        "forfeitAddress": {
+          "type": "string"
         }
       }
     },

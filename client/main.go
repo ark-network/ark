@@ -233,6 +233,7 @@ func config(ctx *cli.Context) error {
 		"dust":                         cfgData.Dust,
 		"boarding_descriptor_template": cfgData.BoardingDescriptorTemplate,
 		"explorer_url":                 cfgData.ExplorerURL,
+		"forfeit_address":              cfgData.ForfeitAddress,
 	}
 
 	return printJSON(cfg)

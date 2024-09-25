@@ -189,6 +189,7 @@ message GetInfoResponse {
   string network = 5;
   int64 dust = 6;
   string boarding_descriptor_template = 7;
+  string forfeit_address = 8;
 }
 
 // EVENT TYPES

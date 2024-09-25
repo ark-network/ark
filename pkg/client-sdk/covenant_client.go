@@ -21,6 +21,7 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	log "github.com/sirupsen/logrus"
@@ -1311,6 +1312,11 @@ func (a *covenantArkClient) createAndSignForfeits(
 	signedForfeits := make([]string, 0)
 	connectorsPsets := make([]*psetv2.Pset, 0, len(connectors))
 
+	forfeitPkScript, err := address.ToOutputScript(a.ForfeitAddress)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, connector := range connectors {
 		p, err := psetv2.NewPsetFromBase64(connector)
 		if err != nil {
@@ -1331,7 +1337,7 @@ func (a *covenantArkClient) createAndSignForfeits(
 			return nil, err
 		}
 
-		feeAmount, err := common.ComputeForfeitMinRelayFee(feeRate, vtxoTapTree)
+		feeAmount, err := common.ComputeForfeitMinRelayFee(feeRate, vtxoTapTree, txscript.WitnessV0PubKeyHashTy)
 		if err != nil {
 			return nil, err
 		}
@@ -1373,7 +1379,7 @@ func (a *covenantArkClient) createAndSignForfeits(
 
 		for _, connectorPset := range connectorsPsets {
 			forfeits, err := tree.BuildForfeitTxs(
-				connectorPset, vtxoInput, vtxo.Amount, a.Dust, feeAmount, vtxoOutputScript, a.AspPubkey,
+				connectorPset, vtxoInput, vtxo.Amount, a.Dust, feeAmount, vtxoOutputScript, forfeitPkScript,
 			)
 			if err != nil {
 				return nil, err

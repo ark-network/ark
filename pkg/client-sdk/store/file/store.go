@@ -32,6 +32,7 @@ type storeData struct {
 	Dust                       string `json:"dust"`
 	BoardingDescriptorTemplate string `json:"boarding_descriptor_template"`
 	ExplorerURL                string `json:"explorer_url"`
+	ForfeitAddress             string `json:"forfeit_address"`
 }
 
 func (d storeData) isEmpty() bool {
@@ -59,6 +60,7 @@ func (d storeData) decode() store.StoreData {
 		Dust:                       uint64(dust),
 		BoardingDescriptorTemplate: d.BoardingDescriptorTemplate,
 		ExplorerURL:                explorerURL,
+		ForfeitAddress:             d.ForfeitAddress,
 	}
 }
 
@@ -75,6 +77,7 @@ func (d storeData) asMap() map[string]string {
 		"dust":                         d.Dust,
 		"boarding_descriptor_template": d.BoardingDescriptorTemplate,
 		"explorer_url":                 d.ExplorerURL,
+		"forfeit_address":              d.ForfeitAddress,
 	}
 }
 
@@ -122,6 +125,7 @@ func (s *Store) AddData(ctx context.Context, data store.StoreData) error {
 		Dust:                       fmt.Sprintf("%d", data.Dust),
 		BoardingDescriptorTemplate: data.BoardingDescriptorTemplate,
 		ExplorerURL:                data.ExplorerURL,
+		ForfeitAddress:             data.ForfeitAddress,
 	}
 
 	if err := s.write(sd); err != nil {

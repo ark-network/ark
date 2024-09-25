@@ -20,6 +20,7 @@ type WalletService interface {
 	Lock(ctx context.Context, password string) error
 	Status(ctx context.Context) (WalletStatus, error)
 	GetPubkey(ctx context.Context) (*secp256k1.PublicKey, error)
+	GetForfeitAddress(ctx context.Context) (string, error)
 	DeriveConnectorAddress(ctx context.Context) (string, error)
 	DeriveAddresses(ctx context.Context, num int) ([]string, error)
 	SignTransaction(
