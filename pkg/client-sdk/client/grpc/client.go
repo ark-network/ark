@@ -461,7 +461,6 @@ func (v vtxo) toVtxo() client.Vtxo {
 		RoundTxid:               v.GetPoolTxid(),
 		ExpiresAt:               expiresAt,
 		Pending:                 v.GetPending(),
-		PendingChange:           v.GetPendingChange(),
 		RedeemTx:                redeemTx,
 		UnconditionalForfeitTxs: uncondForfeitTxs,
 		SpentBy:                 v.GetSpentBy(),
