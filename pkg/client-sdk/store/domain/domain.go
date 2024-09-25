@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -47,7 +48,6 @@ const (
 type TxType string
 
 type Transaction struct {
-	ID              string
 	BoardingTxid    string
 	RoundTxid       string
 	RedeemTxid      string
@@ -56,4 +56,12 @@ type Transaction struct {
 	IsPending       bool
 	IsPendingChange bool
 	CreatedAt       time.Time
+}
+
+func (t Transaction) Key() string {
+	return fmt.Sprintf("%s:%s:%s", t.BoardingTxid, t.RoundTxid, t.RedeemTxid)
+}
+
+func (t Transaction) IsBoarding() bool {
+	return t.BoardingTxid != ""
 }

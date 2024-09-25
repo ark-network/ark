@@ -23,13 +23,15 @@ func TestVtxosToTxsCovenant(t *testing.T) {
 			fixture: aliceToBobCovenant,
 			want: []domain.Transaction{
 				{
-					Amount:    100000000,
-					Type:      domain.TxReceived,
+					RoundTxid: "31e744a81cdd7fcc5517130a7f35722bea4dbf73faa4f4c580a6b93b2df0746d",
+					Amount:    20000,
+					Type:      domain.TxSent,
 					IsPending: false,
 				},
 				{
-					Amount:    20000,
-					Type:      domain.TxSent,
+					RoundTxid: "52dd02e90d70e2ca24f3e0d41bf6382ae98efaa99177036dc261df93a5790d7d",
+					Amount:    100000000,
+					Type:      domain.TxReceived,
 					IsPending: false,
 				},
 			},
@@ -38,11 +40,11 @@ func TestVtxosToTxsCovenant(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			vtxos, boardingTxs, err := loadFixtures(tt.fixture)
+			vtxos, _, err := loadFixtures(tt.fixture)
 			if err != nil {
 				t.Fatalf("failed to load fixture: %s", err)
 			}
-			got, err := vtxosToTxsCovenant(30, vtxos.spendable, vtxos.spent, boardingTxs)
+			got, err := vtxosToTxsCovenant(30, vtxos.spendable, vtxos.spent)
 			require.NoError(t, err)
 			require.Len(t, got, len(tt.want))
 
@@ -83,13 +85,6 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 			fixture: aliceAfterSendingAsync,
 			want: []domain.Transaction{
 				{
-					RoundTxid: "377fa2fbd27c82bdbc095478384c88b6c75432c0ef464189e49c965194446cdf",
-					Amount:    20000,
-					Type:      domain.TxReceived,
-					IsPending: false,
-					CreatedAt: time.Unix(1726054898, 0),
-				},
-				{
 					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
 					Amount:     1000,
 					Type:       domain.TxSent,
@@ -103,18 +98,18 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 			fixture: bobBeforeClaimingAsync,
 			want: []domain.Transaction{
 				{
-					RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
-					Amount:     2000,
-					Type:       domain.TxReceived,
-					IsPending:  true,
-					CreatedAt:  time.Unix(1726486359, 0),
-				},
-				{
 					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
 					Amount:     1000,
 					Type:       domain.TxReceived,
 					IsPending:  true,
 					CreatedAt:  time.Unix(1726054898, 0),
+				},
+				{
+					RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
+					Amount:     2000,
+					Type:       domain.TxReceived,
+					IsPending:  true,
+					CreatedAt:  time.Unix(1726486359, 0),
 				},
 			},
 		},
@@ -169,11 +164,11 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			vtxos, boardingTxs, err := loadFixtures(tt.fixture)
+			vtxos, _, err := loadFixtures(tt.fixture)
 			if err != nil {
 				t.Fatalf("failed to load fixture: %s", err)
 			}
-			got, err := vtxosToTxsCovenantless(30, vtxos.spendable, vtxos.spent, boardingTxs)
+			got, err := vtxosToTxsCovenantless(30, vtxos.spendable, vtxos.spent)
 			require.NoError(t, err)
 			require.Len(t, got, len(tt.want))
 
@@ -347,19 +342,9 @@ func parseTimestamp(timestamp string) (time.Time, error) {
 var (
 	// bellow fixtures are used in bellow scenario:
 	// 1. Alice onboards with 100000000
-	// 2. Alice sends 1000 to Bob
+	// 2. Alice sends 20000 to Bob
 	aliceToBobCovenant = `
 	{
-		"boardingTxs": [
-			{
-        		"boardingTxid": "69ccb6520e0b91ac1cbaa459b16ec1e3ff5f6349990b0d149dd8e6c6485d316c",
-				"roundTxid": "377fa2fbd27c82bdbc095478384c88b6c75432c0ef464189e49c965194446cdf",
-        		"amount": 20000,
-				"pending": false,
-				"claimed": true,
-				"createdAt": "1726503865"
-      		}
-		],
 	  "spendableVtxos": [
 		{
 		  "outpoint": {

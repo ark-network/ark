@@ -120,13 +120,13 @@ func TestNewService(t *testing.T) {
 
 	testTxs := []domain.Transaction{
 		{
-			ID:        "tx1",
+			RoundTxid: "tx1",
 			Amount:    1000,
 			Type:      domain.TxSent,
 			CreatedAt: time.Now(),
 		},
 		{
-			ID:        "tx2",
+			RoundTxid: "tx2",
 			Amount:    2000,
 			Type:      domain.TxReceived,
 			CreatedAt: time.Now(),
@@ -162,6 +162,13 @@ func TestNewService(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, spendable, 1)
 	require.Len(t, spent, 1)
+
+	err = vtxoRepo.DeleteAll(ctx)
+	require.NoError(t, err)
+
+	spendable, spent, err = vtxoRepo.GetAll(ctx)
+	require.NoError(t, err)
+	require.Len(t, spendable, 0)
 
 	service.AppDataRepository().Stop()
 }

@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"sort"
 
 	"github.com/ark-network/ark/pkg/client-sdk/store/domain"
 	"github.com/dgraph-io/badger/v4"
-	"github.com/google/uuid"
 	"github.com/timshannon/badgerhold/v4"
 )
 
@@ -40,10 +40,12 @@ func (t *transactionRepository) GetBoardingTxs(ctx context.Context) ([]domain.Tr
 	return txs, err
 }
 
-func (t *transactionRepository) InsertTransactions(ctx context.Context, txs []domain.Transaction) error {
+func (t *transactionRepository) InsertTransactions(
+	ctx context.Context,
+	txs []domain.Transaction,
+) error {
 	for _, tx := range txs {
-		tx.ID = uuid.New().String()
-		if err := t.db.Insert(tx.ID, &tx); err != nil {
+		if err := t.db.Insert(tx.Key(), &tx); err != nil {
 			return err
 		}
 		go func(trx domain.Transaction) {
@@ -53,9 +55,35 @@ func (t *transactionRepository) InsertTransactions(ctx context.Context, txs []do
 	return nil
 }
 
+func (t *transactionRepository) UpdateTransactions(
+	ctx context.Context,
+	txs []domain.Transaction,
+) error {
+	for _, tx := range txs {
+		if err := t.db.Upsert(tx.Key(), &tx); err != nil {
+			return err
+		}
+		go func(trx domain.Transaction) {
+			// TODO rethink, here we can track diff kind of events, like boarding claimed etc
+			t.eventCh <- trx
+		}(tx)
+	}
+	return nil
+}
+
 func (t *transactionRepository) GetAll(ctx context.Context) ([]domain.Transaction, error) {
 	var txs []domain.Transaction
 	err := t.db.Find(&txs, nil)
+
+	sort.Slice(txs, func(i, j int) bool {
+		txi := txs[i]
+		txj := txs[j]
+		if txi.CreatedAt.Equal(txj.CreatedAt) {
+			return txi.Type > txj.Type
+		}
+		return txi.CreatedAt.After(txj.CreatedAt)
+	})
+
 	return txs, err
 }
 

@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -789,36 +788,16 @@ func (a *covenantlessArkClient) listenToVtxoChan(ctnx context.Context) error {
 					continue
 				}
 
-				spendableVtxosOld, spentVtxosOld, err := a.sdkRepository.
-					AppDataRepository().VtxoRepository().GetAll(ctx)
-				if err != nil {
-					log.Errorf("failed to get vtxos: %s", err)
-					continue
-				}
-
 				allBoardingTxs := a.getBoardingTxs(ctx)
-				oldVtxos := append(spendableVtxosOld, spentVtxosOld...)
-				if len(oldVtxos) == 0 {
-					err = a.insertInitialTxsAndVtxos(
-						ctx,
-						allSpendableVtxos,
-						allSpentVtxos,
-						allBoardingTxs,
-					)
-					if err != nil {
-						log.Errorf("failed to process new vtxos: %s", err)
-					}
-				} else {
-					err := a.insertNewTxsAndVtxos(
-						ctx,
-						allSpendableVtxos,
-						allSpentVtxos,
-						oldVtxos,
-						allBoardingTxs,
-					)
-					if err != nil {
-						log.Errorf("failed to update vtxos: %s", err)
-					}
+
+				if err := a.processVtxosAndTxs(
+					ctx,
+					allSpendableVtxos,
+					allSpentVtxos,
+					allBoardingTxs,
+				); err != nil {
+					log.Errorf("failed to process vtxos: %s", err)
+					continue
 				}
 			}
 		}
@@ -827,101 +806,123 @@ func (a *covenantlessArkClient) listenToVtxoChan(ctnx context.Context) error {
 	return nil
 }
 
-func (a *covenantlessArkClient) insertInitialTxsAndVtxos(
+func (a *covenantlessArkClient) processVtxosAndTxs(
 	ctx context.Context,
-	spendableVtxos,
-	spentVtxos []client.Vtxo,
-	boardingTxs []domain.Transaction,
+	allSpendableVtxos,
+	allSpentVtxos []client.Vtxo,
+	allBoardingTxs []domain.Transaction,
 ) error {
-	txs, err := vtxosToTxsCovenantless(
-		a.ConfigData.RoundInterval,
-		spendableVtxos,
-		spentVtxos,
-		boardingTxs,
-	)
+	if err := a.processBoardingTxs(ctx, allBoardingTxs); err != nil {
+		return fmt.Errorf("failed to process txs: %s", err)
+	}
+
+	return a.processVtxos(ctx, allSpendableVtxos, allSpentVtxos)
+}
+
+func (a *covenantlessArkClient) processBoardingTxs(
+	ctx context.Context,
+	allBoardingTxs []domain.Transaction,
+) error {
+	oldBoardingTxs, err := a.sdkRepository.AppDataRepository().
+		TransactionRepository().GetBoardingTxs(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get boarding txs: %s", err)
 	}
 
-	if len(txs) > 0 {
+	if len(oldBoardingTxs) == 0 {
 		if err := a.sdkRepository.AppDataRepository().TransactionRepository().
-			InsertTransactions(ctx, txs); err != nil {
-			return err
+			InsertTransactions(ctx, allBoardingTxs); err != nil {
+			return fmt.Errorf("failed to insert boarding txs: %s", err)
 		}
-	}
+	} else {
+		newBoardingTxs, updatedOldBoardingTxs := updateBoardingTxsState(allBoardingTxs, oldBoardingTxs)
+		if err := a.sdkRepository.AppDataRepository().TransactionRepository().
+			InsertTransactions(ctx, newBoardingTxs); err != nil {
+			return fmt.Errorf("failed to insert boarding txs: %s", err)
+		}
 
-	domainVtxos := append(
-		convertVtxosToDomainVtxos(spendableVtxos, false),
-		convertVtxosToDomainVtxos(spentVtxos, true)...,
-	)
-	if len(domainVtxos) > 0 {
-		return a.sdkRepository.AppDataRepository().VtxoRepository().
-			InsertVtxos(ctx, domainVtxos)
+		if err := a.sdkRepository.AppDataRepository().TransactionRepository().
+			UpdateTransactions(ctx, updatedOldBoardingTxs); err != nil {
+			return fmt.Errorf("failed to update boarding txs: %s", err)
+		}
 	}
 
 	return nil
 }
 
-func (a *covenantlessArkClient) insertNewTxsAndVtxos(
+func (a *covenantlessArkClient) processVtxos(
 	ctx context.Context,
 	allSpendableVtxos,
 	allSpentVtxos []client.Vtxo,
-	oldVtxos []domain.Vtxo,
-	allBoardingTxs []domain.Transaction,
 ) error {
-	allSpendableVtxosMap := make(map[string]client.Vtxo)
-	allSpentVtxosMap := make(map[string]client.Vtxo)
-	oldVtxosMap := make(map[string]domain.Vtxo)
-
-	for _, vtxo := range allSpendableVtxos {
-		key := fmt.Sprintf("%s:%d", vtxo.Txid, vtxo.VOut)
-		allSpendableVtxosMap[key] = vtxo
-	}
-
-	for _, vtxo := range allSpentVtxos {
-		key := fmt.Sprintf("%s:%d", vtxo.Txid, vtxo.VOut)
-		allSpentVtxosMap[key] = vtxo
-	}
-
-	for _, vtxo := range oldVtxos {
-		key := fmt.Sprintf("%s:%d", vtxo.Txid, vtxo.VOut)
-		oldVtxosMap[key] = vtxo
-	}
-
-	newSpendableVtxos := getNewVtxos(allSpendableVtxosMap, oldVtxosMap)
-	newSpentVtxos := getNewVtxos(allSpentVtxosMap, oldVtxosMap)
-
-	oldBoardingTxs, err := a.sdkRepository.AppDataRepository().
-		TransactionRepository().GetBoardingTxs(ctx)
+	spendableVtxosOld, spentVtxosOld, err := a.sdkRepository.
+		AppDataRepository().VtxoRepository().GetAll(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get vtxos: %s", err)
 	}
 
-	newBoardingTxs := filterNewBoardingTxs(allBoardingTxs, oldBoardingTxs)
+	oldVtxos := append(spendableVtxosOld, spentVtxosOld...)
 
-	txs, err := vtxosToTxsCovenantless(
+	allTxs, err := vtxosToTxsCovenantless(
 		a.ConfigData.RoundInterval,
-		newSpendableVtxos,
-		newSpentVtxos,
-		newBoardingTxs,
+		allSpendableVtxos,
+		allSpentVtxos,
 	)
 	if err != nil {
 		return err
 	}
+	if len(oldVtxos) == 0 {
+		err = a.insertVtxosAndTransactions(
+			ctx,
+			allTxs,
+			allSpendableVtxos,
+			allSpentVtxos,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to process new vtxos: %s", err)
+		}
+	} else {
+		oldTxs, err := a.sdkRepository.AppDataRepository().TransactionRepository().GetAll(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get old transactions: %s", err)
+		}
 
-	if len(txs) > 0 {
-		if err := a.sdkRepository.AppDataRepository().TransactionRepository().
-			InsertTransactions(ctx, txs); err != nil {
-			return err
+		newTxs, err := findNewTxs(oldTxs, allTxs)
+		err = a.insertVtxosAndTransactions(
+			ctx,
+			newTxs,
+			allSpendableVtxos,
+			allSpentVtxos,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to process new vtxos: %s", err)
 		}
 	}
 
-	domainSpendableVtxos := convertVtxosToDomainVtxos(newSpendableVtxos, false)
-	domainSpentVtxos := convertVtxosToDomainVtxos(newSpentVtxos, true)
+	return nil
+}
 
-	if len(domainSpendableVtxos) > 0 || len(domainSpentVtxos) > 0 {
+func (a *covenantlessArkClient) insertVtxosAndTransactions(
+	ctx context.Context,
+	txs []domain.Transaction,
+	spendableVtxos []client.Vtxo,
+	spentVtxos []client.Vtxo,
+) error {
+	if err := a.sdkRepository.AppDataRepository().TransactionRepository().
+		InsertTransactions(ctx, txs); err != nil {
+		return err
+	}
+
+	domainVtxos := convertVtxosToDomainVtxos(spendableVtxos, false)
+	domainVtxos = append(domainVtxos, convertVtxosToDomainVtxos(spentVtxos, true)...)
+
+	if len(domainVtxos) > 0 {
+		if err := a.sdkRepository.AppDataRepository().VtxoRepository().DeleteAll(ctx); err != nil {
+			return err
+		}
+
 		return a.sdkRepository.AppDataRepository().VtxoRepository().
-			InsertVtxos(ctx, append(domainSpentVtxos, domainSpendableVtxos...))
+			InsertVtxos(ctx, domainVtxos)
 	}
 
 	return nil
@@ -2230,19 +2231,9 @@ func findVtxosBySpentBy(allVtxos []client.Vtxo, txid string) (vtxos []client.Vtx
 }
 
 func vtxosToTxsCovenantless(
-	roundLifetime int64, spendable, spent []client.Vtxo, boardingTxs []domain.Transaction,
+	roundLifetime int64, spendable, spent []client.Vtxo,
 ) ([]domain.Transaction, error) {
-	transactions := make([]domain.Transaction, 0)
-	unconfirmedBoardingTxs := make([]domain.Transaction, 0)
-	for _, tx := range boardingTxs {
-		emptyTime := time.Time{}
-		if tx.CreatedAt == emptyTime {
-			unconfirmedBoardingTxs = append(unconfirmedBoardingTxs, tx)
-			continue
-		}
-		transactions = append(transactions, tx)
-	}
-
+	txs := make([]domain.Transaction, 0)
 	for _, v := range append(spendable, spent...) {
 		// get vtxo amount
 		amount := int(v.Amount)
@@ -2274,7 +2265,7 @@ func vtxosToTxsCovenantless(
 			redeemTxid = txid
 		}
 		// add transaction
-		transactions = append(transactions, domain.Transaction{
+		txs = append(txs, domain.Transaction{
 			RoundTxid:       v.RoundTxid,
 			RedeemTxid:      redeemTxid,
 			Amount:          uint64(math.Abs(float64(amount))),
@@ -2285,17 +2276,7 @@ func vtxosToTxsCovenantless(
 		})
 	}
 
-	// Sort the slice by age
-	sort.Slice(transactions, func(i, j int) bool {
-		txi := transactions[i]
-		txj := transactions[j]
-		if txi.CreatedAt.Equal(txj.CreatedAt) {
-			return txi.Type > txj.Type
-		}
-		return txi.CreatedAt.After(txj.CreatedAt)
-	})
-
-	return append(unconfirmedBoardingTxs, transactions...), nil
+	return txs, nil
 }
 
 func getRedeemTxidCovenantless(redeemTx string) (string, error) {

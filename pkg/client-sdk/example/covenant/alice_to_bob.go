@@ -118,7 +118,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	time.Sleep(240 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	aliceBalance, err = aliceArkClient.Balance(ctx, false)
 	if err != nil {

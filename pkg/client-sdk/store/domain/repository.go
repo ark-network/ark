@@ -24,6 +24,7 @@ type ConfigRepository interface {
 
 type TransactionRepository interface {
 	InsertTransactions(ctx context.Context, txs []Transaction) error
+	UpdateTransactions(ctx context.Context, txs []Transaction) error
 	GetAll(ctx context.Context) ([]Transaction, error)
 	GetEventChannel() chan Transaction
 	GetBoardingTxs(ctx context.Context) ([]Transaction, error)
@@ -33,4 +34,5 @@ type TransactionRepository interface {
 type VtxoRepository interface {
 	InsertVtxos(ctx context.Context, vtxos []Vtxo) error
 	GetAll(ctx context.Context) (spendable []Vtxo, spent []Vtxo, err error)
+	DeleteAll(ctx context.Context) error
 }

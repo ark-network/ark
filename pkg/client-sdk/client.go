@@ -327,37 +327,61 @@ func getCreatedAtFromExpiry(roundLifetime int64, expiry time.Time) time.Time {
 	return expiry.Add(-time.Duration(roundLifetime) * time.Second)
 }
 
-func getNewVtxos(
-	newVtxosMap map[string]client.Vtxo,
-	oldVtxosMap map[string]domain.Vtxo,
-) []client.Vtxo {
-	newVtxos := make([]client.Vtxo, 0)
-	for key, vtxo := range newVtxosMap {
-		if _, ok := oldVtxosMap[key]; !ok {
-			newVtxos = append(newVtxos, vtxo)
+func findNewTxs(oldTxs, newTxs []domain.Transaction) ([]domain.Transaction, error) {
+	newTxsMap := make(map[string]domain.Transaction)
+	for _, tx := range newTxs {
+		newTxsMap[tx.Key()] = tx
+	}
+
+	oldTxsMap := make(map[string]domain.Transaction)
+	for _, tx := range oldTxs {
+		oldTxsMap[tx.Key()] = tx
+	}
+
+	var result []domain.Transaction
+	for _, tx := range newTxs {
+		if _, ok := oldTxsMap[tx.Key()]; !ok {
+			result = append(result, tx)
 		}
 	}
-	return newVtxos
+
+	return result, nil
 }
 
-func filterNewBoardingTxs(
-	allBoardingTxs []domain.Transaction,
-	oldBoardingTxs []domain.Transaction,
-) []domain.Transaction {
-	newBoardingTxs := make([]domain.Transaction, 0)
-	for _, tx := range allBoardingTxs {
-		found := false
-		for _, oldTx := range oldBoardingTxs {
-			if tx.BoardingTxid == oldTx.BoardingTxid {
-				found = true
-				break
-			}
-		}
-		if !found {
-			newBoardingTxs = append(newBoardingTxs, tx)
+func updateBoardingTxsState(
+	allBoardingTxs, oldBoardingTxs []domain.Transaction,
+) ([]domain.Transaction, []domain.Transaction) {
+	var newBoardingTxs []domain.Transaction
+	var updatedOldBoardingTxs []domain.Transaction
+
+	newTxsMap := make(map[string]bool)
+	for _, newTx := range allBoardingTxs {
+		newTxsMap[newTx.BoardingTxid] = true
+	}
+
+	for _, oldTx := range oldBoardingTxs {
+		if !newTxsMap[oldTx.BoardingTxid] {
+			oldTx.IsPending = false
+			updatedOldBoardingTxs = append(updatedOldBoardingTxs, oldTx)
 		}
 	}
-	return newBoardingTxs
+
+	for _, newTx := range allBoardingTxs {
+		if !containsTx(oldBoardingTxs, newTx.BoardingTxid) {
+			newBoardingTxs = append(newBoardingTxs, newTx)
+		}
+	}
+
+	return newBoardingTxs, updatedOldBoardingTxs
+}
+
+func containsTx(txs []domain.Transaction, txid string) bool {
+	for _, tx := range txs {
+		if tx.BoardingTxid == txid {
+			return true
+		}
+	}
+	return false
 }
 
 func convertVtxosToDomainVtxos(vtxos []client.Vtxo, spent bool) []domain.Vtxo {

@@ -55,3 +55,10 @@ func (v *vtxoRepository) GetAll(
 	}
 	return
 }
+
+func (v *vtxoRepository) DeleteAll(ctx context.Context) error {
+	if err := v.db.DeleteMatching(&domain.Vtxo{}, nil); err != nil {
+		return fmt.Errorf("failed to delete all vtxos: %w", err)
+	}
+	return nil
+}
