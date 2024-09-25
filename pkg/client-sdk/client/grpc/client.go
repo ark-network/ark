@@ -117,6 +117,7 @@ func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
 		Network:                    resp.GetNetwork(),
 		Dust:                       uint64(resp.GetDust()),
 		BoardingDescriptorTemplate: resp.GetBoardingDescriptorTemplate(),
+		ForfeitAddress:             resp.GetForfeitAddress(),
 	}, nil
 }
 

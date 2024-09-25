@@ -82,7 +82,6 @@ func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (signedSweepTx strin
 }
 
 func (b *txBuilder) BuildForfeitTxs(
-	aspPubkey *secp256k1.PublicKey,
 	poolTx string,
 	payments []domain.Payment,
 	minRelayFeeRate chainfee.SatPerKVByte,
@@ -107,7 +106,7 @@ func (b *txBuilder) BuildForfeitTxs(
 		return nil, nil, err
 	}
 
-	forfeitTxs, err = b.createForfeitTxs(aspPubkey, payments, connectorTxs, connectorAmount, minRelayFeeRate)
+	forfeitTxs, err = b.createForfeitTxs(payments, connectorTxs, connectorAmount, minRelayFeeRate)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -788,12 +787,21 @@ func (b *txBuilder) createConnectors(
 }
 
 func (b *txBuilder) createForfeitTxs(
-	aspPubkey *secp256k1.PublicKey,
 	payments []domain.Payment,
 	connectors []*psetv2.Pset,
 	connectorAmount uint64,
 	minRelayFeeRate chainfee.SatPerKVByte,
 ) ([]string, error) {
+	forfeitAddr, err := b.wallet.GetForfeitAddress(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	forfeitPkScript, err := address.ToOutputScript(forfeitAddr)
+	if err != nil {
+		return nil, err
+	}
+
 	forfeitTxs := make([]string, 0)
 	for _, payment := range payments {
 		for _, vtxo := range payment.Inputs {
@@ -812,7 +820,7 @@ func (b *txBuilder) createForfeitTxs(
 				return nil, err
 			}
 
-			feeAmount, err := common.ComputeForfeitMinRelayFee(minRelayFeeRate, vtxoTree)
+			feeAmount, err := common.ComputeForfeitMinRelayFee(minRelayFeeRate, vtxoTree, txscript.WitnessV0PubKeyHashTy)
 			if err != nil {
 				return nil, err
 			}
@@ -828,7 +836,7 @@ func (b *txBuilder) createForfeitTxs(
 					connectorAmount,
 					feeAmount,
 					vtxoScript,
-					aspPubkey,
+					forfeitPkScript,
 				)
 				if err != nil {
 					return nil, err

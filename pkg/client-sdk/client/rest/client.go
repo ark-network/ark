@@ -130,6 +130,7 @@ func (a *restClient) GetInfo(
 		Network:                    resp.Payload.Network,
 		Dust:                       uint64(dust),
 		BoardingDescriptorTemplate: resp.Payload.BoardingDescriptorTemplate,
+		ForfeitAddress:             resp.Payload.ForfeitAddress,
 	}, nil
 }
 
