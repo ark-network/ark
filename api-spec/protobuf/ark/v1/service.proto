@@ -5,33 +5,33 @@ package ark.v1;
 import "google/api/annotations.proto";
 
 service ArkService {
-  rpc RegisterPayment(RegisterPaymentRequest) returns (RegisterPaymentResponse) {
+  rpc RegisterInputsForNextRound(RegisterPaymentRequest) returns (RegisterPaymentResponse) {
     option (google.api.http) = {
-      post: "/v1/payment/register"
+      post: "/v1/round/registerInputs"
       body: "*"
     };
   };
-  rpc ClaimPayment(ClaimPaymentRequest) returns (ClaimPaymentResponse) {
+  rpc RegisterOutputsForNextRound(ClaimPaymentRequest) returns (ClaimPaymentResponse) {
     option (google.api.http) = {
-      post: "/v1/payment/claim"
+      post: "/v1/round/registerOutputs"
       body: "*"
     };
   };
-  rpc SendTreeNonces(SendTreeNoncesRequest) returns (SendTreeNoncesResponse) {
+  rpc SubmitTreeNonces(SendTreeNoncesRequest) returns (SendTreeNoncesResponse) {
     option (google.api.http) = {
-      post: "/v1/payment/tree/nonces"
+      post: "/v1/round/tree/submitNonces"
       body: "*"
     };
   }
-  rpc SendTreeSignatures(SendTreeSignaturesRequest) returns (SendTreeSignaturesResponse) {
+  rpc SubmitTreeSignatures(SendTreeSignaturesRequest) returns (SendTreeSignaturesResponse) {
     option (google.api.http) = {
-      post: "/v1/payment/tree/signatures"
+      post: "/v1/round/tree/submitSignatures"
       body: "*"
     };
   }
-  rpc FinalizePayment(FinalizePaymentRequest) returns (FinalizePaymentResponse) {
+  rpc SubmitSignedForfeitTransactions(FinalizePaymentRequest) returns (FinalizePaymentResponse) {
     option (google.api.http) = {
-      post: "/v1/payment/finalize"
+      post: "/v1/round/submitForfeitTxs"
       body: "*"
     };
   };
@@ -47,12 +47,12 @@ service ArkService {
   };
   rpc GetEventStream(GetEventStreamRequest) returns (stream GetEventStreamResponse) {
     option (google.api.http) = {
-      get: "/v1/events"
+      get: "/v1/round/events"
     };
   };
   rpc Ping(PingRequest) returns (PingResponse) {
     option (google.api.http) = {
-      get: "/v1/ping/{payment_id}"
+      get: "/v1/round/ping/{payment_id}"
     };
   };
   rpc ListVtxos(ListVtxosRequest) returns (ListVtxosResponse) {
@@ -189,7 +189,8 @@ message GetInfoResponse {
   string network = 5;
   int64 dust = 6;
   string boarding_descriptor_template = 7;
-  string forfeit_address = 8;
+  repeated string vtxo_descriptor_templates = 8;
+  string forfeit_address = 9;
 }
 
 // EVENT TYPES
@@ -256,12 +257,9 @@ message Input {
 }
 
 message Output {
-  oneof destination {
-    string address = 1; // onchain
-    string descriptor = 2; // offchain
-  }
-  // Amount to send in satoshis.
-  uint64 amount = 3;
+  string address = 1; // onchain or off-chain
+  uint64 amount = 2; // Amount to send in satoshis.
+  string descriptor = 3; 
 }
 
 message Tree {
