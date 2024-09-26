@@ -61,7 +61,8 @@ const (
 type spent bool
 
 type arkClient struct {
-	ctxCancelFunc context.CancelFunc
+	ctxListenVtxo       context.Context
+	ctxCancelListenVtxo context.CancelFunc
 
 	*domain.ConfigData
 	sdkRepository domain.SdkRepository
@@ -69,7 +70,8 @@ type arkClient struct {
 	explorer      explorer.Explorer
 	client        client.ASPClient
 
-	sdkInitialized bool
+	sdkInitialized  bool
+	listeningToVtxo bool
 }
 
 func (a *arkClient) GetConfigData(
@@ -252,11 +254,13 @@ func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
 }
 
 func (a *arkClient) Close() error {
+	if a.listeningToVtxo {
+		a.ctxCancelListenVtxo()
+	}
+
 	if err := a.sdkRepository.AppDataRepository().Stop(); err != nil {
 		return err
 	}
-
-	a.ctxCancelFunc()
 
 	return nil
 }
@@ -394,23 +398,4 @@ func containsTx(txs []domain.Transaction, txid string) bool {
 		}
 	}
 	return false
-}
-
-func convertVtxosToDomainVtxos(vtxos []client.Vtxo, spent bool) []domain.Vtxo {
-	domainVtxos := make([]domain.Vtxo, len(vtxos))
-	for i, v := range vtxos {
-		domainVtxos[i] = domain.Vtxo{
-			Txid:                    v.Txid,
-			VOut:                    v.VOut,
-			Amount:                  v.Amount,
-			RoundTxid:               v.RoundTxid,
-			ExpiresAt:               v.ExpiresAt,
-			RedeemTx:                v.RedeemTx,
-			UnconditionalForfeitTxs: v.UnconditionalForfeitTxs,
-			Pending:                 v.Pending,
-			SpentBy:                 v.SpentBy,
-			Spent:                   spent,
-		}
-	}
-	return domainVtxos
 }

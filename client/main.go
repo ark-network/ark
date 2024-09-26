@@ -54,7 +54,6 @@ func main() {
 			return fmt.Errorf("error initializing ark sdk client: %v", err)
 		}
 		arkSdkClient = sdk
-
 		return nil
 	}
 
@@ -229,12 +228,7 @@ func initArkSdk(ctx *cli.Context) error {
 }
 
 func config(ctx *cli.Context) error {
-	sdkRepository, err := getSdkRepository(ctx.String(datadirFlag.Name))
-	if err != nil {
-		return err
-	}
-
-	cfgData, err := sdkRepository.ConfigRepository().GetData(ctx.Context)
+	cfgData, err := arkSdkClient.GetConfigData(ctx.Context)
 	if err != nil {
 		return err
 	}
@@ -317,12 +311,12 @@ func send(ctx *cli.Context) error {
 		return fmt.Errorf("missing destination, use --to and --amount or --receivers")
 	}
 
-	sdkRepository, err := getSdkRepository(ctx.String(datadirFlag.Name))
+	configData, err := arkSdkClient.GetConfigData(ctx.Context)
 	if err != nil {
 		return err
 	}
 
-	net, err := getNetwork(ctx, sdkRepository)
+	net, err := getNetwork(ctx, configData)
 	if err != nil {
 		return err
 	}
@@ -408,7 +402,11 @@ func listTxs(ctx *cli.Context) error {
 
 func getArkSdkClient(ctx *cli.Context) (arksdk.ArkClient, error) {
 	dataDir := ctx.String(datadirFlag.Name)
-	sdkRepository, err := getSdkRepository(dataDir)
+	sdkRepository, err := store.NewService(store.Config{
+		ConfigStoreType:  store.FileStore,
+		AppDataStoreType: store.Badger,
+		BaseDir:          dataDir,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -423,7 +421,7 @@ func getArkSdkClient(ctx *cli.Context) (arksdk.ArkClient, error) {
 		return nil, fmt.Errorf("CLI not initialized, run 'init' cmd to initialize")
 	}
 
-	net, err := getNetwork(ctx, sdkRepository)
+	net, err := getNetwork(ctx, configData)
 	if err != nil {
 		return nil, err
 	}
@@ -452,20 +450,7 @@ func loadOrCreateClient(
 	return client, err
 }
 
-func getSdkRepository(dataDir string) (domain.SdkRepository, error) {
-	return store.NewService(store.Config{
-		ConfigStoreType:  store.FileStore,
-		AppDataStoreType: store.Badger,
-		BaseDir:          dataDir,
-	})
-}
-
-func getNetwork(ctx *cli.Context, sdkRepository domain.SdkRepository) (string, error) {
-	configData, err := sdkRepository.ConfigRepository().GetData(context.Background())
-	if err != nil {
-		return "", err
-	}
-
+func getNetwork(ctx *cli.Context, configData *domain.ConfigData) (string, error) {
 	if configData == nil {
 		return ctx.String(networkFlag.Name), nil
 	}

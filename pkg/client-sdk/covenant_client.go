@@ -65,16 +65,13 @@ func NewCovenantClient(
 		return nil, ErrAlreadyInitialized
 	}
 
-	ctx, ctxCancel := context.WithCancel(context.Background())
+	ctxListenVtxo, ctxCancelListenVtxo := context.WithCancel(context.Background())
 	cvnt := &covenantArkClient{
 		arkClient: &arkClient{
-			ctxCancelFunc: ctxCancel,
-			sdkRepository: sdkRepository,
+			ctxListenVtxo:       ctxListenVtxo,
+			ctxCancelListenVtxo: ctxCancelListenVtxo,
+			sdkRepository:       sdkRepository,
 		},
-	}
-
-	if err := cvnt.listenToVtxoChan(ctx); err != nil {
-		return nil, err
 	}
 
 	return cvnt, nil
@@ -112,20 +109,17 @@ func LoadCovenantClient(
 		return nil, fmt.Errorf("faile to setup wallet: %s", err)
 	}
 
-	ctx, ctxCancel := context.WithCancel(context.Background())
+	ctxListenVtxo, ctxCancelListenVtxo := context.WithCancel(context.Background())
 	cvnt := &covenantArkClient{
 		&arkClient{
-			ctxCancelFunc: ctxCancel,
-			ConfigData:    data,
-			wallet:        walletSvc,
-			sdkRepository: sdkRepository,
-			explorer:      explorerSvc,
-			client:        clientSvc,
+			ctxListenVtxo:       ctxListenVtxo,
+			ctxCancelListenVtxo: ctxCancelListenVtxo,
+			ConfigData:          data,
+			wallet:              walletSvc,
+			sdkRepository:       sdkRepository,
+			explorer:            explorerSvc,
+			client:              clientSvc,
 		},
-	}
-
-	if err := cvnt.listenToVtxoChan(ctx); err != nil {
-		return nil, err
 	}
 
 	return cvnt, nil
@@ -162,20 +156,17 @@ func LoadCovenantClientWithWallet(
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
 
-	ctx, ctxCancel := context.WithCancel(context.Background())
+	ctxListenVtxo, ctxCancelListenVtxo := context.WithCancel(context.Background())
 	cvnt := &covenantArkClient{
 		&arkClient{
-			ctxCancelFunc: ctxCancel,
-			ConfigData:    data,
-			wallet:        walletSvc,
-			sdkRepository: sdkRepository,
-			explorer:      explorerSvc,
-			client:        clientSvc,
+			ctxListenVtxo:       ctxListenVtxo,
+			ctxCancelListenVtxo: ctxCancelListenVtxo,
+			ConfigData:          data,
+			wallet:              walletSvc,
+			sdkRepository:       sdkRepository,
+			explorer:            explorerSvc,
+			client:              clientSvc,
 		},
-	}
-
-	if err := cvnt.listenToVtxoChan(ctx); err != nil {
-		return nil, err
 	}
 
 	return cvnt, nil
@@ -596,10 +587,42 @@ func (a *covenantArkClient) GetTransactionEventChannel() chan domain.Transaction
 	return a.sdkRepository.AppDataRepository().TransactionRepository().GetEventChannel()
 }
 
-func (a *covenantArkClient) listenToVtxoChan(ctnx context.Context) error {
+func (a *covenantArkClient) ListenToVtxoChan() error {
+	a.listeningToVtxo = true
+	var wg sync.WaitGroup
+
 	go func(ctx context.Context) {
-		ticker := time.NewTicker(1 * time.Second)
+		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
+
+		performAction := func() {
+			wg.Add(1)
+			defer wg.Done()
+			// Use a context that won't be canceled prematurely by arkClient ctx
+			ct := context.Background()
+
+			allSpendableVtxos, allSpentVtxos, err := a.ListVtxos(ct)
+			if err != nil {
+				log.Errorf("failed to list vtxos: %s", err)
+				return
+			}
+
+			allBoardingTxs := a.getBoardingTxs(ct)
+
+			if err := a.processVtxosAndTxs(
+				ct,
+				allSpendableVtxos,
+				allSpentVtxos,
+				allBoardingTxs,
+			); err != nil {
+				log.Errorf("failed to process vtxos: %s", err)
+				return
+			}
+			log.Info("processed vtxos")
+		}
+
+		// initial action to prevent sync issue with immediate ctx cancel
+		performAction()
 
 		for {
 			if !a.sdkInitialized {
@@ -609,28 +632,13 @@ func (a *covenantArkClient) listenToVtxoChan(ctnx context.Context) error {
 			select {
 			case <-ctx.Done():
 				log.Info("stopping listening to vtxos")
+				wg.Wait()
 				return
 			case <-ticker.C:
-				allSpendableVtxos, allSpentVtxos, err := a.ListVtxos(ctx)
-				if err != nil {
-					log.Errorf("failed to list vtxos: %s", err)
-					continue
-				}
-
-				allBoardingTxs := a.getBoardingTxs(ctx)
-
-				if err := a.processVtxosAndTxs(
-					ctx,
-					allSpendableVtxos,
-					allSpentVtxos,
-					allBoardingTxs,
-				); err != nil {
-					log.Errorf("failed to process vtxos: %s", err)
-					continue
-				}
+				performAction()
 			}
 		}
-	}(ctnx)
+	}(a.ctxListenVtxo)
 
 	return nil
 }
@@ -645,22 +653,15 @@ func (a *covenantArkClient) processVtxosAndTxs(
 		return fmt.Errorf("failed to process txs: %s", err)
 	}
 
-	return a.processVtxos(ctx, allSpendableVtxos, allSpentVtxos)
+	return a.processVtxos(ctx, allSpendableVtxos, allSpentVtxos, allBoardingTxs)
 }
 
 func (a *covenantArkClient) processVtxos(
 	ctx context.Context,
 	allSpendableVtxos,
 	allSpentVtxos []client.Vtxo,
+	allBoardingTxs []domain.Transaction,
 ) error {
-	spendableVtxosOld, spentVtxosOld, err := a.sdkRepository.
-		AppDataRepository().VtxoRepository().GetAll(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get vtxos: %s", err)
-	}
-
-	oldVtxos := append(spendableVtxosOld, spentVtxosOld...)
-
 	allTxs, err := vtxosToTxsCovenant(
 		a.ConfigData.RoundInterval,
 		allSpendableVtxos,
@@ -669,15 +670,10 @@ func (a *covenantArkClient) processVtxos(
 	if err != nil {
 		return err
 	}
-	if len(oldVtxos) == 0 {
-		err = a.insertVtxosAndTransactions(
-			ctx,
-			allTxs,
-			allSpendableVtxos,
-			allSpentVtxos,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to process new vtxos: %s", err)
+	if len(allBoardingTxs) == 0 {
+		if err := a.sdkRepository.AppDataRepository().TransactionRepository().
+			InsertTransactions(ctx, allTxs); err != nil {
+			return fmt.Errorf("failed to insert txs: %s", err)
 		}
 	} else {
 		oldTxs, err := a.sdkRepository.AppDataRepository().TransactionRepository().GetAll(ctx)
@@ -686,14 +682,9 @@ func (a *covenantArkClient) processVtxos(
 		}
 
 		newTxs, err := findNewTxs(oldTxs, allTxs)
-		err = a.insertVtxosAndTransactions(
-			ctx,
-			newTxs,
-			allSpendableVtxos,
-			allSpentVtxos,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to process new vtxos: %s", err)
+		if err := a.sdkRepository.AppDataRepository().TransactionRepository().
+			InsertTransactions(ctx, newTxs); err != nil {
+			return fmt.Errorf("failed to insert txs: %s", err)
 		}
 	}
 
@@ -726,32 +717,6 @@ func (a *covenantArkClient) processBoardingTxs(
 			UpdateTransactions(ctx, updatedOldBoardingTxs); err != nil {
 			return fmt.Errorf("failed to update boarding txs: %s", err)
 		}
-	}
-
-	return nil
-}
-
-func (a *covenantArkClient) insertVtxosAndTransactions(
-	ctx context.Context,
-	txs []domain.Transaction,
-	spendableVtxos []client.Vtxo,
-	spentVtxos []client.Vtxo,
-) error {
-	if err := a.sdkRepository.AppDataRepository().TransactionRepository().
-		InsertTransactions(ctx, txs); err != nil {
-		return err
-	}
-
-	domainVtxos := convertVtxosToDomainVtxos(spendableVtxos, false)
-	domainVtxos = append(domainVtxos, convertVtxosToDomainVtxos(spentVtxos, true)...)
-
-	if len(domainVtxos) > 0 {
-		if err := a.sdkRepository.AppDataRepository().VtxoRepository().DeleteAll(ctx); err != nil {
-			return err
-		}
-
-		return a.sdkRepository.AppDataRepository().VtxoRepository().
-			InsertVtxos(ctx, domainVtxos)
 	}
 
 	return nil

@@ -32,7 +32,6 @@ func NewService(storeConfig Config) (domain.SdkRepository, error) {
 		configRepository      domain.ConfigRepository
 		appDataRepository     domain.AppDataRepository
 		transactionRepository domain.TransactionRepository
-		vtxoRepository        domain.VtxoRepository
 		err                   error
 
 		dir          = storeConfig.BaseDir
@@ -62,17 +61,8 @@ func NewService(storeConfig Config) (domain.SdkRepository, error) {
 			return nil, err
 		}
 
-		vtxoRepository, err = badgerstore.NewVtxoRepository(
-			dir,
-			badgerLogger,
-		)
-		if err != nil {
-			return nil, err
-		}
-
 		appDataRepository = badgerstore.NewAppDataRepository(
 			transactionRepository,
-			vtxoRepository,
 		)
 	}
 
