@@ -265,7 +265,7 @@ func (s *covenantlessService) CompleteAsyncPayment(
 	for outIndex, out := range redeemPtx.UnsignedTx.TxOut {
 		desc := asyncPayData.receivers[outIndex].Descriptor
 		_, _, _, _, err := descriptor.ParseReversibleVtxoDescriptor(desc)
-		isChange := err != nil
+		isPending := err == nil
 
 		vtxos = append(vtxos, domain.Vtxo{
 			VtxoKey: domain.VtxoKey{
@@ -281,7 +281,7 @@ func (s *covenantlessService) CompleteAsyncPayment(
 				RedeemTx:                redeemTx,
 				UnconditionalForfeitTxs: unconditionalForfeitTxs,
 			},
-			PendingChange: isChange,
+			Pending: isPending,
 		})
 	}
 
@@ -337,7 +337,7 @@ func (s *covenantlessService) CreateAsyncPayment(
 		if vtxo.Swept {
 			return "", nil, fmt.Errorf("all vtxos must be swept")
 		}
-		if vtxo.AsyncPayment != nil && !vtxo.PendingChange {
+		if vtxo.Pending {
 			return "", nil, fmt.Errorf("all vtxos must be claimed")
 		}
 
@@ -599,6 +599,11 @@ func (s *covenantlessService) GetInfo(ctx context.Context) (*ServiceInfo, error)
 		return nil, fmt.Errorf("failed to get dust amount: %s", err)
 	}
 
+	forfeitAddr, err := s.wallet.GetForfeitAddress(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get forfeit address: %s", err)
+	}
+
 	return &ServiceInfo{
 		PubKey:              pubkey,
 		RoundLifetime:       s.roundLifetime,
@@ -614,6 +619,7 @@ func (s *covenantlessService) GetInfo(ctx context.Context) (*ServiceInfo, error)
 			s.boardingExitDelay,
 			"USER",
 		),
+		ForfeitAddress: forfeitAddr,
 	}, nil
 }
 
@@ -962,7 +968,7 @@ func (s *covenantlessService) startFinalization() {
 	minRelayFeeRate := s.wallet.MinRelayFeeRate(ctx)
 
 	if needForfeits {
-		connectors, forfeitTxs, err = s.builder.BuildForfeitTxs(s.pubkey, unsignedRoundTx, payments, minRelayFeeRate)
+		connectors, forfeitTxs, err = s.builder.BuildForfeitTxs(unsignedRoundTx, payments, minRelayFeeRate)
 		if err != nil {
 			round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
 			log.WithError(err).Warn("failed to create connectors and forfeit txs")

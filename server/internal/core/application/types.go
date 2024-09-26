@@ -60,6 +60,7 @@ type ServiceInfo struct {
 	Network                    string
 	Dust                       uint64
 	BoardingDescriptorTemplate string
+	ForfeitAddress             string
 }
 
 type WalletStatus struct {

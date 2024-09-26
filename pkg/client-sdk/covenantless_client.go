@@ -784,7 +784,7 @@ func (a *covenantlessArkClient) ListenToVtxoChan() error {
 				return
 			}
 
-			allBoardingTxs := a.getBoardingTxs(ct)
+			allBoardingTxs, ignoreVtxos, err := a.getBoardingTxs(ct)
 
 			if err := a.processVtxosAndTxs(
 				ct,
@@ -1674,6 +1674,20 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 	feeRate chainfee.SatPerKVByte,
 	myPubkey *secp256k1.PublicKey,
 ) ([]string, error) {
+	parsedForfeitAddr, err := btcutil.DecodeAddress(a.ForfeitAddress, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	forfeitPkScript, err := txscript.PayToAddrScript(parsedForfeitAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	parsedScript, err := txscript.ParsePkScript(forfeitPkScript)
+	if err != nil {
+		return nil, err
+	}
 
 	signedForfeits := make([]string, 0)
 	connectorsPsets := make([]*psbt.Packet, 0, len(connectors))
@@ -1698,7 +1712,7 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 			return nil, err
 		}
 
-		feeAmount, err := common.ComputeForfeitMinRelayFee(feeRate, vtxoTapTree)
+		feeAmount, err := common.ComputeForfeitMinRelayFee(feeRate, vtxoTapTree, parsedScript.Class())
 		if err != nil {
 			return nil, err
 		}
@@ -1741,7 +1755,7 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 
 		for _, connectorPset := range connectorsPsets {
 			forfeits, err := bitcointree.BuildForfeitTxs(
-				connectorPset, vtxoInput, vtxo.Amount, a.Dust, feeAmount, vtxoOutputScript, a.AspPubkey,
+				connectorPset, vtxoInput, vtxo.Amount, a.Dust, feeAmount, vtxoOutputScript, forfeitPkScript,
 			)
 			if err != nil {
 				return nil, err
@@ -1889,6 +1903,12 @@ func (a *covenantlessArkClient) getRedeemBranches(
 
 	for i := range vtxos {
 		vtxo := vtxos[i]
+
+		// TODO: handle exit for pending changes
+		if vtxo.RedeemTx != "" {
+			continue
+		}
+
 		if _, ok := congestionTrees[vtxo.RoundTxid]; !ok {
 			round, err := a.client.GetRound(ctx, vtxo.RoundTxid)
 			if err != nil {
@@ -2045,7 +2065,7 @@ func (a *covenantlessArkClient) getVtxos(
 
 	pendingVtxos := make([]client.Vtxo, 0)
 	for _, vtxo := range spendableVtxos {
-		if vtxo.Pending {
+		if vtxo.RedeemTx != "" {
 			pendingVtxos = append(pendingVtxos, vtxo)
 		}
 	}
@@ -2179,7 +2199,7 @@ func (a *covenantlessArkClient) offchainAddressToDefaultVtxoDescriptor(addr stri
 // offchain tx history and prevent duplicates.
 func (a *covenantlessArkClient) getBoardingTxs(
 	ctx context.Context,
-) ([]domain.Transaction, map[string]struct{}, error) {
+) ([]Transaction, map[string]struct{}, error) {
 	utxos, err := a.getClaimableBoardingUtxos(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -2195,18 +2215,18 @@ func (a *covenantlessArkClient) getBoardingTxs(
 		return nil, nil, err
 	}
 
-	unconfirmedTxs := make([]domain.Transaction, 0)
-	confirmedTxs := make([]domain.Transaction, 0)
+	unconfirmedTxs := make([]Transaction, 0)
+	confirmedTxs := make([]Transaction, 0)
 	for _, u := range allUtxos {
 		pending := false
 		if isPending[u.Txid] {
 			pending = true
 		}
 
-		tx := domain.Transaction{
+		tx := Transaction{
 			BoardingTxid: u.Txid,
 			Amount:       u.Amount,
-			Type:         domain.TxReceived,
+			Type:         TxReceived,
 			IsPending:    pending,
 			CreatedAt:    u.CreatedAt,
 		}

@@ -120,7 +120,7 @@ VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET
     position = EXCLUDED.position;
 
 -- name: UpsertVtxo :exec
-INSERT INTO vtxo (txid, vout, descriptor, amount, pool_tx, spent_by, spent, redeemed, swept, expire_at, redeem_tx, pending_change)
+INSERT INTO vtxo (txid, vout, descriptor, amount, pool_tx, spent_by, spent, redeemed, swept, expire_at, redeem_tx, pending)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(txid, vout) DO UPDATE SET
     descriptor = EXCLUDED.descriptor,
     amount = EXCLUDED.amount,
@@ -131,7 +131,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(txid, vout) DO UPDATE SE
     swept = EXCLUDED.swept,
     expire_at = EXCLUDED.expire_at,
     redeem_tx = EXCLUDED.redeem_tx,
-    pending_change = EXCLUDED.pending_change;
+    pending = EXCLUDED.pending;
 
 -- name: SelectSweepableVtxos :many
 SELECT  sqlc.embed(vtxo),

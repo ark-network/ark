@@ -21,6 +21,7 @@ type ConfigData struct {
 	Dust                       uint64
 	BoardingDescriptorTemplate string
 	ExplorerURL                string
+	ForfeitAddress             string
 }
 
 type Vtxo struct {

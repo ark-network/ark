@@ -129,6 +129,7 @@ func (a *arkClient) InitWithWallet(
 		UnilateralExitDelay:        info.UnilateralExitDelay,
 		Dust:                       info.Dust,
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
+		ForfeitAddress:             info.ForfeitAddress,
 	}
 	if err := a.sdkRepository.ConfigRepository().AddData(ctx, storeData); err != nil {
 		return err
@@ -202,6 +203,7 @@ func (a *arkClient) Init(
 		Dust:                       info.Dust,
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 		ExplorerURL:                args.ExplorerURL,
+		ForfeitAddress:             info.ForfeitAddress,
 	}
 	walletSvc, err := getWallet(a.sdkRepository.ConfigRepository(), &storeData, supportedWallets)
 	if err != nil {

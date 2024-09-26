@@ -33,9 +33,6 @@ type V1Vtxo struct {
 	// pending
 	Pending bool `json:"pending,omitempty"`
 
-	// pending change
-	PendingChange bool `json:"pendingChange,omitempty"`
-
 	// pending data
 	PendingData *V1PendingPayment `json:"pendingData,omitempty"`
 

@@ -130,6 +130,7 @@ func (a *restClient) GetInfo(
 		Network:                    resp.Payload.Network,
 		Dust:                       uint64(dust),
 		BoardingDescriptorTemplate: resp.Payload.BoardingDescriptorTemplate,
+		ForfeitAddress:             resp.Payload.ForfeitAddress,
 	}, nil
 }
 
@@ -176,7 +177,6 @@ func (a *restClient) ListVtxos(
 			RoundTxid:               v.PoolTxid,
 			ExpiresAt:               expiresAt,
 			Pending:                 v.Pending,
-			PendingChange:           v.PendingChange,
 			RedeemTx:                redeemTx,
 			UnconditionalForfeitTxs: uncondForfeitTxs,
 			SpentBy:                 v.SpentBy,

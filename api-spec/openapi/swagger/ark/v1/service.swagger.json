@@ -631,6 +631,9 @@
         },
         "boardingDescriptorTemplate": {
           "type": "string"
+        },
+        "forfeitAddress": {
+          "type": "string"
         }
       }
     },
@@ -999,9 +1002,6 @@
         "amount": {
           "type": "string",
           "format": "uint64"
-        },
-        "pendingChange": {
-          "type": "boolean"
         }
       }
     }

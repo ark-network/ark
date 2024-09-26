@@ -61,6 +61,7 @@ type Info struct {
 	Network                    string
 	Dust                       uint64
 	BoardingDescriptorTemplate string
+	ForfeitAddress             string
 }
 
 type RoundEventChannel struct {
@@ -87,7 +88,6 @@ type Vtxo struct {
 	RedeemTx                string
 	UnconditionalForfeitTxs []string
 	Pending                 bool
-	PendingChange           bool
 	SpentBy                 string
 }
 

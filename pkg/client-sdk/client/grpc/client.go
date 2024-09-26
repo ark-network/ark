@@ -117,6 +117,7 @@ func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
 		Network:                    resp.GetNetwork(),
 		Dust:                       uint64(resp.GetDust()),
 		BoardingDescriptorTemplate: resp.GetBoardingDescriptorTemplate(),
+		ForfeitAddress:             resp.GetForfeitAddress(),
 	}, nil
 }
 
@@ -461,7 +462,6 @@ func (v vtxo) toVtxo() client.Vtxo {
 		RoundTxid:               v.GetPoolTxid(),
 		ExpiresAt:               expiresAt,
 		Pending:                 v.GetPending(),
-		PendingChange:           v.GetPendingChange(),
 		RedeemTx:                redeemTx,
 		UnconditionalForfeitTxs: uncondForfeitTxs,
 		SpentBy:                 v.GetSpentBy(),

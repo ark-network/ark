@@ -19,6 +19,7 @@ func TestVtxosToTxsCovenant(t *testing.T) {
 		want    []domain.Transaction
 	}{
 		{
+<<<<<<< HEAD
 			name:    "Alice Sends to Bob",
 			fixture: aliceToBobCovenant,
 			want: []domain.Transaction{
@@ -35,6 +36,11 @@ func TestVtxosToTxsCovenant(t *testing.T) {
 					IsPending: false,
 				},
 			},
+=======
+			name:    "Alice Before Sending Async",
+			fixture: aliceBeforeSendingAsync,
+			want:    []Transaction{},
+>>>>>>> master
 		},
 	}
 
@@ -72,6 +78,7 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 			fixture: aliceBeforeSendingAsync,
 			want: []domain.Transaction{
 				{
+<<<<<<< HEAD
 					RoundTxid: "377fa2fbd27c82bdbc095478384c88b6c75432c0ef464189e49c965194446cdf",
 					Amount:    20000,
 					Type:      domain.TxReceived,
@@ -89,6 +96,12 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 					Amount:     1000,
 					Type:       domain.TxSent,
 					IsPending:  true,
+=======
+					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
+					Amount:     1000,
+					Type:       TxSent,
+					IsPending:  false,
+>>>>>>> master
 					CreatedAt:  time.Unix(1726054898, 0),
 				},
 			},
@@ -96,13 +109,28 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 		{
 			name:    "Bob Before Claiming Async",
 			fixture: bobBeforeClaimingAsync,
+<<<<<<< HEAD
 			want: []domain.Transaction{
 				{
 					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
 					Amount:     1000,
 					Type:       domain.TxReceived,
+=======
+			want: []Transaction{
+				{
+					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
+					Amount:     1000,
+					Type:       TxReceived,
 					IsPending:  true,
 					CreatedAt:  time.Unix(1726054898, 0),
+				},
+				{
+					RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
+					Amount:     2000,
+					Type:       TxReceived,
+>>>>>>> master
+					IsPending:  true,
+					CreatedAt:  time.Unix(1726486359, 0),
 				},
 				{
 					RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
@@ -118,18 +146,30 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 			fixture: bobAfterClaimingAsync,
 			want: []domain.Transaction{
 				{
+<<<<<<< HEAD
 					RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
 					Amount:     2000,
 					Type:       domain.TxReceived,
+=======
+					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
+					Amount:     1000,
+					Type:       TxReceived,
+>>>>>>> master
 					IsPending:  false,
-					CreatedAt:  time.Unix(1726486359, 0),
+					CreatedAt:  time.Unix(1726054898, 0),
 				},
 				{
+<<<<<<< HEAD
 					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
 					Amount:     1000,
 					Type:       domain.TxReceived,
+=======
+					RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
+					Amount:     2000,
+					Type:       TxReceived,
+>>>>>>> master
 					IsPending:  false,
-					CreatedAt:  time.Unix(1726054898, 0),
+					CreatedAt:  time.Unix(1726486359, 0),
 				},
 			},
 		},
@@ -138,11 +178,19 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 			fixture: bobAfterSendingAsync,
 			want: []domain.Transaction{
 				{
+<<<<<<< HEAD
 					RedeemTxid: "23c3a885f0ea05f7bdf83f3bf7f8ac9dc3f791ad292f4e63a6f53fa5e4935ab0",
 					Amount:     2100,
 					Type:       domain.TxSent,
 					IsPending:  true,
 					CreatedAt:  time.Unix(1726503865, 0),
+=======
+					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
+					Amount:     1000,
+					Type:       TxReceived,
+					IsPending:  false,
+					CreatedAt:  time.Unix(1726054898, 0),
+>>>>>>> master
 				},
 				{
 					RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
@@ -152,11 +200,17 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 					CreatedAt:  time.Unix(1726486359, 0),
 				},
 				{
+<<<<<<< HEAD
 					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
 					Amount:     1000,
 					Type:       domain.TxReceived,
+=======
+					RedeemTxid: "23c3a885f0ea05f7bdf83f3bf7f8ac9dc3f791ad292f4e63a6f53fa5e4935ab0",
+					Amount:     2100,
+					Type:       TxSent,
+>>>>>>> master
 					IsPending:  false,
-					CreatedAt:  time.Unix(1726054898, 0),
+					CreatedAt:  time.Unix(1726503865, 0),
 				},
 			},
 		},
@@ -164,11 +218,19 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+<<<<<<< HEAD
 			vtxos, _, err := loadFixtures(tt.fixture)
 			if err != nil {
 				t.Fatalf("failed to load fixture: %s", err)
 			}
 			got, err := vtxosToTxsCovenantless(30, vtxos.spendable, vtxos.spent)
+=======
+			vtxos, ignoreTxs, err := loadFixtures(tt.fixture)
+			if err != nil {
+				t.Fatalf("failed to load fixture: %s", err)
+			}
+			got, err := vtxosToTxsCovenantless(30, vtxos.spendable, vtxos.spent, ignoreTxs)
+>>>>>>> master
 			require.NoError(t, err)
 			require.Len(t, got, len(tt.want))
 
@@ -190,6 +252,7 @@ type vtxos struct {
 	spent     []client.Vtxo
 }
 
+<<<<<<< HEAD
 func loadFixtures(jsonStr string) (vtxos, []domain.Transaction, error) {
 	var data struct {
 		BoardingTxs []struct {
@@ -201,6 +264,11 @@ func loadFixtures(jsonStr string) (vtxos, []domain.Transaction, error) {
 			Claimed      bool          `json:"claimed"`
 			CreatedAt    string        `json:"createdAt"`
 		} `json:"boardingTxs"`
+=======
+func loadFixtures(jsonStr string) (vtxos, map[string]struct{}, error) {
+	var data struct {
+		IgnoreTxs      []string `json:"ignoreTxs"`
+>>>>>>> master
 		SpendableVtxos []struct {
 			Outpoint struct {
 				Txid string `json:"txid"`
@@ -297,6 +365,7 @@ func loadFixtures(jsonStr string) (vtxos, []domain.Transaction, error) {
 		}
 	}
 
+<<<<<<< HEAD
 	boardingTxs := make([]domain.Transaction, len(data.BoardingTxs))
 	for i, tx := range data.BoardingTxs {
 		createdAt, err := parseTimestamp(tx.CreatedAt)
@@ -313,12 +382,19 @@ func loadFixtures(jsonStr string) (vtxos, []domain.Transaction, error) {
 		}
 	}
 
+=======
+>>>>>>> master
 	vtxos := vtxos{
 		spendable: spendable,
 		spent:     spent,
 	}
 
-	return vtxos, boardingTxs, nil
+	ignoreTxs := make(map[string]struct{})
+	for _, tx := range data.IgnoreTxs {
+		ignoreTxs[tx] = struct{}{}
+	}
+
+	return vtxos, ignoreTxs, nil
 }
 
 func parseAmount(amountStr string) (uint64, error) {
@@ -397,15 +473,8 @@ var (
 var (
 	aliceBeforeSendingAsync = `
 	{
-	  "boardingTxs": [
-		  {
-        "boardingTxid": "69ccb6520e0b91ac1cbaa459b16ec1e3ff5f6349990b0d149dd8e6c6485d316c",
-				"roundTxid": "377fa2fbd27c82bdbc095478384c88b6c75432c0ef464189e49c965194446cdf",
-        "amount": 20000,
-				"pending": false,
-				"claimed": true,
-				"createdAt": "1726503865"
-      }
+	  "ignoreTxs": [
+		  "377fa2fbd27c82bdbc095478384c88b6c75432c0ef464189e49c965194446cdf"
 		],
 	  "spendableVtxos": [
 			{
@@ -431,15 +500,8 @@ var (
 
 	aliceAfterSendingAsync = `
 	{
-	  "boardingTxs": [
-		  {
-        "boardingTxid": "69ccb6520e0b91ac1cbaa459b16ec1e3ff5f6349990b0d149dd8e6c6485d316c",
-				"roundTxid": "377fa2fbd27c82bdbc095478384c88b6c75432c0ef464189e49c965194446cdf",
-        "amount": 20000,
-				"pending": false,
-				"claimed": true,
-				"createdAt": "1726503865"
-      }
+	  "ignoreTxs": [
+		  "377fa2fbd27c82bdbc095478384c88b6c75432c0ef464189e49c965194446cdf"
 		],
 	  "spendableVtxos": [
 			{
@@ -456,7 +518,7 @@ var (
 				"spentBy": "",
 				"expireAt": "1726054928",
 				"swept": false,
-				"pending": true,
+				"pending": false,
 				"pendingData": {
 					"redeemTx": "cHNidP8BAIkCAAAAAWwxXUjG5tidFA0LmUljX//jwW6xWaS6HKyRCw5StsxpAAAAAAD/////AugDAAAAAAAAIlEgt2eR8LtqTP7yUcQtSydeGrRiHnVmHHnZwYjdC23G7MZwSQAAAAAAACJRIKfUzf/o9h+r0v9y4nmyOt9qO8EkDumQPQZGTbEv8fSFAAAAAAABASsgTgAAAAAAACJRIKfUzf/o9h+r0v9y4nmyOt9qO8EkDumQPQZGTbEv8fSFIgYDp9sz9Cto7FhF+C929Y/jJw1zkRWxq6NURd9kX05mShcYAAAAAFYAAIAAAACAAQAAgAAAAAAAAAAAQRSvBIBey3T0IV353FkuGLMmMJFpqHTrliIsJwJsfJkzq7J0B8bQ0j9842h5lUfOWcbj2TeoFx6OCpgoHIqWIBhHQAFqkBLiRmP3AZ8MS77s1QIWZswMV3L72D9gN0f0MbD6XHkmzZeC1clF3uzxr+13wsF0vcFe29Zl3e2gAhMNGYVCFcFQkpt0waBJVLeLS2A16XpeB4paDyjsltVHv+6azoA6wKRtST8P7teUpSF4DAEbfJj5OIXITx5QGbZns/AtxqGyRSCn2zP0K2jsWEX4L3b1j+MnDXORFbGro1RF32RfTmZKF60grwSAXst09CFd+dxZLhizJjCRaah065YiLCcCbHyZM6uswCEWp9sz9Cto7FhF+C929Y/jJw1zkRWxq6NURd9kX05mShc5AbJ0B8bQ0j9842h5lUfOWcbj2TeoFx6OCpgoHIqWIBhHAAAAAFYAAIAAAACAAQAAgAAAAAAAAAAAARcgUJKbdMGgSVS3i0tgNel6XgeKWg8o7JbVR7/ums6AOsAAAAA=",
 					"unconditionalForfeitTxs": [
@@ -621,7 +683,7 @@ var (
 				"spentBy": "",
 				"expireAt": "1726503895",
 				"swept": false,
-				"pending": true,
+				"pending": false,
 				"pendingData": {
 					"redeemTx": "cHNidP8BAIkCAAAAAdOK9YzYw1ceJznqJxtRXGe0KeHj6CLcLtqLVwcbMCivAAAAAAD/////ArgLAAAAAAAAIlEgC39Vxhw3dIa4heHgFS6X4XwDl1mBggsKLVTBwF1h3qEgegEAAAAAACJRIMkktfIFxFNTtAmy3K0p+7JqVn2kcA0P6y2vJ1QX2zysAAAAAAABASughgEAAAAAACJRIMkktfIFxFNTtAmy3K0p+7JqVn2kcA0P6y2vJ1QX2zysIgYDjGeMfnNwCrU45iB3iRqiFdWTADaiJ968+w3ruFuq1F0YAAAAAFYAAIAAAACAAQAAgAAAAAAAAAAAQRTYEOuHJ0hyLBGzY8nSHpD2F1nby5/XQ5Sh2Je+cQ5Wsx0ZucLmB/LLspxMRN9JcJn3Q2KJRMhhg7415cCg1d0gQNSvgaBk/1WLYqQxCKxCfv8ViVJ7vjBxvNO5tc2FEDy27V9cIrfL1jPJoVrhgPZT0GwY7dkVZS7saIKI03CbipBCFcBQkpt0waBJVLeLS2A16XpeB4paDyjsltVHv+6azoA6wPKiQ0JM6aw2kcUByijEbOydM3gTIVCGN/69q+dmyxcqRSCMZ4x+c3AKtTjmIHeJGqIV1ZMANqIn3rz7Deu4W6rUXa0g2BDrhydIciwRs2PJ0h6Q9hdZ28uf10OUodiXvnEOVrOswCEWjGeMfnNwCrU45iB3iRqiFdWTADaiJ968+w3ruFuq1F05AR0ZucLmB/LLspxMRN9JcJn3Q2KJRMhhg7415cCg1d0gAAAAAFYAAIAAAACAAQAAgAAAAAAAAAAAARcgUJKbdMGgSVS3i0tgNel6XgeKWg8o7JbVR7/ums6AOsAAAAA=",
 					"unconditionalForfeitTxs": [
