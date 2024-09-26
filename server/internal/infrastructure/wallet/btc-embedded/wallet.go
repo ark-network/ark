@@ -67,9 +67,12 @@ func (c WalletConfig) chainParams() *chaincfg.Params {
 type accountName string
 
 const (
-	mainAccount      accountName = "main"
+	// p2wkh scope
+	mainAccount      accountName = "default" // default is always the first account (index 0)
 	connectorAccount accountName = "connector"
-	aspKeyAccount    accountName = "aspkey"
+
+	// p2tr scope
+	aspKeyAccount accountName = "default"
 
 	// https://github.com/bitcoin/bitcoin/blob/439e58c4d8194ca37f70346727d31f52e69592ec/src/policy/policy.cpp#L23C8-L23C11
 	// biggest input size to compute the maximum dust amount
@@ -289,11 +292,11 @@ func (s *service) GenSeed(_ context.Context) (string, error) {
 }
 
 func (s *service) Create(_ context.Context, seed, password string) error {
-	return s.create(seed, password, 0)
+	return s.create(seed, password, 512)
 }
 
 func (s *service) Restore(_ context.Context, seed, password string) error {
-	return s.create(seed, password, 100)
+	return s.create(seed, password, 2000) // restore = create with a bigger recovery window
 }
 
 func (s *service) Unlock(_ context.Context, password string) error {
@@ -304,8 +307,7 @@ func (s *service) Unlock(_ context.Context, password string) error {
 			LogDir:                s.cfg.Datadir,
 			PrivatePass:           pwd,
 			PublicPass:            pwd,
-			Birthday:              time.Now(),
-			RecoveryWindow:        0,
+			RecoveryWindow:        512,
 			NetParams:             s.cfg.chainParams(),
 			LoaderOptions:         []btcwallet.LoaderOption{opt},
 			CoinSelectionStrategy: wallet.CoinSelectionLargest,
@@ -1017,11 +1019,11 @@ func (s *service) create(mnemonic, password string, addrGap uint32) error {
 	pwd := []byte(password)
 	seed := bip39.NewSeed(mnemonic, password)
 	opt := btcwallet.LoaderWithLocalWalletDB(s.cfg.Datadir, false, time.Minute)
+
 	config := btcwallet.Config{
 		LogDir:                s.cfg.Datadir,
 		PrivatePass:           pwd,
 		PublicPass:            pwd,
-		Birthday:              time.Now(),
 		RecoveryWindow:        addrGap,
 		HdSeed:                seed,
 		NetParams:             s.cfg.chainParams(),
@@ -1036,11 +1038,18 @@ func (s *service) create(mnemonic, password string, addrGap uint32) error {
 		return fmt.Errorf("failed to setup wallet loader: %s", err)
 	}
 
+	if err := wallet.InternalWallet().Unlock([]byte(password), nil); err != nil {
+		return fmt.Errorf("failed to unlock wallet: %s", err)
+	}
+
+	defer wallet.InternalWallet().Lock()
+
+	if err := s.initWalletAccounts(wallet); err != nil {
+		return err
+	}
+
 	if err := wallet.Start(); err != nil {
 		return fmt.Errorf("failed to start wallet: %s", err)
-	}
-	if err := s.initWallet(wallet); err != nil {
-		return err
 	}
 
 	for {
@@ -1053,53 +1062,71 @@ func (s *service) create(mnemonic, password string, addrGap uint32) error {
 	}
 	log.Debugf("chain synced")
 
-	if addrGap > 0 {
-		// TODO: fix rescan
-		if err := wallet.InternalWallet().Rescan(nil, nil); err != nil {
-			return err
-		}
+	if err := s.initAspKeyAddress(wallet); err != nil {
+		return err
 	}
 
-	wallet.InternalWallet().Lock()
 	s.wallet = wallet
 	return nil
 }
 
-func (s *service) initWallet(wallet *btcwallet.BtcWallet) error {
+func (s *service) initWalletAccounts(wallet *btcwallet.BtcWallet) error {
 	w := wallet.InternalWallet()
 
-	walletAccounts, err := w.Accounts(p2wpkhKeyScope)
+	p2wkhAccounts, err := w.Accounts(p2wpkhKeyScope)
 	if err != nil {
 		return fmt.Errorf("failed to list wallet accounts: %s", err)
 	}
 	var mainAccountNumber, connectorAccountNumber, aspKeyAccountNumber uint32
-	if walletAccounts != nil {
-		for _, account := range walletAccounts.Accounts {
+	var mainAccountSet, connectorAccountSet, aspKeyAccountSet bool
+	if p2wkhAccounts != nil {
+		for _, account := range p2wkhAccounts.Accounts {
 			switch account.AccountName {
 			case string(mainAccount):
+				mainAccountSet = true
 				mainAccountNumber = account.AccountNumber
 			case string(connectorAccount):
+				connectorAccountSet = true
 				connectorAccountNumber = account.AccountNumber
-			case string(aspKeyAccount):
-				aspKeyAccountNumber = account.AccountNumber
 			default:
 				continue
 			}
 		}
 	}
 
-	if mainAccountNumber == 0 && connectorAccountNumber == 0 && aspKeyAccountNumber == 0 {
-		log.Debug("creating default accounts for ark wallet...")
+	p2trAccounts, err := w.Accounts(p2trKeyScope)
+	if err != nil {
+		return fmt.Errorf("failed to list wallet accounts: %s", err)
+	}
+
+	if p2trAccounts != nil {
+		for _, account := range p2trAccounts.Accounts {
+			if account.AccountName == string(aspKeyAccount) {
+				aspKeyAccountSet = true
+				aspKeyAccountNumber = account.AccountNumber
+				break
+			}
+		}
+	}
+
+	if !mainAccountSet {
+		log.Debug("creating main account")
 		mainAccountNumber, err = w.NextAccount(p2wpkhKeyScope, string(mainAccount))
 		if err != nil {
 			return fmt.Errorf("failed to create %s: %s", mainAccount, err)
 		}
+	}
 
+	if !connectorAccountSet {
+		log.Debug("creating connector account")
 		connectorAccountNumber, err = w.NextAccount(p2wpkhKeyScope, string(connectorAccount))
 		if err != nil {
 			return fmt.Errorf("failed to create %s: %s", connectorAccount, err)
 		}
+	}
 
+	if !aspKeyAccountSet {
+		log.Debug("creating asp key account")
 		aspKeyAccountNumber, err = w.NextAccount(p2trKeyScope, string(aspKeyAccount))
 		if err != nil {
 			return fmt.Errorf("failed to create %s: %s", aspKeyAccount, err)
@@ -1110,6 +1137,10 @@ func (s *service) initWallet(wallet *btcwallet.BtcWallet) error {
 	log.Debugf("connector account number: %d", connectorAccountNumber)
 	log.Debugf("asp key account number: %d", aspKeyAccountNumber)
 
+	return nil
+}
+
+func (s *service) initAspKeyAddress(wallet *btcwallet.BtcWallet) error {
 	addrs, err := wallet.ListAddresses(string(aspKeyAccount), false)
 	if err != nil {
 		return err
