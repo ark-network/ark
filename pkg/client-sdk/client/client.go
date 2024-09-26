@@ -88,7 +88,6 @@ type Vtxo struct {
 	RedeemTx                string
 	UnconditionalForfeitTxs []string
 	Pending                 bool
-	PendingChange           bool
 	SpentBy                 string
 }
 

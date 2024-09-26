@@ -14,6 +14,7 @@ import (
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
 	"github.com/ark-network/ark/pkg/client-sdk/store"
 	filestore "github.com/ark-network/ark/pkg/client-sdk/store/file"
+	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/term"
 )
@@ -466,13 +467,18 @@ func parseReceivers(receveirsJSON string, isBitcoin bool) ([]arksdk.Receiver, er
 
 func sendCovenantLess(ctx *cli.Context, receivers []arksdk.Receiver) error {
 	computeExpiration := ctx.Bool(enableExpiryCoinselectFlag.Name)
-	txID, err := arkSdkClient.SendAsync(
+	redeemTx, err := arkSdkClient.SendAsync(
 		ctx.Context, computeExpiration, receivers,
 	)
 	if err != nil {
 		return err
 	}
-	return printJSON(map[string]interface{}{"txid": txID})
+	ptx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
+	if err != nil {
+		fmt.Println("WARN: failed to parse the redeem tx, returning the full psbt")
+		return printJSON(map[string]string{"redeem_tx": redeemTx})
+	}
+	return printJSON(map[string]string{"txid": ptx.UnsignedTx.TxHash().String()})
 }
 
 func sendCovenant(ctx context.Context, receivers []arksdk.Receiver) error {
