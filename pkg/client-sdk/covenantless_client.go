@@ -521,7 +521,7 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 		return "", err
 	}
 
-	paymentID, err := a.client.RegisterPayment(
+	paymentID, err := a.client.RegisterInputsForNextRound(
 		ctx,
 		inputs,
 		hex.EncodeToString(roundEphemeralKey.PubKey().SerializeCompressed()),
@@ -530,7 +530,7 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 		return "", err
 	}
 
-	if err := a.client.ClaimPayment(ctx, paymentID, receivers); err != nil {
+	if err := a.client.RegisterOutputsForNextRound(ctx, paymentID, receivers); err != nil {
 		return "", err
 	}
 
@@ -1005,14 +1005,14 @@ func (a *covenantlessArkClient) sendOffchain(
 		return "", err
 	}
 
-	paymentID, err := a.client.RegisterPayment(
+	paymentID, err := a.client.RegisterInputsForNextRound(
 		ctx, inputs, hex.EncodeToString(roundEphemeralKey.PubKey().SerializeCompressed()),
 	)
 	if err != nil {
 		return "", err
 	}
 
-	if err := a.client.ClaimPayment(
+	if err := a.client.RegisterOutputsForNextRound(
 		ctx, paymentID, receiversOutput,
 	); err != nil {
 		return "", err
@@ -1203,7 +1203,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 				}
 
 				log.Info("finalizing payment... ")
-				if err := a.client.FinalizePayment(ctx, signedForfeitTxs, signedRoundTx); err != nil {
+				if err := a.client.SubmitSignedForfeitTxs(ctx, signedForfeitTxs, signedRoundTx); err != nil {
 					return "", err
 				}
 
@@ -1255,7 +1255,7 @@ func (a *covenantlessArkClient) handleRoundSigningStarted(
 
 	myPubKey := hex.EncodeToString(ephemeralKey.PubKey().SerializeCompressed())
 
-	err = a.arkClient.client.SendTreeNonces(ctx, event.ID, myPubKey, nonces)
+	err = a.arkClient.client.SubmitTreeNonces(ctx, event.ID, myPubKey, nonces)
 
 	return
 }
@@ -1279,7 +1279,7 @@ func (a *covenantlessArkClient) handleRoundSigningNoncesGenerated(
 		return err
 	}
 
-	if err := a.arkClient.client.SendTreeSignatures(
+	if err := a.arkClient.client.SubmitTreeSignatures(
 		ctx,
 		event.ID,
 		hex.EncodeToString(ephemeralKey.PubKey().SerializeCompressed()),
@@ -1994,7 +1994,7 @@ func (a *covenantlessArkClient) selfTransferAllPendingPayments(
 		return "", err
 	}
 
-	paymentID, err := a.client.RegisterPayment(
+	paymentID, err := a.client.RegisterInputsForNextRound(
 		ctx,
 		inputs,
 		hex.EncodeToString(roundEphemeralKey.PubKey().SerializeCompressed()),
@@ -2003,7 +2003,7 @@ func (a *covenantlessArkClient) selfTransferAllPendingPayments(
 		return "", err
 	}
 
-	if err := a.client.ClaimPayment(ctx, paymentID, outputs); err != nil {
+	if err := a.client.RegisterOutputsForNextRound(ctx, paymentID, outputs); err != nil {
 		return "", err
 	}
 

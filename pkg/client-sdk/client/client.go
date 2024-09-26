@@ -21,35 +21,34 @@ type RoundEvent interface {
 
 type ASPClient interface {
 	GetInfo(ctx context.Context) (*Info, error)
-	ListVtxos(ctx context.Context, addr string) ([]Vtxo, []Vtxo, error)
-	GetRound(ctx context.Context, txID string) (*Round, error)
-	GetRoundByID(ctx context.Context, roundID string) (*Round, error)
-	RegisterPayment(
+	RegisterInputsForNextRound(
 		ctx context.Context, inputs []Input, ephemeralKey string,
 	) (string, error)
-	ClaimPayment(
+	RegisterOutputsForNextRound(
 		ctx context.Context, paymentID string, outputs []Output,
+	) error
+	SubmitTreeNonces(
+		ctx context.Context, roundID, cosignerPubkey string, nonces bitcointree.TreeNonces,
+	) error
+	SubmitTreeSignatures(
+		ctx context.Context, roundID, cosignerPubkey string, signatures bitcointree.TreePartialSigs,
+	) error
+	SubmitSignedForfeitTxs(
+		ctx context.Context, signedForfeitTxs []string, signedRoundTx string,
 	) error
 	GetEventStream(
 		ctx context.Context, paymentID string,
 	) (<-chan RoundEventChannel, func(), error)
 	Ping(ctx context.Context, paymentID string) (RoundEvent, error)
-	FinalizePayment(
-		ctx context.Context, signedForfeitTxs []string, signedRoundTx string,
-	) error
 	CreatePayment(
 		ctx context.Context, inputs []Input, outputs []Output,
 	) (string, []string, error)
 	CompletePayment(
 		ctx context.Context, signedRedeemTx string, signedUnconditionalForfeitTxs []string,
 	) error
-	GetBoardingAddress(ctx context.Context, userPubkey string) (string, error)
-	SendTreeNonces(
-		ctx context.Context, roundID, cosignerPubkey string, nonces bitcointree.TreeNonces,
-	) error
-	SendTreeSignatures(
-		ctx context.Context, roundID, cosignerPubkey string, signatures bitcointree.TreePartialSigs,
-	) error
+	ListVtxos(ctx context.Context, addr string) ([]Vtxo, []Vtxo, error)
+	GetRound(ctx context.Context, txID string) (*Round, error)
+	GetRoundByID(ctx context.Context, roundID string) (*Round, error)
 	Close()
 }
 
