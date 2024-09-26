@@ -61,6 +61,8 @@ const (
 type spent bool
 
 type arkClient struct {
+	ctxCancelFunc context.CancelFunc
+
 	*domain.ConfigData
 	sdkRepository domain.SdkRepository
 	wallet        wallet.WalletService
@@ -247,6 +249,16 @@ func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
 	}
 
 	return offchainAddr, boardingAddr, nil
+}
+
+func (a *arkClient) Close() error {
+	if err := a.sdkRepository.AppDataRepository().Stop(); err != nil {
+		return err
+	}
+
+	a.ctxCancelFunc()
+
+	return nil
 }
 
 func (a *arkClient) ping(

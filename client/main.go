@@ -42,6 +42,7 @@ func main() {
 		&sendCommand,
 		&balanceCommand,
 		&redeemCommand,
+		$trasactionCommand,
 	)
 	app.Flags = []cli.Flag{
 		datadirFlag,
@@ -54,6 +55,15 @@ func main() {
 		}
 		arkSdkClient = sdk
 
+		return nil
+	}
+
+	app.After = func(ctx *cli.Context) error {
+		if arkSdkClient != nil {
+			if err := arkSdkClient.Close(); err != nil {
+				return fmt.Errorf("error closing ark sdk client: %v", err)
+			}
+		}
 		return nil
 	}
 
@@ -189,6 +199,13 @@ var (
 		Flags: []cli.Flag{addressFlag, amountToRedeemFlag, forceFlag, passwordFlag},
 		Action: func(ctx *cli.Context) error {
 			return redeem(ctx)
+		},
+	}
+	transactionCommand = cli.Command{
+		Name:  "transactions",
+		Usage: "Show transaction history",
+		Action: func(ctx *cli.Context) error {
+			return listTxs(ctx)
 		},
 	}
 )
@@ -379,6 +396,14 @@ func redeem(ctx *cli.Context) error {
 	return printJSON(map[string]interface{}{
 		"txid": txID,
 	})
+}
+
+func listTxs(ctx *cli.Context) error {
+	txs, err := arkSdkClient.GetTransactionHistory(ctx.Context)
+	if err != nil {
+		return err
+	}
+	return printJSON(txs)
 }
 
 func getArkSdkClient(ctx *cli.Context) (arksdk.ArkClient, error) {

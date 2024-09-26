@@ -27,6 +27,10 @@ func (a *appDataRepository) VtxoRepository() domain.VtxoRepository {
 	return a.vtxoRepository
 }
 
-func (a *appDataRepository) Stop() {
-	a.transactionRepository.Stop()
+func (a *appDataRepository) Stop() error {
+	if err := a.transactionRepository.Stop(); err != nil {
+		return err
+	}
+
+	return a.vtxoRepository.Stop()
 }

@@ -91,6 +91,11 @@ func (t *transactionRepository) GetEventChannel() chan domain.Transaction {
 	return t.eventCh
 }
 
-func (t *transactionRepository) Stop() {
+func (t *transactionRepository) Stop() error {
+	if err := t.db.Close(); err != nil {
+		return err
+	}
 	close(t.eventCh)
+
+	return nil
 }

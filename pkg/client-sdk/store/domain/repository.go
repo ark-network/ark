@@ -11,7 +11,7 @@ type AppDataRepository interface {
 	TransactionRepository() TransactionRepository
 	VtxoRepository() VtxoRepository
 
-	Stop()
+	Stop() error
 }
 
 type ConfigRepository interface {
@@ -28,11 +28,12 @@ type TransactionRepository interface {
 	GetAll(ctx context.Context) ([]Transaction, error)
 	GetEventChannel() chan Transaction
 	GetBoardingTxs(ctx context.Context) ([]Transaction, error)
-	Stop()
+	Stop() error
 }
 
 type VtxoRepository interface {
 	InsertVtxos(ctx context.Context, vtxos []Vtxo) error
 	GetAll(ctx context.Context) (spendable []Vtxo, spent []Vtxo, err error)
 	DeleteAll(ctx context.Context) error
+	Stop() error
 }

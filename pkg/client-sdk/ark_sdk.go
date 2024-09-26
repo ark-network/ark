@@ -30,6 +30,7 @@ type ArkClient interface {
 	Dump(ctx context.Context) (seed string, err error)
 	GetTransactionHistory(ctx context.Context) ([]domain.Transaction, error)
 	GetTransactionEventChannel() chan domain.Transaction
+	Close() error
 }
 
 type Receiver interface {

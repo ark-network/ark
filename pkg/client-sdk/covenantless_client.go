@@ -67,13 +67,15 @@ func NewCovenantlessClient(
 		return nil, ErrAlreadyInitialized
 	}
 
+	ctx, ctxCancel := context.WithCancel(context.Background())
 	cvnt := &covenantlessArkClient{
 		arkClient: &arkClient{
+			ctxCancelFunc: ctxCancel,
 			sdkRepository: sdkRepository,
 		},
 	}
 
-	if err := cvnt.listenToVtxoChan(context.Background()); err != nil {
+	if err := cvnt.listenToVtxoChan(ctx); err != nil {
 		return nil, err
 	}
 
@@ -112,8 +114,10 @@ func LoadCovenantlessClient(
 		return nil, fmt.Errorf("faile to setup wallet: %s", err)
 	}
 
+	ctx, ctxCancel := context.WithCancel(context.Background())
 	cvnt := &covenantlessArkClient{
 		&arkClient{
+			ctxCancelFunc: ctxCancel,
 			ConfigData:    data,
 			wallet:        walletSvc,
 			sdkRepository: sdkRepository,
@@ -122,7 +126,7 @@ func LoadCovenantlessClient(
 		},
 	}
 
-	if err := cvnt.listenToVtxoChan(context.Background()); err != nil {
+	if err := cvnt.listenToVtxoChan(ctx); err != nil {
 		return nil, err
 	}
 
@@ -160,8 +164,10 @@ func LoadCovenantlessClientWithWallet(
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
 
+	ctx, ctxCancel := context.WithCancel(context.Background())
 	cvnt := &covenantlessArkClient{
 		&arkClient{
+			ctxCancelFunc: ctxCancel,
 			ConfigData:    data,
 			wallet:        walletSvc,
 			sdkRepository: sdkRepository,
@@ -170,7 +176,7 @@ func LoadCovenantlessClientWithWallet(
 		},
 	}
 
-	if err := cvnt.listenToVtxoChan(context.Background()); err != nil {
+	if err := cvnt.listenToVtxoChan(ctx); err != nil {
 		return nil, err
 	}
 
@@ -780,6 +786,7 @@ func (a *covenantlessArkClient) listenToVtxoChan(ctnx context.Context) error {
 
 			select {
 			case <-ctx.Done():
+				log.Info("stopping listening to vtxos")
 				return
 			case <-ticker.C:
 				allSpendableVtxos, allSpentVtxos, err := a.ListVtxos(ctx)

@@ -62,3 +62,7 @@ func (v *vtxoRepository) DeleteAll(ctx context.Context) error {
 	}
 	return nil
 }
+
+func (v *vtxoRepository) Stop() error {
+	return v.db.Close()
+}
