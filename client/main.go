@@ -467,8 +467,11 @@ func sendCovenantLess(ctx *cli.Context, receivers []arksdk.Receiver) error {
 	if err != nil {
 		return err
 	}
-	// nolint:all
-	ptx, _ := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
+	ptx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
+	if err != nil {
+		fmt.Println("WARN: failed to parse the redeem tx, returning the full psbt")
+		return printJSON(map[string]string{"redeem_tx": redeemTx})
+	}
 	return printJSON(map[string]string{"txid": ptx.UnsignedTx.TxHash().String()})
 }
 
