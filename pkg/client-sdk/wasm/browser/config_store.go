@@ -93,18 +93,6 @@ func (s *localStorageStore) GetData(ctx context.Context) (*db.ConfigData, error)
 	unilateralExitDelay, _ := strconv.Atoi(s.store.Call("getItem", "unilateral_exit_delay").String())
 	dust, _ := strconv.Atoi(s.store.Call("getItem", "min_relay_fee").String())
 
-<<<<<<< HEAD
-	return &db.ConfigData{
-		AspUrl:              s.store.Call("getItem", "asp_url").String(),
-		AspPubkey:           aspPubkey,
-		WalletType:          s.store.Call("getItem", "wallet_type").String(),
-		ClientType:          s.store.Call("getItem", "client_type").String(),
-		Network:             network,
-		RoundLifetime:       int64(roundLifetime),
-		RoundInterval:       int64(roundInterval),
-		UnilateralExitDelay: int64(unilateralExitDelay),
-		Dust:                uint64(dust),
-=======
 	return &store.StoreData{
 		AspUrl:                     s.store.Call("getItem", "asp_url").String(),
 		AspPubkey:                  aspPubkey,
@@ -118,7 +106,6 @@ func (s *localStorageStore) GetData(ctx context.Context) (*db.ConfigData, error)
 		ExplorerURL:                s.store.Call("getItem", "explorer_url").String(),
 		ForfeitAddress:             s.store.Call("getItem", "forfeit_address").String(),
 		BoardingDescriptorTemplate: s.store.Call("getItem", "boarding_descriptor_template").String(),
->>>>>>> master
 	}, nil
 }
 

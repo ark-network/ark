@@ -19,7 +19,6 @@ func TestVtxosToTxsCovenant(t *testing.T) {
 		want    []domain.Transaction
 	}{
 		{
-<<<<<<< HEAD
 			name:    "Alice Sends to Bob",
 			fixture: aliceToBobCovenant,
 			want: []domain.Transaction{
@@ -36,11 +35,6 @@ func TestVtxosToTxsCovenant(t *testing.T) {
 					IsPending: false,
 				},
 			},
-=======
-			name:    "Alice Before Sending Async",
-			fixture: aliceBeforeSendingAsync,
-			want:    []Transaction{},
->>>>>>> master
 		},
 	}
 
@@ -67,7 +61,7 @@ func TestVtxosToTxsCovenant(t *testing.T) {
 	}
 }
 
-func TestVtxosToTxsCovenantless(t *testing.T) {
+func TestVtxosToTxs(t *testing.T) {
 	tests := []struct {
 		name    string
 		fixture string
@@ -76,16 +70,7 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 		{
 			name:    "Alice Before Sending Async",
 			fixture: aliceBeforeSendingAsync,
-			want: []domain.Transaction{
-				{
-<<<<<<< HEAD
-					RoundTxid: "377fa2fbd27c82bdbc095478384c88b6c75432c0ef464189e49c965194446cdf",
-					Amount:    20000,
-					Type:      domain.TxReceived,
-					IsPending: false,
-					CreatedAt: time.Unix(1726054898, 0),
-				},
-			},
+			want:    []domain.Transaction{},
 		},
 		{
 			name:    "Alice After Sending Async",
@@ -95,13 +80,7 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
 					Amount:     1000,
 					Type:       domain.TxSent,
-					IsPending:  true,
-=======
-					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
-					Amount:     1000,
-					Type:       TxSent,
 					IsPending:  false,
->>>>>>> master
 					CreatedAt:  time.Unix(1726054898, 0),
 				},
 			},
@@ -109,28 +88,13 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 		{
 			name:    "Bob Before Claiming Async",
 			fixture: bobBeforeClaimingAsync,
-<<<<<<< HEAD
 			want: []domain.Transaction{
 				{
 					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
 					Amount:     1000,
 					Type:       domain.TxReceived,
-=======
-			want: []Transaction{
-				{
-					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
-					Amount:     1000,
-					Type:       TxReceived,
 					IsPending:  true,
 					CreatedAt:  time.Unix(1726054898, 0),
-				},
-				{
-					RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
-					Amount:     2000,
-					Type:       TxReceived,
->>>>>>> master
-					IsPending:  true,
-					CreatedAt:  time.Unix(1726486359, 0),
 				},
 				{
 					RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
@@ -146,28 +110,16 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 			fixture: bobAfterClaimingAsync,
 			want: []domain.Transaction{
 				{
-<<<<<<< HEAD
-					RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
-					Amount:     2000,
-					Type:       domain.TxReceived,
-=======
 					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
 					Amount:     1000,
-					Type:       TxReceived,
->>>>>>> master
+					Type:       domain.TxReceived,
 					IsPending:  false,
 					CreatedAt:  time.Unix(1726054898, 0),
 				},
 				{
-<<<<<<< HEAD
-					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
-					Amount:     1000,
-					Type:       domain.TxReceived,
-=======
 					RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
 					Amount:     2000,
-					Type:       TxReceived,
->>>>>>> master
+					Type:       domain.TxReceived,
 					IsPending:  false,
 					CreatedAt:  time.Unix(1726486359, 0),
 				},
@@ -178,19 +130,11 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 			fixture: bobAfterSendingAsync,
 			want: []domain.Transaction{
 				{
-<<<<<<< HEAD
-					RedeemTxid: "23c3a885f0ea05f7bdf83f3bf7f8ac9dc3f791ad292f4e63a6f53fa5e4935ab0",
-					Amount:     2100,
-					Type:       domain.TxSent,
-					IsPending:  true,
-					CreatedAt:  time.Unix(1726503865, 0),
-=======
 					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
 					Amount:     1000,
-					Type:       TxReceived,
+					Type:       domain.TxReceived,
 					IsPending:  false,
 					CreatedAt:  time.Unix(1726054898, 0),
->>>>>>> master
 				},
 				{
 					RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
@@ -200,15 +144,9 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 					CreatedAt:  time.Unix(1726486359, 0),
 				},
 				{
-<<<<<<< HEAD
-					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
-					Amount:     1000,
-					Type:       domain.TxReceived,
-=======
 					RedeemTxid: "23c3a885f0ea05f7bdf83f3bf7f8ac9dc3f791ad292f4e63a6f53fa5e4935ab0",
 					Amount:     2100,
-					Type:       TxSent,
->>>>>>> master
+					Type:       domain.TxSent,
 					IsPending:  false,
 					CreatedAt:  time.Unix(1726503865, 0),
 				},
@@ -218,19 +156,11 @@ func TestVtxosToTxsCovenantless(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-<<<<<<< HEAD
-			vtxos, _, err := loadFixtures(tt.fixture)
-			if err != nil {
-				t.Fatalf("failed to load fixture: %s", err)
-			}
-			got, err := vtxosToTxsCovenantless(30, vtxos.spendable, vtxos.spent)
-=======
 			vtxos, ignoreTxs, err := loadFixtures(tt.fixture)
 			if err != nil {
 				t.Fatalf("failed to load fixture: %s", err)
 			}
 			got, err := vtxosToTxsCovenantless(30, vtxos.spendable, vtxos.spent, ignoreTxs)
->>>>>>> master
 			require.NoError(t, err)
 			require.Len(t, got, len(tt.want))
 
@@ -252,23 +182,9 @@ type vtxos struct {
 	spent     []client.Vtxo
 }
 
-<<<<<<< HEAD
-func loadFixtures(jsonStr string) (vtxos, []domain.Transaction, error) {
-	var data struct {
-		BoardingTxs []struct {
-			BoardingTxid string        `json:"boardingTxid"`
-			RoundTxid    string        `json:"roundTxid"`
-			Amount       uint64        `json:"amount"`
-			Type         domain.TxType `json:"txType"`
-			Pending      bool          `json:"pending"`
-			Claimed      bool          `json:"claimed"`
-			CreatedAt    string        `json:"createdAt"`
-		} `json:"boardingTxs"`
-=======
 func loadFixtures(jsonStr string) (vtxos, map[string]struct{}, error) {
 	var data struct {
 		IgnoreTxs      []string `json:"ignoreTxs"`
->>>>>>> master
 		SpendableVtxos []struct {
 			Outpoint struct {
 				Txid string `json:"txid"`
@@ -365,25 +281,6 @@ func loadFixtures(jsonStr string) (vtxos, map[string]struct{}, error) {
 		}
 	}
 
-<<<<<<< HEAD
-	boardingTxs := make([]domain.Transaction, len(data.BoardingTxs))
-	for i, tx := range data.BoardingTxs {
-		createdAt, err := parseTimestamp(tx.CreatedAt)
-		if err != nil {
-			return vtxos{}, nil, err
-		}
-		boardingTxs[i] = domain.Transaction{
-			BoardingTxid: tx.BoardingTxid,
-			RoundTxid:    tx.RoundTxid,
-			Amount:       tx.Amount,
-			Type:         domain.TxReceived,
-			IsPending:    tx.Pending,
-			CreatedAt:    createdAt,
-		}
-	}
-
-=======
->>>>>>> master
 	vtxos := vtxos{
 		spendable: spendable,
 		spent:     spent,

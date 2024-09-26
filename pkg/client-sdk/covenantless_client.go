@@ -762,10 +762,11 @@ func (a *covenantlessArkClient) Claim(ctx context.Context) (string, error) {
 }
 
 func (a *covenantlessArkClient) GetTransactionEventChannel() chan domain.Transaction {
+	a.listenToVtxoChan()
 	return a.sdkRepository.AppDataRepository().TransactionRepository().GetEventChannel()
 }
 
-func (a *covenantlessArkClient) ListenToVtxoChan() error {
+func (a *covenantlessArkClient) listenToVtxoChan() {
 	var wg sync.WaitGroup
 	a.listeningToVtxo = true
 	go func(ctx context.Context) {
@@ -784,13 +785,18 @@ func (a *covenantlessArkClient) ListenToVtxoChan() error {
 				return
 			}
 
-			allBoardingTxs, ignoreVtxos, err := a.getBoardingTxs(ct)
+			boardingTxs, ignoreVtxos, err := a.getBoardingTxs(ct)
+			if err != nil {
+				log.Errorf("failed to get boarding txs: %s", err)
+				return
+			}
 
 			if err := a.processVtxosAndTxs(
 				ct,
 				allSpendableVtxos,
 				allSpentVtxos,
-				allBoardingTxs,
+				boardingTxs,
+				ignoreVtxos,
 			); err != nil {
 				log.Errorf("failed to process vtxos: %s", err)
 				return
@@ -816,49 +822,53 @@ func (a *covenantlessArkClient) ListenToVtxoChan() error {
 			}
 		}
 	}(a.ctxListenVtxo)
-
-	return nil
 }
 
 func (a *covenantlessArkClient) processVtxosAndTxs(
 	ctx context.Context,
 	allSpendableVtxos,
 	allSpentVtxos []client.Vtxo,
-	allBoardingTxs []domain.Transaction,
+	boardingTxs []domain.Transaction,
+	ignoreVtxos map[string]struct{},
 ) error {
-	if err := a.processBoardingTxs(ctx, allBoardingTxs); err != nil {
+	if err := a.processBoardingTxs(ctx, boardingTxs); err != nil {
 		return fmt.Errorf("failed to process txs: %s", err)
 	}
 
-	return a.processVtxos(ctx, allSpendableVtxos, allSpentVtxos, allBoardingTxs)
+	return a.processVtxos(ctx, allSpendableVtxos, allSpentVtxos, ignoreVtxos)
 }
 
 func (a *covenantlessArkClient) processVtxos(
 	ctx context.Context,
 	allSpendableVtxos,
 	allSpentVtxos []client.Vtxo,
-	allBoardingTxs []domain.Transaction,
+	ignoreVtxos map[string]struct{},
 ) error {
 	allTxs, err := vtxosToTxsCovenantless(
 		a.ConfigData.RoundInterval,
 		allSpendableVtxos,
 		allSpentVtxos,
+		ignoreVtxos,
 	)
 	if err != nil {
 		return err
 	}
-	if len(allBoardingTxs) == 0 {
+
+	oldTxs, err := a.sdkRepository.AppDataRepository().TransactionRepository().GetAll(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get old transactions: %s", err)
+	}
+
+	if len(oldTxs) == 0 {
 		if err := a.sdkRepository.AppDataRepository().TransactionRepository().
 			InsertTransactions(ctx, allTxs); err != nil {
 			return fmt.Errorf("failed to insert txs: %s", err)
 		}
 	} else {
-		oldTxs, err := a.sdkRepository.AppDataRepository().TransactionRepository().GetAll(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get old transactions: %s", err)
-		}
-
 		newTxs, err := findNewTxs(oldTxs, allTxs)
+		if err != nil {
+			return fmt.Errorf("failed to find new txs: %s", err)
+		}
 		if err := a.sdkRepository.AppDataRepository().TransactionRepository().
 			InsertTransactions(ctx, newTxs); err != nil {
 			return fmt.Errorf("failed to insert txs: %s", err)
@@ -2199,7 +2209,7 @@ func (a *covenantlessArkClient) offchainAddressToDefaultVtxoDescriptor(addr stri
 // offchain tx history and prevent duplicates.
 func (a *covenantlessArkClient) getBoardingTxs(
 	ctx context.Context,
-) ([]Transaction, map[string]struct{}, error) {
+) ([]domain.Transaction, map[string]struct{}, error) {
 	utxos, err := a.getClaimableBoardingUtxos(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -2215,18 +2225,18 @@ func (a *covenantlessArkClient) getBoardingTxs(
 		return nil, nil, err
 	}
 
-	unconfirmedTxs := make([]Transaction, 0)
-	confirmedTxs := make([]Transaction, 0)
+	unconfirmedTxs := make([]domain.Transaction, 0)
+	confirmedTxs := make([]domain.Transaction, 0)
 	for _, u := range allUtxos {
 		pending := false
 		if isPending[u.Txid] {
 			pending = true
 		}
 
-		tx := Transaction{
+		tx := domain.Transaction{
 			BoardingTxid: u.Txid,
 			Amount:       u.Amount,
-			Type:         TxReceived,
+			Type:         domain.TxReceived,
 			IsPending:    pending,
 			CreatedAt:    u.CreatedAt,
 		}

@@ -31,7 +31,6 @@ type ArkClient interface {
 	GetTransactionHistory(ctx context.Context) ([]domain.Transaction, error)
 	GetTransactionEventChannel() chan domain.Transaction
 	Close() error
-	ListenToVtxoChan() error
 }
 
 type Receiver interface {

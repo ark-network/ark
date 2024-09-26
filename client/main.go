@@ -7,17 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"syscall"
 
 	"github.com/ark-network/ark/common"
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
 	"github.com/ark-network/ark/pkg/client-sdk/store"
-<<<<<<< HEAD
 	"github.com/ark-network/ark/pkg/client-sdk/store/domain"
-=======
-	filestore "github.com/ark-network/ark/pkg/client-sdk/store/file"
 	"github.com/btcsuite/btcd/btcutil/psbt"
->>>>>>> master
 	"github.com/urfave/cli/v2"
 	"golang.org/x/term"
 )

@@ -585,10 +585,11 @@ func (a *covenantArkClient) Claim(ctx context.Context) (string, error) {
 }
 
 func (a *covenantArkClient) GetTransactionEventChannel() chan domain.Transaction {
+	a.listenToVtxoChan()
 	return a.sdkRepository.AppDataRepository().TransactionRepository().GetEventChannel()
 }
 
-func (a *covenantArkClient) ListenToVtxoChan() error {
+func (a *covenantArkClient) listenToVtxoChan() {
 	a.listeningToVtxo = true
 	var wg sync.WaitGroup
 
@@ -640,8 +641,6 @@ func (a *covenantArkClient) ListenToVtxoChan() error {
 			}
 		}
 	}(a.ctxListenVtxo)
-
-	return nil
 }
 
 func (a *covenantArkClient) processVtxosAndTxs(
