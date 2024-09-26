@@ -42,7 +42,7 @@ func main() {
 		&sendCommand,
 		&balanceCommand,
 		&redeemCommand,
-		$trasactionCommand,
+		&transactionCommand,
 	)
 	app.Flags = []cli.Flag{
 		datadirFlag,
