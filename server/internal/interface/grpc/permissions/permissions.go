@@ -109,15 +109,15 @@ func Whitelist() map[string][]bakery.Op {
 			Entity: EntityWallet,
 			Action: "read",
 		}},
-		fmt.Sprintf("/%s/RegisterPayment", arkv1.ArkService_ServiceDesc.ServiceName): {{
+		fmt.Sprintf("/%s/RegisterInputsForNextRound", arkv1.ArkService_ServiceDesc.ServiceName): {{
 			Entity: EntityArk,
 			Action: "write",
 		}},
-		fmt.Sprintf("/%s/ClaimPayment", arkv1.ArkService_ServiceDesc.ServiceName): {{
+		fmt.Sprintf("/%s/RegisterOutputsForNextRound", arkv1.ArkService_ServiceDesc.ServiceName): {{
 			Entity: EntityArk,
 			Action: "write",
 		}},
-		fmt.Sprintf("/%s/FinalizePayment", arkv1.ArkService_ServiceDesc.ServiceName): {{
+		fmt.Sprintf("/%s/SubmitSignedForfeitTxs", arkv1.ArkService_ServiceDesc.ServiceName): {{
 			Entity: EntityArk,
 			Action: "write",
 		}},
@@ -161,11 +161,11 @@ func Whitelist() map[string][]bakery.Op {
 			Entity: EntityArk,
 			Action: "read",
 		}},
-		fmt.Sprintf("/%s/SendTreeNonces", arkv1.ArkService_ServiceDesc.ServiceName): {{
+		fmt.Sprintf("/%s/SubmitTreeNonces", arkv1.ArkService_ServiceDesc.ServiceName): {{
 			Entity: EntityArk,
 			Action: "write",
 		}},
-		fmt.Sprintf("/%s/SendTreeSignatures", arkv1.ArkService_ServiceDesc.ServiceName): {{
+		fmt.Sprintf("/%s/SubmitTreeSignatures", arkv1.ArkService_ServiceDesc.ServiceName): {{
 			Entity: EntityArk,
 			Action: "write",
 		}},
