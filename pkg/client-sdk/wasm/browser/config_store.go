@@ -39,7 +39,7 @@ type localStorageStore struct {
 	store js.Value
 }
 
-func NewLocalStorageStore() (store.ConfigStore, error) {
+func NewLocalStorageStore() (db.ConfigStore, error) {
 	store := js.Global().Get("localStorage")
 	return &localStorageStore{store}, nil
 }
@@ -52,7 +52,7 @@ func (s *localStorageStore) GetDatadir() string {
 	return ""
 }
 
-func (s *localStorageStore) AddData(ctx context.Context, data store.StoreData) error {
+func (s *localStorageStore) AddData(ctx context.Context, data db.ConfigData) error {
 	sd := &storeData{
 		AspUrl:                     data.AspUrl,
 		AspPubkey:                  hex.EncodeToString(data.AspPubkey.SerializeCompressed()),
@@ -70,7 +70,7 @@ func (s *localStorageStore) AddData(ctx context.Context, data store.StoreData) e
 	return s.writeData(sd)
 }
 
-func (s *localStorageStore) GetData(ctx context.Context) (*store.StoreData, error) {
+func (s *localStorageStore) GetData(ctx context.Context) (*db.ConfigData, error) {
 	key := s.store.Call("getItem", "asp_pubkey")
 	if key.IsNull() || key.IsUndefined() {
 		return nil, nil

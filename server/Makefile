@@ -108,7 +108,7 @@ mig_down_yes:
 	@"yes" | migrate -database "sqlite://path/to/database" -path ./internal/infrastructure/db/sqlite/migration/ down
 
 ## vet_db: check if mig_up and mig_down are ok
-vet_db: recreatedb mig_up mig_down_yes
+vet_db: mig_up mig_down_yes
 	@echo "vet db migration scripts..."
 
 ## sqlc: gen sql

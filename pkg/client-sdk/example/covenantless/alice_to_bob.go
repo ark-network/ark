@@ -9,8 +9,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ark-network/ark/common"
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
-	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
+	"github.com/ark-network/ark/pkg/client-sdk/store"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -142,11 +143,13 @@ func main() {
 }
 
 func setupArkClient() (arksdk.ArkClient, error) {
-	storeSvc, err := inmemorystore.NewConfigStore()
-	if err != nil {
-		return nil, fmt.Errorf("failed to setup store: %s", err)
-	}
-	client, err := arksdk.NewCovenantlessClient(storeSvc)
+	dbDir := common.AppDataDir("ark-example", false)
+	appDataStore, err := store.NewService(store.Config{
+		ConfigStoreType:  store.FileStore,
+		AppDataStoreType: store.Badger,
+		BaseDir:          dbDir,
+	})
+	client, err := arksdk.NewCovenantlessClient(appDataStore)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup ark client: %s", err)
 	}
