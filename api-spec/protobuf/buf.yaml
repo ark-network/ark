@@ -8,5 +8,5 @@ breaking:
   ignore_unstable_packages: true
 lint:
   use:
-    - DEFAULT
+    - STANDARD
   
