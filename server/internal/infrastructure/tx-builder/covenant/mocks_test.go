@@ -270,6 +270,16 @@ func (m *mockedWallet) MinRelayFeeRate(ctx context.Context) chainfee.SatPerKVByt
 	return res
 }
 
+func (m *mockedWallet) GetForfeitAddress(ctx context.Context) (string, error) {
+	args := m.Called(ctx)
+
+	var res string
+	if a := args.Get(0); a != nil {
+		res = a.(string)
+	}
+	return res, args.Error(1)
+}
+
 type mockedInput struct {
 	mock.Mock
 }

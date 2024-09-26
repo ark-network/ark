@@ -1,9 +1,7 @@
 package tree
 
 import (
-	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/txscript"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/elementsutil"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/transaction"
@@ -15,8 +13,8 @@ func BuildForfeitTxs(
 	vtxoAmount,
 	connectorAmount,
 	feeAmount uint64,
-	vtxoScript []byte,
-	aspPubKey *secp256k1.PublicKey,
+	vtxoScript,
+	aspScript []byte,
 ) (forfeitTxs []*psetv2.Pset, err error) {
 	connectors, prevouts := getConnectorInputs(connectorTx, connectorAmount)
 
@@ -58,11 +56,6 @@ func BuildForfeitTxs(
 		}
 
 		if err := updater.AddInSighashType(1, txscript.SigHashDefault); err != nil {
-			return nil, err
-		}
-
-		aspScript, err := common.P2TRScript(aspPubKey)
-		if err != nil {
 			return nil, err
 		}
 

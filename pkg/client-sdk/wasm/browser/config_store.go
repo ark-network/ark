@@ -21,16 +21,18 @@ const (
 )
 
 type storeData struct {
-	AspUrl              string `json:"asp_url"`
-	AspPubkey           string `json:"asp_pubkey"`
-	WalletType          string `json:"wallet_type"`
-	ClientType          string `json:"client_type"`
-	ExplorerURL         string `json:"explorer_url"`
-	Network             string `json:"network"`
-	RoundLifetime       string `json:"round_lifetime"`
-	RoundInterval       string `json:"round_interval"`
-	UnilateralExitDelay string `json:"unilateral_exit_delay"`
-	Dust                string `json:"dust"`
+	AspUrl                     string `json:"asp_url"`
+	AspPubkey                  string `json:"asp_pubkey"`
+	WalletType                 string `json:"wallet_type"`
+	ClientType                 string `json:"client_type"`
+	ExplorerURL                string `json:"explorer_url"`
+	Network                    string `json:"network"`
+	RoundLifetime              string `json:"round_lifetime"`
+	RoundInterval              string `json:"round_interval"`
+	UnilateralExitDelay        string `json:"unilateral_exit_delay"`
+	Dust                       string `json:"dust"`
+	ForfeitAddress             string `json:"forfeit_address"`
+	BoardingDescriptorTemplate string `json:"boarding_descriptor_template"`
 }
 
 type localStorageStore struct {
@@ -52,15 +54,18 @@ func (s *localStorageStore) GetDatadir() string {
 
 func (s *localStorageStore) AddData(ctx context.Context, data store.StoreData) error {
 	sd := &storeData{
-		AspUrl:              data.AspUrl,
-		AspPubkey:           hex.EncodeToString(data.AspPubkey.SerializeCompressed()),
-		WalletType:          data.WalletType,
-		ClientType:          data.ClientType,
-		Network:             data.Network.Name,
-		RoundLifetime:       fmt.Sprintf("%d", data.RoundLifetime),
-		RoundInterval:       fmt.Sprintf("%d", data.RoundInterval),
-		UnilateralExitDelay: fmt.Sprintf("%d", data.UnilateralExitDelay),
-		Dust:                fmt.Sprintf("%d", data.Dust),
+		AspUrl:                     data.AspUrl,
+		AspPubkey:                  hex.EncodeToString(data.AspPubkey.SerializeCompressed()),
+		WalletType:                 data.WalletType,
+		ClientType:                 data.ClientType,
+		Network:                    data.Network.Name,
+		RoundLifetime:              fmt.Sprintf("%d", data.RoundLifetime),
+		RoundInterval:              fmt.Sprintf("%d", data.RoundInterval),
+		UnilateralExitDelay:        fmt.Sprintf("%d", data.UnilateralExitDelay),
+		Dust:                       fmt.Sprintf("%d", data.Dust),
+		ExplorerURL:                data.ExplorerURL,
+		ForfeitAddress:             data.ForfeitAddress,
+		BoardingDescriptorTemplate: data.BoardingDescriptorTemplate,
 	}
 	return s.writeData(sd)
 }
@@ -89,15 +94,18 @@ func (s *localStorageStore) GetData(ctx context.Context) (*store.StoreData, erro
 	dust, _ := strconv.Atoi(s.store.Call("getItem", "min_relay_fee").String())
 
 	return &store.StoreData{
-		AspUrl:              s.store.Call("getItem", "asp_url").String(),
-		AspPubkey:           aspPubkey,
-		WalletType:          s.store.Call("getItem", "wallet_type").String(),
-		ClientType:          s.store.Call("getItem", "client_type").String(),
-		Network:             network,
-		RoundLifetime:       int64(roundLifetime),
-		RoundInterval:       int64(roundInterval),
-		UnilateralExitDelay: int64(unilateralExitDelay),
-		Dust:                uint64(dust),
+		AspUrl:                     s.store.Call("getItem", "asp_url").String(),
+		AspPubkey:                  aspPubkey,
+		WalletType:                 s.store.Call("getItem", "wallet_type").String(),
+		ClientType:                 s.store.Call("getItem", "client_type").String(),
+		Network:                    network,
+		RoundLifetime:              int64(roundLifetime),
+		RoundInterval:              int64(roundInterval),
+		UnilateralExitDelay:        int64(unilateralExitDelay),
+		Dust:                       uint64(dust),
+		ExplorerURL:                s.store.Call("getItem", "explorer_url").String(),
+		ForfeitAddress:             s.store.Call("getItem", "forfeit_address").String(),
+		BoardingDescriptorTemplate: s.store.Call("getItem", "boarding_descriptor_template").String(),
 	}, nil
 }
 

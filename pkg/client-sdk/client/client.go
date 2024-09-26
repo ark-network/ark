@@ -61,6 +61,7 @@ type Info struct {
 	Network                    string
 	Dust                       uint64
 	BoardingDescriptorTemplate string
+	ForfeitAddress             string
 }
 
 type RoundEventChannel struct {

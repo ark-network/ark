@@ -366,6 +366,11 @@ func (s *covenantService) GetInfo(ctx context.Context) (*ServiceInfo, error) {
 		return nil, err
 	}
 
+	forfeitAddress, err := s.wallet.GetForfeitAddress(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	return &ServiceInfo{
 		PubKey:              pubkey,
 		RoundLifetime:       s.roundLifetime,
@@ -381,6 +386,7 @@ func (s *covenantService) GetInfo(ctx context.Context) (*ServiceInfo, error) {
 			s.boardingExitDelay,
 			"USER",
 		),
+		ForfeitAddress: forfeitAddress,
 	}, nil
 }
 
@@ -500,7 +506,7 @@ func (s *covenantService) startFinalization() {
 	minRelayFeeRate := s.wallet.MinRelayFeeRate(ctx)
 
 	if needForfeits {
-		connectors, forfeitTxs, err = s.builder.BuildForfeitTxs(s.pubkey, unsignedPoolTx, payments, minRelayFeeRate)
+		connectors, forfeitTxs, err = s.builder.BuildForfeitTxs(unsignedPoolTx, payments, minRelayFeeRate)
 		if err != nil {
 			round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
 			log.WithError(err).Warn("failed to create connectors and forfeit txs")

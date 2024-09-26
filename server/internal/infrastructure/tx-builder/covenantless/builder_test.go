@@ -22,6 +22,7 @@ import (
 const (
 	testingKey        = "020000000000000000000000000000000000000000000000000000000000000001"
 	connectorAddress  = "bc1py00yhcjpcj0k0sqra0etq0u3yy0purmspppsw0shyzyfe8c83tmq5h6kc2"
+	forfeitAddress    = "bc1py00yhcjpcj0k0sqra0etq0u3yy0purmspppsw0shyzyfe8c83tmq5h6kc2"
 	changeAddress     = "bcrt1qhhq55mut9easvrncy4se8q6vg3crlug7yj4j56"
 	roundLifetime     = int64(1209344)
 	boardingExitDelay = int64(512)
@@ -47,6 +48,8 @@ func TestMain(m *testing.M) {
 		Return(uint64(30), nil)
 	wallet.On("GetDustAmount", mock.Anything).
 		Return(uint64(1000), nil)
+	wallet.On("GetForfeitAddress", mock.Anything).
+		Return(forfeitAddress, nil)
 
 	pubkeyBytes, _ := hex.DecodeString(testingKey)
 	pubkey, _ = secp256k1.ParsePubKey(pubkeyBytes)
@@ -120,7 +123,7 @@ func TestBuildForfeitTxs(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
 			for _, f := range fixtures.Valid {
 				connectors, forfeitTxs, err := builder.BuildForfeitTxs(
-					pubkey, f.PoolTx, f.Payments, minRelayFeeRate,
+					f.PoolTx, f.Payments, minRelayFeeRate,
 				)
 				require.NoError(t, err)
 				require.Len(t, connectors, f.ExpectedNumOfConnectors)
@@ -158,7 +161,7 @@ func TestBuildForfeitTxs(t *testing.T) {
 		t.Run("invalid", func(t *testing.T) {
 			for _, f := range fixtures.Invalid {
 				connectors, forfeitTxs, err := builder.BuildForfeitTxs(
-					pubkey, f.PoolTx, f.Payments, minRelayFeeRate,
+					f.PoolTx, f.Payments, minRelayFeeRate,
 				)
 				require.EqualError(t, err, f.ExpectedErr)
 				require.Empty(t, connectors)

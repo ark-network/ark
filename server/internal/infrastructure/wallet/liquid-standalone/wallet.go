@@ -23,6 +23,35 @@ func (s *service) GetPubkey(ctx context.Context) (*secp256k1.PublicKey, error) {
 	return key, err
 }
 
+func (s *service) GetForfeitAddress(ctx context.Context) (string, error) {
+	response, err := s.accountClient.ListAddresses(ctx, &pb.ListAddressesRequest{
+		AccountName: arkAccount,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	addrs := response.GetAddresses()
+	if len(addrs) == 0 {
+		response, err := s.accountClient.DeriveAddresses(ctx, &pb.DeriveAddressesRequest{
+			AccountName:    arkAccount,
+			NumOfAddresses: 1,
+		})
+		if err != nil {
+			return "", err
+		}
+
+		addrs = response.GetAddresses()
+		if len(addrs) == 0 {
+			return "", fmt.Errorf("no addresses found")
+		}
+
+		return addrs[0], nil
+	}
+
+	return addrs[0], nil
+}
+
 func (s *service) Status(
 	ctx context.Context,
 ) (ports.WalletStatus, error) {
