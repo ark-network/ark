@@ -2209,47 +2209,5 @@ func vtxosToTxsCovenantless(
 		transactions = append(transactions, tx)
 	}
 
-	// for _, v := range append(spendable, spent...) {
-	// 	// get vtxo amount
-	// 	amount := int(v.Amount)
-	// 	// ignore not pending
-	// 	if !v.Pending {
-	// 		continue
-	// 	}
-	// 	// find other spent vtxos that spent this one
-	// 	relatedVtxos := findVtxosBySpentBy(spent, v.Txid)
-	// 	for _, r := range relatedVtxos {
-	// 		if r.Amount < math.MaxInt64 {
-	// 			rAmount := int(r.Amount)
-	// 			amount -= rAmount
-	// 		}
-	// 	}
-	// 	// what kind of tx was this? send or receive?
-	// 	txType := TxReceived
-	// 	if amount < 0 {
-	// 		txType = TxSent
-	// 	}
-
-	// 	// get redeem txid
-	// 	redeemTxid := ""
-	// 	if len(v.RedeemTx) > 0 {
-	// 		txid, err := getRedeemTxidCovenantless(v.RedeemTx)
-	// 		if err != nil {
-	// 			return nil, err
-	// 		}
-	// 		redeemTxid = txid
-	// 	}
-	// 	// add transaction
-	// 	transactions = append(transactions, Transaction{
-	// 		RoundTxid:       v.RoundTxid,
-	// 		RedeemTxid:      redeemTxid,
-	// 		Amount:          uint64(math.Abs(float64(amount))),
-	// 		Type:            txType,
-	// 		IsPending:       (v.Pending && len(v.SpentBy) == 0),
-	// 		IsPendingChange: v.PendingChange,
-	// 		CreatedAt:       getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
-	// 	})
-	// }
-
 	return transactions, nil
 }
