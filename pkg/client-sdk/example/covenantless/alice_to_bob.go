@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"path"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/ark-network/ark/common"
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
-	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
+	"github.com/ark-network/ark/pkg/client-sdk/store"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -26,10 +28,12 @@ func main() {
 
 	log.Info("alice is setting up her ark wallet...")
 
-	aliceArkClient, err := setupArkClient()
+	aliceArkClient, err := setupArkClient("alice")
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer aliceArkClient.Close()
+	logTxEvents("alice", aliceArkClient)
 
 	if err := aliceArkClient.Unlock(ctx, password); err != nil {
 		log.Fatal(err)
@@ -70,10 +74,12 @@ func main() {
 
 	fmt.Println("")
 	log.Info("bob is setting up his ark wallet...")
-	bobArkClient, err := setupArkClient()
+	bobArkClient, err := setupArkClient("bob")
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer bobArkClient.Close()
+	logTxEvents("bob", bobArkClient)
 
 	if err := bobArkClient.Unlock(ctx, password); err != nil {
 		log.Fatal(err)
@@ -138,15 +144,19 @@ func main() {
 		log.Fatal(err)
 	}
 
+	time.Sleep(5 * time.Second)
+
 	log.Infof("bob claimed the incoming payment in round %s", roundTxid)
 }
 
-func setupArkClient() (arksdk.ArkClient, error) {
-	storeSvc, err := inmemorystore.NewConfigStore()
-	if err != nil {
-		return nil, fmt.Errorf("failed to setup store: %s", err)
-	}
-	client, err := arksdk.NewCovenantlessClient(storeSvc)
+func setupArkClient(wallet string) (arksdk.ArkClient, error) {
+	dbDir := common.AppDataDir(path.Join("ark-example", wallet), false)
+	appDataStore, err := store.NewService(store.Config{
+		ConfigStoreType:  store.FileStore,
+		AppDataStoreType: store.Badger,
+		BaseDir:          dbDir,
+	})
+	client, err := arksdk.NewCovenantlessClient(appDataStore)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup ark client: %s", err)
 	}
@@ -232,4 +242,18 @@ func generateBlock() error {
 
 	time.Sleep(6 * time.Second)
 	return nil
+}
+
+func logTxEvents(wallet string, client arksdk.ArkClient) {
+	txsChan := client.GetTransactionEventChannel()
+	go func() {
+		for txEvent := range txsChan {
+			msg := fmt.Sprintf("[EVENT]%s: tx event: %s, %d", wallet, txEvent.Event, txEvent.Tx.Amount)
+			if txEvent.Tx.IsBoarding() {
+				msg += fmt.Sprintf(", boarding tx: %s", txEvent.Tx.BoardingTxid)
+			}
+			log.Infoln(msg)
+		}
+	}()
+	log.Infof("%s tx event listener started", wallet)
 }

@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -18,7 +17,7 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/ark-network/ark/pkg/client-sdk/redemption"
-	"github.com/ark-network/ark/pkg/client-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/store/domain"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
@@ -57,8 +56,10 @@ type covenantlessArkClient struct {
 	*arkClient
 }
 
-func NewCovenantlessClient(storeSvc store.ConfigStore) (ArkClient, error) {
-	data, err := storeSvc.GetData(context.Background())
+func NewCovenantlessClient(
+	sdkRepository domain.SdkRepository,
+) (ArkClient, error) {
+	data, err := sdkRepository.ConfigRepository().GetData(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -66,15 +67,23 @@ func NewCovenantlessClient(storeSvc store.ConfigStore) (ArkClient, error) {
 		return nil, ErrAlreadyInitialized
 	}
 
-	return &covenantlessArkClient{&arkClient{store: storeSvc}}, nil
-}
-
-func LoadCovenantlessClient(storeSvc store.ConfigStore) (ArkClient, error) {
-	if storeSvc == nil {
-		return nil, fmt.Errorf("missin store service")
+	cvnt := &covenantlessArkClient{
+		arkClient: &arkClient{
+			sdkRepository: sdkRepository,
+		},
 	}
 
-	data, err := storeSvc.GetData(context.Background())
+	return cvnt, nil
+}
+
+func LoadCovenantlessClient(
+	sdkRepository domain.SdkRepository,
+) (ArkClient, error) {
+	if sdkRepository == nil {
+		return nil, fmt.Errorf("missing sdk repository")
+	}
+
+	data, err := sdkRepository.ConfigRepository().GetData(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -94,27 +103,36 @@ func LoadCovenantlessClient(storeSvc store.ConfigStore) (ArkClient, error) {
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
 
-	walletSvc, err := getWallet(storeSvc, data, supportedWallets)
+	walletSvc, err := getWallet(sdkRepository.ConfigRepository(), data, supportedWallets)
 	if err != nil {
 		return nil, fmt.Errorf("faile to setup wallet: %s", err)
 	}
 
-	return &covenantlessArkClient{
-		&arkClient{data, walletSvc, storeSvc, explorerSvc, clientSvc},
-	}, nil
+	cvnt := &covenantlessArkClient{
+		&arkClient{
+			ConfigData:    data,
+			wallet:        walletSvc,
+			sdkRepository: sdkRepository,
+			explorer:      explorerSvc,
+			client:        clientSvc,
+		},
+	}
+
+	return cvnt, nil
 }
 
 func LoadCovenantlessClientWithWallet(
-	storeSvc store.ConfigStore, walletSvc wallet.WalletService,
+	sdkRepository domain.SdkRepository,
+	walletSvc wallet.WalletService,
 ) (ArkClient, error) {
-	if storeSvc == nil {
-		return nil, fmt.Errorf("missin store service")
+	if sdkRepository == nil {
+		return nil, fmt.Errorf("missin sdk repository")
 	}
 	if walletSvc == nil {
 		return nil, fmt.Errorf("missin wallet service")
 	}
 
-	data, err := storeSvc.GetData(context.Background())
+	data, err := sdkRepository.ConfigRepository().GetData(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -134,9 +152,17 @@ func LoadCovenantlessClientWithWallet(
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
 
-	return &covenantlessArkClient{
-		&arkClient{data, walletSvc, storeSvc, explorerSvc, clientSvc},
-	}, nil
+	cvnt := &covenantlessArkClient{
+		&arkClient{
+			ConfigData:    data,
+			wallet:        walletSvc,
+			sdkRepository: sdkRepository,
+			explorer:      explorerSvc,
+			client:        clientSvc,
+		},
+	}
+
+	return cvnt, nil
 }
 
 func (a *covenantlessArkClient) ListVtxos(
@@ -521,7 +547,7 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 		return "", err
 	}
 
-	paymentID, err := a.client.RegisterInputsForNextRound(
+	paymentID, err := a.client.RegisterPayment(
 		ctx,
 		inputs,
 		hex.EncodeToString(roundEphemeralKey.PubKey().SerializeCompressed()),
@@ -530,7 +556,7 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 		return "", err
 	}
 
-	if err := a.client.RegisterOutputsForNextRound(ctx, paymentID, receivers); err != nil {
+	if err := a.client.ClaimPayment(ctx, paymentID, receivers); err != nil {
 		return "", err
 	}
 
@@ -726,40 +752,194 @@ func (a *covenantlessArkClient) Claim(ctx context.Context) (string, error) {
 	)
 }
 
-func (a *covenantlessArkClient) GetTransactionHistory(ctx context.Context) ([]Transaction, error) {
-	if a.StoreData == nil {
-		return nil, fmt.Errorf("client not initialized")
+func (a *covenantlessArkClient) GetTransactionHistory(
+	ctx context.Context,
+) ([]domain.Transaction, error) {
+	if a.listeningToVtxo {
+		return a.sdkRepository.AppDataRepository().TransactionRepository().GetAll(ctx)
 	}
 
-	spendableVtxos, spentVtxos, err := a.ListVtxos(ctx)
+	allSpendableVtxos, allSpentVtxos, err := a.ListVtxos(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to list vtxos: %s", err)
+
 	}
 
-	boardingTxs, ignoreVtxos, err := a.getBoardingTxs(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	offchainTxs, err := vtxosToTxsCovenantless(
-		a.StoreData.RoundLifetime, spendableVtxos, spentVtxos, ignoreVtxos,
+	txs, err := vtxosToTxsCovenantless(
+		a.ConfigData.RoundInterval,
+		allSpendableVtxos,
+		allSpentVtxos,
+		nil,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to convert vtxos to txs: %s", err)
 	}
 
-	txs := append(boardingTxs, offchainTxs...)
-	// Sort the slice by age
-	sort.Slice(txs, func(i, j int) bool {
-		txi := txs[i]
-		txj := txs[j]
-		if txi.CreatedAt.Equal(txj.CreatedAt) {
-			return txi.Type > txj.Type
+	if len(txs) == 0 {
+		allBoardingTxs, _, err := a.getBoardingTxs(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get boarding txs: %s", err)
 		}
-		return txi.CreatedAt.After(txj.CreatedAt)
-	})
+
+		return allBoardingTxs, nil
+	}
 
 	return txs, nil
+}
+
+func (a *covenantlessArkClient) GetTransactionEventChannel() chan domain.TransactionEvent {
+	ctxListenVtxo, ctxCancelListenVtxo := context.WithCancel(context.Background())
+	a.ctxListenVtxo = ctxListenVtxo
+	a.ctxCancelListenVtxo = ctxCancelListenVtxo
+	a.listenToVtxoChan()
+	return a.sdkRepository.AppDataRepository().TransactionRepository().GetEventChannel()
+}
+
+func (a *covenantlessArkClient) listenToVtxoChan() {
+	var wg sync.WaitGroup
+	a.listeningToVtxo = true
+	go func(ctx context.Context) {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+
+		performAction := func() {
+			wg.Add(1)
+			defer wg.Done()
+			// Use a context that won't be canceled prematurely by arkClient ctx
+			ct := context.Background()
+
+			allSpendableVtxos, allSpentVtxos, err := a.ListVtxos(ct)
+			if err != nil {
+				log.Errorf("failed to list vtxos: %s", err)
+				return
+			}
+
+			boardingTxs, ignoreVtxos, err := a.getBoardingTxs(ct)
+			if err != nil {
+				log.Errorf("failed to get boarding txs: %s", err)
+				return
+			}
+
+			if err := a.processVtxosAndTxs(
+				ct,
+				allSpendableVtxos,
+				allSpentVtxos,
+				boardingTxs,
+				ignoreVtxos,
+			); err != nil {
+				log.Errorf("failed to process vtxos: %s", err)
+				return
+			}
+		}
+
+		// initial action
+		performAction()
+
+		for {
+			if !a.sdkInitialized {
+				continue
+			}
+
+			select {
+			case <-ctx.Done():
+				log.Info("stopping listening to vtxos")
+				wg.Wait()
+				return
+			case <-ticker.C:
+				performAction()
+			}
+		}
+	}(a.ctxListenVtxo)
+}
+
+func (a *covenantlessArkClient) processVtxosAndTxs(
+	ctx context.Context,
+	allSpendableVtxos,
+	allSpentVtxos []client.Vtxo,
+	boardingTxs []domain.Transaction,
+	ignoreVtxos map[string]struct{},
+) error {
+	if err := a.processBoardingTxs(ctx, boardingTxs); err != nil {
+		return fmt.Errorf("failed to process txs: %s", err)
+	}
+
+	return a.processVtxos(ctx, allSpendableVtxos, allSpentVtxos, ignoreVtxos)
+}
+
+func (a *covenantlessArkClient) processVtxos(
+	ctx context.Context,
+	allSpendableVtxos,
+	allSpentVtxos []client.Vtxo,
+	ignoreVtxos map[string]struct{},
+) error {
+	allTxs, err := vtxosToTxsCovenantless(
+		a.ConfigData.RoundInterval,
+		allSpendableVtxos,
+		allSpentVtxos,
+		ignoreVtxos,
+	)
+	if err != nil {
+		return err
+	}
+
+	oldTxs, err := a.sdkRepository.AppDataRepository().TransactionRepository().GetAll(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get old transactions: %s", err)
+	}
+
+	if len(oldTxs) == 0 {
+		if err := a.sdkRepository.AppDataRepository().TransactionRepository().
+			InsertTransactions(ctx, allTxs); err != nil {
+			return fmt.Errorf("failed to insert txs: %s", err)
+		}
+	} else {
+		newTxs, toBeUpdated, err := findNewAndUpdateOldTxs(oldTxs, allTxs)
+		if err != nil {
+			return fmt.Errorf("failed to find new txs: %s", err)
+		}
+		if err := a.sdkRepository.AppDataRepository().TransactionRepository().
+			InsertTransactions(ctx, newTxs); err != nil {
+			return fmt.Errorf("failed to insert txs: %s", err)
+		}
+
+		if err := a.sdkRepository.AppDataRepository().TransactionRepository().
+			UpdateTransactions(ctx, toBeUpdated); err != nil {
+			return fmt.Errorf("failed to insert txs: %s", err)
+		}
+	}
+
+	return nil
+}
+
+func (a *covenantlessArkClient) processBoardingTxs(
+	ctx context.Context,
+	allBoardingTxs []domain.Transaction,
+) error {
+	oldBoardingTxs, err := a.sdkRepository.AppDataRepository().
+		TransactionRepository().GetBoardingTxs(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get boarding txs: %s", err)
+	}
+
+	if len(oldBoardingTxs) == 0 {
+		if err := a.sdkRepository.AppDataRepository().TransactionRepository().
+			InsertTransactions(ctx, allBoardingTxs); err != nil {
+			return fmt.Errorf("failed to insert boarding txs: %s", err)
+		}
+	} else {
+		newBoardingTxs, updatedOldBoardingTxs := updateBoardingTxsState(allBoardingTxs, oldBoardingTxs)
+		if err := a.sdkRepository.AppDataRepository().TransactionRepository().
+			InsertTransactions(ctx, newBoardingTxs); err != nil {
+			return fmt.Errorf("failed to insert boarding txs: %s", err)
+		}
+
+		if err := a.sdkRepository.AppDataRepository().TransactionRepository().
+			UpdateTransactions(ctx, updatedOldBoardingTxs); err != nil {
+			return fmt.Errorf("failed to update boarding txs: %s", err)
+		}
+	}
+
+	return nil
 }
 
 func (a *covenantlessArkClient) sendOnchain(
@@ -1005,14 +1185,14 @@ func (a *covenantlessArkClient) sendOffchain(
 		return "", err
 	}
 
-	paymentID, err := a.client.RegisterInputsForNextRound(
+	paymentID, err := a.client.RegisterPayment(
 		ctx, inputs, hex.EncodeToString(roundEphemeralKey.PubKey().SerializeCompressed()),
 	)
 	if err != nil {
 		return "", err
 	}
 
-	if err := a.client.RegisterOutputsForNextRound(
+	if err := a.client.ClaimPayment(
 		ctx, paymentID, receiversOutput,
 	); err != nil {
 		return "", err
@@ -1203,7 +1383,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 				}
 
 				log.Info("finalizing payment... ")
-				if err := a.client.SubmitSignedForfeitTxs(ctx, signedForfeitTxs, signedRoundTx); err != nil {
+				if err := a.client.FinalizePayment(ctx, signedForfeitTxs, signedRoundTx); err != nil {
 					return "", err
 				}
 
@@ -1255,7 +1435,7 @@ func (a *covenantlessArkClient) handleRoundSigningStarted(
 
 	myPubKey := hex.EncodeToString(ephemeralKey.PubKey().SerializeCompressed())
 
-	err = a.arkClient.client.SubmitTreeNonces(ctx, event.ID, myPubKey, nonces)
+	err = a.arkClient.client.SendTreeNonces(ctx, event.ID, myPubKey, nonces)
 
 	return
 }
@@ -1279,7 +1459,7 @@ func (a *covenantlessArkClient) handleRoundSigningNoncesGenerated(
 		return err
 	}
 
-	if err := a.arkClient.client.SubmitTreeSignatures(
+	if err := a.arkClient.client.SendTreeSignatures(
 		ctx,
 		event.ID,
 		hex.EncodeToString(ephemeralKey.PubKey().SerializeCompressed()),
@@ -1402,7 +1582,7 @@ func (a *covenantlessArkClient) validateCongestionTree(
 
 	if !utils.IsOnchainOnly(receivers) {
 		if err := bitcointree.ValidateCongestionTree(
-			event.Tree, poolTx, a.StoreData.AspPubkey, a.RoundLifetime,
+			event.Tree, poolTx, a.ConfigData.AspPubkey, a.RoundLifetime,
 		); err != nil {
 			return err
 		}
@@ -1994,7 +2174,7 @@ func (a *covenantlessArkClient) selfTransferAllPendingPayments(
 		return "", err
 	}
 
-	paymentID, err := a.client.RegisterInputsForNextRound(
+	paymentID, err := a.client.RegisterPayment(
 		ctx,
 		inputs,
 		hex.EncodeToString(roundEphemeralKey.PubKey().SerializeCompressed()),
@@ -2003,7 +2183,7 @@ func (a *covenantlessArkClient) selfTransferAllPendingPayments(
 		return "", err
 	}
 
-	if err := a.client.RegisterOutputsForNextRound(ctx, paymentID, outputs); err != nil {
+	if err := a.client.ClaimPayment(ctx, paymentID, outputs); err != nil {
 		return "", err
 	}
 
@@ -2062,7 +2242,7 @@ func (a *covenantlessArkClient) offchainAddressToDefaultVtxoDescriptor(addr stri
 // offchain tx history and prevent duplicates.
 func (a *covenantlessArkClient) getBoardingTxs(
 	ctx context.Context,
-) ([]Transaction, map[string]struct{}, error) {
+) ([]domain.Transaction, map[string]struct{}, error) {
 	utxos, err := a.getClaimableBoardingUtxos(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -2078,18 +2258,18 @@ func (a *covenantlessArkClient) getBoardingTxs(
 		return nil, nil, err
 	}
 
-	unconfirmedTxs := make([]Transaction, 0)
-	confirmedTxs := make([]Transaction, 0)
+	unconfirmedTxs := make([]domain.Transaction, 0)
+	confirmedTxs := make([]domain.Transaction, 0)
 	for _, u := range allUtxos {
 		pending := false
 		if isPending[u.Txid] {
 			pending = true
 		}
 
-		tx := Transaction{
+		tx := domain.Transaction{
 			BoardingTxid: u.Txid,
 			Amount:       u.Amount,
-			Type:         TxReceived,
+			Type:         domain.TxReceived,
 			IsPending:    pending,
 			CreatedAt:    u.CreatedAt,
 		}
@@ -2106,28 +2286,22 @@ func (a *covenantlessArkClient) getBoardingTxs(
 	return txs, ignoreVtxos, nil
 }
 
-func findVtxosBySpentBy(allVtxos []client.Vtxo, txid string) (vtxos []client.Vtxo) {
-	for _, v := range allVtxos {
-		if v.SpentBy == txid {
-			vtxos = append(vtxos, v)
-		}
-	}
-	return
-}
-
 func vtxosToTxsCovenantless(
 	roundLifetime int64, spendable, spent []client.Vtxo, ignoreVtxos map[string]struct{},
-) ([]Transaction, error) {
-	transactions := make([]Transaction, 0)
+) ([]domain.Transaction, error) {
+	transactions := make([]domain.Transaction, 0)
+	if ignoreVtxos == nil {
+		ignoreVtxos = make(map[string]struct{})
+	}
 
-	indexedTxs := make(map[string]Transaction)
+	indexedTxs := make(map[string]domain.Transaction)
 	for _, v := range spent {
 		// If the vtxo was pending and is spent => it's been claimed.
 		if v.Pending {
-			transactions = append(transactions, Transaction{
+			transactions = append(transactions, domain.Transaction{
 				RedeemTxid: v.Txid,
 				Amount:     v.Amount,
-				Type:       TxReceived,
+				Type:       domain.TxReceived,
 				IsPending:  false,
 				CreatedAt:  getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
 			})
@@ -2152,11 +2326,11 @@ func vtxosToTxsCovenantless(
 		// Add a transaction to the indexed list if not existing, it will be deleted if it's a duplicate.
 		tx, ok := indexedTxs[v.SpentBy]
 		if !ok {
-			indexedTxs[v.SpentBy] = Transaction{
+			indexedTxs[v.SpentBy] = domain.Transaction{
 				RedeemTxid: v.SpentBy,
 				RoundTxid:  v.SpentBy,
 				Amount:     v.Amount,
-				Type:       TxSent,
+				Type:       domain.TxSent,
 				IsPending:  false,
 				CreatedAt:  getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
 			}
@@ -2185,11 +2359,11 @@ func vtxosToTxsCovenantless(
 			if v.RoundTxid == "" {
 				redeemTxid = v.Txid
 			}
-			transactions = append(transactions, Transaction{
+			transactions = append(transactions, domain.Transaction{
 				RedeemTxid: redeemTxid,
 				RoundTxid:  v.RoundTxid,
 				Amount:     v.Amount,
-				Type:       TxReceived,
+				Type:       domain.TxReceived,
 				IsPending:  v.Pending,
 				CreatedAt:  getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
 			})

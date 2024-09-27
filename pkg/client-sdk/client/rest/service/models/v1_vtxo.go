@@ -36,8 +36,8 @@ type V1Vtxo struct {
 	// pending data
 	PendingData *V1PendingPayment `json:"pendingData,omitempty"`
 
-	// round txid
-	RoundTxid string `json:"roundTxid,omitempty"`
+	// pool txid
+	PoolTxid string `json:"poolTxid,omitempty"`
 
 	// spent
 	Spent bool `json:"spent,omitempty"`

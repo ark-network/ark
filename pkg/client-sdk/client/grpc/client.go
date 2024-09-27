@@ -13,6 +13,8 @@ import (
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -51,126 +53,9 @@ func NewClient(aspUrl string) (client.ASPClient, error) {
 	return &grpcClient{conn, svc, treeCache}, nil
 }
 
-func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
-	req := &arkv1.GetInfoRequest{}
-	resp, err := a.svc.GetInfo(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	return &client.Info{
-		Pubkey:                     resp.GetPubkey(),
-		RoundLifetime:              resp.GetRoundLifetime(),
-		UnilateralExitDelay:        resp.GetUnilateralExitDelay(),
-		RoundInterval:              resp.GetRoundInterval(),
-		Network:                    resp.GetNetwork(),
-		Dust:                       uint64(resp.GetDust()),
-		BoardingDescriptorTemplate: resp.GetBoardingDescriptorTemplate(),
-		ForfeitAddress:             resp.GetForfeitAddress(),
-	}, nil
-}
-
-func (a *grpcClient) GetBoardingAddress(
-	ctx context.Context, userPubkey string,
-) (string, error) {
-	req := &arkv1.GetBoardingAddressRequest{
-		Pubkey: userPubkey,
-	}
-	resp, err := a.svc.GetBoardingAddress(ctx, req)
-	if err != nil {
-		return "", err
-	}
-	return resp.GetAddress(), nil
-}
-
-func (a *grpcClient) RegisterInputsForNextRound(
-	ctx context.Context, inputs []client.Input, ephemeralPublicKey string,
-) (string, error) {
-	req := &arkv1.RegisterInputsForNextRoundRequest{
-		Inputs: ins(inputs).toProto(),
-	}
-	if len(ephemeralPublicKey) > 0 {
-		req.EphemeralPubkey = &ephemeralPublicKey
-	}
-
-	resp, err := a.svc.RegisterInputsForNextRound(ctx, req)
-	if err != nil {
-		return "", err
-	}
-	return resp.GetId(), nil
-}
-
-func (a *grpcClient) RegisterOutputsForNextRound(
-	ctx context.Context, paymentID string, outputs []client.Output,
-) error {
-	req := &arkv1.RegisterOutputsForNextRoundRequest{
-		Id:      paymentID,
-		Outputs: outs(outputs).toProto(),
-	}
-	_, err := a.svc.RegisterOutputsForNextRound(ctx, req)
-	return err
-}
-
-func (a *grpcClient) SubmitTreeNonces(
-	ctx context.Context, roundID, cosignerPubkey string, nonces bitcointree.TreeNonces,
-) error {
-	var nonceBuffer bytes.Buffer
-
-	if err := nonces.Encode(&nonceBuffer); err != nil {
-		return err
-	}
-
-	serializedNonces := hex.EncodeToString(nonceBuffer.Bytes())
-
-	req := &arkv1.SubmitTreeNoncesRequest{
-		RoundId:    roundID,
-		Pubkey:     cosignerPubkey,
-		TreeNonces: serializedNonces,
-	}
-
-	if _, err := a.svc.SubmitTreeNonces(ctx, req); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (a *grpcClient) SubmitTreeSignatures(
-	ctx context.Context, roundID, cosignerPubkey string, signatures bitcointree.TreePartialSigs,
-) error {
-	var sigsBuffer bytes.Buffer
-
-	if err := signatures.Encode(&sigsBuffer); err != nil {
-		return err
-	}
-
-	serializedSigs := hex.EncodeToString(sigsBuffer.Bytes())
-
-	req := &arkv1.SubmitTreeSignaturesRequest{
-		RoundId:        roundID,
-		Pubkey:         cosignerPubkey,
-		TreeSignatures: serializedSigs,
-	}
-
-	if _, err := a.svc.SubmitTreeSignatures(ctx, req); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (a *grpcClient) SubmitSignedForfeitTxs(
-	ctx context.Context, signedForfeitTxs []string, signedRoundTx string,
-) error {
-	req := &arkv1.SubmitSignedForfeitTxsRequest{
-		SignedForfeitTxs: signedForfeitTxs,
-	}
-
-	if len(signedRoundTx) > 0 {
-		req.SignedRoundTx = &signedRoundTx
-	}
-
-	_, err := a.svc.SubmitSignedForfeitTxs(ctx, req)
-	return err
+func (c *grpcClient) Close() {
+	//nolint:all
+	c.conn.Close()
 }
 
 func (a *grpcClient) GetEventStream(
@@ -218,6 +103,89 @@ func (a *grpcClient) GetEventStream(
 	return eventsCh, closeFn, nil
 }
 
+func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
+	req := &arkv1.GetInfoRequest{}
+	resp, err := a.svc.GetInfo(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return &client.Info{
+		Pubkey:                     resp.GetPubkey(),
+		RoundLifetime:              resp.GetRoundLifetime(),
+		UnilateralExitDelay:        resp.GetUnilateralExitDelay(),
+		RoundInterval:              resp.GetRoundInterval(),
+		Network:                    resp.GetNetwork(),
+		Dust:                       uint64(resp.GetDust()),
+		BoardingDescriptorTemplate: resp.GetBoardingDescriptorTemplate(),
+		ForfeitAddress:             resp.GetForfeitAddress(),
+	}, nil
+}
+
+func (a *grpcClient) ListVtxos(
+	ctx context.Context, addr string,
+) ([]client.Vtxo, []client.Vtxo, error) {
+	resp, err := a.svc.ListVtxos(ctx, &arkv1.ListVtxosRequest{Address: addr})
+	if err != nil {
+		return nil, nil, err
+	}
+	return vtxos(resp.GetSpendableVtxos()).toVtxos(), vtxos(resp.GetSpentVtxos()).toVtxos(), nil
+}
+
+func (a *grpcClient) GetRound(
+	ctx context.Context, txID string,
+) (*client.Round, error) {
+	req := &arkv1.GetRoundRequest{Txid: txID}
+	resp, err := a.svc.GetRound(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	round := resp.GetRound()
+	startedAt := time.Unix(round.GetStart(), 0)
+	var endedAt *time.Time
+	if round.GetEnd() > 0 {
+		t := time.Unix(round.GetEnd(), 0)
+		endedAt = &t
+	}
+	return &client.Round{
+		ID:         round.GetId(),
+		StartedAt:  &startedAt,
+		EndedAt:    endedAt,
+		Tx:         round.GetPoolTx(),
+		Tree:       treeFromProto{round.GetCongestionTree()}.parse(),
+		ForfeitTxs: round.GetForfeitTxs(),
+		Connectors: round.GetConnectors(),
+		Stage:      client.RoundStage(int(round.GetStage())),
+	}, nil
+}
+
+func (a *grpcClient) RegisterPayment(
+	ctx context.Context, inputs []client.Input, ephemeralPublicKey string,
+) (string, error) {
+	req := &arkv1.RegisterPaymentRequest{
+		Inputs: ins(inputs).toProto(),
+	}
+	if len(ephemeralPublicKey) > 0 {
+		req.EphemeralPubkey = &ephemeralPublicKey
+	}
+
+	resp, err := a.svc.RegisterPayment(ctx, req)
+	if err != nil {
+		return "", err
+	}
+	return resp.GetId(), nil
+}
+
+func (a *grpcClient) ClaimPayment(
+	ctx context.Context, paymentID string, outputs []client.Output,
+) error {
+	req := &arkv1.ClaimPaymentRequest{
+		Id:      paymentID,
+		Outputs: outs(outputs).toProto(),
+	}
+	_, err := a.svc.ClaimPayment(ctx, req)
+	return err
+}
+
 func (a *grpcClient) Ping(
 	ctx context.Context, paymentID string,
 ) (client.RoundEvent, error) {
@@ -234,6 +202,21 @@ func (a *grpcClient) Ping(
 	}
 
 	return event{resp}.toRoundEvent()
+}
+
+func (a *grpcClient) FinalizePayment(
+	ctx context.Context, signedForfeitTxs []string, signedRoundTx string,
+) error {
+	req := &arkv1.FinalizePaymentRequest{
+		SignedForfeitTxs: signedForfeitTxs,
+	}
+
+	if len(signedRoundTx) > 0 {
+		req.SignedRoundTx = &signedRoundTx
+	}
+
+	_, err := a.svc.FinalizePayment(ctx, req)
+	return err
 }
 
 func (a *grpcClient) CreatePayment(
@@ -261,33 +244,6 @@ func (a *grpcClient) CompletePayment(
 	return err
 }
 
-func (a *grpcClient) GetRound(
-	ctx context.Context, txID string,
-) (*client.Round, error) {
-	req := &arkv1.GetRoundRequest{Txid: txID}
-	resp, err := a.svc.GetRound(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	round := resp.GetRound()
-	startedAt := time.Unix(round.GetStart(), 0)
-	var endedAt *time.Time
-	if round.GetEnd() > 0 {
-		t := time.Unix(round.GetEnd(), 0)
-		endedAt = &t
-	}
-	return &client.Round{
-		ID:         round.GetId(),
-		StartedAt:  &startedAt,
-		EndedAt:    endedAt,
-		Tx:         round.GetRoundTx(),
-		Tree:       treeFromProto{round.GetVtxoTree()}.parse(),
-		ForfeitTxs: round.GetForfeitTxs(),
-		Connectors: round.GetConnectors(),
-		Stage:      client.RoundStage(int(round.GetStage())),
-	}, nil
-}
-
 func (a *grpcClient) GetRoundByID(
 	ctx context.Context, roundID string,
 ) (*client.Round, error) {
@@ -303,12 +259,12 @@ func (a *grpcClient) GetRoundByID(
 		t := time.Unix(round.GetEnd(), 0)
 		endedAt = &t
 	}
-	tree := treeFromProto{round.GetVtxoTree()}.parse()
+	tree := treeFromProto{round.GetCongestionTree()}.parse()
 	return &client.Round{
 		ID:         round.GetId(),
 		StartedAt:  &startedAt,
 		EndedAt:    endedAt,
-		Tx:         round.GetRoundTx(),
+		Tx:         round.GetPoolTx(),
 		Tree:       tree,
 		ForfeitTxs: round.GetForfeitTxs(),
 		Connectors: round.GetConnectors(),
@@ -316,17 +272,266 @@ func (a *grpcClient) GetRoundByID(
 	}, nil
 }
 
-func (a *grpcClient) ListVtxos(
-	ctx context.Context, addr string,
-) ([]client.Vtxo, []client.Vtxo, error) {
-	resp, err := a.svc.ListVtxos(ctx, &arkv1.ListVtxosRequest{Address: addr})
-	if err != nil {
-		return nil, nil, err
+func (a *grpcClient) GetBoardingAddress(
+	ctx context.Context, userPubkey string,
+) (string, error) {
+	req := &arkv1.GetBoardingAddressRequest{
+		Pubkey: userPubkey,
 	}
-	return vtxos(resp.GetSpendableVtxos()).toVtxos(), vtxos(resp.GetSpentVtxos()).toVtxos(), nil
+	resp, err := a.svc.GetBoardingAddress(ctx, req)
+	if err != nil {
+		return "", err
+	}
+	return resp.GetAddress(), nil
 }
 
-func (c *grpcClient) Close() {
-	//nolint:all
-	c.conn.Close()
+func (a *grpcClient) SendTreeNonces(
+	ctx context.Context, roundID, cosignerPubkey string, nonces bitcointree.TreeNonces,
+) error {
+	var nonceBuffer bytes.Buffer
+
+	if err := nonces.Encode(&nonceBuffer); err != nil {
+		return err
+	}
+
+	serializedNonces := hex.EncodeToString(nonceBuffer.Bytes())
+
+	req := &arkv1.SendTreeNoncesRequest{
+		RoundId:    roundID,
+		PublicKey:  cosignerPubkey,
+		TreeNonces: serializedNonces,
+	}
+
+	if _, err := a.svc.SendTreeNonces(ctx, req); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (a *grpcClient) SendTreeSignatures(
+	ctx context.Context, roundID, cosignerPubkey string, signatures bitcointree.TreePartialSigs,
+) error {
+	var sigsBuffer bytes.Buffer
+
+	if err := signatures.Encode(&sigsBuffer); err != nil {
+		return err
+	}
+
+	serializedSigs := hex.EncodeToString(sigsBuffer.Bytes())
+
+	req := &arkv1.SendTreeSignaturesRequest{
+		RoundId:        roundID,
+		PublicKey:      cosignerPubkey,
+		TreeSignatures: serializedSigs,
+	}
+
+	if _, err := a.svc.SendTreeSignatures(ctx, req); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type out client.Output
+
+func (o out) toProto() *arkv1.Output {
+	if len(o.Address) > 0 {
+		return &arkv1.Output{
+			Destination: &arkv1.Output_Address{
+				Address: o.Address,
+			},
+			Amount: o.Amount,
+		}
+	}
+
+	return &arkv1.Output{
+		Destination: &arkv1.Output_Descriptor_{
+			Descriptor_: o.Descriptor,
+		},
+		Amount: o.Amount,
+	}
+}
+
+type outs []client.Output
+
+func (o outs) toProto() []*arkv1.Output {
+	list := make([]*arkv1.Output, 0, len(o))
+	for _, oo := range o {
+		list = append(list, out(oo).toProto())
+	}
+	return list
+}
+
+// wrapper for GetEventStreamResponse and PingResponse
+type eventResponse interface {
+	GetRoundFailed() *arkv1.RoundFailed
+	GetRoundFinalization() *arkv1.RoundFinalizationEvent
+	GetRoundFinalized() *arkv1.RoundFinalizedEvent
+	GetRoundSigning() *arkv1.RoundSigningEvent
+	GetRoundSigningNoncesGenerated() *arkv1.RoundSigningNoncesGeneratedEvent
+}
+
+type event struct {
+	eventResponse
+}
+
+func (e event) toRoundEvent() (client.RoundEvent, error) {
+	if ee := e.GetRoundFailed(); ee != nil {
+		return client.RoundFailedEvent{
+			ID:     ee.GetId(),
+			Reason: ee.GetReason(),
+		}, nil
+	}
+	if ee := e.GetRoundFinalization(); ee != nil {
+		tree := treeFromProto{ee.GetCongestionTree()}.parse()
+		return client.RoundFinalizationEvent{
+			ID:              ee.GetId(),
+			Tx:              ee.GetPoolTx(),
+			Tree:            tree,
+			Connectors:      ee.GetConnectors(),
+			MinRelayFeeRate: chainfee.SatPerKVByte(ee.MinRelayFeeRate),
+		}, nil
+	}
+
+	if ee := e.GetRoundFinalized(); ee != nil {
+		return client.RoundFinalizedEvent{
+			ID:   ee.GetId(),
+			Txid: ee.GetPoolTxid(),
+		}, nil
+	}
+
+	if ee := e.GetRoundSigning(); ee != nil {
+		pubkeys := make([]*secp256k1.PublicKey, 0, len(ee.GetCosignersPubkeys()))
+		for _, pubkey := range ee.GetCosignersPubkeys() {
+			p, err := hex.DecodeString(pubkey)
+			if err != nil {
+				return nil, err
+			}
+			pk, err := secp256k1.ParsePubKey(p)
+			if err != nil {
+				return nil, err
+			}
+			pubkeys = append(pubkeys, pk)
+		}
+
+		return client.RoundSigningStartedEvent{
+			ID:                  ee.GetId(),
+			UnsignedTree:        treeFromProto{ee.GetUnsignedTree()}.parse(),
+			CosignersPublicKeys: pubkeys,
+			UnsignedRoundTx:     ee.GetUnsignedRoundTx(),
+		}, nil
+	}
+
+	if ee := e.GetRoundSigningNoncesGenerated(); ee != nil {
+		nonces, err := bitcointree.DecodeNonces(hex.NewDecoder(strings.NewReader(ee.GetTreeNonces())))
+		if err != nil {
+			return nil, err
+		}
+		return client.RoundSigningNoncesGeneratedEvent{
+			ID:     ee.GetId(),
+			Nonces: nonces,
+		}, nil
+	}
+
+	return nil, fmt.Errorf("unknown event")
+}
+
+type vtxo struct {
+	*arkv1.Vtxo
+}
+
+func (v vtxo) toVtxo() client.Vtxo {
+	var expiresAt *time.Time
+	if v.GetExpireAt() > 0 {
+		t := time.Unix(v.GetExpireAt(), 0)
+		expiresAt = &t
+	}
+	var redeemTx string
+	var uncondForfeitTxs []string
+	if v.GetPendingData() != nil {
+		redeemTx = v.GetPendingData().GetRedeemTx()
+		uncondForfeitTxs = v.GetPendingData().GetUnconditionalForfeitTxs()
+	}
+	return client.Vtxo{
+		Outpoint: client.Outpoint{
+			Txid: v.GetOutpoint().GetTxid(),
+			VOut: v.GetOutpoint().GetVout(),
+		},
+		Amount:                  v.GetAmount(),
+		RoundTxid:               v.GetPoolTxid(),
+		ExpiresAt:               expiresAt,
+		Pending:                 v.GetPending(),
+		RedeemTx:                redeemTx,
+		UnconditionalForfeitTxs: uncondForfeitTxs,
+		SpentBy:                 v.GetSpentBy(),
+		Descriptor:              v.GetDescriptor_(),
+	}
+}
+
+type vtxos []*arkv1.Vtxo
+
+func (v vtxos) toVtxos() []client.Vtxo {
+	list := make([]client.Vtxo, 0, len(v))
+	for _, vv := range v {
+		list = append(list, vtxo{vv}.toVtxo())
+	}
+	return list
+}
+
+func toProtoInput(i client.Input) *arkv1.Input {
+	return &arkv1.Input{
+		Outpoint: &arkv1.Outpoint{
+			Txid: i.Txid,
+			Vout: i.VOut,
+		},
+		Descriptor_: i.Descriptor,
+	}
+}
+
+type ins []client.Input
+
+func (i ins) toProto() []*arkv1.Input {
+	list := make([]*arkv1.Input, 0, len(i))
+	for _, ii := range i {
+		list = append(list, toProtoInput(ii))
+	}
+	return list
+}
+
+type treeFromProto struct {
+	*arkv1.Tree
+}
+
+func (t treeFromProto) parse() tree.CongestionTree {
+	levels := make(tree.CongestionTree, 0, len(t.GetLevels()))
+
+	for _, level := range t.GetLevels() {
+		nodes := make([]tree.Node, 0, len(level.Nodes))
+
+		for _, node := range level.Nodes {
+			nodes = append(nodes, tree.Node{
+				Txid:       node.Txid,
+				Tx:         node.Tx,
+				ParentTxid: node.ParentTxid,
+			})
+		}
+
+		levels = append(levels, nodes)
+	}
+
+	for j, treeLvl := range levels {
+		for i, node := range treeLvl {
+			if len(levels.Children(node.Txid)) == 0 {
+				levels[j][i] = tree.Node{
+					Txid:       node.Txid,
+					Tx:         node.Tx,
+					ParentTxid: node.ParentTxid,
+					Leaf:       true,
+				}
+			}
+		}
+	}
+
+	return levels
 }

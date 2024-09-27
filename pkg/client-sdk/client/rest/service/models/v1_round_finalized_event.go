@@ -20,8 +20,8 @@ type V1RoundFinalizedEvent struct {
 	// id
 	ID string `json:"id,omitempty"`
 
-	// round txid
-	RoundTxid string `json:"roundTxid,omitempty"`
+	// pool txid
+	PoolTxid string `json:"poolTxid,omitempty"`
 }
 
 // Validate validates this v1 round finalized event

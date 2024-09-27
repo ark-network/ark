@@ -27,15 +27,15 @@ type V1RoundSigningEvent struct {
 	// unsigned round tx
 	UnsignedRoundTx string `json:"unsignedRoundTx,omitempty"`
 
-	// unsigned vtxo tree
-	UnsignedVtxoTree *V1Tree `json:"unsignedVtxoTree,omitempty"`
+	// unsigned tree
+	UnsignedTree *V1Tree `json:"unsignedTree,omitempty"`
 }
 
 // Validate validates this v1 round signing event
 func (m *V1RoundSigningEvent) Validate(formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.validateUnsignedVtxoTree(formats); err != nil {
+	if err := m.validateUnsignedTree(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -45,17 +45,17 @@ func (m *V1RoundSigningEvent) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *V1RoundSigningEvent) validateUnsignedVtxoTree(formats strfmt.Registry) error {
-	if swag.IsZero(m.UnsignedVtxoTree) { // not required
+func (m *V1RoundSigningEvent) validateUnsignedTree(formats strfmt.Registry) error {
+	if swag.IsZero(m.UnsignedTree) { // not required
 		return nil
 	}
 
-	if m.UnsignedVtxoTree != nil {
-		if err := m.UnsignedVtxoTree.Validate(formats); err != nil {
+	if m.UnsignedTree != nil {
+		if err := m.UnsignedTree.Validate(formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("unsignedVtxoTree")
+				return ve.ValidateName("unsignedTree")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("unsignedVtxoTree")
+				return ce.ValidateName("unsignedTree")
 			}
 			return err
 		}
@@ -68,7 +68,7 @@ func (m *V1RoundSigningEvent) validateUnsignedVtxoTree(formats strfmt.Registry) 
 func (m *V1RoundSigningEvent) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.contextValidateUnsignedVtxoTree(ctx, formats); err != nil {
+	if err := m.contextValidateUnsignedTree(ctx, formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -78,19 +78,19 @@ func (m *V1RoundSigningEvent) ContextValidate(ctx context.Context, formats strfm
 	return nil
 }
 
-func (m *V1RoundSigningEvent) contextValidateUnsignedVtxoTree(ctx context.Context, formats strfmt.Registry) error {
+func (m *V1RoundSigningEvent) contextValidateUnsignedTree(ctx context.Context, formats strfmt.Registry) error {
 
-	if m.UnsignedVtxoTree != nil {
+	if m.UnsignedTree != nil {
 
-		if swag.IsZero(m.UnsignedVtxoTree) { // not required
+		if swag.IsZero(m.UnsignedTree) { // not required
 			return nil
 		}
 
-		if err := m.UnsignedVtxoTree.ContextValidate(ctx, formats); err != nil {
+		if err := m.UnsignedTree.ContextValidate(ctx, formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("unsignedVtxoTree")
+				return ve.ValidateName("unsignedTree")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("unsignedVtxoTree")
+				return ce.ValidateName("unsignedTree")
 			}
 			return err
 		}

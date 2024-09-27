@@ -12,13 +12,14 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/ark-network/ark/pkg/client-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/store/domain"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	singlekeywallet "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey"
 	walletstore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store"
 	filestore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store/file"
 	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store/inmemory"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -52,21 +53,34 @@ var (
 	}
 )
 
+const (
+	vtxoSpent   spent = true
+	vtxoUnspent spent = false
+)
+
+type spent bool
+
 type arkClient struct {
-	*store.StoreData
-	wallet   wallet.WalletService
-	store    store.ConfigStore
-	explorer explorer.Explorer
-	client   client.ASPClient
+	ctxListenVtxo       context.Context
+	ctxCancelListenVtxo context.CancelFunc
+
+	*domain.ConfigData
+	sdkRepository domain.SdkRepository
+	wallet        wallet.WalletService
+	explorer      explorer.Explorer
+	client        client.ASPClient
+
+	sdkInitialized  bool
+	listeningToVtxo bool
 }
 
 func (a *arkClient) GetConfigData(
 	_ context.Context,
-) (*store.StoreData, error) {
-	if a.StoreData == nil {
+) (*domain.ConfigData, error) {
+	if a.ConfigData == nil {
 		return nil, fmt.Errorf("client sdk not initialized")
 	}
-	return a.StoreData, nil
+	return a.ConfigData, nil
 }
 
 func (a *arkClient) InitWithWallet(
@@ -104,7 +118,7 @@ func (a *arkClient) InitWithWallet(
 		return fmt.Errorf("failed to parse asp pubkey: %s", err)
 	}
 
-	storeData := store.StoreData{
+	storeData := domain.ConfigData{
 		AspUrl:                     args.AspUrl,
 		AspPubkey:                  aspPubkey,
 		WalletType:                 args.Wallet.GetType(),
@@ -117,20 +131,21 @@ func (a *arkClient) InitWithWallet(
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 		ForfeitAddress:             info.ForfeitAddress,
 	}
-	if err := a.store.AddData(ctx, storeData); err != nil {
+	if err := a.sdkRepository.ConfigRepository().AddData(ctx, storeData); err != nil {
 		return err
 	}
 
 	if _, err := args.Wallet.Create(ctx, args.Password, args.Seed); err != nil {
 		//nolint:all
-		a.store.CleanData(ctx)
+		a.sdkRepository.ConfigRepository().CleanData(ctx)
 		return err
 	}
 
-	a.StoreData = &storeData
+	a.ConfigData = &storeData
 	a.wallet = args.Wallet
 	a.explorer = explorerSvc
 	a.client = clientSvc
+	a.sdkInitialized = true
 
 	return nil
 }
@@ -170,7 +185,7 @@ func (a *arkClient) Init(
 		return fmt.Errorf("failed to parse asp pubkey: %s", err)
 	}
 
-	storeData := store.StoreData{
+	storeData := domain.ConfigData{
 		AspUrl:                     args.AspUrl,
 		AspPubkey:                  aspPubkey,
 		WalletType:                 args.WalletType,
@@ -184,25 +199,26 @@ func (a *arkClient) Init(
 		ExplorerURL:                args.ExplorerURL,
 		ForfeitAddress:             info.ForfeitAddress,
 	}
-	walletSvc, err := getWallet(a.store, &storeData, supportedWallets)
+	walletSvc, err := getWallet(a.sdkRepository.ConfigRepository(), &storeData, supportedWallets)
 	if err != nil {
 		return err
 	}
 
-	if err := a.store.AddData(ctx, storeData); err != nil {
+	if err := a.sdkRepository.ConfigRepository().AddData(ctx, storeData); err != nil {
 		return err
 	}
 
 	if _, err := walletSvc.Create(ctx, args.Password, args.Seed); err != nil {
 		//nolint:all
-		a.store.CleanData(ctx)
+		a.sdkRepository.ConfigRepository().CleanData(ctx)
 		return err
 	}
 
-	a.StoreData = &storeData
+	a.ConfigData = &storeData
 	a.wallet = walletSvc
 	a.explorer = explorerSvc
 	a.client = clientSvc
+	a.sdkInitialized = true
 
 	return nil
 }
@@ -233,6 +249,18 @@ func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
 	return offchainAddr, boardingAddr, nil
 }
 
+func (a *arkClient) Close() error {
+	if a.listeningToVtxo {
+		a.ctxCancelListenVtxo()
+	}
+
+	if err := a.sdkRepository.AppDataRepository().Stop(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (a *arkClient) ping(
 	ctx context.Context, paymentID string,
 ) func() {
@@ -240,11 +268,11 @@ func (a *arkClient) ping(
 
 	go func(t *time.Ticker) {
 		if _, err := a.client.Ping(ctx, paymentID); err != nil {
-			logrus.Warnf("failed to ping asp: %s", err)
+			log.Warnf("failed to ping asp: %s", err)
 		}
 		for range t.C {
 			if _, err := a.client.Ping(ctx, paymentID); err != nil {
-				logrus.Warnf("failed to ping asp: %s", err)
+				log.Warnf("failed to ping asp: %s", err)
 			}
 		}
 	}(ticker)
@@ -270,7 +298,7 @@ func getExplorer(explorerURL, network string) (explorer.Explorer, error) {
 }
 
 func getWallet(
-	storeSvc store.ConfigStore, data *store.StoreData, supportedWallets utils.SupportedType[struct{}],
+	storeSvc domain.ConfigRepository, data *domain.ConfigData, supportedWallets utils.SupportedType[struct{}],
 ) (wallet.WalletService, error) {
 	switch data.WalletType {
 	case wallet.SingleKeyWallet:
@@ -284,7 +312,7 @@ func getWallet(
 }
 
 func getSingleKeyWallet(
-	configStore store.ConfigStore, network string,
+	configStore domain.ConfigRepository, network string,
 ) (wallet.WalletService, error) {
 	walletStore, err := getWalletStore(configStore.GetType(), configStore.GetDatadir())
 	if err != nil {
@@ -309,4 +337,90 @@ func getWalletStore(storeType, datadir string) (walletstore.WalletStore, error) 
 
 func getCreatedAtFromExpiry(roundLifetime int64, expiry time.Time) time.Time {
 	return expiry.Add(-time.Duration(roundLifetime) * time.Second)
+}
+
+func findNewTxs(oldTxs, newTxs []domain.Transaction) ([]domain.Transaction, error) {
+	newTxsMap := make(map[string]domain.Transaction)
+	for _, tx := range newTxs {
+		newTxsMap[tx.Key()] = tx
+	}
+
+	oldTxsMap := make(map[string]domain.Transaction)
+	for _, tx := range oldTxs {
+		oldTxsMap[tx.Key()] = tx
+	}
+
+	var result []domain.Transaction
+	for _, tx := range newTxs {
+		if _, ok := oldTxsMap[tx.Key()]; !ok {
+			result = append(result, tx)
+		}
+	}
+
+	return result, nil
+}
+
+func findNewAndUpdateOldTxs(
+	oldTxs, newTxs []domain.Transaction,
+) ([]domain.Transaction, []domain.Transaction, error) {
+	newTxsMap := make(map[string]domain.Transaction)
+	for _, tx := range newTxs {
+		newTxsMap[tx.Key()] = tx
+	}
+
+	oldTxsMap := make(map[string]domain.Transaction)
+	for _, tx := range oldTxs {
+		oldTxsMap[tx.Key()] = tx
+	}
+
+	newTxsRes := make([]domain.Transaction, 0)
+	updatedOldTxs := make([]domain.Transaction, 0)
+	for _, tx := range newTxs {
+		if oldTx, ok := oldTxsMap[tx.Key()]; !ok {
+			newTxsRes = append(newTxsRes, tx)
+		} else {
+			if oldTx.IsPending != tx.IsPending {
+				updatedOldTxs = append(updatedOldTxs, tx)
+			}
+		}
+	}
+
+	return newTxsRes, updatedOldTxs, nil
+}
+
+func updateBoardingTxsState(
+	allBoardingTxs, oldBoardingTxs []domain.Transaction,
+) ([]domain.Transaction, []domain.Transaction) {
+	var newBoardingTxs []domain.Transaction
+	var updatedOldBoardingTxs []domain.Transaction
+
+	newTxsMap := make(map[string]domain.Transaction)
+	for _, newTx := range allBoardingTxs {
+		newTxsMap[newTx.BoardingTxid] = newTx
+	}
+
+	for _, oldTx := range oldBoardingTxs {
+		newTx, ok := newTxsMap[oldTx.BoardingTxid]
+		if ok && newTx.IsPending != oldTx.IsPending {
+			oldTx.IsPending = newTx.IsPending
+			updatedOldBoardingTxs = append(updatedOldBoardingTxs, oldTx)
+		}
+	}
+
+	for _, newTx := range allBoardingTxs {
+		if !containsTx(oldBoardingTxs, newTx.BoardingTxid) {
+			newBoardingTxs = append(newBoardingTxs, newTx)
+		}
+	}
+
+	return newBoardingTxs, updatedOldBoardingTxs
+}
+
+func containsTx(txs []domain.Transaction, txid string) bool {
+	for _, tx := range txs {
+		if tx.BoardingTxid == txid {
+			return true
+		}
+	}
+	return false
 }

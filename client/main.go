@@ -13,7 +13,7 @@ import (
 	"github.com/ark-network/ark/common"
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
 	"github.com/ark-network/ark/pkg/client-sdk/store"
-	filestore "github.com/ark-network/ark/pkg/client-sdk/store/file"
+	"github.com/ark-network/ark/pkg/client-sdk/store/domain"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/term"
@@ -43,6 +43,7 @@ func main() {
 		&sendCommand,
 		&balanceCommand,
 		&redeemCommand,
+		&transactionCommand,
 	)
 	app.Flags = []cli.Flag{
 		datadirFlag,
@@ -54,7 +55,15 @@ func main() {
 			return fmt.Errorf("error initializing ark sdk client: %v", err)
 		}
 		arkSdkClient = sdk
+		return nil
+	}
 
+	app.After = func(ctx *cli.Context) error {
+		if arkSdkClient != nil {
+			if err := arkSdkClient.Close(); err != nil {
+				return fmt.Errorf("error closing ark sdk client: %v", err)
+			}
+		}
 		return nil
 	}
 
@@ -192,6 +201,13 @@ var (
 			return redeem(ctx)
 		},
 	}
+	transactionCommand = cli.Command{
+		Name:  "transactions",
+		Usage: "Show transaction history",
+		Action: func(ctx *cli.Context) error {
+			return listTxs(ctx)
+		},
+	}
 )
 
 func initArkSdk(ctx *cli.Context) error {
@@ -213,17 +229,18 @@ func initArkSdk(ctx *cli.Context) error {
 }
 
 func config(ctx *cli.Context) error {
-	cfgStore, err := getConfigStore(ctx.String(datadirFlag.Name))
+	cfgData, err := arkSdkClient.GetConfigData(ctx.Context)
 	if err != nil {
 		return err
 	}
 
-	cfgData, err := cfgStore.GetData(ctx.Context)
-	if err != nil {
-		return err
+	cfg := map[string]interface{}{}
+	if cfgData == nil {
+		fmt.Println("no configuration found, run 'init' command")
+		return nil
 	}
 
-	cfg := map[string]interface{}{
+	cfg = map[string]interface{}{
 		"asp_url":                      cfgData.AspUrl,
 		"asp_pubkey":                   hex.EncodeToString(cfgData.AspPubkey.SerializeCompressed()),
 		"wallet_type":                  cfgData.WalletType,
@@ -296,16 +313,16 @@ func send(ctx *cli.Context) error {
 		return fmt.Errorf("missing destination, use --to and --amount or --receivers")
 	}
 
-	configStore, err := getConfigStore(ctx.String(datadirFlag.Name))
+	configData, err := arkSdkClient.GetConfigData(ctx.Context)
 	if err != nil {
 		return err
 	}
 
-	cfgData, err := configStore.GetData(ctx.Context)
+	net, err := getNetwork(ctx, configData)
 	if err != nil {
 		return err
 	}
-	net := getNetwork(ctx, cfgData)
+
 	isBitcoin := isBtcChain(net)
 
 	var receivers []arksdk.Receiver
@@ -377,56 +394,70 @@ func redeem(ctx *cli.Context) error {
 	})
 }
 
+func listTxs(ctx *cli.Context) error {
+	txs, err := arkSdkClient.GetTransactionHistory(ctx.Context)
+	if err != nil {
+		return err
+	}
+	return printJSON(txs)
+}
+
 func getArkSdkClient(ctx *cli.Context) (arksdk.ArkClient, error) {
-	cfgStore, err := getConfigStore(ctx.String(datadirFlag.Name))
+	dataDir := ctx.String(datadirFlag.Name)
+	sdkRepository, err := store.NewService(store.Config{
+		ConfigStoreType:  store.FileStore,
+		AppDataStoreType: store.Badger,
+		BaseDir:          dataDir,
+	})
 	if err != nil {
 		return nil, err
 	}
-	cfgData, err := cfgStore.GetData(ctx.Context)
+
+	configData, err := sdkRepository.ConfigRepository().GetData(context.Background())
 	if err != nil {
 		return nil, err
 	}
 
 	commandName := ctx.Args().First()
-	if commandName != "init" && cfgData == nil {
+	if commandName != "init" && configData == nil {
 		return nil, fmt.Errorf("CLI not initialized, run 'init' cmd to initialize")
 	}
 
-	net := getNetwork(ctx, cfgData)
+	net, err := getNetwork(ctx, configData)
+	if err != nil {
+		return nil, err
+	}
 
 	if isBtcChain(net) {
 		return loadOrCreateClient(
-			arksdk.LoadCovenantlessClient, arksdk.NewCovenantlessClient, cfgStore,
+			arksdk.LoadCovenantlessClient, arksdk.NewCovenantlessClient, sdkRepository,
 		)
 	}
 	return loadOrCreateClient(
-		arksdk.LoadCovenantClient, arksdk.NewCovenantClient, cfgStore,
+		arksdk.LoadCovenantClient, arksdk.NewCovenantClient, sdkRepository,
 	)
 }
 
 func loadOrCreateClient(
-	loadFunc, newFunc func(store.ConfigStore) (arksdk.ArkClient, error),
-	store store.ConfigStore,
+	loadFunc, newFunc func(domain.SdkRepository) (arksdk.ArkClient, error),
+	sdkRepository domain.SdkRepository,
 ) (arksdk.ArkClient, error) {
-	client, err := loadFunc(store)
+	client, err := loadFunc(sdkRepository)
 	if err != nil {
 		if errors.Is(err, arksdk.ErrNotInitialized) {
-			return newFunc(store)
+			return newFunc(sdkRepository)
 		}
 		return nil, err
 	}
 	return client, err
 }
 
-func getConfigStore(dataDir string) (store.ConfigStore, error) {
-	return filestore.NewConfigStore(dataDir)
-}
-
-func getNetwork(ctx *cli.Context, configData *store.StoreData) string {
+func getNetwork(ctx *cli.Context, configData *domain.ConfigData) (string, error) {
 	if configData == nil {
-		return strings.ToLower(ctx.String(networkFlag.Name))
+		return ctx.String(networkFlag.Name), nil
 	}
-	return configData.Network.Name
+
+	return configData.Network.Name, nil
 }
 
 func isBtcChain(network string) bool {

@@ -18,6 +18,9 @@ import (
 // swagger:model v1RoundFinalizationEvent
 type V1RoundFinalizationEvent struct {
 
+	// congestion tree
+	CongestionTree *V1Tree `json:"congestionTree,omitempty"`
+
 	// connectors
 	Connectors []string `json:"connectors"`
 
@@ -27,18 +30,15 @@ type V1RoundFinalizationEvent struct {
 	// min relay fee rate
 	MinRelayFeeRate string `json:"minRelayFeeRate,omitempty"`
 
-	// round tx
-	RoundTx string `json:"roundTx,omitempty"`
-
-	// vtxo tree
-	VtxoTree *V1Tree `json:"vtxoTree,omitempty"`
+	// pool tx
+	PoolTx string `json:"poolTx,omitempty"`
 }
 
 // Validate validates this v1 round finalization event
 func (m *V1RoundFinalizationEvent) Validate(formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.validateVtxoTree(formats); err != nil {
+	if err := m.validateCongestionTree(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -48,17 +48,17 @@ func (m *V1RoundFinalizationEvent) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *V1RoundFinalizationEvent) validateVtxoTree(formats strfmt.Registry) error {
-	if swag.IsZero(m.VtxoTree) { // not required
+func (m *V1RoundFinalizationEvent) validateCongestionTree(formats strfmt.Registry) error {
+	if swag.IsZero(m.CongestionTree) { // not required
 		return nil
 	}
 
-	if m.VtxoTree != nil {
-		if err := m.VtxoTree.Validate(formats); err != nil {
+	if m.CongestionTree != nil {
+		if err := m.CongestionTree.Validate(formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("vtxoTree")
+				return ve.ValidateName("congestionTree")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("vtxoTree")
+				return ce.ValidateName("congestionTree")
 			}
 			return err
 		}
@@ -71,7 +71,7 @@ func (m *V1RoundFinalizationEvent) validateVtxoTree(formats strfmt.Registry) err
 func (m *V1RoundFinalizationEvent) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.contextValidateVtxoTree(ctx, formats); err != nil {
+	if err := m.contextValidateCongestionTree(ctx, formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -81,19 +81,19 @@ func (m *V1RoundFinalizationEvent) ContextValidate(ctx context.Context, formats 
 	return nil
 }
 
-func (m *V1RoundFinalizationEvent) contextValidateVtxoTree(ctx context.Context, formats strfmt.Registry) error {
+func (m *V1RoundFinalizationEvent) contextValidateCongestionTree(ctx context.Context, formats strfmt.Registry) error {
 
-	if m.VtxoTree != nil {
+	if m.CongestionTree != nil {
 
-		if swag.IsZero(m.VtxoTree) { // not required
+		if swag.IsZero(m.CongestionTree) { // not required
 			return nil
 		}
 
-		if err := m.VtxoTree.ContextValidate(ctx, formats); err != nil {
+		if err := m.CongestionTree.ContextValidate(ctx, formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("vtxoTree")
+				return ve.ValidateName("congestionTree")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("vtxoTree")
+				return ce.ValidateName("congestionTree")
 			}
 			return err
 		}
