@@ -699,19 +699,24 @@ func (b *txBuilder) createPoolTx(
 		return nil, err
 	}
 
-	changeAddresses, err := b.wallet.DeriveAddresses(ctx, 1)
-	if err != nil {
-		return nil, err
-	}
+	var cacheChangeScript []byte
+	// avoid derivation of several change addresses
+	getChange := func() ([]byte, error) {
+		if len(cacheChangeScript) > 0 {
+			return cacheChangeScript, nil
+		}
 
-	changeAddress, err := btcutil.DecodeAddress(changeAddresses[0], b.onchainNetwork())
-	if err != nil {
-		return nil, err
-	}
+		changeAddresses, err := b.wallet.DeriveAddresses(ctx, 1)
+		if err != nil {
+			return nil, err
+		}
 
-	changeScript, err := txscript.PayToAddrScript(changeAddress)
-	if err != nil {
-		return nil, err
+		changeAddress, err := btcutil.DecodeAddress(changeAddresses[0], b.onchainNetwork())
+		if err != nil {
+			return nil, err
+		}
+
+		return txscript.PayToAddrScript(changeAddress)
 	}
 
 	exceedingValue := uint64(0)
@@ -720,6 +725,11 @@ func (b *txBuilder) createPoolTx(
 			exceedingValue = change
 			change = 0
 		} else {
+			changeScript, err := getChange()
+			if err != nil {
+				return nil, err
+			}
+
 			outputs = append(outputs, &wire.TxOut{
 				Value:    int64(change),
 				PkScript: changeScript,
@@ -892,6 +902,11 @@ func (b *txBuilder) createPoolTx(
 				newChange = 0
 				exceedingValue += newChange
 			} else {
+				changeScript, err := getChange()
+				if err != nil {
+					return nil, err
+				}
+
 				ptx.UnsignedTx.AddTxOut(&wire.TxOut{
 					Value:    int64(newChange),
 					PkScript: changeScript,
