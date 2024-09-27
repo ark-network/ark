@@ -22,7 +22,7 @@ type RoundFinalizationStarted struct {
 	CongestionTree   tree.CongestionTree // BTC: signed
 	Connectors       []string
 	ConnectorAddress string
-	PoolTx           string
+	RoundTx          string
 	MinRelayFeeRate  int64
 }
 

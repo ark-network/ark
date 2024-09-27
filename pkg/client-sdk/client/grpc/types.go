@@ -58,7 +58,7 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 		tree := treeFromProto{ee.GetVtxoTree()}.parse()
 		return client.RoundFinalizationEvent{
 			ID:              ee.GetId(),
-			Tx:              ee.GetRoundTxid(),
+			Tx:              ee.GetRoundTx(),
 			Tree:            tree,
 			Connectors:      ee.GetConnectors(),
 			MinRelayFeeRate: chainfee.SatPerKVByte(ee.MinRelayFeeRate),

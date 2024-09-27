@@ -171,7 +171,7 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 						Id:             "1ea610ff-bf3e-4068-9bfd-b6c3f553467e",
 						CongestionTree: congestionTree,
 						Connectors:     []string{emptyPtx, emptyPtx},
-						PoolTx:         emptyTx,
+						RoundTx:        emptyTx,
 					},
 				},
 				handler: func(round *domain.Round) {
@@ -193,7 +193,7 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 						Id:             "7578231e-428d-45ae-aaa4-e62c77ad5cec",
 						CongestionTree: congestionTree,
 						Connectors:     []string{emptyPtx, emptyPtx},
-						PoolTx:         emptyTx,
+						RoundTx:        emptyTx,
 					},
 					domain.RoundFinalized{
 						Id:         "7578231e-428d-45ae-aaa4-e62c77ad5cec",
@@ -315,7 +315,7 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 				Id:             roundId,
 				CongestionTree: congestionTree,
 				Connectors:     []string{emptyPtx, emptyPtx},
-				PoolTx:         emptyTx,
+				RoundTx:        emptyTx,
 			},
 		}
 		events = append(events, newEvents...)

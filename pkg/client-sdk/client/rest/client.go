@@ -296,7 +296,7 @@ func (a *restClient) Ping(
 
 		return client.RoundFinalizationEvent{
 			ID:              e.ID,
-			Tx:              e.RoundTxid,
+			Tx:              e.RoundTx,
 			Tree:            tree,
 			Connectors:      e.Connectors,
 			MinRelayFeeRate: chainfee.SatPerKVByte(minRelayFeeRate),

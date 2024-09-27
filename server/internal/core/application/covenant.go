@@ -862,7 +862,7 @@ func (s *covenantService) propagateEvents(round *domain.Round) {
 			Id:              e.Id,
 			CongestionTree:  e.CongestionTree,
 			Connectors:      e.Connectors,
-			PoolTx:          e.PoolTx,
+			RoundTx:         e.RoundTx,
 			MinRelayFeeRate: int64(s.wallet.MinRelayFeeRate(context.Background())),
 		}
 		s.lastEvent = ev

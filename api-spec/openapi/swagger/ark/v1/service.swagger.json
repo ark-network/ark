@@ -825,7 +825,7 @@
         "id": {
           "type": "string"
         },
-        "roundTxid": {
+        "roundTx": {
           "type": "string"
         },
         "vtxoTree": {

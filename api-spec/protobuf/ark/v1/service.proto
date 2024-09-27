@@ -225,7 +225,7 @@ message ListVtxosResponse {
 
 message RoundFinalizationEvent {
   string id = 1;
-  string round_txid = 2;
+  string round_tx = 2;
   Tree vtxo_tree = 3;
   repeated string connectors = 4;
   int64 min_relay_fee_rate = 5;

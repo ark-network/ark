@@ -279,7 +279,7 @@ func (h *handler) Ping(
 			Event: &arkv1.PingResponse_RoundFinalization{
 				RoundFinalization: &arkv1.RoundFinalizationEvent{
 					Id:              e.Id,
-					RoundTxid:       e.PoolTx,
+					RoundTx:         e.RoundTx,
 					VtxoTree:        congestionTree(e.CongestionTree).toProto(),
 					Connectors:      e.Connectors,
 					MinRelayFeeRate: e.MinRelayFeeRate,
@@ -520,7 +520,7 @@ func (h *handler) listenToEvents() {
 				Event: &arkv1.GetEventStreamResponse_RoundFinalization{
 					RoundFinalization: &arkv1.RoundFinalizationEvent{
 						Id:              e.Id,
-						RoundTxid:       e.PoolTx,
+						RoundTx:         e.RoundTx,
 						VtxoTree:        congestionTree(e.CongestionTree).toProto(),
 						Connectors:      e.Connectors,
 						MinRelayFeeRate: e.MinRelayFeeRate,

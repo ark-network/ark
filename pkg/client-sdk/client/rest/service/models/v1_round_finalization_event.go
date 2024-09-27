@@ -27,8 +27,8 @@ type V1RoundFinalizationEvent struct {
 	// min relay fee rate
 	MinRelayFeeRate string `json:"minRelayFeeRate,omitempty"`
 
-	// round txid
-	RoundTxid string `json:"roundTxid,omitempty"`
+	// round tx
+	RoundTx string `json:"roundTx,omitempty"`
 
 	// vtxo tree
 	VtxoTree *V1Tree `json:"vtxoTree,omitempty"`
