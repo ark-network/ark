@@ -167,7 +167,7 @@ func (a *restClient) SubmitTreeNonces(
 
 	body := &models.V1SubmitTreeNoncesRequest{
 		RoundID:    roundID,
-		PublicKey:  cosignerPubkey,
+		Pubkey:     cosignerPubkey,
 		TreeNonces: serializedNonces,
 	}
 
@@ -194,7 +194,7 @@ func (a *restClient) SubmitTreeSignatures(
 
 	body := &models.V1SubmitTreeSignaturesRequest{
 		RoundID:        roundID,
-		PublicKey:      cosignerPubkey,
+		Pubkey:         cosignerPubkey,
 		TreeSignatures: serializedSigs,
 	}
 
@@ -287,7 +287,7 @@ func (a *restClient) Ping(
 		}, nil
 	}
 	if e := payload.RoundFinalization; e != nil {
-		tree := treeFromProto{e.CongestionTree}.parse()
+		tree := treeFromProto{e.VtxoTree}.parse()
 
 		minRelayFeeRate, err := strconv.Atoi(e.MinRelayFeeRate)
 		if err != nil {
@@ -296,7 +296,7 @@ func (a *restClient) Ping(
 
 		return client.RoundFinalizationEvent{
 			ID:              e.ID,
-			Tx:              e.PoolTx,
+			Tx:              e.RoundTx,
 			Tree:            tree,
 			Connectors:      e.Connectors,
 			MinRelayFeeRate: chainfee.SatPerKVByte(minRelayFeeRate),
@@ -306,7 +306,7 @@ func (a *restClient) Ping(
 	if e := payload.RoundFinalized; e != nil {
 		return client.RoundFinalizedEvent{
 			ID:   e.ID,
-			Txid: e.PoolTxid,
+			Txid: e.RoundTxid,
 		}, nil
 	}
 
@@ -326,7 +326,7 @@ func (a *restClient) Ping(
 
 		return client.RoundSigningStartedEvent{
 			ID:                  e.ID,
-			UnsignedTree:        treeFromProto{e.UnsignedTree}.parse(),
+			UnsignedTree:        treeFromProto{e.UnsignedVtxoTree}.parse(),
 			CosignersPublicKeys: pubkeys,
 			UnsignedRoundTx:     e.UnsignedRoundTx,
 		}, nil
@@ -429,8 +429,8 @@ func (a *restClient) GetRound(
 		ID:         resp.Payload.Round.ID,
 		StartedAt:  &startedAt,
 		EndedAt:    endedAt,
-		Tx:         resp.Payload.Round.PoolTx,
-		Tree:       treeFromProto{resp.Payload.Round.CongestionTree}.parse(),
+		Tx:         resp.Payload.Round.RoundTx,
+		Tree:       treeFromProto{resp.Payload.Round.VtxoTree}.parse(),
 		ForfeitTxs: resp.Payload.Round.ForfeitTxs,
 		Connectors: resp.Payload.Round.Connectors,
 		Stage:      toRoundStage(*resp.Payload.Round.Stage),
@@ -468,8 +468,8 @@ func (a *restClient) GetRoundByID(
 		ID:         resp.Payload.Round.ID,
 		StartedAt:  &startedAt,
 		EndedAt:    endedAt,
-		Tx:         resp.Payload.Round.PoolTx,
-		Tree:       treeFromProto{resp.Payload.Round.CongestionTree}.parse(),
+		Tx:         resp.Payload.Round.RoundTx,
+		Tree:       treeFromProto{resp.Payload.Round.VtxoTree}.parse(),
 		ForfeitTxs: resp.Payload.Round.ForfeitTxs,
 		Connectors: resp.Payload.Round.Connectors,
 		Stage:      toRoundStage(*resp.Payload.Round.Stage),
@@ -516,7 +516,7 @@ func (a *restClient) ListVtxos(
 				VOut: uint32(v.Outpoint.Vout),
 			},
 			Amount:                  uint64(amount),
-			RoundTxid:               v.PoolTxid,
+			RoundTxid:               v.RoundTxid,
 			ExpiresAt:               expiresAt,
 			Pending:                 v.Pending,
 			RedeemTx:                redeemTx,
@@ -549,7 +549,7 @@ func (a *restClient) ListVtxos(
 				VOut: uint32(v.Outpoint.Vout),
 			},
 			Amount:     uint64(amount),
-			RoundTxid:  v.PoolTxid,
+			RoundTxid:  v.RoundTxid,
 			ExpiresAt:  expiresAt,
 			SpentBy:    v.SpentBy,
 			Descriptor: v.Descriptor,

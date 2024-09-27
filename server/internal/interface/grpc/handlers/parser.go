@@ -79,7 +79,7 @@ func (v vtxoList) toProto() []*arkv1.Vtxo {
 			},
 			Descriptor_: vv.Descriptor,
 			Amount:      vv.Amount,
-			PoolTxid:    vv.PoolTx,
+			RoundTxid:   vv.RoundTxid,
 			Spent:       vv.Spent,
 			ExpireAt:    vv.ExpireAt,
 			SpentBy:     vv.SpentBy,

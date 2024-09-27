@@ -785,10 +785,10 @@
           "type": "string",
           "format": "int64"
         },
-        "poolTx": {
+        "roundTx": {
           "type": "string"
         },
-        "congestionTree": {
+        "vtxoTree": {
           "$ref": "#/definitions/v1Tree"
         },
         "forfeitTxs": {
@@ -825,10 +825,10 @@
         "id": {
           "type": "string"
         },
-        "poolTx": {
+        "roundTx": {
           "type": "string"
         },
-        "congestionTree": {
+        "vtxoTree": {
           "$ref": "#/definitions/v1Tree"
         },
         "connectors": {
@@ -849,7 +849,7 @@
         "id": {
           "type": "string"
         },
-        "poolTxid": {
+        "roundTxid": {
           "type": "string"
         }
       }
@@ -866,7 +866,7 @@
             "type": "string"
           }
         },
-        "unsignedTree": {
+        "unsignedVtxoTree": {
           "$ref": "#/definitions/v1Tree"
         },
         "unsignedRoundTx": {
@@ -921,7 +921,7 @@
         "roundId": {
           "type": "string"
         },
-        "publicKey": {
+        "pubkey": {
           "type": "string"
         },
         "treeNonces": {
@@ -938,7 +938,7 @@
         "roundId": {
           "type": "string"
         },
-        "publicKey": {
+        "pubkey": {
           "type": "string"
         },
         "treeSignatures": {
@@ -985,7 +985,7 @@
         "spent": {
           "type": "boolean"
         },
-        "poolTxid": {
+        "roundTxid": {
           "type": "string"
         },
         "spentBy": {

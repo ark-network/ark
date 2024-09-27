@@ -123,7 +123,7 @@ func (a *grpcClient) SubmitTreeNonces(
 
 	req := &arkv1.SubmitTreeNoncesRequest{
 		RoundId:    roundID,
-		PublicKey:  cosignerPubkey,
+		Pubkey:     cosignerPubkey,
 		TreeNonces: serializedNonces,
 	}
 
@@ -147,7 +147,7 @@ func (a *grpcClient) SubmitTreeSignatures(
 
 	req := &arkv1.SubmitTreeSignaturesRequest{
 		RoundId:        roundID,
-		PublicKey:      cosignerPubkey,
+		Pubkey:         cosignerPubkey,
 		TreeSignatures: serializedSigs,
 	}
 
@@ -280,8 +280,8 @@ func (a *grpcClient) GetRound(
 		ID:         round.GetId(),
 		StartedAt:  &startedAt,
 		EndedAt:    endedAt,
-		Tx:         round.GetPoolTx(),
-		Tree:       treeFromProto{round.GetCongestionTree()}.parse(),
+		Tx:         round.GetRoundTx(),
+		Tree:       treeFromProto{round.GetVtxoTree()}.parse(),
 		ForfeitTxs: round.GetForfeitTxs(),
 		Connectors: round.GetConnectors(),
 		Stage:      client.RoundStage(int(round.GetStage())),
@@ -303,12 +303,12 @@ func (a *grpcClient) GetRoundByID(
 		t := time.Unix(round.GetEnd(), 0)
 		endedAt = &t
 	}
-	tree := treeFromProto{round.GetCongestionTree()}.parse()
+	tree := treeFromProto{round.GetVtxoTree()}.parse()
 	return &client.Round{
 		ID:         round.GetId(),
 		StartedAt:  &startedAt,
 		EndedAt:    endedAt,
-		Tx:         round.GetPoolTx(),
+		Tx:         round.GetRoundTx(),
 		Tree:       tree,
 		ForfeitTxs: round.GetForfeitTxs(),
 		Connectors: round.GetConnectors(),

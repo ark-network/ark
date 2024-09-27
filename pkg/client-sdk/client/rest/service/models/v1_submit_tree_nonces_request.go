@@ -17,8 +17,8 @@ import (
 // swagger:model v1SubmitTreeNoncesRequest
 type V1SubmitTreeNoncesRequest struct {
 
-	// public key
-	PublicKey string `json:"publicKey,omitempty"`
+	// pubkey
+	Pubkey string `json:"pubkey,omitempty"`
 
 	// round Id
 	RoundID string `json:"roundId,omitempty"`

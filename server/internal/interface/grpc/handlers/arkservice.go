@@ -131,7 +131,7 @@ func (h *handler) RegisterOutputsForNextRound(
 func (h *handler) SubmitTreeNonces(
 	ctx context.Context, req *arkv1.SubmitTreeNoncesRequest,
 ) (*arkv1.SubmitTreeNoncesResponse, error) {
-	pubkey := req.GetPublicKey()
+	pubkey := req.GetPubkey()
 	encodedNonces := req.GetTreeNonces()
 	roundID := req.GetRoundId()
 
@@ -170,7 +170,7 @@ func (h *handler) SubmitTreeSignatures(
 	ctx context.Context, req *arkv1.SubmitTreeSignaturesRequest,
 ) (*arkv1.SubmitTreeSignaturesResponse, error) {
 	roundID := req.GetRoundId()
-	pubkey := req.GetPublicKey()
+	pubkey := req.GetPubkey()
 	encodedSignatures := req.GetTreeSignatures()
 
 	if len(pubkey) <= 0 {
@@ -279,8 +279,8 @@ func (h *handler) Ping(
 			Event: &arkv1.PingResponse_RoundFinalization{
 				RoundFinalization: &arkv1.RoundFinalizationEvent{
 					Id:              e.Id,
-					PoolTx:          e.PoolTx,
-					CongestionTree:  congestionTree(e.CongestionTree).toProto(),
+					RoundTx:         e.RoundTx,
+					VtxoTree:        congestionTree(e.CongestionTree).toProto(),
 					Connectors:      e.Connectors,
 					MinRelayFeeRate: e.MinRelayFeeRate,
 				},
@@ -290,8 +290,8 @@ func (h *handler) Ping(
 		resp = &arkv1.PingResponse{
 			Event: &arkv1.PingResponse_RoundFinalized{
 				RoundFinalized: &arkv1.RoundFinalizedEvent{
-					Id:       e.Id,
-					PoolTxid: e.Txid,
+					Id:        e.Id,
+					RoundTxid: e.Txid,
 				},
 			},
 		}
@@ -315,7 +315,7 @@ func (h *handler) Ping(
 				RoundSigning: &arkv1.RoundSigningEvent{
 					Id:               e.Id,
 					CosignersPubkeys: cosignersKeys,
-					UnsignedTree:     congestionTree(e.UnsignedVtxoTree).toProto(),
+					UnsignedVtxoTree: congestionTree(e.UnsignedVtxoTree).toProto(),
 					UnsignedRoundTx:  e.UnsignedRoundTx,
 				},
 			},
@@ -411,14 +411,14 @@ func (h *handler) GetRound(
 
 		return &arkv1.GetRoundResponse{
 			Round: &arkv1.Round{
-				Id:             round.Id,
-				Start:          round.StartingTimestamp,
-				End:            round.EndingTimestamp,
-				PoolTx:         round.UnsignedTx,
-				CongestionTree: congestionTree(round.CongestionTree).toProto(),
-				ForfeitTxs:     round.ForfeitTxs,
-				Connectors:     round.Connectors,
-				Stage:          stage(round.Stage).toProto(),
+				Id:         round.Id,
+				Start:      round.StartingTimestamp,
+				End:        round.EndingTimestamp,
+				RoundTx:    round.UnsignedTx,
+				VtxoTree:   congestionTree(round.CongestionTree).toProto(),
+				ForfeitTxs: round.ForfeitTxs,
+				Connectors: round.Connectors,
+				Stage:      stage(round.Stage).toProto(),
 			},
 		}, nil
 	}
@@ -430,14 +430,14 @@ func (h *handler) GetRound(
 
 	return &arkv1.GetRoundResponse{
 		Round: &arkv1.Round{
-			Id:             round.Id,
-			Start:          round.StartingTimestamp,
-			End:            round.EndingTimestamp,
-			PoolTx:         round.UnsignedTx,
-			CongestionTree: congestionTree(round.CongestionTree).toProto(),
-			ForfeitTxs:     round.ForfeitTxs,
-			Connectors:     round.Connectors,
-			Stage:          stage(round.Stage).toProto(),
+			Id:         round.Id,
+			Start:      round.StartingTimestamp,
+			End:        round.EndingTimestamp,
+			RoundTx:    round.UnsignedTx,
+			VtxoTree:   congestionTree(round.CongestionTree).toProto(),
+			ForfeitTxs: round.ForfeitTxs,
+			Connectors: round.Connectors,
+			Stage:      stage(round.Stage).toProto(),
 		},
 	}, nil
 }
@@ -457,14 +457,14 @@ func (h *handler) GetRoundById(
 
 	return &arkv1.GetRoundByIdResponse{
 		Round: &arkv1.Round{
-			Id:             round.Id,
-			Start:          round.StartingTimestamp,
-			End:            round.EndingTimestamp,
-			PoolTx:         round.UnsignedTx,
-			CongestionTree: congestionTree(round.CongestionTree).toProto(),
-			ForfeitTxs:     round.ForfeitTxs,
-			Connectors:     round.Connectors,
-			Stage:          stage(round.Stage).toProto(),
+			Id:         round.Id,
+			Start:      round.StartingTimestamp,
+			End:        round.EndingTimestamp,
+			RoundTx:    round.UnsignedTx,
+			VtxoTree:   congestionTree(round.CongestionTree).toProto(),
+			ForfeitTxs: round.ForfeitTxs,
+			Connectors: round.Connectors,
+			Stage:      stage(round.Stage).toProto(),
 		},
 	}, nil
 }
@@ -520,8 +520,8 @@ func (h *handler) listenToEvents() {
 				Event: &arkv1.GetEventStreamResponse_RoundFinalization{
 					RoundFinalization: &arkv1.RoundFinalizationEvent{
 						Id:              e.Id,
-						PoolTx:          e.PoolTx,
-						CongestionTree:  congestionTree(e.CongestionTree).toProto(),
+						RoundTx:         e.RoundTx,
+						VtxoTree:        congestionTree(e.CongestionTree).toProto(),
 						Connectors:      e.Connectors,
 						MinRelayFeeRate: e.MinRelayFeeRate,
 					},
@@ -532,8 +532,8 @@ func (h *handler) listenToEvents() {
 			ev = &arkv1.GetEventStreamResponse{
 				Event: &arkv1.GetEventStreamResponse_RoundFinalized{
 					RoundFinalized: &arkv1.RoundFinalizedEvent{
-						Id:       e.Id,
-						PoolTxid: e.Txid,
+						Id:        e.Id,
+						RoundTxid: e.Txid,
 					},
 				},
 			}
@@ -559,7 +559,7 @@ func (h *handler) listenToEvents() {
 					RoundSigning: &arkv1.RoundSigningEvent{
 						Id:               e.Id,
 						CosignersPubkeys: cosignersKeys,
-						UnsignedTree:     congestionTree(e.UnsignedVtxoTree).toProto(),
+						UnsignedVtxoTree: congestionTree(e.UnsignedVtxoTree).toProto(),
 						UnsignedRoundTx:  e.UnsignedRoundTx,
 					},
 				},

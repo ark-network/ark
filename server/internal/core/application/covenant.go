@@ -862,7 +862,7 @@ func (s *covenantService) propagateEvents(round *domain.Round) {
 			Id:              e.Id,
 			CongestionTree:  e.CongestionTree,
 			Connectors:      e.Connectors,
-			PoolTx:          e.PoolTx,
+			RoundTx:         e.RoundTx,
 			MinRelayFeeRate: int64(s.wallet.MinRelayFeeRate(context.Background())),
 		}
 		s.lastEvent = ev
@@ -945,9 +945,9 @@ func (s *covenantService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 
 			if found {
 				vtxos = append(vtxos, domain.Vtxo{
-					VtxoKey:  domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
-					Receiver: domain.Receiver{Descriptor: desc, Amount: uint64(out.Value)},
-					PoolTx:   round.Txid,
+					VtxoKey:   domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
+					Receiver:  domain.Receiver{Descriptor: desc, Amount: uint64(out.Value)},
+					RoundTxid: round.Txid,
 				})
 				break
 			}
