@@ -785,7 +785,7 @@
           "type": "string",
           "format": "int64"
         },
-        "poolTx": {
+        "roundTx": {
           "type": "string"
         },
         "congestionTree": {
@@ -825,7 +825,7 @@
         "id": {
           "type": "string"
         },
-        "poolTx": {
+        "roundTxid": {
           "type": "string"
         },
         "congestionTree": {
@@ -849,7 +849,7 @@
         "id": {
           "type": "string"
         },
-        "poolTxid": {
+        "roundTxid": {
           "type": "string"
         }
       }
@@ -985,7 +985,7 @@
         "spent": {
           "type": "boolean"
         },
-        "poolTxid": {
+        "roundTxid": {
           "type": "string"
         },
         "spentBy": {
