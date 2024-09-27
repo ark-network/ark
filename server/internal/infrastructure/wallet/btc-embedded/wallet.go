@@ -673,7 +673,6 @@ func (s *service) SignTransaction(ctx context.Context, partialTx string, extract
 					ptx.Inputs[i].FinalScriptWitness = witnessBuf.Bytes()
 					continue
 				}
-
 			}
 
 			if err := psbt.Finalize(ptx, i); err != nil {
