@@ -136,14 +136,14 @@ message RegisterOutputsForNextRoundResponse {}
 
 message SubmitTreeNoncesRequest {
   string round_id = 1;
-  string public_key = 2;
+  string pubkey = 2;
   string tree_nonces = 3;
 }
 message SubmitTreeNoncesResponse {}
 
 message SubmitTreeSignaturesRequest {
   string round_id = 1;
-  string public_key = 2;
+  string pubkey = 2;
   string tree_signatures = 3;
 }
 message SubmitTreeSignaturesResponse {}
@@ -226,7 +226,7 @@ message ListVtxosResponse {
 message RoundFinalizationEvent {
   string id = 1;
   string round_txid = 2;
-  Tree congestion_tree = 3;
+  Tree vtxo_tree = 3;
   repeated string connectors = 4;
   int64 min_relay_fee_rate = 5;
 }
@@ -244,7 +244,7 @@ message RoundFailed {
 message RoundSigningEvent {
   string id = 1;
   repeated string cosigners_pubkeys = 2;
-  Tree unsigned_tree = 3;
+  Tree unsigned_vtxo_tree = 3;
   string unsigned_round_tx = 4;
 }
 
@@ -268,7 +268,7 @@ message Round {
   int64 start = 2;
   int64 end = 3;
   string round_tx = 4;
-  Tree congestion_tree = 5;
+  Tree vtxo_tree = 5;
   repeated string forfeit_txs = 6;
   repeated string connectors = 7;
   RoundStage stage = 8;
