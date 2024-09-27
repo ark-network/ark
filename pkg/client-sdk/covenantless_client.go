@@ -756,7 +756,7 @@ func (a *covenantlessArkClient) GetTransactionHistory(ctx context.Context) ([]Tr
 		if txi.CreatedAt.Equal(txj.CreatedAt) {
 			return txi.Type > txj.Type
 		}
-		return txi.CreatedAt.Before(txj.CreatedAt)
+		return txi.CreatedAt.After(txj.CreatedAt)
 	})
 
 	return txs, nil
