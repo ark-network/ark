@@ -75,7 +75,7 @@ func (s *service) signPsbt(packet *psbt.Packet, inputsToSign []int) ([]uint32, e
 		if len(in.TaprootLeafScript) > 0 && txscript.IsPayToTaproot(in.WitnessUtxo.PkScript) {
 			// segwit v1
 			isTaproot = true
-			managedAddress = s.aspTaprootAddr
+			managedAddress = s.aspKeyAddr
 		} else {
 			// segwit v0
 			var err error

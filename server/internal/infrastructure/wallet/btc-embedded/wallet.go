@@ -68,11 +68,14 @@ type accountName string
 
 const (
 	// p2wkh scope
-	mainAccount      accountName = "default" // default is always the first account (index 0)
-	connectorAccount accountName = "connector"
+	mainAccount accountName = "default" // default is always the first account (index 0)
 
 	// p2tr scope
-	aspKeyAccount accountName = "default"
+	connectorAccount accountName = "default"
+
+	// this account won't be restored by lnd, but it's not a problem cause it does not track any funds
+	// it's used to derive a constant public key to be used as "ASP key" in Vtxo scripts
+	aspKeyAccount accountName = "asp"
 
 	// https://github.com/bitcoin/bitcoin/blob/439e58c4d8194ca37f70346727d31f52e69592ec/src/policy/policy.cpp#L23C8-L23C11
 	// biggest input size to compute the maximum dust amount
@@ -105,7 +108,8 @@ type service struct {
 	watchedScriptsLock sync.RWMutex
 	watchedScripts     map[string]struct{}
 
-	aspTaprootAddr waddrmgr.ManagedPubKeyAddress
+	// holds the data related to the ASP key used in Vtxo scripts
+	aspKeyAddr waddrmgr.ManagedPubKeyAddress
 }
 
 // WithNeutrino creates a start a neutrino node using the provided service datadir
@@ -366,7 +370,7 @@ func (s *service) Unlock(_ context.Context, password string) error {
 						return fmt.Errorf("failed to cast address to managed pubkey address")
 					}
 
-					s.aspTaprootAddr = managedPubkeyAddr
+					s.aspKeyAddr = managedPubkeyAddr
 					break
 				}
 			}
@@ -404,18 +408,28 @@ func (s *service) BroadcastTransaction(ctx context.Context, txHex string) (strin
 }
 
 func (s *service) ConnectorsAccountBalance(ctx context.Context) (uint64, uint64, error) {
-	amount, err := s.getBalance(connectorAccount)
+	utxos, err := s.listUtxos(p2trKeyScope)
 	if err != nil {
 		return 0, 0, err
+	}
+
+	amount := uint64(0)
+	for _, utxo := range utxos {
+		amount += uint64(utxo.Output.Value)
 	}
 
 	return amount, 0, nil
 }
 
 func (s *service) MainAccountBalance(ctx context.Context) (uint64, uint64, error) {
-	amount, err := s.getBalance(mainAccount)
+	utxos, err := s.listUtxos(p2wpkhKeyScope)
 	if err != nil {
 		return 0, 0, err
+	}
+
+	amount := uint64(0)
+	for _, utxo := range utxos {
+		amount += uint64(utxo.Output.Value)
 	}
 
 	return amount, 0, nil
@@ -425,7 +439,7 @@ func (s *service) DeriveAddresses(ctx context.Context, num int) ([]string, error
 	addresses := make([]string, 0, num)
 
 	for i := 0; i < num; i++ {
-		addr, err := s.deriveNextAddress(mainAccount)
+		addr, err := s.deriveNextAddress()
 		if err != nil {
 			return nil, err
 		}
@@ -441,7 +455,7 @@ func (s *service) DeriveAddresses(ctx context.Context, num int) ([]string, error
 }
 
 func (s *service) DeriveConnectorAddress(ctx context.Context) (string, error) {
-	addr, err := s.deriveNextAddress(connectorAccount)
+	addr, err := s.wallet.NewAddress(lnwallet.TaprootPubkey, false, string(connectorAccount))
 	if err != nil {
 		return "", err
 	}
@@ -450,7 +464,7 @@ func (s *service) DeriveConnectorAddress(ctx context.Context) (string, error) {
 }
 
 func (s *service) GetPubkey(ctx context.Context) (*secp256k1.PublicKey, error) {
-	return s.aspTaprootAddr.PubKey(), nil
+	return s.aspKeyAddr.PubKey(), nil
 }
 
 func (s *service) GetForfeitAddress(ctx context.Context) (string, error) {
@@ -460,7 +474,7 @@ func (s *service) GetForfeitAddress(ctx context.Context) (string, error) {
 	}
 
 	if len(addrs) == 0 {
-		addr, err := s.deriveNextAddress(mainAccount)
+		addr, err := s.deriveNextAddress()
 		if err != nil {
 			return "", err
 		}
@@ -469,6 +483,10 @@ func (s *service) GetForfeitAddress(ctx context.Context) (string, error) {
 	}
 
 	for info, addrs := range addrs {
+		if info.KeyScope != p2wpkhKeyScope {
+			continue
+		}
+
 		if info.AccountName != string(mainAccount) {
 			continue
 		}
@@ -502,15 +520,7 @@ func (s *service) ListConnectorUtxos(ctx context.Context, connectorAddress strin
 		return nil, err
 	}
 
-	connectorAccountNumber, err := w.AccountNumber(p2wpkhKeyScope, string(connectorAccount))
-	if err != nil {
-		return nil, err
-	}
-
-	utxos, err := w.UnspentOutputs(wallet.OutputSelectionPolicy{
-		Account:               connectorAccountNumber,
-		RequiredConfirmations: 0,
-	})
+	utxos, err := s.listUtxos(p2trKeyScope)
 	if err != nil {
 		return nil, err
 	}
@@ -550,15 +560,7 @@ func (s *service) LockConnectorUtxos(ctx context.Context, utxos []ports.TxOutpoi
 func (s *service) SelectUtxos(ctx context.Context, _ string, amount uint64) ([]ports.TxInput, uint64, error) {
 	w := s.wallet.InternalWallet()
 
-	mainAccountNumber, err := w.AccountNumber(p2wpkhKeyScope, string(mainAccount))
-	if err != nil {
-		return nil, 0, err
-	}
-
-	utxos, err := w.UnspentOutputs(wallet.OutputSelectionPolicy{
-		Account:               mainAccountNumber,
-		RequiredConfirmations: 0, // allow uncomfirmed utxos
-	})
+	utxos, err := s.listUtxos(p2wpkhKeyScope)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1044,7 +1046,7 @@ func (s *service) create(mnemonic, password string, addrGap uint32) error {
 
 	defer wallet.InternalWallet().Lock()
 
-	if err := s.initWalletAccounts(wallet); err != nil {
+	if err := s.initAspKeyAccount(wallet); err != nil {
 		return err
 	}
 
@@ -1070,62 +1072,27 @@ func (s *service) create(mnemonic, password string, addrGap uint32) error {
 	return nil
 }
 
-func (s *service) initWalletAccounts(wallet *btcwallet.BtcWallet) error {
+// initAspKeyAccount creates the asp key account if it doesn't exist
+func (s *service) initAspKeyAccount(wallet *btcwallet.BtcWallet) error {
 	w := wallet.InternalWallet()
-
-	p2wkhAccounts, err := w.Accounts(p2wpkhKeyScope)
-	if err != nil {
-		return fmt.Errorf("failed to list wallet accounts: %s", err)
-	}
-	var mainAccountNumber, connectorAccountNumber, aspKeyAccountNumber uint32
-	var mainAccountSet, connectorAccountSet, aspKeyAccountSet bool
-	if p2wkhAccounts != nil {
-		for _, account := range p2wkhAccounts.Accounts {
-			switch account.AccountName {
-			case string(mainAccount):
-				mainAccountSet = true
-				mainAccountNumber = account.AccountNumber
-			case string(connectorAccount):
-				connectorAccountSet = true
-				connectorAccountNumber = account.AccountNumber
-			default:
-				continue
-			}
-		}
-	}
 
 	p2trAccounts, err := w.Accounts(p2trKeyScope)
 	if err != nil {
 		return fmt.Errorf("failed to list wallet accounts: %s", err)
 	}
 
+	var aspKeyAccountNumber uint32
+
 	if p2trAccounts != nil {
 		for _, account := range p2trAccounts.Accounts {
 			if account.AccountName == string(aspKeyAccount) {
-				aspKeyAccountSet = true
 				aspKeyAccountNumber = account.AccountNumber
 				break
 			}
 		}
 	}
 
-	if !mainAccountSet {
-		log.Debug("creating main account")
-		mainAccountNumber, err = w.NextAccount(p2wpkhKeyScope, string(mainAccount))
-		if err != nil {
-			return fmt.Errorf("failed to create %s: %s", mainAccount, err)
-		}
-	}
-
-	if !connectorAccountSet {
-		log.Debug("creating connector account")
-		connectorAccountNumber, err = w.NextAccount(p2wpkhKeyScope, string(connectorAccount))
-		if err != nil {
-			return fmt.Errorf("failed to create %s: %s", connectorAccount, err)
-		}
-	}
-
-	if !aspKeyAccountSet {
+	if aspKeyAccountNumber == 0 {
 		log.Debug("creating asp key account")
 		aspKeyAccountNumber, err = w.NextAccount(p2trKeyScope, string(aspKeyAccount))
 		if err != nil {
@@ -1133,13 +1100,13 @@ func (s *service) initWalletAccounts(wallet *btcwallet.BtcWallet) error {
 		}
 	}
 
-	log.Debugf("main account number: %d", mainAccountNumber)
-	log.Debugf("connector account number: %d", connectorAccountNumber)
-	log.Debugf("asp key account number: %d", aspKeyAccountNumber)
+	log.Debugf("key account number: %d", aspKeyAccountNumber)
 
 	return nil
 }
 
+// initAspKeyAddress generates the asp key address if it doesn't exist
+// it also cache the address in s.aspKeyAddr field
 func (s *service) initAspKeyAddress(wallet *btcwallet.BtcWallet) error {
 	addrs, err := wallet.ListAddresses(string(aspKeyAccount), false)
 	if err != nil {
@@ -1162,7 +1129,7 @@ func (s *service) initAspKeyAddress(wallet *btcwallet.BtcWallet) error {
 			return fmt.Errorf("failed to cast address to managed pubkey address")
 		}
 
-		s.aspTaprootAddr = managedAddr
+		s.aspKeyAddr = managedAddr
 	} else {
 		for info, addrs := range addrs {
 			if info.AccountName != string(aspKeyAccount) {
@@ -1192,7 +1159,7 @@ func (s *service) initAspKeyAddress(wallet *btcwallet.BtcWallet) error {
 						return fmt.Errorf("failed to cast address to managed pubkey address")
 					}
 
-					s.aspTaprootAddr = managedPubkeyAddr
+					s.aspKeyAddr = managedPubkeyAddr
 					break
 				}
 			}
@@ -1202,26 +1169,12 @@ func (s *service) initAspKeyAddress(wallet *btcwallet.BtcWallet) error {
 	return nil
 }
 
-func (s *service) getBalance(account accountName) (uint64, error) {
-	if !s.walletLoaded() {
-		return 0, ErrWalletNotLoaded
-	}
-
-	balance, err := s.wallet.ConfirmedBalance(0, string(account))
-	if err != nil {
-		return 0, err
-	}
-
-	return uint64(balance), nil
-}
-
-// this only supports deriving segwit v0 accounts
-func (s *service) deriveNextAddress(account accountName) (btcutil.Address, error) {
+func (s *service) deriveNextAddress() (btcutil.Address, error) {
 	if !s.walletLoaded() {
 		return nil, ErrWalletNotLoaded
 	}
 
-	return s.wallet.NewAddress(lnwallet.WitnessPubKey, false, string(account))
+	return s.wallet.NewAddress(lnwallet.WitnessPubKey, false, string(mainAccount))
 }
 
 func (s *service) walletLoaded() bool {
@@ -1240,6 +1193,43 @@ func (s *service) walletInitialized() bool {
 	exist, _ := loader.WalletExists()
 
 	return exist
+}
+
+func (s *service) listUtxos(scope waddrmgr.KeyScope) ([]*wallet.TransactionOutput, error) {
+	w := s.wallet.InternalWallet()
+
+	accountNumber, err := w.AccountNumber(scope, string(mainAccount))
+	if err != nil {
+		return nil, err
+	}
+
+	utxos, err := w.UnspentOutputs(wallet.OutputSelectionPolicy{
+		Account:               accountNumber,
+		RequiredConfirmations: 0,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	filtered := make([]*wallet.TransactionOutput, 0, len(utxos))
+	for _, utxo := range utxos {
+		scriptClass, _, _, err := txscript.ExtractPkScriptAddrs(utxo.Output.PkScript, w.ChainParams())
+		if err != nil {
+			return nil, err
+		}
+
+		switch scope {
+		case p2wpkhKeyScope:
+			if scriptClass == txscript.WitnessV0PubKeyHashTy {
+				filtered = append(filtered, utxo)
+			}
+		case p2trKeyScope:
+			if scriptClass == txscript.WitnessV1TaprootTy {
+				filtered = append(filtered, utxo)
+			}
+		}
+	}
+	return filtered, nil
 }
 
 func withChainSource(chainSource chain.Interface) WalletOption {
