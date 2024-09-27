@@ -108,7 +108,7 @@ func (r Receiver) IsOnchain() bool {
 type Vtxo struct {
 	VtxoKey
 	Receiver
-	PoolTx       string
+	RoundTxid    string
 	SpentBy      string // round txid or async redeem txid
 	Spent        bool
 	Redeemed     bool

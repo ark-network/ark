@@ -279,7 +279,7 @@ func (h *handler) Ping(
 			Event: &arkv1.PingResponse_RoundFinalization{
 				RoundFinalization: &arkv1.RoundFinalizationEvent{
 					Id:              e.Id,
-					PoolTx:          e.PoolTx,
+					RoundTxid:       e.PoolTx,
 					CongestionTree:  congestionTree(e.CongestionTree).toProto(),
 					Connectors:      e.Connectors,
 					MinRelayFeeRate: e.MinRelayFeeRate,
@@ -290,8 +290,8 @@ func (h *handler) Ping(
 		resp = &arkv1.PingResponse{
 			Event: &arkv1.PingResponse_RoundFinalized{
 				RoundFinalized: &arkv1.RoundFinalizedEvent{
-					Id:       e.Id,
-					PoolTxid: e.Txid,
+					Id:        e.Id,
+					RoundTxid: e.Txid,
 				},
 			},
 		}
@@ -414,7 +414,7 @@ func (h *handler) GetRound(
 				Id:             round.Id,
 				Start:          round.StartingTimestamp,
 				End:            round.EndingTimestamp,
-				PoolTx:         round.UnsignedTx,
+				RoundTx:        round.UnsignedTx,
 				CongestionTree: congestionTree(round.CongestionTree).toProto(),
 				ForfeitTxs:     round.ForfeitTxs,
 				Connectors:     round.Connectors,
@@ -433,7 +433,7 @@ func (h *handler) GetRound(
 			Id:             round.Id,
 			Start:          round.StartingTimestamp,
 			End:            round.EndingTimestamp,
-			PoolTx:         round.UnsignedTx,
+			RoundTx:        round.UnsignedTx,
 			CongestionTree: congestionTree(round.CongestionTree).toProto(),
 			ForfeitTxs:     round.ForfeitTxs,
 			Connectors:     round.Connectors,
@@ -460,7 +460,7 @@ func (h *handler) GetRoundById(
 			Id:             round.Id,
 			Start:          round.StartingTimestamp,
 			End:            round.EndingTimestamp,
-			PoolTx:         round.UnsignedTx,
+			RoundTx:        round.UnsignedTx,
 			CongestionTree: congestionTree(round.CongestionTree).toProto(),
 			ForfeitTxs:     round.ForfeitTxs,
 			Connectors:     round.Connectors,
@@ -520,7 +520,7 @@ func (h *handler) listenToEvents() {
 				Event: &arkv1.GetEventStreamResponse_RoundFinalization{
 					RoundFinalization: &arkv1.RoundFinalizationEvent{
 						Id:              e.Id,
-						PoolTx:          e.PoolTx,
+						RoundTxid:       e.PoolTx,
 						CongestionTree:  congestionTree(e.CongestionTree).toProto(),
 						Connectors:      e.Connectors,
 						MinRelayFeeRate: e.MinRelayFeeRate,
@@ -532,8 +532,8 @@ func (h *handler) listenToEvents() {
 			ev = &arkv1.GetEventStreamResponse{
 				Event: &arkv1.GetEventStreamResponse_RoundFinalized{
 					RoundFinalized: &arkv1.RoundFinalizedEvent{
-						Id:       e.Id,
-						PoolTxid: e.Txid,
+						Id:        e.Id,
+						RoundTxid: e.Txid,
 					},
 				},
 			}

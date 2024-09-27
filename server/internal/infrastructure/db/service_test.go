@@ -268,8 +268,8 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 									Txid: randomString(32),
 									VOut: 0,
 								},
-								PoolTx:   randomString(32),
-								ExpireAt: 7980322,
+								RoundTxid: randomString(32),
+								ExpireAt:  7980322,
 								Receiver: domain.Receiver{
 									Descriptor: randomString(120),
 									Amount:     300,
@@ -290,8 +290,8 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 									Txid: randomString(32),
 									VOut: 0,
 								},
-								PoolTx:   randomString(32),
-								ExpireAt: 7980322,
+								RoundTxid: randomString(32),
+								ExpireAt:  7980322,
 								Receiver: domain.Receiver{
 									Descriptor: randomString(120),
 									Amount:     600,

@@ -473,11 +473,11 @@ func rowToPaymentVtxoVw(row queries.PaymentVtxoVw) domain.Vtxo {
 			Descriptor: row.Descriptor.String,
 			Amount:     uint64(row.Amount.Int64),
 		},
-		PoolTx:   row.PoolTx.String,
-		SpentBy:  row.SpentBy.String,
-		Spent:    row.Spent.Bool,
-		Redeemed: row.Redeemed.Bool,
-		Swept:    row.Swept.Bool,
-		ExpireAt: row.ExpireAt.Int64,
+		RoundTxid: row.PoolTx.String,
+		SpentBy:   row.SpentBy.String,
+		Spent:     row.Spent.Bool,
+		Redeemed:  row.Redeemed.Bool,
+		Swept:     row.Swept.Bool,
+		ExpireAt:  row.ExpireAt.Int64,
 	}
 }
