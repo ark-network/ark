@@ -17,13 +17,13 @@ import (
 // swagger:model v1Output
 type V1Output struct {
 
-	// onchain
+	// onchain or off-chain
 	Address string `json:"address,omitempty"`
 
 	// Amount to send in satoshis.
 	Amount string `json:"amount,omitempty"`
 
-	// offchain
+	// descriptor
 	Descriptor string `json:"descriptor,omitempty"`
 }
 

@@ -43,18 +43,18 @@ func (v *vxtoRepository) AddVtxos(ctx context.Context, vtxos []domain.Vtxo) erro
 			}
 			if err := querierWithTx.UpsertVtxo(
 				ctx, queries.UpsertVtxoParams{
-					Txid:          vtxo.Txid,
-					Vout:          int64(vtxo.VOut),
-					Descriptor:    sql.NullString{String: vtxo.Descriptor, Valid: true},
-					Amount:        int64(vtxo.Amount),
-					PoolTx:        vtxo.PoolTx,
-					SpentBy:       vtxo.SpentBy,
-					Spent:         vtxo.Spent,
-					Redeemed:      vtxo.Redeemed,
-					Swept:         vtxo.Swept,
-					ExpireAt:      vtxo.ExpireAt,
-					RedeemTx:      sql.NullString{String: redeemTx, Valid: true},
-					PendingChange: sql.NullBool{Bool: vtxo.PendingChange, Valid: true},
+					Txid:       vtxo.Txid,
+					Vout:       int64(vtxo.VOut),
+					Descriptor: sql.NullString{String: vtxo.Descriptor, Valid: true},
+					Amount:     int64(vtxo.Amount),
+					PoolTx:     vtxo.RoundTxid,
+					SpentBy:    vtxo.SpentBy,
+					Spent:      vtxo.Spent,
+					Redeemed:   vtxo.Redeemed,
+					Swept:      vtxo.Swept,
+					ExpireAt:   vtxo.ExpireAt,
+					RedeemTx:   sql.NullString{String: redeemTx, Valid: true},
+					Pending:    vtxo.Pending,
 				},
 			); err != nil {
 				return err
@@ -302,14 +302,14 @@ func rowToVtxo(row queries.Vtxo, uncondForfeitTxs []queries.UncondForfeitTxVw) d
 			Descriptor: row.Descriptor.String,
 			Amount:     uint64(row.Amount),
 		},
-		PoolTx:        row.PoolTx,
-		SpentBy:       row.SpentBy,
-		Spent:         row.Spent,
-		Redeemed:      row.Redeemed,
-		Swept:         row.Swept,
-		ExpireAt:      row.ExpireAt,
-		AsyncPayment:  asyncPayment,
-		PendingChange: row.PendingChange.Bool,
+		RoundTxid:    row.PoolTx,
+		SpentBy:      row.SpentBy,
+		Spent:        row.Spent,
+		Redeemed:     row.Redeemed,
+		Swept:        row.Swept,
+		ExpireAt:     row.ExpireAt,
+		AsyncPayment: asyncPayment,
+		Pending:      row.Pending,
 	}
 }
 

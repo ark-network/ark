@@ -1320,5 +1320,7 @@ func fromOutputScript(script []byte, netParams *chaincfg.Params) (btcutil.Addres
 }
 
 func logger(subsystem string) btclog.Logger {
-	return btclog.NewBackend(log.StandardLogger().Writer()).Logger(subsystem)
+	logger := btclog.NewBackend(log.StandardLogger().Writer()).Logger(subsystem)
+	logger.SetLevel(btclog.LevelWarn)
+	return logger
 }

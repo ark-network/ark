@@ -87,7 +87,7 @@ func (r *Round) On(event RoundEvent, replayed bool) {
 		r.CongestionTree = e.CongestionTree
 		r.Connectors = append([]string{}, e.Connectors...)
 		r.ConnectorAddress = e.ConnectorAddress
-		r.UnsignedTx = e.PoolTx
+		r.UnsignedTx = e.RoundTx
 	case RoundFinalized:
 		r.Stage.Ended = true
 		r.Txid = e.Txid
@@ -163,7 +163,7 @@ func (r *Round) StartFinalization(connectorAddress string, connectors []string, 
 		CongestionTree:   congestionTree,
 		Connectors:       connectors,
 		ConnectorAddress: connectorAddress,
-		PoolTx:           poolTx,
+		RoundTx:          poolTx,
 	}
 	r.raise(event)
 

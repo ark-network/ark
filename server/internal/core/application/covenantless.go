@@ -265,7 +265,7 @@ func (s *covenantlessService) CompleteAsyncPayment(
 	for outIndex, out := range redeemPtx.UnsignedTx.TxOut {
 		desc := asyncPayData.receivers[outIndex].Descriptor
 		_, _, _, _, err := descriptor.ParseReversibleVtxoDescriptor(desc)
-		isChange := err != nil
+		isPending := err == nil
 
 		vtxos = append(vtxos, domain.Vtxo{
 			VtxoKey: domain.VtxoKey{
@@ -281,7 +281,7 @@ func (s *covenantlessService) CompleteAsyncPayment(
 				RedeemTx:                redeemTx,
 				UnconditionalForfeitTxs: unconditionalForfeitTxs,
 			},
-			PendingChange: isChange,
+			Pending: isPending,
 		})
 	}
 
@@ -337,7 +337,7 @@ func (s *covenantlessService) CreateAsyncPayment(
 		if vtxo.Swept {
 			return "", nil, fmt.Errorf("all vtxos must be swept")
 		}
-		if vtxo.AsyncPayment != nil && !vtxo.PendingChange {
+		if vtxo.Pending {
 			return "", nil, fmt.Errorf("all vtxos must be claimed")
 		}
 
@@ -796,7 +796,7 @@ func (s *covenantlessService) startFinalization() {
 
 	cosigners = append(cosigners, ephemeralKey.PubKey())
 
-	unsignedRoundTx, tree, connectorAddress, err := s.builder.BuildPoolTx(s.pubkey, payments, boardingInputs, sweptRounds, cosigners...)
+	unsignedRoundTx, tree, connectorAddress, err := s.builder.BuildRoundTx(s.pubkey, payments, boardingInputs, sweptRounds, cosigners...)
 	if err != nil {
 		round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
 		log.WithError(err).Warn("failed to create pool tx")
@@ -1274,7 +1274,7 @@ func (s *covenantlessService) propagateEvents(round *domain.Round) {
 			Id:              e.Id,
 			CongestionTree:  e.CongestionTree,
 			Connectors:      e.Connectors,
-			PoolTx:          e.PoolTx,
+			RoundTx:         e.RoundTx,
 			MinRelayFeeRate: int64(s.wallet.MinRelayFeeRate(context.Background())),
 		}
 		s.lastEvent = ev
@@ -1357,9 +1357,9 @@ func (s *covenantlessService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 
 			if found {
 				vtxos = append(vtxos, domain.Vtxo{
-					VtxoKey:  domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
-					Receiver: domain.Receiver{Descriptor: desc, Amount: uint64(out.Value)},
-					PoolTx:   round.Txid,
+					VtxoKey:   domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
+					Receiver:  domain.Receiver{Descriptor: desc, Amount: uint64(out.Value)},
+					RoundTxid: round.Txid,
 				})
 				break
 			}

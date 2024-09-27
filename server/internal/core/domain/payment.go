@@ -108,14 +108,14 @@ func (r Receiver) IsOnchain() bool {
 type Vtxo struct {
 	VtxoKey
 	Receiver
-	PoolTx        string
-	SpentBy       string // round txid or async redeem txid
-	Spent         bool
-	Redeemed      bool
-	Swept         bool
-	ExpireAt      int64
-	AsyncPayment  *AsyncPaymentTxs // nil if not async vtxo
-	PendingChange bool
+	RoundTxid    string
+	SpentBy      string // round txid or async redeem txid
+	Spent        bool
+	Redeemed     bool
+	Swept        bool
+	ExpireAt     int64
+	AsyncPayment *AsyncPaymentTxs // nil if not async vtxo
+	Pending      bool
 }
 
 type AsyncPaymentTxs struct {

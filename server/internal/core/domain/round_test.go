@@ -309,7 +309,7 @@ func testStartFinalization(t *testing.T) {
 			require.Equal(t, round.Id, event.Id)
 			require.Exactly(t, connectors, event.Connectors)
 			require.Exactly(t, congestionTree, event.CongestionTree)
-			require.Exactly(t, poolTx, event.PoolTx)
+			require.Exactly(t, poolTx, event.RoundTx)
 		})
 
 		t.Run("invalid", func(t *testing.T) {
