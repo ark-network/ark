@@ -30,8 +30,8 @@ type V1RoundFinalizationEvent struct {
 	// min relay fee rate
 	MinRelayFeeRate string `json:"minRelayFeeRate,omitempty"`
 
-	// pool tx
-	PoolTx string `json:"poolTx,omitempty"`
+	// round txid
+	RoundTxid string `json:"roundTxid,omitempty"`
 }
 
 // Validate validates this v1 round finalization event

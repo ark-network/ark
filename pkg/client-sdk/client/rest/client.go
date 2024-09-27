@@ -296,7 +296,7 @@ func (a *restClient) Ping(
 
 		return client.RoundFinalizationEvent{
 			ID:              e.ID,
-			Tx:              e.PoolTx,
+			Tx:              e.RoundTxid,
 			Tree:            tree,
 			Connectors:      e.Connectors,
 			MinRelayFeeRate: chainfee.SatPerKVByte(minRelayFeeRate),
@@ -306,7 +306,7 @@ func (a *restClient) Ping(
 	if e := payload.RoundFinalized; e != nil {
 		return client.RoundFinalizedEvent{
 			ID:   e.ID,
-			Txid: e.PoolTxid,
+			Txid: e.RoundTxid,
 		}, nil
 	}
 
@@ -429,7 +429,7 @@ func (a *restClient) GetRound(
 		ID:         resp.Payload.Round.ID,
 		StartedAt:  &startedAt,
 		EndedAt:    endedAt,
-		Tx:         resp.Payload.Round.PoolTx,
+		Tx:         resp.Payload.Round.RoundTx,
 		Tree:       treeFromProto{resp.Payload.Round.CongestionTree}.parse(),
 		ForfeitTxs: resp.Payload.Round.ForfeitTxs,
 		Connectors: resp.Payload.Round.Connectors,
@@ -468,7 +468,7 @@ func (a *restClient) GetRoundByID(
 		ID:         resp.Payload.Round.ID,
 		StartedAt:  &startedAt,
 		EndedAt:    endedAt,
-		Tx:         resp.Payload.Round.PoolTx,
+		Tx:         resp.Payload.Round.RoundTx,
 		Tree:       treeFromProto{resp.Payload.Round.CongestionTree}.parse(),
 		ForfeitTxs: resp.Payload.Round.ForfeitTxs,
 		Connectors: resp.Payload.Round.Connectors,
@@ -516,7 +516,7 @@ func (a *restClient) ListVtxos(
 				VOut: uint32(v.Outpoint.Vout),
 			},
 			Amount:                  uint64(amount),
-			RoundTxid:               v.PoolTxid,
+			RoundTxid:               v.RoundTxid,
 			ExpiresAt:               expiresAt,
 			Pending:                 v.Pending,
 			RedeemTx:                redeemTx,
@@ -549,7 +549,7 @@ func (a *restClient) ListVtxos(
 				VOut: uint32(v.Outpoint.Vout),
 			},
 			Amount:     uint64(amount),
-			RoundTxid:  v.PoolTxid,
+			RoundTxid:  v.RoundTxid,
 			ExpiresAt:  expiresAt,
 			SpentBy:    v.SpentBy,
 			Descriptor: v.Descriptor,

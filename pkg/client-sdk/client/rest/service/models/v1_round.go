@@ -33,8 +33,8 @@ type V1Round struct {
 	// id
 	ID string `json:"id,omitempty"`
 
-	// pool tx
-	PoolTx string `json:"poolTx,omitempty"`
+	// round tx
+	RoundTx string `json:"roundTx,omitempty"`
 
 	// stage
 	Stage *V1RoundStage `json:"stage,omitempty"`

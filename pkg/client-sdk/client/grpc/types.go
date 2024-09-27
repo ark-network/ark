@@ -58,7 +58,7 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 		tree := treeFromProto{ee.GetCongestionTree()}.parse()
 		return client.RoundFinalizationEvent{
 			ID:              ee.GetId(),
-			Tx:              ee.GetPoolTx(),
+			Tx:              ee.GetRoundTxid(),
 			Tree:            tree,
 			Connectors:      ee.GetConnectors(),
 			MinRelayFeeRate: chainfee.SatPerKVByte(ee.MinRelayFeeRate),
@@ -68,7 +68,7 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 	if ee := e.GetRoundFinalized(); ee != nil {
 		return client.RoundFinalizedEvent{
 			ID:   ee.GetId(),
-			Txid: ee.GetPoolTxid(),
+			Txid: ee.GetRoundTxid(),
 		}, nil
 	}
 
@@ -130,7 +130,7 @@ func (v vtxo) toVtxo() client.Vtxo {
 			VOut: v.GetOutpoint().GetVout(),
 		},
 		Amount:                  v.GetAmount(),
-		RoundTxid:               v.GetPoolTxid(),
+		RoundTxid:               v.GetRoundTxid(),
 		ExpiresAt:               expiresAt,
 		Pending:                 v.GetPending(),
 		RedeemTx:                redeemTx,
