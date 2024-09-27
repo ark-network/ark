@@ -88,12 +88,12 @@ func (o *ArkServicePingOK) Code() int {
 
 func (o *ArkServicePingOK) Error() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/ping/{paymentId}][%d] arkServicePingOK %s", 200, payload)
+	return fmt.Sprintf("[GET /v1/round/ping/{paymentId}][%d] arkServicePingOK %s", 200, payload)
 }
 
 func (o *ArkServicePingOK) String() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/ping/{paymentId}][%d] arkServicePingOK %s", 200, payload)
+	return fmt.Sprintf("[GET /v1/round/ping/{paymentId}][%d] arkServicePingOK %s", 200, payload)
 }
 
 func (o *ArkServicePingOK) GetPayload() *models.V1PingResponse {
@@ -162,12 +162,12 @@ func (o *ArkServicePingDefault) Code() int {
 
 func (o *ArkServicePingDefault) Error() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/ping/{paymentId}][%d] ArkService_Ping default %s", o._statusCode, payload)
+	return fmt.Sprintf("[GET /v1/round/ping/{paymentId}][%d] ArkService_Ping default %s", o._statusCode, payload)
 }
 
 func (o *ArkServicePingDefault) String() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/ping/{paymentId}][%d] ArkService_Ping default %s", o._statusCode, payload)
+	return fmt.Sprintf("[GET /v1/round/ping/{paymentId}][%d] ArkService_Ping default %s", o._statusCode, payload)
 }
 
 func (o *ArkServicePingDefault) GetPayload() *models.RPCStatus {

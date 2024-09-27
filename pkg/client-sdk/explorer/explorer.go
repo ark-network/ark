@@ -80,6 +80,11 @@ type ExplorerUtxo struct {
 	} `json:"status"`
 }
 
+type SpentStatus struct {
+	Spent   bool   `json:"spent"`
+	SpentBy string `json:"txid,omitempty"`
+}
+
 func (e ExplorerUtxo) ToUtxo(delay uint) Utxo {
 	return newUtxo(e, delay)
 }
@@ -88,6 +93,7 @@ type Explorer interface {
 	GetTxHex(txid string) (string, error)
 	Broadcast(txHex string) (string, error)
 	GetTxs(addr string) ([]ExplorerTx, error)
+	GetTxOutspends(tx string) ([]SpentStatus, error)
 	GetUtxos(addr string) ([]ExplorerUtxo, error)
 	GetBalance(addr string) (uint64, error)
 	GetRedeemedVtxosBalance(
@@ -213,6 +219,28 @@ func (e *explorerSvc) GetTxs(addr string) ([]ExplorerTx, error) {
 	}
 
 	return payload, nil
+}
+
+func (e *explorerSvc) GetTxOutspends(txid string) ([]SpentStatus, error) {
+	resp, err := http.Get(fmt.Sprintf("%s/tx/%s/outspends", e.baseUrl, txid))
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get txs: %s", string(body))
+	}
+
+	spentStatuses := make([]SpentStatus, 0)
+	if err := json.Unmarshal(body, &spentStatuses); err != nil {
+		return nil, err
+	}
+	return spentStatuses, nil
 }
 
 func (e *explorerSvc) GetUtxos(addr string) ([]ExplorerUtxo, error) {

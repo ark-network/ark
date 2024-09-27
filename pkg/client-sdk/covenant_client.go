@@ -481,12 +481,12 @@ func (a *covenantArkClient) CollaborativeRedeem(
 		})
 	}
 
-	paymentID, err := a.client.RegisterPayment(ctx, inputs, "") // ephemeralPublicKey is not required for covenant
+	paymentID, err := a.client.RegisterInputsForNextRound(ctx, inputs, "") // ephemeralPublicKey is not required for covenant
 	if err != nil {
 		return "", err
 	}
 
-	if err := a.client.ClaimPayment(ctx, paymentID, receivers); err != nil {
+	if err := a.client.RegisterOutputsForNextRound(ctx, paymentID, receivers); err != nil {
 		return "", err
 	}
 
@@ -900,14 +900,14 @@ func (a *covenantArkClient) sendOffchain(
 		})
 	}
 
-	paymentID, err := a.client.RegisterPayment(
+	paymentID, err := a.client.RegisterInputsForNextRound(
 		ctx, inputs, "", // ephemeralPublicKey is not required for covenant
 	)
 	if err != nil {
 		return "", err
 	}
 
-	if err := a.client.ClaimPayment(
+	if err := a.client.RegisterOutputsForNextRound(
 		ctx, paymentID, receiversOutput,
 	); err != nil {
 		return "", err
@@ -1058,7 +1058,7 @@ func (a *covenantArkClient) handleRoundStream(
 				}
 
 				log.Info("finalizing payment... ")
-				if err := a.client.FinalizePayment(ctx, signedForfeitTxs, signedRoundTx); err != nil {
+				if err := a.client.SubmitSignedForfeitTxs(ctx, signedForfeitTxs, signedRoundTx); err != nil {
 					return "", err
 				}
 
@@ -1632,12 +1632,12 @@ func (a *covenantArkClient) selfTransferAllPendingPayments(
 
 	outputs := []client.Output{myself}
 
-	paymentID, err := a.client.RegisterPayment(ctx, inputs, "") // ephemeralPublicKey is not required for covenant
+	paymentID, err := a.client.RegisterInputsForNextRound(ctx, inputs, "") // ephemeralPublicKey is not required for covenant
 	if err != nil {
 		return "", err
 	}
 
-	if err := a.client.ClaimPayment(ctx, paymentID, outputs); err != nil {
+	if err := a.client.RegisterOutputsForNextRound(ctx, paymentID, outputs); err != nil {
 		return "", err
 	}
 

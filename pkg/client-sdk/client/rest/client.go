@@ -44,7 +44,181 @@ func NewClient(aspUrl string) (client.ASPClient, error) {
 	return &restClient{svc, reqTimeout, treeCache}, nil
 }
 
-func (c *restClient) Close() {}
+func (a *restClient) GetInfo(
+	ctx context.Context,
+) (*client.Info, error) {
+	resp, err := a.svc.ArkServiceGetInfo(ark_service.NewArkServiceGetInfoParams())
+	if err != nil {
+		return nil, err
+	}
+
+	roundLifetime, err := strconv.Atoi(resp.Payload.RoundLifetime)
+	if err != nil {
+		return nil, err
+	}
+
+	unilateralExitDelay, err := strconv.Atoi(resp.Payload.UnilateralExitDelay)
+	if err != nil {
+		return nil, err
+	}
+
+	roundInterval, err := strconv.Atoi(resp.Payload.RoundInterval)
+	if err != nil {
+		return nil, err
+	}
+
+	dust, err := strconv.Atoi(resp.Payload.Dust)
+	if err != nil {
+		return nil, err
+	}
+
+	return &client.Info{
+		Pubkey:                     resp.Payload.Pubkey,
+		RoundLifetime:              int64(roundLifetime),
+		UnilateralExitDelay:        int64(unilateralExitDelay),
+		RoundInterval:              int64(roundInterval),
+		Network:                    resp.Payload.Network,
+		Dust:                       uint64(dust),
+		BoardingDescriptorTemplate: resp.Payload.BoardingDescriptorTemplate,
+		ForfeitAddress:             resp.Payload.ForfeitAddress,
+	}, nil
+}
+
+func (a *restClient) GetBoardingAddress(
+	ctx context.Context, pubkey string,
+) (string, error) {
+	body := models.V1GetBoardingAddressRequest{
+		Pubkey: pubkey,
+	}
+
+	resp, err := a.svc.ArkServiceGetBoardingAddress(
+		ark_service.NewArkServiceGetBoardingAddressParams().WithBody(&body),
+	)
+	if err != nil {
+		return "",
+			err
+	}
+	return resp.Payload.Address, nil
+}
+
+func (a *restClient) RegisterInputsForNextRound(
+	ctx context.Context, inputs []client.Input, ephemeralPublicKey string,
+) (string, error) {
+	ins := make([]*models.V1Input, 0, len(inputs))
+	for _, i := range inputs {
+		ins = append(ins, &models.V1Input{
+			Outpoint: &models.V1Outpoint{
+				Txid: i.Txid,
+				Vout: int64(i.VOut),
+			},
+			Descriptor: i.Descriptor,
+		})
+	}
+	body := &models.V1RegisterInputsForNextRoundRequest{
+		Inputs: ins,
+	}
+	if len(ephemeralPublicKey) > 0 {
+		body.EphemeralPubkey = ephemeralPublicKey
+	}
+
+	resp, err := a.svc.ArkServiceRegisterInputsForNextRound(
+		ark_service.NewArkServiceRegisterInputsForNextRoundParams().WithBody(body),
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return resp.Payload.ID, nil
+}
+
+func (a *restClient) RegisterOutputsForNextRound(
+	ctx context.Context, paymentID string, outputs []client.Output,
+) error {
+	outs := make([]*models.V1Output, 0, len(outputs))
+	for _, o := range outputs {
+		outs = append(outs, &models.V1Output{
+			Address:    o.Address,
+			Descriptor: o.Descriptor,
+			Amount:     strconv.Itoa(int(o.Amount)),
+		})
+	}
+	body := models.V1RegisterOutputsForNextRoundRequest{
+		ID:      paymentID,
+		Outputs: outs,
+	}
+
+	_, err := a.svc.ArkServiceRegisterOutputsForNextRound(
+		ark_service.NewArkServiceRegisterOutputsForNextRoundParams().WithBody(&body),
+	)
+	return err
+}
+
+func (a *restClient) SubmitTreeNonces(
+	ctx context.Context, roundID, cosignerPubkey string,
+	nonces bitcointree.TreeNonces,
+) error {
+	var nonceBuffer bytes.Buffer
+
+	if err := nonces.Encode(&nonceBuffer); err != nil {
+		return err
+	}
+
+	serializedNonces := hex.EncodeToString(nonceBuffer.Bytes())
+
+	body := &models.V1SubmitTreeNoncesRequest{
+		RoundID:    roundID,
+		Pubkey:     cosignerPubkey,
+		TreeNonces: serializedNonces,
+	}
+
+	if _, err := a.svc.ArkServiceSubmitTreeNonces(
+		ark_service.NewArkServiceSubmitTreeNoncesParams().WithBody(body),
+	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (a *restClient) SubmitTreeSignatures(
+	ctx context.Context, roundID, cosignerPubkey string,
+	signatures bitcointree.TreePartialSigs,
+) error {
+	var sigsBuffer bytes.Buffer
+
+	if err := signatures.Encode(&sigsBuffer); err != nil {
+		return err
+	}
+
+	serializedSigs := hex.EncodeToString(sigsBuffer.Bytes())
+
+	body := &models.V1SubmitTreeSignaturesRequest{
+		RoundID:        roundID,
+		Pubkey:         cosignerPubkey,
+		TreeSignatures: serializedSigs,
+	}
+
+	if _, err := a.svc.ArkServiceSubmitTreeSignatures(
+		ark_service.NewArkServiceSubmitTreeSignaturesParams().WithBody(body),
+	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (a *restClient) SubmitSignedForfeitTxs(
+	ctx context.Context, signedForfeitTxs []string, signedRoundTx string,
+) error {
+	body := models.V1SubmitSignedForfeitTxsRequest{
+		SignedForfeitTxs: signedForfeitTxs,
+		SignedRoundTx:    signedRoundTx,
+	}
+	_, err := a.svc.ArkServiceSubmitSignedForfeitTxs(
+		ark_service.NewArkServiceSubmitSignedForfeitTxsParams().WithBody(&body),
+	)
+	return err
+}
 
 func (a *restClient) GetEventStream(
 	ctx context.Context, paymentID string,
@@ -94,43 +268,211 @@ func (a *restClient) GetEventStream(
 	return eventsCh, close, nil
 }
 
-func (a *restClient) GetInfo(
-	ctx context.Context,
-) (*client.Info, error) {
-	resp, err := a.svc.ArkServiceGetInfo(ark_service.NewArkServiceGetInfoParams())
+func (a *restClient) Ping(
+	ctx context.Context, paymentID string,
+) (client.RoundEvent, error) {
+	r := ark_service.NewArkServicePingParams()
+	r.SetPaymentID(paymentID)
+	resp, err := a.svc.ArkServicePing(r)
 	if err != nil {
 		return nil, err
 	}
 
-	roundLifetime, err := strconv.Atoi(resp.Payload.RoundLifetime)
+	payload := resp.Payload
+
+	if e := payload.RoundFailed; e != nil {
+		return client.RoundFailedEvent{
+			ID:     e.ID,
+			Reason: e.Reason,
+		}, nil
+	}
+	if e := payload.RoundFinalization; e != nil {
+		tree := treeFromProto{e.VtxoTree}.parse()
+
+		minRelayFeeRate, err := strconv.Atoi(e.MinRelayFeeRate)
+		if err != nil {
+			return nil, err
+		}
+
+		return client.RoundFinalizationEvent{
+			ID:              e.ID,
+			Tx:              e.RoundTx,
+			Tree:            tree,
+			Connectors:      e.Connectors,
+			MinRelayFeeRate: chainfee.SatPerKVByte(minRelayFeeRate),
+		}, nil
+	}
+
+	if e := payload.RoundFinalized; e != nil {
+		return client.RoundFinalizedEvent{
+			ID:   e.ID,
+			Txid: e.RoundTxid,
+		}, nil
+	}
+
+	if e := payload.RoundSigning; e != nil {
+		pubkeys := make([]*secp256k1.PublicKey, 0, len(e.CosignersPubkeys))
+		for _, pubkey := range e.CosignersPubkeys {
+			p, err := hex.DecodeString(pubkey)
+			if err != nil {
+				return nil, err
+			}
+			pk, err := secp256k1.ParsePubKey(p)
+			if err != nil {
+				return nil, err
+			}
+			pubkeys = append(pubkeys, pk)
+		}
+
+		return client.RoundSigningStartedEvent{
+			ID:                  e.ID,
+			UnsignedTree:        treeFromProto{e.UnsignedVtxoTree}.parse(),
+			CosignersPublicKeys: pubkeys,
+			UnsignedRoundTx:     e.UnsignedRoundTx,
+		}, nil
+	}
+
+	if e := payload.RoundSigningNoncesGenerated; e != nil {
+		reader := hex.NewDecoder(strings.NewReader(e.TreeNonces))
+		nonces, err := bitcointree.DecodeNonces(reader)
+		if err != nil {
+			return nil, err
+		}
+		return client.RoundSigningNoncesGeneratedEvent{
+			ID:     e.ID,
+			Nonces: nonces,
+		}, nil
+	}
+
+	return nil, nil
+}
+
+func (a *restClient) CreatePayment(
+	ctx context.Context, inputs []client.Input, outputs []client.Output,
+) (string, []string, error) {
+	ins := make([]*models.V1Input, 0, len(inputs))
+	for _, i := range inputs {
+		ins = append(ins, &models.V1Input{
+			Outpoint: &models.V1Outpoint{
+				Txid: i.Txid,
+				Vout: int64(i.VOut),
+			},
+			Descriptor: i.Descriptor,
+		})
+	}
+	outs := make([]*models.V1Output, 0, len(outputs))
+	for _, o := range outputs {
+		outs = append(outs, &models.V1Output{
+			Address:    o.Address,
+			Amount:     strconv.Itoa(int(o.Amount)),
+			Descriptor: o.Descriptor,
+		})
+	}
+	body := models.V1CreatePaymentRequest{
+		Inputs:  ins,
+		Outputs: outs,
+	}
+	resp, err := a.svc.ArkServiceCreatePayment(
+		ark_service.NewArkServiceCreatePaymentParams().WithBody(&body),
+	)
+	if err != nil {
+		return "", nil, err
+	}
+	return resp.GetPayload().SignedRedeemTx, resp.GetPayload().UsignedUnconditionalForfeitTxs, nil
+}
+
+func (a *restClient) CompletePayment(
+	ctx context.Context, signedRedeemTx string, signedUncondForfeitTxs []string,
+) error {
+	req := &arkv1.CompletePaymentRequest{
+		SignedRedeemTx:                signedRedeemTx,
+		SignedUnconditionalForfeitTxs: signedUncondForfeitTxs,
+	}
+	body := models.V1CompletePaymentRequest{
+		SignedRedeemTx:                req.GetSignedRedeemTx(),
+		SignedUnconditionalForfeitTxs: req.GetSignedUnconditionalForfeitTxs(),
+	}
+	_, err := a.svc.ArkServiceCompletePayment(
+		ark_service.NewArkServiceCompletePaymentParams().WithBody(&body),
+	)
+	return err
+}
+
+func (a *restClient) GetRound(
+	ctx context.Context, txID string,
+) (*client.Round, error) {
+	resp, err := a.svc.ArkServiceGetRound(
+		ark_service.NewArkServiceGetRoundParams().WithTxid(txID),
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	unilateralExitDelay, err := strconv.Atoi(resp.Payload.UnilateralExitDelay)
+	start, err := strconv.Atoi(resp.Payload.Round.Start)
 	if err != nil {
 		return nil, err
 	}
 
-	roundInterval, err := strconv.Atoi(resp.Payload.RoundInterval)
+	end, err := strconv.Atoi(resp.Payload.Round.End)
 	if err != nil {
 		return nil, err
 	}
 
-	dust, err := strconv.Atoi(resp.Payload.Dust)
+	startedAt := time.Unix(int64(start), 0)
+	var endedAt *time.Time
+	if end > 0 {
+		t := time.Unix(int64(end), 0)
+		endedAt = &t
+	}
+
+	return &client.Round{
+		ID:         resp.Payload.Round.ID,
+		StartedAt:  &startedAt,
+		EndedAt:    endedAt,
+		Tx:         resp.Payload.Round.RoundTx,
+		Tree:       treeFromProto{resp.Payload.Round.VtxoTree}.parse(),
+		ForfeitTxs: resp.Payload.Round.ForfeitTxs,
+		Connectors: resp.Payload.Round.Connectors,
+		Stage:      toRoundStage(*resp.Payload.Round.Stage),
+	}, nil
+}
+
+func (a *restClient) GetRoundByID(
+	ctx context.Context, roundID string,
+) (*client.Round, error) {
+	resp, err := a.svc.ArkServiceGetRoundByID(
+		ark_service.NewArkServiceGetRoundByIDParams().WithID(roundID),
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	return &client.Info{
-		Pubkey:                     resp.Payload.Pubkey,
-		RoundLifetime:              int64(roundLifetime),
-		UnilateralExitDelay:        int64(unilateralExitDelay),
-		RoundInterval:              int64(roundInterval),
-		Network:                    resp.Payload.Network,
-		Dust:                       uint64(dust),
-		BoardingDescriptorTemplate: resp.Payload.BoardingDescriptorTemplate,
-		ForfeitAddress:             resp.Payload.ForfeitAddress,
+	start, err := strconv.Atoi(resp.Payload.Round.Start)
+	if err != nil {
+		return nil, err
+	}
+
+	end, err := strconv.Atoi(resp.Payload.Round.End)
+	if err != nil {
+		return nil, err
+	}
+
+	startedAt := time.Unix(int64(start), 0)
+	var endedAt *time.Time
+	if end > 0 {
+		t := time.Unix(int64(end), 0)
+		endedAt = &t
+	}
+
+	return &client.Round{
+		ID:         resp.Payload.Round.ID,
+		StartedAt:  &startedAt,
+		EndedAt:    endedAt,
+		Tx:         resp.Payload.Round.RoundTx,
+		Tree:       treeFromProto{resp.Payload.Round.VtxoTree}.parse(),
+		ForfeitTxs: resp.Payload.Round.ForfeitTxs,
+		Connectors: resp.Payload.Round.Connectors,
+		Stage:      toRoundStage(*resp.Payload.Round.Stage),
 	}, nil
 }
 
@@ -174,10 +516,9 @@ func (a *restClient) ListVtxos(
 				VOut: uint32(v.Outpoint.Vout),
 			},
 			Amount:                  uint64(amount),
-			RoundTxid:               v.PoolTxid,
+			RoundTxid:               v.RoundTxid,
 			ExpiresAt:               expiresAt,
 			Pending:                 v.Pending,
-			PendingChange:           v.PendingChange,
 			RedeemTx:                redeemTx,
 			UnconditionalForfeitTxs: uncondForfeitTxs,
 			SpentBy:                 v.SpentBy,
@@ -208,7 +549,7 @@ func (a *restClient) ListVtxos(
 				VOut: uint32(v.Outpoint.Vout),
 			},
 			Amount:     uint64(amount),
-			RoundTxid:  v.PoolTxid,
+			RoundTxid:  v.RoundTxid,
 			ExpiresAt:  expiresAt,
 			SpentBy:    v.SpentBy,
 			Descriptor: v.Descriptor,
@@ -218,345 +559,7 @@ func (a *restClient) ListVtxos(
 	return spendableVtxos, spentVtxos, nil
 }
 
-func (a *restClient) GetRound(
-	ctx context.Context, txID string,
-) (*client.Round, error) {
-	resp, err := a.svc.ArkServiceGetRound(
-		ark_service.NewArkServiceGetRoundParams().WithTxid(txID),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	start, err := strconv.Atoi(resp.Payload.Round.Start)
-	if err != nil {
-		return nil, err
-	}
-
-	end, err := strconv.Atoi(resp.Payload.Round.End)
-	if err != nil {
-		return nil, err
-	}
-
-	startedAt := time.Unix(int64(start), 0)
-	var endedAt *time.Time
-	if end > 0 {
-		t := time.Unix(int64(end), 0)
-		endedAt = &t
-	}
-
-	return &client.Round{
-		ID:         resp.Payload.Round.ID,
-		StartedAt:  &startedAt,
-		EndedAt:    endedAt,
-		Tx:         resp.Payload.Round.PoolTx,
-		Tree:       treeFromProto{resp.Payload.Round.CongestionTree}.parse(),
-		ForfeitTxs: resp.Payload.Round.ForfeitTxs,
-		Connectors: resp.Payload.Round.Connectors,
-		Stage:      toRoundStage(*resp.Payload.Round.Stage),
-	}, nil
-}
-
-func (a *restClient) RegisterPayment(
-	ctx context.Context, inputs []client.Input, ephemeralPublicKey string,
-) (string, error) {
-	ins := make([]*models.V1Input, 0, len(inputs))
-	for _, i := range inputs {
-		ins = append(ins, &models.V1Input{
-			Outpoint: &models.V1Outpoint{
-				Txid: i.Txid,
-				Vout: int64(i.VOut),
-			},
-			Descriptor: i.Descriptor,
-		})
-	}
-	body := &models.V1RegisterPaymentRequest{
-		Inputs: ins,
-	}
-	if len(ephemeralPublicKey) > 0 {
-		body.EphemeralPubkey = ephemeralPublicKey
-	}
-
-	resp, err := a.svc.ArkServiceRegisterPayment(
-		ark_service.NewArkServiceRegisterPaymentParams().WithBody(body),
-	)
-	if err != nil {
-		return "", err
-	}
-
-	return resp.Payload.ID, nil
-}
-
-func (a *restClient) ClaimPayment(
-	ctx context.Context, paymentID string, outputs []client.Output,
-) error {
-	outs := make([]*models.V1Output, 0, len(outputs))
-	for _, o := range outputs {
-		outs = append(outs, &models.V1Output{
-			Address: o.Address,
-			Amount:  strconv.Itoa(int(o.Amount)),
-		})
-	}
-	body := models.V1ClaimPaymentRequest{
-		ID:      paymentID,
-		Outputs: outs,
-	}
-
-	_, err := a.svc.ArkServiceClaimPayment(
-		ark_service.NewArkServiceClaimPaymentParams().WithBody(&body),
-	)
-	return err
-}
-
-func (a *restClient) Ping(
-	ctx context.Context, paymentID string,
-) (client.RoundEvent, error) {
-	r := ark_service.NewArkServicePingParams()
-	r.SetPaymentID(paymentID)
-	resp, err := a.svc.ArkServicePing(r)
-	if err != nil {
-		return nil, err
-	}
-
-	payload := resp.Payload
-
-	if e := payload.RoundFailed; e != nil {
-		return client.RoundFailedEvent{
-			ID:     e.ID,
-			Reason: e.Reason,
-		}, nil
-	}
-	if e := payload.RoundFinalization; e != nil {
-		tree := treeFromProto{e.CongestionTree}.parse()
-
-		minRelayFeeRate, err := strconv.Atoi(e.MinRelayFeeRate)
-		if err != nil {
-			return nil, err
-		}
-
-		return client.RoundFinalizationEvent{
-			ID:              e.ID,
-			Tx:              e.PoolTx,
-			Tree:            tree,
-			Connectors:      e.Connectors,
-			MinRelayFeeRate: chainfee.SatPerKVByte(minRelayFeeRate),
-		}, nil
-	}
-
-	if e := payload.RoundFinalized; e != nil {
-		return client.RoundFinalizedEvent{
-			ID:   e.ID,
-			Txid: e.PoolTxid,
-		}, nil
-	}
-
-	if e := payload.RoundSigning; e != nil {
-		pubkeys := make([]*secp256k1.PublicKey, 0, len(e.CosignersPubkeys))
-		for _, pubkey := range e.CosignersPubkeys {
-			p, err := hex.DecodeString(pubkey)
-			if err != nil {
-				return nil, err
-			}
-			pk, err := secp256k1.ParsePubKey(p)
-			if err != nil {
-				return nil, err
-			}
-			pubkeys = append(pubkeys, pk)
-		}
-
-		return client.RoundSigningStartedEvent{
-			ID:                  e.ID,
-			UnsignedTree:        treeFromProto{e.UnsignedTree}.parse(),
-			CosignersPublicKeys: pubkeys,
-			UnsignedRoundTx:     e.UnsignedRoundTx,
-		}, nil
-	}
-
-	if e := payload.RoundSigningNoncesGenerated; e != nil {
-		nonces, err := bitcointree.DecodeNonces(hex.NewDecoder(strings.NewReader(e.TreeNonces)))
-		if err != nil {
-			return nil, err
-		}
-		return client.RoundSigningNoncesGeneratedEvent{
-			ID:     e.ID,
-			Nonces: nonces,
-		}, nil
-	}
-
-	return nil, nil
-}
-
-func (a *restClient) FinalizePayment(
-	ctx context.Context, signedForfeitTxs []string, signedRoundTx string,
-) error {
-	body := models.V1FinalizePaymentRequest{
-		SignedForfeitTxs: signedForfeitTxs,
-		SignedRoundTx:    signedRoundTx,
-	}
-	_, err := a.svc.ArkServiceFinalizePayment(
-		ark_service.NewArkServiceFinalizePaymentParams().WithBody(&body),
-	)
-	return err
-}
-
-func (a *restClient) CreatePayment(
-	ctx context.Context, inputs []client.Input, outputs []client.Output,
-) (string, []string, error) {
-	ins := make([]*models.V1Input, 0, len(inputs))
-	for _, i := range inputs {
-		ins = append(ins, &models.V1Input{
-			Outpoint: &models.V1Outpoint{
-				Txid: i.Txid,
-				Vout: int64(i.VOut),
-			},
-			Descriptor: i.Descriptor,
-		})
-	}
-	outs := make([]*models.V1Output, 0, len(outputs))
-	for _, o := range outputs {
-		outs = append(outs, &models.V1Output{
-			Address:    o.Address,
-			Amount:     strconv.Itoa(int(o.Amount)),
-			Descriptor: o.Descriptor,
-		})
-	}
-	body := models.V1CreatePaymentRequest{
-		Inputs:  ins,
-		Outputs: outs,
-	}
-	resp, err := a.svc.ArkServiceCreatePayment(
-		ark_service.NewArkServiceCreatePaymentParams().WithBody(&body),
-	)
-	if err != nil {
-		return "", nil, err
-	}
-	return resp.GetPayload().SignedRedeemTx, resp.GetPayload().UsignedUnconditionalForfeitTxs, nil
-}
-
-func (a *restClient) CompletePayment(
-	ctx context.Context, signedRedeemTx string, signedUnconditionalForfeitTxs []string,
-) error {
-	req := &arkv1.CompletePaymentRequest{
-		SignedRedeemTx:                signedRedeemTx,
-		SignedUnconditionalForfeitTxs: signedUnconditionalForfeitTxs,
-	}
-	body := models.V1CompletePaymentRequest{
-		SignedRedeemTx:                req.GetSignedRedeemTx(),
-		SignedUnconditionalForfeitTxs: req.GetSignedUnconditionalForfeitTxs(),
-	}
-	_, err := a.svc.ArkServiceCompletePayment(
-		ark_service.NewArkServiceCompletePaymentParams().WithBody(&body),
-	)
-	return err
-}
-
-func (a *restClient) GetRoundByID(
-	ctx context.Context, roundID string,
-) (*client.Round, error) {
-	resp, err := a.svc.ArkServiceGetRoundByID(
-		ark_service.NewArkServiceGetRoundByIDParams().WithID(roundID),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	start, err := strconv.Atoi(resp.Payload.Round.Start)
-	if err != nil {
-		return nil, err
-	}
-
-	end, err := strconv.Atoi(resp.Payload.Round.End)
-	if err != nil {
-		return nil, err
-	}
-
-	startedAt := time.Unix(int64(start), 0)
-	var endedAt *time.Time
-	if end > 0 {
-		t := time.Unix(int64(end), 0)
-		endedAt = &t
-	}
-
-	return &client.Round{
-		ID:         resp.Payload.Round.ID,
-		StartedAt:  &startedAt,
-		EndedAt:    endedAt,
-		Tx:         resp.Payload.Round.PoolTx,
-		Tree:       treeFromProto{resp.Payload.Round.CongestionTree}.parse(),
-		ForfeitTxs: resp.Payload.Round.ForfeitTxs,
-		Connectors: resp.Payload.Round.Connectors,
-		Stage:      toRoundStage(*resp.Payload.Round.Stage),
-	}, nil
-}
-
-func (a *restClient) GetBoardingAddress(
-	ctx context.Context, pubkey string,
-) (string, error) {
-	body := models.V1GetBoardingAddressRequest{
-		Pubkey: pubkey,
-	}
-
-	resp, err := a.svc.ArkServiceGetBoardingAddress(
-		ark_service.NewArkServiceGetBoardingAddressParams().WithBody(&body),
-	)
-	if err != nil {
-		return "",
-			err
-	}
-	return resp.Payload.Address, nil
-}
-
-func (a *restClient) SendTreeNonces(
-	ctx context.Context, roundID, cosignerPubkey string, nonces bitcointree.TreeNonces,
-) error {
-	var nonceBuffer bytes.Buffer
-
-	if err := nonces.Encode(&nonceBuffer); err != nil {
-		return err
-	}
-
-	serializedNonces := hex.EncodeToString(nonceBuffer.Bytes())
-
-	body := &models.V1SendTreeNoncesRequest{
-		RoundID:    roundID,
-		PublicKey:  cosignerPubkey,
-		TreeNonces: serializedNonces,
-	}
-
-	if _, err := a.svc.ArkServiceSendTreeNonces(
-		ark_service.NewArkServiceSendTreeNoncesParams().WithBody(body),
-	); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (a *restClient) SendTreeSignatures(
-	ctx context.Context, roundID, cosignerPubkey string, signatures bitcointree.TreePartialSigs,
-) error {
-	var sigsBuffer bytes.Buffer
-
-	if err := signatures.Encode(&sigsBuffer); err != nil {
-		return err
-	}
-
-	serializedSigs := hex.EncodeToString(sigsBuffer.Bytes())
-
-	body := &models.V1SendTreeSignaturesRequest{
-		RoundID:        roundID,
-		PublicKey:      cosignerPubkey,
-		TreeSignatures: serializedSigs,
-	}
-
-	if _, err := a.svc.ArkServiceSendTreeSignatures(
-		ark_service.NewArkServiceSendTreeSignaturesParams().WithBody(body),
-	); err != nil {
-		return err
-	}
-
-	return nil
-}
+func (c *restClient) Close() {}
 
 func newRestClient(
 	serviceURL string,

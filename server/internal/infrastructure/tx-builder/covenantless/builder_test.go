@@ -77,7 +77,7 @@ func TestBuildPoolTx(t *testing.T) {
 					cosigners = append(cosigners, randKey.PubKey())
 				}
 
-				poolTx, congestionTree, connAddr, err := builder.BuildPoolTx(
+				poolTx, congestionTree, connAddr, err := builder.BuildRoundTx(
 					pubkey, f.Payments, []ports.BoardingInput{}, []domain.Round{}, cosigners...,
 				)
 				require.NoError(t, err)
@@ -98,7 +98,7 @@ func TestBuildPoolTx(t *testing.T) {
 	if len(fixtures.Invalid) > 0 {
 		t.Run("invalid", func(t *testing.T) {
 			for _, f := range fixtures.Invalid {
-				poolTx, congestionTree, connAddr, err := builder.BuildPoolTx(
+				poolTx, congestionTree, connAddr, err := builder.BuildRoundTx(
 					pubkey, f.Payments, []ports.BoardingInput{}, []domain.Round{},
 				)
 				require.EqualError(t, err, f.ExpectedErr)

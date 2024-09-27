@@ -1,4 +1,4 @@
-ALTER TABLE vtxo ADD COLUMN pending_change BOOLEAN;
+ALTER TABLE vtxo ADD COLUMN pending BOOLEAN NOT NULL;
 
 DROP VIEW payment_vtxo_vw;
 DROP VIEW payment_receiver_vw;
