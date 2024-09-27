@@ -118,7 +118,7 @@ func (b *txBuilder) BuildForfeitTxs(
 	return connectors, forfeitTxs, nil
 }
 
-func (b *txBuilder) BuildPoolTx(
+func (b *txBuilder) BuildRoundTx(
 	aspPubkey *secp256k1.PublicKey,
 	payments []domain.Payment,
 	boardingInputs []ports.BoardingInput,

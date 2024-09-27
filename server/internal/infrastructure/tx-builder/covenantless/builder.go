@@ -257,13 +257,13 @@ func (b *txBuilder) BuildForfeitTxs(
 	return connectors, forfeitTxs, nil
 }
 
-func (b *txBuilder) BuildPoolTx(
+func (b *txBuilder) BuildRoundTx(
 	aspPubkey *secp256k1.PublicKey,
 	payments []domain.Payment,
 	boardingInputs []ports.BoardingInput,
 	sweptRounds []domain.Round,
 	cosigners ...*secp256k1.PublicKey,
-) (poolTx string, congestionTree tree.CongestionTree, connectorAddress string, err error) {
+) (roundTx string, congestionTree tree.CongestionTree, connectorAddress string, err error) {
 	var sharedOutputScript []byte
 	var sharedOutputAmount int64
 
@@ -295,14 +295,14 @@ func (b *txBuilder) BuildPoolTx(
 		return
 	}
 
-	ptx, err := b.createPoolTx(
+	ptx, err := b.createRoundTx(
 		sharedOutputAmount, sharedOutputScript, payments, boardingInputs, connectorAddress, sweptRounds,
 	)
 	if err != nil {
 		return
 	}
 
-	poolTx, err = ptx.B64Encode()
+	roundTx, err = ptx.B64Encode()
 	if err != nil {
 		return
 	}
@@ -614,7 +614,7 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 }
 
 // TODO use lnd CoinSelect to craft the pool tx
-func (b *txBuilder) createPoolTx(
+func (b *txBuilder) createRoundTx(
 	sharedOutputAmount int64,
 	sharedOutputScript []byte,
 	payments []domain.Payment,
