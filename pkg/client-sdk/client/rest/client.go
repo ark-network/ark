@@ -167,7 +167,7 @@ func (a *restClient) SubmitTreeNonces(
 
 	body := &models.V1SubmitTreeNoncesRequest{
 		RoundID:    roundID,
-		PublicKey:  cosignerPubkey,
+		Pubkey:     cosignerPubkey,
 		TreeNonces: serializedNonces,
 	}
 
@@ -194,7 +194,7 @@ func (a *restClient) SubmitTreeSignatures(
 
 	body := &models.V1SubmitTreeSignaturesRequest{
 		RoundID:        roundID,
-		PublicKey:      cosignerPubkey,
+		Pubkey:         cosignerPubkey,
 		TreeSignatures: serializedSigs,
 	}
 
@@ -287,7 +287,7 @@ func (a *restClient) Ping(
 		}, nil
 	}
 	if e := payload.RoundFinalization; e != nil {
-		tree := treeFromProto{e.CongestionTree}.parse()
+		tree := treeFromProto{e.VtxoTree}.parse()
 
 		minRelayFeeRate, err := strconv.Atoi(e.MinRelayFeeRate)
 		if err != nil {
@@ -326,7 +326,7 @@ func (a *restClient) Ping(
 
 		return client.RoundSigningStartedEvent{
 			ID:                  e.ID,
-			UnsignedTree:        treeFromProto{e.UnsignedTree}.parse(),
+			UnsignedTree:        treeFromProto{e.UnsignedVtxoTree}.parse(),
 			CosignersPublicKeys: pubkeys,
 			UnsignedRoundTx:     e.UnsignedRoundTx,
 		}, nil
@@ -430,7 +430,7 @@ func (a *restClient) GetRound(
 		StartedAt:  &startedAt,
 		EndedAt:    endedAt,
 		Tx:         resp.Payload.Round.RoundTx,
-		Tree:       treeFromProto{resp.Payload.Round.CongestionTree}.parse(),
+		Tree:       treeFromProto{resp.Payload.Round.VtxoTree}.parse(),
 		ForfeitTxs: resp.Payload.Round.ForfeitTxs,
 		Connectors: resp.Payload.Round.Connectors,
 		Stage:      toRoundStage(*resp.Payload.Round.Stage),
@@ -469,7 +469,7 @@ func (a *restClient) GetRoundByID(
 		StartedAt:  &startedAt,
 		EndedAt:    endedAt,
 		Tx:         resp.Payload.Round.RoundTx,
-		Tree:       treeFromProto{resp.Payload.Round.CongestionTree}.parse(),
+		Tree:       treeFromProto{resp.Payload.Round.VtxoTree}.parse(),
 		ForfeitTxs: resp.Payload.Round.ForfeitTxs,
 		Connectors: resp.Payload.Round.Connectors,
 		Stage:      toRoundStage(*resp.Payload.Round.Stage),

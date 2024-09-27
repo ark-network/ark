@@ -55,7 +55,7 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 		}, nil
 	}
 	if ee := e.GetRoundFinalization(); ee != nil {
-		tree := treeFromProto{ee.GetCongestionTree()}.parse()
+		tree := treeFromProto{ee.GetVtxoTree()}.parse()
 		return client.RoundFinalizationEvent{
 			ID:              ee.GetId(),
 			Tx:              ee.GetRoundTxid(),
@@ -88,7 +88,7 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 
 		return client.RoundSigningStartedEvent{
 			ID:                  ee.GetId(),
-			UnsignedTree:        treeFromProto{ee.GetUnsignedTree()}.parse(),
+			UnsignedTree:        treeFromProto{ee.GetUnsignedVtxoTree()}.parse(),
 			CosignersPublicKeys: pubkeys,
 			UnsignedRoundTx:     ee.GetUnsignedRoundTx(),
 		}, nil
