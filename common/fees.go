@@ -21,9 +21,9 @@ var TreeTxSize = (&input.TxWeightEstimator{}).
 var CovenantTreeTxSize = TreeTxSize * 2
 
 var ConnectorTxSize = (&input.TxWeightEstimator{}).
-	AddP2WKHInput().
-	AddP2WKHOutput().
-	AddP2WKHOutput().
+	AddTaprootKeySpendInput(txscript.SigHashDefault).
+	AddP2TROutput().
+	AddP2TROutput().
 	VSize()
 
 func ComputeForfeitMinRelayFee(

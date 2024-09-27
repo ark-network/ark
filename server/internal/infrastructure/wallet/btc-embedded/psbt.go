@@ -70,14 +70,11 @@ func (s *service) signPsbt(packet *psbt.Packet, inputsToSign []int) ([]uint32, e
 		}
 
 		var managedAddress waddrmgr.ManagedPubKeyAddress
-		var isTaproot bool
+		isTaproot := txscript.IsPayToTaproot(in.WitnessUtxo.PkScript)
 
-		if len(in.TaprootLeafScript) > 0 && txscript.IsPayToTaproot(in.WitnessUtxo.PkScript) {
-			// segwit v1
-			isTaproot = true
-			managedAddress = s.aspTaprootAddr
+		if len(in.TaprootLeafScript) > 0 {
+			managedAddress = s.aspKeyAddr
 		} else {
-			// segwit v0
 			var err error
 			managedAddress, _, _, err = s.wallet.ScriptForOutput(in.WitnessUtxo)
 			if err != nil {

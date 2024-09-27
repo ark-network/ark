@@ -77,6 +77,8 @@ var (
 	}
 )
 
+var timeout = time.Minute
+
 func walletStatusAction(ctx *cli.Context) error {
 	baseURL := ctx.String("url")
 	tlsCertPath := ctx.String("tls-cert-path")
@@ -220,7 +222,7 @@ func post[T any](url, body, key, macaroon, tlsCert string) (result T, err error)
 		req.Header.Add("X-Macaroon", macaroon)
 	}
 	client := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: timeout,
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,
 		},
@@ -267,7 +269,7 @@ func get[T any](url, key, macaroon, tlsCert string) (result T, err error) {
 	}
 
 	client := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: timeout,
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,
 		},
@@ -331,7 +333,7 @@ func getBalance(url, macaroon, tlsCert string) (*balance, error) {
 		req.Header.Add("X-Macaroon", macaroon)
 	}
 	client := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: timeout,
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,
 		},
@@ -384,7 +386,7 @@ func getStatus(url, tlsCert string) (*status, error) {
 	req.Header.Add("Content-Type", "application/json")
 
 	client := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: timeout,
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,
 		},
