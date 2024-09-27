@@ -292,7 +292,7 @@ func (s *service) GenSeed(_ context.Context) (string, error) {
 }
 
 func (s *service) Create(_ context.Context, seed, password string) error {
-	return s.create(seed, password, 512)
+	return s.create(seed, password, 0)
 }
 
 func (s *service) Restore(_ context.Context, seed, password string) error {
