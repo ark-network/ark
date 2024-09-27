@@ -28,10 +28,10 @@ type BoardingInput struct {
 }
 
 type TxBuilder interface {
-	BuildPoolTx(
+	BuildRoundTx(
 		aspPubkey *secp256k1.PublicKey, payments []domain.Payment, boardingInputs []BoardingInput, sweptRounds []domain.Round,
 		cosigners ...*secp256k1.PublicKey,
-	) (poolTx string, congestionTree tree.CongestionTree, connectorAddress string, err error)
+	) (roundTx string, congestionTree tree.CongestionTree, connectorAddress string, err error)
 	BuildForfeitTxs(poolTx string, payments []domain.Payment, minRelayFeeRate chainfee.SatPerKVByte) (connectors []string, forfeitTxs []string, err error)
 	BuildSweepTx(inputs []SweepInput) (signedSweepTx string, err error)
 	GetSweepInput(parentblocktime int64, node tree.Node) (expirationtime int64, sweepInput SweepInput, err error)
