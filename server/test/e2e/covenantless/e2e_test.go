@@ -16,7 +16,7 @@ import (
 	grpcclient "github.com/ark-network/ark/pkg/client-sdk/client/grpc"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/redemption"
-	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
+	"github.com/ark-network/ark/pkg/client-sdk/store"
 	utils "github.com/ark-network/ark/server/test/e2e"
 	"github.com/stretchr/testify/require"
 )
@@ -450,10 +450,14 @@ func setupAspWallet() error {
 }
 
 func setupArkSDK(t *testing.T) (arksdk.ArkClient, client.ASPClient) {
-	storeSvc, err := inmemorystore.NewConfigStore()
+	appDataStore, err := store.NewService(store.Config{
+		ConfigStoreType:  store.FileStore,
+		AppDataStoreType: store.Badger,
+		BaseDir:          t.TempDir(),
+	})
 	require.NoError(t, err)
 
-	client, err := arksdk.NewCovenantlessClient(storeSvc)
+	client, err := arksdk.NewCovenantlessClient(appDataStore)
 	require.NoError(t, err)
 
 	err = client.Init(context.Background(), arksdk.InitArgs{
