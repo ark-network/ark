@@ -140,5 +140,6 @@ func TestNewService(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, retrievedTxs, 2)
 
-	service.AppDataRepository().Stop()
+	err = service.AppDataRepository().Stop()
+	require.NoError(t, err)
 }

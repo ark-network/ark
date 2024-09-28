@@ -53,13 +53,6 @@ var (
 	}
 )
 
-const (
-	vtxoSpent   spent = true
-	vtxoUnspent spent = false
-)
-
-type spent bool
-
 type arkClient struct {
 	ctxListenVtxo       context.Context
 	ctxCancelListenVtxo context.CancelFunc

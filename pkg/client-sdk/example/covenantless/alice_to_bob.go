@@ -156,6 +156,10 @@ func setupArkClient(wallet string) (arksdk.ArkClient, error) {
 		AppDataStoreType: store.Badger,
 		BaseDir:          dbDir,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup app data store: %s", err)
+	}
+
 	client, err := arksdk.NewCovenantlessClient(appDataStore)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup ark client: %s", err)
