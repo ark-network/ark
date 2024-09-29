@@ -20,13 +20,13 @@ func TestUpdateBoardingTxsState(t *testing.T) {
 	}{
 		{
 			description:        "No boarding transactions in both lists",
-			allBoardingTxs:     []domain.Transaction{},
-			oldBoardingTxs:     []domain.Transaction{},
-			expectedNewTxs:     []domain.Transaction{},
-			expectedUpdatedTxs: []domain.Transaction{},
+			allBoardingTxs:     nil,
+			oldBoardingTxs:     nil,
+			expectedNewTxs:     nil,
+			expectedUpdatedTxs: nil,
 		},
 		{
-			description: "All old boarding txs are still pending and present in new list",
+			description: "1",
 			allBoardingTxs: []domain.Transaction{
 				{BoardingTxid: "tx1", IsPending: true, CreatedAt: now},
 				{BoardingTxid: "tx2", IsPending: true, CreatedAt: now},
@@ -35,55 +35,54 @@ func TestUpdateBoardingTxsState(t *testing.T) {
 				{BoardingTxid: "tx1", IsPending: true, CreatedAt: now},
 				{BoardingTxid: "tx2", IsPending: true, CreatedAt: now},
 			},
-			expectedNewTxs:     []domain.Transaction{},
-			expectedUpdatedTxs: []domain.Transaction{},
+			expectedNewTxs:     nil,
+			expectedUpdatedTxs: nil,
 		},
 		{
-			description: "Some old boarding txs not in new list (should be marked as pending=false)",
+			description: "2",
 			allBoardingTxs: []domain.Transaction{
-				{BoardingTxid: "tx1", IsPending: true, CreatedAt: now},
-			},
-			oldBoardingTxs: []domain.Transaction{
-				{BoardingTxid: "tx1", IsPending: true, CreatedAt: now},
+				{BoardingTxid: "tx1", IsPending: false, CreatedAt: now},
 				{BoardingTxid: "tx2", IsPending: true, CreatedAt: now},
-			},
-			expectedNewTxs: []domain.Transaction{},
-			expectedUpdatedTxs: []domain.Transaction{
-				{BoardingTxid: "tx2", IsPending: false, CreatedAt: now},
-			},
-		},
-		{
-			description: "New boarding txs not present in old list",
-			allBoardingTxs: []domain.Transaction{
-				{BoardingTxid: "tx1", IsPending: true, CreatedAt: now},
-				{BoardingTxid: "tx3", IsPending: true, CreatedAt: now},
 			},
 			oldBoardingTxs: []domain.Transaction{
 				{BoardingTxid: "tx1", IsPending: true, CreatedAt: now},
 			},
 			expectedNewTxs: []domain.Transaction{
-				{BoardingTxid: "tx3", IsPending: true, CreatedAt: now},
-			},
-			expectedUpdatedTxs: []domain.Transaction{},
-		},
-		{
-			description: "No overlap between old and new boarding txs",
-			allBoardingTxs: []domain.Transaction{
-				{BoardingTxid: "tx3", IsPending: true, CreatedAt: now},
-				{BoardingTxid: "tx4", IsPending: true, CreatedAt: now},
-			},
-			oldBoardingTxs: []domain.Transaction{
-				{BoardingTxid: "tx1", IsPending: true, CreatedAt: now},
 				{BoardingTxid: "tx2", IsPending: true, CreatedAt: now},
-			},
-			expectedNewTxs: []domain.Transaction{
-				{BoardingTxid: "tx3", IsPending: true, CreatedAt: now},
-				{BoardingTxid: "tx4", IsPending: true, CreatedAt: now},
 			},
 			expectedUpdatedTxs: []domain.Transaction{
 				{BoardingTxid: "tx1", IsPending: false, CreatedAt: now},
-				{BoardingTxid: "tx2", IsPending: false, CreatedAt: now},
 			},
+		},
+		{
+			description: "3",
+			allBoardingTxs: []domain.Transaction{
+				{BoardingTxid: "tx1", IsPending: true, CreatedAt: now},
+				{BoardingTxid: "tx3", IsPending: true, CreatedAt: now},
+			},
+			oldBoardingTxs: []domain.Transaction{
+				{BoardingTxid: "tx1", IsPending: true, CreatedAt: now},
+			},
+			expectedNewTxs: []domain.Transaction{
+				{BoardingTxid: "tx3", IsPending: true, CreatedAt: now},
+			},
+			expectedUpdatedTxs: nil,
+		},
+		{
+			description: "4",
+			allBoardingTxs: []domain.Transaction{
+				{BoardingTxid: "tx3", IsPending: true, CreatedAt: now},
+				{BoardingTxid: "tx4", IsPending: true, CreatedAt: now},
+			},
+			oldBoardingTxs: []domain.Transaction{
+				{BoardingTxid: "tx1", IsPending: true, CreatedAt: now},
+				{BoardingTxid: "tx2", IsPending: true, CreatedAt: now},
+			},
+			expectedNewTxs: []domain.Transaction{
+				{BoardingTxid: "tx3", IsPending: true, CreatedAt: now},
+				{BoardingTxid: "tx4", IsPending: true, CreatedAt: now},
+			},
+			expectedUpdatedTxs: nil,
 		},
 	}
 
