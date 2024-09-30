@@ -119,20 +119,24 @@ func BalanceWrapper() js.Func {
 		}
 
 		var (
-			onchainBalance  int
-			offchainBalance int
+			onchainSpendableBalance int
+			onchainLockedBalance    int
+			offchainBalance         int
 		)
 
-		if resp == nil {
-			onchainBalance = 0
-			offchainBalance = 0
-		} else {
-			onchainBalance = int(resp.OnchainBalance.SpendableAmount)
+		if resp != nil {
+			onchainSpendableBalance = int(resp.OnchainBalance.SpendableAmount)
+			for _, b := range resp.OnchainBalance.LockedAmount {
+				onchainLockedBalance += int(b.Amount)
+			}
 			offchainBalance = int(resp.OffchainBalance.Total)
 		}
 
 		result := map[string]interface{}{
-			"onchain_balance":  onchainBalance,
+			"onchain_balance": map[string]interface{}{
+				"spendable": onchainSpendableBalance,
+				"locked":    onchainLockedBalance,
+			},
 			"offchain_balance": offchainBalance,
 		}
 
@@ -201,6 +205,21 @@ func SendOffChainWrapper() js.Func {
 			return nil, err
 		}
 		return js.ValueOf(txID), nil
+	})
+}
+
+func ClaimWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if len(args) != 0 {
+			return nil, errors.New("invalid number of args")
+		}
+
+		resp, err := arkSdkClient.Claim(context.Background())
+		if err != nil {
+			return nil, err
+		}
+
+		return js.ValueOf(resp), nil
 	})
 }
 
