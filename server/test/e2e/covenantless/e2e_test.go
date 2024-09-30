@@ -362,6 +362,36 @@ func TestAliceSeveralPaymentsToBob(t *testing.T) {
 
 }
 
+func TestSweep(t *testing.T) {
+	var receive utils.ArkReceive
+	receiveStr, err := runClarkCommand("receive")
+	require.NoError(t, err)
+
+	err = json.Unmarshal([]byte(receiveStr), &receive)
+	require.NoError(t, err)
+
+	_, err = utils.RunCommand("nigiri", "faucet", receive.Boarding)
+	require.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+
+	_, err = runClarkCommand("claim", "--password", utils.Password)
+	require.NoError(t, err)
+
+	time.Sleep(3 * time.Second)
+
+	_, err = utils.RunCommand("nigiri", "rpc", "generatetoaddress", "100", "bcrt1qe8eelqalnch946nzhefd5ajhgl2afjw5aegc59")
+	require.NoError(t, err)
+
+	time.Sleep(40 * time.Second)
+
+	var balance utils.ArkBalance
+	balanceStr, err := runClarkCommand("balance")
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
+	require.Zero(t, balance.Offchain.Total) // all funds should be swept
+}
+
 func runClarkCommand(arg ...string) (string, error) {
 	args := append([]string{"exec", "-t", "clarkd", "ark"}, arg...)
 	return utils.RunCommand("docker", args...)

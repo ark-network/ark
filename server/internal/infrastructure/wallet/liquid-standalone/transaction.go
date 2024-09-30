@@ -158,21 +158,21 @@ func (s *service) BroadcastTransaction(
 
 func (s *service) IsTransactionConfirmed(
 	ctx context.Context, txid string,
-) (bool, int64, error) {
-	_, isConfirmed, blocktime, err := s.getTransaction(ctx, txid)
+) (bool, int64, int64, error) {
+	_, isConfirmed, blockheight, blocktime, err := s.getTransaction(ctx, txid)
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "missing transaction") {
-			return isConfirmed, 0, nil
+			return isConfirmed, 0, 0, nil
 		}
-		return false, 0, err
+		return false, 0, 0, err
 	}
 
-	return isConfirmed, blocktime, nil
+	return isConfirmed, blockheight, blocktime, nil
 }
 func (s *service) WaitForSync(ctx context.Context, txid string) error {
 	for {
 		time.Sleep(5 * time.Second)
-		_, _, _, err := s.getTransaction(ctx, txid)
+		_, _, _, _, err := s.getTransaction(ctx, txid)
 		if err != nil {
 			if strings.Contains(strings.ToLower(err.Error()), "missing transaction") {
 				continue
@@ -351,7 +351,7 @@ func (s *service) EstimateFees(
 }
 
 func (s *service) GetTransaction(ctx context.Context, txid string) (string, error) {
-	txHex, _, _, err := s.getTransaction(ctx, txid)
+	txHex, _, _, _, err := s.getTransaction(ctx, txid)
 	if err != nil {
 		return "", err
 	}
@@ -361,18 +361,18 @@ func (s *service) GetTransaction(ctx context.Context, txid string) (string, erro
 
 func (s *service) getTransaction(
 	ctx context.Context, txid string,
-) (string, bool, int64, error) {
+) (string, bool, int64, int64, error) {
 	res, err := s.txClient.GetTransaction(ctx, &pb.GetTransactionRequest{
 		Txid: txid,
 	})
 	if err != nil {
-		return "", false, 0, err
+		return "", false, 0, 0, err
 	}
 
 	if res.GetBlockDetails().GetTimestamp() > 0 {
-		return res.GetTxHex(), true, res.BlockDetails.GetTimestamp(), nil
+		return res.GetTxHex(), true, int64(res.GetBlockDetails().GetHeight()), res.BlockDetails.GetTimestamp(), nil
 	}
 
 	// if not confirmed, we return now + 1 min to estimate the next blocktime
-	return res.GetTxHex(), false, time.Now().Add(time.Minute).Unix(), nil
+	return res.GetTxHex(), false, 0, time.Now().Add(time.Minute).Unix(), nil
 }
