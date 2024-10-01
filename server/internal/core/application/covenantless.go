@@ -712,7 +712,6 @@ func (s *covenantlessService) startRound() {
 	round := domain.NewRound(dustAmount)
 	//nolint:all
 	round.StartRegistration()
-	s.lastEvent = nil
 	s.currentRound = round
 
 	defer func() {

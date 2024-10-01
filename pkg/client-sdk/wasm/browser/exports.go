@@ -30,8 +30,10 @@ func init() {
 	js.Global().Set("receive", ReceiveWrapper())
 	js.Global().Set("sendOnChain", SendOnChainWrapper())
 	js.Global().Set("sendOffChain", SendOffChainWrapper())
+	js.Global().Set("claim", ClaimWrapper())
 	js.Global().Set("unilateralRedeem", UnilateralRedeemWrapper())
 	js.Global().Set("collaborativeRedeem", CollaborativeRedeemWrapper())
+	js.Global().Set("getTransactionHistory", GetTransactionHistoryWrapper())
 	js.Global().Set("log", LogWrapper())
 
 	js.Global().Set("getAspUrl", GetAspUrlWrapper())
