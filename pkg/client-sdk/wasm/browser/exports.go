@@ -33,6 +33,7 @@ func init() {
 	js.Global().Set("claim", ClaimWrapper())
 	js.Global().Set("unilateralRedeem", UnilateralRedeemWrapper())
 	js.Global().Set("collaborativeRedeem", CollaborativeRedeemWrapper())
+	js.Global().Set("getTransactionHistory", GetTransactionHistoryWrapper())
 	js.Global().Set("log", LogWrapper())
 
 	js.Global().Set("getAspUrl", GetAspUrlWrapper())

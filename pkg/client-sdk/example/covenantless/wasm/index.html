@@ -52,10 +52,10 @@
 
         async function getBalance() {
             const bal = await balance(false);
-            logMessage("Offchain balance: " + bal.offchain_balance)
+            logMessage("Offchain balance: " + bal.offchainBalance)
             logMessage("Onchain balance: ")
-            logMessage("  Spendable: " + bal.onchain_balance.spendable)
-            logMessage("  Locked: " + bal.onchain_balance.locked)
+            logMessage("  Spendable: " + bal.onchainBalance.spendable)
+            logMessage("  Locked: " + bal.onchainBalance.locked)
         }
 
 
@@ -104,6 +104,15 @@
                 logMessage("Claim error: " + err.message);
             } finally {
                 await lock(password);
+            }
+        }
+
+        async function history() {    
+            try {
+                const history = await getTransactionHistory();
+                logMessage("Tx history: " + history);
+            } catch (err) {
+                logMessage("Tx history error: " + err.message);
             }
         }
 
@@ -158,6 +167,9 @@
     <div>
         <button onclick="claimVtxos()">Claim</button>
         <input type="password" id="c_password" placeholder="password">
+    </div>
+    <div>
+        <button onclick="history()">History</button>
     </div>
     <div>
         <button onclick="config()">Config</button>
