@@ -228,7 +228,6 @@ func (a *restClient) GetEventStream(
 
 	go func(payID string) {
 		defer close(eventsCh)
-		defer close(stopCh)
 
 		timeout := time.After(a.requestTimeout)
 
@@ -262,7 +261,10 @@ func (a *restClient) GetEventStream(
 	}(paymentID)
 
 	close := func() {
-		stopCh <- struct{}{}
+		go func() {
+			stopCh <- struct{}{}
+			close(stopCh)
+		}()
 	}
 
 	return eventsCh, close, nil
