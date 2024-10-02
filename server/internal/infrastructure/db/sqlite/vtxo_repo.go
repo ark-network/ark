@@ -253,7 +253,7 @@ func (v *vxtoRepository) UpdateExpireAt(ctx context.Context, vtxos []domain.Vtxo
 
 func rowToVtxo(row queries.Vtxo) domain.Vtxo {
 	var asyncPayment *domain.AsyncPaymentTxs
-	if row.RedeemTx.Valid {
+	if row.RedeemTx.Valid && len(row.RedeemTx.String) > 0 {
 		asyncPayment = &domain.AsyncPaymentTxs{
 			RedeemTx: row.RedeemTx.String,
 		}
