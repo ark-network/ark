@@ -107,12 +107,9 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("missing onchain wallet address")
 	}
 	if c.RoundLifetime < minAllowedSequence {
-		log.Infof("round lifetime expressed in number of blocks")
 		if c.SchedulerType != "block" {
 			return fmt.Errorf("scheduler type must be block if round lifetime is expressed in blocks")
 		}
-
-		log.Warnf("lifetime unit must not be mixed in DB, make sure you didn't mix block and time units")
 	} else {
 		if c.SchedulerType != "gocron" {
 			return fmt.Errorf("scheduler type must be gocron if round lifetime is expressed in seconds")
