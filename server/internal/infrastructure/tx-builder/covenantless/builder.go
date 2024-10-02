@@ -409,16 +409,13 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 
 	ins := make([]*wire.OutPoint, 0, len(vtxos))
 	outs := make([]*wire.TxOut, 0, len(receivers))
-	unconditionalForfeitTxs := make([]string, 0, len(vtxos))
+	witnessUtxos := make(map[int]*wire.TxOut)
+	tapscripts := make(map[int]*psbt.TaprootTapLeafScript)
+
 	redeemTxWeightEstimator := &input.TxWeightEstimator{}
-	for _, vtxo := range vtxos {
+	for index, vtxo := range vtxos {
 		if vtxo.Spent || vtxo.Redeemed || vtxo.Swept {
 			return nil, fmt.Errorf("all vtxos must be unspent")
-		}
-
-		aspScript, err := common.P2TRScript(aspPubKey)
-		if err != nil {
-			return nil, err
 		}
 
 		vtxoTxID, err := chainhash.NewHashFromStr(vtxo.Txid)
@@ -446,91 +443,47 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 			return nil, err
 		}
 
-		var tapscript *waddrmgr.Tapscript
-		forfeitTxWeightEstimator := &input.TxWeightEstimator{}
-
-		if defaultVtxoScript, ok := vtxoScript.(*bitcointree.DefaultVtxoScript); ok {
-			forfeitClosure := &bitcointree.MultisigClosure{
-				Pubkey:    defaultVtxoScript.Owner,
-				AspPubkey: defaultVtxoScript.Asp,
-			}
-
-			forfeitLeaf, err := forfeitClosure.Leaf()
-			if err != nil {
-				return nil, err
-			}
-
-			forfeitProof, err := vtxoTree.GetTaprootMerkleProof(forfeitLeaf.TapHash())
-			if err != nil {
-				return nil, err
-			}
-
-			ctrlBlock, err := txscript.ParseControlBlock(forfeitProof.ControlBlock)
-			if err != nil {
-				return nil, err
-			}
-
-			tapscript = &waddrmgr.Tapscript{
-				RevealedScript: forfeitProof.Script,
-				ControlBlock:   ctrlBlock,
-			}
-			forfeitTxWeightEstimator.AddTapscriptInput(64*2, tapscript)
-			forfeitTxWeightEstimator.AddP2TROutput() // ASP output
-		} else {
-			return nil, fmt.Errorf("vtxo script is not a default vtxo script, cannot be async spent")
-		}
-
-		forfeitTxFee, err := b.wallet.MinRelayFee(context.Background(), uint64(forfeitTxWeightEstimator.VSize()))
-		if err != nil {
-			return nil, err
-		}
-
-		if forfeitTxFee >= vtxo.Amount {
-			return nil, fmt.Errorf("forfeit tx fee is higher than the amount of the vtxo")
-		}
-
-		output := &wire.TxOut{
-			PkScript: aspScript,
-			Value:    int64(vtxo.Amount - forfeitTxFee),
-		}
-
-		unconditionnalForfeitPtx, err := psbt.New(
-			[]*wire.OutPoint{vtxoOutpoint},
-			[]*wire.TxOut{output},
-			2,
-			0,
-			[]uint32{wire.MaxTxInSequenceNum},
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		unconditionnalForfeitPtx.Inputs[0].WitnessUtxo = &wire.TxOut{
+		witnessUtxos[index] = &wire.TxOut{
 			Value:    int64(vtxo.Amount),
 			PkScript: vtxoOutputScript,
 		}
 
-		ctrlBlock, err := tapscript.ControlBlock.ToBytes()
-		if err != nil {
-			return nil, err
-		}
+		if defaultVtxoScript, ok := vtxoScript.(*bitcointree.DefaultVtxoScript); ok {
+			forfeitLeaf := bitcointree.MultisigClosure{
+				Pubkey:    defaultVtxoScript.Owner,
+				AspPubkey: defaultVtxoScript.Asp,
+			}
 
-		unconditionnalForfeitPtx.Inputs[0].TaprootLeafScript = []*psbt.TaprootTapLeafScript{
-			{
-				Script:       tapscript.RevealedScript,
-				ControlBlock: ctrlBlock,
+			tapLeaf, err := forfeitLeaf.Leaf()
+			if err != nil {
+				return nil, err
+			}
+
+			leafProof, err := vtxoTree.GetTaprootMerkleProof(tapLeaf.TapHash())
+			if err != nil {
+				return nil, err
+			}
+
+			tapscripts[index] = &psbt.TaprootTapLeafScript{
+				ControlBlock: leafProof.ControlBlock,
+				Script:       leafProof.Script,
 				LeafVersion:  txscript.BaseLeafVersion,
-			},
+			}
+
+			ctrlBlock, err := txscript.ParseControlBlock(leafProof.ControlBlock)
+			if err != nil {
+				return nil, err
+			}
+
+			redeemTxWeightEstimator.AddTapscriptInput(64*2, &waddrmgr.Tapscript{
+				RevealedScript: leafProof.Script,
+				ControlBlock:   ctrlBlock,
+			})
+		} else {
+			return nil, fmt.Errorf("vtxo %s:%d script is not default script, can't be async spent", vtxo.Txid, vtxo.VOut)
 		}
 
-		forfeitTx, err := unconditionnalForfeitPtx.B64Encode()
-		if err != nil {
-			return nil, err
-		}
-
-		unconditionalForfeitTxs = append(unconditionalForfeitTxs, forfeitTx)
 		ins = append(ins, vtxoOutpoint)
-		redeemTxWeightEstimator.AddTapscriptInput(64*2, tapscript)
 	}
 
 	for range receivers {
@@ -587,12 +540,8 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 	}
 
 	for i := range redeemPtx.Inputs {
-		unconditionnalForfeitPsbt, _ := psbt.NewFromRawBytes(
-			strings.NewReader(unconditionalForfeitTxs[i]), true,
-		)
-		redeemPtx.Inputs[i].WitnessUtxo = unconditionnalForfeitPsbt.Inputs[0].WitnessUtxo
-		redeemPtx.Inputs[i].TaprootInternalKey = unconditionnalForfeitPsbt.Inputs[0].TaprootInternalKey
-		redeemPtx.Inputs[i].TaprootLeafScript = unconditionnalForfeitPsbt.Inputs[0].TaprootLeafScript
+		redeemPtx.Inputs[i].WitnessUtxo = witnessUtxos[i]
+		redeemPtx.Inputs[i].TaprootLeafScript = []*psbt.TaprootTapLeafScript{tapscripts[i]}
 	}
 
 	redeemTx, err := redeemPtx.B64Encode()
@@ -608,8 +557,7 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 	}
 
 	return &domain.AsyncPaymentTxs{
-		RedeemTx:                signedRedeemTx,
-		UnconditionalForfeitTxs: unconditionalForfeitTxs,
+		RedeemTx: signedRedeemTx,
 	}, nil
 }
 

@@ -54,16 +54,12 @@ func (q *Queries) MarkVtxoAsSwept(ctx context.Context, arg MarkVtxoAsSweptParams
 }
 
 const selectNotRedeemedVtxos = `-- name: SelectNotRedeemedVtxos :many
-SELECT  vtxo.txid, vtxo.vout, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.payment_id, vtxo.redeem_tx, vtxo.descriptor, vtxo.pending,
-        uncond_forfeit_tx_vw.id, uncond_forfeit_tx_vw.tx, uncond_forfeit_tx_vw.vtxo_txid, uncond_forfeit_tx_vw.vtxo_vout, uncond_forfeit_tx_vw.position
-FROM vtxo
-        LEFT OUTER JOIN uncond_forfeit_tx_vw ON vtxo.txid=uncond_forfeit_tx_vw.vtxo_txid AND vtxo.vout=uncond_forfeit_tx_vw.vtxo_vout
+SELECT vtxo.txid, vtxo.vout, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.payment_id, vtxo.redeem_tx, vtxo.descriptor, vtxo.pending FROM vtxo
 WHERE redeemed = false
 `
 
 type SelectNotRedeemedVtxosRow struct {
-	Vtxo              Vtxo
-	UncondForfeitTxVw UncondForfeitTxVw
+	Vtxo Vtxo
 }
 
 func (q *Queries) SelectNotRedeemedVtxos(ctx context.Context) ([]SelectNotRedeemedVtxosRow, error) {
@@ -89,11 +85,6 @@ func (q *Queries) SelectNotRedeemedVtxos(ctx context.Context) ([]SelectNotRedeem
 			&i.Vtxo.RedeemTx,
 			&i.Vtxo.Descriptor,
 			&i.Vtxo.Pending,
-			&i.UncondForfeitTxVw.ID,
-			&i.UncondForfeitTxVw.Tx,
-			&i.UncondForfeitTxVw.VtxoTxid,
-			&i.UncondForfeitTxVw.VtxoVout,
-			&i.UncondForfeitTxVw.Position,
 		); err != nil {
 			return nil, err
 		}
@@ -109,16 +100,12 @@ func (q *Queries) SelectNotRedeemedVtxos(ctx context.Context) ([]SelectNotRedeem
 }
 
 const selectNotRedeemedVtxosWithPubkey = `-- name: SelectNotRedeemedVtxosWithPubkey :many
-SELECT  vtxo.txid, vtxo.vout, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.payment_id, vtxo.redeem_tx, vtxo.descriptor, vtxo.pending,
-        uncond_forfeit_tx_vw.id, uncond_forfeit_tx_vw.tx, uncond_forfeit_tx_vw.vtxo_txid, uncond_forfeit_tx_vw.vtxo_vout, uncond_forfeit_tx_vw.position
-FROM vtxo
-        LEFT OUTER JOIN uncond_forfeit_tx_vw ON vtxo.txid=uncond_forfeit_tx_vw.vtxo_txid AND vtxo.vout=uncond_forfeit_tx_vw.vtxo_vout
+SELECT vtxo.txid, vtxo.vout, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.payment_id, vtxo.redeem_tx, vtxo.descriptor, vtxo.pending FROM vtxo
 WHERE redeemed = false AND INSTR(descriptor, ?) > 0
 `
 
 type SelectNotRedeemedVtxosWithPubkeyRow struct {
-	Vtxo              Vtxo
-	UncondForfeitTxVw UncondForfeitTxVw
+	Vtxo Vtxo
 }
 
 func (q *Queries) SelectNotRedeemedVtxosWithPubkey(ctx context.Context, instr string) ([]SelectNotRedeemedVtxosWithPubkeyRow, error) {
@@ -144,11 +131,6 @@ func (q *Queries) SelectNotRedeemedVtxosWithPubkey(ctx context.Context, instr st
 			&i.Vtxo.RedeemTx,
 			&i.Vtxo.Descriptor,
 			&i.Vtxo.Pending,
-			&i.UncondForfeitTxVw.ID,
-			&i.UncondForfeitTxVw.Tx,
-			&i.UncondForfeitTxVw.VtxoTxid,
-			&i.UncondForfeitTxVw.VtxoVout,
-			&i.UncondForfeitTxVw.Position,
 		); err != nil {
 			return nil, err
 		}
@@ -481,16 +463,12 @@ func (q *Queries) SelectSweepableRounds(ctx context.Context) ([]SelectSweepableR
 }
 
 const selectSweepableVtxos = `-- name: SelectSweepableVtxos :many
-SELECT  vtxo.txid, vtxo.vout, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.payment_id, vtxo.redeem_tx, vtxo.descriptor, vtxo.pending,
-        uncond_forfeit_tx_vw.id, uncond_forfeit_tx_vw.tx, uncond_forfeit_tx_vw.vtxo_txid, uncond_forfeit_tx_vw.vtxo_vout, uncond_forfeit_tx_vw.position
-FROM vtxo
-        LEFT OUTER JOIN uncond_forfeit_tx_vw ON vtxo.txid=uncond_forfeit_tx_vw.vtxo_txid AND vtxo.vout=uncond_forfeit_tx_vw.vtxo_vout
+SELECT vtxo.txid, vtxo.vout, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.payment_id, vtxo.redeem_tx, vtxo.descriptor, vtxo.pending FROM vtxo
 WHERE redeemed = false AND swept = false
 `
 
 type SelectSweepableVtxosRow struct {
-	Vtxo              Vtxo
-	UncondForfeitTxVw UncondForfeitTxVw
+	Vtxo Vtxo
 }
 
 func (q *Queries) SelectSweepableVtxos(ctx context.Context) ([]SelectSweepableVtxosRow, error) {
@@ -516,11 +494,6 @@ func (q *Queries) SelectSweepableVtxos(ctx context.Context) ([]SelectSweepableVt
 			&i.Vtxo.RedeemTx,
 			&i.Vtxo.Descriptor,
 			&i.Vtxo.Pending,
-			&i.UncondForfeitTxVw.ID,
-			&i.UncondForfeitTxVw.Tx,
-			&i.UncondForfeitTxVw.VtxoTxid,
-			&i.UncondForfeitTxVw.VtxoVout,
-			&i.UncondForfeitTxVw.Position,
 		); err != nil {
 			return nil, err
 		}
@@ -622,10 +595,7 @@ func (q *Queries) SelectSweptRounds(ctx context.Context) ([]SelectSweptRoundsRow
 }
 
 const selectVtxoByOutpoint = `-- name: SelectVtxoByOutpoint :one
-SELECT  vtxo.txid, vtxo.vout, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.payment_id, vtxo.redeem_tx, vtxo.descriptor, vtxo.pending,
-        uncond_forfeit_tx_vw.id, uncond_forfeit_tx_vw.tx, uncond_forfeit_tx_vw.vtxo_txid, uncond_forfeit_tx_vw.vtxo_vout, uncond_forfeit_tx_vw.position
-FROM vtxo
-        LEFT OUTER JOIN uncond_forfeit_tx_vw ON vtxo.txid=uncond_forfeit_tx_vw.vtxo_txid AND vtxo.vout=uncond_forfeit_tx_vw.vtxo_vout
+SELECT vtxo.txid, vtxo.vout, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.payment_id, vtxo.redeem_tx, vtxo.descriptor, vtxo.pending FROM vtxo
 WHERE txid = ? AND vout = ?
 `
 
@@ -635,8 +605,7 @@ type SelectVtxoByOutpointParams struct {
 }
 
 type SelectVtxoByOutpointRow struct {
-	Vtxo              Vtxo
-	UncondForfeitTxVw UncondForfeitTxVw
+	Vtxo Vtxo
 }
 
 func (q *Queries) SelectVtxoByOutpoint(ctx context.Context, arg SelectVtxoByOutpointParams) (SelectVtxoByOutpointRow, error) {
@@ -656,26 +625,17 @@ func (q *Queries) SelectVtxoByOutpoint(ctx context.Context, arg SelectVtxoByOutp
 		&i.Vtxo.RedeemTx,
 		&i.Vtxo.Descriptor,
 		&i.Vtxo.Pending,
-		&i.UncondForfeitTxVw.ID,
-		&i.UncondForfeitTxVw.Tx,
-		&i.UncondForfeitTxVw.VtxoTxid,
-		&i.UncondForfeitTxVw.VtxoVout,
-		&i.UncondForfeitTxVw.Position,
 	)
 	return i, err
 }
 
 const selectVtxosByPoolTxid = `-- name: SelectVtxosByPoolTxid :many
-SELECT  vtxo.txid, vtxo.vout, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.payment_id, vtxo.redeem_tx, vtxo.descriptor, vtxo.pending,
-        uncond_forfeit_tx_vw.id, uncond_forfeit_tx_vw.tx, uncond_forfeit_tx_vw.vtxo_txid, uncond_forfeit_tx_vw.vtxo_vout, uncond_forfeit_tx_vw.position
-FROM vtxo
-        LEFT OUTER JOIN uncond_forfeit_tx_vw ON vtxo.txid=uncond_forfeit_tx_vw.vtxo_txid AND vtxo.vout=uncond_forfeit_tx_vw.vtxo_vout
+SELECT vtxo.txid, vtxo.vout, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.payment_id, vtxo.redeem_tx, vtxo.descriptor, vtxo.pending FROM vtxo
 WHERE pool_tx = ?
 `
 
 type SelectVtxosByPoolTxidRow struct {
-	Vtxo              Vtxo
-	UncondForfeitTxVw UncondForfeitTxVw
+	Vtxo Vtxo
 }
 
 func (q *Queries) SelectVtxosByPoolTxid(ctx context.Context, poolTx string) ([]SelectVtxosByPoolTxidRow, error) {
@@ -701,11 +661,6 @@ func (q *Queries) SelectVtxosByPoolTxid(ctx context.Context, poolTx string) ([]S
 			&i.Vtxo.RedeemTx,
 			&i.Vtxo.Descriptor,
 			&i.Vtxo.Pending,
-			&i.UncondForfeitTxVw.ID,
-			&i.UncondForfeitTxVw.Tx,
-			&i.UncondForfeitTxVw.VtxoTxid,
-			&i.UncondForfeitTxVw.VtxoVout,
-			&i.UncondForfeitTxVw.Position,
 		); err != nil {
 			return nil, err
 		}
@@ -887,32 +842,6 @@ func (q *Queries) UpsertTransaction(ctx context.Context, arg UpsertTransactionPa
 		arg.TreeLevel,
 		arg.ParentTxid,
 		arg.IsLeaf,
-	)
-	return err
-}
-
-const upsertUnconditionalForfeitTx = `-- name: UpsertUnconditionalForfeitTx :exec
-INSERT INTO uncond_forfeit_tx (tx, vtxo_txid, vtxo_vout, position)
-VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET
-    tx = EXCLUDED.tx,
-    vtxo_txid = EXCLUDED.vtxo_txid,
-    vtxo_vout = EXCLUDED.vtxo_vout,
-    position = EXCLUDED.position
-`
-
-type UpsertUnconditionalForfeitTxParams struct {
-	Tx       string
-	VtxoTxid string
-	VtxoVout int64
-	Position int64
-}
-
-func (q *Queries) UpsertUnconditionalForfeitTx(ctx context.Context, arg UpsertUnconditionalForfeitTxParams) error {
-	_, err := q.db.ExecContext(ctx, upsertUnconditionalForfeitTx,
-		arg.Tx,
-		arg.VtxoTxid,
-		arg.VtxoVout,
-		arg.Position,
 	)
 	return err
 }

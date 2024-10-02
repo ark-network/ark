@@ -367,7 +367,7 @@ func (h *handler) CreatePayment(
 		}
 	}
 
-	redeemTx, unconditionalForfeitTxs, err := h.svc.CreateAsyncPayment(
+	redeemTx, err := h.svc.CreateAsyncPayment(
 		ctx, inputs, receivers,
 	)
 	if err != nil {
@@ -375,8 +375,7 @@ func (h *handler) CreatePayment(
 	}
 
 	return &arkv1.CreatePaymentResponse{
-		SignedRedeemTx:                 redeemTx,
-		UsignedUnconditionalForfeitTxs: unconditionalForfeitTxs,
+		SignedRedeemTx: redeemTx,
 	}, nil
 }
 
@@ -387,12 +386,8 @@ func (h *handler) CompletePayment(
 		return nil, status.Error(codes.InvalidArgument, "missing signed redeem tx")
 	}
 
-	if len(req.GetSignedUnconditionalForfeitTxs()) <= 0 {
-		return nil, status.Error(codes.InvalidArgument, "missing signed unconditional forfeit txs")
-	}
-
 	if err := h.svc.CompleteAsyncPayment(
-		ctx, req.GetSignedRedeemTx(), req.GetSignedUnconditionalForfeitTxs(),
+		ctx, req.GetSignedRedeemTx(),
 	); err != nil {
 		return nil, err
 	}

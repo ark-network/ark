@@ -33,9 +33,9 @@ type Service interface {
 	// Async payments
 	CreateAsyncPayment(
 		ctx context.Context, inputs []ports.Input, receivers []domain.Receiver,
-	) (string, []string, error)
+	) (string, error)
 	CompleteAsyncPayment(
-		ctx context.Context, redeemTx string, unconditionalForfeitTxs []string,
+		ctx context.Context, redeemTx string,
 	) error
 	GetBoardingAddress(
 		ctx context.Context, userPubkey *secp256k1.PublicKey,

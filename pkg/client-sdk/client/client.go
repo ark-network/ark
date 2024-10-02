@@ -42,9 +42,9 @@ type ASPClient interface {
 	Ping(ctx context.Context, paymentID string) (RoundEvent, error)
 	CreatePayment(
 		ctx context.Context, inputs []Input, outputs []Output,
-	) (string, []string, error)
+	) (string, error)
 	CompletePayment(
-		ctx context.Context, signedRedeemTx string, signedUnconditionalForfeitTxs []string,
+		ctx context.Context, signedRedeemTx string,
 	) error
 	ListVtxos(ctx context.Context, addr string) ([]Vtxo, []Vtxo, error)
 	GetRound(ctx context.Context, txID string) (*Round, error)
@@ -80,14 +80,13 @@ type Input struct {
 
 type Vtxo struct {
 	Outpoint
-	Descriptor              string
-	Amount                  uint64
-	RoundTxid               string
-	ExpiresAt               *time.Time
-	RedeemTx                string
-	UnconditionalForfeitTxs []string
-	Pending                 bool
-	SpentBy                 string
+	Descriptor string
+	Amount     uint64
+	RoundTxid  string
+	ExpiresAt  *time.Time
+	RedeemTx   string
+	Pending    bool
+	SpentBy    string
 }
 
 type Output struct {

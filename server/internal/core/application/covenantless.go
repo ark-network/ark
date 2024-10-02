@@ -142,7 +142,7 @@ func (s *covenantlessService) Stop() {
 }
 
 func (s *covenantlessService) CompleteAsyncPayment(
-	ctx context.Context, redeemTx string, unconditionalForfeitTxs []string,
+	ctx context.Context, redeemTx string,
 ) error {
 	redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
 	if err != nil {
@@ -278,8 +278,7 @@ func (s *covenantlessService) CompleteAsyncPayment(
 			},
 			ExpireAt: asyncPayData.expireAt,
 			AsyncPayment: &domain.AsyncPaymentTxs{
-				RedeemTx:                redeemTx,
-				UnconditionalForfeitTxs: unconditionalForfeitTxs,
+				RedeemTx: redeemTx,
 			},
 			Pending: isPending,
 		})
@@ -308,7 +307,7 @@ func (s *covenantlessService) CompleteAsyncPayment(
 
 func (s *covenantlessService) CreateAsyncPayment(
 	ctx context.Context, inputs []ports.Input, receivers []domain.Receiver,
-) (string, []string, error) {
+) (string, error) {
 	vtxosKeys := make([]domain.VtxoKey, 0, len(inputs))
 	for _, in := range inputs {
 		vtxosKeys = append(vtxosKeys, in.VtxoKey)
@@ -316,10 +315,10 @@ func (s *covenantlessService) CreateAsyncPayment(
 
 	vtxos, err := s.repoManager.Vtxos().GetVtxos(ctx, vtxosKeys)
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
 	if len(vtxos) <= 0 {
-		return "", nil, fmt.Errorf("vtxos not found")
+		return "", fmt.Errorf("vtxos not found")
 	}
 
 	vtxosInputs := make([]domain.Vtxo, 0, len(inputs))
@@ -327,18 +326,18 @@ func (s *covenantlessService) CreateAsyncPayment(
 	expiration := vtxos[0].ExpireAt
 	for _, vtxo := range vtxos {
 		if vtxo.Spent {
-			return "", nil, fmt.Errorf("all vtxos must be unspent")
+			return "", fmt.Errorf("all vtxos must be unspent")
 		}
 
 		if vtxo.Redeemed {
-			return "", nil, fmt.Errorf("all vtxos must be redeemed")
+			return "", fmt.Errorf("all vtxos must be redeemed")
 		}
 
 		if vtxo.Swept {
-			return "", nil, fmt.Errorf("all vtxos must be swept")
+			return "", fmt.Errorf("all vtxos must be swept")
 		}
 		if vtxo.Pending {
-			return "", nil, fmt.Errorf("all vtxos must be claimed")
+			return "", fmt.Errorf("all vtxos must be claimed")
 		}
 
 		if vtxo.ExpireAt < expiration {
@@ -352,12 +351,12 @@ func (s *covenantlessService) CreateAsyncPayment(
 		vtxosInputs, s.pubkey, receivers,
 	)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to build async payment txs: %s", err)
+		return "", fmt.Errorf("failed to build async payment txs: %s", err)
 	}
 
 	redeemTx, err := psbt.NewFromRawBytes(strings.NewReader(res.RedeemTx), true)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to parse redeem tx: %s", err)
+		return "", fmt.Errorf("failed to parse redeem tx: %s", err)
 	}
 
 	s.asyncPaymentsCache[redeemTx.UnsignedTx.TxID()] = struct {
@@ -368,7 +367,7 @@ func (s *covenantlessService) CreateAsyncPayment(
 		expireAt:  expiration,
 	}
 
-	return res.RedeemTx, res.UnconditionalForfeitTxs, nil
+	return res.RedeemTx, nil
 }
 
 func (s *covenantlessService) GetBoardingAddress(

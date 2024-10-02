@@ -68,8 +68,7 @@ func (v vtxoList) toProto() []*arkv1.Vtxo {
 		var pendingData *arkv1.PendingPayment
 		if vv.AsyncPayment != nil {
 			pendingData = &arkv1.PendingPayment{
-				RedeemTx:                vv.AsyncPayment.RedeemTx,
-				UnconditionalForfeitTxs: vv.AsyncPayment.UnconditionalForfeitTxs,
+				RedeemTx: vv.AsyncPayment.RedeemTx,
 			}
 		}
 		list = append(list, &arkv1.Vtxo{

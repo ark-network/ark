@@ -338,7 +338,7 @@ func (a *restClient) Ping(
 
 func (a *restClient) CreatePayment(
 	ctx context.Context, inputs []client.Input, outputs []client.Output,
-) (string, []string, error) {
+) (string, error) {
 	ins := make([]*models.V1Input, 0, len(inputs))
 	for _, i := range inputs {
 		ins = append(ins, &models.V1Input{
@@ -365,21 +365,19 @@ func (a *restClient) CreatePayment(
 		ark_service.NewArkServiceCreatePaymentParams().WithBody(&body),
 	)
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
-	return resp.GetPayload().SignedRedeemTx, resp.GetPayload().UsignedUnconditionalForfeitTxs, nil
+	return resp.GetPayload().SignedRedeemTx, nil
 }
 
 func (a *restClient) CompletePayment(
-	ctx context.Context, signedRedeemTx string, signedUncondForfeitTxs []string,
+	ctx context.Context, signedRedeemTx string,
 ) error {
 	req := &arkv1.CompletePaymentRequest{
-		SignedRedeemTx:                signedRedeemTx,
-		SignedUnconditionalForfeitTxs: signedUncondForfeitTxs,
+		SignedRedeemTx: signedRedeemTx,
 	}
 	body := models.V1CompletePaymentRequest{
-		SignedRedeemTx:                req.GetSignedRedeemTx(),
-		SignedUnconditionalForfeitTxs: req.GetSignedUnconditionalForfeitTxs(),
+		SignedRedeemTx: req.GetSignedRedeemTx(),
 	}
 	_, err := a.svc.ArkServiceCompletePayment(
 		ark_service.NewArkServiceCompletePaymentParams().WithBody(&body),
@@ -493,10 +491,8 @@ func (a *restClient) ListVtxos(
 		}
 
 		var redeemTx string
-		var uncondForfeitTxs []string
 		if v.PendingData != nil {
 			redeemTx = v.PendingData.RedeemTx
-			uncondForfeitTxs = v.PendingData.UnconditionalForfeitTxs
 		}
 
 		spendableVtxos = append(spendableVtxos, client.Vtxo{
@@ -504,14 +500,13 @@ func (a *restClient) ListVtxos(
 				Txid: v.Outpoint.Txid,
 				VOut: uint32(v.Outpoint.Vout),
 			},
-			Amount:                  uint64(amount),
-			RoundTxid:               v.RoundTxid,
-			ExpiresAt:               expiresAt,
-			Pending:                 v.Pending,
-			RedeemTx:                redeemTx,
-			UnconditionalForfeitTxs: uncondForfeitTxs,
-			SpentBy:                 v.SpentBy,
-			Descriptor:              v.Descriptor,
+			Amount:     uint64(amount),
+			RoundTxid:  v.RoundTxid,
+			ExpiresAt:  expiresAt,
+			Pending:    v.Pending,
+			RedeemTx:   redeemTx,
+			SpentBy:    v.SpentBy,
+			Descriptor: v.Descriptor,
 		})
 	}
 
