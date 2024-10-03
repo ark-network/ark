@@ -938,7 +938,7 @@
             "$ref": "#/definitions/v1Vtxo"
           }
         },
-        "claimedBoardingVtxos": {
+        "claimedBoardingUtxos": {
           "type": "array",
           "items": {
             "type": "object",

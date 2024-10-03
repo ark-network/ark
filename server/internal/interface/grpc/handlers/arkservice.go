@@ -636,7 +636,7 @@ func convertRoundPaymentEvent(e application.RoundPaymentEvent) *arkv1.RoundPayme
 		Txid:                 e.RoundTxID,
 		SpentVtxos:           vtxoKeyList(e.SpentVtxos).toProto(),
 		SpendableVtxos:       vtxoList(e.SpendableVtxos).toProto(),
-		ClaimedBoardingVtxos: vtxoKeyList(e.ClaimedBoardingInputs).toProto(),
+		ClaimedBoardingUtxos: vtxoKeyList(e.ClaimedBoardingInputs).toProto(),
 	}
 }
 
