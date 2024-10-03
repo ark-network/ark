@@ -92,6 +92,11 @@ service ArkService {
       get: "/v1/vtxos/{address}"
     };
   }
+  rpc GetPaymentsStream(GetPaymentsStreamRequest) returns (stream GetPaymentsStreamResponse) {
+    option (google.api.http) = {
+      get: "/v1/payments"
+    };
+  }
 }
 
 message GetInfoRequest {}
@@ -129,7 +134,7 @@ message RegisterInputsForNextRoundResponse {
 message RegisterOutputsForNextRoundRequest {
   // Mocks wabisabi's blinded credentials.
   string id = 1;
-  // List of receivers for a registered payment. 
+  // List of receivers for a registered payment.
   repeated Output outputs = 2;
 }
 message RegisterOutputsForNextRoundResponse {}
@@ -149,7 +154,7 @@ message SubmitTreeSignaturesRequest {
 message SubmitTreeSignaturesResponse {}
 
 message SubmitSignedForfeitTxsRequest {
-  // Forfeit txs signed by the user. 
+  // Forfeit txs signed by the user.
   repeated string signed_forfeit_txs = 1;
   // If payment has boarding input, the user must sign the associated inputs.
   optional string signed_round_tx = 2;
@@ -163,7 +168,7 @@ message GetEventStreamResponse {
     RoundFinalizedEvent round_finalized = 2;
     RoundFailed round_failed = 3;
     RoundSigningEvent round_signing = 4;
-    RoundSigningNoncesGeneratedEvent round_signing_nonces_generated = 5; 
+    RoundSigningNoncesGeneratedEvent round_signing_nonces_generated = 5;
   }
 }
 
@@ -176,7 +181,7 @@ message PingResponse {
     RoundFinalizedEvent round_finalized = 2;
     RoundFailed round_failed = 3;
     RoundSigningEvent round_signing = 4;
-    RoundSigningNoncesGeneratedEvent round_signing_nonces_generated = 5; 
+    RoundSigningNoncesGeneratedEvent round_signing_nonces_generated = 5;
   }
 }
 
@@ -287,7 +292,7 @@ message Input {
 message Output {
   string address = 1; // onchain or off-chain
   uint64 amount = 2; // Amount to send in satoshis.
-  string descriptor = 3; 
+  string descriptor = 3;
 }
 
 message Tree {
@@ -320,4 +325,25 @@ message Vtxo {
 message PendingPayment {
   string redeem_tx = 1;
   repeated string unconditional_forfeit_txs =2;
+}
+
+message GetPaymentsStreamRequest {}
+message GetPaymentsStreamResponse {
+  oneof tx {
+    RoundPayment round_payments = 1;
+    AsyncPayment async_payments = 2;
+  }
+}
+
+message RoundPayment {
+  string txid = 1;
+  repeated Outpoint spent_vtxos = 2;
+  repeated Vtxo spendable_vtxos = 3;
+  repeated Outpoint claimed_boarding_vtxos = 4;
+}
+
+message AsyncPayment {
+  string txid = 1;
+  repeated Outpoint spent_vtxos = 2;
+  repeated Vtxo spendable_vtxos = 3;
 }

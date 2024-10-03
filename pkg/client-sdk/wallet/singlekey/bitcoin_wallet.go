@@ -11,7 +11,7 @@ import (
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
-	"github.com/ark-network/ark/pkg/client-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/store/domain"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	walletstore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -26,14 +26,14 @@ type bitcoinWallet struct {
 }
 
 func NewBitcoinWallet(
-	configStore store.ConfigStore, walletStore walletstore.WalletStore,
+	configRepository domain.ConfigRepository, walletStore walletstore.WalletStore,
 ) (wallet.WalletService, error) {
 	walletData, err := walletStore.GetWallet()
 	if err != nil {
 		return nil, err
 	}
 	return &bitcoinWallet{
-		&singlekeyWallet{configStore, walletStore, nil, walletData},
+		&singlekeyWallet{configRepository, walletStore, nil, walletData},
 	}, nil
 }
 
@@ -206,7 +206,7 @@ func (w *bitcoinWallet) getAddress(
 		return "", "", "", fmt.Errorf("wallet not initialized")
 	}
 
-	data, err := w.configStore.GetData(ctx)
+	data, err := w.configRepository.GetData(ctx)
 	if err != nil {
 		return "", "", "", err
 	}

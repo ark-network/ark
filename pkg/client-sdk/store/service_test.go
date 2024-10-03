@@ -3,21 +3,24 @@ package store_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/store"
-	filestore "github.com/ark-network/ark/pkg/client-sdk/store/file"
-	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
+	"github.com/ark-network/ark/pkg/client-sdk/store/domain"
+	filedb "github.com/ark-network/ark/pkg/client-sdk/store/file"
+	inmemorydb "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	"github.com/btcsuite/btcd/btcec/v2"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
 
 func TestStore(t *testing.T) {
 	key, _ := btcec.NewPrivateKey()
 	ctx := context.Background()
-	testStoreData := store.StoreData{
+	testStoreData := domain.ConfigData{
 		AspUrl:                     "localhost:7070",
 		AspPubkey:                  key.PubKey(),
 		WalletType:                 wallet.SingleKeyWallet,
@@ -47,13 +50,13 @@ func TestStore(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			var storeSvc store.ConfigStore
+			var storeSvc domain.ConfigRepository
 			var err error
 			switch tt.name {
 			case store.InMemoryStore:
-				storeSvc, err = inmemorystore.NewConfigStore()
+				storeSvc, err = inmemorydb.NewConfig()
 			case store.FileStore:
-				storeSvc, err = filestore.NewConfigStore(t.TempDir())
+				storeSvc, err = filedb.NewConfig(t.TempDir())
 			}
 			require.NoError(t, err)
 			require.NotNil(t, storeSvc)
@@ -90,4 +93,53 @@ func TestStore(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
+}
+
+func TestNewService(t *testing.T) {
+	ctx := context.Background()
+	testDir := t.TempDir()
+
+	dbConfig := store.Config{
+		ConfigStoreType:  store.FileStore,
+		AppDataStoreType: store.Badger,
+		BaseDir:          testDir,
+	}
+
+	service, err := store.NewService(dbConfig)
+	require.NoError(t, err)
+	require.NotNil(t, service)
+
+	go func() {
+		eventCh := service.AppDataRepository().TransactionRepository().GetEventChannel()
+		for tx := range eventCh {
+			log.Infof("Tx inserted: %d %v", tx.Tx.Amount, tx.Tx.Type)
+		}
+	}()
+
+	txRepo := service.AppDataRepository().TransactionRepository()
+	require.NotNil(t, txRepo)
+
+	testTxs := []domain.Transaction{
+		{
+			RoundTxid: "tx1",
+			Amount:    1000,
+			Type:      domain.TxSent,
+			CreatedAt: time.Now(),
+		},
+		{
+			RoundTxid: "tx2",
+			Amount:    2000,
+			Type:      domain.TxReceived,
+			CreatedAt: time.Now(),
+		},
+	}
+	err = txRepo.InsertTransactions(ctx, testTxs)
+	require.NoError(t, err)
+
+	retrievedTxs, err := txRepo.GetAll(ctx)
+	require.NoError(t, err)
+	require.Len(t, retrievedTxs, 2)
+
+	err = service.AppDataRepository().Stop()
+	require.NoError(t, err)
 }

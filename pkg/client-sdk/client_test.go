@@ -8,28 +8,102 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/pkg/client-sdk/client"
+	"github.com/ark-network/ark/pkg/client-sdk/store/domain"
 	"github.com/stretchr/testify/require"
 )
+
+func TestVtxosToTxsCovenant(t *testing.T) {
+	t.TempDir()
+	tests := []struct {
+		name    string
+		fixture string
+		want    []domain.Transaction
+	}{
+		{
+			name:    "Alice Onboard",
+			fixture: aliceOnboardCovenant,
+			want:    nil,
+		},
+		{
+			name:    "Alice Sends to Bob",
+			fixture: aliceToBobCovenant,
+			want: []domain.Transaction{
+				{
+					RoundTxid: "31e744a81cdd7fcc5517130a7f35722bea4dbf73faa4f4c580a6b93b2df0746d",
+					Amount:    20000,
+					Type:      domain.TxSent,
+					IsPending: false,
+				},
+			},
+		},
+		{
+			name:    "Alice Sends to Bob 1",
+			fixture: aliceToBobCovenant1,
+			want: []domain.Transaction{
+				{
+					RoundTxid: "6f3d619fd644b168f364b527cd24f5743684f068b3f61d3dfe11a8f99b92ef79",
+					Amount:    1000,
+					Type:      domain.TxSent,
+					IsPending: false,
+				},
+			},
+		},
+		{
+			name:    "Carol Receives",
+			fixture: carolReceives,
+			want: []domain.Transaction{
+				{
+					RoundTxid: "afcace86a7ca457ea83ca9cb3f773a0c021df5ff677c2e175218ac5d14ed23b5",
+					Amount:    3000,
+					Type:      domain.TxReceived,
+					IsPending: false,
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			vtxos, ignoreVtxo, err := loadFixtures(tt.fixture)
+			if err != nil {
+				t.Fatalf("failed to load fixture: %s", err)
+			}
+			got, err := vtxosToTxsCovenant(30, vtxos.spendable, vtxos.spent, ignoreVtxo)
+			require.NoError(t, err)
+			require.Len(t, got, len(tt.want))
+
+			// Check each expected transaction, excluding CreatedAt
+			for i, wantTx := range tt.want {
+				gotTx := got[i]
+				require.Equal(t, wantTx.RoundTxid, gotTx.RoundTxid)
+				require.Equal(t, wantTx.RedeemTxid, gotTx.RedeemTxid)
+				require.Equal(t, int(wantTx.Amount), int(gotTx.Amount))
+				require.Equal(t, wantTx.Type, gotTx.Type)
+				require.Equal(t, wantTx.IsPending, gotTx.IsPending)
+			}
+		})
+	}
+}
 
 func TestVtxosToTxs(t *testing.T) {
 	tests := []struct {
 		name    string
 		fixture string
-		want    []Transaction
+		want    []domain.Transaction
 	}{
 		{
 			name:    "Alice Before Sending Async",
 			fixture: aliceBeforeSendingAsync,
-			want:    []Transaction{},
+			want:    []domain.Transaction{},
 		},
 		{
 			name:    "Alice After Sending Async",
 			fixture: aliceAfterSendingAsync,
-			want: []Transaction{
+			want: []domain.Transaction{
 				{
 					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
 					Amount:     1000,
-					Type:       TxSent,
+					Type:       domain.TxSent,
 					IsPending:  false,
 					CreatedAt:  time.Unix(1726054898, 0),
 				},
@@ -38,18 +112,18 @@ func TestVtxosToTxs(t *testing.T) {
 		{
 			name:    "Bob Before Claiming Async",
 			fixture: bobBeforeClaimingAsync,
-			want: []Transaction{
+			want: []domain.Transaction{
 				{
 					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
 					Amount:     1000,
-					Type:       TxReceived,
+					Type:       domain.TxReceived,
 					IsPending:  true,
 					CreatedAt:  time.Unix(1726054898, 0),
 				},
 				{
 					RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
 					Amount:     2000,
-					Type:       TxReceived,
+					Type:       domain.TxReceived,
 					IsPending:  true,
 					CreatedAt:  time.Unix(1726486359, 0),
 				},
@@ -58,18 +132,18 @@ func TestVtxosToTxs(t *testing.T) {
 		{
 			name:    "Bob After Claiming Async",
 			fixture: bobAfterClaimingAsync,
-			want: []Transaction{
+			want: []domain.Transaction{
 				{
 					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
 					Amount:     1000,
-					Type:       TxReceived,
+					Type:       domain.TxReceived,
 					IsPending:  false,
 					CreatedAt:  time.Unix(1726054898, 0),
 				},
 				{
 					RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
 					Amount:     2000,
-					Type:       TxReceived,
+					Type:       domain.TxReceived,
 					IsPending:  false,
 					CreatedAt:  time.Unix(1726486359, 0),
 				},
@@ -78,25 +152,25 @@ func TestVtxosToTxs(t *testing.T) {
 		{
 			name:    "Bob After Sending Async",
 			fixture: bobAfterSendingAsync,
-			want: []Transaction{
+			want: []domain.Transaction{
 				{
 					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
 					Amount:     1000,
-					Type:       TxReceived,
+					Type:       domain.TxReceived,
 					IsPending:  false,
 					CreatedAt:  time.Unix(1726054898, 0),
 				},
 				{
 					RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
 					Amount:     2000,
-					Type:       TxReceived,
+					Type:       domain.TxReceived,
 					IsPending:  false,
 					CreatedAt:  time.Unix(1726486359, 0),
 				},
 				{
 					RedeemTxid: "23c3a885f0ea05f7bdf83f3bf7f8ac9dc3f791ad292f4e63a6f53fa5e4935ab0",
 					Amount:     2100,
-					Type:       TxSent,
+					Type:       domain.TxSent,
 					IsPending:  false,
 					CreatedAt:  time.Unix(1726503865, 0),
 				},
@@ -137,10 +211,14 @@ func loadFixtures(jsonStr string) (vtxos, map[string]struct{}, error) {
 		IgnoreTxs      []string `json:"ignoreTxs"`
 		SpendableVtxos []struct {
 			Outpoint struct {
-				Txid string `json:"txid"`
-				Vout uint32 `json:"vout"`
+				Txid      string `json:"txid"`
+				Vout      uint32 `json:"vout"`
+				VtxoInput *struct {
+					Txid string `json:"txid"`
+					Vout uint32 `json:"vout"`
+				} `json:"vtxoInput"`
 			} `json:"outpoint"`
-			Receiver struct {
+			Receiver *struct {
 				Address string `json:"address"`
 				Amount  string `json:"amount"`
 			} `json:"receiver"`
@@ -150,17 +228,22 @@ func loadFixtures(jsonStr string) (vtxos, map[string]struct{}, error) {
 			ExpireAt    string `json:"expireAt"`
 			Swept       bool   `json:"swept"`
 			Pending     bool   `json:"pending"`
-			PendingData struct {
+			PendingData *struct {
 				RedeemTx                string   `json:"redeemTx"`
 				UnconditionalForfeitTxs []string `json:"unconditionalForfeitTxs"`
 			} `json:"pendingData"`
+			Amount string `json:"amount"`
 		} `json:"spendableVtxos"`
 		SpentVtxos []struct {
 			Outpoint struct {
-				Txid string `json:"txid"`
-				Vout uint32 `json:"vout"`
+				Txid      string `json:"txid"`
+				Vout      uint32 `json:"vout"`
+				VtxoInput *struct {
+					Txid string `json:"txid"`
+					Vout uint32 `json:"vout"`
+				} `json:"vtxoInput"`
 			} `json:"outpoint"`
-			Receiver struct {
+			Receiver *struct {
 				Address string `json:"address"`
 				Amount  string `json:"amount"`
 			} `json:"receiver"`
@@ -170,10 +253,11 @@ func loadFixtures(jsonStr string) (vtxos, map[string]struct{}, error) {
 			ExpireAt    string `json:"expireAt"`
 			Swept       bool   `json:"swept"`
 			Pending     bool   `json:"pending"`
-			PendingData struct {
+			PendingData *struct {
 				RedeemTx                string   `json:"redeemTx"`
 				UnconditionalForfeitTxs []string `json:"unconditionalForfeitTxs"`
 			} `json:"pendingData"`
+			Amount string `json:"amount"`
 		} `json:"spentVtxos"`
 	}
 
@@ -187,22 +271,43 @@ func loadFixtures(jsonStr string) (vtxos, map[string]struct{}, error) {
 		if err != nil {
 			return vtxos{}, nil, err
 		}
-		amount, err := parseAmount(vtxo.Receiver.Amount)
+
+		var amount uint64
+		var txid string
+		var vout uint32
+
+		if vtxo.Receiver != nil {
+			amount, err = parseAmount(vtxo.Receiver.Amount)
+		} else {
+			amount, err = parseAmount(vtxo.Amount)
+		}
 		if err != nil {
 			return vtxos{}, nil, err
 		}
+
+		if vtxo.Outpoint.VtxoInput != nil {
+			txid = vtxo.Outpoint.VtxoInput.Txid
+			vout = vtxo.Outpoint.VtxoInput.Vout
+		} else {
+			txid = vtxo.Outpoint.Txid
+			vout = vtxo.Outpoint.Vout
+		}
+
 		spendable[i] = client.Vtxo{
 			Outpoint: client.Outpoint{
-				Txid: vtxo.Outpoint.Txid,
-				VOut: vtxo.Outpoint.Vout,
+				Txid: txid,
+				VOut: vout,
 			},
-			Amount:                  amount,
-			RoundTxid:               vtxo.PoolTxid,
-			ExpiresAt:               &expireAt,
-			RedeemTx:                vtxo.PendingData.RedeemTx,
-			UnconditionalForfeitTxs: vtxo.PendingData.UnconditionalForfeitTxs,
-			Pending:                 vtxo.Pending,
-			SpentBy:                 vtxo.SpentBy,
+			Amount:    amount,
+			RoundTxid: vtxo.PoolTxid,
+			ExpiresAt: &expireAt,
+			Pending:   vtxo.Pending,
+			SpentBy:   vtxo.SpentBy,
+		}
+
+		if vtxo.PendingData != nil {
+			spendable[i].RedeemTx = vtxo.PendingData.RedeemTx
+			spendable[i].UnconditionalForfeitTxs = vtxo.PendingData.UnconditionalForfeitTxs
 		}
 	}
 
@@ -212,22 +317,43 @@ func loadFixtures(jsonStr string) (vtxos, map[string]struct{}, error) {
 		if err != nil {
 			return vtxos{}, nil, err
 		}
-		amount, err := parseAmount(vtxo.Receiver.Amount)
+
+		var amount uint64
+		var txid string
+		var vout uint32
+
+		if vtxo.Receiver != nil {
+			amount, err = parseAmount(vtxo.Receiver.Amount)
+		} else {
+			amount, err = parseAmount(vtxo.Amount)
+		}
 		if err != nil {
 			return vtxos{}, nil, err
 		}
+
+		if vtxo.Outpoint.VtxoInput != nil {
+			txid = vtxo.Outpoint.VtxoInput.Txid
+			vout = vtxo.Outpoint.VtxoInput.Vout
+		} else {
+			txid = vtxo.Outpoint.Txid
+			vout = vtxo.Outpoint.Vout
+		}
+
 		spent[i] = client.Vtxo{
 			Outpoint: client.Outpoint{
-				Txid: vtxo.Outpoint.Txid,
-				VOut: vtxo.Outpoint.Vout,
+				Txid: txid,
+				VOut: vout,
 			},
-			Amount:                  amount,
-			RoundTxid:               vtxo.PoolTxid,
-			ExpiresAt:               &expireAt,
-			RedeemTx:                vtxo.PendingData.RedeemTx,
-			UnconditionalForfeitTxs: vtxo.PendingData.UnconditionalForfeitTxs,
-			Pending:                 vtxo.Pending,
-			SpentBy:                 vtxo.SpentBy,
+			Amount:    amount,
+			RoundTxid: vtxo.PoolTxid,
+			ExpiresAt: &expireAt,
+			Pending:   vtxo.Pending,
+			SpentBy:   vtxo.SpentBy,
+		}
+
+		if vtxo.PendingData != nil {
+			spent[i].RedeemTx = vtxo.PendingData.RedeemTx
+			spent[i].UnconditionalForfeitTxs = vtxo.PendingData.UnconditionalForfeitTxs
 		}
 	}
 
@@ -261,6 +387,148 @@ func parseTimestamp(timestamp string) (time.Time, error) {
 
 	return time.Unix(seconds, 0), nil
 }
+
+var (
+	// bellow fixtures are used in bellow scenario:
+	// 1. Alice onboards with 100000000
+	// 2. Alice sends 20000 to Bob
+	// 3. Carol receiver 4000
+	aliceOnboardCovenant = `
+	{
+		"ignoreTxs": [
+		  "afcace86a7ca457ea83ca9cb3f773a0c021df5ff677c2e175218ac5d14ed23b5"
+		],
+	  "spendableVtxos": [
+		{
+		  "outpoint": {
+			"txid": "00ef367785093862472461a1661b9bddb235470083b1092cdb8a1fe55b834fe2",
+			"vout": 0
+		  },
+		  "descriptor": "tr(0250929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0,{ and(pk(4f9c3c9b004b26a3969528e7b9eb8a61b42d6b8cfd697c948e06cea730b18953), pk(0604f373be4821143b614b393462c591cc96fadcdf5d46dcf8b10ba55ace9919)), and(older(1024), pk(4f9c3c9b004b26a3969528e7b9eb8a61b42d6b8cfd697c948e06cea730b18953)) })",
+		  "spent": false,
+		  "poolTxid": "afcace86a7ca457ea83ca9cb3f773a0c021df5ff677c2e175218ac5d14ed23b5",
+		  "spentBy": "",
+		  "expireAt": "1727424210",
+		  "swept": false,
+		  "pending": false,
+		  "pendingData": null,
+		  "amount": "100000000",
+		  "pendingChange": false
+		}
+	  ],
+	  "spentVtxos": []
+	}`
+	aliceToBobCovenant = `
+	{
+		"ignoreTxs": [
+		  "31e744a81cdd7fcc5517130a7f35722bea4dbf73faa4f4c580a6b93b2df0746d"
+		],
+	  "spendableVtxos": [
+		{
+		  "outpoint": {
+			"vtxoInput": {
+			  "txid": "979da550421b4c06e584eedf9f6d63fb2d63b569c2e65fe6aa83fa6c3b52df7a",
+			  "vout": 0
+			}
+		  },
+		  "receiver": {
+			"address": "tark1qvv3y4ggp43h7rre628w88zrt6l4f3du8d5dgkalqtzykqa0jwyt7qujxr20fwy8spgdfnfq4cwhs2y8djuwpr4fc4mnwjpqkc4v3kwmzsqk3u3r",
+			"amount": "99980000"
+		  },
+		  "spent": false,
+		  "poolTxid": "31e744a81cdd7fcc5517130a7f35722bea4dbf73faa4f4c580a6b93b2df0746d",
+		  "spentBy": "",
+		  "expireAt": "1726582783",
+		  "swept": false,
+		  "pending": false,
+		  "pendingData": null
+		}
+	  ],
+	  "spentVtxos": [
+		{
+		  "outpoint": {
+			"vtxoInput": {
+			  "txid": "213c5b329e022cacf8b38702b1d51479dfb00c204f696e43ccda0335be92c19a",
+			  "vout": 0
+			}
+		  },
+		  "receiver": {
+			"address": "tark1qvv3y4ggp43h7rre628w88zrt6l4f3du8d5dgkalqtzykqa0jwyt7qujxr20fwy8spgdfnfq4cwhs2y8djuwpr4fc4mnwjpqkc4v3kwmzsqk3u3r",
+			"amount": "100000000"
+		  },
+		  "spent": true,
+		  "poolTxid": "52dd02e90d70e2ca24f3e0d41bf6382ae98efaa99177036dc261df93a5790d7d",
+		  "spentBy": "31e744a81cdd7fcc5517130a7f35722bea4dbf73faa4f4c580a6b93b2df0746d",
+		  "expireAt": "1726582574",
+		  "swept": false,
+		  "pending": false,
+		  "pendingData": null
+		}
+	  ]
+	}`
+	aliceToBobCovenant1 = `
+	{
+		"ignoreTxs": [
+		  "754f677a510d4edff448db4faa1deaa84492ac70f7f30227db2bb74749ffefa9"
+		],
+	  "spendableVtxos": [
+		{
+		  "outpoint": {
+			"txid": "376a47e27ba40d2689d6f4ed8f4563caff086de6738d7597f4f9f2beeae96ad9",
+			"vout": 0
+		  },
+		  "descriptor": "tr(0250929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0,{ and(pk(c5a2d101e06d8d5151267a550a2aa5616170fb037206ad9beeb51283a7b85cc8), pk(e35697ab50e4484af22bea879c3230299355980bcee0c294008a5f970c3ce2e0)), and(older(1024), pk(c5a2d101e06d8d5151267a550a2aa5616170fb037206ad9beeb51283a7b85cc8)) })",
+		  "spent": false,
+		  "poolTxid": "6f3d619fd644b168f364b527cd24f5743684f068b3f61d3dfe11a8f99b92ef79",
+		  "spentBy": "",
+		  "expireAt": "1727430903",
+		  "swept": false,
+		  "pending": false,
+		  "pendingData": null,
+		  "amount": "99999000"
+		}
+	  ],
+	  "spentVtxos": [
+		{
+		  "outpoint": {
+			"txid": "fb04f42ee5662eb79cec43e7988f4b3867a9568e1a9fc10e8e1aeb47dc0f8948",
+			"vout": 0
+		  },
+		  "descriptor": "tr(0250929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0,{ and(pk(c5a2d101e06d8d5151267a550a2aa5616170fb037206ad9beeb51283a7b85cc8), pk(e35697ab50e4484af22bea879c3230299355980bcee0c294008a5f970c3ce2e0)), and(older(1024), pk(c5a2d101e06d8d5151267a550a2aa5616170fb037206ad9beeb51283a7b85cc8)) })",
+		  "spent": true,
+		  "poolTxid": "754f677a510d4edff448db4faa1deaa84492ac70f7f30227db2bb74749ffefa9",
+		  "spentBy": "6f3d619fd644b168f364b527cd24f5743684f068b3f61d3dfe11a8f99b92ef79",
+		  "expireAt": "1727430839",
+		  "swept": false,
+		  "pending": false,
+		  "pendingData": null,
+		  "amount": "100000000"
+		}
+	  ]
+	}`
+	carolReceives = `
+	{
+	  "spendableVtxos": [
+		{
+		  "outpoint": {
+			"txid": "00ef367785093862472461a1661b9bddb235470083b1092cdb8a1fe55b834fe2",
+			"vout": 0
+		  },
+		  "descriptor": "tr(0250929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0,{ and(pk(4f9c3c9b004b26a3969528e7b9eb8a61b42d6b8cfd697c948e06cea730b18953), pk(0604f373be4821143b614b393462c591cc96fadcdf5d46dcf8b10ba55ace9919)), and(older(1024), pk(4f9c3c9b004b26a3969528e7b9eb8a61b42d6b8cfd697c948e06cea730b18953)) })",
+		  "spent": false,
+		  "poolTxid": "afcace86a7ca457ea83ca9cb3f773a0c021df5ff677c2e175218ac5d14ed23b5",
+		  "spentBy": "",
+		  "expireAt": "1727424210",
+		  "swept": false,
+		  "pending": false,
+		  "pendingData": null,
+		  "amount": "3000",
+		  "pendingChange": false
+		}
+	  ],
+	  "spentVtxos": []
+	}`
+)
 
 // bellow fixtures are used in bellow scenario:
 // 1. Alice boards with 20OOO

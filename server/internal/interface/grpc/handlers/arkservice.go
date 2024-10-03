@@ -15,17 +15,14 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-type listener struct {
-	id   string
-	done chan struct{}
-	ch   chan *arkv1.GetEventStreamResponse
-}
-
 type handler struct {
 	svc application.Service
 
 	listenersLock *sync.Mutex
 	listeners     []*listener
+
+	paymentListenersLock sync.Mutex
+	paymentListeners     []*paymentListener
 }
 
 func NewHandler(service application.Service) arkv1.ArkServiceServer {
@@ -36,8 +33,20 @@ func NewHandler(service application.Service) arkv1.ArkServiceServer {
 	}
 
 	go h.listenToEvents()
+	go h.listenToPaymentEvents()
 
 	return h
+}
+
+type listener struct {
+	id   string
+	done chan struct{}
+	ch   chan *arkv1.GetEventStreamResponse
+}
+
+type paymentListener struct {
+	id string
+	ch chan *arkv1.GetPaymentsStreamResponse
 }
 
 func (h *handler) GetInfo(
@@ -488,6 +497,43 @@ func (h *handler) ListVtxos(
 	}, nil
 }
 
+func (h *handler) GetPaymentsStream(
+	_ *arkv1.GetPaymentsStreamRequest,
+	stream arkv1.ArkService_GetPaymentsStreamServer,
+) error {
+	listener := &paymentListener{
+		id: uuid.NewString(),
+		ch: make(chan *arkv1.GetPaymentsStreamResponse),
+	}
+
+	h.paymentListenersLock.Lock()
+	h.paymentListeners = append(h.paymentListeners, listener)
+	h.paymentListenersLock.Unlock()
+
+	defer func() {
+		h.paymentListenersLock.Lock()
+		for i, l := range h.paymentListeners {
+			if l.id == listener.id {
+				h.paymentListeners = append(h.paymentListeners[:i], h.paymentListeners[i+1:]...)
+				break
+			}
+		}
+		h.paymentListenersLock.Unlock()
+		close(listener.ch)
+	}()
+
+	for {
+		select {
+		case <-stream.Context().Done():
+			return nil
+		case ev := <-listener.ch:
+			if err := stream.Send(ev); err != nil {
+				return err
+			}
+		}
+	}
+}
+
 func (h *handler) pushListener(l *listener) {
 	h.listenersLock.Lock()
 	defer h.listenersLock.Unlock()
@@ -593,4 +639,78 @@ func (h *handler) listenToEvents() {
 			}
 		}
 	}
+}
+
+func (h *handler) listenToPaymentEvents() {
+	paymentEventsCh := h.svc.GetPaymentEventsChannel(context.Background())
+	for event := range paymentEventsCh {
+		var paymentEvent *arkv1.GetPaymentsStreamResponse
+
+		switch event.Type() {
+		case application.RoundPayments:
+			paymentEvent = &arkv1.GetPaymentsStreamResponse{
+				Tx: &arkv1.GetPaymentsStreamResponse_RoundPayments{
+					RoundPayments: convertRoundPaymentEvent(event.(application.RoundPaymentEvent)),
+				},
+			}
+		case application.AsyncPayments:
+			paymentEvent = &arkv1.GetPaymentsStreamResponse{
+				Tx: &arkv1.GetPaymentsStreamResponse_AsyncPayments{
+					AsyncPayments: convertAsyncPaymentEvent(event.(application.AsyncPaymentEvent)),
+				},
+			}
+		}
+
+		if paymentEvent != nil {
+			logrus.Debugf("forwarding event to %d listeners", len(h.listeners))
+			for _, l := range h.paymentListeners {
+				go func(l *paymentListener) {
+					l.ch <- paymentEvent
+				}(l)
+			}
+		}
+	}
+}
+
+func convertRoundPaymentEvent(e application.RoundPaymentEvent) *arkv1.RoundPayment {
+	return &arkv1.RoundPayment{
+		Txid:                 e.RoundTxID,
+		SpentVtxos:           convertVtxoKeysToOutpoints(e.SpentVtxos),
+		SpendableVtxos:       convertVtxosToArkVtxos(e.SpendableVtxos),
+		ClaimedBoardingVtxos: convertVtxoKeysToOutpoints(e.ClaimedBoardingInputs),
+	}
+}
+
+func convertAsyncPaymentEvent(e application.AsyncPaymentEvent) *arkv1.AsyncPayment {
+	return &arkv1.AsyncPayment{
+		Txid:           e.AsyncTxID,
+		SpentVtxos:     convertVtxoKeysToOutpoints(e.SpentVtxos),
+		SpendableVtxos: convertVtxosToArkVtxos(e.SpendableVtxos),
+	}
+}
+
+func convertVtxoKeysToOutpoints(vtxoKeys []domain.VtxoKey) []*arkv1.Outpoint {
+	outpoints := make([]*arkv1.Outpoint, len(vtxoKeys))
+	for i, vtxoKey := range vtxoKeys {
+		outpoints[i] = &arkv1.Outpoint{
+			Txid: vtxoKey.Txid,
+			Vout: vtxoKey.VOut,
+		}
+	}
+	return outpoints
+}
+
+func convertVtxosToArkVtxos(vtxos []domain.Vtxo) []*arkv1.Vtxo {
+	arkVtxos := make([]*arkv1.Vtxo, len(vtxos))
+	for i, vtxo := range vtxos {
+		arkVtxos[i] = &arkv1.Vtxo{
+			Outpoint: &arkv1.Outpoint{
+				Txid: vtxo.Txid,
+				Vout: vtxo.VOut,
+			},
+			Descriptor_: vtxo.Receiver.Descriptor,
+			Amount:      vtxo.Receiver.Amount,
+		}
+	}
+	return arkVtxos
 }
