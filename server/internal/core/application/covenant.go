@@ -572,8 +572,7 @@ func (s *covenantService) finalizeRound() {
 
 	log.Debugf("signing round transaction %s\n", round.Id)
 
-	boardingInputs := make([]domain.VtxoKey, 0)
-	boardingInputsIndexes := make([]int, 0)
+	boardingInputs := make([]int, 0)
 	roundTx, err := psetv2.NewPsetFromBase64(round.UnsignedTx)
 	if err != nil {
 		log.Debugf("failed to parse round tx: %s", round.UnsignedTx)
@@ -591,18 +590,14 @@ func (s *covenantService) finalizeRound() {
 				return
 			}
 
-			boardingInputsIndexes = append(boardingInputsIndexes, i)
-			boardingInputs = append(boardingInputs, domain.VtxoKey{
-				Txid: elementsutil.TxIDFromBytes(in.PreviousTxid),
-				VOut: in.PreviousTxIndex,
-			})
+			boardingInputs = append(boardingInputs, i)
 		}
 	}
 
 	signedRoundTx := round.UnsignedTx
 
-	if len(boardingInputsIndexes) > 0 {
-		signedRoundTx, err = s.wallet.SignTransactionTapscript(ctx, signedRoundTx, boardingInputsIndexes)
+	if len(boardingInputs) > 0 {
+		signedRoundTx, err = s.wallet.SignTransactionTapscript(ctx, signedRoundTx, boardingInputs)
 		if err != nil {
 			changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
 			log.WithError(err).Warn("failed to sign round tx")
@@ -631,15 +626,6 @@ func (s *covenantService) finalizeRound() {
 		log.WithError(err).Warn("failed to finalize round")
 		return
 	}
-
-	go func() {
-		s.paymentEventsCh <- RoundPaymentEvent{
-			RoundTxID:             round.Txid,
-			SpentVtxos:            getSpentVtxos(round.Payments),
-			SpendableVtxos:        s.getNewVtxos(round),
-			ClaimedBoardingInputs: boardingInputs,
-		}
-	}()
 
 	log.Debugf("finalized round %s with pool tx %s", round.Id, round.Txid)
 }
@@ -878,6 +864,26 @@ func (s *covenantService) updateVtxoSet(round *domain.Round) {
 			}
 		}()
 	}
+
+	go func() {
+		// nolint:all
+		tx, _ := psetv2.NewPsetFromBase64(round.UnsignedTx)
+		boardingInputs := make([]domain.VtxoKey, 0)
+		for _, in := range tx.Inputs {
+			if len(in.TapLeafScript) > 0 {
+				boardingInputs = append(boardingInputs, domain.VtxoKey{
+					Txid: elementsutil.TxIDFromBytes(in.PreviousTxid),
+					VOut: in.PreviousTxIndex,
+				})
+			}
+		}
+		s.paymentEventsCh <- RoundPaymentEvent{
+			RoundTxID:             round.Txid,
+			SpentVtxos:            getSpentVtxos(round.Payments),
+			SpendableVtxos:        s.getNewVtxos(round),
+			ClaimedBoardingInputs: boardingInputs,
+		}
+	}()
 }
 
 func (s *covenantService) propagateEvents(round *domain.Round) {

@@ -18,35 +18,21 @@ import (
 type handler struct {
 	svc application.Service
 
-	listenersLock *sync.Mutex
-	listeners     []*listener
-
-	paymentListenersLock sync.Mutex
-	paymentListeners     []*paymentListener
+	eventsListenerHandler   *listenerHanlder[*arkv1.GetEventStreamResponse]
+	paymentsListenerHandler *listenerHanlder[*arkv1.GetPaymentsStreamResponse]
 }
 
 func NewHandler(service application.Service) arkv1.ArkServiceServer {
 	h := &handler{
-		svc:           service,
-		listenersLock: &sync.Mutex{},
-		listeners:     make([]*listener, 0),
+		svc:                     service,
+		eventsListenerHandler:   newListenerHandler[*arkv1.GetEventStreamResponse](),
+		paymentsListenerHandler: newListenerHandler[*arkv1.GetPaymentsStreamResponse](),
 	}
 
 	go h.listenToEvents()
 	go h.listenToPaymentEvents()
 
 	return h
-}
-
-type listener struct {
-	id   string
-	done chan struct{}
-	ch   chan *arkv1.GetEventStreamResponse
-}
-
-type paymentListener struct {
-	id string
-	ch chan *arkv1.GetPaymentsStreamResponse
 }
 
 func (h *handler) GetInfo(
@@ -243,14 +229,14 @@ func (h *handler) GetEventStream(
 ) error {
 	doneCh := make(chan struct{})
 
-	listener := &listener{
+	listener := &listener[*arkv1.GetEventStreamResponse]{
 		id:   uuid.NewString(),
 		done: doneCh,
 		ch:   make(chan *arkv1.GetEventStreamResponse),
 	}
 
-	h.pushListener(listener)
-	defer h.removeListener(listener.id)
+	h.eventsListenerHandler.pushListener(listener)
+	defer h.eventsListenerHandler.removeListener(listener.id)
 	defer close(listener.ch)
 	defer close(doneCh)
 
@@ -501,24 +487,16 @@ func (h *handler) GetPaymentsStream(
 	_ *arkv1.GetPaymentsStreamRequest,
 	stream arkv1.ArkService_GetPaymentsStreamServer,
 ) error {
-	listener := &paymentListener{
-		id: uuid.NewString(),
-		ch: make(chan *arkv1.GetPaymentsStreamResponse),
+	listener := &listener[*arkv1.GetPaymentsStreamResponse]{
+		id:   uuid.NewString(),
+		done: make(chan struct{}),
+		ch:   make(chan *arkv1.GetPaymentsStreamResponse),
 	}
 
-	h.paymentListenersLock.Lock()
-	h.paymentListeners = append(h.paymentListeners, listener)
-	h.paymentListenersLock.Unlock()
+	h.paymentsListenerHandler.pushListener(listener)
 
 	defer func() {
-		h.paymentListenersLock.Lock()
-		for i, l := range h.paymentListeners {
-			if l.id == listener.id {
-				h.paymentListeners = append(h.paymentListeners[:i], h.paymentListeners[i+1:]...)
-				break
-			}
-		}
-		h.paymentListenersLock.Unlock()
+		h.paymentsListenerHandler.removeListener(listener.id)
 		close(listener.ch)
 	}()
 
@@ -530,25 +508,6 @@ func (h *handler) GetPaymentsStream(
 			if err := stream.Send(ev); err != nil {
 				return err
 			}
-		}
-	}
-}
-
-func (h *handler) pushListener(l *listener) {
-	h.listenersLock.Lock()
-	defer h.listenersLock.Unlock()
-
-	h.listeners = append(h.listeners, l)
-}
-
-func (h *handler) removeListener(id string) {
-	h.listenersLock.Lock()
-	defer h.listenersLock.Unlock()
-
-	for i, listener := range h.listeners {
-		if listener.id == id {
-			h.listeners = append(h.listeners[:i], h.listeners[i+1:]...)
-			return
 		}
 	}
 }
@@ -628,9 +587,9 @@ func (h *handler) listenToEvents() {
 		}
 
 		if ev != nil {
-			logrus.Debugf("forwarding event to %d listeners", len(h.listeners))
-			for _, l := range h.listeners {
-				go func(l *listener) {
+			logrus.Debugf("forwarding event to %d listeners", len(h.eventsListenerHandler.listeners))
+			for _, l := range h.eventsListenerHandler.listeners {
+				go func(l *listener[*arkv1.GetEventStreamResponse]) {
 					l.ch <- ev
 					if shouldClose {
 						l.done <- struct{}{}
@@ -662,9 +621,9 @@ func (h *handler) listenToPaymentEvents() {
 		}
 
 		if paymentEvent != nil {
-			logrus.Debugf("forwarding event to %d listeners", len(h.listeners))
-			for _, l := range h.paymentListeners {
-				go func(l *paymentListener) {
+			logrus.Debugf("forwarding event to %d listeners", len(h.paymentsListenerHandler.listeners))
+			for _, l := range h.paymentsListenerHandler.listeners {
+				go func(l *listener[*arkv1.GetPaymentsStreamResponse]) {
 					l.ch <- paymentEvent
 				}(l)
 			}
@@ -675,42 +634,53 @@ func (h *handler) listenToPaymentEvents() {
 func convertRoundPaymentEvent(e application.RoundPaymentEvent) *arkv1.RoundPayment {
 	return &arkv1.RoundPayment{
 		Txid:                 e.RoundTxID,
-		SpentVtxos:           convertVtxoKeysToOutpoints(e.SpentVtxos),
-		SpendableVtxos:       convertVtxosToArkVtxos(e.SpendableVtxos),
-		ClaimedBoardingVtxos: convertVtxoKeysToOutpoints(e.ClaimedBoardingInputs),
+		SpentVtxos:           vtxoKeyList(e.SpentVtxos).toProto(),
+		SpendableVtxos:       vtxoList(e.SpendableVtxos).toProto(),
+		ClaimedBoardingVtxos: vtxoKeyList(e.ClaimedBoardingInputs).toProto(),
 	}
 }
 
 func convertAsyncPaymentEvent(e application.AsyncPaymentEvent) *arkv1.AsyncPayment {
 	return &arkv1.AsyncPayment{
 		Txid:           e.AsyncTxID,
-		SpentVtxos:     convertVtxoKeysToOutpoints(e.SpentVtxos),
-		SpendableVtxos: convertVtxosToArkVtxos(e.SpendableVtxos),
+		SpentVtxos:     vtxoKeyList(e.SpentVtxos).toProto(),
+		SpendableVtxos: vtxoList(e.SpendableVtxos).toProto(),
 	}
 }
 
-func convertVtxoKeysToOutpoints(vtxoKeys []domain.VtxoKey) []*arkv1.Outpoint {
-	outpoints := make([]*arkv1.Outpoint, len(vtxoKeys))
-	for i, vtxoKey := range vtxoKeys {
-		outpoints[i] = &arkv1.Outpoint{
-			Txid: vtxoKey.Txid,
-			Vout: vtxoKey.VOut,
-		}
-	}
-	return outpoints
+type listener[T any] struct {
+	id   string
+	done chan struct{}
+	ch   chan T
 }
 
-func convertVtxosToArkVtxos(vtxos []domain.Vtxo) []*arkv1.Vtxo {
-	arkVtxos := make([]*arkv1.Vtxo, len(vtxos))
-	for i, vtxo := range vtxos {
-		arkVtxos[i] = &arkv1.Vtxo{
-			Outpoint: &arkv1.Outpoint{
-				Txid: vtxo.Txid,
-				Vout: vtxo.VOut,
-			},
-			Descriptor_: vtxo.Receiver.Descriptor,
-			Amount:      vtxo.Receiver.Amount,
+type listenerHanlder[T any] struct {
+	lock      *sync.Mutex
+	listeners []*listener[T]
+}
+
+func newListenerHandler[T any]() *listenerHanlder[T] {
+	return &listenerHanlder[T]{
+		lock:      &sync.Mutex{},
+		listeners: make([]*listener[T], 0),
+	}
+}
+
+func (h *listenerHanlder[T]) pushListener(l *listener[T]) {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	h.listeners = append(h.listeners, l)
+}
+
+func (h *listenerHanlder[T]) removeListener(id string) {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	for i, listener := range h.listeners {
+		if listener.id == id {
+			h.listeners = append(h.listeners[:i], h.listeners[i+1:]...)
+			return
 		}
 	}
-	return arkVtxos
 }

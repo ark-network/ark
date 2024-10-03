@@ -1054,8 +1054,7 @@ func (s *covenantlessService) finalizeRound() {
 
 	log.Debugf("signing round transaction %s\n", round.Id)
 
-	boardingInputs := make([]domain.VtxoKey, 0)
-	boardingInputsIndexes := make([]int, 0)
+	boardingInputs := make([]int, 0)
 	roundTx, err := psbt.NewFromRawBytes(strings.NewReader(round.UnsignedTx), true)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to parse round tx: %s", err))
@@ -1072,18 +1071,14 @@ func (s *covenantlessService) finalizeRound() {
 				return
 			}
 
-			boardingInputsIndexes = append(boardingInputsIndexes, i)
-			boardingInputs = append(boardingInputs, domain.VtxoKey{
-				Txid: roundTx.UnsignedTx.TxIn[i].PreviousOutPoint.Hash.String(),
-				VOut: roundTx.UnsignedTx.TxIn[i].PreviousOutPoint.Index,
-			})
+			boardingInputs = append(boardingInputs, i)
 		}
 	}
 
 	signedRoundTx := round.UnsignedTx
 
-	if len(boardingInputsIndexes) > 0 {
-		signedRoundTx, err = s.wallet.SignTransactionTapscript(ctx, signedRoundTx, boardingInputsIndexes)
+	if len(boardingInputs) > 0 {
+		signedRoundTx, err = s.wallet.SignTransactionTapscript(ctx, signedRoundTx, boardingInputs)
 		if err != nil {
 			changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
 			log.WithError(err).Warn("failed to sign round tx")
@@ -1110,15 +1105,6 @@ func (s *covenantlessService) finalizeRound() {
 		log.WithError(err).Warn("failed to finalize round")
 		return
 	}
-
-	go func() {
-		s.paymentEventsCh <- RoundPaymentEvent{
-			RoundTxID:             round.Txid,
-			SpentVtxos:            getSpentVtxos(round.Payments),
-			SpendableVtxos:        s.getNewVtxos(round),
-			ClaimedBoardingInputs: boardingInputs,
-		}
-	}()
 
 	log.Debugf("finalized round %s with pool tx %s", round.Id, round.Txid)
 }
@@ -1286,7 +1272,27 @@ func (s *covenantlessService) updateVtxoSet(round *domain.Round) {
 				return
 			}
 		}()
+
 	}
+	go func() {
+		// nolint:all
+		tx, _ := psbt.NewFromRawBytes(strings.NewReader(round.UnsignedTx), true)
+		boardingInputs := make([]domain.VtxoKey, 0)
+		for i, in := range tx.Inputs {
+			if len(in.TaprootLeafScript) > 0 {
+				boardingInputs = append(boardingInputs, domain.VtxoKey{
+					Txid: tx.UnsignedTx.TxIn[i].PreviousOutPoint.Hash.String(),
+					VOut: tx.UnsignedTx.TxIn[i].PreviousOutPoint.Index,
+				})
+			}
+		}
+		s.paymentEventsCh <- RoundPaymentEvent{
+			RoundTxID:             round.Txid,
+			SpentVtxos:            getSpentVtxos(round.Payments),
+			SpendableVtxos:        s.getNewVtxos(round),
+			ClaimedBoardingInputs: boardingInputs,
+		}
+	}()
 }
 
 func (s *covenantlessService) propagateEvents(round *domain.Round) {
