@@ -32,6 +32,7 @@ type ArkServiceClient interface {
 	GetRound(ctx context.Context, in *GetRoundRequest, opts ...grpc.CallOption) (*GetRoundResponse, error)
 	GetRoundById(ctx context.Context, in *GetRoundByIdRequest, opts ...grpc.CallOption) (*GetRoundByIdResponse, error)
 	ListVtxos(ctx context.Context, in *ListVtxosRequest, opts ...grpc.CallOption) (*ListVtxosResponse, error)
+	GetPaymentsStream(ctx context.Context, in *GetPaymentsStreamRequest, opts ...grpc.CallOption) (ArkService_GetPaymentsStreamClient, error)
 }
 
 type arkServiceClient struct {
@@ -191,6 +192,38 @@ func (c *arkServiceClient) ListVtxos(ctx context.Context, in *ListVtxosRequest, 
 	return out, nil
 }
 
+func (c *arkServiceClient) GetPaymentsStream(ctx context.Context, in *GetPaymentsStreamRequest, opts ...grpc.CallOption) (ArkService_GetPaymentsStreamClient, error) {
+	stream, err := c.cc.NewStream(ctx, &ArkService_ServiceDesc.Streams[1], "/ark.v1.ArkService/GetPaymentsStream", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &arkServiceGetPaymentsStreamClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type ArkService_GetPaymentsStreamClient interface {
+	Recv() (*GetPaymentsStreamResponse, error)
+	grpc.ClientStream
+}
+
+type arkServiceGetPaymentsStreamClient struct {
+	grpc.ClientStream
+}
+
+func (x *arkServiceGetPaymentsStreamClient) Recv() (*GetPaymentsStreamResponse, error) {
+	m := new(GetPaymentsStreamResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // ArkServiceServer is the server API for ArkService service.
 // All implementations should embed UnimplementedArkServiceServer
 // for forward compatibility
@@ -209,6 +242,7 @@ type ArkServiceServer interface {
 	GetRound(context.Context, *GetRoundRequest) (*GetRoundResponse, error)
 	GetRoundById(context.Context, *GetRoundByIdRequest) (*GetRoundByIdResponse, error)
 	ListVtxos(context.Context, *ListVtxosRequest) (*ListVtxosResponse, error)
+	GetPaymentsStream(*GetPaymentsStreamRequest, ArkService_GetPaymentsStreamServer) error
 }
 
 // UnimplementedArkServiceServer should be embedded to have forward compatible implementations.
@@ -256,6 +290,9 @@ func (UnimplementedArkServiceServer) GetRoundById(context.Context, *GetRoundById
 }
 func (UnimplementedArkServiceServer) ListVtxos(context.Context, *ListVtxosRequest) (*ListVtxosResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListVtxos not implemented")
+}
+func (UnimplementedArkServiceServer) GetPaymentsStream(*GetPaymentsStreamRequest, ArkService_GetPaymentsStreamServer) error {
+	return status.Errorf(codes.Unimplemented, "method GetPaymentsStream not implemented")
 }
 
 // UnsafeArkServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -524,6 +561,27 @@ func _ArkService_ListVtxos_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ArkService_GetPaymentsStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(GetPaymentsStreamRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ArkServiceServer).GetPaymentsStream(m, &arkServiceGetPaymentsStreamServer{stream})
+}
+
+type ArkService_GetPaymentsStreamServer interface {
+	Send(*GetPaymentsStreamResponse) error
+	grpc.ServerStream
+}
+
+type arkServiceGetPaymentsStreamServer struct {
+	grpc.ServerStream
+}
+
+func (x *arkServiceGetPaymentsStreamServer) Send(m *GetPaymentsStreamResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // ArkService_ServiceDesc is the grpc.ServiceDesc for ArkService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -588,6 +646,11 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "GetEventStream",
 			Handler:       _ArkService_GetEventStream_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "GetPaymentsStream",
+			Handler:       _ArkService_GetPaymentsStream_Handler,
 			ServerStreams: true,
 		},
 	},

@@ -134,6 +134,37 @@
         ]
       }
     },
+    "/v1/payments": {
+      "get": {
+        "operationId": "ArkService_GetPaymentsStream",
+        "responses": {
+          "200": {
+            "description": "A successful response.(streaming responses)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "$ref": "#/definitions/v1GetPaymentsStreamResponse"
+                },
+                "error": {
+                  "$ref": "#/definitions/rpcStatus"
+                }
+              },
+              "title": "Stream result of v1GetPaymentsStreamResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
     "/v1/round/events": {
       "get": {
         "operationId": "ArkService_GetEventStream",
@@ -475,6 +506,28 @@
         }
       }
     },
+    "v1AsyncPayment": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "spentVtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Outpoint"
+          }
+        },
+        "spendableVtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Vtxo"
+          }
+        }
+      }
+    },
     "v1CompletePaymentRequest": {
       "type": "object",
       "properties": {
@@ -601,6 +654,17 @@
         },
         "forfeitAddress": {
           "type": "string"
+        }
+      }
+    },
+    "v1GetPaymentsStreamResponse": {
+      "type": "object",
+      "properties": {
+        "roundPayments": {
+          "$ref": "#/definitions/v1RoundPayment"
+        },
+        "asyncPayments": {
+          "$ref": "#/definitions/v1AsyncPayment"
         }
       }
     },
@@ -851,6 +915,35 @@
         },
         "roundTxid": {
           "type": "string"
+        }
+      }
+    },
+    "v1RoundPayment": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "spentVtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Outpoint"
+          }
+        },
+        "spendableVtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Vtxo"
+          }
+        },
+        "claimedBoardingVtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Outpoint"
+          }
         }
       }
     },

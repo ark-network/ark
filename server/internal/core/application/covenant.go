@@ -45,7 +45,8 @@ type covenantService struct {
 	paymentRequests *paymentsMap
 	forfeitTxs      *forfeitTxsMap
 
-	eventsCh chan domain.RoundEvent
+	eventsCh        chan domain.RoundEvent
+	paymentEventsCh chan PaymentEvent
 
 	currentRoundLock sync.Mutex
 	currentRound     *domain.Round
@@ -59,23 +60,30 @@ func NewCovenantService(
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	scheduler ports.SchedulerService,
 ) (Service, error) {
-	eventsCh := make(chan domain.RoundEvent)
-	paymentRequests := newPaymentsMap()
-
-	forfeitTxs := newForfeitTxsMap(builder)
 	pubkey, err := walletSvc.GetPubkey(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch pubkey: %s", err)
 	}
 
-	sweeper := newSweeper(walletSvc, repoManager, builder, scheduler)
-
 	svc := &covenantService{
-		network, pubkey,
-		roundLifetime, roundInterval, unilateralExitDelay, boardingExitDelay,
-		walletSvc, repoManager, builder, scanner, sweeper,
-		paymentRequests, forfeitTxs, eventsCh, sync.Mutex{}, nil, nil,
+		network:             network,
+		pubkey:              pubkey,
+		roundLifetime:       roundLifetime,
+		roundInterval:       roundInterval,
+		unilateralExitDelay: unilateralExitDelay,
+		boardingExitDelay:   boardingExitDelay,
+		wallet:              walletSvc,
+		repoManager:         repoManager,
+		builder:             builder,
+		scanner:             scanner,
+		sweeper:             newSweeper(walletSvc, repoManager, builder, scheduler),
+		paymentRequests:     newPaymentsMap(),
+		forfeitTxs:          newForfeitTxsMap(builder),
+		eventsCh:            make(chan domain.RoundEvent),
+		paymentEventsCh:     make(chan PaymentEvent),
+		currentRoundLock:    sync.Mutex{},
 	}
+
 	repoManager.RegisterEventsHandler(
 		func(round *domain.Round) {
 			go svc.propagateEvents(round)
@@ -346,6 +354,10 @@ func (s *covenantService) GetEventsChannel(ctx context.Context) <-chan domain.Ro
 	return s.eventsCh
 }
 
+func (s *covenantService) GetPaymentEventsChannel(ctx context.Context) <-chan PaymentEvent {
+	return s.paymentEventsCh
+}
+
 func (s *covenantService) GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error) {
 	return s.repoManager.Rounds().GetRoundWithTxid(ctx, poolTxid)
 }
@@ -560,7 +572,8 @@ func (s *covenantService) finalizeRound() {
 
 	log.Debugf("signing round transaction %s\n", round.Id)
 
-	boardingInputs := make([]int, 0)
+	boardingInputs := make([]domain.VtxoKey, 0)
+	boardingInputsIndexes := make([]int, 0)
 	roundTx, err := psetv2.NewPsetFromBase64(round.UnsignedTx)
 	if err != nil {
 		log.Debugf("failed to parse round tx: %s", round.UnsignedTx)
@@ -578,14 +591,18 @@ func (s *covenantService) finalizeRound() {
 				return
 			}
 
-			boardingInputs = append(boardingInputs, i)
+			boardingInputsIndexes = append(boardingInputsIndexes, i)
+			boardingInputs = append(boardingInputs, domain.VtxoKey{
+				Txid: elementsutil.TxIDFromBytes(in.PreviousTxid),
+				VOut: in.PreviousTxIndex,
+			})
 		}
 	}
 
 	signedRoundTx := round.UnsignedTx
 
-	if len(boardingInputs) > 0 {
-		signedRoundTx, err = s.wallet.SignTransactionTapscript(ctx, signedRoundTx, boardingInputs)
+	if len(boardingInputsIndexes) > 0 {
+		signedRoundTx, err = s.wallet.SignTransactionTapscript(ctx, signedRoundTx, boardingInputsIndexes)
 		if err != nil {
 			changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
 			log.WithError(err).Warn("failed to sign round tx")
@@ -614,6 +631,15 @@ func (s *covenantService) finalizeRound() {
 		log.WithError(err).Warn("failed to finalize round")
 		return
 	}
+
+	go func() {
+		s.paymentEventsCh <- RoundPaymentEvent{
+			RoundTxID:             round.Txid,
+			SpentVtxos:            getSpentVtxos(round.Payments),
+			SpendableVtxos:        s.getNewVtxos(round),
+			ClaimedBoardingInputs: boardingInputs,
+		}
+	}()
 
 	log.Debugf("finalized round %s with pool tx %s", round.Id, round.Txid)
 }
