@@ -92,6 +92,11 @@ service ArkService {
       get: "/v1/vtxos/{address}"
     };
   }
+  rpc GetPaymentsStream(GetPaymentsStreamRequest) returns (stream GetPaymentsStreamResponse) {
+    option (google.api.http) = {
+      get: "/v1/payments"
+    };
+  }
 }
 
 message GetInfoRequest {}
@@ -320,4 +325,25 @@ message Vtxo {
 message PendingPayment {
   string redeem_tx = 1;
   repeated string unconditional_forfeit_txs =2;
+}
+
+message GetPaymentsStreamRequest {}
+message GetPaymentsStreamResponse {
+  oneof tx {
+    RoundPayment round_payments = 1;
+    AsyncPayment async_payments = 2;
+  }
+}
+
+message RoundPayment {
+  string txid = 1;
+  repeated Outpoint spent_vtxos = 2;
+  repeated Vtxo spendable_vtxos = 3;
+  repeated Outpoint claimed_boarding_vtxos = 4;
+}
+
+message AsyncPayment {
+  string txid = 1;
+  repeated Outpoint spent_vtxos = 2;
+  repeated Vtxo spendable_vtxos = 3;
 }

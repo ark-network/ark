@@ -42,7 +42,8 @@ type covenantlessService struct {
 	paymentRequests *paymentsMap
 	forfeitTxs      *forfeitTxsMap
 
-	eventsCh chan domain.RoundEvent
+	eventsCh        chan domain.RoundEvent
+	paymentEventsCh chan PaymentEvent
 
 	// cached data for the current round
 	lastEvent           domain.RoundEvent
@@ -62,16 +63,11 @@ func NewCovenantlessService(
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	scheduler ports.SchedulerService,
 ) (Service, error) {
-	eventsCh := make(chan domain.RoundEvent)
-	paymentRequests := newPaymentsMap()
-
-	forfeitTxs := newForfeitTxsMap(builder)
 	pubkey, err := walletSvc.GetPubkey(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch pubkey: %s", err)
 	}
 
-	sweeper := newSweeper(walletSvc, repoManager, builder, scheduler)
 	asyncPaymentsCache := make(map[string]struct {
 		receivers []domain.Receiver
 		expireAt  int64
@@ -87,10 +83,11 @@ func NewCovenantlessService(
 		repoManager:         repoManager,
 		builder:             builder,
 		scanner:             scanner,
-		sweeper:             sweeper,
-		paymentRequests:     paymentRequests,
-		forfeitTxs:          forfeitTxs,
-		eventsCh:            eventsCh,
+		sweeper:             newSweeper(walletSvc, repoManager, builder, scheduler),
+		paymentRequests:     newPaymentsMap(),
+		forfeitTxs:          newForfeitTxsMap(builder),
+		eventsCh:            make(chan domain.RoundEvent),
+		paymentEventsCh:     make(chan PaymentEvent),
 		currentRoundLock:    sync.Mutex{},
 		asyncPaymentsCache:  asyncPaymentsCache,
 		treeSigningSessions: make(map[string]*musigSigningSession),
@@ -302,6 +299,14 @@ func (s *covenantlessService) CompleteAsyncPayment(
 	log.Infof("spent %d vtxos", len(spentVtxos))
 
 	delete(s.asyncPaymentsCache, redeemTxid)
+
+	go func() {
+		s.paymentEventsCh <- AsyncPaymentEvent{
+			AsyncTxID:      redeemTxid,
+			SpentVtxos:     spentVtxos,
+			SpendableVtxos: vtxos,
+		}
+	}()
 
 	return nil
 }
@@ -577,6 +582,10 @@ func (s *covenantlessService) ListVtxos(ctx context.Context, pubkey *secp256k1.P
 
 func (s *covenantlessService) GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent {
 	return s.eventsCh
+}
+
+func (s *covenantlessService) GetPaymentEventsChannel(ctx context.Context) <-chan PaymentEvent {
+	return s.paymentEventsCh
 }
 
 func (s *covenantlessService) GetRoundByTxid(ctx context.Context, roundTxid string) (*domain.Round, error) {
@@ -1045,7 +1054,8 @@ func (s *covenantlessService) finalizeRound() {
 
 	log.Debugf("signing round transaction %s\n", round.Id)
 
-	boardingInputs := make([]int, 0)
+	boardingInputs := make([]domain.VtxoKey, 0)
+	boardingInputsIndexes := make([]int, 0)
 	roundTx, err := psbt.NewFromRawBytes(strings.NewReader(round.UnsignedTx), true)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to parse round tx: %s", err))
@@ -1062,14 +1072,18 @@ func (s *covenantlessService) finalizeRound() {
 				return
 			}
 
-			boardingInputs = append(boardingInputs, i)
+			boardingInputsIndexes = append(boardingInputsIndexes, i)
+			boardingInputs = append(boardingInputs, domain.VtxoKey{
+				Txid: roundTx.UnsignedTx.TxIn[i].PreviousOutPoint.Hash.String(),
+				VOut: roundTx.UnsignedTx.TxIn[i].PreviousOutPoint.Index,
+			})
 		}
 	}
 
 	signedRoundTx := round.UnsignedTx
 
-	if len(boardingInputs) > 0 {
-		signedRoundTx, err = s.wallet.SignTransactionTapscript(ctx, signedRoundTx, boardingInputs)
+	if len(boardingInputsIndexes) > 0 {
+		signedRoundTx, err = s.wallet.SignTransactionTapscript(ctx, signedRoundTx, boardingInputsIndexes)
 		if err != nil {
 			changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
 			log.WithError(err).Warn("failed to sign round tx")
@@ -1096,6 +1110,15 @@ func (s *covenantlessService) finalizeRound() {
 		log.WithError(err).Warn("failed to finalize round")
 		return
 	}
+
+	go func() {
+		s.paymentEventsCh <- RoundPaymentEvent{
+			RoundTxID:             round.Txid,
+			SpentVtxos:            getSpentVtxos(round.Payments),
+			SpendableVtxos:        s.getNewVtxos(round),
+			ClaimedBoardingInputs: boardingInputs,
+		}
+	}()
 
 	log.Debugf("finalized round %s with pool tx %s", round.Id, round.Txid)
 }
