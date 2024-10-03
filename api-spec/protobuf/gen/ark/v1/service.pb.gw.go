@@ -482,11 +482,11 @@ func local_request_ArkService_ListVtxos_0(ctx context.Context, marshaler runtime
 
 }
 
-func request_ArkService_GetPaymentsStream_0(ctx context.Context, marshaler runtime.Marshaler, client ArkServiceClient, req *http.Request, pathParams map[string]string) (ArkService_GetPaymentsStreamClient, runtime.ServerMetadata, error) {
-	var protoReq GetPaymentsStreamRequest
+func request_ArkService_GetTransactionsStream_0(ctx context.Context, marshaler runtime.Marshaler, client ArkServiceClient, req *http.Request, pathParams map[string]string) (ArkService_GetTransactionsStreamClient, runtime.ServerMetadata, error) {
+	var protoReq GetTransactionsStreamRequest
 	var metadata runtime.ServerMetadata
 
-	stream, err := client.GetPaymentsStream(ctx, &protoReq)
+	stream, err := client.GetTransactionsStream(ctx, &protoReq)
 	if err != nil {
 		return nil, metadata, err
 	}
@@ -838,7 +838,7 @@ func RegisterArkServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 
 	})
 
-	mux.Handle("GET", pattern_ArkService_GetPaymentsStream_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("GET", pattern_ArkService_GetTransactionsStream_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		err := status.Error(codes.Unimplemented, "streaming calls are not yet supported in the in-process transport")
 		_, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
@@ -1194,25 +1194,25 @@ func RegisterArkServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 
 	})
 
-	mux.Handle("GET", pattern_ArkService_GetPaymentsStream_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("GET", pattern_ArkService_GetTransactionsStream_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/ark.v1.ArkService/GetPaymentsStream", runtime.WithHTTPPathPattern("/v1/payments"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/ark.v1.ArkService/GetTransactionsStream", runtime.WithHTTPPathPattern("/v1/transactions"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_ArkService_GetPaymentsStream_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_ArkService_GetTransactionsStream_0(annotatedContext, inboundMarshaler, client, req, pathParams)
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
 
-		forward_ArkService_GetPaymentsStream_0(annotatedContext, mux, outboundMarshaler, w, req, func() (proto.Message, error) { return resp.Recv() }, mux.GetForwardResponseOptions()...)
+		forward_ArkService_GetTransactionsStream_0(annotatedContext, mux, outboundMarshaler, w, req, func() (proto.Message, error) { return resp.Recv() }, mux.GetForwardResponseOptions()...)
 
 	})
 
@@ -1248,7 +1248,7 @@ var (
 
 	pattern_ArkService_ListVtxos_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "vtxos", "address"}, ""))
 
-	pattern_ArkService_GetPaymentsStream_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "payments"}, ""))
+	pattern_ArkService_GetTransactionsStream_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "transactions"}, ""))
 )
 
 var (
@@ -1280,5 +1280,5 @@ var (
 
 	forward_ArkService_ListVtxos_0 = runtime.ForwardResponseMessage
 
-	forward_ArkService_GetPaymentsStream_0 = runtime.ForwardResponseStream
+	forward_ArkService_GetTransactionsStream_0 = runtime.ForwardResponseStream
 )

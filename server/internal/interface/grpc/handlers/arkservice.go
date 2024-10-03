@@ -483,14 +483,14 @@ func (h *handler) ListVtxos(
 	}, nil
 }
 
-func (h *handler) GetPaymentsStream(
-	_ *arkv1.GetPaymentsStreamRequest,
-	stream arkv1.ArkService_GetPaymentsStreamServer,
+func (h *handler) GetTransactionsStream(
+	_ *arkv1.GetTransactionsStreamRequest,
+	stream arkv1.ArkService_GetTransactionsStreamServer,
 ) error {
-	listener := &listener[*arkv1.GetPaymentsStreamResponse]{
+	listener := &listener[*arkv1.GetTransactionsStreamResponse]{
 		id:   uuid.NewString(),
 		done: make(chan struct{}),
-		ch:   make(chan *arkv1.GetPaymentsStreamResponse),
+		ch:   make(chan *arkv1.GetTransactionsStreamResponse),
 	}
 
 	h.paymentsListenerHandler.pushListener(listener)
@@ -601,21 +601,21 @@ func (h *handler) listenToEvents() {
 }
 
 func (h *handler) listenToPaymentEvents() {
-	paymentEventsCh := h.svc.GetPaymentEventsChannel(context.Background())
+	paymentEventsCh := h.svc.GetTransactionEventsChannel(context.Background())
 	for event := range paymentEventsCh {
-		var paymentEvent *arkv1.GetPaymentsStreamResponse
+		var paymentEvent *arkv1.GetTransactionsStreamResponse
 
 		switch event.Type() {
-		case application.RoundPayments:
-			paymentEvent = &arkv1.GetPaymentsStreamResponse{
-				Tx: &arkv1.GetPaymentsStreamResponse_RoundPayments{
-					RoundPayments: convertRoundPaymentEvent(event.(application.RoundPaymentEvent)),
+		case application.RoundTransaction:
+			paymentEvent = &arkv1.GetTransactionsStreamResponse{
+				Tx: &arkv1.GetTransactionsStreamResponse_Round{
+					Round: convertRoundPaymentEvent(event.(application.RoundTransactionEvent)),
 				},
 			}
-		case application.AsyncPayments:
-			paymentEvent = &arkv1.GetPaymentsStreamResponse{
-				Tx: &arkv1.GetPaymentsStreamResponse_AsyncPayments{
-					AsyncPayments: convertAsyncPaymentEvent(event.(application.AsyncPaymentEvent)),
+		case application.RedeemTransaction:
+			paymentEvent = &arkv1.GetTransactionsStreamResponse{
+				Tx: &arkv1.GetTransactionsStreamResponse_Redeem{
+					Redeem: convertAsyncPaymentEvent(event.(application.RedeemTransactionEvent)),
 				},
 			}
 		}
@@ -623,7 +623,7 @@ func (h *handler) listenToPaymentEvents() {
 		if paymentEvent != nil {
 			logrus.Debugf("forwarding event to %d listeners", len(h.paymentsListenerHandler.listeners))
 			for _, l := range h.paymentsListenerHandler.listeners {
-				go func(l *listener[*arkv1.GetPaymentsStreamResponse]) {
+				go func(l *listener[*arkv1.GetTransactionsStreamResponse]) {
 					l.ch <- paymentEvent
 				}(l)
 			}
@@ -631,8 +631,8 @@ func (h *handler) listenToPaymentEvents() {
 	}
 }
 
-func convertRoundPaymentEvent(e application.RoundPaymentEvent) *arkv1.RoundPayment {
-	return &arkv1.RoundPayment{
+func convertRoundPaymentEvent(e application.RoundTransactionEvent) *arkv1.RoundTransaction {
+	return &arkv1.RoundTransaction{
 		Txid:                 e.RoundTxID,
 		SpentVtxos:           vtxoKeyList(e.SpentVtxos).toProto(),
 		SpendableVtxos:       vtxoList(e.SpendableVtxos).toProto(),
@@ -640,8 +640,8 @@ func convertRoundPaymentEvent(e application.RoundPaymentEvent) *arkv1.RoundPayme
 	}
 }
 
-func convertAsyncPaymentEvent(e application.AsyncPaymentEvent) *arkv1.AsyncPayment {
-	return &arkv1.AsyncPayment{
+func convertAsyncPaymentEvent(e application.RedeemTransactionEvent) *arkv1.RedeemTransaction {
+	return &arkv1.RedeemTransaction{
 		Txid:           e.AsyncTxID,
 		SpentVtxos:     vtxoKeyList(e.SpentVtxos).toProto(),
 		SpendableVtxos: vtxoList(e.SpendableVtxos).toProto(),

@@ -45,8 +45,8 @@ type covenantService struct {
 	paymentRequests *paymentsMap
 	forfeitTxs      *forfeitTxsMap
 
-	eventsCh        chan domain.RoundEvent
-	paymentEventsCh chan PaymentEvent
+	eventsCh            chan domain.RoundEvent
+	transactionEventsCh chan TransactionEvent
 
 	currentRoundLock sync.Mutex
 	currentRound     *domain.Round
@@ -80,7 +80,7 @@ func NewCovenantService(
 		paymentRequests:     newPaymentsMap(),
 		forfeitTxs:          newForfeitTxsMap(builder),
 		eventsCh:            make(chan domain.RoundEvent),
-		paymentEventsCh:     make(chan PaymentEvent),
+		transactionEventsCh: make(chan TransactionEvent),
 		currentRoundLock:    sync.Mutex{},
 	}
 
@@ -354,8 +354,8 @@ func (s *covenantService) GetEventsChannel(ctx context.Context) <-chan domain.Ro
 	return s.eventsCh
 }
 
-func (s *covenantService) GetPaymentEventsChannel(ctx context.Context) <-chan PaymentEvent {
-	return s.paymentEventsCh
+func (s *covenantService) GetTransactionEventsChannel(ctx context.Context) <-chan TransactionEvent {
+	return s.transactionEventsCh
 }
 
 func (s *covenantService) GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error) {
@@ -877,7 +877,7 @@ func (s *covenantService) updateVtxoSet(round *domain.Round) {
 				})
 			}
 		}
-		s.paymentEventsCh <- RoundPaymentEvent{
+		s.transactionEventsCh <- RoundTransactionEvent{
 			RoundTxID:             round.Txid,
 			SpentVtxos:            getSpentVtxos(round.Payments),
 			SpendableVtxos:        s.getNewVtxos(round),

@@ -42,8 +42,8 @@ type covenantlessService struct {
 	paymentRequests *paymentsMap
 	forfeitTxs      *forfeitTxsMap
 
-	eventsCh        chan domain.RoundEvent
-	paymentEventsCh chan PaymentEvent
+	eventsCh            chan domain.RoundEvent
+	transactionEventsCh chan TransactionEvent
 
 	// cached data for the current round
 	lastEvent           domain.RoundEvent
@@ -87,7 +87,7 @@ func NewCovenantlessService(
 		paymentRequests:     newPaymentsMap(),
 		forfeitTxs:          newForfeitTxsMap(builder),
 		eventsCh:            make(chan domain.RoundEvent),
-		paymentEventsCh:     make(chan PaymentEvent),
+		transactionEventsCh: make(chan TransactionEvent),
 		currentRoundLock:    sync.Mutex{},
 		asyncPaymentsCache:  asyncPaymentsCache,
 		treeSigningSessions: make(map[string]*musigSigningSession),
@@ -301,7 +301,7 @@ func (s *covenantlessService) CompleteAsyncPayment(
 	delete(s.asyncPaymentsCache, redeemTxid)
 
 	go func() {
-		s.paymentEventsCh <- AsyncPaymentEvent{
+		s.transactionEventsCh <- RedeemTransactionEvent{
 			AsyncTxID:      redeemTxid,
 			SpentVtxos:     spentVtxos,
 			SpendableVtxos: vtxos,
@@ -584,8 +584,8 @@ func (s *covenantlessService) GetEventsChannel(ctx context.Context) <-chan domai
 	return s.eventsCh
 }
 
-func (s *covenantlessService) GetPaymentEventsChannel(ctx context.Context) <-chan PaymentEvent {
-	return s.paymentEventsCh
+func (s *covenantlessService) GetTransactionEventsChannel(ctx context.Context) <-chan TransactionEvent {
+	return s.transactionEventsCh
 }
 
 func (s *covenantlessService) GetRoundByTxid(ctx context.Context, roundTxid string) (*domain.Round, error) {
@@ -1286,7 +1286,7 @@ func (s *covenantlessService) updateVtxoSet(round *domain.Round) {
 				})
 			}
 		}
-		s.paymentEventsCh <- RoundPaymentEvent{
+		s.transactionEventsCh <- RoundTransactionEvent{
 			RoundTxID:             round.Txid,
 			SpentVtxos:            getSpentVtxos(round.Payments),
 			SpendableVtxos:        s.getNewVtxos(round),

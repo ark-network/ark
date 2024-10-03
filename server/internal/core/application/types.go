@@ -50,7 +50,7 @@ type Service interface {
 		ctx context.Context, roundID string,
 		pubkey *secp256k1.PublicKey, signatures string,
 	) error
-	GetPaymentEventsChannel(ctx context.Context) <-chan PaymentEvent
+	GetTransactionEventsChannel(ctx context.Context) <-chan TransactionEvent
 }
 
 type ServiceInfo struct {
@@ -84,33 +84,33 @@ func (outpoint txOutpoint) GetIndex() uint32 {
 }
 
 const (
-	RoundPayments PaymentEventType = "round_payments"
-	AsyncPayments PaymentEventType = "async_payments"
+	RoundTransaction  TransactionEventType = "round_tx"
+	RedeemTransaction TransactionEventType = "redeem_tx"
 )
 
-type PaymentEventType string
+type TransactionEventType string
 
-type PaymentEvent interface {
-	Type() PaymentEventType
+type TransactionEvent interface {
+	Type() TransactionEventType
 }
 
-type RoundPaymentEvent struct {
+type RoundTransactionEvent struct {
 	RoundTxID             string
 	SpentVtxos            []domain.VtxoKey
 	SpendableVtxos        []domain.Vtxo
 	ClaimedBoardingInputs []domain.VtxoKey
 }
 
-func (r RoundPaymentEvent) Type() PaymentEventType {
-	return RoundPayments
+func (r RoundTransactionEvent) Type() TransactionEventType {
+	return RoundTransaction
 }
 
-type AsyncPaymentEvent struct {
+type RedeemTransactionEvent struct {
 	AsyncTxID      string
 	SpentVtxos     []domain.VtxoKey
 	SpendableVtxos []domain.Vtxo
 }
 
-func (a AsyncPaymentEvent) Type() PaymentEventType {
-	return AsyncPayments
+func (a RedeemTransactionEvent) Type() TransactionEventType {
+	return RedeemTransaction
 }

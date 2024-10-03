@@ -32,7 +32,7 @@ type ArkServiceClient interface {
 	GetRound(ctx context.Context, in *GetRoundRequest, opts ...grpc.CallOption) (*GetRoundResponse, error)
 	GetRoundById(ctx context.Context, in *GetRoundByIdRequest, opts ...grpc.CallOption) (*GetRoundByIdResponse, error)
 	ListVtxos(ctx context.Context, in *ListVtxosRequest, opts ...grpc.CallOption) (*ListVtxosResponse, error)
-	GetPaymentsStream(ctx context.Context, in *GetPaymentsStreamRequest, opts ...grpc.CallOption) (ArkService_GetPaymentsStreamClient, error)
+	GetTransactionsStream(ctx context.Context, in *GetTransactionsStreamRequest, opts ...grpc.CallOption) (ArkService_GetTransactionsStreamClient, error)
 }
 
 type arkServiceClient struct {
@@ -192,12 +192,12 @@ func (c *arkServiceClient) ListVtxos(ctx context.Context, in *ListVtxosRequest, 
 	return out, nil
 }
 
-func (c *arkServiceClient) GetPaymentsStream(ctx context.Context, in *GetPaymentsStreamRequest, opts ...grpc.CallOption) (ArkService_GetPaymentsStreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &ArkService_ServiceDesc.Streams[1], "/ark.v1.ArkService/GetPaymentsStream", opts...)
+func (c *arkServiceClient) GetTransactionsStream(ctx context.Context, in *GetTransactionsStreamRequest, opts ...grpc.CallOption) (ArkService_GetTransactionsStreamClient, error) {
+	stream, err := c.cc.NewStream(ctx, &ArkService_ServiceDesc.Streams[1], "/ark.v1.ArkService/GetTransactionsStream", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &arkServiceGetPaymentsStreamClient{stream}
+	x := &arkServiceGetTransactionsStreamClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -207,17 +207,17 @@ func (c *arkServiceClient) GetPaymentsStream(ctx context.Context, in *GetPayment
 	return x, nil
 }
 
-type ArkService_GetPaymentsStreamClient interface {
-	Recv() (*GetPaymentsStreamResponse, error)
+type ArkService_GetTransactionsStreamClient interface {
+	Recv() (*GetTransactionsStreamResponse, error)
 	grpc.ClientStream
 }
 
-type arkServiceGetPaymentsStreamClient struct {
+type arkServiceGetTransactionsStreamClient struct {
 	grpc.ClientStream
 }
 
-func (x *arkServiceGetPaymentsStreamClient) Recv() (*GetPaymentsStreamResponse, error) {
-	m := new(GetPaymentsStreamResponse)
+func (x *arkServiceGetTransactionsStreamClient) Recv() (*GetTransactionsStreamResponse, error) {
+	m := new(GetTransactionsStreamResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -242,7 +242,7 @@ type ArkServiceServer interface {
 	GetRound(context.Context, *GetRoundRequest) (*GetRoundResponse, error)
 	GetRoundById(context.Context, *GetRoundByIdRequest) (*GetRoundByIdResponse, error)
 	ListVtxos(context.Context, *ListVtxosRequest) (*ListVtxosResponse, error)
-	GetPaymentsStream(*GetPaymentsStreamRequest, ArkService_GetPaymentsStreamServer) error
+	GetTransactionsStream(*GetTransactionsStreamRequest, ArkService_GetTransactionsStreamServer) error
 }
 
 // UnimplementedArkServiceServer should be embedded to have forward compatible implementations.
@@ -291,8 +291,8 @@ func (UnimplementedArkServiceServer) GetRoundById(context.Context, *GetRoundById
 func (UnimplementedArkServiceServer) ListVtxos(context.Context, *ListVtxosRequest) (*ListVtxosResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListVtxos not implemented")
 }
-func (UnimplementedArkServiceServer) GetPaymentsStream(*GetPaymentsStreamRequest, ArkService_GetPaymentsStreamServer) error {
-	return status.Errorf(codes.Unimplemented, "method GetPaymentsStream not implemented")
+func (UnimplementedArkServiceServer) GetTransactionsStream(*GetTransactionsStreamRequest, ArkService_GetTransactionsStreamServer) error {
+	return status.Errorf(codes.Unimplemented, "method GetTransactionsStream not implemented")
 }
 
 // UnsafeArkServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -561,24 +561,24 @@ func _ArkService_ListVtxos_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ArkService_GetPaymentsStream_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(GetPaymentsStreamRequest)
+func _ArkService_GetTransactionsStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(GetTransactionsStreamRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(ArkServiceServer).GetPaymentsStream(m, &arkServiceGetPaymentsStreamServer{stream})
+	return srv.(ArkServiceServer).GetTransactionsStream(m, &arkServiceGetTransactionsStreamServer{stream})
 }
 
-type ArkService_GetPaymentsStreamServer interface {
-	Send(*GetPaymentsStreamResponse) error
+type ArkService_GetTransactionsStreamServer interface {
+	Send(*GetTransactionsStreamResponse) error
 	grpc.ServerStream
 }
 
-type arkServiceGetPaymentsStreamServer struct {
+type arkServiceGetTransactionsStreamServer struct {
 	grpc.ServerStream
 }
 
-func (x *arkServiceGetPaymentsStreamServer) Send(m *GetPaymentsStreamResponse) error {
+func (x *arkServiceGetTransactionsStreamServer) Send(m *GetTransactionsStreamResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
@@ -649,8 +649,8 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 		{
-			StreamName:    "GetPaymentsStream",
-			Handler:       _ArkService_GetPaymentsStream_Handler,
+			StreamName:    "GetTransactionsStream",
+			Handler:       _ArkService_GetTransactionsStream_Handler,
 			ServerStreams: true,
 		},
 	},
