@@ -18,15 +18,15 @@ import (
 type handler struct {
 	svc application.Service
 
-	eventsListenerHandler   *listenerHanlder[*arkv1.GetEventStreamResponse]
-	paymentsListenerHandler *listenerHanlder[*arkv1.GetPaymentsStreamResponse]
+	eventsListenerHandler       *listenerHanlder[*arkv1.GetEventStreamResponse]
+	transactionsListenerHandler *listenerHanlder[*arkv1.GetTransactionsStreamResponse]
 }
 
 func NewHandler(service application.Service) arkv1.ArkServiceServer {
 	h := &handler{
-		svc:                     service,
-		eventsListenerHandler:   newListenerHandler[*arkv1.GetEventStreamResponse](),
-		paymentsListenerHandler: newListenerHandler[*arkv1.GetPaymentsStreamResponse](),
+		svc:                         service,
+		eventsListenerHandler:       newListenerHandler[*arkv1.GetEventStreamResponse](),
+		transactionsListenerHandler: newListenerHandler[*arkv1.GetTransactionsStreamResponse](),
 	}
 
 	go h.listenToEvents()
@@ -493,10 +493,10 @@ func (h *handler) GetTransactionsStream(
 		ch:   make(chan *arkv1.GetTransactionsStreamResponse),
 	}
 
-	h.paymentsListenerHandler.pushListener(listener)
+	h.transactionsListenerHandler.pushListener(listener)
 
 	defer func() {
-		h.paymentsListenerHandler.removeListener(listener.id)
+		h.transactionsListenerHandler.removeListener(listener.id)
 		close(listener.ch)
 	}()
 
@@ -621,8 +621,8 @@ func (h *handler) listenToPaymentEvents() {
 		}
 
 		if paymentEvent != nil {
-			logrus.Debugf("forwarding event to %d listeners", len(h.paymentsListenerHandler.listeners))
-			for _, l := range h.paymentsListenerHandler.listeners {
+			logrus.Debugf("forwarding event to %d listeners", len(h.transactionsListenerHandler.listeners))
+			for _, l := range h.transactionsListenerHandler.listeners {
 				go func(l *listener[*arkv1.GetTransactionsStreamResponse]) {
 					l.ch <- paymentEvent
 				}(l)
