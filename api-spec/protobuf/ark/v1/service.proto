@@ -92,6 +92,11 @@ service ArkService {
       get: "/v1/vtxos/{address}"
     };
   }
+  rpc GetTransactionsStream(GetTransactionsStreamRequest) returns (stream GetTransactionsStreamResponse) {
+    option (google.api.http) = {
+      get: "/v1/transactions"
+    };
+  }
 }
 
 message GetInfoRequest {}
@@ -317,4 +322,25 @@ message Vtxo {
 
 message PendingPayment {
   string redeem_tx = 1;
+}
+
+message GetTransactionsStreamRequest {}
+message GetTransactionsStreamResponse {
+  oneof tx {
+    RoundTransaction round = 1;
+    RedeemTransaction redeem = 2;
+  }
+}
+
+message RoundTransaction {
+  string txid = 1;
+  repeated Outpoint spent_vtxos = 2;
+  repeated Vtxo spendable_vtxos = 3;
+  repeated Outpoint claimed_boarding_utxos = 4;
+}
+
+message RedeemTransaction {
+  string txid = 1;
+  repeated Outpoint spent_vtxos = 2;
+  repeated Vtxo spendable_vtxos = 3;
 }

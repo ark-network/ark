@@ -415,6 +415,37 @@
         ]
       }
     },
+    "/v1/transactions": {
+      "get": {
+        "operationId": "ArkService_GetTransactionsStream",
+        "responses": {
+          "200": {
+            "description": "A successful response.(streaming responses)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "$ref": "#/definitions/v1GetTransactionsStreamResponse"
+                },
+                "error": {
+                  "$ref": "#/definitions/rpcStatus"
+                }
+              },
+              "title": "Stream result of v1GetTransactionsStreamResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
     "/v1/vtxos/{address}": {
       "get": {
         "operationId": "ArkService_ListVtxos",
@@ -608,6 +639,17 @@
         }
       }
     },
+    "v1GetTransactionsStreamResponse": {
+      "type": "object",
+      "properties": {
+        "round": {
+          "$ref": "#/definitions/v1RoundTransaction"
+        },
+        "redeem": {
+          "$ref": "#/definitions/v1RedeemTransaction"
+        }
+      }
+    },
     "v1Input": {
       "type": "object",
       "properties": {
@@ -706,6 +748,28 @@
         },
         "roundSigningNoncesGenerated": {
           "$ref": "#/definitions/v1RoundSigningNoncesGeneratedEvent"
+        }
+      }
+    },
+    "v1RedeemTransaction": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "spentVtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Outpoint"
+          }
+        },
+        "spendableVtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Vtxo"
+          }
         }
       }
     },
@@ -877,6 +941,35 @@
         "ROUND_STAGE_FAILED"
       ],
       "default": "ROUND_STAGE_UNSPECIFIED"
+    },
+    "v1RoundTransaction": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "spentVtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Outpoint"
+          }
+        },
+        "spendableVtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Vtxo"
+          }
+        },
+        "claimedBoardingUtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Outpoint"
+          }
+        }
+      }
     },
     "v1SubmitSignedForfeitTxsRequest": {
       "type": "object",
