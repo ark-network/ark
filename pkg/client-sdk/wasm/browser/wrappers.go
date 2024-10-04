@@ -172,7 +172,7 @@ func SendOnChainWrapper() js.Func {
 		receivers := make([]arksdk.Receiver, args[0].Length())
 		for i := 0; i < args[0].Length(); i++ {
 			receiver := args[0].Index(i)
-			receivers[i] = arksdk.NewLiquidReceiver(
+			receivers[i] = arksdk.NewBitcoinReceiver(
 				receiver.Get("To").String(), uint64(receiver.Get("Amount").Int()),
 			)
 		}
@@ -196,7 +196,7 @@ func SendOffChainWrapper() js.Func {
 		receivers := make([]arksdk.Receiver, args[1].Length())
 		for i := 0; i < args[1].Length(); i++ {
 			receiver := args[1].Index(i)
-			receivers[i] = arksdk.NewLiquidReceiver(
+			receivers[i] = arksdk.NewBitcoinReceiver(
 				receiver.Get("To").String(), uint64(receiver.Get("Amount").Int()),
 			)
 		}
