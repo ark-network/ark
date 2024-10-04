@@ -211,6 +211,30 @@ func SendOffChainWrapper() js.Func {
 	})
 }
 
+func SendAsyncWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if len(args) != 2 {
+			return nil, errors.New("invalid number of args")
+		}
+		withExpiryCoinselect := args[0].Bool()
+		receivers := make([]arksdk.Receiver, args[1].Length())
+		for i := 0; i < args[1].Length(); i++ {
+			receiver := args[1].Index(i)
+			receivers[i] = arksdk.NewBitcoinReceiver(
+				receiver.Get("To").String(), uint64(receiver.Get("Amount").Int()),
+			)
+		}
+
+		txID, err := arkSdkClient.SendAsync(
+			context.Background(), withExpiryCoinselect, receivers,
+		)
+		if err != nil {
+			return nil, err
+		}
+		return js.ValueOf(txID), nil
+	})
+}
+
 func ClaimWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
 		if len(args) != 0 {
