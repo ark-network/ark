@@ -38,6 +38,7 @@ func NewClient(aspUrl string) (client.ASPClient, error) {
 	if err != nil {
 		return nil, err
 	}
+	// TODO: use twice the round interval.
 	reqTimeout := 15 * time.Second
 	treeCache := utils.NewCache[tree.CongestionTree]()
 
@@ -223,25 +224,19 @@ func (a *restClient) SubmitSignedForfeitTxs(
 func (a *restClient) GetEventStream(
 	ctx context.Context, paymentID string,
 ) (<-chan client.RoundEventChannel, func(), error) {
+	ctx, cancel := context.WithTimeout(ctx, a.requestTimeout)
 	eventsCh := make(chan client.RoundEventChannel)
-	stopCh := make(chan struct{})
 
-	go func(payID string) {
+	go func(payID string, eventsCh chan client.RoundEventChannel) {
+		ticker := time.NewTicker(1 * time.Second)
 		defer close(eventsCh)
-		defer close(stopCh)
-
-		timeout := time.After(a.requestTimeout)
+		defer ticker.Stop()
 
 		for {
 			select {
-			case <-stopCh:
+			case <-ctx.Done():
 				return
-			case <-timeout:
-				eventsCh <- client.RoundEventChannel{
-					Err: fmt.Errorf("timeout reached"),
-				}
-				return
-			default:
+			case <-ticker.C:
 				event, err := a.Ping(ctx, payID)
 				if err != nil {
 					eventsCh <- client.RoundEventChannel{
@@ -255,17 +250,11 @@ func (a *restClient) GetEventStream(
 						Event: event,
 					}
 				}
-
-				time.Sleep(1 * time.Second)
 			}
 		}
-	}(paymentID)
+	}(paymentID, eventsCh)
 
-	close := func() {
-		stopCh <- struct{}{}
-	}
-
-	return eventsCh, close, nil
+	return eventsCh, cancel, nil
 }
 
 func (a *restClient) Ping(

@@ -6,9 +6,12 @@ package browser
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"syscall/js"
+	"time"
 
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
@@ -119,21 +122,25 @@ func BalanceWrapper() js.Func {
 		}
 
 		var (
-			onchainBalance  int
-			offchainBalance int
+			onchainSpendableBalance int
+			onchainLockedBalance    int
+			offchainBalance         int
 		)
 
-		if resp == nil {
-			onchainBalance = 0
-			offchainBalance = 0
-		} else {
-			onchainBalance = int(resp.OnchainBalance.SpendableAmount)
+		if resp != nil {
+			onchainSpendableBalance = int(resp.OnchainBalance.SpendableAmount)
+			for _, b := range resp.OnchainBalance.LockedAmount {
+				onchainLockedBalance += int(b.Amount)
+			}
 			offchainBalance = int(resp.OffchainBalance.Total)
 		}
 
 		result := map[string]interface{}{
-			"onchain_balance":  onchainBalance,
-			"offchain_balance": offchainBalance,
+			"onchainBalance": map[string]interface{}{
+				"spendable": onchainSpendableBalance,
+				"locked":    onchainLockedBalance,
+			},
+			"offchainBalance": offchainBalance,
 		}
 
 		return js.ValueOf(result), nil
@@ -204,6 +211,21 @@ func SendOffChainWrapper() js.Func {
 	})
 }
 
+func ClaimWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if len(args) != 0 {
+			return nil, errors.New("invalid number of args")
+		}
+
+		resp, err := arkSdkClient.Claim(context.Background())
+		if err != nil {
+			return nil, err
+		}
+
+		return js.ValueOf(resp), nil
+	})
+}
+
 func UnilateralRedeemWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
 		return nil, arkSdkClient.UnilateralRedeem(context.Background())
@@ -226,6 +248,32 @@ func CollaborativeRedeemWrapper() js.Func {
 			return nil, err
 		}
 		return js.ValueOf(txID), nil
+	})
+}
+
+func GetTransactionHistoryWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		history, err := arkSdkClient.GetTransactionHistory(context.Background())
+		if err != nil {
+			return nil, err
+		}
+		rawHistory := make([]map[string]interface{}, 0)
+		for _, record := range history {
+			rawHistory = append(rawHistory, map[string]interface{}{
+				"boardingTxid": record.BoardingTxid,
+				"roundTxid":    record.RoundTxid,
+				"redeemTxid":   record.RedeemTxid,
+				"amount":       strconv.Itoa(int(record.Amount)),
+				"type":         record.Type,
+				"isPending":    record.IsPending,
+				"createdAt":    record.CreatedAt.Format(time.RFC3339),
+			})
+		}
+		result, err := json.MarshalIndent(rawHistory, "", "  ")
+		if err != nil {
+			return nil, err
+		}
+		return js.ValueOf(string(result)), nil
 	})
 }
 

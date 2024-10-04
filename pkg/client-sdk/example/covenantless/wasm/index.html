@@ -44,8 +44,7 @@
             try {
                 const addresses = await receive();
                 logMessage("Offchain address: " + addresses.offchainAddr);
-                logMessage("Onchain address: " + addresses.onchainAddr);
-                logMessage("If in regtest faucet onchain address: " + addresses.onchainAddr);
+                logMessage("Boarding address: " + addresses.boardingAddr);
             } catch (err) {
                 logMessage("Receive error: " + err.message);
             }
@@ -53,8 +52,10 @@
 
         async function getBalance() {
             const bal = await balance(false);
-            logMessage("Onchain balance: " + bal.onchain_balance)
-            logMessage("Offchain balance: " + bal.offchain_balance)
+            logMessage("Offchain balance: " + bal.offchainBalance)
+            logMessage("Onchain balance: ")
+            logMessage("  Spendable: " + bal.onchainBalance.spendable)
+            logMessage("  Locked: " + bal.onchainBalance.locked)
         }
 
 
@@ -88,6 +89,33 @@
             }
         }
 
+        async function claimVtxos() {
+            const password = document.getElementById("c_password").value;
+            if (!password) {
+                logMessage("Claim error: password is required");
+                return;
+            }
+            
+            try {
+                await unlock(password);
+                const txID = await claim();
+                logMessage("Claimed money with tx ID: " + txID);
+            } catch (err) {
+                logMessage("Claim error: " + err.message);
+            } finally {
+                await lock(password);
+            }
+        }
+
+        async function history() {    
+            try {
+                const history = await getTransactionHistory();
+                logMessage("Tx history: " + history);
+            } catch (err) {
+                logMessage("Tx history error: " + err.message);
+            }
+        }
+
         async function config() {
             try {
                 const aspUrl = await getAspUrl();
@@ -112,30 +140,6 @@
                 logMessage("Config error: " + err.message);
             }
         }
-
-        async function board() {
-            const amountStr = document.getElementById("amount").value;
-            const amount = parseInt(amountStr, 10);
-            const password = document.getElementById("o_password").value;
-            if (!password) {
-                logMessage("Onboard error: password is required");
-                return;
-            }
-
-            try {
-                console.log("unlocking...");
-                await unlock(password);
-                console.log(amount, password);
-                console.log("onboarding...");
-                const txID = await onboard(amount);
-                logMessage("Onboarded with amount: " + amount + " and txID: " + txID + ", if in regtest mine a block");
-            } catch (err) {
-                logMessage("Onboard error: " + err.message);
-            } finally {
-                await lock(password);
-            }
-
-        }
     </script>
 </head>
 <body>
@@ -155,15 +159,17 @@
         <button onclick="getBalance()">Balance</button>
     </div>
     <div>
-        <button onclick="board()">Onboard</button>
-        <input type="text" id="amount" placeholder="Amount">
-        <input type="password" id="o_password" placeholder="password">
-    </div>
-    <div>
         <button onclick="send()">Send</button>
         <input type="text" id="sendAddress" placeholder="Offchain Address">
         <input type="text" id="amountToSend" placeholder="Amount">
         <input type="password" id="s_password" placeholder="password">
+    </div>
+    <div>
+        <button onclick="claimVtxos()">Claim</button>
+        <input type="password" id="c_password" placeholder="password">
+    </div>
+    <div>
+        <button onclick="history()">History</button>
     </div>
     <div>
         <button onclick="config()">Config</button>

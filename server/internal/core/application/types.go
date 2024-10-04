@@ -50,6 +50,7 @@ type Service interface {
 		ctx context.Context, roundID string,
 		pubkey *secp256k1.PublicKey, signatures string,
 	) error
+	GetTransactionEventsChannel(ctx context.Context) <-chan TransactionEvent
 }
 
 type ServiceInfo struct {
@@ -80,4 +81,36 @@ func (outpoint txOutpoint) GetTxid() string {
 
 func (outpoint txOutpoint) GetIndex() uint32 {
 	return outpoint.vout
+}
+
+const (
+	RoundTransaction  TransactionEventType = "round_tx"
+	RedeemTransaction TransactionEventType = "redeem_tx"
+)
+
+type TransactionEventType string
+
+type TransactionEvent interface {
+	Type() TransactionEventType
+}
+
+type RoundTransactionEvent struct {
+	RoundTxID             string
+	SpentVtxos            []domain.VtxoKey
+	SpendableVtxos        []domain.Vtxo
+	ClaimedBoardingInputs []domain.VtxoKey
+}
+
+func (r RoundTransactionEvent) Type() TransactionEventType {
+	return RoundTransaction
+}
+
+type RedeemTransactionEvent struct {
+	AsyncTxID      string
+	SpentVtxos     []domain.VtxoKey
+	SpendableVtxos []domain.Vtxo
+}
+
+func (a RedeemTransactionEvent) Type() TransactionEventType {
+	return RedeemTransaction
 }
