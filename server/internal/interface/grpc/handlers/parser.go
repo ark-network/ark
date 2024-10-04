@@ -65,13 +65,6 @@ type vtxoList []domain.Vtxo
 func (v vtxoList) toProto() []*arkv1.Vtxo {
 	list := make([]*arkv1.Vtxo, 0, len(v))
 	for _, vv := range v {
-		var pendingData *arkv1.PendingPayment
-		if vv.AsyncPayment != nil {
-			pendingData = &arkv1.PendingPayment{
-				RedeemTx:                vv.AsyncPayment.RedeemTx,
-				UnconditionalForfeitTxs: vv.AsyncPayment.UnconditionalForfeitTxs,
-			}
-		}
 		list = append(list, &arkv1.Vtxo{
 			Outpoint: &arkv1.Outpoint{
 				Txid: vv.Txid,
@@ -84,7 +77,7 @@ func (v vtxoList) toProto() []*arkv1.Vtxo {
 			ExpireAt:    vv.ExpireAt,
 			SpentBy:     vv.SpentBy,
 			Swept:       vv.Swept,
-			PendingData: pendingData,
+			RedeemTx:    vv.RedeemTx,
 			Pending:     vv.Pending,
 		})
 	}

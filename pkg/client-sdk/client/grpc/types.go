@@ -118,25 +118,18 @@ func (v vtxo) toVtxo() client.Vtxo {
 		t := time.Unix(v.GetExpireAt(), 0)
 		expiresAt = &t
 	}
-	var redeemTx string
-	var uncondForfeitTxs []string
-	if v.GetPendingData() != nil {
-		redeemTx = v.GetPendingData().GetRedeemTx()
-		uncondForfeitTxs = v.GetPendingData().GetUnconditionalForfeitTxs()
-	}
 	return client.Vtxo{
 		Outpoint: client.Outpoint{
 			Txid: v.GetOutpoint().GetTxid(),
 			VOut: v.GetOutpoint().GetVout(),
 		},
-		Amount:                  v.GetAmount(),
-		RoundTxid:               v.GetRoundTxid(),
-		ExpiresAt:               expiresAt,
-		Pending:                 v.GetPending(),
-		RedeemTx:                redeemTx,
-		UnconditionalForfeitTxs: uncondForfeitTxs,
-		SpentBy:                 v.GetSpentBy(),
-		Descriptor:              v.GetDescriptor_(),
+		Amount:     v.GetAmount(),
+		RoundTxid:  v.GetRoundTxid(),
+		ExpiresAt:  expiresAt,
+		Pending:    v.GetPending(),
+		RedeemTx:   v.GetRedeemTx(),
+		SpentBy:    v.GetSpentBy(),
+		Descriptor: v.GetDescriptor_(),
 	}
 }
 

@@ -87,22 +87,6 @@ type Tx struct {
 	IsLeaf     sql.NullBool
 }
 
-type UncondForfeitTx struct {
-	ID       int64
-	Tx       string
-	VtxoTxid string
-	VtxoVout int64
-	Position int64
-}
-
-type UncondForfeitTxVw struct {
-	ID       sql.NullInt64
-	Tx       sql.NullString
-	VtxoTxid sql.NullString
-	VtxoVout sql.NullInt64
-	Position sql.NullInt64
-}
-
 type Vtxo struct {
 	Txid       string
 	Vout       int64

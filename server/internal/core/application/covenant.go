@@ -320,12 +320,12 @@ func (s *covenantService) UpdatePaymentStatus(_ context.Context, id string) (dom
 	return s.lastEvent, nil
 }
 
-func (s *covenantService) CompleteAsyncPayment(ctx context.Context, redeemTx string, unconditionalForfeitTxs []string) error {
+func (s *covenantService) CompleteAsyncPayment(ctx context.Context, redeemTx string) error {
 	return fmt.Errorf("unimplemented")
 }
 
-func (s *covenantService) CreateAsyncPayment(ctx context.Context, inputs []ports.Input, receivers []domain.Receiver) (string, []string, error) {
-	return "", nil, fmt.Errorf("unimplemented")
+func (s *covenantService) CreateAsyncPayment(ctx context.Context, inputs []ports.Input, receivers []domain.Receiver) (string, error) {
+	return "", fmt.Errorf("unimplemented")
 }
 
 func (s *covenantService) SignVtxos(ctx context.Context, forfeitTxs []string) error {

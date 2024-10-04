@@ -37,10 +37,6 @@ func (v *vxtoRepository) AddVtxos(ctx context.Context, vtxos []domain.Vtxo) erro
 	txBody := func(querierWithTx *queries.Queries) error {
 		for i := range vtxos {
 			vtxo := vtxos[i]
-			var redeemTx string
-			if vtxo.AsyncPayment != nil {
-				redeemTx = vtxo.AsyncPayment.RedeemTx
-			}
 			if err := querierWithTx.UpsertVtxo(
 				ctx, queries.UpsertVtxoParams{
 					Txid:       vtxo.Txid,
@@ -53,24 +49,11 @@ func (v *vxtoRepository) AddVtxos(ctx context.Context, vtxos []domain.Vtxo) erro
 					Redeemed:   vtxo.Redeemed,
 					Swept:      vtxo.Swept,
 					ExpireAt:   vtxo.ExpireAt,
-					RedeemTx:   sql.NullString{String: redeemTx, Valid: true},
+					RedeemTx:   sql.NullString{String: vtxo.RedeemTx, Valid: true},
 					Pending:    vtxo.Pending,
 				},
 			); err != nil {
 				return err
-			}
-
-			if vtxo.AsyncPayment != nil {
-				for i, tx := range vtxo.AsyncPayment.UnconditionalForfeitTxs {
-					if err := querierWithTx.UpsertUnconditionalForfeitTx(ctx, queries.UpsertUnconditionalForfeitTxParams{
-						Tx:       tx,
-						VtxoTxid: vtxo.Txid,
-						VtxoVout: int64(vtxo.VOut),
-						Position: int64(i),
-					}); err != nil {
-						return err
-					}
-				}
 			}
 		}
 
@@ -86,12 +69,9 @@ func (v *vxtoRepository) GetAllSweepableVtxos(ctx context.Context) ([]domain.Vtx
 		return nil, err
 	}
 
-	rows := make([]vtxoWithUnconditionalForfeitTxs, 0, len(res))
+	rows := make([]queries.Vtxo, 0, len(res))
 	for _, row := range res {
-		rows = append(rows, vtxoWithUnconditionalForfeitTxs{
-			vtxo: row.Vtxo,
-			tx:   row.UncondForfeitTxVw,
-		})
+		rows = append(rows, row.Vtxo)
 	}
 	return readRows(rows)
 }
@@ -99,7 +79,7 @@ func (v *vxtoRepository) GetAllSweepableVtxos(ctx context.Context) ([]domain.Vtx
 func (v *vxtoRepository) GetAllVtxos(ctx context.Context, pubkey string) ([]domain.Vtxo, []domain.Vtxo, error) {
 	withPubkey := len(pubkey) > 0
 
-	var rows []vtxoWithUnconditionalForfeitTxs
+	var rows []queries.Vtxo
 	if withPubkey {
 		if len(pubkey) == 66 {
 			pubkey = pubkey[2:]
@@ -109,24 +89,18 @@ func (v *vxtoRepository) GetAllVtxos(ctx context.Context, pubkey string) ([]doma
 		if err != nil {
 			return nil, nil, err
 		}
-		rows = make([]vtxoWithUnconditionalForfeitTxs, 0, len(res))
+		rows = make([]queries.Vtxo, 0, len(res))
 		for _, row := range res {
-			rows = append(rows, vtxoWithUnconditionalForfeitTxs{
-				vtxo: row.Vtxo,
-				tx:   row.UncondForfeitTxVw,
-			})
+			rows = append(rows, row.Vtxo)
 		}
 	} else {
 		res, err := v.querier.SelectNotRedeemedVtxos(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
-		rows = make([]vtxoWithUnconditionalForfeitTxs, 0, len(res))
+		rows = make([]queries.Vtxo, 0, len(res))
 		for _, row := range res {
-			rows = append(rows, vtxoWithUnconditionalForfeitTxs{
-				vtxo: row.Vtxo,
-				tx:   row.UncondForfeitTxVw,
-			})
+			rows = append(rows, row.Vtxo)
 		}
 	}
 
@@ -163,12 +137,7 @@ func (v *vxtoRepository) GetVtxos(ctx context.Context, outpoints []domain.VtxoKe
 			return nil, err
 		}
 
-		result, err := readRows([]vtxoWithUnconditionalForfeitTxs{
-			{
-				vtxo: res.Vtxo,
-				tx:   res.UncondForfeitTxVw,
-			},
-		})
+		result, err := readRows([]queries.Vtxo{res.Vtxo})
 		if err != nil {
 			return nil, err
 		}
@@ -188,12 +157,9 @@ func (v *vxtoRepository) GetVtxosForRound(ctx context.Context, txid string) ([]d
 	if err != nil {
 		return nil, err
 	}
-	rows := make([]vtxoWithUnconditionalForfeitTxs, 0, len(res))
+	rows := make([]queries.Vtxo, 0, len(res))
 	for _, row := range res {
-		rows = append(rows, vtxoWithUnconditionalForfeitTxs{
-			vtxo: row.Vtxo,
-			tx:   row.UncondForfeitTxVw,
-		})
+		rows = append(rows, row.Vtxo)
 	}
 
 	return readRows(rows)
@@ -281,18 +247,7 @@ func (v *vxtoRepository) UpdateExpireAt(ctx context.Context, vtxos []domain.Vtxo
 	return execTx(ctx, v.db, txBody)
 }
 
-func rowToVtxo(row queries.Vtxo, uncondForfeitTxs []queries.UncondForfeitTxVw) domain.Vtxo {
-	var asyncPayment *domain.AsyncPaymentTxs
-	if row.RedeemTx.Valid && len(uncondForfeitTxs) > 0 {
-		txs := make([]string, len(uncondForfeitTxs))
-		for _, tx := range uncondForfeitTxs {
-			txs[tx.Position.Int64] = tx.Tx.String
-		}
-		asyncPayment = &domain.AsyncPaymentTxs{
-			RedeemTx:                row.RedeemTx.String,
-			UnconditionalForfeitTxs: txs,
-		}
-	}
+func rowToVtxo(row queries.Vtxo) domain.Vtxo {
 	return domain.Vtxo{
 		VtxoKey: domain.VtxoKey{
 			Txid: row.Txid,
@@ -302,49 +257,21 @@ func rowToVtxo(row queries.Vtxo, uncondForfeitTxs []queries.UncondForfeitTxVw) d
 			Descriptor: row.Descriptor.String,
 			Amount:     uint64(row.Amount),
 		},
-		RoundTxid:    row.PoolTx,
-		SpentBy:      row.SpentBy,
-		Spent:        row.Spent,
-		Redeemed:     row.Redeemed,
-		Swept:        row.Swept,
-		ExpireAt:     row.ExpireAt,
-		AsyncPayment: asyncPayment,
-		Pending:      row.Pending,
+		RoundTxid: row.PoolTx,
+		SpentBy:   row.SpentBy,
+		Spent:     row.Spent,
+		Redeemed:  row.Redeemed,
+		Swept:     row.Swept,
+		ExpireAt:  row.ExpireAt,
+		RedeemTx:  row.RedeemTx.String,
+		Pending:   row.Pending,
 	}
 }
 
-type vtxoWithUnconditionalForfeitTxs struct {
-	vtxo queries.Vtxo
-	tx   queries.UncondForfeitTxVw
-}
-
-func readRows(rows []vtxoWithUnconditionalForfeitTxs) ([]domain.Vtxo, error) {
-	uncondForfeitTxsMap := make(map[domain.VtxoKey][]queries.UncondForfeitTxVw)
-	for _, row := range rows {
-		if !row.vtxo.RedeemTx.Valid {
-			continue
-		}
-		vtxoKey := domain.VtxoKey{
-			Txid: row.vtxo.Txid,
-			VOut: uint32(row.vtxo.Vout),
-		}
-		if _, ok := uncondForfeitTxsMap[vtxoKey]; !ok {
-			uncondForfeitTxsMap[vtxoKey] = make([]queries.UncondForfeitTxVw, 0)
-		}
-		if row.tx.Tx.Valid {
-			uncondForfeitTxsMap[vtxoKey] = append(
-				uncondForfeitTxsMap[vtxoKey], row.tx,
-			)
-		}
-	}
+func readRows(rows []queries.Vtxo) ([]domain.Vtxo, error) {
 	vtxos := make([]domain.Vtxo, 0, len(rows))
-	for _, row := range rows {
-		vtxoKey := domain.VtxoKey{
-			Txid: row.vtxo.Txid,
-			VOut: uint32(row.vtxo.Vout),
-		}
-		uncondForfeitTxs := uncondForfeitTxsMap[vtxoKey]
-		vtxos = append(vtxos, rowToVtxo(row.vtxo, uncondForfeitTxs))
+	for _, vtxo := range rows {
+		vtxos = append(vtxos, rowToVtxo(vtxo))
 	}
 
 	return vtxos, nil

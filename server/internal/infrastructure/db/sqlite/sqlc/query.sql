@@ -111,14 +111,6 @@ SELECT id FROM round WHERE starting_timestamp > ? AND starting_timestamp < ?;
 -- name: SelectRoundIds :many
 SELECT id FROM round;
 
--- name: UpsertUnconditionalForfeitTx :exec
-INSERT INTO uncond_forfeit_tx (tx, vtxo_txid, vtxo_vout, position)
-VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET
-    tx = EXCLUDED.tx,
-    vtxo_txid = EXCLUDED.vtxo_txid,
-    vtxo_vout = EXCLUDED.vtxo_vout,
-    position = EXCLUDED.position;
-
 -- name: UpsertVtxo :exec
 INSERT INTO vtxo (txid, vout, descriptor, amount, pool_tx, spent_by, spent, redeemed, swept, expire_at, redeem_tx, pending)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(txid, vout) DO UPDATE SET
@@ -134,38 +126,23 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(txid, vout) DO UPDATE SE
     pending = EXCLUDED.pending;
 
 -- name: SelectSweepableVtxos :many
-SELECT  sqlc.embed(vtxo),
-        sqlc.embed(uncond_forfeit_tx_vw)
-FROM vtxo
-        LEFT OUTER JOIN uncond_forfeit_tx_vw ON vtxo.txid=uncond_forfeit_tx_vw.vtxo_txid AND vtxo.vout=uncond_forfeit_tx_vw.vtxo_vout
+SELECT sqlc.embed(vtxo) FROM vtxo
 WHERE redeemed = false AND swept = false;
 
 -- name: SelectNotRedeemedVtxos :many
-SELECT  sqlc.embed(vtxo),
-        sqlc.embed(uncond_forfeit_tx_vw)
-FROM vtxo
-        LEFT OUTER JOIN uncond_forfeit_tx_vw ON vtxo.txid=uncond_forfeit_tx_vw.vtxo_txid AND vtxo.vout=uncond_forfeit_tx_vw.vtxo_vout
+SELECT sqlc.embed(vtxo) FROM vtxo
 WHERE redeemed = false;
 
 -- name: SelectNotRedeemedVtxosWithPubkey :many
-SELECT  sqlc.embed(vtxo),
-        sqlc.embed(uncond_forfeit_tx_vw)
-FROM vtxo
-        LEFT OUTER JOIN uncond_forfeit_tx_vw ON vtxo.txid=uncond_forfeit_tx_vw.vtxo_txid AND vtxo.vout=uncond_forfeit_tx_vw.vtxo_vout
+SELECT sqlc.embed(vtxo) FROM vtxo
 WHERE redeemed = false AND INSTR(descriptor, ?) > 0;
 
 -- name: SelectVtxoByOutpoint :one
-SELECT  sqlc.embed(vtxo),
-        sqlc.embed(uncond_forfeit_tx_vw)
-FROM vtxo
-        LEFT OUTER JOIN uncond_forfeit_tx_vw ON vtxo.txid=uncond_forfeit_tx_vw.vtxo_txid AND vtxo.vout=uncond_forfeit_tx_vw.vtxo_vout
+SELECT sqlc.embed(vtxo) FROM vtxo
 WHERE txid = ? AND vout = ?;
 
 -- name: SelectVtxosByPoolTxid :many
-SELECT  sqlc.embed(vtxo),
-        sqlc.embed(uncond_forfeit_tx_vw)
-FROM vtxo
-        LEFT OUTER JOIN uncond_forfeit_tx_vw ON vtxo.txid=uncond_forfeit_tx_vw.vtxo_txid AND vtxo.vout=uncond_forfeit_tx_vw.vtxo_vout
+SELECT sqlc.embed(vtxo) FROM vtxo
 WHERE pool_tx = ?;
 
 -- name: MarkVtxoAsRedeemed :exec

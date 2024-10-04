@@ -193,12 +193,10 @@ message CreatePaymentRequest {
 }
 message CreatePaymentResponse {
   string signed_redeem_tx = 1; // signed only by the ASP
-  repeated string usigned_unconditional_forfeit_txs = 2;
 }
 
 message CompletePaymentRequest {
   string signed_redeem_tx = 1;
-  repeated string signed_unconditional_forfeit_txs = 2;
 }
 message CompletePaymentResponse {}
 
@@ -318,14 +316,10 @@ message Vtxo {
   int64 expire_at = 6;
   bool swept = 7;
   bool pending = 8;
-  PendingPayment pending_data = 9;
+  string redeem_tx = 9;
   uint64 amount = 10;
 }
 
-message PendingPayment {
-  string redeem_tx = 1;
-  repeated string unconditional_forfeit_txs =2;
-}
 
 message GetTransactionsStreamRequest {}
 message GetTransactionsStreamResponse {
