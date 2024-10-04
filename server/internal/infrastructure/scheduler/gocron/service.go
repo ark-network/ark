@@ -1,4 +1,4 @@
-package scheduler
+package timescheduler
 
 import (
 	"fmt"

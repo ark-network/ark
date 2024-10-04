@@ -1,4 +1,4 @@
-package block_scheduler
+package blockscheduler
 
 import (
 	"fmt"
