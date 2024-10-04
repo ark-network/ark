@@ -36,6 +36,7 @@ func init() {
 	js.Global().Set("collaborativeRedeem", CollaborativeRedeemWrapper())
 	js.Global().Set("getTransactionHistory", GetTransactionHistoryWrapper())
 	js.Global().Set("log", LogWrapper())
+	js.Global().Set("dump", DumpWrapper())
 
 	js.Global().Set("getAspUrl", GetAspUrlWrapper())
 	js.Global().Set("getAspPubKeyHex", GetAspPubkeyWrapper())

@@ -164,6 +164,19 @@ func ReceiveWrapper() js.Func {
 	})
 }
 
+func DumpWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if arkSdkClient == nil {
+			return nil, errors.New("ARK SDK client is not initialized")
+		}
+		seed, err := arkSdkClient.Dump(context.Background())
+		if err != nil {
+			return nil, err
+		}
+		return js.ValueOf(seed), nil
+	})
+}
+
 func SendOnChainWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
 		if len(args) != 1 {
