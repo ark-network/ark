@@ -1,4 +1,4 @@
-package height_scheduler
+package block_scheduler
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ import (
 
 const tipHeightEndpoit = "/blocks/tip/height"
 
-type blocknumberScheduler struct {
+type service struct {
 	tipURL string
 	lock   sync.Locker
 	taskes map[int64][]func()
@@ -30,7 +30,7 @@ func NewScheduler(esploraURL string) (ports.SchedulerService, error) {
 		return nil, err
 	}
 
-	return &blocknumberScheduler{
+	return &service{
 		tipURL,
 		&sync.Mutex{},
 		make(map[int64][]func()),
@@ -38,7 +38,7 @@ func NewScheduler(esploraURL string) (ports.SchedulerService, error) {
 	}, nil
 }
 
-func (s *blocknumberScheduler) Start() {
+func (s *service) Start() {
 	go func() {
 		for {
 			select {
@@ -61,16 +61,16 @@ func (s *blocknumberScheduler) Start() {
 	}()
 }
 
-func (s *blocknumberScheduler) Stop() {
+func (s *service) Stop() {
 	s.stopCh <- struct{}{}
 	close(s.stopCh)
 }
 
-func (s *blocknumberScheduler) Unit() ports.TimeUnit {
+func (s *service) Unit() ports.TimeUnit {
 	return ports.BlockHeight
 }
 
-func (s *blocknumberScheduler) AddNow(lifetime int64) int64 {
+func (s *service) AddNow(lifetime int64) int64 {
 	tip, err := s.fetchTipHeight()
 	if err != nil {
 		return 0
@@ -79,7 +79,7 @@ func (s *blocknumberScheduler) AddNow(lifetime int64) int64 {
 	return tip + lifetime
 }
 
-func (s *blocknumberScheduler) AfterNow(expiry int64) bool {
+func (s *service) AfterNow(expiry int64) bool {
 	tip, err := s.fetchTipHeight()
 	if err != nil {
 		return false
@@ -88,7 +88,7 @@ func (s *blocknumberScheduler) AfterNow(expiry int64) bool {
 	return expiry > tip
 }
 
-func (s *blocknumberScheduler) ScheduleTaskOnce(at int64, task func()) error {
+func (s *service) ScheduleTaskOnce(at int64, task func()) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -101,7 +101,7 @@ func (s *blocknumberScheduler) ScheduleTaskOnce(at int64, task func()) error {
 	return nil
 }
 
-func (s *blocknumberScheduler) popTaskes() ([]func(), error) {
+func (s *service) popTaskes() ([]func(), error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -124,7 +124,7 @@ func (s *blocknumberScheduler) popTaskes() ([]func(), error) {
 	return taskes, nil
 }
 
-func (s *blocknumberScheduler) fetchTipHeight() (int64, error) {
+func (s *service) fetchTipHeight() (int64, error) {
 	resp, err := http.Get(s.tipURL)
 	if err != nil {
 		return 0, err
