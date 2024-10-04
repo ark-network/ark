@@ -323,9 +323,17 @@ func (s *service) onInit(password string) {
 func (s *service) autoUnlock() error {
 	ctx := context.Background()
 	wallet := s.appConfig.WalletService()
-	unlocker := s.appConfig.UnlockerService()
 
-	password, err := unlocker.GetPassword(ctx)
+	status, err := wallet.Status(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get wallet status: %s", err)
+	}
+	if !status.IsInitialized() {
+		log.Debug("wallet not initiialized, skipping auto unlock")
+		return nil
+	}
+
+	password, err := s.appConfig.UnlockerService().GetPassword(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get password: %s", err)
 	}

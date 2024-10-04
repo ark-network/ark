@@ -3,6 +3,7 @@ package fileunlocker
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -14,6 +15,9 @@ type service struct {
 
 func NewService(filePath string) (ports.Unlocker, error) {
 	if _, err := os.Stat(filePath); err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("password file not found at path %s", filePath)
+		}
 		return nil, err
 	}
 	return &service{filePath: filePath}, nil
