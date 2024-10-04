@@ -544,8 +544,6 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 		redeemTxWeightEstimator.AddP2TROutput()
 	}
 
-	redeemTxWeightEstimator.AddP2WSHOutput() // anchor output
-
 	redeemTxMinRelayFee, err := b.wallet.MinRelayFee(context.Background(), uint64(redeemTxWeightEstimator.VSize()))
 	if err != nil {
 		return nil, err
@@ -581,7 +579,6 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 		value := receiver.Amount
 		if i == len(receivers)-1 {
 			value -= redeemTxMinRelayFee
-			value -= dustAmount // remove anchor output amount
 			if value <= dustAmount {
 				return nil, fmt.Errorf("change amount is dust amount")
 			}
@@ -591,11 +588,6 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 			PkScript: newVtxoScript,
 		})
 	}
-
-	outs = append(outs, &wire.TxOut{
-		Value:    int64(dustAmount),
-		PkScript: bitcointree.ANCHOR_PKSCRIPT,
-	})
 
 	sequences := make([]uint32, len(ins))
 	for i := range sequences {
