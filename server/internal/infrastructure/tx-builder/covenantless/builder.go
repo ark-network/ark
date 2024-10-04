@@ -402,9 +402,9 @@ func (b *txBuilder) FindLeaves(congestionTree tree.CongestionTree, fromtxid stri
 
 func (b *txBuilder) BuildAsyncPaymentTransactions(
 	vtxos []domain.Vtxo, aspPubKey *secp256k1.PublicKey, receivers []domain.Receiver,
-) (*domain.AsyncPaymentTxs, error) {
+) (string, error) {
 	if len(vtxos) <= 0 {
-		return nil, fmt.Errorf("missing vtxos")
+		return "", fmt.Errorf("missing vtxos")
 	}
 
 	ins := make([]*wire.OutPoint, 0, len(vtxos))
@@ -415,12 +415,12 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 	redeemTxWeightEstimator := &input.TxWeightEstimator{}
 	for index, vtxo := range vtxos {
 		if vtxo.Spent || vtxo.Redeemed || vtxo.Swept {
-			return nil, fmt.Errorf("all vtxos must be unspent")
+			return "", fmt.Errorf("all vtxos must be unspent")
 		}
 
 		vtxoTxID, err := chainhash.NewHashFromStr(vtxo.Txid)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 
 		vtxoOutpoint := &wire.OutPoint{
@@ -430,17 +430,17 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 
 		vtxoScript, err := bitcointree.ParseVtxoScript(vtxo.Descriptor)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 
 		vtxoTapKey, vtxoTree, err := vtxoScript.TapTree()
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 
 		vtxoOutputScript, err := common.P2TRScript(vtxoTapKey)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 
 		witnessUtxos[index] = &wire.TxOut{
@@ -456,12 +456,12 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 
 			tapLeaf, err := forfeitLeaf.Leaf()
 			if err != nil {
-				return nil, err
+				return "", err
 			}
 
 			leafProof, err := vtxoTree.GetTaprootMerkleProof(tapLeaf.TapHash())
 			if err != nil {
-				return nil, err
+				return "", err
 			}
 
 			tapscripts[index] = &psbt.TaprootTapLeafScript{
@@ -472,7 +472,7 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 
 			ctrlBlock, err := txscript.ParseControlBlock(leafProof.ControlBlock)
 			if err != nil {
-				return nil, err
+				return "", err
 			}
 
 			redeemTxWeightEstimator.AddTapscriptInput(64*2, &waddrmgr.Tapscript{
@@ -480,7 +480,7 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 				ControlBlock:   ctrlBlock,
 			})
 		} else {
-			return nil, fmt.Errorf("vtxo %s:%d script is not default script, can't be async spent", vtxo.Txid, vtxo.VOut)
+			return "", fmt.Errorf("vtxo %s:%d script is not default script, can't be async spent", vtxo.Txid, vtxo.VOut)
 		}
 
 		ins = append(ins, vtxoOutpoint)
@@ -492,27 +492,27 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 
 	redeemTxMinRelayFee, err := b.wallet.MinRelayFee(context.Background(), uint64(redeemTxWeightEstimator.VSize()))
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	if redeemTxMinRelayFee >= receivers[len(receivers)-1].Amount {
-		return nil, fmt.Errorf("redeem tx fee is higher than the amount of the change receiver")
+		return "", fmt.Errorf("redeem tx fee is higher than the amount of the change receiver")
 	}
 
 	for i, receiver := range receivers {
 		offchainScript, err := bitcointree.ParseVtxoScript(receiver.Descriptor)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 
 		receiverVtxoTaprootKey, _, err := offchainScript.TapTree()
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 
 		newVtxoScript, err := common.P2TRScript(receiverVtxoTaprootKey)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 
 		// Deduct the min relay fee from the very last receiver which is supposed
@@ -536,7 +536,7 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 		ins, outs, 2, 0, sequences,
 	)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	for i := range redeemPtx.Inputs {
@@ -546,19 +546,17 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 
 	redeemTx, err := redeemPtx.B64Encode()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	signedRedeemTx, err := b.wallet.SignTransactionTapscript(
 		context.Background(), redeemTx, nil,
 	)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	return &domain.AsyncPaymentTxs{
-		RedeemTx: signedRedeemTx,
-	}, nil
+	return signedRedeemTx, nil
 }
 
 // TODO use lnd CoinSelect to craft the pool tx

@@ -37,10 +37,6 @@ func (v *vxtoRepository) AddVtxos(ctx context.Context, vtxos []domain.Vtxo) erro
 	txBody := func(querierWithTx *queries.Queries) error {
 		for i := range vtxos {
 			vtxo := vtxos[i]
-			var redeemTx string
-			if vtxo.AsyncPayment != nil {
-				redeemTx = vtxo.AsyncPayment.RedeemTx
-			}
 			if err := querierWithTx.UpsertVtxo(
 				ctx, queries.UpsertVtxoParams{
 					Txid:       vtxo.Txid,
@@ -53,7 +49,7 @@ func (v *vxtoRepository) AddVtxos(ctx context.Context, vtxos []domain.Vtxo) erro
 					Redeemed:   vtxo.Redeemed,
 					Swept:      vtxo.Swept,
 					ExpireAt:   vtxo.ExpireAt,
-					RedeemTx:   sql.NullString{String: redeemTx, Valid: true},
+					RedeemTx:   sql.NullString{String: vtxo.RedeemTx, Valid: true},
 					Pending:    vtxo.Pending,
 				},
 			); err != nil {
@@ -252,12 +248,6 @@ func (v *vxtoRepository) UpdateExpireAt(ctx context.Context, vtxos []domain.Vtxo
 }
 
 func rowToVtxo(row queries.Vtxo) domain.Vtxo {
-	var asyncPayment *domain.AsyncPaymentTxs
-	if row.RedeemTx.Valid && len(row.RedeemTx.String) > 0 {
-		asyncPayment = &domain.AsyncPaymentTxs{
-			RedeemTx: row.RedeemTx.String,
-		}
-	}
 	return domain.Vtxo{
 		VtxoKey: domain.VtxoKey{
 			Txid: row.Txid,
@@ -267,14 +257,14 @@ func rowToVtxo(row queries.Vtxo) domain.Vtxo {
 			Descriptor: row.Descriptor.String,
 			Amount:     uint64(row.Amount),
 		},
-		RoundTxid:    row.PoolTx,
-		SpentBy:      row.SpentBy,
-		Spent:        row.Spent,
-		Redeemed:     row.Redeemed,
-		Swept:        row.Swept,
-		ExpireAt:     row.ExpireAt,
-		AsyncPayment: asyncPayment,
-		Pending:      row.Pending,
+		RoundTxid: row.PoolTx,
+		SpentBy:   row.SpentBy,
+		Spent:     row.Spent,
+		Redeemed:  row.Redeemed,
+		Swept:     row.Swept,
+		ExpireAt:  row.ExpireAt,
+		RedeemTx:  row.RedeemTx.String,
+		Pending:   row.Pending,
 	}
 }
 

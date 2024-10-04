@@ -274,10 +274,8 @@ func (s *covenantlessService) CompleteAsyncPayment(
 				Amount:     uint64(out.Value),
 			},
 			ExpireAt: asyncPayData.expireAt,
-			AsyncPayment: &domain.AsyncPaymentTxs{
-				RedeemTx: redeemTx,
-			},
-			Pending: isPending,
+			RedeemTx: redeemTx,
+			Pending:  isPending,
 		})
 	}
 
@@ -352,19 +350,19 @@ func (s *covenantlessService) CreateAsyncPayment(
 		vtxosInputs = append(vtxosInputs, vtxo)
 	}
 
-	res, err := s.builder.BuildAsyncPaymentTransactions(
+	redeemTx, err := s.builder.BuildAsyncPaymentTransactions(
 		vtxosInputs, s.pubkey, receivers,
 	)
 	if err != nil {
 		return "", fmt.Errorf("failed to build async payment txs: %s", err)
 	}
 
-	redeemTx, err := psbt.NewFromRawBytes(strings.NewReader(res.RedeemTx), true)
+	redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse redeem tx: %s", err)
 	}
 
-	s.asyncPaymentsCache[redeemTx.UnsignedTx.TxID()] = struct {
+	s.asyncPaymentsCache[redeemPtx.UnsignedTx.TxID()] = struct {
 		receivers []domain.Receiver
 		expireAt  int64
 	}{
@@ -372,7 +370,7 @@ func (s *covenantlessService) CreateAsyncPayment(
 		expireAt:  expiration,
 	}
 
-	return res.RedeemTx, nil
+	return redeemTx, nil
 }
 
 func (s *covenantlessService) GetBoardingAddress(
@@ -1535,7 +1533,7 @@ func (s *covenantlessService) reactToFraud(ctx context.Context, vtxo domain.Vtxo
 
 		log.Debugf("vtxo %s:%d has been spent by async payment", vtxo.Txid, vtxo.VOut)
 
-		redeemTxHex, err := s.builder.FinalizeAndExtract(asyncPayVtxo.AsyncPayment.RedeemTx)
+		redeemTxHex, err := s.builder.FinalizeAndExtract(asyncPayVtxo.RedeemTx)
 		if err != nil {
 			return fmt.Errorf("failed to finalize redeem tx: %s", err)
 		}

@@ -42,7 +42,7 @@ type TxBuilder interface {
 	BuildAsyncPaymentTransactions(
 		vtxosToSpend []domain.Vtxo,
 		aspPubKey *secp256k1.PublicKey, receivers []domain.Receiver,
-	) (*domain.AsyncPaymentTxs, error)
+	) (string, error)
 	VerifyAndCombinePartialTx(dest string, src string) (string, error)
 	GetTxID(tx string) (string, error)
 }

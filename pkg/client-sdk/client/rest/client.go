@@ -490,11 +490,6 @@ func (a *restClient) ListVtxos(
 			return nil, nil, err
 		}
 
-		var redeemTx string
-		if v.PendingData != nil {
-			redeemTx = v.PendingData.RedeemTx
-		}
-
 		spendableVtxos = append(spendableVtxos, client.Vtxo{
 			Outpoint: client.Outpoint{
 				Txid: v.Outpoint.Txid,
@@ -504,7 +499,7 @@ func (a *restClient) ListVtxos(
 			RoundTxid:  v.RoundTxid,
 			ExpiresAt:  expiresAt,
 			Pending:    v.Pending,
-			RedeemTx:   redeemTx,
+			RedeemTx:   v.RedeemTx,
 			SpentBy:    v.SpentBy,
 			Descriptor: v.Descriptor,
 		})

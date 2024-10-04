@@ -68,6 +68,8 @@ type ClientService interface {
 
 	ArkServiceGetRoundByID(params *ArkServiceGetRoundByIDParams, opts ...ClientOption) (*ArkServiceGetRoundByIDOK, error)
 
+	ArkServiceGetTransactionsStream(params *ArkServiceGetTransactionsStreamParams, opts ...ClientOption) (*ArkServiceGetTransactionsStreamOK, error)
+
 	ArkServiceListVtxos(params *ArkServiceListVtxosParams, opts ...ClientOption) (*ArkServiceListVtxosOK, error)
 
 	ArkServicePing(params *ArkServicePingParams, opts ...ClientOption) (*ArkServicePingOK, error)
@@ -341,6 +343,43 @@ func (a *Client) ArkServiceGetRoundByID(params *ArkServiceGetRoundByIDParams, op
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*ArkServiceGetRoundByIDDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+ArkServiceGetTransactionsStream ark service get transactions stream API
+*/
+func (a *Client) ArkServiceGetTransactionsStream(params *ArkServiceGetTransactionsStreamParams, opts ...ClientOption) (*ArkServiceGetTransactionsStreamOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewArkServiceGetTransactionsStreamParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "ArkService_GetTransactionsStream",
+		Method:             "GET",
+		PathPattern:        "/v1/transactions",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &ArkServiceGetTransactionsStreamReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*ArkServiceGetTransactionsStreamOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*ArkServiceGetTransactionsStreamDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 

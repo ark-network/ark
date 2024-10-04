@@ -723,14 +723,6 @@
         }
       }
     },
-    "v1PendingPayment": {
-      "type": "object",
-      "properties": {
-        "redeemTx": {
-          "type": "string"
-        }
-      }
-    },
     "v1PingResponse": {
       "type": "object",
       "properties": {
@@ -1076,8 +1068,8 @@
         "pending": {
           "type": "boolean"
         },
-        "pendingData": {
-          "$ref": "#/definitions/v1PendingPayment"
+        "redeemTx": {
+          "type": "string"
         },
         "amount": {
           "type": "string",

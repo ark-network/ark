@@ -365,8 +365,8 @@ func (b *txBuilder) FindLeaves(
 
 func (b *txBuilder) BuildAsyncPaymentTransactions(
 	_ []domain.Vtxo, _ *secp256k1.PublicKey, _ []domain.Receiver,
-) (*domain.AsyncPaymentTxs, error) {
-	return nil, fmt.Errorf("not implemented")
+) (string, error) {
+	return "", fmt.Errorf("not implemented")
 }
 
 func (b *txBuilder) createPoolTx(
