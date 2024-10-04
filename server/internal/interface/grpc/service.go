@@ -94,7 +94,13 @@ func NewService(
 
 func (s *service) Start() error {
 	withoutAppSvc := false
-	return s.start(withoutAppSvc)
+	if err := s.start(withoutAppSvc); err != nil {
+		return err
+	}
+	if s.appConfig.UnlockerService() != nil {
+		return s.autoUnlock()
+	}
+	return nil
 }
 
 func (s *service) Stop() {
@@ -312,6 +318,25 @@ func (s *service) onInit(password string) {
 		log.WithError(err).Warn("failed to create macaroons")
 	}
 	log.Debugf("generated macaroons at path %s", datadir)
+}
+
+func (s *service) autoUnlock() error {
+	ctx := context.Background()
+	wallet := s.appConfig.WalletService()
+	unlocker := s.appConfig.UnlockerService()
+
+	password, err := unlocker.GetPassword(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get password: %s", err)
+	}
+	if err := wallet.Unlock(ctx, password); err != nil {
+		return fmt.Errorf("failed to auto unlock: %s", err)
+	}
+
+	go s.onUnlock(password)
+
+	log.Debug("service auto unlocked")
+	return nil
 }
 
 func router(

@@ -304,6 +304,10 @@ func (s *service) Restore(_ context.Context, seed, password string) error {
 }
 
 func (s *service) Unlock(_ context.Context, password string) error {
+	if !s.walletInitialized() {
+		return fmt.Errorf("wallet not initialized")
+	}
+
 	if !s.walletLoaded() {
 		pwd := []byte(password)
 		opt := btcwallet.LoaderWithLocalWalletDB(s.cfg.Datadir, false, time.Minute)

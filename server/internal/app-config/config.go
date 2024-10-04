@@ -11,6 +11,7 @@ import (
 	scheduler "github.com/ark-network/ark/server/internal/infrastructure/scheduler/gocron"
 	txbuilder "github.com/ark-network/ark/server/internal/infrastructure/tx-builder/covenant"
 	cltxbuilder "github.com/ark-network/ark/server/internal/infrastructure/tx-builder/covenantless"
+	fileunlocker "github.com/ark-network/ark/server/internal/infrastructure/unlocker/file"
 	btcwallet "github.com/ark-network/ark/server/internal/infrastructure/wallet/btc-embedded"
 	liquidwallet "github.com/ark-network/ark/server/internal/infrastructure/wallet/liquid-standalone"
 	log "github.com/sirupsen/logrus"
@@ -36,6 +37,9 @@ var (
 	supportedScanners = supportedType{
 		"ocean":     {},
 		"btcwallet": {},
+	}
+	supportedUnlockers = supportedType{
+		"file": {},
 	}
 	supportedNetworks = supportedType{
 		common.Bitcoin.Name:        {},
@@ -70,6 +74,9 @@ type Config struct {
 	BitcoindRpcPass string
 	BitcoindRpcHost string
 
+	UnlockerType     string
+	UnlockerFilePath string
+
 	repo      ports.RepoManager
 	svc       application.Service
 	adminSvc  application.AdminService
@@ -77,6 +84,7 @@ type Config struct {
 	txBuilder ports.TxBuilder
 	scanner   ports.BlockchainScanner
 	scheduler ports.SchedulerService
+	unlocker  ports.Unlocker
 }
 
 func (c *Config) Validate() error {
@@ -94,6 +102,9 @@ func (c *Config) Validate() error {
 	}
 	if !supportedScanners.supports(c.BlockchainScannerType) {
 		return fmt.Errorf("blockchain scanner type not supported, please select one of: %s", supportedScanners)
+	}
+	if len(c.UnlockerType) > 0 && !supportedUnlockers.supports(c.UnlockerType) {
+		return fmt.Errorf("unlocker type not supported, please select one of: %s", supportedUnlockers)
 	}
 	if c.RoundInterval < 2 {
 		return fmt.Errorf("invalid round interval, must be at least 2 seconds")
@@ -151,7 +162,7 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.walletService(); err != nil {
-		return fmt.Errorf("failed to connect to wallet: %s", err)
+		return err
 	}
 	if err := c.txBuilderService(); err != nil {
 		return err
@@ -163,6 +174,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.adminService(); err != nil {
+		return err
+	}
+	if err := c.unlockerService(); err != nil {
 		return err
 	}
 	return nil
@@ -183,6 +197,10 @@ func (c *Config) AdminService() application.AdminService {
 
 func (c *Config) WalletService() ports.WalletService {
 	return c.wallet
+}
+
+func (c *Config) UnlockerService() ports.Unlocker {
+	return c.unlocker
 }
 
 func (c *Config) repoManager() error {
@@ -227,7 +245,7 @@ func (c *Config) walletService() error {
 	if common.IsLiquid(c.Network) {
 		svc, err := liquidwallet.NewService(c.WalletAddr)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to connect to wallet: %s", err)
 		}
 
 		c.wallet = svc
@@ -350,6 +368,26 @@ func (c *Config) appService() error {
 
 func (c *Config) adminService() error {
 	c.adminSvc = application.NewAdminService(c.wallet, c.repo, c.txBuilder)
+	return nil
+}
+
+func (c *Config) unlockerService() error {
+	if len(c.UnlockerType) <= 0 {
+		return nil
+	}
+
+	var svc ports.Unlocker
+	var err error
+	switch c.UnlockerType {
+	case "file":
+		svc, err = fileunlocker.NewService(c.UnlockerFilePath)
+	default:
+		err = fmt.Errorf("unknown unlocker type")
+	}
+	if err != nil {
+		return err
+	}
+	c.unlocker = svc
 	return nil
 }
 
