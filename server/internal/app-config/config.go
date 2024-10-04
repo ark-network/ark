@@ -8,8 +8,8 @@ import (
 	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/ark-network/ark/server/internal/infrastructure/db"
-	heightscheduler "github.com/ark-network/ark/server/internal/infrastructure/scheduler/block"
-	scheduler "github.com/ark-network/ark/server/internal/infrastructure/scheduler/gocron"
+	blockscheduler "github.com/ark-network/ark/server/internal/infrastructure/scheduler/block"
+	timescheduler "github.com/ark-network/ark/server/internal/infrastructure/scheduler/gocron"
 	txbuilder "github.com/ark-network/ark/server/internal/infrastructure/tx-builder/covenant"
 	cltxbuilder "github.com/ark-network/ark/server/internal/infrastructure/tx-builder/covenantless"
 	btcwallet "github.com/ark-network/ark/server/internal/infrastructure/wallet/btc-embedded"
@@ -316,9 +316,9 @@ func (c *Config) schedulerService() error {
 	var err error
 	switch c.SchedulerType {
 	case "gocron":
-		svc = scheduler.NewScheduler()
+		svc = timescheduler.NewScheduler()
 	case "block":
-		svc, err = heightscheduler.NewScheduler(c.EsploraURL)
+		svc, err = blockscheduler.NewScheduler(c.EsploraURL)
 	default:
 		err = fmt.Errorf("unknown scheduler type")
 	}
