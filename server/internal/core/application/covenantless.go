@@ -42,7 +42,8 @@ type covenantlessService struct {
 	paymentRequests *paymentsMap
 	forfeitTxs      *forfeitTxsMap
 
-	eventsCh chan domain.RoundEvent
+	eventsCh            chan domain.RoundEvent
+	transactionEventsCh chan TransactionEvent
 
 	// cached data for the current round
 	lastEvent           domain.RoundEvent
@@ -62,16 +63,11 @@ func NewCovenantlessService(
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	scheduler ports.SchedulerService,
 ) (Service, error) {
-	eventsCh := make(chan domain.RoundEvent)
-	paymentRequests := newPaymentsMap()
-
-	forfeitTxs := newForfeitTxsMap(builder)
 	pubkey, err := walletSvc.GetPubkey(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch pubkey: %s", err)
 	}
 
-	sweeper := newSweeper(walletSvc, repoManager, builder, scheduler)
 	asyncPaymentsCache := make(map[string]struct {
 		receivers []domain.Receiver
 		expireAt  int64
@@ -87,10 +83,11 @@ func NewCovenantlessService(
 		repoManager:         repoManager,
 		builder:             builder,
 		scanner:             scanner,
-		sweeper:             sweeper,
-		paymentRequests:     paymentRequests,
-		forfeitTxs:          forfeitTxs,
-		eventsCh:            eventsCh,
+		sweeper:             newSweeper(walletSvc, repoManager, builder, scheduler),
+		paymentRequests:     newPaymentsMap(),
+		forfeitTxs:          newForfeitTxsMap(builder),
+		eventsCh:            make(chan domain.RoundEvent),
+		transactionEventsCh: make(chan TransactionEvent),
 		currentRoundLock:    sync.Mutex{},
 		asyncPaymentsCache:  asyncPaymentsCache,
 		treeSigningSessions: make(map[string]*musigSigningSession),
@@ -302,6 +299,14 @@ func (s *covenantlessService) CompleteAsyncPayment(
 	log.Infof("spent %d vtxos", len(spentVtxos))
 
 	delete(s.asyncPaymentsCache, redeemTxid)
+
+	go func() {
+		s.transactionEventsCh <- RedeemTransactionEvent{
+			AsyncTxID:      redeemTxid,
+			SpentVtxos:     spentVtxos,
+			SpendableVtxos: vtxos,
+		}
+	}()
 
 	return nil
 }
@@ -577,6 +582,10 @@ func (s *covenantlessService) ListVtxos(ctx context.Context, pubkey *secp256k1.P
 
 func (s *covenantlessService) GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent {
 	return s.eventsCh
+}
+
+func (s *covenantlessService) GetTransactionEventsChannel(ctx context.Context) <-chan TransactionEvent {
+	return s.transactionEventsCh
 }
 
 func (s *covenantlessService) GetRoundByTxid(ctx context.Context, roundTxid string) (*domain.Round, error) {
@@ -1262,7 +1271,27 @@ func (s *covenantlessService) updateVtxoSet(round *domain.Round) {
 				return
 			}
 		}()
+
 	}
+	go func() {
+		// nolint:all
+		tx, _ := psbt.NewFromRawBytes(strings.NewReader(round.UnsignedTx), true)
+		boardingInputs := make([]domain.VtxoKey, 0)
+		for i, in := range tx.Inputs {
+			if len(in.TaprootLeafScript) > 0 {
+				boardingInputs = append(boardingInputs, domain.VtxoKey{
+					Txid: tx.UnsignedTx.TxIn[i].PreviousOutPoint.Hash.String(),
+					VOut: tx.UnsignedTx.TxIn[i].PreviousOutPoint.Index,
+				})
+			}
+		}
+		s.transactionEventsCh <- RoundTransactionEvent{
+			RoundTxID:             round.Txid,
+			SpentVtxos:            getSpentVtxos(round.Payments),
+			SpendableVtxos:        s.getNewVtxos(round),
+			ClaimedBoardingInputs: boardingInputs,
+		}
+	}()
 }
 
 func (s *covenantlessService) propagateEvents(round *domain.Round) {

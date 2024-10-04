@@ -92,6 +92,19 @@ func (v vtxoList) toProto() []*arkv1.Vtxo {
 	return list
 }
 
+type vtxoKeyList []domain.VtxoKey
+
+func (v vtxoKeyList) toProto() []*arkv1.Outpoint {
+	list := make([]*arkv1.Outpoint, 0, len(v))
+	for _, vtxoKey := range v {
+		list = append(list, &arkv1.Outpoint{
+			Txid: vtxoKey.Txid,
+			Vout: vtxoKey.VOut,
+		})
+	}
+	return list
+}
+
 type congestionTree tree.CongestionTree
 
 func (t congestionTree) toProto() *arkv1.Tree {

@@ -45,7 +45,8 @@ type covenantService struct {
 	paymentRequests *paymentsMap
 	forfeitTxs      *forfeitTxsMap
 
-	eventsCh chan domain.RoundEvent
+	eventsCh            chan domain.RoundEvent
+	transactionEventsCh chan TransactionEvent
 
 	currentRoundLock sync.Mutex
 	currentRound     *domain.Round
@@ -59,23 +60,30 @@ func NewCovenantService(
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	scheduler ports.SchedulerService,
 ) (Service, error) {
-	eventsCh := make(chan domain.RoundEvent)
-	paymentRequests := newPaymentsMap()
-
-	forfeitTxs := newForfeitTxsMap(builder)
 	pubkey, err := walletSvc.GetPubkey(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch pubkey: %s", err)
 	}
 
-	sweeper := newSweeper(walletSvc, repoManager, builder, scheduler)
-
 	svc := &covenantService{
-		network, pubkey,
-		roundLifetime, roundInterval, unilateralExitDelay, boardingExitDelay,
-		walletSvc, repoManager, builder, scanner, sweeper,
-		paymentRequests, forfeitTxs, eventsCh, sync.Mutex{}, nil, nil,
+		network:             network,
+		pubkey:              pubkey,
+		roundLifetime:       roundLifetime,
+		roundInterval:       roundInterval,
+		unilateralExitDelay: unilateralExitDelay,
+		boardingExitDelay:   boardingExitDelay,
+		wallet:              walletSvc,
+		repoManager:         repoManager,
+		builder:             builder,
+		scanner:             scanner,
+		sweeper:             newSweeper(walletSvc, repoManager, builder, scheduler),
+		paymentRequests:     newPaymentsMap(),
+		forfeitTxs:          newForfeitTxsMap(builder),
+		eventsCh:            make(chan domain.RoundEvent),
+		transactionEventsCh: make(chan TransactionEvent),
+		currentRoundLock:    sync.Mutex{},
 	}
+
 	repoManager.RegisterEventsHandler(
 		func(round *domain.Round) {
 			go svc.propagateEvents(round)
@@ -344,6 +352,10 @@ func (s *covenantService) ListVtxos(ctx context.Context, pubkey *secp256k1.Publi
 
 func (s *covenantService) GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent {
 	return s.eventsCh
+}
+
+func (s *covenantService) GetTransactionEventsChannel(ctx context.Context) <-chan TransactionEvent {
+	return s.transactionEventsCh
 }
 
 func (s *covenantService) GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error) {
@@ -851,6 +863,26 @@ func (s *covenantService) updateVtxoSet(round *domain.Round) {
 			}
 		}()
 	}
+
+	go func() {
+		// nolint:all
+		tx, _ := psetv2.NewPsetFromBase64(round.UnsignedTx)
+		boardingInputs := make([]domain.VtxoKey, 0)
+		for _, in := range tx.Inputs {
+			if len(in.TapLeafScript) > 0 {
+				boardingInputs = append(boardingInputs, domain.VtxoKey{
+					Txid: elementsutil.TxIDFromBytes(in.PreviousTxid),
+					VOut: in.PreviousTxIndex,
+				})
+			}
+		}
+		s.transactionEventsCh <- RoundTransactionEvent{
+			RoundTxID:             round.Txid,
+			SpentVtxos:            getSpentVtxos(round.Payments),
+			SpendableVtxos:        s.getNewVtxos(round),
+			ClaimedBoardingInputs: boardingInputs,
+		}
+	}()
 }
 
 func (s *covenantService) propagateEvents(round *domain.Round) {
