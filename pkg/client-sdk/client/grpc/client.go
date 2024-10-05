@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -329,4 +330,90 @@ func (a *grpcClient) ListVtxos(
 func (c *grpcClient) Close() {
 	//nolint:all
 	c.conn.Close()
+}
+
+func (c *grpcClient) GetTransactionsStream(
+	ctx context.Context,
+) (<-chan client.TransactionEvent, func(), error) {
+	stream, err := c.svc.GetTransactionsStream(ctx, &arkv1.GetTransactionsStreamRequest{})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	eventCh := make(chan client.TransactionEvent)
+
+	go func() {
+		defer close(eventCh)
+		for {
+			resp, err := stream.Recv()
+			if err == io.EOF {
+				return
+			}
+			if err != nil {
+				eventCh <- client.TransactionEvent{Err: err}
+				return
+			}
+
+			switch tx := resp.Tx.(type) {
+			case *arkv1.GetTransactionsStreamResponse_Round:
+				eventCh <- client.TransactionEvent{
+					Round: &client.RoundTransaction{
+						Txid:                 tx.Round.Txid,
+						SpentVtxos:           outpointsFromProto(tx.Round.SpentVtxos),
+						SpendableVtxos:       vtxosFromProto(tx.Round.SpendableVtxos),
+						ClaimedBoardingUtxos: outpointsFromProto(tx.Round.ClaimedBoardingUtxos),
+					},
+				}
+			case *arkv1.GetTransactionsStreamResponse_Redeem:
+				eventCh <- client.TransactionEvent{
+					Redeem: &client.RedeemTransaction{
+						Txid:           tx.Redeem.Txid,
+						SpentVtxos:     outpointsFromProto(tx.Redeem.SpentVtxos),
+						SpendableVtxos: vtxosFromProto(tx.Redeem.SpendableVtxos),
+					},
+				}
+			}
+		}
+	}()
+
+	closeFn := func() {
+		if err := stream.CloseSend(); err != nil {
+			logrus.Warnf("failed to close stream: %v", err)
+		}
+	}
+
+	return eventCh, closeFn, nil
+}
+
+func outpointsFromProto(protoOutpoints []*arkv1.Outpoint) []client.Outpoint {
+	outpoints := make([]client.Outpoint, len(protoOutpoints))
+	for i, o := range protoOutpoints {
+		outpoints[i] = client.Outpoint{
+			Txid: o.Txid,
+			VOut: o.Vout,
+		}
+	}
+	return outpoints
+}
+
+func vtxosFromProto(protoVtxos []*arkv1.Vtxo) []client.Vtxo {
+	vtxos := make([]client.Vtxo, len(protoVtxos))
+	for i, v := range protoVtxos {
+		expiresAt := time.Unix(v.ExpireAt, 0)
+		vtxos[i] = client.Vtxo{
+			Outpoint: client.Outpoint{
+				Txid: v.Outpoint.Txid,
+				VOut: v.Outpoint.Vout,
+			},
+			Descriptor:              v.Descriptor_,
+			Amount:                  v.Amount,
+			RoundTxid:               v.RoundTxid,
+			ExpiresAt:               &expiresAt,
+			RedeemTx:                v.PendingData.RedeemTx,
+			UnconditionalForfeitTxs: v.PendingData.UnconditionalForfeitTxs,
+			Pending:                 v.Pending,
+			SpentBy:                 v.SpentBy,
+		}
+	}
+	return vtxos
 }
