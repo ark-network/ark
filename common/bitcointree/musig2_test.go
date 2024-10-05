@@ -17,6 +17,7 @@ import (
 )
 
 const (
+	dustAmount  = 100
 	minRelayFee = 1000
 	exitDelay   = 512
 	lifetime    = 1024
@@ -46,6 +47,7 @@ func TestRoundTripSignTree(t *testing.T) {
 			asp.PubKey(),
 			castReceivers(f.Receivers, asp.PubKey()),
 			minRelayFee,
+			dustAmount,
 			lifetime,
 		)
 		require.NoError(t, err)
@@ -60,6 +62,7 @@ func TestRoundTripSignTree(t *testing.T) {
 			asp.PubKey(),
 			castReceivers(f.Receivers, asp.PubKey()),
 			minRelayFee,
+			dustAmount,
 			lifetime,
 		)
 		require.NoError(t, err)

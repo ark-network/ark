@@ -281,9 +281,16 @@ func (b *txBuilder) BuildRoundTx(
 		return "", nil, "", err
 	}
 
+	var dustAmount uint64
+
 	if !isOnchainOnly(payments) {
+		dustAmount, err = b.wallet.GetDustAmount(context.Background())
+		if err != nil {
+			return "", nil, "", err
+		}
+
 		sharedOutputScript, sharedOutputAmount, err = bitcointree.CraftSharedOutput(
-			cosigners, aspPubkey, receivers, feeAmount, b.roundLifetime,
+			cosigners, aspPubkey, receivers, feeAmount, dustAmount, b.roundLifetime,
 		)
 		if err != nil {
 			return
@@ -314,7 +321,7 @@ func (b *txBuilder) BuildRoundTx(
 		}
 
 		congestionTree, err = bitcointree.CraftCongestionTree(
-			initialOutpoint, cosigners, aspPubkey, receivers, feeAmount, b.roundLifetime,
+			initialOutpoint, cosigners, aspPubkey, receivers, feeAmount, dustAmount, b.roundLifetime,
 		)
 		if err != nil {
 			return
@@ -497,6 +504,11 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 		return "", fmt.Errorf("redeem tx fee is higher than the amount of the change receiver")
 	}
 
+	dustAmount, err := b.wallet.GetDustAmount(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
 	for i, receiver := range receivers {
 		offchainScript, err := bitcointree.ParseVtxoScript(receiver.Descriptor)
 		if err != nil {
@@ -518,6 +530,9 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 		value := receiver.Amount
 		if i == len(receivers)-1 {
 			value -= redeemTxMinRelayFee
+			if value <= dustAmount {
+				return nil, fmt.Errorf("change amount is dust amount")
+			}
 		}
 		outs = append(outs, &wire.TxOut{
 			Value:    int64(value),

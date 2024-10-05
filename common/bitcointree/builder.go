@@ -15,8 +15,12 @@ import (
 
 // CraftSharedOutput returns the taproot script and the amount of the initial root output
 func CraftSharedOutput(
-	cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, receivers []Receiver,
-	feeSatsPerNode uint64, roundLifetime int64,
+	cosigners []*secp256k1.PublicKey,
+	aspPubkey *secp256k1.PublicKey,
+	receivers []Receiver,
+	feeSatsPerNode,
+	dustAmount uint64,
+	roundLifetime int64,
 ) ([]byte, int64, error) {
 	aggregatedKey, _, err := createAggregatedKeyWithSweep(
 		cosigners, aspPubkey, roundLifetime,
@@ -25,7 +29,7 @@ func CraftSharedOutput(
 		return nil, 0, err
 	}
 
-	root, err := createRootNode(aggregatedKey, cosigners, receivers, feeSatsPerNode)
+	root, err := createRootNode(aggregatedKey, cosigners, receivers, feeSatsPerNode, dustAmount)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -42,8 +46,13 @@ func CraftSharedOutput(
 
 // CraftCongestionTree creates all the tree's transactions
 func CraftCongestionTree(
-	initialInput *wire.OutPoint, cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, receivers []Receiver,
-	feeSatsPerNode uint64, roundLifetime int64,
+	initialInput *wire.OutPoint,
+	cosigners []*secp256k1.PublicKey,
+	aspPubkey *secp256k1.PublicKey,
+	receivers []Receiver,
+	feeSatsPerNode,
+	dustAmount uint64,
+	roundLifetime int64,
 ) (tree.CongestionTree, error) {
 	aggregatedKey, sweepTapLeaf, err := createAggregatedKeyWithSweep(
 		cosigners, aspPubkey, roundLifetime,
@@ -52,7 +61,7 @@ func CraftCongestionTree(
 		return nil, err
 	}
 
-	root, err := createRootNode(aggregatedKey, cosigners, receivers, feeSatsPerNode)
+	root, err := createRootNode(aggregatedKey, cosigners, receivers, feeSatsPerNode, dustAmount)
 	if err != nil {
 		return nil, err
 	}
@@ -110,6 +119,7 @@ type node interface {
 type leaf struct {
 	vtxoScript VtxoScript
 	amount     int64
+	dustAmount int64
 }
 
 type branch struct {
@@ -152,12 +162,22 @@ func (l *leaf) getOutputs() ([]*wire.TxOut, error) {
 		return nil, err
 	}
 
-	output := &wire.TxOut{
-		Value:    l.amount,
+	vtxoOutputAmount := l.amount - l.dustAmount
+	if vtxoOutputAmount <= l.dustAmount {
+		return nil, fmt.Errorf("vtxo output amount must be greater than dust amount")
+	}
+
+	vtxoOutput := &wire.TxOut{
+		Value:    l.amount - l.dustAmount,
 		PkScript: script,
 	}
 
-	return []*wire.TxOut{output}, nil
+	anchorOutput := &wire.TxOut{
+		Value:    l.dustAmount,
+		PkScript: ANCHOR_PKSCRIPT,
+	}
+
+	return []*wire.TxOut{vtxoOutput, anchorOutput}, nil
 }
 
 func (b *branch) getOutputs() ([]*wire.TxOut, error) {
@@ -247,7 +267,8 @@ func createRootNode(
 	aggregatedKey *musig2.AggregateKey,
 	cosigners []*secp256k1.PublicKey,
 	receivers []Receiver,
-	feeSatsPerNode uint64,
+	feeSatsPerNode,
+	dustAmount uint64,
 ) (root node, err error) {
 	if len(receivers) == 0 {
 		return nil, fmt.Errorf("no receivers provided")
@@ -258,6 +279,7 @@ func createRootNode(
 		leafNode := &leaf{
 			vtxoScript: r.Script,
 			amount:     int64(r.Amount),
+			dustAmount: int64(dustAmount),
 		}
 		nodes = append(nodes, leafNode)
 	}
