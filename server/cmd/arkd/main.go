@@ -81,6 +81,7 @@ func mainAction(_ *cli.Context) error {
 		BoardingExitDelay:     cfg.BoardingExitDelay,
 		UnlockerType:          cfg.UnlockerType,
 		UnlockerFilePath:      cfg.UnlockerFilePath,
+		UnlockerPassword:      cfg.UnlockerPassword,
 	}
 	svc, err := grpcservice.NewService(svcConfig, appConfig)
 	if err != nil {

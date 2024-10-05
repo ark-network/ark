@@ -11,6 +11,7 @@ import (
 	scheduler "github.com/ark-network/ark/server/internal/infrastructure/scheduler/gocron"
 	txbuilder "github.com/ark-network/ark/server/internal/infrastructure/tx-builder/covenant"
 	cltxbuilder "github.com/ark-network/ark/server/internal/infrastructure/tx-builder/covenantless"
+	envunlocker "github.com/ark-network/ark/server/internal/infrastructure/unlocker/env"
 	fileunlocker "github.com/ark-network/ark/server/internal/infrastructure/unlocker/file"
 	btcwallet "github.com/ark-network/ark/server/internal/infrastructure/wallet/btc-embedded"
 	liquidwallet "github.com/ark-network/ark/server/internal/infrastructure/wallet/liquid-standalone"
@@ -39,6 +40,7 @@ var (
 		"btcwallet": {},
 	}
 	supportedUnlockers = supportedType{
+		"env":  {},
 		"file": {},
 	}
 	supportedNetworks = supportedType{
@@ -75,7 +77,8 @@ type Config struct {
 	BitcoindRpcHost string
 
 	UnlockerType     string
-	UnlockerFilePath string
+	UnlockerFilePath string // file unlocker
+	UnlockerPassword string // env unlocker
 
 	repo      ports.RepoManager
 	svc       application.Service
@@ -381,6 +384,8 @@ func (c *Config) unlockerService() error {
 	switch c.UnlockerType {
 	case "file":
 		svc, err = fileunlocker.NewService(c.UnlockerFilePath)
+	case "env":
+		svc, err = envunlocker.NewService(c.UnlockerPassword)
 	default:
 		err = fmt.Errorf("unknown unlocker type")
 	}

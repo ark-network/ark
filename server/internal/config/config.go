@@ -38,6 +38,7 @@ type Config struct {
 	TLSExtraDomains       []string
 	UnlockerType          string
 	UnlockerFilePath      string
+	UnlockerPassword      string
 }
 
 var (
@@ -69,6 +70,7 @@ var (
 	TLSExtraDomain   = "TLS_EXTRA_DOMAIN"
 	UnlockerType     = "UNLOCKER_TYPE"
 	UnlockerFilePath = "UNLOCKER_FILE_PATH"
+	UnlockerPassword = "UNLOCKER_PASSWORD"
 
 	defaultDatadir               = common.AppDataDir("arkd", false)
 	defaultRoundInterval         = 5
@@ -148,6 +150,7 @@ func LoadConfig() (*Config, error) {
 		TLSExtraDomains:       viper.GetStringSlice(TLSExtraDomain),
 		UnlockerType:          viper.GetString(UnlockerType),
 		UnlockerFilePath:      viper.GetString(UnlockerFilePath),
+		UnlockerPassword:      viper.GetString(UnlockerPassword),
 	}, nil
 }
 
