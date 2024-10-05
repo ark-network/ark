@@ -92,7 +92,7 @@ var (
 // add additional chain API not supported by the chain.Interface type
 type extraChainAPI interface {
 	getTx(txid string) (*wire.MsgTx, error)
-	getTxStatus(txid string) (isConfirmed bool, blocktime int64, err error)
+	getTxStatus(txid string) (isConfirmed bool, blockHeight, blocktime int64, err error)
 	broadcast(txHex string) error
 }
 
@@ -957,7 +957,7 @@ func (s *service) GetNotificationChannel(
 
 func (s *service) IsTransactionConfirmed(
 	ctx context.Context, txid string,
-) (isConfirmed bool, blocktime int64, err error) {
+) (isConfirmed bool, blocknumber int64, blocktime int64, err error) {
 	return s.extraAPI.getTxStatus(txid)
 }
 

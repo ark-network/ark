@@ -20,8 +20,9 @@ type esploraClient struct {
 
 type esploraTx struct {
 	Status struct {
-		Confirmed bool  `json:"confirmed"`
-		BlockTime int64 `json:"block_time"`
+		Confirmed   bool  `json:"confirmed"`
+		BlockTime   int64 `json:"block_time"`
+		BlockNumber int64 `json:"block_height"`
 	} `json:"status"`
 }
 
@@ -79,30 +80,30 @@ func (f *esploraClient) getTx(txid string) (*wire.MsgTx, error) {
 	return &tx, nil
 }
 
-func (f *esploraClient) getTxStatus(txid string) (isConfirmed bool, blocktime int64, err error) {
+func (f *esploraClient) getTxStatus(txid string) (isConfirmed bool, blocknumber, blocktime int64, err error) {
 	endpoint, err := url.JoinPath(f.url, "tx", txid)
 	if err != nil {
-		return false, 0, err
+		return false, 0, 0, err
 	}
 
 	resp, err := http.DefaultClient.Get(endpoint)
 	if err != nil {
-		return false, 0, err
+		return false, 0, 0, err
 	}
 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return false, 0, err
+		return false, 0, 0, err
 	}
 
 	var response esploraTx
 
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return false, 0, err
+		return false, 0, 0, err
 	}
 
-	return response.Status.Confirmed, response.Status.BlockTime, nil
+	return response.Status.Confirmed, response.Status.BlockNumber, response.Status.BlockTime, nil
 }
 
 // GetFeeMap returns a map of sat/vbyte fees for different confirmation targets

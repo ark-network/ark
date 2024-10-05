@@ -33,21 +33,31 @@ func (b *bitcoindRPCClient) broadcast(txhex string) error {
 	return nil
 }
 
-func (b *bitcoindRPCClient) getTxStatus(txid string) (isConfirmed bool, blocktime int64, err error) {
+func (b *bitcoindRPCClient) getTxStatus(txid string) (isConfirmed bool, height, blocktime int64, err error) {
 	txhash, err := chainhash.NewHashFromStr(txid)
 	if err != nil {
-		return false, 0, err
+		return false, 0, 0, err
 	}
 
 	tx, err := b.chainClient.GetRawTransactionVerbose(txhash)
 	if err != nil {
 		if strings.Contains(err.Error(), "No such mempool or blockchain transaction") {
-			return false, 0, nil
+			return false, 0, 0, nil
 		}
-		return false, 0, err
+		return false, 0, 0, err
 	}
 
-	return tx.Confirmations > 0, tx.Blocktime, nil
+	blockHash, err := chainhash.NewHashFromStr(tx.BlockHash)
+	if err != nil {
+		return false, 0, 0, err
+	}
+
+	blockHeight, err := b.chainClient.GetBlockHeight(blockHash)
+	if err != nil {
+		return false, 0, 0, err
+	}
+
+	return tx.Confirmations > 0, int64(blockHeight), tx.Blocktime, nil
 }
 
 func (b *bitcoindRPCClient) getTx(txid string) (*wire.MsgTx, error) {

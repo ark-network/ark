@@ -202,6 +202,36 @@ func TestReactToSpentVtxosRedemption(t *testing.T) {
 	require.Empty(t, balance.OnchainBalance.LockedAmount)
 }
 
+func TestSweep(t *testing.T) {
+	var receive utils.ArkReceive
+	receiveStr, err := runArkCommand("receive")
+	require.NoError(t, err)
+
+	err = json.Unmarshal([]byte(receiveStr), &receive)
+	require.NoError(t, err)
+
+	_, err = utils.RunCommand("nigiri", "faucet", "--liquid", receive.Boarding)
+	require.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+
+	_, err = runArkCommand("claim", "--password", utils.Password)
+	require.NoError(t, err)
+
+	time.Sleep(3 * time.Second)
+
+	_, err = utils.RunCommand("nigiri", "rpc", "--liquid", "generatetoaddress", "100", "el1qqwk722tghgkgmh3r2ph4d2apwj0dy9xnzlenzklx8jg3z299fpaw56trre9gpk6wmw0u4qycajqeva3t7lzp7wnacvwxha59r")
+	require.NoError(t, err)
+
+	time.Sleep(40 * time.Second)
+
+	var balance utils.ArkBalance
+	balanceStr, err := runArkCommand("balance")
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
+	require.Zero(t, balance.Offchain.Total) // all funds should be swept
+}
+
 func runArkCommand(arg ...string) (string, error) {
 	args := append([]string{"exec", "-t", "arkd", "ark"}, arg...)
 	return utils.RunCommand("docker", args...)
@@ -276,20 +306,12 @@ func setupAspWallet() error {
 		return fmt.Errorf("failed to parse response: %s", err)
 	}
 
-	if _, err := utils.RunCommand("nigiri", "faucet", "--liquid", addr.Address); err != nil {
-		return fmt.Errorf("failed to fund wallet: %s", err)
-	}
-	if _, err := utils.RunCommand("nigiri", "faucet", "--liquid", addr.Address); err != nil {
-		return fmt.Errorf("failed to fund wallet: %s", err)
-	}
-	if _, err := utils.RunCommand("nigiri", "faucet", "--liquid", addr.Address); err != nil {
-		return fmt.Errorf("failed to fund wallet: %s", err)
-	}
-	if _, err := utils.RunCommand("nigiri", "faucet", "--liquid", addr.Address); err != nil {
-		return fmt.Errorf("failed to fund wallet: %s", err)
-	}
-	if _, err := utils.RunCommand("nigiri", "faucet", "--liquid", addr.Address); err != nil {
-		return fmt.Errorf("failed to fund wallet: %s", err)
+	const numberOfFaucet = 6
+
+	for i := 0; i < numberOfFaucet; i++ {
+		if _, err := utils.RunCommand("nigiri", "faucet", "--liquid", addr.Address); err != nil {
+			return fmt.Errorf("failed to fund wallet: %s with address %s", err, addr.Address)
+		}
 	}
 
 	time.Sleep(5 * time.Second)

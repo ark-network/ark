@@ -195,7 +195,7 @@ func (b *txBuilder) BuildRoundTx(
 	return
 }
 
-func (b *txBuilder) GetSweepInput(parentblocktime int64, node tree.Node) (expirationtime int64, sweepInput ports.SweepInput, err error) {
+func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime int64, sweepInput ports.SweepInput, err error) {
 	pset, err := psetv2.NewPsetFromBase64(node.Tx)
 	if err != nil {
 		return -1, nil, err
@@ -214,8 +214,6 @@ func (b *txBuilder) GetSweepInput(parentblocktime int64, node tree.Node) (expira
 	if err != nil {
 		return -1, nil, err
 	}
-
-	expirationTime := parentblocktime + lifetime
 
 	txhex, err := b.wallet.GetTransaction(context.Background(), txid)
 	if err != nil {
@@ -241,7 +239,7 @@ func (b *txBuilder) GetSweepInput(parentblocktime int64, node tree.Node) (expira
 		amount:    inputValue,
 	}
 
-	return expirationTime, sweepInput, nil
+	return lifetime, sweepInput, nil
 }
 
 func (b *txBuilder) VerifyTapscriptPartialSigs(tx string) (bool, string, error) {

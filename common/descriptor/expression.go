@@ -130,15 +130,18 @@ func (e *Older) Parse(policy string) error {
 }
 
 func (e *Older) Script(bool) (string, error) {
-	sequence, err := common.BIP68Encode(e.Timeout)
+	sequence, err := common.BIP68Sequence(e.Timeout)
 	if err != nil {
 		return "", err
 	}
 
-	script, err := txscript.NewScriptBuilder().AddData(sequence).AddOps([]byte{
-		txscript.OP_CHECKSEQUENCEVERIFY,
-		txscript.OP_DROP,
-	}).Script()
+	script, err := txscript.NewScriptBuilder().
+		AddInt64(int64(sequence)).
+		AddOps([]byte{
+			txscript.OP_CHECKSEQUENCEVERIFY,
+			txscript.OP_DROP,
+		}).
+		Script()
 	if err != nil {
 		return "", err
 	}
