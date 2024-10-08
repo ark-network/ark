@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"path"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/ark-network/ark/common"
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
-	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
+	"github.com/ark-network/ark/pkg/client-sdk/store"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -26,7 +28,7 @@ func main() {
 
 	log.Info("alice is setting up her ark wallet...")
 
-	aliceArkClient, err := setupArkClient()
+	aliceArkClient, err := setupArkClient("alice")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -70,7 +72,7 @@ func main() {
 
 	fmt.Println("")
 	log.Info("bob is setting up his ark wallet...")
-	bobArkClient, err := setupArkClient()
+	bobArkClient, err := setupArkClient("bob")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -133,12 +135,18 @@ func main() {
 	log.Infof("bob offchain balance: %d", bobBalance.OffchainBalance.Total)
 }
 
-func setupArkClient() (arksdk.ArkClient, error) {
-	storeSvc, err := inmemorystore.NewConfigStore()
+func setupArkClient(wallet string) (arksdk.ArkClient, error) {
+	dbDir := common.AppDataDir(path.Join("ark-example", wallet), false)
+	appDataStore, err := store.NewService(store.Config{
+		ConfigStoreType:  store.FileStore,
+		AppDataStoreType: store.Badger,
+		BaseDir:          dbDir,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to setup store: %s", err)
+		return nil, fmt.Errorf("failed to setup app data store: %s", err)
 	}
-	client, err := arksdk.NewCovenantClient(storeSvc)
+
+	client, err := arksdk.NewCovenantClient(appDataStore)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup ark client: %s", err)
 	}

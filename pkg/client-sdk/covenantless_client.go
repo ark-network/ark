@@ -18,7 +18,7 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/ark-network/ark/pkg/client-sdk/redemption"
-	"github.com/ark-network/ark/pkg/client-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/store/domain"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
@@ -57,85 +57,107 @@ type covenantlessArkClient struct {
 	*arkClient
 }
 
-func NewCovenantlessClient(storeSvc store.ConfigStore) (ArkClient, error) {
-	data, err := storeSvc.GetData(context.Background())
+func NewCovenantlessClient(sdkRepository domain.SdkRepository) (ArkClient, error) {
+	cfgData, err := sdkRepository.ConfigRepository().GetData(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	if data != nil {
+
+	if cfgData != nil {
 		return nil, ErrAlreadyInitialized
 	}
 
-	return &covenantlessArkClient{&arkClient{store: storeSvc}}, nil
+	return &covenantlessArkClient{
+		&arkClient{
+			sdkRepository: sdkRepository,
+		},
+	}, nil
 }
 
-func LoadCovenantlessClient(storeSvc store.ConfigStore) (ArkClient, error) {
-	if storeSvc == nil {
-		return nil, fmt.Errorf("missin store service")
+func LoadCovenantlessClient(sdkRepository domain.SdkRepository) (ArkClient, error) {
+	if sdkRepository == nil {
+		return nil, fmt.Errorf("missin sdk repository")
 	}
 
-	data, err := storeSvc.GetData(context.Background())
+	cfgData, err := sdkRepository.ConfigRepository().GetData(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	if data == nil {
+	if cfgData == nil {
 		return nil, ErrNotInitialized
 	}
 
 	clientSvc, err := getClient(
-		supportedClients, data.ClientType, data.AspUrl,
+		supportedClients, cfgData.ClientType, cfgData.AspUrl,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup transport client: %s", err)
 	}
 
-	explorerSvc, err := getExplorer(data.ExplorerURL, data.Network.Name)
+	explorerSvc, err := getExplorer(cfgData.ExplorerURL, cfgData.Network.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
 
-	walletSvc, err := getWallet(storeSvc, data, supportedWallets)
+	walletSvc, err := getWallet(
+		sdkRepository.ConfigRepository(),
+		cfgData,
+		supportedWallets,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("faile to setup wallet: %s", err)
 	}
 
 	return &covenantlessArkClient{
-		&arkClient{data, walletSvc, storeSvc, explorerSvc, clientSvc},
+		&arkClient{
+			ConfigData:    cfgData,
+			wallet:        walletSvc,
+			sdkRepository: sdkRepository,
+			explorer:      explorerSvc,
+			client:        clientSvc,
+		},
 	}, nil
 }
 
 func LoadCovenantlessClientWithWallet(
-	storeSvc store.ConfigStore, walletSvc wallet.WalletService,
+	sdkRepository domain.SdkRepository, walletSvc wallet.WalletService,
 ) (ArkClient, error) {
-	if storeSvc == nil {
-		return nil, fmt.Errorf("missin store service")
+	if sdkRepository == nil {
+		return nil, fmt.Errorf("missin sdk repository")
 	}
+
 	if walletSvc == nil {
 		return nil, fmt.Errorf("missin wallet service")
 	}
 
-	data, err := storeSvc.GetData(context.Background())
+	cfgData, err := sdkRepository.ConfigRepository().GetData(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	if data == nil {
+	if cfgData == nil {
 		return nil, ErrNotInitialized
 	}
 
 	clientSvc, err := getClient(
-		supportedClients, data.ClientType, data.AspUrl,
+		supportedClients, cfgData.ClientType, cfgData.AspUrl,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup transport client: %s", err)
 	}
 
-	explorerSvc, err := getExplorer(data.ExplorerURL, data.Network.Name)
+	explorerSvc, err := getExplorer(cfgData.ExplorerURL, cfgData.Network.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
 
 	return &covenantlessArkClient{
-		&arkClient{data, walletSvc, storeSvc, explorerSvc, clientSvc},
+		&arkClient{
+			ConfigData:    cfgData,
+			wallet:        walletSvc,
+			sdkRepository: sdkRepository,
+			explorer:      explorerSvc,
+			client:        clientSvc,
+		},
 	}, nil
 }
 
@@ -727,7 +749,7 @@ func (a *covenantlessArkClient) Claim(ctx context.Context) (string, error) {
 }
 
 func (a *covenantlessArkClient) GetTransactionHistory(ctx context.Context) ([]Transaction, error) {
-	if a.StoreData == nil {
+	if a.ConfigData == nil {
 		return nil, fmt.Errorf("client not initialized")
 	}
 
@@ -742,7 +764,7 @@ func (a *covenantlessArkClient) GetTransactionHistory(ctx context.Context) ([]Tr
 	}
 
 	offchainTxs, err := vtxosToTxsCovenantless(
-		a.StoreData.RoundLifetime, spendableVtxos, spentVtxos, ignoreVtxos,
+		a.ConfigData.RoundLifetime, spendableVtxos, spentVtxos, ignoreVtxos,
 	)
 	if err != nil {
 		return nil, err
@@ -1402,7 +1424,7 @@ func (a *covenantlessArkClient) validateCongestionTree(
 
 	if !utils.IsOnchainOnly(receivers) {
 		if err := bitcointree.ValidateCongestionTree(
-			event.Tree, poolTx, a.StoreData.AspPubkey, a.RoundLifetime,
+			event.Tree, poolTx, a.ConfigData.AspPubkey, a.RoundLifetime,
 		); err != nil {
 			return err
 		}

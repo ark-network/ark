@@ -12,6 +12,7 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/ark-network/ark/pkg/client-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/store/domain"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	singlekeywallet "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey"
 	walletstore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store"
@@ -53,20 +54,20 @@ var (
 )
 
 type arkClient struct {
-	*store.StoreData
-	wallet   wallet.WalletService
-	store    store.ConfigStore
-	explorer explorer.Explorer
-	client   client.ASPClient
+	*domain.ConfigData
+	wallet        wallet.WalletService
+	sdkRepository domain.SdkRepository
+	explorer      explorer.Explorer
+	client        client.ASPClient
 }
 
 func (a *arkClient) GetConfigData(
 	_ context.Context,
-) (*store.StoreData, error) {
-	if a.StoreData == nil {
+) (*domain.ConfigData, error) {
+	if a.ConfigData == nil {
 		return nil, fmt.Errorf("client sdk not initialized")
 	}
-	return a.StoreData, nil
+	return a.ConfigData, nil
 }
 
 func (a *arkClient) InitWithWallet(
@@ -104,7 +105,7 @@ func (a *arkClient) InitWithWallet(
 		return fmt.Errorf("failed to parse asp pubkey: %s", err)
 	}
 
-	storeData := store.StoreData{
+	storeData := domain.ConfigData{
 		AspUrl:                     args.AspUrl,
 		AspPubkey:                  aspPubkey,
 		WalletType:                 args.Wallet.GetType(),
@@ -117,17 +118,17 @@ func (a *arkClient) InitWithWallet(
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 		ForfeitAddress:             info.ForfeitAddress,
 	}
-	if err := a.store.AddData(ctx, storeData); err != nil {
+	if err := a.sdkRepository.ConfigRepository().AddData(ctx, storeData); err != nil {
 		return err
 	}
 
 	if _, err := args.Wallet.Create(ctx, args.Password, args.Seed); err != nil {
 		//nolint:all
-		a.store.CleanData(ctx)
+		a.sdkRepository.ConfigRepository().CleanData(ctx)
 		return err
 	}
 
-	a.StoreData = &storeData
+	a.ConfigData = &storeData
 	a.wallet = args.Wallet
 	a.explorer = explorerSvc
 	a.client = clientSvc
@@ -170,7 +171,7 @@ func (a *arkClient) Init(
 		return fmt.Errorf("failed to parse asp pubkey: %s", err)
 	}
 
-	storeData := store.StoreData{
+	cfgData := domain.ConfigData{
 		AspUrl:                     args.AspUrl,
 		AspPubkey:                  aspPubkey,
 		WalletType:                 args.WalletType,
@@ -184,22 +185,22 @@ func (a *arkClient) Init(
 		ExplorerURL:                args.ExplorerURL,
 		ForfeitAddress:             info.ForfeitAddress,
 	}
-	walletSvc, err := getWallet(a.store, &storeData, supportedWallets)
+	walletSvc, err := getWallet(a.sdkRepository.ConfigRepository(), &cfgData, supportedWallets)
 	if err != nil {
 		return err
 	}
 
-	if err := a.store.AddData(ctx, storeData); err != nil {
+	if err := a.sdkRepository.ConfigRepository().AddData(ctx, cfgData); err != nil {
 		return err
 	}
 
 	if _, err := walletSvc.Create(ctx, args.Password, args.Seed); err != nil {
 		//nolint:all
-		a.store.CleanData(ctx)
+		a.sdkRepository.ConfigRepository().CleanData(ctx)
 		return err
 	}
 
-	a.StoreData = &storeData
+	a.ConfigData = &cfgData
 	a.wallet = walletSvc
 	a.explorer = explorerSvc
 	a.client = clientSvc
@@ -270,11 +271,11 @@ func getExplorer(explorerURL, network string) (explorer.Explorer, error) {
 }
 
 func getWallet(
-	storeSvc store.ConfigStore, data *store.StoreData, supportedWallets utils.SupportedType[struct{}],
+	configRepo domain.ConfigRepository, data *domain.ConfigData, supportedWallets utils.SupportedType[struct{}],
 ) (wallet.WalletService, error) {
 	switch data.WalletType {
 	case wallet.SingleKeyWallet:
-		return getSingleKeyWallet(storeSvc, data.Network.Name)
+		return getSingleKeyWallet(configRepo, data.Network.Name)
 	default:
 		return nil, fmt.Errorf(
 			"unsuported wallet type '%s', please select one of: %s",
@@ -284,16 +285,17 @@ func getWallet(
 }
 
 func getSingleKeyWallet(
-	configStore store.ConfigStore, network string,
+	configRepo domain.ConfigRepository, network string,
 ) (wallet.WalletService, error) {
-	walletStore, err := getWalletStore(configStore.GetType(), configStore.GetDatadir())
+	walletStore, err := getWalletStore(configRepo.GetType(), configRepo.GetDatadir())
 	if err != nil {
 		return nil, err
 	}
+
 	if strings.Contains(network, "liquid") {
-		return singlekeywallet.NewLiquidWallet(configStore, walletStore)
+		return singlekeywallet.NewLiquidWallet(configRepo, walletStore)
 	}
-	return singlekeywallet.NewBitcoinWallet(configStore, walletStore)
+	return singlekeywallet.NewBitcoinWallet(configRepo, walletStore)
 }
 
 func getWalletStore(storeType, datadir string) (walletstore.WalletStore, error) {
