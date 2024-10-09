@@ -415,7 +415,7 @@ func setupAspWallet() error {
 		return fmt.Errorf("failed to unlock wallet: %s", err)
 	}
 
-	time.Sleep(time.Second)
+	time.Sleep(5 * time.Second)
 
 	req, err = http.NewRequest("GET", "http://localhost:7070/v1/admin/wallet/address", nil)
 	if err != nil {
