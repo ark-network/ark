@@ -183,7 +183,7 @@ func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 	arkv1.RegisterWalletServiceServer(grpcServer, walletHandler)
 
 	walletInitHandler := handlers.NewWalletInitializerHandler(
-		s.appConfig.WalletService(), s.onInit, s.onUnlock,
+		s.appConfig.WalletService(), s.onInit, s.onUnlock, s.onReady,
 	)
 	arkv1.RegisterWalletInitializerServiceServer(grpcServer, walletInitHandler)
 
@@ -271,14 +271,6 @@ func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 }
 
 func (s *service) onUnlock(password string) {
-	withoutAppSvc := false
-	s.stop(withoutAppSvc)
-
-	withAppSvc := true
-	if err := s.start(withAppSvc); err != nil {
-		panic(err)
-	}
-
 	if s.config.NoMacaroons {
 		return
 	}
@@ -318,6 +310,16 @@ func (s *service) onInit(password string) {
 		log.WithError(err).Warn("failed to create macaroons")
 	}
 	log.Debugf("generated macaroons at path %s", datadir)
+}
+
+func (s *service) onReady() {
+	withoutAppSvc := false
+	s.stop(withoutAppSvc)
+
+	withAppSvc := true
+	if err := s.start(withAppSvc); err != nil {
+		panic(err)
+	}
 }
 
 func (s *service) autoUnlock() error {

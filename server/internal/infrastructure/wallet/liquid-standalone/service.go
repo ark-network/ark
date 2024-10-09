@@ -24,6 +24,7 @@ type service struct {
 	notifyClient  pb.NotificationServiceClient
 	chVtxos       chan map[string][]ports.VtxoWithValue
 	isListening   bool
+	syncedCh      chan struct{}
 }
 
 func NewService(addr string) (ports.WalletService, error) {
@@ -44,6 +45,7 @@ func NewService(addr string) (ports.WalletService, error) {
 		txClient:      txClient,
 		notifyClient:  notifyClient,
 		chVtxos:       chVtxos,
+		syncedCh:      make(chan struct{}),
 	}
 
 	ctx := context.Background()
@@ -63,6 +65,10 @@ func NewService(addr string) (ports.WalletService, error) {
 func (s *service) Close() {
 	close(s.chVtxos)
 	s.conn.Close()
+}
+
+func (s *service) GetSyncedUpdate(_ context.Context) <-chan struct{} {
+	return s.syncedCh
 }
 
 func (s *service) GenSeed(ctx context.Context) (string, error) {

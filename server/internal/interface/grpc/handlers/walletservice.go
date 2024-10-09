@@ -6,18 +6,22 @@ import (
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/server/internal/core/ports"
+	log "github.com/sirupsen/logrus"
 )
 
 type walletInitHandler struct {
 	walletService ports.WalletService
 	onInit        func(password string)
 	onUnlock      func(password string)
+	onReady       func()
 }
 
 func NewWalletInitializerHandler(
-	walletService ports.WalletService, onInit, onUnlock func(string),
+	walletService ports.WalletService, onInit, onUnlock func(string), onReady func(),
 ) arkv1.WalletInitializerServiceServer {
-	return &walletInitHandler{walletService, onInit, onUnlock}
+	svc := walletInitHandler{walletService, onInit, onUnlock, onReady}
+	go svc.listenWhenReady()
+	return &svc
 }
 
 func (a *walletInitHandler) GenSeed(ctx context.Context, _ *arkv1.GenSeedRequest) (*arkv1.GenSeedResponse, error) {
@@ -77,6 +81,17 @@ func (a *walletInitHandler) Unlock(ctx context.Context, req *arkv1.UnlockRequest
 
 	go a.onUnlock(req.GetPassword())
 
+	go func() {
+		status, err := a.walletService.Status(context.Background())
+		if err != nil {
+			log.Warnf("failed to get wallet status: %s", err)
+			return
+		}
+		if status.IsUnlocked() && status.IsSynced() {
+			a.onReady()
+		}
+	}()
+
 	return &arkv1.UnlockResponse{}, nil
 }
 
@@ -91,6 +106,19 @@ func (a *walletInitHandler) GetStatus(ctx context.Context, _ *arkv1.GetStatusReq
 		Unlocked:    status.IsUnlocked(),
 		Synced:      status.IsSynced(),
 	}, nil
+}
+
+func (a *walletInitHandler) listenWhenReady() {
+	ctx := context.Background()
+	<-a.walletService.GetSyncedUpdate(ctx)
+
+	status, err := a.walletService.Status(ctx)
+	if err != nil {
+		log.Warnf("failed to get wallet status: %s", err)
+	}
+	if status.IsUnlocked() && status.IsSynced() {
+		a.onReady()
+	}
 }
 
 type walletHandler struct {

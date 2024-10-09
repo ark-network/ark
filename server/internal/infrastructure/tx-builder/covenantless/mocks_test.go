@@ -13,6 +13,16 @@ type mockedWallet struct {
 	mock.Mock
 }
 
+func (m *mockedWallet) GetSyncedUpdate(ctx context.Context) <-chan struct{} {
+	args := m.Called(ctx)
+
+	var res chan struct{}
+	if a := args.Get(0); a != nil {
+		res = a.(chan struct{})
+	}
+	return res
+}
+
 func (m *mockedWallet) GenSeed(ctx context.Context) (string, error) {
 	args := m.Called(ctx)
 

@@ -13,6 +13,7 @@ var ErrNonFinalBIP68 = errors.New("non-final BIP68 sequence")
 
 type WalletService interface {
 	BlockchainScanner
+	GetSyncedUpdate(ctx context.Context) <-chan struct{}
 	GenSeed(ctx context.Context) (string, error)
 	Create(ctx context.Context, seed, password string) error
 	Restore(ctx context.Context, seed, password string) error
