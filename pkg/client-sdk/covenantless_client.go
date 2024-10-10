@@ -1927,7 +1927,7 @@ func (a *covenantlessArkClient) getVtxos(
 
 	pendingVtxos := make([]client.Vtxo, 0)
 	for _, vtxo := range spendableVtxos {
-		if vtxo.RedeemTx != "" {
+		if vtxo.Pending {
 			pendingVtxos = append(pendingVtxos, vtxo)
 		}
 	}
