@@ -1113,6 +1113,11 @@ func (a *covenantlessArkClient) handleRoundStream(
 	receivers []client.Output,
 	roundEphemeralKey *secp256k1.PrivateKey,
 ) (string, error) {
+	round, err := a.client.GetRound(ctx, "")
+	if err != nil {
+		return "", err
+	}
+
 	eventsCh, close, err := a.client.GetEventStream(ctx, paymentID)
 	if err != nil {
 		return "", err
@@ -1154,7 +1159,10 @@ func (a *covenantlessArkClient) handleRoundStream(
 				}
 				return event.(client.RoundFinalizedEvent).Txid, nil
 			case client.RoundFailedEvent:
-				return "", fmt.Errorf("round failed: %s", event.(client.RoundFailedEvent).Reason)
+				if event.(client.RoundFailedEvent).ID == round.ID {
+					return "", fmt.Errorf("round failed: %s", event.(client.RoundFailedEvent).Reason)
+				}
+				continue
 			case client.RoundSigningStartedEvent:
 				pingStop()
 				if step != start {
