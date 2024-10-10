@@ -91,7 +91,7 @@ func (s *localStorageStore) GetData(ctx context.Context) (*store.StoreData, erro
 	roundLifetime, _ := strconv.Atoi(s.store.Call("getItem", "round_lifetime").String())
 	roundInterval, _ := strconv.Atoi(s.store.Call("getItem", "round_interval").String())
 	unilateralExitDelay, _ := strconv.Atoi(s.store.Call("getItem", "unilateral_exit_delay").String())
-	dust, _ := strconv.Atoi(s.store.Call("getItem", "min_relay_fee").String())
+	dust, _ := strconv.Atoi(s.store.Call("getItem", "dust").String())
 
 	return &store.StoreData{
 		AspUrl:                     s.store.Call("getItem", "asp_url").String(),
