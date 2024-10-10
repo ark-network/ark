@@ -1152,11 +1152,26 @@ func (a *covenantlessArkClient) handleRoundStream(
 			if notify.Err != nil {
 				return "", notify.Err
 			}
+			if notify.Event == nil {
+				if step != roundFinalization {
+					continue
+				}
+				res, err := a.client.Ping(ctx, paymentID)
+				if err != nil {
+					return "", err
+				}
+				if e, ok := res.(client.RoundFinalizedEvent); ok {
+					log.Infof("round completed %s", e.Txid)
+					return e.Txid, nil
+				}
+				time.Sleep(time.Second)
+			}
 			switch event := notify.Event; event.(type) {
 			case client.RoundFinalizedEvent:
 				if step != roundFinalization {
 					continue
 				}
+				log.Infof("round completed %s", event.(client.RoundFinalizedEvent).Txid)
 				return event.(client.RoundFinalizedEvent).Txid, nil
 			case client.RoundFailedEvent:
 				if event.(client.RoundFailedEvent).ID == round.ID {
