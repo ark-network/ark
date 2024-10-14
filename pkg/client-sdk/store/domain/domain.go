@@ -22,6 +22,7 @@ type ConfigData struct {
 	BoardingDescriptorTemplate string
 	ExplorerURL                string
 	ForfeitAddress             string
+	ListenTransactionStream    bool
 }
 
 type Vtxo struct {
@@ -38,7 +39,7 @@ type Vtxo struct {
 }
 
 func (v Vtxo) Key() string {
-	return v.Txid + ":" + strconv.Itoa(int(v.VOut))
+	return fmt.Sprintf("%s:%s", v.Txid, strconv.Itoa(int(v.VOut)))
 }
 
 const (
@@ -50,6 +51,7 @@ type TxType string
 
 type Transaction struct {
 	BoardingTxid    string
+	BoardingVOut    uint32
 	RoundTxid       string
 	RedeemTxid      string
 	Amount          uint64
@@ -63,8 +65,16 @@ func (t Transaction) Key() string {
 	return fmt.Sprintf("%s:%s:%s", t.BoardingTxid, t.RoundTxid, t.RedeemTxid)
 }
 
+func (t Transaction) IsRound() bool {
+	return t.RoundTxid != ""
+}
+
 func (t Transaction) IsBoarding() bool {
 	return t.BoardingTxid != ""
+}
+
+func (t Transaction) IsRedeem() bool {
+	return t.RedeemTxid != ""
 }
 
 const (
@@ -72,6 +82,8 @@ const (
 	BoardingClaimed    EventType = "boarding_claimed"
 	ArkSent            EventType = "ark_sent"
 	ArkReceived        EventType = "ark_received"
+	ArkSentPending     EventType = "ark_sent_pending"
+	ArkSentClaimed     EventType = "ark_sent_claimed"
 	ArkReceivedPending EventType = "ark_received_pending"
 	ArkReceivedClaimed EventType = "ark_received_claimed"
 )

@@ -53,10 +53,16 @@ type storeData struct {
 	BoardingDescriptorTemplate string `json:"boarding_descriptor_template"`
 	ExplorerURL                string `json:"explorer_url"`
 	ForfeitAddress             string `json:"forfeit_address"`
+	ListenTransactionStream    string `json:"listen_transaction_stream"`
 }
 
 func (d storeData) isEmpty() bool {
-	return d == storeData{}
+	if d.AspUrl == "" &&
+		d.AspPubkey == "" {
+		return true
+	}
+
+	return false
 }
 
 func (d storeData) decode() domain.ConfigData {
@@ -81,6 +87,7 @@ func (d storeData) decode() domain.ConfigData {
 		BoardingDescriptorTemplate: d.BoardingDescriptorTemplate,
 		ExplorerURL:                explorerURL,
 		ForfeitAddress:             d.ForfeitAddress,
+		ListenTransactionStream:    d.ListenTransactionStream == "true",
 	}
 }
 
@@ -98,6 +105,7 @@ func (d storeData) asMap() map[string]string {
 		"boarding_descriptor_template": d.BoardingDescriptorTemplate,
 		"explorer_url":                 d.ExplorerURL,
 		"forfeit_address":              d.ForfeitAddress,
+		"listen_transaction_stream":    d.ListenTransactionStream,
 	}
 }
 
@@ -127,6 +135,7 @@ func (s *Store) AddData(ctx context.Context, data domain.ConfigData) error {
 		BoardingDescriptorTemplate: data.BoardingDescriptorTemplate,
 		ExplorerURL:                data.ExplorerURL,
 		ForfeitAddress:             data.ForfeitAddress,
+		ListenTransactionStream:    strconv.FormatBool(data.ListenTransactionStream),
 	}
 
 	if err := s.write(sd); err != nil {

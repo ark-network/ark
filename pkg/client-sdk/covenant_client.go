@@ -108,7 +108,7 @@ func LoadCovenantClient(sdkRepository domain.SdkRepository) (ArkClient, error) {
 		return nil, fmt.Errorf("faile to setup wallet: %s", err)
 	}
 
-	return &covenantArkClient{
+	covenantClient := covenantArkClient{
 		&arkClient{
 			ConfigData:    cfgData,
 			wallet:        walletSvc,
@@ -116,7 +116,16 @@ func LoadCovenantClient(sdkRepository domain.SdkRepository) (ArkClient, error) {
 			explorer:      explorerSvc,
 			client:        clientSvc,
 		},
-	}, nil
+	}
+
+	if cfgData.ListenTransactionStream {
+		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
+		covenantClient.txStreamCtxCancel = txStreamCtxCancel
+		go covenantClient.listenForTxStream(txStreamCtx)
+		go covenantClient.listenForBoardingUtxos(txStreamCtx)
+	}
+
+	return &covenantClient, nil
 }
 
 func LoadCovenantClientWithWallet(
@@ -150,7 +159,7 @@ func LoadCovenantClientWithWallet(
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
 
-	return &covenantArkClient{
+	covenantClient := covenantArkClient{
 		&arkClient{
 			ConfigData:    cfgData,
 			wallet:        walletSvc,
@@ -158,7 +167,88 @@ func LoadCovenantClientWithWallet(
 			explorer:      explorerSvc,
 			client:        clientSvc,
 		},
-	}, nil
+	}
+
+	if cfgData.ListenTransactionStream {
+		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
+		covenantClient.txStreamCtxCancel = txStreamCtxCancel
+		go covenantClient.listenForTxStream(txStreamCtx)
+		go covenantClient.listenForBoardingUtxos(txStreamCtx)
+	}
+
+	return &covenantClient, nil
+}
+
+func (a *covenantArkClient) Init(ctx context.Context, args InitArgs) error {
+	err := a.arkClient.Init(ctx, args)
+	if err != nil {
+		return err
+	}
+
+	if args.ListenTransactionStream {
+		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
+		a.txStreamCtxCancel = txStreamCtxCancel
+		go a.listenForTxStream(txStreamCtx)
+		go a.listenForBoardingUtxos(txStreamCtx)
+	}
+
+	return nil
+}
+
+func (a *covenantArkClient) InitWithWallet(ctx context.Context, args InitWithWalletArgs) error {
+	err := a.arkClient.InitWithWallet(ctx, args)
+	if err != nil {
+		return err
+	}
+
+	if args.ListenTransactionStream {
+		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
+		a.txStreamCtxCancel = txStreamCtxCancel
+		go a.listenForTxStream(txStreamCtx)
+		go a.listenForBoardingUtxos(txStreamCtx)
+	}
+
+	return nil
+}
+
+func (a *covenantArkClient) listenForTxStream(ctx context.Context) {
+	eventChan, closeFunc, err := a.client.GetTransactionsStream(ctx)
+	if err != nil {
+		log.WithError(err).Error("Failed to get transaction stream")
+		return
+	}
+	defer closeFunc()
+
+	for {
+		select {
+		case event, ok := <-eventChan:
+			if !ok {
+				return
+			}
+
+			a.processTransactionEvent(event)
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (a *covenantArkClient) processTransactionEvent(
+	event client.TransactionEvent,
+) {
+	// TODO considering current covenant state where all payments happening in round
+	//and that this is going to change we leave this unimplemented until asnc payments are implemented
+	//also with current state it is not possible to cover some edge cases like when in a round there
+	//are multiple boarding inputs + spent vtxo with change in spendable + received in the same round
+}
+
+func (a *covenantArkClient) listenForBoardingUtxos(
+	ctx context.Context,
+) {
+	// TODO considering current covenant state where all payments happening in round
+	//and that this is going to change we leave this unimplemented until asnc payments are implemented
+	//also with current state it is not possible to cover some edge cases like when in a round there
+	//are multiple boarding inputs + spent vtxo with change in spendable + received in the same round
 }
 
 func (a *covenantArkClient) ListVtxos(
@@ -572,7 +662,13 @@ func (a *covenantArkClient) Claim(ctx context.Context) (string, error) {
 	)
 }
 
-func (a *covenantArkClient) GetTransactionHistory(ctx context.Context) ([]Transaction, error) {
+func (a *covenantArkClient) GetTransactionHistory(
+	ctx context.Context,
+) ([]domain.Transaction, error) {
+	if a.ConfigData.ListenTransactionStream {
+		return a.sdkRepository.AppDataRepository().TransactionRepository().GetAll(ctx)
+	}
+
 	spendableVtxos, spentVtxos, err := a.ListVtxos(ctx)
 	if err != nil {
 		return nil, err
@@ -1689,7 +1785,9 @@ func (a *covenantArkClient) offchainAddressToDefaultVtxoDescriptor(addr string) 
 	return vtxoScript.ToDescriptor(), nil
 }
 
-func (a *covenantArkClient) getBoardingTxs(ctx context.Context) (transactions []Transaction) {
+func (a *covenantArkClient) getBoardingTxs(
+	ctx context.Context,
+) (transactions []domain.Transaction) {
 	utxos, err := a.getClaimableBoardingUtxos(ctx)
 	if err != nil {
 		return nil
@@ -1706,21 +1804,28 @@ func (a *covenantArkClient) getBoardingTxs(ctx context.Context) (transactions []
 	}
 
 	for _, u := range allUtxos {
-		transactions = append(transactions, Transaction{
+		pending := false
+		if isPending[u.Txid] {
+			pending = true
+		}
+
+		transactions = append(transactions, domain.Transaction{
 			BoardingTxid: u.Txid,
 			Amount:       u.Amount,
-			Type:         TxReceived,
+			Type:         domain.TxReceived,
 			CreatedAt:    u.CreatedAt,
+			IsPending:    pending,
+			BoardingVOut: u.Vout,
 		})
 	}
 	return
 }
 
 func vtxosToTxsCovenant(
-	roundLifetime int64, spendable, spent []client.Vtxo, boardingTxs []Transaction,
-) ([]Transaction, error) {
-	transactions := make([]Transaction, 0)
-	unconfirmedBoardingTxs := make([]Transaction, 0)
+	roundLifetime int64, spendable, spent []client.Vtxo, boardingTxs []domain.Transaction,
+) ([]domain.Transaction, error) {
+	transactions := make([]domain.Transaction, 0)
+	unconfirmedBoardingTxs := make([]domain.Transaction, 0)
 	for _, tx := range boardingTxs {
 		emptyTime := time.Time{}
 		if tx.CreatedAt == emptyTime {
@@ -1745,9 +1850,9 @@ func vtxosToTxsCovenant(
 			}
 		}
 		// what kind of tx was this? send or receive?
-		txType := TxReceived
+		txType := domain.TxReceived
 		if amount < 0 {
-			txType = TxSent
+			txType = domain.TxSent
 		}
 		// get redeem txid
 		redeemTxid := ""
@@ -1759,7 +1864,7 @@ func vtxosToTxsCovenant(
 			redeemTxid = txid
 		}
 		// add transaction
-		transactions = append(transactions, Transaction{
+		transactions = append(transactions, domain.Transaction{
 			RoundTxid:  v.RoundTxid,
 			RedeemTxid: redeemTxid,
 			Amount:     uint64(math.Abs(float64(amount))),

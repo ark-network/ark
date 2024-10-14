@@ -24,14 +24,35 @@ var (
 )
 
 func main() {
-	ctx := context.Background()
+	var (
+		ctx = context.Background()
+		err error
+
+		aliceArkClient arksdk.ArkClient
+		bobArkClient   arksdk.ArkClient
+	)
+	defer func() {
+		if aliceArkClient != nil {
+			if err := bobArkClient.Stop(); err != nil {
+				log.Error(err)
+			}
+		}
+
+		if bobArkClient != nil {
+			if err := aliceArkClient.Stop(); err != nil {
+				log.Error(err)
+			}
+		}
+	}()
 
 	log.Info("alice is setting up her ark wallet...")
 
-	aliceArkClient, err := setupArkClient("alice")
+	aliceArkClient, err = setupArkClient("alice")
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	logTxEvents("alice", aliceArkClient)
 
 	if err := aliceArkClient.Unlock(ctx, password); err != nil {
 		log.Fatal(err)
@@ -72,10 +93,12 @@ func main() {
 
 	fmt.Println("")
 	log.Info("bob is setting up his ark wallet...")
-	bobArkClient, err := setupArkClient("bob")
+	bobArkClient, err = setupArkClient("bob")
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	logTxEvents("bob", bobArkClient)
 
 	if err := bobArkClient.Unlock(ctx, password); err != nil {
 		log.Fatal(err)
@@ -141,6 +164,8 @@ func main() {
 	}
 
 	log.Infof("bob claimed the incoming payment in round %s", roundTxid)
+
+	time.Sleep(500 * time.Second)
 }
 
 func setupArkClient(wallet string) (arksdk.ArkClient, error) {
@@ -160,10 +185,11 @@ func setupArkClient(wallet string) (arksdk.ArkClient, error) {
 	}
 
 	if err := client.Init(context.Background(), arksdk.InitArgs{
-		WalletType: walletType,
-		ClientType: clientType,
-		AspUrl:     aspUrl,
-		Password:   password,
+		WalletType:              walletType,
+		ClientType:              clientType,
+		AspUrl:                  aspUrl,
+		Password:                password,
+		ListenTransactionStream: true,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to initialize wallet: %s", err)
 	}
@@ -240,4 +266,18 @@ func generateBlock() error {
 
 	time.Sleep(6 * time.Second)
 	return nil
+}
+
+func logTxEvents(wallet string, client arksdk.ArkClient) {
+	txsChan := client.GetTransactionEventChannel()
+	go func() {
+		for txEvent := range txsChan {
+			msg := fmt.Sprintf("[EVENT]%s: tx event: %s, %d", wallet, txEvent.Event, txEvent.Tx.Amount)
+			if txEvent.Tx.IsBoarding() {
+				msg += fmt.Sprintf(", boarding tx: %s", txEvent.Tx.BoardingTxid)
+			}
+			log.Infoln(msg)
+		}
+	}()
+	log.Infof("%s tx event listener started", wallet)
 }

@@ -59,6 +59,8 @@ type arkClient struct {
 	sdkRepository domain.SdkRepository
 	explorer      explorer.Explorer
 	client        client.ASPClient
+
+	txStreamCtxCancel context.CancelFunc
 }
 
 func (a *arkClient) GetConfigData(
@@ -232,6 +234,22 @@ func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
 	}
 
 	return offchainAddr, boardingAddr, nil
+}
+
+func (a *arkClient) GetTransactionEventChannel() chan domain.TransactionEvent {
+	return a.sdkRepository.AppDataRepository().TransactionRepository().GetEventChannel()
+}
+
+func (a *arkClient) Stop() error {
+	if a.ConfigData.ListenTransactionStream {
+		a.txStreamCtxCancel()
+	}
+
+	if err := a.sdkRepository.AppDataRepository().Stop(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (a *arkClient) ping(

@@ -400,6 +400,12 @@ func vtxosFromProto(protoVtxos []*arkv1.Vtxo) []client.Vtxo {
 	vtxos := make([]client.Vtxo, len(protoVtxos))
 	for i, v := range protoVtxos {
 		expiresAt := time.Unix(v.ExpireAt, 0)
+		reedemTx := ""
+		var unconditionalForfeitTxs []string
+		if v.PendingData != nil {
+			reedemTx = v.PendingData.RedeemTx
+			unconditionalForfeitTxs = v.PendingData.UnconditionalForfeitTxs
+		}
 		vtxos[i] = client.Vtxo{
 			Outpoint: client.Outpoint{
 				Txid: v.Outpoint.Txid,
@@ -409,8 +415,8 @@ func vtxosFromProto(protoVtxos []*arkv1.Vtxo) []client.Vtxo {
 			Amount:                  v.Amount,
 			RoundTxid:               v.RoundTxid,
 			ExpiresAt:               &expiresAt,
-			RedeemTx:                v.PendingData.RedeemTx,
-			UnconditionalForfeitTxs: v.PendingData.UnconditionalForfeitTxs,
+			RedeemTx:                reedemTx,
+			UnconditionalForfeitTxs: unconditionalForfeitTxs,
 			Pending:                 v.Pending,
 			SpentBy:                 v.SpentBy,
 		}

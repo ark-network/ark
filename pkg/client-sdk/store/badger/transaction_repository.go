@@ -49,22 +49,45 @@ func (t *transactionRepository) InsertTransactions(
 			return err
 		}
 		go func(trx domain.Transaction) {
-			event := domain.ArkSent
-			if trx.Type == domain.TxReceived {
-				event = domain.ArkReceived
+			var eventType domain.EventType
+
+			//covenantless transactions
+			if trx.IsRedeem() {
+				switch trx.Type {
+				case domain.TxSent:
+					eventType = domain.ArkSent
+				case domain.TxReceived:
+					eventType = domain.ArkReceivedPending
+				}
 			}
 
-			if trx.IsPending && trx.Type == domain.TxReceived {
-				event = domain.ArkReceivedPending
+			if trx.IsRound() {
+				switch trx.Type {
+				case domain.TxSent:
+					eventType = domain.ArkSentClaimed
+				case domain.TxReceived:
+					eventType = domain.ArkReceivedClaimed
+				}
 			}
+
+			//TODO covenant transactions
+			//if !trx.IsRedeem() && trx.IsRound() {
+			//	if trx.Type == domain.TxSent {
+			//		eventType = domain.ArkSent
+			//	}
+			//
+			//	if trx.Type == domain.TxReceived {
+			//		eventType = domain.ArkReceived
+			//	}
+			//}
 
 			if trx.IsBoarding() {
-				event = domain.BoardingPending
+				eventType = domain.BoardingPending
 			}
 
 			t.eventCh <- domain.TransactionEvent{
 				Tx:    trx,
-				Event: event,
+				Event: eventType,
 			}
 		}(tx)
 	}
@@ -81,12 +104,22 @@ func (t *transactionRepository) UpdateTransactions(
 		}
 		go func(trx domain.Transaction) {
 			var event domain.EventType
+
+			// covenantless
+			//if trx.IsRedeem() {
+			//	if trx.Type == domain.TxSent && !trx.IsPending {
+			//		event = domain.ArkSentClaimed
+			//	}
+			//
+			//	if trx.Type == domain.TxReceived && !trx.IsPending {
+			//		event = domain.ArkReceivedClaimed
+			//	}
+			//}
+
+			//TODO covenant
+
 			if trx.IsBoarding() {
 				event = domain.BoardingClaimed
-			}
-
-			if !trx.IsPending && trx.Type == domain.TxReceived {
-				event = domain.ArkReceivedClaimed
 			}
 
 			t.eventCh <- domain.TransactionEvent{
