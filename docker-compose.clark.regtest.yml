@@ -1,7 +1,9 @@
 services:
   clarkd:
     container_name: clarkd 
-    image: test
+    build: 
+      context: .
+      dockerfile: Dockerfile
     restart: unless-stopped
     environment:
       - ARK_ROUND_INTERVAL=10
