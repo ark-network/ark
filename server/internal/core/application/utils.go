@@ -259,17 +259,18 @@ func findSweepableOutputs(
 	ctx context.Context,
 	walletSvc ports.WalletService,
 	txbuilder ports.TxBuilder,
+	schedulerUnit ports.TimeUnit,
 	congestionTree tree.CongestionTree,
 ) (map[int64][]ports.SweepInput, error) {
 	sweepableOutputs := make(map[int64][]ports.SweepInput)
-	blocktimeCache := make(map[string]int64) // txid -> blocktime
+	blocktimeCache := make(map[string]int64) // txid -> blocktime / blockheight
 	nodesToCheck := congestionTree[0]        // init with the root
 
 	for len(nodesToCheck) > 0 {
 		newNodesToCheck := make([]tree.Node, 0)
 
 		for _, node := range nodesToCheck {
-			isConfirmed, blocktime, err := walletSvc.IsTransactionConfirmed(ctx, node.Txid)
+			isConfirmed, height, blocktime, err := walletSvc.IsTransactionConfirmed(ctx, node.Txid)
 			if err != nil {
 				return nil, err
 			}
@@ -279,21 +280,31 @@ func findSweepableOutputs(
 
 			if !isConfirmed {
 				if _, ok := blocktimeCache[node.ParentTxid]; !ok {
-					isConfirmed, blocktime, err := walletSvc.IsTransactionConfirmed(ctx, node.ParentTxid)
+					isConfirmed, height, blocktime, err := walletSvc.IsTransactionConfirmed(ctx, node.ParentTxid)
 					if !isConfirmed || err != nil {
 						return nil, fmt.Errorf("tx %s not found", node.ParentTxid)
 					}
 
-					blocktimeCache[node.ParentTxid] = blocktime
+					if schedulerUnit == ports.BlockHeight {
+						blocktimeCache[node.ParentTxid] = height
+					} else {
+						blocktimeCache[node.ParentTxid] = blocktime
+					}
 				}
 
-				expirationTime, sweepInput, err = txbuilder.GetSweepInput(blocktimeCache[node.ParentTxid], node)
+				var lifetime int64
+				lifetime, sweepInput, err = txbuilder.GetSweepInput(node)
 				if err != nil {
 					return nil, err
 				}
+				expirationTime = blocktimeCache[node.ParentTxid] + lifetime
 			} else {
 				// cache the blocktime for future use
-				blocktimeCache[node.Txid] = int64(blocktime)
+				if schedulerUnit == ports.BlockHeight {
+					blocktimeCache[node.Txid] = height
+				} else {
+					blocktimeCache[node.Txid] = blocktime
+				}
 
 				// if the tx is onchain, it means that the input is spent
 				// add the children to the nodes in order to check them during the next iteration

@@ -34,7 +34,7 @@ type TxBuilder interface {
 	) (roundTx string, congestionTree tree.CongestionTree, connectorAddress string, err error)
 	BuildForfeitTxs(poolTx string, payments []domain.Payment, minRelayFeeRate chainfee.SatPerKVByte) (connectors []string, forfeitTxs []string, err error)
 	BuildSweepTx(inputs []SweepInput) (signedSweepTx string, err error)
-	GetSweepInput(parentblocktime int64, node tree.Node) (expirationtime int64, sweepInput SweepInput, err error)
+	GetSweepInput(node tree.Node) (lifetime int64, sweepInput SweepInput, err error)
 	FinalizeAndExtract(tx string) (txhex string, err error)
 	VerifyTapscriptPartialSigs(tx string) (valid bool, txid string, err error)
 	// FindLeaves returns all the leaves txs that are reachable from the given outpoint

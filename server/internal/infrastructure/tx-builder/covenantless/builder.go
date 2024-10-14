@@ -324,7 +324,7 @@ func (b *txBuilder) BuildRoundTx(
 	return
 }
 
-func (b *txBuilder) GetSweepInput(parentblocktime int64, node tree.Node) (expirationtime int64, sweepInput ports.SweepInput, err error) {
+func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime int64, sweepInput ports.SweepInput, err error) {
 	partialTx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
 	if err != nil {
 		return -1, nil, err
@@ -342,8 +342,6 @@ func (b *txBuilder) GetSweepInput(parentblocktime int64, node tree.Node) (expira
 	if err != nil {
 		return -1, nil, err
 	}
-
-	expirationTime := parentblocktime + lifetime
 
 	txhex, err := b.wallet.GetTransaction(context.Background(), txid.String())
 	if err != nil {
@@ -365,7 +363,7 @@ func (b *txBuilder) GetSweepInput(parentblocktime int64, node tree.Node) (expira
 		amount:         tx.TxOut[index].Value,
 	}
 
-	return expirationTime, sweepInput, nil
+	return lifetime, sweepInput, nil
 }
 
 func (b *txBuilder) FindLeaves(congestionTree tree.CongestionTree, fromtxid string, vout uint32) ([]tree.Node, error) {
@@ -1220,6 +1218,8 @@ func extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.TaprootTapLeafScript, 
 		if err != nil {
 			return nil, nil, 0, err
 		}
+
+		fmt.Println("closure", valid)
 		if valid && closure.Seconds > 0 {
 			sweepLeaf = leaf
 			lifetime = int64(closure.Seconds)

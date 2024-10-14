@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/ark-network/ark/common/tree"
@@ -22,6 +23,7 @@ type sweeper struct {
 	scheduler   ports.SchedulerService
 
 	// cache of scheduled tasks, avoid scheduling the same sweep event multiple times
+	locker         sync.Locker
 	scheduledTasks map[string]struct{}
 }
 
@@ -36,6 +38,7 @@ func newSweeper(
 		repoManager,
 		builder,
 		scheduler,
+		&sync.Mutex{},
 		make(map[string]struct{}),
 	}
 }
@@ -62,6 +65,8 @@ func (s *sweeper) stop() {
 
 // removeTask update the cached map of scheduled tasks
 func (s *sweeper) removeTask(treeRootTxid string) {
+	s.locker.Lock()
+	defer s.locker.Unlock()
 	delete(s.scheduledTasks, treeRootTxid)
 }
 
@@ -84,13 +89,22 @@ func (s *sweeper) schedule(
 	}
 
 	task := s.createTask(roundTxid, congestionTree)
-	fancyTime := time.Unix(expirationTimestamp, 0).Format("2006-01-02 15:04:05")
+
+	var fancyTime string
+	if s.scheduler.Unit() == ports.UnixTime {
+		fancyTime = time.Unix(expirationTimestamp, 0).Format("2006-01-02 15:04:05")
+	} else {
+		fancyTime = fmt.Sprintf("block %d", expirationTimestamp)
+	}
 	log.Debugf("scheduled sweep for round %s at %s", roundTxid, fancyTime)
+
 	if err := s.scheduler.ScheduleTaskOnce(expirationTimestamp, task); err != nil {
 		return err
 	}
 
+	s.locker.Lock()
 	s.scheduledTasks[root.Txid] = struct{}{}
+	s.locker.Unlock()
 
 	if err := s.updateVtxoExpirationTime(congestionTree, expirationTimestamp); err != nil {
 		log.WithError(err).Error("error while updating vtxo expiration time")
@@ -120,7 +134,7 @@ func (s *sweeper) createTask(
 		vtxoKeys := make([]domain.VtxoKey, 0) // vtxos associated to the sweep inputs
 
 		// inspect the congestion tree to find onchain shared outputs
-		sharedOutputs, err := findSweepableOutputs(ctx, s.wallet, s.builder, congestionTree)
+		sharedOutputs, err := findSweepableOutputs(ctx, s.wallet, s.builder, s.scheduler.Unit(), congestionTree)
 		if err != nil {
 			log.WithError(err).Error("error while inspecting congestion tree")
 			return
@@ -128,7 +142,7 @@ func (s *sweeper) createTask(
 
 		for expiredAt, inputs := range sharedOutputs {
 			// if the shared outputs are not expired, schedule a sweep task for it
-			if time.Unix(expiredAt, 0).After(time.Now()) {
+			if s.scheduler.AfterNow(expiredAt) {
 				subtrees, err := computeSubTrees(congestionTree, inputs)
 				if err != nil {
 					log.WithError(err).Error("error while computing subtrees")
@@ -136,8 +150,7 @@ func (s *sweeper) createTask(
 				}
 
 				for _, subTree := range subtrees {
-					// mitigate the risk to get BIP68 non-final errors by scheduling the task 30 seconds after the expiration time
-					if err := s.schedule(int64(expiredAt), roundTxid, subTree); err != nil {
+					if err := s.schedule(expiredAt, roundTxid, subTree); err != nil {
 						log.WithError(err).Error("error while scheduling sweep task")
 						continue
 					}

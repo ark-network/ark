@@ -113,7 +113,7 @@ func (v *vxtoRepository) GetAllVtxos(ctx context.Context, pubkey string) ([]doma
 	spentVtxos := make([]domain.Vtxo, 0)
 
 	for _, vtxo := range vtxos {
-		if vtxo.Spent {
+		if vtxo.Spent || vtxo.Swept {
 			spentVtxos = append(spentVtxos, vtxo)
 		} else {
 			unspentVtxos = append(unspentVtxos, vtxo)

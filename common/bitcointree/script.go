@@ -109,9 +109,12 @@ func (d *CSVSigClosure) Decode(script []byte) (bool, error) {
 		return false, nil
 	}
 
-	sequence := script[1:csvIndex]
+	sequence := script[:csvIndex]
+	if len(sequence) > 1 {
+		sequence = sequence[1:]
+	}
 
-	seconds, err := common.BIP68Decode(sequence)
+	seconds, err := common.BIP68DecodeSequence(sequence)
 	if err != nil {
 		return false, err
 	}
@@ -162,15 +165,18 @@ func decodeChecksigScript(script []byte) (bool, *secp256k1.PublicKey, error) {
 
 // checkSequenceVerifyScript without checksig
 func encodeCsvScript(seconds uint) ([]byte, error) {
-	sequence, err := common.BIP68Encode(seconds)
+	sequence, err := common.BIP68Sequence(seconds)
 	if err != nil {
 		return nil, err
 	}
 
-	return txscript.NewScriptBuilder().AddData(sequence).AddOps([]byte{
-		txscript.OP_CHECKSEQUENCEVERIFY,
-		txscript.OP_DROP,
-	}).Script()
+	return txscript.NewScriptBuilder().
+		AddInt64(int64(sequence)).
+		AddOps([]byte{
+			txscript.OP_CHECKSEQUENCEVERIFY,
+			txscript.OP_DROP,
+		}).
+		Script()
 }
 
 // checkSequenceVerifyScript + checksig

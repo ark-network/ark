@@ -117,7 +117,7 @@ func (r *vtxoRepository) GetAllVtxos(
 	spentVtxos := make([]domain.Vtxo, 0, len(vtxos))
 	unspentVtxos := make([]domain.Vtxo, 0, len(vtxos))
 	for _, vtxo := range vtxos {
-		if vtxo.Spent {
+		if vtxo.Spent || vtxo.Swept {
 			spentVtxos = append(spentVtxos, vtxo)
 		} else {
 			unspentVtxos = append(unspentVtxos, vtxo)

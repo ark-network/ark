@@ -421,7 +421,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 					return "", fmt.Errorf("failed to deserialize tx %s: %s", input.Txid, err)
 				}
 
-				confirmed, blocktime, err := s.wallet.IsTransactionConfirmed(ctx, input.Txid)
+				confirmed, _, blocktime, err := s.wallet.IsTransactionConfirmed(ctx, input.Txid)
 				if err != nil {
 					return "", fmt.Errorf("failed to check tx %s: %s", input.Txid, err)
 				}
@@ -1316,13 +1316,9 @@ func (s *covenantlessService) scheduleSweepVtxosForRound(round *domain.Round) {
 		return
 	}
 
-	expirationTimestamp := time.Now().Add(
-		time.Duration(s.roundLifetime+30) * time.Second,
-	)
+	expirationTimestamp := s.sweeper.scheduler.AddNow(s.roundLifetime)
 
-	if err := s.sweeper.schedule(
-		expirationTimestamp.Unix(), round.Txid, round.CongestionTree,
-	); err != nil {
+	if err := s.sweeper.schedule(expirationTimestamp, round.Txid, round.CongestionTree); err != nil {
 		log.WithError(err).Warn("failed to schedule sweep tx")
 	}
 }
