@@ -3,3 +3,8 @@
 
 *.wasm
 wasm_exec.js
+
+**/libark.so
+**/libark.h
+
+.idea/
