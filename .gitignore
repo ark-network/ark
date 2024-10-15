@@ -6,5 +6,6 @@ wasm_exec.js
 
 **/libark.so
 **/libark.h
+**/alice_to_bob_covenantless
 
 .idea/
