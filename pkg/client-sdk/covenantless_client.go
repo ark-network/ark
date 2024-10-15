@@ -376,15 +376,14 @@ func (a *covenantlessArkClient) processTransactionEvent(
 		for _, v := range event.Round.SpendableVtxos {
 			if v.Descriptor == descriptor {
 				vtxosToInsert = append(vtxosToInsert, domain.Vtxo{
-					Txid:                    v.Txid,
-					VOut:                    v.VOut,
-					Amount:                  v.Amount,
-					ExpiresAt:               v.ExpiresAt,
-					RedeemTx:                event.Round.Txid,
-					UnconditionalForfeitTxs: v.UnconditionalForfeitTxs,
-					Pending:                 false,
-					SpentBy:                 v.SpentBy,
-					Spent:                   false,
+					Txid:      v.Txid,
+					VOut:      v.VOut,
+					Amount:    v.Amount,
+					ExpiresAt: v.ExpiresAt,
+					RedeemTx:  event.Round.Txid,
+					Pending:   false,
+					SpentBy:   v.SpentBy,
+					Spent:     false,
 				})
 
 				if boardingAmount == int(v.Amount) {
@@ -447,15 +446,14 @@ func (a *covenantlessArkClient) processTransactionEvent(
 			for _, v := range event.Redeem.SpendableVtxos {
 				if v.Descriptor == descriptor {
 					vtxosToInsert = append(vtxosToInsert, domain.Vtxo{
-						Txid:                    v.Txid,
-						VOut:                    v.VOut,
-						Amount:                  v.Amount,
-						ExpiresAt:               v.ExpiresAt,
-						RedeemTx:                event.Redeem.Txid,
-						UnconditionalForfeitTxs: v.UnconditionalForfeitTxs,
-						Pending:                 true,
-						SpentBy:                 v.SpentBy,
-						Spent:                   false,
+						Txid:      v.Txid,
+						VOut:      v.VOut,
+						Amount:    v.Amount,
+						ExpiresAt: v.ExpiresAt,
+						RedeemTx:  event.Redeem.Txid,
+						Pending:   true,
+						SpentBy:   v.SpentBy,
+						Spent:     false,
 					})
 					outputAmount += v.Amount
 				}
@@ -477,15 +475,14 @@ func (a *covenantlessArkClient) processTransactionEvent(
 			for _, v := range event.Redeem.SpendableVtxos {
 				if v.Descriptor == descriptor {
 					vtxosToInsert = append(vtxosToInsert, domain.Vtxo{
-						Txid:                    v.Txid,
-						VOut:                    v.VOut,
-						Amount:                  v.Amount,
-						ExpiresAt:               v.ExpiresAt,
-						RedeemTx:                event.Redeem.Txid,
-						UnconditionalForfeitTxs: v.UnconditionalForfeitTxs,
-						Pending:                 true,
-						SpentBy:                 v.SpentBy,
-						Spent:                   false,
+						Txid:      v.Txid,
+						VOut:      v.VOut,
+						Amount:    v.Amount,
+						ExpiresAt: v.ExpiresAt,
+						RedeemTx:  event.Redeem.Txid,
+						Pending:   true,
+						SpentBy:   v.SpentBy,
+						Spent:     false,
 					})
 
 					tx := domain.Transaction{
