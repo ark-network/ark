@@ -40,31 +40,29 @@ func TestAddressEncoding(t *testing.T) {
 
 	t.Run("valid", func(t *testing.T) {
 		for _, f := range fixtures.Address.Valid {
-			hrp, userKey, aspKey, err := common.DecodeAddress(f.Addr)
+			addr, err := common.DecodeAddress(f.Addr)
 			require.NoError(t, err)
-			require.NotEmpty(t, hrp)
-			require.NotNil(t, userKey)
-			require.NotNil(t, aspKey)
+			require.NotEmpty(t, addr.HRP)
+			require.NotNil(t, addr.Asp)
+			require.NotNil(t, addr.VtxoTapKey)
 
 			require.NoError(t, err)
-			require.Equal(t, f.ExpectedUserKey, hex.EncodeToString(userKey.SerializeCompressed()))
+			require.Equal(t, f.ExpectedUserKey, hex.EncodeToString(addr.VtxoTapKey.SerializeCompressed()))
 
 			require.NoError(t, err)
-			require.Equal(t, f.ExpectedAspKey, hex.EncodeToString(aspKey.SerializeCompressed()))
+			require.Equal(t, f.ExpectedAspKey, hex.EncodeToString(addr.Asp.SerializeCompressed()))
 
-			addr, err := common.EncodeAddress(hrp, userKey, aspKey)
+			encoded, err := addr.Encode()
 			require.NoError(t, err)
-			require.Equal(t, f.Addr, addr)
+			require.Equal(t, f.Addr, encoded)
 		}
 	})
 
 	t.Run("invalid", func(t *testing.T) {
 		for _, f := range fixtures.Address.Invalid {
-			hrp, userKey, aspKey, err := common.DecodeAddress(f.Addr)
+			addr, err := common.DecodeAddress(f.Addr)
 			require.EqualError(t, err, f.ExpectedError)
-			require.Empty(t, hrp)
-			require.Nil(t, userKey)
-			require.Nil(t, aspKey)
+			require.Nil(t, addr)
 		}
 	})
 }
