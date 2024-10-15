@@ -108,17 +108,12 @@ func (r Receiver) IsOnchain() bool {
 type Vtxo struct {
 	VtxoKey
 	Receiver
-	RoundTxid    string
-	SpentBy      string // round txid or async redeem txid
-	Spent        bool
-	Redeemed     bool
-	Swept        bool
-	ExpireAt     int64
-	AsyncPayment *AsyncPaymentTxs // nil if not async vtxo
-	Pending      bool
-}
-
-type AsyncPaymentTxs struct {
-	RedeemTx                string // always signed by the ASP when created
-	UnconditionalForfeitTxs []string
+	RoundTxid string
+	SpentBy   string // round txid or async redeem txid
+	Spent     bool
+	Redeemed  bool
+	Swept     bool
+	ExpireAt  int64
+	RedeemTx  string // empty if in-round vtxo
+	Pending   bool
 }

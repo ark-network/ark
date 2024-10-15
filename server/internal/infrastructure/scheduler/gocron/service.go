@@ -1,4 +1,4 @@
-package scheduler
+package timescheduler
 
 import (
 	"fmt"
@@ -17,21 +17,24 @@ func NewScheduler() ports.SchedulerService {
 	return &service{svc}
 }
 
+func (s *service) Unit() ports.TimeUnit {
+	return ports.UnixTime
+}
+
+func (s *service) AddNow(lifetime int64) int64 {
+	return time.Now().Add(time.Duration(lifetime) * time.Second).Unix()
+}
+
+func (s *service) AfterNow(expiry int64) bool {
+	return time.Unix(expiry, 0).After(time.Now())
+}
+
 func (s *service) Start() {
 	s.scheduler.StartAsync()
 }
 
 func (s *service) Stop() {
 	s.scheduler.Stop()
-}
-
-func (s *service) ScheduleTask(interval int64, immediate bool, task func()) error {
-	if immediate {
-		_, err := s.scheduler.Every(int(interval)).Seconds().Do(task)
-		return err
-	}
-	_, err := s.scheduler.Every(int(interval)).Seconds().WaitForSchedule().Do(task)
-	return err
 }
 
 func (s *service) ScheduleTaskOnce(at int64, task func()) error {

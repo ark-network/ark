@@ -196,13 +196,12 @@ func loadFixtures(jsonStr string) (vtxos, map[string]struct{}, error) {
 				Txid: vtxo.Outpoint.Txid,
 				VOut: vtxo.Outpoint.Vout,
 			},
-			Amount:                  amount,
-			RoundTxid:               vtxo.PoolTxid,
-			ExpiresAt:               &expireAt,
-			RedeemTx:                vtxo.PendingData.RedeemTx,
-			UnconditionalForfeitTxs: vtxo.PendingData.UnconditionalForfeitTxs,
-			Pending:                 vtxo.Pending,
-			SpentBy:                 vtxo.SpentBy,
+			Amount:    amount,
+			RoundTxid: vtxo.PoolTxid,
+			ExpiresAt: &expireAt,
+			RedeemTx:  vtxo.PendingData.RedeemTx,
+			Pending:   vtxo.Pending,
+			SpentBy:   vtxo.SpentBy,
 		}
 	}
 
@@ -221,13 +220,12 @@ func loadFixtures(jsonStr string) (vtxos, map[string]struct{}, error) {
 				Txid: vtxo.Outpoint.Txid,
 				VOut: vtxo.Outpoint.Vout,
 			},
-			Amount:                  amount,
-			RoundTxid:               vtxo.PoolTxid,
-			ExpiresAt:               &expireAt,
-			RedeemTx:                vtxo.PendingData.RedeemTx,
-			UnconditionalForfeitTxs: vtxo.PendingData.UnconditionalForfeitTxs,
-			Pending:                 vtxo.Pending,
-			SpentBy:                 vtxo.SpentBy,
+			Amount:    amount,
+			RoundTxid: vtxo.PoolTxid,
+			ExpiresAt: &expireAt,
+			RedeemTx:  vtxo.PendingData.RedeemTx,
+			Pending:   vtxo.Pending,
+			SpentBy:   vtxo.SpentBy,
 		}
 	}
 

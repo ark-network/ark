@@ -1025,8 +1025,7 @@ func (a *covenantlessArkClient) SendAsync(
 		})
 	}
 
-	redeemTx, unconditionalForfeitTxs, err := a.client.CreatePayment(
-		ctx, inputs, receiversOutput)
+	redeemTx, err := a.client.CreatePayment(ctx, inputs, receiversOutput)
 	if err != nil {
 		return "", err
 	}
@@ -1039,7 +1038,7 @@ func (a *covenantlessArkClient) SendAsync(
 	}
 
 	if err = a.client.CompletePayment(
-		ctx, signedRedeemTx, unconditionalForfeitTxs,
+		ctx, signedRedeemTx,
 	); err != nil {
 		return "", err
 	}

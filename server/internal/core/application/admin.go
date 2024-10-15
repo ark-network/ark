@@ -50,16 +50,18 @@ type AdminService interface {
 }
 
 type adminService struct {
-	walletSvc   ports.WalletService
-	repoManager ports.RepoManager
-	txBuilder   ports.TxBuilder
+	walletSvc       ports.WalletService
+	repoManager     ports.RepoManager
+	txBuilder       ports.TxBuilder
+	sweeperTimeUnit ports.TimeUnit
 }
 
-func NewAdminService(walletSvc ports.WalletService, repoManager ports.RepoManager, txBuilder ports.TxBuilder) AdminService {
+func NewAdminService(walletSvc ports.WalletService, repoManager ports.RepoManager, txBuilder ports.TxBuilder, timeUnit ports.TimeUnit) AdminService {
 	return &adminService{
-		walletSvc:   walletSvc,
-		repoManager: repoManager,
-		txBuilder:   txBuilder,
+		walletSvc:       walletSvc,
+		repoManager:     repoManager,
+		txBuilder:       txBuilder,
+		sweeperTimeUnit: timeUnit,
 	}
 }
 
@@ -130,7 +132,7 @@ func (a *adminService) GetScheduledSweeps(ctx context.Context) ([]ScheduledSweep
 
 	for _, round := range sweepableRounds {
 		sweepable, err := findSweepableOutputs(
-			ctx, a.walletSvc, a.txBuilder, round.CongestionTree,
+			ctx, a.walletSvc, a.txBuilder, a.sweeperTimeUnit, round.CongestionTree,
 		)
 		if err != nil {
 			return nil, err

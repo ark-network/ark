@@ -19,9 +19,6 @@ type V1CreatePaymentResponse struct {
 
 	// signed only by the ASP
 	SignedRedeemTx string `json:"signedRedeemTx,omitempty"`
-
-	// usigned unconditional forfeit txs
-	UsignedUnconditionalForfeitTxs []string `json:"usignedUnconditionalForfeitTxs"`
 }
 
 // Validate validates this v1 create payment response

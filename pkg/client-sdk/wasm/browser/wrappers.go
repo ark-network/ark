@@ -164,6 +164,19 @@ func ReceiveWrapper() js.Func {
 	})
 }
 
+func DumpWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if arkSdkClient == nil {
+			return nil, errors.New("ARK SDK client is not initialized")
+		}
+		seed, err := arkSdkClient.Dump(context.Background())
+		if err != nil {
+			return nil, err
+		}
+		return js.ValueOf(seed), nil
+	})
+}
+
 func SendOnChainWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
 		if len(args) != 1 {
@@ -172,7 +185,7 @@ func SendOnChainWrapper() js.Func {
 		receivers := make([]arksdk.Receiver, args[0].Length())
 		for i := 0; i < args[0].Length(); i++ {
 			receiver := args[0].Index(i)
-			receivers[i] = arksdk.NewLiquidReceiver(
+			receivers[i] = arksdk.NewBitcoinReceiver(
 				receiver.Get("To").String(), uint64(receiver.Get("Amount").Int()),
 			)
 		}
@@ -196,12 +209,36 @@ func SendOffChainWrapper() js.Func {
 		receivers := make([]arksdk.Receiver, args[1].Length())
 		for i := 0; i < args[1].Length(); i++ {
 			receiver := args[1].Index(i)
-			receivers[i] = arksdk.NewLiquidReceiver(
+			receivers[i] = arksdk.NewBitcoinReceiver(
 				receiver.Get("To").String(), uint64(receiver.Get("Amount").Int()),
 			)
 		}
 
 		txID, err := arkSdkClient.SendOffChain(
+			context.Background(), withExpiryCoinselect, receivers,
+		)
+		if err != nil {
+			return nil, err
+		}
+		return js.ValueOf(txID), nil
+	})
+}
+
+func SendAsyncWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if len(args) != 2 {
+			return nil, errors.New("invalid number of args")
+		}
+		withExpiryCoinselect := args[0].Bool()
+		receivers := make([]arksdk.Receiver, args[1].Length())
+		for i := 0; i < args[1].Length(); i++ {
+			receiver := args[1].Index(i)
+			receivers[i] = arksdk.NewBitcoinReceiver(
+				receiver.Get("To").String(), uint64(receiver.Get("Amount").Int()),
+			)
+		}
+
+		txID, err := arkSdkClient.SendAsync(
 			context.Background(), withExpiryCoinselect, receivers,
 		)
 		if err != nil {

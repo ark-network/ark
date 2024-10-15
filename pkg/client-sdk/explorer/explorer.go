@@ -35,7 +35,7 @@ type Utxo struct {
 }
 
 func (u *Utxo) Sequence() (uint32, error) {
-	return common.BIP68EncodeAsNumber(u.Delay)
+	return common.BIP68Sequence(u.Delay)
 }
 
 func newUtxo(explorerUtxo ExplorerUtxo, delay uint) Utxo {

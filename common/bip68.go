@@ -1,8 +1,10 @@
 package common
 
 import (
-	"encoding/hex"
 	"fmt"
+
+	"github.com/btcsuite/btcd/blockchain"
+	"github.com/btcsuite/btcd/txscript"
 )
 
 const (
@@ -18,41 +20,32 @@ func closerToModulo512(x uint) uint {
 	return x - (x % 512)
 }
 
-func BIP68EncodeAsNumber(seconds uint) (uint32, error) {
-	seconds = closerToModulo512(seconds)
-	if seconds > SECONDS_MAX {
-		return 0, fmt.Errorf("seconds too large, max is %d", SECONDS_MAX)
-	}
-	if seconds%SECONDS_MOD != 0 {
-		return 0, fmt.Errorf("seconds must be a multiple of %d", SECONDS_MOD)
+func BIP68Sequence(locktime uint) (uint32, error) {
+	isSeconds := locktime >= 512
+	if isSeconds {
+		locktime = closerToModulo512(locktime)
+		if locktime > SECONDS_MAX {
+			return 0, fmt.Errorf("seconds too large, max is %d", SECONDS_MAX)
+		}
+		if locktime%SECONDS_MOD != 0 {
+			return 0, fmt.Errorf("seconds must be a multiple of %d", SECONDS_MOD)
+		}
 	}
 
-	asNumber := SEQUENCE_LOCKTIME_TYPE_FLAG | (seconds >> SEQUENCE_LOCKTIME_GRANULARITY)
-	return uint32(asNumber), nil
+	return blockchain.LockTimeToSequence(isSeconds, uint32(locktime)), nil
 }
 
-// BIP68Encode returns the encoded sequence locktime for the given number of seconds.
-func BIP68Encode(seconds uint) ([]byte, error) {
-	asNumber, err := BIP68EncodeAsNumber(seconds)
+func BIP68DecodeSequence(sequence []byte) (uint, error) {
+	scriptNumber, err := txscript.MakeScriptNum(sequence, true, len(sequence))
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-	hexString := fmt.Sprintf("%x", asNumber)
-	reversed, err := hex.DecodeString(hexString)
-	if err != nil {
-		return nil, err
-	}
-	for i, j := 0, len(reversed)-1; i < j; i, j = i+1, j-1 {
-		reversed[i], reversed[j] = reversed[j], reversed[i]
-	}
-	return reversed, nil
-}
 
-func BIP68Decode(sequence []byte) (uint, error) {
-	var asNumber int64
-	for i := len(sequence) - 1; i >= 0; i-- {
-		asNumber = asNumber<<8 | int64(sequence[i])
+	if scriptNumber >= txscript.OP_1 && scriptNumber <= txscript.OP_16 {
+		scriptNumber = scriptNumber - (txscript.OP_1 - 1)
 	}
+
+	asNumber := int64(scriptNumber)
 
 	if asNumber&SEQUENCE_LOCKTIME_DISABLE_FLAG != 0 {
 		return 0, fmt.Errorf("sequence is disabled")
@@ -61,5 +54,6 @@ func BIP68Decode(sequence []byte) (uint, error) {
 		seconds := asNumber & SEQUENCE_LOCKTIME_MASK << SEQUENCE_LOCKTIME_GRANULARITY
 		return uint(seconds), nil
 	}
-	return 0, fmt.Errorf("sequence is encoded as block number")
+
+	return uint(asNumber), nil
 }

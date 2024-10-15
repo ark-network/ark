@@ -239,24 +239,23 @@ func (a *grpcClient) Ping(
 
 func (a *grpcClient) CreatePayment(
 	ctx context.Context, inputs []client.Input, outputs []client.Output,
-) (string, []string, error) {
+) (string, error) {
 	req := &arkv1.CreatePaymentRequest{
 		Inputs:  ins(inputs).toProto(),
 		Outputs: outs(outputs).toProto(),
 	}
 	resp, err := a.svc.CreatePayment(ctx, req)
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
-	return resp.SignedRedeemTx, resp.UsignedUnconditionalForfeitTxs, nil
+	return resp.SignedRedeemTx, nil
 }
 
 func (a *grpcClient) CompletePayment(
-	ctx context.Context, redeemTx string, signedForfeitTxs []string,
+	ctx context.Context, redeemTx string,
 ) error {
 	req := &arkv1.CompletePaymentRequest{
-		SignedRedeemTx:                redeemTx,
-		SignedUnconditionalForfeitTxs: signedForfeitTxs,
+		SignedRedeemTx: redeemTx,
 	}
 	_, err := a.svc.CompletePayment(ctx, req)
 	return err

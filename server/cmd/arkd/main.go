@@ -79,18 +79,21 @@ func mainAction(_ *cli.Context) error {
 		BitcoindRpcPass:       cfg.BitcoindRpcPass,
 		BitcoindRpcHost:       cfg.BitcoindRpcHost,
 		BoardingExitDelay:     cfg.BoardingExitDelay,
+		UnlockerType:          cfg.UnlockerType,
+		UnlockerFilePath:      cfg.UnlockerFilePath,
+		UnlockerPassword:      cfg.UnlockerPassword,
 	}
 	svc, err := grpcservice.NewService(svcConfig, appConfig)
 	if err != nil {
 		return err
 	}
 
-	log.RegisterExitHandler(svc.Stop)
-
 	log.Info("starting service...")
 	if err := svc.Start(); err != nil {
 		return err
 	}
+
+	log.RegisterExitHandler(svc.Stop)
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT, os.Interrupt)

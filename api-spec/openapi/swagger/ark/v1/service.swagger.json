@@ -511,12 +511,6 @@
       "properties": {
         "signedRedeemTx": {
           "type": "string"
-        },
-        "signedUnconditionalForfeitTxs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
         }
       }
     },
@@ -548,12 +542,6 @@
         "signedRedeemTx": {
           "type": "string",
           "title": "signed only by the ASP"
-        },
-        "usignedUnconditionalForfeitTxs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
         }
       }
     },
@@ -732,20 +720,6 @@
         },
         "descriptor": {
           "type": "string"
-        }
-      }
-    },
-    "v1PendingPayment": {
-      "type": "object",
-      "properties": {
-        "redeemTx": {
-          "type": "string"
-        },
-        "unconditionalForfeitTxs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
         }
       }
     },
@@ -1094,8 +1068,8 @@
         "pending": {
           "type": "boolean"
         },
-        "pendingData": {
-          "$ref": "#/definitions/v1PendingPayment"
+        "redeemTx": {
+          "type": "string"
         },
         "amount": {
           "type": "string",

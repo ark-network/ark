@@ -177,7 +177,7 @@ func (s *covenantService) SpendVtxos(ctx context.Context, inputs []ports.Input) 
 					return "", fmt.Errorf("failed to parse tx %s: %s", input.Txid, err)
 				}
 
-				confirmed, blocktime, err := s.wallet.IsTransactionConfirmed(ctx, input.Txid)
+				confirmed, _, blocktime, err := s.wallet.IsTransactionConfirmed(ctx, input.Txid)
 				if err != nil {
 					return "", fmt.Errorf("failed to check tx %s: %s", input.Txid, err)
 				}
@@ -320,12 +320,12 @@ func (s *covenantService) UpdatePaymentStatus(_ context.Context, id string) (dom
 	return s.lastEvent, nil
 }
 
-func (s *covenantService) CompleteAsyncPayment(ctx context.Context, redeemTx string, unconditionalForfeitTxs []string) error {
+func (s *covenantService) CompleteAsyncPayment(ctx context.Context, redeemTx string) error {
 	return fmt.Errorf("unimplemented")
 }
 
-func (s *covenantService) CreateAsyncPayment(ctx context.Context, inputs []ports.Input, receivers []domain.Receiver) (string, []string, error) {
-	return "", nil, fmt.Errorf("unimplemented")
+func (s *covenantService) CreateAsyncPayment(ctx context.Context, inputs []ports.Input, receivers []domain.Receiver) (string, error) {
+	return "", fmt.Errorf("unimplemented")
 }
 
 func (s *covenantService) SignVtxos(ctx context.Context, forfeitTxs []string) error {
@@ -910,12 +910,10 @@ func (s *covenantService) scheduleSweepVtxosForRound(round *domain.Round) {
 		return
 	}
 
-	expirationTimestamp := time.Now().Add(
-		time.Duration(s.roundLifetime+30) * time.Second,
-	)
+	expirationTime := s.sweeper.scheduler.AddNow(s.roundLifetime)
 
 	if err := s.sweeper.schedule(
-		expirationTimestamp.Unix(), round.Txid, round.CongestionTree,
+		expirationTime, round.Txid, round.CongestionTree,
 	); err != nil {
 		log.WithError(err).Warn("failed to schedule sweep tx")
 	}
