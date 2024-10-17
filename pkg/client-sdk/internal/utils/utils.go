@@ -167,12 +167,7 @@ func HashPassword(password []byte) []byte {
 	return hash[:]
 }
 
-func EncryptAES128(privateKey, password []byte) ([]byte, error) {
-	// Due to https://github.com/golang/go/issues/7168.
-	// This call makes sure that memory is freed in case the GC doesn't do that
-	// right after the encryption/decryption.
-	// defer debug.FreeOSMemory()
-
+func EncryptAES256(privateKey, password []byte) ([]byte, error) {
 	if len(privateKey) == 0 {
 		return nil, fmt.Errorf("missing plaintext private key")
 	}
@@ -204,9 +199,7 @@ func EncryptAES128(privateKey, password []byte) ([]byte, error) {
 	return ciphertext, nil
 }
 
-func DecryptAES128(encrypted, password []byte) ([]byte, error) {
-	// defer debug.FreeOSMemory()
-
+func DecryptAES256(encrypted, password []byte) ([]byte, error) {
 	if len(encrypted) == 0 {
 		return nil, fmt.Errorf("missing encrypted mnemonic")
 	}
@@ -252,10 +245,6 @@ func deriveKey(password, salt []byte) ([]byte, []byte, error) {
 			return nil, nil, err
 		}
 	}
-	// 2^20 = 1048576 recommended length for key-stretching
-	// check the doc for other recommended values:
-	// https://godoc.org/golang.org/x/crypto/scrypt
-	// key, err := scrypt.Key(password, salt, 1048576, 8, 1, 32)
 	iterations := 10000
 	keySize := 32
 	key := pbkdf2.Key(password, salt, iterations, keySize, sha256.New)
