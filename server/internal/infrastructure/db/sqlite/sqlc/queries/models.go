@@ -23,6 +23,7 @@ type PaymentReceiverVw struct {
 type PaymentVtxoVw struct {
 	Txid      sql.NullString
 	Vout      sql.NullInt64
+	Pubkey    sql.NullString
 	Amount    sql.NullInt64
 	PoolTx    sql.NullString
 	SpentBy   sql.NullString
@@ -33,7 +34,6 @@ type PaymentVtxoVw struct {
 	PaymentID sql.NullString
 	RedeemTx  sql.NullString
 	Pending   sql.NullBool
-	Pubkey    sql.NullString
 }
 
 type Receiver struct {
@@ -90,6 +90,7 @@ type Tx struct {
 type Vtxo struct {
 	Txid      string
 	Vout      int64
+	Pubkey    string
 	Amount    int64
 	PoolTx    string
 	SpentBy   string
@@ -100,5 +101,4 @@ type Vtxo struct {
 	PaymentID sql.NullString
 	RedeemTx  sql.NullString
 	Pending   bool
-	Pubkey    sql.NullString
 }

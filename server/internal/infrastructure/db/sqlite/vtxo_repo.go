@@ -42,7 +42,7 @@ func (v *vxtoRepository) AddVtxos(ctx context.Context, vtxos []domain.Vtxo) erro
 				ctx, queries.UpsertVtxoParams{
 					Txid:     vtxo.Txid,
 					Vout:     int64(vtxo.VOut),
-					Pubkey:   sql.NullString{String: vtxo.Pubkey, Valid: len(vtxo.Pubkey) > 0},
+					Pubkey:   vtxo.Pubkey,
 					Amount:   int64(vtxo.Amount),
 					PoolTx:   vtxo.RoundTxid,
 					SpentBy:  vtxo.SpentBy,
@@ -82,7 +82,7 @@ func (v *vxtoRepository) GetAllVtxos(ctx context.Context, pubkey string) ([]doma
 
 	var rows []queries.Vtxo
 	if withPubkey {
-		res, err := v.querier.SelectNotRedeemedVtxosWithPubkey(ctx, sql.NullString{String: pubkey, Valid: true})
+		res, err := v.querier.SelectNotRedeemedVtxosWithPubkey(ctx, pubkey)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -251,7 +251,7 @@ func rowToVtxo(row queries.Vtxo) domain.Vtxo {
 			VOut: uint32(row.Vout),
 		},
 		Amount:    uint64(row.Amount),
-		Pubkey:    row.Pubkey.String,
+		Pubkey:    row.Pubkey,
 		RoundTxid: row.PoolTx,
 		SpentBy:   row.SpentBy,
 		Spent:     row.Spent,
