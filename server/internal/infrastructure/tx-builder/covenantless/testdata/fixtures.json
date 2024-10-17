@@ -9,14 +9,14 @@
               {
                 "txid": "fd68e3c5796cc7db0a8036d486d5f625b6b2f2c014810ac020e1ac23e82c59d6",
                 "vout": 0,
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "0000000000000000000000000000000000000000000000000000000000000001",
                 "descriptor": "tr(020000000000000000000000000000000000000000000000000000000000000001,{ and(pk(0000000000000000000000000000000000000000000000000000000000000001), pk(0000000000000000000000000000000000000000000000000000000000000001)), and(older(512), pk(0000000000000000000000000000000000000000000000000000000000000001)) })",
                 "amount": 1100
               }
             ],
             "receivers": [
               {
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "25a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967",
                 "amount": 1100
               }
             ]
@@ -33,18 +33,18 @@
               {
                 "txid": "fd68e3c5796cc7db0a8036d486d5f625b6b2f2c014810ac020e1ac23e82c59d6",
                 "vout": 0,
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "0000000000000000000000000000000000000000000000000000000000000001",
                 "descriptor": "tr(020000000000000000000000000000000000000000000000000000000000000001,{ and(pk(0000000000000000000000000000000000000000000000000000000000000001), pk(0000000000000000000000000000000000000000000000000000000000000001)), and(older(512), pk(0000000000000000000000000000000000000000000000000000000000000001)) })",
                 "amount": 1100
               }
             ],
             "receivers": [
               {
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "25a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967",
                 "amount": 600
               },
               {
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "25a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967",
                 "amount": 500
               }
             ]
@@ -61,18 +61,18 @@
               {
                 "txid": "fd68e3c5796cc7db0a8036d486d5f625b6b2f2c014810ac020e1ac23e82c59d6",
                 "vout": 0,
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "0000000000000000000000000000000000000000000000000000000000000001",
                 "descriptor": "tr(020000000000000000000000000000000000000000000000000000000000000001,{ and(pk(0000000000000000000000000000000000000000000000000000000000000001), pk(0000000000000000000000000000000000000000000000000000000000000001)), and(older(512), pk(0000000000000000000000000000000000000000000000000000000000000001)) })",
                 "amount": 1100
               }
             ],
             "receivers": [
               {
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "25a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967",
                 "amount": 600
               },
               {
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "25a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967",
                 "amount": 500
               }
             ]
@@ -83,18 +83,18 @@
               {
                 "txid": "fd68e3c5796cc7db0a8036d486d5f625b6b2f2c014810ac020e1ac23e82c59d6",
                 "vout": 0,
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "0000000000000000000000000000000000000000000000000000000000000001",
                 "descriptor": "tr(020000000000000000000000000000000000000000000000000000000000000001,{ and(pk(0000000000000000000000000000000000000000000000000000000000000001), pk(0000000000000000000000000000000000000000000000000000000000000001)), and(older(512), pk(0000000000000000000000000000000000000000000000000000000000000001)) })",
                 "amount": 1100
               }
             ],
             "receivers": [
               {
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "25a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967",
                 "amount": 600
               },
               {
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "25a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967",
                 "amount": 500
               }
             ]
@@ -105,18 +105,18 @@
               {
                 "txid": "fd68e3c5796cc7db0a8036d486d5f625b6b2f2c014810ac020e1ac23e82c59d6",
                 "vout": 0,
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "0000000000000000000000000000000000000000000000000000000000000001",
                 "descriptor": "tr(020000000000000000000000000000000000000000000000000000000000000001,{ and(pk(0000000000000000000000000000000000000000000000000000000000000001), pk(0000000000000000000000000000000000000000000000000000000000000001)), and(older(512), pk(0000000000000000000000000000000000000000000000000000000000000001)) })",
                 "amount": 1100
               }
             ],
             "receivers": [
               {
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "25a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967",
                 "amount": 600
               },
               {
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "25a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967",
                 "amount": 500
               }
             ]
@@ -133,58 +133,58 @@
               {
                 "txid": "755c820771284d85ea4bbcc246565b4eddadc44237a7e57a0f9cb78a840d1d41",
                 "vout": 0,
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "0000000000000000000000000000000000000000000000000000000000000001",
                 "descriptor": "tr(020000000000000000000000000000000000000000000000000000000000000001,{ and(pk(0000000000000000000000000000000000000000000000000000000000000001), pk(0000000000000000000000000000000000000000000000000000000000000001)), and(older(512), pk(0000000000000000000000000000000000000000000000000000000000000001)) })",
                 "amount": 1000
               },
               {
                 "txid": "66a0df86fcdeb84b8877adfe0b2c556dba30305d72ddbd4c49355f6930355357",
                 "vout": 0,
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "0000000000000000000000000000000000000000000000000000000000000001",
                 "descriptor": "tr(020000000000000000000000000000000000000000000000000000000000000001,{ and(pk(0000000000000000000000000000000000000000000000000000000000000001), pk(0000000000000000000000000000000000000000000000000000000000000001)), and(older(512), pk(0000000000000000000000000000000000000000000000000000000000000001)) })",
                 "amount": 1000
               },
               {
                 "txid": "9913159bc7aa493ca53cbb9cbc88f97ba01137c814009dc7ef520c3fafc67909",
                 "vout": 1,
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "0000000000000000000000000000000000000000000000000000000000000001",
                 "descriptor": "tr(020000000000000000000000000000000000000000000000000000000000000001,{ and(pk(0000000000000000000000000000000000000000000000000000000000000001), pk(0000000000000000000000000000000000000000000000000000000000000001)), and(older(512), pk(0000000000000000000000000000000000000000000000000000000000000001)) })",
                 "amount": 500
               },
               {
                 "txid": "5e10e77a7cdedc153be5193a4b6055a7802706ded4f2a9efefe86ed2f9a6ae60",
                 "vout": 0,
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "0000000000000000000000000000000000000000000000000000000000000001",
                 "descriptor": "tr(020000000000000000000000000000000000000000000000000000000000000001,{ and(pk(0000000000000000000000000000000000000000000000000000000000000001), pk(0000000000000000000000000000000000000000000000000000000000000001)), and(older(512), pk(0000000000000000000000000000000000000000000000000000000000000001)) })",
                 "amount": 1000
               },
               {
                 "txid": "5e10e77a7cdedc153be5193a4b6055a7802706ded4f2a9efefe86ed2f9a6ae60",
                 "vout": 1,
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "0000000000000000000000000000000000000000000000000000000000000001",
                 "descriptor": "tr(020000000000000000000000000000000000000000000000000000000000000001,{ and(pk(0000000000000000000000000000000000000000000000000000000000000001), pk(0000000000000000000000000000000000000000000000000000000000000001)), and(older(512), pk(0000000000000000000000000000000000000000000000000000000000000001)) })",
                 "amount": 1000
               }
             ],
             "receivers": [
               {
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "25a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967",
                 "amount": 1000
               },
               {
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "25a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967",
                 "amount": 1000
               },
               {
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "25a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967",
                 "amount": 1000
               },
               {
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "25a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967",
                 "amount": 1000
               },
               {
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "25a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967",
                 "amount": 500
               }
             ]
@@ -206,58 +206,58 @@
               {
                 "txid": "755c820771284d85ea4bbcc246565b4eddadc44237a7e57a0f9cb78a840d1d41",
                 "vout": 0,
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "0000000000000000000000000000000000000000000000000000000000000001",
                 "descriptor": "tr(020000000000000000000000000000000000000000000000000000000000000001,{ and(pk(0000000000000000000000000000000000000000000000000000000000000001), pk(0000000000000000000000000000000000000000000000000000000000000001)), and(older(512), pk(0000000000000000000000000000000000000000000000000000000000000001)) })",
                 "amount": 1000
               },
               {
                 "txid": "66a0df86fcdeb84b8877adfe0b2c556dba30305d72ddbd4c49355f6930355357",
                 "vout": 0,
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "0000000000000000000000000000000000000000000000000000000000000001",
                 "descriptor": "tr(020000000000000000000000000000000000000000000000000000000000000001,{ and(pk(0000000000000000000000000000000000000000000000000000000000000001), pk(0000000000000000000000000000000000000000000000000000000000000001)), and(older(512), pk(0000000000000000000000000000000000000000000000000000000000000001)) })",
                 "amount": 1000
               },
               {
                 "txid": "9913159bc7aa493ca53cbb9cbc88f97ba01137c814009dc7ef520c3fafc67909",
                 "vout": 1,
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "0000000000000000000000000000000000000000000000000000000000000001",
                 "descriptor": "tr(020000000000000000000000000000000000000000000000000000000000000001,{ and(pk(0000000000000000000000000000000000000000000000000000000000000001), pk(0000000000000000000000000000000000000000000000000000000000000001)), and(older(512), pk(0000000000000000000000000000000000000000000000000000000000000001)) })",
                 "amount": 500
               },
               {
                 "txid": "5e10e77a7cdedc153be5193a4b6055a7802706ded4f2a9efefe86ed2f9a6ae60",
                 "vout": 0,
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "0000000000000000000000000000000000000000000000000000000000000001",
                 "descriptor": "tr(020000000000000000000000000000000000000000000000000000000000000001,{ and(pk(0000000000000000000000000000000000000000000000000000000000000001), pk(0000000000000000000000000000000000000000000000000000000000000001)), and(older(512), pk(0000000000000000000000000000000000000000000000000000000000000001)) })",
                 "amount": 1000
               },
               {
                 "txid": "5e10e77a7cdedc153be5193a4b6055a7802706ded4f2a9efefe86ed2f9a6ae60",
                 "vout": 1,
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "0000000000000000000000000000000000000000000000000000000000000001",
                 "descriptor": "tr(020000000000000000000000000000000000000000000000000000000000000001,{ and(pk(0000000000000000000000000000000000000000000000000000000000000001), pk(0000000000000000000000000000000000000000000000000000000000000001)), and(older(512), pk(0000000000000000000000000000000000000000000000000000000000000001)) })",
                 "amount": 1000
               }
             ],
             "receivers": [
               {
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "25a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967",
                 "amount": 1000
               },
               {
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "25a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967",
                 "amount": 1000
               },
               {
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "25a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967",
                 "amount": 1000
               },
               {
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "25a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967",
                 "amount": 1000
               },
               {
-                "address": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+                "pubkey": "25a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967",
                 "amount": 500
               }
             ]
