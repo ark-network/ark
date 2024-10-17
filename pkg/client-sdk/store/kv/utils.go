@@ -1,4 +1,4 @@
-package badgerstore
+package kvstore
 
 import (
 	"time"
@@ -8,7 +8,7 @@ import (
 	"github.com/timshannon/badgerhold/v4"
 )
 
-func CreateDB(dbDir string, logger badger.Logger) (*badgerhold.Store, error) {
+func createDB(dbDir string, logger badger.Logger) (*badgerhold.Store, error) {
 	isInMemory := len(dbDir) <= 0
 
 	opts := badger.DefaultOptions(dbDir)

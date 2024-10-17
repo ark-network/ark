@@ -13,7 +13,7 @@ import (
 	"github.com/ark-network/ark/common"
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
 	"github.com/ark-network/ark/pkg/client-sdk/store"
-	"github.com/ark-network/ark/pkg/client-sdk/store/domain"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/term"
@@ -230,7 +230,7 @@ func config(ctx *cli.Context) error {
 		"boarding_descriptor_template": cfgData.BoardingDescriptorTemplate,
 		"explorer_url":                 cfgData.ExplorerURL,
 		"forfeit_address":              cfgData.ForfeitAddress,
-		"listen_transaction_stream":    cfgData.ListenTransactionStream,
+		"listen_transaction_stream":    cfgData.WithTransactionFeed,
 	}
 
 	return printJSON(cfg)
@@ -375,16 +375,16 @@ func redeem(ctx *cli.Context) error {
 
 func getArkSdkClient(ctx *cli.Context) (arksdk.ArkClient, error) {
 	dataDir := ctx.String(datadirFlag.Name)
-	sdkRepository, err := store.NewService(store.Config{
-		ConfigStoreType:  store.FileStore,
-		AppDataStoreType: store.Badger,
+	sdkRepository, err := store.NewStore(store.Config{
+		ConfigStoreType:  types.FileStore,
+		AppDataStoreType: types.KVStore,
 		BaseDir:          dataDir,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	cfgData, err := sdkRepository.ConfigRepository().GetData(context.Background())
+	cfgData, err := sdkRepository.ConfigStore().GetData(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -410,8 +410,8 @@ func getArkSdkClient(ctx *cli.Context) (arksdk.ArkClient, error) {
 }
 
 func loadOrCreateClient(
-	loadFunc, newFunc func(domain.SdkRepository) (arksdk.ArkClient, error),
-	sdkRepository domain.SdkRepository,
+	loadFunc, newFunc func(types.Store) (arksdk.ArkClient, error),
+	sdkRepository types.Store,
 ) (arksdk.ArkClient, error) {
 	client, err := loadFunc(sdkRepository)
 	if err != nil {
@@ -423,7 +423,7 @@ func loadOrCreateClient(
 	return client, err
 }
 
-func getNetwork(ctx *cli.Context, cfgData *domain.ConfigData) (string, error) {
+func getNetwork(ctx *cli.Context, cfgData *types.Config) (string, error) {
 	if cfgData == nil {
 		return ctx.String(networkFlag.Name), nil
 	}

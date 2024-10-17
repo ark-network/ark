@@ -7,8 +7,8 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
-	"github.com/ark-network/ark/pkg/client-sdk/store/domain"
 	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
+	sdktypes "github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	singlekeywallet "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey"
 	inmemorywalletstore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store/inmemory"
@@ -20,7 +20,7 @@ func TestWallet(t *testing.T) {
 	ctx := context.Background()
 	key, _ := btcec.NewPrivateKey()
 	password := "password"
-	testStoreData := domain.ConfigData{
+	testStoreData := sdktypes.Config{
 		AspUrl:                     "localhost:7070",
 		AspPubkey:                  key.PubKey(),
 		WalletType:                 wallet.SingleKeyWallet,
@@ -55,7 +55,7 @@ func TestWallet(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			store, err := inmemorystore.NewConfig()
+			store, err := inmemorystore.NewConfigStore()
 			require.NoError(t, err)
 			require.NotNil(t, store)
 

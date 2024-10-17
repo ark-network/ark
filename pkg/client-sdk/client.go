@@ -11,8 +11,7 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
-	"github.com/ark-network/ark/pkg/client-sdk/store"
-	"github.com/ark-network/ark/pkg/client-sdk/store/domain"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	singlekeywallet "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey"
 	walletstore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store"
@@ -29,8 +28,8 @@ const (
 	// wallet
 	SingleKeyWallet = wallet.SingleKeyWallet
 	// store
-	FileStore     = store.FileStore
-	InMemoryStore = store.InMemoryStore
+	FileStore     = types.FileStore
+	InMemoryStore = types.InMemoryStore
 	// explorer
 	BitcoinExplorer = explorer.BitcoinExplorer
 	LiquidExplorer  = explorer.LiquidExplorer
@@ -54,25 +53,65 @@ var (
 )
 
 type arkClient struct {
-	*domain.ConfigData
-	wallet        wallet.WalletService
-	sdkRepository domain.SdkRepository
-	explorer      explorer.Explorer
-	client        client.ASPClient
+	*types.Config
+	wallet   wallet.WalletService
+	store    types.Store
+	explorer explorer.Explorer
+	client   client.ASPClient
 
 	txStreamCtxCancel context.CancelFunc
 }
 
 func (a *arkClient) GetConfigData(
 	_ context.Context,
-) (*domain.ConfigData, error) {
-	if a.ConfigData == nil {
+) (*types.Config, error) {
+	if a.Config == nil {
 		return nil, fmt.Errorf("client sdk not initialized")
 	}
-	return a.ConfigData, nil
+	return a.Config, nil
 }
 
-func (a *arkClient) InitWithWallet(
+func (a *arkClient) Unlock(ctx context.Context, pasword string) error {
+	_, err := a.wallet.Unlock(ctx, pasword)
+	return err
+}
+
+func (a *arkClient) Lock(ctx context.Context, pasword string) error {
+	return a.wallet.Lock(ctx, pasword)
+}
+
+func (a *arkClient) IsLocked(ctx context.Context) bool {
+	return a.wallet.IsLocked()
+}
+
+func (a *arkClient) Dump(ctx context.Context) (string, error) {
+	return a.wallet.Dump(ctx)
+}
+
+func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
+	offchainAddr, boardingAddr, err := a.wallet.NewAddress(ctx, false)
+	if err != nil {
+		return "", "", err
+	}
+
+	return offchainAddr, boardingAddr, nil
+}
+
+func (a *arkClient) GetTransactionEventChannel() chan types.TransactionEvent {
+	return a.store.TransactionStore().GetEventChannel()
+}
+
+func (a *arkClient) Stop() error {
+	if a.Config.WithTransactionFeed {
+		a.txStreamCtxCancel()
+	}
+
+	a.store.Close()
+
+	return nil
+}
+
+func (a *arkClient) initWithWallet(
 	ctx context.Context, args InitWithWalletArgs,
 ) error {
 	if err := args.validate(); err != nil {
@@ -107,7 +146,7 @@ func (a *arkClient) InitWithWallet(
 		return fmt.Errorf("failed to parse asp pubkey: %s", err)
 	}
 
-	storeData := domain.ConfigData{
+	storeData := types.Config{
 		AspUrl:                     args.AspUrl,
 		AspPubkey:                  aspPubkey,
 		WalletType:                 args.Wallet.GetType(),
@@ -119,18 +158,19 @@ func (a *arkClient) InitWithWallet(
 		Dust:                       info.Dust,
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 		ForfeitAddress:             info.ForfeitAddress,
+		WithTransactionFeed:        args.ListenTransactionStream,
 	}
-	if err := a.sdkRepository.ConfigRepository().AddData(ctx, storeData); err != nil {
+	if err := a.store.ConfigStore().AddData(ctx, storeData); err != nil {
 		return err
 	}
 
 	if _, err := args.Wallet.Create(ctx, args.Password, args.Seed); err != nil {
 		//nolint:all
-		a.sdkRepository.ConfigRepository().CleanData(ctx)
+		a.store.ConfigStore().CleanData(ctx)
 		return err
 	}
 
-	a.ConfigData = &storeData
+	a.Config = &storeData
 	a.wallet = args.Wallet
 	a.explorer = explorerSvc
 	a.client = clientSvc
@@ -138,7 +178,7 @@ func (a *arkClient) InitWithWallet(
 	return nil
 }
 
-func (a *arkClient) Init(
+func (a *arkClient) init(
 	ctx context.Context, args InitArgs,
 ) error {
 	if err := args.validate(); err != nil {
@@ -173,7 +213,7 @@ func (a *arkClient) Init(
 		return fmt.Errorf("failed to parse asp pubkey: %s", err)
 	}
 
-	cfgData := domain.ConfigData{
+	cfgData := types.Config{
 		AspUrl:                     args.AspUrl,
 		AspPubkey:                  aspPubkey,
 		WalletType:                 args.WalletType,
@@ -186,68 +226,27 @@ func (a *arkClient) Init(
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 		ExplorerURL:                args.ExplorerURL,
 		ForfeitAddress:             info.ForfeitAddress,
+		WithTransactionFeed:        args.ListenTransactionStream,
 	}
-	walletSvc, err := getWallet(a.sdkRepository.ConfigRepository(), &cfgData, supportedWallets)
+	walletSvc, err := getWallet(a.store.ConfigStore(), &cfgData, supportedWallets)
 	if err != nil {
 		return err
 	}
 
-	if err := a.sdkRepository.ConfigRepository().AddData(ctx, cfgData); err != nil {
+	if err := a.store.ConfigStore().AddData(ctx, cfgData); err != nil {
 		return err
 	}
 
 	if _, err := walletSvc.Create(ctx, args.Password, args.Seed); err != nil {
 		//nolint:all
-		a.sdkRepository.ConfigRepository().CleanData(ctx)
+		a.store.ConfigStore().CleanData(ctx)
 		return err
 	}
 
-	a.ConfigData = &cfgData
+	a.Config = &cfgData
 	a.wallet = walletSvc
 	a.explorer = explorerSvc
 	a.client = clientSvc
-
-	return nil
-}
-
-func (a *arkClient) Unlock(ctx context.Context, pasword string) error {
-	_, err := a.wallet.Unlock(ctx, pasword)
-	return err
-}
-
-func (a *arkClient) Lock(ctx context.Context, pasword string) error {
-	return a.wallet.Lock(ctx, pasword)
-}
-
-func (a *arkClient) IsLocked(ctx context.Context) bool {
-	return a.wallet.IsLocked()
-}
-
-func (a *arkClient) Dump(ctx context.Context) (string, error) {
-	return a.wallet.Dump(ctx)
-}
-
-func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
-	offchainAddr, boardingAddr, err := a.wallet.NewAddress(ctx, false)
-	if err != nil {
-		return "", "", err
-	}
-
-	return offchainAddr, boardingAddr, nil
-}
-
-func (a *arkClient) GetTransactionEventChannel() chan domain.TransactionEvent {
-	return a.sdkRepository.AppDataRepository().TransactionRepository().GetEventChannel()
-}
-
-func (a *arkClient) Stop() error {
-	if a.ConfigData.ListenTransactionStream {
-		a.txStreamCtxCancel()
-	}
-
-	if err := a.sdkRepository.AppDataRepository().Stop(); err != nil {
-		return err
-	}
 
 	return nil
 }
@@ -289,11 +288,11 @@ func getExplorer(explorerURL, network string) (explorer.Explorer, error) {
 }
 
 func getWallet(
-	configRepo domain.ConfigRepository, data *domain.ConfigData, supportedWallets utils.SupportedType[struct{}],
+	configStore types.ConfigStore, data *types.Config, supportedWallets utils.SupportedType[struct{}],
 ) (wallet.WalletService, error) {
 	switch data.WalletType {
 	case wallet.SingleKeyWallet:
-		return getSingleKeyWallet(configRepo, data.Network.Name)
+		return getSingleKeyWallet(configStore, data.Network.Name)
 	default:
 		return nil, fmt.Errorf(
 			"unsuported wallet type '%s', please select one of: %s",
@@ -303,24 +302,24 @@ func getWallet(
 }
 
 func getSingleKeyWallet(
-	configRepo domain.ConfigRepository, network string,
+	configStore types.ConfigStore, network string,
 ) (wallet.WalletService, error) {
-	walletStore, err := getWalletStore(configRepo.GetType(), configRepo.GetDatadir())
+	walletStore, err := getWalletStore(configStore.GetType(), configStore.GetDatadir())
 	if err != nil {
 		return nil, err
 	}
 
 	if strings.Contains(network, "liquid") {
-		return singlekeywallet.NewLiquidWallet(configRepo, walletStore)
+		return singlekeywallet.NewLiquidWallet(configStore, walletStore)
 	}
-	return singlekeywallet.NewBitcoinWallet(configRepo, walletStore)
+	return singlekeywallet.NewBitcoinWallet(configStore, walletStore)
 }
 
 func getWalletStore(storeType, datadir string) (walletstore.WalletStore, error) {
 	switch storeType {
-	case store.InMemoryStore:
+	case types.InMemoryStore:
 		return inmemorystore.NewWalletStore()
-	case store.FileStore:
+	case types.FileStore:
 		return filestore.NewWalletStore(datadir)
 	default:
 		return nil, fmt.Errorf("unknown wallet store type")

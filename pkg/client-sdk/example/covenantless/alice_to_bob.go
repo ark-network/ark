@@ -13,6 +13,7 @@ import (
 	"github.com/ark-network/ark/common"
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
 	"github.com/ark-network/ark/pkg/client-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -170,9 +171,9 @@ func main() {
 
 func setupArkClient(wallet string) (arksdk.ArkClient, error) {
 	dbDir := common.AppDataDir(path.Join("ark-example", wallet), false)
-	appDataStore, err := store.NewService(store.Config{
-		ConfigStoreType:  store.FileStore,
-		AppDataStoreType: store.Badger,
+	appDataStore, err := store.NewStore(store.Config{
+		ConfigStoreType:  types.FileStore,
+		AppDataStoreType: types.KVStore,
 		BaseDir:          dbDir,
 	})
 	if err != nil {
