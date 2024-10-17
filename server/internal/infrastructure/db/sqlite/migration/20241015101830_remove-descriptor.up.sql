@@ -1,14 +1,15 @@
 ALTER TABLE vtxo DROP COLUMN descriptor;
-ALTER TABLE vtxo ADD COLUMN addr TEXT;
+ALTER TABLE vtxo ADD COLUMN pubkey TEXT;
 
 DROP TABLE IF EXISTS receiver;
 
 CREATE TABLE IF NOT EXISTS receiver (
     payment_id TEXT NOT NULL,
-    addr TEXT NOT NULL,
+    pubkey TEXT,
+    onchain_address TEXT,
     amount INTEGER NOT NULL,
     FOREIGN KEY (payment_id) REFERENCES payment(id),
-    PRIMARY KEY (payment_id, addr)
+    PRIMARY KEY (payment_id, pubkey, onchain_address)
 );
 
 DROP VIEW payment_vtxo_vw;

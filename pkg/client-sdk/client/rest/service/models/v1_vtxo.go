@@ -18,9 +18,6 @@ import (
 // swagger:model v1Vtxo
 type V1Vtxo struct {
 
-	// address
-	Address string `json:"address,omitempty"`
-
 	// amount
 	Amount string `json:"amount,omitempty"`
 
@@ -32,6 +29,9 @@ type V1Vtxo struct {
 
 	// pending
 	Pending bool `json:"pending,omitempty"`
+
+	// pubkey
+	Pubkey string `json:"pubkey,omitempty"`
 
 	// redeem tx
 	RedeemTx string `json:"redeemTx,omitempty"`

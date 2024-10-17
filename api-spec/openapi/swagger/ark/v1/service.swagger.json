@@ -1080,7 +1080,7 @@
           "type": "string",
           "format": "uint64"
         },
-        "address": {
+        "pubkey": {
           "type": "string"
         }
       }

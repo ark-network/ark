@@ -128,7 +128,7 @@ func (v vtxo) toVtxo() client.Vtxo {
 		Pending:   v.GetPending(),
 		RedeemTx:  v.GetRedeemTx(),
 		SpentBy:   v.GetSpentBy(),
-		Address:   v.GetAddress(),
+		Pubkey:    v.GetPubkey(),
 	}
 }
 

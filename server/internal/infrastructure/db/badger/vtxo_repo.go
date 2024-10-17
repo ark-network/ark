@@ -96,11 +96,11 @@ func (r *vtxoRepository) GetVtxosForRound(
 }
 
 func (r *vtxoRepository) GetAllVtxos(
-	ctx context.Context, address string,
+	ctx context.Context, pubkey string,
 ) ([]domain.Vtxo, []domain.Vtxo, error) {
 	query := badgerhold.Where("Redeemed").Eq(false)
-	if len(address) > 0 {
-		query = query.And("Address").Eq(address)
+	if len(pubkey) > 0 {
+		query = query.And("Pubkey").Eq(pubkey)
 	}
 	vtxos, err := r.findVtxos(ctx, query)
 	if err != nil {

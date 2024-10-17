@@ -14,9 +14,10 @@ type Payment struct {
 }
 
 type PaymentReceiverVw struct {
-	PaymentID sql.NullString
-	Addr      sql.NullString
-	Amount    sql.NullInt64
+	PaymentID      sql.NullString
+	Pubkey         sql.NullString
+	OnchainAddress sql.NullString
+	Amount         sql.NullInt64
 }
 
 type PaymentVtxoVw struct {
@@ -32,13 +33,14 @@ type PaymentVtxoVw struct {
 	PaymentID sql.NullString
 	RedeemTx  sql.NullString
 	Pending   sql.NullBool
-	Addr      sql.NullString
+	Pubkey    sql.NullString
 }
 
 type Receiver struct {
-	PaymentID string
-	Addr      string
-	Amount    int64
+	PaymentID      string
+	Pubkey         sql.NullString
+	OnchainAddress sql.NullString
+	Amount         int64
 }
 
 type Round struct {
@@ -98,5 +100,5 @@ type Vtxo struct {
 	PaymentID sql.NullString
 	RedeemTx  sql.NullString
 	Pending   bool
-	Addr      sql.NullString
+	Pubkey    sql.NullString
 }

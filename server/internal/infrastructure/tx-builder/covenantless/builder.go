@@ -274,7 +274,7 @@ func (b *txBuilder) BuildRoundTx(
 		return "", nil, "", fmt.Errorf("missing cosigners")
 	}
 
-	receivers, err := getOffchainReceivers(payments)
+	receivers, err := getOutputVtxosLeaves(payments)
 	if err != nil {
 		return "", nil, "", err
 	}
@@ -500,12 +500,21 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 	}
 
 	for i, receiver := range receivers {
-		addr, err := common.DecodeAddress(receiver.Address)
+		if receiver.IsOnchain() {
+			return "", fmt.Errorf("receiver %d is onchain", i)
+		}
+
+		pubkeyBytes, err := hex.DecodeString(receiver.Pubkey)
 		if err != nil {
 			return "", err
 		}
 
-		newVtxoScript, err := common.P2TRScript(addr.VtxoTapKey)
+		pubkey, err := schnorr.ParsePubKey(pubkeyBytes)
+		if err != nil {
+			return "", err
+		}
+
+		newVtxoScript, err := common.P2TRScript(pubkey)
 		if err != nil {
 			return "", err
 		}
@@ -585,7 +594,6 @@ func (b *txBuilder) createRoundTx(
 
 	connectorAmount := dustLimit
 
-	receivers := getOnchainReceivers(payments)
 	nbOfInputs := countSpentVtxos(payments)
 	connectorsAmount := (connectorAmount + connectorMinRelayFee) * nbOfInputs
 	if nbOfInputs > 1 {
@@ -611,24 +619,16 @@ func (b *txBuilder) createRoundTx(
 		})
 	}
 
-	for _, receiver := range receivers {
-		targetAmount += receiver.Amount
-
-		receiverAddr, err := btcutil.DecodeAddress(receiver.Address, b.onchainNetwork())
-		if err != nil {
-			return nil, err
-		}
-
-		receiverScript, err := txscript.PayToAddrScript(receiverAddr)
-		if err != nil {
-			return nil, err
-		}
-
-		outputs = append(outputs, &wire.TxOut{
-			Value:    int64(receiver.Amount),
-			PkScript: receiverScript,
-		})
+	onchainOutputs, err := getOnchainOutputs(payments, b.onchainNetwork())
+	if err != nil {
+		return nil, err
 	}
+
+	for _, output := range onchainOutputs {
+		targetAmount += uint64(output.Value)
+	}
+
+	outputs = append(outputs, onchainOutputs...)
 
 	for _, input := range boardingInputs {
 		targetAmount -= input.Amount

@@ -476,7 +476,12 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 
 	for _, offchainAddr := range offchainAddrs {
 		for _, v := range spendableVtxos {
-			if v.Address == offchainAddr.Address {
+			vtxoAddr, err := v.Address(a.AspPubkey, a.Network)
+			if err != nil {
+				return "", err
+			}
+
+			if vtxoAddr == offchainAddr.Address {
 				vtxos = append(vtxos, client.DescriptorVtxo{
 					Vtxo:       v,
 					Descriptor: offchainAddr.Descriptor,
@@ -605,7 +610,12 @@ func (a *covenantlessArkClient) SendAsync(
 
 	for _, offchainAddr := range offchainAddrs {
 		for _, v := range spendableVtxos {
-			if v.Address == offchainAddr.Address {
+			vtxoAddr, err := v.Address(a.AspPubkey, a.Network)
+			if err != nil {
+				return "", err
+			}
+
+			if vtxoAddr == offchainAddr.Address {
 				vtxos = append(vtxos, client.DescriptorVtxo{
 					Vtxo:       v,
 					Descriptor: offchainAddr.Descriptor,
@@ -971,7 +981,12 @@ func (a *covenantlessArkClient) sendOffchain(
 
 	for _, offchainAddr := range offchainAddrs {
 		for _, v := range spendableVtxos {
-			if v.Address == offchainAddr.Address {
+			vtxoAddr, err := v.Address(a.AspPubkey, a.Network)
+			if err != nil {
+				return "", err
+			}
+
+			if vtxoAddr == offchainAddr.Address {
 				vtxos = append(vtxos, client.DescriptorVtxo{
 					Vtxo:       v,
 					Descriptor: offchainAddr.Descriptor,

@@ -148,13 +148,13 @@ func (b *txBuilder) BuildRoundTx(
 			return "", nil, "", err
 		}
 
-		receivers, err := getOffchainReceivers(payments)
+		vtxosLeaves, err := getOutputVtxosLeaves(payments)
 		if err != nil {
 			return "", nil, "", err
 		}
 
 		treeFactoryFn, sharedOutputScript, sharedOutputAmount, err = tree.CraftCongestionTree(
-			b.onchainNetwork().AssetID, aspPubkey, receivers, feeSatsPerNode, b.roundLifetime,
+			b.onchainNetwork().AssetID, aspPubkey, vtxosLeaves, feeSatsPerNode, b.roundLifetime,
 		)
 		if err != nil {
 			return "", nil, "", err
@@ -400,7 +400,6 @@ func (b *txBuilder) createPoolTx(
 		return nil, err
 	}
 
-	receivers := getOnchainReceivers(payments)
 	nbOfInputs := countSpentVtxos(payments)
 	connectorsAmount := (dustAmount + connectorMinRelayFee) * nbOfInputs
 	if nbOfInputs > 1 {
@@ -428,20 +427,16 @@ func (b *txBuilder) createPoolTx(
 		})
 	}
 
-	for _, receiver := range receivers {
-		targetAmount += receiver.Amount
-
-		receiverScript, err := address.ToOutputScript(receiver.Address)
-		if err != nil {
-			return nil, err
-		}
-
-		outputs = append(outputs, psetv2.OutputArgs{
-			Asset:  b.onchainNetwork().AssetID,
-			Amount: receiver.Amount,
-			Script: receiverScript,
-		})
+	onchainOutputs, err := getOnchainOutputs(payments, b.onchainNetwork())
+	if err != nil {
+		return nil, err
 	}
+
+	for _, out := range onchainOutputs {
+		targetAmount += out.Amount
+	}
+
+	outputs = append(outputs, onchainOutputs...)
 
 	for _, in := range boardingInputs {
 		targetAmount -= in.Amount

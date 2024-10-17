@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"hash"
 
-	"github.com/ark-network/ark/common"
 	"github.com/google/uuid"
 )
 
@@ -69,7 +68,7 @@ func (p Payment) validate(ignoreOuts bool) error {
 		return fmt.Errorf("missing outputs")
 	}
 	for _, r := range p.Receivers {
-		if len(r.Address) <= 0 {
+		if len(r.OnchainAddress) <= 0 && len(r.Pubkey) <= 0 {
 			return fmt.Errorf("missing receiver destination")
 		}
 		if r.Amount == 0 {
@@ -104,18 +103,19 @@ func (k VtxoKey) Hash() string {
 }
 
 type Receiver struct {
-	Amount  uint64
-	Address string
+	Amount         uint64
+	OnchainAddress string // onchain
+	Pubkey         string // offchain
 }
 
 func (r Receiver) IsOnchain() bool {
-	_, err := common.DecodeAddress(r.Address)
-	return err != nil
+	return len(r.OnchainAddress) > 0
 }
 
 type Vtxo struct {
 	VtxoKey
-	Receiver
+	Amount    uint64
+	Pubkey    string
 	RoundTxid string
 	SpentBy   string // round txid or async redeem txid
 	Spent     bool

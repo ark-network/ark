@@ -353,7 +353,7 @@ func (h *handler) CreatePayment(
 			return nil, status.Error(codes.InvalidArgument, "output amount must be greater than 0")
 		}
 
-		if len(receiver.Address) <= 0 {
+		if len(receiver.OnchainAddress) <= 0 && len(receiver.Pubkey) <= 0 {
 			return nil, status.Error(codes.InvalidArgument, "missing address")
 		}
 

@@ -348,7 +348,13 @@ func (s *covenantService) SignRoundTx(ctx context.Context, signedRoundTx string)
 }
 
 func (s *covenantService) ListVtxos(ctx context.Context, address string) ([]domain.Vtxo, []domain.Vtxo, error) {
-	return s.repoManager.Vtxos().GetAllVtxos(ctx, address)
+	decodedAddress, err := common.DecodeAddress(address)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to decode address: %s", err)
+	}
+	pubkey := hex.EncodeToString(schnorr.SerializePubKey(decodedAddress.VtxoTapKey))
+
+	return s.repoManager.Vtxos().GetAllVtxos(ctx, pubkey)
 }
 
 func (s *covenantService) GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent {
@@ -940,21 +946,12 @@ func (s *covenantService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 				continue
 			}
 
-			addr := &common.Address{
-				HRP:        s.network.Addr,
-				Asp:        s.pubkey,
-				VtxoTapKey: vtxoTapKey,
-			}
-
-			addrStr, err := addr.Encode()
-			if err != nil {
-				log.WithError(err).Warn("failed to encode address")
-				continue
-			}
+			vtxoPubkey := hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey))
 
 			vtxos = append(vtxos, domain.Vtxo{
 				VtxoKey:   domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
-				Receiver:  domain.Receiver{Address: addrStr, Amount: uint64(out.Value)},
+				Pubkey:    vtxoPubkey,
+				Amount:    uint64(out.Value),
 				RoundTxid: round.Txid,
 			})
 		}
@@ -1027,12 +1024,17 @@ func (s *covenantService) restoreWatchingVtxos() error {
 func (s *covenantService) extractVtxosScripts(vtxos []domain.Vtxo) ([]string, error) {
 	indexedScripts := make(map[string]struct{})
 	for _, vtxo := range vtxos {
-		addr, err := common.DecodeAddress(vtxo.Receiver.Address)
+		vtxoTapKeyBytes, err := hex.DecodeString(vtxo.Pubkey)
 		if err != nil {
 			return nil, err
 		}
 
-		script, err := common.P2TRScript(addr.VtxoTapKey)
+		vtxoTapKey, err := schnorr.ParsePubKey(vtxoTapKeyBytes)
+		if err != nil {
+			return nil, err
+		}
+
+		script, err := common.P2TRScript(vtxoTapKey)
 		if err != nil {
 			return nil, err
 		}

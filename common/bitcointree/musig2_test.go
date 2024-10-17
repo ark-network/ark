@@ -2,13 +2,11 @@ package bitcointree_test
 
 import (
 	"bytes"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
 
-	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -46,7 +44,7 @@ func TestRoundTripSignTree(t *testing.T) {
 		_, sharedOutputAmount, err := bitcointree.CraftSharedOutput(
 			cosigners,
 			asp.PubKey(),
-			castReceivers(f.Receivers, asp.PubKey()),
+			castReceivers(f.Receivers),
 			minRelayFee,
 			lifetime,
 		)
@@ -60,7 +58,7 @@ func TestRoundTripSignTree(t *testing.T) {
 			},
 			cosigners,
 			asp.PubKey(),
-			castReceivers(f.Receivers, asp.PubKey()),
+			castReceivers(f.Receivers),
 			minRelayFee,
 			lifetime,
 		)
@@ -224,37 +222,12 @@ type receiverFixture struct {
 	Pubkey string `json:"pubkey"`
 }
 
-func (r receiverFixture) toVtxoAddress(asp *secp256k1.PublicKey) string {
-	bytesKey, err := hex.DecodeString(r.Pubkey)
-	if err != nil {
-		panic(err)
-	}
-
-	pubkey, err := secp256k1.ParsePubKey(bytesKey)
-	if err != nil {
-		panic(err)
-	}
-
-	addr := &common.Address{
-		HRP:        common.Bitcoin.Addr,
-		Asp:        asp,
-		VtxoTapKey: pubkey,
-	}
-
-	addrEncoded, err := addr.Encode()
-	if err != nil {
-		panic(err)
-	}
-
-	return addrEncoded
-}
-
-func castReceivers(receivers []receiverFixture, asp *secp256k1.PublicKey) []tree.Receiver {
-	receiversOut := make([]tree.Receiver, 0, len(receivers))
+func castReceivers(receivers []receiverFixture) []tree.VtxoLeaf {
+	receiversOut := make([]tree.VtxoLeaf, 0, len(receivers))
 	for _, r := range receivers {
-		receiversOut = append(receiversOut, tree.Receiver{
-			Address: r.toVtxoAddress(asp),
-			Amount:  uint64(r.Amount),
+		receiversOut = append(receiversOut, tree.VtxoLeaf{
+			Pubkey: r.Pubkey,
+			Amount: uint64(r.Amount),
 		})
 	}
 	return receiversOut

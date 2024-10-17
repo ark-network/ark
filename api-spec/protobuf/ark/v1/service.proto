@@ -321,7 +321,7 @@ message Vtxo {
   bool pending = 7;
   string redeem_tx = 8;
   uint64 amount = 9;
-  string address = 10;
+  string pubkey = 10;
 }
 
 message GetTransactionsStreamRequest {}

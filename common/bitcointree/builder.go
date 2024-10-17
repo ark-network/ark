@@ -1,6 +1,7 @@
 package bitcointree
 
 import (
+	"encoding/hex"
 	"fmt"
 
 	"github.com/ark-network/ark/common"
@@ -16,7 +17,7 @@ import (
 
 // CraftSharedOutput returns the taproot script and the amount of the initial root output
 func CraftSharedOutput(
-	cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, receivers []tree.Receiver,
+	cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, receivers []tree.VtxoLeaf,
 	feeSatsPerNode uint64, roundLifetime int64,
 ) ([]byte, int64, error) {
 	aggregatedKey, _, err := createAggregatedKeyWithSweep(
@@ -43,7 +44,7 @@ func CraftSharedOutput(
 
 // CraftCongestionTree creates all the tree's transactions
 func CraftCongestionTree(
-	initialInput *wire.OutPoint, cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, receivers []tree.Receiver,
+	initialInput *wire.OutPoint, cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, receivers []tree.VtxoLeaf,
 	feeSatsPerNode uint64, roundLifetime int64,
 ) (tree.CongestionTree, error) {
 	aggregatedKey, sweepTapLeaf, err := createAggregatedKeyWithSweep(
@@ -109,8 +110,8 @@ type node interface {
 }
 
 type leaf struct {
-	address string
-	amount  int64
+	amount int64
+	pubkey *secp256k1.PublicKey
 }
 
 type branch struct {
@@ -143,12 +144,7 @@ func (l *leaf) getAmount() int64 {
 }
 
 func (l *leaf) getOutputs() ([]*wire.TxOut, error) {
-	addr, err := common.DecodeAddress(l.address)
-	if err != nil {
-		return nil, err
-	}
-
-	script, err := common.P2TRScript(addr.VtxoTapKey)
+	script, err := common.P2TRScript(l.pubkey)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +243,7 @@ func getTx(
 func createRootNode(
 	aggregatedKey *musig2.AggregateKey,
 	cosigners []*secp256k1.PublicKey,
-	receivers []tree.Receiver,
+	receivers []tree.VtxoLeaf,
 	feeSatsPerNode uint64,
 ) (root node, err error) {
 	if len(receivers) == 0 {
@@ -256,9 +252,19 @@ func createRootNode(
 
 	nodes := make([]node, 0, len(receivers))
 	for _, r := range receivers {
+		pubkeyBytes, err := hex.DecodeString(r.Pubkey)
+		if err != nil {
+			return nil, err
+		}
+
+		pubkey, err := schnorr.ParsePubKey(pubkeyBytes)
+		if err != nil {
+			return nil, err
+		}
+
 		leafNode := &leaf{
-			address: r.Address,
-			amount:  int64(r.Amount),
+			amount: int64(r.Amount),
+			pubkey: pubkey,
 		}
 		nodes = append(nodes, leafNode)
 	}

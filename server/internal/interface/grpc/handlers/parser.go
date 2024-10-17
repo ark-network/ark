@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/hex"
 	"fmt"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
@@ -9,6 +10,7 @@ import (
 	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
@@ -67,6 +69,22 @@ func parseInputs(ins []*arkv1.Input) ([]ports.Input, error) {
 	return inputs, nil
 }
 
+func parseReceiver(out *arkv1.Output) (domain.Receiver, error) {
+	decodedAddr, err := common.DecodeAddress(out.GetAddress())
+	if err != nil {
+		// onchain address
+		return domain.Receiver{
+			Amount:         out.GetAmount(),
+			OnchainAddress: out.GetAddress(),
+		}, nil
+	}
+
+	return domain.Receiver{
+		Amount: out.GetAmount(),
+		Pubkey: hex.EncodeToString(schnorr.SerializePubKey(decodedAddr.VtxoTapKey)),
+	}, nil
+}
+
 func parseReceivers(outs []*arkv1.Output) ([]domain.Receiver, error) {
 	receivers := make([]domain.Receiver, 0, len(outs))
 	for _, out := range outs {
@@ -77,10 +95,12 @@ func parseReceivers(outs []*arkv1.Output) ([]domain.Receiver, error) {
 			return nil, fmt.Errorf("missing output destination")
 		}
 
-		receivers = append(receivers, domain.Receiver{
-			Amount:  out.GetAmount(),
-			Address: out.GetAddress(),
-		})
+		rcv, err := parseReceiver(out)
+		if err != nil {
+			return nil, err
+		}
+
+		receivers = append(receivers, rcv)
 	}
 	return receivers, nil
 }
@@ -105,7 +125,7 @@ func (v vtxoList) toProto() []*arkv1.Vtxo {
 			Swept:     vv.Swept,
 			RedeemTx:  vv.RedeemTx,
 			Pending:   vv.Pending,
-			Address:   vv.Address,
+			Pubkey:    vv.Pubkey,
 		})
 	}
 

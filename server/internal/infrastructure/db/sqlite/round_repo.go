@@ -166,7 +166,14 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 						queries.UpsertReceiverParams{
 							PaymentID: payment.Id,
 							Amount:    int64(receiver.Amount),
-							Addr:      receiver.Address,
+							Pubkey: sql.NullString{
+								String: receiver.Pubkey,
+								Valid:  len(receiver.Pubkey) > 0,
+							},
+							OnchainAddress: sql.NullString{
+								String: receiver.OnchainAddress,
+								Valid:  len(receiver.OnchainAddress) > 0,
+							},
 						},
 					); err != nil {
 						return fmt.Errorf("failed to upsert receiver: %w", err)
@@ -319,8 +326,9 @@ func (r *roundRepository) GetSweptRounds(ctx context.Context) ([]domain.Round, e
 
 func rowToReceiver(row queries.PaymentReceiverVw) domain.Receiver {
 	return domain.Receiver{
-		Amount:  uint64(row.Amount.Int64),
-		Address: row.Addr.String,
+		Amount:         uint64(row.Amount.Int64),
+		Pubkey:         row.Pubkey.String,
+		OnchainAddress: row.OnchainAddress.String,
 	}
 }
 
@@ -411,8 +419,8 @@ func readRoundRows(rows []roundPaymentTxReceiverVtxoRow) ([]*domain.Round, error
 
 				found := false
 				for _, rcv := range payment.Receivers {
-					if v.receiver.Addr.Valid && v.receiver.Amount.Valid {
-						if rcv.Address == v.receiver.Addr.String && int64(rcv.Amount) == v.receiver.Amount.Int64 {
+					if (v.receiver.Pubkey.Valid || v.receiver.OnchainAddress.Valid) && v.receiver.Amount.Valid {
+						if rcv.Pubkey == v.receiver.Pubkey.String && rcv.OnchainAddress == v.receiver.OnchainAddress.String && int64(rcv.Amount) == v.receiver.Amount.Int64 {
 							found = true
 							break
 						}
@@ -467,10 +475,8 @@ func rowToPaymentVtxoVw(row queries.PaymentVtxoVw) domain.Vtxo {
 			Txid: row.Txid.String,
 			VOut: uint32(row.Vout.Int64),
 		},
-		Receiver: domain.Receiver{
-			Address: row.Addr.String,
-			Amount:  uint64(row.Amount.Int64),
-		},
+		Amount:    uint64(row.Amount.Int64),
+		Pubkey:    row.Pubkey.String,
 		RoundTxid: row.PoolTx.String,
 		SpentBy:   row.SpentBy.String,
 		Spent:     row.Spent.Bool,

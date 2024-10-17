@@ -200,11 +200,6 @@ func (s *covenantlessService) CompleteAsyncPayment(
 				return fmt.Errorf("vtxo already swept")
 			}
 
-			addr, err := common.DecodeAddress(vtxo.Receiver.Address)
-			if err != nil {
-				return fmt.Errorf("failed to decode address: %s", err)
-			}
-
 			// verify that the user signs a forfeit closure
 			var userPubKey *secp256k1.PublicKey
 
@@ -225,8 +220,18 @@ func (s *covenantlessService) CompleteAsyncPayment(
 				return fmt.Errorf("redeem transaction is not signed")
 			}
 
+			vtxoPublicKeyBytes, err := hex.DecodeString(vtxo.Pubkey)
+			if err != nil {
+				return fmt.Errorf("failed to decode vtxo pubkey: %s", err)
+			}
+
+			vtxoTapKey, err := schnorr.ParsePubKey(vtxoPublicKeyBytes)
+			if err != nil {
+				return fmt.Errorf("failed to parse vtxo pubkey: %s", err)
+			}
+
 			// verify witness utxo
-			pkscript, err := common.P2TRScript(addr.VtxoTapKey)
+			pkscript, err := common.P2TRScript(vtxoTapKey)
 			if err != nil {
 				return fmt.Errorf("failed to get pkscript: %s", err)
 			}
@@ -262,16 +267,7 @@ func (s *covenantlessService) CompleteAsyncPayment(
 			return fmt.Errorf("failed to parse vtxo taproot key: %s", err)
 		}
 
-		addr := &common.Address{
-			HRP:        s.network.Addr,
-			Asp:        s.pubkey,
-			VtxoTapKey: vtxoTapKey,
-		}
-
-		encodedAddr, err := addr.Encode()
-		if err != nil {
-			return fmt.Errorf("failed to encode address: %s", err)
-		}
+		vtxoPubkey := hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey))
 
 		// all pending except the last one
 		isPending := outIndex < len(asyncPayData.receivers)-1
@@ -281,10 +277,8 @@ func (s *covenantlessService) CompleteAsyncPayment(
 				Txid: redeemTxid,
 				VOut: uint32(outIndex),
 			},
-			Receiver: domain.Receiver{
-				Address: encodedAddr,
-				Amount:  uint64(out.Value),
-			},
+			Pubkey:   vtxoPubkey,
+			Amount:   uint64(out.Value),
 			ExpireAt: asyncPayData.expireAt,
 			RedeemTx: redeemTx,
 			Pending:  isPending,
@@ -592,7 +586,13 @@ func (s *covenantlessService) SignRoundTx(ctx context.Context, signedRoundTx str
 }
 
 func (s *covenantlessService) ListVtxos(ctx context.Context, address string) ([]domain.Vtxo, []domain.Vtxo, error) {
-	return s.repoManager.Vtxos().GetAllVtxos(ctx, address)
+	decodedAddress, err := common.DecodeAddress(address)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to decode address: %s", err)
+	}
+	pubkey := hex.EncodeToString(schnorr.SerializePubKey(decodedAddress.VtxoTapKey))
+
+	return s.repoManager.Vtxos().GetAllVtxos(ctx, pubkey)
 }
 
 func (s *covenantlessService) GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent {
@@ -1361,21 +1361,10 @@ func (s *covenantlessService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 				continue
 			}
 
-			addr := &common.Address{
-				HRP:        s.network.Addr,
-				Asp:        s.pubkey,
-				VtxoTapKey: vtxoTapKey,
-			}
-
-			addrStr, err := addr.Encode()
-			if err != nil {
-				log.WithError(err).Warn("failed to encode address")
-				continue
-			}
-
 			vtxos = append(vtxos, domain.Vtxo{
 				VtxoKey:   domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
-				Receiver:  domain.Receiver{Address: addrStr, Amount: uint64(out.Value)},
+				Pubkey:    hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey)),
+				Amount:    uint64(out.Value),
 				RoundTxid: round.Txid,
 			})
 		}
@@ -1449,12 +1438,17 @@ func (s *covenantlessService) extractVtxosScripts(vtxos []domain.Vtxo) ([]string
 	indexedScripts := make(map[string]struct{})
 
 	for _, vtxo := range vtxos {
-		addr, err := common.DecodeAddress(vtxo.Receiver.Address)
+		vtxoTapKeyBytes, err := hex.DecodeString(vtxo.Pubkey)
 		if err != nil {
 			return nil, err
 		}
 
-		script, err := common.P2TRScript(addr.VtxoTapKey)
+		vtxoTapKey, err := schnorr.ParsePubKey(vtxoTapKeyBytes)
+		if err != nil {
+			return nil, err
+		}
+
+		script, err := common.P2TRScript(vtxoTapKey)
 		if err != nil {
 			return nil, err
 		}

@@ -7,7 +7,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const address = "ark1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22vqa7mdkrrulzu48law4zzvzz8k59hul0ayl2urt905we5wf6gee68sfrfj35"
+// x-only pubkey
+const pubkey = "25a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967"
 
 var inputs = []domain.Vtxo{
 	{
@@ -15,10 +16,8 @@ var inputs = []domain.Vtxo{
 			Txid: "0000000000000000000000000000000000000000000000000000000000000000",
 			VOut: 0,
 		},
-		Receiver: domain.Receiver{
-			Address: address,
-			Amount:  1000,
-		},
+		Pubkey: pubkey,
+		Amount: 1000,
 	},
 }
 
@@ -42,12 +41,12 @@ func TestPayment(t *testing.T) {
 
 			err = payment.AddReceivers([]domain.Receiver{
 				{
-					Address: address,
-					Amount:  450,
+					Pubkey: pubkey,
+					Amount: 450,
 				},
 				{
-					Address: address,
-					Amount:  550,
+					Pubkey: pubkey,
+					Amount: 550,
 				},
 			})
 			require.NoError(t, err)

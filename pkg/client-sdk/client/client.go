@@ -2,10 +2,13 @@ package client
 
 import (
 	"context"
+	"encoding/hex"
 	"time"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -86,13 +89,33 @@ type AsyncPaymentInput struct {
 
 type Vtxo struct {
 	Outpoint
-	Address   string
+	Pubkey    string
 	Amount    uint64
 	RoundTxid string
 	ExpiresAt *time.Time
 	RedeemTx  string
 	Pending   bool
 	SpentBy   string
+}
+
+func (v Vtxo) Address(asp *secp256k1.PublicKey, net common.Network) (string, error) {
+	pubkeyBytes, err := hex.DecodeString(v.Pubkey)
+	if err != nil {
+		return "", err
+	}
+
+	pubkey, err := schnorr.ParsePubKey(pubkeyBytes)
+	if err != nil {
+		return "", err
+	}
+
+	a := &common.Address{
+		HRP:        net.Addr,
+		Asp:        asp,
+		VtxoTapKey: pubkey,
+	}
+
+	return a.Encode()
 }
 
 type DescriptorVtxo struct {

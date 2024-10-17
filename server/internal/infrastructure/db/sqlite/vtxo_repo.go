@@ -37,11 +37,12 @@ func (v *vxtoRepository) AddVtxos(ctx context.Context, vtxos []domain.Vtxo) erro
 	txBody := func(querierWithTx *queries.Queries) error {
 		for i := range vtxos {
 			vtxo := vtxos[i]
+
 			if err := querierWithTx.UpsertVtxo(
 				ctx, queries.UpsertVtxoParams{
 					Txid:     vtxo.Txid,
 					Vout:     int64(vtxo.VOut),
-					Addr:     sql.NullString{String: vtxo.Address, Valid: true},
+					Pubkey:   sql.NullString{String: vtxo.Pubkey, Valid: len(vtxo.Pubkey) > 0},
 					Amount:   int64(vtxo.Amount),
 					PoolTx:   vtxo.RoundTxid,
 					SpentBy:  vtxo.SpentBy,
@@ -76,12 +77,12 @@ func (v *vxtoRepository) GetAllSweepableVtxos(ctx context.Context) ([]domain.Vtx
 	return readRows(rows)
 }
 
-func (v *vxtoRepository) GetAllVtxos(ctx context.Context, address string) ([]domain.Vtxo, []domain.Vtxo, error) {
-	withAddress := len(address) > 0
+func (v *vxtoRepository) GetAllVtxos(ctx context.Context, pubkey string) ([]domain.Vtxo, []domain.Vtxo, error) {
+	withPubkey := len(pubkey) > 0
 
 	var rows []queries.Vtxo
-	if withAddress {
-		res, err := v.querier.SelectNotRedeemedVtxosWithAddress(ctx, sql.NullString{String: address, Valid: true})
+	if withPubkey {
+		res, err := v.querier.SelectNotRedeemedVtxosWithPubkey(ctx, sql.NullString{String: pubkey, Valid: true})
 		if err != nil {
 			return nil, nil, err
 		}
@@ -249,10 +250,8 @@ func rowToVtxo(row queries.Vtxo) domain.Vtxo {
 			Txid: row.Txid,
 			VOut: uint32(row.Vout),
 		},
-		Receiver: domain.Receiver{
-			Address: row.Addr.String,
-			Amount:  uint64(row.Amount),
-		},
+		Amount:    uint64(row.Amount),
+		Pubkey:    row.Pubkey.String,
 		RoundTxid: row.PoolTx,
 		SpentBy:   row.SpentBy,
 		Spent:     row.Spent,

@@ -502,7 +502,7 @@ func (a *restClient) ListVtxos(
 			Pending:   v.Pending,
 			RedeemTx:  v.RedeemTx,
 			SpentBy:   v.SpentBy,
-			Address:   v.Address,
+			Pubkey:    v.Pubkey,
 		})
 	}
 
@@ -532,7 +532,7 @@ func (a *restClient) ListVtxos(
 			RoundTxid: v.RoundTxid,
 			ExpiresAt: expiresAt,
 			SpentBy:   v.SpentBy,
-			Address:   v.Address,
+			Pubkey:    v.Pubkey,
 		})
 	}
 
