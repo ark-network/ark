@@ -777,7 +777,6 @@ func (s *service) Status(ctx context.Context) (ports.WalletStatus, error) {
 	if !s.isLoaded() {
 		return status{
 			initialized: s.isInitialized(),
-			synced:      s.chainSource.IsCurrent(),
 		}, nil
 	}
 
