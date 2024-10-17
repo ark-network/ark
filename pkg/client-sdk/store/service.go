@@ -7,7 +7,6 @@ import (
 	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
 	kvstore "github.com/ark-network/ark/pkg/client-sdk/store/kv"
 	"github.com/ark-network/ark/pkg/client-sdk/types"
-	log "github.com/sirupsen/logrus"
 )
 
 type service struct {
@@ -45,19 +44,20 @@ func NewStore(storeConfig Config) (types.Store, error) {
 		return nil, err
 	}
 
-	switch storeConfig.AppDataStoreType {
-	case types.KVStore:
-		logger := log.New()
-		vtxoStore, err = kvstore.NewVtxoStore(dir, logger)
+	if len(storeConfig.AppDataStoreType) > 0 {
+		switch storeConfig.AppDataStoreType {
+		case types.KVStore:
+			vtxoStore, err = kvstore.NewVtxoStore(dir, nil)
+			if err != nil {
+				return nil, err
+			}
+			txStore, err = kvstore.NewTransactionStore(dir, nil)
+		default:
+			err = fmt.Errorf("unknown appdata store type")
+		}
 		if err != nil {
 			return nil, err
 		}
-		txStore, err = kvstore.NewTransactionStore(dir, logger)
-	default:
-		err = fmt.Errorf("unknown appdata store type")
-	}
-	if err != nil {
-		return nil, err
 	}
 
 	return &service{configStore, vtxoStore, txStore}, nil

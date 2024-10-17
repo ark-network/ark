@@ -230,7 +230,7 @@ func config(ctx *cli.Context) error {
 		"boarding_descriptor_template": cfgData.BoardingDescriptorTemplate,
 		"explorer_url":                 cfgData.ExplorerURL,
 		"forfeit_address":              cfgData.ForfeitAddress,
-		"listen_transaction_stream":    cfgData.WithTransactionFeed,
+		"with_transaction_feed":        cfgData.WithTransactionFeed,
 	}
 
 	return printJSON(cfg)
@@ -376,9 +376,8 @@ func redeem(ctx *cli.Context) error {
 func getArkSdkClient(ctx *cli.Context) (arksdk.ArkClient, error) {
 	dataDir := ctx.String(datadirFlag.Name)
 	sdkRepository, err := store.NewStore(store.Config{
-		ConfigStoreType:  types.FileStore,
-		AppDataStoreType: types.KVStore,
-		BaseDir:          dataDir,
+		ConfigStoreType: types.FileStore,
+		BaseDir:         dataDir,
 	})
 	if err != nil {
 		return nil, err
