@@ -35,7 +35,9 @@ func LogWrapper() js.Func {
 
 func InitWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) != 6 {
+		// TODO: add another withTransactionFeed args to configure client listen to
+		// new txs from the server. Requires server to use websockets.
+		if len(args) != 7 {
 			return nil, errors.New("invalid number of args")
 		}
 		chain := args[5].String()
@@ -43,6 +45,7 @@ func InitWrapper() js.Func {
 			return nil, errors.New("invalid chain, select either 'bitcoin' or 'liquid'")
 		}
 
+		configStore := store.ConfigStore()
 		var walletSvc wallet.WalletService
 		switch args[0].String() {
 		case arksdk.SingleKeyWallet:
@@ -66,11 +69,12 @@ func InitWrapper() js.Func {
 		}
 
 		err := arkSdkClient.InitWithWallet(context.Background(), arksdk.InitWithWalletArgs{
-			ClientType: args[1].String(),
-			Wallet:     walletSvc,
-			AspUrl:     args[2].String(),
-			Seed:       args[3].String(),
-			Password:   args[4].String(),
+			ClientType:  args[1].String(),
+			Wallet:      walletSvc,
+			AspUrl:      args[2].String(),
+			Seed:        args[3].String(),
+			Password:    args[4].String(),
+			ExplorerURL: args[6].String(),
 		})
 
 		// Add this log message

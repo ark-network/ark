@@ -50,6 +50,7 @@ type ASPClient interface {
 	GetRound(ctx context.Context, txID string) (*Round, error)
 	GetRoundByID(ctx context.Context, roundID string) (*Round, error)
 	Close()
+	GetTransactionsStream(ctx context.Context) (<-chan TransactionEvent, func(), error)
 }
 
 type Info struct {
@@ -170,3 +171,22 @@ type RoundSigningNoncesGeneratedEvent struct {
 }
 
 func (e RoundSigningNoncesGeneratedEvent) isRoundEvent() {}
+
+type TransactionEvent struct {
+	Round  *RoundTransaction
+	Redeem *RedeemTransaction
+	Err    error
+}
+
+type RoundTransaction struct {
+	Txid                 string
+	SpentVtxos           []Outpoint
+	SpendableVtxos       []Vtxo
+	ClaimedBoardingUtxos []Outpoint
+}
+
+type RedeemTransaction struct {
+	Txid           string
+	SpentVtxos     []Outpoint
+	SpendableVtxos []Vtxo
+}

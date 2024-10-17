@@ -10,7 +10,7 @@ import (
 	"syscall/js"
 
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
-	"github.com/ark-network/ark/pkg/client-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	singlekeywallet "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey"
 	walletstore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store"
@@ -18,7 +18,7 @@ import (
 
 var (
 	arkSdkClient arksdk.ArkClient
-	configStore  store.ConfigStore
+	store        types.Store
 )
 
 func init() {
@@ -50,11 +50,11 @@ func init() {
 }
 
 func NewCovenantClient(
-	ctx context.Context, storeSvc store.ConfigStore,
+	ctx context.Context, storeSvc types.Store,
 ) error {
 	var err error
 
-	data, err := storeSvc.GetData(ctx)
+	data, err := storeSvc.ConfigStore().GetData(ctx)
 	if err != nil {
 		return err
 	}
@@ -65,7 +65,7 @@ func NewCovenantClient(
 		var walletSvc wallet.WalletService
 		switch data.WalletType {
 		case arksdk.SingleKeyWallet:
-			walletSvc, err = getSingleKeyWallet(storeSvc, data.Network.Name)
+			walletSvc, err = getSingleKeyWallet(storeSvc.ConfigStore(), data.Network.Name)
 			if err != nil {
 				return err
 			}
@@ -79,17 +79,17 @@ func NewCovenantClient(
 		js.Global().Get("console").Call("error", err.Error())
 		return err
 	}
-	configStore = storeSvc
+	store = storeSvc
 
 	select {}
 }
 
 func NewCovenantlessClient(
-	ctx context.Context, storeSvc store.ConfigStore,
+	ctx context.Context, storeSvc types.Store,
 ) error {
 	var err error
 
-	data, err := storeSvc.GetData(ctx)
+	data, err := storeSvc.ConfigStore().GetData(ctx)
 	if err != nil {
 		return err
 	}
@@ -100,7 +100,7 @@ func NewCovenantlessClient(
 		var walletSvc wallet.WalletService
 		switch data.WalletType {
 		case arksdk.SingleKeyWallet:
-			walletSvc, err = getSingleKeyWallet(storeSvc, data.Network.Name)
+			walletSvc, err = getSingleKeyWallet(storeSvc.ConfigStore(), data.Network.Name)
 			if err != nil {
 				return err
 			}
@@ -114,7 +114,7 @@ func NewCovenantlessClient(
 		js.Global().Get("console").Call("error", err.Error())
 		return err
 	}
-	configStore = storeSvc
+	store = storeSvc
 
 	select {}
 }
@@ -128,7 +128,7 @@ func getWalletStore(storeType string) (walletstore.WalletStore, error) {
 }
 
 func getSingleKeyWallet(
-	configStore store.ConfigStore, network string,
+	configStore types.ConfigStore, network string,
 ) (wallet.WalletService, error) {
 	walletStore, err := getWalletStore(configStore.GetType())
 	if err != nil {

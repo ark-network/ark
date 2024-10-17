@@ -3,7 +3,7 @@ package store_test
 import (
 	"testing"
 
-	"github.com/ark-network/ark/pkg/client-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 	walletstore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store"
 	filestore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store/file"
 	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store/inmemory"
@@ -24,10 +24,10 @@ func TestWalletStore(t *testing.T) {
 		args []interface{}
 	}{
 		{
-			name: store.InMemoryStore,
+			name: types.InMemoryStore,
 		},
 		{
-			name: store.FileStore,
+			name: types.FileStore,
 		},
 	}
 
@@ -38,7 +38,7 @@ func TestWalletStore(t *testing.T) {
 
 			var storeSvc walletstore.WalletStore
 			var err error
-			if tt.name == store.InMemoryStore {
+			if tt.name == types.InMemoryStore {
 				storeSvc, err = inmemorystore.NewWalletStore()
 			} else {
 				storeSvc, err = filestore.NewWalletStore(t.TempDir())
