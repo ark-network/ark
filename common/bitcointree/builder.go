@@ -3,6 +3,7 @@ package bitcointree
 import (
 	"fmt"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr/musig2"
@@ -15,7 +16,7 @@ import (
 
 // CraftSharedOutput returns the taproot script and the amount of the initial root output
 func CraftSharedOutput(
-	cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, receivers []Receiver,
+	cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, receivers []tree.Receiver,
 	feeSatsPerNode uint64, roundLifetime int64,
 ) ([]byte, int64, error) {
 	aggregatedKey, _, err := createAggregatedKeyWithSweep(
@@ -32,7 +33,7 @@ func CraftSharedOutput(
 
 	amount := root.getAmount() + int64(feeSatsPerNode)
 
-	scriptPubKey, err := taprootOutputScript(aggregatedKey.FinalKey)
+	scriptPubKey, err := common.P2TRScript(aggregatedKey.FinalKey)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -42,7 +43,7 @@ func CraftSharedOutput(
 
 // CraftCongestionTree creates all the tree's transactions
 func CraftCongestionTree(
-	initialInput *wire.OutPoint, cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, receivers []Receiver,
+	initialInput *wire.OutPoint, cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, receivers []tree.Receiver,
 	feeSatsPerNode uint64, roundLifetime int64,
 ) (tree.CongestionTree, error) {
 	aggregatedKey, sweepTapLeaf, err := createAggregatedKeyWithSweep(
@@ -108,8 +109,8 @@ type node interface {
 }
 
 type leaf struct {
-	vtxoScript VtxoScript
-	amount     int64
+	address string
+	amount  int64
 }
 
 type branch struct {
@@ -142,12 +143,12 @@ func (l *leaf) getAmount() int64 {
 }
 
 func (l *leaf) getOutputs() ([]*wire.TxOut, error) {
-	taprootKey, _, err := l.vtxoScript.TapTree()
+	addr, err := common.DecodeAddress(l.address)
 	if err != nil {
 		return nil, err
 	}
 
-	script, err := taprootOutputScript(taprootKey)
+	script, err := common.P2TRScript(addr.VtxoTapKey)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +162,7 @@ func (l *leaf) getOutputs() ([]*wire.TxOut, error) {
 }
 
 func (b *branch) getOutputs() ([]*wire.TxOut, error) {
-	sharedOutputScript, err := taprootOutputScript(b.aggregatedKey.FinalKey)
+	sharedOutputScript, err := common.P2TRScript(b.aggregatedKey.FinalKey)
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +247,7 @@ func getTx(
 func createRootNode(
 	aggregatedKey *musig2.AggregateKey,
 	cosigners []*secp256k1.PublicKey,
-	receivers []Receiver,
+	receivers []tree.Receiver,
 	feeSatsPerNode uint64,
 ) (root node, err error) {
 	if len(receivers) == 0 {
@@ -256,8 +257,8 @@ func createRootNode(
 	nodes := make([]node, 0, len(receivers))
 	for _, r := range receivers {
 		leafNode := &leaf{
-			vtxoScript: r.Script,
-			amount:     int64(r.Amount),
+			address: r.Address,
+			amount:  int64(r.Amount),
 		}
 		nodes = append(nodes, leafNode)
 	}
@@ -338,10 +339,4 @@ func createUpperLevel(nodes []node, aggregatedKey *musig2.AggregateKey, cosigner
 		pairs = append(pairs, branchNode)
 	}
 	return pairs, nil
-}
-
-func taprootOutputScript(taprootKey *secp256k1.PublicKey) ([]byte, error) {
-	return txscript.NewScriptBuilder().AddOp(txscript.OP_1).AddData(
-		schnorr.SerializePubKey(taprootKey),
-	).Script()
 }

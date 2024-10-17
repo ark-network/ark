@@ -18,11 +18,11 @@ import (
 // swagger:model v1Vtxo
 type V1Vtxo struct {
 
+	// address
+	Address string `json:"address,omitempty"`
+
 	// amount
 	Amount string `json:"amount,omitempty"`
-
-	// descriptor
-	Descriptor string `json:"descriptor,omitempty"`
 
 	// expire at
 	ExpireAt string `json:"expireAt,omitempty"`

@@ -4,14 +4,12 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"fmt"
 	"os"
 	"reflect"
 	"sort"
 	"testing"
 	"time"
 
-	"github.com/ark-network/ark/common/descriptor"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -24,26 +22,8 @@ import (
 const (
 	emptyPtx = "cHNldP8BAgQCAAAAAQQBAAEFAQABBgEDAfsEAgAAAAA="
 	emptyTx  = "0200000000000000000000"
-	pubkey1  = "00000000000000000000000000000000000000000000000000000000000000001"
-	pubkey2  = "00000000000000000000000000000000000000000000000000000000000000002"
-)
-
-var desc1 = fmt.Sprintf(
-	descriptor.DefaultVtxoDescriptorTemplate,
-	randomString(66),
-	pubkey1,
-	pubkey1,
-	512,
-	pubkey1,
-)
-
-var desc2 = fmt.Sprintf(
-	descriptor.DefaultVtxoDescriptorTemplate,
-	randomString(66),
-	pubkey2,
-	pubkey2,
-	512,
-	pubkey2,
+	address  = "ark1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22vqa7mdkrrulzu48law4zzvzz8k59hul0ayl2urt905we5wf6gee68sfrfj35"
+	address2 = "ark1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22vqa7mdkrrulzu48law4zzvzz8k59hul0ayl2urt905we5wf6gee6fspppnge"
 )
 
 var congestionTree = [][]tree.Node{
@@ -271,14 +251,14 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 								RoundTxid: randomString(32),
 								ExpireAt:  7980322,
 								Receiver: domain.Receiver{
-									Descriptor: randomString(120),
-									Amount:     300,
+									Address: randomString(66),
+									Amount:  300,
 								},
 							},
 						},
 						Receivers: []domain.Receiver{{
-							Descriptor: randomString(120),
-							Amount:     300,
+							Address: randomString(66),
+							Amount:  300,
 						}},
 					},
 					{
@@ -293,19 +273,19 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 								RoundTxid: randomString(32),
 								ExpireAt:  7980322,
 								Receiver: domain.Receiver{
-									Descriptor: randomString(120),
-									Amount:     600,
+									Address: randomString(66),
+									Amount:  600,
 								},
 							},
 						},
 						Receivers: []domain.Receiver{
 							{
-								Descriptor: randomString(120),
-								Amount:     400,
+								Address: randomString(66),
+								Amount:  400,
 							},
 							{
-								Descriptor: randomString(120),
-								Amount:     200,
+								Address: randomString(66),
+								Amount:  200,
 							},
 						},
 					},
@@ -371,8 +351,8 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 					VOut: 0,
 				},
 				Receiver: domain.Receiver{
-					Descriptor: desc1,
-					Amount:     1000,
+					Address: address,
+					Amount:  1000,
 				},
 			},
 			{
@@ -381,8 +361,8 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 					VOut: 1,
 				},
 				Receiver: domain.Receiver{
-					Descriptor: desc1,
-					Amount:     2000,
+					Address: address,
+					Amount:  2000,
 				},
 			},
 		}
@@ -392,8 +372,8 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 				VOut: 1,
 			},
 			Receiver: domain.Receiver{
-				Descriptor: desc2,
-				Amount:     2000,
+				Address: address2,
+				Amount:  2000,
 			},
 		})
 
@@ -406,7 +386,7 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 		require.Error(t, err)
 		require.Empty(t, vtxos)
 
-		spendableVtxos, spentVtxos, err := svc.Vtxos().GetAllVtxos(ctx, pubkey1)
+		spendableVtxos, spentVtxos, err := svc.Vtxos().GetAllVtxos(ctx, address)
 		require.NoError(t, err)
 		require.Empty(t, spendableVtxos)
 		require.Empty(t, spentVtxos)
@@ -423,7 +403,7 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 		require.NoError(t, err)
 		require.Exactly(t, userVtxos, vtxos)
 
-		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllVtxos(ctx, pubkey1)
+		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllVtxos(ctx, address)
 		require.NoError(t, err)
 
 		sortedVtxos := sortVtxos(userVtxos)
@@ -449,7 +429,7 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 			require.True(t, v.Spent)
 		}
 
-		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllVtxos(ctx, pubkey1)
+		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllVtxos(ctx, address)
 		require.NoError(t, err)
 		require.Exactly(t, vtxos[1:], spendableVtxos)
 		require.Len(t, spentVtxos, len(vtxoKeys[:1]))

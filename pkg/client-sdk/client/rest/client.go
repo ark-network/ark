@@ -138,9 +138,8 @@ func (a *restClient) RegisterOutputsForNextRound(
 	outs := make([]*models.V1Output, 0, len(outputs))
 	for _, o := range outputs {
 		outs = append(outs, &models.V1Output{
-			Address:    o.Address,
-			Descriptor: o.Descriptor,
-			Amount:     strconv.Itoa(int(o.Amount)),
+			Address: o.Address,
+			Amount:  strconv.Itoa(int(o.Amount)),
 		})
 	}
 	body := models.V1RegisterOutputsForNextRoundRequest{
@@ -337,24 +336,26 @@ func (a *restClient) Ping(
 }
 
 func (a *restClient) CreatePayment(
-	ctx context.Context, inputs []client.Input, outputs []client.Output,
+	ctx context.Context, inputs []client.AsyncPaymentInput, outputs []client.Output,
 ) (string, error) {
-	ins := make([]*models.V1Input, 0, len(inputs))
+	ins := make([]*models.V1AsyncPaymentInput, 0, len(inputs))
 	for _, i := range inputs {
-		ins = append(ins, &models.V1Input{
-			Outpoint: &models.V1Outpoint{
-				Txid: i.Txid,
-				Vout: int64(i.VOut),
+		ins = append(ins, &models.V1AsyncPaymentInput{
+			Input: &models.V1Input{
+				Outpoint: &models.V1Outpoint{
+					Txid: i.Input.Txid,
+					Vout: int64(i.VOut),
+				},
+				Descriptor: i.Input.Descriptor,
 			},
-			Descriptor: i.Descriptor,
+			ForfeitLeafHash: i.ForfeitLeafHash.String(),
 		})
 	}
 	outs := make([]*models.V1Output, 0, len(outputs))
 	for _, o := range outputs {
 		outs = append(outs, &models.V1Output{
-			Address:    o.Address,
-			Amount:     strconv.Itoa(int(o.Amount)),
-			Descriptor: o.Descriptor,
+			Address: o.Address,
+			Amount:  strconv.Itoa(int(o.Amount)),
 		})
 	}
 	body := models.V1CreatePaymentRequest{
@@ -495,13 +496,13 @@ func (a *restClient) ListVtxos(
 				Txid: v.Outpoint.Txid,
 				VOut: uint32(v.Outpoint.Vout),
 			},
-			Amount:     uint64(amount),
-			RoundTxid:  v.RoundTxid,
-			ExpiresAt:  expiresAt,
-			Pending:    v.Pending,
-			RedeemTx:   v.RedeemTx,
-			SpentBy:    v.SpentBy,
-			Descriptor: v.Descriptor,
+			Amount:    uint64(amount),
+			RoundTxid: v.RoundTxid,
+			ExpiresAt: expiresAt,
+			Pending:   v.Pending,
+			RedeemTx:  v.RedeemTx,
+			SpentBy:   v.SpentBy,
+			Address:   v.Address,
 		})
 	}
 
@@ -527,11 +528,11 @@ func (a *restClient) ListVtxos(
 				Txid: v.Outpoint.Txid,
 				VOut: uint32(v.Outpoint.Vout),
 			},
-			Amount:     uint64(amount),
-			RoundTxid:  v.RoundTxid,
-			ExpiresAt:  expiresAt,
-			SpentBy:    v.SpentBy,
-			Descriptor: v.Descriptor,
+			Amount:    uint64(amount),
+			RoundTxid: v.RoundTxid,
+			ExpiresAt: expiresAt,
+			SpentBy:   v.SpentBy,
+			Address:   v.Address,
 		})
 	}
 

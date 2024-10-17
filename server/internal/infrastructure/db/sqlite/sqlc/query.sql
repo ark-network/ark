@@ -44,11 +44,10 @@ INSERT INTO payment (id, round_id) VALUES (?, ?)
 ON CONFLICT(id) DO UPDATE SET round_id = EXCLUDED.round_id;
 
 -- name: UpsertReceiver :exec
-INSERT INTO receiver (payment_id, descriptor, amount, onchain_address) VALUES (?, ?, ?, ?)
-ON CONFLICT(payment_id, descriptor) DO UPDATE SET
+INSERT INTO receiver (payment_id, addr, amount) VALUES (?, ?, ?)
+ON CONFLICT(payment_id, addr) DO UPDATE SET
     amount = EXCLUDED.amount,
-    onchain_address = EXCLUDED.onchain_address,
-    descriptor = EXCLUDED.descriptor;
+    addr = EXCLUDED.addr;
 
 -- name: UpdateVtxoPaymentId :exec
 UPDATE vtxo SET payment_id = ? WHERE txid = ? AND vout = ?;
@@ -112,9 +111,9 @@ SELECT id FROM round WHERE starting_timestamp > ? AND starting_timestamp < ?;
 SELECT id FROM round;
 
 -- name: UpsertVtxo :exec
-INSERT INTO vtxo (txid, vout, descriptor, amount, pool_tx, spent_by, spent, redeemed, swept, expire_at, redeem_tx, pending)
+INSERT INTO vtxo (txid, vout, addr, amount, pool_tx, spent_by, spent, redeemed, swept, expire_at, redeem_tx, pending)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(txid, vout) DO UPDATE SET
-    descriptor = EXCLUDED.descriptor,
+    addr = EXCLUDED.addr,
     amount = EXCLUDED.amount,
     pool_tx = EXCLUDED.pool_tx,
     spent_by = EXCLUDED.spent_by,
@@ -133,9 +132,9 @@ WHERE redeemed = false AND swept = false;
 SELECT sqlc.embed(vtxo) FROM vtxo
 WHERE redeemed = false;
 
--- name: SelectNotRedeemedVtxosWithPubkey :many
+-- name: SelectNotRedeemedVtxosWithAddress :many
 SELECT sqlc.embed(vtxo) FROM vtxo
-WHERE redeemed = false AND INSTR(descriptor, ?) > 0;
+WHERE redeemed = false AND addr = ?;
 
 -- name: SelectVtxoByOutpoint :one
 SELECT sqlc.embed(vtxo) FROM vtxo

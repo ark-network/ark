@@ -2,9 +2,9 @@
   "address": {
     "valid": [
       {
-        "addr": "ark1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22vqa7mdkrrulzu48law4zzvzz8k59hul0ayl2urt905we5wf6gee68sfrfj35",
-        "expectedUserKey": "03bedb6c31f3e2e54ffebaa2130423da85bf3efe93eae0d657d1d9a393a4673a3c",
-        "expectedAspKey": "0218d5ca8b58797b7dbd65c075dd7ba7784b3f38ab71b1a5a8e3f94ba0257654a6"
+        "addr": "tark1x0lm8hhr2wc6n6lyemtyh9rz8rg2ftpkfun46aca56kjg3ws0tsztfpuanaquxc6faedvjk3tax0575y6perapg3e95654pk8r4fjecs5fyd2",
+        "expectedUserKey": "0225a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967",
+        "expectedAspKey": "0233ffb3dee353b1a9ebe4ced64b946238d0a4ac364f275d771da6ad2445d07ae0"
       }
     ],
     "invalid": [

@@ -20,7 +20,7 @@ import (
 type V1CreatePaymentRequest struct {
 
 	// inputs
-	Inputs []*V1Input `json:"inputs"`
+	Inputs []*V1AsyncPaymentInput `json:"inputs"`
 
 	// outputs
 	Outputs []*V1Output `json:"outputs"`

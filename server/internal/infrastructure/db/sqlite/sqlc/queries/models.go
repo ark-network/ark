@@ -14,33 +14,31 @@ type Payment struct {
 }
 
 type PaymentReceiverVw struct {
-	PaymentID      sql.NullString
-	Descriptor     sql.NullString
-	Amount         sql.NullInt64
-	OnchainAddress sql.NullString
+	PaymentID sql.NullString
+	Addr      sql.NullString
+	Amount    sql.NullInt64
 }
 
 type PaymentVtxoVw struct {
-	Txid       sql.NullString
-	Vout       sql.NullInt64
-	Amount     sql.NullInt64
-	PoolTx     sql.NullString
-	SpentBy    sql.NullString
-	Spent      sql.NullBool
-	Redeemed   sql.NullBool
-	Swept      sql.NullBool
-	ExpireAt   sql.NullInt64
-	PaymentID  sql.NullString
-	RedeemTx   sql.NullString
-	Descriptor sql.NullString
-	Pending    sql.NullBool
+	Txid      sql.NullString
+	Vout      sql.NullInt64
+	Amount    sql.NullInt64
+	PoolTx    sql.NullString
+	SpentBy   sql.NullString
+	Spent     sql.NullBool
+	Redeemed  sql.NullBool
+	Swept     sql.NullBool
+	ExpireAt  sql.NullInt64
+	PaymentID sql.NullString
+	RedeemTx  sql.NullString
+	Pending   sql.NullBool
+	Addr      sql.NullString
 }
 
 type Receiver struct {
-	PaymentID      string
-	Descriptor     string
-	Amount         int64
-	OnchainAddress string
+	PaymentID string
+	Addr      string
+	Amount    int64
 }
 
 type Round struct {
@@ -88,17 +86,17 @@ type Tx struct {
 }
 
 type Vtxo struct {
-	Txid       string
-	Vout       int64
-	Amount     int64
-	PoolTx     string
-	SpentBy    string
-	Spent      bool
-	Redeemed   bool
-	Swept      bool
-	ExpireAt   int64
-	PaymentID  sql.NullString
-	RedeemTx   sql.NullString
-	Descriptor sql.NullString
-	Pending    bool
+	Txid      string
+	Vout      int64
+	Amount    int64
+	PoolTx    string
+	SpentBy   string
+	Spent     bool
+	Redeemed  bool
+	Swept     bool
+	ExpireAt  int64
+	PaymentID sql.NullString
+	RedeemTx  sql.NullString
+	Pending   bool
+	Addr      sql.NullString
 }

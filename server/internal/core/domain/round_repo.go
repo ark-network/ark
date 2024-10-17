@@ -28,7 +28,7 @@ type VtxoRepository interface {
 	GetVtxos(ctx context.Context, vtxos []VtxoKey) ([]Vtxo, error)
 	GetVtxosForRound(ctx context.Context, txid string) ([]Vtxo, error)
 	SweepVtxos(ctx context.Context, vtxos []VtxoKey) error
-	GetAllVtxos(ctx context.Context, pubkey string) ([]Vtxo, []Vtxo, error)
+	GetAllVtxos(ctx context.Context, address string) ([]Vtxo, []Vtxo, error)
 	GetAllSweepableVtxos(ctx context.Context) ([]Vtxo, error)
 	UpdateExpireAt(ctx context.Context, vtxos []VtxoKey, expireAt int64) error
 	Close()

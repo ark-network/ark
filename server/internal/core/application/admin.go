@@ -94,7 +94,7 @@ func (a *adminService) GetRoundDetails(ctx context.Context, roundId string) (*Ro
 		for _, receiver := range payment.Receivers {
 			if receiver.IsOnchain() {
 				roundDetails.TotalExitAmount += receiver.Amount
-				roundDetails.ExitAddresses = append(roundDetails.ExitAddresses, receiver.OnchainAddress)
+				roundDetails.ExitAddresses = append(roundDetails.ExitAddresses, receiver.Address)
 				continue
 			}
 

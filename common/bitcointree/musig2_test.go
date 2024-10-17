@@ -8,7 +8,9 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
@@ -222,7 +224,7 @@ type receiverFixture struct {
 	Pubkey string `json:"pubkey"`
 }
 
-func (r receiverFixture) toVtxoScript(asp *secp256k1.PublicKey) bitcointree.VtxoScript {
+func (r receiverFixture) toVtxoAddress(asp *secp256k1.PublicKey) string {
 	bytesKey, err := hex.DecodeString(r.Pubkey)
 	if err != nil {
 		panic(err)
@@ -233,19 +235,26 @@ func (r receiverFixture) toVtxoScript(asp *secp256k1.PublicKey) bitcointree.Vtxo
 		panic(err)
 	}
 
-	return &bitcointree.DefaultVtxoScript{
-		Owner:     pubkey,
-		Asp:       asp,
-		ExitDelay: exitDelay,
+	addr := &common.Address{
+		HRP:        common.Bitcoin.Addr,
+		Asp:        asp,
+		VtxoTapKey: pubkey,
 	}
+
+	addrEncoded, err := addr.Encode()
+	if err != nil {
+		panic(err)
+	}
+
+	return addrEncoded
 }
 
-func castReceivers(receivers []receiverFixture, asp *secp256k1.PublicKey) []bitcointree.Receiver {
-	receiversOut := make([]bitcointree.Receiver, 0, len(receivers))
+func castReceivers(receivers []receiverFixture, asp *secp256k1.PublicKey) []tree.Receiver {
+	receiversOut := make([]tree.Receiver, 0, len(receivers))
 	for _, r := range receivers {
-		receiversOut = append(receiversOut, bitcointree.Receiver{
-			Script: r.toVtxoScript(asp),
-			Amount: uint64(r.Amount),
+		receiversOut = append(receiversOut, tree.Receiver{
+			Address: r.toVtxoAddress(asp),
+			Amount:  uint64(r.Amount),
 		})
 	}
 	return receiversOut

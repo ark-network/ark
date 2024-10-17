@@ -1,22 +1,13 @@
 package domain_test
 
 import (
-	"fmt"
 	"testing"
 
-	"github.com/ark-network/ark/common/descriptor"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/stretchr/testify/require"
 )
 
-var desc = fmt.Sprintf(
-	descriptor.DefaultVtxoDescriptorTemplate,
-	"030000000000000000000000000000000000000000000000000000000000000001",
-	"0000000000000000000000000000000000000000000000000000000000000001",
-	"0000000000000000000000000000000000000000000000000000000000000001",
-	512,
-	"0000000000000000000000000000000000000000000000000000000000000001",
-)
+const address = "ark1qgvdtj5ttpuhkldavhq8thtm5auyk0ec4dcmrfdgu0u5hgp9we22vqa7mdkrrulzu48law4zzvzz8k59hul0ayl2urt905we5wf6gee68sfrfj35"
 
 var inputs = []domain.Vtxo{
 	{
@@ -25,8 +16,8 @@ var inputs = []domain.Vtxo{
 			VOut: 0,
 		},
 		Receiver: domain.Receiver{
-			Descriptor: desc,
-			Amount:     1000,
+			Address: address,
+			Amount:  1000,
 		},
 	},
 }
@@ -51,12 +42,12 @@ func TestPayment(t *testing.T) {
 
 			err = payment.AddReceivers([]domain.Receiver{
 				{
-					Descriptor: desc,
-					Amount:     450,
+					Address: address,
+					Amount:  450,
 				},
 				{
-					Descriptor: desc,
-					Amount:     550,
+					Address: address,
+					Amount:  550,
 				},
 			})
 			require.NoError(t, err)

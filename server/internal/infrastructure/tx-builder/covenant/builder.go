@@ -84,6 +84,7 @@ func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (signedSweepTx strin
 func (b *txBuilder) BuildForfeitTxs(
 	poolTx string,
 	payments []domain.Payment,
+	descriptors map[domain.VtxoKey]string,
 	minRelayFeeRate chainfee.SatPerKVByte,
 ) (connectors []string, forfeitTxs []string, err error) {
 	connectorAddress, err := b.getConnectorAddress(poolTx)
@@ -106,7 +107,7 @@ func (b *txBuilder) BuildForfeitTxs(
 		return nil, nil, err
 	}
 
-	forfeitTxs, err = b.createForfeitTxs(payments, connectorTxs, connectorAmount, minRelayFeeRate)
+	forfeitTxs, err = b.createForfeitTxs(payments, descriptors, connectorTxs, connectorAmount, minRelayFeeRate)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -362,7 +363,10 @@ func (b *txBuilder) FindLeaves(
 }
 
 func (b *txBuilder) BuildAsyncPaymentTransactions(
-	_ []domain.Vtxo, _ *secp256k1.PublicKey, _ []domain.Receiver,
+	_ []domain.Vtxo,
+	_ map[domain.VtxoKey]string,
+	_ map[domain.VtxoKey]chainhash.Hash,
+	_ []domain.Receiver,
 ) (string, error) {
 	return "", fmt.Errorf("not implemented")
 }
@@ -427,7 +431,7 @@ func (b *txBuilder) createPoolTx(
 	for _, receiver := range receivers {
 		targetAmount += receiver.Amount
 
-		receiverScript, err := address.ToOutputScript(receiver.OnchainAddress)
+		receiverScript, err := address.ToOutputScript(receiver.Address)
 		if err != nil {
 			return nil, err
 		}
@@ -786,6 +790,7 @@ func (b *txBuilder) createConnectors(
 
 func (b *txBuilder) createForfeitTxs(
 	payments []domain.Payment,
+	descriptors map[domain.VtxoKey]string,
 	connectors []*psetv2.Pset,
 	connectorAmount uint64,
 	minRelayFeeRate chainfee.SatPerKVByte,
@@ -803,7 +808,12 @@ func (b *txBuilder) createForfeitTxs(
 	forfeitTxs := make([]string, 0)
 	for _, payment := range payments {
 		for _, vtxo := range payment.Inputs {
-			offchainScript, err := tree.ParseVtxoScript(vtxo.Descriptor)
+			desc, ok := descriptors[vtxo.VtxoKey]
+			if !ok {
+				return nil, fmt.Errorf("descriptor not found for vtxo %s:%d", vtxo.VtxoKey.Txid, vtxo.VtxoKey.VOut)
+			}
+
+			offchainScript, err := tree.ParseVtxoScript(desc)
 			if err != nil {
 				return nil, err
 			}

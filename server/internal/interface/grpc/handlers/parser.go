@@ -6,18 +6,46 @@ import (
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
+	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
 // From interface type to app type
 
-func parseAddress(addr string) (string, *secp256k1.PublicKey, *secp256k1.PublicKey, error) {
+func parseAddress(addr string) (*common.Address, error) {
 	if len(addr) <= 0 {
-		return "", nil, nil, fmt.Errorf("missing address")
+		return nil, fmt.Errorf("missing address")
 	}
 	return common.DecodeAddress(addr)
+}
+
+func parseAsyncPaymentInputs(ins []*arkv1.AsyncPaymentInput) ([]application.AsyncPaymentInput, error) {
+	if len(ins) <= 0 {
+		return nil, fmt.Errorf("missing inputs")
+	}
+
+	inputs := make([]application.AsyncPaymentInput, 0, len(ins))
+	for _, input := range ins {
+		forfeitLeafHash, err := chainhash.NewHashFromStr(input.GetForfeitLeafHash())
+		if err != nil {
+			return nil, fmt.Errorf("invalid forfeit leaf hash: %s", err)
+		}
+
+		inputs = append(inputs, application.AsyncPaymentInput{
+			Input: ports.Input{
+				VtxoKey: domain.VtxoKey{
+					Txid: input.GetInput().GetOutpoint().GetTxid(),
+					VOut: input.GetInput().GetOutpoint().GetVout(),
+				},
+				Descriptor: input.GetInput().GetDescriptor_(),
+			},
+			ForfeitLeafHash: *forfeitLeafHash,
+		})
+	}
+
+	return inputs, nil
 }
 
 func parseInputs(ins []*arkv1.Input) ([]ports.Input, error) {
@@ -45,20 +73,19 @@ func parseReceivers(outs []*arkv1.Output) ([]domain.Receiver, error) {
 		if out.GetAmount() == 0 {
 			return nil, fmt.Errorf("missing output amount")
 		}
-		if len(out.GetAddress()) <= 0 && len(out.GetDescriptor_()) <= 0 {
+		if len(out.GetAddress()) <= 0 {
 			return nil, fmt.Errorf("missing output destination")
 		}
 
 		receivers = append(receivers, domain.Receiver{
-			Descriptor:     out.GetDescriptor_(),
-			Amount:         out.GetAmount(),
-			OnchainAddress: out.GetAddress(),
+			Amount:  out.GetAmount(),
+			Address: out.GetAddress(),
 		})
 	}
 	return receivers, nil
 }
 
-// From app typeto interface type
+// From app type to interface type
 
 type vtxoList []domain.Vtxo
 
@@ -70,15 +97,15 @@ func (v vtxoList) toProto() []*arkv1.Vtxo {
 				Txid: vv.Txid,
 				Vout: vv.VOut,
 			},
-			Descriptor_: vv.Descriptor,
-			Amount:      vv.Amount,
-			RoundTxid:   vv.RoundTxid,
-			Spent:       vv.Spent,
-			ExpireAt:    vv.ExpireAt,
-			SpentBy:     vv.SpentBy,
-			Swept:       vv.Swept,
-			RedeemTx:    vv.RedeemTx,
-			Pending:     vv.Pending,
+			Amount:    vv.Amount,
+			RoundTxid: vv.RoundTxid,
+			Spent:     vv.Spent,
+			ExpireAt:  vv.ExpireAt,
+			SpentBy:   vv.SpentBy,
+			Swept:     vv.Swept,
+			RedeemTx:  vv.RedeemTx,
+			Pending:   vv.Pending,
+			Address:   vv.Address,
 		})
 	}
 

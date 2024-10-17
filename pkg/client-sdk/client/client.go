@@ -6,6 +6,7 @@ import (
 
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
@@ -41,7 +42,7 @@ type ASPClient interface {
 	) (<-chan RoundEventChannel, func(), error)
 	Ping(ctx context.Context, paymentID string) (RoundEvent, error)
 	CreatePayment(
-		ctx context.Context, inputs []Input, outputs []Output,
+		ctx context.Context, inputs []AsyncPaymentInput, outputs []Output,
 	) (string, error)
 	CompletePayment(
 		ctx context.Context, signedRedeemTx string,
@@ -78,21 +79,30 @@ type Input struct {
 	Descriptor string
 }
 
+type AsyncPaymentInput struct {
+	Input
+	ForfeitLeafHash chainhash.Hash
+}
+
 type Vtxo struct {
 	Outpoint
+	Address   string
+	Amount    uint64
+	RoundTxid string
+	ExpiresAt *time.Time
+	RedeemTx  string
+	Pending   bool
+	SpentBy   string
+}
+
+type DescriptorVtxo struct {
+	Vtxo
 	Descriptor string
-	Amount     uint64
-	RoundTxid  string
-	ExpiresAt  *time.Time
-	RedeemTx   string
-	Pending    bool
-	SpentBy    string
 }
 
 type Output struct {
-	Address    string // onchain output address
-	Descriptor string // offchain vtxo descriptor
-	Amount     uint64
+	Address string // onchain or offchain address
+	Amount  uint64
 }
 
 type RoundStage int

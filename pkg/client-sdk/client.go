@@ -230,7 +230,7 @@ func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
 		return "", "", err
 	}
 
-	return offchainAddr, boardingAddr, nil
+	return offchainAddr.Address, boardingAddr.Address, nil
 }
 
 func (a *arkClient) ping(

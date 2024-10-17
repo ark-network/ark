@@ -1,7 +1,7 @@
 package txbuilder
 
 import (
-	"github.com/ark-network/ark/common/bitcointree"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/txscript"
@@ -24,19 +24,14 @@ func getOnchainReceivers(
 
 func getOffchainReceivers(
 	payments []domain.Payment,
-) ([]bitcointree.Receiver, error) {
-	receivers := make([]bitcointree.Receiver, 0)
+) ([]tree.Receiver, error) {
+	receivers := make([]tree.Receiver, 0)
 	for _, payment := range payments {
 		for _, receiver := range payment.Receivers {
 			if !receiver.IsOnchain() {
-				vtxoScript, err := bitcointree.ParseVtxoScript(receiver.Descriptor)
-				if err != nil {
-					return nil, err
-				}
-
-				receivers = append(receivers, bitcointree.Receiver{
-					Script: vtxoScript,
-					Amount: receiver.Amount,
+				receivers = append(receivers, tree.Receiver{
+					Address: receiver.Address,
+					Amount:  receiver.Amount,
 				})
 			}
 		}

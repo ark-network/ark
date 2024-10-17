@@ -228,7 +228,10 @@ func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (signedSweepTx strin
 }
 
 func (b *txBuilder) BuildForfeitTxs(
-	poolTx string, payments []domain.Payment, minRelayFeeRate chainfee.SatPerKVByte,
+	poolTx string,
+	payments []domain.Payment,
+	descriptors map[domain.VtxoKey]string,
+	minRelayFeeRate chainfee.SatPerKVByte,
 ) (connectors []string, forfeitTxs []string, err error) {
 	connectorPkScript, err := b.getConnectorPkScript(poolTx)
 	if err != nil {
@@ -245,7 +248,7 @@ func (b *txBuilder) BuildForfeitTxs(
 		return nil, nil, err
 	}
 
-	forfeitTxs, err = b.createForfeitTxs(payments, connectorTxs, minRelayFeeRate)
+	forfeitTxs, err = b.createForfeitTxs(payments, descriptors, connectorTxs, minRelayFeeRate)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -399,7 +402,10 @@ func (b *txBuilder) FindLeaves(congestionTree tree.CongestionTree, fromtxid stri
 }
 
 func (b *txBuilder) BuildAsyncPaymentTransactions(
-	vtxos []domain.Vtxo, aspPubKey *secp256k1.PublicKey, receivers []domain.Receiver,
+	vtxos []domain.Vtxo,
+	descriptors map[domain.VtxoKey]string,
+	forfeitsLeaves map[domain.VtxoKey]chainhash.Hash,
+	receivers []domain.Receiver,
 ) (string, error) {
 	if len(vtxos) <= 0 {
 		return "", fmt.Errorf("missing vtxos")
@@ -412,6 +418,16 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 
 	redeemTxWeightEstimator := &input.TxWeightEstimator{}
 	for index, vtxo := range vtxos {
+		desc, ok := descriptors[vtxo.VtxoKey]
+		if !ok {
+			return "", fmt.Errorf("missing descriptor for vtxo %s", vtxo.VtxoKey)
+		}
+
+		forfeitLeafHash, ok := forfeitsLeaves[vtxo.VtxoKey]
+		if !ok {
+			return "", fmt.Errorf("missing forfeit leaf hash for vtxo %s", vtxo.VtxoKey)
+		}
+
 		if vtxo.Spent || vtxo.Redeemed || vtxo.Swept {
 			return "", fmt.Errorf("all vtxos must be unspent")
 		}
@@ -426,7 +442,7 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 			Index: vtxo.VOut,
 		}
 
-		vtxoScript, err := bitcointree.ParseVtxoScript(vtxo.Descriptor)
+		vtxoScript, err := bitcointree.ParseVtxoScript(desc)
 		if err != nil {
 			return "", err
 		}
@@ -446,40 +462,26 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 			PkScript: vtxoOutputScript,
 		}
 
-		if defaultVtxoScript, ok := vtxoScript.(*bitcointree.DefaultVtxoScript); ok {
-			forfeitLeaf := bitcointree.MultisigClosure{
-				Pubkey:    defaultVtxoScript.Owner,
-				AspPubkey: defaultVtxoScript.Asp,
-			}
-
-			tapLeaf, err := forfeitLeaf.Leaf()
-			if err != nil {
-				return "", err
-			}
-
-			leafProof, err := vtxoTree.GetTaprootMerkleProof(tapLeaf.TapHash())
-			if err != nil {
-				return "", err
-			}
-
-			tapscripts[index] = &psbt.TaprootTapLeafScript{
-				ControlBlock: leafProof.ControlBlock,
-				Script:       leafProof.Script,
-				LeafVersion:  txscript.BaseLeafVersion,
-			}
-
-			ctrlBlock, err := txscript.ParseControlBlock(leafProof.ControlBlock)
-			if err != nil {
-				return "", err
-			}
-
-			redeemTxWeightEstimator.AddTapscriptInput(64*2, &waddrmgr.Tapscript{
-				RevealedScript: leafProof.Script,
-				ControlBlock:   ctrlBlock,
-			})
-		} else {
-			return "", fmt.Errorf("vtxo %s:%d script is not default script, can't be async spent", vtxo.Txid, vtxo.VOut)
+		leafProof, err := vtxoTree.GetTaprootMerkleProof(forfeitLeafHash)
+		if err != nil {
+			return "", err
 		}
+
+		tapscripts[index] = &psbt.TaprootTapLeafScript{
+			ControlBlock: leafProof.ControlBlock,
+			Script:       leafProof.Script,
+			LeafVersion:  txscript.BaseLeafVersion,
+		}
+
+		ctrlBlock, err := txscript.ParseControlBlock(leafProof.ControlBlock)
+		if err != nil {
+			return "", err
+		}
+
+		redeemTxWeightEstimator.AddTapscriptInput(64*2+40, &waddrmgr.Tapscript{
+			RevealedScript: leafProof.Script,
+			ControlBlock:   ctrlBlock,
+		})
 
 		ins = append(ins, vtxoOutpoint)
 	}
@@ -498,17 +500,12 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 	}
 
 	for i, receiver := range receivers {
-		offchainScript, err := bitcointree.ParseVtxoScript(receiver.Descriptor)
+		addr, err := common.DecodeAddress(receiver.Address)
 		if err != nil {
 			return "", err
 		}
 
-		receiverVtxoTaprootKey, _, err := offchainScript.TapTree()
-		if err != nil {
-			return "", err
-		}
-
-		newVtxoScript, err := common.P2TRScript(receiverVtxoTaprootKey)
+		newVtxoScript, err := common.P2TRScript(addr.VtxoTapKey)
 		if err != nil {
 			return "", err
 		}
@@ -617,7 +614,7 @@ func (b *txBuilder) createRoundTx(
 	for _, receiver := range receivers {
 		targetAmount += receiver.Amount
 
-		receiverAddr, err := btcutil.DecodeAddress(receiver.OnchainAddress, b.onchainNetwork())
+		receiverAddr, err := btcutil.DecodeAddress(receiver.Address, b.onchainNetwork())
 		if err != nil {
 			return nil, err
 		}
@@ -1016,6 +1013,7 @@ func (b *txBuilder) minRelayFeeTreeTx() (uint64, error) {
 
 func (b *txBuilder) createForfeitTxs(
 	payments []domain.Payment,
+	descriptors map[domain.VtxoKey]string,
 	connectors []*psbt.Packet,
 	minRelayFeeRate chainfee.SatPerKVByte,
 ) ([]string, error) {
@@ -1042,7 +1040,12 @@ func (b *txBuilder) createForfeitTxs(
 	forfeitTxs := make([]string, 0)
 	for _, payment := range payments {
 		for _, vtxo := range payment.Inputs {
-			offchainscript, err := bitcointree.ParseVtxoScript(vtxo.Descriptor)
+			desc, ok := descriptors[vtxo.VtxoKey]
+			if !ok {
+				return nil, err
+			}
+
+			offchainscript, err := bitcointree.ParseVtxoScript(desc)
 			if err != nil {
 				return nil, err
 			}

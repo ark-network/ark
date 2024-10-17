@@ -21,23 +21,23 @@ var (
 						VOut: 0,
 					},
 					Receiver: domain.Receiver{
-						Descriptor: desc,
-						Amount:     2000,
+						Address: address,
+						Amount:  2000,
 					},
 				},
 			},
 			Receivers: []domain.Receiver{
 				{
-					Descriptor: desc,
-					Amount:     700,
+					Address: address,
+					Amount:  700,
 				},
 				{
-					Descriptor: desc,
-					Amount:     700,
+					Address: address,
+					Amount:  700,
 				},
 				{
-					Descriptor: desc,
-					Amount:     600,
+					Address: address,
+					Amount:  600,
 				},
 			},
 		},
@@ -50,8 +50,8 @@ var (
 						VOut: 0,
 					},
 					Receiver: domain.Receiver{
-						Descriptor: desc,
-						Amount:     1000,
+						Address: address,
+						Amount:  1000,
 					},
 				},
 				{
@@ -60,14 +60,14 @@ var (
 						VOut: 0,
 					},
 					Receiver: domain.Receiver{
-						Descriptor: desc,
-						Amount:     1000,
+						Address: address,
+						Amount:  1000,
 					},
 				},
 			},
 			Receivers: []domain.Receiver{{
-				Descriptor: desc,
-				Amount:     2000,
+				Address: address,
+				Amount:  2000,
 			}},
 		},
 	}

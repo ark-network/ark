@@ -66,14 +66,9 @@ func getOffchainReceivers(
 	for _, payment := range payments {
 		for _, receiver := range payment.Receivers {
 			if !receiver.IsOnchain() {
-				vtxoScript, err := tree.ParseVtxoScript(receiver.Descriptor)
-				if err != nil {
-					return nil, err
-				}
-
 				receivers = append(receivers, tree.Receiver{
-					Script: vtxoScript,
-					Amount: receiver.Amount,
+					Address: receiver.Address,
+					Amount:  receiver.Amount,
 				})
 			}
 		}

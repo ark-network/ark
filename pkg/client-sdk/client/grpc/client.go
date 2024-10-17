@@ -237,10 +237,10 @@ func (a *grpcClient) Ping(
 }
 
 func (a *grpcClient) CreatePayment(
-	ctx context.Context, inputs []client.Input, outputs []client.Output,
+	ctx context.Context, inputs []client.AsyncPaymentInput, outputs []client.Output,
 ) (string, error) {
 	req := &arkv1.CreatePaymentRequest{
-		Inputs:  ins(inputs).toProto(),
+		Inputs:  asyncIns(inputs).toProto(),
 		Outputs: outs(outputs).toProto(),
 	}
 	resp, err := a.svc.CreatePayment(ctx, req)

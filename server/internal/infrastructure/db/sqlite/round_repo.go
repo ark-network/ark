@@ -164,10 +164,9 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 					if err := querierWithTx.UpsertReceiver(
 						ctx,
 						queries.UpsertReceiverParams{
-							PaymentID:      payment.Id,
-							Descriptor:     receiver.Descriptor,
-							Amount:         int64(receiver.Amount),
-							OnchainAddress: receiver.OnchainAddress,
+							PaymentID: payment.Id,
+							Amount:    int64(receiver.Amount),
+							Addr:      receiver.Address,
 						},
 					); err != nil {
 						return fmt.Errorf("failed to upsert receiver: %w", err)
@@ -320,9 +319,8 @@ func (r *roundRepository) GetSweptRounds(ctx context.Context) ([]domain.Round, e
 
 func rowToReceiver(row queries.PaymentReceiverVw) domain.Receiver {
 	return domain.Receiver{
-		Descriptor:     row.Descriptor.String,
-		Amount:         uint64(row.Amount.Int64),
-		OnchainAddress: row.OnchainAddress.String,
+		Amount:  uint64(row.Amount.Int64),
+		Address: row.Addr.String,
 	}
 }
 
@@ -413,8 +411,8 @@ func readRoundRows(rows []roundPaymentTxReceiverVtxoRow) ([]*domain.Round, error
 
 				found := false
 				for _, rcv := range payment.Receivers {
-					if v.receiver.Descriptor.Valid && v.receiver.Amount.Valid {
-						if rcv.Descriptor == v.receiver.Descriptor.String && int64(rcv.Amount) == v.receiver.Amount.Int64 {
+					if v.receiver.Addr.Valid && v.receiver.Amount.Valid {
+						if rcv.Address == v.receiver.Addr.String && int64(rcv.Amount) == v.receiver.Amount.Int64 {
 							found = true
 							break
 						}
@@ -470,8 +468,8 @@ func rowToPaymentVtxoVw(row queries.PaymentVtxoVw) domain.Vtxo {
 			VOut: uint32(row.Vout.Int64),
 		},
 		Receiver: domain.Receiver{
-			Descriptor: row.Descriptor.String,
-			Amount:     uint64(row.Amount.Int64),
+			Address: row.Addr.String,
+			Amount:  uint64(row.Amount.Int64),
 		},
 		RoundTxid: row.PoolTx.String,
 		SpentBy:   row.SpentBy.String,

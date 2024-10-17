@@ -107,7 +107,7 @@ func (n *node) getChildren() []*node {
 
 func (n *node) getOutputs() ([]psetv2.OutputArgs, error) {
 	if n.isLeaf() {
-		taprootKey, _, err := n.getVtxoWitnessData()
+		taprootKey, err := n.getVtxoWitnessData()
 		if err != nil {
 			return nil, err
 		}
@@ -168,7 +168,7 @@ func (n *node) getWitnessData() (
 	}
 
 	if n.isLeaf() {
-		taprootKey, _, err := n.getVtxoWitnessData()
+		taprootKey, err := n.getVtxoWitnessData()
 		if err != nil {
 			return nil, nil, err
 		}
@@ -241,15 +241,20 @@ func (n *node) getWitnessData() (
 }
 
 func (n *node) getVtxoWitnessData() (
-	*secp256k1.PublicKey, common.TaprootTree, error,
+	*secp256k1.PublicKey, error,
 ) {
 	if !n.isLeaf() {
-		return nil, nil, fmt.Errorf("cannot call vtxoWitness on a non-leaf node")
+		return nil, fmt.Errorf("cannot call vtxoWitness on a non-leaf node")
 	}
 
 	receiver := n.receivers[0]
 
-	return receiver.Script.TapTree()
+	addr, err := common.DecodeAddress(receiver.Address)
+	if err != nil {
+		return nil, err
+	}
+
+	return addr.VtxoTapKey, nil
 }
 
 func (n *node) getTreeNode(

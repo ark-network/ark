@@ -39,18 +39,18 @@ func (v *vxtoRepository) AddVtxos(ctx context.Context, vtxos []domain.Vtxo) erro
 			vtxo := vtxos[i]
 			if err := querierWithTx.UpsertVtxo(
 				ctx, queries.UpsertVtxoParams{
-					Txid:       vtxo.Txid,
-					Vout:       int64(vtxo.VOut),
-					Descriptor: sql.NullString{String: vtxo.Descriptor, Valid: true},
-					Amount:     int64(vtxo.Amount),
-					PoolTx:     vtxo.RoundTxid,
-					SpentBy:    vtxo.SpentBy,
-					Spent:      vtxo.Spent,
-					Redeemed:   vtxo.Redeemed,
-					Swept:      vtxo.Swept,
-					ExpireAt:   vtxo.ExpireAt,
-					RedeemTx:   sql.NullString{String: vtxo.RedeemTx, Valid: true},
-					Pending:    vtxo.Pending,
+					Txid:     vtxo.Txid,
+					Vout:     int64(vtxo.VOut),
+					Addr:     sql.NullString{String: vtxo.Address, Valid: true},
+					Amount:   int64(vtxo.Amount),
+					PoolTx:   vtxo.RoundTxid,
+					SpentBy:  vtxo.SpentBy,
+					Spent:    vtxo.Spent,
+					Redeemed: vtxo.Redeemed,
+					Swept:    vtxo.Swept,
+					ExpireAt: vtxo.ExpireAt,
+					RedeemTx: sql.NullString{String: vtxo.RedeemTx, Valid: true},
+					Pending:  vtxo.Pending,
 				},
 			); err != nil {
 				return err
@@ -76,16 +76,12 @@ func (v *vxtoRepository) GetAllSweepableVtxos(ctx context.Context) ([]domain.Vtx
 	return readRows(rows)
 }
 
-func (v *vxtoRepository) GetAllVtxos(ctx context.Context, pubkey string) ([]domain.Vtxo, []domain.Vtxo, error) {
-	withPubkey := len(pubkey) > 0
+func (v *vxtoRepository) GetAllVtxos(ctx context.Context, address string) ([]domain.Vtxo, []domain.Vtxo, error) {
+	withAddress := len(address) > 0
 
 	var rows []queries.Vtxo
-	if withPubkey {
-		if len(pubkey) == 66 {
-			pubkey = pubkey[2:]
-		}
-
-		res, err := v.querier.SelectNotRedeemedVtxosWithPubkey(ctx, pubkey)
+	if withAddress {
+		res, err := v.querier.SelectNotRedeemedVtxosWithAddress(ctx, sql.NullString{String: address, Valid: true})
 		if err != nil {
 			return nil, nil, err
 		}
@@ -254,8 +250,8 @@ func rowToVtxo(row queries.Vtxo) domain.Vtxo {
 			VOut: uint32(row.Vout),
 		},
 		Receiver: domain.Receiver{
-			Descriptor: row.Descriptor.String,
-			Amount:     uint64(row.Amount),
+			Address: row.Addr.String,
+			Amount:  uint64(row.Amount),
 		},
 		RoundTxid: row.PoolTx,
 		SpentBy:   row.SpentBy,
