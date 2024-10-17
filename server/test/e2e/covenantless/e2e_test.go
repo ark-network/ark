@@ -445,25 +445,50 @@ func setupAspWallet() error {
 		return fmt.Errorf("failed to unlock wallet: %s", err)
 	}
 
-	time.Sleep(time.Second)
-
-	req, err = http.NewRequest("GET", "http://localhost:7070/v1/admin/wallet/address", nil)
-	if err != nil {
-		return fmt.Errorf("failed to prepare new address request: %s", err)
+	var status struct {
+		Initialized bool `json:"initialized"`
+		Unlocked    bool `json:"unlocked"`
+		Synced      bool `json:"synced"`
 	}
-	req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
+	for {
+		time.Sleep(time.Second)
 
-	resp, err := adminHttpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to get new address: %s", err)
+		req, err := http.NewRequest("GET", "http://localhost:7070/v1/admin/wallet/status", nil)
+		if err != nil {
+			return fmt.Errorf("failed to prepare status request: %s", err)
+		}
+		resp, err := adminHttpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to get status: %s", err)
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+			return fmt.Errorf("failed to parse status response: %s", err)
+		}
+		if status.Initialized && status.Unlocked && status.Synced {
+			break
+		}
 	}
 
 	var addr struct {
 		Address string `json:"address"`
 	}
+	for addr.Address == "" {
+		time.Sleep(time.Second)
 
-	if err := json.NewDecoder(resp.Body).Decode(&addr); err != nil {
-		return fmt.Errorf("failed to parse response: %s", err)
+		req, err = http.NewRequest("GET", "http://localhost:7070/v1/admin/wallet/address", nil)
+		if err != nil {
+			return fmt.Errorf("failed to prepare new address request: %s", err)
+		}
+		req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
+
+		resp, err := adminHttpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to get new address: %s", err)
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&addr); err != nil {
+			return fmt.Errorf("failed to parse response: %s", err)
+		}
 	}
 
 	const numberOfFaucet = 15 // must cover the liquidity needed for all tests
