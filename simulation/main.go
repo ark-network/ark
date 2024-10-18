@@ -27,9 +27,6 @@ var (
 	clientType = arksdk.GrpcClient
 	password   = "password"
 	walletType = arksdk.SingleKeyWallet
-
-	tempDirs      []string
-	tempDirsMutex sync.Mutex
 )
 
 func main() {
@@ -46,7 +43,7 @@ func main() {
 	log.Infof("Number of Clients: %d\n", len(simulation.Clients))
 	log.Infof("Number of Rounds: %d\n", len(simulation.Rounds))
 
-	roundLifetime := fmt.Sprintf("%d", simulation.Server.RoundInterval)
+	roundLifetime := fmt.Sprintf("ARK_ROUND_INTERVAL=%d", simulation.Server.RoundInterval)
 	tmpfile, err := os.CreateTemp("", "docker-env")
 	if err != nil {
 		log.Fatal(err)
@@ -77,20 +74,12 @@ func main() {
 	log.Infoln("ASP wallet initialized")
 
 	go func() {
-		if err := utils.GenerateBlock(); err != nil {
-			log.Fatal(err)
-		}
-
-		time.Sleep(5 * time.Second)
-	}()
-
-	defer func() {
-		tempDirsMutex.Lock()
-		defer tempDirsMutex.Unlock()
-		for _, dir := range tempDirs {
-			if err := os.RemoveAll(dir); err != nil {
-				log.Errorf("failed to remove dir: %v", err)
+		for {
+			if err := utils.GenerateBlock(); err != nil {
+				log.Fatal(err)
 			}
+
+			time.Sleep(5 * time.Second)
 		}
 	}()
 
@@ -210,20 +199,8 @@ func loadAndValidateSimulation(simFile string) (*Simulation, error) {
 }
 
 func setupArkClient() (arksdk.ArkClient, error) {
-	tempDir, err := os.MkdirTemp("", "ark_client_*")
-	if err != nil {
-		return nil, fmt.Errorf("failed to create temporary directory: %s", err)
-	}
-
-	// Store the temporary directory path for later cleanup
-	tempDirsMutex.Lock()
-	tempDirs = append(tempDirs, tempDir)
-	tempDirsMutex.Unlock()
-
 	appDataStore, err := store.NewStore(store.Config{
-		ConfigStoreType:  types.FileStore,
-		AppDataStoreType: types.KVStore,
-		BaseDir:          tempDir,
+		ConfigStoreType: types.InMemoryStore,
 	})
 
 	if err != nil {
