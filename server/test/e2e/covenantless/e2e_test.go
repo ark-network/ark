@@ -167,12 +167,6 @@ func TestUnilateralExitWithAnchorSpend(t *testing.T) {
 	roundId, err := sdkClient.Claim(ctx)
 	require.NoError(t, err)
 
-	err = utils.GenerateBlock()
-	require.NoError(t, err)
-
-	_, err = sdkClient.Claim(ctx)
-	require.NoError(t, err)
-
 	time.Sleep(5 * time.Second)
 
 	vtxos, _, err := sdkClient.ListVtxos(ctx)
@@ -189,22 +183,8 @@ func TestUnilateralExitWithAnchorSpend(t *testing.T) {
 	}
 	require.NotEmpty(t, vtxo)
 
-	round, err := grpcClient.GetRound(ctx, vtxo.RoundTxid)
+	err = sdkClient.UnilateralRedeem(ctx)
 	require.NoError(t, err)
-
-	expl := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
-
-	branch, err := redemption.NewCovenantlessRedeemBranch(expl, round.Tree, vtxo)
-	require.NoError(t, err)
-
-	txs, err := branch.RedeemPath()
-	require.NoError(t, err)
-
-	for _, tx := range txs {
-		_, err := expl.Broadcast(tx)
-		require.NoError(t, err)
-	}
-
 	vtxoHash, err := chainhash.NewHashFromStr(vtxo.Txid)
 	require.NoError(t, err)
 
@@ -221,6 +201,8 @@ func TestUnilateralExitWithAnchorSpend(t *testing.T) {
 	txid = txid[6:]
 
 	time.Sleep(5 * time.Second)
+
+	expl := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
 
 	faucetTxHex, err := expl.GetTxHex(txid)
 	require.NoError(t, err)
