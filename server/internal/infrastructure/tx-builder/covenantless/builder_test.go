@@ -47,7 +47,7 @@ func TestMain(m *testing.M) {
 	wallet.On("MinRelayFee", mock.Anything, mock.Anything).
 		Return(uint64(30), nil)
 	wallet.On("GetDustAmount", mock.Anything).
-		Return(uint64(1000), nil)
+		Return(uint64(100), nil)
 	wallet.On("GetForfeitAddress", mock.Anything).
 		Return(forfeitAddress, nil)
 
