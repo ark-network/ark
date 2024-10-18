@@ -1,6 +1,6 @@
 version: string()
 
-asp:
+server:
   network: enum('regtest', 'testnet', 'mainnet')
   initial_funding: float(min=0)
   round_interval: int(min=1)

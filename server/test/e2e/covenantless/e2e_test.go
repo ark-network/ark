@@ -14,7 +14,8 @@ import (
 	grpcclient "github.com/ark-network/ark/pkg/client-sdk/client/grpc"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/redemption"
-	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
+	"github.com/ark-network/ark/pkg/client-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 	utils "github.com/ark-network/ark/server/test/e2e"
 	"github.com/stretchr/testify/require"
 )
@@ -38,7 +39,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	if err := utils.SetupAspWalletCovenantless(0.0); err != nil {
+	if err := utils.SetupServerWalletCovenantless(0.0); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
@@ -396,10 +397,14 @@ func runClarkCommand(arg ...string) (string, error) {
 }
 
 func setupArkSDK(t *testing.T) (arksdk.ArkClient, client.ASPClient) {
-	storeSvc, err := inmemorystore.NewConfigStore()
+	appDataStore, err := store.NewStore(store.Config{
+		ConfigStoreType:  types.FileStore,
+		AppDataStoreType: types.KVStore,
+		BaseDir:          t.TempDir(),
+	})
 	require.NoError(t, err)
 
-	client, err := arksdk.NewCovenantlessClient(storeSvc)
+	client, err := arksdk.NewCovenantlessClient(appDataStore)
 	require.NoError(t, err)
 
 	err = client.Init(context.Background(), arksdk.InitArgs{

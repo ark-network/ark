@@ -2,13 +2,15 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
+	"github.com/ark-network/ark/pkg/client-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"os"
 	"sync"
 	"time"
 
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
-	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
 	utils "github.com/ark-network/ark/server/test/e2e"
 	log "github.com/sirupsen/logrus"
 
@@ -25,20 +27,26 @@ var (
 	clientType = arksdk.GrpcClient
 	password   = "password"
 	walletType = arksdk.SingleKeyWallet
+
+	tempDirs      []string
+	tempDirsMutex sync.Mutex
 )
 
 func main() {
-	simulation, err := loadAndValidateSimulation()
+	simFile := flag.String("simulation", "simulation1.yaml", "Path to the simulation YAML file")
+	flag.Parse()
+
+	simulation, err := loadAndValidateSimulation(*simFile)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	log.Infof("Simulation Version: %s\n", simulation.Version)
-	log.Infof("ASP Network: %s\n", simulation.ASP.Network)
+	log.Infof("ASP Network: %s\n", simulation.Server.Network)
 	log.Infof("Number of Clients: %d\n", len(simulation.Clients))
 	log.Infof("Number of Rounds: %d\n", len(simulation.Rounds))
 
-	roundLifetime := fmt.Sprintf("%d", simulation.ASP.RoundInterval)
+	roundLifetime := fmt.Sprintf("%d", simulation.Server.RoundInterval)
 	tmpfile, err := os.CreateTemp("", "docker-env")
 	if err != nil {
 		log.Fatal(err)
@@ -60,7 +68,7 @@ func main() {
 	time.Sleep(10 * time.Second)
 	log.Infoln("ASP running...")
 
-	if err := utils.SetupAspWalletCovenantless(simulation.ASP.InitialFunding); err != nil {
+	if err := utils.SetupServerWalletCovenantless(simulation.Server.InitialFunding); err != nil {
 		log.Fatal(err)
 	}
 
@@ -74,6 +82,16 @@ func main() {
 		}
 
 		time.Sleep(5 * time.Second)
+	}()
+
+	defer func() {
+		tempDirsMutex.Lock()
+		defer tempDirsMutex.Unlock()
+		for _, dir := range tempDirs {
+			if err := os.RemoveAll(dir); err != nil {
+				log.Errorf("failed to remove dir: %v", err)
+			}
+		}
 	}()
 
 	users := make(map[string]User)
@@ -90,7 +108,7 @@ func main() {
 
 			usersMtx.Lock()
 			users[id] = User{
-				aspClient:      cl,
+				client:         cl,
 				ID:             id,
 				InitialFunding: initialFunding,
 			}
@@ -138,12 +156,12 @@ func main() {
 			}
 		}
 		wg.Wait()
-		time.Sleep(time.Duration(simulation.ASP.RoundInterval) * 2 * time.Second)
+		time.Sleep(time.Duration(simulation.Server.RoundInterval) * 2 * time.Second)
 	}
 
 }
 
-func loadAndValidateSimulation() (*Simulation, error) {
+func loadAndValidateSimulation(simFile string) (*Simulation, error) {
 	schemaBytes, err := os.ReadFile("schema.yaml")
 	if err != nil {
 		return nil, fmt.Errorf("error reading schema file: %v", err)
@@ -156,7 +174,7 @@ func loadAndValidateSimulation() (*Simulation, error) {
 
 	schemaLoader := gojsonschema.NewBytesLoader(schemaJSON)
 
-	simBytes, err := os.ReadFile("simulation1.yaml")
+	simBytes, err := os.ReadFile(simFile)
 	if err != nil {
 		return nil, fmt.Errorf("error reading simulation file: %v", err)
 	}
@@ -192,11 +210,27 @@ func loadAndValidateSimulation() (*Simulation, error) {
 }
 
 func setupArkClient() (arksdk.ArkClient, error) {
-	storeSvc, err := inmemorystore.NewConfigStore()
+	tempDir, err := os.MkdirTemp("", "ark_client_*")
 	if err != nil {
-		return nil, fmt.Errorf("failed to setup store: %s", err)
+		return nil, fmt.Errorf("failed to create temporary directory: %s", err)
 	}
-	client, err := arksdk.NewCovenantlessClient(storeSvc)
+
+	// Store the temporary directory path for later cleanup
+	tempDirsMutex.Lock()
+	tempDirs = append(tempDirs, tempDir)
+	tempDirsMutex.Unlock()
+
+	appDataStore, err := store.NewStore(store.Config{
+		ConfigStoreType:  types.FileStore,
+		AppDataStoreType: types.KVStore,
+		BaseDir:          tempDir,
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create store: %s", err)
+	}
+
+	client, err := arksdk.NewCovenantlessClient(appDataStore)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup ark client: %s", err)
 	}
@@ -215,12 +249,12 @@ func setupArkClient() (arksdk.ArkClient, error) {
 
 func onboard(user User, amount float64) error {
 	ctx := context.Background()
-	if err := user.aspClient.Unlock(ctx, password); err != nil {
+	if err := user.client.Unlock(ctx, password); err != nil {
 		return err
 	}
-	defer user.aspClient.Lock(ctx, password)
+	defer user.client.Lock(ctx, password)
 
-	_, boardingAddress, err := user.aspClient.Receive(ctx)
+	_, boardingAddress, err := user.client.Receive(ctx)
 	if err != nil {
 		return err
 	}
@@ -233,23 +267,23 @@ func onboard(user User, amount float64) error {
 
 	time.Sleep(2 * time.Second)
 
-	_, err = user.aspClient.Claim(ctx)
+	_, err = user.client.Claim(ctx)
 	return err
 }
 
 func sendAsync(user User, amount float64, to string, users map[string]User) error {
 	ctx := context.Background()
-	if err := user.aspClient.Unlock(ctx, password); err != nil {
+	if err := user.client.Unlock(ctx, password); err != nil {
 		return err
 	}
-	defer user.aspClient.Lock(ctx, password)
+	defer user.client.Lock(ctx, password)
 
 	toUser, ok := users[to]
 	if !ok {
 		return fmt.Errorf("recipient user %s not found", to)
 	}
 
-	toAddress, _, err := toUser.aspClient.Receive(ctx)
+	toAddress, _, err := toUser.client.Receive(ctx)
 	if err != nil {
 		return err
 	}
@@ -258,28 +292,28 @@ func sendAsync(user User, amount float64, to string, users map[string]User) erro
 		arksdk.NewBitcoinReceiver(toAddress, uint64(amount*1e8)),
 	}
 
-	_, err = user.aspClient.SendAsync(ctx, false, receivers)
+	_, err = user.client.SendAsync(ctx, false, receivers)
 	return err
 }
 
 func claim(user User) error {
 	ctx := context.Background()
-	if err := user.aspClient.Unlock(ctx, password); err != nil {
+	if err := user.client.Unlock(ctx, password); err != nil {
 		return err
 	}
-	defer user.aspClient.Lock(ctx, password)
+	defer user.client.Lock(ctx, password)
 
-	_, err := user.aspClient.Claim(ctx)
+	_, err := user.client.Claim(ctx)
 	return err
 }
 
 type Simulation struct {
 	Version string `yaml:"version"`
-	ASP     struct {
+	Server  struct {
 		Network        string  `yaml:"network"`
 		RoundInterval  int     `yaml:"round_interval"`
 		InitialFunding float64 `yaml:"initial_funding"`
-	} `yaml:"asp"`
+	} `yaml:"server"`
 	Clients []struct {
 		ID             string  `yaml:"id"`
 		Name           string  `yaml:"name"`
@@ -292,7 +326,7 @@ type Simulation struct {
 }
 
 type User struct {
-	aspClient      arksdk.ArkClient
+	client         arksdk.ArkClient
 	ID             string
 	Name           string
 	InitialFunding float64

@@ -108,7 +108,7 @@ func newCommand(name string, arg ...string) *exec.Cmd {
 	return cmd
 }
 
-func SetupAspWalletCovenantless(initFunding float64) error {
+func SetupServerWalletCovenantless(initFunding float64) error {
 	adminHttpClient := &http.Client{
 		Timeout: 15 * time.Second,
 	}
@@ -156,25 +156,50 @@ func SetupAspWalletCovenantless(initFunding float64) error {
 		return fmt.Errorf("failed to unlock wallet: %s", err)
 	}
 
-	time.Sleep(time.Second)
-
-	req, err = http.NewRequest("GET", "http://localhost:7070/v1/admin/wallet/address", nil)
-	if err != nil {
-		return fmt.Errorf("failed to prepare new address request: %s", err)
+	var status struct {
+		Initialized bool `json:"initialized"`
+		Unlocked    bool `json:"unlocked"`
+		Synced      bool `json:"synced"`
 	}
-	req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
+	for {
+		time.Sleep(time.Second)
 
-	resp, err := adminHttpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to get new address: %s", err)
+		req, err := http.NewRequest("GET", "http://localhost:7070/v1/admin/wallet/status", nil)
+		if err != nil {
+			return fmt.Errorf("failed to prepare status request: %s", err)
+		}
+		resp, err := adminHttpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to get status: %s", err)
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+			return fmt.Errorf("failed to parse status response: %s", err)
+		}
+		if status.Initialized && status.Unlocked && status.Synced {
+			break
+		}
 	}
 
 	var addr struct {
 		Address string `json:"address"`
 	}
+	for addr.Address == "" {
+		time.Sleep(time.Second)
 
-	if err := json.NewDecoder(resp.Body).Decode(&addr); err != nil {
-		return fmt.Errorf("failed to parse response: %s", err)
+		req, err = http.NewRequest("GET", "http://localhost:7070/v1/admin/wallet/address", nil)
+		if err != nil {
+			return fmt.Errorf("failed to prepare new address request: %s", err)
+		}
+		req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
+
+		resp, err := adminHttpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to get new address: %s", err)
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&addr); err != nil {
+			return fmt.Errorf("failed to parse response: %s", err)
+		}
 	}
 
 	if initFunding == 0.0 {

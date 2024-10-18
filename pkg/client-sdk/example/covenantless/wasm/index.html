@@ -19,10 +19,11 @@
         async function initWallet() {
             try {
                 const chain = "bitcoin";
-                const walletType = "singlekey"
-                const clientType = "rest"
+                const walletType = "singlekey";
+                const clientType = "rest";
                 const privateKey = document.getElementById("prvkey").value;
                 const password = document.getElementById("i_password").value;
+                const explorerUrl = "";
                 if (!password) {
                     logMessage("Init error: password is required");
                     return;
@@ -32,7 +33,7 @@
                     logMessage("Init error: asp url is required");
                     return;
                 }
-                await init(walletType, clientType, aspUrl, privateKey, password, chain);
+                await init(walletType, clientType, aspUrl, privateKey, password, chain, explorerUrl);
                 logMessage("wallet initialized and connected to ASP");
                 await config();
             } catch (err) {
@@ -80,7 +81,7 @@
                 const amount = parseInt(amountStr, 10);
 
                 await unlock(password);
-                const txID = await sendOffChain(false, [{ To: address, Amount: amount }]);
+                const txID = await sendAsync(false, [{ To: address, Amount: amount }]);
                 logMessage("Sent money with tx ID: " + txID);
             } catch (err) {
                 logMessage("Send error: " + err.message);
