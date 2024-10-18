@@ -1,6 +1,6 @@
 # Simulation Framework for Server Testing
 
-This simulation framework is designed to test the **ASP (Ark Server Provider)** by simulating multiple clients performing 
+This simulation framework is designed to test the **Ark Server** by simulating multiple clients performing 
 various actions over several rounds. It reads simulation configurations from YAML files, validates them against a predefined schema, 
 and executes the simulation accordingly.
 
