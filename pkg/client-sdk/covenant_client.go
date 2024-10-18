@@ -17,7 +17,7 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/ark-network/ark/pkg/client-sdk/redemption"
-	"github.com/ark-network/ark/pkg/client-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -56,86 +56,199 @@ type covenantArkClient struct {
 	*arkClient
 }
 
-func NewCovenantClient(storeSvc store.ConfigStore) (ArkClient, error) {
-	data, err := storeSvc.GetData(context.Background())
+func NewCovenantClient(sdkStore types.Store) (ArkClient, error) {
+	cfgData, err := sdkStore.ConfigStore().GetData(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	if data != nil {
+
+	if cfgData != nil {
 		return nil, ErrAlreadyInitialized
 	}
 
-	return &covenantArkClient{&arkClient{store: storeSvc}}, nil
+	return &covenantArkClient{
+		&arkClient{
+			store: sdkStore,
+		},
+	}, nil
 }
 
-func LoadCovenantClient(storeSvc store.ConfigStore) (ArkClient, error) {
-	if storeSvc == nil {
-		return nil, fmt.Errorf("missin store service")
+func LoadCovenantClient(sdkStore types.Store) (ArkClient, error) {
+	if sdkStore == nil {
+		return nil, fmt.Errorf("missin sdk repository")
 	}
 
-	data, err := storeSvc.GetData(context.Background())
+	cfgData, err := sdkStore.ConfigStore().GetData(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	if data == nil {
+
+	if cfgData == nil {
 		return nil, ErrNotInitialized
 	}
 
 	clientSvc, err := getClient(
-		supportedClients, data.ClientType, data.AspUrl,
+		supportedClients, cfgData.ClientType, cfgData.AspUrl,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup transport client: %s", err)
 	}
 
-	explorerSvc, err := getExplorer(data.ExplorerURL, data.Network.Name)
+	explorerSvc, err := getExplorer(cfgData.ExplorerURL, cfgData.Network.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
 
-	walletSvc, err := getWallet(storeSvc, data, supportedWallets)
+	walletSvc, err := getWallet(
+		sdkStore.ConfigStore(),
+		cfgData,
+		supportedWallets,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("faile to setup wallet: %s", err)
 	}
 
-	return &covenantArkClient{
-		&arkClient{data, walletSvc, storeSvc, explorerSvc, clientSvc},
-	}, nil
+	covenantClient := covenantArkClient{
+		&arkClient{
+			Config:   cfgData,
+			wallet:   walletSvc,
+			store:    sdkStore,
+			explorer: explorerSvc,
+			client:   clientSvc,
+		},
+	}
+
+	if cfgData.WithTransactionFeed {
+		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
+		covenantClient.txStreamCtxCancel = txStreamCtxCancel
+		go covenantClient.listenForTxStream(txStreamCtx)
+		go covenantClient.listenForBoardingUtxos(txStreamCtx)
+	}
+
+	return &covenantClient, nil
 }
 
 func LoadCovenantClientWithWallet(
-	storeSvc store.ConfigStore, walletSvc wallet.WalletService,
+	sdkStore types.Store, walletSvc wallet.WalletService,
 ) (ArkClient, error) {
-	if storeSvc == nil {
-		return nil, fmt.Errorf("missin store service")
+	if sdkStore == nil {
+		return nil, fmt.Errorf("missin sdk repository")
 	}
+
 	if walletSvc == nil {
 		return nil, fmt.Errorf("missin wallet service")
 	}
 
-	data, err := storeSvc.GetData(context.Background())
+	cfgData, err := sdkStore.ConfigStore().GetData(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	if data == nil {
+	if cfgData == nil {
 		return nil, ErrNotInitialized
 	}
 
 	clientSvc, err := getClient(
-		supportedClients, data.ClientType, data.AspUrl,
+		supportedClients, cfgData.ClientType, cfgData.AspUrl,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup transport client: %s", err)
 	}
 
-	explorerSvc, err := getExplorer(data.ExplorerURL, data.Network.Name)
+	explorerSvc, err := getExplorer(cfgData.ExplorerURL, cfgData.Network.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
 
-	return &covenantArkClient{
-		&arkClient{data, walletSvc, storeSvc, explorerSvc, clientSvc},
-	}, nil
+	covenantClient := covenantArkClient{
+		&arkClient{
+			Config:   cfgData,
+			wallet:   walletSvc,
+			store:    sdkStore,
+			explorer: explorerSvc,
+			client:   clientSvc,
+		},
+	}
+
+	if cfgData.WithTransactionFeed {
+		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
+		covenantClient.txStreamCtxCancel = txStreamCtxCancel
+		go covenantClient.listenForTxStream(txStreamCtx)
+		go covenantClient.listenForBoardingUtxos(txStreamCtx)
+	}
+
+	return &covenantClient, nil
+}
+
+func (a *covenantArkClient) Init(ctx context.Context, args InitArgs) error {
+	err := a.arkClient.init(ctx, args)
+	if err != nil {
+		return err
+	}
+
+	if args.ListenTransactionStream {
+		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
+		a.txStreamCtxCancel = txStreamCtxCancel
+		go a.listenForTxStream(txStreamCtx)
+		go a.listenForBoardingUtxos(txStreamCtx)
+	}
+
+	return nil
+}
+
+func (a *covenantArkClient) InitWithWallet(ctx context.Context, args InitWithWalletArgs) error {
+	err := a.arkClient.initWithWallet(ctx, args)
+	if err != nil {
+		return err
+	}
+
+	if a.WithTransactionFeed {
+		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
+		a.txStreamCtxCancel = txStreamCtxCancel
+		go a.listenForTxStream(txStreamCtx)
+		go a.listenForBoardingUtxos(txStreamCtx)
+	}
+
+	return nil
+}
+
+func (a *covenantArkClient) listenForTxStream(ctx context.Context) {
+	eventChan, closeFunc, err := a.client.GetTransactionsStream(ctx)
+	if err != nil {
+		log.WithError(err).Error("Failed to get transaction stream")
+		return
+	}
+	defer closeFunc()
+
+	for {
+		select {
+		case event, ok := <-eventChan:
+			if !ok {
+				return
+			}
+
+			a.processTransactionEvent(event)
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (a *covenantArkClient) processTransactionEvent(
+	event client.TransactionEvent,
+) {
+	// TODO considering current covenant state where all payments happening in round
+	//and that this is going to change we leave this unimplemented until asnc payments are implemented
+	//also with current state it is not possible to cover some edge cases like when in a round there
+	//are multiple boarding inputs + spent vtxo with change in spendable + received in the same round
+}
+
+func (a *covenantArkClient) listenForBoardingUtxos(
+	ctx context.Context,
+) {
+	// TODO considering current covenant state where all payments happening in round
+	//and that this is going to change we leave this unimplemented until asnc payments are implemented
+	//also with current state it is not possible to cover some edge cases like when in a round there
+	//are multiple boarding inputs + spent vtxo with change in spendable + received in the same round
 }
 
 func (a *covenantArkClient) ListVtxos(
@@ -540,13 +653,19 @@ func (a *covenantArkClient) Claim(ctx context.Context) (string, error) {
 	)
 }
 
-func (a *covenantArkClient) GetTransactionHistory(ctx context.Context) ([]Transaction, error) {
+func (a *covenantArkClient) GetTransactionHistory(
+	ctx context.Context,
+) ([]types.Transaction, error) {
+	if a.Config.WithTransactionFeed {
+		return a.store.TransactionStore().GetAllTransactions(ctx)
+	}
+
 	spendableVtxos, spentVtxos, err := a.ListVtxos(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	config, err := a.store.GetData(ctx)
+	config, err := a.store.ConfigStore().GetData(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1165,7 +1284,7 @@ func (a *covenantArkClient) validateCongestionTree(
 
 	if !utils.IsOnchainOnly(receivers) {
 		if err := tree.ValidateCongestionTree(
-			event.Tree, poolTx, a.StoreData.AspPubkey, a.RoundLifetime,
+			event.Tree, poolTx, a.Config.AspPubkey, a.RoundLifetime,
 		); err != nil {
 			return err
 		}
@@ -1625,7 +1744,7 @@ func (a *covenantArkClient) selfTransferAllPendingPayments(
 	return roundTxid, nil
 }
 
-func (a *covenantArkClient) getBoardingTxs(ctx context.Context) (transactions []Transaction) {
+func (a *covenantArkClient) getBoardingTxs(ctx context.Context) (transactions []types.Transaction) {
 	utxos, err := a.getClaimableBoardingUtxos(ctx)
 	if err != nil {
 		return nil
@@ -1642,21 +1761,29 @@ func (a *covenantArkClient) getBoardingTxs(ctx context.Context) (transactions []
 	}
 
 	for _, u := range allUtxos {
-		transactions = append(transactions, Transaction{
-			BoardingTxid: u.Txid,
-			Amount:       u.Amount,
-			Type:         TxReceived,
-			CreatedAt:    u.CreatedAt,
+		pending := false
+		if isPending[u.Txid] {
+			pending = true
+		}
+
+		transactions = append(transactions, types.Transaction{
+			TransactionKey: types.TransactionKey{
+				BoardingTxid: u.Txid,
+			},
+			Amount:    u.Amount,
+			Type:      types.TxReceived,
+			CreatedAt: u.CreatedAt,
+			IsPending: pending,
 		})
 	}
 	return
 }
 
 func vtxosToTxsCovenant(
-	roundLifetime int64, spendable, spent []client.Vtxo, boardingTxs []Transaction,
-) ([]Transaction, error) {
-	transactions := make([]Transaction, 0)
-	unconfirmedBoardingTxs := make([]Transaction, 0)
+	roundLifetime int64, spendable, spent []client.Vtxo, boardingTxs []types.Transaction,
+) ([]types.Transaction, error) {
+	transactions := make([]types.Transaction, 0)
+	unconfirmedBoardingTxs := make([]types.Transaction, 0)
 	for _, tx := range boardingTxs {
 		emptyTime := time.Time{}
 		if tx.CreatedAt == emptyTime {
@@ -1681,9 +1808,9 @@ func vtxosToTxsCovenant(
 			}
 		}
 		// what kind of tx was this? send or receive?
-		txType := TxReceived
+		txType := types.TxReceived
 		if amount < 0 {
-			txType = TxSent
+			txType = types.TxSent
 		}
 		// get redeem txid
 		redeemTxid := ""
@@ -1695,12 +1822,14 @@ func vtxosToTxsCovenant(
 			redeemTxid = txid
 		}
 		// add transaction
-		transactions = append(transactions, Transaction{
-			RoundTxid:  v.RoundTxid,
-			RedeemTxid: redeemTxid,
-			Amount:     uint64(math.Abs(float64(amount))),
-			Type:       txType,
-			CreatedAt:  getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
+		transactions = append(transactions, types.Transaction{
+			TransactionKey: types.TransactionKey{
+				RoundTxid:  v.RoundTxid,
+				RedeemTxid: redeemTxid,
+			},
+			Amount:    uint64(math.Abs(float64(amount))),
+			Type:      txType,
+			CreatedAt: getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
 		})
 	}
 

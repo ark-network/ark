@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/pkg/client-sdk/client"
+	sdktypes "github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -15,90 +16,106 @@ func TestVtxosToTxs(t *testing.T) {
 	tests := []struct {
 		name    string
 		fixture string
-		want    []Transaction
+		want    []sdktypes.Transaction
 	}{
 		{
 			name:    "Alice Before Sending Async",
 			fixture: aliceBeforeSendingAsync,
-			want:    []Transaction{},
+			want:    []sdktypes.Transaction{},
 		},
 		{
 			name:    "Alice After Sending Async",
 			fixture: aliceAfterSendingAsync,
-			want: []Transaction{
+			want: []sdktypes.Transaction{
 				{
-					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
-					Amount:     1000,
-					Type:       TxSent,
-					IsPending:  false,
-					CreatedAt:  time.Unix(1726054898, 0),
+					TransactionKey: sdktypes.TransactionKey{
+						RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
+					},
+					Amount:    1000,
+					Type:      sdktypes.TxSent,
+					IsPending: false,
+					CreatedAt: time.Unix(1726054898, 0),
 				},
 			},
 		},
 		{
 			name:    "Bob Before Claiming Async",
 			fixture: bobBeforeClaimingAsync,
-			want: []Transaction{
+			want: []sdktypes.Transaction{
 				{
-					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
-					Amount:     1000,
-					Type:       TxReceived,
-					IsPending:  true,
-					CreatedAt:  time.Unix(1726054898, 0),
+					TransactionKey: sdktypes.TransactionKey{
+						RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
+					},
+					Amount:    1000,
+					Type:      sdktypes.TxReceived,
+					IsPending: true,
+					CreatedAt: time.Unix(1726054898, 0),
 				},
 				{
-					RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
-					Amount:     2000,
-					Type:       TxReceived,
-					IsPending:  true,
-					CreatedAt:  time.Unix(1726486359, 0),
+					TransactionKey: sdktypes.TransactionKey{
+						RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
+					},
+					Amount:    2000,
+					Type:      sdktypes.TxReceived,
+					IsPending: true,
+					CreatedAt: time.Unix(1726486359, 0),
 				},
 			},
 		},
 		{
 			name:    "Bob After Claiming Async",
 			fixture: bobAfterClaimingAsync,
-			want: []Transaction{
+			want: []sdktypes.Transaction{
 				{
-					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
-					Amount:     1000,
-					Type:       TxReceived,
-					IsPending:  false,
-					CreatedAt:  time.Unix(1726054898, 0),
+					TransactionKey: sdktypes.TransactionKey{
+						RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
+					},
+					Amount:    1000,
+					Type:      sdktypes.TxReceived,
+					IsPending: false,
+					CreatedAt: time.Unix(1726054898, 0),
 				},
 				{
-					RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
-					Amount:     2000,
-					Type:       TxReceived,
-					IsPending:  false,
-					CreatedAt:  time.Unix(1726486359, 0),
+					TransactionKey: sdktypes.TransactionKey{
+						RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
+					},
+					Amount:    2000,
+					Type:      sdktypes.TxReceived,
+					IsPending: false,
+					CreatedAt: time.Unix(1726486359, 0),
 				},
 			},
 		},
 		{
 			name:    "Bob After Sending Async",
 			fixture: bobAfterSendingAsync,
-			want: []Transaction{
+			want: []sdktypes.Transaction{
 				{
-					RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
-					Amount:     1000,
-					Type:       TxReceived,
-					IsPending:  false,
-					CreatedAt:  time.Unix(1726054898, 0),
+					TransactionKey: sdktypes.TransactionKey{
+						RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
+					},
+					Amount:    1000,
+					Type:      sdktypes.TxReceived,
+					IsPending: false,
+					CreatedAt: time.Unix(1726054898, 0),
 				},
 				{
-					RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
-					Amount:     2000,
-					Type:       TxReceived,
-					IsPending:  false,
-					CreatedAt:  time.Unix(1726486359, 0),
+					TransactionKey: sdktypes.TransactionKey{
+						RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
+					},
+					Amount:    2000,
+					Type:      sdktypes.TxReceived,
+					IsPending: false,
+					CreatedAt: time.Unix(1726486359, 0),
 				},
 				{
-					RedeemTxid: "23c3a885f0ea05f7bdf83f3bf7f8ac9dc3f791ad292f4e63a6f53fa5e4935ab0",
-					Amount:     2100,
-					Type:       TxSent,
-					IsPending:  false,
-					CreatedAt:  time.Unix(1726503865, 0),
+					TransactionKey: sdktypes.TransactionKey{
+						RedeemTxid: "23c3a885f0ea05f7bdf83f3bf7f8ac9dc3f791ad292f4e63a6f53fa5e4935ab0",
+					},
+					Amount:    2100,
+					Type:      sdktypes.TxSent,
+					IsPending: false,
+					CreatedAt: time.Unix(1726503865, 0),
 				},
 			},
 		},

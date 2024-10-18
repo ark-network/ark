@@ -616,3 +616,94 @@ func (t treeFromProto) parse() tree.CongestionTree {
 
 	return congestionTree
 }
+
+func (c *restClient) GetTransactionsStream(ctx context.Context) (<-chan client.TransactionEvent, func(), error) {
+	ctx, cancel := context.WithTimeout(ctx, c.requestTimeout)
+	eventsCh := make(chan client.TransactionEvent)
+
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer close(eventsCh)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				resp, err := c.svc.ArkServiceGetTransactionsStream(ark_service.NewArkServiceGetTransactionsStreamParams())
+				if err != nil {
+					eventsCh <- client.TransactionEvent{Err: err}
+					return
+				}
+
+				if resp.Payload.Result.Round != nil {
+					eventsCh <- client.TransactionEvent{
+						Round: &client.RoundTransaction{
+							Txid:                 resp.Payload.Result.Round.Txid,
+							SpentVtxos:           outpointsFromRest(resp.Payload.Result.Round.SpentVtxos),
+							SpendableVtxos:       vtxosFromRest(resp.Payload.Result.Round.SpendableVtxos),
+							ClaimedBoardingUtxos: outpointsFromRest(resp.Payload.Result.Round.ClaimedBoardingUtxos),
+						},
+					}
+				} else if resp.Payload.Result.Redeem != nil {
+					eventsCh <- client.TransactionEvent{
+						Redeem: &client.RedeemTransaction{
+							Txid:           resp.Payload.Result.Redeem.Txid,
+							SpentVtxos:     outpointsFromRest(resp.Payload.Result.Redeem.SpentVtxos),
+							SpendableVtxos: vtxosFromRest(resp.Payload.Result.Redeem.SpendableVtxos),
+						},
+					}
+				}
+			}
+		}
+	}()
+
+	return eventsCh, cancel, nil
+}
+
+func outpointsFromRest(restOutpoints []*models.V1Outpoint) []client.Outpoint {
+	outpoints := make([]client.Outpoint, len(restOutpoints))
+	for i, o := range restOutpoints {
+		outpoints[i] = client.Outpoint{
+			Txid: o.Txid,
+			VOut: uint32(o.Vout),
+		}
+	}
+	return outpoints
+}
+
+func vtxosFromRest(restVtxos []*models.V1Vtxo) []client.Vtxo {
+	vtxos := make([]client.Vtxo, len(restVtxos))
+	for i, v := range restVtxos {
+		var expiresAt *time.Time
+		if v.ExpireAt != "" && v.ExpireAt != "0" {
+			expAt, err := strconv.Atoi(v.ExpireAt)
+			if err != nil {
+				return nil
+			}
+			t := time.Unix(int64(expAt), 0)
+			expiresAt = &t
+		}
+
+		amount, err := strconv.Atoi(v.Amount)
+		if err != nil {
+			return nil
+		}
+
+		vtxos[i] = client.Vtxo{
+			Outpoint: client.Outpoint{
+				Txid: v.Outpoint.Txid,
+				VOut: uint32(v.Outpoint.Vout),
+			},
+			Descriptor: v.Descriptor,
+			Amount:     uint64(amount),
+			RoundTxid:  v.RoundTxid,
+			ExpiresAt:  expiresAt,
+			RedeemTx:   v.RedeemTx,
+			Pending:    v.Pending,
+			SpentBy:    v.SpentBy,
+		}
+	}
+	return vtxos
+}

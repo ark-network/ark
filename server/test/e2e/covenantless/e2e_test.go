@@ -16,7 +16,8 @@ import (
 	grpcclient "github.com/ark-network/ark/pkg/client-sdk/client/grpc"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/redemption"
-	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
+	"github.com/ark-network/ark/pkg/client-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 	utils "github.com/ark-network/ark/server/test/e2e"
 	"github.com/stretchr/testify/require"
 )
@@ -445,25 +446,50 @@ func setupAspWallet() error {
 		return fmt.Errorf("failed to unlock wallet: %s", err)
 	}
 
-	time.Sleep(time.Second)
-
-	req, err = http.NewRequest("GET", "http://localhost:7070/v1/admin/wallet/address", nil)
-	if err != nil {
-		return fmt.Errorf("failed to prepare new address request: %s", err)
+	var status struct {
+		Initialized bool `json:"initialized"`
+		Unlocked    bool `json:"unlocked"`
+		Synced      bool `json:"synced"`
 	}
-	req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
+	for {
+		time.Sleep(time.Second)
 
-	resp, err := adminHttpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to get new address: %s", err)
+		req, err := http.NewRequest("GET", "http://localhost:7070/v1/admin/wallet/status", nil)
+		if err != nil {
+			return fmt.Errorf("failed to prepare status request: %s", err)
+		}
+		resp, err := adminHttpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to get status: %s", err)
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+			return fmt.Errorf("failed to parse status response: %s", err)
+		}
+		if status.Initialized && status.Unlocked && status.Synced {
+			break
+		}
 	}
 
 	var addr struct {
 		Address string `json:"address"`
 	}
+	for addr.Address == "" {
+		time.Sleep(time.Second)
 
-	if err := json.NewDecoder(resp.Body).Decode(&addr); err != nil {
-		return fmt.Errorf("failed to parse response: %s", err)
+		req, err = http.NewRequest("GET", "http://localhost:7070/v1/admin/wallet/address", nil)
+		if err != nil {
+			return fmt.Errorf("failed to prepare new address request: %s", err)
+		}
+		req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
+
+		resp, err := adminHttpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to get new address: %s", err)
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&addr); err != nil {
+			return fmt.Errorf("failed to parse response: %s", err)
+		}
 	}
 
 	const numberOfFaucet = 15 // must cover the liquidity needed for all tests
@@ -480,10 +506,14 @@ func setupAspWallet() error {
 }
 
 func setupArkSDK(t *testing.T) (arksdk.ArkClient, client.ASPClient) {
-	storeSvc, err := inmemorystore.NewConfigStore()
+	appDataStore, err := store.NewStore(store.Config{
+		ConfigStoreType:  types.FileStore,
+		AppDataStoreType: types.KVStore,
+		BaseDir:          t.TempDir(),
+	})
 	require.NoError(t, err)
 
-	client, err := arksdk.NewCovenantlessClient(storeSvc)
+	client, err := arksdk.NewCovenantlessClient(appDataStore)
 	require.NoError(t, err)
 
 	err = client.Init(context.Background(), arksdk.InitArgs{
