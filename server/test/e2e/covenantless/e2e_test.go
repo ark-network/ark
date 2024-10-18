@@ -1,11 +1,9 @@
 package e2e_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -40,7 +38,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	if err := setupAspWallet(); err != nil {
+	if err := utils.SetupAspWalletCovenantless(0.0); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
@@ -395,88 +393,6 @@ func TestSweep(t *testing.T) {
 func runClarkCommand(arg ...string) (string, error) {
 	args := append([]string{"exec", "-t", "clarkd", "ark"}, arg...)
 	return utils.RunCommand("docker", args...)
-}
-
-func setupAspWallet() error {
-	adminHttpClient := &http.Client{
-		Timeout: 15 * time.Second,
-	}
-
-	req, err := http.NewRequest("GET", "http://localhost:7070/v1/admin/wallet/seed", nil)
-	if err != nil {
-		return fmt.Errorf("failed to prepare generate seed request: %s", err)
-	}
-	req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
-
-	seedResp, err := adminHttpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to generate seed: %s", err)
-	}
-
-	var seed struct {
-		Seed string `json:"seed"`
-	}
-
-	if err := json.NewDecoder(seedResp.Body).Decode(&seed); err != nil {
-		return fmt.Errorf("failed to parse response: %s", err)
-	}
-
-	reqBody := bytes.NewReader([]byte(fmt.Sprintf(`{"seed": "%s", "password": "%s"}`, seed.Seed, utils.Password)))
-	req, err = http.NewRequest("POST", "http://localhost:7070/v1/admin/wallet/create", reqBody)
-	if err != nil {
-		return fmt.Errorf("failed to prepare wallet create request: %s", err)
-	}
-	req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
-	req.Header.Set("Content-Type", "application/json")
-
-	if _, err := adminHttpClient.Do(req); err != nil {
-		return fmt.Errorf("failed to create wallet: %s", err)
-	}
-
-	reqBody = bytes.NewReader([]byte(fmt.Sprintf(`{"password": "%s"}`, utils.Password)))
-	req, err = http.NewRequest("POST", "http://localhost:7070/v1/admin/wallet/unlock", reqBody)
-	if err != nil {
-		return fmt.Errorf("failed to prepare wallet unlock request: %s", err)
-	}
-	req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
-	req.Header.Set("Content-Type", "application/json")
-
-	if _, err := adminHttpClient.Do(req); err != nil {
-		return fmt.Errorf("failed to unlock wallet: %s", err)
-	}
-
-	time.Sleep(time.Second)
-
-	req, err = http.NewRequest("GET", "http://localhost:7070/v1/admin/wallet/address", nil)
-	if err != nil {
-		return fmt.Errorf("failed to prepare new address request: %s", err)
-	}
-	req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
-
-	resp, err := adminHttpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to get new address: %s", err)
-	}
-
-	var addr struct {
-		Address string `json:"address"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&addr); err != nil {
-		return fmt.Errorf("failed to parse response: %s", err)
-	}
-
-	const numberOfFaucet = 15 // must cover the liquidity needed for all tests
-
-	for i := 0; i < numberOfFaucet; i++ {
-		_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
-		if err != nil {
-			return fmt.Errorf("failed to fund wallet: %s", err)
-		}
-	}
-
-	time.Sleep(5 * time.Second)
-	return nil
 }
 
 func setupArkSDK(t *testing.T) (arksdk.ArkClient, client.ASPClient) {

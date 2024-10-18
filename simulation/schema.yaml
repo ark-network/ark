@@ -1,0 +1,18 @@
+version: string()
+
+asp:
+  network: enum('regtest', 'testnet', 'mainnet')
+  initial_funding: float(min=0)
+  round_interval: int(min=1)
+
+clients:
+  - id: string()
+    initial_funding: float(min=0, required=false)
+
+rounds:
+  - number: int(min=1)
+    actions:
+      regex('^client_\d+$'):
+        - type: enum('Onboard', 'SendAsync', 'SendOffchain', 'SendOnchain', 'Claim', 'CollaborativeExit', 'UnilateralExit')
+          amount: float(min=0, required=false)
+          to: string(required=false)

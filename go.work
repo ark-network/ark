@@ -1,4 +1,4 @@
-go 1.23.1
+go 1.23.2
 
 use (
 	./api-spec
@@ -8,6 +8,7 @@ use (
 	./server
 	./server/pkg/kvdb
 	./server/pkg/macaroons
+	./simulation
 )
 
 replace github.com/btcsuite/btcd/btcec/v2 => github.com/btcsuite/btcd/btcec/v2 v2.3.3
