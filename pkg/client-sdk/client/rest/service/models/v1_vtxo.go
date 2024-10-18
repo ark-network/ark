@@ -21,9 +21,6 @@ type V1Vtxo struct {
 	// amount
 	Amount string `json:"amount,omitempty"`
 
-	// descriptor
-	Descriptor string `json:"descriptor,omitempty"`
-
 	// expire at
 	ExpireAt string `json:"expireAt,omitempty"`
 
@@ -32,6 +29,9 @@ type V1Vtxo struct {
 
 	// pending
 	Pending bool `json:"pending,omitempty"`
+
+	// pubkey
+	Pubkey string `json:"pubkey,omitempty"`
 
 	// redeem tx
 	RedeemTx string `json:"redeemTx,omitempty"`

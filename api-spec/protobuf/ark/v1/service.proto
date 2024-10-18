@@ -187,8 +187,13 @@ message PingResponse {
 
 /* Async Payment API messages */
 
+message AsyncPaymentInput {
+  Input input = 1;
+  string forfeit_leaf_hash = 2;
+}
+
 message CreatePaymentRequest {
-  repeated Input inputs = 1;
+  repeated AsyncPaymentInput inputs = 1;
   repeated Output outputs = 2;
 }
 message CreatePaymentResponse {
@@ -290,7 +295,6 @@ message Input {
 message Output {
   string address = 1; // onchain or off-chain
   uint64 amount = 2; // Amount to send in satoshis.
-  string descriptor = 3; 
 }
 
 message Tree {
@@ -309,17 +313,16 @@ message Node {
 
 message Vtxo {
   Outpoint outpoint = 1;
-  string descriptor = 2;
-  bool spent = 3;
-  string round_txid = 4;
-  string spent_by = 5;
-  int64 expire_at = 6;
-  bool swept = 7;
-  bool pending = 8;
-  string redeem_tx = 9;
-  uint64 amount = 10;
+  bool spent = 2;
+  string round_txid = 3;
+  string spent_by = 4;
+  int64 expire_at = 5;
+  bool swept = 6;
+  bool pending = 7;
+  string redeem_tx = 8;
+  uint64 amount = 9;
+  string pubkey = 10;
 }
-
 
 message GetTransactionsStreamRequest {}
 message GetTransactionsStreamResponse {

@@ -22,9 +22,6 @@ type V1Output struct {
 
 	// Amount to send in satoshis.
 	Amount string `json:"amount,omitempty"`
-
-	// descriptor
-	Descriptor string `json:"descriptor,omitempty"`
 }
 
 // Validate validates this v1 output

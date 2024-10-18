@@ -21,11 +21,11 @@ CREATE TABLE IF NOT EXISTS payment (
 
 CREATE TABLE IF NOT EXISTS receiver (
     payment_id TEXT NOT NULL,
-    pubkey TEXT NOT NULL,
+    pubkey TEXT,
+    onchain_address TEXT,
     amount INTEGER NOT NULL,
-    onchain_address TEXT NOT NULL,
     FOREIGN KEY (payment_id) REFERENCES payment(id),
-    PRIMARY KEY (payment_id, pubkey)
+    PRIMARY KEY (payment_id, pubkey, onchain_address)
 );
 
 CREATE TABLE IF NOT EXISTS tx (
@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS vtxo (
 	expire_at INTEGER NOT NULL,
 	payment_id TEXT,
     redeem_tx TEXT,
+    pending BOOLEAN NOT NULL,
     PRIMARY KEY (txid, vout),
 	FOREIGN KEY (payment_id) REFERENCES payment(id)
 );

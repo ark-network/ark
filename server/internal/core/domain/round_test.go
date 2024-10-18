@@ -20,24 +20,22 @@ var (
 						Txid: txid,
 						VOut: 0,
 					},
-					Receiver: domain.Receiver{
-						Descriptor: desc,
-						Amount:     2000,
-					},
+					Pubkey: pubkey,
+					Amount: 2000,
 				},
 			},
 			Receivers: []domain.Receiver{
 				{
-					Descriptor: desc,
-					Amount:     700,
+					Pubkey: pubkey,
+					Amount: 700,
 				},
 				{
-					Descriptor: desc,
-					Amount:     700,
+					Pubkey: pubkey,
+					Amount: 700,
 				},
 				{
-					Descriptor: desc,
-					Amount:     600,
+					Pubkey: pubkey,
+					Amount: 600,
 				},
 			},
 		},
@@ -49,25 +47,21 @@ var (
 						Txid: txid,
 						VOut: 0,
 					},
-					Receiver: domain.Receiver{
-						Descriptor: desc,
-						Amount:     1000,
-					},
+					Pubkey: pubkey,
+					Amount: 1000,
 				},
 				{
 					VtxoKey: domain.VtxoKey{
 						Txid: txid,
 						VOut: 0,
 					},
-					Receiver: domain.Receiver{
-						Descriptor: desc,
-						Amount:     1000,
-					},
+					Pubkey: pubkey,
+					Amount: 1000,
 				},
 			},
 			Receivers: []domain.Receiver{{
-				Descriptor: desc,
-				Amount:     2000,
+				Pubkey: pubkey,
+				Amount: 2000,
 			}},
 		},
 	}
