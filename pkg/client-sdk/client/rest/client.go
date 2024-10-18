@@ -696,13 +696,13 @@ func vtxosFromRest(restVtxos []*models.V1Vtxo) []client.Vtxo {
 				Txid: v.Outpoint.Txid,
 				VOut: uint32(v.Outpoint.Vout),
 			},
-			Descriptor: v.Descriptor,
-			Amount:     uint64(amount),
-			RoundTxid:  v.RoundTxid,
-			ExpiresAt:  expiresAt,
-			RedeemTx:   v.RedeemTx,
-			Pending:    v.Pending,
-			SpentBy:    v.SpentBy,
+			Pubkey:    v.Pubkey,
+			Amount:    uint64(amount),
+			RoundTxid: v.RoundTxid,
+			ExpiresAt: expiresAt,
+			RedeemTx:  v.RedeemTx,
+			Pending:   v.Pending,
+			SpentBy:   v.SpentBy,
 		}
 	}
 	return vtxos

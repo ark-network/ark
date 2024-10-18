@@ -404,13 +404,13 @@ func vtxosFromProto(protoVtxos []*arkv1.Vtxo) []client.Vtxo {
 				Txid: v.Outpoint.Txid,
 				VOut: v.Outpoint.Vout,
 			},
-			Descriptor: v.Descriptor_,
-			Amount:     v.Amount,
-			RoundTxid:  v.RoundTxid,
-			ExpiresAt:  &expiresAt,
-			RedeemTx:   v.RedeemTx,
-			Pending:    v.Pending,
-			SpentBy:    v.SpentBy,
+			Pubkey:    v.Pubkey,
+			Amount:    v.Amount,
+			RoundTxid: v.RoundTxid,
+			ExpiresAt: &expiresAt,
+			RedeemTx:  v.RedeemTx,
+			Pending:   v.Pending,
+			SpentBy:   v.SpentBy,
 		}
 	}
 	return vtxos

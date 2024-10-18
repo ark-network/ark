@@ -223,11 +223,13 @@ func (a *covenantlessArkClient) listenForTransactions(ctx context.Context) {
 		return
 	}
 
-	desc, err := a.offchainAddressToDefaultVtxoDescriptor(offchainAddr)
+	addr, err := common.DecodeAddress(offchainAddr.Address)
 	if err != nil {
-		log.WithError(err).Error("Failed to get descriptor for new address")
+		log.WithError(err).Error("Failed to decode address")
 		return
 	}
+
+	addrPubkey := hex.EncodeToString(schnorr.SerializePubKey(addr.VtxoTapKey))
 
 	for {
 		select {
@@ -253,7 +255,7 @@ func (a *covenantlessArkClient) listenForTransactions(ctx context.Context) {
 				continue
 			}
 
-			a.processTransactionEvent(desc, event, pendingBoardingTxsMap)
+			a.processTransactionEvent(addrPubkey, event, pendingBoardingTxsMap)
 		case <-ctx.Done():
 			return
 		}
@@ -319,7 +321,7 @@ func (a *covenantlessArkClient) getBoardingPendingTransactions(
 }
 
 func (a *covenantlessArkClient) processTransactionEvent(
-	descriptor string,
+	pubkey string,
 	event client.TransactionEvent,
 	pendingBoardingTxsMap map[string]types.Transaction,
 ) {
@@ -372,7 +374,7 @@ func (a *covenantlessArkClient) processTransactionEvent(
 		vtxosToInsert := make([]types.Vtxo, 0)
 		txsToInsert := make([]types.Transaction, 0)
 		for _, v := range event.Round.SpendableVtxos {
-			if v.Descriptor == descriptor {
+			if v.Pubkey == pubkey {
 				vtxosToInsert = append(vtxosToInsert, types.Vtxo{
 					VtxoKey: types.VtxoKey{
 						Txid: v.Txid,
@@ -449,7 +451,7 @@ func (a *covenantlessArkClient) processTransactionEvent(
 
 			outputAmount := uint64(0)
 			for _, v := range event.Redeem.SpendableVtxos {
-				if v.Descriptor == descriptor {
+				if v.Pubkey == pubkey {
 					vtxosToInsert = append(vtxosToInsert, types.Vtxo{
 						VtxoKey: types.VtxoKey{
 							Txid: v.Txid,
@@ -482,7 +484,7 @@ func (a *covenantlessArkClient) processTransactionEvent(
 			}
 		} else {
 			for _, v := range event.Redeem.SpendableVtxos {
-				if v.Descriptor == descriptor {
+				if v.Pubkey == pubkey {
 					vtxosToInsert = append(vtxosToInsert, types.Vtxo{
 						VtxoKey: types.VtxoKey{
 							Txid: v.Txid,
