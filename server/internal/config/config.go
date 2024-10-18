@@ -36,6 +36,9 @@ type Config struct {
 	BitcoindRpcHost       string
 	TLSExtraIPs           []string
 	TLSExtraDomains       []string
+	UnlockerType          string
+	UnlockerFilePath      string
+	UnlockerPassword      string
 }
 
 var (
@@ -59,12 +62,15 @@ var (
 	// #nosec G101
 	BitcoindRpcUser = "BITCOIND_RPC_USER"
 	// #nosec G101
-	BitcoindRpcPass = "BITCOIND_RPC_PASS"
-	BitcoindRpcHost = "BITCOIND_RPC_HOST"
-	NoMacaroons     = "NO_MACAROONS"
-	NoTLS           = "NO_TLS"
-	TLSExtraIP      = "TLS_EXTRA_IP"
-	TLSExtraDomain  = "TLS_EXTRA_DOMAIN"
+	BitcoindRpcPass  = "BITCOIND_RPC_PASS"
+	BitcoindRpcHost  = "BITCOIND_RPC_HOST"
+	NoMacaroons      = "NO_MACAROONS"
+	NoTLS            = "NO_TLS"
+	TLSExtraIP       = "TLS_EXTRA_IP"
+	TLSExtraDomain   = "TLS_EXTRA_DOMAIN"
+	UnlockerType     = "UNLOCKER_TYPE"
+	UnlockerFilePath = "UNLOCKER_FILE_PATH"
+	UnlockerPassword = "UNLOCKER_PASSWORD"
 
 	defaultDatadir               = common.AppDataDir("arkd", false)
 	defaultRoundInterval         = 5
@@ -142,6 +148,9 @@ func LoadConfig() (*Config, error) {
 		NoMacaroons:           viper.GetBool(NoMacaroons),
 		TLSExtraIPs:           viper.GetStringSlice(TLSExtraIP),
 		TLSExtraDomains:       viper.GetStringSlice(TLSExtraDomain),
+		UnlockerType:          viper.GetString(UnlockerType),
+		UnlockerFilePath:      viper.GetString(UnlockerFilePath),
+		UnlockerPassword:      viper.GetString(UnlockerPassword),
 	}, nil
 }
 

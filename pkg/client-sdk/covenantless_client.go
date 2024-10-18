@@ -18,7 +18,7 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/ark-network/ark/pkg/client-sdk/redemption"
-	"github.com/ark-network/ark/pkg/client-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
@@ -57,86 +57,468 @@ type covenantlessArkClient struct {
 	*arkClient
 }
 
-func NewCovenantlessClient(storeSvc store.ConfigStore) (ArkClient, error) {
-	data, err := storeSvc.GetData(context.Background())
+func NewCovenantlessClient(sdkStore types.Store) (ArkClient, error) {
+	cfgData, err := sdkStore.ConfigStore().GetData(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	if data != nil {
+
+	if cfgData != nil {
 		return nil, ErrAlreadyInitialized
 	}
 
-	return &covenantlessArkClient{&arkClient{store: storeSvc}}, nil
+	return &covenantlessArkClient{
+		&arkClient{
+			store: sdkStore,
+		},
+	}, nil
 }
 
-func LoadCovenantlessClient(storeSvc store.ConfigStore) (ArkClient, error) {
-	if storeSvc == nil {
-		return nil, fmt.Errorf("missin store service")
+func LoadCovenantlessClient(sdkStore types.Store) (ArkClient, error) {
+	if sdkStore == nil {
+		return nil, fmt.Errorf("missin sdk repository")
 	}
 
-	data, err := storeSvc.GetData(context.Background())
+	cfgData, err := sdkStore.ConfigStore().GetData(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	if data == nil {
+	if cfgData == nil {
 		return nil, ErrNotInitialized
 	}
 
 	clientSvc, err := getClient(
-		supportedClients, data.ClientType, data.AspUrl,
+		supportedClients, cfgData.ClientType, cfgData.AspUrl,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup transport client: %s", err)
 	}
 
-	explorerSvc, err := getExplorer(data.ExplorerURL, data.Network.Name)
+	explorerSvc, err := getExplorer(cfgData.ExplorerURL, cfgData.Network.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
 
-	walletSvc, err := getWallet(storeSvc, data, supportedWallets)
+	walletSvc, err := getWallet(
+		sdkStore.ConfigStore(),
+		cfgData,
+		supportedWallets,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("faile to setup wallet: %s", err)
 	}
 
-	return &covenantlessArkClient{
-		&arkClient{data, walletSvc, storeSvc, explorerSvc, clientSvc},
-	}, nil
+	covenantlessClient := covenantlessArkClient{
+		&arkClient{
+			Config:   cfgData,
+			wallet:   walletSvc,
+			store:    sdkStore,
+			explorer: explorerSvc,
+			client:   clientSvc,
+		},
+	}
+
+	if cfgData.WithTransactionFeed {
+		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
+		covenantlessClient.txStreamCtxCancel = txStreamCtxCancel
+		go covenantlessClient.listenForTransactions(txStreamCtx)
+		go covenantlessClient.listenForBoardingUtxos(txStreamCtx)
+	}
+
+	return &covenantlessClient, nil
 }
 
 func LoadCovenantlessClientWithWallet(
-	storeSvc store.ConfigStore, walletSvc wallet.WalletService,
+	sdkStore types.Store, walletSvc wallet.WalletService,
 ) (ArkClient, error) {
-	if storeSvc == nil {
-		return nil, fmt.Errorf("missin store service")
+	if sdkStore == nil {
+		return nil, fmt.Errorf("missin sdk repository")
 	}
+
 	if walletSvc == nil {
 		return nil, fmt.Errorf("missin wallet service")
 	}
 
-	data, err := storeSvc.GetData(context.Background())
+	cfgData, err := sdkStore.ConfigStore().GetData(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	if data == nil {
+	if cfgData == nil {
 		return nil, ErrNotInitialized
 	}
 
 	clientSvc, err := getClient(
-		supportedClients, data.ClientType, data.AspUrl,
+		supportedClients, cfgData.ClientType, cfgData.AspUrl,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup transport client: %s", err)
 	}
 
-	explorerSvc, err := getExplorer(data.ExplorerURL, data.Network.Name)
+	explorerSvc, err := getExplorer(cfgData.ExplorerURL, cfgData.Network.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
 
-	return &covenantlessArkClient{
-		&arkClient{data, walletSvc, storeSvc, explorerSvc, clientSvc},
-	}, nil
+	covenantlessClient := covenantlessArkClient{
+		&arkClient{
+			Config:   cfgData,
+			wallet:   walletSvc,
+			store:    sdkStore,
+			explorer: explorerSvc,
+			client:   clientSvc,
+		},
+	}
+
+	if cfgData.WithTransactionFeed {
+		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
+		covenantlessClient.txStreamCtxCancel = txStreamCtxCancel
+		go covenantlessClient.listenForTransactions(txStreamCtx)
+		go covenantlessClient.listenForBoardingUtxos(txStreamCtx)
+	}
+
+	return &covenantlessClient, nil
+}
+
+func (a *covenantlessArkClient) Init(ctx context.Context, args InitArgs) error {
+	if err := a.arkClient.init(ctx, args); err != nil {
+		return err
+	}
+
+	if args.ListenTransactionStream {
+		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
+		a.txStreamCtxCancel = txStreamCtxCancel
+		go a.listenForTransactions(txStreamCtx)
+		go a.listenForBoardingUtxos(txStreamCtx)
+	}
+
+	return nil
+}
+
+func (a *covenantlessArkClient) InitWithWallet(ctx context.Context, args InitWithWalletArgs) error {
+	if err := a.arkClient.initWithWallet(ctx, args); err != nil {
+		return err
+	}
+
+	if a.WithTransactionFeed {
+		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
+		a.txStreamCtxCancel = txStreamCtxCancel
+		go a.listenForTransactions(txStreamCtx)
+		go a.listenForBoardingUtxos(txStreamCtx)
+	}
+
+	return nil
+}
+
+func (a *covenantlessArkClient) listenForTransactions(ctx context.Context) {
+	eventChan, closeFunc, err := a.client.GetTransactionsStream(ctx)
+	if err != nil {
+		log.WithError(err).Error("Failed to get transaction stream")
+		return
+	}
+	defer closeFunc()
+
+	offchainAddr, _, err := a.wallet.NewAddress(ctx, true)
+	if err != nil {
+		log.WithError(err).Error("Failed to get new address")
+		return
+	}
+
+	desc, err := a.offchainAddressToDefaultVtxoDescriptor(offchainAddr)
+	if err != nil {
+		log.WithError(err).Error("Failed to get descriptor for new address")
+		return
+	}
+
+	for {
+		select {
+		case event, ok := <-eventChan:
+			if !ok {
+				continue
+			}
+
+			if event.Err != nil {
+				log.WithError(event.Err).Error("Error in transaction stream")
+				continue
+			}
+
+			pendingBoardingTxsMap, newPendingBoardingTxs, err := a.getBoardingPendingTransactions(ctx)
+			if err != nil {
+				log.WithError(err).Error("Failed to get pending transactions")
+				continue
+			}
+
+			if err := a.store.TransactionStore().
+				AddTransactions(ctx, newPendingBoardingTxs); err != nil {
+				log.WithError(err).Error("Failed to insert new boarding transactions")
+				continue
+			}
+
+			a.processTransactionEvent(desc, event, pendingBoardingTxsMap)
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (a *covenantlessArkClient) listenForBoardingUtxos(ctx context.Context) {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			_, newPendingBoardingTxs, err := a.getBoardingPendingTransactions(ctx)
+			if err != nil {
+				log.WithError(err).Error("Failed to get pending transactions")
+				continue
+			}
+
+			if err := a.store.TransactionStore().
+				AddTransactions(ctx, newPendingBoardingTxs); err != nil {
+				log.WithError(err).Error("Failed to insert new boarding transactions")
+				continue
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (a *covenantlessArkClient) getBoardingPendingTransactions(
+	ctx context.Context,
+) (map[string]types.Transaction, []types.Transaction, error) {
+	oldTxs, err := a.store.TransactionStore().GetAllTransactions(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	pendingBoardingTxsMap := make(map[string]types.Transaction)
+	for _, tx := range oldTxs {
+		if tx.IsBoarding() {
+			if tx.IsPending {
+				pendingBoardingTxsMap[tx.BoardingTxid] = tx
+			}
+		}
+	}
+
+	boardingTxs, _, err := a.getBoardingTxs(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	newPendingBoardingTxs := make([]types.Transaction, 0)
+	for _, tx := range boardingTxs {
+		if tx.IsBoarding() && tx.IsPending {
+			if _, ok := pendingBoardingTxsMap[tx.BoardingTxid]; !ok {
+				newPendingBoardingTxs = append(newPendingBoardingTxs, tx)
+				pendingBoardingTxsMap[tx.BoardingTxid] = tx
+			}
+		}
+	}
+
+	return pendingBoardingTxsMap, newPendingBoardingTxs, nil
+}
+
+func (a *covenantlessArkClient) processTransactionEvent(
+	descriptor string,
+	event client.TransactionEvent,
+	pendingBoardingTxsMap map[string]types.Transaction,
+) {
+	if event.Round != nil {
+		boardingAmount := 0
+		boardingTxsToUpdate := make([]types.Transaction, 0)
+		for _, v := range event.Round.ClaimedBoardingUtxos {
+			boardingKey := fmt.Sprintf("%v-%v", v.Txid, v.VOut)
+			if tx, ok := pendingBoardingTxsMap[boardingKey]; ok {
+				boardingAmount += int(tx.Amount)
+				tx.IsPending = false
+				boardingTxsToUpdate = append(boardingTxsToUpdate, tx)
+			}
+		}
+
+		if err := a.store.TransactionStore().
+			UpdateTransactions(context.Background(), boardingTxsToUpdate); err != nil {
+			log.WithError(err).Error("Failed to update boarding transactions")
+		}
+
+		spentKeys := make([]types.VtxoKey, 0, len(event.Round.SpentVtxos))
+		for _, v := range event.Round.SpentVtxos {
+			spentKeys = append(spentKeys, types.VtxoKey{
+				Txid: v.Txid,
+				VOut: v.VOut,
+			})
+		}
+
+		vtxos, err := a.store.VtxoStore().
+			GetVtxos(context.Background(), spentKeys)
+		if err != nil {
+			log.WithError(err).Error("Failed to get spent vtxos")
+			return
+		}
+
+		if len(vtxos) > 0 {
+			vtxosToUpdate := make([]types.Vtxo, 0)
+			for _, v := range vtxos {
+				v.Spent = true
+				v.Pending = false
+				vtxosToUpdate = append(vtxosToUpdate, v)
+			}
+
+			if err := a.store.VtxoStore().
+				UpdateVtxos(context.Background(), vtxosToUpdate); err != nil {
+				log.WithError(err).Error("Failed to update spent vtxos")
+			}
+		}
+
+		vtxosToInsert := make([]types.Vtxo, 0)
+		txsToInsert := make([]types.Transaction, 0)
+		for _, v := range event.Round.SpendableVtxos {
+			if v.Descriptor == descriptor {
+				vtxosToInsert = append(vtxosToInsert, types.Vtxo{
+					VtxoKey: types.VtxoKey{
+						Txid: v.Txid,
+						VOut: v.VOut,
+					},
+					Amount:    v.Amount,
+					ExpiresAt: v.ExpiresAt,
+					RedeemTx:  event.Round.Txid,
+					Pending:   false,
+					SpentBy:   v.SpentBy,
+					Spent:     false,
+				})
+
+				if boardingAmount == int(v.Amount) {
+					continue
+				}
+
+				txsToInsert = append(txsToInsert, types.Transaction{
+					TransactionKey: types.TransactionKey{
+						RoundTxid: event.Round.Txid,
+					},
+					Amount:    v.Amount,
+					Type:      types.TxReceived,
+					CreatedAt: time.Now(), //TODO is this ok?
+				})
+			}
+		}
+
+		if err := a.store.VtxoStore().
+			AddVtxos(context.Background(), vtxosToInsert); err != nil {
+			log.WithError(err).Error("Failed to insert new vtxos")
+			return
+		}
+
+		if err := a.store.TransactionStore().
+			AddTransactions(context.Background(), txsToInsert); err != nil {
+			log.WithError(err).Error("Failed to insert received transaction")
+			return
+		}
+
+	}
+
+	if event.Redeem != nil {
+		vtxosToInsert := make([]types.Vtxo, 0)
+		spentKeys := make([]types.VtxoKey, 0, len(event.Redeem.SpentVtxos))
+		for _, v := range event.Redeem.SpentVtxos {
+			spentKeys = append(spentKeys, types.VtxoKey{
+				Txid: v.Txid,
+				VOut: v.VOut,
+			})
+		}
+
+		vtxos, err := a.store.VtxoStore().
+			GetVtxos(context.Background(), spentKeys)
+		if err != nil {
+			log.WithError(err).Error("Failed to get spent vtxos")
+			return
+		}
+
+		if len(vtxos) > 0 {
+			inputAmount := uint64(0)
+			vtxosToUpdate := make([]types.Vtxo, 0)
+			for _, v := range vtxos {
+				v.Spent = true
+				vtxosToUpdate = append(vtxosToUpdate, v)
+				inputAmount += v.Amount
+			}
+
+			if err := a.store.VtxoStore().
+				UpdateVtxos(context.Background(), vtxosToUpdate); err != nil {
+				log.WithError(err).Error("Failed to update spent vtxos")
+				return
+			}
+
+			outputAmount := uint64(0)
+			for _, v := range event.Redeem.SpendableVtxos {
+				if v.Descriptor == descriptor {
+					vtxosToInsert = append(vtxosToInsert, types.Vtxo{
+						VtxoKey: types.VtxoKey{
+							Txid: v.Txid,
+							VOut: v.VOut,
+						},
+						Amount:    v.Amount,
+						ExpiresAt: v.ExpiresAt,
+						RedeemTx:  event.Redeem.Txid,
+						Pending:   true,
+						SpentBy:   v.SpentBy,
+						Spent:     false,
+					})
+					outputAmount += v.Amount
+				}
+			}
+
+			tx := types.Transaction{
+				TransactionKey: types.TransactionKey{
+					RedeemTxid: event.Redeem.Txid,
+				},
+				Amount:    inputAmount - outputAmount,
+				Type:      types.TxSent,
+				IsPending: true,
+				CreatedAt: time.Now(), //TODO is this ok?
+			}
+
+			if err := a.store.TransactionStore().
+				AddTransactions(context.Background(), []types.Transaction{tx}); err != nil {
+				log.WithError(err).Error("Failed to insert received transaction")
+			}
+		} else {
+			for _, v := range event.Redeem.SpendableVtxos {
+				if v.Descriptor == descriptor {
+					vtxosToInsert = append(vtxosToInsert, types.Vtxo{
+						VtxoKey: types.VtxoKey{
+							Txid: v.Txid,
+							VOut: v.VOut,
+						},
+						Amount:    v.Amount,
+						ExpiresAt: v.ExpiresAt,
+						RedeemTx:  event.Redeem.Txid,
+						Pending:   true,
+						SpentBy:   v.SpentBy,
+						Spent:     false,
+					})
+
+					tx := types.Transaction{
+						TransactionKey: types.TransactionKey{
+							RedeemTxid: event.Redeem.Txid,
+						},
+						Amount:    v.Amount,
+						Type:      types.TxReceived,
+						IsPending: true,
+						CreatedAt: time.Now(), //TODO is this ok?
+					}
+					if err := a.store.TransactionStore().
+						AddTransactions(context.Background(), []types.Transaction{tx}); err != nil {
+						log.WithError(err).Error("Failed to insert received transaction")
+					}
+				}
+			}
+		}
+
+		if err := a.store.VtxoStore().
+			AddVtxos(context.Background(), vtxosToInsert); err != nil {
+			log.WithError(err).Error("Failed to insert new vtxos")
+			return
+		}
+	}
 }
 
 func (a *covenantlessArkClient) ListVtxos(
@@ -653,8 +1035,7 @@ func (a *covenantlessArkClient) SendAsync(
 		})
 	}
 
-	redeemTx, unconditionalForfeitTxs, err := a.client.CreatePayment(
-		ctx, inputs, receiversOutput)
+	redeemTx, err := a.client.CreatePayment(ctx, inputs, receiversOutput)
 	if err != nil {
 		return "", err
 	}
@@ -667,7 +1048,7 @@ func (a *covenantlessArkClient) SendAsync(
 	}
 
 	if err = a.client.CompletePayment(
-		ctx, signedRedeemTx, unconditionalForfeitTxs,
+		ctx, signedRedeemTx,
 	); err != nil {
 		return "", err
 	}
@@ -726,8 +1107,14 @@ func (a *covenantlessArkClient) Claim(ctx context.Context) (string, error) {
 	)
 }
 
-func (a *covenantlessArkClient) GetTransactionHistory(ctx context.Context) ([]Transaction, error) {
-	if a.StoreData == nil {
+func (a *covenantlessArkClient) GetTransactionHistory(
+	ctx context.Context,
+) ([]types.Transaction, error) {
+	if a.Config.WithTransactionFeed {
+		return a.store.TransactionStore().GetAllTransactions(ctx)
+	}
+
+	if a.Config == nil {
 		return nil, fmt.Errorf("client not initialized")
 	}
 
@@ -742,7 +1129,7 @@ func (a *covenantlessArkClient) GetTransactionHistory(ctx context.Context) ([]Tr
 	}
 
 	offchainTxs, err := vtxosToTxsCovenantless(
-		a.StoreData.RoundLifetime, spendableVtxos, spentVtxos, ignoreVtxos,
+		a.Config.RoundLifetime, spendableVtxos, spentVtxos, ignoreVtxos,
 	)
 	if err != nil {
 		return nil, err
@@ -756,7 +1143,7 @@ func (a *covenantlessArkClient) GetTransactionHistory(ctx context.Context) ([]Tr
 		if txi.CreatedAt.Equal(txj.CreatedAt) {
 			return txi.Type > txj.Type
 		}
-		return txi.CreatedAt.Before(txj.CreatedAt)
+		return txi.CreatedAt.After(txj.CreatedAt)
 	})
 
 	return txs, nil
@@ -1402,7 +1789,7 @@ func (a *covenantlessArkClient) validateCongestionTree(
 
 	if !utils.IsOnchainOnly(receivers) {
 		if err := bitcointree.ValidateCongestionTree(
-			event.Tree, poolTx, a.StoreData.AspPubkey, a.RoundLifetime,
+			event.Tree, poolTx, a.Config.AspPubkey, a.RoundLifetime,
 		); err != nil {
 			return err
 		}
@@ -2068,7 +2455,7 @@ func (a *covenantlessArkClient) offchainAddressToDefaultVtxoDescriptor(addr stri
 // offchain tx history and prevent duplicates.
 func (a *covenantlessArkClient) getBoardingTxs(
 	ctx context.Context,
-) ([]Transaction, map[string]struct{}, error) {
+) ([]types.Transaction, map[string]struct{}, error) {
 	utxos, err := a.getClaimableBoardingUtxos(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -2084,20 +2471,22 @@ func (a *covenantlessArkClient) getBoardingTxs(
 		return nil, nil, err
 	}
 
-	unconfirmedTxs := make([]Transaction, 0)
-	confirmedTxs := make([]Transaction, 0)
+	unconfirmedTxs := make([]types.Transaction, 0)
+	confirmedTxs := make([]types.Transaction, 0)
 	for _, u := range allUtxos {
 		pending := false
 		if isPending[u.Txid] {
 			pending = true
 		}
 
-		tx := Transaction{
-			BoardingTxid: u.Txid,
-			Amount:       u.Amount,
-			Type:         TxReceived,
-			IsPending:    pending,
-			CreatedAt:    u.CreatedAt,
+		tx := types.Transaction{
+			TransactionKey: types.TransactionKey{
+				BoardingTxid: u.Txid,
+			},
+			Amount:    u.Amount,
+			Type:      types.TxReceived,
+			IsPending: pending,
+			CreatedAt: u.CreatedAt,
 		}
 
 		emptyTime := time.Time{}
@@ -2123,19 +2512,21 @@ func findVtxosBySpentBy(allVtxos []client.Vtxo, txid string) (vtxos []client.Vtx
 
 func vtxosToTxsCovenantless(
 	roundLifetime int64, spendable, spent []client.Vtxo, ignoreVtxos map[string]struct{},
-) ([]Transaction, error) {
-	transactions := make([]Transaction, 0)
+) ([]types.Transaction, error) {
+	transactions := make([]types.Transaction, 0)
 
-	indexedTxs := make(map[string]Transaction)
+	indexedTxs := make(map[string]types.Transaction)
 	for _, v := range spent {
 		// If the vtxo was pending and is spent => it's been claimed.
 		if v.Pending {
-			transactions = append(transactions, Transaction{
-				RedeemTxid: v.Txid,
-				Amount:     v.Amount,
-				Type:       TxReceived,
-				IsPending:  false,
-				CreatedAt:  getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
+			transactions = append(transactions, types.Transaction{
+				TransactionKey: types.TransactionKey{
+					RedeemTxid: v.Txid,
+				},
+				Amount:    v.Amount,
+				Type:      types.TxReceived,
+				IsPending: false,
+				CreatedAt: getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
 			})
 			// Delete any duplicate in the indexed list.
 			delete(indexedTxs, v.SpentBy)
@@ -2158,13 +2549,15 @@ func vtxosToTxsCovenantless(
 		// Add a transaction to the indexed list if not existing, it will be deleted if it's a duplicate.
 		tx, ok := indexedTxs[v.SpentBy]
 		if !ok {
-			indexedTxs[v.SpentBy] = Transaction{
-				RedeemTxid: v.SpentBy,
-				RoundTxid:  v.SpentBy,
-				Amount:     v.Amount,
-				Type:       TxSent,
-				IsPending:  false,
-				CreatedAt:  getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
+			indexedTxs[v.SpentBy] = types.Transaction{
+				TransactionKey: types.TransactionKey{
+					RedeemTxid: v.SpentBy,
+					RoundTxid:  v.SpentBy,
+				},
+				Amount:    v.Amount,
+				Type:      types.TxSent,
+				IsPending: false,
+				CreatedAt: getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
 			}
 			continue
 		}
@@ -2191,13 +2584,15 @@ func vtxosToTxsCovenantless(
 			if v.RoundTxid == "" {
 				redeemTxid = v.Txid
 			}
-			transactions = append(transactions, Transaction{
-				RedeemTxid: redeemTxid,
-				RoundTxid:  v.RoundTxid,
-				Amount:     v.Amount,
-				Type:       TxReceived,
-				IsPending:  v.Pending,
-				CreatedAt:  getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
+			transactions = append(transactions, types.Transaction{
+				TransactionKey: types.TransactionKey{
+					RedeemTxid: redeemTxid,
+					RoundTxid:  v.RoundTxid,
+				},
+				Amount:    v.Amount,
+				Type:      types.TxReceived,
+				IsPending: v.Pending,
+				CreatedAt: getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
 			})
 			continue
 		}

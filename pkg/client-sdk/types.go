@@ -2,7 +2,6 @@ package arksdk
 
 import (
 	"fmt"
-	"time"
 
 	grpcclient "github.com/ark-network/ark/pkg/client-sdk/client/grpc"
 	restclient "github.com/ark-network/ark/pkg/client-sdk/client/rest"
@@ -21,12 +20,13 @@ var (
 )
 
 type InitArgs struct {
-	ClientType  string
-	WalletType  string
-	AspUrl      string
-	Seed        string
-	Password    string
-	ExplorerURL string
+	ClientType              string
+	WalletType              string
+	AspUrl                  string
+	Seed                    string
+	Password                string
+	ExplorerURL             string
+	ListenTransactionStream bool
 }
 
 func (a InitArgs) validate() error {
@@ -60,12 +60,13 @@ func (a InitArgs) validate() error {
 }
 
 type InitWithWalletArgs struct {
-	ClientType  string
-	Wallet      wallet.WalletService
-	AspUrl      string
-	Seed        string
-	Password    string
-	ExplorerURL string
+	ClientType              string
+	Wallet                  wallet.WalletService
+	AspUrl                  string
+	Seed                    string
+	Password                string
+	ExplorerURL             string
+	ListenTransactionStream bool
 }
 
 func (a InitWithWalletArgs) validate() error {
@@ -121,21 +122,4 @@ type balanceRes struct {
 	onchainLockedBalance        map[int64]uint64
 	offchainBalanceByExpiration map[int64]uint64
 	err                         error
-}
-
-const (
-	TxSent     TxType = "sent"
-	TxReceived TxType = "received"
-)
-
-type TxType string
-
-type Transaction struct {
-	BoardingTxid string
-	RoundTxid    string
-	RedeemTxid   string
-	Amount       uint64
-	Type         TxType
-	IsPending    bool
-	CreatedAt    time.Time
 }

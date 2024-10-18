@@ -13,7 +13,7 @@ import (
 	"github.com/ark-network/ark/common"
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
 	"github.com/ark-network/ark/pkg/client-sdk/store"
-	filestore "github.com/ark-network/ark/pkg/client-sdk/store/file"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/term"
@@ -213,12 +213,7 @@ func initArkSdk(ctx *cli.Context) error {
 }
 
 func config(ctx *cli.Context) error {
-	cfgStore, err := getConfigStore(ctx.String(datadirFlag.Name))
-	if err != nil {
-		return err
-	}
-
-	cfgData, err := cfgStore.GetData(ctx.Context)
+	cfgData, err := arkSdkClient.GetConfigData(ctx.Context)
 	if err != nil {
 		return err
 	}
@@ -235,6 +230,7 @@ func config(ctx *cli.Context) error {
 		"boarding_descriptor_template": cfgData.BoardingDescriptorTemplate,
 		"explorer_url":                 cfgData.ExplorerURL,
 		"forfeit_address":              cfgData.ForfeitAddress,
+		"with_transaction_feed":        cfgData.WithTransactionFeed,
 	}
 
 	return printJSON(cfg)
@@ -296,16 +292,16 @@ func send(ctx *cli.Context) error {
 		return fmt.Errorf("missing destination, use --to and --amount or --receivers")
 	}
 
-	configStore, err := getConfigStore(ctx.String(datadirFlag.Name))
+	configData, err := arkSdkClient.GetConfigData(ctx.Context)
 	if err != nil {
 		return err
 	}
 
-	cfgData, err := configStore.GetData(ctx.Context)
+	net, err := getNetwork(ctx, configData)
 	if err != nil {
 		return err
 	}
-	net := getNetwork(ctx, cfgData)
+
 	isBitcoin := isBtcChain(net)
 
 	var receivers []arksdk.Receiver
@@ -378,11 +374,16 @@ func redeem(ctx *cli.Context) error {
 }
 
 func getArkSdkClient(ctx *cli.Context) (arksdk.ArkClient, error) {
-	cfgStore, err := getConfigStore(ctx.String(datadirFlag.Name))
+	dataDir := ctx.String(datadirFlag.Name)
+	sdkRepository, err := store.NewStore(store.Config{
+		ConfigStoreType: types.FileStore,
+		BaseDir:         dataDir,
+	})
 	if err != nil {
 		return nil, err
 	}
-	cfgData, err := cfgStore.GetData(ctx.Context)
+
+	cfgData, err := sdkRepository.ConfigStore().GetData(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -392,41 +393,41 @@ func getArkSdkClient(ctx *cli.Context) (arksdk.ArkClient, error) {
 		return nil, fmt.Errorf("CLI not initialized, run 'init' cmd to initialize")
 	}
 
-	net := getNetwork(ctx, cfgData)
+	net, err := getNetwork(ctx, cfgData)
+	if err != nil {
+		return nil, err
+	}
 
 	if isBtcChain(net) {
 		return loadOrCreateClient(
-			arksdk.LoadCovenantlessClient, arksdk.NewCovenantlessClient, cfgStore,
+			arksdk.LoadCovenantlessClient, arksdk.NewCovenantlessClient, sdkRepository,
 		)
 	}
 	return loadOrCreateClient(
-		arksdk.LoadCovenantClient, arksdk.NewCovenantClient, cfgStore,
+		arksdk.LoadCovenantClient, arksdk.NewCovenantClient, sdkRepository,
 	)
 }
 
 func loadOrCreateClient(
-	loadFunc, newFunc func(store.ConfigStore) (arksdk.ArkClient, error),
-	store store.ConfigStore,
+	loadFunc, newFunc func(types.Store) (arksdk.ArkClient, error),
+	sdkRepository types.Store,
 ) (arksdk.ArkClient, error) {
-	client, err := loadFunc(store)
+	client, err := loadFunc(sdkRepository)
 	if err != nil {
 		if errors.Is(err, arksdk.ErrNotInitialized) {
-			return newFunc(store)
+			return newFunc(sdkRepository)
 		}
 		return nil, err
 	}
 	return client, err
 }
 
-func getConfigStore(dataDir string) (store.ConfigStore, error) {
-	return filestore.NewConfigStore(dataDir)
-}
-
-func getNetwork(ctx *cli.Context, configData *store.StoreData) string {
-	if configData == nil {
-		return strings.ToLower(ctx.String(networkFlag.Name))
+func getNetwork(ctx *cli.Context, cfgData *types.Config) (string, error) {
+	if cfgData == nil {
+		return ctx.String(networkFlag.Name), nil
 	}
-	return configData.Network.Name
+
+	return cfgData.Network.Name, nil
 }
 
 func isBtcChain(network string) bool {

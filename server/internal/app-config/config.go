@@ -8,9 +8,12 @@ import (
 	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/ark-network/ark/server/internal/infrastructure/db"
-	scheduler "github.com/ark-network/ark/server/internal/infrastructure/scheduler/gocron"
+	blockscheduler "github.com/ark-network/ark/server/internal/infrastructure/scheduler/block"
+	timescheduler "github.com/ark-network/ark/server/internal/infrastructure/scheduler/gocron"
 	txbuilder "github.com/ark-network/ark/server/internal/infrastructure/tx-builder/covenant"
 	cltxbuilder "github.com/ark-network/ark/server/internal/infrastructure/tx-builder/covenantless"
+	envunlocker "github.com/ark-network/ark/server/internal/infrastructure/unlocker/env"
+	fileunlocker "github.com/ark-network/ark/server/internal/infrastructure/unlocker/file"
 	btcwallet "github.com/ark-network/ark/server/internal/infrastructure/wallet/btc-embedded"
 	liquidwallet "github.com/ark-network/ark/server/internal/infrastructure/wallet/liquid-standalone"
 	log "github.com/sirupsen/logrus"
@@ -28,6 +31,7 @@ var (
 	}
 	supportedSchedulers = supportedType{
 		"gocron": {},
+		"block":  {},
 	}
 	supportedTxBuilders = supportedType{
 		"covenant":     {},
@@ -36,6 +40,10 @@ var (
 	supportedScanners = supportedType{
 		"ocean":     {},
 		"btcwallet": {},
+	}
+	supportedUnlockers = supportedType{
+		"env":  {},
+		"file": {},
 	}
 	supportedNetworks = supportedType{
 		common.Bitcoin.Name:        {},
@@ -70,6 +78,10 @@ type Config struct {
 	BitcoindRpcPass string
 	BitcoindRpcHost string
 
+	UnlockerType     string
+	UnlockerFilePath string // file unlocker
+	UnlockerPassword string // env unlocker
+
 	repo      ports.RepoManager
 	svc       application.Service
 	adminSvc  application.AdminService
@@ -77,6 +89,7 @@ type Config struct {
 	txBuilder ports.TxBuilder
 	scanner   ports.BlockchainScanner
 	scheduler ports.SchedulerService
+	unlocker  ports.Unlocker
 }
 
 func (c *Config) Validate() error {
@@ -95,6 +108,9 @@ func (c *Config) Validate() error {
 	if !supportedScanners.supports(c.BlockchainScannerType) {
 		return fmt.Errorf("blockchain scanner type not supported, please select one of: %s", supportedScanners)
 	}
+	if len(c.UnlockerType) > 0 && !supportedUnlockers.supports(c.UnlockerType) {
+		return fmt.Errorf("unlocker type not supported, please select one of: %s", supportedUnlockers)
+	}
 	if c.RoundInterval < 2 {
 		return fmt.Errorf("invalid round interval, must be at least 2 seconds")
 	}
@@ -104,11 +120,23 @@ func (c *Config) Validate() error {
 	if len(c.WalletAddr) <= 0 {
 		return fmt.Errorf("missing onchain wallet address")
 	}
-	// round life time must be a multiple of 512
 	if c.RoundLifetime < minAllowedSequence {
-		return fmt.Errorf(
-			"invalid round lifetime, must be a at least %d", minAllowedSequence,
-		)
+		if c.SchedulerType != "block" {
+			return fmt.Errorf("scheduler type must be block if round lifetime is expressed in blocks")
+		}
+	} else {
+		if c.SchedulerType != "gocron" {
+			return fmt.Errorf("scheduler type must be gocron if round lifetime is expressed in seconds")
+		}
+
+		// round life time must be a multiple of 512 if expressed in seconds
+		if c.RoundLifetime%minAllowedSequence != 0 {
+			c.RoundLifetime -= c.RoundLifetime % minAllowedSequence
+			log.Infof(
+				"round lifetime must be a multiple of %d, rounded to %d",
+				minAllowedSequence, c.RoundLifetime,
+			)
+		}
 	}
 
 	if c.UnilateralExitDelay < minAllowedSequence {
@@ -120,14 +148,6 @@ func (c *Config) Validate() error {
 	if c.BoardingExitDelay < minAllowedSequence {
 		return fmt.Errorf(
 			"invalid boarding exit delay, must at least %d", minAllowedSequence,
-		)
-	}
-
-	if c.RoundLifetime%minAllowedSequence != 0 {
-		c.RoundLifetime -= c.RoundLifetime % minAllowedSequence
-		log.Infof(
-			"round lifetime must be a multiple of %d, rounded to %d",
-			minAllowedSequence, c.RoundLifetime,
 		)
 	}
 
@@ -151,7 +171,7 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.walletService(); err != nil {
-		return fmt.Errorf("failed to connect to wallet: %s", err)
+		return err
 	}
 	if err := c.txBuilderService(); err != nil {
 		return err
@@ -163,6 +183,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.adminService(); err != nil {
+		return err
+	}
+	if err := c.unlockerService(); err != nil {
 		return err
 	}
 	return nil
@@ -183,6 +206,10 @@ func (c *Config) AdminService() application.AdminService {
 
 func (c *Config) WalletService() ports.WalletService {
 	return c.wallet
+}
+
+func (c *Config) UnlockerService() ports.Unlocker {
+	return c.unlocker
 }
 
 func (c *Config) repoManager() error {
@@ -227,7 +254,7 @@ func (c *Config) walletService() error {
 	if common.IsLiquid(c.Network) {
 		svc, err := liquidwallet.NewService(c.WalletAddr)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to connect to wallet: %s", err)
 		}
 
 		c.wallet = svc
@@ -310,7 +337,9 @@ func (c *Config) schedulerService() error {
 	var err error
 	switch c.SchedulerType {
 	case "gocron":
-		svc = scheduler.NewScheduler()
+		svc = timescheduler.NewScheduler()
+	case "block":
+		svc, err = blockscheduler.NewScheduler(c.EsploraURL)
 	default:
 		err = fmt.Errorf("unknown scheduler type")
 	}
@@ -349,7 +378,34 @@ func (c *Config) appService() error {
 }
 
 func (c *Config) adminService() error {
-	c.adminSvc = application.NewAdminService(c.wallet, c.repo, c.txBuilder)
+	unit := ports.UnixTime
+	if c.RoundLifetime < minAllowedSequence {
+		unit = ports.BlockHeight
+	}
+
+	c.adminSvc = application.NewAdminService(c.wallet, c.repo, c.txBuilder, unit)
+	return nil
+}
+
+func (c *Config) unlockerService() error {
+	if len(c.UnlockerType) <= 0 {
+		return nil
+	}
+
+	var svc ports.Unlocker
+	var err error
+	switch c.UnlockerType {
+	case "file":
+		svc, err = fileunlocker.NewService(c.UnlockerFilePath)
+	case "env":
+		svc, err = envunlocker.NewService(c.UnlockerPassword)
+	default:
+		err = fmt.Errorf("unknown unlocker type")
+	}
+	if err != nil {
+		return err
+	}
+	c.unlocker = svc
 	return nil
 }
 

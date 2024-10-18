@@ -13,6 +13,16 @@ type mockedWallet struct {
 	mock.Mock
 }
 
+func (m *mockedWallet) GetSyncedUpdate(ctx context.Context) <-chan struct{} {
+	args := m.Called(ctx)
+
+	var res chan struct{}
+	if a := args.Get(0); a != nil {
+		res = a.(chan struct{})
+	}
+	return res
+}
+
 func (m *mockedWallet) GenSeed(ctx context.Context) (string, error) {
 	args := m.Called(ctx)
 
@@ -172,7 +182,7 @@ func (m *mockedWallet) GetDustAmount(ctx context.Context) (uint64, error) {
 	return res, args.Error(1)
 }
 
-func (m *mockedWallet) IsTransactionConfirmed(ctx context.Context, txid string) (bool, int64, error) {
+func (m *mockedWallet) IsTransactionConfirmed(ctx context.Context, txid string) (bool, int64, int64, error) {
 	args := m.Called(ctx, txid)
 
 	var res bool
@@ -180,12 +190,17 @@ func (m *mockedWallet) IsTransactionConfirmed(ctx context.Context, txid string) 
 		res = a.(bool)
 	}
 
+	var height int64
+	if h := args.Get(1); h != nil {
+		height = h.(int64)
+	}
+
 	var blocktime int64
 	if b := args.Get(1); b != nil {
 		blocktime = b.(int64)
 	}
 
-	return res, blocktime, args.Error(2)
+	return res, height, blocktime, args.Error(2)
 }
 
 func (m *mockedWallet) SignTransactionTapscript(ctx context.Context, pset string, inputIndexes []int) (string, error) {

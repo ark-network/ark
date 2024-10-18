@@ -92,6 +92,11 @@ service ArkService {
       get: "/v1/vtxos/{address}"
     };
   }
+  rpc GetTransactionsStream(GetTransactionsStreamRequest) returns (stream GetTransactionsStreamResponse) {
+    option (google.api.http) = {
+      get: "/v1/transactions"
+    };
+  }
 }
 
 message GetInfoRequest {}
@@ -188,12 +193,10 @@ message CreatePaymentRequest {
 }
 message CreatePaymentResponse {
   string signed_redeem_tx = 1; // signed only by the ASP
-  repeated string usigned_unconditional_forfeit_txs = 2;
 }
 
 message CompletePaymentRequest {
   string signed_redeem_tx = 1;
-  repeated string signed_unconditional_forfeit_txs = 2;
 }
 message CompletePaymentResponse {}
 
@@ -313,11 +316,28 @@ message Vtxo {
   int64 expire_at = 6;
   bool swept = 7;
   bool pending = 8;
-  PendingPayment pending_data = 9;
+  string redeem_tx = 9;
   uint64 amount = 10;
 }
 
-message PendingPayment {
-  string redeem_tx = 1;
-  repeated string unconditional_forfeit_txs =2;
+
+message GetTransactionsStreamRequest {}
+message GetTransactionsStreamResponse {
+  oneof tx {
+    RoundTransaction round = 1;
+    RedeemTransaction redeem = 2;
+  }
+}
+
+message RoundTransaction {
+  string txid = 1;
+  repeated Outpoint spent_vtxos = 2;
+  repeated Vtxo spendable_vtxos = 3;
+  repeated Outpoint claimed_boarding_utxos = 4;
+}
+
+message RedeemTransaction {
+  string txid = 1;
+  repeated Outpoint spent_vtxos = 2;
+  repeated Vtxo spendable_vtxos = 3;
 }

@@ -6,9 +6,12 @@ package browser
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"syscall/js"
+	"time"
 
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
@@ -32,7 +35,9 @@ func LogWrapper() js.Func {
 
 func InitWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) != 6 {
+		// TODO: add another withTransactionFeed args to configure client listen to
+		// new txs from the server. Requires server to use websockets.
+		if len(args) != 7 {
 			return nil, errors.New("invalid number of args")
 		}
 		chain := args[5].String()
@@ -40,6 +45,7 @@ func InitWrapper() js.Func {
 			return nil, errors.New("invalid chain, select either 'bitcoin' or 'liquid'")
 		}
 
+		configStore := store.ConfigStore()
 		var walletSvc wallet.WalletService
 		switch args[0].String() {
 		case arksdk.SingleKeyWallet:
@@ -63,11 +69,12 @@ func InitWrapper() js.Func {
 		}
 
 		err := arkSdkClient.InitWithWallet(context.Background(), arksdk.InitWithWalletArgs{
-			ClientType: args[1].String(),
-			Wallet:     walletSvc,
-			AspUrl:     args[2].String(),
-			Seed:       args[3].String(),
-			Password:   args[4].String(),
+			ClientType:  args[1].String(),
+			Wallet:      walletSvc,
+			AspUrl:      args[2].String(),
+			Seed:        args[3].String(),
+			Password:    args[4].String(),
+			ExplorerURL: args[6].String(),
 		})
 
 		// Add this log message
@@ -119,21 +126,25 @@ func BalanceWrapper() js.Func {
 		}
 
 		var (
-			onchainBalance  int
-			offchainBalance int
+			onchainSpendableBalance int
+			onchainLockedBalance    int
+			offchainBalance         int
 		)
 
-		if resp == nil {
-			onchainBalance = 0
-			offchainBalance = 0
-		} else {
-			onchainBalance = int(resp.OnchainBalance.SpendableAmount)
+		if resp != nil {
+			onchainSpendableBalance = int(resp.OnchainBalance.SpendableAmount)
+			for _, b := range resp.OnchainBalance.LockedAmount {
+				onchainLockedBalance += int(b.Amount)
+			}
 			offchainBalance = int(resp.OffchainBalance.Total)
 		}
 
 		result := map[string]interface{}{
-			"onchain_balance":  onchainBalance,
-			"offchain_balance": offchainBalance,
+			"onchainBalance": map[string]interface{}{
+				"spendable": onchainSpendableBalance,
+				"locked":    onchainLockedBalance,
+			},
+			"offchainBalance": offchainBalance,
 		}
 
 		return js.ValueOf(result), nil
@@ -157,6 +168,19 @@ func ReceiveWrapper() js.Func {
 	})
 }
 
+func DumpWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if arkSdkClient == nil {
+			return nil, errors.New("ARK SDK client is not initialized")
+		}
+		seed, err := arkSdkClient.Dump(context.Background())
+		if err != nil {
+			return nil, err
+		}
+		return js.ValueOf(seed), nil
+	})
+}
+
 func SendOnChainWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
 		if len(args) != 1 {
@@ -165,7 +189,7 @@ func SendOnChainWrapper() js.Func {
 		receivers := make([]arksdk.Receiver, args[0].Length())
 		for i := 0; i < args[0].Length(); i++ {
 			receiver := args[0].Index(i)
-			receivers[i] = arksdk.NewLiquidReceiver(
+			receivers[i] = arksdk.NewBitcoinReceiver(
 				receiver.Get("To").String(), uint64(receiver.Get("Amount").Int()),
 			)
 		}
@@ -189,7 +213,7 @@ func SendOffChainWrapper() js.Func {
 		receivers := make([]arksdk.Receiver, args[1].Length())
 		for i := 0; i < args[1].Length(); i++ {
 			receiver := args[1].Index(i)
-			receivers[i] = arksdk.NewLiquidReceiver(
+			receivers[i] = arksdk.NewBitcoinReceiver(
 				receiver.Get("To").String(), uint64(receiver.Get("Amount").Int()),
 			)
 		}
@@ -201,6 +225,45 @@ func SendOffChainWrapper() js.Func {
 			return nil, err
 		}
 		return js.ValueOf(txID), nil
+	})
+}
+
+func SendAsyncWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if len(args) != 2 {
+			return nil, errors.New("invalid number of args")
+		}
+		withExpiryCoinselect := args[0].Bool()
+		receivers := make([]arksdk.Receiver, args[1].Length())
+		for i := 0; i < args[1].Length(); i++ {
+			receiver := args[1].Index(i)
+			receivers[i] = arksdk.NewBitcoinReceiver(
+				receiver.Get("To").String(), uint64(receiver.Get("Amount").Int()),
+			)
+		}
+
+		txID, err := arkSdkClient.SendAsync(
+			context.Background(), withExpiryCoinselect, receivers,
+		)
+		if err != nil {
+			return nil, err
+		}
+		return js.ValueOf(txID), nil
+	})
+}
+
+func ClaimWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if len(args) != 0 {
+			return nil, errors.New("invalid number of args")
+		}
+
+		resp, err := arkSdkClient.Claim(context.Background())
+		if err != nil {
+			return nil, err
+		}
+
+		return js.ValueOf(resp), nil
 	})
 }
 
@@ -226,6 +289,32 @@ func CollaborativeRedeemWrapper() js.Func {
 			return nil, err
 		}
 		return js.ValueOf(txID), nil
+	})
+}
+
+func GetTransactionHistoryWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		history, err := arkSdkClient.GetTransactionHistory(context.Background())
+		if err != nil {
+			return nil, err
+		}
+		rawHistory := make([]map[string]interface{}, 0)
+		for _, record := range history {
+			rawHistory = append(rawHistory, map[string]interface{}{
+				"boardingTxid": record.BoardingTxid,
+				"roundTxid":    record.RoundTxid,
+				"redeemTxid":   record.RedeemTxid,
+				"amount":       strconv.Itoa(int(record.Amount)),
+				"type":         record.Type,
+				"isPending":    record.IsPending,
+				"createdAt":    record.CreatedAt.Format(time.RFC3339),
+			})
+		}
+		result, err := json.MarshalIndent(rawHistory, "", "  ")
+		if err != nil {
+			return nil, err
+		}
+		return js.ValueOf(string(result)), nil
 	})
 }
 

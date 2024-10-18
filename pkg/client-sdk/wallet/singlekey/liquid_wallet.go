@@ -11,7 +11,7 @@ import (
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
-	"github.com/ark-network/ark/pkg/client-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	walletstore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -27,14 +27,18 @@ type liquidWallet struct {
 }
 
 func NewLiquidWallet(
-	configStore store.ConfigStore, walletStore walletstore.WalletStore,
+	configStore types.ConfigStore, walletStore walletstore.WalletStore,
 ) (wallet.WalletService, error) {
 	walletData, err := walletStore.GetWallet()
 	if err != nil {
 		return nil, err
 	}
 	return &liquidWallet{
-		&singlekeyWallet{configStore, walletStore, nil, walletData},
+		&singlekeyWallet{
+			configStore: configStore,
+			walletStore: walletStore,
+			walletData:  walletData,
+		},
 	}, nil
 }
 
