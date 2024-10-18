@@ -60,7 +60,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Infof("start building ARKD docker container ...")
+	log.Infof("Start building ARKD docker container ...")
 	if _, err := utils.RunCommand("docker", "compose", "-f", composePath, "--env-file", tmpfile.Name(), "up", "-d", "--build"); err != nil {
 		log.Fatal(err)
 	}
@@ -117,7 +117,7 @@ func main() {
 	}
 	wg.Wait()
 
-	log.Infof("client wallets initialized")
+	log.Infof("Client wallets initialized")
 
 	for _, round := range simulation.Rounds {
 		log.Infof("Executing Round %d\n", round.Number)
