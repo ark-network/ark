@@ -506,7 +506,7 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 
 	dustAmount, err := b.wallet.GetDustAmount(context.Background())
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	for i, receiver := range receivers {
@@ -531,7 +531,7 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 		if i == len(receivers)-1 {
 			value -= redeemTxMinRelayFee
 			if value <= dustAmount {
-				return nil, fmt.Errorf("change amount is dust amount")
+				return "", fmt.Errorf("change amount is dust amount")
 			}
 		}
 		outs = append(outs, &wire.TxOut{
