@@ -3,3 +3,5 @@
 
 *.wasm
 wasm_exec.js
+
+.idea
