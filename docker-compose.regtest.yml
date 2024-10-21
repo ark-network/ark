@@ -27,19 +27,19 @@ services:
     depends_on:
       - oceand
     environment:
-      - ARK_WALLET_ADDR=oceand:18000
-      - ARK_ROUND_INTERVAL=10
-      - ARK_NETWORK=liquidregtest
-      - ARK_LOG_LEVEL=5
-      - ARK_ESPLORA_URL=http://chopsticks-liquid:3000
-      - ARK_ROUND_LIFETIME=20
-      - ARK_SCHEDULER_TYPE=block
-      - ARK_DB_TYPE=sqlite
-      - ARK_TX_BUILDER_TYPE=covenant
-      - ARK_PORT=6060
-      - ARK_NO_TLS=true
-      - ARK_NO_MACAROONS=true
-      - ARK_DATADIR=/app/data
+      - ARK_WALLET_ADDR=${ARK_WALLET_ADDR:-oceand:18000}
+      - ARK_ROUND_INTERVAL=${ARK_ROUND_INTERVAL:-10}
+      - ARK_NETWORK=${ARK_NETWORK:-liquidregtest}
+      - ARK_LOG_LEVEL=${ARK_LOG_LEVEL:-5}
+      - ARK_ESPLORA_URL=${ARK_ESPLORA_URL:-http://chopsticks-liquid:3000}
+      - ARK_ROUND_LIFETIME=${ARK_ROUND_LIFETIME:-20}
+      - ARK_SCHEDULER_TYPE=${ARK_SCHEDULER_TYPE:-block}
+      - ARK_DB_TYPE=${ARK_DB_TYPE:-sqlite}
+      - ARK_TX_BUILDER_TYPE=${ARK_TX_BUILDER_TYPE:-covenant}
+      - ARK_PORT=${ARK_PORT:-6060}
+      - ARK_NO_TLS=${ARK_NO_TLS:-true}
+      - ARK_NO_MACAROONS=${ARK_NO_MACAROONS:-true}
+      - ARK_DATADIR=${ARK_DATADIR:-/app/data}
     ports:
       - "6060:6060"
     volumes:

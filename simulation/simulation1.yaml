@@ -1,6 +1,6 @@
 version: "1.0"
 
-asp:
+server:
   network: "regtest"
   initial_funding: 1.0
   round_interval: 20

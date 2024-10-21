@@ -1,18 +1,76 @@
-version: string()
-
-server:
-  network: enum('regtest', 'testnet', 'mainnet')
-  initial_funding: float(min=0)
-  round_interval: int(min=1)
-
-clients:
-  - id: string()
-    initial_funding: float(min=0, required=false)
-
-rounds:
-  - number: int(min=1)
-    actions:
-      regex('^client_\d+$'):
-        - type: enum('Onboard', 'SendAsync', 'SendOffchain', 'SendOnchain', 'Claim', 'CollaborativeExit', 'UnilateralExit')
-          amount: float(min=0, required=false)
-          to: string(required=false)
+$schema: "http://json-schema.org/draft-07/schema#"
+type: object
+required:
+  - version
+  - server
+  - clients
+  - rounds
+properties:
+  version:
+    type: string
+  server:
+    type: object
+    required:
+      - network
+      - initial_funding
+      - round_interval
+    properties:
+      network:
+        type: string
+        enum: ["regtest", "testnet"]
+      initial_funding:
+        type: number
+        minimum: 0
+      round_interval:
+        type: integer
+        minimum: 1
+  clients:
+    type: array
+    items:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        initial_funding:
+          type: number
+          minimum: 0
+  rounds:
+    type: array
+    items:
+      type: object
+      required:
+        - number
+        - actions
+      properties:
+        number:
+          type: integer
+          minimum: 1
+        actions:
+          type: object
+          patternProperties:
+            "^client_\\d+$":
+              type: array
+              items:
+                type: object
+                required:
+                  - type
+                properties:
+                  type:
+                    type: string
+                    enum:
+                      - "Onboard"
+                      - "SendAsync"
+                      - "SendOffchain"
+                      - "SendOnchain"
+                      - "Claim"
+                      - "CollaborativeRedeem"
+                      - "UnilateralExit"
+                  amount:
+                    type: number
+                    minimum: 0
+                  to:
+                    type: string
