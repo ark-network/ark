@@ -509,7 +509,7 @@ func (a *covenantlessArkClient) processTransactionEvent(
 func (a *covenantlessArkClient) ListVtxos(
 	ctx context.Context,
 ) (spendableVtxos, spentVtxos []client.Vtxo, err error) {
-	offchainAddrs, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
+	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return
 	}
