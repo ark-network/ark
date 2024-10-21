@@ -85,7 +85,7 @@ func main() {
 	log.Infof("alice offchain balance: %d", aliceBalance.OffchainBalance.Total)
 
 	log.Infof("alice claiming onboarding funds...")
-	txid, err := aliceArkClient.Claim(ctx)
+	txid, err := aliceArkClient.Settle(ctx, nil, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -128,7 +128,7 @@ func main() {
 	fmt.Println("")
 	log.Infof("alice is sending %d sats to bob offchain...", amount)
 
-	if _, err = aliceArkClient.SendAsync(ctx, false, receivers); err != nil {
+	if _, err = aliceArkClient.Settle(ctx, receivers, nil); err != nil {
 		log.Fatal(err)
 	}
 
@@ -159,7 +159,7 @@ func main() {
 
 	fmt.Println("")
 	log.Info("bob is claiming the incoming payment...")
-	roundTxid, err := bobArkClient.Claim(ctx)
+	roundTxid, err := bobArkClient.Settle(ctx, nil, nil)
 	if err != nil {
 		log.Fatal(err)
 	}

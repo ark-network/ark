@@ -17,15 +17,12 @@ type ArkClient interface {
 	Balance(ctx context.Context, computeExpiryDetails bool) (*Balance, error)
 	Receive(ctx context.Context) (offchainAddr, boardingAddr string, err error)
 	SendOnChain(ctx context.Context, receivers []Receiver) (string, error)
-	SendOffChain(
-		ctx context.Context, withExpiryCoinselect bool, receivers []Receiver,
-	) (string, error)
-	UnilateralRedeem(ctx context.Context) error
+	Settle(ctx context.Context, receivers []Receiver, opts *CoinSelectOptions) (string, error)
+	Send(ctx context.Context, receivers []Receiver, opts *CoinSelectOptions) (string, error)
+	UnilateralRedeem(ctx context.Context, opts *CoinSelectOptions) error
 	CollaborativeRedeem(
-		ctx context.Context, addr string, amount uint64, withExpiryCoinselect bool,
+		ctx context.Context, addr string, amount uint64, opts *CoinSelectOptions,
 	) (string, error)
-	SendAsync(ctx context.Context, withExpiryCoinselect bool, receivers []Receiver) (string, error)
-	Claim(ctx context.Context) (string, error)
 	ListVtxos(ctx context.Context) (spendable, spent []client.Vtxo, err error)
 	Dump(ctx context.Context) (seed string, err error)
 	GetTransactionHistory(ctx context.Context) ([]types.Transaction, error)

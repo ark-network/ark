@@ -102,3 +102,18 @@ type TransactionEvent struct {
 	Tx    Transaction
 	Event EventType
 }
+
+type Utxo struct {
+	Txid        string
+	VOut        uint32
+	Amount      uint64
+	Asset       string // liquid only
+	Delay       uint
+	SpendableAt time.Time
+	CreatedAt   time.Time
+	Descriptor  string
+}
+
+func (u *Utxo) Sequence() (uint32, error) {
+	return common.BIP68Sequence(u.Delay)
+}
