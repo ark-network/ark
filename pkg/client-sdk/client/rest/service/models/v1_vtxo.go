@@ -27,9 +27,6 @@ type V1Vtxo struct {
 	// outpoint
 	Outpoint *V1Outpoint `json:"outpoint,omitempty"`
 
-	// pending
-	Pending bool `json:"pending,omitempty"`
-
 	// pubkey
 	Pubkey string `json:"pubkey,omitempty"`
 

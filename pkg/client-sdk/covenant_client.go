@@ -1745,27 +1745,12 @@ func (a *covenantArkClient) selfTransferAllPendingPayments(
 }
 
 func (a *covenantArkClient) getBoardingTxs(ctx context.Context) (transactions []types.Transaction) {
-	utxos, err := a.getClaimableBoardingUtxos(ctx)
-	if err != nil {
-		return nil
-	}
-
-	isPending := make(map[string]bool)
-	for _, u := range utxos {
-		isPending[u.Txid] = true
-	}
-
 	allUtxos, err := a.getAllBoardingUtxos(ctx)
 	if err != nil {
 		return nil
 	}
 
 	for _, u := range allUtxos {
-		pending := false
-		if isPending[u.Txid] {
-			pending = true
-		}
-
 		transactions = append(transactions, types.Transaction{
 			TransactionKey: types.TransactionKey{
 				BoardingTxid: u.Txid,
@@ -1773,7 +1758,6 @@ func (a *covenantArkClient) getBoardingTxs(ctx context.Context) (transactions []
 			Amount:    u.Amount,
 			Type:      types.TxReceived,
 			CreatedAt: u.CreatedAt,
-			IsPending: pending,
 		})
 	}
 	return
@@ -1796,9 +1780,7 @@ func vtxosToTxsCovenant(
 	for _, v := range append(spendable, spent...) {
 		// get vtxo amount
 		amount := int(v.Amount)
-		if !v.Pending {
-			continue
-		}
+
 		// find other spent vtxos that spent this one
 		relatedVtxos := findVtxosBySpentBy(spent, v.Txid)
 		for _, r := range relatedVtxos {

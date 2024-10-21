@@ -33,7 +33,6 @@ func TestVtxosToTxs(t *testing.T) {
 					},
 					Amount:    1000,
 					Type:      sdktypes.TxSent,
-					IsPending: false,
 					CreatedAt: time.Unix(1726054898, 0),
 				},
 			},
@@ -48,7 +47,6 @@ func TestVtxosToTxs(t *testing.T) {
 					},
 					Amount:    1000,
 					Type:      sdktypes.TxReceived,
-					IsPending: true,
 					CreatedAt: time.Unix(1726054898, 0),
 				},
 				{
@@ -57,7 +55,6 @@ func TestVtxosToTxs(t *testing.T) {
 					},
 					Amount:    2000,
 					Type:      sdktypes.TxReceived,
-					IsPending: true,
 					CreatedAt: time.Unix(1726486359, 0),
 				},
 			},
@@ -72,7 +69,6 @@ func TestVtxosToTxs(t *testing.T) {
 					},
 					Amount:    1000,
 					Type:      sdktypes.TxReceived,
-					IsPending: false,
 					CreatedAt: time.Unix(1726054898, 0),
 				},
 				{
@@ -81,7 +77,6 @@ func TestVtxosToTxs(t *testing.T) {
 					},
 					Amount:    2000,
 					Type:      sdktypes.TxReceived,
-					IsPending: false,
 					CreatedAt: time.Unix(1726486359, 0),
 				},
 			},
@@ -96,7 +91,6 @@ func TestVtxosToTxs(t *testing.T) {
 					},
 					Amount:    1000,
 					Type:      sdktypes.TxReceived,
-					IsPending: false,
 					CreatedAt: time.Unix(1726054898, 0),
 				},
 				{
@@ -105,7 +99,6 @@ func TestVtxosToTxs(t *testing.T) {
 					},
 					Amount:    2000,
 					Type:      sdktypes.TxReceived,
-					IsPending: false,
 					CreatedAt: time.Unix(1726486359, 0),
 				},
 				{
@@ -114,7 +107,6 @@ func TestVtxosToTxs(t *testing.T) {
 					},
 					Amount:    2100,
 					Type:      sdktypes.TxSent,
-					IsPending: false,
 					CreatedAt: time.Unix(1726503865, 0),
 				},
 			},
@@ -138,7 +130,6 @@ func TestVtxosToTxs(t *testing.T) {
 				require.Equal(t, wantTx.RedeemTxid, gotTx.RedeemTxid)
 				require.Equal(t, int(wantTx.Amount), int(gotTx.Amount))
 				require.Equal(t, wantTx.Type, gotTx.Type)
-				require.Equal(t, wantTx.IsPending, gotTx.IsPending)
 			}
 		})
 	}
@@ -217,7 +208,6 @@ func loadFixtures(jsonStr string) (vtxos, map[string]struct{}, error) {
 			RoundTxid: vtxo.PoolTxid,
 			ExpiresAt: &expireAt,
 			RedeemTx:  vtxo.PendingData.RedeemTx,
-			Pending:   vtxo.Pending,
 			SpentBy:   vtxo.SpentBy,
 		}
 	}
@@ -241,7 +231,6 @@ func loadFixtures(jsonStr string) (vtxos, map[string]struct{}, error) {
 			RoundTxid: vtxo.PoolTxid,
 			ExpiresAt: &expireAt,
 			RedeemTx:  vtxo.PendingData.RedeemTx,
-			Pending:   vtxo.Pending,
 			SpentBy:   vtxo.SpentBy,
 		}
 	}

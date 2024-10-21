@@ -54,7 +54,6 @@ CREATE TABLE IF NOT EXISTS vtxo (
 	expire_at INTEGER NOT NULL,
 	payment_id TEXT,
     redeem_tx TEXT,
-    pending BOOLEAN NOT NULL,
     PRIMARY KEY (txid, vout),
 	FOREIGN KEY (payment_id) REFERENCES payment(id)
 );

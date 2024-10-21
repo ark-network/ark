@@ -125,7 +125,6 @@ func (v vtxo) toVtxo() client.Vtxo {
 		Amount:    v.GetAmount(),
 		RoundTxid: v.GetRoundTxid(),
 		ExpiresAt: expiresAt,
-		Pending:   v.GetPending(),
 		RedeemTx:  v.GetRedeemTx(),
 		SpentBy:   v.GetSpentBy(),
 		Pubkey:    v.GetPubkey(),

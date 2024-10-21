@@ -95,7 +95,6 @@ type Vtxo struct {
 	RoundTxid string
 	ExpiresAt *time.Time
 	RedeemTx  string
-	Pending   bool
 	SpentBy   string
 }
 

@@ -217,71 +217,105 @@ func TestReactToSpentVtxosRedemption(t *testing.T) {
 }
 
 func TestReactToAsyncSpentVtxosRedemption(t *testing.T) {
-	t.Run("receiver claimed funds", func(t *testing.T) {
-		ctx := context.Background()
-		sdkClient, grpcClient := setupArkSDK(t)
-		defer grpcClient.Close()
+	ctx := context.Background()
+	sdkClient, grpcClient := setupArkSDK(t)
+	defer grpcClient.Close()
 
-		offchainAddress, boardingAddress, err := sdkClient.Receive(ctx)
-		require.NoError(t, err)
+	offchainAddress, boardingAddress, err := sdkClient.Receive(ctx)
+	require.NoError(t, err)
 
-		_, err = utils.RunCommand("nigiri", "faucet", boardingAddress)
-		require.NoError(t, err)
+	_, err = utils.RunCommand("nigiri", "faucet", boardingAddress)
+	require.NoError(t, err)
 
-		time.Sleep(5 * time.Second)
+	time.Sleep(5 * time.Second)
 
-		roundId, err := sdkClient.Claim(ctx)
-		require.NoError(t, err)
+	roundId, err := sdkClient.Claim(ctx)
+	require.NoError(t, err)
 
-		err = utils.GenerateBlock()
-		require.NoError(t, err)
+	err = utils.GenerateBlock()
+	require.NoError(t, err)
 
-		_, err = sdkClient.SendAsync(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(offchainAddress, 1000)})
-		require.NoError(t, err)
+	_, err = sdkClient.SendAsync(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(offchainAddress, 1000)})
+	require.NoError(t, err)
 
-		_, err = sdkClient.Claim(ctx)
-		require.NoError(t, err)
+	_, err = sdkClient.Claim(ctx)
+	require.NoError(t, err)
 
-		time.Sleep(5 * time.Second)
+	time.Sleep(5 * time.Second)
 
-		_, spentVtxos, err := sdkClient.ListVtxos(ctx)
-		require.NoError(t, err)
-		require.NotEmpty(t, spentVtxos)
+	_, spentVtxos, err := sdkClient.ListVtxos(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, spentVtxos)
 
-		var vtxo client.Vtxo
+	var vtxo client.Vtxo
 
-		for _, v := range spentVtxos {
-			if v.RoundTxid == roundId {
-				vtxo = v
-				break
-			}
+	for _, v := range spentVtxos {
+		if v.RoundTxid == roundId {
+			vtxo = v
+			break
 		}
-		require.NotEmpty(t, vtxo)
+	}
+	require.NotEmpty(t, vtxo)
 
-		round, err := grpcClient.GetRound(ctx, vtxo.RoundTxid)
+	round, err := grpcClient.GetRound(ctx, vtxo.RoundTxid)
+	require.NoError(t, err)
+
+	expl := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
+
+	branch, err := redemption.NewCovenantlessRedeemBranch(expl, round.Tree, vtxo)
+	require.NoError(t, err)
+
+	txs, err := branch.RedeemPath()
+	require.NoError(t, err)
+
+	for _, tx := range txs {
+		_, err := expl.Broadcast(tx)
 		require.NoError(t, err)
+	}
 
-		expl := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
+	// give time for the ASP to detect and process the fraud
+	time.Sleep(50 * time.Second)
 
-		branch, err := redemption.NewCovenantlessRedeemBranch(expl, round.Tree, vtxo)
-		require.NoError(t, err)
+	balance, err := sdkClient.Balance(ctx, false)
+	require.NoError(t, err)
 
-		txs, err := branch.RedeemPath()
-		require.NoError(t, err)
+	require.Empty(t, balance.OnchainBalance.LockedAmount)
+}
 
-		for _, tx := range txs {
-			_, err := expl.Broadcast(tx)
-			require.NoError(t, err)
-		}
+func TestChainAsyncPayments(t *testing.T) {
+	var receive utils.ArkReceive
+	receiveStr, err := runClarkCommand("receive")
+	require.NoError(t, err)
 
-		// give time for the ASP to detect and process the fraud
-		time.Sleep(50 * time.Second)
+	err = json.Unmarshal([]byte(receiveStr), &receive)
+	require.NoError(t, err)
 
-		balance, err := sdkClient.Balance(ctx, false)
-		require.NoError(t, err)
+	_, err = utils.RunCommand("nigiri", "faucet", receive.Boarding)
+	require.NoError(t, err)
 
-		require.Empty(t, balance.OnchainBalance.LockedAmount)
-	})
+	time.Sleep(5 * time.Second)
+
+	_, err = runClarkCommand("claim", "--password", utils.Password)
+	require.NoError(t, err)
+
+	time.Sleep(3 * time.Second)
+
+	_, err = runClarkCommand("send", "--amount", "10000", "--to", receive.Offchain, "--password", utils.Password)
+	require.NoError(t, err)
+
+	var balance utils.ArkBalance
+	balanceStr, err := runClarkCommand("balance")
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
+	require.NotZero(t, balance.Offchain.Total)
+
+	_, err = runClarkCommand("send", "--amount", "10000", "--to", receive.Offchain, "--password", utils.Password)
+	require.NoError(t, err)
+
+	balanceStr, err = runClarkCommand("balance")
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
+	require.NotZero(t, balance.Offchain.Total)
 }
 
 func TestAliceSeveralPaymentsToBob(t *testing.T) {
@@ -360,7 +394,6 @@ func TestAliceSeveralPaymentsToBob(t *testing.T) {
 
 	_, err = bob.Claim(ctx)
 	require.NoError(t, err)
-
 }
 
 func TestSweep(t *testing.T) {

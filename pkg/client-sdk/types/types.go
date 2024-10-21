@@ -73,7 +73,6 @@ type Transaction struct {
 	TransactionKey
 	Amount    uint64
 	Type      TxType
-	IsPending bool
 	CreatedAt time.Time
 }
 
