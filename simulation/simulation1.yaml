@@ -106,8 +106,6 @@ clients:
     name: "Client48"
   - id: "client_49"
     name: "Client49"
-  - id: "client_50"
-    name: "Client50"
 
 rounds:
   - number: 1
@@ -265,9 +263,6 @@ rounds:
         - type: "SendAsync"
           amount: 0.002
           to: "client_49"
-        - type: "SendAsync"
-          amount: 0.002
-          to: "client_50"
   - number: 3
     actions:
       client_1:
@@ -367,6 +362,4 @@ rounds:
       client_48:
         - type: "Claim"
       client_49:
-        - type: "Claim"
-      client_50:
         - type: "Claim"
