@@ -33,6 +33,7 @@ type PaymentVtxoVw struct {
 	ExpireAt  sql.NullInt64
 	PaymentID sql.NullString
 	RedeemTx  sql.NullString
+	Pending   sql.NullBool
 }
 
 type Receiver struct {
@@ -99,4 +100,5 @@ type Vtxo struct {
 	ExpireAt  int64
 	PaymentID sql.NullString
 	RedeemTx  sql.NullString
+	Pending   bool
 }
