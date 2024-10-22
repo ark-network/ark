@@ -663,7 +663,7 @@ func (a *covenantlessArkClient) SendOnChain(
 	return a.sendOnchain(ctx, receivers)
 }
 
-func (a *covenantlessArkClient) Settle(
+func (a *covenantlessArkClient) SendOffChain(
 	ctx context.Context,
 	receivers []Receiver,
 	opts *CoinSelectOptions,
@@ -860,7 +860,7 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 	return poolTxID, nil
 }
 
-func (a *covenantlessArkClient) Send(
+func (a *covenantlessArkClient) SendAsync(
 	ctx context.Context,
 	receivers []Receiver,
 	opts *CoinSelectOptions,

@@ -172,10 +172,10 @@ func TestReactToSpentVtxosRedemption(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	_, err = client.Settle(ctx, nil, nil)
+	_, err = client.SendOffChain(ctx, nil, nil)
 	require.NoError(t, err)
 
-	_, err = client.Settle(ctx, []arksdk.Receiver{arksdk.NewBitcoinReceiver(offchainAddress, 1000)}, nil)
+	_, err = client.SendOffChain(ctx, []arksdk.Receiver{arksdk.NewBitcoinReceiver(offchainAddress, 1000)}, nil)
 	require.NoError(t, err)
 
 	time.Sleep(2 * time.Second)
@@ -224,16 +224,16 @@ func TestReactToAsyncSpentVtxosRedemption(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	roundId, err := sdkClient.Settle(ctx, nil, nil)
+	roundId, err := sdkClient.SendOffChain(ctx, nil, nil)
 	require.NoError(t, err)
 
 	err = utils.GenerateBlock()
 	require.NoError(t, err)
 
-	_, err = sdkClient.Settle(ctx, []arksdk.Receiver{arksdk.NewBitcoinReceiver(offchainAddress, 1000)}, nil)
+	_, err = sdkClient.SendOffChain(ctx, []arksdk.Receiver{arksdk.NewBitcoinReceiver(offchainAddress, 1000)}, nil)
 	require.NoError(t, err)
 
-	_, err = sdkClient.Settle(ctx, nil, nil)
+	_, err = sdkClient.SendOffChain(ctx, nil, nil)
 	require.NoError(t, err)
 
 	time.Sleep(5 * time.Second)
@@ -332,7 +332,7 @@ func TestAliceSeveralPaymentsToBob(t *testing.T) {
 	bobAddress, _, err := bob.Receive(ctx)
 	require.NoError(t, err)
 
-	_, err = alice.Settle(ctx, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 1000)}, nil)
+	_, err = alice.SendOffChain(ctx, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 1000)}, nil)
 	require.NoError(t, err)
 
 	time.Sleep(2 * time.Second)
@@ -341,7 +341,7 @@ func TestAliceSeveralPaymentsToBob(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, bobVtxos, 1)
 
-	_, err = alice.Settle(ctx, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)}, nil)
+	_, err = alice.SendOffChain(ctx, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)}, nil)
 	require.NoError(t, err)
 
 	time.Sleep(2 * time.Second)
@@ -350,7 +350,7 @@ func TestAliceSeveralPaymentsToBob(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, bobVtxos, 2)
 
-	_, err = alice.Settle(ctx, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)}, nil)
+	_, err = alice.SendOffChain(ctx, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)}, nil)
 	require.NoError(t, err)
 
 	time.Sleep(2 * time.Second)
@@ -359,7 +359,7 @@ func TestAliceSeveralPaymentsToBob(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, bobVtxos, 3)
 
-	_, err = alice.Settle(ctx, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)}, nil)
+	_, err = alice.SendOffChain(ctx, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)}, nil)
 	require.NoError(t, err)
 
 	time.Sleep(2 * time.Second)

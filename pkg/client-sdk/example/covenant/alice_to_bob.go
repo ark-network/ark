@@ -56,7 +56,7 @@ func main() {
 	log.Infof("alice is onboarding with %d sats offchain...", onboardAmount)
 
 	log.Infof("alice claiming onboarding funds...")
-	txid, err := aliceArkClient.Settle(ctx, nil, nil)
+	txid, err := aliceArkClient.SendOffChain(ctx, nil, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func main() {
 	fmt.Println("")
 	log.Infof("alice is sending %d sats to bob offchain...", amount)
 
-	txid, err = aliceArkClient.Settle(ctx, receivers, nil)
+	txid, err = aliceArkClient.SendOffChain(ctx, receivers, nil)
 	if err != nil {
 		log.Fatal(err)
 	}

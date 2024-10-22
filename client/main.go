@@ -275,7 +275,7 @@ func claim(ctx *cli.Context) error {
 		return err
 	}
 
-	txID, err := arkSdkClient.Settle(ctx.Context, nil, nil)
+	txID, err := arkSdkClient.SendOffChain(ctx.Context, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -464,7 +464,7 @@ func parseReceivers(receveirsJSON string, isBitcoin bool) ([]arksdk.Receiver, er
 
 func sendCovenantLess(ctx *cli.Context, receivers []arksdk.Receiver) error {
 	computeExpiration := ctx.Bool(enableExpiryCoinselectFlag.Name)
-	redeemTx, err := arkSdkClient.Send(
+	redeemTx, err := arkSdkClient.SendAsync(
 		ctx.Context, receivers, &arksdk.CoinSelectOptions{
 			WithExpirySorting: computeExpiration,
 		},
@@ -500,7 +500,7 @@ func sendCovenant(ctx context.Context, receivers []arksdk.Receiver) error {
 	}
 
 	if len(offchainReceivers) > 0 {
-		txID, err := arkSdkClient.Settle(ctx, offchainReceivers, nil)
+		txID, err := arkSdkClient.SendOffChain(ctx, offchainReceivers, nil)
 		if err != nil {
 			return err
 		}

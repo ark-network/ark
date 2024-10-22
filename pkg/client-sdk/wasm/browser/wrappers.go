@@ -182,8 +182,6 @@ func DumpWrapper() js.Func {
 	})
 }
 
-// Now, let's update the SendOnChainWrapper, SettleWrapper, and SendWrapper functions
-
 func SendOnChainWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
 		if len(args) != 1 {
@@ -207,7 +205,7 @@ func SendOnChainWrapper() js.Func {
 	})
 }
 
-func SettleWrapper() js.Func {
+func SendOffChainWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
 		if len(args) < 1 || len(args) > 2 {
 			return nil, errors.New("invalid number of args")
@@ -226,7 +224,7 @@ func SettleWrapper() js.Func {
 			}
 		}
 
-		txID, err := arkSdkClient.Settle(
+		txID, err := arkSdkClient.SendOffChain(
 			context.Background(),
 			receivers,
 			coinSelectOptions,
@@ -238,7 +236,7 @@ func SettleWrapper() js.Func {
 	})
 }
 
-func SendWrapper() js.Func {
+func SendAsyncWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
 		if len(args) < 1 || len(args) > 2 {
 			return nil, errors.New("invalid number of args")
@@ -261,7 +259,7 @@ func SendWrapper() js.Func {
 			}
 		}
 
-		txID, err := arkSdkClient.Send(
+		txID, err := arkSdkClient.SendAsync(
 			context.Background(),
 			receivers,
 			coinSelectOptions,
