@@ -22,10 +22,10 @@ import (
 )
 
 func CoinSelect(
-	vtxos []client.Vtxo, amount, dust uint64, sortByExpirationTime bool,
-) ([]client.Vtxo, uint64, error) {
-	selected := make([]client.Vtxo, 0)
-	notSelected := make([]client.Vtxo, 0)
+	vtxos []client.DescriptorVtxo, amount, dust uint64, sortByExpirationTime bool,
+) ([]client.DescriptorVtxo, uint64, error) {
+	selected := make([]client.DescriptorVtxo, 0)
+	notSelected := make([]client.DescriptorVtxo, 0)
 	selectedAmount := uint64(0)
 
 	if sortByExpirationTime {

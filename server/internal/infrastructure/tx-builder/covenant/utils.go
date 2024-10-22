@@ -45,34 +45,38 @@ func getPsetId(pset *psetv2.Pset) (string, error) {
 	return utx.TxHash().String(), nil
 }
 
-func getOnchainReceivers(
-	payments []domain.Payment,
-) []domain.Receiver {
-	receivers := make([]domain.Receiver, 0)
+func getOnchainOutputs(
+	payments []domain.Payment, net *network.Network,
+) ([]psetv2.OutputArgs, error) {
+	outputs := make([]psetv2.OutputArgs, 0)
 	for _, payment := range payments {
 		for _, receiver := range payment.Receivers {
 			if receiver.IsOnchain() {
-				receivers = append(receivers, receiver)
-			}
-		}
-	}
-	return receivers
-}
-
-func getOffchainReceivers(
-	payments []domain.Payment,
-) ([]tree.Receiver, error) {
-	receivers := make([]tree.Receiver, 0)
-	for _, payment := range payments {
-		for _, receiver := range payment.Receivers {
-			if !receiver.IsOnchain() {
-				vtxoScript, err := tree.ParseVtxoScript(receiver.Descriptor)
+				receiverScript, err := address.ToOutputScript(receiver.OnchainAddress)
 				if err != nil {
 					return nil, err
 				}
 
-				receivers = append(receivers, tree.Receiver{
-					Script: vtxoScript,
+				outputs = append(outputs, psetv2.OutputArgs{
+					Script: receiverScript,
+					Amount: receiver.Amount,
+					Asset:  net.AssetID,
+				})
+			}
+		}
+	}
+	return outputs, nil
+}
+
+func getOutputVtxosLeaves(
+	payments []domain.Payment,
+) ([]tree.VtxoLeaf, error) {
+	receivers := make([]tree.VtxoLeaf, 0)
+	for _, payment := range payments {
+		for _, receiver := range payment.Receivers {
+			if !receiver.IsOnchain() {
+				receivers = append(receivers, tree.VtxoLeaf{
+					Pubkey: receiver.Pubkey,
 					Amount: receiver.Amount,
 				})
 			}

@@ -238,10 +238,10 @@ func (a *grpcClient) Ping(
 }
 
 func (a *grpcClient) CreatePayment(
-	ctx context.Context, inputs []client.Input, outputs []client.Output,
+	ctx context.Context, inputs []client.AsyncPaymentInput, outputs []client.Output,
 ) (string, error) {
 	req := &arkv1.CreatePaymentRequest{
-		Inputs:  ins(inputs).toProto(),
+		Inputs:  asyncIns(inputs).toProto(),
 		Outputs: outs(outputs).toProto(),
 	}
 	resp, err := a.svc.CreatePayment(ctx, req)
@@ -404,13 +404,13 @@ func vtxosFromProto(protoVtxos []*arkv1.Vtxo) []client.Vtxo {
 				Txid: v.Outpoint.Txid,
 				VOut: v.Outpoint.Vout,
 			},
-			Descriptor: v.Descriptor_,
-			Amount:     v.Amount,
-			RoundTxid:  v.RoundTxid,
-			ExpiresAt:  &expiresAt,
-			RedeemTx:   v.RedeemTx,
-			Pending:    v.Pending,
-			SpentBy:    v.SpentBy,
+			Pubkey:    v.Pubkey,
+			Amount:    v.Amount,
+			RoundTxid: v.RoundTxid,
+			ExpiresAt: &expiresAt,
+			RedeemTx:  v.RedeemTx,
+			Pending:   v.Pending,
+			SpentBy:   v.SpentBy,
 		}
 	}
 	return vtxos

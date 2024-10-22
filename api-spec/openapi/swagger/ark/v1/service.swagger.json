@@ -506,6 +506,17 @@
         }
       }
     },
+    "v1AsyncPaymentInput": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "$ref": "#/definitions/v1Input"
+        },
+        "forfeitLeafHash": {
+          "type": "string"
+        }
+      }
+    },
     "v1CompletePaymentRequest": {
       "type": "object",
       "properties": {
@@ -524,7 +535,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/v1Input"
+            "$ref": "#/definitions/v1AsyncPaymentInput"
           }
         },
         "outputs": {
@@ -717,9 +728,6 @@
           "type": "string",
           "format": "uint64",
           "description": "Amount to send in satoshis."
-        },
-        "descriptor": {
-          "type": "string"
         }
       }
     },
@@ -1046,9 +1054,6 @@
         "outpoint": {
           "$ref": "#/definitions/v1Outpoint"
         },
-        "descriptor": {
-          "type": "string"
-        },
         "spent": {
           "type": "boolean"
         },
@@ -1074,6 +1079,9 @@
         "amount": {
           "type": "string",
           "format": "uint64"
+        },
+        "pubkey": {
+          "type": "string"
         }
       }
     }
