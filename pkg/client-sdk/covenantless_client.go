@@ -2339,11 +2339,25 @@ func vtxosToTxsCovenantless(
 	roundLifetime int64, spendable, spent []client.Vtxo, ignoreVtxos map[string]struct{},
 ) ([]types.Transaction, error) {
 	transactions := make([]types.Transaction, 0)
-
 	indexedTxs := make(map[string]types.Transaction)
+	settledVtxos := make(map[string]struct{})
+
+	// First, loop over all vtxos to find those that have been settled
+	// (they have round txid instead of redeem tx)
+	for _, v := range append(spendable, spent...) {
+		_, ok1 := ignoreVtxos[v.Txid]
+		_, ok2 := ignoreVtxos[v.RoundTxid]
+		if ok1 || ok2 {
+			continue
+		}
+		if len(v.RoundTxid) > 0 {
+			settledVtxos[v.RoundTxid] = struct{}{}
+		}
+	}
+
 	for _, v := range spent {
-		// If the vtxo was pending and is spent => it's been claimed.
-		if len(v.RedeemTx) > 0 {
+		// If the vtxo is settled, add the record to the tx history.
+		if _, ok := settledVtxos[v.SpentBy]; ok {
 			transactions = append(transactions, types.Transaction{
 				TransactionKey: types.TransactionKey{
 					RedeemTxid: v.Txid,
@@ -2354,7 +2368,7 @@ func vtxosToTxsCovenantless(
 			})
 			// Delete any duplicate in the indexed list.
 			delete(indexedTxs, v.SpentBy)
-			// Ignore the spendable vtxo created by the claim.
+			// Ignore the spendable vtxo created by the settlement.
 			ignoreVtxos[v.SpentBy] = struct{}{}
 			continue
 		}
@@ -2370,7 +2384,8 @@ func vtxosToTxsCovenantless(
 			indexedTxs[v.Txid] = tx
 		}
 
-		// Add a transaction to the indexed list if not existing, it will be deleted if it's a duplicate.
+		// Add a transaction to the indexed list if not existing.
+		// This is an intermediate tx state that is updated in the next iterations.
 		tx, ok := indexedTxs[v.SpentBy]
 		if !ok {
 			indexedTxs[v.SpentBy] = types.Transaction{
@@ -2391,6 +2406,7 @@ func vtxosToTxsCovenantless(
 	}
 
 	for _, v := range spendable {
+		// Ignore the vtxo eventually.
 		_, ok1 := ignoreVtxos[v.Txid]
 		_, ok2 := ignoreVtxos[v.RoundTxid]
 		if ok1 || ok2 {
@@ -2402,6 +2418,7 @@ func vtxosToTxsCovenantless(
 		}
 
 		tx, ok := indexedTxs[txid]
+		// If there is no track of records, add a received tx record in the history.
 		if !ok {
 			redeemTxid := ""
 			if v.RoundTxid == "" {
@@ -2419,6 +2436,7 @@ func vtxosToTxsCovenantless(
 			continue
 		}
 
+		// Otherwise subtract the amount to find the actual spent amount.
 		tx.Amount -= v.Amount
 		if v.RedeemTx == "" {
 			tx.RedeemTxid = ""
