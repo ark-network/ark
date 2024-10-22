@@ -320,7 +320,8 @@ message Vtxo {
   bool swept = 6;
   uint64 amount = 7;
   string pubkey = 8;
-  optional string redeem_tx = 9;
+  string redeem_tx = 9;
+  bool is_oor = 10;
 }
 
 message GetTransactionsStreamRequest {}

@@ -408,7 +408,7 @@ func vtxosFromProto(protoVtxos []*arkv1.Vtxo) []client.Vtxo {
 			Amount:    v.Amount,
 			RoundTxid: v.RoundTxid,
 			ExpiresAt: &expiresAt,
-			RedeemTx:  *v.RedeemTx,
+			RedeemTx:  v.RedeemTx,
 			SpentBy:   v.SpentBy,
 		}
 	}
