@@ -14,6 +14,7 @@ import (
 	"time"
 
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
+	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	singlekeywallet "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey"
 )
@@ -181,21 +182,54 @@ func DumpWrapper() js.Func {
 	})
 }
 
+// Now, let's update the SendOnChainWrapper, SettleWrapper, and SendWrapper functions
+
 func SendOnChainWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
 		if len(args) != 1 {
 			return nil, errors.New("invalid number of args")
 		}
-		receivers := make([]arksdk.Receiver, args[0].Length())
-		for i := 0; i < args[0].Length(); i++ {
-			receiver := args[0].Index(i)
-			receivers[i] = arksdk.NewBitcoinReceiver(
-				receiver.Get("To").String(), uint64(receiver.Get("Amount").Int()),
-			)
+
+		receivers, err := parseReceivers(args[0])
+		if err != nil {
+			return nil, err
 		}
 
-		txID, err := arkSdkClient.SendOnChain(
-			context.Background(), receivers,
+		if receivers == nil || len(receivers) == 0 {
+			return nil, errors.New("no receivers specified")
+		}
+
+		txID, err := arkSdkClient.SendOnChain(context.Background(), receivers)
+		if err != nil {
+			return nil, err
+		}
+		return js.ValueOf(txID), nil
+	})
+}
+
+func SettleWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if len(args) < 1 || len(args) > 2 {
+			return nil, errors.New("invalid number of args")
+		}
+
+		receivers, err := parseReceivers(args[0])
+		if err != nil {
+			return nil, err
+		}
+
+		var coinSelectOptions *arksdk.CoinSelectOptions
+		if len(args) == 2 {
+			coinSelectOptions, err = parseCoinSelectOptions(args[1])
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		txID, err := arkSdkClient.Settle(
+			context.Background(),
+			receivers,
+			coinSelectOptions,
 		)
 		if err != nil {
 			return nil, err
@@ -204,86 +238,74 @@ func SendOnChainWrapper() js.Func {
 	})
 }
 
-func SendOffChainWrapper() js.Func {
+func SendWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) != 2 {
+		if len(args) < 1 || len(args) > 2 {
 			return nil, errors.New("invalid number of args")
 		}
-		withExpiryCoinselect := args[0].Bool()
-		receivers := make([]arksdk.Receiver, args[1].Length())
-		for i := 0; i < args[1].Length(); i++ {
-			receiver := args[1].Index(i)
-			receivers[i] = arksdk.NewBitcoinReceiver(
-				receiver.Get("To").String(), uint64(receiver.Get("Amount").Int()),
-			)
+
+		receivers, err := parseReceivers(args[0])
+		if err != nil {
+			return nil, err
 		}
 
-		txID, err := arkSdkClient.SendOffChain(
-			context.Background(), withExpiryCoinselect, receivers,
+		if receivers == nil || len(receivers) == 0 {
+			return nil, errors.New("no receivers specified")
+		}
+
+		var coinSelectOptions *arksdk.CoinSelectOptions
+		if len(args) == 2 {
+			coinSelectOptions, err = parseCoinSelectOptions(args[1])
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		txID, err := arkSdkClient.Send(
+			context.Background(),
+			receivers,
+			coinSelectOptions,
 		)
 		if err != nil {
 			return nil, err
 		}
 		return js.ValueOf(txID), nil
-	})
-}
-
-func SendAsyncWrapper() js.Func {
-	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) != 2 {
-			return nil, errors.New("invalid number of args")
-		}
-		withExpiryCoinselect := args[0].Bool()
-		receivers := make([]arksdk.Receiver, args[1].Length())
-		for i := 0; i < args[1].Length(); i++ {
-			receiver := args[1].Index(i)
-			receivers[i] = arksdk.NewBitcoinReceiver(
-				receiver.Get("To").String(), uint64(receiver.Get("Amount").Int()),
-			)
-		}
-
-		txID, err := arkSdkClient.SendAsync(
-			context.Background(), withExpiryCoinselect, receivers,
-		)
-		if err != nil {
-			return nil, err
-		}
-		return js.ValueOf(txID), nil
-	})
-}
-
-func ClaimWrapper() js.Func {
-	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) != 0 {
-			return nil, errors.New("invalid number of args")
-		}
-
-		resp, err := arkSdkClient.Claim(context.Background())
-		if err != nil {
-			return nil, err
-		}
-
-		return js.ValueOf(resp), nil
 	})
 }
 
 func UnilateralRedeemWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		return nil, arkSdkClient.UnilateralRedeem(context.Background())
+		var coinSelectOptions *arksdk.CoinSelectOptions
+		if len(args) > 0 {
+			var err error
+			coinSelectOptions, err = parseCoinSelectOptions(args[0])
+			if err != nil {
+				return nil, err
+			}
+		}
+		return nil, arkSdkClient.UnilateralRedeem(context.Background(), coinSelectOptions)
 	})
 }
 
 func CollaborativeRedeemWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) != 3 {
+		if len(args) < 2 || len(args) > 3 {
 			return nil, errors.New("invalid number of args")
 		}
 		addr := args[0].String()
 		amount := uint64(args[1].Int())
-		withExpiryCoinselect := args[2].Bool()
+
+		var coinSelectOptions *arksdk.CoinSelectOptions
+		if len(args) == 3 {
+			var err error
+			coinSelectOptions, err = parseCoinSelectOptions(args[2])
+			if err != nil {
+				return nil, err
+			}
+		}
 
 		txID, err := arkSdkClient.CollaborativeRedeem(
-			context.Background(), addr, amount, withExpiryCoinselect,
+			context.Background(), addr, amount, coinSelectOptions,
 		)
 		if err != nil {
 			return nil, err
@@ -306,7 +328,6 @@ func GetTransactionHistoryWrapper() js.Func {
 				"redeemTxid":   record.RedeemTxid,
 				"amount":       strconv.Itoa(int(record.Amount)),
 				"type":         record.Type,
-				"isPending":    record.IsPending,
 				"createdAt":    record.CreatedAt.Format(time.RFC3339),
 			})
 		}
@@ -432,4 +453,92 @@ func JSPromise(fn promise) js.Func {
 		promiseConstructor := js.Global().Get("Promise")
 		return promiseConstructor.New(handler)
 	})
+}
+
+func parseReceivers(jsReceivers js.Value) ([]arksdk.Receiver, error) {
+	if jsReceivers.IsNull() || jsReceivers.IsUndefined() {
+		return nil, nil // Return nil slice if input is null or undefined
+	}
+
+	if jsReceivers.Type() != js.TypeObject || jsReceivers.Get("length").Type() != js.TypeNumber {
+		return nil, errors.New("invalid receivers argument: expected array")
+	}
+
+	length := jsReceivers.Length()
+	if length == 0 {
+		return []arksdk.Receiver{}, nil // Return empty slice if input array is empty
+	}
+
+	receivers := make([]arksdk.Receiver, length)
+	for i := 0; i < length; i++ {
+		receiver := jsReceivers.Index(i)
+		if receiver.Type() != js.TypeObject {
+			return nil, fmt.Errorf("invalid receiver at index %d: expected object", i)
+		}
+
+		to := receiver.Get("To")
+		amount := receiver.Get("Amount")
+		if to.Type() != js.TypeString || amount.Type() != js.TypeNumber {
+			return nil, fmt.Errorf("invalid receiver at index %d: expected 'To' (string) and 'Amount' (number)", i)
+		}
+
+		receivers[i] = arksdk.NewBitcoinReceiver(to.String(), uint64(amount.Int()))
+	}
+
+	return receivers, nil
+}
+
+func parseCoinSelectOptions(jsCoinSelectOptions js.Value) (*arksdk.CoinSelectOptions, error) {
+	if jsCoinSelectOptions.IsNull() || jsCoinSelectOptions.IsUndefined() {
+		return nil, nil // Return nil if input is null or undefined
+	}
+
+	if jsCoinSelectOptions.Type() != js.TypeObject {
+		return nil, errors.New("invalid coinSelectOptions argument: expected object")
+	}
+
+	options := &arksdk.CoinSelectOptions{}
+
+	withExpirySorting := jsCoinSelectOptions.Get("withExpirySorting")
+	if !withExpirySorting.IsUndefined() && withExpirySorting.Type() == js.TypeBoolean {
+		options.WithExpirySorting = withExpirySorting.Bool()
+	}
+
+	jsOutpointsFilter := jsCoinSelectOptions.Get("outpointsFilter")
+	if !jsOutpointsFilter.IsUndefined() && jsOutpointsFilter.Type() == js.TypeObject {
+		outpointsFilter, err := parseOutpoints(jsOutpointsFilter)
+		if err != nil {
+			return nil, fmt.Errorf("invalid OutpointsFilter: %v", err)
+		}
+		options.OutpointsFilter = outpointsFilter
+	}
+
+	return options, nil
+}
+
+func parseOutpoints(jsOutpoints js.Value) ([]client.Outpoint, error) {
+	if jsOutpoints.Length() == 0 {
+		return nil, nil
+	}
+
+	outpoints := make([]client.Outpoint, jsOutpoints.Length())
+	for i := 0; i < jsOutpoints.Length(); i++ {
+		jsOutpoint := jsOutpoints.Index(i)
+		if jsOutpoint.Type() != js.TypeObject {
+			return nil, fmt.Errorf("invalid outpoint at index %d: expected object", i)
+		}
+
+		txid := jsOutpoint.Get("Txid")
+		vout := jsOutpoint.Get("Vout")
+		if txid.Type() != js.TypeString || vout.Type() != js.TypeNumber {
+			return nil, fmt.Errorf("invalid outpoint at index %d: expected 'Txid' (string) and 'Vout' (number)", i)
+		}
+
+		outpoints[i] = client.Outpoint{
+			Txid: txid.String(),
+			VOut: uint32(vout.Int()),
+		}
+	}
+
+	return outpoints, nil
 }
