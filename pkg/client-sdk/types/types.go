@@ -74,6 +74,7 @@ type Transaction struct {
 	Amount    uint64
 	Type      TxType
 	CreatedAt time.Time
+	Settled   bool
 }
 
 func (t Transaction) IsRound() bool {
@@ -112,6 +113,7 @@ type Utxo struct {
 	SpendableAt time.Time
 	CreatedAt   time.Time
 	Descriptor  string
+	Spent       bool
 }
 
 func (u *Utxo) Sequence() (uint32, error) {

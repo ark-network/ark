@@ -2170,6 +2170,7 @@ func (a *covenantlessArkClient) getAllBoardingUtxos(
 		}
 		for _, tx := range txs {
 			for i, vout := range tx.Vout {
+				var spent bool
 				if vout.Address == addr.Address {
 					spentStatuses, err := a.explorer.GetTxOutspends(tx.Txid)
 					if err != nil {
@@ -2177,6 +2178,7 @@ func (a *covenantlessArkClient) getAllBoardingUtxos(
 					}
 					if s := spentStatuses[i]; s.Spent {
 						ignoreVtxos[s.SpentBy] = struct{}{}
+						spent = true
 					}
 					createdAt := time.Time{}
 					if tx.Status.Confirmed {
@@ -2188,6 +2190,7 @@ func (a *covenantlessArkClient) getAllBoardingUtxos(
 						Amount:     vout.Amount,
 						CreatedAt:  createdAt,
 						Descriptor: addr.Descriptor,
+						Spent:      spent,
 					})
 				}
 			}
@@ -2312,6 +2315,7 @@ func (a *covenantlessArkClient) getBoardingTxs(
 			Amount:    u.Amount,
 			Type:      types.TxReceived,
 			CreatedAt: u.CreatedAt,
+			Settled:   u.Spent,
 		}
 
 		emptyTime := time.Time{}
@@ -2365,6 +2369,7 @@ func vtxosToTxsCovenantless(
 				Amount:    v.Amount,
 				Type:      types.TxReceived,
 				CreatedAt: getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
+				Settled:   true,
 			})
 			// Delete any duplicate in the indexed list.
 			delete(indexedTxs, v.SpentBy)
