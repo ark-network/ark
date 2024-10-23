@@ -19,7 +19,7 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/network"
-	"golang.org/x/crypto/scrypt"
+	"golang.org/x/crypto/pbkdf2"
 )
 
 func CoinSelect(
@@ -253,12 +253,8 @@ func deriveKey(password, salt []byte) ([]byte, []byte, error) {
 			return nil, nil, err
 		}
 	}
-	// 2^20 = 1048576 recommended length for key-stretching
-	// check the doc for other recommended values:
-	// https://godoc.org/golang.org/x/crypto/scrypt
-	key, err := scrypt.Key(password, salt, 1048576, 8, 1, 32)
-	if err != nil {
-		return nil, nil, err
-	}
+	iterations := 10000
+	keySize := 32
+	key := pbkdf2.Key(password, salt, iterations, keySize, sha256.New)
 	return key, salt, nil
 }
