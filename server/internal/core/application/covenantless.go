@@ -1047,6 +1047,12 @@ func (s *covenantlessService) finalizeRound() {
 		log.WithError(err).Warn("failed to finalize round")
 		return
 	}
+	if len(forfeitTxs) == 0 {
+		err := fmt.Errorf("no forfeit txs found")
+		changes = round.Fail(fmt.Errorf("failed to finalize round: %s", err))
+		log.WithError(err).Warn("failed to finalize round")
+		return
+	}
 
 	log.Debugf("signing round transaction %s\n", round.Id)
 

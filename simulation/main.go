@@ -59,7 +59,7 @@ func main() {
 	}
 
 	log.Infof("Start building ARKD docker container ...")
-	if _, err := utils.RunCommand("docker", "compose", "-f", composePath, "--env-file", tmpfile.Name(), "up", "-d", "--build"); err != nil {
+	if _, err := utils.RunCommand("docker", "compose", "-f", composePath, "--env-file", tmpfile.Name(), "up", "-d"); err != nil {
 		log.Fatal(err)
 	}
 
@@ -80,7 +80,7 @@ func main() {
 				log.Fatal(err)
 			}
 
-			time.Sleep(5 * time.Second)
+			time.Sleep(1 * time.Second)
 		}
 	}()
 
@@ -106,10 +106,9 @@ func main() {
 		}(v.ID, v.InitialFunding)
 	}
 	wg.Wait()
-
 	log.Infof("Client wallets initialized")
 
-	for i, round := range simulation.Rounds {
+	for _, round := range simulation.Rounds {
 		log.Infof("Executing Round %d\n", round.Number)
 		var wg sync.WaitGroup
 		for clientID, actions := range round.Actions {
@@ -146,9 +145,8 @@ func main() {
 			}(user, actions)
 		}
 		wg.Wait()
-		if i < len(simulation.Rounds)-1 {
-			time.Sleep(time.Duration(simulation.Server.RoundInterval) * 2 * time.Second)
-		}
+
+		time.Sleep(2 * time.Second)
 	}
 
 	log.Println("Final balances for all clients:")
@@ -267,7 +265,7 @@ func onboard(user User, amount float64) error {
 		return err
 	}
 
-	time.Sleep(2 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	if _, err = user.client.Claim(ctx); err != nil {
 		return fmt.Errorf("user %s failed to onboard: %v", user.ID, err)
@@ -307,11 +305,12 @@ func sendAsync(user User, amount float64, to string, users map[string]User) erro
 func claim(user User) error {
 	ctx := context.Background()
 
-	if _, err := user.client.Claim(ctx); err != nil {
+	txID, err := user.client.Claim(ctx)
+	if err != nil {
 		return fmt.Errorf("user %s failed to claim their funds: %v", user.ID, err)
 	}
 
-	log.Infof("User %s claimed their funds", user.ID)
+	log.Infof("User %s claimed their funds, txID: %v", user.ID, txID)
 
 	return nil
 }
