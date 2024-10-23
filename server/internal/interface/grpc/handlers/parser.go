@@ -6,6 +6,7 @@ import (
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/ecash"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/domain"
@@ -48,6 +49,25 @@ func parseAsyncPaymentInputs(ins []*arkv1.AsyncPaymentInput) ([]application.Asyn
 	}
 
 	return inputs, nil
+}
+
+func parseNotes(notes []string) ([]ecash.Note, error) {
+	if len(notes) <= 0 {
+		return nil, fmt.Errorf("missing notes")
+	}
+
+	notesParsed := make([]ecash.Note, 0, len(notes))
+	for _, note := range notes {
+		var n ecash.Note
+
+		if err := n.FromString(note); err != nil {
+			return nil, fmt.Errorf("invalid note: %s", err)
+		}
+
+		notesParsed = append(notesParsed, n)
+	}
+
+	return notesParsed, nil
 }
 
 func parseInputs(ins []*arkv1.Input) ([]ports.Input, error) {

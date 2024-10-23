@@ -211,6 +211,10 @@ func (a *covenantArkClient) InitWithWallet(ctx context.Context, args InitWithWal
 	return nil
 }
 
+func (a *covenantArkClient) RedeemNotes(ctx context.Context, notes []string) (string, error) {
+	return "", nil
+}
+
 func (a *covenantArkClient) listenForTxStream(ctx context.Context) {
 	eventChan, closeFunc, err := a.client.GetTransactionsStream(ctx)
 	if err != nil {

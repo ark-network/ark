@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 
+	"github.com/ark-network/ark/common/ecash"
 	"github.com/ark-network/ark/server/internal/core/ports"
 )
 
@@ -47,6 +48,7 @@ type AdminService interface {
 	GetRounds(ctx context.Context, after int64, before int64) ([]string, error)
 	GetWalletAddress(ctx context.Context) (string, error)
 	GetWalletStatus(ctx context.Context) (*WalletStatus, error)
+	CreateNote(ctx context.Context, amount uint32) (string, error)
 }
 
 type adminService struct {
@@ -178,4 +180,20 @@ func (a *adminService) GetWalletStatus(ctx context.Context) (*WalletStatus, erro
 		IsUnlocked:    status.IsUnlocked(),
 		IsSynced:      status.IsSynced(),
 	}, nil
+}
+
+func (a *adminService) CreateNote(ctx context.Context, value uint32) (string, error) {
+	noteDetails, err := ecash.New(value)
+	if err != nil {
+		return "", err
+	}
+
+	noteHash := noteDetails.Hash()
+
+	signature, err := a.walletSvc.SignMessage(ctx, noteHash)
+	if err != nil {
+		return "", err
+	}
+	note := noteDetails.ToNote(signature)
+	return note.String(), nil
 }

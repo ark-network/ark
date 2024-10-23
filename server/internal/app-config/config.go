@@ -25,6 +25,9 @@ var (
 	supportedEventDbs = supportedType{
 		"badger": {},
 	}
+	supportedNoteDbs = supportedType{
+		"badger": {},
+	}
 	supportedDbs = supportedType{
 		"badger": {},
 		"sqlite": {},
@@ -59,6 +62,7 @@ var (
 type Config struct {
 	DbType                string
 	EventDbType           string
+	NoteDbType            string
 	DbDir                 string
 	DbMigrationPath       string
 	EventDbDir            string
@@ -95,6 +99,9 @@ type Config struct {
 func (c *Config) Validate() error {
 	if !supportedEventDbs.supports(c.EventDbType) {
 		return fmt.Errorf("event db type not supported, please select one of: %s", supportedEventDbs)
+	}
+	if !supportedNoteDbs.supports(c.NoteDbType) {
+		return fmt.Errorf("note db type not supported, please select one of: %s", supportedNoteDbs)
 	}
 	if !supportedDbs.supports(c.DbType) {
 		return fmt.Errorf("db type not supported, please select one of: %s", supportedDbs)
@@ -216,6 +223,7 @@ func (c *Config) repoManager() error {
 	var svc ports.RepoManager
 	var err error
 	var eventStoreConfig []interface{}
+	var noteStoreConfig []interface{}
 	var dataStoreConfig []interface{}
 	logger := log.New()
 
@@ -235,12 +243,20 @@ func (c *Config) repoManager() error {
 		return fmt.Errorf("unknown db type")
 	}
 
-	svc, err = db.NewService(db.ServiceConfig{
-		EventStoreType: c.EventDbType,
-		DataStoreType:  c.DbType,
+	switch c.NoteDbType {
+	case "badger":
+		noteStoreConfig = []interface{}{c.DbDir, logger}
+	default:
+		return fmt.Errorf("unknown note db type")
+	}
 
+	svc, err = db.NewService(db.ServiceConfig{
+		EventStoreType:   c.EventDbType,
+		DataStoreType:    c.DbType,
+		NoteStoreType:    c.NoteDbType,
 		EventStoreConfig: eventStoreConfig,
 		DataStoreConfig:  dataStoreConfig,
+		NoteStoreConfig:  noteStoreConfig,
 	})
 	if err != nil {
 		return err

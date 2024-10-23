@@ -132,6 +132,24 @@ func (a *restClient) RegisterInputsForNextRound(
 	return resp.Payload.ID, nil
 }
 
+func (a *restClient) RegisterNotesForNextRound(
+	ctx context.Context, notes []string, ephemeralKey string,
+) (string, error) {
+	body := &models.V1RegisterInputsForNextRoundRequest{
+		Notes: notes,
+	}
+	if len(ephemeralKey) > 0 {
+		body.EphemeralPubkey = ephemeralKey
+	}
+	resp, err := a.svc.ArkServiceRegisterInputsForNextRound(
+		ark_service.NewArkServiceRegisterInputsForNextRoundParams().WithBody(body),
+	)
+	if err != nil {
+		return "", err
+	}
+	return resp.Payload.ID, nil
+}
+
 func (a *restClient) RegisterOutputsForNextRound(
 	ctx context.Context, paymentID string, outputs []client.Output,
 ) error {

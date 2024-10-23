@@ -13,6 +13,7 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
+	"github.com/ark-network/ark/common/ecash"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
@@ -766,6 +767,62 @@ func (a *covenantlessArkClient) SendOffChain(
 	}
 
 	return a.sendOffchain(ctx, withExpiryCoinselect, receivers)
+}
+
+func (a *covenantlessArkClient) RedeemNotes(ctx context.Context, notes []string) (string, error) {
+	amount := uint64(0)
+
+	for _, note := range notes {
+		var n ecash.Note
+		if err := n.FromString(note); err != nil {
+			return "", err
+		}
+		amount += uint64(n.Details.Value)
+	}
+
+	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return "", err
+	}
+	if len(offchainAddrs) <= 0 {
+		return "", fmt.Errorf("no funds detected")
+	}
+
+	roundEphemeralKey, err := secp256k1.GeneratePrivateKey()
+	if err != nil {
+		return "", err
+	}
+
+	paymentID, err := a.client.RegisterNotesForNextRound(
+		ctx, notes, hex.EncodeToString(roundEphemeralKey.PubKey().SerializeCompressed()),
+	)
+	if err != nil {
+		return "", err
+	}
+
+	output := client.Output{
+		Address: offchainAddrs[0].Address,
+		Amount:  amount,
+	}
+
+	receiversOutput := []client.Output{output}
+
+	if err := a.client.RegisterOutputsForNextRound(
+		ctx, paymentID, receiversOutput,
+	); err != nil {
+		return "", err
+	}
+
+	log.Infof("payment registered with id: %s", paymentID)
+
+	poolTxID, err := a.handleRoundStream(
+		ctx, paymentID, nil, nil, "", receiversOutput, roundEphemeralKey,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return poolTxID, nil
 }
 
 func (a *covenantlessArkClient) UnilateralRedeem(ctx context.Context) error {

@@ -2,6 +2,7 @@ package oceanwallet
 
 import (
 	"context"
+	"errors"
 	"io"
 	"strings"
 
@@ -157,6 +158,14 @@ func (s *service) Lock(ctx context.Context, password string) error {
 
 func (s *service) GetDustAmount(ctx context.Context) (uint64, error) {
 	return 450, nil // constant on liquid cause fees are not subject to huge changes
+}
+
+func (s *service) SignMessage(ctx context.Context, message []byte) ([]byte, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *service) VerifyMessageSignature(ctx context.Context, message, signature []byte) (bool, error) {
+	return false, errors.New("not implemented")
 }
 
 func (s *service) listenToNotifications() {

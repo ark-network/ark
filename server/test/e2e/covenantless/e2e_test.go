@@ -363,6 +363,32 @@ func TestAliceSeveralPaymentsToBob(t *testing.T) {
 
 }
 
+func TestRedeemNotes(t *testing.T) {
+	note := generateNote(t, 10_000)
+
+	balanceBeforeStr, err := runClarkCommand("balance")
+	require.NoError(t, err)
+
+	var balanceBefore utils.ArkBalance
+	require.NoError(t, json.Unmarshal([]byte(balanceBeforeStr), &balanceBefore))
+
+	_, err = runClarkCommand("redeem-notes", "--notes", note)
+	require.NoError(t, err)
+
+	time.Sleep(2 * time.Second)
+
+	balanceAfterStr, err := runClarkCommand("balance")
+	require.NoError(t, err)
+
+	var balanceAfter utils.ArkBalance
+	require.NoError(t, json.Unmarshal([]byte(balanceAfterStr), &balanceAfter))
+
+	require.Greater(t, balanceAfter.Offchain.Total, balanceBefore.Offchain.Total)
+
+	_, err = runClarkCommand("redeem-notes", "--notes", note)
+	require.Error(t, err)
+}
+
 func TestSweep(t *testing.T) {
 	var receive utils.ArkReceive
 	receiveStr, err := runClarkCommand("receive")
@@ -531,4 +557,31 @@ func setupArkSDK(t *testing.T) (arksdk.ArkClient, client.ASPClient) {
 	require.NoError(t, err)
 
 	return client, grpcClient
+}
+
+func generateNote(t *testing.T, amount uint32) string {
+	adminHttpClient := &http.Client{
+		Timeout: 15 * time.Second,
+	}
+
+	reqBody := bytes.NewReader([]byte(fmt.Sprintf(`{"amount": "%d"}`, amount)))
+	req, err := http.NewRequest("POST", "http://localhost:7070/v1/admin/note", reqBody)
+	if err != nil {
+		t.Fatalf("failed to prepare note request: %s", err)
+	}
+	req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := adminHttpClient.Do(req)
+	if err != nil {
+		t.Fatalf("failed to create note: %s", err)
+	}
+
+	var noteResp struct {
+		Note string `json:"note"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&noteResp); err != nil {
+		t.Fatalf("failed to parse response: %s", err)
+	}
+	return noteResp.Note
 }

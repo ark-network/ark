@@ -100,6 +100,22 @@ func (a *grpcClient) RegisterInputsForNextRound(
 	return resp.GetId(), nil
 }
 
+func (a *grpcClient) RegisterNotesForNextRound(
+	ctx context.Context, notes []string, ephemeralKey string,
+) (string, error) {
+	req := &arkv1.RegisterInputsForNextRoundRequest{
+		Notes: notes,
+	}
+	if len(ephemeralKey) > 0 {
+		req.EphemeralPubkey = &ephemeralKey
+	}
+	resp, err := a.svc.RegisterInputsForNextRound(ctx, req)
+	if err != nil {
+		return "", err
+	}
+	return resp.GetId(), nil
+}
+
 func (a *grpcClient) RegisterOutputsForNextRound(
 	ctx context.Context, paymentID string, outputs []client.Output,
 ) error {

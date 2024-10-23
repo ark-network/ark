@@ -43,6 +43,7 @@ func main() {
 		&sendCommand,
 		&balanceCommand,
 		&redeemCommand,
+		&notesCommand,
 	)
 	app.Flags = []cli.Flag{
 		datadirFlag,
@@ -127,6 +128,11 @@ var (
 		Name:  "force",
 		Usage: "force redemption without collaboration",
 	}
+	notesFlag = &cli.StringSliceFlag{
+		Name:    "notes",
+		Aliases: []string{"n"},
+		Usage:   "notes to redeem",
+	}
 )
 
 var (
@@ -190,6 +196,14 @@ var (
 		Flags: []cli.Flag{addressFlag, amountToRedeemFlag, forceFlag, passwordFlag},
 		Action: func(ctx *cli.Context) error {
 			return redeem(ctx)
+		},
+	}
+	notesCommand = cli.Command{
+		Name:  "redeem-notes",
+		Usage: "Redeem offchain notes",
+		Flags: []cli.Flag{notesFlag},
+		Action: func(ctx *cli.Context) error {
+			return redeemNotes(ctx)
 		},
 	}
 )
@@ -365,6 +379,17 @@ func redeem(ctx *cli.Context) error {
 	txID, err := arkSdkClient.CollaborativeRedeem(
 		ctx.Context, address, amount, computeExpiration,
 	)
+	if err != nil {
+		return err
+	}
+	return printJSON(map[string]interface{}{
+		"txid": txID,
+	})
+}
+
+func redeemNotes(ctx *cli.Context) error {
+	notes := ctx.StringSlice(notesFlag.Name)
+	txID, err := arkSdkClient.RedeemNotes(ctx.Context, notes)
 	if err != nil {
 		return err
 	}

@@ -783,6 +783,12 @@
             "$ref": "#/definitions/v1Input"
           }
         },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "ephemeralPubkey": {
           "type": "string"
         }

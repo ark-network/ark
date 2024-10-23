@@ -33,3 +33,9 @@ type VtxoRepository interface {
 	UpdateExpireAt(ctx context.Context, vtxos []VtxoKey, expireAt int64) error
 	Close()
 }
+
+type NoteRepository interface {
+	Contains(ctx context.Context, id uint32) (bool, error)
+	Push(ctx context.Context, id uint32) error
+	Close()
+}

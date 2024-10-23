@@ -28,6 +28,9 @@ type ASPClient interface {
 	RegisterInputsForNextRound(
 		ctx context.Context, inputs []Input, ephemeralKey string,
 	) (string, error)
+	RegisterNotesForNextRound(
+		ctx context.Context, notes []string, ephemeralKey string,
+	) (string, error)
 	RegisterOutputsForNextRound(
 		ctx context.Context, paymentID string, outputs []Output,
 	) error

@@ -45,7 +45,6 @@ func (a *adminHandler) GetRoundDetails(ctx context.Context, req *arkv1.GetRoundD
 	}, nil
 }
 
-// GetRounds implements arkv1.AdminServiceServer.
 func (a *adminHandler) GetRounds(ctx context.Context, req *arkv1.GetRoundsRequest) (*arkv1.GetRoundsResponse, error) {
 	startAfter := req.GetAfter()
 	startBefore := req.GetBefore()
@@ -97,6 +96,20 @@ func (a *adminHandler) GetScheduledSweep(ctx context.Context, _ *arkv1.GetSchedu
 	}
 
 	return &arkv1.GetScheduledSweepResponse{Sweeps: sweeps}, nil
+}
+
+func (a *adminHandler) CreateNote(ctx context.Context, req *arkv1.CreateNoteRequest) (*arkv1.CreateNoteResponse, error) {
+	amount := req.GetAmount()
+	if amount == 0 {
+		return nil, status.Error(codes.InvalidArgument, "amount must be greater than 0")
+	}
+
+	note, err := a.adminService.CreateNote(ctx, amount)
+	if err != nil {
+		return nil, err
+	}
+
+	return &arkv1.CreateNoteResponse{Note: note}, nil
 }
 
 // convert sats to string BTC

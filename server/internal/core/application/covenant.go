@@ -10,6 +10,7 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/descriptor"
+	"github.com/ark-network/ark/common/ecash"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -151,6 +152,10 @@ func (s *covenantService) GetBoardingAddress(ctx context.Context, userPubkey *se
 	}
 
 	return addr, vtxoScript.ToDescriptor(), nil
+}
+
+func (s *covenantService) SpendNotes(_ context.Context, _ []ecash.Note) (string, error) {
+	return "", fmt.Errorf("unimplemented")
 }
 
 func (s *covenantService) SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error) {
@@ -489,7 +494,7 @@ func (s *covenantService) startFinalization() {
 	if num > paymentsThreshold {
 		num = paymentsThreshold
 	}
-	payments, boardingInputs, descriptors, _ := s.paymentRequests.pop(num)
+	payments, boardingInputs, descriptors, _, _ := s.paymentRequests.pop(num)
 	if _, err := round.RegisterPayments(payments); err != nil {
 		round.Fail(fmt.Errorf("failed to register payments: %s", err))
 		log.WithError(err).Warn("failed to register payments")

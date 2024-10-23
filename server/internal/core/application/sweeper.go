@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ark-network/ark/common/ecash"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -255,6 +256,8 @@ func (s *sweeper) createTask(
 				}
 
 				log.Debugf("%d vtxos swept", len(vtxoKeys))
+
+				go s.createNotesForUnspentVtxos(ctx, vtxoKeys)
 			}
 		}
 
@@ -309,6 +312,38 @@ func (s *sweeper) updateVtxoExpirationTime(
 	}
 
 	return s.repoManager.Vtxos().UpdateExpireAt(context.Background(), vtxos, expirationTime)
+}
+
+func (s *sweeper) createNotesForUnspentVtxos(ctx context.Context, vtxosKeys []domain.VtxoKey) {
+	vtxos, err := s.repoManager.Vtxos().GetVtxos(ctx, vtxosKeys)
+	if err != nil {
+		log.Error(fmt.Errorf("error while getting vtxos: %w", err))
+		return
+	}
+
+	for _, vtxo := range vtxos {
+		if !vtxo.Swept || vtxo.Redeemed || vtxo.Spent {
+			continue
+		}
+
+		// if vtxo is not redeemed or spent and is swept, create a note for it
+		noteDetails, err := ecash.New(uint32(vtxo.Amount))
+		if err != nil {
+			log.Error(fmt.Errorf("error while creating note details: %w", err))
+			return
+		}
+
+		signature, err := s.wallet.SignMessage(ctx, noteDetails.Hash())
+		if err != nil {
+			log.Error(fmt.Errorf("error while signing note: %w", err))
+			return
+		}
+
+		note := noteDetails.ToNote(signature)
+		log.Debugf("created note: %s", note)
+
+		// TODO send the note via nostr ??
+	}
 }
 
 func computeSubTrees(congestionTree tree.CongestionTree, inputs []ports.SweepInput) ([]tree.CongestionTree, error) {

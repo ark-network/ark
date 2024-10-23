@@ -86,8 +86,10 @@ func TestService(t *testing.T) {
 			config: db.ServiceConfig{
 				EventStoreType:   "badger",
 				DataStoreType:    "badger",
+				NoteStoreType:    "badger",
 				EventStoreConfig: []interface{}{"", nil},
 				DataStoreConfig:  []interface{}{"", nil},
+				NoteStoreConfig:  []interface{}{"", nil},
 			},
 		},
 		{
@@ -95,8 +97,10 @@ func TestService(t *testing.T) {
 			config: db.ServiceConfig{
 				EventStoreType:   "badger",
 				DataStoreType:    "sqlite",
+				NoteStoreType:    "badger",
 				EventStoreConfig: []interface{}{"", nil},
 				DataStoreConfig:  []interface{}{dbDir, "file://sqlite/migration"},
+				NoteStoreConfig:  []interface{}{"", nil},
 			},
 		},
 	}
@@ -110,7 +114,7 @@ func TestService(t *testing.T) {
 			testRoundEventRepository(t, svc)
 			testRoundRepository(t, svc)
 			testVtxoRepository(t, svc)
-
+			testNoteRepository(t, svc)
 			time.Sleep(5 * time.Second)
 			svc.Close()
 		})
@@ -423,6 +427,35 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 		require.NoError(t, err)
 		require.Exactly(t, vtxos[1:], spendableVtxos)
 		require.Len(t, spentVtxos, len(vtxoKeys[:1]))
+	})
+}
+
+func testNoteRepository(t *testing.T, svc ports.RepoManager) {
+	t.Run("test_note_repository", func(t *testing.T) {
+		ctx := context.Background()
+
+		err := svc.Notes().Push(ctx, 1)
+		require.NoError(t, err)
+
+		err = svc.Notes().Push(ctx, 1099200322)
+		require.NoError(t, err)
+
+		contains, err := svc.Notes().Contains(ctx, 1)
+		require.NoError(t, err)
+		require.True(t, contains)
+
+		contains, err = svc.Notes().Contains(ctx, 1099200322)
+		require.NoError(t, err)
+		require.True(t, contains)
+
+		contains, err = svc.Notes().Contains(ctx, 456)
+		require.NoError(t, err)
+		require.False(t, contains)
+
+		err = svc.Notes().Push(ctx, 1)
+		require.Error(t, err)
+
+		svc.Notes().Close()
 	})
 }
 

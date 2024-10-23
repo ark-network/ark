@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ark-network/ark/common/ecash"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -17,6 +18,7 @@ import (
 type timedPayment struct {
 	domain.Payment
 	boardingInputs []ports.BoardingInput
+	notes          []ecash.Note
 	timestamp      time.Time
 	pingTimestamp  time.Time
 }
@@ -59,6 +61,28 @@ func (m *paymentsMap) delete(id string) error {
 	return nil
 }
 
+func (m *paymentsMap) pushWithNotes(payment domain.Payment, notes []ecash.Note) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	if _, ok := m.payments[payment.Id]; ok {
+		return fmt.Errorf("duplicated payment %s", payment.Id)
+	}
+
+	for _, note := range notes {
+		for _, payment := range m.payments {
+			for _, pNote := range payment.notes {
+				if note.Details.ID == pNote.Details.ID {
+					return fmt.Errorf("duplicated note %s", note)
+				}
+			}
+		}
+	}
+
+	m.payments[payment.Id] = &timedPayment{payment, make([]ports.BoardingInput, 0), notes, time.Now(), time.Time{}}
+	return nil
+}
+
 func (m *paymentsMap) push(
 	payment domain.Payment,
 	boardingInputs []ports.BoardingInput,
@@ -95,7 +119,7 @@ func (m *paymentsMap) push(
 		m.descriptors[key] = desc
 	}
 
-	m.payments[payment.Id] = &timedPayment{payment, boardingInputs, time.Now(), time.Time{}}
+	m.payments[payment.Id] = &timedPayment{payment, boardingInputs, make([]ecash.Note, 0), time.Now(), time.Time{}}
 	return nil
 }
 
@@ -111,7 +135,7 @@ func (m *paymentsMap) pushEphemeralKey(paymentId string, pubkey *secp256k1.Publi
 	return nil
 }
 
-func (m *paymentsMap) pop(num int64) ([]domain.Payment, []ports.BoardingInput, map[domain.VtxoKey]string, []*secp256k1.PublicKey) {
+func (m *paymentsMap) pop(num int64) ([]domain.Payment, []ports.BoardingInput, map[domain.VtxoKey]string, []*secp256k1.PublicKey, []ecash.Note) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -139,6 +163,7 @@ func (m *paymentsMap) pop(num int64) ([]domain.Payment, []ports.BoardingInput, m
 	boardingInputs := make([]ports.BoardingInput, 0)
 	cosigners := make([]*secp256k1.PublicKey, 0, num)
 	descriptors := make(map[domain.VtxoKey]string)
+	notes := make([]ecash.Note, 0)
 	for _, p := range paymentsByTime[:num] {
 		boardingInputs = append(boardingInputs, p.boardingInputs...)
 		payments = append(payments, p.Payment)
@@ -146,6 +171,9 @@ func (m *paymentsMap) pop(num int64) ([]domain.Payment, []ports.BoardingInput, m
 			cosigners = append(cosigners, pubkey)
 			delete(m.ephemeralKeys, p.Payment.Id)
 		}
+
+		notes = append(notes, p.notes...)
+
 		for _, input := range payments {
 			for _, vtxo := range input.Inputs {
 				descriptors[vtxo.VtxoKey] = m.descriptors[vtxo.VtxoKey]
@@ -154,7 +182,7 @@ func (m *paymentsMap) pop(num int64) ([]domain.Payment, []ports.BoardingInput, m
 		}
 		delete(m.payments, p.Id)
 	}
-	return payments, boardingInputs, descriptors, cosigners
+	return payments, boardingInputs, descriptors, cosigners, notes
 }
 
 func (m *paymentsMap) update(payment domain.Payment) error {

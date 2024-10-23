@@ -32,6 +32,11 @@ var (
 		Usage: "address gap limit for wallet restoration",
 		Value: 100,
 	}
+	amountFlag = &cli.UintFlag{
+		Name:     "amount",
+		Usage:    "amount of the note in satoshis",
+		Required: true,
+	}
 )
 
 // commands
@@ -46,6 +51,7 @@ var (
 			walletUnlockCmd,
 			walletAddressCmd,
 			walletBalanceCmd,
+			createNoteCmd,
 		),
 	}
 	walletStatusCmd = &cli.Command{
@@ -74,6 +80,12 @@ var (
 		Name:   "balance",
 		Usage:  "Get the wallet balance",
 		Action: walletBalanceAction,
+	}
+	createNoteCmd = &cli.Command{
+		Name:   "note",
+		Usage:  "Create an ecash note",
+		Action: createNoteAction,
+		Flags:  []cli.Flag{amountFlag},
 	}
 )
 
@@ -205,6 +217,36 @@ func walletBalanceAction(ctx *cli.Context) error {
 	}
 
 	fmt.Println(balance)
+	return nil
+}
+
+func createNoteAction(ctx *cli.Context) error {
+	baseURL := ctx.String("url")
+	amount := ctx.Uint("amount")
+
+	var macaroon string
+	if !ctx.Bool("no-macaroon") {
+		macaroonPath := ctx.String("macaroon-path")
+		mac, err := getMacaroon(macaroonPath)
+		if err != nil {
+			return err
+		}
+		macaroon = mac
+	}
+	tlsCertPath := ctx.String("tls-cert-path")
+	if strings.Contains(baseURL, "http://") {
+		tlsCertPath = ""
+	}
+
+	url := fmt.Sprintf("%s/v1/admin/note", baseURL)
+	body := fmt.Sprintf(`{"amount": %d}`, amount)
+
+	note, err := post[string](url, body, "note", macaroon, tlsCertPath)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(note)
 	return nil
 }
 

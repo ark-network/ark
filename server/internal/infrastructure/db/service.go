@@ -26,6 +26,9 @@ var (
 		"badger": badgerdb.NewVtxoRepository,
 		"sqlite": sqlitedb.NewVtxoRepository,
 	}
+	noteStoreTypes = map[string]func(...interface{}) (domain.NoteRepository, error){
+		"badger": badgerdb.NewNoteRepository,
+	}
 )
 
 const (
@@ -35,15 +38,18 @@ const (
 type ServiceConfig struct {
 	EventStoreType string
 	DataStoreType  string
+	NoteStoreType  string
 
 	EventStoreConfig []interface{}
 	DataStoreConfig  []interface{}
+	NoteStoreConfig  []interface{}
 }
 
 type service struct {
 	eventStore domain.RoundEventRepository
 	roundStore domain.RoundRepository
 	vtxoStore  domain.VtxoRepository
+	noteStore  domain.NoteRepository
 }
 
 func NewService(config ServiceConfig) (ports.RepoManager, error) {
@@ -59,10 +65,15 @@ func NewService(config ServiceConfig) (ports.RepoManager, error) {
 	if !ok {
 		return nil, fmt.Errorf("vtxo store type not supported")
 	}
+	noteStoreFactory, ok := noteStoreTypes[config.NoteStoreType]
+	if !ok {
+		return nil, fmt.Errorf("note store type not supported")
+	}
 
 	var eventStore domain.RoundEventRepository
 	var roundStore domain.RoundRepository
 	var vtxoStore domain.VtxoRepository
+	var noteStore domain.NoteRepository
 	var err error
 
 	switch config.EventStoreType {
@@ -132,10 +143,19 @@ func NewService(config ServiceConfig) (ports.RepoManager, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to open vtxo store: %s", err)
 		}
-
 	}
 
-	return &service{eventStore, roundStore, vtxoStore}, nil
+	switch config.NoteStoreType {
+	case "badger":
+		noteStore, err = noteStoreFactory(config.NoteStoreConfig...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open note store: %s", err)
+		}
+	default:
+		return nil, fmt.Errorf("unknown note store db type")
+	}
+
+	return &service{eventStore, roundStore, vtxoStore, noteStore}, nil
 }
 
 func (s *service) RegisterEventsHandler(handler func(round *domain.Round)) {
@@ -154,8 +174,13 @@ func (s *service) Vtxos() domain.VtxoRepository {
 	return s.vtxoStore
 }
 
+func (s *service) Notes() domain.NoteRepository {
+	return s.noteStore
+}
+
 func (s *service) Close() {
 	s.eventStore.Close()
 	s.roundStore.Close()
 	s.vtxoStore.Close()
+	s.noteStore.Close()
 }
