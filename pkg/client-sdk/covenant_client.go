@@ -421,12 +421,6 @@ func (a *covenantArkClient) SendOffChain(
 	return a.sendOffchain(ctx, withExpiryCoinselect, receivers)
 }
 
-func (a *covenantArkClient) Settle(
-	ctx context.Context,
-) (string, error) {
-	return a.sendOffchain(ctx, false, nil)
-}
-
 func (a *covenantArkClient) UnilateralRedeem(ctx context.Context) error {
 	if a.wallet.IsLocked() {
 		return fmt.Errorf("wallet is locked")
@@ -604,6 +598,12 @@ func (a *covenantArkClient) SendAsync(
 	withExpiryCoinselect bool, receivers []Receiver,
 ) (string, error) {
 	return "", fmt.Errorf("not implemented")
+}
+
+func (a *covenantArkClient) Settle(
+	ctx context.Context,
+) (string, error) {
+	return a.sendOffchain(ctx, false, nil)
 }
 
 func (a *covenantArkClient) GetTransactionHistory(

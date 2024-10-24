@@ -710,10 +710,6 @@ func (a *covenantlessArkClient) SendOffChain(
 	return a.sendOffchain(ctx, withExpiryCoinselect, receivers)
 }
 
-func (a *covenantlessArkClient) Settle(ctx context.Context) (string, error) {
-	return a.sendOffchain(ctx, false, nil)
-}
-
 func (a *covenantlessArkClient) UnilateralRedeem(ctx context.Context) error {
 	if a.wallet.IsLocked() {
 		return fmt.Errorf("wallet is locked")
@@ -1042,6 +1038,10 @@ func (a *covenantlessArkClient) SendAsync(
 	}
 
 	return signedRedeemTx, nil
+}
+
+func (a *covenantlessArkClient) Settle(ctx context.Context) (string, error) {
+	return a.sendOffchain(ctx, false, nil)
 }
 
 func (a *covenantlessArkClient) GetTransactionHistory(
