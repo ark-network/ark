@@ -319,9 +319,9 @@ message Vtxo {
   int64 expire_at = 5;
   bool swept = 6;
   bool is_oor = 7;
-  uint64 amount = 8;
-  string pubkey = 9;
-  string redeem_tx = 10;
+  string redeem_tx = 8;
+  uint64 amount = 9;
+  string pubkey = 10;
 }
 
 message GetTransactionsStreamRequest {}

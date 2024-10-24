@@ -1073,14 +1073,14 @@
         "isOor": {
           "type": "boolean"
         },
+        "redeemTx": {
+          "type": "string"
+        },
         "amount": {
           "type": "string",
           "format": "uint64"
         },
         "pubkey": {
-          "type": "string"
-        },
-        "redeemTx": {
           "type": "string"
         }
       }

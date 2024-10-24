@@ -17,7 +17,9 @@ type ArkClient interface {
 	Balance(ctx context.Context, computeExpiryDetails bool) (*Balance, error)
 	Receive(ctx context.Context) (offchainAddr, boardingAddr string, err error)
 	SendOnChain(ctx context.Context, receivers []Receiver) (string, error)
-	SendOffChain(ctx context.Context, withExpiryCoinselect bool, receivers []Receiver) (string, error)
+	SendOffChain(
+		ctx context.Context, withExpiryCoinselect bool, receivers []Receiver,
+	) (string, error)
 	UnilateralRedeem(ctx context.Context) error
 	CollaborativeRedeem(
 		ctx context.Context, addr string, amount uint64, withExpiryCoinselect bool,

@@ -359,7 +359,7 @@ func (c *grpcClient) GetTransactionsStream(
 					Round: &client.RoundTransaction{
 						Txid:                 tx.Round.Txid,
 						SpentVtxos:           outpointsFromProto(tx.Round.SpentVtxos),
-						SpendableVtxos:       vtxosFromProto(tx.Round.SpendableVtxos),
+						SpendableVtxos:       vtxos(tx.Round.SpendableVtxos).toVtxos(),
 						ClaimedBoardingUtxos: outpointsFromProto(tx.Round.ClaimedBoardingUtxos),
 					},
 				}
@@ -368,7 +368,7 @@ func (c *grpcClient) GetTransactionsStream(
 					Redeem: &client.RedeemTransaction{
 						Txid:           tx.Redeem.Txid,
 						SpentVtxos:     outpointsFromProto(tx.Redeem.SpentVtxos),
-						SpendableVtxos: vtxosFromProto(tx.Redeem.SpendableVtxos),
+						SpendableVtxos: vtxos(tx.Redeem.SpendableVtxos).toVtxos(),
 					},
 				}
 			}
@@ -393,24 +393,4 @@ func outpointsFromProto(protoOutpoints []*arkv1.Outpoint) []client.Outpoint {
 		}
 	}
 	return outpoints
-}
-
-func vtxosFromProto(protoVtxos []*arkv1.Vtxo) []client.Vtxo {
-	vtxos := make([]client.Vtxo, len(protoVtxos))
-	for i, v := range protoVtxos {
-		expiresAt := time.Unix(v.ExpireAt, 0)
-		vtxos[i] = client.Vtxo{
-			Outpoint: client.Outpoint{
-				Txid: v.Outpoint.Txid,
-				VOut: v.Outpoint.Vout,
-			},
-			Pubkey:    v.Pubkey,
-			Amount:    v.Amount,
-			RoundTxid: v.RoundTxid,
-			ExpiresAt: &expiresAt,
-			RedeemTx:  v.RedeemTx,
-			SpentBy:   v.SpentBy,
-		}
-	}
-	return vtxos
 }

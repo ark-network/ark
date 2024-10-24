@@ -99,6 +99,7 @@ type Vtxo struct {
 	RoundTxid string
 	ExpiresAt *time.Time
 	RedeemTx  string
+	IsOOR     bool
 	SpentBy   string
 }
 
