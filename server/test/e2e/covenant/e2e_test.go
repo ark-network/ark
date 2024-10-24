@@ -74,7 +74,7 @@ func TestSendOffchain(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	_, err = runArkCommand("claim", "--password", utils.Password)
+	_, err = runArkCommand("settle", "--password", utils.Password)
 	require.NoError(t, err)
 
 	time.Sleep(3 * time.Second)
@@ -101,7 +101,7 @@ func TestUnilateralExit(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	_, err = runArkCommand("claim", "--password", utils.Password)
+	_, err = runArkCommand("settle", "--password", utils.Password)
 	require.NoError(t, err)
 
 	time.Sleep(3 * time.Second)
@@ -142,7 +142,7 @@ func TestCollaborativeExit(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	_, err = runArkCommand("claim", "--password", utils.Password)
+	_, err = runArkCommand("settle", "--password", utils.Password)
 	require.NoError(t, err)
 
 	time.Sleep(3 * time.Second)
@@ -164,7 +164,7 @@ func TestReactToSpentVtxosRedemption(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	_, err = client.Claim(ctx)
+	_, err = client.Settle(ctx)
 	require.NoError(t, err)
 
 	time.Sleep(3 * time.Second)
@@ -216,7 +216,7 @@ func TestSweep(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	_, err = runArkCommand("claim", "--password", utils.Password)
+	_, err = runArkCommand("settle", "--password", utils.Password)
 	require.NoError(t, err)
 
 	time.Sleep(3 * time.Second)

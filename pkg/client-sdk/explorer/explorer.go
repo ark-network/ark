@@ -13,6 +13,7 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/vulpemventures/go-elements/psetv2"
@@ -23,39 +24,6 @@ const (
 	BitcoinExplorer = "bitcoin"
 	LiquidExplorer  = "liquid"
 )
-
-type Utxo struct {
-	Txid        string
-	Vout        uint32
-	Amount      uint64
-	Asset       string // liquid only
-	Delay       uint
-	SpendableAt time.Time
-	CreatedAt   time.Time
-}
-
-func (u *Utxo) Sequence() (uint32, error) {
-	return common.BIP68Sequence(u.Delay)
-}
-
-func newUtxo(explorerUtxo ExplorerUtxo, delay uint) Utxo {
-	utxoTime := explorerUtxo.Status.Blocktime
-	createdAt := time.Unix(utxoTime, 0)
-	if utxoTime == 0 {
-		createdAt = time.Time{}
-		utxoTime = time.Now().Unix()
-	}
-
-	return Utxo{
-		Txid:        explorerUtxo.Txid,
-		Vout:        explorerUtxo.Vout,
-		Amount:      explorerUtxo.Amount,
-		Asset:       explorerUtxo.Asset,
-		Delay:       delay,
-		SpendableAt: time.Unix(utxoTime, 0).Add(time.Duration(delay) * time.Second),
-		CreatedAt:   createdAt,
-	}
-}
 
 type ExplorerTx struct {
 	Txid string `json:"txid"`
@@ -85,8 +53,8 @@ type SpentStatus struct {
 	SpentBy string `json:"txid,omitempty"`
 }
 
-func (e ExplorerUtxo) ToUtxo(delay uint) Utxo {
-	return newUtxo(e, delay)
+func (e ExplorerUtxo) ToUtxo(delay uint, descriptor string) types.Utxo {
+	return newUtxo(e, delay, descriptor)
 }
 
 type Explorer interface {
@@ -445,4 +413,24 @@ func parseBitcoinTx(txStr string) (string, string, error) {
 	txid := tx.TxHash().String()
 
 	return txhex, txid, nil
+}
+
+func newUtxo(explorerUtxo ExplorerUtxo, delay uint, descriptor string) types.Utxo {
+	utxoTime := explorerUtxo.Status.Blocktime
+	createdAt := time.Unix(utxoTime, 0)
+	if utxoTime == 0 {
+		createdAt = time.Time{}
+		utxoTime = time.Now().Unix()
+	}
+
+	return types.Utxo{
+		Txid:        explorerUtxo.Txid,
+		VOut:        explorerUtxo.Vout,
+		Amount:      explorerUtxo.Amount,
+		Asset:       explorerUtxo.Asset,
+		Delay:       delay,
+		SpendableAt: time.Unix(utxoTime, 0).Add(time.Duration(delay) * time.Second),
+		CreatedAt:   createdAt,
+		Descriptor:  descriptor,
+	}
 }

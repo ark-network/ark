@@ -112,8 +112,8 @@ SELECT id FROM round WHERE starting_timestamp > ? AND starting_timestamp < ?;
 SELECT id FROM round;
 
 -- name: UpsertVtxo :exec
-INSERT INTO vtxo (txid, vout, pubkey, amount, pool_tx, spent_by, spent, redeemed, swept, expire_at, redeem_tx, pending)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(txid, vout) DO UPDATE SET
+INSERT INTO vtxo (txid, vout, pubkey, amount, pool_tx, spent_by, spent, redeemed, swept, expire_at, redeem_tx)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(txid, vout) DO UPDATE SET
     pubkey = EXCLUDED.pubkey,
     amount = EXCLUDED.amount,
     pool_tx = EXCLUDED.pool_tx,
@@ -122,8 +122,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(txid, vout) DO UPDATE SE
     redeemed = EXCLUDED.redeemed,
     swept = EXCLUDED.swept,
     expire_at = EXCLUDED.expire_at,
-    redeem_tx = EXCLUDED.redeem_tx,
-    pending = EXCLUDED.pending;
+    redeem_tx = EXCLUDED.redeem_tx;
 
 -- name: SelectSweepableVtxos :many
 SELECT sqlc.embed(vtxo) FROM vtxo

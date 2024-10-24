@@ -124,7 +124,7 @@ func (v vtxoList) toProto() []*arkv1.Vtxo {
 			SpentBy:   vv.SpentBy,
 			Swept:     vv.Swept,
 			RedeemTx:  vv.RedeemTx,
-			Pending:   vv.Pending,
+			IsOor:     len(vv.RedeemTx) > 0,
 			Pubkey:    vv.Pubkey,
 		})
 	}

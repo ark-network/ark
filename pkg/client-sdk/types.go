@@ -3,6 +3,7 @@ package arksdk
 import (
 	"fmt"
 
+	"github.com/ark-network/ark/pkg/client-sdk/client"
 	grpcclient "github.com/ark-network/ark/pkg/client-sdk/client/grpc"
 	restclient "github.com/ark-network/ark/pkg/client-sdk/client/rest"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
@@ -122,4 +123,11 @@ type balanceRes struct {
 	onchainLockedBalance        map[int64]uint64
 	offchainBalanceByExpiration map[int64]uint64
 	err                         error
+}
+
+type CoinSelectOptions struct {
+	// If true, coin selector will select coins closest to expiry first.
+	WithExpirySorting bool
+	// If specified, coin selector will select only coins in the list.
+	OutpointsFilter []client.Outpoint
 }

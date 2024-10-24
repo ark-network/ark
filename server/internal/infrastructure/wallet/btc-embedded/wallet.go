@@ -782,9 +782,9 @@ func (s *service) Status(ctx context.Context) (ports.WalletStatus, error) {
 
 	w := s.wallet.InternalWallet()
 	return status{
-		true,
-		!w.Manager.IsLocked(),
-		w.ChainSynced(),
+		initialized: true,
+		unlocked:    !w.Manager.IsLocked(),
+		synced:      s.isSynced,
 	}, nil
 }
 

@@ -19,12 +19,8 @@ func TestParseDescriptor(t *testing.T) {
 	aliceKey, err := secp256k1.GeneratePrivateKey()
 	require.NoError(t, err)
 
-	bobKey, err := secp256k1.GeneratePrivateKey()
-	require.NoError(t, err)
-
 	aspPubKey := hex.EncodeToString(schnorr.SerializePubKey(aspKey.PubKey()))
 	alicePubKey := hex.EncodeToString(schnorr.SerializePubKey(aliceKey.PubKey()))
-	bobPubKey := hex.EncodeToString(schnorr.SerializePubKey(bobKey.PubKey()))
 
 	unspendableKey := hex.EncodeToString(bitcointree.UnspendableKey().SerializeCompressed())
 
@@ -44,24 +40,4 @@ func TestParseDescriptor(t *testing.T) {
 	require.Equal(t, defaultScriptDescriptor, vtxo.ToDescriptor())
 	require.Equal(t, alicePubKey, hex.EncodeToString(schnorr.SerializePubKey(vtxo.(*bitcointree.DefaultVtxoScript).Owner)))
 	require.Equal(t, aspPubKey, hex.EncodeToString(schnorr.SerializePubKey(vtxo.(*bitcointree.DefaultVtxoScript).Asp)))
-
-	reversibleScriptDescriptor := fmt.Sprintf(
-		descriptor.ReversibleVtxoScriptTemplate,
-		unspendableKey,
-		alicePubKey,
-		aspPubKey,
-		512,
-		alicePubKey,
-		bobPubKey,
-		aspPubKey,
-	)
-
-	vtxo, err = bitcointree.ParseVtxoScript(reversibleScriptDescriptor)
-	require.NoError(t, err)
-
-	require.IsType(t, &bitcointree.ReversibleVtxoScript{}, vtxo)
-	require.Equal(t, reversibleScriptDescriptor, vtxo.ToDescriptor())
-	require.Equal(t, alicePubKey, hex.EncodeToString(schnorr.SerializePubKey(vtxo.(*bitcointree.ReversibleVtxoScript).Sender)))
-	require.Equal(t, bobPubKey, hex.EncodeToString(schnorr.SerializePubKey(vtxo.(*bitcointree.ReversibleVtxoScript).Owner)))
-	require.Equal(t, aspPubKey, hex.EncodeToString(schnorr.SerializePubKey(vtxo.(*bitcointree.ReversibleVtxoScript).Asp)))
 }
