@@ -77,7 +77,7 @@ func TestSendOffchain(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	_, err = runClarkCommand("claim", "--password", utils.Password)
+	_, err = runClarkCommand("settle", "--password", utils.Password)
 	require.NoError(t, err)
 
 	time.Sleep(3 * time.Second)
@@ -91,7 +91,7 @@ func TestSendOffchain(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 	require.NotZero(t, balance.Offchain.Total)
 
-	_, err = runClarkCommand("claim", "--password", utils.Password)
+	_, err = runClarkCommand("settle", "--password", utils.Password)
 	require.NoError(t, err)
 
 	balanceStr, err = runClarkCommand("balance")
@@ -113,7 +113,7 @@ func TestUnilateralExit(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	_, err = runClarkCommand("claim", "--password", utils.Password)
+	_, err = runClarkCommand("settle", "--password", utils.Password)
 	require.NoError(t, err)
 
 	time.Sleep(3 * time.Second)
@@ -172,10 +172,10 @@ func TestReactToSpentVtxosRedemption(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	_, err = client.SendOffChain(ctx, nil, nil)
+	_, err = client.Settle(ctx)
 	require.NoError(t, err)
 
-	_, err = client.SendOffChain(ctx, []arksdk.Receiver{arksdk.NewBitcoinReceiver(offchainAddress, 1000)}, nil)
+	_, err = client.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(offchainAddress, 1000)})
 	require.NoError(t, err)
 
 	time.Sleep(2 * time.Second)
@@ -224,16 +224,16 @@ func TestReactToAsyncSpentVtxosRedemption(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	roundId, err := sdkClient.SendOffChain(ctx, nil, nil)
+	roundId, err := sdkClient.Settle(ctx)
 	require.NoError(t, err)
 
 	err = utils.GenerateBlock()
 	require.NoError(t, err)
 
-	_, err = sdkClient.SendOffChain(ctx, []arksdk.Receiver{arksdk.NewBitcoinReceiver(offchainAddress, 1000)}, nil)
+	_, err = sdkClient.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(offchainAddress, 1000)})
 	require.NoError(t, err)
 
-	_, err = sdkClient.SendOffChain(ctx, nil, nil)
+	_, err = sdkClient.Settle(ctx)
 	require.NoError(t, err)
 
 	time.Sleep(5 * time.Second)
@@ -290,7 +290,7 @@ func TestChainAsyncPayments(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	_, err = runClarkCommand("claim", "--password", utils.Password)
+	_, err = runClarkCommand("settle", "--password", utils.Password)
 	require.NoError(t, err)
 
 	time.Sleep(3 * time.Second)
@@ -332,7 +332,7 @@ func TestAliceSeveralPaymentsToBob(t *testing.T) {
 	bobAddress, _, err := bob.Receive(ctx)
 	require.NoError(t, err)
 
-	_, err = alice.SendOffChain(ctx, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 1000)}, nil)
+	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 1000)})
 	require.NoError(t, err)
 
 	time.Sleep(2 * time.Second)
@@ -341,7 +341,7 @@ func TestAliceSeveralPaymentsToBob(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, bobVtxos, 1)
 
-	_, err = alice.SendOffChain(ctx, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)}, nil)
+	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)})
 	require.NoError(t, err)
 
 	time.Sleep(2 * time.Second)
@@ -350,7 +350,7 @@ func TestAliceSeveralPaymentsToBob(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, bobVtxos, 2)
 
-	_, err = alice.SendOffChain(ctx, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)}, nil)
+	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)})
 	require.NoError(t, err)
 
 	time.Sleep(2 * time.Second)
@@ -359,7 +359,7 @@ func TestAliceSeveralPaymentsToBob(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, bobVtxos, 3)
 
-	_, err = alice.SendOffChain(ctx, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)}, nil)
+	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)})
 	require.NoError(t, err)
 
 	time.Sleep(2 * time.Second)
@@ -391,7 +391,7 @@ func TestSweep(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	_, err = runClarkCommand("claim", "--password", utils.Password)
+	_, err = runClarkCommand("settle", "--password", utils.Password)
 	require.NoError(t, err)
 
 	time.Sleep(3 * time.Second)

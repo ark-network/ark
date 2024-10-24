@@ -73,8 +73,8 @@ type Transaction struct {
 	TransactionKey
 	Amount    uint64
 	Type      TxType
-	CreatedAt time.Time
 	Settled   bool
+	CreatedAt time.Time
 }
 
 func (t Transaction) IsRound() bool {

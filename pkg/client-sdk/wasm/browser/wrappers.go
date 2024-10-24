@@ -207,27 +207,18 @@ func SendOnChainWrapper() js.Func {
 
 func SendOffChainWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) < 1 || len(args) > 2 {
+		if len(args) != 2 {
 			return nil, errors.New("invalid number of args")
 		}
 
+		withExpiryCoinselect := args[0].Bool()
 		receivers, err := parseReceivers(args[0])
 		if err != nil {
 			return nil, err
 		}
 
-		var coinSelectOptions *arksdk.CoinSelectOptions
-		if len(args) == 2 {
-			coinSelectOptions, err = parseCoinSelectOptions(args[1])
-			if err != nil {
-				return nil, err
-			}
-		}
-
 		txID, err := arkSdkClient.SendOffChain(
-			context.Background(),
-			receivers,
-			coinSelectOptions,
+			context.Background(), withExpiryCoinselect, receivers,
 		)
 		if err != nil {
 			return nil, err
@@ -238,10 +229,11 @@ func SendOffChainWrapper() js.Func {
 
 func SendAsyncWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) < 1 || len(args) > 2 {
+		if len(args) != 2 {
 			return nil, errors.New("invalid number of args")
 		}
 
+		withExpiryCoinselect := args[0].Bool()
 		receivers, err := parseReceivers(args[0])
 		if err != nil {
 			return nil, err
@@ -251,18 +243,8 @@ func SendAsyncWrapper() js.Func {
 			return nil, errors.New("no receivers specified")
 		}
 
-		var coinSelectOptions *arksdk.CoinSelectOptions
-		if len(args) == 2 {
-			coinSelectOptions, err = parseCoinSelectOptions(args[1])
-			if err != nil {
-				return nil, err
-			}
-		}
-
 		txID, err := arkSdkClient.SendAsync(
-			context.Background(),
-			receivers,
-			coinSelectOptions,
+			context.Background(), withExpiryCoinselect, receivers,
 		)
 		if err != nil {
 			return nil, err
@@ -271,39 +253,38 @@ func SendAsyncWrapper() js.Func {
 	})
 }
 
+func SettleWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if len(args) != 0 {
+			return nil, errors.New("invalid number of args")
+		}
+
+		resp, err := arkSdkClient.Settle(context.Background())
+		if err != nil {
+			return nil, err
+		}
+
+		return js.ValueOf(resp), nil
+	})
+}
+
 func UnilateralRedeemWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		var coinSelectOptions *arksdk.CoinSelectOptions
-		if len(args) > 0 {
-			var err error
-			coinSelectOptions, err = parseCoinSelectOptions(args[0])
-			if err != nil {
-				return nil, err
-			}
-		}
-		return nil, arkSdkClient.UnilateralRedeem(context.Background(), coinSelectOptions)
+		return nil, arkSdkClient.UnilateralRedeem(context.Background())
 	})
 }
 
 func CollaborativeRedeemWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) < 2 || len(args) > 3 {
+		if len(args) != 3 {
 			return nil, errors.New("invalid number of args")
 		}
 		addr := args[0].String()
 		amount := uint64(args[1].Int())
-
-		var coinSelectOptions *arksdk.CoinSelectOptions
-		if len(args) == 3 {
-			var err error
-			coinSelectOptions, err = parseCoinSelectOptions(args[2])
-			if err != nil {
-				return nil, err
-			}
-		}
+		withExpiryCoinselect := args[2].Bool()
 
 		txID, err := arkSdkClient.CollaborativeRedeem(
-			context.Background(), addr, amount, coinSelectOptions,
+			context.Background(), addr, amount, withExpiryCoinselect,
 		)
 		if err != nil {
 			return nil, err
@@ -326,6 +307,7 @@ func GetTransactionHistoryWrapper() js.Func {
 				"redeemTxid":   record.RedeemTxid,
 				"amount":       strconv.Itoa(int(record.Amount)),
 				"type":         record.Type,
+				"settled":      record.Settled,
 				"createdAt":    record.CreatedAt.Format(time.RFC3339),
 			})
 		}
@@ -484,34 +466,6 @@ func parseReceivers(jsReceivers js.Value) ([]arksdk.Receiver, error) {
 	}
 
 	return receivers, nil
-}
-
-func parseCoinSelectOptions(jsCoinSelectOptions js.Value) (*arksdk.CoinSelectOptions, error) {
-	if jsCoinSelectOptions.IsNull() || jsCoinSelectOptions.IsUndefined() {
-		return nil, nil // Return nil if input is null or undefined
-	}
-
-	if jsCoinSelectOptions.Type() != js.TypeObject {
-		return nil, errors.New("invalid coinSelectOptions argument: expected object")
-	}
-
-	options := &arksdk.CoinSelectOptions{}
-
-	withExpirySorting := jsCoinSelectOptions.Get("withExpirySorting")
-	if !withExpirySorting.IsUndefined() && withExpirySorting.Type() == js.TypeBoolean {
-		options.WithExpirySorting = withExpirySorting.Bool()
-	}
-
-	jsOutpointsFilter := jsCoinSelectOptions.Get("outpointsFilter")
-	if !jsOutpointsFilter.IsUndefined() && jsOutpointsFilter.Type() == js.TypeObject {
-		outpointsFilter, err := parseOutpoints(jsOutpointsFilter)
-		if err != nil {
-			return nil, fmt.Errorf("invalid OutpointsFilter: %v", err)
-		}
-		options.OutpointsFilter = outpointsFilter
-	}
-
-	return options, nil
 }
 
 func parseOutpoints(jsOutpoints js.Value) ([]client.Outpoint, error) {

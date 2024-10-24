@@ -318,10 +318,10 @@ message Vtxo {
   string spent_by = 4;
   int64 expire_at = 5;
   bool swept = 6;
-  uint64 amount = 7;
-  string pubkey = 8;
-  string redeem_tx = 9;
-  bool is_oor = 10;
+  bool is_oor = 7;
+  uint64 amount = 8;
+  string pubkey = 9;
+  string redeem_tx = 10;
 }
 
 message GetTransactionsStreamRequest {}

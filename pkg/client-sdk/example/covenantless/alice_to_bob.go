@@ -84,13 +84,13 @@ func main() {
 	log.Infof("alice onchain balance: %d", aliceBalance.OnchainBalance.SpendableAmount)
 	log.Infof("alice offchain balance: %d", aliceBalance.OffchainBalance.Total)
 
-	log.Infof("alice claiming onboarding funds...")
-	txid, err := aliceArkClient.SendOffChain(ctx, nil, nil)
+	log.Infof("alice is settling the onboard funds...")
+	txid, err := aliceArkClient.Settle(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Infof("alice claimed onboarding funds in round %s", txid)
+	log.Infof("alice settled the onboard funds in round %s", txid)
 
 	fmt.Println("")
 	log.Info("bob is setting up his ark wallet...")
@@ -128,7 +128,7 @@ func main() {
 	fmt.Println("")
 	log.Infof("alice is sending %d sats to bob offchain...", amount)
 
-	if _, err = aliceArkClient.SendOffChain(ctx, receivers, nil); err != nil {
+	if _, err = aliceArkClient.SendOffChain(ctx, false, receivers); err != nil {
 		log.Fatal(err)
 	}
 
@@ -158,13 +158,13 @@ func main() {
 	log.Infof("bob offchain balance: %d", bobBalance.OffchainBalance.Total)
 
 	fmt.Println("")
-	log.Info("bob is claiming the incoming payment...")
-	roundTxid, err := bobArkClient.SendOffChain(ctx, nil, nil)
+	log.Info("bob is settling the received funds...")
+	roundTxid, err := bobArkClient.Settle(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Infof("bob claimed the incoming payment in round %s", roundTxid)
+	log.Infof("bob settled the received funds in round %s", roundTxid)
 
 	time.Sleep(500 * time.Second)
 }

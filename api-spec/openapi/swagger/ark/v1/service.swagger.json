@@ -1070,6 +1070,9 @@
         "swept": {
           "type": "boolean"
         },
+        "isOor": {
+          "type": "boolean"
+        },
         "amount": {
           "type": "string",
           "format": "uint64"
@@ -1079,9 +1082,6 @@
         },
         "redeemTx": {
           "type": "string"
-        },
-        "isOor": {
-          "type": "boolean"
         }
       }
     }

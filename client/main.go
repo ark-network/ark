@@ -39,7 +39,7 @@ func main() {
 		&configCommand,
 		&dumpCommand,
 		&receiveCommand,
-		&claimCmd,
+		&settleCmd,
 		&sendCommand,
 		&balanceCommand,
 		&redeemCommand,
@@ -160,11 +160,11 @@ var (
 			return receive(ctx)
 		},
 	}
-	claimCmd = cli.Command{
-		Name:  "claim",
-		Usage: "Claim onboarding funds or pending payments",
+	settleCmd = cli.Command{
+		Name:  "settle",
+		Usage: "Settle onboarding funds or oor payments",
 		Action: func(ctx *cli.Context) error {
-			return claim(ctx)
+			return settle(ctx)
 		},
 		Flags: []cli.Flag{passwordFlag},
 	}
@@ -266,7 +266,7 @@ func receive(ctx *cli.Context) error {
 	})
 }
 
-func claim(ctx *cli.Context) error {
+func settle(ctx *cli.Context) error {
 	password, err := readPassword(ctx)
 	if err != nil {
 		return err
@@ -275,7 +275,7 @@ func claim(ctx *cli.Context) error {
 		return err
 	}
 
-	txID, err := arkSdkClient.SendOffChain(ctx.Context, nil, nil)
+	txID, err := arkSdkClient.Settle(ctx.Context)
 	if err != nil {
 		return err
 	}
@@ -355,7 +355,7 @@ func redeem(ctx *cli.Context) error {
 	amount := ctx.Uint64(amountToRedeemFlag.Name)
 	computeExpiration := ctx.Bool(expiryDetailsFlag.Name)
 	if force {
-		err := arkSdkClient.UnilateralRedeem(ctx.Context, nil)
+		err := arkSdkClient.UnilateralRedeem(ctx.Context)
 		if err != nil {
 			return err
 		}
@@ -363,9 +363,7 @@ func redeem(ctx *cli.Context) error {
 	}
 
 	txID, err := arkSdkClient.CollaborativeRedeem(
-		ctx.Context, address, amount, &arksdk.CoinSelectOptions{
-			WithExpirySorting: computeExpiration,
-		},
+		ctx.Context, address, amount, computeExpiration,
 	)
 	if err != nil {
 		return err
@@ -465,9 +463,7 @@ func parseReceivers(receveirsJSON string, isBitcoin bool) ([]arksdk.Receiver, er
 func sendCovenantLess(ctx *cli.Context, receivers []arksdk.Receiver) error {
 	computeExpiration := ctx.Bool(enableExpiryCoinselectFlag.Name)
 	redeemTx, err := arkSdkClient.SendAsync(
-		ctx.Context, receivers, &arksdk.CoinSelectOptions{
-			WithExpirySorting: computeExpiration,
-		},
+		ctx.Context, computeExpiration, receivers,
 	)
 	if err != nil {
 		return err
@@ -500,7 +496,7 @@ func sendCovenant(ctx context.Context, receivers []arksdk.Receiver) error {
 	}
 
 	if len(offchainReceivers) > 0 {
-		txID, err := arkSdkClient.SendOffChain(ctx, offchainReceivers, nil)
+		txID, err := arkSdkClient.SendOffChain(ctx, false, offchainReceivers)
 		if err != nil {
 			return err
 		}
