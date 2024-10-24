@@ -499,6 +499,7 @@ func (a *restClient) ListVtxos(
 			Amount:    uint64(amount),
 			RoundTxid: v.RoundTxid,
 			ExpiresAt: expiresAt,
+			IsOOR:     v.IsOor,
 			RedeemTx:  v.RedeemTx,
 			SpentBy:   v.SpentBy,
 			Pubkey:    v.Pubkey,
@@ -699,6 +700,7 @@ func vtxosFromRest(restVtxos []*models.V1Vtxo) []client.Vtxo {
 			Amount:    uint64(amount),
 			RoundTxid: v.RoundTxid,
 			ExpiresAt: expiresAt,
+			IsOOR:     v.IsOor,
 			RedeemTx:  v.RedeemTx,
 			SpentBy:   v.SpentBy,
 		}
