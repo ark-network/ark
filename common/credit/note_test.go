@@ -1,4 +1,4 @@
-package ecash
+package credit
 
 import (
 	"bytes"

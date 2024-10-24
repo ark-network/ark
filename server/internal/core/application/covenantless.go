@@ -11,8 +11,8 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
+	"github.com/ark-network/ark/common/credit"
 	"github.com/ark-network/ark/common/descriptor"
-	"github.com/ark-network/ark/common/ecash"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -409,7 +409,7 @@ func (s *covenantlessService) GetBoardingAddress(
 	return addr.EncodeAddress(), vtxoScript.ToDescriptor(), nil
 }
 
-func (s *covenantlessService) SpendNotes(ctx context.Context, notes []ecash.Note) (string, error) {
+func (s *covenantlessService) SpendNotes(ctx context.Context, notes []credit.Note) (string, error) {
 	noteRepo := s.repoManager.Notes()
 
 	for _, note := range notes {
@@ -793,7 +793,7 @@ func (s *covenantlessService) startFinalization() {
 	roundRemainingDuration := time.Duration(s.roundInterval/2-1) * time.Second
 	thirdOfRemainingDuration := time.Duration(roundRemainingDuration / 3)
 
-	var notes []ecash.Note
+	var notes []credit.Note
 	var roundAborted bool
 	defer func() {
 		delete(s.treeSigningSessions, round.Id)
@@ -1084,7 +1084,7 @@ func (s *covenantlessService) propagateRoundSigningNoncesGeneratedEvent(combined
 	s.eventsCh <- ev
 }
 
-func (s *covenantlessService) finalizeRound(notes []ecash.Note) {
+func (s *covenantlessService) finalizeRound(notes []credit.Note) {
 	defer s.startRound()
 
 	ctx := context.Background()

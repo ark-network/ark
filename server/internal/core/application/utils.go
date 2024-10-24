@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ark-network/ark/common/ecash"
+	"github.com/ark-network/ark/common/credit"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -18,7 +18,7 @@ import (
 type timedPayment struct {
 	domain.Payment
 	boardingInputs []ports.BoardingInput
-	notes          []ecash.Note
+	notes          []credit.Note
 	timestamp      time.Time
 	pingTimestamp  time.Time
 }
@@ -61,7 +61,7 @@ func (m *paymentsMap) delete(id string) error {
 	return nil
 }
 
-func (m *paymentsMap) pushWithNotes(payment domain.Payment, notes []ecash.Note) error {
+func (m *paymentsMap) pushWithNotes(payment domain.Payment, notes []credit.Note) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -119,7 +119,7 @@ func (m *paymentsMap) push(
 		m.descriptors[key] = desc
 	}
 
-	m.payments[payment.Id] = &timedPayment{payment, boardingInputs, make([]ecash.Note, 0), time.Now(), time.Time{}}
+	m.payments[payment.Id] = &timedPayment{payment, boardingInputs, make([]credit.Note, 0), time.Now(), time.Time{}}
 	return nil
 }
 
@@ -135,7 +135,7 @@ func (m *paymentsMap) pushEphemeralKey(paymentId string, pubkey *secp256k1.Publi
 	return nil
 }
 
-func (m *paymentsMap) pop(num int64) ([]domain.Payment, []ports.BoardingInput, map[domain.VtxoKey]string, []*secp256k1.PublicKey, []ecash.Note) {
+func (m *paymentsMap) pop(num int64) ([]domain.Payment, []ports.BoardingInput, map[domain.VtxoKey]string, []*secp256k1.PublicKey, []credit.Note) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -163,7 +163,7 @@ func (m *paymentsMap) pop(num int64) ([]domain.Payment, []ports.BoardingInput, m
 	boardingInputs := make([]ports.BoardingInput, 0)
 	cosigners := make([]*secp256k1.PublicKey, 0, num)
 	descriptors := make(map[domain.VtxoKey]string)
-	notes := make([]ecash.Note, 0)
+	notes := make([]credit.Note, 0)
 	for _, p := range paymentsByTime[:num] {
 		boardingInputs = append(boardingInputs, p.boardingInputs...)
 		payments = append(payments, p.Payment)

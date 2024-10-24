@@ -3,7 +3,7 @@ package application
 import (
 	"context"
 
-	"github.com/ark-network/ark/common/ecash"
+	"github.com/ark-network/ark/common/credit"
 	"github.com/ark-network/ark/server/internal/core/ports"
 )
 
@@ -183,7 +183,7 @@ func (a *adminService) GetWalletStatus(ctx context.Context) (*WalletStatus, erro
 }
 
 func (a *adminService) CreateNote(ctx context.Context, value uint32) (string, error) {
-	noteDetails, err := ecash.New(value)
+	noteDetails, err := credit.New(value)
 	if err != nil {
 		return "", err
 	}

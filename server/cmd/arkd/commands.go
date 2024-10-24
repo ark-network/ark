@@ -83,7 +83,7 @@ var (
 	}
 	createNoteCmd = &cli.Command{
 		Name:   "note",
-		Usage:  "Create an ecash note",
+		Usage:  "Create a credit note",
 		Action: createNoteAction,
 		Flags:  []cli.Flag{amountFlag},
 	}

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ark-network/ark/common/ecash"
+	"github.com/ark-network/ark/common/credit"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -327,7 +327,7 @@ func (s *sweeper) createNotesForUnspentVtxos(ctx context.Context, vtxosKeys []do
 		}
 
 		// if vtxo is not redeemed or spent and is swept, create a note for it
-		noteDetails, err := ecash.New(uint32(vtxo.Amount))
+		noteDetails, err := credit.New(uint32(vtxo.Amount))
 		if err != nil {
 			log.Error(fmt.Errorf("error while creating note details: %w", err))
 			return

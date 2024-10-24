@@ -13,7 +13,7 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
-	"github.com/ark-network/ark/common/ecash"
+	"github.com/ark-network/ark/common/credit"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
@@ -773,7 +773,7 @@ func (a *covenantlessArkClient) RedeemNotes(ctx context.Context, notes []string)
 	amount := uint64(0)
 
 	for _, note := range notes {
-		var n ecash.Note
+		var n credit.Note
 		if err := n.FromString(note); err != nil {
 			return "", err
 		}
