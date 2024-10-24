@@ -37,6 +37,7 @@ func init() {
 	js.Global().Set("getTransactionHistory", GetTransactionHistoryWrapper())
 	js.Global().Set("log", LogWrapper())
 	js.Global().Set("dump", DumpWrapper())
+	js.Global().Set("listVtxos", ListVtxosWrapper())
 
 	js.Global().Set("getAspUrl", GetAspUrlWrapper())
 	js.Global().Set("getAspPubKeyHex", GetAspPubkeyWrapper())

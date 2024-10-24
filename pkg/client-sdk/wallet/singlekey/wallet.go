@@ -47,7 +47,7 @@ func (w *singlekeyWallet) Create(
 	passwordHash := utils.HashPassword(pwd)
 	pubkey := privateKey.PubKey()
 	buf := privateKey.Serialize()
-	encryptedPrivateKey, err := utils.EncryptAES128(buf, pwd)
+	encryptedPrivateKey, err := utils.EncryptAES256(buf, pwd)
 	if err != nil {
 		return "", err
 	}
@@ -104,7 +104,7 @@ func (w *singlekeyWallet) Unlock(
 		return false, fmt.Errorf("invalid password")
 	}
 
-	privateKeyBytes, err := utils.DecryptAES128(w.walletData.EncryptedPrvkey, pwd)
+	privateKeyBytes, err := utils.DecryptAES256(w.walletData.EncryptedPrvkey, pwd)
 	if err != nil {
 		return false, err
 	}
