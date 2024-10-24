@@ -11,6 +11,7 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
@@ -22,10 +23,14 @@ import (
 )
 
 func CoinSelect(
-	vtxos []client.DescriptorVtxo, amount, dust uint64, sortByExpirationTime bool,
-) ([]client.DescriptorVtxo, uint64, error) {
-	selected := make([]client.DescriptorVtxo, 0)
-	notSelected := make([]client.DescriptorVtxo, 0)
+	boardingUtxos []types.Utxo,
+	vtxos []client.DescriptorVtxo,
+	amount,
+	dust uint64,
+	sortByExpirationTime bool,
+) ([]types.Utxo, []client.DescriptorVtxo, uint64, error) {
+	selected, notSelected := make([]client.DescriptorVtxo, 0), make([]client.DescriptorVtxo, 0)
+	selectedBoarding, notSelectedBoarding := make([]types.Utxo, 0), make([]types.Utxo, 0)
 	selectedAmount := uint64(0)
 
 	if sortByExpirationTime {
@@ -37,6 +42,20 @@ func CoinSelect(
 
 			return vtxos[i].ExpiresAt.Before(*vtxos[j].ExpiresAt)
 		})
+
+		sort.SliceStable(boardingUtxos, func(i, j int) bool {
+			return boardingUtxos[i].SpendableAt.Before(boardingUtxos[j].SpendableAt)
+		})
+	}
+
+	for _, boardingUtxo := range boardingUtxos {
+		if selectedAmount >= amount {
+			notSelectedBoarding = append(notSelectedBoarding, boardingUtxo)
+			break
+		}
+
+		selectedBoarding = append(selectedBoarding, boardingUtxo)
+		selectedAmount += boardingUtxo.Amount
 	}
 
 	for _, vtxo := range vtxos {
@@ -50,7 +69,7 @@ func CoinSelect(
 	}
 
 	if selectedAmount < amount {
-		return nil, 0, fmt.Errorf("not enough funds to cover amount %d", amount)
+		return nil, nil, 0, fmt.Errorf("not enough funds to cover amount %d", amount)
 	}
 
 	change := selectedAmount - amount
@@ -59,10 +78,13 @@ func CoinSelect(
 		if len(notSelected) > 0 {
 			selected = append(selected, notSelected[0])
 			change += notSelected[0].Amount
+		} else if len(notSelectedBoarding) > 0 {
+			selectedBoarding = append(selectedBoarding, notSelectedBoarding[0])
+			change += notSelectedBoarding[0].Amount
 		}
 	}
 
-	return selected, change, nil
+	return selectedBoarding, selected, change, nil
 }
 
 func ParseLiquidAddress(addr string) (

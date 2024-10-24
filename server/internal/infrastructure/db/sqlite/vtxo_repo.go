@@ -51,7 +51,6 @@ func (v *vxtoRepository) AddVtxos(ctx context.Context, vtxos []domain.Vtxo) erro
 					Swept:    vtxo.Swept,
 					ExpireAt: vtxo.ExpireAt,
 					RedeemTx: sql.NullString{String: vtxo.RedeemTx, Valid: true},
-					Pending:  vtxo.Pending,
 				},
 			); err != nil {
 				return err
@@ -259,7 +258,6 @@ func rowToVtxo(row queries.Vtxo) domain.Vtxo {
 		Swept:     row.Swept,
 		ExpireAt:  row.ExpireAt,
 		RedeemTx:  row.RedeemTx.String,
-		Pending:   row.Pending,
 	}
 }
 

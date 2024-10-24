@@ -31,7 +31,7 @@ func init() {
 	js.Global().Set("sendOnChain", SendOnChainWrapper())
 	js.Global().Set("sendOffChain", SendOffChainWrapper())
 	js.Global().Set("sendAsync", SendAsyncWrapper())
-	js.Global().Set("claim", ClaimWrapper())
+	js.Global().Set("settle", SettleWrapper())
 	js.Global().Set("unilateralRedeem", UnilateralRedeemWrapper())
 	js.Global().Set("collaborativeRedeem", CollaborativeRedeemWrapper())
 	js.Global().Set("getTransactionHistory", GetTransactionHistoryWrapper())
