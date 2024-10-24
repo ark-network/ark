@@ -434,10 +434,10 @@ func testNoteRepository(t *testing.T, svc ports.RepoManager) {
 	t.Run("test_note_repository", func(t *testing.T) {
 		ctx := context.Background()
 
-		err := svc.Notes().Push(ctx, 1)
+		err := svc.Notes().Add(ctx, 1)
 		require.NoError(t, err)
 
-		err = svc.Notes().Push(ctx, 1099200322)
+		err = svc.Notes().Add(ctx, 1099200322)
 		require.NoError(t, err)
 
 		contains, err := svc.Notes().Contains(ctx, 1)
@@ -452,7 +452,7 @@ func testNoteRepository(t *testing.T, svc ports.RepoManager) {
 		require.NoError(t, err)
 		require.False(t, contains)
 
-		err = svc.Notes().Push(ctx, 1)
+		err = svc.Notes().Add(ctx, 1)
 		require.Error(t, err)
 
 		svc.Notes().Close()

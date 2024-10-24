@@ -1170,7 +1170,7 @@ func (s *covenantlessService) finalizeRound(notes []credit.Note) {
 
 	// mark the notes as spent
 	for _, note := range notes {
-		if err := s.repoManager.Notes().Push(ctx, note.Details.ID); err != nil {
+		if err := s.repoManager.Notes().Add(ctx, note.Details.ID); err != nil {
 			log.WithError(err).Warn("failed to mark note as spent")
 		}
 	}

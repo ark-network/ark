@@ -36,6 +36,6 @@ type VtxoRepository interface {
 
 type NoteRepository interface {
 	Contains(ctx context.Context, id uint32) (bool, error)
-	Push(ctx context.Context, id uint32) error
+	Add(ctx context.Context, id uint32) error
 	Close()
 }

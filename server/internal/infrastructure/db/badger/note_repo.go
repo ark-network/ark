@@ -56,7 +56,7 @@ func (n *noteRepository) Close() {
 	n.store.Close()
 }
 
-func (n *noteRepository) Push(ctx context.Context, id uint32) error {
+func (n *noteRepository) Add(ctx context.Context, id uint32) error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
