@@ -19,7 +19,7 @@ type noteRepository struct {
 }
 
 type note struct {
-	ID uint32
+	ID uint64
 }
 
 func NewNoteRepository(config ...interface{}) (domain.NoteRepository, error) {
@@ -56,14 +56,14 @@ func (n *noteRepository) Close() {
 	n.store.Close()
 }
 
-func (n *noteRepository) Add(ctx context.Context, id uint32) error {
+func (n *noteRepository) Add(ctx context.Context, id uint64) error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
 	return n.store.Insert(id, note{ID: id})
 }
 
-func (n *noteRepository) Contains(ctx context.Context, id uint32) (bool, error) {
+func (n *noteRepository) Contains(ctx context.Context, id uint64) (bool, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 

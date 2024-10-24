@@ -20,20 +20,22 @@ type Note struct {
 
 // NoteDetails contains the data of a virtual note
 type NoteDetails struct {
-	ID    uint32
+	ID    uint64
 	Value uint32
 }
 
 // New creates a new NoteDetails with the given value and a random ID
 func New(value uint32) (*NoteDetails, error) {
-	randomBytes := make([]byte, 4)
+	randomBytes := make([]byte, 8)
 	_, err := rand.Read(randomBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate random ID: %w", err)
 	}
 
+	id := binary.BigEndian.Uint64(randomBytes)
+
 	return &NoteDetails{
-		ID:    binary.BigEndian.Uint32(randomBytes),
+		ID:    id,
 		Value: value,
 	}, nil
 }
@@ -61,21 +63,20 @@ func NewFromString(s string) (*Note, error) {
 
 // Serialize converts the NoteDetails to a byte slice
 func (n *NoteDetails) Serialize() []byte {
-	combined := uint64(n.ID)<<32 | uint64(n.Value)
-	buf := make([]byte, 8)
-	binary.BigEndian.PutUint64(buf, combined)
+	buf := make([]byte, 12)
+	binary.BigEndian.PutUint64(buf[:8], n.ID)
+	binary.BigEndian.PutUint32(buf[8:], n.Value)
 	return buf
 }
 
 // Deserialize converts a byte slice to a NoteDetails
 func (n *NoteDetails) Deserialize(data []byte) error {
-	if len(data) != 8 {
-		return fmt.Errorf("invalid data length: expected 8 bytes, got %d", len(data))
+	if len(data) != 12 {
+		return fmt.Errorf("invalid data length: expected 12 bytes, got %d", len(data))
 	}
 
-	combined := binary.BigEndian.Uint64(data)
-	n.ID = uint32(combined >> 32)
-	n.Value = uint32(combined & 0xFFFFFFFF)
+	n.ID = binary.BigEndian.Uint64(data[:8])
+	n.Value = binary.BigEndian.Uint32(data[8:])
 	return nil
 }
 
@@ -90,32 +91,32 @@ func (n *Note) Serialize() []byte {
 	detailsBytes := n.Details.Serialize()
 	sigLen := len(n.Signature)
 
-	buf := make([]byte, 8+1+sigLen)
+	buf := make([]byte, 12+1+sigLen)
 	copy(buf, detailsBytes)
-	buf[8] = byte(sigLen)
-	copy(buf[9:], n.Signature)
+	buf[12] = byte(sigLen)
+	copy(buf[13:], n.Signature)
 
 	return buf
 }
 
 // Deserialize converts a byte slice to a Note
 func (n *Note) Deserialize(data []byte) error {
-	if len(data) < 9 {
-		return fmt.Errorf("invalid data length: expected at least 9 bytes, got %d", len(data))
+	if len(data) < 13 {
+		return fmt.Errorf("invalid data length: expected at least 13 bytes, got %d", len(data))
 	}
 
 	n.Details = &NoteDetails{}
-	if err := n.Details.Deserialize(data[:8]); err != nil {
+	if err := n.Details.Deserialize(data[:12]); err != nil {
 		return err
 	}
 
-	sigLen := int(data[8])
-	if len(data) != 9+sigLen {
-		return fmt.Errorf("invalid data length: expected %d bytes, got %d", 9+sigLen, len(data))
+	sigLen := int(data[12])
+	if len(data) != 13+sigLen {
+		return fmt.Errorf("invalid data length: expected %d bytes, got %d", 13+sigLen, len(data))
 	}
 
 	n.Signature = make([]byte, sigLen)
-	copy(n.Signature, data[9:])
+	copy(n.Signature, data[13:])
 
 	return nil
 }

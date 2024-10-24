@@ -17,17 +17,18 @@ func TestNoteDetails_Serialize(t *testing.T) {
 	}{
 		{
 			name: "Valid note",
-			note: credit.NoteDetails{ID: 12345, Value: 100},
+			note: credit.NoteDetails{ID: 12345678901234567890, Value: 100},
 			want: func() []byte {
-				buf := make([]byte, 8)
-				binary.BigEndian.PutUint64(buf, uint64(12345)<<32|uint64(100))
+				buf := make([]byte, 12)
+				binary.BigEndian.PutUint64(buf[:8], 12345678901234567890)
+				binary.BigEndian.PutUint32(buf[8:], 100)
 				return buf
 			}(),
 		},
 		{
 			name: "Zero values",
 			note: credit.NoteDetails{ID: 0, Value: 0},
-			want: make([]byte, 8),
+			want: make([]byte, 12),
 		},
 	}
 
@@ -49,16 +50,17 @@ func TestNoteDetails_Deserialize(t *testing.T) {
 		{
 			name: "Valid data",
 			data: func() []byte {
-				buf := make([]byte, 8)
-				binary.BigEndian.PutUint64(buf, uint64(12345)<<32|uint64(100))
+				buf := make([]byte, 12)
+				binary.BigEndian.PutUint64(buf[:8], 12345678901234567890)
+				binary.BigEndian.PutUint32(buf[8:], 100)
 				return buf
 			}(),
-			want:    credit.NoteDetails{ID: 12345, Value: 100},
+			want:    credit.NoteDetails{ID: 12345678901234567890, Value: 100},
 			wantErr: false,
 		},
 		{
 			name:    "Zero values",
-			data:    make([]byte, 8),
+			data:    make([]byte, 12),
 			want:    credit.NoteDetails{ID: 0, Value: 0},
 			wantErr: false,
 		},
@@ -123,8 +125,8 @@ func TestNewNoteDetails(t *testing.T) {
 
 	// Test for uniqueness of IDs
 	t.Run("Unique IDs", func(t *testing.T) {
-		idSet := make(map[uint32]bool)
-		for i := 0; i < 1000; i++ {
+		idSet := make(map[uint64]bool)
+		for i := 0; i < 1_000_000; i++ {
 			note, err := credit.New(100)
 			require.NoError(t, err)
 			require.False(t, idSet[note.ID], "Generated duplicate ID: %v", note.ID)
@@ -141,14 +143,14 @@ func TestNote_SerializeDeserialize(t *testing.T) {
 		{
 			name: "Valid note",
 			note: credit.Note{
-				Details:   &credit.NoteDetails{ID: 12345, Value: 100},
+				Details:   &credit.NoteDetails{ID: 12345678901234567890, Value: 100},
 				Signature: []byte("test signature"),
 			},
 		},
 		{
 			name: "Note with empty signature",
 			note: credit.Note{
-				Details:   &credit.NoteDetails{ID: 67890, Value: 200},
+				Details:   &credit.NoteDetails{ID: 67899, Value: 200},
 				Signature: []byte{},
 			},
 		},
@@ -161,7 +163,8 @@ func TestNote_SerializeDeserialize(t *testing.T) {
 			var deserialized credit.Note
 			err := deserialized.Deserialize(serialized)
 			require.NoError(t, err)
-			require.Equal(t, tt.note.Details, deserialized.Details)
+			require.Equal(t, tt.note.Details.ID, deserialized.Details.ID)
+			require.Equal(t, tt.note.Details.Value, deserialized.Details.Value)
 			require.Equal(t, tt.note.Signature, deserialized.Signature)
 		})
 	}
@@ -176,7 +179,7 @@ func TestNote_StringFromString(t *testing.T) {
 		{
 			name: "Valid note",
 			note: credit.Note{
-				Details:   &credit.NoteDetails{ID: 12345, Value: 100},
+				Details:   &credit.NoteDetails{ID: 12345678901234567890, Value: 100},
 				Signature: []byte("test signature"),
 			},
 			wantError: false,
@@ -203,12 +206,12 @@ func TestNoteDetails_ToNote(t *testing.T) {
 	}{
 		{
 			name:      "Valid note details and signature",
-			details:   credit.NoteDetails{ID: 12345, Value: 100},
+			details:   credit.NoteDetails{ID: 12345678901234567890, Value: 100},
 			signature: []byte("test signature"),
 		},
 		{
 			name:      "Valid note details with empty signature",
-			details:   credit.NoteDetails{ID: 67890, Value: 200},
+			details:   credit.NoteDetails{ID: 65992, Value: 200},
 			signature: []byte{},
 		},
 	}
@@ -230,7 +233,7 @@ func TestNoteDetails_Hash(t *testing.T) {
 	}{
 		{
 			name:    "Valid note details",
-			details: credit.NoteDetails{ID: 12345, Value: 100},
+			details: credit.NoteDetails{ID: 12345678901234567890, Value: 100},
 		},
 		{
 			name:    "Zero values",
