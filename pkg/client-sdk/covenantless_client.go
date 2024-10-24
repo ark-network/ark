@@ -773,8 +773,8 @@ func (a *covenantlessArkClient) RedeemNotes(ctx context.Context, notes []string)
 	amount := uint64(0)
 
 	for _, note := range notes {
-		var n credit.Note
-		if err := n.FromString(note); err != nil {
+		n, err := credit.NewFromString(note)
+		if err != nil {
 			return "", err
 		}
 		amount += uint64(n.Details.Value)

@@ -58,13 +58,12 @@ func parseNotes(notes []string) ([]credit.Note, error) {
 
 	notesParsed := make([]credit.Note, 0, len(notes))
 	for _, note := range notes {
-		var n credit.Note
-
-		if err := n.FromString(note); err != nil {
+		n, err := credit.NewFromString(note)
+		if err != nil {
 			return nil, fmt.Errorf("invalid note: %s", err)
 		}
 
-		notesParsed = append(notesParsed, n)
+		notesParsed = append(notesParsed, *n)
 	}
 
 	return notesParsed, nil

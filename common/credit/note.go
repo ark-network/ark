@@ -38,6 +38,27 @@ func New(value uint32) (*NoteDetails, error) {
 	}, nil
 }
 
+// NewFromString converts a base58 encoded string with HRP to a Note
+func NewFromString(s string) (*Note, error) {
+	if !strings.HasPrefix(s, noteHRP) {
+		return nil, fmt.Errorf("invalid human-readable part: expected %s prefix", noteHRP)
+	}
+
+	encoded := strings.TrimPrefix(s, noteHRP)
+	decoded := base58.Decode(encoded)
+	if len(decoded) == 0 {
+		return nil, fmt.Errorf("failed to decode base58 string")
+	}
+
+	note := &Note{}
+	err := note.Deserialize(decoded)
+	if err != nil {
+		return nil, fmt.Errorf("failed to deserialize note: %w", err)
+	}
+
+	return note, nil
+}
+
 // Serialize converts the NoteDetails to a byte slice
 func (n *NoteDetails) Serialize() []byte {
 	combined := uint64(n.ID)<<32 | uint64(n.Value)
@@ -102,21 +123,6 @@ func (n *Note) Deserialize(data []byte) error {
 // String converts the Note to a base58 encoded string with HRP
 func (n Note) String() string {
 	return noteHRP + base58.Encode(n.Serialize())
-}
-
-// FromString converts a base58 encoded string with HRP to a Note
-func (n *Note) FromString(s string) error {
-	if !strings.HasPrefix(s, noteHRP) {
-		return fmt.Errorf("invalid human-readable part: expected %s prefix", noteHRP)
-	}
-
-	encoded := strings.TrimPrefix(s, noteHRP)
-	decoded := base58.Decode(encoded)
-	if len(decoded) == 0 {
-		return fmt.Errorf("failed to decode base58 string")
-	}
-
-	return n.Deserialize(decoded)
 }
 
 // ToNote creates a Note from NoteDetails with the given signature

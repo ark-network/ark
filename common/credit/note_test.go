@@ -187,8 +187,7 @@ func TestNote_StringFromString(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			str := tt.note.String()
 
-			var deserialized credit.Note
-			err := deserialized.FromString(str)
+			deserialized, err := credit.NewFromString(str)
 			require.NoError(t, err)
 			require.Equal(t, tt.note.Details, deserialized.Details)
 			require.Equal(t, tt.note.Signature, deserialized.Signature)
