@@ -1,21 +1,23 @@
-package credit
+package credit_test
 
 import (
-	"bytes"
 	"encoding/binary"
 	"math"
 	"testing"
+
+	"github.com/ark-network/ark/common/credit"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNoteDetails_Serialize(t *testing.T) {
 	tests := []struct {
 		name string
-		note NoteDetails
+		note credit.NoteDetails
 		want []byte
 	}{
 		{
 			name: "Valid note",
-			note: NoteDetails{ID: 12345, Value: 100},
+			note: credit.NoteDetails{ID: 12345, Value: 100},
 			want: func() []byte {
 				buf := make([]byte, 8)
 				binary.BigEndian.PutUint64(buf, uint64(12345)<<32|uint64(100))
@@ -24,7 +26,7 @@ func TestNoteDetails_Serialize(t *testing.T) {
 		},
 		{
 			name: "Zero values",
-			note: NoteDetails{ID: 0, Value: 0},
+			note: credit.NoteDetails{ID: 0, Value: 0},
 			want: make([]byte, 8),
 		},
 	}
@@ -32,9 +34,7 @@ func TestNoteDetails_Serialize(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.note.Serialize()
-			if !bytes.Equal(got, tt.want) {
-				t.Errorf("NoteDetails.Serialize() = %v, want %v", got, tt.want)
-			}
+			require.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -43,7 +43,7 @@ func TestNoteDetails_Deserialize(t *testing.T) {
 	tests := []struct {
 		name    string
 		data    []byte
-		want    NoteDetails
+		want    credit.NoteDetails
 		wantErr bool
 	}{
 		{
@@ -53,33 +53,32 @@ func TestNoteDetails_Deserialize(t *testing.T) {
 				binary.BigEndian.PutUint64(buf, uint64(12345)<<32|uint64(100))
 				return buf
 			}(),
-			want:    NoteDetails{ID: 12345, Value: 100},
+			want:    credit.NoteDetails{ID: 12345, Value: 100},
 			wantErr: false,
 		},
 		{
 			name:    "Zero values",
 			data:    make([]byte, 8),
-			want:    NoteDetails{ID: 0, Value: 0},
+			want:    credit.NoteDetails{ID: 0, Value: 0},
 			wantErr: false,
 		},
 		{
 			name:    "Invalid data length",
 			data:    []byte{1, 2, 3},
-			want:    NoteDetails{},
+			want:    credit.NoteDetails{},
 			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var got NoteDetails
+			var got credit.NoteDetails
 			err := got.Deserialize(tt.data)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("NoteDetails.Deserialize() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("NoteDetails.Deserialize() = %v, want %v", got, tt.want)
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tt.want, got)
 			}
 		})
 	}
@@ -110,20 +109,14 @@ func TestNewNoteDetails(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := New(tt.value)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("NewNoteDetails() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got == nil {
-				t.Errorf("NewNoteDetails() returned nil")
-				return
-			}
-			if got.Value != tt.value {
-				t.Errorf("NewNoteDetails() Value = %v, want %v", got.Value, tt.value)
-			}
-			if got.ID == 0 {
-				t.Errorf("NewNoteDetails() ID is zero, expected non-zero random value")
+			got, err := credit.New(tt.value)
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, got)
+				require.Equal(t, tt.value, got.Value)
+				require.NotZero(t, got.ID)
 			}
 		})
 	}
@@ -132,15 +125,9 @@ func TestNewNoteDetails(t *testing.T) {
 	t.Run("Unique IDs", func(t *testing.T) {
 		idSet := make(map[uint32]bool)
 		for i := 0; i < 1000; i++ {
-			note, err := New(100)
-			if err != nil {
-				t.Errorf("NewNoteDetails() unexpected error: %v", err)
-				return
-			}
-			if idSet[note.ID] {
-				t.Errorf("NewNoteDetails() generated duplicate ID: %v", note.ID)
-				return
-			}
+			note, err := credit.New(100)
+			require.NoError(t, err)
+			require.False(t, idSet[note.ID], "Generated duplicate ID: %v", note.ID)
 			idSet[note.ID] = true
 		}
 	})
@@ -149,19 +136,19 @@ func TestNewNoteDetails(t *testing.T) {
 func TestNote_SerializeDeserialize(t *testing.T) {
 	tests := []struct {
 		name string
-		note Note
+		note credit.Note
 	}{
 		{
 			name: "Valid note",
-			note: Note{
-				Details:   &NoteDetails{ID: 12345, Value: 100},
+			note: credit.Note{
+				Details:   &credit.NoteDetails{ID: 12345, Value: 100},
 				Signature: []byte("test signature"),
 			},
 		},
 		{
 			name: "Note with empty signature",
-			note: Note{
-				Details:   &NoteDetails{ID: 67890, Value: 200},
+			note: credit.Note{
+				Details:   &credit.NoteDetails{ID: 67890, Value: 200},
 				Signature: []byte{},
 			},
 		},
@@ -171,20 +158,11 @@ func TestNote_SerializeDeserialize(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			serialized := tt.note.Serialize()
 
-			var deserialized Note
+			var deserialized credit.Note
 			err := deserialized.Deserialize(serialized)
-			if err != nil {
-				t.Errorf("Note.Deserialize() error = %v", err)
-				return
-			}
-
-			if deserialized.Details.ID != tt.note.Details.ID || deserialized.Details.Value != tt.note.Details.Value {
-				t.Errorf("Deserialized NoteDetails do not match original. Got %+v, want %+v", deserialized.Details, tt.note.Details)
-			}
-
-			if !bytes.Equal(deserialized.Signature, tt.note.Signature) {
-				t.Errorf("Deserialized Signature does not match original. Got %v, want %v", deserialized.Signature, tt.note.Signature)
-			}
+			require.NoError(t, err)
+			require.Equal(t, tt.note.Details, deserialized.Details)
+			require.Equal(t, tt.note.Signature, deserialized.Signature)
 		})
 	}
 }
@@ -192,13 +170,13 @@ func TestNote_SerializeDeserialize(t *testing.T) {
 func TestNote_StringFromString(t *testing.T) {
 	tests := []struct {
 		name      string
-		note      Note
+		note      credit.Note
 		wantError bool
 	}{
 		{
 			name: "Valid note",
-			note: Note{
-				Details:   &NoteDetails{ID: 12345, Value: 100},
+			note: credit.Note{
+				Details:   &credit.NoteDetails{ID: 12345, Value: 100},
 				Signature: []byte("test signature"),
 			},
 			wantError: false,
@@ -209,20 +187,11 @@ func TestNote_StringFromString(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			str := tt.note.String()
 
-			var deserialized Note
+			var deserialized credit.Note
 			err := deserialized.FromString(str)
-			if err != nil {
-				t.Errorf("Note.FromString() error = %v", err)
-				return
-			}
-
-			if deserialized.Details.ID != tt.note.Details.ID || deserialized.Details.Value != tt.note.Details.Value {
-				t.Errorf("Deserialized NoteDetails do not match original. Got %+v, want %+v", deserialized.Details, tt.note.Details)
-			}
-
-			if !bytes.Equal(deserialized.Signature, tt.note.Signature) {
-				t.Errorf("Deserialized Signature does not match original. Got %v, want %v", deserialized.Signature, tt.note.Signature)
-			}
+			require.NoError(t, err)
+			require.Equal(t, tt.note.Details, deserialized.Details)
+			require.Equal(t, tt.note.Signature, deserialized.Signature)
 		})
 	}
 }
@@ -230,17 +199,17 @@ func TestNote_StringFromString(t *testing.T) {
 func TestNoteDetails_ToNote(t *testing.T) {
 	tests := []struct {
 		name      string
-		details   NoteDetails
+		details   credit.NoteDetails
 		signature []byte
 	}{
 		{
 			name:      "Valid note details and signature",
-			details:   NoteDetails{ID: 12345, Value: 100},
+			details:   credit.NoteDetails{ID: 12345, Value: 100},
 			signature: []byte("test signature"),
 		},
 		{
 			name:      "Valid note details with empty signature",
-			details:   NoteDetails{ID: 67890, Value: 200},
+			details:   credit.NoteDetails{ID: 67890, Value: 200},
 			signature: []byte{},
 		},
 	}
@@ -248,19 +217,9 @@ func TestNoteDetails_ToNote(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			note := tt.details.ToNote(tt.signature)
-
-			if note == nil {
-				t.Errorf("NoteDetails.ToNote() returned nil")
-				return
-			}
-
-			if note.Details.ID != tt.details.ID || note.Details.Value != tt.details.Value {
-				t.Errorf("Note Details do not match original. Got %+v, want %+v", note.Details, tt.details)
-			}
-
-			if !bytes.Equal(note.Signature, tt.signature) {
-				t.Errorf("Note Signature does not match input. Got %v, want %v", note.Signature, tt.signature)
-			}
+			require.NotNil(t, note)
+			require.Equal(t, tt.details, *note.Details)
+			require.Equal(t, tt.signature, note.Signature)
 		})
 	}
 }
@@ -268,37 +227,31 @@ func TestNoteDetails_ToNote(t *testing.T) {
 func TestNoteDetails_Hash(t *testing.T) {
 	tests := []struct {
 		name    string
-		details NoteDetails
+		details credit.NoteDetails
 	}{
 		{
 			name:    "Valid note details",
-			details: NoteDetails{ID: 12345, Value: 100},
+			details: credit.NoteDetails{ID: 12345, Value: 100},
 		},
 		{
 			name:    "Zero values",
-			details: NoteDetails{ID: 0, Value: 0},
+			details: credit.NoteDetails{ID: 0, Value: 0},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			hash := tt.details.Hash()
-			if len(hash) != 32 {
-				t.Errorf("NoteDetails.Hash() returned hash of length %d, want 32", len(hash))
-			}
+			require.Len(t, hash, 32)
 
 			// Verify that the hash is deterministic
 			hash2 := tt.details.Hash()
-			if !bytes.Equal(hash, hash2) {
-				t.Errorf("NoteDetails.Hash() is not deterministic")
-			}
+			require.Equal(t, hash, hash2)
 
 			// Verify that different details produce different hashes
-			differentDetails := NoteDetails{ID: tt.details.ID + 1, Value: tt.details.Value}
+			differentDetails := credit.NoteDetails{ID: tt.details.ID + 1, Value: tt.details.Value}
 			differentHash := differentDetails.Hash()
-			if bytes.Equal(hash, differentHash) {
-				t.Errorf("NoteDetails.Hash() produced same hash for different details")
-			}
+			require.NotEqual(t, hash, differentHash)
 		})
 	}
 }
