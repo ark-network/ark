@@ -531,7 +531,7 @@ func (a *restClient) ListVtxos(
 			Amount:    uint64(amount),
 			RoundTxid: v.RoundTxid,
 			ExpiresAt: expiresAt,
-			Pending:   v.Pending,
+			IsOOR:     v.IsOor,
 			RedeemTx:  v.RedeemTx,
 			SpentBy:   v.SpentBy,
 			Pubkey:    v.Pubkey,
