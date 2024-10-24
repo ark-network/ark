@@ -73,8 +73,9 @@ message GetRoundsResponse {
 
 message CreateNoteRequest {
   uint32 amount = 1;
+  uint32 quantity = 2;
 }
 
 message CreateNoteResponse {
-  string note = 1;
+  repeated string notes = 1;
 }

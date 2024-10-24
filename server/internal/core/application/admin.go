@@ -48,7 +48,7 @@ type AdminService interface {
 	GetRounds(ctx context.Context, after int64, before int64) ([]string, error)
 	GetWalletAddress(ctx context.Context) (string, error)
 	GetWalletStatus(ctx context.Context) (*WalletStatus, error)
-	CreateNote(ctx context.Context, amount uint32) (string, error)
+	CreateNotes(ctx context.Context, amount uint32, quantity int) ([]string, error)
 }
 
 type adminService struct {
@@ -182,18 +182,23 @@ func (a *adminService) GetWalletStatus(ctx context.Context) (*WalletStatus, erro
 	}, nil
 }
 
-func (a *adminService) CreateNote(ctx context.Context, value uint32) (string, error) {
-	noteDetails, err := credit.New(value)
-	if err != nil {
-		return "", err
+func (a *adminService) CreateNotes(ctx context.Context, value uint32, quantity int) ([]string, error) {
+	notes := make([]string, 0, quantity)
+	for i := 0; i < quantity; i++ {
+		noteDetails, err := credit.New(value)
+		if err != nil {
+			return nil, err
+		}
+
+		noteHash := noteDetails.Hash()
+
+		signature, err := a.walletSvc.SignMessage(ctx, noteHash)
+		if err != nil {
+			return nil, err
+		}
+		note := noteDetails.ToNote(signature)
+		notes = append(notes, note.String())
 	}
 
-	noteHash := noteDetails.Hash()
-
-	signature, err := a.walletSvc.SignMessage(ctx, noteHash)
-	if err != nil {
-		return "", err
-	}
-	note := noteDetails.ToNote(signature)
-	return note.String(), nil
+	return notes, nil
 }

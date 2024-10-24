@@ -168,14 +168,21 @@
         "amount": {
           "type": "integer",
           "format": "int64"
+        },
+        "quantity": {
+          "type": "integer",
+          "format": "int64"
         }
       }
     },
     "v1CreateNoteResponse": {
       "type": "object",
       "properties": {
-        "note": {
-          "type": "string"
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },

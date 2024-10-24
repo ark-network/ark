@@ -100,16 +100,21 @@ func (a *adminHandler) GetScheduledSweep(ctx context.Context, _ *arkv1.GetSchedu
 
 func (a *adminHandler) CreateNote(ctx context.Context, req *arkv1.CreateNoteRequest) (*arkv1.CreateNoteResponse, error) {
 	amount := req.GetAmount()
+	quantity := req.GetQuantity()
+	if quantity == 0 {
+		quantity = 1
+	}
+
 	if amount == 0 {
 		return nil, status.Error(codes.InvalidArgument, "amount must be greater than 0")
 	}
 
-	note, err := a.adminService.CreateNote(ctx, amount)
+	notes, err := a.adminService.CreateNotes(ctx, amount, int(quantity))
 	if err != nil {
 		return nil, err
 	}
 
-	return &arkv1.CreateNoteResponse{Note: note}, nil
+	return &arkv1.CreateNoteResponse{Notes: notes}, nil
 }
 
 // convert sats to string BTC
