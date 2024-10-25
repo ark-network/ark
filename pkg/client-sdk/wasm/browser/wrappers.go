@@ -255,7 +255,7 @@ func SendAsyncWrapper() js.Func {
 		}
 
 		withExpiryCoinselect := args[0].Bool()
-		receivers, err := parseReceivers(args[0])
+		receivers, err := parseReceivers(args[1])
 		if err != nil {
 			return nil, err
 		}
