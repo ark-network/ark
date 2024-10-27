@@ -26,8 +26,8 @@ var (
 		"badger": badgerdb.NewVtxoRepository,
 		"sqlite": sqlitedb.NewVtxoRepository,
 	}
-	noteStoreTypes = map[string]func(...interface{}) (domain.NoteRepository, error){
-		"badger": badgerdb.NewNoteRepository,
+	voucherStoreTypes = map[string]func(...interface{}) (domain.VoucherRepository, error){
+		"badger": badgerdb.NewVoucherRepository,
 	}
 )
 
@@ -36,20 +36,20 @@ const (
 )
 
 type ServiceConfig struct {
-	EventStoreType string
-	DataStoreType  string
-	NoteStoreType  string
+	EventStoreType   string
+	DataStoreType    string
+	VoucherStoreType string
 
-	EventStoreConfig []interface{}
-	DataStoreConfig  []interface{}
-	NoteStoreConfig  []interface{}
+	EventStoreConfig   []interface{}
+	DataStoreConfig    []interface{}
+	VoucherStoreConfig []interface{}
 }
 
 type service struct {
-	eventStore domain.RoundEventRepository
-	roundStore domain.RoundRepository
-	vtxoStore  domain.VtxoRepository
-	noteStore  domain.NoteRepository
+	eventStore   domain.RoundEventRepository
+	roundStore   domain.RoundRepository
+	vtxoStore    domain.VtxoRepository
+	voucherStore domain.VoucherRepository
 }
 
 func NewService(config ServiceConfig) (ports.RepoManager, error) {
@@ -65,15 +65,15 @@ func NewService(config ServiceConfig) (ports.RepoManager, error) {
 	if !ok {
 		return nil, fmt.Errorf("vtxo store type not supported")
 	}
-	noteStoreFactory, ok := noteStoreTypes[config.NoteStoreType]
+	voucherStoreFactory, ok := voucherStoreTypes[config.VoucherStoreType]
 	if !ok {
-		return nil, fmt.Errorf("note store type not supported")
+		return nil, fmt.Errorf("voucher store type not supported")
 	}
 
 	var eventStore domain.RoundEventRepository
 	var roundStore domain.RoundRepository
 	var vtxoStore domain.VtxoRepository
-	var noteStore domain.NoteRepository
+	var voucherStore domain.VoucherRepository
 	var err error
 
 	switch config.EventStoreType {
@@ -145,17 +145,17 @@ func NewService(config ServiceConfig) (ports.RepoManager, error) {
 		}
 	}
 
-	switch config.NoteStoreType {
+	switch config.VoucherStoreType {
 	case "badger":
-		noteStore, err = noteStoreFactory(config.NoteStoreConfig...)
+		voucherStore, err = voucherStoreFactory(config.VoucherStoreConfig...)
 		if err != nil {
-			return nil, fmt.Errorf("failed to open note store: %s", err)
+			return nil, fmt.Errorf("failed to open voucher store: %s", err)
 		}
 	default:
-		return nil, fmt.Errorf("unknown note store db type")
+		return nil, fmt.Errorf("unknown voucher store db type")
 	}
 
-	return &service{eventStore, roundStore, vtxoStore, noteStore}, nil
+	return &service{eventStore, roundStore, vtxoStore, voucherStore}, nil
 }
 
 func (s *service) RegisterEventsHandler(handler func(round *domain.Round)) {
@@ -174,13 +174,13 @@ func (s *service) Vtxos() domain.VtxoRepository {
 	return s.vtxoStore
 }
 
-func (s *service) Notes() domain.NoteRepository {
-	return s.noteStore
+func (s *service) Vouchers() domain.VoucherRepository {
+	return s.voucherStore
 }
 
 func (s *service) Close() {
 	s.eventStore.Close()
 	s.roundStore.Close()
 	s.vtxoStore.Close()
-	s.noteStore.Close()
+	s.voucherStore.Close()
 }

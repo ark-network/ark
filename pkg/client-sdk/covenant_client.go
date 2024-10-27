@@ -211,7 +211,7 @@ func (a *covenantArkClient) InitWithWallet(ctx context.Context, args InitWithWal
 	return nil
 }
 
-func (a *covenantArkClient) RedeemNotes(ctx context.Context, notes []string) (string, error) {
+func (a *covenantArkClient) RedeemVouchers(ctx context.Context, notes []string) (string, error) {
 	return "", nil
 }
 

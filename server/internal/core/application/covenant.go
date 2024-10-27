@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/credit"
 	"github.com/ark-network/ark/common/descriptor"
 	"github.com/ark-network/ark/common/tree"
+	"github.com/ark-network/ark/common/voucher"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -154,7 +154,7 @@ func (s *covenantService) GetBoardingAddress(ctx context.Context, userPubkey *se
 	return addr, vtxoScript.ToDescriptor(), nil
 }
 
-func (s *covenantService) SpendNotes(_ context.Context, _ []credit.Note) (string, error) {
+func (s *covenantService) SpendVouchers(_ context.Context, _ []voucher.Voucher) (string, error) {
 	return "", fmt.Errorf("unimplemented")
 }
 

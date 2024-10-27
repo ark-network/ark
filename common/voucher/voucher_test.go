@@ -1,23 +1,23 @@
-package credit_test
+package voucher_test
 
 import (
 	"encoding/binary"
 	"math"
 	"testing"
 
-	"github.com/ark-network/ark/common/credit"
+	"github.com/ark-network/ark/common/voucher"
 	"github.com/stretchr/testify/require"
 )
 
-func TestNoteDetails_Serialize(t *testing.T) {
+func TestDataSerialize(t *testing.T) {
 	tests := []struct {
-		name string
-		note credit.NoteDetails
-		want []byte
+		name    string
+		voucher voucher.Data
+		want    []byte
 	}{
 		{
-			name: "Valid note",
-			note: credit.NoteDetails{ID: 12345678901234567890, Value: 100},
+			name:    "Valid voucher",
+			voucher: voucher.Data{ID: 12345678901234567890, Value: 100},
 			want: func() []byte {
 				buf := make([]byte, 12)
 				binary.BigEndian.PutUint64(buf[:8], 12345678901234567890)
@@ -26,25 +26,25 @@ func TestNoteDetails_Serialize(t *testing.T) {
 			}(),
 		},
 		{
-			name: "Zero values",
-			note: credit.NoteDetails{ID: 0, Value: 0},
-			want: make([]byte, 12),
+			name:    "Zero values",
+			voucher: voucher.Data{ID: 0, Value: 0},
+			want:    make([]byte, 12),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := tt.note.Serialize()
+			got := tt.voucher.Serialize()
 			require.Equal(t, tt.want, got)
 		})
 	}
 }
 
-func TestNoteDetails_Deserialize(t *testing.T) {
+func TestDataDeserialize(t *testing.T) {
 	tests := []struct {
 		name    string
 		data    []byte
-		want    credit.NoteDetails
+		want    voucher.Data
 		wantErr bool
 	}{
 		{
@@ -55,26 +55,26 @@ func TestNoteDetails_Deserialize(t *testing.T) {
 				binary.BigEndian.PutUint32(buf[8:], 100)
 				return buf
 			}(),
-			want:    credit.NoteDetails{ID: 12345678901234567890, Value: 100},
+			want:    voucher.Data{ID: 12345678901234567890, Value: 100},
 			wantErr: false,
 		},
 		{
 			name:    "Zero values",
 			data:    make([]byte, 12),
-			want:    credit.NoteDetails{ID: 0, Value: 0},
+			want:    voucher.Data{ID: 0, Value: 0},
 			wantErr: false,
 		},
 		{
 			name:    "Invalid data length",
 			data:    []byte{1, 2, 3},
-			want:    credit.NoteDetails{},
+			want:    voucher.Data{},
 			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var got credit.NoteDetails
+			var got voucher.Data
 			err := got.Deserialize(tt.data)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -86,7 +86,7 @@ func TestNoteDetails_Deserialize(t *testing.T) {
 	}
 }
 
-func TestNewNoteDetails(t *testing.T) {
+func TestNew(t *testing.T) {
 	tests := []struct {
 		name    string
 		value   uint32
@@ -111,7 +111,7 @@ func TestNewNoteDetails(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := credit.New(tt.value)
+			got, err := voucher.New(tt.value)
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
@@ -127,30 +127,30 @@ func TestNewNoteDetails(t *testing.T) {
 	t.Run("Unique IDs", func(t *testing.T) {
 		idSet := make(map[uint64]bool)
 		for i := 0; i < 1_000_000; i++ {
-			note, err := credit.New(100)
+			data, err := voucher.New(100)
 			require.NoError(t, err)
-			require.False(t, idSet[note.ID], "Generated duplicate ID: %v", note.ID)
-			idSet[note.ID] = true
+			require.False(t, idSet[data.ID], "Generated duplicate ID: %v", data.ID)
+			idSet[data.ID] = true
 		}
 	})
 }
 
-func TestNote_SerializeDeserialize(t *testing.T) {
+func TestVoucherRoundtrip(t *testing.T) {
 	tests := []struct {
-		name string
-		note credit.Note
+		name    string
+		voucher voucher.Voucher
 	}{
 		{
-			name: "Valid note",
-			note: credit.Note{
-				Details:   &credit.NoteDetails{ID: 12345678901234567890, Value: 100},
+			name: "Valid voucher",
+			voucher: voucher.Voucher{
+				Data:      voucher.Data{ID: 12345678901234567890, Value: 100},
 				Signature: []byte("test signature"),
 			},
 		},
 		{
-			name: "Note with empty signature",
-			note: credit.Note{
-				Details:   &credit.NoteDetails{ID: 67899, Value: 200},
+			name: "Voucher with empty signature",
+			voucher: voucher.Voucher{
+				Data:      voucher.Data{ID: 67899, Value: 200},
 				Signature: []byte{},
 			},
 		},
@@ -158,28 +158,28 @@ func TestNote_SerializeDeserialize(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			serialized := tt.note.Serialize()
+			serialized := tt.voucher.Serialize()
 
-			var deserialized credit.Note
+			var deserialized voucher.Voucher
 			err := deserialized.Deserialize(serialized)
 			require.NoError(t, err)
-			require.Equal(t, tt.note.Details.ID, deserialized.Details.ID)
-			require.Equal(t, tt.note.Details.Value, deserialized.Details.Value)
-			require.Equal(t, tt.note.Signature, deserialized.Signature)
+			require.Equal(t, tt.voucher.Data.ID, deserialized.Data.ID)
+			require.Equal(t, tt.voucher.Data.Value, deserialized.Data.Value)
+			require.Equal(t, tt.voucher.Signature, deserialized.Signature)
 		})
 	}
 }
 
-func TestNote_StringFromString(t *testing.T) {
+func TestNewFromString(t *testing.T) {
 	tests := []struct {
 		name      string
-		note      credit.Note
+		voucher   voucher.Voucher
 		wantError bool
 	}{
 		{
-			name: "Valid note",
-			note: credit.Note{
-				Details:   &credit.NoteDetails{ID: 12345678901234567890, Value: 100},
+			name: "Valid voucher",
+			voucher: voucher.Voucher{
+				Data:      voucher.Data{ID: 12345678901234567890, Value: 100},
 				Signature: []byte("test signature"),
 			},
 			wantError: false,
@@ -188,71 +188,71 @@ func TestNote_StringFromString(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			str := tt.note.String()
+			str := tt.voucher.String()
 
-			deserialized, err := credit.NewFromString(str)
+			deserialized, err := voucher.NewFromString(str)
 			require.NoError(t, err)
-			require.Equal(t, tt.note.Details, deserialized.Details)
-			require.Equal(t, tt.note.Signature, deserialized.Signature)
+			require.Equal(t, tt.voucher.Data, deserialized.Data)
+			require.Equal(t, tt.voucher.Signature, deserialized.Signature)
 		})
 	}
 }
 
-func TestNoteDetails_ToNote(t *testing.T) {
+func TestDataToVoucher(t *testing.T) {
 	tests := []struct {
 		name      string
-		details   credit.NoteDetails
+		data      voucher.Data
 		signature []byte
 	}{
 		{
-			name:      "Valid note details and signature",
-			details:   credit.NoteDetails{ID: 12345678901234567890, Value: 100},
+			name:      "Valid voucher data and signature",
+			data:      voucher.Data{ID: 12345678901234567890, Value: 100},
 			signature: []byte("test signature"),
 		},
 		{
-			name:      "Valid note details with empty signature",
-			details:   credit.NoteDetails{ID: 65992, Value: 200},
+			name:      "Valid voucher data with empty signature",
+			data:      voucher.Data{ID: 65992, Value: 200},
 			signature: []byte{},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			note := tt.details.ToNote(tt.signature)
-			require.NotNil(t, note)
-			require.Equal(t, tt.details, *note.Details)
-			require.Equal(t, tt.signature, note.Signature)
+			voucher := tt.data.ToVoucher(tt.signature)
+			require.NotNil(t, voucher)
+			require.Equal(t, tt.data, voucher.Data)
+			require.Equal(t, tt.signature, voucher.Signature)
 		})
 	}
 }
 
-func TestNoteDetails_Hash(t *testing.T) {
+func TestDataHash(t *testing.T) {
 	tests := []struct {
-		name    string
-		details credit.NoteDetails
+		name string
+		data voucher.Data
 	}{
 		{
-			name:    "Valid note details",
-			details: credit.NoteDetails{ID: 12345678901234567890, Value: 100},
+			name: "Valid voucher data",
+			data: voucher.Data{ID: 12345678901234567890, Value: 100},
 		},
 		{
-			name:    "Zero values",
-			details: credit.NoteDetails{ID: 0, Value: 0},
+			name: "Zero values",
+			data: voucher.Data{ID: 0, Value: 0},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hash := tt.details.Hash()
+			hash := tt.data.Hash()
 			require.Len(t, hash, 32)
 
 			// Verify that the hash is deterministic
-			hash2 := tt.details.Hash()
+			hash2 := tt.data.Hash()
 			require.Equal(t, hash, hash2)
 
 			// Verify that different details produce different hashes
-			differentDetails := credit.NoteDetails{ID: tt.details.ID + 1, Value: tt.details.Value}
-			differentHash := differentDetails.Hash()
+			differentData := voucher.Data{ID: tt.data.ID + 1, Value: tt.data.Value}
+			differentHash := differentData.Hash()
 			require.NotEqual(t, hash, differentHash)
 		})
 	}

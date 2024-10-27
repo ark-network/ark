@@ -100,11 +100,11 @@ func (a *grpcClient) RegisterInputsForNextRound(
 	return resp.GetId(), nil
 }
 
-func (a *grpcClient) RegisterNotesForNextRound(
-	ctx context.Context, notes []string, ephemeralKey string,
+func (a *grpcClient) RegisterVouchersForNextRound(
+	ctx context.Context, vouchers []string, ephemeralKey string,
 ) (string, error) {
 	req := &arkv1.RegisterInputsForNextRoundRequest{
-		Notes: notes,
+		Vouchers: vouchers,
 	}
 	if len(ephemeralKey) > 0 {
 		req.EphemeralPubkey = &ephemeralKey

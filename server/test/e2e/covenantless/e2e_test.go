@@ -363,8 +363,8 @@ func TestAliceSeveralPaymentsToBob(t *testing.T) {
 
 }
 
-func TestRedeemNotes(t *testing.T) {
-	note := generateNote(t, 10_000)
+func TestRedeemVouchers(t *testing.T) {
+	voucher := generateVoucher(t, 10_000)
 
 	balanceBeforeStr, err := runClarkCommand("balance")
 	require.NoError(t, err)
@@ -372,7 +372,7 @@ func TestRedeemNotes(t *testing.T) {
 	var balanceBefore utils.ArkBalance
 	require.NoError(t, json.Unmarshal([]byte(balanceBeforeStr), &balanceBefore))
 
-	_, err = runClarkCommand("redeem-notes", "--notes", note)
+	_, err = runClarkCommand("redeem-vouchers", "--vouchers", voucher)
 	require.NoError(t, err)
 
 	time.Sleep(2 * time.Second)
@@ -385,7 +385,7 @@ func TestRedeemNotes(t *testing.T) {
 
 	require.Greater(t, balanceAfter.Offchain.Total, balanceBefore.Offchain.Total)
 
-	_, err = runClarkCommand("redeem-notes", "--notes", note)
+	_, err = runClarkCommand("redeem-vouchers", "--vouchers", voucher)
 	require.Error(t, err)
 }
 
@@ -559,29 +559,29 @@ func setupArkSDK(t *testing.T) (arksdk.ArkClient, client.ASPClient) {
 	return client, grpcClient
 }
 
-func generateNote(t *testing.T, amount uint32) string {
+func generateVoucher(t *testing.T, amount uint32) string {
 	adminHttpClient := &http.Client{
 		Timeout: 15 * time.Second,
 	}
 
 	reqBody := bytes.NewReader([]byte(fmt.Sprintf(`{"amount": "%d"}`, amount)))
-	req, err := http.NewRequest("POST", "http://localhost:7070/v1/admin/note", reqBody)
+	req, err := http.NewRequest("POST", "http://localhost:7070/v1/admin/voucher", reqBody)
 	if err != nil {
-		t.Fatalf("failed to prepare note request: %s", err)
+		t.Fatalf("failed to prepare voucher request: %s", err)
 	}
 	req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := adminHttpClient.Do(req)
 	if err != nil {
-		t.Fatalf("failed to create note: %s", err)
+		t.Fatalf("failed to create voucher: %s", err)
 	}
 
-	var noteResp struct {
-		Note string `json:"note"`
+	var voucherResp struct {
+		Voucher string `json:"voucher"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&noteResp); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&voucherResp); err != nil {
 		t.Fatalf("failed to parse response: %s", err)
 	}
-	return noteResp.Note
+	return voucherResp.Voucher
 }

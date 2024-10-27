@@ -21,9 +21,9 @@ service AdminService {
       body: "*"
     };
   } 
-  rpc CreateNote(CreateNoteRequest) returns (CreateNoteResponse) {
+  rpc CreateVoucher(CreateVoucherRequest) returns (CreateVoucherResponse) {
     option (google.api.http) = {
-      post: "/v1/admin/note"
+      post: "/v1/admin/voucher"
       body: "*"
     };
   }
@@ -71,11 +71,11 @@ message GetRoundsResponse {
   repeated string rounds = 1;
 }
 
-message CreateNoteRequest {
+message CreateVoucherRequest {
   uint32 amount = 1;
   uint32 quantity = 2;
 }
 
-message CreateNoteResponse {
-  repeated string notes = 1;
+message CreateVoucherResponse {
+  repeated string vouchers = 1;
 }

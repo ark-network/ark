@@ -128,10 +128,10 @@ var (
 		Name:  "force",
 		Usage: "force redemption without collaboration",
 	}
-	notesFlag = &cli.StringSliceFlag{
-		Name:    "notes",
-		Aliases: []string{"n"},
-		Usage:   "notes to redeem",
+	vouchersFlag = &cli.StringSliceFlag{
+		Name:    "vouchers",
+		Aliases: []string{"v"},
+		Usage:   "vouchers to redeem",
 	}
 )
 
@@ -199,11 +199,11 @@ var (
 		},
 	}
 	notesCommand = cli.Command{
-		Name:  "redeem-notes",
-		Usage: "Redeem offchain notes",
-		Flags: []cli.Flag{notesFlag},
+		Name:  "redeem-vouchers",
+		Usage: "Redeem offchain vouchers",
+		Flags: []cli.Flag{vouchersFlag},
 		Action: func(ctx *cli.Context) error {
-			return redeemNotes(ctx)
+			return redeemVouchers(ctx)
 		},
 	}
 )
@@ -387,9 +387,9 @@ func redeem(ctx *cli.Context) error {
 	})
 }
 
-func redeemNotes(ctx *cli.Context) error {
-	notes := ctx.StringSlice(notesFlag.Name)
-	txID, err := arkSdkClient.RedeemNotes(ctx.Context, notes)
+func redeemVouchers(ctx *cli.Context) error {
+	vouchers := ctx.StringSlice(vouchersFlag.Name)
+	txID, err := arkSdkClient.RedeemVouchers(ctx.Context, vouchers)
 	if err != nil {
 		return err
 	}

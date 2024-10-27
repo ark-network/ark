@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ark-network/ark/common/credit"
 	"github.com/ark-network/ark/common/tree"
+	"github.com/ark-network/ark/common/voucher"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	log "github.com/sirupsen/logrus"
@@ -326,23 +326,23 @@ func (s *sweeper) createNotesForUnspentVtxos(ctx context.Context, vtxosKeys []do
 			continue
 		}
 
-		// if vtxo is not redeemed or spent and is swept, create a note for it
-		noteDetails, err := credit.New(uint32(vtxo.Amount))
+		// if vtxo is not redeemed or spent and is swept, create a voucher for it
+		voucherData, err := voucher.New(uint32(vtxo.Amount))
 		if err != nil {
-			log.Error(fmt.Errorf("error while creating note details: %w", err))
+			log.Error(fmt.Errorf("error while creating voucher data: %w", err))
 			return
 		}
 
-		signature, err := s.wallet.SignMessage(ctx, noteDetails.Hash())
+		signature, err := s.wallet.SignMessage(ctx, voucherData.Hash())
 		if err != nil {
-			log.Error(fmt.Errorf("error while signing note: %w", err))
+			log.Error(fmt.Errorf("error while signing voucher data: %w", err))
 			return
 		}
 
-		note := noteDetails.ToNote(signature)
-		log.Debugf("created note: %s", note)
+		voucher := voucherData.ToVoucher(signature)
+		log.Debugf("voucher created: %s", voucher)
 
-		// TODO send the note via nostr ??
+		// TODO send the voucher via nostr ??
 	}
 }
 

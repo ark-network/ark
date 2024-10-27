@@ -3,7 +3,7 @@ package application
 import (
 	"context"
 
-	"github.com/ark-network/ark/common/credit"
+	"github.com/ark-network/ark/common/voucher"
 	"github.com/ark-network/ark/server/internal/core/ports"
 )
 
@@ -48,7 +48,7 @@ type AdminService interface {
 	GetRounds(ctx context.Context, after int64, before int64) ([]string, error)
 	GetWalletAddress(ctx context.Context) (string, error)
 	GetWalletStatus(ctx context.Context) (*WalletStatus, error)
-	CreateNotes(ctx context.Context, amount uint32, quantity int) ([]string, error)
+	CreateVouchers(ctx context.Context, amount uint32, quantity int) ([]string, error)
 }
 
 type adminService struct {
@@ -182,23 +182,23 @@ func (a *adminService) GetWalletStatus(ctx context.Context) (*WalletStatus, erro
 	}, nil
 }
 
-func (a *adminService) CreateNotes(ctx context.Context, value uint32, quantity int) ([]string, error) {
-	notes := make([]string, 0, quantity)
+func (a *adminService) CreateVouchers(ctx context.Context, value uint32, quantity int) ([]string, error) {
+	vouchers := make([]string, 0, quantity)
 	for i := 0; i < quantity; i++ {
-		noteDetails, err := credit.New(value)
+		data, err := voucher.New(value)
 		if err != nil {
 			return nil, err
 		}
 
-		noteHash := noteDetails.Hash()
+		voucherHash := data.Hash()
 
-		signature, err := a.walletSvc.SignMessage(ctx, noteHash)
+		signature, err := a.walletSvc.SignMessage(ctx, voucherHash)
 		if err != nil {
 			return nil, err
 		}
-		note := noteDetails.ToNote(signature)
-		notes = append(notes, note.String())
+		voucher := data.ToVoucher(signature)
+		vouchers = append(vouchers, voucher.String())
 	}
 
-	return notes, nil
+	return vouchers, nil
 }

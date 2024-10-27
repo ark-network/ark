@@ -84,23 +84,23 @@ func TestService(t *testing.T) {
 		{
 			name: "repo_manager_with_badger_stores",
 			config: db.ServiceConfig{
-				EventStoreType:   "badger",
-				DataStoreType:    "badger",
-				NoteStoreType:    "badger",
-				EventStoreConfig: []interface{}{"", nil},
-				DataStoreConfig:  []interface{}{"", nil},
-				NoteStoreConfig:  []interface{}{"", nil},
+				EventStoreType:     "badger",
+				DataStoreType:      "badger",
+				VoucherStoreType:   "badger",
+				EventStoreConfig:   []interface{}{"", nil},
+				DataStoreConfig:    []interface{}{"", nil},
+				VoucherStoreConfig: []interface{}{"", nil},
 			},
 		},
 		{
 			name: "repo_manager_with_sqlite_stores",
 			config: db.ServiceConfig{
-				EventStoreType:   "badger",
-				DataStoreType:    "sqlite",
-				NoteStoreType:    "badger",
-				EventStoreConfig: []interface{}{"", nil},
-				DataStoreConfig:  []interface{}{dbDir, "file://sqlite/migration"},
-				NoteStoreConfig:  []interface{}{"", nil},
+				EventStoreType:     "badger",
+				DataStoreType:      "sqlite",
+				VoucherStoreType:   "badger",
+				EventStoreConfig:   []interface{}{"", nil},
+				DataStoreConfig:    []interface{}{dbDir, "file://sqlite/migration"},
+				VoucherStoreConfig: []interface{}{"", nil},
 			},
 		},
 	}
@@ -434,28 +434,28 @@ func testNoteRepository(t *testing.T, svc ports.RepoManager) {
 	t.Run("test_note_repository", func(t *testing.T) {
 		ctx := context.Background()
 
-		err := svc.Notes().Add(ctx, 1)
+		err := svc.Vouchers().Add(ctx, 1)
 		require.NoError(t, err)
 
-		err = svc.Notes().Add(ctx, 1099200322)
+		err = svc.Vouchers().Add(ctx, 1099200322)
 		require.NoError(t, err)
 
-		contains, err := svc.Notes().Contains(ctx, 1)
-		require.NoError(t, err)
-		require.True(t, contains)
-
-		contains, err = svc.Notes().Contains(ctx, 1099200322)
+		contains, err := svc.Vouchers().Contains(ctx, 1)
 		require.NoError(t, err)
 		require.True(t, contains)
 
-		contains, err = svc.Notes().Contains(ctx, 456)
+		contains, err = svc.Vouchers().Contains(ctx, 1099200322)
+		require.NoError(t, err)
+		require.True(t, contains)
+
+		contains, err = svc.Vouchers().Contains(ctx, 456)
 		require.NoError(t, err)
 		require.False(t, contains)
 
-		err = svc.Notes().Add(ctx, 1)
+		err = svc.Vouchers().Add(ctx, 1)
 		require.Error(t, err)
 
-		svc.Notes().Close()
+		svc.Vouchers().Close()
 	})
 }
 

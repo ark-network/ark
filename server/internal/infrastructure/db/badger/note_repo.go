@@ -11,18 +11,18 @@ import (
 	"github.com/timshannon/badgerhold/v4"
 )
 
-const noteStoreDir = "notes"
+const voucherStoreDir = "vouchers"
 
-type noteRepository struct {
+type voucherRepository struct {
 	store *badgerhold.Store
 	lock  *sync.Mutex
 }
 
-type note struct {
+type voucher struct {
 	ID uint64
 }
 
-func NewNoteRepository(config ...interface{}) (domain.NoteRepository, error) {
+func NewVoucherRepository(config ...interface{}) (domain.VoucherRepository, error) {
 	if len(config) != 2 {
 		return nil, fmt.Errorf("invalid config")
 	}
@@ -41,34 +41,34 @@ func NewNoteRepository(config ...interface{}) (domain.NoteRepository, error) {
 
 	var dir string
 	if len(baseDir) > 0 {
-		dir = filepath.Join(baseDir, noteStoreDir)
+		dir = filepath.Join(baseDir, voucherStoreDir)
 	}
 	store, err := createDB(dir, logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open note store: %s", err)
+		return nil, fmt.Errorf("failed to open voucher store: %s", err)
 	}
 	lock := &sync.Mutex{}
-	repo := &noteRepository{store, lock}
+	repo := &voucherRepository{store, lock}
 	return repo, nil
 }
 
-func (n *noteRepository) Close() {
+func (n *voucherRepository) Close() {
 	n.store.Close()
 }
 
-func (n *noteRepository) Add(ctx context.Context, id uint64) error {
+func (n *voucherRepository) Add(ctx context.Context, id uint64) error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	return n.store.Insert(id, note{ID: id})
+	return n.store.Insert(id, voucher{ID: id})
 }
 
-func (n *noteRepository) Contains(ctx context.Context, id uint64) (bool, error) {
+func (n *voucherRepository) Contains(ctx context.Context, id uint64) (bool, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	var note note
-	err := n.store.Get(id, &note)
+	var v voucher
+	err := n.store.Get(id, &v)
 	if err != nil {
 		if err == badgerhold.ErrNotFound {
 			return false, nil

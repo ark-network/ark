@@ -11,9 +11,9 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
-	"github.com/ark-network/ark/common/credit"
 	"github.com/ark-network/ark/common/descriptor"
 	"github.com/ark-network/ark/common/tree"
+	"github.com/ark-network/ark/common/voucher"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -409,30 +409,30 @@ func (s *covenantlessService) GetBoardingAddress(
 	return addr.EncodeAddress(), vtxoScript.ToDescriptor(), nil
 }
 
-func (s *covenantlessService) SpendNotes(ctx context.Context, notes []credit.Note) (string, error) {
-	noteRepo := s.repoManager.Notes()
+func (s *covenantlessService) SpendVouchers(ctx context.Context, vouchers []voucher.Voucher) (string, error) {
+	vouchersRepo := s.repoManager.Vouchers()
 
-	for _, note := range notes {
-		// verify the signature of the note
-		hash := note.Details.Hash()
+	for _, voucher := range vouchers {
+		// verify the voucher signature
+		hash := voucher.Hash()
 
-		valid, err := s.wallet.VerifyMessageSignature(ctx, hash, note.Signature)
+		valid, err := s.wallet.VerifyMessageSignature(ctx, hash, voucher.Signature)
 		if err != nil {
-			return "", fmt.Errorf("failed to verify note signature: %s", err)
+			return "", fmt.Errorf("failed to verify voucher signature: %s", err)
 		}
 
 		if !valid {
-			return "", fmt.Errorf("invalid note signature %s", note)
+			return "", fmt.Errorf("invalid voucher signature %s", voucher)
 		}
 
-		// verify that the note is spendable
-		spent, err := noteRepo.Contains(ctx, note.Details.ID)
+		// verify that the voucher is spendable
+		spent, err := vouchersRepo.Contains(ctx, voucher.ID)
 		if err != nil {
-			return "", fmt.Errorf("failed to check if note is spent: %s", err)
+			return "", fmt.Errorf("failed to check if voucher is spent: %s", err)
 		}
 
 		if spent {
-			return "", fmt.Errorf("note already spent: %s", note)
+			return "", fmt.Errorf("voucher already spent: %s", voucher)
 		}
 	}
 
@@ -441,7 +441,7 @@ func (s *covenantlessService) SpendNotes(ctx context.Context, notes []credit.Not
 		return "", fmt.Errorf("failed to create payment: %s", err)
 	}
 
-	if err := s.paymentRequests.pushWithNotes(*payment, notes); err != nil {
+	if err := s.paymentRequests.pushWithVouchers(*payment, vouchers); err != nil {
 		return "", fmt.Errorf("failed to push payment: %s", err)
 	}
 
@@ -793,7 +793,7 @@ func (s *covenantlessService) startFinalization() {
 	roundRemainingDuration := time.Duration(s.roundInterval/2-1) * time.Second
 	thirdOfRemainingDuration := time.Duration(roundRemainingDuration / 3)
 
-	var notes []credit.Note
+	var vouchers []voucher.Voucher
 	var roundAborted bool
 	defer func() {
 		delete(s.treeSigningSessions, round.Id)
@@ -811,7 +811,7 @@ func (s *covenantlessService) startFinalization() {
 			return
 		}
 		time.Sleep(thirdOfRemainingDuration)
-		s.finalizeRound(notes)
+		s.finalizeRound(vouchers)
 	}()
 
 	if round.IsFailed() {
@@ -830,7 +830,7 @@ func (s *covenantlessService) startFinalization() {
 	if num > paymentsThreshold {
 		num = paymentsThreshold
 	}
-	payments, boardingInputs, descriptors, cosigners, paymentsNotes := s.paymentRequests.pop(num)
+	payments, boardingInputs, descriptors, cosigners, paymentsVouchers := s.paymentRequests.pop(num)
 	if len(payments) > len(cosigners) {
 		err := fmt.Errorf("missing ephemeral key for payments")
 		round.Fail(fmt.Errorf("round aborted: %s", err))
@@ -838,7 +838,7 @@ func (s *covenantlessService) startFinalization() {
 		return
 	}
 
-	notes = paymentsNotes
+	vouchers = paymentsVouchers
 
 	if _, err := round.RegisterPayments(payments); err != nil {
 		round.Fail(fmt.Errorf("failed to register payments: %s", err))
@@ -1084,7 +1084,7 @@ func (s *covenantlessService) propagateRoundSigningNoncesGeneratedEvent(combined
 	s.eventsCh <- ev
 }
 
-func (s *covenantlessService) finalizeRound(notes []credit.Note) {
+func (s *covenantlessService) finalizeRound(vouchers []voucher.Voucher) {
 	defer s.startRound()
 
 	ctx := context.Background()
@@ -1169,9 +1169,9 @@ func (s *covenantlessService) finalizeRound(notes []credit.Note) {
 	}
 
 	// mark the notes as spent
-	for _, note := range notes {
-		if err := s.repoManager.Notes().Add(ctx, note.Details.ID); err != nil {
-			log.WithError(err).Warn("failed to mark note as spent")
+	for _, voucher := range vouchers {
+		if err := s.repoManager.Vouchers().Add(ctx, voucher.ID); err != nil {
+			log.WithError(err).Warn("failed to mark voucher as spent")
 		}
 	}
 

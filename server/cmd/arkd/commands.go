@@ -34,7 +34,7 @@ var (
 	}
 	amountFlag = &cli.UintFlag{
 		Name:     "amount",
-		Usage:    "amount of the note in satoshis",
+		Usage:    "amount of the voucher in satoshis",
 		Required: true,
 	}
 )
@@ -51,7 +51,7 @@ var (
 			walletUnlockCmd,
 			walletAddressCmd,
 			walletBalanceCmd,
-			createNoteCmd,
+			createVoucherCmd,
 		),
 	}
 	walletStatusCmd = &cli.Command{
@@ -81,10 +81,10 @@ var (
 		Usage:  "Get the wallet balance",
 		Action: walletBalanceAction,
 	}
-	createNoteCmd = &cli.Command{
-		Name:   "note",
-		Usage:  "Create a credit note",
-		Action: createNoteAction,
+	createVoucherCmd = &cli.Command{
+		Name:   "voucher",
+		Usage:  "Create a credit voucher",
+		Action: createVoucherAction,
 		Flags:  []cli.Flag{amountFlag},
 	}
 )
@@ -220,7 +220,7 @@ func walletBalanceAction(ctx *cli.Context) error {
 	return nil
 }
 
-func createNoteAction(ctx *cli.Context) error {
+func createVoucherAction(ctx *cli.Context) error {
 	baseURL := ctx.String("url")
 	amount := ctx.Uint("amount")
 
@@ -238,15 +238,15 @@ func createNoteAction(ctx *cli.Context) error {
 		tlsCertPath = ""
 	}
 
-	url := fmt.Sprintf("%s/v1/admin/note", baseURL)
+	url := fmt.Sprintf("%s/v1/admin/voucher", baseURL)
 	body := fmt.Sprintf(`{"amount": %d}`, amount)
 
-	note, err := post[string](url, body, "note", macaroon, tlsCertPath)
+	voucher, err := post[string](url, body, "voucher", macaroon, tlsCertPath)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println(note)
+	fmt.Println(voucher)
 	return nil
 }
 
