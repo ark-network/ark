@@ -8,6 +8,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -513,7 +514,7 @@ func prevOutFetcherFactory(
 	func(partial *psbt.Packet) (txscript.PrevOutputFetcher, error),
 	error,
 ) {
-	pkscript, err := taprootOutputScript(finalAggregatedKey)
+	pkscript, err := common.P2TRScript(finalAggregatedKey)
 	if err != nil {
 		return nil, err
 	}

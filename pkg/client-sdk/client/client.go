@@ -2,10 +2,14 @@ package client
 
 import (
 	"context"
+	"encoding/hex"
 	"time"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
@@ -41,7 +45,7 @@ type ASPClient interface {
 	) (<-chan RoundEventChannel, func(), error)
 	Ping(ctx context.Context, paymentID string) (RoundEvent, error)
 	CreatePayment(
-		ctx context.Context, inputs []Input, outputs []Output,
+		ctx context.Context, inputs []AsyncPaymentInput, outputs []Output,
 	) (string, error)
 	CompletePayment(
 		ctx context.Context, signedRedeemTx string,
@@ -74,26 +78,59 @@ type Outpoint struct {
 	VOut uint32
 }
 
+func (o Outpoint) Equals(other Outpoint) bool {
+	return o.Txid == other.Txid && o.VOut == other.VOut
+}
+
 type Input struct {
 	Outpoint
 	Descriptor string
 }
 
+type AsyncPaymentInput struct {
+	Input
+	ForfeitLeafHash chainhash.Hash
+}
+
 type Vtxo struct {
 	Outpoint
+	Pubkey    string
+	Amount    uint64
+	RoundTxid string
+	ExpiresAt *time.Time
+	RedeemTx  string
+	IsOOR     bool
+	SpentBy   string
+}
+
+func (v Vtxo) Address(asp *secp256k1.PublicKey, net common.Network) (string, error) {
+	pubkeyBytes, err := hex.DecodeString(v.Pubkey)
+	if err != nil {
+		return "", err
+	}
+
+	pubkey, err := schnorr.ParsePubKey(pubkeyBytes)
+	if err != nil {
+		return "", err
+	}
+
+	a := &common.Address{
+		HRP:        net.Addr,
+		Asp:        asp,
+		VtxoTapKey: pubkey,
+	}
+
+	return a.Encode()
+}
+
+type DescriptorVtxo struct {
+	Vtxo
 	Descriptor string
-	Amount     uint64
-	RoundTxid  string
-	ExpiresAt  *time.Time
-	RedeemTx   string
-	Pending    bool
-	SpentBy    string
 }
 
 type Output struct {
-	Address    string // onchain output address
-	Descriptor string // offchain vtxo descriptor
-	Amount     uint64
+	Address string // onchain or offchain address
+	Amount  uint64
 }
 
 type RoundStage int

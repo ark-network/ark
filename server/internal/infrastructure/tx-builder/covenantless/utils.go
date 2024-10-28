@@ -1,47 +1,58 @@
 package txbuilder
 
 import (
-	"github.com/ark-network/ark/common/bitcointree"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-func getOnchainReceivers(
-	payments []domain.Payment,
-) []domain.Receiver {
-	receivers := make([]domain.Receiver, 0)
+func getOnchainOutputs(
+	payments []domain.Payment, network *chaincfg.Params,
+) ([]*wire.TxOut, error) {
+	outputs := make([]*wire.TxOut, 0)
 	for _, payment := range payments {
 		for _, receiver := range payment.Receivers {
 			if receiver.IsOnchain() {
-				receivers = append(receivers, receiver)
-			}
-		}
-	}
-	return receivers
-}
-
-func getOffchainReceivers(
-	payments []domain.Payment,
-) ([]bitcointree.Receiver, error) {
-	receivers := make([]bitcointree.Receiver, 0)
-	for _, payment := range payments {
-		for _, receiver := range payment.Receivers {
-			if !receiver.IsOnchain() {
-				vtxoScript, err := bitcointree.ParseVtxoScript(receiver.Descriptor)
+				receiverAddr, err := btcutil.DecodeAddress(receiver.OnchainAddress, network)
 				if err != nil {
 					return nil, err
 				}
 
-				receivers = append(receivers, bitcointree.Receiver{
-					Script: vtxoScript,
+				receiverScript, err := txscript.PayToAddrScript(receiverAddr)
+				if err != nil {
+					return nil, err
+				}
+
+				outputs = append(outputs, &wire.TxOut{
+					Value:    int64(receiver.Amount),
+					PkScript: receiverScript,
+				})
+			}
+		}
+	}
+	return outputs, nil
+}
+
+func getOutputVtxosLeaves(
+	payments []domain.Payment,
+) ([]tree.VtxoLeaf, error) {
+	leaves := make([]tree.VtxoLeaf, 0)
+	for _, payment := range payments {
+		for _, receiver := range payment.Receivers {
+			if !receiver.IsOnchain() {
+				leaves = append(leaves, tree.VtxoLeaf{
+					Pubkey: receiver.Pubkey,
 					Amount: receiver.Amount,
 				})
 			}
 		}
 	}
-	return receivers, nil
+	return leaves, nil
 }
 
 func countSpentVtxos(payments []domain.Payment) uint64 {

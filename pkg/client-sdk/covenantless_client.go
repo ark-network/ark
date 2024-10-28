@@ -15,7 +15,6 @@ import (
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
-	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/ark-network/ark/pkg/client-sdk/redemption"
 	"github.com/ark-network/ark/pkg/client-sdk/types"
@@ -223,11 +222,13 @@ func (a *covenantlessArkClient) listenForTransactions(ctx context.Context) {
 		return
 	}
 
-	desc, err := a.offchainAddressToDefaultVtxoDescriptor(offchainAddr)
+	addr, err := common.DecodeAddress(offchainAddr.Address)
 	if err != nil {
-		log.WithError(err).Error("Failed to get descriptor for new address")
+		log.WithError(err).Error("Failed to decode address")
 		return
 	}
+
+	addrPubkey := hex.EncodeToString(schnorr.SerializePubKey(addr.VtxoTapKey))
 
 	for {
 		select {
@@ -241,7 +242,7 @@ func (a *covenantlessArkClient) listenForTransactions(ctx context.Context) {
 				continue
 			}
 
-			pendingBoardingTxsMap, newPendingBoardingTxs, err := a.getBoardingPendingTransactions(ctx)
+			newPendingBoardingTxs, err := a.getBoardingPendingTransactions(ctx)
 			if err != nil {
 				log.WithError(err).Error("Failed to get pending transactions")
 				continue
@@ -253,7 +254,7 @@ func (a *covenantlessArkClient) listenForTransactions(ctx context.Context) {
 				continue
 			}
 
-			a.processTransactionEvent(desc, event, pendingBoardingTxsMap)
+			a.processTransactionEvent(addrPubkey, event)
 		case <-ctx.Done():
 			return
 		}
@@ -267,7 +268,7 @@ func (a *covenantlessArkClient) listenForBoardingUtxos(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			_, newPendingBoardingTxs, err := a.getBoardingPendingTransactions(ctx)
+			newPendingBoardingTxs, err := a.getBoardingPendingTransactions(ctx)
 			if err != nil {
 				log.WithError(err).Error("Failed to get pending transactions")
 				continue
@@ -286,58 +287,76 @@ func (a *covenantlessArkClient) listenForBoardingUtxos(ctx context.Context) {
 
 func (a *covenantlessArkClient) getBoardingPendingTransactions(
 	ctx context.Context,
-) (map[string]types.Transaction, []types.Transaction, error) {
+) ([]types.Transaction, error) {
 	oldTxs, err := a.store.TransactionStore().GetAllTransactions(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	pendingBoardingTxsMap := make(map[string]types.Transaction)
-	for _, tx := range oldTxs {
-		if tx.IsBoarding() {
-			if tx.IsPending {
-				pendingBoardingTxsMap[tx.BoardingTxid] = tx
-			}
-		}
-	}
-
-	boardingTxs, _, err := a.getBoardingTxs(ctx)
+	boardingUtxos, err := a.getClaimableBoardingUtxos(ctx, nil)
 	if err != nil {
-		return nil, nil, err
-	}
-	newPendingBoardingTxs := make([]types.Transaction, 0)
-	for _, tx := range boardingTxs {
-		if tx.IsBoarding() && tx.IsPending {
-			if _, ok := pendingBoardingTxsMap[tx.BoardingTxid]; !ok {
-				newPendingBoardingTxs = append(newPendingBoardingTxs, tx)
-				pendingBoardingTxsMap[tx.BoardingTxid] = tx
-			}
-		}
+		return nil, err
 	}
 
-	return pendingBoardingTxsMap, newPendingBoardingTxs, nil
+	newPendingBoardingTxs := make([]types.Transaction, 0)
+	for _, u := range boardingUtxos {
+		found := false
+		for _, tx := range oldTxs {
+			if tx.BoardingTxid == u.Txid {
+				found = true
+				break
+			}
+		}
+
+		if found {
+			continue
+		}
+
+		newPendingBoardingTxs = append(newPendingBoardingTxs, types.Transaction{
+			TransactionKey: types.TransactionKey{
+				BoardingTxid: u.Txid,
+			},
+			Amount:    u.Amount,
+			Type:      types.TxReceived,
+			CreatedAt: u.CreatedAt,
+		})
+	}
+
+	return newPendingBoardingTxs, nil
 }
 
 func (a *covenantlessArkClient) processTransactionEvent(
-	descriptor string,
+	pubkey string,
 	event client.TransactionEvent,
-	pendingBoardingTxsMap map[string]types.Transaction,
 ) {
 	if event.Round != nil {
-		boardingAmount := 0
-		boardingTxsToUpdate := make([]types.Transaction, 0)
-		for _, v := range event.Round.ClaimedBoardingUtxos {
-			boardingKey := fmt.Sprintf("%v-%v", v.Txid, v.VOut)
-			if tx, ok := pendingBoardingTxsMap[boardingKey]; ok {
-				boardingAmount += int(tx.Amount)
-				tx.IsPending = false
-				boardingTxsToUpdate = append(boardingTxsToUpdate, tx)
+		allTxs, err := a.store.TransactionStore().GetAllTransactions(context.Background())
+		if err != nil {
+			log.WithError(err).Error("Failed to get all transactions")
+			return
+		}
+		pendingBoardingTxs := make(map[string]types.Transaction)
+		for _, tx := range allTxs {
+			if tx.BoardingTxid != "" && !tx.Settled {
+				pendingBoardingTxs[tx.BoardingTxid] = tx
+			}
+		}
+		var ignoreNewTxs bool
+		settledBoardingTxs := make([]types.Transaction, 0, len(event.Round.ClaimedBoardingUtxos))
+		for _, u := range event.Round.ClaimedBoardingUtxos {
+			if tx, ok := pendingBoardingTxs[u.Txid]; ok {
+				ignoreNewTxs = true
+				tx.Settled = true
+				settledBoardingTxs = append(settledBoardingTxs, tx)
 			}
 		}
 
-		if err := a.store.TransactionStore().
-			UpdateTransactions(context.Background(), boardingTxsToUpdate); err != nil {
-			log.WithError(err).Error("Failed to update boarding transactions")
+		if len(settledBoardingTxs) > 0 {
+			if err := a.store.TransactionStore().
+				UpdateTransactions(context.Background(), settledBoardingTxs); err != nil {
+				log.WithError(err).Error("Failed to settle boarding transactions")
+				return
+			}
 		}
 
 		spentKeys := make([]types.VtxoKey, 0, len(event.Round.SpentVtxos))
@@ -372,7 +391,7 @@ func (a *covenantlessArkClient) processTransactionEvent(
 		vtxosToInsert := make([]types.Vtxo, 0)
 		txsToInsert := make([]types.Transaction, 0)
 		for _, v := range event.Round.SpendableVtxos {
-			if v.Descriptor == descriptor {
+			if v.Pubkey == pubkey {
 				vtxosToInsert = append(vtxosToInsert, types.Vtxo{
 					VtxoKey: types.VtxoKey{
 						Txid: v.Txid,
@@ -386,33 +405,34 @@ func (a *covenantlessArkClient) processTransactionEvent(
 					Spent:     false,
 				})
 
-				if boardingAmount == int(v.Amount) {
-					continue
+				if !ignoreNewTxs {
+					txsToInsert = append(txsToInsert, types.Transaction{
+						TransactionKey: types.TransactionKey{
+							RoundTxid: event.Round.Txid,
+						},
+						Amount:    v.Amount,
+						Type:      types.TxReceived,
+						CreatedAt: time.Now(), //TODO is this ok?
+					})
 				}
-
-				txsToInsert = append(txsToInsert, types.Transaction{
-					TransactionKey: types.TransactionKey{
-						RoundTxid: event.Round.Txid,
-					},
-					Amount:    v.Amount,
-					Type:      types.TxReceived,
-					CreatedAt: time.Now(), //TODO is this ok?
-				})
 			}
 		}
 
-		if err := a.store.VtxoStore().
-			AddVtxos(context.Background(), vtxosToInsert); err != nil {
-			log.WithError(err).Error("Failed to insert new vtxos")
-			return
+		if len(vtxosToInsert) > 0 {
+			if err := a.store.VtxoStore().
+				AddVtxos(context.Background(), vtxosToInsert); err != nil {
+				log.WithError(err).Error("Failed to insert new vtxos")
+				return
+			}
 		}
 
-		if err := a.store.TransactionStore().
-			AddTransactions(context.Background(), txsToInsert); err != nil {
-			log.WithError(err).Error("Failed to insert received transaction")
-			return
+		if len(txsToInsert) > 0 {
+			if err := a.store.TransactionStore().
+				AddTransactions(context.Background(), txsToInsert); err != nil {
+				log.WithError(err).Error("Failed to insert received transaction")
+				return
+			}
 		}
-
 	}
 
 	if event.Redeem != nil {
@@ -449,7 +469,7 @@ func (a *covenantlessArkClient) processTransactionEvent(
 
 			outputAmount := uint64(0)
 			for _, v := range event.Redeem.SpendableVtxos {
-				if v.Descriptor == descriptor {
+				if v.Pubkey == pubkey {
 					vtxosToInsert = append(vtxosToInsert, types.Vtxo{
 						VtxoKey: types.VtxoKey{
 							Txid: v.Txid,
@@ -472,7 +492,6 @@ func (a *covenantlessArkClient) processTransactionEvent(
 				},
 				Amount:    inputAmount - outputAmount,
 				Type:      types.TxSent,
-				IsPending: true,
 				CreatedAt: time.Now(), //TODO is this ok?
 			}
 
@@ -482,7 +501,7 @@ func (a *covenantlessArkClient) processTransactionEvent(
 			}
 		} else {
 			for _, v := range event.Redeem.SpendableVtxos {
-				if v.Descriptor == descriptor {
+				if v.Pubkey == pubkey {
 					vtxosToInsert = append(vtxosToInsert, types.Vtxo{
 						VtxoKey: types.VtxoKey{
 							Txid: v.Txid,
@@ -502,7 +521,6 @@ func (a *covenantlessArkClient) processTransactionEvent(
 						},
 						Amount:    v.Amount,
 						Type:      types.TxReceived,
-						IsPending: true,
 						CreatedAt: time.Now(), //TODO is this ok?
 					}
 					if err := a.store.TransactionStore().
@@ -521,73 +539,6 @@ func (a *covenantlessArkClient) processTransactionEvent(
 	}
 }
 
-func (a *covenantlessArkClient) ListVtxos(
-	ctx context.Context,
-) (spendableVtxos, spentVtxos []client.Vtxo, err error) {
-	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
-	if err != nil {
-		return
-	}
-
-	_, pubkey, _, err := common.DecodeAddress(offchainAddrs[0])
-	if err != nil {
-		return
-	}
-
-	myPubkey := schnorr.SerializePubKey(pubkey)
-
-	// The ASP returns the vtxos sent to others via async payments as spendable
-	// because they are actually revertable. Since we do not provide any revert
-	// feature, we want to ignore them.
-	// To understand if the output of a redeem tx is sent or received we look at
-	// the inputs and check if they are owned by us.
-	// The auxiliary variables below are used to make these checks in an
-	// efficient way.
-	for _, addr := range offchainAddrs {
-		spendable, spent, err := a.client.ListVtxos(ctx, addr)
-		if err != nil {
-			return nil, nil, err
-		}
-		for _, v := range spendable {
-			if !v.Pending {
-				spendableVtxos = append(spendableVtxos, v)
-				continue
-			}
-			script, err := bitcointree.ParseVtxoScript(v.Descriptor)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			reversibleVtxo, ok := script.(*bitcointree.ReversibleVtxoScript)
-			if !ok {
-				spendableVtxos = append(spendableVtxos, v)
-				continue
-			}
-
-			if !bytes.Equal(schnorr.SerializePubKey(reversibleVtxo.Sender), myPubkey) {
-				spendableVtxos = append(spendableVtxos, v)
-			}
-		}
-		for _, v := range spent {
-			script, err := bitcointree.ParseVtxoScript(v.Descriptor)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			reversibleVtxo, ok := script.(*bitcointree.ReversibleVtxoScript)
-			if !ok {
-				spentVtxos = append(spentVtxos, v)
-				continue
-			}
-			if !bytes.Equal(schnorr.SerializePubKey(reversibleVtxo.Sender), myPubkey) {
-				spentVtxos = append(spentVtxos, v)
-			}
-		}
-	}
-
-	return
-}
-
 func (a *covenantlessArkClient) Balance(
 	ctx context.Context, computeVtxoExpiration bool,
 ) (*Balance, error) {
@@ -602,14 +553,13 @@ func (a *covenantlessArkClient) Balance(
 
 	chRes := make(chan balanceRes, nbWorkers*len(offchainAddrs))
 	for i := range offchainAddrs {
-		offchainAddr := offchainAddrs[i]
 		boardingAddr := boardingAddrs[i]
 		redeemAddr := redeemAddrs[i]
 
-		go func(addr string) {
+		go func() {
 			defer wg.Done()
 			balance, amountByExpiration, err := a.getOffchainBalance(
-				ctx, addr, computeVtxoExpiration,
+				ctx, computeVtxoExpiration,
 			)
 			if err != nil {
 				chRes <- balanceRes{err: err}
@@ -620,7 +570,7 @@ func (a *covenantlessArkClient) Balance(
 				offchainBalance:             balance,
 				offchainBalanceByExpiration: amountByExpiration,
 			}
-		}(offchainAddr)
+		}()
 
 		getDelayedBalance := func(addr string) {
 			defer wg.Done()
@@ -640,8 +590,8 @@ func (a *covenantlessArkClient) Balance(
 			}
 		}
 
-		go getDelayedBalance(boardingAddr)
-		go getDelayedBalance(redeemAddr)
+		go getDelayedBalance(boardingAddr.Address)
+		go getDelayedBalance(redeemAddr.Address)
 	}
 
 	wg.Wait()
@@ -765,18 +715,9 @@ func (a *covenantlessArkClient) UnilateralRedeem(ctx context.Context) error {
 		return fmt.Errorf("wallet is locked")
 	}
 
-	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+	vtxos, err := a.getVtxos(ctx, nil)
 	if err != nil {
 		return err
-	}
-
-	vtxos := make([]client.Vtxo, 0)
-	for _, offchainAddr := range offchainAddrs {
-		spendableVtxos, _, err := a.getVtxos(ctx, offchainAddr, false)
-		if err != nil {
-			return err
-		}
-		vtxos = append(vtxos, spendableVtxos...)
 	}
 
 	totalVtxosAmount := uint64(0)
@@ -853,17 +794,35 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 		},
 	}
 
-	vtxos := make([]client.Vtxo, 0)
-	for _, offchainAddr := range offchainAddrs {
-		spendableVtxos, _, err := a.getVtxos(ctx, offchainAddr, withExpiryCoinselect)
-		if err != nil {
-			return "", err
-		}
-		vtxos = append(vtxos, spendableVtxos...)
+	vtxos := make([]client.DescriptorVtxo, 0)
+	spendableVtxos, err := a.getVtxos(ctx, nil)
+	if err != nil {
+		return "", err
 	}
 
-	selectedCoins, changeAmount, err := utils.CoinSelect(
-		vtxos, amount, a.Dust, withExpiryCoinselect,
+	for _, offchainAddr := range offchainAddrs {
+		for _, v := range spendableVtxos {
+			vtxoAddr, err := v.Address(a.AspPubkey, a.Network)
+			if err != nil {
+				return "", err
+			}
+
+			if vtxoAddr == offchainAddr.Address {
+				vtxos = append(vtxos, client.DescriptorVtxo{
+					Vtxo:       v,
+					Descriptor: offchainAddr.Descriptor,
+				})
+			}
+		}
+	}
+
+	boardingUtxos, err := a.getClaimableBoardingUtxos(ctx, nil)
+	if err != nil {
+		return "", err
+	}
+
+	selectedBoardingCoins, selectedCoins, changeAmount, err := utils.CoinSelect(
+		boardingUtxos, vtxos, amount, a.Dust, withExpiryCoinselect,
 	)
 	if err != nil {
 		return "", err
@@ -875,20 +834,24 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 			return "", err
 		}
 
-		desc, err := a.offchainAddressToDefaultVtxoDescriptor(offchainAddr)
-		if err != nil {
-			return "", err
-		}
-
 		receivers = append(receivers, client.Output{
-			Descriptor: desc,
-			Amount:     changeAmount,
+			Address: offchainAddr.Address,
+			Amount:  changeAmount,
 		})
 	}
 
-	inputs := make([]client.Input, 0, len(selectedCoins))
+	inputs := make([]client.Input, 0, len(selectedCoins)+len(selectedBoardingCoins))
 
 	for _, coin := range selectedCoins {
+		inputs = append(inputs, client.Input{
+			Outpoint: client.Outpoint{
+				Txid: coin.Txid,
+				VOut: coin.VOut,
+			},
+			Descriptor: coin.Descriptor,
+		})
+	}
+	for _, coin := range selectedBoardingCoins {
 		inputs = append(inputs, client.Input{
 			Outpoint: client.Outpoint{
 				Txid: coin.Txid,
@@ -917,7 +880,7 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 	}
 
 	poolTxID, err := a.handleRoundStream(
-		ctx, paymentID, selectedCoins, nil, "", receivers, roundEphemeralKey,
+		ctx, paymentID, selectedCoins, selectedBoardingCoins, receivers, roundEphemeralKey,
 	)
 	if err != nil {
 		return "", err
@@ -950,88 +913,109 @@ func (a *covenantlessArkClient) SendAsync(
 		return "", err
 	}
 
-	_, _, aspPubKey, err := common.DecodeAddress(offchainAddrs[0])
-	if err != nil {
-		return "", err
-	}
+	expectedAspPubKey := schnorr.SerializePubKey(a.AspPubkey)
 
 	receiversOutput := make([]client.Output, 0)
 	sumOfReceivers := uint64(0)
 
 	for _, receiver := range receivers {
-		_, _, aspKey, err := common.DecodeAddress(receiver.To())
+		rcvAddr, err := common.DecodeAddress(receiver.To())
 		if err != nil {
 			return "", fmt.Errorf("invalid receiver address: %s", err)
 		}
 
-		if !bytes.Equal(
-			aspPubKey.SerializeCompressed(), aspKey.SerializeCompressed(),
-		) {
-			return "", fmt.Errorf("invalid receiver address '%s': must be associated with the connected service provider", receiver)
+		rcvAspPubKey := schnorr.SerializePubKey(rcvAddr.Asp)
+
+		if !bytes.Equal(expectedAspPubKey, rcvAspPubKey) {
+			return "", fmt.Errorf("invalid receiver address '%s': expected ASP %s, got %s", receiver.To(), hex.EncodeToString(expectedAspPubKey), hex.EncodeToString(rcvAspPubKey))
 		}
 
 		if receiver.Amount() < a.Dust {
 			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), a.Dust)
 		}
 
-		isSelfTransfer := offchainAddrs[0] == receiver.To()
-
-		var desc string
-
-		// reversible vtxo does not make sense for self transfer
-		// if the receiver is the same as the sender, handle the output like the change
-		if !isSelfTransfer {
-			desc, err = a.offchainAddressToReversibleVtxoDescriptor(offchainAddrs[0], receiver.To())
-			if err != nil {
-				return "", err
-			}
-		} else {
-			desc, err = a.offchainAddressToDefaultVtxoDescriptor(receiver.To())
-			if err != nil {
-				return "", err
-			}
-		}
-
 		receiversOutput = append(receiversOutput, client.Output{
-			Descriptor: desc,
-			Amount:     receiver.Amount(),
+			Address: receiver.To(),
+			Amount:  receiver.Amount(),
 		})
 		sumOfReceivers += receiver.Amount()
 	}
 
-	vtxos, _, err := a.getVtxos(ctx, offchainAddrs[0], withExpiryCoinselect)
+	vtxos := make([]client.DescriptorVtxo, 0)
+	opts := &CoinSelectOptions{
+		WithExpirySorting: withExpiryCoinselect,
+	}
+	spendableVtxos, err := a.getVtxos(ctx, opts)
 	if err != nil {
 		return "", err
 	}
-	selectedCoins, changeAmount, err := utils.CoinSelect(
-		vtxos, sumOfReceivers, a.Dust, withExpiryCoinselect,
+
+	for _, offchainAddr := range offchainAddrs {
+		for _, v := range spendableVtxos {
+			vtxoAddr, err := v.Address(a.AspPubkey, a.Network)
+			if err != nil {
+				return "", err
+			}
+
+			if vtxoAddr == offchainAddr.Address {
+				vtxos = append(vtxos, client.DescriptorVtxo{
+					Vtxo:       v,
+					Descriptor: offchainAddr.Descriptor,
+				})
+			}
+		}
+	}
+
+	// do not include boarding utxos
+	_, selectedCoins, changeAmount, err := utils.CoinSelect(
+		nil, vtxos, sumOfReceivers, a.Dust, withExpiryCoinselect,
 	)
 	if err != nil {
 		return "", err
 	}
 
 	if changeAmount > 0 {
-		changeDesc, err := a.offchainAddressToDefaultVtxoDescriptor(offchainAddrs[0])
-		if err != nil {
-			return "", err
-		}
-
 		changeReceiver := client.Output{
-			Descriptor: changeDesc,
-			Amount:     changeAmount,
+			Address: offchainAddrs[0].Address,
+			Amount:  changeAmount,
 		}
 		receiversOutput = append(receiversOutput, changeReceiver)
 	}
 
-	inputs := make([]client.Input, 0, len(selectedCoins))
+	inputs := make([]client.AsyncPaymentInput, 0, len(selectedCoins))
 
 	for _, coin := range selectedCoins {
-		inputs = append(inputs, client.Input{
-			Outpoint: client.Outpoint{
-				Txid: coin.Txid,
-				VOut: coin.VOut,
+		vtxoScript, err := bitcointree.ParseVtxoScript(coin.Descriptor)
+		if err != nil {
+			return "", err
+		}
+
+		var forfeitClosure bitcointree.Closure
+
+		switch s := vtxoScript.(type) {
+		case *bitcointree.DefaultVtxoScript:
+			forfeitClosure = &bitcointree.MultisigClosure{
+				Pubkey:    s.Owner,
+				AspPubkey: s.Asp,
+			}
+		default:
+			return "", fmt.Errorf("unsupported vtxo script: %T", s)
+		}
+
+		forfeitLeaf, err := forfeitClosure.Leaf()
+		if err != nil {
+			return "", err
+		}
+
+		inputs = append(inputs, client.AsyncPaymentInput{
+			Input: client.Input{
+				Outpoint: client.Outpoint{
+					Txid: coin.Txid,
+					VOut: coin.VOut,
+				},
+				Descriptor: coin.Descriptor,
 			},
-			Descriptor: coin.Descriptor,
+			ForfeitLeafHash: forfeitLeaf.TapHash(),
 		})
 	}
 
@@ -1056,55 +1040,8 @@ func (a *covenantlessArkClient) SendAsync(
 	return signedRedeemTx, nil
 }
 
-func (a *covenantlessArkClient) Claim(ctx context.Context) (string, error) {
-	myselfOffchain, _, err := a.wallet.NewAddress(ctx, false)
-	if err != nil {
-		return "", err
-	}
-
-	_, pendingVtxos, err := a.getVtxos(ctx, myselfOffchain, false)
-	if err != nil {
-		return "", err
-	}
-
-	_, mypubkey, _, err := common.DecodeAddress(myselfOffchain)
-	if err != nil {
-		return "", err
-	}
-
-	boardingUtxos, err := a.getClaimableBoardingUtxos(ctx)
-	if err != nil {
-		return "", err
-	}
-
-	var pendingBalance uint64
-	for _, vtxo := range pendingVtxos {
-		pendingBalance += vtxo.Amount
-	}
-	for _, vtxo := range boardingUtxos {
-		pendingBalance += vtxo.Amount
-	}
-	if pendingBalance == 0 {
-		return "", nil
-	}
-
-	desc, err := a.offchainAddressToDefaultVtxoDescriptor(myselfOffchain)
-	if err != nil {
-		return "", err
-	}
-
-	receiver := client.Output{
-		Descriptor: desc,
-		Amount:     pendingBalance,
-	}
-
-	return a.selfTransferAllPendingPayments(
-		ctx,
-		pendingVtxos,
-		boardingUtxos,
-		receiver,
-		hex.EncodeToString(mypubkey.SerializeCompressed()),
-	)
+func (a *covenantlessArkClient) Settle(ctx context.Context) (string, error) {
+	return a.sendOffchain(ctx, false, nil)
 }
 
 func (a *covenantlessArkClient) GetTransactionHistory(
@@ -1208,7 +1145,7 @@ func (a *covenantlessArkClient) sendOnchain(
 		if err != nil {
 			return "", err
 		}
-		addr, _ := btcutil.DecodeAddress(changeAddr, &netParams)
+		addr, _ := btcutil.DecodeAddress(changeAddr.Address, &netParams)
 
 		pkscript, err := txscript.PayToAddrScript(addr)
 		if err != nil {
@@ -1255,7 +1192,7 @@ func (a *covenantlessArkClient) sendOnchain(
 			if err != nil {
 				return "", err
 			}
-			addr, _ := btcutil.DecodeAddress(changeAddr, &netParams)
+			addr, _ := btcutil.DecodeAddress(changeAddr.Address, &netParams)
 
 			pkscript, err := txscript.PayToAddrScript(addr)
 			if err != nil {
@@ -1298,64 +1235,101 @@ func (a *covenantlessArkClient) sendOffchain(
 		return "", fmt.Errorf("wallet is locked")
 	}
 
-	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
-	if err != nil {
-		return "", err
-	}
-	if len(offchainAddrs) <= 0 {
-		return "", fmt.Errorf("no funds detected")
-	}
-
-	_, _, aspPubKey, err := common.DecodeAddress(offchainAddrs[0])
-	if err != nil {
-		return "", err
-	}
-
-	receiversOutput := make([]client.Output, 0)
+	expectedAspPubKey := schnorr.SerializePubKey(a.AspPubkey)
+	outputs := make([]client.Output, 0)
 	sumOfReceivers := uint64(0)
 
+	// validate receivers and create outputs
 	for _, receiver := range receivers {
-		_, _, aspKey, err := common.DecodeAddress(receiver.To())
+		rcvAddr, err := common.DecodeAddress(receiver.To())
 		if err != nil {
 			return "", fmt.Errorf("invalid receiver address: %s", err)
 		}
 
-		if !bytes.Equal(
-			aspPubKey.SerializeCompressed(), aspKey.SerializeCompressed(),
-		) {
-			return "", fmt.Errorf("invalid receiver address '%s': must be associated with the connected service provider", receiver.To())
+		rcvAspPubKey := schnorr.SerializePubKey(rcvAddr.Asp)
+
+		if !bytes.Equal(expectedAspPubKey, rcvAspPubKey) {
+			return "", fmt.Errorf("invalid receiver address '%s': expected ASP %s, got %s", receiver.To(), hex.EncodeToString(expectedAspPubKey), hex.EncodeToString(rcvAspPubKey))
 		}
 
 		if receiver.Amount() < a.Dust {
 			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), a.Dust)
 		}
 
-		desc, err := a.offchainAddressToDefaultVtxoDescriptor(receiver.To())
-		if err != nil {
-			return "", err
-		}
-
-		receiversOutput = append(receiversOutput, client.Output{
-			Descriptor: desc,
-			Amount:     receiver.Amount(),
+		outputs = append(outputs, client.Output{
+			Address: receiver.To(),
+			Amount:  receiver.Amount(),
 		})
 		sumOfReceivers += receiver.Amount()
 	}
 
-	vtxos := make([]client.Vtxo, 0)
+	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return "", err
+	}
+	if len(offchainAddrs) <= 0 {
+		return "", fmt.Errorf("no offchain addresses found")
+	}
+
+	vtxos := make([]client.DescriptorVtxo, 0)
+	opts := &CoinSelectOptions{
+		WithExpirySorting: withExpiryCoinselect}
+	spendableVtxos, err := a.getVtxos(ctx, opts)
+	if err != nil {
+		return "", err
+	}
+
 	for _, offchainAddr := range offchainAddrs {
-		spendableVtxos, _, err := a.getVtxos(ctx, offchainAddr, withExpiryCoinselect)
+		for _, v := range spendableVtxos {
+			vtxoAddr, err := v.Address(a.AspPubkey, a.Network)
+			if err != nil {
+				return "", err
+			}
+
+			if vtxoAddr == offchainAddr.Address {
+				vtxos = append(vtxos, client.DescriptorVtxo{
+					Vtxo:       v,
+					Descriptor: offchainAddr.Descriptor,
+				})
+			}
+		}
+	}
+
+	boardingUtxos, err := a.getClaimableBoardingUtxos(ctx, nil)
+	if err != nil {
+		return "", err
+	}
+
+	var selectedBoardingCoins []types.Utxo
+	var selectedCoins []client.DescriptorVtxo
+	var changeAmount uint64
+
+	// if no receivers, self send all selected coins
+	if len(outputs) <= 0 {
+		selectedBoardingCoins = boardingUtxos
+		selectedCoins = vtxos
+
+		amount := uint64(0)
+		for _, utxo := range boardingUtxos {
+			amount += utxo.Amount
+		}
+		for _, utxo := range vtxos {
+			amount += utxo.Amount
+		}
+
+		outputs = append(outputs, client.Output{
+			Address: offchainAddrs[0].Address,
+			Amount:  amount,
+		})
+
+		changeAmount = 0
+	} else {
+		selectedBoardingCoins, selectedCoins, changeAmount, err = utils.CoinSelect(
+			boardingUtxos, vtxos, sumOfReceivers, a.Dust, withExpiryCoinselect,
+		)
 		if err != nil {
 			return "", err
 		}
-		vtxos = append(vtxos, spendableVtxos...)
-	}
-
-	selectedCoins, changeAmount, err := utils.CoinSelect(
-		vtxos, sumOfReceivers, a.Dust, withExpiryCoinselect,
-	)
-	if err != nil {
-		return "", err
 	}
 
 	if changeAmount > 0 {
@@ -1363,20 +1337,13 @@ func (a *covenantlessArkClient) sendOffchain(
 		if err != nil {
 			return "", err
 		}
-
-		desc, err := a.offchainAddressToDefaultVtxoDescriptor(offchainAddr)
-		if err != nil {
-			return "", err
-		}
-
-		changeReceiver := client.Output{
-			Descriptor: desc,
-			Amount:     changeAmount,
-		}
-		receiversOutput = append(receiversOutput, changeReceiver)
+		outputs = append(outputs, client.Output{
+			Address: offchainAddr.Address,
+			Amount:  changeAmount,
+		})
 	}
 
-	inputs := make([]client.Input, 0, len(selectedCoins))
+	inputs := make([]client.Input, 0, len(selectedCoins)+len(selectedBoardingCoins))
 	for _, coin := range selectedCoins {
 		inputs = append(inputs, client.Input{
 			Outpoint: client.Outpoint{
@@ -1384,6 +1351,15 @@ func (a *covenantlessArkClient) sendOffchain(
 				VOut: coin.VOut,
 			},
 			Descriptor: coin.Descriptor,
+		})
+	}
+	for _, boardingUtxo := range selectedBoardingCoins {
+		inputs = append(inputs, client.Input{
+			Outpoint: client.Outpoint{
+				Txid: boardingUtxo.Txid,
+				VOut: boardingUtxo.VOut,
+			},
+			Descriptor: boardingUtxo.Descriptor,
 		})
 	}
 
@@ -1400,7 +1376,7 @@ func (a *covenantlessArkClient) sendOffchain(
 	}
 
 	if err := a.client.RegisterOutputsForNextRound(
-		ctx, paymentID, receiversOutput,
+		ctx, paymentID, outputs,
 	); err != nil {
 		return "", err
 	}
@@ -1408,7 +1384,7 @@ func (a *covenantlessArkClient) sendOffchain(
 	log.Infof("payment registered with id: %s", paymentID)
 
 	poolTxID, err := a.handleRoundStream(
-		ctx, paymentID, selectedCoins, nil, "", receiversOutput, roundEphemeralKey,
+		ctx, paymentID, selectedCoins, selectedBoardingCoins, outputs, roundEphemeralKey,
 	)
 	if err != nil {
 		return "", err
@@ -1420,7 +1396,7 @@ func (a *covenantlessArkClient) sendOffchain(
 func (a *covenantlessArkClient) addInputs(
 	ctx context.Context,
 	updater *psbt.Updater,
-	utxos []explorer.Utxo,
+	utxos []types.Utxo,
 ) error {
 	// TODO works only with single-key wallet
 	offchain, _, err := a.wallet.NewAddress(ctx, false)
@@ -1428,9 +1404,19 @@ func (a *covenantlessArkClient) addInputs(
 		return err
 	}
 
-	_, userPubkey, aspPubkey, err := common.DecodeAddress(offchain)
+	vtxoScript, err := tree.ParseVtxoScript(offchain.Descriptor)
 	if err != nil {
 		return err
+	}
+
+	var userPubkey, aspPubkey *secp256k1.PublicKey
+
+	switch s := vtxoScript.(type) {
+	case *tree.DefaultVtxoScript:
+		userPubkey = s.Owner
+		aspPubkey = s.Asp
+	default:
+		return fmt.Errorf("unsupported vtxo script: %T", s)
 	}
 
 	for _, utxo := range utxos {
@@ -1447,7 +1433,7 @@ func (a *covenantlessArkClient) addInputs(
 		updater.Upsbt.UnsignedTx.AddTxIn(&wire.TxIn{
 			PreviousOutPoint: wire.OutPoint{
 				Hash:  *previousHash,
-				Index: utxo.Vout,
+				Index: utxo.VOut,
 			},
 			Sequence: sequence,
 		})
@@ -1495,9 +1481,8 @@ func (a *covenantlessArkClient) addInputs(
 func (a *covenantlessArkClient) handleRoundStream(
 	ctx context.Context,
 	paymentID string,
-	vtxosToSign []client.Vtxo,
-	boardingUtxos []explorer.Utxo,
-	boardingDescriptor string,
+	vtxosToSign []client.DescriptorVtxo,
+	boardingUtxos []types.Utxo,
 	receivers []client.Output,
 	roundEphemeralKey *secp256k1.PrivateKey,
 ) (string, error) {
@@ -1578,7 +1563,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 				log.Info("a round finalization started")
 
 				signedForfeitTxs, signedRoundTx, err := a.handleRoundFinalization(
-					ctx, event.(client.RoundFinalizationEvent), vtxosToSign, boardingUtxos, boardingDescriptor, receivers,
+					ctx, event.(client.RoundFinalizationEvent), vtxosToSign, boardingUtxos, receivers,
 				)
 				if err != nil {
 					return "", err
@@ -1681,30 +1666,19 @@ func (a *covenantlessArkClient) handleRoundSigningNoncesGenerated(
 func (a *covenantlessArkClient) handleRoundFinalization(
 	ctx context.Context,
 	event client.RoundFinalizationEvent,
-	vtxos []client.Vtxo,
-	boardingUtxos []explorer.Utxo,
-	boardingDescriptor string,
+	vtxos []client.DescriptorVtxo,
+	boardingUtxos []types.Utxo,
 	receivers []client.Output,
 ) ([]string, string, error) {
 	if err := a.validateCongestionTree(event, receivers); err != nil {
 		return nil, "", fmt.Errorf("failed to verify congestion tree: %s", err)
 	}
 
-	offchainAddr, _, err := a.wallet.NewAddress(ctx, false)
-	if err != nil {
-		return nil, "", err
-	}
-
-	_, myPubkey, _, err := common.DecodeAddress(offchainAddr)
-	if err != nil {
-		return nil, "", err
-	}
-
 	var forfeits []string
 
 	if len(vtxos) > 0 {
 		signedForfeits, err := a.createAndSignForfeits(
-			ctx, vtxos, event.Connectors, event.MinRelayFeeRate, myPubkey,
+			ctx, vtxos, event.Connectors, event.MinRelayFeeRate,
 		)
 		if err != nil {
 			return nil, "", err
@@ -1713,15 +1687,29 @@ func (a *covenantlessArkClient) handleRoundFinalization(
 		forfeits = signedForfeits
 	}
 
-	if len(boardingUtxos) > 0 {
-		boardingVtxoScript, err := bitcointree.ParseVtxoScript(boardingDescriptor)
+	// if no boarding utxos inputs, we don't need to sign the round transaction
+	if len(boardingUtxos) <= 0 {
+		return forfeits, "", nil
+	}
+
+	roundPtx, err := psbt.NewFromRawBytes(strings.NewReader(event.Tx), true)
+	if err != nil {
+		return nil, "", err
+	}
+
+	for _, boardingUtxo := range boardingUtxos {
+		boardingVtxoScript, err := bitcointree.ParseVtxoScript(boardingUtxo.Descriptor)
 		if err != nil {
 			return nil, "", err
 		}
 
-		roundPtx, err := psbt.NewFromRawBytes(strings.NewReader(event.Tx), true)
-		if err != nil {
-			return nil, "", err
+		var myPubkey *secp256k1.PublicKey
+
+		switch v := boardingVtxoScript.(type) {
+		case *bitcointree.DefaultVtxoScript:
+			myPubkey = v.Owner
+		default:
+			return nil, "", fmt.Errorf("unsupported boarding descriptor: %s", boardingUtxo.Descriptor)
 		}
 
 		// add tapscript leaf
@@ -1754,28 +1742,24 @@ func (a *covenantlessArkClient) handleRoundFinalization(
 		for i := range roundPtx.Inputs {
 			previousOutpoint := roundPtx.UnsignedTx.TxIn[i].PreviousOutPoint
 
-			for _, boardingUtxo := range boardingUtxos {
-				if boardingUtxo.Txid == previousOutpoint.Hash.String() && boardingUtxo.Vout == previousOutpoint.Index {
-					roundPtx.Inputs[i].TaprootLeafScript = []*psbt.TaprootTapLeafScript{tapscript}
-					break
-				}
+			if boardingUtxo.Txid == previousOutpoint.Hash.String() && boardingUtxo.VOut == previousOutpoint.Index {
+				roundPtx.Inputs[i].TaprootLeafScript = []*psbt.TaprootTapLeafScript{tapscript}
+				break
 			}
 		}
-
-		b64, err := roundPtx.B64Encode()
-		if err != nil {
-			return nil, "", err
-		}
-
-		signedRoundTx, err := a.wallet.SignTransaction(ctx, a.explorer, b64)
-		if err != nil {
-			return nil, "", err
-		}
-
-		return forfeits, signedRoundTx, nil
 	}
 
-	return forfeits, "", nil
+	b64, err := roundPtx.B64Encode()
+	if err != nil {
+		return nil, "", err
+	}
+
+	signedRoundTx, err := a.wallet.SignTransaction(ctx, a.explorer, b64)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return forfeits, signedRoundTx, nil
 }
 
 func (a *covenantlessArkClient) validateCongestionTree(
@@ -1869,15 +1853,12 @@ func (a *covenantlessArkClient) validateOffChainReceiver(
 ) error {
 	found := false
 
-	receiverVtxoScript, err := bitcointree.ParseVtxoScript(receiver.Descriptor)
+	rcvAddr, err := common.DecodeAddress(receiver.Address)
 	if err != nil {
 		return err
 	}
 
-	outputTapKey, _, err := receiverVtxoScript.TapTree()
-	if err != nil {
-		return err
-	}
+	vtxoTapKey := schnorr.SerializePubKey(rcvAddr.VtxoTapKey)
 
 	leaves := congestionTree.Leaves()
 	for _, leaf := range leaves {
@@ -1891,9 +1872,7 @@ func (a *covenantlessArkClient) validateOffChainReceiver(
 				continue
 			}
 
-			if bytes.Equal(
-				output.PkScript[2:], schnorr.SerializePubKey(outputTapKey),
-			) {
+			if bytes.Equal(output.PkScript[2:], vtxoTapKey) {
 				if output.Value != int64(receiver.Amount) {
 					continue
 				}
@@ -1919,10 +1898,9 @@ func (a *covenantlessArkClient) validateOffChainReceiver(
 
 func (a *covenantlessArkClient) createAndSignForfeits(
 	ctx context.Context,
-	vtxosToSign []client.Vtxo,
+	vtxosToSign []client.DescriptorVtxo,
 	connectors []string,
 	feeRate chainfee.SatPerKVByte,
-	myPubkey *secp256k1.PublicKey,
 ) ([]string, error) {
 	parsedForfeitAddr, err := btcutil.DecodeAddress(a.ForfeitAddress, nil)
 	if err != nil {
@@ -1982,9 +1960,16 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 			Index: vtxo.VOut,
 		}
 
-		forfeitClosure := &bitcointree.MultisigClosure{
-			Pubkey:    myPubkey,
-			AspPubkey: a.AspPubkey,
+		var forfeitClosure bitcointree.Closure
+
+		switch v := vtxoScript.(type) {
+		case *bitcointree.DefaultVtxoScript:
+			forfeitClosure = &bitcointree.MultisigClosure{
+				Pubkey:    v.Owner,
+				AspPubkey: a.AspPubkey,
+			}
+		default:
+			return nil, fmt.Errorf("unsupported vtxo script: %T", vtxoScript)
 		}
 
 		forfeitLeaf, err := forfeitClosure.Leaf()
@@ -2038,54 +2023,43 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 }
 
 func (a *covenantlessArkClient) coinSelectOnchain(
-	ctx context.Context, targetAmount uint64, exclude []explorer.Utxo,
-) ([]explorer.Utxo, uint64, error) {
-	offchainAddrs, boardingAddrs, redemptionAddrs, err := a.wallet.GetAddresses(ctx)
+	ctx context.Context, targetAmount uint64, exclude []types.Utxo,
+) ([]types.Utxo, uint64, error) {
+	_, boardingAddrs, redemptionAddrs, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return nil, 0, err
-	}
-
-	_, myPubkey, _, err := common.DecodeAddress(offchainAddrs[0])
-	if err != nil {
-		return nil, 0, err
-	}
-
-	myPubkeyStr := hex.EncodeToString(schnorr.SerializePubKey(myPubkey))
-	descriptorStr := strings.ReplaceAll(
-		a.BoardingDescriptorTemplate, "USER", myPubkeyStr,
-	)
-
-	boardingScript, err := bitcointree.ParseVtxoScript(descriptorStr)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	var boardingTimeout uint
-
-	if defaultVtxo, ok := boardingScript.(*bitcointree.DefaultVtxoScript); ok {
-		boardingTimeout = defaultVtxo.ExitDelay
-	} else {
-		return nil, 0, fmt.Errorf("unsupported boarding descriptor: %s", descriptorStr)
 	}
 
 	now := time.Now()
 
-	fetchedUtxos := make([]explorer.Utxo, 0)
+	fetchedUtxos := make([]types.Utxo, 0)
 	for _, addr := range boardingAddrs {
-		utxos, err := a.explorer.GetUtxos(addr)
+		boardingScript, err := bitcointree.ParseVtxoScript(addr.Descriptor)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		var boardingTimeout uint
+
+		if defaultVtxo, ok := boardingScript.(*bitcointree.DefaultVtxoScript); ok {
+			boardingTimeout = defaultVtxo.ExitDelay
+		} else {
+			return nil, 0, fmt.Errorf("unsupported boarding descriptor: %s", addr.Descriptor)
+		}
+		utxos, err := a.explorer.GetUtxos(addr.Address)
 		if err != nil {
 			return nil, 0, err
 		}
 
 		for _, utxo := range utxos {
-			u := utxo.ToUtxo(boardingTimeout)
+			u := utxo.ToUtxo(boardingTimeout, addr.Descriptor)
 			if u.SpendableAt.Before(now) {
 				fetchedUtxos = append(fetchedUtxos, u)
 			}
 		}
 	}
 
-	selected := make([]explorer.Utxo, 0)
+	selected := make([]types.Utxo, 0)
 	selectedAmount := uint64(0)
 	for _, utxo := range fetchedUtxos {
 		if selectedAmount >= targetAmount {
@@ -2093,7 +2067,7 @@ func (a *covenantlessArkClient) coinSelectOnchain(
 		}
 
 		for _, excluded := range exclude {
-			if utxo.Txid == excluded.Txid && utxo.Vout == excluded.Vout {
+			if utxo.Txid == excluded.Txid && utxo.VOut == excluded.VOut {
 				continue
 			}
 		}
@@ -2106,15 +2080,15 @@ func (a *covenantlessArkClient) coinSelectOnchain(
 		return selected, selectedAmount - targetAmount, nil
 	}
 
-	fetchedUtxos = make([]explorer.Utxo, 0)
+	fetchedUtxos = make([]types.Utxo, 0)
 	for _, addr := range redemptionAddrs {
-		utxos, err := a.explorer.GetUtxos(addr)
+		utxos, err := a.explorer.GetUtxos(addr.Address)
 		if err != nil {
 			return nil, 0, err
 		}
 
 		for _, utxo := range utxos {
-			u := utxo.ToUtxo(uint(a.UnilateralExitDelay))
+			u := utxo.ToUtxo(uint(a.UnilateralExitDelay), addr.Descriptor)
 			if u.SpendableAt.Before(now) {
 				fetchedUtxos = append(fetchedUtxos, u)
 			}
@@ -2127,7 +2101,7 @@ func (a *covenantlessArkClient) coinSelectOnchain(
 		}
 
 		for _, excluded := range exclude {
-			if utxo.Txid == excluded.Txid && utxo.Vout == excluded.Vout {
+			if utxo.Txid == excluded.Txid && utxo.VOut == excluded.VOut {
 				continue
 			}
 		}
@@ -2181,15 +2155,14 @@ func (a *covenantlessArkClient) getRedeemBranches(
 	return redeemBranches, nil
 }
 
-// TODO (@louisinger): return pending balance in dedicated map.
-// Currently, the returned balance is calculated from both spendable and
-// pending vtxos.
 func (a *covenantlessArkClient) getOffchainBalance(
-	ctx context.Context, addr string, computeVtxoExpiration bool,
+	ctx context.Context, computeVtxoExpiration bool,
 ) (uint64, map[int64]uint64, error) {
 	amountByExpiration := make(map[int64]uint64, 0)
-
-	vtxos, _, err := a.getVtxos(ctx, addr, computeVtxoExpiration)
+	opts := &CoinSelectOptions{
+		WithExpirySorting: computeVtxoExpiration,
+	}
+	vtxos, err := a.getVtxos(ctx, opts)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -2213,38 +2186,42 @@ func (a *covenantlessArkClient) getOffchainBalance(
 
 func (a *covenantlessArkClient) getAllBoardingUtxos(
 	ctx context.Context,
-) ([]explorer.Utxo, map[string]struct{}, error) {
+) ([]types.Utxo, map[string]struct{}, error) {
 	_, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	utxos := []explorer.Utxo{}
+	utxos := []types.Utxo{}
 	ignoreVtxos := make(map[string]struct{}, 0)
 	for _, addr := range boardingAddrs {
-		txs, err := a.explorer.GetTxs(addr)
+		txs, err := a.explorer.GetTxs(addr.Address)
 		if err != nil {
 			return nil, nil, err
 		}
 		for _, tx := range txs {
 			for i, vout := range tx.Vout {
-				if vout.Address == addr {
+				var spent bool
+				if vout.Address == addr.Address {
 					spentStatuses, err := a.explorer.GetTxOutspends(tx.Txid)
 					if err != nil {
 						return nil, nil, err
 					}
 					if s := spentStatuses[i]; s.Spent {
 						ignoreVtxos[s.SpentBy] = struct{}{}
+						spent = true
 					}
 					createdAt := time.Time{}
 					if tx.Status.Confirmed {
 						createdAt = time.Unix(tx.Status.Blocktime, 0)
 					}
-					utxos = append(utxos, explorer.Utxo{
-						Txid:      tx.Txid,
-						Vout:      uint32(i),
-						Amount:    vout.Amount,
-						CreatedAt: createdAt,
+					utxos = append(utxos, types.Utxo{
+						Txid:       tx.Txid,
+						VOut:       uint32(i),
+						Amount:     vout.Amount,
+						CreatedAt:  createdAt,
+						Descriptor: addr.Descriptor,
+						Spent:      spent,
 					})
 				}
 			}
@@ -2254,85 +2231,92 @@ func (a *covenantlessArkClient) getAllBoardingUtxos(
 	return utxos, ignoreVtxos, nil
 }
 
-func (a *covenantlessArkClient) getClaimableBoardingUtxos(ctx context.Context) ([]explorer.Utxo, error) {
-	offchainAddrs, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
+func (a *covenantlessArkClient) getClaimableBoardingUtxos(ctx context.Context, opts *CoinSelectOptions) ([]types.Utxo, error) {
+	_, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	_, myPubkey, _, err := common.DecodeAddress(offchainAddrs[0])
-	if err != nil {
-		return nil, err
-	}
-
-	myPubkeyStr := hex.EncodeToString(schnorr.SerializePubKey(myPubkey))
-	descriptorStr := strings.ReplaceAll(
-		a.BoardingDescriptorTemplate, "USER", myPubkeyStr,
-	)
-
-	boardingScript, err := bitcointree.ParseVtxoScript(descriptorStr)
-	if err != nil {
-		return nil, err
-	}
-
-	var boardingTimeout uint
-
-	if defaultVtxo, ok := boardingScript.(*bitcointree.DefaultVtxoScript); ok {
-		boardingTimeout = defaultVtxo.ExitDelay
-	} else {
-		return nil, fmt.Errorf("unsupported boarding descriptor: %s", descriptorStr)
-	}
-
-	claimable := make([]explorer.Utxo, 0)
-	now := time.Now()
+	claimable := make([]types.Utxo, 0)
 
 	for _, addr := range boardingAddrs {
-		boardingUtxos, err := a.explorer.GetUtxos(addr)
+		boardingScript, err := bitcointree.ParseVtxoScript(addr.Descriptor)
 		if err != nil {
 			return nil, err
 		}
 
+		var boardingTimeout uint
+
+		if defaultVtxo, ok := boardingScript.(*bitcointree.DefaultVtxoScript); ok {
+			boardingTimeout = defaultVtxo.ExitDelay
+		} else {
+			return nil, fmt.Errorf("unsupported boarding descriptor: %s", addr.Descriptor)
+		}
+
+		boardingUtxos, err := a.explorer.GetUtxos(addr.Address)
+		if err != nil {
+			return nil, err
+		}
+
+		now := time.Now()
+
 		for _, utxo := range boardingUtxos {
-			u := utxo.ToUtxo(boardingTimeout)
+			if opts != nil && len(opts.OutpointsFilter) > 0 {
+				utxoOutpoint := client.Outpoint{
+					Txid: utxo.Txid,
+					VOut: utxo.Vout,
+				}
+				found := false
+				for _, outpoint := range opts.OutpointsFilter {
+					if outpoint.Equals(utxoOutpoint) {
+						found = true
+						break
+					}
+				}
+
+				if !found {
+					continue
+				}
+			}
+
+			u := utxo.ToUtxo(boardingTimeout, addr.Descriptor)
 			if u.SpendableAt.Before(now) {
 				continue
 			}
+
 			claimable = append(claimable, u)
 		}
-
 	}
 
 	return claimable, nil
 }
 
 func (a *covenantlessArkClient) getVtxos(
-	ctx context.Context, _ string, computeVtxoExpiration bool,
-) ([]client.Vtxo, []client.Vtxo, error) {
+	ctx context.Context, opts *CoinSelectOptions,
+) ([]client.Vtxo, error) {
 	spendableVtxos, _, err := a.ListVtxos(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	pendingVtxos := make([]client.Vtxo, 0)
-	for _, vtxo := range spendableVtxos {
-		if vtxo.RedeemTx != "" {
-			pendingVtxos = append(pendingVtxos, vtxo)
-		}
+	if opts != nil && len(opts.OutpointsFilter) > 0 {
+		spendableVtxos = filterByOutpoints(spendableVtxos, opts.OutpointsFilter)
 	}
 
-	if !computeVtxoExpiration {
-		return spendableVtxos, pendingVtxos, nil
+	if opts == nil || !opts.WithExpirySorting {
+		return spendableVtxos, nil
 	}
 
+	// if sorting by expiry is required, we need to get the expiration date of each vtxo
 	redeemBranches, err := a.getRedeemBranches(ctx, spendableVtxos)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	for vtxoTxid, branch := range redeemBranches {
 		expiration, err := branch.ExpiresAt()
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 
 		for i, vtxo := range spendableVtxos {
@@ -2343,123 +2327,12 @@ func (a *covenantlessArkClient) getVtxos(
 		}
 	}
 
-	return spendableVtxos, pendingVtxos, nil
+	return spendableVtxos, nil
 }
 
-func (a *covenantlessArkClient) selfTransferAllPendingPayments(
-	ctx context.Context, pendingVtxos []client.Vtxo, boardingUtxos []explorer.Utxo, myself client.Output, mypubkey string,
-) (string, error) {
-	inputs := make([]client.Input, 0, len(pendingVtxos)+len(boardingUtxos))
-
-	boardingDescriptor := strings.ReplaceAll(
-		a.BoardingDescriptorTemplate, "USER", mypubkey[2:],
-	)
-
-	for _, coin := range pendingVtxos {
-		inputs = append(inputs, client.Input{
-			Outpoint: client.Outpoint{
-				Txid: coin.Txid,
-				VOut: coin.VOut,
-			},
-			Descriptor: coin.Descriptor,
-		})
-	}
-
-	for _, utxo := range boardingUtxos {
-		inputs = append(inputs, client.Input{
-			Outpoint: client.Outpoint{
-				Txid: utxo.Txid,
-				VOut: utxo.Vout,
-			},
-			Descriptor: boardingDescriptor,
-		})
-	}
-	outputs := []client.Output{myself}
-
-	roundEphemeralKey, err := secp256k1.GeneratePrivateKey()
-	if err != nil {
-		return "", err
-	}
-
-	paymentID, err := a.client.RegisterInputsForNextRound(
-		ctx,
-		inputs,
-		hex.EncodeToString(roundEphemeralKey.PubKey().SerializeCompressed()),
-	)
-	if err != nil {
-		return "", err
-	}
-
-	if err := a.client.RegisterOutputsForNextRound(ctx, paymentID, outputs); err != nil {
-		return "", err
-	}
-
-	roundTxid, err := a.handleRoundStream(
-		ctx, paymentID, pendingVtxos, boardingUtxos, boardingDescriptor, outputs, roundEphemeralKey,
-	)
-	if err != nil {
-		return "", err
-	}
-
-	return roundTxid, nil
-}
-
-func (a *covenantlessArkClient) offchainAddressToReversibleVtxoDescriptor(myaddr string, receiveraddr string) (string, error) {
-	_, receiverPubkey, aspPubkey, err := common.DecodeAddress(receiveraddr)
-	if err != nil {
-		return "", err
-	}
-
-	_, userPubKey, _, err := common.DecodeAddress(myaddr)
-	if err != nil {
-		return "", err
-	}
-
-	vtxoScript := bitcointree.ReversibleVtxoScript{
-		Owner:     receiverPubkey,
-		Sender:    userPubKey,
-		Asp:       aspPubkey,
-		ExitDelay: uint(a.UnilateralExitDelay),
-	}
-
-	return vtxoScript.ToDescriptor(), nil
-}
-
-func (a *covenantlessArkClient) offchainAddressToDefaultVtxoDescriptor(addr string) (string, error) {
-	_, userPubKey, aspPubkey, err := common.DecodeAddress(addr)
-	if err != nil {
-		return "", err
-	}
-
-	vtxoScript := bitcointree.DefaultVtxoScript{
-		Owner:     userPubKey,
-		Asp:       aspPubkey,
-		ExitDelay: uint(a.UnilateralExitDelay),
-	}
-
-	return vtxoScript.ToDescriptor(), nil
-}
-
-// getBoardingTxs builds the boarding tx history from onchain utxos:
-//   - unspent utxo => pending boarding tx
-//   - spent utxo => claimed boarding tx
-//
-// The tx spending an onchain utxo is an ark round, therefore an indexed list
-// of round txids is returned to specify the vtxos to be ignored to build the
-// offchain tx history and prevent duplicates.
 func (a *covenantlessArkClient) getBoardingTxs(
 	ctx context.Context,
 ) ([]types.Transaction, map[string]struct{}, error) {
-	utxos, err := a.getClaimableBoardingUtxos(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	isPending := make(map[string]bool)
-	for _, u := range utxos {
-		isPending[u.Txid] = true
-	}
-
 	allUtxos, ignoreVtxos, err := a.getAllBoardingUtxos(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -2468,19 +2341,14 @@ func (a *covenantlessArkClient) getBoardingTxs(
 	unconfirmedTxs := make([]types.Transaction, 0)
 	confirmedTxs := make([]types.Transaction, 0)
 	for _, u := range allUtxos {
-		pending := false
-		if isPending[u.Txid] {
-			pending = true
-		}
-
 		tx := types.Transaction{
 			TransactionKey: types.TransactionKey{
 				BoardingTxid: u.Txid,
 			},
 			Amount:    u.Amount,
 			Type:      types.TxReceived,
-			IsPending: pending,
 			CreatedAt: u.CreatedAt,
+			Settled:   u.Spent,
 		}
 
 		emptyTime := time.Time{}
@@ -2508,23 +2376,37 @@ func vtxosToTxsCovenantless(
 	roundLifetime int64, spendable, spent []client.Vtxo, ignoreVtxos map[string]struct{},
 ) ([]types.Transaction, error) {
 	transactions := make([]types.Transaction, 0)
-
 	indexedTxs := make(map[string]types.Transaction)
+	settledVtxos := make(map[string]struct{})
+
+	// First, loop over all vtxos to find those that have been settled
+	// (they have round txid instead of redeem tx)
+	for _, v := range append(spendable, spent...) {
+		_, ok1 := ignoreVtxos[v.Txid]
+		_, ok2 := ignoreVtxos[v.RoundTxid]
+		if ok1 || ok2 {
+			continue
+		}
+		if len(v.RoundTxid) > 0 {
+			settledVtxos[v.RoundTxid] = struct{}{}
+		}
+	}
+
 	for _, v := range spent {
-		// If the vtxo was pending and is spent => it's been claimed.
-		if v.Pending {
+		// If the vtxo is settled, add the record to the tx history.
+		if _, ok := settledVtxos[v.SpentBy]; ok {
 			transactions = append(transactions, types.Transaction{
 				TransactionKey: types.TransactionKey{
 					RedeemTxid: v.Txid,
 				},
 				Amount:    v.Amount,
 				Type:      types.TxReceived,
-				IsPending: false,
 				CreatedAt: getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
+				Settled:   true,
 			})
 			// Delete any duplicate in the indexed list.
 			delete(indexedTxs, v.SpentBy)
-			// Ignore the spendable vtxo created by the claim.
+			// Ignore the spendable vtxo created by the settlement.
 			ignoreVtxos[v.SpentBy] = struct{}{}
 			continue
 		}
@@ -2540,7 +2422,8 @@ func vtxosToTxsCovenantless(
 			indexedTxs[v.Txid] = tx
 		}
 
-		// Add a transaction to the indexed list if not existing, it will be deleted if it's a duplicate.
+		// Add a transaction to the indexed list if not existing.
+		// This is an intermediate tx state that is updated in the next iterations.
 		tx, ok := indexedTxs[v.SpentBy]
 		if !ok {
 			indexedTxs[v.SpentBy] = types.Transaction{
@@ -2550,7 +2433,6 @@ func vtxosToTxsCovenantless(
 				},
 				Amount:    v.Amount,
 				Type:      types.TxSent,
-				IsPending: false,
 				CreatedAt: getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
 			}
 			continue
@@ -2562,6 +2444,7 @@ func vtxosToTxsCovenantless(
 	}
 
 	for _, v := range spendable {
+		// Ignore the vtxo eventually.
 		_, ok1 := ignoreVtxos[v.Txid]
 		_, ok2 := ignoreVtxos[v.RoundTxid]
 		if ok1 || ok2 {
@@ -2573,6 +2456,7 @@ func vtxosToTxsCovenantless(
 		}
 
 		tx, ok := indexedTxs[txid]
+		// If there is no track of records, add a received tx record in the history.
 		if !ok {
 			redeemTxid := ""
 			if v.RoundTxid == "" {
@@ -2585,12 +2469,12 @@ func vtxosToTxsCovenantless(
 				},
 				Amount:    v.Amount,
 				Type:      types.TxReceived,
-				IsPending: v.Pending,
 				CreatedAt: getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
 			})
 			continue
 		}
 
+		// Otherwise subtract the amount to find the actual spent amount.
 		tx.Amount -= v.Amount
 		if v.RedeemTx == "" {
 			tx.RedeemTxid = ""

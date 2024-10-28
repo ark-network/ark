@@ -1,9 +1,9 @@
 package tree
 
 import (
+	"encoding/hex"
 	"fmt"
 
-	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
@@ -13,7 +13,7 @@ import (
 )
 
 func CraftCongestionTree(
-	asset string, aspPubkey *secp256k1.PublicKey, receivers []Receiver,
+	asset string, aspPubkey *secp256k1.PublicKey, receivers []VtxoLeaf,
 	feeSatsPerNode uint64, roundLifetime int64,
 ) (
 	buildCongestionTree TreeFactory,
@@ -41,9 +41,14 @@ func CraftCongestionTree(
 	return
 }
 
+type vtxoOutput struct {
+	pubkey *secp256k1.PublicKey
+	amount uint64
+}
+
 type node struct {
 	sweepKey      *secp256k1.PublicKey
-	receivers     []Receiver
+	receivers     []vtxoOutput
 	left          *node
 	right         *node
 	asset         string
@@ -61,7 +66,7 @@ func (n *node) isLeaf() bool {
 func (n *node) getAmount() uint64 {
 	var amount uint64
 	for _, r := range n.receivers {
-		amount += r.Amount
+		amount += r.amount
 	}
 
 	if n.isLeaf() {
@@ -107,7 +112,7 @@ func (n *node) getChildren() []*node {
 
 func (n *node) getOutputs() ([]psetv2.OutputArgs, error) {
 	if n.isLeaf() {
-		taprootKey, _, err := n.getVtxoWitnessData()
+		taprootKey, err := n.getVtxoWitnessData()
 		if err != nil {
 			return nil, err
 		}
@@ -168,7 +173,7 @@ func (n *node) getWitnessData() (
 	}
 
 	if n.isLeaf() {
-		taprootKey, _, err := n.getVtxoWitnessData()
+		taprootKey, err := n.getVtxoWitnessData()
 		if err != nil {
 			return nil, nil, err
 		}
@@ -241,15 +246,14 @@ func (n *node) getWitnessData() (
 }
 
 func (n *node) getVtxoWitnessData() (
-	*secp256k1.PublicKey, common.TaprootTree, error,
+	*secp256k1.PublicKey, error,
 ) {
 	if !n.isLeaf() {
-		return nil, nil, fmt.Errorf("cannot call vtxoWitness on a non-leaf node")
+		return nil, fmt.Errorf("cannot call vtxoWitness on a non-leaf node")
 	}
 
 	receiver := n.receivers[0]
-
-	return receiver.Script.TapTree()
+	return receiver.pubkey, nil
 }
 
 func (n *node) getTreeNode(
@@ -373,7 +377,7 @@ func (n *node) createFinalCongestionTree() TreeFactory {
 }
 
 func createPartialCongestionTree(
-	asset string, aspPubkey *secp256k1.PublicKey, receivers []Receiver,
+	asset string, aspPubkey *secp256k1.PublicKey, receivers []VtxoLeaf,
 	feeSatsPerNode uint64, roundLifetime int64,
 ) (root *node, err error) {
 	if len(receivers) == 0 {
@@ -382,9 +386,19 @@ func createPartialCongestionTree(
 
 	nodes := make([]*node, 0, len(receivers))
 	for _, r := range receivers {
+		pubkeyBytes, err := hex.DecodeString(r.Pubkey)
+		if err != nil {
+			return nil, err
+		}
+
+		pubkey, err := schnorr.ParsePubKey(pubkeyBytes)
+		if err != nil {
+			return nil, err
+		}
+
 		leafNode := &node{
 			sweepKey:      aspPubkey,
-			receivers:     []Receiver{r},
+			receivers:     []vtxoOutput{{pubkey, r.Amount}},
 			asset:         asset,
 			feeSats:       feeSatsPerNode,
 			roundLifetime: roundLifetime,

@@ -3,6 +3,7 @@ package bitcointree_test
 import (
 	"encoding/hex"
 	"encoding/json"
+	"github.com/ark-network/ark/common/tree"
 	"os"
 	"testing"
 
@@ -42,7 +43,7 @@ func TestRoundTripSignTree(t *testing.T) {
 		_, sharedOutputAmount, err := bitcointree.CraftSharedOutput(
 			cosignerPubKeys,
 			asp.PubKey(),
-			castReceivers(f.Receivers, asp.PubKey()),
+			castReceivers(f.Receivers),
 			minRelayFee,
 			lifetime,
 		)
@@ -56,7 +57,7 @@ func TestRoundTripSignTree(t *testing.T) {
 			},
 			cosignerPubKeys,
 			asp.PubKey(),
-			castReceivers(f.Receivers, asp.PubKey()),
+			castReceivers(f.Receivers),
 			minRelayFee,
 			lifetime,
 		)
@@ -154,11 +155,11 @@ func (r receiverFixture) toVtxoScript(asp *secp256k1.PublicKey) bitcointree.Vtxo
 	}
 }
 
-func castReceivers(receivers []receiverFixture, asp *secp256k1.PublicKey) []bitcointree.Receiver {
-	receiversOut := make([]bitcointree.Receiver, 0, len(receivers))
+func castReceivers(receivers []receiverFixture) []tree.VtxoLeaf {
+	receiversOut := make([]tree.VtxoLeaf, 0, len(receivers))
 	for _, r := range receivers {
-		receiversOut = append(receiversOut, bitcointree.Receiver{
-			Script: r.toVtxoScript(asp),
+		receiversOut = append(receiversOut, tree.VtxoLeaf{
+			Pubkey: r.Pubkey,
 			Amount: uint64(r.Amount),
 		})
 	}

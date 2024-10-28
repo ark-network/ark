@@ -37,20 +37,20 @@ func (v *vxtoRepository) AddVtxos(ctx context.Context, vtxos []domain.Vtxo) erro
 	txBody := func(querierWithTx *queries.Queries) error {
 		for i := range vtxos {
 			vtxo := vtxos[i]
+
 			if err := querierWithTx.UpsertVtxo(
 				ctx, queries.UpsertVtxoParams{
-					Txid:       vtxo.Txid,
-					Vout:       int64(vtxo.VOut),
-					Descriptor: sql.NullString{String: vtxo.Descriptor, Valid: true},
-					Amount:     int64(vtxo.Amount),
-					PoolTx:     vtxo.RoundTxid,
-					SpentBy:    vtxo.SpentBy,
-					Spent:      vtxo.Spent,
-					Redeemed:   vtxo.Redeemed,
-					Swept:      vtxo.Swept,
-					ExpireAt:   vtxo.ExpireAt,
-					RedeemTx:   sql.NullString{String: vtxo.RedeemTx, Valid: true},
-					Pending:    vtxo.Pending,
+					Txid:     vtxo.Txid,
+					Vout:     int64(vtxo.VOut),
+					Pubkey:   vtxo.Pubkey,
+					Amount:   int64(vtxo.Amount),
+					PoolTx:   vtxo.RoundTxid,
+					SpentBy:  vtxo.SpentBy,
+					Spent:    vtxo.Spent,
+					Redeemed: vtxo.Redeemed,
+					Swept:    vtxo.Swept,
+					ExpireAt: vtxo.ExpireAt,
+					RedeemTx: sql.NullString{String: vtxo.RedeemTx, Valid: true},
 				},
 			); err != nil {
 				return err
@@ -81,10 +81,6 @@ func (v *vxtoRepository) GetAllVtxos(ctx context.Context, pubkey string) ([]doma
 
 	var rows []queries.Vtxo
 	if withPubkey {
-		if len(pubkey) == 66 {
-			pubkey = pubkey[2:]
-		}
-
 		res, err := v.querier.SelectNotRedeemedVtxosWithPubkey(ctx, pubkey)
 		if err != nil {
 			return nil, nil, err
@@ -253,10 +249,8 @@ func rowToVtxo(row queries.Vtxo) domain.Vtxo {
 			Txid: row.Txid,
 			VOut: uint32(row.Vout),
 		},
-		Receiver: domain.Receiver{
-			Descriptor: row.Descriptor.String,
-			Amount:     uint64(row.Amount),
-		},
+		Amount:    uint64(row.Amount),
+		Pubkey:    row.Pubkey,
 		RoundTxid: row.PoolTx,
 		SpentBy:   row.SpentBy,
 		Spent:     row.Spent,
@@ -264,7 +258,6 @@ func rowToVtxo(row queries.Vtxo) domain.Vtxo {
 		Swept:     row.Swept,
 		ExpireAt:  row.ExpireAt,
 		RedeemTx:  row.RedeemTx.String,
-		Pending:   row.Pending,
 	}
 }
 

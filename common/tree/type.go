@@ -6,7 +6,7 @@ import (
 
 type TreeFactory func(outpoint psetv2.InputArgs) (CongestionTree, error)
 
-type Receiver struct {
-	Script VtxoScript
+type VtxoLeaf struct {
+	Pubkey string
 	Amount uint64
 }

@@ -24,13 +24,14 @@ type timedPayment struct {
 type paymentsMap struct {
 	lock          *sync.RWMutex
 	payments      map[string]*timedPayment
+	descriptors   map[domain.VtxoKey]string
 	ephemeralKeys map[string]*secp256k1.PublicKey
 }
 
 func newPaymentsMap() *paymentsMap {
 	paymentsById := make(map[string]*timedPayment)
 	lock := &sync.RWMutex{}
-	return &paymentsMap{lock, paymentsById, make(map[string]*secp256k1.PublicKey)}
+	return &paymentsMap{lock, paymentsById, make(map[domain.VtxoKey]string), make(map[string]*secp256k1.PublicKey)}
 }
 
 func (m *paymentsMap) len() int64 {
@@ -58,7 +59,11 @@ func (m *paymentsMap) delete(id string) error {
 	return nil
 }
 
-func (m *paymentsMap) push(payment domain.Payment, boardingInputs []ports.BoardingInput) error {
+func (m *paymentsMap) push(
+	payment domain.Payment,
+	boardingInputs []ports.BoardingInput,
+	descriptors map[domain.VtxoKey]string,
+) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -86,6 +91,10 @@ func (m *paymentsMap) push(payment domain.Payment, boardingInputs []ports.Boardi
 		}
 	}
 
+	for key, desc := range descriptors {
+		m.descriptors[key] = desc
+	}
+
 	m.payments[payment.Id] = &timedPayment{payment, boardingInputs, time.Now(), time.Time{}}
 	return nil
 }
@@ -102,7 +111,7 @@ func (m *paymentsMap) pushEphemeralKey(paymentId string, pubkey *secp256k1.Publi
 	return nil
 }
 
-func (m *paymentsMap) pop(num int64) ([]domain.Payment, []ports.BoardingInput, []*secp256k1.PublicKey) {
+func (m *paymentsMap) pop(num int64) ([]domain.Payment, []ports.BoardingInput, map[domain.VtxoKey]string, []*secp256k1.PublicKey) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -129,6 +138,7 @@ func (m *paymentsMap) pop(num int64) ([]domain.Payment, []ports.BoardingInput, [
 	payments := make([]domain.Payment, 0, num)
 	boardingInputs := make([]ports.BoardingInput, 0)
 	cosigners := make([]*secp256k1.PublicKey, 0, num)
+	descriptors := make(map[domain.VtxoKey]string)
 	for _, p := range paymentsByTime[:num] {
 		boardingInputs = append(boardingInputs, p.boardingInputs...)
 		payments = append(payments, p.Payment)
@@ -136,9 +146,15 @@ func (m *paymentsMap) pop(num int64) ([]domain.Payment, []ports.BoardingInput, [
 			cosigners = append(cosigners, pubkey)
 			delete(m.ephemeralKeys, p.Payment.Id)
 		}
+		for _, input := range payments {
+			for _, vtxo := range input.Inputs {
+				descriptors[vtxo.VtxoKey] = m.descriptors[vtxo.VtxoKey]
+				delete(m.descriptors, vtxo.VtxoKey)
+			}
+		}
 		delete(m.payments, p.Id)
 	}
-	return payments, boardingInputs, cosigners
+	return payments, boardingInputs, descriptors, cosigners
 }
 
 func (m *paymentsMap) update(payment domain.Payment) error {
@@ -148,6 +164,24 @@ func (m *paymentsMap) update(payment domain.Payment) error {
 	p, ok := m.payments[payment.Id]
 	if !ok {
 		return fmt.Errorf("payment %s not found", payment.Id)
+	}
+
+	sumOfInputs := uint64(0)
+	for _, input := range payment.Inputs {
+		sumOfInputs += input.Amount
+	}
+
+	for _, boardingInput := range p.boardingInputs {
+		sumOfInputs += boardingInput.Amount
+	}
+
+	sumOfOutputs := uint64(0)
+	for _, receiver := range payment.Receivers {
+		sumOfOutputs += receiver.Amount
+	}
+
+	if sumOfInputs != sumOfOutputs {
+		return fmt.Errorf("sum of inputs %d does not match sum of outputs %d", sumOfInputs, sumOfOutputs)
 	}
 
 	p.Payment = payment

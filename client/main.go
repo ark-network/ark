@@ -39,7 +39,7 @@ func main() {
 		&configCommand,
 		&dumpCommand,
 		&receiveCommand,
-		&claimCmd,
+		&settleCmd,
 		&sendCommand,
 		&balanceCommand,
 		&redeemCommand,
@@ -160,11 +160,11 @@ var (
 			return receive(ctx)
 		},
 	}
-	claimCmd = cli.Command{
-		Name:  "claim",
-		Usage: "Claim onboarding funds or pending payments",
+	settleCmd = cli.Command{
+		Name:  "settle",
+		Usage: "Settle onboarding funds or oor payments",
 		Action: func(ctx *cli.Context) error {
-			return claim(ctx)
+			return settle(ctx)
 		},
 		Flags: []cli.Flag{passwordFlag},
 	}
@@ -266,7 +266,7 @@ func receive(ctx *cli.Context) error {
 	})
 }
 
-func claim(ctx *cli.Context) error {
+func settle(ctx *cli.Context) error {
 	password, err := readPassword(ctx)
 	if err != nil {
 		return err
@@ -275,7 +275,7 @@ func claim(ctx *cli.Context) error {
 		return err
 	}
 
-	txID, err := arkSdkClient.Claim(ctx.Context)
+	txID, err := arkSdkClient.Settle(ctx.Context)
 	if err != nil {
 		return err
 	}
