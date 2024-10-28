@@ -267,7 +267,7 @@ func onboard(user User, amount float64) error {
 
 	time.Sleep(5 * time.Second)
 
-	if _, err = user.client.Claim(ctx); err != nil {
+	if _, err = user.client.Settle(ctx); err != nil {
 		return fmt.Errorf("user %s failed to onboard: %v", user.ID, err)
 	}
 
@@ -305,7 +305,7 @@ func sendAsync(user User, amount float64, to string, users map[string]User) erro
 func claim(user User) error {
 	ctx := context.Background()
 
-	txID, err := user.client.Claim(ctx)
+	txID, err := user.client.Settle(ctx)
 	if err != nil {
 		return fmt.Errorf("user %s failed to claim their funds: %v", user.ID, err)
 	}
