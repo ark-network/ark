@@ -265,7 +265,7 @@ func onboard(user User, amount float64) error {
 		return err
 	}
 
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	if _, err = user.client.Claim(ctx); err != nil {
 		return fmt.Errorf("user %s failed to onboard: %v", user.ID, err)

@@ -3,7 +3,7 @@ version: "1.0"
 server:
   network: "regtest"
   initial_funding: 1.0
-  round_interval: 20
+  round_interval: 25
 
 clients:
   - id: "client_0"
