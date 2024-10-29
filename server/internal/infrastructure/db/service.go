@@ -29,6 +29,9 @@ var (
 	voucherStoreTypes = map[string]func(...interface{}) (domain.VoucherRepository, error){
 		"badger": badgerdb.NewVoucherRepository,
 	}
+	metadataStoreTypes = map[string]func(...interface{}) (domain.MetadataRepository, error){
+		"badger": badgerdb.NewMetadataRepository,
+	}
 )
 
 const (
@@ -36,20 +39,23 @@ const (
 )
 
 type ServiceConfig struct {
-	EventStoreType   string
-	DataStoreType    string
-	VoucherStoreType string
+	EventStoreType    string
+	DataStoreType     string
+	VoucherStoreType  string
+	MetadataStoreType string
 
-	EventStoreConfig   []interface{}
-	DataStoreConfig    []interface{}
-	VoucherStoreConfig []interface{}
+	EventStoreConfig    []interface{}
+	DataStoreConfig     []interface{}
+	VoucherStoreConfig  []interface{}
+	MetadataStoreConfig []interface{}
 }
 
 type service struct {
-	eventStore   domain.RoundEventRepository
-	roundStore   domain.RoundRepository
-	vtxoStore    domain.VtxoRepository
-	voucherStore domain.VoucherRepository
+	eventStore    domain.RoundEventRepository
+	roundStore    domain.RoundRepository
+	vtxoStore     domain.VtxoRepository
+	voucherStore  domain.VoucherRepository
+	metadataStore domain.MetadataRepository
 }
 
 func NewService(config ServiceConfig) (ports.RepoManager, error) {
@@ -69,11 +75,16 @@ func NewService(config ServiceConfig) (ports.RepoManager, error) {
 	if !ok {
 		return nil, fmt.Errorf("voucher store type not supported")
 	}
+	metadataStoreFactory, ok := metadataStoreTypes[config.MetadataStoreType]
+	if !ok {
+		return nil, fmt.Errorf("metadata store type not supported")
+	}
 
 	var eventStore domain.RoundEventRepository
 	var roundStore domain.RoundRepository
 	var vtxoStore domain.VtxoRepository
 	var voucherStore domain.VoucherRepository
+	var metadataStore domain.MetadataRepository
 	var err error
 
 	switch config.EventStoreType {
@@ -155,7 +166,15 @@ func NewService(config ServiceConfig) (ports.RepoManager, error) {
 		return nil, fmt.Errorf("unknown voucher store db type")
 	}
 
-	return &service{eventStore, roundStore, vtxoStore, voucherStore}, nil
+	switch config.MetadataStoreType {
+	case "badger":
+		metadataStore, err = metadataStoreFactory(config.MetadataStoreConfig...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open metadata store: %s", err)
+		}
+	}
+
+	return &service{eventStore, roundStore, vtxoStore, voucherStore, metadataStore}, nil
 }
 
 func (s *service) RegisterEventsHandler(handler func(round *domain.Round)) {
@@ -176,6 +195,10 @@ func (s *service) Vtxos() domain.VtxoRepository {
 
 func (s *service) Vouchers() domain.VoucherRepository {
 	return s.voucherStore
+}
+
+func (s *service) VtxoMetadata() domain.MetadataRepository {
+	return s.metadataStore
 }
 
 func (s *service) Close() {

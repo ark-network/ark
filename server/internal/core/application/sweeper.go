@@ -10,8 +10,18 @@ import (
 	"github.com/ark-network/ark/common/voucher"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
+	nostr_notifier "github.com/ark-network/ark/server/internal/infrastructure/notifier/nostr"
 	log "github.com/sirupsen/logrus"
 )
+
+const voucherNotificationMsg = `
+Your VTXO has been swept! You have received a voucher for %d BTC.
+You can redeem it to get new VTXOs.
+
+Vtxo swept: %s:%d
+Amount: %d
+Voucher: %s
+`
 
 // sweeper is an unexported service running while the main application service is started
 // it is responsible for sweeping onchain shared outputs that expired
@@ -257,7 +267,7 @@ func (s *sweeper) createTask(
 
 				log.Debugf("%d vtxos swept", len(vtxoKeys))
 
-				go s.createNotesForUnspentVtxos(ctx, vtxoKeys)
+				go s.createAndSendVouchers(ctx, vtxoKeys)
 			}
 		}
 
@@ -314,15 +324,31 @@ func (s *sweeper) updateVtxoExpirationTime(
 	return s.repoManager.Vtxos().UpdateExpireAt(context.Background(), vtxos, expirationTime)
 }
 
-func (s *sweeper) createNotesForUnspentVtxos(ctx context.Context, vtxosKeys []domain.VtxoKey) {
+func (s *sweeper) createAndSendVouchers(ctx context.Context, vtxosKeys []domain.VtxoKey) {
 	vtxos, err := s.repoManager.Vtxos().GetVtxos(ctx, vtxosKeys)
 	if err != nil {
 		log.Error(fmt.Errorf("error while getting vtxos: %w", err))
 		return
 	}
 
+	metadataRepo := s.repoManager.VtxoMetadata()
+
+	notifier := nostr_notifier.New()
+
 	for _, vtxo := range vtxos {
 		if !vtxo.Swept || vtxo.Redeemed || vtxo.Spent {
+			continue
+		}
+
+		// get the nostr recipient
+		metadata, err := metadataRepo.Get(ctx, vtxo.VtxoKey)
+		if err != nil {
+			log.Debugf("no metadata found for vtxo %s", vtxo.VtxoKey)
+			continue
+		}
+
+		if len(metadata.NostrRecipient) == 0 {
+			log.Debugf("no nostr recipient found for vtxo %s:%d, skipping voucher creation", vtxo.Txid, vtxo.VOut)
 			continue
 		}
 
@@ -330,19 +356,21 @@ func (s *sweeper) createNotesForUnspentVtxos(ctx context.Context, vtxosKeys []do
 		voucherData, err := voucher.New(uint32(vtxo.Amount))
 		if err != nil {
 			log.Error(fmt.Errorf("error while creating voucher data: %w", err))
-			return
+			continue
 		}
 
 		signature, err := s.wallet.SignMessage(ctx, voucherData.Hash())
 		if err != nil {
 			log.Error(fmt.Errorf("error while signing voucher data: %w", err))
-			return
+			continue
 		}
 
 		voucher := voucherData.ToVoucher(signature)
-		log.Debugf("voucher created: %s", voucher)
+		msg := notificationMsg(vtxo.VtxoKey, uint32(vtxo.Amount), voucher.String())
 
-		// TODO send the voucher via nostr ??
+		if err := notifier.Notify(ctx, metadata.NostrRecipient, msg); err != nil {
+			log.Error(fmt.Errorf("error while sending voucher notification: %w", err))
+		}
 	}
 }
 
@@ -447,4 +475,8 @@ func extractVtxoOutpoint(leaf tree.Node) (*domain.VtxoKey, error) {
 		Txid: leaf.Txid,
 		VOut: 0,
 	}, nil
+}
+
+func notificationMsg(vtxo domain.VtxoKey, amount uint32, voucher string) string {
+	return fmt.Sprintf(voucherNotificationMsg, amount, vtxo.Txid, vtxo.VOut, amount, voucher)
 }

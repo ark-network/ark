@@ -381,3 +381,24 @@ func getSpentVtxos(payments map[string]domain.Payment) []domain.VtxoKey {
 	}
 	return vtxos
 }
+
+func validateProofs(ctx context.Context, vtxoRepo domain.VtxoRepository, proofs []SignedVtxoOutpoint) error {
+	for _, signedVtxo := range proofs {
+		vtxos, err := vtxoRepo.GetVtxos(ctx, []domain.VtxoKey{signedVtxo.Outpoint})
+		if err != nil {
+			return fmt.Errorf("vtxo not found: %s (%s)", signedVtxo.Outpoint, err)
+		}
+
+		if len(vtxos) < 1 {
+			return fmt.Errorf("vtxo not found: %s", signedVtxo.Outpoint)
+		}
+
+		vtxo := vtxos[0]
+
+		if err := signedVtxo.Proof.validate(vtxo); err != nil {
+			return fmt.Errorf("invalid proof for vtxo %s (%s)", signedVtxo.Outpoint, err)
+		}
+	}
+
+	return nil
+}

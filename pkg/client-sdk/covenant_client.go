@@ -212,7 +212,11 @@ func (a *covenantArkClient) InitWithWallet(ctx context.Context, args InitWithWal
 }
 
 func (a *covenantArkClient) RedeemVouchers(ctx context.Context, notes []string) (string, error) {
-	return "", nil
+	return "", fmt.Errorf("not implemented")
+}
+
+func (a *covenantArkClient) SetNostrNotificationRecipient(_ context.Context, _ string) error {
+	return fmt.Errorf("not implemented")
 }
 
 func (a *covenantArkClient) listenForTxStream(ctx context.Context) {

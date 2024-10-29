@@ -31,6 +31,7 @@ type ArkClient interface {
 	GetTransactionHistory(ctx context.Context) ([]types.Transaction, error)
 	GetTransactionEventChannel() chan types.TransactionEvent
 	RedeemVouchers(ctx context.Context, vouchers []string) (string, error)
+	SetNostrNotificationRecipient(ctx context.Context, nostrRecipient string) error
 	Stop() error
 }
 

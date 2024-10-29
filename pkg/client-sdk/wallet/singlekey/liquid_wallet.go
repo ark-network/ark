@@ -287,6 +287,22 @@ func (s *liquidWallet) SignTransaction(
 	return pset.ToBase64()
 }
 
+func (w *liquidWallet) SignMessage(
+	ctx context.Context, message []byte, pubkey string,
+) (string, error) {
+	walletPubkeyHex := hex.EncodeToString(schnorr.SerializePubKey(w.walletData.Pubkey))
+	if walletPubkeyHex != pubkey {
+		return "", fmt.Errorf("pubkey mismatch, cannot sign message")
+	}
+
+	sig, err := schnorr.Sign(w.privateKey, message)
+	if err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(sig.Serialize()), nil
+}
+
 func (w *liquidWallet) getAddress(
 	ctx context.Context,
 ) (

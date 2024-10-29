@@ -97,6 +97,22 @@ service ArkService {
       get: "/v1/transactions"
     };
   }
+
+  /* Metadata APIs */
+
+  rpc SetNostrRecipient(SetNostrRecipientRequest) returns (SetNostrRecipientResponse) {
+    option (google.api.http) = {
+      post: "/v1/vtxo/nostr"
+      body: "*"
+    };
+  }
+
+  rpc DeleteNostrRecipient(DeleteNostrRecipientRequest) returns (DeleteNostrRecipientResponse) {
+    option (google.api.http) = {
+      post: "/v1/vtxo/nostr/delete"
+      body: "*"
+    };
+  }
 }
 
 message GetInfoRequest {}
@@ -345,3 +361,28 @@ message RedeemTransaction {
   repeated Outpoint spent_vtxos = 2;
   repeated Vtxo spendable_vtxos = 3;
 }
+
+// This message is used to prove to the ASP that the user controls the vtxo without revealing the whole VTXO descriptor.
+message OwnershipProof {
+  string control_block = 1;
+  string script = 2;
+  string signature = 3; // VTXO outpoint signed with script's secret key
+}
+
+message SignedVtxoOutpoint {
+  Outpoint outpoint = 1;
+  OwnershipProof proof = 2;
+}
+
+message SetNostrRecipientRequest {
+  string nostr_recipient = 1;
+  repeated SignedVtxoOutpoint vtxos = 2;
+}
+
+message SetNostrRecipientResponse {}
+
+message DeleteNostrRecipientRequest {
+  repeated SignedVtxoOutpoint vtxos = 1;
+}
+
+message DeleteNostrRecipientResponse {}

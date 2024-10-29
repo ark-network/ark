@@ -19,6 +19,7 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/store"
 	"github.com/ark-network/ark/pkg/client-sdk/types"
 	utils "github.com/ark-network/ark/server/test/e2e"
+	"github.com/nbd-wtf/go-nostr"
 	"github.com/stretchr/testify/require"
 )
 
@@ -407,6 +408,34 @@ func TestSweep(t *testing.T) {
 
 	time.Sleep(3 * time.Second)
 
+	secretKey, publicKey, nprofile, err := utils.GetNewNostrProfile()
+	require.NoError(t, err)
+
+	t.Logf("secretKey: %s", secretKey)
+
+	_, err = runClarkCommand("register-nostr", "--profile", nprofile)
+	require.NoError(t, err)
+
+	time.Sleep(3 * time.Second)
+
+	// connect to relay
+	relay, err := nostr.RelayConnect(context.Background(), utils.NakTestingRelay)
+	require.NoError(t, err)
+	defer relay.Close()
+
+	sub, err := relay.Subscribe(context.Background(), nostr.Filters{
+		{
+			Kinds: []int{nostr.KindEncryptedDirectMessage},
+		},
+		{
+			Tags: nostr.TagMap{
+				"p": []string{publicKey},
+			},
+		},
+	})
+	require.NoError(t, err)
+	defer sub.Close()
+
 	_, err = utils.RunCommand("nigiri", "rpc", "generatetoaddress", "100", "bcrt1qe8eelqalnch946nzhefd5ajhgl2afjw5aegc59")
 	require.NoError(t, err)
 
@@ -417,11 +446,14 @@ func TestSweep(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 	require.Zero(t, balance.Offchain.Total) // all funds should be swept
+
+	for event := range sub.Events {
+		t.Logf("event: %+v", event)
+	}
 }
 
 func runClarkCommand(arg ...string) (string, error) {
-	args := append([]string{"exec", "-t", "clarkd", "ark"}, arg...)
-	return utils.RunCommand("docker", args...)
+	return utils.RunDockerExec("clarkd", arg...)
 }
 
 func setupAspWallet() error {

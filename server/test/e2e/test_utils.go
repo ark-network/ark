@@ -7,10 +7,14 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nbd-wtf/go-nostr"
+	"github.com/nbd-wtf/go-nostr/nip19"
 )
 
 const (
-	Password = "password"
+	Password        = "password"
+	NakTestingRelay = "ws://nak:10547"
 )
 
 type ArkBalance struct {
@@ -41,6 +45,11 @@ func GenerateBlock() error {
 
 	time.Sleep(6 * time.Second)
 	return nil
+}
+
+func RunDockerExec(container string, arg ...string) (string, error) {
+	args := append([]string{"exec", "-t", container}, arg...)
+	return RunCommand("docker", args...)
 }
 
 func RunCommand(name string, arg ...string) (string, error) {
@@ -103,4 +112,26 @@ func RunCommand(name string, arg ...string) (string, error) {
 func newCommand(name string, arg ...string) *exec.Cmd {
 	cmd := exec.Command(name, arg...)
 	return cmd
+}
+
+// nostr
+// use nak utils https://github.com/fiatjaf/nak
+
+func GetNewNostrProfile() (secretKey, publickey string, nprofile string, err error) {
+	secretKey, err = RunDockerExec("nak", "nak", "key", "generate")
+	if err != nil {
+		return "", "", "", err
+	}
+
+	publicKey, err := nostr.GetPublicKey(secretKey)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	nprofile, err = nip19.EncodeProfile(publicKey, []string{NakTestingRelay})
+	if err != nil {
+		return "", "", "", err
+	}
+
+	return secretKey, publicKey, nprofile, nil
 }

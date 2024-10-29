@@ -17,6 +17,7 @@ type Config struct {
 	Port                  uint32
 	EventDbType           string
 	VoucherDbType         string
+	MetadataDbType        string
 	DbType                string
 	DbDir                 string
 	DbMigrationPath       string
@@ -49,6 +50,7 @@ var (
 	Port                  = "PORT"
 	EventDbType           = "EVENT_DB_TYPE"
 	VoucherDbType         = "VOUCHER_DB_TYPE"
+	MetadataDbType        = "METADATA_DB_TYPE"
 	DbType                = "DB_TYPE"
 	DbMigrationPath       = "DB_MIGRATION_PATH"
 	SchedulerType         = "SCHEDULER_TYPE"
@@ -82,6 +84,7 @@ var (
 	defaultDbMigrationPath       = "file://internal/infrastructure/db/sqlite/migration"
 	defaultEventDbType           = "badger"
 	defaultVoucherDbType         = "badger"
+	defaultMetadataDbType        = "badger"
 	defaultSchedulerType         = "gocron"
 	defaultTxBuilderType         = "covenant"
 	defaultBlockchainScannerType = "ocean"
@@ -111,6 +114,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(SchedulerType, defaultSchedulerType)
 	viper.SetDefault(EventDbType, defaultEventDbType)
 	viper.SetDefault(VoucherDbType, defaultVoucherDbType)
+	viper.SetDefault(MetadataDbType, defaultMetadataDbType)
 	viper.SetDefault(TxBuilderType, defaultTxBuilderType)
 	viper.SetDefault(UnilateralExitDelay, defaultUnilateralExitDelay)
 	viper.SetDefault(BlockchainScannerType, defaultBlockchainScannerType)
@@ -133,6 +137,7 @@ func LoadConfig() (*Config, error) {
 		Port:                  viper.GetUint32(Port),
 		EventDbType:           viper.GetString(EventDbType),
 		VoucherDbType:         viper.GetString(VoucherDbType),
+		MetadataDbType:        viper.GetString(MetadataDbType),
 		DbType:                viper.GetString(DbType),
 		DbMigrationPath:       viper.GetString(DbMigrationPath),
 		SchedulerType:         viper.GetString(SchedulerType),

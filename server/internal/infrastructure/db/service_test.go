@@ -84,23 +84,27 @@ func TestService(t *testing.T) {
 		{
 			name: "repo_manager_with_badger_stores",
 			config: db.ServiceConfig{
-				EventStoreType:     "badger",
-				DataStoreType:      "badger",
-				VoucherStoreType:   "badger",
-				EventStoreConfig:   []interface{}{"", nil},
-				DataStoreConfig:    []interface{}{"", nil},
-				VoucherStoreConfig: []interface{}{"", nil},
+				EventStoreType:      "badger",
+				DataStoreType:       "badger",
+				VoucherStoreType:    "badger",
+				MetadataStoreType:   "badger",
+				EventStoreConfig:    []interface{}{"", nil},
+				DataStoreConfig:     []interface{}{"", nil},
+				VoucherStoreConfig:  []interface{}{"", nil},
+				MetadataStoreConfig: []interface{}{"", nil},
 			},
 		},
 		{
 			name: "repo_manager_with_sqlite_stores",
 			config: db.ServiceConfig{
-				EventStoreType:     "badger",
-				DataStoreType:      "sqlite",
-				VoucherStoreType:   "badger",
-				EventStoreConfig:   []interface{}{"", nil},
-				DataStoreConfig:    []interface{}{dbDir, "file://sqlite/migration"},
-				VoucherStoreConfig: []interface{}{"", nil},
+				EventStoreType:      "badger",
+				DataStoreType:       "sqlite",
+				VoucherStoreType:    "badger",
+				MetadataStoreType:   "badger",
+				EventStoreConfig:    []interface{}{"", nil},
+				DataStoreConfig:     []interface{}{dbDir, "file://sqlite/migration"},
+				VoucherStoreConfig:  []interface{}{"", nil},
+				MetadataStoreConfig: []interface{}{"", nil},
 			},
 		},
 	}
@@ -115,6 +119,7 @@ func TestService(t *testing.T) {
 			testRoundRepository(t, svc)
 			testVtxoRepository(t, svc)
 			testNoteRepository(t, svc)
+			testMetadataRepository(t, svc)
 			time.Sleep(5 * time.Second)
 			svc.Close()
 		})
@@ -456,6 +461,48 @@ func testNoteRepository(t *testing.T, svc ports.RepoManager) {
 		require.Error(t, err)
 
 		svc.Vouchers().Close()
+	})
+}
+
+func testMetadataRepository(t *testing.T, svc ports.RepoManager) {
+	t.Run("test_metadata_repository", func(t *testing.T) {
+		ctx := context.Background()
+
+		vtxoKey := domain.VtxoKey{
+			Txid: randomString(32),
+			VOut: 0,
+		}
+
+		metadata := domain.Metadata{
+			NostrRecipient: "test",
+		}
+
+		// add
+		err := svc.VtxoMetadata().AddOrUpdate(ctx, metadata, []domain.VtxoKey{vtxoKey})
+		require.NoError(t, err)
+
+		gotMetadata, err := svc.VtxoMetadata().Get(ctx, vtxoKey)
+		require.NoError(t, err)
+		require.NotNil(t, gotMetadata)
+		require.Equal(t, metadata, *gotMetadata)
+
+		// update
+		metadata.NostrRecipient = "test2"
+		err = svc.VtxoMetadata().AddOrUpdate(ctx, metadata, []domain.VtxoKey{vtxoKey})
+		require.NoError(t, err)
+
+		gotMetadata, err = svc.VtxoMetadata().Get(ctx, vtxoKey)
+		require.NoError(t, err)
+		require.NotNil(t, gotMetadata)
+		require.Equal(t, metadata, *gotMetadata)
+
+		// delete
+		err = svc.VtxoMetadata().Delete(ctx, []domain.VtxoKey{vtxoKey})
+		require.NoError(t, err)
+
+		gotMetadata, err = svc.VtxoMetadata().Get(ctx, vtxoKey)
+		require.Error(t, err)
+		require.Nil(t, gotMetadata)
 	})
 }
 

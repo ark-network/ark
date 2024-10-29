@@ -133,6 +133,11 @@ var (
 		Aliases: []string{"v"},
 		Usage:   "vouchers to redeem",
 	}
+	nostrProfileFlag = &cli.StringFlag{
+		Name:    "profile",
+		Aliases: []string{"p"},
+		Usage:   "nostr profile to register",
+	}
 )
 
 var (
@@ -204,6 +209,14 @@ var (
 		Flags: []cli.Flag{vouchersFlag},
 		Action: func(ctx *cli.Context) error {
 			return redeemVouchers(ctx)
+		},
+	}
+	registerNostrCommand = cli.Command{
+		Name:  "register-nostr",
+		Usage: "Register Nostr profile",
+		Flags: []cli.Flag{nostrProfileFlag},
+		Action: func(ctx *cli.Context) error {
+			return registerNostrProfile(ctx)
 		},
 	}
 )
@@ -385,6 +398,17 @@ func redeem(ctx *cli.Context) error {
 	return printJSON(map[string]interface{}{
 		"txid": txID,
 	})
+}
+
+func registerNostrProfile(ctx *cli.Context) error {
+	profile := ctx.String(nostrProfileFlag.Name)
+
+	arkSdkClient, err := getArkSdkClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	return arkSdkClient.SetNostrNotificationRecipient(ctx.Context, profile)
 }
 
 func redeemVouchers(ctx *cli.Context) error {

@@ -59,6 +59,8 @@ type Service interface {
 		pubkey *secp256k1.PublicKey, signatures string,
 	) error
 	GetTransactionEventsChannel(ctx context.Context) <-chan TransactionEvent
+	SetNostrRecipient(ctx context.Context, nostrRecipient string, signedVtxoOutpoints []SignedVtxoOutpoint) error
+	DeleteNostrRecipient(ctx context.Context, signedVtxoOutpoints []SignedVtxoOutpoint) error
 }
 
 type ServiceInfo struct {
@@ -76,6 +78,11 @@ type WalletStatus struct {
 	IsInitialized bool
 	IsUnlocked    bool
 	IsSynced      bool
+}
+
+type SignedVtxoOutpoint struct {
+	Outpoint domain.VtxoKey
+	Proof    OwnershipProof
 }
 
 type txOutpoint struct {

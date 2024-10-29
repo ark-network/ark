@@ -3,6 +3,8 @@ package arksdk
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"math"
@@ -1232,6 +1234,108 @@ func (a *covenantlessArkClient) GetTransactionHistory(
 	})
 
 	return txs, nil
+}
+
+func (a *covenantlessArkClient) SetNostrNotificationRecipient(ctx context.Context, nostrProfile string) error {
+	spendableVtxos, _, err := a.ListVtxos(ctx)
+	if err != nil {
+		return err
+	}
+
+	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return err
+	}
+
+	descriptorVtxos := make([]client.DescriptorVtxo, 0)
+	for _, offchainAddr := range offchainAddrs {
+		for _, vtxo := range spendableVtxos {
+			vtxoAddr, err := vtxo.Address(a.AspPubkey, a.Network)
+			if err != nil {
+				return err
+			}
+
+			if vtxoAddr == offchainAddr.Address {
+				descriptorVtxos = append(descriptorVtxos, client.DescriptorVtxo{
+					Vtxo:       vtxo,
+					Descriptor: offchainAddr.Descriptor,
+				})
+			}
+		}
+	}
+
+	// sign the vtxos outpoints
+	vtxos := make([]client.SignedVtxoOutpoint, 0)
+	for _, v := range descriptorVtxos {
+		signedOutpoint := client.SignedVtxoOutpoint{
+			Outpoint: client.Outpoint{
+				Txid: v.Vtxo.Txid,
+				VOut: v.Vtxo.VOut,
+			},
+			Proof: client.OwnershipProof{},
+		}
+
+		// validate the vtxo script type
+		vtxoScript, err := bitcointree.ParseVtxoScript(v.Descriptor)
+		if err != nil {
+			return err
+		}
+
+		var forfeitClosure bitcointree.Closure
+		var signingPubkey string
+
+		if defaultVtxoScript, ok := vtxoScript.(*bitcointree.DefaultVtxoScript); ok {
+			forfeitClosure = &bitcointree.MultisigClosure{
+				Pubkey:    defaultVtxoScript.Owner,
+				AspPubkey: defaultVtxoScript.Asp,
+			}
+
+			signingPubkey = hex.EncodeToString(schnorr.SerializePubKey(defaultVtxoScript.Owner))
+		} else {
+			return fmt.Errorf("unsupported vtxo script: %T", vtxoScript)
+		}
+
+		_, tapTree, err := vtxoScript.TapTree()
+		if err != nil {
+			return err
+		}
+
+		forfeitLeaf, err := forfeitClosure.Leaf()
+		if err != nil {
+			return err
+		}
+
+		merkleProof, err := tapTree.GetTaprootMerkleProof(forfeitLeaf.TapHash())
+		if err != nil {
+			return err
+		}
+
+		// set the taproot merkle proof
+		signedOutpoint.Proof.ControlBlock = hex.EncodeToString(merkleProof.ControlBlock)
+		signedOutpoint.Proof.Script = hex.EncodeToString(merkleProof.Script)
+
+		txhash, err := chainhash.NewHashFromStr(v.Txid)
+		if err != nil {
+			return err
+		}
+
+		// hash the outpoint and sign it
+		voutBytes := make([]byte, 4)
+		binary.BigEndian.PutUint32(voutBytes, v.VOut)
+		outpointBytes := append(txhash[:], voutBytes...)
+		sigMsg := sha256.Sum256(outpointBytes)
+
+		sig, err := a.wallet.SignMessage(ctx, sigMsg[:], signingPubkey)
+		if err != nil {
+			return err
+		}
+
+		signedOutpoint.Proof.Signature = sig
+
+		vtxos = append(vtxos, signedOutpoint)
+	}
+
+	return a.client.SetNostrRecipient(ctx, nostrProfile, vtxos)
 }
 
 func (a *covenantlessArkClient) sendOnchain(

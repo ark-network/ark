@@ -33,9 +33,3 @@ type VtxoRepository interface {
 	UpdateExpireAt(ctx context.Context, vtxos []VtxoKey, expireAt int64) error
 	Close()
 }
-
-type VoucherRepository interface {
-	Contains(ctx context.Context, id uint64) (bool, error)
-	Add(ctx context.Context, id uint64) error
-	Close()
-}

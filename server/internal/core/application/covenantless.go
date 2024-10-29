@@ -762,6 +762,38 @@ func (s *covenantlessService) RegisterCosignerSignatures(
 	return nil
 }
 
+func (s *covenantlessService) SetNostrRecipient(ctx context.Context, nostrRecipient string, signedVtxoOutpoints []SignedVtxoOutpoint) error {
+	if err := validateProofs(ctx, s.repoManager.Vtxos(), signedVtxoOutpoints); err != nil {
+		return err
+	}
+
+	vtxoKeys := make([]domain.VtxoKey, 0, len(signedVtxoOutpoints))
+	for _, signedVtxo := range signedVtxoOutpoints {
+		vtxoKeys = append(vtxoKeys, signedVtxo.Outpoint)
+	}
+
+	return s.repoManager.VtxoMetadata().AddOrUpdate(
+		ctx,
+		domain.Metadata{
+			NostrRecipient: nostrRecipient,
+		},
+		vtxoKeys,
+	)
+}
+
+func (s *covenantlessService) DeleteNostrRecipient(ctx context.Context, signedVtxoOutpoints []SignedVtxoOutpoint) error {
+	if err := validateProofs(ctx, s.repoManager.Vtxos(), signedVtxoOutpoints); err != nil {
+		return err
+	}
+
+	vtxoKeys := make([]domain.VtxoKey, 0, len(signedVtxoOutpoints))
+	for _, signedVtxo := range signedVtxoOutpoints {
+		vtxoKeys = append(vtxoKeys, signedVtxo.Outpoint)
+	}
+
+	return s.repoManager.VtxoMetadata().Delete(ctx, vtxoKeys)
+}
+
 func (s *covenantlessService) start() {
 	s.startRound()
 }

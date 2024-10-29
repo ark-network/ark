@@ -58,6 +58,8 @@ type ASPClient interface {
 	GetRoundByID(ctx context.Context, roundID string) (*Round, error)
 	Close()
 	GetTransactionsStream(ctx context.Context) (<-chan TransactionEvent, func(), error)
+	SetNostrRecipient(ctx context.Context, nostrRecipient string, vtxos []SignedVtxoOutpoint) error
+	DeleteNostrRecipient(ctx context.Context, vtxos []SignedVtxoOutpoint) error
 }
 
 type Info struct {
@@ -225,4 +227,15 @@ type RedeemTransaction struct {
 	Txid           string
 	SpentVtxos     []Outpoint
 	SpendableVtxos []Vtxo
+}
+
+type SignedVtxoOutpoint struct {
+	Outpoint
+	Proof OwnershipProof
+}
+
+type OwnershipProof struct {
+	ControlBlock string
+	Script       string
+	Signature    string
 }
