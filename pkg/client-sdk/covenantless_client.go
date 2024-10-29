@@ -817,14 +817,14 @@ func (a *covenantlessArkClient) RedeemVouchers(ctx context.Context, vouchers []s
 
 	log.Infof("payment registered with id: %s", paymentID)
 
-	poolTxID, err := a.handleRoundStream(
+	roundTxID, err := a.handleRoundStream(
 		ctx, paymentID, nil, nil, "", receiversOutput, roundEphemeralKey,
 	)
 	if err != nil {
 		return "", err
 	}
 
-	return poolTxID, nil
+	return roundTxID, nil
 }
 
 func (a *covenantlessArkClient) UnilateralRedeem(ctx context.Context) error {
@@ -982,14 +982,14 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 		return "", err
 	}
 
-	poolTxID, err := a.handleRoundStream(
+	roundTxID, err := a.handleRoundStream(
 		ctx, paymentID, selectedCoins, nil, "", receivers, roundEphemeralKey,
 	)
 	if err != nil {
 		return "", err
 	}
 
-	return poolTxID, nil
+	return roundTxID, nil
 }
 
 func (a *covenantlessArkClient) SendAsync(
@@ -1596,14 +1596,14 @@ func (a *covenantlessArkClient) sendOffchain(
 
 	log.Infof("payment registered with id: %s", paymentID)
 
-	poolTxID, err := a.handleRoundStream(
+	roundTxID, err := a.handleRoundStream(
 		ctx, paymentID, selectedCoins, nil, "", receiversOutput, roundEphemeralKey,
 	)
 	if err != nil {
 		return "", err
 	}
 
-	return poolTxID, nil
+	return roundTxID, nil
 }
 
 func (a *covenantlessArkClient) addInputs(

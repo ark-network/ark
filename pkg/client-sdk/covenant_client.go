@@ -612,14 +612,14 @@ func (a *covenantArkClient) CollaborativeRedeem(
 		return "", err
 	}
 
-	poolTxID, err := a.handleRoundStream(
+	roundTxID, err := a.handleRoundStream(
 		ctx, paymentID, selectedCoins, nil, "", receivers,
 	)
 	if err != nil {
 		return "", err
 	}
 
-	return poolTxID, nil
+	return roundTxID, nil
 }
 
 func (a *covenantArkClient) SendAsync(
@@ -1017,14 +1017,14 @@ func (a *covenantArkClient) sendOffchain(
 
 	log.Infof("payment registered with id: %s", paymentID)
 
-	poolTxID, err := a.handleRoundStream(
+	roundTxID, err := a.handleRoundStream(
 		ctx, paymentID, selectedCoins, nil, "", receiversOutput,
 	)
 	if err != nil {
 		return "", err
 	}
 
-	return poolTxID, nil
+	return roundTxID, nil
 }
 
 // addInputs adds the inputs to the pset for send onchain
