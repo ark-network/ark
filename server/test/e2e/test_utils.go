@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	Password        = "password"
-	NakTestingRelay = "ws://nak:10547"
+	Password              = "password"
+	NostrTestingSecretKey = "07959d1d2bc6507403449c556585d463a9ca4374eb0ec07b3929088ce6c34a7e"
 )
 
 type ArkBalance struct {
@@ -117,18 +117,15 @@ func newCommand(name string, arg ...string) *exec.Cmd {
 // nostr
 // use nak utils https://github.com/fiatjaf/nak
 
-func GetNewNostrProfile() (secretKey, publickey string, nprofile string, err error) {
-	secretKey, err = RunDockerExec("nak", "nak", "key", "generate")
-	if err != nil {
-		return "", "", "", err
-	}
+func GetNostrProfile() (secretKey, publickey string, nprofile string, err error) {
+	secretKey = NostrTestingSecretKey
 
 	publicKey, err := nostr.GetPublicKey(secretKey)
 	if err != nil {
 		return "", "", "", err
 	}
 
-	nprofile, err = nip19.EncodeProfile(publicKey, []string{NakTestingRelay})
+	nprofile, err = nip19.EncodeProfile(publicKey, []string{"ws://nak:10547"})
 	if err != nil {
 		return "", "", "", err
 	}

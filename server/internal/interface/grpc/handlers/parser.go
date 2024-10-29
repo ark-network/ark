@@ -226,11 +226,6 @@ func parseSignedVtxoOutpoints(signedVtxoOutpoints []*arkv1.SignedVtxoOutpoint) (
 			return nil, fmt.Errorf("missing txid")
 		}
 
-		vout := outpoint.GetVout()
-		if vout <= 0 {
-			return nil, fmt.Errorf("missing vout")
-		}
-
 		proof := signedVtxo.GetProof()
 		if proof == nil {
 			return nil, fmt.Errorf("missing proof")
@@ -275,6 +270,8 @@ func parseSignedVtxoOutpoints(signedVtxoOutpoints []*arkv1.SignedVtxoOutpoint) (
 		if err != nil {
 			return nil, fmt.Errorf("invalid script: %s", err)
 		}
+
+		vout := outpoint.GetVout()
 
 		parsed = append(parsed, application.SignedVtxoOutpoint{
 			Outpoint: domain.VtxoKey{

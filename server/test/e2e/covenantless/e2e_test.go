@@ -20,6 +20,7 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/types"
 	utils "github.com/ark-network/ark/server/test/e2e"
 	"github.com/nbd-wtf/go-nostr"
+	"github.com/nbd-wtf/go-nostr/nip04"
 	"github.com/stretchr/testify/require"
 )
 
@@ -408,18 +409,16 @@ func TestSweep(t *testing.T) {
 
 	time.Sleep(3 * time.Second)
 
-	secretKey, publicKey, nprofile, err := utils.GetNewNostrProfile()
+	secretKey, publicKey, nprofile, err := utils.GetNostrProfile()
 	require.NoError(t, err)
 
-	t.Logf("secretKey: %s", secretKey)
-
-	_, err = runClarkCommand("register-nostr", "--profile", nprofile)
+	_, err = runClarkCommand("register-nostr", "--profile", nprofile, "--password", utils.Password)
 	require.NoError(t, err)
 
 	time.Sleep(3 * time.Second)
 
 	// connect to relay
-	relay, err := nostr.RelayConnect(context.Background(), utils.NakTestingRelay)
+	relay, err := nostr.RelayConnect(context.Background(), "ws://localhost:10547")
 	require.NoError(t, err)
 	defer relay.Close()
 
@@ -447,13 +446,42 @@ func TestSweep(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 	require.Zero(t, balance.Offchain.Total) // all funds should be swept
 
+	var voucher string
+
 	for event := range sub.Events {
-		t.Logf("event: %+v", event)
+		sharedSecret, err := nip04.ComputeSharedSecret(event.PubKey, secretKey)
+		require.NoError(t, err)
+
+		// Decrypt the NIP04 message
+		decrypted, err := nip04.Decrypt(event.Content, sharedSecret)
+		require.NoError(t, err)
+
+		// Parse the decrypted JSON message to extract voucher
+		var notification struct {
+			Data struct {
+				Details struct {
+					Voucher string `json:"voucher"`
+				} `json:"details"`
+			} `json:"data"`
+		}
+		err = json.Unmarshal([]byte(decrypted), &notification)
+		require.NoError(t, err)
+		require.NotEmpty(t, notification.Data.Details.Voucher)
+
+		voucher = notification.Data.Details.Voucher
+		break // Exit after processing the first message
 	}
+
+	require.NotEmpty(t, voucher)
+
+	// redeem the voucher
+	_, err = runClarkCommand("redeem-vouchers", "--vouchers", voucher)
+	require.NoError(t, err)
 }
 
 func runClarkCommand(arg ...string) (string, error) {
-	return utils.RunDockerExec("clarkd", arg...)
+	args := append([]string{"ark"}, arg...)
+	return utils.RunDockerExec("clarkd", args...)
 }
 
 func setupAspWallet() error {

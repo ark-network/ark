@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -13,15 +14,6 @@ import (
 	nostr_notifier "github.com/ark-network/ark/server/internal/infrastructure/notifier/nostr"
 	log "github.com/sirupsen/logrus"
 )
-
-const voucherNotificationMsg = `
-Your VTXO has been swept! You have received a voucher for %d BTC.
-You can redeem it to get new VTXOs.
-
-Vtxo swept: %s:%d
-Amount: %d
-Voucher: %s
-`
 
 // sweeper is an unexported service running while the main application service is started
 // it is responsible for sweeping onchain shared outputs that expired
@@ -366,7 +358,7 @@ func (s *sweeper) createAndSendVouchers(ctx context.Context, vtxosKeys []domain.
 		}
 
 		voucher := voucherData.ToVoucher(signature)
-		msg := notificationMsg(vtxo.VtxoKey, uint32(vtxo.Amount), voucher.String())
+		msg := notificationJSON(vtxo.VtxoKey, uint32(vtxo.Amount), voucher.String())
 
 		if err := notifier.Notify(ctx, metadata.NostrRecipient, msg); err != nil {
 			log.Error(fmt.Errorf("error while sending voucher notification: %w", err))
@@ -477,6 +469,39 @@ func extractVtxoOutpoint(leaf tree.Node) (*domain.VtxoKey, error) {
 	}, nil
 }
 
-func notificationMsg(vtxo domain.VtxoKey, amount uint32, voucher string) string {
-	return fmt.Sprintf(voucherNotificationMsg, amount, vtxo.Txid, vtxo.VOut, amount, voucher)
+type sweepNotification struct {
+	Type string `json:"type"`
+	Data struct {
+		Message string `json:"message"`
+		Details struct {
+			Vtxo struct {
+				Txid string `json:"txid"`
+				Vout uint32 `json:"vout"`
+			} `json:"vtxo"`
+			Amount  uint32 `json:"amount"`
+			Voucher string `json:"voucher"`
+		} `json:"details"`
+	} `json:"data"`
+}
+
+func notificationJSON(vtxo domain.VtxoKey, amount uint32, voucher string) string {
+	notification := sweepNotification{
+		Type: "sweep_notification",
+	}
+
+	amountBtc := float64(amount) / 1e8
+
+	notification.Data.Message = fmt.Sprintf("Your VTXO has been swept! You have received a voucher for %.8f BTC.", amountBtc)
+	notification.Data.Details.Vtxo.Txid = vtxo.Txid
+	notification.Data.Details.Vtxo.Vout = vtxo.VOut
+	notification.Data.Details.Amount = amount
+	notification.Data.Details.Voucher = voucher
+
+	jsonBytes, err := json.Marshal(notification)
+	if err != nil {
+		log.Error(fmt.Errorf("error marshaling notification: %w", err))
+		return ""
+	}
+
+	return string(jsonBytes)
 }

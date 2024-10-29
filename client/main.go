@@ -44,6 +44,7 @@ func main() {
 		&balanceCommand,
 		&redeemCommand,
 		&notesCommand,
+		&registerNostrCommand,
 	)
 	app.Flags = []cli.Flag{
 		datadirFlag,
@@ -214,7 +215,7 @@ var (
 	registerNostrCommand = cli.Command{
 		Name:  "register-nostr",
 		Usage: "Register Nostr profile",
-		Flags: []cli.Flag{nostrProfileFlag},
+		Flags: []cli.Flag{nostrProfileFlag, passwordFlag},
 		Action: func(ctx *cli.Context) error {
 			return registerNostrProfile(ctx)
 		},
@@ -403,8 +404,11 @@ func redeem(ctx *cli.Context) error {
 func registerNostrProfile(ctx *cli.Context) error {
 	profile := ctx.String(nostrProfileFlag.Name)
 
-	arkSdkClient, err := getArkSdkClient(ctx)
+	password, err := readPassword(ctx)
 	if err != nil {
+		return err
+	}
+	if err := arkSdkClient.Unlock(ctx.Context, string(password)); err != nil {
 		return err
 	}
 

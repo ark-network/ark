@@ -1222,7 +1222,6 @@ func extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.TaprootTapLeafScript, 
 			return nil, nil, 0, err
 		}
 
-		fmt.Println("closure", valid)
 		if valid && closure.Seconds > 0 {
 			sweepLeaf = leaf
 			lifetime = int64(closure.Seconds)

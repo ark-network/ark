@@ -266,6 +266,10 @@ func (w *bitcoinWallet) SignMessage(
 		return "", fmt.Errorf("pubkey mismatch, cannot sign message")
 	}
 
+	if w.IsLocked() {
+		return "", fmt.Errorf("wallet is locked")
+	}
+
 	sig, err := schnorr.Sign(w.privateKey, message)
 	if err != nil {
 		return "", err
