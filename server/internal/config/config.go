@@ -97,7 +97,7 @@ var (
 	defaultBoardingExitDelay     = 604672
 	defaultNoMacaroons           = false
 	defaultNoTLS                 = false
-	defaultNostrDefaultRelays    = []string{"wss://relay.prima.net"}
+	defaultNostrDefaultRelays    = []string{"wss://relay.primal.net", "wss://nostr.vulpem.com", "wss://relay.damus.io"}
 )
 
 func LoadConfig() (*Config, error) {

@@ -360,6 +360,7 @@ func (s *sweeper) createAndSendVouchers(ctx context.Context, vtxosKeys []domain.
 		voucher := voucherData.ToVoucher(signature)
 		msg := notificationJSON(vtxo.VtxoKey, uint32(vtxo.Amount), voucher.String())
 
+		log.Debugf("sending voucher notification to %s", metadata.NostrRecipient)
 		if err := notifier.Notify(ctx, metadata.NostrRecipient, msg); err != nil {
 			log.Error(fmt.Errorf("error while sending voucher notification: %w", err))
 		}
