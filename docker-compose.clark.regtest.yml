@@ -17,6 +17,7 @@ services:
       - ARK_NO_TLS=true
       - ARK_NO_MACAROONS=true
       - ARK_DATADIR=/app/data
+      - ARK_NOSTR_DEFAULT_RELAYS=ws://nak:10547
     ports:
       - "7070:7070"
     volumes:

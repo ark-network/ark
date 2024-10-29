@@ -84,6 +84,7 @@ func mainAction(_ *cli.Context) error {
 		UnlockerType:          cfg.UnlockerType,
 		UnlockerFilePath:      cfg.UnlockerFilePath,
 		UnlockerPassword:      cfg.UnlockerPassword,
+		NostrDefaultRelays:    cfg.NostrDefaultRelays,
 	}
 	svc, err := grpcservice.NewService(svcConfig, appConfig)
 	if err != nil {

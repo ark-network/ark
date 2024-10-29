@@ -35,6 +35,8 @@ type covenantlessService struct {
 	unilateralExitDelay int64
 	boardingExitDelay   int64
 
+	nostrDefaultRelays []string
+
 	wallet      ports.WalletService
 	repoManager ports.RepoManager
 	builder     ports.TxBuilder
@@ -61,6 +63,7 @@ type covenantlessService struct {
 func NewCovenantlessService(
 	network common.Network,
 	roundInterval, roundLifetime, unilateralExitDelay, boardingExitDelay int64,
+	defaultNostrRelays []string,
 	walletSvc ports.WalletService, repoManager ports.RepoManager,
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	scheduler ports.SchedulerService,
@@ -94,6 +97,7 @@ func NewCovenantlessService(
 		asyncPaymentsCache:  asyncPaymentsCache,
 		treeSigningSessions: make(map[string]*musigSigningSession),
 		boardingExitDelay:   boardingExitDelay,
+		nostrDefaultRelays:  defaultNostrRelays,
 	}
 
 	repoManager.RegisterEventsHandler(
@@ -763,6 +767,11 @@ func (s *covenantlessService) RegisterCosignerSignatures(
 }
 
 func (s *covenantlessService) SetNostrRecipient(ctx context.Context, nostrRecipient string, signedVtxoOutpoints []SignedVtxoOutpoint) error {
+	nprofileRecipient, err := nip19toNostrProfile(nostrRecipient, s.nostrDefaultRelays)
+	if err != nil {
+		return fmt.Errorf("failed to convert nostr recipient: %s", err)
+	}
+
 	if err := validateProofs(ctx, s.repoManager.Vtxos(), signedVtxoOutpoints); err != nil {
 		return err
 	}
@@ -775,7 +784,7 @@ func (s *covenantlessService) SetNostrRecipient(ctx context.Context, nostrRecipi
 	return s.repoManager.VtxoMetadata().AddOrUpdate(
 		ctx,
 		domain.Metadata{
-			NostrRecipient: nostrRecipient,
+			NostrRecipient: nprofileRecipient,
 		},
 		vtxoKeys,
 	)

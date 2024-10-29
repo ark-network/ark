@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
 	"sync"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
@@ -11,8 +10,6 @@ import (
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/google/uuid"
-	"github.com/nbd-wtf/go-nostr"
-	"github.com/nbd-wtf/go-nostr/nip19"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -559,36 +556,6 @@ func (h *handler) SetNostrRecipient(
 	nostrRecipient := req.GetNostrRecipient()
 	if len(nostrRecipient) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "missing nostr recipient")
-	}
-
-	prefix, result, err := nip19.Decode(nostrRecipient)
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("failed to decode NIP-19 string: %s", err))
-	}
-
-	if prefix != "nprofile" {
-		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("invalid NIP-19 prefix: %s", prefix))
-	}
-
-	recipient, ok := result.(nostr.ProfilePointer)
-	if !ok {
-		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("invalid NIP-19 result: %v", result))
-	}
-
-	// validate public key
-	if !nostr.IsValidPublicKey(recipient.PublicKey) {
-		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("invalid nostr public key: %s", recipient.PublicKey))
-	}
-
-	// validate relays
-	if len(recipient.Relays) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "invalid nostr profile: at least one relay is required")
-	}
-
-	for _, relay := range recipient.Relays {
-		if !nostr.IsValidRelayURL(relay) {
-			return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("invalid relay URL: %s", relay))
-		}
 	}
 
 	if err := h.svc.SetNostrRecipient(ctx, nostrRecipient, signedVtxoOutpoints); err != nil {

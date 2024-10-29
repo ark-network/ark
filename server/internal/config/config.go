@@ -41,6 +41,7 @@ type Config struct {
 	UnlockerType          string
 	UnlockerFilePath      string
 	UnlockerPassword      string
+	NostrDefaultRelays    []string
 }
 
 var (
@@ -63,6 +64,7 @@ var (
 	BoardingExitDelay     = "BOARDING_EXIT_DELAY"
 	EsploraURL            = "ESPLORA_URL"
 	NeutrinoPeer          = "NEUTRINO_PEER"
+	NostrDefaultRelays    = "NOSTR_DEFAULT_RELAYS"
 	// #nosec G101
 	BitcoindRpcUser = "BITCOIND_RPC_USER"
 	// #nosec G101
@@ -95,6 +97,7 @@ var (
 	defaultBoardingExitDelay     = 604672
 	defaultNoMacaroons           = false
 	defaultNoTLS                 = false
+	defaultNostrDefaultRelays    = []string{"wss://relay.prima.net"}
 )
 
 func LoadConfig() (*Config, error) {
@@ -120,7 +123,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(BlockchainScannerType, defaultBlockchainScannerType)
 	viper.SetDefault(NoMacaroons, defaultNoMacaroons)
 	viper.SetDefault(BoardingExitDelay, defaultBoardingExitDelay)
-
+	viper.SetDefault(NostrDefaultRelays, defaultNostrDefaultRelays)
 	net, err := getNetwork()
 	if err != nil {
 		return nil, fmt.Errorf("error while getting network: %s", err)
@@ -161,6 +164,7 @@ func LoadConfig() (*Config, error) {
 		UnlockerType:          viper.GetString(UnlockerType),
 		UnlockerFilePath:      viper.GetString(UnlockerFilePath),
 		UnlockerPassword:      viper.GetString(UnlockerPassword),
+		NostrDefaultRelays:    viper.GetStringSlice(NostrDefaultRelays),
 	}, nil
 }
 

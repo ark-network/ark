@@ -409,10 +409,10 @@ func TestSweep(t *testing.T) {
 
 	time.Sleep(3 * time.Second)
 
-	secretKey, publicKey, nprofile, err := utils.GetNostrProfile()
+	secretKey, publicKey, npub, err := utils.GetNostrKeys()
 	require.NoError(t, err)
 
-	_, err = runClarkCommand("register-nostr", "--profile", nprofile, "--password", utils.Password)
+	_, err = runClarkCommand("register-nostr", "--profile", npub, "--password", utils.Password)
 	require.NoError(t, err)
 
 	time.Sleep(3 * time.Second)

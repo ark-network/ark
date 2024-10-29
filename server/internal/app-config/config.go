@@ -16,6 +16,7 @@ import (
 	fileunlocker "github.com/ark-network/ark/server/internal/infrastructure/unlocker/file"
 	btcwallet "github.com/ark-network/ark/server/internal/infrastructure/wallet/btc-embedded"
 	liquidwallet "github.com/ark-network/ark/server/internal/infrastructure/wallet/liquid-standalone"
+	"github.com/nbd-wtf/go-nostr"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -79,6 +80,7 @@ type Config struct {
 	RoundLifetime         int64
 	UnilateralExitDelay   int64
 	BoardingExitDelay     int64
+	NostrDefaultRelays    []string
 
 	EsploraURL      string
 	NeutrinoPeer    string
@@ -179,6 +181,16 @@ func (c *Config) Validate() error {
 			"boarding exit delay must be a multiple of %d, rounded to %d",
 			minAllowedSequence, c.BoardingExitDelay,
 		)
+	}
+
+	if len(c.NostrDefaultRelays) == 0 {
+		return fmt.Errorf("missing nostr default relays")
+	}
+
+	for _, relay := range c.NostrDefaultRelays {
+		if !nostr.IsValidRelayURL(relay) {
+			return fmt.Errorf("invalid nostr relay url: %s", relay)
+		}
 	}
 
 	if err := c.repoManager(); err != nil {
@@ -387,7 +399,7 @@ func (c *Config) schedulerService() error {
 func (c *Config) appService() error {
 	if common.IsLiquid(c.Network) {
 		svc, err := application.NewCovenantService(
-			c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay,
+			c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay, c.NostrDefaultRelays,
 			c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler,
 		)
 		if err != nil {
@@ -399,7 +411,7 @@ func (c *Config) appService() error {
 	}
 
 	svc, err := application.NewCovenantlessService(
-		c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay,
+		c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay, c.NostrDefaultRelays,
 		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler,
 	)
 	if err != nil {

@@ -117,18 +117,18 @@ func newCommand(name string, arg ...string) *exec.Cmd {
 // nostr
 // use nak utils https://github.com/fiatjaf/nak
 
-func GetNostrProfile() (secretKey, publickey string, nprofile string, err error) {
+func GetNostrKeys() (secretKey, publicKey string, npub string, err error) {
 	secretKey = NostrTestingSecretKey
 
-	publicKey, err := nostr.GetPublicKey(secretKey)
+	publicKey, err = nostr.GetPublicKey(secretKey)
 	if err != nil {
-		return "", "", "", err
+		return
 	}
 
-	nprofile, err = nip19.EncodeProfile(publicKey, []string{"ws://nak:10547"})
+	npub, err = nip19.EncodePublicKey(publicKey)
 	if err != nil {
-		return "", "", "", err
+		return
 	}
 
-	return secretKey, publicKey, nprofile, nil
+	return
 }
