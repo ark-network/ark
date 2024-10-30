@@ -102,6 +102,7 @@ type Vtxo struct {
 	RedeemTx  string
 	IsOOR     bool
 	SpentBy   string
+	CreatedAt *time.Time
 }
 
 func (v Vtxo) Address(asp *secp256k1.PublicKey, net common.Network) (string, error) {

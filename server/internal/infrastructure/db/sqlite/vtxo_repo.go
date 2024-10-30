@@ -40,17 +40,18 @@ func (v *vxtoRepository) AddVtxos(ctx context.Context, vtxos []domain.Vtxo) erro
 
 			if err := querierWithTx.UpsertVtxo(
 				ctx, queries.UpsertVtxoParams{
-					Txid:     vtxo.Txid,
-					Vout:     int64(vtxo.VOut),
-					Pubkey:   vtxo.Pubkey,
-					Amount:   int64(vtxo.Amount),
-					PoolTx:   vtxo.RoundTxid,
-					SpentBy:  vtxo.SpentBy,
-					Spent:    vtxo.Spent,
-					Redeemed: vtxo.Redeemed,
-					Swept:    vtxo.Swept,
-					ExpireAt: vtxo.ExpireAt,
-					RedeemTx: sql.NullString{String: vtxo.RedeemTx, Valid: true},
+					Txid:      vtxo.Txid,
+					Vout:      int64(vtxo.VOut),
+					Pubkey:    vtxo.Pubkey,
+					Amount:    int64(vtxo.Amount),
+					PoolTx:    vtxo.RoundTxid,
+					SpentBy:   vtxo.SpentBy,
+					Spent:     vtxo.Spent,
+					Redeemed:  vtxo.Redeemed,
+					Swept:     vtxo.Swept,
+					ExpireAt:  vtxo.ExpireAt,
+					CreatedAt: vtxo.CreatedAt,
+					RedeemTx:  sql.NullString{String: vtxo.RedeemTx, Valid: true},
 				},
 			); err != nil {
 				return err

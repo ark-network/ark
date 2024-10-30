@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS vtxo (
 	redeemed BOOLEAN NOT NULL,
 	swept BOOLEAN NOT NULL,
 	expire_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
 	payment_id TEXT,
     redeem_tx TEXT,
     PRIMARY KEY (txid, vout),
