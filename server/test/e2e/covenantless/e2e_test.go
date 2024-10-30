@@ -653,10 +653,10 @@ func generateVoucher(t *testing.T, amount uint32) string {
 	}
 
 	var voucherResp struct {
-		Voucher string `json:"voucher"`
+		Vouchers []string `json:"vouchers"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&voucherResp); err != nil {
 		t.Fatalf("failed to parse response: %s", err)
 	}
-	return voucherResp.Voucher
+	return voucherResp.Vouchers[0]
 }

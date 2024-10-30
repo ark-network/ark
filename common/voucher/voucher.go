@@ -44,7 +44,7 @@ func New(value uint32) (*Data, error) {
 // NewFromString converts a base58 encoded string with HRP to a Voucher
 func NewFromString(s string) (*Voucher, error) {
 	if !strings.HasPrefix(s, voucherHRP) {
-		return nil, fmt.Errorf("invalid human-readable part: expected %s prefix", voucherHRP)
+		return nil, fmt.Errorf("invalid human-readable part: expected %s prefix (voucher '%s')", voucherHRP, s)
 	}
 
 	encoded := strings.TrimPrefix(s, voucherHRP)

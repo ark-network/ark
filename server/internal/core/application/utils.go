@@ -196,6 +196,7 @@ func (m *paymentsMap) update(payment domain.Payment) error {
 		return fmt.Errorf("payment %s not found", payment.Id)
 	}
 
+	// sum inputs = vtxos + boarding utxos + vouchers
 	sumOfInputs := uint64(0)
 	for _, input := range payment.Inputs {
 		sumOfInputs += input.Amount
@@ -205,6 +206,11 @@ func (m *paymentsMap) update(payment domain.Payment) error {
 		sumOfInputs += boardingInput.Amount
 	}
 
+	for _, voucher := range p.vouchers {
+		sumOfInputs += uint64(voucher.Value)
+	}
+
+	// sum outputs = receivers VTXOs
 	sumOfOutputs := uint64(0)
 	for _, receiver := range payment.Receivers {
 		sumOfOutputs += receiver.Amount
