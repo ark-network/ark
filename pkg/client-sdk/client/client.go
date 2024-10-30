@@ -83,6 +83,10 @@ type Outpoint struct {
 	VOut uint32
 }
 
+func (o Outpoint) Equals(other Outpoint) bool {
+	return o.Txid == other.Txid && o.VOut == other.VOut
+}
+
 type Input struct {
 	Outpoint
 	Descriptor string
@@ -100,7 +104,7 @@ type Vtxo struct {
 	RoundTxid string
 	ExpiresAt *time.Time
 	RedeemTx  string
-	Pending   bool
+	IsOOR     bool
 	SpentBy   string
 }
 

@@ -335,7 +335,7 @@ message Vtxo {
   string spent_by = 4;
   int64 expire_at = 5;
   bool swept = 6;
-  bool pending = 7;
+  bool is_oor = 7;
   string redeem_tx = 8;
   uint64 amount = 9;
   string pubkey = 10;

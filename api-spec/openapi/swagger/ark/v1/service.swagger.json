@@ -1200,7 +1200,7 @@
         "swept": {
           "type": "boolean"
         },
-        "pending": {
+        "isOor": {
           "type": "boolean"
         },
         "redeemTx": {

@@ -196,6 +196,24 @@ func (m *paymentsMap) update(payment domain.Payment) error {
 		return fmt.Errorf("payment %s not found", payment.Id)
 	}
 
+	sumOfInputs := uint64(0)
+	for _, input := range payment.Inputs {
+		sumOfInputs += input.Amount
+	}
+
+	for _, boardingInput := range p.boardingInputs {
+		sumOfInputs += boardingInput.Amount
+	}
+
+	sumOfOutputs := uint64(0)
+	for _, receiver := range payment.Receivers {
+		sumOfOutputs += receiver.Amount
+	}
+
+	if sumOfInputs != sumOfOutputs {
+		return fmt.Errorf("sum of inputs %d does not match sum of outputs %d", sumOfInputs, sumOfOutputs)
+	}
+
 	p.Payment = payment
 
 	return nil

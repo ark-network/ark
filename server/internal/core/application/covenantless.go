@@ -54,10 +54,7 @@ type covenantlessService struct {
 	currentRoundLock    sync.Mutex
 	currentRound        *domain.Round
 	treeSigningSessions map[string]*musigSigningSession
-	asyncPaymentsCache  map[string]struct { // redeem txid -> receivers
-		receivers []domain.Receiver
-		expireAt  int64
-	}
+	asyncPaymentsCache  map[string]asyncPaymentData
 }
 
 func NewCovenantlessService(
@@ -72,11 +69,6 @@ func NewCovenantlessService(
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch pubkey: %s", err)
 	}
-
-	asyncPaymentsCache := make(map[string]struct {
-		receivers []domain.Receiver
-		expireAt  int64
-	})
 
 	svc := &covenantlessService{
 		network:             network,
@@ -94,7 +86,7 @@ func NewCovenantlessService(
 		eventsCh:            make(chan domain.RoundEvent),
 		transactionEventsCh: make(chan TransactionEvent),
 		currentRoundLock:    sync.Mutex{},
-		asyncPaymentsCache:  asyncPaymentsCache,
+		asyncPaymentsCache:  make(map[string]asyncPaymentData),
 		treeSigningSessions: make(map[string]*musigSigningSession),
 		boardingExitDelay:   boardingExitDelay,
 		nostrDefaultRelays:  defaultNostrRelays,
@@ -274,19 +266,16 @@ func (s *covenantlessService) CompleteAsyncPayment(
 
 		vtxoPubkey := hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey))
 
-		// all pending except the last one
-		isPending := outIndex < len(asyncPayData.receivers)-1
-
 		vtxos = append(vtxos, domain.Vtxo{
 			VtxoKey: domain.VtxoKey{
 				Txid: redeemTxid,
 				VOut: uint32(outIndex),
 			},
-			Pubkey:   vtxoPubkey,
-			Amount:   uint64(out.Value),
-			ExpireAt: asyncPayData.expireAt,
-			RedeemTx: redeemTx,
-			Pending:  isPending,
+			Pubkey:    vtxoPubkey,
+			Amount:    uint64(out.Value),
+			ExpireAt:  asyncPayData.expireAt,
+			RoundTxid: asyncPayData.roundTxid,
+			RedeemTx:  redeemTx,
 		})
 	}
 
@@ -343,6 +332,8 @@ func (s *covenantlessService) CreateAsyncPayment(
 	vtxosInputs := make([]domain.Vtxo, 0, len(inputs))
 
 	expiration := vtxos[0].ExpireAt
+	roundTxid := vtxos[0].RoundTxid
+
 	for _, vtxo := range vtxos {
 		if vtxo.Spent {
 			return "", fmt.Errorf("all vtxos must be unspent")
@@ -355,11 +346,9 @@ func (s *covenantlessService) CreateAsyncPayment(
 		if vtxo.Swept {
 			return "", fmt.Errorf("all vtxos must be swept")
 		}
-		if vtxo.Pending {
-			return "", fmt.Errorf("all vtxos must be claimed")
-		}
 
 		if vtxo.ExpireAt < expiration {
+			roundTxid = vtxo.RoundTxid
 			expiration = vtxo.ExpireAt
 		}
 
@@ -378,12 +367,10 @@ func (s *covenantlessService) CreateAsyncPayment(
 		return "", fmt.Errorf("failed to parse redeem tx: %s", err)
 	}
 
-	s.asyncPaymentsCache[redeemPtx.UnsignedTx.TxID()] = struct {
-		receivers []domain.Receiver
-		expireAt  int64
-	}{
+	s.asyncPaymentsCache[redeemPtx.UnsignedTx.TxID()] = asyncPaymentData{
 		receivers: receivers,
 		expireAt:  expiration,
+		roundTxid: roundTxid,
 	}
 
 	return redeemTx, nil
@@ -1677,6 +1664,12 @@ func findForfeitTxBitcoin(
 	}
 
 	return "", fmt.Errorf("forfeit tx not found")
+}
+
+type asyncPaymentData struct {
+	receivers []domain.Receiver
+	expireAt  int64
+	roundTxid string
 }
 
 // musigSigningSession holds the state of ephemeral nonces and signatures in order to coordinate the signing of the tree
