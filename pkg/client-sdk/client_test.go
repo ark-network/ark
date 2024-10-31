@@ -31,8 +31,6 @@ func TestVtxosToTxs(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, txHistory, len(tt.expectedTxHistory))
 
-			// fmt.Printf("GOT HISTORY: %+v\n", txHistory)
-
 			// Check each expected transaction, excluding CreatedAt
 			for i, wantTx := range tt.expectedTxHistory {
 				gotTx := txHistory[i]
