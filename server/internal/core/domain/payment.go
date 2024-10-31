@@ -123,4 +123,5 @@ type Vtxo struct {
 	Swept     bool
 	ExpireAt  int64
 	RedeemTx  string // empty if in-round vtxo
+	CreatedAt int64
 }

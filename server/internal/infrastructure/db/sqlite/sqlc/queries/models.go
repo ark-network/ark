@@ -31,6 +31,7 @@ type PaymentVtxoVw struct {
 	Redeemed  sql.NullBool
 	Swept     sql.NullBool
 	ExpireAt  sql.NullInt64
+	CreatedAt sql.NullInt64
 	PaymentID sql.NullString
 	RedeemTx  sql.NullString
 }
@@ -97,6 +98,7 @@ type Vtxo struct {
 	Redeemed  bool
 	Swept     bool
 	ExpireAt  int64
+	CreatedAt int64
 	PaymentID sql.NullString
 	RedeemTx  sql.NullString
 }
