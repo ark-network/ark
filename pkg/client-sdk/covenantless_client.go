@@ -2427,14 +2427,21 @@ func vtxosToTxsCovenantless(
 			})
 		}
 		if len(vtxos) > 1 {
-			for i, v := range vtxos[1:] {
+			for _, v := range vtxos[1:] {
 				var tx types.Transaction
 				if v.VOut > 0 {
+					var spentAmount uint64
+					for _, vv := range vtxos {
+						if vv.SpentBy == v.Txid {
+							spentAmount = vv.Amount
+							break
+						}
+					}
 					tx = types.Transaction{
 						TransactionKey: types.TransactionKey{
 							RedeemTxid: v.Txid,
 						},
-						Amount:    vtxos[i].Amount - v.Amount,
+						Amount:    spentAmount - v.Amount,
 						Type:      types.TxSent,
 						CreatedAt: v.CreatedAt,
 					}
