@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	Password              = "password"
+	Password = "password"
+	// #nosec G101
 	NostrTestingSecretKey = "07959d1d2bc6507403449c556585d463a9ca4374eb0ec07b3929088ce6c34a7e"
 )
 
