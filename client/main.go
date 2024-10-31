@@ -127,6 +127,12 @@ var (
 		Name:  "force",
 		Usage: "force redemption without collaboration",
 	}
+	restFlag = &cli.BoolFlag{
+		Name:        "rest",
+		Usage:       "use REST client instead of gRPC",
+		Value:       false,
+		DefaultText: "false",
+	}
 )
 
 var (
@@ -136,7 +142,7 @@ var (
 		Action: func(ctx *cli.Context) error {
 			return initArkSdk(ctx)
 		},
-		Flags: []cli.Flag{networkFlag, passwordFlag, privateKeyFlag, urlFlag, explorerFlag},
+		Flags: []cli.Flag{networkFlag, passwordFlag, privateKeyFlag, urlFlag, explorerFlag, restFlag},
 	}
 	configCommand = cli.Command{
 		Name:  "config",
@@ -200,9 +206,14 @@ func initArkSdk(ctx *cli.Context) error {
 		return err
 	}
 
+	clientType := arksdk.GrpcClient
+	if ctx.Bool(restFlag.Name) {
+		clientType = arksdk.RestClient
+	}
+
 	return arkSdkClient.Init(
 		ctx.Context, arksdk.InitArgs{
-			ClientType:  arksdk.GrpcClient,
+			ClientType:  clientType,
 			WalletType:  arksdk.SingleKeyWallet,
 			AspUrl:      ctx.String(urlFlag.Name),
 			Seed:        ctx.String(privateKeyFlag.Name),
