@@ -259,6 +259,7 @@ func rowToVtxo(row queries.Vtxo) domain.Vtxo {
 		Swept:     row.Swept,
 		ExpireAt:  row.ExpireAt,
 		RedeemTx:  row.RedeemTx.String,
+		CreatedAt: row.CreatedAt,
 	}
 }
 

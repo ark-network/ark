@@ -399,6 +399,7 @@ func (a *covenantlessArkClient) processTransactionEvent(
 					},
 					Amount:    v.Amount,
 					ExpiresAt: v.ExpiresAt,
+					CreatedAt: v.CreatedAt,
 					RedeemTx:  event.Round.Txid,
 					Pending:   false,
 					SpentBy:   v.SpentBy,
@@ -477,6 +478,7 @@ func (a *covenantlessArkClient) processTransactionEvent(
 						},
 						Amount:    v.Amount,
 						ExpiresAt: v.ExpiresAt,
+						CreatedAt: v.CreatedAt,
 						RedeemTx:  event.Redeem.Txid,
 						Pending:   true,
 						SpentBy:   v.SpentBy,
@@ -509,6 +511,7 @@ func (a *covenantlessArkClient) processTransactionEvent(
 						},
 						Amount:    v.Amount,
 						ExpiresAt: v.ExpiresAt,
+						CreatedAt: v.CreatedAt,
 						RedeemTx:  event.Redeem.Txid,
 						Pending:   true,
 						SpentBy:   v.SpentBy,
@@ -2191,7 +2194,7 @@ func (a *covenantlessArkClient) getOffchainBalance(
 	for _, vtxo := range vtxos {
 		balance += vtxo.Amount
 
-		if vtxo.ExpiresAt != nil {
+		if !vtxo.ExpiresAt.IsZero() {
 			expiration := vtxo.ExpiresAt.Unix()
 
 			if _, ok := amountByExpiration[expiration]; !ok {
@@ -2342,7 +2345,7 @@ func (a *covenantlessArkClient) getVtxos(
 
 		for i, vtxo := range spendableVtxos {
 			if vtxo.Txid == vtxoTxid {
-				spendableVtxos[i].ExpiresAt = expiration
+				spendableVtxos[i].ExpiresAt = *expiration
 				break
 			}
 		}

@@ -1679,7 +1679,7 @@ func (a *covenantArkClient) getOffchainBalance(
 	for _, vtxo := range vtxos {
 		balance += vtxo.Amount
 
-		if vtxo.ExpiresAt != nil {
+		if !vtxo.ExpiresAt.IsZero() {
 			expiration := vtxo.ExpiresAt.Unix()
 
 			if _, ok := amountByExpiration[expiration]; !ok {
@@ -1724,7 +1724,7 @@ func (a *covenantArkClient) getVtxos(
 
 		for i, vtxo := range spendableVtxos {
 			if vtxo.Txid == vtxoTxid {
-				spendableVtxos[i].ExpiresAt = expiration
+				spendableVtxos[i].ExpiresAt = *expiration
 				break
 			}
 		}
@@ -1800,7 +1800,7 @@ func vtxosToTxsCovenant(
 			},
 			Amount:    uint64(math.Abs(float64(amount))),
 			Type:      txType,
-			CreatedAt: getCreatedAtFromExpiry(roundLifetime, *v.ExpiresAt),
+			CreatedAt: getCreatedAtFromExpiry(roundLifetime, v.ExpiresAt),
 		})
 	}
 

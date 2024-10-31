@@ -44,7 +44,8 @@ type Vtxo struct {
 	VtxoKey
 	Amount                  uint64
 	RoundTxid               string
-	ExpiresAt               *time.Time
+	ExpiresAt               time.Time
+	CreatedAt               time.Time
 	RedeemTx                string
 	UnconditionalForfeitTxs []string
 	Pending                 bool

@@ -617,14 +617,13 @@ func outpointsFromRest(restOutpoints []*models.V1Outpoint) []client.Outpoint {
 func vtxosFromRest(restVtxos []*models.V1Vtxo) []client.Vtxo {
 	vtxos := make([]client.Vtxo, len(restVtxos))
 	for i, v := range restVtxos {
-		var expiresAt, createdAt *time.Time
+		var expiresAt, createdAt time.Time
 		if v.ExpireAt != "" && v.ExpireAt != "0" {
 			expAt, err := strconv.Atoi(v.ExpireAt)
 			if err != nil {
 				return nil
 			}
-			t := time.Unix(int64(expAt), 0)
-			expiresAt = &t
+			expiresAt = time.Unix(int64(expAt), 0)
 		}
 
 		if v.CreatedAt != "" && v.CreatedAt != "0" {
@@ -632,8 +631,7 @@ func vtxosFromRest(restVtxos []*models.V1Vtxo) []client.Vtxo {
 			if err != nil {
 				return nil
 			}
-			t := time.Unix(int64(creaAt), 0)
-			createdAt = &t
+			createdAt = time.Unix(int64(creaAt), 0)
 		}
 
 		amount, err := strconv.Atoi(v.Amount)

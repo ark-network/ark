@@ -36,11 +36,7 @@ func CoinSelect(
 	if sortByExpirationTime {
 		// sort vtxos by expiration (older first)
 		sort.SliceStable(vtxos, func(i, j int) bool {
-			if vtxos[i].ExpiresAt == nil || vtxos[j].ExpiresAt == nil {
-				return false
-			}
-
-			return vtxos[i].ExpiresAt.Before(*vtxos[j].ExpiresAt)
+			return vtxos[i].ExpiresAt.Before(vtxos[j].ExpiresAt)
 		})
 
 		sort.SliceStable(boardingUtxos, func(i, j int) bool {

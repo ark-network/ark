@@ -67,7 +67,6 @@ type vtxos []vtxo
 func (v vtxos) parse() []client.Vtxo {
 	list := make([]client.Vtxo, 0, len(v))
 	for _, vv := range v {
-		expiresAt := parseTimestamp(vv.ExpiresAt)
 		list = append(list, client.Vtxo{
 			Outpoint: client.Outpoint{
 				Txid: vv.Outpoint.Txid,
@@ -75,7 +74,7 @@ func (v vtxos) parse() []client.Vtxo {
 			},
 			Amount:    parseAmount(vv.Amount),
 			RoundTxid: vv.RoundTxid,
-			ExpiresAt: &expiresAt,
+			ExpiresAt: parseTimestamp(vv.ExpiresAt),
 			CreatedAt: parseTimestamp(vv.CreatedAt),
 			RedeemTx:  vv.RedeemTx,
 			SpentBy:   vv.SpentBy,
