@@ -471,19 +471,7 @@ func TestSweep(t *testing.T) {
 		decrypted, err := nip04.Decrypt(event.Content, sharedSecret)
 		require.NoError(t, err)
 
-		// Parse the decrypted JSON message to extract voucher
-		var notification struct {
-			Data struct {
-				Details struct {
-					Voucher string `json:"voucher"`
-				} `json:"details"`
-			} `json:"data"`
-		}
-		err = json.Unmarshal([]byte(decrypted), &notification)
-		require.NoError(t, err)
-		require.NotEmpty(t, notification.Data.Details.Voucher)
-
-		voucher = notification.Data.Details.Voucher
+		voucher = decrypted
 		break // Exit after processing the first message
 	}
 
