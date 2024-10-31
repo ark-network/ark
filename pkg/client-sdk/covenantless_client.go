@@ -413,7 +413,7 @@ func (a *covenantlessArkClient) processTransactionEvent(
 						},
 						Amount:    v.Amount,
 						Type:      types.TxReceived,
-						CreatedAt: time.Now(), //TODO is this ok?
+						CreatedAt: v.CreatedAt,
 					})
 				}
 			}
@@ -494,7 +494,7 @@ func (a *covenantlessArkClient) processTransactionEvent(
 				},
 				Amount:    inputAmount - outputAmount,
 				Type:      types.TxSent,
-				CreatedAt: time.Now(), //TODO is this ok?
+				CreatedAt: time.Now(),
 			}
 
 			if err := a.store.TransactionStore().
@@ -524,7 +524,7 @@ func (a *covenantlessArkClient) processTransactionEvent(
 						},
 						Amount:    v.Amount,
 						Type:      types.TxReceived,
-						CreatedAt: time.Now(), //TODO is this ok?
+						CreatedAt: v.CreatedAt,
 					}
 					if err := a.store.TransactionStore().
 						AddTransactions(context.Background(), []types.Transaction{tx}); err != nil {
@@ -2428,14 +2428,27 @@ func vtxosToTxsCovenantless(
 		}
 		if len(vtxos) > 1 {
 			for i, v := range vtxos[1:] {
-				txs = append(txs, types.Transaction{
-					TransactionKey: types.TransactionKey{
-						RedeemTxid: v.Txid,
-					},
-					Amount:    vtxos[i].Amount - v.Amount,
-					Type:      types.TxSent,
-					CreatedAt: v.CreatedAt,
-				})
+				var tx types.Transaction
+				if v.VOut > 0 {
+					tx = types.Transaction{
+						TransactionKey: types.TransactionKey{
+							RedeemTxid: v.Txid,
+						},
+						Amount:    vtxos[i].Amount - v.Amount,
+						Type:      types.TxSent,
+						CreatedAt: v.CreatedAt,
+					}
+				} else {
+					tx = types.Transaction{
+						TransactionKey: types.TransactionKey{
+							RedeemTxid: v.Txid,
+						},
+						Amount:    v.Amount,
+						Type:      types.TxReceived,
+						CreatedAt: v.CreatedAt,
+					}
+				}
+				txs = append(txs, tx)
 			}
 		}
 	}

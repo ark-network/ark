@@ -627,7 +627,7 @@ func vtxosFromRest(restVtxos []*models.V1Vtxo) []client.Vtxo {
 		}
 
 		if v.CreatedAt != "" && v.CreatedAt != "0" {
-			creaAt, err := strconv.Atoi(v.ExpireAt)
+			creaAt, err := strconv.Atoi(v.CreatedAt)
 			if err != nil {
 				return nil
 			}
