@@ -2433,8 +2433,7 @@ func vtxosToTxsCovenantless(
 					var spentAmount uint64
 					for _, vv := range vtxos {
 						if vv.SpentBy == v.Txid {
-							spentAmount = vv.Amount
-							break
+							spentAmount += vv.Amount
 						}
 					}
 					tx = types.Transaction{
