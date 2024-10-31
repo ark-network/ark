@@ -37,6 +37,11 @@ var (
 		Usage:    "amount of the voucher in satoshis",
 		Required: true,
 	}
+	quantityFlag = &cli.UintFlag{
+		Name:  "quantity",
+		Usage: "quantity of vouchers to create",
+		Value: 1,
+	}
 )
 
 // commands
@@ -85,7 +90,7 @@ var (
 		Name:   "voucher",
 		Usage:  "Create a credit voucher",
 		Action: createVoucherAction,
-		Flags:  []cli.Flag{amountFlag},
+		Flags:  []cli.Flag{amountFlag, quantityFlag},
 	}
 )
 
@@ -223,7 +228,7 @@ func walletBalanceAction(ctx *cli.Context) error {
 func createVoucherAction(ctx *cli.Context) error {
 	baseURL := ctx.String("url")
 	amount := ctx.Uint("amount")
-
+	quantity := ctx.Uint("quantity")
 	var macaroon string
 	if !ctx.Bool("no-macaroon") {
 		macaroonPath := ctx.String("macaroon-path")
@@ -239,14 +244,14 @@ func createVoucherAction(ctx *cli.Context) error {
 	}
 
 	url := fmt.Sprintf("%s/v1/admin/voucher", baseURL)
-	body := fmt.Sprintf(`{"amount": %d}`, amount)
+	body := fmt.Sprintf(`{"amount": %d, "quantity": %d}`, amount, quantity)
 
-	voucher, err := post[string](url, body, "voucher", macaroon, tlsCertPath)
+	vouchers, err := post[[]string](url, body, "vouchers", macaroon, tlsCertPath)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println(voucher)
+	fmt.Println(vouchers)
 	return nil
 }
 
