@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"strings"
 
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	walletstore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store"
+	"github.com/btcsuite/btcd/btcutil/bech32"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
@@ -35,12 +37,29 @@ func (w *singlekeyWallet) Create(
 		}
 		privateKey = privKey
 	} else {
-		privKeyBytes, err := hex.DecodeString(seed)
-		if err != nil {
-			return "", err
-		}
+		// handle nsec format
+		if strings.HasPrefix(seed, "nsec") {
+			hrp, data, err := bech32.Decode(seed)
+			if err != nil {
+				return "", fmt.Errorf("invalid nsec format: %w", err)
+			}
+			if hrp != "nsec" {
+				return "", fmt.Errorf("invalid nsec prefix")
+			}
+			converted, err := bech32.ConvertBits(data, 5, 8, false)
+			if err != nil {
+				return "", fmt.Errorf("failed to convert bits: %w", err)
+			}
+			privateKey = secp256k1.PrivKeyFromBytes(converted)
 
-		privateKey = secp256k1.PrivKeyFromBytes(privKeyBytes)
+			// else raw priv key
+		} else {
+			privKeyBytes, err := hex.DecodeString(seed)
+			if err != nil {
+				return "", err
+			}
+			privateKey = secp256k1.PrivKeyFromBytes(privKeyBytes)
+		}
 	}
 
 	pwd := []byte(password)

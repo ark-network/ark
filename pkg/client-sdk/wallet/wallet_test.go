@@ -16,6 +16,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const ()
+
 func TestWallet(t *testing.T) {
 	ctx := context.Background()
 	key, _ := btcec.NewPrivateKey()
@@ -148,4 +150,30 @@ func TestWallet(t *testing.T) {
 			require.False(t, locked)
 		})
 	}
+}
+
+func TestWalletCreate(t *testing.T) {
+	t.Run("nsec", func(t *testing.T) {
+		const nsec = "nsec1ptxrrkgrly7r46dhsxeayp359paqn09ut5xr8edmxqqvxaj26wxsqurxd8"
+		const privkey = "0acc31d903f93c3ae9b781b3d20634287a09bcbc5d0c33e5bb3000c3764ad38d"
+
+		ctx := context.Background()
+
+		store, err := inmemorystore.NewConfigStore()
+		require.NoError(t, err)
+		require.NotNil(t, store)
+
+		walletStore, err := inmemorywalletstore.NewWalletStore()
+		require.NoError(t, err)
+		require.NotNil(t, walletStore)
+
+		walletSvc, err := singlekeywallet.NewBitcoinWallet(store, walletStore)
+		require.NoError(t, err)
+		require.NotNil(t, walletSvc)
+
+		key, err := walletSvc.Create(ctx, "password", nsec)
+		require.NoError(t, err)
+		require.NotEmpty(t, key)
+		require.Equal(t, key, privkey)
+	})
 }
