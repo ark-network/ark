@@ -42,6 +42,7 @@ type Config struct {
 	UnlockerFilePath      string
 	UnlockerPassword      string
 	NostrDefaultRelays    []string
+	NotificationPrefix    string
 }
 
 var (
@@ -68,15 +69,16 @@ var (
 	// #nosec G101
 	BitcoindRpcUser = "BITCOIND_RPC_USER"
 	// #nosec G101
-	BitcoindRpcPass  = "BITCOIND_RPC_PASS"
-	BitcoindRpcHost  = "BITCOIND_RPC_HOST"
-	NoMacaroons      = "NO_MACAROONS"
-	NoTLS            = "NO_TLS"
-	TLSExtraIP       = "TLS_EXTRA_IP"
-	TLSExtraDomain   = "TLS_EXTRA_DOMAIN"
-	UnlockerType     = "UNLOCKER_TYPE"
-	UnlockerFilePath = "UNLOCKER_FILE_PATH"
-	UnlockerPassword = "UNLOCKER_PASSWORD"
+	BitcoindRpcPass    = "BITCOIND_RPC_PASS"
+	BitcoindRpcHost    = "BITCOIND_RPC_HOST"
+	NoMacaroons        = "NO_MACAROONS"
+	NoTLS              = "NO_TLS"
+	TLSExtraIP         = "TLS_EXTRA_IP"
+	TLSExtraDomain     = "TLS_EXTRA_DOMAIN"
+	UnlockerType       = "UNLOCKER_TYPE"
+	UnlockerFilePath   = "UNLOCKER_FILE_PATH"
+	UnlockerPassword   = "UNLOCKER_PASSWORD"
+	NotificationPrefix = "NOTIFICATION_PREFIX"
 
 	defaultDatadir               = common.AppDataDir("arkd", false)
 	defaultRoundInterval         = 5
@@ -98,6 +100,7 @@ var (
 	defaultNoMacaroons           = false
 	defaultNoTLS                 = false
 	defaultNostrDefaultRelays    = []string{"wss://relay.primal.net", "wss://relay.damus.io"}
+	defaultNotificationPrefix    = "ark"
 )
 
 func LoadConfig() (*Config, error) {
@@ -124,6 +127,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(NoMacaroons, defaultNoMacaroons)
 	viper.SetDefault(BoardingExitDelay, defaultBoardingExitDelay)
 	viper.SetDefault(NostrDefaultRelays, defaultNostrDefaultRelays)
+	viper.SetDefault(NotificationPrefix, defaultNotificationPrefix)
 	net, err := getNetwork()
 	if err != nil {
 		return nil, fmt.Errorf("error while getting network: %s", err)
@@ -165,6 +169,7 @@ func LoadConfig() (*Config, error) {
 		UnlockerFilePath:      viper.GetString(UnlockerFilePath),
 		UnlockerPassword:      viper.GetString(UnlockerPassword),
 		NostrDefaultRelays:    viper.GetStringSlice(NostrDefaultRelays),
+		NotificationPrefix:    viper.GetString(NotificationPrefix),
 	}, nil
 }
 

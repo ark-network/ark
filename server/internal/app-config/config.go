@@ -81,6 +81,7 @@ type Config struct {
 	UnilateralExitDelay   int64
 	BoardingExitDelay     int64
 	NostrDefaultRelays    []string
+	NotificationPrefix    string
 
 	EsploraURL      string
 	NeutrinoPeer    string
@@ -400,7 +401,7 @@ func (c *Config) appService() error {
 	if common.IsLiquid(c.Network) {
 		svc, err := application.NewCovenantService(
 			c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay, c.NostrDefaultRelays,
-			c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler,
+			c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NotificationPrefix,
 		)
 		if err != nil {
 			return err
@@ -412,7 +413,7 @@ func (c *Config) appService() error {
 
 	svc, err := application.NewCovenantlessService(
 		c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay, c.NostrDefaultRelays,
-		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler,
+		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NotificationPrefix,
 	)
 	if err != nil {
 		return err

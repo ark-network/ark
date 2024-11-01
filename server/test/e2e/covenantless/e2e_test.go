@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -471,7 +472,10 @@ func TestSweep(t *testing.T) {
 		decrypted, err := nip04.Decrypt(event.Content, sharedSecret)
 		require.NoError(t, err)
 
-		note = decrypted
+		parts := strings.Split(decrypted, ":")
+		require.Len(t, parts, 2)
+
+		note = parts[1]
 		break // Exit after processing the first message
 	}
 

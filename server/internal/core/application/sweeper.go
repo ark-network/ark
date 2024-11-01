@@ -24,6 +24,8 @@ type sweeper struct {
 	builder     ports.TxBuilder
 	scheduler   ports.SchedulerService
 
+	notificationPrefix string
+
 	// cache of scheduled tasks, avoid scheduling the same sweep event multiple times
 	locker         sync.Locker
 	scheduledTasks map[string]struct{}
@@ -34,12 +36,14 @@ func newSweeper(
 	repoManager ports.RepoManager,
 	builder ports.TxBuilder,
 	scheduler ports.SchedulerService,
+	notificationPrefix string,
 ) *sweeper {
 	return &sweeper{
 		wallet,
 		repoManager,
 		builder,
 		scheduler,
+		notificationPrefix,
 		&sync.Mutex{},
 		make(map[string]struct{}),
 	}
@@ -358,8 +362,10 @@ func (s *sweeper) createAndSendNotes(ctx context.Context, vtxosKeys []domain.Vtx
 
 		note := noteData.ToNote(signature)
 
+		notification := fmt.Sprintf("%s:%s", s.notificationPrefix, note)
+
 		log.Debugf("sending note notification to %s", metadata.NostrRecipient)
-		if err := notifier.Notify(ctx, metadata.NostrRecipient, note.String()); err != nil {
+		if err := notifier.Notify(ctx, metadata.NostrRecipient, notification); err != nil {
 			log.Error(fmt.Errorf("error while sending note notification: %w", err))
 		}
 	}
