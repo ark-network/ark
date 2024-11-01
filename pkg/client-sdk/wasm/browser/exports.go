@@ -39,6 +39,7 @@ func init() {
 	js.Global().Set("dump", DumpWrapper())
 	js.Global().Set("redeemNotes", RedeemNotesWrapper())
 	js.Global().Set("setNostrNotificationRecipient", SetNostrNotificationRecipientWrapper())
+	js.Global().Set("listVtxos", ListVtxosWrapper())
 
 	js.Global().Set("getAspUrl", GetAspUrlWrapper())
 	js.Global().Set("getAspPubKeyHex", GetAspPubkeyWrapper())

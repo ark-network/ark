@@ -91,7 +91,7 @@ func (s *configStore) GetData(ctx context.Context) (*types.Config, error) {
 	roundLifetime, _ := strconv.Atoi(s.store.Call("getItem", "round_lifetime").String())
 	roundInterval, _ := strconv.Atoi(s.store.Call("getItem", "round_interval").String())
 	unilateralExitDelay, _ := strconv.Atoi(s.store.Call("getItem", "unilateral_exit_delay").String())
-	dust, _ := strconv.Atoi(s.store.Call("getItem", "min_relay_fee").String())
+	dust, _ := strconv.Atoi(s.store.Call("getItem", "dust").String())
 	withTxFeed, _ := strconv.ParseBool(s.store.Call("getItem", "with_transaction_feed").String())
 
 	return &types.Config{

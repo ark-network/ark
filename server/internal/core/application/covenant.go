@@ -978,6 +978,8 @@ func (s *covenantService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 		return nil
 	}
 
+	createdAt := time.Now().Unix()
+
 	leaves := round.CongestionTree.Leaves()
 	vtxos := make([]domain.Vtxo, 0)
 	for _, node := range leaves {
@@ -1000,6 +1002,7 @@ func (s *covenantService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 				Pubkey:    vtxoPubkey,
 				Amount:    uint64(out.Value),
 				RoundTxid: round.Txid,
+				CreatedAt: createdAt,
 			})
 		}
 	}

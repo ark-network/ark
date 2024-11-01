@@ -492,67 +492,8 @@ func (a *restClient) ListVtxos(
 		return nil, nil, err
 	}
 
-	spendableVtxos := make([]client.Vtxo, 0, len(resp.Payload.SpendableVtxos))
-	for _, v := range resp.Payload.SpendableVtxos {
-		var expiresAt *time.Time
-		if v.ExpireAt != "" && v.ExpireAt != "0" {
-			expAt, err := strconv.Atoi(v.ExpireAt)
-			if err != nil {
-				return nil, nil, err
-			}
-			t := time.Unix(int64(expAt), 0)
-			expiresAt = &t
-		}
-
-		amount, err := strconv.Atoi(v.Amount)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		spendableVtxos = append(spendableVtxos, client.Vtxo{
-			Outpoint: client.Outpoint{
-				Txid: v.Outpoint.Txid,
-				VOut: uint32(v.Outpoint.Vout),
-			},
-			Amount:    uint64(amount),
-			RoundTxid: v.RoundTxid,
-			ExpiresAt: expiresAt,
-			IsOOR:     v.IsOor,
-			RedeemTx:  v.RedeemTx,
-			SpentBy:   v.SpentBy,
-			Pubkey:    v.Pubkey,
-		})
-	}
-
-	spentVtxos := make([]client.Vtxo, 0, len(resp.Payload.SpentVtxos))
-	for _, v := range resp.Payload.SpentVtxos {
-		var expiresAt *time.Time
-		if v.ExpireAt != "" && v.ExpireAt != "0" {
-			expAt, err := strconv.Atoi(v.ExpireAt)
-			if err != nil {
-				return nil, nil, err
-			}
-			t := time.Unix(int64(expAt), 0)
-			expiresAt = &t
-		}
-
-		amount, err := strconv.Atoi(v.Amount)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		spentVtxos = append(spentVtxos, client.Vtxo{
-			Outpoint: client.Outpoint{
-				Txid: v.Outpoint.Txid,
-				VOut: uint32(v.Outpoint.Vout),
-			},
-			Amount:    uint64(amount),
-			RoundTxid: v.RoundTxid,
-			ExpiresAt: expiresAt,
-			SpentBy:   v.SpentBy,
-			Pubkey:    v.Pubkey,
-		})
-	}
+	spendableVtxos := vtxosFromRest(resp.Payload.SpendableVtxos)
+	spentVtxos := vtxosFromRest(resp.Payload.SpentVtxos)
 
 	return spendableVtxos, spentVtxos, nil
 }
@@ -721,14 +662,21 @@ func outpointsFromRest(restOutpoints []*models.V1Outpoint) []client.Outpoint {
 func vtxosFromRest(restVtxos []*models.V1Vtxo) []client.Vtxo {
 	vtxos := make([]client.Vtxo, len(restVtxos))
 	for i, v := range restVtxos {
-		var expiresAt *time.Time
+		var expiresAt, createdAt time.Time
 		if v.ExpireAt != "" && v.ExpireAt != "0" {
 			expAt, err := strconv.Atoi(v.ExpireAt)
 			if err != nil {
 				return nil
 			}
-			t := time.Unix(int64(expAt), 0)
-			expiresAt = &t
+			expiresAt = time.Unix(int64(expAt), 0)
+		}
+
+		if v.CreatedAt != "" && v.CreatedAt != "0" {
+			creaAt, err := strconv.Atoi(v.CreatedAt)
+			if err != nil {
+				return nil
+			}
+			createdAt = time.Unix(int64(creaAt), 0)
 		}
 
 		amount, err := strconv.Atoi(v.Amount)
@@ -748,6 +696,7 @@ func vtxosFromRest(restVtxos []*models.V1Vtxo) []client.Vtxo {
 			RedeemTx:  v.RedeemTx,
 			IsOOR:     v.IsOor,
 			SpentBy:   v.SpentBy,
+			CreatedAt: createdAt,
 		}
 	}
 	return vtxos

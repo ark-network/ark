@@ -112,11 +112,6 @@ type vtxo struct {
 }
 
 func (v vtxo) toVtxo() client.Vtxo {
-	var expiresAt *time.Time
-	if v.GetExpireAt() > 0 {
-		t := time.Unix(v.GetExpireAt(), 0)
-		expiresAt = &t
-	}
 	return client.Vtxo{
 		Outpoint: client.Outpoint{
 			Txid: v.GetOutpoint().GetTxid(),
@@ -124,11 +119,12 @@ func (v vtxo) toVtxo() client.Vtxo {
 		},
 		Amount:    v.GetAmount(),
 		RoundTxid: v.GetRoundTxid(),
-		ExpiresAt: expiresAt,
+		ExpiresAt: time.Unix(v.GetExpireAt(), 0),
 		IsOOR:     v.GetIsOor(),
 		RedeemTx:  v.GetRedeemTx(),
 		SpentBy:   v.GetSpentBy(),
 		Pubkey:    v.GetPubkey(),
+		CreatedAt: time.Unix(v.GetCreatedAt(), 0),
 	}
 }
 

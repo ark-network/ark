@@ -21,6 +21,9 @@ type V1Vtxo struct {
 	// amount
 	Amount string `json:"amount,omitempty"`
 
+	// created at
+	CreatedAt string `json:"createdAt,omitempty"`
+
 	// expire at
 	ExpireAt string `json:"expireAt,omitempty"`
 

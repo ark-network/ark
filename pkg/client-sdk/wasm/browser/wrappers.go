@@ -182,6 +182,27 @@ func DumpWrapper() js.Func {
 	})
 }
 
+func ListVtxosWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if arkSdkClient == nil {
+			return nil, errors.New("ARK SDK client is not initialized")
+		}
+		spendable, spent, err := arkSdkClient.ListVtxos(context.Background())
+		if err != nil {
+			return nil, err
+		}
+		rawList := map[string]interface{}{
+			"spendable": spendable,
+			"spent":     spent,
+		}
+		result, err := json.Marshal(rawList)
+		if err != nil {
+			return nil, err
+		}
+		return js.ValueOf(string(result)), nil
+	})
+}
+
 func SendOnChainWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
 		if len(args) != 1 {
@@ -234,7 +255,7 @@ func SendAsyncWrapper() js.Func {
 		}
 
 		withExpiryCoinselect := args[0].Bool()
-		receivers, err := parseReceivers(args[0])
+		receivers, err := parseReceivers(args[1])
 		if err != nil {
 			return nil, err
 		}

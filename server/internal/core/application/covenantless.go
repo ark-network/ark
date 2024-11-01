@@ -277,6 +277,7 @@ func (s *covenantlessService) CompleteAsyncPayment(
 			ExpireAt:  asyncPayData.expireAt,
 			RoundTxid: asyncPayData.roundTxid,
 			RedeemTx:  redeemTx,
+			CreatedAt: time.Now().Unix(),
 		})
 	}
 
@@ -1420,6 +1421,8 @@ func (s *covenantlessService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 		return nil
 	}
 
+	createdAt := time.Now().Unix()
+
 	leaves := round.CongestionTree.Leaves()
 	vtxos := make([]domain.Vtxo, 0)
 	for _, node := range leaves {
@@ -1440,6 +1443,7 @@ func (s *covenantlessService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 				Pubkey:    hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey)),
 				Amount:    uint64(out.Value),
 				RoundTxid: round.Txid,
+				CreatedAt: createdAt,
 			})
 		}
 	}

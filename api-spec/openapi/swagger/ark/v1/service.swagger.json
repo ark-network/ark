@@ -1212,6 +1212,10 @@
         },
         "pubkey": {
           "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "int64"
         }
       }
     }
