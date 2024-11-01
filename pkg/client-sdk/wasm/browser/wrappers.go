@@ -407,24 +407,24 @@ func GetDustWrapper() js.Func {
 	})
 }
 
-func RedeemVouchersWrapper() js.Func {
+func RedeemNotesWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
 		if len(args) != 1 {
 			return nil, errors.New("invalid number of args")
 		}
 
-		// Parse vouchers array from JS
-		jsVouchers := args[0]
-		if jsVouchers.Type() != js.TypeObject || jsVouchers.Get("length").Type() != js.TypeNumber {
-			return nil, errors.New("invalid vouchers argument: expected array")
+		// Parse notes array from JS
+		jsNotes := args[0]
+		if jsNotes.Type() != js.TypeObject || jsNotes.Get("length").Type() != js.TypeNumber {
+			return nil, errors.New("invalid notes argument: expected array")
 		}
 
-		vouchers := make([]string, jsVouchers.Length())
-		for i := 0; i < jsVouchers.Length(); i++ {
-			vouchers[i] = jsVouchers.Index(i).String()
+		notes := make([]string, jsNotes.Length())
+		for i := 0; i < jsNotes.Length(); i++ {
+			notes[i] = jsNotes.Index(i).String()
 		}
 
-		txID, err := arkSdkClient.RedeemVouchers(context.Background(), vouchers)
+		txID, err := arkSdkClient.RedeemNotes(context.Background(), notes)
 		if err != nil {
 			return nil, err
 		}

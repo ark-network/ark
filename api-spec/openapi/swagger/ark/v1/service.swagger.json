@@ -881,7 +881,7 @@
         "ephemeralPubkey": {
           "type": "string"
         },
-        "vouchers": {
+        "notes": {
           "type": "array",
           "items": {
             "type": "string"

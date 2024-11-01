@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
-	"github.com/ark-network/ark/common/voucher"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	nostr_notifier "github.com/ark-network/ark/server/internal/infrastructure/notifier/nostr"
@@ -258,7 +258,7 @@ func (s *sweeper) createTask(
 
 				log.Debugf("%d vtxos swept", len(vtxoKeys))
 
-				go s.createAndSendVouchers(ctx, vtxoKeys)
+				go s.createAndSendNotes(ctx, vtxoKeys)
 			}
 		}
 
@@ -315,7 +315,7 @@ func (s *sweeper) updateVtxoExpirationTime(
 	return s.repoManager.Vtxos().UpdateExpireAt(context.Background(), vtxos, expirationTime)
 }
 
-func (s *sweeper) createAndSendVouchers(ctx context.Context, vtxosKeys []domain.VtxoKey) {
+func (s *sweeper) createAndSendNotes(ctx context.Context, vtxosKeys []domain.VtxoKey) {
 	vtxos, err := s.repoManager.Vtxos().GetVtxos(ctx, vtxosKeys)
 	if err != nil {
 		log.Error(fmt.Errorf("error while getting vtxos: %w", err))
@@ -339,28 +339,28 @@ func (s *sweeper) createAndSendVouchers(ctx context.Context, vtxosKeys []domain.
 		}
 
 		if len(metadata.NostrRecipient) == 0 {
-			log.Debugf("no nostr recipient found for vtxo %s:%d, skipping voucher creation", vtxo.Txid, vtxo.VOut)
+			log.Debugf("no nostr recipient found for vtxo %s:%d, skipping note creation", vtxo.Txid, vtxo.VOut)
 			continue
 		}
 
-		// if vtxo is not redeemed or spent and is swept, create a voucher for it
-		voucherData, err := voucher.New(uint32(vtxo.Amount))
+		// if vtxo is not redeemed or spent and is swept, create a note for it
+		noteData, err := note.New(uint32(vtxo.Amount))
 		if err != nil {
-			log.Error(fmt.Errorf("error while creating voucher data: %w", err))
+			log.Error(fmt.Errorf("error while creating note data: %w", err))
 			continue
 		}
 
-		signature, err := s.wallet.SignMessage(ctx, voucherData.Hash())
+		signature, err := s.wallet.SignMessage(ctx, noteData.Hash())
 		if err != nil {
-			log.Error(fmt.Errorf("error while signing voucher data: %w", err))
+			log.Error(fmt.Errorf("error while signing note data: %w", err))
 			continue
 		}
 
-		voucher := voucherData.ToVoucher(signature)
+		note := noteData.ToNote(signature)
 
-		log.Debugf("sending voucher notification to %s", metadata.NostrRecipient)
-		if err := notifier.Notify(ctx, metadata.NostrRecipient, voucher.String()); err != nil {
-			log.Error(fmt.Errorf("error while sending voucher notification: %w", err))
+		log.Debugf("sending note notification to %s", metadata.NostrRecipient)
+		if err := notifier.Notify(ctx, metadata.NostrRecipient, note.String()); err != nil {
+			log.Error(fmt.Errorf("error while sending note notification: %w", err))
 		}
 	}
 }

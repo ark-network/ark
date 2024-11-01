@@ -132,11 +132,11 @@ func (a *restClient) RegisterInputsForNextRound(
 	return resp.Payload.ID, nil
 }
 
-func (a *restClient) RegisterVouchersForNextRound(
-	ctx context.Context, vouchers []string, ephemeralKey string,
+func (a *restClient) RegisterNotesForNextRound(
+	ctx context.Context, notes []string, ephemeralKey string,
 ) (string, error) {
 	body := &models.V1RegisterInputsForNextRoundRequest{
-		Vouchers: vouchers,
+		Notes: notes,
 	}
 	if len(ephemeralKey) > 0 {
 		body.EphemeralPubkey = ephemeralKey

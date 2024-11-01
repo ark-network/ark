@@ -3,7 +3,7 @@ package application
 import (
 	"context"
 
-	"github.com/ark-network/ark/common/voucher"
+	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -22,7 +22,7 @@ type AsyncPaymentInput struct {
 type Service interface {
 	Start() error
 	Stop()
-	SpendVouchers(ctx context.Context, notes []voucher.Voucher) (string, error)
+	SpendNotes(ctx context.Context, notes []note.Note) (string, error)
 	SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error)
 	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error
 	SignVtxos(ctx context.Context, forfeitTxs []string) error

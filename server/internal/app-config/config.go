@@ -26,7 +26,7 @@ var (
 	supportedEventDbs = supportedType{
 		"badger": {},
 	}
-	supportedVoucherDbs = supportedType{
+	supportedNoteDbs = supportedType{
 		"badger": {},
 	}
 	supportedMetadataDbs = supportedType{
@@ -66,7 +66,7 @@ var (
 type Config struct {
 	DbType                string
 	EventDbType           string
-	VoucherDbType         string
+	NoteDbType            string
 	MetadataDbType        string
 	DbDir                 string
 	DbMigrationPath       string
@@ -106,8 +106,8 @@ func (c *Config) Validate() error {
 	if !supportedEventDbs.supports(c.EventDbType) {
 		return fmt.Errorf("event db type not supported, please select one of: %s", supportedEventDbs)
 	}
-	if !supportedVoucherDbs.supports(c.VoucherDbType) {
-		return fmt.Errorf("voucher db type not supported, please select one of: %s", supportedVoucherDbs)
+	if !supportedNoteDbs.supports(c.NoteDbType) {
+		return fmt.Errorf("note db type not supported, please select one of: %s", supportedNoteDbs)
 	}
 	if !supportedMetadataDbs.supports(c.MetadataDbType) {
 		return fmt.Errorf("metadata db type not supported, please select one of: %s", supportedMetadataDbs)
@@ -242,7 +242,7 @@ func (c *Config) repoManager() error {
 	var svc ports.RepoManager
 	var err error
 	var eventStoreConfig []interface{}
-	var voucherStoreConfig []interface{}
+	var noteStoreConfig []interface{}
 	var dataStoreConfig []interface{}
 	var metadataStoreConfig []interface{}
 	logger := log.New()
@@ -263,11 +263,11 @@ func (c *Config) repoManager() error {
 		return fmt.Errorf("unknown db type")
 	}
 
-	switch c.VoucherDbType {
+	switch c.NoteDbType {
 	case "badger":
-		voucherStoreConfig = []interface{}{c.DbDir, logger}
+		noteStoreConfig = []interface{}{c.DbDir, logger}
 	default:
-		return fmt.Errorf("unknown voucher db type")
+		return fmt.Errorf("unknown note db type")
 	}
 
 	switch c.MetadataDbType {
@@ -280,11 +280,11 @@ func (c *Config) repoManager() error {
 	svc, err = db.NewService(db.ServiceConfig{
 		EventStoreType:      c.EventDbType,
 		DataStoreType:       c.DbType,
-		VoucherStoreType:    c.VoucherDbType,
+		NoteStoreType:       c.NoteDbType,
 		MetadataStoreType:   c.MetadataDbType,
 		EventStoreConfig:    eventStoreConfig,
 		DataStoreConfig:     dataStoreConfig,
-		VoucherStoreConfig:  voucherStoreConfig,
+		NoteStoreConfig:     noteStoreConfig,
 		MetadataStoreConfig: metadataStoreConfig,
 	})
 	if err != nil {

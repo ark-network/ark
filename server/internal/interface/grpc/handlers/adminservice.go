@@ -98,7 +98,7 @@ func (a *adminHandler) GetScheduledSweep(ctx context.Context, _ *arkv1.GetSchedu
 	return &arkv1.GetScheduledSweepResponse{Sweeps: sweeps}, nil
 }
 
-func (a *adminHandler) CreateVoucher(ctx context.Context, req *arkv1.CreateVoucherRequest) (*arkv1.CreateVoucherResponse, error) {
+func (a *adminHandler) CreateNote(ctx context.Context, req *arkv1.CreateNoteRequest) (*arkv1.CreateNoteResponse, error) {
 	amount := req.GetAmount()
 	quantity := req.GetQuantity()
 	if quantity == 0 {
@@ -109,12 +109,12 @@ func (a *adminHandler) CreateVoucher(ctx context.Context, req *arkv1.CreateVouch
 		return nil, status.Error(codes.InvalidArgument, "amount must be greater than 0")
 	}
 
-	vouchers, err := a.adminService.CreateVouchers(ctx, amount, int(quantity))
+	notes, err := a.adminService.CreateNotes(ctx, amount, int(quantity))
 	if err != nil {
 		return nil, err
 	}
 
-	return &arkv1.CreateVoucherResponse{Vouchers: vouchers}, nil
+	return &arkv1.CreateNoteResponse{Notes: notes}, nil
 }
 
 // convert sats to string BTC

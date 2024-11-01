@@ -26,8 +26,8 @@ var (
 		"badger": badgerdb.NewVtxoRepository,
 		"sqlite": sqlitedb.NewVtxoRepository,
 	}
-	voucherStoreTypes = map[string]func(...interface{}) (domain.VoucherRepository, error){
-		"badger": badgerdb.NewVoucherRepository,
+	noteStoreTypes = map[string]func(...interface{}) (domain.NoteRepository, error){
+		"badger": badgerdb.NewNoteRepository,
 	}
 	metadataStoreTypes = map[string]func(...interface{}) (domain.MetadataRepository, error){
 		"badger": badgerdb.NewMetadataRepository,
@@ -41,12 +41,12 @@ const (
 type ServiceConfig struct {
 	EventStoreType    string
 	DataStoreType     string
-	VoucherStoreType  string
+	NoteStoreType     string
 	MetadataStoreType string
 
 	EventStoreConfig    []interface{}
 	DataStoreConfig     []interface{}
-	VoucherStoreConfig  []interface{}
+	NoteStoreConfig     []interface{}
 	MetadataStoreConfig []interface{}
 }
 
@@ -54,7 +54,7 @@ type service struct {
 	eventStore    domain.RoundEventRepository
 	roundStore    domain.RoundRepository
 	vtxoStore     domain.VtxoRepository
-	voucherStore  domain.VoucherRepository
+	noteStore     domain.NoteRepository
 	metadataStore domain.MetadataRepository
 }
 
@@ -71,9 +71,9 @@ func NewService(config ServiceConfig) (ports.RepoManager, error) {
 	if !ok {
 		return nil, fmt.Errorf("vtxo store type not supported")
 	}
-	voucherStoreFactory, ok := voucherStoreTypes[config.VoucherStoreType]
+	noteStoreFactory, ok := noteStoreTypes[config.NoteStoreType]
 	if !ok {
-		return nil, fmt.Errorf("voucher store type not supported")
+		return nil, fmt.Errorf("note store type not supported")
 	}
 	metadataStoreFactory, ok := metadataStoreTypes[config.MetadataStoreType]
 	if !ok {
@@ -83,7 +83,7 @@ func NewService(config ServiceConfig) (ports.RepoManager, error) {
 	var eventStore domain.RoundEventRepository
 	var roundStore domain.RoundRepository
 	var vtxoStore domain.VtxoRepository
-	var voucherStore domain.VoucherRepository
+	var noteStore domain.NoteRepository
 	var metadataStore domain.MetadataRepository
 	var err error
 
@@ -156,14 +156,14 @@ func NewService(config ServiceConfig) (ports.RepoManager, error) {
 		}
 	}
 
-	switch config.VoucherStoreType {
+	switch config.NoteStoreType {
 	case "badger":
-		voucherStore, err = voucherStoreFactory(config.VoucherStoreConfig...)
+		noteStore, err = noteStoreFactory(config.NoteStoreConfig...)
 		if err != nil {
-			return nil, fmt.Errorf("failed to open voucher store: %s", err)
+			return nil, fmt.Errorf("failed to open note store: %s", err)
 		}
 	default:
-		return nil, fmt.Errorf("unknown voucher store db type")
+		return nil, fmt.Errorf("unknown note store db type")
 	}
 
 	switch config.MetadataStoreType {
@@ -174,7 +174,7 @@ func NewService(config ServiceConfig) (ports.RepoManager, error) {
 		}
 	}
 
-	return &service{eventStore, roundStore, vtxoStore, voucherStore, metadataStore}, nil
+	return &service{eventStore, roundStore, vtxoStore, noteStore, metadataStore}, nil
 }
 
 func (s *service) RegisterEventsHandler(handler func(round *domain.Round)) {
@@ -193,8 +193,8 @@ func (s *service) Vtxos() domain.VtxoRepository {
 	return s.vtxoStore
 }
 
-func (s *service) Vouchers() domain.VoucherRepository {
-	return s.voucherStore
+func (s *service) Notes() domain.NoteRepository {
+	return s.noteStore
 }
 
 func (s *service) VtxoMetadata() domain.MetadataRepository {
@@ -205,5 +205,5 @@ func (s *service) Close() {
 	s.eventStore.Close()
 	s.roundStore.Close()
 	s.vtxoStore.Close()
-	s.voucherStore.Close()
+	s.noteStore.Close()
 }

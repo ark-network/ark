@@ -16,6 +16,38 @@
     "application/json"
   ],
   "paths": {
+    "/v1/admin/note": {
+      "post": {
+        "operationId": "AdminService_CreateNote",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CreateNoteResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateNoteRequest"
+            }
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
     "/v1/admin/round/{roundId}": {
       "get": {
         "operationId": "AdminService_GetRoundDetails",
@@ -99,38 +131,6 @@
           "AdminService"
         ]
       }
-    },
-    "/v1/admin/voucher": {
-      "post": {
-        "operationId": "AdminService_CreateVoucher",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1CreateVoucherResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1CreateVoucherRequest"
-            }
-          }
-        ],
-        "tags": [
-          "AdminService"
-        ]
-      }
     }
   },
   "definitions": {
@@ -162,7 +162,7 @@
         }
       }
     },
-    "v1CreateVoucherRequest": {
+    "v1CreateNoteRequest": {
       "type": "object",
       "properties": {
         "amount": {
@@ -175,10 +175,10 @@
         }
       }
     },
-    "v1CreateVoucherResponse": {
+    "v1CreateNoteResponse": {
       "type": "object",
       "properties": {
-        "vouchers": {
+        "notes": {
           "type": "array",
           "items": {
             "type": "string"

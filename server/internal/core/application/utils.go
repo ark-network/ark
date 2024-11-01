@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
-	"github.com/ark-network/ark/common/voucher"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -20,7 +20,7 @@ import (
 type timedPayment struct {
 	domain.Payment
 	boardingInputs []ports.BoardingInput
-	vouchers       []voucher.Voucher
+	notes          []note.Note
 	timestamp      time.Time
 	pingTimestamp  time.Time
 }
@@ -63,7 +63,7 @@ func (m *paymentsMap) delete(id string) error {
 	return nil
 }
 
-func (m *paymentsMap) pushWithVouchers(payment domain.Payment, vouchers []voucher.Voucher) error {
+func (m *paymentsMap) pushWithNotes(payment domain.Payment, notes []note.Note) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -71,17 +71,17 @@ func (m *paymentsMap) pushWithVouchers(payment domain.Payment, vouchers []vouche
 		return fmt.Errorf("duplicated payment %s", payment.Id)
 	}
 
-	for _, voucher := range vouchers {
+	for _, note := range notes {
 		for _, payment := range m.payments {
-			for _, pVoucher := range payment.vouchers {
-				if voucher.ID == pVoucher.ID {
-					return fmt.Errorf("duplicated voucher %s", voucher)
+			for _, pNote := range payment.notes {
+				if note.ID == pNote.ID {
+					return fmt.Errorf("duplicated note %s", note)
 				}
 			}
 		}
 	}
 
-	m.payments[payment.Id] = &timedPayment{payment, make([]ports.BoardingInput, 0), vouchers, time.Now(), time.Time{}}
+	m.payments[payment.Id] = &timedPayment{payment, make([]ports.BoardingInput, 0), notes, time.Now(), time.Time{}}
 	return nil
 }
 
@@ -121,7 +121,7 @@ func (m *paymentsMap) push(
 		m.descriptors[key] = desc
 	}
 
-	m.payments[payment.Id] = &timedPayment{payment, boardingInputs, make([]voucher.Voucher, 0), time.Now(), time.Time{}}
+	m.payments[payment.Id] = &timedPayment{payment, boardingInputs, make([]note.Note, 0), time.Now(), time.Time{}}
 	return nil
 }
 
@@ -137,7 +137,7 @@ func (m *paymentsMap) pushEphemeralKey(paymentId string, pubkey *secp256k1.Publi
 	return nil
 }
 
-func (m *paymentsMap) pop(num int64) ([]domain.Payment, []ports.BoardingInput, map[domain.VtxoKey]string, []*secp256k1.PublicKey, []voucher.Voucher) {
+func (m *paymentsMap) pop(num int64) ([]domain.Payment, []ports.BoardingInput, map[domain.VtxoKey]string, []*secp256k1.PublicKey, []note.Note) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -165,7 +165,7 @@ func (m *paymentsMap) pop(num int64) ([]domain.Payment, []ports.BoardingInput, m
 	boardingInputs := make([]ports.BoardingInput, 0)
 	cosigners := make([]*secp256k1.PublicKey, 0, num)
 	descriptors := make(map[domain.VtxoKey]string)
-	vouchers := make([]voucher.Voucher, 0)
+	notes := make([]note.Note, 0)
 	for _, p := range paymentsByTime[:num] {
 		boardingInputs = append(boardingInputs, p.boardingInputs...)
 		payments = append(payments, p.Payment)
@@ -174,7 +174,7 @@ func (m *paymentsMap) pop(num int64) ([]domain.Payment, []ports.BoardingInput, m
 			delete(m.ephemeralKeys, p.Payment.Id)
 		}
 
-		vouchers = append(vouchers, p.vouchers...)
+		notes = append(notes, p.notes...)
 
 		for _, input := range payments {
 			for _, vtxo := range input.Inputs {
@@ -184,7 +184,7 @@ func (m *paymentsMap) pop(num int64) ([]domain.Payment, []ports.BoardingInput, m
 		}
 		delete(m.payments, p.Id)
 	}
-	return payments, boardingInputs, descriptors, cosigners, vouchers
+	return payments, boardingInputs, descriptors, cosigners, notes
 }
 
 func (m *paymentsMap) update(payment domain.Payment) error {
@@ -196,7 +196,7 @@ func (m *paymentsMap) update(payment domain.Payment) error {
 		return fmt.Errorf("payment %s not found", payment.Id)
 	}
 
-	// sum inputs = vtxos + boarding utxos + vouchers
+	// sum inputs = vtxos + boarding utxos + notes
 	sumOfInputs := uint64(0)
 	for _, input := range payment.Inputs {
 		sumOfInputs += input.Amount
@@ -206,8 +206,8 @@ func (m *paymentsMap) update(payment domain.Payment) error {
 		sumOfInputs += boardingInput.Amount
 	}
 
-	for _, voucher := range p.vouchers {
-		sumOfInputs += uint64(voucher.Value)
+	for _, note := range p.notes {
+		sumOfInputs += uint64(note.Value)
 	}
 
 	// sum outputs = receivers VTXOs

@@ -15,8 +15,8 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
+	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
-	"github.com/ark-network/ark/common/voucher"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/ark-network/ark/pkg/client-sdk/redemption"
@@ -713,11 +713,11 @@ func (a *covenantlessArkClient) SendOffChain(
 	return a.sendOffchain(ctx, withExpiryCoinselect, receivers)
 }
 
-func (a *covenantlessArkClient) RedeemVouchers(ctx context.Context, vouchers []string) (string, error) {
+func (a *covenantlessArkClient) RedeemNotes(ctx context.Context, notes []string) (string, error) {
 	amount := uint64(0)
 
-	for _, vStr := range vouchers {
-		v, err := voucher.NewFromString(vStr)
+	for _, vStr := range notes {
+		v, err := note.NewFromString(vStr)
 		if err != nil {
 			return "", err
 		}
@@ -737,8 +737,8 @@ func (a *covenantlessArkClient) RedeemVouchers(ctx context.Context, vouchers []s
 		return "", err
 	}
 
-	paymentID, err := a.client.RegisterVouchersForNextRound(
-		ctx, vouchers, hex.EncodeToString(roundEphemeralKey.PubKey().SerializeCompressed()),
+	paymentID, err := a.client.RegisterNotesForNextRound(
+		ctx, notes, hex.EncodeToString(roundEphemeralKey.PubKey().SerializeCompressed()),
 	)
 	if err != nil {
 		return "", err

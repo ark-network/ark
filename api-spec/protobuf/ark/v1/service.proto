@@ -141,7 +141,7 @@ message GetBoardingAddressResponse {
 message RegisterInputsForNextRoundRequest {
   repeated Input inputs = 1;
   optional string ephemeral_pubkey = 2;
-  repeated string vouchers = 3;
+  repeated string notes = 3;
 }
 message RegisterInputsForNextRoundResponse {
   // Mocks wabisabi's blinded credentials.

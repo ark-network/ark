@@ -34,12 +34,12 @@ var (
 	}
 	amountFlag = &cli.UintFlag{
 		Name:     "amount",
-		Usage:    "amount of the voucher in satoshis",
+		Usage:    "amount of the note in satoshis",
 		Required: true,
 	}
 	quantityFlag = &cli.UintFlag{
 		Name:  "quantity",
-		Usage: "quantity of vouchers to create",
+		Usage: "quantity of notes to create",
 		Value: 1,
 	}
 )
@@ -56,7 +56,7 @@ var (
 			walletUnlockCmd,
 			walletAddressCmd,
 			walletBalanceCmd,
-			createVoucherCmd,
+			createNoteCmd,
 		),
 	}
 	walletStatusCmd = &cli.Command{
@@ -86,10 +86,10 @@ var (
 		Usage:  "Get the wallet balance",
 		Action: walletBalanceAction,
 	}
-	createVoucherCmd = &cli.Command{
-		Name:   "voucher",
-		Usage:  "Create a credit voucher",
-		Action: createVoucherAction,
+	createNoteCmd = &cli.Command{
+		Name:   "note",
+		Usage:  "Create a credit note",
+		Action: createNoteAction,
 		Flags:  []cli.Flag{amountFlag, quantityFlag},
 	}
 )
@@ -225,7 +225,7 @@ func walletBalanceAction(ctx *cli.Context) error {
 	return nil
 }
 
-func createVoucherAction(ctx *cli.Context) error {
+func createNoteAction(ctx *cli.Context) error {
 	baseURL := ctx.String("url")
 	amount := ctx.Uint("amount")
 	quantity := ctx.Uint("quantity")
@@ -243,15 +243,15 @@ func createVoucherAction(ctx *cli.Context) error {
 		tlsCertPath = ""
 	}
 
-	url := fmt.Sprintf("%s/v1/admin/voucher", baseURL)
+	url := fmt.Sprintf("%s/v1/admin/note", baseURL)
 	body := fmt.Sprintf(`{"amount": %d, "quantity": %d}`, amount, quantity)
 
-	vouchers, err := post[[]string](url, body, "vouchers", macaroon, tlsCertPath)
+	notes, err := post[[]string](url, body, "notes", macaroon, tlsCertPath)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println(vouchers)
+	fmt.Println(notes)
 	return nil
 }
 

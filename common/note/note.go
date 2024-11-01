@@ -1,4 +1,4 @@
-package voucher
+package note
 
 import (
 	"crypto/rand"
@@ -10,22 +10,22 @@ import (
 	"github.com/btcsuite/btcd/btcutil/base58"
 )
 
-const voucherHRP = "anote"
+const noteHRP = "arknote"
 
-// Voucher represents a voucher signed by the issuer
-type Voucher struct {
+// Note represents a note signed by the issuer
+type Note struct {
 	Data
 	Signature []byte
 }
 
-// Data contains the data of a voucher
+// Data contains the data of a note
 type Data struct {
 	ID    uint64
 	Value uint32
 }
 
-// New generate a new voucher data struct with a random ID and the given value
-// it must be signed by the issuer and then converted to a Voucher using Data.ToVoucher(signature)
+// New generate a new note data struct with a random ID and the given value
+// it must be signed by the issuer and then converted to a Note using Data.ToNote(signature)
 func New(value uint32) (*Data, error) {
 	randomBytes := make([]byte, 8)
 	_, err := rand.Read(randomBytes)
@@ -41,25 +41,25 @@ func New(value uint32) (*Data, error) {
 	}, nil
 }
 
-// NewFromString converts a base58 encoded string with HRP to a Voucher
-func NewFromString(s string) (*Voucher, error) {
-	if !strings.HasPrefix(s, voucherHRP) {
-		return nil, fmt.Errorf("invalid human-readable part: expected %s prefix (voucher '%s')", voucherHRP, s)
+// NewFromString converts a base58 encoded string with HRP to a Note
+func NewFromString(s string) (*Note, error) {
+	if !strings.HasPrefix(s, noteHRP) {
+		return nil, fmt.Errorf("invalid human-readable part: expected %s prefix (note '%s')", noteHRP, s)
 	}
 
-	encoded := strings.TrimPrefix(s, voucherHRP)
+	encoded := strings.TrimPrefix(s, noteHRP)
 	decoded := base58.Decode(encoded)
 	if len(decoded) == 0 {
 		return nil, fmt.Errorf("failed to decode base58 string")
 	}
 
-	voucher := &Voucher{}
-	err := voucher.Deserialize(decoded)
+	note := &Note{}
+	err := note.Deserialize(decoded)
 	if err != nil {
-		return nil, fmt.Errorf("failed to deserialize voucher: %w", err)
+		return nil, fmt.Errorf("failed to deserialize note: %w", err)
 	}
 
-	return voucher, nil
+	return note, nil
 }
 
 // Serialize converts Data to a byte slice
@@ -87,8 +87,8 @@ func (n *Data) Hash() []byte {
 	return hash[:]
 }
 
-// Serialize converts the Voucher to a byte slice
-func (n *Voucher) Serialize() []byte {
+// Serialize converts the Note to a byte slice
+func (n *Note) Serialize() []byte {
 	detailsBytes := n.Data.Serialize()
 	sigLen := len(n.Signature)
 
@@ -100,8 +100,8 @@ func (n *Voucher) Serialize() []byte {
 	return buf
 }
 
-// Deserialize converts a byte slice to a Voucher
-func (n *Voucher) Deserialize(data []byte) error {
+// Deserialize converts a byte slice to a Note
+func (n *Note) Deserialize(data []byte) error {
 	if len(data) < 13 {
 		return fmt.Errorf("invalid data length: expected at least 13 bytes, got %d", len(data))
 	}
@@ -125,13 +125,13 @@ func (n *Voucher) Deserialize(data []byte) error {
 }
 
 // String converts the Note to a base58 encoded string with HRP
-func (n Voucher) String() string {
-	return voucherHRP + base58.Encode(n.Serialize())
+func (n Note) String() string {
+	return noteHRP + base58.Encode(n.Serialize())
 }
 
-// ToVoucher creates a Voucher from Data with the given signature
-func (n *Data) ToVoucher(signature []byte) *Voucher {
-	return &Voucher{
+// ToNote creates a Note from Data with the given signature
+func (n *Data) ToNote(signature []byte) *Note {
+	return &Note{
 		Data:      *n,
 		Signature: signature,
 	}

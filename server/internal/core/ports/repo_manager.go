@@ -6,7 +6,7 @@ type RepoManager interface {
 	Events() domain.RoundEventRepository
 	Rounds() domain.RoundRepository
 	Vtxos() domain.VtxoRepository
-	Vouchers() domain.VoucherRepository
+	Notes() domain.NoteRepository
 	VtxoMetadata() domain.MetadataRepository
 	RegisterEventsHandler(func(*domain.Round))
 	Close()

@@ -6,8 +6,8 @@ import (
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
-	"github.com/ark-network/ark/common/voucher"
 	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -52,22 +52,22 @@ func parseAsyncPaymentInputs(ins []*arkv1.AsyncPaymentInput) ([]application.Asyn
 	return inputs, nil
 }
 
-func parseVouchers(vouchers []string) ([]voucher.Voucher, error) {
-	if len(vouchers) <= 0 {
-		return nil, fmt.Errorf("missing vouchers")
+func parseNotes(notes []string) ([]note.Note, error) {
+	if len(notes) <= 0 {
+		return nil, fmt.Errorf("missing notes")
 	}
 
-	vouchersParsed := make([]voucher.Voucher, 0, len(vouchers))
-	for _, voucherStr := range vouchers {
-		v, err := voucher.NewFromString(voucherStr)
+	notesParsed := make([]note.Note, 0, len(notes))
+	for _, noteStr := range notes {
+		n, err := note.NewFromString(noteStr)
 		if err != nil {
-			return nil, fmt.Errorf("invalid voucher: %s", err)
+			return nil, fmt.Errorf("invalid note: %s", err)
 		}
 
-		vouchersParsed = append(vouchersParsed, *v)
+		notesParsed = append(notesParsed, *n)
 	}
 
-	return vouchersParsed, nil
+	return notesParsed, nil
 }
 
 func parseInputs(ins []*arkv1.Input) ([]ports.Input, error) {

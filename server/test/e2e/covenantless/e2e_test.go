@@ -380,8 +380,8 @@ func TestAliceSeveralPaymentsToBob(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestRedeemVouchers(t *testing.T) {
-	voucher := generateVoucher(t, 10_000)
+func TestRedeemNotes(t *testing.T) {
+	note := generateNote(t, 10_000)
 
 	balanceBeforeStr, err := runClarkCommand("balance")
 	require.NoError(t, err)
@@ -389,7 +389,7 @@ func TestRedeemVouchers(t *testing.T) {
 	var balanceBefore utils.ArkBalance
 	require.NoError(t, json.Unmarshal([]byte(balanceBeforeStr), &balanceBefore))
 
-	_, err = runClarkCommand("redeem-vouchers", "--vouchers", voucher)
+	_, err = runClarkCommand("redeem-notes", "--notes", note)
 	require.NoError(t, err)
 
 	time.Sleep(2 * time.Second)
@@ -402,7 +402,7 @@ func TestRedeemVouchers(t *testing.T) {
 
 	require.Greater(t, balanceAfter.Offchain.Total, balanceBefore.Offchain.Total)
 
-	_, err = runClarkCommand("redeem-vouchers", "--vouchers", voucher)
+	_, err = runClarkCommand("redeem-notes", "--notes", note)
 	require.Error(t, err)
 }
 
@@ -461,7 +461,7 @@ func TestSweep(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 	require.Zero(t, balance.Offchain.Total) // all funds should be swept
 
-	var voucher string
+	var note string
 
 	for event := range sub.Events {
 		sharedSecret, err := nip04.ComputeSharedSecret(event.PubKey, secretKey)
@@ -471,14 +471,14 @@ func TestSweep(t *testing.T) {
 		decrypted, err := nip04.Decrypt(event.Content, sharedSecret)
 		require.NoError(t, err)
 
-		voucher = decrypted
+		note = decrypted
 		break // Exit after processing the first message
 	}
 
-	require.NotEmpty(t, voucher)
+	require.NotEmpty(t, note)
 
-	// redeem the voucher
-	_, err = runClarkCommand("redeem-vouchers", "--vouchers", voucher)
+	// redeem the note
+	_, err = runClarkCommand("redeem-notes", "--notes", note)
 	require.NoError(t, err)
 }
 
@@ -622,29 +622,29 @@ func setupArkSDK(t *testing.T) (arksdk.ArkClient, client.ASPClient) {
 	return client, grpcClient
 }
 
-func generateVoucher(t *testing.T, amount uint32) string {
+func generateNote(t *testing.T, amount uint32) string {
 	adminHttpClient := &http.Client{
 		Timeout: 15 * time.Second,
 	}
 
 	reqBody := bytes.NewReader([]byte(fmt.Sprintf(`{"amount": "%d"}`, amount)))
-	req, err := http.NewRequest("POST", "http://localhost:7070/v1/admin/voucher", reqBody)
+	req, err := http.NewRequest("POST", "http://localhost:7070/v1/admin/note", reqBody)
 	if err != nil {
-		t.Fatalf("failed to prepare voucher request: %s", err)
+		t.Fatalf("failed to prepare note request: %s", err)
 	}
 	req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := adminHttpClient.Do(req)
 	if err != nil {
-		t.Fatalf("failed to create voucher: %s", err)
+		t.Fatalf("failed to create note: %s", err)
 	}
 
-	var voucherResp struct {
-		Vouchers []string `json:"vouchers"`
+	var noteResp struct {
+		Notes []string `json:"notes"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&voucherResp); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&noteResp); err != nil {
 		t.Fatalf("failed to parse response: %s", err)
 	}
-	return voucherResp.Vouchers[0]
+	return noteResp.Notes[0]
 }

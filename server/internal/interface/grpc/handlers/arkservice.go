@@ -88,14 +88,14 @@ func (h *handler) RegisterInputsForNextRound(
 	ctx context.Context, req *arkv1.RegisterInputsForNextRoundRequest,
 ) (*arkv1.RegisterInputsForNextRoundResponse, error) {
 	vtxosInputs := req.GetInputs()
-	vouchersInputs := req.GetVouchers()
+	notesInputs := req.GetNotes()
 
-	if len(vtxosInputs) <= 0 && len(vouchersInputs) <= 0 {
+	if len(vtxosInputs) <= 0 && len(notesInputs) <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "missing inputs")
 	}
 
-	if len(vtxosInputs) > 0 && len(vouchersInputs) > 0 {
-		return nil, status.Error(codes.InvalidArgument, "cannot mix vtxos and vouchers")
+	if len(vtxosInputs) > 0 && len(notesInputs) > 0 {
+		return nil, status.Error(codes.InvalidArgument, "cannot mix vtxos and notes")
 	}
 
 	paymentID := ""
@@ -111,12 +111,12 @@ func (h *handler) RegisterInputsForNextRound(
 		}
 	}
 
-	if len(vouchersInputs) > 0 {
-		vouchers, err := parseVouchers(vouchersInputs)
+	if len(notesInputs) > 0 {
+		notes, err := parseNotes(notesInputs)
 		if err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
-		paymentID, err = h.svc.SpendVouchers(ctx, vouchers)
+		paymentID, err = h.svc.SpendNotes(ctx, notes)
 		if err != nil {
 			return nil, err
 		}

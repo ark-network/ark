@@ -210,7 +210,7 @@ func (a *covenantArkClient) InitWithWallet(ctx context.Context, args InitWithWal
 	return nil
 }
 
-func (a *covenantArkClient) RedeemVouchers(ctx context.Context, notes []string) (string, error) {
+func (a *covenantArkClient) RedeemNotes(ctx context.Context, notes []string) (string, error) {
 	return "", fmt.Errorf("not implemented")
 }
 
@@ -1703,7 +1703,7 @@ func (a *covenantArkClient) getOffchainBalance(
 
 func (a *covenantArkClient) getVtxos(
 	ctx context.Context,
-	withExpiryCoinselect bool, opts *CoinSelectOptions,
+	_ bool, opts *CoinSelectOptions,
 ) ([]client.Vtxo, error) {
 	spendableVtxos, _, err := a.ListVtxos(ctx)
 	if err != nil {

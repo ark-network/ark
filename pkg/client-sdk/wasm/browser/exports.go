@@ -37,7 +37,7 @@ func init() {
 	js.Global().Set("getTransactionHistory", GetTransactionHistoryWrapper())
 	js.Global().Set("log", LogWrapper())
 	js.Global().Set("dump", DumpWrapper())
-	js.Global().Set("redeemVouchers", RedeemVouchersWrapper())
+	js.Global().Set("redeemNotes", RedeemNotesWrapper())
 	js.Global().Set("setNostrNotificationRecipient", SetNostrNotificationRecipientWrapper())
 
 	js.Global().Set("getAspUrl", GetAspUrlWrapper())
