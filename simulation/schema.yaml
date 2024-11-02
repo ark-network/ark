@@ -12,15 +12,11 @@ properties:
     type: object
     required:
       - network
-      - initial_funding
       - round_interval
     properties:
       network:
         type: string
         enum: ["regtest", "testnet"]
-      initial_funding:
-        type: number
-        minimum: 0
       round_interval:
         type: integer
         minimum: 1
@@ -69,6 +65,7 @@ properties:
                       - "Claim"
                       - "CollaborativeRedeem"
                       - "UnilateralExit"
+                      - "Balance"
                   amount:
                     type: number
                     minimum: 0

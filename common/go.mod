@@ -11,6 +11,7 @@ require (
 	github.com/btcsuite/btcwallet v0.16.10-0.20240718224643-db3a4a2543bd
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0
 	github.com/lightningnetwork/lnd v0.18.2-beta
+	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
 )
 

@@ -1,0 +1,297 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS CloudFormation Template for Orchestrator and Clients Infrastructure with Simplifications
+
+Parameters:
+  VpcCIDR:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: CIDR block for the VPC
+  SubnetCIDR:
+    Type: String
+    Default: 10.0.1.0/24
+    Description: CIDR block for the subnet
+  AvailabilityZone:
+    Type: String
+    Default: eu-central-1a
+    Description: Availability Zone
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Name of an existing EC2 KeyPair to enable SSH access
+  InstanceType:
+    Type: String
+    Default: t2.large
+    AllowedValues:
+      - t2.micro
+      - t2.small
+      - t2.medium
+      - t2.large
+    Description: EC2 Instance Type
+  AMI:
+    Type: AWS::EC2::Image::Id
+    Default: ami-0084a47cc718c111a
+    Description: AMI ID for Amazon Linux 2 in eu-central-1
+  OrchestratorPort:
+    Type: Number
+    Default: 9000
+    Description: Port on which the orchestrator listens
+
+Resources:
+
+  ### VPC and Networking ###
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: OrchestratorVPC
+
+  Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref SubnetCIDR
+      AvailabilityZone: !Ref AvailabilityZone
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: OrchestratorSubnet
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: OrchestratorInternetGateway
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: OrchestratorRouteTable
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref Subnet
+      RouteTableId: !Ref RouteTable
+
+  ### Security Group ###
+
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security Group for Orchestrator EC2 Instance and Clients
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !Ref OrchestratorPort
+          ToPort: !Ref OrchestratorPort
+          CidrIp: !GetAtt VPC.CidrBlock
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: OrchestratorSecurityGroup
+
+  ### ECR Repository ###
+
+  ECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: client-repo
+
+  ### IAM Role for Orchestrator EC2 Instance ###
+
+  OrchestratorInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: "/"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonECS_FullAccess  # Updated policy ARN
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess
+
+  OrchestratorInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+        - !Ref OrchestratorInstanceRole
+
+  ### EC2 Instance for Orchestrator and ASP ###
+
+  OrchestratorInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref OrchestratorInstanceProfile
+      KeyName: !Ref KeyPairName
+      ImageId: !Ref AMI
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref Subnet
+          AssociatePublicIpAddress: true
+          GroupSet:
+            - !Ref SecurityGroup
+      Tags:
+        - Key: Name
+          Value: OrchestratorInstance
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Update and install dependencies
+          yum update -y
+          
+          # Install Docker
+          amazon-linux-extras install docker -y
+          service docker start
+          usermod -a -G docker ec2-user
+          
+          # Install Docker Compose
+          curl -L "https://github.com/docker/compose/releases/download/2.20.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          chmod +x /usr/local/bin/docker-compose
+          
+          # Install Go 1.23.1
+          wget https://go.dev/dl/go1.23.1.linux-amd64.tar.gz
+          tar -C /usr/local -xzf go1.23.1.linux-amd64.tar.gz
+          echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile
+          source /etc/profile
+          
+          # Install Nigiri
+          curl -Ls https://nigiri.vulpem.com | bash
+          
+          # Start Nigiri
+          /home/ec2-user/bin/nigiri start --daemon
+          
+          # Expose port 9000
+          iptables -I INPUT -p tcp --dport 9000 -j ACCEPT
+
+  ### CloudWatch Logs Group ###
+
+  ClientLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/ClientContainer
+      RetentionInDays: 7  # Adjust as needed
+
+  ### ECS Cluster and Task Definition ###
+
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: OrchestratorCluster
+
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: "/"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: AllowLogs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "arn:aws:logs:*:*:log-group:/ecs/ClientContainer:*"
+
+  ECSTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: ClientTaskDefinition
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: '1024'
+      Memory: '2048'
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: ClientContainer
+          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/client-repo:latest"
+          Essential: true
+          Environment:
+            - Name: ASP_URL
+              Value: !Sub "${OrchestratorInstance.PrivateIp}:${OrchestratorPort}"
+            - Name: ORCHESTRATOR_URL
+              Value: !Sub "ws://${OrchestratorInstance.PrivateIp}:${OrchestratorPort}"
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: /ecs/ClientContainer
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+Outputs:
+  OrchestratorInstanceID:
+    Description: Instance ID of the Orchestrator EC2 instance
+    Value: !Ref OrchestratorInstance
+
+  OrchestratorPrivateIP:
+    Description: Private IP of the Orchestrator EC2 instance
+    Value: !GetAtt OrchestratorInstance.PrivateIp
+
+  OrchestratorPublicIP:
+    Description: Public IP of the Orchestrator EC2 instance
+    Value: !GetAtt OrchestratorInstance.PublicIp
+
+  VPCID:
+    Description: VPC ID
+    Value: !Ref VPC
+
+  SubnetID:
+    Description: Subnet ID
+    Value: !Ref Subnet
+
+  SecurityGroupID:
+    Description: Security Group ID
+    Value: !Ref SecurityGroup
+
+  ECRRepositoryURI:
+    Description: URI of the ECR Repository
+    Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/client-repo"

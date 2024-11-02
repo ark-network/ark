@@ -7,7 +7,7 @@ server:
 
 clients:
   - id: "client_0"
-    initial_funding: 0.1
+    name: Client0
   - id: "client_1"
     name: "Client1"
   - id: "client_2"

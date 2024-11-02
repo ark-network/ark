@@ -23,6 +23,7 @@ import (
 const (
 	composePath   = "../../../../docker-compose.clark.regtest.yml"
 	redeemAddress = "bcrt1q2wrgf2hrkfegt0t97cnv4g5yvfjua9k6vua54d"
+	aspUrl        = "http://localhost:7070"
 )
 
 func TestMain(m *testing.M) {
@@ -39,7 +40,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	if err := utils.SetupServerWalletCovenantless(0.0); err != nil {
+	if err := utils.SetupServerWalletCovenantless(aspUrl, 0.0); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}

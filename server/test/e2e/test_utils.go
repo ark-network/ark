@@ -108,12 +108,11 @@ func newCommand(name string, arg ...string) *exec.Cmd {
 	return cmd
 }
 
-func SetupServerWalletCovenantless(initFunding float64) error {
+func SetupServerWalletCovenantless(aspUrl string, initFunding float64) error {
 	adminHttpClient := &http.Client{
 		Timeout: 15 * time.Second,
 	}
-
-	req, err := http.NewRequest("GET", "http://localhost:7070/v1/admin/wallet/seed", nil)
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/admin/wallet/seed", aspUrl), nil)
 	if err != nil {
 		return fmt.Errorf("failed to prepare generate seed request: %s", err)
 	}

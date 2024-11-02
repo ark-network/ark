@@ -31,7 +31,7 @@ var (
 )
 
 func main() {
-	simFile := flag.String("simulation", "simulation1.yaml", "Path to the simulation YAML file")
+	simFile := flag.String("simulation", "simulation2.yaml", "Path to the simulation YAML file")
 	flag.Parse()
 
 	simulation, err := loadAndValidateSimulation(*simFile)
@@ -59,14 +59,14 @@ func main() {
 	}
 
 	log.Infof("Start building ARKD docker container ...")
-	if _, err := utils.RunCommand("docker", "compose", "-f", composePath, "--env-file", tmpfile.Name(), "up", "-d"); err != nil {
+	if _, err := utils.RunCommand("docker", "compose", "-f", composePath, "--env-file", tmpfile.Name(), "up", "-d", "--build"); err != nil {
 		log.Fatal(err)
 	}
 
 	time.Sleep(10 * time.Second)
 	log.Infoln("ASP running...")
 
-	if err := utils.SetupServerWalletCovenantless(simulation.Server.InitialFunding); err != nil {
+	if err := utils.SetupServerWalletCovenantless("http://localhost:7070", simulation.Server.InitialFunding); err != nil {
 		log.Fatal(err)
 	}
 
@@ -149,23 +149,23 @@ func main() {
 		time.Sleep(2 * time.Second)
 	}
 
-	log.Println("Final balances for all clients:")
-	for _, user := range users {
-		wg.Add(1)
-		go func(u User) {
-			defer wg.Done()
-			ctx := context.Background()
-			balance, err := getBalance(u.client, ctx)
-			if err != nil {
-				log.Errorf("Failed to get balance for user %s: %v", u.ID, err)
-			} else {
-				if err := printJSON(u.Name, balance); err != nil {
-					log.Errorf("Failed to print JSON for user %s: %v", u.ID, err)
-				}
-			}
-		}(user)
-	}
-	wg.Wait()
+	//log.Println("Final balances for all clients:")
+	//for _, user := range users {
+	//	wg.Add(1)
+	//	go func(u User) {
+	//		defer wg.Done()
+	//		ctx := context.Background()
+	//		balance, err := getBalance(u.client, ctx)
+	//		if err != nil {
+	//			log.Errorf("Failed to get balance for user %s: %v", u.ID, err)
+	//		} else {
+	//			if err := printJSON(u.Name, balance); err != nil {
+	//				log.Errorf("Failed to print JSON for user %s: %v", u.ID, err)
+	//			}
+	//		}
+	//	}(user)
+	//}
+	//wg.Wait()
 }
 
 func loadAndValidateSimulation(simFile string) (*Simulation, error) {

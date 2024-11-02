@@ -49,7 +49,6 @@ func TestRoundTripSignTree(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		// Create a new tree
 		tree, err := bitcointree.CraftCongestionTree(
 			&wire.OutPoint{
 				Hash:  *testTxid,
