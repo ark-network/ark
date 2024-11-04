@@ -212,8 +212,20 @@ func startClients(subnetIDsEnv, securityGroupIDsEnv string, clientConfigs []Clie
 	subnetIDs := strings.Split(subnetIDsEnv, ",")
 	securityGroupIDs := strings.Split(securityGroupIDsEnv, ",")
 
-	clusterName := "OrchestratorCluster"     // Use your ECS cluster name
-	taskDefinition := "ClientTaskDefinition" // Use your task definition name
+	clusterName := "OrchestratorCluster"
+	taskDefinition := "ClientTaskDefinition"
+
+	// Log task definition details
+	describeTaskDefInput := &ecs.DescribeTaskDefinitionInput{
+		TaskDefinition: aws.String(taskDefinition),
+	}
+
+	taskDefDetails, err := ecsClient.DescribeTaskDefinition(context.TODO(), describeTaskDefInput)
+	if err != nil {
+		log.Warnf("Failed to get task definition details: %v", err)
+	} else {
+		log.Infof("Task Definition details: %+v", taskDefDetails.TaskDefinition)
+	}
 
 	var (
 		tasksMu sync.Mutex
@@ -222,6 +234,61 @@ func startClients(subnetIDsEnv, securityGroupIDsEnv string, clientConfigs []Clie
 			TaskArn  string
 		}
 	)
+
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	// Function to wait for task to be running
+	waitForTaskRunning := func(taskArn string, clientID string) error {
+		for {
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("timeout waiting for task to start")
+			default:
+				describeTasksInput := &ecs.DescribeTasksInput{
+					Cluster: aws.String(clusterName),
+					Tasks:   []string{taskArn},
+				}
+
+				result, err := ecsClient.DescribeTasks(context.TODO(), describeTasksInput)
+				if err != nil {
+					return fmt.Errorf("failed to describe task: %v", err)
+				}
+
+				if len(result.Tasks) > 0 {
+					task := result.Tasks[0]
+					status := aws.ToString(task.LastStatus)
+
+					switch status {
+					case "RUNNING":
+						return nil
+					case "STOPPED":
+						// Get detailed error information
+						var errorDetail string
+						if task.StoppedReason != nil {
+							errorDetail = *task.StoppedReason
+						}
+
+						// Check container status for more details
+						for _, container := range task.Containers {
+							if container.Reason != nil {
+								errorDetail += fmt.Sprintf(" Container error: %s", *container.Reason)
+							}
+						}
+
+						return fmt.Errorf("task stopped: %s", errorDetail)
+					case "PENDING", "PROVISIONING":
+						log.Infof("Client %s task status: %s", clientID, status)
+					default:
+						log.Infof("Client %s unexpected status: %s", clientID, status)
+					}
+				}
+
+				time.Sleep(5 * time.Second)
+			}
+		}
+	}
 
 	// Use errgroup to manage goroutines and errors
 	g := new(errgroup.Group)
@@ -234,7 +301,7 @@ func startClients(subnetIDsEnv, securityGroupIDsEnv string, clientConfigs []Clie
 
 			// Prepare the overrides for the container
 			containerOverrides := ecsTypes.ContainerOverride{
-				Name: aws.String("ClientContainer"), // Name of the container in task definition
+				Name: aws.String("ClientContainer"),
 				Environment: []ecsTypes.KeyValuePair{
 					{
 						Name:  aws.String("CLIENT_ID"),
@@ -265,9 +332,14 @@ func startClients(subnetIDsEnv, securityGroupIDsEnv string, clientConfigs []Clie
 				return fmt.Errorf("failed to start client %s: %v", clientID, err)
 			}
 
+			if len(result.Tasks) == 0 {
+				return fmt.Errorf("no tasks created for client %s", clientID)
+			}
+
 			taskArn := *result.Tasks[0].TaskArn
 			log.Infof("Started client %s with task ARN: %s", clientID, taskArn)
 
+			// Store task information
 			tasksMu.Lock()
 			tasks = append(tasks, struct {
 				ClientID string
@@ -277,6 +349,11 @@ func startClients(subnetIDsEnv, securityGroupIDsEnv string, clientConfigs []Clie
 				TaskArn:  taskArn,
 			})
 			tasksMu.Unlock()
+
+			// Wait for task to be running
+			if err := waitForTaskRunning(taskArn, clientID); err != nil {
+				return fmt.Errorf("client %s failed to start: %v", clientID, err)
+			}
 
 			// Initialize client connection without WebSocket connection yet
 			clientsMu.Lock()
@@ -289,59 +366,61 @@ func startClients(subnetIDsEnv, securityGroupIDsEnv string, clientConfigs []Clie
 			}
 			clientsMu.Unlock()
 
+			log.Infof("Client %s successfully started and running", clientID)
 			return nil
 		})
 	}
 
 	// Wait for all tasks to be started
 	if err := g.Wait(); err != nil {
+		log.Errorf("Error starting clients: %v", err)
 		// If any error occurred during task startup, stop any started tasks
 		stopClients()
 		return err
 	}
 
-	// Wait for 10 seconds before checking task statuses
-	time.Sleep(10 * time.Second)
+	log.Infof("All clients started successfully")
 
-	// Use another errgroup for checking task statuses
-	statusGroup := new(errgroup.Group)
+	// Monitor task health periodically
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
 
-	for _, taskInfo := range tasks {
-		taskInfo := taskInfo // Capture range variable
-		statusGroup.Go(func() error {
-			describeTasksInput := &ecs.DescribeTasksInput{
-				Cluster: aws.String(clusterName),
-				Tasks:   []string{taskInfo.TaskArn},
-			}
-			describeTasksOutput, err := ecsClient.DescribeTasks(context.TODO(), describeTasksInput)
-			if err != nil {
-				return fmt.Errorf("failed to describe task for client %s: %v", taskInfo.ClientID, err)
-			}
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				tasksMu.Lock()
+				currentTasks := make([]struct {
+					ClientID string
+					TaskArn  string
+				}, len(tasks))
+				copy(currentTasks, tasks)
+				tasksMu.Unlock()
 
-			if len(describeTasksOutput.Tasks) > 0 {
-				task := describeTasksOutput.Tasks[0]
-				lastStatus := aws.ToString(task.LastStatus)
-				if lastStatus == "STOPPED" {
-					stoppedReason := aws.ToString(task.StoppedReason)
-					return fmt.Errorf("client %s task stopped: %s", taskInfo.ClientID, stoppedReason)
-				} else {
-					log.Infof("Client %s task is in status: %s", taskInfo.ClientID, lastStatus)
+				for _, task := range currentTasks {
+					describeTasksInput := &ecs.DescribeTasksInput{
+						Cluster: aws.String(clusterName),
+						Tasks:   []string{task.TaskArn},
+					}
+
+					result, err := ecsClient.DescribeTasks(context.TODO(), describeTasksInput)
+					if err != nil {
+						log.Warnf("Failed to describe task for client %s: %v", task.ClientID, err)
+						continue
+					}
+
+					if len(result.Tasks) > 0 {
+						status := aws.ToString(result.Tasks[0].LastStatus)
+						if status == "STOPPED" {
+							log.Warnf("Client %s task stopped unexpectedly", task.ClientID)
+						}
+					}
 				}
-			} else {
-				return fmt.Errorf("no task information found for client %s", taskInfo.ClientID)
 			}
-			return nil
-		})
-	}
-
-	// Wait for all status checks to complete
-	if err := statusGroup.Wait(); err != nil {
-		// If any task is stopped or an error occurred, stop all clients and return the error
-		stopClients()
-		return err
-	}
-
-	log.Infof("All clients started as Fargate tasks")
+		}
+	}()
 
 	return nil
 }

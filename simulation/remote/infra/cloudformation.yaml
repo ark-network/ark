@@ -29,11 +29,22 @@ Parameters:
   AMI:
     Type: AWS::EC2::Image::Id
     Default: ami-0084a47cc718c111a
-    Description: AMI ID for Amazon Linux 2 in eu-central-1
+    Description: Ubuntu Server 24.04 in eu-central-1
   OrchestratorPort:
     Type: Number
     Default: 9000
     Description: Port on which the orchestrator listens
+  GitRepoURL:
+    Type: String
+    Description: URL of the Git repository to clone
+  GitBranch:
+    Type: String
+    Default: master
+    Description: Git branch to checkout (optional)
+  GoVersion:
+    Type: String
+    Default: "1.23.1"
+    Description: Version of Go to install
 
 Resources:
 
@@ -106,7 +117,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: !Ref OrchestratorPort
           ToPort: !Ref OrchestratorPort
-          CidrIp: !GetAtt VPC.CidrBlock
+          CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
@@ -141,8 +152,9 @@ Resources:
               - 'sts:AssumeRole'
       Path: "/"
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonECS_FullAccess  # Updated policy ARN
+        - arn:aws:iam::aws:policy/AmazonECS_FullAccess
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
 
   OrchestratorInstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -160,6 +172,12 @@ Resources:
       IamInstanceProfile: !Ref OrchestratorInstanceProfile
       KeyName: !Ref KeyPairName
       ImageId: !Ref AMI
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 100
+            VolumeType: gp3  # Optional, can specify desired volume type
+            DeleteOnTermination: true
       NetworkInterfaces:
         - DeviceIndex: 0
           SubnetId: !Ref Subnet
@@ -172,32 +190,70 @@ Resources:
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
-          # Update and install dependencies
-          yum update -y
-          
-          # Install Docker
-          amazon-linux-extras install docker -y
-          service docker start
-          usermod -a -G docker ec2-user
-          
-          # Install Docker Compose
-          curl -L "https://github.com/docker/compose/releases/download/2.20.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          # set -e  # Commented out for debugging
+
+          echo "Updating package list..."
+          apt-get update -y
+
+          echo "Installing Docker..."
+          apt-get install -y docker.io
+          systemctl start docker
+          systemctl enable docker
+          usermod -aG docker ubuntu
+
+          echo "Installing Docker Compose..."
+          curl -L "https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-x86_64" -o /usr/local/bin/docker-compose
           chmod +x /usr/local/bin/docker-compose
-          
-          # Install Go 1.23.1
-          wget https://go.dev/dl/go1.23.1.linux-amd64.tar.gz
-          tar -C /usr/local -xzf go1.23.1.linux-amd64.tar.gz
+
+          echo "Installing Go..."
+          wget https://dl.google.com/go/go${GoVersion}.linux-amd64.tar.gz
+          tar -C /usr/local -xzf go${GoVersion}.linux-amd64.tar.gz
+          ln -s /usr/local/go/bin/go /usr/local/bin/go
           echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile
           source /etc/profile
-          
-          # Install Nigiri
-          curl -Ls https://nigiri.vulpem.com | bash
-          
-          # Start Nigiri
-          /home/ec2-user/bin/nigiri start --daemon
-          
-          # Expose port 9000
-          iptables -I INPUT -p tcp --dport 9000 -j ACCEPT
+
+          echo "Installing build tools and utilities..."
+          apt-get install -y build-essential curl jq git unzip
+
+          echo "Installing AWS CLI v2..."
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install
+
+          echo "Installing Nigiri..."
+          curl https://getnigiri.vulpem.com | sudo bash
+
+          echo "Cloning the repository..."
+          cd /home/ubuntu
+          REPO_URL="${GitRepoURL}"
+          BRANCH="${GitBranch}"
+          echo "REPO_URL is: $REPO_URL"
+          echo "BRANCH is: $BRANCH"
+          if [ -n "$BRANCH" ] && [ "$BRANCH" != "master" ]; then
+            git clone -b $BRANCH $REPO_URL
+          else
+            git clone $REPO_URL
+          fi
+
+          chown -R ubuntu:ubuntu /home/ubuntu
+
+          echo "Switching to ubuntu user..."
+          sudo -u ubuntu bash << EOF
+
+          echo "Inside ubuntu user context..."
+          export AWS_REGION="${AWS::Region}"
+          AWS_ACCOUNT_ID=\$(aws sts get-caller-identity --query Account --output text)
+          echo "AWS_ACCOUNT_ID is: \$AWS_ACCOUNT_ID"
+
+          cd /home/ubuntu/$(basename $REPO_URL .git)/simulation
+
+          echo "Running make push-to-ecr..."
+          make push-to-ecr AWS_ACCOUNT_ID=\$AWS_ACCOUNT_ID AWS_REGION=\$AWS_REGION
+
+          EOF
+
+          echo "Allowing port 9000..."
+          sudo ufw allow 9000/tcp
 
   ### CloudWatch Logs Group ###
 

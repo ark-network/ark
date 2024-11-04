@@ -1,4 +1,4 @@
-.PHONY: buildclient run push-to-ecr
+.PHONY: buildclient run push-to-ecr build-client
 
 #### Remote simulation ####
 
@@ -13,3 +13,8 @@ BUILD_CONTEXT ?= ../
 push-to-ecr:
 	@echo "Building and pushing client image to ECR..."
 	./script/build_and_push.sh -a $(AWS_ACCOUNT_ID) -r $(AWS_REGION) -e $(ECR_REPOSITORY_NAME) -i $(IMAGE_NAME) -d $(DOCKERFILE_PATH) -c $(BUILD_CONTEXT)
+
+## build-client: Build Docker image only without pushing to ECR
+build-client:
+	@echo "Building Docker image without pushing to ECR..."
+	./script/build_and_push.sh -a $(AWS_ACCOUNT_ID) -r $(AWS_REGION) -e $(ECR_REPOSITORY_NAME) -i $(IMAGE_NAME) -d $(DOCKERFILE_PATH) -c $(BUILD_CONTEXT) --no-push

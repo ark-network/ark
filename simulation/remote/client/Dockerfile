@@ -25,19 +25,28 @@ COPY server/pkg/kvdb ./server/pkg/kvdb/
 COPY server/pkg/macaroons ./server/pkg/macaroons/
 COPY simulation ./simulation/
 
-
 # Copy the main.go file from ./simulation/remote/client
 COPY simulation/remote/client/main.go ./
 
 RUN go mod download
 
+# Build the binary with explicit name
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
-    go build -ldflags="-X 'main.Version=${VERSION}'" -o client main.go
+    go build -v -ldflags="-X 'main.Version=${VERSION}'" -o arkclient main.go
 
 # Stage 2: Create the runtime image
 FROM alpine:latest
 
-WORKDIR /root/
-COPY --from=builder /app/client .
+# Install file command for debugging
+RUN apk add --no-cache file
 
-ENTRYPOINT ["./client"]
+# Copy the binary with a specific name
+COPY --from=builder /app/arkclient /arkclient
+
+# Verify the binary
+RUN ls -la . && \
+    chmod +x /arkclient && \
+    file /arkclient
+
+# Use the binary as entrypoint
+ENTRYPOINT ["./arkclient"]
