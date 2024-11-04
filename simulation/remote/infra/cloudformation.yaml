@@ -34,6 +34,10 @@ Parameters:
     Type: Number
     Default: 9000
     Description: Port on which the orchestrator listens
+  AspPort:
+    Type: Number
+    Default: 7070
+    Description: Port on which the ASP listens
   GitRepoURL:
     Type: String
     Description: URL of the Git repository to clone
@@ -134,7 +138,7 @@ Resources:
   ECRRepository:
     Type: AWS::ECR::Repository
     Properties:
-      RepositoryName: client-repo
+      RepositoryName: ark-client-repo
 
   ### IAM Role for Orchestrator EC2 Instance ###
 
@@ -246,6 +250,9 @@ Resources:
           echo "AWS_ACCOUNT_ID is: \$AWS_ACCOUNT_ID"
 
           cd /home/ubuntu/$(basename $REPO_URL .git)/simulation
+          
+          echo "Running nigiri..."
+          nigiri start
 
           echo "Running make push-to-ecr..."
           make push-to-ecr AWS_ACCOUNT_ID=\$AWS_ACCOUNT_ID AWS_REGION=\$AWS_REGION
@@ -309,13 +316,13 @@ Resources:
       TaskRoleArn: !GetAtt ECSTaskExecutionRole.Arn
       ContainerDefinitions:
         - Name: ClientContainer
-          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/client-repo:latest"
+          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/ark-client-repo:latest"
           Essential: true
           Environment:
             - Name: ASP_URL
               Value: !Sub "${OrchestratorInstance.PrivateIp}:${OrchestratorPort}"
             - Name: ORCHESTRATOR_URL
-              Value: !Sub "ws://${OrchestratorInstance.PrivateIp}:${OrchestratorPort}"
+              Value: !Sub "ws://${OrchestratorInstance.PrivateIp}:${AspPort}"
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -350,4 +357,4 @@ Outputs:
 
   ECRRepositoryURI:
     Description: URI of the ECR Repository
-    Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/client-repo"
+    Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/ark-client-repo"

@@ -1,9 +1,8 @@
-.PHONY: buildclient run push-to-ecr build-client
+.PHONY: run push-to-ecr build-client
 
 #### Remote simulation ####
 
 # Default values for optional variables
-SIMULATION ?= simulation1.yaml
 ECR_REPOSITORY_NAME ?= client-repo
 IMAGE_NAME ?= client-image
 DOCKERFILE_PATH ?= ./remote/client

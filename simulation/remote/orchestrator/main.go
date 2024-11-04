@@ -133,7 +133,7 @@ func startAspLocally(simulation Simulation) error {
 	}
 
 	log.Infof("Start building ARKD docker container ...")
-	if _, err := utils.RunCommand("docker", "compose", "-f", composePath, "--env-file", tmpfile.Name(), "up", "-d"); err != nil {
+	if _, err := utils.RunCommand("docker-compose", "-f", composePath, "--env-file", tmpfile.Name(), "up", "-d"); err != nil {
 		return err
 	}
 
