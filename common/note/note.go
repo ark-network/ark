@@ -90,20 +90,13 @@ func (n *Data) Hash() []byte {
 // Serialize converts the Note to a byte slice
 func (n *Note) Serialize() []byte {
 	detailsBytes := n.Data.Serialize()
-	sigLen := len(n.Signature)
-
-	buf := make([]byte, 12+1+sigLen)
-	copy(buf, detailsBytes)
-	buf[12] = byte(sigLen)
-	copy(buf[13:], n.Signature)
-
-	return buf
+	return append(detailsBytes, n.Signature...)
 }
 
 // Deserialize converts a byte slice to a Note
 func (n *Note) Deserialize(data []byte) error {
-	if len(data) < 13 {
-		return fmt.Errorf("invalid data length: expected at least 13 bytes, got %d", len(data))
+	if len(data) < 12 {
+		return fmt.Errorf("invalid data length: expected at least 12 bytes, got %d", len(data))
 	}
 
 	dataCopy := &Data{}
@@ -113,13 +106,9 @@ func (n *Note) Deserialize(data []byte) error {
 
 	n.Data = *dataCopy
 
-	sigLen := int(data[12])
-	if len(data) != 13+sigLen {
-		return fmt.Errorf("invalid data length: expected %d bytes, got %d", 13+sigLen, len(data))
+	if len(data) > 12 {
+		n.Signature = data[13:]
 	}
-
-	n.Signature = make([]byte, sigLen)
-	copy(n.Signature, data[13:])
 
 	return nil
 }

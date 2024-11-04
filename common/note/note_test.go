@@ -70,6 +70,18 @@ func TestDataDeserialize(t *testing.T) {
 			want:    note.Data{},
 			wantErr: true,
 		},
+		{
+			name:    "Nil data",
+			data:    nil,
+			want:    note.Data{},
+			wantErr: true,
+		},
+		{
+			name:    "Too long data",
+			data:    make([]byte, 20),
+			want:    note.Data{},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -148,10 +160,17 @@ func TestNoteRoundtrip(t *testing.T) {
 			},
 		},
 		{
-			name: "Note with empty signature",
+			name: "Note with nil signature",
+			note: note.Note{
+				Data:      note.Data{ID: 67899, Value: 200000},
+				Signature: nil,
+			},
+		},
+		{
+			name: "Note with large signature",
 			note: note.Note{
 				Data:      note.Data{ID: 67899, Value: 200},
-				Signature: []byte{},
+				Signature: make([]byte, 1000),
 			},
 		},
 	}
@@ -172,28 +191,35 @@ func TestNoteRoundtrip(t *testing.T) {
 
 func TestNewFromString(t *testing.T) {
 	tests := []struct {
-		name      string
-		note      note.Note
-		wantError bool
+		str           string
+		expectedID    uint64
+		expectedValue uint32
 	}{
 		{
-			name: "Valid note",
-			note: note.Note{
-				Data:      note.Data{ID: 12345678901234567890, Value: 100},
-				Signature: []byte("test signature"),
-			},
-			wantError: false,
+			str:           "arknotehDPftpXhnoBvJ1k4z6mF2ad9WwPvwTJbt9h471Q4z2jtVkKdGMfqnftq5TTuiAkEtPC9WhSZGkZBsh19dkE4dqiYvR6hebLd2toMdeqnQ",
+			expectedID:    0x5e5456e4f2281740,
+			expectedValue: 2000,
+		},
+		{
+			str:           "arknote2TUm2Kgu1X7FPAR2eDsER99g5qaRGAxnRA2LCB9M4u1Q1fbH9RsNpJKqN2SsKZtV6mw5t9gzoNvKGj4Sb6gVtouuZB7DasnFXbJLMx8Kik",
+			expectedID:    0xc629824f851bc163,
+			expectedValue: 200009212,
+		},
+		{
+			str:           "arknoteuZkrdzYZLVPzdpoSY9uXMUrANgz9EWJ48ZtTHkYZPeA7yAsMN4GAtiqmrUdHyoqLiWjtrJwXmCPT6hMSv3iN3RHkGhPkYiLfRXP5cVrJu",
+			expectedID:    0x7b4d34b24e2d0685,
+			expectedValue: 900000,
 		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			str := tt.note.String()
-
-			deserialized, err := note.NewFromString(str)
+		t.Run(tt.str, func(t *testing.T) {
+			note, err := note.NewFromString(tt.str)
 			require.NoError(t, err)
-			require.Equal(t, tt.note.Data, deserialized.Data)
-			require.Equal(t, tt.note.Signature, deserialized.Signature)
+			require.NotNil(t, note)
+			require.Len(t, note.Signature, 64)
+			require.Equal(t, tt.expectedID, note.Data.ID)
+			require.Equal(t, tt.expectedValue, note.Data.Value)
 		})
 	}
 }
