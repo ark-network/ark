@@ -1063,7 +1063,7 @@ func (a *covenantlessArkClient) GetTransactionHistory(
 		return nil, err
 	}
 
-	boardingTxs, _, err := a.getBoardingTxs(ctx)
+	boardingTxs, err := a.getBoardingTxs(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -2210,18 +2210,17 @@ func (a *covenantlessArkClient) getOffchainBalance(
 
 func (a *covenantlessArkClient) getAllBoardingUtxos(
 	ctx context.Context,
-) ([]types.Utxo, map[string]struct{}, error) {
+) ([]types.Utxo, error) {
 	_, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	utxos := []types.Utxo{}
-	ignoreVtxos := make(map[string]struct{}, 0)
 	for _, addr := range boardingAddrs {
 		txs, err := a.explorer.GetTxs(addr.Address)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		for _, tx := range txs {
 			for i, vout := range tx.Vout {
@@ -2229,10 +2228,9 @@ func (a *covenantlessArkClient) getAllBoardingUtxos(
 				if vout.Address == addr.Address {
 					spentStatuses, err := a.explorer.GetTxOutspends(tx.Txid)
 					if err != nil {
-						return nil, nil, err
+						return nil, err
 					}
 					if s := spentStatuses[i]; s.Spent {
-						ignoreVtxos[s.SpentBy] = struct{}{}
 						spent = true
 					}
 					createdAt := time.Time{}
@@ -2252,7 +2250,7 @@ func (a *covenantlessArkClient) getAllBoardingUtxos(
 		}
 	}
 
-	return utxos, ignoreVtxos, nil
+	return utxos, nil
 }
 
 func (a *covenantlessArkClient) getClaimableBoardingUtxos(ctx context.Context, opts *CoinSelectOptions) ([]types.Utxo, error) {
@@ -2356,10 +2354,10 @@ func (a *covenantlessArkClient) getVtxos(
 
 func (a *covenantlessArkClient) getBoardingTxs(
 	ctx context.Context,
-) ([]types.Transaction, map[string]struct{}, error) {
-	allUtxos, ignoreVtxos, err := a.getAllBoardingUtxos(ctx)
+) ([]types.Transaction, error) {
+	allUtxos, err := a.getAllBoardingUtxos(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	unconfirmedTxs := make([]types.Transaction, 0)
@@ -2384,7 +2382,7 @@ func (a *covenantlessArkClient) getBoardingTxs(
 	}
 
 	txs := append(unconfirmedTxs, confirmedTxs...)
-	return txs, ignoreVtxos, nil
+	return txs, nil
 }
 
 func findVtxosBySpentBy(allVtxos []client.Vtxo, txid string) (vtxos []client.Vtxo) {
