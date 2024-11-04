@@ -8,7 +8,7 @@ usage() {
     echo "Usage: $0 -a <AWS_ACCOUNT_ID> -r <AWS_REGION> [-e <ECR_REPOSITORY_NAME>] [-i <IMAGE_NAME>] [-d <DOCKERFILE_PATH>] [-c <BUILD_CONTEXT>] [--no-push]"
     echo "  -a AWS Account ID"
     echo "  -r AWS Region"
-    echo "  -e ECR Repository Name (default: client-repo)"
+    echo "  -e ECR Repository Name (default: ark-client-repo)"
     echo "  -i Docker Image Name (default: arkclient)"
     echo "  -d Dockerfile Path (default: current directory)"
     echo "  -c Build Context Path (default: current directory)"

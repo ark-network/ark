@@ -3,7 +3,7 @@
 #### Remote simulation ####
 
 # Default values for optional variables
-ECR_REPOSITORY_NAME ?= client-repo
+ECR_REPOSITORY_NAME ?= ark-client-repo
 IMAGE_NAME ?= arkclient
 DOCKERFILE_PATH ?= ./remote/client
 BUILD_CONTEXT ?= ../
