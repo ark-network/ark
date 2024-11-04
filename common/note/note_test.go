@@ -196,19 +196,14 @@ func TestNewFromString(t *testing.T) {
 		expectedValue uint32
 	}{
 		{
-			str:           "arknotehDPftpXhnoBvJ1k4z6mF2ad9WwPvwTJbt9h471Q4z2jtVkKdGMfqnftq5TTuiAkEtPC9WhSZGkZBsh19dkE4dqiYvR6hebLd2toMdeqnQ",
-			expectedID:    0x5e5456e4f2281740,
-			expectedValue: 2000,
-		},
-		{
-			str:           "arknote2TUm2Kgu1X7FPAR2eDsER99g5qaRGAxnRA2LCB9M4u1Q1fbH9RsNpJKqN2SsKZtV6mw5t9gzoNvKGj4Sb6gVtouuZB7DasnFXbJLMx8Kik",
-			expectedID:    0xc629824f851bc163,
-			expectedValue: 200009212,
-		},
-		{
-			str:           "arknoteuZkrdzYZLVPzdpoSY9uXMUrANgz9EWJ48ZtTHkYZPeA7yAsMN4GAtiqmrUdHyoqLiWjtrJwXmCPT6hMSv3iN3RHkGhPkYiLfRXP5cVrJu",
-			expectedID:    0x7b4d34b24e2d0685,
+			str:           "arknote2iqtKmdVWDNo8aXT7HHWLxcZovseWBqAEf2Q4SwhqMQHRyuhLQSukyNtmJzrnPHEcLGDsvxVsmndw8e8m4AFy2FbSw8Q6MA6uYCZQeY6",
+			expectedID:    0x11d2a03264d0efd3,
 			expectedValue: 900000,
+		},
+		{
+			str:           "arknoteDyxaEGpxuGNNy4L6B45vDarZzY8ChLST7AD4VYshjCNByz1p3ayWwrK6QN696Us1uMwP6frxBu171ESuqU1AjrWzXgoPYnNoogLbcYps",
+			expectedID:    0x8668bd0f324d8ec7,
+			expectedValue: 1828932,
 		},
 	}
 

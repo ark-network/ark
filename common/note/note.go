@@ -107,7 +107,7 @@ func (n *Note) Deserialize(data []byte) error {
 	n.Data = *dataCopy
 
 	if len(data) > 12 {
-		n.Signature = data[13:]
+		n.Signature = data[12:]
 	}
 
 	return nil
