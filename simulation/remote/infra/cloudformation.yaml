@@ -123,6 +123,10 @@ Resources:
           ToPort: !Ref OrchestratorPort
           CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
+          FromPort: !Ref AspPort
+          ToPort: !Ref AspPort
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
           CidrIp: 0.0.0.0/0
@@ -322,7 +326,7 @@ Resources:
             - Name: ASP_URL
               Value: !Sub "${OrchestratorInstance.PrivateIp}:${AspPort}"
             - Name: ORCHESTRATOR_URL
-              Value: !Sub "ws://${OrchestratorInstance.PrivateIp}:${OrchestratorPort}"
+              Value: !Sub "${OrchestratorInstance.PrivateIp}:${OrchestratorPort}"
           LogConfiguration:
             LogDriver: awslogs
             Options:
