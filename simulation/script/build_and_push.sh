@@ -9,7 +9,7 @@ usage() {
     echo "  -a AWS Account ID"
     echo "  -r AWS Region"
     echo "  -e ECR Repository Name (default: client-repo)"
-    echo "  -i Docker Image Name (default: client-image)"
+    echo "  -i Docker Image Name (default: arkclient)"
     echo "  -d Dockerfile Path (default: current directory)"
     echo "  -c Build Context Path (default: current directory)"
     echo "  --no-push Skip pushing the Docker image to ECR"
@@ -17,8 +17,8 @@ usage() {
 }
 
 # Default values
-ECR_REPOSITORY_NAME="client-repo"
-IMAGE_NAME="client-image"
+ECR_REPOSITORY_NAME="ark-client-repo"
+IMAGE_NAME="arkclient"
 DOCKERFILE_PATH="."
 BUILD_CONTEXT="."
 NO_PUSH=false  # Default to pushing image

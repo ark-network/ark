@@ -4,7 +4,7 @@
 
 # Default values for optional variables
 ECR_REPOSITORY_NAME ?= client-repo
-IMAGE_NAME ?= client-image
+IMAGE_NAME ?= arkclient
 DOCKERFILE_PATH ?= ./remote/client
 BUILD_CONTEXT ?= ../
 
