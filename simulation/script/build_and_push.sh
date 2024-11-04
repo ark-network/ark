@@ -50,7 +50,7 @@ fi
 
 # Build the Docker image
 echo "Building Docker image..."
-docker build --build-arg TARGETOS=linux --build-arg TARGETARCH=$(uname -m) -t ${IMAGE_NAME} -f ${DOCKERFILE_PATH}/Dockerfile ${BUILD_CONTEXT}
+docker build -t ${IMAGE_NAME} -f ${DOCKERFILE_PATH}/Dockerfile ${BUILD_CONTEXT}
 
 # Skip pushing if --no-push is set
 if [ "$NO_PUSH" = true ]; then
