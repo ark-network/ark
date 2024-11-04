@@ -426,7 +426,7 @@ func (a *covenantArkClient) UnilateralRedeem(ctx context.Context) error {
 		return fmt.Errorf("wallet is locked")
 	}
 
-	vtxos, err := a.getVtxos(ctx, false, nil)
+	vtxos, err := a.getVtxos(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -510,7 +510,9 @@ func (a *covenantArkClient) CollaborativeRedeem(
 	}
 
 	vtxos := make([]client.DescriptorVtxo, 0)
-	spendableVtxos, err := a.getVtxos(ctx, false, nil)
+	spendableVtxos, err := a.getVtxos(ctx, &CoinSelectOptions{
+		WithExpirySorting: withExpiryCoinselect,
+	})
 	if err != nil {
 		return "", err
 	}
@@ -922,7 +924,9 @@ func (a *covenantArkClient) sendOffchain(
 
 	vtxos := make([]client.DescriptorVtxo, 0)
 
-	spendableVtxos, err := a.getVtxos(ctx, withExpiryCoinselect, nil)
+	spendableVtxos, err := a.getVtxos(ctx, &CoinSelectOptions{
+		WithExpirySorting: withExpiryCoinselect,
+	})
 	if err != nil {
 		return "", err
 	}
@@ -1671,7 +1675,9 @@ func (a *covenantArkClient) getOffchainBalance(
 ) (uint64, map[int64]uint64, error) {
 	amountByExpiration := make(map[int64]uint64, 0)
 
-	vtxos, err := a.getVtxos(ctx, computeVtxoExpiration, nil)
+	vtxos, err := a.getVtxos(ctx, &CoinSelectOptions{
+		WithExpirySorting: computeVtxoExpiration,
+	})
 	if err != nil {
 		return 0, nil, err
 	}
@@ -1695,7 +1701,7 @@ func (a *covenantArkClient) getOffchainBalance(
 
 func (a *covenantArkClient) getVtxos(
 	ctx context.Context,
-	withExpiryCoinselect bool, opts *CoinSelectOptions,
+	opts *CoinSelectOptions,
 ) ([]client.Vtxo, error) {
 	spendableVtxos, _, err := a.ListVtxos(ctx)
 	if err != nil {
