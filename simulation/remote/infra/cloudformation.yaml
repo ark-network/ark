@@ -320,9 +320,9 @@ Resources:
           Essential: true
           Environment:
             - Name: ASP_URL
-              Value: !Sub "${OrchestratorInstance.PrivateIp}:${OrchestratorPort}"
+              Value: !Sub "${OrchestratorInstance.PrivateIp}:${AspPort}"
             - Name: ORCHESTRATOR_URL
-              Value: !Sub "ws://${OrchestratorInstance.PrivateIp}:${AspPort}"
+              Value: !Sub "ws://${OrchestratorInstance.PrivateIp}:${OrchestratorPort}"
           LogConfiguration:
             LogDriver: awslogs
             Options:
