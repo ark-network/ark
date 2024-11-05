@@ -36,14 +36,14 @@ func newSweeper(
 	repoManager ports.RepoManager,
 	builder ports.TxBuilder,
 	scheduler ports.SchedulerService,
-	notificationPrefix string,
+	noteUriPrefix string,
 ) *sweeper {
 	return &sweeper{
 		wallet,
 		repoManager,
 		builder,
 		scheduler,
-		notificationPrefix,
+		noteUriPrefix,
 		&sync.Mutex{},
 		make(map[string]struct{}),
 	}
