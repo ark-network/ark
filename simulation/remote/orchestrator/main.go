@@ -1,17 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/xeipuuv/gojsonschema"
-	"golang.org/x/sync/errgroup"
-	"net"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -21,8 +20,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	ecsTypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
-	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 	"sigs.k8s.io/yaml"
 )
 
@@ -31,18 +30,22 @@ const (
 	schemaPath     = "../../schema.yaml"
 	simulationPath = "../../simulation.yaml"
 	defaultAspUrl  = "localhost:7070"
+	clientPort     = "9000" // All clients listen on this port
 )
 
+type ClientInfo struct {
+	ID        string
+	Address   string
+	TaskARN   string
+	IPAddress string
+}
+
 var (
-	clients   = make(map[string]*ClientConnection)
-	clientsMu sync.Mutex // Protects the clients map
-	upgrader  = websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool { return true },
-	}
+	clients   = make(map[string]*ClientInfo)
+	clientsMu sync.Mutex
 )
 
 func main() {
-	// Parse command-line flags
 	simFile := flag.String("sim", simulationPath, "Path to simulation YAML file")
 	serverAddress := flag.String("server", "", "Orchestrator server address")
 	flag.Parse()
@@ -57,13 +60,11 @@ func main() {
 		log.Fatalf("SECURITY_GROUP_IDS environment variable is not set")
 	}
 
-	// Load and validate the simulation YAML file
 	simulation, err := loadAndValidateSimulation(*simFile)
 	if err != nil {
 		log.Fatalf("Error loading simulation config: %v", err)
 	}
 
-	// Determine the ASP URL, start ASP locally if no server address is provided
 	aspUrl := *serverAddress
 	if aspUrl == "" {
 		if err := startAspLocally(*simulation); err != nil {
@@ -76,7 +77,7 @@ func main() {
 		Scheme: "http",
 		Host:   aspUrl,
 	}
-	// Setup the server wallet with the initial funding
+
 	if err := utils.SetupServerWalletCovenantless(aspUrlParsed.String(), simulation.Server.InitialFunding); err != nil {
 		log.Fatal(err)
 	}
@@ -90,7 +91,7 @@ func main() {
 		log.Fatalf("Error starting clients: %v", err)
 	}
 
-	// Wait for clients to connect and send their addresses
+	// Wait for clients to send their addresses
 	clientIDs := make([]string, len(simulation.Clients))
 	for i, client := range simulation.Clients {
 		clientIDs[i] = client.ID
@@ -113,89 +114,197 @@ func main() {
 	stopClients()
 }
 
-// startAspLocally starts ASP server locally.
-func startAspLocally(simulation Simulation) error {
-	log.Infof("Simulation Version: %s\n", simulation.Version)
-	log.Infof("ASP Network: %s\n", simulation.Server.Network)
-	log.Infof("Number of Clients: %d\n", len(simulation.Clients))
-	log.Infof("Number of Rounds: %d\n", len(simulation.Rounds))
-
-	roundLifetime := fmt.Sprintf("ARK_ROUND_INTERVAL=%d", simulation.Server.RoundInterval)
-	tmpfile, err := os.CreateTemp("", "docker-env")
-	if err != nil {
-		return err
+func startServer() {
+	http.HandleFunc("/address", addressHandler)
+	http.HandleFunc("/faucet", faucetHandler)
+	log.Infoln("Orchestrator HTTP server running on port 9000")
+	if err := http.ListenAndServe(":9000", nil); err != nil {
+		log.Fatalf("Orchestrator server failed: %v", err)
 	}
-	defer os.Remove(tmpfile.Name()) // clean up
-
-	if _, err := tmpfile.Write([]byte(roundLifetime)); err != nil {
-		return err
-	}
-	if err := tmpfile.Close(); err != nil {
-		return err
-	}
-
-	log.Infof("Start building ARKD docker container ...")
-	if _, err := utils.RunCommand("docker-compose", "-f", composePath, "--env-file", tmpfile.Name(), "up", "-d"); err != nil {
-		return err
-	}
-
-	time.Sleep(10 * time.Second)
-	log.Infoln("ASP running...")
-
-	return nil
 }
 
-// loadAndValidateSimulation reads and validates the simulation YAML file.
-func loadAndValidateSimulation(simFile string) (*Simulation, error) {
-	// Read and convert the schema YAML file to JSON
-	schemaBytes, err := os.ReadFile(schemaPath)
-	if err != nil {
-		return nil, fmt.Errorf("error reading schema file: %v", err)
+func addressHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
 	}
 
-	schemaJSON, err := yaml.YAMLToJSON(schemaBytes)
-	if err != nil {
-		return nil, fmt.Errorf("error converting schema YAML to JSON: %v", err)
+	var req struct {
+		ClientID string `json:"client_id"`
+		Address  string `json:"address"`
 	}
 
-	// Read and convert the simulation YAML file to JSON
-	simBytes, err := os.ReadFile(simFile)
-	if err != nil {
-		return nil, fmt.Errorf("error reading simulation file: %v", err)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Errorf("Error decoding address request: %v", err)
+		return
 	}
 
-	simJSON, err := yaml.YAMLToJSON(simBytes)
-	if err != nil {
-		return nil, fmt.Errorf("error converting simulation YAML to JSON: %v", err)
+	clientsMu.Lock()
+	if client, exists := clients[req.ClientID]; exists {
+		client.Address = req.Address
+		log.Infof("Registered address for client %s: %s", req.ClientID, req.Address)
+	} else {
+		log.Warnf("Received address for unknown client: %s", req.ClientID)
+	}
+	clientsMu.Unlock()
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func faucetHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
 	}
 
-	// Create JSON loaders for the schema and the document
-	schemaLoader := gojsonschema.NewBytesLoader(schemaJSON)
-	documentLoader := gojsonschema.NewBytesLoader(simJSON)
-
-	// Validate the simulation JSON against the schema JSON
-	result, err := gojsonschema.Validate(schemaLoader, documentLoader)
-	if err != nil {
-		return nil, fmt.Errorf("error validating simulation: %v", err)
+	var req struct {
+		Address string `json:"address"`
+		Amount  string `json:"amount"`
 	}
 
-	if !result.Valid() {
-		// Collect error messages
-		var errorMessages string
-		for _, desc := range result.Errors() {
-			errorMessages += fmt.Sprintf("- %s\n", desc)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Errorf("Error decoding faucet request: %v", err)
+		return
+	}
+
+	if _, err := utils.RunCommand("nigiri", "faucet", req.Address, fmt.Sprintf("%.8f", req.Amount)); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Errorf("Error running faucet command: %v", err)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func executeSimulation(simulation *Simulation) {
+	for _, round := range simulation.Rounds {
+		waitRound := false
+		log.Infof("Executing Round %d at %s", round.Number, time.Now().Format("2006-01-02 15:04:05"))
+		var wg sync.WaitGroup
+		for clientID, actions := range round.Actions {
+			wg.Add(1)
+			go func(clientID string, actions []ActionMap) {
+				defer wg.Done()
+				for _, action := range actions {
+					actionType, ok := action["type"].(string)
+					if !ok {
+						log.Infof("Invalid action type for client %s", clientID)
+						return
+					}
+
+					if actionType == "Onboard" || actionType == "Claim" || actionType == "CollaborativeRedeem" {
+						waitRound = true
+					}
+
+					if err := executeClientAction(clientID, actionType, action); err != nil {
+						log.Warnf("Error executing %s for client %s: %v", actionType, clientID, err)
+					}
+				}
+			}(clientID, actions)
 		}
-		return nil, fmt.Errorf("the simulation is not valid:\n%s", errorMessages)
+		wg.Wait()
+
+		sleepTime := 2 * time.Second
+		if waitRound {
+			sleepTime = time.Duration(simulation.Server.RoundInterval)*time.Second + 2*time.Second
+		}
+		log.Infof("Waiting for %s before starting next round", sleepTime)
+		time.Sleep(sleepTime)
+		log.Infof("Round %d completed at %s", round.Number, time.Now().Format("2006-01-02 15:04:05"))
+	}
+}
+
+func executeClientAction(clientID string, actionType string, action ActionMap) error {
+	clientsMu.Lock()
+	client, exists := clients[clientID]
+	clientsMu.Unlock()
+
+	if !exists {
+		return fmt.Errorf("client %s not found", clientID)
 	}
 
-	// Unmarshal the simulation YAML into the Simulation struct
-	var sim Simulation
-	err = json.Unmarshal(simJSON, &sim)
+	clientURL := fmt.Sprintf("http://%s:%s", client.IPAddress, clientPort)
+
+	switch actionType {
+	case "Onboard":
+		amount, _ := action["amount"].(float64)
+		return executeOnboard(clientURL, amount)
+	case "SendAsync":
+		amount, _ := action["amount"].(float64)
+		toClientID, _ := action["to"].(string)
+		toAddress, err := getClientAddress(toClientID)
+		if err != nil {
+			return err
+		}
+		return executeSendAsync(clientURL, amount, toAddress)
+	case "Claim":
+		return executeClaim(clientURL)
+	default:
+		return fmt.Errorf("unknown action type: %s", actionType)
+	}
+}
+
+func getClientAddress(clientID string) (string, error) {
+	clientsMu.Lock()
+	defer clientsMu.Unlock()
+
+	client, exists := clients[clientID]
+	if !exists {
+		return "", fmt.Errorf("client %s not found", clientID)
+	}
+	if client.Address == "" {
+		return "", fmt.Errorf("address for client %s not available", clientID)
+	}
+	return client.Address, nil
+}
+
+func executeOnboard(clientURL string, amount float64) error {
+	payload := map[string]float64{"amount": amount}
+	return sendRequest(clientURL+"/onboard", payload)
+}
+
+func executeSendAsync(clientURL string, amount float64, toAddress string) error {
+	payload := map[string]interface{}{
+		"amount":     amount,
+		"to_address": toAddress,
+	}
+	return sendRequest(clientURL+"/sendAsync", payload)
+}
+
+func executeClaim(clientURL string) error {
+	return sendRequest(clientURL+"/claim", nil)
+}
+
+func sendRequest(url string, payload interface{}) error {
+	var jsonData []byte
+	var err error
+	if payload != nil {
+		jsonData, err = json.Marshal(payload)
+		if err != nil {
+			return err
+		}
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return nil, fmt.Errorf("error parsing simulation YAML: %v", err)
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := ioutil.ReadAll(resp.Body)
+		return fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	return &sim, nil
+	return nil
 }
 
 // startClients launches each client as an AWS Fargate task.
@@ -352,14 +461,16 @@ func startClients(subnetIDsEnv, securityGroupIDsEnv string, clientConfigs []Clie
 				return fmt.Errorf("client %s failed to start: %v", clientID, err)
 			}
 
-			// Initialize client connection without WebSocket connection yet
+			ip, err := waitForTaskRunningAndGetIP(ctx, ecsClient, clusterName, taskArn)
+			if err != nil {
+				return fmt.Errorf("error waiting for client %s task: %v", clientID, err)
+			}
+
 			clientsMu.Lock()
-			clients[clientID] = &ClientConnection{
-				ID:      clientID,
-				Conn:    nil,
-				ConnMu:  sync.Mutex{},
-				Address: "",
-				TaskArn: taskArn,
+			clients[clientID] = &ClientInfo{
+				ID:        clientID,
+				TaskARN:   taskArn,
+				IPAddress: ip,
 			}
 			clientsMu.Unlock()
 
@@ -422,35 +533,62 @@ func startClients(subnetIDsEnv, securityGroupIDsEnv string, clientConfigs []Clie
 	return nil
 }
 
-// getLocalPrivateIP retrieves the private IP address of the orchestrator.
-func getLocalPrivateIP() (string, error) {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return "", err
+func waitForTaskRunningAndGetIP(ctx context.Context, ecsClient *ecs.Client, clusterName, taskArn string) (string, error) {
+	for {
+		select {
+		case <-ctx.Done():
+			return "", fmt.Errorf("timeout waiting for task to start")
+		default:
+			describeTasksInput := &ecs.DescribeTasksInput{
+				Cluster: aws.String(clusterName),
+				Tasks:   []string{taskArn},
+			}
+
+			result, err := ecsClient.DescribeTasks(ctx, describeTasksInput)
+			if err != nil {
+				return "", fmt.Errorf("failed to describe task: %v", err)
+			}
+
+			if len(result.Tasks) > 0 {
+				task := result.Tasks[0]
+				status := aws.ToString(task.LastStatus)
+
+				switch status {
+				case "RUNNING":
+					if task.TaskArn != nil && len(task.Attachments) > 0 {
+						for _, attachment := range task.Attachments {
+							if aws.ToString(attachment.Type) == "ElasticNetworkInterface" {
+								for _, detail := range attachment.Details {
+									if aws.ToString(detail.Name) == "privateIPv4Address" {
+										return aws.ToString(detail.Value), nil
+									}
+								}
+							}
+						}
+					}
+					return "", fmt.Errorf("could not find IP address for task")
+				case "STOPPED":
+					var errorDetail string
+					if task.StoppedReason != nil {
+						errorDetail = *task.StoppedReason
+					}
+					for _, container := range task.Containers {
+						if container.Reason != nil {
+							errorDetail += fmt.Sprintf(" Container error: %s", *container.Reason)
+						}
+					}
+					return "", fmt.Errorf("task stopped: %s", errorDetail)
+				}
+			}
+
+			time.Sleep(5 * time.Second)
+		}
 	}
-	for _, addr := range addrs {
-		var ip net.IP
-		switch v := addr.(type) {
-		case *net.IPNet:
-			ip = v.IP
-		case *net.IPAddr:
-			ip = v.IP
-		}
-		if ip == nil || ip.IsLoopback() {
-			continue
-		}
-		if ip.To4() != nil {
-			// Return the first IPv4 non-loopback address
-			return ip.String(), nil
-		}
-	}
-	return "", fmt.Errorf("no private IP address found")
 }
 
-// waitForClientsToSendAddresses waits until all clients have sent their addresses.
 func waitForClientsToSendAddresses(clientIDs []string) {
 	log.Info("Waiting for clients to send addresses...")
-	timeout := time.After(1 * time.Minute)
+	timeout := time.After(2 * time.Minute)
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
@@ -462,19 +600,8 @@ func waitForClientsToSendAddresses(clientIDs []string) {
 			allReceived := true
 			clientsMu.Lock()
 			for _, clientID := range clientIDs {
-				clientConn, exists := clients[clientID]
-				if !exists || clientConn.Address == "" {
-					log.Infof(
-						"Client %s address not received (exists: %v, address: '%s')",
-						clientID,
-						exists,
-						func() string {
-							if exists {
-								return clientConn.Address
-							}
-							return ""
-						}(),
-					)
+				client, exists := clients[clientID]
+				if !exists || client.Address == "" {
 					allReceived = false
 					break
 				}
@@ -489,7 +616,6 @@ func waitForClientsToSendAddresses(clientIDs []string) {
 	}
 }
 
-// stopClients terminates all client tasks.
 func stopClients() {
 	cfg, err := config.LoadDefaultConfig(context.TODO())
 	if err != nil {
@@ -499,250 +625,107 @@ func stopClients() {
 
 	ecsClient := ecs.NewFromConfig(cfg)
 
-	// Stop each client task
 	clientsMu.Lock()
-	for clientID, clientConn := range clients {
-		if clientConn.TaskArn != "" {
+	defer clientsMu.Unlock()
+
+	for _, client := range clients {
+		if client.TaskARN != "" {
 			_, err := ecsClient.StopTask(context.TODO(), &ecs.StopTaskInput{
-				Cluster: aws.String("OrchestratorCluster"), // Replace with your ECS cluster name
-				Task:    aws.String(clientConn.TaskArn),
+				Cluster: aws.String("OrchestratorCluster"),
+				Task:    aws.String(client.TaskARN),
 			})
 			if err != nil {
-				log.Errorf("Failed to stop client %s task: %v", clientID, err)
+				log.Errorf("Failed to stop client %s task: %v", client.ID, err)
 			} else {
-				log.Infof("Stopped client %s task", clientID)
+				log.Infof("Stopped client %s task", client.ID)
 			}
 		}
 	}
-	clientsMu.Unlock()
 }
 
-func executeSimulation(simulation *Simulation) {
-	for _, round := range simulation.Rounds {
-		waitRound := false
-		log.Infof("Executing Round %d at %s", round.Number, time.Now().Format("2006-01-02 15:04:05"))
-		var wg sync.WaitGroup
-		for clientID, actions := range round.Actions {
-			wg.Add(1)
-			go func(clientID string, actions []ActionMap) {
-				defer wg.Done()
-				for _, action := range actions {
-					actionType, ok := action["type"].(string)
-					if !ok {
-						log.Infof("Invalid action type for client %s", clientID)
-						return
-					}
-
-					if actionType == "Onboard" || actionType == "Claim" || actionType == "CollaborativeRedeem" {
-						waitRound = true
-					}
-
-					// Prepare the command based on actionType
-					command := Command{
-						Type: actionType,
-						Data: action,
-					}
-					// Send the command to the client
-					err := sendCommand(clientID, command)
-					if err != nil {
-						log.Warnf("Error sending %s to client %s: %v", actionType, clientID, err)
-						return
-					}
-				}
-			}(clientID, actions)
-		}
-		wg.Wait()
-
-		sleepTime := 2 * time.Second
-		if waitRound {
-			sleepTime = time.Duration(simulation.Server.RoundInterval)*time.Second + 2*time.Second
-		}
-		log.Infof("Waiting for %s before starting next round", sleepTime)
-		time.Sleep(sleepTime)
-		log.Infof("Round %d completed at %s", round.Number, time.Now().Format("2006-01-02 15:04:05"))
-	}
-}
-
-// startServer starts the orchestrator's HTTP server.
-func startServer() {
-	http.HandleFunc("/ws", wsHandler)
-	http.HandleFunc("/cmd", cmdHandler)
-	http.HandleFunc("/address", addressHandler) // Added address handler
-	// Start the server
-	log.Infoln("Orchestrator HTTP server running on port 9000")
-	if err := http.ListenAndServe(":9000", nil); err != nil {
-		log.Fatalf("Orchestrator server failed: %v", err)
-	}
-}
-
-// wsHandler handles WebSocket connections from clients.
-func wsHandler(w http.ResponseWriter, r *http.Request) {
-	// Upgrade HTTP connection to WebSocket
-	conn, err := upgrader.Upgrade(w, r, nil)
+// loadAndValidateSimulation reads and validates the simulation YAML file.
+func loadAndValidateSimulation(simFile string) (*Simulation, error) {
+	// Read and convert the schema YAML file to JSON
+	schemaBytes, err := os.ReadFile(schemaPath)
 	if err != nil {
-		log.Errorf("WebSocket upgrade error: %v", err)
-		return
+		return nil, fmt.Errorf("error reading schema file: %v", err)
 	}
 
-	// Get client ID from query parameters
-	clientID := r.URL.Query().Get("id")
-	if clientID == "" {
-		log.Error("Client ID not provided")
-		conn.Close()
-		return
-	}
-
-	// Register the client connection
-	clientsMu.Lock()
-	clientConn, exists := clients[clientID]
-	if !exists {
-		clientConn = &ClientConnection{
-			ID:      clientID,
-			Conn:    conn,
-			Address: "",
-			ConnMu:  sync.Mutex{},
-		}
-		clients[clientID] = clientConn
-	} else {
-		clientConn.Conn = conn
-	}
-	clientsMu.Unlock()
-
-	log.Infof("Client %s connected via WebSocket", clientID)
-
-	// Listen for messages from the client
-	go func() {
-		defer func() {
-			conn.Close()
-			// Handle client disconnection
-			log.Infof("Client %s disconnected", clientID)
-			clientsMu.Lock()
-			delete(clients, clientID) // Remove client from map on disconnect
-			clientsMu.Unlock()
-		}()
-
-		for {
-			var message ClientMessage
-			err := conn.ReadJSON(&message)
-			if err != nil {
-				// Log the disconnection or any read error (e.g., network error)
-				log.Errorf("Error reading from client %s: %v", clientID, err)
-				break
-			}
-			// Process the client message if no error occurred
-			handleClientMessage(clientID, message)
-		}
-	}()
-}
-
-// sendCommand sends a command to a client.
-func sendCommand(clientID string, command Command) error {
-	clientsMu.Lock()
-	clientConn, exists := clients[clientID]
-	clientsMu.Unlock()
-	if !exists || clientConn.Conn == nil {
-		return fmt.Errorf("client %s not connected", clientID)
-	}
-
-	clientConn.ConnMu.Lock()
-	defer clientConn.ConnMu.Unlock()
-
-	log.Infof("Sending command to client %s: %+v", clientID, command)
-
-	return clientConn.Conn.WriteJSON(command)
-}
-
-// handleClientMessage processes messages received from clients.
-func handleClientMessage(clientID string, message ClientMessage) {
-	switch message.Type {
-	case "Log":
-		log.Infof("Log from client %s: %s", clientID, message.Data)
-	case "Address":
-		address, ok := message.Data.(string)
-		if !ok {
-			log.Warnf("Invalid address from client %s", clientID)
-			return
-		}
-
-		clientsMu.Lock()
-		if clientConn, exists := clients[clientID]; exists {
-			clientConn.Address = address
-			log.Infof("Stored address from client %s: %s", clientID, address)
-		} else {
-			log.Warnf("Client %s not found when storing address", clientID)
-		}
-		clientsMu.Unlock()
-
-	case "Error":
-		log.Warnf("Error from client %s: %s", clientID, message.Data)
-	default:
-		log.Infof("Unknown message type from client %s: %s", clientID, message.Type)
-	}
-}
-
-// addressHandler handles requests for client addresses.
-func addressHandler(w http.ResponseWriter, r *http.Request) {
-	clientID := r.URL.Query().Get("client_id")
-	if clientID == "" {
-		http.Error(w, "client_id is required", http.StatusBadRequest)
-		return
-	}
-
-	clientsMu.Lock()
-	clientConn, exists := clients[clientID]
-	clientsMu.Unlock()
-	if !exists {
-		http.Error(w, fmt.Sprintf("client %s not found", clientID), http.StatusNotFound)
-		return
-	}
-	if clientConn.Address == "" {
-		http.Error(w, fmt.Sprintf("address for client %s not available", clientID), http.StatusNotFound)
-		return
-	}
-
-	res := struct {
-		Address string `json:"address"`
-	}{
-		Address: clientConn.Address,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(res)
-}
-
-// cmdHandler handles command execution requests from clients.
-func cmdHandler(w http.ResponseWriter, r *http.Request) {
-	var cmdRequest struct {
-		Command string   `json:"command"`
-		Args    []string `json:"args"`
-	}
-	err := json.NewDecoder(r.Body).Decode(&cmdRequest)
+	schemaJSON, err := yaml.YAMLToJSON(schemaBytes)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return nil, fmt.Errorf("error converting schema YAML to JSON: %v", err)
 	}
-	log.Infof("Executing command: %s %v", cmdRequest.Command, cmdRequest.Args)
-	// Execute the command
-	output, err := exec.Command(cmdRequest.Command, cmdRequest.Args...).CombinedOutput()
+
+	// Read and convert the simulation YAML file to JSON
+	simBytes, err := os.ReadFile(simFile)
 	if err != nil {
-		log.Infof("Command execution failed: %v", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, fmt.Errorf("error reading simulation file: %v", err)
 	}
-	log.Infof("Command output: %s", output)
-	w.WriteHeader(http.StatusOK)
+
+	simJSON, err := yaml.YAMLToJSON(simBytes)
+	if err != nil {
+		return nil, fmt.Errorf("error converting simulation YAML to JSON: %v", err)
+	}
+
+	// Create JSON loaders for the schema and the document
+	schemaLoader := gojsonschema.NewBytesLoader(schemaJSON)
+	documentLoader := gojsonschema.NewBytesLoader(simJSON)
+
+	// Validate the simulation JSON against the schema JSON
+	result, err := gojsonschema.Validate(schemaLoader, documentLoader)
+	if err != nil {
+		return nil, fmt.Errorf("error validating simulation: %v", err)
+	}
+
+	if !result.Valid() {
+		// Collect error messages
+		var errorMessages string
+		for _, desc := range result.Errors() {
+			errorMessages += fmt.Sprintf("- %s\n", desc)
+		}
+		return nil, fmt.Errorf("the simulation is not valid:\n%s", errorMessages)
+	}
+
+	// Unmarshal the simulation YAML into the Simulation struct
+	var sim Simulation
+	err = json.Unmarshal(simJSON, &sim)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing simulation YAML: %v", err)
+	}
+
+	return &sim, nil
 }
 
-// Command represents a command sent to a client.
-type Command struct {
-	Type string                 `json:"type"`
-	Data map[string]interface{} `json:"data,omitempty"`
-}
+// startAspLocally starts ASP server locally.
+func startAspLocally(simulation Simulation) error {
+	log.Infof("Simulation Version: %s\n", simulation.Version)
+	log.Infof("ASP Network: %s\n", simulation.Server.Network)
+	log.Infof("Number of Clients: %d\n", len(simulation.Clients))
+	log.Infof("Number of Rounds: %d\n", len(simulation.Rounds))
 
-// ClientMessage represents a message received from a client.
-type ClientMessage struct {
-	Type string      `json:"type"`
-	Data interface{} `json:"data,omitempty"`
+	roundLifetime := fmt.Sprintf("ARK_ROUND_INTERVAL=%d", simulation.Server.RoundInterval)
+	tmpfile, err := os.CreateTemp("", "docker-env")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmpfile.Name()) // clean up
+
+	if _, err := tmpfile.Write([]byte(roundLifetime)); err != nil {
+		return err
+	}
+	if err := tmpfile.Close(); err != nil {
+		return err
+	}
+
+	log.Infof("Start building ARKD docker container ...")
+	if _, err := utils.RunCommand("docker-compose", "-f", composePath, "--env-file", tmpfile.Name(), "up", "-d"); err != nil {
+		return err
+	}
+
+	time.Sleep(10 * time.Second)
+	log.Infoln("ASP running...")
+
+	return nil
 }
 
 // ClientConfig holds configuration for a client.
@@ -770,13 +753,4 @@ type Simulation struct {
 	} `yaml:"server"`
 	Clients []ClientConfig `json:"clients"`
 	Rounds  []Round        `json:"rounds"`
-}
-
-// ClientConnection holds information about a connected client.
-type ClientConnection struct {
-	ID      string
-	Conn    *websocket.Conn
-	Address string
-	ConnMu  sync.Mutex
-	TaskArn string // Store the task ARN of the client
 }

@@ -48,5 +48,7 @@ RUN ls -la . && \
     chmod +x /arkclient && \
     file /arkclient
 
+EXPOSE 9000
+
 # Use the binary as entrypoint
 ENTRYPOINT ["./arkclient"]

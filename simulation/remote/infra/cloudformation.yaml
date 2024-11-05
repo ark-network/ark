@@ -270,9 +270,6 @@ Resources:
 
           EOF
           
-        
-  
-
           echo "Allowing port 9000..."
           sudo ufw allow 9000/tcp
         - Subnet: !Ref Subnet
