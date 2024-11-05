@@ -36,7 +36,9 @@ const (
 var (
 	clients   = make(map[string]*ClientConnection)
 	clientsMu sync.Mutex // Protects the clients map
-	upgrader  = websocket.Upgrader{}
+	upgrader  = websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool { return true },
+	}
 )
 
 func main() {
@@ -581,7 +583,8 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		log.Errorf("WebSocket upgrade error: %v", err)
 		return
 	}
-	// Read client ID from query parameters
+
+	// Get client ID from query parameters
 	clientID := r.URL.Query().Get("id")
 	if clientID == "" {
 		log.Error("Client ID not provided")
@@ -589,6 +592,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Register the client connection
 	clientsMu.Lock()
 	clientConn, exists := clients[clientID]
 	if !exists {
@@ -608,14 +612,24 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Listen for messages from the client
 	go func() {
-		defer conn.Close()
+		defer func() {
+			conn.Close()
+			// Handle client disconnection
+			log.Infof("Client %s disconnected", clientID)
+			clientsMu.Lock()
+			delete(clients, clientID) // Remove client from map on disconnect
+			clientsMu.Unlock()
+		}()
+
 		for {
 			var message ClientMessage
 			err := conn.ReadJSON(&message)
 			if err != nil {
+				// Log the disconnection or any read error (e.g., network error)
 				log.Errorf("Error reading from client %s: %v", clientID, err)
 				break
 			}
+			// Process the client message if no error occurred
 			handleClientMessage(clientID, message)
 		}
 	}()
@@ -633,30 +647,32 @@ func sendCommand(clientID string, command Command) error {
 	clientConn.ConnMu.Lock()
 	defer clientConn.ConnMu.Unlock()
 
+	log.Infof("Sending command to client %s: %+v", clientID, command)
+
 	return clientConn.Conn.WriteJSON(command)
 }
 
 // handleClientMessage processes messages received from clients.
 func handleClientMessage(clientID string, message ClientMessage) {
-	// Process the message based on its type
 	switch message.Type {
 	case "Log":
 		log.Infof("Log from client %s: %s", clientID, message.Data)
 	case "Address":
 		address, ok := message.Data.(string)
 		if !ok {
-			log.Infof("Invalid address from client %s", clientID)
+			log.Warnf("Invalid address from client %s", clientID)
 			return
 		}
+
 		clientsMu.Lock()
-		clientConn, exists := clients[clientID]
-		if exists {
+		if clientConn, exists := clients[clientID]; exists {
 			clientConn.Address = address
+			log.Infof("Stored address from client %s: %s", clientID, address)
 		} else {
-			log.Warnf("Client %s not found", clientID)
+			log.Warnf("Client %s not found when storing address", clientID)
 		}
 		clientsMu.Unlock()
-		log.Infof("Received address from client %s", clientID)
+
 	case "Error":
 		log.Warnf("Error from client %s: %s", clientID, message.Data)
 	default:

@@ -196,7 +196,8 @@ Resources:
         - Key: Name
           Value: OrchestratorInstance
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: !Sub
+        - |
           #!/bin/bash
           # set -e  # Commented out for debugging
 
@@ -251,7 +252,13 @@ Resources:
           echo "Inside ubuntu user context..."
           export AWS_REGION="${AWS::Region}"
           AWS_ACCOUNT_ID=\$(aws sts get-caller-identity --query Account --output text)
+          export AWS_ACCOUNT_ID
+          export SUBNET_IDS="${Subnet}"
+          export SECURITY_GROUP_IDS="${SecurityGroup}"
+          echo "AWS_REGION is: \$AWS_REGION"
           echo "AWS_ACCOUNT_ID is: \$AWS_ACCOUNT_ID"
+          echo "SUBNET_IDS is: \$SUBNET_IDS"
+          echo "SECURITY_GROUP_IDS is: \$SECURITY_GROUP_IDS"
 
           cd /home/ubuntu/$(basename $REPO_URL .git)/simulation
           
@@ -262,9 +269,14 @@ Resources:
           cd simulation & make push-to-ecr AWS_ACCOUNT_ID=\$AWS_ACCOUNT_ID AWS_REGION=\$AWS_REGION
 
           EOF
+          
+        
+  
 
           echo "Allowing port 9000..."
           sudo ufw allow 9000/tcp
+        - Subnet: !Ref Subnet
+          SecurityGroup: !Ref SecurityGroup
 
   ### CloudWatch Logs Group ###
 

@@ -106,6 +106,8 @@ func (c *Client) connectToOrchestrator(orchestratorUrl string) error {
 	}
 	log.Infof("Connected to orchestrator")
 
+	go c.keepConnectionAlive()
+
 	time.Sleep(5 * time.Second)
 
 	// Send the client's address to the orchestrator
@@ -150,7 +152,7 @@ func (c *Client) listenForCommands(orchestratorUrl string) {
 			var command Command
 			err := c.Conn.ReadJSON(&command)
 			if err != nil {
-				log.Infof("Error reading command: %v", err)
+				log.Errorf("Error reading command: %v", err)
 				return
 			}
 			// Handle the command
@@ -340,6 +342,24 @@ func (c *Client) requestRecipientAddress(orchestratorUrl, toClientID string) (st
 		return "", err
 	}
 	return res.Address, nil
+}
+
+func (c *Client) keepConnectionAlive() {
+	ticker := time.NewTicker(15 * time.Second) // Ping every 30 seconds
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-c.ctx.Done():
+			return
+		case <-ticker.C:
+			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				log.Warnf("Ping failed: %v", err)
+				return
+			}
+			log.Info("Ping sent to keep connection alive")
+		}
+	}
 }
 
 // handleSignals handles OS signals for graceful shutdown.
