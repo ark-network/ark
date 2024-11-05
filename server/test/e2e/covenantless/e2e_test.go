@@ -472,7 +472,7 @@ func TestSweep(t *testing.T) {
 		decrypted, err := nip04.Decrypt(event.Content, sharedSecret)
 		require.NoError(t, err)
 
-		parts := strings.Split(decrypted, ":")
+		parts := strings.Split(decrypted, "://")
 		require.Len(t, parts, 2)
 
 		note = parts[1]
@@ -650,5 +650,9 @@ func generateNote(t *testing.T, amount uint32) string {
 	if err := json.NewDecoder(resp.Body).Decode(&noteResp); err != nil {
 		t.Fatalf("failed to parse response: %s", err)
 	}
-	return noteResp.Notes[0]
+
+	noteURI := noteResp.Notes[0]
+	note := strings.Split(noteURI, "://")[1]
+
+	return note
 }

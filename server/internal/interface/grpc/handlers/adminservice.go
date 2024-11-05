@@ -13,12 +13,14 @@ import (
 type adminHandler struct {
 	adminService application.AdminService
 	aspService   application.Service
+
+	noteUriPrefix string
 }
 
 func NewAdminHandler(
-	adminService application.AdminService, aspService application.Service,
+	adminService application.AdminService, aspService application.Service, noteUriPrefix string,
 ) arkv1.AdminServiceServer {
-	return &adminHandler{adminService, aspService}
+	return &adminHandler{adminService, aspService, noteUriPrefix}
 }
 
 func (a *adminHandler) GetRoundDetails(ctx context.Context, req *arkv1.GetRoundDetailsRequest) (*arkv1.GetRoundDetailsResponse, error) {
@@ -114,7 +116,12 @@ func (a *adminHandler) CreateNote(ctx context.Context, req *arkv1.CreateNoteRequ
 		return nil, err
 	}
 
-	return &arkv1.CreateNoteResponse{Notes: notes}, nil
+	notesWithURI := make([]string, 0, len(notes))
+	for _, note := range notes {
+		notesWithURI = append(notesWithURI, fmt.Sprintf("%s://%s", a.noteUriPrefix, note))
+	}
+
+	return &arkv1.CreateNoteResponse{Notes: notesWithURI}, nil
 }
 
 // convert sats to string BTC
