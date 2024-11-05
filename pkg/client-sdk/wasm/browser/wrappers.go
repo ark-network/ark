@@ -440,9 +440,9 @@ func RedeemNotesWrapper() js.Func {
 			return nil, errors.New("invalid notes argument: expected array")
 		}
 
-		notes := make([]string, jsNotes.Length())
+		notes := make([]string, 0, jsNotes.Length())
 		for i := 0; i < jsNotes.Length(); i++ {
-			notes[i] = jsNotes.Index(i).String()
+			notes = append(notes, jsNotes.Index(i).String())
 		}
 
 		txID, err := arkSdkClient.RedeemNotes(context.Background(), notes)
