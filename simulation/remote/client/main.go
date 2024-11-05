@@ -55,7 +55,7 @@ func main() {
 	// Start HTTP server
 	go client.startServer()
 
-	time.Sleep(15 * time.Second)
+	time.Sleep(20 * time.Second)
 
 	// Send address to orchestrator
 	if err := client.sendAddress(); err != nil {
