@@ -101,7 +101,7 @@ func (n *nostrNotifier) Notify(ctx context.Context, to any, message string) erro
 
 			relay, err := nostr.RelayConnect(ctx, relayURL)
 			if err != nil {
-				logrus.Errorf("failed to connect to relay %s: %s", relayURL, err)
+				logrus.WithError(err).Warnf("failed to connect to relay %s", relayURL)
 				return
 			}
 			defer relay.Close()
