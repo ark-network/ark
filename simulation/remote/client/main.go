@@ -106,6 +106,8 @@ func (c *Client) connectToOrchestrator(orchestratorUrl string) error {
 	}
 	log.Infof("Connected to orchestrator")
 
+	time.Sleep(5 * time.Second)
+
 	// Send the client's address to the orchestrator
 	err = c.sendAddress()
 	if err != nil {

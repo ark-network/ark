@@ -21,7 +21,7 @@ import (
 
 const (
 	composePath    = "../docker-compose.clark.regtest.yml"
-	simulationPath = "simulation2.yaml"
+	simulationPath = "simulation.yaml"
 	clientPath     = "./build/client"
 	defaultAspUrl  = "localhost:7070"
 )

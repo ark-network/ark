@@ -20,7 +20,8 @@ import (
 )
 
 const (
-	composePath = "../docker-compose.clark.regtest.yml"
+	composePath    = "../docker-compose.clark.regtest.yml"
+	simulationPath = "simulation.yaml"
 )
 
 var (
@@ -31,7 +32,7 @@ var (
 )
 
 func main() {
-	simFile := flag.String("simulation", "simulation.yaml", "Path to the simulation YAML file")
+	simFile := flag.String("simulation", simulationPath, "Path to the simulation YAML file")
 	flag.Parse()
 
 	simulation, err := loadAndValidateSimulation(*simFile)

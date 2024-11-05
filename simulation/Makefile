@@ -6,6 +6,16 @@ run-single:
 	@echo "Running singe process simulation..."
 	go run ./local/single-process/main.go
 
+## run-multi: Run simulation with separate client and server processes
+run-multi: build-local-client
+	@echo "Running multi-process simulation..."
+	go run ./local/process-per-client/main.go
+
+## build-local-client
+build-local-client:
+	@echo "Building local client..."
+	go build -o ./build/client ./local/process-per-client/client/main.go
+
 #### Remote simulation ####
 
 # Default values for optional variables
