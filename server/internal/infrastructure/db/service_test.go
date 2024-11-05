@@ -84,27 +84,19 @@ func TestService(t *testing.T) {
 		{
 			name: "repo_manager_with_badger_stores",
 			config: db.ServiceConfig{
-				EventStoreType:      "badger",
-				DataStoreType:       "badger",
-				NoteStoreType:       "badger",
-				MetadataStoreType:   "badger",
-				EventStoreConfig:    []interface{}{"", nil},
-				DataStoreConfig:     []interface{}{"", nil},
-				NoteStoreConfig:     []interface{}{"", nil},
-				MetadataStoreConfig: []interface{}{"", nil},
+				EventStoreType:   "badger",
+				DataStoreType:    "badger",
+				EventStoreConfig: []interface{}{"", nil},
+				DataStoreConfig:  []interface{}{"", nil},
 			},
 		},
 		{
 			name: "repo_manager_with_sqlite_stores",
 			config: db.ServiceConfig{
-				EventStoreType:      "badger",
-				DataStoreType:       "sqlite",
-				NoteStoreType:       "badger",
-				MetadataStoreType:   "badger",
-				EventStoreConfig:    []interface{}{"", nil},
-				DataStoreConfig:     []interface{}{dbDir, "file://sqlite/migration"},
-				NoteStoreConfig:     []interface{}{"", nil},
-				MetadataStoreConfig: []interface{}{"", nil},
+				EventStoreType:   "badger",
+				DataStoreType:    "sqlite",
+				EventStoreConfig: []interface{}{"", nil},
+				DataStoreConfig:  []interface{}{dbDir, "file://sqlite/migration"},
 			},
 		},
 	}
@@ -119,7 +111,7 @@ func TestService(t *testing.T) {
 			testRoundRepository(t, svc)
 			testVtxoRepository(t, svc)
 			testNoteRepository(t, svc)
-			testMetadataRepository(t, svc)
+			testEntityRepository(t, svc)
 			time.Sleep(5 * time.Second)
 			svc.Close()
 		})
@@ -459,13 +451,11 @@ func testNoteRepository(t *testing.T, svc ports.RepoManager) {
 
 		err = svc.Notes().Add(ctx, 1)
 		require.Error(t, err)
-
-		svc.Notes().Close()
 	})
 }
 
-func testMetadataRepository(t *testing.T, svc ports.RepoManager) {
-	t.Run("test_metadata_repository", func(t *testing.T) {
+func testEntityRepository(t *testing.T, svc ports.RepoManager) {
+	t.Run("test_entity_repository", func(t *testing.T) {
 		ctx := context.Background()
 
 		vtxoKey := domain.VtxoKey{
@@ -473,36 +463,45 @@ func testMetadataRepository(t *testing.T, svc ports.RepoManager) {
 			VOut: 0,
 		}
 
-		metadata := domain.Metadata{
+		entity := domain.Entity{
 			NostrRecipient: "test",
 		}
 
 		// add
-		err := svc.VtxoMetadata().AddOrUpdate(ctx, metadata, []domain.VtxoKey{vtxoKey})
+		err := svc.Entities().Add(ctx, entity, []domain.VtxoKey{vtxoKey})
 		require.NoError(t, err)
 
-		gotMetadata, err := svc.VtxoMetadata().Get(ctx, vtxoKey)
+		gotEntities, err := svc.Entities().Get(ctx, vtxoKey)
 		require.NoError(t, err)
-		require.NotNil(t, gotMetadata)
-		require.Equal(t, metadata, *gotMetadata)
+		require.NotNil(t, gotEntities)
+		require.Equal(t, entity, gotEntities[0])
 
-		// update
-		metadata.NostrRecipient = "test2"
-		err = svc.VtxoMetadata().AddOrUpdate(ctx, metadata, []domain.VtxoKey{vtxoKey})
+		// add another entity
+		entity2 := domain.Entity{
+			NostrRecipient: "test2",
+		}
+
+		err = svc.Entities().Add(ctx, entity2, []domain.VtxoKey{vtxoKey})
 		require.NoError(t, err)
 
-		gotMetadata, err = svc.VtxoMetadata().Get(ctx, vtxoKey)
+		// if nostrkey is the same, it should not be added
+		err = svc.Entities().Add(ctx, entity2, []domain.VtxoKey{vtxoKey})
 		require.NoError(t, err)
-		require.NotNil(t, gotMetadata)
-		require.Equal(t, metadata, *gotMetadata)
+
+		gotEntities, err = svc.Entities().Get(ctx, vtxoKey)
+		require.NoError(t, err)
+		require.NotNil(t, gotEntities)
+		require.Contains(t, gotEntities, entity)
+		require.Contains(t, gotEntities, entity2)
+		require.Len(t, gotEntities, 2)
 
 		// delete
-		err = svc.VtxoMetadata().Delete(ctx, []domain.VtxoKey{vtxoKey})
+		err = svc.Entities().Delete(ctx, []domain.VtxoKey{vtxoKey})
 		require.NoError(t, err)
 
-		gotMetadata, err = svc.VtxoMetadata().Get(ctx, vtxoKey)
+		gotEntities, err = svc.Entities().Get(ctx, vtxoKey)
 		require.Error(t, err)
-		require.Nil(t, gotMetadata)
+		require.Nil(t, gotEntities)
 	})
 }
 

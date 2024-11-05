@@ -7,7 +7,7 @@ type RepoManager interface {
 	Rounds() domain.RoundRepository
 	Vtxos() domain.VtxoRepository
 	Notes() domain.NoteRepository
-	VtxoMetadata() domain.MetadataRepository
+	Entities() domain.EntityRepository
 	RegisterEventsHandler(func(*domain.Round))
 	Close()
 }

@@ -438,40 +438,11 @@ func (s *covenantService) RegisterCosignerSignatures(context.Context, string, *s
 }
 
 func (s *covenantService) SetNostrRecipient(ctx context.Context, nostrRecipient string, signedVtxoOutpoints []SignedVtxoOutpoint) error {
-	nprofileRecipient, err := nip19toNostrProfile(nostrRecipient, s.nostrDefaultRelays)
-	if err != nil {
-		return fmt.Errorf("failed to convert nostr recipient: %s", err)
-	}
-
-	if err := validateProofs(ctx, s.repoManager.Vtxos(), signedVtxoOutpoints); err != nil {
-		return err
-	}
-
-	vtxoKeys := make([]domain.VtxoKey, 0, len(signedVtxoOutpoints))
-	for _, signedVtxo := range signedVtxoOutpoints {
-		vtxoKeys = append(vtxoKeys, signedVtxo.Outpoint)
-	}
-
-	return s.repoManager.VtxoMetadata().AddOrUpdate(
-		ctx,
-		domain.Metadata{
-			NostrRecipient: nprofileRecipient,
-		},
-		vtxoKeys,
-	)
+	return fmt.Errorf("not implemented")
 }
 
 func (s *covenantService) DeleteNostrRecipient(ctx context.Context, signedVtxoOutpoints []SignedVtxoOutpoint) error {
-	if err := validateProofs(ctx, s.repoManager.Vtxos(), signedVtxoOutpoints); err != nil {
-		return err
-	}
-
-	vtxoKeys := make([]domain.VtxoKey, 0, len(signedVtxoOutpoints))
-	for _, signedVtxo := range signedVtxoOutpoints {
-		vtxoKeys = append(vtxoKeys, signedVtxo.Outpoint)
-	}
-
-	return s.repoManager.VtxoMetadata().Delete(ctx, vtxoKeys)
+	return fmt.Errorf("not implemented")
 }
 
 func (s *covenantService) start() {

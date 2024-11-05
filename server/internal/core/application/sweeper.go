@@ -326,7 +326,7 @@ func (s *sweeper) createAndSendNotes(ctx context.Context, vtxosKeys []domain.Vtx
 		return
 	}
 
-	metadataRepo := s.repoManager.VtxoMetadata()
+	entitiesRepo := s.repoManager.Entities()
 
 	notifier := nostr_notifier.New()
 
@@ -335,14 +335,14 @@ func (s *sweeper) createAndSendNotes(ctx context.Context, vtxosKeys []domain.Vtx
 			continue
 		}
 
-		// get the nostr recipient
-		metadata, err := metadataRepo.Get(ctx, vtxo.VtxoKey)
+		// get the nostr recipients
+		entities, err := entitiesRepo.Get(ctx, vtxo.VtxoKey)
 		if err != nil {
-			log.Debugf("no metadata found for vtxo %s", vtxo.VtxoKey)
+			log.Debugf("no entity found for vtxo %s", vtxo.VtxoKey)
 			continue
 		}
 
-		if len(metadata.NostrRecipient) == 0 {
+		if len(entities) == 0 {
 			log.Debugf("no nostr recipient found for vtxo %s:%d, skipping note creation", vtxo.Txid, vtxo.VOut)
 			continue
 		}
@@ -364,9 +364,11 @@ func (s *sweeper) createAndSendNotes(ctx context.Context, vtxosKeys []domain.Vtx
 
 		notification := fmt.Sprintf("%s:%s", s.notificationPrefix, note)
 
-		log.Debugf("sending note notification to %s", metadata.NostrRecipient)
-		if err := notifier.Notify(ctx, metadata.NostrRecipient, notification); err != nil {
-			log.Error(fmt.Errorf("error while sending note notification: %w", err))
+		for _, entity := range entities {
+			log.Debugf("sending note notification to %s", entity.NostrRecipient)
+			if err := notifier.Notify(ctx, entity.NostrRecipient, notification); err != nil {
+				log.Error(fmt.Errorf("error while sending note notification: %w", err))
+			}
 		}
 	}
 }

@@ -770,9 +770,9 @@ func (s *covenantlessService) SetNostrRecipient(ctx context.Context, nostrRecipi
 		vtxoKeys = append(vtxoKeys, signedVtxo.Outpoint)
 	}
 
-	return s.repoManager.VtxoMetadata().AddOrUpdate(
+	return s.repoManager.Entities().Add(
 		ctx,
-		domain.Metadata{
+		domain.Entity{
 			NostrRecipient: nprofileRecipient,
 		},
 		vtxoKeys,
@@ -789,7 +789,7 @@ func (s *covenantlessService) DeleteNostrRecipient(ctx context.Context, signedVt
 		vtxoKeys = append(vtxoKeys, signedVtxo.Outpoint)
 	}
 
-	return s.repoManager.VtxoMetadata().Delete(ctx, vtxoKeys)
+	return s.repoManager.Entities().Delete(ctx, vtxoKeys)
 }
 
 func (s *covenantlessService) start() {

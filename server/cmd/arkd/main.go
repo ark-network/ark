@@ -61,8 +61,6 @@ func mainAction(_ *cli.Context) error {
 
 	appConfig := &appconfig.Config{
 		EventDbType:           cfg.EventDbType,
-		NoteDbType:            cfg.NoteDbType,
-		MetadataDbType:        cfg.MetadataDbType,
 		DbType:                cfg.DbType,
 		DbDir:                 cfg.DbDir,
 		DbMigrationPath:       cfg.DbMigrationPath,

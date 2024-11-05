@@ -28,9 +28,11 @@ var (
 	}
 	noteStoreTypes = map[string]func(...interface{}) (domain.NoteRepository, error){
 		"badger": badgerdb.NewNoteRepository,
+		"sqlite": sqlitedb.NewNoteRepository,
 	}
-	metadataStoreTypes = map[string]func(...interface{}) (domain.MetadataRepository, error){
-		"badger": badgerdb.NewMetadataRepository,
+	entityStoreTypes = map[string]func(...interface{}) (domain.EntityRepository, error){
+		"badger": badgerdb.NewEntityRepository,
+		"sqlite": sqlitedb.NewEntityRepository,
 	}
 )
 
@@ -39,23 +41,19 @@ const (
 )
 
 type ServiceConfig struct {
-	EventStoreType    string
-	DataStoreType     string
-	NoteStoreType     string
-	MetadataStoreType string
+	EventStoreType string
+	DataStoreType  string
 
-	EventStoreConfig    []interface{}
-	DataStoreConfig     []interface{}
-	NoteStoreConfig     []interface{}
-	MetadataStoreConfig []interface{}
+	EventStoreConfig []interface{}
+	DataStoreConfig  []interface{}
 }
 
 type service struct {
-	eventStore    domain.RoundEventRepository
-	roundStore    domain.RoundRepository
-	vtxoStore     domain.VtxoRepository
-	noteStore     domain.NoteRepository
-	metadataStore domain.MetadataRepository
+	eventStore  domain.RoundEventRepository
+	roundStore  domain.RoundRepository
+	vtxoStore   domain.VtxoRepository
+	noteStore   domain.NoteRepository
+	entityStore domain.EntityRepository
 }
 
 func NewService(config ServiceConfig) (ports.RepoManager, error) {
@@ -71,20 +69,20 @@ func NewService(config ServiceConfig) (ports.RepoManager, error) {
 	if !ok {
 		return nil, fmt.Errorf("vtxo store type not supported")
 	}
-	noteStoreFactory, ok := noteStoreTypes[config.NoteStoreType]
+	noteStoreFactory, ok := noteStoreTypes[config.DataStoreType]
 	if !ok {
 		return nil, fmt.Errorf("note store type not supported")
 	}
-	metadataStoreFactory, ok := metadataStoreTypes[config.MetadataStoreType]
+	entityStoreFactory, ok := entityStoreTypes[config.DataStoreType]
 	if !ok {
-		return nil, fmt.Errorf("metadata store type not supported")
+		return nil, fmt.Errorf("entity store type not supported")
 	}
 
 	var eventStore domain.RoundEventRepository
 	var roundStore domain.RoundRepository
 	var vtxoStore domain.VtxoRepository
 	var noteStore domain.NoteRepository
-	var metadataStore domain.MetadataRepository
+	var entityStore domain.EntityRepository
 	var err error
 
 	switch config.EventStoreType {
@@ -106,6 +104,14 @@ func NewService(config ServiceConfig) (ports.RepoManager, error) {
 		vtxoStore, err = vtxoStoreFactory(config.DataStoreConfig...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open vtxo store: %s", err)
+		}
+		entityStore, err = entityStoreFactory(config.DataStoreConfig...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open entity store: %s", err)
+		}
+		noteStore, err = noteStoreFactory(config.DataStoreConfig...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open note store: %s", err)
 		}
 	case "sqlite":
 		if len(config.DataStoreConfig) != 2 {
@@ -154,27 +160,17 @@ func NewService(config ServiceConfig) (ports.RepoManager, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to open vtxo store: %s", err)
 		}
-	}
-
-	switch config.NoteStoreType {
-	case "badger":
-		noteStore, err = noteStoreFactory(config.NoteStoreConfig...)
+		entityStore, err = entityStoreFactory(db)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open entity store: %s", err)
+		}
+		noteStore, err = noteStoreFactory(db)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open note store: %s", err)
 		}
-	default:
-		return nil, fmt.Errorf("unknown note store db type")
 	}
 
-	switch config.MetadataStoreType {
-	case "badger":
-		metadataStore, err = metadataStoreFactory(config.MetadataStoreConfig...)
-		if err != nil {
-			return nil, fmt.Errorf("failed to open metadata store: %s", err)
-		}
-	}
-
-	return &service{eventStore, roundStore, vtxoStore, noteStore, metadataStore}, nil
+	return &service{eventStore, roundStore, vtxoStore, noteStore, entityStore}, nil
 }
 
 func (s *service) RegisterEventsHandler(handler func(round *domain.Round)) {
@@ -197,8 +193,8 @@ func (s *service) Notes() domain.NoteRepository {
 	return s.noteStore
 }
 
-func (s *service) VtxoMetadata() domain.MetadataRepository {
-	return s.metadataStore
+func (s *service) Entities() domain.EntityRepository {
+	return s.entityStore
 }
 
 func (s *service) Close() {

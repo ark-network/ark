@@ -26,12 +26,6 @@ var (
 	supportedEventDbs = supportedType{
 		"badger": {},
 	}
-	supportedNoteDbs = supportedType{
-		"badger": {},
-	}
-	supportedMetadataDbs = supportedType{
-		"badger": {},
-	}
 	supportedDbs = supportedType{
 		"badger": {},
 		"sqlite": {},
@@ -66,8 +60,6 @@ var (
 type Config struct {
 	DbType                string
 	EventDbType           string
-	NoteDbType            string
-	MetadataDbType        string
 	DbDir                 string
 	DbMigrationPath       string
 	EventDbDir            string
@@ -106,12 +98,6 @@ type Config struct {
 func (c *Config) Validate() error {
 	if !supportedEventDbs.supports(c.EventDbType) {
 		return fmt.Errorf("event db type not supported, please select one of: %s", supportedEventDbs)
-	}
-	if !supportedNoteDbs.supports(c.NoteDbType) {
-		return fmt.Errorf("note db type not supported, please select one of: %s", supportedNoteDbs)
-	}
-	if !supportedMetadataDbs.supports(c.MetadataDbType) {
-		return fmt.Errorf("metadata db type not supported, please select one of: %s", supportedMetadataDbs)
 	}
 	if !supportedDbs.supports(c.DbType) {
 		return fmt.Errorf("db type not supported, please select one of: %s", supportedDbs)
@@ -243,9 +229,7 @@ func (c *Config) repoManager() error {
 	var svc ports.RepoManager
 	var err error
 	var eventStoreConfig []interface{}
-	var noteStoreConfig []interface{}
 	var dataStoreConfig []interface{}
-	var metadataStoreConfig []interface{}
 	logger := log.New()
 
 	switch c.EventDbType {
@@ -264,29 +248,11 @@ func (c *Config) repoManager() error {
 		return fmt.Errorf("unknown db type")
 	}
 
-	switch c.NoteDbType {
-	case "badger":
-		noteStoreConfig = []interface{}{c.DbDir, logger}
-	default:
-		return fmt.Errorf("unknown note db type")
-	}
-
-	switch c.MetadataDbType {
-	case "badger":
-		metadataStoreConfig = []interface{}{c.DbDir, logger}
-	default:
-		return fmt.Errorf("unknown metadata db type")
-	}
-
 	svc, err = db.NewService(db.ServiceConfig{
-		EventStoreType:      c.EventDbType,
-		DataStoreType:       c.DbType,
-		NoteStoreType:       c.NoteDbType,
-		MetadataStoreType:   c.MetadataDbType,
-		EventStoreConfig:    eventStoreConfig,
-		DataStoreConfig:     dataStoreConfig,
-		NoteStoreConfig:     noteStoreConfig,
-		MetadataStoreConfig: metadataStoreConfig,
+		EventStoreType:   c.EventDbType,
+		DataStoreType:    c.DbType,
+		EventStoreConfig: eventStoreConfig,
+		DataStoreConfig:  dataStoreConfig,
 	})
 	if err != nil {
 		return err

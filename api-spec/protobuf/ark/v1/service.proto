@@ -98,7 +98,7 @@ service ArkService {
     };
   }
 
-  /* Metadata APIs */
+  /* Entity APIs */
 
   rpc SetNostrRecipient(SetNostrRecipientRequest) returns (SetNostrRecipientResponse) {
     option (google.api.http) = {

@@ -16,8 +16,6 @@ type Config struct {
 	RoundInterval         int64
 	Port                  uint32
 	EventDbType           string
-	NoteDbType            string
-	MetadataDbType        string
 	DbType                string
 	DbDir                 string
 	DbMigrationPath       string
@@ -51,8 +49,6 @@ var (
 	RoundInterval         = "ROUND_INTERVAL"
 	Port                  = "PORT"
 	EventDbType           = "EVENT_DB_TYPE"
-	NoteDbType            = "NOTE_DB_TYPE"
-	MetadataDbType        = "METADATA_DB_TYPE"
 	DbType                = "DB_TYPE"
 	DbMigrationPath       = "DB_MIGRATION_PATH"
 	SchedulerType         = "SCHEDULER_TYPE"
@@ -87,8 +83,6 @@ var (
 	defaultDbType                = "sqlite"
 	defaultDbMigrationPath       = "file://internal/infrastructure/db/sqlite/migration"
 	defaultEventDbType           = "badger"
-	defaultNoteDbType            = "badger"
-	defaultMetadataDbType        = "badger"
 	defaultSchedulerType         = "gocron"
 	defaultTxBuilderType         = "covenant"
 	defaultBlockchainScannerType = "ocean"
@@ -119,8 +113,6 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(RoundLifetime, defaultRoundLifetime)
 	viper.SetDefault(SchedulerType, defaultSchedulerType)
 	viper.SetDefault(EventDbType, defaultEventDbType)
-	viper.SetDefault(NoteDbType, defaultNoteDbType)
-	viper.SetDefault(MetadataDbType, defaultMetadataDbType)
 	viper.SetDefault(TxBuilderType, defaultTxBuilderType)
 	viper.SetDefault(UnilateralExitDelay, defaultUnilateralExitDelay)
 	viper.SetDefault(BlockchainScannerType, defaultBlockchainScannerType)
@@ -143,8 +135,6 @@ func LoadConfig() (*Config, error) {
 		RoundInterval:         viper.GetInt64(RoundInterval),
 		Port:                  viper.GetUint32(Port),
 		EventDbType:           viper.GetString(EventDbType),
-		NoteDbType:            viper.GetString(NoteDbType),
-		MetadataDbType:        viper.GetString(MetadataDbType),
 		DbType:                viper.GetString(DbType),
 		DbMigrationPath:       viper.GetString(DbMigrationPath),
 		SchedulerType:         viper.GetString(SchedulerType),
