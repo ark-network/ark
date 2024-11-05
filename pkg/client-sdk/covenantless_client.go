@@ -186,7 +186,7 @@ func (a *covenantlessArkClient) Init(ctx context.Context, args InitArgs) error {
 		return err
 	}
 
-	if args.ListenTransactionStream {
+	if args.WithTransactionFeed {
 		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
 		a.txStreamCtxCancel = txStreamCtxCancel
 		go a.listenForTransactions(txStreamCtx)
@@ -1122,12 +1122,12 @@ func (a *covenantlessArkClient) GetTransactionHistory(
 		return nil, err
 	}
 
-	boardingTxs, _, err := a.getBoardingTxs(ctx)
+	boardingTxs, roundsToIgnore, err := a.getBoardingTxs(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	offchainTxs, err := vtxosToTxsCovenantless(spendableVtxos, spentVtxos)
+	offchainTxs, err := vtxosToTxsCovenantless(spendableVtxos, spentVtxos, roundsToIgnore)
 	if err != nil {
 		return nil, err
 	}
@@ -2558,7 +2558,7 @@ func findVtxosBySpentBy(allVtxos []client.Vtxo, txid string) (vtxos []client.Vtx
 }
 
 func vtxosToTxsCovenantless(
-	spendable, spent []client.Vtxo,
+	spendable, spent []client.Vtxo, ignoreVtxosByRound map[string]struct{},
 ) ([]types.Transaction, error) {
 	txs := make([]types.Transaction, 0)
 	vtxosByRound := make(map[string][]client.Vtxo)
@@ -2567,6 +2567,10 @@ func vtxosToTxsCovenantless(
 			vtxosByRound[v.RoundTxid] = make([]client.Vtxo, 0)
 		}
 		vtxosByRound[v.RoundTxid] = append(vtxosByRound[v.RoundTxid], v)
+
+		if len(v.SpentBy) > 0 {
+			ignoreVtxosByRound[v.SpentBy] = struct{}{}
+		}
 	}
 
 	for round := range vtxosByRound {
@@ -2581,6 +2585,15 @@ func vtxosToTxsCovenantless(
 			txs = append(txs, types.Transaction{
 				TransactionKey: types.TransactionKey{
 					RedeemTxid: v.Txid,
+				},
+				Amount:    v.Amount,
+				Type:      types.TxReceived,
+				CreatedAt: v.CreatedAt,
+			})
+		} else if _, ok := ignoreVtxosByRound[v.Txid]; !ok {
+			txs = append(txs, types.Transaction{
+				TransactionKey: types.TransactionKey{
+					RoundTxid: v.RoundTxid,
 				},
 				Amount:    v.Amount,
 				Type:      types.TxReceived,

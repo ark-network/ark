@@ -184,7 +184,7 @@ func (a *covenantArkClient) Init(ctx context.Context, args InitArgs) error {
 		return err
 	}
 
-	if args.ListenTransactionStream {
+	if args.WithTransactionFeed {
 		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
 		a.txStreamCtxCancel = txStreamCtxCancel
 		go a.listenForTxStream(txStreamCtx)

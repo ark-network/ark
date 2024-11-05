@@ -158,7 +158,7 @@ func (a *arkClient) initWithWallet(
 		Dust:                       info.Dust,
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 		ForfeitAddress:             info.ForfeitAddress,
-		WithTransactionFeed:        args.ListenTransactionStream,
+		WithTransactionFeed:        args.WithTransactionFeed,
 	}
 	if err := a.store.ConfigStore().AddData(ctx, storeData); err != nil {
 		return err
@@ -226,7 +226,7 @@ func (a *arkClient) init(
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 		ExplorerURL:                args.ExplorerURL,
 		ForfeitAddress:             info.ForfeitAddress,
-		WithTransactionFeed:        args.ListenTransactionStream,
+		WithTransactionFeed:        args.WithTransactionFeed,
 	}
 	walletSvc, err := getWallet(a.store.ConfigStore(), &cfgData, supportedWallets)
 	if err != nil {

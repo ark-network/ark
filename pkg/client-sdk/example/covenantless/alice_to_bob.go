@@ -186,11 +186,11 @@ func setupArkClient(wallet string) (arksdk.ArkClient, error) {
 	}
 
 	if err := client.Init(context.Background(), arksdk.InitArgs{
-		WalletType:              walletType,
-		ClientType:              clientType,
-		AspUrl:                  aspUrl,
-		Password:                password,
-		ListenTransactionStream: true,
+		WalletType:          walletType,
+		ClientType:          clientType,
+		AspUrl:              aspUrl,
+		Password:            password,
+		WithTransactionFeed: true,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to initialize wallet: %s", err)
 	}
