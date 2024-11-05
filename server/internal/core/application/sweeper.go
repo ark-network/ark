@@ -24,7 +24,7 @@ type sweeper struct {
 	builder     ports.TxBuilder
 	scheduler   ports.SchedulerService
 
-	notificationPrefix string
+	noteUriPrefix string
 
 	// cache of scheduled tasks, avoid scheduling the same sweep event multiple times
 	locker         sync.Locker
@@ -362,7 +362,7 @@ func (s *sweeper) createAndSendNotes(ctx context.Context, vtxosKeys []domain.Vtx
 
 		note := noteData.ToNote(signature)
 
-		notification := fmt.Sprintf("%s:%s", s.notificationPrefix, note)
+		notification := fmt.Sprintf("%s://%s", s.noteUriPrefix, note)
 
 		for _, entity := range entities {
 			log.Debugf("sending note notification to %s", entity.NostrRecipient)
