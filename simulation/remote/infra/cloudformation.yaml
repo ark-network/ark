@@ -340,6 +340,8 @@ Resources:
               Value: !Sub "${OrchestratorInstance.PrivateIp}:${AspPort}"
             - Name: ORCHESTRATOR_URL
               Value: !Sub "${OrchestratorInstance.PrivateIp}:${OrchestratorPort}"
+            - Name: EXPLORER_URL
+              Value: !Sub "${OrchestratorInstance.PrivateIp}:3000"
           LogConfiguration:
             LogDriver: awslogs
             Options:

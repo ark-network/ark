@@ -29,6 +29,7 @@ func main() {
 	clientID := os.Getenv("CLIENT_ID")
 	aspUrl := os.Getenv("ASP_URL")
 	orchUrl := os.Getenv("ORCHESTRATOR_URL")
+	explorerUrl := os.Getenv("EXPLORER_URL")
 	if clientID == "" {
 		log.Fatal("CLIENT_ID environment variable is required")
 	}
@@ -39,6 +40,9 @@ func main() {
 		log.Fatal("ORCHESTRATOR_URL environment variable is required")
 	}
 	orchestratorUrl = orchUrl
+	if explorerUrl == "" {
+		log.Fatal("EXPLORER_URL environment variable is required")
+	}
 
 	client := &Client{
 		ID: clientID,
@@ -48,7 +52,7 @@ func main() {
 	client.ctx, client.cancel = context.WithCancel(context.Background())
 
 	// Set up ArkClient
-	if err := client.setupArkClient(aspUrl); err != nil {
+	if err := client.setupArkClient(explorerUrl, aspUrl); err != nil {
 		log.Fatalf("Failed to set up client: %v", err)
 	}
 
@@ -74,7 +78,7 @@ type Client struct {
 	Address   string
 }
 
-func (c *Client) setupArkClient(aspUrl string) error {
+func (c *Client) setupArkClient(explorerUrl, aspUrl string) error {
 	appDataStore, err := store.NewStore(store.Config{
 		ConfigStoreType: types.InMemoryStore,
 	})
@@ -93,7 +97,7 @@ func (c *Client) setupArkClient(aspUrl string) error {
 		ClientType:  arksdk.GrpcClient,
 		AspUrl:      aspUrl,
 		Password:    "password",
-		ExplorerURL: fmt.Sprintf("http://%s/%s", orchestratorUrl, "3000"),
+		ExplorerURL: fmt.Sprintf("http://%s", explorerUrl),
 	}); err != nil {
 		return fmt.Errorf("failed to initialize wallet: %s", err)
 	}
