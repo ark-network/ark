@@ -7,7 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/xeipuuv/gojsonschema"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -300,7 +300,7 @@ func sendRequest(url string, payload interface{}) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := ioutil.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -310,7 +310,8 @@ func sendRequest(url string, payload interface{}) error {
 // startClients launches each client as an AWS Fargate task.
 func startClients(subnetIDsEnv, securityGroupIDsEnv string, clientConfigs []ClientConfig) error {
 	awsRegion := "eu-central-1"
-	cfg, err := config.LoadDefaultConfig(context.TODO(),
+	cfg, err := config.LoadDefaultConfig(
+		context.TODO(),
 		config.WithRegion(awsRegion),
 	)
 	if err != nil {
@@ -617,7 +618,11 @@ func waitForClientsToSendAddresses(clientIDs []string) {
 }
 
 func stopClients() {
-	cfg, err := config.LoadDefaultConfig(context.TODO())
+	awsRegion := "eu-central-1"
+	cfg, err := config.LoadDefaultConfig(
+		context.TODO(),
+		config.WithRegion(awsRegion),
+	)
 	if err != nil {
 		log.Errorf("Unable to load AWS SDK config: %v", err)
 		return

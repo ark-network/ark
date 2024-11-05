@@ -89,10 +89,11 @@ func (c *Client) setupArkClient(aspUrl string) error {
 
 	ctx := context.Background()
 	if err := client.Init(ctx, arksdk.InitArgs{
-		WalletType: arksdk.SingleKeyWallet,
-		ClientType: arksdk.GrpcClient,
-		AspUrl:     aspUrl,
-		Password:   "password",
+		WalletType:  arksdk.SingleKeyWallet,
+		ClientType:  arksdk.GrpcClient,
+		AspUrl:      aspUrl,
+		Password:    "password",
+		ExplorerURL: fmt.Sprintf("http://%s/%s", orchestratorUrl, "3000"),
 	}); err != nil {
 		return fmt.Errorf("failed to initialize wallet: %s", err)
 	}
