@@ -108,7 +108,7 @@ func (n *nostrNotifier) Notify(ctx context.Context, to any, message string) erro
 
 			err = relay.Publish(ctx, *ev)
 			if err != nil {
-				logrus.Errorf("failed to publish to relay %s: %s", relayURL, err)
+				logrus.WithError(err).Warnf("failed to publish to relay %s", relayURL)
 				return
 			}
 
