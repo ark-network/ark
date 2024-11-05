@@ -28,7 +28,7 @@ const (
 
 var (
 	clients   = make(map[string]*ClientConnection)
-	clientsMu sync.Mutex // Protects the clients map
+	clientsMu sync.Mutex
 	upgrader  = websocket.Upgrader{}
 )
 

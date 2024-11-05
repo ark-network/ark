@@ -55,7 +55,7 @@ func main() {
 	}
 
 	// Listen for commands from orchestrator
-	client.listenForCommands()
+	client.listenForCommands(orchestratorUrl)
 }
 
 // setupArkClient initializes the ArkClient for the client.
@@ -137,7 +137,7 @@ func (c *Client) sendAddress() error {
 }
 
 // listenForCommands listens for commands from the orchestrator.
-func (c *Client) listenForCommands() {
+func (c *Client) listenForCommands(orchestratorUrl string) {
 	defer c.Conn.Close()
 	for {
 		select {
@@ -152,13 +152,13 @@ func (c *Client) listenForCommands() {
 				return
 			}
 			// Handle the command
-			c.handleCommand(command)
+			c.handleCommand(orchestratorUrl, command)
 		}
 	}
 }
 
 // handleCommand processes a command received from the orchestrator.
-func (c *Client) handleCommand(command Command) {
+func (c *Client) handleCommand(orchestratorUrl string, command Command) {
 	switch command.Type {
 	case "Onboard":
 		amount, ok := command.Data["amount"].(float64)
@@ -181,7 +181,7 @@ func (c *Client) handleCommand(command Command) {
 			c.sendError("Invalid recipient in SendAsync command")
 			return
 		}
-		err := c.sendAsync(amount, toClientID)
+		err := c.sendAsync(amount, orchestratorUrl, toClientID)
 		if err != nil {
 			c.sendError(fmt.Sprintf("SendAsync failed: %v", err))
 		}
@@ -248,11 +248,11 @@ func (c *Client) onboard(amount float64) error {
 }
 
 // sendAsync sends funds asynchronously to another client.
-func (c *Client) sendAsync(amount float64, toClientID string) error {
+func (c *Client) sendAsync(amount float64, orchestratorUrl, toClientID string) error {
 	ctx := context.Background()
 
 	// Request recipient address from orchestrator
-	recipientAddress, err := c.requestRecipientAddress(toClientID)
+	recipientAddress, err := c.requestRecipientAddress(orchestratorUrl, toClientID)
 	if err != nil {
 		return err
 	}
@@ -321,7 +321,7 @@ func (c *Client) sendLog(message string) {
 }
 
 // requestRecipientAddress requests the recipient's address from the orchestrator.
-func (c *Client) requestRecipientAddress(toClientID string) (string, error) {
+func (c *Client) requestRecipientAddress(orchestratorUrl, toClientID string) (string, error) {
 	resp, err := http.Get(fmt.Sprintf("http://localhost:9000/address?client_id=%s", toClientID))
 	if err != nil {
 		return "", err

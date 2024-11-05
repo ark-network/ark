@@ -259,7 +259,7 @@ Resources:
           nigiri start
 
           echo "Running make push-to-ecr..."
-          make push-to-ecr AWS_ACCOUNT_ID=\$AWS_ACCOUNT_ID AWS_REGION=\$AWS_REGION
+          cd simulation & make push-to-ecr AWS_ACCOUNT_ID=\$AWS_ACCOUNT_ID AWS_REGION=\$AWS_REGION
 
           EOF
 

@@ -1,5 +1,11 @@
 .PHONY: run push-to-ecr build-client
 
+#### Local simulation ####
+## run-single: Run bundled simulation where client and server are in the same process
+run-single:
+	@echo "Running singe process simulation..."
+	go run ./local/single-process/main.go
+
 #### Remote simulation ####
 
 # Default values for optional variables

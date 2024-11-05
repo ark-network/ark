@@ -31,7 +31,7 @@ var (
 )
 
 func main() {
-	simFile := flag.String("simulation", "simulation2.yaml", "Path to the simulation YAML file")
+	simFile := flag.String("simulation", "simulation.yaml", "Path to the simulation YAML file")
 	flag.Parse()
 
 	simulation, err := loadAndValidateSimulation(*simFile)
