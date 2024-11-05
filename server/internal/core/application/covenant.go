@@ -443,7 +443,7 @@ func (s *covenantService) startRound() {
 	s.currentRound = round
 
 	defer func() {
-		time.Sleep(time.Duration(s.roundInterval/2) * time.Second)
+		time.Sleep(time.Duration(s.roundInterval/3) * time.Second)
 		s.startFinalization()
 	}()
 
@@ -469,7 +469,7 @@ func (s *covenantService) startFinalization() {
 			s.startRound()
 			return
 		}
-		time.Sleep(time.Duration((s.roundInterval/2)-1) * time.Second)
+		time.Sleep(time.Duration((s.roundInterval/3)-1) * time.Second)
 		s.finalizeRound()
 	}()
 

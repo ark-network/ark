@@ -727,7 +727,7 @@ func (s *covenantlessService) startRound() {
 	s.currentRound = round
 
 	defer func() {
-		time.Sleep(time.Duration(s.roundInterval/2) * time.Second)
+		time.Sleep(time.Duration(s.roundInterval/3) * time.Second)
 		s.startFinalization()
 	}()
 
@@ -738,7 +738,7 @@ func (s *covenantlessService) startFinalization() {
 	ctx := context.Background()
 	round := s.currentRound
 
-	roundRemainingDuration := time.Duration(s.roundInterval/2-1) * time.Second
+	roundRemainingDuration := time.Duration(s.roundInterval/3-1) * time.Second
 	thirdOfRemainingDuration := time.Duration(roundRemainingDuration / 3)
 
 	var roundAborted bool
