@@ -227,7 +227,7 @@ func (a *restClient) GetEventStream(
 	eventsCh := make(chan client.RoundEventChannel)
 
 	go func(payID string, eventsCh chan client.RoundEventChannel) {
-		ticker := time.NewTicker(1 * time.Second)
+		ticker := time.NewTicker(300 * time.Millisecond)
 		defer close(eventsCh)
 		defer ticker.Stop()
 
