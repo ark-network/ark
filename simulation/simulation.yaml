@@ -106,13 +106,114 @@ clients:
     name: "Client48"
   - id: "client_49"
     name: "Client49"
+  - id: "client_50"
+    name: "Client50"
+  - id: "client_51"
+    name: "Client51"
+  - id: "client_52"
+    name: "Client52"
+  - id: "client_53"
+    name: "Client53"
+  - id: "client_54"
+    name: "Client54"
+  - id: "client_55"
+    name: "Client55"
+  - id: "client_56"
+    name: "Client56"
+  - id: "client_57"
+    name: "Client57"
+  - id: "client_58"
+    name: "Client58"
+  - id: "client_59"
+    name: "Client59"
+  - id: "client_60"
+    name: "Client60"
+  - id: "client_61"
+    name: "Client61"
+  - id: "client_62"
+    name: "Client62"
+  - id: "client_63"
+    name: "Client63"
+  - id: "client_64"
+    name: "Client64"
+  - id: "client_65"
+    name: "Client65"
+  - id: "client_66"
+    name: "Client66"
+  - id: "client_67"
+    name: "Client67"
+  - id: "client_68"
+    name: "Client68"
+  - id: "client_69"
+    name: "Client69"
+  - id: "client_70"
+    name: "Client70"
+  - id: "client_71"
+    name: "Client71"
+  - id: "client_72"
+    name: "Client72"
+  - id: "client_73"
+    name: "Client73"
+  - id: "client_74"
+    name: "Client74"
+  - id: "client_75"
+    name: "Client75"
+  - id: "client_76"
+    name: "Client76"
+  - id: "client_77"
+    name: "Client77"
+  - id: "client_78"
+    name: "Client78"
+  - id: "client_79"
+    name: "Client79"
+  - id: "client_80"
+    name: "Client80"
+  - id: "client_81"
+    name: "Client81"
+  - id: "client_82"
+    name: "Client82"
+  - id: "client_83"
+    name: "Client83"
+  - id: "client_84"
+    name: "Client84"
+  - id: "client_85"
+    name: "Client85"
+  - id: "client_86"
+    name: "Client86"
+  - id: "client_87"
+    name: "Client87"
+  - id: "client_88"
+    name: "Client88"
+  - id: "client_89"
+    name: "Client89"
+  - id: "client_90"
+    name: "Client90"
+  - id: "client_91"
+    name: "Client91"
+  - id: "client_92"
+    name: "Client92"
+  - id: "client_93"
+    name: "Client93"
+  - id: "client_94"
+    name: "Client94"
+  - id: "client_95"
+    name: "Client95"
+  - id: "client_96"
+    name: "Client96"
+  - id: "client_97"
+    name: "Client97"
+  - id: "client_98"
+    name: "Client98"
+  - id: "client_99"
+    name: "Client99"
 
 rounds:
   - number: 1
     actions:
       client_0:
         - type: "Onboard"
-          amount: 0.1
+          amount: 0.3
+
   - number: 2
     actions:
       client_0:
@@ -263,6 +364,157 @@ rounds:
         - type: "SendAsync"
           amount: 0.002
           to: "client_49"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_50"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_51"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_52"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_53"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_54"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_55"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_56"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_57"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_58"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_59"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_60"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_61"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_62"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_63"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_64"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_65"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_66"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_67"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_68"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_69"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_70"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_71"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_72"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_73"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_74"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_75"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_76"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_77"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_78"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_79"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_80"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_81"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_82"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_83"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_84"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_85"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_86"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_87"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_88"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_89"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_90"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_91"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_92"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_93"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_94"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_95"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_96"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_97"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_98"
+        - type: "SendAsync"
+          amount: 0.002
+          to: "client_99"
+
   - number: 3
     actions:
       client_1:
@@ -363,3 +615,104 @@ rounds:
         - type: "Claim"
       client_49:
         - type: "Claim"
+      client_50:
+        - type: "Claim"
+      client_51:
+        - type: "Claim"
+      client_52:
+        - type: "Claim"
+      client_53:
+        - type: "Claim"
+      client_54:
+        - type: "Claim"
+      client_55:
+        - type: "Claim"
+      client_56:
+        - type: "Claim"
+      client_57:
+        - type: "Claim"
+      client_58:
+        - type: "Claim"
+      client_59:
+        - type: "Claim"
+      client_60:
+        - type: "Claim"
+      client_61:
+        - type: "Claim"
+      client_62:
+        - type: "Claim"
+      client_63:
+        - type: "Claim"
+      client_64:
+        - type: "Claim"
+      client_65:
+        - type: "Claim"
+      client_66:
+        - type: "Claim"
+      client_67:
+        - type: "Claim"
+      client_68:
+        - type: "Claim"
+      client_69:
+        - type: "Claim"
+      client_70:
+        - type: "Claim"
+      client_71:
+        - type: "Claim"
+      client_72:
+        - type: "Claim"
+      client_73:
+        - type: "Claim"
+      client_74:
+        - type: "Claim"
+      client_75:
+        - type: "Claim"
+      client_76:
+        - type: "Claim"
+      client_77:
+        - type: "Claim"
+      client_78:
+        - type: "Claim"
+      client_79:
+        - type: "Claim"
+      client_80:
+        - type: "Claim"
+      client_81:
+        - type: "Claim"
+      client_82:
+        - type: "Claim"
+      client_83:
+        - type: "Claim"
+      client_84:
+        - type: "Claim"
+      client_85:
+        - type: "Claim"
+      client_86:
+        - type: "Claim"
+      client_87:
+        - type: "Claim"
+      client_88:
+        - type: "Claim"
+      client_89:
+        - type: "Claim"
+      client_90:
+        - type: "Claim"
+      client_91:
+        - type: "Claim"
+      client_92:
+        - type: "Claim"
+      client_93:
+        - type: "Claim"
+      client_94:
+        - type: "Claim"
+      client_95:
+        - type: "Claim"
+      client_96:
+        - type: "Claim"
+      client_97:
+        - type: "Claim"
+      client_98:
+        - type: "Claim"
+      client_99:
+        - type: "Claim"
+

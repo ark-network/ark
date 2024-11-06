@@ -66,11 +66,22 @@ func main() {
 	}
 
 	aspUrl := *serverAddress
+	startedLocally := false
 	if aspUrl == "" {
 		if err := startAspLocally(*simulation); err != nil {
 			log.Fatalf("Error starting ASP server: %v", err)
 		}
 		aspUrl = defaultAspUrl
+		startedLocally = true
+	}
+
+	if startedLocally {
+		defer func() {
+			log.Info("Stopping ASP server...")
+			if _, err := utils.RunCommand("docker-compose", "-f", composePath, "down", "-v"); err != nil {
+				log.Errorf("Error stopping ASP server: %v", err)
+			}
+		}()
 	}
 
 	aspUrlParsed := &url.URL{
@@ -117,6 +128,7 @@ func main() {
 func startServer() {
 	http.HandleFunc("/address", addressHandler)
 	http.HandleFunc("/faucet", faucetHandler)
+	http.HandleFunc("/log", logHandler)
 	log.Infoln("Orchestrator HTTP server running on port 9000")
 	if err := http.ListenAndServe(":9000", nil); err != nil {
 		log.Fatalf("Orchestrator server failed: %v", err)
@@ -169,10 +181,41 @@ func faucetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := utils.RunCommand("nigiri", "faucet", req.Address, fmt.Sprintf("%.8f", req.Amount)); err != nil {
+	if _, err := utils.RunCommand("nigiri", "faucet", req.Address, req.Amount); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Errorf("Error running faucet command: %v", err)
 		return
+	}
+
+	log.Infof("Faucet sent %s to %s", req.Amount, req.Address)
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func logHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		ClientID string `json:"client_id"`
+		Type     string `json:"type"`
+		Message  string `json:"message"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Errorf("Error decoding log request: %v", err)
+		return
+	}
+
+	logMsg := fmt.Sprintf("Client %s: %s", req.ClientID, req.Message)
+	if req.Type == "Error" {
+		log.Warnln(logMsg)
+	}
+	if req.Type == "Info" {
+		log.Infoln(logMsg)
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -434,13 +477,38 @@ func startClients(subnetIDsEnv, securityGroupIDsEnv string, clientConfigs []Clie
 				},
 			}
 
-			result, err := ecsClient.RunTask(context.TODO(), runTaskInput)
-			if err != nil {
-				return fmt.Errorf("failed to start client %s: %v", clientID, err)
+			var result *ecs.RunTaskOutput
+			backoff := 2 * time.Second
+			for i := 0; i < 5; i++ {
+				result, err = ecsClient.RunTask(context.TODO(), runTaskInput)
+				if err != nil {
+					return fmt.Errorf("failed to start client %s: %v", clientID, err)
+				}
+
+				if len(result.Failures) > 0 {
+					for _, failure := range result.Failures {
+						log.Warnf(
+							"Failed to start client %s: %s, %s",
+							clientID,
+							aws.ToString(failure.Reason),
+							aws.ToString(failure.Detail),
+						)
+					}
+					time.Sleep(backoff)
+					backoff *= 2
+					continue
+				}
+
+				if len(result.Tasks) > 0 {
+					break
+				}
+				log.Warnf("No tasks created for client %s, retrying... (%d/5)", clientID, i+1)
+				time.Sleep(backoff)
+				backoff *= 2
 			}
 
 			if len(result.Tasks) == 0 {
-				return fmt.Errorf("no tasks created for client %s", clientID)
+				return fmt.Errorf("no tasks created for client %s after 5 attempts", clientID)
 			}
 
 			taskArn := *result.Tasks[0].TaskArn

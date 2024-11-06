@@ -222,6 +222,12 @@ func (c *Client) sendAsyncHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	logMsg := fmt.Sprintf("Client %s sent async %f BTC to %s", c.ID, req.Amount, req.ToAddress)
+	log.Infoln(logMsg)
+	if err := c.sendLogToOrchestrator(logMsg, "Info"); err != nil {
+		log.Errorf("Failed to send log to orchestrator: %v", err)
+	}
+
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -279,7 +285,7 @@ func (c *Client) onboard(orchestratorUrl string, amount float64) error {
 		return err
 	}
 
-	resp, err := http.Post(fmt.Sprintf("http://%s/address", orchestratorUrl),
+	resp, err := http.Post(fmt.Sprintf("http://%s/faucet", orchestratorUrl),
 		"application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return err
@@ -297,10 +303,15 @@ func (c *Client) onboard(orchestratorUrl string, amount float64) error {
 
 	_, err = c.ArkClient.Settle(ctx)
 	if err != nil {
-		return fmt.Errorf("client %s failed to onboard: %v", c.ID, err)
+		return fmt.Errorf("client %s failed to settle onboard: %v", c.ID, err)
 	}
 
-	log.Infof("Client %s onboarded successfully with %f BTC", c.ID, amount)
+	logMsg := fmt.Sprintf("Client %s onboarded successfully with %f BTC", c.ID, amount)
+	log.Infoln(logMsg)
+	if err := c.sendLogToOrchestrator(logMsg, "Info"); err != nil {
+		log.Errorf("Failed to send log to orchestrator: %v", err)
+	}
+
 	return nil
 }
 
@@ -312,7 +323,11 @@ func (c *Client) claim() error {
 		return fmt.Errorf("client %s failed to claim funds: %v", c.ID, err)
 	}
 
-	log.Infof("Client %s claimed funds, txID: %v", c.ID, txID)
+	logMsg := fmt.Sprintf("Client %s claimed funds, txID: %v", c.ID, txID)
+	log.Infoln(logMsg)
+	if err := c.sendLogToOrchestrator(logMsg, "Info"); err != nil {
+		log.Errorf("Failed to send log to orchestrator: %v", err)
+	}
 	return nil
 }
 
@@ -322,4 +337,36 @@ func (c *Client) handleSignals() {
 	<-sigs
 	log.Info("Shutting down client...")
 	c.cancel()
+}
+
+func (c *Client) sendLogToOrchestrator(message, logType string) error {
+	payload := struct {
+		ClientID string `json:"client_id"`
+		Type     string `json:"type"`
+		Message  string `json:"message"`
+	}{
+		ClientID: c.ID,
+		Type:     logType,
+		Message:  message,
+	}
+
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	resp, err := http.Post(fmt.Sprintf("http://%s/log", orchestratorUrl),
+		"application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var body map[string]interface{}
+		_ = json.NewDecoder(resp.Body).Decode(&body)
+		return fmt.Errorf("failed to send log to orchestrator: status=%d, body=%v", resp.StatusCode, body)
+	}
+
+	return nil
 }
