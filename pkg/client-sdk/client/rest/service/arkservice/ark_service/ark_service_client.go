@@ -250,7 +250,7 @@ func (a *Client) ArkServiceGetEventStream(params *ArkServiceGetEventStreamParams
 	op := &runtime.ClientOperation{
 		ID:                 "ArkService_GetEventStream",
 		Method:             "GET",
-		PathPattern:        "/v1/round/events",
+		PathPattern:        "/v1/events",
 		ProducesMediaTypes: []string{"application/json"},
 		ConsumesMediaTypes: []string{"application/json"},
 		Schemes:            []string{"http"},

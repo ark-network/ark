@@ -241,35 +241,116 @@ func (a *restClient) SubmitSignedForfeitTxs(
 func (a *restClient) GetEventStream(
 	ctx context.Context, paymentID string,
 ) (<-chan client.RoundEventChannel, func(), error) {
-	ctx, cancel := context.WithTimeout(ctx, a.requestTimeout)
+	ctx, cancel := context.WithCancel(ctx)
 	eventsCh := make(chan client.RoundEventChannel)
 
-	go func(payID string, eventsCh chan client.RoundEventChannel) {
-		ticker := time.NewTicker(300 * time.Millisecond)
-		defer close(eventsCh)
+	go func() {
+		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
+		defer close(eventsCh)
 
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				event, err := a.Ping(ctx, payID)
+				resp, err := a.svc.ArkServiceGetEventStream(
+					ark_service.NewArkServiceGetEventStreamParams(),
+				)
 				if err != nil {
-					eventsCh <- client.RoundEventChannel{
-						Err: err,
-					}
+					eventsCh <- client.RoundEventChannel{Err: err}
 					return
 				}
 
-				if event != nil {
+				payload := resp.Payload
+
+				// Handle different event types
+				if e := payload.Result.RoundFailed; e != nil {
 					eventsCh <- client.RoundEventChannel{
-						Event: event,
+						Event: client.RoundFailedEvent{
+							ID:     e.ID,
+							Reason: e.Reason,
+						},
 					}
+					continue
+				}
+
+				if e := payload.Result.RoundFinalization; e != nil {
+					tree := treeFromProto{e.VtxoTree}.parse()
+
+					minRelayFeeRate, err := strconv.Atoi(e.MinRelayFeeRate)
+					if err != nil {
+						eventsCh <- client.RoundEventChannel{Err: err}
+						return
+					}
+
+					eventsCh <- client.RoundEventChannel{
+						Event: client.RoundFinalizationEvent{
+							ID:              e.ID,
+							Tx:              e.RoundTx,
+							Tree:            tree,
+							Connectors:      e.Connectors,
+							MinRelayFeeRate: chainfee.SatPerKVByte(minRelayFeeRate),
+						},
+					}
+					continue
+				}
+
+				if e := payload.Result.RoundFinalized; e != nil {
+					eventsCh <- client.RoundEventChannel{
+						Event: client.RoundFinalizedEvent{
+							ID:   e.ID,
+							Txid: e.RoundTxid,
+						},
+					}
+					continue
+				}
+
+				if e := payload.Result.RoundSigning; e != nil {
+					pubkeys := make([]*secp256k1.PublicKey, 0, len(e.CosignersPubkeys))
+					for _, pubkey := range e.CosignersPubkeys {
+						p, err := hex.DecodeString(pubkey)
+						if err != nil {
+							eventsCh <- client.RoundEventChannel{Err: err}
+							return
+						}
+						pk, err := secp256k1.ParsePubKey(p)
+						if err != nil {
+							eventsCh <- client.RoundEventChannel{Err: err}
+							return
+						}
+						pubkeys = append(pubkeys, pk)
+					}
+
+					eventsCh <- client.RoundEventChannel{
+						Event: client.RoundSigningStartedEvent{
+							ID:                  e.ID,
+							UnsignedTree:        treeFromProto{e.UnsignedVtxoTree}.parse(),
+							CosignersPublicKeys: pubkeys,
+							UnsignedRoundTx:     e.UnsignedRoundTx,
+						},
+					}
+					continue
+				}
+
+				if e := payload.Result.RoundSigningNoncesGenerated; e != nil {
+					reader := hex.NewDecoder(strings.NewReader(e.TreeNonces))
+					nonces, err := bitcointree.DecodeNonces(reader)
+					if err != nil {
+						eventsCh <- client.RoundEventChannel{Err: err}
+						return
+					}
+					eventsCh <- client.RoundEventChannel{
+						Event: client.RoundSigningNoncesGeneratedEvent{
+							ID:     e.ID,
+							Nonces: nonces,
+						},
+					}
+					continue
 				}
 			}
 		}
-	}(paymentID, eventsCh)
+	}()
 
 	return eventsCh, cancel, nil
 }
