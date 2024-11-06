@@ -54,7 +54,7 @@ func TestMain(m *testing.M) {
 
 	code := m.Run()
 
-	_, err = utils.RunCommand("docker", "compose", "-f", composePath, "down")
+	_, err = utils.RunCommand("docker", "compose", "-f", composePath, "down", "-v")
 	if err != nil {
 		fmt.Printf("error stopping docker-compose: %s", err)
 		os.Exit(1)

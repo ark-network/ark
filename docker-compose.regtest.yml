@@ -31,15 +31,15 @@ services:
       - ARK_ROUND_INTERVAL=10
       - ARK_NETWORK=liquidregtest
       - ARK_LOG_LEVEL=5
-      - ARK_ESPLORA_URL=http://chopsticks-liquid:3000
-      - ARK_ROUND_LIFETIME=20
-      - ARK_SCHEDULER_TYPE=block
+      - ARK_ROUND_LIFETIME=10
       - ARK_DB_TYPE=sqlite
       - ARK_TX_BUILDER_TYPE=covenant
       - ARK_PORT=6060
       - ARK_NO_TLS=true
       - ARK_NO_MACAROONS=true
       - ARK_DATADIR=/app/data
+      - ARK_ESPLORA_URL=http://chopsticks-liquid:3000
+      - ARK_SCHEDULER_TYPE=block
     ports:
       - "6060:6060"
     volumes:

@@ -1670,10 +1670,13 @@ func (a *covenantlessArkClient) handleRoundSigningNoncesGenerated(
 		return err
 	}
 
+	pk := hex.EncodeToString(ephemeralKey.PubKey().SerializeCompressed())
+	sigTimeStart := time.Now()
 	sigs, err := signerSession.Sign()
 	if err != nil {
 		return err
 	}
+	log.Infof("for key %v signing took %v", pk, time.Since(sigTimeStart))
 
 	if err := a.arkClient.client.SubmitTreeSignatures(
 		ctx,
