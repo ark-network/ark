@@ -2590,7 +2590,7 @@ func vtxosToTxsCovenantless(
 				Type:      types.TxReceived,
 				CreatedAt: v.CreatedAt,
 			})
-		} else if _, ok := ignoreVtxosByRound[v.Txid]; !ok {
+		} else if _, ok := ignoreVtxosByRound[v.RoundTxid]; !ok {
 			txs = append(txs, types.Transaction{
 				TransactionKey: types.TransactionKey{
 					RoundTxid: v.RoundTxid,
