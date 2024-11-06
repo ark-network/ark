@@ -33,3 +33,16 @@ push-to-ecr:
 build-client:
 	@echo "Building Docker image without pushing to ECR..."
 	./script/build_and_push.sh -a $(AWS_ACCOUNT_ID) -r $(AWS_REGION) -e $(ECR_REPOSITORY_NAME) -i $(IMAGE_NAME) -d $(DOCKERFILE_PATH) -c $(BUILD_CONTEXT) --no-push
+
+## run-remote: Run simulation on remote server
+run-remote:
+	@echo "Running simulation on remote server..."
+	@if [ -z "$(SUBNET_IDS)" ]; then \
+		echo "Error: SUBNET_IDS is not set. You can find this in CloudFormation outputs."; \
+		exit 1; \
+	fi
+	@if [ -z "$(SECURITY_GROUP_IDS)" ]; then \
+		echo "Error: SECURITY_GROUP_IDS is not set. You can find this in CloudFormation outputs."; \
+		exit 1; \
+	fi
+	go run ./remote/orchestrator/main.go

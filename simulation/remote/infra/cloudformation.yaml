@@ -327,8 +327,8 @@ Resources:
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      Cpu: '512'
-      Memory: '1024'
+      Cpu: '1024'
+      Memory: '2048'
       ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
       TaskRoleArn: !GetAtt ECSTaskExecutionRole.Arn
       ContainerDefinitions:
