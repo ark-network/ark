@@ -1,10 +1,14 @@
 package restclient
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -22,19 +26,21 @@ import (
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
+	log "github.com/sirupsen/logrus"
 )
 
 type restClient struct {
+	serverURL      string
 	svc            ark_service.ClientService
 	requestTimeout time.Duration
 	treeCache      *utils.Cache[tree.CongestionTree]
 }
 
-func NewClient(aspUrl string) (client.ASPClient, error) {
-	if len(aspUrl) <= 0 {
+func NewClient(serverURL string) (client.ASPClient, error) {
+	if len(serverURL) <= 0 {
 		return nil, fmt.Errorf("missing asp url")
 	}
-	svc, err := newRestClient(aspUrl)
+	svc, err := newRestClient(serverURL)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +48,7 @@ func NewClient(aspUrl string) (client.ASPClient, error) {
 	reqTimeout := 15 * time.Second
 	treeCache := utils.NewCache[tree.CongestionTree]()
 
-	return &restClient{svc, reqTimeout, treeCache}, nil
+	return &restClient{serverURL, svc, reqTimeout, treeCache}, nil
 }
 
 func (a *restClient) GetInfo(
@@ -220,119 +226,142 @@ func (a *restClient) SubmitSignedForfeitTxs(
 	return err
 }
 
-func (a *restClient) GetEventStream(
+func (c *restClient) GetEventStream(
 	ctx context.Context, paymentID string,
 ) (<-chan client.RoundEventChannel, func(), error) {
-	ctx, cancel := context.WithTimeout(ctx, a.requestTimeout)
 	eventsCh := make(chan client.RoundEventChannel)
 
 	go func() {
-		defer close(eventsCh)
+		httpClient := &http.Client{Timeout: time.Second * 0}
+
+		resp, err := httpClient.Get(fmt.Sprintf("%s/v1/events", c.serverURL))
+		if err != nil {
+			eventsCh <- client.RoundEventChannel{
+				Err: fmt.Errorf("failed to fetch round event stream: %s", err),
+			}
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			eventsCh <- client.RoundEventChannel{
+				Err: fmt.Errorf("received unexpected status %d code when fetching round event stream", resp.StatusCode),
+			}
+			return
+		}
+
+		reader := bufio.NewReader(resp.Body)
 
 		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				resp, err := a.svc.ArkServiceGetEventStream(
-					ark_service.NewArkServiceGetEventStreamParams(),
-				)
-				if err != nil {
-					eventsCh <- client.RoundEventChannel{Err: err}
+			chunk, err := reader.ReadBytes('\n')
+			if err != nil {
+				// Stream ended
+				if err == io.EOF {
 					return
 				}
+				log.WithError(err).Warn("failed to read from round event stream")
+				return
+			}
 
-				payload := resp.Payload
+			chunk = bytes.Trim(chunk, "\n")
+			resp := ark_service.ArkServiceGetEventStreamOKBody{}
+			if err := json.Unmarshal(chunk, &resp); err != nil {
+				eventsCh <- client.RoundEventChannel{
+					Err: fmt.Errorf("failed to parse message from round event stream: %s", err),
+				}
+				return
+			}
 
-				// Handle different event types
-				if e := payload.Result.RoundFailed; e != nil {
-					eventsCh <- client.RoundEventChannel{
-						Event: client.RoundFailedEvent{
-							ID:     e.ID,
-							Reason: e.Reason,
-						},
-					}
-					continue
+			emptyResp := ark_service.ArkServiceGetEventStreamOKBody{}
+			if resp == emptyResp {
+				continue
+			}
+
+			if resp.Error != nil {
+				eventsCh <- client.RoundEventChannel{
+					Err: fmt.Errorf("received error %d: %s", resp.Error.Code, resp.Error.Message),
+				}
+				continue
+			}
+
+			// Handle different event types
+			var event client.RoundEvent
+			var _err error
+			switch {
+			case resp.Result.RoundFailed != nil:
+				e := resp.Result.RoundFailed
+				event = client.RoundFailedEvent{
+					ID:     e.ID,
+					Reason: e.Reason,
+				}
+			case resp.Result.RoundFinalization != nil:
+				e := resp.Result.RoundFinalization
+				tree := treeFromProto{e.VtxoTree}.parse()
+
+				minRelayFeeRate, err := strconv.Atoi(e.MinRelayFeeRate)
+				if err != nil {
+					_err = err
+					break
 				}
 
-				if e := payload.Result.RoundFinalization; e != nil {
-					tree := treeFromProto{e.VtxoTree}.parse()
-
-					minRelayFeeRate, err := strconv.Atoi(e.MinRelayFeeRate)
+				event = client.RoundFinalizationEvent{
+					ID:              e.ID,
+					Tx:              e.RoundTx,
+					Tree:            tree,
+					Connectors:      e.Connectors,
+					MinRelayFeeRate: chainfee.SatPerKVByte(minRelayFeeRate),
+				}
+			case resp.Result.RoundFinalized != nil:
+				e := resp.Result.RoundFinalized
+				event = client.RoundFinalizedEvent{
+					ID:   e.ID,
+					Txid: e.RoundTxid,
+				}
+			case resp.Result.RoundSigning != nil:
+				e := resp.Result.RoundSigning
+				pubkeys := make([]*secp256k1.PublicKey, 0, len(e.CosignersPubkeys))
+				for _, pubkey := range e.CosignersPubkeys {
+					p, err := hex.DecodeString(pubkey)
 					if err != nil {
-						eventsCh <- client.RoundEventChannel{Err: err}
-						return
+						_err = err
+						break
 					}
-
-					eventsCh <- client.RoundEventChannel{
-						Event: client.RoundFinalizationEvent{
-							ID:              e.ID,
-							Tx:              e.RoundTx,
-							Tree:            tree,
-							Connectors:      e.Connectors,
-							MinRelayFeeRate: chainfee.SatPerKVByte(minRelayFeeRate),
-						},
-					}
-					continue
-				}
-
-				if e := payload.Result.RoundFinalized; e != nil {
-					eventsCh <- client.RoundEventChannel{
-						Event: client.RoundFinalizedEvent{
-							ID:   e.ID,
-							Txid: e.RoundTxid,
-						},
-					}
-					continue
-				}
-
-				if e := payload.Result.RoundSigning; e != nil {
-					pubkeys := make([]*secp256k1.PublicKey, 0, len(e.CosignersPubkeys))
-					for _, pubkey := range e.CosignersPubkeys {
-						p, err := hex.DecodeString(pubkey)
-						if err != nil {
-							eventsCh <- client.RoundEventChannel{Err: err}
-							return
-						}
-						pk, err := secp256k1.ParsePubKey(p)
-						if err != nil {
-							eventsCh <- client.RoundEventChannel{Err: err}
-							return
-						}
-						pubkeys = append(pubkeys, pk)
-					}
-
-					eventsCh <- client.RoundEventChannel{
-						Event: client.RoundSigningStartedEvent{
-							ID:                  e.ID,
-							UnsignedTree:        treeFromProto{e.UnsignedVtxoTree}.parse(),
-							CosignersPublicKeys: pubkeys,
-							UnsignedRoundTx:     e.UnsignedRoundTx,
-						},
-					}
-					continue
-				}
-
-				if e := payload.Result.RoundSigningNoncesGenerated; e != nil {
-					reader := hex.NewDecoder(strings.NewReader(e.TreeNonces))
-					nonces, err := bitcointree.DecodeNonces(reader)
+					pk, err := secp256k1.ParsePubKey(p)
 					if err != nil {
-						eventsCh <- client.RoundEventChannel{Err: err}
-						return
+						_err = err
+						break
 					}
-					eventsCh <- client.RoundEventChannel{
-						Event: client.RoundSigningNoncesGeneratedEvent{
-							ID:     e.ID,
-							Nonces: nonces,
-						},
-					}
-					continue
+					pubkeys = append(pubkeys, pk)
 				}
+
+				event = client.RoundSigningStartedEvent{
+					ID:                  e.ID,
+					UnsignedTree:        treeFromProto{e.UnsignedVtxoTree}.parse(),
+					CosignersPublicKeys: pubkeys,
+					UnsignedRoundTx:     e.UnsignedRoundTx,
+				}
+			case resp.Result.RoundSigningNoncesGenerated != nil:
+				e := resp.Result.RoundSigningNoncesGenerated
+				reader := hex.NewDecoder(strings.NewReader(e.TreeNonces))
+				nonces, err := bitcointree.DecodeNonces(reader)
+				if err != nil {
+					_err = err
+					break
+				}
+				event = client.RoundSigningNoncesGeneratedEvent{
+					ID:     e.ID,
+					Nonces: nonces,
+				}
+			}
+
+			eventsCh <- client.RoundEventChannel{
+				Event: event,
+				Err:   _err,
 			}
 		}
 	}()
 
-	return eventsCh, cancel, nil
+	return eventsCh, func() {}, nil
 }
 
 func (a *restClient) Ping(
@@ -638,48 +667,84 @@ func (t treeFromProto) parse() tree.CongestionTree {
 }
 
 func (c *restClient) GetTransactionsStream(ctx context.Context) (<-chan client.TransactionEvent, func(), error) {
-	ctx, cancel := context.WithTimeout(ctx, c.requestTimeout)
 	eventsCh := make(chan client.TransactionEvent)
 
 	go func() {
-		ticker := time.NewTicker(1 * time.Second)
-		defer close(eventsCh)
-		defer ticker.Stop()
+		httpClient := &http.Client{Timeout: time.Second * 0}
 
+		resp, err := httpClient.Get(fmt.Sprintf("%s/v1/transactions", c.serverURL))
+		if err != nil {
+			eventsCh <- client.TransactionEvent{Err: err}
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			eventsCh <- client.TransactionEvent{
+				Err: fmt.Errorf("unexpected status code: %d", resp.StatusCode),
+			}
+			return
+		}
+
+		reader := bufio.NewReader(resp.Body)
 		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				resp, err := c.svc.ArkServiceGetTransactionsStream(ark_service.NewArkServiceGetTransactionsStreamParams())
-				if err != nil {
-					eventsCh <- client.TransactionEvent{Err: err}
+			chunk, err := reader.ReadBytes('\n')
+			if err != nil {
+				// Stream ended
+				if err == io.EOF {
 					return
 				}
+				eventsCh <- client.TransactionEvent{
+					Err: fmt.Errorf("failed to read from transaction stream: %s", err),
+				}
+				return
+			}
 
-				if resp.Payload.Result.Round != nil {
-					eventsCh <- client.TransactionEvent{
-						Round: &client.RoundTransaction{
-							Txid:                 resp.Payload.Result.Round.Txid,
-							SpentVtxos:           outpointsFromRest(resp.Payload.Result.Round.SpentVtxos),
-							SpendableVtxos:       vtxosFromRest(resp.Payload.Result.Round.SpendableVtxos),
-							ClaimedBoardingUtxos: outpointsFromRest(resp.Payload.Result.Round.ClaimedBoardingUtxos),
-						},
-					}
-				} else if resp.Payload.Result.Redeem != nil {
-					eventsCh <- client.TransactionEvent{
-						Redeem: &client.RedeemTransaction{
-							Txid:           resp.Payload.Result.Redeem.Txid,
-							SpentVtxos:     outpointsFromRest(resp.Payload.Result.Redeem.SpentVtxos),
-							SpendableVtxos: vtxosFromRest(resp.Payload.Result.Redeem.SpendableVtxos),
-						},
-					}
+			chunk = bytes.Trim(chunk, "\n")
+			resp := ark_service.ArkServiceGetTransactionsStreamOK{}
+			if err := json.Unmarshal(chunk, &resp); err != nil {
+				eventsCh <- client.TransactionEvent{
+					Err: fmt.Errorf("failed to parse message from transaction stream: %s", err),
+				}
+				return
+			}
+
+			if resp.Payload == nil {
+				continue
+			}
+
+			if resp.Payload.Error != nil {
+				eventsCh <- client.TransactionEvent{
+					Err: fmt.Errorf("received error from transaction stream: %s", resp.Payload.Error.Message),
+				}
+				continue
+			}
+
+			var event client.TransactionEvent
+			if resp.Payload.Result.Round != nil {
+				event = client.TransactionEvent{
+					Round: &client.RoundTransaction{
+						Txid:                 resp.Payload.Result.Round.Txid,
+						SpentVtxos:           outpointsFromRest(resp.Payload.Result.Round.SpentVtxos),
+						SpendableVtxos:       vtxosFromRest(resp.Payload.Result.Round.SpendableVtxos),
+						ClaimedBoardingUtxos: outpointsFromRest(resp.Payload.Result.Round.ClaimedBoardingUtxos),
+					},
+				}
+			} else if resp.Payload.Result.Redeem != nil {
+				event = client.TransactionEvent{
+					Redeem: &client.RedeemTransaction{
+						Txid:           resp.Payload.Result.Redeem.Txid,
+						SpentVtxos:     outpointsFromRest(resp.Payload.Result.Redeem.SpentVtxos),
+						SpendableVtxos: vtxosFromRest(resp.Payload.Result.Redeem.SpendableVtxos),
+					},
 				}
 			}
+
+			eventsCh <- event
 		}
 	}()
 
-	return eventsCh, cancel, nil
+	return eventsCh, func() {}, nil
 }
 
 func outpointsFromRest(restOutpoints []*models.V1Outpoint) []client.Outpoint {
