@@ -820,7 +820,7 @@ func (s *covenantlessService) startFinalization() {
 	ctx := context.Background()
 	round := s.currentRound
 
-	roundRemainingDuration := time.Duration(s.roundInterval/3-1) * time.Second
+	roundRemainingDuration := time.Duration((s.roundInterval/3)*2-1) * time.Second
 	thirdOfRemainingDuration := time.Duration(roundRemainingDuration / 3)
 
 	var notes []note.Note
