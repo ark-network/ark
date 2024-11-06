@@ -223,19 +223,17 @@ func (a *restClient) SubmitSignedForfeitTxs(
 func (a *restClient) GetEventStream(
 	ctx context.Context, paymentID string,
 ) (<-chan client.RoundEventChannel, func(), error) {
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithTimeout(ctx, a.requestTimeout)
 	eventsCh := make(chan client.RoundEventChannel)
 
 	go func() {
-		ticker := time.NewTicker(100 * time.Millisecond)
-		defer ticker.Stop()
 		defer close(eventsCh)
 
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case <-ticker.C:
+			default:
 				resp, err := a.svc.ArkServiceGetEventStream(
 					ark_service.NewArkServiceGetEventStreamParams(),
 				)
