@@ -103,7 +103,7 @@ func (d *CSVSigClosure) Leaf() (*txscript.TapLeaf, error) {
 
 func (d *CSVSigClosure) Decode(script []byte) (bool, error) {
 	csvIndex := bytes.Index(
-		script, []byte{txscript.OP_CHECKSEQUENCEVERIFY, txscript.OP_DROP},
+		script, []byte{txscript.OP_CHECKSEQUENCEVERIFY, txscript.OP_VERIFY},
 	)
 	if csvIndex == -1 || csvIndex == 0 {
 		return false, nil
@@ -174,7 +174,7 @@ func encodeCsvScript(seconds uint) ([]byte, error) {
 		AddInt64(int64(sequence)).
 		AddOps([]byte{
 			txscript.OP_CHECKSEQUENCEVERIFY,
-			txscript.OP_DROP,
+			txscript.OP_VERIFY,
 		}).
 		Script()
 }

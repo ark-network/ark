@@ -139,7 +139,7 @@ func (e *Older) Script(bool) (string, error) {
 		AddInt64(int64(sequence)).
 		AddOps([]byte{
 			txscript.OP_CHECKSEQUENCEVERIFY,
-			txscript.OP_DROP,
+			txscript.OP_VERIFY,
 		}).
 		Script()
 	if err != nil {
