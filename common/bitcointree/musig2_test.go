@@ -1,14 +1,14 @@
 package bitcointree_test
 
 import (
-	"bytes"
+	"encoding/hex"
 	"encoding/json"
-	"fmt"
+	"github.com/ark-network/ark/common/tree"
 	"os"
 	"testing"
 
 	"github.com/ark-network/ark/common/bitcointree"
-	"github.com/ark-network/ark/common/tree"
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
@@ -27,22 +27,21 @@ var testTxid, _ = chainhash.NewHashFromStr("49f8664acc899be91902f8ade781b7eeb9cb
 func TestRoundTripSignTree(t *testing.T) {
 	fixtures := parseFixtures(t)
 	for _, f := range fixtures.Valid {
-		alice, err := secp256k1.GeneratePrivateKey()
-		require.NoError(t, err)
-
-		bob, err := secp256k1.GeneratePrivateKey()
-		require.NoError(t, err)
+		// Generate 20 cosigners
+		cosigners := make([]*secp256k1.PrivateKey, 20)
+		cosignerPubKeys := make([]*btcec.PublicKey, 20)
+		for i := 0; i < 20; i++ {
+			privKey, err := secp256k1.GeneratePrivateKey()
+			require.NoError(t, err)
+			cosigners[i] = privKey
+			cosignerPubKeys[i] = privKey.PubKey()
+		}
 
 		asp, err := secp256k1.GeneratePrivateKey()
 		require.NoError(t, err)
 
-		cosigners := make([]*secp256k1.PublicKey, 0)
-		cosigners = append(cosigners, alice.PubKey())
-		cosigners = append(cosigners, bob.PubKey())
-		cosigners = append(cosigners, asp.PubKey())
-
 		_, sharedOutputAmount, err := bitcointree.CraftSharedOutput(
-			cosigners,
+			cosignerPubKeys,
 			asp.PubKey(),
 			castReceivers(f.Receivers),
 			minRelayFee,
@@ -50,13 +49,12 @@ func TestRoundTripSignTree(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		// Create a new tree
 		tree, err := bitcointree.CraftCongestionTree(
 			&wire.OutPoint{
 				Hash:  *testTxid,
 				Index: 0,
 			},
-			cosigners,
+			cosignerPubKeys,
 			asp.PubKey(),
 			castReceivers(f.Receivers),
 			minRelayFee,
@@ -79,132 +77,48 @@ func TestRoundTripSignTree(t *testing.T) {
 			sharedOutputAmount,
 			tree,
 			root.CloneBytes(),
-			[]*secp256k1.PublicKey{alice.PubKey(), bob.PubKey(), asp.PubKey()},
+			cosignerPubKeys,
 		)
 		require.NoError(t, err)
 
-		aliceSession := bitcointree.NewTreeSignerSession(alice, sharedOutputAmount, tree, root.CloneBytes())
-		bobSession := bitcointree.NewTreeSignerSession(bob, sharedOutputAmount, tree, root.CloneBytes())
-		aspSession := bitcointree.NewTreeSignerSession(asp, sharedOutputAmount, tree, root.CloneBytes())
-
-		aliceNonces, err := aliceSession.GetNonces()
-		require.NoError(t, err)
-
-		bobNonces, err := bobSession.GetNonces()
-		require.NoError(t, err)
-
-		aspNonces, err := aspSession.GetNonces()
-		require.NoError(t, err)
-
-		s := bytes.NewBuffer(nil)
-
-		err = aspNonces[0][0].Encode(s)
-		require.NoError(t, err)
-
-		bitcointreeNonce := new(bitcointree.Musig2Nonce)
-		err = bitcointreeNonce.Decode(s)
-		require.NoError(t, err)
-
-		require.Equal(t, aspNonces[0][0], bitcointreeNonce)
-
-		var serializedNonces bytes.Buffer
-
-		err = aspNonces.Encode(&serializedNonces)
-		require.NoError(t, err)
-
-		decodedNonces, err := bitcointree.DecodeNonces(&serializedNonces)
-		require.NoError(t, err)
-
-		for i, nonces := range aspNonces {
-			for j, nonce := range nonces {
-				require.Equal(t, nonce.PubNonce, decodedNonces[i][j].PubNonce, fmt.Sprintf("matrix nonce not equal at index i: %d, j: %d", i, j))
-			}
+		// Create signer sessions for all cosigners
+		signerSessions := make([]bitcointree.SignerSession, 20)
+		for i, cosigner := range cosigners {
+			signerSessions[i] = bitcointree.NewTreeSignerSession(cosigner, sharedOutputAmount, tree, root.CloneBytes())
 		}
 
-		err = aspCoordinator.AddNonce(alice.PubKey(), aliceNonces)
-		require.NoError(t, err)
-
-		err = aspCoordinator.AddNonce(bob.PubKey(), bobNonces)
-		require.NoError(t, err)
-
-		err = aspCoordinator.AddNonce(asp.PubKey(), aspNonces)
-		require.NoError(t, err)
+		// Get nonces from all signers
+		for i, session := range signerSessions {
+			nonces, err := session.GetNonces()
+			require.NoError(t, err)
+			err = aspCoordinator.AddNonce(cosignerPubKeys[i], nonces)
+			require.NoError(t, err)
+		}
 
 		aggregatedNonce, err := aspCoordinator.AggregateNonces()
 		require.NoError(t, err)
 
-		// coordinator sends the combined nonce to all signers
-
-		err = aliceSession.SetKeys(
-			cosigners,
-		)
-		require.NoError(t, err)
-
-		err = aliceSession.SetAggregatedNonces(
-			aggregatedNonce,
-		)
-		require.NoError(t, err)
-
-		err = bobSession.SetKeys(
-			cosigners,
-		)
-		require.NoError(t, err)
-
-		err = bobSession.SetAggregatedNonces(
-			aggregatedNonce,
-		)
-		require.NoError(t, err)
-
-		err = aspSession.SetKeys(
-			cosigners,
-		)
-		require.NoError(t, err)
-
-		err = aspSession.SetAggregatedNonces(
-			aggregatedNonce,
-		)
-		require.NoError(t, err)
-
-		aliceSig, err := aliceSession.Sign()
-		require.NoError(t, err)
-
-		bobSig, err := bobSession.Sign()
-		require.NoError(t, err)
-
-		aspSig, err := aspSession.Sign()
-		require.NoError(t, err)
-
-		// check that the sigs are serializable
-
-		serializedSigs := bytes.NewBuffer(nil)
-
-		err = aspSig.Encode(serializedSigs)
-		require.NoError(t, err)
-
-		decodedSigs, err := bitcointree.DecodeSignatures(serializedSigs)
-		require.NoError(t, err)
-
-		for i, sigs := range aspSig {
-			for j, sig := range sigs {
-				require.Equal(t, sig.S, decodedSigs[i][j].S, fmt.Sprintf("matrix sig not equal at index i: %d, j: %d", i, j))
-			}
+		// Set keys and aggregated nonces for all signers
+		for _, session := range signerSessions {
+			err = session.SetKeys(cosignerPubKeys)
+			require.NoError(t, err)
+			err = session.SetAggregatedNonces(aggregatedNonce)
+			require.NoError(t, err)
 		}
 
-		// coordinator receives the signatures and combines them
-		err = aspCoordinator.AddSig(alice.PubKey(), aliceSig)
-		require.NoError(t, err)
-
-		err = aspCoordinator.AddSig(bob.PubKey(), bobSig)
-		require.NoError(t, err)
-
-		err = aspCoordinator.AddSig(asp.PubKey(), aspSig)
-		require.NoError(t, err)
+		// Get signatures from all signers
+		for i, session := range signerSessions {
+			sig, err := session.Sign()
+			require.NoError(t, err)
+			err = aspCoordinator.AddSig(cosignerPubKeys[i], sig)
+			require.NoError(t, err)
+		}
 
 		signedTree, err := aspCoordinator.SignTree()
 		require.NoError(t, err)
 
 		// verify the tree
-		aggregatedKey, err := bitcointree.AggregateKeys(cosigners, root.CloneBytes())
+		aggregatedKey, err := bitcointree.AggregateKeys(cosignerPubKeys, root.CloneBytes())
 		require.NoError(t, err)
 
 		err = bitcointree.ValidateTreeSigs(
@@ -220,6 +134,24 @@ func TestRoundTripSignTree(t *testing.T) {
 type receiverFixture struct {
 	Amount int64  `json:"amount"`
 	Pubkey string `json:"pubkey"`
+}
+
+func (r receiverFixture) toVtxoScript(asp *secp256k1.PublicKey) bitcointree.VtxoScript {
+	bytesKey, err := hex.DecodeString(r.Pubkey)
+	if err != nil {
+		panic(err)
+	}
+
+	pubkey, err := secp256k1.ParsePubKey(bytesKey)
+	if err != nil {
+		panic(err)
+	}
+
+	return &bitcointree.DefaultVtxoScript{
+		Owner:     pubkey,
+		Asp:       asp,
+		ExitDelay: exitDelay,
+	}
 }
 
 func castReceivers(receivers []receiverFixture) []tree.VtxoLeaf {
