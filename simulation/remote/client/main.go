@@ -30,10 +30,11 @@ func main() {
 	aspUrl := os.Getenv("ASP_URL")
 	orchUrl := os.Getenv("ORCHESTRATOR_URL")
 	explorerUrl := os.Getenv("EXPLORER_URL")
+	signetAspUrl := os.Getenv("SIMNET_ASP_URL")
 	if clientID == "" {
 		log.Fatal("CLIENT_ID environment variable is required")
 	}
-	if aspUrl == "" {
+	if aspUrl == "" && signetAspUrl == "" {
 		log.Fatal("ASP_URL environment variable is required")
 	}
 	if orchUrl == "" {
@@ -43,6 +44,16 @@ func main() {
 	if explorerUrl == "" {
 		log.Fatal("EXPLORER_URL environment variable is required")
 	}
+	if signetAspUrl != "" {
+		aspUrl = signetAspUrl
+		signetExplorerUrl := os.Getenv("SIGNET_EXPLORER_URL")
+		if signetExplorerUrl == "" {
+			log.Fatal("SIGNET_EXPLORER_URL environment variable is required")
+		}
+		explorerUrl = signetExplorerUrl
+	}
+
+	log.Infof("Env vars: CLIENT_ID=%s, ASP_URL=%s, ORCHESTRATOR_URL=%s, EXPLORER_URL=%s", clientID, aspUrl, orchestratorUrl, explorerUrl)
 
 	client := &Client{
 		ID: clientID,
@@ -94,10 +105,10 @@ func (c *Client) setupArkClient(explorerUrl, aspUrl string) error {
 	ctx := context.Background()
 	if err := client.Init(ctx, arksdk.InitArgs{
 		WalletType:  arksdk.SingleKeyWallet,
-		ClientType:  arksdk.GrpcClient,
+		ClientType:  arksdk.RestClient,
 		AspUrl:      aspUrl,
 		Password:    "password",
-		ExplorerURL: fmt.Sprintf("http://%s", explorerUrl),
+		ExplorerURL: explorerUrl,
 	}); err != nil {
 		return fmt.Errorf("failed to initialize wallet: %s", err)
 	}

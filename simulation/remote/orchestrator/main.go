@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -43,12 +44,17 @@ type ClientInfo struct {
 var (
 	clients   = make(map[string]*ClientInfo)
 	clientsMu sync.Mutex
+
+	sigNet bool
 )
 
 func main() {
 	simFile := flag.String("sim", simulationPath, "Path to simulation YAML file")
-	serverAddress := flag.String("server", "", "Orchestrator server address")
+	serverUrl := flag.String("asp-url", "", "ASP URL to use for the simulation")
+	signet := flag.Bool("signet", false, "Use signet")
 	flag.Parse()
+	sigNet = *signet
+	log.Infof("Signet: %v", sigNet)
 
 	subnetIDsEnv := os.Getenv("SUBNET_IDS")
 	securityGroupIDsEnv := os.Getenv("SECURITY_GROUP_IDS")
@@ -65,7 +71,7 @@ func main() {
 		log.Fatalf("Error loading simulation config: %v", err)
 	}
 
-	aspUrl := *serverAddress
+	aspUrl := *serverUrl
 	startedLocally := false
 	if aspUrl == "" {
 		if err := startAspLocally(*simulation); err != nil {
@@ -89,15 +95,17 @@ func main() {
 		Host:   aspUrl,
 	}
 
-	if err := utils.SetupServerWalletCovenantless(aspUrlParsed.String(), simulation.Server.InitialFunding); err != nil {
-		log.Fatal(err)
+	if startedLocally {
+		if err := utils.SetupServerWalletCovenantless(aspUrlParsed.String(), simulation.Server.InitialFunding); err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	// Start the orchestrator HTTP server
 	go startServer()
 
 	// Start clients
-	err = startClients(subnetIDsEnv, securityGroupIDsEnv, simulation.Clients)
+	err = startClients(aspUrl, subnetIDsEnv, securityGroupIDsEnv, simulation.Clients)
 	if err != nil {
 		log.Fatalf("Error starting clients: %v", err)
 	}
@@ -181,10 +189,18 @@ func faucetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := utils.RunCommand("nigiri", "faucet", req.Address, req.Amount); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Errorf("Error running faucet command: %v", err)
-		return
+	if !sigNet {
+		if _, err := utils.RunCommand("nigiri", "faucet", req.Address, req.Amount); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Errorf("Error running faucet command: %v", err)
+			return
+		}
+	} else {
+		if err := faucetSignet(req.Address, req.Amount); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Errorf("Error running faucet command: %v", err)
+			return
+		}
 	}
 
 	log.Infof("Faucet sent %s to %s", req.Amount, req.Address)
@@ -351,7 +367,7 @@ func sendRequest(url string, payload interface{}) error {
 }
 
 // startClients launches each client as an AWS Fargate task.
-func startClients(subnetIDsEnv, securityGroupIDsEnv string, clientConfigs []ClientConfig) error {
+func startClients(aspUrl, subnetIDsEnv, securityGroupIDsEnv string, clientConfigs []ClientConfig) error {
 	awsRegion := "eu-central-1"
 	cfg, err := config.LoadDefaultConfig(
 		context.TODO(),
@@ -449,16 +465,30 @@ func startClients(subnetIDsEnv, securityGroupIDsEnv string, clientConfigs []Clie
 		client := client // Capture range variable
 		g.Go(func() error {
 			clientID := client.ID
+			clientEnvVars := []ecsTypes.KeyValuePair{
+				{
+					Name:  aws.String("CLIENT_ID"),
+					Value: aws.String(clientID),
+				},
+			}
+			if sigNet {
+				clientEnvVars = append(
+					clientEnvVars,
+					ecsTypes.KeyValuePair{
+						Name:  aws.String("SIMNET_ASP_URL"),
+						Value: aws.String(aspUrl),
+					},
+					ecsTypes.KeyValuePair{
+						Name:  aws.String("SIGNET_EXPLORER_URL"),
+						Value: aws.String("https://mutinynet.com/api"),
+					},
+				)
+			}
 
 			// Prepare the overrides for the container
 			containerOverrides := ecsTypes.ContainerOverride{
-				Name: aws.String("ClientContainer"),
-				Environment: []ecsTypes.KeyValuePair{
-					{
-						Name:  aws.String("CLIENT_ID"),
-						Value: aws.String(clientID),
-					},
-				},
+				Name:        aws.String("ClientContainer"),
+				Environment: clientEnvVars,
 			}
 
 			runTaskInput := &ecs.RunTaskInput{
@@ -546,6 +576,7 @@ func startClients(subnetIDsEnv, securityGroupIDsEnv string, clientConfigs []Clie
 			log.Infof("Client %s successfully started and running", clientID)
 			return nil
 		})
+		time.Sleep(1 * time.Second)
 	}
 
 	// Wait for all tasks to be started
@@ -590,6 +621,7 @@ func startClients(subnetIDsEnv, securityGroupIDsEnv string, clientConfigs []Clie
 
 					if len(result.Tasks) > 0 {
 						status := aws.ToString(result.Tasks[0].LastStatus)
+						log.Infof("Client %s task status: %s", task.ClientID, status)
 						if status == "STOPPED" {
 							log.Warnf("Client %s task stopped unexpectedly", task.ClientID)
 						}
@@ -826,4 +858,84 @@ type Simulation struct {
 	} `yaml:"server"`
 	Clients []ClientConfig `json:"clients"`
 	Rounds  []Round        `json:"rounds"`
+}
+
+func faucetSignet(address, amount string) error {
+	btcFloat, _ := strconv.ParseFloat(amount, 64)
+	sats := int(btcFloat * 100000000)
+	var req = struct {
+		Sats    int    `json:"sats"`
+		Address string `json:"address"`
+	}{
+		Sats:    sats,
+		Address: address,
+	}
+
+	log.Infof("Requesting %d sats from signet faucet for address %s", req.Sats, req.Address)
+
+	reqBody, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("error marshalling request: %v", err)
+	}
+
+	resp, err := http.Post("https://faucet.mutinynet.com/api/onchain", "application/json", bytes.NewBuffer(reqBody))
+	if err != nil {
+		return fmt.Errorf("error sending request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("signet faucet request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var rsp = struct {
+		TxID    string `json:"txid"`
+		Address string `json:"address"`
+	}{}
+	if err := json.NewDecoder(resp.Body).Decode(&rsp); err != nil {
+		return fmt.Errorf("error decoding response: %v", err)
+	}
+
+	// considering signet block time should be 30sec loop for 40 seconds, checking every 5 seconds
+	timeout := time.After(35 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-timeout:
+			return fmt.Errorf("transaction %s not confirmed within 40 seconds", rsp.TxID)
+		case <-ticker.C:
+			statusResp, err := http.Get(fmt.Sprintf("https://mutinynet.com/api/tx/%s", rsp.TxID))
+			if err != nil {
+				return fmt.Errorf("error getting transaction status: %v", err)
+			}
+
+			if statusResp.StatusCode != http.StatusOK {
+				body, _ := io.ReadAll(statusResp.Body)
+				statusResp.Body.Close()
+				return fmt.Errorf("signet get tx request failed with status %d: %s", statusResp.StatusCode, string(body))
+			}
+
+			var txStatus = struct {
+				TxID   string `json:"txid"`
+				Status struct {
+					Confirmed bool `json:"confirmed"`
+				} `json:"status"`
+			}{}
+			if err := json.NewDecoder(statusResp.Body).Decode(&txStatus); err != nil {
+				statusResp.Body.Close()
+				return fmt.Errorf("error decoding status response: %v", err)
+			}
+			statusResp.Body.Close()
+
+			if txStatus.Status.Confirmed {
+				log.Infof("Transaction %s confirmed", rsp.TxID)
+				return nil
+			} else {
+				log.Infof("Signet faucet transaction %s not confirmed yet", rsp.TxID)
+			}
+		}
+	}
 }

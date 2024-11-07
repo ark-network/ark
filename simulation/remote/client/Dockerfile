@@ -37,8 +37,8 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
 # Stage 2: Create the runtime image
 FROM alpine:latest
 
-# Install file command for debugging
-RUN apk add --no-cache file
+# Install necessary packages, including CA certificates
+RUN apk add --no-cache file ca-certificates
 
 # Copy the binary with a specific name
 COPY --from=builder /app/arkclient /arkclient
