@@ -116,12 +116,16 @@ func (a *adminHandler) CreateNote(ctx context.Context, req *arkv1.CreateNoteRequ
 		return nil, err
 	}
 
-	notesWithURI := make([]string, 0, len(notes))
-	for _, note := range notes {
-		notesWithURI = append(notesWithURI, fmt.Sprintf("%s://%s", a.noteUriPrefix, note))
+	if len(a.noteUriPrefix) > 0 {
+		notesWithURI := make([]string, 0, len(notes))
+		for _, note := range notes {
+			notesWithURI = append(notesWithURI, fmt.Sprintf("%s://%s", a.noteUriPrefix, note))
+		}
+
+		return &arkv1.CreateNoteResponse{Notes: notesWithURI}, nil
 	}
 
-	return &arkv1.CreateNoteResponse{Notes: notesWithURI}, nil
+	return &arkv1.CreateNoteResponse{Notes: notes}, nil
 }
 
 // convert sats to string BTC

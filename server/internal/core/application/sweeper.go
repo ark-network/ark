@@ -362,7 +362,10 @@ func (s *sweeper) createAndSendNotes(ctx context.Context, vtxosKeys []domain.Vtx
 
 		note := noteData.ToNote(signature)
 
-		notification := fmt.Sprintf("%s://%s", s.noteUriPrefix, note)
+		notification := note.String()
+		if len(s.noteUriPrefix) > 0 {
+			notification = fmt.Sprintf("%s://%s", s.noteUriPrefix, note)
+		}
 
 		for _, entity := range entities {
 			log.Debugf("sending note notification to %s", entity.NostrRecipient)

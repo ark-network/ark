@@ -169,10 +169,6 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	if len(c.NoteUriPrefix) == 0 {
-		return fmt.Errorf("missing note uri prefix")
-	}
-
 	if err := c.repoManager(); err != nil {
 		return err
 	}

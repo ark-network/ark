@@ -251,7 +251,10 @@ func createNoteAction(ctx *cli.Context) error {
 		return err
 	}
 
-	fmt.Println(notes)
+	for _, note := range notes {
+		fmt.Println(note)
+	}
+
 	return nil
 }
 

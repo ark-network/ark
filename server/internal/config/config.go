@@ -91,7 +91,6 @@ var (
 	defaultNoMacaroons         = false
 	defaultNoTLS               = true
 	defaultNostrDefaultRelays  = []string{"wss://relay.primal.net", "wss://relay.damus.io"}
-	defaultNoteUriPrefix       = "ark"
 )
 
 func LoadConfig() (*Config, error) {
@@ -115,7 +114,6 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(NoMacaroons, defaultNoMacaroons)
 	viper.SetDefault(BoardingExitDelay, defaultBoardingExitDelay)
 	viper.SetDefault(NostrDefaultRelays, defaultNostrDefaultRelays)
-	viper.SetDefault(NoteUriPrefix, defaultNoteUriPrefix)
 	net, err := getNetwork()
 	if err != nil {
 		return nil, fmt.Errorf("error while getting network: %s", err)
