@@ -231,7 +231,7 @@ func (c *restClient) GetEventStream(
 ) (<-chan client.RoundEventChannel, func(), error) {
 	eventsCh := make(chan client.RoundEventChannel)
 
-	go func() {
+	go func(eventsCh chan client.RoundEventChannel) {
 		httpClient := &http.Client{Timeout: time.Second * 0}
 
 		resp, err := httpClient.Get(fmt.Sprintf("%s/v1/events", c.serverURL))
@@ -359,7 +359,7 @@ func (c *restClient) GetEventStream(
 				Err:   _err,
 			}
 		}
-	}()
+	}(eventsCh)
 
 	return eventsCh, func() {}, nil
 }
@@ -669,7 +669,7 @@ func (t treeFromProto) parse() tree.CongestionTree {
 func (c *restClient) GetTransactionsStream(ctx context.Context) (<-chan client.TransactionEvent, func(), error) {
 	eventsCh := make(chan client.TransactionEvent)
 
-	go func() {
+	go func(eventsCh chan client.TransactionEvent) {
 		httpClient := &http.Client{Timeout: time.Second * 0}
 
 		resp, err := httpClient.Get(fmt.Sprintf("%s/v1/transactions", c.serverURL))
@@ -742,7 +742,7 @@ func (c *restClient) GetTransactionsStream(ctx context.Context) (<-chan client.T
 
 			eventsCh <- event
 		}
-	}()
+	}(eventsCh)
 
 	return eventsCh, func() {}, nil
 }
