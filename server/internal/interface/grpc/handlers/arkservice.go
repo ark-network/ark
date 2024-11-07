@@ -261,78 +261,11 @@ func (h *handler) Ping(
 		return nil, status.Error(codes.InvalidArgument, "missing payment id")
 	}
 
-	lastEvent, err := h.svc.UpdatePaymentStatus(ctx, req.GetPaymentId())
-	if err != nil {
+	if err := h.svc.UpdatePaymentStatus(ctx, req.GetPaymentId()); err != nil {
 		return nil, err
 	}
 
-	var resp *arkv1.PingResponse
-
-	switch e := lastEvent.(type) {
-	case domain.RoundFinalizationStarted:
-		resp = &arkv1.PingResponse{
-			Event: &arkv1.PingResponse_RoundFinalization{
-				RoundFinalization: &arkv1.RoundFinalizationEvent{
-					Id:              e.Id,
-					RoundTx:         e.RoundTx,
-					VtxoTree:        congestionTree(e.CongestionTree).toProto(),
-					Connectors:      e.Connectors,
-					MinRelayFeeRate: e.MinRelayFeeRate,
-				},
-			},
-		}
-	case domain.RoundFinalized:
-		resp = &arkv1.PingResponse{
-			Event: &arkv1.PingResponse_RoundFinalized{
-				RoundFinalized: &arkv1.RoundFinalizedEvent{
-					Id:        e.Id,
-					RoundTxid: e.Txid,
-				},
-			},
-		}
-	case domain.RoundFailed:
-		resp = &arkv1.PingResponse{
-			Event: &arkv1.PingResponse_RoundFailed{
-				RoundFailed: &arkv1.RoundFailed{
-					Id:     e.Id,
-					Reason: e.Err,
-				},
-			},
-		}
-	case application.RoundSigningStarted:
-		cosignersKeys := make([]string, 0, len(e.Cosigners))
-		for _, key := range e.Cosigners {
-			cosignersKeys = append(cosignersKeys, hex.EncodeToString(key.SerializeCompressed()))
-		}
-
-		resp = &arkv1.PingResponse{
-			Event: &arkv1.PingResponse_RoundSigning{
-				RoundSigning: &arkv1.RoundSigningEvent{
-					Id:               e.Id,
-					CosignersPubkeys: cosignersKeys,
-					UnsignedVtxoTree: congestionTree(e.UnsignedVtxoTree).toProto(),
-					UnsignedRoundTx:  e.UnsignedRoundTx,
-				},
-			},
-		}
-	case application.RoundSigningNoncesGenerated:
-		serialized, err := e.SerializeNonces()
-		if err != nil {
-			logrus.WithError(err).Error("failed to serialize nonces")
-			return nil, status.Error(codes.Internal, "failed to serialize nonces")
-		}
-
-		resp = &arkv1.PingResponse{
-			Event: &arkv1.PingResponse_RoundSigningNoncesGenerated{
-				RoundSigningNoncesGenerated: &arkv1.RoundSigningNoncesGeneratedEvent{
-					Id:         e.Id,
-					TreeNonces: serialized,
-				},
-			},
-		}
-	}
-
-	return resp, nil
+	return &arkv1.PingResponse{}, nil
 }
 
 func (h *handler) CreatePayment(
@@ -528,7 +461,7 @@ func (h *handler) listenToEvents() {
 				},
 			}
 		case domain.RoundFinalized:
-			shouldClose = true
+			// shouldClose = true
 			ev = &arkv1.GetEventStreamResponse{
 				Event: &arkv1.GetEventStreamResponse_RoundFinalized{
 					RoundFinalized: &arkv1.RoundFinalizedEvent{
@@ -538,7 +471,7 @@ func (h *handler) listenToEvents() {
 				},
 			}
 		case domain.RoundFailed:
-			shouldClose = true
+			// shouldClose = true
 			ev = &arkv1.GetEventStreamResponse{
 				Event: &arkv1.GetEventStreamResponse_RoundFailed{
 					RoundFailed: &arkv1.RoundFailed{
