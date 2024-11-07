@@ -25,6 +25,7 @@ import (
 const (
 	composePath   = "../../../../docker-compose.clark.regtest.yml"
 	redeemAddress = "bcrt1q2wrgf2hrkfegt0t97cnv4g5yvfjua9k6vua54d"
+	aspUrl        = "http://localhost:7070"
 )
 
 func TestMain(m *testing.M) {
@@ -41,7 +42,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	if err := setupAspWallet(); err != nil {
+	if err := utils.SetupServerWalletCovenantless(aspUrl, 0.0); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
@@ -56,7 +57,7 @@ func TestMain(m *testing.M) {
 
 	code := m.Run()
 
-	_, err = utils.RunCommand("docker", "compose", "-f", composePath, "down")
+	_, err = utils.RunCommand("docker", "compose", "-f", composePath, "down", "-v")
 	if err != nil {
 		fmt.Printf("error stopping docker-compose: %s", err)
 		os.Exit(1)
