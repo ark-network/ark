@@ -257,11 +257,11 @@ func (a *arkClient) ping(
 	ticker := time.NewTicker(5 * time.Second)
 
 	go func(t *time.Ticker) {
-		if _, err := a.client.Ping(ctx, paymentID); err != nil {
+		if err := a.client.Ping(ctx, paymentID); err != nil {
 			logrus.Warnf("failed to ping asp: %s", err)
 		}
 		for range t.C {
-			if _, err := a.client.Ping(ctx, paymentID); err != nil {
+			if err := a.client.Ping(ctx, paymentID); err != nil {
 				logrus.Warnf("failed to ping asp: %s", err)
 			}
 		}

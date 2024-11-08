@@ -237,20 +237,12 @@ func (a *grpcClient) GetEventStream(
 
 func (a *grpcClient) Ping(
 	ctx context.Context, paymentID string,
-) (client.RoundEvent, error) {
+) error {
 	req := &arkv1.PingRequest{
 		PaymentId: paymentID,
 	}
-	resp, err := a.svc.Ping(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.GetEvent() == nil {
-		return nil, nil
-	}
-
-	return event{resp}.toRoundEvent()
+	_, err := a.svc.Ping(ctx, req)
+	return err
 }
 
 func (a *grpcClient) CreatePayment(

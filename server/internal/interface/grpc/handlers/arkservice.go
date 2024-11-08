@@ -586,7 +586,7 @@ func (h *handler) listenToEvents() {
 				},
 			}
 		case domain.RoundFinalized:
-			shouldClose = true
+			// shouldClose = true
 			ev = &arkv1.GetEventStreamResponse{
 				Event: &arkv1.GetEventStreamResponse_RoundFinalized{
 					RoundFinalized: &arkv1.RoundFinalizedEvent{
@@ -596,7 +596,7 @@ func (h *handler) listenToEvents() {
 				},
 			}
 		case domain.RoundFailed:
-			shouldClose = true
+			// shouldClose = true
 			ev = &arkv1.GetEventStreamResponse{
 				Event: &arkv1.GetEventStreamResponse_RoundFailed{
 					RoundFailed: &arkv1.RoundFailed{

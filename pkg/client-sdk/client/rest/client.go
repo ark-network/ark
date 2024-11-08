@@ -249,7 +249,7 @@ func (c *restClient) GetEventStream(
 ) (<-chan client.RoundEventChannel, func(), error) {
 	eventsCh := make(chan client.RoundEventChannel)
 
-	go func() {
+	go func(eventsCh chan client.RoundEventChannel) {
 		httpClient := &http.Client{Timeout: time.Second * 0}
 
 		resp, err := httpClient.Get(fmt.Sprintf("%s/v1/events", c.serverURL))
@@ -377,88 +377,18 @@ func (c *restClient) GetEventStream(
 				Err:   _err,
 			}
 		}
-	}()
+	}(eventsCh)
 
 	return eventsCh, func() {}, nil
 }
 
 func (a *restClient) Ping(
 	ctx context.Context, paymentID string,
-) (client.RoundEvent, error) {
+) error {
 	r := ark_service.NewArkServicePingParams()
 	r.SetPaymentID(paymentID)
-	resp, err := a.svc.ArkServicePing(r)
-	if err != nil {
-		return nil, err
-	}
-
-	payload := resp.Payload
-
-	if e := payload.RoundFailed; e != nil {
-		return client.RoundFailedEvent{
-			ID:     e.ID,
-			Reason: e.Reason,
-		}, nil
-	}
-	if e := payload.RoundFinalization; e != nil {
-		tree := treeFromProto{e.VtxoTree}.parse()
-
-		minRelayFeeRate, err := strconv.Atoi(e.MinRelayFeeRate)
-		if err != nil {
-			return nil, err
-		}
-
-		return client.RoundFinalizationEvent{
-			ID:              e.ID,
-			Tx:              e.RoundTx,
-			Tree:            tree,
-			Connectors:      e.Connectors,
-			MinRelayFeeRate: chainfee.SatPerKVByte(minRelayFeeRate),
-		}, nil
-	}
-
-	if e := payload.RoundFinalized; e != nil {
-		return client.RoundFinalizedEvent{
-			ID:   e.ID,
-			Txid: e.RoundTxid,
-		}, nil
-	}
-
-	if e := payload.RoundSigning; e != nil {
-		pubkeys := make([]*secp256k1.PublicKey, 0, len(e.CosignersPubkeys))
-		for _, pubkey := range e.CosignersPubkeys {
-			p, err := hex.DecodeString(pubkey)
-			if err != nil {
-				return nil, err
-			}
-			pk, err := secp256k1.ParsePubKey(p)
-			if err != nil {
-				return nil, err
-			}
-			pubkeys = append(pubkeys, pk)
-		}
-
-		return client.RoundSigningStartedEvent{
-			ID:                  e.ID,
-			UnsignedTree:        treeFromProto{e.UnsignedVtxoTree}.parse(),
-			CosignersPublicKeys: pubkeys,
-			UnsignedRoundTx:     e.UnsignedRoundTx,
-		}, nil
-	}
-
-	if e := payload.RoundSigningNoncesGenerated; e != nil {
-		reader := hex.NewDecoder(strings.NewReader(e.TreeNonces))
-		nonces, err := bitcointree.DecodeNonces(reader)
-		if err != nil {
-			return nil, err
-		}
-		return client.RoundSigningNoncesGeneratedEvent{
-			ID:     e.ID,
-			Nonces: nonces,
-		}, nil
-	}
-
-	return nil, nil
+	_, err := a.svc.ArkServicePing(r)
+	return err
 }
 
 func (a *restClient) CreatePayment(
@@ -714,7 +644,7 @@ func (t treeFromProto) parse() tree.CongestionTree {
 func (c *restClient) GetTransactionsStream(ctx context.Context) (<-chan client.TransactionEvent, func(), error) {
 	eventsCh := make(chan client.TransactionEvent)
 
-	go func() {
+	go func(eventsCh chan client.TransactionEvent) {
 		httpClient := &http.Client{Timeout: time.Second * 0}
 
 		resp, err := httpClient.Get(fmt.Sprintf("%s/v1/transactions", c.serverURL))
@@ -787,7 +717,7 @@ func (c *restClient) GetTransactionsStream(ctx context.Context) (<-chan client.T
 
 			eventsCh <- event
 		}
-	}()
+	}(eventsCh)
 
 	return eventsCh, func() {}, nil
 }

@@ -46,7 +46,7 @@ type ASPClient interface {
 	GetEventStream(
 		ctx context.Context, paymentID string,
 	) (<-chan RoundEventChannel, func(), error)
-	Ping(ctx context.Context, paymentID string) (RoundEvent, error)
+	Ping(ctx context.Context, paymentID string) error
 	CreatePayment(
 		ctx context.Context, inputs []AsyncPaymentInput, outputs []Output,
 	) (string, error)
