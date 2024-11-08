@@ -39,5 +39,3 @@ func PrintBuildInfo() {
 func GetVersion() string {
 	return Version
 }
-
-// You can add more build-related functions here as needed

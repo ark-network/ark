@@ -39,7 +39,7 @@ func main() {
 		&configCommand,
 		&dumpCommand,
 		&receiveCommand,
-		&claimCmd,
+		&settleCmd,
 		&sendCommand,
 		&balanceCommand,
 		&redeemCommand,
@@ -127,6 +127,12 @@ var (
 		Name:  "force",
 		Usage: "force redemption without collaboration",
 	}
+	restFlag = &cli.BoolFlag{
+		Name:        "rest",
+		Usage:       "use REST client instead of gRPC",
+		Value:       false,
+		DefaultText: "false",
+	}
 )
 
 var (
@@ -136,7 +142,7 @@ var (
 		Action: func(ctx *cli.Context) error {
 			return initArkSdk(ctx)
 		},
-		Flags: []cli.Flag{networkFlag, passwordFlag, privateKeyFlag, urlFlag, explorerFlag},
+		Flags: []cli.Flag{networkFlag, passwordFlag, privateKeyFlag, urlFlag, explorerFlag, restFlag},
 	}
 	configCommand = cli.Command{
 		Name:  "config",
@@ -160,11 +166,11 @@ var (
 			return receive(ctx)
 		},
 	}
-	claimCmd = cli.Command{
-		Name:  "claim",
-		Usage: "Claim onboarding funds or pending payments",
+	settleCmd = cli.Command{
+		Name:  "settle",
+		Usage: "Settle onboarding funds or oor payments",
 		Action: func(ctx *cli.Context) error {
-			return claim(ctx)
+			return settle(ctx)
 		},
 		Flags: []cli.Flag{passwordFlag},
 	}
@@ -200,9 +206,14 @@ func initArkSdk(ctx *cli.Context) error {
 		return err
 	}
 
+	clientType := arksdk.GrpcClient
+	if ctx.Bool(restFlag.Name) {
+		clientType = arksdk.RestClient
+	}
+
 	return arkSdkClient.Init(
 		ctx.Context, arksdk.InitArgs{
-			ClientType:  arksdk.GrpcClient,
+			ClientType:  clientType,
 			WalletType:  arksdk.SingleKeyWallet,
 			AspUrl:      ctx.String(urlFlag.Name),
 			Seed:        ctx.String(privateKeyFlag.Name),
@@ -266,7 +277,7 @@ func receive(ctx *cli.Context) error {
 	})
 }
 
-func claim(ctx *cli.Context) error {
+func settle(ctx *cli.Context) error {
 	password, err := readPassword(ctx)
 	if err != nil {
 		return err
@@ -275,7 +286,7 @@ func claim(ctx *cli.Context) error {
 		return err
 	}
 
-	txID, err := arkSdkClient.Claim(ctx.Context)
+	txID, err := arkSdkClient.Settle(ctx.Context)
 	if err != nil {
 		return err
 	}

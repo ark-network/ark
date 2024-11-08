@@ -21,8 +21,3 @@ func main() {
 	println("ARK SDK WebAssembly module initialized")
 	<-c
 }
-
-func init() {
-	// You can add any additional initialization here if needed
-	// This runs before the main function
-}

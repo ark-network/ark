@@ -94,7 +94,7 @@ func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
 		return "", "", err
 	}
 
-	return offchainAddr, boardingAddr, nil
+	return offchainAddr.Address, boardingAddr.Address, nil
 }
 
 func (a *arkClient) GetTransactionEventChannel() chan types.TransactionEvent {
@@ -270,6 +270,27 @@ func (a *arkClient) ping(
 	return ticker.Stop
 }
 
+func (a *arkClient) ListVtxos(
+	ctx context.Context,
+) (spendableVtxos, spentVtxos []client.Vtxo, err error) {
+	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return
+	}
+
+	for _, addr := range offchainAddrs {
+		spendable, spent, err := a.client.ListVtxos(ctx, addr.Address)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		spendableVtxos = append(spendableVtxos, spendable...)
+		spentVtxos = append(spentVtxos, spent...)
+	}
+
+	return
+}
+
 func getClient(
 	supportedClients utils.SupportedType[utils.ClientFactory], clientType, aspUrl string,
 ) (client.ASPClient, error) {
@@ -328,4 +349,16 @@ func getWalletStore(storeType, datadir string) (walletstore.WalletStore, error) 
 
 func getCreatedAtFromExpiry(roundLifetime int64, expiry time.Time) time.Time {
 	return expiry.Add(-time.Duration(roundLifetime) * time.Second)
+}
+
+func filterByOutpoints(vtxos []client.Vtxo, outpoints []client.Outpoint) []client.Vtxo {
+	filtered := make([]client.Vtxo, 0, len(vtxos))
+	for _, vtxo := range vtxos {
+		for _, outpoint := range outpoints {
+			if vtxo.Outpoint.Equals(outpoint) {
+				filtered = append(filtered, vtxo)
+			}
+		}
+	}
+	return filtered
 }

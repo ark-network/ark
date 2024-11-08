@@ -6,12 +6,12 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
-	"runtime/debug"
 	"sort"
 	"sync"
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
@@ -19,25 +19,39 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/network"
-	"golang.org/x/crypto/scrypt"
+	"golang.org/x/crypto/pbkdf2"
 )
 
 func CoinSelect(
-	vtxos []client.Vtxo, amount, dust uint64, sortByExpirationTime bool,
-) ([]client.Vtxo, uint64, error) {
-	selected := make([]client.Vtxo, 0)
-	notSelected := make([]client.Vtxo, 0)
+	boardingUtxos []types.Utxo,
+	vtxos []client.DescriptorVtxo,
+	amount,
+	dust uint64,
+	sortByExpirationTime bool,
+) ([]types.Utxo, []client.DescriptorVtxo, uint64, error) {
+	selected, notSelected := make([]client.DescriptorVtxo, 0), make([]client.DescriptorVtxo, 0)
+	selectedBoarding, notSelectedBoarding := make([]types.Utxo, 0), make([]types.Utxo, 0)
 	selectedAmount := uint64(0)
 
 	if sortByExpirationTime {
 		// sort vtxos by expiration (older first)
 		sort.SliceStable(vtxos, func(i, j int) bool {
-			if vtxos[i].ExpiresAt == nil || vtxos[j].ExpiresAt == nil {
-				return false
-			}
-
-			return vtxos[i].ExpiresAt.Before(*vtxos[j].ExpiresAt)
+			return vtxos[i].ExpiresAt.Before(vtxos[j].ExpiresAt)
 		})
+
+		sort.SliceStable(boardingUtxos, func(i, j int) bool {
+			return boardingUtxos[i].SpendableAt.Before(boardingUtxos[j].SpendableAt)
+		})
+	}
+
+	for _, boardingUtxo := range boardingUtxos {
+		if selectedAmount >= amount {
+			notSelectedBoarding = append(notSelectedBoarding, boardingUtxo)
+			break
+		}
+
+		selectedBoarding = append(selectedBoarding, boardingUtxo)
+		selectedAmount += boardingUtxo.Amount
 	}
 
 	for _, vtxo := range vtxos {
@@ -51,7 +65,7 @@ func CoinSelect(
 	}
 
 	if selectedAmount < amount {
-		return nil, 0, fmt.Errorf("not enough funds to cover amount %d", amount)
+		return nil, nil, 0, fmt.Errorf("not enough funds to cover amount %d", amount)
 	}
 
 	change := selectedAmount - amount
@@ -60,10 +74,13 @@ func CoinSelect(
 		if len(notSelected) > 0 {
 			selected = append(selected, notSelected[0])
 			change += notSelected[0].Amount
+		} else if len(notSelectedBoarding) > 0 {
+			selectedBoarding = append(selectedBoarding, notSelectedBoarding[0])
+			change += notSelectedBoarding[0].Amount
 		}
 	}
 
-	return selected, change, nil
+	return selectedBoarding, selected, change, nil
 }
 
 func ParseLiquidAddress(addr string) (
@@ -168,12 +185,7 @@ func HashPassword(password []byte) []byte {
 	return hash[:]
 }
 
-func EncryptAES128(privateKey, password []byte) ([]byte, error) {
-	// Due to https://github.com/golang/go/issues/7168.
-	// This call makes sure that memory is freed in case the GC doesn't do that
-	// right after the encryption/decryption.
-	defer debug.FreeOSMemory()
-
+func EncryptAES256(privateKey, password []byte) ([]byte, error) {
 	if len(privateKey) == 0 {
 		return nil, fmt.Errorf("missing plaintext private key")
 	}
@@ -205,9 +217,7 @@ func EncryptAES128(privateKey, password []byte) ([]byte, error) {
 	return ciphertext, nil
 }
 
-func DecryptAES128(encrypted, password []byte) ([]byte, error) {
-	defer debug.FreeOSMemory()
-
+func DecryptAES256(encrypted, password []byte) ([]byte, error) {
 	if len(encrypted) == 0 {
 		return nil, fmt.Errorf("missing encrypted mnemonic")
 	}
@@ -253,12 +263,8 @@ func deriveKey(password, salt []byte) ([]byte, []byte, error) {
 			return nil, nil, err
 		}
 	}
-	// 2^20 = 1048576 recommended length for key-stretching
-	// check the doc for other recommended values:
-	// https://godoc.org/golang.org/x/crypto/scrypt
-	key, err := scrypt.Key(password, salt, 1048576, 8, 1, 32)
-	if err != nil {
-		return nil, nil, err
-	}
+	iterations := 10000
+	keySize := 32
+	key := pbkdf2.Key(password, salt, iterations, keySize, sha256.New)
 	return key, salt, nil
 }

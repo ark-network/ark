@@ -90,19 +90,19 @@
             }
         }
 
-        async function claimVtxos() {
+        async function settleVtxos() {
             const password = document.getElementById("c_password").value;
             if (!password) {
-                logMessage("Claim error: password is required");
+                logMessage("Settle error: password is required");
                 return;
             }
             
             try {
                 await unlock(password);
-                const txID = await claim();
-                logMessage("Claimed money with tx ID: " + txID);
+                const txID = await settle();
+                logMessage("Settled money with tx ID: " + txID);
             } catch (err) {
-                logMessage("Claim error: " + err.message);
+                logMessage("Settle error: " + err.message);
             } finally {
                 await lock(password);
             }
@@ -166,7 +166,7 @@
         <input type="password" id="s_password" placeholder="password">
     </div>
     <div>
-        <button onclick="claimVtxos()">Claim</button>
+        <button onclick="settleVtxos()">Settle</button>
         <input type="password" id="c_password" placeholder="password">
     </div>
     <div>

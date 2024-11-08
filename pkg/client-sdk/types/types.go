@@ -44,7 +44,8 @@ type Vtxo struct {
 	VtxoKey
 	Amount                  uint64
 	RoundTxid               string
-	ExpiresAt               *time.Time
+	ExpiresAt               time.Time
+	CreatedAt               time.Time
 	RedeemTx                string
 	UnconditionalForfeitTxs []string
 	Pending                 bool
@@ -73,7 +74,7 @@ type Transaction struct {
 	TransactionKey
 	Amount    uint64
 	Type      TxType
-	IsPending bool
+	Settled   bool
 	CreatedAt time.Time
 }
 
@@ -102,4 +103,20 @@ type EventType string
 type TransactionEvent struct {
 	Tx    Transaction
 	Event EventType
+}
+
+type Utxo struct {
+	Txid        string
+	VOut        uint32
+	Amount      uint64
+	Asset       string // liquid only
+	Delay       uint
+	SpendableAt time.Time
+	CreatedAt   time.Time
+	Descriptor  string
+	Spent       bool
+}
+
+func (u *Utxo) Sequence() (uint32, error) {
+	return common.BIP68Sequence(u.Delay)
 }

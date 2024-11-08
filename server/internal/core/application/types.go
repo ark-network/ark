@@ -5,12 +5,18 @@ import (
 
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
 var (
 	paymentsThreshold = int64(128)
 )
+
+type AsyncPaymentInput struct {
+	ports.Input
+	ForfeitLeafHash chainhash.Hash
+}
 
 type Service interface {
 	Start() error
@@ -27,12 +33,12 @@ type Service interface {
 		ctx context.Context, paymentId string,
 	) (lastEvent domain.RoundEvent, err error)
 	ListVtxos(
-		ctx context.Context, pubkey *secp256k1.PublicKey,
+		ctx context.Context, address string,
 	) (spendableVtxos, spentVtxos []domain.Vtxo, err error)
 	GetInfo(ctx context.Context) (*ServiceInfo, error)
 	// Async payments
 	CreateAsyncPayment(
-		ctx context.Context, inputs []ports.Input, receivers []domain.Receiver,
+		ctx context.Context, inputs []AsyncPaymentInput, receivers []domain.Receiver,
 	) (string, error)
 	CompleteAsyncPayment(
 		ctx context.Context, redeemTx string,

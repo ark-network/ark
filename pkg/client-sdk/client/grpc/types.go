@@ -18,9 +18,8 @@ type out client.Output
 
 func (o out) toProto() *arkv1.Output {
 	return &arkv1.Output{
-		Address:     o.Address,
-		Descriptor_: o.Descriptor,
-		Amount:      o.Amount,
+		Address: o.Address,
+		Amount:  o.Amount,
 	}
 }
 
@@ -113,23 +112,19 @@ type vtxo struct {
 }
 
 func (v vtxo) toVtxo() client.Vtxo {
-	var expiresAt *time.Time
-	if v.GetExpireAt() > 0 {
-		t := time.Unix(v.GetExpireAt(), 0)
-		expiresAt = &t
-	}
 	return client.Vtxo{
 		Outpoint: client.Outpoint{
 			Txid: v.GetOutpoint().GetTxid(),
 			VOut: v.GetOutpoint().GetVout(),
 		},
-		Amount:     v.GetAmount(),
-		RoundTxid:  v.GetRoundTxid(),
-		ExpiresAt:  expiresAt,
-		Pending:    v.GetPending(),
-		RedeemTx:   v.GetRedeemTx(),
-		SpentBy:    v.GetSpentBy(),
-		Descriptor: v.GetDescriptor_(),
+		Amount:    v.GetAmount(),
+		RoundTxid: v.GetRoundTxid(),
+		ExpiresAt: time.Unix(v.GetExpireAt(), 0),
+		IsOOR:     v.GetIsOor(),
+		RedeemTx:  v.GetRedeemTx(),
+		SpentBy:   v.GetSpentBy(),
+		Pubkey:    v.GetPubkey(),
+		CreatedAt: time.Unix(v.GetCreatedAt(), 0),
 	}
 }
 
@@ -151,6 +146,23 @@ func toProtoInput(i client.Input) *arkv1.Input {
 		},
 		Descriptor_: i.Descriptor,
 	}
+}
+
+func toAsyncProtoInput(i client.AsyncPaymentInput) *arkv1.AsyncPaymentInput {
+	return &arkv1.AsyncPaymentInput{
+		Input:           toProtoInput(i.Input),
+		ForfeitLeafHash: i.ForfeitLeafHash.String(),
+	}
+}
+
+type asyncIns []client.AsyncPaymentInput
+
+func (i asyncIns) toProto() []*arkv1.AsyncPaymentInput {
+	list := make([]*arkv1.AsyncPaymentInput, 0, len(i))
+	for _, ii := range i {
+		list = append(list, toAsyncProtoInput(ii))
+	}
+	return list
 }
 
 type ins []client.Input

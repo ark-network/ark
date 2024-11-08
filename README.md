@@ -7,7 +7,7 @@
 [![GitHub](https://img.shields.io/github/license/ark-network/ark)](https://github.com/ark-network/ark/blob/master/LICENSE)
 ![Go Reference](https://pkg.go.dev/badge/github.com/ark-network/ark.svg)
 
-Welcome to the Ark monorepo, a comprehensive solution for off-chain Bitcoin and Liquid transactions.
+Welcome to the Ark monorepo, a comprehensive solution for off-chain Bitcoin transactions.
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/169d6ae5-7d90-448d-b768-4e40a412bf70" alt="Ark logo">

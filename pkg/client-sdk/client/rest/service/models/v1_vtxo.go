@@ -21,17 +21,20 @@ type V1Vtxo struct {
 	// amount
 	Amount string `json:"amount,omitempty"`
 
-	// descriptor
-	Descriptor string `json:"descriptor,omitempty"`
+	// created at
+	CreatedAt string `json:"createdAt,omitempty"`
 
 	// expire at
 	ExpireAt string `json:"expireAt,omitempty"`
 
+	// is oor
+	IsOor bool `json:"isOor,omitempty"`
+
 	// outpoint
 	Outpoint *V1Outpoint `json:"outpoint,omitempty"`
 
-	// pending
-	Pending bool `json:"pending,omitempty"`
+	// pubkey
+	Pubkey string `json:"pubkey,omitempty"`
 
 	// redeem tx
 	RedeemTx string `json:"redeemTx,omitempty"`

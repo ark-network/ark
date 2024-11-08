@@ -338,7 +338,7 @@ func (h *handler) Ping(
 func (h *handler) CreatePayment(
 	ctx context.Context, req *arkv1.CreatePaymentRequest,
 ) (*arkv1.CreatePaymentResponse, error) {
-	inputs, err := parseInputs(req.GetInputs())
+	inputs, err := parseAsyncPaymentInputs(req.GetInputs())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -353,12 +353,12 @@ func (h *handler) CreatePayment(
 			return nil, status.Error(codes.InvalidArgument, "output amount must be greater than 0")
 		}
 
-		if len(receiver.OnchainAddress) > 0 {
-			return nil, status.Error(codes.InvalidArgument, "onchain address is not supported as async payment destination")
+		if len(receiver.OnchainAddress) <= 0 && len(receiver.Pubkey) <= 0 {
+			return nil, status.Error(codes.InvalidArgument, "missing address")
 		}
 
-		if len(receiver.Descriptor) <= 0 {
-			return nil, status.Error(codes.InvalidArgument, "missing output descriptor")
+		if receiver.IsOnchain() {
+			return nil, status.Error(codes.InvalidArgument, "onchain outputs are not supported as async payment destination")
 		}
 	}
 
@@ -462,12 +462,12 @@ func (h *handler) GetRoundById(
 func (h *handler) ListVtxos(
 	ctx context.Context, req *arkv1.ListVtxosRequest,
 ) (*arkv1.ListVtxosResponse, error) {
-	_, userPubkey, _, err := parseAddress(req.GetAddress())
+	_, err := parseAddress(req.GetAddress())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	spendableVtxos, spentVtxos, err := h.svc.ListVtxos(ctx, userPubkey)
+	spendableVtxos, spentVtxos, err := h.svc.ListVtxos(ctx, req.GetAddress())
 	if err != nil {
 		return nil, err
 	}

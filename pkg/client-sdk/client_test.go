@@ -3,6 +3,7 @@ package arksdk
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -12,559 +13,143 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestVtxosToTxs(t *testing.T) {
-	tests := []struct {
-		name    string
-		fixture string
-		want    []sdktypes.Transaction
-	}{
-		{
-			name:    "Alice Before Sending Async",
-			fixture: aliceBeforeSendingAsync,
-			want:    []sdktypes.Transaction{},
-		},
-		{
-			name:    "Alice After Sending Async",
-			fixture: aliceAfterSendingAsync,
-			want: []sdktypes.Transaction{
-				{
-					TransactionKey: sdktypes.TransactionKey{
-						RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
-					},
-					Amount:    1000,
-					Type:      sdktypes.TxSent,
-					IsPending: false,
-					CreatedAt: time.Unix(1726054898, 0),
-				},
-			},
-		},
-		{
-			name:    "Bob Before Claiming Async",
-			fixture: bobBeforeClaimingAsync,
-			want: []sdktypes.Transaction{
-				{
-					TransactionKey: sdktypes.TransactionKey{
-						RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
-					},
-					Amount:    1000,
-					Type:      sdktypes.TxReceived,
-					IsPending: true,
-					CreatedAt: time.Unix(1726054898, 0),
-				},
-				{
-					TransactionKey: sdktypes.TransactionKey{
-						RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
-					},
-					Amount:    2000,
-					Type:      sdktypes.TxReceived,
-					IsPending: true,
-					CreatedAt: time.Unix(1726486359, 0),
-				},
-			},
-		},
-		{
-			name:    "Bob After Claiming Async",
-			fixture: bobAfterClaimingAsync,
-			want: []sdktypes.Transaction{
-				{
-					TransactionKey: sdktypes.TransactionKey{
-						RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
-					},
-					Amount:    1000,
-					Type:      sdktypes.TxReceived,
-					IsPending: false,
-					CreatedAt: time.Unix(1726054898, 0),
-				},
-				{
-					TransactionKey: sdktypes.TransactionKey{
-						RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
-					},
-					Amount:    2000,
-					Type:      sdktypes.TxReceived,
-					IsPending: false,
-					CreatedAt: time.Unix(1726486359, 0),
-				},
-			},
-		},
-		{
-			name:    "Bob After Sending Async",
-			fixture: bobAfterSendingAsync,
-			want: []sdktypes.Transaction{
-				{
-					TransactionKey: sdktypes.TransactionKey{
-						RedeemTxid: "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
-					},
-					Amount:    1000,
-					Type:      sdktypes.TxReceived,
-					IsPending: false,
-					CreatedAt: time.Unix(1726054898, 0),
-				},
-				{
-					TransactionKey: sdktypes.TransactionKey{
-						RedeemTxid: "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
-					},
-					Amount:    2000,
-					Type:      sdktypes.TxReceived,
-					IsPending: false,
-					CreatedAt: time.Unix(1726486359, 0),
-				},
-				{
-					TransactionKey: sdktypes.TransactionKey{
-						RedeemTxid: "23c3a885f0ea05f7bdf83f3bf7f8ac9dc3f791ad292f4e63a6f53fa5e4935ab0",
-					},
-					Amount:    2100,
-					Type:      sdktypes.TxSent,
-					IsPending: false,
-					CreatedAt: time.Unix(1726503865, 0),
-				},
-			},
-		},
-	}
+type fixture struct {
+	name              string
+	ignoreTxs         map[string]struct{}
+	spendableVtxos    []client.Vtxo
+	spentVtxos        []client.Vtxo
+	expectedTxHistory []sdktypes.Transaction
+}
 
-	for _, tt := range tests {
+func TestVtxosToTxs(t *testing.T) {
+	fixtures, err := loadFixtures()
+	require.NoError(t, err)
+
+	for _, tt := range fixtures {
 		t.Run(tt.name, func(t *testing.T) {
-			vtxos, ignoreTxs, err := loadFixtures(tt.fixture)
-			if err != nil {
-				t.Fatalf("failed to load fixture: %s", err)
-			}
-			got, err := vtxosToTxsCovenantless(30, vtxos.spendable, vtxos.spent, ignoreTxs)
+			txHistory, err := vtxosToTxsCovenantless(tt.spendableVtxos, tt.spentVtxos)
 			require.NoError(t, err)
-			require.Len(t, got, len(tt.want))
+			require.Len(t, txHistory, len(tt.expectedTxHistory))
 
 			// Check each expected transaction, excluding CreatedAt
-			for i, wantTx := range tt.want {
-				gotTx := got[i]
-				require.Equal(t, wantTx.RoundTxid, gotTx.RoundTxid)
-				require.Equal(t, wantTx.RedeemTxid, gotTx.RedeemTxid)
+			for i, wantTx := range tt.expectedTxHistory {
+				gotTx := txHistory[i]
+				require.Equal(t, wantTx.TransactionKey, gotTx.TransactionKey)
 				require.Equal(t, int(wantTx.Amount), int(gotTx.Amount))
 				require.Equal(t, wantTx.Type, gotTx.Type)
-				require.Equal(t, wantTx.IsPending, gotTx.IsPending)
+				require.Equal(t, wantTx.Settled, gotTx.Settled)
+				require.Equal(t, wantTx.CreatedAt, gotTx.CreatedAt)
 			}
 		})
 	}
 }
 
-type vtxos struct {
-	spendable []client.Vtxo
-	spent     []client.Vtxo
+type vtxo struct {
+	Outpoint struct {
+		Txid string `json:"txid"`
+		VOut uint32 `json:"vout"`
+	} `json:"outpoint"`
+	Amount    string `json:"amount"`
+	Spent     bool   `json:"spent"`
+	RoundTxid string `json:"roundTxid"`
+	SpentBy   string `json:"spentBy"`
+	ExpiresAt string `json:"expireAt"`
+	Swept     bool   `json:"swept"`
+	RedeemTx  string `json:"redeemTx"`
+	CreatedAt string `json:"createdAt"`
+	IsOOR     bool   `json:"isOor"`
 }
 
-func loadFixtures(jsonStr string) (vtxos, map[string]struct{}, error) {
-	var data struct {
-		IgnoreTxs      []string `json:"ignoreTxs"`
-		SpendableVtxos []struct {
-			Outpoint struct {
-				Txid string `json:"txid"`
-				Vout uint32 `json:"vout"`
-			} `json:"outpoint"`
-			Receiver struct {
-				Address string `json:"address"`
-				Amount  string `json:"amount"`
-			} `json:"receiver"`
-			Spent       bool   `json:"spent"`
-			PoolTxid    string `json:"poolTxid"`
-			SpentBy     string `json:"spentBy"`
-			ExpireAt    string `json:"expireAt"`
-			Swept       bool   `json:"swept"`
-			Pending     bool   `json:"pending"`
-			PendingData struct {
-				RedeemTx                string   `json:"redeemTx"`
-				UnconditionalForfeitTxs []string `json:"unconditionalForfeitTxs"`
-			} `json:"pendingData"`
-		} `json:"spendableVtxos"`
-		SpentVtxos []struct {
-			Outpoint struct {
-				Txid string `json:"txid"`
-				Vout uint32 `json:"vout"`
-			} `json:"outpoint"`
-			Receiver struct {
-				Address string `json:"address"`
-				Amount  string `json:"amount"`
-			} `json:"receiver"`
-			Spent       bool   `json:"spent"`
-			PoolTxid    string `json:"poolTxid"`
-			SpentBy     string `json:"spentBy"`
-			ExpireAt    string `json:"expireAt"`
-			Swept       bool   `json:"swept"`
-			Pending     bool   `json:"pending"`
-			PendingData struct {
-				RedeemTx                string   `json:"redeemTx"`
-				UnconditionalForfeitTxs []string `json:"unconditionalForfeitTxs"`
-			} `json:"pendingData"`
-		} `json:"spentVtxos"`
-	}
+type vtxos []vtxo
 
-	if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
-		return vtxos{}, nil, err
-	}
-
-	spendable := make([]client.Vtxo, len(data.SpendableVtxos))
-	for i, vtxo := range data.SpendableVtxos {
-		expireAt, err := parseTimestamp(vtxo.ExpireAt)
-		if err != nil {
-			return vtxos{}, nil, err
-		}
-		amount, err := parseAmount(vtxo.Receiver.Amount)
-		if err != nil {
-			return vtxos{}, nil, err
-		}
-		spendable[i] = client.Vtxo{
+func (v vtxos) parse() []client.Vtxo {
+	list := make([]client.Vtxo, 0, len(v))
+	for _, vv := range v {
+		list = append(list, client.Vtxo{
 			Outpoint: client.Outpoint{
-				Txid: vtxo.Outpoint.Txid,
-				VOut: vtxo.Outpoint.Vout,
+				Txid: vv.Outpoint.Txid,
+				VOut: vv.Outpoint.VOut,
 			},
-			Amount:    amount,
-			RoundTxid: vtxo.PoolTxid,
-			ExpiresAt: &expireAt,
-			RedeemTx:  vtxo.PendingData.RedeemTx,
-			Pending:   vtxo.Pending,
-			SpentBy:   vtxo.SpentBy,
-		}
+			Amount:    parseAmount(vv.Amount),
+			RoundTxid: vv.RoundTxid,
+			ExpiresAt: parseTimestamp(vv.ExpiresAt),
+			CreatedAt: parseTimestamp(vv.CreatedAt),
+			RedeemTx:  vv.RedeemTx,
+			SpentBy:   vv.SpentBy,
+			IsOOR:     vv.IsOOR,
+		})
 	}
-
-	spent := make([]client.Vtxo, len(data.SpentVtxos))
-	for i, vtxo := range data.SpentVtxos {
-		expireAt, err := parseTimestamp(vtxo.ExpireAt)
-		if err != nil {
-			return vtxos{}, nil, err
-		}
-		amount, err := parseAmount(vtxo.Receiver.Amount)
-		if err != nil {
-			return vtxos{}, nil, err
-		}
-		spent[i] = client.Vtxo{
-			Outpoint: client.Outpoint{
-				Txid: vtxo.Outpoint.Txid,
-				VOut: vtxo.Outpoint.Vout,
-			},
-			Amount:    amount,
-			RoundTxid: vtxo.PoolTxid,
-			ExpiresAt: &expireAt,
-			RedeemTx:  vtxo.PendingData.RedeemTx,
-			Pending:   vtxo.Pending,
-			SpentBy:   vtxo.SpentBy,
-		}
-	}
-
-	vtxos := vtxos{
-		spendable: spendable,
-		spent:     spent,
-	}
-
-	ignoreTxs := make(map[string]struct{})
-	for _, tx := range data.IgnoreTxs {
-		ignoreTxs[tx] = struct{}{}
-	}
-
-	return vtxos, ignoreTxs, nil
+	return list
 }
 
-func parseAmount(amountStr string) (uint64, error) {
-	amount, err := strconv.ParseUint(amountStr, 10, 64)
+type tx struct {
+	RoundTxid  string `json:"roundTxid"`
+	RedeemTxid string `json:"redeemTxid"`
+	Amount     string `json:"amount"`
+	Type       string `json:"type"`
+	Settled    bool   `json:"settled"`
+	CreatedAt  string `json:"createdAt"`
+}
+
+type txs []tx
+
+func (t txs) parse() []sdktypes.Transaction {
+	list := make([]sdktypes.Transaction, 0, len(t))
+	for _, tx := range t {
+		list = append(list, sdktypes.Transaction{
+			TransactionKey: sdktypes.TransactionKey{
+				RedeemTxid: tx.RedeemTxid,
+				RoundTxid:  tx.RoundTxid,
+			},
+			Amount:    parseAmount(tx.Amount),
+			Type:      sdktypes.TxType(tx.Type),
+			Settled:   tx.Settled,
+			CreatedAt: parseTimestamp(tx.CreatedAt),
+		},
+		)
+	}
+	return list
+}
+
+func loadFixtures() ([]fixture, error) {
+	data := make([]struct {
+		Name              string   `json:"name"`
+		IgnoreTxs         []string `json:"ignoreTxs"`
+		SpendableVtxos    vtxos    `json:"spendableVtxos"`
+		SpentVtxos        vtxos    `json:"spentVtxos"`
+		ExpectedTxHistory txs      `json:"expectedTxHistory"`
+	}, 0)
+	buf, err := os.ReadFile("test_data.json")
 	if err != nil {
-		return 0, err
+		return nil, fmt.Errorf("failed to read fixtures: %s", err)
+	}
+	if err := json.Unmarshal(buf, &data); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal fixtures: %s", err)
 	}
 
-	return amount, nil
-}
-
-func parseTimestamp(timestamp string) (time.Time, error) {
-	seconds, err := strconv.ParseInt(timestamp, 10, 64)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("invalid timestamp format: %w", err)
+	fixtures := make([]fixture, 0, len(data))
+	for _, r := range data {
+		indexedTxs := make(map[string]struct{})
+		for _, tx := range r.IgnoreTxs {
+			indexedTxs[tx] = struct{}{}
+		}
+		fixtures = append(fixtures, fixture{
+			name:              r.Name,
+			ignoreTxs:         indexedTxs,
+			spendableVtxos:    r.SpendableVtxos.parse(),
+			spentVtxos:        r.SpentVtxos.parse(),
+			expectedTxHistory: r.ExpectedTxHistory.parse(),
+		})
 	}
-
-	return time.Unix(seconds, 0), nil
+	return fixtures, nil
 }
 
-// bellow fixtures are used in bellow scenario:
-// 1. Alice boards with 20OOO
-// 2. Alice sends 1000 to Bob
-// 3. Bob claims 1000
-var (
-	aliceBeforeSendingAsync = `
-	{
-	  "ignoreTxs": [
-		  "377fa2fbd27c82bdbc095478384c88b6c75432c0ef464189e49c965194446cdf"
-		],
-	  "spendableVtxos": [
-			{
-				"outpoint": {
-					"txid": "69ccb6520e0b91ac1cbaa459b16ec1e3ff5f6349990b0d149dd8e6c6485d316c",
-					"vout": 0
-				},
-				"receiver": {
-					"address": "tark1qwnakvl59d5wckz9lqhhdav0uvns6uu3zkc6hg65gh0kgh6wve9pwqa0qjq9ajm57ss4m7wutyhp3vexxzgkn2r5awtzytp8qfk8exfn4vm5d8ff",
-					"amount": "20000"
-				},
-				"spent": false,
-				"poolTxid": "377fa2fbd27c82bdbc095478384c88b6c75432c0ef464189e49c965194446cdf",
-				"spentBy": "",
-				"expireAt": "1726054928",
-				"swept": false,
-				"pending": false,
-				"pendingData": null
-			}
-	  ],
-	  "spentVtxos": []
-	}`
+func parseAmount(amountStr string) uint64 {
+	amount, _ := strconv.ParseUint(amountStr, 10, 64)
+	return amount
+}
 
-	aliceAfterSendingAsync = `
-	{
-	  "ignoreTxs": [
-		  "377fa2fbd27c82bdbc095478384c88b6c75432c0ef464189e49c965194446cdf"
-		],
-	  "spendableVtxos": [
-			{
-				"outpoint": {
-					"txid": "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
-					"vout": 1
-				},
-				"receiver": {
-					"address": "tark1qwnakvl59d5wckz9lqhhdav0uvns6uu3zkc6hg65gh0kgh6wve9pwqa0qjq9ajm57ss4m7wutyhp3vexxzgkn2r5awtzytp8qfk8exfn4vm5d8ff",
-					"amount": "19000"
-				},
-				"spent": false,
-				"poolTxid": "",
-				"spentBy": "",
-				"expireAt": "1726054928",
-				"swept": false,
-				"pending": false,
-				"pendingData": {
-					"redeemTx": "cHNidP8BAIkCAAAAAWwxXUjG5tidFA0LmUljX//jwW6xWaS6HKyRCw5StsxpAAAAAAD/////AugDAAAAAAAAIlEgt2eR8LtqTP7yUcQtSydeGrRiHnVmHHnZwYjdC23G7MZwSQAAAAAAACJRIKfUzf/o9h+r0v9y4nmyOt9qO8EkDumQPQZGTbEv8fSFAAAAAAABASsgTgAAAAAAACJRIKfUzf/o9h+r0v9y4nmyOt9qO8EkDumQPQZGTbEv8fSFIgYDp9sz9Cto7FhF+C929Y/jJw1zkRWxq6NURd9kX05mShcYAAAAAFYAAIAAAACAAQAAgAAAAAAAAAAAQRSvBIBey3T0IV353FkuGLMmMJFpqHTrliIsJwJsfJkzq7J0B8bQ0j9842h5lUfOWcbj2TeoFx6OCpgoHIqWIBhHQAFqkBLiRmP3AZ8MS77s1QIWZswMV3L72D9gN0f0MbD6XHkmzZeC1clF3uzxr+13wsF0vcFe29Zl3e2gAhMNGYVCFcFQkpt0waBJVLeLS2A16XpeB4paDyjsltVHv+6azoA6wKRtST8P7teUpSF4DAEbfJj5OIXITx5QGbZns/AtxqGyRSCn2zP0K2jsWEX4L3b1j+MnDXORFbGro1RF32RfTmZKF60grwSAXst09CFd+dxZLhizJjCRaah065YiLCcCbHyZM6uswCEWp9sz9Cto7FhF+C929Y/jJw1zkRWxq6NURd9kX05mShc5AbJ0B8bQ0j9842h5lUfOWcbj2TeoFx6OCpgoHIqWIBhHAAAAAFYAAIAAAACAAQAAgAAAAAAAAAAAARcgUJKbdMGgSVS3i0tgNel6XgeKWg8o7JbVR7/ums6AOsAAAAA=",
-					"unconditionalForfeitTxs": [
-						"cHNidP8BAFICAAAAAWwxXUjG5tidFA0LmUljX//jwW6xWaS6HKyRCw5StsxpAAAAAAD/////AVhNAAAAAAAAFgAUSU38/3Mzx5BdILG4oUO+JoHcoT8AAAAAAAEBKyBOAAAAAAAAIlEgp9TN/+j2H6vS/3LiebI632o7wSQO6ZA9BkZNsS/x9IVBFK8EgF7LdPQhXfncWS4YsyYwkWmodOuWIiwnAmx8mTOrsnQHxtDSP3zjaHmVR85ZxuPZN6gXHo4KmCgcipYgGEdAjH8Mg1Z3GdjGzp78Mg2xq1fop9KDfeji+xoyMgYS7q0Nl0AGOAaNzkDRW4cNcefll5jZC2i3nfygKdXsUsR+LEIVwVCSm3TBoElUt4tLYDXpel4HiloPKOyW1Ue/7prOgDrApG1JPw/u15SlIXgMARt8mPk4hchPHlAZtmez8C3GobJFIKfbM/QraOxYRfgvdvWP4ycNc5EVsaujVEXfZF9OZkoXrSCvBIBey3T0IV353FkuGLMmMJFpqHTrliIsJwJsfJkzq6zAARcgUJKbdMGgSVS3i0tgNel6XgeKWg8o7JbVR7/ums6AOsAAAA=="
-					]
-				}
-			}
-	  ],
-	  "spentVtxos": [
-			{
-				"outpoint": {
-					"txid": "69ccb6520e0b91ac1cbaa459b16ec1e3ff5f6349990b0d149dd8e6c6485d316c",
-					"vout": 0
-				},
-				"receiver": {
-					"address": "tark1qwnakvl59d5wckz9lqhhdav0uvns6uu3zkc6hg65gh0kgh6wve9pwqa0qjq9ajm57ss4m7wutyhp3vexxzgkn2r5awtzytp8qfk8exfn4vm5d8ff",
-					"amount": "20000"
-				},
-				"spent": true,
-				"poolTxid": "377fa2fbd27c82bdbc095478384c88b6c75432c0ef464189e49c965194446cdf",
-				"spentBy": "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
-				"expireAt": "1726054928",
-				"swept": false,
-				"pending": false,
-				"pendingData": null
-			}
-	  ]
-	}`
-
-	bobBeforeClaimingAsync = `
-	{
-	  "spendableVtxos": [
-			{
-				"outpoint": {
-					"txid": "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
-					"vout": 0
-				},
-				"receiver": {
-					"address": "tark1qwnakvl59d5wckz9lqhhdav0uvns6uu3zkc6hg65gh0kgh6wve9pwqa8vzms5xcr7pqgt0sw88vc287dse5rw6fnxuk9f08frf8amxjcrya0tkgt",
-					"amount": "1000"
-				},
-				"spent": false,
-				"poolTxid": "",
-				"spentBy": "",
-				"expireAt": "1726054928",
-				"swept": false,
-				"pending": true,
-				"pendingData": {
-					"redeemTx": "cHNidP8BAIkCAAAAAWwxXUjG5tidFA0LmUljX//jwW6xWaS6HKyRCw5StsxpAAAAAAD/////AugDAAAAAAAAIlEgt2eR8LtqTP7yUcQtSydeGrRiHnVmHHnZwYjdC23G7MZwSQAAAAAAACJRIKfUzf/o9h+r0v9y4nmyOt9qO8EkDumQPQZGTbEv8fSFAAAAAAABASsgTgAAAAAAACJRIKfUzf/o9h+r0v9y4nmyOt9qO8EkDumQPQZGTbEv8fSFIgYDp9sz9Cto7FhF+C929Y/jJw1zkRWxq6NURd9kX05mShcYAAAAAFYAAIAAAACAAQAAgAAAAAAAAAAAQRSvBIBey3T0IV353FkuGLMmMJFpqHTrliIsJwJsfJkzq7J0B8bQ0j9842h5lUfOWcbj2TeoFx6OCpgoHIqWIBhHQAFqkBLiRmP3AZ8MS77s1QIWZswMV3L72D9gN0f0MbD6XHkmzZeC1clF3uzxr+13wsF0vcFe29Zl3e2gAhMNGYVCFcFQkpt0waBJVLeLS2A16XpeB4paDyjsltVHv+6azoA6wKRtST8P7teUpSF4DAEbfJj5OIXITx5QGbZns/AtxqGyRSCn2zP0K2jsWEX4L3b1j+MnDXORFbGro1RF32RfTmZKF60grwSAXst09CFd+dxZLhizJjCRaah065YiLCcCbHyZM6uswCEWp9sz9Cto7FhF+C929Y/jJw1zkRWxq6NURd9kX05mShc5AbJ0B8bQ0j9842h5lUfOWcbj2TeoFx6OCpgoHIqWIBhHAAAAAFYAAIAAAACAAQAAgAAAAAAAAAAAARcgUJKbdMGgSVS3i0tgNel6XgeKWg8o7JbVR7/ums6AOsAAAAA=",
-					"unconditionalForfeitTxs": [
-						"cHNidP8BAFICAAAAAWwxXUjG5tidFA0LmUljX//jwW6xWaS6HKyRCw5StsxpAAAAAAD/////AVhNAAAAAAAAFgAUSU38/3Mzx5BdILG4oUO+JoHcoT8AAAAAAAEBKyBOAAAAAAAAIlEgp9TN/+j2H6vS/3LiebI632o7wSQO6ZA9BkZNsS/x9IVBFK8EgF7LdPQhXfncWS4YsyYwkWmodOuWIiwnAmx8mTOrsnQHxtDSP3zjaHmVR85ZxuPZN6gXHo4KmCgcipYgGEdAjH8Mg1Z3GdjGzp78Mg2xq1fop9KDfeji+xoyMgYS7q0Nl0AGOAaNzkDRW4cNcefll5jZC2i3nfygKdXsUsR+LEIVwVCSm3TBoElUt4tLYDXpel4HiloPKOyW1Ue/7prOgDrApG1JPw/u15SlIXgMARt8mPk4hchPHlAZtmez8C3GobJFIKfbM/QraOxYRfgvdvWP4ycNc5EVsaujVEXfZF9OZkoXrSCvBIBey3T0IV353FkuGLMmMJFpqHTrliIsJwJsfJkzq6zAARcgUJKbdMGgSVS3i0tgNel6XgeKWg8o7JbVR7/ums6AOsAAAA=="
-					]
-				}
-			},
-			{
-				"outpoint": {
-					"txid": "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
-					"vout": 0
-				},
-				"receiver": {
-					"address": "tark1qgw4gpt40zet7q399hv78z7pdak5sxlcgzhy6y6qq7hw3syeudc6xqsws4tegt5r88eahx7g5try2ua4n9rflsncpresjfwcrq80k0d3systnm98",
-					"amount": "2000"
-				},
-				"spent": false,
-				"poolTxid": "",
-				"spentBy": "",
-				"expireAt": "1726486389",
-				"swept": false,
-				"pending": true,
-				"pendingData": {
-					"redeemTx": "cHNidP8BAIkCAAAAARH6LJRGP/pFIkD/o5bBp8fXAhjl8yjfN7MhJsxdt5lrAQAAAAD/////AtAHAAAAAAAAIlEguuBh3KQUVZp+NHV2sixQ/mrsngCuLCGXzsgJPC1FzY7ANQ8AAAAAACJRIP7uXXtl4jLUcVVQU+sX7WFXmx2H6iCMzn7gye0v1Y8JAAAAAAABAStYPg8AAAAAACJRIP7uXXtl4jLUcVVQU+sX7WFXmx2H6iCMzn7gye0v1Y8JIgYCHVQFdXiyvwIlLdnji8FvbUgb+ECuTRNAB67owJnjcaMYAAAAAFYAAIAAAACAAQAAgAAAAAAAAAAAQRSc1yjQ/vHRHev23fKGANLvbOhkNYmGtmRWt8fSszlOJUzRFbnfxd1fq9gIEpaI0vrZww8tlZ94iEL75QoaIbVqQJsPdLYf7fAoXO82VoqwYHu1WevE4g6LxUGBPzfd96q5EEZkoW5qqg+v5dWJUEY467Q6qZLFHwziUaB3KEY8yEpCFcBQkpt0waBJVLeLS2A16XpeB4paDyjsltVHv+6azoA6wO5D2Mh3x0XNGxFCS67GNughkENFodpFeVpZjn76chI8RSAdVAV1eLK/AiUt2eOLwW9tSBv4QK5NE0AHrujAmeNxo60gnNco0P7x0R3r9t3yhgDS72zoZDWJhrZkVrfH0rM5TiWswCEWHVQFdXiyvwIlLdnji8FvbUgb+ECuTRNAB67owJnjcaM5AUzRFbnfxd1fq9gIEpaI0vrZww8tlZ94iEL75QoaIbVqAAAAAFYAAIAAAACAAQAAgAAAAAAAAAAAARcgUJKbdMGgSVS3i0tgNel6XgeKWg8o7JbVR7/ums6AOsAAAAA=",
-					"unconditionalForfeitTxs": [
-						"cHNidP8BAFICAAAAARH6LJRGP/pFIkD/o5bBp8fXAhjl8yjfN7MhJsxdt5lrAQAAAAD/////AZA9DwAAAAAAFgAU+9NJhjFhe8jX1hrXh3NvDyHZ1cYAAAAAAAEBK1g+DwAAAAAAIlEg/u5de2XiMtRxVVBT6xftYVebHYfqIIzOfuDJ7S/VjwlBFJzXKND+8dEd6/bd8oYA0u9s6GQ1iYa2ZFa3x9KzOU4lTNEVud/F3V+r2AgSlojS+tnDDy2Vn3iIQvvlChohtWpARJzBjlEkN/kTpyFEtpvP2Ui7ypevuxb9J/NUAwhYf8Pmnnj1l3WuKCSi4Fcp1O+lQjIiZlNpwY6J73q/V8Fe2kIVwFCSm3TBoElUt4tLYDXpel4HiloPKOyW1Ue/7prOgDrA7kPYyHfHRc0bEUJLrsY26CGQQ0Wh2kV5WlmOfvpyEjxFIB1UBXV4sr8CJS3Z44vBb21IG/hArk0TQAeu6MCZ43GjrSCc1yjQ/vHRHev23fKGANLvbOhkNYmGtmRWt8fSszlOJazAARcgUJKbdMGgSVS3i0tgNel6XgeKWg8o7JbVR7/ums6AOsAAAA=="
-					]
-				}
-			}
-	  ],
-	  "spentVtxos": []
-	}`
-	bobAfterClaimingAsync = `
-	{
-		"spendableVtxos": [
-			{
-				"outpoint": {
-					"txid": "11cba4cbb06290fb7426157efe439940e1e4143d51bdd20567d7bfd28f0d9090",
-					"vout": 0
-				},
-				"receiver": {
-					"address": "tark1qgw4gpt40zet7q399hv78z7pdak5sxlcgzhy6y6qq7hw3syeudc6xqsws4tegt5r88eahx7g5try2ua4n9rflsncpresjfwcrq80k0d3systnm98",
-					"amount": "3000"
-				},
-				"spent": false,
-				"poolTxid": "d6684a5b9e6939dccdf07d1f0eaf7fdd7b31de4d123e63e400d23de739800d4e",
-				"spentBy": "",
-				"expireAt": "1726503895",
-				"swept": false,
-				"pending": false,
-				"pendingData": null
-			}
-		],
-		"spentVtxos": [
-			{
-				"outpoint": {
-					"txid": "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
-					"vout": 0
-				},
-				"receiver": {
-					"address": "tark1qwnakvl59d5wckz9lqhhdav0uvns6uu3zkc6hg65gh0kgh6wve9pwqa8vzms5xcr7pqgt0sw88vc287dse5rw6fnxuk9f08frf8amxjcrya0tkgt",
-					"amount": "1000"
-				},
-				"spent": true,
-				"poolTxid": "",
-				"spentBy": "d6684a5b9e6939dccdf07d1f0eaf7fdd7b31de4d123e63e400d23de739800d4e",
-				"expireAt": "1726054928",
-				"swept": false,
-				"pending": true,
-				"pendingData": {
-					"redeemTx": "cHNidP8BAIkCAAAAAWwxXUjG5tidFA0LmUljX//jwW6xWaS6HKyRCw5StsxpAAAAAAD/////AugDAAAAAAAAIlEgt2eR8LtqTP7yUcQtSydeGrRiHnVmHHnZwYjdC23G7MZwSQAAAAAAACJRIKfUzf/o9h+r0v9y4nmyOt9qO8EkDumQPQZGTbEv8fSFAAAAAAABASsgTgAAAAAAACJRIKfUzf/o9h+r0v9y4nmyOt9qO8EkDumQPQZGTbEv8fSFIgYDp9sz9Cto7FhF+C929Y/jJw1zkRWxq6NURd9kX05mShcYAAAAAFYAAIAAAACAAQAAgAAAAAAAAAAAQRSvBIBey3T0IV353FkuGLMmMJFpqHTrliIsJwJsfJkzq7J0B8bQ0j9842h5lUfOWcbj2TeoFx6OCpgoHIqWIBhHQAFqkBLiRmP3AZ8MS77s1QIWZswMV3L72D9gN0f0MbD6XHkmzZeC1clF3uzxr+13wsF0vcFe29Zl3e2gAhMNGYVCFcFQkpt0waBJVLeLS2A16XpeB4paDyjsltVHv+6azoA6wKRtST8P7teUpSF4DAEbfJj5OIXITx5QGbZns/AtxqGyRSCn2zP0K2jsWEX4L3b1j+MnDXORFbGro1RF32RfTmZKF60grwSAXst09CFd+dxZLhizJjCRaah065YiLCcCbHyZM6uswCEWp9sz9Cto7FhF+C929Y/jJw1zkRWxq6NURd9kX05mShc5AbJ0B8bQ0j9842h5lUfOWcbj2TeoFx6OCpgoHIqWIBhHAAAAAFYAAIAAAACAAQAAgAAAAAAAAAAAARcgUJKbdMGgSVS3i0tgNel6XgeKWg8o7JbVR7/ums6AOsAAAAA=",
-					"unconditionalForfeitTxs": [
-						"cHNidP8BAFICAAAAAWwxXUjG5tidFA0LmUljX//jwW6xWaS6HKyRCw5StsxpAAAAAAD/////AVhNAAAAAAAAFgAUSU38/3Mzx5BdILG4oUO+JoHcoT8AAAAAAAEBKyBOAAAAAAAAIlEgp9TN/+j2H6vS/3LiebI632o7wSQO6ZA9BkZNsS/x9IVBFK8EgF7LdPQhXfncWS4YsyYwkWmodOuWIiwnAmx8mTOrsnQHxtDSP3zjaHmVR85ZxuPZN6gXHo4KmCgcipYgGEdAjH8Mg1Z3GdjGzp78Mg2xq1fop9KDfeji+xoyMgYS7q0Nl0AGOAaNzkDRW4cNcefll5jZC2i3nfygKdXsUsR+LEIVwVCSm3TBoElUt4tLYDXpel4HiloPKOyW1Ue/7prOgDrApG1JPw/u15SlIXgMARt8mPk4hchPHlAZtmez8C3GobJFIKfbM/QraOxYRfgvdvWP4ycNc5EVsaujVEXfZF9OZkoXrSCvBIBey3T0IV353FkuGLMmMJFpqHTrliIsJwJsfJkzq6zAARcgUJKbdMGgSVS3i0tgNel6XgeKWg8o7JbVR7/ums6AOsAAAA=="
-					]
-				}
-			},
-			{
-				"outpoint": {
-					"txid": "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
-					"vout": 0
-				},
-				"receiver": {
-					"address": "tark1qgw4gpt40zet7q399hv78z7pdak5sxlcgzhy6y6qq7hw3syeudc6xqsws4tegt5r88eahx7g5try2ua4n9rflsncpresjfwcrq80k0d3systnm98",
-					"amount": "2000"
-				},
-				"spent": true,
-				"poolTxid": "",
-				"spentBy": "d6684a5b9e6939dccdf07d1f0eaf7fdd7b31de4d123e63e400d23de739800d4e",
-				"expireAt": "1726486389",
-				"swept": false,
-				"pending": true,
-				"pendingData": {
-					"redeemTx": "cHNidP8BAIkCAAAAARH6LJRGP/pFIkD/o5bBp8fXAhjl8yjfN7MhJsxdt5lrAQAAAAD/////AtAHAAAAAAAAIlEguuBh3KQUVZp+NHV2sixQ/mrsngCuLCGXzsgJPC1FzY7ANQ8AAAAAACJRIP7uXXtl4jLUcVVQU+sX7WFXmx2H6iCMzn7gye0v1Y8JAAAAAAABAStYPg8AAAAAACJRIP7uXXtl4jLUcVVQU+sX7WFXmx2H6iCMzn7gye0v1Y8JIgYCHVQFdXiyvwIlLdnji8FvbUgb+ECuTRNAB67owJnjcaMYAAAAAFYAAIAAAACAAQAAgAAAAAAAAAAAQRSc1yjQ/vHRHev23fKGANLvbOhkNYmGtmRWt8fSszlOJUzRFbnfxd1fq9gIEpaI0vrZww8tlZ94iEL75QoaIbVqQJsPdLYf7fAoXO82VoqwYHu1WevE4g6LxUGBPzfd96q5EEZkoW5qqg+v5dWJUEY467Q6qZLFHwziUaB3KEY8yEpCFcBQkpt0waBJVLeLS2A16XpeB4paDyjsltVHv+6azoA6wO5D2Mh3x0XNGxFCS67GNughkENFodpFeVpZjn76chI8RSAdVAV1eLK/AiUt2eOLwW9tSBv4QK5NE0AHrujAmeNxo60gnNco0P7x0R3r9t3yhgDS72zoZDWJhrZkVrfH0rM5TiWswCEWHVQFdXiyvwIlLdnji8FvbUgb+ECuTRNAB67owJnjcaM5AUzRFbnfxd1fq9gIEpaI0vrZww8tlZ94iEL75QoaIbVqAAAAAFYAAIAAAACAAQAAgAAAAAAAAAAAARcgUJKbdMGgSVS3i0tgNel6XgeKWg8o7JbVR7/ums6AOsAAAAA=",
-					"unconditionalForfeitTxs": [
-						"cHNidP8BAFICAAAAARH6LJRGP/pFIkD/o5bBp8fXAhjl8yjfN7MhJsxdt5lrAQAAAAD/////AZA9DwAAAAAAFgAU+9NJhjFhe8jX1hrXh3NvDyHZ1cYAAAAAAAEBK1g+DwAAAAAAIlEg/u5de2XiMtRxVVBT6xftYVebHYfqIIzOfuDJ7S/VjwlBFJzXKND+8dEd6/bd8oYA0u9s6GQ1iYa2ZFa3x9KzOU4lTNEVud/F3V+r2AgSlojS+tnDDy2Vn3iIQvvlChohtWpARJzBjlEkN/kTpyFEtpvP2Ui7ypevuxb9J/NUAwhYf8Pmnnj1l3WuKCSi4Fcp1O+lQjIiZlNpwY6J73q/V8Fe2kIVwFCSm3TBoElUt4tLYDXpel4HiloPKOyW1Ue/7prOgDrA7kPYyHfHRc0bEUJLrsY26CGQQ0Wh2kV5WlmOfvpyEjxFIB1UBXV4sr8CJS3Z44vBb21IG/hArk0TQAeu6MCZ43GjrSCc1yjQ/vHRHev23fKGANLvbOhkNYmGtmRWt8fSszlOJazAARcgUJKbdMGgSVS3i0tgNel6XgeKWg8o7JbVR7/ums6AOsAAAA=="
-					]
-				}
-			}
-		]
-	}`
-	bobAfterSendingAsync = `
-	{
-		"spendableVtxos": [
-			{
-				"outpoint": {
-					"txid": "23c3a885f0ea05f7bdf83f3bf7f8ac9dc3f791ad292f4e63a6f53fa5e4935ab0",
-					"vout": 0
-				},
-				"receiver": {
-					"address": "tark1qwnakvl59d5wckz9lqhhdav0uvns6uu3zkc6hg65gh0kgh6wve9pwqa8vzms5xcr7pqgt0sw88vc287dse5rw6fnxuk9f08frf8amxjcrya0tkgt",
-					"amount": "900"
-				},
-				"spent": false,
-				"poolTxid": "",
-				"spentBy": "",
-				"expireAt": "1726503895",
-				"swept": false,
-				"pending": false,
-				"pendingData": {
-					"redeemTx": "cHNidP8BAIkCAAAAAdOK9YzYw1ceJznqJxtRXGe0KeHj6CLcLtqLVwcbMCivAAAAAAD/////ArgLAAAAAAAAIlEgC39Vxhw3dIa4heHgFS6X4XwDl1mBggsKLVTBwF1h3qEgegEAAAAAACJRIMkktfIFxFNTtAmy3K0p+7JqVn2kcA0P6y2vJ1QX2zysAAAAAAABASughgEAAAAAACJRIMkktfIFxFNTtAmy3K0p+7JqVn2kcA0P6y2vJ1QX2zysIgYDjGeMfnNwCrU45iB3iRqiFdWTADaiJ968+w3ruFuq1F0YAAAAAFYAAIAAAACAAQAAgAAAAAAAAAAAQRTYEOuHJ0hyLBGzY8nSHpD2F1nby5/XQ5Sh2Je+cQ5Wsx0ZucLmB/LLspxMRN9JcJn3Q2KJRMhhg7415cCg1d0gQNSvgaBk/1WLYqQxCKxCfv8ViVJ7vjBxvNO5tc2FEDy27V9cIrfL1jPJoVrhgPZT0GwY7dkVZS7saIKI03CbipBCFcBQkpt0waBJVLeLS2A16XpeB4paDyjsltVHv+6azoA6wPKiQ0JM6aw2kcUByijEbOydM3gTIVCGN/69q+dmyxcqRSCMZ4x+c3AKtTjmIHeJGqIV1ZMANqIn3rz7Deu4W6rUXa0g2BDrhydIciwRs2PJ0h6Q9hdZ28uf10OUodiXvnEOVrOswCEWjGeMfnNwCrU45iB3iRqiFdWTADaiJ968+w3ruFuq1F05AR0ZucLmB/LLspxMRN9JcJn3Q2KJRMhhg7415cCg1d0gAAAAAFYAAIAAAACAAQAAgAAAAAAAAAAAARcgUJKbdMGgSVS3i0tgNel6XgeKWg8o7JbVR7/ums6AOsAAAAA=",
-					"unconditionalForfeitTxs": [
-						"cHNidP8BAFICAAAAAdOK9YzYw1ceJznqJxtRXGe0KeHj6CLcLtqLVwcbMCivAAAAAAD/////AdiFAQAAAAAAFgAUlsBYsQa9BEiB8ZumuN4J50lbQIoAAAAAAAEBK6CGAQAAAAAAIlEgySS18gXEU1O0CbLcrSn7smpWfaRwDQ/rLa8nVBfbPKxBFNgQ64cnSHIsEbNjydIekPYXWdvLn9dDlKHYl75xDlazHRm5wuYH8suynExE30lwmfdDYolEyGGDvjXlwKDV3SBAZadgbU8gCDvq3XN0EeLIwGKGSAYHZRkGbAnr9ZjCHGKAQlfFNYS0af1Lz4j7Th2osVY8JJv7O736sC5NNQome0IVwFCSm3TBoElUt4tLYDXpel4HiloPKOyW1Ue/7prOgDrA8qJDQkzprDaRxQHKKMRs7J0zeBMhUIY3/r2r52bLFypFIIxnjH5zcAq1OOYgd4kaohXVkwA2oifevPsN67hbqtRdrSDYEOuHJ0hyLBGzY8nSHpD2F1nby5/XQ5Sh2Je+cQ5Ws6zAARcgUJKbdMGgSVS3i0tgNel6XgeKWg8o7JbVR7/ums6AOsAAAA=="
-					]
-				}
-			}
-		],
-		"spentVtxos": [
-			{
-				"outpoint": {
-					"txid": "94fa598302f17f00c8881e742ec0ce2f8c8d16f3d54fe6ba0fb7d13a493d84ad",
-					"vout": 0
-				},
-				"receiver": {
-					"address": "tark1qwnakvl59d5wckz9lqhhdav0uvns6uu3zkc6hg65gh0kgh6wve9pwqa8vzms5xcr7pqgt0sw88vc287dse5rw6fnxuk9f08frf8amxjcrya0tkgt",
-					"amount": "1000"
-				},
-				"spent": true,
-				"poolTxid": "",
-				"spentBy": "d6684a5b9e6939dccdf07d1f0eaf7fdd7b31de4d123e63e400d23de739800d4e",
-				"expireAt": "1726054928",
-				"swept": false,
-				"pending": true,
-				"pendingData": {
-					"redeemTx": "cHNidP8BAIkCAAAAAWwxXUjG5tidFA0LmUljX//jwW6xWaS6HKyRCw5StsxpAAAAAAD/////AugDAAAAAAAAIlEgt2eR8LtqTP7yUcQtSydeGrRiHnVmHHnZwYjdC23G7MZwSQAAAAAAACJRIKfUzf/o9h+r0v9y4nmyOt9qO8EkDumQPQZGTbEv8fSFAAAAAAABASsgTgAAAAAAACJRIKfUzf/o9h+r0v9y4nmyOt9qO8EkDumQPQZGTbEv8fSFIgYDp9sz9Cto7FhF+C929Y/jJw1zkRWxq6NURd9kX05mShcYAAAAAFYAAIAAAACAAQAAgAAAAAAAAAAAQRSvBIBey3T0IV353FkuGLMmMJFpqHTrliIsJwJsfJkzq7J0B8bQ0j9842h5lUfOWcbj2TeoFx6OCpgoHIqWIBhHQAFqkBLiRmP3AZ8MS77s1QIWZswMV3L72D9gN0f0MbD6XHkmzZeC1clF3uzxr+13wsF0vcFe29Zl3e2gAhMNGYVCFcFQkpt0waBJVLeLS2A16XpeB4paDyjsltVHv+6azoA6wKRtST8P7teUpSF4DAEbfJj5OIXITx5QGbZns/AtxqGyRSCn2zP0K2jsWEX4L3b1j+MnDXORFbGro1RF32RfTmZKF60grwSAXst09CFd+dxZLhizJjCRaah065YiLCcCbHyZM6uswCEWp9sz9Cto7FhF+C929Y/jJw1zkRWxq6NURd9kX05mShc5AbJ0B8bQ0j9842h5lUfOWcbj2TeoFx6OCpgoHIqWIBhHAAAAAFYAAIAAAACAAQAAgAAAAAAAAAAAARcgUJKbdMGgSVS3i0tgNel6XgeKWg8o7JbVR7/ums6AOsAAAAA=",
-					"unconditionalForfeitTxs": [
-						"cHNidP8BAFICAAAAAWwxXUjG5tidFA0LmUljX//jwW6xWaS6HKyRCw5StsxpAAAAAAD/////AVhNAAAAAAAAFgAUSU38/3Mzx5BdILG4oUO+JoHcoT8AAAAAAAEBKyBOAAAAAAAAIlEgp9TN/+j2H6vS/3LiebI632o7wSQO6ZA9BkZNsS/x9IVBFK8EgF7LdPQhXfncWS4YsyYwkWmodOuWIiwnAmx8mTOrsnQHxtDSP3zjaHmVR85ZxuPZN6gXHo4KmCgcipYgGEdAjH8Mg1Z3GdjGzp78Mg2xq1fop9KDfeji+xoyMgYS7q0Nl0AGOAaNzkDRW4cNcefll5jZC2i3nfygKdXsUsR+LEIVwVCSm3TBoElUt4tLYDXpel4HiloPKOyW1Ue/7prOgDrApG1JPw/u15SlIXgMARt8mPk4hchPHlAZtmez8C3GobJFIKfbM/QraOxYRfgvdvWP4ycNc5EVsaujVEXfZF9OZkoXrSCvBIBey3T0IV353FkuGLMmMJFpqHTrliIsJwJsfJkzq6zAARcgUJKbdMGgSVS3i0tgNel6XgeKWg8o7JbVR7/ums6AOsAAAA=="
-					]
-				}
-			},
-			{
-				"outpoint": {
-					"txid": "766fc46ba5c2da41cd4c4bc0566e0f4e0f24c184c41acd3bead5cd7b11120367",
-					"vout": 0
-				},
-				"receiver": {
-					"address": "tark1qgw4gpt40zet7q399hv78z7pdak5sxlcgzhy6y6qq7hw3syeudc6xqsws4tegt5r88eahx7g5try2ua4n9rflsncpresjfwcrq80k0d3systnm98",
-					"amount": "2000"
-				},
-				"spent": true,
-				"poolTxid": "",
-				"spentBy": "d6684a5b9e6939dccdf07d1f0eaf7fdd7b31de4d123e63e400d23de739800d4e",
-				"expireAt": "1726486389",
-				"swept": false,
-				"pending": true,
-				"pendingData": {
-					"redeemTx": "cHNidP8BAIkCAAAAARH6LJRGP/pFIkD/o5bBp8fXAhjl8yjfN7MhJsxdt5lrAQAAAAD/////AtAHAAAAAAAAIlEguuBh3KQUVZp+NHV2sixQ/mrsngCuLCGXzsgJPC1FzY7ANQ8AAAAAACJRIP7uXXtl4jLUcVVQU+sX7WFXmx2H6iCMzn7gye0v1Y8JAAAAAAABAStYPg8AAAAAACJRIP7uXXtl4jLUcVVQU+sX7WFXmx2H6iCMzn7gye0v1Y8JIgYCHVQFdXiyvwIlLdnji8FvbUgb+ECuTRNAB67owJnjcaMYAAAAAFYAAIAAAACAAQAAgAAAAAAAAAAAQRSc1yjQ/vHRHev23fKGANLvbOhkNYmGtmRWt8fSszlOJUzRFbnfxd1fq9gIEpaI0vrZww8tlZ94iEL75QoaIbVqQJsPdLYf7fAoXO82VoqwYHu1WevE4g6LxUGBPzfd96q5EEZkoW5qqg+v5dWJUEY467Q6qZLFHwziUaB3KEY8yEpCFcBQkpt0waBJVLeLS2A16XpeB4paDyjsltVHv+6azoA6wO5D2Mh3x0XNGxFCS67GNughkENFodpFeVpZjn76chI8RSAdVAV1eLK/AiUt2eOLwW9tSBv4QK5NE0AHrujAmeNxo60gnNco0P7x0R3r9t3yhgDS72zoZDWJhrZkVrfH0rM5TiWswCEWHVQFdXiyvwIlLdnji8FvbUgb+ECuTRNAB67owJnjcaM5AUzRFbnfxd1fq9gIEpaI0vrZww8tlZ94iEL75QoaIbVqAAAAAFYAAIAAAACAAQAAgAAAAAAAAAAAARcgUJKbdMGgSVS3i0tgNel6XgeKWg8o7JbVR7/ums6AOsAAAAA=",
-					"unconditionalForfeitTxs": [
-						"cHNidP8BAFICAAAAARH6LJRGP/pFIkD/o5bBp8fXAhjl8yjfN7MhJsxdt5lrAQAAAAD/////AZA9DwAAAAAAFgAU+9NJhjFhe8jX1hrXh3NvDyHZ1cYAAAAAAAEBK1g+DwAAAAAAIlEg/u5de2XiMtRxVVBT6xftYVebHYfqIIzOfuDJ7S/VjwlBFJzXKND+8dEd6/bd8oYA0u9s6GQ1iYa2ZFa3x9KzOU4lTNEVud/F3V+r2AgSlojS+tnDDy2Vn3iIQvvlChohtWpARJzBjlEkN/kTpyFEtpvP2Ui7ypevuxb9J/NUAwhYf8Pmnnj1l3WuKCSi4Fcp1O+lQjIiZlNpwY6J73q/V8Fe2kIVwFCSm3TBoElUt4tLYDXpel4HiloPKOyW1Ue/7prOgDrA7kPYyHfHRc0bEUJLrsY26CGQQ0Wh2kV5WlmOfvpyEjxFIB1UBXV4sr8CJS3Z44vBb21IG/hArk0TQAeu6MCZ43GjrSCc1yjQ/vHRHev23fKGANLvbOhkNYmGtmRWt8fSszlOJazAARcgUJKbdMGgSVS3i0tgNel6XgeKWg8o7JbVR7/ums6AOsAAAA=="
-					]
-				}
-			},
-			{
-				"outpoint": {
-					"txid": "11cba4cbb06290fb7426157efe439940e1e4143d51bdd20567d7bfd28f0d9090",
-					"vout": 0
-				},
-				"receiver": {
-					"address": "tark1qgw4gpt40zet7q399hv78z7pdak5sxlcgzhy6y6qq7hw3syeudc6xqsws4tegt5r88eahx7g5try2ua4n9rflsncpresjfwcrq80k0d3systnm98",
-					"amount": "3000"
-				},
-				"spent": false,
-				"poolTxid": "d6684a5b9e6939dccdf07d1f0eaf7fdd7b31de4d123e63e400d23de739800d4e",
-				"spentBy": "23c3a885f0ea05f7bdf83f3bf7f8ac9dc3f791ad292f4e63a6f53fa5e4935ab0",
-				"expireAt": "1726503895",
-				"swept": false,
-				"pending": false,
-				"pendingData": null
-			}
-		]
-	}`
-)
+func parseTimestamp(timestamp string) time.Time {
+	seconds, _ := strconv.ParseInt(timestamp, 10, 64)
+	return time.Unix(seconds, 0)
+}

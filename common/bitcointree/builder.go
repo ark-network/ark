@@ -1,8 +1,10 @@
 package bitcointree
 
 import (
+	"encoding/hex"
 	"fmt"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr/musig2"
@@ -17,7 +19,7 @@ import (
 func CraftSharedOutput(
 	cosigners []*secp256k1.PublicKey,
 	aspPubkey *secp256k1.PublicKey,
-	receivers []Receiver,
+	receivers []tree.VtxoLeaf,
 	feeSatsPerNode,
 	dustAmount uint64,
 	roundLifetime int64,
@@ -36,7 +38,7 @@ func CraftSharedOutput(
 
 	amount := root.getAmount() + int64(feeSatsPerNode)
 
-	scriptPubKey, err := taprootOutputScript(aggregatedKey.FinalKey)
+	scriptPubKey, err := common.P2TRScript(aggregatedKey.FinalKey)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -49,7 +51,7 @@ func CraftCongestionTree(
 	initialInput *wire.OutPoint,
 	cosigners []*secp256k1.PublicKey,
 	aspPubkey *secp256k1.PublicKey,
-	receivers []Receiver,
+	receivers []tree.VtxoLeaf,
 	feeSatsPerNode,
 	dustAmount uint64,
 	roundLifetime int64,
@@ -117,9 +119,9 @@ type node interface {
 }
 
 type leaf struct {
-	vtxoScript VtxoScript
 	amount     int64
 	dustAmount int64
+	pubkey     *secp256k1.PublicKey
 }
 
 type branch struct {
@@ -152,12 +154,7 @@ func (l *leaf) getAmount() int64 {
 }
 
 func (l *leaf) getOutputs() ([]*wire.TxOut, error) {
-	taprootKey, _, err := l.vtxoScript.TapTree()
-	if err != nil {
-		return nil, err
-	}
-
-	script, err := taprootOutputScript(taprootKey)
+	script, err := common.P2TRScript(l.pubkey)
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +178,7 @@ func (l *leaf) getOutputs() ([]*wire.TxOut, error) {
 }
 
 func (b *branch) getOutputs() ([]*wire.TxOut, error) {
-	sharedOutputScript, err := taprootOutputScript(b.aggregatedKey.FinalKey)
+	sharedOutputScript, err := common.P2TRScript(b.aggregatedKey.FinalKey)
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +263,7 @@ func getTx(
 func createRootNode(
 	aggregatedKey *musig2.AggregateKey,
 	cosigners []*secp256k1.PublicKey,
-	receivers []Receiver,
+	receivers []tree.VtxoLeaf,
 	feeSatsPerNode,
 	dustAmount uint64,
 ) (root node, err error) {
@@ -276,10 +273,20 @@ func createRootNode(
 
 	nodes := make([]node, 0, len(receivers))
 	for _, r := range receivers {
+		pubkeyBytes, err := hex.DecodeString(r.Pubkey)
+		if err != nil {
+			return nil, err
+		}
+
+		pubkey, err := schnorr.ParsePubKey(pubkeyBytes)
+		if err != nil {
+			return nil, err
+		}
+
 		leafNode := &leaf{
-			vtxoScript: r.Script,
 			amount:     int64(r.Amount),
 			dustAmount: int64(dustAmount),
+			pubkey:     pubkey,
 		}
 		nodes = append(nodes, leafNode)
 	}
@@ -360,10 +367,4 @@ func createUpperLevel(nodes []node, aggregatedKey *musig2.AggregateKey, cosigner
 		pairs = append(pairs, branchNode)
 	}
 	return pairs, nil
-}
-
-func taprootOutputScript(taprootKey *secp256k1.PublicKey) ([]byte, error) {
-	return txscript.NewScriptBuilder().AddOp(txscript.OP_1).AddData(
-		schnorr.SerializePubKey(taprootKey),
-	).Script()
 }

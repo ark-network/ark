@@ -156,6 +156,7 @@ func (s *covenantService) GetBoardingAddress(ctx context.Context, userPubkey *se
 func (s *covenantService) SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error) {
 	vtxosInputs := make([]domain.Vtxo, 0)
 	boardingInputs := make([]ports.BoardingInput, 0)
+	descriptors := make(map[domain.VtxoKey]string)
 
 	now := time.Now().Unix()
 
@@ -218,13 +219,14 @@ func (s *covenantService) SpendVtxos(ctx context.Context, inputs []ports.Input) 
 		}
 
 		vtxosInputs = append(vtxosInputs, vtxo)
+		descriptors[vtxo.VtxoKey] = input.Descriptor
 	}
 
 	payment, err := domain.NewPayment(vtxosInputs)
 	if err != nil {
 		return "", err
 	}
-	if err := s.paymentRequests.push(*payment, boardingInputs); err != nil {
+	if err := s.paymentRequests.push(*payment, boardingInputs, descriptors); err != nil {
 		return "", err
 	}
 	return payment.Id, nil
@@ -324,7 +326,7 @@ func (s *covenantService) CompleteAsyncPayment(ctx context.Context, redeemTx str
 	return fmt.Errorf("unimplemented")
 }
 
-func (s *covenantService) CreateAsyncPayment(ctx context.Context, inputs []ports.Input, receivers []domain.Receiver) (string, error) {
+func (s *covenantService) CreateAsyncPayment(_ context.Context, _ []AsyncPaymentInput, _ []domain.Receiver) (string, error) {
 	return "", fmt.Errorf("unimplemented")
 }
 
@@ -345,9 +347,14 @@ func (s *covenantService) SignRoundTx(ctx context.Context, signedRoundTx string)
 	return nil
 }
 
-func (s *covenantService) ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, []domain.Vtxo, error) {
-	pk := hex.EncodeToString(pubkey.SerializeCompressed())
-	return s.repoManager.Vtxos().GetAllVtxos(ctx, pk)
+func (s *covenantService) ListVtxos(ctx context.Context, address string) ([]domain.Vtxo, []domain.Vtxo, error) {
+	decodedAddress, err := common.DecodeAddress(address)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to decode address: %s", err)
+	}
+	pubkey := hex.EncodeToString(schnorr.SerializePubKey(decodedAddress.VtxoTapKey))
+
+	return s.repoManager.Vtxos().GetAllVtxos(ctx, pubkey)
 }
 
 func (s *covenantService) GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent {
@@ -436,7 +443,7 @@ func (s *covenantService) startRound() {
 	s.currentRound = round
 
 	defer func() {
-		time.Sleep(time.Duration(s.roundInterval/2) * time.Second)
+		time.Sleep(time.Duration(s.roundInterval/3) * time.Second)
 		s.startFinalization()
 	}()
 
@@ -462,7 +469,7 @@ func (s *covenantService) startFinalization() {
 			s.startRound()
 			return
 		}
-		time.Sleep(time.Duration((s.roundInterval/2)-1) * time.Second)
+		time.Sleep(time.Duration((s.roundInterval/3)-1) * time.Second)
 		s.finalizeRound()
 	}()
 
@@ -482,7 +489,7 @@ func (s *covenantService) startFinalization() {
 	if num > paymentsThreshold {
 		num = paymentsThreshold
 	}
-	payments, boardingInputs, _ := s.paymentRequests.pop(num)
+	payments, boardingInputs, descriptors, _ := s.paymentRequests.pop(num)
 	if _, err := round.RegisterPayments(payments); err != nil {
 		round.Fail(fmt.Errorf("failed to register payments: %s", err))
 		log.WithError(err).Warn("failed to register payments")
@@ -517,7 +524,7 @@ func (s *covenantService) startFinalization() {
 	minRelayFeeRate := s.wallet.MinRelayFeeRate(ctx)
 
 	if needForfeits {
-		connectors, forfeitTxs, err = s.builder.BuildForfeitTxs(unsignedPoolTx, payments, minRelayFeeRate)
+		connectors, forfeitTxs, err = s.builder.BuildForfeitTxs(unsignedPoolTx, payments, descriptors, minRelayFeeRate)
 		if err != nil {
 			round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
 			log.WithError(err).Warn("failed to create connectors and forfeit txs")
@@ -924,6 +931,8 @@ func (s *covenantService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 		return nil
 	}
 
+	createdAt := time.Now().Unix()
+
 	leaves := round.CongestionTree.Leaves()
 	vtxos := make([]domain.Vtxo, 0)
 	for _, node := range leaves {
@@ -933,53 +942,21 @@ func (s *covenantService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 				continue // skip fee outputs
 			}
 
-			desc := ""
-			found := false
-
-			for _, p := range round.Payments {
-				if found {
-					break
-				}
-
-				for _, r := range p.Receivers {
-					if r.IsOnchain() {
-						continue
-					}
-
-					vtxoScript, err := tree.ParseVtxoScript(r.Descriptor)
-					if err != nil {
-						log.WithError(err).Warn("failed to parse vtxo descriptor")
-						continue
-					}
-
-					tapKey, _, err := vtxoScript.TapTree()
-					if err != nil {
-						log.WithError(err).Warn("failed to compute vtxo tap key")
-						continue
-					}
-
-					script, err := common.P2TRScript(tapKey)
-					if err != nil {
-						log.WithError(err).Warn("failed to create vtxo scriptpubkey")
-						continue
-					}
-
-					if bytes.Equal(script, out.Script) {
-						found = true
-						desc = r.Descriptor
-						break
-					}
-				}
+			vtxoTapKey, err := schnorr.ParsePubKey(out.Script[2:])
+			if err != nil {
+				log.WithError(err).Warn("failed to parse vtxo tap key")
+				continue
 			}
 
-			if found {
-				vtxos = append(vtxos, domain.Vtxo{
-					VtxoKey:   domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
-					Receiver:  domain.Receiver{Descriptor: desc, Amount: uint64(out.Value)},
-					RoundTxid: round.Txid,
-				})
-				break
-			}
+			vtxoPubkey := hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey))
+
+			vtxos = append(vtxos, domain.Vtxo{
+				VtxoKey:   domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
+				Pubkey:    vtxoPubkey,
+				Amount:    uint64(out.Value),
+				RoundTxid: round.Txid,
+				CreatedAt: createdAt,
+			})
 		}
 	}
 	return vtxos
@@ -1050,17 +1027,17 @@ func (s *covenantService) restoreWatchingVtxos() error {
 func (s *covenantService) extractVtxosScripts(vtxos []domain.Vtxo) ([]string, error) {
 	indexedScripts := make(map[string]struct{})
 	for _, vtxo := range vtxos {
-		vtxoScript, err := tree.ParseVtxoScript(vtxo.Receiver.Descriptor)
+		vtxoTapKeyBytes, err := hex.DecodeString(vtxo.Pubkey)
 		if err != nil {
 			return nil, err
 		}
 
-		tapKey, _, err := vtxoScript.TapTree()
+		vtxoTapKey, err := schnorr.ParsePubKey(vtxoTapKeyBytes)
 		if err != nil {
 			return nil, err
 		}
 
-		script, err := common.P2TRScript(tapKey)
+		script, err := common.P2TRScript(vtxoTapKey)
 		if err != nil {
 			return nil, err
 		}

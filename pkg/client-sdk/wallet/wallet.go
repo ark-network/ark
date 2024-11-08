@@ -10,6 +10,11 @@ const (
 	SingleKeyWallet = "singlekey"
 )
 
+type DescriptorAddress struct {
+	Descriptor string
+	Address    string
+}
+
 type WalletService interface {
 	GetType() string
 	Create(
@@ -20,13 +25,13 @@ type WalletService interface {
 	IsLocked() bool
 	GetAddresses(
 		ctx context.Context,
-	) (offchainAddresses, boardingAddresses, redemptionAddresses []string, err error)
+	) (offchainAddresses, boardingAddresses, redemptionAddresses []DescriptorAddress, err error)
 	NewAddress(
 		ctx context.Context, change bool,
-	) (offchainAddr, onchainAddr string, err error)
+	) (offchainAddr, onchainAddr *DescriptorAddress, err error)
 	NewAddresses(
 		ctx context.Context, change bool, num int,
-	) (offchainAddresses, onchainAddresses []string, err error)
+	) (offchainAddresses, onchainAddresses []DescriptorAddress, err error)
 	SignTransaction(
 		ctx context.Context, explorerSvc explorer.Explorer, tx string,
 	) (signedTx string, err error)

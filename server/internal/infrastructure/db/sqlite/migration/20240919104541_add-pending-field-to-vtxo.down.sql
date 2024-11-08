@@ -1,1 +1,0 @@
-ALTER TABLE vtxo DROP COLUMN pending;

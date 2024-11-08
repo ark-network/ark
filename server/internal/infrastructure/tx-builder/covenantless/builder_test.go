@@ -123,7 +123,7 @@ func TestBuildForfeitTxs(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
 			for _, f := range fixtures.Valid {
 				connectors, forfeitTxs, err := builder.BuildForfeitTxs(
-					f.PoolTx, f.Payments, minRelayFeeRate,
+					f.PoolTx, f.Payments, f.Descriptors, minRelayFeeRate,
 				)
 				require.NoError(t, err)
 				require.Len(t, connectors, f.ExpectedNumOfConnectors)
@@ -161,7 +161,7 @@ func TestBuildForfeitTxs(t *testing.T) {
 		t.Run("invalid", func(t *testing.T) {
 			for _, f := range fixtures.Invalid {
 				connectors, forfeitTxs, err := builder.BuildForfeitTxs(
-					f.PoolTx, f.Payments, minRelayFeeRate,
+					f.PoolTx, f.Payments, f.Descriptors, minRelayFeeRate,
 				)
 				require.EqualError(t, err, f.ExpectedErr)
 				require.Empty(t, connectors)
@@ -225,6 +225,7 @@ func parsePoolTxFixtures() (*poolTxFixtures, error) {
 type forfeitTxsFixtures struct {
 	Valid []struct {
 		Payments                []domain.Payment
+		Descriptors             map[domain.VtxoKey]string
 		ExpectedNumOfConnectors int
 		ExpectedNumOfForfeitTxs int
 		PoolTx                  string
@@ -232,6 +233,7 @@ type forfeitTxsFixtures struct {
 	}
 	Invalid []struct {
 		Payments    []domain.Payment
+		Descriptors map[domain.VtxoKey]string
 		ExpectedErr string
 		PoolTx      string
 	}
@@ -252,6 +254,42 @@ func parseForfeitTxsFixtures() (*forfeitTxsFixtures, error) {
 	var fixtures forfeitTxsFixtures
 	if err := json.Unmarshal(file, &fixtures); err != nil {
 		return nil, err
+	}
+
+	valid := vv["valid"].([]interface{})
+	for i, v := range valid {
+		val := v.(map[string]interface{})
+		payments := val["payments"].([]interface{})
+		descriptors := make(map[domain.VtxoKey]string)
+		for _, p := range payments {
+			inputs := p.(map[string]interface{})["inputs"].([]interface{})
+			for _, in := range inputs {
+				inMap := in.(map[string]interface{})
+				descriptors[domain.VtxoKey{
+					Txid: inMap["txid"].(string),
+					VOut: uint32(inMap["vout"].(float64)),
+				}] = inMap["descriptor"].(string)
+			}
+		}
+		fixtures.Valid[i].Descriptors = descriptors
+	}
+
+	invalid := vv["invalid"].([]interface{})
+	for i, v := range invalid {
+		val := v.(map[string]interface{})
+		payments := val["payments"].([]interface{})
+		descriptors := make(map[domain.VtxoKey]string)
+		for _, p := range payments {
+			inputs := p.(map[string]interface{})["inputs"].([]interface{})
+			for _, in := range inputs {
+				inMap := in.(map[string]interface{})
+				descriptors[domain.VtxoKey{
+					Txid: inMap["txid"].(string),
+					VOut: uint32(inMap["vout"].(float64)),
+				}] = inMap["descriptor"].(string)
+			}
+		}
+		fixtures.Invalid[i].Descriptors = descriptors
 	}
 
 	return &fixtures, nil
