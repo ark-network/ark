@@ -116,6 +116,7 @@ type node interface {
 	getAmount() int64 // returns the input amount of the node = sum of all receivers' amounts + fees
 	getOutputs() ([]*wire.TxOut, error)
 	getChildren() []node
+	getTxVersion() int32
 }
 
 type leaf struct {
@@ -131,6 +132,14 @@ type branch struct {
 	feeAmount     int64
 }
 
+func (b *branch) getTxVersion() int32 {
+	return 2
+}
+
+func (l *leaf) getTxVersion() int32 {
+	return 3
+}
+
 func (b *branch) getChildren() []node {
 	return b.children
 }
@@ -143,7 +152,9 @@ func (b *branch) getAmount() int64 {
 	amount := int64(0)
 	for _, child := range b.children {
 		amount += child.getAmount()
-		amount += b.feeAmount
+		if child.getTxVersion() == 2 {
+			amount += b.feeAmount
+		}
 	}
 
 	return amount
@@ -159,18 +170,13 @@ func (l *leaf) getOutputs() ([]*wire.TxOut, error) {
 		return nil, err
 	}
 
-	vtxoOutputAmount := l.amount - l.dustAmount
-	if vtxoOutputAmount <= l.dustAmount {
-		return nil, fmt.Errorf("vtxo output amount must be greater than dust amount")
-	}
-
 	vtxoOutput := &wire.TxOut{
-		Value:    l.amount - l.dustAmount,
+		Value:    l.amount,
 		PkScript: script,
 	}
 
 	anchorOutput := &wire.TxOut{
-		Value:    l.dustAmount,
+		Value:    0,
 		PkScript: ANCHOR_PKSCRIPT,
 	}
 
@@ -186,8 +192,13 @@ func (b *branch) getOutputs() ([]*wire.TxOut, error) {
 	outputs := make([]*wire.TxOut, 0)
 
 	for _, child := range b.children {
+		value := child.getAmount()
+		if child.getTxVersion() == 2 {
+			value += b.feeAmount
+		}
+
 		outputs = append(outputs, &wire.TxOut{
-			Value:    child.getAmount() + b.feeAmount,
+			Value:    value,
 			PkScript: sharedOutputScript,
 		})
 	}
@@ -222,6 +233,9 @@ func getTreeNode(
 	}, nil
 }
 
+// getTx returns the psbt associated with the node
+// the psbt contains the inputs of the parent and the outputs of the children (or VTXOs if it's a leaf)
+// it also contains the internal key used to "unroll" and the sweep tascript branch of the input
 func getTx(
 	n node,
 	input *wire.OutPoint,
@@ -234,7 +248,13 @@ func getTx(
 		return nil, err
 	}
 
-	tx, err := psbt.New([]*wire.OutPoint{input}, outputs, 2, 0, []uint32{wire.MaxTxInSequenceNum})
+	tx, err := psbt.New(
+		[]*wire.OutPoint{input},
+		outputs,
+		n.getTxVersion(),
+		0,
+		[]uint32{wire.MaxTxInSequenceNum},
+	)
 	if err != nil {
 		return nil, err
 	}

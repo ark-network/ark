@@ -44,7 +44,7 @@ type TxBuilder interface {
 	VerifyTapscriptPartialSigs(tx string) (valid bool, txid string, err error)
 	// FindLeaves returns all the leaves txs that are reachable from the given outpoint
 	FindLeaves(congestionTree tree.CongestionTree, fromtxid string, vout uint32) (leaves []tree.Node, err error)
-	BuildAsyncPaymentTransactions(
+	BuildTxOOR(
 		vtxosToSpend []domain.Vtxo,
 		descriptors map[domain.VtxoKey]string,
 		forfeitsLeaves map[domain.VtxoKey]chainhash.Hash,

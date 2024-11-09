@@ -362,7 +362,7 @@ func (b *txBuilder) FindLeaves(
 	return foundLeaves, nil
 }
 
-func (b *txBuilder) BuildAsyncPaymentTransactions(
+func (b *txBuilder) BuildTxOOR(
 	_ []domain.Vtxo,
 	_ map[domain.VtxoKey]string,
 	_ map[domain.VtxoKey]chainhash.Hash,

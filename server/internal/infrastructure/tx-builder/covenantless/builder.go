@@ -408,7 +408,7 @@ func (b *txBuilder) FindLeaves(congestionTree tree.CongestionTree, fromtxid stri
 	return foundLeaves, nil
 }
 
-func (b *txBuilder) BuildAsyncPaymentTransactions(
+func (b *txBuilder) BuildTxOOR(
 	vtxos []domain.Vtxo,
 	descriptors map[domain.VtxoKey]string,
 	forfeitsLeaves map[domain.VtxoKey]chainhash.Hash,
@@ -416,6 +416,18 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 ) (string, error) {
 	if len(vtxos) <= 0 {
 		return "", fmt.Errorf("missing vtxos")
+	}
+
+	if len(receivers) <= 0 {
+		return "", fmt.Errorf("missing receivers")
+	}
+
+	if len(descriptors) != len(vtxos) {
+		return "", fmt.Errorf("missing descriptors")
+	}
+
+	if len(forfeitsLeaves) != len(vtxos) {
+		return "", fmt.Errorf("missing forfeits leaves")
 	}
 
 	ins := make([]*wire.OutPoint, 0, len(vtxos))
@@ -497,15 +509,6 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 		redeemTxWeightEstimator.AddP2TROutput()
 	}
 
-	redeemTxMinRelayFee, err := b.wallet.MinRelayFee(context.Background(), uint64(redeemTxWeightEstimator.VSize()))
-	if err != nil {
-		return "", err
-	}
-
-	if redeemTxMinRelayFee >= receivers[len(receivers)-1].Amount {
-		return "", fmt.Errorf("redeem tx fee is higher than the amount of the change receiver")
-	}
-
 	dustAmount, err := b.wallet.GetDustAmount(context.Background())
 	if err != nil {
 		return "", err
@@ -526,25 +529,26 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 			return "", err
 		}
 
-		newVtxoScript, err := common.P2TRScript(pubkey)
+		receiverPkScript, err := common.P2TRScript(pubkey)
 		if err != nil {
 			return "", err
 		}
 
-		// Deduct the min relay fee from the very last receiver which is supposed
 		// to be the change in case it's not a send-all.
 		value := receiver.Amount
-		if i == len(receivers)-1 {
-			value -= redeemTxMinRelayFee
-			if value <= dustAmount {
-				return "", fmt.Errorf("change amount is dust amount")
-			}
+		if value <= dustAmount {
+			return "", fmt.Errorf("receiver amount smaller than dust")
 		}
 		outs = append(outs, &wire.TxOut{
 			Value:    int64(value),
-			PkScript: newVtxoScript,
+			PkScript: receiverPkScript,
 		})
 	}
+
+	outs = append(outs, &wire.TxOut{
+		Value:    0,
+		PkScript: bitcointree.ANCHOR_PKSCRIPT,
+	})
 
 	sequences := make([]uint32, len(ins))
 	for i := range sequences {
@@ -552,7 +556,7 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 	}
 
 	redeemPtx, err := psbt.New(
-		ins, outs, 2, 0, sequences,
+		ins, outs, 3, 0, sequences,
 	)
 	if err != nil {
 		return "", err

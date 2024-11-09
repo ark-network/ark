@@ -355,7 +355,7 @@ func (s *covenantlessService) CreateAsyncPayment(
 		vtxosInputs = append(vtxosInputs, vtxo)
 	}
 
-	redeemTx, err := s.builder.BuildAsyncPaymentTransactions(
+	redeemTx, err := s.builder.BuildTxOOR(
 		vtxosInputs, descriptors, forfeitLeaves, receivers,
 	)
 	if err != nil {
@@ -1344,6 +1344,9 @@ func (s *covenantlessService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 			continue
 		}
 		for i, out := range tx.UnsignedTx.TxOut {
+			if bytes.Equal(out.PkScript, bitcointree.ANCHOR_PKSCRIPT) {
+				continue // skip anchor output
+			}
 			vtxoTapKey, err := schnorr.ParsePubKey(out.PkScript[2:])
 			if err != nil {
 				log.WithError(err).Warn("failed to parse vtxo tap key")
