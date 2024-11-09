@@ -2584,6 +2584,7 @@ func vtxosToTxsCovenantless(
 				Amount:    v.Amount,
 				Type:      types.TxReceived,
 				CreatedAt: v.CreatedAt,
+				Settled:   true,
 			})
 		}
 		if len(vtxos) > 1 {
@@ -2615,6 +2616,12 @@ func vtxosToTxsCovenantless(
 					}
 				}
 				txs = append(txs, tx)
+			}
+			lastVtxo := vtxos[len(vtxos)-1]
+			if len(lastVtxo.SpentBy) > 0 {
+				for i := range txs {
+					txs[i].Settled = true
+				}
 			}
 		}
 	}
