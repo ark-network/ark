@@ -171,13 +171,13 @@ func (l *leaf) getOutputs() ([]*wire.TxOut, error) {
 	}
 
 	vtxoOutput := &wire.TxOut{
-		Value:    l.amount,
+		Value:    l.amount - ANCHOR_AMOUNT,
 		PkScript: script,
 	}
 
 	anchorOutput := &wire.TxOut{
-		Value:    0,
 		PkScript: ANCHOR_PKSCRIPT,
+		Value:    ANCHOR_AMOUNT,
 	}
 
 	return []*wire.TxOut{vtxoOutput, anchorOutput}, nil

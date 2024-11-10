@@ -11,8 +11,9 @@ var (
 	COSIGNER_PSBT_KEY_PREFIX = []byte("cosigner")
 )
 
-// p2wsh(OP_TRUE)
+// P2A script = p2wsh(OP_TRUE)
 var ANCHOR_PKSCRIPT = []byte{0, 32, 74, 232, 21, 114, 240, 110, 27, 136, 253, 92, 237, 122, 26, 0, 9, 69, 67, 46, 131, 225, 85, 30, 111, 114, 30, 233, 192, 11, 140, 195, 50, 96}
+var ANCHOR_AMOUNT = int64(330) // dust amount for P2A
 
 func AddCosignerKey(inIndex int, ptx *psbt.Packet, key *secp256k1.PublicKey) error {
 	currentCosigners, err := GetCosignerKeys(ptx.Inputs[inIndex])

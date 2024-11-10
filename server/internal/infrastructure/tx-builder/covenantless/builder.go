@@ -534,11 +534,19 @@ func (b *txBuilder) BuildTxOOR(
 			return "", err
 		}
 
-		// to be the change in case it's not a send-all.
 		value := receiver.Amount
 		if value <= dustAmount {
 			return "", fmt.Errorf("receiver amount smaller than dust")
 		}
+
+		// to be the change in case it's not a send-all.
+		if i == len(receivers)-1 {
+			value -= uint64(bitcointree.ANCHOR_AMOUNT)
+			if value <= dustAmount {
+				return "", fmt.Errorf("change amount is dust amount")
+			}
+		}
+
 		outs = append(outs, &wire.TxOut{
 			Value:    int64(value),
 			PkScript: receiverPkScript,
@@ -546,7 +554,7 @@ func (b *txBuilder) BuildTxOOR(
 	}
 
 	outs = append(outs, &wire.TxOut{
-		Value:    0,
+		Value:    bitcointree.ANCHOR_AMOUNT,
 		PkScript: bitcointree.ANCHOR_PKSCRIPT,
 	})
 
