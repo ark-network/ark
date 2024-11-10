@@ -19,9 +19,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcwallet/waddrmgr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
@@ -435,7 +433,6 @@ func (b *txBuilder) BuildTxOOR(
 	witnessUtxos := make(map[int]*wire.TxOut)
 	tapscripts := make(map[int]*psbt.TaprootTapLeafScript)
 
-	redeemTxWeightEstimator := &input.TxWeightEstimator{}
 	for index, vtxo := range vtxos {
 		desc, ok := descriptors[vtxo.VtxoKey]
 		if !ok {
@@ -492,21 +489,7 @@ func (b *txBuilder) BuildTxOOR(
 			LeafVersion:  txscript.BaseLeafVersion,
 		}
 
-		ctrlBlock, err := txscript.ParseControlBlock(leafProof.ControlBlock)
-		if err != nil {
-			return "", err
-		}
-
-		redeemTxWeightEstimator.AddTapscriptInput(64*2+40, &waddrmgr.Tapscript{
-			RevealedScript: leafProof.Script,
-			ControlBlock:   ctrlBlock,
-		})
-
 		ins = append(ins, vtxoOutpoint)
-	}
-
-	for range receivers {
-		redeemTxWeightEstimator.AddP2TROutput()
 	}
 
 	dustAmount, err := b.wallet.GetDustAmount(context.Background())
