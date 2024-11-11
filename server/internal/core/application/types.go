@@ -29,9 +29,7 @@ type Service interface {
 	GetRoundById(ctx context.Context, id string) (*domain.Round, error)
 	GetCurrentRound(ctx context.Context) (*domain.Round, error)
 	GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
-	UpdatePaymentStatus(
-		ctx context.Context, paymentId string,
-	) (lastEvent domain.RoundEvent, err error)
+	UpdatePaymentStatus(ctx context.Context, paymentId string) error
 	ListVtxos(
 		ctx context.Context, address string,
 	) (spendableVtxos, spentVtxos []domain.Vtxo, err error)

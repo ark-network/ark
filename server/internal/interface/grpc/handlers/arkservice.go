@@ -227,24 +227,18 @@ func (h *handler) SubmitSignedForfeitTxs(
 func (h *handler) GetEventStream(
 	_ *arkv1.GetEventStreamRequest, stream arkv1.ArkService_GetEventStreamServer,
 ) error {
-	doneCh := make(chan struct{})
-
 	listener := &listener[*arkv1.GetEventStreamResponse]{
-		id:   uuid.NewString(),
-		done: doneCh,
-		ch:   make(chan *arkv1.GetEventStreamResponse),
+		id: uuid.NewString(),
+		ch: make(chan *arkv1.GetEventStreamResponse),
 	}
 
 	h.eventsListenerHandler.pushListener(listener)
 	defer h.eventsListenerHandler.removeListener(listener.id)
 	defer close(listener.ch)
-	defer close(doneCh)
 
 	for {
 		select {
 		case <-stream.Context().Done():
-			return nil
-		case <-doneCh:
 			return nil
 		case ev := <-listener.ch:
 			if err := stream.Send(ev); err != nil {
@@ -261,78 +255,11 @@ func (h *handler) Ping(
 		return nil, status.Error(codes.InvalidArgument, "missing payment id")
 	}
 
-	lastEvent, err := h.svc.UpdatePaymentStatus(ctx, req.GetPaymentId())
-	if err != nil {
+	if err := h.svc.UpdatePaymentStatus(ctx, req.GetPaymentId()); err != nil {
 		return nil, err
 	}
 
-	var resp *arkv1.PingResponse
-
-	switch e := lastEvent.(type) {
-	case domain.RoundFinalizationStarted:
-		resp = &arkv1.PingResponse{
-			Event: &arkv1.PingResponse_RoundFinalization{
-				RoundFinalization: &arkv1.RoundFinalizationEvent{
-					Id:              e.Id,
-					RoundTx:         e.RoundTx,
-					VtxoTree:        congestionTree(e.CongestionTree).toProto(),
-					Connectors:      e.Connectors,
-					MinRelayFeeRate: e.MinRelayFeeRate,
-				},
-			},
-		}
-	case domain.RoundFinalized:
-		resp = &arkv1.PingResponse{
-			Event: &arkv1.PingResponse_RoundFinalized{
-				RoundFinalized: &arkv1.RoundFinalizedEvent{
-					Id:        e.Id,
-					RoundTxid: e.Txid,
-				},
-			},
-		}
-	case domain.RoundFailed:
-		resp = &arkv1.PingResponse{
-			Event: &arkv1.PingResponse_RoundFailed{
-				RoundFailed: &arkv1.RoundFailed{
-					Id:     e.Id,
-					Reason: e.Err,
-				},
-			},
-		}
-	case application.RoundSigningStarted:
-		cosignersKeys := make([]string, 0, len(e.Cosigners))
-		for _, key := range e.Cosigners {
-			cosignersKeys = append(cosignersKeys, hex.EncodeToString(key.SerializeCompressed()))
-		}
-
-		resp = &arkv1.PingResponse{
-			Event: &arkv1.PingResponse_RoundSigning{
-				RoundSigning: &arkv1.RoundSigningEvent{
-					Id:               e.Id,
-					CosignersPubkeys: cosignersKeys,
-					UnsignedVtxoTree: congestionTree(e.UnsignedVtxoTree).toProto(),
-					UnsignedRoundTx:  e.UnsignedRoundTx,
-				},
-			},
-		}
-	case application.RoundSigningNoncesGenerated:
-		serialized, err := e.SerializeNonces()
-		if err != nil {
-			logrus.WithError(err).Error("failed to serialize nonces")
-			return nil, status.Error(codes.Internal, "failed to serialize nonces")
-		}
-
-		resp = &arkv1.PingResponse{
-			Event: &arkv1.PingResponse_RoundSigningNoncesGenerated{
-				RoundSigningNoncesGenerated: &arkv1.RoundSigningNoncesGeneratedEvent{
-					Id:         e.Id,
-					TreeNonces: serialized,
-				},
-			},
-		}
-	}
-
-	return resp, nil
+	return &arkv1.PingResponse{}, nil
 }
 
 func (h *handler) CreatePayment(
@@ -483,9 +410,8 @@ func (h *handler) GetTransactionsStream(
 	stream arkv1.ArkService_GetTransactionsStreamServer,
 ) error {
 	listener := &listener[*arkv1.GetTransactionsStreamResponse]{
-		id:   uuid.NewString(),
-		done: make(chan struct{}),
-		ch:   make(chan *arkv1.GetTransactionsStreamResponse),
+		id: uuid.NewString(),
+		ch: make(chan *arkv1.GetTransactionsStreamResponse),
 	}
 
 	h.transactionsListenerHandler.pushListener(listener)
@@ -512,7 +438,6 @@ func (h *handler) listenToEvents() {
 	channel := h.svc.GetEventsChannel(context.Background())
 	for event := range channel {
 		var ev *arkv1.GetEventStreamResponse
-		shouldClose := false
 
 		switch e := event.(type) {
 		case domain.RoundFinalizationStarted:
@@ -528,7 +453,6 @@ func (h *handler) listenToEvents() {
 				},
 			}
 		case domain.RoundFinalized:
-			shouldClose = true
 			ev = &arkv1.GetEventStreamResponse{
 				Event: &arkv1.GetEventStreamResponse_RoundFinalized{
 					RoundFinalized: &arkv1.RoundFinalizedEvent{
@@ -538,7 +462,6 @@ func (h *handler) listenToEvents() {
 				},
 			}
 		case domain.RoundFailed:
-			shouldClose = true
 			ev = &arkv1.GetEventStreamResponse{
 				Event: &arkv1.GetEventStreamResponse_RoundFailed{
 					RoundFailed: &arkv1.RoundFailed{
@@ -586,9 +509,6 @@ func (h *handler) listenToEvents() {
 			for _, l := range h.eventsListenerHandler.listeners {
 				go func(l *listener[*arkv1.GetEventStreamResponse]) {
 					l.ch <- ev
-					if shouldClose {
-						l.done <- struct{}{}
-					}
 				}(l)
 			}
 		}
@@ -644,9 +564,8 @@ func convertAsyncPaymentEvent(e application.RedeemTransactionEvent) *arkv1.Redee
 }
 
 type listener[T any] struct {
-	id   string
-	done chan struct{}
-	ch   chan T
+	id string
+	ch chan T
 }
 
 type listenerHanlder[T any] struct {
