@@ -101,16 +101,13 @@ func main() {
 		}
 	}
 
-	// Start the orchestrator HTTP server
 	go startServer()
 
-	// Start clients
 	err = startClients(aspUrl, subnetIDsEnv, securityGroupIDsEnv, simulation.Clients)
 	if err != nil {
 		log.Fatalf("Error starting clients: %v", err)
 	}
 
-	// Wait for clients to send their addresses
 	clientIDs := make([]string, len(simulation.Clients))
 	for i, client := range simulation.Clients {
 		clientIDs[i] = client.ID
@@ -126,10 +123,8 @@ func main() {
 		}
 	}()
 
-	// Execute the simulation
 	executeSimulation(simulation)
 
-	// Stop clients after simulation
 	stopClients()
 }
 
@@ -238,10 +233,28 @@ func logHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func executeSimulation(simulation *Simulation) {
-	for _, round := range simulation.Rounds {
+	for i, round := range simulation.Rounds {
 		waitRound := false
 		log.Infof("Executing Round %d at %s", round.Number, time.Now().Format("2006-01-02 15:04:05"))
 		var wg sync.WaitGroup
+
+		for _, actions := range round.Actions {
+			for _, action := range actions {
+				actionType, ok := action["type"].(string)
+				if !ok {
+					log.Warnf("Invalid action type for client %+v", action)
+					continue
+				}
+				if actionType == "Onboard" || actionType == "Claim" || actionType == "CollaborativeRedeem" {
+					waitRound = true
+					break
+				}
+			}
+			if waitRound {
+				break
+			}
+		}
+
 		for clientID, actions := range round.Actions {
 			wg.Add(1)
 			go func(clientID string, actions []ActionMap) {
@@ -253,11 +266,10 @@ func executeSimulation(simulation *Simulation) {
 						return
 					}
 
-					if actionType == "Onboard" || actionType == "Claim" || actionType == "CollaborativeRedeem" {
-						waitRound = true
-					}
+					ctx, cancel := context.WithTimeout(context.Background(), time.Duration(simulation.Server.RoundInterval)*time.Second)
+					defer cancel()
 
-					if err := executeClientAction(clientID, actionType, action); err != nil {
+					if err := executeClientAction(ctx, clientID, actionType, action); err != nil {
 						log.Warnf("Error executing %s for client %s: %v", actionType, clientID, err)
 					}
 				}
@@ -265,17 +277,23 @@ func executeSimulation(simulation *Simulation) {
 		}
 		wg.Wait()
 
+		if i == len(simulation.Rounds)-1 {
+			log.Infof("Simulation completed at %s", time.Now().Format("2006-01-02 15:04:05"))
+			return
+		}
+
 		sleepTime := 2 * time.Second
 		if waitRound {
 			sleepTime = time.Duration(simulation.Server.RoundInterval)*time.Second + 2*time.Second
 		}
+
 		log.Infof("Waiting for %s before starting next round", sleepTime)
 		time.Sleep(sleepTime)
 		log.Infof("Round %d completed at %s", round.Number, time.Now().Format("2006-01-02 15:04:05"))
 	}
 }
 
-func executeClientAction(clientID string, actionType string, action ActionMap) error {
+func executeClientAction(ctx context.Context, clientID string, actionType string, action ActionMap) error {
 	clientsMu.Lock()
 	client, exists := clients[clientID]
 	clientsMu.Unlock()
@@ -289,7 +307,7 @@ func executeClientAction(clientID string, actionType string, action ActionMap) e
 	switch actionType {
 	case "Onboard":
 		amount, _ := action["amount"].(float64)
-		return executeOnboard(clientURL, amount)
+		return executeOnboard(ctx, clientURL, amount)
 	case "SendAsync":
 		amount, _ := action["amount"].(float64)
 		toClientID, _ := action["to"].(string)
@@ -297,9 +315,9 @@ func executeClientAction(clientID string, actionType string, action ActionMap) e
 		if err != nil {
 			return err
 		}
-		return executeSendAsync(clientURL, amount, toAddress)
+		return executeSendAsync(ctx, clientURL, amount, toAddress)
 	case "Claim":
-		return executeClaim(clientURL)
+		return executeClaim(ctx, clientURL)
 	default:
 		return fmt.Errorf("unknown action type: %s", actionType)
 	}
@@ -319,24 +337,24 @@ func getClientAddress(clientID string) (string, error) {
 	return client.Address, nil
 }
 
-func executeOnboard(clientURL string, amount float64) error {
+func executeOnboard(ctx context.Context, clientURL string, amount float64) error {
 	payload := map[string]float64{"amount": amount}
-	return sendRequest(clientURL+"/onboard", payload)
+	return sendRequest(ctx, clientURL+"/onboard", payload)
 }
 
-func executeSendAsync(clientURL string, amount float64, toAddress string) error {
+func executeSendAsync(ctx context.Context, clientURL string, amount float64, toAddress string) error {
 	payload := map[string]interface{}{
 		"amount":     amount,
 		"to_address": toAddress,
 	}
-	return sendRequest(clientURL+"/sendAsync", payload)
+	return sendRequest(ctx, clientURL+"/sendAsync", payload)
 }
 
-func executeClaim(clientURL string) error {
-	return sendRequest(clientURL+"/claim", nil)
+func executeClaim(ctx context.Context, clientURL string) error {
+	return sendRequest(ctx, clientURL+"/claim", nil)
 }
 
-func sendRequest(url string, payload interface{}) error {
+func sendRequest(ctx context.Context, url string, payload interface{}) error {
 	var jsonData []byte
 	var err error
 	if payload != nil {
@@ -346,7 +364,7 @@ func sendRequest(url string, payload interface{}) error {
 		}
 	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return err
 	}
@@ -354,6 +372,9 @@ func sendRequest(url string, payload interface{}) error {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return fmt.Errorf("request to %s timed out", url)
+		}
 		return err
 	}
 	defer resp.Body.Close()
@@ -462,7 +483,7 @@ func startClients(aspUrl, subnetIDsEnv, securityGroupIDsEnv string, clientConfig
 	)
 	g := new(errgroup.Group)
 	for _, client := range clientConfigs {
-		client := client // Capture range variable
+		client := client
 		g.Go(func() error {
 			clientID := client.ID
 			clientEnvVars := []ecsTypes.KeyValuePair{
@@ -750,7 +771,6 @@ func stopClients() {
 
 // loadAndValidateSimulation reads and validates the simulation YAML file.
 func loadAndValidateSimulation(simFile string) (*Simulation, error) {
-	// Read and convert the schema YAML file to JSON
 	schemaBytes, err := os.ReadFile(schemaPath)
 	if err != nil {
 		return nil, fmt.Errorf("error reading schema file: %v", err)
@@ -813,7 +833,7 @@ func startAspLocally(simulation Simulation) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmpfile.Name()) // clean up
+	defer os.Remove(tmpfile.Name())
 
 	if _, err := tmpfile.Write([]byte(roundLifetime)); err != nil {
 		return err

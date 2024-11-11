@@ -88,6 +88,52 @@ clients:
     name: "Client39"
   - id: "client_40"
     name: "Client40"
+  - id: "client_41"
+    name: "Client41"
+  - id: "client_42"
+    name: "Client42"
+  - id: "client_43"
+    name: "Client43"
+  - id: "client_44"
+    name: "Client44"
+  - id: "client_45"
+    name: "Client45"
+  - id: "client_46"
+    name: "Client46"
+  - id: "client_47"
+    name: "Client47"
+  - id: "client_48"
+    name: "Client48"
+  - id: "client_49"
+    name: "Client49"
+  - id: "client_50"
+    name: "Client50"
+  - id: "client_51"
+    name: "Client51"
+  - id: "client_52"
+    name: "Client52"
+  - id: "client_53"
+    name: "Client53"
+  - id: "client_54"
+    name: "Client54"
+  - id: "client_55"
+    name: "Client55"
+  - id: "client_56"
+    name: "Client56"
+  - id: "client_57"
+    name: "Client57"
+  - id: "client_58"
+    name: "Client58"
+  - id: "client_59"
+    name: "Client59"
+  - id: "client_60"
+    name: "Client60"
+  - id: "client_61"
+    name: "Client61"
+  - id: "client_62"
+    name: "Client62"
+  - id: "client_63"
+    name: "Client63"
 
 rounds:
   - number: 1
@@ -100,126 +146,194 @@ rounds:
     actions:
       client_0:
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_1"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_2"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_3"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_4"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_5"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_6"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_7"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_8"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_9"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_10"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_11"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_12"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_13"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_14"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_15"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_16"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_17"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_18"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_19"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_20"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_21"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_22"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_23"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_24"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_25"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_26"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_27"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_28"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_29"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_30"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_31"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_32"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_33"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_34"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_35"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_36"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_37"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_38"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_39"
         - type: "SendAsync"
-          amount: 0.002
+          amount: 0.0002
           to: "client_40"
-
+        - type: "SendAsync"
+          amount: 0.0002
+          to: "client_41"
+        - type: "SendAsync"
+          amount: 0.0002
+          to: "client_42"
+        - type: "SendAsync"
+          amount: 0.0002
+          to: "client_43"
+        - type: "SendAsync"
+          amount: 0.0002
+          to: "client_44"
+        - type: "SendAsync"
+          amount: 0.0002
+          to: "client_45"
+        - type: "SendAsync"
+          amount: 0.0002
+          to: "client_46"
+        - type: "SendAsync"
+          amount: 0.0002
+          to: "client_47"
+        - type: "SendAsync"
+          amount: 0.0002
+          to: "client_48"
+        - type: "SendAsync"
+          amount: 0.0002
+          to: "client_49"
+        - type: "SendAsync"
+          amount: 0.0002
+          to: "client_50"
+        - type: "SendAsync"
+          amount: 0.0002
+          to: "client_51"
+        - type: "SendAsync"
+          amount: 0.0002
+          to: "client_52"
+        - type: "SendAsync"
+          amount: 0.0002
+          to: "client_53"
+        - type: "SendAsync"
+          amount: 0.0002
+          to: "client_54"
+        - type: "SendAsync"
+          amount: 0.0002
+          to: "client_55"
+        - type: "SendAsync"
+          amount: 0.0002
+          to: "client_56"
+        - type: "SendAsync"
+          amount: 0.0002
+          to: "client_57"
+        - type: "SendAsync"
+          amount: 0.0002
+          to: "client_58"
+        - type: "SendAsync"
+          amount: 0.0002
+          to: "client_59"
+        - type: "SendAsync"
+          amount: 0.0002
+          to: "client_60"
+        - type: "SendAsync"
+          amount: 0.0002
+          to: "client_61"
+        - type: "SendAsync"
+          amount: 0.0002
+          to: "client_62"
+        - type: "SendAsync"
+          amount: 0.0002
+          to: "client_63"
 
   - number: 3
     actions:
@@ -303,5 +417,49 @@ rounds:
         - type: "Claim"
       client_40:
         - type: "Claim"
-
-
+      client_41:
+        - type: "Claim"
+      client_42:
+        - type: "Claim"
+      client_43:
+        - type: "Claim"
+      client_44:
+        - type: "Claim"
+      client_45:
+        - type: "Claim"
+      client_46:
+        - type: "Claim"
+      client_47:
+        - type: "Claim"
+      client_48:
+        - type: "Claim"
+      client_49:
+        - type: "Claim"
+      client_50:
+        - type: "Claim"
+      client_51:
+        - type: "Claim"
+      client_52:
+        - type: "Claim"
+      client_53:
+        - type: "Claim"
+      client_54:
+        - type: "Claim"
+      client_55:
+        - type: "Claim"
+      client_56:
+        - type: "Claim"
+      client_57:
+        - type: "Claim"
+      client_58:
+        - type: "Claim"
+      client_59:
+        - type: "Claim"
+      client_60:
+        - type: "Claim"
+      client_61:
+        - type: "Claim"
+      client_62:
+        - type: "Claim"
+      client_63:
+        - type: "Claim"

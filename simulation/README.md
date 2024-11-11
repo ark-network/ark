@@ -100,3 +100,10 @@ To overcome this and to provide a more realistic simulation, this framework supp
    export SECURITY_GROUP_IDS={SECURITY_GROUP_IDS}
    make run-remote
    ```
+5. **Run Remote Simulation in Signet**:   
+   ```bash
+   cd ./ark/simulation/remote/orchestrator
+   export SUBNET_IDS={SUBNET_IDS}
+   export SECURITY_GROUP_IDS={SECURITY_GROUP_IDS}
+   make run-remote-signet --asp-url {URL} --signet true
+   ```
