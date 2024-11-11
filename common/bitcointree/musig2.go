@@ -618,8 +618,7 @@ func decodeMatrix[T readable](factory func() T, data io.Reader) ([][]T, error) {
 	}
 
 	// Initialize matrix
-	matrix := make([][]T, rowCount)
-
+	matrix := make([][]T, 0, rowCount)
 	// For each row, read its length and then its elements
 	for i := uint32(0); i < rowCount; i++ {
 		var colCount uint32
@@ -627,20 +626,17 @@ func decodeMatrix[T readable](factory func() T, data io.Reader) ([][]T, error) {
 		if err := binary.Read(data, binary.LittleEndian, &colCount); err != nil {
 			return nil, err
 		}
-
 		// Initialize row
-		row := make([]T, colCount)
-
+		row := make([]T, 0, colCount)
 		// Read row data
 		for j := uint32(0); j < colCount; j++ {
 			cell := factory()
 			if err := cell.Decode(data); err != nil {
 				return nil, err
 			}
-			row[j] = cell
+			row = append(row, cell)
 		}
-
-		matrix[i] = row
+		matrix = append(matrix, row)
 	}
 
 	return matrix, nil
