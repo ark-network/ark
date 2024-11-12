@@ -1,4 +1,4 @@
-.PHONY: genrest test vet lint
+.PHONY: genrest test vet lint prepare-wasm-test
 
 ## genrest: compiles rest client from stub with https://github.com/go-swagger/go-swagger
 genrest:
@@ -31,4 +31,15 @@ GO_VERSION := $(shell go version | cut -d' ' -f3)
 build-wasm:
 	@mkdir -p $(BUILD_DIR)
 	@echo "Version: $(VERSION)"
-	@GOOS=js GOARCH=wasm GO111MODULE=on go build -ldflags="-X 'main.Version=$(VERSION)'" -o $(BUILD_DIR)/ark-sdk.wasm $(WASM_DIR)/main.go
+	@GOOS=js GOARCH=wasm GO111MODULE=on go build -ldflags="-s -w -X 'main.Version=$(VERSION)'" -o $(BUILD_DIR)/ark-sdk.wasm $(WASM_DIR)/main.go
+
+test-wasm:
+	$(MAKE) build-wasm BUILD_DIR=./test/wasm/web
+	@echo "Copying $(go env GOROOT)/misc/wasm/wasm_exec.js"
+	@cp `go env GOROOT`/misc/wasm/wasm_exec.js ./test/wasm/web
+	@echo "Starting web server..."
+	@cd ./test/wasm/web && python3 -m http.server 8000 & echo $$! > server.pid
+	@echo "Waiting for server to start..."
+	@sleep 3
+	@echo "Running tests..."
+	@cd ./test/wasm && go test -v
