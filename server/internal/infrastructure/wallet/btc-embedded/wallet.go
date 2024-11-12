@@ -821,6 +821,14 @@ func (s *service) WaitForSync(ctx context.Context, txid string) error {
 	}
 }
 
+func (s *service) FeeRate(ctx context.Context) chainfee.SatPerKVByte {
+	fee, err := s.feeEstimator.EstimateFeePerKW(1)
+	if err != nil {
+		return s.MinRelayFeeRate(ctx)
+	}
+	return fee.FeePerKVByte()
+}
+
 func (s *service) MinRelayFeeRate(ctx context.Context) chainfee.SatPerKVByte {
 	return s.feeEstimator.RelayFeePerKW().FeePerKVByte()
 }
