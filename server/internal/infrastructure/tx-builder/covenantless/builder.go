@@ -236,12 +236,7 @@ func (b *txBuilder) BuildForfeitTxs(
 		return nil, nil, err
 	}
 
-	minRelayFeeConnectorTx, err := b.minRelayFeeConnectorTx()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	connectorTxs, err := b.createConnectors(poolTx, payments, connectorPkScript, minRelayFeeConnectorTx)
+	connectorTxs, err := b.createConnectors(poolTx, payments, connectorPkScript)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -592,11 +587,6 @@ func (b *txBuilder) createRoundTx(
 		return nil, err
 	}
 
-	connectorMinRelayFee, err := b.minRelayFeeConnectorTx()
-	if err != nil {
-		return nil, err
-	}
-
 	dustLimit, err := b.wallet.GetDustAmount(context.Background())
 	if err != nil {
 		return nil, err
@@ -605,10 +595,7 @@ func (b *txBuilder) createRoundTx(
 	connectorAmount := dustLimit
 
 	nbOfInputs := countSpentVtxos(payments)
-	connectorsAmount := (connectorAmount + connectorMinRelayFee) * nbOfInputs
-	if nbOfInputs > 1 {
-		connectorsAmount -= connectorMinRelayFee
-	}
+	connectorsAmount := connectorAmount * nbOfInputs
 	targetAmount := connectorsAmount
 
 	outputs := make([]*wire.TxOut, 0)
@@ -889,10 +876,6 @@ func (b *txBuilder) createRoundTx(
 	return ptx, nil
 }
 
-func (b *txBuilder) minRelayFeeConnectorTx() (uint64, error) {
-	return b.wallet.MinRelayFee(context.Background(), uint64(common.ConnectorTxSize))
-}
-
 func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, error) {
 	roundTx, err := psbt.NewFromRawBytes(strings.NewReader(dest), true)
 	if err != nil {
@@ -951,7 +934,7 @@ func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, 
 }
 
 func (b *txBuilder) createConnectors(
-	poolTx string, payments []domain.Payment, connectorScript []byte, feeAmount uint64,
+	poolTx string, payments []domain.Payment, connectorScript []byte,
 ) ([]*psbt.Packet, error) {
 	partialTx, err := psbt.NewFromRawBytes(strings.NewReader(poolTx), true)
 	if err != nil {
@@ -977,7 +960,7 @@ func (b *txBuilder) createConnectors(
 
 	if numberOfConnectors == 1 {
 		outputs := []*wire.TxOut{connectorOutput}
-		connectorTx, err := craftConnectorTx(previousInput, connectorScript, outputs, feeAmount)
+		connectorTx, err := craftConnectorTx(previousInput, connectorScript, outputs)
 		if err != nil {
 			return nil, err
 		}
@@ -985,23 +968,19 @@ func (b *txBuilder) createConnectors(
 		return []*psbt.Packet{connectorTx}, nil
 	}
 
-	totalConnectorAmount := (connectorAmount + feeAmount) * numberOfConnectors
-	if numberOfConnectors > 1 {
-		totalConnectorAmount -= feeAmount
-	}
+	totalConnectorAmount := connectorAmount * numberOfConnectors
 
 	connectors := make([]*psbt.Packet, 0, numberOfConnectors-1)
 	for i := uint64(0); i < numberOfConnectors-1; i++ {
 		outputs := []*wire.TxOut{connectorOutput}
 		totalConnectorAmount -= connectorAmount
-		totalConnectorAmount -= feeAmount
 		if totalConnectorAmount > 0 {
 			outputs = append(outputs, &wire.TxOut{
 				PkScript: connectorScript,
 				Value:    int64(totalConnectorAmount),
 			})
 		}
-		connectorTx, err := craftConnectorTx(previousInput, connectorScript, outputs, feeAmount)
+		connectorTx, err := craftConnectorTx(previousInput, connectorScript, outputs)
 		if err != nil {
 			return nil, err
 		}

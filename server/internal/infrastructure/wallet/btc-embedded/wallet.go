@@ -392,12 +392,12 @@ func (s *service) Lock(_ context.Context, _ string) error {
 }
 
 func (s *service) BroadcastTransaction(ctx context.Context, txHex string) (string, error) {
-	if err := s.extraAPI.broadcast(txHex); err != nil {
+	var tx wire.MsgTx
+	if err := tx.Deserialize(hex.NewDecoder(strings.NewReader(txHex))); err != nil {
 		return "", err
 	}
 
-	var tx wire.MsgTx
-	if err := tx.Deserialize(hex.NewDecoder(strings.NewReader(txHex))); err != nil {
+	if err := s.extraAPI.broadcast(txHex); err != nil {
 		return "", err
 	}
 

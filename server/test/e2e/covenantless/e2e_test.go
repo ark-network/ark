@@ -363,7 +363,7 @@ func TestReactToAsyncSpentVtxosRedemption(t *testing.T) {
 	offchainAddress, boardingAddress, err := sdkClient.Receive(ctx)
 	require.NoError(t, err)
 
-	_, err = utils.RunCommand("nigiri", "faucet", boardingAddress)
+	_, err = utils.RunCommand("nigiri", "faucet", boardingAddress, "0.00003000")
 	require.NoError(t, err)
 
 	time.Sleep(5 * time.Second)
@@ -371,10 +371,12 @@ func TestReactToAsyncSpentVtxosRedemption(t *testing.T) {
 	roundId, err := sdkClient.Settle(ctx)
 	require.NoError(t, err)
 
+	time.Sleep(3 * time.Second)
+
 	err = utils.GenerateBlock()
 	require.NoError(t, err)
 
-	_, err = sdkClient.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(offchainAddress, 1000)})
+	_, err = sdkClient.SendAsync(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(offchainAddress, 1000)})
 	require.NoError(t, err)
 
 	_, err = sdkClient.Settle(ctx)
@@ -389,7 +391,7 @@ func TestReactToAsyncSpentVtxosRedemption(t *testing.T) {
 	var vtxo client.Vtxo
 
 	for _, v := range spentVtxos {
-		if v.RoundTxid == roundId {
+		if v.RoundTxid == roundId && !v.IsOOR {
 			vtxo = v
 			break
 		}
