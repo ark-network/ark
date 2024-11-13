@@ -3,10 +3,10 @@ name: wasm_test
 on:
   push:
     branches:
-      - *
+      - '**'
   pull_request:
     branches:
-      - *
+      - '**'
 
 jobs:
   test:
@@ -17,14 +17,16 @@ jobs:
         working-directory: ./pkg/client-sdk
     steps:
       - uses: actions/checkout@v3
+
       - uses: actions/setup-go@v4
         with:
           go-version: '>=1.23.1'
+
       - name: Run go work sync
         run: go work sync
 
       - name: Install Python
-      - uses: actions/setup-python@v5
+        uses: actions/setup-python@v5
         with:
           python-version: '3.13'
 
