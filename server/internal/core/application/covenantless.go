@@ -20,9 +20,12 @@ import (
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/mempool"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightningnetwork/lnd/input"
+	"github.com/lightningnetwork/lnd/lntypes"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -254,6 +257,10 @@ func (s *covenantlessService) CompleteAsyncPayment(
 	vtxos := make([]domain.Vtxo, 0, len(asyncPayData.receivers))
 
 	for outIndex, out := range redeemPtx.UnsignedTx.TxOut {
+		if bytes.Equal(out.PkScript, bitcointree.ANCHOR_PKSCRIPT) {
+			continue // skip anchor output
+		}
+
 		vtxoTapKey, err := schnorr.ParsePubKey(out.PkScript[2:])
 		if err != nil {
 			return fmt.Errorf("failed to parse vtxo taproot key: %s", err)
@@ -351,7 +358,7 @@ func (s *covenantlessService) CreateAsyncPayment(
 		vtxosInputs = append(vtxosInputs, vtxo)
 	}
 
-	redeemTx, err := s.builder.BuildAsyncPaymentTransactions(
+	redeemTx, err := s.builder.BuildTxOOR(
 		vtxosInputs, descriptors, forfeitLeaves, receivers,
 	)
 	if err != nil {
@@ -742,6 +749,7 @@ func (s *covenantlessService) startFinalization() {
 
 		if err := s.saveEvents(ctx, round.Id, round.Events()); err != nil {
 			log.WithError(err).Warn("failed to store new round events")
+			return
 		}
 
 		if round.IsFailed() {
@@ -1133,11 +1141,9 @@ func (s *covenantlessService) listenToScannerNotifications() {
 					vtxo := vtxos[0]
 
 					if !vtxo.Redeemed {
-						go func() {
-							if err := s.markAsRedeemed(ctx, vtxo); err != nil {
-								log.WithError(err).Warnf("failed to mark vtxo %s:%d as redeemed", vtxo.Txid, vtxo.VOut)
-							}
-						}()
+						if err := s.markAsRedeemed(ctx, vtxo); err != nil {
+							log.WithError(err).Warnf("failed to mark vtxo %s:%d as redeemed", vtxo.Txid, vtxo.VOut)
+						}
 					}
 
 					if vtxo.Spent {
@@ -1157,10 +1163,10 @@ func (s *covenantlessService) listenToScannerNotifications() {
 func (s *covenantlessService) getNextConnector(
 	ctx context.Context,
 	round domain.Round,
-) (string, uint32, error) {
+) (string, uint32, *btcutil.Tx, error) {
 	lastConnectorPtx, err := psbt.NewFromRawBytes(strings.NewReader(round.Connectors[len(round.Connectors)-1]), true)
 	if err != nil {
-		return "", 0, err
+		return "", 0, nil, err
 	}
 
 	lastOutput := lastConnectorPtx.UnsignedTx.TxOut[len(lastConnectorPtx.UnsignedTx.TxOut)-1]
@@ -1168,35 +1174,40 @@ func (s *covenantlessService) getNextConnector(
 
 	utxos, err := s.wallet.ListConnectorUtxos(ctx, round.ConnectorAddress)
 	if err != nil {
-		return "", 0, err
+		return "", 0, nil, err
 	}
 	log.Debugf("found %d connector utxos, dust amount is %d", len(utxos), connectorAmount)
 
 	// if we do not find any utxos, we make sure to wait for the connector outpoint to be confirmed then we retry
 	if len(utxos) <= 0 {
 		if err := s.wallet.WaitForSync(ctx, round.Txid); err != nil {
-			return "", 0, err
+			return "", 0, nil, err
 		}
 
 		utxos, err = s.wallet.ListConnectorUtxos(ctx, round.ConnectorAddress)
 		if err != nil {
-			return "", 0, err
+			return "", 0, nil, err
 		}
 	}
 
 	// search for an already existing connector
 	for _, u := range utxos {
+		// skip if the utxo is the round tx output
+		if u.GetTxid() == round.Txid {
+			continue
+		}
+
 		if u.GetValue() == uint64(connectorAmount) {
-			return u.GetTxid(), u.GetIndex(), nil
+			return u.GetTxid(), u.GetIndex(), nil, nil
 		}
 	}
 
 	for _, u := range utxos {
-		if u.GetValue() > uint64(connectorAmount) {
+		if u.GetTxid() == round.Txid || u.GetValue() > uint64(connectorAmount) {
 			for _, b64 := range round.Connectors {
 				ptx, err := psbt.NewFromRawBytes(strings.NewReader(b64), true)
 				if err != nil {
-					return "", 0, err
+					return "", 0, nil, err
 				}
 
 				for _, i := range ptx.UnsignedTx.TxIn {
@@ -1204,34 +1215,39 @@ func (s *covenantlessService) getNextConnector(
 						connectorOutpoint := txOutpoint{u.GetTxid(), u.GetIndex()}
 
 						if err := s.wallet.LockConnectorUtxos(ctx, []ports.TxOutpoint{connectorOutpoint}); err != nil {
-							return "", 0, err
+							return "", 0, nil, err
 						}
 
-						// sign & broadcast the connector tx
-						signedConnectorTx, err := s.wallet.SignTransaction(ctx, b64, true)
+						// sign the connector tx
+						signedConnectorTxHex, err := s.wallet.SignTransaction(ctx, b64, true)
 						if err != nil {
-							return "", 0, err
+							return "", 0, nil, err
 						}
 
-						connectorTxid, err := s.wallet.BroadcastTransaction(ctx, signedConnectorTx)
+						// broadcast the connector tx
+						txid, err := s.wallet.BroadcastTransaction(ctx, signedConnectorTxHex)
 						if err != nil {
-							return "", 0, fmt.Errorf("failed to broadcast connector tx: %s", err)
+							return "", 0, nil, err
 						}
-						log.Debugf("broadcasted connector tx %s", connectorTxid)
+
+						var signedConnectorTx wire.MsgTx
+						if err := signedConnectorTx.Deserialize(hex.NewDecoder(strings.NewReader(signedConnectorTxHex))); err != nil {
+							return "", 0, nil, err
+						}
 
 						// wait for the connector tx to be in the mempool
-						if err := s.wallet.WaitForSync(ctx, connectorTxid); err != nil {
-							return "", 0, err
+						if err := s.wallet.WaitForSync(ctx, txid); err != nil {
+							return "", 0, nil, err
 						}
 
-						return connectorTxid, 0, nil
+						return txid, 0, btcutil.NewTx(&signedConnectorTx), nil
 					}
 				}
 			}
 		}
 	}
 
-	return "", 0, fmt.Errorf("no connector utxos found")
+	return "", 0, nil, fmt.Errorf("no connector utxos found")
 }
 
 func (s *covenantlessService) updateVtxoSet(round *domain.Round) {
@@ -1331,6 +1347,9 @@ func (s *covenantlessService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 			continue
 		}
 		for i, out := range tx.UnsignedTx.TxOut {
+			if bytes.Equal(out.PkScript, bitcointree.ANCHOR_PKSCRIPT) {
+				continue // skip anchor output
+			}
 			vtxoTapKey, err := schnorr.ParsePubKey(out.PkScript[2:])
 			if err != nil {
 				log.WithError(err).Warn("failed to parse vtxo tap key")
@@ -1470,71 +1489,404 @@ func (s *covenantlessService) reactToFraud(ctx context.Context, vtxo domain.Vtxo
 	defer mutx.Unlock()
 	roundRepo := s.repoManager.Rounds()
 
+	settledVtxos := make(map[domain.VtxoKey]domain.Round)
+
+	type pkgTx struct {
+		tx          *btcutil.Tx
+		isConnector bool
+	}
+
+	txsPkg := make([]pkgTx, 0)
+
 	round, err := roundRepo.GetRoundWithTxid(ctx, vtxo.SpentBy)
 	if err != nil {
+		log.Debugf("vtxo %s:%d has been spent by oor", vtxo.Txid, vtxo.VOut)
+
 		vtxosRepo := s.repoManager.Vtxos()
 
-		// if the round is not found, the utxo may be spent by an async payment redeem tx
-		vtxos, err := vtxosRepo.GetVtxos(ctx, []domain.VtxoKey{
-			{Txid: vtxo.SpentBy, VOut: 0},
-		})
+		// if the round is not found, it means spentBy is a OOR redeem tx
+		// get all the associated vtxos
+		vtxos, err := vtxosRepo.GetVtxosByTxid(ctx, vtxo.SpentBy)
 		if err != nil || len(vtxos) <= 0 {
-			return fmt.Errorf("failed to retrieve round: %s", err)
+			return fmt.Errorf("failed to retrieve redeem txs vtxos: %s", err)
 		}
 
-		asyncPayVtxo := vtxos[0]
-		if asyncPayVtxo.Redeemed { // redeem tx is already onchain
+		// check if the redeem tx is already onchain = at least one vtxo is marked as redeemed
+		for _, v := range vtxos {
+			if v.Redeemed {
+				return nil
+			}
+		}
+
+		atLeastOneSpent := false
+
+		// search for a spent vtxo
+		for _, v := range vtxos {
+			if v.Spent {
+				atLeastOneSpent = true
+				// if the vtxo is settled, add the round to the list
+				if _, ok := settledVtxos[v.VtxoKey]; !ok {
+					r, _ := roundRepo.GetRoundWithTxid(ctx, v.SpentBy)
+					if r != nil {
+						settledVtxos[v.VtxoKey] = *r
+					}
+				}
+			}
+		}
+
+		// if no vtxos of the redeem tx are spent, the server is not responsible to broadcast
+		if !atLeastOneSpent {
 			return nil
 		}
 
-		log.Debugf("vtxo %s:%d has been spent by async payment", vtxo.Txid, vtxo.VOut)
+		redeemTx := vtxos[0].RedeemTx
 
-		redeemTxHex, err := s.builder.FinalizeAndExtract(asyncPayVtxo.RedeemTx)
+		redeemTxHex, err := s.builder.FinalizeAndExtract(redeemTx)
 		if err != nil {
 			return fmt.Errorf("failed to finalize redeem tx: %s", err)
 		}
 
-		redeemTxid, err := s.wallet.BroadcastTransaction(ctx, redeemTxHex)
-		if err != nil {
-			return fmt.Errorf("failed to broadcast redeem tx: %s", err)
+		var redeemTxMsg wire.MsgTx
+
+		if err := redeemTxMsg.Deserialize(hex.NewDecoder(strings.NewReader(redeemTxHex))); err != nil {
+			return fmt.Errorf("failed to deserialize redeem tx: %s", err)
 		}
 
-		log.Debugf("broadcasted redeem tx %s", redeemTxid)
+		// in case the next state of the chain is only OOR, broadcast the redeem tx
+		if len(settledVtxos) <= 0 {
+			log.Debugf("redeem tx %s is not settled, broadcasting only the redeem tx", vtxos[0].Txid)
+			if err := s.broadcastRedeemTx(ctx, btcutil.NewTx(&redeemTxMsg)); err != nil {
+				return fmt.Errorf("failed to broadcast redeem tx: %s", err)
+			}
+			return nil
+		}
+
+		// if some rounds are settle, add the redeem tx to the package
+		log.Debugf("adding redeem tx %s to package", vtxos[0].Txid)
+		txsPkg = append(txsPkg, pkgTx{tx: btcutil.NewTx(&redeemTxMsg), isConnector: false})
+		log.Debugf("redeem tx hex: %s", redeemTxHex)
+	} else {
+		// if v.spentBy is a round, the vtxo has been settled
+		settledVtxos[vtxo.VtxoKey] = *round
+	}
+
+	outputsToBump := make(map[wire.OutPoint]*wire.TxOut)
+
+	for vtxoKey, r := range settledVtxos {
+		connectorTxid, connectorVout, connectorTx, err := s.getNextConnector(ctx, r)
+		if err != nil {
+			return fmt.Errorf("failed to get next connector: %s", err)
+		}
+
+		if connectorTx != nil {
+			txsPkg = append(txsPkg, pkgTx{tx: connectorTx, isConnector: true})
+			log.Debugf("found next connector %s:%d", connectorTxid, connectorVout)
+			log.Debugf("added connector tx %s to package", connectorTx.Hash().String())
+		}
+
+		forfeitTx, err := findForfeitTxBitcoin(r.ForfeitTxs, connectorTxid, connectorVout, vtxoKey)
+		if err != nil {
+			return fmt.Errorf("failed to find forfeit tx: %s", err)
+		}
+
+		if err := s.wallet.LockConnectorUtxos(ctx, []ports.TxOutpoint{txOutpoint{connectorTxid, connectorVout}}); err != nil {
+			return fmt.Errorf("failed to lock connector utxos: %s", err)
+		}
+
+		signedForfeitTx, err := s.wallet.SignTransactionTapscript(ctx, forfeitTx, nil)
+		if err != nil {
+			return fmt.Errorf("failed to sign forfeit tx: %s", err)
+		}
+
+		forfeitTxHex, err := s.builder.FinalizeAndExtract(signedForfeitTx)
+		if err != nil {
+			return fmt.Errorf("failed to finalize forfeit tx: %s", err)
+		}
+
+		var forfeitTxMsg wire.MsgTx
+		if err := forfeitTxMsg.Deserialize(hex.NewDecoder(strings.NewReader(forfeitTxHex))); err != nil {
+			return fmt.Errorf("failed to deserialize forfeit tx: %s", err)
+		}
+
+		txsPkg = append(txsPkg, pkgTx{tx: btcutil.NewTx(&forfeitTxMsg), isConnector: false})
+
+		log.Debugf("added forfeit tx %s to package", forfeitTxMsg.TxID())
+
+		outputToBump := forfeitTxMsg.TxOut[0]
+		txHash := forfeitTxMsg.TxHash()
+		outpointToBump := wire.NewOutPoint(
+			&txHash,
+			uint32(0),
+		)
+
+		outputsToBump[*outpointToBump] = outputToBump
+	}
+
+	// generate the output script of the bump tx
+	addrs, err := s.wallet.DeriveAddresses(ctx, 1)
+	if err != nil {
+		return fmt.Errorf("failed to derive addresses: %s", err)
+	}
+
+	addr := addrs[0]
+	parsedAddr, err := btcutil.DecodeAddress(addr, s.chainParams())
+	if err != nil {
+		return fmt.Errorf("failed to decode address: %s", err)
+	}
+
+	pkscript, err := txscript.PayToAddrScript(parsedAddr)
+	if err != nil {
+		return fmt.Errorf("failed to create pkscript: %s", err)
+	}
+
+	// estimate the bump tx vsize
+	weightEstimator := &input.TxWeightEstimator{}
+
+	switch txscript.GetScriptClass(pkscript) {
+	case txscript.PubKeyHashTy:
+		weightEstimator.AddP2PKHOutput()
+	case txscript.WitnessV0PubKeyHashTy:
+		weightEstimator.AddP2WKHOutput()
+	case txscript.WitnessV1TaprootTy:
+		weightEstimator.AddP2TROutput()
+	default:
+		return fmt.Errorf("unknown script class: %v", txscript.GetScriptClass(pkscript))
+	}
+
+	inputs := make([]*wire.OutPoint, 0)
+	nSequences := make([]uint32, 0)
+
+	outputsValue := int64(0)
+	for outpoint, output := range outputsToBump {
+		outputsValue += output.Value
+		inputs = append(inputs, &outpoint)
+		nSequences = append(nSequences, wire.MaxTxInSequenceNum)
+		scriptClass := txscript.GetScriptClass(output.PkScript)
+		switch txscript.ScriptClass(scriptClass) {
+		case txscript.PubKeyHashTy:
+			weightEstimator.AddP2PKHInput()
+		case txscript.WitnessV0PubKeyHashTy:
+			weightEstimator.AddP2WKHInput()
+		case txscript.WitnessV1TaprootTy:
+			weightEstimator.AddTaprootKeySpendInput(txscript.SigHashDefault)
+		default:
+			return fmt.Errorf("unknown script class: %v", scriptClass)
+		}
+	}
+
+	pkgSize := int64(weightEstimator.VSize())
+	for _, pkgTx := range txsPkg {
+		pkgSize += mempool.GetTxVirtualSize(pkgTx.tx)
+	}
+
+	feeRate := s.wallet.FeeRate(ctx)
+	fees := feeRate.FeeForVSize(lntypes.VByte(pkgSize))
+	profit := outputsValue - int64(fees.ToUnit(btcutil.AmountSatoshi))
+
+	dust, err := s.wallet.GetDustAmount(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get dust amount: %s", err)
+	}
+
+	if profit <= int64(dust) {
+		log.Infof("profit is less than dust, not worth to broadcast package")
 		return nil
 	}
 
-	connectorTxid, connectorVout, err := s.getNextConnector(ctx, *round)
+	// create the bump tx = spend forfeit input and add the profit output
+	bumpTx, err := psbt.New(
+		inputs,
+		[]*wire.TxOut{{PkScript: pkscript, Value: profit}},
+		2,
+		0,
+		nSequences,
+	)
 	if err != nil {
-		return fmt.Errorf("failed to get next connector: %s", err)
+		return fmt.Errorf("failed to create bump tx: %s", err)
 	}
 
-	log.Debugf("found next connector %s:%d", connectorTxid, connectorVout)
-
-	forfeitTx, err := findForfeitTxBitcoin(round.ForfeitTxs, connectorTxid, connectorVout, vtxo.VtxoKey)
+	updater, err := psbt.NewUpdater(bumpTx)
 	if err != nil {
-		return fmt.Errorf("failed to find forfeit tx: %s", err)
+		return fmt.Errorf("failed to create updater for bump tx: %s", err)
 	}
 
-	if err := s.wallet.LockConnectorUtxos(ctx, []ports.TxOutpoint{txOutpoint{connectorTxid, connectorVout}}); err != nil {
-		return fmt.Errorf("failed to lock connector utxos: %s", err)
+	for idx, input := range updater.Upsbt.UnsignedTx.TxIn {
+		output, ok := outputsToBump[input.PreviousOutPoint]
+		if !ok {
+			return fmt.Errorf("output to bump not found for input %s", input.PreviousOutPoint)
+		}
+
+		if err := updater.AddInWitnessUtxo(output, idx); err != nil {
+			return fmt.Errorf("failed to add in witness utxo to bump tx: %s", err)
+		}
 	}
 
-	signedForfeitTx, err := s.wallet.SignTransactionTapscript(ctx, forfeitTx, nil)
+	bumpTxBase64, err := bumpTx.B64Encode()
 	if err != nil {
-		return fmt.Errorf("failed to sign forfeit tx: %s", err)
+		return fmt.Errorf("failed to encode bump tx: %s", err)
 	}
 
-	forfeitTxHex, err := s.builder.FinalizeAndExtract(signedForfeitTx)
+	signedBumpTx, err := s.wallet.SignTransaction(ctx, bumpTxBase64, true)
 	if err != nil {
-		return fmt.Errorf("failed to finalize forfeit tx: %s", err)
+		return fmt.Errorf("failed to sign bump tx: %s", err)
 	}
 
-	forfeitTxid, err := s.wallet.BroadcastTransaction(ctx, forfeitTxHex)
+	log.Debugf("bump tx %s signed", bumpTx.UnsignedTx.TxID())
+
+	// broadcast the packages and the bump tx
+	for _, pkgTx := range txsPkg {
+		// skip connector transactions, they are already broadcasted
+		if pkgTx.isConnector {
+			continue
+		}
+
+		var buffer bytes.Buffer
+		if err := pkgTx.tx.MsgTx().Serialize(&buffer); err != nil {
+			return fmt.Errorf("failed to serialize tx: %s", err)
+		}
+
+		txHex := hex.EncodeToString(buffer.Bytes())
+
+		txid, err := s.wallet.BroadcastTransaction(ctx, txHex)
+		if err != nil {
+			log.WithError(err).Debugf("failed to broadcast tx: %s", err)
+			continue
+		}
+
+		log.Debugf("tx %s broadcasted", txid)
+	}
+
+	txid, err := s.wallet.BroadcastTransaction(ctx, signedBumpTx)
 	if err != nil {
-		return fmt.Errorf("failed to broadcast forfeit tx: %s", err)
+		return fmt.Errorf("failed to broadcast bump tx: %s", err)
 	}
 
-	log.Debugf("broadcasted forfeit tx %s", forfeitTxid)
+	log.Debugf("bump tx %s broadcasted", txid)
+
+	return nil
+}
+
+func (s *covenantlessService) broadcastRedeemTx(ctx context.Context, tx *btcutil.Tx) error {
+	// First broadcast the redeem transaction
+	var buffer bytes.Buffer
+	if err := tx.MsgTx().Serialize(&buffer); err != nil {
+		return fmt.Errorf("failed to serialize redeem tx: %s", err)
+	}
+
+	redeemTxHex := hex.EncodeToString(buffer.Bytes())
+	redeemTxid, err := s.wallet.BroadcastTransaction(ctx, redeemTxHex)
+	if err != nil {
+		return fmt.Errorf("failed to broadcast redeem tx: %s", err)
+	}
+
+	log.Debugf("redeem tx %s broadcasted", redeemTxid)
+
+	// Find the anchor output in the redeem tx
+	var anchorOutput *wire.TxOut
+	var anchorIndex uint32
+	for i, out := range tx.MsgTx().TxOut {
+		if bytes.Equal(out.PkScript, bitcointree.ANCHOR_PKSCRIPT) {
+			anchorOutput = out
+			anchorIndex = uint32(i)
+			break
+		}
+	}
+
+	if anchorOutput == nil {
+		return fmt.Errorf("anchor output not found in redeem tx")
+	}
+
+	addrs, err := s.wallet.DeriveAddresses(ctx, 1)
+	if err != nil {
+		return fmt.Errorf("failed to derive address: %s", err)
+	}
+
+	addr := addrs[0]
+	parsedAddr, err := btcutil.DecodeAddress(addr, s.chainParams())
+	if err != nil {
+		return fmt.Errorf("failed to decode address: %s", err)
+	}
+
+	pkscript, err := txscript.PayToAddrScript(parsedAddr)
+	if err != nil {
+		return fmt.Errorf("failed to create pkscript: %s", err)
+	}
+
+	weightEstimator := &input.TxWeightEstimator{}
+
+	weightEstimator.AddNestedP2WSHInput(2) // anchor input
+	switch txscript.GetScriptClass(pkscript) {
+	case txscript.PubKeyHashTy:
+		weightEstimator.AddP2PKHOutput()
+	case txscript.WitnessV0PubKeyHashTy:
+		weightEstimator.AddP2WKHOutput()
+	case txscript.WitnessV1TaprootTy:
+		weightEstimator.AddP2TROutput()
+	default:
+		return fmt.Errorf("unknown script class: %v", txscript.GetScriptClass(pkscript))
+	}
+
+	pkgSize := int64(weightEstimator.VSize()) + mempool.GetTxVirtualSize(tx)
+
+	// Calculate fees for the bump transaction
+	feeRate := s.wallet.FeeRate(ctx)
+	fees := feeRate.FeeForVSize(lntypes.VByte(pkgSize))
+	profit := anchorOutput.Value - int64(fees.ToUnit(btcutil.AmountSatoshi))
+
+	dust, err := s.wallet.GetDustAmount(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get dust amount: %s", err)
+	}
+
+	if profit <= int64(dust) {
+		log.Info("profit from anchor output is less than dust, skipping bump tx")
+		return nil
+	}
+
+	// Create output for the bump transaction
+
+	// Create the bump transaction
+	redeemTxHash := tx.Hash()
+	anchorOutpoint := wire.NewOutPoint(redeemTxHash, anchorIndex)
+
+	bumpTx, err := psbt.New(
+		[]*wire.OutPoint{anchorOutpoint},
+		[]*wire.TxOut{{PkScript: pkscript, Value: profit}},
+		2,
+		0,
+		[]uint32{wire.MaxTxInSequenceNum},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create bump tx: %s", err)
+	}
+
+	// Add witness UTXO info
+	updater, err := psbt.NewUpdater(bumpTx)
+	if err != nil {
+		return fmt.Errorf("failed to create updater for bump tx: %s", err)
+	}
+
+	if err := updater.AddInWitnessUtxo(anchorOutput, 0); err != nil {
+		return fmt.Errorf("failed to add witness utxo to bump tx: %s", err)
+	}
+
+	bumpTxBase64, err := bumpTx.B64Encode()
+	if err != nil {
+		return fmt.Errorf("failed to encode bump tx: %s", err)
+	}
+
+	// Sign and broadcast the bump transaction
+	signedBumpTx, err := s.wallet.SignTransaction(ctx, bumpTxBase64, true)
+	if err != nil {
+		return fmt.Errorf("failed to sign bump tx: %s", err)
+	}
+
+	bumpTxid, err := s.wallet.BroadcastTransaction(ctx, signedBumpTx)
+	if err != nil {
+		return fmt.Errorf("failed to broadcast bump tx: %s", err)
+	}
+
+	log.Debugf("bump tx %s broadcasted", bumpTxid)
 	return nil
 }
 

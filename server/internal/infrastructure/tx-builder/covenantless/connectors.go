@@ -6,12 +6,12 @@ import (
 )
 
 func craftConnectorTx(
-	input *wire.OutPoint, inputScript []byte, outputs []*wire.TxOut, feeAmount uint64,
+	input *wire.OutPoint, inputScript []byte, outputs []*wire.TxOut,
 ) (*psbt.Packet, error) {
 	ptx, err := psbt.New(
 		[]*wire.OutPoint{input},
 		outputs,
-		2,
+		3,
 		0,
 		[]uint32{wire.MaxTxInSequenceNum},
 	)
@@ -24,7 +24,7 @@ func craftConnectorTx(
 		return nil, err
 	}
 
-	inputAmount := int64(feeAmount)
+	inputAmount := int64(0)
 	for _, output := range outputs {
 		inputAmount += output.Value
 	}

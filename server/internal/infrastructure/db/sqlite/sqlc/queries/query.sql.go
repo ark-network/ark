@@ -675,6 +675,52 @@ func (q *Queries) SelectVtxosByPoolTxid(ctx context.Context, poolTx string) ([]S
 	return items, nil
 }
 
+const selectVtxosByTxid = `-- name: SelectVtxosByTxid :many
+SELECT vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.created_at, vtxo.payment_id, vtxo.redeem_tx FROM vtxo
+WHERE txid = ?
+`
+
+type SelectVtxosByTxidRow struct {
+	Vtxo Vtxo
+}
+
+func (q *Queries) SelectVtxosByTxid(ctx context.Context, txid string) ([]SelectVtxosByTxidRow, error) {
+	rows, err := q.db.QueryContext(ctx, selectVtxosByTxid, txid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SelectVtxosByTxidRow
+	for rows.Next() {
+		var i SelectVtxosByTxidRow
+		if err := rows.Scan(
+			&i.Vtxo.Txid,
+			&i.Vtxo.Vout,
+			&i.Vtxo.Pubkey,
+			&i.Vtxo.Amount,
+			&i.Vtxo.PoolTx,
+			&i.Vtxo.SpentBy,
+			&i.Vtxo.Spent,
+			&i.Vtxo.Redeemed,
+			&i.Vtxo.Swept,
+			&i.Vtxo.ExpireAt,
+			&i.Vtxo.CreatedAt,
+			&i.Vtxo.PaymentID,
+			&i.Vtxo.RedeemTx,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateVtxoExpireAt = `-- name: UpdateVtxoExpireAt :exec
 UPDATE vtxo SET expire_at = ? WHERE txid = ? AND vout = ?
 `

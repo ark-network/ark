@@ -19,9 +19,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcwallet/waddrmgr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
@@ -238,12 +236,7 @@ func (b *txBuilder) BuildForfeitTxs(
 		return nil, nil, err
 	}
 
-	minRelayFeeConnectorTx, err := b.minRelayFeeConnectorTx()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	connectorTxs, err := b.createConnectors(poolTx, payments, connectorPkScript, minRelayFeeConnectorTx)
+	connectorTxs, err := b.createConnectors(poolTx, payments, connectorPkScript)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -284,9 +277,16 @@ func (b *txBuilder) BuildRoundTx(
 		return "", nil, "", err
 	}
 
+	var dustAmount uint64
+
 	if !isOnchainOnly(payments) {
+		dustAmount, err = b.wallet.GetDustAmount(context.Background())
+		if err != nil {
+			return "", nil, "", err
+		}
+
 		sharedOutputScript, sharedOutputAmount, err = bitcointree.CraftSharedOutput(
-			cosigners, aspPubkey, receivers, feeAmount, b.roundLifetime,
+			cosigners, aspPubkey, receivers, feeAmount, dustAmount, b.roundLifetime,
 		)
 		if err != nil {
 			return
@@ -317,7 +317,7 @@ func (b *txBuilder) BuildRoundTx(
 		}
 
 		congestionTree, err = bitcointree.CraftCongestionTree(
-			initialOutpoint, cosigners, aspPubkey, receivers, feeAmount, b.roundLifetime,
+			initialOutpoint, cosigners, aspPubkey, receivers, feeAmount, dustAmount, b.roundLifetime,
 		)
 		if err != nil {
 			return
@@ -401,7 +401,7 @@ func (b *txBuilder) FindLeaves(congestionTree tree.CongestionTree, fromtxid stri
 	return foundLeaves, nil
 }
 
-func (b *txBuilder) BuildAsyncPaymentTransactions(
+func (b *txBuilder) BuildTxOOR(
 	vtxos []domain.Vtxo,
 	descriptors map[domain.VtxoKey]string,
 	forfeitsLeaves map[domain.VtxoKey]chainhash.Hash,
@@ -411,12 +411,23 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 		return "", fmt.Errorf("missing vtxos")
 	}
 
+	if len(receivers) <= 0 {
+		return "", fmt.Errorf("missing receivers")
+	}
+
+	if len(descriptors) != len(vtxos) {
+		return "", fmt.Errorf("missing descriptors")
+	}
+
+	if len(forfeitsLeaves) != len(vtxos) {
+		return "", fmt.Errorf("missing forfeits leaves")
+	}
+
 	ins := make([]*wire.OutPoint, 0, len(vtxos))
 	outs := make([]*wire.TxOut, 0, len(receivers))
 	witnessUtxos := make(map[int]*wire.TxOut)
 	tapscripts := make(map[int]*psbt.TaprootTapLeafScript)
 
-	redeemTxWeightEstimator := &input.TxWeightEstimator{}
 	for index, vtxo := range vtxos {
 		desc, ok := descriptors[vtxo.VtxoKey]
 		if !ok {
@@ -473,30 +484,12 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 			LeafVersion:  txscript.BaseLeafVersion,
 		}
 
-		ctrlBlock, err := txscript.ParseControlBlock(leafProof.ControlBlock)
-		if err != nil {
-			return "", err
-		}
-
-		redeemTxWeightEstimator.AddTapscriptInput(64*2+40, &waddrmgr.Tapscript{
-			RevealedScript: leafProof.Script,
-			ControlBlock:   ctrlBlock,
-		})
-
 		ins = append(ins, vtxoOutpoint)
 	}
 
-	for range receivers {
-		redeemTxWeightEstimator.AddP2TROutput()
-	}
-
-	redeemTxMinRelayFee, err := b.wallet.MinRelayFee(context.Background(), uint64(redeemTxWeightEstimator.VSize()))
+	dustAmount, err := b.wallet.GetDustAmount(context.Background())
 	if err != nil {
 		return "", err
-	}
-
-	if redeemTxMinRelayFee >= receivers[len(receivers)-1].Amount {
-		return "", fmt.Errorf("redeem tx fee is higher than the amount of the change receiver")
 	}
 
 	for i, receiver := range receivers {
@@ -514,22 +507,34 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 			return "", err
 		}
 
-		newVtxoScript, err := common.P2TRScript(pubkey)
+		receiverPkScript, err := common.P2TRScript(pubkey)
 		if err != nil {
 			return "", err
 		}
 
-		// Deduct the min relay fee from the very last receiver which is supposed
-		// to be the change in case it's not a send-all.
 		value := receiver.Amount
-		if i == len(receivers)-1 {
-			value -= redeemTxMinRelayFee
+		if value <= dustAmount {
+			return "", fmt.Errorf("receiver amount smaller than dust")
 		}
+
+		// to be the change in case it's not a send-all.
+		if i == len(receivers)-1 {
+			value -= uint64(bitcointree.ANCHOR_AMOUNT)
+			if value <= dustAmount {
+				return "", fmt.Errorf("change amount is dust amount")
+			}
+		}
+
 		outs = append(outs, &wire.TxOut{
 			Value:    int64(value),
-			PkScript: newVtxoScript,
+			PkScript: receiverPkScript,
 		})
 	}
+
+	outs = append(outs, &wire.TxOut{
+		Value:    bitcointree.ANCHOR_AMOUNT,
+		PkScript: bitcointree.ANCHOR_PKSCRIPT,
+	})
 
 	sequences := make([]uint32, len(ins))
 	for i := range sequences {
@@ -537,7 +542,7 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 	}
 
 	redeemPtx, err := psbt.New(
-		ins, outs, 2, 0, sequences,
+		ins, outs, 3, 0, sequences,
 	)
 	if err != nil {
 		return "", err
@@ -582,11 +587,6 @@ func (b *txBuilder) createRoundTx(
 		return nil, err
 	}
 
-	connectorMinRelayFee, err := b.minRelayFeeConnectorTx()
-	if err != nil {
-		return nil, err
-	}
-
 	dustLimit, err := b.wallet.GetDustAmount(context.Background())
 	if err != nil {
 		return nil, err
@@ -595,10 +595,7 @@ func (b *txBuilder) createRoundTx(
 	connectorAmount := dustLimit
 
 	nbOfInputs := countSpentVtxos(payments)
-	connectorsAmount := (connectorAmount + connectorMinRelayFee) * nbOfInputs
-	if nbOfInputs > 1 {
-		connectorsAmount -= connectorMinRelayFee
-	}
+	connectorsAmount := connectorAmount * nbOfInputs
 	targetAmount := connectorsAmount
 
 	outputs := make([]*wire.TxOut, 0)
@@ -879,10 +876,6 @@ func (b *txBuilder) createRoundTx(
 	return ptx, nil
 }
 
-func (b *txBuilder) minRelayFeeConnectorTx() (uint64, error) {
-	return b.wallet.MinRelayFee(context.Background(), uint64(common.ConnectorTxSize))
-}
-
 func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, error) {
 	roundTx, err := psbt.NewFromRawBytes(strings.NewReader(dest), true)
 	if err != nil {
@@ -941,7 +934,7 @@ func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, 
 }
 
 func (b *txBuilder) createConnectors(
-	poolTx string, payments []domain.Payment, connectorScript []byte, feeAmount uint64,
+	poolTx string, payments []domain.Payment, connectorScript []byte,
 ) ([]*psbt.Packet, error) {
 	partialTx, err := psbt.NewFromRawBytes(strings.NewReader(poolTx), true)
 	if err != nil {
@@ -967,7 +960,7 @@ func (b *txBuilder) createConnectors(
 
 	if numberOfConnectors == 1 {
 		outputs := []*wire.TxOut{connectorOutput}
-		connectorTx, err := craftConnectorTx(previousInput, connectorScript, outputs, feeAmount)
+		connectorTx, err := craftConnectorTx(previousInput, connectorScript, outputs)
 		if err != nil {
 			return nil, err
 		}
@@ -975,23 +968,19 @@ func (b *txBuilder) createConnectors(
 		return []*psbt.Packet{connectorTx}, nil
 	}
 
-	totalConnectorAmount := (connectorAmount + feeAmount) * numberOfConnectors
-	if numberOfConnectors > 1 {
-		totalConnectorAmount -= feeAmount
-	}
+	totalConnectorAmount := connectorAmount * numberOfConnectors
 
 	connectors := make([]*psbt.Packet, 0, numberOfConnectors-1)
 	for i := uint64(0); i < numberOfConnectors-1; i++ {
 		outputs := []*wire.TxOut{connectorOutput}
 		totalConnectorAmount -= connectorAmount
-		totalConnectorAmount -= feeAmount
 		if totalConnectorAmount > 0 {
 			outputs = append(outputs, &wire.TxOut{
 				PkScript: connectorScript,
 				Value:    int64(totalConnectorAmount),
 			})
 		}
-		connectorTx, err := craftConnectorTx(previousInput, connectorScript, outputs, feeAmount)
+		connectorTx, err := craftConnectorTx(previousInput, connectorScript, outputs)
 		if err != nil {
 			return nil, err
 		}

@@ -145,6 +145,10 @@ WHERE txid = ? AND vout = ?;
 SELECT sqlc.embed(vtxo) FROM vtxo
 WHERE pool_tx = ?;
 
+-- name: SelectVtxosByTxid :many
+SELECT sqlc.embed(vtxo) FROM vtxo
+WHERE txid = ?;
+
 -- name: MarkVtxoAsRedeemed :exec
 UPDATE vtxo SET redeemed = true WHERE txid = ? AND vout = ?;
 

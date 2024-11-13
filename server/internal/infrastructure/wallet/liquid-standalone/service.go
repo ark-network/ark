@@ -8,6 +8,7 @@ import (
 	pb "github.com/ark-network/ark/api-spec/protobuf/gen/ocean/v1"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -157,6 +158,10 @@ func (s *service) Lock(ctx context.Context, password string) error {
 
 func (s *service) GetDustAmount(ctx context.Context) (uint64, error) {
 	return 450, nil // constant on liquid cause fees are not subject to huge changes
+}
+
+func (s *service) FeeRate(ctx context.Context) chainfee.SatPerKVByte {
+	return chainfee.SatPerKVByte(1000)
 }
 
 func (s *service) listenToNotifications() {

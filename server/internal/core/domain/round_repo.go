@@ -26,6 +26,7 @@ type VtxoRepository interface {
 	SpendVtxos(ctx context.Context, vtxos []VtxoKey, txid string) error
 	RedeemVtxos(ctx context.Context, vtxos []VtxoKey) error
 	GetVtxos(ctx context.Context, vtxos []VtxoKey) ([]Vtxo, error)
+	GetVtxosByTxid(ctx context.Context, txid string) ([]Vtxo, error)
 	GetVtxosForRound(ctx context.Context, txid string) ([]Vtxo, error)
 	SweepVtxos(ctx context.Context, vtxos []VtxoKey) error
 	GetAllVtxos(ctx context.Context, pubkey string) ([]Vtxo, []Vtxo, error)

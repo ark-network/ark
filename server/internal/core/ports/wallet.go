@@ -32,6 +32,7 @@ type WalletService interface {
 	BroadcastTransaction(ctx context.Context, txHex string) (string, error)
 	WaitForSync(ctx context.Context, txid string) error
 	EstimateFees(ctx context.Context, psbt string) (uint64, error)
+	FeeRate(ctx context.Context) chainfee.SatPerKVByte
 	MinRelayFee(ctx context.Context, vbytes uint64) (uint64, error)
 	MinRelayFeeRate(ctx context.Context) chainfee.SatPerKVByte
 	ListConnectorUtxos(ctx context.Context, connectorAddress string) ([]TxInput, error)

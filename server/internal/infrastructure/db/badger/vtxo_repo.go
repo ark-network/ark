@@ -88,6 +88,13 @@ func (r *vtxoRepository) GetVtxos(
 	return vtxos, nil
 }
 
+func (r *vtxoRepository) GetVtxosByTxid(
+	ctx context.Context, txid string,
+) ([]domain.Vtxo, error) {
+	query := badgerhold.Where("Txid").Eq(txid)
+	return r.findVtxos(ctx, query)
+}
+
 func (r *vtxoRepository) GetVtxosForRound(
 	ctx context.Context, txid string,
 ) ([]domain.Vtxo, error) {

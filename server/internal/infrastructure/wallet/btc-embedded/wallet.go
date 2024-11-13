@@ -392,12 +392,12 @@ func (s *service) Lock(_ context.Context, _ string) error {
 }
 
 func (s *service) BroadcastTransaction(ctx context.Context, txHex string) (string, error) {
-	if err := s.extraAPI.broadcast(txHex); err != nil {
+	var tx wire.MsgTx
+	if err := tx.Deserialize(hex.NewDecoder(strings.NewReader(txHex))); err != nil {
 		return "", err
 	}
 
-	var tx wire.MsgTx
-	if err := tx.Deserialize(hex.NewDecoder(strings.NewReader(txHex))); err != nil {
+	if err := s.extraAPI.broadcast(txHex); err != nil {
 		return "", err
 	}
 
@@ -819,6 +819,14 @@ func (s *service) WaitForSync(ctx context.Context, txid string) error {
 			}
 		}
 	}
+}
+
+func (s *service) FeeRate(ctx context.Context) chainfee.SatPerKVByte {
+	fee, err := s.feeEstimator.EstimateFeePerKW(1)
+	if err != nil {
+		return s.MinRelayFeeRate(ctx)
+	}
+	return fee.FeePerKVByte()
 }
 
 func (s *service) MinRelayFeeRate(ctx context.Context) chainfee.SatPerKVByte {

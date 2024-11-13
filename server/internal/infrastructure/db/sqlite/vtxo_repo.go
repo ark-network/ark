@@ -149,6 +149,20 @@ func (v *vxtoRepository) GetVtxos(ctx context.Context, outpoints []domain.VtxoKe
 	return vtxos, nil
 }
 
+func (v *vxtoRepository) GetVtxosByTxid(ctx context.Context, txid string) ([]domain.Vtxo, error) {
+	res, err := v.querier.SelectVtxosByTxid(ctx, txid)
+	if err != nil {
+		return nil, err
+	}
+
+	rows := make([]queries.Vtxo, 0, len(res))
+	for _, row := range res {
+		rows = append(rows, row.Vtxo)
+	}
+
+	return readRows(rows)
+}
+
 func (v *vxtoRepository) GetVtxosForRound(ctx context.Context, txid string) ([]domain.Vtxo, error) {
 	res, err := v.querier.SelectVtxosByPoolTxid(ctx, txid)
 	if err != nil {

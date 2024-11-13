@@ -17,8 +17,12 @@ import (
 
 // CraftSharedOutput returns the taproot script and the amount of the initial root output
 func CraftSharedOutput(
-	cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, receivers []tree.VtxoLeaf,
-	feeSatsPerNode uint64, roundLifetime int64,
+	cosigners []*secp256k1.PublicKey,
+	aspPubkey *secp256k1.PublicKey,
+	receivers []tree.VtxoLeaf,
+	feeSatsPerNode,
+	dustAmount uint64,
+	roundLifetime int64,
 ) ([]byte, int64, error) {
 	aggregatedKey, _, err := createAggregatedKeyWithSweep(
 		cosigners, aspPubkey, roundLifetime,
@@ -27,7 +31,7 @@ func CraftSharedOutput(
 		return nil, 0, err
 	}
 
-	root, err := createRootNode(aggregatedKey, cosigners, receivers, feeSatsPerNode)
+	root, err := createRootNode(aggregatedKey, cosigners, receivers, feeSatsPerNode, dustAmount)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -44,8 +48,13 @@ func CraftSharedOutput(
 
 // CraftCongestionTree creates all the tree's transactions
 func CraftCongestionTree(
-	initialInput *wire.OutPoint, cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, receivers []tree.VtxoLeaf,
-	feeSatsPerNode uint64, roundLifetime int64,
+	initialInput *wire.OutPoint,
+	cosigners []*secp256k1.PublicKey,
+	aspPubkey *secp256k1.PublicKey,
+	receivers []tree.VtxoLeaf,
+	feeSatsPerNode,
+	dustAmount uint64,
+	roundLifetime int64,
 ) (tree.CongestionTree, error) {
 	aggregatedKey, sweepTapLeaf, err := createAggregatedKeyWithSweep(
 		cosigners, aspPubkey, roundLifetime,
@@ -54,7 +63,7 @@ func CraftCongestionTree(
 		return nil, err
 	}
 
-	root, err := createRootNode(aggregatedKey, cosigners, receivers, feeSatsPerNode)
+	root, err := createRootNode(aggregatedKey, cosigners, receivers, feeSatsPerNode, dustAmount)
 	if err != nil {
 		return nil, err
 	}
@@ -107,11 +116,13 @@ type node interface {
 	getAmount() int64 // returns the input amount of the node = sum of all receivers' amounts + fees
 	getOutputs() ([]*wire.TxOut, error)
 	getChildren() []node
+	getTxVersion() int32
 }
 
 type leaf struct {
-	amount int64
-	pubkey *secp256k1.PublicKey
+	amount     int64
+	dustAmount int64
+	pubkey     *secp256k1.PublicKey
 }
 
 type branch struct {
@@ -119,6 +130,14 @@ type branch struct {
 	cosigners     []*secp256k1.PublicKey
 	children      []node
 	feeAmount     int64
+}
+
+func (b *branch) getTxVersion() int32 {
+	return 2
+}
+
+func (l *leaf) getTxVersion() int32 {
+	return 3
 }
 
 func (b *branch) getChildren() []node {
@@ -133,7 +152,9 @@ func (b *branch) getAmount() int64 {
 	amount := int64(0)
 	for _, child := range b.children {
 		amount += child.getAmount()
-		amount += b.feeAmount
+		if child.getTxVersion() == 2 {
+			amount += b.feeAmount
+		}
 	}
 
 	return amount
@@ -149,12 +170,17 @@ func (l *leaf) getOutputs() ([]*wire.TxOut, error) {
 		return nil, err
 	}
 
-	output := &wire.TxOut{
-		Value:    l.amount,
+	vtxoOutput := &wire.TxOut{
+		Value:    l.amount - ANCHOR_AMOUNT,
 		PkScript: script,
 	}
 
-	return []*wire.TxOut{output}, nil
+	anchorOutput := &wire.TxOut{
+		PkScript: ANCHOR_PKSCRIPT,
+		Value:    ANCHOR_AMOUNT,
+	}
+
+	return []*wire.TxOut{vtxoOutput, anchorOutput}, nil
 }
 
 func (b *branch) getOutputs() ([]*wire.TxOut, error) {
@@ -166,8 +192,13 @@ func (b *branch) getOutputs() ([]*wire.TxOut, error) {
 	outputs := make([]*wire.TxOut, 0)
 
 	for _, child := range b.children {
+		value := child.getAmount()
+		if child.getTxVersion() == 2 {
+			value += b.feeAmount
+		}
+
 		outputs = append(outputs, &wire.TxOut{
-			Value:    child.getAmount() + b.feeAmount,
+			Value:    value,
 			PkScript: sharedOutputScript,
 		})
 	}
@@ -202,6 +233,9 @@ func getTreeNode(
 	}, nil
 }
 
+// getTx returns the psbt associated with the node
+// the psbt contains the inputs of the parent and the outputs of the children (or VTXOs if it's a leaf)
+// it also contains the internal key used to "unroll" and the sweep tascript branch of the input
 func getTx(
 	n node,
 	input *wire.OutPoint,
@@ -214,7 +248,13 @@ func getTx(
 		return nil, err
 	}
 
-	tx, err := psbt.New([]*wire.OutPoint{input}, outputs, 2, 0, []uint32{wire.MaxTxInSequenceNum})
+	tx, err := psbt.New(
+		[]*wire.OutPoint{input},
+		outputs,
+		n.getTxVersion(),
+		0,
+		[]uint32{wire.MaxTxInSequenceNum},
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -244,7 +284,8 @@ func createRootNode(
 	aggregatedKey *musig2.AggregateKey,
 	cosigners []*secp256k1.PublicKey,
 	receivers []tree.VtxoLeaf,
-	feeSatsPerNode uint64,
+	feeSatsPerNode,
+	dustAmount uint64,
 ) (root node, err error) {
 	if len(receivers) == 0 {
 		return nil, fmt.Errorf("no receivers provided")
@@ -263,8 +304,9 @@ func createRootNode(
 		}
 
 		leafNode := &leaf{
-			amount: int64(r.Amount),
-			pubkey: pubkey,
+			amount:     int64(r.Amount),
+			dustAmount: int64(dustAmount),
+			pubkey:     pubkey,
 		}
 		nodes = append(nodes, leafNode)
 	}
