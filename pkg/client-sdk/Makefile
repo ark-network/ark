@@ -38,7 +38,7 @@ test-wasm:
 	@echo "Copying $(go env GOROOT)/misc/wasm/wasm_exec.js"
 	@cp `go env GOROOT`/misc/wasm/wasm_exec.js ./test/wasm/web
 	@echo "Starting web server..."
-	@cd ./test/wasm/web && python3 -m http.server 8000 & echo $$! > server.pid
+	@cd ./test/wasm/web && python3 -m http.server 8000 &
 	@echo "Waiting for server to start..."
 	@sleep 3
 	@echo "Running tests..."

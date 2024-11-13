@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Ark SDK WASM Example</title>
-    <script src="../wasm_exec.js"></script>
+    <script src="wasm_exec.js"></script>
     <script>
         const go = new Go();
         WebAssembly.instantiateStreaming(fetch("ark-sdk.wasm"), go.importObject).then((result) => {

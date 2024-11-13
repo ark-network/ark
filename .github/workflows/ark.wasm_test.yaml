@@ -10,7 +10,7 @@ on:
 
 jobs:
   test:
-    name: integration tests
+    name: wasm integration tests
     runs-on: ubuntu-latest
     defaults:
       run:

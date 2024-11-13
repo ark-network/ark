@@ -1,17 +1,63 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	utils "github.com/ark-network/ark/server/test/e2e"
 	"github.com/playwright-community/playwright-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"io"
+	"net/http"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 )
+
+const (
+	composePath = "../../../../docker-compose.clark.regtest.yml"
+)
+
+func TestMain(m *testing.M) {
+	_, err := utils.RunCommand("docker", "compose", "-f", composePath, "up", "-d")
+	if err != nil {
+		fmt.Printf("error starting docker-compose: %s", err)
+		os.Exit(1)
+	}
+
+	time.Sleep(10 * time.Second)
+
+	if err := utils.GenerateBlock(); err != nil {
+		fmt.Printf("error generating block: %s", err)
+		os.Exit(1)
+	}
+
+	if err := setupAspWallet(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	time.Sleep(3 * time.Second)
+
+	_, err = runClarkCommand("init", "--asp-url", "localhost:7070", "--password", utils.Password, "--network", "regtest", "--explorer", "http://chopsticks:3000")
+	if err != nil {
+		fmt.Printf("error initializing ark config: %s", err)
+		os.Exit(1)
+	}
+
+	code := m.Run()
+
+	_, err = utils.RunCommand("docker", "compose", "-f", composePath, "down", "-v")
+	if err != nil {
+		fmt.Printf("error stopping docker-compose: %s", err)
+		os.Exit(1)
+	}
+	os.Exit(code)
+}
 
 func TestWasm(t *testing.T) {
 	err := playwright.Install()
@@ -358,4 +404,116 @@ func generateBlock() error {
 
 	time.Sleep(6 * time.Second)
 	return nil
+}
+
+func setupAspWallet() error {
+	adminHttpClient := &http.Client{
+		Timeout: 15 * time.Second,
+	}
+
+	req, err := http.NewRequest("GET", "http://localhost:7070/v1/admin/wallet/seed", nil)
+	if err != nil {
+		return fmt.Errorf("failed to prepare generate seed request: %s", err)
+	}
+	req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
+
+	seedResp, err := adminHttpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to generate seed: %s", err)
+	}
+
+	var seed struct {
+		Seed string `json:"seed"`
+	}
+
+	if err := json.NewDecoder(seedResp.Body).Decode(&seed); err != nil {
+		return fmt.Errorf("failed to parse response: %s", err)
+	}
+
+	reqBody := bytes.NewReader([]byte(fmt.Sprintf(`{"seed": "%s", "password": "%s"}`, seed.Seed, utils.Password)))
+	req, err = http.NewRequest("POST", "http://localhost:7070/v1/admin/wallet/create", reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to prepare wallet create request: %s", err)
+	}
+	req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
+	req.Header.Set("Content-Type", "application/json")
+
+	if _, err := adminHttpClient.Do(req); err != nil {
+		return fmt.Errorf("failed to create wallet: %s", err)
+	}
+
+	reqBody = bytes.NewReader([]byte(fmt.Sprintf(`{"password": "%s"}`, utils.Password)))
+	req, err = http.NewRequest("POST", "http://localhost:7070/v1/admin/wallet/unlock", reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to prepare wallet unlock request: %s", err)
+	}
+	req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
+	req.Header.Set("Content-Type", "application/json")
+
+	if _, err := adminHttpClient.Do(req); err != nil {
+		return fmt.Errorf("failed to unlock wallet: %s", err)
+	}
+
+	var status struct {
+		Initialized bool `json:"initialized"`
+		Unlocked    bool `json:"unlocked"`
+		Synced      bool `json:"synced"`
+	}
+	for {
+		time.Sleep(time.Second)
+
+		req, err := http.NewRequest("GET", "http://localhost:7070/v1/admin/wallet/status", nil)
+		if err != nil {
+			return fmt.Errorf("failed to prepare status request: %s", err)
+		}
+		resp, err := adminHttpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to get status: %s", err)
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+			return fmt.Errorf("failed to parse status response: %s", err)
+		}
+		if status.Initialized && status.Unlocked && status.Synced {
+			break
+		}
+	}
+
+	var addr struct {
+		Address string `json:"address"`
+	}
+	for addr.Address == "" {
+		time.Sleep(time.Second)
+
+		req, err = http.NewRequest("GET", "http://localhost:7070/v1/admin/wallet/address", nil)
+		if err != nil {
+			return fmt.Errorf("failed to prepare new address request: %s", err)
+		}
+		req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
+
+		resp, err := adminHttpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to get new address: %s", err)
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&addr); err != nil {
+			return fmt.Errorf("failed to parse response: %s", err)
+		}
+	}
+
+	const numberOfFaucet = 15 // must cover the liquidity needed for all tests
+
+	for i := 0; i < numberOfFaucet; i++ {
+		_, err = utils.RunCommand("nigiri", "faucet", addr.Address)
+		if err != nil {
+			return fmt.Errorf("failed to fund wallet: %s", err)
+		}
+	}
+
+	time.Sleep(5 * time.Second)
+	return nil
+}
+
+func runClarkCommand(arg ...string) (string, error) {
+	args := append([]string{"exec", "-t", "clarkd", "ark"}, arg...)
+	return utils.RunCommand("docker", args...)
 }
