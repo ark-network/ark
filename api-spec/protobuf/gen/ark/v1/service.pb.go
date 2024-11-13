@@ -1042,15 +1042,6 @@ type PingResponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
-
-	// Types that are assignable to Event:
-	//
-	//	*PingResponse_RoundFinalization
-	//	*PingResponse_RoundFinalized
-	//	*PingResponse_RoundFailed
-	//	*PingResponse_RoundSigning
-	//	*PingResponse_RoundSigningNoncesGenerated
-	Event isPingResponse_Event `protobuf_oneof:"event"`
 }
 
 func (x *PingResponse) Reset() {
@@ -1084,82 +1075,6 @@ func (x *PingResponse) ProtoReflect() protoreflect.Message {
 func (*PingResponse) Descriptor() ([]byte, []int) {
 	return file_ark_v1_service_proto_rawDescGZIP(), []int{17}
 }
-
-func (m *PingResponse) GetEvent() isPingResponse_Event {
-	if m != nil {
-		return m.Event
-	}
-	return nil
-}
-
-func (x *PingResponse) GetRoundFinalization() *RoundFinalizationEvent {
-	if x, ok := x.GetEvent().(*PingResponse_RoundFinalization); ok {
-		return x.RoundFinalization
-	}
-	return nil
-}
-
-func (x *PingResponse) GetRoundFinalized() *RoundFinalizedEvent {
-	if x, ok := x.GetEvent().(*PingResponse_RoundFinalized); ok {
-		return x.RoundFinalized
-	}
-	return nil
-}
-
-func (x *PingResponse) GetRoundFailed() *RoundFailed {
-	if x, ok := x.GetEvent().(*PingResponse_RoundFailed); ok {
-		return x.RoundFailed
-	}
-	return nil
-}
-
-func (x *PingResponse) GetRoundSigning() *RoundSigningEvent {
-	if x, ok := x.GetEvent().(*PingResponse_RoundSigning); ok {
-		return x.RoundSigning
-	}
-	return nil
-}
-
-func (x *PingResponse) GetRoundSigningNoncesGenerated() *RoundSigningNoncesGeneratedEvent {
-	if x, ok := x.GetEvent().(*PingResponse_RoundSigningNoncesGenerated); ok {
-		return x.RoundSigningNoncesGenerated
-	}
-	return nil
-}
-
-type isPingResponse_Event interface {
-	isPingResponse_Event()
-}
-
-type PingResponse_RoundFinalization struct {
-	RoundFinalization *RoundFinalizationEvent `protobuf:"bytes,1,opt,name=round_finalization,json=roundFinalization,proto3,oneof"`
-}
-
-type PingResponse_RoundFinalized struct {
-	RoundFinalized *RoundFinalizedEvent `protobuf:"bytes,2,opt,name=round_finalized,json=roundFinalized,proto3,oneof"`
-}
-
-type PingResponse_RoundFailed struct {
-	RoundFailed *RoundFailed `protobuf:"bytes,3,opt,name=round_failed,json=roundFailed,proto3,oneof"`
-}
-
-type PingResponse_RoundSigning struct {
-	RoundSigning *RoundSigningEvent `protobuf:"bytes,4,opt,name=round_signing,json=roundSigning,proto3,oneof"`
-}
-
-type PingResponse_RoundSigningNoncesGenerated struct {
-	RoundSigningNoncesGenerated *RoundSigningNoncesGeneratedEvent `protobuf:"bytes,5,opt,name=round_signing_nonces_generated,json=roundSigningNoncesGenerated,proto3,oneof"`
-}
-
-func (*PingResponse_RoundFinalization) isPingResponse_Event() {}
-
-func (*PingResponse_RoundFinalized) isPingResponse_Event() {}
-
-func (*PingResponse_RoundFailed) isPingResponse_Event() {}
-
-func (*PingResponse_RoundSigning) isPingResponse_Event() {}
-
-func (*PingResponse_RoundSigningNoncesGenerated) isPingResponse_Event() {}
 
 type AsyncPaymentInput struct {
 	state         protoimpl.MessageState
@@ -3233,33 +3148,8 @@ var file_ark_v1_service_proto_rawDesc = []byte{
 	0x65, 0x72, 0x61, 0x74, 0x65, 0x64, 0x42, 0x07, 0x0a, 0x05, 0x65, 0x76, 0x65, 0x6e, 0x74, 0x22,
 	0x2c, 0x0a, 0x0b, 0x50, 0x69, 0x6e, 0x67, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1d,
 	0x0a, 0x0a, 0x70, 0x61, 0x79, 0x6d, 0x65, 0x6e, 0x74, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x09, 0x70, 0x61, 0x79, 0x6d, 0x65, 0x6e, 0x74, 0x49, 0x64, 0x22, 0x9d, 0x03,
-	0x0a, 0x0c, 0x50, 0x69, 0x6e, 0x67, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x4f,
-	0x0a, 0x12, 0x72, 0x6f, 0x75, 0x6e, 0x64, 0x5f, 0x66, 0x69, 0x6e, 0x61, 0x6c, 0x69, 0x7a, 0x61,
-	0x74, 0x69, 0x6f, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1e, 0x2e, 0x61, 0x72, 0x6b,
-	0x2e, 0x76, 0x31, 0x2e, 0x52, 0x6f, 0x75, 0x6e, 0x64, 0x46, 0x69, 0x6e, 0x61, 0x6c, 0x69, 0x7a,
-	0x61, 0x74, 0x69, 0x6f, 0x6e, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x48, 0x00, 0x52, 0x11, 0x72, 0x6f,
-	0x75, 0x6e, 0x64, 0x46, 0x69, 0x6e, 0x61, 0x6c, 0x69, 0x7a, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x12,
-	0x46, 0x0a, 0x0f, 0x72, 0x6f, 0x75, 0x6e, 0x64, 0x5f, 0x66, 0x69, 0x6e, 0x61, 0x6c, 0x69, 0x7a,
-	0x65, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1b, 0x2e, 0x61, 0x72, 0x6b, 0x2e, 0x76,
-	0x31, 0x2e, 0x52, 0x6f, 0x75, 0x6e, 0x64, 0x46, 0x69, 0x6e, 0x61, 0x6c, 0x69, 0x7a, 0x65, 0x64,
-	0x45, 0x76, 0x65, 0x6e, 0x74, 0x48, 0x00, 0x52, 0x0e, 0x72, 0x6f, 0x75, 0x6e, 0x64, 0x46, 0x69,
-	0x6e, 0x61, 0x6c, 0x69, 0x7a, 0x65, 0x64, 0x12, 0x38, 0x0a, 0x0c, 0x72, 0x6f, 0x75, 0x6e, 0x64,
-	0x5f, 0x66, 0x61, 0x69, 0x6c, 0x65, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x13, 0x2e,
-	0x61, 0x72, 0x6b, 0x2e, 0x76, 0x31, 0x2e, 0x52, 0x6f, 0x75, 0x6e, 0x64, 0x46, 0x61, 0x69, 0x6c,
-	0x65, 0x64, 0x48, 0x00, 0x52, 0x0b, 0x72, 0x6f, 0x75, 0x6e, 0x64, 0x46, 0x61, 0x69, 0x6c, 0x65,
-	0x64, 0x12, 0x40, 0x0a, 0x0d, 0x72, 0x6f, 0x75, 0x6e, 0x64, 0x5f, 0x73, 0x69, 0x67, 0x6e, 0x69,
-	0x6e, 0x67, 0x18, 0x04, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x19, 0x2e, 0x61, 0x72, 0x6b, 0x2e, 0x76,
-	0x31, 0x2e, 0x52, 0x6f, 0x75, 0x6e, 0x64, 0x53, 0x69, 0x67, 0x6e, 0x69, 0x6e, 0x67, 0x45, 0x76,
-	0x65, 0x6e, 0x74, 0x48, 0x00, 0x52, 0x0c, 0x72, 0x6f, 0x75, 0x6e, 0x64, 0x53, 0x69, 0x67, 0x6e,
-	0x69, 0x6e, 0x67, 0x12, 0x6f, 0x0a, 0x1e, 0x72, 0x6f, 0x75, 0x6e, 0x64, 0x5f, 0x73, 0x69, 0x67,
-	0x6e, 0x69, 0x6e, 0x67, 0x5f, 0x6e, 0x6f, 0x6e, 0x63, 0x65, 0x73, 0x5f, 0x67, 0x65, 0x6e, 0x65,
-	0x72, 0x61, 0x74, 0x65, 0x64, 0x18, 0x05, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x28, 0x2e, 0x61, 0x72,
-	0x6b, 0x2e, 0x76, 0x31, 0x2e, 0x52, 0x6f, 0x75, 0x6e, 0x64, 0x53, 0x69, 0x67, 0x6e, 0x69, 0x6e,
-	0x67, 0x4e, 0x6f, 0x6e, 0x63, 0x65, 0x73, 0x47, 0x65, 0x6e, 0x65, 0x72, 0x61, 0x74, 0x65, 0x64,
-	0x45, 0x76, 0x65, 0x6e, 0x74, 0x48, 0x00, 0x52, 0x1b, 0x72, 0x6f, 0x75, 0x6e, 0x64, 0x53, 0x69,
-	0x67, 0x6e, 0x69, 0x6e, 0x67, 0x4e, 0x6f, 0x6e, 0x63, 0x65, 0x73, 0x47, 0x65, 0x6e, 0x65, 0x72,
-	0x61, 0x74, 0x65, 0x64, 0x42, 0x07, 0x0a, 0x05, 0x65, 0x76, 0x65, 0x6e, 0x74, 0x22, 0x64, 0x0a,
+	0x28, 0x09, 0x52, 0x09, 0x70, 0x61, 0x79, 0x6d, 0x65, 0x6e, 0x74, 0x49, 0x64, 0x22, 0x0e, 0x0a,
+	0x0c, 0x50, 0x69, 0x6e, 0x67, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x64, 0x0a,
 	0x11, 0x41, 0x73, 0x79, 0x6e, 0x63, 0x50, 0x61, 0x79, 0x6d, 0x65, 0x6e, 0x74, 0x49, 0x6e, 0x70,
 	0x75, 0x74, 0x12, 0x23, 0x0a, 0x05, 0x69, 0x6e, 0x70, 0x75, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28,
 	0x0b, 0x32, 0x0d, 0x2e, 0x61, 0x72, 0x6b, 0x2e, 0x76, 0x31, 0x2e, 0x49, 0x6e, 0x70, 0x75, 0x74,
@@ -3691,76 +3581,71 @@ var file_ark_v1_service_proto_depIdxs = []int32{
 	32, // 4: ark.v1.GetEventStreamResponse.round_failed:type_name -> ark.v1.RoundFailed
 	33, // 5: ark.v1.GetEventStreamResponse.round_signing:type_name -> ark.v1.RoundSigningEvent
 	34, // 6: ark.v1.GetEventStreamResponse.round_signing_nonces_generated:type_name -> ark.v1.RoundSigningNoncesGeneratedEvent
-	30, // 7: ark.v1.PingResponse.round_finalization:type_name -> ark.v1.RoundFinalizationEvent
-	31, // 8: ark.v1.PingResponse.round_finalized:type_name -> ark.v1.RoundFinalizedEvent
-	32, // 9: ark.v1.PingResponse.round_failed:type_name -> ark.v1.RoundFailed
-	33, // 10: ark.v1.PingResponse.round_signing:type_name -> ark.v1.RoundSigningEvent
-	34, // 11: ark.v1.PingResponse.round_signing_nonces_generated:type_name -> ark.v1.RoundSigningNoncesGeneratedEvent
-	37, // 12: ark.v1.AsyncPaymentInput.input:type_name -> ark.v1.Input
-	19, // 13: ark.v1.CreatePaymentRequest.inputs:type_name -> ark.v1.AsyncPaymentInput
-	38, // 14: ark.v1.CreatePaymentRequest.outputs:type_name -> ark.v1.Output
-	35, // 15: ark.v1.GetRoundResponse.round:type_name -> ark.v1.Round
-	35, // 16: ark.v1.GetRoundByIdResponse.round:type_name -> ark.v1.Round
-	42, // 17: ark.v1.ListVtxosResponse.spendable_vtxos:type_name -> ark.v1.Vtxo
-	42, // 18: ark.v1.ListVtxosResponse.spent_vtxos:type_name -> ark.v1.Vtxo
-	39, // 19: ark.v1.RoundFinalizationEvent.vtxo_tree:type_name -> ark.v1.Tree
-	39, // 20: ark.v1.RoundSigningEvent.unsigned_vtxo_tree:type_name -> ark.v1.Tree
-	39, // 21: ark.v1.Round.vtxo_tree:type_name -> ark.v1.Tree
-	0,  // 22: ark.v1.Round.stage:type_name -> ark.v1.RoundStage
-	36, // 23: ark.v1.Input.outpoint:type_name -> ark.v1.Outpoint
-	40, // 24: ark.v1.Tree.levels:type_name -> ark.v1.TreeLevel
-	41, // 25: ark.v1.TreeLevel.nodes:type_name -> ark.v1.Node
-	36, // 26: ark.v1.Vtxo.outpoint:type_name -> ark.v1.Outpoint
-	45, // 27: ark.v1.GetTransactionsStreamResponse.round:type_name -> ark.v1.RoundTransaction
-	46, // 28: ark.v1.GetTransactionsStreamResponse.redeem:type_name -> ark.v1.RedeemTransaction
-	36, // 29: ark.v1.RoundTransaction.spent_vtxos:type_name -> ark.v1.Outpoint
-	42, // 30: ark.v1.RoundTransaction.spendable_vtxos:type_name -> ark.v1.Vtxo
-	36, // 31: ark.v1.RoundTransaction.claimed_boarding_utxos:type_name -> ark.v1.Outpoint
-	36, // 32: ark.v1.RedeemTransaction.spent_vtxos:type_name -> ark.v1.Outpoint
-	42, // 33: ark.v1.RedeemTransaction.spendable_vtxos:type_name -> ark.v1.Vtxo
-	36, // 34: ark.v1.SignedVtxoOutpoint.outpoint:type_name -> ark.v1.Outpoint
-	47, // 35: ark.v1.SignedVtxoOutpoint.proof:type_name -> ark.v1.OwnershipProof
-	48, // 36: ark.v1.SetNostrRecipientRequest.vtxos:type_name -> ark.v1.SignedVtxoOutpoint
-	48, // 37: ark.v1.DeleteNostrRecipientRequest.vtxos:type_name -> ark.v1.SignedVtxoOutpoint
-	1,  // 38: ark.v1.ArkService.GetInfo:input_type -> ark.v1.GetInfoRequest
-	3,  // 39: ark.v1.ArkService.GetBoardingAddress:input_type -> ark.v1.GetBoardingAddressRequest
-	5,  // 40: ark.v1.ArkService.RegisterInputsForNextRound:input_type -> ark.v1.RegisterInputsForNextRoundRequest
-	7,  // 41: ark.v1.ArkService.RegisterOutputsForNextRound:input_type -> ark.v1.RegisterOutputsForNextRoundRequest
-	9,  // 42: ark.v1.ArkService.SubmitTreeNonces:input_type -> ark.v1.SubmitTreeNoncesRequest
-	11, // 43: ark.v1.ArkService.SubmitTreeSignatures:input_type -> ark.v1.SubmitTreeSignaturesRequest
-	13, // 44: ark.v1.ArkService.SubmitSignedForfeitTxs:input_type -> ark.v1.SubmitSignedForfeitTxsRequest
-	15, // 45: ark.v1.ArkService.GetEventStream:input_type -> ark.v1.GetEventStreamRequest
-	17, // 46: ark.v1.ArkService.Ping:input_type -> ark.v1.PingRequest
-	20, // 47: ark.v1.ArkService.CreatePayment:input_type -> ark.v1.CreatePaymentRequest
-	22, // 48: ark.v1.ArkService.CompletePayment:input_type -> ark.v1.CompletePaymentRequest
-	24, // 49: ark.v1.ArkService.GetRound:input_type -> ark.v1.GetRoundRequest
-	26, // 50: ark.v1.ArkService.GetRoundById:input_type -> ark.v1.GetRoundByIdRequest
-	28, // 51: ark.v1.ArkService.ListVtxos:input_type -> ark.v1.ListVtxosRequest
-	43, // 52: ark.v1.ArkService.GetTransactionsStream:input_type -> ark.v1.GetTransactionsStreamRequest
-	49, // 53: ark.v1.ArkService.SetNostrRecipient:input_type -> ark.v1.SetNostrRecipientRequest
-	51, // 54: ark.v1.ArkService.DeleteNostrRecipient:input_type -> ark.v1.DeleteNostrRecipientRequest
-	2,  // 55: ark.v1.ArkService.GetInfo:output_type -> ark.v1.GetInfoResponse
-	4,  // 56: ark.v1.ArkService.GetBoardingAddress:output_type -> ark.v1.GetBoardingAddressResponse
-	6,  // 57: ark.v1.ArkService.RegisterInputsForNextRound:output_type -> ark.v1.RegisterInputsForNextRoundResponse
-	8,  // 58: ark.v1.ArkService.RegisterOutputsForNextRound:output_type -> ark.v1.RegisterOutputsForNextRoundResponse
-	10, // 59: ark.v1.ArkService.SubmitTreeNonces:output_type -> ark.v1.SubmitTreeNoncesResponse
-	12, // 60: ark.v1.ArkService.SubmitTreeSignatures:output_type -> ark.v1.SubmitTreeSignaturesResponse
-	14, // 61: ark.v1.ArkService.SubmitSignedForfeitTxs:output_type -> ark.v1.SubmitSignedForfeitTxsResponse
-	16, // 62: ark.v1.ArkService.GetEventStream:output_type -> ark.v1.GetEventStreamResponse
-	18, // 63: ark.v1.ArkService.Ping:output_type -> ark.v1.PingResponse
-	21, // 64: ark.v1.ArkService.CreatePayment:output_type -> ark.v1.CreatePaymentResponse
-	23, // 65: ark.v1.ArkService.CompletePayment:output_type -> ark.v1.CompletePaymentResponse
-	25, // 66: ark.v1.ArkService.GetRound:output_type -> ark.v1.GetRoundResponse
-	27, // 67: ark.v1.ArkService.GetRoundById:output_type -> ark.v1.GetRoundByIdResponse
-	29, // 68: ark.v1.ArkService.ListVtxos:output_type -> ark.v1.ListVtxosResponse
-	44, // 69: ark.v1.ArkService.GetTransactionsStream:output_type -> ark.v1.GetTransactionsStreamResponse
-	50, // 70: ark.v1.ArkService.SetNostrRecipient:output_type -> ark.v1.SetNostrRecipientResponse
-	52, // 71: ark.v1.ArkService.DeleteNostrRecipient:output_type -> ark.v1.DeleteNostrRecipientResponse
-	55, // [55:72] is the sub-list for method output_type
-	38, // [38:55] is the sub-list for method input_type
-	38, // [38:38] is the sub-list for extension type_name
-	38, // [38:38] is the sub-list for extension extendee
-	0,  // [0:38] is the sub-list for field type_name
+	37, // 7: ark.v1.AsyncPaymentInput.input:type_name -> ark.v1.Input
+	19, // 8: ark.v1.CreatePaymentRequest.inputs:type_name -> ark.v1.AsyncPaymentInput
+	38, // 9: ark.v1.CreatePaymentRequest.outputs:type_name -> ark.v1.Output
+	35, // 10: ark.v1.GetRoundResponse.round:type_name -> ark.v1.Round
+	35, // 11: ark.v1.GetRoundByIdResponse.round:type_name -> ark.v1.Round
+	42, // 12: ark.v1.ListVtxosResponse.spendable_vtxos:type_name -> ark.v1.Vtxo
+	42, // 13: ark.v1.ListVtxosResponse.spent_vtxos:type_name -> ark.v1.Vtxo
+	39, // 14: ark.v1.RoundFinalizationEvent.vtxo_tree:type_name -> ark.v1.Tree
+	39, // 15: ark.v1.RoundSigningEvent.unsigned_vtxo_tree:type_name -> ark.v1.Tree
+	39, // 16: ark.v1.Round.vtxo_tree:type_name -> ark.v1.Tree
+	0,  // 17: ark.v1.Round.stage:type_name -> ark.v1.RoundStage
+	36, // 18: ark.v1.Input.outpoint:type_name -> ark.v1.Outpoint
+	40, // 19: ark.v1.Tree.levels:type_name -> ark.v1.TreeLevel
+	41, // 20: ark.v1.TreeLevel.nodes:type_name -> ark.v1.Node
+	36, // 21: ark.v1.Vtxo.outpoint:type_name -> ark.v1.Outpoint
+	45, // 22: ark.v1.GetTransactionsStreamResponse.round:type_name -> ark.v1.RoundTransaction
+	46, // 23: ark.v1.GetTransactionsStreamResponse.redeem:type_name -> ark.v1.RedeemTransaction
+	36, // 24: ark.v1.RoundTransaction.spent_vtxos:type_name -> ark.v1.Outpoint
+	42, // 25: ark.v1.RoundTransaction.spendable_vtxos:type_name -> ark.v1.Vtxo
+	36, // 26: ark.v1.RoundTransaction.claimed_boarding_utxos:type_name -> ark.v1.Outpoint
+	36, // 27: ark.v1.RedeemTransaction.spent_vtxos:type_name -> ark.v1.Outpoint
+	42, // 28: ark.v1.RedeemTransaction.spendable_vtxos:type_name -> ark.v1.Vtxo
+	36, // 29: ark.v1.SignedVtxoOutpoint.outpoint:type_name -> ark.v1.Outpoint
+	47, // 30: ark.v1.SignedVtxoOutpoint.proof:type_name -> ark.v1.OwnershipProof
+	48, // 31: ark.v1.SetNostrRecipientRequest.vtxos:type_name -> ark.v1.SignedVtxoOutpoint
+	48, // 32: ark.v1.DeleteNostrRecipientRequest.vtxos:type_name -> ark.v1.SignedVtxoOutpoint
+	1,  // 33: ark.v1.ArkService.GetInfo:input_type -> ark.v1.GetInfoRequest
+	3,  // 34: ark.v1.ArkService.GetBoardingAddress:input_type -> ark.v1.GetBoardingAddressRequest
+	5,  // 35: ark.v1.ArkService.RegisterInputsForNextRound:input_type -> ark.v1.RegisterInputsForNextRoundRequest
+	7,  // 36: ark.v1.ArkService.RegisterOutputsForNextRound:input_type -> ark.v1.RegisterOutputsForNextRoundRequest
+	9,  // 37: ark.v1.ArkService.SubmitTreeNonces:input_type -> ark.v1.SubmitTreeNoncesRequest
+	11, // 38: ark.v1.ArkService.SubmitTreeSignatures:input_type -> ark.v1.SubmitTreeSignaturesRequest
+	13, // 39: ark.v1.ArkService.SubmitSignedForfeitTxs:input_type -> ark.v1.SubmitSignedForfeitTxsRequest
+	15, // 40: ark.v1.ArkService.GetEventStream:input_type -> ark.v1.GetEventStreamRequest
+	17, // 41: ark.v1.ArkService.Ping:input_type -> ark.v1.PingRequest
+	20, // 42: ark.v1.ArkService.CreatePayment:input_type -> ark.v1.CreatePaymentRequest
+	22, // 43: ark.v1.ArkService.CompletePayment:input_type -> ark.v1.CompletePaymentRequest
+	24, // 44: ark.v1.ArkService.GetRound:input_type -> ark.v1.GetRoundRequest
+	26, // 45: ark.v1.ArkService.GetRoundById:input_type -> ark.v1.GetRoundByIdRequest
+	28, // 46: ark.v1.ArkService.ListVtxos:input_type -> ark.v1.ListVtxosRequest
+	43, // 47: ark.v1.ArkService.GetTransactionsStream:input_type -> ark.v1.GetTransactionsStreamRequest
+	49, // 48: ark.v1.ArkService.SetNostrRecipient:input_type -> ark.v1.SetNostrRecipientRequest
+	51, // 49: ark.v1.ArkService.DeleteNostrRecipient:input_type -> ark.v1.DeleteNostrRecipientRequest
+	2,  // 50: ark.v1.ArkService.GetInfo:output_type -> ark.v1.GetInfoResponse
+	4,  // 51: ark.v1.ArkService.GetBoardingAddress:output_type -> ark.v1.GetBoardingAddressResponse
+	6,  // 52: ark.v1.ArkService.RegisterInputsForNextRound:output_type -> ark.v1.RegisterInputsForNextRoundResponse
+	8,  // 53: ark.v1.ArkService.RegisterOutputsForNextRound:output_type -> ark.v1.RegisterOutputsForNextRoundResponse
+	10, // 54: ark.v1.ArkService.SubmitTreeNonces:output_type -> ark.v1.SubmitTreeNoncesResponse
+	12, // 55: ark.v1.ArkService.SubmitTreeSignatures:output_type -> ark.v1.SubmitTreeSignaturesResponse
+	14, // 56: ark.v1.ArkService.SubmitSignedForfeitTxs:output_type -> ark.v1.SubmitSignedForfeitTxsResponse
+	16, // 57: ark.v1.ArkService.GetEventStream:output_type -> ark.v1.GetEventStreamResponse
+	18, // 58: ark.v1.ArkService.Ping:output_type -> ark.v1.PingResponse
+	21, // 59: ark.v1.ArkService.CreatePayment:output_type -> ark.v1.CreatePaymentResponse
+	23, // 60: ark.v1.ArkService.CompletePayment:output_type -> ark.v1.CompletePaymentResponse
+	25, // 61: ark.v1.ArkService.GetRound:output_type -> ark.v1.GetRoundResponse
+	27, // 62: ark.v1.ArkService.GetRoundById:output_type -> ark.v1.GetRoundByIdResponse
+	29, // 63: ark.v1.ArkService.ListVtxos:output_type -> ark.v1.ListVtxosResponse
+	44, // 64: ark.v1.ArkService.GetTransactionsStream:output_type -> ark.v1.GetTransactionsStreamResponse
+	50, // 65: ark.v1.ArkService.SetNostrRecipient:output_type -> ark.v1.SetNostrRecipientResponse
+	52, // 66: ark.v1.ArkService.DeleteNostrRecipient:output_type -> ark.v1.DeleteNostrRecipientResponse
+	50, // [50:67] is the sub-list for method output_type
+	33, // [33:50] is the sub-list for method input_type
+	33, // [33:33] is the sub-list for extension type_name
+	33, // [33:33] is the sub-list for extension extendee
+	0,  // [0:33] is the sub-list for field type_name
 }
 
 func init() { file_ark_v1_service_proto_init() }
@@ -4402,13 +4287,6 @@ func file_ark_v1_service_proto_init() {
 		(*GetEventStreamResponse_RoundFailed)(nil),
 		(*GetEventStreamResponse_RoundSigning)(nil),
 		(*GetEventStreamResponse_RoundSigningNoncesGenerated)(nil),
-	}
-	file_ark_v1_service_proto_msgTypes[17].OneofWrappers = []interface{}{
-		(*PingResponse_RoundFinalization)(nil),
-		(*PingResponse_RoundFinalized)(nil),
-		(*PingResponse_RoundFailed)(nil),
-		(*PingResponse_RoundSigning)(nil),
-		(*PingResponse_RoundSigningNoncesGenerated)(nil),
 	}
 	file_ark_v1_service_proto_msgTypes[43].OneofWrappers = []interface{}{
 		(*GetTransactionsStreamResponse_Round)(nil),

@@ -192,15 +192,7 @@ message GetEventStreamResponse {
 message PingRequest {
   string payment_id = 1;
 }
-message PingResponse {
-  oneof event {
-    RoundFinalizationEvent round_finalization = 1;
-    RoundFinalizedEvent round_finalized = 2;
-    RoundFailed round_failed = 3;
-    RoundSigningEvent round_signing = 4;
-    RoundSigningNoncesGeneratedEvent round_signing_nonces_generated = 5; 
-  }
-}
+message PingResponse {}
 
 /* Async Payment API messages */
 

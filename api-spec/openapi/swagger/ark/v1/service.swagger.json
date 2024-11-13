@@ -827,24 +827,7 @@
       "description": "This message is used to prove to the ASP that the user controls the vtxo without revealing the whole VTXO descriptor."
     },
     "v1PingResponse": {
-      "type": "object",
-      "properties": {
-        "roundFinalization": {
-          "$ref": "#/definitions/v1RoundFinalizationEvent"
-        },
-        "roundFinalized": {
-          "$ref": "#/definitions/v1RoundFinalizedEvent"
-        },
-        "roundFailed": {
-          "$ref": "#/definitions/v1RoundFailed"
-        },
-        "roundSigning": {
-          "$ref": "#/definitions/v1RoundSigningEvent"
-        },
-        "roundSigningNoncesGenerated": {
-          "$ref": "#/definitions/v1RoundSigningNoncesGeneratedEvent"
-        }
-      }
+      "type": "object"
     },
     "v1RedeemTransaction": {
       "type": "object",
