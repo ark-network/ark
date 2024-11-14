@@ -89,6 +89,8 @@ func mainAction(_ *cli.Context) error {
 		return err
 	}
 
+	log.Infof("Ark Server config: %+v", appConfig)
+
 	log.Info("starting service...")
 	if err := svc.Start(); err != nil {
 		return err

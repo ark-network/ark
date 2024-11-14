@@ -6,9 +6,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ark-network/ark/common/tree"
-
 	"github.com/ark-network/ark/common/bitcointree"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"

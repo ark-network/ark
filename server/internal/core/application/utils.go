@@ -173,14 +173,10 @@ func (m *paymentsMap) pop(num int64) ([]domain.Payment, []ports.BoardingInput, m
 			cosigners = append(cosigners, pubkey)
 			delete(m.ephemeralKeys, p.Payment.Id)
 		}
-
 		notes = append(notes, p.notes...)
-
-		for _, input := range payments {
-			for _, vtxo := range input.Inputs {
-				descriptors[vtxo.VtxoKey] = m.descriptors[vtxo.VtxoKey]
-				delete(m.descriptors, vtxo.VtxoKey)
-			}
+		for _, vtxo := range p.Payment.Inputs {
+			descriptors[vtxo.VtxoKey] = m.descriptors[vtxo.VtxoKey]
+			delete(m.descriptors, vtxo.VtxoKey)
 		}
 		delete(m.payments, p.Id)
 	}
