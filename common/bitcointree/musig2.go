@@ -2,6 +2,7 @@ package bitcointree
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -21,9 +22,6 @@ import (
 var (
 	ErrCongestionTreeNotSet = errors.New("congestion tree not set")
 	ErrAggregateKeyNotSet   = errors.New("aggregate key not set")
-
-	columnSeparator = byte('|')
-	rowSeparator    = byte('/')
 )
 
 type Musig2Nonce struct {
@@ -37,12 +35,15 @@ func (n *Musig2Nonce) Encode(w io.Writer) error {
 
 func (n *Musig2Nonce) Decode(r io.Reader) error {
 	bytes := make([]byte, 66)
-	_, err := r.Read(bytes)
+	bytesRead, err := io.ReadFull(r, bytes)
 	if err != nil {
 		return err
 	}
+	if bytesRead != 66 {
+		return fmt.Errorf("expected to read 66 bytes, but read %d", bytesRead)
+	}
 
-	n.PubNonce = [66]byte(bytes)
+	copy(n.PubNonce[:], bytes)
 	return nil
 }
 
@@ -585,19 +586,22 @@ type readable interface {
 func encodeMatrix[T writable](matrix [][]T) ([]byte, error) {
 	var buf bytes.Buffer
 
-	for _, row := range matrix {
-		for _, cell := range row {
-			if err := buf.WriteByte(columnSeparator); err != nil {
-				return nil, err
-			}
+	// Write number of rows
+	if err := binary.Write(&buf, binary.LittleEndian, uint32(len(matrix))); err != nil {
+		return nil, err
+	}
 
+	// For each row, write its length and then its elements
+	for _, row := range matrix {
+		// Write row length
+		if err := binary.Write(&buf, binary.LittleEndian, uint32(len(row))); err != nil {
+			return nil, err
+		}
+		// Write row data
+		for _, cell := range row {
 			if err := cell.Encode(&buf); err != nil {
 				return nil, err
 			}
-		}
-
-		if err := buf.WriteByte(rowSeparator); err != nil {
-			return nil, err
 		}
 	}
 
@@ -606,36 +610,33 @@ func encodeMatrix[T writable](matrix [][]T) ([]byte, error) {
 
 // decodeMatrix decode a byte stream into a matrix of serializable objects
 func decodeMatrix[T readable](factory func() T, data io.Reader) ([][]T, error) {
-	matrix := make([][]T, 0)
-	row := make([]T, 0)
+	var rowCount uint32
 
-	for {
-		separator := make([]byte, 1)
+	// Read number of rows
+	if err := binary.Read(data, binary.LittleEndian, &rowCount); err != nil {
+		return nil, err
+	}
 
-		if _, err := data.Read(separator); err != nil {
-			if err == io.EOF {
-				break
-			}
+	// Initialize matrix
+	matrix := make([][]T, 0, rowCount)
+	// For each row, read its length and then its elements
+	for i := uint32(0); i < rowCount; i++ {
+		var colCount uint32
+		// Read row length
+		if err := binary.Read(data, binary.LittleEndian, &colCount); err != nil {
 			return nil, err
 		}
-
-		b := separator[0]
-
-		if b == rowSeparator {
-			matrix = append(matrix, row)
-			row = make([]T, 0)
-			continue
-		}
-
-		cell := factory()
-
-		if err := cell.Decode(data); err != nil {
-			if err == io.EOF {
-				break
+		// Initialize row
+		row := make([]T, 0, colCount)
+		// Read row data
+		for j := uint32(0); j < colCount; j++ {
+			cell := factory()
+			if err := cell.Decode(data); err != nil {
+				return nil, err
 			}
-			return nil, err
+			row = append(row, cell)
 		}
-		row = append(row, cell)
+		matrix = append(matrix, row)
 	}
 
 	return matrix, nil
