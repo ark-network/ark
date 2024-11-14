@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -472,10 +471,7 @@ func TestSweep(t *testing.T) {
 		decrypted, err := nip04.Decrypt(event.Content, sharedSecret)
 		require.NoError(t, err)
 
-		parts := strings.Split(decrypted, "://")
-		require.Len(t, parts, 2)
-
-		note = parts[1]
+		note = decrypted
 		break // Exit after processing the first message
 	}
 
@@ -651,8 +647,5 @@ func generateNote(t *testing.T, amount uint32) string {
 		t.Fatalf("failed to parse response: %s", err)
 	}
 
-	noteURI := noteResp.Notes[0]
-	note := strings.Split(noteURI, "://")[1]
-
-	return note
+	return noteResp.Notes[0]
 }
