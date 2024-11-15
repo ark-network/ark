@@ -543,17 +543,8 @@ func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, rece
 	return s.paymentRequests.update(*payment)
 }
 
-func (s *covenantlessService) UpdatePaymentStatus(_ context.Context, id string) (domain.RoundEvent, error) {
-	err := s.paymentRequests.updatePingTimestamp(id)
-	if err != nil {
-		if _, ok := err.(errPaymentNotFound); ok {
-			return s.lastEvent, nil
-		}
-
-		return nil, err
-	}
-
-	return s.lastEvent, nil
+func (s *covenantlessService) UpdatePaymentStatus(_ context.Context, id string) error {
+	return s.paymentRequests.updatePingTimestamp(id)
 }
 
 func (s *covenantlessService) SignVtxos(ctx context.Context, forfeitTxs []string) error {
@@ -738,7 +729,7 @@ func (s *covenantlessService) startFinalization() {
 	ctx := context.Background()
 	round := s.currentRound
 
-	roundRemainingDuration := time.Duration(s.roundInterval/3-1) * time.Second
+	roundRemainingDuration := time.Duration((s.roundInterval/3)*2-1) * time.Second
 	thirdOfRemainingDuration := time.Duration(roundRemainingDuration / 3)
 
 	var roundAborted bool
