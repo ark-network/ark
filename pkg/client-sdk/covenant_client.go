@@ -210,6 +210,14 @@ func (a *covenantArkClient) InitWithWallet(ctx context.Context, args InitWithWal
 	return nil
 }
 
+func (a *covenantArkClient) RedeemNotes(ctx context.Context, notes []string) (string, error) {
+	return "", fmt.Errorf("not implemented")
+}
+
+func (a *covenantArkClient) SetNostrNotificationRecipient(_ context.Context, _ string) error {
+	return fmt.Errorf("not implemented")
+}
+
 func (a *covenantArkClient) listenForTxStream(ctx context.Context) {
 	eventChan, closeFunc, err := a.client.GetTransactionsStream(ctx)
 	if err != nil {
@@ -585,12 +593,12 @@ func (a *covenantArkClient) CollaborativeRedeem(
 		return "", err
 	}
 
-	poolTxID, err := a.handleRoundStream(ctx, paymentID, selectedCoins, selectedBoardingUtxos, receivers)
+	roundTxID, err := a.handleRoundStream(ctx, paymentID, selectedCoins, selectedBoardingUtxos, receivers)
 	if err != nil {
 		return "", err
 	}
 
-	return poolTxID, nil
+	return roundTxID, nil
 }
 
 func (a *covenantArkClient) SendAsync(
@@ -1026,14 +1034,14 @@ func (a *covenantArkClient) sendOffchain(
 
 	log.Infof("payment registered with id: %s", paymentID)
 
-	poolTxID, err := a.handleRoundStream(
+	roundTxID, err := a.handleRoundStream(
 		ctx, paymentID, selectedCoins, boardingUtxos, outputs,
 	)
 	if err != nil {
 		return "", err
 	}
 
-	return poolTxID, nil
+	return roundTxID, nil
 }
 
 // addInputs adds the inputs to the pset for send onchain
@@ -1695,7 +1703,7 @@ func (a *covenantArkClient) getOffchainBalance(
 
 func (a *covenantArkClient) getVtxos(
 	ctx context.Context,
-	withExpiryCoinselect bool, opts *CoinSelectOptions,
+	_ bool, opts *CoinSelectOptions,
 ) ([]client.Vtxo, error) {
 	spendableVtxos, _, err := a.ListVtxos(ctx)
 	if err != nil {

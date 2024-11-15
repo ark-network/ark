@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 
+	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -21,6 +22,7 @@ type AsyncPaymentInput struct {
 type Service interface {
 	Start() error
 	Stop()
+	SpendNotes(ctx context.Context, notes []note.Note) (string, error)
 	SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error)
 	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error
 	SignVtxos(ctx context.Context, forfeitTxs []string) error
@@ -55,6 +57,8 @@ type Service interface {
 		pubkey *secp256k1.PublicKey, signatures string,
 	) error
 	GetTransactionEventsChannel(ctx context.Context) <-chan TransactionEvent
+	SetNostrRecipient(ctx context.Context, nostrRecipient string, signedVtxoOutpoints []SignedVtxoOutpoint) error
+	DeleteNostrRecipient(ctx context.Context, signedVtxoOutpoints []SignedVtxoOutpoint) error
 }
 
 type ServiceInfo struct {
@@ -72,6 +76,11 @@ type WalletStatus struct {
 	IsInitialized bool
 	IsUnlocked    bool
 	IsSynced      bool
+}
+
+type SignedVtxoOutpoint struct {
+	Outpoint domain.VtxoKey
+	Proof    OwnershipProof
 }
 
 type txOutpoint struct {

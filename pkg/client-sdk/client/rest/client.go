@@ -138,6 +138,24 @@ func (a *restClient) RegisterInputsForNextRound(
 	return resp.Payload.ID, nil
 }
 
+func (a *restClient) RegisterNotesForNextRound(
+	ctx context.Context, notes []string, ephemeralKey string,
+) (string, error) {
+	body := &models.V1RegisterInputsForNextRoundRequest{
+		Notes: notes,
+	}
+	if len(ephemeralKey) > 0 {
+		body.EphemeralPubkey = ephemeralKey
+	}
+	resp, err := a.svc.ArkServiceRegisterInputsForNextRound(
+		ark_service.NewArkServiceRegisterInputsForNextRoundParams().WithBody(body),
+	)
+	if err != nil {
+		return "", err
+	}
+	return resp.Payload.ID, nil
+}
+
 func (a *restClient) RegisterOutputsForNextRound(
 	ctx context.Context, paymentID string, outputs []client.Output,
 ) error {
@@ -518,6 +536,33 @@ func (a *restClient) ListVtxos(
 	return spendableVtxos, spentVtxos, nil
 }
 
+func (a *restClient) SetNostrRecipient(
+	ctx context.Context, nostrRecipient string, vtxos []client.SignedVtxoOutpoint,
+) error {
+	body := models.V1SetNostrRecipientRequest{
+		NostrRecipient: nostrRecipient,
+		Vtxos:          toSignedVtxoModel(vtxos),
+	}
+
+	_, err := a.svc.ArkServiceSetNostrRecipient(
+		ark_service.NewArkServiceSetNostrRecipientParams().WithBody(&body),
+	)
+	return err
+}
+
+func (a *restClient) DeleteNostrRecipient(
+	ctx context.Context, vtxos []client.SignedVtxoOutpoint,
+) error {
+	body := models.V1DeleteNostrRecipientRequest{
+		Vtxos: toSignedVtxoModel(vtxos),
+	}
+
+	_, err := a.svc.ArkServiceDeleteNostrRecipient(
+		ark_service.NewArkServiceDeleteNostrRecipientParams().WithBody(&body),
+	)
+	return err
+}
+
 func (c *restClient) Close() {}
 
 func newRestClient(
@@ -729,4 +774,22 @@ func vtxosFromRest(restVtxos []*models.V1Vtxo) []client.Vtxo {
 		}
 	}
 	return vtxos
+}
+
+func toSignedVtxoModel(vtxos []client.SignedVtxoOutpoint) []*models.V1SignedVtxoOutpoint {
+	signedVtxos := make([]*models.V1SignedVtxoOutpoint, 0, len(vtxos))
+	for _, v := range vtxos {
+		signedVtxos = append(signedVtxos, &models.V1SignedVtxoOutpoint{
+			Outpoint: &models.V1Outpoint{
+				Txid: v.Outpoint.Txid,
+				Vout: int64(v.Outpoint.VOut),
+			},
+			Proof: &models.V1OwnershipProof{
+				ControlBlock: v.Proof.ControlBlock,
+				Script:       v.Proof.Script,
+				Signature:    v.Proof.Signature,
+			},
+		})
+	}
+	return signedVtxos
 }
