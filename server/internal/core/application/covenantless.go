@@ -1610,3 +1610,26 @@ func newMusigSigningSession(nbCosigners int) *musigSigningSession {
 		nbCosigners: nbCosigners,
 	}
 }
+
+func (s *covenantlessService) UpdateMarketHour(
+	ctx context.Context,
+	firstMarketHour, period, roundLifetime int64,
+) error {
+	if firstMarketHour <= 0 {
+		return fmt.Errorf("first_market_hour must be positive")
+	}
+	if period <= 0 {
+		return fmt.Errorf("period must be positive")
+	}
+	if roundLifetime < 0 {
+		return fmt.Errorf("round_lifetime cannot be negative")
+	}
+
+	s.firstMarketHour = firstMarketHour
+	s.marketHourPeriod = period
+	if roundLifetime > 0 {
+		s.marketHourRoundLifetime = roundLifetime
+	}
+
+	return nil
+}

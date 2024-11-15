@@ -21,6 +21,12 @@ service AdminService {
       body: "*"
     };
   } 
+  rpc UpdateMarketHour(UpdateMarketHourRequest) returns (UpdateMarketHourResponse) {
+    option (google.api.http) = {
+      post: "/v1/admin/market-hour"
+      body: "*"
+    };
+  }
 }
 
 message GetScheduledSweepRequest {}
@@ -64,3 +70,12 @@ message GetRoundsRequest {
 message GetRoundsResponse {
   repeated string rounds = 1;
 }
+
+message UpdateMarketHourRequest {
+  int64 first_market_hour = 1;
+  int64 period = 2;
+  int64 round_lifetime = 3;
+}
+
+// Empty response, only status code matters
+message UpdateMarketHourResponse {}

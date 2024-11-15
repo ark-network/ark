@@ -99,6 +99,22 @@ func (a *adminHandler) GetScheduledSweep(ctx context.Context, _ *arkv1.GetSchedu
 	return &arkv1.GetScheduledSweepResponse{Sweeps: sweeps}, nil
 }
 
+func (a *adminHandler) UpdateMarketHour(
+	ctx context.Context,
+	req *arkv1.UpdateMarketHourRequest,
+) (*arkv1.UpdateMarketHourResponse, error) {
+	if err := a.aspService.UpdateMarketHour(
+		ctx,
+		req.FirstMarketHour,
+		req.Period,
+		req.RoundLifetime,
+	); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	return &arkv1.UpdateMarketHourResponse{}, nil
+}
+
 // convert sats to string BTC
 func convertSatoshis(sats uint64) string {
 	btc := float64(sats) * 1e-8

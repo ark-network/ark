@@ -55,6 +55,7 @@ type Service interface {
 		pubkey *secp256k1.PublicKey, signatures string,
 	) error
 	GetTransactionEventsChannel(ctx context.Context) <-chan TransactionEvent
+	UpdateMarketHour(ctx context.Context, firstMarketHour, period, roundLifetime int64) error
 }
 
 type ServiceInfo struct {

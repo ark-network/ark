@@ -16,6 +16,38 @@
     "application/json"
   ],
   "paths": {
+    "/v1/admin/market-hour": {
+      "post": {
+        "operationId": "AdminService_UpdateMarketHour",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1UpdateMarketHourResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1UpdateMarketHourRequest"
+            }
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
     "/v1/admin/round/{roundId}": {
       "get": {
         "operationId": "AdminService_GetRoundDetails",
@@ -240,6 +272,30 @@
           "format": "int64"
         }
       }
+    },
+    "v1UpdateMarketHourRequest": {
+      "type": "object",
+      "properties": {
+        "firstMarketHour": {
+          "type": "string",
+          "format": "int64",
+          "title": "Unix timestamp for the first market hour"
+        },
+        "period": {
+          "type": "string",
+          "format": "int64",
+          "title": "Period between market hours in seconds"
+        },
+        "roundLifetime": {
+          "type": "string",
+          "format": "int64",
+          "title": "Round lifetime for market hours, if 0 uses default round lifetime"
+        }
+      }
+    },
+    "v1UpdateMarketHourResponse": {
+      "type": "object",
+      "title": "Empty response, only status code matters"
     }
   }
 }
