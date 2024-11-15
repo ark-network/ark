@@ -69,6 +69,24 @@ func NewCovenantService(
 		return nil, fmt.Errorf("failed to fetch pubkey: %s", err)
 	}
 
+	// Try to load market hours from DB first
+	marketHours, err := repoManager.MarketHourRepo().Get(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get market hours from db: %w", err)
+	}
+
+	// If no market hours in DB, use config values and save to DB
+	if marketHours == nil {
+		marketHours = &domain.MarketHour{
+			FirstMarketHour: firstMarketHour,
+			Period:          marketHourPeriod,
+			RoundLifetime:   marketHourRoundLifetime,
+		}
+		if err := repoManager.MarketHourRepo().Save(context.Background(), marketHours); err != nil {
+			return nil, fmt.Errorf("failed to save initial market hours to db: %w", err)
+		}
+	}
+
 	svc := &covenantService{
 		network:                 network,
 		pubkey:                  pubkey,
@@ -81,14 +99,12 @@ func NewCovenantService(
 		builder:                 builder,
 		scanner:                 scanner,
 		sweeper:                 newSweeper(walletSvc, repoManager, builder, scheduler),
-		paymentRequests:         newPaymentsMap(),
-		forfeitTxs:              newForfeitTxsMap(builder),
 		eventsCh:                make(chan domain.RoundEvent),
 		transactionEventsCh:     make(chan TransactionEvent),
 		currentRoundLock:        sync.Mutex{},
-		firstMarketHour:         firstMarketHour,
-		marketHourPeriod:        marketHourPeriod,
-		marketHourRoundLifetime: marketHourRoundLifetime,
+		firstMarketHour:         marketHours.FirstMarketHour,
+		marketHourPeriod:        marketHours.Period,
+		marketHourRoundLifetime: marketHours.RoundLifetime,
 	}
 
 	repoManager.RegisterEventsHandler(
@@ -1114,6 +1130,16 @@ func (s *covenantService) UpdateMarketHour(
 	}
 	if roundLifetime < 0 {
 		return fmt.Errorf("round_lifetime cannot be negative")
+	}
+
+	marketHours := &domain.MarketHour{
+		FirstMarketHour: firstMarketHour,
+		Period:          period,
+		RoundLifetime:   roundLifetime,
+	}
+
+	if err := s.repoManager.MarketHourRepo().Save(ctx, marketHours); err != nil {
+		return fmt.Errorf("failed to save market hours: %w", err)
 	}
 
 	s.firstMarketHour = firstMarketHour

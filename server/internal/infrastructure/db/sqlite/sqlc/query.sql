@@ -156,3 +156,15 @@ UPDATE vtxo SET spent = true, spent_by = ? WHERE txid = ? AND vout = ?;
 
 -- name: UpdateVtxoExpireAt :exec
 UPDATE vtxo SET expire_at = ? WHERE txid = ? AND vout = ?;
+
+-- name: GetLatestMarketHour :one
+SELECT * FROM market_hour ORDER BY created_at DESC LIMIT 1;
+
+-- name: SaveMarketHour :one
+INSERT INTO market_hour (
+    first_market_hour,
+    period,
+    round_lifetime,
+    created_at
+) VALUES (?, ?, ?, ?)
+RETURNING *;

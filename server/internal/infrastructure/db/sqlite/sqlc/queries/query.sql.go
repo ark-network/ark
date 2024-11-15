@@ -10,6 +10,23 @@ import (
 	"database/sql"
 )
 
+const getLatestMarketHour = `-- name: GetLatestMarketHour :one
+SELECT id, first_market_hour, period, round_lifetime, created_at FROM market_hour ORDER BY created_at DESC LIMIT 1
+`
+
+func (q *Queries) GetLatestMarketHour(ctx context.Context) (MarketHour, error) {
+	row := q.db.QueryRowContext(ctx, getLatestMarketHour)
+	var i MarketHour
+	err := row.Scan(
+		&i.ID,
+		&i.FirstMarketHour,
+		&i.Period,
+		&i.RoundLifetime,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const markVtxoAsRedeemed = `-- name: MarkVtxoAsRedeemed :exec
 UPDATE vtxo SET redeemed = true WHERE txid = ? AND vout = ?
 `
@@ -51,6 +68,41 @@ type MarkVtxoAsSweptParams struct {
 func (q *Queries) MarkVtxoAsSwept(ctx context.Context, arg MarkVtxoAsSweptParams) error {
 	_, err := q.db.ExecContext(ctx, markVtxoAsSwept, arg.Txid, arg.Vout)
 	return err
+}
+
+const saveMarketHour = `-- name: SaveMarketHour :one
+INSERT INTO market_hour (
+    first_market_hour,
+    period,
+    round_lifetime,
+    created_at
+) VALUES (?, ?, ?, ?)
+RETURNING id, first_market_hour, period, round_lifetime, created_at
+`
+
+type SaveMarketHourParams struct {
+	FirstMarketHour int64
+	Period          int64
+	RoundLifetime   int64
+	CreatedAt       int64
+}
+
+func (q *Queries) SaveMarketHour(ctx context.Context, arg SaveMarketHourParams) (MarketHour, error) {
+	row := q.db.QueryRowContext(ctx, saveMarketHour,
+		arg.FirstMarketHour,
+		arg.Period,
+		arg.RoundLifetime,
+		arg.CreatedAt,
+	)
+	var i MarketHour
+	err := row.Scan(
+		&i.ID,
+		&i.FirstMarketHour,
+		&i.Period,
+		&i.RoundLifetime,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const selectNotRedeemedVtxos = `-- name: SelectNotRedeemedVtxos :many
