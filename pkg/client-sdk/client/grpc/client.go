@@ -41,7 +41,11 @@ func NewClient(aspUrl string) (client.ASPClient, error) {
 	if !strings.Contains(aspUrl, ":") {
 		aspUrl = fmt.Sprintf("%s:%d", aspUrl, port)
 	}
-	conn, err := grpc.NewClient(aspUrl, grpc.WithTransportCredentials(creds))
+	conn, err := grpc.NewClient(
+		aspUrl,
+		grpc.WithTransportCredentials(creds),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(8*1024*1024)),
+	)
 	if err != nil {
 		return nil, err
 	}
