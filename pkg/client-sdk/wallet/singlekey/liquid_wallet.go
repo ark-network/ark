@@ -290,6 +290,10 @@ func (s *liquidWallet) SignTransaction(
 func (w *liquidWallet) SignMessage(
 	ctx context.Context, message []byte, pubkey string,
 ) (string, error) {
+	if w.IsLocked() {
+		return "", fmt.Errorf("wallet is locked")
+	}
+
 	walletPubkeyHex := hex.EncodeToString(schnorr.SerializePubKey(w.walletData.Pubkey))
 	if walletPubkeyHex != pubkey {
 		return "", fmt.Errorf("pubkey mismatch, cannot sign message")
