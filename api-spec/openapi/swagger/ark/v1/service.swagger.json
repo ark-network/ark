@@ -631,6 +631,9 @@
         },
         "forfeitAddress": {
           "type": "string"
+        },
+        "marketHour": {
+          "$ref": "#/definitions/v1MarketHour"
         }
       }
     },
@@ -688,6 +691,26 @@
             "type": "object",
             "$ref": "#/definitions/v1Vtxo"
           }
+        }
+      }
+    },
+    "v1MarketHour": {
+      "type": "object",
+      "properties": {
+        "firstMarketHour": {
+          "type": "string",
+          "format": "int64",
+          "title": "Unix time representing the first market hour"
+        },
+        "period": {
+          "type": "string",
+          "format": "int64",
+          "title": "Period between market hours"
+        },
+        "roundLifetime": {
+          "type": "string",
+          "format": "int64",
+          "title": "Round lifetime in seconds"
         }
       }
     },

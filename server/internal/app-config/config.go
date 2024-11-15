@@ -57,26 +57,28 @@ var (
 )
 
 type Config struct {
-	DbType                string
-	EventDbType           string
-	DbDir                 string
-	DbMigrationPath       string
-	EventDbDir            string
-	RoundInterval         int64
-	Network               common.Network
-	SchedulerType         string
-	TxBuilderType         string
-	BlockchainScannerType string
-	WalletAddr            string
-	RoundLifetime         int64
-	UnilateralExitDelay   int64
-	BoardingExitDelay     int64
-
-	EsploraURL      string
-	NeutrinoPeer    string
-	BitcoindRpcUser string
-	BitcoindRpcPass string
-	BitcoindRpcHost string
+	DbType                  string
+	EventDbType             string
+	DbDir                   string
+	DbMigrationPath         string
+	EventDbDir              string
+	RoundInterval           int64
+	Network                 common.Network
+	SchedulerType           string
+	TxBuilderType           string
+	BlockchainScannerType   string
+	WalletAddr              string
+	RoundLifetime           int64
+	UnilateralExitDelay     int64
+	BoardingExitDelay       int64
+	FirstMarketHour         int64
+	MarketHourPeriod        int64
+	MarketHourRoundLifetime int64
+	EsploraURL              string
+	NeutrinoPeer            string
+	BitcoindRpcUser         string
+	BitcoindRpcPass         string
+	BitcoindRpcHost         string
 
 	UnlockerType     string
 	UnlockerFilePath string // file unlocker
@@ -352,9 +354,14 @@ func (c *Config) schedulerService() error {
 }
 
 func (c *Config) appService() error {
+	marketHourRoundLifetime := c.MarketHourRoundLifetime
+	if marketHourRoundLifetime == 0 {
+		marketHourRoundLifetime = c.RoundLifetime
+	}
 	if common.IsLiquid(c.Network) {
 		svc, err := application.NewCovenantService(
 			c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay,
+			c.FirstMarketHour, c.MarketHourPeriod, marketHourRoundLifetime,
 			c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler,
 		)
 		if err != nil {
@@ -367,6 +374,7 @@ func (c *Config) appService() error {
 
 	svc, err := application.NewCovenantlessService(
 		c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay,
+		c.FirstMarketHour, c.MarketHourPeriod, marketHourRoundLifetime,
 		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler,
 	)
 	if err != nil {

@@ -52,6 +52,11 @@ func (h *handler) GetInfo(
 		Dust:                       int64(info.Dust),
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 		ForfeitAddress:             info.ForfeitAddress,
+		MarketHour: &arkv1.MarketHour{
+			FirstMarketHour: info.MarketHour.FirstMarketHour,
+			Period:          info.MarketHour.Period,
+			RoundLifetime:   info.MarketHour.RoundLifetime,
+		},
 	}, nil
 }
 

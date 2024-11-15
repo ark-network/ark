@@ -110,6 +110,7 @@ message GetInfoResponse {
   string boarding_descriptor_template = 7;
   repeated string vtxo_descriptor_templates = 8;
   string forfeit_address = 9;
+  MarketHour market_hour = 10;
 }
 
 message GetBoardingAddressRequest {
@@ -336,4 +337,10 @@ message RedeemTransaction {
   string txid = 1;
   repeated Outpoint spent_vtxos = 2;
   repeated Vtxo spendable_vtxos = 3;
+}
+
+message MarketHour {
+  int64 first_market_hour = 1;  // Unix time representing the first market hour
+  int64 period = 2;             // Period between market hours
+  int64 round_lifetime = 3;     // Round lifetime in seconds
 }

@@ -66,6 +66,13 @@ type ServiceInfo struct {
 	Dust                       uint64
 	BoardingDescriptorTemplate string
 	ForfeitAddress             string
+	MarketHour                 *MarketHour
+}
+
+type MarketHour struct {
+	FirstMarketHour int64
+	Period          int64
+	RoundLifetime   int64
 }
 
 type WalletStatus struct {

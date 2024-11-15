@@ -29,12 +29,15 @@ var (
 )
 
 type covenantService struct {
-	network             common.Network
-	pubkey              *secp256k1.PublicKey
-	roundLifetime       int64
-	roundInterval       int64
-	unilateralExitDelay int64
-	boardingExitDelay   int64
+	network                 common.Network
+	pubkey                  *secp256k1.PublicKey
+	roundLifetime           int64
+	roundInterval           int64
+	unilateralExitDelay     int64
+	boardingExitDelay       int64
+	firstMarketHour         int64
+	marketHourPeriod        int64
+	marketHourRoundLifetime int64
 
 	wallet      ports.WalletService
 	repoManager ports.RepoManager
@@ -55,7 +58,8 @@ type covenantService struct {
 
 func NewCovenantService(
 	network common.Network,
-	roundInterval, roundLifetime, unilateralExitDelay, boardingExitDelay int64,
+	roundInterval, roundLifetime, unilateralExitDelay, boardingExitDelay,
+	firstMarketHour, marketHourPeriod, marketHourRoundLifetime int64,
 	walletSvc ports.WalletService, repoManager ports.RepoManager,
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	scheduler ports.SchedulerService,
@@ -66,22 +70,25 @@ func NewCovenantService(
 	}
 
 	svc := &covenantService{
-		network:             network,
-		pubkey:              pubkey,
-		roundLifetime:       roundLifetime,
-		roundInterval:       roundInterval,
-		unilateralExitDelay: unilateralExitDelay,
-		boardingExitDelay:   boardingExitDelay,
-		wallet:              walletSvc,
-		repoManager:         repoManager,
-		builder:             builder,
-		scanner:             scanner,
-		sweeper:             newSweeper(walletSvc, repoManager, builder, scheduler),
-		paymentRequests:     newPaymentsMap(),
-		forfeitTxs:          newForfeitTxsMap(builder),
-		eventsCh:            make(chan domain.RoundEvent),
-		transactionEventsCh: make(chan TransactionEvent),
-		currentRoundLock:    sync.Mutex{},
+		network:                 network,
+		pubkey:                  pubkey,
+		roundLifetime:           roundLifetime,
+		roundInterval:           roundInterval,
+		unilateralExitDelay:     unilateralExitDelay,
+		boardingExitDelay:       boardingExitDelay,
+		wallet:                  walletSvc,
+		repoManager:             repoManager,
+		builder:                 builder,
+		scanner:                 scanner,
+		sweeper:                 newSweeper(walletSvc, repoManager, builder, scheduler),
+		paymentRequests:         newPaymentsMap(),
+		forfeitTxs:              newForfeitTxsMap(builder),
+		eventsCh:                make(chan domain.RoundEvent),
+		transactionEventsCh:     make(chan TransactionEvent),
+		currentRoundLock:        sync.Mutex{},
+		firstMarketHour:         firstMarketHour,
+		marketHourPeriod:        marketHourPeriod,
+		marketHourRoundLifetime: marketHourRoundLifetime,
 	}
 
 	repoManager.RegisterEventsHandler(
@@ -397,6 +404,11 @@ func (s *covenantService) GetInfo(ctx context.Context) (*ServiceInfo, error) {
 			"USER",
 		),
 		ForfeitAddress: forfeitAddress,
+		MarketHour: &MarketHour{
+			FirstMarketHour: s.firstMarketHour,
+			Period:          s.marketHourPeriod,
+			RoundLifetime:   s.marketHourRoundLifetime,
+		},
 	}, nil
 }
 
