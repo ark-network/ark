@@ -266,7 +266,10 @@ func executeSimulation(simulation *Simulation) {
 						return
 					}
 
-					ctx, cancel := context.WithTimeout(context.Background(), time.Duration(simulation.Server.RoundInterval)*time.Second)
+					ctx, cancel := context.WithTimeout(
+						context.Background(),
+						time.Duration(simulation.Server.RoundInterval)*time.Second*2,
+					)
 					defer cancel()
 
 					if err := executeClientAction(ctx, clientID, actionType, action); err != nil {
