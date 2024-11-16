@@ -12,6 +12,7 @@ import (
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/descriptor"
+	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -33,6 +34,8 @@ type covenantlessService struct {
 	roundInterval       int64
 	unilateralExitDelay int64
 	boardingExitDelay   int64
+
+	nostrDefaultRelays []string
 
 	wallet      ports.WalletService
 	repoManager ports.RepoManager
@@ -57,9 +60,11 @@ type covenantlessService struct {
 func NewCovenantlessService(
 	network common.Network,
 	roundInterval, roundLifetime, unilateralExitDelay, boardingExitDelay int64,
+	defaultNostrRelays []string,
 	walletSvc ports.WalletService, repoManager ports.RepoManager,
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	scheduler ports.SchedulerService,
+	notificationPrefix string,
 ) (Service, error) {
 	pubkey, err := walletSvc.GetPubkey(context.Background())
 	if err != nil {
@@ -76,7 +81,7 @@ func NewCovenantlessService(
 		repoManager:         repoManager,
 		builder:             builder,
 		scanner:             scanner,
-		sweeper:             newSweeper(walletSvc, repoManager, builder, scheduler),
+		sweeper:             newSweeper(walletSvc, repoManager, builder, scheduler, notificationPrefix),
 		paymentRequests:     newPaymentsMap(),
 		forfeitTxs:          newForfeitTxsMap(builder),
 		eventsCh:            make(chan domain.RoundEvent),
@@ -85,6 +90,7 @@ func NewCovenantlessService(
 		asyncPaymentsCache:  make(map[string]asyncPaymentData),
 		treeSigningSessions: make(map[string]*musigSigningSession),
 		boardingExitDelay:   boardingExitDelay,
+		nostrDefaultRelays:  defaultNostrRelays,
 	}
 
 	repoManager.RegisterEventsHandler(
@@ -411,6 +417,45 @@ func (s *covenantlessService) GetBoardingAddress(
 	return addr.EncodeAddress(), vtxoScript.ToDescriptor(), nil
 }
 
+func (s *covenantlessService) SpendNotes(ctx context.Context, notes []note.Note) (string, error) {
+	notesRepo := s.repoManager.Notes()
+
+	for _, note := range notes {
+		// verify the note signature
+		hash := note.Hash()
+
+		valid, err := s.wallet.VerifyMessageSignature(ctx, hash, note.Signature)
+		if err != nil {
+			return "", fmt.Errorf("failed to verify note signature: %s", err)
+		}
+
+		if !valid {
+			return "", fmt.Errorf("invalid note signature %s", note)
+		}
+
+		// verify that the note is spendable
+		spent, err := notesRepo.Contains(ctx, note.ID)
+		if err != nil {
+			return "", fmt.Errorf("failed to check if note is spent: %s", err)
+		}
+
+		if spent {
+			return "", fmt.Errorf("note already spent: %s", note)
+		}
+	}
+
+	payment, err := domain.NewPayment(make([]domain.Vtxo, 0))
+	if err != nil {
+		return "", fmt.Errorf("failed to create payment: %s", err)
+	}
+
+	if err := s.paymentRequests.pushWithNotes(*payment, notes); err != nil {
+		return "", fmt.Errorf("failed to push payment: %s", err)
+	}
+
+	return payment.Id, nil
+}
+
 func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error) {
 	vtxosInputs := make([]domain.Vtxo, 0)
 	boardingInputs := make([]ports.BoardingInput, 0)
@@ -716,6 +761,43 @@ func (s *covenantlessService) RegisterCosignerSignatures(
 	return nil
 }
 
+func (s *covenantlessService) SetNostrRecipient(ctx context.Context, nostrRecipient string, signedVtxoOutpoints []SignedVtxoOutpoint) error {
+	nprofileRecipient, err := nip19toNostrProfile(nostrRecipient, s.nostrDefaultRelays)
+	if err != nil {
+		return fmt.Errorf("failed to convert nostr recipient: %s", err)
+	}
+
+	if err := validateProofs(ctx, s.repoManager.Vtxos(), signedVtxoOutpoints); err != nil {
+		return err
+	}
+
+	vtxoKeys := make([]domain.VtxoKey, 0, len(signedVtxoOutpoints))
+	for _, signedVtxo := range signedVtxoOutpoints {
+		vtxoKeys = append(vtxoKeys, signedVtxo.Outpoint)
+	}
+
+	return s.repoManager.Entities().Add(
+		ctx,
+		domain.Entity{
+			NostrRecipient: nprofileRecipient,
+		},
+		vtxoKeys,
+	)
+}
+
+func (s *covenantlessService) DeleteNostrRecipient(ctx context.Context, signedVtxoOutpoints []SignedVtxoOutpoint) error {
+	if err := validateProofs(ctx, s.repoManager.Vtxos(), signedVtxoOutpoints); err != nil {
+		return err
+	}
+
+	vtxoKeys := make([]domain.VtxoKey, 0, len(signedVtxoOutpoints))
+	for _, signedVtxo := range signedVtxoOutpoints {
+		vtxoKeys = append(vtxoKeys, signedVtxo.Outpoint)
+	}
+
+	return s.repoManager.Entities().Delete(ctx, vtxoKeys)
+}
+
 func (s *covenantlessService) start() {
 	defer func() {
 		if r := recover(); r != nil {
@@ -753,6 +835,7 @@ func (s *covenantlessService) startFinalization() {
 	roundRemainingDuration := time.Duration((s.roundInterval/3)*2-1) * time.Second
 	thirdOfRemainingDuration := time.Duration(roundRemainingDuration / 3)
 
+	var notes []note.Note
 	var roundAborted bool
 	defer func() {
 		delete(s.treeSigningSessions, round.Id)
@@ -770,7 +853,7 @@ func (s *covenantlessService) startFinalization() {
 			return
 		}
 		time.Sleep(thirdOfRemainingDuration)
-		s.finalizeRound()
+		s.finalizeRound(notes)
 	}()
 
 	if round.IsFailed() {
@@ -789,13 +872,15 @@ func (s *covenantlessService) startFinalization() {
 	if num > paymentsThreshold {
 		num = paymentsThreshold
 	}
-	payments, boardingInputs, descriptors, cosigners := s.paymentRequests.pop(num)
+	payments, boardingInputs, descriptors, cosigners, paymentsNotes := s.paymentRequests.pop(num)
 	if len(payments) > len(cosigners) {
 		err := fmt.Errorf("missing ephemeral key for payments")
 		round.Fail(fmt.Errorf("round aborted: %s", err))
 		log.WithError(err).Debugf("round %s aborted", round.Id)
 		return
 	}
+
+	notes = paymentsNotes
 
 	if _, err := round.RegisterPayments(payments); err != nil {
 		round.Fail(fmt.Errorf("failed to register payments: %s", err))
@@ -1041,7 +1126,7 @@ func (s *covenantlessService) propagateRoundSigningNoncesGeneratedEvent(combined
 	s.eventsCh <- ev
 }
 
-func (s *covenantlessService) finalizeRound() {
+func (s *covenantlessService) finalizeRound(notes []note.Note) {
 	defer s.startRound()
 
 	ctx := context.Background()
@@ -1123,6 +1208,13 @@ func (s *covenantlessService) finalizeRound() {
 		changes = round.Fail(fmt.Errorf("failed to finalize round: %s", err))
 		log.WithError(err).Warn("failed to finalize round")
 		return
+	}
+
+	// mark the notes as spent
+	for _, note := range notes {
+		if err := s.repoManager.Notes().Add(ctx, note.ID); err != nil {
+			log.WithError(err).Warn("failed to mark note as spent")
+		}
 	}
 
 	go func() {

@@ -3,11 +3,11 @@ package bitcointree_test
 import (
 	"encoding/hex"
 	"encoding/json"
-	"github.com/ark-network/ark/common/tree"
 	"os"
 	"testing"
 
 	"github.com/ark-network/ark/common/bitcointree"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"

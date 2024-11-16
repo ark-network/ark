@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 
+	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/server/internal/core/ports"
 )
 
@@ -47,6 +48,7 @@ type AdminService interface {
 	GetRounds(ctx context.Context, after int64, before int64) ([]string, error)
 	GetWalletAddress(ctx context.Context) (string, error)
 	GetWalletStatus(ctx context.Context) (*WalletStatus, error)
+	CreateNotes(ctx context.Context, amount uint32, quantity int) ([]string, error)
 }
 
 type adminService struct {
@@ -178,4 +180,25 @@ func (a *adminService) GetWalletStatus(ctx context.Context) (*WalletStatus, erro
 		IsUnlocked:    status.IsUnlocked(),
 		IsSynced:      status.IsSynced(),
 	}, nil
+}
+
+func (a *adminService) CreateNotes(ctx context.Context, value uint32, quantity int) ([]string, error) {
+	notes := make([]string, 0, quantity)
+	for i := 0; i < quantity; i++ {
+		data, err := note.New(value)
+		if err != nil {
+			return nil, err
+		}
+
+		noteHash := data.Hash()
+
+		signature, err := a.walletSvc.SignMessage(ctx, noteHash)
+		if err != nil {
+			return nil, err
+		}
+		note := data.ToNote(signature)
+		notes = append(notes, note.String())
+	}
+
+	return notes, nil
 }

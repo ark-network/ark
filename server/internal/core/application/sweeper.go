@@ -6,9 +6,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
+	nostr_notifier "github.com/ark-network/ark/server/internal/infrastructure/notifier/nostr"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -22,6 +24,8 @@ type sweeper struct {
 	builder     ports.TxBuilder
 	scheduler   ports.SchedulerService
 
+	noteUriPrefix string
+
 	// cache of scheduled tasks, avoid scheduling the same sweep event multiple times
 	locker         sync.Locker
 	scheduledTasks map[string]struct{}
@@ -32,12 +36,14 @@ func newSweeper(
 	repoManager ports.RepoManager,
 	builder ports.TxBuilder,
 	scheduler ports.SchedulerService,
+	noteUriPrefix string,
 ) *sweeper {
 	return &sweeper{
 		wallet,
 		repoManager,
 		builder,
 		scheduler,
+		noteUriPrefix,
 		&sync.Mutex{},
 		make(map[string]struct{}),
 	}
@@ -255,6 +261,8 @@ func (s *sweeper) createTask(
 				}
 
 				log.Debugf("%d vtxos swept", len(vtxoKeys))
+
+				go s.createAndSendNotes(ctx, vtxoKeys)
 			}
 		}
 
@@ -309,6 +317,63 @@ func (s *sweeper) updateVtxoExpirationTime(
 	}
 
 	return s.repoManager.Vtxos().UpdateExpireAt(context.Background(), vtxos, expirationTime)
+}
+
+func (s *sweeper) createAndSendNotes(ctx context.Context, vtxosKeys []domain.VtxoKey) {
+	vtxos, err := s.repoManager.Vtxos().GetVtxos(ctx, vtxosKeys)
+	if err != nil {
+		log.Error(fmt.Errorf("error while getting vtxos: %w", err))
+		return
+	}
+
+	entitiesRepo := s.repoManager.Entities()
+
+	notifier := nostr_notifier.New()
+
+	for _, vtxo := range vtxos {
+		if !vtxo.Swept || vtxo.Redeemed || vtxo.Spent {
+			continue
+		}
+
+		// get the nostr recipients
+		entities, err := entitiesRepo.Get(ctx, vtxo.VtxoKey)
+		if err != nil {
+			log.Debugf("no entity found for vtxo %s", vtxo.VtxoKey)
+			continue
+		}
+
+		if len(entities) == 0 {
+			log.Debugf("no nostr recipient found for vtxo %s:%d, skipping note creation", vtxo.Txid, vtxo.VOut)
+			continue
+		}
+
+		// if vtxo is not redeemed or spent and is swept, create a note for it
+		noteData, err := note.New(uint32(vtxo.Amount))
+		if err != nil {
+			log.Error(fmt.Errorf("error while creating note data: %w", err))
+			continue
+		}
+
+		signature, err := s.wallet.SignMessage(ctx, noteData.Hash())
+		if err != nil {
+			log.Error(fmt.Errorf("error while signing note data: %w", err))
+			continue
+		}
+
+		note := noteData.ToNote(signature)
+
+		notification := note.String()
+		if len(s.noteUriPrefix) > 0 {
+			notification = fmt.Sprintf("%s://%s", s.noteUriPrefix, note)
+		}
+
+		for _, entity := range entities {
+			log.Debugf("sending note notification to %s", entity.NostrRecipient)
+			if err := notifier.Notify(ctx, entity.NostrRecipient, notification); err != nil {
+				log.Error(fmt.Errorf("error while sending note notification: %w", err))
+			}
+		}
+	}
 }
 
 func computeSubTrees(congestionTree tree.CongestionTree, inputs []ports.SweepInput) ([]tree.CongestionTree, error) {

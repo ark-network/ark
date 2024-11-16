@@ -21,6 +21,12 @@ service AdminService {
       body: "*"
     };
   } 
+  rpc CreateNote(CreateNoteRequest) returns (CreateNoteResponse) {
+    option (google.api.http) = {
+      post: "/v1/admin/note"
+      body: "*"
+    };
+  }
 }
 
 message GetScheduledSweepRequest {}
@@ -63,4 +69,13 @@ message GetRoundsRequest {
 
 message GetRoundsResponse {
   repeated string rounds = 1;
+}
+
+message CreateNoteRequest {
+  uint32 amount = 1;
+  uint32 quantity = 2;
+}
+
+message CreateNoteResponse {
+  repeated string notes = 1;
 }
