@@ -19,6 +19,8 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/store"
 	"github.com/ark-network/ark/pkg/client-sdk/types"
 	utils "github.com/ark-network/ark/server/test/e2e"
+	"github.com/nbd-wtf/go-nostr"
+	"github.com/nbd-wtf/go-nostr/nip04"
 	"github.com/stretchr/testify/require"
 )
 
@@ -378,6 +380,32 @@ func TestAliceSeveralPaymentsToBob(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestRedeemNotes(t *testing.T) {
+	note := generateNote(t, 10_000)
+
+	balanceBeforeStr, err := runClarkCommand("balance")
+	require.NoError(t, err)
+
+	var balanceBefore utils.ArkBalance
+	require.NoError(t, json.Unmarshal([]byte(balanceBeforeStr), &balanceBefore))
+
+	_, err = runClarkCommand("redeem-notes", "--notes", note)
+	require.NoError(t, err)
+
+	time.Sleep(2 * time.Second)
+
+	balanceAfterStr, err := runClarkCommand("balance")
+	require.NoError(t, err)
+
+	var balanceAfter utils.ArkBalance
+	require.NoError(t, json.Unmarshal([]byte(balanceAfterStr), &balanceAfter))
+
+	require.Greater(t, balanceAfter.Offchain.Total, balanceBefore.Offchain.Total)
+
+	_, err = runClarkCommand("redeem-notes", "--notes", note)
+	require.Error(t, err)
+}
+
 func TestSweep(t *testing.T) {
 	var receive utils.ArkReceive
 	receiveStr, err := runClarkCommand("receive")
@@ -396,6 +424,32 @@ func TestSweep(t *testing.T) {
 
 	time.Sleep(3 * time.Second)
 
+	secretKey, publicKey, npub, err := utils.GetNostrKeys()
+	require.NoError(t, err)
+
+	_, err = runClarkCommand("register-nostr", "--profile", npub, "--password", utils.Password)
+	require.NoError(t, err)
+
+	time.Sleep(3 * time.Second)
+
+	// connect to relay
+	relay, err := nostr.RelayConnect(context.Background(), "ws://localhost:10547")
+	require.NoError(t, err)
+	defer relay.Close()
+
+	sub, err := relay.Subscribe(context.Background(), nostr.Filters{
+		{
+			Kinds: []int{nostr.KindEncryptedDirectMessage},
+		},
+		{
+			Tags: nostr.TagMap{
+				"p": []string{publicKey},
+			},
+		},
+	})
+	require.NoError(t, err)
+	defer sub.Close()
+
 	_, err = utils.RunCommand("nigiri", "rpc", "generatetoaddress", "100", "bcrt1qe8eelqalnch946nzhefd5ajhgl2afjw5aegc59")
 	require.NoError(t, err)
 
@@ -406,11 +460,31 @@ func TestSweep(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 	require.Zero(t, balance.Offchain.Total) // all funds should be swept
+
+	var note string
+
+	for event := range sub.Events {
+		sharedSecret, err := nip04.ComputeSharedSecret(event.PubKey, secretKey)
+		require.NoError(t, err)
+
+		// Decrypt the NIP04 message
+		decrypted, err := nip04.Decrypt(event.Content, sharedSecret)
+		require.NoError(t, err)
+
+		note = decrypted
+		break // Exit after processing the first message
+	}
+
+	require.NotEmpty(t, note)
+
+	// redeem the note
+	_, err = runClarkCommand("redeem-notes", "--notes", note)
+	require.NoError(t, err)
 }
 
 func runClarkCommand(arg ...string) (string, error) {
-	args := append([]string{"exec", "-t", "clarkd", "ark"}, arg...)
-	return utils.RunCommand("docker", args...)
+	args := append([]string{"ark"}, arg...)
+	return utils.RunDockerExec("clarkd", args...)
 }
 
 func setupAspWallet() error {
@@ -546,4 +620,32 @@ func setupArkSDK(t *testing.T) (arksdk.ArkClient, client.ASPClient) {
 	require.NoError(t, err)
 
 	return client, grpcClient
+}
+
+func generateNote(t *testing.T, amount uint32) string {
+	adminHttpClient := &http.Client{
+		Timeout: 15 * time.Second,
+	}
+
+	reqBody := bytes.NewReader([]byte(fmt.Sprintf(`{"amount": "%d"}`, amount)))
+	req, err := http.NewRequest("POST", "http://localhost:7070/v1/admin/note", reqBody)
+	if err != nil {
+		t.Fatalf("failed to prepare note request: %s", err)
+	}
+	req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := adminHttpClient.Do(req)
+	if err != nil {
+		t.Fatalf("failed to create note: %s", err)
+	}
+
+	var noteResp struct {
+		Notes []string `json:"notes"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&noteResp); err != nil {
+		t.Fatalf("failed to parse response: %s", err)
+	}
+
+	return noteResp.Notes[0]
 }

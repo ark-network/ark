@@ -1032,6 +1032,33 @@ func (s *service) GetTransaction(ctx context.Context, txid string) (string, erro
 	return hex.EncodeToString(buf.Bytes()), nil
 }
 
+func (s *service) SignMessage(ctx context.Context, message []byte) ([]byte, error) {
+	if s.aspKeyAddr == nil {
+		return nil, fmt.Errorf("wallet not initialized or locked")
+	}
+
+	privKey, err := s.aspKeyAddr.PrivKey()
+	if err != nil {
+		return nil, err
+	}
+
+	sig, err := schnorr.Sign(privKey, message)
+	if err != nil {
+		return nil, err
+	}
+
+	return sig.Serialize(), nil
+}
+
+func (s *service) VerifyMessageSignature(ctx context.Context, message, signature []byte) (bool, error) {
+	sig, err := schnorr.ParseSignature(signature)
+	if err != nil {
+		return false, err
+	}
+
+	return sig.Verify(message, s.aspKeyAddr.PubKey()), nil
+}
+
 func (s *service) castNotification(tx *wtxmgr.TxRecord) map[string][]ports.VtxoWithValue {
 	vtxos := make(map[string][]ports.VtxoWithValue)
 

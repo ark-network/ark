@@ -16,6 +16,7 @@ import (
 	fileunlocker "github.com/ark-network/ark/server/internal/infrastructure/unlocker/file"
 	btcwallet "github.com/ark-network/ark/server/internal/infrastructure/wallet/btc-embedded"
 	liquidwallet "github.com/ark-network/ark/server/internal/infrastructure/wallet/liquid-standalone"
+	"github.com/nbd-wtf/go-nostr"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -37,10 +38,6 @@ var (
 		"covenant":     {},
 		"covenantless": {},
 	}
-	supportedScanners = supportedType{
-		"ocean":     {},
-		"btcwallet": {},
-	}
 	supportedUnlockers = supportedType{
 		"env":  {},
 		"file": {},
@@ -57,20 +54,21 @@ var (
 )
 
 type Config struct {
-	DbType                string
-	EventDbType           string
-	DbDir                 string
-	DbMigrationPath       string
-	EventDbDir            string
-	RoundInterval         int64
-	Network               common.Network
-	SchedulerType         string
-	TxBuilderType         string
-	BlockchainScannerType string
-	WalletAddr            string
-	RoundLifetime         int64
-	UnilateralExitDelay   int64
-	BoardingExitDelay     int64
+	DbType              string
+	EventDbType         string
+	DbDir               string
+	DbMigrationPath     string
+	EventDbDir          string
+	RoundInterval       int64
+	Network             common.Network
+	SchedulerType       string
+	TxBuilderType       string
+	WalletAddr          string
+	RoundLifetime       int64
+	UnilateralExitDelay int64
+	BoardingExitDelay   int64
+	NostrDefaultRelays  []string
+	NoteUriPrefix       string
 
 	EsploraURL      string
 	NeutrinoPeer    string
@@ -105,9 +103,6 @@ func (c *Config) Validate() error {
 	if !supportedTxBuilders.supports(c.TxBuilderType) {
 		return fmt.Errorf("tx builder type not supported, please select one of: %s", supportedTxBuilders)
 	}
-	if !supportedScanners.supports(c.BlockchainScannerType) {
-		return fmt.Errorf("blockchain scanner type not supported, please select one of: %s", supportedScanners)
-	}
 	if len(c.UnlockerType) > 0 && !supportedUnlockers.supports(c.UnlockerType) {
 		return fmt.Errorf("unlocker type not supported, please select one of: %s", supportedUnlockers)
 	}
@@ -116,9 +111,6 @@ func (c *Config) Validate() error {
 	}
 	if !supportedNetworks.supports(c.Network.Name) {
 		return fmt.Errorf("invalid network, must be one of: %s", supportedNetworks)
-	}
-	if len(c.WalletAddr) <= 0 {
-		return fmt.Errorf("missing onchain wallet address")
 	}
 	if c.RoundLifetime < minAllowedSequence {
 		if c.SchedulerType != "block" {
@@ -165,6 +157,16 @@ func (c *Config) Validate() error {
 			"boarding exit delay must be a multiple of %d, rounded to %d",
 			minAllowedSequence, c.BoardingExitDelay,
 		)
+	}
+
+	if len(c.NostrDefaultRelays) == 0 {
+		return fmt.Errorf("missing nostr default relays")
+	}
+
+	for _, relay := range c.NostrDefaultRelays {
+		if !nostr.IsValidRelayURL(relay) {
+			return fmt.Errorf("invalid nostr relay url: %s", relay)
+		}
 	}
 
 	if err := c.repoManager(); err != nil {
@@ -236,9 +238,8 @@ func (c *Config) repoManager() error {
 	}
 
 	svc, err = db.NewService(db.ServiceConfig{
-		EventStoreType: c.EventDbType,
-		DataStoreType:  c.DbType,
-
+		EventStoreType:   c.EventDbType,
+		DataStoreType:    c.DbType,
 		EventStoreConfig: eventStoreConfig,
 		DataStoreConfig:  dataStoreConfig,
 	})
@@ -270,7 +271,14 @@ func (c *Config) walletService() error {
 	var err error
 
 	switch {
-	case c.NeutrinoPeer != "":
+	case c.BitcoindRpcUser != "" && c.BitcoindRpcPass != "":
+		svc, err = btcwallet.NewService(btcwallet.WalletConfig{
+			Datadir: c.DbDir,
+			Network: c.Network,
+		}, btcwallet.WithPollingBitcoind(c.BitcoindRpcHost, c.BitcoindRpcUser, c.BitcoindRpcPass))
+
+	default:
+		// Default to Neutrino for Bitcoin mainnet or when NeutrinoPeer is explicitly set
 		if len(c.EsploraURL) == 0 {
 			return fmt.Errorf("missing esplora url, covenant-less ark requires ARK_ESPLORA_URL to be set")
 		}
@@ -278,16 +286,6 @@ func (c *Config) walletService() error {
 			Datadir: c.DbDir,
 			Network: c.Network,
 		}, btcwallet.WithNeutrino(c.NeutrinoPeer, c.EsploraURL))
-
-	case c.BitcoindRpcUser != "" && c.BitcoindRpcPass != "":
-		svc, err = btcwallet.NewService(btcwallet.WalletConfig{
-			Datadir: c.DbDir,
-			Network: c.Network,
-		}, btcwallet.WithPollingBitcoind(c.BitcoindRpcHost, c.BitcoindRpcUser, c.BitcoindRpcPass))
-
-	// Placeholder for future initializers like WithBitcoindZMQ
-	default:
-		return fmt.Errorf("either Neutrino peer or Bitcoind RPC credentials must be provided")
 	}
 
 	if err != nil {
@@ -322,13 +320,7 @@ func (c *Config) txBuilderService() error {
 }
 
 func (c *Config) scannerService() error {
-	var svc ports.BlockchainScanner
-	switch c.BlockchainScannerType {
-	default:
-		svc = c.wallet
-	}
-
-	c.scanner = svc
+	c.scanner = c.wallet
 	return nil
 }
 
@@ -354,8 +346,8 @@ func (c *Config) schedulerService() error {
 func (c *Config) appService() error {
 	if common.IsLiquid(c.Network) {
 		svc, err := application.NewCovenantService(
-			c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay,
-			c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler,
+			c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay, c.NostrDefaultRelays,
+			c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NoteUriPrefix,
 		)
 		if err != nil {
 			return err
@@ -366,8 +358,8 @@ func (c *Config) appService() error {
 	}
 
 	svc, err := application.NewCovenantlessService(
-		c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay,
-		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler,
+		c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay, c.NostrDefaultRelays,
+		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NoteUriPrefix,
 	)
 	if err != nil {
 		return err

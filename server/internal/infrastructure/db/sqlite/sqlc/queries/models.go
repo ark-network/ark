@@ -8,6 +8,28 @@ import (
 	"database/sql"
 )
 
+type Entity struct {
+	ID             int64
+	NostrRecipient string
+}
+
+type EntityVtxo struct {
+	EntityID int64
+	VtxoTxid string
+	VtxoVout int64
+}
+
+type EntityVw struct {
+	ID             int64
+	NostrRecipient string
+	VtxoTxid       sql.NullString
+	VtxoVout       sql.NullInt64
+}
+
+type Note struct {
+	ID int64
+}
+
 type Payment struct {
 	ID      string
 	RoundID string
