@@ -193,7 +193,7 @@ func WithPollingBitcoind(host, user, pass string) WalletOption {
 			},
 		}
 
-		chain.UseLogger(logger("chain"))
+		btcwallet.UseLogger(logger("btcwallet"))
 
 		// Create the BitcoindConn first
 		bitcoindConn, err := chain.NewBitcoindConn(bitcoindConfig)
@@ -242,6 +242,62 @@ func WithPollingBitcoind(host, user, pass string) WalletOption {
 		}
 
 		// Set up the wallet as chain source and scanner
+		if err := withChainSource(chainClient)(s); err != nil {
+			chainClient.Stop()
+			bitcoindConn.Stop()
+			return fmt.Errorf("failed to set chain source: %w", err)
+		}
+
+		if err := withScanner(chainClient)(s); err != nil {
+			chainClient.Stop()
+			bitcoindConn.Stop()
+			return fmt.Errorf("failed to set scanner: %w", err)
+		}
+
+		return nil
+	}
+}
+
+func WithBitcoindZMQ(block, tx string, host, user, pass string) WalletOption {
+	return func(s *service) error {
+		if s.chainSource != nil {
+			return fmt.Errorf("chain source already set")
+		}
+
+		bitcoindConfig := &chain.BitcoindConfig{
+			ChainParams: s.cfg.chainParams(),
+			Host:        host,
+			User:        user,
+			Pass:        pass,
+			ZMQConfig: &chain.ZMQConfig{
+				ZMQBlockHost:    block,
+				ZMQTxHost:       tx,
+				ZMQReadDeadline: 5 * time.Second,
+			},
+		}
+
+		btcwallet.UseLogger(logger("btcwallet"))
+
+		bitcoindConn, err := chain.NewBitcoindConn(bitcoindConfig)
+		if err != nil {
+			return fmt.Errorf("failed to create bitcoind connection: %w", err)
+		}
+
+		if err := bitcoindConn.Start(); err != nil {
+			return fmt.Errorf("failed to start bitcoind connection: %w", err)
+		}
+
+		chainClient := bitcoindConn.NewBitcoindClient()
+
+		if err := chainClient.Start(); err != nil {
+			bitcoindConn.Stop()
+			return fmt.Errorf("failed to start bitcoind client: %w", err)
+		}
+
+		for !chainClient.IsCurrent() {
+			time.Sleep(1 * time.Second)
+		}
+
 		if err := withChainSource(chainClient)(s); err != nil {
 			chainClient.Stop()
 			bitcoindConn.Stop()

@@ -70,11 +70,13 @@ type Config struct {
 	NostrDefaultRelays  []string
 	NoteUriPrefix       string
 
-	EsploraURL      string
-	NeutrinoPeer    string
-	BitcoindRpcUser string
-	BitcoindRpcPass string
-	BitcoindRpcHost string
+	EsploraURL       string
+	NeutrinoPeer     string
+	BitcoindRpcUser  string
+	BitcoindRpcPass  string
+	BitcoindRpcHost  string
+	BitcoindZMQBlock string
+	BitcoindZMQTx    string
 
 	UnlockerType     string
 	UnlockerFilePath string // file unlocker
@@ -271,12 +273,16 @@ func (c *Config) walletService() error {
 	var err error
 
 	switch {
+	case c.BitcoindZMQBlock != "" && c.BitcoindZMQTx != "" && c.BitcoindRpcUser != "" && c.BitcoindRpcPass != "":
+		svc, err = btcwallet.NewService(btcwallet.WalletConfig{
+			Datadir: c.DbDir,
+			Network: c.Network,
+		}, btcwallet.WithBitcoindZMQ(c.BitcoindZMQBlock, c.BitcoindZMQTx, c.BitcoindRpcHost, c.BitcoindRpcUser, c.BitcoindRpcPass))
 	case c.BitcoindRpcUser != "" && c.BitcoindRpcPass != "":
 		svc, err = btcwallet.NewService(btcwallet.WalletConfig{
 			Datadir: c.DbDir,
 			Network: c.Network,
 		}, btcwallet.WithPollingBitcoind(c.BitcoindRpcHost, c.BitcoindRpcUser, c.BitcoindRpcPass))
-
 	default:
 		// Default to Neutrino for Bitcoin mainnet or when NeutrinoPeer is explicitly set
 		if len(c.EsploraURL) == 0 {
