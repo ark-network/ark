@@ -5,11 +5,22 @@ import (
 
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/stretchr/testify/mock"
 )
 
 type mockedWallet struct {
 	mock.Mock
+}
+
+func (m *mockedWallet) GetSyncedUpdate(ctx context.Context) <-chan struct{} {
+	args := m.Called(ctx)
+
+	var res chan struct{}
+	if a := args.Get(0); a != nil {
+		res = a.(chan struct{})
+	}
+	return res
 }
 
 func (m *mockedWallet) GenSeed(ctx context.Context) (string, error) {
@@ -130,7 +141,27 @@ func (m *mockedWallet) EstimateFees(ctx context.Context, pset string) (uint64, e
 	return res, args.Error(1)
 }
 
-func (m *mockedWallet) IsTransactionConfirmed(ctx context.Context, txid string) (bool, int64, error) {
+func (m *mockedWallet) MinRelayFee(ctx context.Context, vbytes uint64) (uint64, error) {
+	args := m.Called(ctx, vbytes)
+
+	var res uint64
+	if a := args.Get(0); a != nil {
+		res = a.(uint64)
+	}
+	return res, args.Error(1)
+}
+
+func (m *mockedWallet) GetDustAmount(ctx context.Context) (uint64, error) {
+	args := m.Called(ctx)
+
+	var res uint64
+	if a := args.Get(0); a != nil {
+		res = a.(uint64)
+	}
+	return res, args.Error(1)
+}
+
+func (m *mockedWallet) IsTransactionConfirmed(ctx context.Context, txid string) (bool, int64, int64, error) {
 	args := m.Called(ctx, txid)
 
 	var res bool
@@ -138,12 +169,17 @@ func (m *mockedWallet) IsTransactionConfirmed(ctx context.Context, txid string) 
 		res = a.(bool)
 	}
 
+	var height int64
+	if h := args.Get(1); h != nil {
+		height = h.(int64)
+	}
+
 	var blocktime int64
 	if b := args.Get(1); b != nil {
 		blocktime = b.(int64)
 	}
 
-	return res, blocktime, args.Error(2)
+	return res, height, blocktime, args.Error(2)
 }
 
 func (m *mockedWallet) SignTransactionTapscript(ctx context.Context, pset string, inputIndexes []int) (string, error) {
@@ -170,12 +206,12 @@ func (m *mockedWallet) UnwatchScripts(
 	return args.Error(0)
 }
 
-func (m *mockedWallet) GetNotificationChannel(ctx context.Context) <-chan map[string]ports.VtxoWithValue {
+func (m *mockedWallet) GetNotificationChannel(ctx context.Context) <-chan map[string][]ports.VtxoWithValue {
 	args := m.Called(ctx)
 
-	var res <-chan map[string]ports.VtxoWithValue
+	var res <-chan map[string][]ports.VtxoWithValue
 	if a := args.Get(0); a != nil {
-		res = a.(<-chan map[string]ports.VtxoWithValue)
+		res = a.(<-chan map[string][]ports.VtxoWithValue)
 	}
 	return res
 }
@@ -227,6 +263,44 @@ func (m *mockedWallet) MainAccountBalance(ctx context.Context) (uint64, uint64, 
 		res2 = a.(uint64)
 	}
 	return res, res2, args.Error(2)
+}
+
+func (m *mockedWallet) GetTransaction(ctx context.Context, txid string) (string, error) {
+	args := m.Called(ctx, txid)
+
+	var res string
+	if a := args.Get(0); a != nil {
+		res = a.(string)
+	}
+	return res, args.Error(1)
+}
+
+func (m *mockedWallet) MinRelayFeeRate(ctx context.Context) chainfee.SatPerKVByte {
+	args := m.Called(ctx)
+
+	var res chainfee.SatPerKVByte
+	if a := args.Get(0); a != nil {
+		res = a.(chainfee.SatPerKVByte)
+	}
+	return res
+}
+
+func (m *mockedWallet) GetForfeitAddress(ctx context.Context) (string, error) {
+	args := m.Called(ctx)
+
+	var res string
+	if a := args.Get(0); a != nil {
+		res = a.(string)
+	}
+	return res, args.Error(1)
+}
+
+func (m *mockedWallet) SignMessage(ctx context.Context, message []byte) ([]byte, error) {
+	panic("not implemented")
+}
+
+func (m *mockedWallet) VerifyMessageSignature(ctx context.Context, message, signature []byte) (bool, error) {
+	panic("not implemented")
 }
 
 type mockedInput struct {

@@ -13,12 +13,14 @@ import (
 type adminHandler struct {
 	adminService application.AdminService
 	aspService   application.Service
+
+	noteUriPrefix string
 }
 
 func NewAdminHandler(
-	adminService application.AdminService, aspService application.Service,
+	adminService application.AdminService, aspService application.Service, noteUriPrefix string,
 ) arkv1.AdminServiceServer {
-	return &adminHandler{adminService, aspService}
+	return &adminHandler{adminService, aspService, noteUriPrefix}
 }
 
 func (a *adminHandler) GetRoundDetails(ctx context.Context, req *arkv1.GetRoundDetailsRequest) (*arkv1.GetRoundDetailsResponse, error) {
@@ -45,7 +47,6 @@ func (a *adminHandler) GetRoundDetails(ctx context.Context, req *arkv1.GetRoundD
 	}, nil
 }
 
-// GetRounds implements arkv1.AdminServiceServer.
 func (a *adminHandler) GetRounds(ctx context.Context, req *arkv1.GetRoundsRequest) (*arkv1.GetRoundsResponse, error) {
 	startAfter := req.GetAfter()
 	startBefore := req.GetBefore()
@@ -97,6 +98,34 @@ func (a *adminHandler) GetScheduledSweep(ctx context.Context, _ *arkv1.GetSchedu
 	}
 
 	return &arkv1.GetScheduledSweepResponse{Sweeps: sweeps}, nil
+}
+
+func (a *adminHandler) CreateNote(ctx context.Context, req *arkv1.CreateNoteRequest) (*arkv1.CreateNoteResponse, error) {
+	amount := req.GetAmount()
+	quantity := req.GetQuantity()
+	if quantity == 0 {
+		quantity = 1
+	}
+
+	if amount == 0 {
+		return nil, status.Error(codes.InvalidArgument, "amount must be greater than 0")
+	}
+
+	notes, err := a.adminService.CreateNotes(ctx, amount, int(quantity))
+	if err != nil {
+		return nil, err
+	}
+
+	if len(a.noteUriPrefix) > 0 {
+		notesWithURI := make([]string, 0, len(notes))
+		for _, note := range notes {
+			notesWithURI = append(notesWithURI, fmt.Sprintf("%s://%s", a.noteUriPrefix, note))
+		}
+
+		return &arkv1.CreateNoteResponse{Notes: notesWithURI}, nil
+	}
+
+	return &arkv1.CreateNoteResponse{Notes: notes}, nil
 }
 
 // convert sats to string BTC

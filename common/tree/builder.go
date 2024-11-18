@@ -13,14 +13,14 @@ import (
 )
 
 func CraftCongestionTree(
-	asset string, aspPubkey *secp256k1.PublicKey, receivers []Receiver,
-	feeSatsPerNode uint64, roundLifetime, unilateralExitDelay int64,
+	asset string, aspPubkey *secp256k1.PublicKey, receivers []VtxoLeaf,
+	feeSatsPerNode uint64, roundLifetime int64,
 ) (
 	buildCongestionTree TreeFactory,
 	sharedOutputScript []byte, sharedOutputAmount uint64, err error,
 ) {
 	root, err := createPartialCongestionTree(
-		asset, aspPubkey, receivers, feeSatsPerNode, roundLifetime, unilateralExitDelay,
+		asset, aspPubkey, receivers, feeSatsPerNode, roundLifetime,
 	)
 	if err != nil {
 		return
@@ -41,15 +41,19 @@ func CraftCongestionTree(
 	return
 }
 
+type vtxoOutput struct {
+	pubkey *secp256k1.PublicKey
+	amount uint64
+}
+
 type node struct {
-	sweepKey            *secp256k1.PublicKey
-	receivers           []Receiver
-	left                *node
-	right               *node
-	asset               string
-	feeSats             uint64
-	roundLifetime       int64
-	unilateralExitDelay int64
+	sweepKey      *secp256k1.PublicKey
+	receivers     []vtxoOutput
+	left          *node
+	right         *node
+	asset         string
+	feeSats       uint64
+	roundLifetime int64
 
 	_inputTaprootKey  *secp256k1.PublicKey
 	_inputTaprootTree *taproot.IndexedElementsTapScriptTree
@@ -62,7 +66,7 @@ func (n *node) isLeaf() bool {
 func (n *node) getAmount() uint64 {
 	var amount uint64
 	for _, r := range n.receivers {
-		amount += r.Amount
+		amount += r.amount
 	}
 
 	if n.isLeaf() {
@@ -108,7 +112,7 @@ func (n *node) getChildren() []*node {
 
 func (n *node) getOutputs() ([]psetv2.OutputArgs, error) {
 	if n.isLeaf() {
-		taprootKey, _, err := n.getVtxoWitnessData()
+		taprootKey, err := n.getVtxoWitnessData()
 		if err != nil {
 			return nil, err
 		}
@@ -169,7 +173,7 @@ func (n *node) getWitnessData() (
 	}
 
 	if n.isLeaf() {
-		taprootKey, _, err := n.getVtxoWitnessData()
+		taprootKey, err := n.getVtxoWitnessData()
 		if err != nil {
 			return nil, nil, err
 		}
@@ -242,53 +246,14 @@ func (n *node) getWitnessData() (
 }
 
 func (n *node) getVtxoWitnessData() (
-	*secp256k1.PublicKey, *taproot.IndexedElementsTapScriptTree, error,
+	*secp256k1.PublicKey, error,
 ) {
 	if !n.isLeaf() {
-		return nil, nil, fmt.Errorf("cannot call vtxoWitness on a non-leaf node")
+		return nil, fmt.Errorf("cannot call vtxoWitness on a non-leaf node")
 	}
 
-	key, err := hex.DecodeString(n.receivers[0].Pubkey)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	pubkey, err := secp256k1.ParsePubKey(key)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	redeemClosure := &CSVSigClosure{
-		Pubkey:  pubkey,
-		Seconds: uint(n.unilateralExitDelay),
-	}
-
-	redeemLeaf, err := redeemClosure.Leaf()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	forfeitClosure := &ForfeitClosure{
-		Pubkey:    pubkey,
-		AspPubkey: n.sweepKey,
-	}
-
-	forfeitLeaf, err := forfeitClosure.Leaf()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	leafTaprootTree := taproot.AssembleTaprootScriptTree(
-		*redeemLeaf, *forfeitLeaf,
-	)
-	root := leafTaprootTree.RootNode.TapHash()
-
-	taprootKey := taproot.ComputeTaprootOutputKey(
-		UnspendableKey(),
-		root[:],
-	)
-
-	return taprootKey, leafTaprootTree, nil
+	receiver := n.receivers[0]
+	return receiver.pubkey, nil
 }
 
 func (n *node) getTreeNode(
@@ -412,8 +377,8 @@ func (n *node) createFinalCongestionTree() TreeFactory {
 }
 
 func createPartialCongestionTree(
-	asset string, aspPubkey *secp256k1.PublicKey, receivers []Receiver,
-	feeSatsPerNode uint64, roundLifetime, unilateralExitDelay int64,
+	asset string, aspPubkey *secp256k1.PublicKey, receivers []VtxoLeaf,
+	feeSatsPerNode uint64, roundLifetime int64,
 ) (root *node, err error) {
 	if len(receivers) == 0 {
 		return nil, fmt.Errorf("no receivers provided")
@@ -421,13 +386,22 @@ func createPartialCongestionTree(
 
 	nodes := make([]*node, 0, len(receivers))
 	for _, r := range receivers {
+		pubkeyBytes, err := hex.DecodeString(r.Pubkey)
+		if err != nil {
+			return nil, err
+		}
+
+		pubkey, err := schnorr.ParsePubKey(pubkeyBytes)
+		if err != nil {
+			return nil, err
+		}
+
 		leafNode := &node{
-			sweepKey:            aspPubkey,
-			receivers:           []Receiver{r},
-			asset:               asset,
-			feeSats:             feeSatsPerNode,
-			roundLifetime:       roundLifetime,
-			unilateralExitDelay: unilateralExitDelay,
+			sweepKey:      aspPubkey,
+			receivers:     []vtxoOutput{{pubkey, r.Amount}},
+			asset:         asset,
+			feeSats:       feeSatsPerNode,
+			roundLifetime: roundLifetime,
 		}
 		nodes = append(nodes, leafNode)
 	}

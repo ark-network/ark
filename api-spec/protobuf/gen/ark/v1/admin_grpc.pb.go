@@ -21,6 +21,7 @@ type AdminServiceClient interface {
 	GetScheduledSweep(ctx context.Context, in *GetScheduledSweepRequest, opts ...grpc.CallOption) (*GetScheduledSweepResponse, error)
 	GetRoundDetails(ctx context.Context, in *GetRoundDetailsRequest, opts ...grpc.CallOption) (*GetRoundDetailsResponse, error)
 	GetRounds(ctx context.Context, in *GetRoundsRequest, opts ...grpc.CallOption) (*GetRoundsResponse, error)
+	CreateNote(ctx context.Context, in *CreateNoteRequest, opts ...grpc.CallOption) (*CreateNoteResponse, error)
 }
 
 type adminServiceClient struct {
@@ -58,6 +59,15 @@ func (c *adminServiceClient) GetRounds(ctx context.Context, in *GetRoundsRequest
 	return out, nil
 }
 
+func (c *adminServiceClient) CreateNote(ctx context.Context, in *CreateNoteRequest, opts ...grpc.CallOption) (*CreateNoteResponse, error) {
+	out := new(CreateNoteResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/CreateNote", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AdminServiceServer is the server API for AdminService service.
 // All implementations should embed UnimplementedAdminServiceServer
 // for forward compatibility
@@ -65,6 +75,7 @@ type AdminServiceServer interface {
 	GetScheduledSweep(context.Context, *GetScheduledSweepRequest) (*GetScheduledSweepResponse, error)
 	GetRoundDetails(context.Context, *GetRoundDetailsRequest) (*GetRoundDetailsResponse, error)
 	GetRounds(context.Context, *GetRoundsRequest) (*GetRoundsResponse, error)
+	CreateNote(context.Context, *CreateNoteRequest) (*CreateNoteResponse, error)
 }
 
 // UnimplementedAdminServiceServer should be embedded to have forward compatible implementations.
@@ -79,6 +90,9 @@ func (UnimplementedAdminServiceServer) GetRoundDetails(context.Context, *GetRoun
 }
 func (UnimplementedAdminServiceServer) GetRounds(context.Context, *GetRoundsRequest) (*GetRoundsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetRounds not implemented")
+}
+func (UnimplementedAdminServiceServer) CreateNote(context.Context, *CreateNoteRequest) (*CreateNoteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateNote not implemented")
 }
 
 // UnsafeAdminServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -146,6 +160,24 @@ func _AdminService_GetRounds_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AdminService_CreateNote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateNoteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).CreateNote(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.AdminService/CreateNote",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).CreateNote(ctx, req.(*CreateNoteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AdminService_ServiceDesc is the grpc.ServiceDesc for AdminService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -164,6 +196,10 @@ var AdminService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetRounds",
 			Handler:    _AdminService_GetRounds_Handler,
+		},
+		{
+			MethodName: "CreateNote",
+			Handler:    _AdminService_CreateNote_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

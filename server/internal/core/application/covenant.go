@@ -5,19 +5,24 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/descriptor"
+	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
-	"github.com/btcsuite/btcd/btcutil/psbt"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	log "github.com/sirupsen/logrus"
+	"github.com/vulpemventures/go-elements/elementsutil"
+	"github.com/vulpemventures/go-elements/network"
+	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/psetv2"
+	"github.com/vulpemventures/go-elements/transaction"
 )
 
 var (
@@ -30,7 +35,9 @@ type covenantService struct {
 	roundLifetime       int64
 	roundInterval       int64
 	unilateralExitDelay int64
-	minRelayFee         uint64
+	boardingExitDelay   int64
+
+	nostrDefaultRelays []string
 
 	wallet      ports.WalletService
 	repoManager ports.RepoManager
@@ -41,42 +48,67 @@ type covenantService struct {
 	paymentRequests *paymentsMap
 	forfeitTxs      *forfeitTxsMap
 
-	eventsCh     chan domain.RoundEvent
-	onboardingCh chan onboarding
+	eventsCh            chan domain.RoundEvent
+	transactionEventsCh chan TransactionEvent
 
-	lastEvent    domain.RoundEvent
-	currentRound *domain.Round
+	currentRoundLock sync.Mutex
+	currentRound     *domain.Round
+	lastEvent        domain.RoundEvent
 }
 
 func NewCovenantService(
 	network common.Network,
-	roundInterval, roundLifetime, unilateralExitDelay int64, minRelayFee uint64,
+	roundInterval, roundLifetime, unilateralExitDelay, boardingExitDelay int64,
+	nostrDefaultRelays []string,
 	walletSvc ports.WalletService, repoManager ports.RepoManager,
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	scheduler ports.SchedulerService,
+	notificationPrefix string,
 ) (Service, error) {
-	eventsCh := make(chan domain.RoundEvent)
-	onboardingCh := make(chan onboarding)
-	paymentRequests := newPaymentsMap(nil)
-
-	forfeitTxs := newForfeitTxsMap(builder)
 	pubkey, err := walletSvc.GetPubkey(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch pubkey: %s", err)
 	}
 
-	sweeper := newSweeper(walletSvc, repoManager, builder, scheduler)
-
 	svc := &covenantService{
-		network, pubkey,
-		roundLifetime, roundInterval, unilateralExitDelay, minRelayFee,
-		walletSvc, repoManager, builder, scanner, sweeper,
-		paymentRequests, forfeitTxs, eventsCh, onboardingCh, nil, nil,
+		network:             network,
+		pubkey:              pubkey,
+		roundLifetime:       roundLifetime,
+		roundInterval:       roundInterval,
+		unilateralExitDelay: unilateralExitDelay,
+		boardingExitDelay:   boardingExitDelay,
+		wallet:              walletSvc,
+		repoManager:         repoManager,
+		builder:             builder,
+		scanner:             scanner,
+		sweeper:             newSweeper(walletSvc, repoManager, builder, scheduler, notificationPrefix),
+		paymentRequests:     newPaymentsMap(),
+		forfeitTxs:          newForfeitTxsMap(builder),
+		eventsCh:            make(chan domain.RoundEvent),
+		transactionEventsCh: make(chan TransactionEvent),
+		currentRoundLock:    sync.Mutex{},
+		nostrDefaultRelays:  nostrDefaultRelays,
 	}
+
 	repoManager.RegisterEventsHandler(
 		func(round *domain.Round) {
-			go svc.propagateEvents(round)
 			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Errorf("recovered from panic in propagateEvents: %v", r)
+					}
+				}()
+
+				svc.propagateEvents(round)
+			}()
+
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Errorf("recovered from panic in updateVtxoSet and scheduleSweepVtxosForRound: %v", r)
+					}
+				}()
+
 				// utxo db must be updated before scheduling the sweep events
 				svc.updateVtxoSet(round)
 				svc.scheduleSweepVtxosForRound(round)
@@ -88,7 +120,6 @@ func NewCovenantService(
 		return nil, fmt.Errorf("failed to restore watching vtxos: %s", err)
 	}
 	go svc.listenToScannerNotifications()
-	go svc.listenToOnboarding()
 	return svc, nil
 }
 
@@ -116,28 +147,167 @@ func (s *covenantService) Stop() {
 	s.repoManager.Close()
 	log.Debug("closed connection to db")
 	close(s.eventsCh)
-	close(s.onboardingCh)
 }
 
-func (s *covenantService) SpendVtxos(ctx context.Context, inputs []domain.VtxoKey) (string, error) {
-	vtxos, err := s.repoManager.Vtxos().GetVtxos(ctx, inputs)
-	if err != nil {
-		return "", err
-	}
-	for _, v := range vtxos {
-		if v.Spent {
-			return "", fmt.Errorf("input %s:%d already spent", v.Txid, v.VOut)
-		}
+func (s *covenantService) GetBoardingAddress(ctx context.Context, userPubkey *secp256k1.PublicKey) (string, string, error) {
+	vtxoScript := &tree.DefaultVtxoScript{
+		Asp:       s.pubkey,
+		Owner:     userPubkey,
+		ExitDelay: uint(s.boardingExitDelay),
 	}
 
-	payment, err := domain.NewPayment(vtxos)
+	tapKey, _, err := vtxoScript.TapTree()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get taproot key: %s", err)
+	}
+
+	p2tr, err := payment.FromTweakedKey(tapKey, s.onchainNetwork(), nil)
+	if err != nil {
+		return "", "", err
+	}
+
+	addr, err := p2tr.TaprootAddress()
+	if err != nil {
+		return "", "", err
+	}
+
+	return addr, vtxoScript.ToDescriptor(), nil
+}
+
+func (s *covenantService) SpendNotes(_ context.Context, _ []note.Note) (string, error) {
+	return "", fmt.Errorf("unimplemented")
+}
+
+func (s *covenantService) SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error) {
+	vtxosInputs := make([]domain.Vtxo, 0)
+	boardingInputs := make([]ports.BoardingInput, 0)
+	descriptors := make(map[domain.VtxoKey]string)
+
+	now := time.Now().Unix()
+
+	boardingTxs := make(map[string]*transaction.Transaction, 0) // txid -> txhex
+
+	for _, input := range inputs {
+		vtxosResult, err := s.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{input.VtxoKey})
+		if err != nil || len(vtxosResult) == 0 {
+			// vtxo not found in db, check if it exists on-chain
+			if _, ok := boardingTxs[input.Txid]; !ok {
+				// check if the tx exists and is confirmed
+				txhex, err := s.wallet.GetTransaction(ctx, input.Txid)
+				if err != nil {
+					return "", fmt.Errorf("failed to get tx %s: %s", input.Txid, err)
+				}
+
+				tx, err := transaction.NewTxFromHex(txhex)
+				if err != nil {
+					return "", fmt.Errorf("failed to parse tx %s: %s", input.Txid, err)
+				}
+
+				confirmed, _, blocktime, err := s.wallet.IsTransactionConfirmed(ctx, input.Txid)
+				if err != nil {
+					return "", fmt.Errorf("failed to check tx %s: %s", input.Txid, err)
+				}
+
+				if !confirmed {
+					return "", fmt.Errorf("tx %s not confirmed", input.Txid)
+				}
+
+				// if the exit path is available, forbid registering the boarding utxo
+				if blocktime+int64(s.boardingExitDelay) < now {
+					return "", fmt.Errorf("tx %s expired", input.Txid)
+				}
+
+				boardingTxs[input.Txid] = tx
+			}
+
+			tx := boardingTxs[input.Txid]
+			boardingInput, err := s.newBoardingInput(tx, input)
+			if err != nil {
+				return "", err
+			}
+
+			boardingInputs = append(boardingInputs, *boardingInput)
+			continue
+		}
+
+		vtxo := vtxosResult[0]
+		if vtxo.Spent {
+			return "", fmt.Errorf("input %s:%d already spent", vtxo.Txid, vtxo.VOut)
+		}
+
+		if vtxo.Redeemed {
+			return "", fmt.Errorf("input %s:%d already redeemed", vtxo.Txid, vtxo.VOut)
+		}
+
+		if vtxo.Swept {
+			return "", fmt.Errorf("input %s:%d already swept", vtxo.Txid, vtxo.VOut)
+		}
+
+		vtxosInputs = append(vtxosInputs, vtxo)
+		descriptors[vtxo.VtxoKey] = input.Descriptor
+	}
+
+	payment, err := domain.NewPayment(vtxosInputs)
 	if err != nil {
 		return "", err
 	}
-	if err := s.paymentRequests.push(*payment); err != nil {
+	if err := s.paymentRequests.push(*payment, boardingInputs, descriptors); err != nil {
 		return "", err
 	}
 	return payment.Id, nil
+}
+
+func (s *covenantService) newBoardingInput(tx *transaction.Transaction, input ports.Input) (*ports.BoardingInput, error) {
+	if len(tx.Outputs) <= int(input.VtxoKey.VOut) {
+		return nil, fmt.Errorf("output not found")
+	}
+
+	output := tx.Outputs[input.VtxoKey.VOut]
+
+	if len(output.RangeProof) > 0 || len(output.SurjectionProof) > 0 {
+		return nil, fmt.Errorf("output is confidential")
+	}
+
+	amount, err := elementsutil.ValueFromBytes(output.Value)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse value: %s", err)
+	}
+
+	boardingScript, err := tree.ParseVtxoScript(input.Descriptor)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse boarding descriptor: %s", err)
+	}
+
+	tapKey, _, err := boardingScript.TapTree()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get taproot key: %s", err)
+	}
+
+	expectedScriptPubKey, err := common.P2TRScript(tapKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get script pubkey: %s", err)
+	}
+
+	if !bytes.Equal(output.Script, expectedScriptPubKey) {
+		return nil, fmt.Errorf("descriptor does not match script in transaction output")
+	}
+
+	if defaultVtxoScript, ok := boardingScript.(*tree.DefaultVtxoScript); ok {
+		if !bytes.Equal(schnorr.SerializePubKey(defaultVtxoScript.Asp), schnorr.SerializePubKey(s.pubkey)) {
+			return nil, fmt.Errorf("invalid boarding descriptor, ASP mismatch")
+		}
+
+		if defaultVtxoScript.ExitDelay != uint(s.boardingExitDelay) {
+			return nil, fmt.Errorf("invalid boarding descriptor, timeout mismatch")
+		}
+	} else {
+		return nil, fmt.Errorf("only default vtxo script is supported for boarding")
+	}
+
+	return &ports.BoardingInput{
+		Amount: amount,
+		Input:  input,
+	}, nil
 }
 
 func (s *covenantService) ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error {
@@ -147,44 +317,68 @@ func (s *covenantService) ClaimVtxos(ctx context.Context, creds string, receiver
 		return fmt.Errorf("invalid credentials")
 	}
 
+	dustAmount, err := s.wallet.GetDustAmount(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, r := range receivers {
+		if r.Amount <= dustAmount {
+			return fmt.Errorf("receiver amount must be greater than dust amount: %d", dustAmount)
+		}
+	}
+
 	if err := payment.AddReceivers(receivers); err != nil {
 		return err
 	}
 	return s.paymentRequests.update(*payment)
 }
 
-func (s *covenantService) UpdatePaymentStatus(_ context.Context, id string) (domain.RoundEvent, error) {
-	err := s.paymentRequests.updatePingTimestamp(id)
-	if err != nil {
-		if _, ok := err.(errPaymentNotFound); ok {
-			return s.lastEvent, nil
-		}
-
-		return nil, err
-	}
-
-	return s.lastEvent, nil
+func (s *covenantService) UpdatePaymentStatus(_ context.Context, id string) error {
+	return s.paymentRequests.updatePingTimestamp(id)
 }
 
-func (s *covenantService) CompleteAsyncPayment(ctx context.Context, redeemTx string, unconditionalForfeitTxs []string) error {
+func (s *covenantService) CompleteAsyncPayment(ctx context.Context, redeemTx string) error {
 	return fmt.Errorf("unimplemented")
 }
 
-func (s *covenantService) CreateAsyncPayment(ctx context.Context, inputs []domain.VtxoKey, receivers []domain.Receiver) (string, []string, error) {
-	return "", nil, fmt.Errorf("unimplemented")
+func (s *covenantService) CreateAsyncPayment(_ context.Context, _ []AsyncPaymentInput, _ []domain.Receiver) (string, error) {
+	return "", fmt.Errorf("unimplemented")
 }
 
 func (s *covenantService) SignVtxos(ctx context.Context, forfeitTxs []string) error {
 	return s.forfeitTxs.sign(forfeitTxs)
 }
 
-func (s *covenantService) ListVtxos(ctx context.Context, pubkey *secp256k1.PublicKey) ([]domain.Vtxo, []domain.Vtxo, error) {
-	pk := hex.EncodeToString(pubkey.SerializeCompressed())
-	return s.repoManager.Vtxos().GetAllVtxos(ctx, pk)
+func (s *covenantService) SignRoundTx(ctx context.Context, signedRoundTx string) error {
+	s.currentRoundLock.Lock()
+	defer s.currentRoundLock.Unlock()
+
+	combined, err := s.builder.VerifyAndCombinePartialTx(s.currentRound.UnsignedTx, signedRoundTx)
+	if err != nil {
+		return err
+	}
+
+	s.currentRound.UnsignedTx = combined
+	return nil
+}
+
+func (s *covenantService) ListVtxos(ctx context.Context, address string) ([]domain.Vtxo, []domain.Vtxo, error) {
+	decodedAddress, err := common.DecodeAddress(address)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to decode address: %s", err)
+	}
+	pubkey := hex.EncodeToString(schnorr.SerializePubKey(decodedAddress.VtxoTapKey))
+
+	return s.repoManager.Vtxos().GetAllVtxos(ctx, pubkey)
 }
 
 func (s *covenantService) GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent {
 	return s.eventsCh
+}
+
+func (s *covenantService) GetTransactionEventsChannel(ctx context.Context) <-chan TransactionEvent {
+	return s.transactionEventsCh
 }
 
 func (s *covenantService) GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error) {
@@ -202,55 +396,33 @@ func (s *covenantService) GetRoundById(ctx context.Context, id string) (*domain.
 func (s *covenantService) GetInfo(ctx context.Context) (*ServiceInfo, error) {
 	pubkey := hex.EncodeToString(s.pubkey.SerializeCompressed())
 
+	dust, err := s.wallet.GetDustAmount(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	forfeitAddress, err := s.wallet.GetForfeitAddress(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	return &ServiceInfo{
 		PubKey:              pubkey,
 		RoundLifetime:       s.roundLifetime,
 		UnilateralExitDelay: s.unilateralExitDelay,
 		RoundInterval:       s.roundInterval,
 		Network:             s.network.Name,
-		MinRelayFee:         int64(s.minRelayFee),
+		Dust:                dust,
+		BoardingDescriptorTemplate: fmt.Sprintf(
+			descriptor.DefaultVtxoDescriptorTemplate,
+			hex.EncodeToString(tree.UnspendableKey().SerializeCompressed()),
+			"USER",
+			hex.EncodeToString(schnorr.SerializePubKey(s.pubkey)),
+			s.boardingExitDelay,
+			"USER",
+		),
+		ForfeitAddress: forfeitAddress,
 	}, nil
-}
-
-func (s *covenantService) Onboard(
-	ctx context.Context, boardingTx string,
-	congestionTree tree.CongestionTree, userPubkey *secp256k1.PublicKey,
-) error {
-	ptx, err := psetv2.NewPsetFromBase64(boardingTx)
-	if err != nil {
-		return fmt.Errorf("failed to parse boarding tx: %s", err)
-	}
-
-	if err := tree.ValidateCongestionTree(
-		congestionTree, boardingTx, s.pubkey, s.roundLifetime,
-	); err != nil {
-		return err
-	}
-
-	extracted, err := psetv2.Extract(ptx)
-	if err != nil {
-		return fmt.Errorf("failed to extract boarding tx: %s", err)
-	}
-
-	boardingTxHex, err := extracted.ToHex()
-	if err != nil {
-		return fmt.Errorf("failed to convert boarding tx to hex: %s", err)
-	}
-
-	txid, err := s.wallet.BroadcastTransaction(ctx, boardingTxHex)
-	if err != nil {
-		return fmt.Errorf("failed to broadcast boarding tx: %s", err)
-	}
-
-	log.Debugf("broadcasted boarding tx %s", txid)
-
-	s.onboardingCh <- onboarding{
-		tx:             boardingTx,
-		congestionTree: congestionTree,
-		userPubkey:     userPubkey,
-	}
-
-	return nil
 }
 
 func (s *covenantService) RegisterCosignerPubkey(ctx context.Context, paymentId string, _ string) error {
@@ -271,19 +443,37 @@ func (s *covenantService) RegisterCosignerSignatures(context.Context, string, *s
 	return ErrTreeSigningNotRequired
 }
 
+func (s *covenantService) SetNostrRecipient(ctx context.Context, nostrRecipient string, signedVtxoOutpoints []SignedVtxoOutpoint) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (s *covenantService) DeleteNostrRecipient(ctx context.Context, signedVtxoOutpoints []SignedVtxoOutpoint) error {
+	return fmt.Errorf("not implemented")
+}
+
 func (s *covenantService) start() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("recovered from panic in start: %v", r)
+		}
+	}()
+
 	s.startRound()
 }
 
 func (s *covenantService) startRound() {
+	dustAmount, err := s.wallet.GetDustAmount(context.Background())
+	if err != nil {
+		log.WithError(err).Warn("failed to retrieve dust amount")
+		return
+	}
 	round := domain.NewRound(dustAmount)
 	//nolint:all
 	round.StartRegistration()
-	s.lastEvent = nil
 	s.currentRound = round
 
 	defer func() {
-		time.Sleep(time.Duration(s.roundInterval/2) * time.Second)
+		time.Sleep(time.Duration(s.roundInterval/3) * time.Second)
 		s.startFinalization()
 	}()
 
@@ -309,7 +499,7 @@ func (s *covenantService) startFinalization() {
 			s.startRound()
 			return
 		}
-		time.Sleep(time.Duration((s.roundInterval/2)-1) * time.Second)
+		time.Sleep(time.Duration((s.roundInterval/3)-1) * time.Second)
 		s.finalizeRound()
 	}()
 
@@ -329,7 +519,7 @@ func (s *covenantService) startFinalization() {
 	if num > paymentsThreshold {
 		num = paymentsThreshold
 	}
-	payments, _ := s.paymentRequests.pop(num)
+	payments, boardingInputs, descriptors, _, _ := s.paymentRequests.pop(num)
 	if _, err := round.RegisterPayments(payments); err != nil {
 		round.Fail(fmt.Errorf("failed to register payments: %s", err))
 		log.WithError(err).Warn("failed to register payments")
@@ -343,7 +533,7 @@ func (s *covenantService) startFinalization() {
 		return
 	}
 
-	unsignedPoolTx, tree, connectorAddress, err := s.builder.BuildPoolTx(s.pubkey, payments, s.minRelayFee, sweptRounds)
+	unsignedPoolTx, tree, connectorAddress, err := s.builder.BuildRoundTx(s.pubkey, payments, boardingInputs, sweptRounds)
 	if err != nil {
 		round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
 		log.WithError(err).Warn("failed to create pool tx")
@@ -351,16 +541,34 @@ func (s *covenantService) startFinalization() {
 	}
 	log.Debugf("pool tx created for round %s", round.Id)
 
-	// TODO BTC make the senders sign the tree
-
-	connectors, forfeitTxs, err := s.builder.BuildForfeitTxs(s.pubkey, unsignedPoolTx, payments, s.minRelayFee)
-	if err != nil {
-		round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
-		log.WithError(err).Warn("failed to create connectors and forfeit txs")
-		return
+	needForfeits := false
+	for _, pay := range payments {
+		if len(pay.Inputs) > 0 {
+			needForfeits = true
+			break
+		}
 	}
 
-	log.Debugf("forfeit transactions created for round %s", round.Id)
+	var forfeitTxs, connectors []string
+
+	minRelayFeeRate := s.wallet.MinRelayFeeRate(ctx)
+
+	if needForfeits {
+		connectors, forfeitTxs, err = s.builder.BuildForfeitTxs(unsignedPoolTx, payments, descriptors, minRelayFeeRate)
+		if err != nil {
+			round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
+			log.WithError(err).Warn("failed to create connectors and forfeit txs")
+			return
+		}
+
+		log.Debugf("forfeit transactions created for round %s", round.Id)
+
+		if err := s.forfeitTxs.push(forfeitTxs); err != nil {
+			round.Fail(fmt.Errorf("failed to cache forfeit txs: %s", err))
+			log.WithError(err).Warn("failed to cache forfeit txs")
+			return
+		}
+	}
 
 	if _, err := round.StartFinalization(
 		connectorAddress, connectors, tree, unsignedPoolTx,
@@ -369,8 +577,6 @@ func (s *covenantService) startFinalization() {
 		log.WithError(err).Warn("failed to start finalization")
 		return
 	}
-
-	s.forfeitTxs.push(forfeitTxs)
 
 	log.Debugf("started finalization stage for round: %s", round.Id)
 }
@@ -401,160 +607,124 @@ func (s *covenantService) finalizeRound() {
 	}
 
 	log.Debugf("signing round transaction %s\n", round.Id)
-	signedPoolTx, err := s.wallet.SignTransaction(ctx, round.UnsignedTx, true)
+
+	boardingInputs := make([]int, 0)
+	roundTx, err := psetv2.NewPsetFromBase64(round.UnsignedTx)
+	if err != nil {
+		log.Debugf("failed to parse round tx: %s", round.UnsignedTx)
+		changes = round.Fail(fmt.Errorf("failed to parse round tx: %s", err))
+		log.WithError(err).Warn("failed to parse round tx")
+		return
+	}
+
+	for i, in := range roundTx.Inputs {
+		if len(in.TapLeafScript) > 0 {
+			if len(in.TapScriptSig) == 0 {
+				err = fmt.Errorf("missing tapscript spend sig for input %d", i)
+				changes = round.Fail(err)
+				log.WithError(err).Warn("missing boarding sig")
+				return
+			}
+
+			boardingInputs = append(boardingInputs, i)
+		}
+	}
+
+	signedRoundTx := round.UnsignedTx
+
+	if len(boardingInputs) > 0 {
+		signedRoundTx, err = s.wallet.SignTransactionTapscript(ctx, signedRoundTx, boardingInputs)
+		if err != nil {
+			changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
+			log.WithError(err).Warn("failed to sign round tx")
+			return
+		}
+	}
+
+	signedRoundTx, err = s.wallet.SignTransaction(ctx, signedRoundTx, true)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
 		log.WithError(err).Warn("failed to sign round tx")
 		return
 	}
 
-	txid, err := s.wallet.BroadcastTransaction(ctx, signedPoolTx)
+	txid, err := s.wallet.BroadcastTransaction(ctx, signedRoundTx)
 	if err != nil {
+		log.Debugf("failed to broadcast round tx: %s", signedRoundTx)
 		changes = round.Fail(fmt.Errorf("failed to broadcast pool tx: %s", err))
 		log.WithError(err).Warn("failed to broadcast pool tx")
 		return
 	}
 
-	changes, _ = round.EndFinalization(forfeitTxs, txid)
+	changes, err = round.EndFinalization(forfeitTxs, txid)
+	if err != nil {
+		changes = round.Fail(fmt.Errorf("failed to finalize round: %s", err))
+		log.WithError(err).Warn("failed to finalize round")
+		return
+	}
 
 	log.Debugf("finalized round %s with pool tx %s", round.Id, round.Txid)
 }
 
-func (s *covenantService) listenToOnboarding() {
-	for onboarding := range s.onboardingCh {
-		go s.handleOnboarding(onboarding)
-	}
-}
-
-func (s *covenantService) handleOnboarding(onboarding onboarding) {
-	ctx := context.Background()
-
-	ptx, _ := psetv2.NewPsetFromBase64(onboarding.tx)
-	utx, _ := psetv2.Extract(ptx)
-	txid := utx.TxHash().String()
-
-	// wait for the tx to be confirmed with a timeout
-	timeout := time.NewTimer(5 * time.Minute)
-	defer timeout.Stop()
-
-	isConfirmed := false
-
-	for !isConfirmed {
-		select {
-		case <-timeout.C:
-			log.WithError(fmt.Errorf("operation timed out")).Warnf("failed to get confirmation for boarding tx %s", txid)
-			return
-		default:
-			var err error
-			isConfirmed, _, err = s.wallet.IsTransactionConfirmed(ctx, txid)
-			if err != nil {
-				log.WithError(err).Warn("failed to check tx confirmation")
-			}
-
-			if err != nil || !isConfirmed {
-				time.Sleep(5 * time.Second)
-			}
-		}
-	}
-
-	pubkey := hex.EncodeToString(onboarding.userPubkey.SerializeCompressed())
-	payments := getPaymentsFromOnboardingLiquid(onboarding.congestionTree, pubkey)
-	round := domain.NewFinalizedRound(
-		dustAmount, pubkey, txid, onboarding.tx, onboarding.congestionTree, payments,
-	)
-	if err := s.saveEvents(ctx, round.Id, round.Events()); err != nil {
-		log.WithError(err).Warn("failed to store new round events")
-		return
-	}
-}
-
 func (s *covenantService) listenToScannerNotifications() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("recovered from panic in listenToScannerNotifications: %v", r)
+		}
+	}()
+
 	ctx := context.Background()
 	chVtxos := s.scanner.GetNotificationChannel(ctx)
 
 	mutx := &sync.Mutex{}
 	for vtxoKeys := range chVtxos {
-		go func(vtxoKeys map[string]ports.VtxoWithValue) {
+		go func(vtxoKeys map[string][]ports.VtxoWithValue) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Errorf("recovered from panic in GetVtxos goroutine: %v", r)
+				}
+			}()
+
 			vtxosRepo := s.repoManager.Vtxos()
-			roundRepo := s.repoManager.Rounds()
 
-			for _, v := range vtxoKeys {
-				// redeem
-				vtxos, err := vtxosRepo.GetVtxos(ctx, []domain.VtxoKey{v.VtxoKey})
-				if err != nil {
-					log.WithError(err).Warn("failed to retrieve vtxos, skipping...")
-					continue
+			for _, keys := range vtxoKeys {
+				for _, v := range keys {
+					vtxos, err := vtxosRepo.GetVtxos(ctx, []domain.VtxoKey{v.VtxoKey})
+					if err != nil {
+						log.WithError(err).Warn("failed to retrieve vtxos, skipping...")
+						continue
+					}
+					vtxo := vtxos[0]
+
+					if !vtxo.Redeemed {
+						go func() {
+							defer func() {
+								if r := recover(); r != nil {
+									log.Errorf("recovered from panic in markAsRedeemed goroutine: %v", r)
+								}
+							}()
+
+							if err := s.markAsRedeemed(ctx, vtxo); err != nil {
+								log.WithError(err).Warnf("failed to mark vtxo %s:%d as redeemed", vtxo.Txid, vtxo.VOut)
+							}
+						}()
+					}
+
+					if vtxo.Spent {
+						log.Infof("fraud detected on vtxo %s:%d", vtxo.Txid, vtxo.VOut)
+						go func() {
+							defer func() {
+								if r := recover(); r != nil {
+									log.Errorf("recovered from panic in reactToFraud goroutine: %v", r)
+								}
+							}()
+
+							if err := s.reactToFraud(ctx, vtxo, mutx); err != nil {
+								log.WithError(err).Warnf("failed to prevent fraud for vtxo %s:%d", vtxo.Txid, vtxo.VOut)
+							}
+						}()
+					}
 				}
-
-				vtxo := vtxos[0]
-
-				if vtxo.Redeemed {
-					continue
-				}
-
-				if err := s.repoManager.Vtxos().RedeemVtxos(ctx, []domain.VtxoKey{vtxo.VtxoKey}); err != nil {
-					log.WithError(err).Warn("failed to redeem vtxos, retrying...")
-					continue
-				}
-				log.Debugf("vtxo %s redeemed", vtxo.Txid)
-
-				if !vtxo.Spent {
-					continue
-				}
-
-				log.Debugf("fraud detected on vtxo %s", vtxo.Txid)
-
-				round, err := roundRepo.GetRoundWithTxid(ctx, vtxo.SpentBy)
-				if err != nil {
-					log.WithError(err).Warn("failed to retrieve round")
-					continue
-				}
-
-				mutx.Lock()
-				defer mutx.Unlock()
-
-				connectorTxid, connectorVout, err := s.getNextConnector(ctx, *round)
-				if err != nil {
-					log.WithError(err).Warn("failed to retrieve next connector")
-					continue
-				}
-
-				forfeitTx, err := findForfeitTxLiquid(round.ForfeitTxs, connectorTxid, connectorVout, vtxo.Txid)
-				if err != nil {
-					log.WithError(err).Warn("failed to retrieve forfeit tx")
-					continue
-				}
-
-				if err := s.wallet.LockConnectorUtxos(ctx, []ports.TxOutpoint{txOutpoint{connectorTxid, connectorVout}}); err != nil {
-					log.WithError(err).Warn("failed to lock connector utxos")
-					continue
-				}
-
-				signedForfeitTx, err := s.wallet.SignTransaction(ctx, forfeitTx, false)
-				if err != nil {
-					log.WithError(err).Warn("failed to sign connector input in forfeit tx")
-					continue
-				}
-
-				signedForfeitTx, err = s.wallet.SignTransactionTapscript(ctx, signedForfeitTx, []int{1})
-				if err != nil {
-					log.WithError(err).Warn("failed to sign vtxo input in forfeit tx")
-					continue
-				}
-
-				forfeitTxHex, err := s.builder.FinalizeAndExtractForfeit(signedForfeitTx)
-				if err != nil {
-					log.WithError(err).Warn("failed to finalize forfeit tx")
-					continue
-				}
-
-				forfeitTxid, err := s.wallet.BroadcastTransaction(ctx, forfeitTxHex)
-				if err != nil {
-					log.WithError(err).Warn("failed to broadcast forfeit tx")
-					continue
-				}
-
-				log.Debugf("broadcasted forfeit tx %s", forfeitTxid)
 			}
 		}(vtxoKeys)
 	}
@@ -564,20 +734,27 @@ func (s *covenantService) getNextConnector(
 	ctx context.Context,
 	round domain.Round,
 ) (string, uint32, error) {
-	connectorTx, err := psetv2.NewPsetFromBase64(round.Connectors[0])
+	lastConnectorPtx, err := psetv2.NewPsetFromBase64(round.Connectors[len(round.Connectors)-1])
 	if err != nil {
 		return "", 0, err
 	}
 
-	prevout := connectorTx.Inputs[0].WitnessUtxo
-	if prevout == nil {
-		return "", 0, fmt.Errorf("connector prevout not found")
+	var connectorAmount uint64
+	for i := len(lastConnectorPtx.Outputs) - 1; i >= 0; i-- {
+		o := lastConnectorPtx.Outputs[i]
+		if len(o.Script) <= 0 {
+			continue //	skip the fee output
+		}
+
+		connectorAmount = o.Value
+		break
 	}
 
 	utxos, err := s.wallet.ListConnectorUtxos(ctx, round.ConnectorAddress)
 	if err != nil {
 		return "", 0, err
 	}
+	log.Debugf("found %d connector utxos, dust amount is %d", len(utxos), connectorAmount)
 
 	// if we do not find any utxos, we make sure to wait for the connector outpoint to be confirmed then we retry
 	if len(utxos) <= 0 {
@@ -593,21 +770,26 @@ func (s *covenantService) getNextConnector(
 
 	// search for an already existing connector
 	for _, u := range utxos {
-		if u.GetValue() == 450 {
+		if u.GetValue() == connectorAmount {
 			return u.GetTxid(), u.GetIndex(), nil
 		}
 	}
 
 	for _, u := range utxos {
-		if u.GetValue() > 450 {
+		if u.GetValue() > connectorAmount {
 			for _, b64 := range round.Connectors {
-				partial, err := psbt.NewFromRawBytes(strings.NewReader(b64), true)
+				partial, err := psetv2.NewPsetFromBase64(b64)
 				if err != nil {
 					return "", 0, err
 				}
 
-				for _, i := range partial.UnsignedTx.TxIn {
-					if i.PreviousOutPoint.Hash.String() == u.GetTxid() && i.PreviousOutPoint.Index == u.GetIndex() {
+				for _, i := range partial.Inputs {
+					txhash, err := chainhash.NewHash(i.PreviousTxid)
+					if err != nil {
+						return "", 0, err
+					}
+
+					if txhash.String() == u.GetTxid() && i.PreviousTxIndex == u.GetIndex() {
 						connectorOutpoint := txOutpoint{u.GetTxid(), u.GetIndex()}
 
 						if err := s.wallet.LockConnectorUtxos(ctx, []ports.TxOutpoint{connectorOutpoint}); err != nil {
@@ -639,6 +821,61 @@ func (s *covenantService) getNextConnector(
 	}
 
 	return "", 0, fmt.Errorf("no connector utxos found")
+}
+
+func (s *covenantService) reactToFraud(ctx context.Context, vtxo domain.Vtxo, mutx *sync.Mutex) error {
+	round, err := s.repoManager.Rounds().GetRoundWithTxid(ctx, vtxo.SpentBy)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve round: %s", err)
+	}
+
+	mutx.Lock()
+	defer mutx.Unlock()
+
+	connectorTxid, connectorVout, err := s.getNextConnector(ctx, *round)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve next connector: %s", err)
+	}
+
+	forfeitTx, err := findForfeitTxLiquid(round.ForfeitTxs, connectorTxid, connectorVout, vtxo.Txid)
+	if err != nil {
+		return fmt.Errorf("failed to find forfeit tx: %s", err)
+	}
+
+	if err := s.wallet.LockConnectorUtxos(ctx, []ports.TxOutpoint{txOutpoint{connectorTxid, connectorVout}}); err != nil {
+		return fmt.Errorf("failed to lock connector utxos: %s", err)
+	}
+
+	signedForfeitTx, err := s.wallet.SignTransaction(ctx, forfeitTx, false)
+	if err != nil {
+		return fmt.Errorf("failed to sign connector input in forfeit tx: %s", err)
+	}
+
+	signedForfeitTx, err = s.wallet.SignTransactionTapscript(ctx, signedForfeitTx, []int{1})
+	if err != nil {
+		return fmt.Errorf("failed to sign vtxo input in forfeit tx: %s", err)
+	}
+
+	forfeitTxHex, err := s.builder.FinalizeAndExtract(signedForfeitTx)
+	if err != nil {
+		return fmt.Errorf("failed to finalize forfeit tx: %s", err)
+	}
+
+	forfeitTxid, err := s.wallet.BroadcastTransaction(ctx, forfeitTxHex)
+	if err != nil {
+		return fmt.Errorf("failed to broadcast forfeit tx: %s", err)
+	}
+
+	log.Debugf("broadcasted forfeit tx %s", forfeitTxid)
+	return nil
+}
+
+func (s *covenantService) markAsRedeemed(ctx context.Context, vtxo domain.Vtxo) error {
+	if err := s.repoManager.Vtxos().RedeemVtxos(ctx, []domain.VtxoKey{vtxo.VtxoKey}); err != nil {
+		return err
+	}
+	log.Debugf("vtxo %s redeemed", vtxo.Txid)
+	return nil
 }
 
 func (s *covenantService) updateVtxoSet(round *domain.Round) {
@@ -675,6 +912,12 @@ func (s *covenantService) updateVtxoSet(round *domain.Round) {
 		}
 
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Errorf("recovered from panic in startWatchingVtxos: %v", r)
+				}
+			}()
+
 			for {
 				if err := s.startWatchingVtxos(newVtxos); err != nil {
 					log.WithError(err).Warn(
@@ -687,19 +930,44 @@ func (s *covenantService) updateVtxoSet(round *domain.Round) {
 			}
 		}()
 	}
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Errorf("recovered from panic in RoundTransactionEvent: %v", r)
+			}
+		}()
+
+		// nolint:all
+		tx, _ := psetv2.NewPsetFromBase64(round.UnsignedTx)
+		boardingInputs := make([]domain.VtxoKey, 0)
+		for _, in := range tx.Inputs {
+			if len(in.TapLeafScript) > 0 {
+				boardingInputs = append(boardingInputs, domain.VtxoKey{
+					Txid: elementsutil.TxIDFromBytes(in.PreviousTxid),
+					VOut: in.PreviousTxIndex,
+				})
+			}
+		}
+		s.transactionEventsCh <- RoundTransactionEvent{
+			RoundTxID:             round.Txid,
+			SpentVtxos:            getSpentVtxos(round.Payments),
+			SpendableVtxos:        s.getNewVtxos(round),
+			ClaimedBoardingInputs: boardingInputs,
+		}
+	}()
 }
 
 func (s *covenantService) propagateEvents(round *domain.Round) {
 	lastEvent := round.Events()[len(round.Events())-1]
 	switch e := lastEvent.(type) {
 	case domain.RoundFinalizationStarted:
-		forfeitTxs := s.forfeitTxs.view()
 		ev := domain.RoundFinalizationStarted{
-			Id:                 e.Id,
-			CongestionTree:     e.CongestionTree,
-			Connectors:         e.Connectors,
-			PoolTx:             e.PoolTx,
-			UnsignedForfeitTxs: forfeitTxs,
+			Id:              e.Id,
+			CongestionTree:  e.CongestionTree,
+			Connectors:      e.Connectors,
+			RoundTx:         e.RoundTx,
+			MinRelayFeeRate: int64(s.wallet.MinRelayFeeRate(context.Background())),
 		}
 		s.lastEvent = ev
 		s.eventsCh <- ev
@@ -715,12 +983,10 @@ func (s *covenantService) scheduleSweepVtxosForRound(round *domain.Round) {
 		return
 	}
 
-	expirationTimestamp := time.Now().Add(
-		time.Duration(s.roundLifetime+30) * time.Second,
-	)
+	expirationTime := s.sweeper.scheduler.AddNow(s.roundLifetime)
 
 	if err := s.sweeper.schedule(
-		expirationTimestamp.Unix(), round.Txid, round.CongestionTree,
+		expirationTime, round.Txid, round.CongestionTree,
 	); err != nil {
 		log.WithError(err).Warn("failed to schedule sweep tx")
 	}
@@ -731,37 +997,32 @@ func (s *covenantService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 		return nil
 	}
 
+	createdAt := time.Now().Unix()
+
 	leaves := round.CongestionTree.Leaves()
 	vtxos := make([]domain.Vtxo, 0)
 	for _, node := range leaves {
 		tx, _ := psetv2.NewPsetFromBase64(node.Tx)
 		for i, out := range tx.Outputs {
-			for _, p := range round.Payments {
-				var pubkey string
-				found := false
-				for _, r := range p.Receivers {
-					if r.IsOnchain() {
-						continue
-					}
-
-					buf, _ := hex.DecodeString(r.Pubkey)
-					pk, _ := secp256k1.ParsePubKey(buf)
-					script, _ := s.builder.GetVtxoScript(pk, s.pubkey)
-					if bytes.Equal(script, out.Script) {
-						found = true
-						pubkey = r.Pubkey
-						break
-					}
-				}
-				if found {
-					vtxos = append(vtxos, domain.Vtxo{
-						VtxoKey:  domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
-						Receiver: domain.Receiver{Pubkey: pubkey, Amount: out.Value},
-						PoolTx:   round.Txid,
-					})
-					break
-				}
+			if len(out.Script) <= 0 {
+				continue // skip fee outputs
 			}
+
+			vtxoTapKey, err := schnorr.ParsePubKey(out.Script[2:])
+			if err != nil {
+				log.WithError(err).Warn("failed to parse vtxo tap key")
+				continue
+			}
+
+			vtxoPubkey := hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey))
+
+			vtxos = append(vtxos, domain.Vtxo{
+				VtxoKey:   domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
+				Pubkey:    vtxoPubkey,
+				Amount:    uint64(out.Value),
+				RoundTxid: round.Txid,
+				CreatedAt: createdAt,
+			})
 		}
 	}
 	return vtxos
@@ -832,15 +1093,17 @@ func (s *covenantService) restoreWatchingVtxos() error {
 func (s *covenantService) extractVtxosScripts(vtxos []domain.Vtxo) ([]string, error) {
 	indexedScripts := make(map[string]struct{})
 	for _, vtxo := range vtxos {
-		buf, err := hex.DecodeString(vtxo.Pubkey)
+		vtxoTapKeyBytes, err := hex.DecodeString(vtxo.Pubkey)
 		if err != nil {
 			return nil, err
 		}
-		userPubkey, err := secp256k1.ParsePubKey(buf)
+
+		vtxoTapKey, err := schnorr.ParsePubKey(vtxoTapKeyBytes)
 		if err != nil {
 			return nil, err
 		}
-		script, err := s.builder.GetVtxoScript(userPubkey, s.pubkey)
+
+		script, err := common.P2TRScript(vtxoTapKey)
 		if err != nil {
 			return nil, err
 		}
@@ -867,21 +1130,17 @@ func (s *covenantService) saveEvents(
 	return s.repoManager.Rounds().AddOrUpdateRound(ctx, *round)
 }
 
-func getPaymentsFromOnboardingLiquid(
-	congestionTree tree.CongestionTree, userKey string,
-) []domain.Payment {
-	leaves := congestionTree.Leaves()
-	receivers := make([]domain.Receiver, 0, len(leaves))
-	for _, node := range leaves {
-		ptx, _ := psetv2.NewPsetFromBase64(node.Tx)
-		receiver := domain.Receiver{
-			Pubkey: userKey,
-			Amount: ptx.Outputs[0].Value,
-		}
-		receivers = append(receivers, receiver)
+func (s *covenantService) onchainNetwork() *network.Network {
+	switch s.network {
+	case common.Liquid:
+		return &network.Liquid
+	case common.LiquidTestNet:
+		return &network.Testnet
+	case common.LiquidRegTest:
+		return &network.Regtest
+	default:
+		return nil
 	}
-	payment := domain.NewPaymentUnsafe(nil, receivers)
-	return []domain.Payment{*payment}
 }
 
 func findForfeitTxLiquid(

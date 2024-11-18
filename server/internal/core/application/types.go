@@ -3,44 +3,49 @@ package application
 import (
 	"context"
 
-	"github.com/ark-network/ark/common/tree"
+	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/server/internal/core/domain"
+	"github.com/ark-network/ark/server/internal/core/ports"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
 var (
 	paymentsThreshold = int64(128)
-	dustAmount        = uint64(450)
 )
+
+type AsyncPaymentInput struct {
+	ports.Input
+	ForfeitLeafHash chainhash.Hash
+}
 
 type Service interface {
 	Start() error
 	Stop()
-	SpendVtxos(ctx context.Context, inputs []domain.VtxoKey) (string, error)
+	SpendNotes(ctx context.Context, notes []note.Note) (string, error)
+	SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error)
 	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error
 	SignVtxos(ctx context.Context, forfeitTxs []string) error
+	SignRoundTx(ctx context.Context, roundTx string) error
 	GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error)
 	GetRoundById(ctx context.Context, id string) (*domain.Round, error)
 	GetCurrentRound(ctx context.Context) (*domain.Round, error)
 	GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
-	UpdatePaymentStatus(
-		ctx context.Context, paymentId string,
-	) (lastEvent domain.RoundEvent, err error)
+	UpdatePaymentStatus(ctx context.Context, paymentId string) error
 	ListVtxos(
-		ctx context.Context, pubkey *secp256k1.PublicKey,
+		ctx context.Context, address string,
 	) (spendableVtxos, spentVtxos []domain.Vtxo, err error)
 	GetInfo(ctx context.Context) (*ServiceInfo, error)
-	Onboard(
-		ctx context.Context, boardingTx string,
-		congestionTree tree.CongestionTree, userPubkey *secp256k1.PublicKey,
-	) error
 	// Async payments
 	CreateAsyncPayment(
-		ctx context.Context, inputs []domain.VtxoKey, receivers []domain.Receiver,
-	) (string, []string, error)
+		ctx context.Context, inputs []AsyncPaymentInput, receivers []domain.Receiver,
+	) (string, error)
 	CompleteAsyncPayment(
-		ctx context.Context, redeemTx string, unconditionalForfeitTxs []string,
+		ctx context.Context, redeemTx string,
 	) error
+	GetBoardingAddress(
+		ctx context.Context, userPubkey *secp256k1.PublicKey,
+	) (address string, descriptor string, err error)
 	// Tree signing methods
 	RegisterCosignerPubkey(ctx context.Context, paymentId string, ephemeralPublicKey string) error
 	RegisterCosignerNonces(
@@ -51,15 +56,20 @@ type Service interface {
 		ctx context.Context, roundID string,
 		pubkey *secp256k1.PublicKey, signatures string,
 	) error
+	GetTransactionEventsChannel(ctx context.Context) <-chan TransactionEvent
+	SetNostrRecipient(ctx context.Context, nostrRecipient string, signedVtxoOutpoints []SignedVtxoOutpoint) error
+	DeleteNostrRecipient(ctx context.Context, signedVtxoOutpoints []SignedVtxoOutpoint) error
 }
 
 type ServiceInfo struct {
-	PubKey              string
-	RoundLifetime       int64
-	UnilateralExitDelay int64
-	RoundInterval       int64
-	Network             string
-	MinRelayFee         int64
+	PubKey                     string
+	RoundLifetime              int64
+	UnilateralExitDelay        int64
+	RoundInterval              int64
+	Network                    string
+	Dust                       uint64
+	BoardingDescriptorTemplate string
+	ForfeitAddress             string
 }
 
 type WalletStatus struct {
@@ -68,10 +78,9 @@ type WalletStatus struct {
 	IsSynced      bool
 }
 
-type onboarding struct {
-	tx             string
-	congestionTree tree.CongestionTree
-	userPubkey     *secp256k1.PublicKey
+type SignedVtxoOutpoint struct {
+	Outpoint domain.VtxoKey
+	Proof    OwnershipProof
 }
 
 type txOutpoint struct {
@@ -85,4 +94,36 @@ func (outpoint txOutpoint) GetTxid() string {
 
 func (outpoint txOutpoint) GetIndex() uint32 {
 	return outpoint.vout
+}
+
+const (
+	RoundTransaction  TransactionEventType = "round_tx"
+	RedeemTransaction TransactionEventType = "redeem_tx"
+)
+
+type TransactionEventType string
+
+type TransactionEvent interface {
+	Type() TransactionEventType
+}
+
+type RoundTransactionEvent struct {
+	RoundTxID             string
+	SpentVtxos            []domain.VtxoKey
+	SpendableVtxos        []domain.Vtxo
+	ClaimedBoardingInputs []domain.VtxoKey
+}
+
+func (r RoundTransactionEvent) Type() TransactionEventType {
+	return RoundTransaction
+}
+
+type RedeemTransactionEvent struct {
+	AsyncTxID      string
+	SpentVtxos     []domain.VtxoKey
+	SpendableVtxos []domain.Vtxo
+}
+
+func (a RedeemTransactionEvent) Type() TransactionEventType {
+	return RedeemTransaction
 }

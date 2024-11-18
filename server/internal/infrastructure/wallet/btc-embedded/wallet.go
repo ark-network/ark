@@ -10,12 +10,15 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btclog"
@@ -28,8 +31,11 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightninglabs/neutrino"
 	"github.com/lightningnetwork/lnd/blockcache"
+	"github.com/lightningnetwork/lnd/input"
+	"github.com/lightningnetwork/lnd/lntypes"
 	"github.com/lightningnetwork/lnd/lnwallet"
 	"github.com/lightningnetwork/lnd/lnwallet/btcwallet"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	log "github.com/sirupsen/logrus"
 	"github.com/vulpemventures/go-bip39"
 )
@@ -37,9 +43,8 @@ import (
 type WalletOption func(*service) error
 
 type WalletConfig struct {
-	Datadir    string
-	Network    common.Network
-	EsploraURL string
+	Datadir string
+	Network common.Network
 }
 
 func (c WalletConfig) chainParams() *chaincfg.Params {
@@ -62,35 +67,60 @@ func (c WalletConfig) chainParams() *chaincfg.Params {
 type accountName string
 
 const (
-	mainAccount      accountName = "main"
-	connectorAccount accountName = "connector"
-	aspKeyAccount    accountName = "aspkey"
+	// p2wkh scope
+	mainAccount accountName = "default" // default is always the first account (index 0)
+
+	// p2tr scope
+	connectorAccount accountName = "default"
+
+	// this account won't be restored by lnd, but it's not a problem cause it does not track any funds
+	// it's used to derive a constant public key to be used as "ASP key" in Vtxo scripts
+	aspKeyAccount accountName = "asp"
+
+	// https://github.com/bitcoin/bitcoin/blob/439e58c4d8194ca37f70346727d31f52e69592ec/src/policy/policy.cpp#L23C8-L23C11
+	// biggest input size to compute the maximum dust amount
+	biggestInputSize = 148 + 182 // = 330 vbytes
 )
 
 var (
-	ErrWalletNotLoaded = fmt.Errorf("wallet not loaded, create or unlock it first")
-	p2wpkhKeyScope     = waddrmgr.KeyScopeBIP0084
-	p2trKeyScope       = waddrmgr.KeyScopeBIP0086
-	outputLockDuration = time.Minute
+	ErrNotLoaded          = fmt.Errorf("wallet not loaded, create or unlock it first")
+	ErrNotSynced          = fmt.Errorf("wallet still syncing, please retry later")
+	ErrNotReady           = fmt.Errorf("wallet not ready, please init and wait for it to complete syncing")
+	ErrNotUnlocked        = fmt.Errorf("wallet is locked, please unlock it to perform this operation")
+	ErrAlreadyInitialized = fmt.Errorf("wallet already initialized")
+	p2wpkhKeyScope        = waddrmgr.KeyScopeBIP0084
+	p2trKeyScope          = waddrmgr.KeyScopeBIP0086
+	outputLockDuration    = time.Minute
 )
+
+// add additional chain API not supported by the chain.Interface type
+type extraChainAPI interface {
+	getTx(txid string) (*wire.MsgTx, error)
+	getTxStatus(txid string) (isConfirmed bool, blockHeight, blocktime int64, err error)
+	broadcast(txHex string) error
+}
 
 type service struct {
 	wallet *btcwallet.BtcWallet
 	cfg    WalletConfig
 
-	chainSource chain.Interface
-	scanner     chain.Interface
-
-	esploraClient *esploraClient
+	chainSource  chain.Interface
+	scanner      chain.Interface
+	extraAPI     extraChainAPI
+	feeEstimator chainfee.Estimator
 
 	watchedScriptsLock sync.RWMutex
 	watchedScripts     map[string]struct{}
 
-	aspTaprootAddr waddrmgr.ManagedPubKeyAddress
+	// holds the data related to the ASP key used in Vtxo scripts
+	aspKeyAddr waddrmgr.ManagedPubKeyAddress
+
+	isSynced bool
+	syncedCh chan struct{}
 }
 
 // WithNeutrino creates a start a neutrino node using the provided service datadir
-func WithNeutrino(initialPeer string) WalletOption {
+func WithNeutrino(initialPeer string, esploraURL string) WalletOption {
 	return func(s *service) error {
 		if s.cfg.Network.Name == common.BitcoinRegTest.Name && len(initialPeer) == 0 {
 			return fmt.Errorf("initial neutrino peer required for regtest network, set NEUTRINO_PEER env var")
@@ -121,17 +151,23 @@ func WithNeutrino(initialPeer string) WalletOption {
 			return err
 		}
 
-		if err := neutrinoSvc.Start(); err != nil {
+		chainSrc := chain.NewNeutrinoClient(netParams, neutrinoSvc)
+		scanner := chain.NewNeutrinoClient(netParams, neutrinoSvc)
+
+		esploraClient := &esploraClient{url: esploraURL}
+		estimator, err := chainfee.NewWebAPIEstimator(esploraClient, true, 5*time.Minute, 20*time.Minute)
+		if err != nil {
 			return err
 		}
 
-		// wait for neutrino to sync
-		for !neutrinoSvc.IsCurrent() {
-			time.Sleep(1 * time.Second)
+		if err := withExtraAPI(esploraClient)(s); err != nil {
+			return err
 		}
 
-		chainSrc := chain.NewNeutrinoClient(netParams, neutrinoSvc)
-		scanner := chain.NewNeutrinoClient(netParams, neutrinoSvc)
+		if err := withFeeEstimator(estimator)(s); err != nil {
+			return err
+		}
+
 		if err := withChainSource(chainSrc)(s); err != nil {
 			return err
 		}
@@ -182,6 +218,27 @@ func WithPollingBitcoind(host, user, pass string) WalletOption {
 		// wait for bitcoind to sync
 		for !chainClient.IsCurrent() {
 			time.Sleep(1 * time.Second)
+		}
+
+		estimator, err := chainfee.NewBitcoindEstimator(
+			rpcclient.ConnConfig{
+				Host: bitcoindConfig.Host,
+				User: bitcoindConfig.User,
+				Pass: bitcoindConfig.Pass,
+			},
+			"CONSERVATIVE",
+			chainfee.AbsoluteFeePerKwFloor,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to create bitcoind fee estimator: %w", err)
+		}
+
+		if err := withExtraAPI(&bitcoindRPCClient{chainClient})(s); err != nil {
+			return err
+		}
+
+		if err := withFeeEstimator(estimator)(s); err != nil {
+			return err
 		}
 
 		// Set up the wallet as chain source and scanner
@@ -263,9 +320,9 @@ func NewService(cfg WalletConfig, options ...WalletOption) (ports.WalletService,
 
 	svc := &service{
 		cfg:                cfg,
-		esploraClient:      &esploraClient{url: cfg.EsploraURL},
 		watchedScriptsLock: sync.RWMutex{},
 		watchedScripts:     make(map[string]struct{}),
+		syncedCh:           make(chan struct{}),
 	}
 
 	for _, option := range options {
@@ -278,11 +335,14 @@ func NewService(cfg WalletConfig, options ...WalletOption) (ports.WalletService,
 }
 
 func (s *service) Close() {
-	if s.walletLoaded() {
-		if err := s.wallet.Stop(); err != nil {
-			log.WithError(err).Warn("failed to gracefully stop the wallet, forcing shutdown")
-		}
+	if s.isLoaded() {
+		s.wallet.InternalWallet().Stop()
 	}
+	s.chainSource.Stop()
+}
+
+func (s *service) GetSyncedUpdate(_ context.Context) <-chan struct{} {
+	return s.syncedCh
 }
 
 func (s *service) GenSeed(_ context.Context) (string, error) {
@@ -298,19 +358,22 @@ func (s *service) Create(_ context.Context, seed, password string) error {
 }
 
 func (s *service) Restore(_ context.Context, seed, password string) error {
-	return s.create(seed, password, 100)
+	return s.create(seed, password, 2000) // restore = create with a bigger recovery window
 }
 
 func (s *service) Unlock(_ context.Context, password string) error {
-	if !s.walletLoaded() {
+	if !s.isInitialized() {
+		return fmt.Errorf("wallet not initialized")
+	}
+
+	if !s.isLoaded() {
 		pwd := []byte(password)
 		opt := btcwallet.LoaderWithLocalWalletDB(s.cfg.Datadir, false, time.Minute)
 		config := btcwallet.Config{
 			LogDir:                s.cfg.Datadir,
 			PrivatePass:           pwd,
 			PublicPass:            pwd,
-			Birthday:              time.Now(),
-			RecoveryWindow:        0,
+			RecoveryWindow:        512,
 			NetParams:             s.cfg.chainParams(),
 			LoaderOptions:         []btcwallet.LoaderOption{opt},
 			CoinSelectionStrategy: wallet.CoinSelectionLargest,
@@ -326,16 +389,6 @@ func (s *service) Unlock(_ context.Context, password string) error {
 		if err := wallet.Start(); err != nil {
 			return fmt.Errorf("failed to start wallet: %s", err)
 		}
-
-		for {
-			if !wallet.InternalWallet().ChainSynced() {
-				log.Debugf("waiting sync: current height %d", wallet.InternalWallet().Manager.SyncedTo().Height)
-				time.Sleep(3 * time.Second)
-				continue
-			}
-			break
-		}
-		log.Debugf("chain synced")
 
 		addrs, err := wallet.ListAddresses(string(aspKeyAccount), false)
 		if err != nil {
@@ -369,21 +422,25 @@ func (s *service) Unlock(_ context.Context, password string) error {
 						return fmt.Errorf("failed to cast address to managed pubkey address")
 					}
 
-					s.aspTaprootAddr = managedPubkeyAddr
+					s.aspKeyAddr = managedPubkeyAddr
 					break
 				}
 			}
 		}
 
 		s.wallet = wallet
+
+		go s.listenToSynced()
+
 		return nil
 	}
+
 	return s.wallet.InternalWallet().Unlock([]byte(password), nil)
 }
 
 func (s *service) Lock(_ context.Context, _ string) error {
-	if !s.walletLoaded() {
-		return ErrWalletNotLoaded
+	if !s.isLoaded() {
+		return ErrNotLoaded
 	}
 
 	s.wallet.InternalWallet().Lock()
@@ -391,7 +448,7 @@ func (s *service) Lock(_ context.Context, _ string) error {
 }
 
 func (s *service) BroadcastTransaction(ctx context.Context, txHex string) (string, error) {
-	if err := s.esploraClient.broadcast(txHex); err != nil {
+	if err := s.extraAPI.broadcast(txHex); err != nil {
 		return "", err
 	}
 
@@ -399,36 +456,54 @@ func (s *service) BroadcastTransaction(ctx context.Context, txHex string) (strin
 	if err := tx.Deserialize(hex.NewDecoder(strings.NewReader(txHex))); err != nil {
 		return "", err
 	}
-	if err := s.wallet.PublishTransaction(&tx, ""); err != nil {
-		return "", err
-	}
 
 	return tx.TxHash().String(), nil
 }
 
 func (s *service) ConnectorsAccountBalance(ctx context.Context) (uint64, uint64, error) {
-	amount, err := s.getBalance(connectorAccount)
+	if err := s.safeCheck(); err != nil {
+		return 0, 0, err
+	}
+
+	utxos, err := s.listUtxos(p2trKeyScope)
 	if err != nil {
 		return 0, 0, err
+	}
+
+	amount := uint64(0)
+	for _, utxo := range utxos {
+		amount += uint64(utxo.Output.Value)
 	}
 
 	return amount, 0, nil
 }
 
 func (s *service) MainAccountBalance(ctx context.Context) (uint64, uint64, error) {
-	amount, err := s.getBalance(mainAccount)
+	if err := s.safeCheck(); err != nil {
+		return 0, 0, err
+	}
+
+	utxos, err := s.listUtxos(p2wpkhKeyScope)
 	if err != nil {
 		return 0, 0, err
+	}
+
+	amount := uint64(0)
+	for _, utxo := range utxos {
+		amount += uint64(utxo.Output.Value)
 	}
 
 	return amount, 0, nil
 }
 
 func (s *service) DeriveAddresses(ctx context.Context, num int) ([]string, error) {
-	addresses := make([]string, 0, num)
+	if err := s.safeCheck(); err != nil {
+		return nil, err
+	}
 
+	addresses := make([]string, 0, num)
 	for i := 0; i < num; i++ {
-		addr, err := s.deriveNextAddress(mainAccount)
+		addr, err := s.deriveNextAddress()
 		if err != nil {
 			return nil, err
 		}
@@ -444,7 +519,11 @@ func (s *service) DeriveAddresses(ctx context.Context, num int) ([]string, error
 }
 
 func (s *service) DeriveConnectorAddress(ctx context.Context) (string, error) {
-	addr, err := s.deriveNextAddress(connectorAccount)
+	if err := s.safeCheck(); err != nil {
+		return "", err
+	}
+
+	addr, err := s.wallet.NewAddress(lnwallet.TaprootPubkey, false, string(connectorAccount))
 	if err != nil {
 		return "", err
 	}
@@ -453,10 +532,61 @@ func (s *service) DeriveConnectorAddress(ctx context.Context) (string, error) {
 }
 
 func (s *service) GetPubkey(ctx context.Context) (*secp256k1.PublicKey, error) {
-	return s.aspTaprootAddr.PubKey(), nil
+	if !s.isLoaded() {
+		return nil, ErrNotLoaded
+	}
+	return s.aspKeyAddr.PubKey(), nil
+}
+
+func (s *service) GetForfeitAddress(ctx context.Context) (string, error) {
+	if err := s.safeCheck(); err != nil {
+		return "", err
+	}
+
+	addrs, err := s.wallet.ListAddresses(string(mainAccount), false)
+	if err != nil {
+		return "", err
+	}
+
+	if len(addrs) == 0 {
+		addr, err := s.deriveNextAddress()
+		if err != nil {
+			return "", err
+		}
+
+		return addr.EncodeAddress(), nil
+	}
+
+	for info, addrs := range addrs {
+		if info.KeyScope != p2wpkhKeyScope {
+			continue
+		}
+
+		if info.AccountName != string(mainAccount) {
+			continue
+		}
+
+		for _, addr := range addrs {
+			if addr.Internal {
+				continue
+			}
+
+			splittedPath := strings.Split(addr.DerivationPath, "/")
+			last := splittedPath[len(splittedPath)-1]
+			if last == "0" {
+				return addr.Address, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("forfeit address not found")
 }
 
 func (s *service) ListConnectorUtxos(ctx context.Context, connectorAddress string) ([]ports.TxInput, error) {
+	if err := s.safeCheck(); err != nil {
+		return nil, err
+	}
+
 	w := s.wallet.InternalWallet()
 
 	addr, err := btcutil.DecodeAddress(connectorAddress, w.ChainParams())
@@ -469,15 +599,7 @@ func (s *service) ListConnectorUtxos(ctx context.Context, connectorAddress strin
 		return nil, err
 	}
 
-	connectorAccountNumber, err := w.AccountNumber(p2wpkhKeyScope, string(connectorAccount))
-	if err != nil {
-		return nil, err
-	}
-
-	utxos, err := w.UnspentOutputs(wallet.OutputSelectionPolicy{
-		Account:               connectorAccountNumber,
-		RequiredConfirmations: 0,
-	})
+	utxos, err := s.listUtxos(p2trKeyScope)
 	if err != nil {
 		return nil, err
 	}
@@ -495,6 +617,10 @@ func (s *service) ListConnectorUtxos(ctx context.Context, connectorAddress strin
 }
 
 func (s *service) LockConnectorUtxos(ctx context.Context, utxos []ports.TxOutpoint) error {
+	if err := s.safeCheck(); err != nil {
+		return err
+	}
+
 	w := s.wallet.InternalWallet()
 
 	for _, utxo := range utxos {
@@ -515,17 +641,13 @@ func (s *service) LockConnectorUtxos(ctx context.Context, utxos []ports.TxOutpoi
 }
 
 func (s *service) SelectUtxos(ctx context.Context, _ string, amount uint64) ([]ports.TxInput, uint64, error) {
-	w := s.wallet.InternalWallet()
-
-	mainAccountNumber, err := w.AccountNumber(p2wpkhKeyScope, string(mainAccount))
-	if err != nil {
+	if err := s.safeCheck(); err != nil {
 		return nil, 0, err
 	}
 
-	utxos, err := w.UnspentOutputs(wallet.OutputSelectionPolicy{
-		Account:               mainAccountNumber,
-		RequiredConfirmations: 0, // allow uncomfirmed utxos
-	})
+	w := s.wallet.InternalWallet()
+
+	utxos, err := s.listUtxos(p2wpkhKeyScope)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -557,12 +679,30 @@ func (s *service) SelectUtxos(ctx context.Context, _ string, amount uint64) ([]p
 		selectedUtxos = append(selectedUtxos, coinTxInput{coin})
 	}
 
-	change := selectedAmount - amount
+	if selectedAmount < amount {
+		return nil, 0, fmt.Errorf("insufficient funds to select %d, only %d available", amount, selectedAmount)
+	}
 
-	return selectedUtxos, change, nil
+	for _, utxo := range selectedUtxos {
+		if _, err := w.LeaseOutput(
+			wtxmgr.LockID(utxo.(coinTxInput).Hash),
+			wire.OutPoint{
+				Hash:  utxo.(coinTxInput).Hash,
+				Index: utxo.(coinTxInput).Index,
+			},
+			outputLockDuration,
+		); err != nil {
+			return nil, 0, err
+		}
+	}
+	return selectedUtxos, selectedAmount - amount, nil
 }
 
 func (s *service) SignTransaction(ctx context.Context, partialTx string, extractRawTx bool) (string, error) {
+	if err := s.safeCheck(); err != nil {
+		return "", err
+	}
+
 	ptx, err := psbt.NewFromRawBytes(
 		strings.NewReader(partialTx),
 		true,
@@ -571,7 +711,7 @@ func (s *service) SignTransaction(ctx context.Context, partialTx string, extract
 		return "", err
 	}
 
-	signedInputs, err := s.signPsbt(ptx)
+	signedInputs, err := s.signPsbt(ptx, nil)
 	if err != nil {
 		return "", err
 	}
@@ -581,8 +721,54 @@ func (s *service) SignTransaction(ctx context.Context, partialTx string, extract
 			return "", fmt.Errorf("not all inputs are signed, unable to finalize the psbt")
 		}
 
-		if err := psbt.MaybeFinalizeAll(ptx); err != nil {
-			return "", err
+		for i, in := range ptx.Inputs {
+			isTaproot := txscript.IsPayToTaproot(in.WitnessUtxo.PkScript)
+			if isTaproot && len(in.TaprootLeafScript) > 0 {
+				closure, err := bitcointree.DecodeClosure(in.TaprootLeafScript[0].Script)
+				if err != nil {
+					return "", err
+				}
+
+				witness := make(wire.TxWitness, 4)
+
+				castClosure, isTaprootMultisig := closure.(*bitcointree.MultisigClosure)
+				if isTaprootMultisig {
+					ownerPubkey := schnorr.SerializePubKey(castClosure.Pubkey)
+					aspKey := schnorr.SerializePubKey(castClosure.AspPubkey)
+
+					for _, sig := range in.TaprootScriptSpendSig {
+						if bytes.Equal(sig.XOnlyPubKey, ownerPubkey) {
+							witness[0] = sig.Signature
+						}
+
+						if bytes.Equal(sig.XOnlyPubKey, aspKey) {
+							witness[1] = sig.Signature
+						}
+					}
+
+					witness[2] = in.TaprootLeafScript[0].Script
+					witness[3] = in.TaprootLeafScript[0].ControlBlock
+
+					for idw, w := range witness {
+						if w == nil {
+							return "", fmt.Errorf("missing witness element %d, cannot finalize taproot mutlisig input %d", idw, i)
+						}
+					}
+
+					var witnessBuf bytes.Buffer
+
+					if err := psbt.WriteTxWitness(&witnessBuf, witness); err != nil {
+						return "", err
+					}
+
+					ptx.Inputs[i].FinalScriptWitness = witnessBuf.Bytes()
+					continue
+				}
+			}
+
+			if err := psbt.Finalize(ptx, i); err != nil {
+				return "", fmt.Errorf("failed to finalize input %d: %w", i, err)
+			}
 		}
 
 		extracted, err := psbt.Extract(ptx)
@@ -602,6 +788,10 @@ func (s *service) SignTransaction(ctx context.Context, partialTx string, extract
 }
 
 func (s *service) SignTransactionTapscript(ctx context.Context, partialTx string, inputIndexes []int) (string, error) {
+	if err := s.safeCheck(); err != nil {
+		return "", err
+	}
+
 	partial, err := psbt.NewFromRawBytes(
 		strings.NewReader(partialTx),
 		true,
@@ -617,7 +807,7 @@ func (s *service) SignTransactionTapscript(ctx context.Context, partialTx string
 		}
 	}
 
-	signedInputs, err := s.signPsbt(partial)
+	signedInputs, err := s.signPsbt(partial, inputIndexes)
 	if err != nil {
 		return "", err
 	}
@@ -640,21 +830,25 @@ func (s *service) SignTransactionTapscript(ctx context.Context, partialTx string
 }
 
 func (s *service) Status(ctx context.Context) (ports.WalletStatus, error) {
-	if !s.walletLoaded() {
+	if !s.isLoaded() {
 		return status{
-			initialized: s.walletInitialized(),
+			initialized: s.isInitialized(),
 		}, nil
 	}
 
 	w := s.wallet.InternalWallet()
 	return status{
-		true,
-		!w.Manager.IsLocked(),
-		w.ChainSynced(),
+		initialized: true,
+		unlocked:    !w.Manager.IsLocked(),
+		synced:      s.isSynced,
 	}, nil
 }
 
 func (s *service) WaitForSync(ctx context.Context, txid string) error {
+	if err := s.safeCheck(); err != nil {
+		return err
+	}
+
 	w := s.wallet.InternalWallet()
 
 	txhash, err := chainhash.NewHashFromStr(txid)
@@ -683,8 +877,17 @@ func (s *service) WaitForSync(ctx context.Context, txid string) error {
 	}
 }
 
+func (s *service) MinRelayFeeRate(ctx context.Context) chainfee.SatPerKVByte {
+	return s.feeEstimator.RelayFeePerKW().FeePerKVByte()
+}
+
+func (s *service) MinRelayFee(ctx context.Context, vbytes uint64) (uint64, error) {
+	fee := s.feeEstimator.RelayFeePerKW().FeeForVByte(lntypes.VByte(vbytes))
+	return uint64(fee.ToUnit(btcutil.AmountSatoshi)), nil
+}
+
 func (s *service) EstimateFees(ctx context.Context, partialTx string) (uint64, error) {
-	feeRate, err := s.esploraClient.getFeeRate()
+	feeRate, err := s.feeEstimator.EstimateFeePerKW(1)
 	if err != nil {
 		return 0, err
 	}
@@ -697,11 +900,74 @@ func (s *service) EstimateFees(ctx context.Context, partialTx string) (uint64, e
 		return 0, err
 	}
 
-	fee := feeRate * btcutil.Amount(partial.UnsignedTx.SerializeSize())
+	weightEstimator := &input.TxWeightEstimator{}
+
+	for _, input := range partial.Inputs {
+		if input.WitnessUtxo == nil {
+			return 0, fmt.Errorf("missing witness utxo for input")
+		}
+
+		script, err := txscript.ParsePkScript(input.WitnessUtxo.PkScript)
+		if err != nil {
+			return 0, err
+		}
+
+		switch script.Class() {
+		case txscript.PubKeyHashTy:
+			weightEstimator.AddP2PKHInput()
+		case txscript.WitnessV0PubKeyHashTy:
+			weightEstimator.AddP2WKHInput()
+		case txscript.WitnessV1TaprootTy:
+			if len(input.TaprootLeafScript) > 0 {
+				leaf := input.TaprootLeafScript[0]
+				ctrlBlock, err := txscript.ParseControlBlock(leaf.ControlBlock)
+				if err != nil {
+					return 0, err
+				}
+
+				weightEstimator.AddTapscriptInput(64*2, &waddrmgr.Tapscript{
+					RevealedScript: leaf.Script,
+					ControlBlock:   ctrlBlock,
+				})
+			} else {
+				weightEstimator.AddTaprootKeySpendInput(txscript.SigHashDefault)
+			}
+		default:
+			return 0, fmt.Errorf("unsupported script type: %v", script.Class())
+		}
+	}
+
+	for _, output := range partial.UnsignedTx.TxOut {
+		script, err := txscript.ParsePkScript(output.PkScript)
+		if err != nil {
+			return 0, err
+		}
+
+		switch script.Class() {
+		case txscript.PubKeyHashTy:
+			weightEstimator.AddP2PKHOutput()
+		case txscript.WitnessV0PubKeyHashTy:
+			weightEstimator.AddP2WKHOutput()
+		case txscript.ScriptHashTy:
+			weightEstimator.AddP2SHOutput()
+		case txscript.WitnessV0ScriptHashTy:
+			weightEstimator.AddP2WSHOutput()
+		case txscript.WitnessV1TaprootTy:
+			weightEstimator.AddP2TROutput()
+		default:
+			return 0, fmt.Errorf("unsupported script type: %v", script.Class())
+		}
+	}
+
+	fee := feeRate.FeeForVByte(lntypes.VByte(weightEstimator.VSize()))
 	return uint64(fee.ToUnit(btcutil.AmountSatoshi)), nil
 }
 
 func (s *service) WatchScripts(ctx context.Context, scripts []string) error {
+	if !s.isSynced {
+		return ErrNotSynced
+	}
+
 	addresses := make([]btcutil.Address, 0, len(scripts))
 
 	for _, script := range scripts {
@@ -737,6 +1003,10 @@ func (s *service) WatchScripts(ctx context.Context, scripts []string) error {
 }
 
 func (s *service) UnwatchScripts(ctx context.Context, scripts []string) error {
+	if !s.isSynced {
+		return ErrNotSynced
+	}
+
 	s.watchedScriptsLock.Lock()
 	defer s.watchedScriptsLock.Unlock()
 	for _, script := range scripts {
@@ -748,18 +1018,37 @@ func (s *service) UnwatchScripts(ctx context.Context, scripts []string) error {
 
 func (s *service) GetNotificationChannel(
 	ctx context.Context,
-) <-chan map[string]ports.VtxoWithValue {
-	ch := make(chan map[string]ports.VtxoWithValue)
+) <-chan map[string][]ports.VtxoWithValue {
+	ch := make(chan map[string][]ports.VtxoWithValue)
 
 	go func() {
+		const maxCacheSize = 100
+		sentTxs := make(map[chainhash.Hash]struct{})
+
+		cache := func(hash chainhash.Hash) {
+			if len(sentTxs) > maxCacheSize {
+				sentTxs = make(map[chainhash.Hash]struct{})
+			}
+
+			sentTxs[hash] = struct{}{}
+		}
+
 		for n := range s.scanner.Notifications() {
 			switch m := n.(type) {
 			case chain.RelevantTx:
+				if _, sent := sentTxs[m.TxRecord.Hash]; sent {
+					continue
+				}
 				notification := s.castNotification(m.TxRecord)
+				cache(m.TxRecord.Hash)
 				ch <- notification
 			case chain.FilteredBlockConnected:
 				for _, tx := range m.RelevantTxs {
+					if _, sent := sentTxs[tx.Hash]; sent {
+						continue
+					}
 					notification := s.castNotification(tx)
+					cache(tx.Hash)
 					ch <- notification
 				}
 			}
@@ -771,12 +1060,63 @@ func (s *service) GetNotificationChannel(
 
 func (s *service) IsTransactionConfirmed(
 	ctx context.Context, txid string,
-) (isConfirmed bool, blocktime int64, err error) {
-	return s.esploraClient.getTxStatus(txid)
+) (isConfirmed bool, blocknumber int64, blocktime int64, err error) {
+	return s.extraAPI.getTxStatus(txid)
 }
 
-func (s *service) castNotification(tx *wtxmgr.TxRecord) map[string]ports.VtxoWithValue {
-	vtxos := make(map[string]ports.VtxoWithValue)
+func (s *service) GetDustAmount(
+	ctx context.Context,
+) (uint64, error) {
+	return s.MinRelayFee(ctx, biggestInputSize)
+}
+
+func (s *service) GetTransaction(ctx context.Context, txid string) (string, error) {
+	tx, err := s.extraAPI.getTx(txid)
+	if err != nil {
+		return "", err
+	}
+
+	if tx == nil {
+		return "", fmt.Errorf("transaction not found")
+	}
+
+	var buf bytes.Buffer
+	if err := tx.Serialize(&buf); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(buf.Bytes()), nil
+}
+
+func (s *service) SignMessage(ctx context.Context, message []byte) ([]byte, error) {
+	if s.aspKeyAddr == nil {
+		return nil, fmt.Errorf("wallet not initialized or locked")
+	}
+
+	privKey, err := s.aspKeyAddr.PrivKey()
+	if err != nil {
+		return nil, err
+	}
+
+	sig, err := schnorr.Sign(privKey, message)
+	if err != nil {
+		return nil, err
+	}
+
+	return sig.Serialize(), nil
+}
+
+func (s *service) VerifyMessageSignature(ctx context.Context, message, signature []byte) (bool, error) {
+	sig, err := schnorr.ParseSignature(signature)
+	if err != nil {
+		return false, err
+	}
+
+	return sig.Verify(message, s.aspKeyAddr.PubKey()), nil
+}
+
+func (s *service) castNotification(tx *wtxmgr.TxRecord) map[string][]ports.VtxoWithValue {
+	vtxos := make(map[string][]ports.VtxoWithValue)
 
 	s.watchedScriptsLock.RLock()
 	defer s.watchedScriptsLock.RUnlock()
@@ -787,19 +1127,27 @@ func (s *service) castNotification(tx *wtxmgr.TxRecord) map[string]ports.VtxoWit
 			continue
 		}
 
-		vtxos[script] = ports.VtxoWithValue{
+		if len(vtxos[script]) <= 0 {
+			vtxos[script] = make([]ports.VtxoWithValue, 0)
+		}
+
+		vtxos[script] = append(vtxos[script], ports.VtxoWithValue{
 			VtxoKey: domain.VtxoKey{
 				Txid: tx.Hash.String(),
 				VOut: uint32(outputIndex),
 			},
 			Value: uint64(txout.Value),
-		}
+		})
 	}
 
 	return vtxos
 }
 
 func (s *service) create(mnemonic, password string, addrGap uint32) error {
+	if s.isInitialized() {
+		return ErrAlreadyInitialized
+	}
+
 	if len(mnemonic) <= 0 {
 		return fmt.Errorf("missing hd seed")
 	}
@@ -810,11 +1158,11 @@ func (s *service) create(mnemonic, password string, addrGap uint32) error {
 	pwd := []byte(password)
 	seed := bip39.NewSeed(mnemonic, password)
 	opt := btcwallet.LoaderWithLocalWalletDB(s.cfg.Datadir, false, time.Minute)
+
 	config := btcwallet.Config{
 		LogDir:                s.cfg.Datadir,
 		PrivatePass:           pwd,
 		PublicPass:            pwd,
-		Birthday:              time.Now(),
 		RecoveryWindow:        addrGap,
 		HdSeed:                seed,
 		NetParams:             s.cfg.chainParams(),
@@ -829,80 +1177,112 @@ func (s *service) create(mnemonic, password string, addrGap uint32) error {
 		return fmt.Errorf("failed to setup wallet loader: %s", err)
 	}
 
-	if err := wallet.Start(); err != nil {
-		return fmt.Errorf("failed to start wallet: %s", err)
+	if err := wallet.InternalWallet().Unlock([]byte(password), nil); err != nil {
+		return fmt.Errorf("failed to unlock wallet: %s", err)
 	}
-	if err := s.initWallet(wallet); err != nil {
+
+	defer wallet.InternalWallet().Lock()
+
+	if err := s.initAspKeyAccount(wallet); err != nil {
 		return err
 	}
 
-	for {
-		if !wallet.InternalWallet().ChainSynced() {
-			log.Debugf("waiting sync: current height %d", wallet.InternalWallet().Manager.SyncedTo().Height)
-			time.Sleep(3 * time.Second)
-			continue
-		}
-		break
-	}
-	log.Debugf("chain synced")
-
-	if addrGap > 0 {
-		// TODO: fix rescan
-		if err := wallet.InternalWallet().Rescan(nil, nil); err != nil {
-			return err
-		}
+	if err := wallet.Start(); err != nil {
+		return fmt.Errorf("failed to start wallet: %s", err)
 	}
 
-	wallet.InternalWallet().Lock()
+	if err := s.initAspKeyAddress(wallet); err != nil {
+		return err
+	}
+
 	s.wallet = wallet
+
+	go s.listenToSynced()
+
 	return nil
 }
 
-func (s *service) initWallet(wallet *btcwallet.BtcWallet) error {
+func (s *service) listenToSynced() {
+	counter := 0
+	for {
+		if s.wallet.InternalWallet().ChainSynced() {
+			log.Debug("wallet: syncing completed")
+			s.isSynced = true
+			s.syncedCh <- struct{}{}
+			return
+		}
+
+		isRestore, progress, err := s.wallet.GetRecoveryInfo()
+		if err != nil {
+			log.Warnf("wallet: failed to check if wallet is synced: %s", err)
+		} else {
+			if !isRestore {
+				if counter%6 == 0 {
+					log.Debug("wallet: syncing in progress...")
+				}
+				counter++
+			} else {
+				switch progress {
+				case 0:
+					// nolint: all
+					if counter%6 == 0 {
+						_, bestBlock, _ := s.wallet.IsSynced()
+						if bestBlock > 0 {
+							log.Debugf("wallet: waiting for chain source to be synced, last block fetched: %s", time.Unix(bestBlock, 0))
+						}
+					}
+					counter++
+				case 1:
+					log.Debug("wallet: syncing completed")
+					s.isSynced = true
+					s.syncedCh <- struct{}{}
+					return
+				default:
+					log.Debugf("wallet: syncing progress %.0f%%", progress*100)
+				}
+			}
+		}
+
+		time.Sleep(10 * time.Second)
+	}
+}
+
+// initAspKeyAccount creates the asp key account if it doesn't exist
+func (s *service) initAspKeyAccount(wallet *btcwallet.BtcWallet) error {
 	w := wallet.InternalWallet()
 
-	walletAccounts, err := w.Accounts(p2wpkhKeyScope)
+	p2trAccounts, err := w.Accounts(p2trKeyScope)
 	if err != nil {
 		return fmt.Errorf("failed to list wallet accounts: %s", err)
 	}
-	var mainAccountNumber, connectorAccountNumber, aspKeyAccountNumber uint32
-	if walletAccounts != nil {
-		for _, account := range walletAccounts.Accounts {
-			switch account.AccountName {
-			case string(mainAccount):
-				mainAccountNumber = account.AccountNumber
-			case string(connectorAccount):
-				connectorAccountNumber = account.AccountNumber
-			case string(aspKeyAccount):
+
+	var aspKeyAccountNumber uint32
+
+	if p2trAccounts != nil {
+		for _, account := range p2trAccounts.Accounts {
+			if account.AccountName == string(aspKeyAccount) {
 				aspKeyAccountNumber = account.AccountNumber
-			default:
-				continue
+				break
 			}
 		}
 	}
 
-	if mainAccountNumber == 0 && connectorAccountNumber == 0 && aspKeyAccountNumber == 0 {
-		log.Debug("creating default accounts for ark wallet...")
-		mainAccountNumber, err = w.NextAccount(p2wpkhKeyScope, string(mainAccount))
-		if err != nil {
-			return fmt.Errorf("failed to create %s: %s", mainAccount, err)
-		}
-
-		connectorAccountNumber, err = w.NextAccount(p2wpkhKeyScope, string(connectorAccount))
-		if err != nil {
-			return fmt.Errorf("failed to create %s: %s", connectorAccount, err)
-		}
-
+	if aspKeyAccountNumber == 0 {
+		log.Debug("creating asp key account")
 		aspKeyAccountNumber, err = w.NextAccount(p2trKeyScope, string(aspKeyAccount))
 		if err != nil {
 			return fmt.Errorf("failed to create %s: %s", aspKeyAccount, err)
 		}
 	}
 
-	log.Debugf("main account number: %d", mainAccountNumber)
-	log.Debugf("connector account number: %d", connectorAccountNumber)
-	log.Debugf("asp key account number: %d", aspKeyAccountNumber)
+	log.Debugf("key account number: %d", aspKeyAccountNumber)
 
+	return nil
+}
+
+// initAspKeyAddress generates the asp key address if it doesn't exist
+// it also cache the address in s.aspKeyAddr field
+func (s *service) initAspKeyAddress(wallet *btcwallet.BtcWallet) error {
 	addrs, err := wallet.ListAddresses(string(aspKeyAccount), false)
 	if err != nil {
 		return err
@@ -924,7 +1304,7 @@ func (s *service) initWallet(wallet *btcwallet.BtcWallet) error {
 			return fmt.Errorf("failed to cast address to managed pubkey address")
 		}
 
-		s.aspTaprootAddr = managedAddr
+		s.aspKeyAddr = managedAddr
 	} else {
 		for info, addrs := range addrs {
 			if info.AccountName != string(aspKeyAccount) {
@@ -954,7 +1334,7 @@ func (s *service) initWallet(wallet *btcwallet.BtcWallet) error {
 						return fmt.Errorf("failed to cast address to managed pubkey address")
 					}
 
-					s.aspTaprootAddr = managedPubkeyAddr
+					s.aspKeyAddr = managedPubkeyAddr
 					break
 				}
 			}
@@ -964,33 +1344,32 @@ func (s *service) initWallet(wallet *btcwallet.BtcWallet) error {
 	return nil
 }
 
-func (s *service) getBalance(account accountName) (uint64, error) {
-	if !s.walletLoaded() {
-		return 0, ErrWalletNotLoaded
+func (s *service) deriveNextAddress() (btcutil.Address, error) {
+	if !s.isLoaded() {
+		return nil, ErrNotLoaded
 	}
 
-	balance, err := s.wallet.ConfirmedBalance(0, string(account))
-	if err != nil {
-		return 0, err
-	}
-
-	return uint64(balance), nil
+	return s.wallet.NewAddress(lnwallet.WitnessPubKey, false, string(mainAccount))
 }
 
-// this only supports deriving segwit v0 accounts
-func (s *service) deriveNextAddress(account accountName) (btcutil.Address, error) {
-	if !s.walletLoaded() {
-		return nil, ErrWalletNotLoaded
+func (s *service) safeCheck() error {
+	if !s.isLoaded() {
+		if s.isInitialized() {
+			return ErrNotUnlocked
+		}
+		return ErrNotReady
 	}
-
-	return s.wallet.NewAddress(lnwallet.WitnessPubKey, false, string(account))
+	if !s.isSynced {
+		return ErrNotSynced
+	}
+	return nil
 }
 
-func (s *service) walletLoaded() bool {
+func (s *service) isLoaded() bool {
 	return s.wallet != nil
 }
 
-func (s *service) walletInitialized() bool {
+func (s *service) isInitialized() bool {
 	opts := []btcwallet.LoaderOption{btcwallet.LoaderWithLocalWalletDB(s.cfg.Datadir, false, time.Minute)}
 	loader, err := btcwallet.NewWalletLoader(
 		s.cfg.chainParams(), 0, opts...,
@@ -1002,6 +1381,43 @@ func (s *service) walletInitialized() bool {
 	exist, _ := loader.WalletExists()
 
 	return exist
+}
+
+func (s *service) listUtxos(scope waddrmgr.KeyScope) ([]*wallet.TransactionOutput, error) {
+	w := s.wallet.InternalWallet()
+
+	accountNumber, err := w.AccountNumber(scope, string(mainAccount))
+	if err != nil {
+		return nil, err
+	}
+
+	utxos, err := w.UnspentOutputs(wallet.OutputSelectionPolicy{
+		Account:               accountNumber,
+		RequiredConfirmations: 0,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	filtered := make([]*wallet.TransactionOutput, 0, len(utxos))
+	for _, utxo := range utxos {
+		scriptClass, _, _, err := txscript.ExtractPkScriptAddrs(utxo.Output.PkScript, w.ChainParams())
+		if err != nil {
+			return nil, err
+		}
+
+		switch scope {
+		case p2wpkhKeyScope:
+			if scriptClass == txscript.WitnessV0PubKeyHashTy {
+				filtered = append(filtered, utxo)
+			}
+		case p2trKeyScope:
+			if scriptClass == txscript.WitnessV1TaprootTy {
+				filtered = append(filtered, utxo)
+			}
+		}
+	}
+	return filtered, nil
 }
 
 func withChainSource(chainSource chain.Interface) WalletOption {
@@ -1024,6 +1440,31 @@ func withScanner(chainSource chain.Interface) WalletOption {
 			return fmt.Errorf("failed to start scanner: %s", err)
 		}
 		s.scanner = chainSource
+		return nil
+	}
+}
+
+func withExtraAPI(api extraChainAPI) WalletOption {
+	return func(s *service) error {
+		if s.extraAPI != nil {
+			return fmt.Errorf("extra chain API already set")
+		}
+		s.extraAPI = api
+		return nil
+	}
+}
+
+func withFeeEstimator(estimator chainfee.Estimator) WalletOption {
+	return func(s *service) error {
+		if s.feeEstimator != nil {
+			return fmt.Errorf("fee estimator already set")
+		}
+
+		if err := estimator.Start(); err != nil {
+			return fmt.Errorf("failed to start fee estimator: %s", err)
+		}
+
+		s.feeEstimator = estimator
 		return nil
 	}
 }
@@ -1063,5 +1504,7 @@ func fromOutputScript(script []byte, netParams *chaincfg.Params) (btcutil.Addres
 }
 
 func logger(subsystem string) btclog.Logger {
-	return btclog.NewBackend(log.StandardLogger().Writer()).Logger(subsystem)
+	logger := btclog.NewBackend(log.StandardLogger().Writer()).Logger(subsystem)
+	logger.SetLevel(btclog.LevelWarn)
+	return logger
 }

@@ -94,7 +94,13 @@ func NewService(
 
 func (s *service) Start() error {
 	withoutAppSvc := false
-	return s.start(withoutAppSvc)
+	if err := s.start(withoutAppSvc); err != nil {
+		return err
+	}
+	if s.appConfig.UnlockerService() != nil {
+		return s.autoUnlock()
+	}
+	return nil
 }
 
 func (s *service) Stop() {
@@ -170,14 +176,14 @@ func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 		arkv1.RegisterArkServiceServer(grpcServer, appHandler)
 	}
 
-	adminHandler := handlers.NewAdminHandler(s.appConfig.AdminService(), appSvc)
+	adminHandler := handlers.NewAdminHandler(s.appConfig.AdminService(), appSvc, s.appConfig.NoteUriPrefix)
 	arkv1.RegisterAdminServiceServer(grpcServer, adminHandler)
 
 	walletHandler := handlers.NewWalletHandler(s.appConfig.WalletService())
 	arkv1.RegisterWalletServiceServer(grpcServer, walletHandler)
 
 	walletInitHandler := handlers.NewWalletInitializerHandler(
-		s.appConfig.WalletService(), s.onInit, s.onUnlock,
+		s.appConfig.WalletService(), s.onInit, s.onUnlock, s.onReady,
 	)
 	arkv1.RegisterWalletInitializerServiceServer(grpcServer, walletInitHandler)
 
@@ -265,14 +271,6 @@ func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 }
 
 func (s *service) onUnlock(password string) {
-	withoutAppSvc := false
-	s.stop(withoutAppSvc)
-
-	withAppSvc := true
-	if err := s.start(withAppSvc); err != nil {
-		panic(err)
-	}
-
 	if s.config.NoMacaroons {
 		return
 	}
@@ -312,6 +310,43 @@ func (s *service) onInit(password string) {
 		log.WithError(err).Warn("failed to create macaroons")
 	}
 	log.Debugf("generated macaroons at path %s", datadir)
+}
+
+func (s *service) onReady() {
+	withoutAppSvc := false
+	s.stop(withoutAppSvc)
+
+	withAppSvc := true
+	if err := s.start(withAppSvc); err != nil {
+		panic(err)
+	}
+}
+
+func (s *service) autoUnlock() error {
+	ctx := context.Background()
+	wallet := s.appConfig.WalletService()
+
+	status, err := wallet.Status(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get wallet status: %s", err)
+	}
+	if !status.IsInitialized() {
+		log.Debug("wallet not initiialized, skipping auto unlock")
+		return nil
+	}
+
+	password, err := s.appConfig.UnlockerService().GetPassword(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get password: %s", err)
+	}
+	if err := wallet.Unlock(ctx, password); err != nil {
+		return fmt.Errorf("failed to auto unlock: %s", err)
+	}
+
+	go s.onUnlock(password)
+
+	log.Debug("service auto unlocked")
+	return nil
 }
 
 func router(

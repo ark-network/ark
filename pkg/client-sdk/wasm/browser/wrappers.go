@@ -6,11 +6,15 @@ package browser
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"syscall/js"
+	"time"
 
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
+	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	singlekeywallet "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey"
 )
@@ -32,7 +36,9 @@ func LogWrapper() js.Func {
 
 func InitWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) != 6 {
+		// TODO: add another withTransactionFeed args to configure client listen to
+		// new txs from the server. Requires server to use websockets.
+		if len(args) != 7 {
 			return nil, errors.New("invalid number of args")
 		}
 		chain := args[5].String()
@@ -40,6 +46,7 @@ func InitWrapper() js.Func {
 			return nil, errors.New("invalid chain, select either 'bitcoin' or 'liquid'")
 		}
 
+		configStore := store.ConfigStore()
 		var walletSvc wallet.WalletService
 		switch args[0].String() {
 		case arksdk.SingleKeyWallet:
@@ -63,11 +70,12 @@ func InitWrapper() js.Func {
 		}
 
 		err := arkSdkClient.InitWithWallet(context.Background(), arksdk.InitWithWalletArgs{
-			ClientType: args[1].String(),
-			Wallet:     walletSvc,
-			AspUrl:     args[2].String(),
-			Seed:       args[3].String(),
-			Password:   args[4].String(),
+			ClientType:  args[1].String(),
+			Wallet:      walletSvc,
+			AspUrl:      args[2].String(),
+			Seed:        args[3].String(),
+			Password:    args[4].String(),
+			ExplorerURL: args[6].String(),
 		})
 
 		// Add this log message
@@ -119,39 +127,28 @@ func BalanceWrapper() js.Func {
 		}
 
 		var (
-			onchainBalance  int
-			offchainBalance int
+			onchainSpendableBalance int
+			onchainLockedBalance    int
+			offchainBalance         int
 		)
 
-		if resp == nil {
-			onchainBalance = 0
-			offchainBalance = 0
-		} else {
-			onchainBalance = int(resp.OnchainBalance.SpendableAmount)
+		if resp != nil {
+			onchainSpendableBalance = int(resp.OnchainBalance.SpendableAmount)
+			for _, b := range resp.OnchainBalance.LockedAmount {
+				onchainLockedBalance += int(b.Amount)
+			}
 			offchainBalance = int(resp.OffchainBalance.Total)
 		}
 
 		result := map[string]interface{}{
-			"onchain_balance":  onchainBalance,
-			"offchain_balance": offchainBalance,
+			"onchainBalance": map[string]interface{}{
+				"spendable": onchainSpendableBalance,
+				"locked":    onchainLockedBalance,
+			},
+			"offchainBalance": offchainBalance,
 		}
 
 		return js.ValueOf(result), nil
-	})
-}
-
-func OnboardWrapper() js.Func {
-	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) != 1 {
-			return nil, errors.New("invalid number of args")
-		}
-		amount := uint64(args[0].Int())
-
-		txID, err := arkSdkClient.Onboard(context.Background(), amount)
-		if err != nil {
-			return nil, err
-		}
-		return js.ValueOf(txID), nil
 	})
 }
 
@@ -160,15 +157,49 @@ func ReceiveWrapper() js.Func {
 		if arkSdkClient == nil {
 			return nil, errors.New("ARK SDK client is not initialized")
 		}
-		offchainAddr, onchainAddr, err := arkSdkClient.Receive(context.Background())
+		offchainAddr, boardingAddr, err := arkSdkClient.Receive(context.Background())
 		if err != nil {
 			return nil, err
 		}
 		result := map[string]interface{}{
 			"offchainAddr": offchainAddr,
-			"onchainAddr":  onchainAddr,
+			"boardingAddr": boardingAddr,
 		}
 		return js.ValueOf(result), nil
+	})
+}
+
+func DumpWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if arkSdkClient == nil {
+			return nil, errors.New("ARK SDK client is not initialized")
+		}
+		seed, err := arkSdkClient.Dump(context.Background())
+		if err != nil {
+			return nil, err
+		}
+		return js.ValueOf(seed), nil
+	})
+}
+
+func ListVtxosWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if arkSdkClient == nil {
+			return nil, errors.New("ARK SDK client is not initialized")
+		}
+		spendable, spent, err := arkSdkClient.ListVtxos(context.Background())
+		if err != nil {
+			return nil, err
+		}
+		rawList := map[string]interface{}{
+			"spendable": spendable,
+			"spent":     spent,
+		}
+		result, err := json.Marshal(rawList)
+		if err != nil {
+			return nil, err
+		}
+		return js.ValueOf(string(result)), nil
 	})
 }
 
@@ -177,17 +208,17 @@ func SendOnChainWrapper() js.Func {
 		if len(args) != 1 {
 			return nil, errors.New("invalid number of args")
 		}
-		receivers := make([]arksdk.Receiver, args[0].Length())
-		for i := 0; i < args[0].Length(); i++ {
-			receiver := args[0].Index(i)
-			receivers[i] = arksdk.NewLiquidReceiver(
-				receiver.Get("To").String(), uint64(receiver.Get("Amount").Int()),
-			)
+
+		receivers, err := parseReceivers(args[0])
+		if err != nil {
+			return nil, err
 		}
 
-		txID, err := arkSdkClient.SendOnChain(
-			context.Background(), receivers,
-		)
+		if receivers == nil || len(receivers) == 0 {
+			return nil, errors.New("no receivers specified")
+		}
+
+		txID, err := arkSdkClient.SendOnChain(context.Background(), receivers)
 		if err != nil {
 			return nil, err
 		}
@@ -200,13 +231,11 @@ func SendOffChainWrapper() js.Func {
 		if len(args) != 2 {
 			return nil, errors.New("invalid number of args")
 		}
+
 		withExpiryCoinselect := args[0].Bool()
-		receivers := make([]arksdk.Receiver, args[1].Length())
-		for i := 0; i < args[1].Length(); i++ {
-			receiver := args[1].Index(i)
-			receivers[i] = arksdk.NewLiquidReceiver(
-				receiver.Get("To").String(), uint64(receiver.Get("Amount").Int()),
-			)
+		receivers, err := parseReceivers(args[0])
+		if err != nil {
+			return nil, err
 		}
 
 		txID, err := arkSdkClient.SendOffChain(
@@ -216,6 +245,47 @@ func SendOffChainWrapper() js.Func {
 			return nil, err
 		}
 		return js.ValueOf(txID), nil
+	})
+}
+
+func SendAsyncWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if len(args) != 2 {
+			return nil, errors.New("invalid number of args")
+		}
+
+		withExpiryCoinselect := args[0].Bool()
+		receivers, err := parseReceivers(args[1])
+		if err != nil {
+			return nil, err
+		}
+
+		if receivers == nil || len(receivers) == 0 {
+			return nil, errors.New("no receivers specified")
+		}
+
+		txID, err := arkSdkClient.SendAsync(
+			context.Background(), withExpiryCoinselect, receivers,
+		)
+		if err != nil {
+			return nil, err
+		}
+		return js.ValueOf(txID), nil
+	})
+}
+
+func SettleWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if len(args) != 0 {
+			return nil, errors.New("invalid number of args")
+		}
+
+		resp, err := arkSdkClient.Settle(context.Background())
+		if err != nil {
+			return nil, err
+		}
+
+		return js.ValueOf(resp), nil
 	})
 }
 
@@ -241,6 +311,32 @@ func CollaborativeRedeemWrapper() js.Func {
 			return nil, err
 		}
 		return js.ValueOf(txID), nil
+	})
+}
+
+func GetTransactionHistoryWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		history, err := arkSdkClient.GetTransactionHistory(context.Background())
+		if err != nil {
+			return nil, err
+		}
+		rawHistory := make([]map[string]interface{}, 0)
+		for _, record := range history {
+			rawHistory = append(rawHistory, map[string]interface{}{
+				"boardingTxid": record.BoardingTxid,
+				"roundTxid":    record.RoundTxid,
+				"redeemTxid":   record.RedeemTxid,
+				"amount":       strconv.Itoa(int(record.Amount)),
+				"type":         record.Type,
+				"settled":      record.Settled,
+				"createdAt":    record.CreatedAt.Format(time.RFC3339),
+			})
+		}
+		result, err := json.MarshalIndent(rawHistory, "", "  ")
+		if err != nil {
+			return nil, err
+		}
+		return js.ValueOf(string(result)), nil
 	})
 }
 
@@ -321,14 +417,52 @@ func GetUnilateralExitDelayWrapper() js.Func {
 	})
 }
 
-func GetMinRelayFeeWrapper() js.Func {
+func GetDustWrapper() js.Func {
 	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
 		data, _ := arkSdkClient.GetConfigData(context.Background())
-		var minRelayFee uint64
+		var dust uint64
 		if data != nil {
-			minRelayFee = data.MinRelayFee
+			dust = data.Dust
 		}
-		return js.ValueOf(minRelayFee)
+		return js.ValueOf(dust)
+	})
+}
+
+func RedeemNotesWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if len(args) != 1 {
+			return nil, errors.New("invalid number of args")
+		}
+
+		// Parse notes array from JS
+		jsNotes := args[0]
+		if jsNotes.Type() != js.TypeObject || jsNotes.Get("length").Type() != js.TypeNumber {
+			return nil, errors.New("invalid notes argument: expected array")
+		}
+
+		notes := make([]string, 0, jsNotes.Length())
+		for i := 0; i < jsNotes.Length(); i++ {
+			notes = append(notes, jsNotes.Index(i).String())
+		}
+
+		txID, err := arkSdkClient.RedeemNotes(context.Background(), notes)
+		if err != nil {
+			return nil, err
+		}
+
+		return js.ValueOf(txID), nil
+	})
+}
+
+func SetNostrNotificationRecipientWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if len(args) != 1 {
+			return nil, errors.New("invalid number of args")
+		}
+
+		nostrRecipient := args[0].String()
+		err := arkSdkClient.SetNostrNotificationRecipient(context.Background(), nostrRecipient)
+		return nil, err
 	})
 }
 
@@ -358,4 +492,64 @@ func JSPromise(fn promise) js.Func {
 		promiseConstructor := js.Global().Get("Promise")
 		return promiseConstructor.New(handler)
 	})
+}
+
+func parseReceivers(jsReceivers js.Value) ([]arksdk.Receiver, error) {
+	if jsReceivers.IsNull() || jsReceivers.IsUndefined() {
+		return nil, nil // Return nil slice if input is null or undefined
+	}
+
+	if jsReceivers.Type() != js.TypeObject || jsReceivers.Get("length").Type() != js.TypeNumber {
+		return nil, errors.New("invalid receivers argument: expected array")
+	}
+
+	length := jsReceivers.Length()
+	if length == 0 {
+		return []arksdk.Receiver{}, nil // Return empty slice if input array is empty
+	}
+
+	receivers := make([]arksdk.Receiver, length)
+	for i := 0; i < length; i++ {
+		receiver := jsReceivers.Index(i)
+		if receiver.Type() != js.TypeObject {
+			return nil, fmt.Errorf("invalid receiver at index %d: expected object", i)
+		}
+
+		to := receiver.Get("To")
+		amount := receiver.Get("Amount")
+		if to.Type() != js.TypeString || amount.Type() != js.TypeNumber {
+			return nil, fmt.Errorf("invalid receiver at index %d: expected 'To' (string) and 'Amount' (number)", i)
+		}
+
+		receivers[i] = arksdk.NewBitcoinReceiver(to.String(), uint64(amount.Int()))
+	}
+
+	return receivers, nil
+}
+
+func parseOutpoints(jsOutpoints js.Value) ([]client.Outpoint, error) {
+	if jsOutpoints.Length() == 0 {
+		return nil, nil
+	}
+
+	outpoints := make([]client.Outpoint, jsOutpoints.Length())
+	for i := 0; i < jsOutpoints.Length(); i++ {
+		jsOutpoint := jsOutpoints.Index(i)
+		if jsOutpoint.Type() != js.TypeObject {
+			return nil, fmt.Errorf("invalid outpoint at index %d: expected object", i)
+		}
+
+		txid := jsOutpoint.Get("Txid")
+		vout := jsOutpoint.Get("Vout")
+		if txid.Type() != js.TypeString || vout.Type() != js.TypeNumber {
+			return nil, fmt.Errorf("invalid outpoint at index %d: expected 'Txid' (string) and 'Vout' (number)", i)
+		}
+
+		outpoints[i] = client.Outpoint{
+			Txid: txid.String(),
+			VOut: uint32(vout.Int()),
+		}
+	}
+
+	return outpoints, nil
 }

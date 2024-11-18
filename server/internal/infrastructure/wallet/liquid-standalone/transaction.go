@@ -1,6 +1,7 @@
 package oceanwallet
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/hex"
@@ -11,8 +12,11 @@ import (
 	pb "github.com/ark-network/ark/api-spec/protobuf/gen/ocean/v1"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/ports"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/vulpemventures/go-elements/elementsutil"
 	"github.com/vulpemventures/go-elements/psetv2"
 )
@@ -22,7 +26,7 @@ const (
 )
 
 func (s *service) SignTransaction(
-	ctx context.Context, pset string, extractRawTx bool,
+	ctx context.Context, pset string, finalizeAndExtractRawTx bool,
 ) (string, error) {
 	res, err := s.txClient.SignPset(ctx, &pb.SignPsetRequest{
 		Pset: pset,
@@ -32,7 +36,7 @@ func (s *service) SignTransaction(
 	}
 	signedPset := res.GetPset()
 
-	if !extractRawTx {
+	if !finalizeAndExtractRawTx {
 		return signedPset, nil
 	}
 
@@ -41,8 +45,61 @@ func (s *service) SignTransaction(
 		return "", err
 	}
 
-	if err := psetv2.MaybeFinalizeAll(ptx); err != nil {
-		return "", fmt.Errorf("failed to finalize signed pset: %s", err)
+	for i, in := range ptx.Inputs {
+		if in.WitnessUtxo == nil {
+			return "", fmt.Errorf("missing witness utxo, cannot finalize tx")
+		}
+
+		if len(in.TapLeafScript) > 0 {
+			tapLeaf := in.TapLeafScript[0]
+
+			closure, err := tree.DecodeClosure(tapLeaf.Script)
+			if err != nil {
+				return "", err
+			}
+
+			switch c := closure.(type) {
+			case *tree.MultisigClosure:
+				asp := schnorr.SerializePubKey(c.AspPubkey)
+				owner := schnorr.SerializePubKey(c.Pubkey)
+
+				witness := make([][]byte, 4)
+				for _, sig := range in.TapScriptSig {
+					if bytes.Equal(sig.PubKey, owner) {
+						witness[0] = sig.Signature
+						continue
+					}
+
+					if bytes.Equal(sig.PubKey, asp) {
+						witness[1] = sig.Signature
+					}
+				}
+
+				witness[2] = tapLeaf.Script
+
+				controlBlock, err := tapLeaf.ControlBlock.ToBytes()
+				if err != nil {
+					return "", err
+				}
+
+				witness[3] = controlBlock
+
+				var witnessBuf bytes.Buffer
+
+				if err := psbt.WriteTxWitness(&witnessBuf, witness); err != nil {
+					return "", err
+				}
+
+				ptx.Inputs[i].FinalScriptWitness = witnessBuf.Bytes()
+				continue
+			default:
+				return "", fmt.Errorf("unexpected closure type %T", c)
+			}
+		}
+
+		if err := psetv2.Finalize(ptx, i); err != nil {
+			return "", fmt.Errorf("failed to finalize signed pset: %s", err)
+		}
 	}
 
 	extractedTx, err := psetv2.Extract(ptx)
@@ -101,21 +158,21 @@ func (s *service) BroadcastTransaction(
 
 func (s *service) IsTransactionConfirmed(
 	ctx context.Context, txid string,
-) (bool, int64, error) {
-	_, isConfirmed, blocktime, err := s.getTransaction(ctx, txid)
+) (bool, int64, int64, error) {
+	_, isConfirmed, blockheight, blocktime, err := s.getTransaction(ctx, txid)
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "missing transaction") {
-			return isConfirmed, 0, nil
+			return isConfirmed, 0, 0, nil
 		}
-		return false, 0, err
+		return false, 0, 0, err
 	}
 
-	return isConfirmed, blocktime, nil
+	return isConfirmed, blockheight, blocktime, nil
 }
 func (s *service) WaitForSync(ctx context.Context, txid string) error {
 	for {
 		time.Sleep(5 * time.Second)
-		_, _, _, err := s.getTransaction(ctx, txid)
+		_, _, _, _, err := s.getTransaction(ctx, txid)
 		if err != nil {
 			if strings.Contains(strings.ToLower(err.Error()), "missing transaction") {
 				continue
@@ -218,6 +275,18 @@ func (s *service) LockConnectorUtxos(ctx context.Context, utxos []ports.TxOutpoi
 	return err
 }
 
+var minRate = chainfee.SatPerKVByte(0.2 * 1000)
+
+func (s *service) MinRelayFeeRate(ctx context.Context) chainfee.SatPerKVByte {
+	return minRate
+}
+
+func (s *service) MinRelayFee(ctx context.Context, vbytes uint64) (uint64, error) {
+	feeRate := 0.2
+	fee := uint64(float64(vbytes) * feeRate)
+	return fee, nil
+}
+
 func (s *service) EstimateFees(
 	ctx context.Context, pset string,
 ) (uint64, error) {
@@ -281,20 +350,29 @@ func (s *service) EstimateFees(
 	return fee.GetFeeAmount() + 5, nil
 }
 
+func (s *service) GetTransaction(ctx context.Context, txid string) (string, error) {
+	txHex, _, _, _, err := s.getTransaction(ctx, txid)
+	if err != nil {
+		return "", err
+	}
+
+	return txHex, nil
+}
+
 func (s *service) getTransaction(
 	ctx context.Context, txid string,
-) (string, bool, int64, error) {
+) (string, bool, int64, int64, error) {
 	res, err := s.txClient.GetTransaction(ctx, &pb.GetTransactionRequest{
 		Txid: txid,
 	})
 	if err != nil {
-		return "", false, 0, err
+		return "", false, 0, 0, err
 	}
 
 	if res.GetBlockDetails().GetTimestamp() > 0 {
-		return res.GetTxHex(), true, res.BlockDetails.GetTimestamp(), nil
+		return res.GetTxHex(), true, int64(res.GetBlockDetails().GetHeight()), res.BlockDetails.GetTimestamp(), nil
 	}
 
 	// if not confirmed, we return now + 1 min to estimate the next blocktime
-	return res.GetTxHex(), false, time.Now().Add(time.Minute).Unix(), nil
+	return res.GetTxHex(), false, 0, time.Now().Add(time.Minute).Unix(), nil
 }

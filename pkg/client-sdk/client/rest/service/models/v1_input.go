@@ -8,6 +8,7 @@ package models
 import (
 	"context"
 
+	"github.com/go-openapi/errors"
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
 )
@@ -17,20 +18,78 @@ import (
 // swagger:model v1Input
 type V1Input struct {
 
-	// txid
-	Txid string `json:"txid,omitempty"`
+	// descriptor
+	Descriptor string `json:"descriptor,omitempty"`
 
-	// vout
-	Vout int64 `json:"vout,omitempty"`
+	// outpoint
+	Outpoint *V1Outpoint `json:"outpoint,omitempty"`
 }
 
 // Validate validates this v1 input
 func (m *V1Input) Validate(formats strfmt.Registry) error {
+	var res []error
+
+	if err := m.validateOutpoint(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if len(res) > 0 {
+		return errors.CompositeValidationError(res...)
+	}
 	return nil
 }
 
-// ContextValidate validates this v1 input based on context it is used
+func (m *V1Input) validateOutpoint(formats strfmt.Registry) error {
+	if swag.IsZero(m.Outpoint) { // not required
+		return nil
+	}
+
+	if m.Outpoint != nil {
+		if err := m.Outpoint.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("outpoint")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("outpoint")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ContextValidate validate this v1 input based on the context it is used
 func (m *V1Input) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
+	var res []error
+
+	if err := m.contextValidateOutpoint(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
+	if len(res) > 0 {
+		return errors.CompositeValidationError(res...)
+	}
+	return nil
+}
+
+func (m *V1Input) contextValidateOutpoint(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.Outpoint != nil {
+
+		if swag.IsZero(m.Outpoint) { // not required
+			return nil
+		}
+
+		if err := m.Outpoint.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("outpoint")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("outpoint")
+			}
+			return err
+		}
+	}
+
 	return nil
 }
 

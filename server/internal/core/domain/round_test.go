@@ -14,16 +14,16 @@ var (
 	payments   = []domain.Payment{
 		{
 			Id: "0",
-			Inputs: []domain.Vtxo{{
-				VtxoKey: domain.VtxoKey{
-					Txid: txid,
-					VOut: 0,
-				},
-				Receiver: domain.Receiver{
+			Inputs: []domain.Vtxo{
+				{
+					VtxoKey: domain.VtxoKey{
+						Txid: txid,
+						VOut: 0,
+					},
 					Pubkey: pubkey,
 					Amount: 2000,
 				},
-			}},
+			},
 			Receivers: []domain.Receiver{
 				{
 					Pubkey: pubkey,
@@ -47,20 +47,16 @@ var (
 						Txid: txid,
 						VOut: 0,
 					},
-					Receiver: domain.Receiver{
-						Pubkey: pubkey,
-						Amount: 1000,
-					},
+					Pubkey: pubkey,
+					Amount: 1000,
 				},
 				{
 					VtxoKey: domain.VtxoKey{
 						Txid: txid,
 						VOut: 0,
 					},
-					Receiver: domain.Receiver{
-						Pubkey: pubkey,
-						Amount: 1000,
-					},
+					Pubkey: pubkey,
+					Amount: 1000,
 				},
 			},
 			Receivers: []domain.Receiver{{
@@ -72,7 +68,6 @@ var (
 	emptyPtx       = "cHNldP8BAgQCAAAAAQQBAAEFAQABBgEDAfsEAgAAAAA="
 	emptyTx        = "0200000000000000000000"
 	txid           = "0000000000000000000000000000000000000000000000000000000000000000"
-	pubkey         = "030000000000000000000000000000000000000000000000000000000000000001"
 	congestionTree = tree.CongestionTree{
 		{
 			{
@@ -308,7 +303,7 @@ func testStartFinalization(t *testing.T) {
 			require.Equal(t, round.Id, event.Id)
 			require.Exactly(t, connectors, event.Connectors)
 			require.Exactly(t, congestionTree, event.CongestionTree)
-			require.Exactly(t, poolTx, event.PoolTx)
+			require.Exactly(t, poolTx, event.RoundTx)
 		})
 
 		t.Run("invalid", func(t *testing.T) {
@@ -449,6 +444,7 @@ func testEndFinalization(t *testing.T) {
 						Stage: domain.Stage{
 							Code: domain.FinalizationStage,
 						},
+						Payments: paymentsById,
 					},
 					forfeitTxs:  nil,
 					txid:        txid,

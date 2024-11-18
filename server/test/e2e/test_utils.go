@@ -7,10 +7,15 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nbd-wtf/go-nostr"
+	"github.com/nbd-wtf/go-nostr/nip19"
 )
 
 const (
 	Password = "password"
+	// #nosec G101
+	NostrTestingSecretKey = "07959d1d2bc6507403449c556585d463a9ca4374eb0ec07b3929088ce6c34a7e"
 )
 
 type ArkBalance struct {
@@ -28,20 +33,24 @@ type ArkBalance struct {
 
 type ArkReceive struct {
 	Offchain string `json:"offchain_address"`
-	Onchain  string `json:"onchain_address"`
-}
-
-type ArkTrustedOnboard struct {
-	OnboardAddress string `json:"onboard_address"`
+	Boarding string `json:"boarding_address"`
 }
 
 func GenerateBlock() error {
 	if _, err := RunCommand("nigiri", "rpc", "--liquid", "generatetoaddress", "1", "el1qqwk722tghgkgmh3r2ph4d2apwj0dy9xnzlenzklx8jg3z299fpaw56trre9gpk6wmw0u4qycajqeva3t7lzp7wnacvwxha59r"); err != nil {
 		return err
 	}
+	if _, err := RunCommand("nigiri", "rpc", "generatetoaddress", "1", "bcrt1qe8eelqalnch946nzhefd5ajhgl2afjw5aegc59"); err != nil {
+		return err
+	}
 
 	time.Sleep(6 * time.Second)
 	return nil
+}
+
+func RunDockerExec(container string, arg ...string) (string, error) {
+	args := append([]string{"exec", "-t", container}, arg...)
+	return RunCommand("docker", args...)
 }
 
 func RunCommand(name string, arg ...string) (string, error) {
@@ -84,18 +93,18 @@ func RunCommand(name string, arg ...string) (string, error) {
 	wg.Wait()
 	if err := cmd.Wait(); err != nil {
 		if errMsg := errorb.String(); len(errMsg) > 0 {
-			return "", fmt.Errorf(errMsg)
+			return "", fmt.Errorf("%s", errMsg)
 		}
 
 		if outMsg := output.String(); len(outMsg) > 0 {
-			return "", fmt.Errorf(outMsg)
+			return "", fmt.Errorf("%s", outMsg)
 		}
 
 		return "", err
 	}
 
 	if errMsg := errb.String(); len(errMsg) > 0 {
-		return "", fmt.Errorf(errMsg)
+		return "", fmt.Errorf("%s", errMsg)
 	}
 
 	return strings.Trim(output.String(), "\n"), nil
@@ -104,4 +113,23 @@ func RunCommand(name string, arg ...string) (string, error) {
 func newCommand(name string, arg ...string) *exec.Cmd {
 	cmd := exec.Command(name, arg...)
 	return cmd
+}
+
+// nostr
+// use nak utils https://github.com/fiatjaf/nak
+
+func GetNostrKeys() (secretKey, publicKey string, npub string, err error) {
+	secretKey = NostrTestingSecretKey
+
+	publicKey, err = nostr.GetPublicKey(secretKey)
+	if err != nil {
+		return
+	}
+
+	npub, err = nip19.EncodePublicKey(publicKey)
+	if err != nil {
+		return
+	}
+
+	return
 }

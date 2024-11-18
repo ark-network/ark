@@ -1,10 +1,14 @@
 package restclient
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -21,68 +25,30 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
+	log "github.com/sirupsen/logrus"
 )
 
 type restClient struct {
+	serverURL      string
 	svc            ark_service.ClientService
-	eventsCh       chan client.RoundEventChannel
 	requestTimeout time.Duration
 	treeCache      *utils.Cache[tree.CongestionTree]
 }
 
-func NewClient(aspUrl string) (client.ASPClient, error) {
-	if len(aspUrl) <= 0 {
+func NewClient(serverURL string) (client.ASPClient, error) {
+	if len(serverURL) <= 0 {
 		return nil, fmt.Errorf("missing asp url")
 	}
-	svc, err := newRestClient(aspUrl)
+	svc, err := newRestClient(serverURL)
 	if err != nil {
 		return nil, err
 	}
-	eventsCh := make(chan client.RoundEventChannel)
+	// TODO: use twice the round interval.
 	reqTimeout := 15 * time.Second
 	treeCache := utils.NewCache[tree.CongestionTree]()
 
-	return &restClient{svc, eventsCh, reqTimeout, treeCache}, nil
-}
-
-func (c *restClient) Close() {}
-
-func (a *restClient) GetEventStream(
-	ctx context.Context, paymentID string,
-) (<-chan client.RoundEventChannel, error) {
-	go func(payID string) {
-		defer close(a.eventsCh)
-
-		timeout := time.After(a.requestTimeout)
-
-		for {
-			select {
-			case <-timeout:
-				a.eventsCh <- client.RoundEventChannel{
-					Err: fmt.Errorf("timeout reached"),
-				}
-				return
-			default:
-				event, err := a.Ping(ctx, payID)
-				if err != nil {
-					a.eventsCh <- client.RoundEventChannel{
-						Err: err,
-					}
-					return
-				}
-
-				if event != nil {
-					a.eventsCh <- client.RoundEventChannel{
-						Event: event,
-					}
-				}
-
-				time.Sleep(1 * time.Second)
-			}
-		}
-	}(paymentID)
-
-	return a.eventsCh, nil
+	return &restClient{serverURL, svc, reqTimeout, treeCache}, nil
 }
 
 func (a *restClient) GetInfo(
@@ -108,100 +74,372 @@ func (a *restClient) GetInfo(
 		return nil, err
 	}
 
-	minRelayFee, err := strconv.Atoi(resp.Payload.MinRelayFee)
+	dust, err := strconv.Atoi(resp.Payload.Dust)
 	if err != nil {
 		return nil, err
 	}
 
 	return &client.Info{
-		Pubkey:              resp.Payload.Pubkey,
-		RoundLifetime:       int64(roundLifetime),
-		UnilateralExitDelay: int64(unilateralExitDelay),
-		RoundInterval:       int64(roundInterval),
-		Network:             resp.Payload.Network,
-		MinRelayFee:         int64(minRelayFee),
+		Pubkey:                     resp.Payload.Pubkey,
+		RoundLifetime:              int64(roundLifetime),
+		UnilateralExitDelay:        int64(unilateralExitDelay),
+		RoundInterval:              int64(roundInterval),
+		Network:                    resp.Payload.Network,
+		Dust:                       uint64(dust),
+		BoardingDescriptorTemplate: resp.Payload.BoardingDescriptorTemplate,
+		ForfeitAddress:             resp.Payload.ForfeitAddress,
 	}, nil
 }
 
-func (a *restClient) ListVtxos(
-	ctx context.Context, addr string,
-) ([]client.Vtxo, []client.Vtxo, error) {
-	resp, err := a.svc.ArkServiceListVtxos(
-		ark_service.NewArkServiceListVtxosParams().WithAddress(addr),
+func (a *restClient) GetBoardingAddress(
+	ctx context.Context, pubkey string,
+) (string, error) {
+	body := models.V1GetBoardingAddressRequest{
+		Pubkey: pubkey,
+	}
+
+	resp, err := a.svc.ArkServiceGetBoardingAddress(
+		ark_service.NewArkServiceGetBoardingAddressParams().WithBody(&body),
 	)
 	if err != nil {
-		return nil, nil, err
+		return "",
+			err
 	}
+	return resp.Payload.Address, nil
+}
 
-	spendableVtxos := make([]client.Vtxo, 0, len(resp.Payload.SpendableVtxos))
-	for _, v := range resp.Payload.SpendableVtxos {
-		var expiresAt *time.Time
-		if v.ExpireAt != "" && v.ExpireAt != "0" {
-			expAt, err := strconv.Atoi(v.ExpireAt)
-			if err != nil {
-				return nil, nil, err
-			}
-			t := time.Unix(int64(expAt), 0)
-			expiresAt = &t
-		}
-
-		amount, err := strconv.Atoi(v.Receiver.Amount)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		var redeemTx string
-		var uncondForfeitTxs []string
-		if v.PendingData != nil {
-			redeemTx = v.PendingData.RedeemTx
-			uncondForfeitTxs = v.PendingData.UnconditionalForfeitTxs
-		}
-
-		spendableVtxos = append(spendableVtxos, client.Vtxo{
-			VtxoKey: client.VtxoKey{
-				Txid: v.Outpoint.Txid,
-				VOut: uint32(v.Outpoint.Vout),
+func (a *restClient) RegisterInputsForNextRound(
+	ctx context.Context, inputs []client.Input, ephemeralPublicKey string,
+) (string, error) {
+	ins := make([]*models.V1Input, 0, len(inputs))
+	for _, i := range inputs {
+		ins = append(ins, &models.V1Input{
+			Outpoint: &models.V1Outpoint{
+				Txid: i.Txid,
+				Vout: int64(i.VOut),
 			},
-			Amount:                  uint64(amount),
-			RoundTxid:               v.PoolTxid,
-			ExpiresAt:               expiresAt,
-			Pending:                 v.Pending,
-			RedeemTx:                redeemTx,
-			UnconditionalForfeitTxs: uncondForfeitTxs,
-			SpentBy:                 v.SpentBy,
+			Descriptor: i.Descriptor,
 		})
 	}
-
-	spentVtxos := make([]client.Vtxo, 0, len(resp.Payload.SpentVtxos))
-	for _, v := range resp.Payload.SpentVtxos {
-		var expiresAt *time.Time
-		if v.ExpireAt != "" && v.ExpireAt != "0" {
-			expAt, err := strconv.Atoi(v.ExpireAt)
-			if err != nil {
-				return nil, nil, err
-			}
-			t := time.Unix(int64(expAt), 0)
-			expiresAt = &t
-		}
-
-		amount, err := strconv.Atoi(v.Receiver.Amount)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		spentVtxos = append(spentVtxos, client.Vtxo{
-			VtxoKey: client.VtxoKey{
-				Txid: v.Outpoint.Txid,
-				VOut: uint32(v.Outpoint.Vout),
-			},
-			Amount:    uint64(amount),
-			RoundTxid: v.PoolTxid,
-			ExpiresAt: expiresAt,
-			SpentBy:   v.SpentBy,
-		})
+	body := &models.V1RegisterInputsForNextRoundRequest{
+		Inputs: ins,
+	}
+	if len(ephemeralPublicKey) > 0 {
+		body.EphemeralPubkey = ephemeralPublicKey
 	}
 
-	return spendableVtxos, spentVtxos, nil
+	resp, err := a.svc.ArkServiceRegisterInputsForNextRound(
+		ark_service.NewArkServiceRegisterInputsForNextRoundParams().WithBody(body),
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return resp.Payload.ID, nil
+}
+
+func (a *restClient) RegisterNotesForNextRound(
+	ctx context.Context, notes []string, ephemeralKey string,
+) (string, error) {
+	body := &models.V1RegisterInputsForNextRoundRequest{
+		Notes: notes,
+	}
+	if len(ephemeralKey) > 0 {
+		body.EphemeralPubkey = ephemeralKey
+	}
+	resp, err := a.svc.ArkServiceRegisterInputsForNextRound(
+		ark_service.NewArkServiceRegisterInputsForNextRoundParams().WithBody(body),
+	)
+	if err != nil {
+		return "", err
+	}
+	return resp.Payload.ID, nil
+}
+
+func (a *restClient) RegisterOutputsForNextRound(
+	ctx context.Context, paymentID string, outputs []client.Output,
+) error {
+	outs := make([]*models.V1Output, 0, len(outputs))
+	for _, o := range outputs {
+		outs = append(outs, &models.V1Output{
+			Address: o.Address,
+			Amount:  strconv.Itoa(int(o.Amount)),
+		})
+	}
+	body := models.V1RegisterOutputsForNextRoundRequest{
+		ID:      paymentID,
+		Outputs: outs,
+	}
+
+	_, err := a.svc.ArkServiceRegisterOutputsForNextRound(
+		ark_service.NewArkServiceRegisterOutputsForNextRoundParams().WithBody(&body),
+	)
+	return err
+}
+
+func (a *restClient) SubmitTreeNonces(
+	ctx context.Context, roundID, cosignerPubkey string,
+	nonces bitcointree.TreeNonces,
+) error {
+	var nonceBuffer bytes.Buffer
+
+	if err := nonces.Encode(&nonceBuffer); err != nil {
+		return err
+	}
+
+	serializedNonces := hex.EncodeToString(nonceBuffer.Bytes())
+
+	body := &models.V1SubmitTreeNoncesRequest{
+		RoundID:    roundID,
+		Pubkey:     cosignerPubkey,
+		TreeNonces: serializedNonces,
+	}
+
+	if _, err := a.svc.ArkServiceSubmitTreeNonces(
+		ark_service.NewArkServiceSubmitTreeNoncesParams().WithBody(body),
+	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (a *restClient) SubmitTreeSignatures(
+	ctx context.Context, roundID, cosignerPubkey string,
+	signatures bitcointree.TreePartialSigs,
+) error {
+	var sigsBuffer bytes.Buffer
+
+	if err := signatures.Encode(&sigsBuffer); err != nil {
+		return err
+	}
+
+	serializedSigs := hex.EncodeToString(sigsBuffer.Bytes())
+
+	body := &models.V1SubmitTreeSignaturesRequest{
+		RoundID:        roundID,
+		Pubkey:         cosignerPubkey,
+		TreeSignatures: serializedSigs,
+	}
+
+	if _, err := a.svc.ArkServiceSubmitTreeSignatures(
+		ark_service.NewArkServiceSubmitTreeSignaturesParams().WithBody(body),
+	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (a *restClient) SubmitSignedForfeitTxs(
+	ctx context.Context, signedForfeitTxs []string, signedRoundTx string,
+) error {
+	body := models.V1SubmitSignedForfeitTxsRequest{
+		SignedForfeitTxs: signedForfeitTxs,
+		SignedRoundTx:    signedRoundTx,
+	}
+	_, err := a.svc.ArkServiceSubmitSignedForfeitTxs(
+		ark_service.NewArkServiceSubmitSignedForfeitTxsParams().WithBody(&body),
+	)
+	return err
+}
+
+func (c *restClient) GetEventStream(
+	ctx context.Context, paymentID string,
+) (<-chan client.RoundEventChannel, func(), error) {
+	eventsCh := make(chan client.RoundEventChannel)
+
+	go func(eventsCh chan client.RoundEventChannel) {
+		httpClient := &http.Client{Timeout: time.Second * 0}
+
+		resp, err := httpClient.Get(fmt.Sprintf("%s/v1/events", c.serverURL))
+		if err != nil {
+			eventsCh <- client.RoundEventChannel{
+				Err: fmt.Errorf("failed to fetch round event stream: %s", err),
+			}
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			eventsCh <- client.RoundEventChannel{
+				Err: fmt.Errorf("received unexpected status %d code when fetching round event stream", resp.StatusCode),
+			}
+			return
+		}
+
+		reader := bufio.NewReader(resp.Body)
+
+		for {
+			chunk, err := reader.ReadBytes('\n')
+			if err != nil {
+				// Stream ended
+				if err == io.EOF {
+					return
+				}
+				log.WithError(err).Warn("failed to read from round event stream")
+				return
+			}
+
+			chunk = bytes.Trim(chunk, "\n")
+			resp := ark_service.ArkServiceGetEventStreamOKBody{}
+			if err := json.Unmarshal(chunk, &resp); err != nil {
+				eventsCh <- client.RoundEventChannel{
+					Err: fmt.Errorf("failed to parse message from round event stream: %s", err),
+				}
+				return
+			}
+
+			emptyResp := ark_service.ArkServiceGetEventStreamOKBody{}
+			if resp == emptyResp {
+				continue
+			}
+
+			if resp.Error != nil {
+				eventsCh <- client.RoundEventChannel{
+					Err: fmt.Errorf("received error %d: %s", resp.Error.Code, resp.Error.Message),
+				}
+				continue
+			}
+
+			// Handle different event types
+			var event client.RoundEvent
+			var _err error
+			switch {
+			case resp.Result.RoundFailed != nil:
+				e := resp.Result.RoundFailed
+				event = client.RoundFailedEvent{
+					ID:     e.ID,
+					Reason: e.Reason,
+				}
+			case resp.Result.RoundFinalization != nil:
+				e := resp.Result.RoundFinalization
+				tree := treeFromProto{e.VtxoTree}.parse()
+
+				minRelayFeeRate, err := strconv.Atoi(e.MinRelayFeeRate)
+				if err != nil {
+					_err = err
+					break
+				}
+
+				event = client.RoundFinalizationEvent{
+					ID:              e.ID,
+					Tx:              e.RoundTx,
+					Tree:            tree,
+					Connectors:      e.Connectors,
+					MinRelayFeeRate: chainfee.SatPerKVByte(minRelayFeeRate),
+				}
+			case resp.Result.RoundFinalized != nil:
+				e := resp.Result.RoundFinalized
+				event = client.RoundFinalizedEvent{
+					ID:   e.ID,
+					Txid: e.RoundTxid,
+				}
+			case resp.Result.RoundSigning != nil:
+				e := resp.Result.RoundSigning
+				pubkeys := make([]*secp256k1.PublicKey, 0, len(e.CosignersPubkeys))
+				for _, pubkey := range e.CosignersPubkeys {
+					p, err := hex.DecodeString(pubkey)
+					if err != nil {
+						_err = err
+						break
+					}
+					pk, err := secp256k1.ParsePubKey(p)
+					if err != nil {
+						_err = err
+						break
+					}
+					pubkeys = append(pubkeys, pk)
+				}
+
+				event = client.RoundSigningStartedEvent{
+					ID:                  e.ID,
+					UnsignedTree:        treeFromProto{e.UnsignedVtxoTree}.parse(),
+					CosignersPublicKeys: pubkeys,
+					UnsignedRoundTx:     e.UnsignedRoundTx,
+				}
+			case resp.Result.RoundSigningNoncesGenerated != nil:
+				e := resp.Result.RoundSigningNoncesGenerated
+				reader := hex.NewDecoder(strings.NewReader(e.TreeNonces))
+				nonces, err := bitcointree.DecodeNonces(reader)
+				if err != nil {
+					_err = err
+					break
+				}
+				event = client.RoundSigningNoncesGeneratedEvent{
+					ID:     e.ID,
+					Nonces: nonces,
+				}
+			}
+
+			eventsCh <- client.RoundEventChannel{
+				Event: event,
+				Err:   _err,
+			}
+		}
+	}(eventsCh)
+
+	return eventsCh, func() {}, nil
+}
+
+func (a *restClient) Ping(
+	ctx context.Context, paymentID string,
+) error {
+	r := ark_service.NewArkServicePingParams()
+	r.SetPaymentID(paymentID)
+	_, err := a.svc.ArkServicePing(r)
+	return err
+}
+
+func (a *restClient) CreatePayment(
+	ctx context.Context, inputs []client.AsyncPaymentInput, outputs []client.Output,
+) (string, error) {
+	ins := make([]*models.V1AsyncPaymentInput, 0, len(inputs))
+	for _, i := range inputs {
+		ins = append(ins, &models.V1AsyncPaymentInput{
+			Input: &models.V1Input{
+				Outpoint: &models.V1Outpoint{
+					Txid: i.Input.Txid,
+					Vout: int64(i.VOut),
+				},
+				Descriptor: i.Input.Descriptor,
+			},
+			ForfeitLeafHash: i.ForfeitLeafHash.String(),
+		})
+	}
+	outs := make([]*models.V1Output, 0, len(outputs))
+	for _, o := range outputs {
+		outs = append(outs, &models.V1Output{
+			Address: o.Address,
+			Amount:  strconv.Itoa(int(o.Amount)),
+		})
+	}
+	body := models.V1CreatePaymentRequest{
+		Inputs:  ins,
+		Outputs: outs,
+	}
+	resp, err := a.svc.ArkServiceCreatePayment(
+		ark_service.NewArkServiceCreatePaymentParams().WithBody(&body),
+	)
+	if err != nil {
+		return "", err
+	}
+	return resp.GetPayload().SignedRedeemTx, nil
+}
+
+func (a *restClient) CompletePayment(
+	ctx context.Context, signedRedeemTx string,
+) error {
+	req := &arkv1.CompletePaymentRequest{
+		SignedRedeemTx: signedRedeemTx,
+	}
+	body := models.V1CompletePaymentRequest{
+		SignedRedeemTx: req.GetSignedRedeemTx(),
+	}
+	_, err := a.svc.ArkServiceCompletePayment(
+		ark_service.NewArkServiceCompletePaymentParams().WithBody(&body),
+	)
+	return err
 }
 
 func (a *restClient) GetRound(
@@ -235,207 +473,12 @@ func (a *restClient) GetRound(
 		ID:         resp.Payload.Round.ID,
 		StartedAt:  &startedAt,
 		EndedAt:    endedAt,
-		Tx:         resp.Payload.Round.PoolTx,
-		Tree:       treeFromProto{resp.Payload.Round.CongestionTree}.parse(),
+		Tx:         resp.Payload.Round.RoundTx,
+		Tree:       treeFromProto{resp.Payload.Round.VtxoTree}.parse(),
 		ForfeitTxs: resp.Payload.Round.ForfeitTxs,
 		Connectors: resp.Payload.Round.Connectors,
 		Stage:      toRoundStage(*resp.Payload.Round.Stage),
 	}, nil
-}
-
-func (a *restClient) Onboard(
-	ctx context.Context, tx, userPubkey string, congestionTree tree.CongestionTree,
-) error {
-	body := models.V1OnboardRequest{
-		BoardingTx:     tx,
-		CongestionTree: treeToProto(congestionTree).parse(),
-		UserPubkey:     userPubkey,
-	}
-	_, err := a.svc.ArkServiceOnboard(
-		ark_service.NewArkServiceOnboardParams().WithBody(&body),
-	)
-	return err
-}
-
-func (a *restClient) RegisterPayment(
-	ctx context.Context, inputs []client.VtxoKey, ephemeralPublicKey string,
-) (string, error) {
-	ins := make([]*models.V1Input, 0, len(inputs))
-	for _, i := range inputs {
-		ins = append(ins, &models.V1Input{
-			Txid: i.Txid,
-			Vout: int64(i.VOut),
-		})
-	}
-	body := &models.V1RegisterPaymentRequest{
-		Inputs: ins,
-	}
-	if len(ephemeralPublicKey) > 0 {
-		body.EphemeralPubkey = ephemeralPublicKey
-	}
-
-	resp, err := a.svc.ArkServiceRegisterPayment(
-		ark_service.NewArkServiceRegisterPaymentParams().WithBody(body),
-	)
-	if err != nil {
-		return "", err
-	}
-
-	return resp.Payload.ID, nil
-}
-
-func (a *restClient) ClaimPayment(
-	ctx context.Context, paymentID string, outputs []client.Output,
-) error {
-	outs := make([]*models.V1Output, 0, len(outputs))
-	for _, o := range outputs {
-		outs = append(outs, &models.V1Output{
-			Address: o.Address,
-			Amount:  strconv.Itoa(int(o.Amount)),
-		})
-	}
-	body := models.V1ClaimPaymentRequest{
-		ID:      paymentID,
-		Outputs: outs,
-	}
-
-	_, err := a.svc.ArkServiceClaimPayment(
-		ark_service.NewArkServiceClaimPaymentParams().WithBody(&body),
-	)
-	return err
-}
-
-func (a *restClient) Ping(
-	ctx context.Context, paymentID string,
-) (client.RoundEvent, error) {
-	r := ark_service.NewArkServicePingParams()
-	r.SetPaymentID(paymentID)
-	resp, err := a.svc.ArkServicePing(r)
-	if err != nil {
-		return nil, err
-	}
-
-	payload := resp.Payload
-
-	if e := payload.RoundFailed; e != nil {
-		return client.RoundFailedEvent{
-			ID:     e.ID,
-			Reason: e.Reason,
-		}, nil
-	}
-	if e := payload.RoundFinalization; e != nil {
-		tree := treeFromProto{e.CongestionTree}.parse()
-		return client.RoundFinalizationEvent{
-			ID:         e.ID,
-			Tx:         e.PoolTx,
-			ForfeitTxs: e.ForfeitTxs,
-			Tree:       tree,
-			Connectors: e.Connectors,
-		}, nil
-	}
-
-	if e := payload.RoundFinalized; e != nil {
-		return client.RoundFinalizedEvent{
-			ID:   e.ID,
-			Txid: e.PoolTxid,
-		}, nil
-	}
-
-	if e := payload.RoundSigning; e != nil {
-		pubkeys := make([]*secp256k1.PublicKey, 0, len(e.CosignersPubkeys))
-		for _, pubkey := range e.CosignersPubkeys {
-			p, err := hex.DecodeString(pubkey)
-			if err != nil {
-				return nil, err
-			}
-			pk, err := secp256k1.ParsePubKey(p)
-			if err != nil {
-				return nil, err
-			}
-			pubkeys = append(pubkeys, pk)
-		}
-
-		return client.RoundSigningStartedEvent{
-			ID:                  e.ID,
-			UnsignedTree:        treeFromProto{e.UnsignedTree}.parse(),
-			CosignersPublicKeys: pubkeys,
-		}, nil
-	}
-
-	if e := payload.RoundSigningNoncesGenerated; e != nil {
-		nonces, err := bitcointree.DecodeNonces(hex.NewDecoder(strings.NewReader(e.TreeNonces)))
-		if err != nil {
-			return nil, err
-		}
-		return client.RoundSigningNoncesGeneratedEvent{
-			ID:     e.ID,
-			Nonces: nonces,
-		}, nil
-	}
-
-	return nil, nil
-}
-
-func (a *restClient) FinalizePayment(
-	ctx context.Context, signedForfeitTxs []string,
-) error {
-	req := &arkv1.FinalizePaymentRequest{
-		SignedForfeitTxs: signedForfeitTxs,
-	}
-	body := models.V1FinalizePaymentRequest{
-		SignedForfeitTxs: req.GetSignedForfeitTxs(),
-	}
-	_, err := a.svc.ArkServiceFinalizePayment(
-		ark_service.NewArkServiceFinalizePaymentParams().WithBody(&body),
-	)
-	return err
-}
-
-func (a *restClient) CreatePayment(
-	ctx context.Context, inputs []client.VtxoKey, outputs []client.Output,
-) (string, []string, error) {
-	ins := make([]*models.V1Input, 0, len(inputs))
-	for _, i := range inputs {
-		ins = append(ins, &models.V1Input{
-			Txid: i.Txid,
-			Vout: int64(i.VOut),
-		})
-	}
-	outs := make([]*models.V1Output, 0, len(outputs))
-	for _, o := range outputs {
-		outs = append(outs, &models.V1Output{
-			Address: o.Address,
-			Amount:  strconv.Itoa(int(o.Amount)),
-		})
-	}
-	body := models.V1CreatePaymentRequest{
-		Inputs:  ins,
-		Outputs: outs,
-	}
-	resp, err := a.svc.ArkServiceCreatePayment(
-		ark_service.NewArkServiceCreatePaymentParams().WithBody(&body),
-	)
-	if err != nil {
-		return "", nil, err
-	}
-	return resp.GetPayload().SignedRedeemTx, resp.GetPayload().UsignedUnconditionalForfeitTxs, nil
-}
-
-func (a *restClient) CompletePayment(
-	ctx context.Context, signedRedeemTx string, signedUnconditionalForfeitTxs []string,
-) error {
-	req := &arkv1.CompletePaymentRequest{
-		SignedRedeemTx:                signedRedeemTx,
-		SignedUnconditionalForfeitTxs: signedUnconditionalForfeitTxs,
-	}
-	body := models.V1CompletePaymentRequest{
-		SignedRedeemTx:                req.GetSignedRedeemTx(),
-		SignedUnconditionalForfeitTxs: req.GetSignedUnconditionalForfeitTxs(),
-	}
-	_, err := a.svc.ArkServiceCompletePayment(
-		ark_service.NewArkServiceCompletePaymentParams().WithBody(&body),
-	)
-	return err
 }
 
 func (a *restClient) GetRoundByID(
@@ -469,65 +512,58 @@ func (a *restClient) GetRoundByID(
 		ID:         resp.Payload.Round.ID,
 		StartedAt:  &startedAt,
 		EndedAt:    endedAt,
-		Tx:         resp.Payload.Round.PoolTx,
-		Tree:       treeFromProto{resp.Payload.Round.CongestionTree}.parse(),
+		Tx:         resp.Payload.Round.RoundTx,
+		Tree:       treeFromProto{resp.Payload.Round.VtxoTree}.parse(),
 		ForfeitTxs: resp.Payload.Round.ForfeitTxs,
 		Connectors: resp.Payload.Round.Connectors,
 		Stage:      toRoundStage(*resp.Payload.Round.Stage),
 	}, nil
 }
 
-func (a *restClient) SendTreeNonces(
-	ctx context.Context, roundID, cosignerPubkey string, nonces bitcointree.TreeNonces,
-) error {
-	var nonceBuffer bytes.Buffer
-
-	if err := nonces.Encode(&nonceBuffer); err != nil {
-		return err
+func (a *restClient) ListVtxos(
+	ctx context.Context, addr string,
+) ([]client.Vtxo, []client.Vtxo, error) {
+	resp, err := a.svc.ArkServiceListVtxos(
+		ark_service.NewArkServiceListVtxosParams().WithAddress(addr),
+	)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	serializedNonces := hex.EncodeToString(nonceBuffer.Bytes())
+	spendableVtxos := vtxosFromRest(resp.Payload.SpendableVtxos)
+	spentVtxos := vtxosFromRest(resp.Payload.SpentVtxos)
 
-	body := &models.V1SendTreeNoncesRequest{
-		RoundID:    roundID,
-		PublicKey:  cosignerPubkey,
-		TreeNonces: serializedNonces,
-	}
-
-	if _, err := a.svc.ArkServiceSendTreeNonces(
-		ark_service.NewArkServiceSendTreeNoncesParams().WithBody(body),
-	); err != nil {
-		return err
-	}
-
-	return nil
+	return spendableVtxos, spentVtxos, nil
 }
 
-func (a *restClient) SendTreeSignatures(
-	ctx context.Context, roundID, cosignerPubkey string, signatures bitcointree.TreePartialSigs,
+func (a *restClient) SetNostrRecipient(
+	ctx context.Context, nostrRecipient string, vtxos []client.SignedVtxoOutpoint,
 ) error {
-	var sigsBuffer bytes.Buffer
-
-	if err := signatures.Encode(&sigsBuffer); err != nil {
-		return err
+	body := models.V1SetNostrRecipientRequest{
+		NostrRecipient: nostrRecipient,
+		Vtxos:          toSignedVtxoModel(vtxos),
 	}
 
-	serializedSigs := hex.EncodeToString(sigsBuffer.Bytes())
-
-	body := &models.V1SendTreeSignaturesRequest{
-		RoundID:        roundID,
-		PublicKey:      cosignerPubkey,
-		TreeSignatures: serializedSigs,
-	}
-
-	if _, err := a.svc.ArkServiceSendTreeSignatures(
-		ark_service.NewArkServiceSendTreeSignaturesParams().WithBody(body),
-	); err != nil {
-		return err
-	}
-
-	return nil
+	_, err := a.svc.ArkServiceSetNostrRecipient(
+		ark_service.NewArkServiceSetNostrRecipientParams().WithBody(&body),
+	)
+	return err
 }
+
+func (a *restClient) DeleteNostrRecipient(
+	ctx context.Context, vtxos []client.SignedVtxoOutpoint,
+) error {
+	body := models.V1DeleteNostrRecipientRequest{
+		Vtxos: toSignedVtxoModel(vtxos),
+	}
+
+	_, err := a.svc.ArkServiceDeleteNostrRecipient(
+		ark_service.NewArkServiceDeleteNostrRecipientParams().WithBody(&body),
+	)
+	return err
+}
+
+func (c *restClient) Close() {}
 
 func newRestClient(
 	serviceURL string,
@@ -605,24 +641,155 @@ func (t treeFromProto) parse() tree.CongestionTree {
 	return congestionTree
 }
 
-type treeToProto tree.CongestionTree
+func (c *restClient) GetTransactionsStream(ctx context.Context) (<-chan client.TransactionEvent, func(), error) {
+	eventsCh := make(chan client.TransactionEvent)
 
-func (t treeToProto) parse() *models.V1Tree {
-	levels := make([]*models.V1TreeLevel, 0, len(t))
-	for _, level := range t {
-		nodes := make([]*models.V1Node, 0, len(level))
-		for _, n := range level {
-			nodes = append(nodes, &models.V1Node{
-				Txid:       n.Txid,
-				Tx:         n.Tx,
-				ParentTxid: n.ParentTxid,
-			})
+	go func(eventsCh chan client.TransactionEvent) {
+		httpClient := &http.Client{Timeout: time.Second * 0}
+
+		resp, err := httpClient.Get(fmt.Sprintf("%s/v1/transactions", c.serverURL))
+		if err != nil {
+			eventsCh <- client.TransactionEvent{Err: err}
+			return
 		}
-		levels = append(levels, &models.V1TreeLevel{
-			Nodes: nodes,
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			eventsCh <- client.TransactionEvent{
+				Err: fmt.Errorf("unexpected status code: %d", resp.StatusCode),
+			}
+			return
+		}
+
+		reader := bufio.NewReader(resp.Body)
+		for {
+			chunk, err := reader.ReadBytes('\n')
+			if err != nil {
+				// Stream ended
+				if err == io.EOF {
+					return
+				}
+				eventsCh <- client.TransactionEvent{
+					Err: fmt.Errorf("failed to read from transaction stream: %s", err),
+				}
+				return
+			}
+
+			chunk = bytes.Trim(chunk, "\n")
+			resp := ark_service.ArkServiceGetTransactionsStreamOK{}
+			if err := json.Unmarshal(chunk, &resp); err != nil {
+				eventsCh <- client.TransactionEvent{
+					Err: fmt.Errorf("failed to parse message from transaction stream: %s", err),
+				}
+				return
+			}
+
+			if resp.Payload == nil {
+				continue
+			}
+
+			if resp.Payload.Error != nil {
+				eventsCh <- client.TransactionEvent{
+					Err: fmt.Errorf("received error from transaction stream: %s", resp.Payload.Error.Message),
+				}
+				continue
+			}
+
+			var event client.TransactionEvent
+			if resp.Payload.Result.Round != nil {
+				event = client.TransactionEvent{
+					Round: &client.RoundTransaction{
+						Txid:                 resp.Payload.Result.Round.Txid,
+						SpentVtxos:           outpointsFromRest(resp.Payload.Result.Round.SpentVtxos),
+						SpendableVtxos:       vtxosFromRest(resp.Payload.Result.Round.SpendableVtxos),
+						ClaimedBoardingUtxos: outpointsFromRest(resp.Payload.Result.Round.ClaimedBoardingUtxos),
+					},
+				}
+			} else if resp.Payload.Result.Redeem != nil {
+				event = client.TransactionEvent{
+					Redeem: &client.RedeemTransaction{
+						Txid:           resp.Payload.Result.Redeem.Txid,
+						SpentVtxos:     outpointsFromRest(resp.Payload.Result.Redeem.SpentVtxos),
+						SpendableVtxos: vtxosFromRest(resp.Payload.Result.Redeem.SpendableVtxos),
+					},
+				}
+			}
+
+			eventsCh <- event
+		}
+	}(eventsCh)
+
+	return eventsCh, func() {}, nil
+}
+
+func outpointsFromRest(restOutpoints []*models.V1Outpoint) []client.Outpoint {
+	outpoints := make([]client.Outpoint, len(restOutpoints))
+	for i, o := range restOutpoints {
+		outpoints[i] = client.Outpoint{
+			Txid: o.Txid,
+			VOut: uint32(o.Vout),
+		}
+	}
+	return outpoints
+}
+
+func vtxosFromRest(restVtxos []*models.V1Vtxo) []client.Vtxo {
+	vtxos := make([]client.Vtxo, len(restVtxos))
+	for i, v := range restVtxos {
+		var expiresAt, createdAt time.Time
+		if v.ExpireAt != "" && v.ExpireAt != "0" {
+			expAt, err := strconv.Atoi(v.ExpireAt)
+			if err != nil {
+				return nil
+			}
+			expiresAt = time.Unix(int64(expAt), 0)
+		}
+
+		if v.CreatedAt != "" && v.CreatedAt != "0" {
+			creaAt, err := strconv.Atoi(v.CreatedAt)
+			if err != nil {
+				return nil
+			}
+			createdAt = time.Unix(int64(creaAt), 0)
+		}
+
+		amount, err := strconv.Atoi(v.Amount)
+		if err != nil {
+			return nil
+		}
+
+		vtxos[i] = client.Vtxo{
+			Outpoint: client.Outpoint{
+				Txid: v.Outpoint.Txid,
+				VOut: uint32(v.Outpoint.Vout),
+			},
+			Pubkey:    v.Pubkey,
+			Amount:    uint64(amount),
+			RoundTxid: v.RoundTxid,
+			ExpiresAt: expiresAt,
+			RedeemTx:  v.RedeemTx,
+			IsOOR:     v.IsOor,
+			SpentBy:   v.SpentBy,
+			CreatedAt: createdAt,
+		}
+	}
+	return vtxos
+}
+
+func toSignedVtxoModel(vtxos []client.SignedVtxoOutpoint) []*models.V1SignedVtxoOutpoint {
+	signedVtxos := make([]*models.V1SignedVtxoOutpoint, 0, len(vtxos))
+	for _, v := range vtxos {
+		signedVtxos = append(signedVtxos, &models.V1SignedVtxoOutpoint{
+			Outpoint: &models.V1Outpoint{
+				Txid: v.Outpoint.Txid,
+				Vout: int64(v.Outpoint.VOut),
+			},
+			Proof: &models.V1OwnershipProof{
+				ControlBlock: v.Proof.ControlBlock,
+				Script:       v.Proof.Script,
+				Signature:    v.Proof.Signature,
+			},
 		})
 	}
-	return &models.V1Tree{
-		Levels: levels,
-	}
+	return signedVtxos
 }

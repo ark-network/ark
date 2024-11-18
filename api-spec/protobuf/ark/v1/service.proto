@@ -5,44 +5,48 @@ package ark.v1;
 import "google/api/annotations.proto";
 
 service ArkService {
-  rpc RegisterPayment(RegisterPaymentRequest) returns (RegisterPaymentResponse) {
+  rpc GetInfo(GetInfoRequest) returns (GetInfoResponse) {
     option (google.api.http) = {
-      post: "/v1/payment/register"
+      get: "/v1/info"
+    };
+  }
+  rpc GetBoardingAddress(GetBoardingAddressRequest) returns (GetBoardingAddressResponse) {
+    option (google.api.http) = {
+      post: "/v1/boarding"
       body: "*"
     };
   };
-  rpc ClaimPayment(ClaimPaymentRequest) returns (ClaimPaymentResponse) {
+
+  /* In-Round Payment APIs */
+
+  rpc RegisterInputsForNextRound(RegisterInputsForNextRoundRequest) returns (RegisterInputsForNextRoundResponse) {
     option (google.api.http) = {
-      post: "/v1/payment/claim"
+      post: "/v1/round/registerInputs"
       body: "*"
     };
   };
-  rpc SendTreeNonces(SendTreeNoncesRequest) returns (SendTreeNoncesResponse) {
+  rpc RegisterOutputsForNextRound(RegisterOutputsForNextRoundRequest) returns (RegisterOutputsForNextRoundResponse) {
     option (google.api.http) = {
-      post: "/v1/payment/tree/nonces"
+      post: "/v1/round/registerOutputs"
+      body: "*"
+    };
+  };
+  rpc SubmitTreeNonces(SubmitTreeNoncesRequest) returns (SubmitTreeNoncesResponse) {
+    option (google.api.http) = {
+      post: "/v1/round/tree/submitNonces"
       body: "*"
     };
   }
-  rpc SendTreeSignatures(SendTreeSignaturesRequest) returns (SendTreeSignaturesResponse) {
+  rpc SubmitTreeSignatures(SubmitTreeSignaturesRequest) returns (SubmitTreeSignaturesResponse) {
     option (google.api.http) = {
-      post: "/v1/payment/tree/signatures"
+      post: "/v1/round/tree/submitSignatures"
       body: "*"
     };
   }
-  rpc FinalizePayment(FinalizePaymentRequest) returns (FinalizePaymentResponse) {
+  rpc SubmitSignedForfeitTxs(SubmitSignedForfeitTxsRequest) returns (SubmitSignedForfeitTxsResponse) {
     option (google.api.http) = {
-      post: "/v1/payment/finalize"
+      post: "/v1/round/submitForfeitTxs"
       body: "*"
-    };
-  };
-  rpc GetRound(GetRoundRequest) returns (GetRoundResponse) {
-    option (google.api.http) = {
-      get: "/v1/round/{txid}"
-    };
-  };
-  rpc GetRoundById(GetRoundByIdRequest) returns (GetRoundByIdResponse) {
-    option (google.api.http) = {
-      get: "/v1/round/id/{id}"
     };
   };
   rpc GetEventStream(GetEventStreamRequest) returns (stream GetEventStreamResponse) {
@@ -52,25 +56,12 @@ service ArkService {
   };
   rpc Ping(PingRequest) returns (PingResponse) {
     option (google.api.http) = {
-      get: "/v1/ping/{payment_id}"
+      get: "/v1/round/ping/{payment_id}"
     };
   };
-  rpc ListVtxos(ListVtxosRequest) returns (ListVtxosResponse) {
-    option (google.api.http) = {
-      get: "/v1/vtxos/{address}"
-    };
-  }
-  rpc GetInfo(GetInfoRequest) returns (GetInfoResponse) {
-    option (google.api.http) = {
-      get: "/v1/info"
-    };
-  }
-  rpc Onboard(OnboardRequest) returns (OnboardResponse) {
-    option (google.api.http) = {
-      post: "/v1/onboard"
-      body: "*"
-    };
-  }
+
+  /* Async Payment APIs */
+
   rpc CreatePayment(CreatePaymentRequest) returns (CreatePaymentResponse) {
     option (google.api.http) = {
       post: "/v1/payment"
@@ -83,59 +74,109 @@ service ArkService {
       body: "*"
     };
   }
+
+  /* Explorer-like APIs */
+
+  rpc GetRound(GetRoundRequest) returns (GetRoundResponse) {
+    option (google.api.http) = {
+      get: "/v1/round/{txid}"
+    };
+  };
+  rpc GetRoundById(GetRoundByIdRequest) returns (GetRoundByIdResponse) {
+    option (google.api.http) = {
+      get: "/v1/round/id/{id}"
+    };
+  };
+  rpc ListVtxos(ListVtxosRequest) returns (ListVtxosResponse) {
+    option (google.api.http) = {
+      get: "/v1/vtxos/{address}"
+    };
+  }
+  rpc GetTransactionsStream(GetTransactionsStreamRequest) returns (stream GetTransactionsStreamResponse) {
+    option (google.api.http) = {
+      get: "/v1/transactions"
+    };
+  }
+
+  /* Entity APIs */
+
+  rpc SetNostrRecipient(SetNostrRecipientRequest) returns (SetNostrRecipientResponse) {
+    option (google.api.http) = {
+      post: "/v1/vtxo/nostr"
+      body: "*"
+    };
+  }
+
+  rpc DeleteNostrRecipient(DeleteNostrRecipientRequest) returns (DeleteNostrRecipientResponse) {
+    option (google.api.http) = {
+      post: "/v1/vtxo/nostr/delete"
+      body: "*"
+    };
+  }
 }
 
-message CreatePaymentRequest {
-  repeated Input inputs = 1;
-  repeated Output outputs = 2;
-}
-message CreatePaymentResponse {
-  string signed_redeem_tx = 1; // signed only by the ASP
-  repeated string usigned_unconditional_forfeit_txs = 2;
+message GetInfoRequest {}
+message GetInfoResponse {
+  string pubkey = 1;
+  int64 round_lifetime = 2;
+  int64 unilateral_exit_delay = 3;
+  int64 round_interval = 4;
+  string network = 5;
+  int64 dust = 6;
+  string boarding_descriptor_template = 7;
+  repeated string vtxo_descriptor_templates = 8;
+  string forfeit_address = 9;
 }
 
-message CompletePaymentRequest {
-  string signed_redeem_tx = 1;
-  repeated string signed_unconditional_forfeit_txs = 2;
+message GetBoardingAddressRequest {
+  string pubkey = 1;
 }
-message CompletePaymentResponse {}
+message GetBoardingAddressResponse {
+  string address = 1;
+  string descriptor = 2;
+}
 
-message RegisterPaymentRequest {
+/* In-Round Payment API messages */
+
+message RegisterInputsForNextRoundRequest {
   repeated Input inputs = 1;
   optional string ephemeral_pubkey = 2;
+  repeated string notes = 3;
 }
-message RegisterPaymentResponse {
-  // Mocks wabisabi's credentials.
+message RegisterInputsForNextRoundResponse {
+  // Mocks wabisabi's blinded credentials.
   string id = 1;
 }
 
-message ClaimPaymentRequest {
-  // Mocks wabisabi's credentials.
+message RegisterOutputsForNextRoundRequest {
+  // Mocks wabisabi's blinded credentials.
   string id = 1;
   // List of receivers for a registered payment. 
   repeated Output outputs = 2;
 }
-message ClaimPaymentResponse {}
+message RegisterOutputsForNextRoundResponse {}
 
-message FinalizePaymentRequest {
+message SubmitTreeNoncesRequest {
+  string round_id = 1;
+  string pubkey = 2;
+  string tree_nonces = 3;
+}
+message SubmitTreeNoncesResponse {}
+
+message SubmitTreeSignaturesRequest {
+  string round_id = 1;
+  string pubkey = 2;
+  string tree_signatures = 3;
+}
+message SubmitTreeSignaturesResponse {}
+
+message SubmitSignedForfeitTxsRequest {
   // Forfeit txs signed by the user. 
   repeated string signed_forfeit_txs = 1;
+  // If payment has boarding input, the user must sign the associated inputs.
+  optional string signed_round_tx = 2;
 }
-message FinalizePaymentResponse {}
-
-message GetRoundRequest {
-  string txid = 1;
-}
-message GetRoundResponse {
-  Round round = 1;
-}
-
-message GetRoundByIdRequest {
-  string id = 1;
-}
-message GetRoundByIdResponse {
-  Round round = 1;
-}
+message SubmitSignedForfeitTxsResponse {}
 
 message GetEventStreamRequest {}
 message GetEventStreamResponse {
@@ -151,14 +192,42 @@ message GetEventStreamResponse {
 message PingRequest {
   string payment_id = 1;
 }
-message PingResponse {
-  oneof event {
-    RoundFinalizationEvent round_finalization = 1;
-    RoundFinalizedEvent round_finalized = 2;
-    RoundFailed round_failed = 3;
-    RoundSigningEvent round_signing = 4;
-    RoundSigningNoncesGeneratedEvent round_signing_nonces_generated = 5; 
-  }
+message PingResponse {}
+
+/* Async Payment API messages */
+
+message AsyncPaymentInput {
+  Input input = 1;
+  string forfeit_leaf_hash = 2;
+}
+
+message CreatePaymentRequest {
+  repeated AsyncPaymentInput inputs = 1;
+  repeated Output outputs = 2;
+}
+message CreatePaymentResponse {
+  string signed_redeem_tx = 1; // signed only by the ASP
+}
+
+message CompletePaymentRequest {
+  string signed_redeem_tx = 1;
+}
+message CompletePaymentResponse {}
+
+/* Explorer-like API messages */
+
+message GetRoundRequest {
+  string txid = 1;
+}
+message GetRoundResponse {
+  Round round = 1;
+}
+
+message GetRoundByIdRequest {
+  string id = 1;
+}
+message GetRoundByIdResponse {
+  Round round = 1;
 }
 
 message ListVtxosRequest {
@@ -169,37 +238,19 @@ message ListVtxosResponse {
   repeated Vtxo spent_vtxos = 2;
 }
 
-message GetInfoRequest {}
-message GetInfoResponse {
-  string pubkey = 1;
-  int64 round_lifetime = 2;
-  int64 unilateral_exit_delay = 3;
-  int64 round_interval = 4;
-  string network = 5;
-  int64 min_relay_fee = 6;
-}
-
-message OnboardRequest {
-  string boarding_tx = 1;
-  Tree congestion_tree = 2;
-  string user_pubkey = 3;
-}
-message OnboardResponse {
-}
-
-// EVENT TYPES
+/* Events */
 
 message RoundFinalizationEvent {
   string id = 1;
-  string pool_tx = 2;
-  repeated string forfeit_txs = 3;
-  Tree congestion_tree = 4;
-  repeated string connectors = 5;
+  string round_tx = 2;
+  Tree vtxo_tree = 3;
+  repeated string connectors = 4;
+  int64 min_relay_fee_rate = 5;
 }
 
 message RoundFinalizedEvent {
   string id = 1;
-  string pool_txid = 2;
+  string round_txid = 2;
 }
 
 message RoundFailed {
@@ -210,7 +261,8 @@ message RoundFailed {
 message RoundSigningEvent {
   string id = 1;
   repeated string cosigners_pubkeys = 2;
-  Tree unsigned_tree = 3;
+  Tree unsigned_vtxo_tree = 3;
+  string unsigned_round_tx = 4;
 }
 
 message RoundSigningNoncesGeneratedEvent {
@@ -218,7 +270,7 @@ message RoundSigningNoncesGeneratedEvent {
   string tree_nonces = 2;
 }
 
-// TYPES
+/* Types */
 
 enum RoundStage {
   ROUND_STAGE_UNSPECIFIED = 0;
@@ -232,23 +284,26 @@ message Round {
   string id = 1;
   int64 start = 2;
   int64 end = 3;
-  string pool_tx = 4;
-  Tree congestion_tree = 5;
+  string round_tx = 4;
+  Tree vtxo_tree = 5;
   repeated string forfeit_txs = 6;
   repeated string connectors = 7;
   RoundStage stage = 8;
 }
 
-message Input {
+message Outpoint {
   string txid = 1;
   uint32 vout = 2;
 }
 
+message Input {
+  Outpoint outpoint = 1;
+  string descriptor = 2;
+}
+
 message Output {
-  // Either the offchain or onchain address.
-  string address = 1;
-  // Amount to send in satoshis.
-  uint64 amount = 2;
+  string address = 1; // onchain or off-chain
+  uint64 amount = 2; // Amount to send in satoshis.
 }
 
 message Tree {
@@ -266,34 +321,61 @@ message Node {
 }
 
 message Vtxo {
-  Input outpoint = 1;
-  Output receiver = 2;
-  bool spent = 3;
-  string pool_txid = 4;
-  string spent_by = 5;
-  int64 expire_at = 6;
-  bool swept = 7;
-  bool pending = 8;
-  PendingPayment pending_data = 9;
+  Outpoint outpoint = 1;
+  bool spent = 2;
+  string round_txid = 3;
+  string spent_by = 4;
+  int64 expire_at = 5;
+  bool swept = 6;
+  bool is_oor = 7;
+  string redeem_tx = 8;
+  uint64 amount = 9;
+  string pubkey = 10;
+  int64 created_at = 11;
 }
 
-message PendingPayment {
-  string redeem_tx = 1;
-  repeated string unconditional_forfeit_txs =2;
+message GetTransactionsStreamRequest {}
+message GetTransactionsStreamResponse {
+  oneof tx {
+    RoundTransaction round = 1;
+    RedeemTransaction redeem = 2;
+  }
 }
 
-message SendTreeNoncesRequest {
-  string round_id = 1;
-  string public_key = 2;
-  string tree_nonces = 3;
+message RoundTransaction {
+  string txid = 1;
+  repeated Outpoint spent_vtxos = 2;
+  repeated Vtxo spendable_vtxos = 3;
+  repeated Outpoint claimed_boarding_utxos = 4;
 }
 
-message SendTreeNoncesResponse {}
-
-message SendTreeSignaturesRequest {
-  string round_id = 1;
-  string public_key = 2;
-  string tree_signatures = 3;
+message RedeemTransaction {
+  string txid = 1;
+  repeated Outpoint spent_vtxos = 2;
+  repeated Vtxo spendable_vtxos = 3;
 }
 
-message SendTreeSignaturesResponse {}
+// This message is used to prove to the ASP that the user controls the vtxo without revealing the whole VTXO descriptor.
+message OwnershipProof {
+  string control_block = 1;
+  string script = 2;
+  string signature = 3; // VTXO outpoint signed with script's secret key
+}
+
+message SignedVtxoOutpoint {
+  Outpoint outpoint = 1;
+  OwnershipProof proof = 2;
+}
+
+message SetNostrRecipientRequest {
+  string nostr_recipient = 1;
+  repeated SignedVtxoOutpoint vtxos = 2;
+}
+
+message SetNostrRecipientResponse {}
+
+message DeleteNostrRecipientRequest {
+  repeated SignedVtxoOutpoint vtxos = 1;
+}
+
+message DeleteNostrRecipientResponse {}

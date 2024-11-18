@@ -1,58 +1,58 @@
 package txbuilder
 
 import (
-	"github.com/ark-network/ark/common/bitcointree"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-func p2trScript(publicKey *secp256k1.PublicKey, net *chaincfg.Params) ([]byte, error) {
-	tapKey := txscript.ComputeTaprootKeyNoScript(publicKey)
-
-	payment, err := btcutil.NewAddressWitnessPubKeyHash(
-		btcutil.Hash160(tapKey.SerializeCompressed()),
-		net,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return txscript.PayToAddrScript(payment)
-}
-
-func getOnchainReceivers(
-	payments []domain.Payment,
-) []domain.Receiver {
-	receivers := make([]domain.Receiver, 0)
+func getOnchainOutputs(
+	payments []domain.Payment, network *chaincfg.Params,
+) ([]*wire.TxOut, error) {
+	outputs := make([]*wire.TxOut, 0)
 	for _, payment := range payments {
 		for _, receiver := range payment.Receivers {
 			if receiver.IsOnchain() {
-				receivers = append(receivers, receiver)
+				receiverAddr, err := btcutil.DecodeAddress(receiver.OnchainAddress, network)
+				if err != nil {
+					return nil, err
+				}
+
+				receiverScript, err := txscript.PayToAddrScript(receiverAddr)
+				if err != nil {
+					return nil, err
+				}
+
+				outputs = append(outputs, &wire.TxOut{
+					Value:    int64(receiver.Amount),
+					PkScript: receiverScript,
+				})
 			}
 		}
 	}
-	return receivers
+	return outputs, nil
 }
 
-func getOffchainReceivers(
+func getOutputVtxosLeaves(
 	payments []domain.Payment,
-) []bitcointree.Receiver {
-	receivers := make([]bitcointree.Receiver, 0)
+) ([]tree.VtxoLeaf, error) {
+	leaves := make([]tree.VtxoLeaf, 0)
 	for _, payment := range payments {
 		for _, receiver := range payment.Receivers {
 			if !receiver.IsOnchain() {
-				receivers = append(receivers, bitcointree.Receiver{
+				leaves = append(leaves, tree.VtxoLeaf{
 					Pubkey: receiver.Pubkey,
 					Amount: receiver.Amount,
 				})
 			}
 		}
 	}
-	return receivers
+	return leaves, nil
 }
 
 func countSpentVtxos(payments []domain.Payment) uint64 {

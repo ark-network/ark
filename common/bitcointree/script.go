@@ -109,9 +109,12 @@ func (d *CSVSigClosure) Decode(script []byte) (bool, error) {
 		return false, nil
 	}
 
-	sequence := script[1:csvIndex]
+	sequence := script[:csvIndex]
+	if len(sequence) > 1 {
+		sequence = sequence[1:]
+	}
 
-	seconds, err := common.BIP68Decode(sequence)
+	seconds, err := common.BIP68DecodeSequence(sequence)
 	if err != nil {
 		return false, err
 	}
@@ -141,44 +144,6 @@ func (d *CSVSigClosure) Decode(script []byte) (bool, error) {
 	return valid, nil
 }
 
-func ComputeVtxoTaprootScript(
-	userPubkey, aspPubkey *secp256k1.PublicKey, exitDelay uint,
-) (*secp256k1.PublicKey, *txscript.TapscriptProof, error) {
-	redeemClosure := &CSVSigClosure{
-		Pubkey:  userPubkey,
-		Seconds: exitDelay,
-	}
-
-	forfeitClosure := &MultisigClosure{
-		Pubkey:    userPubkey,
-		AspPubkey: aspPubkey,
-	}
-
-	redeemLeaf, err := redeemClosure.Leaf()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	forfeitLeaf, err := forfeitClosure.Leaf()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	vtxoTaprootTree := txscript.AssembleTaprootScriptTree(
-		*redeemLeaf, *forfeitLeaf,
-	)
-	root := vtxoTaprootTree.RootNode.TapHash()
-
-	unspendableKey := UnspendableKey()
-	vtxoTaprootKey := txscript.ComputeTaprootOutputKey(unspendableKey, root[:])
-
-	redeemLeafHash := redeemLeaf.TapHash()
-	proofIndex := vtxoTaprootTree.LeafProofIndex[redeemLeafHash]
-	proof := vtxoTaprootTree.LeafMerkleProofs[proofIndex]
-
-	return vtxoTaprootKey, &proof, nil
-}
-
 func decodeChecksigScript(script []byte) (bool, *secp256k1.PublicKey, error) {
 	data32Index := bytes.Index(script, []byte{txscript.OP_DATA_32})
 	if data32Index == -1 {
@@ -200,15 +165,18 @@ func decodeChecksigScript(script []byte) (bool, *secp256k1.PublicKey, error) {
 
 // checkSequenceVerifyScript without checksig
 func encodeCsvScript(seconds uint) ([]byte, error) {
-	sequence, err := common.BIP68Encode(seconds)
+	sequence, err := common.BIP68Sequence(seconds)
 	if err != nil {
 		return nil, err
 	}
 
-	return txscript.NewScriptBuilder().AddData(sequence).AddOps([]byte{
-		txscript.OP_CHECKSEQUENCEVERIFY,
-		txscript.OP_DROP,
-	}).Script()
+	return txscript.NewScriptBuilder().
+		AddInt64(int64(sequence)).
+		AddOps([]byte{
+			txscript.OP_CHECKSEQUENCEVERIFY,
+			txscript.OP_DROP,
+		}).
+		Script()
 }
 
 // checkSequenceVerifyScript + checksig

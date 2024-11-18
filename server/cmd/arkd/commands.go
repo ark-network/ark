@@ -32,6 +32,16 @@ var (
 		Usage: "address gap limit for wallet restoration",
 		Value: 100,
 	}
+	amountFlag = &cli.UintFlag{
+		Name:     "amount",
+		Usage:    "amount of the note in satoshis",
+		Required: true,
+	}
+	quantityFlag = &cli.UintFlag{
+		Name:  "quantity",
+		Usage: "quantity of notes to create",
+		Value: 1,
+	}
 )
 
 // commands
@@ -46,6 +56,7 @@ var (
 			walletUnlockCmd,
 			walletAddressCmd,
 			walletBalanceCmd,
+			createNoteCmd,
 		),
 	}
 	walletStatusCmd = &cli.Command{
@@ -75,7 +86,15 @@ var (
 		Usage:  "Get the wallet balance",
 		Action: walletBalanceAction,
 	}
+	createNoteCmd = &cli.Command{
+		Name:   "note",
+		Usage:  "Create a credit note",
+		Action: createNoteAction,
+		Flags:  []cli.Flag{amountFlag, quantityFlag},
+	}
 )
+
+var timeout = time.Minute
 
 func walletStatusAction(ctx *cli.Context) error {
 	baseURL := ctx.String("url")
@@ -206,6 +225,39 @@ func walletBalanceAction(ctx *cli.Context) error {
 	return nil
 }
 
+func createNoteAction(ctx *cli.Context) error {
+	baseURL := ctx.String("url")
+	amount := ctx.Uint("amount")
+	quantity := ctx.Uint("quantity")
+	var macaroon string
+	if !ctx.Bool("no-macaroon") {
+		macaroonPath := ctx.String("macaroon-path")
+		mac, err := getMacaroon(macaroonPath)
+		if err != nil {
+			return err
+		}
+		macaroon = mac
+	}
+	tlsCertPath := ctx.String("tls-cert-path")
+	if strings.Contains(baseURL, "http://") {
+		tlsCertPath = ""
+	}
+
+	url := fmt.Sprintf("%s/v1/admin/note", baseURL)
+	body := fmt.Sprintf(`{"amount": %d, "quantity": %d}`, amount, quantity)
+
+	notes, err := post[[]string](url, body, "notes", macaroon, tlsCertPath)
+	if err != nil {
+		return err
+	}
+
+	for _, note := range notes {
+		fmt.Println(note)
+	}
+
+	return nil
+}
+
 func post[T any](url, body, key, macaroon, tlsCert string) (result T, err error) {
 	tlsConfig, err := getTLSConfig(tlsCert)
 	if err != nil {
@@ -220,7 +272,7 @@ func post[T any](url, body, key, macaroon, tlsCert string) (result T, err error)
 		req.Header.Add("X-Macaroon", macaroon)
 	}
 	client := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: timeout,
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,
 		},
@@ -237,7 +289,7 @@ func post[T any](url, body, key, macaroon, tlsCert string) (result T, err error)
 		return
 	}
 	if resp.StatusCode != http.StatusOK {
-		err = fmt.Errorf(string(buf))
+		err = fmt.Errorf("failed to post: %s", string(buf))
 		return
 	}
 	if key == "" {
@@ -267,7 +319,7 @@ func get[T any](url, key, macaroon, tlsCert string) (result T, err error) {
 	}
 
 	client := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: timeout,
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,
 		},
@@ -283,7 +335,7 @@ func get[T any](url, key, macaroon, tlsCert string) (result T, err error) {
 		return
 	}
 	if resp.StatusCode != http.StatusOK {
-		err = fmt.Errorf(string(buf))
+		err = fmt.Errorf("failed to get: %s", string(buf))
 		return
 	}
 
@@ -331,7 +383,7 @@ func getBalance(url, macaroon, tlsCert string) (*balance, error) {
 		req.Header.Add("X-Macaroon", macaroon)
 	}
 	client := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: timeout,
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,
 		},
@@ -347,7 +399,7 @@ func getBalance(url, macaroon, tlsCert string) (*balance, error) {
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		err = fmt.Errorf(string(buf))
+		err = fmt.Errorf("%s", buf)
 		return nil, err
 	}
 
@@ -384,7 +436,7 @@ func getStatus(url, tlsCert string) (*status, error) {
 	req.Header.Add("Content-Type", "application/json")
 
 	client := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: timeout,
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,
 		},
@@ -401,7 +453,7 @@ func getStatus(url, tlsCert string) (*status, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		err = fmt.Errorf(string(buf))
+		err = fmt.Errorf("failed to get status: %s", string(buf))
 		return nil, err
 	}
 

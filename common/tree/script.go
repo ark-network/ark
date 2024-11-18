@@ -3,15 +3,13 @@ package tree
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/vulpemventures/go-elements/address"
-	"github.com/vulpemventures/go-elements/network"
-	"github.com/vulpemventures/go-elements/payment"
 	"github.com/vulpemventures/go-elements/taproot"
 )
 
@@ -39,7 +37,7 @@ type CSVSigClosure struct {
 	Seconds uint
 }
 
-type ForfeitClosure struct {
+type MultisigClosure struct {
 	Pubkey    *secp256k1.PublicKey
 	AspPubkey *secp256k1.PublicKey
 }
@@ -57,15 +55,15 @@ func DecodeClosure(script []byte) (Closure, error) {
 		return closure, nil
 	}
 
-	closure = &ForfeitClosure{}
+	closure = &MultisigClosure{}
 	if valid, err := closure.Decode(script); err == nil && valid {
 		return closure, nil
 	}
 
-	return nil, fmt.Errorf("invalid closure script")
+	return nil, fmt.Errorf("invalid closure script %s", hex.EncodeToString(script))
 }
 
-func (f *ForfeitClosure) Leaf() (*taproot.TapElementsLeaf, error) {
+func (f *MultisigClosure) Leaf() (*taproot.TapElementsLeaf, error) {
 	aspKeyBytes := schnorr.SerializePubKey(f.AspPubkey)
 	userKeyBytes := schnorr.SerializePubKey(f.Pubkey)
 
@@ -80,7 +78,7 @@ func (f *ForfeitClosure) Leaf() (*taproot.TapElementsLeaf, error) {
 	return &tapLeaf, nil
 }
 
-func (f *ForfeitClosure) Decode(script []byte) (bool, error) {
+func (f *MultisigClosure) Decode(script []byte) (bool, error) {
 	valid, aspPubKey, err := decodeChecksigScript(script)
 	if err != nil {
 		return false, err
@@ -132,9 +130,12 @@ func (d *CSVSigClosure) Decode(script []byte) (bool, error) {
 		return false, nil
 	}
 
-	sequence := script[1:csvIndex]
+	sequence := script[:csvIndex]
+	if len(sequence) > 1 {
+		sequence = sequence[1:]
+	}
 
-	seconds, err := common.BIP68Decode(sequence)
+	seconds, err := common.BIP68DecodeSequence(sequence)
 	if err != nil {
 		return false, err
 	}
@@ -283,59 +284,6 @@ func (c *UnrollClosure) Decode(script []byte) (valid bool, err error) {
 	return true, nil
 }
 
-func ComputeVtxoTaprootScript(
-	userPubkey, aspPubkey *secp256k1.PublicKey, exitDelay uint, net network.Network,
-) (*secp256k1.PublicKey, *taproot.TapscriptElementsProof, []byte, string, error) {
-	redeemClosure := &CSVSigClosure{
-		Pubkey:  userPubkey,
-		Seconds: exitDelay,
-	}
-
-	forfeitClosure := &ForfeitClosure{
-		Pubkey:    userPubkey,
-		AspPubkey: aspPubkey,
-	}
-
-	redeemLeaf, err := redeemClosure.Leaf()
-	if err != nil {
-		return nil, nil, nil, "", err
-	}
-
-	forfeitLeaf, err := forfeitClosure.Leaf()
-	if err != nil {
-		return nil, nil, nil, "", err
-	}
-
-	vtxoTaprootTree := taproot.AssembleTaprootScriptTree(
-		*redeemLeaf, *forfeitLeaf,
-	)
-	root := vtxoTaprootTree.RootNode.TapHash()
-
-	unspendableKey := UnspendableKey()
-	vtxoTaprootKey := taproot.ComputeTaprootOutputKey(unspendableKey, root[:])
-
-	redeemLeafHash := redeemLeaf.TapHash()
-	proofIndex := vtxoTaprootTree.LeafProofIndex[redeemLeafHash]
-	proof := vtxoTaprootTree.LeafMerkleProofs[proofIndex]
-
-	pay, err := payment.FromTweakedKey(vtxoTaprootKey, &net, nil)
-	if err != nil {
-		return nil, nil, nil, "", err
-	}
-
-	addr, err := pay.TaprootAddress()
-	if err != nil {
-		return nil, nil, nil, "", err
-	}
-
-	script, err := address.ToOutputScript(addr)
-	if err != nil {
-		return nil, nil, nil, "", err
-	}
-
-	return vtxoTaprootKey, &proof, script, addr, nil
-}
-
 func decodeIntrospectionScript(
 	script []byte, expectedIndex byte, isVerify bool,
 ) (bool, *secp256k1.PublicKey, uint64, error) {
@@ -424,15 +372,18 @@ func decodeChecksigScript(script []byte) (bool, *secp256k1.PublicKey, error) {
 
 // checkSequenceVerifyScript without checksig
 func encodeCsvScript(seconds uint) ([]byte, error) {
-	sequence, err := common.BIP68Encode(seconds)
+	sequence, err := common.BIP68Sequence(seconds)
 	if err != nil {
 		return nil, err
 	}
 
-	return txscript.NewScriptBuilder().AddData(sequence).AddOps([]byte{
-		txscript.OP_CHECKSEQUENCEVERIFY,
-		txscript.OP_DROP,
-	}).Script()
+	return txscript.NewScriptBuilder().
+		AddInt64(int64(sequence)).
+		AddOps([]byte{
+			txscript.OP_CHECKSEQUENCEVERIFY,
+			txscript.OP_DROP,
+		}).
+		Script()
 }
 
 // checkSequenceVerifyScript + checksig

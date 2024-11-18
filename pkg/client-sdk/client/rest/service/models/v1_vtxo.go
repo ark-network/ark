@@ -18,23 +18,29 @@ import (
 // swagger:model v1Vtxo
 type V1Vtxo struct {
 
+	// amount
+	Amount string `json:"amount,omitempty"`
+
+	// created at
+	CreatedAt string `json:"createdAt,omitempty"`
+
 	// expire at
 	ExpireAt string `json:"expireAt,omitempty"`
 
+	// is oor
+	IsOor bool `json:"isOor,omitempty"`
+
 	// outpoint
-	Outpoint *V1Input `json:"outpoint,omitempty"`
+	Outpoint *V1Outpoint `json:"outpoint,omitempty"`
 
-	// pending
-	Pending bool `json:"pending,omitempty"`
+	// pubkey
+	Pubkey string `json:"pubkey,omitempty"`
 
-	// pending data
-	PendingData *V1PendingPayment `json:"pendingData,omitempty"`
+	// redeem tx
+	RedeemTx string `json:"redeemTx,omitempty"`
 
-	// pool txid
-	PoolTxid string `json:"poolTxid,omitempty"`
-
-	// receiver
-	Receiver *V1Output `json:"receiver,omitempty"`
+	// round txid
+	RoundTxid string `json:"roundTxid,omitempty"`
 
 	// spent
 	Spent bool `json:"spent,omitempty"`
@@ -51,14 +57,6 @@ func (m *V1Vtxo) Validate(formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.validateOutpoint(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.validatePendingData(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.validateReceiver(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -87,57 +85,11 @@ func (m *V1Vtxo) validateOutpoint(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *V1Vtxo) validatePendingData(formats strfmt.Registry) error {
-	if swag.IsZero(m.PendingData) { // not required
-		return nil
-	}
-
-	if m.PendingData != nil {
-		if err := m.PendingData.Validate(formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("pendingData")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("pendingData")
-			}
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (m *V1Vtxo) validateReceiver(formats strfmt.Registry) error {
-	if swag.IsZero(m.Receiver) { // not required
-		return nil
-	}
-
-	if m.Receiver != nil {
-		if err := m.Receiver.Validate(formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("receiver")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("receiver")
-			}
-			return err
-		}
-	}
-
-	return nil
-}
-
 // ContextValidate validate this v1 vtxo based on the context it is used
 func (m *V1Vtxo) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.contextValidateOutpoint(ctx, formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.contextValidatePendingData(ctx, formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.contextValidateReceiver(ctx, formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -160,48 +112,6 @@ func (m *V1Vtxo) contextValidateOutpoint(ctx context.Context, formats strfmt.Reg
 				return ve.ValidateName("outpoint")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
 				return ce.ValidateName("outpoint")
-			}
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (m *V1Vtxo) contextValidatePendingData(ctx context.Context, formats strfmt.Registry) error {
-
-	if m.PendingData != nil {
-
-		if swag.IsZero(m.PendingData) { // not required
-			return nil
-		}
-
-		if err := m.PendingData.ContextValidate(ctx, formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("pendingData")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("pendingData")
-			}
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (m *V1Vtxo) contextValidateReceiver(ctx context.Context, formats strfmt.Registry) error {
-
-	if m.Receiver != nil {
-
-		if swag.IsZero(m.Receiver) { // not required
-			return nil
-		}
-
-		if err := m.Receiver.ContextValidate(ctx, formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("receiver")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("receiver")
 			}
 			return err
 		}

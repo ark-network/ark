@@ -3,16 +3,17 @@ package singlekeywallet
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
+	"strings"
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
-	"github.com/ark-network/ark/pkg/client-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	walletstore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store"
-	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
@@ -26,56 +27,122 @@ type liquidWallet struct {
 }
 
 func NewLiquidWallet(
-	configStore store.ConfigStore, walletStore walletstore.WalletStore,
+	configStore types.ConfigStore, walletStore walletstore.WalletStore,
 ) (wallet.WalletService, error) {
 	walletData, err := walletStore.GetWallet()
 	if err != nil {
 		return nil, err
 	}
 	return &liquidWallet{
-		&singlekeyWallet{configStore, walletStore, nil, walletData},
+		&singlekeyWallet{
+			configStore: configStore,
+			walletStore: walletStore,
+			walletData:  walletData,
+		},
 	}, nil
 }
 
 func (w *liquidWallet) GetAddresses(
 	ctx context.Context,
-) ([]string, []string, []string, error) {
-	offchainAddr, onchainAddr, redemptionAddr, err := w.getAddress(ctx)
+) ([]wallet.DescriptorAddress, []wallet.DescriptorAddress, []wallet.DescriptorAddress, error) {
+	offchainAddr, boardingAddr, err := w.getAddress(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	offchainAddrs := []string{offchainAddr}
-	onchainAddrs := []string{onchainAddr}
-	redemptionAddrs := []string{redemptionAddr}
-	return offchainAddrs, onchainAddrs, redemptionAddrs, nil
+	encodedOffchainAddr, err := offchainAddr.Address.Encode()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	data, err := w.configStore.GetData(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	liquidNet := utils.ToElementsNetwork(data.Network)
+
+	vtxoP2TR, err := payment.FromTweakedKey(offchainAddr.Address.VtxoTapKey, &liquidNet, nil)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	redemptionAddr, err := vtxoP2TR.TaprootAddress()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	offchainAddrs := []wallet.DescriptorAddress{
+		{
+			Descriptor: offchainAddr.Descriptor,
+			Address:    encodedOffchainAddr,
+		},
+	}
+	boardingAddrs := []wallet.DescriptorAddress{
+		{
+			Descriptor: boardingAddr.Descriptor,
+			Address:    boardingAddr.Address,
+		},
+	}
+
+	redemptionAddrs := []wallet.DescriptorAddress{
+		{
+			Descriptor: offchainAddr.Descriptor,
+			Address:    redemptionAddr,
+		},
+	}
+
+	return offchainAddrs, boardingAddrs, redemptionAddrs, nil
 }
 
 func (w *liquidWallet) NewAddress(
 	ctx context.Context, _ bool,
-) (string, string, error) {
-	offchainAddr, onchainAddr, _, err := w.getAddress(ctx)
-	if err != nil {
-		return "", "", err
-	}
-	return offchainAddr, onchainAddr, nil
-}
-
-func (w *liquidWallet) NewAddresses(
-	ctx context.Context, _ bool, num int,
-) ([]string, []string, error) {
-	offchainAddr, onchainAddr, _, err := w.getAddress(ctx)
+) (*wallet.DescriptorAddress, *wallet.DescriptorAddress, error) {
+	offchainAddr, boardingAddr, err := w.getAddress(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	offchainAddrs := make([]string, 0, num)
-	onchainAddrs := make([]string, 0, num)
-	for i := 0; i < num; i++ {
-		offchainAddrs = append(offchainAddrs, offchainAddr)
-		onchainAddrs = append(onchainAddrs, onchainAddr)
+	encodedOffchainAddr, err := offchainAddr.Address.Encode()
+	if err != nil {
+		return nil, nil, err
 	}
-	return offchainAddrs, onchainAddrs, nil
+
+	return &wallet.DescriptorAddress{
+			Descriptor: offchainAddr.Descriptor,
+			Address:    encodedOffchainAddr,
+		}, &wallet.DescriptorAddress{
+			Descriptor: boardingAddr.Descriptor,
+			Address:    boardingAddr.Address,
+		}, nil
+}
+
+func (w *liquidWallet) NewAddresses(
+	ctx context.Context, _ bool, num int,
+) ([]wallet.DescriptorAddress, []wallet.DescriptorAddress, error) {
+	offchainAddr, boardingAddr, err := w.getAddress(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	offchainAddrs := make([]wallet.DescriptorAddress, 0, num)
+	boardingAddrs := make([]wallet.DescriptorAddress, 0, num)
+	for i := 0; i < num; i++ {
+		encodedOffchainAddr, err := offchainAddr.Address.Encode()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		offchainAddrs = append(offchainAddrs, wallet.DescriptorAddress{
+			Descriptor: offchainAddr.Descriptor,
+			Address:    encodedOffchainAddr,
+		})
+		boardingAddrs = append(boardingAddrs, wallet.DescriptorAddress{
+			Descriptor: boardingAddr.Descriptor,
+			Address:    boardingAddr.Address,
+		})
+	}
+	return offchainAddrs, boardingAddrs, nil
 }
 
 func (s *liquidWallet) SignTransaction(
@@ -114,13 +181,7 @@ func (s *liquidWallet) SignTransaction(
 			return "", err
 		}
 
-		sighashType := txscript.SigHashAll
-
-		if utxo.Script[0] == txscript.OP_1 {
-			sighashType = txscript.SigHashDefault
-		}
-
-		if err := updater.AddInSighashType(i, sighashType); err != nil {
+		if err := updater.AddInSighashType(i, txscript.SigHashDefault); err != nil {
 			return "", err
 		}
 	}
@@ -135,8 +196,6 @@ func (s *liquidWallet) SignTransaction(
 		return "", err
 	}
 	liquidNet := utils.ToElementsNetwork(storeData.Network)
-	p2wpkh := payment.FromPublicKey(s.walletData.Pubkey, &liquidNet, nil)
-	onchainWalletScript := p2wpkh.WitnessScript
 
 	utx, err := pset.UnsignedTx()
 	if err != nil {
@@ -156,33 +215,6 @@ func (s *liquidWallet) SignTransaction(
 	serializedPubKey := s.walletData.Pubkey.SerializeCompressed()
 
 	for i, input := range pset.Inputs {
-		prevout := input.GetUtxo()
-
-		if bytes.Equal(prevout.Script, onchainWalletScript) {
-			p, err := payment.FromScript(prevout.Script, &liquidNet, nil)
-			if err != nil {
-				return "", err
-			}
-
-			preimage := utx.HashForWitnessV0(
-				i, p.Script, prevout.Value, txscript.SigHashAll,
-			)
-
-			sig := ecdsa.Sign(s.privateKey, preimage[:])
-
-			signatureWithSighashType := append(
-				sig.Serialize(), byte(txscript.SigHashAll),
-			)
-
-			err = signer.SignInput(
-				i, signatureWithSighashType, serializedPubKey, nil, nil,
-			)
-			if err != nil {
-				return "", err
-			}
-			continue
-		}
-
 		if len(input.TapLeafScript) > 0 {
 			genesis, err := chainhash.NewHashFromStr(liquidNet.GenesisBlockHash)
 			if err != nil {
@@ -199,7 +231,7 @@ func (s *liquidWallet) SignTransaction(
 				switch c := closure.(type) {
 				case *tree.CSVSigClosure:
 					sign = bytes.Equal(c.Pubkey.SerializeCompressed()[1:], serializedPubKey[1:])
-				case *tree.ForfeitClosure:
+				case *tree.MultisigClosure:
 					sign = bytes.Equal(c.Pubkey.SerializeCompressed()[1:], serializedPubKey[1:])
 				}
 
@@ -255,39 +287,97 @@ func (s *liquidWallet) SignTransaction(
 	return pset.ToBase64()
 }
 
+func (w *liquidWallet) SignMessage(
+	ctx context.Context, message []byte, pubkey string,
+) (string, error) {
+	if w.IsLocked() {
+		return "", fmt.Errorf("wallet is locked")
+	}
+
+	walletPubkeyHex := hex.EncodeToString(schnorr.SerializePubKey(w.walletData.Pubkey))
+	if walletPubkeyHex != pubkey {
+		return "", fmt.Errorf("pubkey mismatch, cannot sign message")
+	}
+
+	sig, err := schnorr.Sign(w.privateKey, message)
+	if err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(sig.Serialize()), nil
+}
+
 func (w *liquidWallet) getAddress(
 	ctx context.Context,
-) (string, string, string, error) {
+) (
+	*struct {
+		Address    common.Address
+		Descriptor string
+	},
+	*wallet.DescriptorAddress,
+	error,
+) {
 	if w.walletData == nil {
-		return "", "", "", fmt.Errorf("wallet not initialized")
+		return nil, nil, fmt.Errorf("wallet not initialized")
 	}
 
 	data, err := w.configStore.GetData(ctx)
 	if err != nil {
-		return "", "", "", err
-	}
-
-	offchainAddr, err := common.EncodeAddress(
-		data.Network.Addr, w.walletData.Pubkey, data.AspPubkey,
-	)
-	if err != nil {
-		return "", "", "", err
+		return nil, nil, err
 	}
 
 	liquidNet := utils.ToElementsNetwork(data.Network)
 
-	p2wpkh := payment.FromPublicKey(w.walletData.Pubkey, &liquidNet, nil)
-	onchainAddr, err := p2wpkh.WitnessPubKeyHash()
-	if err != nil {
-		return "", "", "", err
+	vtxoScript := &tree.DefaultVtxoScript{
+		Owner:     w.walletData.Pubkey,
+		Asp:       data.AspPubkey,
+		ExitDelay: uint(data.UnilateralExitDelay),
 	}
 
-	_, _, _, redemptionAddr, err := tree.ComputeVtxoTaprootScript(
-		w.walletData.Pubkey, data.AspPubkey, uint(data.UnilateralExitDelay), liquidNet,
+	vtxoTapKey, _, err := vtxoScript.TapTree()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	offchainAddr := &common.Address{
+		HRP:        data.Network.Addr,
+		Asp:        data.AspPubkey,
+		VtxoTapKey: vtxoTapKey,
+	}
+
+	myPubkeyStr := hex.EncodeToString(schnorr.SerializePubKey(w.walletData.Pubkey))
+	descriptorStr := strings.ReplaceAll(
+		data.BoardingDescriptorTemplate, "USER", myPubkeyStr,
 	)
+
+	onboardingScript, err := tree.ParseVtxoScript(descriptorStr)
 	if err != nil {
-		return "", "", "", err
+		return nil, nil, err
 	}
 
-	return offchainAddr, onchainAddr, redemptionAddr, nil
+	tapKey, _, err := onboardingScript.TapTree()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	p2tr, err := payment.FromTweakedKey(tapKey, &liquidNet, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	boardingAddr, err := p2tr.TaprootAddress()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &struct {
+			Address    common.Address
+			Descriptor string
+		}{
+			Address:    *offchainAddr,
+			Descriptor: vtxoScript.ToDescriptor(),
+		}, &wallet.DescriptorAddress{
+			Descriptor: descriptorStr,
+			Address:    boardingAddr,
+		}, nil
 }

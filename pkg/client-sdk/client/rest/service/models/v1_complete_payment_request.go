@@ -19,9 +19,6 @@ type V1CompletePaymentRequest struct {
 
 	// signed redeem tx
 	SignedRedeemTx string `json:"signedRedeemTx,omitempty"`
-
-	// signed unconditional forfeit txs
-	SignedUnconditionalForfeitTxs []string `json:"signedUnconditionalForfeitTxs"`
 }
 
 // Validate validates this v1 complete payment request

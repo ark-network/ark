@@ -7,7 +7,6 @@ import (
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
-	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/address"
@@ -46,35 +45,44 @@ func getPsetId(pset *psetv2.Pset) (string, error) {
 	return utx.TxHash().String(), nil
 }
 
-func getOnchainReceivers(
-	payments []domain.Payment,
-) []domain.Receiver {
-	receivers := make([]domain.Receiver, 0)
+func getOnchainOutputs(
+	payments []domain.Payment, net *network.Network,
+) ([]psetv2.OutputArgs, error) {
+	outputs := make([]psetv2.OutputArgs, 0)
 	for _, payment := range payments {
 		for _, receiver := range payment.Receivers {
 			if receiver.IsOnchain() {
-				receivers = append(receivers, receiver)
+				receiverScript, err := address.ToOutputScript(receiver.OnchainAddress)
+				if err != nil {
+					return nil, err
+				}
+
+				outputs = append(outputs, psetv2.OutputArgs{
+					Script: receiverScript,
+					Amount: receiver.Amount,
+					Asset:  net.AssetID,
+				})
 			}
 		}
 	}
-	return receivers
+	return outputs, nil
 }
 
-func getOffchainReceivers(
+func getOutputVtxosLeaves(
 	payments []domain.Payment,
-) []tree.Receiver {
-	receivers := make([]tree.Receiver, 0)
+) ([]tree.VtxoLeaf, error) {
+	receivers := make([]tree.VtxoLeaf, 0)
 	for _, payment := range payments {
 		for _, receiver := range payment.Receivers {
 			if !receiver.IsOnchain() {
-				receivers = append(receivers, tree.Receiver{
+				receivers = append(receivers, tree.VtxoLeaf{
 					Pubkey: receiver.Pubkey,
 					Amount: receiver.Amount,
 				})
 			}
 		}
 	}
-	return receivers
+	return receivers, nil
 }
 
 func toWitnessUtxo(in ports.TxInput) (*transaction.TxOutput, error) {
@@ -134,10 +142,6 @@ func addInputs(
 	}
 
 	return nil
-}
-
-func taprootOutputScript(taprootKey *secp256k1.PublicKey) ([]byte, error) {
-	return txscript.NewScriptBuilder().AddOp(txscript.OP_1).AddData(schnorr.SerializePubKey(taprootKey)).Script()
 }
 
 func isOnchainOnly(payments []domain.Payment) bool {

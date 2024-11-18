@@ -2,16 +2,17 @@ name: ci_unit
 
 on:
   push:
+    branches:
+      - master
     paths:
-      - "server/**"
-      - "pkg/client-sdk/**"
-    branches: [master]
+      - 'server/**'
+      - 'pkg/client-sdk/**'
   pull_request:
     branches:
       - master
     paths:
-      - "server/**"
-      - "pkg/client-sdk/**"
+      - 'server/**'
+      - 'pkg/client-sdk/**'
 
 jobs:
   check-go-sync:
@@ -22,7 +23,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: '>=1.22.6'
+          go-version: '>=1.23.1'
 
       - name: Run go work sync
         run: go work sync
@@ -44,18 +45,20 @@ jobs:
     steps:
       - uses: actions/setup-go@v4
         with:
-          go-version: '>=1.22.6'
+          go-version: '>=1.23.1'
       - uses: actions/checkout@v3
       - name: check linting
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.54
+          version: v1.61
           working-directory: ./server
+          args: --timeout 5m
       - name: check code integrity
         uses: securego/gosec@master
         with:
-          args: "-severity high -quiet ./..."
-      - run: go get -v -t -d ./...
+          args: '-severity high -quiet -exclude=G115 ./...'
+      - name: Run go work sync
+        run: go work sync
       - name: unit testing
         run: make test
 
@@ -68,17 +71,19 @@ jobs:
     steps:
       - uses: actions/setup-go@v4
         with:
-          go-version: '>=1.22.6'
+          go-version: '>=1.23.1'
       - uses: actions/checkout@v3
       - name: check linting
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.54
+          version: v1.61
           working-directory: ./pkg/client-sdk
+          args: --timeout 5m
       - name: check code integrity
         uses: securego/gosec@master
         with:
-          args: "-severity high -quiet ./..."
-      - run: go get -v -t -d ./...
+          args: '-severity high -quiet -exclude=G115 ./...'
+      - name: Run go work sync
+        run: go work sync
       - name: unit testing
         run: make test

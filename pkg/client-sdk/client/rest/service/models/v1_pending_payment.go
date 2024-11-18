@@ -19,9 +19,6 @@ type V1PendingPayment struct {
 
 	// redeem tx
 	RedeemTx string `json:"redeemTx,omitempty"`
-
-	// unconditional forfeit txs
-	UnconditionalForfeitTxs []string `json:"unconditionalForfeitTxs"`
 }
 
 // Validate validates this v1 pending payment

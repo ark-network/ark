@@ -22,8 +22,8 @@ import (
 const (
 	emptyPtx = "cHNldP8BAgQCAAAAAQQBAAEFAQABBgEDAfsEAgAAAAA="
 	emptyTx  = "0200000000000000000000"
-	pubkey1  = "0300000000000000000000000000000000000000000000000000000000000000001"
-	pubkey2  = "0200000000000000000000000000000000000000000000000000000000000000002"
+	pubkey   = "25a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967"
+	pubkey2  = "33ffb3dee353b1a9ebe4ced64b946238d0a4ac364f275d771da6ad2445d07ae0"
 )
 
 var congestionTree = [][]tree.Node{
@@ -110,7 +110,8 @@ func TestService(t *testing.T) {
 			testRoundEventRepository(t, svc)
 			testRoundRepository(t, svc)
 			testVtxoRepository(t, svc)
-
+			testNoteRepository(t, svc)
+			testEntityRepository(t, svc)
 			time.Sleep(5 * time.Second)
 			svc.Close()
 		})
@@ -151,7 +152,7 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 						Id:             "1ea610ff-bf3e-4068-9bfd-b6c3f553467e",
 						CongestionTree: congestionTree,
 						Connectors:     []string{emptyPtx, emptyPtx},
-						PoolTx:         emptyTx,
+						RoundTx:        emptyTx,
 					},
 				},
 				handler: func(round *domain.Round) {
@@ -173,7 +174,7 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 						Id:             "7578231e-428d-45ae-aaa4-e62c77ad5cec",
 						CongestionTree: congestionTree,
 						Connectors:     []string{emptyPtx, emptyPtx},
-						PoolTx:         emptyTx,
+						RoundTx:        emptyTx,
 					},
 					domain.RoundFinalized{
 						Id:         "7578231e-428d-45ae-aaa4-e62c77ad5cec",
@@ -248,42 +249,39 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 									Txid: randomString(32),
 									VOut: 0,
 								},
-								PoolTx:   randomString(32),
-								ExpireAt: 7980322,
-								Receiver: domain.Receiver{
-									Pubkey: randomString(36),
-									Amount: 300,
-								},
+								RoundTxid: randomString(32),
+								ExpireAt:  7980322,
+								Pubkey:    randomString(32),
+								Amount:    300,
 							},
 						},
 						Receivers: []domain.Receiver{{
-							Pubkey: randomString(36),
+							Pubkey: randomString(32),
 							Amount: 300,
 						}},
 					},
 					{
 						Id: uuid.New().String(),
 						Inputs: []domain.Vtxo{
+
 							{
 								VtxoKey: domain.VtxoKey{
 									Txid: randomString(32),
 									VOut: 0,
 								},
-								PoolTx:   randomString(32),
-								ExpireAt: 7980322,
-								Receiver: domain.Receiver{
-									Pubkey: randomString(36),
-									Amount: 600,
-								},
+								RoundTxid: randomString(32),
+								ExpireAt:  7980322,
+								Pubkey:    randomString(32),
+								Amount:    600,
 							},
 						},
 						Receivers: []domain.Receiver{
 							{
-								Pubkey: randomString(36),
+								Pubkey: randomString(32),
 								Amount: 400,
 							},
 							{
-								Pubkey: randomString(34),
+								Pubkey: randomString(32),
 								Amount: 200,
 							},
 						},
@@ -294,7 +292,7 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 				Id:             roundId,
 				CongestionTree: congestionTree,
 				Connectors:     []string{emptyPtx, emptyPtx},
-				PoolTx:         emptyTx,
+				RoundTx:        emptyTx,
 			},
 		}
 		events = append(events, newEvents...)
@@ -349,20 +347,16 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 					Txid: randomString(32),
 					VOut: 0,
 				},
-				Receiver: domain.Receiver{
-					Pubkey: pubkey1,
-					Amount: 1000,
-				},
+				Pubkey: pubkey,
+				Amount: 1000,
 			},
 			{
 				VtxoKey: domain.VtxoKey{
 					Txid: randomString(32),
 					VOut: 1,
 				},
-				Receiver: domain.Receiver{
-					Pubkey: pubkey1,
-					Amount: 2000,
-				},
+				Pubkey: pubkey,
+				Amount: 2000,
 			},
 		}
 		newVtxos := append(userVtxos, domain.Vtxo{
@@ -370,10 +364,8 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 				Txid: randomString(32),
 				VOut: 1,
 			},
-			Receiver: domain.Receiver{
-				Pubkey: pubkey2,
-				Amount: 2000,
-			},
+			Pubkey: pubkey2,
+			Amount: 2000,
 		})
 
 		vtxoKeys := make([]domain.VtxoKey, 0, len(userVtxos))
@@ -385,7 +377,7 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 		require.Error(t, err)
 		require.Empty(t, vtxos)
 
-		spendableVtxos, spentVtxos, err := svc.Vtxos().GetAllVtxos(ctx, pubkey1)
+		spendableVtxos, spentVtxos, err := svc.Vtxos().GetAllVtxos(ctx, pubkey)
 		require.NoError(t, err)
 		require.Empty(t, spendableVtxos)
 		require.Empty(t, spentVtxos)
@@ -402,7 +394,7 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 		require.NoError(t, err)
 		require.Exactly(t, userVtxos, vtxos)
 
-		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllVtxos(ctx, pubkey1)
+		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllVtxos(ctx, pubkey)
 		require.NoError(t, err)
 
 		sortedVtxos := sortVtxos(userVtxos)
@@ -428,10 +420,88 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 			require.True(t, v.Spent)
 		}
 
-		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllVtxos(ctx, pubkey1)
+		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllVtxos(ctx, pubkey)
 		require.NoError(t, err)
 		require.Exactly(t, vtxos[1:], spendableVtxos)
 		require.Len(t, spentVtxos, len(vtxoKeys[:1]))
+	})
+}
+
+func testNoteRepository(t *testing.T, svc ports.RepoManager) {
+	t.Run("test_note_repository", func(t *testing.T) {
+		ctx := context.Background()
+
+		err := svc.Notes().Add(ctx, 1)
+		require.NoError(t, err)
+
+		err = svc.Notes().Add(ctx, 1099200322)
+		require.NoError(t, err)
+
+		contains, err := svc.Notes().Contains(ctx, 1)
+		require.NoError(t, err)
+		require.True(t, contains)
+
+		contains, err = svc.Notes().Contains(ctx, 1099200322)
+		require.NoError(t, err)
+		require.True(t, contains)
+
+		contains, err = svc.Notes().Contains(ctx, 456)
+		require.NoError(t, err)
+		require.False(t, contains)
+
+		err = svc.Notes().Add(ctx, 1)
+		require.Error(t, err)
+	})
+}
+
+func testEntityRepository(t *testing.T, svc ports.RepoManager) {
+	t.Run("test_entity_repository", func(t *testing.T) {
+		ctx := context.Background()
+
+		vtxoKey := domain.VtxoKey{
+			Txid: randomString(32),
+			VOut: 0,
+		}
+
+		entity := domain.Entity{
+			NostrRecipient: "test",
+		}
+
+		// add
+		err := svc.Entities().Add(ctx, entity, []domain.VtxoKey{vtxoKey})
+		require.NoError(t, err)
+
+		gotEntities, err := svc.Entities().Get(ctx, vtxoKey)
+		require.NoError(t, err)
+		require.NotNil(t, gotEntities)
+		require.Equal(t, entity, gotEntities[0])
+
+		// add another entity
+		entity2 := domain.Entity{
+			NostrRecipient: "test2",
+		}
+
+		err = svc.Entities().Add(ctx, entity2, []domain.VtxoKey{vtxoKey})
+		require.NoError(t, err)
+
+		// if nostrkey is the same, it should not be added
+		err = svc.Entities().Add(ctx, entity2, []domain.VtxoKey{vtxoKey})
+		require.NoError(t, err)
+
+		gotEntities, err = svc.Entities().Get(ctx, vtxoKey)
+		require.NoError(t, err)
+		require.NotNil(t, gotEntities)
+		require.Contains(t, gotEntities, entity)
+		require.Contains(t, gotEntities, entity2)
+		require.Len(t, gotEntities, 2)
+
+		// delete
+		err = svc.Entities().Delete(ctx, []domain.VtxoKey{vtxoKey})
+		require.NoError(t, err)
+
+		gotEntities, err = svc.Entities().Get(ctx, vtxoKey)
+		require.Error(t, err)
+		require.Nil(t, gotEntities)
 	})
 }
 
@@ -531,7 +601,7 @@ type sortReceivers []domain.Receiver
 
 func (a sortReceivers) Len() int           { return len(a) }
 func (a sortReceivers) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a sortReceivers) Less(i, j int) bool { return a[i].Pubkey < a[j].Pubkey }
+func (a sortReceivers) Less(i, j int) bool { return a[i].Amount < a[j].Amount }
 
 type sortStrings []string
 

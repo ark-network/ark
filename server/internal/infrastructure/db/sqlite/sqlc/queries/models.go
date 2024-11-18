@@ -8,6 +8,28 @@ import (
 	"database/sql"
 )
 
+type Entity struct {
+	ID             int64
+	NostrRecipient string
+}
+
+type EntityVtxo struct {
+	EntityID int64
+	VtxoTxid string
+	VtxoVout int64
+}
+
+type EntityVw struct {
+	ID             int64
+	NostrRecipient string
+	VtxoTxid       sql.NullString
+	VtxoVout       sql.NullInt64
+}
+
+type Note struct {
+	ID int64
+}
+
 type Payment struct {
 	ID      string
 	RoundID string
@@ -16,8 +38,8 @@ type Payment struct {
 type PaymentReceiverVw struct {
 	PaymentID      sql.NullString
 	Pubkey         sql.NullString
-	Amount         sql.NullInt64
 	OnchainAddress sql.NullString
+	Amount         sql.NullInt64
 }
 
 type PaymentVtxoVw struct {
@@ -31,15 +53,16 @@ type PaymentVtxoVw struct {
 	Redeemed  sql.NullBool
 	Swept     sql.NullBool
 	ExpireAt  sql.NullInt64
+	CreatedAt sql.NullInt64
 	PaymentID sql.NullString
 	RedeemTx  sql.NullString
 }
 
 type Receiver struct {
 	PaymentID      string
-	Pubkey         string
+	Pubkey         sql.NullString
+	OnchainAddress sql.NullString
 	Amount         int64
-	OnchainAddress string
 }
 
 type Round struct {
@@ -86,22 +109,6 @@ type Tx struct {
 	IsLeaf     sql.NullBool
 }
 
-type UncondForfeitTx struct {
-	ID       int64
-	Tx       string
-	VtxoTxid string
-	VtxoVout int64
-	Position int64
-}
-
-type UncondForfeitTxVw struct {
-	ID       sql.NullInt64
-	Tx       sql.NullString
-	VtxoTxid sql.NullString
-	VtxoVout sql.NullInt64
-	Position sql.NullInt64
-}
-
 type Vtxo struct {
 	Txid      string
 	Vout      int64
@@ -113,6 +120,7 @@ type Vtxo struct {
 	Redeemed  bool
 	Swept     bool
 	ExpireAt  int64
+	CreatedAt int64
 	PaymentID sql.NullString
 	RedeemTx  sql.NullString
 }

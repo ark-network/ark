@@ -2,19 +2,22 @@
 
 This example demonstrates how to compile ARK Go SDK to WebAssembly and use it in a web page.
 
-1. Create a Go file with the main package, check [main.go](main.go).
-
-2. Copy `wasm_exec.js`:
+1. Copy `wasm_exec.js` to a new directory:
 
     ```bash
     cp $(go env GOROOT)/misc/wasm/wasm_exec.js .
     ```
 
-3. Build the Go code to WebAssembly:
+2. On the root directory of this repo, build the Go code to WebAssembly:
 
     ```bash
-    GOOS=js GOARCH=wasm go build -o main.wasm main.go
+    make build-wasm
     ```
+
+3. Move the wasm file to your directory
+
+    ```bash
+    mv <repo>/pkg/client-sdk/build/ark-sdk.wasm .
 
 4. Load the WebAssembly module in a web page, check [index.html](index.html).
 

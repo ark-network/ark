@@ -72,8 +72,7 @@ func UnspendableKey() *secp256k1.PublicKey {
 // - every control block and taproot output scripts
 // - input and output amounts
 func ValidateCongestionTree(
-	tree tree.CongestionTree, poolTx string, aspPublicKey *secp256k1.PublicKey,
-	roundLifetime int64, minRelayFee int64,
+	tree tree.CongestionTree, poolTx string, aspPublicKey *secp256k1.PublicKey, roundLifetime int64,
 ) error {
 	poolTransaction, err := psbt.NewFromRawBytes(strings.NewReader(poolTx), true)
 	if err != nil {
@@ -112,12 +111,12 @@ func ValidateCongestionTree(
 		return ErrWrongPoolTxID
 	}
 
-	sumRootValue := minRelayFee
+	sumRootValue := int64(0)
 	for _, output := range rootPset.UnsignedTx.TxOut {
 		sumRootValue += output.Value
 	}
 
-	if sumRootValue != poolTxAmount {
+	if sumRootValue >= poolTxAmount {
 		return ErrInvalidAmount
 	}
 
@@ -142,7 +141,7 @@ func ValidateCongestionTree(
 	for _, level := range tree {
 		for _, node := range level {
 			if err := validateNodeTransaction(
-				node, tree, root.CloneBytes(), minRelayFee,
+				node, tree, root.CloneBytes(),
 			); err != nil {
 				return err
 			}
@@ -152,7 +151,7 @@ func ValidateCongestionTree(
 	return nil
 }
 
-func validateNodeTransaction(node tree.Node, tree tree.CongestionTree, tapTreeRoot []byte, minRelayFee int64) error {
+func validateNodeTransaction(node tree.Node, tree tree.CongestionTree, tapTreeRoot []byte) error {
 	if node.Tx == "" {
 		return ErrNodeTransactionEmpty
 	}
@@ -241,12 +240,12 @@ func validateNodeTransaction(node tree.Node, tree tree.CongestionTree, tapTreeRo
 			return ErrInvalidTaprootScript
 		}
 
-		sumChildAmount := minRelayFee
+		sumChildAmount := int64(0)
 		for _, output := range childTx.UnsignedTx.TxOut {
 			sumChildAmount += output.Value
 		}
 
-		if sumChildAmount != parentOutput.Value {
+		if sumChildAmount >= parentOutput.Value {
 			return ErrInvalidAmount
 		}
 	}

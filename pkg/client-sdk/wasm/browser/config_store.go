@@ -12,7 +12,7 @@ import (
 	"syscall/js"
 
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
-	"github.com/ark-network/ark/pkg/client-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
@@ -21,49 +21,56 @@ const (
 )
 
 type storeData struct {
-	AspUrl              string `json:"asp_url"`
-	AspPubkey           string `json:"asp_pubkey"`
-	WalletType          string `json:"wallet_type"`
-	ClientType          string `json:"client_type"`
-	ExplorerURL         string `json:"explorer_url"`
-	Network             string `json:"network"`
-	RoundLifetime       string `json:"round_lifetime"`
-	UnilateralExitDelay string `json:"unilateral_exit_delay"`
-	MinRelayFee         string `json:"min_relay_fee"`
+	AspUrl                     string `json:"asp_url"`
+	AspPubkey                  string `json:"asp_pubkey"`
+	WalletType                 string `json:"wallet_type"`
+	ClientType                 string `json:"client_type"`
+	ExplorerURL                string `json:"explorer_url"`
+	Network                    string `json:"network"`
+	RoundLifetime              string `json:"round_lifetime"`
+	RoundInterval              string `json:"round_interval"`
+	UnilateralExitDelay        string `json:"unilateral_exit_delay"`
+	Dust                       string `json:"dust"`
+	ForfeitAddress             string `json:"forfeit_address"`
+	BoardingDescriptorTemplate string `json:"boarding_descriptor_template"`
+	WithTransactionFeed        string `json:"with_transaction_feed"`
 }
 
-type localStorageStore struct {
+type configStore struct {
 	store js.Value
 }
 
-func NewLocalStorageStore() (store.ConfigStore, error) {
-	store := js.Global().Get("localStorage")
-	return &localStorageStore{store}, nil
+func NewConfigStore(store js.Value) types.ConfigStore {
+	return &configStore{store}
 }
 
-func (s *localStorageStore) GetType() string {
+func (s *configStore) GetType() string {
 	return LocalStorageStore
 }
 
-func (s *localStorageStore) GetDatadir() string {
+func (s *configStore) GetDatadir() string {
 	return ""
 }
 
-func (s *localStorageStore) AddData(ctx context.Context, data store.StoreData) error {
+func (s *configStore) AddData(ctx context.Context, data types.Config) error {
 	sd := &storeData{
-		AspUrl:              data.AspUrl,
-		AspPubkey:           hex.EncodeToString(data.AspPubkey.SerializeCompressed()),
-		WalletType:          data.WalletType,
-		ClientType:          data.ClientType,
-		Network:             data.Network.Name,
-		RoundLifetime:       fmt.Sprintf("%d", data.RoundLifetime),
-		UnilateralExitDelay: fmt.Sprintf("%d", data.UnilateralExitDelay),
-		MinRelayFee:         fmt.Sprintf("%d", data.MinRelayFee),
+		AspUrl:                     data.AspUrl,
+		AspPubkey:                  hex.EncodeToString(data.AspPubkey.SerializeCompressed()),
+		WalletType:                 data.WalletType,
+		ClientType:                 data.ClientType,
+		Network:                    data.Network.Name,
+		RoundLifetime:              fmt.Sprintf("%d", data.RoundLifetime),
+		RoundInterval:              fmt.Sprintf("%d", data.RoundInterval),
+		UnilateralExitDelay:        fmt.Sprintf("%d", data.UnilateralExitDelay),
+		Dust:                       fmt.Sprintf("%d", data.Dust),
+		ExplorerURL:                data.ExplorerURL,
+		ForfeitAddress:             data.ForfeitAddress,
+		BoardingDescriptorTemplate: data.BoardingDescriptorTemplate,
 	}
 	return s.writeData(sd)
 }
 
-func (s *localStorageStore) GetData(ctx context.Context) (*store.StoreData, error) {
+func (s *configStore) GetData(ctx context.Context) (*types.Config, error) {
 	key := s.store.Call("getItem", "asp_pubkey")
 	if key.IsNull() || key.IsUndefined() {
 		return nil, nil
@@ -82,29 +89,38 @@ func (s *localStorageStore) GetData(ctx context.Context) (*store.StoreData, erro
 	}
 	network := utils.NetworkFromString(s.store.Call("getItem", "network").String())
 	roundLifetime, _ := strconv.Atoi(s.store.Call("getItem", "round_lifetime").String())
+	roundInterval, _ := strconv.Atoi(s.store.Call("getItem", "round_interval").String())
 	unilateralExitDelay, _ := strconv.Atoi(s.store.Call("getItem", "unilateral_exit_delay").String())
-	minRelayFee, _ := strconv.Atoi(s.store.Call("getItem", "min_relay_fee").String())
+	dust, _ := strconv.Atoi(s.store.Call("getItem", "dust").String())
+	withTxFeed, _ := strconv.ParseBool(s.store.Call("getItem", "with_transaction_feed").String())
 
-	return &store.StoreData{
-		AspUrl:              s.store.Call("getItem", "asp_url").String(),
-		AspPubkey:           aspPubkey,
-		WalletType:          s.store.Call("getItem", "wallet_type").String(),
-		ClientType:          s.store.Call("getItem", "client_type").String(),
-		Network:             network,
-		RoundLifetime:       int64(roundLifetime),
-		UnilateralExitDelay: int64(unilateralExitDelay),
-		MinRelayFee:         uint64(minRelayFee),
+	return &types.Config{
+		AspUrl:                     s.store.Call("getItem", "asp_url").String(),
+		AspPubkey:                  aspPubkey,
+		WalletType:                 s.store.Call("getItem", "wallet_type").String(),
+		ClientType:                 s.store.Call("getItem", "client_type").String(),
+		Network:                    network,
+		RoundLifetime:              int64(roundLifetime),
+		RoundInterval:              int64(roundInterval),
+		UnilateralExitDelay:        int64(unilateralExitDelay),
+		Dust:                       uint64(dust),
+		ExplorerURL:                s.store.Call("getItem", "explorer_url").String(),
+		ForfeitAddress:             s.store.Call("getItem", "forfeit_address").String(),
+		BoardingDescriptorTemplate: s.store.Call("getItem", "boarding_descriptor_template").String(),
+		WithTransactionFeed:        withTxFeed,
 	}, nil
 }
 
-func (s *localStorageStore) CleanData(ctx context.Context) error {
+func (s *configStore) CleanData(ctx context.Context) error {
 	if err := s.writeData(&storeData{}); err != nil {
 		return fmt.Errorf("failed to write to store: %s", err)
 	}
 	return nil
 }
 
-func (s *localStorageStore) writeData(data *storeData) error {
+func (s *configStore) Close() {}
+
+func (s *configStore) writeData(data *storeData) error {
 	dataMap := make(map[string]string)
 	buf, err := json.Marshal(data)
 	if err != nil {

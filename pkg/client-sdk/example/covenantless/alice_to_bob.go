@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"path"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/ark-network/ark/common"
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
-	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
+	"github.com/ark-network/ark/pkg/client-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -22,14 +25,35 @@ var (
 )
 
 func main() {
-	ctx := context.Background()
+	var (
+		ctx = context.Background()
+		err error
+
+		aliceArkClient arksdk.ArkClient
+		bobArkClient   arksdk.ArkClient
+	)
+	defer func() {
+		if aliceArkClient != nil {
+			if err := bobArkClient.Stop(); err != nil {
+				log.Error(err)
+			}
+		}
+
+		if bobArkClient != nil {
+			if err := aliceArkClient.Stop(); err != nil {
+				log.Error(err)
+			}
+		}
+	}()
 
 	log.Info("alice is setting up her ark wallet...")
 
-	aliceArkClient, err := setupArkClient()
+	aliceArkClient, err = setupArkClient("alice")
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	logTxEvents("alice", aliceArkClient)
 
 	if err := aliceArkClient.Unlock(ctx, password); err != nil {
 		log.Fatal(err)
@@ -38,31 +62,19 @@ func main() {
 	defer aliceArkClient.Lock(ctx, password)
 
 	log.Info("alice is acquiring onchain funds...")
-	_, aliceOnchainAddr, err := aliceArkClient.Receive(ctx)
+	_, boardingAddress, err := aliceArkClient.Receive(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if _, err := runCommand("nigiri", "faucet", aliceOnchainAddr); err != nil {
+	if _, err := runCommand("nigiri", "faucet", boardingAddress); err != nil {
 		log.Fatal(err)
 	}
 
 	time.Sleep(5 * time.Second)
 
-	onboardAmount := uint64(20000)
+	onboardAmount := uint64(1_0000_0000) // 1 BTC
 	log.Infof("alice is onboarding with %d sats offchain...", onboardAmount)
-	txid, err := aliceArkClient.Onboard(ctx, onboardAmount)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if err := generateBlock(); err != nil {
-		log.Fatal(err)
-	}
-
-	time.Sleep(5 * time.Second)
-
-	log.Infof("alice onboarded with tx: %s", txid)
 
 	aliceBalance, err := aliceArkClient.Balance(ctx, false)
 	if err != nil {
@@ -72,12 +84,22 @@ func main() {
 	log.Infof("alice onchain balance: %d", aliceBalance.OnchainBalance.SpendableAmount)
 	log.Infof("alice offchain balance: %d", aliceBalance.OffchainBalance.Total)
 
-	fmt.Println("")
-	log.Info("bob is setting up his ark wallet...")
-	bobArkClient, err := setupArkClient()
+	log.Infof("alice is settling the onboard funds...")
+	txid, err := aliceArkClient.Settle(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	log.Infof("alice settled the onboard funds in round %s", txid)
+
+	fmt.Println("")
+	log.Info("bob is setting up his ark wallet...")
+	bobArkClient, err = setupArkClient("bob")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	logTxEvents("bob", bobArkClient)
 
 	if err := bobArkClient.Unlock(ctx, password); err != nil {
 		log.Fatal(err)
@@ -136,30 +158,39 @@ func main() {
 	log.Infof("bob offchain balance: %d", bobBalance.OffchainBalance.Total)
 
 	fmt.Println("")
-	log.Info("bob is claiming the incoming payment...")
-	roundTxid, err := bobArkClient.ClaimAsync(ctx)
+	log.Info("bob is settling the received funds...")
+	roundTxid, err := bobArkClient.Settle(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Infof("bob claimed the incoming payment in round %s", roundTxid)
+	log.Infof("bob settled the received funds in round %s", roundTxid)
+
+	time.Sleep(500 * time.Second)
 }
 
-func setupArkClient() (arksdk.ArkClient, error) {
-	storeSvc, err := inmemorystore.NewConfigStore()
+func setupArkClient(wallet string) (arksdk.ArkClient, error) {
+	dbDir := common.AppDataDir(path.Join("ark-example", wallet), false)
+	appDataStore, err := store.NewStore(store.Config{
+		ConfigStoreType:  types.FileStore,
+		AppDataStoreType: types.KVStore,
+		BaseDir:          dbDir,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to setup store: %s", err)
+		return nil, fmt.Errorf("failed to setup app data store: %s", err)
 	}
-	client, err := arksdk.NewCovenantlessClient(storeSvc)
+
+	client, err := arksdk.NewCovenantlessClient(appDataStore)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup ark client: %s", err)
 	}
 
 	if err := client.Init(context.Background(), arksdk.InitArgs{
-		WalletType: walletType,
-		ClientType: clientType,
-		AspUrl:     aspUrl,
-		Password:   password,
+		WalletType:          walletType,
+		ClientType:          clientType,
+		AspUrl:              aspUrl,
+		Password:            password,
+		WithTransactionFeed: true,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to initialize wallet: %s", err)
 	}
@@ -207,18 +238,18 @@ func runCommand(name string, arg ...string) (string, error) {
 	wg.Wait()
 	if err := cmd.Wait(); err != nil {
 		if errMsg := errorb.String(); len(errMsg) > 0 {
-			return "", fmt.Errorf(errMsg)
+			return "", fmt.Errorf("%s", errMsg)
 		}
 
 		if outMsg := output.String(); len(outMsg) > 0 {
-			return "", fmt.Errorf(outMsg)
+			return "", fmt.Errorf("%s", outMsg)
 		}
 
 		return "", err
 	}
 
 	if errMsg := errb.String(); len(errMsg) > 0 {
-		return "", fmt.Errorf(errMsg)
+		return "", fmt.Errorf("%s", errMsg)
 	}
 
 	return strings.Trim(output.String(), "\n"), nil
@@ -236,4 +267,18 @@ func generateBlock() error {
 
 	time.Sleep(6 * time.Second)
 	return nil
+}
+
+func logTxEvents(wallet string, client arksdk.ArkClient) {
+	txsChan := client.GetTransactionEventChannel()
+	go func() {
+		for txEvent := range txsChan {
+			msg := fmt.Sprintf("[EVENT]%s: tx event: %s, %d", wallet, txEvent.Event, txEvent.Tx.Amount)
+			if txEvent.Tx.IsBoarding() {
+				msg += fmt.Sprintf(", boarding tx: %s", txEvent.Tx.BoardingTxid)
+			}
+			log.Infoln(msg)
+		}
+	}()
+	log.Infof("%s tx event listener started", wallet)
 }

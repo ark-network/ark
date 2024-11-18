@@ -1,5 +1,9 @@
 .DS_Store
 .vscode/
+.idea
 
 *.wasm
 wasm_exec.js
+
+build
+log

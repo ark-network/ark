@@ -18,20 +18,23 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ArkServiceClient interface {
-	RegisterPayment(ctx context.Context, in *RegisterPaymentRequest, opts ...grpc.CallOption) (*RegisterPaymentResponse, error)
-	ClaimPayment(ctx context.Context, in *ClaimPaymentRequest, opts ...grpc.CallOption) (*ClaimPaymentResponse, error)
-	SendTreeNonces(ctx context.Context, in *SendTreeNoncesRequest, opts ...grpc.CallOption) (*SendTreeNoncesResponse, error)
-	SendTreeSignatures(ctx context.Context, in *SendTreeSignaturesRequest, opts ...grpc.CallOption) (*SendTreeSignaturesResponse, error)
-	FinalizePayment(ctx context.Context, in *FinalizePaymentRequest, opts ...grpc.CallOption) (*FinalizePaymentResponse, error)
-	GetRound(ctx context.Context, in *GetRoundRequest, opts ...grpc.CallOption) (*GetRoundResponse, error)
-	GetRoundById(ctx context.Context, in *GetRoundByIdRequest, opts ...grpc.CallOption) (*GetRoundByIdResponse, error)
+	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error)
+	GetBoardingAddress(ctx context.Context, in *GetBoardingAddressRequest, opts ...grpc.CallOption) (*GetBoardingAddressResponse, error)
+	RegisterInputsForNextRound(ctx context.Context, in *RegisterInputsForNextRoundRequest, opts ...grpc.CallOption) (*RegisterInputsForNextRoundResponse, error)
+	RegisterOutputsForNextRound(ctx context.Context, in *RegisterOutputsForNextRoundRequest, opts ...grpc.CallOption) (*RegisterOutputsForNextRoundResponse, error)
+	SubmitTreeNonces(ctx context.Context, in *SubmitTreeNoncesRequest, opts ...grpc.CallOption) (*SubmitTreeNoncesResponse, error)
+	SubmitTreeSignatures(ctx context.Context, in *SubmitTreeSignaturesRequest, opts ...grpc.CallOption) (*SubmitTreeSignaturesResponse, error)
+	SubmitSignedForfeitTxs(ctx context.Context, in *SubmitSignedForfeitTxsRequest, opts ...grpc.CallOption) (*SubmitSignedForfeitTxsResponse, error)
 	GetEventStream(ctx context.Context, in *GetEventStreamRequest, opts ...grpc.CallOption) (ArkService_GetEventStreamClient, error)
 	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
-	ListVtxos(ctx context.Context, in *ListVtxosRequest, opts ...grpc.CallOption) (*ListVtxosResponse, error)
-	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error)
-	Onboard(ctx context.Context, in *OnboardRequest, opts ...grpc.CallOption) (*OnboardResponse, error)
 	CreatePayment(ctx context.Context, in *CreatePaymentRequest, opts ...grpc.CallOption) (*CreatePaymentResponse, error)
 	CompletePayment(ctx context.Context, in *CompletePaymentRequest, opts ...grpc.CallOption) (*CompletePaymentResponse, error)
+	GetRound(ctx context.Context, in *GetRoundRequest, opts ...grpc.CallOption) (*GetRoundResponse, error)
+	GetRoundById(ctx context.Context, in *GetRoundByIdRequest, opts ...grpc.CallOption) (*GetRoundByIdResponse, error)
+	ListVtxos(ctx context.Context, in *ListVtxosRequest, opts ...grpc.CallOption) (*ListVtxosResponse, error)
+	GetTransactionsStream(ctx context.Context, in *GetTransactionsStreamRequest, opts ...grpc.CallOption) (ArkService_GetTransactionsStreamClient, error)
+	SetNostrRecipient(ctx context.Context, in *SetNostrRecipientRequest, opts ...grpc.CallOption) (*SetNostrRecipientResponse, error)
+	DeleteNostrRecipient(ctx context.Context, in *DeleteNostrRecipientRequest, opts ...grpc.CallOption) (*DeleteNostrRecipientResponse, error)
 }
 
 type arkServiceClient struct {
@@ -42,63 +45,63 @@ func NewArkServiceClient(cc grpc.ClientConnInterface) ArkServiceClient {
 	return &arkServiceClient{cc}
 }
 
-func (c *arkServiceClient) RegisterPayment(ctx context.Context, in *RegisterPaymentRequest, opts ...grpc.CallOption) (*RegisterPaymentResponse, error) {
-	out := new(RegisterPaymentResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/RegisterPayment", in, out, opts...)
+func (c *arkServiceClient) GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error) {
+	out := new(GetInfoResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/GetInfo", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *arkServiceClient) ClaimPayment(ctx context.Context, in *ClaimPaymentRequest, opts ...grpc.CallOption) (*ClaimPaymentResponse, error) {
-	out := new(ClaimPaymentResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/ClaimPayment", in, out, opts...)
+func (c *arkServiceClient) GetBoardingAddress(ctx context.Context, in *GetBoardingAddressRequest, opts ...grpc.CallOption) (*GetBoardingAddressResponse, error) {
+	out := new(GetBoardingAddressResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/GetBoardingAddress", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *arkServiceClient) SendTreeNonces(ctx context.Context, in *SendTreeNoncesRequest, opts ...grpc.CallOption) (*SendTreeNoncesResponse, error) {
-	out := new(SendTreeNoncesResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/SendTreeNonces", in, out, opts...)
+func (c *arkServiceClient) RegisterInputsForNextRound(ctx context.Context, in *RegisterInputsForNextRoundRequest, opts ...grpc.CallOption) (*RegisterInputsForNextRoundResponse, error) {
+	out := new(RegisterInputsForNextRoundResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/RegisterInputsForNextRound", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *arkServiceClient) SendTreeSignatures(ctx context.Context, in *SendTreeSignaturesRequest, opts ...grpc.CallOption) (*SendTreeSignaturesResponse, error) {
-	out := new(SendTreeSignaturesResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/SendTreeSignatures", in, out, opts...)
+func (c *arkServiceClient) RegisterOutputsForNextRound(ctx context.Context, in *RegisterOutputsForNextRoundRequest, opts ...grpc.CallOption) (*RegisterOutputsForNextRoundResponse, error) {
+	out := new(RegisterOutputsForNextRoundResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/RegisterOutputsForNextRound", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *arkServiceClient) FinalizePayment(ctx context.Context, in *FinalizePaymentRequest, opts ...grpc.CallOption) (*FinalizePaymentResponse, error) {
-	out := new(FinalizePaymentResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/FinalizePayment", in, out, opts...)
+func (c *arkServiceClient) SubmitTreeNonces(ctx context.Context, in *SubmitTreeNoncesRequest, opts ...grpc.CallOption) (*SubmitTreeNoncesResponse, error) {
+	out := new(SubmitTreeNoncesResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/SubmitTreeNonces", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *arkServiceClient) GetRound(ctx context.Context, in *GetRoundRequest, opts ...grpc.CallOption) (*GetRoundResponse, error) {
-	out := new(GetRoundResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/GetRound", in, out, opts...)
+func (c *arkServiceClient) SubmitTreeSignatures(ctx context.Context, in *SubmitTreeSignaturesRequest, opts ...grpc.CallOption) (*SubmitTreeSignaturesResponse, error) {
+	out := new(SubmitTreeSignaturesResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/SubmitTreeSignatures", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *arkServiceClient) GetRoundById(ctx context.Context, in *GetRoundByIdRequest, opts ...grpc.CallOption) (*GetRoundByIdResponse, error) {
-	out := new(GetRoundByIdResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/GetRoundById", in, out, opts...)
+func (c *arkServiceClient) SubmitSignedForfeitTxs(ctx context.Context, in *SubmitSignedForfeitTxsRequest, opts ...grpc.CallOption) (*SubmitSignedForfeitTxsResponse, error) {
+	out := new(SubmitSignedForfeitTxsResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/SubmitSignedForfeitTxs", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -146,33 +149,6 @@ func (c *arkServiceClient) Ping(ctx context.Context, in *PingRequest, opts ...gr
 	return out, nil
 }
 
-func (c *arkServiceClient) ListVtxos(ctx context.Context, in *ListVtxosRequest, opts ...grpc.CallOption) (*ListVtxosResponse, error) {
-	out := new(ListVtxosResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/ListVtxos", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *arkServiceClient) GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error) {
-	out := new(GetInfoResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/GetInfo", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *arkServiceClient) Onboard(ctx context.Context, in *OnboardRequest, opts ...grpc.CallOption) (*OnboardResponse, error) {
-	out := new(OnboardResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/Onboard", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *arkServiceClient) CreatePayment(ctx context.Context, in *CreatePaymentRequest, opts ...grpc.CallOption) (*CreatePaymentResponse, error) {
 	out := new(CreatePaymentResponse)
 	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/CreatePayment", in, out, opts...)
@@ -191,50 +167,130 @@ func (c *arkServiceClient) CompletePayment(ctx context.Context, in *CompletePaym
 	return out, nil
 }
 
+func (c *arkServiceClient) GetRound(ctx context.Context, in *GetRoundRequest, opts ...grpc.CallOption) (*GetRoundResponse, error) {
+	out := new(GetRoundResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/GetRound", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *arkServiceClient) GetRoundById(ctx context.Context, in *GetRoundByIdRequest, opts ...grpc.CallOption) (*GetRoundByIdResponse, error) {
+	out := new(GetRoundByIdResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/GetRoundById", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *arkServiceClient) ListVtxos(ctx context.Context, in *ListVtxosRequest, opts ...grpc.CallOption) (*ListVtxosResponse, error) {
+	out := new(ListVtxosResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/ListVtxos", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *arkServiceClient) GetTransactionsStream(ctx context.Context, in *GetTransactionsStreamRequest, opts ...grpc.CallOption) (ArkService_GetTransactionsStreamClient, error) {
+	stream, err := c.cc.NewStream(ctx, &ArkService_ServiceDesc.Streams[1], "/ark.v1.ArkService/GetTransactionsStream", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &arkServiceGetTransactionsStreamClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type ArkService_GetTransactionsStreamClient interface {
+	Recv() (*GetTransactionsStreamResponse, error)
+	grpc.ClientStream
+}
+
+type arkServiceGetTransactionsStreamClient struct {
+	grpc.ClientStream
+}
+
+func (x *arkServiceGetTransactionsStreamClient) Recv() (*GetTransactionsStreamResponse, error) {
+	m := new(GetTransactionsStreamResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *arkServiceClient) SetNostrRecipient(ctx context.Context, in *SetNostrRecipientRequest, opts ...grpc.CallOption) (*SetNostrRecipientResponse, error) {
+	out := new(SetNostrRecipientResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/SetNostrRecipient", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *arkServiceClient) DeleteNostrRecipient(ctx context.Context, in *DeleteNostrRecipientRequest, opts ...grpc.CallOption) (*DeleteNostrRecipientResponse, error) {
+	out := new(DeleteNostrRecipientResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/DeleteNostrRecipient", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ArkServiceServer is the server API for ArkService service.
 // All implementations should embed UnimplementedArkServiceServer
 // for forward compatibility
 type ArkServiceServer interface {
-	RegisterPayment(context.Context, *RegisterPaymentRequest) (*RegisterPaymentResponse, error)
-	ClaimPayment(context.Context, *ClaimPaymentRequest) (*ClaimPaymentResponse, error)
-	SendTreeNonces(context.Context, *SendTreeNoncesRequest) (*SendTreeNoncesResponse, error)
-	SendTreeSignatures(context.Context, *SendTreeSignaturesRequest) (*SendTreeSignaturesResponse, error)
-	FinalizePayment(context.Context, *FinalizePaymentRequest) (*FinalizePaymentResponse, error)
-	GetRound(context.Context, *GetRoundRequest) (*GetRoundResponse, error)
-	GetRoundById(context.Context, *GetRoundByIdRequest) (*GetRoundByIdResponse, error)
+	GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error)
+	GetBoardingAddress(context.Context, *GetBoardingAddressRequest) (*GetBoardingAddressResponse, error)
+	RegisterInputsForNextRound(context.Context, *RegisterInputsForNextRoundRequest) (*RegisterInputsForNextRoundResponse, error)
+	RegisterOutputsForNextRound(context.Context, *RegisterOutputsForNextRoundRequest) (*RegisterOutputsForNextRoundResponse, error)
+	SubmitTreeNonces(context.Context, *SubmitTreeNoncesRequest) (*SubmitTreeNoncesResponse, error)
+	SubmitTreeSignatures(context.Context, *SubmitTreeSignaturesRequest) (*SubmitTreeSignaturesResponse, error)
+	SubmitSignedForfeitTxs(context.Context, *SubmitSignedForfeitTxsRequest) (*SubmitSignedForfeitTxsResponse, error)
 	GetEventStream(*GetEventStreamRequest, ArkService_GetEventStreamServer) error
 	Ping(context.Context, *PingRequest) (*PingResponse, error)
-	ListVtxos(context.Context, *ListVtxosRequest) (*ListVtxosResponse, error)
-	GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error)
-	Onboard(context.Context, *OnboardRequest) (*OnboardResponse, error)
 	CreatePayment(context.Context, *CreatePaymentRequest) (*CreatePaymentResponse, error)
 	CompletePayment(context.Context, *CompletePaymentRequest) (*CompletePaymentResponse, error)
+	GetRound(context.Context, *GetRoundRequest) (*GetRoundResponse, error)
+	GetRoundById(context.Context, *GetRoundByIdRequest) (*GetRoundByIdResponse, error)
+	ListVtxos(context.Context, *ListVtxosRequest) (*ListVtxosResponse, error)
+	GetTransactionsStream(*GetTransactionsStreamRequest, ArkService_GetTransactionsStreamServer) error
+	SetNostrRecipient(context.Context, *SetNostrRecipientRequest) (*SetNostrRecipientResponse, error)
+	DeleteNostrRecipient(context.Context, *DeleteNostrRecipientRequest) (*DeleteNostrRecipientResponse, error)
 }
 
 // UnimplementedArkServiceServer should be embedded to have forward compatible implementations.
 type UnimplementedArkServiceServer struct {
 }
 
-func (UnimplementedArkServiceServer) RegisterPayment(context.Context, *RegisterPaymentRequest) (*RegisterPaymentResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RegisterPayment not implemented")
+func (UnimplementedArkServiceServer) GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetInfo not implemented")
 }
-func (UnimplementedArkServiceServer) ClaimPayment(context.Context, *ClaimPaymentRequest) (*ClaimPaymentResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ClaimPayment not implemented")
+func (UnimplementedArkServiceServer) GetBoardingAddress(context.Context, *GetBoardingAddressRequest) (*GetBoardingAddressResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetBoardingAddress not implemented")
 }
-func (UnimplementedArkServiceServer) SendTreeNonces(context.Context, *SendTreeNoncesRequest) (*SendTreeNoncesResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SendTreeNonces not implemented")
+func (UnimplementedArkServiceServer) RegisterInputsForNextRound(context.Context, *RegisterInputsForNextRoundRequest) (*RegisterInputsForNextRoundResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RegisterInputsForNextRound not implemented")
 }
-func (UnimplementedArkServiceServer) SendTreeSignatures(context.Context, *SendTreeSignaturesRequest) (*SendTreeSignaturesResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SendTreeSignatures not implemented")
+func (UnimplementedArkServiceServer) RegisterOutputsForNextRound(context.Context, *RegisterOutputsForNextRoundRequest) (*RegisterOutputsForNextRoundResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RegisterOutputsForNextRound not implemented")
 }
-func (UnimplementedArkServiceServer) FinalizePayment(context.Context, *FinalizePaymentRequest) (*FinalizePaymentResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method FinalizePayment not implemented")
+func (UnimplementedArkServiceServer) SubmitTreeNonces(context.Context, *SubmitTreeNoncesRequest) (*SubmitTreeNoncesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SubmitTreeNonces not implemented")
 }
-func (UnimplementedArkServiceServer) GetRound(context.Context, *GetRoundRequest) (*GetRoundResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetRound not implemented")
+func (UnimplementedArkServiceServer) SubmitTreeSignatures(context.Context, *SubmitTreeSignaturesRequest) (*SubmitTreeSignaturesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SubmitTreeSignatures not implemented")
 }
-func (UnimplementedArkServiceServer) GetRoundById(context.Context, *GetRoundByIdRequest) (*GetRoundByIdResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetRoundById not implemented")
+func (UnimplementedArkServiceServer) SubmitSignedForfeitTxs(context.Context, *SubmitSignedForfeitTxsRequest) (*SubmitSignedForfeitTxsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SubmitSignedForfeitTxs not implemented")
 }
 func (UnimplementedArkServiceServer) GetEventStream(*GetEventStreamRequest, ArkService_GetEventStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method GetEventStream not implemented")
@@ -242,20 +298,29 @@ func (UnimplementedArkServiceServer) GetEventStream(*GetEventStreamRequest, ArkS
 func (UnimplementedArkServiceServer) Ping(context.Context, *PingRequest) (*PingResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
 }
-func (UnimplementedArkServiceServer) ListVtxos(context.Context, *ListVtxosRequest) (*ListVtxosResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListVtxos not implemented")
-}
-func (UnimplementedArkServiceServer) GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetInfo not implemented")
-}
-func (UnimplementedArkServiceServer) Onboard(context.Context, *OnboardRequest) (*OnboardResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Onboard not implemented")
-}
 func (UnimplementedArkServiceServer) CreatePayment(context.Context, *CreatePaymentRequest) (*CreatePaymentResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreatePayment not implemented")
 }
 func (UnimplementedArkServiceServer) CompletePayment(context.Context, *CompletePaymentRequest) (*CompletePaymentResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CompletePayment not implemented")
+}
+func (UnimplementedArkServiceServer) GetRound(context.Context, *GetRoundRequest) (*GetRoundResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetRound not implemented")
+}
+func (UnimplementedArkServiceServer) GetRoundById(context.Context, *GetRoundByIdRequest) (*GetRoundByIdResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetRoundById not implemented")
+}
+func (UnimplementedArkServiceServer) ListVtxos(context.Context, *ListVtxosRequest) (*ListVtxosResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListVtxos not implemented")
+}
+func (UnimplementedArkServiceServer) GetTransactionsStream(*GetTransactionsStreamRequest, ArkService_GetTransactionsStreamServer) error {
+	return status.Errorf(codes.Unimplemented, "method GetTransactionsStream not implemented")
+}
+func (UnimplementedArkServiceServer) SetNostrRecipient(context.Context, *SetNostrRecipientRequest) (*SetNostrRecipientResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetNostrRecipient not implemented")
+}
+func (UnimplementedArkServiceServer) DeleteNostrRecipient(context.Context, *DeleteNostrRecipientRequest) (*DeleteNostrRecipientResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteNostrRecipient not implemented")
 }
 
 // UnsafeArkServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -269,128 +334,128 @@ func RegisterArkServiceServer(s grpc.ServiceRegistrar, srv ArkServiceServer) {
 	s.RegisterService(&ArkService_ServiceDesc, srv)
 }
 
-func _ArkService_RegisterPayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RegisterPaymentRequest)
+func _ArkService_GetInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetInfoRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ArkServiceServer).RegisterPayment(ctx, in)
+		return srv.(ArkServiceServer).GetInfo(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/RegisterPayment",
+		FullMethod: "/ark.v1.ArkService/GetInfo",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).RegisterPayment(ctx, req.(*RegisterPaymentRequest))
+		return srv.(ArkServiceServer).GetInfo(ctx, req.(*GetInfoRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ArkService_ClaimPayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ClaimPaymentRequest)
+func _ArkService_GetBoardingAddress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBoardingAddressRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ArkServiceServer).ClaimPayment(ctx, in)
+		return srv.(ArkServiceServer).GetBoardingAddress(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/ClaimPayment",
+		FullMethod: "/ark.v1.ArkService/GetBoardingAddress",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).ClaimPayment(ctx, req.(*ClaimPaymentRequest))
+		return srv.(ArkServiceServer).GetBoardingAddress(ctx, req.(*GetBoardingAddressRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ArkService_SendTreeNonces_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SendTreeNoncesRequest)
+func _ArkService_RegisterInputsForNextRound_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RegisterInputsForNextRoundRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ArkServiceServer).SendTreeNonces(ctx, in)
+		return srv.(ArkServiceServer).RegisterInputsForNextRound(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/SendTreeNonces",
+		FullMethod: "/ark.v1.ArkService/RegisterInputsForNextRound",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).SendTreeNonces(ctx, req.(*SendTreeNoncesRequest))
+		return srv.(ArkServiceServer).RegisterInputsForNextRound(ctx, req.(*RegisterInputsForNextRoundRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ArkService_SendTreeSignatures_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SendTreeSignaturesRequest)
+func _ArkService_RegisterOutputsForNextRound_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RegisterOutputsForNextRoundRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ArkServiceServer).SendTreeSignatures(ctx, in)
+		return srv.(ArkServiceServer).RegisterOutputsForNextRound(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/SendTreeSignatures",
+		FullMethod: "/ark.v1.ArkService/RegisterOutputsForNextRound",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).SendTreeSignatures(ctx, req.(*SendTreeSignaturesRequest))
+		return srv.(ArkServiceServer).RegisterOutputsForNextRound(ctx, req.(*RegisterOutputsForNextRoundRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ArkService_FinalizePayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(FinalizePaymentRequest)
+func _ArkService_SubmitTreeNonces_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SubmitTreeNoncesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ArkServiceServer).FinalizePayment(ctx, in)
+		return srv.(ArkServiceServer).SubmitTreeNonces(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/FinalizePayment",
+		FullMethod: "/ark.v1.ArkService/SubmitTreeNonces",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).FinalizePayment(ctx, req.(*FinalizePaymentRequest))
+		return srv.(ArkServiceServer).SubmitTreeNonces(ctx, req.(*SubmitTreeNoncesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ArkService_GetRound_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetRoundRequest)
+func _ArkService_SubmitTreeSignatures_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SubmitTreeSignaturesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ArkServiceServer).GetRound(ctx, in)
+		return srv.(ArkServiceServer).SubmitTreeSignatures(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/GetRound",
+		FullMethod: "/ark.v1.ArkService/SubmitTreeSignatures",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).GetRound(ctx, req.(*GetRoundRequest))
+		return srv.(ArkServiceServer).SubmitTreeSignatures(ctx, req.(*SubmitTreeSignaturesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ArkService_GetRoundById_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetRoundByIdRequest)
+func _ArkService_SubmitSignedForfeitTxs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SubmitSignedForfeitTxsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ArkServiceServer).GetRoundById(ctx, in)
+		return srv.(ArkServiceServer).SubmitSignedForfeitTxs(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/GetRoundById",
+		FullMethod: "/ark.v1.ArkService/SubmitSignedForfeitTxs",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).GetRoundById(ctx, req.(*GetRoundByIdRequest))
+		return srv.(ArkServiceServer).SubmitSignedForfeitTxs(ctx, req.(*SubmitSignedForfeitTxsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -434,60 +499,6 @@ func _ArkService_Ping_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ArkService_ListVtxos_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListVtxosRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ArkServiceServer).ListVtxos(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/ListVtxos",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).ListVtxos(ctx, req.(*ListVtxosRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ArkService_GetInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetInfoRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ArkServiceServer).GetInfo(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/GetInfo",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).GetInfo(ctx, req.(*GetInfoRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ArkService_Onboard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(OnboardRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ArkServiceServer).Onboard(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/Onboard",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).Onboard(ctx, req.(*OnboardRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _ArkService_CreatePayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreatePaymentRequest)
 	if err := dec(in); err != nil {
@@ -524,6 +535,117 @@ func _ArkService_CompletePayment_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ArkService_GetRound_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRoundRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ArkServiceServer).GetRound(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.ArkService/GetRound",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ArkServiceServer).GetRound(ctx, req.(*GetRoundRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ArkService_GetRoundById_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRoundByIdRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ArkServiceServer).GetRoundById(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.ArkService/GetRoundById",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ArkServiceServer).GetRoundById(ctx, req.(*GetRoundByIdRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ArkService_ListVtxos_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListVtxosRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ArkServiceServer).ListVtxos(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.ArkService/ListVtxos",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ArkServiceServer).ListVtxos(ctx, req.(*ListVtxosRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ArkService_GetTransactionsStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(GetTransactionsStreamRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ArkServiceServer).GetTransactionsStream(m, &arkServiceGetTransactionsStreamServer{stream})
+}
+
+type ArkService_GetTransactionsStreamServer interface {
+	Send(*GetTransactionsStreamResponse) error
+	grpc.ServerStream
+}
+
+type arkServiceGetTransactionsStreamServer struct {
+	grpc.ServerStream
+}
+
+func (x *arkServiceGetTransactionsStreamServer) Send(m *GetTransactionsStreamResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _ArkService_SetNostrRecipient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetNostrRecipientRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ArkServiceServer).SetNostrRecipient(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.ArkService/SetNostrRecipient",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ArkServiceServer).SetNostrRecipient(ctx, req.(*SetNostrRecipientRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ArkService_DeleteNostrRecipient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteNostrRecipientRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ArkServiceServer).DeleteNostrRecipient(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.ArkService/DeleteNostrRecipient",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ArkServiceServer).DeleteNostrRecipient(ctx, req.(*DeleteNostrRecipientRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ArkService_ServiceDesc is the grpc.ServiceDesc for ArkService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -532,24 +654,44 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*ArkServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "RegisterPayment",
-			Handler:    _ArkService_RegisterPayment_Handler,
+			MethodName: "GetInfo",
+			Handler:    _ArkService_GetInfo_Handler,
 		},
 		{
-			MethodName: "ClaimPayment",
-			Handler:    _ArkService_ClaimPayment_Handler,
+			MethodName: "GetBoardingAddress",
+			Handler:    _ArkService_GetBoardingAddress_Handler,
 		},
 		{
-			MethodName: "SendTreeNonces",
-			Handler:    _ArkService_SendTreeNonces_Handler,
+			MethodName: "RegisterInputsForNextRound",
+			Handler:    _ArkService_RegisterInputsForNextRound_Handler,
 		},
 		{
-			MethodName: "SendTreeSignatures",
-			Handler:    _ArkService_SendTreeSignatures_Handler,
+			MethodName: "RegisterOutputsForNextRound",
+			Handler:    _ArkService_RegisterOutputsForNextRound_Handler,
 		},
 		{
-			MethodName: "FinalizePayment",
-			Handler:    _ArkService_FinalizePayment_Handler,
+			MethodName: "SubmitTreeNonces",
+			Handler:    _ArkService_SubmitTreeNonces_Handler,
+		},
+		{
+			MethodName: "SubmitTreeSignatures",
+			Handler:    _ArkService_SubmitTreeSignatures_Handler,
+		},
+		{
+			MethodName: "SubmitSignedForfeitTxs",
+			Handler:    _ArkService_SubmitSignedForfeitTxs_Handler,
+		},
+		{
+			MethodName: "Ping",
+			Handler:    _ArkService_Ping_Handler,
+		},
+		{
+			MethodName: "CreatePayment",
+			Handler:    _ArkService_CreatePayment_Handler,
+		},
+		{
+			MethodName: "CompletePayment",
+			Handler:    _ArkService_CompletePayment_Handler,
 		},
 		{
 			MethodName: "GetRound",
@@ -560,34 +702,27 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ArkService_GetRoundById_Handler,
 		},
 		{
-			MethodName: "Ping",
-			Handler:    _ArkService_Ping_Handler,
-		},
-		{
 			MethodName: "ListVtxos",
 			Handler:    _ArkService_ListVtxos_Handler,
 		},
 		{
-			MethodName: "GetInfo",
-			Handler:    _ArkService_GetInfo_Handler,
+			MethodName: "SetNostrRecipient",
+			Handler:    _ArkService_SetNostrRecipient_Handler,
 		},
 		{
-			MethodName: "Onboard",
-			Handler:    _ArkService_Onboard_Handler,
-		},
-		{
-			MethodName: "CreatePayment",
-			Handler:    _ArkService_CreatePayment_Handler,
-		},
-		{
-			MethodName: "CompletePayment",
-			Handler:    _ArkService_CompletePayment_Handler,
+			MethodName: "DeleteNostrRecipient",
+			Handler:    _ArkService_DeleteNostrRecipient_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "GetEventStream",
 			Handler:       _ArkService_GetEventStream_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "GetTransactionsStream",
+			Handler:       _ArkService_GetTransactionsStream_Handler,
 			ServerStreams: true,
 		},
 	},

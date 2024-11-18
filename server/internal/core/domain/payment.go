@@ -9,8 +9,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const dustAmount = 450
-
 type Payment struct {
 	Id        string
 	Inputs    []Vtxo
@@ -26,14 +24,6 @@ func NewPayment(inputs []Vtxo) (*Payment, error) {
 		return nil, err
 	}
 	return p, nil
-}
-
-func NewPaymentUnsafe(inputs []Vtxo, receivers []Receiver) *Payment {
-	return &Payment{
-		Id:        uuid.New().String(),
-		Inputs:    inputs,
-		Receivers: receivers,
-	}
 }
 
 func (p *Payment) AddReceivers(receivers []Receiver) (err error) {
@@ -70,29 +60,20 @@ func (p Payment) validate(ignoreOuts bool) error {
 	if len(p.Id) <= 0 {
 		return fmt.Errorf("missing id")
 	}
-	if len(p.Inputs) <= 0 {
-		return fmt.Errorf("missing inputs")
-	}
 	if ignoreOuts {
 		return nil
 	}
+
 	if len(p.Receivers) <= 0 {
 		return fmt.Errorf("missing outputs")
 	}
-	// Check that input and output and output amounts match.
-	inAmount := p.TotalInputAmount()
-	outAmount := uint64(0)
 	for _, r := range p.Receivers {
 		if len(r.OnchainAddress) <= 0 && len(r.Pubkey) <= 0 {
 			return fmt.Errorf("missing receiver destination")
 		}
-		if r.Amount < dustAmount {
-			return fmt.Errorf("receiver amount must be greater than dust")
+		if r.Amount == 0 {
+			return fmt.Errorf("missing receiver amount")
 		}
-		outAmount += r.Amount
-	}
-	if inAmount != outAmount {
-		return fmt.Errorf("input and output amounts mismatch")
 	}
 	return nil
 }
@@ -100,6 +81,10 @@ func (p Payment) validate(ignoreOuts bool) error {
 type VtxoKey struct {
 	Txid string
 	VOut uint32
+}
+
+func (k VtxoKey) String() string {
+	return fmt.Sprintf("%s:%d", k.Txid, k.VOut)
 }
 
 func (k VtxoKey) Hash() string {
@@ -118,9 +103,9 @@ func (k VtxoKey) Hash() string {
 }
 
 type Receiver struct {
-	Pubkey         string
 	Amount         uint64
-	OnchainAddress string
+	OnchainAddress string // onchain
+	Pubkey         string // offchain
 }
 
 func (r Receiver) IsOnchain() bool {
@@ -129,17 +114,14 @@ func (r Receiver) IsOnchain() bool {
 
 type Vtxo struct {
 	VtxoKey
-	Receiver
-	PoolTx       string
-	SpentBy      string // round txid or async redeem txid
-	Spent        bool
-	Redeemed     bool
-	Swept        bool
-	ExpireAt     int64
-	AsyncPayment *AsyncPaymentTxs // nil if not async vtxo
-}
-
-type AsyncPaymentTxs struct {
-	RedeemTx                string // always signed by the ASP when created
-	UnconditionalForfeitTxs []string
+	Amount    uint64
+	Pubkey    string
+	RoundTxid string
+	SpentBy   string // round txid or async redeem txid
+	Spent     bool
+	Redeemed  bool
+	Swept     bool
+	ExpireAt  int64
+	RedeemTx  string // empty if in-round vtxo
+	CreatedAt int64
 }

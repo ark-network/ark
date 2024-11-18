@@ -2,6 +2,7 @@ package oceanwallet
 
 import (
 	"context"
+	"encoding/hex"
 
 	pb "github.com/ark-network/ark/api-spec/protobuf/gen/ocean/v1"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -27,20 +28,26 @@ func (s *service) DeriveConnectorAddress(ctx context.Context) (string, error) {
 func (s *service) ListConnectorUtxos(
 	ctx context.Context, connectorAddress string,
 ) ([]ports.TxInput, error) {
-	addresses := make([]string, 0)
-	if len(connectorAddress) > 0 {
-		addresses = append(addresses, connectorAddress)
+	connectorScript, err := address.ToOutputScript(connectorAddress)
+	if err != nil {
+		return nil, err
 	}
+
 	res, err := s.accountClient.ListUtxos(ctx, &pb.ListUtxosRequest{
 		AccountName: connectorAccount,
-		Addresses:   addresses,
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	utxos := make([]ports.TxInput, 0)
+	connectorScriptHex := hex.EncodeToString(connectorScript)
+
 	for _, utxo := range res.GetSpendableUtxos().GetUtxos() {
+		if utxo.Script != connectorScriptHex {
+			continue
+		}
+
 		utxos = append(utxos, utxo)
 	}
 

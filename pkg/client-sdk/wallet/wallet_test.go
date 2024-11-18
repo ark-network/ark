@@ -7,8 +7,8 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
-	"github.com/ark-network/ark/pkg/client-sdk/store"
 	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
+	sdktypes "github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	singlekeywallet "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey"
 	inmemorywalletstore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store/inmemory"
@@ -20,15 +20,18 @@ func TestWallet(t *testing.T) {
 	ctx := context.Background()
 	key, _ := btcec.NewPrivateKey()
 	password := "password"
-	testStoreData := store.StoreData{
-		AspUrl:              "localhost:7070",
-		AspPubkey:           key.PubKey(),
-		WalletType:          wallet.SingleKeyWallet,
-		ClientType:          client.GrpcClient,
-		Network:             common.LiquidRegTest,
-		RoundLifetime:       512,
-		UnilateralExitDelay: 512,
-		MinRelayFee:         300,
+	testStoreData := sdktypes.Config{
+		AspUrl:                     "localhost:7070",
+		AspPubkey:                  key.PubKey(),
+		WalletType:                 wallet.SingleKeyWallet,
+		ClientType:                 client.GrpcClient,
+		Network:                    common.LiquidRegTest,
+		RoundLifetime:              512,
+		RoundInterval:              10,
+		UnilateralExitDelay:        512,
+		Dust:                       1000,
+		BoardingDescriptorTemplate: "tr(0250929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0,{ and(pk(873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465), pk(USER)), and(older(604672), pk(USER)) })",
+		ForfeitAddress:             "bcrt1qzvqj",
 	}
 	tests := []struct {
 		name  string

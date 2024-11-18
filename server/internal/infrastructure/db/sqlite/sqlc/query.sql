@@ -44,11 +44,11 @@ INSERT INTO payment (id, round_id) VALUES (?, ?)
 ON CONFLICT(id) DO UPDATE SET round_id = EXCLUDED.round_id;
 
 -- name: UpsertReceiver :exec
-INSERT INTO receiver (payment_id, pubkey, amount, onchain_address) VALUES (?, ?, ?, ?)
-ON CONFLICT(payment_id, pubkey) DO UPDATE SET
+INSERT INTO receiver (payment_id, pubkey, onchain_address, amount) VALUES (?, ?, ?, ?)
+ON CONFLICT(payment_id, pubkey, onchain_address) DO UPDATE SET
     amount = EXCLUDED.amount,
-    onchain_address = EXCLUDED.onchain_address,
-    pubkey = EXCLUDED.pubkey;
+    pubkey = EXCLUDED.pubkey,
+    onchain_address = EXCLUDED.onchain_address;
 
 -- name: UpdateVtxoPaymentId :exec
 UPDATE vtxo SET payment_id = ? WHERE txid = ? AND vout = ?;
@@ -111,17 +111,9 @@ SELECT id FROM round WHERE starting_timestamp > ? AND starting_timestamp < ?;
 -- name: SelectRoundIds :many
 SELECT id FROM round;
 
--- name: UpsertUnconditionalForfeitTx :exec
-INSERT INTO uncond_forfeit_tx (tx, vtxo_txid, vtxo_vout, position)
-VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET
-    tx = EXCLUDED.tx,
-    vtxo_txid = EXCLUDED.vtxo_txid,
-    vtxo_vout = EXCLUDED.vtxo_vout,
-    position = EXCLUDED.position;
-
 -- name: UpsertVtxo :exec
-INSERT INTO vtxo (txid, vout, pubkey, amount, pool_tx, spent_by, spent, redeemed, swept, expire_at, redeem_tx)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(txid, vout) DO UPDATE SET
+INSERT INTO vtxo (txid, vout, pubkey, amount, pool_tx, spent_by, spent, redeemed, swept, expire_at, created_at, redeem_tx)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(txid, vout) DO UPDATE SET
     pubkey = EXCLUDED.pubkey,
     amount = EXCLUDED.amount,
     pool_tx = EXCLUDED.pool_tx,
@@ -130,41 +122,27 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(txid, vout) DO UPDATE SET
     redeemed = EXCLUDED.redeemed,
     swept = EXCLUDED.swept,
     expire_at = EXCLUDED.expire_at,
+    created_at = EXCLUDED.created_at,
     redeem_tx = EXCLUDED.redeem_tx;
 
 -- name: SelectSweepableVtxos :many
-SELECT  sqlc.embed(vtxo),
-        sqlc.embed(uncond_forfeit_tx_vw)
-FROM vtxo
-        LEFT OUTER JOIN uncond_forfeit_tx_vw ON vtxo.txid=uncond_forfeit_tx_vw.vtxo_txid AND vtxo.vout=uncond_forfeit_tx_vw.vtxo_vout
+SELECT sqlc.embed(vtxo) FROM vtxo
 WHERE redeemed = false AND swept = false;
 
 -- name: SelectNotRedeemedVtxos :many
-SELECT  sqlc.embed(vtxo),
-        sqlc.embed(uncond_forfeit_tx_vw)
-FROM vtxo
-        LEFT OUTER JOIN uncond_forfeit_tx_vw ON vtxo.txid=uncond_forfeit_tx_vw.vtxo_txid AND vtxo.vout=uncond_forfeit_tx_vw.vtxo_vout
+SELECT sqlc.embed(vtxo) FROM vtxo
 WHERE redeemed = false;
 
 -- name: SelectNotRedeemedVtxosWithPubkey :many
-SELECT  sqlc.embed(vtxo),
-        sqlc.embed(uncond_forfeit_tx_vw)
-FROM vtxo
-        LEFT OUTER JOIN uncond_forfeit_tx_vw ON vtxo.txid=uncond_forfeit_tx_vw.vtxo_txid AND vtxo.vout=uncond_forfeit_tx_vw.vtxo_vout
+SELECT sqlc.embed(vtxo) FROM vtxo
 WHERE redeemed = false AND pubkey = ?;
 
 -- name: SelectVtxoByOutpoint :one
-SELECT  sqlc.embed(vtxo),
-        sqlc.embed(uncond_forfeit_tx_vw)
-FROM vtxo
-        LEFT OUTER JOIN uncond_forfeit_tx_vw ON vtxo.txid=uncond_forfeit_tx_vw.vtxo_txid AND vtxo.vout=uncond_forfeit_tx_vw.vtxo_vout
+SELECT sqlc.embed(vtxo) FROM vtxo
 WHERE txid = ? AND vout = ?;
 
 -- name: SelectVtxosByPoolTxid :many
-SELECT  sqlc.embed(vtxo),
-        sqlc.embed(uncond_forfeit_tx_vw)
-FROM vtxo
-        LEFT OUTER JOIN uncond_forfeit_tx_vw ON vtxo.txid=uncond_forfeit_tx_vw.vtxo_txid AND vtxo.vout=uncond_forfeit_tx_vw.vtxo_vout
+SELECT sqlc.embed(vtxo) FROM vtxo
 WHERE pool_tx = ?;
 
 -- name: MarkVtxoAsRedeemed :exec
@@ -178,3 +156,32 @@ UPDATE vtxo SET spent = true, spent_by = ? WHERE txid = ? AND vout = ?;
 
 -- name: UpdateVtxoExpireAt :exec
 UPDATE vtxo SET expire_at = ? WHERE txid = ? AND vout = ?;
+
+-- name: UpsertEntity :one
+INSERT INTO entity (nostr_recipient) 
+VALUES (?) 
+ON CONFLICT(nostr_recipient) DO UPDATE SET 
+    nostr_recipient = EXCLUDED.nostr_recipient
+RETURNING id;
+
+-- name: UpsertEntityVtxo :exec
+INSERT INTO entity_vtxo (entity_id, vtxo_txid, vtxo_vout) 
+VALUES (?, ?, ?) 
+ON CONFLICT(entity_id, vtxo_txid, vtxo_vout) DO UPDATE SET 
+    entity_id = EXCLUDED.entity_id;
+
+-- name: SelectEntitiesByVtxo :many
+SELECT sqlc.embed(entity_vw) FROM entity_vw
+WHERE vtxo_txid = ? AND vtxo_vout = ?;
+
+-- name: DeleteEntityVtxo :exec
+DELETE FROM entity_vtxo WHERE entity_id = ?;
+
+-- name: DeleteEntity :exec
+DELETE FROM entity WHERE id = ?;
+
+-- name: InsertNote :exec
+INSERT INTO note (id) VALUES (?);
+
+-- name: ContainsNote :one
+SELECT EXISTS(SELECT 1 FROM note WHERE id = ?);

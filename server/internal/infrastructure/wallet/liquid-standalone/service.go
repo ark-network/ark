@@ -2,6 +2,7 @@ package oceanwallet
 
 import (
 	"context"
+	"errors"
 	"io"
 	"strings"
 
@@ -22,8 +23,9 @@ type service struct {
 	accountClient pb.AccountServiceClient
 	txClient      pb.TransactionServiceClient
 	notifyClient  pb.NotificationServiceClient
-	chVtxos       chan map[string]ports.VtxoWithValue
+	chVtxos       chan map[string][]ports.VtxoWithValue
 	isListening   bool
+	syncedCh      chan struct{}
 }
 
 func NewService(addr string) (ports.WalletService, error) {
@@ -35,7 +37,7 @@ func NewService(addr string) (ports.WalletService, error) {
 	accountClient := pb.NewAccountServiceClient(conn)
 	txClient := pb.NewTransactionServiceClient(conn)
 	notifyClient := pb.NewNotificationServiceClient(conn)
-	chVtxos := make(chan map[string]ports.VtxoWithValue)
+	chVtxos := make(chan map[string][]ports.VtxoWithValue)
 	svc := &service{
 		addr:          addr,
 		conn:          conn,
@@ -44,6 +46,7 @@ func NewService(addr string) (ports.WalletService, error) {
 		txClient:      txClient,
 		notifyClient:  notifyClient,
 		chVtxos:       chVtxos,
+		syncedCh:      make(chan struct{}),
 	}
 
 	ctx := context.Background()
@@ -63,6 +66,10 @@ func NewService(addr string) (ports.WalletService, error) {
 func (s *service) Close() {
 	close(s.chVtxos)
 	s.conn.Close()
+}
+
+func (s *service) GetSyncedUpdate(_ context.Context) <-chan struct{} {
+	return s.syncedCh
 }
 
 func (s *service) GenSeed(ctx context.Context) (string, error) {
@@ -149,6 +156,18 @@ func (s *service) Lock(ctx context.Context, password string) error {
 	return err
 }
 
+func (s *service) GetDustAmount(ctx context.Context) (uint64, error) {
+	return 450, nil // constant on liquid cause fees are not subject to huge changes
+}
+
+func (s *service) SignMessage(ctx context.Context, message []byte) ([]byte, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *service) VerifyMessageSignature(ctx context.Context, message, signature []byte) (bool, error) {
+	return false, errors.New("not implemented")
+}
+
 func (s *service) listenToNotifications() {
 	s.isListening = true
 	defer func() {
@@ -186,8 +205,8 @@ func (s *service) listenToNotifications() {
 	}
 }
 
-func toVtxos(utxos []*pb.Utxo) map[string]ports.VtxoWithValue {
-	vtxos := make(map[string]ports.VtxoWithValue, len(utxos))
+func toVtxos(utxos []*pb.Utxo) map[string][]ports.VtxoWithValue {
+	vtxos := make(map[string][]ports.VtxoWithValue, len(utxos))
 	for _, utxo := range utxos {
 		// We want to notify for activity related to vtxos owner, therefore we skip
 		// returning anything related to the internal accounts of the wallet, like
@@ -196,11 +215,13 @@ func toVtxos(utxos []*pb.Utxo) map[string]ports.VtxoWithValue {
 			continue
 		}
 
-		vtxos[utxo.Script] = ports.VtxoWithValue{
-			VtxoKey: domain.VtxoKey{Txid: utxo.GetTxid(),
-				VOut: utxo.GetIndex(),
+		vtxos[utxo.Script] = []ports.VtxoWithValue{
+			{
+				VtxoKey: domain.VtxoKey{Txid: utxo.GetTxid(),
+					VOut: utxo.GetIndex(),
+				},
+				Value: utxo.GetValue(),
 			},
-			Value: utxo.GetValue(),
 		}
 	}
 	return vtxos

@@ -21,11 +21,11 @@ CREATE TABLE IF NOT EXISTS payment (
 
 CREATE TABLE IF NOT EXISTS receiver (
     payment_id TEXT NOT NULL,
-    pubkey TEXT NOT NULL,
+    pubkey TEXT,
+    onchain_address TEXT,
     amount INTEGER NOT NULL,
-    onchain_address TEXT NOT NULL,
     FOREIGN KEY (payment_id) REFERENCES payment(id),
-    PRIMARY KEY (payment_id, pubkey)
+    PRIMARY KEY (payment_id, pubkey, onchain_address)
 );
 
 CREATE TABLE IF NOT EXISTS tx (
@@ -41,15 +41,6 @@ CREATE TABLE IF NOT EXISTS tx (
     FOREIGN KEY (round_id) REFERENCES round(id)
 );
 
-CREATE TABLE IF NOT EXISTS uncond_forfeit_tx (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    tx TEXT NOT NULL,
-    vtxo_txid TEXT NOT NULL,
-    vtxo_vout INTEGER NOT NULL,
-    position INTEGER NOT NULL,
-    FOREIGN KEY (vtxo_txid, vtxo_vout) REFERENCES vtxo(txid, vout)
-);
-
 CREATE TABLE IF NOT EXISTS vtxo (
 	txid TEXT NOT NULL,
 	vout INTEGER NOT NULL,
@@ -61,11 +52,34 @@ CREATE TABLE IF NOT EXISTS vtxo (
 	redeemed BOOLEAN NOT NULL,
 	swept BOOLEAN NOT NULL,
 	expire_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
 	payment_id TEXT,
     redeem_tx TEXT,
     PRIMARY KEY (txid, vout),
 	FOREIGN KEY (payment_id) REFERENCES payment(id)
 );
+
+CREATE TABLE IF NOT EXISTS note (
+    id INTEGER PRIMARY KEY
+);
+
+CREATE TABLE IF NOT EXISTS entity (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nostr_recipient TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS entity_vtxo (
+    entity_id INTEGER NOT NULL,
+    vtxo_txid TEXT NOT NULL,
+    vtxo_vout INTEGER NOT NULL,
+    FOREIGN KEY (entity_id) REFERENCES entity(id),
+    PRIMARY KEY (entity_id, vtxo_txid, vtxo_vout)
+);
+
+CREATE VIEW entity_vw AS SELECT entity.id, entity.nostr_recipient, entity_vtxo.vtxo_txid, entity_vtxo.vtxo_vout
+FROM entity
+LEFT OUTER JOIN entity_vtxo
+ON entity.id=entity_vtxo.entity_id;
 
 CREATE VIEW round_payment_vw AS SELECT payment.*
 FROM round
@@ -86,8 +100,3 @@ CREATE VIEW payment_vtxo_vw AS SELECT vtxo.*
 FROM payment
 LEFT OUTER JOIN vtxo
 ON payment.id=vtxo.payment_id;
-
-CREATE VIEW uncond_forfeit_tx_vw AS SELECT uncond_forfeit_tx.*
-FROM vtxo
-LEFT OUTER JOIN uncond_forfeit_tx
-ON vtxo.txid=uncond_forfeit_tx.vtxo_txid AND vtxo.vout=uncond_forfeit_tx.vtxo_vout;

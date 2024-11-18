@@ -60,37 +60,43 @@ func mainAction(_ *cli.Context) error {
 	}
 
 	appConfig := &appconfig.Config{
-		EventDbType:           cfg.EventDbType,
-		DbType:                cfg.DbType,
-		DbDir:                 cfg.DbDir,
-		DbMigrationPath:       cfg.DbMigrationPath,
-		EventDbDir:            cfg.DbDir,
-		RoundInterval:         cfg.RoundInterval,
-		Network:               cfg.Network,
-		SchedulerType:         cfg.SchedulerType,
-		TxBuilderType:         cfg.TxBuilderType,
-		BlockchainScannerType: cfg.BlockchainScannerType,
-		WalletAddr:            cfg.WalletAddr,
-		MinRelayFee:           cfg.MinRelayFee,
-		RoundLifetime:         cfg.RoundLifetime,
-		UnilateralExitDelay:   cfg.UnilateralExitDelay,
-		EsploraURL:            cfg.EsploraURL,
-		NeutrinoPeer:          cfg.NeutrinoPeer,
-		BitcoindRpcUser:       cfg.BitcoindRpcUser,
-		BitcoindRpcPass:       cfg.BitcoindRpcPass,
-		BitcoindRpcHost:       cfg.BitcoindRpcHost,
+		EventDbType:         cfg.EventDbType,
+		DbType:              cfg.DbType,
+		DbDir:               cfg.DbDir,
+		DbMigrationPath:     cfg.DbMigrationPath,
+		EventDbDir:          cfg.DbDir,
+		RoundInterval:       cfg.RoundInterval,
+		Network:             cfg.Network,
+		SchedulerType:       cfg.SchedulerType,
+		TxBuilderType:       cfg.TxBuilderType,
+		WalletAddr:          cfg.WalletAddr,
+		RoundLifetime:       cfg.RoundLifetime,
+		UnilateralExitDelay: cfg.UnilateralExitDelay,
+		EsploraURL:          cfg.EsploraURL,
+		NeutrinoPeer:        cfg.NeutrinoPeer,
+		BitcoindRpcUser:     cfg.BitcoindRpcUser,
+		BitcoindRpcPass:     cfg.BitcoindRpcPass,
+		BitcoindRpcHost:     cfg.BitcoindRpcHost,
+		BoardingExitDelay:   cfg.BoardingExitDelay,
+		UnlockerType:        cfg.UnlockerType,
+		UnlockerFilePath:    cfg.UnlockerFilePath,
+		UnlockerPassword:    cfg.UnlockerPassword,
+		NostrDefaultRelays:  cfg.NostrDefaultRelays,
+		NoteUriPrefix:       cfg.NoteUriPrefix,
 	}
 	svc, err := grpcservice.NewService(svcConfig, appConfig)
 	if err != nil {
 		return err
 	}
 
-	log.RegisterExitHandler(svc.Stop)
+	log.Infof("Ark Server config: %+v", appConfig)
 
 	log.Info("starting service...")
 	if err := svc.Start(); err != nil {
 		return err
 	}
+
+	log.RegisterExitHandler(svc.Stop)
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT, os.Interrupt)

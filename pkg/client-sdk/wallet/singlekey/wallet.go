@@ -7,14 +7,14 @@ import (
 	"fmt"
 
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
-	"github.com/ark-network/ark/pkg/client-sdk/store"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	walletstore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
 type singlekeyWallet struct {
-	configStore store.ConfigStore
+	configStore types.ConfigStore
 	walletStore walletstore.WalletStore
 	privateKey  *secp256k1.PrivateKey
 	walletData  *walletstore.WalletData
@@ -47,7 +47,7 @@ func (w *singlekeyWallet) Create(
 	passwordHash := utils.HashPassword(pwd)
 	pubkey := privateKey.PubKey()
 	buf := privateKey.Serialize()
-	encryptedPrivateKey, err := utils.EncryptAES128(buf, pwd)
+	encryptedPrivateKey, err := utils.EncryptAES256(buf, pwd)
 	if err != nil {
 		return "", err
 	}
@@ -104,7 +104,7 @@ func (w *singlekeyWallet) Unlock(
 		return false, fmt.Errorf("invalid password")
 	}
 
-	privateKeyBytes, err := utils.DecryptAES128(w.walletData.EncryptedPrvkey, pwd)
+	privateKeyBytes, err := utils.DecryptAES256(w.walletData.EncryptedPrvkey, pwd)
 	if err != nil {
 		return false, err
 	}
@@ -115,4 +115,17 @@ func (w *singlekeyWallet) Unlock(
 
 func (w *singlekeyWallet) IsLocked() bool {
 	return w.privateKey == nil
+}
+
+func (w *singlekeyWallet) Dump(ctx context.Context) (string, error) {
+	if w.walletData == nil {
+		return "", fmt.Errorf("wallet not initialized")
+	}
+
+	if w.IsLocked() {
+		return "", fmt.Errorf("wallet is locked")
+	}
+
+	return hex.EncodeToString(w.privateKey.Serialize()), nil
+
 }

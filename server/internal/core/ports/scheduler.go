@@ -1,9 +1,18 @@
 package ports
 
+type TimeUnit int
+
+const (
+	UnixTime TimeUnit = iota
+	BlockHeight
+)
+
 type SchedulerService interface {
 	Start()
 	Stop()
 
-	ScheduleTask(interval int64, immediate bool, task func()) error
-	ScheduleTaskOnce(delay int64, task func()) error
+	Unit() TimeUnit
+	AddNow(lifetime int64) int64
+	AfterNow(expiry int64) bool
+	ScheduleTaskOnce(at int64, task func()) error
 }

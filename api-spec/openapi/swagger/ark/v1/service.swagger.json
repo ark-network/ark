@@ -16,6 +16,38 @@
     "application/json"
   ],
   "paths": {
+    "/v1/boarding": {
+      "post": {
+        "operationId": "ArkService_GetBoardingAddress",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetBoardingAddressResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1GetBoardingAddressRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
     "/v1/events": {
       "get": {
         "operationId": "ArkService_GetEventStream",
@@ -69,38 +101,6 @@
         ]
       }
     },
-    "/v1/onboard": {
-      "post": {
-        "operationId": "ArkService_Onboard",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1OnboardResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1OnboardRequest"
-            }
-          }
-        ],
-        "tags": [
-          "ArkService"
-        ]
-      }
-    },
     "/v1/payment": {
       "post": {
         "operationId": "ArkService_CreatePayment",
@@ -125,38 +125,6 @@
             "required": true,
             "schema": {
               "$ref": "#/definitions/v1CreatePaymentRequest"
-            }
-          }
-        ],
-        "tags": [
-          "ArkService"
-        ]
-      }
-    },
-    "/v1/payment/claim": {
-      "post": {
-        "operationId": "ArkService_ClaimPayment",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1ClaimPaymentResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1ClaimPaymentRequest"
             }
           }
         ],
@@ -197,164 +165,6 @@
         ]
       }
     },
-    "/v1/payment/finalize": {
-      "post": {
-        "operationId": "ArkService_FinalizePayment",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1FinalizePaymentResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1FinalizePaymentRequest"
-            }
-          }
-        ],
-        "tags": [
-          "ArkService"
-        ]
-      }
-    },
-    "/v1/payment/register": {
-      "post": {
-        "operationId": "ArkService_RegisterPayment",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1RegisterPaymentResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1RegisterPaymentRequest"
-            }
-          }
-        ],
-        "tags": [
-          "ArkService"
-        ]
-      }
-    },
-    "/v1/payment/tree/nonces": {
-      "post": {
-        "operationId": "ArkService_SendTreeNonces",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1SendTreeNoncesResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1SendTreeNoncesRequest"
-            }
-          }
-        ],
-        "tags": [
-          "ArkService"
-        ]
-      }
-    },
-    "/v1/payment/tree/signatures": {
-      "post": {
-        "operationId": "ArkService_SendTreeSignatures",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1SendTreeSignaturesResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1SendTreeSignaturesRequest"
-            }
-          }
-        ],
-        "tags": [
-          "ArkService"
-        ]
-      }
-    },
-    "/v1/ping/{paymentId}": {
-      "get": {
-        "operationId": "ArkService_Ping",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1PingResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "paymentId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "ArkService"
-        ]
-      }
-    },
     "/v1/round/id/{id}": {
       "get": {
         "operationId": "ArkService_GetRoundById",
@@ -385,6 +195,196 @@
         ]
       }
     },
+    "/v1/round/ping/{paymentId}": {
+      "get": {
+        "operationId": "ArkService_Ping",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1PingResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "paymentId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
+    "/v1/round/registerInputs": {
+      "post": {
+        "operationId": "ArkService_RegisterInputsForNextRound",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RegisterInputsForNextRoundResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RegisterInputsForNextRoundRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
+    "/v1/round/registerOutputs": {
+      "post": {
+        "operationId": "ArkService_RegisterOutputsForNextRound",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RegisterOutputsForNextRoundResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RegisterOutputsForNextRoundRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
+    "/v1/round/submitForfeitTxs": {
+      "post": {
+        "operationId": "ArkService_SubmitSignedForfeitTxs",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SubmitSignedForfeitTxsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1SubmitSignedForfeitTxsRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
+    "/v1/round/tree/submitNonces": {
+      "post": {
+        "operationId": "ArkService_SubmitTreeNonces",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SubmitTreeNoncesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1SubmitTreeNoncesRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
+    "/v1/round/tree/submitSignatures": {
+      "post": {
+        "operationId": "ArkService_SubmitTreeSignatures",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SubmitTreeSignaturesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1SubmitTreeSignaturesRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
     "/v1/round/{txid}": {
       "get": {
         "operationId": "ArkService_GetRound",
@@ -408,6 +408,101 @@
             "in": "path",
             "required": true,
             "type": "string"
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
+    "/v1/transactions": {
+      "get": {
+        "operationId": "ArkService_GetTransactionsStream",
+        "responses": {
+          "200": {
+            "description": "A successful response.(streaming responses)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "$ref": "#/definitions/v1GetTransactionsStreamResponse"
+                },
+                "error": {
+                  "$ref": "#/definitions/rpcStatus"
+                }
+              },
+              "title": "Stream result of v1GetTransactionsStreamResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
+    "/v1/vtxo/nostr": {
+      "post": {
+        "operationId": "ArkService_SetNostrRecipient",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SetNostrRecipientResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1SetNostrRecipientRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
+    "/v1/vtxo/nostr/delete": {
+      "post": {
+        "operationId": "ArkService_DeleteNostrRecipient",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteNostrRecipientResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1DeleteNostrRecipientRequest"
+            }
           }
         ],
         "tags": [
@@ -475,37 +570,22 @@
         }
       }
     },
-    "v1ClaimPaymentRequest": {
+    "v1AsyncPaymentInput": {
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Mocks wabisabi's credentials."
+        "input": {
+          "$ref": "#/definitions/v1Input"
         },
-        "outputs": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1Output"
-          },
-          "description": "List of receivers for a registered payment."
+        "forfeitLeafHash": {
+          "type": "string"
         }
       }
-    },
-    "v1ClaimPaymentResponse": {
-      "type": "object"
     },
     "v1CompletePaymentRequest": {
       "type": "object",
       "properties": {
         "signedRedeemTx": {
           "type": "string"
-        },
-        "signedUnconditionalForfeitTxs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
         }
       }
     },
@@ -519,7 +599,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/v1Input"
+            "$ref": "#/definitions/v1AsyncPaymentInput"
           }
         },
         "outputs": {
@@ -537,29 +617,42 @@
         "signedRedeemTx": {
           "type": "string",
           "title": "signed only by the ASP"
-        },
-        "usignedUnconditionalForfeitTxs": {
+        }
+      }
+    },
+    "v1DeleteNostrRecipientRequest": {
+      "type": "object",
+      "properties": {
+        "vtxos": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "object",
+            "$ref": "#/definitions/v1SignedVtxoOutpoint"
           }
         }
       }
     },
-    "v1FinalizePaymentRequest": {
+    "v1DeleteNostrRecipientResponse": {
+      "type": "object"
+    },
+    "v1GetBoardingAddressRequest": {
       "type": "object",
       "properties": {
-        "signedForfeitTxs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Forfeit txs signed by the user."
+        "pubkey": {
+          "type": "string"
         }
       }
     },
-    "v1FinalizePaymentResponse": {
-      "type": "object"
+    "v1GetBoardingAddressResponse": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "descriptor": {
+          "type": "string"
+        }
+      }
     },
     "v1GetEventStreamResponse": {
       "type": "object",
@@ -602,9 +695,21 @@
         "network": {
           "type": "string"
         },
-        "minRelayFee": {
+        "dust": {
           "type": "string",
           "format": "int64"
+        },
+        "boardingDescriptorTemplate": {
+          "type": "string"
+        },
+        "vtxoDescriptorTemplates": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "forfeitAddress": {
+          "type": "string"
         }
       }
     },
@@ -624,15 +729,25 @@
         }
       }
     },
+    "v1GetTransactionsStreamResponse": {
+      "type": "object",
+      "properties": {
+        "round": {
+          "$ref": "#/definitions/v1RoundTransaction"
+        },
+        "redeem": {
+          "$ref": "#/definitions/v1RedeemTransaction"
+        }
+      }
+    },
     "v1Input": {
       "type": "object",
       "properties": {
-        "txid": {
-          "type": "string"
+        "outpoint": {
+          "$ref": "#/definitions/v1Outpoint"
         },
-        "vout": {
-          "type": "integer",
-          "format": "int64"
+        "descriptor": {
+          "type": "string"
         }
       }
     },
@@ -669,29 +784,24 @@
         }
       }
     },
-    "v1OnboardRequest": {
+    "v1Outpoint": {
       "type": "object",
       "properties": {
-        "boardingTx": {
+        "txid": {
           "type": "string"
         },
-        "congestionTree": {
-          "$ref": "#/definitions/v1Tree"
-        },
-        "userPubkey": {
-          "type": "string"
+        "vout": {
+          "type": "integer",
+          "format": "int64"
         }
       }
-    },
-    "v1OnboardResponse": {
-      "type": "object"
     },
     "v1Output": {
       "type": "object",
       "properties": {
         "address": {
           "type": "string",
-          "description": "Either the offchain or onchain address."
+          "title": "onchain or off-chain"
         },
         "amount": {
           "type": "string",
@@ -700,41 +810,48 @@
         }
       }
     },
-    "v1PendingPayment": {
+    "v1OwnershipProof": {
       "type": "object",
       "properties": {
-        "redeemTx": {
+        "controlBlock": {
           "type": "string"
         },
-        "unconditionalForfeitTxs": {
+        "script": {
+          "type": "string"
+        },
+        "signature": {
+          "type": "string",
+          "title": "VTXO outpoint signed with script's secret key"
+        }
+      },
+      "description": "This message is used to prove to the ASP that the user controls the vtxo without revealing the whole VTXO descriptor."
+    },
+    "v1PingResponse": {
+      "type": "object"
+    },
+    "v1RedeemTransaction": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "spentVtxos": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "object",
+            "$ref": "#/definitions/v1Outpoint"
+          }
+        },
+        "spendableVtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Vtxo"
           }
         }
       }
     },
-    "v1PingResponse": {
-      "type": "object",
-      "properties": {
-        "roundFinalization": {
-          "$ref": "#/definitions/v1RoundFinalizationEvent"
-        },
-        "roundFinalized": {
-          "$ref": "#/definitions/v1RoundFinalizedEvent"
-        },
-        "roundFailed": {
-          "$ref": "#/definitions/v1RoundFailed"
-        },
-        "roundSigning": {
-          "$ref": "#/definitions/v1RoundSigningEvent"
-        },
-        "roundSigningNoncesGenerated": {
-          "$ref": "#/definitions/v1RoundSigningNoncesGeneratedEvent"
-        }
-      }
-    },
-    "v1RegisterPaymentRequest": {
+    "v1RegisterInputsForNextRoundRequest": {
       "type": "object",
       "properties": {
         "inputs": {
@@ -746,17 +863,43 @@
         },
         "ephemeralPubkey": {
           "type": "string"
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
-    "v1RegisterPaymentResponse": {
+    "v1RegisterInputsForNextRoundResponse": {
       "type": "object",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Mocks wabisabi's credentials."
+          "description": "Mocks wabisabi's blinded credentials."
         }
       }
+    },
+    "v1RegisterOutputsForNextRoundRequest": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Mocks wabisabi's blinded credentials."
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Output"
+          },
+          "description": "List of receivers for a registered payment."
+        }
+      }
+    },
+    "v1RegisterOutputsForNextRoundResponse": {
+      "type": "object"
     },
     "v1Round": {
       "type": "object",
@@ -772,10 +915,10 @@
           "type": "string",
           "format": "int64"
         },
-        "poolTx": {
+        "roundTx": {
           "type": "string"
         },
-        "congestionTree": {
+        "vtxoTree": {
           "$ref": "#/definitions/v1Tree"
         },
         "forfeitTxs": {
@@ -812,16 +955,10 @@
         "id": {
           "type": "string"
         },
-        "poolTx": {
+        "roundTx": {
           "type": "string"
         },
-        "forfeitTxs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "congestionTree": {
+        "vtxoTree": {
           "$ref": "#/definitions/v1Tree"
         },
         "connectors": {
@@ -829,6 +966,10 @@
           "items": {
             "type": "string"
           }
+        },
+        "minRelayFeeRate": {
+          "type": "string",
+          "format": "int64"
         }
       }
     },
@@ -838,7 +979,7 @@
         "id": {
           "type": "string"
         },
-        "poolTxid": {
+        "roundTxid": {
           "type": "string"
         }
       }
@@ -855,8 +996,11 @@
             "type": "string"
           }
         },
-        "unsignedTree": {
+        "unsignedVtxoTree": {
           "$ref": "#/definitions/v1Tree"
+        },
+        "unsignedRoundTx": {
+          "type": "string"
         }
       }
     },
@@ -882,13 +1026,90 @@
       ],
       "default": "ROUND_STAGE_UNSPECIFIED"
     },
-    "v1SendTreeNoncesRequest": {
+    "v1RoundTransaction": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "spentVtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Outpoint"
+          }
+        },
+        "spendableVtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Vtxo"
+          }
+        },
+        "claimedBoardingUtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Outpoint"
+          }
+        }
+      }
+    },
+    "v1SetNostrRecipientRequest": {
+      "type": "object",
+      "properties": {
+        "nostrRecipient": {
+          "type": "string"
+        },
+        "vtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1SignedVtxoOutpoint"
+          }
+        }
+      }
+    },
+    "v1SetNostrRecipientResponse": {
+      "type": "object"
+    },
+    "v1SignedVtxoOutpoint": {
+      "type": "object",
+      "properties": {
+        "outpoint": {
+          "$ref": "#/definitions/v1Outpoint"
+        },
+        "proof": {
+          "$ref": "#/definitions/v1OwnershipProof"
+        }
+      }
+    },
+    "v1SubmitSignedForfeitTxsRequest": {
+      "type": "object",
+      "properties": {
+        "signedForfeitTxs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Forfeit txs signed by the user."
+        },
+        "signedRoundTx": {
+          "type": "string",
+          "description": "If payment has boarding input, the user must sign the associated inputs."
+        }
+      }
+    },
+    "v1SubmitSignedForfeitTxsResponse": {
+      "type": "object"
+    },
+    "v1SubmitTreeNoncesRequest": {
       "type": "object",
       "properties": {
         "roundId": {
           "type": "string"
         },
-        "publicKey": {
+        "pubkey": {
           "type": "string"
         },
         "treeNonces": {
@@ -896,16 +1117,16 @@
         }
       }
     },
-    "v1SendTreeNoncesResponse": {
+    "v1SubmitTreeNoncesResponse": {
       "type": "object"
     },
-    "v1SendTreeSignaturesRequest": {
+    "v1SubmitTreeSignaturesRequest": {
       "type": "object",
       "properties": {
         "roundId": {
           "type": "string"
         },
-        "publicKey": {
+        "pubkey": {
           "type": "string"
         },
         "treeSignatures": {
@@ -913,7 +1134,7 @@
         }
       }
     },
-    "v1SendTreeSignaturesResponse": {
+    "v1SubmitTreeSignaturesResponse": {
       "type": "object"
     },
     "v1Tree": {
@@ -944,15 +1165,12 @@
       "type": "object",
       "properties": {
         "outpoint": {
-          "$ref": "#/definitions/v1Input"
-        },
-        "receiver": {
-          "$ref": "#/definitions/v1Output"
+          "$ref": "#/definitions/v1Outpoint"
         },
         "spent": {
           "type": "boolean"
         },
-        "poolTxid": {
+        "roundTxid": {
           "type": "string"
         },
         "spentBy": {
@@ -965,11 +1183,22 @@
         "swept": {
           "type": "boolean"
         },
-        "pending": {
+        "isOor": {
           "type": "boolean"
         },
-        "pendingData": {
-          "$ref": "#/definitions/v1PendingPayment"
+        "redeemTx": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "pubkey": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "int64"
         }
       }
     }

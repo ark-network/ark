@@ -17,7 +17,7 @@ import (
 // swagger:model v1Output
 type V1Output struct {
 
-	// Either the offchain or onchain address.
+	// onchain or off-chain
 	Address string `json:"address,omitempty"`
 
 	// Amount to send in satoshis.

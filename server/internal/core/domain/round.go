@@ -60,39 +60,6 @@ func NewRound(dustAmount uint64) *Round {
 	}
 }
 
-func NewFinalizedRound(
-	dustAmount uint64, userKey, poolTxid, poolTx string,
-	congestionTree tree.CongestionTree, payments []Payment,
-) *Round {
-	r := NewRound(dustAmount)
-	events := []RoundEvent{
-		RoundStarted{
-			Id:        r.Id,
-			Timestamp: time.Now().Unix(),
-		},
-		PaymentsRegistered{
-			Id:       r.Id,
-			Payments: payments,
-		},
-		RoundFinalizationStarted{
-			Id:             r.Id,
-			CongestionTree: congestionTree,
-			PoolTx:         poolTx,
-		},
-		RoundFinalized{
-			Id:        r.Id,
-			Txid:      poolTxid,
-			Timestamp: time.Now().Unix(),
-		},
-	}
-
-	for _, event := range events {
-		r.raise(event)
-	}
-
-	return r
-}
-
 func NewRoundFromEvents(events []RoundEvent) *Round {
 	r := &Round{}
 
@@ -120,7 +87,7 @@ func (r *Round) On(event RoundEvent, replayed bool) {
 		r.CongestionTree = e.CongestionTree
 		r.Connectors = append([]string{}, e.Connectors...)
 		r.ConnectorAddress = e.ConnectorAddress
-		r.UnsignedTx = e.PoolTx
+		r.UnsignedTx = e.RoundTx
 	case RoundFinalized:
 		r.Stage.Ended = true
 		r.Txid = e.Txid
@@ -196,7 +163,7 @@ func (r *Round) StartFinalization(connectorAddress string, connectors []string, 
 		CongestionTree:   congestionTree,
 		Connectors:       connectors,
 		ConnectorAddress: connectorAddress,
-		PoolTx:           poolTx,
+		RoundTx:          poolTx,
 	}
 	r.raise(event)
 
@@ -205,7 +172,11 @@ func (r *Round) StartFinalization(connectorAddress string, connectors []string, 
 
 func (r *Round) EndFinalization(forfeitTxs []string, txid string) ([]RoundEvent, error) {
 	if len(forfeitTxs) <= 0 {
-		return nil, fmt.Errorf("missing list of signed forfeit txs")
+		for _, p := range r.Payments {
+			if len(p.Inputs) > 0 {
+				return nil, fmt.Errorf("missing list of signed forfeit txs")
+			}
+		}
 	}
 	if len(txid) <= 0 {
 		return nil, fmt.Errorf("missing pool txid")
@@ -216,6 +187,10 @@ func (r *Round) EndFinalization(forfeitTxs []string, txid string) ([]RoundEvent,
 	if r.Stage.Ended {
 		return nil, fmt.Errorf("round already finalized")
 	}
+	if forfeitTxs == nil {
+		forfeitTxs = make([]string, 0)
+	}
+
 	event := RoundFinalized{
 		Id:         r.Id,
 		Txid:       txid,
