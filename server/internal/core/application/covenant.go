@@ -181,7 +181,6 @@ func (s *covenantService) SpendNotes(_ context.Context, _ []note.Note) (string, 
 func (s *covenantService) SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error) {
 	vtxosInputs := make([]domain.Vtxo, 0)
 	boardingInputs := make([]ports.BoardingInput, 0)
-	descriptors := make(map[domain.VtxoKey]string)
 
 	now := time.Now().Unix()
 
@@ -243,15 +242,33 @@ func (s *covenantService) SpendVtxos(ctx context.Context, inputs []ports.Input) 
 			return "", fmt.Errorf("input %s:%d already swept", vtxo.Txid, vtxo.VOut)
 		}
 
+		vtxoScript, err := tree.ParseVtxoScript(input.Descriptor)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse boarding descriptor: %s", err)
+		}
+
+		tapKey, _, err := vtxoScript.TapTree()
+		if err != nil {
+			return "", fmt.Errorf("failed to get taproot key: %s", err)
+		}
+
+		expectedTapKey, err := vtxo.TapKey()
+		if err != nil {
+			return "", fmt.Errorf("failed to get taproot key: %s", err)
+		}
+
+		if !bytes.Equal(schnorr.SerializePubKey(tapKey), schnorr.SerializePubKey(expectedTapKey)) {
+			return "", fmt.Errorf("descriptor does not match vtxo pubkey")
+		}
+
 		vtxosInputs = append(vtxosInputs, vtxo)
-		descriptors[vtxo.VtxoKey] = input.Descriptor
 	}
 
 	payment, err := domain.NewPayment(vtxosInputs)
 	if err != nil {
 		return "", err
 	}
-	if err := s.paymentRequests.push(*payment, boardingInputs, descriptors); err != nil {
+	if err := s.paymentRequests.push(*payment, boardingInputs); err != nil {
 		return "", err
 	}
 	return payment.Id, nil
@@ -519,7 +536,7 @@ func (s *covenantService) startFinalization() {
 	if num > paymentsThreshold {
 		num = paymentsThreshold
 	}
-	payments, boardingInputs, descriptors, _, _ := s.paymentRequests.pop(num)
+	payments, boardingInputs, _, _ := s.paymentRequests.pop(num)
 	if _, err := round.RegisterPayments(payments); err != nil {
 		round.Fail(fmt.Errorf("failed to register payments: %s", err))
 		log.WithError(err).Warn("failed to register payments")
@@ -533,7 +550,7 @@ func (s *covenantService) startFinalization() {
 		return
 	}
 
-	unsignedPoolTx, tree, connectorAddress, err := s.builder.BuildRoundTx(s.pubkey, payments, boardingInputs, sweptRounds)
+	unsignedPoolTx, tree, connectorAddress, connectors, err := s.builder.BuildRoundTx(s.pubkey, payments, boardingInputs, sweptRounds)
 	if err != nil {
 		round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
 		log.WithError(err).Warn("failed to create pool tx")
@@ -541,34 +558,7 @@ func (s *covenantService) startFinalization() {
 	}
 	log.Debugf("pool tx created for round %s", round.Id)
 
-	needForfeits := false
-	for _, pay := range payments {
-		if len(pay.Inputs) > 0 {
-			needForfeits = true
-			break
-		}
-	}
-
-	var forfeitTxs, connectors []string
-
-	minRelayFeeRate := s.wallet.MinRelayFeeRate(ctx)
-
-	if needForfeits {
-		connectors, forfeitTxs, err = s.builder.BuildForfeitTxs(unsignedPoolTx, payments, descriptors, minRelayFeeRate)
-		if err != nil {
-			round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
-			log.WithError(err).Warn("failed to create connectors and forfeit txs")
-			return
-		}
-
-		log.Debugf("forfeit transactions created for round %s", round.Id)
-
-		if err := s.forfeitTxs.push(forfeitTxs); err != nil {
-			round.Fail(fmt.Errorf("failed to cache forfeit txs: %s", err))
-			log.WithError(err).Warn("failed to cache forfeit txs")
-			return
-		}
-	}
+	s.forfeitTxs.init(connectors, payments)
 
 	if _, err := round.StartFinalization(
 		connectorAddress, connectors, tree, unsignedPoolTx,
@@ -598,9 +588,8 @@ func (s *covenantService) finalizeRound() {
 		}
 	}()
 
-	forfeitTxs, leftUnsigned := s.forfeitTxs.pop()
-	if len(leftUnsigned) > 0 {
-		err := fmt.Errorf("%d forfeit txs left to sign", len(leftUnsigned))
+	forfeitTxs, err := s.forfeitTxs.pop()
+	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to finalize round: %s", err))
 		log.WithError(err).Warn("failed to finalize round")
 		return

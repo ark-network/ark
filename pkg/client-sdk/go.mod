@@ -10,6 +10,7 @@ require (
 	github.com/btcsuite/btcd/btcutil v1.1.5
 	github.com/btcsuite/btcd/btcutil/psbt v1.1.9
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0
+	github.com/btcsuite/btcwallet v0.16.10-0.20240718224643-db3a4a2543bd
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0
 	github.com/dgraph-io/badger/v4 v4.3.0
 	github.com/go-openapi/errors v0.22.0
@@ -32,6 +33,7 @@ require (
 	github.com/aead/siphash v1.0.1 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/btcsuite/btclog v0.0.0-20170628155309-84c8d2346e9f // indirect
+	github.com/btcsuite/btcwallet/walletdb v1.4.2 // indirect
 	github.com/btcsuite/go-socks v0.0.0-20170105172521-4720035b7bfd // indirect
 	github.com/btcsuite/websocket v0.0.0-20150119174127-31079b680792 // indirect
 	github.com/btcsuite/winsvc v1.0.0 // indirect
@@ -65,7 +67,9 @@ require (
 	github.com/jrick/logrotate v1.0.0 // indirect
 	github.com/kkdai/bstream v1.0.0 // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
+	github.com/lightninglabs/neutrino/cache v1.1.2 // indirect
 	github.com/lightningnetwork/lnd/fn v1.2.1 // indirect
+	github.com/lightningnetwork/lnd/tlv v1.2.6 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
@@ -77,6 +81,7 @@ require (
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7 // indirect
 	github.com/vulpemventures/fastsha256 v0.0.0-20160815193821-637e65642941 // indirect
+	go.etcd.io/bbolt v1.3.10 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.mongodb.org/mongo-driver v1.14.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
