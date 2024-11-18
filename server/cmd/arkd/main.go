@@ -77,6 +77,8 @@ func mainAction(_ *cli.Context) error {
 		BitcoindRpcUser:     cfg.BitcoindRpcUser,
 		BitcoindRpcPass:     cfg.BitcoindRpcPass,
 		BitcoindRpcHost:     cfg.BitcoindRpcHost,
+		BitcoindZMQBlock:    cfg.BitcoindZMQBlock,
+		BitcoindZMQTx:       cfg.BitcoindZMQTx,
 		BoardingExitDelay:   cfg.BoardingExitDelay,
 		UnlockerType:        cfg.UnlockerType,
 		UnlockerFilePath:    cfg.UnlockerFilePath,
