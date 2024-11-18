@@ -118,6 +118,14 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 			return nil, err
 		}
 
+		valid, _, err := b.verifyTapscriptPartialSigs(pset)
+		if err != nil {
+			return nil, err
+		}
+		if !valid {
+			return nil, fmt.Errorf("invalid forfeit tx signature")
+		}
+
 		if len(pset.Inputs) != 2 {
 			return nil, fmt.Errorf("invalid forfeit tx, expect 2 inputs, got %d", len(pset.Inputs))
 		}
@@ -454,13 +462,20 @@ func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime int64, sweepInput po
 
 	return lifetime, sweepInput, nil
 }
-
 func (b *txBuilder) VerifyTapscriptPartialSigs(tx string) (bool, string, error) {
-	ptx, _ := psetv2.NewPsetFromBase64(tx)
-	utx, _ := ptx.UnsignedTx()
+	pset, err := psetv2.NewPsetFromBase64(tx)
+	if err != nil {
+		return false, "", err
+	}
+
+	return b.verifyTapscriptPartialSigs(pset)
+}
+
+func (b *txBuilder) verifyTapscriptPartialSigs(pset *psetv2.Pset) (bool, string, error) {
+	utx, _ := pset.UnsignedTx()
 	txid := utx.TxHash().String()
 
-	for index, input := range ptx.Inputs {
+	for index, input := range pset.Inputs {
 		if len(input.TapLeafScript) == 0 {
 			continue
 		}
@@ -486,7 +501,7 @@ func (b *txBuilder) VerifyTapscriptPartialSigs(tx string) (bool, string, error) 
 		leafHash := taproot.NewBaseTapElementsLeaf(tapLeaf.Script).TapHash()
 
 		preimage, err := b.getTaprootPreimage(
-			tx,
+			pset,
 			index,
 			&leafHash,
 		)
@@ -891,7 +906,7 @@ func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, 
 			return "", err
 		}
 
-		preimage, err := b.getTaprootPreimage(src, i, leafHash)
+		preimage, err := b.getTaprootPreimage(sourcePset, i, leafHash)
 		if err != nil {
 			return "", err
 		}
@@ -995,12 +1010,7 @@ func (b *txBuilder) createConnectors(
 	return connectors, nil
 }
 
-func (b *txBuilder) getTaprootPreimage(tx string, inputIndex int, leafHash *chainhash.Hash) ([]byte, error) {
-	pset, err := psetv2.NewPsetFromBase64(tx)
-	if err != nil {
-		return nil, err
-	}
-
+func (b *txBuilder) getTaprootPreimage(pset *psetv2.Pset, inputIndex int, leafHash *chainhash.Hash) ([]byte, error) {
 	prevoutScripts := make([][]byte, 0)
 	prevoutAssets := make([][]byte, 0)
 	prevoutValues := make([][]byte, 0)

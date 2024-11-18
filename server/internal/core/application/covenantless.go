@@ -1153,7 +1153,6 @@ func (s *covenantlessService) finalizeRound(notes []note.Note) {
 	boardingInputs := make([]domain.VtxoKey, 0)
 	roundTx, err := psbt.NewFromRawBytes(strings.NewReader(round.UnsignedTx), true)
 	if err != nil {
-		log.Debug(round.UnsignedTx)
 		changes = round.Fail(fmt.Errorf("failed to parse round tx: %s", err))
 		log.WithError(err).Warn("failed to parse round tx")
 		return

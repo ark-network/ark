@@ -282,19 +282,6 @@ func (m *forfeitTxsMap) sign(txs []string) error {
 		return err
 	}
 
-	// verify the signatures
-	for _, txs := range validTxs {
-		for _, tx := range txs {
-			valid, txid, err := m.builder.VerifyTapscriptPartialSigs(tx)
-			if err != nil {
-				return err
-			}
-			if !valid {
-				return fmt.Errorf("invalid forfeit tx signature (%s)", txid)
-			}
-		}
-	}
-
 	m.lock.Lock()
 	defer m.lock.Unlock()
 

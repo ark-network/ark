@@ -48,7 +48,15 @@ func (b *txBuilder) GetTxID(tx string) (string, error) {
 }
 
 func (b *txBuilder) VerifyTapscriptPartialSigs(tx string) (bool, string, error) {
-	ptx, _ := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+	ptx, err := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+	if err != nil {
+		return false, "", err
+	}
+
+	return b.verifyTapscriptPartialSigs(ptx)
+}
+
+func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, string, error) {
 	txid := ptx.UnsignedTx.TxID()
 
 	for index, input := range ptx.Inputs {
@@ -83,7 +91,7 @@ func (b *txBuilder) VerifyTapscriptPartialSigs(tx string) (bool, string, error) 
 		}
 
 		preimage, err := b.getTaprootPreimage(
-			tx,
+			ptx,
 			index,
 			tapLeaf.Script,
 		)
@@ -255,6 +263,14 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 
 		if len(ptx.Inputs) != 2 {
 			return nil, fmt.Errorf("invalid forfeit tx, expect 2 inputs, got %d", len(ptx.Inputs))
+		}
+
+		valid, _, err := b.verifyTapscriptPartialSigs(ptx)
+		if err != nil {
+			return nil, err
+		}
+		if !valid {
+			return nil, fmt.Errorf("invalid forfeit tx signature")
 		}
 
 		vtxoInput := ptx.UnsignedTx.TxIn[1]
@@ -1113,7 +1129,7 @@ func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, 
 			}
 
 			partialSig := sourceInput.TaprootScriptSpendSig[0]
-			preimage, err := b.getTaprootPreimage(src, i, sourceInput.TaprootLeafScript[0].Script)
+			preimage, err := b.getTaprootPreimage(sourceTx, i, sourceInput.TaprootLeafScript[0].Script)
 			if err != nil {
 				return "", err
 			}
@@ -1255,12 +1271,7 @@ func (b *txBuilder) selectUtxos(ctx context.Context, sweptRounds []domain.Round,
 	return append(selectedConnectorsUtxos, utxos...), change, nil
 }
 
-func (b *txBuilder) getTaprootPreimage(tx string, inputIndex int, leafScript []byte) ([]byte, error) {
-	partial, err := psbt.NewFromRawBytes(strings.NewReader(tx), true)
-	if err != nil {
-		return nil, err
-	}
-
+func (b *txBuilder) getTaprootPreimage(partial *psbt.Packet, inputIndex int, leafScript []byte) ([]byte, error) {
 	prevouts := make(map[wire.OutPoint]*wire.TxOut)
 
 	for i, input := range partial.Inputs {
