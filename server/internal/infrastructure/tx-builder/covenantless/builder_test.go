@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/ark-network/ark/common"
@@ -13,7 +12,6 @@ import (
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	txbuilder "github.com/ark-network/ark/server/internal/infrastructure/tx-builder/covenantless"
-	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -77,7 +75,7 @@ func TestBuildPoolTx(t *testing.T) {
 					cosigners = append(cosigners, randKey.PubKey())
 				}
 
-				poolTx, congestionTree, connAddr, err := builder.BuildRoundTx(
+				poolTx, congestionTree, connAddr, _, err := builder.BuildRoundTx(
 					pubkey, f.Payments, []ports.BoardingInput{}, []domain.Round{}, cosigners...,
 				)
 				require.NoError(t, err)
@@ -98,74 +96,13 @@ func TestBuildPoolTx(t *testing.T) {
 	if len(fixtures.Invalid) > 0 {
 		t.Run("invalid", func(t *testing.T) {
 			for _, f := range fixtures.Invalid {
-				poolTx, congestionTree, connAddr, err := builder.BuildRoundTx(
+				poolTx, congestionTree, connAddr, _, err := builder.BuildRoundTx(
 					pubkey, f.Payments, []ports.BoardingInput{}, []domain.Round{},
 				)
 				require.EqualError(t, err, f.ExpectedErr)
 				require.Empty(t, poolTx)
 				require.Empty(t, connAddr)
 				require.Empty(t, congestionTree)
-			}
-		})
-	}
-}
-
-func TestBuildForfeitTxs(t *testing.T) {
-	builder := txbuilder.NewTxBuilder(
-		wallet, common.Bitcoin, 1209344, boardingExitDelay,
-	)
-
-	fixtures, err := parseForfeitTxsFixtures()
-	require.NoError(t, err)
-	require.NotEmpty(t, fixtures)
-
-	if len(fixtures.Valid) > 0 {
-		t.Run("valid", func(t *testing.T) {
-			for _, f := range fixtures.Valid {
-				connectors, forfeitTxs, err := builder.BuildForfeitTxs(
-					f.PoolTx, f.Payments, f.Descriptors, minRelayFeeRate,
-				)
-				require.NoError(t, err)
-				require.Len(t, connectors, f.ExpectedNumOfConnectors)
-				require.Len(t, forfeitTxs, f.ExpectedNumOfForfeitTxs)
-
-				expectedInputTxid := f.PoolTxid
-				// Verify the chain of connectors
-				for _, connector := range connectors {
-					tx, err := psbt.NewFromRawBytes(strings.NewReader(connector), true)
-					require.NoError(t, err)
-					require.NotNil(t, tx)
-
-					require.Len(t, tx.Inputs, 1)
-					require.Len(t, tx.Outputs, 2)
-
-					inputTxid := tx.UnsignedTx.TxIn[0].PreviousOutPoint.Hash.String()
-					require.Equal(t, expectedInputTxid, inputTxid)
-					require.Equal(t, 1, int(tx.UnsignedTx.TxIn[0].PreviousOutPoint.Index))
-
-					expectedInputTxid = tx.UnsignedTx.TxHash().String()
-				}
-
-				// decode and check forfeit txs
-				for _, forfeitTx := range forfeitTxs {
-					tx, err := psbt.NewFromRawBytes(strings.NewReader(forfeitTx), true)
-					require.NoError(t, err)
-					require.Len(t, tx.Inputs, 2)
-					require.Len(t, tx.Outputs, 1)
-				}
-			}
-		})
-	}
-
-	if len(fixtures.Invalid) > 0 {
-		t.Run("invalid", func(t *testing.T) {
-			for _, f := range fixtures.Invalid {
-				connectors, forfeitTxs, err := builder.BuildForfeitTxs(
-					f.PoolTx, f.Payments, f.Descriptors, minRelayFeeRate,
-				)
-				require.EqualError(t, err, f.ExpectedErr)
-				require.Empty(t, connectors)
-				require.Empty(t, forfeitTxs)
 			}
 		})
 	}
@@ -217,79 +154,6 @@ func parsePoolTxFixtures() (*poolTxFixtures, error) {
 	var fixtures poolTxFixtures
 	if err := json.Unmarshal(file, &fixtures); err != nil {
 		return nil, err
-	}
-
-	return &fixtures, nil
-}
-
-type forfeitTxsFixtures struct {
-	Valid []struct {
-		Payments                []domain.Payment
-		Descriptors             map[domain.VtxoKey]string
-		ExpectedNumOfConnectors int
-		ExpectedNumOfForfeitTxs int
-		PoolTx                  string
-		PoolTxid                string
-	}
-	Invalid []struct {
-		Payments    []domain.Payment
-		Descriptors map[domain.VtxoKey]string
-		ExpectedErr string
-		PoolTx      string
-	}
-}
-
-func parseForfeitTxsFixtures() (*forfeitTxsFixtures, error) {
-	file, err := os.ReadFile("testdata/fixtures.json")
-	if err != nil {
-		return nil, err
-	}
-	v := map[string]interface{}{}
-	if err := json.Unmarshal(file, &v); err != nil {
-		return nil, err
-	}
-
-	vv := v["buildForfeitTxs"].(map[string]interface{})
-	file, _ = json.Marshal(vv)
-	var fixtures forfeitTxsFixtures
-	if err := json.Unmarshal(file, &fixtures); err != nil {
-		return nil, err
-	}
-
-	valid := vv["valid"].([]interface{})
-	for i, v := range valid {
-		val := v.(map[string]interface{})
-		payments := val["payments"].([]interface{})
-		descriptors := make(map[domain.VtxoKey]string)
-		for _, p := range payments {
-			inputs := p.(map[string]interface{})["inputs"].([]interface{})
-			for _, in := range inputs {
-				inMap := in.(map[string]interface{})
-				descriptors[domain.VtxoKey{
-					Txid: inMap["txid"].(string),
-					VOut: uint32(inMap["vout"].(float64)),
-				}] = inMap["descriptor"].(string)
-			}
-		}
-		fixtures.Valid[i].Descriptors = descriptors
-	}
-
-	invalid := vv["invalid"].([]interface{})
-	for i, v := range invalid {
-		val := v.(map[string]interface{})
-		payments := val["payments"].([]interface{})
-		descriptors := make(map[domain.VtxoKey]string)
-		for _, p := range payments {
-			inputs := p.(map[string]interface{})["inputs"].([]interface{})
-			for _, in := range inputs {
-				inMap := in.(map[string]interface{})
-				descriptors[domain.VtxoKey{
-					Txid: inMap["txid"].(string),
-					VOut: uint32(inMap["vout"].(float64)),
-				}] = inMap["descriptor"].(string)
-			}
-		}
-		fixtures.Invalid[i].Descriptors = descriptors
 	}
 
 	return &fixtures, nil

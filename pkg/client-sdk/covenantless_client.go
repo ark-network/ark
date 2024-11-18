@@ -28,6 +28,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcwallet/waddrmgr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	log "github.com/sirupsen/logrus"
@@ -2111,11 +2112,6 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 			return nil, err
 		}
 
-		feeAmount, err := common.ComputeForfeitMinRelayFee(feeRate, vtxoTapTree, parsedScript.Class())
-		if err != nil {
-			return nil, err
-		}
-
 		vtxoOutputScript, err := common.P2TRScript(vtxoTapKey)
 		if err != nil {
 			return nil, err
@@ -2132,6 +2128,7 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 		}
 
 		var forfeitClosure bitcointree.Closure
+		var witnessSize int
 
 		switch v := vtxoScript.(type) {
 		case *bitcointree.DefaultVtxoScript:
@@ -2139,6 +2136,7 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 				Pubkey:    v.Owner,
 				AspPubkey: a.AspPubkey,
 			}
+			witnessSize = 64 * 2
 		default:
 			return nil, fmt.Errorf("unsupported vtxo script: %T", vtxoScript)
 		}
@@ -2157,6 +2155,24 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 			ControlBlock: leafProof.ControlBlock,
 			Script:       leafProof.Script,
 			LeafVersion:  txscript.BaseLeafVersion,
+		}
+
+		ctrlBlock, err := txscript.ParseControlBlock(leafProof.ControlBlock)
+		if err != nil {
+			return nil, err
+		}
+
+		feeAmount, err := common.ComputeForfeitMinRelayFee(
+			feeRate,
+			&waddrmgr.Tapscript{
+				RevealedScript: leafProof.Script,
+				ControlBlock:   ctrlBlock,
+			},
+			witnessSize,
+			parsedScript.Class(),
+		)
+		if err != nil {
+			return nil, err
 		}
 
 		for _, connectorPset := range connectorsPsets {

@@ -28,28 +28,16 @@ var ConnectorTxSize = (&input.TxWeightEstimator{}).
 
 func ComputeForfeitMinRelayFee(
 	feeRate chainfee.SatPerKVByte,
-	vtxoScriptTapTree TaprootTree,
+	tapscript *waddrmgr.Tapscript,
+	witnessSize int,
 	aspScriptClass txscript.ScriptClass,
 ) (uint64, error) {
 	txWeightEstimator := &input.TxWeightEstimator{}
 
-	biggestVtxoLeafProof, err := BiggestLeafMerkleProof(vtxoScriptTapTree)
-	if err != nil {
-		return 0, err
-	}
-
-	ctrlBlock, err := txscript.ParseControlBlock(biggestVtxoLeafProof.ControlBlock)
-	if err != nil {
-		return 0, err
-	}
-
 	txWeightEstimator.AddP2PKHInput() // connector input
 	txWeightEstimator.AddTapscriptInput(
-		64*2, // forfeit witness = 2 signatures
-		&waddrmgr.Tapscript{
-			RevealedScript: biggestVtxoLeafProof.Script,
-			ControlBlock:   ctrlBlock,
-		},
+		lntypes.WeightUnit(witnessSize),
+		tapscript,
 	)
 
 	switch aspScriptClass {
