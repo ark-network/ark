@@ -118,16 +118,16 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 			return nil, err
 		}
 
+		if len(pset.Inputs) != 2 {
+			return nil, fmt.Errorf("invalid forfeit tx, expect 2 inputs, got %d", len(pset.Inputs))
+		}
+
 		valid, _, err := b.verifyTapscriptPartialSigs(pset)
 		if err != nil {
 			return nil, err
 		}
 		if !valid {
 			return nil, fmt.Errorf("invalid forfeit tx signature")
-		}
-
-		if len(pset.Inputs) != 2 {
-			return nil, fmt.Errorf("invalid forfeit tx, expect 2 inputs, got %d", len(pset.Inputs))
 		}
 
 		vtxoInput := pset.Inputs[1]
