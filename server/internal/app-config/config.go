@@ -75,8 +75,8 @@ type Config struct {
 	BitcoindRpcUser  string
 	BitcoindRpcPass  string
 	BitcoindRpcHost  string
-	BitcoindZmqBlock string
-	BitcoindZmqTx    string
+	BitcoindZMQBlock string
+	BitcoindZMQTx    string
 
 	UnlockerType     string
 	UnlockerFilePath string // file unlocker
@@ -273,11 +273,11 @@ func (c *Config) walletService() error {
 	var err error
 
 	switch {
-	case c.BitcoindZmqBlock != "" && c.BitcoindZmqTx != "" && c.BitcoindRpcUser != "" && c.BitcoindRpcPass != "":
+	case c.BitcoindZMQBlock != "" && c.BitcoindZMQTx != "" && c.BitcoindRpcUser != "" && c.BitcoindRpcPass != "":
 		svc, err = btcwallet.NewService(btcwallet.WalletConfig{
 			Datadir: c.DbDir,
 			Network: c.Network,
-		}, btcwallet.WithBitcoindZMQ(c.BitcoindZmqBlock, c.BitcoindZmqTx, c.BitcoindRpcHost, c.BitcoindRpcUser, c.BitcoindRpcPass))
+		}, btcwallet.WithBitcoindZMQ(c.BitcoindZMQBlock, c.BitcoindZMQTx, c.BitcoindRpcHost, c.BitcoindRpcUser, c.BitcoindRpcPass))
 	case c.BitcoindRpcUser != "" && c.BitcoindRpcPass != "":
 		svc, err = btcwallet.NewService(btcwallet.WalletConfig{
 			Datadir: c.DbDir,
