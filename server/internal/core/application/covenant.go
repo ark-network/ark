@@ -92,8 +92,23 @@ func NewCovenantService(
 
 	repoManager.RegisterEventsHandler(
 		func(round *domain.Round) {
-			go svc.propagateEvents(round)
 			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Errorf("recovered from panic in propagateEvents: %v", r)
+					}
+				}()
+
+				svc.propagateEvents(round)
+			}()
+
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Errorf("recovered from panic in updateVtxoSet and scheduleSweepVtxosForRound: %v", r)
+					}
+				}()
+
 				// utxo db must be updated before scheduling the sweep events
 				svc.updateVtxoSet(round)
 				svc.scheduleSweepVtxosForRound(round)
@@ -437,6 +452,12 @@ func (s *covenantService) DeleteNostrRecipient(ctx context.Context, signedVtxoOu
 }
 
 func (s *covenantService) start() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("recovered from panic in start: %v", r)
+		}
+	}()
+
 	s.startRound()
 }
 
@@ -646,12 +667,24 @@ func (s *covenantService) finalizeRound() {
 }
 
 func (s *covenantService) listenToScannerNotifications() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("recovered from panic in listenToScannerNotifications: %v", r)
+		}
+	}()
+
 	ctx := context.Background()
 	chVtxos := s.scanner.GetNotificationChannel(ctx)
 
 	mutx := &sync.Mutex{}
 	for vtxoKeys := range chVtxos {
 		go func(vtxoKeys map[string][]ports.VtxoWithValue) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Errorf("recovered from panic in GetVtxos goroutine: %v", r)
+				}
+			}()
+
 			vtxosRepo := s.repoManager.Vtxos()
 
 			for _, keys := range vtxoKeys {
@@ -665,6 +698,12 @@ func (s *covenantService) listenToScannerNotifications() {
 
 					if !vtxo.Redeemed {
 						go func() {
+							defer func() {
+								if r := recover(); r != nil {
+									log.Errorf("recovered from panic in markAsRedeemed goroutine: %v", r)
+								}
+							}()
+
 							if err := s.markAsRedeemed(ctx, vtxo); err != nil {
 								log.WithError(err).Warnf("failed to mark vtxo %s:%d as redeemed", vtxo.Txid, vtxo.VOut)
 							}
@@ -674,6 +713,12 @@ func (s *covenantService) listenToScannerNotifications() {
 					if vtxo.Spent {
 						log.Infof("fraud detected on vtxo %s:%d", vtxo.Txid, vtxo.VOut)
 						go func() {
+							defer func() {
+								if r := recover(); r != nil {
+									log.Errorf("recovered from panic in reactToFraud goroutine: %v", r)
+								}
+							}()
+
 							if err := s.reactToFraud(ctx, vtxo, mutx); err != nil {
 								log.WithError(err).Warnf("failed to prevent fraud for vtxo %s:%d", vtxo.Txid, vtxo.VOut)
 							}
@@ -867,6 +912,12 @@ func (s *covenantService) updateVtxoSet(round *domain.Round) {
 		}
 
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Errorf("recovered from panic in startWatchingVtxos: %v", r)
+				}
+			}()
+
 			for {
 				if err := s.startWatchingVtxos(newVtxos); err != nil {
 					log.WithError(err).Warn(
@@ -881,6 +932,12 @@ func (s *covenantService) updateVtxoSet(round *domain.Round) {
 	}
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Errorf("recovered from panic in RoundTransactionEvent: %v", r)
+			}
+		}()
+
 		// nolint:all
 		tx, _ := psetv2.NewPsetFromBase64(round.UnsignedTx)
 		boardingInputs := make([]domain.VtxoKey, 0)
