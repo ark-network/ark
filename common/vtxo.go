@@ -33,7 +33,7 @@ VtxoScript abstracts the taproot complexity behind vtxo contracts.
 it is compiled, transferred and parsed using descriptor string.
 */
 type VtxoScript[T TaprootTree, F interface{}, E interface{}] interface {
-	Validate(asp *secp256k1.PublicKey, minExitDelay uint) error
+	Validate(server *secp256k1.PublicKey, minExitDelay uint) error
 	TapTree() (taprootKey *secp256k1.PublicKey, taprootScriptTree T, err error)
 	Encode() ([]string, error)
 	Decode(scripts []string) error
