@@ -80,14 +80,13 @@ func (a *restClient) GetInfo(
 	}
 
 	return &client.Info{
-		Pubkey:                     resp.Payload.Pubkey,
-		RoundLifetime:              int64(roundLifetime),
-		UnilateralExitDelay:        int64(unilateralExitDelay),
-		RoundInterval:              int64(roundInterval),
-		Network:                    resp.Payload.Network,
-		Dust:                       uint64(dust),
-		BoardingDescriptorTemplate: resp.Payload.BoardingDescriptorTemplate,
-		ForfeitAddress:             resp.Payload.ForfeitAddress,
+		Pubkey:              resp.Payload.Pubkey,
+		RoundLifetime:       int64(roundLifetime),
+		UnilateralExitDelay: int64(unilateralExitDelay),
+		RoundInterval:       int64(roundInterval),
+		Network:             resp.Payload.Network,
+		Dust:                uint64(dust),
+		ForfeitAddress:      resp.Payload.ForfeitAddress,
 	}, nil
 }
 
@@ -118,7 +117,7 @@ func (a *restClient) RegisterInputsForNextRound(
 				Txid: i.Txid,
 				Vout: int64(i.VOut),
 			},
-			Descriptor: i.Descriptor,
+			Tapscripts: i.Tapscripts,
 		})
 	}
 	body := &models.V1RegisterInputsForNextRoundRequest{
@@ -402,7 +401,7 @@ func (a *restClient) CreatePayment(
 					Txid: i.Input.Txid,
 					Vout: int64(i.VOut),
 				},
-				Descriptor: i.Input.Descriptor,
+				Tapscripts: i.Input.Tapscripts,
 			},
 			ForfeitLeafHash: i.ForfeitLeafHash.String(),
 		})

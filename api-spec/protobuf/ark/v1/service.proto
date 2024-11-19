@@ -123,9 +123,7 @@ message GetInfoResponse {
   int64 round_interval = 4;
   string network = 5;
   int64 dust = 6;
-  string boarding_descriptor_template = 7;
-  repeated string vtxo_descriptor_templates = 8;
-  string forfeit_address = 9;
+  string forfeit_address = 7;
 }
 
 message GetBoardingAddressRequest {
@@ -133,7 +131,7 @@ message GetBoardingAddressRequest {
 }
 message GetBoardingAddressResponse {
   string address = 1;
-  string descriptor = 2;
+  repeated string tapscripts = 2;
 }
 
 /* In-Round Payment API messages */
@@ -298,7 +296,7 @@ message Outpoint {
 
 message Input {
   Outpoint outpoint = 1;
-  string descriptor = 2;
+  repeated string tapscripts = 2;
 }
 
 message Output {
@@ -355,7 +353,7 @@ message RedeemTransaction {
   repeated Vtxo spendable_vtxos = 3;
 }
 
-// This message is used to prove to the ASP that the user controls the vtxo without revealing the whole VTXO descriptor.
+// This message is used to prove to the ASP that the user controls the vtxo without revealing the whole VTXO taproot tree.
 message OwnershipProof {
   string control_block = 1;
   string script = 2;

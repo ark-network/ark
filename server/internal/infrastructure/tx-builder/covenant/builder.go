@@ -591,7 +591,7 @@ func (b *txBuilder) FindLeaves(
 
 func (b *txBuilder) BuildAsyncPaymentTransactions(
 	_ []domain.Vtxo,
-	_ map[domain.VtxoKey]string,
+	_ map[domain.VtxoKey][]string,
 	_ map[domain.VtxoKey]chainhash.Hash,
 	_ []domain.Receiver,
 ) (string, error) {
@@ -728,7 +728,7 @@ func (b *txBuilder) createPoolTx(
 			return nil, fmt.Errorf("failed to convert value to bytes: %s", err)
 		}
 
-		boardingVtxoScript, err := tree.ParseVtxoScript(in.Descriptor)
+		boardingVtxoScript, err := tree.ParseVtxoScript(in.Tapscripts)
 		if err != nil {
 			return nil, err
 		}

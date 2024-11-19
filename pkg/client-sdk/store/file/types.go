@@ -45,19 +45,18 @@ func (d storeData) decode() types.Config {
 	aspPubkey, _ := secp256k1.ParsePubKey(buf)
 	explorerURL := d.ExplorerURL
 	return types.Config{
-		AspUrl:                     d.AspUrl,
-		AspPubkey:                  aspPubkey,
-		WalletType:                 d.WalletType,
-		ClientType:                 d.ClientType,
-		Network:                    network,
-		RoundLifetime:              int64(roundLifetime),
-		UnilateralExitDelay:        int64(unilateralExitDelay),
-		RoundInterval:              int64(roundInterval),
-		Dust:                       uint64(dust),
-		BoardingDescriptorTemplate: d.BoardingDescriptorTemplate,
-		ExplorerURL:                explorerURL,
-		ForfeitAddress:             d.ForfeitAddress,
-		WithTransactionFeed:        withTransactionFeed,
+		AspUrl:              d.AspUrl,
+		AspPubkey:           aspPubkey,
+		WalletType:          d.WalletType,
+		ClientType:          d.ClientType,
+		Network:             network,
+		RoundLifetime:       int64(roundLifetime),
+		UnilateralExitDelay: int64(unilateralExitDelay),
+		RoundInterval:       int64(roundInterval),
+		Dust:                uint64(dust),
+		ExplorerURL:         explorerURL,
+		ForfeitAddress:      d.ForfeitAddress,
+		WithTransactionFeed: withTransactionFeed,
 	}
 }
 

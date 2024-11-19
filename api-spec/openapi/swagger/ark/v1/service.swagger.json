@@ -649,8 +649,11 @@
         "address": {
           "type": "string"
         },
-        "descriptor": {
-          "type": "string"
+        "tapscripts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -699,15 +702,6 @@
           "type": "string",
           "format": "int64"
         },
-        "boardingDescriptorTemplate": {
-          "type": "string"
-        },
-        "vtxoDescriptorTemplates": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
         "forfeitAddress": {
           "type": "string"
         }
@@ -746,8 +740,11 @@
         "outpoint": {
           "$ref": "#/definitions/v1Outpoint"
         },
-        "descriptor": {
-          "type": "string"
+        "tapscripts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -824,7 +821,7 @@
           "title": "VTXO outpoint signed with script's secret key"
         }
       },
-      "description": "This message is used to prove to the ASP that the user controls the vtxo without revealing the whole VTXO descriptor."
+      "description": "This message is used to prove to the ASP that the user controls the vtxo without revealing the whole VTXO taproot tree."
     },
     "v1PingResponse": {
       "type": "object"

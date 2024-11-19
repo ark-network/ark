@@ -63,14 +63,13 @@ type ASPClient interface {
 }
 
 type Info struct {
-	Pubkey                     string
-	RoundLifetime              int64
-	UnilateralExitDelay        int64
-	RoundInterval              int64
-	Network                    string
-	Dust                       uint64
-	BoardingDescriptorTemplate string
-	ForfeitAddress             string
+	Pubkey              string
+	RoundLifetime       int64
+	UnilateralExitDelay int64
+	RoundInterval       int64
+	Network             string
+	Dust                uint64
+	ForfeitAddress      string
 }
 
 type RoundEventChannel struct {
@@ -89,7 +88,7 @@ func (o Outpoint) Equals(other Outpoint) bool {
 
 type Input struct {
 	Outpoint
-	Descriptor string
+	Tapscripts []string
 }
 
 type AsyncPaymentInput struct {
@@ -129,9 +128,9 @@ func (v Vtxo) Address(asp *secp256k1.PublicKey, net common.Network) (string, err
 	return a.Encode()
 }
 
-type DescriptorVtxo struct {
+type TapscriptsVtxo struct {
 	Vtxo
-	Descriptor string
+	Tapscripts []string
 }
 
 type Output struct {

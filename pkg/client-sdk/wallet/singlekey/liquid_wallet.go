@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"strings"
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
@@ -44,7 +43,7 @@ func NewLiquidWallet(
 
 func (w *liquidWallet) GetAddresses(
 	ctx context.Context,
-) ([]wallet.DescriptorAddress, []wallet.DescriptorAddress, []wallet.DescriptorAddress, error) {
+) ([]wallet.TapscriptsAddress, []wallet.TapscriptsAddress, []wallet.TapscriptsAddress, error) {
 	offchainAddr, boardingAddr, err := w.getAddress(ctx)
 	if err != nil {
 		return nil, nil, nil, err
@@ -72,22 +71,22 @@ func (w *liquidWallet) GetAddresses(
 		return nil, nil, nil, err
 	}
 
-	offchainAddrs := []wallet.DescriptorAddress{
+	offchainAddrs := []wallet.TapscriptsAddress{
 		{
-			Descriptor: offchainAddr.Descriptor,
+			Tapscripts: offchainAddr.Tapscripts,
 			Address:    encodedOffchainAddr,
 		},
 	}
-	boardingAddrs := []wallet.DescriptorAddress{
+	boardingAddrs := []wallet.TapscriptsAddress{
 		{
-			Descriptor: boardingAddr.Descriptor,
+			Tapscripts: boardingAddr.Tapscripts,
 			Address:    boardingAddr.Address,
 		},
 	}
 
-	redemptionAddrs := []wallet.DescriptorAddress{
+	redemptionAddrs := []wallet.TapscriptsAddress{
 		{
-			Descriptor: offchainAddr.Descriptor,
+			Tapscripts: offchainAddr.Tapscripts,
 			Address:    redemptionAddr,
 		},
 	}
@@ -97,7 +96,7 @@ func (w *liquidWallet) GetAddresses(
 
 func (w *liquidWallet) NewAddress(
 	ctx context.Context, _ bool,
-) (*wallet.DescriptorAddress, *wallet.DescriptorAddress, error) {
+) (*wallet.TapscriptsAddress, *wallet.TapscriptsAddress, error) {
 	offchainAddr, boardingAddr, err := w.getAddress(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -108,37 +107,37 @@ func (w *liquidWallet) NewAddress(
 		return nil, nil, err
 	}
 
-	return &wallet.DescriptorAddress{
-			Descriptor: offchainAddr.Descriptor,
+	return &wallet.TapscriptsAddress{
+			Tapscripts: offchainAddr.Tapscripts,
 			Address:    encodedOffchainAddr,
-		}, &wallet.DescriptorAddress{
-			Descriptor: boardingAddr.Descriptor,
+		}, &wallet.TapscriptsAddress{
+			Tapscripts: boardingAddr.Tapscripts,
 			Address:    boardingAddr.Address,
 		}, nil
 }
 
 func (w *liquidWallet) NewAddresses(
 	ctx context.Context, _ bool, num int,
-) ([]wallet.DescriptorAddress, []wallet.DescriptorAddress, error) {
+) ([]wallet.TapscriptsAddress, []wallet.TapscriptsAddress, error) {
 	offchainAddr, boardingAddr, err := w.getAddress(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	offchainAddrs := make([]wallet.DescriptorAddress, 0, num)
-	boardingAddrs := make([]wallet.DescriptorAddress, 0, num)
+	offchainAddrs := make([]wallet.TapscriptsAddress, 0, num)
+	boardingAddrs := make([]wallet.TapscriptsAddress, 0, num)
 	for i := 0; i < num; i++ {
 		encodedOffchainAddr, err := offchainAddr.Address.Encode()
 		if err != nil {
 			return nil, nil, err
 		}
 
-		offchainAddrs = append(offchainAddrs, wallet.DescriptorAddress{
-			Descriptor: offchainAddr.Descriptor,
+		offchainAddrs = append(offchainAddrs, wallet.TapscriptsAddress{
+			Tapscripts: offchainAddr.Tapscripts,
 			Address:    encodedOffchainAddr,
 		})
-		boardingAddrs = append(boardingAddrs, wallet.DescriptorAddress{
-			Descriptor: boardingAddr.Descriptor,
+		boardingAddrs = append(boardingAddrs, wallet.TapscriptsAddress{
+			Tapscripts: boardingAddr.Tapscripts,
 			Address:    boardingAddr.Address,
 		})
 	}
@@ -310,11 +309,8 @@ func (w *liquidWallet) SignMessage(
 func (w *liquidWallet) getAddress(
 	ctx context.Context,
 ) (
-	*struct {
-		Address    common.Address
-		Descriptor string
-	},
-	*wallet.DescriptorAddress,
+	*addressWithTapscripts,
+	*wallet.TapscriptsAddress,
 	error,
 ) {
 	if w.walletData == nil {
@@ -328,11 +324,11 @@ func (w *liquidWallet) getAddress(
 
 	liquidNet := utils.ToElementsNetwork(data.Network)
 
-	vtxoScript := &tree.DefaultVtxoScript{
-		Owner:     w.walletData.Pubkey,
-		Asp:       data.AspPubkey,
-		ExitDelay: uint(data.UnilateralExitDelay),
-	}
+	vtxoScript := tree.NewDefaultVtxoScript(
+		w.walletData.Pubkey,
+		data.AspPubkey,
+		uint(data.UnilateralExitDelay),
+	)
 
 	vtxoTapKey, _, err := vtxoScript.TapTree()
 	if err != nil {
@@ -345,17 +341,7 @@ func (w *liquidWallet) getAddress(
 		VtxoTapKey: vtxoTapKey,
 	}
 
-	myPubkeyStr := hex.EncodeToString(schnorr.SerializePubKey(w.walletData.Pubkey))
-	descriptorStr := strings.ReplaceAll(
-		data.BoardingDescriptorTemplate, "USER", myPubkeyStr,
-	)
-
-	onboardingScript, err := tree.ParseVtxoScript(descriptorStr)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	tapKey, _, err := onboardingScript.TapTree()
+	tapKey, _, err := vtxoScript.TapTree()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -370,14 +356,16 @@ func (w *liquidWallet) getAddress(
 		return nil, nil, err
 	}
 
-	return &struct {
-			Address    common.Address
-			Descriptor string
-		}{
+	tapscripts, err := vtxoScript.Encode()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &addressWithTapscripts{
 			Address:    *offchainAddr,
-			Descriptor: vtxoScript.ToDescriptor(),
-		}, &wallet.DescriptorAddress{
-			Descriptor: descriptorStr,
+			Tapscripts: tapscripts,
+		}, &wallet.TapscriptsAddress{
+			Tapscripts: tapscripts,
 			Address:    boardingAddr,
 		}, nil
 }

@@ -14,6 +14,7 @@ var (
 type TaprootMerkleProof struct {
 	ControlBlock []byte
 	Script       []byte
+	WitnessSize  int
 }
 
 // TaprootTree is an interface wrapping the methods needed to spend a vtxo taproot contract
@@ -30,14 +31,15 @@ It may also contain others closures implementing specific use cases.
 
 VtxoScript abstracts the taproot complexity behind vtxo contracts.
 it is compiled, transferred and parsed using descriptor string.
-
-default vtxo script = tr(_,{ and(pk(USER), pk(ASP)), and(older(T), pk(USER)) })
-reversible vtxo script = tr(_,{ { and(pk(SENDER), pk(ASP)), and(older(T), pk(SENDER)) }, { and(pk(RECEIVER), pk(ASP) } })
 */
-type VtxoScript[T TaprootTree] interface {
+type VtxoScript[T TaprootTree, F interface{}, E interface{}] interface {
+	Validate(asp *secp256k1.PublicKey) error
 	TapTree() (taprootKey *secp256k1.PublicKey, taprootScriptTree T, err error)
-	ToDescriptor() string
-	FromDescriptor(descriptor string) error
+	Encode() ([]string, error)
+	Decode(scripts []string) error
+	SmallestExitDelay() (uint, error)
+	ForfeitClosures() []F
+	ExitClosures() []E
 }
 
 // BiggestLeafMerkleProof returns the leaf with the biggest witness size (for fee estimation)

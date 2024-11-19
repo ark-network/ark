@@ -18,7 +18,7 @@ type SweepInput interface {
 
 type Input struct {
 	domain.VtxoKey
-	Descriptor string
+	Tapscripts []string
 }
 
 type BoardingInput struct {
@@ -54,7 +54,7 @@ type TxBuilder interface {
 	FindLeaves(congestionTree tree.CongestionTree, fromtxid string, vout uint32) (leaves []tree.Node, err error)
 	BuildAsyncPaymentTransactions(
 		vtxosToSpend []domain.Vtxo,
-		descriptors map[domain.VtxoKey]string,
+		scripts map[domain.VtxoKey][]string,
 		forfeitsLeaves map[domain.VtxoKey]chainhash.Hash,
 		receivers []domain.Receiver,
 	) (string, error)

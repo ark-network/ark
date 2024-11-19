@@ -16,19 +16,18 @@ const (
 )
 
 type Config struct {
-	AspUrl                     string
-	AspPubkey                  *secp256k1.PublicKey
-	WalletType                 string
-	ClientType                 string
-	Network                    common.Network
-	RoundLifetime              int64
-	RoundInterval              int64
-	UnilateralExitDelay        int64
-	Dust                       uint64
-	BoardingDescriptorTemplate string
-	ExplorerURL                string
-	ForfeitAddress             string
-	WithTransactionFeed        bool
+	AspUrl              string
+	AspPubkey           *secp256k1.PublicKey
+	WalletType          string
+	ClientType          string
+	Network             common.Network
+	RoundLifetime       int64
+	RoundInterval       int64
+	UnilateralExitDelay int64
+	Dust                uint64
+	ExplorerURL         string
+	ForfeitAddress      string
+	WithTransactionFeed bool
 }
 
 type VtxoKey struct {
@@ -113,7 +112,7 @@ type Utxo struct {
 	Delay       uint
 	SpendableAt time.Time
 	CreatedAt   time.Time
-	Descriptor  string
+	Tapscripts  []string
 	Spent       bool
 }
 

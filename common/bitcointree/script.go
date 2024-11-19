@@ -13,6 +13,7 @@ import (
 type Closure interface {
 	Leaf() (*txscript.TapLeaf, error)
 	Decode(script []byte) (bool, error)
+	WitnessSize() int
 }
 
 type CSVSigClosure struct {
@@ -39,7 +40,10 @@ func DecodeClosure(script []byte) (Closure, error) {
 	}
 
 	return nil, fmt.Errorf("invalid closure script")
+}
 
+func (f *MultisigClosure) WitnessSize() int {
+	return 64 * 2
 }
 
 func (f *MultisigClosure) Leaf() (*txscript.TapLeaf, error) {
@@ -89,6 +93,10 @@ func (f *MultisigClosure) Decode(script []byte) (bool, error) {
 	}
 
 	return true, nil
+}
+
+func (d *CSVSigClosure) WitnessSize() int {
+	return 64
 }
 
 func (d *CSVSigClosure) Leaf() (*txscript.TapLeaf, error) {

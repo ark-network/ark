@@ -18,11 +18,11 @@ import (
 // swagger:model v1Input
 type V1Input struct {
 
-	// descriptor
-	Descriptor string `json:"descriptor,omitempty"`
-
 	// outpoint
 	Outpoint *V1Outpoint `json:"outpoint,omitempty"`
+
+	// tapscripts
+	Tapscripts []string `json:"tapscripts"`
 }
 
 // Validate validates this v1 input

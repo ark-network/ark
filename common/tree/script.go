@@ -24,6 +24,7 @@ const (
 type Closure interface {
 	Leaf() (*taproot.TapElementsLeaf, error)
 	Decode(script []byte) (bool, error)
+	WitnessSize() int
 }
 
 type UnrollClosure struct {
@@ -61,6 +62,10 @@ func DecodeClosure(script []byte) (Closure, error) {
 	}
 
 	return nil, fmt.Errorf("invalid closure script %s", hex.EncodeToString(script))
+}
+
+func (f *MultisigClosure) WitnessSize() int {
+	return 64 * 2
 }
 
 func (f *MultisigClosure) Leaf() (*taproot.TapElementsLeaf, error) {
@@ -110,6 +115,10 @@ func (f *MultisigClosure) Decode(script []byte) (bool, error) {
 	}
 
 	return true, nil
+}
+
+func (f *CSVSigClosure) WitnessSize() int {
+	return 64
 }
 
 func (d *CSVSigClosure) Leaf() (*taproot.TapElementsLeaf, error) {
@@ -163,6 +172,10 @@ func (d *CSVSigClosure) Decode(script []byte) (bool, error) {
 	d.Seconds = seconds
 
 	return valid, nil
+}
+
+func (c *UnrollClosure) WitnessSize() int {
+	return 0
 }
 
 func (c *UnrollClosure) isOneChild() bool {

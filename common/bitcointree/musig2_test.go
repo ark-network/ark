@@ -1,7 +1,6 @@
 package bitcointree_test
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"os"
 	"testing"
@@ -134,24 +133,6 @@ func TestRoundTripSignTree(t *testing.T) {
 type receiverFixture struct {
 	Amount int64  `json:"amount"`
 	Pubkey string `json:"pubkey"`
-}
-
-func (r receiverFixture) toVtxoScript(asp *secp256k1.PublicKey) bitcointree.VtxoScript {
-	bytesKey, err := hex.DecodeString(r.Pubkey)
-	if err != nil {
-		panic(err)
-	}
-
-	pubkey, err := secp256k1.ParsePubKey(bytesKey)
-	if err != nil {
-		panic(err)
-	}
-
-	return &bitcointree.DefaultVtxoScript{
-		Owner:     pubkey,
-		Asp:       asp,
-		ExitDelay: exitDelay,
-	}
 }
 
 func castReceivers(receivers []receiverFixture) []tree.VtxoLeaf {

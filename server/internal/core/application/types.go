@@ -45,7 +45,7 @@ type Service interface {
 	) error
 	GetBoardingAddress(
 		ctx context.Context, userPubkey *secp256k1.PublicKey,
-	) (address string, descriptor string, err error)
+	) (address string, scripts []string, err error)
 	// Tree signing methods
 	RegisterCosignerPubkey(ctx context.Context, paymentId string, ephemeralPublicKey string) error
 	RegisterCosignerNonces(

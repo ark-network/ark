@@ -44,14 +44,13 @@ func (h *handler) GetInfo(
 	}
 
 	return &arkv1.GetInfoResponse{
-		Pubkey:                     info.PubKey,
-		RoundLifetime:              info.RoundLifetime,
-		UnilateralExitDelay:        info.UnilateralExitDelay,
-		RoundInterval:              info.RoundInterval,
-		Network:                    info.Network,
-		Dust:                       int64(info.Dust),
-		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
-		ForfeitAddress:             info.ForfeitAddress,
+		Pubkey:              info.PubKey,
+		RoundLifetime:       info.RoundLifetime,
+		UnilateralExitDelay: info.UnilateralExitDelay,
+		RoundInterval:       info.RoundInterval,
+		Network:             info.Network,
+		Dust:                int64(info.Dust),
+		ForfeitAddress:      info.ForfeitAddress,
 	}, nil
 }
 
@@ -73,14 +72,14 @@ func (h *handler) GetBoardingAddress(
 		return nil, status.Error(codes.InvalidArgument, "invalid pubkey (parse error)")
 	}
 
-	addr, descriptor, err := h.svc.GetBoardingAddress(ctx, userPubkey)
+	addr, tapscripts, err := h.svc.GetBoardingAddress(ctx, userPubkey)
 	if err != nil {
 		return nil, err
 	}
 
 	return &arkv1.GetBoardingAddressResponse{
-		Address:     addr,
-		Descriptor_: descriptor,
+		Address:    addr,
+		Tapscripts: tapscripts,
 	}, nil
 }
 

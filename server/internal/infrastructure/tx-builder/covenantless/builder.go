@@ -623,7 +623,7 @@ func (b *txBuilder) FindLeaves(congestionTree tree.CongestionTree, fromtxid stri
 
 func (b *txBuilder) BuildAsyncPaymentTransactions(
 	vtxos []domain.Vtxo,
-	descriptors map[domain.VtxoKey]string,
+	scripts map[domain.VtxoKey][]string,
 	forfeitsLeaves map[domain.VtxoKey]chainhash.Hash,
 	receivers []domain.Receiver,
 ) (string, error) {
@@ -638,9 +638,9 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 
 	redeemTxWeightEstimator := &input.TxWeightEstimator{}
 	for index, vtxo := range vtxos {
-		desc, ok := descriptors[vtxo.VtxoKey]
+		vtxoTapscripts, ok := scripts[vtxo.VtxoKey]
 		if !ok {
-			return "", fmt.Errorf("missing descriptor for vtxo %s", vtxo.VtxoKey)
+			return "", fmt.Errorf("missing scripts for vtxo %s", vtxo.VtxoKey)
 		}
 
 		forfeitLeafHash, ok := forfeitsLeaves[vtxo.VtxoKey]
@@ -662,7 +662,7 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 			Index: vtxo.VOut,
 		}
 
-		vtxoScript, err := bitcointree.ParseVtxoScript(desc)
+		vtxoScript, err := bitcointree.ParseVtxoScript(vtxoTapscripts)
 		if err != nil {
 			return "", err
 		}
@@ -940,7 +940,7 @@ func (b *txBuilder) createRoundTx(
 		})
 		nSequences = append(nSequences, wire.MaxTxInSequenceNum)
 
-		boardingVtxoScript, err := bitcointree.ParseVtxoScript(boardingInput.Descriptor)
+		boardingVtxoScript, err := bitcointree.ParseVtxoScript(boardingInput.Tapscripts)
 		if err != nil {
 			return nil, err
 		}

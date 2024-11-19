@@ -20,8 +20,8 @@ type V1GetBoardingAddressResponse struct {
 	// address
 	Address string `json:"address,omitempty"`
 
-	// descriptor
-	Descriptor string `json:"descriptor,omitempty"`
+	// tapscripts
+	Tapscripts []string `json:"tapscripts"`
 }
 
 // Validate validates this v1 get boarding address response

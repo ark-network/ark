@@ -149,29 +149,30 @@ func (s *covenantService) Stop() {
 	close(s.eventsCh)
 }
 
-func (s *covenantService) GetBoardingAddress(ctx context.Context, userPubkey *secp256k1.PublicKey) (string, string, error) {
-	vtxoScript := &tree.DefaultVtxoScript{
-		Asp:       s.pubkey,
-		Owner:     userPubkey,
-		ExitDelay: uint(s.boardingExitDelay),
-	}
+func (s *covenantService) GetBoardingAddress(ctx context.Context, userPubkey *secp256k1.PublicKey) (string, []string, error) {
+	vtxoScript := tree.NewDefaultVtxoScript(userPubkey, s.pubkey, uint(s.boardingExitDelay))
 
 	tapKey, _, err := vtxoScript.TapTree()
 	if err != nil {
-		return "", "", fmt.Errorf("failed to get taproot key: %s", err)
+		return "", nil, fmt.Errorf("failed to get taproot key: %s", err)
 	}
 
 	p2tr, err := payment.FromTweakedKey(tapKey, s.onchainNetwork(), nil)
 	if err != nil {
-		return "", "", err
+		return "", nil, err
 	}
 
 	addr, err := p2tr.TaprootAddress()
 	if err != nil {
-		return "", "", err
+		return "", nil, err
 	}
 
-	return addr, vtxoScript.ToDescriptor(), nil
+	scripts, err := vtxoScript.Encode()
+	if err != nil {
+		return "", nil, err
+	}
+
+	return addr, scripts, nil
 }
 
 func (s *covenantService) SpendNotes(_ context.Context, _ []note.Note) (string, error) {
@@ -242,7 +243,7 @@ func (s *covenantService) SpendVtxos(ctx context.Context, inputs []ports.Input) 
 			return "", fmt.Errorf("input %s:%d already swept", vtxo.Txid, vtxo.VOut)
 		}
 
-		vtxoScript, err := tree.ParseVtxoScript(input.Descriptor)
+		vtxoScript, err := tree.ParseVtxoScript(input.Tapscripts)
 		if err != nil {
 			return "", fmt.Errorf("failed to parse boarding descriptor: %s", err)
 		}
@@ -290,7 +291,7 @@ func (s *covenantService) newBoardingInput(tx *transaction.Transaction, input po
 		return nil, fmt.Errorf("failed to parse value: %s", err)
 	}
 
-	boardingScript, err := tree.ParseVtxoScript(input.Descriptor)
+	boardingScript, err := tree.ParseVtxoScript(input.Tapscripts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse boarding descriptor: %s", err)
 	}
@@ -309,16 +310,8 @@ func (s *covenantService) newBoardingInput(tx *transaction.Transaction, input po
 		return nil, fmt.Errorf("descriptor does not match script in transaction output")
 	}
 
-	if defaultVtxoScript, ok := boardingScript.(*tree.DefaultVtxoScript); ok {
-		if !bytes.Equal(schnorr.SerializePubKey(defaultVtxoScript.Asp), schnorr.SerializePubKey(s.pubkey)) {
-			return nil, fmt.Errorf("invalid boarding descriptor, ASP mismatch")
-		}
-
-		if defaultVtxoScript.ExitDelay != uint(s.boardingExitDelay) {
-			return nil, fmt.Errorf("invalid boarding descriptor, timeout mismatch")
-		}
-	} else {
-		return nil, fmt.Errorf("only default vtxo script is supported for boarding")
+	if err := boardingScript.Validate(s.pubkey); err != nil {
+		return nil, err
 	}
 
 	return &ports.BoardingInput{

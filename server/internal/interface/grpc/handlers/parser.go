@@ -43,7 +43,7 @@ func parseAsyncPaymentInputs(ins []*arkv1.AsyncPaymentInput) ([]application.Asyn
 					Txid: input.GetInput().GetOutpoint().GetTxid(),
 					VOut: input.GetInput().GetOutpoint().GetVout(),
 				},
-				Descriptor: input.GetInput().GetDescriptor_(),
+				Tapscripts: input.GetInput().GetTapscripts(),
 			},
 			ForfeitLeafHash: *forfeitLeafHash,
 		})
@@ -82,7 +82,7 @@ func parseInputs(ins []*arkv1.Input) ([]ports.Input, error) {
 				Txid: input.GetOutpoint().GetTxid(),
 				VOut: input.GetOutpoint().GetVout(),
 			},
-			Descriptor: input.GetDescriptor_(),
+			Tapscripts: input.GetTapscripts(),
 		})
 	}
 
