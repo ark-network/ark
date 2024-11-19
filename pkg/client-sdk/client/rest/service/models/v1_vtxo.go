@@ -27,8 +27,8 @@ type V1Vtxo struct {
 	// expire at
 	ExpireAt string `json:"expireAt,omitempty"`
 
-	// is oor
-	IsOor bool `json:"isOor,omitempty"`
+	// is pending
+	IsPending bool `json:"isPending,omitempty"`
 
 	// outpoint
 	Outpoint *V1Outpoint `json:"outpoint,omitempty"`
