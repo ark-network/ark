@@ -147,7 +147,7 @@ func NewCovenantlessService(
 	if err := svc.restoreWatchingVtxos(); err != nil {
 		return nil, fmt.Errorf("failed to restore watching vtxos: %s", err)
 	}
-
+	go svc.listenToScannerNotifications()
 	return svc, nil
 }
 
