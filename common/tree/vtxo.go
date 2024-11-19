@@ -38,11 +38,11 @@ type TapscriptsVtxoScript struct {
 func (v *TapscriptsVtxoScript) Encode() ([]string, error) {
 	encoded := make([]string, 0)
 	for _, closure := range v.Closures {
-		leaf, err := closure.Leaf()
+		script, err := closure.Script()
 		if err != nil {
 			return nil, err
 		}
-		encoded = append(encoded, hex.EncodeToString(leaf.Script))
+		encoded = append(encoded, hex.EncodeToString(script))
 	}
 	return encoded, nil
 }
@@ -116,11 +116,11 @@ func (v *TapscriptsVtxoScript) ExitClosures() []*CSVSigClosure {
 func (v *TapscriptsVtxoScript) TapTree() (*secp256k1.PublicKey, elementsTapTree, error) {
 	leaves := make([]taproot.TapElementsLeaf, 0, len(v.Closures))
 	for _, closure := range v.Closures {
-		leaf, err := closure.Leaf()
+		leaf, err := closure.Script()
 		if err != nil {
 			return nil, elementsTapTree{}, err
 		}
-		leaves = append(leaves, *leaf)
+		leaves = append(leaves, taproot.NewBaseTapElementsLeaf(leaf))
 	}
 
 	tapTree := taproot.AssembleTaprootScriptTree(leaves...)

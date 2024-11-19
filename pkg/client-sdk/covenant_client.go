@@ -1060,10 +1060,12 @@ func (a *covenantArkClient) addInputs(
 
 	forfeitClosure := vtxoScript.ForfeitClosures()[0]
 
-	forfeitLeaf, err := forfeitClosure.Leaf()
+	forfeitScript, err := forfeitClosure.Script()
 	if err != nil {
 		return err
 	}
+
+	forfeitLeaf := taproot.NewBaseTapElementsLeaf(forfeitScript)
 
 	_, taprootTree, err := vtxoScript.TapTree()
 	if err != nil {
@@ -1217,10 +1219,12 @@ func (a *covenantArkClient) handleRoundFinalization(
 
 		forfeitClosure := boardingVtxoScript.ForfeitClosures()[0]
 
-		forfeitLeaf, err := forfeitClosure.Leaf()
+		forfeitScript, err := forfeitClosure.Script()
 		if err != nil {
 			return nil, "", err
 		}
+
+		forfeitLeaf := taproot.NewBaseTapElementsLeaf(forfeitScript)
 
 		_, taprootTree, err := boardingVtxoScript.TapTree()
 		if err != nil {
@@ -1441,10 +1445,12 @@ func (a *covenantArkClient) createAndSignForfeits(
 
 		forfeitClosure := vtxoScript.ForfeitClosures()[0]
 
-		forfeitLeaf, err := forfeitClosure.Leaf()
+		forfeitScript, err := forfeitClosure.Script()
 		if err != nil {
 			return nil, err
 		}
+
+		forfeitLeaf := taproot.NewBaseTapElementsLeaf(forfeitScript)
 
 		leafProof, err := vtxoTapTree.GetTaprootMerkleProof(forfeitLeaf.TapHash())
 		if err != nil {

@@ -1,19 +1,16 @@
 package bitcointree
 
 import (
-	"bytes"
-	"encoding/hex"
 	"fmt"
-	"math"
 
 	"github.com/ark-network/ark/common"
-	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-type VtxoScript common.VtxoScript[bitcoinTapTree, *MultisigClosure, *CSVSigClosure]
+type VtxoScript common.VtxoScript[bitcoinTapTree, *tree.MultisigClosure, *tree.CSVSigClosure]
 
 func ParseVtxoScript(scripts []string) (VtxoScript, error) {
 	types := []VtxoScript{
@@ -30,108 +27,23 @@ func ParseVtxoScript(scripts []string) (VtxoScript, error) {
 }
 
 func NewDefaultVtxoScript(owner, asp *secp256k1.PublicKey, exitDelay uint) VtxoScript {
-	return &TapscriptsVtxoScript{
-		[]Closure{
-			&CSVSigClosure{Pubkey: owner, Seconds: exitDelay},
-			&MultisigClosure{Pubkey: owner, AspPubkey: asp},
-		},
-	}
+	base := tree.NewDefaultVtxoScript(owner, asp, exitDelay)
+
+	return &TapscriptsVtxoScript{*base}
 }
 
 type TapscriptsVtxoScript struct {
-	Closures []Closure
-}
-
-func (v *TapscriptsVtxoScript) Encode() ([]string, error) {
-	scripts := make([]string, len(v.Closures))
-	for i, closure := range v.Closures {
-		leaf, err := closure.Leaf()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get leaf for closure %d: %w", i, err)
-		}
-		scripts[i] = hex.EncodeToString(leaf.Script)
-	}
-
-	return scripts, nil
-}
-
-func (v *TapscriptsVtxoScript) Decode(scripts []string) error {
-	v.Closures = make([]Closure, len(scripts))
-	for i, scriptHex := range scripts {
-		script, err := hex.DecodeString(scriptHex)
-		if err != nil {
-			return fmt.Errorf("invalid script hex: %w", err)
-		}
-
-		// Parse script into appropriate closure type
-		closure, err := DecodeClosure(script)
-		if err != nil {
-			return fmt.Errorf("failed to parse closure: %w", err)
-		}
-		v.Closures[i] = closure
-	}
-
-	return nil
-}
-
-func (v *TapscriptsVtxoScript) Validate(asp *secp256k1.PublicKey) error {
-	for _, closure := range v.Closures {
-		if multisigClosure, ok := closure.(*MultisigClosure); ok {
-			if !bytes.Equal(schnorr.SerializePubKey(multisigClosure.AspPubkey), schnorr.SerializePubKey(asp)) {
-				return fmt.Errorf("invalid forfeit closure, ASP pubkey not found")
-			}
-		}
-	}
-
-	return nil
-}
-
-func (v *TapscriptsVtxoScript) SmallestExitDelay() (uint, error) {
-	smallest := uint(math.MaxUint32)
-
-	for _, closure := range v.Closures {
-		if csvClosure, ok := closure.(*CSVSigClosure); ok {
-			if csvClosure.Seconds < smallest {
-				smallest = csvClosure.Seconds
-			}
-		}
-	}
-
-	if smallest == math.MaxUint32 {
-		return 0, fmt.Errorf("no exit delay found")
-	}
-
-	return smallest, nil
-}
-
-func (v *TapscriptsVtxoScript) ForfeitClosures() []*MultisigClosure {
-	forfeits := make([]*MultisigClosure, 0)
-	for _, closure := range v.Closures {
-		if multisigClosure, ok := closure.(*MultisigClosure); ok {
-			forfeits = append(forfeits, multisigClosure)
-		}
-	}
-	return forfeits
-}
-
-func (v *TapscriptsVtxoScript) ExitClosures() []*CSVSigClosure {
-	exits := make([]*CSVSigClosure, 0)
-	for _, closure := range v.Closures {
-		if csvClosure, ok := closure.(*CSVSigClosure); ok {
-			exits = append(exits, csvClosure)
-		}
-	}
-	return exits
+	tree.TapscriptsVtxoScript
 }
 
 func (v *TapscriptsVtxoScript) TapTree() (*secp256k1.PublicKey, bitcoinTapTree, error) {
 	leaves := make([]txscript.TapLeaf, len(v.Closures))
 	for i, closure := range v.Closures {
-		leaf, err := closure.Leaf()
+		script, err := closure.Script()
 		if err != nil {
-			return nil, bitcoinTapTree{}, fmt.Errorf("failed to get leaf for closure %d: %w", i, err)
+			return nil, bitcoinTapTree{}, fmt.Errorf("failed to get script for closure %d: %w", i, err)
 		}
-		leaves[i] = *leaf
+		leaves[i] = txscript.NewBaseTapLeaf(script)
 	}
 
 	tapTree := txscript.AssembleTaprootScriptTree(leaves...)

@@ -1055,10 +1055,12 @@ func (a *covenantlessArkClient) SendAsync(
 
 		forfeitClosure := vtxoScript.ForfeitClosures()[0]
 
-		forfeitLeaf, err := forfeitClosure.Leaf()
+		forfeitScript, err := forfeitClosure.Script()
 		if err != nil {
 			return "", err
 		}
+
+		forfeitLeaf := txscript.NewBaseTapLeaf(forfeitScript)
 
 		inputs = append(inputs, client.AsyncPaymentInput{
 			Input: client.Input{
@@ -1189,11 +1191,12 @@ func (a *covenantlessArkClient) SetNostrNotificationRecipient(ctx context.Contex
 			return err
 		}
 
-		forfeitLeaf, err := forfeitClosure.Leaf()
+		forfeitScript, err := forfeitClosure.Script()
 		if err != nil {
 			return err
 		}
 
+		forfeitLeaf := txscript.NewBaseTapLeaf(forfeitScript)
 		merkleProof, err := tapTree.GetTaprootMerkleProof(forfeitLeaf.TapHash())
 		if err != nil {
 			return err
@@ -1545,7 +1548,7 @@ func (a *covenantlessArkClient) addInputs(
 		return err
 	}
 
-	vtxoScript, err := tree.ParseVtxoScript(offchain.Tapscripts)
+	vtxoScript, err := bitcointree.ParseVtxoScript(offchain.Tapscripts)
 	if err != nil {
 		return err
 	}
@@ -1576,7 +1579,7 @@ func (a *covenantlessArkClient) addInputs(
 
 		exitClosure := exitClosures[0]
 
-		exitLeaf, err := exitClosure.Leaf()
+		exitScript, err := exitClosure.Script()
 		if err != nil {
 			return err
 		}
@@ -1586,6 +1589,7 @@ func (a *covenantlessArkClient) addInputs(
 			return err
 		}
 
+		exitLeaf := txscript.NewBaseTapLeaf(exitScript)
 		leafProof, err := taprootTree.GetTaprootMerkleProof(exitLeaf.TapHash())
 		if err != nil {
 			return fmt.Errorf("failed to get taproot merkle proof: %s", err)
@@ -1727,12 +1731,12 @@ func (a *covenantlessArkClient) handleRoundStream(
 func (a *covenantlessArkClient) handleRoundSigningStarted(
 	ctx context.Context, ephemeralKey *secp256k1.PrivateKey, event client.RoundSigningStartedEvent,
 ) (signerSession bitcointree.SignerSession, err error) {
-	sweepClosure := bitcointree.CSVSigClosure{
+	sweepClosure := tree.CSVSigClosure{
 		Pubkey:  a.AspPubkey,
 		Seconds: uint(a.RoundLifetime),
 	}
 
-	sweepTapLeaf, err := sweepClosure.Leaf()
+	script, err := sweepClosure.Script()
 	if err != nil {
 		return
 	}
@@ -1745,7 +1749,8 @@ func (a *covenantlessArkClient) handleRoundSigningStarted(
 	sharedOutput := roundTx.UnsignedTx.TxOut[0]
 	sharedOutputValue := sharedOutput.Value
 
-	sweepTapTree := txscript.AssembleTaprootScriptTree(*sweepTapLeaf)
+	sweepTapLeaf := txscript.NewBaseTapLeaf(script)
+	sweepTapTree := txscript.AssembleTaprootScriptTree(sweepTapLeaf)
 	root := sweepTapTree.RootNode.TapHash()
 
 	signerSession = bitcointree.NewTreeSignerSession(
@@ -1847,7 +1852,7 @@ func (a *covenantlessArkClient) handleRoundFinalization(
 
 		forfeitClosure := forfeitClosures[0]
 
-		forfeitLeaf, err := forfeitClosure.Leaf()
+		forfeitScript, err := forfeitClosure.Script()
 		if err != nil {
 			return nil, "", err
 		}
@@ -1857,6 +1862,7 @@ func (a *covenantlessArkClient) handleRoundFinalization(
 			return nil, "", err
 		}
 
+		forfeitLeaf := txscript.NewBaseTapLeaf(forfeitScript)
 		forfeitProof, err := taprootTree.GetTaprootMerkleProof(forfeitLeaf.TapHash())
 		if err != nil {
 			return nil, "", fmt.Errorf("failed to get taproot merkle proof for boarding utxo: %s", err)
@@ -2091,11 +2097,12 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 
 		forfeitClosure := forfeitClosures[0]
 
-		forfeitLeaf, err := forfeitClosure.Leaf()
+		forfeitScript, err := forfeitClosure.Script()
 		if err != nil {
 			return nil, err
 		}
 
+		forfeitLeaf := txscript.NewBaseTapLeaf(forfeitScript)
 		leafProof, err := vtxoTapTree.GetTaprootMerkleProof(forfeitLeaf.TapHash())
 		if err != nil {
 			return nil, err

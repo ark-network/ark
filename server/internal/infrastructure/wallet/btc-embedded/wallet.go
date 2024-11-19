@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/bitcointree"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -724,14 +724,14 @@ func (s *service) SignTransaction(ctx context.Context, partialTx string, extract
 		for i, in := range ptx.Inputs {
 			isTaproot := txscript.IsPayToTaproot(in.WitnessUtxo.PkScript)
 			if isTaproot && len(in.TaprootLeafScript) > 0 {
-				closure, err := bitcointree.DecodeClosure(in.TaprootLeafScript[0].Script)
+				closure, err := tree.DecodeClosure(in.TaprootLeafScript[0].Script)
 				if err != nil {
 					return "", err
 				}
 
 				witness := make(wire.TxWitness, 4)
 
-				castClosure, isTaprootMultisig := closure.(*bitcointree.MultisigClosure)
+				castClosure, isTaprootMultisig := closure.(*tree.MultisigClosure)
 				if isTaprootMultisig {
 					ownerPubkey := schnorr.SerializePubKey(castClosure.Pubkey)
 					aspKey := schnorr.SerializePubKey(castClosure.AspPubkey)

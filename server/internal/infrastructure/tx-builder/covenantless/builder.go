@@ -128,15 +128,16 @@ func (b *txBuilder) FinalizeAndExtract(tx string) (string, error) {
 	for i, in := range ptx.Inputs {
 		isTaproot := txscript.IsPayToTaproot(in.WitnessUtxo.PkScript)
 		if isTaproot && len(in.TaprootLeafScript) > 0 {
-			closure, err := bitcointree.DecodeClosure(in.TaprootLeafScript[0].Script)
+			closure, err := tree.DecodeClosure(in.TaprootLeafScript[0].Script)
 			if err != nil {
 				return "", err
 			}
 
 			witness := make(wire.TxWitness, 4)
 
-			castClosure, isTaprootMultisig := closure.(*bitcointree.MultisigClosure)
+			castClosure, isTaprootMultisig := closure.(*tree.MultisigClosure)
 			if isTaprootMultisig {
+				// TODO abstract finalizer
 				ownerPubkey := schnorr.SerializePubKey(castClosure.Pubkey)
 				aspKey := schnorr.SerializePubKey(castClosure.AspPubkey)
 
@@ -1322,7 +1323,7 @@ func castToOutpoints(inputs []ports.TxInput) []ports.TxOutpoint {
 
 func extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.TaprootTapLeafScript, internalKey *secp256k1.PublicKey, lifetime int64, err error) {
 	for _, leaf := range input.TaprootLeafScript {
-		closure := &bitcointree.CSVSigClosure{}
+		closure := &tree.CSVSigClosure{}
 		valid, err := closure.Decode(leaf.Script)
 		if err != nil {
 			return nil, nil, 0, err

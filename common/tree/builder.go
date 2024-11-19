@@ -167,7 +167,7 @@ func (n *node) getWitnessData() (
 		Seconds: uint(n.roundLifetime),
 	}
 
-	sweepLeaf, err := sweepClosure.Leaf()
+	sweepLeaf, err := sweepClosure.Script()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -183,13 +183,14 @@ func (n *node) getWitnessData() (
 			MinRelayFee: n.feeSats,
 		}
 
-		unrollLeaf, err := unrollClosure.Leaf()
+		unrollScript, err := unrollClosure.Script()
 		if err != nil {
 			return nil, nil, err
 		}
 
 		branchTaprootTree := taproot.AssembleTaprootScriptTree(
-			*unrollLeaf, *sweepLeaf,
+			taproot.NewBaseTapElementsLeaf(unrollScript),
+			taproot.NewBaseTapElementsLeaf(sweepLeaf),
 		)
 		root := branchTaprootTree.RootNode.TapHash()
 
@@ -224,13 +225,14 @@ func (n *node) getWitnessData() (
 		RightAmount: rightAmount,
 	}
 
-	unrollLeaf, err := unrollClosure.Leaf()
+	unrollLeaf, err := unrollClosure.Script()
 	if err != nil {
 		return nil, nil, err
 	}
 
 	branchTaprootTree := taproot.AssembleTaprootScriptTree(
-		*unrollLeaf, *sweepLeaf,
+		taproot.NewBaseTapElementsLeaf(unrollLeaf),
+		taproot.NewBaseTapElementsLeaf(sweepLeaf),
 	)
 	root := branchTaprootTree.RootNode.TapHash()
 

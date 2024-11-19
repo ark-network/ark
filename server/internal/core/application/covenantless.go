@@ -917,7 +917,7 @@ func (s *covenantlessService) startFinalization() {
 
 	cosigners = append(cosigners, ephemeralKey.PubKey())
 
-	unsignedRoundTx, tree, connectorAddress, connectors, err := s.builder.BuildRoundTx(
+	unsignedRoundTx, vtxoTree, connectorAddress, connectors, err := s.builder.BuildRoundTx(
 		s.pubkey,
 		payments,
 		boardingInputs,
@@ -933,7 +933,7 @@ func (s *covenantlessService) startFinalization() {
 
 	s.forfeitTxs.init(connectors, payments)
 
-	if len(tree) > 0 {
+	if len(vtxoTree) > 0 {
 		log.Debugf("signing congestion tree for round %s", round.Id)
 
 		signingSession := newMusigSigningSession(len(cosigners))
@@ -943,14 +943,14 @@ func (s *covenantlessService) startFinalization() {
 
 		s.currentRound.UnsignedTx = unsignedRoundTx
 		// send back the unsigned tree & all cosigners pubkeys
-		s.propagateRoundSigningStartedEvent(tree, cosigners)
+		s.propagateRoundSigningStartedEvent(vtxoTree, cosigners)
 
-		sweepClosure := bitcointree.CSVSigClosure{
+		sweepClosure := tree.CSVSigClosure{
 			Pubkey:  s.pubkey,
 			Seconds: uint(s.roundLifetime),
 		}
 
-		sweepTapLeaf, err := sweepClosure.Leaf()
+		sweepScript, err := sweepClosure.Script()
 		if err != nil {
 			return
 		}
@@ -964,10 +964,11 @@ func (s *covenantlessService) startFinalization() {
 
 		sharedOutputAmount := unsignedPsbt.UnsignedTx.TxOut[0].Value
 
-		sweepTapTree := txscript.AssembleTaprootScriptTree(*sweepTapLeaf)
+		sweepLeaf := txscript.NewBaseTapLeaf(sweepScript)
+		sweepTapTree := txscript.AssembleTaprootScriptTree(sweepLeaf)
 		root := sweepTapTree.RootNode.TapHash()
 
-		coordinator, err := bitcointree.NewTreeCoordinatorSession(sharedOutputAmount, tree, root.CloneBytes(), cosigners)
+		coordinator, err := bitcointree.NewTreeCoordinatorSession(sharedOutputAmount, vtxoTree, root.CloneBytes(), cosigners)
 		if err != nil {
 			round.Fail(fmt.Errorf("failed to create tree coordinator: %s", err))
 			log.WithError(err).Warn("failed to create tree coordinator")
@@ -975,7 +976,7 @@ func (s *covenantlessService) startFinalization() {
 		}
 
 		aspSignerSession := bitcointree.NewTreeSignerSession(
-			ephemeralKey, sharedOutputAmount, tree, root.CloneBytes(),
+			ephemeralKey, sharedOutputAmount, vtxoTree, root.CloneBytes(),
 		)
 
 		nonces, err := aspSignerSession.GetNonces()
@@ -1081,11 +1082,11 @@ func (s *covenantlessService) startFinalization() {
 
 		log.Debugf("congestion tree signed for round %s", round.Id)
 
-		tree = signedTree
+		vtxoTree = signedTree
 	}
 
 	if _, err := round.StartFinalization(
-		connectorAddress, connectors, tree, unsignedRoundTx,
+		connectorAddress, connectors, vtxoTree, unsignedRoundTx,
 	); err != nil {
 		round.Fail(fmt.Errorf("failed to start finalization: %s", err))
 		log.WithError(err).Warn("failed to start finalization")

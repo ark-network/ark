@@ -9,6 +9,7 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/ark-network/ark/pkg/client-sdk/types"
@@ -197,7 +198,7 @@ func (s *bitcoinWallet) SignTransaction(
 		if len(input.TaprootLeafScript) > 0 {
 			pubkey := s.walletData.Pubkey
 			for _, leaf := range input.TaprootLeafScript {
-				closure, err := bitcointree.DecodeClosure(leaf.Script)
+				closure, err := tree.DecodeClosure(leaf.Script)
 				if err != nil {
 					return "", err
 				}
@@ -205,9 +206,9 @@ func (s *bitcoinWallet) SignTransaction(
 				sign := false
 
 				switch c := closure.(type) {
-				case *bitcointree.CSVSigClosure:
+				case *tree.CSVSigClosure:
 					sign = bytes.Equal(c.Pubkey.SerializeCompressed()[1:], pubkey.SerializeCompressed()[1:])
-				case *bitcointree.MultisigClosure:
+				case *tree.MultisigClosure:
 					sign = bytes.Equal(c.Pubkey.SerializeCompressed()[1:], pubkey.SerializeCompressed()[1:])
 				}
 

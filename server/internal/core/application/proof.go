@@ -57,16 +57,16 @@ func (p OwnershipProof) validate(vtxo domain.Vtxo) error {
 }
 
 func decodeForfeitClosure(script []byte) (*secp256k1.PublicKey, error) {
-	var covenantLessForfeitClosure bitcointree.MultisigClosure
+	var forfeit tree.MultisigClosure
 
-	if valid, err := covenantLessForfeitClosure.Decode(script); err == nil && valid {
-		return covenantLessForfeitClosure.Pubkey, nil
+	valid, err := forfeit.Decode(script)
+	if err != nil {
+		return nil, err
 	}
 
-	var covenantForfeitClosure tree.CSVSigClosure
-	if valid, err := covenantForfeitClosure.Decode(script); err == nil && valid {
-		return covenantForfeitClosure.Pubkey, nil
+	if !valid {
+		return nil, fmt.Errorf("invalid forfeit closure script")
 	}
 
-	return nil, fmt.Errorf("invalid forfeit closure script")
+	return forfeit.Pubkey, nil
 }

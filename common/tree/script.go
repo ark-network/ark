@@ -10,7 +10,6 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/vulpemventures/go-elements/taproot"
 )
 
 const (
@@ -22,7 +21,7 @@ const (
 )
 
 type Closure interface {
-	Leaf() (*taproot.TapElementsLeaf, error)
+	Script() ([]byte, error)
 	Decode(script []byte) (bool, error)
 	WitnessSize() int
 }
@@ -68,19 +67,15 @@ func (f *MultisigClosure) WitnessSize() int {
 	return 64 * 2
 }
 
-func (f *MultisigClosure) Leaf() (*taproot.TapElementsLeaf, error) {
+func (f *MultisigClosure) Script() ([]byte, error) {
 	aspKeyBytes := schnorr.SerializePubKey(f.AspPubkey)
 	userKeyBytes := schnorr.SerializePubKey(f.Pubkey)
 
-	script, err := txscript.NewScriptBuilder().AddData(aspKeyBytes).
-		AddOp(txscript.OP_CHECKSIGVERIFY).AddData(userKeyBytes).
+	return txscript.NewScriptBuilder().
+		AddData(aspKeyBytes).
+		AddOp(txscript.OP_CHECKSIGVERIFY).
+		AddData(userKeyBytes).
 		AddOp(txscript.OP_CHECKSIG).Script()
-	if err != nil {
-		return nil, err
-	}
-
-	tapLeaf := taproot.NewBaseTapElementsLeaf(script)
-	return &tapLeaf, nil
 }
 
 func (f *MultisigClosure) Decode(script []byte) (bool, error) {
@@ -105,12 +100,12 @@ func (f *MultisigClosure) Decode(script []byte) (bool, error) {
 	f.Pubkey = pubkey
 	f.AspPubkey = aspPubKey
 
-	rebuilt, err := f.Leaf()
+	rebuilt, err := f.Script()
 	if err != nil {
 		return false, err
 	}
 
-	if !bytes.Equal(rebuilt.Script, script) {
+	if !bytes.Equal(rebuilt, script) {
 		return false, nil
 	}
 
@@ -121,14 +116,8 @@ func (f *CSVSigClosure) WitnessSize() int {
 	return 64
 }
 
-func (d *CSVSigClosure) Leaf() (*taproot.TapElementsLeaf, error) {
-	script, err := encodeCsvWithChecksigScript(d.Pubkey, d.Seconds)
-	if err != nil {
-		return nil, err
-	}
-
-	tapLeaf := taproot.NewBaseTapElementsLeaf(script)
-	return &tapLeaf, nil
+func (d *CSVSigClosure) Script() ([]byte, error) {
+	return encodeCsvWithChecksigScript(d.Pubkey, d.Seconds)
 }
 
 func (d *CSVSigClosure) Decode(script []byte) (bool, error) {
@@ -182,7 +171,7 @@ func (c *UnrollClosure) isOneChild() bool {
 	return c.RightKey == nil && c.MinRelayFee > 0
 }
 
-func (c *UnrollClosure) Leaf() (*taproot.TapElementsLeaf, error) {
+func (c *UnrollClosure) Script() ([]byte, error) {
 	if c.LeftKey == nil {
 		return nil, fmt.Errorf("left key is required")
 	}
@@ -191,8 +180,7 @@ func (c *UnrollClosure) Leaf() (*taproot.TapElementsLeaf, error) {
 		branchScript := encodeOneChildIntrospectionScript(
 			txscript.OP_0, schnorr.SerializePubKey(c.LeftKey), c.MinRelayFee,
 		)
-		leaf := taproot.NewBaseTapElementsLeaf(branchScript)
-		return &leaf, nil
+		return branchScript, nil
 	}
 
 	if c.LeftAmount == 0 {
@@ -218,8 +206,7 @@ func (c *UnrollClosure) Leaf() (*taproot.TapElementsLeaf, error) {
 	)
 	branchScript = append(branchScript, nextScriptRight...)
 
-	leaf := taproot.NewBaseTapElementsLeaf(branchScript)
-	return &leaf, nil
+	return branchScript, nil
 }
 
 func (c *UnrollClosure) Decode(script []byte) (valid bool, err error) {
@@ -240,12 +227,12 @@ func (c *UnrollClosure) Decode(script []byte) (valid bool, err error) {
 		c.LeftKey = pubkey
 		c.MinRelayFee = minrelayfee
 
-		rebuilt, err := c.Leaf()
+		rebuilt, err := c.Script()
 		if err != nil {
 			return false, err
 		}
 
-		if !bytes.Equal(rebuilt.Script, script) {
+		if !bytes.Equal(rebuilt, script) {
 			return false, nil
 		}
 
@@ -285,12 +272,12 @@ func (c *UnrollClosure) Decode(script []byte) (valid bool, err error) {
 	c.RightAmount = rightAmount
 	c.RightKey = rightKey
 
-	rebuilt, err := c.Leaf()
+	rebuilt, err := c.Script()
 	if err != nil {
 		return false, err
 	}
 
-	if !bytes.Equal(rebuilt.Script, script) {
+	if !bytes.Equal(rebuilt, script) {
 		return false, nil
 	}
 
