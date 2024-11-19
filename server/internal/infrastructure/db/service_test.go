@@ -505,41 +505,43 @@ func testEntityRepository(t *testing.T, svc ports.RepoManager) {
 }
 
 func testMarketHourRepository(t *testing.T, svc ports.RepoManager) {
-	ctx := context.Background()
-	repo := svc.MarketHourRepo()
-	defer repo.Close()
+	t.Run("test_entity_repository", func(t *testing.T) {
+		ctx := context.Background()
+		repo := svc.MarketHourRepo()
+		defer repo.Close()
 
-	marketHour, err := repo.Get(ctx)
-	require.NoError(t, err)
-	require.Nil(t, marketHour)
+		marketHour, err := repo.Get(ctx)
+		require.NoError(t, err)
+		require.Nil(t, marketHour)
 
-	now := time.Now().Unix()
-	expected := domain.MarketHour{
-		StartTime:     now,
-		Period:        3600,
-		RoundInterval: 300,
-		UpdatedAt:     now,
-	}
+		now := time.Now().Unix()
+		expected := domain.MarketHour{
+			StartTime:     now,
+			Period:        3600,
+			RoundInterval: 300,
+			UpdatedAt:     now,
+		}
 
-	err = repo.Upsert(ctx, expected)
-	require.NoError(t, err)
+		err = repo.Upsert(ctx, expected)
+		require.NoError(t, err)
 
-	got, err := repo.Get(ctx)
-	require.NoError(t, err)
-	require.NotNil(t, got)
-	assert.Equal(t, expected, *got)
+		got, err := repo.Get(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, got)
+		assert.Equal(t, expected, *got)
 
-	expected.Period = 7200
-	expected.RoundInterval = 600
-	expected.UpdatedAt = now + 100
+		expected.Period = 7200
+		expected.RoundInterval = 600
+		expected.UpdatedAt = now + 100
 
-	err = repo.Upsert(ctx, expected)
-	require.NoError(t, err)
+		err = repo.Upsert(ctx, expected)
+		require.NoError(t, err)
 
-	got, err = repo.Get(ctx)
-	require.NoError(t, err)
-	require.NotNil(t, got)
-	assert.Equal(t, expected, *got)
+		got, err = repo.Get(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, got)
+		assert.Equal(t, expected, *got)
+	})
 }
 
 func roundsMatch(expected, got domain.Round) assert.Comparison {
