@@ -62,14 +62,13 @@ type Service interface {
 }
 
 type ServiceInfo struct {
-	PubKey                     string
-	RoundLifetime              int64
-	UnilateralExitDelay        int64
-	RoundInterval              int64
-	Network                    string
-	Dust                       uint64
-	BoardingDescriptorTemplate string
-	ForfeitAddress             string
+	PubKey              string
+	RoundLifetime       int64
+	UnilateralExitDelay int64
+	RoundInterval       int64
+	Network             string
+	Dust                uint64
+	ForfeitAddress      string
 }
 
 type WalletStatus struct {

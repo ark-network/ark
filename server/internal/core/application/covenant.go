@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/descriptor"
 	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
@@ -212,8 +211,18 @@ func (s *covenantService) SpendVtxos(ctx context.Context, inputs []ports.Input) 
 					return "", fmt.Errorf("tx %s not confirmed", input.Txid)
 				}
 
+				vtxoScript, err := tree.ParseVtxoScript(input.Tapscripts)
+				if err != nil {
+					return "", fmt.Errorf("failed to parse boarding descriptor: %s", err)
+				}
+
+				exitDelay, err := vtxoScript.SmallestExitDelay()
+				if err != nil {
+					return "", fmt.Errorf("failed to get exit delay: %s", err)
+				}
+
 				// if the exit path is available, forbid registering the boarding utxo
-				if blocktime+int64(s.boardingExitDelay) < now {
+				if blocktime+int64(exitDelay) < now {
 					return "", fmt.Errorf("tx %s expired", input.Txid)
 				}
 
@@ -423,15 +432,7 @@ func (s *covenantService) GetInfo(ctx context.Context) (*ServiceInfo, error) {
 		RoundInterval:       s.roundInterval,
 		Network:             s.network.Name,
 		Dust:                dust,
-		BoardingDescriptorTemplate: fmt.Sprintf(
-			descriptor.DefaultVtxoDescriptorTemplate,
-			hex.EncodeToString(tree.UnspendableKey().SerializeCompressed()),
-			"USER",
-			hex.EncodeToString(schnorr.SerializePubKey(s.pubkey)),
-			s.boardingExitDelay,
-			"USER",
-		),
-		ForfeitAddress: forfeitAddress,
+		ForfeitAddress:      forfeitAddress,
 	}, nil
 }
 
