@@ -226,7 +226,7 @@ func WithPollingBitcoind(host, user, pass string) WalletOption {
 				User: bitcoindConfig.User,
 				Pass: bitcoindConfig.Pass,
 			},
-			"CONSERVATIVE",
+			"ECONOMICAL",
 			chainfee.AbsoluteFeePerKwFloor,
 		)
 		if err != nil {
@@ -304,7 +304,7 @@ func WithBitcoindZMQ(block, tx string, host, user, pass string) WalletOption {
 				User: bitcoindConfig.User,
 				Pass: bitcoindConfig.Pass,
 			},
-			"CONSERVATIVE",
+			"ECONOMICAL",
 			chainfee.AbsoluteFeePerKwFloor,
 		)
 		if err != nil {
