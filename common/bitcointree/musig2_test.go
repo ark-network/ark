@@ -62,8 +62,8 @@ func TestRoundTripSignTree(t *testing.T) {
 		require.NoError(t, err)
 
 		sweepClosure := &tree.CSVSigClosure{
-			Pubkey:  asp.PubKey(),
-			Seconds: uint(lifetime),
+			MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{asp.PubKey()}},
+			Seconds:         uint(lifetime),
 		}
 
 		sweepScript, err := sweepClosure.Script()

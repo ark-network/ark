@@ -283,8 +283,8 @@ func createAggregatedKeyWithSweep(
 	cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, roundLifetime int64,
 ) (*musig2.AggregateKey, *psbt.TaprootTapLeafScript, error) {
 	sweepClosure := &tree.CSVSigClosure{
-		Pubkey:  aspPubkey,
-		Seconds: uint(roundLifetime),
+		MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{aspPubkey}},
+		Seconds:         uint(roundLifetime),
 	}
 
 	sweepScript, err := sweepClosure.Script()

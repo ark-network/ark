@@ -36,7 +36,7 @@ type WalletService interface {
 		ctx context.Context, explorerSvc explorer.Explorer, tx string,
 	) (signedTx string, err error)
 	SignMessage(
-		ctx context.Context, message []byte, pubkey string,
+		ctx context.Context, message []byte,
 	) (signature string, err error)
 	Dump(ctx context.Context) (seed string, err error)
 }

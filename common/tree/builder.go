@@ -163,8 +163,8 @@ func (n *node) getWitnessData() (
 	}
 
 	sweepClosure := &CSVSigClosure{
-		Pubkey:  n.sweepKey,
-		Seconds: uint(n.roundLifetime),
+		MultisigClosure: MultisigClosure{PubKeys: []*secp256k1.PublicKey{n.sweepKey}},
+		Seconds:         uint(n.roundLifetime),
 	}
 
 	sweepLeaf, err := sweepClosure.Script()

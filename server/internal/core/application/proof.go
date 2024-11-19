@@ -24,7 +24,7 @@ type OwnershipProof struct {
 
 func (p OwnershipProof) validate(vtxo domain.Vtxo) error {
 	// verify revealed script and extract user public key
-	pubkey, err := decodeForfeitClosure(p.Script)
+	pubkeys, err := decodeForfeitClosure(p.Script)
 	if err != nil {
 		return err
 	}
@@ -49,14 +49,22 @@ func (p OwnershipProof) validate(vtxo domain.Vtxo) error {
 	outpointBytes := append(txhash[:], voutBytes...)
 	sigMsg := sha256.Sum256(outpointBytes)
 
-	if !p.Signature.Verify(sigMsg[:], pubkey) {
+	valid := false
+	for _, pubkey := range pubkeys {
+		if p.Signature.Verify(sigMsg[:], pubkey) {
+			valid = true
+			break
+		}
+	}
+
+	if !valid {
 		return fmt.Errorf("invalid signature")
 	}
 
 	return nil
 }
 
-func decodeForfeitClosure(script []byte) (*secp256k1.PublicKey, error) {
+func decodeForfeitClosure(script []byte) ([]*secp256k1.PublicKey, error) {
 	var forfeit tree.MultisigClosure
 
 	valid, err := forfeit.Decode(script)
@@ -68,5 +76,5 @@ func decodeForfeitClosure(script []byte) (*secp256k1.PublicKey, error) {
 		return nil, fmt.Errorf("invalid forfeit closure script")
 	}
 
-	return forfeit.Pubkey, nil
+	return forfeit.PubKeys, nil
 }

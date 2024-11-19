@@ -125,8 +125,8 @@ func ValidateCongestionTree(
 	}
 
 	sweepClosure := &tree.CSVSigClosure{
-		Seconds: uint(roundLifetime),
-		Pubkey:  aspPublicKey,
+		MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{aspPublicKey}},
+		Seconds:         uint(roundLifetime),
 	}
 
 	sweepScript, err := sweepClosure.Script()

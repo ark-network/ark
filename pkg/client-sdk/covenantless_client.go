@@ -1217,7 +1217,7 @@ func (a *covenantlessArkClient) SetNostrNotificationRecipient(ctx context.Contex
 		outpointBytes := append(txhash[:], voutBytes...)
 		sigMsg := sha256.Sum256(outpointBytes)
 
-		sig, err := a.wallet.SignMessage(ctx, sigMsg[:], hex.EncodeToString(schnorr.SerializePubKey(forfeitClosure.Pubkey)))
+		sig, err := a.wallet.SignMessage(ctx, sigMsg[:])
 		if err != nil {
 			return err
 		}
@@ -1732,8 +1732,8 @@ func (a *covenantlessArkClient) handleRoundSigningStarted(
 	ctx context.Context, ephemeralKey *secp256k1.PrivateKey, event client.RoundSigningStartedEvent,
 ) (signerSession bitcointree.SignerSession, err error) {
 	sweepClosure := tree.CSVSigClosure{
-		Pubkey:  a.AspPubkey,
-		Seconds: uint(a.RoundLifetime),
+		MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{a.AspPubkey}},
+		Seconds:         uint(a.RoundLifetime),
 	}
 
 	script, err := sweepClosure.Script()

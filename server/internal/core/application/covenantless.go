@@ -258,7 +258,7 @@ func (s *covenantlessService) CompleteAsyncPayment(
 		}
 
 		// verify the tapscript signatures
-		if valid, _, err := s.builder.VerifyTapscriptPartialSigs(tx); err != nil || !valid {
+		if valid, err := s.builder.VerifyTapscriptPartialSigs(tx); err != nil || !valid {
 			return fmt.Errorf("invalid tx signature: %s", err)
 		}
 	}
@@ -590,7 +590,7 @@ func (s *covenantlessService) newBoardingInput(tx wire.MsgTx, input ports.Input)
 		return nil, fmt.Errorf("descriptor does not match script in transaction output")
 	}
 
-	if err := boardingScript.Validate(s.pubkey); err != nil {
+	if err := boardingScript.Validate(s.pubkey, uint(s.unilateralExitDelay)); err != nil {
 		return nil, err
 	}
 
@@ -946,8 +946,8 @@ func (s *covenantlessService) startFinalization() {
 		s.propagateRoundSigningStartedEvent(vtxoTree, cosigners)
 
 		sweepClosure := tree.CSVSigClosure{
-			Pubkey:  s.pubkey,
-			Seconds: uint(s.roundLifetime),
+			MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{s.pubkey}},
+			Seconds:         uint(s.roundLifetime),
 		}
 
 		sweepScript, err := sweepClosure.Script()

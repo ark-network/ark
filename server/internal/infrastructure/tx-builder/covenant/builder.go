@@ -3,6 +3,7 @@ package txbuilder
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"math"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcwallet/waddrmgr"
@@ -122,7 +124,7 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 			return nil, fmt.Errorf("invalid forfeit tx, expect 2 inputs, got %d", len(pset.Inputs))
 		}
 
-		valid, _, err := b.verifyTapscriptPartialSigs(pset)
+		valid, err := b.verifyTapscriptPartialSigs(pset)
 		if err != nil {
 			return nil, err
 		}
@@ -462,40 +464,66 @@ func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime int64, sweepInput po
 
 	return lifetime, sweepInput, nil
 }
-func (b *txBuilder) VerifyTapscriptPartialSigs(tx string) (bool, string, error) {
+func (b *txBuilder) VerifyTapscriptPartialSigs(tx string) (bool, error) {
 	pset, err := psetv2.NewPsetFromBase64(tx)
 	if err != nil {
-		return false, "", err
+		return false, err
 	}
 
 	return b.verifyTapscriptPartialSigs(pset)
 }
 
-func (b *txBuilder) verifyTapscriptPartialSigs(pset *psetv2.Pset) (bool, string, error) {
+func (b *txBuilder) verifyTapscriptPartialSigs(pset *psetv2.Pset) (bool, error) {
 	utx, _ := pset.UnsignedTx()
 	txid := utx.TxHash().String()
+
+	aspPublicKey, err := b.wallet.GetPubkey(context.Background())
+	if err != nil {
+		return false, err
+	}
 
 	for index, input := range pset.Inputs {
 		if len(input.TapLeafScript) == 0 {
 			continue
 		}
 		if input.WitnessUtxo == nil {
-			return false, txid, fmt.Errorf("missing witness utxo for input %d, cannot verify signature", index)
+			return false, fmt.Errorf("missing witness utxo for input %d, cannot verify signature", index)
 		}
 
 		// verify taproot leaf script
 		tapLeaf := input.TapLeafScript[0]
+
+		closure, err := tree.DecodeClosure(tapLeaf.Script)
+		if err != nil {
+			return false, err
+		}
+
+		keys := make(map[string]bool)
+
+		switch c := closure.(type) {
+		case *tree.MultisigClosure:
+			for _, key := range c.PubKeys {
+				keys[hex.EncodeToString(schnorr.SerializePubKey(key))] = false
+			}
+		case *tree.CSVSigClosure:
+			for _, key := range c.PubKeys {
+				keys[hex.EncodeToString(schnorr.SerializePubKey(key))] = false
+			}
+		}
+
+		// we don't need to check if ASP signed
+		keys[hex.EncodeToString(schnorr.SerializePubKey(aspPublicKey))] = true
 
 		rootHash := tapLeaf.ControlBlock.RootHash(tapLeaf.Script)
 		tapKeyFromControlBlock := taproot.ComputeTaprootOutputKey(tree.UnspendableKey(), rootHash[:])
 
 		pkscript, err := common.P2TRScript(tapKeyFromControlBlock)
 		if err != nil {
-			return false, txid, err
+			return false, err
 		}
 
 		if !bytes.Equal(pkscript, input.WitnessUtxo.Script) {
-			return false, txid, fmt.Errorf("invalid control block for input %d", index)
+			return false, fmt.Errorf("invalid control block for input %d", index)
 		}
 
 		leafHash := taproot.NewBaseTapElementsLeaf(tapLeaf.Script).TapHash()
@@ -506,41 +534,93 @@ func (b *txBuilder) verifyTapscriptPartialSigs(pset *psetv2.Pset) (bool, string,
 			&leafHash,
 		)
 		if err != nil {
-			return false, txid, err
+			return false, err
 		}
 
 		for _, tapScriptSig := range input.TapScriptSig {
 			sig, err := schnorr.ParseSignature(tapScriptSig.Signature)
 			if err != nil {
-				return false, txid, err
+				return false, err
 			}
 
 			pubkey, err := schnorr.ParsePubKey(tapScriptSig.PubKey)
 			if err != nil {
-				return false, txid, err
+				return false, err
 			}
 
 			if !sig.Verify(preimage, pubkey) {
-				return false, txid, fmt.Errorf("invalid signature for tx %s", txid)
+				return false, fmt.Errorf("invalid signature for tx %s", txid)
 			}
+
+			keys[hex.EncodeToString(schnorr.SerializePubKey(pubkey))] = true
+		}
+
+		missingSigs := 0
+		for key := range keys {
+			if !keys[key] {
+				missingSigs++
+			}
+		}
+
+		if missingSigs > 0 {
+			return false, fmt.Errorf("missing %d signatures", missingSigs)
 		}
 	}
 
-	return true, txid, nil
+	return true, nil
 }
 
 func (b *txBuilder) FinalizeAndExtract(tx string) (string, error) {
-	p, err := psetv2.NewPsetFromBase64(tx)
+	ptx, err := psetv2.NewPsetFromBase64(tx)
 	if err != nil {
 		return "", err
 	}
 
-	if err := psetv2.FinalizeAll(p); err != nil {
-		return "", err
+	for i, in := range ptx.Inputs {
+		if in.WitnessUtxo == nil {
+			return "", fmt.Errorf("missing witness utxo, cannot finalize tx")
+		}
+
+		if len(in.TapLeafScript) > 0 {
+			tapLeaf := in.TapLeafScript[0]
+
+			closure, err := tree.DecodeClosure(tapLeaf.Script)
+			if err != nil {
+				return "", err
+			}
+
+			signatures := make(map[string][]byte)
+
+			for _, sig := range in.TapScriptSig {
+				signatures[hex.EncodeToString(sig.PubKey)] = sig.Signature
+			}
+
+			controlBlock, err := tapLeaf.ControlBlock.ToBytes()
+			if err != nil {
+				return "", err
+			}
+
+			witness, err := closure.Witness(controlBlock, signatures)
+			if err != nil {
+				return "", err
+			}
+
+			var witnessBuf bytes.Buffer
+			if err := psbt.WriteTxWitness(&witnessBuf, witness); err != nil {
+				return "", err
+			}
+
+			ptx.Inputs[i].FinalScriptWitness = witnessBuf.Bytes()
+			continue
+		}
+
+		if err := psetv2.Finalize(ptx, i); err != nil {
+			return "", fmt.Errorf("failed to finalize signed pset: %s", err)
+		}
 	}
 
 	// extract the forfeit tx
-	extracted, err := psetv2.Extract(p)
+	extracted, err := psetv2.Extract(ptx)
 	if err != nil {
 		return "", err
 	}

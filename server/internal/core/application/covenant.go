@@ -319,7 +319,7 @@ func (s *covenantService) newBoardingInput(tx *transaction.Transaction, input po
 		return nil, fmt.Errorf("descriptor does not match script in transaction output")
 	}
 
-	if err := boardingScript.Validate(s.pubkey); err != nil {
+	if err := boardingScript.Validate(s.pubkey, uint(s.unilateralExitDelay)); err != nil {
 		return nil, err
 	}
 
@@ -846,6 +846,7 @@ func (s *covenantService) reactToFraud(ctx context.Context, vtxo domain.Vtxo, mu
 
 	forfeitTxid, err := s.wallet.BroadcastTransaction(ctx, forfeitTxHex)
 	if err != nil {
+		log.Debug(forfeitTxHex)
 		return fmt.Errorf("failed to broadcast forfeit tx: %s", err)
 	}
 

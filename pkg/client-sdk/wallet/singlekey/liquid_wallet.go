@@ -211,7 +211,7 @@ func (s *liquidWallet) SignTransaction(
 		prevoutsAssets = append(prevoutsAssets, input.WitnessUtxo.Asset)
 	}
 
-	serializedPubKey := s.walletData.Pubkey.SerializeCompressed()
+	myPubkey := schnorr.SerializePubKey(s.walletData.Pubkey)
 
 	for i, input := range pset.Inputs {
 		if len(input.TapLeafScript) > 0 {
@@ -229,9 +229,19 @@ func (s *liquidWallet) SignTransaction(
 				sign := false
 				switch c := closure.(type) {
 				case *tree.CSVSigClosure:
-					sign = bytes.Equal(c.Pubkey.SerializeCompressed()[1:], serializedPubKey[1:])
+					for _, key := range c.MultisigClosure.PubKeys {
+						if bytes.Equal(schnorr.SerializePubKey(key), myPubkey) {
+							sign = true
+							break
+						}
+					}
 				case *tree.MultisigClosure:
-					sign = bytes.Equal(c.Pubkey.SerializeCompressed()[1:], serializedPubKey[1:])
+					for _, key := range c.PubKeys {
+						if bytes.Equal(schnorr.SerializePubKey(key), myPubkey) {
+							sign = true
+							break
+						}
+					}
 				}
 
 				if sign {
@@ -287,15 +297,10 @@ func (s *liquidWallet) SignTransaction(
 }
 
 func (w *liquidWallet) SignMessage(
-	ctx context.Context, message []byte, pubkey string,
+	ctx context.Context, message []byte,
 ) (string, error) {
 	if w.IsLocked() {
 		return "", fmt.Errorf("wallet is locked")
-	}
-
-	walletPubkeyHex := hex.EncodeToString(schnorr.SerializePubKey(w.walletData.Pubkey))
-	if walletPubkeyHex != pubkey {
-		return "", fmt.Errorf("pubkey mismatch, cannot sign message")
 	}
 
 	sig, err := schnorr.Sign(w.privateKey, message)

@@ -13,6 +13,10 @@ import (
 	"github.com/vulpemventures/go-elements/taproot"
 )
 
+var (
+	ErrNoExitLeaf = fmt.Errorf("no exit leaf")
+)
+
 type VtxoScript common.VtxoScript[elementsTapTree, *MultisigClosure, *CSVSigClosure]
 
 func ParseVtxoScript(scripts []string) (VtxoScript, error) {
@@ -25,12 +29,17 @@ func ParseVtxoScript(scripts []string) (VtxoScript, error) {
 func NewDefaultVtxoScript(owner, asp *secp256k1.PublicKey, exitDelay uint) *TapscriptsVtxoScript {
 	return &TapscriptsVtxoScript{
 		[]Closure{
-			&CSVSigClosure{Pubkey: owner, Seconds: exitDelay},
-			&MultisigClosure{Pubkey: owner, AspPubkey: asp},
+			&CSVSigClosure{
+				MultisigClosure: MultisigClosure{PubKeys: []*secp256k1.PublicKey{owner}},
+				Seconds:         exitDelay,
+			},
+			&MultisigClosure{PubKeys: []*secp256k1.PublicKey{owner, asp}},
 		},
 	}
 }
 
+// TapscriptsVtxoScript represents a taproot script that contains a list of tapscript leaves
+// the key-path is always unspendable
 type TapscriptsVtxoScript struct {
 	Closures []Closure
 }
@@ -64,14 +73,34 @@ func (v *TapscriptsVtxoScript) Decode(scripts []string) error {
 	return nil
 }
 
-func (v *TapscriptsVtxoScript) Validate(asp *secp256k1.PublicKey) error {
-	for _, closure := range v.Closures {
-		if multisigClosure, ok := closure.(*MultisigClosure); ok {
-			if !bytes.Equal(schnorr.SerializePubKey(multisigClosure.AspPubkey), schnorr.SerializePubKey(asp)) {
-				return fmt.Errorf("invalid forfeit closure, ASP pubkey not found")
+func (v *TapscriptsVtxoScript) Validate(asp *secp256k1.PublicKey, minExitDelay uint) error {
+	aspXonly := schnorr.SerializePubKey(asp)
+	for _, forfeit := range v.ForfeitClosures() {
+		// must contain asp pubkey
+		found := false
+		for _, pubkey := range forfeit.PubKeys {
+			if bytes.Equal(schnorr.SerializePubKey(pubkey), aspXonly) {
+				found = true
+				break
 			}
 		}
+		if !found {
+			return fmt.Errorf("invalid forfeit closure, ASP pubkey not found")
+		}
 	}
+
+	smallestExit, err := v.SmallestExitDelay()
+	if err != nil {
+		if err == ErrNoExitLeaf {
+			return nil
+		}
+		return err
+	}
+
+	if smallestExit < minExitDelay {
+		return fmt.Errorf("exit delay is too short")
+	}
+
 	return nil
 }
 
@@ -87,7 +116,7 @@ func (v *TapscriptsVtxoScript) SmallestExitDelay() (uint, error) {
 	}
 
 	if smallest == math.MaxUint32 {
-		return 0, fmt.Errorf("no exit delay found")
+		return 0, ErrNoExitLeaf
 	}
 
 	return smallest, nil

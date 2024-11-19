@@ -193,10 +193,10 @@ func (s *bitcoinWallet) SignTransaction(
 	)
 
 	txsighashes := txscript.NewTxSigHashes(updater.Upsbt.UnsignedTx, prevoutFetcher)
+	myPubkey := schnorr.SerializePubKey(s.walletData.Pubkey)
 
 	for i, input := range ptx.Inputs {
 		if len(input.TaprootLeafScript) > 0 {
-			pubkey := s.walletData.Pubkey
 			for _, leaf := range input.TaprootLeafScript {
 				closure, err := tree.DecodeClosure(leaf.Script)
 				if err != nil {
@@ -207,9 +207,19 @@ func (s *bitcoinWallet) SignTransaction(
 
 				switch c := closure.(type) {
 				case *tree.CSVSigClosure:
-					sign = bytes.Equal(c.Pubkey.SerializeCompressed()[1:], pubkey.SerializeCompressed()[1:])
+					for _, key := range c.MultisigClosure.PubKeys {
+						if bytes.Equal(schnorr.SerializePubKey(key), myPubkey) {
+							sign = true
+							break
+						}
+					}
 				case *tree.MultisigClosure:
-					sign = bytes.Equal(c.Pubkey.SerializeCompressed()[1:], pubkey.SerializeCompressed()[1:])
+					for _, key := range c.PubKeys {
+						if bytes.Equal(schnorr.SerializePubKey(key), myPubkey) {
+							sign = true
+							break
+						}
+					}
 				}
 
 				if sign {
@@ -236,7 +246,7 @@ func (s *bitcoinWallet) SignTransaction(
 						return "", err
 					}
 
-					if !sig.Verify(preimage, pubkey) {
+					if !sig.Verify(preimage, s.walletData.Pubkey) {
 						return "", fmt.Errorf("signature verification failed")
 					}
 
@@ -245,7 +255,7 @@ func (s *bitcoinWallet) SignTransaction(
 					}
 
 					updater.Upsbt.Inputs[i].TaprootScriptSpendSig = append(updater.Upsbt.Inputs[i].TaprootScriptSpendSig, &psbt.TaprootScriptSpendSig{
-						XOnlyPubKey: schnorr.SerializePubKey(pubkey),
+						XOnlyPubKey: myPubkey,
 						LeafHash:    hash.CloneBytes(),
 						Signature:   sig.Serialize(),
 						SigHash:     txscript.SigHashDefault,
@@ -260,15 +270,10 @@ func (s *bitcoinWallet) SignTransaction(
 }
 
 func (w *bitcoinWallet) SignMessage(
-	ctx context.Context, message []byte, pubkey string,
+	ctx context.Context, message []byte,
 ) (string, error) {
 	if w.IsLocked() {
 		return "", fmt.Errorf("wallet is locked")
-	}
-
-	walletPubkeyHex := hex.EncodeToString(schnorr.SerializePubKey(w.walletData.Pubkey))
-	if walletPubkeyHex != pubkey {
-		return "", fmt.Errorf("pubkey mismatch, cannot sign message")
 	}
 
 	sig, err := schnorr.Sign(w.privateKey, message)

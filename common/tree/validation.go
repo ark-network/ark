@@ -238,8 +238,8 @@ func validateNodeTransaction(
 
 			switch c := closure.(type) {
 			case *CSVSigClosure:
-				isASP := bytes.Equal(
-					schnorr.SerializePubKey(c.Pubkey),
+				isASP := len(c.MultisigClosure.PubKeys) == 1 && bytes.Equal(
+					schnorr.SerializePubKey(c.MultisigClosure.PubKeys[0]),
 					schnorr.SerializePubKey(expectedPublicKeyASP),
 				)
 				isSweepDelay := int64(c.Seconds) == expectedSequence
