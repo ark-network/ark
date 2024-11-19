@@ -105,15 +105,14 @@ func TestService(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc, err := db.NewService(tt.config)
 			require.NoError(t, err)
-			require.NotNil(t, svc)
+			defer svc.Close()
 
 			testRoundEventRepository(t, svc)
 			testRoundRepository(t, svc)
 			testVtxoRepository(t, svc)
 			testNoteRepository(t, svc)
 			testEntityRepository(t, svc)
-			time.Sleep(5 * time.Second)
-			svc.Close()
+			testMarketHourRepository(t, svc)
 		})
 	}
 }
@@ -503,6 +502,44 @@ func testEntityRepository(t *testing.T, svc ports.RepoManager) {
 		require.Error(t, err)
 		require.Nil(t, gotEntities)
 	})
+}
+
+func testMarketHourRepository(t *testing.T, svc ports.RepoManager) {
+	ctx := context.Background()
+	repo := svc.MarketHourRepo()
+	defer repo.Close()
+
+	marketHour, err := repo.Get(ctx)
+	require.NoError(t, err)
+	require.Nil(t, marketHour)
+
+	now := time.Now().Unix()
+	expected := domain.MarketHour{
+		StartTime:     now,
+		Period:        3600,
+		RoundInterval: 300,
+		UpdatedAt:     now,
+	}
+
+	err = repo.Upsert(ctx, expected)
+	require.NoError(t, err)
+
+	got, err := repo.Get(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, expected, *got)
+
+	expected.Period = 7200
+	expected.RoundInterval = 600
+	expected.UpdatedAt = now + 100
+
+	err = repo.Upsert(ctx, expected)
+	require.NoError(t, err)
+
+	got, err = repo.Get(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, expected, *got)
 }
 
 func roundsMatch(expected, got domain.Round) assert.Comparison {

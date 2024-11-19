@@ -212,5 +212,9 @@ func AllPermissionsByMethod() map[string][]bakery.Op {
 			Entity: EntityManager,
 			Action: "write",
 		}},
+		fmt.Sprintf("/%s/UpdateMarketHour", arkv1.AdminService_ServiceDesc.ServiceName): {{
+			Entity: EntityManager,
+			Action: "write",
+		}},
 	}
 }

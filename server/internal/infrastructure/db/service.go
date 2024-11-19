@@ -35,6 +35,7 @@ var (
 		"sqlite": sqlitedb.NewEntityRepository,
 	}
 	marketHourStoreTypes = map[string]func(...interface{}) (domain.MarketHourRepo, error){
+		"badger": badgerdb.NewMarketHourRepository,
 		"sqlite": sqlitedb.NewMarketHourRepository,
 	}
 )
@@ -121,6 +122,10 @@ func NewService(config ServiceConfig) (ports.RepoManager, error) {
 		noteStore, err = noteStoreFactory(config.DataStoreConfig...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open note store: %s", err)
+		}
+		marketHourRepo, err = marketHourStoreFactory(config.DataStoreConfig...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create market hour store: %w", err)
 		}
 	case "sqlite":
 		if len(config.DataStoreConfig) != 2 {
