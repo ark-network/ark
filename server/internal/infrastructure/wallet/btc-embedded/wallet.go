@@ -298,6 +298,27 @@ func WithBitcoindZMQ(block, tx string, host, user, pass string) WalletOption {
 			time.Sleep(1 * time.Second)
 		}
 
+		estimator, err := chainfee.NewBitcoindEstimator(
+			rpcclient.ConnConfig{
+				Host: bitcoindConfig.Host,
+				User: bitcoindConfig.User,
+				Pass: bitcoindConfig.Pass,
+			},
+			"CONSERVATIVE",
+			chainfee.AbsoluteFeePerKwFloor,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to create bitcoind fee estimator: %w", err)
+		}
+
+		if err := withExtraAPI(&bitcoindRPCClient{chainClient})(s); err != nil {
+			return err
+		}
+
+		if err := withFeeEstimator(estimator)(s); err != nil {
+			return err
+		}
+
 		if err := withChainSource(chainClient)(s); err != nil {
 			chainClient.Stop()
 			bitcoindConn.Stop()
