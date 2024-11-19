@@ -53,9 +53,9 @@ func (h *handler) GetInfo(
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 		ForfeitAddress:             info.ForfeitAddress,
 		MarketHour: &arkv1.MarketHour{
-			FirstMarketHour: info.MarketHour.FirstMarketHour,
-			Period:          info.MarketHour.Period,
-			RoundLifetime:   info.MarketHour.RoundLifetime,
+			NextStartTime: info.MarketHour.StartTime,
+			Period:        info.MarketHour.Period,
+			RoundInterval: info.MarketHour.RoundInterval,
 		},
 	}, nil
 }

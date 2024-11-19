@@ -11,7 +11,7 @@ import (
 )
 
 const getLatestMarketHour = `-- name: GetLatestMarketHour :one
-SELECT id, first_market_hour, period, round_lifetime, created_at FROM market_hour ORDER BY created_at DESC LIMIT 1
+SELECT id, start_time, period, round_interval, updated_at FROM market_hour ORDER BY created_at DESC LIMIT 1
 `
 
 func (q *Queries) GetLatestMarketHour(ctx context.Context) (MarketHour, error) {
@@ -19,10 +19,45 @@ func (q *Queries) GetLatestMarketHour(ctx context.Context) (MarketHour, error) {
 	var i MarketHour
 	err := row.Scan(
 		&i.ID,
-		&i.FirstMarketHour,
+		&i.StartTime,
 		&i.Period,
-		&i.RoundLifetime,
-		&i.CreatedAt,
+		&i.RoundInterval,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const insertMarketHour = `-- name: InsertMarketHour :one
+INSERT INTO market_hour (
+    start_time,
+    period,
+    round_interval,
+    updated_at
+) VALUES (?, ?, ?, ?)
+RETURNING id, start_time, period, round_interval, updated_at
+`
+
+type InsertMarketHourParams struct {
+	StartTime     int64
+	Period        int64
+	RoundInterval int64
+	UpdatedAt     int64
+}
+
+func (q *Queries) InsertMarketHour(ctx context.Context, arg InsertMarketHourParams) (MarketHour, error) {
+	row := q.db.QueryRowContext(ctx, insertMarketHour,
+		arg.StartTime,
+		arg.Period,
+		arg.RoundInterval,
+		arg.UpdatedAt,
+	)
+	var i MarketHour
+	err := row.Scan(
+		&i.ID,
+		&i.StartTime,
+		&i.Period,
+		&i.RoundInterval,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -68,41 +103,6 @@ type MarkVtxoAsSweptParams struct {
 func (q *Queries) MarkVtxoAsSwept(ctx context.Context, arg MarkVtxoAsSweptParams) error {
 	_, err := q.db.ExecContext(ctx, markVtxoAsSwept, arg.Txid, arg.Vout)
 	return err
-}
-
-const saveMarketHour = `-- name: SaveMarketHour :one
-INSERT INTO market_hour (
-    first_market_hour,
-    period,
-    round_lifetime,
-    created_at
-) VALUES (?, ?, ?, ?)
-RETURNING id, first_market_hour, period, round_lifetime, created_at
-`
-
-type SaveMarketHourParams struct {
-	FirstMarketHour int64
-	Period          int64
-	RoundLifetime   int64
-	CreatedAt       int64
-}
-
-func (q *Queries) SaveMarketHour(ctx context.Context, arg SaveMarketHourParams) (MarketHour, error) {
-	row := q.db.QueryRowContext(ctx, saveMarketHour,
-		arg.FirstMarketHour,
-		arg.Period,
-		arg.RoundLifetime,
-		arg.CreatedAt,
-	)
-	var i MarketHour
-	err := row.Scan(
-		&i.ID,
-		&i.FirstMarketHour,
-		&i.Period,
-		&i.RoundLifetime,
-		&i.CreatedAt,
-	)
-	return i, err
 }
 
 const selectNotRedeemedVtxos = `-- name: SelectNotRedeemedVtxos :many
@@ -725,6 +725,43 @@ func (q *Queries) SelectVtxosByPoolTxid(ctx context.Context, poolTx string) ([]S
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateMarketHour = `-- name: UpdateMarketHour :one
+UPDATE market_hour 
+SET start_time = ?,
+    period = ?,
+    round_interval = ?,
+    updated_at = ?
+WHERE id = ?
+RETURNING id, start_time, period, round_interval, updated_at
+`
+
+type UpdateMarketHourParams struct {
+	StartTime     int64
+	Period        int64
+	RoundInterval int64
+	UpdatedAt     int64
+	ID            int64
+}
+
+func (q *Queries) UpdateMarketHour(ctx context.Context, arg UpdateMarketHourParams) (MarketHour, error) {
+	row := q.db.QueryRowContext(ctx, updateMarketHour,
+		arg.StartTime,
+		arg.Period,
+		arg.RoundInterval,
+		arg.UpdatedAt,
+		arg.ID,
+	)
+	var i MarketHour
+	err := row.Scan(
+		&i.ID,
+		&i.StartTime,
+		&i.Period,
+		&i.RoundInterval,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const updateVtxoExpireAt = `-- name: UpdateVtxoExpireAt :exec

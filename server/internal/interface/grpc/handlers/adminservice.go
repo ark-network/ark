@@ -105,9 +105,9 @@ func (a *adminHandler) UpdateMarketHour(
 ) (*arkv1.UpdateMarketHourResponse, error) {
 	if err := a.aspService.UpdateMarketHour(
 		ctx,
-		req.FirstMarketHour,
+		req.StartTime,
 		req.Period,
-		req.RoundLifetime,
+		req.RoundInterval,
 	); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}

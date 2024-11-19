@@ -9,11 +9,11 @@ import (
 )
 
 type MarketHour struct {
-	ID              int64
-	FirstMarketHour int64
-	Period          int64
-	RoundLifetime   int64
-	CreatedAt       int64
+	ID            int64
+	StartTime     int64
+	Period        int64
+	RoundInterval int64
+	UpdatedAt     int64
 }
 
 type Payment struct {

@@ -71,9 +71,9 @@ type Config struct {
 	RoundLifetime           int64
 	UnilateralExitDelay     int64
 	BoardingExitDelay       int64
-	FirstMarketHour         int64
+	MarketStartTime         int64
 	MarketHourPeriod        int64
-	MarketHourRoundLifetime int64
+	MarketHourRoundInterval int64
 	EsploraURL              string
 	NeutrinoPeer            string
 	BitcoindRpcUser         string
@@ -354,14 +354,14 @@ func (c *Config) schedulerService() error {
 }
 
 func (c *Config) appService() error {
-	marketHourRoundLifetime := c.MarketHourRoundLifetime
-	if marketHourRoundLifetime == 0 {
-		marketHourRoundLifetime = c.RoundLifetime
+	marketHourRoundInterval := c.MarketHourRoundInterval
+	if marketHourRoundInterval == 0 {
+		marketHourRoundInterval = c.RoundInterval
 	}
 	if common.IsLiquid(c.Network) {
 		svc, err := application.NewCovenantService(
 			c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay,
-			c.FirstMarketHour, c.MarketHourPeriod, marketHourRoundLifetime,
+			c.MarketStartTime, c.MarketHourPeriod, marketHourRoundInterval,
 			c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler,
 		)
 		if err != nil {
@@ -374,7 +374,7 @@ func (c *Config) appService() error {
 
 	svc, err := application.NewCovenantlessService(
 		c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay,
-		c.FirstMarketHour, c.MarketHourPeriod, marketHourRoundLifetime,
+		c.MarketStartTime, c.MarketHourPeriod, marketHourRoundInterval,
 		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler,
 	)
 	if err != nil {

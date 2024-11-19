@@ -40,9 +40,9 @@ type Config struct {
 	UnlockerType            string
 	UnlockerFilePath        string
 	UnlockerPassword        string
-	FirstMarketHour         int64
+	MarketStartTime         int64
 	MarketHourPeriod        int64
-	MarketHourRoundLifetime int64
+	MarketHourRoundInterval int64
 }
 
 var (
@@ -75,9 +75,9 @@ var (
 	UnlockerType            = "UNLOCKER_TYPE"
 	UnlockerFilePath        = "UNLOCKER_FILE_PATH"
 	UnlockerPassword        = "UNLOCKER_PASSWORD"
-	FirstMarketHour         = "FIRST_MARKET_HOUR"
+	MarketStartTime         = "MARKET_START_TIME"
 	MarketHourPeriod        = "MARKET_HOUR_PERIOD"
-	MarketHourRoundLifetime = "MARKET_HOUR_ROUND_LIFETIME"
+	MarketHourRoundInterval = "MARKET_HOUR_ROUND_INTERVAL"
 
 	defaultDatadir                 = common.AppDataDir("arkd", false)
 	defaultRoundInterval           = 5
@@ -96,9 +96,9 @@ var (
 	defaultBoardingExitDelay       = 604672
 	defaultNoMacaroons             = false
 	defaultNoTLS                   = false
-	defaultFirstMarketHour         = time.Now().Unix()
+	defaultMarketHourStartTime     = time.Now().Unix()
 	defaultMarketHourPeriod        = int64(86400) // 24 hours in seconds
-	defaultMarketHourRoundLifetime = int64(0)     // if 0, use roundLifetime
+	defaultMarketHourRoundInterval = int64(0)     // if 0, use roundLifetime
 )
 
 func LoadConfig() (*Config, error) {
@@ -122,9 +122,9 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(BlockchainScannerType, defaultBlockchainScannerType)
 	viper.SetDefault(NoMacaroons, defaultNoMacaroons)
 	viper.SetDefault(BoardingExitDelay, defaultBoardingExitDelay)
-	viper.SetDefault(FirstMarketHour, defaultFirstMarketHour)
+	viper.SetDefault(MarketStartTime, defaultMarketHourStartTime)
 	viper.SetDefault(MarketHourPeriod, defaultMarketHourPeriod)
-	viper.SetDefault(MarketHourRoundLifetime, defaultMarketHourRoundLifetime)
+	viper.SetDefault(MarketHourRoundInterval, defaultMarketHourRoundInterval)
 
 	net, err := getNetwork()
 	if err != nil {
@@ -164,9 +164,9 @@ func LoadConfig() (*Config, error) {
 		UnlockerType:            viper.GetString(UnlockerType),
 		UnlockerFilePath:        viper.GetString(UnlockerFilePath),
 		UnlockerPassword:        viper.GetString(UnlockerPassword),
-		FirstMarketHour:         viper.GetInt64(FirstMarketHour),
+		MarketStartTime:         viper.GetInt64(MarketStartTime),
 		MarketHourPeriod:        viper.GetInt64(MarketHourPeriod),
-		MarketHourRoundLifetime: viper.GetInt64(MarketHourRoundLifetime),
+		MarketHourRoundInterval: viper.GetInt64(MarketHourRoundInterval),
 	}, nil
 }
 

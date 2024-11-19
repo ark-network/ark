@@ -55,7 +55,7 @@ type Service interface {
 		pubkey *secp256k1.PublicKey, signatures string,
 	) error
 	GetTransactionEventsChannel(ctx context.Context) <-chan TransactionEvent
-	UpdateMarketHour(ctx context.Context, firstMarketHour, period, roundLifetime int64) error
+	UpdateMarketHour(ctx context.Context, marketStartTime, period, roundInterval int64) error
 }
 
 type ServiceInfo struct {
@@ -67,13 +67,13 @@ type ServiceInfo struct {
 	Dust                       uint64
 	BoardingDescriptorTemplate string
 	ForfeitAddress             string
-	MarketHour                 *MarketHour
+	MarketHour                 *NextMarketHour
 }
 
-type MarketHour struct {
-	FirstMarketHour int64
-	Period          int64
-	RoundLifetime   int64
+type NextMarketHour struct {
+	StartTime     int64
+	Period        int64
+	RoundInterval int64
 }
 
 type WalletStatus struct {

@@ -36,6 +36,6 @@ type VtxoRepository interface {
 
 type MarketHourRepo interface {
 	Get(ctx context.Context) (*MarketHour, error)
-	Save(ctx context.Context, marketHour *MarketHour) error
+	Upsert(ctx context.Context, marketHour MarketHour) error
 	Close()
 }

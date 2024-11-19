@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
-
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/infrastructure/db/sqlite/sqlc/queries"
 )
@@ -41,27 +39,39 @@ func (r *marketHourRepository) Get(ctx context.Context) (*domain.MarketHour, err
 	}
 
 	return &domain.MarketHour{
-		ID:              marketHour.ID,
-		FirstMarketHour: marketHour.FirstMarketHour,
-		Period:          marketHour.Period,
-		RoundLifetime:   marketHour.RoundLifetime,
-		CreatedAt:       marketHour.CreatedAt,
+		StartTime:     marketHour.StartTime,
+		Period:        marketHour.Period,
+		RoundInterval: marketHour.RoundInterval,
+		UpdatedAt:     marketHour.UpdatedAt,
 	}, nil
 }
 
-func (r *marketHourRepository) Save(ctx context.Context, marketHour *domain.MarketHour) error {
-	result, err := r.querier.SaveMarketHour(ctx, queries.SaveMarketHourParams{
-		FirstMarketHour: marketHour.FirstMarketHour,
-		Period:          marketHour.Period,
-		RoundLifetime:   marketHour.RoundLifetime,
-		CreatedAt:       time.Now().Unix(),
-	})
-	if err != nil {
-		return fmt.Errorf("failed to save market hour: %w", err)
+func (r *marketHourRepository) Upsert(ctx context.Context, marketHour domain.MarketHour) error {
+	latest, err := r.querier.GetLatestMarketHour(ctx)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("failed to get latest market hour: %w", err)
 	}
 
-	marketHour.ID = result.ID
-	marketHour.CreatedAt = result.CreatedAt
+	if errors.Is(err, sql.ErrNoRows) {
+		_, err = r.querier.InsertMarketHour(ctx, queries.InsertMarketHourParams{
+			StartTime:     marketHour.StartTime,
+			Period:        marketHour.Period,
+			RoundInterval: marketHour.RoundInterval,
+			UpdatedAt:     marketHour.UpdatedAt,
+		})
+	} else {
+		_, err = r.querier.UpdateMarketHour(ctx, queries.UpdateMarketHourParams{
+			StartTime:     marketHour.StartTime,
+			Period:        marketHour.Period,
+			RoundInterval: marketHour.RoundInterval,
+			UpdatedAt:     marketHour.UpdatedAt,
+			ID:            latest.ID,
+		})
+	}
+	if err != nil {
+		return fmt.Errorf("failed to upsert market hour: %w", err)
+	}
+
 	return nil
 }
 

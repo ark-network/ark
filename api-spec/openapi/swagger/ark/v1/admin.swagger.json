@@ -276,20 +276,17 @@
     "v1UpdateMarketHourRequest": {
       "type": "object",
       "properties": {
-        "firstMarketHour": {
+        "startTime": {
           "type": "string",
-          "format": "int64",
-          "title": "Unix timestamp for the first market hour"
+          "format": "int64"
         },
         "period": {
           "type": "string",
-          "format": "int64",
-          "title": "Period between market hours in seconds"
+          "format": "int64"
         },
-        "roundLifetime": {
+        "roundInterval": {
           "type": "string",
-          "format": "int64",
-          "title": "Round lifetime for market hours, if 0 uses default round lifetime"
+          "format": "int64"
         }
       }
     },

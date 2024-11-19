@@ -697,20 +697,17 @@
     "v1MarketHour": {
       "type": "object",
       "properties": {
-        "firstMarketHour": {
+        "nextStartTime": {
           "type": "string",
-          "format": "int64",
-          "title": "Unix time representing the first market hour"
+          "format": "int64"
         },
         "period": {
           "type": "string",
-          "format": "int64",
-          "title": "Period between market hours"
+          "format": "int64"
         },
-        "roundLifetime": {
+        "roundInterval": {
           "type": "string",
-          "format": "int64",
-          "title": "Round lifetime in seconds"
+          "format": "int64"
         }
       }
     },
