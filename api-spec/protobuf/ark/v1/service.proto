@@ -123,7 +123,9 @@ message GetInfoResponse {
   int64 round_interval = 4;
   string network = 5;
   int64 dust = 6;
-  string forfeit_address = 7;
+  string boarding_descriptor_template = 7;
+  repeated string vtxo_descriptor_templates = 8;
+  string forfeit_address = 9;
 }
 
 message GetBoardingAddressRequest {

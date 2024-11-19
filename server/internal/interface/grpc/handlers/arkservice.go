@@ -3,9 +3,12 @@ package handlers
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"sync"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+	"github.com/ark-network/ark/common/bitcointree"
+	"github.com/ark-network/ark/common/descriptor"
 	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -43,14 +46,25 @@ func (h *handler) GetInfo(
 		return nil, err
 	}
 
+	desc := fmt.Sprintf(
+		descriptor.DefaultVtxoDescriptorTemplate,
+		hex.EncodeToString(bitcointree.UnspendableKey().SerializeCompressed()),
+		"USER",
+		info.PubKey,
+		info.UnilateralExitDelay,
+		info.PubKey,
+	)
+
 	return &arkv1.GetInfoResponse{
-		Pubkey:              info.PubKey,
-		RoundLifetime:       info.RoundLifetime,
-		UnilateralExitDelay: info.UnilateralExitDelay,
-		RoundInterval:       info.RoundInterval,
-		Network:             info.Network,
-		Dust:                int64(info.Dust),
-		ForfeitAddress:      info.ForfeitAddress,
+		Pubkey:                     info.PubKey,
+		RoundLifetime:              info.RoundLifetime,
+		UnilateralExitDelay:        info.UnilateralExitDelay,
+		RoundInterval:              info.RoundInterval,
+		Network:                    info.Network,
+		Dust:                       int64(info.Dust),
+		ForfeitAddress:             info.ForfeitAddress,
+		BoardingDescriptorTemplate: desc,
+		VtxoDescriptorTemplates:    []string{desc},
 	}, nil
 }
 

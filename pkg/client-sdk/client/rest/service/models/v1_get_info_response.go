@@ -17,6 +17,9 @@ import (
 // swagger:model v1GetInfoResponse
 type V1GetInfoResponse struct {
 
+	// boarding descriptor template
+	BoardingDescriptorTemplate string `json:"boardingDescriptorTemplate,omitempty"`
+
 	// dust
 	Dust string `json:"dust,omitempty"`
 
@@ -37,6 +40,9 @@ type V1GetInfoResponse struct {
 
 	// unilateral exit delay
 	UnilateralExitDelay string `json:"unilateralExitDelay,omitempty"`
+
+	// vtxo descriptor templates
+	VtxoDescriptorTemplates []string `json:"vtxoDescriptorTemplates"`
 }
 
 // Validate validates this v1 get info response

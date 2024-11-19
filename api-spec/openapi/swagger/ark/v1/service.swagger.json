@@ -702,6 +702,15 @@
           "type": "string",
           "format": "int64"
         },
+        "boardingDescriptorTemplate": {
+          "type": "string"
+        },
+        "vtxoDescriptorTemplates": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "forfeitAddress": {
           "type": "string"
         }
