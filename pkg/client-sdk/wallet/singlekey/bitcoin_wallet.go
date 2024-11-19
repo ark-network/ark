@@ -302,7 +302,9 @@ func (w *bitcoinWallet) getAddress(
 	netParams := utils.ToBitcoinNetwork(data.Network)
 
 	defaultVtxoScript := bitcointree.NewDefaultVtxoScript(
-		data.AspPubkey, w.walletData.Pubkey, uint(data.UnilateralExitDelay),
+		w.walletData.Pubkey,
+		data.AspPubkey,
+		uint(data.UnilateralExitDelay),
 	)
 
 	vtxoTapKey, _, err := defaultVtxoScript.TapTree()
@@ -316,7 +318,13 @@ func (w *bitcoinWallet) getAddress(
 		VtxoTapKey: vtxoTapKey,
 	}
 
-	boardingTapKey, _, err := defaultVtxoScript.TapTree()
+	boardingVtxoScript := bitcointree.NewDefaultVtxoScript(
+		w.walletData.Pubkey,
+		data.AspPubkey,
+		uint(data.UnilateralExitDelay*2),
+	)
+
+	boardingTapKey, _, err := boardingVtxoScript.TapTree()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -334,12 +342,17 @@ func (w *bitcoinWallet) getAddress(
 		return nil, nil, err
 	}
 
+	boardingTapscripts, err := boardingVtxoScript.Encode()
+	if err != nil {
+		return nil, nil, err
+	}
+
 	return &addressWithTapscripts{
 			Address:    *offchainAddress,
 			Tapscripts: tapscripts,
 		},
 		&wallet.TapscriptsAddress{
-			Tapscripts: tapscripts,
+			Tapscripts: boardingTapscripts,
 			Address:    boardingAddr.EncodeAddress(),
 		},
 		nil

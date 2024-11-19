@@ -341,12 +341,18 @@ func (w *liquidWallet) getAddress(
 		VtxoTapKey: vtxoTapKey,
 	}
 
-	tapKey, _, err := vtxoScript.TapTree()
+	boardingVtxoScript := tree.NewDefaultVtxoScript(
+		w.walletData.Pubkey,
+		data.AspPubkey,
+		uint(data.UnilateralExitDelay*2),
+	)
+
+	boardingTapKey, _, err := boardingVtxoScript.TapTree()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	p2tr, err := payment.FromTweakedKey(tapKey, &liquidNet, nil)
+	p2tr, err := payment.FromTweakedKey(boardingTapKey, &liquidNet, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -361,11 +367,16 @@ func (w *liquidWallet) getAddress(
 		return nil, nil, err
 	}
 
+	boardingTapscripts, err := boardingVtxoScript.Encode()
+	if err != nil {
+		return nil, nil, err
+	}
+
 	return &addressWithTapscripts{
 			Address:    *offchainAddr,
 			Tapscripts: tapscripts,
 		}, &wallet.TapscriptsAddress{
-			Tapscripts: tapscripts,
+			Tapscripts: boardingTapscripts,
 			Address:    boardingAddr,
 		}, nil
 }

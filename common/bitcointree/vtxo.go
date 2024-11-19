@@ -29,7 +29,7 @@ func ParseVtxoScript(scripts []string) (VtxoScript, error) {
 	return nil, fmt.Errorf("invalid vtxo scripts: %s", scripts)
 }
 
-func NewDefaultVtxoScript(asp, owner *secp256k1.PublicKey, exitDelay uint) VtxoScript {
+func NewDefaultVtxoScript(owner, asp *secp256k1.PublicKey, exitDelay uint) VtxoScript {
 	return &TapscriptsVtxoScript{
 		[]Closure{
 			&CSVSigClosure{Pubkey: owner, Seconds: exitDelay},
