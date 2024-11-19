@@ -428,6 +428,44 @@ func GetDustWrapper() js.Func {
 	})
 }
 
+func RedeemNotesWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if len(args) != 1 {
+			return nil, errors.New("invalid number of args")
+		}
+
+		// Parse notes array from JS
+		jsNotes := args[0]
+		if jsNotes.Type() != js.TypeObject || jsNotes.Get("length").Type() != js.TypeNumber {
+			return nil, errors.New("invalid notes argument: expected array")
+		}
+
+		notes := make([]string, 0, jsNotes.Length())
+		for i := 0; i < jsNotes.Length(); i++ {
+			notes = append(notes, jsNotes.Index(i).String())
+		}
+
+		txID, err := arkSdkClient.RedeemNotes(context.Background(), notes)
+		if err != nil {
+			return nil, err
+		}
+
+		return js.ValueOf(txID), nil
+	})
+}
+
+func SetNostrNotificationRecipientWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if len(args) != 1 {
+			return nil, errors.New("invalid number of args")
+		}
+
+		nostrRecipient := args[0].String()
+		err := arkSdkClient.SetNostrNotificationRecipient(context.Background(), nostrRecipient)
+		return nil, err
+	})
+}
+
 type promise func(args []js.Value) (interface{}, error)
 
 func JSPromise(fn promise) js.Func {

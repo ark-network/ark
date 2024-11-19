@@ -24,6 +24,9 @@ type V1RegisterInputsForNextRoundRequest struct {
 
 	// inputs
 	Inputs []*V1Input `json:"inputs"`
+
+	// notes
+	Notes []string `json:"notes"`
 }
 
 // Validate validates this v1 register inputs for next round request

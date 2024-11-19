@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/ark-network/ark/common"
@@ -22,7 +23,6 @@ import (
 	"github.com/btcsuite/btcwallet/waddrmgr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightningnetwork/lnd/input"
-	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
 type txBuilder struct {
@@ -48,7 +48,15 @@ func (b *txBuilder) GetTxID(tx string) (string, error) {
 }
 
 func (b *txBuilder) VerifyTapscriptPartialSigs(tx string) (bool, string, error) {
-	ptx, _ := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+	ptx, err := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+	if err != nil {
+		return false, "", err
+	}
+
+	return b.verifyTapscriptPartialSigs(ptx)
+}
+
+func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, string, error) {
 	txid := ptx.UnsignedTx.TxID()
 
 	for index, input := range ptx.Inputs {
@@ -83,7 +91,7 @@ func (b *txBuilder) VerifyTapscriptPartialSigs(tx string) (bool, string, error) 
 		}
 
 		preimage, err := b.getTaprootPreimage(
-			tx,
+			ptx,
 			index,
 			tapLeaf.Script,
 		)
@@ -227,37 +235,217 @@ func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (signedSweepTx strin
 	return hex.EncodeToString(buf.Bytes()), nil
 }
 
-func (b *txBuilder) BuildForfeitTxs(
-	poolTx string,
-	payments []domain.Payment,
-	descriptors map[domain.VtxoKey]string,
-	minRelayFeeRate chainfee.SatPerKVByte,
-) (connectors []string, forfeitTxs []string, err error) {
-	connectorPkScript, err := b.getConnectorPkScript(poolTx)
-	if err != nil {
-		return nil, nil, err
+func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, forfeitTxs []string) (map[domain.VtxoKey][]string, error) {
+	connectorsPtxs := make([]*psbt.Packet, 0, len(connectors))
+	var connectorAmount uint64
+
+	for i, connector := range connectors {
+		ptx, err := psbt.NewFromRawBytes(strings.NewReader(connector), true)
+		if err != nil {
+			return nil, err
+		}
+
+		if i == len(connectors)-1 {
+			lastOutput := ptx.UnsignedTx.TxOut[len(ptx.UnsignedTx.TxOut)-1]
+			connectorAmount = uint64(lastOutput.Value)
+		}
+
+		connectorsPtxs = append(connectorsPtxs, ptx)
 	}
 
-	minRelayFeeConnectorTx, err := b.minRelayFeeConnectorTx()
-	if err != nil {
-		return nil, nil, err
+	// decode forfeit txs, map by vtxo key
+	forfeitTxsPtxs := make(map[domain.VtxoKey][]*psbt.Packet)
+	for _, forfeitTx := range forfeitTxs {
+		ptx, err := psbt.NewFromRawBytes(strings.NewReader(forfeitTx), true)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(ptx.Inputs) != 2 {
+			return nil, fmt.Errorf("invalid forfeit tx, expect 2 inputs, got %d", len(ptx.Inputs))
+		}
+
+		valid, _, err := b.verifyTapscriptPartialSigs(ptx)
+		if err != nil {
+			return nil, err
+		}
+		if !valid {
+			return nil, fmt.Errorf("invalid forfeit tx signature")
+		}
+
+		vtxoInput := ptx.UnsignedTx.TxIn[1]
+
+		vtxoKey := domain.VtxoKey{
+			Txid: vtxoInput.PreviousOutPoint.Hash.String(),
+			VOut: vtxoInput.PreviousOutPoint.Index,
+		}
+		if _, ok := forfeitTxsPtxs[vtxoKey]; !ok {
+			forfeitTxsPtxs[vtxoKey] = make([]*psbt.Packet, 0)
+		}
+		forfeitTxsPtxs[vtxoKey] = append(forfeitTxsPtxs[vtxoKey], ptx)
 	}
 
-	connectorTxs, err := b.createConnectors(poolTx, payments, connectorPkScript, minRelayFeeConnectorTx)
+	forfeitAddress, err := b.wallet.GetForfeitAddress(context.Background())
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	forfeitTxs, err = b.createForfeitTxs(payments, descriptors, connectorTxs, minRelayFeeRate)
+	addr, err := btcutil.DecodeAddress(forfeitAddress, nil)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	for _, tx := range connectorTxs {
-		buf, _ := tx.B64Encode()
-		connectors = append(connectors, buf)
+	forfeitScript, err := txscript.PayToAddrScript(addr)
+	if err != nil {
+		return nil, err
 	}
-	return connectors, forfeitTxs, nil
+
+	minRate := b.wallet.MinRelayFeeRate(context.Background())
+
+	validForfeitTxs := make(map[domain.VtxoKey][]string)
+
+	for vtxoKey, ptxs := range forfeitTxsPtxs {
+		if len(ptxs) == 0 {
+			continue
+		}
+
+		var vtxo *domain.Vtxo
+		for _, v := range vtxos {
+			if v.VtxoKey == vtxoKey {
+				vtxo = &v
+				break
+			}
+		}
+
+		if vtxo == nil {
+			return nil, fmt.Errorf("missing vtxo %s", vtxoKey)
+		}
+
+		outputAmount := uint64(0)
+
+		// only take the first forfeit tx, as all forfeit must have the same output
+		firstForfeit := ptxs[0]
+		for _, output := range firstForfeit.UnsignedTx.TxOut {
+			outputAmount += uint64(output.Value)
+		}
+
+		inputAmount := vtxo.Amount + connectorAmount
+		feeAmount := inputAmount - outputAmount
+
+		if len(firstForfeit.Inputs[1].TaprootLeafScript) <= 0 {
+			return nil, fmt.Errorf("missing taproot leaf script for vtxo input, invalid forfeit tx")
+		}
+
+		vtxoTapscript := firstForfeit.Inputs[1].TaprootLeafScript[0]
+		ctrlBlock, err := txscript.ParseControlBlock(vtxoTapscript.ControlBlock)
+		if err != nil {
+			return nil, err
+		}
+
+		minFee, err := common.ComputeForfeitMinRelayFee(
+			minRate,
+			&waddrmgr.Tapscript{
+				RevealedScript: vtxoTapscript.Script,
+				ControlBlock:   ctrlBlock,
+			},
+			64*2,
+			txscript.GetScriptClass(forfeitScript),
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		dustAmount, err := b.wallet.GetDustAmount(context.Background())
+		if err != nil {
+			return nil, err
+		}
+
+		if inputAmount-feeAmount < dustAmount {
+			return nil, fmt.Errorf("forfeit tx output amount is dust, %d < %d", inputAmount-feeAmount, dustAmount)
+		}
+
+		if feeAmount < uint64(minFee) {
+			return nil, fmt.Errorf("forfeit tx fee is lower than the min relay fee, %d < %d", feeAmount, minFee)
+		}
+
+		feeThreshold := uint64(math.Ceil(float64(minFee) * 1.05))
+
+		if feeAmount > feeThreshold {
+			return nil, fmt.Errorf("forfeit tx fee is higher than 5%% of the min relay fee, %d > %d", feeAmount, feeThreshold)
+		}
+
+		vtxoChainhash, err := chainhash.NewHashFromStr(vtxoKey.Txid)
+		if err != nil {
+			return nil, err
+		}
+
+		vtxoInput := &wire.OutPoint{
+			Hash:  *vtxoChainhash,
+			Index: vtxoKey.VOut,
+		}
+
+		vtxoTapKey, err := vtxo.TapKey()
+		if err != nil {
+			return nil, err
+		}
+
+		vtxoScript, err := common.P2TRScript(vtxoTapKey)
+		if err != nil {
+			return nil, err
+		}
+
+		rebuiltForfeits := make([]*psbt.Packet, 0)
+
+		for _, connector := range connectorsPtxs {
+			forfeits, err := bitcointree.BuildForfeitTxs(
+				connector,
+				vtxoInput,
+				vtxo.Amount,
+				connectorAmount,
+				feeAmount,
+				vtxoScript,
+				forfeitScript,
+			)
+			if err != nil {
+				return nil, err
+			}
+
+			rebuiltForfeits = append(rebuiltForfeits, forfeits...)
+		}
+
+		if len(rebuiltForfeits) != len(ptxs) {
+			return nil, fmt.Errorf("missing forfeits, expect %d, got %d", len(ptxs), len(rebuiltForfeits))
+		}
+
+		for _, forfeit := range rebuiltForfeits {
+			found := false
+			txid := forfeit.UnsignedTx.TxHash().String()
+			for _, ptx := range ptxs {
+				if txid == ptx.UnsignedTx.TxHash().String() {
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				return nil, fmt.Errorf("missing forfeit tx %s", txid)
+			}
+		}
+
+		b64Txs := make([]string, 0, len(ptxs))
+		for _, forfeit := range ptxs {
+			b64, err := forfeit.B64Encode()
+			if err != nil {
+				return nil, err
+			}
+
+			b64Txs = append(b64Txs, b64)
+		}
+
+		validForfeitTxs[vtxoKey] = b64Txs
+	}
+
+	return validForfeitTxs, nil
 }
 
 func (b *txBuilder) BuildRoundTx(
@@ -266,22 +454,22 @@ func (b *txBuilder) BuildRoundTx(
 	boardingInputs []ports.BoardingInput,
 	sweptRounds []domain.Round,
 	cosigners ...*secp256k1.PublicKey,
-) (roundTx string, congestionTree tree.CongestionTree, connectorAddress string, err error) {
+) (roundTx string, congestionTree tree.CongestionTree, connectorAddress string, connectors []string, err error) {
 	var sharedOutputScript []byte
 	var sharedOutputAmount int64
 
 	if len(cosigners) == 0 {
-		return "", nil, "", fmt.Errorf("missing cosigners")
+		return "", nil, "", nil, fmt.Errorf("missing cosigners")
 	}
 
 	receivers, err := getOutputVtxosLeaves(payments)
 	if err != nil {
-		return "", nil, "", err
+		return "", nil, "", nil, err
 	}
 
 	feeAmount, err := b.minRelayFeeTreeTx()
 	if err != nil {
-		return "", nil, "", err
+		return
 	}
 
 	if !isOnchainOnly(payments) {
@@ -320,11 +508,43 @@ func (b *txBuilder) BuildRoundTx(
 			initialOutpoint, cosigners, aspPubkey, receivers, feeAmount, b.roundLifetime,
 		)
 		if err != nil {
-			return
+			return "", nil, "", nil, err
 		}
 	}
 
-	return
+	if countSpentVtxos(payments) <= 0 {
+		return
+	}
+
+	connectorAddr, err := btcutil.DecodeAddress(connectorAddress, b.onchainNetwork())
+	if err != nil {
+		return "", nil, "", nil, err
+	}
+
+	connectorPkScript, err := txscript.PayToAddrScript(connectorAddr)
+	if err != nil {
+		return "", nil, "", nil, err
+	}
+
+	minRelayFeeConnectorTx, err := b.minRelayFeeConnectorTx()
+	if err != nil {
+		return "", nil, "", nil, err
+	}
+
+	connectorsPsbts, err := b.createConnectors(roundTx, payments, connectorPkScript, minRelayFeeConnectorTx)
+	if err != nil {
+		return "", nil, "", nil, err
+	}
+
+	for _, ptx := range connectorsPsbts {
+		b64, err := ptx.B64Encode()
+		if err != nil {
+			return "", nil, "", nil, err
+		}
+		connectors = append(connectors, b64)
+	}
+
+	return roundTx, congestionTree, connectorAddress, connectors, nil
 }
 
 func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime int64, sweepInput ports.SweepInput, err error) {
@@ -909,7 +1129,7 @@ func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, 
 			}
 
 			partialSig := sourceInput.TaprootScriptSpendSig[0]
-			preimage, err := b.getTaprootPreimage(src, i, sourceInput.TaprootLeafScript[0].Script)
+			preimage, err := b.getTaprootPreimage(sourceTx, i, sourceInput.TaprootLeafScript[0].Script)
 			if err != nil {
 				return "", err
 			}
@@ -964,7 +1184,6 @@ func (b *txBuilder) createConnectors(
 		Hash:  partialTx.UnsignedTx.TxHash(),
 		Index: 1,
 	}
-
 	if numberOfConnectors == 1 {
 		outputs := []*wire.TxOut{connectorOutput}
 		connectorTx, err := craftConnectorTx(previousInput, connectorScript, outputs, feeAmount)
@@ -1011,114 +1230,6 @@ func (b *txBuilder) minRelayFeeTreeTx() (uint64, error) {
 	return b.wallet.MinRelayFee(context.Background(), uint64(common.TreeTxSize))
 }
 
-func (b *txBuilder) createForfeitTxs(
-	payments []domain.Payment,
-	descriptors map[domain.VtxoKey]string,
-	connectors []*psbt.Packet,
-	minRelayFeeRate chainfee.SatPerKVByte,
-) ([]string, error) {
-	forfeitAddress, err := b.wallet.GetForfeitAddress(context.Background())
-	if err != nil {
-		return nil, err
-	}
-
-	parsedAddr, err := btcutil.DecodeAddress(forfeitAddress, b.onchainNetwork())
-	if err != nil {
-		return nil, err
-	}
-
-	pkScript, err := txscript.PayToAddrScript(parsedAddr)
-	if err != nil {
-		return nil, err
-	}
-
-	scriptParsed, err := txscript.ParsePkScript(pkScript)
-	if err != nil {
-		return nil, err
-	}
-
-	forfeitTxs := make([]string, 0)
-	for _, payment := range payments {
-		for _, vtxo := range payment.Inputs {
-			desc, ok := descriptors[vtxo.VtxoKey]
-			if !ok {
-				return nil, err
-			}
-
-			offchainscript, err := bitcointree.ParseVtxoScript(desc)
-			if err != nil {
-				return nil, err
-			}
-
-			vtxoTaprootKey, tapTree, err := offchainscript.TapTree()
-			if err != nil {
-				return nil, err
-			}
-
-			connectorAmount, err := b.wallet.GetDustAmount(context.Background())
-			if err != nil {
-				return nil, err
-			}
-
-			vtxoScript, err := common.P2TRScript(vtxoTaprootKey)
-			if err != nil {
-				return nil, err
-			}
-
-			feeAmount, err := common.ComputeForfeitMinRelayFee(minRelayFeeRate, tapTree, scriptParsed.Class())
-			if err != nil {
-				return nil, err
-			}
-
-			vtxoTxHash, err := chainhash.NewHashFromStr(vtxo.Txid)
-			if err != nil {
-				return nil, err
-			}
-
-			for _, connector := range connectors {
-				txs, err := bitcointree.BuildForfeitTxs(
-					connector,
-					&wire.OutPoint{
-						Hash:  *vtxoTxHash,
-						Index: vtxo.VOut,
-					},
-					vtxo.Amount,
-					connectorAmount,
-					feeAmount,
-					vtxoScript,
-					pkScript,
-				)
-				if err != nil {
-					return nil, err
-				}
-
-				for _, tx := range txs {
-					b64, err := tx.B64Encode()
-					if err != nil {
-						return nil, err
-					}
-					forfeitTxs = append(forfeitTxs, b64)
-				}
-
-			}
-		}
-	}
-	return forfeitTxs, nil
-}
-
-func (b *txBuilder) getConnectorPkScript(poolTx string) ([]byte, error) {
-	partialTx, err := psbt.NewFromRawBytes(strings.NewReader(poolTx), true)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(partialTx.Outputs) < 1 {
-		return nil, fmt.Errorf("connector output not found in pool tx")
-	}
-
-	return partialTx.UnsignedTx.TxOut[1].PkScript, nil
-}
-
 func (b *txBuilder) selectUtxos(ctx context.Context, sweptRounds []domain.Round, amount uint64) ([]ports.TxInput, uint64, error) {
 	selectedConnectorsUtxos := make([]ports.TxInput, 0)
 	selectedConnectorsAmount := uint64(0)
@@ -1160,12 +1271,7 @@ func (b *txBuilder) selectUtxos(ctx context.Context, sweptRounds []domain.Round,
 	return append(selectedConnectorsUtxos, utxos...), change, nil
 }
 
-func (b *txBuilder) getTaprootPreimage(tx string, inputIndex int, leafScript []byte) ([]byte, error) {
-	partial, err := psbt.NewFromRawBytes(strings.NewReader(tx), true)
-	if err != nil {
-		return nil, err
-	}
-
+func (b *txBuilder) getTaprootPreimage(partial *psbt.Packet, inputIndex int, leafScript []byte) ([]byte, error) {
 	prevouts := make(map[wire.OutPoint]*wire.TxOut)
 
 	for i, input := range partial.Inputs {

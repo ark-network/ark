@@ -30,6 +30,8 @@ type ArkClient interface {
 	Dump(ctx context.Context) (seed string, err error)
 	GetTransactionHistory(ctx context.Context) ([]types.Transaction, error)
 	GetTransactionEventChannel() chan types.TransactionEvent
+	RedeemNotes(ctx context.Context, notes []string) (string, error)
+	SetNostrNotificationRecipient(ctx context.Context, nostrRecipient string) error
 	Stop() error
 }
 

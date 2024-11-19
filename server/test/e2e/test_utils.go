@@ -7,10 +7,15 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nbd-wtf/go-nostr"
+	"github.com/nbd-wtf/go-nostr/nip19"
 )
 
 const (
 	Password = "password"
+	// #nosec G101
+	NostrTestingSecretKey = "07959d1d2bc6507403449c556585d463a9ca4374eb0ec07b3929088ce6c34a7e"
 )
 
 type ArkBalance struct {
@@ -41,6 +46,11 @@ func GenerateBlock() error {
 
 	time.Sleep(6 * time.Second)
 	return nil
+}
+
+func RunDockerExec(container string, arg ...string) (string, error) {
+	args := append([]string{"exec", "-t", container}, arg...)
+	return RunCommand("docker", args...)
 }
 
 func RunCommand(name string, arg ...string) (string, error) {
@@ -103,4 +113,23 @@ func RunCommand(name string, arg ...string) (string, error) {
 func newCommand(name string, arg ...string) *exec.Cmd {
 	cmd := exec.Command(name, arg...)
 	return cmd
+}
+
+// nostr
+// use nak utils https://github.com/fiatjaf/nak
+
+func GetNostrKeys() (secretKey, publicKey string, npub string, err error) {
+	secretKey = NostrTestingSecretKey
+
+	publicKey, err = nostr.GetPublicKey(secretKey)
+	if err != nil {
+		return
+	}
+
+	npub, err = nip19.EncodePublicKey(publicKey)
+	if err != nil {
+		return
+	}
+
+	return
 }

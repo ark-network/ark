@@ -10,8 +10,37 @@ import (
 	"database/sql"
 )
 
+const containsNote = `-- name: ContainsNote :one
+SELECT EXISTS(SELECT 1 FROM note WHERE id = ?)
+`
+
+func (q *Queries) ContainsNote(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, containsNote, id)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const deleteEntity = `-- name: DeleteEntity :exec
+DELETE FROM entity WHERE id = ?
+`
+
+func (q *Queries) DeleteEntity(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteEntity, id)
+	return err
+}
+
+const deleteEntityVtxo = `-- name: DeleteEntityVtxo :exec
+DELETE FROM entity_vtxo WHERE entity_id = ?
+`
+
+func (q *Queries) DeleteEntityVtxo(ctx context.Context, entityID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteEntityVtxo, entityID)
+	return err
+}
+
 const getLatestMarketHour = `-- name: GetLatestMarketHour :one
-SELECT id, start_time, period, round_interval, updated_at FROM market_hour ORDER BY created_at DESC LIMIT 1
+SELECT id, start_time, period, round_interval, updated_at FROM market_hour ORDER BY updated_at DESC LIMIT 1
 `
 
 func (q *Queries) GetLatestMarketHour(ctx context.Context) (MarketHour, error) {
@@ -62,6 +91,15 @@ func (q *Queries) InsertMarketHour(ctx context.Context, arg InsertMarketHourPara
 	return i, err
 }
 
+const insertNote = `-- name: InsertNote :exec
+INSERT INTO note (id) VALUES (?)
+`
+
+func (q *Queries) InsertNote(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, insertNote, id)
+	return err
+}
+
 const markVtxoAsRedeemed = `-- name: MarkVtxoAsRedeemed :exec
 UPDATE vtxo SET redeemed = true WHERE txid = ? AND vout = ?
 `
@@ -103,6 +141,48 @@ type MarkVtxoAsSweptParams struct {
 func (q *Queries) MarkVtxoAsSwept(ctx context.Context, arg MarkVtxoAsSweptParams) error {
 	_, err := q.db.ExecContext(ctx, markVtxoAsSwept, arg.Txid, arg.Vout)
 	return err
+}
+
+const selectEntitiesByVtxo = `-- name: SelectEntitiesByVtxo :many
+SELECT entity_vw.id, entity_vw.nostr_recipient, entity_vw.vtxo_txid, entity_vw.vtxo_vout FROM entity_vw
+WHERE vtxo_txid = ? AND vtxo_vout = ?
+`
+
+type SelectEntitiesByVtxoParams struct {
+	VtxoTxid sql.NullString
+	VtxoVout sql.NullInt64
+}
+
+type SelectEntitiesByVtxoRow struct {
+	EntityVw EntityVw
+}
+
+func (q *Queries) SelectEntitiesByVtxo(ctx context.Context, arg SelectEntitiesByVtxoParams) ([]SelectEntitiesByVtxoRow, error) {
+	rows, err := q.db.QueryContext(ctx, selectEntitiesByVtxo, arg.VtxoTxid, arg.VtxoVout)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SelectEntitiesByVtxoRow
+	for rows.Next() {
+		var i SelectEntitiesByVtxoRow
+		if err := rows.Scan(
+			&i.EntityVw.ID,
+			&i.EntityVw.NostrRecipient,
+			&i.EntityVw.VtxoTxid,
+			&i.EntityVw.VtxoVout,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const selectNotRedeemedVtxos = `-- name: SelectNotRedeemedVtxos :many
@@ -728,7 +808,7 @@ func (q *Queries) SelectVtxosByPoolTxid(ctx context.Context, poolTx string) ([]S
 }
 
 const updateMarketHour = `-- name: UpdateMarketHour :one
-UPDATE market_hour 
+UPDATE market_hour
 SET start_time = ?,
     period = ?,
     round_interval = ?,
@@ -791,6 +871,39 @@ type UpdateVtxoPaymentIdParams struct {
 
 func (q *Queries) UpdateVtxoPaymentId(ctx context.Context, arg UpdateVtxoPaymentIdParams) error {
 	_, err := q.db.ExecContext(ctx, updateVtxoPaymentId, arg.PaymentID, arg.Txid, arg.Vout)
+	return err
+}
+
+const upsertEntity = `-- name: UpsertEntity :one
+INSERT INTO entity (nostr_recipient)
+VALUES (?)
+ON CONFLICT(nostr_recipient) DO UPDATE SET
+    nostr_recipient = EXCLUDED.nostr_recipient
+RETURNING id
+`
+
+func (q *Queries) UpsertEntity(ctx context.Context, nostrRecipient string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, upsertEntity, nostrRecipient)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const upsertEntityVtxo = `-- name: UpsertEntityVtxo :exec
+INSERT INTO entity_vtxo (entity_id, vtxo_txid, vtxo_vout)
+VALUES (?, ?, ?)
+ON CONFLICT(entity_id, vtxo_txid, vtxo_vout) DO UPDATE SET
+    entity_id = EXCLUDED.entity_id
+`
+
+type UpsertEntityVtxoParams struct {
+	EntityID int64
+	VtxoTxid string
+	VtxoVout int64
+}
+
+func (q *Queries) UpsertEntityVtxo(ctx context.Context, arg UpsertEntityVtxoParams) error {
+	_, err := q.db.ExecContext(ctx, upsertEntityVtxo, arg.EntityID, arg.VtxoTxid, arg.VtxoVout)
 	return err
 }
 

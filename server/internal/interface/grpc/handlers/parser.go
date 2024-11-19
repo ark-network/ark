@@ -6,12 +6,14 @@ import (
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/txscript"
 )
 
 // From interface type to app type
@@ -48,6 +50,24 @@ func parseAsyncPaymentInputs(ins []*arkv1.AsyncPaymentInput) ([]application.Asyn
 	}
 
 	return inputs, nil
+}
+
+func parseNotes(notes []string) ([]note.Note, error) {
+	if len(notes) <= 0 {
+		return nil, fmt.Errorf("missing notes")
+	}
+
+	notesParsed := make([]note.Note, 0, len(notes))
+	for _, noteStr := range notes {
+		n, err := note.NewFromString(noteStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid note: %s", err)
+		}
+
+		notesParsed = append(notesParsed, *n)
+	}
+
+	return notesParsed, nil
 }
 
 func parseInputs(ins []*arkv1.Input) ([]ports.Input, error) {
@@ -188,4 +208,84 @@ func (s stage) toProto() arkv1.RoundStage {
 	default:
 		return arkv1.RoundStage_ROUND_STAGE_UNSPECIFIED
 	}
+}
+
+func parseSignedVtxoOutpoints(signedVtxoOutpoints []*arkv1.SignedVtxoOutpoint) ([]application.SignedVtxoOutpoint, error) {
+	if len(signedVtxoOutpoints) <= 0 {
+		return nil, fmt.Errorf("missing signed vtxo outpoints")
+	}
+
+	parsed := make([]application.SignedVtxoOutpoint, 0, len(signedVtxoOutpoints))
+	for _, signedVtxo := range signedVtxoOutpoints {
+		outpoint := signedVtxo.GetOutpoint()
+		if outpoint == nil {
+			return nil, fmt.Errorf("missing outpoint")
+		}
+
+		txid := outpoint.GetTxid()
+		if len(txid) <= 0 {
+			return nil, fmt.Errorf("missing txid")
+		}
+
+		proof := signedVtxo.GetProof()
+		if proof == nil {
+			return nil, fmt.Errorf("missing proof")
+		}
+
+		controlBlockHex := proof.GetControlBlock()
+		if len(controlBlockHex) <= 0 {
+			return nil, fmt.Errorf("missing control block")
+		}
+
+		controlBlockBytes, err := hex.DecodeString(controlBlockHex)
+		if err != nil {
+			return nil, fmt.Errorf("invalid control block: %s", err)
+		}
+
+		controlBlock, err := txscript.ParseControlBlock(controlBlockBytes)
+		if err != nil {
+			return nil, fmt.Errorf("invalid control block: %s", err)
+		}
+
+		signatureHex := proof.GetSignature()
+		if len(signatureHex) <= 0 {
+			return nil, fmt.Errorf("missing signature")
+		}
+
+		signatureBytes, err := hex.DecodeString(signatureHex)
+		if err != nil {
+			return nil, fmt.Errorf("invalid signature: %s", err)
+		}
+
+		signature, err := schnorr.ParseSignature(signatureBytes)
+		if err != nil {
+			return nil, fmt.Errorf("invalid signature: %s", err)
+		}
+
+		scriptHex := proof.GetScript()
+		if len(scriptHex) <= 0 {
+			return nil, fmt.Errorf("missing script")
+		}
+
+		scriptBytes, err := hex.DecodeString(scriptHex)
+		if err != nil {
+			return nil, fmt.Errorf("invalid script: %s", err)
+		}
+
+		vout := outpoint.GetVout()
+
+		parsed = append(parsed, application.SignedVtxoOutpoint{
+			Outpoint: domain.VtxoKey{
+				Txid: txid,
+				VOut: vout,
+			},
+			Proof: application.OwnershipProof{
+				ControlBlock: controlBlock,
+				Script:       scriptBytes,
+				Signature:    signature,
+			},
+		})
+	}
+
+	return parsed, nil
 }

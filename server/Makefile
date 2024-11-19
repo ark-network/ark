@@ -44,6 +44,8 @@ run: clean
 	export ARK_BITCOIND_RPC_USER=admin1; \
 	export ARK_BITCOIND_RPC_PASS=123; \
 	export ARK_BITCOIND_RPC_HOST=localhost:18443; \
+	export ARK_BITCOIND_ZMQ_BLOCK=tcp://127.0.0.1:28332; \
+	export ARK_BITCOIND_ZMQ_TX=tcp://127.0.0.1:28333; \
 	export ARK_DATADIR=./data/regtest; \
 	go run ./cmd/arkd
 

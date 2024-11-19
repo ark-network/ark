@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"hash"
 
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/google/uuid"
 )
 
@@ -124,4 +126,12 @@ type Vtxo struct {
 	ExpireAt  int64
 	RedeemTx  string // empty if in-round vtxo
 	CreatedAt int64
+}
+
+func (v Vtxo) TapKey() (*secp256k1.PublicKey, error) {
+	pubkeyBytes, err := hex.DecodeString(v.Pubkey)
+	if err != nil {
+		return nil, err
+	}
+	return schnorr.ParsePubKey(pubkeyBytes)
 }

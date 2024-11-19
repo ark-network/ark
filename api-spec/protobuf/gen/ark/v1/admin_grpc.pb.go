@@ -21,6 +21,7 @@ type AdminServiceClient interface {
 	GetScheduledSweep(ctx context.Context, in *GetScheduledSweepRequest, opts ...grpc.CallOption) (*GetScheduledSweepResponse, error)
 	GetRoundDetails(ctx context.Context, in *GetRoundDetailsRequest, opts ...grpc.CallOption) (*GetRoundDetailsResponse, error)
 	GetRounds(ctx context.Context, in *GetRoundsRequest, opts ...grpc.CallOption) (*GetRoundsResponse, error)
+	CreateNote(ctx context.Context, in *CreateNoteRequest, opts ...grpc.CallOption) (*CreateNoteResponse, error)
 	UpdateMarketHour(ctx context.Context, in *UpdateMarketHourRequest, opts ...grpc.CallOption) (*UpdateMarketHourResponse, error)
 }
 
@@ -59,6 +60,15 @@ func (c *adminServiceClient) GetRounds(ctx context.Context, in *GetRoundsRequest
 	return out, nil
 }
 
+func (c *adminServiceClient) CreateNote(ctx context.Context, in *CreateNoteRequest, opts ...grpc.CallOption) (*CreateNoteResponse, error) {
+	out := new(CreateNoteResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/CreateNote", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *adminServiceClient) UpdateMarketHour(ctx context.Context, in *UpdateMarketHourRequest, opts ...grpc.CallOption) (*UpdateMarketHourResponse, error) {
 	out := new(UpdateMarketHourResponse)
 	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/UpdateMarketHour", in, out, opts...)
@@ -75,6 +85,7 @@ type AdminServiceServer interface {
 	GetScheduledSweep(context.Context, *GetScheduledSweepRequest) (*GetScheduledSweepResponse, error)
 	GetRoundDetails(context.Context, *GetRoundDetailsRequest) (*GetRoundDetailsResponse, error)
 	GetRounds(context.Context, *GetRoundsRequest) (*GetRoundsResponse, error)
+	CreateNote(context.Context, *CreateNoteRequest) (*CreateNoteResponse, error)
 	UpdateMarketHour(context.Context, *UpdateMarketHourRequest) (*UpdateMarketHourResponse, error)
 }
 
@@ -90,6 +101,9 @@ func (UnimplementedAdminServiceServer) GetRoundDetails(context.Context, *GetRoun
 }
 func (UnimplementedAdminServiceServer) GetRounds(context.Context, *GetRoundsRequest) (*GetRoundsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetRounds not implemented")
+}
+func (UnimplementedAdminServiceServer) CreateNote(context.Context, *CreateNoteRequest) (*CreateNoteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateNote not implemented")
 }
 func (UnimplementedAdminServiceServer) UpdateMarketHour(context.Context, *UpdateMarketHourRequest) (*UpdateMarketHourResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateMarketHour not implemented")
@@ -160,6 +174,24 @@ func _AdminService_GetRounds_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AdminService_CreateNote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateNoteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).CreateNote(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.AdminService/CreateNote",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).CreateNote(ctx, req.(*CreateNoteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AdminService_UpdateMarketHour_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(UpdateMarketHourRequest)
 	if err := dec(in); err != nil {
@@ -196,6 +228,10 @@ var AdminService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetRounds",
 			Handler:    _AdminService_GetRounds_Handler,
+		},
+		{
+			MethodName: "CreateNote",
+			Handler:    _AdminService_CreateNote_Handler,
 		},
 		{
 			MethodName: "UpdateMarketHour",

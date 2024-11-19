@@ -110,7 +110,8 @@ func TestService(t *testing.T) {
 			testRoundEventRepository(t, svc)
 			testRoundRepository(t, svc)
 			testVtxoRepository(t, svc)
-
+			testNoteRepository(t, svc)
+			testEntityRepository(t, svc)
 			time.Sleep(5 * time.Second)
 			svc.Close()
 		})
@@ -423,6 +424,84 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 		require.NoError(t, err)
 		require.Exactly(t, vtxos[1:], spendableVtxos)
 		require.Len(t, spentVtxos, len(vtxoKeys[:1]))
+	})
+}
+
+func testNoteRepository(t *testing.T, svc ports.RepoManager) {
+	t.Run("test_note_repository", func(t *testing.T) {
+		ctx := context.Background()
+
+		err := svc.Notes().Add(ctx, 1)
+		require.NoError(t, err)
+
+		err = svc.Notes().Add(ctx, 1099200322)
+		require.NoError(t, err)
+
+		contains, err := svc.Notes().Contains(ctx, 1)
+		require.NoError(t, err)
+		require.True(t, contains)
+
+		contains, err = svc.Notes().Contains(ctx, 1099200322)
+		require.NoError(t, err)
+		require.True(t, contains)
+
+		contains, err = svc.Notes().Contains(ctx, 456)
+		require.NoError(t, err)
+		require.False(t, contains)
+
+		err = svc.Notes().Add(ctx, 1)
+		require.Error(t, err)
+	})
+}
+
+func testEntityRepository(t *testing.T, svc ports.RepoManager) {
+	t.Run("test_entity_repository", func(t *testing.T) {
+		ctx := context.Background()
+
+		vtxoKey := domain.VtxoKey{
+			Txid: randomString(32),
+			VOut: 0,
+		}
+
+		entity := domain.Entity{
+			NostrRecipient: "test",
+		}
+
+		// add
+		err := svc.Entities().Add(ctx, entity, []domain.VtxoKey{vtxoKey})
+		require.NoError(t, err)
+
+		gotEntities, err := svc.Entities().Get(ctx, vtxoKey)
+		require.NoError(t, err)
+		require.NotNil(t, gotEntities)
+		require.Equal(t, entity, gotEntities[0])
+
+		// add another entity
+		entity2 := domain.Entity{
+			NostrRecipient: "test2",
+		}
+
+		err = svc.Entities().Add(ctx, entity2, []domain.VtxoKey{vtxoKey})
+		require.NoError(t, err)
+
+		// if nostrkey is the same, it should not be added
+		err = svc.Entities().Add(ctx, entity2, []domain.VtxoKey{vtxoKey})
+		require.NoError(t, err)
+
+		gotEntities, err = svc.Entities().Get(ctx, vtxoKey)
+		require.NoError(t, err)
+		require.NotNil(t, gotEntities)
+		require.Contains(t, gotEntities, entity)
+		require.Contains(t, gotEntities, entity2)
+		require.Len(t, gotEntities, 2)
+
+		// delete
+		err = svc.Entities().Delete(ctx, []domain.VtxoKey{vtxoKey})
+		require.NoError(t, err)
+
+		gotEntities, err = svc.Entities().Get(ctx, vtxoKey)
+		require.Error(t, err)
+		require.Nil(t, gotEntities)
 	})
 }
 

@@ -26,6 +26,14 @@ var (
 		"badger": badgerdb.NewVtxoRepository,
 		"sqlite": sqlitedb.NewVtxoRepository,
 	}
+	noteStoreTypes = map[string]func(...interface{}) (domain.NoteRepository, error){
+		"badger": badgerdb.NewNoteRepository,
+		"sqlite": sqlitedb.NewNoteRepository,
+	}
+	entityStoreTypes = map[string]func(...interface{}) (domain.EntityRepository, error){
+		"badger": badgerdb.NewEntityRepository,
+		"sqlite": sqlitedb.NewEntityRepository,
+	}
 	marketHourStoreTypes = map[string]func(...interface{}) (domain.MarketHourRepo, error){
 		"sqlite": sqlitedb.NewMarketHourRepository,
 	}
@@ -47,60 +55,141 @@ type service struct {
 	eventStore     domain.RoundEventRepository
 	roundStore     domain.RoundRepository
 	vtxoStore      domain.VtxoRepository
+	noteStore      domain.NoteRepository
+	entityStore    domain.EntityRepository
 	marketHourRepo domain.MarketHourRepo
 }
 
 func NewService(config ServiceConfig) (ports.RepoManager, error) {
 	eventStoreFactory, ok := eventStoreTypes[config.EventStoreType]
 	if !ok {
-		return nil, fmt.Errorf("invalid event store type: %s", config.EventStoreType)
+		return nil, fmt.Errorf("event store type not supported")
 	}
-
-	eventStore, err := eventStoreFactory(config.EventStoreConfig...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create event store: %w", err)
-	}
-
 	roundStoreFactory, ok := roundStoreTypes[config.DataStoreType]
 	if !ok {
-		return nil, fmt.Errorf("invalid data store type: %s", config.DataStoreType)
+		return nil, fmt.Errorf("round store type not supported")
 	}
-
 	vtxoStoreFactory, ok := vtxoStoreTypes[config.DataStoreType]
 	if !ok {
-		return nil, fmt.Errorf("invalid data store type: %s", config.DataStoreType)
+		return nil, fmt.Errorf("vtxo store type not supported")
 	}
-
+	noteStoreFactory, ok := noteStoreTypes[config.DataStoreType]
+	if !ok {
+		return nil, fmt.Errorf("note store type not supported")
+	}
+	entityStoreFactory, ok := entityStoreTypes[config.DataStoreType]
+	if !ok {
+		return nil, fmt.Errorf("entity store type not supported")
+	}
 	marketHourStoreFactory, ok := marketHourStoreTypes[config.DataStoreType]
 	if !ok {
 		return nil, fmt.Errorf("invalid data store type: %s", config.DataStoreType)
 	}
 
-	if config.DataStoreType == "sqlite" {
-		if err := migrateSqlite(config.DataStoreConfig); err != nil {
-			return nil, fmt.Errorf("failed to migrate sqlite: %w", err)
+	var eventStore domain.RoundEventRepository
+	var roundStore domain.RoundRepository
+	var vtxoStore domain.VtxoRepository
+	var noteStore domain.NoteRepository
+	var entityStore domain.EntityRepository
+	var marketHourRepo domain.MarketHourRepo
+	var err error
+
+	switch config.EventStoreType {
+	case "badger":
+		eventStore, err = eventStoreFactory(config.EventStoreConfig...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open event store: %s", err)
 		}
+	default:
+		return nil, fmt.Errorf("unknown event store db type")
 	}
 
-	roundStore, err := roundStoreFactory(config.DataStoreConfig...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create round store: %w", err)
-	}
+	switch config.DataStoreType {
+	case "badger":
+		roundStore, err = roundStoreFactory(config.DataStoreConfig...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open round store: %s", err)
+		}
+		vtxoStore, err = vtxoStoreFactory(config.DataStoreConfig...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open vtxo store: %s", err)
+		}
+		entityStore, err = entityStoreFactory(config.DataStoreConfig...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open entity store: %s", err)
+		}
+		noteStore, err = noteStoreFactory(config.DataStoreConfig...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open note store: %s", err)
+		}
+	case "sqlite":
+		if len(config.DataStoreConfig) != 2 {
+			return nil, fmt.Errorf("invalid data store config")
+		}
 
-	vtxoStore, err := vtxoStoreFactory(config.DataStoreConfig...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create vtxo store: %w", err)
-	}
+		baseDir, ok := config.DataStoreConfig[0].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid base directory")
+		}
 
-	marketHourRepo, err := marketHourStoreFactory(config.DataStoreConfig...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create market hour store: %w", err)
+		migrationPath, ok := config.DataStoreConfig[1].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid migration path")
+		}
+
+		dbFile := filepath.Join(baseDir, sqliteDbFile)
+		db, err := sqlitedb.OpenDb(dbFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open db: %s", err)
+		}
+
+		driver, err := sqlitemigrate.WithInstance(db, &sqlitemigrate.Config{})
+		if err != nil {
+			return nil, err
+		}
+
+		m, err := migrate.NewWithDatabaseInstance(
+			migrationPath,
+			"arkdb",
+			driver,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create migration instance: %s", err)
+		}
+
+		if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+			return nil, fmt.Errorf("failed to run migrations: %s", err)
+		}
+
+		roundStore, err = roundStoreFactory(db)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open round store: %s", err)
+		}
+		vtxoStore, err = vtxoStoreFactory(db)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open vtxo store: %s", err)
+		}
+		entityStore, err = entityStoreFactory(db)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open entity store: %s", err)
+		}
+		noteStore, err = noteStoreFactory(db)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open note store: %s", err)
+		}
+
+		marketHourRepo, err = marketHourStoreFactory(db)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create market hour store: %w", err)
+		}
 	}
 
 	return &service{
 		eventStore:     eventStore,
 		roundStore:     roundStore,
 		vtxoStore:      vtxoStore,
+		noteStore:      noteStore,
+		entityStore:    entityStore,
 		marketHourRepo: marketHourRepo,
 	}, nil
 }
@@ -121,6 +210,14 @@ func (s *service) Vtxos() domain.VtxoRepository {
 	return s.vtxoStore
 }
 
+func (s *service) Notes() domain.NoteRepository {
+	return s.noteStore
+}
+
+func (s *service) Entities() domain.EntityRepository {
+	return s.entityStore
+}
+
 func (s *service) MarketHourRepo() domain.MarketHourRepo {
 	return s.marketHourRepo
 }
@@ -129,36 +226,6 @@ func (s *service) Close() {
 	s.eventStore.Close()
 	s.roundStore.Close()
 	s.vtxoStore.Close()
+	s.noteStore.Close()
 	s.marketHourRepo.Close()
-}
-
-func migrateSqlite(config []interface{}) error {
-	if len(config) != 1 {
-		return errors.New("invalid config")
-	}
-
-	dbPath, ok := config[0].(string)
-	if !ok {
-		return errors.New("invalid config")
-	}
-
-	dbPath = filepath.Join(dbPath, sqliteDbFile)
-	driver, err := sqlitemigrate.WithInstance(nil, &sqlitemigrate.Config{})
-	if err != nil {
-		return fmt.Errorf("failed to create sqlite driver: %w", err)
-	}
-
-	m, err := migrate.NewWithDatabaseInstance(
-		"file://internal/infrastructure/db/sqlite/migration",
-		"sqlite", driver,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create migrate instance: %w", err)
-	}
-
-	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-		return fmt.Errorf("failed to migrate up: %w", err)
-	}
-
-	return nil
 }

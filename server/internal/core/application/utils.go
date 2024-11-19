@@ -7,16 +7,19 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/sirupsen/logrus"
+	"github.com/nbd-wtf/go-nostr"
+	"github.com/nbd-wtf/go-nostr/nip19"
 )
 
 type timedPayment struct {
 	domain.Payment
 	boardingInputs []ports.BoardingInput
+	notes          []note.Note
 	timestamp      time.Time
 	pingTimestamp  time.Time
 }
@@ -24,14 +27,13 @@ type timedPayment struct {
 type paymentsMap struct {
 	lock          *sync.RWMutex
 	payments      map[string]*timedPayment
-	descriptors   map[domain.VtxoKey]string
 	ephemeralKeys map[string]*secp256k1.PublicKey
 }
 
 func newPaymentsMap() *paymentsMap {
 	paymentsById := make(map[string]*timedPayment)
 	lock := &sync.RWMutex{}
-	return &paymentsMap{lock, paymentsById, make(map[domain.VtxoKey]string), make(map[string]*secp256k1.PublicKey)}
+	return &paymentsMap{lock, paymentsById, make(map[string]*secp256k1.PublicKey)}
 }
 
 func (m *paymentsMap) len() int64 {
@@ -59,10 +61,31 @@ func (m *paymentsMap) delete(id string) error {
 	return nil
 }
 
+func (m *paymentsMap) pushWithNotes(payment domain.Payment, notes []note.Note) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	if _, ok := m.payments[payment.Id]; ok {
+		return fmt.Errorf("duplicated payment %s", payment.Id)
+	}
+
+	for _, note := range notes {
+		for _, payment := range m.payments {
+			for _, pNote := range payment.notes {
+				if note.ID == pNote.ID {
+					return fmt.Errorf("duplicated note %s", note)
+				}
+			}
+		}
+	}
+
+	m.payments[payment.Id] = &timedPayment{payment, make([]ports.BoardingInput, 0), notes, time.Now(), time.Time{}}
+	return nil
+}
+
 func (m *paymentsMap) push(
 	payment domain.Payment,
 	boardingInputs []ports.BoardingInput,
-	descriptors map[domain.VtxoKey]string,
 ) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
@@ -91,11 +114,7 @@ func (m *paymentsMap) push(
 		}
 	}
 
-	for key, desc := range descriptors {
-		m.descriptors[key] = desc
-	}
-
-	m.payments[payment.Id] = &timedPayment{payment, boardingInputs, time.Now(), time.Time{}}
+	m.payments[payment.Id] = &timedPayment{payment, boardingInputs, make([]note.Note, 0), time.Now(), time.Time{}}
 	return nil
 }
 
@@ -111,7 +130,7 @@ func (m *paymentsMap) pushEphemeralKey(paymentId string, pubkey *secp256k1.Publi
 	return nil
 }
 
-func (m *paymentsMap) pop(num int64) ([]domain.Payment, []ports.BoardingInput, map[domain.VtxoKey]string, []*secp256k1.PublicKey) {
+func (m *paymentsMap) pop(num int64) ([]domain.Payment, []ports.BoardingInput, []*secp256k1.PublicKey, []note.Note) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -138,7 +157,7 @@ func (m *paymentsMap) pop(num int64) ([]domain.Payment, []ports.BoardingInput, m
 	payments := make([]domain.Payment, 0, num)
 	boardingInputs := make([]ports.BoardingInput, 0)
 	cosigners := make([]*secp256k1.PublicKey, 0, num)
-	descriptors := make(map[domain.VtxoKey]string)
+	notes := make([]note.Note, 0)
 	for _, p := range paymentsByTime[:num] {
 		boardingInputs = append(boardingInputs, p.boardingInputs...)
 		payments = append(payments, p.Payment)
@@ -146,13 +165,10 @@ func (m *paymentsMap) pop(num int64) ([]domain.Payment, []ports.BoardingInput, m
 			cosigners = append(cosigners, pubkey)
 			delete(m.ephemeralKeys, p.Payment.Id)
 		}
-		for _, vtxo := range p.Payment.Inputs {
-			descriptors[vtxo.VtxoKey] = m.descriptors[vtxo.VtxoKey]
-			delete(m.descriptors, vtxo.VtxoKey)
-		}
+		notes = append(notes, p.notes...)
 		delete(m.payments, p.Id)
 	}
-	return payments, boardingInputs, descriptors, cosigners
+	return payments, boardingInputs, cosigners, notes
 }
 
 func (m *paymentsMap) update(payment domain.Payment) error {
@@ -164,6 +180,7 @@ func (m *paymentsMap) update(payment domain.Payment) error {
 		return fmt.Errorf("payment %s not found", payment.Id)
 	}
 
+	// sum inputs = vtxos + boarding utxos + notes
 	sumOfInputs := uint64(0)
 	for _, input := range payment.Inputs {
 		sumOfInputs += input.Amount
@@ -173,6 +190,11 @@ func (m *paymentsMap) update(payment domain.Payment) error {
 		sumOfInputs += boardingInput.Amount
 	}
 
+	for _, note := range p.notes {
+		sumOfInputs += uint64(note.Value)
+	}
+
+	// sum outputs = receivers VTXOs
 	sumOfOutputs := uint64(0)
 	for _, receiver := range payment.Receivers {
 		sumOfOutputs += receiver.Amount
@@ -216,73 +238,84 @@ func (m *paymentsMap) view(id string) (*domain.Payment, bool) {
 	}, true
 }
 
-type signedTx struct {
-	tx     string
-	signed bool
-}
-
 type forfeitTxsMap struct {
-	lock       *sync.RWMutex
-	forfeitTxs map[string]*signedTx
-	builder    ports.TxBuilder
+	lock    *sync.RWMutex
+	builder ports.TxBuilder
+
+	forfeitTxs map[domain.VtxoKey][]string
+	connectors []string
+	vtxos      []domain.Vtxo
 }
 
 func newForfeitTxsMap(txBuilder ports.TxBuilder) *forfeitTxsMap {
-	return &forfeitTxsMap{&sync.RWMutex{}, make(map[string]*signedTx), txBuilder}
+	return &forfeitTxsMap{&sync.RWMutex{}, txBuilder, make(map[domain.VtxoKey][]string), nil, nil}
 }
 
-func (m *forfeitTxsMap) push(txs []string) error {
+func (m *forfeitTxsMap) init(connectors []string, payments []domain.Payment) {
+	vtxosToSign := make([]domain.Vtxo, 0)
+	for _, payment := range payments {
+		vtxosToSign = append(vtxosToSign, payment.Inputs...)
+	}
+
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	for _, tx := range txs {
-		txid, err := m.builder.GetTxID(tx)
-		if err != nil {
-			return err
-		}
-		m.forfeitTxs[txid] = &signedTx{tx, false}
+	m.vtxos = vtxosToSign
+	m.connectors = connectors
+	for _, vtxo := range vtxosToSign {
+		m.forfeitTxs[vtxo.VtxoKey] = make([]string, 0)
 	}
-
-	return nil
 }
 
 func (m *forfeitTxsMap) sign(txs []string) error {
+	if len(txs) == 0 {
+		return nil
+	}
+
+	if len(m.vtxos) == 0 || len(m.connectors) == 0 {
+		return fmt.Errorf("forfeit txs map not initialized")
+	}
+
+	// verify the txs are valid
+	validTxs, err := m.builder.VerifyForfeitTxs(m.vtxos, m.connectors, txs)
+	if err != nil {
+		return err
+	}
+
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	for _, tx := range txs {
-		valid, txid, err := m.builder.VerifyTapscriptPartialSigs(tx)
-		if err != nil {
-			return err
-		}
-
-		if _, ok := m.forfeitTxs[txid]; ok {
-			if valid {
-				m.forfeitTxs[txid].tx = tx
-				m.forfeitTxs[txid].signed = true
-			} else {
-				logrus.Warnf("invalid forfeit tx signature (%s)", txid)
-			}
-		}
+	for vtxoKey, txs := range validTxs {
+		m.forfeitTxs[vtxoKey] = txs
 	}
 
 	return nil
 }
 
-func (m *forfeitTxsMap) pop() (signed, unsigned []string) {
+func (m *forfeitTxsMap) reset() {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	for _, t := range m.forfeitTxs {
-		if t.signed {
-			signed = append(signed, t.tx)
-		} else {
-			unsigned = append(unsigned, t.tx)
+	m.forfeitTxs = make(map[domain.VtxoKey][]string)
+	m.connectors = nil
+}
+
+func (m *forfeitTxsMap) pop() ([]string, error) {
+	m.lock.Lock()
+	defer func() {
+		m.lock.Unlock()
+		m.reset()
+	}()
+
+	txs := make([]string, 0)
+	for vtxoKey, signed := range m.forfeitTxs {
+		if len(signed) == 0 {
+			return nil, fmt.Errorf("missing forfeit txs for vtxo %s", vtxoKey)
 		}
+		txs = append(txs, signed...)
 	}
 
-	m.forfeitTxs = make(map[string]*signedTx)
-	return signed, unsigned
+	return txs, nil
 }
 
 // onchainOutputs iterates over all the nodes' outputs in the congestion tree and checks their onchain state
@@ -368,4 +401,81 @@ func getSpentVtxos(payments map[string]domain.Payment) []domain.VtxoKey {
 		}
 	}
 	return vtxos
+}
+
+func validateProofs(ctx context.Context, vtxoRepo domain.VtxoRepository, proofs []SignedVtxoOutpoint) error {
+	for _, signedVtxo := range proofs {
+		vtxos, err := vtxoRepo.GetVtxos(ctx, []domain.VtxoKey{signedVtxo.Outpoint})
+		if err != nil {
+			return fmt.Errorf("vtxo not found: %s (%s)", signedVtxo.Outpoint, err)
+		}
+
+		if len(vtxos) < 1 {
+			return fmt.Errorf("vtxo not found: %s", signedVtxo.Outpoint)
+		}
+
+		vtxo := vtxos[0]
+
+		if err := signedVtxo.Proof.validate(vtxo); err != nil {
+			return fmt.Errorf("invalid proof for vtxo %s (%s)", signedVtxo.Outpoint, err)
+		}
+	}
+
+	return nil
+}
+
+// nip19toNostrProfile decodes a NIP-19 string and returns a nostr profile
+// if nprofile => returns nostrRecipient
+// if npub => craft nprofile from npub and defaultRelays
+func nip19toNostrProfile(nostrRecipient string, defaultRelays []string) (string, error) {
+	prefix, result, err := nip19.Decode(nostrRecipient)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode NIP-19 string: %s", err)
+	}
+
+	var nprofileRecipient string
+
+	switch prefix {
+	case "nprofile":
+		recipient, ok := result.(nostr.ProfilePointer)
+		if !ok {
+			return "", fmt.Errorf("invalid NIP-19 result: %v", result)
+		}
+
+		// validate public key
+		if !nostr.IsValidPublicKey(recipient.PublicKey) {
+			return "", fmt.Errorf("invalid nostr public key: %s", recipient.PublicKey)
+		}
+
+		// validate relays
+		if len(recipient.Relays) == 0 {
+			return "", fmt.Errorf("invalid nostr profile: at least one relay is required")
+		}
+
+		for _, relay := range recipient.Relays {
+			if !nostr.IsValidRelayURL(relay) {
+				return "", fmt.Errorf("invalid relay URL: %s", relay)
+			}
+		}
+
+		nprofileRecipient = nostrRecipient
+	case "npub":
+		recipientPublicKey, ok := result.(string)
+		if !ok {
+			return "", fmt.Errorf("invalid NIP-19 result: %v", result)
+		}
+
+		nprofileRecipient, err = nip19.EncodeProfile(recipientPublicKey, defaultRelays)
+		if err != nil {
+			return "", fmt.Errorf("failed to encode nostr profile: %s", err)
+		}
+	default:
+		return "", fmt.Errorf("invalid NIP-19 prefix: %s", prefix)
+	}
+
+	if nprofileRecipient == "" {
+		return "", fmt.Errorf("invalid nostr recipient")
+	}
+
+	return nprofileRecipient, nil
 }
