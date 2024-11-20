@@ -2583,7 +2583,7 @@ func vtxosToTxsCovenantless(
 
 	for _, vtxos := range vtxosByRound {
 		v := vtxos[0]
-		if v.IsOOR {
+		if v.IsPending {
 			txs = append(txs, types.Transaction{
 				TransactionKey: types.TransactionKey{
 					RedeemTxid: v.Txid,

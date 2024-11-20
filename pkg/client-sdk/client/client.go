@@ -105,7 +105,7 @@ type Vtxo struct {
 	ExpiresAt time.Time
 	CreatedAt time.Time
 	RedeemTx  string
-	IsOOR     bool
+	IsPending bool
 	SpentBy   string
 }
 
