@@ -258,17 +258,18 @@ func config(ctx *cli.Context) error {
 	}
 
 	cfg := map[string]interface{}{
-		"asp_url":               cfgData.AspUrl,
-		"asp_pubkey":            hex.EncodeToString(cfgData.AspPubkey.SerializeCompressed()),
-		"wallet_type":           cfgData.WalletType,
-		"client_tyep":           cfgData.ClientType,
-		"network":               cfgData.Network.Name,
-		"round_lifetime":        cfgData.RoundLifetime,
-		"unilateral_exit_delay": cfgData.UnilateralExitDelay,
-		"dust":                  cfgData.Dust,
-		"explorer_url":          cfgData.ExplorerURL,
-		"forfeit_address":       cfgData.ForfeitAddress,
-		"with_transaction_feed": cfgData.WithTransactionFeed,
+		"asp_url":                      cfgData.AspUrl,
+		"asp_pubkey":                   hex.EncodeToString(cfgData.AspPubkey.SerializeCompressed()),
+		"wallet_type":                  cfgData.WalletType,
+		"client_tyep":                  cfgData.ClientType,
+		"network":                      cfgData.Network.Name,
+		"round_lifetime":               cfgData.RoundLifetime,
+		"unilateral_exit_delay":        cfgData.UnilateralExitDelay,
+		"dust":                         cfgData.Dust,
+		"boarding_descriptor_template": cfgData.BoardingDescriptorTemplate,
+		"explorer_url":                 cfgData.ExplorerURL,
+		"forfeit_address":              cfgData.ForfeitAddress,
+		"with_transaction_feed":        cfgData.WithTransactionFeed,
 	}
 
 	return printJSON(cfg)
