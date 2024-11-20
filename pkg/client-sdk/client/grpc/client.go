@@ -59,13 +59,14 @@ func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
 		return nil, err
 	}
 	return &client.Info{
-		Pubkey:              resp.GetPubkey(),
-		RoundLifetime:       resp.GetRoundLifetime(),
-		UnilateralExitDelay: resp.GetUnilateralExitDelay(),
-		RoundInterval:       resp.GetRoundInterval(),
-		Network:             resp.GetNetwork(),
-		Dust:                uint64(resp.GetDust()),
-		ForfeitAddress:      resp.GetForfeitAddress(),
+		Pubkey:                     resp.GetPubkey(),
+		RoundLifetime:              resp.GetRoundLifetime(),
+		UnilateralExitDelay:        resp.GetUnilateralExitDelay(),
+		RoundInterval:              resp.GetRoundInterval(),
+		Network:                    resp.GetNetwork(),
+		Dust:                       uint64(resp.GetDust()),
+		BoardingDescriptorTemplate: resp.GetBoardingDescriptorTemplate(),
+		ForfeitAddress:             resp.GetForfeitAddress(),
 	}, nil
 }
 

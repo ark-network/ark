@@ -63,13 +63,14 @@ type ASPClient interface {
 }
 
 type Info struct {
-	Pubkey              string
-	RoundLifetime       int64
-	UnilateralExitDelay int64
-	RoundInterval       int64
-	Network             string
-	Dust                uint64
-	ForfeitAddress      string
+	Pubkey                     string
+	RoundLifetime              int64
+	UnilateralExitDelay        int64
+	RoundInterval              int64
+	Network                    string
+	Dust                       uint64
+	BoardingDescriptorTemplate string
+	ForfeitAddress             string
 }
 
 type RoundEventChannel struct {

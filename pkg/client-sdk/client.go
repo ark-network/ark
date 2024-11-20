@@ -147,17 +147,18 @@ func (a *arkClient) initWithWallet(
 	}
 
 	storeData := types.Config{
-		AspUrl:              args.AspUrl,
-		AspPubkey:           aspPubkey,
-		WalletType:          args.Wallet.GetType(),
-		ClientType:          args.ClientType,
-		Network:             network,
-		RoundLifetime:       info.RoundLifetime,
-		RoundInterval:       info.RoundInterval,
-		UnilateralExitDelay: info.UnilateralExitDelay,
-		Dust:                info.Dust,
-		ForfeitAddress:      info.ForfeitAddress,
-		WithTransactionFeed: args.WithTransactionFeed,
+		AspUrl:                     args.AspUrl,
+		AspPubkey:                  aspPubkey,
+		WalletType:                 args.Wallet.GetType(),
+		ClientType:                 args.ClientType,
+		Network:                    network,
+		RoundLifetime:              info.RoundLifetime,
+		RoundInterval:              info.RoundInterval,
+		UnilateralExitDelay:        info.UnilateralExitDelay,
+		Dust:                       info.Dust,
+		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
+		ForfeitAddress:             info.ForfeitAddress,
+		WithTransactionFeed:        args.WithTransactionFeed,
 	}
 	if err := a.store.ConfigStore().AddData(ctx, storeData); err != nil {
 		return err
@@ -213,18 +214,19 @@ func (a *arkClient) init(
 	}
 
 	cfgData := types.Config{
-		AspUrl:              args.AspUrl,
-		AspPubkey:           aspPubkey,
-		WalletType:          args.WalletType,
-		ClientType:          args.ClientType,
-		Network:             network,
-		RoundLifetime:       info.RoundLifetime,
-		RoundInterval:       info.RoundInterval,
-		UnilateralExitDelay: info.UnilateralExitDelay,
-		Dust:                info.Dust,
-		ExplorerURL:         args.ExplorerURL,
-		ForfeitAddress:      info.ForfeitAddress,
-		WithTransactionFeed: args.WithTransactionFeed,
+		AspUrl:                     args.AspUrl,
+		AspPubkey:                  aspPubkey,
+		WalletType:                 args.WalletType,
+		ClientType:                 args.ClientType,
+		Network:                    network,
+		RoundLifetime:              info.RoundLifetime,
+		RoundInterval:              info.RoundInterval,
+		UnilateralExitDelay:        info.UnilateralExitDelay,
+		Dust:                       info.Dust,
+		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
+		ExplorerURL:                args.ExplorerURL,
+		ForfeitAddress:             info.ForfeitAddress,
+		WithTransactionFeed:        args.WithTransactionFeed,
 	}
 	walletSvc, err := getWallet(a.store.ConfigStore(), &cfgData, supportedWallets)
 	if err != nil {

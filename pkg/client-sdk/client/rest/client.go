@@ -80,13 +80,14 @@ func (a *restClient) GetInfo(
 	}
 
 	return &client.Info{
-		Pubkey:              resp.Payload.Pubkey,
-		RoundLifetime:       int64(roundLifetime),
-		UnilateralExitDelay: int64(unilateralExitDelay),
-		RoundInterval:       int64(roundInterval),
-		Network:             resp.Payload.Network,
-		Dust:                uint64(dust),
-		ForfeitAddress:      resp.Payload.ForfeitAddress,
+		Pubkey:                     resp.Payload.Pubkey,
+		RoundLifetime:              int64(roundLifetime),
+		UnilateralExitDelay:        int64(unilateralExitDelay),
+		RoundInterval:              int64(roundInterval),
+		Network:                    resp.Payload.Network,
+		Dust:                       uint64(dust),
+		BoardingDescriptorTemplate: resp.Payload.BoardingDescriptorTemplate,
+		ForfeitAddress:             resp.Payload.ForfeitAddress,
 	}, nil
 }
 
