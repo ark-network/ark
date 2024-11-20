@@ -95,7 +95,7 @@ func TestMultisigClosure(t *testing.T) {
 	t.Run("invalid empty script", func(t *testing.T) {
 		closure := &tree.MultisigClosure{}
 		valid, err := closure.Decode([]byte{})
-		require.NoError(t, err)
+		require.Error(t, err)
 		require.False(t, valid)
 	})
 
@@ -242,7 +242,7 @@ func TestCSVSigClosure(t *testing.T) {
 	t.Run("invalid empty script", func(t *testing.T) {
 		csvSig := &tree.CSVSigClosure{}
 		valid, err := csvSig.Decode([]byte{})
-		require.NoError(t, err)
+		require.Error(t, err)
 		require.False(t, valid)
 	})
 
@@ -356,10 +356,11 @@ func TestMultisigClosureWitness(t *testing.T) {
 			expectedLen := len(tc.closure.PubKeys) + 2
 			require.Equal(t, expectedLen, len(witness))
 
-			// Verify signatures are in correct order
-			for i, pubKey := range tc.closure.PubKeys {
-				expectedSig := tc.signatures[hex.EncodeToString(schnorr.SerializePubKey(pubKey))]
-				require.Equal(t, expectedSig, witness[i])
+			// Verify signatures are in correct order (reverse order of pubkeys)
+			for i := len(tc.closure.PubKeys) - 1; i >= 0; i-- {
+				expectedSig := tc.signatures[hex.EncodeToString(schnorr.SerializePubKey(tc.closure.PubKeys[i]))]
+				witnessIndex := len(witness) - 3 - i
+				require.Equal(t, expectedSig, witness[:len(witness)-2][witnessIndex])
 			}
 
 			// Verify script is present
@@ -433,4 +434,38 @@ func TestCSVSigClosureWitness(t *testing.T) {
 	// Test missing signature
 	_, err = closure.Witness(controlBlock, nil)
 	require.Error(t, err)
+}
+
+func TestDecodeChecksigAdd(t *testing.T) {
+	// Generate some test public keys
+	pubKey1, err := secp256k1.GeneratePrivateKey()
+	require.NoError(t, err)
+	pubKey2, err := secp256k1.GeneratePrivateKey()
+	require.NoError(t, err)
+	pubKey3, err := secp256k1.GeneratePrivateKey()
+	require.NoError(t, err)
+
+	pubKeys := []*secp256k1.PublicKey{pubKey1.PubKey(), pubKey2.PubKey(), pubKey3.PubKey()}
+
+	// Create a script for 3-of-3 multisig using CHECKSIGADD
+	scriptBuilder := txscript.NewScriptBuilder().
+		AddData(schnorr.SerializePubKey(pubKeys[0])).
+		AddOp(txscript.OP_CHECKSIG).
+		AddData(schnorr.SerializePubKey(pubKeys[1])).
+		AddOp(txscript.OP_CHECKSIGADD).
+		AddData(schnorr.SerializePubKey(pubKeys[2])).
+		AddOp(txscript.OP_CHECKSIGADD).
+		AddInt64(3).
+		AddOp(txscript.OP_EQUAL)
+
+	script, err := scriptBuilder.Script()
+	require.NoError(t, err, "failed to build script")
+
+	// Decode the script
+	multisigClosure := &tree.MultisigClosure{}
+	valid, err := multisigClosure.Decode(script)
+	require.NoError(t, err, "failed to decode script")
+	require.True(t, valid, "script should be valid")
+	require.Equal(t, tree.MultisigTypeChecksigAdd, multisigClosure.Type, "expected MultisigTypeChecksigAdd")
+	require.Equal(t, 3, len(multisigClosure.PubKeys), "expected 3 public keys")
 }
