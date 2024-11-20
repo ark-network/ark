@@ -649,11 +649,11 @@
         "address": {
           "type": "string"
         },
+        "descriptor": {
+          "type": "string"
+        },
         "tapscripts": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
+          "$ref": "#/definitions/v1Tapscripts"
         }
       }
     },
@@ -749,11 +749,11 @@
         "outpoint": {
           "$ref": "#/definitions/v1Outpoint"
         },
+        "descriptor": {
+          "type": "string"
+        },
         "tapscripts": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
+          "$ref": "#/definitions/v1Tapscripts"
         }
       }
     },
@@ -1142,6 +1142,17 @@
     },
     "v1SubmitTreeSignaturesResponse": {
       "type": "object"
+    },
+    "v1Tapscripts": {
+      "type": "object",
+      "properties": {
+        "scripts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     },
     "v1Tree": {
       "type": "object",

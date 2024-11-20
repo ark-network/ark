@@ -133,7 +133,10 @@ message GetBoardingAddressRequest {
 }
 message GetBoardingAddressResponse {
   string address = 1;
-  repeated string tapscripts = 2;
+  oneof taproot_tree {
+    string descriptor = 2;
+    Tapscripts tapscripts = 3;
+  }
 }
 
 /* In-Round Payment API messages */
@@ -298,7 +301,10 @@ message Outpoint {
 
 message Input {
   Outpoint outpoint = 1;
-  repeated string tapscripts = 2;
+  oneof taproot_tree {
+    string descriptor = 2;
+    Tapscripts tapscripts = 3;
+  }
 }
 
 message Output {
@@ -379,3 +385,7 @@ message DeleteNostrRecipientRequest {
 }
 
 message DeleteNostrRecipientResponse {}
+
+message Tapscripts {
+  repeated string scripts = 1;
+}

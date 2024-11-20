@@ -144,7 +144,11 @@ func toProtoInput(i client.Input) *arkv1.Input {
 			Txid: i.Txid,
 			Vout: i.VOut,
 		},
-		Tapscripts: i.Tapscripts,
+		TaprootTree: &arkv1.Input_Tapscripts{
+			Tapscripts: &arkv1.Tapscripts{
+				Scripts: i.Tapscripts,
+			},
+		},
 	}
 }
 

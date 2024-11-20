@@ -92,8 +92,12 @@ func (h *handler) GetBoardingAddress(
 	}
 
 	return &arkv1.GetBoardingAddressResponse{
-		Address:    addr,
-		Tapscripts: tapscripts,
+		Address: addr,
+		TaprootTree: &arkv1.GetBoardingAddressResponse_Tapscripts{
+			Tapscripts: &arkv1.Tapscripts{
+				Scripts: tapscripts,
+			},
+		},
 	}, nil
 }
 
