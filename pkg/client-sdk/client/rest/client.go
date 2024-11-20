@@ -768,7 +768,7 @@ func vtxosFromRest(restVtxos []*models.V1Vtxo) []client.Vtxo {
 			RoundTxid: v.RoundTxid,
 			ExpiresAt: expiresAt,
 			RedeemTx:  v.RedeemTx,
-			IsOOR:     v.IsOor,
+			IsPending: v.IsPending,
 			SpentBy:   v.SpentBy,
 			CreatedAt: createdAt,
 		}
