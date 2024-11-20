@@ -53,8 +53,8 @@ type SpentStatus struct {
 	SpentBy string `json:"txid,omitempty"`
 }
 
-func (e ExplorerUtxo) ToUtxo(delay uint, descriptor string) types.Utxo {
-	return newUtxo(e, delay, descriptor)
+func (e ExplorerUtxo) ToUtxo(delay uint, tapscripts []string) types.Utxo {
+	return newUtxo(e, delay, tapscripts)
 }
 
 type Explorer interface {
@@ -415,7 +415,7 @@ func parseBitcoinTx(txStr string) (string, string, error) {
 	return txhex, txid, nil
 }
 
-func newUtxo(explorerUtxo ExplorerUtxo, delay uint, descriptor string) types.Utxo {
+func newUtxo(explorerUtxo ExplorerUtxo, delay uint, tapscripts []string) types.Utxo {
 	utxoTime := explorerUtxo.Status.Blocktime
 	createdAt := time.Unix(utxoTime, 0)
 	if utxoTime == 0 {
@@ -431,6 +431,6 @@ func newUtxo(explorerUtxo ExplorerUtxo, delay uint, descriptor string) types.Utx
 		Delay:       delay,
 		SpendableAt: time.Unix(utxoTime, 0).Add(time.Duration(delay) * time.Second),
 		CreatedAt:   createdAt,
-		Descriptor:  descriptor,
+		Tapscripts:  tapscripts,
 	}
 }

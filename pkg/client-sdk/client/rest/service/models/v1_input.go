@@ -23,6 +23,9 @@ type V1Input struct {
 
 	// outpoint
 	Outpoint *V1Outpoint `json:"outpoint,omitempty"`
+
+	// tapscripts
+	Tapscripts *V1Tapscripts `json:"tapscripts,omitempty"`
 }
 
 // Validate validates this v1 input
@@ -30,6 +33,10 @@ func (m *V1Input) Validate(formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.validateOutpoint(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.validateTapscripts(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -58,11 +65,34 @@ func (m *V1Input) validateOutpoint(formats strfmt.Registry) error {
 	return nil
 }
 
+func (m *V1Input) validateTapscripts(formats strfmt.Registry) error {
+	if swag.IsZero(m.Tapscripts) { // not required
+		return nil
+	}
+
+	if m.Tapscripts != nil {
+		if err := m.Tapscripts.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("tapscripts")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("tapscripts")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
 // ContextValidate validate this v1 input based on the context it is used
 func (m *V1Input) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.contextValidateOutpoint(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.contextValidateTapscripts(ctx, formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -85,6 +115,27 @@ func (m *V1Input) contextValidateOutpoint(ctx context.Context, formats strfmt.Re
 				return ve.ValidateName("outpoint")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
 				return ce.ValidateName("outpoint")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *V1Input) contextValidateTapscripts(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.Tapscripts != nil {
+
+		if swag.IsZero(m.Tapscripts) { // not required
+			return nil
+		}
+
+		if err := m.Tapscripts.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("tapscripts")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("tapscripts")
 			}
 			return err
 		}

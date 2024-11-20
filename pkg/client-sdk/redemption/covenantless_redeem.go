@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
@@ -172,7 +171,7 @@ func findCovenantlessSweepClosure(
 	var seconds uint
 	var sweepClosure *txscript.TapLeaf
 	for _, tapLeaf := range tx.Inputs[0].TaprootLeafScript {
-		closure := &bitcointree.CSVSigClosure{}
+		closure := &tree.CSVSigClosure{}
 		valid, err := closure.Decode(tapLeaf.Script)
 		if err != nil {
 			continue
