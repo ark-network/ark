@@ -128,20 +128,40 @@ func (a *adminHandler) CreateNote(ctx context.Context, req *arkv1.CreateNoteRequ
 	return &arkv1.CreateNoteResponse{Notes: notes}, nil
 }
 
-func (a *adminHandler) UpdateMarketHour(
+func (a *adminHandler) GetMarketHourConfig(
 	ctx context.Context,
-	req *arkv1.UpdateMarketHourRequest,
-) (*arkv1.UpdateMarketHourResponse, error) {
-	if err := a.aspService.UpdateMarketHour(
-		ctx,
-		req.StartTime,
-		req.Period,
-		req.RoundInterval,
-	); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+	request *arkv1.GetMarketHourConfigRequest,
+) (*arkv1.GetMarketHourConfigResponse, error) {
+	config, err := a.aspService.GetMarketHourConfig(ctx)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	return &arkv1.UpdateMarketHourResponse{}, nil
+	return &arkv1.GetMarketHourConfigResponse{
+		Config: &arkv1.MarketHourConfig{
+			StartTime:     config.StartTime,
+			EndTime:       config.EndTime,
+			Period:        config.Period,
+			RoundInterval: config.RoundInterval,
+		},
+	}, nil
+}
+
+func (a *adminHandler) UpdateMarketHourConfig(
+	ctx context.Context,
+	req *arkv1.UpdateMarketHourConfigRequest,
+) (*arkv1.UpdateMarketHourConfigResponse, error) {
+	if err := a.aspService.UpdateMarketHourConfig(
+		ctx,
+		req.Config.StartTime,
+		req.Config.EndTime,
+		req.Config.Period,
+		req.Config.RoundInterval,
+	); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &arkv1.UpdateMarketHourConfigResponse{}, nil
 }
 
 // convert sats to string BTC

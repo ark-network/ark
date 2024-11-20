@@ -27,7 +27,12 @@ service AdminService {
       body: "*"
     };
   }
-  rpc UpdateMarketHour(UpdateMarketHourRequest) returns (UpdateMarketHourResponse) {
+  rpc GetMarketHourConfig(GetMarketHourConfigRequest) returns (GetMarketHourConfigResponse) {
+    option (google.api.http) = {
+      get: "/v1/admin/market-hour"
+    };
+  }
+  rpc UpdateMarketHourConfig(UpdateMarketHourConfigRequest) returns (UpdateMarketHourConfigResponse) {
     option (google.api.http) = {
       post: "/v1/admin/market-hour"
       body: "*"
@@ -86,12 +91,21 @@ message CreateNoteResponse {
   repeated string notes = 1;
 }
 
+message GetMarketHourConfigRequest {}
 
-message UpdateMarketHourRequest {
-  int64 start_time = 1;
-  int64 period = 2;
-  int64 round_interval = 3;
+message GetMarketHourConfigResponse {
+    MarketHourConfig config = 1;
 }
 
-// Empty response, only status code matters
-message UpdateMarketHourResponse {}
+message UpdateMarketHourConfigRequest {
+    MarketHourConfig config = 1;
+}
+
+message UpdateMarketHourConfigResponse {}
+
+message MarketHourConfig {
+  int64 start_time = 1;
+  int64 end_time = 2;
+  int64 period = 3;
+  int64 round_interval = 4;
+}

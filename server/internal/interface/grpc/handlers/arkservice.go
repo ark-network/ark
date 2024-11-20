@@ -40,7 +40,7 @@ func (h *handler) GetInfo(
 ) (*arkv1.GetInfoResponse, error) {
 	info, err := h.svc.GetInfo(ctx)
 	if err != nil {
-		return nil, err
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	return &arkv1.GetInfoResponse{
@@ -53,9 +53,10 @@ func (h *handler) GetInfo(
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 		ForfeitAddress:             info.ForfeitAddress,
 		MarketHour: &arkv1.MarketHour{
-			NextStartTime: info.MarketHour.StartTime,
-			Period:        info.MarketHour.Period,
-			RoundInterval: info.MarketHour.RoundInterval,
+			NextStartTime: info.NextMarketHour.StartTime,
+			NextEndTime:   info.NextMarketHour.EndTime,
+			Period:        info.NextMarketHour.Period,
+			RoundInterval: info.NextMarketHour.RoundInterval,
 		},
 	}, nil
 }

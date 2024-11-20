@@ -29,6 +29,7 @@ type EntityVw struct {
 type MarketHour struct {
 	ID            int64
 	StartTime     int64
+	EndTime       int64
 	Period        int64
 	RoundInterval int64
 	UpdatedAt     int64

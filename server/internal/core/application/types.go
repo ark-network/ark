@@ -59,7 +59,8 @@ type Service interface {
 	GetTransactionEventsChannel(ctx context.Context) <-chan TransactionEvent
 	SetNostrRecipient(ctx context.Context, nostrRecipient string, signedVtxoOutpoints []SignedVtxoOutpoint) error
 	DeleteNostrRecipient(ctx context.Context, signedVtxoOutpoints []SignedVtxoOutpoint) error
-	UpdateMarketHour(ctx context.Context, marketStartTime, period, roundInterval int64) error
+	GetMarketHourConfig(ctx context.Context) (*domain.MarketHour, error)
+	UpdateMarketHourConfig(ctx context.Context, marketHourStartTime, marketHourEndTime, period, roundInterval int64) error
 }
 
 type ServiceInfo struct {
@@ -71,11 +72,12 @@ type ServiceInfo struct {
 	Dust                       uint64
 	BoardingDescriptorTemplate string
 	ForfeitAddress             string
-	MarketHour                 *NextMarketHour
+	NextMarketHour             *NextMarketHour
 }
 
 type NextMarketHour struct {
 	StartTime     int64
+	EndTime       int64
 	Period        int64
 	RoundInterval int64
 }

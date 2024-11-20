@@ -11,7 +11,10 @@ import (
 	"github.com/timshannon/badgerhold/v4"
 )
 
-const marketHourStoreDir = "market_hour"
+const (
+	marketHourStoreDir = "market_hour"
+	marketHourKey      = "market_hour"
+)
 
 type marketHourRepository struct {
 	store *badgerhold.Store

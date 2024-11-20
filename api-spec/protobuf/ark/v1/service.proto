@@ -383,6 +383,7 @@ message DeleteNostrRecipientResponse {}
 
 message MarketHour {
   int64 next_start_time = 1;
-  int64 period = 2;
-  int64 round_interval = 3;
+  int64 next_end_time = 2;
+  int64 period = 3;
+  int64 round_interval = 4;
 }

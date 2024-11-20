@@ -189,15 +189,17 @@ SELECT EXISTS(SELECT 1 FROM note WHERE id = ?);
 -- name: InsertMarketHour :one
 INSERT INTO market_hour (
     start_time,
+    end_time,
     period,
     round_interval,
     updated_at
-) VALUES (?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: UpdateMarketHour :one
 UPDATE market_hour
 SET start_time = ?,
+    end_time = ?,
     period = ?,
     round_interval = ?,
     updated_at = ?

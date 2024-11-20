@@ -12,38 +12,39 @@ import (
 )
 
 type Config struct {
-	Datadir             string
-	WalletAddr          string
-	RoundInterval       int64
-	Port                uint32
-	EventDbType         string
-	DbType              string
-	DbDir               string
-	DbMigrationPath     string
-	SchedulerType       string
-	TxBuilderType       string
-	NoTLS               bool
-	NoMacaroons         bool
-	Network             common.Network
-	LogLevel            int
-	RoundLifetime       int64
-	UnilateralExitDelay int64
-	BoardingExitDelay   int64
-	EsploraURL          string
-	NeutrinoPeer        string
-	BitcoindRpcUser     string
-	BitcoindRpcPass     string
-	BitcoindRpcHost     string
-	BitcoindZMQBlock    string
-	BitcoindZMQTx       string
-	TLSExtraIPs         []string
-	TLSExtraDomains     []string
-	UnlockerType        string
-	UnlockerFilePath    string
-	UnlockerPassword    string
-	NostrDefaultRelays  []string
-	NoteUriPrefix       string
-	MarketStartTime         int64
+	Datadir                 string
+	WalletAddr              string
+	RoundInterval           int64
+	Port                    uint32
+	EventDbType             string
+	DbType                  string
+	DbDir                   string
+	DbMigrationPath         string
+	SchedulerType           string
+	TxBuilderType           string
+	NoTLS                   bool
+	NoMacaroons             bool
+	Network                 common.Network
+	LogLevel                int
+	RoundLifetime           int64
+	UnilateralExitDelay     int64
+	BoardingExitDelay       int64
+	EsploraURL              string
+	NeutrinoPeer            string
+	BitcoindRpcUser         string
+	BitcoindRpcPass         string
+	BitcoindRpcHost         string
+	BitcoindZMQBlock        string
+	BitcoindZMQTx           string
+	TLSExtraIPs             []string
+	TLSExtraDomains         []string
+	UnlockerType            string
+	UnlockerFilePath        string
+	UnlockerPassword        string
+	NostrDefaultRelays      []string
+	NoteUriPrefix           string
+	MarketHourStartTime     int64
+	MarketHourEndTime       int64
 	MarketHourPeriod        int64
 	MarketHourRoundInterval int64
 }
@@ -69,42 +70,43 @@ var (
 	// #nosec G101
 	BitcoindRpcUser = "BITCOIND_RPC_USER"
 	// #nosec G101
-	BitcoindRpcPass  = "BITCOIND_RPC_PASS"
-	BitcoindRpcHost  = "BITCOIND_RPC_HOST"
-	BitcoindZMQBlock = "BITCOIND_ZMQ_BLOCK"
-	BitcoindZMQTx    = "BITCOIND_ZMQ_TX"
-	NoMacaroons      = "NO_MACAROONS"
-	NoTLS            = "NO_TLS"
-	TLSExtraIP       = "TLS_EXTRA_IP"
-	TLSExtraDomain   = "TLS_EXTRA_DOMAIN"
-	UnlockerType     = "UNLOCKER_TYPE"
-	UnlockerFilePath = "UNLOCKER_FILE_PATH"
-	UnlockerPassword = "UNLOCKER_PASSWORD"
-	NoteUriPrefix    = "NOTE_URI_PREFIX"
-	MarketStartTime         = "MARKET_START_TIME"
+	BitcoindRpcPass         = "BITCOIND_RPC_PASS"
+	BitcoindRpcHost         = "BITCOIND_RPC_HOST"
+	BitcoindZMQBlock        = "BITCOIND_ZMQ_BLOCK"
+	BitcoindZMQTx           = "BITCOIND_ZMQ_TX"
+	NoMacaroons             = "NO_MACAROONS"
+	NoTLS                   = "NO_TLS"
+	TLSExtraIP              = "TLS_EXTRA_IP"
+	TLSExtraDomain          = "TLS_EXTRA_DOMAIN"
+	UnlockerType            = "UNLOCKER_TYPE"
+	UnlockerFilePath        = "UNLOCKER_FILE_PATH"
+	UnlockerPassword        = "UNLOCKER_PASSWORD"
+	NoteUriPrefix           = "NOTE_URI_PREFIX"
+	MarketHourStartTime     = "MARKET_HOUR_START_TIME"
+	MarketHourEndTime       = "MARKET_HOUR_END_TIME"
 	MarketHourPeriod        = "MARKET_HOUR_PERIOD"
 	MarketHourRoundInterval = "MARKET_HOUR_ROUND_INTERVAL"
 
-	defaultDatadir             = common.AppDataDir("arkd", false)
-	defaultRoundInterval       = 15
-	DefaultPort                = 7070
-	defaultDbType              = "sqlite"
-	defaultEventDbType         = "badger"
-	defaultDbMigrationPath     = "file://internal/infrastructure/db/sqlite/migration"
-	defaultSchedulerType       = "gocron"
-	defaultTxBuilderType       = "covenantless"
-	defaultNetwork             = "bitcoin"
-	defaultEsploraURL          = "https://blockstream.info/api"
-	defaultLogLevel            = 5
-	defaultRoundLifetime       = 604672
-	defaultUnilateralExitDelay = 1024
-	defaultBoardingExitDelay   = 604672
-	defaultNoMacaroons         = false
-	defaultNoTLS               = true
-	defaultNostrDefaultRelays  = []string{"wss://relay.primal.net", "wss://relay.damus.io"}
+	defaultDatadir                 = common.AppDataDir("arkd", false)
+	defaultRoundInterval           = 15
+	DefaultPort                    = 7070
+	defaultDbType                  = "sqlite"
+	defaultEventDbType             = "badger"
+	defaultDbMigrationPath         = "file://internal/infrastructure/db/sqlite/migration"
+	defaultSchedulerType           = "gocron"
+	defaultTxBuilderType           = "covenantless"
+	defaultNetwork                 = "bitcoin"
+	defaultEsploraURL              = "https://blockstream.info/api"
+	defaultLogLevel                = 5
+	defaultRoundLifetime           = 604672
+	defaultUnilateralExitDelay     = 1024
+	defaultBoardingExitDelay       = 604672
+	defaultNoMacaroons             = false
+	defaultNoTLS                   = true
+	defaultNostrDefaultRelays      = []string{"wss://relay.primal.net", "wss://relay.damus.io"}
 	defaultMarketHourStartTime     = time.Now().Unix()
 	defaultMarketHourPeriod        = int64(86400)
-	defaultMarketHourRoundInterval = int64(0)
+	defaultMarketHourRoundInterval = defaultRoundInterval
 )
 
 func LoadConfig() (*Config, error) {
@@ -128,7 +130,8 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(NoMacaroons, defaultNoMacaroons)
 	viper.SetDefault(BoardingExitDelay, defaultBoardingExitDelay)
 	viper.SetDefault(NostrDefaultRelays, defaultNostrDefaultRelays)
-	viper.SetDefault(MarketStartTime, defaultMarketHourStartTime)
+	viper.SetDefault(MarketHourStartTime, defaultMarketHourStartTime)
+	viper.SetDefault(MarketHourEndTime, defaultMarketHourStartTime+int64(defaultMarketHourRoundInterval))
 	viper.SetDefault(MarketHourPeriod, defaultMarketHourPeriod)
 	viper.SetDefault(MarketHourRoundInterval, defaultMarketHourRoundInterval)
 
@@ -142,38 +145,39 @@ func LoadConfig() (*Config, error) {
 	}
 
 	return &Config{
-		Datadir:             viper.GetString(Datadir),
-		WalletAddr:          viper.GetString(WalletAddr),
-		RoundInterval:       viper.GetInt64(RoundInterval),
-		Port:                viper.GetUint32(Port),
-		EventDbType:         viper.GetString(EventDbType),
-		DbType:              viper.GetString(DbType),
-		DbMigrationPath:     viper.GetString(DbMigrationPath),
-		SchedulerType:       viper.GetString(SchedulerType),
-		TxBuilderType:       viper.GetString(TxBuilderType),
-		NoTLS:               viper.GetBool(NoTLS),
-		DbDir:               filepath.Join(viper.GetString(Datadir), "db"),
-		LogLevel:            viper.GetInt(LogLevel),
-		Network:             net,
-		RoundLifetime:       viper.GetInt64(RoundLifetime),
-		UnilateralExitDelay: viper.GetInt64(UnilateralExitDelay),
-		BoardingExitDelay:   viper.GetInt64(BoardingExitDelay),
-		EsploraURL:          viper.GetString(EsploraURL),
-		NeutrinoPeer:        viper.GetString(NeutrinoPeer),
-		BitcoindRpcUser:     viper.GetString(BitcoindRpcUser),
-		BitcoindRpcPass:     viper.GetString(BitcoindRpcPass),
-		BitcoindRpcHost:     viper.GetString(BitcoindRpcHost),
-		BitcoindZMQBlock:    viper.GetString(BitcoindZMQBlock),
-		BitcoindZMQTx:       viper.GetString(BitcoindZMQTx),
-		NoMacaroons:         viper.GetBool(NoMacaroons),
-		TLSExtraIPs:         viper.GetStringSlice(TLSExtraIP),
-		TLSExtraDomains:     viper.GetStringSlice(TLSExtraDomain),
-		UnlockerType:        viper.GetString(UnlockerType),
-		UnlockerFilePath:    viper.GetString(UnlockerFilePath),
-		UnlockerPassword:    viper.GetString(UnlockerPassword),
-		NostrDefaultRelays:  viper.GetStringSlice(NostrDefaultRelays),
-		NoteUriPrefix:       viper.GetString(NoteUriPrefix),
-		MarketStartTime:         viper.GetInt64(MarketStartTime),
+		Datadir:                 viper.GetString(Datadir),
+		WalletAddr:              viper.GetString(WalletAddr),
+		RoundInterval:           viper.GetInt64(RoundInterval),
+		Port:                    viper.GetUint32(Port),
+		EventDbType:             viper.GetString(EventDbType),
+		DbType:                  viper.GetString(DbType),
+		DbMigrationPath:         viper.GetString(DbMigrationPath),
+		SchedulerType:           viper.GetString(SchedulerType),
+		TxBuilderType:           viper.GetString(TxBuilderType),
+		NoTLS:                   viper.GetBool(NoTLS),
+		DbDir:                   filepath.Join(viper.GetString(Datadir), "db"),
+		LogLevel:                viper.GetInt(LogLevel),
+		Network:                 net,
+		RoundLifetime:           viper.GetInt64(RoundLifetime),
+		UnilateralExitDelay:     viper.GetInt64(UnilateralExitDelay),
+		BoardingExitDelay:       viper.GetInt64(BoardingExitDelay),
+		EsploraURL:              viper.GetString(EsploraURL),
+		NeutrinoPeer:            viper.GetString(NeutrinoPeer),
+		BitcoindRpcUser:         viper.GetString(BitcoindRpcUser),
+		BitcoindRpcPass:         viper.GetString(BitcoindRpcPass),
+		BitcoindRpcHost:         viper.GetString(BitcoindRpcHost),
+		BitcoindZMQBlock:        viper.GetString(BitcoindZMQBlock),
+		BitcoindZMQTx:           viper.GetString(BitcoindZMQTx),
+		NoMacaroons:             viper.GetBool(NoMacaroons),
+		TLSExtraIPs:             viper.GetStringSlice(TLSExtraIP),
+		TLSExtraDomains:         viper.GetStringSlice(TLSExtraDomain),
+		UnlockerType:            viper.GetString(UnlockerType),
+		UnlockerFilePath:        viper.GetString(UnlockerFilePath),
+		UnlockerPassword:        viper.GetString(UnlockerPassword),
+		NostrDefaultRelays:      viper.GetStringSlice(NostrDefaultRelays),
+		NoteUriPrefix:           viper.GetString(NoteUriPrefix),
+		MarketHourStartTime:     viper.GetInt64(MarketHourStartTime),
+		MarketHourEndTime:       viper.GetInt64(MarketHourEndTime),
 		MarketHourPeriod:        viper.GetInt64(MarketHourPeriod),
 		MarketHourRoundInterval: viper.GetInt64(MarketHourRoundInterval),
 	}, nil

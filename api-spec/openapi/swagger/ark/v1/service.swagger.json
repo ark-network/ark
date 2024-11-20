@@ -780,6 +780,10 @@
           "type": "string",
           "format": "int64"
         },
+        "nextEndTime": {
+          "type": "string",
+          "format": "int64"
+        },
         "period": {
           "type": "string",
           "format": "int64"

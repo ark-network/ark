@@ -40,6 +40,7 @@ func (r *marketHourRepository) Get(ctx context.Context) (*domain.MarketHour, err
 
 	return &domain.MarketHour{
 		StartTime:     marketHour.StartTime,
+		EndTime:       marketHour.EndTime,
 		Period:        marketHour.Period,
 		RoundInterval: marketHour.RoundInterval,
 		UpdatedAt:     marketHour.UpdatedAt,
@@ -55,6 +56,7 @@ func (r *marketHourRepository) Upsert(ctx context.Context, marketHour domain.Mar
 	if errors.Is(err, sql.ErrNoRows) {
 		_, err = r.querier.InsertMarketHour(ctx, queries.InsertMarketHourParams{
 			StartTime:     marketHour.StartTime,
+			EndTime:       marketHour.EndTime,
 			Period:        marketHour.Period,
 			RoundInterval: marketHour.RoundInterval,
 			UpdatedAt:     marketHour.UpdatedAt,
@@ -62,6 +64,7 @@ func (r *marketHourRepository) Upsert(ctx context.Context, marketHour domain.Mar
 	} else {
 		_, err = r.querier.UpdateMarketHour(ctx, queries.UpdateMarketHourParams{
 			StartTime:     marketHour.StartTime,
+			EndTime:       marketHour.EndTime,
 			Period:        marketHour.Period,
 			RoundInterval: marketHour.RoundInterval,
 			UpdatedAt:     marketHour.UpdatedAt,

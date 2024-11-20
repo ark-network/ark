@@ -17,13 +17,33 @@
   ],
   "paths": {
     "/v1/admin/market-hour": {
-      "post": {
-        "operationId": "AdminService_UpdateMarketHour",
+      "get": {
+        "operationId": "AdminService_GetMarketHourConfig",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1UpdateMarketHourResponse"
+              "$ref": "#/definitions/v1GetMarketHourConfigResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "AdminService"
+        ]
+      },
+      "post": {
+        "operationId": "AdminService_UpdateMarketHourConfig",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1UpdateMarketHourConfigResponse"
             }
           },
           "default": {
@@ -39,7 +59,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/v1UpdateMarketHourRequest"
+              "$ref": "#/definitions/v1UpdateMarketHourConfigRequest"
             }
           }
         ],
@@ -218,6 +238,14 @@
         }
       }
     },
+    "v1GetMarketHourConfigResponse": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "$ref": "#/definitions/v1MarketHourConfig"
+        }
+      }
+    },
     "v1GetRoundDetailsResponse": {
       "type": "object",
       "properties": {
@@ -295,6 +323,27 @@
         }
       }
     },
+    "v1MarketHourConfig": {
+      "type": "object",
+      "properties": {
+        "startTime": {
+          "type": "string",
+          "format": "int64"
+        },
+        "endTime": {
+          "type": "string",
+          "format": "int64"
+        },
+        "period": {
+          "type": "string",
+          "format": "int64"
+        },
+        "roundInterval": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
     "v1ScheduledSweep": {
       "type": "object",
       "properties": {
@@ -329,26 +378,16 @@
         }
       }
     },
-    "v1UpdateMarketHourRequest": {
+    "v1UpdateMarketHourConfigRequest": {
       "type": "object",
       "properties": {
-        "startTime": {
-          "type": "string",
-          "format": "int64"
-        },
-        "period": {
-          "type": "string",
-          "format": "int64"
-        },
-        "roundInterval": {
-          "type": "string",
-          "format": "int64"
+        "config": {
+          "$ref": "#/definitions/v1MarketHourConfig"
         }
       }
     },
-    "v1UpdateMarketHourResponse": {
-      "type": "object",
-      "title": "Empty response, only status code matters"
+    "v1UpdateMarketHourConfigResponse": {
+      "type": "object"
     }
   }
 }

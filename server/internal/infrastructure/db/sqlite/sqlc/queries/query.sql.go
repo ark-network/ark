@@ -40,7 +40,7 @@ func (q *Queries) DeleteEntityVtxo(ctx context.Context, entityID int64) error {
 }
 
 const getLatestMarketHour = `-- name: GetLatestMarketHour :one
-SELECT id, start_time, period, round_interval, updated_at FROM market_hour ORDER BY updated_at DESC LIMIT 1
+SELECT id, start_time, end_time, period, round_interval, updated_at FROM market_hour ORDER BY updated_at DESC LIMIT 1
 `
 
 func (q *Queries) GetLatestMarketHour(ctx context.Context) (MarketHour, error) {
@@ -49,6 +49,7 @@ func (q *Queries) GetLatestMarketHour(ctx context.Context) (MarketHour, error) {
 	err := row.Scan(
 		&i.ID,
 		&i.StartTime,
+		&i.EndTime,
 		&i.Period,
 		&i.RoundInterval,
 		&i.UpdatedAt,
@@ -59,15 +60,17 @@ func (q *Queries) GetLatestMarketHour(ctx context.Context) (MarketHour, error) {
 const insertMarketHour = `-- name: InsertMarketHour :one
 INSERT INTO market_hour (
     start_time,
+    end_time,
     period,
     round_interval,
     updated_at
-) VALUES (?, ?, ?, ?)
-RETURNING id, start_time, period, round_interval, updated_at
+) VALUES (?, ?, ?, ?, ?)
+RETURNING id, start_time, end_time, period, round_interval, updated_at
 `
 
 type InsertMarketHourParams struct {
 	StartTime     int64
+	EndTime       int64
 	Period        int64
 	RoundInterval int64
 	UpdatedAt     int64
@@ -76,6 +79,7 @@ type InsertMarketHourParams struct {
 func (q *Queries) InsertMarketHour(ctx context.Context, arg InsertMarketHourParams) (MarketHour, error) {
 	row := q.db.QueryRowContext(ctx, insertMarketHour,
 		arg.StartTime,
+		arg.EndTime,
 		arg.Period,
 		arg.RoundInterval,
 		arg.UpdatedAt,
@@ -84,6 +88,7 @@ func (q *Queries) InsertMarketHour(ctx context.Context, arg InsertMarketHourPara
 	err := row.Scan(
 		&i.ID,
 		&i.StartTime,
+		&i.EndTime,
 		&i.Period,
 		&i.RoundInterval,
 		&i.UpdatedAt,
@@ -810,15 +815,17 @@ func (q *Queries) SelectVtxosByPoolTxid(ctx context.Context, poolTx string) ([]S
 const updateMarketHour = `-- name: UpdateMarketHour :one
 UPDATE market_hour
 SET start_time = ?,
+    end_time = ?,
     period = ?,
     round_interval = ?,
     updated_at = ?
 WHERE id = ?
-RETURNING id, start_time, period, round_interval, updated_at
+RETURNING id, start_time, end_time, period, round_interval, updated_at
 `
 
 type UpdateMarketHourParams struct {
 	StartTime     int64
+	EndTime       int64
 	Period        int64
 	RoundInterval int64
 	UpdatedAt     int64
@@ -828,6 +835,7 @@ type UpdateMarketHourParams struct {
 func (q *Queries) UpdateMarketHour(ctx context.Context, arg UpdateMarketHourParams) (MarketHour, error) {
 	row := q.db.QueryRowContext(ctx, updateMarketHour,
 		arg.StartTime,
+		arg.EndTime,
 		arg.Period,
 		arg.RoundInterval,
 		arg.UpdatedAt,
@@ -837,6 +845,7 @@ func (q *Queries) UpdateMarketHour(ctx context.Context, arg UpdateMarketHourPara
 	err := row.Scan(
 		&i.ID,
 		&i.StartTime,
+		&i.EndTime,
 		&i.Period,
 		&i.RoundInterval,
 		&i.UpdatedAt,

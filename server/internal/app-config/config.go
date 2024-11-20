@@ -69,7 +69,8 @@ type Config struct {
 	BoardingExitDelay       int64
 	NostrDefaultRelays      []string
 	NoteUriPrefix           string
-	MarketStartTime         int64
+	MarketHourStartTime     int64
+	MarketHourEndTime       int64
 	MarketHourPeriod        int64
 	MarketHourRoundInterval int64
 
@@ -353,15 +354,11 @@ func (c *Config) schedulerService() error {
 }
 
 func (c *Config) appService() error {
-	marketHourRoundInterval := c.MarketHourRoundInterval
-	if marketHourRoundInterval == 0 {
-		marketHourRoundInterval = c.RoundInterval
-	}
 	if common.IsLiquid(c.Network) {
 		svc, err := application.NewCovenantService(
 			c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay, c.NostrDefaultRelays,
 			c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NoteUriPrefix,
-			c.MarketStartTime, c.MarketHourPeriod, marketHourRoundInterval,
+			c.MarketHourStartTime, c.MarketHourEndTime, c.MarketHourPeriod, c.MarketHourRoundInterval,
 		)
 		if err != nil {
 			return err
@@ -374,7 +371,7 @@ func (c *Config) appService() error {
 	svc, err := application.NewCovenantlessService(
 		c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay, c.NostrDefaultRelays,
 		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NoteUriPrefix,
-		c.MarketStartTime, c.MarketHourPeriod, marketHourRoundInterval,
+		c.MarketHourStartTime, c.MarketHourEndTime, c.MarketHourPeriod, c.MarketHourRoundInterval,
 	)
 	if err != nil {
 		return err
