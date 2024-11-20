@@ -18,7 +18,7 @@ type SweepInput interface {
 
 type Input struct {
 	domain.VtxoKey
-	Descriptor string
+	Tapscripts []string
 }
 
 type BoardingInput struct {
@@ -49,12 +49,12 @@ type TxBuilder interface {
 	BuildSweepTx(inputs []SweepInput) (signedSweepTx string, err error)
 	GetSweepInput(node tree.Node) (lifetime int64, sweepInput SweepInput, err error)
 	FinalizeAndExtract(tx string) (txhex string, err error)
-	VerifyTapscriptPartialSigs(tx string) (valid bool, txid string, err error)
+	VerifyTapscriptPartialSigs(tx string) (valid bool, err error)
 	// FindLeaves returns all the leaves txs that are reachable from the given outpoint
 	FindLeaves(congestionTree tree.CongestionTree, fromtxid string, vout uint32) (leaves []tree.Node, err error)
 	BuildAsyncPaymentTransactions(
 		vtxosToSpend []domain.Vtxo,
-		descriptors map[domain.VtxoKey]string,
+		scripts map[domain.VtxoKey][]string,
 		forfeitsLeaves map[domain.VtxoKey]chainhash.Hash,
 		receivers []domain.Receiver,
 	) (string, error)

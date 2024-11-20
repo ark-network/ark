@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/bitcointree"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -745,46 +745,29 @@ func (s *service) SignTransaction(ctx context.Context, partialTx string, extract
 		for i, in := range ptx.Inputs {
 			isTaproot := txscript.IsPayToTaproot(in.WitnessUtxo.PkScript)
 			if isTaproot && len(in.TaprootLeafScript) > 0 {
-				closure, err := bitcointree.DecodeClosure(in.TaprootLeafScript[0].Script)
+				closure, err := tree.DecodeClosure(in.TaprootLeafScript[0].Script)
 				if err != nil {
 					return "", err
 				}
 
-				witness := make(wire.TxWitness, 4)
+				signatures := make(map[string][]byte)
 
-				castClosure, isTaprootMultisig := closure.(*bitcointree.MultisigClosure)
-				if isTaprootMultisig {
-					ownerPubkey := schnorr.SerializePubKey(castClosure.Pubkey)
-					aspKey := schnorr.SerializePubKey(castClosure.AspPubkey)
-
-					for _, sig := range in.TaprootScriptSpendSig {
-						if bytes.Equal(sig.XOnlyPubKey, ownerPubkey) {
-							witness[0] = sig.Signature
-						}
-
-						if bytes.Equal(sig.XOnlyPubKey, aspKey) {
-							witness[1] = sig.Signature
-						}
-					}
-
-					witness[2] = in.TaprootLeafScript[0].Script
-					witness[3] = in.TaprootLeafScript[0].ControlBlock
-
-					for idw, w := range witness {
-						if w == nil {
-							return "", fmt.Errorf("missing witness element %d, cannot finalize taproot mutlisig input %d", idw, i)
-						}
-					}
-
-					var witnessBuf bytes.Buffer
-
-					if err := psbt.WriteTxWitness(&witnessBuf, witness); err != nil {
-						return "", err
-					}
-
-					ptx.Inputs[i].FinalScriptWitness = witnessBuf.Bytes()
-					continue
+				for _, sig := range in.TaprootScriptSpendSig {
+					signatures[hex.EncodeToString(sig.XOnlyPubKey)] = sig.Signature
 				}
+
+				witness, err := closure.Witness(in.TaprootLeafScript[0].ControlBlock, signatures)
+				if err != nil {
+					return "", err
+				}
+
+				var witnessBuf bytes.Buffer
+				if err := psbt.WriteTxWitness(&witnessBuf, witness); err != nil {
+					return "", err
+				}
+
+				ptx.Inputs[i].FinalScriptWitness = witnessBuf.Bytes()
+				continue
 			}
 
 			if err := psbt.Finalize(ptx, i); err != nil {

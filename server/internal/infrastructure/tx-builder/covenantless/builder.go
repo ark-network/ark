@@ -23,6 +23,7 @@ import (
 	"github.com/btcsuite/btcwallet/waddrmgr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightningnetwork/lnd/input"
+	"github.com/lightningnetwork/lnd/lntypes"
 )
 
 type txBuilder struct {
@@ -47,17 +48,22 @@ func (b *txBuilder) GetTxID(tx string) (string, error) {
 	return ptx.UnsignedTx.TxHash().String(), nil
 }
 
-func (b *txBuilder) VerifyTapscriptPartialSigs(tx string) (bool, string, error) {
+func (b *txBuilder) VerifyTapscriptPartialSigs(tx string) (bool, error) {
 	ptx, err := psbt.NewFromRawBytes(strings.NewReader(tx), true)
 	if err != nil {
-		return false, "", err
+		return false, err
 	}
 
 	return b.verifyTapscriptPartialSigs(ptx)
 }
 
-func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, string, error) {
+func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, error) {
 	txid := ptx.UnsignedTx.TxID()
+
+	aspPublicKey, err := b.wallet.GetPubkey(context.Background())
+	if err != nil {
+		return false, err
+	}
 
 	for index, input := range ptx.Inputs {
 		if len(input.TaprootLeafScript) == 0 {
@@ -65,29 +71,51 @@ func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, string, 
 		}
 
 		if input.WitnessUtxo == nil {
-			return false, txid, fmt.Errorf("missing witness utxo for input %d, cannot verify signature", index)
+			return false, fmt.Errorf("missing witness utxo for input %d, cannot verify signature", index)
 		}
 
 		// verify taproot leaf script
 		tapLeaf := input.TaprootLeafScript[0]
+
+		closure, err := tree.DecodeClosure(tapLeaf.Script)
+		if err != nil {
+			return false, err
+		}
+
+		keys := make(map[string]bool)
+
+		switch c := closure.(type) {
+		case *tree.MultisigClosure:
+			for _, key := range c.PubKeys {
+				keys[hex.EncodeToString(schnorr.SerializePubKey(key))] = false
+			}
+		case *tree.CSVSigClosure:
+			for _, key := range c.PubKeys {
+				keys[hex.EncodeToString(schnorr.SerializePubKey(key))] = false
+			}
+		}
+
+		// we don't need to check if ASP signed
+		keys[hex.EncodeToString(schnorr.SerializePubKey(aspPublicKey))] = true
+
 		if len(tapLeaf.ControlBlock) == 0 {
-			return false, txid, fmt.Errorf("missing control block for input %d", index)
+			return false, fmt.Errorf("missing control block for input %d", index)
 		}
 
 		controlBlock, err := txscript.ParseControlBlock(tapLeaf.ControlBlock)
 		if err != nil {
-			return false, txid, err
+			return false, err
 		}
 
 		rootHash := controlBlock.RootHash(tapLeaf.Script)
 		tapKeyFromControlBlock := txscript.ComputeTaprootOutputKey(bitcointree.UnspendableKey(), rootHash[:])
 		pkscript, err := common.P2TRScript(tapKeyFromControlBlock)
 		if err != nil {
-			return false, txid, err
+			return false, err
 		}
 
 		if !bytes.Equal(pkscript, input.WitnessUtxo.PkScript) {
-			return false, txid, fmt.Errorf("invalid control block for input %d", index)
+			return false, fmt.Errorf("invalid control block for input %d", index)
 		}
 
 		preimage, err := b.getTaprootPreimage(
@@ -96,27 +124,40 @@ func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, string, 
 			tapLeaf.Script,
 		)
 		if err != nil {
-			return false, txid, err
+			return false, err
 		}
 
 		for _, tapScriptSig := range input.TaprootScriptSpendSig {
 			sig, err := schnorr.ParseSignature(tapScriptSig.Signature)
 			if err != nil {
-				return false, txid, err
+				return false, err
 			}
 
 			pubkey, err := schnorr.ParsePubKey(tapScriptSig.XOnlyPubKey)
 			if err != nil {
-				return false, txid, err
+				return false, err
 			}
 
 			if !sig.Verify(preimage, pubkey) {
-				return false, txid, fmt.Errorf("invalid signature for tx %s", txid)
+				return false, fmt.Errorf("invalid signature for tx %s", txid)
 			}
+
+			keys[hex.EncodeToString(schnorr.SerializePubKey(pubkey))] = true
+		}
+
+		missingSigs := 0
+		for key := range keys {
+			if !keys[key] {
+				missingSigs++
+			}
+		}
+
+		if missingSigs > 0 {
+			return false, fmt.Errorf("missing %d signatures", missingSigs)
 		}
 	}
 
-	return true, txid, nil
+	return true, nil
 }
 
 func (b *txBuilder) FinalizeAndExtract(tx string) (string, error) {
@@ -128,46 +169,29 @@ func (b *txBuilder) FinalizeAndExtract(tx string) (string, error) {
 	for i, in := range ptx.Inputs {
 		isTaproot := txscript.IsPayToTaproot(in.WitnessUtxo.PkScript)
 		if isTaproot && len(in.TaprootLeafScript) > 0 {
-			closure, err := bitcointree.DecodeClosure(in.TaprootLeafScript[0].Script)
+			closure, err := tree.DecodeClosure(in.TaprootLeafScript[0].Script)
 			if err != nil {
 				return "", err
 			}
 
-			witness := make(wire.TxWitness, 4)
+			signatures := make(map[string][]byte)
 
-			castClosure, isTaprootMultisig := closure.(*bitcointree.MultisigClosure)
-			if isTaprootMultisig {
-				ownerPubkey := schnorr.SerializePubKey(castClosure.Pubkey)
-				aspKey := schnorr.SerializePubKey(castClosure.AspPubkey)
-
-				for _, sig := range in.TaprootScriptSpendSig {
-					if bytes.Equal(sig.XOnlyPubKey, ownerPubkey) {
-						witness[0] = sig.Signature
-					}
-
-					if bytes.Equal(sig.XOnlyPubKey, aspKey) {
-						witness[1] = sig.Signature
-					}
-				}
-
-				witness[2] = in.TaprootLeafScript[0].Script
-				witness[3] = in.TaprootLeafScript[0].ControlBlock
-
-				for idw, w := range witness {
-					if w == nil {
-						return "", fmt.Errorf("missing witness element %d, cannot finalize taproot mutlisig input %d", idw, i)
-					}
-				}
-
-				var witnessBuf bytes.Buffer
-
-				if err := psbt.WriteTxWitness(&witnessBuf, witness); err != nil {
-					return "", err
-				}
-
-				ptx.Inputs[i].FinalScriptWitness = witnessBuf.Bytes()
-				continue
+			for _, sig := range in.TaprootScriptSpendSig {
+				signatures[hex.EncodeToString(sig.XOnlyPubKey)] = sig.Signature
 			}
+
+			witness, err := closure.Witness(in.TaprootLeafScript[0].ControlBlock, signatures)
+			if err != nil {
+				return "", err
+			}
+
+			var witnessBuf bytes.Buffer
+			if err := psbt.WriteTxWitness(&witnessBuf, witness); err != nil {
+				return "", err
+			}
+
+			ptx.Inputs[i].FinalScriptWitness = witnessBuf.Bytes()
+			continue
 
 		}
 
@@ -265,7 +289,7 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 			return nil, fmt.Errorf("invalid forfeit tx, expect 2 inputs, got %d", len(ptx.Inputs))
 		}
 
-		valid, _, err := b.verifyTapscriptPartialSigs(ptx)
+		valid, err := b.verifyTapscriptPartialSigs(ptx)
 		if err != nil {
 			return nil, err
 		}
@@ -623,7 +647,7 @@ func (b *txBuilder) FindLeaves(congestionTree tree.CongestionTree, fromtxid stri
 
 func (b *txBuilder) BuildAsyncPaymentTransactions(
 	vtxos []domain.Vtxo,
-	descriptors map[domain.VtxoKey]string,
+	scripts map[domain.VtxoKey][]string,
 	forfeitsLeaves map[domain.VtxoKey]chainhash.Hash,
 	receivers []domain.Receiver,
 ) (string, error) {
@@ -638,9 +662,9 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 
 	redeemTxWeightEstimator := &input.TxWeightEstimator{}
 	for index, vtxo := range vtxos {
-		desc, ok := descriptors[vtxo.VtxoKey]
+		vtxoTapscripts, ok := scripts[vtxo.VtxoKey]
 		if !ok {
-			return "", fmt.Errorf("missing descriptor for vtxo %s", vtxo.VtxoKey)
+			return "", fmt.Errorf("missing scripts for vtxo %s", vtxo.VtxoKey)
 		}
 
 		forfeitLeafHash, ok := forfeitsLeaves[vtxo.VtxoKey]
@@ -662,7 +686,7 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 			Index: vtxo.VOut,
 		}
 
-		vtxoScript, err := bitcointree.ParseVtxoScript(desc)
+		vtxoScript, err := bitcointree.ParseVtxoScript(vtxoTapscripts)
 		if err != nil {
 			return "", err
 		}
@@ -698,7 +722,12 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 			return "", err
 		}
 
-		redeemTxWeightEstimator.AddTapscriptInput(64*2+40, &waddrmgr.Tapscript{
+		closure, err := tree.DecodeClosure(leafProof.Script)
+		if err != nil {
+			return "", err
+		}
+
+		redeemTxWeightEstimator.AddTapscriptInput(lntypes.WeightUnit(closure.WitnessSize()), &waddrmgr.Tapscript{
 			RevealedScript: leafProof.Script,
 			ControlBlock:   ctrlBlock,
 		})
@@ -940,7 +969,7 @@ func (b *txBuilder) createRoundTx(
 		})
 		nSequences = append(nSequences, wire.MaxTxInSequenceNum)
 
-		boardingVtxoScript, err := bitcointree.ParseVtxoScript(boardingInput.Descriptor)
+		boardingVtxoScript, err := bitcointree.ParseVtxoScript(boardingInput.Tapscripts)
 		if err != nil {
 			return nil, err
 		}
@@ -1322,7 +1351,7 @@ func castToOutpoints(inputs []ports.TxInput) []ports.TxOutpoint {
 
 func extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.TaprootTapLeafScript, internalKey *secp256k1.PublicKey, lifetime int64, err error) {
 	for _, leaf := range input.TaprootLeafScript {
-		closure := &bitcointree.CSVSigClosure{}
+		closure := &tree.CSVSigClosure{}
 		valid, err := closure.Decode(leaf.Script)
 		if err != nil {
 			return nil, nil, 0, err

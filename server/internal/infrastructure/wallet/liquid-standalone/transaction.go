@@ -12,7 +12,6 @@ import (
 	pb "github.com/ark-network/ark/api-spec/protobuf/gen/ocean/v1"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/ports"
-	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
@@ -58,43 +57,29 @@ func (s *service) SignTransaction(
 				return "", err
 			}
 
-			switch c := closure.(type) {
-			case *tree.MultisigClosure:
-				asp := schnorr.SerializePubKey(c.AspPubkey)
-				owner := schnorr.SerializePubKey(c.Pubkey)
+			signatures := make(map[string][]byte)
 
-				witness := make([][]byte, 4)
-				for _, sig := range in.TapScriptSig {
-					if bytes.Equal(sig.PubKey, owner) {
-						witness[0] = sig.Signature
-						continue
-					}
-
-					if bytes.Equal(sig.PubKey, asp) {
-						witness[1] = sig.Signature
-					}
-				}
-
-				witness[2] = tapLeaf.Script
-
-				controlBlock, err := tapLeaf.ControlBlock.ToBytes()
-				if err != nil {
-					return "", err
-				}
-
-				witness[3] = controlBlock
-
-				var witnessBuf bytes.Buffer
-
-				if err := psbt.WriteTxWitness(&witnessBuf, witness); err != nil {
-					return "", err
-				}
-
-				ptx.Inputs[i].FinalScriptWitness = witnessBuf.Bytes()
-				continue
-			default:
-				return "", fmt.Errorf("unexpected closure type %T", c)
+			for _, sig := range in.TapScriptSig {
+				signatures[hex.EncodeToString(sig.PubKey)] = sig.Signature
 			}
+
+			controlBlock, err := tapLeaf.ControlBlock.ToBytes()
+			if err != nil {
+				return "", err
+			}
+
+			witness, err := closure.Witness(controlBlock, signatures)
+			if err != nil {
+				return "", err
+			}
+
+			var witnessBuf bytes.Buffer
+			if err := psbt.WriteTxWitness(&witnessBuf, witness); err != nil {
+				return "", err
+			}
+
+			ptx.Inputs[i].FinalScriptWitness = witnessBuf.Bytes()
+			continue
 		}
 
 		if err := psetv2.Finalize(ptx, i); err != nil {

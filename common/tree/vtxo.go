@@ -1,89 +1,159 @@
 package tree
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
+	"math"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/descriptor"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/taproot"
 )
 
-type VtxoScript common.VtxoScript[elementsTapTree]
+var (
+	ErrNoExitLeaf = fmt.Errorf("no exit leaf")
+)
 
-func ParseVtxoScript(desc string) (VtxoScript, error) {
-	v := &DefaultVtxoScript{}
-	// TODO add other type
-	err := v.FromDescriptor(desc)
+type VtxoScript common.VtxoScript[elementsTapTree, *MultisigClosure, *CSVSigClosure]
+
+func ParseVtxoScript(scripts []string) (VtxoScript, error) {
+	v := &TapscriptsVtxoScript{}
+
+	err := v.Decode(scripts)
 	return v, err
 }
 
-/*
-* DefaultVtxoScript is the default implementation of VTXO with 2 closures
-* - Owner and ASP (forfeit)
-*	- Owner after t (unilateral exit)
- */
-type DefaultVtxoScript struct {
-	Owner     *secp256k1.PublicKey
-	Asp       *secp256k1.PublicKey
-	ExitDelay uint
-}
-
-func (v *DefaultVtxoScript) ToDescriptor() string {
-	owner := hex.EncodeToString(schnorr.SerializePubKey(v.Owner))
-
-	return fmt.Sprintf(
-		descriptor.DefaultVtxoDescriptorTemplate,
-		hex.EncodeToString(UnspendableKey().SerializeCompressed()),
-		owner,
-		hex.EncodeToString(schnorr.SerializePubKey(v.Asp)),
-		v.ExitDelay,
-		owner,
-	)
-}
-
-func (v *DefaultVtxoScript) FromDescriptor(desc string) error {
-	owner, asp, exitDelay, err := descriptor.ParseDefaultVtxoDescriptor(desc)
-	if err != nil {
-		return err
+func NewDefaultVtxoScript(owner, asp *secp256k1.PublicKey, exitDelay uint) *TapscriptsVtxoScript {
+	return &TapscriptsVtxoScript{
+		[]Closure{
+			&CSVSigClosure{
+				MultisigClosure: MultisigClosure{PubKeys: []*secp256k1.PublicKey{owner}},
+				Seconds:         exitDelay,
+			},
+			&MultisigClosure{PubKeys: []*secp256k1.PublicKey{owner, asp}},
+		},
 	}
+}
 
-	v.Owner = owner
-	v.Asp = asp
-	v.ExitDelay = exitDelay
+// TapscriptsVtxoScript represents a taproot script that contains a list of tapscript leaves
+// the key-path is always unspendable
+type TapscriptsVtxoScript struct {
+	Closures []Closure
+}
+
+func (v *TapscriptsVtxoScript) Encode() ([]string, error) {
+	encoded := make([]string, 0)
+	for _, closure := range v.Closures {
+		script, err := closure.Script()
+		if err != nil {
+			return nil, err
+		}
+		encoded = append(encoded, hex.EncodeToString(script))
+	}
+	return encoded, nil
+}
+
+func (v *TapscriptsVtxoScript) Decode(scripts []string) error {
+	v.Closures = make([]Closure, 0, len(scripts))
+	for _, script := range scripts {
+		scriptBytes, err := hex.DecodeString(script)
+		if err != nil {
+			return err
+		}
+
+		closure, err := DecodeClosure(scriptBytes)
+		if err != nil {
+			return err
+		}
+		v.Closures = append(v.Closures, closure)
+	}
 	return nil
 }
 
-func (v *DefaultVtxoScript) TapTree() (*secp256k1.PublicKey, elementsTapTree, error) {
-	redeemClosure := &CSVSigClosure{
-		Pubkey:  v.Owner,
-		Seconds: v.ExitDelay,
+func (v *TapscriptsVtxoScript) Validate(asp *secp256k1.PublicKey, minExitDelay uint) error {
+	aspXonly := schnorr.SerializePubKey(asp)
+	for _, forfeit := range v.ForfeitClosures() {
+		// must contain asp pubkey
+		found := false
+		for _, pubkey := range forfeit.PubKeys {
+			if bytes.Equal(schnorr.SerializePubKey(pubkey), aspXonly) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("invalid forfeit closure, ASP pubkey not found")
+		}
 	}
 
-	redeemLeaf, err := redeemClosure.Leaf()
+	smallestExit, err := v.SmallestExitDelay()
 	if err != nil {
-		return nil, elementsTapTree{}, err
+		if err == ErrNoExitLeaf {
+			return nil
+		}
+		return err
 	}
 
-	forfeitClosure := &MultisigClosure{
-		Pubkey:    v.Owner,
-		AspPubkey: v.Asp,
+	if smallestExit < minExitDelay {
+		return fmt.Errorf("exit delay is too short")
 	}
 
-	forfeitLeaf, err := forfeitClosure.Leaf()
-	if err != nil {
-		return nil, elementsTapTree{}, err
+	return nil
+}
+
+func (v *TapscriptsVtxoScript) SmallestExitDelay() (uint, error) {
+	smallest := uint(math.MaxUint32)
+
+	for _, closure := range v.Closures {
+		if csvClosure, ok := closure.(*CSVSigClosure); ok {
+			if csvClosure.Seconds < smallest {
+				smallest = csvClosure.Seconds
+			}
+		}
 	}
 
-	tapTree := taproot.AssembleTaprootScriptTree(
-		*redeemLeaf, *forfeitLeaf,
-	)
+	if smallest == math.MaxUint32 {
+		return 0, ErrNoExitLeaf
+	}
 
+	return smallest, nil
+}
+
+func (v *TapscriptsVtxoScript) ForfeitClosures() []*MultisigClosure {
+	forfeits := make([]*MultisigClosure, 0)
+	for _, closure := range v.Closures {
+		if multisigClosure, ok := closure.(*MultisigClosure); ok {
+			forfeits = append(forfeits, multisigClosure)
+		}
+	}
+	return forfeits
+}
+
+func (v *TapscriptsVtxoScript) ExitClosures() []*CSVSigClosure {
+	exits := make([]*CSVSigClosure, 0)
+	for _, closure := range v.Closures {
+		if csvClosure, ok := closure.(*CSVSigClosure); ok {
+			exits = append(exits, csvClosure)
+		}
+	}
+	return exits
+}
+
+func (v *TapscriptsVtxoScript) TapTree() (*secp256k1.PublicKey, elementsTapTree, error) {
+	leaves := make([]taproot.TapElementsLeaf, 0, len(v.Closures))
+	for _, closure := range v.Closures {
+		leaf, err := closure.Script()
+		if err != nil {
+			return nil, elementsTapTree{}, err
+		}
+		leaves = append(leaves, taproot.NewBaseTapElementsLeaf(leaf))
+	}
+
+	tapTree := taproot.AssembleTaprootScriptTree(leaves...)
 	root := tapTree.RootNode.TapHash()
-
 	taprootKey := taproot.ComputeTaprootOutputKey(UnspendableKey(), root[:])
 
 	return taprootKey, elementsTapTree{tapTree}, nil
@@ -111,9 +181,15 @@ func (b elementsTapTree) GetTaprootMerkleProof(leafhash chainhash.Hash) (*common
 		return nil, err
 	}
 
+	closure, err := DecodeClosure(proof.Script)
+	if err != nil {
+		return nil, err
+	}
+
 	return &common.TaprootMerkleProof{
 		ControlBlock: controlBlockBytes,
 		Script:       proof.Script,
+		WitnessSize:  closure.WitnessSize(),
 	}, nil
 }
 
