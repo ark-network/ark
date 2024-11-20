@@ -23,6 +23,7 @@ import (
 	"github.com/btcsuite/btcwallet/waddrmgr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightningnetwork/lnd/input"
+	"github.com/lightningnetwork/lnd/lntypes"
 )
 
 type txBuilder struct {
@@ -721,7 +722,12 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 			return "", err
 		}
 
-		redeemTxWeightEstimator.AddTapscriptInput(64*2+40, &waddrmgr.Tapscript{
+		closure, err := tree.DecodeClosure(leafProof.Script)
+		if err != nil {
+			return "", err
+		}
+
+		redeemTxWeightEstimator.AddTapscriptInput(lntypes.WeightUnit(closure.WitnessSize()), &waddrmgr.Tapscript{
 			RevealedScript: leafProof.Script,
 			ControlBlock:   ctrlBlock,
 		})
