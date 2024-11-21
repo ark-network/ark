@@ -134,7 +134,7 @@ func (q *Queries) SelectEntitiesByVtxo(ctx context.Context, arg SelectEntitiesBy
 }
 
 const selectNotRedeemedVtxos = `-- name: SelectNotRedeemedVtxos :many
-SELECT vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.created_at, vtxo.payment_id, vtxo.redeem_tx FROM vtxo
+SELECT vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.round_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.created_at, vtxo.payment_id, vtxo.redeem_tx FROM vtxo
 WHERE redeemed = false
 `
 
@@ -156,7 +156,7 @@ func (q *Queries) SelectNotRedeemedVtxos(ctx context.Context) ([]SelectNotRedeem
 			&i.Vtxo.Vout,
 			&i.Vtxo.Pubkey,
 			&i.Vtxo.Amount,
-			&i.Vtxo.PoolTx,
+			&i.Vtxo.RoundTx,
 			&i.Vtxo.SpentBy,
 			&i.Vtxo.Spent,
 			&i.Vtxo.Redeemed,
@@ -180,7 +180,7 @@ func (q *Queries) SelectNotRedeemedVtxos(ctx context.Context) ([]SelectNotRedeem
 }
 
 const selectNotRedeemedVtxosWithPubkey = `-- name: SelectNotRedeemedVtxosWithPubkey :many
-SELECT vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.created_at, vtxo.payment_id, vtxo.redeem_tx FROM vtxo
+SELECT vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.round_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.created_at, vtxo.payment_id, vtxo.redeem_tx FROM vtxo
 WHERE redeemed = false AND pubkey = ?
 `
 
@@ -202,7 +202,7 @@ func (q *Queries) SelectNotRedeemedVtxosWithPubkey(ctx context.Context, pubkey s
 			&i.Vtxo.Vout,
 			&i.Vtxo.Pubkey,
 			&i.Vtxo.Amount,
-			&i.Vtxo.PoolTx,
+			&i.Vtxo.RoundTx,
 			&i.Vtxo.SpentBy,
 			&i.Vtxo.Spent,
 			&i.Vtxo.Redeemed,
@@ -289,7 +289,7 @@ SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, 
        round_payment_vw.id, round_payment_vw.round_id,
        round_tx_vw.id, round_tx_vw.tx, round_tx_vw.round_id, round_tx_vw.type, round_tx_vw.position, round_tx_vw.txid, round_tx_vw.tree_level, round_tx_vw.parent_txid, round_tx_vw.is_leaf,
        payment_receiver_vw.payment_id, payment_receiver_vw.pubkey, payment_receiver_vw.onchain_address, payment_receiver_vw.amount,
-       payment_vtxo_vw.txid, payment_vtxo_vw.vout, payment_vtxo_vw.pubkey, payment_vtxo_vw.amount, payment_vtxo_vw.pool_tx, payment_vtxo_vw.spent_by, payment_vtxo_vw.spent, payment_vtxo_vw.redeemed, payment_vtxo_vw.swept, payment_vtxo_vw.expire_at, payment_vtxo_vw.created_at, payment_vtxo_vw.payment_id, payment_vtxo_vw.redeem_tx
+       payment_vtxo_vw.txid, payment_vtxo_vw.vout, payment_vtxo_vw.pubkey, payment_vtxo_vw.amount, payment_vtxo_vw.round_tx, payment_vtxo_vw.spent_by, payment_vtxo_vw.spent, payment_vtxo_vw.redeemed, payment_vtxo_vw.swept, payment_vtxo_vw.expire_at, payment_vtxo_vw.created_at, payment_vtxo_vw.payment_id, payment_vtxo_vw.redeem_tx
 FROM round
          LEFT OUTER JOIN round_payment_vw ON round.id=round_payment_vw.round_id
          LEFT OUTER JOIN round_tx_vw ON round.id=round_tx_vw.round_id
@@ -347,7 +347,7 @@ func (q *Queries) SelectRoundWithRoundId(ctx context.Context, id string) ([]Sele
 			&i.PaymentVtxoVw.Vout,
 			&i.PaymentVtxoVw.Pubkey,
 			&i.PaymentVtxoVw.Amount,
-			&i.PaymentVtxoVw.PoolTx,
+			&i.PaymentVtxoVw.RoundTx,
 			&i.PaymentVtxoVw.SpentBy,
 			&i.PaymentVtxoVw.Spent,
 			&i.PaymentVtxoVw.Redeemed,
@@ -375,7 +375,7 @@ SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, 
        round_payment_vw.id, round_payment_vw.round_id,
        round_tx_vw.id, round_tx_vw.tx, round_tx_vw.round_id, round_tx_vw.type, round_tx_vw.position, round_tx_vw.txid, round_tx_vw.tree_level, round_tx_vw.parent_txid, round_tx_vw.is_leaf,
        payment_receiver_vw.payment_id, payment_receiver_vw.pubkey, payment_receiver_vw.onchain_address, payment_receiver_vw.amount,
-       payment_vtxo_vw.txid, payment_vtxo_vw.vout, payment_vtxo_vw.pubkey, payment_vtxo_vw.amount, payment_vtxo_vw.pool_tx, payment_vtxo_vw.spent_by, payment_vtxo_vw.spent, payment_vtxo_vw.redeemed, payment_vtxo_vw.swept, payment_vtxo_vw.expire_at, payment_vtxo_vw.created_at, payment_vtxo_vw.payment_id, payment_vtxo_vw.redeem_tx
+       payment_vtxo_vw.txid, payment_vtxo_vw.vout, payment_vtxo_vw.pubkey, payment_vtxo_vw.amount, payment_vtxo_vw.round_tx, payment_vtxo_vw.spent_by, payment_vtxo_vw.spent, payment_vtxo_vw.redeemed, payment_vtxo_vw.swept, payment_vtxo_vw.expire_at, payment_vtxo_vw.created_at, payment_vtxo_vw.payment_id, payment_vtxo_vw.redeem_tx
 FROM round
          LEFT OUTER JOIN round_payment_vw ON round.id=round_payment_vw.round_id
          LEFT OUTER JOIN round_tx_vw ON round.id=round_tx_vw.round_id
@@ -433,7 +433,7 @@ func (q *Queries) SelectRoundWithRoundTxId(ctx context.Context, txid string) ([]
 			&i.PaymentVtxoVw.Vout,
 			&i.PaymentVtxoVw.Pubkey,
 			&i.PaymentVtxoVw.Amount,
-			&i.PaymentVtxoVw.PoolTx,
+			&i.PaymentVtxoVw.RoundTx,
 			&i.PaymentVtxoVw.SpentBy,
 			&i.PaymentVtxoVw.Spent,
 			&i.PaymentVtxoVw.Redeemed,
@@ -461,7 +461,7 @@ SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, 
        round_payment_vw.id, round_payment_vw.round_id,
        round_tx_vw.id, round_tx_vw.tx, round_tx_vw.round_id, round_tx_vw.type, round_tx_vw.position, round_tx_vw.txid, round_tx_vw.tree_level, round_tx_vw.parent_txid, round_tx_vw.is_leaf,
        payment_receiver_vw.payment_id, payment_receiver_vw.pubkey, payment_receiver_vw.onchain_address, payment_receiver_vw.amount,
-       payment_vtxo_vw.txid, payment_vtxo_vw.vout, payment_vtxo_vw.pubkey, payment_vtxo_vw.amount, payment_vtxo_vw.pool_tx, payment_vtxo_vw.spent_by, payment_vtxo_vw.spent, payment_vtxo_vw.redeemed, payment_vtxo_vw.swept, payment_vtxo_vw.expire_at, payment_vtxo_vw.created_at, payment_vtxo_vw.payment_id, payment_vtxo_vw.redeem_tx
+       payment_vtxo_vw.txid, payment_vtxo_vw.vout, payment_vtxo_vw.pubkey, payment_vtxo_vw.amount, payment_vtxo_vw.round_tx, payment_vtxo_vw.spent_by, payment_vtxo_vw.spent, payment_vtxo_vw.redeemed, payment_vtxo_vw.swept, payment_vtxo_vw.expire_at, payment_vtxo_vw.created_at, payment_vtxo_vw.payment_id, payment_vtxo_vw.redeem_tx
 FROM round
          LEFT OUTER JOIN round_payment_vw ON round.id=round_payment_vw.round_id
          LEFT OUTER JOIN round_tx_vw ON round.id=round_tx_vw.round_id
@@ -519,7 +519,7 @@ func (q *Queries) SelectSweepableRounds(ctx context.Context) ([]SelectSweepableR
 			&i.PaymentVtxoVw.Vout,
 			&i.PaymentVtxoVw.Pubkey,
 			&i.PaymentVtxoVw.Amount,
-			&i.PaymentVtxoVw.PoolTx,
+			&i.PaymentVtxoVw.RoundTx,
 			&i.PaymentVtxoVw.SpentBy,
 			&i.PaymentVtxoVw.Spent,
 			&i.PaymentVtxoVw.Redeemed,
@@ -543,7 +543,7 @@ func (q *Queries) SelectSweepableRounds(ctx context.Context) ([]SelectSweepableR
 }
 
 const selectSweepableVtxos = `-- name: SelectSweepableVtxos :many
-SELECT vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.created_at, vtxo.payment_id, vtxo.redeem_tx FROM vtxo
+SELECT vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.round_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.created_at, vtxo.payment_id, vtxo.redeem_tx FROM vtxo
 WHERE redeemed = false AND swept = false
 `
 
@@ -565,7 +565,7 @@ func (q *Queries) SelectSweepableVtxos(ctx context.Context) ([]SelectSweepableVt
 			&i.Vtxo.Vout,
 			&i.Vtxo.Pubkey,
 			&i.Vtxo.Amount,
-			&i.Vtxo.PoolTx,
+			&i.Vtxo.RoundTx,
 			&i.Vtxo.SpentBy,
 			&i.Vtxo.Spent,
 			&i.Vtxo.Redeemed,
@@ -593,7 +593,7 @@ SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, 
        round_payment_vw.id, round_payment_vw.round_id,
        round_tx_vw.id, round_tx_vw.tx, round_tx_vw.round_id, round_tx_vw.type, round_tx_vw.position, round_tx_vw.txid, round_tx_vw.tree_level, round_tx_vw.parent_txid, round_tx_vw.is_leaf,
        payment_receiver_vw.payment_id, payment_receiver_vw.pubkey, payment_receiver_vw.onchain_address, payment_receiver_vw.amount,
-       payment_vtxo_vw.txid, payment_vtxo_vw.vout, payment_vtxo_vw.pubkey, payment_vtxo_vw.amount, payment_vtxo_vw.pool_tx, payment_vtxo_vw.spent_by, payment_vtxo_vw.spent, payment_vtxo_vw.redeemed, payment_vtxo_vw.swept, payment_vtxo_vw.expire_at, payment_vtxo_vw.created_at, payment_vtxo_vw.payment_id, payment_vtxo_vw.redeem_tx
+       payment_vtxo_vw.txid, payment_vtxo_vw.vout, payment_vtxo_vw.pubkey, payment_vtxo_vw.amount, payment_vtxo_vw.round_tx, payment_vtxo_vw.spent_by, payment_vtxo_vw.spent, payment_vtxo_vw.redeemed, payment_vtxo_vw.swept, payment_vtxo_vw.expire_at, payment_vtxo_vw.created_at, payment_vtxo_vw.payment_id, payment_vtxo_vw.redeem_tx
 FROM round
          LEFT OUTER JOIN round_payment_vw ON round.id=round_payment_vw.round_id
          LEFT OUTER JOIN round_tx_vw ON round.id=round_tx_vw.round_id
@@ -651,7 +651,7 @@ func (q *Queries) SelectSweptRounds(ctx context.Context) ([]SelectSweptRoundsRow
 			&i.PaymentVtxoVw.Vout,
 			&i.PaymentVtxoVw.Pubkey,
 			&i.PaymentVtxoVw.Amount,
-			&i.PaymentVtxoVw.PoolTx,
+			&i.PaymentVtxoVw.RoundTx,
 			&i.PaymentVtxoVw.SpentBy,
 			&i.PaymentVtxoVw.Spent,
 			&i.PaymentVtxoVw.Redeemed,
@@ -675,7 +675,7 @@ func (q *Queries) SelectSweptRounds(ctx context.Context) ([]SelectSweptRoundsRow
 }
 
 const selectVtxoByOutpoint = `-- name: SelectVtxoByOutpoint :one
-SELECT vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.created_at, vtxo.payment_id, vtxo.redeem_tx FROM vtxo
+SELECT vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.round_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.created_at, vtxo.payment_id, vtxo.redeem_tx FROM vtxo
 WHERE txid = ? AND vout = ?
 `
 
@@ -696,7 +696,7 @@ func (q *Queries) SelectVtxoByOutpoint(ctx context.Context, arg SelectVtxoByOutp
 		&i.Vtxo.Vout,
 		&i.Vtxo.Pubkey,
 		&i.Vtxo.Amount,
-		&i.Vtxo.PoolTx,
+		&i.Vtxo.RoundTx,
 		&i.Vtxo.SpentBy,
 		&i.Vtxo.Spent,
 		&i.Vtxo.Redeemed,
@@ -709,30 +709,30 @@ func (q *Queries) SelectVtxoByOutpoint(ctx context.Context, arg SelectVtxoByOutp
 	return i, err
 }
 
-const selectVtxosByPoolTxid = `-- name: SelectVtxosByPoolTxid :many
-SELECT vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.pool_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.created_at, vtxo.payment_id, vtxo.redeem_tx FROM vtxo
-WHERE pool_tx = ?
+const selectVtxosByRoundTxid = `-- name: SelectVtxosByRoundTxid :many
+SELECT vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.round_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.created_at, vtxo.payment_id, vtxo.redeem_tx FROM vtxo
+WHERE round_tx = ?
 `
 
-type SelectVtxosByPoolTxidRow struct {
+type SelectVtxosByRoundTxidRow struct {
 	Vtxo Vtxo
 }
 
-func (q *Queries) SelectVtxosByPoolTxid(ctx context.Context, poolTx string) ([]SelectVtxosByPoolTxidRow, error) {
-	rows, err := q.db.QueryContext(ctx, selectVtxosByPoolTxid, poolTx)
+func (q *Queries) SelectVtxosByRoundTxid(ctx context.Context, roundTx string) ([]SelectVtxosByRoundTxidRow, error) {
+	rows, err := q.db.QueryContext(ctx, selectVtxosByRoundTxid, roundTx)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []SelectVtxosByPoolTxidRow
+	var items []SelectVtxosByRoundTxidRow
 	for rows.Next() {
-		var i SelectVtxosByPoolTxidRow
+		var i SelectVtxosByRoundTxidRow
 		if err := rows.Scan(
 			&i.Vtxo.Txid,
 			&i.Vtxo.Vout,
 			&i.Vtxo.Pubkey,
 			&i.Vtxo.Amount,
-			&i.Vtxo.PoolTx,
+			&i.Vtxo.RoundTx,
 			&i.Vtxo.SpentBy,
 			&i.Vtxo.Spent,
 			&i.Vtxo.Redeemed,
@@ -960,11 +960,11 @@ func (q *Queries) UpsertTransaction(ctx context.Context, arg UpsertTransactionPa
 }
 
 const upsertVtxo = `-- name: UpsertVtxo :exec
-INSERT INTO vtxo (txid, vout, pubkey, amount, pool_tx, spent_by, spent, redeemed, swept, expire_at, created_at, redeem_tx)
+INSERT INTO vtxo (txid, vout, pubkey, amount, round_tx, spent_by, spent, redeemed, swept, expire_at, created_at, redeem_tx)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(txid, vout) DO UPDATE SET
     pubkey = EXCLUDED.pubkey,
     amount = EXCLUDED.amount,
-    pool_tx = EXCLUDED.pool_tx,
+    round_tx = EXCLUDED.round_tx,
     spent_by = EXCLUDED.spent_by,
     spent = EXCLUDED.spent,
     redeemed = EXCLUDED.redeemed,
@@ -979,7 +979,7 @@ type UpsertVtxoParams struct {
 	Vout      int64
 	Pubkey    string
 	Amount    int64
-	PoolTx    string
+	RoundTx   string
 	SpentBy   string
 	Spent     bool
 	Redeemed  bool
@@ -995,7 +995,7 @@ func (q *Queries) UpsertVtxo(ctx context.Context, arg UpsertVtxoParams) error {
 		arg.Vout,
 		arg.Pubkey,
 		arg.Amount,
-		arg.PoolTx,
+		arg.RoundTx,
 		arg.SpentBy,
 		arg.Spent,
 		arg.Redeemed,

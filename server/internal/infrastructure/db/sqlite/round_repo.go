@@ -477,7 +477,7 @@ func rowToPaymentVtxoVw(row queries.PaymentVtxoVw) domain.Vtxo {
 		},
 		Amount:    uint64(row.Amount.Int64),
 		Pubkey:    row.Pubkey.String,
-		RoundTxid: row.PoolTx.String,
+		RoundTxid: row.RoundTx.String,
 		SpentBy:   row.SpentBy.String,
 		Spent:     row.Spent.Bool,
 		Redeemed:  row.Redeemed.Bool,

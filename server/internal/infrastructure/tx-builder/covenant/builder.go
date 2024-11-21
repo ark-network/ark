@@ -321,17 +321,17 @@ func (b *txBuilder) BuildRoundTx(
 	sweptRounds []domain.Round,
 	_ ...*secp256k1.PublicKey, // cosigners are not used in the covenant
 ) (roundTx string, congestionTree tree.CongestionTree, connectorAddress string, connectors []string, err error) {
-	// The creation of the tree and the pool tx are tightly coupled:
+	// The creation of the tree and the round tx are tightly coupled:
 	// - building the tree requires knowing the shared outpoint (txid:vout)
-	// - building the pool tx requires knowing the shared output script and amount
+	// - building the round tx requires knowing the shared output script and amount
 	// The idea here is to first create all the data for the outputs of the txs
 	// of the congestion tree to calculate the shared output script and amount.
-	// With these data the pool tx can be created, and once the shared utxo
+	// With these data the round tx can be created, and once the shared utxo
 	// outpoint is obtained, the congestion tree can be finally created.
 	// The factory function `treeFactoryFn` returned below holds all outputs data
 	// generated in the process and takes the shared utxo outpoint as argument.
 	// This is safe as the memory allocated for `craftCongestionTree` is freed
-	// only after `BuildPoolTx` returns.
+	// only after `BuildRoundTx` returns.
 
 	var sharedOutputScript []byte
 	var sharedOutputAmount uint64
@@ -361,7 +361,7 @@ func (b *txBuilder) BuildRoundTx(
 		return
 	}
 
-	ptx, err := b.createPoolTx(
+	ptx, err := b.createRoundTx(
 		sharedOutputAmount, sharedOutputScript, payments, boardingInputs, serverPubkey, connectorAddress, sweptRounds,
 	)
 	if err != nil {
@@ -678,7 +678,7 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 	return "", fmt.Errorf("not implemented")
 }
 
-func (b *txBuilder) createPoolTx(
+func (b *txBuilder) createRoundTx(
 	sharedOutputAmount uint64,
 	sharedOutputScript []byte,
 	payments []domain.Payment,

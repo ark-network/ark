@@ -55,12 +55,12 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestBuildPoolTx(t *testing.T) {
+func TestBuildRoundTx(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(
 		wallet, common.Bitcoin, roundLifetime, boardingExitDelay,
 	)
 
-	fixtures, err := parsePoolTxFixtures()
+	fixtures, err := parseRoundTxFixtures()
 	require.NoError(t, err)
 	require.NotEmpty(t, fixtures)
 
@@ -75,18 +75,18 @@ func TestBuildPoolTx(t *testing.T) {
 					cosigners = append(cosigners, randKey.PubKey())
 				}
 
-				poolTx, congestionTree, connAddr, _, err := builder.BuildRoundTx(
+				roundTx, congestionTree, connAddr, _, err := builder.BuildRoundTx(
 					pubkey, f.Payments, []ports.BoardingInput{}, []domain.Round{}, cosigners...,
 				)
 				require.NoError(t, err)
-				require.NotEmpty(t, poolTx)
+				require.NotEmpty(t, roundTx)
 				require.NotEmpty(t, congestionTree)
 				require.Equal(t, connectorAddress, connAddr)
 				require.Equal(t, f.ExpectedNumOfNodes, congestionTree.NumberOfNodes())
 				require.Len(t, congestionTree.Leaves(), f.ExpectedNumOfLeaves)
 
 				err = bitcointree.ValidateCongestionTree(
-					congestionTree, poolTx, pubkey, roundLifetime,
+					congestionTree, roundTx, pubkey, roundLifetime,
 				)
 				require.NoError(t, err)
 			}
@@ -96,11 +96,11 @@ func TestBuildPoolTx(t *testing.T) {
 	if len(fixtures.Invalid) > 0 {
 		t.Run("invalid", func(t *testing.T) {
 			for _, f := range fixtures.Invalid {
-				poolTx, congestionTree, connAddr, _, err := builder.BuildRoundTx(
+				roundTx, congestionTree, connAddr, _, err := builder.BuildRoundTx(
 					pubkey, f.Payments, []ports.BoardingInput{}, []domain.Round{},
 				)
 				require.EqualError(t, err, f.ExpectedErr)
-				require.Empty(t, poolTx)
+				require.Empty(t, roundTx)
 				require.Empty(t, connAddr)
 				require.Empty(t, congestionTree)
 			}
@@ -127,7 +127,7 @@ func randomHex(len int) string {
 	return hex.EncodeToString(buf)
 }
 
-type poolTxFixtures struct {
+type roundTxFixtures struct {
 	Valid []struct {
 		Payments            []domain.Payment
 		ExpectedNumOfNodes  int
@@ -139,7 +139,7 @@ type poolTxFixtures struct {
 	}
 }
 
-func parsePoolTxFixtures() (*poolTxFixtures, error) {
+func parseRoundTxFixtures() (*roundTxFixtures, error) {
 	file, err := os.ReadFile("testdata/fixtures.json")
 	if err != nil {
 		return nil, err
@@ -149,9 +149,9 @@ func parsePoolTxFixtures() (*poolTxFixtures, error) {
 		return nil, err
 	}
 
-	vv := v["buildPoolTx"].(map[string]interface{})
+	vv := v["buildRoundTx"].(map[string]interface{})
 	file, _ = json.Marshal(vv)
-	var fixtures poolTxFixtures
+	var fixtures roundTxFixtures
 	if err := json.Unmarshal(file, &fixtures); err != nil {
 		return nil, err
 	}

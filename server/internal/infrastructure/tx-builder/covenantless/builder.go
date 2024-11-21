@@ -812,7 +812,7 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 	return signedRedeemTx, nil
 }
 
-// TODO use lnd CoinSelect to craft the pool tx
+// TODO use lnd CoinSelect to craft the round tx
 func (b *txBuilder) createRoundTx(
 	sharedOutputAmount int64,
 	sharedOutputScript []byte,
@@ -1190,9 +1190,9 @@ func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, 
 }
 
 func (b *txBuilder) createConnectors(
-	poolTx string, payments []domain.Payment, connectorScript []byte, feeAmount uint64,
+	roundTx string, payments []domain.Payment, connectorScript []byte, feeAmount uint64,
 ) ([]*psbt.Packet, error) {
-	partialTx, err := psbt.NewFromRawBytes(strings.NewReader(poolTx), true)
+	partialTx, err := psbt.NewFromRawBytes(strings.NewReader(roundTx), true)
 	if err != nil {
 		return nil, err
 	}

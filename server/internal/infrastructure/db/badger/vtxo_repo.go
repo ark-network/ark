@@ -91,7 +91,7 @@ func (r *vtxoRepository) GetVtxos(
 func (r *vtxoRepository) GetVtxosForRound(
 	ctx context.Context, txid string,
 ) ([]domain.Vtxo, error) {
-	query := badgerhold.Where("PoolTx").Eq(txid)
+	query := badgerhold.Where("RoundTx").Eq(txid)
 	return r.findVtxos(ctx, query)
 }
 

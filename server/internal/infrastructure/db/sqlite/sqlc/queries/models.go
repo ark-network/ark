@@ -47,7 +47,7 @@ type PaymentVtxoVw struct {
 	Vout      sql.NullInt64
 	Pubkey    sql.NullString
 	Amount    sql.NullInt64
-	PoolTx    sql.NullString
+	RoundTx   sql.NullString
 	SpentBy   sql.NullString
 	Spent     sql.NullBool
 	Redeemed  sql.NullBool
@@ -114,7 +114,7 @@ type Vtxo struct {
 	Vout      int64
 	Pubkey    string
 	Amount    int64
-	PoolTx    string
+	RoundTx   string
 	SpentBy   string
 	Spent     bool
 	Redeemed  bool

@@ -82,7 +82,7 @@ func ValidateCongestionTree(
 		return ErrInvalidRoundTxOutputs
 	}
 
-	poolTxAmount := roundTransaction.UnsignedTx.TxOut[sharedOutputIndex].Value
+	roundTxAmount := roundTransaction.UnsignedTx.TxOut[sharedOutputIndex].Value
 
 	nbNodes := vtxoTree.NumberOfNodes()
 	if nbNodes == 0 {
@@ -93,7 +93,7 @@ func ValidateCongestionTree(
 		return ErrInvalidRootLevel
 	}
 
-	// check that root input is connected to the pool tx
+	// check that root input is connected to the round tx
 	rootPsetB64 := vtxoTree[0][0].Tx
 	rootPset, err := psbt.NewFromRawBytes(strings.NewReader(rootPsetB64), true)
 	if err != nil {
@@ -115,7 +115,7 @@ func ValidateCongestionTree(
 		sumRootValue += output.Value
 	}
 
-	if sumRootValue >= poolTxAmount {
+	if sumRootValue >= roundTxAmount {
 		return ErrInvalidAmount
 	}
 

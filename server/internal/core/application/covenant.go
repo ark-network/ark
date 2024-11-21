@@ -405,8 +405,8 @@ func (s *covenantService) GetTransactionEventsChannel(ctx context.Context) <-cha
 	return s.transactionEventsCh
 }
 
-func (s *covenantService) GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error) {
-	return s.repoManager.Rounds().GetRoundWithTxid(ctx, poolTxid)
+func (s *covenantService) GetRoundByTxid(ctx context.Context, roundTxid string) (*domain.Round, error) {
+	return s.repoManager.Rounds().GetRoundWithTxid(ctx, roundTxid)
 }
 
 func (s *covenantService) GetCurrentRound(ctx context.Context) (*domain.Round, error) {
@@ -549,18 +549,18 @@ func (s *covenantService) startFinalization() {
 		return
 	}
 
-	unsignedPoolTx, tree, connectorAddress, connectors, err := s.builder.BuildRoundTx(s.pubkey, payments, boardingInputs, sweptRounds)
+	unsignedRoundTx, tree, connectorAddress, connectors, err := s.builder.BuildRoundTx(s.pubkey, payments, boardingInputs, sweptRounds)
 	if err != nil {
-		round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
-		log.WithError(err).Warn("failed to create pool tx")
+		round.Fail(fmt.Errorf("failed to create round tx: %s", err))
+		log.WithError(err).Warn("failed to create round tx")
 		return
 	}
-	log.Debugf("pool tx created for round %s", round.Id)
+	log.Debugf("round tx created for round %s", round.Id)
 
 	s.forfeitTxs.init(connectors, payments)
 
 	if _, err := round.StartFinalization(
-		connectorAddress, connectors, tree, unsignedPoolTx,
+		connectorAddress, connectors, tree, unsignedRoundTx,
 	); err != nil {
 		round.Fail(fmt.Errorf("failed to start finalization: %s", err))
 		log.WithError(err).Warn("failed to start finalization")
@@ -639,8 +639,8 @@ func (s *covenantService) finalizeRound() {
 	txid, err := s.wallet.BroadcastTransaction(ctx, signedRoundTx)
 	if err != nil {
 		log.Debugf("failed to broadcast round tx: %s", signedRoundTx)
-		changes = round.Fail(fmt.Errorf("failed to broadcast pool tx: %s", err))
-		log.WithError(err).Warn("failed to broadcast pool tx")
+		changes = round.Fail(fmt.Errorf("failed to broadcast round tx: %s", err))
+		log.WithError(err).Warn("failed to broadcast round tx")
 		return
 	}
 
@@ -651,7 +651,7 @@ func (s *covenantService) finalizeRound() {
 		return
 	}
 
-	log.Debugf("finalized round %s with pool tx %s", round.Id, round.Txid)
+	log.Debugf("finalized round %s with round tx %s", round.Id, round.Txid)
 }
 
 func (s *covenantService) listenToScannerNotifications() {

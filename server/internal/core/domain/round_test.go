@@ -113,7 +113,7 @@ var (
 	}
 	connectors = []string{emptyPtx, emptyPtx, emptyPtx}
 	forfeitTxs = []string{emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx}
-	poolTx     = emptyTx
+	roundTx    = emptyTx
 )
 
 func TestRound(t *testing.T) {
@@ -291,7 +291,7 @@ func testStartFinalization(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			events, err = round.StartFinalization("", connectors, congestionTree, poolTx)
+			events, err = round.StartFinalization("", connectors, congestionTree, roundTx)
 			require.NoError(t, err)
 			require.Len(t, events, 1)
 			require.True(t, round.IsStarted())
@@ -303,7 +303,7 @@ func testStartFinalization(t *testing.T) {
 			require.Equal(t, round.Id, event.Id)
 			require.Exactly(t, connectors, event.Connectors)
 			require.Exactly(t, congestionTree, event.CongestionTree)
-			require.Exactly(t, poolTx, event.RoundTx)
+			require.Exactly(t, roundTx, event.RoundTx)
 		})
 
 		t.Run("invalid", func(t *testing.T) {
@@ -315,7 +315,7 @@ func testStartFinalization(t *testing.T) {
 				round       *domain.Round
 				connectors  []string
 				tree        tree.CongestionTree
-				poolTx      string
+				roundTx     string
 				expectedErr string
 			}{
 				{
@@ -328,8 +328,8 @@ func testStartFinalization(t *testing.T) {
 					},
 					connectors:  connectors,
 					tree:        congestionTree,
-					poolTx:      "",
-					expectedErr: "missing unsigned pool tx",
+					roundTx:     "",
+					expectedErr: "missing unsigned round tx",
 				},
 				{
 					round: &domain.Round{
@@ -341,7 +341,7 @@ func testStartFinalization(t *testing.T) {
 					},
 					connectors:  connectors,
 					tree:        congestionTree,
-					poolTx:      poolTx,
+					roundTx:     roundTx,
 					expectedErr: "no payments registered",
 				},
 				{
@@ -354,7 +354,7 @@ func testStartFinalization(t *testing.T) {
 					},
 					connectors:  connectors,
 					tree:        congestionTree,
-					poolTx:      poolTx,
+					roundTx:     roundTx,
 					expectedErr: "not in a valid stage to start payment finalization",
 				},
 				{
@@ -368,7 +368,7 @@ func testStartFinalization(t *testing.T) {
 					},
 					connectors:  connectors,
 					tree:        congestionTree,
-					poolTx:      poolTx,
+					roundTx:     roundTx,
 					expectedErr: "not in a valid stage to start payment finalization",
 				},
 				{
@@ -381,14 +381,14 @@ func testStartFinalization(t *testing.T) {
 					},
 					connectors:  connectors,
 					tree:        congestionTree,
-					poolTx:      poolTx,
+					roundTx:     roundTx,
 					expectedErr: "not in a valid stage to start payment finalization",
 				},
 			}
 
 			for _, f := range fixtures {
 				// TODO fix this
-				events, err := f.round.StartFinalization("", f.connectors, f.tree, f.poolTx)
+				events, err := f.round.StartFinalization("", f.connectors, f.tree, f.roundTx)
 				require.EqualError(t, err, f.expectedErr)
 				require.Empty(t, events)
 			}
@@ -408,7 +408,7 @@ func testEndFinalization(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			events, err = round.StartFinalization("", connectors, congestionTree, poolTx)
+			events, err = round.StartFinalization("", connectors, congestionTree, roundTx)
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
@@ -459,7 +459,7 @@ func testEndFinalization(t *testing.T) {
 					},
 					forfeitTxs:  forfeitTxs,
 					txid:        "",
-					expectedErr: "missing pool txid",
+					expectedErr: "missing round txid",
 				},
 				{
 					round: &domain.Round{

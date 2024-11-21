@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS vtxo (
 	vout INTEGER NOT NULL,
 	pubkey TEXT NOT NULL,
 	amount INTEGER NOT NULL,
-	pool_tx TEXT NOT NULL,
+	round_tx TEXT NOT NULL,
 	spent_by TEXT NOT NULL,
 	spent BOOLEAN NOT NULL,
 	redeemed BOOLEAN NOT NULL,

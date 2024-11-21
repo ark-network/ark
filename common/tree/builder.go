@@ -322,7 +322,7 @@ func (n *node) getTx(
 }
 
 func (n *node) createFinalCongestionTree() TreeFactory {
-	return func(poolTxInput psetv2.InputArgs) (CongestionTree, error) {
+	return func(roundTxInput psetv2.InputArgs) (CongestionTree, error) {
 		congestionTree := make(CongestionTree, 0)
 
 		_, taprootTree, err := n.getWitnessData()
@@ -330,7 +330,7 @@ func (n *node) createFinalCongestionTree() TreeFactory {
 			return nil, err
 		}
 
-		ins := []psetv2.InputArgs{poolTxInput}
+		ins := []psetv2.InputArgs{roundTxInput}
 		inTrees := []*taproot.IndexedElementsTapScriptTree{taprootTree}
 		nodes := []*node{n}
 

@@ -1197,7 +1197,7 @@ func (s *covenantlessService) finalizeRound(notes []note.Note) {
 
 	txid, err := s.wallet.BroadcastTransaction(ctx, signedRoundTx)
 	if err != nil {
-		changes = round.Fail(fmt.Errorf("failed to broadcast pool tx: %s", err))
+		changes = round.Fail(fmt.Errorf("failed to broadcast round tx: %s", err))
 		return
 	}
 
@@ -1224,7 +1224,7 @@ func (s *covenantlessService) finalizeRound(notes []note.Note) {
 		}
 	}()
 
-	log.Debugf("finalized round %s with pool tx %s", round.Id, round.Txid)
+	log.Debugf("finalized round %s with round tx %s", round.Id, round.Txid)
 }
 
 func (s *covenantlessService) listenToScannerNotifications() {

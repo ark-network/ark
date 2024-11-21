@@ -1900,21 +1900,22 @@ func (a *covenantlessArkClient) handleRoundFinalization(
 func (a *covenantlessArkClient) validateCongestionTree(
 	event client.RoundFinalizationEvent, receivers []client.Output,
 ) error {
-	poolTx := event.Tx
-	ptx, err := psbt.NewFromRawBytes(strings.NewReader(poolTx), true)
+	roundTx := event.Tx
+	ptx, err := psbt.NewFromRawBytes(strings.NewReader(roundTx), true)
 	if err != nil {
 		return err
 	}
 
 	if !utils.IsOnchainOnly(receivers) {
 		if err := bitcointree.ValidateCongestionTree(
-			event.Tree, poolTx, a.Config.ServerPubkey, a.RoundLifetime,
+			event.Tree, roundTx, a.Config.ServerPubkey, a.RoundLifetime,
 		); err != nil {
 			return err
 		}
 	}
 
-	// if err := common.ValidateConnectors(poolTx, event.Connectors); err != nil {
+	// TODO: common.ValidateConnectors is for covenant version (liquid), add covenantless (bitcoin) version
+	// if err := common.ValidateConnectors(roundTx, event.Connectors); err != nil {
 	// 	return err
 	// }
 

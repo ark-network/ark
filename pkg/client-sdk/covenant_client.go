@@ -1273,8 +1273,8 @@ func (a *covenantArkClient) handleRoundFinalization(
 func (a *covenantArkClient) validateCongestionTree(
 	event client.RoundFinalizationEvent, receivers []client.Output,
 ) error {
-	poolTx := event.Tx
-	ptx, err := psetv2.NewPsetFromBase64(poolTx)
+	roundTx := event.Tx
+	ptx, err := psetv2.NewPsetFromBase64(roundTx)
 	if err != nil {
 		return err
 	}
@@ -1283,13 +1283,13 @@ func (a *covenantArkClient) validateCongestionTree(
 
 	if !utils.IsOnchainOnly(receivers) {
 		if err := tree.ValidateCongestionTree(
-			event.Tree, poolTx, a.Config.ServerPubkey, a.RoundLifetime,
+			event.Tree, roundTx, a.Config.ServerPubkey, a.RoundLifetime,
 		); err != nil {
 			return err
 		}
 	}
 
-	if err := common.ValidateConnectors(poolTx, connectors); err != nil {
+	if err := common.ValidateConnectors(roundTx, connectors); err != nil {
 		return err
 	}
 

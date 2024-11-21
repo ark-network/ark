@@ -147,9 +147,9 @@ func (r *Round) RegisterPayments(payments []Payment) ([]RoundEvent, error) {
 	return []RoundEvent{event}, nil
 }
 
-func (r *Round) StartFinalization(connectorAddress string, connectors []string, congestionTree tree.CongestionTree, poolTx string) ([]RoundEvent, error) {
-	if len(poolTx) <= 0 {
-		return nil, fmt.Errorf("missing unsigned pool tx")
+func (r *Round) StartFinalization(connectorAddress string, connectors []string, congestionTree tree.CongestionTree, roundTx string) ([]RoundEvent, error) {
+	if len(roundTx) <= 0 {
+		return nil, fmt.Errorf("missing unsigned round tx")
 	}
 	if r.Stage.Code != RegistrationStage || r.IsFailed() {
 		return nil, fmt.Errorf("not in a valid stage to start payment finalization")
@@ -163,7 +163,7 @@ func (r *Round) StartFinalization(connectorAddress string, connectors []string, 
 		CongestionTree:   congestionTree,
 		Connectors:       connectors,
 		ConnectorAddress: connectorAddress,
-		RoundTx:          poolTx,
+		RoundTx:          roundTx,
 	}
 	r.raise(event)
 
@@ -179,7 +179,7 @@ func (r *Round) EndFinalization(forfeitTxs []string, txid string) ([]RoundEvent,
 		}
 	}
 	if len(txid) <= 0 {
-		return nil, fmt.Errorf("missing pool txid")
+		return nil, fmt.Errorf("missing round txid")
 	}
 	if r.Stage.Code != FinalizationStage || r.IsFailed() {
 		return nil, fmt.Errorf("not in a valid stage to end payment finalization")
