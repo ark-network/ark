@@ -282,17 +282,19 @@ func createRootNode(
 func createAggregatedKeyWithSweep(
 	cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, roundLifetime int64,
 ) (*musig2.AggregateKey, *psbt.TaprootTapLeafScript, error) {
-	sweepClosure := &CSVSigClosure{
-		Pubkey:  aspPubkey,
-		Seconds: uint(roundLifetime),
+	sweepClosure := &tree.CSVSigClosure{
+		MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{aspPubkey}},
+		Seconds:         uint(roundLifetime),
 	}
 
-	sweepLeaf, err := sweepClosure.Leaf()
+	sweepScript, err := sweepClosure.Script()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	tapTree := txscript.AssembleTaprootScriptTree(*sweepLeaf)
+	sweepLeaf := txscript.NewBaseTapLeaf(sweepScript)
+
+	tapTree := txscript.AssembleTaprootScriptTree(sweepLeaf)
 	tapTreeRoot := tapTree.RootNode.TapHash()
 
 	aggregatedKey, err := AggregateKeys(

@@ -1,7 +1,6 @@
 package bitcointree_test
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"os"
 	"testing"
@@ -49,7 +48,7 @@ func TestRoundTripSignTree(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		tree, err := bitcointree.CraftCongestionTree(
+		vtxoTree, err := bitcointree.CraftCongestionTree(
 			&wire.OutPoint{
 				Hash:  *testTxid,
 				Index: 0,
@@ -62,20 +61,21 @@ func TestRoundTripSignTree(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		sweepClosure := bitcointree.CSVSigClosure{
-			Pubkey:  asp.PubKey(),
-			Seconds: lifetime,
+		sweepClosure := &tree.CSVSigClosure{
+			MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{asp.PubKey()}},
+			Seconds:         uint(lifetime),
 		}
 
-		sweepTapLeaf, err := sweepClosure.Leaf()
+		sweepScript, err := sweepClosure.Script()
 		require.NoError(t, err)
 
-		sweepTapTree := txscript.AssembleTaprootScriptTree(*sweepTapLeaf)
+		sweepTapLeaf := txscript.NewBaseTapLeaf(sweepScript)
+		sweepTapTree := txscript.AssembleTaprootScriptTree(sweepTapLeaf)
 		root := sweepTapTree.RootNode.TapHash()
 
 		aspCoordinator, err := bitcointree.NewTreeCoordinatorSession(
 			sharedOutputAmount,
-			tree,
+			vtxoTree,
 			root.CloneBytes(),
 			cosignerPubKeys,
 		)
@@ -84,7 +84,7 @@ func TestRoundTripSignTree(t *testing.T) {
 		// Create signer sessions for all cosigners
 		signerSessions := make([]bitcointree.SignerSession, 20)
 		for i, cosigner := range cosigners {
-			signerSessions[i] = bitcointree.NewTreeSignerSession(cosigner, sharedOutputAmount, tree, root.CloneBytes())
+			signerSessions[i] = bitcointree.NewTreeSignerSession(cosigner, sharedOutputAmount, vtxoTree, root.CloneBytes())
 		}
 
 		// Get nonces from all signers
@@ -134,24 +134,6 @@ func TestRoundTripSignTree(t *testing.T) {
 type receiverFixture struct {
 	Amount int64  `json:"amount"`
 	Pubkey string `json:"pubkey"`
-}
-
-func (r receiverFixture) toVtxoScript(asp *secp256k1.PublicKey) bitcointree.VtxoScript {
-	bytesKey, err := hex.DecodeString(r.Pubkey)
-	if err != nil {
-		panic(err)
-	}
-
-	pubkey, err := secp256k1.ParsePubKey(bytesKey)
-	if err != nil {
-		panic(err)
-	}
-
-	return &bitcointree.DefaultVtxoScript{
-		Owner:     pubkey,
-		Asp:       asp,
-		ExitDelay: exitDelay,
-	}
 }
 
 func castReceivers(receivers []receiverFixture) []tree.VtxoLeaf {

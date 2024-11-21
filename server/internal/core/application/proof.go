@@ -24,7 +24,7 @@ type OwnershipProof struct {
 
 func (p OwnershipProof) validate(vtxo domain.Vtxo) error {
 	// verify revealed script and extract user public key
-	pubkey, err := decodeForfeitClosure(p.Script)
+	pubkeys, err := decodeForfeitClosure(p.Script)
 	if err != nil {
 		return err
 	}
@@ -49,24 +49,32 @@ func (p OwnershipProof) validate(vtxo domain.Vtxo) error {
 	outpointBytes := append(txhash[:], voutBytes...)
 	sigMsg := sha256.Sum256(outpointBytes)
 
-	if !p.Signature.Verify(sigMsg[:], pubkey) {
+	valid := false
+	for _, pubkey := range pubkeys {
+		if p.Signature.Verify(sigMsg[:], pubkey) {
+			valid = true
+			break
+		}
+	}
+
+	if !valid {
 		return fmt.Errorf("invalid signature")
 	}
 
 	return nil
 }
 
-func decodeForfeitClosure(script []byte) (*secp256k1.PublicKey, error) {
-	var covenantLessForfeitClosure bitcointree.MultisigClosure
+func decodeForfeitClosure(script []byte) ([]*secp256k1.PublicKey, error) {
+	var forfeit tree.MultisigClosure
 
-	if valid, err := covenantLessForfeitClosure.Decode(script); err == nil && valid {
-		return covenantLessForfeitClosure.Pubkey, nil
+	valid, err := forfeit.Decode(script)
+	if err != nil {
+		return nil, err
 	}
 
-	var covenantForfeitClosure tree.CSVSigClosure
-	if valid, err := covenantForfeitClosure.Decode(script); err == nil && valid {
-		return covenantForfeitClosure.Pubkey, nil
+	if !valid {
+		return nil, fmt.Errorf("invalid forfeit closure script")
 	}
 
-	return nil, fmt.Errorf("invalid forfeit closure script")
+	return forfeit.PubKeys, nil
 }

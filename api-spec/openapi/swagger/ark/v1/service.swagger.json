@@ -651,6 +651,9 @@
         },
         "descriptor": {
           "type": "string"
+        },
+        "tapscripts": {
+          "$ref": "#/definitions/v1Tapscripts"
         }
       }
     },
@@ -751,6 +754,9 @@
         },
         "descriptor": {
           "type": "string"
+        },
+        "tapscripts": {
+          "$ref": "#/definitions/v1Tapscripts"
         }
       }
     },
@@ -846,7 +852,7 @@
           "title": "VTXO outpoint signed with script's secret key"
         }
       },
-      "description": "This message is used to prove to the ASP that the user controls the vtxo without revealing the whole VTXO descriptor."
+      "description": "This message is used to prove to the ASP that the user controls the vtxo without revealing the whole VTXO taproot tree."
     },
     "v1PingResponse": {
       "type": "object"
@@ -1158,6 +1164,17 @@
     },
     "v1SubmitTreeSignaturesResponse": {
       "type": "object"
+    },
+    "v1Tapscripts": {
+      "type": "object",
+      "properties": {
+        "scripts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     },
     "v1Tree": {
       "type": "object",

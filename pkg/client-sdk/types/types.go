@@ -113,7 +113,7 @@ type Utxo struct {
 	Delay       uint
 	SpendableAt time.Time
 	CreatedAt   time.Time
-	Descriptor  string
+	Tapscripts  []string
 	Spent       bool
 }
 

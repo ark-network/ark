@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/descriptor"
 	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
@@ -162,29 +161,30 @@ func (s *covenantService) Stop() {
 	close(s.eventsCh)
 }
 
-func (s *covenantService) GetBoardingAddress(ctx context.Context, userPubkey *secp256k1.PublicKey) (string, string, error) {
-	vtxoScript := &tree.DefaultVtxoScript{
-		Asp:       s.pubkey,
-		Owner:     userPubkey,
-		ExitDelay: uint(s.boardingExitDelay),
-	}
+func (s *covenantService) GetBoardingAddress(ctx context.Context, userPubkey *secp256k1.PublicKey) (string, []string, error) {
+	vtxoScript := tree.NewDefaultVtxoScript(userPubkey, s.pubkey, uint(s.boardingExitDelay))
 
 	tapKey, _, err := vtxoScript.TapTree()
 	if err != nil {
-		return "", "", fmt.Errorf("failed to get taproot key: %s", err)
+		return "", nil, fmt.Errorf("failed to get taproot key: %s", err)
 	}
 
 	p2tr, err := payment.FromTweakedKey(tapKey, s.onchainNetwork(), nil)
 	if err != nil {
-		return "", "", err
+		return "", nil, err
 	}
 
 	addr, err := p2tr.TaprootAddress()
 	if err != nil {
-		return "", "", err
+		return "", nil, err
 	}
 
-	return addr, vtxoScript.ToDescriptor(), nil
+	scripts, err := vtxoScript.Encode()
+	if err != nil {
+		return "", nil, err
+	}
+
+	return addr, scripts, nil
 }
 
 func (s *covenantService) SpendNotes(_ context.Context, _ []note.Note) (string, error) {
@@ -224,8 +224,18 @@ func (s *covenantService) SpendVtxos(ctx context.Context, inputs []ports.Input) 
 					return "", fmt.Errorf("tx %s not confirmed", input.Txid)
 				}
 
+				vtxoScript, err := tree.ParseVtxoScript(input.Tapscripts)
+				if err != nil {
+					return "", fmt.Errorf("failed to parse boarding descriptor: %s", err)
+				}
+
+				exitDelay, err := vtxoScript.SmallestExitDelay()
+				if err != nil {
+					return "", fmt.Errorf("failed to get exit delay: %s", err)
+				}
+
 				// if the exit path is available, forbid registering the boarding utxo
-				if blocktime+int64(s.boardingExitDelay) < now {
+				if blocktime+int64(exitDelay) < now {
 					return "", fmt.Errorf("tx %s expired", input.Txid)
 				}
 
@@ -255,7 +265,7 @@ func (s *covenantService) SpendVtxos(ctx context.Context, inputs []ports.Input) 
 			return "", fmt.Errorf("input %s:%d already swept", vtxo.Txid, vtxo.VOut)
 		}
 
-		vtxoScript, err := tree.ParseVtxoScript(input.Descriptor)
+		vtxoScript, err := tree.ParseVtxoScript(input.Tapscripts)
 		if err != nil {
 			return "", fmt.Errorf("failed to parse boarding descriptor: %s", err)
 		}
@@ -303,7 +313,7 @@ func (s *covenantService) newBoardingInput(tx *transaction.Transaction, input po
 		return nil, fmt.Errorf("failed to parse value: %s", err)
 	}
 
-	boardingScript, err := tree.ParseVtxoScript(input.Descriptor)
+	boardingScript, err := tree.ParseVtxoScript(input.Tapscripts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse boarding descriptor: %s", err)
 	}
@@ -322,16 +332,8 @@ func (s *covenantService) newBoardingInput(tx *transaction.Transaction, input po
 		return nil, fmt.Errorf("descriptor does not match script in transaction output")
 	}
 
-	if defaultVtxoScript, ok := boardingScript.(*tree.DefaultVtxoScript); ok {
-		if !bytes.Equal(schnorr.SerializePubKey(defaultVtxoScript.Asp), schnorr.SerializePubKey(s.pubkey)) {
-			return nil, fmt.Errorf("invalid boarding descriptor, ASP mismatch")
-		}
-
-		if defaultVtxoScript.ExitDelay != uint(s.boardingExitDelay) {
-			return nil, fmt.Errorf("invalid boarding descriptor, timeout mismatch")
-		}
-	} else {
-		return nil, fmt.Errorf("only default vtxo script is supported for boarding")
+	if err := boardingScript.Validate(s.pubkey, uint(s.unilateralExitDelay)); err != nil {
+		return nil, err
 	}
 
 	return &ports.BoardingInput{
@@ -398,6 +400,11 @@ func (s *covenantService) ListVtxos(ctx context.Context, address string) ([]doma
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to decode address: %s", err)
 	}
+
+	if !bytes.Equal(schnorr.SerializePubKey(decodedAddress.Asp), schnorr.SerializePubKey(s.pubkey)) {
+		return nil, nil, fmt.Errorf("address does not match server pubkey")
+	}
+
 	pubkey := hex.EncodeToString(schnorr.SerializePubKey(decodedAddress.VtxoTapKey))
 
 	return s.repoManager.Vtxos().GetAllVtxos(ctx, pubkey)
@@ -459,15 +466,7 @@ func (s *covenantService) GetInfo(ctx context.Context) (*ServiceInfo, error) {
 		RoundInterval:       s.roundInterval,
 		Network:             s.network.Name,
 		Dust:                dust,
-		BoardingDescriptorTemplate: fmt.Sprintf(
-			descriptor.DefaultVtxoDescriptorTemplate,
-			hex.EncodeToString(tree.UnspendableKey().SerializeCompressed()),
-			"USER",
-			hex.EncodeToString(schnorr.SerializePubKey(s.pubkey)),
-			s.boardingExitDelay,
-			"USER",
-		),
-		ForfeitAddress: forfeitAddress,
+		ForfeitAddress:      forfeitAddress,
 		NextMarketHour: &NextMarketHour{
 			StartTime:     marketHourNextStart,
 			EndTime:       marketHourNextEnd,
@@ -887,6 +886,7 @@ func (s *covenantService) reactToFraud(ctx context.Context, vtxo domain.Vtxo, mu
 
 	forfeitTxid, err := s.wallet.BroadcastTransaction(ctx, forfeitTxHex)
 	if err != nil {
+		log.Debug(forfeitTxHex)
 		return fmt.Errorf("failed to broadcast forfeit tx: %s", err)
 	}
 

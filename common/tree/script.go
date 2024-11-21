@@ -9,8 +9,8 @@ import (
 	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/vulpemventures/go-elements/taproot"
 )
 
 const (
@@ -21,108 +21,333 @@ const (
 	OP_SUB64                     = 0xd8
 )
 
+type MultisigType int
+
+const (
+	MultisigTypeChecksig MultisigType = iota
+	MultisigTypeChecksigAdd
+)
+
 type Closure interface {
-	Leaf() (*taproot.TapElementsLeaf, error)
+	Script() ([]byte, error)
 	Decode(script []byte) (bool, error)
+	// WitnessSize returns the size of the witness excluding the script and control block
+	WitnessSize() int
+	Witness(controlBlock []byte, signatures map[string][]byte) (wire.TxWitness, error)
 }
 
+// UnrollClosure is liquid-only tapscript letting to enforce
+// unrollable UTXO without musig.
 type UnrollClosure struct {
 	LeftKey, RightKey       *secp256k1.PublicKey
 	LeftAmount, RightAmount uint64
 	MinRelayFee             uint64
 }
 
+// MultisigClosure is a closure that contains a list of public keys and a
+// CHECKSIG for each key. The witness size is 64 bytes per key, admitting the
+// sighash type is SIGHASH_DEFAULT.
+type MultisigClosure struct {
+	PubKeys []*secp256k1.PublicKey
+	Type    MultisigType
+}
+
+// CSVSigClosure is a closure that contains a list of public keys and a
+// CHECKSEQUENCEVERIFY + DROP. The witness size is 64 bytes per key, admitting
+// the sighash type is SIGHASH_DEFAULT.
 type CSVSigClosure struct {
-	Pubkey  *secp256k1.PublicKey
+	MultisigClosure
 	Seconds uint
 }
 
-type MultisigClosure struct {
-	Pubkey    *secp256k1.PublicKey
-	AspPubkey *secp256k1.PublicKey
-}
-
 func DecodeClosure(script []byte) (Closure, error) {
-	var closure Closure
-
-	closure = &UnrollClosure{}
-	if valid, err := closure.Decode(script); err == nil && valid {
-		return closure, nil
+	types := []Closure{
+		&CSVSigClosure{},
+		&MultisigClosure{},
+		&UnrollClosure{},
 	}
 
-	closure = &CSVSigClosure{}
-	if valid, err := closure.Decode(script); err == nil && valid {
-		return closure, nil
-	}
-
-	closure = &MultisigClosure{}
-	if valid, err := closure.Decode(script); err == nil && valid {
-		return closure, nil
+	for _, closure := range types {
+		if valid, err := closure.Decode(script); err == nil && valid {
+			return closure, nil
+		}
 	}
 
 	return nil, fmt.Errorf("invalid closure script %s", hex.EncodeToString(script))
 }
 
-func (f *MultisigClosure) Leaf() (*taproot.TapElementsLeaf, error) {
-	aspKeyBytes := schnorr.SerializePubKey(f.AspPubkey)
-	userKeyBytes := schnorr.SerializePubKey(f.Pubkey)
+func (f *MultisigClosure) WitnessSize() int {
+	return 64 * len(f.PubKeys)
+}
 
-	script, err := txscript.NewScriptBuilder().AddData(aspKeyBytes).
-		AddOp(txscript.OP_CHECKSIGVERIFY).AddData(userKeyBytes).
-		AddOp(txscript.OP_CHECKSIG).Script()
-	if err != nil {
-		return nil, err
+func (f *MultisigClosure) Script() ([]byte, error) {
+	scriptBuilder := txscript.NewScriptBuilder()
+
+	switch f.Type {
+	case MultisigTypeChecksig:
+		for i, pubkey := range f.PubKeys {
+			scriptBuilder.AddData(schnorr.SerializePubKey(pubkey))
+			if i == len(f.PubKeys)-1 {
+				scriptBuilder.AddOp(txscript.OP_CHECKSIG)
+				continue
+			}
+			scriptBuilder.AddOp(txscript.OP_CHECKSIGVERIFY)
+		}
+	case MultisigTypeChecksigAdd:
+		for i, pubkey := range f.PubKeys {
+			scriptBuilder.AddData(schnorr.SerializePubKey(pubkey))
+			if i == 0 {
+				scriptBuilder.AddOp(txscript.OP_CHECKSIG)
+				continue
+			}
+			scriptBuilder.AddOp(txscript.OP_CHECKSIGADD)
+		}
+		scriptBuilder.AddInt64(int64(len(f.PubKeys)))
+		scriptBuilder.AddOp(txscript.OP_EQUAL)
 	}
 
-	tapLeaf := taproot.NewBaseTapElementsLeaf(script)
-	return &tapLeaf, nil
+	return scriptBuilder.Script()
 }
 
 func (f *MultisigClosure) Decode(script []byte) (bool, error) {
-	valid, aspPubKey, err := decodeChecksigScript(script)
-	if err != nil {
-		return false, err
+	if len(script) == 0 {
+		return false, fmt.Errorf("empty script")
 	}
 
-	if !valid {
+	valid, err := f.decodeChecksig(script)
+	if err != nil {
+		return false, fmt.Errorf("failed to decode checksig: %w", err)
+	}
+	if valid {
+		return true, nil
+	}
+
+	valid, err = f.decodeChecksigAdd(script)
+	if err != nil {
+		return false, fmt.Errorf("failed to decode checksigadd: %w", err)
+	}
+	if valid {
+		return valid, nil
+	}
+
+	return false, nil
+}
+
+func (f *MultisigClosure) decodeChecksigAdd(script []byte) (bool, error) {
+	pubkeys := make([]*secp256k1.PublicKey, 0)
+
+	// Keep track of position in script
+	pos := 0
+
+	for pos < len(script) {
+		// Check for 33-byte data push (32 bytes for pubkey + 1 byte for OP_DATA)
+		if pos+33 > len(script) {
+			break
+		}
+
+		// Verify we have a 32-byte data push
+		if script[pos] != txscript.OP_DATA_32 {
+			return false, nil
+		}
+
+		// Parse the public key
+		pubkey, err := schnorr.ParsePubKey(script[pos+1 : pos+33])
+		if err != nil {
+			return false, err
+		}
+
+		pubkeys = append(pubkeys, pubkey)
+		pos += 33
+
+		// Check if we've reached the end
+		if pos >= len(script) {
+			return false, nil
+		}
+
+		// Check for CHECKSIG or CHECKSIGADD pattern
+		if len(pubkeys) == 1 && script[pos] == txscript.OP_CHECKSIG {
+			pos++
+		} else if len(pubkeys) > 1 && script[pos] == txscript.OP_CHECKSIGADD {
+			pos++
+		} else {
+			return false, nil
+		}
+	}
+
+	lastOp := script[len(script)-1]
+	if lastOp != txscript.OP_EQUAL {
 		return false, nil
 	}
 
-	valid, pubkey, err := decodeChecksigScript(script[33:])
-	if err != nil {
-		return false, err
-	}
-
-	if !valid {
+	// Verify we found at least one public key
+	if len(pubkeys) == 0 {
 		return false, nil
 	}
 
-	f.Pubkey = pubkey
-	f.AspPubkey = aspPubKey
+	f.PubKeys = pubkeys
+	f.Type = MultisigTypeChecksigAdd
 
-	rebuilt, err := f.Leaf()
+	// Verify the script matches what we would generate
+	rebuilt, err := f.Script()
 	if err != nil {
+		f.PubKeys = nil
+		f.Type = 0
 		return false, err
 	}
 
-	if !bytes.Equal(rebuilt.Script, script) {
+	if !bytes.Equal(rebuilt, script) {
+		f.PubKeys = nil
+		f.Type = 0
 		return false, nil
 	}
 
 	return true, nil
 }
 
-func (d *CSVSigClosure) Leaf() (*taproot.TapElementsLeaf, error) {
-	script, err := encodeCsvWithChecksigScript(d.Pubkey, d.Seconds)
+func (f *MultisigClosure) decodeChecksig(script []byte) (bool, error) {
+	pubkeys := make([]*secp256k1.PublicKey, 0)
+
+	// Keep track of position in script
+	pos := 0
+
+	for pos < len(script) {
+		// Check for 33-byte data push (32 bytes for pubkey + 1 byte for OP_DATA)
+		if pos+33 > len(script) {
+			return false, nil
+		}
+
+		// Verify we have a 32-byte data push
+		if script[pos] != txscript.OP_DATA_32 {
+			return false, nil
+		}
+
+		// Parse the public key
+		pubkey, err := schnorr.ParsePubKey(script[pos+1 : pos+33])
+		if err != nil {
+			return false, err
+		}
+
+		pubkeys = append(pubkeys, pubkey)
+		pos += 33
+
+		// Check if we've reached the end
+		if pos >= len(script) {
+			return false, nil
+		}
+
+		// Next byte should be either CHECKSIG (last key) or CHECKSIGVERIFY
+		if script[pos] == txscript.OP_CHECKSIG {
+			// This should be the last operation
+			if pos != len(script)-1 {
+				return false, nil
+			}
+			break
+		} else if script[pos] == txscript.OP_CHECKSIGVERIFY {
+			pos++
+			continue
+		} else {
+			return false, nil
+		}
+	}
+
+	// Verify we found at least one public key
+	if len(pubkeys) == 0 {
+		return false, nil
+	}
+
+	f.PubKeys = pubkeys
+	f.Type = MultisigTypeChecksig
+
+	// Verify the script matches what we would generate
+	rebuilt, err := f.Script()
+	if err != nil {
+		f.PubKeys = nil
+		f.Type = 0
+		return false, err
+	}
+
+	if !bytes.Equal(rebuilt, script) {
+		f.PubKeys = nil
+		f.Type = 0
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func (f *MultisigClosure) Witness(controlBlock []byte, signatures map[string][]byte) (wire.TxWitness, error) {
+	// Create witness stack with capacity for all signatures plus script and control block
+	witness := make(wire.TxWitness, 0, len(f.PubKeys)+2)
+
+	// Add signatures in the reverse order as public keys
+	for i := len(f.PubKeys) - 1; i >= 0; i-- {
+		pubKey := f.PubKeys[i]
+		sig, ok := signatures[hex.EncodeToString(schnorr.SerializePubKey(pubKey))]
+		if !ok {
+			return nil, fmt.Errorf("missing signature for public key %x", schnorr.SerializePubKey(pubKey))
+		}
+		witness = append(witness, sig)
+	}
+
+	// Get script
+	script, err := f.Script()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate script: %w", err)
+	}
+
+	// Add script and control block
+	witness = append(witness, script)
+	witness = append(witness, controlBlock)
+
+	return witness, nil
+}
+
+func (f *CSVSigClosure) Witness(controlBlock []byte, signatures map[string][]byte) (wire.TxWitness, error) {
+	multisigWitness, err := f.MultisigClosure.Witness(controlBlock, signatures)
 	if err != nil {
 		return nil, err
 	}
 
-	tapLeaf := taproot.NewBaseTapElementsLeaf(script)
-	return &tapLeaf, nil
+	script, err := f.Script()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate script: %w", err)
+	}
+
+	// replace script with csv script
+	multisigWitness[len(multisigWitness)-2] = script
+
+	return multisigWitness, nil
+}
+
+func (f *CSVSigClosure) WitnessSize() int {
+	return f.MultisigClosure.WitnessSize()
+}
+
+func (d *CSVSigClosure) Script() ([]byte, error) {
+	csvScript, err := txscript.NewScriptBuilder().
+		AddInt64(int64(d.Seconds)).
+		AddOps([]byte{
+			txscript.OP_CHECKSEQUENCEVERIFY,
+			txscript.OP_DROP,
+		}).
+		Script()
+	if err != nil {
+		return nil, err
+	}
+
+	multisigScript, err := d.MultisigClosure.Script()
+	if err != nil {
+		return nil, err
+	}
+
+	return append(csvScript, multisigScript...), nil
 }
 
 func (d *CSVSigClosure) Decode(script []byte) (bool, error) {
+	if len(script) == 0 {
+		return false, fmt.Errorf("empty script")
+	}
+
 	csvIndex := bytes.Index(
 		script, []byte{txscript.OP_CHECKSEQUENCEVERIFY, txscript.OP_DROP},
 	)
@@ -140,8 +365,8 @@ func (d *CSVSigClosure) Decode(script []byte) (bool, error) {
 		return false, err
 	}
 
-	checksigScript := script[csvIndex+2:]
-	valid, pubkey, err := decodeChecksigScript(checksigScript)
+	multisigClosure := &MultisigClosure{}
+	valid, err := multisigClosure.Decode(script[csvIndex+2:])
 	if err != nil {
 		return false, err
 	}
@@ -150,26 +375,21 @@ func (d *CSVSigClosure) Decode(script []byte) (bool, error) {
 		return false, nil
 	}
 
-	rebuilt, err := encodeCsvWithChecksigScript(pubkey, seconds)
-	if err != nil {
-		return false, err
-	}
-
-	if !bytes.Equal(rebuilt, script) {
-		return false, nil
-	}
-
-	d.Pubkey = pubkey
 	d.Seconds = seconds
+	d.MultisigClosure = *multisigClosure
 
 	return valid, nil
+}
+
+func (c *UnrollClosure) WitnessSize() int {
+	return 0
 }
 
 func (c *UnrollClosure) isOneChild() bool {
 	return c.RightKey == nil && c.MinRelayFee > 0
 }
 
-func (c *UnrollClosure) Leaf() (*taproot.TapElementsLeaf, error) {
+func (c *UnrollClosure) Script() ([]byte, error) {
 	if c.LeftKey == nil {
 		return nil, fmt.Errorf("left key is required")
 	}
@@ -178,8 +398,7 @@ func (c *UnrollClosure) Leaf() (*taproot.TapElementsLeaf, error) {
 		branchScript := encodeOneChildIntrospectionScript(
 			txscript.OP_0, schnorr.SerializePubKey(c.LeftKey), c.MinRelayFee,
 		)
-		leaf := taproot.NewBaseTapElementsLeaf(branchScript)
-		return &leaf, nil
+		return branchScript, nil
 	}
 
 	if c.LeftAmount == 0 {
@@ -205,8 +424,7 @@ func (c *UnrollClosure) Leaf() (*taproot.TapElementsLeaf, error) {
 	)
 	branchScript = append(branchScript, nextScriptRight...)
 
-	leaf := taproot.NewBaseTapElementsLeaf(branchScript)
-	return &leaf, nil
+	return branchScript, nil
 }
 
 func (c *UnrollClosure) Decode(script []byte) (valid bool, err error) {
@@ -227,12 +445,12 @@ func (c *UnrollClosure) Decode(script []byte) (valid bool, err error) {
 		c.LeftKey = pubkey
 		c.MinRelayFee = minrelayfee
 
-		rebuilt, err := c.Leaf()
+		rebuilt, err := c.Script()
 		if err != nil {
 			return false, err
 		}
 
-		if !bytes.Equal(rebuilt.Script, script) {
+		if !bytes.Equal(rebuilt, script) {
 			return false, nil
 		}
 
@@ -272,12 +490,12 @@ func (c *UnrollClosure) Decode(script []byte) (valid bool, err error) {
 	c.RightAmount = rightAmount
 	c.RightKey = rightKey
 
-	rebuilt, err := c.Leaf()
+	rebuilt, err := c.Script()
 	if err != nil {
 		return false, err
 	}
 
-	if !bytes.Equal(rebuilt.Script, script) {
+	if !bytes.Equal(rebuilt, script) {
 		return false, nil
 	}
 
@@ -349,64 +567,6 @@ func decodeOneChildIntrospectionScript(
 	}
 
 	return true, pubkey, minrelayfee, nil
-}
-
-func decodeChecksigScript(script []byte) (bool, *secp256k1.PublicKey, error) {
-	data32Index := bytes.Index(script, []byte{txscript.OP_DATA_32})
-	if data32Index == -1 {
-		return false, nil, nil
-	}
-
-	key := script[data32Index+1 : data32Index+33]
-	if len(key) != 32 {
-		return false, nil, nil
-	}
-
-	pubkey, err := schnorr.ParsePubKey(key)
-	if err != nil {
-		return false, nil, err
-	}
-
-	return true, pubkey, nil
-}
-
-// checkSequenceVerifyScript without checksig
-func encodeCsvScript(seconds uint) ([]byte, error) {
-	sequence, err := common.BIP68Sequence(seconds)
-	if err != nil {
-		return nil, err
-	}
-
-	return txscript.NewScriptBuilder().
-		AddInt64(int64(sequence)).
-		AddOps([]byte{
-			txscript.OP_CHECKSEQUENCEVERIFY,
-			txscript.OP_DROP,
-		}).
-		Script()
-}
-
-// checkSequenceVerifyScript + checksig
-func encodeCsvWithChecksigScript(
-	pubkey *secp256k1.PublicKey, seconds uint,
-) ([]byte, error) {
-	script, err := encodeChecksigScript(pubkey)
-	if err != nil {
-		return nil, err
-	}
-
-	csvScript, err := encodeCsvScript(seconds)
-	if err != nil {
-		return nil, err
-	}
-
-	return append(csvScript, script...), nil
-}
-
-func encodeChecksigScript(pubkey *secp256k1.PublicKey) ([]byte, error) {
-	key := schnorr.SerializePubKey(pubkey)
-	return txscript.NewScriptBuilder().AddData(key).
-		AddOp(txscript.OP_CHECKSIG).Script()
 }
 
 // encodeIntrospectionScript returns an introspection script that checks the
@@ -495,4 +655,14 @@ func encodeOneChildIntrospectionScript(
 	}...)
 
 	return script
+}
+
+func (c *UnrollClosure) Witness(controlBlock []byte, _ map[string][]byte) (wire.TxWitness, error) {
+	script, err := c.Script()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate script: %w", err)
+	}
+
+	// UnrollClosure only needs script and control block
+	return wire.TxWitness{script, controlBlock}, nil
 }

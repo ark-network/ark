@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/bitcointree"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
@@ -27,7 +27,7 @@ func sweepTransaction(
 			Index: input.GetIndex(),
 		})
 
-		sweepClosure := bitcointree.CSVSigClosure{}
+		sweepClosure := tree.CSVSigClosure{}
 		valid, err := sweepClosure.Decode(input.GetLeafScript())
 		if err != nil {
 			return nil, err

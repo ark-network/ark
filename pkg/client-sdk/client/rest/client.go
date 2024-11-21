@@ -118,7 +118,9 @@ func (a *restClient) RegisterInputsForNextRound(
 				Txid: i.Txid,
 				Vout: int64(i.VOut),
 			},
-			Descriptor: i.Descriptor,
+			Tapscripts: &models.V1Tapscripts{
+				Scripts: i.Tapscripts,
+			},
 		})
 	}
 	body := &models.V1RegisterInputsForNextRoundRequest{
@@ -402,7 +404,9 @@ func (a *restClient) CreatePayment(
 					Txid: i.Input.Txid,
 					Vout: int64(i.VOut),
 				},
-				Descriptor: i.Input.Descriptor,
+				Tapscripts: &models.V1Tapscripts{
+					Scripts: i.Input.Tapscripts,
+				},
 			},
 			ForfeitLeafHash: i.ForfeitLeafHash.String(),
 		})

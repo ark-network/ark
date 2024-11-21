@@ -72,7 +72,7 @@ func UnspendableKey() *secp256k1.PublicKey {
 // - every control block and taproot output scripts
 // - input and output amounts
 func ValidateCongestionTree(
-	tree tree.CongestionTree, poolTx string, aspPublicKey *secp256k1.PublicKey, roundLifetime int64,
+	vtxoTree tree.CongestionTree, poolTx string, aspPublicKey *secp256k1.PublicKey, roundLifetime int64,
 ) error {
 	poolTransaction, err := psbt.NewFromRawBytes(strings.NewReader(poolTx), true)
 	if err != nil {
@@ -85,17 +85,17 @@ func ValidateCongestionTree(
 
 	poolTxAmount := poolTransaction.UnsignedTx.TxOut[sharedOutputIndex].Value
 
-	nbNodes := tree.NumberOfNodes()
+	nbNodes := vtxoTree.NumberOfNodes()
 	if nbNodes == 0 {
 		return ErrEmptyTree
 	}
 
-	if len(tree[0]) != 1 {
+	if len(vtxoTree[0]) != 1 {
 		return ErrInvalidRootLevel
 	}
 
 	// check that root input is connected to the pool tx
-	rootPsetB64 := tree[0][0].Tx
+	rootPsetB64 := vtxoTree[0][0].Tx
 	rootPset, err := psbt.NewFromRawBytes(strings.NewReader(rootPsetB64), true)
 	if err != nil {
 		return fmt.Errorf("invalid root transaction: %w", err)
@@ -120,28 +120,29 @@ func ValidateCongestionTree(
 		return ErrInvalidAmount
 	}
 
-	if len(tree.Leaves()) == 0 {
+	if len(vtxoTree.Leaves()) == 0 {
 		return ErrNoLeaves
 	}
 
-	sweepClosure := &CSVSigClosure{
-		Seconds: uint(roundLifetime),
-		Pubkey:  aspPublicKey,
+	sweepClosure := &tree.CSVSigClosure{
+		MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{aspPublicKey}},
+		Seconds:         uint(roundLifetime),
 	}
 
-	sweepLeaf, err := sweepClosure.Leaf()
+	sweepScript, err := sweepClosure.Script()
 	if err != nil {
 		return err
 	}
 
-	tapTree := txscript.AssembleTaprootScriptTree(*sweepLeaf)
+	sweepLeaf := txscript.NewBaseTapLeaf(sweepScript)
+	tapTree := txscript.AssembleTaprootScriptTree(sweepLeaf)
 	root := tapTree.RootNode.TapHash()
 
 	// iterates over all the nodes of the tree
-	for _, level := range tree {
+	for _, level := range vtxoTree {
 		for _, node := range level {
 			if err := validateNodeTransaction(
-				node, tree, root.CloneBytes(),
+				node, vtxoTree, root.CloneBytes(),
 			); err != nil {
 				return err
 			}

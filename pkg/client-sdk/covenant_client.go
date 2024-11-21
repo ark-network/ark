@@ -22,7 +22,6 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcwallet/waddrmgr"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	log "github.com/sirupsen/logrus"
 	"github.com/vulpemventures/go-elements/address"
@@ -518,7 +517,7 @@ func (a *covenantArkClient) CollaborativeRedeem(
 		},
 	}
 
-	vtxos := make([]client.DescriptorVtxo, 0)
+	vtxos := make([]client.TapscriptsVtxo, 0)
 	spendableVtxos, err := a.getVtxos(ctx, false, nil)
 	if err != nil {
 		return "", err
@@ -532,9 +531,9 @@ func (a *covenantArkClient) CollaborativeRedeem(
 			}
 
 			if vtxoAddr == offchainAddr.Address {
-				vtxos = append(vtxos, client.DescriptorVtxo{
+				vtxos = append(vtxos, client.TapscriptsVtxo{
 					Vtxo:       v,
-					Descriptor: offchainAddr.Descriptor,
+					Tapscripts: offchainAddr.Tapscripts,
 				})
 			}
 		}
@@ -572,7 +571,7 @@ func (a *covenantArkClient) CollaborativeRedeem(
 				Txid: coin.Txid,
 				VOut: coin.VOut,
 			},
-			Descriptor: coin.Descriptor,
+			Tapscripts: coin.Tapscripts,
 		})
 	}
 	for _, coin := range selectedBoardingUtxos {
@@ -581,7 +580,7 @@ func (a *covenantArkClient) CollaborativeRedeem(
 				Txid: coin.Txid,
 				VOut: coin.VOut,
 			},
-			Descriptor: coin.Descriptor,
+			Tapscripts: coin.Tapscripts,
 		})
 	}
 
@@ -661,7 +660,7 @@ func (a *covenantArkClient) getAllBoardingUtxos(ctx context.Context) ([]types.Ut
 						VOut:       uint32(i),
 						Amount:     vout.Amount,
 						CreatedAt:  createdAt,
-						Descriptor: addr.Descriptor,
+						Tapscripts: addr.Tapscripts,
 					})
 				}
 			}
@@ -680,17 +679,14 @@ func (a *covenantArkClient) getClaimableBoardingUtxos(ctx context.Context, opts 
 	claimable := make([]types.Utxo, 0)
 
 	for _, addr := range boardingAddrs {
-		boardingScript, err := tree.ParseVtxoScript(addr.Descriptor)
+		boardingScript, err := tree.ParseVtxoScript(addr.Tapscripts)
 		if err != nil {
 			return nil, err
 		}
 
-		var boardingTimeout uint
-
-		if defaultVtxo, ok := boardingScript.(*tree.DefaultVtxoScript); ok {
-			boardingTimeout = defaultVtxo.ExitDelay
-		} else {
-			return nil, fmt.Errorf("unsupported boarding descriptor: %s", addr.Descriptor)
+		boardingTimeout, err := boardingScript.SmallestExitDelay()
+		if err != nil {
+			return nil, err
 		}
 
 		boardingUtxos, err := a.explorer.GetUtxos(addr.Address)
@@ -719,7 +715,7 @@ func (a *covenantArkClient) getClaimableBoardingUtxos(ctx context.Context, opts 
 				}
 			}
 
-			u := utxo.ToUtxo(boardingTimeout, addr.Descriptor)
+			u := utxo.ToUtxo(boardingTimeout, addr.Tapscripts)
 			if u.SpendableAt.Before(now) {
 				continue
 			}
@@ -929,7 +925,7 @@ func (a *covenantArkClient) sendOffchain(
 		return "", fmt.Errorf("no offchain addresses found")
 	}
 
-	vtxos := make([]client.DescriptorVtxo, 0)
+	vtxos := make([]client.TapscriptsVtxo, 0)
 
 	spendableVtxos, err := a.getVtxos(ctx, withExpiryCoinselect, nil)
 	if err != nil {
@@ -944,9 +940,9 @@ func (a *covenantArkClient) sendOffchain(
 			}
 
 			if vtxoAddr == offchainAddr.Address {
-				vtxos = append(vtxos, client.DescriptorVtxo{
+				vtxos = append(vtxos, client.TapscriptsVtxo{
 					Vtxo:       v,
-					Descriptor: offchainAddr.Descriptor,
+					Tapscripts: offchainAddr.Tapscripts,
 				})
 			}
 		}
@@ -958,7 +954,7 @@ func (a *covenantArkClient) sendOffchain(
 	}
 
 	var selectedBoardingCoins []types.Utxo
-	var selectedCoins []client.DescriptorVtxo
+	var selectedCoins []client.TapscriptsVtxo
 	var changeAmount uint64
 
 	// if no receivers, self send all selected coins
@@ -1009,7 +1005,7 @@ func (a *covenantArkClient) sendOffchain(
 				Txid: coin.Txid,
 				VOut: coin.VOut,
 			},
-			Descriptor: coin.Descriptor,
+			Tapscripts: coin.Tapscripts,
 		})
 	}
 	for _, coin := range selectedBoardingCoins {
@@ -1018,7 +1014,7 @@ func (a *covenantArkClient) sendOffchain(
 				Txid: coin.Txid,
 				VOut: coin.VOut,
 			},
-			Descriptor: coin.Descriptor,
+			Tapscripts: coin.Tapscripts,
 		})
 	}
 
@@ -1057,19 +1053,33 @@ func (a *covenantArkClient) addInputs(
 		return err
 	}
 
-	vtxoScript, err := tree.ParseVtxoScript(offchain.Descriptor)
+	vtxoScript, err := tree.ParseVtxoScript(offchain.Tapscripts)
 	if err != nil {
 		return err
 	}
 
-	var userPubkey, aspPubkey *secp256k1.PublicKey
+	forfeitClosure := vtxoScript.ForfeitClosures()[0]
 
-	switch s := vtxoScript.(type) {
-	case *tree.DefaultVtxoScript:
-		userPubkey = s.Owner
-		aspPubkey = s.Asp
-	default:
-		return fmt.Errorf("unsupported vtxo script: %T", s)
+	forfeitScript, err := forfeitClosure.Script()
+	if err != nil {
+		return err
+	}
+
+	forfeitLeaf := taproot.NewBaseTapElementsLeaf(forfeitScript)
+
+	_, taprootTree, err := vtxoScript.TapTree()
+	if err != nil {
+		return err
+	}
+
+	leafProof, err := taprootTree.GetTaprootMerkleProof(forfeitLeaf.TapHash())
+	if err != nil {
+		return err
+	}
+
+	controlBlock, err := taproot.ParseControlBlock(leafProof.Script)
+	if err != nil {
+		return err
 	}
 
 	for _, utxo := range utxos {
@@ -1085,37 +1095,6 @@ func (a *covenantArkClient) addInputs(
 				Sequence: sequence,
 			},
 		}); err != nil {
-			return err
-		}
-
-		vtxoScript := &tree.DefaultVtxoScript{
-			Owner:     userPubkey,
-			Asp:       aspPubkey,
-			ExitDelay: utxo.Delay,
-		}
-
-		forfeitClosure := &tree.MultisigClosure{
-			Pubkey:    userPubkey,
-			AspPubkey: aspPubkey,
-		}
-
-		forfeitLeaf, err := forfeitClosure.Leaf()
-		if err != nil {
-			return err
-		}
-
-		_, taprootTree, err := vtxoScript.TapTree()
-		if err != nil {
-			return err
-		}
-
-		leafProof, err := taprootTree.GetTaprootMerkleProof(forfeitLeaf.TapHash())
-		if err != nil {
-			return err
-		}
-
-		controlBlock, err := taproot.ParseControlBlock(leafProof.Script)
-		if err != nil {
 			return err
 		}
 
@@ -1138,7 +1117,7 @@ func (a *covenantArkClient) addInputs(
 func (a *covenantArkClient) handleRoundStream(
 	ctx context.Context,
 	paymentID string,
-	vtxosToSign []client.DescriptorVtxo,
+	vtxosToSign []client.TapscriptsVtxo,
 	boardingUtxos []types.Utxo,
 	receivers []client.Output,
 ) (string, error) {
@@ -1202,7 +1181,7 @@ func (a *covenantArkClient) handleRoundStream(
 func (a *covenantArkClient) handleRoundFinalization(
 	ctx context.Context,
 	event client.RoundFinalizationEvent,
-	vtxos []client.DescriptorVtxo,
+	vtxos []client.TapscriptsVtxo,
 	boardingUtxos []types.Utxo,
 	receivers []client.Output,
 ) (signedForfeits []string, signedRoundTx string, err error) {
@@ -1233,27 +1212,19 @@ func (a *covenantArkClient) handleRoundFinalization(
 	}
 
 	for _, boardingUtxo := range boardingUtxos {
-		boardingVtxoScript, err := tree.ParseVtxoScript(boardingUtxo.Descriptor)
+		boardingVtxoScript, err := tree.ParseVtxoScript(boardingUtxo.Tapscripts)
 		if err != nil {
 			return nil, "", err
 		}
 
-		var forfeitClosure tree.Closure
+		forfeitClosure := boardingVtxoScript.ForfeitClosures()[0]
 
-		switch s := boardingVtxoScript.(type) {
-		case *tree.DefaultVtxoScript:
-			forfeitClosure = &tree.MultisigClosure{
-				Pubkey:    s.Owner,
-				AspPubkey: a.AspPubkey,
-			}
-		default:
-			return nil, "", fmt.Errorf("unsupported boarding descriptor: %s", boardingUtxo.Descriptor)
-		}
-
-		forfeitLeaf, err := forfeitClosure.Leaf()
+		forfeitScript, err := forfeitClosure.Script()
 		if err != nil {
 			return nil, "", err
 		}
+
+		forfeitLeaf := taproot.NewBaseTapElementsLeaf(forfeitScript)
 
 		_, taprootTree, err := boardingVtxoScript.TapTree()
 		if err != nil {
@@ -1430,7 +1401,7 @@ func (a *covenantArkClient) validateOffChainReceiver(
 
 func (a *covenantArkClient) createAndSignForfeits(
 	ctx context.Context,
-	vtxosToSign []client.DescriptorVtxo,
+	vtxosToSign []client.TapscriptsVtxo,
 	connectors []string,
 	feeRate chainfee.SatPerKVByte,
 ) ([]string, error) {
@@ -1452,7 +1423,7 @@ func (a *covenantArkClient) createAndSignForfeits(
 	}
 
 	for _, vtxo := range vtxosToSign {
-		vtxoScript, err := tree.ParseVtxoScript(vtxo.Descriptor)
+		vtxoScript, err := tree.ParseVtxoScript(vtxo.Tapscripts)
 		if err != nil {
 			return nil, err
 		}
@@ -1472,24 +1443,14 @@ func (a *covenantArkClient) createAndSignForfeits(
 			TxIndex: vtxo.VOut,
 		}
 
-		var forfeitClosure tree.Closure
-		var witnessSize int
+		forfeitClosure := vtxoScript.ForfeitClosures()[0]
 
-		switch s := vtxoScript.(type) {
-		case *tree.DefaultVtxoScript:
-			forfeitClosure = &tree.MultisigClosure{
-				Pubkey:    s.Owner,
-				AspPubkey: a.AspPubkey,
-			}
-			witnessSize = 64 * 2
-		default:
-			return nil, fmt.Errorf("unsupported vtxo script: %T", s)
-		}
-
-		forfeitLeaf, err := forfeitClosure.Leaf()
+		forfeitScript, err := forfeitClosure.Script()
 		if err != nil {
 			return nil, err
 		}
+
+		forfeitLeaf := taproot.NewBaseTapElementsLeaf(forfeitScript)
 
 		leafProof, err := vtxoTapTree.GetTaprootMerkleProof(forfeitLeaf.TapHash())
 		if err != nil {
@@ -1512,7 +1473,7 @@ func (a *covenantArkClient) createAndSignForfeits(
 				RevealedScript: leafProof.Script,
 				ControlBlock:   &ctrlBlock.ControlBlock,
 			},
-			witnessSize,
+			forfeitClosure.WitnessSize(),
 			txscript.WitnessV0PubKeyHashTy,
 		)
 		if err != nil {
@@ -1567,19 +1528,14 @@ func (a *covenantArkClient) coinSelectOnchain(
 
 	fetchedUtxos := make([]types.Utxo, 0)
 	for _, addr := range boardingAddrs {
-		boardingDescriptor := addr.Descriptor
-
-		boardingScript, err := tree.ParseVtxoScript(boardingDescriptor)
+		boardingScript, err := tree.ParseVtxoScript(addr.Tapscripts)
 		if err != nil {
 			return nil, 0, err
 		}
 
-		var boardingTimeout uint
-
-		if defaultVtxo, ok := boardingScript.(*tree.DefaultVtxoScript); ok {
-			boardingTimeout = defaultVtxo.ExitDelay
-		} else {
-			return nil, 0, fmt.Errorf("unsupported boarding descriptor: %s", boardingDescriptor)
+		boardingTimeout, err := boardingScript.SmallestExitDelay()
+		if err != nil {
+			return nil, 0, err
 		}
 
 		utxos, err := a.explorer.GetUtxos(addr.Address)
@@ -1588,7 +1544,7 @@ func (a *covenantArkClient) coinSelectOnchain(
 		}
 
 		for _, utxo := range utxos {
-			u := utxo.ToUtxo(boardingTimeout, addr.Descriptor)
+			u := utxo.ToUtxo(boardingTimeout, addr.Tapscripts)
 			if u.SpendableAt.Before(now) {
 				fetchedUtxos = append(fetchedUtxos, u)
 			}
@@ -1624,7 +1580,7 @@ func (a *covenantArkClient) coinSelectOnchain(
 		}
 
 		for _, utxo := range utxos {
-			u := utxo.ToUtxo(uint(a.UnilateralExitDelay), addr.Descriptor)
+			u := utxo.ToUtxo(uint(a.UnilateralExitDelay), addr.Tapscripts)
 			if u.SpendableAt.Before(now) {
 				fetchedUtxos = append(fetchedUtxos, u)
 			}
