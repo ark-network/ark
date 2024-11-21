@@ -42,7 +42,7 @@ func (v *vxtoRepository) AddVtxos(ctx context.Context, vtxos []domain.Vtxo) erro
 				ctx, queries.UpsertVtxoParams{
 					Txid:      vtxo.Txid,
 					Vout:      int64(vtxo.VOut),
-					Pubkey:    vtxo.Pubkey,
+					Pubkey:    vtxo.PubKey,
 					Amount:    int64(vtxo.Amount),
 					RoundTx:   vtxo.RoundTxid,
 					SpentBy:   vtxo.SpentBy,
@@ -251,7 +251,7 @@ func rowToVtxo(row queries.Vtxo) domain.Vtxo {
 			VOut: uint32(row.Vout),
 		},
 		Amount:    uint64(row.Amount),
-		Pubkey:    row.Pubkey,
+		PubKey:    row.Pubkey,
 		RoundTxid: row.RoundTx,
 		SpentBy:   row.SpentBy,
 		Spent:     row.Spent,

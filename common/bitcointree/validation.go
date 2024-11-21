@@ -62,8 +62,8 @@ func UnspendableKey() *secp256k1.PublicKey {
 }
 
 // ValidateCongestionTree checks if the given congestion tree is valid
-// roundTxID & roundTxIndex & roundTxAmount are used to validate the root input outpoint
-// serverPublicKey & roundLifetime are used to validate the sweep tapscript leaves
+// roundTxid & roundTxIndex & roundTxAmount are used to validate the root input outpoint
+// serverPubkey & roundLifetime are used to validate the sweep tapscript leaves
 // besides that, the function validates:
 // - the number of nodes
 // - the number of leaves

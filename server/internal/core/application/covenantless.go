@@ -213,31 +213,31 @@ func (s *covenantlessService) CompleteAsyncPayment(
 			}
 
 			// verify that the user signs a forfeit closure
-			var userPubKey *secp256k1.PublicKey
+			var userPubkey *secp256k1.PublicKey
 
-			serverXOnlyPubKey := schnorr.SerializePubKey(s.pubkey)
+			serverXOnlyPubkey := schnorr.SerializePubKey(s.pubkey)
 
 			for _, sig := range input.TaprootScriptSpendSig {
-				if !bytes.Equal(sig.XOnlyPubKey, serverXOnlyPubKey) {
+				if !bytes.Equal(sig.XOnlyPubKey, serverXOnlyPubkey) {
 					parsed, err := schnorr.ParsePubKey(sig.XOnlyPubKey)
 					if err != nil {
 						return fmt.Errorf("failed to parse pubkey: %s", err)
 					}
-					userPubKey = parsed
+					userPubkey = parsed
 					break
 				}
 			}
 
-			if userPubKey == nil {
+			if userPubkey == nil {
 				return fmt.Errorf("redeem transaction is not signed")
 			}
 
-			vtxoPublicKeyBytes, err := hex.DecodeString(vtxo.Pubkey)
+			vtxoPubkeyBytes, err := hex.DecodeString(vtxo.PubKey)
 			if err != nil {
 				return fmt.Errorf("failed to decode vtxo pubkey: %s", err)
 			}
 
-			vtxoTapKey, err := schnorr.ParsePubKey(vtxoPublicKeyBytes)
+			vtxoTapKey, err := schnorr.ParsePubKey(vtxoPubkeyBytes)
 			if err != nil {
 				return fmt.Errorf("failed to parse vtxo pubkey: %s", err)
 			}
@@ -286,7 +286,7 @@ func (s *covenantlessService) CompleteAsyncPayment(
 				Txid: redeemTxid,
 				VOut: uint32(outIndex),
 			},
-			Pubkey:    vtxoPubkey,
+			PubKey:    vtxoPubkey,
 			Amount:    uint64(out.Value),
 			ExpireAt:  asyncPayData.expireAt,
 			RoundTxid: asyncPayData.roundTxid,
@@ -581,12 +581,12 @@ func (s *covenantlessService) newBoardingInput(tx wire.MsgTx, input ports.Input)
 		return nil, fmt.Errorf("failed to get taproot key: %s", err)
 	}
 
-	expectedScriptPubKey, err := common.P2TRScript(tapKey)
+	expectedScriptPubkey, err := common.P2TRScript(tapKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get script pubkey: %s", err)
 	}
 
-	if !bytes.Equal(output.PkScript, expectedScriptPubKey) {
+	if !bytes.Equal(output.PkScript, expectedScriptPubkey) {
 		return nil, fmt.Errorf("descriptor does not match script in transaction output")
 	}
 
@@ -710,12 +710,12 @@ func (s *covenantlessService) RegisterCosignerPubkey(ctx context.Context, paymen
 		return fmt.Errorf("failed to decode hex pubkey: %s", err)
 	}
 
-	ephemeralPublicKey, err := secp256k1.ParsePubKey(pubkeyBytes)
+	ephemeralPubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
 	if err != nil {
 		return fmt.Errorf("failed to parse pubkey: %s", err)
 	}
 
-	return s.paymentRequests.pushEphemeralKey(paymentId, ephemeralPublicKey)
+	return s.paymentRequests.pushEphemeralKey(paymentId, ephemeralPubkey)
 }
 
 func (s *covenantlessService) RegisterCosignerNonces(
@@ -1480,7 +1480,7 @@ func (s *covenantlessService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 
 			vtxos = append(vtxos, domain.Vtxo{
 				VtxoKey:   domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
-				Pubkey:    hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey)),
+				PubKey:    hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey)),
 				Amount:    uint64(out.Value),
 				RoundTxid: round.Txid,
 				CreatedAt: createdAt,
@@ -1556,7 +1556,7 @@ func (s *covenantlessService) extractVtxosScripts(vtxos []domain.Vtxo) ([]string
 	indexedScripts := make(map[string]struct{})
 
 	for _, vtxo := range vtxos {
-		vtxoTapKeyBytes, err := hex.DecodeString(vtxo.Pubkey)
+		vtxoTapKeyBytes, err := hex.DecodeString(vtxo.PubKey)
 		if err != nil {
 			return nil, err
 		}

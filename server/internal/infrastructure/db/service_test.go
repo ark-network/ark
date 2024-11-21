@@ -251,12 +251,12 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 								},
 								RoundTxid: randomString(32),
 								ExpireAt:  7980322,
-								Pubkey:    randomString(32),
+								PubKey:    randomString(32),
 								Amount:    300,
 							},
 						},
 						Receivers: []domain.Receiver{{
-							Pubkey: randomString(32),
+							PubKey: randomString(32),
 							Amount: 300,
 						}},
 					},
@@ -271,17 +271,17 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 								},
 								RoundTxid: randomString(32),
 								ExpireAt:  7980322,
-								Pubkey:    randomString(32),
+								PubKey:    randomString(32),
 								Amount:    600,
 							},
 						},
 						Receivers: []domain.Receiver{
 							{
-								Pubkey: randomString(32),
+								PubKey: randomString(32),
 								Amount: 400,
 							},
 							{
-								Pubkey: randomString(32),
+								PubKey: randomString(32),
 								Amount: 200,
 							},
 						},
@@ -347,7 +347,7 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 					Txid: randomString(32),
 					VOut: 0,
 				},
-				Pubkey: pubkey,
+				PubKey: pubkey,
 				Amount: 1000,
 			},
 			{
@@ -355,7 +355,7 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 					Txid: randomString(32),
 					VOut: 1,
 				},
-				Pubkey: pubkey,
+				PubKey: pubkey,
 				Amount: 2000,
 			},
 		}
@@ -364,7 +364,7 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 				Txid: randomString(32),
 				VOut: 1,
 			},
-			Pubkey: pubkey2,
+			PubKey: pubkey2,
 			Amount: 2000,
 		})
 

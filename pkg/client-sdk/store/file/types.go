@@ -11,7 +11,7 @@ import (
 
 type storeData struct {
 	ServerUrl                  string `json:"server_url"`
-	ServerPubkey               string `json:"server_pubkey"`
+	ServerPubKey               string `json:"server_pubkey"`
 	WalletType                 string `json:"wallet_type"`
 	ClientType                 string `json:"client_type"`
 	Network                    string `json:"network"`
@@ -27,7 +27,7 @@ type storeData struct {
 
 func (d storeData) isEmpty() bool {
 	if d.ServerUrl == "" &&
-		d.ServerPubkey == "" {
+		d.ServerPubKey == "" {
 		return true
 	}
 
@@ -41,12 +41,12 @@ func (d storeData) decode() types.Config {
 	unilateralExitDelay, _ := strconv.Atoi(d.UnilateralExitDelay)
 	withTransactionFeed, _ := strconv.ParseBool(d.WithTransactionFeed)
 	dust, _ := strconv.Atoi(d.Dust)
-	buf, _ := hex.DecodeString(d.ServerPubkey)
+	buf, _ := hex.DecodeString(d.ServerPubKey)
 	serverPubkey, _ := secp256k1.ParsePubKey(buf)
 	explorerURL := d.ExplorerURL
 	return types.Config{
 		ServerUrl:                  d.ServerUrl,
-		ServerPubkey:               serverPubkey,
+		ServerPubKey:               serverPubkey,
 		WalletType:                 d.WalletType,
 		ClientType:                 d.ClientType,
 		Network:                    network,
@@ -64,7 +64,7 @@ func (d storeData) decode() types.Config {
 func (d storeData) asMap() map[string]string {
 	return map[string]string{
 		"server_url":                   d.ServerUrl,
-		"server_pubkey":                d.ServerPubkey,
+		"server_pubkey":                d.ServerPubKey,
 		"wallet_type":                  d.WalletType,
 		"client_type":                  d.ClientType,
 		"network":                      d.Network,

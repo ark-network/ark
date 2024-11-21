@@ -388,7 +388,7 @@ func createPartialCongestionTree(
 
 	nodes := make([]*node, 0, len(receivers))
 	for _, r := range receivers {
-		pubkeyBytes, err := hex.DecodeString(r.Pubkey)
+		pubkeyBytes, err := hex.DecodeString(r.PubKey)
 		if err != nil {
 			return nil, err
 		}

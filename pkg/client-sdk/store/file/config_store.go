@@ -53,7 +53,7 @@ func (s *configStore) GetDatadir() string {
 func (s *configStore) AddData(ctx context.Context, data types.Config) error {
 	sd := &storeData{
 		ServerUrl:                  data.ServerUrl,
-		ServerPubkey:               hex.EncodeToString(data.ServerPubkey.SerializeCompressed()),
+		ServerPubKey:               hex.EncodeToString(data.ServerPubKey.SerializeCompressed()),
 		WalletType:                 data.WalletType,
 		ClientType:                 data.ClientType,
 		Network:                    data.Network.Name,

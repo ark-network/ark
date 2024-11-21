@@ -137,7 +137,7 @@ func (a *arkClient) initWithWallet(
 
 	network := utils.NetworkFromString(info.Network)
 
-	buf, err := hex.DecodeString(info.Pubkey)
+	buf, err := hex.DecodeString(info.PubKey)
 	if err != nil {
 		return fmt.Errorf("failed to parse server pubkey: %s", err)
 	}
@@ -148,7 +148,7 @@ func (a *arkClient) initWithWallet(
 
 	storeData := types.Config{
 		ServerUrl:                  args.ServerUrl,
-		ServerPubkey:               serverPubkey,
+		ServerPubKey:               serverPubkey,
 		WalletType:                 args.Wallet.GetType(),
 		ClientType:                 args.ClientType,
 		Network:                    network,
@@ -204,7 +204,7 @@ func (a *arkClient) init(
 
 	network := utils.NetworkFromString(info.Network)
 
-	buf, err := hex.DecodeString(info.Pubkey)
+	buf, err := hex.DecodeString(info.PubKey)
 	if err != nil {
 		return fmt.Errorf("failed to parse server pubkey: %s", err)
 	}
@@ -215,7 +215,7 @@ func (a *arkClient) init(
 
 	cfgData := types.Config{
 		ServerUrl:                  args.ServerUrl,
-		ServerPubkey:               serverPubkey,
+		ServerPubKey:               serverPubkey,
 		WalletType:                 args.WalletType,
 		ClientType:                 args.ClientType,
 		Network:                    network,

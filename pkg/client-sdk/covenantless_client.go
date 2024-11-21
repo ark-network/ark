@@ -395,7 +395,7 @@ func (a *covenantlessArkClient) processTransactionEvent(
 		vtxosToInsert := make([]types.Vtxo, 0)
 		txsToInsert := make([]types.Transaction, 0)
 		for _, v := range event.Round.SpendableVtxos {
-			if v.Pubkey == pubkey {
+			if v.PubKey == pubkey {
 				vtxosToInsert = append(vtxosToInsert, types.Vtxo{
 					VtxoKey: types.VtxoKey{
 						Txid: v.Txid,
@@ -474,7 +474,7 @@ func (a *covenantlessArkClient) processTransactionEvent(
 
 			outputAmount := uint64(0)
 			for _, v := range event.Redeem.SpendableVtxos {
-				if v.Pubkey == pubkey {
+				if v.PubKey == pubkey {
 					vtxosToInsert = append(vtxosToInsert, types.Vtxo{
 						VtxoKey: types.VtxoKey{
 							Txid: v.Txid,
@@ -507,7 +507,7 @@ func (a *covenantlessArkClient) processTransactionEvent(
 			}
 		} else {
 			for _, v := range event.Redeem.SpendableVtxos {
-				if v.Pubkey == pubkey {
+				if v.PubKey == pubkey {
 					vtxosToInsert = append(vtxosToInsert, types.Vtxo{
 						VtxoKey: types.VtxoKey{
 							Txid: v.Txid,
@@ -865,7 +865,7 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 
 	for _, offchainAddr := range offchainAddrs {
 		for _, v := range spendableVtxos {
-			vtxoAddr, err := v.Address(a.ServerPubkey, a.Network)
+			vtxoAddr, err := v.Address(a.ServerPubKey, a.Network)
 			if err != nil {
 				return "", err
 			}
@@ -976,7 +976,7 @@ func (a *covenantlessArkClient) SendAsync(
 		return "", err
 	}
 
-	expectedServerPubkey := schnorr.SerializePubKey(a.ServerPubkey)
+	expectedServerPubkey := schnorr.SerializePubKey(a.ServerPubKey)
 
 	receiversOutput := make([]client.Output, 0)
 	sumOfReceivers := uint64(0)
@@ -1015,7 +1015,7 @@ func (a *covenantlessArkClient) SendAsync(
 
 	for _, offchainAddr := range offchainAddrs {
 		for _, v := range spendableVtxos {
-			vtxoAddr, err := v.Address(a.ServerPubkey, a.Network)
+			vtxoAddr, err := v.Address(a.ServerPubKey, a.Network)
 			if err != nil {
 				return "", err
 			}
@@ -1153,7 +1153,7 @@ func (a *covenantlessArkClient) SetNostrNotificationRecipient(ctx context.Contex
 	descriptorVtxos := make([]client.TapscriptsVtxo, 0)
 	for _, offchainAddr := range offchainAddrs {
 		for _, vtxo := range spendableVtxos {
-			vtxoAddr, err := vtxo.Address(a.ServerPubkey, a.Network)
+			vtxoAddr, err := vtxo.Address(a.ServerPubKey, a.Network)
 			if err != nil {
 				return err
 			}
@@ -1379,7 +1379,7 @@ func (a *covenantlessArkClient) sendOffchain(
 		return "", fmt.Errorf("wallet is locked")
 	}
 
-	expectedServerPubkey := schnorr.SerializePubKey(a.ServerPubkey)
+	expectedServerPubkey := schnorr.SerializePubKey(a.ServerPubKey)
 	outputs := make([]client.Output, 0)
 	sumOfReceivers := uint64(0)
 
@@ -1425,7 +1425,7 @@ func (a *covenantlessArkClient) sendOffchain(
 
 	for _, offchainAddr := range offchainAddrs {
 		for _, v := range spendableVtxos {
-			vtxoAddr, err := v.Address(a.ServerPubkey, a.Network)
+			vtxoAddr, err := v.Address(a.ServerPubKey, a.Network)
 			if err != nil {
 				return "", err
 			}
@@ -1732,7 +1732,7 @@ func (a *covenantlessArkClient) handleRoundSigningStarted(
 	ctx context.Context, ephemeralKey *secp256k1.PrivateKey, event client.RoundSigningStartedEvent,
 ) (signerSession bitcointree.SignerSession, err error) {
 	sweepClosure := tree.CSVSigClosure{
-		MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{a.ServerPubkey}},
+		MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{a.ServerPubKey}},
 		Seconds:         uint(a.RoundLifetime),
 	}
 
@@ -1757,7 +1757,7 @@ func (a *covenantlessArkClient) handleRoundSigningStarted(
 		ephemeralKey, sharedOutputValue, event.UnsignedTree, root.CloneBytes(),
 	)
 
-	if err = signerSession.SetKeys(event.CosignersPublicKeys); err != nil {
+	if err = signerSession.SetKeys(event.CosignersPubKeys); err != nil {
 		return
 	}
 
@@ -1766,9 +1766,9 @@ func (a *covenantlessArkClient) handleRoundSigningStarted(
 		return
 	}
 
-	myPubKey := hex.EncodeToString(ephemeralKey.PubKey().SerializeCompressed())
+	myPubkey := hex.EncodeToString(ephemeralKey.PubKey().SerializeCompressed())
 
-	err = a.arkClient.client.SubmitTreeNonces(ctx, event.ID, myPubKey, nonces)
+	err = a.arkClient.client.SubmitTreeNonces(ctx, event.ID, myPubkey, nonces)
 
 	return
 }
@@ -1908,7 +1908,7 @@ func (a *covenantlessArkClient) validateCongestionTree(
 
 	if !utils.IsOnchainOnly(receivers) {
 		if err := bitcointree.ValidateCongestionTree(
-			event.Tree, roundTx, a.Config.ServerPubkey, a.RoundLifetime,
+			event.Tree, roundTx, a.Config.ServerPubKey, a.RoundLifetime,
 		); err != nil {
 			return err
 		}

@@ -59,7 +59,7 @@ func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
 		return nil, err
 	}
 	return &client.Info{
-		Pubkey:                     resp.GetPubkey(),
+		PubKey:                     resp.GetPubkey(),
 		RoundLifetime:              resp.GetRoundLifetime(),
 		UnilateralExitDelay:        resp.GetUnilateralExitDelay(),
 		RoundInterval:              resp.GetRoundInterval(),
@@ -84,13 +84,13 @@ func (a *grpcClient) GetBoardingAddress(
 }
 
 func (a *grpcClient) RegisterInputsForNextRound(
-	ctx context.Context, inputs []client.Input, ephemeralPublicKey string,
+	ctx context.Context, inputs []client.Input, ephemeralPubkey string,
 ) (string, error) {
 	req := &arkv1.RegisterInputsForNextRoundRequest{
 		Inputs: ins(inputs).toProto(),
 	}
-	if len(ephemeralPublicKey) > 0 {
-		req.EphemeralPubkey = &ephemeralPublicKey
+	if len(ephemeralPubkey) > 0 {
+		req.EphemeralPubkey = &ephemeralPubkey
 	}
 
 	resp, err := a.svc.RegisterInputsForNextRound(ctx, req)

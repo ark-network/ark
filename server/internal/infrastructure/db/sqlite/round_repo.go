@@ -167,8 +167,8 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 							PaymentID: payment.Id,
 							Amount:    int64(receiver.Amount),
 							Pubkey: sql.NullString{
-								String: receiver.Pubkey,
-								Valid:  len(receiver.Pubkey) > 0,
+								String: receiver.PubKey,
+								Valid:  len(receiver.PubKey) > 0,
 							},
 							OnchainAddress: sql.NullString{
 								String: receiver.OnchainAddress,
@@ -327,7 +327,7 @@ func (r *roundRepository) GetSweptRounds(ctx context.Context) ([]domain.Round, e
 func rowToReceiver(row queries.PaymentReceiverVw) domain.Receiver {
 	return domain.Receiver{
 		Amount:         uint64(row.Amount.Int64),
-		Pubkey:         row.Pubkey.String,
+		PubKey:         row.Pubkey.String,
 		OnchainAddress: row.OnchainAddress.String,
 	}
 }
@@ -420,7 +420,7 @@ func readRoundRows(rows []roundPaymentTxReceiverVtxoRow) ([]*domain.Round, error
 				found := false
 				for _, rcv := range payment.Receivers {
 					if (v.receiver.Pubkey.Valid || v.receiver.OnchainAddress.Valid) && v.receiver.Amount.Valid {
-						if rcv.Pubkey == v.receiver.Pubkey.String && rcv.OnchainAddress == v.receiver.OnchainAddress.String && int64(rcv.Amount) == v.receiver.Amount.Int64 {
+						if rcv.PubKey == v.receiver.Pubkey.String && rcv.OnchainAddress == v.receiver.OnchainAddress.String && int64(rcv.Amount) == v.receiver.Amount.Int64 {
 							found = true
 							break
 						}
@@ -476,7 +476,7 @@ func rowToPaymentVtxoVw(row queries.PaymentVtxoVw) domain.Vtxo {
 			VOut: uint32(row.Vout.Int64),
 		},
 		Amount:    uint64(row.Amount.Int64),
-		Pubkey:    row.Pubkey.String,
+		PubKey:    row.Pubkey.String,
 		RoundTxid: row.RoundTx.String,
 		SpentBy:   row.SpentBy.String,
 		Spent:     row.Spent.Bool,

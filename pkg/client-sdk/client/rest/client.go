@@ -80,7 +80,7 @@ func (a *restClient) GetInfo(
 	}
 
 	return &client.Info{
-		Pubkey:                     resp.Payload.Pubkey,
+		PubKey:                     resp.Payload.Pubkey,
 		RoundLifetime:              int64(roundLifetime),
 		UnilateralExitDelay:        int64(unilateralExitDelay),
 		RoundInterval:              int64(roundInterval),
@@ -109,7 +109,7 @@ func (a *restClient) GetBoardingAddress(
 }
 
 func (a *restClient) RegisterInputsForNextRound(
-	ctx context.Context, inputs []client.Input, ephemeralPublicKey string,
+	ctx context.Context, inputs []client.Input, ephemeralPubkey string,
 ) (string, error) {
 	ins := make([]*models.V1Input, 0, len(inputs))
 	for _, i := range inputs {
@@ -126,8 +126,8 @@ func (a *restClient) RegisterInputsForNextRound(
 	body := &models.V1RegisterInputsForNextRoundRequest{
 		Inputs: ins,
 	}
-	if len(ephemeralPublicKey) > 0 {
-		body.EphemeralPubkey = ephemeralPublicKey
+	if len(ephemeralPubkey) > 0 {
+		body.EphemeralPubkey = ephemeralPubkey
 	}
 
 	resp, err := a.svc.ArkServiceRegisterInputsForNextRound(
@@ -355,10 +355,10 @@ func (c *restClient) GetEventStream(
 				}
 
 				event = client.RoundSigningStartedEvent{
-					ID:                  e.ID,
-					UnsignedTree:        treeFromProto{e.UnsignedVtxoTree}.parse(),
-					CosignersPublicKeys: pubkeys,
-					UnsignedRoundTx:     e.UnsignedRoundTx,
+					ID:               e.ID,
+					UnsignedTree:     treeFromProto{e.UnsignedVtxoTree}.parse(),
+					CosignersPubKeys: pubkeys,
+					UnsignedRoundTx:  e.UnsignedRoundTx,
 				}
 			case resp.Result.RoundSigningNoncesGenerated != nil:
 				e := resp.Result.RoundSigningNoncesGenerated
@@ -767,7 +767,7 @@ func vtxosFromRest(restVtxos []*models.V1Vtxo) []client.Vtxo {
 				Txid: v.Outpoint.Txid,
 				VOut: uint32(v.Outpoint.Vout),
 			},
-			Pubkey:    v.Pubkey,
+			PubKey:    v.Pubkey,
 			Amount:    uint64(amount),
 			RoundTxid: v.RoundTxid,
 			ExpiresAt: expiresAt,

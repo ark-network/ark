@@ -7,6 +7,6 @@ import (
 type TreeFactory func(outpoint psetv2.InputArgs) (CongestionTree, error)
 
 type VtxoLeaf struct {
-	Pubkey string
+	PubKey string
 	Amount uint64
 }

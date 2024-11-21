@@ -28,19 +28,19 @@ func TestRoundTripSignTree(t *testing.T) {
 	for _, f := range fixtures.Valid {
 		// Generate 20 cosigners
 		cosigners := make([]*secp256k1.PrivateKey, 20)
-		cosignerPubKeys := make([]*btcec.PublicKey, 20)
+		cosignerPubkeys := make([]*btcec.PublicKey, 20)
 		for i := 0; i < 20; i++ {
-			privKey, err := secp256k1.GeneratePrivateKey()
+			prvkey, err := secp256k1.GeneratePrivateKey()
 			require.NoError(t, err)
-			cosigners[i] = privKey
-			cosignerPubKeys[i] = privKey.PubKey()
+			cosigners[i] = prvkey
+			cosignerPubkeys[i] = prvkey.PubKey()
 		}
 
 		server, err := secp256k1.GeneratePrivateKey()
 		require.NoError(t, err)
 
 		_, sharedOutputAmount, err := bitcointree.CraftSharedOutput(
-			cosignerPubKeys,
+			cosignerPubkeys,
 			server.PubKey(),
 			castReceivers(f.Receivers),
 			minRelayFee,
@@ -53,7 +53,7 @@ func TestRoundTripSignTree(t *testing.T) {
 				Hash:  *testTxid,
 				Index: 0,
 			},
-			cosignerPubKeys,
+			cosignerPubkeys,
 			server.PubKey(),
 			castReceivers(f.Receivers),
 			minRelayFee,
@@ -77,7 +77,7 @@ func TestRoundTripSignTree(t *testing.T) {
 			sharedOutputAmount,
 			vtxoTree,
 			root.CloneBytes(),
-			cosignerPubKeys,
+			cosignerPubkeys,
 		)
 		require.NoError(t, err)
 
@@ -91,7 +91,7 @@ func TestRoundTripSignTree(t *testing.T) {
 		for i, session := range signerSessions {
 			nonces, err := session.GetNonces()
 			require.NoError(t, err)
-			err = serverCoordinator.AddNonce(cosignerPubKeys[i], nonces)
+			err = serverCoordinator.AddNonce(cosignerPubkeys[i], nonces)
 			require.NoError(t, err)
 		}
 
@@ -100,7 +100,7 @@ func TestRoundTripSignTree(t *testing.T) {
 
 		// Set keys and aggregated nonces for all signers
 		for _, session := range signerSessions {
-			err = session.SetKeys(cosignerPubKeys)
+			err = session.SetKeys(cosignerPubkeys)
 			require.NoError(t, err)
 			err = session.SetAggregatedNonces(aggregatedNonce)
 			require.NoError(t, err)
@@ -110,7 +110,7 @@ func TestRoundTripSignTree(t *testing.T) {
 		for i, session := range signerSessions {
 			sig, err := session.Sign()
 			require.NoError(t, err)
-			err = serverCoordinator.AddSig(cosignerPubKeys[i], sig)
+			err = serverCoordinator.AddSig(cosignerPubkeys[i], sig)
 			require.NoError(t, err)
 		}
 
@@ -118,7 +118,7 @@ func TestRoundTripSignTree(t *testing.T) {
 		require.NoError(t, err)
 
 		// verify the tree
-		aggregatedKey, err := bitcointree.AggregateKeys(cosignerPubKeys, root.CloneBytes())
+		aggregatedKey, err := bitcointree.AggregateKeys(cosignerPubkeys, root.CloneBytes())
 		require.NoError(t, err)
 
 		err = bitcointree.ValidateTreeSigs(
@@ -140,7 +140,7 @@ func castReceivers(receivers []receiverFixture) []tree.VtxoLeaf {
 	receiversOut := make([]tree.VtxoLeaf, 0, len(receivers))
 	for _, r := range receivers {
 		receiversOut = append(receiversOut, tree.VtxoLeaf{
-			Pubkey: r.Pubkey,
+			PubKey: r.Pubkey,
 			Amount: uint64(r.Amount),
 		})
 	}

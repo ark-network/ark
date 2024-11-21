@@ -22,7 +22,7 @@ func TestWallet(t *testing.T) {
 	password := "password"
 	testStoreData := sdktypes.Config{
 		ServerUrl:                  "localhost:7070",
-		ServerPubkey:               key.PubKey(),
+		ServerPubKey:               key.PubKey(),
 		WalletType:                 wallet.SingleKeyWallet,
 		ClientType:                 client.GrpcClient,
 		Network:                    common.LiquidRegTest,

@@ -22,7 +22,7 @@ const (
 
 type storeData struct {
 	ServerUrl                  string `json:"server_url"`
-	ServerPubkey               string `json:"server_pubkey"`
+	ServerPubKey               string `json:"server_pubkey"`
 	WalletType                 string `json:"wallet_type"`
 	ClientType                 string `json:"client_type"`
 	ExplorerURL                string `json:"explorer_url"`
@@ -55,7 +55,7 @@ func (s *configStore) GetDatadir() string {
 func (s *configStore) AddData(ctx context.Context, data types.Config) error {
 	sd := &storeData{
 		ServerUrl:                  data.ServerUrl,
-		ServerPubkey:               hex.EncodeToString(data.ServerPubkey.SerializeCompressed()),
+		ServerPubKey:               hex.EncodeToString(data.ServerPubkey.SerializeCompressed()),
 		WalletType:                 data.WalletType,
 		ClientType:                 data.ClientType,
 		Network:                    data.Network.Name,

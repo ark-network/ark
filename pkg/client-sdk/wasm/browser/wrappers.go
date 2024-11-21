@@ -356,7 +356,7 @@ func GetServerPubkeyWrapper() js.Func {
 		data, _ := arkSdkClient.GetConfigData(context.Background())
 		var serverPubkey string
 		if data != nil {
-			serverPubkey = hex.EncodeToString(data.ServerPubkey.SerializeCompressed())
+			serverPubkey = hex.EncodeToString(data.ServerPubKey.SerializeCompressed())
 		}
 		return js.ValueOf(serverPubkey)
 	})

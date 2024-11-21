@@ -190,13 +190,13 @@ func (h *handler) SubmitTreeNonces(
 		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key")
 	}
 
-	cosignerPublicKey, err := secp256k1.ParsePubKey(pubkeyBytes)
+	cosignerPubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key")
 	}
 
 	if err := h.svc.RegisterCosignerNonces(
-		ctx, roundID, cosignerPublicKey, encodedNonces,
+		ctx, roundID, cosignerPubkey, encodedNonces,
 	); err != nil {
 		return nil, err
 	}
@@ -228,13 +228,13 @@ func (h *handler) SubmitTreeSignatures(
 		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key")
 	}
 
-	cosignerPublicKey, err := secp256k1.ParsePubKey(pubkeyBytes)
+	cosignerPubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key")
 	}
 
 	if err := h.svc.RegisterCosignerSignatures(
-		ctx, roundID, cosignerPublicKey, encodedSignatures,
+		ctx, roundID, cosignerPubkey, encodedSignatures,
 	); err != nil {
 		return nil, err
 	}
@@ -319,7 +319,7 @@ func (h *handler) CreatePayment(
 			return nil, status.Error(codes.InvalidArgument, "output amount must be greater than 0")
 		}
 
-		if len(receiver.OnchainAddress) <= 0 && len(receiver.Pubkey) <= 0 {
+		if len(receiver.OnchainAddress) <= 0 && len(receiver.PubKey) <= 0 {
 			return nil, status.Error(codes.InvalidArgument, "missing address")
 		}
 

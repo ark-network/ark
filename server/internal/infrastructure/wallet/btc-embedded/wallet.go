@@ -1097,12 +1097,12 @@ func (s *service) SignMessage(ctx context.Context, message []byte) ([]byte, erro
 		return nil, fmt.Errorf("wallet not initialized or locked")
 	}
 
-	privKey, err := s.serverKeyAddr.PrivKey()
+	prvkey, err := s.serverKeyAddr.PrivKey()
 	if err != nil {
 		return nil, err
 	}
 
-	sig, err := schnorr.Sign(privKey, message)
+	sig, err := schnorr.Sign(prvkey, message)
 	if err != nil {
 		return nil, err
 	}

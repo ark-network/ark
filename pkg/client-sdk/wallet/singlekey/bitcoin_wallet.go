@@ -193,7 +193,7 @@ func (s *bitcoinWallet) SignTransaction(
 	)
 
 	txsighashes := txscript.NewTxSigHashes(updater.Upsbt.UnsignedTx, prevoutFetcher)
-	myPubkey := schnorr.SerializePubKey(s.walletData.Pubkey)
+	myPubkey := schnorr.SerializePubKey(s.walletData.PubKey)
 
 	for i, input := range ptx.Inputs {
 		if len(input.TaprootLeafScript) > 0 {
@@ -246,7 +246,7 @@ func (s *bitcoinWallet) SignTransaction(
 						return "", err
 					}
 
-					if !sig.Verify(preimage, s.walletData.Pubkey) {
+					if !sig.Verify(preimage, s.walletData.PubKey) {
 						return "", fmt.Errorf("signature verification failed")
 					}
 
@@ -308,8 +308,8 @@ func (w *bitcoinWallet) getAddress(
 	netParams := utils.ToBitcoinNetwork(data.Network)
 
 	defaultVtxoScript := bitcointree.NewDefaultVtxoScript(
-		w.walletData.Pubkey,
-		data.ServerPubkey,
+		w.walletData.PubKey,
+		data.ServerPubKey,
 		uint(data.UnilateralExitDelay),
 	)
 
@@ -320,13 +320,13 @@ func (w *bitcoinWallet) getAddress(
 
 	offchainAddress := &common.Address{
 		HRP:        data.Network.Addr,
-		Server:     data.ServerPubkey,
+		Server:     data.ServerPubKey,
 		VtxoTapKey: vtxoTapKey,
 	}
 
 	boardingVtxoScript := bitcointree.NewDefaultVtxoScript(
-		w.walletData.Pubkey,
-		data.ServerPubkey,
+		w.walletData.PubKey,
+		data.ServerPubKey,
 		uint(data.UnilateralExitDelay*2),
 	)
 

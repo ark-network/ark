@@ -70,7 +70,7 @@ func (p Payment) validate(ignoreOuts bool) error {
 		return fmt.Errorf("missing outputs")
 	}
 	for _, r := range p.Receivers {
-		if len(r.OnchainAddress) <= 0 && len(r.Pubkey) <= 0 {
+		if len(r.OnchainAddress) <= 0 && len(r.PubKey) <= 0 {
 			return fmt.Errorf("missing receiver destination")
 		}
 		if r.Amount == 0 {
@@ -107,7 +107,7 @@ func (k VtxoKey) Hash() string {
 type Receiver struct {
 	Amount         uint64
 	OnchainAddress string // onchain
-	Pubkey         string // offchain
+	PubKey         string // offchain
 }
 
 func (r Receiver) IsOnchain() bool {
@@ -117,7 +117,7 @@ func (r Receiver) IsOnchain() bool {
 type Vtxo struct {
 	VtxoKey
 	Amount    uint64
-	Pubkey    string
+	PubKey    string
 	RoundTxid string
 	SpentBy   string // round txid or async redeem txid
 	Spent     bool
@@ -129,7 +129,7 @@ type Vtxo struct {
 }
 
 func (v Vtxo) TapKey() (*secp256k1.PublicKey, error) {
-	pubkeyBytes, err := hex.DecodeString(v.Pubkey)
+	pubkeyBytes, err := hex.DecodeString(v.PubKey)
 	if err != nil {
 		return nil, err
 	}

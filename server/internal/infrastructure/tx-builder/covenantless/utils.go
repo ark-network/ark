@@ -46,7 +46,7 @@ func getOutputVtxosLeaves(
 		for _, receiver := range payment.Receivers {
 			if !receiver.IsOnchain() {
 				leaves = append(leaves, tree.VtxoLeaf{
-					Pubkey: receiver.Pubkey,
+					PubKey: receiver.PubKey,
 					Amount: receiver.Amount,
 				})
 			}

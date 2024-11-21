@@ -86,10 +86,10 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 		}
 
 		return client.RoundSigningStartedEvent{
-			ID:                  ee.GetId(),
-			UnsignedTree:        treeFromProto{ee.GetUnsignedVtxoTree()}.parse(),
-			CosignersPublicKeys: pubkeys,
-			UnsignedRoundTx:     ee.GetUnsignedRoundTx(),
+			ID:               ee.GetId(),
+			UnsignedTree:     treeFromProto{ee.GetUnsignedVtxoTree()}.parse(),
+			CosignersPubKeys: pubkeys,
+			UnsignedRoundTx:  ee.GetUnsignedRoundTx(),
 		}, nil
 	}
 
@@ -123,7 +123,7 @@ func (v vtxo) toVtxo() client.Vtxo {
 		IsPending: v.GetIsPending(),
 		RedeemTx:  v.GetRedeemTx(),
 		SpentBy:   v.GetSpentBy(),
-		Pubkey:    v.GetPubkey(),
+		PubKey:    v.GetPubkey(),
 		CreatedAt: time.Unix(v.GetCreatedAt(), 0),
 	}
 }

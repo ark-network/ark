@@ -525,7 +525,7 @@ func (a *covenantArkClient) CollaborativeRedeem(
 
 	for _, offchainAddr := range offchainAddrs {
 		for _, v := range spendableVtxos {
-			vtxoAddr, err := v.Address(a.ServerPubkey, a.Network)
+			vtxoAddr, err := v.Address(a.ServerPubKey, a.Network)
 			if err != nil {
 				return "", err
 			}
@@ -889,7 +889,7 @@ func (a *covenantArkClient) sendOffchain(
 		return "", fmt.Errorf("wallet is locked")
 	}
 
-	expectedServerPubkey := schnorr.SerializePubKey(a.ServerPubkey)
+	expectedServerPubkey := schnorr.SerializePubKey(a.ServerPubKey)
 	outputs := make([]client.Output, 0)
 	sumOfReceivers := uint64(0)
 
@@ -934,7 +934,7 @@ func (a *covenantArkClient) sendOffchain(
 
 	for _, offchainAddr := range offchainAddrs {
 		for _, v := range spendableVtxos {
-			vtxoAddr, err := v.Address(a.ServerPubkey, a.Network)
+			vtxoAddr, err := v.Address(a.ServerPubKey, a.Network)
 			if err != nil {
 				return "", err
 			}
@@ -1283,7 +1283,7 @@ func (a *covenantArkClient) validateCongestionTree(
 
 	if !utils.IsOnchainOnly(receivers) {
 		if err := tree.ValidateCongestionTree(
-			event.Tree, roundTx, a.Config.ServerPubkey, a.RoundLifetime,
+			event.Tree, roundTx, a.Config.ServerPubKey, a.RoundLifetime,
 		); err != nil {
 			return err
 		}

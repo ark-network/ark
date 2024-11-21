@@ -17,8 +17,8 @@ import (
 	"github.com/vulpemventures/go-elements/transaction"
 )
 
-func p2wpkhScript(publicKey *secp256k1.PublicKey, net *network.Network) ([]byte, error) {
-	payment := payment.FromPublicKey(publicKey, net, nil)
+func p2wpkhScript(pubkey *secp256k1.PublicKey, net *network.Network) ([]byte, error) {
+	payment := payment.FromPublicKey(pubkey, net, nil)
 	addr, err := payment.WitnessPubKeyHash()
 	if err != nil {
 		return nil, err
@@ -76,7 +76,7 @@ func getOutputVtxosLeaves(
 		for _, receiver := range payment.Receivers {
 			if !receiver.IsOnchain() {
 				receivers = append(receivers, tree.VtxoLeaf{
-					Pubkey: receiver.Pubkey,
+					PubKey: receiver.PubKey,
 					Amount: receiver.Amount,
 				})
 			}

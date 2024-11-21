@@ -34,12 +34,12 @@ func CraftSharedOutput(
 
 	amount := root.getAmount() + int64(feeSatsPerNode)
 
-	scriptPubKey, err := common.P2TRScript(aggregatedKey.FinalKey)
+	scriptPubkey, err := common.P2TRScript(aggregatedKey.FinalKey)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	return scriptPubKey, amount, err
+	return scriptPubkey, amount, err
 }
 
 // CraftCongestionTree creates all the tree's transactions
@@ -252,7 +252,7 @@ func createRootNode(
 
 	nodes := make([]node, 0, len(receivers))
 	for _, r := range receivers {
-		pubkeyBytes, err := hex.DecodeString(r.Pubkey)
+		pubkeyBytes, err := hex.DecodeString(r.PubKey)
 		if err != nil {
 			return nil, err
 		}

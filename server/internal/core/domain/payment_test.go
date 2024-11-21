@@ -16,7 +16,7 @@ var inputs = []domain.Vtxo{
 			Txid: "0000000000000000000000000000000000000000000000000000000000000000",
 			VOut: 0,
 		},
-		Pubkey: pubkey,
+		PubKey: pubkey,
 		Amount: 1000,
 	},
 }
@@ -41,11 +41,11 @@ func TestPayment(t *testing.T) {
 
 			err = payment.AddReceivers([]domain.Receiver{
 				{
-					Pubkey: pubkey,
+					PubKey: pubkey,
 					Amount: 450,
 				},
 				{
-					Pubkey: pubkey,
+					PubKey: pubkey,
 					Amount: 550,
 				},
 			})

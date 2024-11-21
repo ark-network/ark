@@ -63,7 +63,7 @@ type TransportClient interface {
 }
 
 type Info struct {
-	Pubkey                     string
+	PubKey                     string
 	RoundLifetime              int64
 	UnilateralExitDelay        int64
 	RoundInterval              int64
@@ -99,7 +99,7 @@ type AsyncPaymentInput struct {
 
 type Vtxo struct {
 	Outpoint
-	Pubkey    string
+	PubKey    string
 	Amount    uint64
 	RoundTxid string
 	ExpiresAt time.Time
@@ -110,7 +110,7 @@ type Vtxo struct {
 }
 
 func (v Vtxo) Address(server *secp256k1.PublicKey, net common.Network) (string, error) {
-	pubkeyBytes, err := hex.DecodeString(v.Pubkey)
+	pubkeyBytes, err := hex.DecodeString(v.PubKey)
 	if err != nil {
 		return "", err
 	}
@@ -200,10 +200,10 @@ type RoundFailedEvent struct {
 func (e RoundFailedEvent) isRoundEvent() {}
 
 type RoundSigningStartedEvent struct {
-	ID                  string
-	UnsignedTree        tree.CongestionTree
-	CosignersPublicKeys []*secp256k1.PublicKey
-	UnsignedRoundTx     string
+	ID               string
+	UnsignedTree     tree.CongestionTree
+	CosignersPubKeys []*secp256k1.PublicKey
+	UnsignedRoundTx  string
 }
 
 func (e RoundSigningStartedEvent) isRoundEvent() {}

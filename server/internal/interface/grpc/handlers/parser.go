@@ -101,7 +101,7 @@ func parseReceiver(out *arkv1.Output) (domain.Receiver, error) {
 
 	return domain.Receiver{
 		Amount: out.GetAmount(),
-		Pubkey: hex.EncodeToString(schnorr.SerializePubKey(decodedAddr.VtxoTapKey)),
+		PubKey: hex.EncodeToString(schnorr.SerializePubKey(decodedAddr.VtxoTapKey)),
 	}, nil
 }
 
@@ -145,7 +145,7 @@ func (v vtxoList) toProto() []*arkv1.Vtxo {
 			Swept:     vv.Swept,
 			RedeemTx:  vv.RedeemTx,
 			IsPending: len(vv.RedeemTx) > 0,
-			Pubkey:    vv.Pubkey,
+			Pubkey:    vv.PubKey,
 			CreatedAt: vv.CreatedAt,
 		})
 	}

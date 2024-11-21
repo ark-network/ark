@@ -460,12 +460,12 @@ func nip19toNostrProfile(nostrRecipient string, defaultRelays []string) (string,
 
 		nprofileRecipient = nostrRecipient
 	case "npub":
-		recipientPublicKey, ok := result.(string)
+		recipientPubkey, ok := result.(string)
 		if !ok {
 			return "", fmt.Errorf("invalid NIP-19 result: %v", result)
 		}
 
-		nprofileRecipient, err = nip19.EncodeProfile(recipientPublicKey, defaultRelays)
+		nprofileRecipient, err = nip19.EncodeProfile(recipientPubkey, defaultRelays)
 		if err != nil {
 			return "", fmt.Errorf("failed to encode nostr profile: %s", err)
 		}

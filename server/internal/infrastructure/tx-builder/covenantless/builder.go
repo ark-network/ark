@@ -753,7 +753,7 @@ func (b *txBuilder) BuildAsyncPaymentTransactions(
 			return "", fmt.Errorf("receiver %d is onchain", i)
 		}
 
-		pubkeyBytes, err := hex.DecodeString(receiver.Pubkey)
+		pubkeyBytes, err := hex.DecodeString(receiver.PubKey)
 		if err != nil {
 			return "", err
 		}

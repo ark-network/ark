@@ -1007,7 +1007,7 @@ func (s *covenantService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 
 			vtxos = append(vtxos, domain.Vtxo{
 				VtxoKey:   domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
-				Pubkey:    vtxoPubkey,
+				PubKey:    vtxoPubkey,
 				Amount:    uint64(out.Value),
 				RoundTxid: round.Txid,
 				CreatedAt: createdAt,
@@ -1082,7 +1082,7 @@ func (s *covenantService) restoreWatchingVtxos() error {
 func (s *covenantService) extractVtxosScripts(vtxos []domain.Vtxo) ([]string, error) {
 	indexedScripts := make(map[string]struct{})
 	for _, vtxo := range vtxos {
-		vtxoTapKeyBytes, err := hex.DecodeString(vtxo.Pubkey)
+		vtxoTapKeyBytes, err := hex.DecodeString(vtxo.PubKey)
 		if err != nil {
 			return nil, err
 		}

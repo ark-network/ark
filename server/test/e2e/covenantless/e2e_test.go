@@ -424,7 +424,7 @@ func TestSweep(t *testing.T) {
 
 	time.Sleep(3 * time.Second)
 
-	secretKey, publicKey, npub, err := utils.GetNostrKeys()
+	secretKey, pubkey, npub, err := utils.GetNostrKeys()
 	require.NoError(t, err)
 
 	_, err = runClarkCommand("register-nostr", "--profile", npub, "--password", utils.Password)
@@ -443,7 +443,7 @@ func TestSweep(t *testing.T) {
 		},
 		{
 			Tags: nostr.TagMap{
-				"p": []string{publicKey},
+				"p": []string{pubkey},
 			},
 		},
 	})
