@@ -389,7 +389,7 @@ func (s *covenantService) ListVtxos(ctx context.Context, address string) ([]doma
 	}
 
 	if !bytes.Equal(schnorr.SerializePubKey(decodedAddress.Asp), schnorr.SerializePubKey(s.pubkey)) {
-		return nil, nil, fmt.Errorf("address does not match service pubkey")
+		return nil, nil, fmt.Errorf("address does not match server pubkey")
 	}
 
 	pubkey := hex.EncodeToString(schnorr.SerializePubKey(decodedAddress.VtxoTapKey))
