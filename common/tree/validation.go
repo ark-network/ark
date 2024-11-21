@@ -13,37 +13,37 @@ import (
 )
 
 var (
-	ErrInvalidPoolTransaction        = errors.New("invalid pool transaction")
-	ErrInvalidPoolTransactionOutputs = errors.New("invalid number of outputs in pool transaction")
-	ErrEmptyTree                     = errors.New("empty congestion tree")
-	ErrInvalidRootLevel              = errors.New("root level must have only one node")
-	ErrNoLeaves                      = errors.New("no leaves in the tree")
-	ErrNodeTransactionEmpty          = errors.New("node transaction is empty")
-	ErrNodeTxidEmpty                 = errors.New("node txid is empty")
-	ErrNodeParentTxidEmpty           = errors.New("node parent txid is empty")
-	ErrNodeTxidDifferent             = errors.New("node txid differs from node transaction")
-	ErrNumberOfInputs                = errors.New("node transaction should have only one input")
-	ErrNumberOfOutputs               = errors.New("node transaction should have only three or two outputs")
-	ErrParentTxidInput               = errors.New("parent txid should be the input of the node transaction")
-	ErrNumberOfChildren              = errors.New("node branch transaction should have two children")
-	ErrLeafChildren                  = errors.New("leaf node should have max 1 child")
-	ErrInvalidChildTxid              = errors.New("invalid child txid")
-	ErrNumberOfTapscripts            = errors.New("input should have two tapscripts leaves")
-	ErrInternalKey                   = errors.New("taproot internal key is not unspendable")
-	ErrInvalidTaprootScript          = errors.New("invalid taproot script")
-	ErrInvalidTaprootScriptLen       = errors.New("invalid taproot script length (expected 32 bytes)")
-	ErrInvalidLeafTaprootScript      = errors.New("invalid leaf taproot script")
-	ErrInvalidAmount                 = errors.New("children amount is different from parent amount")
-	ErrInvalidAsset                  = errors.New("invalid output asset")
-	ErrInvalidSweepSequence          = errors.New("invalid sweep sequence")
-	ErrInvalidASP                    = errors.New("invalid ASP")
-	ErrMissingFeeOutput              = errors.New("missing fee output")
-	ErrInvalidLeftOutput             = errors.New("invalid left output")
-	ErrInvalidRightOutput            = errors.New("invalid right output")
-	ErrMissingSweepTapscript         = errors.New("missing sweep tapscript")
-	ErrMissingBranchTapscript        = errors.New("missing branch tapscript")
-	ErrInvalidLeaf                   = errors.New("leaf node shouldn't have children")
-	ErrWrongPoolTxID                 = errors.New("root input should be the pool tx outpoint")
+	ErrInvalidRoundTx           = fmt.Errorf("invalid round transaction")
+	ErrInvalidRoundTxOutputs    = fmt.Errorf("invalid number of outputs in round transaction")
+	ErrEmptyTree                = fmt.Errorf("empty congestion tree")
+	ErrInvalidRootLevel         = fmt.Errorf("root level must have only one node")
+	ErrNoLeaves                 = fmt.Errorf("no leaves in the tree")
+	ErrNodeTxEmpty              = fmt.Errorf("node transaction is empty")
+	ErrNodeTxidEmpty            = fmt.Errorf("node txid is empty")
+	ErrNodeParentTxidEmpty      = fmt.Errorf("node parent txid is empty")
+	ErrNodeTxidDifferent        = fmt.Errorf("node txid differs from node transaction")
+	ErrNumberOfInputs           = fmt.Errorf("node transaction should have only one input")
+	ErrNumberOfOutputs          = fmt.Errorf("node transaction should have only three or two outputs")
+	ErrParentTxidInput          = fmt.Errorf("parent txid should be the input of the node transaction")
+	ErrNumberOfChildren         = fmt.Errorf("node branch transaction should have two children")
+	ErrLeafChildren             = fmt.Errorf("leaf node should have max 1 child")
+	ErrInvalidChildTxid         = fmt.Errorf("invalid child txid")
+	ErrNumberOfTapscripts       = fmt.Errorf("input should have 1 tapscript leaf")
+	ErrInternalKey              = fmt.Errorf("invalid taproot internal key")
+	ErrInvalidTaprootScript     = fmt.Errorf("invalid taproot script")
+	ErrInvalidTaprootScriptLen  = fmt.Errorf("invalid taproot script length (expected 32 bytes)")
+	ErrInvalidLeafTaprootScript = fmt.Errorf("invalid leaf taproot script")
+	ErrInvalidAmount            = fmt.Errorf("children amount is different from parent amount")
+	ErrInvalidAsset             = errors.New("invalid output asset")
+	ErrInvalidSweepSequence     = fmt.Errorf("invalid sweep sequence")
+	ErrInvalidServer            = fmt.Errorf("invalid server")
+	ErrMissingFeeOutput         = fmt.Errorf("missing fee output")
+	ErrInvalidLeftOutput        = fmt.Errorf("invalid left output")
+	ErrInvalidRightOutput       = fmt.Errorf("invalid right output")
+	ErrMissingSweepTapscript    = fmt.Errorf("missing sweep tapscript")
+	ErrMissingBranchTapscript   = errors.New("missing branch tapscript")
+	ErrInvalidLeaf              = fmt.Errorf("leaf node shouldn't have children")
+	ErrWrongRoundTxid           = fmt.Errorf("the input of the tree root is not the round tx's shared output")
 )
 
 // 0250929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0
@@ -62,8 +62,8 @@ func UnspendableKey() *secp256k1.PublicKey {
 }
 
 // ValidateCongestionTree checks if the given congestion tree is valid
-// poolTxID & poolTxIndex & poolTxAmount are used to validate the root input outpoint
-// aspPublicKey & roundLifetime are used to validate the sweep tapscript leaves
+// roundTxid & roundTxIndex & roundTxAmount are used to validate the root input outpoint
+// serverPubkey & roundLifetime are used to validate the sweep tapscript leaves
 // besides that, the function validates:
 // - the number of nodes
 // - the number of leaves
@@ -71,26 +71,26 @@ func UnspendableKey() *secp256k1.PublicKey {
 // - every control block and taproot output scripts
 // - input and output amounts
 func ValidateCongestionTree(
-	tree CongestionTree, poolTx string, aspPublicKey *secp256k1.PublicKey,
+	tree CongestionTree, roundTx string, serverPubkey *secp256k1.PublicKey,
 	roundLifetime int64,
 ) error {
-	poolTransaction, err := psetv2.NewPsetFromBase64(poolTx)
+	roundTransaction, err := psetv2.NewPsetFromBase64(roundTx)
 	if err != nil {
-		return ErrInvalidPoolTransaction
+		return ErrInvalidRoundTx
 	}
 
-	if len(poolTransaction.Outputs) < sharedOutputIndex+1 {
-		return ErrInvalidPoolTransactionOutputs
+	if len(roundTransaction.Outputs) < sharedOutputIndex+1 {
+		return ErrInvalidRoundTxOutputs
 	}
 
-	poolTxAmount := poolTransaction.Outputs[sharedOutputIndex].Value
+	roundTxAmount := roundTransaction.Outputs[sharedOutputIndex].Value
 
-	utx, err := poolTransaction.UnsignedTx()
+	utx, err := roundTransaction.UnsignedTx()
 	if err != nil {
-		return ErrInvalidPoolTransaction
+		return ErrInvalidRoundTx
 	}
 
-	poolTxID := utx.TxHash().String()
+	roundTxid := utx.TxHash().String()
 
 	nbNodes := tree.NumberOfNodes()
 	if nbNodes == 0 {
@@ -101,7 +101,7 @@ func ValidateCongestionTree(
 		return ErrInvalidRootLevel
 	}
 
-	// check that root input is connected to the pool tx
+	// check that root input is connected to the round tx
 	rootPsetB64 := tree[0][0].Tx
 	rootPset, err := psetv2.NewPsetFromBase64(rootPsetB64)
 	if err != nil {
@@ -113,9 +113,9 @@ func ValidateCongestionTree(
 	}
 
 	rootInput := rootPset.Inputs[0]
-	if chainhash.Hash(rootInput.PreviousTxid).String() != poolTxID ||
+	if chainhash.Hash(rootInput.PreviousTxid).String() != roundTxid ||
 		rootInput.PreviousTxIndex != sharedOutputIndex {
-		return ErrWrongPoolTxID
+		return ErrWrongRoundTxid
 	}
 
 	sumRootValue := uint64(0)
@@ -123,7 +123,7 @@ func ValidateCongestionTree(
 		sumRootValue += output.Value
 	}
 
-	if sumRootValue != poolTxAmount {
+	if sumRootValue != roundTxAmount {
 		return ErrInvalidAmount
 	}
 
@@ -135,7 +135,7 @@ func ValidateCongestionTree(
 	for _, level := range tree {
 		for _, node := range level {
 			if err := validateNodeTransaction(
-				node, tree, UnspendableKey(), aspPublicKey, roundLifetime,
+				node, tree, UnspendableKey(), serverPubkey, roundLifetime,
 			); err != nil {
 				return err
 			}
@@ -147,11 +147,11 @@ func ValidateCongestionTree(
 
 func validateNodeTransaction(
 	node Node, tree CongestionTree,
-	expectedInternalKey, expectedPublicKeyASP *secp256k1.PublicKey,
+	expectedInternalKey, expectedServerPubkey *secp256k1.PublicKey,
 	expectedSequence int64,
 ) error {
 	if node.Tx == "" {
-		return ErrNodeTransactionEmpty
+		return ErrNodeTxEmpty
 	}
 
 	if node.Txid == "" {
@@ -238,21 +238,21 @@ func validateNodeTransaction(
 
 			switch c := closure.(type) {
 			case *CSVSigClosure:
-				isASP := len(c.MultisigClosure.PubKeys) == 1 && bytes.Equal(
+				isServer := len(c.MultisigClosure.PubKeys) == 1 && bytes.Equal(
 					schnorr.SerializePubKey(c.MultisigClosure.PubKeys[0]),
-					schnorr.SerializePubKey(expectedPublicKeyASP),
+					schnorr.SerializePubKey(expectedServerPubkey),
 				)
 				isSweepDelay := int64(c.Seconds) == expectedSequence
 
-				if isASP && !isSweepDelay {
+				if isServer && !isSweepDelay {
 					return ErrInvalidSweepSequence
 				}
 
-				if isSweepDelay && !isASP {
-					return ErrInvalidASP
+				if isSweepDelay && !isServer {
+					return ErrInvalidServer
 				}
 
-				if isASP && isSweepDelay {
+				if isServer && isSweepDelay {
 					sweepLeafFound = true
 				}
 			case *UnrollClosure:

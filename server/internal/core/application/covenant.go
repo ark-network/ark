@@ -388,7 +388,7 @@ func (s *covenantService) ListVtxos(ctx context.Context, address string) ([]doma
 		return nil, nil, fmt.Errorf("failed to decode address: %s", err)
 	}
 
-	if !bytes.Equal(schnorr.SerializePubKey(decodedAddress.Asp), schnorr.SerializePubKey(s.pubkey)) {
+	if !bytes.Equal(schnorr.SerializePubKey(decodedAddress.Server), schnorr.SerializePubKey(s.pubkey)) {
 		return nil, nil, fmt.Errorf("address does not match server pubkey")
 	}
 

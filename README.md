@@ -32,10 +32,10 @@ For a quick-start with Docker, head over to our [Quick Start guide](https://arkd
 ## Repository Structure
 
 - [`api-spec`](./api-spec/): Ark Protocol Buffer API specification
-- [`client`](./client/): `ark` Single-key wallet CLI for interacting with the ASP
+- [`client`](./client/): `ark` Single-key wallet CLI for interacting with the server
 - [`common`](./common/): Shared code between the server and client
-- [`pkg/client-sdk`](./pkg/client-sdk/): Go SDK for interacting with ASPs running the Ark protocol. It offers WASM bindings to interact with the SDK from the browser and other environments.
-- [`server`](./server/): `arkd` Ark Service Provider (ASP) - the always-on daemon
+- [`pkg/client-sdk`](./pkg/client-sdk/): Go SDK for interacting with servers running the Ark protocol. It offers WASM bindings to interact with the SDK from the browser and other environments.
+- [`server`](./server/): `arkd` Ark server - the always-on daemon
 
 ## Development
 

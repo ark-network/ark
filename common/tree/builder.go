@@ -13,14 +13,14 @@ import (
 )
 
 func CraftCongestionTree(
-	asset string, aspPubkey *secp256k1.PublicKey, receivers []VtxoLeaf,
+	asset string, serverPubkey *secp256k1.PublicKey, receivers []VtxoLeaf,
 	feeSatsPerNode uint64, roundLifetime int64,
 ) (
 	buildCongestionTree TreeFactory,
 	sharedOutputScript []byte, sharedOutputAmount uint64, err error,
 ) {
 	root, err := createPartialCongestionTree(
-		asset, aspPubkey, receivers, feeSatsPerNode, roundLifetime,
+		asset, serverPubkey, receivers, feeSatsPerNode, roundLifetime,
 	)
 	if err != nil {
 		return
@@ -379,7 +379,7 @@ func (n *node) createFinalCongestionTree() TreeFactory {
 }
 
 func createPartialCongestionTree(
-	asset string, aspPubkey *secp256k1.PublicKey, receivers []VtxoLeaf,
+	asset string, serverPubkey *secp256k1.PublicKey, receivers []VtxoLeaf,
 	feeSatsPerNode uint64, roundLifetime int64,
 ) (root *node, err error) {
 	if len(receivers) == 0 {
@@ -399,7 +399,7 @@ func createPartialCongestionTree(
 		}
 
 		leafNode := &node{
-			sweepKey:      aspPubkey,
+			sweepKey:      serverPubkey,
 			receivers:     []vtxoOutput{{pubkey, r.Amount}},
 			asset:         asset,
 			feeSats:       feeSatsPerNode,

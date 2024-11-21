@@ -26,7 +26,7 @@ type TaprootTree interface {
 }
 
 /*
-A vtxo script is defined as a taproot contract with at least 1 forfeit closure (User && ASP) and 1 exit closure (A after t).
+A vtxo script is defined as a taproot contract with at least 1 forfeit closure (User && Server) and 1 exit closure (A after t).
 It may also contain others closures implementing specific use cases.
 
 VtxoScript abstracts the taproot complexity behind vtxo contracts.

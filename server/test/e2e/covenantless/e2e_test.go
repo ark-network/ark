@@ -43,14 +43,14 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	if err := setupAspWallet(); err != nil {
+	if err := setupServerWallet(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
 	time.Sleep(3 * time.Second)
 
-	_, err = runClarkCommand("init", "--asp-url", "localhost:7070", "--password", utils.Password, "--network", "regtest", "--explorer", "http://chopsticks:3000")
+	_, err = runClarkCommand("init", "--server-url", "localhost:7070", "--password", utils.Password, "--network", "regtest", "--explorer", "http://chopsticks:3000")
 	if err != nil {
 		fmt.Printf("error initializing ark config: %s", err)
 		os.Exit(1)
@@ -204,7 +204,7 @@ func TestReactToSpentVtxosRedemption(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// give time for the ASP to detect and process the fraud
+	// give time for the server to detect and process the fraud
 	time.Sleep(20 * time.Second)
 
 	balance, err := client.Balance(ctx, false)
@@ -270,7 +270,7 @@ func TestReactToAsyncSpentVtxosRedemption(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// give time for the ASP to detect and process the fraud
+	// give time for the server to detect and process the fraud
 	time.Sleep(50 * time.Second)
 
 	balance, err := sdkClient.Balance(ctx, false)
@@ -487,7 +487,7 @@ func runClarkCommand(arg ...string) (string, error) {
 	return utils.RunDockerExec("clarkd", args...)
 }
 
-func setupAspWallet() error {
+func setupServerWallet() error {
 	adminHttpClient := &http.Client{
 		Timeout: 15 * time.Second,
 	}
@@ -594,7 +594,7 @@ func setupAspWallet() error {
 	return nil
 }
 
-func setupArkSDK(t *testing.T) (arksdk.ArkClient, client.ASPClient) {
+func setupArkSDK(t *testing.T) (arksdk.ArkClient, client.TransportClient) {
 	appDataStore, err := store.NewStore(store.Config{
 		ConfigStoreType:  types.FileStore,
 		AppDataStoreType: types.KVStore,
@@ -608,7 +608,7 @@ func setupArkSDK(t *testing.T) (arksdk.ArkClient, client.ASPClient) {
 	err = client.Init(context.Background(), arksdk.InitArgs{
 		WalletType: arksdk.SingleKeyWallet,
 		ClientType: arksdk.GrpcClient,
-		AspUrl:     "localhost:7070",
+		ServerUrl:  "localhost:7070",
 		Password:   utils.Password,
 	})
 	require.NoError(t, err)

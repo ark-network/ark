@@ -36,9 +36,9 @@ type restClient struct {
 	treeCache      *utils.Cache[tree.CongestionTree]
 }
 
-func NewClient(serverURL string) (client.ASPClient, error) {
+func NewClient(serverURL string) (client.TransportClient, error) {
 	if len(serverURL) <= 0 {
-		return nil, fmt.Errorf("missing asp url")
+		return nil, fmt.Errorf("missing server url")
 	}
 	svc, err := newRestClient(serverURL)
 	if err != nil {

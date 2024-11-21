@@ -209,7 +209,8 @@ message CreatePaymentRequest {
   repeated Output outputs = 2;
 }
 message CreatePaymentResponse {
-  string signed_redeem_tx = 1; // signed only by the ASP
+  // The redeem tx already signed by the server.
+  string signed_redeem_tx = 1;
 }
 
 message CompletePaymentRequest {
@@ -361,7 +362,7 @@ message RedeemTransaction {
   repeated Vtxo spendable_vtxos = 3;
 }
 
-// This message is used to prove to the ASP that the user controls the vtxo without revealing the whole VTXO taproot tree.
+// This message is used to prove to the server that the user controls the vtxo without revealing the whole VTXO taproot tree.
 message OwnershipProof {
   string control_block = 1;
   string script = 2;

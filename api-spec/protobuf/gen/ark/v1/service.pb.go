@@ -1225,7 +1225,8 @@ type CreatePaymentResponse struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	SignedRedeemTx string `protobuf:"bytes,1,opt,name=signed_redeem_tx,json=signedRedeemTx,proto3" json:"signed_redeem_tx,omitempty"` // signed only by the ASP
+	// The redeem tx already signed by the server.
+	SignedRedeemTx string `protobuf:"bytes,1,opt,name=signed_redeem_tx,json=signedRedeemTx,proto3" json:"signed_redeem_tx,omitempty"`
 }
 
 func (x *CreatePaymentResponse) Reset() {
@@ -2796,7 +2797,7 @@ func (x *RedeemTransaction) GetSpendableVtxos() []*Vtxo {
 	return nil
 }
 
-// This message is used to prove to the ASP that the user controls the vtxo without revealing the whole VTXO taproot tree.
+// This message is used to prove to the server that the user controls the vtxo without revealing the whole VTXO taproot tree.
 type OwnershipProof struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

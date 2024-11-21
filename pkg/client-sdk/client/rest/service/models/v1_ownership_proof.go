@@ -12,7 +12,7 @@ import (
 	"github.com/go-openapi/swag"
 )
 
-// V1OwnershipProof This message is used to prove to the ASP that the user controls the vtxo without revealing the whole VTXO taproot tree.
+// V1OwnershipProof This message is used to prove to the server that the user controls the vtxo without revealing the whole VTXO taproot tree.
 //
 // swagger:model v1OwnershipProof
 type V1OwnershipProof struct {

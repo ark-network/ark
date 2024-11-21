@@ -87,7 +87,7 @@ func LoadCovenantClient(sdkStore types.Store) (ArkClient, error) {
 	}
 
 	clientSvc, err := getClient(
-		supportedClients, cfgData.ClientType, cfgData.AspUrl,
+		supportedClients, cfgData.ClientType, cfgData.ServerUrl,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup transport client: %s", err)
@@ -147,7 +147,7 @@ func LoadCovenantClientWithWallet(
 	}
 
 	clientSvc, err := getClient(
-		supportedClients, cfgData.ClientType, cfgData.AspUrl,
+		supportedClients, cfgData.ClientType, cfgData.ServerUrl,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup transport client: %s", err)
@@ -525,7 +525,7 @@ func (a *covenantArkClient) CollaborativeRedeem(
 
 	for _, offchainAddr := range offchainAddrs {
 		for _, v := range spendableVtxos {
-			vtxoAddr, err := v.Address(a.AspPubkey, a.Network)
+			vtxoAddr, err := v.Address(a.ServerPubkey, a.Network)
 			if err != nil {
 				return "", err
 			}
@@ -889,7 +889,7 @@ func (a *covenantArkClient) sendOffchain(
 		return "", fmt.Errorf("wallet is locked")
 	}
 
-	expectedAspPubKey := schnorr.SerializePubKey(a.AspPubkey)
+	expectedServerPubkey := schnorr.SerializePubKey(a.ServerPubkey)
 	outputs := make([]client.Output, 0)
 	sumOfReceivers := uint64(0)
 
@@ -900,10 +900,10 @@ func (a *covenantArkClient) sendOffchain(
 			return "", fmt.Errorf("invalid receiver address: %s", err)
 		}
 
-		rcvAspPubKey := schnorr.SerializePubKey(rcvAddr.Asp)
+		rcvServerPubKkey := schnorr.SerializePubKey(rcvAddr.Server)
 
-		if !bytes.Equal(expectedAspPubKey, rcvAspPubKey) {
-			return "", fmt.Errorf("invalid receiver address '%s': expected ASP %s, got %s", receiver.To(), hex.EncodeToString(expectedAspPubKey), hex.EncodeToString(rcvAspPubKey))
+		if !bytes.Equal(expectedServerPubkey, rcvServerPubKkey) {
+			return "", fmt.Errorf("invalid receiver address '%s': expected server %s, got %s", receiver.To(), hex.EncodeToString(expectedServerPubkey), hex.EncodeToString(rcvServerPubKkey))
 		}
 
 		if receiver.Amount() < a.Dust {
@@ -934,7 +934,7 @@ func (a *covenantArkClient) sendOffchain(
 
 	for _, offchainAddr := range offchainAddrs {
 		for _, v := range spendableVtxos {
-			vtxoAddr, err := v.Address(a.AspPubkey, a.Network)
+			vtxoAddr, err := v.Address(a.ServerPubkey, a.Network)
 			if err != nil {
 				return "", err
 			}
@@ -1283,7 +1283,7 @@ func (a *covenantArkClient) validateCongestionTree(
 
 	if !utils.IsOnchainOnly(receivers) {
 		if err := tree.ValidateCongestionTree(
-			event.Tree, poolTx, a.Config.AspPubkey, a.RoundLifetime,
+			event.Tree, poolTx, a.Config.ServerPubkey, a.RoundLifetime,
 		); err != nil {
 			return err
 		}

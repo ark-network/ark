@@ -28,13 +28,13 @@
                     logMessage("Init error: password is required");
                     return;
                 }
-                const aspUrl = document.getElementById("aspUrl").value;
-                if (!aspUrl) {
-                    logMessage("Init error: asp url is required");
+                const serverUrl = document.getElementById("serverUrl").value;
+                if (!serverUrl) {
+                    logMessage("Init error: server url is required");
                     return;
                 }
-                await init(walletType, clientType, aspUrl, privateKey, password, chain, explorerUrl);
-                logMessage("wallet initialized and connected to ASP");
+                await init(walletType, clientType, serverUrl, privateKey, password, chain, explorerUrl);
+                logMessage("wallet initialized and connected to server");
                 await config();
             } catch (err) {
                 logMessage("Init error: " + err.message);
@@ -119,11 +119,11 @@
 
         async function config() {
             try {
-                const aspUrl = await getAspUrl();
-                logMessage("ASP URL: " + aspUrl);
+                const serverUrl = await getServerUrl();
+                logMessage("Server URL: " + serverUrl);
 
-                const aspPubKeyHex = await getAspPubKeyHex();
-                logMessage("ASP PubKey: " + aspPubKeyHex);
+                const serverPubkeyHex = await getServerPubkeyHex();
+                logMessage("Server Pubkey: " + serverPubkeyHex);
 
                 const walletType = await getWalletType();
                 logMessage("Wallet Type: " + walletType);
@@ -149,7 +149,7 @@
     <h2>Wallet</h2>
     <div>
         <button onclick="initWallet()">Init</button>
-        <input type="text" id="aspUrl" placeholder="http://localhost:7070">
+        <input type="text" id="serverUrl" placeholder="http://localhost:7070">
         <input type="password" id="i_password" placeholder="password">
         <input type="text" id="prvkey" placeholder="Optional: privkey (hex)">
     </div>

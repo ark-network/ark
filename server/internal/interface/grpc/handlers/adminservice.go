@@ -12,15 +12,15 @@ import (
 
 type adminHandler struct {
 	adminService application.AdminService
-	aspService   application.Service
+	arkService   application.Service
 
 	noteUriPrefix string
 }
 
 func NewAdminHandler(
-	adminService application.AdminService, aspService application.Service, noteUriPrefix string,
+	adminService application.AdminService, arkService application.Service, noteUriPrefix string,
 ) arkv1.AdminServiceServer {
-	return &adminHandler{adminService, aspService, noteUriPrefix}
+	return &adminHandler{adminService, arkService, noteUriPrefix}
 }
 
 func (a *adminHandler) GetRoundDetails(ctx context.Context, req *arkv1.GetRoundDetailsRequest) (*arkv1.GetRoundDetailsResponse, error) {

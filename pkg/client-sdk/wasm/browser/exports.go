@@ -41,8 +41,8 @@ func init() {
 	js.Global().Set("setNostrNotificationRecipient", SetNostrNotificationRecipientWrapper())
 	js.Global().Set("listVtxos", ListVtxosWrapper())
 
-	js.Global().Set("getAspUrl", GetAspUrlWrapper())
-	js.Global().Set("getAspPubKeyHex", GetAspPubkeyWrapper())
+	js.Global().Set("getServerUrl", GetServerUrlWrapper())
+	js.Global().Set("getServerPubkeyHex", GetServerPubkeyWrapper())
 	js.Global().Set("getWalletType", GetWalletTypeWrapper())
 	js.Global().Set("getClientType", GetClientTypeWrapper())
 	js.Global().Set("getNetwork", GetNetworkWrapper())

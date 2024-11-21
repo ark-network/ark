@@ -309,7 +309,7 @@ func (w *bitcoinWallet) getAddress(
 
 	defaultVtxoScript := bitcointree.NewDefaultVtxoScript(
 		w.walletData.Pubkey,
-		data.AspPubkey,
+		data.ServerPubkey,
 		uint(data.UnilateralExitDelay),
 	)
 
@@ -320,13 +320,13 @@ func (w *bitcoinWallet) getAddress(
 
 	offchainAddress := &common.Address{
 		HRP:        data.Network.Addr,
-		Asp:        data.AspPubkey,
+		Server:     data.ServerPubkey,
 		VtxoTapKey: vtxoTapKey,
 	}
 
 	boardingVtxoScript := bitcointree.NewDefaultVtxoScript(
 		w.walletData.Pubkey,
-		data.AspPubkey,
+		data.ServerPubkey,
 		uint(data.UnilateralExitDelay*2),
 	)
 

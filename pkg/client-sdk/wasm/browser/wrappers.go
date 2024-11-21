@@ -72,7 +72,7 @@ func InitWrapper() js.Func {
 		err := arkSdkClient.InitWithWallet(context.Background(), arksdk.InitWithWalletArgs{
 			ClientType:  args[1].String(),
 			Wallet:      walletSvc,
-			AspUrl:      args[2].String(),
+			ServerUrl:   args[2].String(),
 			Seed:        args[3].String(),
 			Password:    args[4].String(),
 			ExplorerURL: args[6].String(),
@@ -340,25 +340,25 @@ func GetTransactionHistoryWrapper() js.Func {
 	})
 }
 
-func GetAspUrlWrapper() js.Func {
+func GetServerUrlWrapper() js.Func {
 	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
 		data, _ := arkSdkClient.GetConfigData(context.Background())
 		var url string
 		if data != nil {
-			url = data.AspUrl
+			url = data.ServerUrl
 		}
 		return js.ValueOf(url)
 	})
 }
 
-func GetAspPubkeyWrapper() js.Func {
+func GetServerPubkeyWrapper() js.Func {
 	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
 		data, _ := arkSdkClient.GetConfigData(context.Background())
-		var aspPubkey string
+		var serverPubkey string
 		if data != nil {
-			aspPubkey = hex.EncodeToString(data.AspPubkey.SerializeCompressed())
+			serverPubkey = hex.EncodeToString(data.ServerPubkey.SerializeCompressed())
 		}
-		return js.ValueOf(aspPubkey)
+		return js.ValueOf(serverPubkey)
 	})
 }
 

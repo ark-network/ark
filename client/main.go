@@ -97,8 +97,8 @@ var (
 		Usage: "optional private key to encrypt",
 	}
 	urlFlag = &cli.StringFlag{
-		Name:     "asp-url",
-		Usage:    "the url of the ASP to connect to",
+		Name:     "server-url",
+		Usage:    "the url of the Ark server to connect to",
 		Required: true,
 	}
 	receiversFlag = &cli.StringFlag{
@@ -150,7 +150,7 @@ var (
 var (
 	initCommand = cli.Command{
 		Name:  "init",
-		Usage: "Initialize Ark wallet with encryption password, connect to ASP",
+		Usage: "Initialize Ark wallet with encryption password, connect to Ark server",
 		Action: func(ctx *cli.Context) error {
 			return initArkSdk(ctx)
 		},
@@ -243,7 +243,7 @@ func initArkSdk(ctx *cli.Context) error {
 		ctx.Context, arksdk.InitArgs{
 			ClientType:  clientType,
 			WalletType:  arksdk.SingleKeyWallet,
-			AspUrl:      ctx.String(urlFlag.Name),
+			ServerUrl:   ctx.String(urlFlag.Name),
 			Seed:        ctx.String(privateKeyFlag.Name),
 			Password:    string(password),
 			ExplorerURL: ctx.String(explorerFlag.Name),
@@ -258,8 +258,8 @@ func config(ctx *cli.Context) error {
 	}
 
 	cfg := map[string]interface{}{
-		"asp_url":                      cfgData.AspUrl,
-		"asp_pubkey":                   hex.EncodeToString(cfgData.AspPubkey.SerializeCompressed()),
+		"server_url":                   cfgData.ServerUrl,
+		"server_pubkey":                hex.EncodeToString(cfgData.ServerPubkey.SerializeCompressed()),
 		"wallet_type":                  cfgData.WalletType,
 		"client_tyep":                  cfgData.ClientType,
 		"network":                      cfgData.Network.Name,

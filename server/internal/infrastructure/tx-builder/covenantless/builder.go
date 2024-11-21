@@ -60,7 +60,7 @@ func (b *txBuilder) VerifyTapscriptPartialSigs(tx string) (bool, error) {
 func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, error) {
 	txid := ptx.UnsignedTx.TxID()
 
-	aspPublicKey, err := b.wallet.GetPubkey(context.Background())
+	serverPubkey, err := b.wallet.GetPubkey(context.Background())
 	if err != nil {
 		return false, err
 	}
@@ -95,8 +95,8 @@ func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, error) {
 			}
 		}
 
-		// we don't need to check if ASP signed
-		keys[hex.EncodeToString(schnorr.SerializePubKey(aspPublicKey))] = true
+		// we don't need to check if server signed
+		keys[hex.EncodeToString(schnorr.SerializePubKey(serverPubkey))] = true
 
 		if len(tapLeaf.ControlBlock) == 0 {
 			return false, fmt.Errorf("missing control block for input %d", index)
@@ -473,7 +473,7 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 }
 
 func (b *txBuilder) BuildRoundTx(
-	aspPubkey *secp256k1.PublicKey,
+	serverPubkey *secp256k1.PublicKey,
 	payments []domain.Payment,
 	boardingInputs []ports.BoardingInput,
 	sweptRounds []domain.Round,
@@ -498,7 +498,7 @@ func (b *txBuilder) BuildRoundTx(
 
 	if !isOnchainOnly(payments) {
 		sharedOutputScript, sharedOutputAmount, err = bitcointree.CraftSharedOutput(
-			cosigners, aspPubkey, receivers, feeAmount, b.roundLifetime,
+			cosigners, serverPubkey, receivers, feeAmount, b.roundLifetime,
 		)
 		if err != nil {
 			return
@@ -529,7 +529,7 @@ func (b *txBuilder) BuildRoundTx(
 		}
 
 		congestionTree, err = bitcointree.CraftCongestionTree(
-			initialOutpoint, cosigners, aspPubkey, receivers, feeAmount, b.roundLifetime,
+			initialOutpoint, cosigners, serverPubkey, receivers, feeAmount, b.roundLifetime,
 		)
 		if err != nil {
 			return "", nil, "", nil, err

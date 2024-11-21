@@ -17,11 +17,11 @@ import (
 
 // CraftSharedOutput returns the taproot script and the amount of the initial root output
 func CraftSharedOutput(
-	cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, receivers []tree.VtxoLeaf,
+	cosigners []*secp256k1.PublicKey, server *secp256k1.PublicKey, receivers []tree.VtxoLeaf,
 	feeSatsPerNode uint64, roundLifetime int64,
 ) ([]byte, int64, error) {
 	aggregatedKey, _, err := createAggregatedKeyWithSweep(
-		cosigners, aspPubkey, roundLifetime,
+		cosigners, server, roundLifetime,
 	)
 	if err != nil {
 		return nil, 0, err
@@ -44,11 +44,11 @@ func CraftSharedOutput(
 
 // CraftCongestionTree creates all the tree's transactions
 func CraftCongestionTree(
-	initialInput *wire.OutPoint, cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, receivers []tree.VtxoLeaf,
+	initialInput *wire.OutPoint, cosigners []*secp256k1.PublicKey, server *secp256k1.PublicKey, receivers []tree.VtxoLeaf,
 	feeSatsPerNode uint64, roundLifetime int64,
 ) (tree.CongestionTree, error) {
 	aggregatedKey, sweepTapLeaf, err := createAggregatedKeyWithSweep(
-		cosigners, aspPubkey, roundLifetime,
+		cosigners, server, roundLifetime,
 	)
 	if err != nil {
 		return nil, err
@@ -280,10 +280,10 @@ func createRootNode(
 }
 
 func createAggregatedKeyWithSweep(
-	cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, roundLifetime int64,
+	cosigners []*secp256k1.PublicKey, server *secp256k1.PublicKey, roundLifetime int64,
 ) (*musig2.AggregateKey, *psbt.TaprootTapLeafScript, error) {
 	sweepClosure := &tree.CSVSigClosure{
-		MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{aspPubkey}},
+		MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{server}},
 		Seconds:         uint(roundLifetime),
 	}
 

@@ -21,8 +21,8 @@ const (
 )
 
 type storeData struct {
-	AspUrl                     string `json:"asp_url"`
-	AspPubkey                  string `json:"asp_pubkey"`
+	ServerUrl                  string `json:"server_url"`
+	ServerPubkey               string `json:"server_pubkey"`
 	WalletType                 string `json:"wallet_type"`
 	ClientType                 string `json:"client_type"`
 	ExplorerURL                string `json:"explorer_url"`
@@ -54,8 +54,8 @@ func (s *configStore) GetDatadir() string {
 
 func (s *configStore) AddData(ctx context.Context, data types.Config) error {
 	sd := &storeData{
-		AspUrl:                     data.AspUrl,
-		AspPubkey:                  hex.EncodeToString(data.AspPubkey.SerializeCompressed()),
+		ServerUrl:                  data.ServerUrl,
+		ServerPubkey:               hex.EncodeToString(data.ServerPubkey.SerializeCompressed()),
 		WalletType:                 data.WalletType,
 		ClientType:                 data.ClientType,
 		Network:                    data.Network.Name,
@@ -71,7 +71,7 @@ func (s *configStore) AddData(ctx context.Context, data types.Config) error {
 }
 
 func (s *configStore) GetData(ctx context.Context) (*types.Config, error) {
-	key := s.store.Call("getItem", "asp_pubkey")
+	key := s.store.Call("getItem", "server_pubkey")
 	if key.IsNull() || key.IsUndefined() {
 		return nil, nil
 	}
@@ -83,7 +83,7 @@ func (s *configStore) GetData(ctx context.Context) (*types.Config, error) {
 		return nil, nil
 	}
 
-	aspPubkey, err := secp256k1.ParsePubKey(buf)
+	serverPubkey, err := secp256k1.ParsePubKey(buf)
 	if err != nil {
 		return nil, err
 	}
@@ -95,8 +95,8 @@ func (s *configStore) GetData(ctx context.Context) (*types.Config, error) {
 	withTxFeed, _ := strconv.ParseBool(s.store.Call("getItem", "with_transaction_feed").String())
 
 	return &types.Config{
-		AspUrl:                     s.store.Call("getItem", "asp_url").String(),
-		AspPubkey:                  aspPubkey,
+		ServerUrl:                  s.store.Call("getItem", "server_url").String(),
+		ServerPubkey:               serverPubkey,
 		WalletType:                 s.store.Call("getItem", "wallet_type").String(),
 		ClientType:                 s.store.Call("getItem", "client_type").String(),
 		Network:                    network,

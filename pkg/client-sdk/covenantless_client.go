@@ -91,7 +91,7 @@ func LoadCovenantlessClient(sdkStore types.Store) (ArkClient, error) {
 	}
 
 	clientSvc, err := getClient(
-		supportedClients, cfgData.ClientType, cfgData.AspUrl,
+		supportedClients, cfgData.ClientType, cfgData.ServerUrl,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup transport client: %s", err)
@@ -151,7 +151,7 @@ func LoadCovenantlessClientWithWallet(
 	}
 
 	clientSvc, err := getClient(
-		supportedClients, cfgData.ClientType, cfgData.AspUrl,
+		supportedClients, cfgData.ClientType, cfgData.ServerUrl,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup transport client: %s", err)
@@ -865,7 +865,7 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 
 	for _, offchainAddr := range offchainAddrs {
 		for _, v := range spendableVtxos {
-			vtxoAddr, err := v.Address(a.AspPubkey, a.Network)
+			vtxoAddr, err := v.Address(a.ServerPubkey, a.Network)
 			if err != nil {
 				return "", err
 			}
@@ -976,7 +976,7 @@ func (a *covenantlessArkClient) SendAsync(
 		return "", err
 	}
 
-	expectedAspPubKey := schnorr.SerializePubKey(a.AspPubkey)
+	expectedServerPubkey := schnorr.SerializePubKey(a.ServerPubkey)
 
 	receiversOutput := make([]client.Output, 0)
 	sumOfReceivers := uint64(0)
@@ -987,10 +987,10 @@ func (a *covenantlessArkClient) SendAsync(
 			return "", fmt.Errorf("invalid receiver address: %s", err)
 		}
 
-		rcvAspPubKey := schnorr.SerializePubKey(rcvAddr.Asp)
+		rcvServerPubkey := schnorr.SerializePubKey(rcvAddr.Server)
 
-		if !bytes.Equal(expectedAspPubKey, rcvAspPubKey) {
-			return "", fmt.Errorf("invalid receiver address '%s': expected ASP %s, got %s", receiver.To(), hex.EncodeToString(expectedAspPubKey), hex.EncodeToString(rcvAspPubKey))
+		if !bytes.Equal(expectedServerPubkey, rcvServerPubkey) {
+			return "", fmt.Errorf("invalid receiver address '%s': expected server %s, got %s", receiver.To(), hex.EncodeToString(expectedServerPubkey), hex.EncodeToString(rcvServerPubkey))
 		}
 
 		if receiver.Amount() < a.Dust {
@@ -1015,7 +1015,7 @@ func (a *covenantlessArkClient) SendAsync(
 
 	for _, offchainAddr := range offchainAddrs {
 		for _, v := range spendableVtxos {
-			vtxoAddr, err := v.Address(a.AspPubkey, a.Network)
+			vtxoAddr, err := v.Address(a.ServerPubkey, a.Network)
 			if err != nil {
 				return "", err
 			}
@@ -1153,7 +1153,7 @@ func (a *covenantlessArkClient) SetNostrNotificationRecipient(ctx context.Contex
 	descriptorVtxos := make([]client.TapscriptsVtxo, 0)
 	for _, offchainAddr := range offchainAddrs {
 		for _, vtxo := range spendableVtxos {
-			vtxoAddr, err := vtxo.Address(a.AspPubkey, a.Network)
+			vtxoAddr, err := vtxo.Address(a.ServerPubkey, a.Network)
 			if err != nil {
 				return err
 			}
@@ -1379,7 +1379,7 @@ func (a *covenantlessArkClient) sendOffchain(
 		return "", fmt.Errorf("wallet is locked")
 	}
 
-	expectedAspPubKey := schnorr.SerializePubKey(a.AspPubkey)
+	expectedServerPubkey := schnorr.SerializePubKey(a.ServerPubkey)
 	outputs := make([]client.Output, 0)
 	sumOfReceivers := uint64(0)
 
@@ -1390,10 +1390,10 @@ func (a *covenantlessArkClient) sendOffchain(
 			return "", fmt.Errorf("invalid receiver address: %s", err)
 		}
 
-		rcvAspPubKey := schnorr.SerializePubKey(rcvAddr.Asp)
+		rcvServerPubkey := schnorr.SerializePubKey(rcvAddr.Server)
 
-		if !bytes.Equal(expectedAspPubKey, rcvAspPubKey) {
-			return "", fmt.Errorf("invalid receiver address '%s': expected ASP %s, got %s", receiver.To(), hex.EncodeToString(expectedAspPubKey), hex.EncodeToString(rcvAspPubKey))
+		if !bytes.Equal(expectedServerPubkey, rcvServerPubkey) {
+			return "", fmt.Errorf("invalid receiver address '%s': expected server %s, got %s", receiver.To(), hex.EncodeToString(expectedServerPubkey), hex.EncodeToString(rcvServerPubkey))
 		}
 
 		if receiver.Amount() < a.Dust {
@@ -1425,7 +1425,7 @@ func (a *covenantlessArkClient) sendOffchain(
 
 	for _, offchainAddr := range offchainAddrs {
 		for _, v := range spendableVtxos {
-			vtxoAddr, err := v.Address(a.AspPubkey, a.Network)
+			vtxoAddr, err := v.Address(a.ServerPubkey, a.Network)
 			if err != nil {
 				return "", err
 			}
@@ -1732,7 +1732,7 @@ func (a *covenantlessArkClient) handleRoundSigningStarted(
 	ctx context.Context, ephemeralKey *secp256k1.PrivateKey, event client.RoundSigningStartedEvent,
 ) (signerSession bitcointree.SignerSession, err error) {
 	sweepClosure := tree.CSVSigClosure{
-		MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{a.AspPubkey}},
+		MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{a.ServerPubkey}},
 		Seconds:         uint(a.RoundLifetime),
 	}
 
@@ -1908,7 +1908,7 @@ func (a *covenantlessArkClient) validateCongestionTree(
 
 	if !utils.IsOnchainOnly(receivers) {
 		if err := bitcointree.ValidateCongestionTree(
-			event.Tree, poolTx, a.Config.AspPubkey, a.RoundLifetime,
+			event.Tree, poolTx, a.Config.ServerPubkey, a.RoundLifetime,
 		); err != nil {
 			return err
 		}

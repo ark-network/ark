@@ -215,10 +215,10 @@ func (s *covenantlessService) CompleteAsyncPayment(
 			// verify that the user signs a forfeit closure
 			var userPubKey *secp256k1.PublicKey
 
-			aspXOnlyPubKey := schnorr.SerializePubKey(s.pubkey)
+			serverXOnlyPubKey := schnorr.SerializePubKey(s.pubkey)
 
 			for _, sig := range input.TaprootScriptSpendSig {
-				if !bytes.Equal(sig.XOnlyPubKey, aspXOnlyPubKey) {
+				if !bytes.Equal(sig.XOnlyPubKey, serverXOnlyPubKey) {
 					parsed, err := schnorr.ParsePubKey(sig.XOnlyPubKey)
 					if err != nil {
 						return fmt.Errorf("failed to parse pubkey: %s", err)
@@ -651,7 +651,7 @@ func (s *covenantlessService) ListVtxos(ctx context.Context, address string) ([]
 		return nil, nil, fmt.Errorf("failed to decode address: %s", err)
 	}
 
-	if !bytes.Equal(schnorr.SerializePubKey(decodedAddress.Asp), schnorr.SerializePubKey(s.pubkey)) {
+	if !bytes.Equal(schnorr.SerializePubKey(decodedAddress.Server), schnorr.SerializePubKey(s.pubkey)) {
 		return nil, nil, fmt.Errorf("address does not match server pubkey")
 	}
 
@@ -739,7 +739,7 @@ func (s *covenantlessService) RegisterCosignerNonces(
 
 	session.nonces[pubkey] = nonces
 
-	if len(session.nonces) == session.nbCosigners-1 { // exclude the ASP
+	if len(session.nonces) == session.nbCosigners-1 { // exclude the server
 		go func() {
 			session.nonceDoneC <- struct{}{}
 		}()
@@ -770,7 +770,7 @@ func (s *covenantlessService) RegisterCosignerSignatures(
 
 	session.signatures[pubkey] = signatures
 
-	if len(session.signatures) == session.nbCosigners-1 { // exclude the ASP
+	if len(session.signatures) == session.nbCosigners-1 { // exclude the server
 		go func() {
 			session.sigDoneC <- struct{}{}
 		}()
@@ -980,11 +980,11 @@ func (s *covenantlessService) startFinalization() {
 			return
 		}
 
-		aspSignerSession := bitcointree.NewTreeSignerSession(
+		serverSignerSession := bitcointree.NewTreeSignerSession(
 			ephemeralKey, sharedOutputAmount, vtxoTree, root.CloneBytes(),
 		)
 
-		nonces, err := aspSignerSession.GetNonces()
+		nonces, err := serverSignerSession.GetNonces()
 		if err != nil {
 			round.Fail(fmt.Errorf("failed to get nonces: %s", err))
 			log.WithError(err).Warn("failed to get nonces")
@@ -1028,33 +1028,33 @@ func (s *covenantlessService) startFinalization() {
 
 		s.propagateRoundSigningNoncesGeneratedEvent(aggragatedNonces)
 
-		if err := aspSignerSession.SetKeys(cosigners); err != nil {
+		if err := serverSignerSession.SetKeys(cosigners); err != nil {
 			round.Fail(fmt.Errorf("failed to set keys: %s", err))
 			log.WithError(err).Warn("failed to set keys")
 			return
 		}
 
-		if err := aspSignerSession.SetAggregatedNonces(aggragatedNonces); err != nil {
+		if err := serverSignerSession.SetAggregatedNonces(aggragatedNonces); err != nil {
 			round.Fail(fmt.Errorf("failed to set aggregated nonces: %s", err))
 			log.WithError(err).Warn("failed to set aggregated nonces")
 			return
 		}
 
-		// sign the tree as ASP
-		aspTreeSigs, err := aspSignerSession.Sign()
+		// sign the tree as server
+		serverTreeSigs, err := serverSignerSession.Sign()
 		if err != nil {
 			round.Fail(fmt.Errorf("failed to sign tree: %s", err))
 			log.WithError(err).Warn("failed to sign tree")
 			return
 		}
 
-		if err := coordinator.AddSig(ephemeralKey.PubKey(), aspTreeSigs); err != nil {
+		if err := coordinator.AddSig(ephemeralKey.PubKey(), serverTreeSigs); err != nil {
 			round.Fail(fmt.Errorf("failed to add signature: %s", err))
 			log.WithError(err).Warn("failed to add signature")
 			return
 		}
 
-		log.Debugf("ASP tree signed for round %s", round.Id)
+		log.Debugf("tree signed by us for round %s", round.Id)
 
 		signaturesTimer := time.NewTimer(thirdOfRemainingDuration)
 

@@ -315,7 +315,7 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 }
 
 func (b *txBuilder) BuildRoundTx(
-	aspPubkey *secp256k1.PublicKey,
+	serverPubkey *secp256k1.PublicKey,
 	payments []domain.Payment,
 	boardingInputs []ports.BoardingInput,
 	sweptRounds []domain.Round,
@@ -349,7 +349,7 @@ func (b *txBuilder) BuildRoundTx(
 		}
 
 		treeFactoryFn, sharedOutputScript, sharedOutputAmount, err = tree.CraftCongestionTree(
-			b.onchainNetwork().AssetID, aspPubkey, vtxosLeaves, feeSatsPerNode, b.roundLifetime,
+			b.onchainNetwork().AssetID, serverPubkey, vtxosLeaves, feeSatsPerNode, b.roundLifetime,
 		)
 		if err != nil {
 			return "", nil, "", nil, err
@@ -362,7 +362,7 @@ func (b *txBuilder) BuildRoundTx(
 	}
 
 	ptx, err := b.createPoolTx(
-		sharedOutputAmount, sharedOutputScript, payments, boardingInputs, aspPubkey, connectorAddress, sweptRounds,
+		sharedOutputAmount, sharedOutputScript, payments, boardingInputs, serverPubkey, connectorAddress, sweptRounds,
 	)
 	if err != nil {
 		return
@@ -477,7 +477,7 @@ func (b *txBuilder) verifyTapscriptPartialSigs(pset *psetv2.Pset) (bool, error) 
 	utx, _ := pset.UnsignedTx()
 	txid := utx.TxHash().String()
 
-	aspPublicKey, err := b.wallet.GetPubkey(context.Background())
+	serverPubkey, err := b.wallet.GetPubkey(context.Background())
 	if err != nil {
 		return false, err
 	}
@@ -511,8 +511,8 @@ func (b *txBuilder) verifyTapscriptPartialSigs(pset *psetv2.Pset) (bool, error) 
 			}
 		}
 
-		// we don't need to check if ASP signed
-		keys[hex.EncodeToString(schnorr.SerializePubKey(aspPublicKey))] = true
+		// we don't need to check if server signed
+		keys[hex.EncodeToString(schnorr.SerializePubKey(serverPubkey))] = true
 
 		rootHash := tapLeaf.ControlBlock.RootHash(tapLeaf.Script)
 		tapKeyFromControlBlock := taproot.ComputeTaprootOutputKey(tree.UnspendableKey(), rootHash[:])
@@ -683,11 +683,11 @@ func (b *txBuilder) createPoolTx(
 	sharedOutputScript []byte,
 	payments []domain.Payment,
 	boardingInputs []ports.BoardingInput,
-	aspPubKey *secp256k1.PublicKey,
+	serverPubkey *secp256k1.PublicKey,
 	connectorAddress string,
 	sweptRounds []domain.Round,
 ) (*psetv2.Pset, error) {
-	aspScript, err := p2wpkhScript(aspPubKey, b.onchainNetwork())
+	serverScript, err := p2wpkhScript(serverPubkey, b.onchainNetwork())
 	if err != nil {
 		return nil, err
 	}
@@ -769,7 +769,7 @@ func (b *txBuilder) createPoolTx(
 			outputs = append(outputs, psetv2.OutputArgs{
 				Asset:  b.onchainNetwork().AssetID,
 				Amount: change,
-				Script: aspScript,
+				Script: serverScript,
 			})
 		}
 	}
@@ -887,7 +887,7 @@ func (b *txBuilder) createPoolTx(
 						{
 							Asset:  b.onchainNetwork().AssetID,
 							Amount: change,
-							Script: aspScript,
+							Script: serverScript,
 						},
 					}); err != nil {
 						return nil, err
@@ -913,7 +913,7 @@ func (b *txBuilder) createPoolTx(
 					{
 						Asset:  b.onchainNetwork().AssetID,
 						Amount: change,
-						Script: aspScript,
+						Script: serverScript,
 					},
 				}); err != nil {
 					return nil, err
@@ -1024,14 +1024,14 @@ func (b *txBuilder) createConnectors(
 ) ([]*psetv2.Pset, error) {
 	txid, _ := getTxid(roundTx)
 
-	aspScript, err := address.ToOutputScript(connectorAddress)
+	serverScript, err := address.ToOutputScript(connectorAddress)
 	if err != nil {
 		return nil, err
 	}
 
 	connectorOutput := psetv2.OutputArgs{
 		Asset:  b.onchainNetwork().AssetID,
-		Script: aspScript,
+		Script: serverScript,
 		Amount: connectorAmount,
 	}
 
@@ -1044,7 +1044,7 @@ func (b *txBuilder) createConnectors(
 
 	if numberOfConnectors == 1 {
 		outputs := []psetv2.OutputArgs{connectorOutput}
-		connectorTx, err := craftConnectorTx(previousInput, aspScript, outputs, feeAmount)
+		connectorTx, err := craftConnectorTx(previousInput, serverScript, outputs, feeAmount)
 		if err != nil {
 			return nil, err
 		}
@@ -1065,11 +1065,11 @@ func (b *txBuilder) createConnectors(
 		if totalConnectorAmount > 0 {
 			outputs = append(outputs, psetv2.OutputArgs{
 				Asset:  b.onchainNetwork().AssetID,
-				Script: aspScript,
+				Script: serverScript,
 				Amount: totalConnectorAmount,
 			})
 		}
-		connectorTx, err := craftConnectorTx(previousInput, aspScript, outputs, feeAmount)
+		connectorTx, err := craftConnectorTx(previousInput, serverScript, outputs, feeAmount)
 		if err != nil {
 			return nil, err
 		}

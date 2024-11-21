@@ -36,12 +36,12 @@ func TestRoundTripSignTree(t *testing.T) {
 			cosignerPubKeys[i] = privKey.PubKey()
 		}
 
-		asp, err := secp256k1.GeneratePrivateKey()
+		server, err := secp256k1.GeneratePrivateKey()
 		require.NoError(t, err)
 
 		_, sharedOutputAmount, err := bitcointree.CraftSharedOutput(
 			cosignerPubKeys,
-			asp.PubKey(),
+			server.PubKey(),
 			castReceivers(f.Receivers),
 			minRelayFee,
 			lifetime,
@@ -54,7 +54,7 @@ func TestRoundTripSignTree(t *testing.T) {
 				Index: 0,
 			},
 			cosignerPubKeys,
-			asp.PubKey(),
+			server.PubKey(),
 			castReceivers(f.Receivers),
 			minRelayFee,
 			lifetime,
@@ -62,7 +62,7 @@ func TestRoundTripSignTree(t *testing.T) {
 		require.NoError(t, err)
 
 		sweepClosure := &tree.CSVSigClosure{
-			MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{asp.PubKey()}},
+			MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{server.PubKey()}},
 			Seconds:         uint(lifetime),
 		}
 
@@ -73,7 +73,7 @@ func TestRoundTripSignTree(t *testing.T) {
 		sweepTapTree := txscript.AssembleTaprootScriptTree(sweepTapLeaf)
 		root := sweepTapTree.RootNode.TapHash()
 
-		aspCoordinator, err := bitcointree.NewTreeCoordinatorSession(
+		serverCoordinator, err := bitcointree.NewTreeCoordinatorSession(
 			sharedOutputAmount,
 			vtxoTree,
 			root.CloneBytes(),
@@ -91,11 +91,11 @@ func TestRoundTripSignTree(t *testing.T) {
 		for i, session := range signerSessions {
 			nonces, err := session.GetNonces()
 			require.NoError(t, err)
-			err = aspCoordinator.AddNonce(cosignerPubKeys[i], nonces)
+			err = serverCoordinator.AddNonce(cosignerPubKeys[i], nonces)
 			require.NoError(t, err)
 		}
 
-		aggregatedNonce, err := aspCoordinator.AggregateNonces()
+		aggregatedNonce, err := serverCoordinator.AggregateNonces()
 		require.NoError(t, err)
 
 		// Set keys and aggregated nonces for all signers
@@ -110,11 +110,11 @@ func TestRoundTripSignTree(t *testing.T) {
 		for i, session := range signerSessions {
 			sig, err := session.Sign()
 			require.NoError(t, err)
-			err = aspCoordinator.AddSig(cosignerPubKeys[i], sig)
+			err = serverCoordinator.AddSig(cosignerPubKeys[i], sig)
 			require.NoError(t, err)
 		}
 
-		signedTree, err := aspCoordinator.SignTree()
+		signedTree, err := serverCoordinator.SignTree()
 		require.NoError(t, err)
 
 		// verify the tree

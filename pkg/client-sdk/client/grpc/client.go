@@ -26,22 +26,22 @@ type grpcClient struct {
 	treeCache *utils.Cache[tree.CongestionTree]
 }
 
-func NewClient(aspUrl string) (client.ASPClient, error) {
-	if len(aspUrl) <= 0 {
-		return nil, fmt.Errorf("missing asp url")
+func NewClient(serverUrl string) (client.TransportClient, error) {
+	if len(serverUrl) <= 0 {
+		return nil, fmt.Errorf("missing server url")
 	}
 
 	creds := insecure.NewCredentials()
 	port := 80
-	if strings.HasPrefix(aspUrl, "https://") {
-		aspUrl = strings.TrimPrefix(aspUrl, "https://")
+	if strings.HasPrefix(serverUrl, "https://") {
+		serverUrl = strings.TrimPrefix(serverUrl, "https://")
 		creds = credentials.NewTLS(nil)
 		port = 443
 	}
-	if !strings.Contains(aspUrl, ":") {
-		aspUrl = fmt.Sprintf("%s:%d", aspUrl, port)
+	if !strings.Contains(serverUrl, ":") {
+		serverUrl = fmt.Sprintf("%s:%d", serverUrl, port)
 	}
-	conn, err := grpc.NewClient(aspUrl, grpc.WithTransportCredentials(creds))
+	conn, err := grpc.NewClient(serverUrl, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		return nil, err
 	}

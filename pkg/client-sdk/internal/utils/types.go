@@ -22,7 +22,7 @@ func (t SupportedType[V]) Supports(typeStr string) bool {
 	return ok
 }
 
-type ClientFactory func(string) (client.ASPClient, error)
+type ClientFactory func(string) (client.TransportClient, error)
 
 type Cache[V any] struct {
 	mapping map[string]V

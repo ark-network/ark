@@ -26,14 +26,14 @@ func ParseVtxoScript(scripts []string) (VtxoScript, error) {
 	return v, err
 }
 
-func NewDefaultVtxoScript(owner, asp *secp256k1.PublicKey, exitDelay uint) *TapscriptsVtxoScript {
+func NewDefaultVtxoScript(owner, server *secp256k1.PublicKey, exitDelay uint) *TapscriptsVtxoScript {
 	return &TapscriptsVtxoScript{
 		[]Closure{
 			&CSVSigClosure{
 				MultisigClosure: MultisigClosure{PubKeys: []*secp256k1.PublicKey{owner}},
 				Seconds:         exitDelay,
 			},
-			&MultisigClosure{PubKeys: []*secp256k1.PublicKey{owner, asp}},
+			&MultisigClosure{PubKeys: []*secp256k1.PublicKey{owner, server}},
 		},
 	}
 }
@@ -73,19 +73,19 @@ func (v *TapscriptsVtxoScript) Decode(scripts []string) error {
 	return nil
 }
 
-func (v *TapscriptsVtxoScript) Validate(asp *secp256k1.PublicKey, minExitDelay uint) error {
-	aspXonly := schnorr.SerializePubKey(asp)
+func (v *TapscriptsVtxoScript) Validate(server *secp256k1.PublicKey, minExitDelay uint) error {
+	serverXonly := schnorr.SerializePubKey(server)
 	for _, forfeit := range v.ForfeitClosures() {
-		// must contain asp pubkey
+		// must contain server pubkey
 		found := false
 		for _, pubkey := range forfeit.PubKeys {
-			if bytes.Equal(schnorr.SerializePubKey(pubkey), aspXonly) {
+			if bytes.Equal(schnorr.SerializePubKey(pubkey), serverXonly) {
 				found = true
 				break
 			}
 		}
 		if !found {
-			return fmt.Errorf("invalid forfeit closure, ASP pubkey not found")
+			return fmt.Errorf("invalid forfeit closure, server pubkey not found")
 		}
 	}
 

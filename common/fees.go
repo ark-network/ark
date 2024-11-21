@@ -30,7 +30,7 @@ func ComputeForfeitMinRelayFee(
 	feeRate chainfee.SatPerKVByte,
 	tapscript *waddrmgr.Tapscript,
 	witnessSize int,
-	aspScriptClass txscript.ScriptClass,
+	serverScriptClass txscript.ScriptClass,
 ) (uint64, error) {
 	txWeightEstimator := &input.TxWeightEstimator{}
 
@@ -40,7 +40,7 @@ func ComputeForfeitMinRelayFee(
 		tapscript,
 	)
 
-	switch aspScriptClass {
+	switch serverScriptClass {
 	case txscript.PubKeyHashTy:
 		txWeightEstimator.AddP2PKHOutput()
 	case txscript.ScriptHashTy:
@@ -52,7 +52,7 @@ func ComputeForfeitMinRelayFee(
 	case txscript.WitnessV1TaprootTy:
 		txWeightEstimator.AddP2TROutput()
 	default:
-		return 0, fmt.Errorf("unknown asp script class: %v", aspScriptClass)
+		return 0, fmt.Errorf("unknown server script class: %v", serverScriptClass)
 	}
 
 	return uint64(feeRate.FeeForVSize(lntypes.VByte(txWeightEstimator.VSize())).ToUnit(btcutil.AmountSatoshi)), nil

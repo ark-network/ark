@@ -331,7 +331,7 @@ func (w *liquidWallet) getAddress(
 
 	vtxoScript := tree.NewDefaultVtxoScript(
 		w.walletData.Pubkey,
-		data.AspPubkey,
+		data.ServerPubkey,
 		uint(data.UnilateralExitDelay),
 	)
 
@@ -342,13 +342,13 @@ func (w *liquidWallet) getAddress(
 
 	offchainAddr := &common.Address{
 		HRP:        data.Network.Addr,
-		Asp:        data.AspPubkey,
+		Server:     data.ServerPubkey,
 		VtxoTapKey: vtxoTapKey,
 	}
 
 	boardingVtxoScript := tree.NewDefaultVtxoScript(
 		w.walletData.Pubkey,
-		data.AspPubkey,
+		data.ServerPubkey,
 		uint(data.UnilateralExitDelay*2),
 	)
 

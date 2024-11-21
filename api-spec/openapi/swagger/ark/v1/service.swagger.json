@@ -616,7 +616,7 @@
       "properties": {
         "signedRedeemTx": {
           "type": "string",
-          "title": "signed only by the ASP"
+          "description": "The redeem tx already signed by the server."
         }
       }
     },
@@ -830,7 +830,7 @@
           "title": "VTXO outpoint signed with script's secret key"
         }
       },
-      "description": "This message is used to prove to the ASP that the user controls the vtxo without revealing the whole VTXO taproot tree."
+      "description": "This message is used to prove to the server that the user controls the vtxo without revealing the whole VTXO taproot tree."
     },
     "v1PingResponse": {
       "type": "object"

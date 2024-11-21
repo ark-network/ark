@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	aspUrl     = "localhost:7070"
+	serverUrl  = "localhost:7070"
 	clientType = arksdk.GrpcClient
 	password   = "password"
 	walletType = arksdk.SingleKeyWallet
@@ -188,7 +188,7 @@ func setupArkClient(wallet string) (arksdk.ArkClient, error) {
 	if err := client.Init(context.Background(), arksdk.InitArgs{
 		WalletType:          walletType,
 		ClientType:          clientType,
-		AspUrl:              aspUrl,
+		ServerUrl:           serverUrl,
 		Password:            password,
 		WithTransactionFeed: true,
 	}); err != nil {

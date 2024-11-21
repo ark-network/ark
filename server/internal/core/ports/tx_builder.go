@@ -28,10 +28,10 @@ type BoardingInput struct {
 
 type TxBuilder interface {
 	// BuildRoundTx builds a round tx for the given payments, boarding inputs
-	// it selects coin from swept rounds and ASP wallet
+	// it selects coin from swept rounds and server wallet
 	// returns the round partial tx, the vtxo tree and the set of connectors
 	BuildRoundTx(
-		aspPubkey *secp256k1.PublicKey, payments []domain.Payment, boardingInputs []BoardingInput, sweptRounds []domain.Round,
+		serverPubkey *secp256k1.PublicKey, payments []domain.Payment, boardingInputs []BoardingInput, sweptRounds []domain.Round,
 		cosigners ...*secp256k1.PublicKey,
 	) (
 		roundTx string,

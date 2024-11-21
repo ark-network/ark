@@ -17,7 +17,7 @@ import (
 // swagger:model v1CreatePaymentResponse
 type V1CreatePaymentResponse struct {
 
-	// signed only by the ASP
+	// The redeem tx already signed by the server.
 	SignedRedeemTx string `json:"signedRedeemTx,omitempty"`
 }
 
