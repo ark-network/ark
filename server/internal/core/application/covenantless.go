@@ -27,6 +27,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const marketHourDelta = 5 * time.Minute
+
 type covenantlessService struct {
 	network             common.Network
 	pubkey              *secp256k1.PublicKey
@@ -65,7 +67,8 @@ func NewCovenantlessService(
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	scheduler ports.SchedulerService,
 	noteUriPrefix string,
-	marketHourStartTime, marketHourEndTime, marketHourPeriod, marketHourRoundInterval int64,
+	marketHourStartTime, marketHourEndTime time.Time,
+	marketHourPeriod, marketHourRoundInterval time.Duration,
 ) (Service, error) {
 	pubkey, err := walletSvc.GetPubkey(context.Background())
 	if err != nil {
@@ -703,12 +706,12 @@ func (s *covenantlessService) GetInfo(ctx context.Context) (*ServiceInfo, error)
 		return nil, err
 	}
 
-	now := time.Now().Unix()
 	marketHourNextStart, marketHourNextEnd, err := calcNextMarketHour(
 		marketHourConfig.StartTime,
 		marketHourConfig.EndTime,
 		marketHourConfig.Period,
-		now,
+		marketHourDelta,
+		time.Now(),
 	)
 	if err != nil {
 		return nil, err
@@ -739,21 +742,50 @@ func (s *covenantlessService) GetInfo(ctx context.Context) (*ServiceInfo, error)
 	}, nil
 }
 
-func calcNextMarketHour(marketHourStartTime, marketHourEndTime, period, now int64) (int64, int64, error) {
+func calcNextMarketHour(marketHourStartTime, marketHourEndTime time.Time, period, marketHourDelta time.Duration, now time.Time) (time.Time, time.Time, error) {
+	// Validate input parameters
 	if period <= 0 {
-		return 0, 0, fmt.Errorf("period must be greater than 0")
+		return time.Time{}, time.Time{}, fmt.Errorf("period must be greater than 0")
 	}
-	duration := marketHourEndTime - marketHourStartTime
-	if duration <= 0 {
-		return 0, 0, fmt.Errorf("market hour end time must be after start time")
+	if !marketHourEndTime.After(marketHourStartTime) {
+		return time.Time{}, time.Time{}, fmt.Errorf("market hour end time must be after start time")
 	}
-	n := (now - marketHourStartTime + period - 1) / period
-	if n < 0 {
-		n = 0
+
+	// Calculate the duration of the market hour
+	duration := marketHourEndTime.Sub(marketHourStartTime)
+
+	// Calculate the number of periods since the initial marketHourStartTime
+	elapsed := now.Sub(marketHourStartTime)
+	var n int64
+	if elapsed >= 0 {
+		n = int64(elapsed / period)
+	} else {
+		n = int64((elapsed - period + 1) / period)
 	}
-	nextStartTime := marketHourStartTime + n*period
-	nextEndTime := nextStartTime + duration
-	return nextStartTime, nextEndTime, nil
+
+	// Calculate the current market hour start and end times
+	currentStartTime := marketHourStartTime.Add(time.Duration(n) * period)
+	currentEndTime := currentStartTime.Add(duration)
+
+	// Adjust if now is before the currentStartTime
+	if now.Before(currentStartTime) {
+		n -= 1
+		currentStartTime = marketHourStartTime.Add(time.Duration(n) * period)
+		currentEndTime = currentStartTime.Add(duration)
+	}
+
+	timeUntilEnd := currentEndTime.Sub(now)
+
+	if !now.Before(currentStartTime) && now.Before(currentEndTime) && timeUntilEnd >= marketHourDelta {
+		// Return the current market hour
+		return currentStartTime, currentEndTime, nil
+	} else {
+		// Move to the next market hour
+		n += 1
+		nextStartTime := marketHourStartTime.Add(time.Duration(n) * period)
+		nextEndTime := nextStartTime.Add(duration)
+		return nextStartTime, nextEndTime, nil
+	}
 }
 
 func (s *covenantlessService) RegisterCosignerPubkey(ctx context.Context, paymentId string, pubkey string) error {
@@ -1799,22 +1831,14 @@ func (s *covenantlessService) GetMarketHourConfig(ctx context.Context) (*domain.
 
 func (s *covenantlessService) UpdateMarketHourConfig(
 	ctx context.Context,
-	marketHourStartTime, marketHourEndTime, period, roundInterval int64,
+	marketHourStartTime, marketHourEndTime time.Time, period, roundInterval time.Duration,
 ) error {
-	if marketHourStartTime <= 0 {
-		return fmt.Errorf("market_start_time must be positive")
-	}
-	if marketHourEndTime <= 0 {
-		return fmt.Errorf("market_end_time must be positive")
-	}
-	if period <= 0 {
-		return fmt.Errorf("period must be positive")
-	}
-	if roundInterval < 0 {
-		return fmt.Errorf("round_interval cannot be negative")
-	}
-
-	marketHour := domain.NewMarketHour(marketHourStartTime, marketHourEndTime, period, roundInterval)
+	marketHour := domain.NewMarketHour(
+		marketHourStartTime,
+		marketHourEndTime,
+		period,
+		roundInterval,
+	)
 	if err := s.repoManager.MarketHourRepo().Upsert(ctx, *marketHour); err != nil {
 		return fmt.Errorf("failed to upsert market hours: %w", err)
 	}

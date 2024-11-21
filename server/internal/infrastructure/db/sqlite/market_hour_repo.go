@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/infrastructure/db/sqlite/sqlc/queries"
+	"time"
 )
 
 type marketHourRepository struct {
@@ -39,11 +40,11 @@ func (r *marketHourRepository) Get(ctx context.Context) (*domain.MarketHour, err
 	}
 
 	return &domain.MarketHour{
-		StartTime:     marketHour.StartTime,
-		EndTime:       marketHour.EndTime,
-		Period:        marketHour.Period,
-		RoundInterval: marketHour.RoundInterval,
-		UpdatedAt:     marketHour.UpdatedAt,
+		StartTime:     time.Unix(marketHour.StartTime, 0),
+		EndTime:       time.Unix(marketHour.EndTime, 0),
+		Period:        time.Duration(marketHour.Period),
+		RoundInterval: time.Duration(marketHour.RoundInterval),
+		UpdatedAt:     time.Unix(marketHour.UpdatedAt, 0),
 	}, nil
 }
 
@@ -55,19 +56,19 @@ func (r *marketHourRepository) Upsert(ctx context.Context, marketHour domain.Mar
 
 	if errors.Is(err, sql.ErrNoRows) {
 		_, err = r.querier.InsertMarketHour(ctx, queries.InsertMarketHourParams{
-			StartTime:     marketHour.StartTime,
-			EndTime:       marketHour.EndTime,
-			Period:        marketHour.Period,
-			RoundInterval: marketHour.RoundInterval,
-			UpdatedAt:     marketHour.UpdatedAt,
+			StartTime:     marketHour.StartTime.Unix(),
+			EndTime:       marketHour.EndTime.Unix(),
+			Period:        int64(marketHour.Period),
+			RoundInterval: int64(marketHour.RoundInterval),
+			UpdatedAt:     marketHour.UpdatedAt.Unix(),
 		})
 	} else {
 		_, err = r.querier.UpdateMarketHour(ctx, queries.UpdateMarketHourParams{
-			StartTime:     marketHour.StartTime,
-			EndTime:       marketHour.EndTime,
-			Period:        marketHour.Period,
-			RoundInterval: marketHour.RoundInterval,
-			UpdatedAt:     marketHour.UpdatedAt,
+			StartTime:     marketHour.StartTime.Unix(),
+			EndTime:       marketHour.EndTime.Unix(),
+			Period:        int64(marketHour.Period),
+			RoundInterval: int64(marketHour.RoundInterval),
+			UpdatedAt:     marketHour.UpdatedAt.Unix(),
 			ID:            latest.ID,
 		})
 	}

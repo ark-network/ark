@@ -64,7 +64,7 @@ func NewCovenantService(
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	scheduler ports.SchedulerService,
 	notificationPrefix string,
-	marketHourStartTime, marketHourEndTime, marketHourPeriod, marketHourRoundInterval int64,
+	marketHourStartTime, marketHourEndTime time.Time, marketHourPeriod, marketHourRoundInterval time.Duration,
 ) (Service, error) {
 	pubkey, err := walletSvc.GetPubkey(context.Background())
 	if err != nil {
@@ -441,12 +441,12 @@ func (s *covenantService) GetInfo(ctx context.Context) (*ServiceInfo, error) {
 		return nil, err
 	}
 
-	now := time.Now().Unix()
-	marketNextStart, marketNextEnd, err := calcNextMarketHour(
+	marketHourNextStart, marketHourNextEnd, err := calcNextMarketHour(
 		marketHourConfig.StartTime,
 		marketHourConfig.EndTime,
 		marketHourConfig.Period,
-		now,
+		marketHourDelta,
+		time.Now(),
 	)
 	if err != nil {
 		return nil, err
@@ -469,8 +469,8 @@ func (s *covenantService) GetInfo(ctx context.Context) (*ServiceInfo, error) {
 		),
 		ForfeitAddress: forfeitAddress,
 		NextMarketHour: &NextMarketHour{
-			StartTime:     marketNextStart,
-			EndTime:       marketNextEnd,
+			StartTime:     marketHourNextStart,
+			EndTime:       marketHourNextEnd,
 			Period:        marketHourConfig.Period,
 			RoundInterval: marketHourConfig.RoundInterval,
 		},
@@ -1195,22 +1195,14 @@ func (s *covenantService) GetMarketHourConfig(ctx context.Context) (*domain.Mark
 
 func (s *covenantService) UpdateMarketHourConfig(
 	ctx context.Context,
-	marketHourStartTime, marketHourEndTime, period, roundInterval int64,
+	marketHourStartTime, marketHourEndTime time.Time, period, roundInterval time.Duration,
 ) error {
-	if marketHourStartTime <= 0 {
-		return fmt.Errorf("market_start_time must be positive")
-	}
-	if marketHourEndTime <= 0 {
-		return fmt.Errorf("market_end_time must be positive")
-	}
-	if period <= 0 {
-		return fmt.Errorf("period must be positive")
-	}
-	if roundInterval < 0 {
-		return fmt.Errorf("round_interval cannot be negative")
-	}
-
-	marketHour := domain.NewMarketHour(marketHourStartTime, marketHourEndTime, period, roundInterval)
+	marketHour := domain.NewMarketHour(
+		marketHourStartTime,
+		marketHourEndTime,
+		period,
+		roundInterval,
+	)
 	if err := s.repoManager.MarketHourRepo().Upsert(ctx, *marketHour); err != nil {
 		return fmt.Errorf("failed to upsert market hours: %w", err)
 	}

@@ -505,7 +505,7 @@ func testEntityRepository(t *testing.T, svc ports.RepoManager) {
 }
 
 func testMarketHourRepository(t *testing.T, svc ports.RepoManager) {
-	t.Run("test_entity_repository", func(t *testing.T) {
+	t.Run("test_market_hour_repository", func(t *testing.T) {
 		ctx := context.Background()
 		repo := svc.MarketHourRepo()
 		defer repo.Close()
@@ -514,11 +514,11 @@ func testMarketHourRepository(t *testing.T, svc ports.RepoManager) {
 		require.NoError(t, err)
 		require.Nil(t, marketHour)
 
-		now := time.Now().Unix()
+		now := time.Now().Truncate(time.Second)
 		expected := domain.MarketHour{
 			StartTime:     now,
-			Period:        3600,
-			RoundInterval: 300,
+			Period:        time.Duration(3) * time.Hour,
+			RoundInterval: time.Duration(20) * time.Second,
 			UpdatedAt:     now,
 		}
 
@@ -528,11 +528,11 @@ func testMarketHourRepository(t *testing.T, svc ports.RepoManager) {
 		got, err := repo.Get(ctx)
 		require.NoError(t, err)
 		require.NotNil(t, got)
-		assert.Equal(t, expected, *got)
+		assertMarketHourEqual(t, expected, *got)
 
-		expected.Period = 7200
-		expected.RoundInterval = 600
-		expected.UpdatedAt = now + 100
+		expected.Period = time.Duration(4) * time.Hour
+		expected.RoundInterval = time.Duration(40) * time.Second
+		expected.UpdatedAt = now.Add(100 * time.Second)
 
 		err = repo.Upsert(ctx, expected)
 		require.NoError(t, err)
@@ -540,8 +540,16 @@ func testMarketHourRepository(t *testing.T, svc ports.RepoManager) {
 		got, err = repo.Get(ctx)
 		require.NoError(t, err)
 		require.NotNil(t, got)
-		assert.Equal(t, expected, *got)
+		assertMarketHourEqual(t, expected, *got)
 	})
+}
+
+func assertMarketHourEqual(t *testing.T, expected, actual domain.MarketHour) {
+	assert.True(t, expected.StartTime.Equal(actual.StartTime), "StartTime not equal")
+	assert.Equal(t, expected.Period, actual.Period, "Period not equal")
+	assert.Equal(t, expected.RoundInterval, actual.RoundInterval, "RoundInterval not equal")
+	assert.True(t, expected.UpdatedAt.Equal(actual.UpdatedAt), "UpdatedAt not equal")
+	assert.True(t, expected.EndTime.Equal(actual.EndTime), "EndTime not equal")
 }
 
 func roundsMatch(expected, got domain.Round) assert.Comparison {

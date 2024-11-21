@@ -328,19 +328,17 @@
       "properties": {
         "startTime": {
           "type": "string",
-          "format": "int64"
+          "format": "date-time"
         },
         "endTime": {
           "type": "string",
-          "format": "int64"
+          "format": "date-time"
         },
         "period": {
-          "type": "string",
-          "format": "int64"
+          "type": "string"
         },
         "roundInterval": {
-          "type": "string",
-          "format": "int64"
+          "type": "string"
         }
       }
     },

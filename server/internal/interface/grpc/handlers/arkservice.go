@@ -3,6 +3,8 @@ package handlers
 import (
 	"context"
 	"encoding/hex"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"sync"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
@@ -53,10 +55,10 @@ func (h *handler) GetInfo(
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 		ForfeitAddress:             info.ForfeitAddress,
 		MarketHour: &arkv1.MarketHour{
-			NextStartTime: info.NextMarketHour.StartTime,
-			NextEndTime:   info.NextMarketHour.EndTime,
-			Period:        info.NextMarketHour.Period,
-			RoundInterval: info.NextMarketHour.RoundInterval,
+			NextStartTime: timestamppb.New(info.NextMarketHour.StartTime),
+			NextEndTime:   timestamppb.New(info.NextMarketHour.EndTime),
+			Period:        durationpb.New(info.NextMarketHour.Period),
+			RoundInterval: durationpb.New(info.NextMarketHour.RoundInterval),
 		},
 	}, nil
 }

@@ -3,6 +3,7 @@ package appconfig
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/server/internal/core/application"
@@ -69,10 +70,10 @@ type Config struct {
 	BoardingExitDelay       int64
 	NostrDefaultRelays      []string
 	NoteUriPrefix           string
-	MarketHourStartTime     int64
-	MarketHourEndTime       int64
-	MarketHourPeriod        int64
-	MarketHourRoundInterval int64
+	MarketHourStartTime     time.Time
+	MarketHourEndTime       time.Time
+	MarketHourPeriod        time.Duration
+	MarketHourRoundInterval time.Duration
 
 	EsploraURL       string
 	NeutrinoPeer     string

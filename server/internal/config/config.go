@@ -43,10 +43,10 @@ type Config struct {
 	UnlockerPassword        string
 	NostrDefaultRelays      []string
 	NoteUriPrefix           string
-	MarketHourStartTime     int64
-	MarketHourEndTime       int64
-	MarketHourPeriod        int64
-	MarketHourRoundInterval int64
+	MarketHourStartTime     time.Time
+	MarketHourEndTime       time.Time
+	MarketHourPeriod        time.Duration
+	MarketHourRoundInterval time.Duration
 }
 
 var (
@@ -87,26 +87,27 @@ var (
 	MarketHourPeriod        = "MARKET_HOUR_PERIOD"
 	MarketHourRoundInterval = "MARKET_HOUR_ROUND_INTERVAL"
 
-	defaultDatadir                 = common.AppDataDir("arkd", false)
-	defaultRoundInterval           = 15
-	DefaultPort                    = 7070
-	defaultDbType                  = "sqlite"
-	defaultEventDbType             = "badger"
-	defaultDbMigrationPath         = "file://internal/infrastructure/db/sqlite/migration"
-	defaultSchedulerType           = "gocron"
-	defaultTxBuilderType           = "covenantless"
-	defaultNetwork                 = "bitcoin"
-	defaultEsploraURL              = "https://blockstream.info/api"
-	defaultLogLevel                = 5
-	defaultRoundLifetime           = 604672
-	defaultUnilateralExitDelay     = 1024
-	defaultBoardingExitDelay       = 604672
-	defaultNoMacaroons             = false
-	defaultNoTLS                   = true
-	defaultNostrDefaultRelays      = []string{"wss://relay.primal.net", "wss://relay.damus.io"}
-	defaultMarketHourStartTime     = time.Now().Unix()
-	defaultMarketHourPeriod        = int64(86400)
-	defaultMarketHourRoundInterval = defaultRoundInterval
+	defaultDatadir             = common.AppDataDir("arkd", false)
+	defaultRoundInterval       = 15
+	DefaultPort                = 7070
+	defaultDbType              = "sqlite"
+	defaultEventDbType         = "badger"
+	defaultDbMigrationPath     = "file://internal/infrastructure/db/sqlite/migration"
+	defaultSchedulerType       = "gocron"
+	defaultTxBuilderType       = "covenantless"
+	defaultNetwork             = "bitcoin"
+	defaultEsploraURL          = "https://blockstream.info/api"
+	defaultLogLevel            = 5
+	defaultRoundLifetime       = 604672
+	defaultUnilateralExitDelay = 1024
+	defaultBoardingExitDelay   = 604672
+	defaultNoMacaroons         = false
+	defaultNoTLS               = true
+	defaultNostrDefaultRelays  = []string{"wss://relay.primal.net", "wss://relay.damus.io"}
+	defaultMarketHourStartTime = time.Now()
+	defaultMarketHourEndTime   = defaultMarketHourStartTime.Add(time.Duration(defaultRoundInterval) * time.Second)
+	defaultMarketHourPeriod    = time.Duration(24) * time.Hour
+	defaultMarketHourInterval  = time.Duration(defaultRoundInterval) * time.Second
 )
 
 func LoadConfig() (*Config, error) {
@@ -131,9 +132,9 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(BoardingExitDelay, defaultBoardingExitDelay)
 	viper.SetDefault(NostrDefaultRelays, defaultNostrDefaultRelays)
 	viper.SetDefault(MarketHourStartTime, defaultMarketHourStartTime)
-	viper.SetDefault(MarketHourEndTime, defaultMarketHourStartTime+int64(defaultMarketHourRoundInterval))
+	viper.SetDefault(MarketHourEndTime, defaultMarketHourEndTime)
 	viper.SetDefault(MarketHourPeriod, defaultMarketHourPeriod)
-	viper.SetDefault(MarketHourRoundInterval, defaultMarketHourRoundInterval)
+	viper.SetDefault(MarketHourRoundInterval, defaultMarketHourInterval)
 
 	net, err := getNetwork()
 	if err != nil {
@@ -176,10 +177,10 @@ func LoadConfig() (*Config, error) {
 		UnlockerPassword:        viper.GetString(UnlockerPassword),
 		NostrDefaultRelays:      viper.GetStringSlice(NostrDefaultRelays),
 		NoteUriPrefix:           viper.GetString(NoteUriPrefix),
-		MarketHourStartTime:     viper.GetInt64(MarketHourStartTime),
-		MarketHourEndTime:       viper.GetInt64(MarketHourEndTime),
-		MarketHourPeriod:        viper.GetInt64(MarketHourPeriod),
-		MarketHourRoundInterval: viper.GetInt64(MarketHourRoundInterval),
+		MarketHourStartTime:     viper.GetTime(MarketHourStartTime),
+		MarketHourEndTime:       viper.GetTime(MarketHourEndTime),
+		MarketHourPeriod:        viper.GetDuration(MarketHourPeriod),
+		MarketHourRoundInterval: viper.GetDuration(MarketHourRoundInterval),
 	}, nil
 }
 

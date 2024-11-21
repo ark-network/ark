@@ -3,6 +3,8 @@ syntax = "proto3";
 package ark.v1;
 
 import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
 
 service AdminService {
   rpc GetScheduledSweep(GetScheduledSweepRequest) returns (GetScheduledSweepResponse) {
@@ -104,8 +106,8 @@ message UpdateMarketHourConfigRequest {
 message UpdateMarketHourConfigResponse {}
 
 message MarketHourConfig {
-  int64 start_time = 1;
-  int64 end_time = 2;
-  int64 period = 3;
-  int64 round_interval = 4;
+  google.protobuf.Timestamp start_time = 1;
+  google.protobuf.Timestamp end_time = 2;
+  google.protobuf.Duration period = 3;
+  google.protobuf.Duration round_interval = 4;
 }
