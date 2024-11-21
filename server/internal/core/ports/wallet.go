@@ -40,6 +40,8 @@ type WalletService interface {
 	LockConnectorUtxos(ctx context.Context, utxos []TxOutpoint) error
 	GetDustAmount(ctx context.Context) (uint64, error)
 	GetTransaction(ctx context.Context, txid string) (string, error)
+	SignMessage(ctx context.Context, message []byte) ([]byte, error)
+	VerifyMessageSignature(ctx context.Context, message, signature []byte) (bool, error)
 	Close()
 }
 

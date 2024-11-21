@@ -43,6 +43,8 @@ func main() {
 		&sendCommand,
 		&balanceCommand,
 		&redeemCommand,
+		&notesCommand,
+		&registerNostrCommand,
 	)
 	app.Flags = []cli.Flag{
 		datadirFlag,
@@ -127,6 +129,16 @@ var (
 		Name:  "force",
 		Usage: "force redemption without collaboration",
 	}
+	notesFlag = &cli.StringSliceFlag{
+		Name:    "notes",
+		Aliases: []string{"n"},
+		Usage:   "notes to redeem",
+	}
+	nostrProfileFlag = &cli.StringFlag{
+		Name:    "profile",
+		Aliases: []string{"p"},
+		Usage:   "nostr profile to register",
+	}
 	restFlag = &cli.BoolFlag{
 		Name:        "rest",
 		Usage:       "use REST client instead of gRPC",
@@ -196,6 +208,22 @@ var (
 		Flags: []cli.Flag{addressFlag, amountToRedeemFlag, forceFlag, passwordFlag},
 		Action: func(ctx *cli.Context) error {
 			return redeem(ctx)
+		},
+	}
+	notesCommand = cli.Command{
+		Name:  "redeem-notes",
+		Usage: "Redeem offchain notes",
+		Flags: []cli.Flag{notesFlag},
+		Action: func(ctx *cli.Context) error {
+			return redeemNotes(ctx)
+		},
+	}
+	registerNostrCommand = cli.Command{
+		Name:  "register-nostr",
+		Usage: "Register Nostr profile",
+		Flags: []cli.Flag{nostrProfileFlag, passwordFlag},
+		Action: func(ctx *cli.Context) error {
+			return registerNostrProfile(ctx)
 		},
 	}
 )
@@ -376,6 +404,31 @@ func redeem(ctx *cli.Context) error {
 	txID, err := arkSdkClient.CollaborativeRedeem(
 		ctx.Context, address, amount, computeExpiration,
 	)
+	if err != nil {
+		return err
+	}
+	return printJSON(map[string]interface{}{
+		"txid": txID,
+	})
+}
+
+func registerNostrProfile(ctx *cli.Context) error {
+	profile := ctx.String(nostrProfileFlag.Name)
+
+	password, err := readPassword(ctx)
+	if err != nil {
+		return err
+	}
+	if err := arkSdkClient.Unlock(ctx.Context, string(password)); err != nil {
+		return err
+	}
+
+	return arkSdkClient.SetNostrNotificationRecipient(ctx.Context, profile)
+}
+
+func redeemNotes(ctx *cli.Context) error {
+	notes := ctx.StringSlice(notesFlag.Name)
+	txID, err := arkSdkClient.RedeemNotes(ctx.Context, notes)
 	if err != nil {
 		return err
 	}

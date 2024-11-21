@@ -9,14 +9,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
+
+	"github.com/shirou/gopsutil/net"
 )
 
 const (
@@ -24,12 +26,6 @@ const (
 )
 
 func TestMain(m *testing.M) {
-	port := "8000"
-	if checkPortInUse(port) {
-		fmt.Printf("A process is running on port %s. Tests cannot proceed.\n", port)
-		os.Exit(1)
-	}
-
 	_, err := utils.RunCommand("docker", "compose", "-f", composePath, "up", "-d", "--build")
 	if err != nil {
 		fmt.Printf("error starting docker-compose: %s", err)
@@ -69,9 +65,12 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	if err := killProcessesOnPort(port); err != nil {
-		fmt.Printf("killed web server runing on 8000")
+	if err := killProcessByPort(8000); err != nil {
+		fmt.Printf("failed to kill process running on 8000, err: %v", err)
+		os.Exit(1)
 	}
+
+	fmt.Println("killed web server running on 8000")
 	os.Exit(code)
 }
 
@@ -531,31 +530,40 @@ func runClarkCommand(arg ...string) (string, error) {
 	return utils.RunCommand("docker", args...)
 }
 
-func checkPortInUse(port string) bool {
-	ln, err := net.Listen("tcp", ":"+port)
+func findProcessByPort(port uint32) (int32, error) {
+	connections, err := net.Connections("tcp")
 	if err != nil {
-		return true
+		return 0, fmt.Errorf("failed to get network connections: %v", err)
 	}
-	_ = ln.Close()
-	return false
+
+	for _, conn := range connections {
+		if conn.Laddr.Port == uint32(port) {
+			return conn.Pid, nil
+		}
+	}
+
+	return 0, fmt.Errorf("no process found using port %v", port)
 }
 
-func killProcessesOnPort(port string) error {
-	cmd := exec.Command("netstat", "-ano")
-	output, err := cmd.Output()
+func killProcessByPID(pid int) error {
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return fmt.Errorf("failed to find process with PID %v: %v", pid, err)
+	}
+
+	if err := process.Signal(syscall.SIGKILL); err != nil {
+		return fmt.Errorf("failed to kill process with PID %v: %v", pid, err)
+	}
+
+	fmt.Printf("Successfully killed process with PID %v.\n", pid)
+	return nil
+}
+
+func killProcessByPort(port int) error {
+	pid, err := findProcessByPort(uint32(port))
 	if err != nil {
 		return err
 	}
 
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
-		if strings.Contains(line, ":"+port) {
-			parts := strings.Fields(line)
-			if len(parts) >= 5 {
-				pid := parts[len(parts)-1]
-				killCmd := exec.Command("kill", "-9", pid)
-				return killCmd.Run()
-			}
-		}
-	}
+	return killProcessByPID(int(pid))
 }
