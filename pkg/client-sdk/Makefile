@@ -8,7 +8,7 @@ genrest:
 ## test: runs unit tests
 test:
 	@echo "Running unit tests..."
-	@go test -v -count=1 -race $(go list ./... | grep -v '/test/wasm')
+	@go test -v -count=1 -race $$(go list ./... | grep -v '/test/wasm')
 
 ## vet: code analysis
 vet:
