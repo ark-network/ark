@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -23,7 +24,13 @@ const (
 )
 
 func TestMain(m *testing.M) {
-	_, err := utils.RunCommand("docker", "compose", "-f", composePath, "up", "-d")
+	port := "8000"
+	if checkPortInUse(port) {
+		fmt.Printf("A process is running on port %s. Tests cannot proceed.\n", port)
+		os.Exit(1)
+	}
+
+	_, err := utils.RunCommand("docker", "compose", "-f", composePath, "up", "-d", "--build")
 	if err != nil {
 		fmt.Printf("error starting docker-compose: %s", err)
 		os.Exit(1)
@@ -43,6 +50,11 @@ func TestMain(m *testing.M) {
 
 	time.Sleep(3 * time.Second)
 
+	if err := playwright.Install(); err != nil {
+		fmt.Printf("error installing playwright: %v", err)
+		os.Exit(1)
+	}
+
 	_, err = runClarkCommand("init", "--asp-url", "localhost:7070", "--password", utils.Password, "--network", "regtest", "--explorer", "http://chopsticks:3000")
 	if err != nil {
 		fmt.Printf("error initializing ark config: %s", err)
@@ -56,13 +68,14 @@ func TestMain(m *testing.M) {
 		fmt.Printf("error stopping docker-compose: %s", err)
 		os.Exit(1)
 	}
+
+	if err := killProcessesOnPort(port); err != nil {
+		fmt.Printf("killed web server runing on 8000")
+	}
 	os.Exit(code)
 }
 
 func TestWasm(t *testing.T) {
-	err := playwright.Install()
-	require.NoError(t, err)
-
 	pw, err := playwright.Run()
 	require.NoError(t, err)
 	defer pw.Stop()
@@ -516,4 +529,33 @@ func setupAspWallet() error {
 func runClarkCommand(arg ...string) (string, error) {
 	args := append([]string{"exec", "-t", "clarkd", "ark"}, arg...)
 	return utils.RunCommand("docker", args...)
+}
+
+func checkPortInUse(port string) bool {
+	ln, err := net.Listen("tcp", ":"+port)
+	if err != nil {
+		return true
+	}
+	_ = ln.Close()
+	return false
+}
+
+func killProcessesOnPort(port string) error {
+	cmd := exec.Command("netstat", "-ano")
+	output, err := cmd.Output()
+	if err != nil {
+		return err
+	}
+
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		if strings.Contains(line, ":"+port) {
+			parts := strings.Fields(line)
+			if len(parts) >= 5 {
+				pid := parts[len(parts)-1]
+				killCmd := exec.Command("kill", "-9", pid)
+				return killCmd.Run()
+			}
+		}
+	}
 }
