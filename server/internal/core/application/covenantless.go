@@ -26,6 +26,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const marketHourDelta = 5 * time.Minute
+
 type covenantlessService struct {
 	network             common.Network
 	pubkey              *secp256k1.PublicKey
@@ -59,15 +61,30 @@ type covenantlessService struct {
 func NewCovenantlessService(
 	network common.Network,
 	roundInterval, roundLifetime, unilateralExitDelay, boardingExitDelay int64,
-	defaultNostrRelays []string,
+	nostrDefaultRelays []string,
 	walletSvc ports.WalletService, repoManager ports.RepoManager,
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	scheduler ports.SchedulerService,
-	notificationPrefix string,
+	noteUriPrefix string,
+	marketHourStartTime, marketHourEndTime time.Time,
+	marketHourPeriod, marketHourRoundInterval time.Duration,
 ) (Service, error) {
 	pubkey, err := walletSvc.GetPubkey(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch pubkey: %s", err)
+	}
+
+	// Try to load market hours from DB first
+	marketHour, err := repoManager.MarketHourRepo().Get(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get market hours from db: %w", err)
+	}
+
+	if marketHour == nil {
+		marketHour = domain.NewMarketHour(marketHourStartTime, marketHourEndTime, marketHourPeriod, marketHourRoundInterval)
+		if err := repoManager.MarketHourRepo().Upsert(context.Background(), *marketHour); err != nil {
+			return nil, fmt.Errorf("failed to upsert initial market hours to db: %w", err)
+		}
 	}
 
 	svc := &covenantlessService{
@@ -80,7 +97,7 @@ func NewCovenantlessService(
 		repoManager:         repoManager,
 		builder:             builder,
 		scanner:             scanner,
-		sweeper:             newSweeper(walletSvc, repoManager, builder, scheduler, notificationPrefix),
+		sweeper:             newSweeper(walletSvc, repoManager, builder, scheduler, noteUriPrefix),
 		paymentRequests:     newPaymentsMap(),
 		forfeitTxs:          newForfeitTxsMap(builder),
 		eventsCh:            make(chan domain.RoundEvent),
@@ -89,7 +106,7 @@ func NewCovenantlessService(
 		asyncPaymentsCache:  make(map[string]asyncPaymentData),
 		treeSigningSessions: make(map[string]*musigSigningSession),
 		boardingExitDelay:   boardingExitDelay,
-		nostrDefaultRelays:  defaultNostrRelays,
+		nostrDefaultRelays:  nostrDefaultRelays,
 	}
 
 	repoManager.RegisterEventsHandler(
@@ -693,6 +710,22 @@ func (s *covenantlessService) GetInfo(ctx context.Context) (*ServiceInfo, error)
 		return nil, fmt.Errorf("failed to get forfeit address: %s", err)
 	}
 
+	marketHourConfig, err := s.repoManager.MarketHourRepo().Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	marketHourNextStart, marketHourNextEnd, err := calcNextMarketHour(
+		marketHourConfig.StartTime,
+		marketHourConfig.EndTime,
+		marketHourConfig.Period,
+		marketHourDelta,
+		time.Now(),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	return &ServiceInfo{
 		PubKey:              pubkey,
 		RoundLifetime:       s.roundLifetime,
@@ -701,7 +734,59 @@ func (s *covenantlessService) GetInfo(ctx context.Context) (*ServiceInfo, error)
 		Network:             s.network.Name,
 		Dust:                dust,
 		ForfeitAddress:      forfeitAddr,
+		NextMarketHour: &NextMarketHour{
+			StartTime:     marketHourNextStart,
+			EndTime:       marketHourNextEnd,
+			Period:        marketHourConfig.Period,
+			RoundInterval: marketHourConfig.RoundInterval,
+		},
 	}, nil
+}
+
+func calcNextMarketHour(marketHourStartTime, marketHourEndTime time.Time, period, marketHourDelta time.Duration, now time.Time) (time.Time, time.Time, error) {
+	// Validate input parameters
+	if period <= 0 {
+		return time.Time{}, time.Time{}, fmt.Errorf("period must be greater than 0")
+	}
+	if !marketHourEndTime.After(marketHourStartTime) {
+		return time.Time{}, time.Time{}, fmt.Errorf("market hour end time must be after start time")
+	}
+
+	// Calculate the duration of the market hour
+	duration := marketHourEndTime.Sub(marketHourStartTime)
+
+	// Calculate the number of periods since the initial marketHourStartTime
+	elapsed := now.Sub(marketHourStartTime)
+	var n int64
+	if elapsed >= 0 {
+		n = int64(elapsed / period)
+	} else {
+		n = int64((elapsed - period + 1) / period)
+	}
+
+	// Calculate the current market hour start and end times
+	currentStartTime := marketHourStartTime.Add(time.Duration(n) * period)
+	currentEndTime := currentStartTime.Add(duration)
+
+	// Adjust if now is before the currentStartTime
+	if now.Before(currentStartTime) {
+		n -= 1
+		currentStartTime = marketHourStartTime.Add(time.Duration(n) * period)
+		currentEndTime = currentStartTime.Add(duration)
+	}
+
+	timeUntilEnd := currentEndTime.Sub(now)
+
+	if !now.Before(currentStartTime) && now.Before(currentEndTime) && timeUntilEnd >= marketHourDelta {
+		// Return the current market hour
+		return currentStartTime, currentEndTime, nil
+	} else {
+		// Move to the next market hour
+		n += 1
+		nextStartTime := marketHourStartTime.Add(time.Duration(n) * period)
+		nextEndTime := nextStartTime.Add(duration)
+		return nextStartTime, nextEndTime, nil
+	}
 }
 
 func (s *covenantlessService) RegisterCosignerPubkey(ctx context.Context, paymentId string, pubkey string) error {
@@ -1478,9 +1563,11 @@ func (s *covenantlessService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 				continue
 			}
 
+			vtxoPubkey := hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey))
+
 			vtxos = append(vtxos, domain.Vtxo{
 				VtxoKey:   domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
-				Pubkey:    hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey)),
+				Pubkey:    vtxoPubkey,
 				Amount:    uint64(out.Value),
 				RoundTxid: round.Txid,
 				CreatedAt: createdAt,
@@ -1738,4 +1825,25 @@ func newMusigSigningSession(nbCosigners int) *musigSigningSession {
 		lock:        sync.Mutex{},
 		nbCosigners: nbCosigners,
 	}
+}
+
+func (s *covenantlessService) GetMarketHourConfig(ctx context.Context) (*domain.MarketHour, error) {
+	return s.repoManager.MarketHourRepo().Get(ctx)
+}
+
+func (s *covenantlessService) UpdateMarketHourConfig(
+	ctx context.Context,
+	marketHourStartTime, marketHourEndTime time.Time, period, roundInterval time.Duration,
+) error {
+	marketHour := domain.NewMarketHour(
+		marketHourStartTime,
+		marketHourEndTime,
+		period,
+		roundInterval,
+	)
+	if err := s.repoManager.MarketHourRepo().Upsert(ctx, *marketHour); err != nil {
+		return fmt.Errorf("failed to upsert market hours: %w", err)
+	}
+
+	return nil
 }

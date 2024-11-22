@@ -3,6 +3,7 @@ package appconfig
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/server/internal/core/application"
@@ -54,21 +55,25 @@ var (
 )
 
 type Config struct {
-	DbType              string
-	EventDbType         string
-	DbDir               string
-	DbMigrationPath     string
-	EventDbDir          string
-	RoundInterval       int64
-	Network             common.Network
-	SchedulerType       string
-	TxBuilderType       string
-	WalletAddr          string
-	RoundLifetime       int64
-	UnilateralExitDelay int64
-	BoardingExitDelay   int64
-	NostrDefaultRelays  []string
-	NoteUriPrefix       string
+	DbType                  string
+	EventDbType             string
+	DbDir                   string
+	DbMigrationPath         string
+	EventDbDir              string
+	RoundInterval           int64
+	Network                 common.Network
+	SchedulerType           string
+	TxBuilderType           string
+	WalletAddr              string
+	RoundLifetime           int64
+	UnilateralExitDelay     int64
+	BoardingExitDelay       int64
+	NostrDefaultRelays      []string
+	NoteUriPrefix           string
+	MarketHourStartTime     time.Time
+	MarketHourEndTime       time.Time
+	MarketHourPeriod        time.Duration
+	MarketHourRoundInterval time.Duration
 
 	EsploraURL       string
 	NeutrinoPeer     string
@@ -354,6 +359,7 @@ func (c *Config) appService() error {
 		svc, err := application.NewCovenantService(
 			c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay, c.NostrDefaultRelays,
 			c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NoteUriPrefix,
+			c.MarketHourStartTime, c.MarketHourEndTime, c.MarketHourPeriod, c.MarketHourRoundInterval,
 		)
 		if err != nil {
 			return err
@@ -366,6 +372,7 @@ func (c *Config) appService() error {
 	svc, err := application.NewCovenantlessService(
 		c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay, c.NostrDefaultRelays,
 		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NoteUriPrefix,
+		c.MarketHourStartTime, c.MarketHourEndTime, c.MarketHourPeriod, c.MarketHourRoundInterval,
 	)
 	if err != nil {
 		return err

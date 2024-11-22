@@ -3,6 +3,8 @@ syntax = "proto3";
 package ark.v1;
 
 import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
 
 service ArkService {
   rpc GetInfo(GetInfoRequest) returns (GetInfoResponse) {
@@ -126,6 +128,7 @@ message GetInfoResponse {
   string boarding_descriptor_template = 7;
   repeated string vtxo_descriptor_templates = 8;
   string forfeit_address = 9;
+  MarketHour market_hour = 10;
 }
 
 message GetBoardingAddressRequest {
@@ -388,4 +391,11 @@ message DeleteNostrRecipientResponse {}
 
 message Tapscripts {
   repeated string scripts = 1;
+}
+
+message MarketHour {
+  google.protobuf.Timestamp next_start_time = 1;
+  google.protobuf.Timestamp next_end_time = 2;
+  google.protobuf.Duration period = 3;
+  google.protobuf.Duration round_interval = 4;
 }
