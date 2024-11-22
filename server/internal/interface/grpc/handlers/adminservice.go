@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -134,7 +135,7 @@ func (a *adminHandler) GetMarketHourConfig(
 	ctx context.Context,
 	request *arkv1.GetMarketHourConfigRequest,
 ) (*arkv1.GetMarketHourConfigResponse, error) {
-	config, err := a.aspService.GetMarketHourConfig(ctx)
+	config, err := a.arkService.GetMarketHourConfig(ctx)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -153,7 +154,7 @@ func (a *adminHandler) UpdateMarketHourConfig(
 	ctx context.Context,
 	req *arkv1.UpdateMarketHourConfigRequest,
 ) (*arkv1.UpdateMarketHourConfigResponse, error) {
-	if err := a.aspService.UpdateMarketHourConfig(
+	if err := a.arkService.UpdateMarketHourConfig(
 		ctx,
 		req.GetConfig().GetStartTime().AsTime(),
 		req.GetConfig().GetEndTime().AsTime(),
