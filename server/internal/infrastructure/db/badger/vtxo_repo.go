@@ -100,7 +100,7 @@ func (r *vtxoRepository) GetAllVtxos(
 ) ([]domain.Vtxo, []domain.Vtxo, error) {
 	query := badgerhold.Where("Redeemed").Eq(false)
 	if len(pubkey) > 0 {
-		query = query.And("Pubkey").Eq(pubkey)
+		query = query.And("PubKey").Eq(pubkey)
 	}
 	vtxos, err := r.findVtxos(ctx, query)
 	if err != nil {
