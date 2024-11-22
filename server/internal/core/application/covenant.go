@@ -63,10 +63,23 @@ func NewCovenantService(
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	scheduler ports.SchedulerService,
 	notificationPrefix string,
+	marketHourStartTime, marketHourEndTime time.Time, marketHourPeriod, marketHourRoundInterval time.Duration,
 ) (Service, error) {
 	pubkey, err := walletSvc.GetPubkey(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch pubkey: %s", err)
+	}
+
+	marketHour, err := repoManager.MarketHourRepo().Get(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get market hours from db: %w", err)
+	}
+
+	if marketHour == nil {
+		marketHour = domain.NewMarketHour(marketHourStartTime, marketHourEndTime, marketHourPeriod, marketHourRoundInterval)
+		if err := repoManager.MarketHourRepo().Upsert(context.Background(), *marketHour); err != nil {
+			return nil, fmt.Errorf("failed to upsert initial market hours to db: %w", err)
+		}
 	}
 
 	svc := &covenantService{
@@ -430,6 +443,22 @@ func (s *covenantService) GetInfo(ctx context.Context) (*ServiceInfo, error) {
 		return nil, err
 	}
 
+	marketHourConfig, err := s.repoManager.MarketHourRepo().Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	marketHourNextStart, marketHourNextEnd, err := calcNextMarketHour(
+		marketHourConfig.StartTime,
+		marketHourConfig.EndTime,
+		marketHourConfig.Period,
+		marketHourDelta,
+		time.Now(),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	return &ServiceInfo{
 		PubKey:              pubkey,
 		RoundLifetime:       s.roundLifetime,
@@ -438,6 +467,12 @@ func (s *covenantService) GetInfo(ctx context.Context) (*ServiceInfo, error) {
 		Network:             s.network.Name,
 		Dust:                dust,
 		ForfeitAddress:      forfeitAddress,
+		NextMarketHour: &NextMarketHour{
+			StartTime:     marketHourNextStart,
+			EndTime:       marketHourNextEnd,
+			Period:        marketHourConfig.Period,
+			RoundInterval: marketHourConfig.RoundInterval,
+		},
 	}, nil
 }
 
@@ -1152,4 +1187,25 @@ func findForfeitTxLiquid(
 	}
 
 	return "", fmt.Errorf("forfeit tx not found")
+}
+
+func (s *covenantService) GetMarketHourConfig(ctx context.Context) (*domain.MarketHour, error) {
+	return s.repoManager.MarketHourRepo().Get(ctx)
+}
+
+func (s *covenantService) UpdateMarketHourConfig(
+	ctx context.Context,
+	marketHourStartTime, marketHourEndTime time.Time, period, roundInterval time.Duration,
+) error {
+	marketHour := domain.NewMarketHour(
+		marketHourStartTime,
+		marketHourEndTime,
+		period,
+		roundInterval,
+	)
+	if err := s.repoManager.MarketHourRepo().Upsert(ctx, *marketHour); err != nil {
+		return fmt.Errorf("failed to upsert market hours: %w", err)
+	}
+
+	return nil
 }

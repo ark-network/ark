@@ -22,6 +22,8 @@ type AdminServiceClient interface {
 	GetRoundDetails(ctx context.Context, in *GetRoundDetailsRequest, opts ...grpc.CallOption) (*GetRoundDetailsResponse, error)
 	GetRounds(ctx context.Context, in *GetRoundsRequest, opts ...grpc.CallOption) (*GetRoundsResponse, error)
 	CreateNote(ctx context.Context, in *CreateNoteRequest, opts ...grpc.CallOption) (*CreateNoteResponse, error)
+	GetMarketHourConfig(ctx context.Context, in *GetMarketHourConfigRequest, opts ...grpc.CallOption) (*GetMarketHourConfigResponse, error)
+	UpdateMarketHourConfig(ctx context.Context, in *UpdateMarketHourConfigRequest, opts ...grpc.CallOption) (*UpdateMarketHourConfigResponse, error)
 }
 
 type adminServiceClient struct {
@@ -68,6 +70,24 @@ func (c *adminServiceClient) CreateNote(ctx context.Context, in *CreateNoteReque
 	return out, nil
 }
 
+func (c *adminServiceClient) GetMarketHourConfig(ctx context.Context, in *GetMarketHourConfigRequest, opts ...grpc.CallOption) (*GetMarketHourConfigResponse, error) {
+	out := new(GetMarketHourConfigResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/GetMarketHourConfig", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) UpdateMarketHourConfig(ctx context.Context, in *UpdateMarketHourConfigRequest, opts ...grpc.CallOption) (*UpdateMarketHourConfigResponse, error) {
+	out := new(UpdateMarketHourConfigResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/UpdateMarketHourConfig", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AdminServiceServer is the server API for AdminService service.
 // All implementations should embed UnimplementedAdminServiceServer
 // for forward compatibility
@@ -76,6 +96,8 @@ type AdminServiceServer interface {
 	GetRoundDetails(context.Context, *GetRoundDetailsRequest) (*GetRoundDetailsResponse, error)
 	GetRounds(context.Context, *GetRoundsRequest) (*GetRoundsResponse, error)
 	CreateNote(context.Context, *CreateNoteRequest) (*CreateNoteResponse, error)
+	GetMarketHourConfig(context.Context, *GetMarketHourConfigRequest) (*GetMarketHourConfigResponse, error)
+	UpdateMarketHourConfig(context.Context, *UpdateMarketHourConfigRequest) (*UpdateMarketHourConfigResponse, error)
 }
 
 // UnimplementedAdminServiceServer should be embedded to have forward compatible implementations.
@@ -93,6 +115,12 @@ func (UnimplementedAdminServiceServer) GetRounds(context.Context, *GetRoundsRequ
 }
 func (UnimplementedAdminServiceServer) CreateNote(context.Context, *CreateNoteRequest) (*CreateNoteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateNote not implemented")
+}
+func (UnimplementedAdminServiceServer) GetMarketHourConfig(context.Context, *GetMarketHourConfigRequest) (*GetMarketHourConfigResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetMarketHourConfig not implemented")
+}
+func (UnimplementedAdminServiceServer) UpdateMarketHourConfig(context.Context, *UpdateMarketHourConfigRequest) (*UpdateMarketHourConfigResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateMarketHourConfig not implemented")
 }
 
 // UnsafeAdminServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -178,6 +206,42 @@ func _AdminService_CreateNote_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AdminService_GetMarketHourConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetMarketHourConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).GetMarketHourConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.AdminService/GetMarketHourConfig",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).GetMarketHourConfig(ctx, req.(*GetMarketHourConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_UpdateMarketHourConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateMarketHourConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).UpdateMarketHourConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.AdminService/UpdateMarketHourConfig",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).UpdateMarketHourConfig(ctx, req.(*UpdateMarketHourConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AdminService_ServiceDesc is the grpc.ServiceDesc for AdminService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -200,6 +264,14 @@ var AdminService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateNote",
 			Handler:    _AdminService_CreateNote_Handler,
+		},
+		{
+			MethodName: "GetMarketHourConfig",
+			Handler:    _AdminService_GetMarketHourConfig_Handler,
+		},
+		{
+			MethodName: "UpdateMarketHourConfig",
+			Handler:    _AdminService_UpdateMarketHourConfig_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

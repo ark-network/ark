@@ -713,6 +713,9 @@
         },
         "forfeitAddress": {
           "type": "string"
+        },
+        "marketHour": {
+          "$ref": "#/definitions/v1MarketHour"
         }
       }
     },
@@ -773,6 +776,25 @@
             "type": "object",
             "$ref": "#/definitions/v1Vtxo"
           }
+        }
+      }
+    },
+    "v1MarketHour": {
+      "type": "object",
+      "properties": {
+        "nextStartTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "nextEndTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "period": {
+          "type": "string"
+        },
+        "roundInterval": {
+          "type": "string"
         }
       }
     },

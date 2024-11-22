@@ -26,6 +26,15 @@ type EntityVw struct {
 	VtxoVout       sql.NullInt64
 }
 
+type MarketHour struct {
+	ID            int64
+	StartTime     int64
+	EndTime       int64
+	Period        int64
+	RoundInterval int64
+	UpdatedAt     int64
+}
+
 type Note struct {
 	ID int64
 }

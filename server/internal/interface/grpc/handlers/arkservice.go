@@ -3,6 +3,8 @@ package handlers
 import (
 	"context"
 	"encoding/hex"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"fmt"
 	"sync"
 
@@ -43,7 +45,7 @@ func (h *handler) GetInfo(
 ) (*arkv1.GetInfoResponse, error) {
 	info, err := h.svc.GetInfo(ctx)
 	if err != nil {
-		return nil, err
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	desc := fmt.Sprintf(
@@ -65,6 +67,12 @@ func (h *handler) GetInfo(
 		ForfeitAddress:             info.ForfeitAddress,
 		BoardingDescriptorTemplate: desc,
 		VtxoDescriptorTemplates:    []string{desc},
+		MarketHour: &arkv1.MarketHour{
+			NextStartTime: timestamppb.New(info.NextMarketHour.StartTime),
+			NextEndTime:   timestamppb.New(info.NextMarketHour.EndTime),
+			Period:        durationpb.New(info.NextMarketHour.Period),
+			RoundInterval: durationpb.New(info.NextMarketHour.RoundInterval),
+		},
 	}, nil
 }
 

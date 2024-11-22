@@ -39,6 +39,63 @@ func (q *Queries) DeleteEntityVtxo(ctx context.Context, entityID int64) error {
 	return err
 }
 
+const getLatestMarketHour = `-- name: GetLatestMarketHour :one
+SELECT id, start_time, end_time, period, round_interval, updated_at FROM market_hour ORDER BY updated_at DESC LIMIT 1
+`
+
+func (q *Queries) GetLatestMarketHour(ctx context.Context) (MarketHour, error) {
+	row := q.db.QueryRowContext(ctx, getLatestMarketHour)
+	var i MarketHour
+	err := row.Scan(
+		&i.ID,
+		&i.StartTime,
+		&i.EndTime,
+		&i.Period,
+		&i.RoundInterval,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const insertMarketHour = `-- name: InsertMarketHour :one
+INSERT INTO market_hour (
+    start_time,
+    end_time,
+    period,
+    round_interval,
+    updated_at
+) VALUES (?, ?, ?, ?, ?)
+RETURNING id, start_time, end_time, period, round_interval, updated_at
+`
+
+type InsertMarketHourParams struct {
+	StartTime     int64
+	EndTime       int64
+	Period        int64
+	RoundInterval int64
+	UpdatedAt     int64
+}
+
+func (q *Queries) InsertMarketHour(ctx context.Context, arg InsertMarketHourParams) (MarketHour, error) {
+	row := q.db.QueryRowContext(ctx, insertMarketHour,
+		arg.StartTime,
+		arg.EndTime,
+		arg.Period,
+		arg.RoundInterval,
+		arg.UpdatedAt,
+	)
+	var i MarketHour
+	err := row.Scan(
+		&i.ID,
+		&i.StartTime,
+		&i.EndTime,
+		&i.Period,
+		&i.RoundInterval,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const insertNote = `-- name: InsertNote :exec
 INSERT INTO note (id) VALUES (?)
 `
@@ -755,6 +812,47 @@ func (q *Queries) SelectVtxosByRoundTxid(ctx context.Context, roundTx string) ([
 	return items, nil
 }
 
+const updateMarketHour = `-- name: UpdateMarketHour :one
+UPDATE market_hour
+SET start_time = ?,
+    end_time = ?,
+    period = ?,
+    round_interval = ?,
+    updated_at = ?
+WHERE id = ?
+RETURNING id, start_time, end_time, period, round_interval, updated_at
+`
+
+type UpdateMarketHourParams struct {
+	StartTime     int64
+	EndTime       int64
+	Period        int64
+	RoundInterval int64
+	UpdatedAt     int64
+	ID            int64
+}
+
+func (q *Queries) UpdateMarketHour(ctx context.Context, arg UpdateMarketHourParams) (MarketHour, error) {
+	row := q.db.QueryRowContext(ctx, updateMarketHour,
+		arg.StartTime,
+		arg.EndTime,
+		arg.Period,
+		arg.RoundInterval,
+		arg.UpdatedAt,
+		arg.ID,
+	)
+	var i MarketHour
+	err := row.Scan(
+		&i.ID,
+		&i.StartTime,
+		&i.EndTime,
+		&i.Period,
+		&i.RoundInterval,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateVtxoExpireAt = `-- name: UpdateVtxoExpireAt :exec
 UPDATE vtxo SET expire_at = ? WHERE txid = ? AND vout = ?
 `
@@ -786,9 +884,9 @@ func (q *Queries) UpdateVtxoPaymentId(ctx context.Context, arg UpdateVtxoPayment
 }
 
 const upsertEntity = `-- name: UpsertEntity :one
-INSERT INTO entity (nostr_recipient) 
-VALUES (?) 
-ON CONFLICT(nostr_recipient) DO UPDATE SET 
+INSERT INTO entity (nostr_recipient)
+VALUES (?)
+ON CONFLICT(nostr_recipient) DO UPDATE SET
     nostr_recipient = EXCLUDED.nostr_recipient
 RETURNING id
 `
@@ -801,9 +899,9 @@ func (q *Queries) UpsertEntity(ctx context.Context, nostrRecipient string) (int6
 }
 
 const upsertEntityVtxo = `-- name: UpsertEntityVtxo :exec
-INSERT INTO entity_vtxo (entity_id, vtxo_txid, vtxo_vout) 
-VALUES (?, ?, ?) 
-ON CONFLICT(entity_id, vtxo_txid, vtxo_vout) DO UPDATE SET 
+INSERT INTO entity_vtxo (entity_id, vtxo_txid, vtxo_vout)
+VALUES (?, ?, ?)
+ON CONFLICT(entity_id, vtxo_txid, vtxo_vout) DO UPDATE SET
     entity_id = EXCLUDED.entity_id
 `
 

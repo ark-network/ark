@@ -3,6 +3,8 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/server/internal/core/application"
@@ -126,6 +128,42 @@ func (a *adminHandler) CreateNote(ctx context.Context, req *arkv1.CreateNoteRequ
 	}
 
 	return &arkv1.CreateNoteResponse{Notes: notes}, nil
+}
+
+func (a *adminHandler) GetMarketHourConfig(
+	ctx context.Context,
+	request *arkv1.GetMarketHourConfigRequest,
+) (*arkv1.GetMarketHourConfigResponse, error) {
+	config, err := a.aspService.GetMarketHourConfig(ctx)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &arkv1.GetMarketHourConfigResponse{
+		Config: &arkv1.MarketHourConfig{
+			StartTime:     timestamppb.New(config.StartTime),
+			EndTime:       timestamppb.New(config.EndTime),
+			Period:        durationpb.New(config.Period),
+			RoundInterval: durationpb.New(config.RoundInterval),
+		},
+	}, nil
+}
+
+func (a *adminHandler) UpdateMarketHourConfig(
+	ctx context.Context,
+	req *arkv1.UpdateMarketHourConfigRequest,
+) (*arkv1.UpdateMarketHourConfigResponse, error) {
+	if err := a.aspService.UpdateMarketHourConfig(
+		ctx,
+		req.GetConfig().GetStartTime().AsTime(),
+		req.GetConfig().GetEndTime().AsTime(),
+		req.GetConfig().GetPeriod().AsDuration(),
+		req.GetConfig().GetRoundInterval().AsDuration(),
+	); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &arkv1.UpdateMarketHourConfigResponse{}, nil
 }
 
 // convert sats to string BTC

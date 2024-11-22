@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"time"
 
 	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/server/internal/core/domain"
@@ -59,6 +60,8 @@ type Service interface {
 	GetTransactionEventsChannel(ctx context.Context) <-chan TransactionEvent
 	SetNostrRecipient(ctx context.Context, nostrRecipient string, signedVtxoOutpoints []SignedVtxoOutpoint) error
 	DeleteNostrRecipient(ctx context.Context, signedVtxoOutpoints []SignedVtxoOutpoint) error
+	GetMarketHourConfig(ctx context.Context) (*domain.MarketHour, error)
+	UpdateMarketHourConfig(ctx context.Context, marketHourStartTime, marketHourEndTime time.Time, period, roundInterval time.Duration) error
 }
 
 type ServiceInfo struct {
@@ -69,6 +72,14 @@ type ServiceInfo struct {
 	Network             string
 	Dust                uint64
 	ForfeitAddress      string
+	NextMarketHour             *NextMarketHour
+}
+
+type NextMarketHour struct {
+	StartTime     time.Time
+	EndTime       time.Time
+	Period        time.Duration
+	RoundInterval time.Duration
 }
 
 type WalletStatus struct {

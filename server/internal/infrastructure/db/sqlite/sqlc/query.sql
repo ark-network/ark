@@ -158,16 +158,16 @@ UPDATE vtxo SET spent = true, spent_by = ? WHERE txid = ? AND vout = ?;
 UPDATE vtxo SET expire_at = ? WHERE txid = ? AND vout = ?;
 
 -- name: UpsertEntity :one
-INSERT INTO entity (nostr_recipient) 
-VALUES (?) 
-ON CONFLICT(nostr_recipient) DO UPDATE SET 
+INSERT INTO entity (nostr_recipient)
+VALUES (?)
+ON CONFLICT(nostr_recipient) DO UPDATE SET
     nostr_recipient = EXCLUDED.nostr_recipient
 RETURNING id;
 
 -- name: UpsertEntityVtxo :exec
-INSERT INTO entity_vtxo (entity_id, vtxo_txid, vtxo_vout) 
-VALUES (?, ?, ?) 
-ON CONFLICT(entity_id, vtxo_txid, vtxo_vout) DO UPDATE SET 
+INSERT INTO entity_vtxo (entity_id, vtxo_txid, vtxo_vout)
+VALUES (?, ?, ?)
+ON CONFLICT(entity_id, vtxo_txid, vtxo_vout) DO UPDATE SET
     entity_id = EXCLUDED.entity_id;
 
 -- name: SelectEntitiesByVtxo :many
@@ -185,3 +185,26 @@ INSERT INTO note (id) VALUES (?);
 
 -- name: ContainsNote :one
 SELECT EXISTS(SELECT 1 FROM note WHERE id = ?);
+
+-- name: InsertMarketHour :one
+INSERT INTO market_hour (
+    start_time,
+    end_time,
+    period,
+    round_interval,
+    updated_at
+) VALUES (?, ?, ?, ?, ?)
+RETURNING *;
+
+-- name: UpdateMarketHour :one
+UPDATE market_hour
+SET start_time = ?,
+    end_time = ?,
+    period = ?,
+    round_interval = ?,
+    updated_at = ?
+WHERE id = ?
+RETURNING *;
+
+-- name: GetLatestMarketHour :one
+SELECT * FROM market_hour ORDER BY updated_at DESC LIMIT 1;
