@@ -37,13 +37,7 @@ type Service interface {
 		ctx context.Context, address string,
 	) (spendableVtxos, spentVtxos []domain.Vtxo, err error)
 	GetInfo(ctx context.Context) (*ServiceInfo, error)
-	// Async payments
-	CreateAsyncPayment(
-		ctx context.Context, inputs []AsyncPaymentInput, receivers []domain.Receiver,
-	) (string, error)
-	CompleteAsyncPayment(
-		ctx context.Context, redeemTx string,
-	) error
+	CompleteAsyncPayment(ctx context.Context, redeemTx string) (string, error)
 	GetBoardingAddress(
 		ctx context.Context, userPubkey *secp256k1.PublicKey,
 	) (address string, scripts []string, err error)
@@ -72,7 +66,7 @@ type ServiceInfo struct {
 	Network             string
 	Dust                uint64
 	ForfeitAddress      string
-	NextMarketHour             *NextMarketHour
+	NextMarketHour      *NextMarketHour
 }
 
 type NextMarketHour struct {

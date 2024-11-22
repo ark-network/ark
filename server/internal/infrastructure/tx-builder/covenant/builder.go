@@ -669,15 +669,6 @@ func (b *txBuilder) FindLeaves(
 	return foundLeaves, nil
 }
 
-func (b *txBuilder) BuildAsyncPaymentTransactions(
-	_ []domain.Vtxo,
-	_ map[domain.VtxoKey][]string,
-	_ map[domain.VtxoKey]chainhash.Hash,
-	_ []domain.Receiver,
-) (string, error) {
-	return "", fmt.Errorf("not implemented")
-}
-
 func (b *txBuilder) createPoolTx(
 	sharedOutputAmount uint64,
 	sharedOutputScript []byte,

@@ -27,7 +27,7 @@ type WalletService interface {
 	SignTransaction(
 		ctx context.Context, partialTx string, extractRawTx bool,
 	) (string, error)
-	SignTransactionTapscript(ctx context.Context, pset string, inputIndexes []int) (string, error) // inputIndexes == nil means sign all inputs
+	SignTransactionTapscript(ctx context.Context, partialTx string, inputIndexes []int) (string, error) // inputIndexes == nil means sign all inputs
 	SelectUtxos(ctx context.Context, asset string, amount uint64) ([]TxInput, uint64, error)
 	BroadcastTransaction(ctx context.Context, txHex string) (string, error)
 	WaitForSync(ctx context.Context, txid string) error

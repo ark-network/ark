@@ -245,28 +245,19 @@ func (a *grpcClient) Ping(
 	return err
 }
 
-func (a *grpcClient) CreatePayment(
-	ctx context.Context, inputs []client.AsyncPaymentInput, outputs []client.Output,
+func (a *grpcClient) CompletePayment(
+	ctx context.Context, redeemTx string,
 ) (string, error) {
-	req := &arkv1.CreatePaymentRequest{
-		Inputs:  asyncIns(inputs).toProto(),
-		Outputs: outs(outputs).toProto(),
+	req := &arkv1.CompletePaymentRequest{
+		RedeemTx: redeemTx,
 	}
-	resp, err := a.svc.CreatePayment(ctx, req)
+
+	resp, err := a.svc.CompletePayment(ctx, req)
 	if err != nil {
 		return "", err
 	}
-	return resp.SignedRedeemTx, nil
-}
 
-func (a *grpcClient) CompletePayment(
-	ctx context.Context, redeemTx string,
-) error {
-	req := &arkv1.CompletePaymentRequest{
-		SignedRedeemTx: redeemTx,
-	}
-	_, err := a.svc.CompletePayment(ctx, req)
-	return err
+	return resp.GetSignedRedeemTx(), nil
 }
 
 func (a *grpcClient) GetRound(

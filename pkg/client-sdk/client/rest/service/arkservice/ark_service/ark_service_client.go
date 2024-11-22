@@ -56,8 +56,6 @@ type ClientOption func(*runtime.ClientOperation)
 type ClientService interface {
 	ArkServiceCompletePayment(params *ArkServiceCompletePaymentParams, opts ...ClientOption) (*ArkServiceCompletePaymentOK, error)
 
-	ArkServiceCreatePayment(params *ArkServiceCreatePaymentParams, opts ...ClientOption) (*ArkServiceCreatePaymentOK, error)
-
 	ArkServiceDeleteNostrRecipient(params *ArkServiceDeleteNostrRecipientParams, opts ...ClientOption) (*ArkServiceDeleteNostrRecipientOK, error)
 
 	ArkServiceGetBoardingAddress(params *ArkServiceGetBoardingAddressParams, opts ...ClientOption) (*ArkServiceGetBoardingAddressOK, error)
@@ -125,43 +123,6 @@ func (a *Client) ArkServiceCompletePayment(params *ArkServiceCompletePaymentPara
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*ArkServiceCompletePaymentDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
-}
-
-/*
-ArkServiceCreatePayment ark service create payment API
-*/
-func (a *Client) ArkServiceCreatePayment(params *ArkServiceCreatePaymentParams, opts ...ClientOption) (*ArkServiceCreatePaymentOK, error) {
-	// TODO: Validate the params before sending
-	if params == nil {
-		params = NewArkServiceCreatePaymentParams()
-	}
-	op := &runtime.ClientOperation{
-		ID:                 "ArkService_CreatePayment",
-		Method:             "POST",
-		PathPattern:        "/v1/payment",
-		ProducesMediaTypes: []string{"application/json"},
-		ConsumesMediaTypes: []string{"application/json"},
-		Schemes:            []string{"http"},
-		Params:             params,
-		Reader:             &ArkServiceCreatePaymentReader{formats: a.formats},
-		Context:            params.Context,
-		Client:             params.HTTPClient,
-	}
-	for _, opt := range opts {
-		opt(op)
-	}
-
-	result, err := a.transport.Submit(op)
-	if err != nil {
-		return nil, err
-	}
-	success, ok := result.(*ArkServiceCreatePaymentOK)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*ArkServiceCreatePaymentDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 

@@ -64,12 +64,6 @@ service ArkService {
 
   /* Async Payment APIs */
 
-  rpc CreatePayment(CreatePaymentRequest) returns (CreatePaymentResponse) {
-    option (google.api.http) = {
-      post: "/v1/payment"
-      body: "*"
-    };
-  }
   rpc CompletePayment(CompletePaymentRequest) returns (CompletePaymentResponse) {
     option (google.api.http) = {
       post: "/v1/payment/complete"
@@ -200,25 +194,12 @@ message PingRequest {
 }
 message PingResponse {}
 
-/* Async Payment API messages */
-
-message AsyncPaymentInput {
-  Input input = 1;
-  string forfeit_leaf_hash = 2;
-}
-
-message CreatePaymentRequest {
-  repeated AsyncPaymentInput inputs = 1;
-  repeated Output outputs = 2;
-}
-message CreatePaymentResponse {
-  string signed_redeem_tx = 1; // signed only by the ASP
-}
-
 message CompletePaymentRequest {
+  string redeem_tx = 1;
+}
+message CompletePaymentResponse {
   string signed_redeem_tx = 1;
 }
-message CompletePaymentResponse {}
 
 /* Explorer-like API messages */
 

@@ -27,7 +27,6 @@ type ArkServiceClient interface {
 	SubmitSignedForfeitTxs(ctx context.Context, in *SubmitSignedForfeitTxsRequest, opts ...grpc.CallOption) (*SubmitSignedForfeitTxsResponse, error)
 	GetEventStream(ctx context.Context, in *GetEventStreamRequest, opts ...grpc.CallOption) (ArkService_GetEventStreamClient, error)
 	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
-	CreatePayment(ctx context.Context, in *CreatePaymentRequest, opts ...grpc.CallOption) (*CreatePaymentResponse, error)
 	CompletePayment(ctx context.Context, in *CompletePaymentRequest, opts ...grpc.CallOption) (*CompletePaymentResponse, error)
 	GetRound(ctx context.Context, in *GetRoundRequest, opts ...grpc.CallOption) (*GetRoundResponse, error)
 	GetRoundById(ctx context.Context, in *GetRoundByIdRequest, opts ...grpc.CallOption) (*GetRoundByIdResponse, error)
@@ -149,15 +148,6 @@ func (c *arkServiceClient) Ping(ctx context.Context, in *PingRequest, opts ...gr
 	return out, nil
 }
 
-func (c *arkServiceClient) CreatePayment(ctx context.Context, in *CreatePaymentRequest, opts ...grpc.CallOption) (*CreatePaymentResponse, error) {
-	out := new(CreatePaymentResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/CreatePayment", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *arkServiceClient) CompletePayment(ctx context.Context, in *CompletePaymentRequest, opts ...grpc.CallOption) (*CompletePaymentResponse, error) {
 	out := new(CompletePaymentResponse)
 	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/CompletePayment", in, out, opts...)
@@ -257,7 +247,6 @@ type ArkServiceServer interface {
 	SubmitSignedForfeitTxs(context.Context, *SubmitSignedForfeitTxsRequest) (*SubmitSignedForfeitTxsResponse, error)
 	GetEventStream(*GetEventStreamRequest, ArkService_GetEventStreamServer) error
 	Ping(context.Context, *PingRequest) (*PingResponse, error)
-	CreatePayment(context.Context, *CreatePaymentRequest) (*CreatePaymentResponse, error)
 	CompletePayment(context.Context, *CompletePaymentRequest) (*CompletePaymentResponse, error)
 	GetRound(context.Context, *GetRoundRequest) (*GetRoundResponse, error)
 	GetRoundById(context.Context, *GetRoundByIdRequest) (*GetRoundByIdResponse, error)
@@ -297,9 +286,6 @@ func (UnimplementedArkServiceServer) GetEventStream(*GetEventStreamRequest, ArkS
 }
 func (UnimplementedArkServiceServer) Ping(context.Context, *PingRequest) (*PingResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
-}
-func (UnimplementedArkServiceServer) CreatePayment(context.Context, *CreatePaymentRequest) (*CreatePaymentResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CreatePayment not implemented")
 }
 func (UnimplementedArkServiceServer) CompletePayment(context.Context, *CompletePaymentRequest) (*CompletePaymentResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CompletePayment not implemented")
@@ -499,24 +485,6 @@ func _ArkService_Ping_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ArkService_CreatePayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CreatePaymentRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ArkServiceServer).CreatePayment(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/CreatePayment",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).CreatePayment(ctx, req.(*CreatePaymentRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _ArkService_CompletePayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CompletePaymentRequest)
 	if err := dec(in); err != nil {
@@ -684,10 +652,6 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Ping",
 			Handler:    _ArkService_Ping_Handler,
-		},
-		{
-			MethodName: "CreatePayment",
-			Handler:    _ArkService_CreatePayment_Handler,
 		},
 		{
 			MethodName: "CompletePayment",

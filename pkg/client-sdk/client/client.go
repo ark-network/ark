@@ -9,7 +9,6 @@ import (
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
@@ -47,12 +46,9 @@ type ASPClient interface {
 		ctx context.Context, paymentID string,
 	) (<-chan RoundEventChannel, func(), error)
 	Ping(ctx context.Context, paymentID string) error
-	CreatePayment(
-		ctx context.Context, inputs []AsyncPaymentInput, outputs []Output,
-	) (string, error)
 	CompletePayment(
 		ctx context.Context, signedRedeemTx string,
-	) error
+	) (string, error)
 	ListVtxos(ctx context.Context, addr string) ([]Vtxo, []Vtxo, error)
 	GetRound(ctx context.Context, txID string) (*Round, error)
 	GetRoundByID(ctx context.Context, roundID string) (*Round, error)
@@ -90,11 +86,6 @@ func (o Outpoint) Equals(other Outpoint) bool {
 type Input struct {
 	Outpoint
 	Tapscripts []string
-}
-
-type AsyncPaymentInput struct {
-	Input
-	ForfeitLeafHash chainhash.Hash
 }
 
 type Vtxo struct {

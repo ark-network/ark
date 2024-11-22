@@ -17,8 +17,8 @@ import (
 // swagger:model v1CompletePaymentRequest
 type V1CompletePaymentRequest struct {
 
-	// signed redeem tx
-	SignedRedeemTx string `json:"signedRedeemTx,omitempty"`
+	// redeem tx
+	RedeemTx string `json:"redeemTx,omitempty"`
 }
 
 // Validate validates this v1 complete payment request

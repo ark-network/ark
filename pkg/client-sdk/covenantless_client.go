@@ -30,6 +30,8 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcwallet/waddrmgr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightningnetwork/lnd/input"
+	"github.com/lightningnetwork/lnd/lntypes"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	log "github.com/sirupsen/logrus"
 )
@@ -978,7 +980,6 @@ func (a *covenantlessArkClient) SendAsync(
 
 	expectedAspPubKey := schnorr.SerializePubKey(a.AspPubkey)
 
-	receiversOutput := make([]client.Output, 0)
 	sumOfReceivers := uint64(0)
 
 	for _, receiver := range receivers {
@@ -997,10 +998,6 @@ func (a *covenantlessArkClient) SendAsync(
 			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), a.Dust)
 		}
 
-		receiversOutput = append(receiversOutput, client.Output{
-			Address: receiver.To(),
-			Amount:  receiver.Amount(),
-		})
 		sumOfReceivers += receiver.Amount()
 	}
 
@@ -1038,14 +1035,10 @@ func (a *covenantlessArkClient) SendAsync(
 	}
 
 	if changeAmount > 0 {
-		changeReceiver := client.Output{
-			Address: offchainAddrs[0].Address,
-			Amount:  changeAmount,
-		}
-		receiversOutput = append(receiversOutput, changeReceiver)
+		receivers = append(receivers, NewBitcoinReceiver(offchainAddrs[0].Address, changeAmount))
 	}
 
-	inputs := make([]client.AsyncPaymentInput, 0, len(selectedCoins))
+	inputs := make([]OORVtxoInput, 0, len(selectedCoins))
 
 	for _, coin := range selectedCoins {
 		vtxoScript, err := bitcointree.ParseVtxoScript(coin.Tapscripts)
@@ -1062,33 +1055,25 @@ func (a *covenantlessArkClient) SendAsync(
 
 		forfeitLeaf := txscript.NewBaseTapLeaf(forfeitScript)
 
-		inputs = append(inputs, client.AsyncPaymentInput{
-			Input: client.Input{
-				Outpoint: client.Outpoint{
-					Txid: coin.Txid,
-					VOut: coin.VOut,
-				},
-				Tapscripts: coin.Tapscripts,
-			},
-			ForfeitLeafHash: forfeitLeaf.TapHash(),
+		inputs = append(inputs, OORVtxoInput{
+			coin,
+			forfeitLeaf.TapHash(),
 		})
 	}
 
-	redeemTx, err := a.client.CreatePayment(ctx, inputs, receiversOutput)
+	feeRate := chainfee.AbsoluteFeePerKwFloor
+	redeemTx, err := BuildOORTransaction(inputs, receivers, feeRate.FeePerVByte())
 	if err != nil {
 		return "", err
 	}
-
-	// TODO verify the redeem tx signature
 
 	signedRedeemTx, err := a.wallet.SignTransaction(ctx, a.explorer, redeemTx)
 	if err != nil {
 		return "", err
 	}
 
-	if err = a.client.CompletePayment(
-		ctx, signedRedeemTx,
-	); err != nil {
+	signedRedeemTx, err = a.client.CompletePayment(ctx, signedRedeemTx)
+	if err != nil {
 		return "", err
 	}
 
@@ -2604,4 +2589,151 @@ func vtxosToTxsCovenantless(
 	})
 
 	return txs, nil
+}
+
+type OORVtxoInput struct {
+	client.TapscriptsVtxo
+	ForfeitLeafHash chainhash.Hash
+}
+
+func BuildOORTransaction(
+	vtxos []OORVtxoInput,
+	receivers []Receiver,
+	feeRate chainfee.SatPerVByte,
+) (string, error) {
+	if len(vtxos) <= 0 {
+		return "", fmt.Errorf("missing vtxos")
+	}
+
+	ins := make([]*wire.OutPoint, 0, len(vtxos))
+	outs := make([]*wire.TxOut, 0, len(receivers))
+	witnessUtxos := make(map[int]*wire.TxOut)
+	tapscripts := make(map[int]*psbt.TaprootTapLeafScript)
+
+	redeemTxWeightEstimator := &input.TxWeightEstimator{}
+	for index, vtxo := range vtxos {
+		if len(vtxo.Tapscripts) <= 0 {
+			return "", fmt.Errorf("missing tapscripts for vtxo %s", vtxo.Vtxo.Txid)
+		}
+
+		vtxoTxID, err := chainhash.NewHashFromStr(vtxo.Txid)
+		if err != nil {
+			return "", err
+		}
+
+		vtxoOutpoint := &wire.OutPoint{
+			Hash:  *vtxoTxID,
+			Index: vtxo.VOut,
+		}
+
+		vtxoScript, err := bitcointree.ParseVtxoScript(vtxo.Tapscripts)
+		if err != nil {
+			return "", err
+		}
+
+		vtxoTapKey, vtxoTree, err := vtxoScript.TapTree()
+		if err != nil {
+			return "", err
+		}
+
+		vtxoOutputScript, err := common.P2TRScript(vtxoTapKey)
+		if err != nil {
+			return "", err
+		}
+
+		witnessUtxos[index] = &wire.TxOut{
+			Value:    int64(vtxo.Amount),
+			PkScript: vtxoOutputScript,
+		}
+
+		leafProof, err := vtxoTree.GetTaprootMerkleProof(vtxo.ForfeitLeafHash)
+		if err != nil {
+			return "", err
+		}
+
+		tapscripts[index] = &psbt.TaprootTapLeafScript{
+			ControlBlock: leafProof.ControlBlock,
+			Script:       leafProof.Script,
+			LeafVersion:  txscript.BaseLeafVersion,
+		}
+
+		ctrlBlock, err := txscript.ParseControlBlock(leafProof.ControlBlock)
+		if err != nil {
+			return "", err
+		}
+
+		closure, err := tree.DecodeClosure(leafProof.Script)
+		if err != nil {
+			return "", err
+		}
+
+		redeemTxWeightEstimator.AddTapscriptInput(lntypes.WeightUnit(closure.WitnessSize()), &waddrmgr.Tapscript{
+			RevealedScript: leafProof.Script,
+			ControlBlock:   ctrlBlock,
+		})
+
+		ins = append(ins, vtxoOutpoint)
+	}
+
+	for range receivers {
+		redeemTxWeightEstimator.AddP2TROutput()
+	}
+
+	fees := feeRate.FeePerKVByte().FeeForVSize(lntypes.VByte(redeemTxWeightEstimator.VSize()))
+	feesAmount := uint64(fees.ToUnit(btcutil.AmountSatoshi))
+
+	if feesAmount >= receivers[len(receivers)-1].Amount() {
+		return "", fmt.Errorf("redeem tx fee is higher than the amount of the change receiver")
+	}
+
+	for i, receiver := range receivers {
+		if receiver.IsOnchain() {
+			return "", fmt.Errorf("receiver %d is onchain", i)
+		}
+
+		addr, err := common.DecodeAddress(receiver.To())
+		if err != nil {
+			return "", err
+		}
+
+		newVtxoScript, err := common.P2TRScript(addr.VtxoTapKey)
+		if err != nil {
+			return "", err
+		}
+
+		// Deduct the min relay fee from the very last receiver which is supposed
+		// to be the change in case it's not a send-all.
+		value := receiver.Amount()
+		if i == len(receivers)-1 {
+			value -= feesAmount
+		}
+		outs = append(outs, &wire.TxOut{
+			Value:    int64(value),
+			PkScript: newVtxoScript,
+		})
+	}
+
+	sequences := make([]uint32, len(ins))
+	for i := range sequences {
+		sequences[i] = wire.MaxTxInSequenceNum
+	}
+
+	redeemPtx, err := psbt.New(
+		ins, outs, 2, 0, sequences,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	for i := range redeemPtx.Inputs {
+		redeemPtx.Inputs[i].WitnessUtxo = witnessUtxos[i]
+		redeemPtx.Inputs[i].TaprootLeafScript = []*psbt.TaprootTapLeafScript{tapscripts[i]}
+	}
+
+	redeemTx, err := redeemPtx.B64Encode()
+	if err != nil {
+		return "", err
+	}
+
+	return redeemTx, nil
 }

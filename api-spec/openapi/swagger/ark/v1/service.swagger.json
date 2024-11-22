@@ -101,38 +101,6 @@
         ]
       }
     },
-    "/v1/payment": {
-      "post": {
-        "operationId": "ArkService_CreatePayment",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1CreatePaymentResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1CreatePaymentRequest"
-            }
-          }
-        ],
-        "tags": [
-          "ArkService"
-        ]
-      }
-    },
     "/v1/payment/complete": {
       "post": {
         "operationId": "ArkService_CompletePayment",
@@ -570,53 +538,19 @@
         }
       }
     },
-    "v1AsyncPaymentInput": {
-      "type": "object",
-      "properties": {
-        "input": {
-          "$ref": "#/definitions/v1Input"
-        },
-        "forfeitLeafHash": {
-          "type": "string"
-        }
-      }
-    },
     "v1CompletePaymentRequest": {
       "type": "object",
       "properties": {
-        "signedRedeemTx": {
+        "redeemTx": {
           "type": "string"
         }
       }
     },
     "v1CompletePaymentResponse": {
-      "type": "object"
-    },
-    "v1CreatePaymentRequest": {
-      "type": "object",
-      "properties": {
-        "inputs": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1AsyncPaymentInput"
-          }
-        },
-        "outputs": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1Output"
-          }
-        }
-      }
-    },
-    "v1CreatePaymentResponse": {
       "type": "object",
       "properties": {
         "signedRedeemTx": {
-          "type": "string",
-          "title": "signed only by the ASP"
+          "type": "string"
         }
       }
     },

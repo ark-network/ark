@@ -53,7 +53,7 @@ ArkServiceCompletePaymentOK describes a response with status code 200, with defa
 A successful response.
 */
 type ArkServiceCompletePaymentOK struct {
-	Payload models.V1CompletePaymentResponse
+	Payload *models.V1CompletePaymentResponse
 }
 
 // IsSuccess returns true when this ark service complete payment o k response has a 2xx status code
@@ -96,14 +96,16 @@ func (o *ArkServiceCompletePaymentOK) String() string {
 	return fmt.Sprintf("[POST /v1/payment/complete][%d] arkServiceCompletePaymentOK %s", 200, payload)
 }
 
-func (o *ArkServiceCompletePaymentOK) GetPayload() models.V1CompletePaymentResponse {
+func (o *ArkServiceCompletePaymentOK) GetPayload() *models.V1CompletePaymentResponse {
 	return o.Payload
 }
 
 func (o *ArkServiceCompletePaymentOK) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
 
+	o.Payload = new(models.V1CompletePaymentResponse)
+
 	// response payload
-	if err := consumer.Consume(response.Body(), &o.Payload); err != nil && err != io.EOF {
+	if err := consumer.Consume(response.Body(), o.Payload); err != nil && err != io.EOF {
 		return err
 	}
 
