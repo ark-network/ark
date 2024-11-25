@@ -12,14 +12,14 @@ import (
 	"github.com/vulpemventures/go-elements/taproot"
 )
 
-func CraftCongestionTree(
+func BuildVtxoTree(
 	asset string, serverPubkey *secp256k1.PublicKey, receivers []VtxoLeaf,
 	feeSatsPerNode uint64, roundLifetime int64,
 ) (
-	buildCongestionTree TreeFactory,
+	factoryFn TreeFactory,
 	sharedOutputScript []byte, sharedOutputAmount uint64, err error,
 ) {
-	root, err := createPartialCongestionTree(
+	root, err := buildTreeNodes(
 		asset, serverPubkey, receivers, feeSatsPerNode, roundLifetime,
 	)
 	if err != nil {
@@ -36,7 +36,7 @@ func CraftCongestionTree(
 		return
 	}
 	sharedOutputAmount = root.getAmount() + root.feeSats
-	buildCongestionTree = root.createFinalCongestionTree()
+	factoryFn = root.buildVtxoTree()
 
 	return
 }
@@ -321,7 +321,7 @@ func (n *node) getTx(
 	return pset, nil
 }
 
-func (n *node) createFinalCongestionTree() TreeFactory {
+func (n *node) buildVtxoTree() TreeFactory {
 	return func(roundTxInput psetv2.InputArgs) (VtxoTree, error) {
 		vtxoTree := make(VtxoTree, 0)
 
@@ -378,7 +378,7 @@ func (n *node) createFinalCongestionTree() TreeFactory {
 	}
 }
 
-func createPartialCongestionTree(
+func buildTreeNodes(
 	asset string, serverPubkey *secp256k1.PublicKey, receivers []VtxoLeaf,
 	feeSatsPerNode uint64, roundLifetime int64,
 ) (root *node, err error) {

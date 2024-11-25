@@ -134,7 +134,7 @@ func (a *adminService) GetScheduledSweeps(ctx context.Context) ([]ScheduledSweep
 
 	for _, round := range sweepableRounds {
 		sweepable, err := findSweepableOutputs(
-			ctx, a.walletSvc, a.txBuilder, a.sweeperTimeUnit, round.CongestionTree,
+			ctx, a.walletSvc, a.txBuilder, a.sweeperTimeUnit, round.VtxoTree,
 		)
 		if err != nil {
 			return nil, err

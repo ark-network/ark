@@ -58,7 +58,7 @@ func (s *sweeper) start() error {
 	}
 
 	for _, round := range allRounds {
-		task := s.createTask(round.Txid, round.CongestionTree)
+		task := s.createTask(round.Txid, round.VtxoTree)
 		task()
 	}
 

@@ -984,7 +984,7 @@ func (s *covenantService) propagateEvents(round *domain.Round) {
 	case domain.RoundFinalizationStarted:
 		ev := domain.RoundFinalizationStarted{
 			Id:              e.Id,
-			CongestionTree:  e.CongestionTree,
+			VtxoTree:        e.VtxoTree,
 			Connectors:      e.Connectors,
 			RoundTx:         e.RoundTx,
 			MinRelayFeeRate: int64(s.wallet.MinRelayFeeRate(context.Background())),
@@ -1006,20 +1006,20 @@ func (s *covenantService) scheduleSweepVtxosForRound(round *domain.Round) {
 	expirationTime := s.sweeper.scheduler.AddNow(s.roundLifetime)
 
 	if err := s.sweeper.schedule(
-		expirationTime, round.Txid, round.CongestionTree,
+		expirationTime, round.Txid, round.VtxoTree,
 	); err != nil {
 		log.WithError(err).Warn("failed to schedule sweep tx")
 	}
 }
 
 func (s *covenantService) getNewVtxos(round *domain.Round) []domain.Vtxo {
-	if len(round.CongestionTree) <= 0 {
+	if len(round.VtxoTree) <= 0 {
 		return nil
 	}
 
 	createdAt := time.Now().Unix()
 
-	leaves := round.CongestionTree.Leaves()
+	leaves := round.VtxoTree.Leaves()
 	vtxos := make([]domain.Vtxo, 0)
 	for _, node := range leaves {
 		tx, _ := psetv2.NewPsetFromBase64(node.Tx)

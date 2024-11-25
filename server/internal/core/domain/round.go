@@ -42,7 +42,7 @@ type Round struct {
 	Txid              string
 	UnsignedTx        string
 	ForfeitTxs        []string
-	CongestionTree    tree.VtxoTree
+	VtxoTree          tree.VtxoTree
 	Connectors        []string
 	ConnectorAddress  string
 	DustAmount        uint64
@@ -84,7 +84,7 @@ func (r *Round) On(event RoundEvent, replayed bool) {
 		r.StartingTimestamp = e.Timestamp
 	case RoundFinalizationStarted:
 		r.Stage.Code = FinalizationStage
-		r.CongestionTree = e.CongestionTree
+		r.VtxoTree = e.VtxoTree
 		r.Connectors = append([]string{}, e.Connectors...)
 		r.ConnectorAddress = e.ConnectorAddress
 		r.UnsignedTx = e.RoundTx
@@ -160,7 +160,7 @@ func (r *Round) StartFinalization(connectorAddress string, connectors []string, 
 
 	event := RoundFinalizationStarted{
 		Id:               r.Id,
-		CongestionTree:   vtxoTree,
+		VtxoTree:         vtxoTree,
 		Connectors:       connectors,
 		ConnectorAddress: connectorAddress,
 		RoundTx:          roundTx,

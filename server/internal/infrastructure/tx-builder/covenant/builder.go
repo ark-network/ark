@@ -330,7 +330,7 @@ func (b *txBuilder) BuildRoundTx(
 	// outpoint is obtained, the vtxo tree can be finally created.
 	// The factory function `treeFactoryFn` returned below holds all outputs data
 	// generated in the process and takes the shared utxo outpoint as argument.
-	// This is safe as the memory allocated for `craftCongestionTree` is freed
+	// This is safe as the memory allocated for `BuildVtxoTree` is flushed
 	// only after `BuildRoundTx` returns.
 
 	var sharedOutputScript []byte
@@ -348,7 +348,7 @@ func (b *txBuilder) BuildRoundTx(
 			return "", nil, "", nil, err
 		}
 
-		treeFactoryFn, sharedOutputScript, sharedOutputAmount, err = tree.CraftCongestionTree(
+		treeFactoryFn, sharedOutputScript, sharedOutputAmount, err = tree.BuildVtxoTree(
 			b.onchainNetwork().AssetID, serverPubkey, vtxosLeaves, feeSatsPerNode, b.roundLifetime,
 		)
 		if err != nil {

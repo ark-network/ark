@@ -302,7 +302,7 @@ func testStartFinalization(t *testing.T) {
 			require.True(t, ok)
 			require.Equal(t, round.Id, event.Id)
 			require.Exactly(t, connectors, event.Connectors)
-			require.Exactly(t, vtxoTree, event.CongestionTree)
+			require.Exactly(t, vtxoTree, event.VtxoTree)
 			require.Exactly(t, roundTx, event.RoundTx)
 		})
 

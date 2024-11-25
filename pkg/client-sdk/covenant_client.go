@@ -1185,7 +1185,7 @@ func (a *covenantArkClient) handleRoundFinalization(
 	boardingUtxos []types.Utxo,
 	receivers []client.Output,
 ) (signedForfeits []string, signedRoundTx string, err error) {
-	if err = a.validateCongestionTree(event, receivers); err != nil {
+	if err = a.validateVtxoTree(event, receivers); err != nil {
 		return
 	}
 
@@ -1270,7 +1270,7 @@ func (a *covenantArkClient) handleRoundFinalization(
 	return signedForfeits, signedRoundTx, nil
 }
 
-func (a *covenantArkClient) validateCongestionTree(
+func (a *covenantArkClient) validateVtxoTree(
 	event client.RoundFinalizationEvent, receivers []client.Output,
 ) error {
 	roundTx := event.Tx

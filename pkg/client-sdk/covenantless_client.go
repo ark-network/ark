@@ -1794,7 +1794,7 @@ func (a *covenantlessArkClient) handleRoundFinalization(
 	boardingUtxos []types.Utxo,
 	receivers []client.Output,
 ) ([]string, string, error) {
-	if err := a.validateCongestionTree(event, receivers); err != nil {
+	if err := a.validateVtxoTree(event, receivers); err != nil {
 		return nil, "", fmt.Errorf("failed to verify vtxo tree: %s", err)
 	}
 
@@ -1880,7 +1880,7 @@ func (a *covenantlessArkClient) handleRoundFinalization(
 	return forfeits, signedRoundTx, nil
 }
 
-func (a *covenantlessArkClient) validateCongestionTree(
+func (a *covenantlessArkClient) validateVtxoTree(
 	event client.RoundFinalizationEvent, receivers []client.Output,
 ) error {
 	roundTx := event.Tx

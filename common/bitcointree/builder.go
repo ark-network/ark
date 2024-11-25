@@ -42,8 +42,8 @@ func CraftSharedOutput(
 	return scriptPubkey, amount, err
 }
 
-// CraftCongestionTree creates all the tree's transactions
-func CraftCongestionTree(
+// BuildVtxoTree creates all the tree's transactions
+func BuildVtxoTree(
 	initialInput *wire.OutPoint, cosigners []*secp256k1.PublicKey, server *secp256k1.PublicKey, receivers []tree.VtxoLeaf,
 	feeSatsPerNode uint64, roundLifetime int64,
 ) (tree.VtxoTree, error) {

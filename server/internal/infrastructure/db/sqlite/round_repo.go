@@ -86,7 +86,7 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 			return fmt.Errorf("failed to upsert round: %w", err)
 		}
 
-		if len(round.ForfeitTxs) > 0 || len(round.Connectors) > 0 || len(round.CongestionTree) > 0 {
+		if len(round.ForfeitTxs) > 0 || len(round.Connectors) > 0 || len(round.VtxoTree) > 0 {
 			for pos, tx := range round.ForfeitTxs {
 				if err := querierWithTx.UpsertTransaction(
 					ctx,
@@ -115,7 +115,7 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 				}
 			}
 
-			for level, levelTxs := range round.CongestionTree {
+			for level, levelTxs := range round.VtxoTree {
 				for pos, tx := range levelTxs {
 					if err := querierWithTx.UpsertTransaction(
 						ctx,
@@ -443,10 +443,10 @@ func rowsToRounds(rows []combinedRow) ([]*domain.Round, error) {
 				round.Connectors[position.Int64] = v.tx.Tx.String
 			case "tree":
 				level := v.tx.TreeLevel
-				round.CongestionTree = extendArray(round.CongestionTree, int(level.Int64))
-				round.CongestionTree[int(level.Int64)] = extendArray(round.CongestionTree[int(level.Int64)], int(position.Int64))
-				if round.CongestionTree[int(level.Int64)][position.Int64] == (tree.Node{}) {
-					round.CongestionTree[int(level.Int64)][position.Int64] = tree.Node{
+				round.VtxoTree = extendArray(round.VtxoTree, int(level.Int64))
+				round.VtxoTree[int(level.Int64)] = extendArray(round.VtxoTree[int(level.Int64)], int(position.Int64))
+				if round.VtxoTree[int(level.Int64)][position.Int64] == (tree.Node{}) {
+					round.VtxoTree[int(level.Int64)][position.Int64] = tree.Node{
 						Tx:         v.tx.Tx.String,
 						Txid:       v.tx.Txid.String,
 						ParentTxid: v.tx.ParentTxid.String,

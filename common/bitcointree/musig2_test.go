@@ -48,7 +48,7 @@ func TestRoundTripSignTree(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		vtxoTree, err := bitcointree.CraftCongestionTree(
+		vtxoTree, err := bitcointree.BuildVtxoTree(
 			&wire.OutPoint{
 				Hash:  *testTxid,
 				Index: 0,

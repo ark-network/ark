@@ -148,17 +148,17 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 						Timestamp: 1701190270,
 					},
 					domain.RoundFinalizationStarted{
-						Id:             "1ea610ff-bf3e-4068-9bfd-b6c3f553467e",
-						CongestionTree: vtxoTree,
-						Connectors:     []string{emptyPtx, emptyPtx},
-						RoundTx:        emptyTx,
+						Id:         "1ea610ff-bf3e-4068-9bfd-b6c3f553467e",
+						VtxoTree:   vtxoTree,
+						Connectors: []string{emptyPtx, emptyPtx},
+						RoundTx:    emptyTx,
 					},
 				},
 				handler: func(round *domain.Round) {
 					require.NotNil(t, round)
 					require.Len(t, round.Events(), 2)
-					require.Len(t, round.CongestionTree, 3)
-					require.Equal(t, round.CongestionTree.NumberOfNodes(), 7)
+					require.Len(t, round.VtxoTree, 3)
+					require.Equal(t, round.VtxoTree.NumberOfNodes(), 7)
 					require.Len(t, round.Connectors, 2)
 				},
 			},
@@ -170,10 +170,10 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 						Timestamp: 1701190270,
 					},
 					domain.RoundFinalizationStarted{
-						Id:             "7578231e-428d-45ae-aaa4-e62c77ad5cec",
-						CongestionTree: vtxoTree,
-						Connectors:     []string{emptyPtx, emptyPtx},
-						RoundTx:        emptyTx,
+						Id:         "7578231e-428d-45ae-aaa4-e62c77ad5cec",
+						VtxoTree:   vtxoTree,
+						Connectors: []string{emptyPtx, emptyPtx},
+						RoundTx:    emptyTx,
 					},
 					domain.RoundFinalized{
 						Id:         "7578231e-428d-45ae-aaa4-e62c77ad5cec",
@@ -288,10 +288,10 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 				},
 			},
 			domain.RoundFinalizationStarted{
-				Id:             roundId,
-				CongestionTree: vtxoTree,
-				Connectors:     []string{emptyPtx, emptyPtx},
-				RoundTx:        emptyTx,
+				Id:         roundId,
+				VtxoTree:   vtxoTree,
+				Connectors: []string{emptyPtx, emptyPtx},
+				RoundTx:    emptyTx,
 			},
 		}
 		events = append(events, newEvents...)
@@ -612,7 +612,7 @@ func roundsMatch(expected, got domain.Round) assert.Comparison {
 			}
 		}
 
-		if !reflect.DeepEqual(expected.CongestionTree, got.CongestionTree) {
+		if !reflect.DeepEqual(expected.VtxoTree, got.VtxoTree) {
 			return false
 		}
 

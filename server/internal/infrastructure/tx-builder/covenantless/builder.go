@@ -526,7 +526,7 @@ func (b *txBuilder) BuildRoundTx(
 			Index: 0,
 		}
 
-		vtxoTree, err = bitcointree.CraftCongestionTree(
+		vtxoTree, err = bitcointree.BuildVtxoTree(
 			initialOutpoint, cosigners, serverPubkey, receivers, feeAmount, b.roundLifetime,
 		)
 		if err != nil {

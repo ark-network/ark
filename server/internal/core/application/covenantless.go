@@ -1216,11 +1216,11 @@ func (s *covenantlessService) startFinalization() {
 }
 
 func (s *covenantlessService) propagateRoundSigningStartedEvent(
-	unsignedCongestionTree tree.VtxoTree, cosigners []*secp256k1.PublicKey,
+	unsignedVtxoTree tree.VtxoTree, cosigners []*secp256k1.PublicKey,
 ) {
 	ev := RoundSigningStarted{
 		Id:               s.currentRound.Id,
-		UnsignedVtxoTree: unsignedCongestionTree,
+		UnsignedVtxoTree: unsignedVtxoTree,
 		Cosigners:        cosigners,
 		UnsignedRoundTx:  s.currentRound.UnsignedTx,
 	}
@@ -1544,7 +1544,7 @@ func (s *covenantlessService) propagateEvents(round *domain.Round) {
 	case domain.RoundFinalizationStarted:
 		ev := domain.RoundFinalizationStarted{
 			Id:              e.Id,
-			CongestionTree:  e.CongestionTree,
+			VtxoTree:        e.VtxoTree,
 			Connectors:      e.Connectors,
 			RoundTx:         e.RoundTx,
 			MinRelayFeeRate: int64(s.wallet.MinRelayFeeRate(context.Background())),
@@ -1565,19 +1565,19 @@ func (s *covenantlessService) scheduleSweepVtxosForRound(round *domain.Round) {
 
 	expirationTimestamp := s.sweeper.scheduler.AddNow(s.roundLifetime)
 
-	if err := s.sweeper.schedule(expirationTimestamp, round.Txid, round.CongestionTree); err != nil {
+	if err := s.sweeper.schedule(expirationTimestamp, round.Txid, round.VtxoTree); err != nil {
 		log.WithError(err).Warn("failed to schedule sweep tx")
 	}
 }
 
 func (s *covenantlessService) getNewVtxos(round *domain.Round) []domain.Vtxo {
-	if len(round.CongestionTree) <= 0 {
+	if len(round.VtxoTree) <= 0 {
 		return nil
 	}
 
 	createdAt := time.Now().Unix()
 
-	leaves := round.CongestionTree.Leaves()
+	leaves := round.VtxoTree.Leaves()
 	vtxos := make([]domain.Vtxo, 0)
 	for _, node := range leaves {
 		tx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
