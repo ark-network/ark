@@ -310,21 +310,21 @@ func (h *handler) Ping(
 	return &arkv1.PingResponse{}, nil
 }
 
-func (h *handler) CompletePayment(
-	ctx context.Context, req *arkv1.CompletePaymentRequest,
-) (*arkv1.CompletePaymentResponse, error) {
+func (h *handler) SubmitRedeemTx(
+	ctx context.Context, req *arkv1.SubmitRedeemTxRequest,
+) (*arkv1.SubmitRedeemTxResponse, error) {
 	if req.GetRedeemTx() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing redeem tx")
 	}
 
-	signedRedeemTx, err := h.svc.CompleteAsyncPayment(
+	signedRedeemTx, err := h.svc.SubmitRedeemTx(
 		ctx, req.GetRedeemTx(),
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	return &arkv1.CompletePaymentResponse{
+	return &arkv1.SubmitRedeemTxResponse{
 		SignedRedeemTx: signedRedeemTx,
 	}, nil
 }

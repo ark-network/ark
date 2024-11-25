@@ -62,11 +62,9 @@ service ArkService {
     };
   };
 
-  /* Async Payment APIs */
-
-  rpc CompletePayment(CompletePaymentRequest) returns (CompletePaymentResponse) {
+  rpc SubmitRedeemTx(SubmitRedeemTxRequest) returns (SubmitRedeemTxResponse) {
     option (google.api.http) = {
-      post: "/v1/payment/complete"
+      post: "/v1/redeem-tx"
       body: "*"
     };
   }
@@ -194,10 +192,10 @@ message PingRequest {
 }
 message PingResponse {}
 
-message CompletePaymentRequest {
+message SubmitRedeemTxRequest {
   string redeem_tx = 1;
 }
-message CompletePaymentResponse {
+message SubmitRedeemTxResponse {
   string signed_redeem_tx = 1;
 }
 

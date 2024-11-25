@@ -168,7 +168,7 @@ func (s *covenantlessService) Stop() {
 	close(s.eventsCh)
 }
 
-func (s *covenantlessService) CompleteAsyncPayment(
+func (s *covenantlessService) SubmitRedeemTx(
 	ctx context.Context, redeemTx string,
 ) (string, error) {
 	redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)

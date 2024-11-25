@@ -245,14 +245,14 @@ func (a *grpcClient) Ping(
 	return err
 }
 
-func (a *grpcClient) CompletePayment(
+func (a *grpcClient) SubmitRedeemTx(
 	ctx context.Context, redeemTx string,
 ) (string, error) {
-	req := &arkv1.CompletePaymentRequest{
+	req := &arkv1.SubmitRedeemTxRequest{
 		RedeemTx: redeemTx,
 	}
 
-	resp, err := a.svc.CompletePayment(ctx, req)
+	resp, err := a.svc.SubmitRedeemTx(ctx, req)
 	if err != nil {
 		return "", err
 	}

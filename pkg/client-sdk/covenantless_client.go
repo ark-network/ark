@@ -1070,7 +1070,7 @@ func (a *covenantlessArkClient) SendAsync(
 		return "", err
 	}
 
-	signedRedeemTx, err = a.client.CompletePayment(ctx, signedRedeemTx)
+	signedRedeemTx, err = a.client.SubmitRedeemTx(ctx, signedRedeemTx)
 	if err != nil {
 		return "", err
 	}

@@ -46,7 +46,7 @@ type ASPClient interface {
 		ctx context.Context, paymentID string,
 	) (<-chan RoundEventChannel, func(), error)
 	Ping(ctx context.Context, paymentID string) error
-	CompletePayment(
+	SubmitRedeemTx(
 		ctx context.Context, signedRedeemTx string,
 	) (string, error)
 	ListVtxos(ctx context.Context, addr string) ([]Vtxo, []Vtxo, error)

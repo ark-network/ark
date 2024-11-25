@@ -27,7 +27,7 @@ type ArkServiceClient interface {
 	SubmitSignedForfeitTxs(ctx context.Context, in *SubmitSignedForfeitTxsRequest, opts ...grpc.CallOption) (*SubmitSignedForfeitTxsResponse, error)
 	GetEventStream(ctx context.Context, in *GetEventStreamRequest, opts ...grpc.CallOption) (ArkService_GetEventStreamClient, error)
 	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
-	CompletePayment(ctx context.Context, in *CompletePaymentRequest, opts ...grpc.CallOption) (*CompletePaymentResponse, error)
+	SubmitRedeemTx(ctx context.Context, in *SubmitRedeemTxRequest, opts ...grpc.CallOption) (*SubmitRedeemTxResponse, error)
 	GetRound(ctx context.Context, in *GetRoundRequest, opts ...grpc.CallOption) (*GetRoundResponse, error)
 	GetRoundById(ctx context.Context, in *GetRoundByIdRequest, opts ...grpc.CallOption) (*GetRoundByIdResponse, error)
 	ListVtxos(ctx context.Context, in *ListVtxosRequest, opts ...grpc.CallOption) (*ListVtxosResponse, error)
@@ -148,9 +148,9 @@ func (c *arkServiceClient) Ping(ctx context.Context, in *PingRequest, opts ...gr
 	return out, nil
 }
 
-func (c *arkServiceClient) CompletePayment(ctx context.Context, in *CompletePaymentRequest, opts ...grpc.CallOption) (*CompletePaymentResponse, error) {
-	out := new(CompletePaymentResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/CompletePayment", in, out, opts...)
+func (c *arkServiceClient) SubmitRedeemTx(ctx context.Context, in *SubmitRedeemTxRequest, opts ...grpc.CallOption) (*SubmitRedeemTxResponse, error) {
+	out := new(SubmitRedeemTxResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/SubmitRedeemTx", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +247,7 @@ type ArkServiceServer interface {
 	SubmitSignedForfeitTxs(context.Context, *SubmitSignedForfeitTxsRequest) (*SubmitSignedForfeitTxsResponse, error)
 	GetEventStream(*GetEventStreamRequest, ArkService_GetEventStreamServer) error
 	Ping(context.Context, *PingRequest) (*PingResponse, error)
-	CompletePayment(context.Context, *CompletePaymentRequest) (*CompletePaymentResponse, error)
+	SubmitRedeemTx(context.Context, *SubmitRedeemTxRequest) (*SubmitRedeemTxResponse, error)
 	GetRound(context.Context, *GetRoundRequest) (*GetRoundResponse, error)
 	GetRoundById(context.Context, *GetRoundByIdRequest) (*GetRoundByIdResponse, error)
 	ListVtxos(context.Context, *ListVtxosRequest) (*ListVtxosResponse, error)
@@ -287,8 +287,8 @@ func (UnimplementedArkServiceServer) GetEventStream(*GetEventStreamRequest, ArkS
 func (UnimplementedArkServiceServer) Ping(context.Context, *PingRequest) (*PingResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
 }
-func (UnimplementedArkServiceServer) CompletePayment(context.Context, *CompletePaymentRequest) (*CompletePaymentResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CompletePayment not implemented")
+func (UnimplementedArkServiceServer) SubmitRedeemTx(context.Context, *SubmitRedeemTxRequest) (*SubmitRedeemTxResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SubmitRedeemTx not implemented")
 }
 func (UnimplementedArkServiceServer) GetRound(context.Context, *GetRoundRequest) (*GetRoundResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetRound not implemented")
@@ -485,20 +485,20 @@ func _ArkService_Ping_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ArkService_CompletePayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CompletePaymentRequest)
+func _ArkService_SubmitRedeemTx_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SubmitRedeemTxRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ArkServiceServer).CompletePayment(ctx, in)
+		return srv.(ArkServiceServer).SubmitRedeemTx(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/CompletePayment",
+		FullMethod: "/ark.v1.ArkService/SubmitRedeemTx",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).CompletePayment(ctx, req.(*CompletePaymentRequest))
+		return srv.(ArkServiceServer).SubmitRedeemTx(ctx, req.(*SubmitRedeemTxRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -654,8 +654,8 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ArkService_Ping_Handler,
 		},
 		{
-			MethodName: "CompletePayment",
-			Handler:    _ArkService_CompletePayment_Handler,
+			MethodName: "SubmitRedeemTx",
+			Handler:    _ArkService_SubmitRedeemTx_Handler,
 		},
 		{
 			MethodName: "GetRound",

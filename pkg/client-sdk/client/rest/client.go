@@ -392,14 +392,14 @@ func (a *restClient) Ping(
 	return err
 }
 
-func (a *restClient) CompletePayment(
+func (a *restClient) SubmitRedeemTx(
 	ctx context.Context, redeemTx string,
 ) (string, error) {
-	req := &models.V1CompletePaymentRequest{
+	req := &models.V1SubmitRedeemTxRequest{
 		RedeemTx: redeemTx,
 	}
-	resp, err := a.svc.ArkServiceCompletePayment(
-		ark_service.NewArkServiceCompletePaymentParams().WithBody(req),
+	resp, err := a.svc.ArkServiceSubmitRedeemTx(
+		ark_service.NewArkServiceSubmitRedeemTxParams().WithBody(req),
 	)
 	return resp.Payload.SignedRedeemTx, err
 }

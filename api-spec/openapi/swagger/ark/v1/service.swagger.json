@@ -101,14 +101,14 @@
         ]
       }
     },
-    "/v1/payment/complete": {
+    "/v1/redeem-tx": {
       "post": {
-        "operationId": "ArkService_CompletePayment",
+        "operationId": "ArkService_SubmitRedeemTx",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1CompletePaymentResponse"
+              "$ref": "#/definitions/v1SubmitRedeemTxResponse"
             }
           },
           "default": {
@@ -124,7 +124,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/v1CompletePaymentRequest"
+              "$ref": "#/definitions/v1SubmitRedeemTxRequest"
             }
           }
         ],
@@ -535,22 +535,6 @@
             "type": "object",
             "$ref": "#/definitions/protobufAny"
           }
-        }
-      }
-    },
-    "v1CompletePaymentRequest": {
-      "type": "object",
-      "properties": {
-        "redeemTx": {
-          "type": "string"
-        }
-      }
-    },
-    "v1CompletePaymentResponse": {
-      "type": "object",
-      "properties": {
-        "signedRedeemTx": {
-          "type": "string"
         }
       }
     },
@@ -1043,6 +1027,22 @@
         },
         "proof": {
           "$ref": "#/definitions/v1OwnershipProof"
+        }
+      }
+    },
+    "v1SubmitRedeemTxRequest": {
+      "type": "object",
+      "properties": {
+        "redeemTx": {
+          "type": "string"
+        }
+      }
+    },
+    "v1SubmitRedeemTxResponse": {
+      "type": "object",
+      "properties": {
+        "signedRedeemTx": {
+          "type": "string"
         }
       }
     },
