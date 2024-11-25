@@ -978,7 +978,6 @@ func (a *covenantlessArkClient) SendAsync(
 
 	expectedServerPubkey := schnorr.SerializePubKey(a.ServerPubKey)
 
-	receiversOutput := make([]client.Output, 0)
 	sumOfReceivers := uint64(0)
 
 	for _, receiver := range receivers {
@@ -997,10 +996,6 @@ func (a *covenantlessArkClient) SendAsync(
 			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), a.Dust)
 		}
 
-		receiversOutput = append(receiversOutput, client.Output{
-			Address: receiver.To(),
-			Amount:  receiver.Amount(),
-		})
 		sumOfReceivers += receiver.Amount()
 	}
 
@@ -1038,14 +1033,10 @@ func (a *covenantlessArkClient) SendAsync(
 	}
 
 	if changeAmount > 0 {
-		changeReceiver := client.Output{
-			Address: offchainAddrs[0].Address,
-			Amount:  changeAmount,
-		}
-		receiversOutput = append(receiversOutput, changeReceiver)
+		receivers = append(receivers, NewBitcoinReceiver(offchainAddrs[0].Address, changeAmount))
 	}
 
-	inputs := make([]client.AsyncPaymentInput, 0, len(selectedCoins))
+	inputs := make([]redeemTxInput, 0, len(selectedCoins))
 
 	for _, coin := range selectedCoins {
 		vtxoScript, err := bitcointree.ParseVtxoScript(coin.Tapscripts)
@@ -1062,33 +1053,25 @@ func (a *covenantlessArkClient) SendAsync(
 
 		forfeitLeaf := txscript.NewBaseTapLeaf(forfeitScript)
 
-		inputs = append(inputs, client.AsyncPaymentInput{
-			Input: client.Input{
-				Outpoint: client.Outpoint{
-					Txid: coin.Txid,
-					VOut: coin.VOut,
-				},
-				Tapscripts: coin.Tapscripts,
-			},
-			ForfeitLeafHash: forfeitLeaf.TapHash(),
+		inputs = append(inputs, redeemTxInput{
+			coin,
+			forfeitLeaf.TapHash(),
 		})
 	}
 
-	redeemTx, err := a.client.CreatePayment(ctx, inputs, receiversOutput)
+	feeRate := chainfee.FeePerKwFloor
+	redeemTx, err := buildRedeemTx(inputs, receivers, feeRate.FeePerVByte())
 	if err != nil {
 		return "", err
 	}
-
-	// TODO verify the redeem tx signature
 
 	signedRedeemTx, err := a.wallet.SignTransaction(ctx, a.explorer, redeemTx)
 	if err != nil {
 		return "", err
 	}
 
-	if err = a.client.CompletePayment(
-		ctx, signedRedeemTx,
-	); err != nil {
+	signedRedeemTx, err = a.client.SubmitRedeemTx(ctx, signedRedeemTx)
+	if err != nil {
 		return "", err
 	}
 
@@ -2118,7 +2101,7 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 			return nil, err
 		}
 
-		feeAmount, err := common.ComputeForfeitMinRelayFee(
+		feeAmount, err := common.ComputeForfeitTxFee(
 			feeRate,
 			&waddrmgr.Tapscript{
 				RevealedScript: leafProof.Script,
@@ -2603,4 +2586,114 @@ func vtxosToTxsCovenantless(
 	})
 
 	return txs, nil
+}
+
+type redeemTxInput struct {
+	client.TapscriptsVtxo
+	ForfeitLeafHash chainhash.Hash
+}
+
+func buildRedeemTx(
+	vtxos []redeemTxInput,
+	receivers []Receiver,
+	feeRate chainfee.SatPerVByte,
+) (string, error) {
+	if len(vtxos) <= 0 {
+		return "", fmt.Errorf("missing vtxos")
+	}
+
+	ins := make([]common.VtxoInput, 0, len(vtxos))
+
+	for _, vtxo := range vtxos {
+		if len(vtxo.Tapscripts) <= 0 {
+			return "", fmt.Errorf("missing tapscripts for vtxo %s", vtxo.Vtxo.Txid)
+		}
+
+		vtxoTxID, err := chainhash.NewHashFromStr(vtxo.Txid)
+		if err != nil {
+			return "", err
+		}
+
+		vtxoOutpoint := &wire.OutPoint{
+			Hash:  *vtxoTxID,
+			Index: vtxo.VOut,
+		}
+
+		vtxoScript, err := bitcointree.ParseVtxoScript(vtxo.Tapscripts)
+		if err != nil {
+			return "", err
+		}
+
+		_, vtxoTree, err := vtxoScript.TapTree()
+		if err != nil {
+			return "", err
+		}
+
+		leafProof, err := vtxoTree.GetTaprootMerkleProof(vtxo.ForfeitLeafHash)
+		if err != nil {
+			return "", err
+		}
+
+		ctrlBlock, err := txscript.ParseControlBlock(leafProof.ControlBlock)
+		if err != nil {
+			return "", err
+		}
+
+		closure, err := tree.DecodeClosure(leafProof.Script)
+		if err != nil {
+			return "", err
+		}
+
+		tapscript := &waddrmgr.Tapscript{
+			RevealedScript: leafProof.Script,
+			ControlBlock:   ctrlBlock,
+		}
+
+		ins = append(ins, common.VtxoInput{
+			Outpoint:    vtxoOutpoint,
+			Tapscript:   tapscript,
+			Amount:      int64(vtxo.Amount),
+			WitnessSize: closure.WitnessSize(),
+		})
+	}
+
+	fees, err := common.ComputeRedeemTxFee(feeRate.FeePerKVByte(), ins, len(receivers))
+	if err != nil {
+		return "", err
+	}
+
+	if fees >= int64(receivers[len(receivers)-1].Amount()) {
+		return "", fmt.Errorf("redeem tx fee is higher than the amount of the change receiver")
+	}
+
+	outs := make([]*wire.TxOut, 0, len(receivers))
+
+	for i, receiver := range receivers {
+		if receiver.IsOnchain() {
+			return "", fmt.Errorf("receiver %d is onchain", i)
+		}
+
+		addr, err := common.DecodeAddress(receiver.To())
+		if err != nil {
+			return "", err
+		}
+
+		newVtxoScript, err := common.P2TRScript(addr.VtxoTapKey)
+		if err != nil {
+			return "", err
+		}
+
+		// Deduct the min relay fee from the very last receiver which is supposed
+		// to be the change in case it's not a send-all.
+		value := receiver.Amount()
+		if i == len(receivers)-1 {
+			value -= uint64(fees)
+		}
+		outs = append(outs, &wire.TxOut{
+			Value:    int64(value),
+			PkScript: newVtxoScript,
+		})
+	}
+
+	return bitcointree.BuildRedeemTx(ins, outs, fees)
 }

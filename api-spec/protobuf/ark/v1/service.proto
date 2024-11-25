@@ -62,17 +62,9 @@ service ArkService {
     };
   };
 
-  /* Async Payment APIs */
-
-  rpc CreatePayment(CreatePaymentRequest) returns (CreatePaymentResponse) {
+  rpc SubmitRedeemTx(SubmitRedeemTxRequest) returns (SubmitRedeemTxResponse) {
     option (google.api.http) = {
-      post: "/v1/payment"
-      body: "*"
-    };
-  }
-  rpc CompletePayment(CompletePaymentRequest) returns (CompletePaymentResponse) {
-    option (google.api.http) = {
-      post: "/v1/payment/complete"
+      post: "/v1/redeem-tx"
       body: "*"
     };
   }
@@ -200,26 +192,12 @@ message PingRequest {
 }
 message PingResponse {}
 
-/* Async Payment API messages */
-
-message AsyncPaymentInput {
-  Input input = 1;
-  string forfeit_leaf_hash = 2;
+message SubmitRedeemTxRequest {
+  string redeem_tx = 1;
 }
-
-message CreatePaymentRequest {
-  repeated AsyncPaymentInput inputs = 1;
-  repeated Output outputs = 2;
-}
-message CreatePaymentResponse {
-  // The redeem tx already signed by the server.
+message SubmitRedeemTxResponse {
   string signed_redeem_tx = 1;
 }
-
-message CompletePaymentRequest {
-  string signed_redeem_tx = 1;
-}
-message CompletePaymentResponse {}
 
 /* Explorer-like API messages */
 

@@ -52,12 +52,6 @@ type TxBuilder interface {
 	VerifyTapscriptPartialSigs(tx string) (valid bool, err error)
 	// FindLeaves returns all the leaves txs that are reachable from the given outpoint
 	FindLeaves(vtxoTree tree.VtxoTree, fromtxid string, vout uint32) (leaves []tree.Node, err error)
-	BuildAsyncPaymentTransactions(
-		vtxosToSpend []domain.Vtxo,
-		scripts map[domain.VtxoKey][]string,
-		forfeitsLeaves map[domain.VtxoKey]chainhash.Hash,
-		receivers []domain.Receiver,
-	) (string, error)
 	VerifyAndCombinePartialTx(dest string, src string) (string, error)
 	GetTxID(tx string) (string, error)
 }

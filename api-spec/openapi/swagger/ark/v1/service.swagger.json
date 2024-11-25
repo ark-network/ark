@@ -101,14 +101,14 @@
         ]
       }
     },
-    "/v1/payment": {
+    "/v1/redeem-tx": {
       "post": {
-        "operationId": "ArkService_CreatePayment",
+        "operationId": "ArkService_SubmitRedeemTx",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1CreatePaymentResponse"
+              "$ref": "#/definitions/v1SubmitRedeemTxResponse"
             }
           },
           "default": {
@@ -124,39 +124,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/v1CreatePaymentRequest"
-            }
-          }
-        ],
-        "tags": [
-          "ArkService"
-        ]
-      }
-    },
-    "/v1/payment/complete": {
-      "post": {
-        "operationId": "ArkService_CompletePayment",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1CompletePaymentResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1CompletePaymentRequest"
+              "$ref": "#/definitions/v1SubmitRedeemTxRequest"
             }
           }
         ],
@@ -567,56 +535,6 @@
             "type": "object",
             "$ref": "#/definitions/protobufAny"
           }
-        }
-      }
-    },
-    "v1AsyncPaymentInput": {
-      "type": "object",
-      "properties": {
-        "input": {
-          "$ref": "#/definitions/v1Input"
-        },
-        "forfeitLeafHash": {
-          "type": "string"
-        }
-      }
-    },
-    "v1CompletePaymentRequest": {
-      "type": "object",
-      "properties": {
-        "signedRedeemTx": {
-          "type": "string"
-        }
-      }
-    },
-    "v1CompletePaymentResponse": {
-      "type": "object"
-    },
-    "v1CreatePaymentRequest": {
-      "type": "object",
-      "properties": {
-        "inputs": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1AsyncPaymentInput"
-          }
-        },
-        "outputs": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1Output"
-          }
-        }
-      }
-    },
-    "v1CreatePaymentResponse": {
-      "type": "object",
-      "properties": {
-        "signedRedeemTx": {
-          "type": "string",
-          "description": "The redeem tx already signed by the server."
         }
       }
     },
@@ -1109,6 +1027,22 @@
         },
         "proof": {
           "$ref": "#/definitions/v1OwnershipProof"
+        }
+      }
+    },
+    "v1SubmitRedeemTxRequest": {
+      "type": "object",
+      "properties": {
+        "redeemTx": {
+          "type": "string"
+        }
+      }
+    },
+    "v1SubmitRedeemTxResponse": {
+      "type": "object",
+      "properties": {
+        "signedRedeemTx": {
+          "type": "string"
         }
       }
     },

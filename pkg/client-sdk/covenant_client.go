@@ -1465,7 +1465,7 @@ func (a *covenantArkClient) createAndSignForfeits(
 			ControlBlock:    *ctrlBlock,
 		}
 
-		feeAmount, err := common.ComputeForfeitMinRelayFee(
+		feeAmount, err := common.ComputeForfeitTxFee(
 			feeRate,
 			&waddrmgr.Tapscript{
 				RevealedScript: leafProof.Script,

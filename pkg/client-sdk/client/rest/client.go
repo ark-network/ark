@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
@@ -393,57 +392,16 @@ func (a *restClient) Ping(
 	return err
 }
 
-func (a *restClient) CreatePayment(
-	ctx context.Context, inputs []client.AsyncPaymentInput, outputs []client.Output,
+func (a *restClient) SubmitRedeemTx(
+	ctx context.Context, redeemTx string,
 ) (string, error) {
-	ins := make([]*models.V1AsyncPaymentInput, 0, len(inputs))
-	for _, i := range inputs {
-		ins = append(ins, &models.V1AsyncPaymentInput{
-			Input: &models.V1Input{
-				Outpoint: &models.V1Outpoint{
-					Txid: i.Input.Txid,
-					Vout: int64(i.VOut),
-				},
-				Tapscripts: &models.V1Tapscripts{
-					Scripts: i.Input.Tapscripts,
-				},
-			},
-			ForfeitLeafHash: i.ForfeitLeafHash.String(),
-		})
+	req := &models.V1SubmitRedeemTxRequest{
+		RedeemTx: redeemTx,
 	}
-	outs := make([]*models.V1Output, 0, len(outputs))
-	for _, o := range outputs {
-		outs = append(outs, &models.V1Output{
-			Address: o.Address,
-			Amount:  strconv.Itoa(int(o.Amount)),
-		})
-	}
-	body := models.V1CreatePaymentRequest{
-		Inputs:  ins,
-		Outputs: outs,
-	}
-	resp, err := a.svc.ArkServiceCreatePayment(
-		ark_service.NewArkServiceCreatePaymentParams().WithBody(&body),
+	resp, err := a.svc.ArkServiceSubmitRedeemTx(
+		ark_service.NewArkServiceSubmitRedeemTxParams().WithBody(req),
 	)
-	if err != nil {
-		return "", err
-	}
-	return resp.GetPayload().SignedRedeemTx, nil
-}
-
-func (a *restClient) CompletePayment(
-	ctx context.Context, signedRedeemTx string,
-) error {
-	req := &arkv1.CompletePaymentRequest{
-		SignedRedeemTx: signedRedeemTx,
-	}
-	body := models.V1CompletePaymentRequest{
-		SignedRedeemTx: req.GetSignedRedeemTx(),
-	}
-	_, err := a.svc.ArkServiceCompletePayment(
-		ark_service.NewArkServiceCompletePaymentParams().WithBody(&body),
-	)
-	return err
+	return resp.Payload.SignedRedeemTx, err
 }
 
 func (a *restClient) GetRound(

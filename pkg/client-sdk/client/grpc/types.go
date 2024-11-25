@@ -152,23 +152,6 @@ func toProtoInput(i client.Input) *arkv1.Input {
 	}
 }
 
-func toAsyncProtoInput(i client.AsyncPaymentInput) *arkv1.AsyncPaymentInput {
-	return &arkv1.AsyncPaymentInput{
-		Input:           toProtoInput(i.Input),
-		ForfeitLeafHash: i.ForfeitLeafHash.String(),
-	}
-}
-
-type asyncIns []client.AsyncPaymentInput
-
-func (i asyncIns) toProto() []*arkv1.AsyncPaymentInput {
-	list := make([]*arkv1.AsyncPaymentInput, 0, len(i))
-	for _, ii := range i {
-		list = append(list, toAsyncProtoInput(ii))
-	}
-	return list
-}
-
 type ins []client.Input
 
 func (i ins) toProto() []*arkv1.Input {
