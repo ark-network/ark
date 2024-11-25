@@ -55,7 +55,7 @@ func (s *configStore) GetDatadir() string {
 func (s *configStore) AddData(ctx context.Context, data types.Config) error {
 	sd := &storeData{
 		ServerUrl:                  data.ServerUrl,
-		ServerPubKey:               hex.EncodeToString(data.ServerPubkey.SerializeCompressed()),
+		ServerPubKey:               hex.EncodeToString(data.ServerPubKey.SerializeCompressed()),
 		WalletType:                 data.WalletType,
 		ClientType:                 data.ClientType,
 		Network:                    data.Network.Name,
@@ -96,7 +96,7 @@ func (s *configStore) GetData(ctx context.Context) (*types.Config, error) {
 
 	return &types.Config{
 		ServerUrl:                  s.store.Call("getItem", "server_url").String(),
-		ServerPubkey:               serverPubkey,
+		ServerPubKey:               serverPubkey,
 		WalletType:                 s.store.Call("getItem", "wallet_type").String(),
 		ClientType:                 s.store.Call("getItem", "client_type").String(),
 		Network:                    network,

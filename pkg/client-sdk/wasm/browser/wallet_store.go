@@ -27,7 +27,7 @@ func (d walletData) decode() *walletstore.WalletData {
 	return &walletstore.WalletData{
 		EncryptedPrvkey: encryptedPrvkey,
 		PasswordHash:    passwordHash,
-		Pubkey:          pubkey,
+		PubKey:          pubkey,
 	}
 }
 
@@ -44,7 +44,7 @@ func (s *walletStore) AddWallet(data walletstore.WalletData) error {
 	wd := &walletData{
 		EncryptedPrvkey: hex.EncodeToString(data.EncryptedPrvkey),
 		PasswordHash:    hex.EncodeToString(data.PasswordHash),
-		PubKey:          hex.EncodeToString(data.Pubkey.SerializeCompressed()),
+		PubKey:          hex.EncodeToString(data.PubKey.SerializeCompressed()),
 	}
 
 	if err := s.writeData(wd); err != nil {
