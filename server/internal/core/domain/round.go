@@ -42,7 +42,7 @@ type Round struct {
 	Txid              string
 	UnsignedTx        string
 	ForfeitTxs        []string
-	CongestionTree    tree.CongestionTree
+	CongestionTree    tree.VtxoTree
 	Connectors        []string
 	ConnectorAddress  string
 	DustAmount        uint64
@@ -147,7 +147,7 @@ func (r *Round) RegisterPayments(payments []Payment) ([]RoundEvent, error) {
 	return []RoundEvent{event}, nil
 }
 
-func (r *Round) StartFinalization(connectorAddress string, connectors []string, congestionTree tree.CongestionTree, roundTx string) ([]RoundEvent, error) {
+func (r *Round) StartFinalization(connectorAddress string, connectors []string, vtxoTree tree.VtxoTree, roundTx string) ([]RoundEvent, error) {
 	if len(roundTx) <= 0 {
 		return nil, fmt.Errorf("missing unsigned round tx")
 	}
@@ -160,7 +160,7 @@ func (r *Round) StartFinalization(connectorAddress string, connectors []string, 
 
 	event := RoundFinalizationStarted{
 		Id:               r.Id,
-		CongestionTree:   congestionTree,
+		CongestionTree:   vtxoTree,
 		Connectors:       connectors,
 		ConnectorAddress: connectorAddress,
 		RoundTx:          roundTx,

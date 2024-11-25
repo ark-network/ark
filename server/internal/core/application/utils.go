@@ -318,18 +318,18 @@ func (m *forfeitTxsMap) pop() ([]string, error) {
 	return txs, nil
 }
 
-// onchainOutputs iterates over all the nodes' outputs in the congestion tree and checks their onchain state
+// onchainOutputs iterates over all the nodes' outputs in the vtxo tree and checks their onchain state
 // returns the sweepable outputs as ports.SweepInput mapped by their expiration time
 func findSweepableOutputs(
 	ctx context.Context,
 	walletSvc ports.WalletService,
 	txbuilder ports.TxBuilder,
 	schedulerUnit ports.TimeUnit,
-	congestionTree tree.CongestionTree,
+	vtxoTree tree.VtxoTree,
 ) (map[int64][]ports.SweepInput, error) {
 	sweepableOutputs := make(map[int64][]ports.SweepInput)
 	blocktimeCache := make(map[string]int64) // txid -> blocktime / blockheight
-	nodesToCheck := congestionTree[0]        // init with the root
+	nodesToCheck := vtxoTree[0]              // init with the root
 
 	for len(nodesToCheck) > 0 {
 		newNodesToCheck := make([]tree.Node, 0)
@@ -375,7 +375,7 @@ func findSweepableOutputs(
 				// add the children to the nodes in order to check them during the next iteration
 				// We will return the error below, but are we going to schedule the tasks for the "children roots"?
 				if !node.Leaf {
-					children := congestionTree.Children(node.Txid)
+					children := vtxoTree.Children(node.Txid)
 					newNodesToCheck = append(newNodesToCheck, children...)
 				}
 				continue

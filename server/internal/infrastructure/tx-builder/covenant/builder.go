@@ -320,14 +320,14 @@ func (b *txBuilder) BuildRoundTx(
 	boardingInputs []ports.BoardingInput,
 	sweptRounds []domain.Round,
 	_ ...*secp256k1.PublicKey, // cosigners are not used in the covenant
-) (roundTx string, congestionTree tree.CongestionTree, connectorAddress string, connectors []string, err error) {
+) (roundTx string, vtxoTree tree.VtxoTree, connectorAddress string, connectors []string, err error) {
 	// The creation of the tree and the round tx are tightly coupled:
 	// - building the tree requires knowing the shared outpoint (txid:vout)
 	// - building the round tx requires knowing the shared output script and amount
 	// The idea here is to first create all the data for the outputs of the txs
-	// of the congestion tree to calculate the shared output script and amount.
+	// of the vtxo tree to calculate the shared output script and amount.
 	// With these data the round tx can be created, and once the shared utxo
-	// outpoint is obtained, the congestion tree can be finally created.
+	// outpoint is obtained, the vtxo tree can be finally created.
 	// The factory function `treeFactoryFn` returned below holds all outputs data
 	// generated in the process and takes the shared utxo outpoint as argument.
 	// This is safe as the memory allocated for `craftCongestionTree` is freed
@@ -374,7 +374,7 @@ func (b *txBuilder) BuildRoundTx(
 	}
 
 	if treeFactoryFn != nil {
-		congestionTree, err = treeFactoryFn(psetv2.InputArgs{
+		vtxoTree, err = treeFactoryFn(psetv2.InputArgs{
 			Txid:    unsignedTx.TxHash().String(),
 			TxIndex: 0,
 		})
@@ -629,15 +629,15 @@ func (b *txBuilder) FinalizeAndExtract(tx string) (string, error) {
 }
 
 func (b *txBuilder) FindLeaves(
-	congestionTree tree.CongestionTree,
+	vtxoTree tree.VtxoTree,
 	fromtxid string,
 	fromvout uint32,
 ) ([]tree.Node, error) {
-	allLeaves := congestionTree.Leaves()
+	allLeaves := vtxoTree.Leaves()
 	foundLeaves := make([]tree.Node, 0)
 
 	for _, leaf := range allLeaves {
-		branch, err := congestionTree.Branch(leaf.Txid)
+		branch, err := vtxoTree.Branch(leaf.Txid)
 		if err != nil {
 			return nil, err
 		}

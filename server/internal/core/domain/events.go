@@ -19,7 +19,7 @@ type RoundStarted struct {
 
 type RoundFinalizationStarted struct {
 	Id               string
-	CongestionTree   tree.CongestionTree // BTC: signed
+	CongestionTree   tree.VtxoTree // BTC: signed
 	Connectors       []string
 	ConnectorAddress string
 	RoundTx          string

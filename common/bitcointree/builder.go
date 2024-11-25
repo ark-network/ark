@@ -46,7 +46,7 @@ func CraftSharedOutput(
 func CraftCongestionTree(
 	initialInput *wire.OutPoint, cosigners []*secp256k1.PublicKey, server *secp256k1.PublicKey, receivers []tree.VtxoLeaf,
 	feeSatsPerNode uint64, roundLifetime int64,
-) (tree.CongestionTree, error) {
+) (tree.VtxoTree, error) {
 	aggregatedKey, sweepTapLeaf, err := createAggregatedKeyWithSweep(
 		cosigners, server, roundLifetime,
 	)
@@ -59,7 +59,7 @@ func CraftCongestionTree(
 		return nil, err
 	}
 
-	congestionTree := make(tree.CongestionTree, 0)
+	vtxoTree := make(tree.VtxoTree, 0)
 
 	ins := []*wire.OutPoint{initialInput}
 	nodes := []node{root}
@@ -95,12 +95,12 @@ func CraftCongestionTree(
 			}
 		}
 
-		congestionTree = append(congestionTree, treeLevel)
+		vtxoTree = append(vtxoTree, treeLevel)
 		nodes = append([]node{}, nextNodes...)
 		ins = append([]*wire.OutPoint{}, nextInputsArgs...)
 	}
 
-	return congestionTree, nil
+	return vtxoTree, nil
 }
 
 type node interface {

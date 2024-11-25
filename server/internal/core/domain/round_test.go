@@ -65,10 +65,10 @@ var (
 			}},
 		},
 	}
-	emptyPtx       = "cHNldP8BAgQCAAAAAQQBAAEFAQABBgEDAfsEAgAAAAA="
-	emptyTx        = "0200000000000000000000"
-	txid           = "0000000000000000000000000000000000000000000000000000000000000000"
-	congestionTree = tree.CongestionTree{
+	emptyPtx = "cHNldP8BAgQCAAAAAQQBAAEFAQABBgEDAfsEAgAAAAA="
+	emptyTx  = "0200000000000000000000"
+	txid     = "0000000000000000000000000000000000000000000000000000000000000000"
+	vtxoTree = tree.VtxoTree{
 		{
 			{
 				Txid:       txid,
@@ -291,7 +291,7 @@ func testStartFinalization(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			events, err = round.StartFinalization("", connectors, congestionTree, roundTx)
+			events, err = round.StartFinalization("", connectors, vtxoTree, roundTx)
 			require.NoError(t, err)
 			require.Len(t, events, 1)
 			require.True(t, round.IsStarted())
@@ -302,7 +302,7 @@ func testStartFinalization(t *testing.T) {
 			require.True(t, ok)
 			require.Equal(t, round.Id, event.Id)
 			require.Exactly(t, connectors, event.Connectors)
-			require.Exactly(t, congestionTree, event.CongestionTree)
+			require.Exactly(t, vtxoTree, event.CongestionTree)
 			require.Exactly(t, roundTx, event.RoundTx)
 		})
 
@@ -314,7 +314,7 @@ func testStartFinalization(t *testing.T) {
 			fixtures := []struct {
 				round       *domain.Round
 				connectors  []string
-				tree        tree.CongestionTree
+				tree        tree.VtxoTree
 				roundTx     string
 				expectedErr string
 			}{
@@ -327,7 +327,7 @@ func testStartFinalization(t *testing.T) {
 						Payments: paymentsById,
 					},
 					connectors:  connectors,
-					tree:        congestionTree,
+					tree:        vtxoTree,
 					roundTx:     "",
 					expectedErr: "missing unsigned round tx",
 				},
@@ -340,7 +340,7 @@ func testStartFinalization(t *testing.T) {
 						Payments: nil,
 					},
 					connectors:  connectors,
-					tree:        congestionTree,
+					tree:        vtxoTree,
 					roundTx:     roundTx,
 					expectedErr: "no payments registered",
 				},
@@ -353,7 +353,7 @@ func testStartFinalization(t *testing.T) {
 						Payments: paymentsById,
 					},
 					connectors:  connectors,
-					tree:        congestionTree,
+					tree:        vtxoTree,
 					roundTx:     roundTx,
 					expectedErr: "not in a valid stage to start payment finalization",
 				},
@@ -367,7 +367,7 @@ func testStartFinalization(t *testing.T) {
 						Payments: paymentsById,
 					},
 					connectors:  connectors,
-					tree:        congestionTree,
+					tree:        vtxoTree,
 					roundTx:     roundTx,
 					expectedErr: "not in a valid stage to start payment finalization",
 				},
@@ -380,7 +380,7 @@ func testStartFinalization(t *testing.T) {
 						Payments: paymentsById,
 					},
 					connectors:  connectors,
-					tree:        congestionTree,
+					tree:        vtxoTree,
 					roundTx:     roundTx,
 					expectedErr: "not in a valid stage to start payment finalization",
 				},
@@ -408,7 +408,7 @@ func testEndFinalization(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			events, err = round.StartFinalization("", connectors, congestionTree, roundTx)
+			events, err = round.StartFinalization("", connectors, vtxoTree, roundTx)
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 

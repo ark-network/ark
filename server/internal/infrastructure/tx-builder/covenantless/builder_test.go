@@ -75,18 +75,18 @@ func TestBuildRoundTx(t *testing.T) {
 					cosigners = append(cosigners, randKey.PubKey())
 				}
 
-				roundTx, congestionTree, connAddr, _, err := builder.BuildRoundTx(
+				roundTx, vtxoTree, connAddr, _, err := builder.BuildRoundTx(
 					pubkey, f.Payments, []ports.BoardingInput{}, []domain.Round{}, cosigners...,
 				)
 				require.NoError(t, err)
 				require.NotEmpty(t, roundTx)
-				require.NotEmpty(t, congestionTree)
+				require.NotEmpty(t, vtxoTree)
 				require.Equal(t, connectorAddress, connAddr)
-				require.Equal(t, f.ExpectedNumOfNodes, congestionTree.NumberOfNodes())
-				require.Len(t, congestionTree.Leaves(), f.ExpectedNumOfLeaves)
+				require.Equal(t, f.ExpectedNumOfNodes, vtxoTree.NumberOfNodes())
+				require.Len(t, vtxoTree.Leaves(), f.ExpectedNumOfLeaves)
 
-				err = bitcointree.ValidateCongestionTree(
-					congestionTree, roundTx, pubkey, roundLifetime,
+				err = bitcointree.ValidateVtxoTree(
+					vtxoTree, roundTx, pubkey, roundLifetime,
 				)
 				require.NoError(t, err)
 			}
@@ -96,13 +96,13 @@ func TestBuildRoundTx(t *testing.T) {
 	if len(fixtures.Invalid) > 0 {
 		t.Run("invalid", func(t *testing.T) {
 			for _, f := range fixtures.Invalid {
-				roundTx, congestionTree, connAddr, _, err := builder.BuildRoundTx(
+				roundTx, vtxoTree, connAddr, _, err := builder.BuildRoundTx(
 					pubkey, f.Payments, []ports.BoardingInput{}, []domain.Round{},
 				)
 				require.EqualError(t, err, f.ExpectedErr)
 				require.Empty(t, roundTx)
 				require.Empty(t, connAddr)
-				require.Empty(t, congestionTree)
+				require.Empty(t, vtxoTree)
 			}
 		})
 	}

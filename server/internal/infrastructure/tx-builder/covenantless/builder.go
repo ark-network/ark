@@ -478,7 +478,7 @@ func (b *txBuilder) BuildRoundTx(
 	boardingInputs []ports.BoardingInput,
 	sweptRounds []domain.Round,
 	cosigners ...*secp256k1.PublicKey,
-) (roundTx string, congestionTree tree.CongestionTree, connectorAddress string, connectors []string, err error) {
+) (roundTx string, vtxoTree tree.VtxoTree, connectorAddress string, connectors []string, err error) {
 	var sharedOutputScript []byte
 	var sharedOutputAmount int64
 
@@ -528,7 +528,7 @@ func (b *txBuilder) BuildRoundTx(
 			Index: 0,
 		}
 
-		congestionTree, err = bitcointree.CraftCongestionTree(
+		vtxoTree, err = bitcointree.CraftCongestionTree(
 			initialOutpoint, cosigners, serverPubkey, receivers, feeAmount, b.roundLifetime,
 		)
 		if err != nil {
@@ -568,7 +568,7 @@ func (b *txBuilder) BuildRoundTx(
 		connectors = append(connectors, b64)
 	}
 
-	return roundTx, congestionTree, connectorAddress, connectors, nil
+	return roundTx, vtxoTree, connectorAddress, connectors, nil
 }
 
 func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime int64, sweepInput ports.SweepInput, err error) {
@@ -613,12 +613,12 @@ func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime int64, sweepInput po
 	return lifetime, sweepInput, nil
 }
 
-func (b *txBuilder) FindLeaves(congestionTree tree.CongestionTree, fromtxid string, vout uint32) ([]tree.Node, error) {
-	allLeaves := congestionTree.Leaves()
+func (b *txBuilder) FindLeaves(vtxoTree tree.VtxoTree, fromtxid string, vout uint32) ([]tree.Node, error) {
+	allLeaves := vtxoTree.Leaves()
 	foundLeaves := make([]tree.Node, 0)
 
 	for _, leaf := range allLeaves {
-		branch, err := congestionTree.Branch(leaf.Txid)
+		branch, err := vtxoTree.Branch(leaf.Txid)
 		if err != nil {
 			return nil, err
 		}

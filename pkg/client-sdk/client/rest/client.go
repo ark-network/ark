@@ -33,7 +33,7 @@ type restClient struct {
 	serverURL      string
 	svc            ark_service.ClientService
 	requestTimeout time.Duration
-	treeCache      *utils.Cache[tree.CongestionTree]
+	treeCache      *utils.Cache[tree.VtxoTree]
 }
 
 func NewClient(serverURL string) (client.TransportClient, error) {
@@ -46,7 +46,7 @@ func NewClient(serverURL string) (client.TransportClient, error) {
 	}
 	// TODO: use twice the round interval.
 	reqTimeout := 15 * time.Second
-	treeCache := utils.NewCache[tree.CongestionTree]()
+	treeCache := utils.NewCache[tree.VtxoTree]()
 
 	return &restClient{serverURL, svc, reqTimeout, treeCache}, nil
 }
@@ -615,8 +615,8 @@ type treeFromProto struct {
 	*models.V1Tree
 }
 
-func (t treeFromProto) parse() tree.CongestionTree {
-	congestionTree := make(tree.CongestionTree, 0, len(t.Levels))
+func (t treeFromProto) parse() tree.VtxoTree {
+	vtxoTree := make(tree.VtxoTree, 0, len(t.Levels))
 	for _, l := range t.Levels {
 		level := make([]tree.Node, 0, len(l.Nodes))
 		for _, n := range l.Nodes {
@@ -626,13 +626,13 @@ func (t treeFromProto) parse() tree.CongestionTree {
 				ParentTxid: n.ParentTxid,
 			})
 		}
-		congestionTree = append(congestionTree, level)
+		vtxoTree = append(vtxoTree, level)
 	}
 
-	for j, treeLvl := range congestionTree {
+	for j, treeLvl := range vtxoTree {
 		for i, node := range treeLvl {
-			if len(congestionTree.Children(node.Txid)) == 0 {
-				congestionTree[j][i] = tree.Node{
+			if len(vtxoTree.Children(node.Txid)) == 0 {
+				vtxoTree[j][i] = tree.Node{
 					Txid:       node.Txid,
 					Tx:         node.Tx,
 					ParentTxid: node.ParentTxid,
@@ -642,7 +642,7 @@ func (t treeFromProto) parse() tree.CongestionTree {
 		}
 	}
 
-	return congestionTree
+	return vtxoTree
 }
 
 func (c *restClient) GetTransactionsStream(ctx context.Context) (<-chan client.TransactionEvent, func(), error) {

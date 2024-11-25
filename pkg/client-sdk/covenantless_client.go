@@ -1812,7 +1812,7 @@ func (a *covenantlessArkClient) handleRoundFinalization(
 	receivers []client.Output,
 ) ([]string, string, error) {
 	if err := a.validateCongestionTree(event, receivers); err != nil {
-		return nil, "", fmt.Errorf("failed to verify congestion tree: %s", err)
+		return nil, "", fmt.Errorf("failed to verify vtxo tree: %s", err)
 	}
 
 	var forfeits []string
@@ -1907,7 +1907,7 @@ func (a *covenantlessArkClient) validateCongestionTree(
 	}
 
 	if !utils.IsOnchainOnly(receivers) {
-		if err := bitcointree.ValidateCongestionTree(
+		if err := bitcointree.ValidateVtxoTree(
 			event.Tree, roundTx, a.Config.ServerPubKey, a.RoundLifetime,
 		); err != nil {
 			return err
@@ -1925,15 +1925,13 @@ func (a *covenantlessArkClient) validateCongestionTree(
 		return err
 	}
 
-	log.Info("congestion tree validated")
-
 	return nil
 }
 
 func (a *covenantlessArkClient) validateReceivers(
 	ptx *psbt.Packet,
 	receivers []client.Output,
-	congestionTree tree.CongestionTree,
+	vtxoTree tree.VtxoTree,
 ) error {
 	netParams := utils.ToBitcoinNetwork(a.Network)
 	for _, receiver := range receivers {
@@ -1950,7 +1948,7 @@ func (a *covenantlessArkClient) validateReceivers(
 			}
 		} else {
 			if err := a.validateOffChainReceiver(
-				congestionTree, receiver,
+				vtxoTree, receiver,
 			); err != nil {
 				return err
 			}
@@ -1984,7 +1982,7 @@ func (a *covenantlessArkClient) validateOnChainReceiver(
 }
 
 func (a *covenantlessArkClient) validateOffChainReceiver(
-	congestionTree tree.CongestionTree,
+	vtxoTree tree.VtxoTree,
 	receiver client.Output,
 ) error {
 	found := false
@@ -1996,7 +1994,7 @@ func (a *covenantlessArkClient) validateOffChainReceiver(
 
 	vtxoTapKey := schnorr.SerializePubKey(rcvAddr.VtxoTapKey)
 
-	leaves := congestionTree.Leaves()
+	leaves := vtxoTree.Leaves()
 	for _, leaf := range leaves {
 		tx, err := psbt.NewFromRawBytes(strings.NewReader(leaf.Tx), true)
 		if err != nil {
@@ -2265,7 +2263,7 @@ func (a *covenantlessArkClient) coinSelectOnchain(
 func (a *covenantlessArkClient) getRedeemBranches(
 	ctx context.Context, vtxos []client.Vtxo,
 ) (map[string]*redemption.CovenantlessRedeemBranch, error) {
-	congestionTrees := make(map[string]tree.CongestionTree, 0)
+	vtxoTrees := make(map[string]tree.VtxoTree, 0)
 	redeemBranches := make(map[string]*redemption.CovenantlessRedeemBranch, 0)
 
 	for i := range vtxos {
@@ -2276,17 +2274,17 @@ func (a *covenantlessArkClient) getRedeemBranches(
 			continue
 		}
 
-		if _, ok := congestionTrees[vtxo.RoundTxid]; !ok {
+		if _, ok := vtxoTrees[vtxo.RoundTxid]; !ok {
 			round, err := a.client.GetRound(ctx, vtxo.RoundTxid)
 			if err != nil {
 				return nil, err
 			}
 
-			congestionTrees[vtxo.RoundTxid] = round.Tree
+			vtxoTrees[vtxo.RoundTxid] = round.Tree
 		}
 
 		redeemBranch, err := redemption.NewCovenantlessRedeemBranch(
-			a.explorer, congestionTrees[vtxo.RoundTxid], vtxo,
+			a.explorer, vtxoTrees[vtxo.RoundTxid], vtxo,
 		)
 		if err != nil {
 			return nil, err

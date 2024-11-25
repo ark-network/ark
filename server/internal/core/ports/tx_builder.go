@@ -35,7 +35,7 @@ type TxBuilder interface {
 		cosigners ...*secp256k1.PublicKey,
 	) (
 		roundTx string,
-		congestionTree tree.CongestionTree,
+		vtxoTree tree.VtxoTree,
 		connectorAddress string,
 		connectors []string,
 		err error,
@@ -51,7 +51,7 @@ type TxBuilder interface {
 	FinalizeAndExtract(tx string) (txhex string, err error)
 	VerifyTapscriptPartialSigs(tx string) (valid bool, err error)
 	// FindLeaves returns all the leaves txs that are reachable from the given outpoint
-	FindLeaves(congestionTree tree.CongestionTree, fromtxid string, vout uint32) (leaves []tree.Node, err error)
+	FindLeaves(vtxoTree tree.VtxoTree, fromtxid string, vout uint32) (leaves []tree.Node, err error)
 	BuildAsyncPaymentTransactions(
 		vtxosToSpend []domain.Vtxo,
 		scripts map[domain.VtxoKey][]string,

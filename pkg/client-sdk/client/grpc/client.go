@@ -23,7 +23,7 @@ import (
 type grpcClient struct {
 	conn      *grpc.ClientConn
 	svc       arkv1.ArkServiceClient
-	treeCache *utils.Cache[tree.CongestionTree]
+	treeCache *utils.Cache[tree.VtxoTree]
 }
 
 func NewClient(serverUrl string) (client.TransportClient, error) {
@@ -47,7 +47,7 @@ func NewClient(serverUrl string) (client.TransportClient, error) {
 	}
 
 	svc := arkv1.NewArkServiceClient(conn)
-	treeCache := utils.NewCache[tree.CongestionTree]()
+	treeCache := utils.NewCache[tree.VtxoTree]()
 
 	return &grpcClient{conn, svc, treeCache}, nil
 }

@@ -1024,7 +1024,7 @@ func (s *covenantlessService) startFinalization() {
 	s.forfeitTxs.init(connectors, payments)
 
 	if len(vtxoTree) > 0 {
-		log.Debugf("signing congestion tree for round %s", round.Id)
+		log.Debugf("signing vtxo tree for round %s", round.Id)
 
 		signingSession := newMusigSigningSession(len(cosigners))
 		s.treeSigningSessions[round.Id] = signingSession
@@ -1170,7 +1170,7 @@ func (s *covenantlessService) startFinalization() {
 			return
 		}
 
-		log.Debugf("congestion tree signed for round %s", round.Id)
+		log.Debugf("vtxo tree signed for round %s", round.Id)
 
 		vtxoTree = signedTree
 	}
@@ -1187,7 +1187,7 @@ func (s *covenantlessService) startFinalization() {
 }
 
 func (s *covenantlessService) propagateRoundSigningStartedEvent(
-	unsignedCongestionTree tree.CongestionTree, cosigners []*secp256k1.PublicKey,
+	unsignedCongestionTree tree.VtxoTree, cosigners []*secp256k1.PublicKey,
 ) {
 	ev := RoundSigningStarted{
 		Id:               s.currentRound.Id,

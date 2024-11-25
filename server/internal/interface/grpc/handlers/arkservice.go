@@ -3,10 +3,11 @@ package handlers
 import (
 	"context"
 	"encoding/hex"
-	"google.golang.org/protobuf/types/known/durationpb"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"fmt"
 	"sync"
+
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common/bitcointree"
@@ -379,7 +380,7 @@ func (h *handler) GetRound(
 				Start:      round.StartingTimestamp,
 				End:        round.EndingTimestamp,
 				RoundTx:    round.UnsignedTx,
-				VtxoTree:   congestionTree(round.CongestionTree).toProto(),
+				VtxoTree:   vtxoTree(round.CongestionTree).toProto(),
 				ForfeitTxs: round.ForfeitTxs,
 				Connectors: round.Connectors,
 				Stage:      stage(round.Stage).toProto(),
@@ -398,7 +399,7 @@ func (h *handler) GetRound(
 			Start:      round.StartingTimestamp,
 			End:        round.EndingTimestamp,
 			RoundTx:    round.UnsignedTx,
-			VtxoTree:   congestionTree(round.CongestionTree).toProto(),
+			VtxoTree:   vtxoTree(round.CongestionTree).toProto(),
 			ForfeitTxs: round.ForfeitTxs,
 			Connectors: round.Connectors,
 			Stage:      stage(round.Stage).toProto(),
@@ -425,7 +426,7 @@ func (h *handler) GetRoundById(
 			Start:      round.StartingTimestamp,
 			End:        round.EndingTimestamp,
 			RoundTx:    round.UnsignedTx,
-			VtxoTree:   congestionTree(round.CongestionTree).toProto(),
+			VtxoTree:   vtxoTree(round.CongestionTree).toProto(),
 			ForfeitTxs: round.ForfeitTxs,
 			Connectors: round.Connectors,
 			Stage:      stage(round.Stage).toProto(),
@@ -529,7 +530,7 @@ func (h *handler) listenToEvents() {
 					RoundFinalization: &arkv1.RoundFinalizationEvent{
 						Id:              e.Id,
 						RoundTx:         e.RoundTx,
-						VtxoTree:        congestionTree(e.CongestionTree).toProto(),
+						VtxoTree:        vtxoTree(e.CongestionTree).toProto(),
 						Connectors:      e.Connectors,
 						MinRelayFeeRate: e.MinRelayFeeRate,
 					},
@@ -565,7 +566,7 @@ func (h *handler) listenToEvents() {
 					RoundSigning: &arkv1.RoundSigningEvent{
 						Id:               e.Id,
 						CosignersPubkeys: cosignersKeys,
-						UnsignedVtxoTree: congestionTree(e.UnsignedVtxoTree).toProto(),
+						UnsignedVtxoTree: vtxoTree(e.UnsignedVtxoTree).toProto(),
 						UnsignedRoundTx:  e.UnsignedRoundTx,
 					},
 				},

@@ -1282,7 +1282,7 @@ func (a *covenantArkClient) validateCongestionTree(
 	connectors := event.Connectors
 
 	if !utils.IsOnchainOnly(receivers) {
-		if err := tree.ValidateCongestionTree(
+		if err := tree.ValidateVtxoTree(
 			event.Tree, roundTx, a.Config.ServerPubKey, a.RoundLifetime,
 		); err != nil {
 			return err
@@ -1299,15 +1299,13 @@ func (a *covenantArkClient) validateCongestionTree(
 		return err
 	}
 
-	log.Infoln("congestion tree validated")
-
 	return nil
 }
 
 func (a *covenantArkClient) validateReceivers(
 	ptx *psetv2.Pset,
 	receivers []client.Output,
-	congestionTree tree.CongestionTree,
+	vtxoTree tree.VtxoTree,
 ) error {
 	for _, receiver := range receivers {
 		isOnChain, onchainScript, err := utils.ParseLiquidAddress(
@@ -1323,7 +1321,7 @@ func (a *covenantArkClient) validateReceivers(
 			}
 		} else {
 			if err := a.validateOffChainReceiver(
-				congestionTree, receiver,
+				vtxoTree, receiver,
 			); err != nil {
 				return err
 			}
@@ -1357,7 +1355,7 @@ func (a *covenantArkClient) validateOnChainReceiver(
 }
 
 func (a *covenantArkClient) validateOffChainReceiver(
-	congestionTree tree.CongestionTree,
+	vtxoTree tree.VtxoTree,
 	receiver client.Output,
 ) error {
 	found := false
@@ -1369,7 +1367,7 @@ func (a *covenantArkClient) validateOffChainReceiver(
 
 	vtxoTapKey := schnorr.SerializePubKey(addr.VtxoTapKey)
 
-	leaves := congestionTree.Leaves()
+	leaves := vtxoTree.Leaves()
 	for _, leaf := range leaves {
 		tx, err := psetv2.NewPsetFromBase64(leaf.Tx)
 		if err != nil {
@@ -1614,22 +1612,22 @@ func (a *covenantArkClient) coinSelectOnchain(
 func (a *covenantArkClient) getRedeemBranches(
 	ctx context.Context, vtxos []client.Vtxo,
 ) (map[string]*redemption.CovenantRedeemBranch, error) {
-	congestionTrees := make(map[string]tree.CongestionTree, 0)
+	vtxoTrees := make(map[string]tree.VtxoTree, 0)
 	redeemBranches := make(map[string]*redemption.CovenantRedeemBranch, 0)
 
 	for i := range vtxos {
 		vtxo := vtxos[i]
-		if _, ok := congestionTrees[vtxo.RoundTxid]; !ok {
+		if _, ok := vtxoTrees[vtxo.RoundTxid]; !ok {
 			round, err := a.client.GetRound(ctx, vtxo.RoundTxid)
 			if err != nil {
 				return nil, err
 			}
 
-			congestionTrees[vtxo.RoundTxid] = round.Tree
+			vtxoTrees[vtxo.RoundTxid] = round.Tree
 		}
 
 		redeemBranch, err := redemption.NewCovenantRedeemBranch(
-			a.explorer, congestionTrees[vtxo.RoundTxid], vtxo,
+			a.explorer, vtxoTrees[vtxo.RoundTxid], vtxo,
 		)
 		if err != nil {
 			return nil, err

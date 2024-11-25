@@ -26,7 +26,7 @@ const (
 	pubkey2  = "33ffb3dee353b1a9ebe4ced64b946238d0a4ac364f275d771da6ad2445d07ae0"
 )
 
-var congestionTree = [][]tree.Node{
+var vtxoTree = [][]tree.Node{
 	{
 		{
 			Txid:       randomString(32),
@@ -149,7 +149,7 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 					},
 					domain.RoundFinalizationStarted{
 						Id:             "1ea610ff-bf3e-4068-9bfd-b6c3f553467e",
-						CongestionTree: congestionTree,
+						CongestionTree: vtxoTree,
 						Connectors:     []string{emptyPtx, emptyPtx},
 						RoundTx:        emptyTx,
 					},
@@ -171,7 +171,7 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 					},
 					domain.RoundFinalizationStarted{
 						Id:             "7578231e-428d-45ae-aaa4-e62c77ad5cec",
-						CongestionTree: congestionTree,
+						CongestionTree: vtxoTree,
 						Connectors:     []string{emptyPtx, emptyPtx},
 						RoundTx:        emptyTx,
 					},
@@ -289,7 +289,7 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 			},
 			domain.RoundFinalizationStarted{
 				Id:             roundId,
-				CongestionTree: congestionTree,
+				CongestionTree: vtxoTree,
 				Connectors:     []string{emptyPtx, emptyPtx},
 				RoundTx:        emptyTx,
 			},

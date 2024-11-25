@@ -322,8 +322,8 @@ func (n *node) getTx(
 }
 
 func (n *node) createFinalCongestionTree() TreeFactory {
-	return func(roundTxInput psetv2.InputArgs) (CongestionTree, error) {
-		congestionTree := make(CongestionTree, 0)
+	return func(roundTxInput psetv2.InputArgs) (VtxoTree, error) {
+		vtxoTree := make(VtxoTree, 0)
 
 		_, taprootTree, err := n.getWitnessData()
 		if err != nil {
@@ -366,7 +366,7 @@ func (n *node) createFinalCongestionTree() TreeFactory {
 				}
 			}
 
-			congestionTree = append(congestionTree, treeLevel)
+			vtxoTree = append(vtxoTree, treeLevel)
 			nodes = append([]*node{}, nextNodes...)
 			ins = append([]psetv2.InputArgs{}, nextInputsArgs...)
 			inTrees = append(
@@ -374,7 +374,7 @@ func (n *node) createFinalCongestionTree() TreeFactory {
 			)
 		}
 
-		return congestionTree, nil
+		return vtxoTree, nil
 	}
 }
 

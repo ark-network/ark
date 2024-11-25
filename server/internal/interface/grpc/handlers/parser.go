@@ -166,9 +166,9 @@ func (v vtxoKeyList) toProto() []*arkv1.Outpoint {
 	return list
 }
 
-type congestionTree tree.CongestionTree
+type vtxoTree tree.VtxoTree
 
-func (t congestionTree) toProto() *arkv1.Tree {
+func (t vtxoTree) toProto() *arkv1.Tree {
 	levels := make([]*arkv1.TreeLevel, 0, len(t))
 	for _, level := range t {
 		levelProto := &arkv1.TreeLevel{

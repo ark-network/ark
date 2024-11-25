@@ -15,7 +15,7 @@ import (
 var (
 	ErrInvalidRoundTx           = fmt.Errorf("invalid round transaction")
 	ErrInvalidRoundTxOutputs    = fmt.Errorf("invalid number of outputs in round transaction")
-	ErrEmptyTree                = fmt.Errorf("empty congestion tree")
+	ErrEmptyTree                = fmt.Errorf("empty vtxo tree")
 	ErrInvalidRootLevel         = fmt.Errorf("root level must have only one node")
 	ErrNoLeaves                 = fmt.Errorf("no leaves in the tree")
 	ErrNodeTxEmpty              = fmt.Errorf("node transaction is empty")
@@ -61,7 +61,7 @@ func UnspendableKey() *secp256k1.PublicKey {
 	return key
 }
 
-// ValidateCongestionTree checks if the given congestion tree is valid
+// ValidateVtxoTree checks if the given vtxo tree is valid
 // roundTxid & roundTxIndex & roundTxAmount are used to validate the root input outpoint
 // serverPubkey & roundLifetime are used to validate the sweep tapscript leaves
 // besides that, the function validates:
@@ -70,8 +70,8 @@ func UnspendableKey() *secp256k1.PublicKey {
 // - children coherence with parent
 // - every control block and taproot output scripts
 // - input and output amounts
-func ValidateCongestionTree(
-	tree CongestionTree, roundTx string, serverPubkey *secp256k1.PublicKey,
+func ValidateVtxoTree(
+	tree VtxoTree, roundTx string, serverPubkey *secp256k1.PublicKey,
 	roundLifetime int64,
 ) error {
 	roundTransaction, err := psetv2.NewPsetFromBase64(roundTx)
@@ -146,7 +146,7 @@ func ValidateCongestionTree(
 }
 
 func validateNodeTransaction(
-	node Node, tree CongestionTree,
+	node Node, tree VtxoTree,
 	expectedInternalKey, expectedServerPubkey *secp256k1.PublicKey,
 	expectedSequence int64,
 ) error {
