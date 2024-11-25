@@ -12,7 +12,6 @@ import (
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 )
 
@@ -23,33 +22,6 @@ func parseAddress(addr string) (*common.Address, error) {
 		return nil, fmt.Errorf("missing address")
 	}
 	return common.DecodeAddress(addr)
-}
-
-func parseAsyncPaymentInputs(ins []*arkv1.AsyncPaymentInput) ([]application.AsyncPaymentInput, error) {
-	if len(ins) <= 0 {
-		return nil, fmt.Errorf("missing inputs")
-	}
-
-	inputs := make([]application.AsyncPaymentInput, 0, len(ins))
-	for _, input := range ins {
-		forfeitLeafHash, err := chainhash.NewHashFromStr(input.GetForfeitLeafHash())
-		if err != nil {
-			return nil, fmt.Errorf("invalid forfeit leaf hash: %s", err)
-		}
-
-		inputs = append(inputs, application.AsyncPaymentInput{
-			Input: ports.Input{
-				VtxoKey: domain.VtxoKey{
-					Txid: input.GetInput().GetOutpoint().GetTxid(),
-					VOut: input.GetInput().GetOutpoint().GetVout(),
-				},
-				Tapscripts: input.GetInput().GetTapscripts().GetScripts(),
-			},
-			ForfeitLeafHash: *forfeitLeafHash,
-		})
-	}
-
-	return inputs, nil
 }
 
 func parseNotes(notes []string) ([]note.Note, error) {

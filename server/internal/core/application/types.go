@@ -7,18 +7,12 @@ import (
 	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
 var (
 	paymentsThreshold = int64(128)
 )
-
-type AsyncPaymentInput struct {
-	ports.Input
-	ForfeitLeafHash chainhash.Hash
-}
 
 type Service interface {
 	Start() error
@@ -37,13 +31,7 @@ type Service interface {
 		ctx context.Context, address string,
 	) (spendableVtxos, spentVtxos []domain.Vtxo, err error)
 	GetInfo(ctx context.Context) (*ServiceInfo, error)
-	// Async payments
-	CreateAsyncPayment(
-		ctx context.Context, inputs []AsyncPaymentInput, receivers []domain.Receiver,
-	) (string, error)
-	CompleteAsyncPayment(
-		ctx context.Context, redeemTx string,
-	) error
+	SubmitRedeemTx(ctx context.Context, redeemTx string) (string, error)
 	GetBoardingAddress(
 		ctx context.Context, userPubkey *secp256k1.PublicKey,
 	) (address string, scripts []string, err error)
@@ -72,7 +60,7 @@ type ServiceInfo struct {
 	Network             string
 	Dust                uint64
 	ForfeitAddress      string
-	NextMarketHour             *NextMarketHour
+	NextMarketHour      *NextMarketHour
 }
 
 type NextMarketHour struct {

@@ -202,7 +202,7 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 
 		vtxoTapscript := firstForfeit.Inputs[1].TapLeafScript[0]
 
-		minFee, err := common.ComputeForfeitMinRelayFee(
+		minFee, err := common.ComputeForfeitTxFee(
 			minRate,
 			&waddrmgr.Tapscript{
 				RevealedScript: vtxoTapscript.Script,
@@ -667,15 +667,6 @@ func (b *txBuilder) FindLeaves(
 	}
 
 	return foundLeaves, nil
-}
-
-func (b *txBuilder) BuildAsyncPaymentTransactions(
-	_ []domain.Vtxo,
-	_ map[domain.VtxoKey][]string,
-	_ map[domain.VtxoKey]chainhash.Hash,
-	_ []domain.Receiver,
-) (string, error) {
-	return "", fmt.Errorf("not implemented")
 }
 
 func (b *txBuilder) createPoolTx(

@@ -3,10 +3,11 @@ package handlers
 import (
 	"context"
 	"encoding/hex"
-	"google.golang.org/protobuf/types/known/durationpb"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"fmt"
 	"sync"
+
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common/bitcointree"
@@ -309,59 +310,23 @@ func (h *handler) Ping(
 	return &arkv1.PingResponse{}, nil
 }
 
-func (h *handler) CreatePayment(
-	ctx context.Context, req *arkv1.CreatePaymentRequest,
-) (*arkv1.CreatePaymentResponse, error) {
-	inputs, err := parseAsyncPaymentInputs(req.GetInputs())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+func (h *handler) SubmitRedeemTx(
+	ctx context.Context, req *arkv1.SubmitRedeemTxRequest,
+) (*arkv1.SubmitRedeemTxResponse, error) {
+	if req.GetRedeemTx() == "" {
+		return nil, status.Error(codes.InvalidArgument, "missing redeem tx")
 	}
 
-	receivers, err := parseReceivers(req.GetOutputs())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-
-	for _, receiver := range receivers {
-		if receiver.Amount <= 0 {
-			return nil, status.Error(codes.InvalidArgument, "output amount must be greater than 0")
-		}
-
-		if len(receiver.OnchainAddress) <= 0 && len(receiver.Pubkey) <= 0 {
-			return nil, status.Error(codes.InvalidArgument, "missing address")
-		}
-
-		if receiver.IsOnchain() {
-			return nil, status.Error(codes.InvalidArgument, "onchain outputs are not supported as async payment destination")
-		}
-	}
-
-	redeemTx, err := h.svc.CreateAsyncPayment(
-		ctx, inputs, receivers,
+	signedRedeemTx, err := h.svc.SubmitRedeemTx(
+		ctx, req.GetRedeemTx(),
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	return &arkv1.CreatePaymentResponse{
-		SignedRedeemTx: redeemTx,
+	return &arkv1.SubmitRedeemTxResponse{
+		SignedRedeemTx: signedRedeemTx,
 	}, nil
-}
-
-func (h *handler) CompletePayment(
-	ctx context.Context, req *arkv1.CompletePaymentRequest,
-) (*arkv1.CompletePaymentResponse, error) {
-	if req.GetSignedRedeemTx() == "" {
-		return nil, status.Error(codes.InvalidArgument, "missing signed redeem tx")
-	}
-
-	if err := h.svc.CompleteAsyncPayment(
-		ctx, req.GetSignedRedeemTx(),
-	); err != nil {
-		return nil, err
-	}
-
-	return &arkv1.CompletePaymentResponse{}, nil
 }
 
 func (h *handler) GetRound(

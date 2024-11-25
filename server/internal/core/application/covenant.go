@@ -370,11 +370,7 @@ func (s *covenantService) UpdatePaymentStatus(_ context.Context, id string) erro
 	return s.paymentRequests.updatePingTimestamp(id)
 }
 
-func (s *covenantService) CompleteAsyncPayment(ctx context.Context, redeemTx string) error {
-	return fmt.Errorf("unimplemented")
-}
-
-func (s *covenantService) CreateAsyncPayment(_ context.Context, _ []AsyncPaymentInput, _ []domain.Receiver) (string, error) {
+func (s *covenantService) SubmitRedeemTx(context.Context, string) (string, error) {
 	return "", fmt.Errorf("unimplemented")
 }
 

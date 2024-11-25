@@ -8,6 +8,7 @@ package models
 import (
 	"context"
 
+	"github.com/go-openapi/errors"
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
 )
@@ -25,6 +26,9 @@ type V1GetInfoResponse struct {
 
 	// forfeit address
 	ForfeitAddress string `json:"forfeitAddress,omitempty"`
+
+	// market hour
+	MarketHour *V1MarketHour `json:"marketHour,omitempty"`
 
 	// network
 	Network string `json:"network,omitempty"`
@@ -47,11 +51,69 @@ type V1GetInfoResponse struct {
 
 // Validate validates this v1 get info response
 func (m *V1GetInfoResponse) Validate(formats strfmt.Registry) error {
+	var res []error
+
+	if err := m.validateMarketHour(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if len(res) > 0 {
+		return errors.CompositeValidationError(res...)
+	}
 	return nil
 }
 
-// ContextValidate validates this v1 get info response based on context it is used
+func (m *V1GetInfoResponse) validateMarketHour(formats strfmt.Registry) error {
+	if swag.IsZero(m.MarketHour) { // not required
+		return nil
+	}
+
+	if m.MarketHour != nil {
+		if err := m.MarketHour.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("marketHour")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("marketHour")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ContextValidate validate this v1 get info response based on the context it is used
 func (m *V1GetInfoResponse) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
+	var res []error
+
+	if err := m.contextValidateMarketHour(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
+	if len(res) > 0 {
+		return errors.CompositeValidationError(res...)
+	}
+	return nil
+}
+
+func (m *V1GetInfoResponse) contextValidateMarketHour(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.MarketHour != nil {
+
+		if swag.IsZero(m.MarketHour) { // not required
+			return nil
+		}
+
+		if err := m.MarketHour.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("marketHour")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("marketHour")
+			}
+			return err
+		}
+	}
+
 	return nil
 }
 
