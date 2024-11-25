@@ -19,11 +19,11 @@ import (
 // swagger:model v1RegisterOutputsForNextRoundRequest
 type V1RegisterOutputsForNextRoundRequest struct {
 
-	// Mocks wabisabi's blinded credentials.
-	ID string `json:"id,omitempty"`
-
-	// List of receivers for a registered payment.
+	// List of receivers for to convert to leaves in the next VTXO tree.
 	Outputs []*V1Output `json:"outputs"`
+
+	// Mocks wabisabi's blinded credentials.
+	RequestID string `json:"requestId,omitempty"`
 }
 
 // Validate validates this v1 register outputs for next round request

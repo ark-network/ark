@@ -142,7 +142,7 @@ func TestWasm(t *testing.T) {
 	t.Logf("Alice is sending %d sats to Bob offchain...", amount)
 	require.NoError(t, sendAsync(alicePage, bobAddr.OffchainAddr, amount))
 
-	t.Log("Payment completed out of round")
+	t.Log("Transaction completed out of round")
 
 	t.Logf("Bob settling the received funds...")
 	txID, err = settle(bobPage)

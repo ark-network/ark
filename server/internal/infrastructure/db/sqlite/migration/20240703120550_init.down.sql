@@ -1,6 +1,6 @@
 DROP TABLE IF EXISTS round;
 
-DROP TABLE IF EXISTS payment;
+DROP TABLE IF EXISTS tx_request;
 
 DROP TABLE IF EXISTS receiver;
 

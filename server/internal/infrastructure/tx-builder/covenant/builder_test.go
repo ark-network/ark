@@ -66,7 +66,7 @@ func TestBuildRoundTx(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
 			for _, f := range fixtures.Valid {
 				roundTx, vtxoTree, connAddr, _, err := builder.BuildRoundTx(
-					pubkey, f.Payments, []ports.BoardingInput{}, []domain.Round{},
+					pubkey, f.Requests, []ports.BoardingInput{}, []domain.Round{},
 				)
 				require.NoError(t, err)
 				require.NotEmpty(t, roundTx)
@@ -87,7 +87,7 @@ func TestBuildRoundTx(t *testing.T) {
 		t.Run("invalid", func(t *testing.T) {
 			for _, f := range fixtures.Invalid {
 				roundTx, vtxoTree, connAddr, _, err := builder.BuildRoundTx(
-					pubkey, f.Payments, []ports.BoardingInput{}, []domain.Round{},
+					pubkey, f.Requests, []ports.BoardingInput{}, []domain.Round{},
 				)
 				require.EqualError(t, err, f.ExpectedErr)
 				require.Empty(t, roundTx)
@@ -119,12 +119,12 @@ func randomHex(len int) string {
 
 type roundTxFixtures struct {
 	Valid []struct {
-		Payments            []domain.Payment
+		Requests            []domain.TxRequest
 		ExpectedNumOfNodes  int
 		ExpectedNumOfLeaves int
 	}
 	Invalid []struct {
-		Payments    []domain.Payment
+		Requests    []domain.TxRequest
 		ExpectedErr string
 	}
 }

@@ -316,7 +316,7 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 
 func (b *txBuilder) BuildRoundTx(
 	serverPubkey *secp256k1.PublicKey,
-	payments []domain.Payment,
+	requests []domain.TxRequest,
 	boardingInputs []ports.BoardingInput,
 	sweptRounds []domain.Round,
 	_ ...*secp256k1.PublicKey, // cosigners are not used in the covenant
@@ -337,13 +337,13 @@ func (b *txBuilder) BuildRoundTx(
 	var sharedOutputAmount uint64
 	var treeFactoryFn tree.TreeFactory
 
-	if !isOnchainOnly(payments) {
+	if !isOnchainOnly(requests) {
 		feeSatsPerNode, err := b.wallet.MinRelayFee(context.Background(), uint64(common.CovenantTreeTxSize))
 		if err != nil {
 			return "", nil, "", nil, err
 		}
 
-		vtxosLeaves, err := getOutputVtxosLeaves(payments)
+		vtxosLeaves, err := getOutputVtxosLeaves(requests)
 		if err != nil {
 			return "", nil, "", nil, err
 		}
@@ -362,7 +362,7 @@ func (b *txBuilder) BuildRoundTx(
 	}
 
 	ptx, err := b.createRoundTx(
-		sharedOutputAmount, sharedOutputScript, payments, boardingInputs, serverPubkey, connectorAddress, sweptRounds,
+		sharedOutputAmount, sharedOutputScript, requests, boardingInputs, serverPubkey, connectorAddress, sweptRounds,
 	)
 	if err != nil {
 		return
@@ -388,7 +388,7 @@ func (b *txBuilder) BuildRoundTx(
 		return
 	}
 
-	if countSpentVtxos(payments) <= 0 {
+	if countSpentVtxos(requests) <= 0 {
 		return
 	}
 
@@ -402,7 +402,7 @@ func (b *txBuilder) BuildRoundTx(
 		return "", nil, "", nil, err
 	}
 
-	connectorsPsets, err := b.createConnectors(roundTx, payments, connectorAddress, connectorAmount, connectorFeeAmount)
+	connectorsPsets, err := b.createConnectors(roundTx, requests, connectorAddress, connectorAmount, connectorFeeAmount)
 	if err != nil {
 		return "", nil, "", nil, err
 	}
@@ -672,7 +672,7 @@ func (b *txBuilder) FindLeaves(
 func (b *txBuilder) createRoundTx(
 	sharedOutputAmount uint64,
 	sharedOutputScript []byte,
-	payments []domain.Payment,
+	requests []domain.TxRequest,
 	boardingInputs []ports.BoardingInput,
 	serverPubkey *secp256k1.PublicKey,
 	connectorAddress string,
@@ -698,7 +698,7 @@ func (b *txBuilder) createRoundTx(
 		return nil, err
 	}
 
-	nbOfInputs := countSpentVtxos(payments)
+	nbOfInputs := countSpentVtxos(requests)
 	connectorsAmount := (dustAmount + connectorMinRelayFee) * nbOfInputs
 	if nbOfInputs > 1 {
 		connectorsAmount -= connectorMinRelayFee
@@ -725,7 +725,7 @@ func (b *txBuilder) createRoundTx(
 		})
 	}
 
-	onchainOutputs, err := getOnchainOutputs(payments, b.onchainNetwork())
+	onchainOutputs, err := getOnchainOutputs(requests, b.onchainNetwork())
 	if err != nil {
 		return nil, err
 	}
@@ -1009,7 +1009,7 @@ func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, 
 }
 
 func (b *txBuilder) createConnectors(
-	roundTx string, payments []domain.Payment,
+	roundTx string, requests []domain.TxRequest,
 	connectorAddress string,
 	connectorAmount, feeAmount uint64,
 ) ([]*psetv2.Pset, error) {
@@ -1026,7 +1026,7 @@ func (b *txBuilder) createConnectors(
 		Amount: connectorAmount,
 	}
 
-	numberOfConnectors := countSpentVtxos(payments)
+	numberOfConnectors := countSpentVtxos(requests)
 
 	previousInput := psetv2.InputArgs{
 		Txid:    txid,

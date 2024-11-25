@@ -97,7 +97,7 @@ func (a *grpcClient) RegisterInputsForNextRound(
 	if err != nil {
 		return "", err
 	}
-	return resp.GetId(), nil
+	return resp.GetRequestId(), nil
 }
 
 func (a *grpcClient) RegisterNotesForNextRound(
@@ -113,15 +113,15 @@ func (a *grpcClient) RegisterNotesForNextRound(
 	if err != nil {
 		return "", err
 	}
-	return resp.GetId(), nil
+	return resp.GetRequestId(), nil
 }
 
 func (a *grpcClient) RegisterOutputsForNextRound(
-	ctx context.Context, paymentID string, outputs []client.Output,
+	ctx context.Context, requestID string, outputs []client.Output,
 ) error {
 	req := &arkv1.RegisterOutputsForNextRoundRequest{
-		Id:      paymentID,
-		Outputs: outs(outputs).toProto(),
+		RequestId: requestID,
+		Outputs:   outs(outputs).toProto(),
 	}
 	_, err := a.svc.RegisterOutputsForNextRound(ctx, req)
 	return err
@@ -191,7 +191,7 @@ func (a *grpcClient) SubmitSignedForfeitTxs(
 }
 
 func (a *grpcClient) GetEventStream(
-	ctx context.Context, paymentID string,
+	ctx context.Context, requestID string,
 ) (<-chan client.RoundEventChannel, func(), error) {
 	req := &arkv1.GetEventStreamRequest{}
 	stream, err := a.svc.GetEventStream(ctx, req)
@@ -236,10 +236,10 @@ func (a *grpcClient) GetEventStream(
 }
 
 func (a *grpcClient) Ping(
-	ctx context.Context, paymentID string,
+	ctx context.Context, requestID string,
 ) error {
 	req := &arkv1.PingRequest{
-		PaymentId: paymentID,
+		RequestId: requestID,
 	}
 	_, err := a.svc.Ping(ctx, req)
 	return err

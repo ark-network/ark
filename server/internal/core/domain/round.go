@@ -38,7 +38,7 @@ type Round struct {
 	StartingTimestamp int64
 	EndingTimestamp   int64
 	Stage             Stage
-	Payments          map[string]Payment
+	TxRequests        map[string]TxRequest
 	Txid              string
 	UnsignedTx        string
 	ForfeitTxs        []string
@@ -55,7 +55,7 @@ func NewRound(dustAmount uint64) *Round {
 	return &Round{
 		Id:         uuid.New().String(),
 		DustAmount: dustAmount,
-		Payments:   make(map[string]Payment),
+		TxRequests: make(map[string]TxRequest),
 		changes:    make([]RoundEvent, 0),
 	}
 }
@@ -96,12 +96,12 @@ func (r *Round) On(event RoundEvent, replayed bool) {
 	case RoundFailed:
 		r.Stage.Failed = true
 		r.EndingTimestamp = e.Timestamp
-	case PaymentsRegistered:
-		if r.Payments == nil {
-			r.Payments = make(map[string]Payment)
+	case TxRequestsRegistered:
+		if r.TxRequests == nil {
+			r.TxRequests = make(map[string]TxRequest)
 		}
-		for _, p := range e.Payments {
-			r.Payments[p.Id] = p
+		for _, p := range e.TxRequests {
+			r.TxRequests[p.Id] = p
 		}
 	}
 
@@ -113,7 +113,7 @@ func (r *Round) On(event RoundEvent, replayed bool) {
 func (r *Round) StartRegistration() ([]RoundEvent, error) {
 	empty := Stage{}
 	if r.Stage != empty {
-		return nil, fmt.Errorf("not in a valid stage to start payment registration")
+		return nil, fmt.Errorf("not in a valid stage to start tx requests registration")
 	}
 
 	event := RoundStarted{
@@ -125,22 +125,22 @@ func (r *Round) StartRegistration() ([]RoundEvent, error) {
 	return []RoundEvent{event}, nil
 }
 
-func (r *Round) RegisterPayments(payments []Payment) ([]RoundEvent, error) {
+func (r *Round) RegisterTxRequests(txRequests []TxRequest) ([]RoundEvent, error) {
 	if r.Stage.Code != RegistrationStage || r.IsFailed() {
-		return nil, fmt.Errorf("not in a valid stage to register payments")
+		return nil, fmt.Errorf("not in a valid stage to register tx requests")
 	}
-	if len(payments) <= 0 {
-		return nil, fmt.Errorf("missing payments to register")
+	if len(txRequests) <= 0 {
+		return nil, fmt.Errorf("missing tx requests to register")
 	}
-	for _, p := range payments {
-		if err := p.validate(false); err != nil {
+	for _, request := range txRequests {
+		if err := request.validate(false); err != nil {
 			return nil, err
 		}
 	}
 
-	event := PaymentsRegistered{
-		Id:       r.Id,
-		Payments: payments,
+	event := TxRequestsRegistered{
+		Id:         r.Id,
+		TxRequests: txRequests,
 	}
 	r.raise(event)
 
@@ -152,10 +152,10 @@ func (r *Round) StartFinalization(connectorAddress string, connectors []string, 
 		return nil, fmt.Errorf("missing unsigned round tx")
 	}
 	if r.Stage.Code != RegistrationStage || r.IsFailed() {
-		return nil, fmt.Errorf("not in a valid stage to start payment finalization")
+		return nil, fmt.Errorf("not in a valid stage to start finalization")
 	}
-	if len(r.Payments) <= 0 {
-		return nil, fmt.Errorf("no payments registered")
+	if len(r.TxRequests) <= 0 {
+		return nil, fmt.Errorf("no tx requests registered")
 	}
 
 	event := RoundFinalizationStarted{
@@ -172,8 +172,8 @@ func (r *Round) StartFinalization(connectorAddress string, connectors []string, 
 
 func (r *Round) EndFinalization(forfeitTxs []string, txid string) ([]RoundEvent, error) {
 	if len(forfeitTxs) <= 0 {
-		for _, p := range r.Payments {
-			if len(p.Inputs) > 0 {
+		for _, request := range r.TxRequests {
+			if len(request.Inputs) > 0 {
 				return nil, fmt.Errorf("missing list of signed forfeit txs")
 			}
 		}
@@ -182,7 +182,7 @@ func (r *Round) EndFinalization(forfeitTxs []string, txid string) ([]RoundEvent,
 		return nil, fmt.Errorf("missing round txid")
 	}
 	if r.Stage.Code != FinalizationStage || r.IsFailed() {
-		return nil, fmt.Errorf("not in a valid stage to end payment finalization")
+		return nil, fmt.Errorf("not in a valid stage to end finalization")
 	}
 	if r.Stage.Ended {
 		return nil, fmt.Errorf("round already finalized")
@@ -231,16 +231,16 @@ func (r *Round) IsFailed() bool {
 
 func (r *Round) TotalInputAmount() uint64 {
 	totInputs := 0
-	for _, p := range r.Payments {
-		totInputs += len(p.Inputs)
+	for _, request := range r.TxRequests {
+		totInputs += len(request.Inputs)
 	}
 	return uint64(totInputs * int(r.DustAmount))
 }
 
 func (r *Round) TotalOutputAmount() uint64 {
 	tot := uint64(0)
-	for _, p := range r.Payments {
-		tot += p.TotalOutputAmount()
+	for _, request := range r.TxRequests {
+		tot += request.TotalOutputAmount()
 	}
 	return tot
 }

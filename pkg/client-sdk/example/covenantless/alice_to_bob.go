@@ -132,7 +132,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Info("payment completed out of round")
+	log.Info("transaction completed out of round")
 
 	if err := generateBlock(); err != nil {
 		log.Fatal(err)

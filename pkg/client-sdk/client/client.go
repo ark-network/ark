@@ -31,7 +31,7 @@ type TransportClient interface {
 		ctx context.Context, notes []string, ephemeralKey string,
 	) (string, error)
 	RegisterOutputsForNextRound(
-		ctx context.Context, paymentID string, outputs []Output,
+		ctx context.Context, requestID string, outputs []Output,
 	) error
 	SubmitTreeNonces(
 		ctx context.Context, roundID, cosignerPubkey string, nonces bitcointree.TreeNonces,
@@ -43,9 +43,9 @@ type TransportClient interface {
 		ctx context.Context, signedForfeitTxs []string, signedRoundTx string,
 	) error
 	GetEventStream(
-		ctx context.Context, paymentID string,
+		ctx context.Context, requestID string,
 	) (<-chan RoundEventChannel, func(), error)
-	Ping(ctx context.Context, paymentID string) error
+	Ping(ctx context.Context, requestID string) error
 	SubmitRedeemTx(
 		ctx context.Context, signedRedeemTx string,
 	) (string, error)

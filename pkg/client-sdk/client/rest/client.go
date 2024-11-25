@@ -136,7 +136,7 @@ func (a *restClient) RegisterInputsForNextRound(
 		return "", err
 	}
 
-	return resp.Payload.ID, nil
+	return resp.Payload.RequestID, nil
 }
 
 func (a *restClient) RegisterNotesForNextRound(
@@ -154,11 +154,11 @@ func (a *restClient) RegisterNotesForNextRound(
 	if err != nil {
 		return "", err
 	}
-	return resp.Payload.ID, nil
+	return resp.Payload.RequestID, nil
 }
 
 func (a *restClient) RegisterOutputsForNextRound(
-	ctx context.Context, paymentID string, outputs []client.Output,
+	ctx context.Context, requestID string, outputs []client.Output,
 ) error {
 	outs := make([]*models.V1Output, 0, len(outputs))
 	for _, o := range outputs {
@@ -168,8 +168,8 @@ func (a *restClient) RegisterOutputsForNextRound(
 		})
 	}
 	body := models.V1RegisterOutputsForNextRoundRequest{
-		ID:      paymentID,
-		Outputs: outs,
+		RequestID: requestID,
+		Outputs:   outs,
 	}
 
 	_, err := a.svc.ArkServiceRegisterOutputsForNextRound(
@@ -246,7 +246,7 @@ func (a *restClient) SubmitSignedForfeitTxs(
 }
 
 func (c *restClient) GetEventStream(
-	ctx context.Context, paymentID string,
+	ctx context.Context, requestID string,
 ) (<-chan client.RoundEventChannel, func(), error) {
 	eventsCh := make(chan client.RoundEventChannel)
 
@@ -384,10 +384,10 @@ func (c *restClient) GetEventStream(
 }
 
 func (a *restClient) Ping(
-	ctx context.Context, paymentID string,
+	ctx context.Context, requestID string,
 ) error {
 	r := ark_service.NewArkServicePingParams()
-	r.SetPaymentID(paymentID)
+	r.SetRequestID(requestID)
 	_, err := a.svc.ArkServicePing(r)
 	return err
 }

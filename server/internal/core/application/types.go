@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	paymentsThreshold = int64(128)
+	txRequestsThreshold = int64(128)
 )
 
 type Service interface {
@@ -26,7 +26,7 @@ type Service interface {
 	GetRoundById(ctx context.Context, id string) (*domain.Round, error)
 	GetCurrentRound(ctx context.Context) (*domain.Round, error)
 	GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
-	UpdatePaymentStatus(ctx context.Context, paymentId string) error
+	UpdateTxRequestStatus(ctx context.Context, requestID string) error
 	ListVtxos(
 		ctx context.Context, address string,
 	) (spendableVtxos, spentVtxos []domain.Vtxo, err error)
@@ -36,7 +36,7 @@ type Service interface {
 		ctx context.Context, userPubkey *secp256k1.PublicKey,
 	) (address string, scripts []string, err error)
 	// Tree signing methods
-	RegisterCosignerPubkey(ctx context.Context, paymentId string, ephemeralPubkey string) error
+	RegisterCosignerPubkey(ctx context.Context, requestID string, ephemeralPubkey string) error
 	RegisterCosignerNonces(
 		ctx context.Context, roundID string,
 		pubkey *secp256k1.PublicKey, nonces string,

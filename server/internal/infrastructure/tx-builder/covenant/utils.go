@@ -46,11 +46,11 @@ func getPsetId(pset *psetv2.Pset) (string, error) {
 }
 
 func getOnchainOutputs(
-	payments []domain.Payment, net *network.Network,
+	requests []domain.TxRequest, net *network.Network,
 ) ([]psetv2.OutputArgs, error) {
 	outputs := make([]psetv2.OutputArgs, 0)
-	for _, payment := range payments {
-		for _, receiver := range payment.Receivers {
+	for _, request := range requests {
+		for _, receiver := range request.Receivers {
 			if receiver.IsOnchain() {
 				receiverScript, err := address.ToOutputScript(receiver.OnchainAddress)
 				if err != nil {
@@ -69,11 +69,11 @@ func getOnchainOutputs(
 }
 
 func getOutputVtxosLeaves(
-	payments []domain.Payment,
+	requests []domain.TxRequest,
 ) ([]tree.VtxoLeaf, error) {
 	receivers := make([]tree.VtxoLeaf, 0)
-	for _, payment := range payments {
-		for _, receiver := range payment.Receivers {
+	for _, request := range requests {
+		for _, receiver := range request.Receivers {
 			if !receiver.IsOnchain() {
 				receivers = append(receivers, tree.VtxoLeaf{
 					PubKey: receiver.PubKey,
@@ -104,10 +104,10 @@ func toWitnessUtxo(in ports.TxInput) (*transaction.TxOutput, error) {
 	return transaction.NewTxOutput(assetBytes, valueBytes, scriptBytes), nil
 }
 
-func countSpentVtxos(payments []domain.Payment) uint64 {
+func countSpentVtxos(requests []domain.TxRequest) uint64 {
 	var sum uint64
-	for _, payment := range payments {
-		sum += uint64(len(payment.Inputs))
+	for _, request := range requests {
+		sum += uint64(len(request.Inputs))
 	}
 	return sum
 }
@@ -144,9 +144,9 @@ func addInputs(
 	return nil
 }
 
-func isOnchainOnly(payments []domain.Payment) bool {
-	for _, p := range payments {
-		for _, r := range p.Receivers {
+func isOnchainOnly(requests []domain.TxRequest) bool {
+	for _, request := range requests {
+		for _, r := range request.Receivers {
 			if !r.IsOnchain() {
 				return false
 			}

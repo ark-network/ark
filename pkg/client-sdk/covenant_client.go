@@ -243,19 +243,19 @@ func (a *covenantArkClient) listenForTxStream(ctx context.Context) {
 func (a *covenantArkClient) processTransactionEvent(
 	event client.TransactionEvent,
 ) {
-	// TODO considering current covenant state where all payments happening in round
-	//and that this is going to change we leave this unimplemented until asnc payments are implemented
-	//also with current state it is not possible to cover some edge cases like when in a round there
-	//are multiple boarding inputs + spent vtxo with change in spendable + received in the same round
+	// TODO: considering current covenant state where all transactions happening in round
+	// and that this is going to change we leave this unimplemented for now.
+	// Also, with current state it is not possible to cover some edge cases like when in a round there
+	// are multiple boarding inputs + spent vtxo with change in spendable + received in the same round
 }
 
 func (a *covenantArkClient) listenForBoardingUtxos(
 	ctx context.Context,
 ) {
-	// TODO considering current covenant state where all payments happening in round
-	//and that this is going to change we leave this unimplemented until asnc payments are implemented
-	//also with current state it is not possible to cover some edge cases like when in a round there
-	//are multiple boarding inputs + spent vtxo with change in spendable + received in the same round
+	// TODO considering current covenant state where all transactions happening in round
+	// and that this is going to change we leave this unimplemented for now.
+	// Also, with current state it is not possible to cover some edge cases like when in a round there
+	// are multiple boarding inputs + spent vtxo with change in spendable + received in the same round
 }
 
 func (a *covenantArkClient) Balance(
@@ -584,16 +584,16 @@ func (a *covenantArkClient) CollaborativeRedeem(
 		})
 	}
 
-	paymentID, err := a.client.RegisterInputsForNextRound(ctx, inputs, "")
+	requestID, err := a.client.RegisterInputsForNextRound(ctx, inputs, "")
 	if err != nil {
 		return "", err
 	}
 
-	if err := a.client.RegisterOutputsForNextRound(ctx, paymentID, receivers); err != nil {
+	if err := a.client.RegisterOutputsForNextRound(ctx, requestID, receivers); err != nil {
 		return "", err
 	}
 
-	roundTxID, err := a.handleRoundStream(ctx, paymentID, selectedCoins, selectedBoardingUtxos, receivers)
+	roundTxID, err := a.handleRoundStream(ctx, requestID, selectedCoins, selectedBoardingUtxos, receivers)
 	if err != nil {
 		return "", err
 	}
@@ -1018,21 +1018,21 @@ func (a *covenantArkClient) sendOffchain(
 		})
 	}
 
-	paymentID, err := a.client.RegisterInputsForNextRound(ctx, inputs, "")
+	requestID, err := a.client.RegisterInputsForNextRound(ctx, inputs, "")
 	if err != nil {
 		return "", err
 	}
 
 	if err := a.client.RegisterOutputsForNextRound(
-		ctx, paymentID, outputs,
+		ctx, requestID, outputs,
 	); err != nil {
 		return "", err
 	}
 
-	log.Infof("payment registered with id: %s", paymentID)
+	log.Infof("payout registered with id: %s", requestID)
 
 	roundTxID, err := a.handleRoundStream(
-		ctx, paymentID, selectedCoins, boardingUtxos, outputs,
+		ctx, requestID, selectedCoins, boardingUtxos, outputs,
 	)
 	if err != nil {
 		return "", err
@@ -1116,19 +1116,19 @@ func (a *covenantArkClient) addInputs(
 
 func (a *covenantArkClient) handleRoundStream(
 	ctx context.Context,
-	paymentID string,
+	requestID string,
 	vtxosToSign []client.TapscriptsVtxo,
 	boardingUtxos []types.Utxo,
 	receivers []client.Output,
 ) (string, error) {
-	eventsCh, close, err := a.client.GetEventStream(ctx, paymentID)
+	eventsCh, close, err := a.client.GetEventStream(ctx, requestID)
 	if err != nil {
 		return "", err
 	}
 
 	var pingStop func()
 	for pingStop == nil {
-		pingStop = a.ping(ctx, paymentID)
+		pingStop = a.ping(ctx, requestID)
 	}
 
 	defer func() {
@@ -1166,7 +1166,7 @@ func (a *covenantArkClient) handleRoundStream(
 					continue
 				}
 
-				log.Info("finalizing payment... ")
+				log.Info("submitting forfeit transactions... ")
 				if err := a.client.SubmitSignedForfeitTxs(ctx, signedForfeitTxs, signedRoundTx); err != nil {
 					return "", err
 				}

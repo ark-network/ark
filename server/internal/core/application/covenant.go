@@ -44,8 +44,8 @@ type covenantService struct {
 	scanner     ports.BlockchainScanner
 	sweeper     *sweeper
 
-	paymentRequests *paymentsMap
-	forfeitTxs      *forfeitTxsMap
+	txRequests *txRequestsQueue
+	forfeitTxs *forfeitTxsMap
 
 	eventsCh            chan domain.RoundEvent
 	transactionEventsCh chan TransactionEvent
@@ -94,7 +94,7 @@ func NewCovenantService(
 		builder:             builder,
 		scanner:             scanner,
 		sweeper:             newSweeper(walletSvc, repoManager, builder, scheduler, notificationPrefix),
-		paymentRequests:     newPaymentsMap(),
+		txRequests:          newTxRequestsQueue(),
 		forfeitTxs:          newForfeitTxsMap(builder),
 		eventsCh:            make(chan domain.RoundEvent),
 		transactionEventsCh: make(chan TransactionEvent),
@@ -287,14 +287,14 @@ func (s *covenantService) SpendVtxos(ctx context.Context, inputs []ports.Input) 
 		vtxosInputs = append(vtxosInputs, vtxo)
 	}
 
-	payment, err := domain.NewPayment(vtxosInputs)
+	request, err := domain.NewTxRequest(vtxosInputs)
 	if err != nil {
 		return "", err
 	}
-	if err := s.paymentRequests.push(*payment, boardingInputs); err != nil {
+	if err := s.txRequests.push(*request, boardingInputs); err != nil {
 		return "", err
 	}
-	return payment.Id, nil
+	return request.Id, nil
 }
 
 func (s *covenantService) newBoardingInput(tx *transaction.Transaction, input ports.Input) (*ports.BoardingInput, error) {
@@ -344,7 +344,7 @@ func (s *covenantService) newBoardingInput(tx *transaction.Transaction, input po
 
 func (s *covenantService) ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error {
 	// Check credentials
-	payment, ok := s.paymentRequests.view(creds)
+	request, ok := s.txRequests.view(creds)
 	if !ok {
 		return fmt.Errorf("invalid credentials")
 	}
@@ -360,14 +360,14 @@ func (s *covenantService) ClaimVtxos(ctx context.Context, creds string, receiver
 		}
 	}
 
-	if err := payment.AddReceivers(receivers); err != nil {
+	if err := request.AddReceivers(receivers); err != nil {
 		return err
 	}
-	return s.paymentRequests.update(*payment)
+	return s.txRequests.update(*request)
 }
 
-func (s *covenantService) UpdatePaymentStatus(_ context.Context, id string) error {
-	return s.paymentRequests.updatePingTimestamp(id)
+func (s *covenantService) UpdateTxRequestStatus(_ context.Context, id string) error {
+	return s.txRequests.updatePingTimestamp(id)
 }
 
 func (s *covenantService) SubmitRedeemTx(context.Context, string) (string, error) {
@@ -472,11 +472,11 @@ func (s *covenantService) GetInfo(ctx context.Context) (*ServiceInfo, error) {
 	}, nil
 }
 
-func (s *covenantService) RegisterCosignerPubkey(ctx context.Context, paymentId string, _ string) error {
+func (s *covenantService) RegisterCosignerPubkey(ctx context.Context, requestID string, _ string) error {
 	// if the user sends an ephemeral pubkey, something is going wrong client-side
-	// we should delete the associated payment
-	if err := s.paymentRequests.delete(paymentId); err != nil {
-		log.WithError(err).Warn("failed to delete payment")
+	// we should delete the associated tx request
+	if err := s.txRequests.delete(requestID); err != nil {
+		log.WithError(err).Warnf("failed to delete tx request %s", requestID)
 	}
 
 	return ErrTreeSigningNotRequired
@@ -554,22 +554,22 @@ func (s *covenantService) startFinalization() {
 		return
 	}
 
-	// TODO: understand how many payments must be popped from the queue and actually registered for the round
-	num := s.paymentRequests.len()
+	// TODO: understand how many tx requests must be popped from the queue and actually registered for the round
+	num := s.txRequests.len()
 	if num == 0 {
 		roundAborted = true
-		err := fmt.Errorf("no payments registered")
+		err := fmt.Errorf("no tx requests registered")
 		round.Fail(fmt.Errorf("round aborted: %s", err))
 		log.WithError(err).Debugf("round %s aborted", round.Id)
 		return
 	}
-	if num > paymentsThreshold {
-		num = paymentsThreshold
+	if num > txRequestsThreshold {
+		num = txRequestsThreshold
 	}
-	payments, boardingInputs, _, _ := s.paymentRequests.pop(num)
-	if _, err := round.RegisterPayments(payments); err != nil {
-		round.Fail(fmt.Errorf("failed to register payments: %s", err))
-		log.WithError(err).Warn("failed to register payments")
+	requests, boardingInputs, _, _ := s.txRequests.pop(num)
+	if _, err := round.RegisterTxRequests(requests); err != nil {
+		round.Fail(fmt.Errorf("failed to register tx requests: %s", err))
+		log.WithError(err).Warn("failed to register tx requests")
 		return
 	}
 
@@ -580,7 +580,7 @@ func (s *covenantService) startFinalization() {
 		return
 	}
 
-	unsignedRoundTx, tree, connectorAddress, connectors, err := s.builder.BuildRoundTx(s.pubkey, payments, boardingInputs, sweptRounds)
+	unsignedRoundTx, tree, connectorAddress, connectors, err := s.builder.BuildRoundTx(s.pubkey, requests, boardingInputs, sweptRounds)
 	if err != nil {
 		round.Fail(fmt.Errorf("failed to create round tx: %s", err))
 		log.WithError(err).Warn("failed to create round tx")
@@ -588,7 +588,7 @@ func (s *covenantService) startFinalization() {
 	}
 	log.Debugf("round tx created for round %s", round.Id)
 
-	s.forfeitTxs.init(connectors, payments)
+	s.forfeitTxs.init(connectors, requests)
 
 	if _, err := round.StartFinalization(
 		connectorAddress, connectors, tree, unsignedRoundTx,
@@ -906,7 +906,7 @@ func (s *covenantService) updateVtxoSet(round *domain.Round) {
 
 	ctx := context.Background()
 	repo := s.repoManager.Vtxos()
-	spentVtxos := getSpentVtxos(round.Payments)
+	spentVtxos := getSpentVtxos(round.TxRequests)
 	if len(spentVtxos) > 0 {
 		for {
 			if err := repo.SpendVtxos(ctx, spentVtxos, round.Txid); err != nil {
@@ -971,7 +971,7 @@ func (s *covenantService) updateVtxoSet(round *domain.Round) {
 		}
 		s.transactionEventsCh <- RoundTransactionEvent{
 			RoundTxID:             round.Txid,
-			SpentVtxos:            getSpentVtxos(round.Payments),
+			SpentVtxos:            getSpentVtxos(round.TxRequests),
 			SpendableVtxos:        s.getNewVtxos(round),
 			ClaimedBoardingInputs: boardingInputs,
 		}

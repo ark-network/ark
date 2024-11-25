@@ -11,65 +11,65 @@ import (
 	"github.com/google/uuid"
 )
 
-type Payment struct {
+type TxRequest struct {
 	Id        string
 	Inputs    []Vtxo
 	Receivers []Receiver
 }
 
-func NewPayment(inputs []Vtxo) (*Payment, error) {
-	p := &Payment{
+func NewTxRequest(inputs []Vtxo) (*TxRequest, error) {
+	request := &TxRequest{
 		Id:     uuid.New().String(),
 		Inputs: inputs,
 	}
-	if err := p.validate(true); err != nil {
+	if err := request.validate(true); err != nil {
 		return nil, err
 	}
-	return p, nil
+	return request, nil
 }
 
-func (p *Payment) AddReceivers(receivers []Receiver) (err error) {
-	if p.Receivers == nil {
-		p.Receivers = make([]Receiver, 0)
+func (r *TxRequest) AddReceivers(receivers []Receiver) (err error) {
+	if r.Receivers == nil {
+		r.Receivers = make([]Receiver, 0)
 	}
-	p.Receivers = append(p.Receivers, receivers...)
+	r.Receivers = append(r.Receivers, receivers...)
 	defer func() {
 		if err != nil {
-			p.Receivers = p.Receivers[:len(p.Receivers)-len(receivers)]
+			r.Receivers = r.Receivers[:len(r.Receivers)-len(receivers)]
 		}
 	}()
-	err = p.validate(false)
+	err = r.validate(false)
 	return
 }
 
-func (p Payment) TotalInputAmount() uint64 {
+func (r TxRequest) TotalInputAmount() uint64 {
 	tot := uint64(0)
-	for _, in := range p.Inputs {
+	for _, in := range r.Inputs {
 		tot += in.Amount
 	}
 	return tot
 }
 
-func (p Payment) TotalOutputAmount() uint64 {
+func (r TxRequest) TotalOutputAmount() uint64 {
 	tot := uint64(0)
-	for _, r := range p.Receivers {
+	for _, r := range r.Receivers {
 		tot += r.Amount
 	}
 	return tot
 }
 
-func (p Payment) validate(ignoreOuts bool) error {
-	if len(p.Id) <= 0 {
+func (r TxRequest) validate(ignoreOuts bool) error {
+	if len(r.Id) <= 0 {
 		return fmt.Errorf("missing id")
 	}
 	if ignoreOuts {
 		return nil
 	}
 
-	if len(p.Receivers) <= 0 {
+	if len(r.Receivers) <= 0 {
 		return fmt.Errorf("missing outputs")
 	}
-	for _, r := range p.Receivers {
+	for _, r := range r.Receivers {
 		if len(r.OnchainAddress) <= 0 && len(r.PubKey) <= 0 {
 			return fmt.Errorf("missing receiver destination")
 		}

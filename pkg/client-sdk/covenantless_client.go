@@ -741,7 +741,7 @@ func (a *covenantlessArkClient) RedeemNotes(ctx context.Context, notes []string)
 		return "", err
 	}
 
-	paymentID, err := a.client.RegisterNotesForNextRound(
+	requestID, err := a.client.RegisterNotesForNextRound(
 		ctx, notes, hex.EncodeToString(roundEphemeralKey.PubKey().SerializeCompressed()),
 	)
 	if err != nil {
@@ -756,15 +756,15 @@ func (a *covenantlessArkClient) RedeemNotes(ctx context.Context, notes []string)
 	receiversOutput := []client.Output{output}
 
 	if err := a.client.RegisterOutputsForNextRound(
-		ctx, paymentID, receiversOutput,
+		ctx, requestID, receiversOutput,
 	); err != nil {
 		return "", err
 	}
 
-	log.Infof("payment registered with id: %s", paymentID)
+	log.Infof("payout registered with id: %s", requestID)
 
 	roundTxID, err := a.handleRoundStream(
-		ctx, paymentID, nil, nil, receiversOutput, roundEphemeralKey,
+		ctx, requestID, nil, nil, receiversOutput, roundEphemeralKey,
 	)
 	if err != nil {
 		return "", err
@@ -929,7 +929,7 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 		return "", err
 	}
 
-	paymentID, err := a.client.RegisterInputsForNextRound(
+	requestID, err := a.client.RegisterInputsForNextRound(
 		ctx,
 		inputs,
 		hex.EncodeToString(roundEphemeralKey.PubKey().SerializeCompressed()),
@@ -938,12 +938,12 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 		return "", err
 	}
 
-	if err := a.client.RegisterOutputsForNextRound(ctx, paymentID, receivers); err != nil {
+	if err := a.client.RegisterOutputsForNextRound(ctx, requestID, receivers); err != nil {
 		return "", err
 	}
 
 	roundTxID, err := a.handleRoundStream(
-		ctx, paymentID, selectedCoins, selectedBoardingCoins, receivers, roundEphemeralKey,
+		ctx, requestID, selectedCoins, selectedBoardingCoins, receivers, roundEphemeralKey,
 	)
 	if err != nil {
 		return "", err
@@ -1495,7 +1495,7 @@ func (a *covenantlessArkClient) sendOffchain(
 		return "", err
 	}
 
-	paymentID, err := a.client.RegisterInputsForNextRound(
+	requestID, err := a.client.RegisterInputsForNextRound(
 		ctx, inputs, hex.EncodeToString(roundEphemeralKey.PubKey().SerializeCompressed()),
 	)
 	if err != nil {
@@ -1503,15 +1503,15 @@ func (a *covenantlessArkClient) sendOffchain(
 	}
 
 	if err := a.client.RegisterOutputsForNextRound(
-		ctx, paymentID, outputs,
+		ctx, requestID, outputs,
 	); err != nil {
 		return "", err
 	}
 
-	log.Infof("payment registered with id: %s", paymentID)
+	log.Infof("registered inputs and outputs with request id: %s", requestID)
 
 	roundTxID, err := a.handleRoundStream(
-		ctx, paymentID, selectedCoins, selectedBoardingCoins, outputs, roundEphemeralKey,
+		ctx, requestID, selectedCoins, selectedBoardingCoins, outputs, roundEphemeralKey,
 	)
 	if err != nil {
 		return "", err
@@ -1594,7 +1594,7 @@ func (a *covenantlessArkClient) addInputs(
 
 func (a *covenantlessArkClient) handleRoundStream(
 	ctx context.Context,
-	paymentID string,
+	requestID string,
 	vtxosToSign []client.TapscriptsVtxo,
 	boardingUtxos []types.Utxo,
 	receivers []client.Output,
@@ -1605,14 +1605,14 @@ func (a *covenantlessArkClient) handleRoundStream(
 		return "", err
 	}
 
-	eventsCh, close, err := a.client.GetEventStream(ctx, paymentID)
+	eventsCh, close, err := a.client.GetEventStream(ctx, requestID)
 	if err != nil {
 		return "", err
 	}
 
 	var pingStop func()
 	for pingStop == nil {
-		pingStop = a.ping(ctx, paymentID)
+		pingStop = a.ping(ctx, requestID)
 	}
 
 	defer func() {
@@ -1697,7 +1697,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 					continue
 				}
 
-				log.Info("finalizing payment... ")
+				log.Info("submitting forfeit transactions... ")
 				if err := a.client.SubmitSignedForfeitTxs(ctx, signedForfeitTxs, signedRoundTx); err != nil {
 					return "", err
 				}

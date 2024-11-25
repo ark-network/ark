@@ -68,7 +68,7 @@ func TestBuildRoundTx(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
 			for _, f := range fixtures.Valid {
 				cosigners := make([]*secp256k1.PublicKey, 0)
-				for range f.Payments {
+				for range f.Requests {
 					randKey, err := secp256k1.GeneratePrivateKey()
 					require.NoError(t, err)
 
@@ -76,7 +76,7 @@ func TestBuildRoundTx(t *testing.T) {
 				}
 
 				roundTx, vtxoTree, connAddr, _, err := builder.BuildRoundTx(
-					pubkey, f.Payments, []ports.BoardingInput{}, []domain.Round{}, cosigners...,
+					pubkey, f.Requests, []ports.BoardingInput{}, []domain.Round{}, cosigners...,
 				)
 				require.NoError(t, err)
 				require.NotEmpty(t, roundTx)
@@ -97,7 +97,7 @@ func TestBuildRoundTx(t *testing.T) {
 		t.Run("invalid", func(t *testing.T) {
 			for _, f := range fixtures.Invalid {
 				roundTx, vtxoTree, connAddr, _, err := builder.BuildRoundTx(
-					pubkey, f.Payments, []ports.BoardingInput{}, []domain.Round{},
+					pubkey, f.Requests, []ports.BoardingInput{}, []domain.Round{},
 				)
 				require.EqualError(t, err, f.ExpectedErr)
 				require.Empty(t, roundTx)
@@ -129,12 +129,12 @@ func randomHex(len int) string {
 
 type roundTxFixtures struct {
 	Valid []struct {
-		Payments            []domain.Payment
+		Requests            []domain.TxRequest
 		ExpectedNumOfNodes  int
 		ExpectedNumOfLeaves int
 	}
 	Invalid []struct {
-		Payments    []domain.Payment
+		Requests    []domain.TxRequest
 		ExpectedErr string
 	}
 }

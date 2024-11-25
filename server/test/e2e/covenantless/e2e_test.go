@@ -279,7 +279,7 @@ func TestReactToAsyncSpentVtxosRedemption(t *testing.T) {
 	require.Empty(t, balance.OnchainBalance.LockedAmount)
 }
 
-func TestChainAsyncPayments(t *testing.T) {
+func TestChainOutOfRoundTransactions(t *testing.T) {
 	var receive utils.ArkReceive
 	receiveStr, err := runClarkCommand("receive")
 	require.NoError(t, err)
@@ -315,7 +315,7 @@ func TestChainAsyncPayments(t *testing.T) {
 	require.NotZero(t, balance.Offchain.Total)
 }
 
-func TestAliceSeveralPaymentsToBob(t *testing.T) {
+func TestAliceSendsSeveralTimesToBob(t *testing.T) {
 	ctx := context.Background()
 	alice, grpcAlice := setupArkSDK(t)
 	defer grpcAlice.Close()

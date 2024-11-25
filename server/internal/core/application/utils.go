@@ -16,32 +16,32 @@ import (
 	"github.com/nbd-wtf/go-nostr/nip19"
 )
 
-type timedPayment struct {
-	domain.Payment
+type timedTxRequest struct {
+	domain.TxRequest
 	boardingInputs []ports.BoardingInput
 	notes          []note.Note
 	timestamp      time.Time
 	pingTimestamp  time.Time
 }
 
-type paymentsMap struct {
+type txRequestsQueue struct {
 	lock          *sync.RWMutex
-	payments      map[string]*timedPayment
+	requests      map[string]*timedTxRequest
 	ephemeralKeys map[string]*secp256k1.PublicKey
 }
 
-func newPaymentsMap() *paymentsMap {
-	paymentsById := make(map[string]*timedPayment)
+func newTxRequestsQueue() *txRequestsQueue {
+	requestsById := make(map[string]*timedTxRequest)
 	lock := &sync.RWMutex{}
-	return &paymentsMap{lock, paymentsById, make(map[string]*secp256k1.PublicKey)}
+	return &txRequestsQueue{lock, requestsById, make(map[string]*secp256k1.PublicKey)}
 }
 
-func (m *paymentsMap) len() int64 {
+func (m *txRequestsQueue) len() int64 {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
 	count := int64(0)
-	for _, p := range m.payments {
+	for _, p := range m.requests {
 		if len(p.Receivers) > 0 {
 			count++
 		}
@@ -49,154 +49,154 @@ func (m *paymentsMap) len() int64 {
 	return count
 }
 
-func (m *paymentsMap) delete(id string) error {
+func (m *txRequestsQueue) delete(id string) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	if _, ok := m.payments[id]; !ok {
-		return errPaymentNotFound{id}
+	if _, ok := m.requests[id]; !ok {
+		return errTxRequestNotFound{id}
 	}
 
-	delete(m.payments, id)
+	delete(m.requests, id)
 	return nil
 }
 
-func (m *paymentsMap) pushWithNotes(payment domain.Payment, notes []note.Note) error {
+func (m *txRequestsQueue) pushWithNotes(request domain.TxRequest, notes []note.Note) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	if _, ok := m.payments[payment.Id]; ok {
-		return fmt.Errorf("duplicated payment %s", payment.Id)
+	if _, ok := m.requests[request.Id]; ok {
+		return fmt.Errorf("duplicated tx request %s", request.Id)
 	}
 
 	for _, note := range notes {
-		for _, payment := range m.payments {
-			for _, pNote := range payment.notes {
-				if note.ID == pNote.ID {
+		for _, txRequest := range m.requests {
+			for _, rNote := range txRequest.notes {
+				if note.ID == rNote.ID {
 					return fmt.Errorf("duplicated note %s", note)
 				}
 			}
 		}
 	}
 
-	m.payments[payment.Id] = &timedPayment{payment, make([]ports.BoardingInput, 0), notes, time.Now(), time.Time{}}
+	m.requests[request.Id] = &timedTxRequest{request, make([]ports.BoardingInput, 0), notes, time.Now(), time.Time{}}
 	return nil
 }
 
-func (m *paymentsMap) push(
-	payment domain.Payment,
+func (m *txRequestsQueue) push(
+	request domain.TxRequest,
 	boardingInputs []ports.BoardingInput,
 ) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	if _, ok := m.payments[payment.Id]; ok {
-		return fmt.Errorf("duplicated payment %s", payment.Id)
+	if _, ok := m.requests[request.Id]; ok {
+		return fmt.Errorf("duplicated tx request %s", request.Id)
 	}
 
-	for _, input := range payment.Inputs {
-		for _, pay := range m.payments {
+	for _, input := range request.Inputs {
+		for _, pay := range m.requests {
 			for _, pInput := range pay.Inputs {
 				if input.VtxoKey.Txid == pInput.VtxoKey.Txid && input.VtxoKey.VOut == pInput.VtxoKey.VOut {
-					return fmt.Errorf("duplicated input, %s:%d already used by payment %s", input.VtxoKey.Txid, input.VtxoKey.VOut, pay.Id)
+					return fmt.Errorf("duplicated input, %s:%d already used by tx request %s", input.VtxoKey.Txid, input.VtxoKey.VOut, pay.Id)
 				}
 			}
 		}
 	}
 
 	for _, input := range boardingInputs {
-		for _, pay := range m.payments {
-			for _, pBoardingInput := range pay.boardingInputs {
+		for _, request := range m.requests {
+			for _, pBoardingInput := range request.boardingInputs {
 				if input.Txid == pBoardingInput.Txid && input.VOut == pBoardingInput.VOut {
-					return fmt.Errorf("duplicated boarding input, %s:%d already used by payment %s", input.Txid, input.VOut, pay.Id)
+					return fmt.Errorf("duplicated boarding input, %s:%d already used by tx request %s", input.Txid, input.VOut, request.Id)
 				}
 			}
 		}
 	}
 
-	m.payments[payment.Id] = &timedPayment{payment, boardingInputs, make([]note.Note, 0), time.Now(), time.Time{}}
+	m.requests[request.Id] = &timedTxRequest{request, boardingInputs, make([]note.Note, 0), time.Now(), time.Time{}}
 	return nil
 }
 
-func (m *paymentsMap) pushEphemeralKey(paymentId string, pubkey *secp256k1.PublicKey) error {
+func (m *txRequestsQueue) pushEphemeralKey(requestID string, pubkey *secp256k1.PublicKey) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	if _, ok := m.payments[paymentId]; !ok {
-		return fmt.Errorf("payment %s not found, cannot register signing ephemeral public key", paymentId)
+	if _, ok := m.requests[requestID]; !ok {
+		return fmt.Errorf("tx request %s not found, cannot register signing ephemeral public key", requestID)
 	}
 
-	m.ephemeralKeys[paymentId] = pubkey
+	m.ephemeralKeys[requestID] = pubkey
 	return nil
 }
 
-func (m *paymentsMap) pop(num int64) ([]domain.Payment, []ports.BoardingInput, []*secp256k1.PublicKey, []note.Note) {
+func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingInput, []*secp256k1.PublicKey, []note.Note) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	paymentsByTime := make([]timedPayment, 0, len(m.payments))
-	for _, p := range m.payments {
-		// Skip payments without registered receivers.
+	requestsByTime := make([]timedTxRequest, 0, len(m.requests))
+	for _, p := range m.requests {
+		// Skip tx requests without registered receivers.
 		if len(p.Receivers) <= 0 {
 			continue
 		}
-		// Skip payments for which users didn't notify to be online in the last minute.
+		// Skip tx requests for which users didn't notify to be online in the last minute.
 		if p.pingTimestamp.IsZero() || time.Since(p.pingTimestamp).Minutes() > 1 {
 			continue
 		}
-		paymentsByTime = append(paymentsByTime, *p)
+		requestsByTime = append(requestsByTime, *p)
 	}
-	sort.SliceStable(paymentsByTime, func(i, j int) bool {
-		return paymentsByTime[i].timestamp.Before(paymentsByTime[j].timestamp)
+	sort.SliceStable(requestsByTime, func(i, j int) bool {
+		return requestsByTime[i].timestamp.Before(requestsByTime[j].timestamp)
 	})
 
-	if num < 0 || num > int64(len(paymentsByTime)) {
-		num = int64(len(paymentsByTime))
+	if num < 0 || num > int64(len(requestsByTime)) {
+		num = int64(len(requestsByTime))
 	}
 
-	payments := make([]domain.Payment, 0, num)
+	requests := make([]domain.TxRequest, 0, num)
 	boardingInputs := make([]ports.BoardingInput, 0)
 	cosigners := make([]*secp256k1.PublicKey, 0, num)
 	notes := make([]note.Note, 0)
-	for _, p := range paymentsByTime[:num] {
+	for _, p := range requestsByTime[:num] {
 		boardingInputs = append(boardingInputs, p.boardingInputs...)
-		payments = append(payments, p.Payment)
-		if pubkey, ok := m.ephemeralKeys[p.Payment.Id]; ok {
+		requests = append(requests, p.TxRequest)
+		if pubkey, ok := m.ephemeralKeys[p.TxRequest.Id]; ok {
 			cosigners = append(cosigners, pubkey)
-			delete(m.ephemeralKeys, p.Payment.Id)
+			delete(m.ephemeralKeys, p.TxRequest.Id)
 		}
 		notes = append(notes, p.notes...)
-		delete(m.payments, p.Id)
+		delete(m.requests, p.Id)
 	}
-	return payments, boardingInputs, cosigners, notes
+	return requests, boardingInputs, cosigners, notes
 }
 
-func (m *paymentsMap) update(payment domain.Payment) error {
+func (m *txRequestsQueue) update(request domain.TxRequest) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	p, ok := m.payments[payment.Id]
+	r, ok := m.requests[request.Id]
 	if !ok {
-		return fmt.Errorf("payment %s not found", payment.Id)
+		return fmt.Errorf("tx request %s not found", request.Id)
 	}
 
 	// sum inputs = vtxos + boarding utxos + notes
 	sumOfInputs := uint64(0)
-	for _, input := range payment.Inputs {
+	for _, input := range request.Inputs {
 		sumOfInputs += input.Amount
 	}
 
-	for _, boardingInput := range p.boardingInputs {
+	for _, boardingInput := range r.boardingInputs {
 		sumOfInputs += boardingInput.Amount
 	}
 
-	for _, note := range p.notes {
+	for _, note := range r.notes {
 		sumOfInputs += uint64(note.Value)
 	}
 
 	// sum outputs = receivers VTXOs
 	sumOfOutputs := uint64(0)
-	for _, receiver := range payment.Receivers {
+	for _, receiver := range request.Receivers {
 		sumOfOutputs += receiver.Amount
 	}
 
@@ -204,37 +204,37 @@ func (m *paymentsMap) update(payment domain.Payment) error {
 		return fmt.Errorf("sum of inputs %d does not match sum of outputs %d", sumOfInputs, sumOfOutputs)
 	}
 
-	p.Payment = payment
+	r.TxRequest = request
 
 	return nil
 }
 
-func (m *paymentsMap) updatePingTimestamp(id string) error {
+func (m *txRequestsQueue) updatePingTimestamp(id string) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	payment, ok := m.payments[id]
+	request, ok := m.requests[id]
 	if !ok {
-		return errPaymentNotFound{id}
+		return errTxRequestNotFound{id}
 	}
 
-	payment.pingTimestamp = time.Now()
+	request.pingTimestamp = time.Now()
 	return nil
 }
 
-func (m *paymentsMap) view(id string) (*domain.Payment, bool) {
+func (m *txRequestsQueue) view(id string) (*domain.TxRequest, bool) {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
-	payment, ok := m.payments[id]
+	request, ok := m.requests[id]
 	if !ok {
 		return nil, false
 	}
 
-	return &domain.Payment{
-		Id:        payment.Id,
-		Inputs:    payment.Inputs,
-		Receivers: payment.Receivers,
+	return &domain.TxRequest{
+		Id:        request.Id,
+		Inputs:    request.Inputs,
+		Receivers: request.Receivers,
 	}, true
 }
 
@@ -251,10 +251,10 @@ func newForfeitTxsMap(txBuilder ports.TxBuilder) *forfeitTxsMap {
 	return &forfeitTxsMap{&sync.RWMutex{}, txBuilder, make(map[domain.VtxoKey][]string), nil, nil}
 }
 
-func (m *forfeitTxsMap) init(connectors []string, payments []domain.Payment) {
+func (m *forfeitTxsMap) init(connectors []string, requests []domain.TxRequest) {
 	vtxosToSign := make([]domain.Vtxo, 0)
-	for _, payment := range payments {
-		vtxosToSign = append(vtxosToSign, payment.Inputs...)
+	for _, request := range requests {
+		vtxosToSign = append(vtxosToSign, request.Inputs...)
 	}
 
 	m.lock.Lock()
@@ -393,10 +393,10 @@ func findSweepableOutputs(
 	return sweepableOutputs, nil
 }
 
-func getSpentVtxos(payments map[string]domain.Payment) []domain.VtxoKey {
+func getSpentVtxos(requests map[string]domain.TxRequest) []domain.VtxoKey {
 	vtxos := make([]domain.VtxoKey, 0)
-	for _, p := range payments {
-		for _, vtxo := range p.Inputs {
+	for _, request := range requests {
+		for _, vtxo := range request.Inputs {
 			vtxos = append(vtxos, vtxo.VtxoKey)
 		}
 	}

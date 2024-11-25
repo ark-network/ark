@@ -163,7 +163,7 @@
         ]
       }
     },
-    "/v1/round/ping/{paymentId}": {
+    "/v1/round/ping/{requestId}": {
       "get": {
         "operationId": "ArkService_Ping",
         "responses": {
@@ -182,7 +182,8 @@
         },
         "parameters": [
           {
-            "name": "paymentId",
+            "name": "requestId",
+            "description": "The id used to register inputs and ouptuts.",
             "in": "path",
             "required": true,
             "type": "string"
@@ -821,7 +822,7 @@
     "v1RegisterInputsForNextRoundResponse": {
       "type": "object",
       "properties": {
-        "id": {
+        "requestId": {
           "type": "string",
           "description": "Mocks wabisabi's blinded credentials."
         }
@@ -830,7 +831,7 @@
     "v1RegisterOutputsForNextRoundRequest": {
       "type": "object",
       "properties": {
-        "id": {
+        "requestId": {
           "type": "string",
           "description": "Mocks wabisabi's blinded credentials."
         },
@@ -840,7 +841,7 @@
             "type": "object",
             "$ref": "#/definitions/v1Output"
           },
-          "description": "List of receivers for a registered payment."
+          "description": "List of receivers for to convert to leaves in the next VTXO tree."
         }
       }
     },
@@ -1058,7 +1059,7 @@
         },
         "signedRoundTx": {
           "type": "string",
-          "description": "If payment has boarding input, the user must sign the associated inputs."
+          "description": "The user has to sign also the round tx if he's onboarding."
         }
       }
     },

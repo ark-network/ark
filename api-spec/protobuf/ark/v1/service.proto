@@ -19,7 +19,7 @@ service ArkService {
     };
   };
 
-  /* In-Round Payment APIs */
+  /* In-Round Transaction APIs */
 
   rpc RegisterInputsForNextRound(RegisterInputsForNextRoundRequest) returns (RegisterInputsForNextRoundResponse) {
     option (google.api.http) = {
@@ -58,9 +58,11 @@ service ArkService {
   };
   rpc Ping(PingRequest) returns (PingResponse) {
     option (google.api.http) = {
-      get: "/v1/round/ping/{payment_id}"
+      get: "/v1/round/ping/{request_id}"
     };
   };
+
+  /* Out-of-Round Transaction APIs */
 
   rpc SubmitRedeemTx(SubmitRedeemTxRequest) returns (SubmitRedeemTxResponse) {
     option (google.api.http) = {
@@ -134,7 +136,7 @@ message GetBoardingAddressResponse {
   }
 }
 
-/* In-Round Payment API messages */
+/* In-Round Transaction API messages */
 
 message RegisterInputsForNextRoundRequest {
   repeated Input inputs = 1;
@@ -143,13 +145,13 @@ message RegisterInputsForNextRoundRequest {
 }
 message RegisterInputsForNextRoundResponse {
   // Mocks wabisabi's blinded credentials.
-  string id = 1;
+  string request_id = 1;
 }
 
 message RegisterOutputsForNextRoundRequest {
   // Mocks wabisabi's blinded credentials.
-  string id = 1;
-  // List of receivers for a registered payment. 
+  string request_id = 1;
+  // List of receivers for to convert to leaves in the next VTXO tree. 
   repeated Output outputs = 2;
 }
 message RegisterOutputsForNextRoundResponse {}
@@ -171,7 +173,7 @@ message SubmitTreeSignaturesResponse {}
 message SubmitSignedForfeitTxsRequest {
   // Forfeit txs signed by the user. 
   repeated string signed_forfeit_txs = 1;
-  // If payment has boarding input, the user must sign the associated inputs.
+  // The user has to sign also the round tx if he's onboarding.
   optional string signed_round_tx = 2;
 }
 message SubmitSignedForfeitTxsResponse {}
@@ -188,7 +190,8 @@ message GetEventStreamResponse {
 }
 
 message PingRequest {
-  string payment_id = 1;
+  // The id used to register inputs and ouptuts.
+  string request_id = 1;
 }
 message PingResponse {}
 

@@ -252,16 +252,16 @@ func (a *arkClient) init(
 }
 
 func (a *arkClient) ping(
-	ctx context.Context, paymentID string,
+	ctx context.Context, requestID string,
 ) func() {
 	ticker := time.NewTicker(5 * time.Second)
 
 	go func(t *time.Ticker) {
-		if err := a.client.Ping(ctx, paymentID); err != nil {
+		if err := a.client.Ping(ctx, requestID); err != nil {
 			logrus.Warnf("failed to ping server: %s", err)
 		}
 		for range t.C {
-			if err := a.client.Ping(ctx, paymentID); err != nil {
+			if err := a.client.Ping(ctx, requestID); err != nil {
 				logrus.Warnf("failed to ping server: %s", err)
 			}
 		}

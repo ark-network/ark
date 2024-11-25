@@ -39,19 +39,21 @@ type Note struct {
 	ID int64
 }
 
-type Payment struct {
-	ID      string
-	RoundID string
+type Receiver struct {
+	RequestID      string
+	Pubkey         sql.NullString
+	OnchainAddress sql.NullString
+	Amount         int64
 }
 
-type PaymentReceiverVw struct {
-	PaymentID      sql.NullString
+type RequestReceiverVw struct {
+	RequestID      sql.NullString
 	Pubkey         sql.NullString
 	OnchainAddress sql.NullString
 	Amount         sql.NullInt64
 }
 
-type PaymentVtxoVw struct {
+type RequestVtxoVw struct {
 	Txid      sql.NullString
 	Vout      sql.NullInt64
 	Pubkey    sql.NullString
@@ -63,15 +65,8 @@ type PaymentVtxoVw struct {
 	Swept     sql.NullBool
 	ExpireAt  sql.NullInt64
 	CreatedAt sql.NullInt64
-	PaymentID sql.NullString
+	RequestID sql.NullString
 	RedeemTx  sql.NullString
-}
-
-type Receiver struct {
-	PaymentID      string
-	Pubkey         sql.NullString
-	OnchainAddress sql.NullString
-	Amount         int64
 }
 
 type Round struct {
@@ -89,7 +84,7 @@ type Round struct {
 	Swept             bool
 }
 
-type RoundPaymentVw struct {
+type RoundRequestVw struct {
 	ID      sql.NullString
 	RoundID sql.NullString
 }
@@ -118,6 +113,11 @@ type Tx struct {
 	IsLeaf     sql.NullBool
 }
 
+type TxRequest struct {
+	ID      string
+	RoundID string
+}
+
 type Vtxo struct {
 	Txid      string
 	Vout      int64
@@ -130,6 +130,6 @@ type Vtxo struct {
 	Swept     bool
 	ExpireAt  int64
 	CreatedAt int64
-	PaymentID sql.NullString
+	RequestID sql.NullString
 	RedeemTx  sql.NullString
 }

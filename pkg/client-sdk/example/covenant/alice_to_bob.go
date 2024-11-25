@@ -110,7 +110,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Infof("payment completed in round tx: %s", txid)
+	log.Infof("transaction completed in round: %s", txid)
 
 	if err := generateBlock(); err != nil {
 		log.Fatal(err)

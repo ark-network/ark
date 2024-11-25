@@ -237,9 +237,9 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 		require.Condition(t, roundsMatch(*round, *roundById))
 
 		newEvents := []domain.RoundEvent{
-			domain.PaymentsRegistered{
+			domain.TxRequestsRegistered{
 				Id: roundId,
-				Payments: []domain.Payment{
+				TxRequests: []domain.TxRequest{
 					{
 						Id: uuid.New().String(),
 						Inputs: []domain.Vtxo{
@@ -296,8 +296,8 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 		}
 		events = append(events, newEvents...)
 		updatedRound := domain.NewRoundFromEvents(events)
-		for _, pay := range updatedRound.Payments {
-			err = svc.Vtxos().AddVtxos(ctx, pay.Inputs)
+		for _, request := range updatedRound.TxRequests {
+			err = svc.Vtxos().AddVtxos(ctx, request.Inputs)
 			require.NoError(t, err)
 		}
 
@@ -567,8 +567,8 @@ func roundsMatch(expected, got domain.Round) assert.Comparison {
 			return false
 		}
 
-		for k, v := range expected.Payments {
-			gotValue, ok := got.Payments[k]
+		for k, v := range expected.TxRequests {
+			gotValue, ok := got.TxRequests[k]
 			if !ok {
 				return false
 			}
