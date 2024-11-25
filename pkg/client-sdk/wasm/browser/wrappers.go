@@ -248,32 +248,6 @@ func SendOffChainWrapper() js.Func {
 	})
 }
 
-func SendAsyncWrapper() js.Func {
-	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) != 2 {
-			return nil, errors.New("invalid number of args")
-		}
-
-		withExpiryCoinselect := args[0].Bool()
-		receivers, err := parseReceivers(args[1])
-		if err != nil {
-			return nil, err
-		}
-
-		if receivers == nil || len(receivers) == 0 {
-			return nil, errors.New("no receivers specified")
-		}
-
-		txID, err := arkSdkClient.SendAsync(
-			context.Background(), withExpiryCoinselect, receivers,
-		)
-		if err != nil {
-			return nil, err
-		}
-		return js.ValueOf(txID), nil
-	})
-}
-
 func SettleWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
 		if len(args) != 0 {

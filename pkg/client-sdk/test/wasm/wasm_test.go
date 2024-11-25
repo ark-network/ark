@@ -140,7 +140,7 @@ func TestWasm(t *testing.T) {
 
 	amount := 1000
 	t.Logf("Alice is sending %d sats to Bob offchain...", amount)
-	require.NoError(t, sendAsync(alicePage, bobAddr.OffchainAddr, amount))
+	require.NoError(t, sendOffChain(alicePage, bobAddr.OffchainAddr, amount))
 
 	t.Log("Transaction completed out of round")
 
@@ -337,10 +337,10 @@ func settle(page playwright.Page) (string, error) {
 	return fmt.Sprint(result), nil
 }
 
-func sendAsync(page playwright.Page, addr string, amount int) error {
+func sendOffChain(page playwright.Page, addr string, amount int) error {
 	_, err := page.Evaluate(fmt.Sprintf(`async () => { 
         try {
-            return await sendAsync(false, [{To:"%s", Amount:%d}]);
+            return await sendOffChain(false, [{To:"%s", Amount:%d}]);
         } catch (err) {
             console.error("Error:", err);
             throw err;
