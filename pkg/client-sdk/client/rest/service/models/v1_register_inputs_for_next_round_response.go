@@ -17,7 +17,7 @@ import (
 // swagger:model v1RegisterInputsForNextRoundResponse
 type V1RegisterInputsForNextRoundResponse struct {
 
-	// Mocks wabisabi's blinded credentials.
+	// request Id
 	RequestID string `json:"requestId,omitempty"`
 }
 

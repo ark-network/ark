@@ -22,7 +22,7 @@ type V1RegisterOutputsForNextRoundRequest struct {
 	// List of receivers for to convert to leaves in the next VTXO tree.
 	Outputs []*V1Output `json:"outputs"`
 
-	// Mocks wabisabi's blinded credentials.
+	// request Id
 	RequestID string `json:"requestId,omitempty"`
 }
 

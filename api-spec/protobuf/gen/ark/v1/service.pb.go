@@ -439,7 +439,6 @@ type RegisterInputsForNextRoundResponse struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// Mocks wabisabi's blinded credentials.
 	RequestId string `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
 }
 
@@ -487,7 +486,6 @@ type RegisterOutputsForNextRoundRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// Mocks wabisabi's blinded credentials.
 	RequestId string `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
 	// List of receivers for to convert to leaves in the next VTXO tree.
 	Outputs []*Output `protobuf:"bytes,2,rep,name=outputs,proto3" json:"outputs,omitempty"`
@@ -786,7 +784,7 @@ type SubmitSignedForfeitTxsRequest struct {
 
 	// Forfeit txs signed by the user.
 	SignedForfeitTxs []string `protobuf:"bytes,1,rep,name=signed_forfeit_txs,json=signedForfeitTxs,proto3" json:"signed_forfeit_txs,omitempty"`
-	// The user has to sign also the round tx if he's onboarding.
+	// The user has to sign also the round tx if he registerd a boarding UTXO.
 	SignedRoundTx *string `protobuf:"bytes,2,opt,name=signed_round_tx,json=signedRoundTx,proto3,oneof" json:"signed_round_tx,omitempty"`
 }
 

@@ -144,12 +144,10 @@ message RegisterInputsForNextRoundRequest {
   repeated string notes = 3;
 }
 message RegisterInputsForNextRoundResponse {
-  // Mocks wabisabi's blinded credentials.
   string request_id = 1;
 }
 
 message RegisterOutputsForNextRoundRequest {
-  // Mocks wabisabi's blinded credentials.
   string request_id = 1;
   // List of receivers for to convert to leaves in the next VTXO tree. 
   repeated Output outputs = 2;
@@ -173,7 +171,7 @@ message SubmitTreeSignaturesResponse {}
 message SubmitSignedForfeitTxsRequest {
   // Forfeit txs signed by the user. 
   repeated string signed_forfeit_txs = 1;
-  // The user has to sign also the round tx if he's onboarding.
+  // The user has to sign also the round tx if he registerd a boarding UTXO.
   optional string signed_round_tx = 2;
 }
 message SubmitSignedForfeitTxsResponse {}

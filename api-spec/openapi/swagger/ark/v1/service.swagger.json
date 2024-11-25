@@ -823,8 +823,7 @@
       "type": "object",
       "properties": {
         "requestId": {
-          "type": "string",
-          "description": "Mocks wabisabi's blinded credentials."
+          "type": "string"
         }
       }
     },
@@ -832,8 +831,7 @@
       "type": "object",
       "properties": {
         "requestId": {
-          "type": "string",
-          "description": "Mocks wabisabi's blinded credentials."
+          "type": "string"
         },
         "outputs": {
           "type": "array",
@@ -1059,7 +1057,7 @@
         },
         "signedRoundTx": {
           "type": "string",
-          "description": "The user has to sign also the round tx if he's onboarding."
+          "description": "The user has to sign also the round tx if he registerd a boarding UTXO."
         }
       }
     },
