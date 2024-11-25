@@ -19,6 +19,7 @@ import (
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcwallet/waddrmgr"
@@ -187,6 +188,32 @@ func (s *covenantlessService) CompleteAsyncPayment(
 		return "", fmt.Errorf("failed to parse redeem tx: %s", err)
 	}
 
+	spentVtxoKeys := make([]domain.VtxoKey, 0, len(ptx.Inputs))
+	for _, input := range ptx.UnsignedTx.TxIn {
+		spentVtxoKeys = append(spentVtxoKeys, domain.VtxoKey{
+			Txid: input.PreviousOutPoint.Hash.String(),
+			VOut: input.PreviousOutPoint.Index,
+		})
+	}
+
+	spentVtxos, err := vtxoRepo.GetVtxos(ctx, spentVtxoKeys)
+	if err != nil {
+		return "", fmt.Errorf("failed to get vtxos: %s", err)
+	}
+
+	if len(spentVtxos) != len(spentVtxoKeys) {
+		return "", fmt.Errorf("some vtxos not found")
+	}
+
+	vtxoMap := make(map[wire.OutPoint]domain.Vtxo)
+	for _, vtxo := range spentVtxos {
+		hash, err := chainhash.NewHashFromStr(vtxo.Txid)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse vtxo txid: %s", err)
+		}
+		vtxoMap[wire.OutPoint{Hash: *hash, Index: vtxo.VOut}] = vtxo
+	}
+
 	sumOfInputs := int64(0)
 	for inputIndex, input := range ptx.Inputs {
 		if input.WitnessUtxo == nil {
@@ -203,20 +230,16 @@ func (s *covenantlessService) CompleteAsyncPayment(
 			return "", fmt.Errorf("missing tapscript spend sig")
 		}
 
-		vtxoOutpoint := ptx.UnsignedTx.TxIn[inputIndex].PreviousOutPoint
+		outpoint := ptx.UnsignedTx.TxIn[inputIndex].PreviousOutPoint
 
-		// verify that the vtxo is spendable
-
-		vtxos, err := vtxoRepo.GetVtxos(ctx, []domain.VtxoKey{{Txid: vtxoOutpoint.Hash.String(), VOut: vtxoOutpoint.Index}})
-		if err != nil {
-			return "", fmt.Errorf("failed to get vtxo: %s", err)
-		}
-
-		if len(vtxos) == 0 {
+		vtxo, exists := vtxoMap[outpoint]
+		if !exists {
 			return "", fmt.Errorf("vtxo not found")
 		}
 
-		vtxo := vtxos[0]
+		// make sure we don't use the same vtxo twice
+		delete(vtxoMap, outpoint)
+
 		if vtxo.Spent {
 			return "", fmt.Errorf("vtxo already spent")
 		}
@@ -286,7 +309,7 @@ func (s *covenantlessService) CompleteAsyncPayment(
 		}
 
 		ins = append(ins, common.VtxoInput{
-			Outpoint: &vtxoOutpoint,
+			Outpoint: &outpoint,
 			Tapscript: &waddrmgr.Tapscript{
 				ControlBlock:   ctrlBlock,
 				RevealedScript: tapscript.Script,
@@ -355,15 +378,7 @@ func (s *covenantlessService) CompleteAsyncPayment(
 		return "", fmt.Errorf("no valid vtxo found")
 	}
 
-	spentVtxos := make([]domain.VtxoKey, 0)
-	for _, in := range redeemPtx.UnsignedTx.TxIn {
-		spentVtxos = append(spentVtxos, domain.VtxoKey{
-			Txid: in.PreviousOutPoint.Hash.String(),
-			VOut: in.PreviousOutPoint.Index,
-		})
-	}
-
-	vtxos := make([]domain.Vtxo, 0, len(redeemPtx.UnsignedTx.TxOut))
+	newVtxos := make([]domain.Vtxo, 0, len(redeemPtx.UnsignedTx.TxOut))
 
 	for outIndex, out := range outputs {
 		vtxoTapKey, err := schnorr.ParsePubKey(out.PkScript[2:])
@@ -373,7 +388,7 @@ func (s *covenantlessService) CompleteAsyncPayment(
 
 		vtxoPubkey := hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey))
 
-		vtxos = append(vtxos, domain.Vtxo{
+		newVtxos = append(newVtxos, domain.Vtxo{
 			VtxoKey: domain.VtxoKey{
 				Txid: redeemTxid,
 				VOut: uint32(outIndex),
@@ -394,18 +409,20 @@ func (s *covenantlessService) CompleteAsyncPayment(
 		return "", fmt.Errorf("failed to sign redeem tx: %s", err)
 	}
 
-	if err := s.repoManager.Vtxos().AddVtxos(ctx, vtxos); err != nil {
+	// create new vtxos, update spent vtxos state
+
+	if err := s.repoManager.Vtxos().AddVtxos(ctx, newVtxos); err != nil {
 		return "", fmt.Errorf("failed to add vtxos: %s", err)
 	}
-	log.Infof("added %d vtxos", len(vtxos))
-	if err := s.startWatchingVtxos(vtxos); err != nil {
+	log.Infof("added %d vtxos", len(newVtxos))
+	if err := s.startWatchingVtxos(newVtxos); err != nil {
 		log.WithError(err).Warn(
 			"failed to start watching vtxos",
 		)
 	}
-	log.Debugf("started watching %d vtxos", len(vtxos))
+	log.Debugf("started watching %d vtxos", len(newVtxos))
 
-	if err := s.repoManager.Vtxos().SpendVtxos(ctx, spentVtxos, redeemTxid); err != nil {
+	if err := s.repoManager.Vtxos().SpendVtxos(ctx, spentVtxoKeys, redeemTxid); err != nil {
 		return "", fmt.Errorf("failed to spend vtxo: %s", err)
 	}
 	log.Infof("spent %d vtxos", len(spentVtxos))
@@ -413,8 +430,8 @@ func (s *covenantlessService) CompleteAsyncPayment(
 	go func() {
 		s.transactionEventsCh <- RedeemTransactionEvent{
 			AsyncTxID:      redeemTxid,
-			SpentVtxos:     spentVtxos,
-			SpendableVtxos: vtxos,
+			SpentVtxos:     spentVtxoKeys,
+			SpendableVtxos: newVtxos,
 		}
 	}()
 
