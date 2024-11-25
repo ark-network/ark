@@ -4,10 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	utils "github.com/ark-network/ark/server/test/e2e"
-	"github.com/playwright-community/playwright-go"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"io"
 	"net/http"
 	"os"
@@ -17,6 +13,11 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	utils "github.com/ark-network/ark/server/test/e2e"
+	"github.com/playwright-community/playwright-go"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/shirou/gopsutil/net"
 )
@@ -51,7 +52,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	_, err = runClarkCommand("init", "--asp-url", "localhost:7070", "--password", utils.Password, "--network", "regtest", "--explorer", "http://chopsticks:3000")
+	_, err = runClarkCommand("init", "--server-url", "localhost:7070", "--password", utils.Password, "--network", "regtest", "--explorer", "http://chopsticks:3000")
 	if err != nil {
 		fmt.Printf("error initializing ark config: %s", err)
 		os.Exit(1)
@@ -231,8 +232,8 @@ func initWallet(page playwright.Page) error {
             const privateKey = "";
             const password = "pass";
             const explorerUrl = "";
-            const aspUrl = "http://localhost:7070";    
-            return await init(walletType, clientType, aspUrl, privateKey, password, chain, explorerUrl);
+            const serverUrl = "http://localhost:7070";    
+            return await init(walletType, clientType, serverUrl, privateKey, password, chain, explorerUrl);
         } catch (err) {
             console.error("Init error:", err);
             throw err;
