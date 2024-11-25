@@ -364,7 +364,7 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 			return nil, err
 		}
 
-		minFee, err := common.ComputeForfeitMinRelayFee(
+		minFee, err := common.ComputeForfeitTxFee(
 			minRate,
 			&waddrmgr.Tapscript{
 				RevealedScript: vtxoTapscript.Script,

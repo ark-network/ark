@@ -21,7 +21,9 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcwallet/waddrmgr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -172,112 +174,177 @@ func (s *covenantlessService) CompleteAsyncPayment(
 	if err != nil {
 		return "", fmt.Errorf("failed to parse redeem tx: %s", err)
 	}
-	redeemTxid := redeemPtx.UnsignedTx.TxID()
 
 	vtxoRepo := s.repoManager.Vtxos()
 
 	expiration := int64(0)
 	roundTxid := ""
 
-	for _, tx := range []string{redeemTx} {
-		ptx, err := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+	ins := make([]common.VtxoInput, 0)
+
+	ptx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse redeem tx: %s", err)
+	}
+
+	sumOfInputs := int64(0)
+	for inputIndex, input := range ptx.Inputs {
+		if input.WitnessUtxo == nil {
+			return "", fmt.Errorf("missing witness utxo")
+		}
+
+		if len(input.TaprootLeafScript) == 0 {
+			return "", fmt.Errorf("missing tapscript leaf")
+		}
+
+		tapscript := input.TaprootLeafScript[0]
+
+		if len(input.TaprootScriptSpendSig) == 0 {
+			return "", fmt.Errorf("missing tapscript spend sig")
+		}
+
+		vtxoOutpoint := ptx.UnsignedTx.TxIn[inputIndex].PreviousOutPoint
+
+		// verify that the vtxo is spendable
+
+		vtxos, err := vtxoRepo.GetVtxos(ctx, []domain.VtxoKey{{Txid: vtxoOutpoint.Hash.String(), VOut: vtxoOutpoint.Index}})
 		if err != nil {
-			return "", fmt.Errorf("failed to parse tx: %s", err)
+			return "", fmt.Errorf("failed to get vtxo: %s", err)
 		}
 
-		for inputIndex, input := range ptx.Inputs {
-			if input.WitnessUtxo == nil {
-				return "", fmt.Errorf("missing witness utxo")
-			}
+		if len(vtxos) == 0 {
+			return "", fmt.Errorf("vtxo not found")
+		}
 
-			if len(input.TaprootLeafScript) == 0 {
-				return "", fmt.Errorf("missing tapscript leaf")
-			}
+		vtxo := vtxos[0]
+		if vtxo.Spent {
+			return "", fmt.Errorf("vtxo already spent")
+		}
 
-			if len(input.TaprootScriptSpendSig) == 0 {
-				return "", fmt.Errorf("missing tapscript spend sig")
-			}
+		if vtxo.Redeemed {
+			return "", fmt.Errorf("vtxo already redeemed")
+		}
 
-			vtxoOutpoint := ptx.UnsignedTx.TxIn[inputIndex].PreviousOutPoint
+		if vtxo.Swept {
+			return "", fmt.Errorf("vtxo already swept")
+		}
 
-			// verify that the vtxo is spendable
+		sumOfInputs += input.WitnessUtxo.Value
 
-			vtxos, err := vtxoRepo.GetVtxos(ctx, []domain.VtxoKey{{Txid: vtxoOutpoint.Hash.String(), VOut: vtxoOutpoint.Index}})
-			if err != nil {
-				return "", fmt.Errorf("failed to get vtxo: %s", err)
-			}
+		if inputIndex == 0 || vtxo.ExpireAt < expiration {
+			roundTxid = vtxo.RoundTxid
+			expiration = vtxo.ExpireAt
+		}
 
-			if len(vtxos) == 0 {
-				return "", fmt.Errorf("vtxo not found")
-			}
+		// verify that the user signs a forfeit closure
+		var userPubKey *secp256k1.PublicKey
 
-			vtxo := vtxos[0]
-			if vtxo.Spent {
-				return "", fmt.Errorf("vtxo already spent")
-			}
+		aspXOnlyPubKey := schnorr.SerializePubKey(s.pubkey)
 
-			if vtxo.Redeemed {
-				return "", fmt.Errorf("vtxo already redeemed")
-			}
-
-			if vtxo.Swept {
-				return "", fmt.Errorf("vtxo already swept")
-			}
-
-			if inputIndex == 0 || vtxo.ExpireAt < expiration {
-				roundTxid = vtxo.RoundTxid
-				expiration = vtxo.ExpireAt
-			}
-
-			// verify that the user signs a forfeit closure
-			var userPubKey *secp256k1.PublicKey
-
-			aspXOnlyPubKey := schnorr.SerializePubKey(s.pubkey)
-
-			for _, sig := range input.TaprootScriptSpendSig {
-				if !bytes.Equal(sig.XOnlyPubKey, aspXOnlyPubKey) {
-					parsed, err := schnorr.ParsePubKey(sig.XOnlyPubKey)
-					if err != nil {
-						return "", fmt.Errorf("failed to parse pubkey: %s", err)
-					}
-					userPubKey = parsed
-					break
+		for _, sig := range input.TaprootScriptSpendSig {
+			if !bytes.Equal(sig.XOnlyPubKey, aspXOnlyPubKey) {
+				parsed, err := schnorr.ParsePubKey(sig.XOnlyPubKey)
+				if err != nil {
+					return "", fmt.Errorf("failed to parse pubkey: %s", err)
 				}
-			}
-
-			if userPubKey == nil {
-				return "", fmt.Errorf("redeem transaction is not signed")
-			}
-
-			vtxoPublicKeyBytes, err := hex.DecodeString(vtxo.Pubkey)
-			if err != nil {
-				return "", fmt.Errorf("failed to decode vtxo pubkey: %s", err)
-			}
-
-			vtxoTapKey, err := schnorr.ParsePubKey(vtxoPublicKeyBytes)
-			if err != nil {
-				return "", fmt.Errorf("failed to parse vtxo pubkey: %s", err)
-			}
-
-			// verify witness utxo
-			pkscript, err := common.P2TRScript(vtxoTapKey)
-			if err != nil {
-				return "", fmt.Errorf("failed to get pkscript: %s", err)
-			}
-
-			if !bytes.Equal(input.WitnessUtxo.PkScript, pkscript) {
-				return "", fmt.Errorf("witness utxo script mismatch")
-			}
-
-			if input.WitnessUtxo.Value != int64(vtxo.Amount) {
-				return "", fmt.Errorf("witness utxo value mismatch")
+				userPubKey = parsed
+				break
 			}
 		}
 
-		// verify the tapscript signatures
-		if valid, err := s.builder.VerifyTapscriptPartialSigs(tx); err != nil || !valid {
-			return "", fmt.Errorf("invalid tx signature: %s", err)
+		if userPubKey == nil {
+			return "", fmt.Errorf("redeem transaction is not signed")
 		}
+
+		vtxoPublicKeyBytes, err := hex.DecodeString(vtxo.Pubkey)
+		if err != nil {
+			return "", fmt.Errorf("failed to decode vtxo pubkey: %s", err)
+		}
+
+		vtxoTapKey, err := schnorr.ParsePubKey(vtxoPublicKeyBytes)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse vtxo pubkey: %s", err)
+		}
+
+		// verify witness utxo
+		pkscript, err := common.P2TRScript(vtxoTapKey)
+		if err != nil {
+			return "", fmt.Errorf("failed to get pkscript: %s", err)
+		}
+
+		if !bytes.Equal(input.WitnessUtxo.PkScript, pkscript) {
+			return "", fmt.Errorf("witness utxo script mismatch")
+		}
+
+		if input.WitnessUtxo.Value != int64(vtxo.Amount) {
+			return "", fmt.Errorf("witness utxo value mismatch")
+		}
+
+		ctrlBlock, err := txscript.ParseControlBlock(tapscript.ControlBlock)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse control block: %s", err)
+		}
+
+		ins = append(ins, common.VtxoInput{
+			Outpoint: &vtxoOutpoint,
+			Tapscript: &waddrmgr.Tapscript{
+				ControlBlock:   ctrlBlock,
+				RevealedScript: tapscript.Script,
+			},
+		})
+	}
+
+	dust, err := s.wallet.GetDustAmount(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to get dust threshold: %s", err)
+	}
+
+	outputs := ptx.UnsignedTx.TxOut
+
+	sumOfOutputs := int64(0)
+	for _, out := range outputs {
+		sumOfOutputs += out.Value
+		if out.Value < int64(dust) {
+			return "", fmt.Errorf("output value is less than dust threshold")
+		}
+	}
+
+	fees := sumOfInputs - sumOfOutputs
+	if fees < 0 {
+		return "", fmt.Errorf("invalid fees, inputs are less than outputs")
+	}
+
+	minFeeRate := s.wallet.MinRelayFeeRate(ctx)
+
+	minFees, err := common.ComputeRedeemTxFee(chainfee.SatPerKVByte(minFeeRate), ins, len(outputs))
+	if err != nil {
+		return "", fmt.Errorf("failed to compute min fees: %s", err)
+	}
+
+	if fees < minFees {
+		return "", fmt.Errorf("min relay fee not met, %d < %d", fees, minFees)
+	}
+
+	// recompute redeem tx
+	rebuiltRedeemTx, err := bitcointree.BuildRedeemTx(ins, outputs, fees)
+	if err != nil {
+		return "", fmt.Errorf("failed to rebuild redeem tx: %s", err)
+	}
+
+	rebuiltPtx, err := psbt.NewFromRawBytes(strings.NewReader(rebuiltRedeemTx), true)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse rebuilt redeem tx: %s", err)
+	}
+
+	rebuiltTxid := rebuiltPtx.UnsignedTx.TxID()
+	redeemTxid := redeemPtx.UnsignedTx.TxID()
+	if rebuiltTxid != redeemTxid {
+		return "", fmt.Errorf("invalid redeem tx")
+	}
+
+	// verify the tapscript signatures
+	if valid, err := s.builder.VerifyTapscriptPartialSigs(redeemTx); err != nil || !valid {
+		return "", fmt.Errorf("invalid tx signature: %s", err)
 	}
 
 	if expiration == 0 {
@@ -298,7 +365,7 @@ func (s *covenantlessService) CompleteAsyncPayment(
 
 	vtxos := make([]domain.Vtxo, 0, len(redeemPtx.UnsignedTx.TxOut))
 
-	for outIndex, out := range redeemPtx.UnsignedTx.TxOut {
+	for outIndex, out := range outputs {
 		vtxoTapKey, err := schnorr.ParsePubKey(out.PkScript[2:])
 		if err != nil {
 			return "", fmt.Errorf("failed to parse vtxo taproot key: %s", err)

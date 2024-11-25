@@ -202,7 +202,7 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 
 		vtxoTapscript := firstForfeit.Inputs[1].TapLeafScript[0]
 
-		minFee, err := common.ComputeForfeitMinRelayFee(
+		minFee, err := common.ComputeForfeitTxFee(
 			minRate,
 			&waddrmgr.Tapscript{
 				RevealedScript: vtxoTapscript.Script,

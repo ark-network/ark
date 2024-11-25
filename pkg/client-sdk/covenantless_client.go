@@ -30,8 +30,6 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcwallet/waddrmgr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/lightningnetwork/lnd/input"
-	"github.com/lightningnetwork/lnd/lntypes"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	log "github.com/sirupsen/logrus"
 )
@@ -1038,7 +1036,7 @@ func (a *covenantlessArkClient) SendAsync(
 		receivers = append(receivers, NewBitcoinReceiver(offchainAddrs[0].Address, changeAmount))
 	}
 
-	inputs := make([]OORVtxoInput, 0, len(selectedCoins))
+	inputs := make([]redeemTxInput, 0, len(selectedCoins))
 
 	for _, coin := range selectedCoins {
 		vtxoScript, err := bitcointree.ParseVtxoScript(coin.Tapscripts)
@@ -1055,14 +1053,14 @@ func (a *covenantlessArkClient) SendAsync(
 
 		forfeitLeaf := txscript.NewBaseTapLeaf(forfeitScript)
 
-		inputs = append(inputs, OORVtxoInput{
+		inputs = append(inputs, redeemTxInput{
 			coin,
 			forfeitLeaf.TapHash(),
 		})
 	}
 
-	feeRate := chainfee.AbsoluteFeePerKwFloor
-	redeemTx, err := BuildOORTransaction(inputs, receivers, feeRate.FeePerVByte())
+	feeRate := chainfee.FeePerKwFloor
+	redeemTx, err := buildRedeemTx(inputs, receivers, feeRate.FeePerVByte())
 	if err != nil {
 		return "", err
 	}
@@ -2104,7 +2102,7 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 			return nil, err
 		}
 
-		feeAmount, err := common.ComputeForfeitMinRelayFee(
+		feeAmount, err := common.ComputeForfeitTxFee(
 			feeRate,
 			&waddrmgr.Tapscript{
 				RevealedScript: leafProof.Script,
@@ -2591,13 +2589,13 @@ func vtxosToTxsCovenantless(
 	return txs, nil
 }
 
-type OORVtxoInput struct {
+type redeemTxInput struct {
 	client.TapscriptsVtxo
 	ForfeitLeafHash chainhash.Hash
 }
 
-func BuildOORTransaction(
-	vtxos []OORVtxoInput,
+func buildRedeemTx(
+	vtxos []redeemTxInput,
 	receivers []Receiver,
 	feeRate chainfee.SatPerVByte,
 ) (string, error) {
@@ -2605,13 +2603,9 @@ func BuildOORTransaction(
 		return "", fmt.Errorf("missing vtxos")
 	}
 
-	ins := make([]*wire.OutPoint, 0, len(vtxos))
-	outs := make([]*wire.TxOut, 0, len(receivers))
-	witnessUtxos := make(map[int]*wire.TxOut)
-	tapscripts := make(map[int]*psbt.TaprootTapLeafScript)
+	ins := make([]common.VtxoInput, 0, len(vtxos))
 
-	redeemTxWeightEstimator := &input.TxWeightEstimator{}
-	for index, vtxo := range vtxos {
+	for _, vtxo := range vtxos {
 		if len(vtxo.Tapscripts) <= 0 {
 			return "", fmt.Errorf("missing tapscripts for vtxo %s", vtxo.Vtxo.Txid)
 		}
@@ -2631,30 +2625,14 @@ func BuildOORTransaction(
 			return "", err
 		}
 
-		vtxoTapKey, vtxoTree, err := vtxoScript.TapTree()
+		_, vtxoTree, err := vtxoScript.TapTree()
 		if err != nil {
 			return "", err
-		}
-
-		vtxoOutputScript, err := common.P2TRScript(vtxoTapKey)
-		if err != nil {
-			return "", err
-		}
-
-		witnessUtxos[index] = &wire.TxOut{
-			Value:    int64(vtxo.Amount),
-			PkScript: vtxoOutputScript,
 		}
 
 		leafProof, err := vtxoTree.GetTaprootMerkleProof(vtxo.ForfeitLeafHash)
 		if err != nil {
 			return "", err
-		}
-
-		tapscripts[index] = &psbt.TaprootTapLeafScript{
-			ControlBlock: leafProof.ControlBlock,
-			Script:       leafProof.Script,
-			LeafVersion:  txscript.BaseLeafVersion,
 		}
 
 		ctrlBlock, err := txscript.ParseControlBlock(leafProof.ControlBlock)
@@ -2667,24 +2645,29 @@ func BuildOORTransaction(
 			return "", err
 		}
 
-		redeemTxWeightEstimator.AddTapscriptInput(lntypes.WeightUnit(closure.WitnessSize()), &waddrmgr.Tapscript{
+		tapscript := &waddrmgr.Tapscript{
 			RevealedScript: leafProof.Script,
 			ControlBlock:   ctrlBlock,
+		}
+
+		ins = append(ins, common.VtxoInput{
+			Outpoint:    vtxoOutpoint,
+			Tapscript:   tapscript,
+			Amount:      int64(vtxo.Amount),
+			WitnessSize: closure.WitnessSize(),
 		})
-
-		ins = append(ins, vtxoOutpoint)
 	}
 
-	for range receivers {
-		redeemTxWeightEstimator.AddP2TROutput()
+	fees, err := common.ComputeRedeemTxFee(feeRate.FeePerKVByte(), ins, len(receivers))
+	if err != nil {
+		return "", err
 	}
 
-	fees := feeRate.FeePerKVByte().FeeForVSize(lntypes.VByte(redeemTxWeightEstimator.VSize()))
-	feesAmount := uint64(fees.ToUnit(btcutil.AmountSatoshi))
-
-	if feesAmount >= receivers[len(receivers)-1].Amount() {
+	if fees >= int64(receivers[len(receivers)-1].Amount()) {
 		return "", fmt.Errorf("redeem tx fee is higher than the amount of the change receiver")
 	}
+
+	outs := make([]*wire.TxOut, 0, len(receivers))
 
 	for i, receiver := range receivers {
 		if receiver.IsOnchain() {
@@ -2705,7 +2688,7 @@ func BuildOORTransaction(
 		// to be the change in case it's not a send-all.
 		value := receiver.Amount()
 		if i == len(receivers)-1 {
-			value -= feesAmount
+			value -= uint64(fees)
 		}
 		outs = append(outs, &wire.TxOut{
 			Value:    int64(value),
@@ -2713,27 +2696,5 @@ func BuildOORTransaction(
 		})
 	}
 
-	sequences := make([]uint32, len(ins))
-	for i := range sequences {
-		sequences[i] = wire.MaxTxInSequenceNum
-	}
-
-	redeemPtx, err := psbt.New(
-		ins, outs, 2, 0, sequences,
-	)
-	if err != nil {
-		return "", err
-	}
-
-	for i := range redeemPtx.Inputs {
-		redeemPtx.Inputs[i].WitnessUtxo = witnessUtxos[i]
-		redeemPtx.Inputs[i].TaprootLeafScript = []*psbt.TaprootTapLeafScript{tapscripts[i]}
-	}
-
-	redeemTx, err := redeemPtx.B64Encode()
-	if err != nil {
-		return "", err
-	}
-
-	return redeemTx, nil
+	return bitcointree.BuildRedeemTx(ins, outs, fees)
 }
