@@ -601,13 +601,6 @@ func (a *covenantArkClient) CollaborativeRedeem(
 	return roundTxID, nil
 }
 
-func (a *covenantArkClient) SendAsync(
-	ctx context.Context,
-	withExpiryCoinselect bool, receivers []Receiver,
-) (string, error) {
-	return "", fmt.Errorf("not implemented")
-}
-
 func (a *covenantArkClient) Settle(
 	ctx context.Context,
 ) (string, error) {

@@ -196,7 +196,7 @@ var (
 	}
 	sendCommand = cli.Command{
 		Name:  "send",
-		Usage: "Send funds onchain, offchain, or asynchronously",
+		Usage: "Send funds offchain",
 		Action: func(ctx *cli.Context) error {
 			return send(ctx)
 		},
@@ -368,7 +368,7 @@ func send(ctx *cli.Context) error {
 	if isBitcoin {
 		return sendCovenantLess(ctx, receivers)
 	}
-	return sendCovenant(ctx.Context, receivers)
+	return sendCovenant(ctx, receivers)
 }
 
 func balance(ctx *cli.Context) error {
@@ -525,9 +525,27 @@ func parseReceivers(receveirsJSON string, isBitcoin bool) ([]arksdk.Receiver, er
 }
 
 func sendCovenantLess(ctx *cli.Context, receivers []arksdk.Receiver) error {
+	var onchainReceivers, offchainReceivers []arksdk.Receiver
+
+	for _, receiver := range receivers {
+		if receiver.IsOnchain() {
+			onchainReceivers = append(onchainReceivers, receiver)
+		} else {
+			offchainReceivers = append(offchainReceivers, receiver)
+		}
+	}
+
+	if len(onchainReceivers) > 0 {
+		txid, err := arkSdkClient.SendOnChain(ctx.Context, onchainReceivers)
+		if err != nil {
+			return err
+		}
+		return printJSON(map[string]interface{}{"txid": txid})
+	}
+
 	computeExpiration := ctx.Bool(enableExpiryCoinselectFlag.Name)
-	redeemTx, err := arkSdkClient.SendAsync(
-		ctx.Context, computeExpiration, receivers,
+	redeemTx, err := arkSdkClient.SendOffChain(
+		ctx.Context, computeExpiration, offchainReceivers,
 	)
 	if err != nil {
 		return err
@@ -540,7 +558,7 @@ func sendCovenantLess(ctx *cli.Context, receivers []arksdk.Receiver) error {
 	return printJSON(map[string]string{"txid": ptx.UnsignedTx.TxHash().String()})
 }
 
-func sendCovenant(ctx context.Context, receivers []arksdk.Receiver) error {
+func sendCovenant(ctx *cli.Context, receivers []arksdk.Receiver) error {
 	var onchainReceivers, offchainReceivers []arksdk.Receiver
 
 	for _, receiver := range receivers {
@@ -552,22 +570,21 @@ func sendCovenant(ctx context.Context, receivers []arksdk.Receiver) error {
 	}
 
 	if len(onchainReceivers) > 0 {
-		txID, err := arkSdkClient.SendOnChain(ctx, onchainReceivers)
+		txID, err := arkSdkClient.SendOnChain(ctx.Context, onchainReceivers)
 		if err != nil {
 			return err
 		}
 		return printJSON(map[string]interface{}{"txid": txID})
 	}
 
-	if len(offchainReceivers) > 0 {
-		txID, err := arkSdkClient.SendOffChain(ctx, false, offchainReceivers)
-		if err != nil {
-			return err
-		}
-		return printJSON(map[string]interface{}{"txid": txID})
+	computeExpiration := ctx.Bool(enableExpiryCoinselectFlag.Name)
+	txid, err := arkSdkClient.SendOffChain(
+		ctx.Context, computeExpiration, offchainReceivers,
+	)
+	if err != nil {
+		return err
 	}
-
-	return nil
+	return printJSON(map[string]interface{}{"txid": txid})
 }
 
 func readPassword(ctx *cli.Context) ([]byte, error) {
