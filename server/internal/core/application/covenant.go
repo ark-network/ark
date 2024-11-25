@@ -970,7 +970,7 @@ func (s *covenantService) updateVtxoSet(round *domain.Round) {
 			}
 		}
 		s.transactionEventsCh <- RoundTransactionEvent{
-			RoundTxID:             round.Txid,
+			RoundTxid:             round.Txid,
 			SpentVtxos:            getSpentVtxos(round.TxRequests),
 			SpendableVtxos:        s.getNewVtxos(round),
 			ClaimedBoardingInputs: boardingInputs,

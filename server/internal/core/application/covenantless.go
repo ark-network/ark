@@ -429,7 +429,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 
 	go func() {
 		s.transactionEventsCh <- RedeemTransactionEvent{
-			AsyncTxID:      redeemTxid,
+			Txid:           redeemTxid,
 			SpentVtxos:     spentVtxoKeys,
 			SpendableVtxos: newVtxos,
 		}
@@ -1331,7 +1331,7 @@ func (s *covenantlessService) finalizeRound(notes []note.Note) {
 
 	go func() {
 		s.transactionEventsCh <- RoundTransactionEvent{
-			RoundTxID:             round.Txid,
+			RoundTxid:             round.Txid,
 			SpentVtxos:            getSpentVtxos(round.TxRequests),
 			SpendableVtxos:        s.getNewVtxos(round),
 			ClaimedBoardingInputs: boardingInputs,
@@ -1738,14 +1738,14 @@ func (s *covenantlessService) reactToFraud(ctx context.Context, vtxo domain.Vtxo
 			return fmt.Errorf("failed to retrieve round: %s", err)
 		}
 
-		asyncPayVtxo := vtxos[0]
-		if asyncPayVtxo.Redeemed { // redeem tx is already onchain
+		storedVtxo := vtxos[0]
+		if storedVtxo.Redeemed { // redeem tx is already onchain
 			return nil
 		}
 
 		log.Debugf("vtxo %s:%d has been spent by out of round transaction", vtxo.Txid, vtxo.VOut)
 
-		redeemTxHex, err := s.builder.FinalizeAndExtract(asyncPayVtxo.RedeemTx)
+		redeemTxHex, err := s.builder.FinalizeAndExtract(storedVtxo.RedeemTx)
 		if err != nil {
 			return fmt.Errorf("failed to finalize redeem tx: %s", err)
 		}

@@ -106,7 +106,7 @@ type TransactionEvent interface {
 }
 
 type RoundTransactionEvent struct {
-	RoundTxID             string
+	RoundTxid             string
 	SpentVtxos            []domain.VtxoKey
 	SpendableVtxos        []domain.Vtxo
 	ClaimedBoardingInputs []domain.VtxoKey
@@ -117,7 +117,7 @@ func (r RoundTransactionEvent) Type() TransactionEventType {
 }
 
 type RedeemTransactionEvent struct {
-	AsyncTxID      string
+	RedeemTxid     string
 	SpentVtxos     []domain.VtxoKey
 	SpendableVtxos []domain.Vtxo
 }

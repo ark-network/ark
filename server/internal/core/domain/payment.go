@@ -119,7 +119,7 @@ type Vtxo struct {
 	Amount    uint64
 	PubKey    string
 	RoundTxid string
-	SpentBy   string // round txid or async redeem txid
+	SpentBy   string // round txid or redeem txid
 	Spent     bool
 	Redeemed  bool
 	Swept     bool
