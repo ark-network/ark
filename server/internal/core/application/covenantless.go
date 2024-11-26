@@ -429,7 +429,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 
 	go func() {
 		s.transactionEventsCh <- RedeemTransactionEvent{
-			Txid:           redeemTxid,
+			RedeemTxid:     redeemTxid,
 			SpentVtxos:     spentVtxoKeys,
 			SpendableVtxos: newVtxos,
 		}
