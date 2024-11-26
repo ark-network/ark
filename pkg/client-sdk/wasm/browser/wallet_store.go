@@ -16,18 +16,18 @@ import (
 type walletData struct {
 	EncryptedPrvkey string `json:"encrypted_private_key"`
 	PasswordHash    string `json:"password_hash"`
-	Pubkey          string `json:"pubkey"`
+	PubKey          string `json:"pubkey"`
 }
 
 func (d walletData) decode() *walletstore.WalletData {
 	encryptedPrvkey, _ := hex.DecodeString(d.EncryptedPrvkey)
 	passwordHash, _ := hex.DecodeString(d.PasswordHash)
-	buf, _ := hex.DecodeString(d.Pubkey)
+	buf, _ := hex.DecodeString(d.PubKey)
 	pubkey, _ := secp256k1.ParsePubKey(buf)
 	return &walletstore.WalletData{
 		EncryptedPrvkey: encryptedPrvkey,
 		PasswordHash:    passwordHash,
-		Pubkey:          pubkey,
+		PubKey:          pubkey,
 	}
 }
 
@@ -44,7 +44,7 @@ func (s *walletStore) AddWallet(data walletstore.WalletData) error {
 	wd := &walletData{
 		EncryptedPrvkey: hex.EncodeToString(data.EncryptedPrvkey),
 		PasswordHash:    hex.EncodeToString(data.PasswordHash),
-		Pubkey:          hex.EncodeToString(data.Pubkey.SerializeCompressed()),
+		PubKey:          hex.EncodeToString(data.PubKey.SerializeCompressed()),
 	}
 
 	if err := s.writeData(wd); err != nil {
@@ -57,7 +57,7 @@ func (s *walletStore) GetWallet() (*walletstore.WalletData, error) {
 	data := walletData{
 		EncryptedPrvkey: s.store.Call("getItem", "encrypted_private_key").String(),
 		PasswordHash:    s.store.Call("getItem", "password_hash").String(),
-		Pubkey:          s.store.Call("getItem", "pubkey").String(),
+		PubKey:          s.store.Call("getItem", "pubkey").String(),
 	}
 	return data.decode(), nil
 }

@@ -74,8 +74,8 @@ const (
 	connectorAccount accountName = "default"
 
 	// this account won't be restored by lnd, but it's not a problem cause it does not track any funds
-	// it's used to derive a constant public key to be used as "ASP key" in Vtxo scripts
-	aspKeyAccount accountName = "asp"
+	// it's used to derive a constant public key to be used as "server key" in Vtxo scripts
+	serverKeyAccount accountName = "server"
 
 	// https://github.com/bitcoin/bitcoin/blob/439e58c4d8194ca37f70346727d31f52e69592ec/src/policy/policy.cpp#L23C8-L23C11
 	// biggest input size to compute the maximum dust amount
@@ -112,8 +112,8 @@ type service struct {
 	watchedScriptsLock sync.RWMutex
 	watchedScripts     map[string]struct{}
 
-	// holds the data related to the ASP key used in Vtxo scripts
-	aspKeyAddr waddrmgr.ManagedPubKeyAddress
+	// holds the data related to the server key used in Vtxo scripts
+	serverKeyAddr waddrmgr.ManagedPubKeyAddress
 
 	isSynced bool
 	syncedCh chan struct{}
@@ -411,12 +411,12 @@ func (s *service) Unlock(_ context.Context, password string) error {
 			return fmt.Errorf("failed to start wallet: %s", err)
 		}
 
-		addrs, err := wallet.ListAddresses(string(aspKeyAccount), false)
+		addrs, err := wallet.ListAddresses(string(serverKeyAccount), false)
 		if err != nil {
 			return err
 		}
 		for info, addrs := range addrs {
-			if info.AccountName != string(aspKeyAccount) {
+			if info.AccountName != string(serverKeyAccount) {
 				continue
 			}
 
@@ -443,7 +443,7 @@ func (s *service) Unlock(_ context.Context, password string) error {
 						return fmt.Errorf("failed to cast address to managed pubkey address")
 					}
 
-					s.aspKeyAddr = managedPubkeyAddr
+					s.serverKeyAddr = managedPubkeyAddr
 					break
 				}
 			}
@@ -556,7 +556,7 @@ func (s *service) GetPubkey(ctx context.Context) (*secp256k1.PublicKey, error) {
 	if !s.isLoaded() {
 		return nil, ErrNotLoaded
 	}
-	return s.aspKeyAddr.PubKey(), nil
+	return s.serverKeyAddr.PubKey(), nil
 }
 
 func (s *service) GetForfeitAddress(ctx context.Context) (string, error) {
@@ -1093,16 +1093,16 @@ func (s *service) GetTransaction(ctx context.Context, txid string) (string, erro
 }
 
 func (s *service) SignMessage(ctx context.Context, message []byte) ([]byte, error) {
-	if s.aspKeyAddr == nil {
+	if s.serverKeyAddr == nil {
 		return nil, fmt.Errorf("wallet not initialized or locked")
 	}
 
-	privKey, err := s.aspKeyAddr.PrivKey()
+	prvkey, err := s.serverKeyAddr.PrivKey()
 	if err != nil {
 		return nil, err
 	}
 
-	sig, err := schnorr.Sign(privKey, message)
+	sig, err := schnorr.Sign(prvkey, message)
 	if err != nil {
 		return nil, err
 	}
@@ -1116,7 +1116,7 @@ func (s *service) VerifyMessageSignature(ctx context.Context, message, signature
 		return false, err
 	}
 
-	return sig.Verify(message, s.aspKeyAddr.PubKey()), nil
+	return sig.Verify(message, s.serverKeyAddr.PubKey()), nil
 }
 
 func (s *service) castNotification(tx *wtxmgr.TxRecord) map[string][]ports.VtxoWithValue {
@@ -1187,7 +1187,7 @@ func (s *service) create(mnemonic, password string, addrGap uint32) error {
 
 	defer wallet.InternalWallet().Lock()
 
-	if err := s.initAspKeyAccount(wallet); err != nil {
+	if err := s.initServerKeyAccount(wallet); err != nil {
 		return err
 	}
 
@@ -1195,7 +1195,7 @@ func (s *service) create(mnemonic, password string, addrGap uint32) error {
 		return fmt.Errorf("failed to start wallet: %s", err)
 	}
 
-	if err := s.initAspKeyAddress(wallet); err != nil {
+	if err := s.initServerKeyAddress(wallet); err != nil {
 		return err
 	}
 
@@ -1251,8 +1251,8 @@ func (s *service) listenToSynced() {
 	}
 }
 
-// initAspKeyAccount creates the asp key account if it doesn't exist
-func (s *service) initAspKeyAccount(wallet *btcwallet.BtcWallet) error {
+// initServerKeyAccount creates the server key account if it doesn't exist
+func (s *service) initServerKeyAccount(wallet *btcwallet.BtcWallet) error {
 	w := wallet.InternalWallet()
 
 	p2trAccounts, err := w.Accounts(p2trKeyScope)
@@ -1260,45 +1260,45 @@ func (s *service) initAspKeyAccount(wallet *btcwallet.BtcWallet) error {
 		return fmt.Errorf("failed to list wallet accounts: %s", err)
 	}
 
-	var aspKeyAccountNumber uint32
+	var serverKeyAccountNumber uint32
 
 	if p2trAccounts != nil {
 		for _, account := range p2trAccounts.Accounts {
-			if account.AccountName == string(aspKeyAccount) {
-				aspKeyAccountNumber = account.AccountNumber
+			if account.AccountName == string(serverKeyAccount) {
+				serverKeyAccountNumber = account.AccountNumber
 				break
 			}
 		}
 	}
 
-	if aspKeyAccountNumber == 0 {
-		log.Debug("creating asp key account")
-		aspKeyAccountNumber, err = w.NextAccount(p2trKeyScope, string(aspKeyAccount))
+	if serverKeyAccountNumber == 0 {
+		log.Debug("creating server key account")
+		serverKeyAccountNumber, err = w.NextAccount(p2trKeyScope, string(serverKeyAccount))
 		if err != nil {
-			return fmt.Errorf("failed to create %s: %s", aspKeyAccount, err)
+			return fmt.Errorf("failed to create %s: %s", serverKeyAccount, err)
 		}
 	}
 
-	log.Debugf("key account number: %d", aspKeyAccountNumber)
+	log.Debugf("key account number: %d", serverKeyAccountNumber)
 
 	return nil
 }
 
-// initAspKeyAddress generates the asp key address if it doesn't exist
-// it also cache the address in s.aspKeyAddr field
-func (s *service) initAspKeyAddress(wallet *btcwallet.BtcWallet) error {
-	addrs, err := wallet.ListAddresses(string(aspKeyAccount), false)
+// initServerKeyAddress generates the server key address if it doesn't exist
+// it also cache the address in s.serverKeyAddr field
+func (s *service) initServerKeyAddress(wallet *btcwallet.BtcWallet) error {
+	addrs, err := wallet.ListAddresses(string(serverKeyAccount), false)
 	if err != nil {
 		return err
 	}
 
 	if len(addrs) == 0 {
-		aspKeyAddr, err := wallet.NewAddress(lnwallet.TaprootPubkey, false, string(aspKeyAccount))
+		serverKeyAddr, err := wallet.NewAddress(lnwallet.TaprootPubkey, false, string(serverKeyAccount))
 		if err != nil {
 			return err
 		}
 
-		addrInfos, err := wallet.AddressInfo(aspKeyAddr)
+		addrInfos, err := wallet.AddressInfo(serverKeyAddr)
 		if err != nil {
 			return err
 		}
@@ -1308,10 +1308,10 @@ func (s *service) initAspKeyAddress(wallet *btcwallet.BtcWallet) error {
 			return fmt.Errorf("failed to cast address to managed pubkey address")
 		}
 
-		s.aspKeyAddr = managedAddr
+		s.serverKeyAddr = managedAddr
 	} else {
 		for info, addrs := range addrs {
-			if info.AccountName != string(aspKeyAccount) {
+			if info.AccountName != string(serverKeyAccount) {
 				continue
 			}
 
@@ -1338,7 +1338,7 @@ func (s *service) initAspKeyAddress(wallet *btcwallet.BtcWallet) error {
 						return fmt.Errorf("failed to cast address to managed pubkey address")
 					}
 
-					s.aspKeyAddr = managedPubkeyAddr
+					s.serverKeyAddr = managedPubkeyAddr
 					break
 				}
 			}

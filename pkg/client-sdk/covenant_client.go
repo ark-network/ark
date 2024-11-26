@@ -87,7 +87,7 @@ func LoadCovenantClient(sdkStore types.Store) (ArkClient, error) {
 	}
 
 	clientSvc, err := getClient(
-		supportedClients, cfgData.ClientType, cfgData.AspUrl,
+		supportedClients, cfgData.ClientType, cfgData.ServerUrl,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup transport client: %s", err)
@@ -147,7 +147,7 @@ func LoadCovenantClientWithWallet(
 	}
 
 	clientSvc, err := getClient(
-		supportedClients, cfgData.ClientType, cfgData.AspUrl,
+		supportedClients, cfgData.ClientType, cfgData.ServerUrl,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup transport client: %s", err)
@@ -243,19 +243,19 @@ func (a *covenantArkClient) listenForTxStream(ctx context.Context) {
 func (a *covenantArkClient) processTransactionEvent(
 	event client.TransactionEvent,
 ) {
-	// TODO considering current covenant state where all payments happening in round
-	//and that this is going to change we leave this unimplemented until asnc payments are implemented
-	//also with current state it is not possible to cover some edge cases like when in a round there
-	//are multiple boarding inputs + spent vtxo with change in spendable + received in the same round
+	// TODO: considering current covenant state where all transactions happening in round
+	// and that this is going to change we leave this unimplemented for now.
+	// Also, with current state it is not possible to cover some edge cases like when in a round there
+	// are multiple boarding inputs + spent vtxo with change in spendable + received in the same round
 }
 
 func (a *covenantArkClient) listenForBoardingUtxos(
 	ctx context.Context,
 ) {
-	// TODO considering current covenant state where all payments happening in round
-	//and that this is going to change we leave this unimplemented until asnc payments are implemented
-	//also with current state it is not possible to cover some edge cases like when in a round there
-	//are multiple boarding inputs + spent vtxo with change in spendable + received in the same round
+	// TODO considering current covenant state where all transactions happening in round
+	// and that this is going to change we leave this unimplemented for now.
+	// Also, with current state it is not possible to cover some edge cases like when in a round there
+	// are multiple boarding inputs + spent vtxo with change in spendable + received in the same round
 }
 
 func (a *covenantArkClient) Balance(
@@ -525,7 +525,7 @@ func (a *covenantArkClient) CollaborativeRedeem(
 
 	for _, offchainAddr := range offchainAddrs {
 		for _, v := range spendableVtxos {
-			vtxoAddr, err := v.Address(a.AspPubkey, a.Network)
+			vtxoAddr, err := v.Address(a.ServerPubKey, a.Network)
 			if err != nil {
 				return "", err
 			}
@@ -584,28 +584,21 @@ func (a *covenantArkClient) CollaborativeRedeem(
 		})
 	}
 
-	paymentID, err := a.client.RegisterInputsForNextRound(ctx, inputs, "")
+	requestID, err := a.client.RegisterInputsForNextRound(ctx, inputs, "")
 	if err != nil {
 		return "", err
 	}
 
-	if err := a.client.RegisterOutputsForNextRound(ctx, paymentID, receivers); err != nil {
+	if err := a.client.RegisterOutputsForNextRound(ctx, requestID, receivers); err != nil {
 		return "", err
 	}
 
-	roundTxID, err := a.handleRoundStream(ctx, paymentID, selectedCoins, selectedBoardingUtxos, receivers)
+	roundTxID, err := a.handleRoundStream(ctx, requestID, selectedCoins, selectedBoardingUtxos, receivers)
 	if err != nil {
 		return "", err
 	}
 
 	return roundTxID, nil
-}
-
-func (a *covenantArkClient) SendAsync(
-	ctx context.Context,
-	withExpiryCoinselect bool, receivers []Receiver,
-) (string, error) {
-	return "", fmt.Errorf("not implemented")
 }
 
 func (a *covenantArkClient) Settle(
@@ -889,7 +882,7 @@ func (a *covenantArkClient) sendOffchain(
 		return "", fmt.Errorf("wallet is locked")
 	}
 
-	expectedAspPubKey := schnorr.SerializePubKey(a.AspPubkey)
+	expectedServerPubkey := schnorr.SerializePubKey(a.ServerPubKey)
 	outputs := make([]client.Output, 0)
 	sumOfReceivers := uint64(0)
 
@@ -900,10 +893,10 @@ func (a *covenantArkClient) sendOffchain(
 			return "", fmt.Errorf("invalid receiver address: %s", err)
 		}
 
-		rcvAspPubKey := schnorr.SerializePubKey(rcvAddr.Asp)
+		rcvServerPubKkey := schnorr.SerializePubKey(rcvAddr.Server)
 
-		if !bytes.Equal(expectedAspPubKey, rcvAspPubKey) {
-			return "", fmt.Errorf("invalid receiver address '%s': expected ASP %s, got %s", receiver.To(), hex.EncodeToString(expectedAspPubKey), hex.EncodeToString(rcvAspPubKey))
+		if !bytes.Equal(expectedServerPubkey, rcvServerPubKkey) {
+			return "", fmt.Errorf("invalid receiver address '%s': expected server %s, got %s", receiver.To(), hex.EncodeToString(expectedServerPubkey), hex.EncodeToString(rcvServerPubKkey))
 		}
 
 		if receiver.Amount() < a.Dust {
@@ -934,7 +927,7 @@ func (a *covenantArkClient) sendOffchain(
 
 	for _, offchainAddr := range offchainAddrs {
 		for _, v := range spendableVtxos {
-			vtxoAddr, err := v.Address(a.AspPubkey, a.Network)
+			vtxoAddr, err := v.Address(a.ServerPubKey, a.Network)
 			if err != nil {
 				return "", err
 			}
@@ -1018,21 +1011,21 @@ func (a *covenantArkClient) sendOffchain(
 		})
 	}
 
-	paymentID, err := a.client.RegisterInputsForNextRound(ctx, inputs, "")
+	requestID, err := a.client.RegisterInputsForNextRound(ctx, inputs, "")
 	if err != nil {
 		return "", err
 	}
 
 	if err := a.client.RegisterOutputsForNextRound(
-		ctx, paymentID, outputs,
+		ctx, requestID, outputs,
 	); err != nil {
 		return "", err
 	}
 
-	log.Infof("payment registered with id: %s", paymentID)
+	log.Infof("payout registered with id: %s", requestID)
 
 	roundTxID, err := a.handleRoundStream(
-		ctx, paymentID, selectedCoins, boardingUtxos, outputs,
+		ctx, requestID, selectedCoins, boardingUtxos, outputs,
 	)
 	if err != nil {
 		return "", err
@@ -1116,19 +1109,19 @@ func (a *covenantArkClient) addInputs(
 
 func (a *covenantArkClient) handleRoundStream(
 	ctx context.Context,
-	paymentID string,
+	requestID string,
 	vtxosToSign []client.TapscriptsVtxo,
 	boardingUtxos []types.Utxo,
 	receivers []client.Output,
 ) (string, error) {
-	eventsCh, close, err := a.client.GetEventStream(ctx, paymentID)
+	eventsCh, close, err := a.client.GetEventStream(ctx, requestID)
 	if err != nil {
 		return "", err
 	}
 
 	var pingStop func()
 	for pingStop == nil {
-		pingStop = a.ping(ctx, paymentID)
+		pingStop = a.ping(ctx, requestID)
 	}
 
 	defer func() {
@@ -1166,7 +1159,7 @@ func (a *covenantArkClient) handleRoundStream(
 					continue
 				}
 
-				log.Info("finalizing payment... ")
+				log.Info("submitting forfeit transactions... ")
 				if err := a.client.SubmitSignedForfeitTxs(ctx, signedForfeitTxs, signedRoundTx); err != nil {
 					return "", err
 				}
@@ -1185,7 +1178,7 @@ func (a *covenantArkClient) handleRoundFinalization(
 	boardingUtxos []types.Utxo,
 	receivers []client.Output,
 ) (signedForfeits []string, signedRoundTx string, err error) {
-	if err = a.validateCongestionTree(event, receivers); err != nil {
+	if err = a.validateVtxoTree(event, receivers); err != nil {
 		return
 	}
 
@@ -1270,11 +1263,11 @@ func (a *covenantArkClient) handleRoundFinalization(
 	return signedForfeits, signedRoundTx, nil
 }
 
-func (a *covenantArkClient) validateCongestionTree(
+func (a *covenantArkClient) validateVtxoTree(
 	event client.RoundFinalizationEvent, receivers []client.Output,
 ) error {
-	poolTx := event.Tx
-	ptx, err := psetv2.NewPsetFromBase64(poolTx)
+	roundTx := event.Tx
+	ptx, err := psetv2.NewPsetFromBase64(roundTx)
 	if err != nil {
 		return err
 	}
@@ -1282,14 +1275,14 @@ func (a *covenantArkClient) validateCongestionTree(
 	connectors := event.Connectors
 
 	if !utils.IsOnchainOnly(receivers) {
-		if err := tree.ValidateCongestionTree(
-			event.Tree, poolTx, a.Config.AspPubkey, a.RoundLifetime,
+		if err := tree.ValidateVtxoTree(
+			event.Tree, roundTx, a.Config.ServerPubKey, a.RoundLifetime,
 		); err != nil {
 			return err
 		}
 	}
 
-	if err := common.ValidateConnectors(poolTx, connectors); err != nil {
+	if err := common.ValidateConnectors(roundTx, connectors); err != nil {
 		return err
 	}
 
@@ -1299,15 +1292,13 @@ func (a *covenantArkClient) validateCongestionTree(
 		return err
 	}
 
-	log.Infoln("congestion tree validated")
-
 	return nil
 }
 
 func (a *covenantArkClient) validateReceivers(
 	ptx *psetv2.Pset,
 	receivers []client.Output,
-	congestionTree tree.CongestionTree,
+	vtxoTree tree.VtxoTree,
 ) error {
 	for _, receiver := range receivers {
 		isOnChain, onchainScript, err := utils.ParseLiquidAddress(
@@ -1323,7 +1314,7 @@ func (a *covenantArkClient) validateReceivers(
 			}
 		} else {
 			if err := a.validateOffChainReceiver(
-				congestionTree, receiver,
+				vtxoTree, receiver,
 			); err != nil {
 				return err
 			}
@@ -1357,7 +1348,7 @@ func (a *covenantArkClient) validateOnChainReceiver(
 }
 
 func (a *covenantArkClient) validateOffChainReceiver(
-	congestionTree tree.CongestionTree,
+	vtxoTree tree.VtxoTree,
 	receiver client.Output,
 ) error {
 	found := false
@@ -1369,7 +1360,7 @@ func (a *covenantArkClient) validateOffChainReceiver(
 
 	vtxoTapKey := schnorr.SerializePubKey(addr.VtxoTapKey)
 
-	leaves := congestionTree.Leaves()
+	leaves := vtxoTree.Leaves()
 	for _, leaf := range leaves {
 		tx, err := psetv2.NewPsetFromBase64(leaf.Tx)
 		if err != nil {
@@ -1614,22 +1605,22 @@ func (a *covenantArkClient) coinSelectOnchain(
 func (a *covenantArkClient) getRedeemBranches(
 	ctx context.Context, vtxos []client.Vtxo,
 ) (map[string]*redemption.CovenantRedeemBranch, error) {
-	congestionTrees := make(map[string]tree.CongestionTree, 0)
+	vtxoTrees := make(map[string]tree.VtxoTree, 0)
 	redeemBranches := make(map[string]*redemption.CovenantRedeemBranch, 0)
 
 	for i := range vtxos {
 		vtxo := vtxos[i]
-		if _, ok := congestionTrees[vtxo.RoundTxid]; !ok {
+		if _, ok := vtxoTrees[vtxo.RoundTxid]; !ok {
 			round, err := a.client.GetRound(ctx, vtxo.RoundTxid)
 			if err != nil {
 				return nil, err
 			}
 
-			congestionTrees[vtxo.RoundTxid] = round.Tree
+			vtxoTrees[vtxo.RoundTxid] = round.Tree
 		}
 
 		redeemBranch, err := redemption.NewCovenantRedeemBranch(
-			a.explorer, congestionTrees[vtxo.RoundTxid], vtxo,
+			a.explorer, vtxoTrees[vtxo.RoundTxid], vtxo,
 		)
 		if err != nil {
 			return nil, err

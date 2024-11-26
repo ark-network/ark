@@ -8,12 +8,12 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-// tr(unspendable, { and(pk(user), pk(asp)), and(older(timeout), pk(user)) })
+// tr(unspendable, { and(pk(user), pk(server)), and(older(timeout), pk(user)) })
 const DefaultVtxoDescriptorTemplate = "tr(%s,{ and(pk(%s), pk(%s)), and(older(%d), pk(%s)) })"
 
 func ParseDefaultVtxoDescriptor(
 	descriptor string,
-) (user, asp *secp256k1.PublicKey, timeout uint, err error) {
+) (user, server *secp256k1.PublicKey, timeout uint, err error) {
 	desc, err := ParseTaprootDescriptor(descriptor)
 	if err != nil {
 		return nil, nil, 0, err
@@ -42,7 +42,7 @@ func ParseDefaultVtxoDescriptor(
 						return nil, nil, 0, err
 					}
 
-					asp, err = schnorr.ParsePubKey(keyBytes)
+					server, err = schnorr.ParsePubKey(keyBytes)
 					if err != nil {
 						return nil, nil, 0, err
 					}
@@ -70,7 +70,7 @@ func ParseDefaultVtxoDescriptor(
 		return nil, nil, 0, errors.New("boarding descriptor is invalid")
 	}
 
-	if asp == nil {
+	if server == nil {
 		return nil, nil, 0, errors.New("boarding descriptor is invalid")
 	}
 

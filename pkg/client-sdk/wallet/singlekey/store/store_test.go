@@ -16,7 +16,7 @@ func TestWalletStore(t *testing.T) {
 	testWalletData := walletstore.WalletData{
 		EncryptedPrvkey: make([]byte, 32),
 		PasswordHash:    make([]byte, 32),
-		Pubkey:          key.PubKey(),
+		PubKey:          key.PubKey(),
 	}
 
 	tests := []struct {

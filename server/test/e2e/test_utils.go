@@ -118,15 +118,15 @@ func newCommand(name string, arg ...string) *exec.Cmd {
 // nostr
 // use nak utils https://github.com/fiatjaf/nak
 
-func GetNostrKeys() (secretKey, publicKey string, npub string, err error) {
+func GetNostrKeys() (secretKey, pubkey string, npub string, err error) {
 	secretKey = NostrTestingSecretKey
 
-	publicKey, err = nostr.GetPublicKey(secretKey)
+	pubkey, err = nostr.GetPublicKey(secretKey)
 	if err != nil {
 		return
 	}
 
-	npub, err = nip19.EncodePublicKey(publicKey)
+	npub, err = nip19.EncodePublicKey(pubkey)
 	if err != nil {
 		return
 	}

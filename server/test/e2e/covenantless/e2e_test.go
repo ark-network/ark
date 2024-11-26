@@ -43,14 +43,14 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	if err := setupAspWallet(); err != nil {
+	if err := setupServerWallet(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
 	time.Sleep(3 * time.Second)
 
-	_, err = runClarkCommand("init", "--asp-url", "localhost:7070", "--password", utils.Password, "--network", "regtest", "--explorer", "http://chopsticks:3000")
+	_, err = runClarkCommand("init", "--server-url", "localhost:7070", "--password", utils.Password, "--network", "regtest", "--explorer", "http://chopsticks:3000")
 	if err != nil {
 		fmt.Printf("error initializing ark config: %s", err)
 		os.Exit(1)
@@ -161,12 +161,12 @@ func TestCollaborativeExit(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestReactToSpentVtxosRedemption(t *testing.T) {
+func TestReactToRedemptionOfRefreshedVtxos(t *testing.T) {
 	ctx := context.Background()
 	client, grpcClient := setupArkSDK(t)
 	defer grpcClient.Close()
 
-	offchainAddress, boardingAddress, err := client.Receive(ctx)
+	_, boardingAddress, err := client.Receive(ctx)
 	require.NoError(t, err)
 
 	_, err = utils.RunCommand("nigiri", "faucet", boardingAddress)
@@ -177,10 +177,10 @@ func TestReactToSpentVtxosRedemption(t *testing.T) {
 	_, err = client.Settle(ctx)
 	require.NoError(t, err)
 
-	_, err = client.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(offchainAddress, 1000)})
-	require.NoError(t, err)
-
 	time.Sleep(2 * time.Second)
+
+	_, err = client.Settle(ctx)
+	require.NoError(t, err)
 
 	_, spentVtxos, err := client.ListVtxos(ctx)
 	require.NoError(t, err)
@@ -204,7 +204,7 @@ func TestReactToSpentVtxosRedemption(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// give time for the ASP to detect and process the fraud
+	// give time for the server to detect and process the fraud
 	time.Sleep(20 * time.Second)
 
 	balance, err := client.Balance(ctx, false)
@@ -213,7 +213,7 @@ func TestReactToSpentVtxosRedemption(t *testing.T) {
 	require.Empty(t, balance.OnchainBalance.LockedAmount)
 }
 
-func TestReactToAsyncSpentVtxosRedemption(t *testing.T) {
+func TestReactToRedemptionOfVtxosSpentOOR(t *testing.T) {
 	ctx := context.Background()
 	sdkClient, grpcClient := setupArkSDK(t)
 	defer grpcClient.Close()
@@ -270,7 +270,7 @@ func TestReactToAsyncSpentVtxosRedemption(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// give time for the ASP to detect and process the fraud
+	// give time for the server to detect and process the fraud
 	time.Sleep(50 * time.Second)
 
 	balance, err := sdkClient.Balance(ctx, false)
@@ -279,7 +279,7 @@ func TestReactToAsyncSpentVtxosRedemption(t *testing.T) {
 	require.Empty(t, balance.OnchainBalance.LockedAmount)
 }
 
-func TestChainAsyncPayments(t *testing.T) {
+func TestChainOutOfRoundTransactions(t *testing.T) {
 	var receive utils.ArkReceive
 	receiveStr, err := runClarkCommand("receive")
 	require.NoError(t, err)
@@ -315,7 +315,7 @@ func TestChainAsyncPayments(t *testing.T) {
 	require.NotZero(t, balance.Offchain.Total)
 }
 
-func TestAliceSeveralPaymentsToBob(t *testing.T) {
+func TestAliceSendsSeveralTimesToBob(t *testing.T) {
 	ctx := context.Background()
 	alice, grpcAlice := setupArkSDK(t)
 	defer grpcAlice.Close()
@@ -327,6 +327,11 @@ func TestAliceSeveralPaymentsToBob(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = utils.RunCommand("nigiri", "faucet", boardingAddress)
+	require.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+
+	_, err = alice.Settle(ctx)
 	require.NoError(t, err)
 
 	time.Sleep(5 * time.Second)
@@ -424,7 +429,7 @@ func TestSweep(t *testing.T) {
 
 	time.Sleep(3 * time.Second)
 
-	secretKey, publicKey, npub, err := utils.GetNostrKeys()
+	secretKey, pubkey, npub, err := utils.GetNostrKeys()
 	require.NoError(t, err)
 
 	_, err = runClarkCommand("register-nostr", "--profile", npub, "--password", utils.Password)
@@ -443,7 +448,7 @@ func TestSweep(t *testing.T) {
 		},
 		{
 			Tags: nostr.TagMap{
-				"p": []string{publicKey},
+				"p": []string{pubkey},
 			},
 		},
 	})
@@ -487,7 +492,7 @@ func runClarkCommand(arg ...string) (string, error) {
 	return utils.RunDockerExec("clarkd", args...)
 }
 
-func setupAspWallet() error {
+func setupServerWallet() error {
 	adminHttpClient := &http.Client{
 		Timeout: 15 * time.Second,
 	}
@@ -594,7 +599,7 @@ func setupAspWallet() error {
 	return nil
 }
 
-func setupArkSDK(t *testing.T) (arksdk.ArkClient, client.ASPClient) {
+func setupArkSDK(t *testing.T) (arksdk.ArkClient, client.TransportClient) {
 	appDataStore, err := store.NewStore(store.Config{
 		ConfigStoreType:  types.FileStore,
 		AppDataStoreType: types.KVStore,
@@ -608,7 +613,7 @@ func setupArkSDK(t *testing.T) (arksdk.ArkClient, client.ASPClient) {
 	err = client.Init(context.Background(), arksdk.InitArgs{
 		WalletType: arksdk.SingleKeyWallet,
 		ClientType: arksdk.GrpcClient,
-		AspUrl:     "localhost:7070",
+		ServerUrl:  "localhost:7070",
 		Password:   utils.Password,
 	})
 	require.NoError(t, err)

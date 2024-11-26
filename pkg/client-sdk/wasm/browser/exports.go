@@ -30,7 +30,6 @@ func init() {
 	js.Global().Set("receive", ReceiveWrapper())
 	js.Global().Set("sendOnChain", SendOnChainWrapper())
 	js.Global().Set("sendOffChain", SendOffChainWrapper())
-	js.Global().Set("sendAsync", SendAsyncWrapper())
 	js.Global().Set("settle", SettleWrapper())
 	js.Global().Set("unilateralRedeem", UnilateralRedeemWrapper())
 	js.Global().Set("collaborativeRedeem", CollaborativeRedeemWrapper())
@@ -41,8 +40,8 @@ func init() {
 	js.Global().Set("setNostrNotificationRecipient", SetNostrNotificationRecipientWrapper())
 	js.Global().Set("listVtxos", ListVtxosWrapper())
 
-	js.Global().Set("getAspUrl", GetAspUrlWrapper())
-	js.Global().Set("getAspPubKeyHex", GetAspPubkeyWrapper())
+	js.Global().Set("getServerUrl", GetServerUrlWrapper())
+	js.Global().Set("getServerPubkeyHex", GetServerPubkeyWrapper())
 	js.Global().Set("getWalletType", GetWalletTypeWrapper())
 	js.Global().Set("getClientType", GetClientTypeWrapper())
 	js.Global().Set("getNetwork", GetNetworkWrapper())

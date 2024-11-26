@@ -4,7 +4,7 @@ import (
 	"errors"
 )
 
-// Node is a struct embedding the transaction and the parent txid of a congestion tree node
+// Node is a struct embedding the transaction and the parent txid of a vtxo tree node
 type Node struct {
 	Txid       string
 	Tx         string
@@ -14,28 +14,28 @@ type Node struct {
 
 var (
 	ErrParentNotFound = errors.New("parent not found")
-	ErrLeafNotFound   = errors.New("leaf not found in congestion tree")
+	ErrLeafNotFound   = errors.New("leaf not found in vtxo tree")
 )
 
-// CongestionTree is reprensented as a matrix of TreeNode struct
+// VtxoTree is reprensented as a matrix of TreeNode struct
 // the first level of the matrix is the root of the tree
-type CongestionTree [][]Node
+type VtxoTree [][]Node
 
-// Root returns the root node of the congestion tree
-func (c CongestionTree) Root() (Node, error) {
+// Root returns the root node of the vtxo tree
+func (c VtxoTree) Root() (Node, error) {
 	if len(c) <= 0 {
-		return Node{}, errors.New("empty congestion tree")
+		return Node{}, errors.New("empty vtxo tree")
 	}
 
 	if len(c[0]) <= 0 {
-		return Node{}, errors.New("empty congestion tree")
+		return Node{}, errors.New("empty vtxo tree")
 	}
 
 	return c[0][0], nil
 }
 
-// Leaves returns the leaves of the congestion tree (the vtxos txs)
-func (c CongestionTree) Leaves() []Node {
+// Leaves returns the leaves of the vtxo tree
+func (c VtxoTree) Leaves() []Node {
 	leaves := c[len(c)-1]
 	for _, level := range c[:len(c)-1] {
 		for _, node := range level {
@@ -49,7 +49,7 @@ func (c CongestionTree) Leaves() []Node {
 }
 
 // Children returns all the nodes that have the given node as parent
-func (c CongestionTree) Children(nodeTxid string) []Node {
+func (c VtxoTree) Children(nodeTxid string) []Node {
 	var children []Node
 	for _, level := range c {
 		for _, node := range level {
@@ -62,8 +62,8 @@ func (c CongestionTree) Children(nodeTxid string) []Node {
 	return children
 }
 
-// NumberOfNodes returns the total number of pset in the congestion tree
-func (c CongestionTree) NumberOfNodes() int {
+// NumberOfNodes returns the total number of pset in the vtxo tree
+func (c VtxoTree) NumberOfNodes() int {
 	var count int
 	for _, level := range c {
 		count += len(level)
@@ -71,8 +71,8 @@ func (c CongestionTree) NumberOfNodes() int {
 	return count
 }
 
-// Branch returns the branch of the given vtxo txid from root to leaf in the order of the congestion tree
-func (c CongestionTree) Branch(vtxoTxid string) ([]Node, error) {
+// Branch returns the branch of the given vtxo txid from root to leaf in the order of the vtxo tree
+func (c VtxoTree) Branch(vtxoTxid string) ([]Node, error) {
 	branch := make([]Node, 0)
 
 	leaves := c.Leaves()
@@ -102,7 +102,7 @@ func (c CongestionTree) Branch(vtxoTxid string) ([]Node, error) {
 	return branch, nil
 }
 
-func (n Node) findParent(tree CongestionTree) (Node, error) {
+func (n Node) findParent(tree VtxoTree) (Node, error) {
 	for _, level := range tree {
 		for _, node := range level {
 			if node.Txid == n.ParentTxid {

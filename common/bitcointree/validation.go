@@ -2,7 +2,6 @@ package bitcointree
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -15,36 +14,36 @@ import (
 )
 
 var (
-	ErrInvalidPoolTransaction        = errors.New("invalid pool transaction")
-	ErrInvalidPoolTransactionOutputs = errors.New("invalid number of outputs in pool transaction")
-	ErrEmptyTree                     = errors.New("empty congestion tree")
-	ErrInvalidRootLevel              = errors.New("root level must have only one node")
-	ErrNoLeaves                      = errors.New("no leaves in the tree")
-	ErrNodeTransactionEmpty          = errors.New("node transaction is empty")
-	ErrNodeTxidEmpty                 = errors.New("node txid is empty")
-	ErrNodeParentTxidEmpty           = errors.New("node parent txid is empty")
-	ErrNodeTxidDifferent             = errors.New("node txid differs from node transaction")
-	ErrNumberOfInputs                = errors.New("node transaction should have only one input")
-	ErrNumberOfOutputs               = errors.New("node transaction should have only three or two outputs")
-	ErrParentTxidInput               = errors.New("parent txid should be the input of the node transaction")
-	ErrNumberOfChildren              = errors.New("node branch transaction should have two children")
-	ErrLeafChildren                  = errors.New("leaf node should have max 1 child")
-	ErrInvalidChildTxid              = errors.New("invalid child txid")
-	ErrNumberOfTapscripts            = errors.New("input should have 1 tapscript leaf")
-	ErrInternalKey                   = errors.New("invalid taproot internal key")
-	ErrInvalidTaprootScript          = errors.New("invalid taproot script")
-	ErrInvalidControlBlock           = errors.New("invalid control block")
-	ErrInvalidTaprootScriptLen       = errors.New("invalid taproot script length (expected 32 bytes)")
-	ErrInvalidLeafTaprootScript      = errors.New("invalid leaf taproot script")
-	ErrInvalidAmount                 = errors.New("children amount is different from parent amount")
-	ErrInvalidSweepSequence          = errors.New("invalid sweep sequence")
-	ErrInvalidASP                    = errors.New("invalid ASP")
-	ErrMissingFeeOutput              = errors.New("missing fee output")
-	ErrInvalidLeftOutput             = errors.New("invalid left output")
-	ErrInvalidRightOutput            = errors.New("invalid right output")
-	ErrMissingSweepTapscript         = errors.New("missing sweep tapscript")
-	ErrInvalidLeaf                   = errors.New("leaf node shouldn't have children")
-	ErrWrongPoolTxID                 = errors.New("root input should be the pool tx outpoint")
+	ErrInvalidRoundTx           = fmt.Errorf("invalid round transaction")
+	ErrInvalidRoundTxOutputs    = fmt.Errorf("invalid number of outputs in round transaction")
+	ErrEmptyTree                = fmt.Errorf("empty vtxo tree")
+	ErrInvalidRootLevel         = fmt.Errorf("root level must have only one node")
+	ErrNoLeaves                 = fmt.Errorf("no leaves in the tree")
+	ErrNodeTxEmpty              = fmt.Errorf("node transaction is empty")
+	ErrNodeTxidEmpty            = fmt.Errorf("node txid is empty")
+	ErrNodeParentTxidEmpty      = fmt.Errorf("node parent txid is empty")
+	ErrNodeTxidDifferent        = fmt.Errorf("node txid differs from node transaction")
+	ErrNumberOfInputs           = fmt.Errorf("node transaction should have only one input")
+	ErrNumberOfOutputs          = fmt.Errorf("node transaction should have only three or two outputs")
+	ErrParentTxidInput          = fmt.Errorf("parent txid should be the input of the node transaction")
+	ErrNumberOfChildren         = fmt.Errorf("node branch transaction should have two children")
+	ErrLeafChildren             = fmt.Errorf("leaf node should have max 1 child")
+	ErrInvalidChildTxid         = fmt.Errorf("invalid child txid")
+	ErrNumberOfTapscripts       = fmt.Errorf("input should have 1 tapscript leaf")
+	ErrInternalKey              = fmt.Errorf("invalid taproot internal key")
+	ErrInvalidTaprootScript     = fmt.Errorf("invalid taproot script")
+	ErrInvalidControlBlock      = fmt.Errorf("invalid control block")
+	ErrInvalidTaprootScriptLen  = fmt.Errorf("invalid taproot script length (expected 32 bytes)")
+	ErrInvalidLeafTaprootScript = fmt.Errorf("invalid leaf taproot script")
+	ErrInvalidAmount            = fmt.Errorf("children amount is different from parent amount")
+	ErrInvalidSweepSequence     = fmt.Errorf("invalid sweep sequence")
+	ErrInvalidServer            = fmt.Errorf("invalid server")
+	ErrMissingFeeOutput         = fmt.Errorf("missing fee output")
+	ErrInvalidLeftOutput        = fmt.Errorf("invalid left output")
+	ErrInvalidRightOutput       = fmt.Errorf("invalid right output")
+	ErrMissingSweepTapscript    = fmt.Errorf("missing sweep tapscript")
+	ErrInvalidLeaf              = fmt.Errorf("leaf node shouldn't have children")
+	ErrWrongRoundTxid           = fmt.Errorf("the input of the tree root is not the round tx's shared output")
 )
 
 // 0250929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0
@@ -62,28 +61,28 @@ func UnspendableKey() *secp256k1.PublicKey {
 	return key
 }
 
-// ValidateCongestionTree checks if the given congestion tree is valid
-// poolTxID & poolTxIndex & poolTxAmount are used to validate the root input outpoint
-// aspPublicKey & roundLifetime are used to validate the sweep tapscript leaves
+// ValidateVtxoTree checks if the given vtxo tree is valid
+// roundTxid & roundTxIndex & roundTxAmount are used to validate the root input outpoint
+// serverPubkey & roundLifetime are used to validate the sweep tapscript leaves
 // besides that, the function validates:
 // - the number of nodes
 // - the number of leaves
 // - children coherence with parent
 // - every control block and taproot output scripts
 // - input and output amounts
-func ValidateCongestionTree(
-	vtxoTree tree.CongestionTree, poolTx string, aspPublicKey *secp256k1.PublicKey, roundLifetime int64,
+func ValidateVtxoTree(
+	vtxoTree tree.VtxoTree, roundTx string, serverPubkey *secp256k1.PublicKey, roundLifetime int64,
 ) error {
-	poolTransaction, err := psbt.NewFromRawBytes(strings.NewReader(poolTx), true)
+	roundTransaction, err := psbt.NewFromRawBytes(strings.NewReader(roundTx), true)
 	if err != nil {
-		return ErrInvalidPoolTransaction
+		return ErrInvalidRoundTx
 	}
 
-	if len(poolTransaction.Outputs) < sharedOutputIndex+1 {
-		return ErrInvalidPoolTransactionOutputs
+	if len(roundTransaction.Outputs) < sharedOutputIndex+1 {
+		return ErrInvalidRoundTxOutputs
 	}
 
-	poolTxAmount := poolTransaction.UnsignedTx.TxOut[sharedOutputIndex].Value
+	roundTxAmount := roundTransaction.UnsignedTx.TxOut[sharedOutputIndex].Value
 
 	nbNodes := vtxoTree.NumberOfNodes()
 	if nbNodes == 0 {
@@ -94,7 +93,7 @@ func ValidateCongestionTree(
 		return ErrInvalidRootLevel
 	}
 
-	// check that root input is connected to the pool tx
+	// check that root input is connected to the round tx
 	rootPsetB64 := vtxoTree[0][0].Tx
 	rootPset, err := psbt.NewFromRawBytes(strings.NewReader(rootPsetB64), true)
 	if err != nil {
@@ -106,9 +105,9 @@ func ValidateCongestionTree(
 	}
 
 	rootInput := rootPset.UnsignedTx.TxIn[0]
-	if chainhash.Hash(rootInput.PreviousOutPoint.Hash).String() != poolTransaction.UnsignedTx.TxHash().String() ||
+	if chainhash.Hash(rootInput.PreviousOutPoint.Hash).String() != roundTransaction.UnsignedTx.TxHash().String() ||
 		rootInput.PreviousOutPoint.Index != sharedOutputIndex {
-		return ErrWrongPoolTxID
+		return ErrWrongRoundTxid
 	}
 
 	sumRootValue := int64(0)
@@ -116,7 +115,7 @@ func ValidateCongestionTree(
 		sumRootValue += output.Value
 	}
 
-	if sumRootValue >= poolTxAmount {
+	if sumRootValue >= roundTxAmount {
 		return ErrInvalidAmount
 	}
 
@@ -125,7 +124,7 @@ func ValidateCongestionTree(
 	}
 
 	sweepClosure := &tree.CSVSigClosure{
-		MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{aspPublicKey}},
+		MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{serverPubkey}},
 		Seconds:         uint(roundLifetime),
 	}
 
@@ -152,9 +151,9 @@ func ValidateCongestionTree(
 	return nil
 }
 
-func validateNodeTransaction(node tree.Node, tree tree.CongestionTree, tapTreeRoot []byte) error {
+func validateNodeTransaction(node tree.Node, tree tree.VtxoTree, tapTreeRoot []byte) error {
 	if node.Tx == "" {
-		return ErrNodeTransactionEmpty
+		return ErrNodeTxEmpty
 	}
 
 	if node.Txid == "" {

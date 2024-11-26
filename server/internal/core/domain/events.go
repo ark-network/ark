@@ -10,7 +10,7 @@ func (r RoundStarted) IsEvent()             {}
 func (r RoundFinalizationStarted) IsEvent() {}
 func (r RoundFinalized) IsEvent()           {}
 func (r RoundFailed) IsEvent()              {}
-func (r PaymentsRegistered) IsEvent()       {}
+func (r TxRequestsRegistered) IsEvent()     {}
 
 type RoundStarted struct {
 	Id        string
@@ -19,7 +19,7 @@ type RoundStarted struct {
 
 type RoundFinalizationStarted struct {
 	Id               string
-	CongestionTree   tree.CongestionTree // BTC: signed
+	VtxoTree         tree.VtxoTree
 	Connectors       []string
 	ConnectorAddress string
 	RoundTx          string
@@ -39,7 +39,7 @@ type RoundFailed struct {
 	Timestamp int64
 }
 
-type PaymentsRegistered struct {
-	Id       string
-	Payments []Payment
+type TxRequestsRegistered struct {
+	Id         string
+	TxRequests []TxRequest
 }

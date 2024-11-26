@@ -58,7 +58,7 @@ func (b *txBuilder) VerifyTapscriptPartialSigs(tx string) (bool, error) {
 func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, error) {
 	txid := ptx.UnsignedTx.TxID()
 
-	aspPublicKey, err := b.wallet.GetPubkey(context.Background())
+	serverPubkey, err := b.wallet.GetPubkey(context.Background())
 	if err != nil {
 		return false, err
 	}
@@ -93,8 +93,8 @@ func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, error) {
 			}
 		}
 
-		// we don't need to check if ASP signed
-		keys[hex.EncodeToString(schnorr.SerializePubKey(aspPublicKey))] = true
+		// we don't need to check if server signed
+		keys[hex.EncodeToString(schnorr.SerializePubKey(serverPubkey))] = true
 
 		if len(tapLeaf.ControlBlock) == 0 {
 			return false, fmt.Errorf("missing control block for input %d", index)
@@ -471,12 +471,12 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 }
 
 func (b *txBuilder) BuildRoundTx(
-	aspPubkey *secp256k1.PublicKey,
-	payments []domain.Payment,
+	serverPubkey *secp256k1.PublicKey,
+	requests []domain.TxRequest,
 	boardingInputs []ports.BoardingInput,
 	sweptRounds []domain.Round,
 	cosigners ...*secp256k1.PublicKey,
-) (roundTx string, congestionTree tree.CongestionTree, connectorAddress string, connectors []string, err error) {
+) (roundTx string, vtxoTree tree.VtxoTree, connectorAddress string, connectors []string, err error) {
 	var sharedOutputScript []byte
 	var sharedOutputAmount int64
 
@@ -484,7 +484,7 @@ func (b *txBuilder) BuildRoundTx(
 		return "", nil, "", nil, fmt.Errorf("missing cosigners")
 	}
 
-	receivers, err := getOutputVtxosLeaves(payments)
+	receivers, err := getOutputVtxosLeaves(requests)
 	if err != nil {
 		return "", nil, "", nil, err
 	}
@@ -494,9 +494,9 @@ func (b *txBuilder) BuildRoundTx(
 		return
 	}
 
-	if !isOnchainOnly(payments) {
+	if !isOnchainOnly(requests) {
 		sharedOutputScript, sharedOutputAmount, err = bitcointree.CraftSharedOutput(
-			cosigners, aspPubkey, receivers, feeAmount, b.roundLifetime,
+			cosigners, serverPubkey, receivers, feeAmount, b.roundLifetime,
 		)
 		if err != nil {
 			return
@@ -509,7 +509,7 @@ func (b *txBuilder) BuildRoundTx(
 	}
 
 	ptx, err := b.createRoundTx(
-		sharedOutputAmount, sharedOutputScript, payments, boardingInputs, connectorAddress, sweptRounds,
+		sharedOutputAmount, sharedOutputScript, requests, boardingInputs, connectorAddress, sweptRounds,
 	)
 	if err != nil {
 		return
@@ -520,21 +520,21 @@ func (b *txBuilder) BuildRoundTx(
 		return
 	}
 
-	if !isOnchainOnly(payments) {
+	if !isOnchainOnly(requests) {
 		initialOutpoint := &wire.OutPoint{
 			Hash:  ptx.UnsignedTx.TxHash(),
 			Index: 0,
 		}
 
-		congestionTree, err = bitcointree.CraftCongestionTree(
-			initialOutpoint, cosigners, aspPubkey, receivers, feeAmount, b.roundLifetime,
+		vtxoTree, err = bitcointree.BuildVtxoTree(
+			initialOutpoint, cosigners, serverPubkey, receivers, feeAmount, b.roundLifetime,
 		)
 		if err != nil {
 			return "", nil, "", nil, err
 		}
 	}
 
-	if countSpentVtxos(payments) <= 0 {
+	if countSpentVtxos(requests) <= 0 {
 		return
 	}
 
@@ -553,7 +553,7 @@ func (b *txBuilder) BuildRoundTx(
 		return "", nil, "", nil, err
 	}
 
-	connectorsPsbts, err := b.createConnectors(roundTx, payments, connectorPkScript, minRelayFeeConnectorTx)
+	connectorsPsbts, err := b.createConnectors(roundTx, requests, connectorPkScript, minRelayFeeConnectorTx)
 	if err != nil {
 		return "", nil, "", nil, err
 	}
@@ -566,7 +566,7 @@ func (b *txBuilder) BuildRoundTx(
 		connectors = append(connectors, b64)
 	}
 
-	return roundTx, congestionTree, connectorAddress, connectors, nil
+	return roundTx, vtxoTree, connectorAddress, connectors, nil
 }
 
 func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime int64, sweepInput ports.SweepInput, err error) {
@@ -611,12 +611,12 @@ func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime int64, sweepInput po
 	return lifetime, sweepInput, nil
 }
 
-func (b *txBuilder) FindLeaves(congestionTree tree.CongestionTree, fromtxid string, vout uint32) ([]tree.Node, error) {
-	allLeaves := congestionTree.Leaves()
+func (b *txBuilder) FindLeaves(vtxoTree tree.VtxoTree, fromtxid string, vout uint32) ([]tree.Node, error) {
+	allLeaves := vtxoTree.Leaves()
 	foundLeaves := make([]tree.Node, 0)
 
 	for _, leaf := range allLeaves {
-		branch, err := congestionTree.Branch(leaf.Txid)
+		branch, err := vtxoTree.Branch(leaf.Txid)
 		if err != nil {
 			return nil, err
 		}
@@ -647,7 +647,7 @@ func (b *txBuilder) FindLeaves(congestionTree tree.CongestionTree, fromtxid stri
 func (b *txBuilder) createRoundTx(
 	sharedOutputAmount int64,
 	sharedOutputScript []byte,
-	payments []domain.Payment,
+	requests []domain.TxRequest,
 	boardingInputs []ports.BoardingInput,
 	connectorAddress string,
 	sweptRounds []domain.Round,
@@ -674,7 +674,7 @@ func (b *txBuilder) createRoundTx(
 
 	connectorAmount := dustLimit
 
-	nbOfInputs := countSpentVtxos(payments)
+	nbOfInputs := countSpentVtxos(requests)
 	connectorsAmount := (connectorAmount + connectorMinRelayFee) * nbOfInputs
 	if nbOfInputs > 1 {
 		connectorsAmount -= connectorMinRelayFee
@@ -699,7 +699,7 @@ func (b *txBuilder) createRoundTx(
 		})
 	}
 
-	onchainOutputs, err := getOnchainOutputs(payments, b.onchainNetwork())
+	onchainOutputs, err := getOnchainOutputs(requests, b.onchainNetwork())
 	if err != nil {
 		return nil, err
 	}
@@ -1021,9 +1021,9 @@ func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, 
 }
 
 func (b *txBuilder) createConnectors(
-	poolTx string, payments []domain.Payment, connectorScript []byte, feeAmount uint64,
+	roundTx string, requests []domain.TxRequest, connectorScript []byte, feeAmount uint64,
 ) ([]*psbt.Packet, error) {
-	partialTx, err := psbt.NewFromRawBytes(strings.NewReader(poolTx), true)
+	partialTx, err := psbt.NewFromRawBytes(strings.NewReader(roundTx), true)
 	if err != nil {
 		return nil, err
 	}
@@ -1038,7 +1038,7 @@ func (b *txBuilder) createConnectors(
 		Value:    int64(connectorAmount),
 	}
 
-	numberOfConnectors := countSpentVtxos(payments)
+	numberOfConnectors := countSpentVtxos(requests)
 
 	previousInput := &wire.OutPoint{
 		Hash:  partialTx.UnsignedTx.TxHash(),

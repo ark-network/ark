@@ -396,7 +396,7 @@ func (a *Client) ArkServicePing(params *ArkServicePingParams, opts ...ClientOpti
 	op := &runtime.ClientOperation{
 		ID:                 "ArkService_Ping",
 		Method:             "GET",
-		PathPattern:        "/v1/round/ping/{paymentId}",
+		PathPattern:        "/v1/round/ping/{requestId}",
 		ProducesMediaTypes: []string{"application/json"},
 		ConsumesMediaTypes: []string{"application/json"},
 		Schemes:            []string{"http"},

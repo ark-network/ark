@@ -21,8 +21,8 @@ func TestStore(t *testing.T) {
 	key, _ := btcec.NewPrivateKey()
 	ctx := context.Background()
 	testStoreData := sdktypes.Config{
-		AspUrl:                     "localhost:7070",
-		AspPubkey:                  key.PubKey(),
+		ServerUrl:                  "localhost:7070",
+		ServerPubKey:               key.PubKey(),
 		WalletType:                 wallet.SingleKeyWallet,
 		ClientType:                 client.GrpcClient,
 		Network:                    common.LiquidRegTest,

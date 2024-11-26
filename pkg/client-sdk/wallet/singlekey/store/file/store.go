@@ -20,7 +20,7 @@ const (
 type walletData struct {
 	EncryptedPrvkey string `json:"encrypted_private_key"`
 	PasswordHash    string `json:"password_hash"`
-	Pubkey          string `json:"pubkey"`
+	PubKey          string `json:"pubkey"`
 }
 
 func (d walletData) isEmpty() bool {
@@ -30,12 +30,12 @@ func (d walletData) isEmpty() bool {
 func (d walletData) decode() walletstore.WalletData {
 	encryptedPrvkey, _ := hex.DecodeString(d.EncryptedPrvkey)
 	passwordHash, _ := hex.DecodeString(d.PasswordHash)
-	buf, _ := hex.DecodeString(d.Pubkey)
+	buf, _ := hex.DecodeString(d.PubKey)
 	pubkey, _ := secp256k1.ParsePubKey(buf)
 	return walletstore.WalletData{
 		EncryptedPrvkey: encryptedPrvkey,
 		PasswordHash:    passwordHash,
-		Pubkey:          pubkey,
+		PubKey:          pubkey,
 	}
 }
 
@@ -43,7 +43,7 @@ func (d walletData) asMap() map[string]string {
 	return map[string]string{
 		"encrypted_private_key": d.EncryptedPrvkey,
 		"password_hash":         d.PasswordHash,
-		"pubkey":                d.Pubkey,
+		"pubkey":                d.PubKey,
 	}
 }
 
@@ -71,7 +71,7 @@ func (s *fileStore) AddWallet(data walletstore.WalletData) error {
 	wd := &walletData{
 		EncryptedPrvkey: hex.EncodeToString(data.EncryptedPrvkey),
 		PasswordHash:    hex.EncodeToString(data.PasswordHash),
-		Pubkey:          hex.EncodeToString(data.Pubkey.SerializeCompressed()),
+		PubKey:          hex.EncodeToString(data.PubKey.SerializeCompressed()),
 	}
 
 	if err := s.write(wd); err != nil {

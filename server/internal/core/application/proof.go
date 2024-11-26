@@ -33,7 +33,7 @@ func (p OwnershipProof) validate(vtxo domain.Vtxo) error {
 	rootHash := p.ControlBlock.RootHash(p.Script)
 	vtxoTapKey := txscript.ComputeTaprootOutputKey(bitcointree.UnspendableKey(), rootHash)
 
-	if hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey)) != vtxo.Pubkey {
+	if hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey)) != vtxo.PubKey {
 		return fmt.Errorf("invalid control block")
 	}
 

@@ -4,10 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	utils "github.com/ark-network/ark/server/test/e2e"
-	"github.com/playwright-community/playwright-go"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"io"
 	"net/http"
 	"os"
@@ -17,6 +13,11 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	utils "github.com/ark-network/ark/server/test/e2e"
+	"github.com/playwright-community/playwright-go"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/shirou/gopsutil/net"
 )
@@ -51,7 +52,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	_, err = runClarkCommand("init", "--asp-url", "localhost:7070", "--password", utils.Password, "--network", "regtest", "--explorer", "http://chopsticks:3000")
+	_, err = runClarkCommand("init", "--server-url", "localhost:7070", "--password", utils.Password, "--network", "regtest", "--explorer", "http://chopsticks:3000")
 	if err != nil {
 		fmt.Printf("error initializing ark config: %s", err)
 		os.Exit(1)
@@ -139,9 +140,9 @@ func TestWasm(t *testing.T) {
 
 	amount := 1000
 	t.Logf("Alice is sending %d sats to Bob offchain...", amount)
-	require.NoError(t, sendAsync(alicePage, bobAddr.OffchainAddr, amount))
+	require.NoError(t, sendOffChain(alicePage, bobAddr.OffchainAddr, amount))
 
-	t.Log("Payment completed out of round")
+	t.Log("Transaction completed out of round")
 
 	t.Logf("Bob settling the received funds...")
 	txID, err = settle(bobPage)
@@ -231,8 +232,8 @@ func initWallet(page playwright.Page) error {
             const privateKey = "";
             const password = "pass";
             const explorerUrl = "";
-            const aspUrl = "http://localhost:7070";    
-            return await init(walletType, clientType, aspUrl, privateKey, password, chain, explorerUrl);
+            const serverUrl = "http://localhost:7070";    
+            return await init(walletType, clientType, serverUrl, privateKey, password, chain, explorerUrl);
         } catch (err) {
             console.error("Init error:", err);
             throw err;
@@ -336,10 +337,10 @@ func settle(page playwright.Page) (string, error) {
 	return fmt.Sprint(result), nil
 }
 
-func sendAsync(page playwright.Page, addr string, amount int) error {
+func sendOffChain(page playwright.Page, addr string, amount int) error {
 	_, err := page.Evaluate(fmt.Sprintf(`async () => { 
         try {
-            return await sendAsync(false, [{To:"%s", Amount:%d}]);
+            return await sendOffChain(false, [{To:"%s", Amount:%d}]);
         } catch (err) {
             console.error("Error:", err);
             throw err;

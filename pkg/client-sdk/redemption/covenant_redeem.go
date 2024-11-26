@@ -24,9 +24,9 @@ type CovenantRedeemBranch struct {
 
 func NewCovenantRedeemBranch(
 	explorer explorer.Explorer,
-	congestionTree tree.CongestionTree, vtxo client.Vtxo,
+	vtxoTree tree.VtxoTree, vtxo client.Vtxo,
 ) (*CovenantRedeemBranch, error) {
-	sweepClosure, seconds, err := findCovenantSweepClosure(congestionTree)
+	sweepClosure, seconds, err := findCovenantSweepClosure(vtxoTree)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +36,7 @@ func NewCovenantRedeemBranch(
 		return nil, err
 	}
 
-	nodes, err := congestionTree.Branch(vtxo.Txid)
+	nodes, err := vtxoTree.Branch(vtxo.Txid)
 	if err != nil {
 		return nil, err
 	}
@@ -182,9 +182,9 @@ func (r *CovenantRedeemBranch) offchainPath() ([]*psetv2.Pset, error) {
 }
 
 func findCovenantSweepClosure(
-	congestionTree tree.CongestionTree,
+	vtxoTree tree.VtxoTree,
 ) (*taproot.TapElementsLeaf, uint, error) {
-	root, err := congestionTree.Root()
+	root, err := vtxoTree.Root()
 	if err != nil {
 		return nil, 0, err
 	}

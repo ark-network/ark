@@ -89,11 +89,11 @@ func (a *adminService) GetRoundDetails(ctx context.Context, roundId string) (*Ro
 		OutputsVtxos:     []string{},
 	}
 
-	for _, payment := range round.Payments {
+	for _, request := range round.TxRequests {
 		// TODO: Add fees amount
-		roundDetails.ForfeitedAmount += payment.TotalInputAmount()
+		roundDetails.ForfeitedAmount += request.TotalInputAmount()
 
-		for _, receiver := range payment.Receivers {
+		for _, receiver := range request.Receivers {
 			if receiver.IsOnchain() {
 				roundDetails.TotalExitAmount += receiver.Amount
 				roundDetails.ExitAddresses = append(roundDetails.ExitAddresses, receiver.OnchainAddress)
@@ -103,7 +103,7 @@ func (a *adminService) GetRoundDetails(ctx context.Context, roundId string) (*Ro
 			roundDetails.TotalVtxosAmount += receiver.Amount
 		}
 
-		for _, input := range payment.Inputs {
+		for _, input := range request.Inputs {
 			roundDetails.InputsVtxos = append(roundDetails.InputsVtxos, input.Txid)
 		}
 	}
@@ -134,7 +134,7 @@ func (a *adminService) GetScheduledSweeps(ctx context.Context) ([]ScheduledSweep
 
 	for _, round := range sweepableRounds {
 		sweepable, err := findSweepableOutputs(
-			ctx, a.walletSvc, a.txBuilder, a.sweeperTimeUnit, round.CongestionTree,
+			ctx, a.walletSvc, a.txBuilder, a.sweeperTimeUnit, round.VtxoTree,
 		)
 		if err != nil {
 			return nil, err

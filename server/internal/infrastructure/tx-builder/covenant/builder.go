@@ -315,41 +315,41 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 }
 
 func (b *txBuilder) BuildRoundTx(
-	aspPubkey *secp256k1.PublicKey,
-	payments []domain.Payment,
+	serverPubkey *secp256k1.PublicKey,
+	requests []domain.TxRequest,
 	boardingInputs []ports.BoardingInput,
 	sweptRounds []domain.Round,
 	_ ...*secp256k1.PublicKey, // cosigners are not used in the covenant
-) (roundTx string, congestionTree tree.CongestionTree, connectorAddress string, connectors []string, err error) {
-	// The creation of the tree and the pool tx are tightly coupled:
+) (roundTx string, vtxoTree tree.VtxoTree, connectorAddress string, connectors []string, err error) {
+	// The creation of the tree and the round tx are tightly coupled:
 	// - building the tree requires knowing the shared outpoint (txid:vout)
-	// - building the pool tx requires knowing the shared output script and amount
+	// - building the round tx requires knowing the shared output script and amount
 	// The idea here is to first create all the data for the outputs of the txs
-	// of the congestion tree to calculate the shared output script and amount.
-	// With these data the pool tx can be created, and once the shared utxo
-	// outpoint is obtained, the congestion tree can be finally created.
+	// of the vtxo tree to calculate the shared output script and amount.
+	// With these data the round tx can be created, and once the shared utxo
+	// outpoint is obtained, the vtxo tree can be finally created.
 	// The factory function `treeFactoryFn` returned below holds all outputs data
 	// generated in the process and takes the shared utxo outpoint as argument.
-	// This is safe as the memory allocated for `craftCongestionTree` is freed
-	// only after `BuildPoolTx` returns.
+	// This is safe as the memory allocated for `BuildVtxoTree` is flushed
+	// only after `BuildRoundTx` returns.
 
 	var sharedOutputScript []byte
 	var sharedOutputAmount uint64
 	var treeFactoryFn tree.TreeFactory
 
-	if !isOnchainOnly(payments) {
+	if !isOnchainOnly(requests) {
 		feeSatsPerNode, err := b.wallet.MinRelayFee(context.Background(), uint64(common.CovenantTreeTxSize))
 		if err != nil {
 			return "", nil, "", nil, err
 		}
 
-		vtxosLeaves, err := getOutputVtxosLeaves(payments)
+		vtxosLeaves, err := getOutputVtxosLeaves(requests)
 		if err != nil {
 			return "", nil, "", nil, err
 		}
 
-		treeFactoryFn, sharedOutputScript, sharedOutputAmount, err = tree.CraftCongestionTree(
-			b.onchainNetwork().AssetID, aspPubkey, vtxosLeaves, feeSatsPerNode, b.roundLifetime,
+		treeFactoryFn, sharedOutputScript, sharedOutputAmount, err = tree.BuildVtxoTree(
+			b.onchainNetwork().AssetID, serverPubkey, vtxosLeaves, feeSatsPerNode, b.roundLifetime,
 		)
 		if err != nil {
 			return "", nil, "", nil, err
@@ -361,8 +361,8 @@ func (b *txBuilder) BuildRoundTx(
 		return
 	}
 
-	ptx, err := b.createPoolTx(
-		sharedOutputAmount, sharedOutputScript, payments, boardingInputs, aspPubkey, connectorAddress, sweptRounds,
+	ptx, err := b.createRoundTx(
+		sharedOutputAmount, sharedOutputScript, requests, boardingInputs, serverPubkey, connectorAddress, sweptRounds,
 	)
 	if err != nil {
 		return
@@ -374,7 +374,7 @@ func (b *txBuilder) BuildRoundTx(
 	}
 
 	if treeFactoryFn != nil {
-		congestionTree, err = treeFactoryFn(psetv2.InputArgs{
+		vtxoTree, err = treeFactoryFn(psetv2.InputArgs{
 			Txid:    unsignedTx.TxHash().String(),
 			TxIndex: 0,
 		})
@@ -388,7 +388,7 @@ func (b *txBuilder) BuildRoundTx(
 		return
 	}
 
-	if countSpentVtxos(payments) <= 0 {
+	if countSpentVtxos(requests) <= 0 {
 		return
 	}
 
@@ -402,7 +402,7 @@ func (b *txBuilder) BuildRoundTx(
 		return "", nil, "", nil, err
 	}
 
-	connectorsPsets, err := b.createConnectors(roundTx, payments, connectorAddress, connectorAmount, connectorFeeAmount)
+	connectorsPsets, err := b.createConnectors(roundTx, requests, connectorAddress, connectorAmount, connectorFeeAmount)
 	if err != nil {
 		return "", nil, "", nil, err
 	}
@@ -477,7 +477,7 @@ func (b *txBuilder) verifyTapscriptPartialSigs(pset *psetv2.Pset) (bool, error) 
 	utx, _ := pset.UnsignedTx()
 	txid := utx.TxHash().String()
 
-	aspPublicKey, err := b.wallet.GetPubkey(context.Background())
+	serverPubkey, err := b.wallet.GetPubkey(context.Background())
 	if err != nil {
 		return false, err
 	}
@@ -511,8 +511,8 @@ func (b *txBuilder) verifyTapscriptPartialSigs(pset *psetv2.Pset) (bool, error) 
 			}
 		}
 
-		// we don't need to check if ASP signed
-		keys[hex.EncodeToString(schnorr.SerializePubKey(aspPublicKey))] = true
+		// we don't need to check if server signed
+		keys[hex.EncodeToString(schnorr.SerializePubKey(serverPubkey))] = true
 
 		rootHash := tapLeaf.ControlBlock.RootHash(tapLeaf.Script)
 		tapKeyFromControlBlock := taproot.ComputeTaprootOutputKey(tree.UnspendableKey(), rootHash[:])
@@ -629,15 +629,15 @@ func (b *txBuilder) FinalizeAndExtract(tx string) (string, error) {
 }
 
 func (b *txBuilder) FindLeaves(
-	congestionTree tree.CongestionTree,
+	vtxoTree tree.VtxoTree,
 	fromtxid string,
 	fromvout uint32,
 ) ([]tree.Node, error) {
-	allLeaves := congestionTree.Leaves()
+	allLeaves := vtxoTree.Leaves()
 	foundLeaves := make([]tree.Node, 0)
 
 	for _, leaf := range allLeaves {
-		branch, err := congestionTree.Branch(leaf.Txid)
+		branch, err := vtxoTree.Branch(leaf.Txid)
 		if err != nil {
 			return nil, err
 		}
@@ -669,16 +669,16 @@ func (b *txBuilder) FindLeaves(
 	return foundLeaves, nil
 }
 
-func (b *txBuilder) createPoolTx(
+func (b *txBuilder) createRoundTx(
 	sharedOutputAmount uint64,
 	sharedOutputScript []byte,
-	payments []domain.Payment,
+	requests []domain.TxRequest,
 	boardingInputs []ports.BoardingInput,
-	aspPubKey *secp256k1.PublicKey,
+	serverPubkey *secp256k1.PublicKey,
 	connectorAddress string,
 	sweptRounds []domain.Round,
 ) (*psetv2.Pset, error) {
-	aspScript, err := p2wpkhScript(aspPubKey, b.onchainNetwork())
+	serverScript, err := p2wpkhScript(serverPubkey, b.onchainNetwork())
 	if err != nil {
 		return nil, err
 	}
@@ -698,7 +698,7 @@ func (b *txBuilder) createPoolTx(
 		return nil, err
 	}
 
-	nbOfInputs := countSpentVtxos(payments)
+	nbOfInputs := countSpentVtxos(requests)
 	connectorsAmount := (dustAmount + connectorMinRelayFee) * nbOfInputs
 	if nbOfInputs > 1 {
 		connectorsAmount -= connectorMinRelayFee
@@ -725,7 +725,7 @@ func (b *txBuilder) createPoolTx(
 		})
 	}
 
-	onchainOutputs, err := getOnchainOutputs(payments, b.onchainNetwork())
+	onchainOutputs, err := getOnchainOutputs(requests, b.onchainNetwork())
 	if err != nil {
 		return nil, err
 	}
@@ -760,7 +760,7 @@ func (b *txBuilder) createPoolTx(
 			outputs = append(outputs, psetv2.OutputArgs{
 				Asset:  b.onchainNetwork().AssetID,
 				Amount: change,
-				Script: aspScript,
+				Script: serverScript,
 			})
 		}
 	}
@@ -878,7 +878,7 @@ func (b *txBuilder) createPoolTx(
 						{
 							Asset:  b.onchainNetwork().AssetID,
 							Amount: change,
-							Script: aspScript,
+							Script: serverScript,
 						},
 					}); err != nil {
 						return nil, err
@@ -904,7 +904,7 @@ func (b *txBuilder) createPoolTx(
 					{
 						Asset:  b.onchainNetwork().AssetID,
 						Amount: change,
-						Script: aspScript,
+						Script: serverScript,
 					},
 				}); err != nil {
 					return nil, err
@@ -1009,24 +1009,24 @@ func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, 
 }
 
 func (b *txBuilder) createConnectors(
-	roundTx string, payments []domain.Payment,
+	roundTx string, requests []domain.TxRequest,
 	connectorAddress string,
 	connectorAmount, feeAmount uint64,
 ) ([]*psetv2.Pset, error) {
 	txid, _ := getTxid(roundTx)
 
-	aspScript, err := address.ToOutputScript(connectorAddress)
+	serverScript, err := address.ToOutputScript(connectorAddress)
 	if err != nil {
 		return nil, err
 	}
 
 	connectorOutput := psetv2.OutputArgs{
 		Asset:  b.onchainNetwork().AssetID,
-		Script: aspScript,
+		Script: serverScript,
 		Amount: connectorAmount,
 	}
 
-	numberOfConnectors := countSpentVtxos(payments)
+	numberOfConnectors := countSpentVtxos(requests)
 
 	previousInput := psetv2.InputArgs{
 		Txid:    txid,
@@ -1035,7 +1035,7 @@ func (b *txBuilder) createConnectors(
 
 	if numberOfConnectors == 1 {
 		outputs := []psetv2.OutputArgs{connectorOutput}
-		connectorTx, err := craftConnectorTx(previousInput, aspScript, outputs, feeAmount)
+		connectorTx, err := craftConnectorTx(previousInput, serverScript, outputs, feeAmount)
 		if err != nil {
 			return nil, err
 		}
@@ -1056,11 +1056,11 @@ func (b *txBuilder) createConnectors(
 		if totalConnectorAmount > 0 {
 			outputs = append(outputs, psetv2.OutputArgs{
 				Asset:  b.onchainNetwork().AssetID,
-				Script: aspScript,
+				Script: serverScript,
 				Amount: totalConnectorAmount,
 			})
 		}
-		connectorTx, err := craftConnectorTx(previousInput, aspScript, outputs, feeAmount)
+		connectorTx, err := craftConnectorTx(previousInput, serverScript, outputs, feeAmount)
 		if err != nil {
 			return nil, err
 		}

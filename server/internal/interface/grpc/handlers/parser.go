@@ -73,7 +73,7 @@ func parseReceiver(out *arkv1.Output) (domain.Receiver, error) {
 
 	return domain.Receiver{
 		Amount: out.GetAmount(),
-		Pubkey: hex.EncodeToString(schnorr.SerializePubKey(decodedAddr.VtxoTapKey)),
+		PubKey: hex.EncodeToString(schnorr.SerializePubKey(decodedAddr.VtxoTapKey)),
 	}, nil
 }
 
@@ -117,7 +117,7 @@ func (v vtxoList) toProto() []*arkv1.Vtxo {
 			Swept:     vv.Swept,
 			RedeemTx:  vv.RedeemTx,
 			IsPending: len(vv.RedeemTx) > 0,
-			Pubkey:    vv.Pubkey,
+			Pubkey:    vv.PubKey,
 			CreatedAt: vv.CreatedAt,
 		})
 	}
@@ -138,9 +138,9 @@ func (v vtxoKeyList) toProto() []*arkv1.Outpoint {
 	return list
 }
 
-type congestionTree tree.CongestionTree
+type vtxoTree tree.VtxoTree
 
-func (t congestionTree) toProto() *arkv1.Tree {
+func (t vtxoTree) toProto() *arkv1.Tree {
 	levels := make([]*arkv1.TreeLevel, 0, len(t))
 	for _, level := range t {
 		levelProto := &arkv1.TreeLevel{
@@ -179,6 +179,27 @@ func (s stage) toProto() arkv1.RoundStage {
 		return arkv1.RoundStage_ROUND_STAGE_FINALIZATION
 	default:
 		return arkv1.RoundStage_ROUND_STAGE_UNSPECIFIED
+	}
+}
+
+type roundTxEvent application.RoundTransactionEvent
+
+func (e roundTxEvent) toProto() *arkv1.RoundTransaction {
+	return &arkv1.RoundTransaction{
+		Txid:                 e.RoundTxid,
+		SpentVtxos:           vtxoKeyList(e.SpentVtxos).toProto(),
+		SpendableVtxos:       vtxoList(e.SpendableVtxos).toProto(),
+		ClaimedBoardingUtxos: vtxoKeyList(e.ClaimedBoardingInputs).toProto(),
+	}
+}
+
+type redeemTxEvent application.RedeemTransactionEvent
+
+func (e redeemTxEvent) toProto() *arkv1.RedeemTransaction {
+	return &arkv1.RedeemTransaction{
+		Txid:           e.RedeemTxid,
+		SpentVtxos:     vtxoKeyList(e.SpentVtxos).toProto(),
+		SpendableVtxos: vtxoList(e.SpendableVtxos).toProto(),
 	}
 }
 

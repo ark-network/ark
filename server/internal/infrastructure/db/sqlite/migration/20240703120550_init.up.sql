@@ -13,19 +13,19 @@ CREATE TABLE IF NOT EXISTS round (
     swept BOOLEAN NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS payment (
+CREATE TABLE IF NOT EXISTS tx_request (
     id TEXT PRIMARY KEY,
     round_id TEXT NOT NULL,
     FOREIGN KEY (round_id) REFERENCES round(id)
 );
 
 CREATE TABLE IF NOT EXISTS receiver (
-    payment_id TEXT NOT NULL,
+    request_id TEXT NOT NULL,
     pubkey TEXT,
     onchain_address TEXT,
     amount INTEGER NOT NULL,
-    FOREIGN KEY (payment_id) REFERENCES payment(id),
-    PRIMARY KEY (payment_id, pubkey, onchain_address)
+    FOREIGN KEY (request_id) REFERENCES tx_request(id),
+    PRIMARY KEY (request_id, pubkey, onchain_address)
 );
 
 CREATE TABLE IF NOT EXISTS tx (
@@ -46,17 +46,17 @@ CREATE TABLE IF NOT EXISTS vtxo (
 	vout INTEGER NOT NULL,
 	pubkey TEXT NOT NULL,
 	amount INTEGER NOT NULL,
-	pool_tx TEXT NOT NULL,
+	round_tx TEXT NOT NULL,
 	spent_by TEXT NOT NULL,
 	spent BOOLEAN NOT NULL,
 	redeemed BOOLEAN NOT NULL,
 	swept BOOLEAN NOT NULL,
 	expire_at INTEGER NOT NULL,
     created_at INTEGER NOT NULL,
-	payment_id TEXT,
+	request_id TEXT,
     redeem_tx TEXT,
     PRIMARY KEY (txid, vout),
-	FOREIGN KEY (payment_id) REFERENCES payment(id)
+	FOREIGN KEY (request_id) REFERENCES tx_request(id)
 );
 
 CREATE TABLE IF NOT EXISTS note (
@@ -81,22 +81,22 @@ FROM entity
 LEFT OUTER JOIN entity_vtxo
 ON entity.id=entity_vtxo.entity_id;
 
-CREATE VIEW round_payment_vw AS SELECT payment.*
+CREATE VIEW round_request_vw AS SELECT tx_request.*
 FROM round
-LEFT OUTER JOIN payment
-ON round.id=payment.round_id;
+LEFT OUTER JOIN tx_request
+ON round.id=tx_request.round_id;
 
 CREATE VIEW round_tx_vw AS SELECT tx.*
 FROM round
 LEFT OUTER JOIN tx
 ON round.id=tx.round_id;
 
-CREATE VIEW payment_receiver_vw AS SELECT receiver.*
-FROM payment
+CREATE VIEW request_receiver_vw AS SELECT receiver.*
+FROM tx_request
 LEFT OUTER JOIN receiver
-ON payment.id=receiver.payment_id;
+ON tx_request.id=receiver.request_id;
 
-CREATE VIEW payment_vtxo_vw AS SELECT vtxo.*
-FROM payment
+CREATE VIEW request_vtxo_vw AS SELECT vtxo.*
+FROM tx_request
 LEFT OUTER JOIN vtxo
-ON payment.id=vtxo.payment_id;
+ON tx_request.id=vtxo.request_id;

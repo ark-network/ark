@@ -17,7 +17,7 @@ import (
 // sweeper is an unexported service running while the main application service is started
 // it is responsible for sweeping onchain shared outputs that expired
 // it also handles delaying the sweep events in case some parts of the tree are broadcasted
-// when a round is finalized, the main application service schedules a sweep event on the newly created congestion tree
+// when a round is finalized, the main application service schedules a sweep event on the newly created vtxo tree
 type sweeper struct {
 	wallet      ports.WalletService
 	repoManager ports.RepoManager
@@ -58,7 +58,7 @@ func (s *sweeper) start() error {
 	}
 
 	for _, round := range allRounds {
-		task := s.createTask(round.Txid, round.CongestionTree)
+		task := s.createTask(round.Txid, round.VtxoTree)
 		task()
 	}
 
@@ -78,14 +78,14 @@ func (s *sweeper) removeTask(treeRootTxid string) {
 
 // schedule set up a task to be executed once at the given timestamp
 func (s *sweeper) schedule(
-	expirationTimestamp int64, roundTxid string, congestionTree tree.CongestionTree,
+	expirationTimestamp int64, roundTxid string, vtxoTree tree.VtxoTree,
 ) error {
-	if len(congestionTree) <= 0 { // skip
-		log.Debugf("skipping sweep scheduling (round tx %s), empty congestion tree", roundTxid)
+	if len(vtxoTree) <= 0 { // skip
+		log.Debugf("skipping sweep scheduling (round tx %s), empty vtxo tree", roundTxid)
 		return nil
 	}
 
-	root, err := congestionTree.Root()
+	root, err := vtxoTree.Root()
 	if err != nil {
 		return err
 	}
@@ -94,7 +94,7 @@ func (s *sweeper) schedule(
 		return nil
 	}
 
-	task := s.createTask(roundTxid, congestionTree)
+	task := s.createTask(roundTxid, vtxoTree)
 
 	var fancyTime string
 	if s.scheduler.Unit() == ports.UnixTime {
@@ -112,7 +112,7 @@ func (s *sweeper) schedule(
 	s.scheduledTasks[root.Txid] = struct{}{}
 	s.locker.Unlock()
 
-	if err := s.updateVtxoExpirationTime(congestionTree, expirationTimestamp); err != nil {
+	if err := s.updateVtxoExpirationTime(vtxoTree, expirationTimestamp); err != nil {
 		log.WithError(err).Error("error while updating vtxo expiration time")
 	}
 
@@ -120,14 +120,14 @@ func (s *sweeper) schedule(
 }
 
 // createTask returns a function passed as handler in the scheduler
-// it tries to craft a sweep tx containing the onchain outputs of the given congestion tree
+// it tries to craft a sweep tx containing the onchain outputs of the given vtxo tree
 // if some parts of the tree have been broadcasted in the meantine, it will schedule the next taskes for the remaining parts of the tree
 func (s *sweeper) createTask(
-	roundTxid string, congestionTree tree.CongestionTree,
+	roundTxid string, vtxoTree tree.VtxoTree,
 ) func() {
 	return func() {
 		ctx := context.Background()
-		root, err := congestionTree.Root()
+		root, err := vtxoTree.Root()
 		if err != nil {
 			log.WithError(err).Error("error while getting root node")
 			return
@@ -139,17 +139,17 @@ func (s *sweeper) createTask(
 		sweepInputs := make([]ports.SweepInput, 0)
 		vtxoKeys := make([]domain.VtxoKey, 0) // vtxos associated to the sweep inputs
 
-		// inspect the congestion tree to find onchain shared outputs
-		sharedOutputs, err := findSweepableOutputs(ctx, s.wallet, s.builder, s.scheduler.Unit(), congestionTree)
+		// inspect the vtxo tree to find onchain shared outputs
+		sharedOutputs, err := findSweepableOutputs(ctx, s.wallet, s.builder, s.scheduler.Unit(), vtxoTree)
 		if err != nil {
-			log.WithError(err).Error("error while inspecting congestion tree")
+			log.WithError(err).Error("error while inspecting vtxo tree")
 			return
 		}
 
 		for expiredAt, inputs := range sharedOutputs {
 			// if the shared outputs are not expired, schedule a sweep task for it
 			if s.scheduler.AfterNow(expiredAt) {
-				subtrees, err := computeSubTrees(congestionTree, inputs)
+				subtrees, err := computeSubTrees(vtxoTree, inputs)
 				if err != nil {
 					log.WithError(err).Error("error while computing subtrees")
 					continue
@@ -185,7 +185,7 @@ func (s *sweeper) createTask(
 					}
 				} else {
 					// if it's not a vtxo, find all the vtxos leaves reachable from that input
-					vtxosLeaves, err := s.builder.FindLeaves(congestionTree, input.GetHash().String(), input.GetIndex())
+					vtxosLeaves, err := s.builder.FindLeaves(vtxoTree, input.GetHash().String(), input.GetIndex())
 					if err != nil {
 						log.WithError(err).Error("error while finding vtxos leaves")
 						continue
@@ -301,7 +301,7 @@ func (s *sweeper) createTask(
 }
 
 func (s *sweeper) updateVtxoExpirationTime(
-	tree tree.CongestionTree,
+	tree tree.VtxoTree,
 	expirationTime int64,
 ) error {
 	leaves := tree.Leaves()
@@ -376,13 +376,13 @@ func (s *sweeper) createAndSendNotes(ctx context.Context, vtxosKeys []domain.Vtx
 	}
 }
 
-func computeSubTrees(congestionTree tree.CongestionTree, inputs []ports.SweepInput) ([]tree.CongestionTree, error) {
-	subTrees := make(map[string]tree.CongestionTree, 0)
+func computeSubTrees(vtxoTree tree.VtxoTree, inputs []ports.SweepInput) ([]tree.VtxoTree, error) {
+	subTrees := make(map[string]tree.VtxoTree, 0)
 
-	// for each sweepable input, create a sub congestion tree
+	// for each sweepable input, create a sub vtxo tree
 	// it allows to skip the part of the tree that has been broadcasted in the next task
 	for _, input := range inputs {
-		subTree, err := computeSubTree(congestionTree, input.GetHash().String())
+		subTree, err := computeSubTree(vtxoTree, input.GetHash().String())
 		if err != nil {
 			log.WithError(err).Error("error while finding sub tree")
 			continue
@@ -398,7 +398,7 @@ func computeSubTrees(congestionTree tree.CongestionTree, inputs []ports.SweepInp
 	}
 
 	// filter out the sub trees, remove the ones that are included in others
-	filteredSubTrees := make([]tree.CongestionTree, 0)
+	filteredSubTrees := make([]tree.VtxoTree, 0)
 	for i, subTree := range subTrees {
 		notIncludedInOtherTrees := true
 
@@ -426,19 +426,19 @@ func computeSubTrees(congestionTree tree.CongestionTree, inputs []ports.SweepInp
 	return filteredSubTrees, nil
 }
 
-func computeSubTree(congestionTree tree.CongestionTree, newRoot string) (tree.CongestionTree, error) {
-	for _, level := range congestionTree {
+func computeSubTree(vtxoTree tree.VtxoTree, newRoot string) (tree.VtxoTree, error) {
+	for _, level := range vtxoTree {
 		for _, node := range level {
 			if node.Txid == newRoot || node.ParentTxid == newRoot {
-				newTree := make(tree.CongestionTree, 0)
+				newTree := make(tree.VtxoTree, 0)
 				newTree = append(newTree, []tree.Node{node})
 
-				children := congestionTree.Children(node.Txid)
+				children := vtxoTree.Children(node.Txid)
 				for len(children) > 0 {
 					newTree = append(newTree, children)
 					newChildren := make([]tree.Node, 0)
 					for _, child := range children {
-						newChildren = append(newChildren, congestionTree.Children(child.Txid)...)
+						newChildren = append(newChildren, vtxoTree.Children(child.Txid)...)
 					}
 					children = newChildren
 				}
@@ -451,7 +451,7 @@ func computeSubTree(congestionTree tree.CongestionTree, newRoot string) (tree.Co
 	return nil, fmt.Errorf("failed to create subtree, new root not found")
 }
 
-func containsTree(tr0 tree.CongestionTree, tr1 tree.CongestionTree) (bool, error) {
+func containsTree(tr0 tree.VtxoTree, tr1 tree.VtxoTree) (bool, error) {
 	tr1Root, err := tr1.Root()
 	if err != nil {
 		return false, err
@@ -468,7 +468,7 @@ func containsTree(tr0 tree.CongestionTree, tr1 tree.CongestionTree) (bool, error
 	return false, nil
 }
 
-// assuming the pset is a leaf in the congestion tree, returns the vtxo outpoint
+// assuming the pset is a leaf in the vtxo tree, returns the vtxo outpoint
 func extractVtxoOutpoint(leaf tree.Node) (*domain.VtxoKey, error) {
 	if !leaf.Leaf {
 		return nil, fmt.Errorf("node is not a leaf")

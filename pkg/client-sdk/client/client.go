@@ -22,7 +22,7 @@ type RoundEvent interface {
 	isRoundEvent()
 }
 
-type ASPClient interface {
+type TransportClient interface {
 	GetInfo(ctx context.Context) (*Info, error)
 	RegisterInputsForNextRound(
 		ctx context.Context, inputs []Input, ephemeralKey string,
@@ -31,7 +31,7 @@ type ASPClient interface {
 		ctx context.Context, notes []string, ephemeralKey string,
 	) (string, error)
 	RegisterOutputsForNextRound(
-		ctx context.Context, paymentID string, outputs []Output,
+		ctx context.Context, requestID string, outputs []Output,
 	) error
 	SubmitTreeNonces(
 		ctx context.Context, roundID, cosignerPubkey string, nonces bitcointree.TreeNonces,
@@ -43,9 +43,9 @@ type ASPClient interface {
 		ctx context.Context, signedForfeitTxs []string, signedRoundTx string,
 	) error
 	GetEventStream(
-		ctx context.Context, paymentID string,
+		ctx context.Context, requestID string,
 	) (<-chan RoundEventChannel, func(), error)
-	Ping(ctx context.Context, paymentID string) error
+	Ping(ctx context.Context, requestID string) error
 	SubmitRedeemTx(
 		ctx context.Context, signedRedeemTx string,
 	) (string, error)
@@ -59,7 +59,7 @@ type ASPClient interface {
 }
 
 type Info struct {
-	Pubkey                     string
+	PubKey                     string
 	RoundLifetime              int64
 	UnilateralExitDelay        int64
 	RoundInterval              int64
@@ -90,7 +90,7 @@ type Input struct {
 
 type Vtxo struct {
 	Outpoint
-	Pubkey    string
+	PubKey    string
 	Amount    uint64
 	RoundTxid string
 	ExpiresAt time.Time
@@ -100,8 +100,8 @@ type Vtxo struct {
 	SpentBy   string
 }
 
-func (v Vtxo) Address(asp *secp256k1.PublicKey, net common.Network) (string, error) {
-	pubkeyBytes, err := hex.DecodeString(v.Pubkey)
+func (v Vtxo) Address(server *secp256k1.PublicKey, net common.Network) (string, error) {
+	pubkeyBytes, err := hex.DecodeString(v.PubKey)
 	if err != nil {
 		return "", err
 	}
@@ -113,7 +113,7 @@ func (v Vtxo) Address(asp *secp256k1.PublicKey, net common.Network) (string, err
 
 	a := &common.Address{
 		HRP:        net.Addr,
-		Asp:        asp,
+		Server:     server,
 		VtxoTapKey: pubkey,
 	}
 
@@ -160,7 +160,7 @@ type Round struct {
 	StartedAt  *time.Time
 	EndedAt    *time.Time
 	Tx         string
-	Tree       tree.CongestionTree
+	Tree       tree.VtxoTree
 	ForfeitTxs []string
 	Connectors []string
 	Stage      RoundStage
@@ -169,7 +169,7 @@ type Round struct {
 type RoundFinalizationEvent struct {
 	ID              string
 	Tx              string
-	Tree            tree.CongestionTree
+	Tree            tree.VtxoTree
 	Connectors      []string
 	MinRelayFeeRate chainfee.SatPerKVByte
 }
@@ -191,10 +191,10 @@ type RoundFailedEvent struct {
 func (e RoundFailedEvent) isRoundEvent() {}
 
 type RoundSigningStartedEvent struct {
-	ID                  string
-	UnsignedTree        tree.CongestionTree
-	CosignersPublicKeys []*secp256k1.PublicKey
-	UnsignedRoundTx     string
+	ID               string
+	UnsignedTree     tree.VtxoTree
+	CosignersPubKeys []*secp256k1.PublicKey
+	UnsignedRoundTx  string
 }
 
 func (e RoundSigningStartedEvent) isRoundEvent() {}

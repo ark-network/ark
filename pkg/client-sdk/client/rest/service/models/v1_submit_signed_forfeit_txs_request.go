@@ -20,7 +20,7 @@ type V1SubmitSignedForfeitTxsRequest struct {
 	// Forfeit txs signed by the user.
 	SignedForfeitTxs []string `json:"signedForfeitTxs"`
 
-	// If payment has boarding input, the user must sign the associated inputs.
+	// The user has to sign also the round tx if he registerd a boarding UTXO.
 	SignedRoundTx string `json:"signedRoundTx,omitempty"`
 }
 

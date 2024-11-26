@@ -86,10 +86,10 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 		}
 
 		return client.RoundSigningStartedEvent{
-			ID:                  ee.GetId(),
-			UnsignedTree:        treeFromProto{ee.GetUnsignedVtxoTree()}.parse(),
-			CosignersPublicKeys: pubkeys,
-			UnsignedRoundTx:     ee.GetUnsignedRoundTx(),
+			ID:               ee.GetId(),
+			UnsignedTree:     treeFromProto{ee.GetUnsignedVtxoTree()}.parse(),
+			CosignersPubKeys: pubkeys,
+			UnsignedRoundTx:  ee.GetUnsignedRoundTx(),
 		}, nil
 	}
 
@@ -123,7 +123,7 @@ func (v vtxo) toVtxo() client.Vtxo {
 		IsPending: v.GetIsPending(),
 		RedeemTx:  v.GetRedeemTx(),
 		SpentBy:   v.GetSpentBy(),
-		Pubkey:    v.GetPubkey(),
+		PubKey:    v.GetPubkey(),
 		CreatedAt: time.Unix(v.GetCreatedAt(), 0),
 	}
 }
@@ -166,8 +166,8 @@ type treeFromProto struct {
 	*arkv1.Tree
 }
 
-func (t treeFromProto) parse() tree.CongestionTree {
-	levels := make(tree.CongestionTree, 0, len(t.GetLevels()))
+func (t treeFromProto) parse() tree.VtxoTree {
+	levels := make(tree.VtxoTree, 0, len(t.GetLevels()))
 
 	for _, level := range t.GetLevels() {
 		nodes := make([]tree.Node, 0, len(level.Nodes))

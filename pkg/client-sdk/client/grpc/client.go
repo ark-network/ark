@@ -23,31 +23,31 @@ import (
 type grpcClient struct {
 	conn      *grpc.ClientConn
 	svc       arkv1.ArkServiceClient
-	treeCache *utils.Cache[tree.CongestionTree]
+	treeCache *utils.Cache[tree.VtxoTree]
 }
 
-func NewClient(aspUrl string) (client.ASPClient, error) {
-	if len(aspUrl) <= 0 {
-		return nil, fmt.Errorf("missing asp url")
+func NewClient(serverUrl string) (client.TransportClient, error) {
+	if len(serverUrl) <= 0 {
+		return nil, fmt.Errorf("missing server url")
 	}
 
 	creds := insecure.NewCredentials()
 	port := 80
-	if strings.HasPrefix(aspUrl, "https://") {
-		aspUrl = strings.TrimPrefix(aspUrl, "https://")
+	if strings.HasPrefix(serverUrl, "https://") {
+		serverUrl = strings.TrimPrefix(serverUrl, "https://")
 		creds = credentials.NewTLS(nil)
 		port = 443
 	}
-	if !strings.Contains(aspUrl, ":") {
-		aspUrl = fmt.Sprintf("%s:%d", aspUrl, port)
+	if !strings.Contains(serverUrl, ":") {
+		serverUrl = fmt.Sprintf("%s:%d", serverUrl, port)
 	}
-	conn, err := grpc.NewClient(aspUrl, grpc.WithTransportCredentials(creds))
+	conn, err := grpc.NewClient(serverUrl, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		return nil, err
 	}
 
 	svc := arkv1.NewArkServiceClient(conn)
-	treeCache := utils.NewCache[tree.CongestionTree]()
+	treeCache := utils.NewCache[tree.VtxoTree]()
 
 	return &grpcClient{conn, svc, treeCache}, nil
 }
@@ -59,7 +59,7 @@ func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
 		return nil, err
 	}
 	return &client.Info{
-		Pubkey:                     resp.GetPubkey(),
+		PubKey:                     resp.GetPubkey(),
 		RoundLifetime:              resp.GetRoundLifetime(),
 		UnilateralExitDelay:        resp.GetUnilateralExitDelay(),
 		RoundInterval:              resp.GetRoundInterval(),
@@ -84,20 +84,20 @@ func (a *grpcClient) GetBoardingAddress(
 }
 
 func (a *grpcClient) RegisterInputsForNextRound(
-	ctx context.Context, inputs []client.Input, ephemeralPublicKey string,
+	ctx context.Context, inputs []client.Input, ephemeralPubkey string,
 ) (string, error) {
 	req := &arkv1.RegisterInputsForNextRoundRequest{
 		Inputs: ins(inputs).toProto(),
 	}
-	if len(ephemeralPublicKey) > 0 {
-		req.EphemeralPubkey = &ephemeralPublicKey
+	if len(ephemeralPubkey) > 0 {
+		req.EphemeralPubkey = &ephemeralPubkey
 	}
 
 	resp, err := a.svc.RegisterInputsForNextRound(ctx, req)
 	if err != nil {
 		return "", err
 	}
-	return resp.GetId(), nil
+	return resp.GetRequestId(), nil
 }
 
 func (a *grpcClient) RegisterNotesForNextRound(
@@ -113,15 +113,15 @@ func (a *grpcClient) RegisterNotesForNextRound(
 	if err != nil {
 		return "", err
 	}
-	return resp.GetId(), nil
+	return resp.GetRequestId(), nil
 }
 
 func (a *grpcClient) RegisterOutputsForNextRound(
-	ctx context.Context, paymentID string, outputs []client.Output,
+	ctx context.Context, requestID string, outputs []client.Output,
 ) error {
 	req := &arkv1.RegisterOutputsForNextRoundRequest{
-		Id:      paymentID,
-		Outputs: outs(outputs).toProto(),
+		RequestId: requestID,
+		Outputs:   outs(outputs).toProto(),
 	}
 	_, err := a.svc.RegisterOutputsForNextRound(ctx, req)
 	return err
@@ -191,7 +191,7 @@ func (a *grpcClient) SubmitSignedForfeitTxs(
 }
 
 func (a *grpcClient) GetEventStream(
-	ctx context.Context, paymentID string,
+	ctx context.Context, requestID string,
 ) (<-chan client.RoundEventChannel, func(), error) {
 	req := &arkv1.GetEventStreamRequest{}
 	stream, err := a.svc.GetEventStream(ctx, req)
@@ -236,10 +236,10 @@ func (a *grpcClient) GetEventStream(
 }
 
 func (a *grpcClient) Ping(
-	ctx context.Context, paymentID string,
+	ctx context.Context, requestID string,
 ) error {
 	req := &arkv1.PingRequest{
-		PaymentId: paymentID,
+		RequestId: requestID,
 	}
 	_, err := a.svc.Ping(ctx, req)
 	return err

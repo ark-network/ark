@@ -36,17 +36,17 @@ func TestRoundTripCSV(t *testing.T) {
 
 func TestMultisigClosure(t *testing.T) {
 	// Generate some test keys
-	privKey1, err := secp256k1.GeneratePrivateKey()
+	prvkey1, err := secp256k1.GeneratePrivateKey()
 	require.NoError(t, err)
-	pubKey1 := privKey1.PubKey()
+	pubkey1 := prvkey1.PubKey()
 
-	privKey2, err := secp256k1.GeneratePrivateKey()
+	prvkey2, err := secp256k1.GeneratePrivateKey()
 	require.NoError(t, err)
-	pubKey2 := privKey2.PubKey()
+	pubkey2 := prvkey2.PubKey()
 
 	t.Run("valid 2-of-2 multisig", func(t *testing.T) {
 		closure := &tree.MultisigClosure{
-			PubKeys: []*secp256k1.PublicKey{pubKey1, pubKey2},
+			PubKeys: []*secp256k1.PublicKey{pubkey1, pubkey2},
 		}
 
 		// Generate script
@@ -62,18 +62,18 @@ func TestMultisigClosure(t *testing.T) {
 
 		// Compare serialized pubkeys
 		require.Equal(t,
-			schnorr.SerializePubKey(pubKey1),
+			schnorr.SerializePubKey(pubkey1),
 			schnorr.SerializePubKey(decodedClosure.PubKeys[0]),
 		)
 		require.Equal(t,
-			schnorr.SerializePubKey(pubKey2),
+			schnorr.SerializePubKey(pubkey2),
 			schnorr.SerializePubKey(decodedClosure.PubKeys[1]),
 		)
 	})
 
 	t.Run("valid single key multisig", func(t *testing.T) {
 		closure := &tree.MultisigClosure{
-			PubKeys: []*secp256k1.PublicKey{pubKey1},
+			PubKeys: []*secp256k1.PublicKey{pubkey1},
 		}
 
 		script, err := closure.Script()
@@ -87,7 +87,7 @@ func TestMultisigClosure(t *testing.T) {
 
 		// Compare serialized pubkey
 		require.Equal(t,
-			schnorr.SerializePubKey(pubKey1),
+			schnorr.SerializePubKey(pubkey1),
 			schnorr.SerializePubKey(decodedClosure.PubKeys[0]),
 		)
 	})
@@ -110,9 +110,9 @@ func TestMultisigClosure(t *testing.T) {
 	})
 
 	t.Run("invalid script - missing checksig", func(t *testing.T) {
-		pubKeyBytes := schnorr.SerializePubKey(pubKey1)
+		pubkeyBytes := schnorr.SerializePubKey(pubkey1)
 		script := []byte{txscript.OP_DATA_32}
-		script = append(script, pubKeyBytes...)
+		script = append(script, pubkeyBytes...)
 		// Missing OP_CHECKSIG
 
 		closure := &tree.MultisigClosure{}
@@ -122,9 +122,9 @@ func TestMultisigClosure(t *testing.T) {
 	})
 
 	t.Run("invalid script - extra data after checksig", func(t *testing.T) {
-		pubKeyBytes := schnorr.SerializePubKey(pubKey1)
+		pubkeyBytes := schnorr.SerializePubKey(pubkey1)
 		script := []byte{txscript.OP_DATA_32}
-		script = append(script, pubKeyBytes...)
+		script = append(script, pubkeyBytes...)
 		script = append(script, txscript.OP_CHECKSIG)
 		script = append(script, 0x00) // Extra unwanted byte
 
@@ -136,7 +136,7 @@ func TestMultisigClosure(t *testing.T) {
 
 	t.Run("witness size", func(t *testing.T) {
 		closure := &tree.MultisigClosure{
-			PubKeys: []*secp256k1.PublicKey{pubKey1, pubKey2},
+			PubKeys: []*secp256k1.PublicKey{pubkey1, pubkey2},
 		}
 
 		require.Equal(t, 128, closure.WitnessSize()) // 64 * 2 bytes
@@ -144,15 +144,15 @@ func TestMultisigClosure(t *testing.T) {
 
 	t.Run("valid 12-of-12 multisig", func(t *testing.T) {
 		// Generate 12 keys
-		pubKeys := make([]*secp256k1.PublicKey, 12)
+		pubkeys := make([]*secp256k1.PublicKey, 12)
 		for i := 0; i < 12; i++ {
-			privKey, err := secp256k1.GeneratePrivateKey()
+			prvkey, err := secp256k1.GeneratePrivateKey()
 			require.NoError(t, err)
-			pubKeys[i] = privKey.PubKey()
+			pubkeys[i] = prvkey.PubKey()
 		}
 
 		closure := &tree.MultisigClosure{
-			PubKeys: pubKeys,
+			PubKeys: pubkeys,
 		}
 
 		// Generate script
@@ -169,7 +169,7 @@ func TestMultisigClosure(t *testing.T) {
 		// Compare all serialized pubkeys
 		for i := 0; i < 12; i++ {
 			require.Equal(t,
-				schnorr.SerializePubKey(pubKeys[i]),
+				schnorr.SerializePubKey(pubkeys[i]),
 				schnorr.SerializePubKey(decodedClosure.PubKeys[i]),
 			)
 		}
@@ -181,18 +181,18 @@ func TestMultisigClosure(t *testing.T) {
 
 func TestCSVSigClosure(t *testing.T) {
 	// Generate test keys
-	privKey1, err := secp256k1.GeneratePrivateKey()
+	prvkey1, err := secp256k1.GeneratePrivateKey()
 	require.NoError(t, err)
-	pubKey1 := privKey1.PubKey()
+	pubkey1 := prvkey1.PubKey()
 
-	privKey2, err := secp256k1.GeneratePrivateKey()
+	prvkey2, err := secp256k1.GeneratePrivateKey()
 	require.NoError(t, err)
-	pubKey2 := privKey2.PubKey()
+	pubkey2 := prvkey2.PubKey()
 
 	t.Run("valid single key CSV", func(t *testing.T) {
 		csvSig := &tree.CSVSigClosure{
 			MultisigClosure: tree.MultisigClosure{
-				PubKeys: []*secp256k1.PublicKey{pubKey1},
+				PubKeys: []*secp256k1.PublicKey{pubkey1},
 			},
 			Seconds: 1024,
 		}
@@ -207,7 +207,7 @@ func TestCSVSigClosure(t *testing.T) {
 		require.Equal(t, uint32(1024), uint32(decodedCSV.Seconds))
 		require.Equal(t, 1, len(decodedCSV.PubKeys))
 		require.Equal(t,
-			schnorr.SerializePubKey(pubKey1),
+			schnorr.SerializePubKey(pubkey1),
 			schnorr.SerializePubKey(decodedCSV.PubKeys[0]),
 		)
 	})
@@ -215,7 +215,7 @@ func TestCSVSigClosure(t *testing.T) {
 	t.Run("valid 2-of-2 CSV", func(t *testing.T) {
 		csvSig := &tree.CSVSigClosure{
 			MultisigClosure: tree.MultisigClosure{
-				PubKeys: []*secp256k1.PublicKey{pubKey1, pubKey2},
+				PubKeys: []*secp256k1.PublicKey{pubkey1, pubkey2},
 			},
 			Seconds: 2016, // ~2 weeks
 		}
@@ -230,11 +230,11 @@ func TestCSVSigClosure(t *testing.T) {
 		require.Equal(t, uint32(2016), uint32(decodedCSV.Seconds))
 		require.Equal(t, 2, len(decodedCSV.PubKeys))
 		require.Equal(t,
-			schnorr.SerializePubKey(pubKey1),
+			schnorr.SerializePubKey(pubkey1),
 			schnorr.SerializePubKey(decodedCSV.PubKeys[0]),
 		)
 		require.Equal(t,
-			schnorr.SerializePubKey(pubKey2),
+			schnorr.SerializePubKey(pubkey2),
 			schnorr.SerializePubKey(decodedCSV.PubKeys[1]),
 		)
 	})
@@ -248,9 +248,9 @@ func TestCSVSigClosure(t *testing.T) {
 
 	t.Run("invalid CSV value", func(t *testing.T) {
 		// Create a script with invalid CSV value
-		pubKeyBytes := schnorr.SerializePubKey(pubKey1)
+		pubkeyBytes := schnorr.SerializePubKey(pubkey1)
 		script := []byte{txscript.OP_DATA_32}
-		script = append(script, pubKeyBytes...)
+		script = append(script, pubkeyBytes...)
 		script = append(script, txscript.OP_CHECKSIG)
 		script = append(script, 0xFF) // Invalid CSV value
 
@@ -263,7 +263,7 @@ func TestCSVSigClosure(t *testing.T) {
 	t.Run("witness size", func(t *testing.T) {
 		csvSig := &tree.CSVSigClosure{
 			MultisigClosure: tree.MultisigClosure{
-				PubKeys: []*secp256k1.PublicKey{pubKey1, pubKey2},
+				PubKeys: []*secp256k1.PublicKey{pubkey1, pubkey2},
 			},
 			Seconds: 1024,
 		}
@@ -274,7 +274,7 @@ func TestCSVSigClosure(t *testing.T) {
 	t.Run("max timelock", func(t *testing.T) {
 		csvSig := &tree.CSVSigClosure{
 			MultisigClosure: tree.MultisigClosure{
-				PubKeys: []*secp256k1.PublicKey{pubKey1},
+				PubKeys: []*secp256k1.PublicKey{pubkey1},
 			},
 			Seconds: 65535, // Maximum allowed value
 		}
@@ -438,22 +438,22 @@ func TestCSVSigClosureWitness(t *testing.T) {
 
 func TestDecodeChecksigAdd(t *testing.T) {
 	// Generate some test public keys
-	pubKey1, err := secp256k1.GeneratePrivateKey()
+	pubkey1, err := secp256k1.GeneratePrivateKey()
 	require.NoError(t, err)
-	pubKey2, err := secp256k1.GeneratePrivateKey()
+	pubkey2, err := secp256k1.GeneratePrivateKey()
 	require.NoError(t, err)
-	pubKey3, err := secp256k1.GeneratePrivateKey()
+	pubkey3, err := secp256k1.GeneratePrivateKey()
 	require.NoError(t, err)
 
-	pubKeys := []*secp256k1.PublicKey{pubKey1.PubKey(), pubKey2.PubKey(), pubKey3.PubKey()}
+	pubkeys := []*secp256k1.PublicKey{pubkey1.PubKey(), pubkey2.PubKey(), pubkey3.PubKey()}
 
 	// Create a script for 3-of-3 multisig using CHECKSIGADD
 	scriptBuilder := txscript.NewScriptBuilder().
-		AddData(schnorr.SerializePubKey(pubKeys[0])).
+		AddData(schnorr.SerializePubKey(pubkeys[0])).
 		AddOp(txscript.OP_CHECKSIG).
-		AddData(schnorr.SerializePubKey(pubKeys[1])).
+		AddData(schnorr.SerializePubKey(pubkeys[1])).
 		AddOp(txscript.OP_CHECKSIGADD).
-		AddData(schnorr.SerializePubKey(pubKeys[2])).
+		AddData(schnorr.SerializePubKey(pubkeys[2])).
 		AddOp(txscript.OP_CHECKSIGADD).
 		AddInt64(3).
 		AddOp(txscript.OP_EQUAL)

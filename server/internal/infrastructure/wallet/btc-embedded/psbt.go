@@ -73,7 +73,7 @@ func (s *service) signPsbt(packet *psbt.Packet, inputsToSign []int) ([]uint32, e
 		isTaproot := txscript.IsPayToTaproot(in.WitnessUtxo.PkScript)
 
 		if len(in.TaprootLeafScript) > 0 {
-			managedAddress = s.aspKeyAddr
+			managedAddress = s.serverKeyAddr
 		} else {
 			var err error
 			managedAddress, _, _, err = s.wallet.ScriptForOutput(in.WitnessUtxo)

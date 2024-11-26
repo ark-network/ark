@@ -23,7 +23,7 @@ var (
 type InitArgs struct {
 	ClientType          string
 	WalletType          string
-	AspUrl              string
+	ServerUrl           string
 	Seed                string
 	Password            string
 	ExplorerURL         string
@@ -51,8 +51,8 @@ func (a InitArgs) validate() error {
 		)
 	}
 
-	if len(a.AspUrl) <= 0 {
-		return fmt.Errorf("missing asp url")
+	if len(a.ServerUrl) <= 0 {
+		return fmt.Errorf("missing server url")
 	}
 	if len(a.Password) <= 0 {
 		return fmt.Errorf("missing password")
@@ -63,7 +63,7 @@ func (a InitArgs) validate() error {
 type InitWithWalletArgs struct {
 	ClientType          string
 	Wallet              wallet.WalletService
-	AspUrl              string
+	ServerUrl           string
 	Seed                string
 	Password            string
 	ExplorerURL         string
@@ -82,8 +82,8 @@ func (a InitWithWalletArgs) validate() error {
 		return fmt.Errorf("client type not supported, please select one of: %s", supportedClients)
 	}
 
-	if len(a.AspUrl) <= 0 {
-		return fmt.Errorf("missing asp url")
+	if len(a.ServerUrl) <= 0 {
+		return fmt.Errorf("missing server url")
 	}
 	if len(a.Password) <= 0 {
 		return fmt.Errorf("missing password")

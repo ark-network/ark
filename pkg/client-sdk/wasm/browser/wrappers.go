@@ -72,7 +72,7 @@ func InitWrapper() js.Func {
 		err := arkSdkClient.InitWithWallet(context.Background(), arksdk.InitWithWalletArgs{
 			ClientType:  args[1].String(),
 			Wallet:      walletSvc,
-			AspUrl:      args[2].String(),
+			ServerUrl:   args[2].String(),
 			Seed:        args[3].String(),
 			Password:    args[4].String(),
 			ExplorerURL: args[6].String(),
@@ -233,38 +233,12 @@ func SendOffChainWrapper() js.Func {
 		}
 
 		withExpiryCoinselect := args[0].Bool()
-		receivers, err := parseReceivers(args[0])
-		if err != nil {
-			return nil, err
-		}
-
-		txID, err := arkSdkClient.SendOffChain(
-			context.Background(), withExpiryCoinselect, receivers,
-		)
-		if err != nil {
-			return nil, err
-		}
-		return js.ValueOf(txID), nil
-	})
-}
-
-func SendAsyncWrapper() js.Func {
-	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) != 2 {
-			return nil, errors.New("invalid number of args")
-		}
-
-		withExpiryCoinselect := args[0].Bool()
 		receivers, err := parseReceivers(args[1])
 		if err != nil {
 			return nil, err
 		}
 
-		if receivers == nil || len(receivers) == 0 {
-			return nil, errors.New("no receivers specified")
-		}
-
-		txID, err := arkSdkClient.SendAsync(
+		txID, err := arkSdkClient.SendOffChain(
 			context.Background(), withExpiryCoinselect, receivers,
 		)
 		if err != nil {
@@ -340,25 +314,25 @@ func GetTransactionHistoryWrapper() js.Func {
 	})
 }
 
-func GetAspUrlWrapper() js.Func {
+func GetServerUrlWrapper() js.Func {
 	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
 		data, _ := arkSdkClient.GetConfigData(context.Background())
 		var url string
 		if data != nil {
-			url = data.AspUrl
+			url = data.ServerUrl
 		}
 		return js.ValueOf(url)
 	})
 }
 
-func GetAspPubkeyWrapper() js.Func {
+func GetServerPubkeyWrapper() js.Func {
 	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
 		data, _ := arkSdkClient.GetConfigData(context.Background())
-		var aspPubkey string
+		var serverPubkey string
 		if data != nil {
-			aspPubkey = hex.EncodeToString(data.AspPubkey.SerializeCompressed())
+			serverPubkey = hex.EncodeToString(data.ServerPubKey.SerializeCompressed())
 		}
-		return js.ValueOf(aspPubkey)
+		return js.ValueOf(serverPubkey)
 	})
 }
 

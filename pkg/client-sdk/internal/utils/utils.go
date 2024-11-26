@@ -173,11 +173,11 @@ func ToBitcoinNetwork(net common.Network) chaincfg.Params {
 }
 
 func GenerateRandomPrivateKey() (*secp256k1.PrivateKey, error) {
-	privKey, err := btcec.NewPrivateKey()
+	prvkey, err := btcec.NewPrivateKey()
 	if err != nil {
 		return nil, err
 	}
-	return privKey, nil
+	return prvkey, nil
 }
 
 func HashPassword(password []byte) []byte {

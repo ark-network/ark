@@ -12,15 +12,15 @@ import (
 	"github.com/vulpemventures/go-elements/taproot"
 )
 
-func CraftCongestionTree(
-	asset string, aspPubkey *secp256k1.PublicKey, receivers []VtxoLeaf,
+func BuildVtxoTree(
+	asset string, serverPubkey *secp256k1.PublicKey, receivers []VtxoLeaf,
 	feeSatsPerNode uint64, roundLifetime int64,
 ) (
-	buildCongestionTree TreeFactory,
+	factoryFn TreeFactory,
 	sharedOutputScript []byte, sharedOutputAmount uint64, err error,
 ) {
-	root, err := createPartialCongestionTree(
-		asset, aspPubkey, receivers, feeSatsPerNode, roundLifetime,
+	root, err := buildTreeNodes(
+		asset, serverPubkey, receivers, feeSatsPerNode, roundLifetime,
 	)
 	if err != nil {
 		return
@@ -36,7 +36,7 @@ func CraftCongestionTree(
 		return
 	}
 	sharedOutputAmount = root.getAmount() + root.feeSats
-	buildCongestionTree = root.createFinalCongestionTree()
+	factoryFn = root.buildVtxoTree()
 
 	return
 }
@@ -321,16 +321,16 @@ func (n *node) getTx(
 	return pset, nil
 }
 
-func (n *node) createFinalCongestionTree() TreeFactory {
-	return func(poolTxInput psetv2.InputArgs) (CongestionTree, error) {
-		congestionTree := make(CongestionTree, 0)
+func (n *node) buildVtxoTree() TreeFactory {
+	return func(roundTxInput psetv2.InputArgs) (VtxoTree, error) {
+		vtxoTree := make(VtxoTree, 0)
 
 		_, taprootTree, err := n.getWitnessData()
 		if err != nil {
 			return nil, err
 		}
 
-		ins := []psetv2.InputArgs{poolTxInput}
+		ins := []psetv2.InputArgs{roundTxInput}
 		inTrees := []*taproot.IndexedElementsTapScriptTree{taprootTree}
 		nodes := []*node{n}
 
@@ -366,7 +366,7 @@ func (n *node) createFinalCongestionTree() TreeFactory {
 				}
 			}
 
-			congestionTree = append(congestionTree, treeLevel)
+			vtxoTree = append(vtxoTree, treeLevel)
 			nodes = append([]*node{}, nextNodes...)
 			ins = append([]psetv2.InputArgs{}, nextInputsArgs...)
 			inTrees = append(
@@ -374,12 +374,12 @@ func (n *node) createFinalCongestionTree() TreeFactory {
 			)
 		}
 
-		return congestionTree, nil
+		return vtxoTree, nil
 	}
 }
 
-func createPartialCongestionTree(
-	asset string, aspPubkey *secp256k1.PublicKey, receivers []VtxoLeaf,
+func buildTreeNodes(
+	asset string, serverPubkey *secp256k1.PublicKey, receivers []VtxoLeaf,
 	feeSatsPerNode uint64, roundLifetime int64,
 ) (root *node, err error) {
 	if len(receivers) == 0 {
@@ -388,7 +388,7 @@ func createPartialCongestionTree(
 
 	nodes := make([]*node, 0, len(receivers))
 	for _, r := range receivers {
-		pubkeyBytes, err := hex.DecodeString(r.Pubkey)
+		pubkeyBytes, err := hex.DecodeString(r.PubKey)
 		if err != nil {
 			return nil, err
 		}
@@ -399,7 +399,7 @@ func createPartialCongestionTree(
 		}
 
 		leafNode := &node{
-			sweepKey:      aspPubkey,
+			sweepKey:      serverPubkey,
 			receivers:     []vtxoOutput{{pubkey, r.Amount}},
 			asset:         asset,
 			feeSats:       feeSatsPerNode,

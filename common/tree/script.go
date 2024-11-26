@@ -281,10 +281,10 @@ func (f *MultisigClosure) Witness(controlBlock []byte, signatures map[string][]b
 
 	// Add signatures in the reverse order as public keys
 	for i := len(f.PubKeys) - 1; i >= 0; i-- {
-		pubKey := f.PubKeys[i]
-		sig, ok := signatures[hex.EncodeToString(schnorr.SerializePubKey(pubKey))]
+		pubkey := f.PubKeys[i]
+		sig, ok := signatures[hex.EncodeToString(schnorr.SerializePubKey(pubkey))]
 		if !ok {
-			return nil, fmt.Errorf("missing signature for public key %x", schnorr.SerializePubKey(pubKey))
+			return nil, fmt.Errorf("missing signature for public key %x", schnorr.SerializePubKey(pubkey))
 		}
 		witness = append(witness, sig)
 	}

@@ -39,70 +39,70 @@ ON CONFLICT(id) DO UPDATE SET
     version = EXCLUDED.version,
     swept = EXCLUDED.swept;
 
--- name: UpsertPayment :exec
-INSERT INTO payment (id, round_id) VALUES (?, ?)
+-- name: UpsertTxRequest :exec
+INSERT INTO tx_request (id, round_id) VALUES (?, ?)
 ON CONFLICT(id) DO UPDATE SET round_id = EXCLUDED.round_id;
 
 -- name: UpsertReceiver :exec
-INSERT INTO receiver (payment_id, pubkey, onchain_address, amount) VALUES (?, ?, ?, ?)
-ON CONFLICT(payment_id, pubkey, onchain_address) DO UPDATE SET
+INSERT INTO receiver (request_id, pubkey, onchain_address, amount) VALUES (?, ?, ?, ?)
+ON CONFLICT(request_id, pubkey, onchain_address) DO UPDATE SET
     amount = EXCLUDED.amount,
     pubkey = EXCLUDED.pubkey,
     onchain_address = EXCLUDED.onchain_address;
 
--- name: UpdateVtxoPaymentId :exec
-UPDATE vtxo SET payment_id = ? WHERE txid = ? AND vout = ?;
+-- name: UpdateVtxoRequestId :exec
+UPDATE vtxo SET request_id = ? WHERE txid = ? AND vout = ?;
 
 -- name: SelectRoundWithRoundId :many
 SELECT sqlc.embed(round),
-       sqlc.embed(round_payment_vw),
+       sqlc.embed(round_request_vw),
        sqlc.embed(round_tx_vw),
-       sqlc.embed(payment_receiver_vw),
-       sqlc.embed(payment_vtxo_vw)
+       sqlc.embed(request_receiver_vw),
+       sqlc.embed(request_vtxo_vw)
 FROM round
-         LEFT OUTER JOIN round_payment_vw ON round.id=round_payment_vw.round_id
+         LEFT OUTER JOIN round_request_vw ON round.id=round_request_vw.round_id
          LEFT OUTER JOIN round_tx_vw ON round.id=round_tx_vw.round_id
-         LEFT OUTER JOIN payment_receiver_vw ON round_payment_vw.id=payment_receiver_vw.payment_id
-         LEFT OUTER JOIN payment_vtxo_vw ON round_payment_vw.id=payment_vtxo_vw.payment_id
+         LEFT OUTER JOIN request_receiver_vw ON round_request_vw.id=request_receiver_vw.request_id
+         LEFT OUTER JOIN request_vtxo_vw ON round_request_vw.id=request_vtxo_vw.request_id
 WHERE round.id = ?;
 
 -- name: SelectRoundWithRoundTxId :many
 SELECT sqlc.embed(round),
-       sqlc.embed(round_payment_vw),
+       sqlc.embed(round_request_vw),
        sqlc.embed(round_tx_vw),
-       sqlc.embed(payment_receiver_vw),
-       sqlc.embed(payment_vtxo_vw)
+       sqlc.embed(request_receiver_vw),
+       sqlc.embed(request_vtxo_vw)
 FROM round
-         LEFT OUTER JOIN round_payment_vw ON round.id=round_payment_vw.round_id
+         LEFT OUTER JOIN round_request_vw ON round.id=round_request_vw.round_id
          LEFT OUTER JOIN round_tx_vw ON round.id=round_tx_vw.round_id
-         LEFT OUTER JOIN payment_receiver_vw ON round_payment_vw.id=payment_receiver_vw.payment_id
-         LEFT OUTER JOIN payment_vtxo_vw ON round_payment_vw.id=payment_vtxo_vw.payment_id
+         LEFT OUTER JOIN request_receiver_vw ON round_request_vw.id=request_receiver_vw.request_id
+         LEFT OUTER JOIN request_vtxo_vw ON round_request_vw.id=request_vtxo_vw.request_id
 WHERE round.txid = ?;
 
 -- name: SelectSweepableRounds :many
 SELECT sqlc.embed(round),
-       sqlc.embed(round_payment_vw),
+       sqlc.embed(round_request_vw),
        sqlc.embed(round_tx_vw),
-       sqlc.embed(payment_receiver_vw),
-       sqlc.embed(payment_vtxo_vw)
+       sqlc.embed(request_receiver_vw),
+       sqlc.embed(request_vtxo_vw)
 FROM round
-         LEFT OUTER JOIN round_payment_vw ON round.id=round_payment_vw.round_id
+         LEFT OUTER JOIN round_request_vw ON round.id=round_request_vw.round_id
          LEFT OUTER JOIN round_tx_vw ON round.id=round_tx_vw.round_id
-         LEFT OUTER JOIN payment_receiver_vw ON round_payment_vw.id=payment_receiver_vw.payment_id
-         LEFT OUTER JOIN payment_vtxo_vw ON round_payment_vw.id=payment_vtxo_vw.payment_id
+         LEFT OUTER JOIN request_receiver_vw ON round_request_vw.id=request_receiver_vw.request_id
+         LEFT OUTER JOIN request_vtxo_vw ON round_request_vw.id=request_vtxo_vw.request_id
 WHERE round.swept = false AND round.ended = true AND round.failed = false;
 
 -- name: SelectSweptRounds :many
 SELECT sqlc.embed(round),
-       sqlc.embed(round_payment_vw),
+       sqlc.embed(round_request_vw),
        sqlc.embed(round_tx_vw),
-       sqlc.embed(payment_receiver_vw),
-       sqlc.embed(payment_vtxo_vw)
+       sqlc.embed(request_receiver_vw),
+       sqlc.embed(request_vtxo_vw)
 FROM round
-         LEFT OUTER JOIN round_payment_vw ON round.id=round_payment_vw.round_id
+         LEFT OUTER JOIN round_request_vw ON round.id=round_request_vw.round_id
          LEFT OUTER JOIN round_tx_vw ON round.id=round_tx_vw.round_id
-         LEFT OUTER JOIN payment_receiver_vw ON round_payment_vw.id=payment_receiver_vw.payment_id
-         LEFT OUTER JOIN payment_vtxo_vw ON round_payment_vw.id=payment_vtxo_vw.payment_id
+         LEFT OUTER JOIN request_receiver_vw ON round_request_vw.id=request_receiver_vw.request_id
+         LEFT OUTER JOIN request_vtxo_vw ON round_request_vw.id=request_vtxo_vw.request_id
 WHERE round.swept = true AND round.failed = false AND round.ended = true AND round.connector_address <> '';
 
 -- name: SelectRoundIdsInRange :many
@@ -112,11 +112,11 @@ SELECT id FROM round WHERE starting_timestamp > ? AND starting_timestamp < ?;
 SELECT id FROM round;
 
 -- name: UpsertVtxo :exec
-INSERT INTO vtxo (txid, vout, pubkey, amount, pool_tx, spent_by, spent, redeemed, swept, expire_at, created_at, redeem_tx)
+INSERT INTO vtxo (txid, vout, pubkey, amount, round_tx, spent_by, spent, redeemed, swept, expire_at, created_at, redeem_tx)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(txid, vout) DO UPDATE SET
     pubkey = EXCLUDED.pubkey,
     amount = EXCLUDED.amount,
-    pool_tx = EXCLUDED.pool_tx,
+    round_tx = EXCLUDED.round_tx,
     spent_by = EXCLUDED.spent_by,
     spent = EXCLUDED.spent,
     redeemed = EXCLUDED.redeemed,
@@ -141,9 +141,9 @@ WHERE redeemed = false AND pubkey = ?;
 SELECT sqlc.embed(vtxo) FROM vtxo
 WHERE txid = ? AND vout = ?;
 
--- name: SelectVtxosByPoolTxid :many
+-- name: SelectVtxosByRoundTxid :many
 SELECT sqlc.embed(vtxo) FROM vtxo
-WHERE pool_tx = ?;
+WHERE round_tx = ?;
 
 -- name: MarkVtxoAsRedeemed :exec
 UPDATE vtxo SET redeemed = true WHERE txid = ? AND vout = ?;

@@ -27,15 +27,15 @@ type BoardingInput struct {
 }
 
 type TxBuilder interface {
-	// BuildRoundTx builds a round tx for the given payments, boarding inputs
-	// it selects coin from swept rounds and ASP wallet
+	// BuildRoundTx builds a round tx for the given tx requests, boarding inputs
+	// it selects coin from swept rounds and server wallet
 	// returns the round partial tx, the vtxo tree and the set of connectors
 	BuildRoundTx(
-		aspPubkey *secp256k1.PublicKey, payments []domain.Payment, boardingInputs []BoardingInput, sweptRounds []domain.Round,
+		serverPubkey *secp256k1.PublicKey, txRequests []domain.TxRequest, boardingInputs []BoardingInput, sweptRounds []domain.Round,
 		cosigners ...*secp256k1.PublicKey,
 	) (
 		roundTx string,
-		congestionTree tree.CongestionTree,
+		vtxoTree tree.VtxoTree,
 		connectorAddress string,
 		connectors []string,
 		err error,
@@ -51,7 +51,7 @@ type TxBuilder interface {
 	FinalizeAndExtract(tx string) (txhex string, err error)
 	VerifyTapscriptPartialSigs(tx string) (valid bool, err error)
 	// FindLeaves returns all the leaves txs that are reachable from the given outpoint
-	FindLeaves(congestionTree tree.CongestionTree, fromtxid string, vout uint32) (leaves []tree.Node, err error)
+	FindLeaves(vtxoTree tree.VtxoTree, fromtxid string, vout uint32) (leaves []tree.Node, err error)
 	VerifyAndCombinePartialTx(dest string, src string) (string, error)
 	GetTxID(tx string) (string, error)
 }

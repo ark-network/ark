@@ -17,11 +17,11 @@ import (
 
 // CraftSharedOutput returns the taproot script and the amount of the initial root output
 func CraftSharedOutput(
-	cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, receivers []tree.VtxoLeaf,
+	cosigners []*secp256k1.PublicKey, server *secp256k1.PublicKey, receivers []tree.VtxoLeaf,
 	feeSatsPerNode uint64, roundLifetime int64,
 ) ([]byte, int64, error) {
 	aggregatedKey, _, err := createAggregatedKeyWithSweep(
-		cosigners, aspPubkey, roundLifetime,
+		cosigners, server, roundLifetime,
 	)
 	if err != nil {
 		return nil, 0, err
@@ -34,21 +34,21 @@ func CraftSharedOutput(
 
 	amount := root.getAmount() + int64(feeSatsPerNode)
 
-	scriptPubKey, err := common.P2TRScript(aggregatedKey.FinalKey)
+	scriptPubkey, err := common.P2TRScript(aggregatedKey.FinalKey)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	return scriptPubKey, amount, err
+	return scriptPubkey, amount, err
 }
 
-// CraftCongestionTree creates all the tree's transactions
-func CraftCongestionTree(
-	initialInput *wire.OutPoint, cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, receivers []tree.VtxoLeaf,
+// BuildVtxoTree creates all the tree's transactions
+func BuildVtxoTree(
+	initialInput *wire.OutPoint, cosigners []*secp256k1.PublicKey, server *secp256k1.PublicKey, receivers []tree.VtxoLeaf,
 	feeSatsPerNode uint64, roundLifetime int64,
-) (tree.CongestionTree, error) {
+) (tree.VtxoTree, error) {
 	aggregatedKey, sweepTapLeaf, err := createAggregatedKeyWithSweep(
-		cosigners, aspPubkey, roundLifetime,
+		cosigners, server, roundLifetime,
 	)
 	if err != nil {
 		return nil, err
@@ -59,7 +59,7 @@ func CraftCongestionTree(
 		return nil, err
 	}
 
-	congestionTree := make(tree.CongestionTree, 0)
+	vtxoTree := make(tree.VtxoTree, 0)
 
 	ins := []*wire.OutPoint{initialInput}
 	nodes := []node{root}
@@ -95,12 +95,12 @@ func CraftCongestionTree(
 			}
 		}
 
-		congestionTree = append(congestionTree, treeLevel)
+		vtxoTree = append(vtxoTree, treeLevel)
 		nodes = append([]node{}, nextNodes...)
 		ins = append([]*wire.OutPoint{}, nextInputsArgs...)
 	}
 
-	return congestionTree, nil
+	return vtxoTree, nil
 }
 
 type node interface {
@@ -252,7 +252,7 @@ func createRootNode(
 
 	nodes := make([]node, 0, len(receivers))
 	for _, r := range receivers {
-		pubkeyBytes, err := hex.DecodeString(r.Pubkey)
+		pubkeyBytes, err := hex.DecodeString(r.PubKey)
 		if err != nil {
 			return nil, err
 		}
@@ -280,10 +280,10 @@ func createRootNode(
 }
 
 func createAggregatedKeyWithSweep(
-	cosigners []*secp256k1.PublicKey, aspPubkey *secp256k1.PublicKey, roundLifetime int64,
+	cosigners []*secp256k1.PublicKey, server *secp256k1.PublicKey, roundLifetime int64,
 ) (*musig2.AggregateKey, *psbt.TaprootTapLeafScript, error) {
 	sweepClosure := &tree.CSVSigClosure{
-		MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{aspPubkey}},
+		MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{server}},
 		Seconds:         uint(roundLifetime),
 	}
 

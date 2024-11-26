@@ -1,6 +1,6 @@
 /*
 * This package contains intermediary events that are used only by the covenantless version
-* they let to sign the congestion tree using musig2 algorithm
+* they let to sign the vtxo tree using musig2 algorithm
 * they are not included in domain because they don't mutate the Round state and should not be persisted
  */
 package application
@@ -17,7 +17,7 @@ import (
 // signer should react to this event by generating a musig2 nonce for each transaction in the tree
 type RoundSigningStarted struct {
 	Id               string
-	UnsignedVtxoTree tree.CongestionTree
+	UnsignedVtxoTree tree.VtxoTree
 	Cosigners        []*secp256k1.PublicKey
 	UnsignedRoundTx  string
 }

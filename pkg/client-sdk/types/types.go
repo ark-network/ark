@@ -16,8 +16,8 @@ const (
 )
 
 type Config struct {
-	AspUrl                     string
-	AspPubkey                  *secp256k1.PublicKey
+	ServerUrl                  string
+	ServerPubKey               *secp256k1.PublicKey
 	WalletType                 string
 	ClientType                 string
 	Network                    common.Network

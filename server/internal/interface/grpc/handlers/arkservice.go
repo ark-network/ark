@@ -36,7 +36,7 @@ func NewHandler(service application.Service) arkv1.ArkServiceServer {
 	}
 
 	go h.listenToEvents()
-	go h.listenToPaymentEvents()
+	go h.listenToTxEvents()
 
 	return h
 }
@@ -124,14 +124,14 @@ func (h *handler) RegisterInputsForNextRound(
 		return nil, status.Error(codes.InvalidArgument, "cannot mix vtxos and notes")
 	}
 
-	paymentID := ""
+	requestID := ""
 
 	if len(vtxosInputs) > 0 {
 		inputs, err := parseInputs(vtxosInputs)
 		if err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
-		paymentID, err = h.svc.SpendVtxos(ctx, inputs)
+		requestID, err = h.svc.SpendVtxos(ctx, inputs)
 		if err != nil {
 			return nil, err
 		}
@@ -142,7 +142,7 @@ func (h *handler) RegisterInputsForNextRound(
 		if err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
-		paymentID, err = h.svc.SpendNotes(ctx, notes)
+		requestID, err = h.svc.SpendNotes(ctx, notes)
 		if err != nil {
 			return nil, err
 		}
@@ -150,13 +150,13 @@ func (h *handler) RegisterInputsForNextRound(
 
 	pubkey := req.GetEphemeralPubkey()
 	if len(pubkey) > 0 {
-		if err := h.svc.RegisterCosignerPubkey(ctx, paymentID, pubkey); err != nil {
+		if err := h.svc.RegisterCosignerPubkey(ctx, requestID, pubkey); err != nil {
 			return nil, err
 		}
 	}
 
 	return &arkv1.RegisterInputsForNextRoundResponse{
-		Id: paymentID,
+		RequestId: requestID,
 	}, nil
 }
 
@@ -168,7 +168,7 @@ func (h *handler) RegisterOutputsForNextRound(
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	if err := h.svc.ClaimVtxos(ctx, req.GetId(), receivers); err != nil {
+	if err := h.svc.ClaimVtxos(ctx, req.GetRequestId(), receivers); err != nil {
 		return nil, err
 	}
 
@@ -199,13 +199,13 @@ func (h *handler) SubmitTreeNonces(
 		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key")
 	}
 
-	cosignerPublicKey, err := secp256k1.ParsePubKey(pubkeyBytes)
+	cosignerPubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key")
 	}
 
 	if err := h.svc.RegisterCosignerNonces(
-		ctx, roundID, cosignerPublicKey, encodedNonces,
+		ctx, roundID, cosignerPubkey, encodedNonces,
 	); err != nil {
 		return nil, err
 	}
@@ -237,13 +237,13 @@ func (h *handler) SubmitTreeSignatures(
 		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key")
 	}
 
-	cosignerPublicKey, err := secp256k1.ParsePubKey(pubkeyBytes)
+	cosignerPubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key")
 	}
 
 	if err := h.svc.RegisterCosignerSignatures(
-		ctx, roundID, cosignerPublicKey, encodedSignatures,
+		ctx, roundID, cosignerPubkey, encodedSignatures,
 	); err != nil {
 		return nil, err
 	}
@@ -299,11 +299,11 @@ func (h *handler) GetEventStream(
 func (h *handler) Ping(
 	ctx context.Context, req *arkv1.PingRequest,
 ) (*arkv1.PingResponse, error) {
-	if req.GetPaymentId() == "" {
-		return nil, status.Error(codes.InvalidArgument, "missing payment id")
+	if req.GetRequestId() == "" {
+		return nil, status.Error(codes.InvalidArgument, "missing request id")
 	}
 
-	if err := h.svc.UpdatePaymentStatus(ctx, req.GetPaymentId()); err != nil {
+	if err := h.svc.UpdateTxRequestStatus(ctx, req.GetRequestId()); err != nil {
 		return nil, err
 	}
 
@@ -344,7 +344,7 @@ func (h *handler) GetRound(
 				Start:      round.StartingTimestamp,
 				End:        round.EndingTimestamp,
 				RoundTx:    round.UnsignedTx,
-				VtxoTree:   congestionTree(round.CongestionTree).toProto(),
+				VtxoTree:   vtxoTree(round.VtxoTree).toProto(),
 				ForfeitTxs: round.ForfeitTxs,
 				Connectors: round.Connectors,
 				Stage:      stage(round.Stage).toProto(),
@@ -363,7 +363,7 @@ func (h *handler) GetRound(
 			Start:      round.StartingTimestamp,
 			End:        round.EndingTimestamp,
 			RoundTx:    round.UnsignedTx,
-			VtxoTree:   congestionTree(round.CongestionTree).toProto(),
+			VtxoTree:   vtxoTree(round.VtxoTree).toProto(),
 			ForfeitTxs: round.ForfeitTxs,
 			Connectors: round.Connectors,
 			Stage:      stage(round.Stage).toProto(),
@@ -390,7 +390,7 @@ func (h *handler) GetRoundById(
 			Start:      round.StartingTimestamp,
 			End:        round.EndingTimestamp,
 			RoundTx:    round.UnsignedTx,
-			VtxoTree:   congestionTree(round.CongestionTree).toProto(),
+			VtxoTree:   vtxoTree(round.VtxoTree).toProto(),
 			ForfeitTxs: round.ForfeitTxs,
 			Connectors: round.Connectors,
 			Stage:      stage(round.Stage).toProto(),
@@ -494,7 +494,7 @@ func (h *handler) listenToEvents() {
 					RoundFinalization: &arkv1.RoundFinalizationEvent{
 						Id:              e.Id,
 						RoundTx:         e.RoundTx,
-						VtxoTree:        congestionTree(e.CongestionTree).toProto(),
+						VtxoTree:        vtxoTree(e.VtxoTree).toProto(),
 						Connectors:      e.Connectors,
 						MinRelayFeeRate: e.MinRelayFeeRate,
 					},
@@ -530,7 +530,7 @@ func (h *handler) listenToEvents() {
 					RoundSigning: &arkv1.RoundSigningEvent{
 						Id:               e.Id,
 						CosignersPubkeys: cosignersKeys,
-						UnsignedVtxoTree: congestionTree(e.UnsignedVtxoTree).toProto(),
+						UnsignedVtxoTree: vtxoTree(e.UnsignedVtxoTree).toProto(),
 						UnsignedRoundTx:  e.UnsignedRoundTx,
 					},
 				},
@@ -563,51 +563,34 @@ func (h *handler) listenToEvents() {
 	}
 }
 
-func (h *handler) listenToPaymentEvents() {
-	paymentEventsCh := h.svc.GetTransactionEventsChannel(context.Background())
-	for event := range paymentEventsCh {
-		var paymentEvent *arkv1.GetTransactionsStreamResponse
+func (h *handler) listenToTxEvents() {
+	eventsCh := h.svc.GetTransactionEventsChannel(context.Background())
+	for event := range eventsCh {
+		var txEvent *arkv1.GetTransactionsStreamResponse
 
 		switch event.Type() {
 		case application.RoundTransaction:
-			paymentEvent = &arkv1.GetTransactionsStreamResponse{
+			txEvent = &arkv1.GetTransactionsStreamResponse{
 				Tx: &arkv1.GetTransactionsStreamResponse_Round{
-					Round: convertRoundPaymentEvent(event.(application.RoundTransactionEvent)),
+					Round: roundTxEvent(event.(application.RoundTransactionEvent)).toProto(),
 				},
 			}
 		case application.RedeemTransaction:
-			paymentEvent = &arkv1.GetTransactionsStreamResponse{
+			txEvent = &arkv1.GetTransactionsStreamResponse{
 				Tx: &arkv1.GetTransactionsStreamResponse_Redeem{
-					Redeem: convertAsyncPaymentEvent(event.(application.RedeemTransactionEvent)),
+					Redeem: redeemTxEvent(event.(application.RedeemTransactionEvent)).toProto(),
 				},
 			}
 		}
 
-		if paymentEvent != nil {
+		if txEvent != nil {
 			logrus.Debugf("forwarding event to %d listeners", len(h.transactionsListenerHandler.listeners))
 			for _, l := range h.transactionsListenerHandler.listeners {
 				go func(l *listener[*arkv1.GetTransactionsStreamResponse]) {
-					l.ch <- paymentEvent
+					l.ch <- txEvent
 				}(l)
 			}
 		}
-	}
-}
-
-func convertRoundPaymentEvent(e application.RoundTransactionEvent) *arkv1.RoundTransaction {
-	return &arkv1.RoundTransaction{
-		Txid:                 e.RoundTxID,
-		SpentVtxos:           vtxoKeyList(e.SpentVtxos).toProto(),
-		SpendableVtxos:       vtxoList(e.SpendableVtxos).toProto(),
-		ClaimedBoardingUtxos: vtxoKeyList(e.ClaimedBoardingInputs).toProto(),
-	}
-}
-
-func convertAsyncPaymentEvent(e application.RedeemTransactionEvent) *arkv1.RedeemTransaction {
-	return &arkv1.RedeemTransaction{
-		Txid:           e.AsyncTxID,
-		SpentVtxos:     vtxoKeyList(e.SpentVtxos).toProto(),
-		SpendableVtxos: vtxoList(e.SpendableVtxos).toProto(),
 	}
 }
 

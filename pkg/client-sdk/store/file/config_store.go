@@ -52,8 +52,8 @@ func (s *configStore) GetDatadir() string {
 
 func (s *configStore) AddData(ctx context.Context, data types.Config) error {
 	sd := &storeData{
-		AspUrl:                     data.AspUrl,
-		AspPubkey:                  hex.EncodeToString(data.AspPubkey.SerializeCompressed()),
+		ServerUrl:                  data.ServerUrl,
+		ServerPubKey:               hex.EncodeToString(data.ServerPubKey.SerializeCompressed()),
 		WalletType:                 data.WalletType,
 		ClientType:                 data.ClientType,
 		Network:                    data.Network.Name,

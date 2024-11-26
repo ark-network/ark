@@ -55,12 +55,12 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestBuildPoolTx(t *testing.T) {
+func TestBuildRoundTx(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(
 		wallet, common.Bitcoin, roundLifetime, boardingExitDelay,
 	)
 
-	fixtures, err := parsePoolTxFixtures()
+	fixtures, err := parseRoundTxFixtures()
 	require.NoError(t, err)
 	require.NotEmpty(t, fixtures)
 
@@ -68,25 +68,25 @@ func TestBuildPoolTx(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
 			for _, f := range fixtures.Valid {
 				cosigners := make([]*secp256k1.PublicKey, 0)
-				for range f.Payments {
+				for range f.Requests {
 					randKey, err := secp256k1.GeneratePrivateKey()
 					require.NoError(t, err)
 
 					cosigners = append(cosigners, randKey.PubKey())
 				}
 
-				poolTx, congestionTree, connAddr, _, err := builder.BuildRoundTx(
-					pubkey, f.Payments, []ports.BoardingInput{}, []domain.Round{}, cosigners...,
+				roundTx, vtxoTree, connAddr, _, err := builder.BuildRoundTx(
+					pubkey, f.Requests, []ports.BoardingInput{}, []domain.Round{}, cosigners...,
 				)
 				require.NoError(t, err)
-				require.NotEmpty(t, poolTx)
-				require.NotEmpty(t, congestionTree)
+				require.NotEmpty(t, roundTx)
+				require.NotEmpty(t, vtxoTree)
 				require.Equal(t, connectorAddress, connAddr)
-				require.Equal(t, f.ExpectedNumOfNodes, congestionTree.NumberOfNodes())
-				require.Len(t, congestionTree.Leaves(), f.ExpectedNumOfLeaves)
+				require.Equal(t, f.ExpectedNumOfNodes, vtxoTree.NumberOfNodes())
+				require.Len(t, vtxoTree.Leaves(), f.ExpectedNumOfLeaves)
 
-				err = bitcointree.ValidateCongestionTree(
-					congestionTree, poolTx, pubkey, roundLifetime,
+				err = bitcointree.ValidateVtxoTree(
+					vtxoTree, roundTx, pubkey, roundLifetime,
 				)
 				require.NoError(t, err)
 			}
@@ -96,13 +96,13 @@ func TestBuildPoolTx(t *testing.T) {
 	if len(fixtures.Invalid) > 0 {
 		t.Run("invalid", func(t *testing.T) {
 			for _, f := range fixtures.Invalid {
-				poolTx, congestionTree, connAddr, _, err := builder.BuildRoundTx(
-					pubkey, f.Payments, []ports.BoardingInput{}, []domain.Round{},
+				roundTx, vtxoTree, connAddr, _, err := builder.BuildRoundTx(
+					pubkey, f.Requests, []ports.BoardingInput{}, []domain.Round{},
 				)
 				require.EqualError(t, err, f.ExpectedErr)
-				require.Empty(t, poolTx)
+				require.Empty(t, roundTx)
 				require.Empty(t, connAddr)
-				require.Empty(t, congestionTree)
+				require.Empty(t, vtxoTree)
 			}
 		})
 	}
@@ -127,19 +127,19 @@ func randomHex(len int) string {
 	return hex.EncodeToString(buf)
 }
 
-type poolTxFixtures struct {
+type roundTxFixtures struct {
 	Valid []struct {
-		Payments            []domain.Payment
+		Requests            []domain.TxRequest
 		ExpectedNumOfNodes  int
 		ExpectedNumOfLeaves int
 	}
 	Invalid []struct {
-		Payments    []domain.Payment
+		Requests    []domain.TxRequest
 		ExpectedErr string
 	}
 }
 
-func parsePoolTxFixtures() (*poolTxFixtures, error) {
+func parseRoundTxFixtures() (*roundTxFixtures, error) {
 	file, err := os.ReadFile("testdata/fixtures.json")
 	if err != nil {
 		return nil, err
@@ -149,9 +149,9 @@ func parsePoolTxFixtures() (*poolTxFixtures, error) {
 		return nil, err
 	}
 
-	vv := v["buildPoolTx"].(map[string]interface{})
+	vv := v["buildRoundTx"].(map[string]interface{})
 	file, _ = json.Marshal(vv)
-	var fixtures poolTxFixtures
+	var fixtures roundTxFixtures
 	if err := json.Unmarshal(file, &fixtures); err != nil {
 		return nil, err
 	}

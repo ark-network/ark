@@ -211,7 +211,7 @@ func (s *liquidWallet) SignTransaction(
 		prevoutsAssets = append(prevoutsAssets, input.WitnessUtxo.Asset)
 	}
 
-	myPubkey := schnorr.SerializePubKey(s.walletData.Pubkey)
+	myPubkey := schnorr.SerializePubKey(s.walletData.PubKey)
 
 	for i, input := range pset.Inputs {
 		if len(input.TapLeafScript) > 0 {
@@ -265,7 +265,7 @@ func (s *liquidWallet) SignTransaction(
 
 					tapScriptSig := psetv2.TapScriptSig{
 						PartialSig: psetv2.PartialSig{
-							PubKey:    schnorr.SerializePubKey(s.walletData.Pubkey),
+							PubKey:    schnorr.SerializePubKey(s.walletData.PubKey),
 							Signature: sig.Serialize(),
 						},
 						LeafHash: hash.CloneBytes(),
@@ -330,8 +330,8 @@ func (w *liquidWallet) getAddress(
 	liquidNet := utils.ToElementsNetwork(data.Network)
 
 	vtxoScript := tree.NewDefaultVtxoScript(
-		w.walletData.Pubkey,
-		data.AspPubkey,
+		w.walletData.PubKey,
+		data.ServerPubKey,
 		uint(data.UnilateralExitDelay),
 	)
 
@@ -342,13 +342,13 @@ func (w *liquidWallet) getAddress(
 
 	offchainAddr := &common.Address{
 		HRP:        data.Network.Addr,
-		Asp:        data.AspPubkey,
+		Server:     data.ServerPubKey,
 		VtxoTapKey: vtxoTapKey,
 	}
 
 	boardingVtxoScript := tree.NewDefaultVtxoScript(
-		w.walletData.Pubkey,
-		data.AspPubkey,
+		w.walletData.PubKey,
+		data.ServerPubKey,
 		uint(data.UnilateralExitDelay*2),
 	)
 

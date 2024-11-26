@@ -26,8 +26,8 @@ func ParseVtxoScript(scripts []string) (VtxoScript, error) {
 	return nil, fmt.Errorf("invalid vtxo scripts: %s", scripts)
 }
 
-func NewDefaultVtxoScript(owner, asp *secp256k1.PublicKey, exitDelay uint) VtxoScript {
-	base := tree.NewDefaultVtxoScript(owner, asp, exitDelay)
+func NewDefaultVtxoScript(owner, server *secp256k1.PublicKey, exitDelay uint) VtxoScript {
+	base := tree.NewDefaultVtxoScript(owner, server, exitDelay)
 
 	return &TapscriptsVtxoScript{*base}
 }

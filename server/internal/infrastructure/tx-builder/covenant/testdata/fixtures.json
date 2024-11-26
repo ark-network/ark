@@ -1,8 +1,8 @@
 {
-  "buildPoolTx": {
+  "buildRoundTx": {
     "valid": [
       {
-        "payments": [
+        "requests": [
           {
             "id": "0",
             "inputs": [
@@ -26,7 +26,7 @@
         "expectedNumOfLeaves": 1
       },
       {
-        "payments": [
+        "requests": [
           {
             "id": "0",
             "inputs": [
@@ -54,7 +54,7 @@
         "expectedNumOfLeaves": 2
       },
       {
-        "payments": [
+        "requests": [
           {
             "id": "0",
             "inputs": [
@@ -126,7 +126,7 @@
         "expectedNumOfLeaves": 6
       },
       {
-        "payments": [
+        "requests": [
           {
             "id": "a242cdd8-f3d5-46c0-ae98-94135a2bee3f",
             "inputs": [
@@ -199,7 +199,7 @@
   "buildForfeitTxs": {
     "valid": [
       {
-        "payments": [
+        "requests": [
           {
             "id": "0",
             "inputs": [
@@ -230,8 +230,8 @@
             ]
           }
         ],
-        "poolTx": "cHNldP8BAgQCAAAAAQQBAQEFAQMBBgEDAfsEAgAAAAABDiDk7dXxh4KQzgLO8i1ABtaLCe4aPL12GVhN1E9zM1ePLwEPBAAAAAABEAT/////AAEDCOgDAAAAAAAAAQQWABSNnpy01UJqd99eTg2M1IpdKId11gf8BHBzZXQCICWyUQcOKcoZBDzzPM1zJOLdqwPsxK4LXnfE/A5c9slaB/wEcHNldAgEAAAAAAABAwh4BQAAAAAAAAEEFgAUjZ6ctNVCanffXk4NjNSKXSiHddYH/ARwc2V0AiAlslEHDinKGQQ88zzNcyTi3asD7MSuC153xPwOXPbJWgf8BHBzZXQIBAAAAAAAAQMI9AEAAAAAAAABBAAH/ARwc2V0AiAlslEHDinKGQQ88zzNcyTi3asD7MSuC153xPwOXPbJWgf8BHBzZXQIBAAAAAAA",
-        "poolTxid": "7981fce656f266472cc742444527cb32a8bed8c90fed6d47adbfc4c8780d4d9a",
+        "roundTx": "cHNldP8BAgQCAAAAAQQBAQEFAQMBBgEDAfsEAgAAAAABDiDk7dXxh4KQzgLO8i1ABtaLCe4aPL12GVhN1E9zM1ePLwEPBAAAAAABEAT/////AAEDCOgDAAAAAAAAAQQWABSNnpy01UJqd99eTg2M1IpdKId11gf8BHBzZXQCICWyUQcOKcoZBDzzPM1zJOLdqwPsxK4LXnfE/A5c9slaB/wEcHNldAgEAAAAAAABAwh4BQAAAAAAAAEEFgAUjZ6ctNVCanffXk4NjNSKXSiHddYH/ARwc2V0AiAlslEHDinKGQQ88zzNcyTi3asD7MSuC153xPwOXPbJWgf8BHBzZXQIBAAAAAAAAQMI9AEAAAAAAAABBAAH/ARwc2V0AiAlslEHDinKGQQ88zzNcyTi3asD7MSuC153xPwOXPbJWgf8BHBzZXQIBAAAAAAA",
+        "roundTxid": "7981fce656f266472cc742444527cb32a8bed8c90fed6d47adbfc4c8780d4d9a",
         "expectedNumOfForfeitTxs": 4,
 			  "expectedNumOfConnectors": 1
       }

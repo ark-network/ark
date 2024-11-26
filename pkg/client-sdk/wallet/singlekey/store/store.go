@@ -7,7 +7,7 @@ import (
 type WalletData struct {
 	EncryptedPrvkey []byte
 	PasswordHash    []byte
-	Pubkey          *secp256k1.PublicKey
+	PubKey          *secp256k1.PublicKey
 }
 
 type WalletStore interface {

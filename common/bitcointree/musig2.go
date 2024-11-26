@@ -20,8 +20,8 @@ import (
 )
 
 var (
-	ErrCongestionTreeNotSet = errors.New("congestion tree not set")
-	ErrAggregateKeyNotSet   = errors.New("aggregate key not set")
+	ErrMissingVtxoTree     = errors.New("missing vtxo tree")
+	ErrMissingAggregateKey = errors.New("missing aggregate key")
 )
 
 type Musig2Nonce struct {
@@ -62,7 +62,7 @@ type CoordinatorSession interface {
 	AggregateNonces() (TreeNonces, error)
 	AddSig(*btcec.PublicKey, TreePartialSigs) error
 	// SignTree combines the signatures and add them to the tree's psbts
-	SignTree() (tree.CongestionTree, error)
+	SignTree() (tree.VtxoTree, error)
 }
 
 func (n TreeNonces) Encode(w io.Writer) error {
@@ -111,7 +111,7 @@ func ValidateTreeSigs(
 	scriptRoot []byte,
 	finalAggregatedKey *btcec.PublicKey,
 	roundSharedOutputAmount int64,
-	vtxoTree tree.CongestionTree,
+	vtxoTree tree.VtxoTree,
 ) error {
 	prevoutFetcherFactory, err := prevOutFetcherFactory(finalAggregatedKey, vtxoTree, roundSharedOutputAmount)
 	if err != nil {
@@ -163,7 +163,7 @@ func ValidateTreeSigs(
 func NewTreeSignerSession(
 	signer *btcec.PrivateKey,
 	roundSharedOutputAmount int64,
-	vtxoTree tree.CongestionTree,
+	vtxoTree tree.VtxoTree,
 	scriptRoot []byte,
 ) SignerSession {
 	return &treeSignerSession{
@@ -176,7 +176,7 @@ func NewTreeSignerSession(
 
 type treeSignerSession struct {
 	secretKey               *btcec.PrivateKey
-	tree                    tree.CongestionTree
+	tree                    tree.VtxoTree
 	myNonces                [][]*musig2.Nonces
 	keys                    []*btcec.PublicKey
 	aggregateNonces         TreeNonces
@@ -187,7 +187,7 @@ type treeSignerSession struct {
 
 func (t *treeSignerSession) generateNonces() error {
 	if t.tree == nil {
-		return ErrCongestionTreeNotSet
+		return ErrMissingVtxoTree
 	}
 
 	myNonces := make([][]*musig2.Nonces, 0)
@@ -213,7 +213,7 @@ func (t *treeSignerSession) generateNonces() error {
 
 func (t *treeSignerSession) GetNonces() (TreeNonces, error) {
 	if t.tree == nil {
-		return nil, ErrCongestionTreeNotSet
+		return nil, ErrMissingVtxoTree
 	}
 
 	if t.myNonces == nil {
@@ -267,11 +267,11 @@ func (t *treeSignerSession) SetAggregatedNonces(nonces TreeNonces) error {
 
 func (t *treeSignerSession) Sign() (TreePartialSigs, error) {
 	if t.tree == nil {
-		return nil, ErrCongestionTreeNotSet
+		return nil, ErrMissingVtxoTree
 	}
 
 	if t.keys == nil {
-		return nil, ErrAggregateKeyNotSet
+		return nil, ErrMissingAggregateKey
 	}
 
 	if t.aggregateNonces == nil {
@@ -331,7 +331,7 @@ func (t *treeSignerSession) signPartial(partialTx *psbt.Packet, posx int, posy i
 
 type treeCoordinatorSession struct {
 	scriptRoot            []byte
-	tree                  tree.CongestionTree
+	tree                  tree.VtxoTree
 	keys                  []*btcec.PublicKey
 	nonces                []TreeNonces
 	sigs                  []TreePartialSigs
@@ -340,7 +340,7 @@ type treeCoordinatorSession struct {
 
 func NewTreeCoordinatorSession(
 	roundSharedOutputAmount int64,
-	vtxoTree tree.CongestionTree,
+	vtxoTree tree.VtxoTree,
 	scriptRoot []byte,
 	keys []*btcec.PublicKey,
 ) (CoordinatorSession, error) {
@@ -428,7 +428,7 @@ func (t *treeCoordinatorSession) AggregateNonces() (TreeNonces, error) {
 }
 
 // SignTree implements CoordinatorSession.
-func (t *treeCoordinatorSession) SignTree() (tree.CongestionTree, error) {
+func (t *treeCoordinatorSession) SignTree() (tree.VtxoTree, error) {
 	var missingSigs int
 	for _, sig := range t.sigs {
 		if sig == nil {
@@ -508,7 +508,7 @@ func (t *treeCoordinatorSession) SignTree() (tree.CongestionTree, error) {
 
 func prevOutFetcherFactory(
 	finalAggregatedKey *btcec.PublicKey,
-	vtxoTree tree.CongestionTree,
+	vtxoTree tree.VtxoTree,
 	roundSharedOutputAmount int64,
 ) (
 	func(partial *psbt.Packet) (txscript.PrevOutputFetcher, error),

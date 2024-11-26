@@ -8,13 +8,9 @@ import (
 )
 
 func BuildForfeitTxs(
-	connectorTx *psetv2.Pset,
-	vtxoInput psetv2.InputArgs,
-	vtxoAmount,
-	connectorAmount,
-	feeAmount uint64,
-	vtxoScript,
-	aspScript []byte,
+	connectorTx *psetv2.Pset, vtxoInput psetv2.InputArgs,
+	vtxoAmount, connectorAmount, feeAmount uint64,
+	vtxoScript, serverScript []byte,
 ) (forfeitTxs []*psetv2.Pset, err error) {
 	connectors, prevouts := getConnectorInputs(connectorTx, connectorAmount)
 
@@ -63,7 +59,7 @@ func BuildForfeitTxs(
 			{
 				Asset:  asset,
 				Amount: vtxoAmount + connectorAmount - feeAmount,
-				Script: aspScript,
+				Script: serverScript,
 			},
 			{
 				Asset:  asset,
