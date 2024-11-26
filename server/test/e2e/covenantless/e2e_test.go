@@ -161,12 +161,12 @@ func TestCollaborativeExit(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestReactToRedepmptionOfSpentVtxos(t *testing.T) {
+func TestReactToRedemptionOfRefreshedVtxos(t *testing.T) {
 	ctx := context.Background()
 	client, grpcClient := setupArkSDK(t)
 	defer grpcClient.Close()
 
-	offchainAddress, boardingAddress, err := client.Receive(ctx)
+	_, boardingAddress, err := client.Receive(ctx)
 	require.NoError(t, err)
 
 	_, err = utils.RunCommand("nigiri", "faucet", boardingAddress)
@@ -177,10 +177,10 @@ func TestReactToRedepmptionOfSpentVtxos(t *testing.T) {
 	_, err = client.Settle(ctx)
 	require.NoError(t, err)
 
-	_, err = client.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(offchainAddress, 1000)})
-	require.NoError(t, err)
-
 	time.Sleep(2 * time.Second)
+
+	_, err = client.Settle(ctx)
+	require.NoError(t, err)
 
 	_, spentVtxos, err := client.ListVtxos(ctx)
 	require.NoError(t, err)
@@ -327,6 +327,11 @@ func TestAliceSendsSeveralTimesToBob(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = utils.RunCommand("nigiri", "faucet", boardingAddress)
+	require.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+
+	_, err = alice.Settle(ctx)
 	require.NoError(t, err)
 
 	time.Sleep(5 * time.Second)
