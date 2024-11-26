@@ -378,8 +378,15 @@ func (s *covenantlessService) SubmitRedeemTx(
 		return "", fmt.Errorf("no valid vtxo found")
 	}
 
-	newVtxos := make([]domain.Vtxo, 0, len(redeemPtx.UnsignedTx.TxOut))
+	// sign the redeem tx
 
+	signedRedeemTx, err := s.wallet.SignTransactionTapscript(ctx, redeemTx, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign redeem tx: %s", err)
+	}
+
+	// Create new vtxos, update spent vtxos state
+	newVtxos := make([]domain.Vtxo, 0, len(redeemPtx.UnsignedTx.TxOut))
 	for outIndex, out := range outputs {
 		vtxoTapKey, err := schnorr.ParsePubKey(out.PkScript[2:])
 		if err != nil {
@@ -397,19 +404,10 @@ func (s *covenantlessService) SubmitRedeemTx(
 			Amount:    uint64(out.Value),
 			ExpireAt:  expiration,
 			RoundTxid: roundTxid,
-			RedeemTx:  redeemTx,
+			RedeemTx:  signedRedeemTx,
 			CreatedAt: time.Now().Unix(),
 		})
 	}
-
-	// sign the redeem tx
-
-	signedRedeemTx, err := s.wallet.SignTransactionTapscript(ctx, redeemTx, nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to sign redeem tx: %s", err)
-	}
-
-	// create new vtxos, update spent vtxos state
 
 	if err := s.repoManager.Vtxos().AddVtxos(ctx, newVtxos); err != nil {
 		return "", fmt.Errorf("failed to add vtxos: %s", err)
