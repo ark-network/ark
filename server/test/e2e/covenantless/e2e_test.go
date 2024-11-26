@@ -161,7 +161,7 @@ func TestCollaborativeExit(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestReactToSpentVtxosRedemption(t *testing.T) {
+func TestReactToRedepmptionOfSpentVtxos(t *testing.T) {
 	ctx := context.Background()
 	client, grpcClient := setupArkSDK(t)
 	defer grpcClient.Close()
@@ -213,7 +213,7 @@ func TestReactToSpentVtxosRedemption(t *testing.T) {
 	require.Empty(t, balance.OnchainBalance.LockedAmount)
 }
 
-func TestReactToAsyncSpentVtxosRedemption(t *testing.T) {
+func TestReactToRedemptionOfVtxosSpentOOR(t *testing.T) {
 	ctx := context.Background()
 	sdkClient, grpcClient := setupArkSDK(t)
 	defer grpcClient.Close()
