@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -38,6 +39,9 @@ type blockInfo struct {
 }
 
 func NewService(addr string, esploraURL string) (ports.WalletService, error) {
+	if len(esploraURL) == 0 {
+		return nil, fmt.Errorf("missing esplora url")
+	}
 	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, err
