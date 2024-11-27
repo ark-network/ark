@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"syscall/js"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -94,15 +95,25 @@ func (s *configStore) GetData(ctx context.Context) (*types.Config, error) {
 	dust, _ := strconv.Atoi(s.store.Call("getItem", "dust").String())
 	withTxFeed, _ := strconv.ParseBool(s.store.Call("getItem", "with_transaction_feed").String())
 
+	lifetimeType := common.LocktimeTypeBlock
+	if roundLifetime >= 512 {
+		lifetimeType = common.LocktimeTypeSecond
+	}
+
+	unilateralExitDelayType := common.LocktimeTypeBlock
+	if unilateralExitDelay >= 512 {
+		unilateralExitDelayType = common.LocktimeTypeSecond
+	}
+
 	return &types.Config{
 		ServerUrl:                  s.store.Call("getItem", "server_url").String(),
 		ServerPubKey:               serverPubkey,
 		WalletType:                 s.store.Call("getItem", "wallet_type").String(),
 		ClientType:                 s.store.Call("getItem", "client_type").String(),
 		Network:                    network,
-		RoundLifetime:              int64(roundLifetime),
+		RoundLifetime:              common.Locktime{Value: uint32(roundLifetime), Type: lifetimeType},
 		RoundInterval:              int64(roundInterval),
-		UnilateralExitDelay:        int64(unilateralExitDelay),
+		UnilateralExitDelay:        common.Locktime{Value: uint32(unilateralExitDelay), Type: unilateralExitDelayType},
 		Dust:                       uint64(dust),
 		ExplorerURL:                s.store.Call("getItem", "explorer_url").String(),
 		ForfeitAddress:             s.store.Call("getItem", "forfeit_address").String(),

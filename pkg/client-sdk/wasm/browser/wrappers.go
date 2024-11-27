@@ -374,7 +374,7 @@ func GetRoundLifetimeWrapper() js.Func {
 		data, _ := arkSdkClient.GetConfigData(context.Background())
 		var roundLifettime int64
 		if data != nil {
-			roundLifettime = data.RoundLifetime
+			roundLifettime = data.RoundLifetime.Seconds()
 		}
 		return js.ValueOf(roundLifettime)
 	})
@@ -385,7 +385,7 @@ func GetUnilateralExitDelayWrapper() js.Func {
 		data, _ := arkSdkClient.GetConfigData(context.Background())
 		var unilateralExitDelay int64
 		if data != nil {
-			unilateralExitDelay = data.UnilateralExitDelay
+			unilateralExitDelay = data.UnilateralExitDelay.Seconds()
 		}
 		return js.ValueOf(unilateralExitDelay)
 	})
