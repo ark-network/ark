@@ -2,11 +2,11 @@ package oceanwallet
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 
 	pb "github.com/ark-network/ark/api-spec/protobuf/gen/ocean/v1"
@@ -30,6 +30,11 @@ type service struct {
 	isListening   bool
 	syncedCh      chan struct{}
 	esploraURL    string
+}
+
+type blockInfo struct {
+	Height    int64 `json:"height"`
+	Timestamp int64 `json:"timestamp"`
 }
 
 func NewService(addr string, esploraURL string) (ports.WalletService, error) {
@@ -174,31 +179,41 @@ func (s *service) VerifyMessageSignature(ctx context.Context, message, signature
 }
 
 func (s *service) GetCurrentBlockTime(ctx context.Context) (*ports.BlockTimestamp, error) {
-	tipURL, err := url.JoinPath(s.esploraURL, "blocks/tip/height")
+	tipHashURL, err := url.JoinPath(s.esploraURL, "blocks/tip/hash")
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := http.Get(tipURL)
+	resp, err := http.Get(tipHashURL)
 	if err != nil {
 		return nil, err
 	}
-
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	hash, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	height, err := strconv.ParseInt(string(body), 10, 64)
+	blockURL, err := url.JoinPath(s.esploraURL, "block", string(hash))
 	if err != nil {
+		return nil, err
+	}
+
+	resp, err = http.Get(blockURL)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var blockInfo blockInfo
+	if err := json.NewDecoder(resp.Body).Decode(&blockInfo); err != nil {
 		return nil, err
 	}
 
 	return &ports.BlockTimestamp{
-		Height: uint32(height),
-		Time:   height * 60,
+		Height: uint32(blockInfo.Height),
+		Time:   blockInfo.Timestamp,
 	}, nil
 }
 
