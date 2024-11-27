@@ -53,8 +53,8 @@ type SpentStatus struct {
 	SpentBy string `json:"txid,omitempty"`
 }
 
-func (e ExplorerUtxo) ToUtxo(delay *common.Locktime, tapscripts []string) types.Utxo {
-	return newUtxo(e, *delay, tapscripts)
+func (e ExplorerUtxo) ToUtxo(delay common.Locktime, tapscripts []string) types.Utxo {
+	return newUtxo(e, delay, tapscripts)
 }
 
 type Explorer interface {

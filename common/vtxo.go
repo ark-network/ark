@@ -31,6 +31,8 @@ It may also contain others closures implementing specific use cases.
 
 VtxoScript abstracts the taproot complexity behind vtxo contracts.
 it is compiled, transferred and parsed using descriptor string.
+
+// TODO gather common and tree package to prevent circular dependency and move C generic
 */
 type VtxoScript[T TaprootTree, C interface{}] interface {
 	Validate(server *secp256k1.PublicKey, minLocktime Locktime) error

@@ -2163,7 +2163,7 @@ func (a *covenantlessArkClient) coinSelectOnchain(
 		}
 
 		for _, utxo := range utxos {
-			u := utxo.ToUtxo(boardingTimeout, addr.Tapscripts)
+			u := utxo.ToUtxo(*boardingTimeout, addr.Tapscripts)
 			if u.SpendableAt.Before(now) {
 				fetchedUtxos = append(fetchedUtxos, u)
 			}
@@ -2199,7 +2199,7 @@ func (a *covenantlessArkClient) coinSelectOnchain(
 		}
 
 		for _, utxo := range utxos {
-			u := utxo.ToUtxo(&a.UnilateralExitDelay, addr.Tapscripts)
+			u := utxo.ToUtxo(a.UnilateralExitDelay, addr.Tapscripts)
 			if u.SpendableAt.Before(now) {
 				fetchedUtxos = append(fetchedUtxos, u)
 			}
@@ -2387,7 +2387,7 @@ func (a *covenantlessArkClient) getClaimableBoardingUtxos(ctx context.Context, o
 				}
 			}
 
-			u := utxo.ToUtxo(boardingTimeout, addr.Tapscripts)
+			u := utxo.ToUtxo(*boardingTimeout, addr.Tapscripts)
 			if u.SpendableAt.Before(now) {
 				continue
 			}
