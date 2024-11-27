@@ -91,6 +91,10 @@ func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, error) {
 			for _, key := range c.PubKeys {
 				keys[hex.EncodeToString(schnorr.SerializePubKey(key))] = false
 			}
+		case *tree.CLTVMultisigClosure:
+			for _, key := range c.PubKeys {
+				keys[hex.EncodeToString(schnorr.SerializePubKey(key))] = false
+			}
 		}
 
 		// we don't need to check if server signed
@@ -326,6 +330,11 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 
 	validForfeitTxs := make(map[domain.VtxoKey][]string)
 
+	blocktimestamp, err := b.wallet.GetCurrentBlockTime(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
 	for vtxoKey, ptxs := range forfeitTxsPtxs {
 		if len(ptxs) == 0 {
 			continue
@@ -359,6 +368,30 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 		}
 
 		vtxoTapscript := firstForfeit.Inputs[1].TaprootLeafScript[0]
+
+		// verify the forfeit closure script
+		closure, err := tree.DecodeClosure(vtxoTapscript.Script)
+		if err != nil {
+			return nil, err
+		}
+
+		switch c := closure.(type) {
+		case *tree.CLTVMultisigClosure:
+			switch c.Locktime.Type {
+			case common.LocktimeTypeBlock:
+				if c.Locktime.Value > blocktimestamp.Height {
+					return nil, fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block height)", c.Locktime.Value, blocktimestamp.Height)
+				}
+			case common.LocktimeTypeSecond:
+				if c.Locktime.Value > uint32(blocktimestamp.Time) {
+					return nil, fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block time)", c.Locktime.Value, blocktimestamp.Time)
+				}
+			}
+		case *tree.MultisigClosure:
+		default:
+			return nil, fmt.Errorf("invalid forfeit closure script")
+		}
+
 		ctrlBlock, err := txscript.ParseControlBlock(vtxoTapscript.ControlBlock)
 		if err != nil {
 			return nil, err
@@ -370,7 +403,7 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 				RevealedScript: vtxoTapscript.Script,
 				ControlBlock:   ctrlBlock,
 			},
-			64*2,
+			closure.WitnessSize(),
 			txscript.GetScriptClass(forfeitScript),
 		)
 		if err != nil {

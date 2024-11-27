@@ -16,7 +16,7 @@ var (
 	ErrNoExitLeaf = fmt.Errorf("no exit leaf")
 )
 
-type VtxoScript common.VtxoScript[elementsTapTree, *MultisigClosure, *CSVSigClosure]
+type VtxoScript common.VtxoScript[elementsTapTree, Closure]
 
 func ParseVtxoScript(scripts []string) (VtxoScript, error) {
 	v := &TapscriptsVtxoScript{}
@@ -75,9 +75,14 @@ func (v *TapscriptsVtxoScript) Decode(scripts []string) error {
 func (v *TapscriptsVtxoScript) Validate(server *secp256k1.PublicKey, minLocktime common.Locktime) error {
 	serverXonly := schnorr.SerializePubKey(server)
 	for _, forfeit := range v.ForfeitClosures() {
+		multisigClosure, ok := forfeit.(*MultisigClosure)
+		if !ok {
+			return fmt.Errorf("invalid forfeit closure, expected MultisigClosure")
+		}
+
 		// must contain server pubkey
 		found := false
-		for _, pubkey := range forfeit.PubKeys {
+		for _, pubkey := range multisigClosure.PubKeys {
 			if bytes.Equal(schnorr.SerializePubKey(pubkey), serverXonly) {
 				found = true
 				break
@@ -121,21 +126,23 @@ func (v *TapscriptsVtxoScript) SmallestExitDelay() (*common.Locktime, error) {
 	return smallest, nil
 }
 
-func (v *TapscriptsVtxoScript) ForfeitClosures() []*MultisigClosure {
-	forfeits := make([]*MultisigClosure, 0)
+func (v *TapscriptsVtxoScript) ForfeitClosures() []Closure {
+	forfeits := make([]Closure, 0)
 	for _, closure := range v.Closures {
-		if multisigClosure, ok := closure.(*MultisigClosure); ok {
-			forfeits = append(forfeits, multisigClosure)
+		switch closure.(type) {
+		case *MultisigClosure, *CLTVMultisigClosure:
+			forfeits = append(forfeits, closure)
 		}
 	}
 	return forfeits
 }
 
-func (v *TapscriptsVtxoScript) ExitClosures() []*CSVSigClosure {
-	exits := make([]*CSVSigClosure, 0)
+func (v *TapscriptsVtxoScript) ExitClosures() []Closure {
+	exits := make([]Closure, 0)
 	for _, closure := range v.Closures {
-		if csvClosure, ok := closure.(*CSVSigClosure); ok {
-			exits = append(exits, csvClosure)
+		switch closure.(type) {
+		case *CSVSigClosure:
+			exits = append(exits, closure)
 		}
 	}
 	return exits

@@ -2682,5 +2682,5 @@ func buildRedeemTx(
 		})
 	}
 
-	return bitcointree.BuildRedeemTx(ins, outs, fees)
+	return bitcointree.BuildRedeemTx(ins, outs)
 }

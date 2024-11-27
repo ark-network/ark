@@ -158,6 +158,11 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 
 	validForfeitTxs := make(map[domain.VtxoKey][]string)
 
+	blocktimestamp, err := b.wallet.GetCurrentBlockTime(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
 	for vtxoKey, psets := range forfeitTxsPsets {
 		if len(psets) == 0 {
 			continue
@@ -202,13 +207,36 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 
 		vtxoTapscript := firstForfeit.Inputs[1].TapLeafScript[0]
 
+		// verify the forfeit closure script
+		closure, err := tree.DecodeClosure(vtxoTapscript.Script)
+		if err != nil {
+			return nil, err
+		}
+
+		switch c := closure.(type) {
+		case *tree.CLTVMultisigClosure:
+			switch c.Locktime.Type {
+			case common.LocktimeTypeBlock:
+				if c.Locktime.Value > blocktimestamp.Height {
+					return nil, fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block height)", c.Locktime.Value, blocktimestamp.Height)
+				}
+			case common.LocktimeTypeSecond:
+				if c.Locktime.Value > uint32(blocktimestamp.Time) {
+					return nil, fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block time)", c.Locktime.Value, blocktimestamp.Time)
+				}
+			}
+		case *tree.MultisigClosure:
+		default:
+			return nil, fmt.Errorf("invalid forfeit closure script")
+		}
+
 		minFee, err := common.ComputeForfeitTxFee(
 			minRate,
 			&waddrmgr.Tapscript{
 				RevealedScript: vtxoTapscript.Script,
 				ControlBlock:   &vtxoTapscript.ControlBlock.ControlBlock,
 			},
-			64*2,
+			closure.WitnessSize(),
 			txscript.GetScriptClass(forfeitScript),
 		)
 		if err != nil {
@@ -506,6 +534,10 @@ func (b *txBuilder) verifyTapscriptPartialSigs(pset *psetv2.Pset) (bool, error) 
 				keys[hex.EncodeToString(schnorr.SerializePubKey(key))] = false
 			}
 		case *tree.CSVSigClosure:
+			for _, key := range c.PubKeys {
+				keys[hex.EncodeToString(schnorr.SerializePubKey(key))] = false
+			}
+		case *tree.CLTVMultisigClosure:
 			for _, key := range c.PubKeys {
 				keys[hex.EncodeToString(schnorr.SerializePubKey(key))] = false
 			}

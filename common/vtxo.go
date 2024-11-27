@@ -32,14 +32,14 @@ It may also contain others closures implementing specific use cases.
 VtxoScript abstracts the taproot complexity behind vtxo contracts.
 it is compiled, transferred and parsed using descriptor string.
 */
-type VtxoScript[T TaprootTree, F interface{}, E interface{}] interface {
+type VtxoScript[T TaprootTree, C interface{}] interface {
 	Validate(server *secp256k1.PublicKey, minLocktime Locktime) error
 	TapTree() (taprootKey *secp256k1.PublicKey, taprootScriptTree T, err error)
 	Encode() ([]string, error)
 	Decode(scripts []string) error
 	SmallestExitDelay() (*Locktime, error)
-	ForfeitClosures() []F
-	ExitClosures() []E
+	ForfeitClosures() []C
+	ExitClosures() []C
 }
 
 // BiggestLeafMerkleProof returns the leaf with the biggest witness size (for fee estimation)

@@ -10,7 +10,7 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-type VtxoScript common.VtxoScript[bitcoinTapTree, *tree.MultisigClosure, *tree.CSVSigClosure]
+type VtxoScript common.VtxoScript[bitcoinTapTree, tree.Closure]
 
 func ParseVtxoScript(scripts []string) (VtxoScript, error) {
 	types := []VtxoScript{

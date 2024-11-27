@@ -1119,6 +1119,23 @@ func (s *service) VerifyMessageSignature(ctx context.Context, message, signature
 	return sig.Verify(message, s.serverKeyAddr.PubKey()), nil
 }
 
+func (s *service) GetCurrentBlockTime(ctx context.Context) (*ports.BlockTimestamp, error) {
+	blockhash, blockheight, err := s.wallet.GetBestBlock()
+	if err != nil {
+		return nil, err
+	}
+
+	header, err := s.wallet.GetBlockHeader(blockhash)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ports.BlockTimestamp{
+		Time:   header.Timestamp.Unix(),
+		Height: uint32(blockheight),
+	}, nil
+}
+
 func (s *service) castNotification(tx *wtxmgr.TxRecord) map[string][]ports.VtxoWithValue {
 	vtxos := make(map[string][]ports.VtxoWithValue)
 

@@ -1,6 +1,7 @@
 package tree_test
 
 import (
+	"bytes"
 	"encoding/hex"
 	"testing"
 
@@ -469,4 +470,157 @@ func TestDecodeChecksigAdd(t *testing.T) {
 	require.True(t, valid, "script should be valid")
 	require.Equal(t, tree.MultisigTypeChecksigAdd, multisigClosure.Type, "expected MultisigTypeChecksigAdd")
 	require.Equal(t, 3, len(multisigClosure.PubKeys), "expected 3 public keys")
+}
+
+func TestCLTVMultisigClosure(t *testing.T) {
+	// Generate test keys
+	privkey1, err := secp256k1.GeneratePrivateKey()
+	require.NoError(t, err)
+	pubkey1 := privkey1.PubKey()
+
+	privkey2, err := secp256k1.GeneratePrivateKey()
+	require.NoError(t, err)
+	pubkey2 := privkey2.PubKey()
+
+	locktime := common.Locktime{
+		Type:  common.LocktimeTypeBlock,
+		Value: 100,
+	}
+
+	t.Run("valid single key with CLTV", func(t *testing.T) {
+		closure := &tree.CLTVMultisigClosure{
+			MultisigClosure: tree.MultisigClosure{
+				PubKeys: []*secp256k1.PublicKey{pubkey1},
+				Type:    tree.MultisigTypeChecksig,
+			},
+			Locktime: locktime,
+		}
+
+		script, err := closure.Script()
+		require.NoError(t, err)
+
+		decodedClosure := &tree.CLTVMultisigClosure{}
+		valid, err := decodedClosure.Decode(script)
+		require.NoError(t, err)
+		require.True(t, valid)
+		require.Equal(t, closure.Locktime, decodedClosure.Locktime)
+		require.Equal(t, 1, len(decodedClosure.PubKeys))
+		require.True(t, closure.PubKeys[0].IsEqual(decodedClosure.PubKeys[0]))
+	})
+
+	t.Run("valid two keys with CLTV", func(t *testing.T) {
+		closure := &tree.CLTVMultisigClosure{
+			MultisigClosure: tree.MultisigClosure{
+				PubKeys: []*secp256k1.PublicKey{pubkey1, pubkey2},
+				Type:    tree.MultisigTypeChecksig,
+			},
+			Locktime: locktime,
+		}
+
+		script, err := closure.Script()
+		require.NoError(t, err)
+
+		decodedClosure := &tree.CLTVMultisigClosure{}
+		valid, err := decodedClosure.Decode(script)
+		require.NoError(t, err)
+		require.True(t, valid)
+		require.Equal(t, closure.Locktime, decodedClosure.Locktime)
+		require.Equal(t, 2, len(decodedClosure.PubKeys))
+	})
+
+	t.Run("valid two keys with CLTV using checksigadd", func(t *testing.T) {
+		closure := &tree.CLTVMultisigClosure{
+			MultisigClosure: tree.MultisigClosure{
+				PubKeys: []*secp256k1.PublicKey{pubkey1, pubkey2},
+				Type:    tree.MultisigTypeChecksigAdd,
+			},
+			Locktime: locktime,
+		}
+
+		script, err := closure.Script()
+		require.NoError(t, err)
+
+		decodedClosure := &tree.CLTVMultisigClosure{}
+		valid, err := decodedClosure.Decode(script)
+		require.NoError(t, err)
+		require.True(t, valid)
+		require.Equal(t, closure.Locktime, decodedClosure.Locktime)
+		require.Equal(t, closure.Type, decodedClosure.Type)
+		require.Equal(t, 2, len(decodedClosure.PubKeys))
+	})
+
+	t.Run("witness generation", func(t *testing.T) {
+		closure := &tree.CLTVMultisigClosure{
+			MultisigClosure: tree.MultisigClosure{
+				PubKeys: []*secp256k1.PublicKey{pubkey1, pubkey2},
+				Type:    tree.MultisigTypeChecksig,
+			},
+			Locktime: locktime,
+		}
+
+		controlBlock := bytes.Repeat([]byte{0x00}, 32)
+		signatures := map[string][]byte{
+			hex.EncodeToString(schnorr.SerializePubKey(pubkey1)): bytes.Repeat([]byte{0x01}, 64),
+			hex.EncodeToString(schnorr.SerializePubKey(pubkey2)): bytes.Repeat([]byte{0x01}, 64),
+		}
+
+		witness, err := closure.Witness(controlBlock, signatures)
+		require.NoError(t, err)
+		require.Equal(t, 4, len(witness)) // 2 sigs + script + control block
+
+		script, err := closure.Script()
+		require.NoError(t, err)
+		require.Equal(t, script, witness[2])
+		require.Equal(t, controlBlock, witness[3])
+	})
+
+	t.Run("invalid cases", func(t *testing.T) {
+		validClosure := &tree.CLTVMultisigClosure{
+			MultisigClosure: tree.MultisigClosure{
+				PubKeys: []*secp256k1.PublicKey{pubkey1},
+				Type:    tree.MultisigTypeChecksig,
+			},
+			Locktime: locktime,
+		}
+		script, err := validClosure.Script()
+		require.NoError(t, err)
+		emptyScriptErr := "empty script"
+
+		testCases := []struct {
+			name   string
+			script []byte
+			err    *string
+		}{
+			{
+				name:   "empty script",
+				script: []byte{},
+				err:    &emptyScriptErr,
+			},
+			{
+				name:   "invalid CLTV index",
+				script: append([]byte{txscript.OP_CHECKLOCKTIMEVERIFY, txscript.OP_DROP}, script...),
+			},
+			{
+				name:   "missing CLTV",
+				script: script[5:],
+			},
+			{
+				name:   "invalid multisig after CLTV",
+				script: append(script[:len(script)-1], txscript.OP_CHECKSIGVERIFY),
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				closure := &tree.CLTVMultisigClosure{}
+				valid, err := closure.Decode(tc.script)
+				require.False(t, valid)
+				if tc.err != nil {
+					require.Contains(t, err.Error(), *tc.err)
+				} else {
+					require.NoError(t, err)
+				}
+			})
+		}
+	})
 }

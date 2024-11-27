@@ -304,6 +304,35 @@ func (s *covenantlessService) SubmitRedeemTx(
 			return "", fmt.Errorf("witness utxo value mismatch")
 		}
 
+		// verify forfeit closure script
+		closure, err := tree.DecodeClosure(tapscript.Script)
+		if err != nil {
+			return "", fmt.Errorf("failed to decode forfeit closure: %s", err)
+		}
+
+		switch c := closure.(type) {
+		case *tree.CLTVMultisigClosure:
+			blocktimestamp, err := s.wallet.GetCurrentBlockTime(ctx)
+			if err != nil {
+				return "", fmt.Errorf("failed to get current block time: %s", err)
+			}
+
+			switch c.Locktime.Type {
+			case common.LocktimeTypeBlock:
+				if c.Locktime.Value > blocktimestamp.Height {
+					return "", fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block height)", c.Locktime.Value, blocktimestamp.Height)
+				}
+			case common.LocktimeTypeSecond:
+				if c.Locktime.Value > uint32(blocktimestamp.Time) {
+					return "", fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block time)", c.Locktime.Value, blocktimestamp.Time)
+				}
+			}
+		case *tree.MultisigClosure:
+			// prevent failure in case of multisig closure
+		default:
+			return "", fmt.Errorf("invalid forfeit closure script")
+		}
+
 		ctrlBlock, err := txscript.ParseControlBlock(tapscript.ControlBlock)
 		if err != nil {
 			return "", fmt.Errorf("failed to parse control block: %s", err)
@@ -350,7 +379,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 	}
 
 	// recompute redeem tx
-	rebuiltRedeemTx, err := bitcointree.BuildRedeemTx(ins, outputs, fees)
+	rebuiltRedeemTx, err := bitcointree.BuildRedeemTx(ins, outputs)
 	if err != nil {
 		return "", fmt.Errorf("failed to rebuild redeem tx: %s", err)
 	}

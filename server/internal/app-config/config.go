@@ -260,7 +260,10 @@ func (c *Config) repoManager() error {
 
 func (c *Config) walletService() error {
 	if common.IsLiquid(c.Network) {
-		svc, err := liquidwallet.NewService(c.WalletAddr)
+		if len(c.EsploraURL) == 0 {
+			return fmt.Errorf("missing esplora url, liquid ark requires ARK_ESPLORA_URL to be set")
+		}
+		svc, err := liquidwallet.NewService(c.WalletAddr, c.EsploraURL)
 		if err != nil {
 			return fmt.Errorf("failed to connect to wallet: %s", err)
 		}

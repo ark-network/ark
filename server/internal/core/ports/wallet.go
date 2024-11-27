@@ -42,6 +42,7 @@ type WalletService interface {
 	GetTransaction(ctx context.Context, txid string) (string, error)
 	SignMessage(ctx context.Context, message []byte) ([]byte, error)
 	VerifyMessageSignature(ctx context.Context, message, signature []byte) (bool, error)
+	GetCurrentBlockTime(ctx context.Context) (*BlockTimestamp, error)
 	Close()
 }
 
@@ -62,4 +63,9 @@ type TxInput interface {
 type TxOutpoint interface {
 	GetTxid() string
 	GetIndex() uint32
+}
+
+type BlockTimestamp struct {
+	Height uint32
+	Time   int64
 }

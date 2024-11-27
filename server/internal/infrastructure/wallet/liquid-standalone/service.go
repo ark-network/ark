@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 
 	pb "github.com/ark-network/ark/api-spec/protobuf/gen/ocean/v1"
@@ -26,9 +29,10 @@ type service struct {
 	chVtxos       chan map[string][]ports.VtxoWithValue
 	isListening   bool
 	syncedCh      chan struct{}
+	esploraURL    string
 }
 
-func NewService(addr string) (ports.WalletService, error) {
+func NewService(addr string, esploraURL string) (ports.WalletService, error) {
 	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, err
@@ -47,6 +51,7 @@ func NewService(addr string) (ports.WalletService, error) {
 		notifyClient:  notifyClient,
 		chVtxos:       chVtxos,
 		syncedCh:      make(chan struct{}),
+		esploraURL:    esploraURL,
 	}
 
 	ctx := context.Background()
@@ -166,6 +171,35 @@ func (s *service) SignMessage(ctx context.Context, message []byte) ([]byte, erro
 
 func (s *service) VerifyMessageSignature(ctx context.Context, message, signature []byte) (bool, error) {
 	return false, errors.New("not implemented")
+}
+
+func (s *service) GetCurrentBlockTime(ctx context.Context) (*ports.BlockTimestamp, error) {
+	tipURL, err := url.JoinPath(s.esploraURL, "blocks/tip/height")
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := http.Get(tipURL)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	height, err := strconv.ParseInt(string(body), 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ports.BlockTimestamp{
+		Height: uint32(height),
+		Time:   height * 60,
+	}, nil
 }
 
 func (s *service) listenToNotifications() {

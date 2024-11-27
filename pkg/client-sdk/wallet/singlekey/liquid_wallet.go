@@ -242,6 +242,13 @@ func (s *liquidWallet) SignTransaction(
 							break
 						}
 					}
+				case *tree.CLTVMultisigClosure:
+					for _, key := range c.MultisigClosure.PubKeys {
+						if bytes.Equal(schnorr.SerializePubKey(key), myPubkey) {
+							sign = true
+							break
+						}
+					}
 				}
 
 				if sign {
