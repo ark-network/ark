@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil/psbt"
@@ -71,7 +72,7 @@ func UnspendableKey() *secp256k1.PublicKey {
 // - every control block and taproot output scripts
 // - input and output amounts
 func ValidateVtxoTree(
-	vtxoTree tree.VtxoTree, roundTx string, serverPubkey *secp256k1.PublicKey, roundLifetime int64,
+	vtxoTree tree.VtxoTree, roundTx string, serverPubkey *secp256k1.PublicKey, roundLifetime common.Locktime,
 ) error {
 	roundTransaction, err := psbt.NewFromRawBytes(strings.NewReader(roundTx), true)
 	if err != nil {
@@ -125,7 +126,7 @@ func ValidateVtxoTree(
 
 	sweepClosure := &tree.CSVSigClosure{
 		MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{serverPubkey}},
-		Seconds:         uint(roundLifetime),
+		Locktime:        roundLifetime,
 	}
 
 	sweepScript, err := sweepClosure.Script()

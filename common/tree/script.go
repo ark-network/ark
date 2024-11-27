@@ -57,7 +57,12 @@ type MultisigClosure struct {
 // the sighash type is SIGHASH_DEFAULT.
 type CSVSigClosure struct {
 	MultisigClosure
-	Seconds uint
+	Locktime common.Locktime
+}
+
+type CLTVMultisigClosure struct {
+	MultisigClosure
+	Locktime common.Locktime
 }
 
 func DecodeClosure(script []byte) (Closure, error) {
@@ -324,8 +329,13 @@ func (f *CSVSigClosure) WitnessSize() int {
 }
 
 func (d *CSVSigClosure) Script() ([]byte, error) {
+	sequence, err := common.BIP68Sequence(d.Locktime)
+	if err != nil {
+		return nil, err
+	}
+
 	csvScript, err := txscript.NewScriptBuilder().
-		AddInt64(int64(d.Seconds)).
+		AddInt64(int64(sequence)).
 		AddOps([]byte{
 			txscript.OP_CHECKSEQUENCEVERIFY,
 			txscript.OP_DROP,
@@ -360,7 +370,7 @@ func (d *CSVSigClosure) Decode(script []byte) (bool, error) {
 		sequence = sequence[1:]
 	}
 
-	seconds, err := common.BIP68DecodeSequence(sequence)
+	locktime, err := common.BIP68DecodeSequence(sequence)
 	if err != nil {
 		return false, err
 	}
@@ -375,7 +385,7 @@ func (d *CSVSigClosure) Decode(script []byte) (bool, error) {
 		return false, nil
 	}
 
-	d.Seconds = seconds
+	d.Locktime = *locktime
 	d.MultisigClosure = *multisigClosure
 
 	return valid, nil

@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
@@ -14,7 +15,7 @@ import (
 
 func BuildVtxoTree(
 	asset string, serverPubkey *secp256k1.PublicKey, receivers []VtxoLeaf,
-	feeSatsPerNode uint64, roundLifetime int64,
+	feeSatsPerNode uint64, roundLifetime common.Locktime,
 ) (
 	factoryFn TreeFactory,
 	sharedOutputScript []byte, sharedOutputAmount uint64, err error,
@@ -53,7 +54,7 @@ type node struct {
 	right         *node
 	asset         string
 	feeSats       uint64
-	roundLifetime int64
+	roundLifetime common.Locktime
 
 	_inputTaprootKey  *secp256k1.PublicKey
 	_inputTaprootTree *taproot.IndexedElementsTapScriptTree
@@ -164,7 +165,7 @@ func (n *node) getWitnessData() (
 
 	sweepClosure := &CSVSigClosure{
 		MultisigClosure: MultisigClosure{PubKeys: []*secp256k1.PublicKey{n.sweepKey}},
-		Seconds:         uint(n.roundLifetime),
+		Locktime:        n.roundLifetime,
 	}
 
 	sweepLeaf, err := sweepClosure.Script()
@@ -380,7 +381,7 @@ func (n *node) buildVtxoTree() TreeFactory {
 
 func buildTreeNodes(
 	asset string, serverPubkey *secp256k1.PublicKey, receivers []VtxoLeaf,
-	feeSatsPerNode uint64, roundLifetime int64,
+	feeSatsPerNode uint64, roundLifetime common.Locktime,
 ) (root *node, err error) {
 	if len(receivers) == 0 {
 		return nil, fmt.Errorf("no receivers provided")

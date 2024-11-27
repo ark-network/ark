@@ -18,18 +18,19 @@ import (
 )
 
 const (
-	testingKey        = "020000000000000000000000000000000000000000000000000000000000000001"
-	connectorAddress  = "bc1py00yhcjpcj0k0sqra0etq0u3yy0purmspppsw0shyzyfe8c83tmq5h6kc2"
-	forfeitAddress    = "bc1py00yhcjpcj0k0sqra0etq0u3yy0purmspppsw0shyzyfe8c83tmq5h6kc2"
-	changeAddress     = "bcrt1qhhq55mut9easvrncy4se8q6vg3crlug7yj4j56"
-	roundLifetime     = int64(1209344)
-	boardingExitDelay = int64(512)
-	minRelayFeeRate   = 3
+	testingKey       = "020000000000000000000000000000000000000000000000000000000000000001"
+	connectorAddress = "bc1py00yhcjpcj0k0sqra0etq0u3yy0purmspppsw0shyzyfe8c83tmq5h6kc2"
+	forfeitAddress   = "bc1py00yhcjpcj0k0sqra0etq0u3yy0purmspppsw0shyzyfe8c83tmq5h6kc2"
+	changeAddress    = "bcrt1qhhq55mut9easvrncy4se8q6vg3crlug7yj4j56"
+	minRelayFeeRate  = 3
 )
 
 var (
 	wallet *mockedWallet
 	pubkey *secp256k1.PublicKey
+
+	roundLifetime     = common.Locktime{Type: common.LocktimeTypeSecond, Value: 1209344}
+	boardingExitDelay = common.Locktime{Type: common.LocktimeTypeSecond, Value: 512}
 )
 
 func TestMain(m *testing.M) {

@@ -51,7 +51,7 @@ func ParseDefaultVtxoDescriptor(
 
 			if first, ok := andLeaf.First.(*Older); ok {
 				if second, ok := andLeaf.Second.(*PK); ok {
-					timeout = first.Timeout
+					timeout = uint(first.Locktime.Value)
 					keyBytes, err := hex.DecodeString(second.Key.Hex)
 					if err != nil {
 						return nil, nil, 0, err

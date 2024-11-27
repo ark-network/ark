@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
@@ -26,12 +27,12 @@ func NewCovenantRedeemBranch(
 	explorer explorer.Explorer,
 	vtxoTree tree.VtxoTree, vtxo client.Vtxo,
 ) (*CovenantRedeemBranch, error) {
-	sweepClosure, seconds, err := findCovenantSweepClosure(vtxoTree)
+	sweepClosure, locktime, err := findCovenantSweepClosure(vtxoTree)
 	if err != nil {
 		return nil, err
 	}
 
-	lifetime, err := time.ParseDuration(fmt.Sprintf("%ds", seconds))
+	lifetime, err := time.ParseDuration(fmt.Sprintf("%ds", locktime.Seconds()))
 	if err != nil {
 		return nil, err
 	}
@@ -183,19 +184,19 @@ func (r *CovenantRedeemBranch) offchainPath() ([]*psetv2.Pset, error) {
 
 func findCovenantSweepClosure(
 	vtxoTree tree.VtxoTree,
-) (*taproot.TapElementsLeaf, uint, error) {
+) (*taproot.TapElementsLeaf, *common.Locktime, error) {
 	root, err := vtxoTree.Root()
 	if err != nil {
-		return nil, 0, err
+		return nil, nil, err
 	}
 
 	// find the sweep closure
 	tx, err := psetv2.NewPsetFromBase64(root.Tx)
 	if err != nil {
-		return nil, 0, err
+		return nil, nil, err
 	}
 
-	var seconds uint
+	var locktime *common.Locktime
 	var sweepClosure *taproot.TapElementsLeaf
 	for _, tapLeaf := range tx.Inputs[0].TapLeafScript {
 		closure := &tree.CSVSigClosure{}
@@ -204,15 +205,15 @@ func findCovenantSweepClosure(
 			continue
 		}
 
-		if valid && closure.Seconds > seconds {
-			seconds = closure.Seconds
+		if valid && (locktime == nil || closure.Locktime.LessThan(*locktime)) {
+			locktime = &closure.Locktime
 			sweepClosure = &tapLeaf.TapElementsLeaf
 		}
 	}
 
 	if sweepClosure == nil {
-		return nil, 0, fmt.Errorf("sweep closure not found")
+		return nil, nil, fmt.Errorf("sweep closure not found")
 	}
 
-	return sweepClosure, seconds, nil
+	return sweepClosure, locktime, nil
 }

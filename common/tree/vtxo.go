@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"math"
 
 	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -26,12 +25,12 @@ func ParseVtxoScript(scripts []string) (VtxoScript, error) {
 	return v, err
 }
 
-func NewDefaultVtxoScript(owner, server *secp256k1.PublicKey, exitDelay uint) *TapscriptsVtxoScript {
+func NewDefaultVtxoScript(owner, server *secp256k1.PublicKey, exitDelay common.Locktime) *TapscriptsVtxoScript {
 	return &TapscriptsVtxoScript{
 		[]Closure{
 			&CSVSigClosure{
 				MultisigClosure: MultisigClosure{PubKeys: []*secp256k1.PublicKey{owner}},
-				Seconds:         exitDelay,
+				Locktime:        exitDelay,
 			},
 			&MultisigClosure{PubKeys: []*secp256k1.PublicKey{owner, server}},
 		},
@@ -73,7 +72,7 @@ func (v *TapscriptsVtxoScript) Decode(scripts []string) error {
 	return nil
 }
 
-func (v *TapscriptsVtxoScript) Validate(server *secp256k1.PublicKey, minExitDelay uint) error {
+func (v *TapscriptsVtxoScript) Validate(server *secp256k1.PublicKey, minLocktime common.Locktime) error {
 	serverXonly := schnorr.SerializePubKey(server)
 	for _, forfeit := range v.ForfeitClosures() {
 		// must contain server pubkey
@@ -97,26 +96,26 @@ func (v *TapscriptsVtxoScript) Validate(server *secp256k1.PublicKey, minExitDela
 		return err
 	}
 
-	if smallestExit < minExitDelay {
+	if smallestExit.LessThan(minLocktime) {
 		return fmt.Errorf("exit delay is too short")
 	}
 
 	return nil
 }
 
-func (v *TapscriptsVtxoScript) SmallestExitDelay() (uint, error) {
-	smallest := uint(math.MaxUint32)
+func (v *TapscriptsVtxoScript) SmallestExitDelay() (*common.Locktime, error) {
+	var smallest *common.Locktime
 
 	for _, closure := range v.Closures {
 		if csvClosure, ok := closure.(*CSVSigClosure); ok {
-			if csvClosure.Seconds < smallest {
-				smallest = csvClosure.Seconds
+			if smallest == nil || csvClosure.Locktime.LessThan(*smallest) {
+				smallest = &csvClosure.Locktime
 			}
 		}
 	}
 
-	if smallest == math.MaxUint32 {
-		return 0, ErrNoExitLeaf
+	if smallest == nil {
+		return nil, ErrNoExitLeaf
 	}
 
 	return smallest, nil

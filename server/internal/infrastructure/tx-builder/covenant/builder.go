@@ -28,15 +28,15 @@ import (
 type txBuilder struct {
 	wallet            ports.WalletService
 	net               common.Network
-	roundLifetime     int64 // in seconds
-	boardingExitDelay int64 // in seconds
+	roundLifetime     common.Locktime
+	boardingExitDelay common.Locktime
 }
 
 func NewTxBuilder(
 	wallet ports.WalletService,
 	net common.Network,
-	roundLifetime int64,
-	boardingExitDelay int64,
+	roundLifetime common.Locktime,
+	boardingExitDelay common.Locktime,
 ) ports.TxBuilder {
 	return &txBuilder{wallet, net, roundLifetime, boardingExitDelay}
 }
@@ -418,14 +418,14 @@ func (b *txBuilder) BuildRoundTx(
 	return
 }
 
-func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime int64, sweepInput ports.SweepInput, err error) {
+func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime *common.Locktime, sweepInput ports.SweepInput, err error) {
 	pset, err := psetv2.NewPsetFromBase64(node.Tx)
 	if err != nil {
-		return -1, nil, err
+		return nil, nil, err
 	}
 
 	if len(pset.Inputs) != 1 {
-		return -1, nil, fmt.Errorf("invalid node pset, expect 1 input, got %d", len(pset.Inputs))
+		return nil, nil, fmt.Errorf("invalid node pset, expect 1 input, got %d", len(pset.Inputs))
 	}
 
 	// if the tx is not onchain, it means that the input is an existing shared output
@@ -435,22 +435,22 @@ func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime int64, sweepInput po
 
 	sweepLeaf, lifetime, err := extractSweepLeaf(input)
 	if err != nil {
-		return -1, nil, err
+		return nil, nil, err
 	}
 
 	txhex, err := b.wallet.GetTransaction(context.Background(), txid)
 	if err != nil {
-		return -1, nil, err
+		return nil, nil, err
 	}
 
 	tx, err := transaction.NewTxFromHex(txhex)
 	if err != nil {
-		return -1, nil, err
+		return nil, nil, err
 	}
 
 	inputValue, err := elementsutil.ValueFromBytes(tx.Outputs[index].Value)
 	if err != nil {
-		return -1, nil, err
+		return nil, nil, err
 	}
 
 	sweepInput = &sweepLiquidInput{
@@ -1123,24 +1123,24 @@ func (b *txBuilder) onchainNetwork() *network.Network {
 	}
 }
 
-func extractSweepLeaf(input psetv2.Input) (sweepLeaf *psetv2.TapLeafScript, lifetime int64, err error) {
+func extractSweepLeaf(input psetv2.Input) (sweepLeaf *psetv2.TapLeafScript, lifetime *common.Locktime, err error) {
 	for _, leaf := range input.TapLeafScript {
 		closure := &tree.CSVSigClosure{}
 		valid, err := closure.Decode(leaf.Script)
 		if err != nil {
-			return nil, 0, err
+			return nil, nil, err
 		}
-		if valid && closure.Seconds > uint(lifetime) {
+		if valid && (lifetime == nil || lifetime.LessThan(closure.Locktime)) {
 			sweepLeaf = &leaf
-			lifetime = int64(closure.Seconds)
+			lifetime = &closure.Locktime
 		}
 	}
 
 	if sweepLeaf == nil {
-		return nil, 0, fmt.Errorf("sweep leaf not found")
+		return nil, nil, fmt.Errorf("sweep leaf not found")
 	}
 
-	return sweepLeaf, lifetime, nil
+	return
 }
 
 type sweepLiquidInput struct {

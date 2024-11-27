@@ -37,7 +37,7 @@ func sweepTransaction(
 			return nil, fmt.Errorf("invalid csv script")
 		}
 
-		sequence, err := common.BIP68Sequence(sweepClosure.Seconds)
+		sequence, err := common.BIP68Sequence(sweepClosure.Locktime)
 		if err != nil {
 			return nil, err
 		}

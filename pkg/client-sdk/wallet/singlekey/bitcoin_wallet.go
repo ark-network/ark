@@ -310,7 +310,7 @@ func (w *bitcoinWallet) getAddress(
 	defaultVtxoScript := bitcointree.NewDefaultVtxoScript(
 		w.walletData.PubKey,
 		data.ServerPubKey,
-		uint(data.UnilateralExitDelay),
+		data.UnilateralExitDelay,
 	)
 
 	vtxoTapKey, _, err := defaultVtxoScript.TapTree()
@@ -327,7 +327,10 @@ func (w *bitcoinWallet) getAddress(
 	boardingVtxoScript := bitcointree.NewDefaultVtxoScript(
 		w.walletData.PubKey,
 		data.ServerPubKey,
-		uint(data.UnilateralExitDelay*2),
+		common.Locktime{
+			Type:  data.UnilateralExitDelay.Type,
+			Value: data.UnilateralExitDelay.Value * 2,
+		},
 	)
 
 	boardingTapKey, _, err := boardingVtxoScript.TapTree()

@@ -59,6 +59,17 @@ func mainAction(_ *cli.Context) error {
 		TLSExtraDomains: cfg.TLSExtraDomains,
 	}
 
+	lifetimeType, unilateralExitType, boardingExitType := common.LocktimeTypeBlock, common.LocktimeTypeBlock, common.LocktimeTypeBlock
+	if cfg.RoundLifetime >= 512 {
+		lifetimeType = common.LocktimeTypeSecond
+	}
+	if cfg.UnilateralExitDelay >= 512 {
+		unilateralExitType = common.LocktimeTypeSecond
+	}
+	if cfg.BoardingExitDelay >= 512 {
+		boardingExitType = common.LocktimeTypeSecond
+	}
+
 	appConfig := &appconfig.Config{
 		EventDbType:             cfg.EventDbType,
 		DbType:                  cfg.DbType,
@@ -70,8 +81,8 @@ func mainAction(_ *cli.Context) error {
 		SchedulerType:           cfg.SchedulerType,
 		TxBuilderType:           cfg.TxBuilderType,
 		WalletAddr:              cfg.WalletAddr,
-		RoundLifetime:           cfg.RoundLifetime,
-		UnilateralExitDelay:     cfg.UnilateralExitDelay,
+		RoundLifetime:           common.Locktime{Type: lifetimeType, Value: uint32(cfg.RoundLifetime)},
+		UnilateralExitDelay:     common.Locktime{Type: unilateralExitType, Value: uint32(cfg.UnilateralExitDelay)},
 		EsploraURL:              cfg.EsploraURL,
 		NeutrinoPeer:            cfg.NeutrinoPeer,
 		BitcoindRpcUser:         cfg.BitcoindRpcUser,
@@ -79,7 +90,7 @@ func mainAction(_ *cli.Context) error {
 		BitcoindRpcHost:         cfg.BitcoindRpcHost,
 		BitcoindZMQBlock:        cfg.BitcoindZMQBlock,
 		BitcoindZMQTx:           cfg.BitcoindZMQTx,
-		BoardingExitDelay:       cfg.BoardingExitDelay,
+		BoardingExitDelay:       common.Locktime{Type: boardingExitType, Value: uint32(cfg.BoardingExitDelay)},
 		UnlockerType:            cfg.UnlockerType,
 		UnlockerFilePath:        cfg.UnlockerFilePath,
 		UnlockerPassword:        cfg.UnlockerPassword,

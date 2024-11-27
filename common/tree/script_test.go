@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/txscript"
@@ -19,7 +20,7 @@ func TestRoundTripCSV(t *testing.T) {
 		MultisigClosure: tree.MultisigClosure{
 			PubKeys: []*secp256k1.PublicKey{seckey.PubKey()},
 		},
-		Seconds: 1024,
+		Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 1024},
 	}
 
 	leaf, err := csvSig.Script()
@@ -31,7 +32,7 @@ func TestRoundTripCSV(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, valid)
 
-	require.Equal(t, csvSig.Seconds, cl.Seconds)
+	require.Equal(t, csvSig.Locktime.Value, cl.Locktime.Value)
 }
 
 func TestMultisigClosure(t *testing.T) {
@@ -194,7 +195,7 @@ func TestCSVSigClosure(t *testing.T) {
 			MultisigClosure: tree.MultisigClosure{
 				PubKeys: []*secp256k1.PublicKey{pubkey1},
 			},
-			Seconds: 1024,
+			Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 1024},
 		}
 
 		script, err := csvSig.Script()
@@ -204,7 +205,7 @@ func TestCSVSigClosure(t *testing.T) {
 		valid, err := decodedCSV.Decode(script)
 		require.NoError(t, err)
 		require.True(t, valid)
-		require.Equal(t, uint32(1024), uint32(decodedCSV.Seconds))
+		require.Equal(t, uint32(1024), uint32(decodedCSV.Locktime.Value))
 		require.Equal(t, 1, len(decodedCSV.PubKeys))
 		require.Equal(t,
 			schnorr.SerializePubKey(pubkey1),
@@ -217,7 +218,7 @@ func TestCSVSigClosure(t *testing.T) {
 			MultisigClosure: tree.MultisigClosure{
 				PubKeys: []*secp256k1.PublicKey{pubkey1, pubkey2},
 			},
-			Seconds: 2016, // ~2 weeks
+			Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 512 * 4}, // ~2 weeks
 		}
 
 		script, err := csvSig.Script()
@@ -227,7 +228,7 @@ func TestCSVSigClosure(t *testing.T) {
 		valid, err := decodedCSV.Decode(script)
 		require.NoError(t, err)
 		require.True(t, valid)
-		require.Equal(t, uint32(2016), uint32(decodedCSV.Seconds))
+		require.Equal(t, uint32(512*4), uint32(decodedCSV.Locktime.Value))
 		require.Equal(t, 2, len(decodedCSV.PubKeys))
 		require.Equal(t,
 			schnorr.SerializePubKey(pubkey1),
@@ -265,7 +266,7 @@ func TestCSVSigClosure(t *testing.T) {
 			MultisigClosure: tree.MultisigClosure{
 				PubKeys: []*secp256k1.PublicKey{pubkey1, pubkey2},
 			},
-			Seconds: 1024,
+			Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 1024},
 		}
 		// Should be same as multisig witness size (64 bytes per signature)
 		require.Equal(t, 128, csvSig.WitnessSize())
@@ -276,7 +277,7 @@ func TestCSVSigClosure(t *testing.T) {
 			MultisigClosure: tree.MultisigClosure{
 				PubKeys: []*secp256k1.PublicKey{pubkey1},
 			},
-			Seconds: 65535, // Maximum allowed value
+			Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: common.SECONDS_MAX}, // Maximum allowed value
 		}
 
 		script, err := csvSig.Script()
@@ -286,7 +287,7 @@ func TestCSVSigClosure(t *testing.T) {
 		valid, err := decodedCSV.Decode(script)
 		require.NoError(t, err)
 		require.True(t, valid)
-		require.Equal(t, uint32(65535), uint32(decodedCSV.Seconds))
+		require.Equal(t, uint32(common.SECONDS_MAX), decodedCSV.Locktime.Value)
 	})
 }
 
@@ -416,7 +417,7 @@ func TestCSVSigClosureWitness(t *testing.T) {
 		MultisigClosure: tree.MultisigClosure{
 			PubKeys: []*secp256k1.PublicKey{pub1},
 		},
-		Seconds: 144,
+		Locktime: common.Locktime{Type: common.LocktimeTypeBlock, Value: 144},
 	}
 
 	witness, err := closure.Witness(controlBlock, signatures)

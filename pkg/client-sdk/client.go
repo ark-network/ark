@@ -146,15 +146,25 @@ func (a *arkClient) initWithWallet(
 		return fmt.Errorf("failed to parse server pubkey: %s", err)
 	}
 
+	lifetimeType := common.LocktimeTypeBlock
+	if info.RoundLifetime >= 512 {
+		lifetimeType = common.LocktimeTypeSecond
+	}
+
+	unilateralExitDelayType := common.LocktimeTypeBlock
+	if info.UnilateralExitDelay >= 512 {
+		unilateralExitDelayType = common.LocktimeTypeSecond
+	}
+
 	storeData := types.Config{
 		ServerUrl:                  args.ServerUrl,
 		ServerPubKey:               serverPubkey,
 		WalletType:                 args.Wallet.GetType(),
 		ClientType:                 args.ClientType,
 		Network:                    network,
-		RoundLifetime:              info.RoundLifetime,
+		RoundLifetime:              common.Locktime{Type: lifetimeType, Value: uint32(info.RoundLifetime)},
 		RoundInterval:              info.RoundInterval,
-		UnilateralExitDelay:        info.UnilateralExitDelay,
+		UnilateralExitDelay:        common.Locktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
 		Dust:                       info.Dust,
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 		ForfeitAddress:             info.ForfeitAddress,
@@ -213,15 +223,25 @@ func (a *arkClient) init(
 		return fmt.Errorf("failed to parse server pubkey: %s", err)
 	}
 
+	lifetimeType := common.LocktimeTypeBlock
+	if info.RoundLifetime >= 512 {
+		lifetimeType = common.LocktimeTypeSecond
+	}
+
+	unilateralExitDelayType := common.LocktimeTypeBlock
+	if info.UnilateralExitDelay >= 512 {
+		unilateralExitDelayType = common.LocktimeTypeSecond
+	}
+
 	cfgData := types.Config{
 		ServerUrl:                  args.ServerUrl,
 		ServerPubKey:               serverPubkey,
 		WalletType:                 args.WalletType,
 		ClientType:                 args.ClientType,
 		Network:                    network,
-		RoundLifetime:              info.RoundLifetime,
+		RoundLifetime:              common.Locktime{Type: lifetimeType, Value: uint32(info.RoundLifetime)},
 		RoundInterval:              info.RoundInterval,
-		UnilateralExitDelay:        info.UnilateralExitDelay,
+		UnilateralExitDelay:        common.Locktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
 		Dust:                       info.Dust,
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 		ExplorerURL:                args.ExplorerURL,
@@ -347,8 +367,8 @@ func getWalletStore(storeType, datadir string) (walletstore.WalletStore, error) 
 	}
 }
 
-func getCreatedAtFromExpiry(roundLifetime int64, expiry time.Time) time.Time {
-	return expiry.Add(-time.Duration(roundLifetime) * time.Second)
+func getCreatedAtFromExpiry(roundLifetime common.Locktime, expiry time.Time) time.Time {
+	return expiry.Add(-time.Duration(roundLifetime.Seconds()) * time.Second)
 }
 
 func filterByOutpoints(vtxos []client.Vtxo, outpoints []client.Outpoint) []client.Vtxo {

@@ -65,9 +65,9 @@ type Config struct {
 	SchedulerType           string
 	TxBuilderType           string
 	WalletAddr              string
-	RoundLifetime           int64
-	UnilateralExitDelay     int64
-	BoardingExitDelay       int64
+	RoundLifetime           common.Locktime
+	UnilateralExitDelay     common.Locktime
+	BoardingExitDelay       common.Locktime
 	NostrDefaultRelays      []string
 	NoteUriPrefix           string
 	MarketHourStartTime     time.Time
@@ -119,18 +119,18 @@ func (c *Config) Validate() error {
 	if !supportedNetworks.supports(c.Network.Name) {
 		return fmt.Errorf("invalid network, must be one of: %s", supportedNetworks)
 	}
-	if c.RoundLifetime < minAllowedSequence {
+	if c.RoundLifetime.Type == common.LocktimeTypeBlock {
 		if c.SchedulerType != "block" {
 			return fmt.Errorf("scheduler type must be block if round lifetime is expressed in blocks")
 		}
-	} else {
+	} else { // seconds
 		if c.SchedulerType != "gocron" {
 			return fmt.Errorf("scheduler type must be gocron if round lifetime is expressed in seconds")
 		}
 
 		// round life time must be a multiple of 512 if expressed in seconds
-		if c.RoundLifetime%minAllowedSequence != 0 {
-			c.RoundLifetime -= c.RoundLifetime % minAllowedSequence
+		if c.RoundLifetime.Value%minAllowedSequence != 0 {
+			c.RoundLifetime.Value -= c.RoundLifetime.Value % minAllowedSequence
 			log.Infof(
 				"round lifetime must be a multiple of %d, rounded to %d",
 				minAllowedSequence, c.RoundLifetime,
@@ -138,28 +138,28 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	if c.UnilateralExitDelay < minAllowedSequence {
+	if c.UnilateralExitDelay.Type == common.LocktimeTypeBlock {
 		return fmt.Errorf(
 			"invalid unilateral exit delay, must at least %d", minAllowedSequence,
 		)
 	}
 
-	if c.BoardingExitDelay < minAllowedSequence {
+	if c.BoardingExitDelay.Type == common.LocktimeTypeBlock {
 		return fmt.Errorf(
 			"invalid boarding exit delay, must at least %d", minAllowedSequence,
 		)
 	}
 
-	if c.UnilateralExitDelay%minAllowedSequence != 0 {
-		c.UnilateralExitDelay -= c.UnilateralExitDelay % minAllowedSequence
+	if c.UnilateralExitDelay.Value%minAllowedSequence != 0 {
+		c.UnilateralExitDelay.Value -= c.UnilateralExitDelay.Value % minAllowedSequence
 		log.Infof(
 			"unilateral exit delay must be a multiple of %d, rounded to %d",
 			minAllowedSequence, c.UnilateralExitDelay,
 		)
 	}
 
-	if c.BoardingExitDelay%minAllowedSequence != 0 {
-		c.BoardingExitDelay -= c.BoardingExitDelay % minAllowedSequence
+	if c.BoardingExitDelay.Value%minAllowedSequence != 0 {
+		c.BoardingExitDelay.Value -= c.BoardingExitDelay.Value % minAllowedSequence
 		log.Infof(
 			"boarding exit delay must be a multiple of %d, rounded to %d",
 			minAllowedSequence, c.BoardingExitDelay,
@@ -384,7 +384,7 @@ func (c *Config) appService() error {
 
 func (c *Config) adminService() error {
 	unit := ports.UnixTime
-	if c.RoundLifetime < minAllowedSequence {
+	if c.RoundLifetime.Value < minAllowedSequence {
 		unit = ports.BlockHeight
 	}
 

@@ -33,10 +33,10 @@ const marketHourDelta = 5 * time.Minute
 type covenantlessService struct {
 	network             common.Network
 	pubkey              *secp256k1.PublicKey
-	roundLifetime       int64
+	roundLifetime       common.Locktime
 	roundInterval       int64
-	unilateralExitDelay int64
-	boardingExitDelay   int64
+	unilateralExitDelay common.Locktime
+	boardingExitDelay   common.Locktime
 
 	nostrDefaultRelays []string
 
@@ -61,7 +61,8 @@ type covenantlessService struct {
 
 func NewCovenantlessService(
 	network common.Network,
-	roundInterval, roundLifetime, unilateralExitDelay, boardingExitDelay int64,
+	roundInterval int64,
+	roundLifetime, unilateralExitDelay, boardingExitDelay common.Locktime,
 	nostrDefaultRelays []string,
 	walletSvc ports.WalletService, repoManager ports.RepoManager,
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
@@ -439,7 +440,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 func (s *covenantlessService) GetBoardingAddress(
 	ctx context.Context, userPubkey *secp256k1.PublicKey,
 ) (address string, scripts []string, err error) {
-	vtxoScript := bitcointree.NewDefaultVtxoScript(s.pubkey, userPubkey, uint(s.boardingExitDelay))
+	vtxoScript := bitcointree.NewDefaultVtxoScript(s.pubkey, userPubkey, s.boardingExitDelay)
 
 	tapKey, _, err := vtxoScript.TapTree()
 	if err != nil {
@@ -546,7 +547,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 				}
 
 				// if the exit path is available, forbid registering the boarding utxo
-				if blocktime+int64(exitDelay) < now {
+				if blocktime+exitDelay.Seconds() < now {
 					return "", fmt.Errorf("tx %s expired", input.Txid)
 				}
 
@@ -634,7 +635,7 @@ func (s *covenantlessService) newBoardingInput(tx wire.MsgTx, input ports.Input)
 		return nil, fmt.Errorf("descriptor does not match script in transaction output")
 	}
 
-	if err := boardingScript.Validate(s.pubkey, uint(s.unilateralExitDelay)); err != nil {
+	if err := boardingScript.Validate(s.pubkey, s.unilateralExitDelay); err != nil {
 		return nil, err
 	}
 
@@ -755,8 +756,8 @@ func (s *covenantlessService) GetInfo(ctx context.Context) (*ServiceInfo, error)
 
 	return &ServiceInfo{
 		PubKey:              pubkey,
-		RoundLifetime:       s.roundLifetime,
-		UnilateralExitDelay: s.unilateralExitDelay,
+		RoundLifetime:       int64(s.roundLifetime.Value),
+		UnilateralExitDelay: int64(s.unilateralExitDelay.Value),
 		RoundInterval:       s.roundInterval,
 		Network:             s.network.Name,
 		Dust:                dust,
@@ -1064,7 +1065,7 @@ func (s *covenantlessService) startFinalization() {
 
 		sweepClosure := tree.CSVSigClosure{
 			MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{s.pubkey}},
-			Seconds:         uint(s.roundLifetime),
+			Locktime:        s.roundLifetime,
 		}
 
 		sweepScript, err := sweepClosure.Script()
@@ -1561,7 +1562,7 @@ func (s *covenantlessService) scheduleSweepVtxosForRound(round *domain.Round) {
 		return
 	}
 
-	expirationTimestamp := s.sweeper.scheduler.AddNow(s.roundLifetime)
+	expirationTimestamp := s.sweeper.scheduler.AddNow(int64(s.roundLifetime.Value))
 
 	if err := s.sweeper.schedule(expirationTimestamp, round.Txid, round.VtxoTree); err != nil {
 		log.WithError(err).Warn("failed to schedule sweep tx")

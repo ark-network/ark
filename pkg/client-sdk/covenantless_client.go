@@ -1703,7 +1703,7 @@ func (a *covenantlessArkClient) handleRoundSigningStarted(
 ) (signerSession bitcointree.SignerSession, err error) {
 	sweepClosure := tree.CSVSigClosure{
 		MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{a.ServerPubKey}},
-		Seconds:         uint(a.RoundLifetime),
+		Locktime:        a.RoundLifetime,
 	}
 
 	script, err := sweepClosure.Script()
@@ -2199,7 +2199,7 @@ func (a *covenantlessArkClient) coinSelectOnchain(
 		}
 
 		for _, utxo := range utxos {
-			u := utxo.ToUtxo(uint(a.UnilateralExitDelay), addr.Tapscripts)
+			u := utxo.ToUtxo(&a.UnilateralExitDelay, addr.Tapscripts)
 			if u.SpendableAt.Before(now) {
 				fetchedUtxos = append(fetchedUtxos, u)
 			}

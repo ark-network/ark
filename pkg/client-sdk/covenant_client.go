@@ -450,12 +450,14 @@ func (a *covenantArkClient) UnilateralRedeem(ctx context.Context) error {
 
 	redeemBranches, err := a.getRedeemBranches(ctx, vtxos)
 	if err != nil {
+		fmt.Println("1")
 		return err
 	}
 
 	for _, branch := range redeemBranches {
 		branchTxs, err := branch.RedeemPath()
 		if err != nil {
+			fmt.Println("2")
 			return err
 		}
 
@@ -1571,7 +1573,7 @@ func (a *covenantArkClient) coinSelectOnchain(
 		}
 
 		for _, utxo := range utxos {
-			u := utxo.ToUtxo(uint(a.UnilateralExitDelay), addr.Tapscripts)
+			u := utxo.ToUtxo(&a.UnilateralExitDelay, addr.Tapscripts)
 			if u.SpendableAt.Before(now) {
 				fetchedUtxos = append(fetchedUtxos, u)
 			}
@@ -1719,7 +1721,7 @@ func (a *covenantArkClient) getBoardingTxs(ctx context.Context) (transactions []
 }
 
 func vtxosToTxsCovenant(
-	roundLifetime int64, spendable, spent []client.Vtxo, boardingTxs []types.Transaction,
+	roundLifetime common.Locktime, spendable, spent []client.Vtxo, boardingTxs []types.Transaction,
 ) ([]types.Transaction, error) {
 	transactions := make([]types.Transaction, 0)
 	unconfirmedBoardingTxs := make([]types.Transaction, 0)
