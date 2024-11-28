@@ -401,7 +401,10 @@ func (a *restClient) SubmitRedeemTx(
 	resp, err := a.svc.ArkServiceSubmitRedeemTx(
 		ark_service.NewArkServiceSubmitRedeemTxParams().WithBody(req),
 	)
-	return resp.Payload.SignedRedeemTx, err
+	if err != nil {
+		return "", err
+	}
+	return resp.Payload.SignedRedeemTx, nil
 }
 
 func (a *restClient) GetRound(
