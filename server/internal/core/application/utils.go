@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
@@ -357,12 +358,12 @@ func findSweepableOutputs(
 					}
 				}
 
-				var lifetime int64
+				var lifetime *common.Locktime
 				lifetime, sweepInput, err = txbuilder.GetSweepInput(node)
 				if err != nil {
 					return nil, err
 				}
-				expirationTime = blocktimeCache[node.ParentTxid] + lifetime
+				expirationTime = blocktimeCache[node.ParentTxid] + int64(lifetime.Value)
 			} else {
 				// cache the blocktime for future use
 				if schedulerUnit == ports.BlockHeight {

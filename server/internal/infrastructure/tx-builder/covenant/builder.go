@@ -28,15 +28,15 @@ import (
 type txBuilder struct {
 	wallet            ports.WalletService
 	net               common.Network
-	roundLifetime     int64 // in seconds
-	boardingExitDelay int64 // in seconds
+	roundLifetime     common.Locktime
+	boardingExitDelay common.Locktime
 }
 
 func NewTxBuilder(
 	wallet ports.WalletService,
 	net common.Network,
-	roundLifetime int64,
-	boardingExitDelay int64,
+	roundLifetime common.Locktime,
+	boardingExitDelay common.Locktime,
 ) ports.TxBuilder {
 	return &txBuilder{wallet, net, roundLifetime, boardingExitDelay}
 }
@@ -158,6 +158,11 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 
 	validForfeitTxs := make(map[domain.VtxoKey][]string)
 
+	blocktimestamp, err := b.wallet.GetCurrentBlockTime(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
 	for vtxoKey, psets := range forfeitTxsPsets {
 		if len(psets) == 0 {
 			continue
@@ -202,13 +207,36 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 
 		vtxoTapscript := firstForfeit.Inputs[1].TapLeafScript[0]
 
+		// verify the forfeit closure script
+		closure, err := tree.DecodeClosure(vtxoTapscript.Script)
+		if err != nil {
+			return nil, err
+		}
+
+		switch c := closure.(type) {
+		case *tree.CLTVMultisigClosure:
+			switch c.Locktime.Type {
+			case common.LocktimeTypeBlock:
+				if c.Locktime.Value > blocktimestamp.Height {
+					return nil, fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block height)", c.Locktime.Value, blocktimestamp.Height)
+				}
+			case common.LocktimeTypeSecond:
+				if c.Locktime.Value > uint32(blocktimestamp.Time) {
+					return nil, fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block time)", c.Locktime.Value, blocktimestamp.Time)
+				}
+			}
+		case *tree.MultisigClosure:
+		default:
+			return nil, fmt.Errorf("invalid forfeit closure script")
+		}
+
 		minFee, err := common.ComputeForfeitTxFee(
 			minRate,
 			&waddrmgr.Tapscript{
 				RevealedScript: vtxoTapscript.Script,
 				ControlBlock:   &vtxoTapscript.ControlBlock.ControlBlock,
 			},
-			64*2,
+			closure.WitnessSize(),
 			txscript.GetScriptClass(forfeitScript),
 		)
 		if err != nil {
@@ -418,14 +446,14 @@ func (b *txBuilder) BuildRoundTx(
 	return
 }
 
-func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime int64, sweepInput ports.SweepInput, err error) {
+func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime *common.Locktime, sweepInput ports.SweepInput, err error) {
 	pset, err := psetv2.NewPsetFromBase64(node.Tx)
 	if err != nil {
-		return -1, nil, err
+		return nil, nil, err
 	}
 
 	if len(pset.Inputs) != 1 {
-		return -1, nil, fmt.Errorf("invalid node pset, expect 1 input, got %d", len(pset.Inputs))
+		return nil, nil, fmt.Errorf("invalid node pset, expect 1 input, got %d", len(pset.Inputs))
 	}
 
 	// if the tx is not onchain, it means that the input is an existing shared output
@@ -435,22 +463,22 @@ func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime int64, sweepInput po
 
 	sweepLeaf, lifetime, err := extractSweepLeaf(input)
 	if err != nil {
-		return -1, nil, err
+		return nil, nil, err
 	}
 
 	txhex, err := b.wallet.GetTransaction(context.Background(), txid)
 	if err != nil {
-		return -1, nil, err
+		return nil, nil, err
 	}
 
 	tx, err := transaction.NewTxFromHex(txhex)
 	if err != nil {
-		return -1, nil, err
+		return nil, nil, err
 	}
 
 	inputValue, err := elementsutil.ValueFromBytes(tx.Outputs[index].Value)
 	if err != nil {
-		return -1, nil, err
+		return nil, nil, err
 	}
 
 	sweepInput = &sweepLiquidInput{
@@ -506,6 +534,10 @@ func (b *txBuilder) verifyTapscriptPartialSigs(pset *psetv2.Pset) (bool, error) 
 				keys[hex.EncodeToString(schnorr.SerializePubKey(key))] = false
 			}
 		case *tree.CSVSigClosure:
+			for _, key := range c.PubKeys {
+				keys[hex.EncodeToString(schnorr.SerializePubKey(key))] = false
+			}
+		case *tree.CLTVMultisigClosure:
 			for _, key := range c.PubKeys {
 				keys[hex.EncodeToString(schnorr.SerializePubKey(key))] = false
 			}
@@ -1123,24 +1155,24 @@ func (b *txBuilder) onchainNetwork() *network.Network {
 	}
 }
 
-func extractSweepLeaf(input psetv2.Input) (sweepLeaf *psetv2.TapLeafScript, lifetime int64, err error) {
+func extractSweepLeaf(input psetv2.Input) (sweepLeaf *psetv2.TapLeafScript, lifetime *common.Locktime, err error) {
 	for _, leaf := range input.TapLeafScript {
 		closure := &tree.CSVSigClosure{}
 		valid, err := closure.Decode(leaf.Script)
 		if err != nil {
-			return nil, 0, err
+			return nil, nil, err
 		}
-		if valid && closure.Seconds > uint(lifetime) {
+		if valid && (lifetime == nil || lifetime.LessThan(closure.Locktime)) {
 			sweepLeaf = &leaf
-			lifetime = int64(closure.Seconds)
+			lifetime = &closure.Locktime
 		}
 	}
 
 	if sweepLeaf == nil {
-		return nil, 0, fmt.Errorf("sweep leaf not found")
+		return nil, nil, fmt.Errorf("sweep leaf not found")
 	}
 
-	return sweepLeaf, lifetime, nil
+	return
 }
 
 type sweepLiquidInput struct {

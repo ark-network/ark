@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -18,8 +19,9 @@ import (
 const (
 	minRelayFee = 1000
 	exitDelay   = 512
-	lifetime    = 1024
 )
+
+var lifetime = common.Locktime{Type: common.LocktimeTypeBlock, Value: 144}
 
 var testTxid, _ = chainhash.NewHashFromStr("49f8664acc899be91902f8ade781b7eeb9cbe22bdd9efbc36e56195de21bcd12")
 
@@ -63,7 +65,7 @@ func TestRoundTripSignTree(t *testing.T) {
 
 		sweepClosure := &tree.CSVSigClosure{
 			MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{server.PubKey()}},
-			Seconds:         uint(lifetime),
+			Locktime:        lifetime,
 		}
 
 		sweepScript, err := sweepClosure.Script()

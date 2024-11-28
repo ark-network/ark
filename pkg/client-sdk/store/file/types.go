@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"strconv"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -44,14 +45,25 @@ func (d storeData) decode() types.Config {
 	buf, _ := hex.DecodeString(d.ServerPubKey)
 	serverPubkey, _ := secp256k1.ParsePubKey(buf)
 	explorerURL := d.ExplorerURL
+
+	lifetimeType := common.LocktimeTypeBlock
+	if roundLifetime >= 512 {
+		lifetimeType = common.LocktimeTypeSecond
+	}
+
+	unilateralExitDelayType := common.LocktimeTypeBlock
+	if unilateralExitDelay >= 512 {
+		unilateralExitDelayType = common.LocktimeTypeSecond
+	}
+
 	return types.Config{
 		ServerUrl:                  d.ServerUrl,
 		ServerPubKey:               serverPubkey,
 		WalletType:                 d.WalletType,
 		ClientType:                 d.ClientType,
 		Network:                    network,
-		RoundLifetime:              int64(roundLifetime),
-		UnilateralExitDelay:        int64(unilateralExitDelay),
+		RoundLifetime:              common.Locktime{Type: lifetimeType, Value: uint32(roundLifetime)},
+		UnilateralExitDelay:        common.Locktime{Type: unilateralExitDelayType, Value: uint32(unilateralExitDelay)},
 		RoundInterval:              int64(roundInterval),
 		Dust:                       uint64(dust),
 		BoardingDescriptorTemplate: d.BoardingDescriptorTemplate,

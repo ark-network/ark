@@ -21,9 +21,9 @@ type Config struct {
 	WalletType                 string
 	ClientType                 string
 	Network                    common.Network
-	RoundLifetime              int64
+	RoundLifetime              common.Locktime
 	RoundInterval              int64
-	UnilateralExitDelay        int64
+	UnilateralExitDelay        common.Locktime
 	Dust                       uint64
 	BoardingDescriptorTemplate string
 	ExplorerURL                string
@@ -110,7 +110,7 @@ type Utxo struct {
 	VOut        uint32
 	Amount      uint64
 	Asset       string // liquid only
-	Delay       uint
+	Delay       common.Locktime
 	SpendableAt time.Time
 	CreatedAt   time.Time
 	Tapscripts  []string

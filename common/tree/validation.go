@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -72,7 +73,7 @@ func UnspendableKey() *secp256k1.PublicKey {
 // - input and output amounts
 func ValidateVtxoTree(
 	tree VtxoTree, roundTx string, serverPubkey *secp256k1.PublicKey,
-	roundLifetime int64,
+	roundLifetime common.Locktime,
 ) error {
 	roundTransaction, err := psetv2.NewPsetFromBase64(roundTx)
 	if err != nil {
@@ -148,7 +149,7 @@ func ValidateVtxoTree(
 func validateNodeTransaction(
 	node Node, tree VtxoTree,
 	expectedInternalKey, expectedServerPubkey *secp256k1.PublicKey,
-	expectedSequence int64,
+	expectedLifetime common.Locktime,
 ) error {
 	if node.Tx == "" {
 		return ErrNodeTxEmpty
@@ -242,7 +243,8 @@ func validateNodeTransaction(
 					schnorr.SerializePubKey(c.MultisigClosure.PubKeys[0]),
 					schnorr.SerializePubKey(expectedServerPubkey),
 				)
-				isSweepDelay := int64(c.Seconds) == expectedSequence
+
+				isSweepDelay := c.Locktime == expectedLifetime
 
 				if isServer && !isSweepDelay {
 					return ErrInvalidSweepSequence

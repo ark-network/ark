@@ -53,7 +53,7 @@ type SpentStatus struct {
 	SpentBy string `json:"txid,omitempty"`
 }
 
-func (e ExplorerUtxo) ToUtxo(delay uint, tapscripts []string) types.Utxo {
+func (e ExplorerUtxo) ToUtxo(delay common.Locktime, tapscripts []string) types.Utxo {
 	return newUtxo(e, delay, tapscripts)
 }
 
@@ -65,7 +65,7 @@ type Explorer interface {
 	GetUtxos(addr string) ([]ExplorerUtxo, error)
 	GetBalance(addr string) (uint64, error)
 	GetRedeemedVtxosBalance(
-		addr string, unilateralExitDelay int64,
+		addr string, unilateralExitDelay common.Locktime,
 	) (uint64, map[int64]uint64, error)
 	GetTxBlockTime(
 		txid string,
@@ -247,7 +247,7 @@ func (e *explorerSvc) GetBalance(addr string) (uint64, error) {
 }
 
 func (e *explorerSvc) GetRedeemedVtxosBalance(
-	addr string, unilateralExitDelay int64,
+	addr string, unilateralExitDelay common.Locktime,
 ) (spendableBalance uint64, lockedBalance map[int64]uint64, err error) {
 	utxos, err := e.GetUtxos(addr)
 	if err != nil {
@@ -262,7 +262,7 @@ func (e *explorerSvc) GetRedeemedVtxosBalance(
 			blocktime = time.Unix(utxo.Status.Blocktime, 0)
 		}
 
-		delay := time.Duration(unilateralExitDelay) * time.Second
+		delay := time.Duration(unilateralExitDelay.Seconds()) * time.Second
 		availableAt := blocktime.Add(delay)
 		if availableAt.After(now) {
 			if _, ok := lockedBalance[availableAt.Unix()]; !ok {
@@ -415,7 +415,7 @@ func parseBitcoinTx(txStr string) (string, string, error) {
 	return txhex, txid, nil
 }
 
-func newUtxo(explorerUtxo ExplorerUtxo, delay uint, tapscripts []string) types.Utxo {
+func newUtxo(explorerUtxo ExplorerUtxo, delay common.Locktime, tapscripts []string) types.Utxo {
 	utxoTime := explorerUtxo.Status.Blocktime
 	createdAt := time.Unix(utxoTime, 0)
 	if utxoTime == 0 {
@@ -429,7 +429,7 @@ func newUtxo(explorerUtxo ExplorerUtxo, delay uint, tapscripts []string) types.U
 		Amount:      explorerUtxo.Amount,
 		Asset:       explorerUtxo.Asset,
 		Delay:       delay,
-		SpendableAt: time.Unix(utxoTime, 0).Add(time.Duration(delay) * time.Second),
+		SpendableAt: time.Unix(utxoTime, 0).Add(time.Duration(delay.Seconds()) * time.Second),
 		CreatedAt:   createdAt,
 		Tapscripts:  tapscripts,
 	}

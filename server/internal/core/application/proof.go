@@ -65,16 +65,17 @@ func (p OwnershipProof) validate(vtxo domain.Vtxo) error {
 }
 
 func decodeForfeitClosure(script []byte) ([]*secp256k1.PublicKey, error) {
-	var forfeit tree.MultisigClosure
-
-	valid, err := forfeit.Decode(script)
+	closure, err := tree.DecodeClosure(script)
 	if err != nil {
 		return nil, err
 	}
 
-	if !valid {
-		return nil, fmt.Errorf("invalid forfeit closure script")
+	switch c := closure.(type) {
+	case *tree.MultisigClosure:
+		return c.PubKeys, nil
+	case *tree.CLTVMultisigClosure:
+		return c.PubKeys, nil
 	}
 
-	return forfeit.PubKeys, nil
+	return nil, fmt.Errorf("invalid forfeit closure script")
 }

@@ -3,6 +3,7 @@ package descriptor_test
 import (
 	"testing"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/descriptor"
 	"github.com/stretchr/testify/require"
 )
@@ -53,7 +54,7 @@ func TestParseTaprootDescriptor(t *testing.T) {
 							},
 						},
 						Second: &descriptor.Older{
-							Timeout: 144,
+							Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 144},
 						},
 					},
 				},
@@ -91,7 +92,7 @@ func TestParseTaprootDescriptor(t *testing.T) {
 							},
 						},
 						First: &descriptor.Older{
-							Timeout: 604672,
+							Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 604672},
 						},
 					},
 				},
@@ -156,7 +157,7 @@ func TestParseTaprootDescriptor(t *testing.T) {
 							},
 						},
 						First: &descriptor.Older{
-							Timeout: 604672,
+							Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 604672},
 						},
 					},
 					&descriptor.And{
@@ -232,7 +233,7 @@ func TestParseTaprootDescriptor(t *testing.T) {
 					},
 					&descriptor.And{
 						First: &descriptor.Older{
-							Timeout: 512,
+							Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 512},
 						},
 						Second: &descriptor.And{
 							First: &descriptor.PK{
@@ -278,7 +279,7 @@ func TestParseTaprootDescriptor(t *testing.T) {
 					},
 					&descriptor.And{
 						First: &descriptor.Older{
-							Timeout: 1024,
+							Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 1024},
 						},
 						Second: &descriptor.And{
 							First: &descriptor.PK{
@@ -299,7 +300,7 @@ func TestParseTaprootDescriptor(t *testing.T) {
 					},
 					&descriptor.And{
 						First: &descriptor.Older{
-							Timeout: 512,
+							Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 512},
 						},
 						Second: &descriptor.PK{
 							Key: descriptor.XOnlyKey{
@@ -311,7 +312,7 @@ func TestParseTaprootDescriptor(t *testing.T) {
 					},
 					&descriptor.And{
 						First: &descriptor.Older{
-							Timeout: 512,
+							Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 512},
 						},
 						Second: &descriptor.And{
 							First: &descriptor.PK{
@@ -393,7 +394,7 @@ func TestCompileDescriptor(t *testing.T) {
 							},
 						},
 						Second: &descriptor.Older{
-							Timeout: 1024,
+							Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 1024},
 						},
 					},
 				},
@@ -464,14 +465,14 @@ func TestParseOlder(t *testing.T) {
 			policy:         "older(512)",
 			expectedScript: "03010040b275",
 			expected: descriptor.Older{
-				Timeout: uint(512),
+				Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 512},
 			},
 		},
 		{
 			policy:         "older(1024)",
 			expectedScript: "03020040b275",
 			expected: descriptor.Older{
-				Timeout: uint(1024),
+				Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 1024},
 			},
 		},
 	}
@@ -506,7 +507,7 @@ func TestParseAnd(t *testing.T) {
 					},
 				},
 				Second: &descriptor.Older{
-					Timeout: 512,
+					Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 512},
 				},
 			},
 		},
@@ -522,7 +523,7 @@ func TestParseAnd(t *testing.T) {
 					},
 				},
 				First: &descriptor.Older{
-					Timeout: 512,
+					Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 512},
 				},
 			},
 		},

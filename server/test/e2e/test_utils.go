@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -46,6 +47,24 @@ func GenerateBlock() error {
 
 	time.Sleep(6 * time.Second)
 	return nil
+}
+
+func GetBlockHeight(isLiquid bool) (uint32, error) {
+	var out string
+	var err error
+	if isLiquid {
+		out, err = RunCommand("nigiri", "rpc", "--liquid", "getblockcount")
+	} else {
+		out, err = RunCommand("nigiri", "rpc", "getblockcount")
+	}
+	if err != nil {
+		return 0, err
+	}
+	height, err := strconv.ParseUint(strings.TrimSpace(out), 10, 32)
+	if err != nil {
+		return 0, err
+	}
+	return uint32(height), nil
 }
 
 func RunDockerExec(container string, arg ...string) (string, error) {

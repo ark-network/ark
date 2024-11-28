@@ -303,6 +303,10 @@ func (m *mockedWallet) VerifyMessageSignature(ctx context.Context, message, sign
 	panic("not implemented")
 }
 
+func (m *mockedWallet) GetCurrentBlockTime(ctx context.Context) (*ports.BlockTimestamp, error) {
+	panic("not implemented")
+}
+
 type mockedInput struct {
 	mock.Mock
 }

@@ -27,12 +27,12 @@ import (
 type txBuilder struct {
 	wallet            ports.WalletService
 	net               common.Network
-	roundLifetime     int64 // in seconds
-	boardingExitDelay int64 // in seconds
+	roundLifetime     common.Locktime
+	boardingExitDelay common.Locktime
 }
 
 func NewTxBuilder(
-	wallet ports.WalletService, net common.Network, roundLifetime, boardingExitDelay int64,
+	wallet ports.WalletService, net common.Network, roundLifetime, boardingExitDelay common.Locktime,
 ) ports.TxBuilder {
 	return &txBuilder{wallet, net, roundLifetime, boardingExitDelay}
 }
@@ -88,6 +88,10 @@ func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, error) {
 				keys[hex.EncodeToString(schnorr.SerializePubKey(key))] = false
 			}
 		case *tree.CSVSigClosure:
+			for _, key := range c.PubKeys {
+				keys[hex.EncodeToString(schnorr.SerializePubKey(key))] = false
+			}
+		case *tree.CLTVMultisigClosure:
 			for _, key := range c.PubKeys {
 				keys[hex.EncodeToString(schnorr.SerializePubKey(key))] = false
 			}
@@ -326,6 +330,11 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 
 	validForfeitTxs := make(map[domain.VtxoKey][]string)
 
+	blocktimestamp, err := b.wallet.GetCurrentBlockTime(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
 	for vtxoKey, ptxs := range forfeitTxsPtxs {
 		if len(ptxs) == 0 {
 			continue
@@ -359,6 +368,30 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 		}
 
 		vtxoTapscript := firstForfeit.Inputs[1].TaprootLeafScript[0]
+
+		// verify the forfeit closure script
+		closure, err := tree.DecodeClosure(vtxoTapscript.Script)
+		if err != nil {
+			return nil, err
+		}
+
+		switch c := closure.(type) {
+		case *tree.CLTVMultisigClosure:
+			switch c.Locktime.Type {
+			case common.LocktimeTypeBlock:
+				if c.Locktime.Value > blocktimestamp.Height {
+					return nil, fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block height)", c.Locktime.Value, blocktimestamp.Height)
+				}
+			case common.LocktimeTypeSecond:
+				if c.Locktime.Value > uint32(blocktimestamp.Time) {
+					return nil, fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block time)", c.Locktime.Value, blocktimestamp.Time)
+				}
+			}
+		case *tree.MultisigClosure:
+		default:
+			return nil, fmt.Errorf("invalid forfeit closure script")
+		}
+
 		ctrlBlock, err := txscript.ParseControlBlock(vtxoTapscript.ControlBlock)
 		if err != nil {
 			return nil, err
@@ -370,7 +403,7 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 				RevealedScript: vtxoTapscript.Script,
 				ControlBlock:   ctrlBlock,
 			},
-			64*2,
+			closure.WitnessSize(),
 			txscript.GetScriptClass(forfeitScript),
 		)
 		if err != nil {
@@ -569,14 +602,14 @@ func (b *txBuilder) BuildRoundTx(
 	return roundTx, vtxoTree, connectorAddress, connectors, nil
 }
 
-func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime int64, sweepInput ports.SweepInput, err error) {
+func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime *common.Locktime, sweepInput ports.SweepInput, err error) {
 	partialTx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
 	if err != nil {
-		return -1, nil, err
+		return nil, nil, err
 	}
 
 	if len(partialTx.Inputs) != 1 {
-		return -1, nil, fmt.Errorf("invalid node pset, expect 1 input, got %d", len(partialTx.Inputs))
+		return nil, nil, fmt.Errorf("invalid node pset, expect 1 input, got %d", len(partialTx.Inputs))
 	}
 
 	input := partialTx.UnsignedTx.TxIn[0]
@@ -585,17 +618,17 @@ func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime int64, sweepInput po
 
 	sweepLeaf, internalKey, lifetime, err := extractSweepLeaf(partialTx.Inputs[0])
 	if err != nil {
-		return -1, nil, err
+		return nil, nil, err
 	}
 
 	txhex, err := b.wallet.GetTransaction(context.Background(), txid.String())
 	if err != nil {
-		return -1, nil, err
+		return nil, nil, err
 	}
 
 	var tx wire.MsgTx
 	if err := tx.Deserialize(hex.NewDecoder(strings.NewReader(txhex))); err != nil {
-		return -1, nil, err
+		return nil, nil, err
 	}
 
 	sweepInput = &sweepBitcoinInput{
@@ -1180,27 +1213,27 @@ func castToOutpoints(inputs []ports.TxInput) []ports.TxOutpoint {
 	return outpoints
 }
 
-func extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.TaprootTapLeafScript, internalKey *secp256k1.PublicKey, lifetime int64, err error) {
+func extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.TaprootTapLeafScript, internalKey *secp256k1.PublicKey, lifetime *common.Locktime, err error) {
 	for _, leaf := range input.TaprootLeafScript {
 		closure := &tree.CSVSigClosure{}
 		valid, err := closure.Decode(leaf.Script)
 		if err != nil {
-			return nil, nil, 0, err
+			return nil, nil, nil, err
 		}
 
-		if valid && closure.Seconds > 0 {
+		if valid && (lifetime == nil || closure.Locktime.LessThan(*lifetime)) {
 			sweepLeaf = leaf
-			lifetime = int64(closure.Seconds)
+			lifetime = &closure.Locktime
 		}
 	}
 
 	internalKey, err = schnorr.ParsePubKey(input.TaprootInternalKey)
 	if err != nil {
-		return nil, nil, 0, err
+		return nil, nil, nil, err
 	}
 
 	if sweepLeaf == nil {
-		return nil, nil, 0, fmt.Errorf("sweep leaf not found")
+		return nil, nil, nil, fmt.Errorf("sweep leaf not found")
 	}
 
 	return sweepLeaf, internalKey, lifetime, nil

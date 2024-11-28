@@ -31,10 +31,10 @@ var (
 type covenantService struct {
 	network             common.Network
 	pubkey              *secp256k1.PublicKey
-	roundLifetime       int64
 	roundInterval       int64
-	unilateralExitDelay int64
-	boardingExitDelay   int64
+	roundLifetime       common.Locktime
+	unilateralExitDelay common.Locktime
+	boardingExitDelay   common.Locktime
 
 	nostrDefaultRelays []string
 
@@ -57,7 +57,8 @@ type covenantService struct {
 
 func NewCovenantService(
 	network common.Network,
-	roundInterval, roundLifetime, unilateralExitDelay, boardingExitDelay int64,
+	roundInterval int64,
+	roundLifetime, unilateralExitDelay, boardingExitDelay common.Locktime,
 	nostrDefaultRelays []string,
 	walletSvc ports.WalletService, repoManager ports.RepoManager,
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
@@ -162,7 +163,7 @@ func (s *covenantService) Stop() {
 }
 
 func (s *covenantService) GetBoardingAddress(ctx context.Context, userPubkey *secp256k1.PublicKey) (string, []string, error) {
-	vtxoScript := tree.NewDefaultVtxoScript(userPubkey, s.pubkey, uint(s.boardingExitDelay))
+	vtxoScript := tree.NewDefaultVtxoScript(userPubkey, s.pubkey, s.boardingExitDelay)
 
 	tapKey, _, err := vtxoScript.TapTree()
 	if err != nil {
@@ -235,7 +236,7 @@ func (s *covenantService) SpendVtxos(ctx context.Context, inputs []ports.Input) 
 				}
 
 				// if the exit path is available, forbid registering the boarding utxo
-				if blocktime+int64(exitDelay) < now {
+				if blocktime+exitDelay.Seconds() < now {
 					return "", fmt.Errorf("tx %s expired", input.Txid)
 				}
 
@@ -332,7 +333,7 @@ func (s *covenantService) newBoardingInput(tx *transaction.Transaction, input po
 		return nil, fmt.Errorf("descriptor does not match script in transaction output")
 	}
 
-	if err := boardingScript.Validate(s.pubkey, uint(s.unilateralExitDelay)); err != nil {
+	if err := boardingScript.Validate(s.pubkey, s.unilateralExitDelay); err != nil {
 		return nil, err
 	}
 
@@ -457,8 +458,8 @@ func (s *covenantService) GetInfo(ctx context.Context) (*ServiceInfo, error) {
 
 	return &ServiceInfo{
 		PubKey:              pubkey,
-		RoundLifetime:       s.roundLifetime,
-		UnilateralExitDelay: s.unilateralExitDelay,
+		RoundLifetime:       int64(s.roundLifetime.Value),
+		UnilateralExitDelay: int64(s.unilateralExitDelay.Value),
 		RoundInterval:       s.roundInterval,
 		Network:             s.network.Name,
 		Dust:                dust,
@@ -1003,7 +1004,7 @@ func (s *covenantService) scheduleSweepVtxosForRound(round *domain.Round) {
 		return
 	}
 
-	expirationTime := s.sweeper.scheduler.AddNow(s.roundLifetime)
+	expirationTime := s.sweeper.scheduler.AddNow(int64(s.roundLifetime.Value))
 
 	if err := s.sweeper.schedule(
 		expirationTime, round.Txid, round.VtxoTree,

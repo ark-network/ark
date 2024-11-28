@@ -3,22 +3,35 @@ package e2e_test
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/bitcointree"
+	"github.com/ark-network/ark/common/tree"
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	grpcclient "github.com/ark-network/ark/pkg/client-sdk/client/grpc"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/redemption"
 	"github.com/ark-network/ark/pkg/client-sdk/store"
+	inmemorystoreconfig "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
 	"github.com/ark-network/ark/pkg/client-sdk/types"
+	singlekeywallet "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey"
+	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store/inmemory"
 	utils "github.com/ark-network/ark/server/test/e2e"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/btcsuite/btcd/btcutil/psbt"
+	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcwallet/waddrmgr"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/nbd-wtf/go-nostr"
 	"github.com/nbd-wtf/go-nostr/nip04"
 	"github.com/stretchr/testify/require"
@@ -409,6 +422,163 @@ func TestRedeemNotes(t *testing.T) {
 
 	_, err = runClarkCommand("redeem-notes", "--notes", note)
 	require.Error(t, err)
+}
+
+func TestSendToCLTVMultisigClosure(t *testing.T) {
+	ctx := context.Background()
+	alice, grpcAlice := setupArkSDK(t)
+	defer grpcAlice.Close()
+
+	bobPrivKey, err := secp256k1.GeneratePrivateKey()
+	require.NoError(t, err)
+
+	configStore, err := inmemorystoreconfig.NewConfigStore()
+	require.NoError(t, err)
+
+	walletStore, err := inmemorystore.NewWalletStore()
+	require.NoError(t, err)
+
+	bobWallet, err := singlekeywallet.NewBitcoinWallet(
+		configStore,
+		walletStore,
+	)
+	require.NoError(t, err)
+
+	_, err = bobWallet.Create(ctx, utils.Password, hex.EncodeToString(bobPrivKey.Serialize()))
+	require.NoError(t, err)
+
+	_, err = bobWallet.Unlock(ctx, utils.Password)
+	require.NoError(t, err)
+
+	bobPubKey := bobPrivKey.PubKey()
+
+	// Fund Alice's account
+	offchainAddr, boardingAddress, err := alice.Receive(ctx)
+	require.NoError(t, err)
+
+	aliceAddr, err := common.DecodeAddress(offchainAddr)
+	require.NoError(t, err)
+
+	_, err = utils.RunCommand("nigiri", "faucet", boardingAddress)
+	require.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+
+	_, err = alice.Settle(ctx)
+	require.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+
+	const cltvBlocks = 10
+	const sendAmount = 10000
+
+	currentHeight, err := utils.GetBlockHeight(false)
+	require.NoError(t, err)
+
+	vtxoScript := bitcointree.TapscriptsVtxoScript{
+		TapscriptsVtxoScript: tree.TapscriptsVtxoScript{
+			Closures: []tree.Closure{
+				&tree.CLTVMultisigClosure{
+					Locktime: common.Locktime{Type: common.LocktimeTypeBlock, Value: currentHeight + cltvBlocks},
+					MultisigClosure: tree.MultisigClosure{
+						PubKeys: []*secp256k1.PublicKey{bobPubKey},
+					},
+				},
+			},
+		},
+	}
+
+	vtxoTapKey, vtxoTapTree, err := vtxoScript.TapTree()
+	require.NoError(t, err)
+
+	closure := vtxoScript.ForfeitClosures()[0]
+
+	bobAddr := common.Address{
+		HRP:        "tark",
+		VtxoTapKey: vtxoTapKey,
+		Server:     aliceAddr.Server,
+	}
+
+	script, err := closure.Script()
+	require.NoError(t, err)
+
+	merkleProof, err := vtxoTapTree.GetTaprootMerkleProof(txscript.NewBaseTapLeaf(script).TapHash())
+	require.NoError(t, err)
+
+	ctrlBlock, err := txscript.ParseControlBlock(merkleProof.ControlBlock)
+	require.NoError(t, err)
+
+	tapscript := &waddrmgr.Tapscript{
+		ControlBlock:   ctrlBlock,
+		RevealedScript: merkleProof.Script,
+	}
+
+	bobAddrStr, err := bobAddr.Encode()
+	require.NoError(t, err)
+
+	redeemTx, err := alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddrStr, sendAmount)})
+	require.NoError(t, err)
+
+	redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
+	require.NoError(t, err)
+
+	var bobOutput *wire.TxOut
+	var bobOutputIndex uint32
+	for i, out := range redeemPtx.UnsignedTx.TxOut {
+		if bytes.Equal(out.PkScript[2:], schnorr.SerializePubKey(bobAddr.VtxoTapKey)) {
+			bobOutput = out
+			bobOutputIndex = uint32(i)
+			break
+		}
+	}
+	require.NotNil(t, bobOutput)
+
+	time.Sleep(2 * time.Second)
+
+	alicePkScript, err := common.P2TRScript(aliceAddr.VtxoTapKey)
+	require.NoError(t, err)
+
+	ptx, err := bitcointree.BuildRedeemTx(
+		[]common.VtxoInput{
+			{
+				Outpoint: &wire.OutPoint{
+					Hash:  redeemPtx.UnsignedTx.TxHash(),
+					Index: bobOutputIndex,
+				},
+				Tapscript:   tapscript,
+				WitnessSize: closure.WitnessSize(),
+				Amount:      bobOutput.Value,
+			},
+		},
+		[]*wire.TxOut{
+			{
+				Value:    bobOutput.Value - 500,
+				PkScript: alicePkScript,
+			},
+		},
+	)
+	require.NoError(t, err)
+
+	signedTx, err := bobWallet.SignTransaction(
+		ctx,
+		explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest),
+		ptx,
+	)
+	require.NoError(t, err)
+
+	// should fail because the tx is not yet valid
+	_, err = grpcAlice.SubmitRedeemTx(ctx, signedTx)
+	require.Error(t, err)
+
+	// Generate blocks to pass the timelock
+	for i := 0; i < cltvBlocks+1; i++ {
+		err = utils.GenerateBlock()
+		require.NoError(t, err)
+		time.Sleep(1 * time.Second)
+	}
+
+	_, err = grpcAlice.SubmitRedeemTx(ctx, signedTx)
+	require.NoError(t, err)
 }
 
 func TestSweep(t *testing.T) {

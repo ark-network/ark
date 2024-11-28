@@ -53,16 +53,25 @@ type MultisigClosure struct {
 }
 
 // CSVSigClosure is a closure that contains a list of public keys and a
-// CHECKSEQUENCEVERIFY + DROP. The witness size is 64 bytes per key, admitting
+// CHECKSEQUENCEVERIFY. The witness size is 64 bytes per key, admitting
 // the sighash type is SIGHASH_DEFAULT.
 type CSVSigClosure struct {
 	MultisigClosure
-	Seconds uint
+	Locktime common.Locktime
+}
+
+// CLTVMultisigClosure is a closure that contains a list of public keys and a
+// CHECKLOCKTIMEVERIFY. The witness size is 64 bytes per key, admitting
+// the sighash type is SIGHASH_DEFAULT.
+type CLTVMultisigClosure struct {
+	MultisigClosure
+	Locktime common.Locktime
 }
 
 func DecodeClosure(script []byte) (Closure, error) {
 	types := []Closure{
 		&CSVSigClosure{},
+		&CLTVMultisigClosure{},
 		&MultisigClosure{},
 		&UnrollClosure{},
 	}
@@ -324,8 +333,13 @@ func (f *CSVSigClosure) WitnessSize() int {
 }
 
 func (d *CSVSigClosure) Script() ([]byte, error) {
+	sequence, err := common.BIP68Sequence(d.Locktime)
+	if err != nil {
+		return nil, err
+	}
+
 	csvScript, err := txscript.NewScriptBuilder().
-		AddInt64(int64(d.Seconds)).
+		AddInt64(int64(sequence)).
 		AddOps([]byte{
 			txscript.OP_CHECKSEQUENCEVERIFY,
 			txscript.OP_DROP,
@@ -360,7 +374,7 @@ func (d *CSVSigClosure) Decode(script []byte) (bool, error) {
 		sequence = sequence[1:]
 	}
 
-	seconds, err := common.BIP68DecodeSequence(sequence)
+	locktime, err := common.BIP68DecodeSequence(sequence)
 	if err != nil {
 		return false, err
 	}
@@ -375,7 +389,7 @@ func (d *CSVSigClosure) Decode(script []byte) (bool, error) {
 		return false, nil
 	}
 
-	d.Seconds = seconds
+	d.Locktime = *locktime
 	d.MultisigClosure = *multisigClosure
 
 	return valid, nil
@@ -665,4 +679,88 @@ func (c *UnrollClosure) Witness(controlBlock []byte, _ map[string][]byte) (wire.
 
 	// UnrollClosure only needs script and control block
 	return wire.TxWitness{script, controlBlock}, nil
+}
+
+func (f *CLTVMultisigClosure) Witness(controlBlock []byte, signatures map[string][]byte) (wire.TxWitness, error) {
+	multisigWitness, err := f.MultisigClosure.Witness(controlBlock, signatures)
+	if err != nil {
+		return nil, err
+	}
+
+	script, err := f.Script()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate script: %w", err)
+	}
+
+	// replace script with cltv script
+	multisigWitness[len(multisigWitness)-2] = script
+
+	return multisigWitness, nil
+}
+
+func (f *CLTVMultisigClosure) WitnessSize() int {
+	return f.MultisigClosure.WitnessSize()
+}
+
+func (d *CLTVMultisigClosure) Script() ([]byte, error) {
+	locktime, err := common.BIP68Sequence(d.Locktime)
+	if err != nil {
+		return nil, err
+	}
+
+	cltvScript, err := txscript.NewScriptBuilder().
+		AddInt64(int64(locktime)).
+		AddOps([]byte{
+			txscript.OP_CHECKLOCKTIMEVERIFY,
+			txscript.OP_DROP,
+		}).
+		Script()
+	if err != nil {
+		return nil, err
+	}
+
+	multisigScript, err := d.MultisigClosure.Script()
+	if err != nil {
+		return nil, err
+	}
+
+	return append(cltvScript, multisigScript...), nil
+}
+
+func (d *CLTVMultisigClosure) Decode(script []byte) (bool, error) {
+	if len(script) == 0 {
+		return false, fmt.Errorf("empty script")
+	}
+
+	cltvIndex := bytes.Index(
+		script, []byte{txscript.OP_CHECKLOCKTIMEVERIFY, txscript.OP_DROP},
+	)
+	if cltvIndex == -1 || cltvIndex == 0 {
+		return false, nil
+	}
+
+	locktime := script[:cltvIndex]
+	if len(locktime) > 1 {
+		locktime = locktime[1:]
+	}
+
+	locktimeValue, err := common.BIP68DecodeSequence(locktime)
+	if err != nil {
+		return false, err
+	}
+
+	multisigClosure := &MultisigClosure{}
+	valid, err := multisigClosure.Decode(script[cltvIndex+2:])
+	if err != nil {
+		return false, err
+	}
+
+	if !valid {
+		return false, nil
+	}
+
+	d.Locktime = *locktimeValue
+	d.MultisigClosure = *multisigClosure
+
+	return valid, nil
 }

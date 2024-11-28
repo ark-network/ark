@@ -284,6 +284,10 @@ func (m *mockedWallet) MainAccountBalance(ctx context.Context) (uint64, uint64, 
 	panic("not implemented")
 }
 
+func (m *mockedWallet) GetCurrentBlockTime(ctx context.Context) (*ports.BlockTimestamp, error) {
+	panic("not implemented")
+}
+
 type mockedInput struct {
 	mock.Mock
 }

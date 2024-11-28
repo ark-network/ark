@@ -10,7 +10,7 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-type VtxoScript common.VtxoScript[bitcoinTapTree, *tree.MultisigClosure, *tree.CSVSigClosure]
+type VtxoScript common.VtxoScript[bitcoinTapTree, tree.Closure]
 
 func ParseVtxoScript(scripts []string) (VtxoScript, error) {
 	types := []VtxoScript{
@@ -26,7 +26,7 @@ func ParseVtxoScript(scripts []string) (VtxoScript, error) {
 	return nil, fmt.Errorf("invalid vtxo scripts: %s", scripts)
 }
 
-func NewDefaultVtxoScript(owner, server *secp256k1.PublicKey, exitDelay uint) VtxoScript {
+func NewDefaultVtxoScript(owner, server *secp256k1.PublicKey, exitDelay common.Locktime) VtxoScript {
 	base := tree.NewDefaultVtxoScript(owner, server, exitDelay)
 
 	return &TapscriptsVtxoScript{*base}

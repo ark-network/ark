@@ -708,7 +708,7 @@ func (a *covenantArkClient) getClaimableBoardingUtxos(ctx context.Context, opts 
 				}
 			}
 
-			u := utxo.ToUtxo(boardingTimeout, addr.Tapscripts)
+			u := utxo.ToUtxo(*boardingTimeout, addr.Tapscripts)
 			if u.SpendableAt.Before(now) {
 				continue
 			}
@@ -1535,7 +1535,7 @@ func (a *covenantArkClient) coinSelectOnchain(
 		}
 
 		for _, utxo := range utxos {
-			u := utxo.ToUtxo(boardingTimeout, addr.Tapscripts)
+			u := utxo.ToUtxo(*boardingTimeout, addr.Tapscripts)
 			if u.SpendableAt.Before(now) {
 				fetchedUtxos = append(fetchedUtxos, u)
 			}
@@ -1571,7 +1571,7 @@ func (a *covenantArkClient) coinSelectOnchain(
 		}
 
 		for _, utxo := range utxos {
-			u := utxo.ToUtxo(uint(a.UnilateralExitDelay), addr.Tapscripts)
+			u := utxo.ToUtxo(a.UnilateralExitDelay, addr.Tapscripts)
 			if u.SpendableAt.Before(now) {
 				fetchedUtxos = append(fetchedUtxos, u)
 			}
@@ -1719,7 +1719,7 @@ func (a *covenantArkClient) getBoardingTxs(ctx context.Context) (transactions []
 }
 
 func vtxosToTxsCovenant(
-	roundLifetime int64, spendable, spent []client.Vtxo, boardingTxs []types.Transaction,
+	roundLifetime common.Locktime, spendable, spent []client.Vtxo, boardingTxs []types.Transaction,
 ) ([]types.Transaction, error) {
 	transactions := make([]types.Transaction, 0)
 	unconfirmedBoardingTxs := make([]types.Transaction, 0)

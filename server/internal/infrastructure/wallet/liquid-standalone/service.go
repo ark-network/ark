@@ -2,8 +2,12 @@ package oceanwallet
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"net/http"
+	"net/url"
 	"strings"
 
 	pb "github.com/ark-network/ark/api-spec/protobuf/gen/ocean/v1"
@@ -26,9 +30,18 @@ type service struct {
 	chVtxos       chan map[string][]ports.VtxoWithValue
 	isListening   bool
 	syncedCh      chan struct{}
+	esploraURL    string
 }
 
-func NewService(addr string) (ports.WalletService, error) {
+type blockInfo struct {
+	Height    int64 `json:"height"`
+	Timestamp int64 `json:"timestamp"`
+}
+
+func NewService(addr string, esploraURL string) (ports.WalletService, error) {
+	if len(esploraURL) == 0 {
+		return nil, fmt.Errorf("missing esplora url")
+	}
 	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, err
@@ -47,6 +60,7 @@ func NewService(addr string) (ports.WalletService, error) {
 		notifyClient:  notifyClient,
 		chVtxos:       chVtxos,
 		syncedCh:      make(chan struct{}),
+		esploraURL:    esploraURL,
 	}
 
 	ctx := context.Background()
@@ -166,6 +180,45 @@ func (s *service) SignMessage(ctx context.Context, message []byte) ([]byte, erro
 
 func (s *service) VerifyMessageSignature(ctx context.Context, message, signature []byte) (bool, error) {
 	return false, errors.New("not implemented")
+}
+
+func (s *service) GetCurrentBlockTime(ctx context.Context) (*ports.BlockTimestamp, error) {
+	tipHashURL, err := url.JoinPath(s.esploraURL, "blocks/tip/hash")
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := http.Get(tipHashURL)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	hash, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	blockURL, err := url.JoinPath(s.esploraURL, "block", string(hash))
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err = http.Get(blockURL)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var blockInfo blockInfo
+	if err := json.NewDecoder(resp.Body).Decode(&blockInfo); err != nil {
+		return nil, err
+	}
+
+	return &ports.BlockTimestamp{
+		Height: uint32(blockInfo.Height),
+		Time:   blockInfo.Timestamp,
+	}, nil
 }
 
 func (s *service) listenToNotifications() {

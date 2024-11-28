@@ -12,7 +12,6 @@ import (
 func BuildRedeemTx(
 	vtxos []common.VtxoInput,
 	outputs []*wire.TxOut,
-	feeAmount int64,
 ) (string, error) {
 	if len(vtxos) <= 0 {
 		return "", fmt.Errorf("missing vtxos")
@@ -48,10 +47,6 @@ func BuildRedeemTx(
 		}
 
 		ins = append(ins, vtxo.Outpoint)
-	}
-
-	if feeAmount >= outputs[len(outputs)-1].Value {
-		return "", fmt.Errorf("redeem tx fee is higher than the amount of the change receiver")
 	}
 
 	sequences := make([]uint32, len(ins))
