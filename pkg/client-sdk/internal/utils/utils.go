@@ -24,12 +24,12 @@ import (
 
 func CoinSelect(
 	boardingUtxos []types.Utxo,
-	vtxos []client.DescriptorVtxo,
+	vtxos []client.TapscriptsVtxo,
 	amount,
 	dust uint64,
 	sortByExpirationTime bool,
-) ([]types.Utxo, []client.DescriptorVtxo, uint64, error) {
-	selected, notSelected := make([]client.DescriptorVtxo, 0), make([]client.DescriptorVtxo, 0)
+) ([]types.Utxo, []client.TapscriptsVtxo, uint64, error) {
+	selected, notSelected := make([]client.TapscriptsVtxo, 0), make([]client.TapscriptsVtxo, 0)
 	selectedBoarding, notSelectedBoarding := make([]types.Utxo, 0), make([]types.Utxo, 0)
 	selectedAmount := uint64(0)
 
@@ -173,11 +173,11 @@ func ToBitcoinNetwork(net common.Network) chaincfg.Params {
 }
 
 func GenerateRandomPrivateKey() (*secp256k1.PrivateKey, error) {
-	privKey, err := btcec.NewPrivateKey()
+	prvkey, err := btcec.NewPrivateKey()
 	if err != nil {
 		return nil, err
 	}
-	return privKey, nil
+	return prvkey, nil
 }
 
 func HashPassword(password []byte) []byte {

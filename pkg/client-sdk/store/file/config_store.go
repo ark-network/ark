@@ -52,14 +52,14 @@ func (s *configStore) GetDatadir() string {
 
 func (s *configStore) AddData(ctx context.Context, data types.Config) error {
 	sd := &storeData{
-		AspUrl:                     data.AspUrl,
-		AspPubkey:                  hex.EncodeToString(data.AspPubkey.SerializeCompressed()),
+		ServerUrl:                  data.ServerUrl,
+		ServerPubKey:               hex.EncodeToString(data.ServerPubKey.SerializeCompressed()),
 		WalletType:                 data.WalletType,
 		ClientType:                 data.ClientType,
 		Network:                    data.Network.Name,
-		RoundLifetime:              fmt.Sprintf("%d", data.RoundLifetime),
+		RoundLifetime:              fmt.Sprintf("%d", data.RoundLifetime.Value),
 		RoundInterval:              fmt.Sprintf("%d", data.RoundInterval),
-		UnilateralExitDelay:        fmt.Sprintf("%d", data.UnilateralExitDelay),
+		UnilateralExitDelay:        fmt.Sprintf("%d", data.UnilateralExitDelay.Value),
 		Dust:                       fmt.Sprintf("%d", data.Dust),
 		BoardingDescriptorTemplate: data.BoardingDescriptorTemplate,
 		ExplorerURL:                data.ExplorerURL,

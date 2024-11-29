@@ -24,12 +24,13 @@ type ArkClient interface {
 	CollaborativeRedeem(
 		ctx context.Context, addr string, amount uint64, withExpiryCoinselect bool,
 	) (string, error)
-	SendAsync(ctx context.Context, withExpiryCoinselect bool, receivers []Receiver) (string, error)
 	Settle(ctx context.Context) (string, error)
 	ListVtxos(ctx context.Context) (spendable, spent []client.Vtxo, err error)
 	Dump(ctx context.Context) (seed string, err error)
 	GetTransactionHistory(ctx context.Context) ([]types.Transaction, error)
 	GetTransactionEventChannel() chan types.TransactionEvent
+	RedeemNotes(ctx context.Context, notes []string) (string, error)
+	SetNostrNotificationRecipient(ctx context.Context, nostrRecipient string) error
 	Stop() error
 }
 

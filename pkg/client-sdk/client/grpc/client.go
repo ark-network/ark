@@ -23,26 +23,26 @@ import (
 type grpcClient struct {
 	conn      *grpc.ClientConn
 	svc       arkv1.ArkServiceClient
-	treeCache *utils.Cache[tree.CongestionTree]
+	treeCache *utils.Cache[tree.VtxoTree]
 }
 
-func NewClient(aspUrl string) (client.ASPClient, error) {
-	if len(aspUrl) <= 0 {
-		return nil, fmt.Errorf("missing asp url")
+func NewClient(serverUrl string) (client.TransportClient, error) {
+	if len(serverUrl) <= 0 {
+		return nil, fmt.Errorf("missing server url")
 	}
 
 	creds := insecure.NewCredentials()
 	port := 80
-	if strings.HasPrefix(aspUrl, "https://") {
-		aspUrl = strings.TrimPrefix(aspUrl, "https://")
+	if strings.HasPrefix(serverUrl, "https://") {
+		serverUrl = strings.TrimPrefix(serverUrl, "https://")
 		creds = credentials.NewTLS(nil)
 		port = 443
 	}
-	if !strings.Contains(aspUrl, ":") {
-		aspUrl = fmt.Sprintf("%s:%d", aspUrl, port)
+	if !strings.Contains(serverUrl, ":") {
+		serverUrl = fmt.Sprintf("%s:%d", serverUrl, port)
 	}
 	conn, err := grpc.NewClient(
-		aspUrl,
+		serverUrl,
 		grpc.WithTransportCredentials(creds),
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(8*1024*1024)),
 	)
@@ -51,7 +51,7 @@ func NewClient(aspUrl string) (client.ASPClient, error) {
 	}
 
 	svc := arkv1.NewArkServiceClient(conn)
-	treeCache := utils.NewCache[tree.CongestionTree]()
+	treeCache := utils.NewCache[tree.VtxoTree]()
 
 	return &grpcClient{conn, svc, treeCache}, nil
 }
@@ -63,7 +63,7 @@ func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
 		return nil, err
 	}
 	return &client.Info{
-		Pubkey:                     resp.GetPubkey(),
+		PubKey:                     resp.GetPubkey(),
 		RoundLifetime:              resp.GetRoundLifetime(),
 		UnilateralExitDelay:        resp.GetUnilateralExitDelay(),
 		RoundInterval:              resp.GetRoundInterval(),
@@ -88,28 +88,44 @@ func (a *grpcClient) GetBoardingAddress(
 }
 
 func (a *grpcClient) RegisterInputsForNextRound(
-	ctx context.Context, inputs []client.Input, ephemeralPublicKey string,
+	ctx context.Context, inputs []client.Input, ephemeralPubkey string,
 ) (string, error) {
 	req := &arkv1.RegisterInputsForNextRoundRequest{
 		Inputs: ins(inputs).toProto(),
 	}
-	if len(ephemeralPublicKey) > 0 {
-		req.EphemeralPubkey = &ephemeralPublicKey
+	if len(ephemeralPubkey) > 0 {
+		req.EphemeralPubkey = &ephemeralPubkey
 	}
 
 	resp, err := a.svc.RegisterInputsForNextRound(ctx, req)
 	if err != nil {
 		return "", err
 	}
-	return resp.GetId(), nil
+	return resp.GetRequestId(), nil
+}
+
+func (a *grpcClient) RegisterNotesForNextRound(
+	ctx context.Context, notes []string, ephemeralKey string,
+) (string, error) {
+	req := &arkv1.RegisterInputsForNextRoundRequest{
+		Notes: notes,
+	}
+	if len(ephemeralKey) > 0 {
+		req.EphemeralPubkey = &ephemeralKey
+	}
+	resp, err := a.svc.RegisterInputsForNextRound(ctx, req)
+	if err != nil {
+		return "", err
+	}
+	return resp.GetRequestId(), nil
 }
 
 func (a *grpcClient) RegisterOutputsForNextRound(
-	ctx context.Context, paymentID string, outputs []client.Output,
+	ctx context.Context, requestID string, outputs []client.Output,
 ) error {
 	req := &arkv1.RegisterOutputsForNextRoundRequest{
-		Id:      paymentID,
-		Outputs: outs(outputs).toProto(),
+		RequestId: requestID,
+		Outputs:   outs(outputs).toProto(),
 	}
 	_, err := a.svc.RegisterOutputsForNextRound(ctx, req)
 	return err
@@ -179,7 +195,7 @@ func (a *grpcClient) SubmitSignedForfeitTxs(
 }
 
 func (a *grpcClient) GetEventStream(
-	ctx context.Context, paymentID string,
+	ctx context.Context, requestID string,
 ) (<-chan client.RoundEventChannel, func(), error) {
 	req := &arkv1.GetEventStreamRequest{}
 	stream, err := a.svc.GetEventStream(ctx, req)
@@ -224,37 +240,28 @@ func (a *grpcClient) GetEventStream(
 }
 
 func (a *grpcClient) Ping(
-	ctx context.Context, paymentID string,
+	ctx context.Context, requestID string,
 ) error {
 	req := &arkv1.PingRequest{
-		PaymentId: paymentID,
+		RequestId: requestID,
 	}
 	_, err := a.svc.Ping(ctx, req)
 	return err
 }
 
-func (a *grpcClient) CreatePayment(
-	ctx context.Context, inputs []client.AsyncPaymentInput, outputs []client.Output,
+func (a *grpcClient) SubmitRedeemTx(
+	ctx context.Context, redeemTx string,
 ) (string, error) {
-	req := &arkv1.CreatePaymentRequest{
-		Inputs:  asyncIns(inputs).toProto(),
-		Outputs: outs(outputs).toProto(),
+	req := &arkv1.SubmitRedeemTxRequest{
+		RedeemTx: redeemTx,
 	}
-	resp, err := a.svc.CreatePayment(ctx, req)
+
+	resp, err := a.svc.SubmitRedeemTx(ctx, req)
 	if err != nil {
 		return "", err
 	}
-	return resp.SignedRedeemTx, nil
-}
 
-func (a *grpcClient) CompletePayment(
-	ctx context.Context, redeemTx string,
-) error {
-	req := &arkv1.CompletePaymentRequest{
-		SignedRedeemTx: redeemTx,
-	}
-	_, err := a.svc.CompletePayment(ctx, req)
-	return err
+	return resp.GetSignedRedeemTx(), nil
 }
 
 func (a *grpcClient) GetRound(
@@ -378,6 +385,45 @@ func (c *grpcClient) GetTransactionsStream(
 	}
 
 	return eventCh, closeFn, nil
+}
+
+func (a *grpcClient) SetNostrRecipient(
+	ctx context.Context, nostrRecipient string, vtxos []client.SignedVtxoOutpoint,
+) error {
+	req := &arkv1.SetNostrRecipientRequest{
+		NostrRecipient: nostrRecipient,
+		Vtxos:          signedVtxosToProto(vtxos),
+	}
+	_, err := a.svc.SetNostrRecipient(ctx, req)
+	return err
+}
+
+func (a *grpcClient) DeleteNostrRecipient(
+	ctx context.Context, vtxos []client.SignedVtxoOutpoint,
+) error {
+	req := &arkv1.DeleteNostrRecipientRequest{
+		Vtxos: signedVtxosToProto(vtxos),
+	}
+	_, err := a.svc.DeleteNostrRecipient(ctx, req)
+	return err
+}
+
+func signedVtxosToProto(vtxos []client.SignedVtxoOutpoint) []*arkv1.SignedVtxoOutpoint {
+	protoVtxos := make([]*arkv1.SignedVtxoOutpoint, len(vtxos))
+	for i, v := range vtxos {
+		protoVtxos[i] = &arkv1.SignedVtxoOutpoint{
+			Outpoint: &arkv1.Outpoint{
+				Txid: v.Outpoint.Txid,
+				Vout: uint32(v.Outpoint.VOut),
+			},
+			Proof: &arkv1.OwnershipProof{
+				ControlBlock: v.Proof.ControlBlock,
+				Script:       v.Proof.Script,
+				Signature:    v.Proof.Signature,
+			},
+		}
+	}
+	return protoVtxos
 }
 
 func outpointsFromProto(protoOutpoints []*arkv1.Outpoint) []client.Outpoint {

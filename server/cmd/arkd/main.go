@@ -59,29 +59,47 @@ func mainAction(_ *cli.Context) error {
 		TLSExtraDomains: cfg.TLSExtraDomains,
 	}
 
+	lifetimeType, unilateralExitType, boardingExitType := common.LocktimeTypeBlock, common.LocktimeTypeBlock, common.LocktimeTypeBlock
+	if cfg.RoundLifetime >= 512 {
+		lifetimeType = common.LocktimeTypeSecond
+	}
+	if cfg.UnilateralExitDelay >= 512 {
+		unilateralExitType = common.LocktimeTypeSecond
+	}
+	if cfg.BoardingExitDelay >= 512 {
+		boardingExitType = common.LocktimeTypeSecond
+	}
+
 	appConfig := &appconfig.Config{
-		EventDbType:           cfg.EventDbType,
-		DbType:                cfg.DbType,
-		DbDir:                 cfg.DbDir,
-		DbMigrationPath:       cfg.DbMigrationPath,
-		EventDbDir:            cfg.DbDir,
-		RoundInterval:         cfg.RoundInterval,
-		Network:               cfg.Network,
-		SchedulerType:         cfg.SchedulerType,
-		TxBuilderType:         cfg.TxBuilderType,
-		BlockchainScannerType: cfg.BlockchainScannerType,
-		WalletAddr:            cfg.WalletAddr,
-		RoundLifetime:         cfg.RoundLifetime,
-		UnilateralExitDelay:   cfg.UnilateralExitDelay,
-		EsploraURL:            cfg.EsploraURL,
-		NeutrinoPeer:          cfg.NeutrinoPeer,
-		BitcoindRpcUser:       cfg.BitcoindRpcUser,
-		BitcoindRpcPass:       cfg.BitcoindRpcPass,
-		BitcoindRpcHost:       cfg.BitcoindRpcHost,
-		BoardingExitDelay:     cfg.BoardingExitDelay,
-		UnlockerType:          cfg.UnlockerType,
-		UnlockerFilePath:      cfg.UnlockerFilePath,
-		UnlockerPassword:      cfg.UnlockerPassword,
+		EventDbType:             cfg.EventDbType,
+		DbType:                  cfg.DbType,
+		DbDir:                   cfg.DbDir,
+		DbMigrationPath:         cfg.DbMigrationPath,
+		EventDbDir:              cfg.DbDir,
+		RoundInterval:           cfg.RoundInterval,
+		Network:                 cfg.Network,
+		SchedulerType:           cfg.SchedulerType,
+		TxBuilderType:           cfg.TxBuilderType,
+		WalletAddr:              cfg.WalletAddr,
+		RoundLifetime:           common.Locktime{Type: lifetimeType, Value: uint32(cfg.RoundLifetime)},
+		UnilateralExitDelay:     common.Locktime{Type: unilateralExitType, Value: uint32(cfg.UnilateralExitDelay)},
+		EsploraURL:              cfg.EsploraURL,
+		NeutrinoPeer:            cfg.NeutrinoPeer,
+		BitcoindRpcUser:         cfg.BitcoindRpcUser,
+		BitcoindRpcPass:         cfg.BitcoindRpcPass,
+		BitcoindRpcHost:         cfg.BitcoindRpcHost,
+		BitcoindZMQBlock:        cfg.BitcoindZMQBlock,
+		BitcoindZMQTx:           cfg.BitcoindZMQTx,
+		BoardingExitDelay:       common.Locktime{Type: boardingExitType, Value: uint32(cfg.BoardingExitDelay)},
+		UnlockerType:            cfg.UnlockerType,
+		UnlockerFilePath:        cfg.UnlockerFilePath,
+		UnlockerPassword:        cfg.UnlockerPassword,
+		NostrDefaultRelays:      cfg.NostrDefaultRelays,
+		NoteUriPrefix:           cfg.NoteUriPrefix,
+		MarketHourStartTime:     cfg.MarketHourStartTime,
+		MarketHourEndTime:       cfg.MarketHourEndTime,
+		MarketHourPeriod:        cfg.MarketHourPeriod,
+		MarketHourRoundInterval: cfg.MarketHourRoundInterval,
 	}
 	svc, err := grpcservice.NewService(svcConfig, appConfig)
 	if err != nil {

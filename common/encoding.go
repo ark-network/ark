@@ -8,24 +8,24 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-// Address represents an Ark address with HRP, ASP public key, and VTXO Taproot public key
+// Address represents an Ark address with HRP, server public key, and VTXO Taproot public key
 type Address struct {
 	HRP        string
-	Asp        *secp256k1.PublicKey
+	Server     *secp256k1.PublicKey
 	VtxoTapKey *secp256k1.PublicKey
 }
 
 // Encode converts the address to its bech32m string representation
 func (a *Address) Encode() (string, error) {
-	if a.Asp == nil {
-		return "", fmt.Errorf("missing asp public key")
+	if a.Server == nil {
+		return "", fmt.Errorf("missing server public key")
 	}
 	if a.VtxoTapKey == nil {
 		return "", fmt.Errorf("missing vtxo tap public key")
 	}
 
 	combinedKey := append(
-		schnorr.SerializePubKey(a.Asp), schnorr.SerializePubKey(a.VtxoTapKey)...,
+		schnorr.SerializePubKey(a.Server), schnorr.SerializePubKey(a.VtxoTapKey)...,
 	)
 	grp, err := bech32.ConvertBits(combinedKey, 8, 5, true)
 	if err != nil {
@@ -52,19 +52,19 @@ func DecodeAddress(addr string) (*Address, error) {
 		return nil, err
 	}
 
-	aKey, err := schnorr.ParsePubKey(grp[:32])
+	serverKey, err := schnorr.ParsePubKey(grp[:32])
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse public key: %s", err)
 	}
 
 	vtxoKey, err := schnorr.ParsePubKey(grp[32:])
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse asp public key: %s", err)
+		return nil, fmt.Errorf("failed to parse server public key: %s", err)
 	}
 
 	return &Address{
 		HRP:        prefix,
-		Asp:        aKey,
+		Server:     serverKey,
 		VtxoTapKey: vtxoKey,
 	}, nil
 }

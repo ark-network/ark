@@ -176,7 +176,7 @@ func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 		arkv1.RegisterArkServiceServer(grpcServer, appHandler)
 	}
 
-	adminHandler := handlers.NewAdminHandler(s.appConfig.AdminService(), appSvc)
+	adminHandler := handlers.NewAdminHandler(s.appConfig.AdminService(), appSvc, s.appConfig.NoteUriPrefix)
 	arkv1.RegisterAdminServiceServer(grpcServer, adminHandler)
 
 	walletHandler := handlers.NewWalletHandler(s.appConfig.WalletService())

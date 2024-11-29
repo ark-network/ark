@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	aspUrl     = "localhost:6060"
+	serverUrl  = "localhost:6060"
 	clientType = arksdk.GrpcClient
 	password   = "password"
 	walletType = arksdk.SingleKeyWallet
@@ -110,7 +110,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Infof("payment completed in round tx: %s", txid)
+	log.Infof("transaction completed in round: %s", txid)
 
 	if err := generateBlock(); err != nil {
 		log.Fatal(err)
@@ -155,7 +155,7 @@ func setupArkClient(wallet string) (arksdk.ArkClient, error) {
 	if err := client.Init(context.Background(), arksdk.InitArgs{
 		WalletType: walletType,
 		ClientType: clientType,
-		AspUrl:     aspUrl,
+		ServerUrl:  serverUrl,
 		Password:   password,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to initialize wallet: %s", err)

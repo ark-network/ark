@@ -57,7 +57,7 @@ type arkClient struct {
 	wallet   wallet.WalletService
 	store    types.Store
 	explorer explorer.Explorer
-	client   client.ASPClient
+	client   client.TransportClient
 
 	txStreamCtxCancel context.CancelFunc
 }
@@ -119,7 +119,7 @@ func (a *arkClient) initWithWallet(
 	}
 
 	clientSvc, err := getClient(
-		supportedClients, args.ClientType, args.AspUrl,
+		supportedClients, args.ClientType, args.ServerUrl,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to setup client: %s", err)
@@ -127,7 +127,7 @@ func (a *arkClient) initWithWallet(
 
 	info, err := clientSvc.GetInfo(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to connect to asp: %s", err)
+		return fmt.Errorf("failed to connect to server: %s", err)
 	}
 
 	explorerSvc, err := getExplorer(args.ExplorerURL, info.Network)
@@ -137,24 +137,34 @@ func (a *arkClient) initWithWallet(
 
 	network := utils.NetworkFromString(info.Network)
 
-	buf, err := hex.DecodeString(info.Pubkey)
+	buf, err := hex.DecodeString(info.PubKey)
 	if err != nil {
-		return fmt.Errorf("failed to parse asp pubkey: %s", err)
+		return fmt.Errorf("failed to parse server pubkey: %s", err)
 	}
-	aspPubkey, err := secp256k1.ParsePubKey(buf)
+	serverPubkey, err := secp256k1.ParsePubKey(buf)
 	if err != nil {
-		return fmt.Errorf("failed to parse asp pubkey: %s", err)
+		return fmt.Errorf("failed to parse server pubkey: %s", err)
+	}
+
+	lifetimeType := common.LocktimeTypeBlock
+	if info.RoundLifetime >= 512 {
+		lifetimeType = common.LocktimeTypeSecond
+	}
+
+	unilateralExitDelayType := common.LocktimeTypeBlock
+	if info.UnilateralExitDelay >= 512 {
+		unilateralExitDelayType = common.LocktimeTypeSecond
 	}
 
 	storeData := types.Config{
-		AspUrl:                     args.AspUrl,
-		AspPubkey:                  aspPubkey,
+		ServerUrl:                  args.ServerUrl,
+		ServerPubKey:               serverPubkey,
 		WalletType:                 args.Wallet.GetType(),
 		ClientType:                 args.ClientType,
 		Network:                    network,
-		RoundLifetime:              info.RoundLifetime,
+		RoundLifetime:              common.Locktime{Type: lifetimeType, Value: uint32(info.RoundLifetime)},
 		RoundInterval:              info.RoundInterval,
-		UnilateralExitDelay:        info.UnilateralExitDelay,
+		UnilateralExitDelay:        common.Locktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
 		Dust:                       info.Dust,
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 		ForfeitAddress:             info.ForfeitAddress,
@@ -186,7 +196,7 @@ func (a *arkClient) init(
 	}
 
 	clientSvc, err := getClient(
-		supportedClients, args.ClientType, args.AspUrl,
+		supportedClients, args.ClientType, args.ServerUrl,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to setup client: %s", err)
@@ -194,7 +204,7 @@ func (a *arkClient) init(
 
 	info, err := clientSvc.GetInfo(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to connect to asp: %s", err)
+		return fmt.Errorf("failed to connect to server: %s", err)
 	}
 
 	explorerSvc, err := getExplorer(args.ExplorerURL, info.Network)
@@ -204,24 +214,34 @@ func (a *arkClient) init(
 
 	network := utils.NetworkFromString(info.Network)
 
-	buf, err := hex.DecodeString(info.Pubkey)
+	buf, err := hex.DecodeString(info.PubKey)
 	if err != nil {
-		return fmt.Errorf("failed to parse asp pubkey: %s", err)
+		return fmt.Errorf("failed to parse server pubkey: %s", err)
 	}
-	aspPubkey, err := secp256k1.ParsePubKey(buf)
+	serverPubkey, err := secp256k1.ParsePubKey(buf)
 	if err != nil {
-		return fmt.Errorf("failed to parse asp pubkey: %s", err)
+		return fmt.Errorf("failed to parse server pubkey: %s", err)
+	}
+
+	lifetimeType := common.LocktimeTypeBlock
+	if info.RoundLifetime >= 512 {
+		lifetimeType = common.LocktimeTypeSecond
+	}
+
+	unilateralExitDelayType := common.LocktimeTypeBlock
+	if info.UnilateralExitDelay >= 512 {
+		unilateralExitDelayType = common.LocktimeTypeSecond
 	}
 
 	cfgData := types.Config{
-		AspUrl:                     args.AspUrl,
-		AspPubkey:                  aspPubkey,
+		ServerUrl:                  args.ServerUrl,
+		ServerPubKey:               serverPubkey,
 		WalletType:                 args.WalletType,
 		ClientType:                 args.ClientType,
 		Network:                    network,
-		RoundLifetime:              info.RoundLifetime,
+		RoundLifetime:              common.Locktime{Type: lifetimeType, Value: uint32(info.RoundLifetime)},
 		RoundInterval:              info.RoundInterval,
-		UnilateralExitDelay:        info.UnilateralExitDelay,
+		UnilateralExitDelay:        common.Locktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
 		Dust:                       info.Dust,
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 		ExplorerURL:                args.ExplorerURL,
@@ -252,17 +272,17 @@ func (a *arkClient) init(
 }
 
 func (a *arkClient) ping(
-	ctx context.Context, paymentID string,
+	ctx context.Context, requestID string,
 ) func() {
 	ticker := time.NewTicker(5 * time.Second)
 
 	go func(t *time.Ticker) {
-		if err := a.client.Ping(ctx, paymentID); err != nil {
-			logrus.Warnf("failed to ping asp: %s", err)
+		if err := a.client.Ping(ctx, requestID); err != nil {
+			logrus.Warnf("failed to ping server: %s", err)
 		}
 		for range t.C {
-			if err := a.client.Ping(ctx, paymentID); err != nil {
-				logrus.Warnf("failed to ping asp: %s", err)
+			if err := a.client.Ping(ctx, requestID); err != nil {
+				logrus.Warnf("failed to ping server: %s", err)
 			}
 		}
 	}(ticker)
@@ -292,10 +312,10 @@ func (a *arkClient) ListVtxos(
 }
 
 func getClient(
-	supportedClients utils.SupportedType[utils.ClientFactory], clientType, aspUrl string,
-) (client.ASPClient, error) {
+	supportedClients utils.SupportedType[utils.ClientFactory], clientType, serverUrl string,
+) (client.TransportClient, error) {
 	factory := supportedClients[clientType]
-	return factory(aspUrl)
+	return factory(serverUrl)
 }
 
 func getExplorer(explorerURL, network string) (explorer.Explorer, error) {
@@ -347,8 +367,8 @@ func getWalletStore(storeType, datadir string) (walletstore.WalletStore, error) 
 	}
 }
 
-func getCreatedAtFromExpiry(roundLifetime int64, expiry time.Time) time.Time {
-	return expiry.Add(-time.Duration(roundLifetime) * time.Second)
+func getCreatedAtFromExpiry(roundLifetime common.Locktime, expiry time.Time) time.Time {
+	return expiry.Add(-time.Duration(roundLifetime.Seconds()) * time.Second)
 }
 
 func filterByOutpoints(vtxos []client.Vtxo, outpoints []client.Outpoint) []client.Vtxo {

@@ -3,6 +3,8 @@ syntax = "proto3";
 package ark.v1;
 
 import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
 
 service AdminService {
   rpc GetScheduledSweep(GetScheduledSweepRequest) returns (GetScheduledSweepResponse) {
@@ -21,6 +23,23 @@ service AdminService {
       body: "*"
     };
   } 
+  rpc CreateNote(CreateNoteRequest) returns (CreateNoteResponse) {
+    option (google.api.http) = {
+      post: "/v1/admin/note"
+      body: "*"
+    };
+  }
+  rpc GetMarketHourConfig(GetMarketHourConfigRequest) returns (GetMarketHourConfigResponse) {
+    option (google.api.http) = {
+      get: "/v1/admin/market-hour"
+    };
+  }
+  rpc UpdateMarketHourConfig(UpdateMarketHourConfigRequest) returns (UpdateMarketHourConfigResponse) {
+    option (google.api.http) = {
+      post: "/v1/admin/market-hour"
+      body: "*"
+    };
+  }
 }
 
 message GetScheduledSweepRequest {}
@@ -63,4 +82,32 @@ message GetRoundsRequest {
 
 message GetRoundsResponse {
   repeated string rounds = 1;
+}
+
+message CreateNoteRequest {
+  uint32 amount = 1;
+  uint32 quantity = 2;
+}
+
+message CreateNoteResponse {
+  repeated string notes = 1;
+}
+
+message GetMarketHourConfigRequest {}
+
+message GetMarketHourConfigResponse {
+    MarketHourConfig config = 1;
+}
+
+message UpdateMarketHourConfigRequest {
+    MarketHourConfig config = 1;
+}
+
+message UpdateMarketHourConfigResponse {}
+
+message MarketHourConfig {
+  google.protobuf.Timestamp start_time = 1;
+  google.protobuf.Timestamp end_time = 2;
+  google.protobuf.Duration period = 3;
+  google.protobuf.Duration round_interval = 4;
 }

@@ -26,7 +26,7 @@ const (
 	pubkey2  = "33ffb3dee353b1a9ebe4ced64b946238d0a4ac364f275d771da6ad2445d07ae0"
 )
 
-var congestionTree = [][]tree.Node{
+var vtxoTree = [][]tree.Node{
 	{
 		{
 			Txid:       randomString(32),
@@ -105,14 +105,14 @@ func TestService(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc, err := db.NewService(tt.config)
 			require.NoError(t, err)
-			require.NotNil(t, svc)
+			defer svc.Close()
 
 			testRoundEventRepository(t, svc)
 			testRoundRepository(t, svc)
 			testVtxoRepository(t, svc)
-
-			time.Sleep(5 * time.Second)
-			svc.Close()
+			testNoteRepository(t, svc)
+			testEntityRepository(t, svc)
+			testMarketHourRepository(t, svc)
 		})
 	}
 }
@@ -148,17 +148,17 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 						Timestamp: 1701190270,
 					},
 					domain.RoundFinalizationStarted{
-						Id:             "1ea610ff-bf3e-4068-9bfd-b6c3f553467e",
-						CongestionTree: congestionTree,
-						Connectors:     []string{emptyPtx, emptyPtx},
-						RoundTx:        emptyTx,
+						Id:         "1ea610ff-bf3e-4068-9bfd-b6c3f553467e",
+						VtxoTree:   vtxoTree,
+						Connectors: []string{emptyPtx, emptyPtx},
+						RoundTx:    emptyTx,
 					},
 				},
 				handler: func(round *domain.Round) {
 					require.NotNil(t, round)
 					require.Len(t, round.Events(), 2)
-					require.Len(t, round.CongestionTree, 3)
-					require.Equal(t, round.CongestionTree.NumberOfNodes(), 7)
+					require.Len(t, round.VtxoTree, 3)
+					require.Equal(t, round.VtxoTree.NumberOfNodes(), 7)
 					require.Len(t, round.Connectors, 2)
 				},
 			},
@@ -170,10 +170,10 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 						Timestamp: 1701190270,
 					},
 					domain.RoundFinalizationStarted{
-						Id:             "7578231e-428d-45ae-aaa4-e62c77ad5cec",
-						CongestionTree: congestionTree,
-						Connectors:     []string{emptyPtx, emptyPtx},
-						RoundTx:        emptyTx,
+						Id:         "7578231e-428d-45ae-aaa4-e62c77ad5cec",
+						VtxoTree:   vtxoTree,
+						Connectors: []string{emptyPtx, emptyPtx},
+						RoundTx:    emptyTx,
 					},
 					domain.RoundFinalized{
 						Id:         "7578231e-428d-45ae-aaa4-e62c77ad5cec",
@@ -237,9 +237,9 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 		require.Condition(t, roundsMatch(*round, *roundById))
 
 		newEvents := []domain.RoundEvent{
-			domain.PaymentsRegistered{
+			domain.TxRequestsRegistered{
 				Id: roundId,
-				Payments: []domain.Payment{
+				TxRequests: []domain.TxRequest{
 					{
 						Id: uuid.New().String(),
 						Inputs: []domain.Vtxo{
@@ -250,12 +250,12 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 								},
 								RoundTxid: randomString(32),
 								ExpireAt:  7980322,
-								Pubkey:    randomString(32),
+								PubKey:    randomString(32),
 								Amount:    300,
 							},
 						},
 						Receivers: []domain.Receiver{{
-							Pubkey: randomString(32),
+							PubKey: randomString(32),
 							Amount: 300,
 						}},
 					},
@@ -270,17 +270,17 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 								},
 								RoundTxid: randomString(32),
 								ExpireAt:  7980322,
-								Pubkey:    randomString(32),
+								PubKey:    randomString(32),
 								Amount:    600,
 							},
 						},
 						Receivers: []domain.Receiver{
 							{
-								Pubkey: randomString(32),
+								PubKey: randomString(32),
 								Amount: 400,
 							},
 							{
-								Pubkey: randomString(32),
+								PubKey: randomString(32),
 								Amount: 200,
 							},
 						},
@@ -288,16 +288,16 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 				},
 			},
 			domain.RoundFinalizationStarted{
-				Id:             roundId,
-				CongestionTree: congestionTree,
-				Connectors:     []string{emptyPtx, emptyPtx},
-				RoundTx:        emptyTx,
+				Id:         roundId,
+				VtxoTree:   vtxoTree,
+				Connectors: []string{emptyPtx, emptyPtx},
+				RoundTx:    emptyTx,
 			},
 		}
 		events = append(events, newEvents...)
 		updatedRound := domain.NewRoundFromEvents(events)
-		for _, pay := range updatedRound.Payments {
-			err = svc.Vtxos().AddVtxos(ctx, pay.Inputs)
+		for _, request := range updatedRound.TxRequests {
+			err = svc.Vtxos().AddVtxos(ctx, request.Inputs)
 			require.NoError(t, err)
 		}
 
@@ -346,7 +346,7 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 					Txid: randomString(32),
 					VOut: 0,
 				},
-				Pubkey: pubkey,
+				PubKey: pubkey,
 				Amount: 1000,
 			},
 			{
@@ -354,7 +354,7 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 					Txid: randomString(32),
 					VOut: 1,
 				},
-				Pubkey: pubkey,
+				PubKey: pubkey,
 				Amount: 2000,
 			},
 		}
@@ -363,7 +363,7 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 				Txid: randomString(32),
 				VOut: 1,
 			},
-			Pubkey: pubkey2,
+			PubKey: pubkey2,
 			Amount: 2000,
 		})
 
@@ -426,6 +426,132 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 	})
 }
 
+func testNoteRepository(t *testing.T, svc ports.RepoManager) {
+	t.Run("test_note_repository", func(t *testing.T) {
+		ctx := context.Background()
+
+		err := svc.Notes().Add(ctx, 1)
+		require.NoError(t, err)
+
+		err = svc.Notes().Add(ctx, 1099200322)
+		require.NoError(t, err)
+
+		contains, err := svc.Notes().Contains(ctx, 1)
+		require.NoError(t, err)
+		require.True(t, contains)
+
+		contains, err = svc.Notes().Contains(ctx, 1099200322)
+		require.NoError(t, err)
+		require.True(t, contains)
+
+		contains, err = svc.Notes().Contains(ctx, 456)
+		require.NoError(t, err)
+		require.False(t, contains)
+
+		err = svc.Notes().Add(ctx, 1)
+		require.Error(t, err)
+	})
+}
+
+func testEntityRepository(t *testing.T, svc ports.RepoManager) {
+	t.Run("test_entity_repository", func(t *testing.T) {
+		ctx := context.Background()
+
+		vtxoKey := domain.VtxoKey{
+			Txid: randomString(32),
+			VOut: 0,
+		}
+
+		entity := domain.Entity{
+			NostrRecipient: "test",
+		}
+
+		// add
+		err := svc.Entities().Add(ctx, entity, []domain.VtxoKey{vtxoKey})
+		require.NoError(t, err)
+
+		gotEntities, err := svc.Entities().Get(ctx, vtxoKey)
+		require.NoError(t, err)
+		require.NotNil(t, gotEntities)
+		require.Equal(t, entity, gotEntities[0])
+
+		// add another entity
+		entity2 := domain.Entity{
+			NostrRecipient: "test2",
+		}
+
+		err = svc.Entities().Add(ctx, entity2, []domain.VtxoKey{vtxoKey})
+		require.NoError(t, err)
+
+		// if nostrkey is the same, it should not be added
+		err = svc.Entities().Add(ctx, entity2, []domain.VtxoKey{vtxoKey})
+		require.NoError(t, err)
+
+		gotEntities, err = svc.Entities().Get(ctx, vtxoKey)
+		require.NoError(t, err)
+		require.NotNil(t, gotEntities)
+		require.Contains(t, gotEntities, entity)
+		require.Contains(t, gotEntities, entity2)
+		require.Len(t, gotEntities, 2)
+
+		// delete
+		err = svc.Entities().Delete(ctx, []domain.VtxoKey{vtxoKey})
+		require.NoError(t, err)
+
+		gotEntities, err = svc.Entities().Get(ctx, vtxoKey)
+		require.Error(t, err)
+		require.Nil(t, gotEntities)
+	})
+}
+
+func testMarketHourRepository(t *testing.T, svc ports.RepoManager) {
+	t.Run("test_market_hour_repository", func(t *testing.T) {
+		ctx := context.Background()
+		repo := svc.MarketHourRepo()
+		defer repo.Close()
+
+		marketHour, err := repo.Get(ctx)
+		require.NoError(t, err)
+		require.Nil(t, marketHour)
+
+		now := time.Now().Truncate(time.Second)
+		expected := domain.MarketHour{
+			StartTime:     now,
+			Period:        time.Duration(3) * time.Hour,
+			RoundInterval: time.Duration(20) * time.Second,
+			UpdatedAt:     now,
+		}
+
+		err = repo.Upsert(ctx, expected)
+		require.NoError(t, err)
+
+		got, err := repo.Get(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, got)
+		assertMarketHourEqual(t, expected, *got)
+
+		expected.Period = time.Duration(4) * time.Hour
+		expected.RoundInterval = time.Duration(40) * time.Second
+		expected.UpdatedAt = now.Add(100 * time.Second)
+
+		err = repo.Upsert(ctx, expected)
+		require.NoError(t, err)
+
+		got, err = repo.Get(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, got)
+		assertMarketHourEqual(t, expected, *got)
+	})
+}
+
+func assertMarketHourEqual(t *testing.T, expected, actual domain.MarketHour) {
+	assert.True(t, expected.StartTime.Equal(actual.StartTime), "StartTime not equal")
+	assert.Equal(t, expected.Period, actual.Period, "Period not equal")
+	assert.Equal(t, expected.RoundInterval, actual.RoundInterval, "RoundInterval not equal")
+	assert.True(t, expected.UpdatedAt.Equal(actual.UpdatedAt), "UpdatedAt not equal")
+	assert.True(t, expected.EndTime.Equal(actual.EndTime), "EndTime not equal")
+}
+
 func roundsMatch(expected, got domain.Round) assert.Comparison {
 	return func() bool {
 		if expected.Id != got.Id {
@@ -441,8 +567,8 @@ func roundsMatch(expected, got domain.Round) assert.Comparison {
 			return false
 		}
 
-		for k, v := range expected.Payments {
-			gotValue, ok := got.Payments[k]
+		for k, v := range expected.TxRequests {
+			gotValue, ok := got.TxRequests[k]
 			if !ok {
 				return false
 			}
@@ -486,7 +612,7 @@ func roundsMatch(expected, got domain.Round) assert.Comparison {
 			}
 		}
 
-		if !reflect.DeepEqual(expected.CongestionTree, got.CongestionTree) {
+		if !reflect.DeepEqual(expected.VtxoTree, got.VtxoTree) {
 			return false
 		}
 

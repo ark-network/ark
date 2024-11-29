@@ -11,7 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const tipHeightEndpoit = "/blocks/tip/height"
+const tipHeightEndpoint = "/blocks/tip/height"
 
 type service struct {
 	tipURL string
@@ -25,7 +25,7 @@ func NewScheduler(esploraURL string) (ports.SchedulerService, error) {
 		return nil, fmt.Errorf("esplora URL is required")
 	}
 
-	tipURL, err := url.JoinPath(esploraURL, tipHeightEndpoit)
+	tipURL, err := url.JoinPath(esploraURL, tipHeightEndpoint)
 	if err != nil {
 		return nil, err
 	}

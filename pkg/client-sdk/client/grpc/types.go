@@ -86,10 +86,10 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 		}
 
 		return client.RoundSigningStartedEvent{
-			ID:                  ee.GetId(),
-			UnsignedTree:        treeFromProto{ee.GetUnsignedVtxoTree()}.parse(),
-			CosignersPublicKeys: pubkeys,
-			UnsignedRoundTx:     ee.GetUnsignedRoundTx(),
+			ID:               ee.GetId(),
+			UnsignedTree:     treeFromProto{ee.GetUnsignedVtxoTree()}.parse(),
+			CosignersPubKeys: pubkeys,
+			UnsignedRoundTx:  ee.GetUnsignedRoundTx(),
 		}, nil
 	}
 
@@ -120,10 +120,10 @@ func (v vtxo) toVtxo() client.Vtxo {
 		Amount:    v.GetAmount(),
 		RoundTxid: v.GetRoundTxid(),
 		ExpiresAt: time.Unix(v.GetExpireAt(), 0),
-		IsOOR:     v.GetIsOor(),
+		IsPending: v.GetIsPending(),
 		RedeemTx:  v.GetRedeemTx(),
 		SpentBy:   v.GetSpentBy(),
-		Pubkey:    v.GetPubkey(),
+		PubKey:    v.GetPubkey(),
 		CreatedAt: time.Unix(v.GetCreatedAt(), 0),
 	}
 }
@@ -144,25 +144,12 @@ func toProtoInput(i client.Input) *arkv1.Input {
 			Txid: i.Txid,
 			Vout: i.VOut,
 		},
-		Descriptor_: i.Descriptor,
+		TaprootTree: &arkv1.Input_Tapscripts{
+			Tapscripts: &arkv1.Tapscripts{
+				Scripts: i.Tapscripts,
+			},
+		},
 	}
-}
-
-func toAsyncProtoInput(i client.AsyncPaymentInput) *arkv1.AsyncPaymentInput {
-	return &arkv1.AsyncPaymentInput{
-		Input:           toProtoInput(i.Input),
-		ForfeitLeafHash: i.ForfeitLeafHash.String(),
-	}
-}
-
-type asyncIns []client.AsyncPaymentInput
-
-func (i asyncIns) toProto() []*arkv1.AsyncPaymentInput {
-	list := make([]*arkv1.AsyncPaymentInput, 0, len(i))
-	for _, ii := range i {
-		list = append(list, toAsyncProtoInput(ii))
-	}
-	return list
 }
 
 type ins []client.Input
@@ -179,8 +166,8 @@ type treeFromProto struct {
 	*arkv1.Tree
 }
 
-func (t treeFromProto) parse() tree.CongestionTree {
-	levels := make(tree.CongestionTree, 0, len(t.GetLevels()))
+func (t treeFromProto) parse() tree.VtxoTree {
+	levels := make(tree.VtxoTree, 0, len(t.GetLevels()))
 
 	for _, level := range t.GetLevels() {
 		nodes := make([]tree.Node, 0, len(level.Nodes))

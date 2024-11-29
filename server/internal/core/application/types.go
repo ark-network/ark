@@ -2,50 +2,41 @@ package application
 
 import (
 	"context"
+	"time"
 
+	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
 var (
-	paymentsThreshold = int64(128)
+	txRequestsThreshold = int64(128)
 )
-
-type AsyncPaymentInput struct {
-	ports.Input
-	ForfeitLeafHash chainhash.Hash
-}
 
 type Service interface {
 	Start() error
 	Stop()
+	SpendNotes(ctx context.Context, notes []note.Note) (string, error)
 	SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error)
 	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error
 	SignVtxos(ctx context.Context, forfeitTxs []string) error
 	SignRoundTx(ctx context.Context, roundTx string) error
-	GetRoundByTxid(ctx context.Context, poolTxid string) (*domain.Round, error)
+	GetRoundByTxid(ctx context.Context, roundTxid string) (*domain.Round, error)
 	GetRoundById(ctx context.Context, id string) (*domain.Round, error)
 	GetCurrentRound(ctx context.Context) (*domain.Round, error)
 	GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent
-	UpdatePaymentStatus(ctx context.Context, paymentId string) error
+	UpdateTxRequestStatus(ctx context.Context, requestID string) error
 	ListVtxos(
 		ctx context.Context, address string,
 	) (spendableVtxos, spentVtxos []domain.Vtxo, err error)
 	GetInfo(ctx context.Context) (*ServiceInfo, error)
-	// Async payments
-	CreateAsyncPayment(
-		ctx context.Context, inputs []AsyncPaymentInput, receivers []domain.Receiver,
-	) (string, error)
-	CompleteAsyncPayment(
-		ctx context.Context, redeemTx string,
-	) error
+	SubmitRedeemTx(ctx context.Context, redeemTx string) (string, error)
 	GetBoardingAddress(
 		ctx context.Context, userPubkey *secp256k1.PublicKey,
-	) (address string, descriptor string, err error)
+	) (address string, scripts []string, err error)
 	// Tree signing methods
-	RegisterCosignerPubkey(ctx context.Context, paymentId string, ephemeralPublicKey string) error
+	RegisterCosignerPubkey(ctx context.Context, requestID string, ephemeralPubkey string) error
 	RegisterCosignerNonces(
 		ctx context.Context, roundID string,
 		pubkey *secp256k1.PublicKey, nonces string,
@@ -55,23 +46,39 @@ type Service interface {
 		pubkey *secp256k1.PublicKey, signatures string,
 	) error
 	GetTransactionEventsChannel(ctx context.Context) <-chan TransactionEvent
+	SetNostrRecipient(ctx context.Context, nostrRecipient string, signedVtxoOutpoints []SignedVtxoOutpoint) error
+	DeleteNostrRecipient(ctx context.Context, signedVtxoOutpoints []SignedVtxoOutpoint) error
+	GetMarketHourConfig(ctx context.Context) (*domain.MarketHour, error)
+	UpdateMarketHourConfig(ctx context.Context, marketHourStartTime, marketHourEndTime time.Time, period, roundInterval time.Duration) error
 }
 
 type ServiceInfo struct {
-	PubKey                     string
-	RoundLifetime              int64
-	UnilateralExitDelay        int64
-	RoundInterval              int64
-	Network                    string
-	Dust                       uint64
-	BoardingDescriptorTemplate string
-	ForfeitAddress             string
+	PubKey              string
+	RoundLifetime       int64
+	UnilateralExitDelay int64
+	RoundInterval       int64
+	Network             string
+	Dust                uint64
+	ForfeitAddress      string
+	NextMarketHour      *NextMarketHour
+}
+
+type NextMarketHour struct {
+	StartTime     time.Time
+	EndTime       time.Time
+	Period        time.Duration
+	RoundInterval time.Duration
 }
 
 type WalletStatus struct {
 	IsInitialized bool
 	IsUnlocked    bool
 	IsSynced      bool
+}
+
+type SignedVtxoOutpoint struct {
+	Outpoint domain.VtxoKey
+	Proof    OwnershipProof
 }
 
 type txOutpoint struct {
@@ -99,7 +106,7 @@ type TransactionEvent interface {
 }
 
 type RoundTransactionEvent struct {
-	RoundTxID             string
+	RoundTxid             string
 	SpentVtxos            []domain.VtxoKey
 	SpendableVtxos        []domain.Vtxo
 	ClaimedBoardingInputs []domain.VtxoKey
@@ -110,7 +117,7 @@ func (r RoundTransactionEvent) Type() TransactionEventType {
 }
 
 type RedeemTransactionEvent struct {
-	AsyncTxID      string
+	RedeemTxid     string
 	SpentVtxos     []domain.VtxoKey
 	SpendableVtxos []domain.Vtxo
 }

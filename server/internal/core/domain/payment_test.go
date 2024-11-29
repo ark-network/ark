@@ -16,36 +16,36 @@ var inputs = []domain.Vtxo{
 			Txid: "0000000000000000000000000000000000000000000000000000000000000000",
 			VOut: 0,
 		},
-		Pubkey: pubkey,
+		PubKey: pubkey,
 		Amount: 1000,
 	},
 }
 
-func TestPayment(t *testing.T) {
-	t.Run("new_payment", func(t *testing.T) {
+func TestTxRequest(t *testing.T) {
+	t.Run("new_tx_request", func(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
-			payment, err := domain.NewPayment(inputs)
+			request, err := domain.NewTxRequest(inputs)
 			require.NoError(t, err)
-			require.NotNil(t, payment)
-			require.NotEmpty(t, payment.Id)
-			require.Exactly(t, inputs, payment.Inputs)
-			require.Empty(t, payment.Receivers)
+			require.NotNil(t, request)
+			require.NotEmpty(t, request.Id)
+			require.Exactly(t, inputs, request.Inputs)
+			require.Empty(t, request.Receivers)
 		})
 	})
 
 	t.Run("add_receivers", func(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
-			payment, err := domain.NewPayment(inputs)
+			request, err := domain.NewTxRequest(inputs)
 			require.NoError(t, err)
-			require.NotNil(t, payment)
+			require.NotNil(t, request)
 
-			err = payment.AddReceivers([]domain.Receiver{
+			err = request.AddReceivers([]domain.Receiver{
 				{
-					Pubkey: pubkey,
+					PubKey: pubkey,
 					Amount: 450,
 				},
 				{
-					Pubkey: pubkey,
+					PubKey: pubkey,
 					Amount: 550,
 				},
 			})
@@ -63,12 +63,12 @@ func TestPayment(t *testing.T) {
 				},
 			}
 
-			payment, err := domain.NewPayment(inputs)
+			request, err := domain.NewTxRequest(inputs)
 			require.NoError(t, err)
-			require.NotNil(t, payment)
+			require.NotNil(t, request)
 
 			for _, f := range fixtures {
-				err := payment.AddReceivers(f.receivers)
+				err := request.AddReceivers(f.receivers)
 				require.EqualError(t, err, f.expectedErr)
 			}
 		})

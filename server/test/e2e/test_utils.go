@@ -7,13 +7,19 @@ import (
 	"io"
 	"net/http"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nbd-wtf/go-nostr"
+	"github.com/nbd-wtf/go-nostr/nip19"
 )
 
 const (
 	Password = "password"
+	// #nosec G101
+	NostrTestingSecretKey = "07959d1d2bc6507403449c556585d463a9ca4374eb0ec07b3929088ce6c34a7e"
 )
 
 type ArkBalance struct {
@@ -44,6 +50,29 @@ func GenerateBlock() error {
 
 	time.Sleep(6 * time.Second)
 	return nil
+}
+
+func GetBlockHeight(isLiquid bool) (uint32, error) {
+	var out string
+	var err error
+	if isLiquid {
+		out, err = RunCommand("nigiri", "rpc", "--liquid", "getblockcount")
+	} else {
+		out, err = RunCommand("nigiri", "rpc", "getblockcount")
+	}
+	if err != nil {
+		return 0, err
+	}
+	height, err := strconv.ParseUint(strings.TrimSpace(out), 10, 32)
+	if err != nil {
+		return 0, err
+	}
+	return uint32(height), nil
+}
+
+func RunDockerExec(container string, arg ...string) (string, error) {
+	args := append([]string{"exec", "-t", container}, arg...)
+	return RunCommand("docker", args...)
 }
 
 func RunCommand(name string, arg ...string) (string, error) {
@@ -224,4 +253,23 @@ func SetupServerWalletCovenantless(aspUrl string, initFunding float64) error {
 
 	time.Sleep(5 * time.Second)
 	return nil
+}
+
+// nostr
+// use nak utils https://github.com/fiatjaf/nak
+
+func GetNostrKeys() (secretKey, pubkey string, npub string, err error) {
+	secretKey = NostrTestingSecretKey
+
+	pubkey, err = nostr.GetPublicKey(secretKey)
+	if err != nil {
+		return
+	}
+
+	npub, err = nip19.EncodePublicKey(pubkey)
+	if err != nil {
+		return
+	}
+
+	return
 }

@@ -27,7 +27,7 @@ type WalletService interface {
 	SignTransaction(
 		ctx context.Context, partialTx string, extractRawTx bool,
 	) (string, error)
-	SignTransactionTapscript(ctx context.Context, pset string, inputIndexes []int) (string, error) // inputIndexes == nil means sign all inputs
+	SignTransactionTapscript(ctx context.Context, partialTx string, inputIndexes []int) (string, error) // inputIndexes == nil means sign all inputs
 	SelectUtxos(ctx context.Context, asset string, amount uint64) ([]TxInput, uint64, error)
 	BroadcastTransaction(ctx context.Context, txHex string) (string, error)
 	WaitForSync(ctx context.Context, txid string) error
@@ -40,6 +40,9 @@ type WalletService interface {
 	LockConnectorUtxos(ctx context.Context, utxos []TxOutpoint) error
 	GetDustAmount(ctx context.Context) (uint64, error)
 	GetTransaction(ctx context.Context, txid string) (string, error)
+	SignMessage(ctx context.Context, message []byte) ([]byte, error)
+	VerifyMessageSignature(ctx context.Context, message, signature []byte) (bool, error)
+	GetCurrentBlockTime(ctx context.Context) (*BlockTimestamp, error)
 	Close()
 }
 
@@ -60,4 +63,9 @@ type TxInput interface {
 type TxOutpoint interface {
 	GetTxid() string
 	GetIndex() uint32
+}
+
+type BlockTimestamp struct {
+	Height uint32
+	Time   int64
 }

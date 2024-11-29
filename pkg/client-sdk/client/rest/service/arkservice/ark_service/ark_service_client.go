@@ -54,9 +54,7 @@ type ClientOption func(*runtime.ClientOperation)
 
 // ClientService is the interface for Client methods
 type ClientService interface {
-	ArkServiceCompletePayment(params *ArkServiceCompletePaymentParams, opts ...ClientOption) (*ArkServiceCompletePaymentOK, error)
-
-	ArkServiceCreatePayment(params *ArkServiceCreatePaymentParams, opts ...ClientOption) (*ArkServiceCreatePaymentOK, error)
+	ArkServiceDeleteNostrRecipient(params *ArkServiceDeleteNostrRecipientParams, opts ...ClientOption) (*ArkServiceDeleteNostrRecipientOK, error)
 
 	ArkServiceGetBoardingAddress(params *ArkServiceGetBoardingAddressParams, opts ...ClientOption) (*ArkServiceGetBoardingAddressOK, error)
 
@@ -78,6 +76,10 @@ type ClientService interface {
 
 	ArkServiceRegisterOutputsForNextRound(params *ArkServiceRegisterOutputsForNextRoundParams, opts ...ClientOption) (*ArkServiceRegisterOutputsForNextRoundOK, error)
 
+	ArkServiceSetNostrRecipient(params *ArkServiceSetNostrRecipientParams, opts ...ClientOption) (*ArkServiceSetNostrRecipientOK, error)
+
+	ArkServiceSubmitRedeemTx(params *ArkServiceSubmitRedeemTxParams, opts ...ClientOption) (*ArkServiceSubmitRedeemTxOK, error)
+
 	ArkServiceSubmitSignedForfeitTxs(params *ArkServiceSubmitSignedForfeitTxsParams, opts ...ClientOption) (*ArkServiceSubmitSignedForfeitTxsOK, error)
 
 	ArkServiceSubmitTreeNonces(params *ArkServiceSubmitTreeNoncesParams, opts ...ClientOption) (*ArkServiceSubmitTreeNoncesOK, error)
@@ -88,22 +90,22 @@ type ClientService interface {
 }
 
 /*
-ArkServiceCompletePayment ark service complete payment API
+ArkServiceDeleteNostrRecipient ark service delete nostr recipient API
 */
-func (a *Client) ArkServiceCompletePayment(params *ArkServiceCompletePaymentParams, opts ...ClientOption) (*ArkServiceCompletePaymentOK, error) {
+func (a *Client) ArkServiceDeleteNostrRecipient(params *ArkServiceDeleteNostrRecipientParams, opts ...ClientOption) (*ArkServiceDeleteNostrRecipientOK, error) {
 	// TODO: Validate the params before sending
 	if params == nil {
-		params = NewArkServiceCompletePaymentParams()
+		params = NewArkServiceDeleteNostrRecipientParams()
 	}
 	op := &runtime.ClientOperation{
-		ID:                 "ArkService_CompletePayment",
+		ID:                 "ArkService_DeleteNostrRecipient",
 		Method:             "POST",
-		PathPattern:        "/v1/payment/complete",
+		PathPattern:        "/v1/vtxo/nostr/delete",
 		ProducesMediaTypes: []string{"application/json"},
 		ConsumesMediaTypes: []string{"application/json"},
 		Schemes:            []string{"http"},
 		Params:             params,
-		Reader:             &ArkServiceCompletePaymentReader{formats: a.formats},
+		Reader:             &ArkServiceDeleteNostrRecipientReader{formats: a.formats},
 		Context:            params.Context,
 		Client:             params.HTTPClient,
 	}
@@ -115,49 +117,12 @@ func (a *Client) ArkServiceCompletePayment(params *ArkServiceCompletePaymentPara
 	if err != nil {
 		return nil, err
 	}
-	success, ok := result.(*ArkServiceCompletePaymentOK)
+	success, ok := result.(*ArkServiceDeleteNostrRecipientOK)
 	if ok {
 		return success, nil
 	}
 	// unexpected success response
-	unexpectedSuccess := result.(*ArkServiceCompletePaymentDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
-}
-
-/*
-ArkServiceCreatePayment ark service create payment API
-*/
-func (a *Client) ArkServiceCreatePayment(params *ArkServiceCreatePaymentParams, opts ...ClientOption) (*ArkServiceCreatePaymentOK, error) {
-	// TODO: Validate the params before sending
-	if params == nil {
-		params = NewArkServiceCreatePaymentParams()
-	}
-	op := &runtime.ClientOperation{
-		ID:                 "ArkService_CreatePayment",
-		Method:             "POST",
-		PathPattern:        "/v1/payment",
-		ProducesMediaTypes: []string{"application/json"},
-		ConsumesMediaTypes: []string{"application/json"},
-		Schemes:            []string{"http"},
-		Params:             params,
-		Reader:             &ArkServiceCreatePaymentReader{formats: a.formats},
-		Context:            params.Context,
-		Client:             params.HTTPClient,
-	}
-	for _, opt := range opts {
-		opt(op)
-	}
-
-	result, err := a.transport.Submit(op)
-	if err != nil {
-		return nil, err
-	}
-	success, ok := result.(*ArkServiceCreatePaymentOK)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*ArkServiceCreatePaymentDefault)
+	unexpectedSuccess := result.(*ArkServiceDeleteNostrRecipientDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 
@@ -431,7 +396,7 @@ func (a *Client) ArkServicePing(params *ArkServicePingParams, opts ...ClientOpti
 	op := &runtime.ClientOperation{
 		ID:                 "ArkService_Ping",
 		Method:             "GET",
-		PathPattern:        "/v1/round/ping/{paymentId}",
+		PathPattern:        "/v1/round/ping/{requestId}",
 		ProducesMediaTypes: []string{"application/json"},
 		ConsumesMediaTypes: []string{"application/json"},
 		Schemes:            []string{"http"},
@@ -528,6 +493,80 @@ func (a *Client) ArkServiceRegisterOutputsForNextRound(params *ArkServiceRegiste
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*ArkServiceRegisterOutputsForNextRoundDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+ArkServiceSetNostrRecipient ark service set nostr recipient API
+*/
+func (a *Client) ArkServiceSetNostrRecipient(params *ArkServiceSetNostrRecipientParams, opts ...ClientOption) (*ArkServiceSetNostrRecipientOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewArkServiceSetNostrRecipientParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "ArkService_SetNostrRecipient",
+		Method:             "POST",
+		PathPattern:        "/v1/vtxo/nostr",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &ArkServiceSetNostrRecipientReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*ArkServiceSetNostrRecipientOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*ArkServiceSetNostrRecipientDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+ArkServiceSubmitRedeemTx ark service submit redeem tx API
+*/
+func (a *Client) ArkServiceSubmitRedeemTx(params *ArkServiceSubmitRedeemTxParams, opts ...ClientOption) (*ArkServiceSubmitRedeemTxOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewArkServiceSubmitRedeemTxParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "ArkService_SubmitRedeemTx",
+		Method:             "POST",
+		PathPattern:        "/v1/redeem-tx",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &ArkServiceSubmitRedeemTxReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*ArkServiceSubmitRedeemTxOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*ArkServiceSubmitRedeemTxDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 

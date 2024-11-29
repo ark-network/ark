@@ -3,6 +3,7 @@ package appconfig
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/server/internal/core/application"
@@ -16,6 +17,7 @@ import (
 	fileunlocker "github.com/ark-network/ark/server/internal/infrastructure/unlocker/file"
 	btcwallet "github.com/ark-network/ark/server/internal/infrastructure/wallet/btc-embedded"
 	liquidwallet "github.com/ark-network/ark/server/internal/infrastructure/wallet/liquid-standalone"
+	"github.com/nbd-wtf/go-nostr"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -37,10 +39,6 @@ var (
 		"covenant":     {},
 		"covenantless": {},
 	}
-	supportedScanners = supportedType{
-		"ocean":     {},
-		"btcwallet": {},
-	}
 	supportedUnlockers = supportedType{
 		"env":  {},
 		"file": {},
@@ -57,26 +55,33 @@ var (
 )
 
 type Config struct {
-	DbType                string
-	EventDbType           string
-	DbDir                 string
-	DbMigrationPath       string
-	EventDbDir            string
-	RoundInterval         int64
-	Network               common.Network
-	SchedulerType         string
-	TxBuilderType         string
-	BlockchainScannerType string
-	WalletAddr            string
-	RoundLifetime         int64
-	UnilateralExitDelay   int64
-	BoardingExitDelay     int64
+	DbType                  string
+	EventDbType             string
+	DbDir                   string
+	DbMigrationPath         string
+	EventDbDir              string
+	RoundInterval           int64
+	Network                 common.Network
+	SchedulerType           string
+	TxBuilderType           string
+	WalletAddr              string
+	RoundLifetime           common.Locktime
+	UnilateralExitDelay     common.Locktime
+	BoardingExitDelay       common.Locktime
+	NostrDefaultRelays      []string
+	NoteUriPrefix           string
+	MarketHourStartTime     time.Time
+	MarketHourEndTime       time.Time
+	MarketHourPeriod        time.Duration
+	MarketHourRoundInterval time.Duration
 
-	EsploraURL      string
-	NeutrinoPeer    string
-	BitcoindRpcUser string
-	BitcoindRpcPass string
-	BitcoindRpcHost string
+	EsploraURL       string
+	NeutrinoPeer     string
+	BitcoindRpcUser  string
+	BitcoindRpcPass  string
+	BitcoindRpcHost  string
+	BitcoindZMQBlock string
+	BitcoindZMQTx    string
 
 	UnlockerType     string
 	UnlockerFilePath string // file unlocker
@@ -105,9 +110,6 @@ func (c *Config) Validate() error {
 	if !supportedTxBuilders.supports(c.TxBuilderType) {
 		return fmt.Errorf("tx builder type not supported, please select one of: %s", supportedTxBuilders)
 	}
-	if !supportedScanners.supports(c.BlockchainScannerType) {
-		return fmt.Errorf("blockchain scanner type not supported, please select one of: %s", supportedScanners)
-	}
 	if len(c.UnlockerType) > 0 && !supportedUnlockers.supports(c.UnlockerType) {
 		return fmt.Errorf("unlocker type not supported, please select one of: %s", supportedUnlockers)
 	}
@@ -117,21 +119,18 @@ func (c *Config) Validate() error {
 	if !supportedNetworks.supports(c.Network.Name) {
 		return fmt.Errorf("invalid network, must be one of: %s", supportedNetworks)
 	}
-	if len(c.WalletAddr) <= 0 {
-		return fmt.Errorf("missing onchain wallet address")
-	}
-	if c.RoundLifetime < minAllowedSequence {
+	if c.RoundLifetime.Type == common.LocktimeTypeBlock {
 		if c.SchedulerType != "block" {
 			return fmt.Errorf("scheduler type must be block if round lifetime is expressed in blocks")
 		}
-	} else {
+	} else { // seconds
 		if c.SchedulerType != "gocron" {
 			return fmt.Errorf("scheduler type must be gocron if round lifetime is expressed in seconds")
 		}
 
 		// round life time must be a multiple of 512 if expressed in seconds
-		if c.RoundLifetime%minAllowedSequence != 0 {
-			c.RoundLifetime -= c.RoundLifetime % minAllowedSequence
+		if c.RoundLifetime.Value%minAllowedSequence != 0 {
+			c.RoundLifetime.Value -= c.RoundLifetime.Value % minAllowedSequence
 			log.Infof(
 				"round lifetime must be a multiple of %d, rounded to %d",
 				minAllowedSequence, c.RoundLifetime,
@@ -139,32 +138,42 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	if c.UnilateralExitDelay < minAllowedSequence {
+	if c.UnilateralExitDelay.Type == common.LocktimeTypeBlock {
 		return fmt.Errorf(
 			"invalid unilateral exit delay, must at least %d", minAllowedSequence,
 		)
 	}
 
-	if c.BoardingExitDelay < minAllowedSequence {
+	if c.BoardingExitDelay.Type == common.LocktimeTypeBlock {
 		return fmt.Errorf(
 			"invalid boarding exit delay, must at least %d", minAllowedSequence,
 		)
 	}
 
-	if c.UnilateralExitDelay%minAllowedSequence != 0 {
-		c.UnilateralExitDelay -= c.UnilateralExitDelay % minAllowedSequence
+	if c.UnilateralExitDelay.Value%minAllowedSequence != 0 {
+		c.UnilateralExitDelay.Value -= c.UnilateralExitDelay.Value % minAllowedSequence
 		log.Infof(
 			"unilateral exit delay must be a multiple of %d, rounded to %d",
 			minAllowedSequence, c.UnilateralExitDelay,
 		)
 	}
 
-	if c.BoardingExitDelay%minAllowedSequence != 0 {
-		c.BoardingExitDelay -= c.BoardingExitDelay % minAllowedSequence
+	if c.BoardingExitDelay.Value%minAllowedSequence != 0 {
+		c.BoardingExitDelay.Value -= c.BoardingExitDelay.Value % minAllowedSequence
 		log.Infof(
 			"boarding exit delay must be a multiple of %d, rounded to %d",
 			minAllowedSequence, c.BoardingExitDelay,
 		)
+	}
+
+	if len(c.NostrDefaultRelays) == 0 {
+		return fmt.Errorf("missing nostr default relays")
+	}
+
+	for _, relay := range c.NostrDefaultRelays {
+		if !nostr.IsValidRelayURL(relay) {
+			return fmt.Errorf("invalid nostr relay url: %s", relay)
+		}
 	}
 
 	if err := c.repoManager(); err != nil {
@@ -236,9 +245,8 @@ func (c *Config) repoManager() error {
 	}
 
 	svc, err = db.NewService(db.ServiceConfig{
-		EventStoreType: c.EventDbType,
-		DataStoreType:  c.DbType,
-
+		EventStoreType:   c.EventDbType,
+		DataStoreType:    c.DbType,
 		EventStoreConfig: eventStoreConfig,
 		DataStoreConfig:  dataStoreConfig,
 	})
@@ -252,7 +260,7 @@ func (c *Config) repoManager() error {
 
 func (c *Config) walletService() error {
 	if common.IsLiquid(c.Network) {
-		svc, err := liquidwallet.NewService(c.WalletAddr)
+		svc, err := liquidwallet.NewService(c.WalletAddr, c.EsploraURL)
 		if err != nil {
 			return fmt.Errorf("failed to connect to wallet: %s", err)
 		}
@@ -270,7 +278,18 @@ func (c *Config) walletService() error {
 	var err error
 
 	switch {
-	case c.NeutrinoPeer != "":
+	case c.BitcoindZMQBlock != "" && c.BitcoindZMQTx != "" && c.BitcoindRpcUser != "" && c.BitcoindRpcPass != "":
+		svc, err = btcwallet.NewService(btcwallet.WalletConfig{
+			Datadir: c.DbDir,
+			Network: c.Network,
+		}, btcwallet.WithBitcoindZMQ(c.BitcoindZMQBlock, c.BitcoindZMQTx, c.BitcoindRpcHost, c.BitcoindRpcUser, c.BitcoindRpcPass))
+	case c.BitcoindRpcUser != "" && c.BitcoindRpcPass != "":
+		svc, err = btcwallet.NewService(btcwallet.WalletConfig{
+			Datadir: c.DbDir,
+			Network: c.Network,
+		}, btcwallet.WithPollingBitcoind(c.BitcoindRpcHost, c.BitcoindRpcUser, c.BitcoindRpcPass))
+	default:
+		// Default to Neutrino for Bitcoin mainnet or when NeutrinoPeer is explicitly set
 		if len(c.EsploraURL) == 0 {
 			return fmt.Errorf("missing esplora url, covenant-less ark requires ARK_ESPLORA_URL to be set")
 		}
@@ -278,16 +297,6 @@ func (c *Config) walletService() error {
 			Datadir: c.DbDir,
 			Network: c.Network,
 		}, btcwallet.WithNeutrino(c.NeutrinoPeer, c.EsploraURL))
-
-	case c.BitcoindRpcUser != "" && c.BitcoindRpcPass != "":
-		svc, err = btcwallet.NewService(btcwallet.WalletConfig{
-			Datadir: c.DbDir,
-			Network: c.Network,
-		}, btcwallet.WithPollingBitcoind(c.BitcoindRpcHost, c.BitcoindRpcUser, c.BitcoindRpcPass))
-
-	// Placeholder for future initializers like WithBitcoindZMQ
-	default:
-		return fmt.Errorf("either Neutrino peer or Bitcoind RPC credentials must be provided")
 	}
 
 	if err != nil {
@@ -322,13 +331,7 @@ func (c *Config) txBuilderService() error {
 }
 
 func (c *Config) scannerService() error {
-	var svc ports.BlockchainScanner
-	switch c.BlockchainScannerType {
-	default:
-		svc = c.wallet
-	}
-
-	c.scanner = svc
+	c.scanner = c.wallet
 	return nil
 }
 
@@ -354,8 +357,9 @@ func (c *Config) schedulerService() error {
 func (c *Config) appService() error {
 	if common.IsLiquid(c.Network) {
 		svc, err := application.NewCovenantService(
-			c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay,
-			c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler,
+			c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay, c.NostrDefaultRelays,
+			c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NoteUriPrefix,
+			c.MarketHourStartTime, c.MarketHourEndTime, c.MarketHourPeriod, c.MarketHourRoundInterval,
 		)
 		if err != nil {
 			return err
@@ -366,8 +370,9 @@ func (c *Config) appService() error {
 	}
 
 	svc, err := application.NewCovenantlessService(
-		c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay,
-		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler,
+		c.Network, c.RoundInterval, c.RoundLifetime, c.UnilateralExitDelay, c.BoardingExitDelay, c.NostrDefaultRelays,
+		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NoteUriPrefix,
+		c.MarketHourStartTime, c.MarketHourEndTime, c.MarketHourPeriod, c.MarketHourRoundInterval,
 	)
 	if err != nil {
 		return err
@@ -379,7 +384,7 @@ func (c *Config) appService() error {
 
 func (c *Config) adminService() error {
 	unit := ports.UnixTime
-	if c.RoundLifetime < minAllowedSequence {
+	if c.RoundLifetime.Value < minAllowedSequence {
 		unit = ports.BlockHeight
 	}
 

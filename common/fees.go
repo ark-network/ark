@@ -26,33 +26,21 @@ var ConnectorTxSize = (&input.TxWeightEstimator{}).
 	AddP2TROutput().
 	VSize()
 
-func ComputeForfeitMinRelayFee(
+func ComputeForfeitTxFee(
 	feeRate chainfee.SatPerKVByte,
-	vtxoScriptTapTree TaprootTree,
-	aspScriptClass txscript.ScriptClass,
+	tapscript *waddrmgr.Tapscript,
+	witnessSize int,
+	serverScriptClass txscript.ScriptClass,
 ) (uint64, error) {
 	txWeightEstimator := &input.TxWeightEstimator{}
 
-	biggestVtxoLeafProof, err := BiggestLeafMerkleProof(vtxoScriptTapTree)
-	if err != nil {
-		return 0, err
-	}
-
-	ctrlBlock, err := txscript.ParseControlBlock(biggestVtxoLeafProof.ControlBlock)
-	if err != nil {
-		return 0, err
-	}
-
 	txWeightEstimator.AddP2PKHInput() // connector input
 	txWeightEstimator.AddTapscriptInput(
-		64*2, // forfeit witness = 2 signatures
-		&waddrmgr.Tapscript{
-			RevealedScript: biggestVtxoLeafProof.Script,
-			ControlBlock:   ctrlBlock,
-		},
+		lntypes.WeightUnit(witnessSize),
+		tapscript,
 	)
 
-	switch aspScriptClass {
+	switch serverScriptClass {
 	case txscript.PubKeyHashTy:
 		txWeightEstimator.AddP2PKHOutput()
 	case txscript.ScriptHashTy:
@@ -64,8 +52,37 @@ func ComputeForfeitMinRelayFee(
 	case txscript.WitnessV1TaprootTy:
 		txWeightEstimator.AddP2TROutput()
 	default:
-		return 0, fmt.Errorf("unknown asp script class: %v", aspScriptClass)
+		return 0, fmt.Errorf("unknown server script class: %v", serverScriptClass)
 	}
 
 	return uint64(feeRate.FeeForVSize(lntypes.VByte(txWeightEstimator.VSize())).ToUnit(btcutil.AmountSatoshi)), nil
+}
+
+func ComputeRedeemTxFee(
+	feeRate chainfee.SatPerKVByte,
+	vtxos []VtxoInput,
+	numOutputs int,
+) (int64, error) {
+	if len(vtxos) <= 0 {
+		return 0, fmt.Errorf("missing vtxos")
+	}
+
+	redeemTxWeightEstimator := &input.TxWeightEstimator{}
+
+	// Estimate inputs
+	for _, vtxo := range vtxos {
+		if vtxo.Tapscript == nil {
+			txid := vtxo.Outpoint.Hash.String()
+			return 0, fmt.Errorf("missing tapscript for vtxo %s", txid)
+		}
+
+		redeemTxWeightEstimator.AddTapscriptInput(lntypes.WeightUnit(vtxo.WitnessSize), vtxo.Tapscript)
+	}
+
+	// Estimate outputs
+	for i := 0; i < numOutputs; i++ {
+		redeemTxWeightEstimator.AddP2TROutput()
+	}
+
+	return int64(feeRate.FeeForVSize(lntypes.VByte(redeemTxWeightEstimator.VSize())).ToUnit(btcutil.AmountSatoshi)), nil
 }

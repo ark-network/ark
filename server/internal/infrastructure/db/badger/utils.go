@@ -100,8 +100,8 @@ func deserializeEvent(buf []byte) (domain.RoundEvent, error) {
 		}
 	}
 	{
-		var event = domain.PaymentsRegistered{}
-		if err := json.Unmarshal(buf, &event); err == nil && len(event.Payments) > 0 {
+		var event = domain.TxRequestsRegistered{}
+		if err := json.Unmarshal(buf, &event); err == nil && len(event.TxRequests) > 0 {
 			return event, nil
 		}
 	}

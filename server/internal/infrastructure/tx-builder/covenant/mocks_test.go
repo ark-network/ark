@@ -295,6 +295,18 @@ func (m *mockedWallet) GetForfeitAddress(ctx context.Context) (string, error) {
 	return res, args.Error(1)
 }
 
+func (m *mockedWallet) SignMessage(ctx context.Context, message []byte) ([]byte, error) {
+	panic("not implemented")
+}
+
+func (m *mockedWallet) VerifyMessageSignature(ctx context.Context, message, signature []byte) (bool, error) {
+	panic("not implemented")
+}
+
+func (m *mockedWallet) GetCurrentBlockTime(ctx context.Context) (*ports.BlockTimestamp, error) {
+	panic("not implemented")
+}
+
 type mockedInput struct {
 	mock.Mock
 }

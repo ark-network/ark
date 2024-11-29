@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"syscall/js"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -21,8 +22,8 @@ const (
 )
 
 type storeData struct {
-	AspUrl                     string `json:"asp_url"`
-	AspPubkey                  string `json:"asp_pubkey"`
+	ServerUrl                  string `json:"server_url"`
+	ServerPubKey               string `json:"server_pubkey"`
 	WalletType                 string `json:"wallet_type"`
 	ClientType                 string `json:"client_type"`
 	ExplorerURL                string `json:"explorer_url"`
@@ -54,14 +55,14 @@ func (s *configStore) GetDatadir() string {
 
 func (s *configStore) AddData(ctx context.Context, data types.Config) error {
 	sd := &storeData{
-		AspUrl:                     data.AspUrl,
-		AspPubkey:                  hex.EncodeToString(data.AspPubkey.SerializeCompressed()),
+		ServerUrl:                  data.ServerUrl,
+		ServerPubKey:               hex.EncodeToString(data.ServerPubKey.SerializeCompressed()),
 		WalletType:                 data.WalletType,
 		ClientType:                 data.ClientType,
 		Network:                    data.Network.Name,
-		RoundLifetime:              fmt.Sprintf("%d", data.RoundLifetime),
+		RoundLifetime:              fmt.Sprintf("%d", data.RoundLifetime.Value),
 		RoundInterval:              fmt.Sprintf("%d", data.RoundInterval),
-		UnilateralExitDelay:        fmt.Sprintf("%d", data.UnilateralExitDelay),
+		UnilateralExitDelay:        fmt.Sprintf("%d", data.UnilateralExitDelay.Value),
 		Dust:                       fmt.Sprintf("%d", data.Dust),
 		ExplorerURL:                data.ExplorerURL,
 		ForfeitAddress:             data.ForfeitAddress,
@@ -71,7 +72,7 @@ func (s *configStore) AddData(ctx context.Context, data types.Config) error {
 }
 
 func (s *configStore) GetData(ctx context.Context) (*types.Config, error) {
-	key := s.store.Call("getItem", "asp_pubkey")
+	key := s.store.Call("getItem", "server_pubkey")
 	if key.IsNull() || key.IsUndefined() {
 		return nil, nil
 	}
@@ -83,7 +84,7 @@ func (s *configStore) GetData(ctx context.Context) (*types.Config, error) {
 		return nil, nil
 	}
 
-	aspPubkey, err := secp256k1.ParsePubKey(buf)
+	serverPubkey, err := secp256k1.ParsePubKey(buf)
 	if err != nil {
 		return nil, err
 	}
@@ -94,15 +95,25 @@ func (s *configStore) GetData(ctx context.Context) (*types.Config, error) {
 	dust, _ := strconv.Atoi(s.store.Call("getItem", "dust").String())
 	withTxFeed, _ := strconv.ParseBool(s.store.Call("getItem", "with_transaction_feed").String())
 
+	lifetimeType := common.LocktimeTypeBlock
+	if roundLifetime >= 512 {
+		lifetimeType = common.LocktimeTypeSecond
+	}
+
+	unilateralExitDelayType := common.LocktimeTypeBlock
+	if unilateralExitDelay >= 512 {
+		unilateralExitDelayType = common.LocktimeTypeSecond
+	}
+
 	return &types.Config{
-		AspUrl:                     s.store.Call("getItem", "asp_url").String(),
-		AspPubkey:                  aspPubkey,
+		ServerUrl:                  s.store.Call("getItem", "server_url").String(),
+		ServerPubKey:               serverPubkey,
 		WalletType:                 s.store.Call("getItem", "wallet_type").String(),
 		ClientType:                 s.store.Call("getItem", "client_type").String(),
 		Network:                    network,
-		RoundLifetime:              int64(roundLifetime),
+		RoundLifetime:              common.Locktime{Value: uint32(roundLifetime), Type: lifetimeType},
 		RoundInterval:              int64(roundInterval),
-		UnilateralExitDelay:        int64(unilateralExitDelay),
+		UnilateralExitDelay:        common.Locktime{Value: uint32(unilateralExitDelay), Type: unilateralExitDelayType},
 		Dust:                       uint64(dust),
 		ExplorerURL:                s.store.Call("getItem", "explorer_url").String(),
 		ForfeitAddress:             s.store.Call("getItem", "forfeit_address").String(),

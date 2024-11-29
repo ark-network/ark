@@ -11,7 +11,7 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
-	"github.com/ark-network/ark/common/descriptor"
+	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -22,17 +22,23 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcwallet/waddrmgr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	log "github.com/sirupsen/logrus"
 )
+
+const marketHourDelta = 5 * time.Minute
 
 type covenantlessService struct {
 	network             common.Network
 	pubkey              *secp256k1.PublicKey
-	roundLifetime       int64
+	roundLifetime       common.Locktime
 	roundInterval       int64
-	unilateralExitDelay int64
-	boardingExitDelay   int64
+	unilateralExitDelay common.Locktime
+	boardingExitDelay   common.Locktime
+
+	nostrDefaultRelays []string
 
 	wallet      ports.WalletService
 	repoManager ports.RepoManager
@@ -40,8 +46,8 @@ type covenantlessService struct {
 	scanner     ports.BlockchainScanner
 	sweeper     *sweeper
 
-	paymentRequests *paymentsMap
-	forfeitTxs      *forfeitTxsMap
+	txRequests *txRequestsQueue
+	forfeitTxs *forfeitTxsMap
 
 	eventsCh            chan domain.RoundEvent
 	transactionEventsCh chan TransactionEvent
@@ -51,19 +57,36 @@ type covenantlessService struct {
 	currentRoundLock    sync.Mutex
 	currentRound        *domain.Round
 	treeSigningSessions map[string]*musigSigningSession
-	asyncPaymentsCache  map[string]asyncPaymentData
 }
 
 func NewCovenantlessService(
 	network common.Network,
-	roundInterval, roundLifetime, unilateralExitDelay, boardingExitDelay int64,
+	roundInterval int64,
+	roundLifetime, unilateralExitDelay, boardingExitDelay common.Locktime,
+	nostrDefaultRelays []string,
 	walletSvc ports.WalletService, repoManager ports.RepoManager,
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	scheduler ports.SchedulerService,
+	noteUriPrefix string,
+	marketHourStartTime, marketHourEndTime time.Time,
+	marketHourPeriod, marketHourRoundInterval time.Duration,
 ) (Service, error) {
 	pubkey, err := walletSvc.GetPubkey(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch pubkey: %s", err)
+	}
+
+	// Try to load market hours from DB first
+	marketHour, err := repoManager.MarketHourRepo().Get(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get market hours from db: %w", err)
+	}
+
+	if marketHour == nil {
+		marketHour = domain.NewMarketHour(marketHourStartTime, marketHourEndTime, marketHourPeriod, marketHourRoundInterval)
+		if err := repoManager.MarketHourRepo().Upsert(context.Background(), *marketHour); err != nil {
+			return nil, fmt.Errorf("failed to upsert initial market hours to db: %w", err)
+		}
 	}
 
 	svc := &covenantlessService{
@@ -76,21 +99,36 @@ func NewCovenantlessService(
 		repoManager:         repoManager,
 		builder:             builder,
 		scanner:             scanner,
-		sweeper:             newSweeper(walletSvc, repoManager, builder, scheduler),
-		paymentRequests:     newPaymentsMap(),
+		sweeper:             newSweeper(walletSvc, repoManager, builder, scheduler, noteUriPrefix),
+		txRequests:          newTxRequestsQueue(),
 		forfeitTxs:          newForfeitTxsMap(builder),
 		eventsCh:            make(chan domain.RoundEvent),
 		transactionEventsCh: make(chan TransactionEvent),
 		currentRoundLock:    sync.Mutex{},
-		asyncPaymentsCache:  make(map[string]asyncPaymentData),
 		treeSigningSessions: make(map[string]*musigSigningSession),
 		boardingExitDelay:   boardingExitDelay,
+		nostrDefaultRelays:  nostrDefaultRelays,
 	}
 
 	repoManager.RegisterEventsHandler(
 		func(round *domain.Round) {
-			go svc.propagateEvents(round)
 			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Errorf("recovered from panic in propagateEvents: %v", r)
+					}
+				}()
+
+				svc.propagateEvents(round)
+			}()
+
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Errorf("recovered from panic in updateVtxoSet and scheduleSweepVtxosForRound: %v", r)
+					}
+				}()
+
 				// utxo db must be updated before scheduling the sweep events
 				svc.updateVtxoSet(round)
 				svc.scheduleSweepVtxosForRound(round)
@@ -131,269 +169,367 @@ func (s *covenantlessService) Stop() {
 	close(s.eventsCh)
 }
 
-func (s *covenantlessService) CompleteAsyncPayment(
+func (s *covenantlessService) SubmitRedeemTx(
 	ctx context.Context, redeemTx string,
-) error {
-	redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
-	if err != nil {
-		return fmt.Errorf("failed to parse redeem tx: %s", err)
-	}
-	redeemTxid := redeemPtx.UnsignedTx.TxID()
-
-	asyncPayData, ok := s.asyncPaymentsCache[redeemTxid]
-	if !ok {
-		return fmt.Errorf("async payment not found")
-	}
-
-	vtxoRepo := s.repoManager.Vtxos()
-
-	for _, tx := range []string{redeemTx} {
-		ptx, err := psbt.NewFromRawBytes(strings.NewReader(tx), true)
-		if err != nil {
-			return fmt.Errorf("failed to parse tx: %s", err)
-		}
-
-		for inputIndex, input := range ptx.Inputs {
-			if input.WitnessUtxo == nil {
-				return fmt.Errorf("missing witness utxo")
-			}
-
-			if len(input.TaprootLeafScript) == 0 {
-				return fmt.Errorf("missing tapscript leaf")
-			}
-
-			if len(input.TaprootScriptSpendSig) == 0 {
-				return fmt.Errorf("missing tapscript spend sig")
-			}
-
-			vtxoOutpoint := ptx.UnsignedTx.TxIn[inputIndex].PreviousOutPoint
-
-			// verify that the vtxo is spendable
-
-			vtxos, err := vtxoRepo.GetVtxos(ctx, []domain.VtxoKey{{Txid: vtxoOutpoint.Hash.String(), VOut: vtxoOutpoint.Index}})
-			if err != nil {
-				return fmt.Errorf("failed to get vtxo: %s", err)
-			}
-
-			if len(vtxos) == 0 {
-				return fmt.Errorf("vtxo not found")
-			}
-
-			vtxo := vtxos[0]
-			if vtxo.Spent {
-				return fmt.Errorf("vtxo already spent")
-			}
-
-			if vtxo.Redeemed {
-				return fmt.Errorf("vtxo already redeemed")
-			}
-
-			if vtxo.Swept {
-				return fmt.Errorf("vtxo already swept")
-			}
-
-			// verify that the user signs a forfeit closure
-			var userPubKey *secp256k1.PublicKey
-
-			aspXOnlyPubKey := schnorr.SerializePubKey(s.pubkey)
-
-			for _, sig := range input.TaprootScriptSpendSig {
-				if !bytes.Equal(sig.XOnlyPubKey, aspXOnlyPubKey) {
-					parsed, err := schnorr.ParsePubKey(sig.XOnlyPubKey)
-					if err != nil {
-						return fmt.Errorf("failed to parse pubkey: %s", err)
-					}
-					userPubKey = parsed
-					break
-				}
-			}
-
-			if userPubKey == nil {
-				return fmt.Errorf("redeem transaction is not signed")
-			}
-
-			vtxoPublicKeyBytes, err := hex.DecodeString(vtxo.Pubkey)
-			if err != nil {
-				return fmt.Errorf("failed to decode vtxo pubkey: %s", err)
-			}
-
-			vtxoTapKey, err := schnorr.ParsePubKey(vtxoPublicKeyBytes)
-			if err != nil {
-				return fmt.Errorf("failed to parse vtxo pubkey: %s", err)
-			}
-
-			// verify witness utxo
-			pkscript, err := common.P2TRScript(vtxoTapKey)
-			if err != nil {
-				return fmt.Errorf("failed to get pkscript: %s", err)
-			}
-
-			if !bytes.Equal(input.WitnessUtxo.PkScript, pkscript) {
-				return fmt.Errorf("witness utxo script mismatch")
-			}
-
-			if input.WitnessUtxo.Value != int64(vtxo.Amount) {
-				return fmt.Errorf("witness utxo value mismatch")
-			}
-		}
-
-		// verify the tapscript signatures
-		if valid, _, err := s.builder.VerifyTapscriptPartialSigs(tx); err != nil || !valid {
-			return fmt.Errorf("invalid tx signature: %s", err)
-		}
-	}
-
-	spentVtxos := make([]domain.VtxoKey, 0)
-	for _, in := range redeemPtx.UnsignedTx.TxIn {
-		spentVtxos = append(spentVtxos, domain.VtxoKey{
-			Txid: in.PreviousOutPoint.Hash.String(),
-			VOut: in.PreviousOutPoint.Index,
-		})
-	}
-
-	vtxos := make([]domain.Vtxo, 0, len(asyncPayData.receivers))
-
-	for outIndex, out := range redeemPtx.UnsignedTx.TxOut {
-		vtxoTapKey, err := schnorr.ParsePubKey(out.PkScript[2:])
-		if err != nil {
-			return fmt.Errorf("failed to parse vtxo taproot key: %s", err)
-		}
-
-		vtxoPubkey := hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey))
-
-		vtxos = append(vtxos, domain.Vtxo{
-			VtxoKey: domain.VtxoKey{
-				Txid: redeemTxid,
-				VOut: uint32(outIndex),
-			},
-			Pubkey:    vtxoPubkey,
-			Amount:    uint64(out.Value),
-			ExpireAt:  asyncPayData.expireAt,
-			RoundTxid: asyncPayData.roundTxid,
-			RedeemTx:  redeemTx,
-			CreatedAt: time.Now().Unix(),
-		})
-	}
-
-	if err := s.repoManager.Vtxos().AddVtxos(ctx, vtxos); err != nil {
-		return fmt.Errorf("failed to add vtxos: %s", err)
-	}
-	log.Infof("added %d vtxos", len(vtxos))
-	if err := s.startWatchingVtxos(vtxos); err != nil {
-		log.WithError(err).Warn(
-			"failed to start watching vtxos",
-		)
-	}
-	log.Debugf("started watching %d vtxos", len(vtxos))
-
-	if err := s.repoManager.Vtxos().SpendVtxos(ctx, spentVtxos, redeemTxid); err != nil {
-		return fmt.Errorf("failed to spend vtxo: %s", err)
-	}
-	log.Infof("spent %d vtxos", len(spentVtxos))
-
-	delete(s.asyncPaymentsCache, redeemTxid)
-
-	go func() {
-		s.transactionEventsCh <- RedeemTransactionEvent{
-			AsyncTxID:      redeemTxid,
-			SpentVtxos:     spentVtxos,
-			SpendableVtxos: vtxos,
-		}
-	}()
-
-	return nil
-}
-
-func (s *covenantlessService) CreateAsyncPayment(
-	ctx context.Context, inputs []AsyncPaymentInput, receivers []domain.Receiver,
 ) (string, error) {
-	vtxosKeys := make([]domain.VtxoKey, 0, len(inputs))
-	descriptors := make(map[domain.VtxoKey]string)
-	forfeitLeaves := make(map[domain.VtxoKey]chainhash.Hash)
-
-	for _, in := range inputs {
-		vtxosKeys = append(vtxosKeys, in.VtxoKey)
-		descriptors[in.VtxoKey] = in.Descriptor
-		forfeitLeaves[in.VtxoKey] = in.ForfeitLeafHash
-	}
-
-	vtxos, err := s.repoManager.Vtxos().GetVtxos(ctx, vtxosKeys)
-	if err != nil {
-		return "", err
-	}
-	if len(vtxos) <= 0 {
-		return "", fmt.Errorf("vtxos not found")
-	}
-
-	vtxosInputs := make([]domain.Vtxo, 0, len(inputs))
-
-	expiration := vtxos[0].ExpireAt
-	roundTxid := vtxos[0].RoundTxid
-
-	for _, vtxo := range vtxos {
-		if vtxo.Spent {
-			return "", fmt.Errorf("all vtxos must be unspent")
-		}
-
-		if vtxo.Redeemed {
-			return "", fmt.Errorf("all vtxos must be redeemed")
-		}
-
-		if vtxo.Swept {
-			return "", fmt.Errorf("all vtxos must be swept")
-		}
-
-		if vtxo.ExpireAt < expiration {
-			roundTxid = vtxo.RoundTxid
-			expiration = vtxo.ExpireAt
-		}
-
-		vtxosInputs = append(vtxosInputs, vtxo)
-	}
-
-	redeemTx, err := s.builder.BuildAsyncPaymentTransactions(
-		vtxosInputs, descriptors, forfeitLeaves, receivers,
-	)
-	if err != nil {
-		return "", fmt.Errorf("failed to build async payment txs: %s", err)
-	}
-
 	redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse redeem tx: %s", err)
 	}
 
-	s.asyncPaymentsCache[redeemPtx.UnsignedTx.TxID()] = asyncPaymentData{
-		receivers: receivers,
-		expireAt:  expiration,
-		roundTxid: roundTxid,
+	vtxoRepo := s.repoManager.Vtxos()
+
+	expiration := int64(0)
+	roundTxid := ""
+
+	ins := make([]common.VtxoInput, 0)
+
+	ptx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse redeem tx: %s", err)
 	}
 
-	return redeemTx, nil
+	spentVtxoKeys := make([]domain.VtxoKey, 0, len(ptx.Inputs))
+	for _, input := range ptx.UnsignedTx.TxIn {
+		spentVtxoKeys = append(spentVtxoKeys, domain.VtxoKey{
+			Txid: input.PreviousOutPoint.Hash.String(),
+			VOut: input.PreviousOutPoint.Index,
+		})
+	}
+
+	spentVtxos, err := vtxoRepo.GetVtxos(ctx, spentVtxoKeys)
+	if err != nil {
+		return "", fmt.Errorf("failed to get vtxos: %s", err)
+	}
+
+	if len(spentVtxos) != len(spentVtxoKeys) {
+		return "", fmt.Errorf("some vtxos not found")
+	}
+
+	vtxoMap := make(map[wire.OutPoint]domain.Vtxo)
+	for _, vtxo := range spentVtxos {
+		hash, err := chainhash.NewHashFromStr(vtxo.Txid)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse vtxo txid: %s", err)
+		}
+		vtxoMap[wire.OutPoint{Hash: *hash, Index: vtxo.VOut}] = vtxo
+	}
+
+	sumOfInputs := int64(0)
+	for inputIndex, input := range ptx.Inputs {
+		if input.WitnessUtxo == nil {
+			return "", fmt.Errorf("missing witness utxo")
+		}
+
+		if len(input.TaprootLeafScript) == 0 {
+			return "", fmt.Errorf("missing tapscript leaf")
+		}
+
+		tapscript := input.TaprootLeafScript[0]
+
+		if len(input.TaprootScriptSpendSig) == 0 {
+			return "", fmt.Errorf("missing tapscript spend sig")
+		}
+
+		outpoint := ptx.UnsignedTx.TxIn[inputIndex].PreviousOutPoint
+
+		vtxo, exists := vtxoMap[outpoint]
+		if !exists {
+			return "", fmt.Errorf("vtxo not found")
+		}
+
+		// make sure we don't use the same vtxo twice
+		delete(vtxoMap, outpoint)
+
+		if vtxo.Spent {
+			return "", fmt.Errorf("vtxo already spent")
+		}
+
+		if vtxo.Redeemed {
+			return "", fmt.Errorf("vtxo already redeemed")
+		}
+
+		if vtxo.Swept {
+			return "", fmt.Errorf("vtxo already swept")
+		}
+
+		sumOfInputs += input.WitnessUtxo.Value
+
+		if inputIndex == 0 || vtxo.ExpireAt < expiration {
+			roundTxid = vtxo.RoundTxid
+			expiration = vtxo.ExpireAt
+		}
+
+		// verify that the user signs a forfeit closure
+		var userPubkey *secp256k1.PublicKey
+
+		serverXOnlyPubkey := schnorr.SerializePubKey(s.pubkey)
+
+		for _, sig := range input.TaprootScriptSpendSig {
+			if !bytes.Equal(sig.XOnlyPubKey, serverXOnlyPubkey) {
+				parsed, err := schnorr.ParsePubKey(sig.XOnlyPubKey)
+				if err != nil {
+					return "", fmt.Errorf("failed to parse pubkey: %s", err)
+				}
+				userPubkey = parsed
+				break
+			}
+		}
+
+		if userPubkey == nil {
+			return "", fmt.Errorf("redeem transaction is not signed")
+		}
+
+		vtxoPubkeyBuf, err := hex.DecodeString(vtxo.PubKey)
+		if err != nil {
+			return "", fmt.Errorf("failed to decode vtxo pubkey: %s", err)
+		}
+
+		vtxoPubkey, err := schnorr.ParsePubKey(vtxoPubkeyBuf)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse vtxo pubkey: %s", err)
+		}
+
+		// verify witness utxo
+		pkscript, err := common.P2TRScript(vtxoPubkey)
+		if err != nil {
+			return "", fmt.Errorf("failed to get pkscript: %s", err)
+		}
+
+		if !bytes.Equal(input.WitnessUtxo.PkScript, pkscript) {
+			return "", fmt.Errorf("witness utxo script mismatch")
+		}
+
+		if input.WitnessUtxo.Value != int64(vtxo.Amount) {
+			return "", fmt.Errorf("witness utxo value mismatch")
+		}
+
+		// verify forfeit closure script
+		closure, err := tree.DecodeClosure(tapscript.Script)
+		if err != nil {
+			return "", fmt.Errorf("failed to decode forfeit closure: %s", err)
+		}
+
+		switch c := closure.(type) {
+		case *tree.CLTVMultisigClosure:
+			blocktimestamp, err := s.wallet.GetCurrentBlockTime(ctx)
+			if err != nil {
+				return "", fmt.Errorf("failed to get current block time: %s", err)
+			}
+
+			switch c.Locktime.Type {
+			case common.LocktimeTypeBlock:
+				if c.Locktime.Value > blocktimestamp.Height {
+					return "", fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block height)", c.Locktime.Value, blocktimestamp.Height)
+				}
+			case common.LocktimeTypeSecond:
+				if c.Locktime.Value > uint32(blocktimestamp.Time) {
+					return "", fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block time)", c.Locktime.Value, blocktimestamp.Time)
+				}
+			}
+		case *tree.MultisigClosure:
+			// prevent failure in case of multisig closure
+		default:
+			return "", fmt.Errorf("invalid forfeit closure script")
+		}
+
+		ctrlBlock, err := txscript.ParseControlBlock(tapscript.ControlBlock)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse control block: %s", err)
+		}
+
+		ins = append(ins, common.VtxoInput{
+			Outpoint: &outpoint,
+			Tapscript: &waddrmgr.Tapscript{
+				ControlBlock:   ctrlBlock,
+				RevealedScript: tapscript.Script,
+			},
+		})
+	}
+
+	dust, err := s.wallet.GetDustAmount(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to get dust threshold: %s", err)
+	}
+
+	outputs := ptx.UnsignedTx.TxOut
+
+	sumOfOutputs := int64(0)
+	for _, out := range outputs {
+		sumOfOutputs += out.Value
+		if out.Value < int64(dust) {
+			return "", fmt.Errorf("output value is less than dust threshold")
+		}
+	}
+
+	fees := sumOfInputs - sumOfOutputs
+	if fees < 0 {
+		return "", fmt.Errorf("invalid fees, inputs are less than outputs")
+	}
+
+	minFeeRate := s.wallet.MinRelayFeeRate(ctx)
+
+	minFees, err := common.ComputeRedeemTxFee(chainfee.SatPerKVByte(minFeeRate), ins, len(outputs))
+	if err != nil {
+		return "", fmt.Errorf("failed to compute min fees: %s", err)
+	}
+
+	if fees < minFees {
+		return "", fmt.Errorf("min relay fee not met, %d < %d", fees, minFees)
+	}
+
+	// recompute redeem tx
+	rebuiltRedeemTx, err := bitcointree.BuildRedeemTx(ins, outputs)
+	if err != nil {
+		return "", fmt.Errorf("failed to rebuild redeem tx: %s", err)
+	}
+
+	rebuiltPtx, err := psbt.NewFromRawBytes(strings.NewReader(rebuiltRedeemTx), true)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse rebuilt redeem tx: %s", err)
+	}
+
+	rebuiltTxid := rebuiltPtx.UnsignedTx.TxID()
+	redeemTxid := redeemPtx.UnsignedTx.TxID()
+	if rebuiltTxid != redeemTxid {
+		return "", fmt.Errorf("invalid redeem tx")
+	}
+
+	// verify the tapscript signatures
+	if valid, err := s.builder.VerifyTapscriptPartialSigs(redeemTx); err != nil || !valid {
+		return "", fmt.Errorf("invalid tx signature: %s", err)
+	}
+
+	if expiration == 0 {
+		return "", fmt.Errorf("no valid vtxo found")
+	}
+
+	if roundTxid == "" {
+		return "", fmt.Errorf("no valid vtxo found")
+	}
+
+	// sign the redeem tx
+
+	signedRedeemTx, err := s.wallet.SignTransactionTapscript(ctx, redeemTx, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign redeem tx: %s", err)
+	}
+
+	// Create new vtxos, update spent vtxos state
+	newVtxos := make([]domain.Vtxo, 0, len(redeemPtx.UnsignedTx.TxOut))
+	for outIndex, out := range outputs {
+		vtxoTapKey, err := schnorr.ParsePubKey(out.PkScript[2:])
+		if err != nil {
+			return "", fmt.Errorf("failed to parse vtxo taproot key: %s", err)
+		}
+
+		vtxoPubkey := hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey))
+
+		newVtxos = append(newVtxos, domain.Vtxo{
+			VtxoKey: domain.VtxoKey{
+				Txid: redeemTxid,
+				VOut: uint32(outIndex),
+			},
+			PubKey:    vtxoPubkey,
+			Amount:    uint64(out.Value),
+			ExpireAt:  expiration,
+			RoundTxid: roundTxid,
+			RedeemTx:  signedRedeemTx,
+			CreatedAt: time.Now().Unix(),
+		})
+	}
+
+	if err := s.repoManager.Vtxos().AddVtxos(ctx, newVtxos); err != nil {
+		return "", fmt.Errorf("failed to add vtxos: %s", err)
+	}
+	log.Infof("added %d vtxos", len(newVtxos))
+	if err := s.startWatchingVtxos(newVtxos); err != nil {
+		log.WithError(err).Warn(
+			"failed to start watching vtxos",
+		)
+	}
+	log.Debugf("started watching %d vtxos", len(newVtxos))
+
+	if err := s.repoManager.Vtxos().SpendVtxos(ctx, spentVtxoKeys, redeemTxid); err != nil {
+		return "", fmt.Errorf("failed to spend vtxo: %s", err)
+	}
+	log.Infof("spent %d vtxos", len(spentVtxos))
+
+	go func() {
+		s.transactionEventsCh <- RedeemTransactionEvent{
+			RedeemTxid:     redeemTxid,
+			SpentVtxos:     spentVtxoKeys,
+			SpendableVtxos: newVtxos,
+		}
+	}()
+
+	return signedRedeemTx, nil
 }
 
 func (s *covenantlessService) GetBoardingAddress(
 	ctx context.Context, userPubkey *secp256k1.PublicKey,
-) (address string, descriptor string, err error) {
-	vtxoScript := &bitcointree.DefaultVtxoScript{
-		Asp:       s.pubkey,
-		Owner:     userPubkey,
-		ExitDelay: uint(s.boardingExitDelay),
-	}
+) (address string, scripts []string, err error) {
+	vtxoScript := bitcointree.NewDefaultVtxoScript(s.pubkey, userPubkey, s.boardingExitDelay)
 
 	tapKey, _, err := vtxoScript.TapTree()
 	if err != nil {
-		return "", "", fmt.Errorf("failed to get taproot key: %s", err)
+		return "", nil, fmt.Errorf("failed to get taproot key: %s", err)
 	}
 
 	addr, err := btcutil.NewAddressTaproot(
 		schnorr.SerializePubKey(tapKey), s.chainParams(),
 	)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to get address: %s", err)
+		return "", nil, fmt.Errorf("failed to get address: %s", err)
 	}
 
-	return addr.EncodeAddress(), vtxoScript.ToDescriptor(), nil
+	scripts, err = vtxoScript.Encode()
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to encode vtxo script: %s", err)
+	}
+
+	address = addr.EncodeAddress()
+
+	return
+}
+
+func (s *covenantlessService) SpendNotes(ctx context.Context, notes []note.Note) (string, error) {
+	notesRepo := s.repoManager.Notes()
+
+	for _, note := range notes {
+		// verify the note signature
+		hash := note.Hash()
+
+		valid, err := s.wallet.VerifyMessageSignature(ctx, hash, note.Signature)
+		if err != nil {
+			return "", fmt.Errorf("failed to verify note signature: %s", err)
+		}
+
+		if !valid {
+			return "", fmt.Errorf("invalid note signature %s", note)
+		}
+
+		// verify that the note is spendable
+		spent, err := notesRepo.Contains(ctx, note.ID)
+		if err != nil {
+			return "", fmt.Errorf("failed to check if note is spent: %s", err)
+		}
+
+		if spent {
+			return "", fmt.Errorf("note already spent: %s", note)
+		}
+	}
+
+	request, err := domain.NewTxRequest(make([]domain.Vtxo, 0))
+	if err != nil {
+		return "", fmt.Errorf("failed to create tx request: %s", err)
+	}
+
+	if err := s.txRequests.pushWithNotes(*request, notes); err != nil {
+		return "", fmt.Errorf("failed to push tx requests: %s", err)
+	}
+
+	return request.Id, nil
 }
 
 func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error) {
@@ -403,7 +539,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 	now := time.Now().Unix()
 
 	boardingTxs := make(map[string]wire.MsgTx, 0) // txid -> txhex
-	descriptors := make(map[domain.VtxoKey]string)
+
 	for _, input := range inputs {
 		vtxosResult, err := s.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{input.VtxoKey})
 		if err != nil || len(vtxosResult) == 0 {
@@ -429,8 +565,18 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 					return "", fmt.Errorf("tx %s not confirmed", input.Txid)
 				}
 
+				vtxoScript, err := bitcointree.ParseVtxoScript(input.Tapscripts)
+				if err != nil {
+					return "", fmt.Errorf("failed to parse boarding descriptor: %s", err)
+				}
+
+				exitDelay, err := vtxoScript.SmallestExitDelay()
+				if err != nil {
+					return "", fmt.Errorf("failed to get exit delay: %s", err)
+				}
+
 				// if the exit path is available, forbid registering the boarding utxo
-				if blocktime+int64(s.boardingExitDelay) < now {
+				if blocktime+exitDelay.Seconds() < now {
 					return "", fmt.Errorf("tx %s expired", input.Txid)
 				}
 
@@ -460,19 +606,36 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 			return "", fmt.Errorf("input %s:%d already swept", vtxo.Txid, vtxo.VOut)
 		}
 
-		descriptors[vtxo.VtxoKey] = input.Descriptor
+		vtxoScript, err := bitcointree.ParseVtxoScript(input.Tapscripts)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse boarding descriptor: %s", err)
+		}
+
+		tapKey, _, err := vtxoScript.TapTree()
+		if err != nil {
+			return "", fmt.Errorf("failed to get taproot key: %s", err)
+		}
+
+		expectedTapKey, err := vtxo.TapKey()
+		if err != nil {
+			return "", fmt.Errorf("failed to get taproot key: %s", err)
+		}
+
+		if !bytes.Equal(schnorr.SerializePubKey(tapKey), schnorr.SerializePubKey(expectedTapKey)) {
+			return "", fmt.Errorf("descriptor does not match vtxo pubkey")
+		}
 
 		vtxosInputs = append(vtxosInputs, vtxo)
 	}
 
-	payment, err := domain.NewPayment(vtxosInputs)
+	request, err := domain.NewTxRequest(vtxosInputs)
 	if err != nil {
 		return "", err
 	}
-	if err := s.paymentRequests.push(*payment, boardingInputs, descriptors); err != nil {
+	if err := s.txRequests.push(*request, boardingInputs); err != nil {
 		return "", err
 	}
-	return payment.Id, nil
+	return request.Id, nil
 }
 
 func (s *covenantlessService) newBoardingInput(tx wire.MsgTx, input ports.Input) (*ports.BoardingInput, error) {
@@ -482,7 +645,7 @@ func (s *covenantlessService) newBoardingInput(tx wire.MsgTx, input ports.Input)
 
 	output := tx.TxOut[input.VtxoKey.VOut]
 
-	boardingScript, err := bitcointree.ParseVtxoScript(input.Descriptor)
+	boardingScript, err := bitcointree.ParseVtxoScript(input.Tapscripts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse boarding descriptor: %s", err)
 	}
@@ -492,25 +655,17 @@ func (s *covenantlessService) newBoardingInput(tx wire.MsgTx, input ports.Input)
 		return nil, fmt.Errorf("failed to get taproot key: %s", err)
 	}
 
-	expectedScriptPubKey, err := common.P2TRScript(tapKey)
+	expectedScriptPubkey, err := common.P2TRScript(tapKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get script pubkey: %s", err)
 	}
 
-	if !bytes.Equal(output.PkScript, expectedScriptPubKey) {
+	if !bytes.Equal(output.PkScript, expectedScriptPubkey) {
 		return nil, fmt.Errorf("descriptor does not match script in transaction output")
 	}
 
-	if defaultVtxoScript, ok := boardingScript.(*bitcointree.DefaultVtxoScript); ok {
-		if !bytes.Equal(schnorr.SerializePubKey(defaultVtxoScript.Asp), schnorr.SerializePubKey(s.pubkey)) {
-			return nil, fmt.Errorf("invalid boarding descriptor, ASP mismatch")
-		}
-
-		if defaultVtxoScript.ExitDelay != uint(s.boardingExitDelay) {
-			return nil, fmt.Errorf("invalid boarding descriptor, timeout mismatch")
-		}
-	} else {
-		return nil, fmt.Errorf("only default vtxo script is supported for boarding")
+	if err := boardingScript.Validate(s.pubkey, s.unilateralExitDelay); err != nil {
+		return nil, err
 	}
 
 	return &ports.BoardingInput{
@@ -521,7 +676,7 @@ func (s *covenantlessService) newBoardingInput(tx wire.MsgTx, input ports.Input)
 
 func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error {
 	// Check credentials
-	payment, ok := s.paymentRequests.view(creds)
+	request, ok := s.txRequests.view(creds)
 	if !ok {
 		return fmt.Errorf("invalid credentials")
 	}
@@ -537,14 +692,14 @@ func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, rece
 		}
 	}
 
-	if err := payment.AddReceivers(receivers); err != nil {
+	if err := request.AddReceivers(receivers); err != nil {
 		return err
 	}
-	return s.paymentRequests.update(*payment)
+	return s.txRequests.update(*request)
 }
 
-func (s *covenantlessService) UpdatePaymentStatus(_ context.Context, id string) error {
-	return s.paymentRequests.updatePingTimestamp(id)
+func (s *covenantlessService) UpdateTxRequestStatus(_ context.Context, id string) error {
+	return s.txRequests.updatePingTimestamp(id)
 }
 
 func (s *covenantlessService) SignVtxos(ctx context.Context, forfeitTxs []string) error {
@@ -569,6 +724,11 @@ func (s *covenantlessService) ListVtxos(ctx context.Context, address string) ([]
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to decode address: %s", err)
 	}
+
+	if !bytes.Equal(schnorr.SerializePubKey(decodedAddress.Server), schnorr.SerializePubKey(s.pubkey)) {
+		return nil, nil, fmt.Errorf("address does not match server pubkey")
+	}
+
 	pubkey := hex.EncodeToString(schnorr.SerializePubKey(decodedAddress.VtxoTapKey))
 
 	return s.repoManager.Vtxos().GetAllVtxos(ctx, pubkey)
@@ -607,37 +767,97 @@ func (s *covenantlessService) GetInfo(ctx context.Context) (*ServiceInfo, error)
 		return nil, fmt.Errorf("failed to get forfeit address: %s", err)
 	}
 
+	marketHourConfig, err := s.repoManager.MarketHourRepo().Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	marketHourNextStart, marketHourNextEnd, err := calcNextMarketHour(
+		marketHourConfig.StartTime,
+		marketHourConfig.EndTime,
+		marketHourConfig.Period,
+		marketHourDelta,
+		time.Now(),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	return &ServiceInfo{
 		PubKey:              pubkey,
-		RoundLifetime:       s.roundLifetime,
-		UnilateralExitDelay: s.unilateralExitDelay,
+		RoundLifetime:       int64(s.roundLifetime.Value),
+		UnilateralExitDelay: int64(s.unilateralExitDelay.Value),
 		RoundInterval:       s.roundInterval,
 		Network:             s.network.Name,
 		Dust:                dust,
-		BoardingDescriptorTemplate: fmt.Sprintf(
-			descriptor.DefaultVtxoDescriptorTemplate,
-			hex.EncodeToString(bitcointree.UnspendableKey().SerializeCompressed()),
-			"USER",
-			hex.EncodeToString(schnorr.SerializePubKey(s.pubkey)),
-			s.boardingExitDelay,
-			"USER",
-		),
-		ForfeitAddress: forfeitAddr,
+		ForfeitAddress:      forfeitAddr,
+		NextMarketHour: &NextMarketHour{
+			StartTime:     marketHourNextStart,
+			EndTime:       marketHourNextEnd,
+			Period:        marketHourConfig.Period,
+			RoundInterval: marketHourConfig.RoundInterval,
+		},
 	}, nil
 }
 
-func (s *covenantlessService) RegisterCosignerPubkey(ctx context.Context, paymentId string, pubkey string) error {
+func calcNextMarketHour(marketHourStartTime, marketHourEndTime time.Time, period, marketHourDelta time.Duration, now time.Time) (time.Time, time.Time, error) {
+	// Validate input parameters
+	if period <= 0 {
+		return time.Time{}, time.Time{}, fmt.Errorf("period must be greater than 0")
+	}
+	if !marketHourEndTime.After(marketHourStartTime) {
+		return time.Time{}, time.Time{}, fmt.Errorf("market hour end time must be after start time")
+	}
+
+	// Calculate the duration of the market hour
+	duration := marketHourEndTime.Sub(marketHourStartTime)
+
+	// Calculate the number of periods since the initial marketHourStartTime
+	elapsed := now.Sub(marketHourStartTime)
+	var n int64
+	if elapsed >= 0 {
+		n = int64(elapsed / period)
+	} else {
+		n = int64((elapsed - period + 1) / period)
+	}
+
+	// Calculate the current market hour start and end times
+	currentStartTime := marketHourStartTime.Add(time.Duration(n) * period)
+	currentEndTime := currentStartTime.Add(duration)
+
+	// Adjust if now is before the currentStartTime
+	if now.Before(currentStartTime) {
+		n -= 1
+		currentStartTime = marketHourStartTime.Add(time.Duration(n) * period)
+		currentEndTime = currentStartTime.Add(duration)
+	}
+
+	timeUntilEnd := currentEndTime.Sub(now)
+
+	if !now.Before(currentStartTime) && now.Before(currentEndTime) && timeUntilEnd >= marketHourDelta {
+		// Return the current market hour
+		return currentStartTime, currentEndTime, nil
+	} else {
+		// Move to the next market hour
+		n += 1
+		nextStartTime := marketHourStartTime.Add(time.Duration(n) * period)
+		nextEndTime := nextStartTime.Add(duration)
+		return nextStartTime, nextEndTime, nil
+	}
+}
+
+func (s *covenantlessService) RegisterCosignerPubkey(ctx context.Context, requestID string, pubkey string) error {
 	pubkeyBytes, err := hex.DecodeString(pubkey)
 	if err != nil {
 		return fmt.Errorf("failed to decode hex pubkey: %s", err)
 	}
 
-	ephemeralPublicKey, err := secp256k1.ParsePubKey(pubkeyBytes)
+	ephemeralPubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
 	if err != nil {
 		return fmt.Errorf("failed to parse pubkey: %s", err)
 	}
 
-	return s.paymentRequests.pushEphemeralKey(paymentId, ephemeralPublicKey)
+	return s.txRequests.pushEphemeralKey(requestID, ephemeralPubkey)
 }
 
 func (s *covenantlessService) RegisterCosignerNonces(
@@ -661,7 +881,7 @@ func (s *covenantlessService) RegisterCosignerNonces(
 
 	session.nonces[pubkey] = nonces
 
-	if len(session.nonces) == session.nbCosigners-1 { // exclude the ASP
+	if len(session.nonces) == session.nbCosigners-1 { // exclude the server
 		go func() {
 			session.nonceDoneC <- struct{}{}
 		}()
@@ -692,7 +912,7 @@ func (s *covenantlessService) RegisterCosignerSignatures(
 
 	session.signatures[pubkey] = signatures
 
-	if len(session.signatures) == session.nbCosigners-1 { // exclude the ASP
+	if len(session.signatures) == session.nbCosigners-1 { // exclude the server
 		go func() {
 			session.sigDoneC <- struct{}{}
 		}()
@@ -701,7 +921,50 @@ func (s *covenantlessService) RegisterCosignerSignatures(
 	return nil
 }
 
+func (s *covenantlessService) SetNostrRecipient(ctx context.Context, nostrRecipient string, signedVtxoOutpoints []SignedVtxoOutpoint) error {
+	nprofileRecipient, err := nip19toNostrProfile(nostrRecipient, s.nostrDefaultRelays)
+	if err != nil {
+		return fmt.Errorf("failed to convert nostr recipient: %s", err)
+	}
+
+	if err := validateProofs(ctx, s.repoManager.Vtxos(), signedVtxoOutpoints); err != nil {
+		return err
+	}
+
+	vtxoKeys := make([]domain.VtxoKey, 0, len(signedVtxoOutpoints))
+	for _, signedVtxo := range signedVtxoOutpoints {
+		vtxoKeys = append(vtxoKeys, signedVtxo.Outpoint)
+	}
+
+	return s.repoManager.Entities().Add(
+		ctx,
+		domain.Entity{
+			NostrRecipient: nprofileRecipient,
+		},
+		vtxoKeys,
+	)
+}
+
+func (s *covenantlessService) DeleteNostrRecipient(ctx context.Context, signedVtxoOutpoints []SignedVtxoOutpoint) error {
+	if err := validateProofs(ctx, s.repoManager.Vtxos(), signedVtxoOutpoints); err != nil {
+		return err
+	}
+
+	vtxoKeys := make([]domain.VtxoKey, 0, len(signedVtxoOutpoints))
+	for _, signedVtxo := range signedVtxoOutpoints {
+		vtxoKeys = append(vtxoKeys, signedVtxo.Outpoint)
+	}
+
+	return s.repoManager.Entities().Delete(ctx, vtxoKeys)
+}
+
 func (s *covenantlessService) start() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("recovered from panic in start: %v", r)
+		}
+	}()
+
 	s.startRound()
 }
 
@@ -732,6 +995,7 @@ func (s *covenantlessService) startFinalization() {
 	roundRemainingDuration := time.Duration((s.roundInterval/3)*2-1) * time.Second
 	thirdOfRemainingDuration := time.Duration(roundRemainingDuration / 3)
 
+	var notes []note.Note
 	var roundAborted bool
 	defer func() {
 		delete(s.treeSigningSessions, round.Id)
@@ -749,36 +1013,38 @@ func (s *covenantlessService) startFinalization() {
 			return
 		}
 		time.Sleep(thirdOfRemainingDuration)
-		s.finalizeRound()
+		s.finalizeRound(notes)
 	}()
 
 	if round.IsFailed() {
 		return
 	}
 
-	// TODO: understand how many payments must be popped from the queue and actually registered for the round
-	num := s.paymentRequests.len()
+	// TODO: understand how many tx requests must be popped from the queue and actually registered for the round
+	num := s.txRequests.len()
 	if num == 0 {
 		roundAborted = true
-		err := fmt.Errorf("no payments registered")
+		err := fmt.Errorf("no tx requests registered")
 		round.Fail(fmt.Errorf("round aborted: %s", err))
 		log.WithError(err).Debugf("round %s aborted", round.Id)
 		return
 	}
-	if num > paymentsThreshold {
-		num = paymentsThreshold
+	if num > txRequestsThreshold {
+		num = txRequestsThreshold
 	}
-	payments, boardingInputs, descriptors, cosigners := s.paymentRequests.pop(num)
-	if len(payments) > len(cosigners) {
-		err := fmt.Errorf("missing ephemeral key for payments")
+	requests, boardingInputs, cosigners, redeeemedNotes := s.txRequests.pop(num)
+	if len(requests) > len(cosigners) {
+		err := fmt.Errorf("missing ephemeral key for tx requests")
 		round.Fail(fmt.Errorf("round aborted: %s", err))
 		log.WithError(err).Debugf("round %s aborted", round.Id)
 		return
 	}
 
-	if _, err := round.RegisterPayments(payments); err != nil {
-		round.Fail(fmt.Errorf("failed to register payments: %s", err))
-		log.WithError(err).Warn("failed to register payments")
+	notes = redeeemedNotes
+
+	if _, err := round.RegisterTxRequests(requests); err != nil {
+		round.Fail(fmt.Errorf("failed to register tx requests: %s", err))
+		log.WithError(err).Warn("failed to register tx requests")
 		return
 	}
 
@@ -798,16 +1064,24 @@ func (s *covenantlessService) startFinalization() {
 
 	cosigners = append(cosigners, ephemeralKey.PubKey())
 
-	unsignedRoundTx, tree, connectorAddress, err := s.builder.BuildRoundTx(s.pubkey, payments, boardingInputs, sweptRounds, cosigners...)
+	unsignedRoundTx, vtxoTree, connectorAddress, connectors, err := s.builder.BuildRoundTx(
+		s.pubkey,
+		requests,
+		boardingInputs,
+		sweptRounds,
+		cosigners...,
+	)
 	if err != nil {
-		round.Fail(fmt.Errorf("failed to create pool tx: %s", err))
-		log.WithError(err).Warn("failed to create pool tx")
+		round.Fail(fmt.Errorf("failed to create round tx: %s", err))
+		log.WithError(err).Warn("failed to create round tx")
 		return
 	}
-	log.Debugf("pool tx created for round %s", round.Id)
+	log.Debugf("round tx created for round %s", round.Id)
 
-	if len(tree) > 0 {
-		log.Debugf("signing congestion tree for round %s", round.Id)
+	s.forfeitTxs.init(connectors, requests)
+
+	if len(vtxoTree) > 0 {
+		log.Debugf("signing vtxo tree for round %s", round.Id)
 
 		signingSession := newMusigSigningSession(len(cosigners))
 		s.treeSigningSessions[round.Id] = signingSession
@@ -816,14 +1090,14 @@ func (s *covenantlessService) startFinalization() {
 
 		s.currentRound.UnsignedTx = unsignedRoundTx
 		// send back the unsigned tree & all cosigners pubkeys
-		s.propagateRoundSigningStartedEvent(tree, cosigners)
+		s.propagateRoundSigningStartedEvent(vtxoTree, cosigners)
 
-		sweepClosure := bitcointree.CSVSigClosure{
-			Pubkey:  s.pubkey,
-			Seconds: uint(s.roundLifetime),
+		sweepClosure := tree.CSVSigClosure{
+			MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{s.pubkey}},
+			Locktime:        s.roundLifetime,
 		}
 
-		sweepTapLeaf, err := sweepClosure.Leaf()
+		sweepScript, err := sweepClosure.Script()
 		if err != nil {
 			return
 		}
@@ -837,21 +1111,22 @@ func (s *covenantlessService) startFinalization() {
 
 		sharedOutputAmount := unsignedPsbt.UnsignedTx.TxOut[0].Value
 
-		sweepTapTree := txscript.AssembleTaprootScriptTree(*sweepTapLeaf)
+		sweepLeaf := txscript.NewBaseTapLeaf(sweepScript)
+		sweepTapTree := txscript.AssembleTaprootScriptTree(sweepLeaf)
 		root := sweepTapTree.RootNode.TapHash()
 
-		coordinator, err := bitcointree.NewTreeCoordinatorSession(sharedOutputAmount, tree, root.CloneBytes(), cosigners)
+		coordinator, err := bitcointree.NewTreeCoordinatorSession(sharedOutputAmount, vtxoTree, root.CloneBytes(), cosigners)
 		if err != nil {
 			round.Fail(fmt.Errorf("failed to create tree coordinator: %s", err))
 			log.WithError(err).Warn("failed to create tree coordinator")
 			return
 		}
 
-		aspSignerSession := bitcointree.NewTreeSignerSession(
-			ephemeralKey, sharedOutputAmount, tree, root.CloneBytes(),
+		serverSignerSession := bitcointree.NewTreeSignerSession(
+			ephemeralKey, sharedOutputAmount, vtxoTree, root.CloneBytes(),
 		)
 
-		nonces, err := aspSignerSession.GetNonces()
+		nonces, err := serverSignerSession.GetNonces()
 		if err != nil {
 			round.Fail(fmt.Errorf("failed to get nonces: %s", err))
 			log.WithError(err).Warn("failed to get nonces")
@@ -895,33 +1170,33 @@ func (s *covenantlessService) startFinalization() {
 
 		s.propagateRoundSigningNoncesGeneratedEvent(aggragatedNonces)
 
-		if err := aspSignerSession.SetKeys(cosigners); err != nil {
+		if err := serverSignerSession.SetKeys(cosigners); err != nil {
 			round.Fail(fmt.Errorf("failed to set keys: %s", err))
 			log.WithError(err).Warn("failed to set keys")
 			return
 		}
 
-		if err := aspSignerSession.SetAggregatedNonces(aggragatedNonces); err != nil {
+		if err := serverSignerSession.SetAggregatedNonces(aggragatedNonces); err != nil {
 			round.Fail(fmt.Errorf("failed to set aggregated nonces: %s", err))
 			log.WithError(err).Warn("failed to set aggregated nonces")
 			return
 		}
 
-		// sign the tree as ASP
-		aspTreeSigs, err := aspSignerSession.Sign()
+		// sign the tree as server
+		serverTreeSigs, err := serverSignerSession.Sign()
 		if err != nil {
 			round.Fail(fmt.Errorf("failed to sign tree: %s", err))
 			log.WithError(err).Warn("failed to sign tree")
 			return
 		}
 
-		if err := coordinator.AddSig(ephemeralKey.PubKey(), aspTreeSigs); err != nil {
+		if err := coordinator.AddSig(ephemeralKey.PubKey(), serverTreeSigs); err != nil {
 			round.Fail(fmt.Errorf("failed to add signature: %s", err))
 			log.WithError(err).Warn("failed to add signature")
 			return
 		}
 
-		log.Debugf("ASP tree signed for round %s", round.Id)
+		log.Debugf("tree signed by us for round %s", round.Id)
 
 		signaturesTimer := time.NewTimer(thirdOfRemainingDuration)
 
@@ -952,41 +1227,13 @@ func (s *covenantlessService) startFinalization() {
 			return
 		}
 
-		log.Debugf("congestion tree signed for round %s", round.Id)
+		log.Debugf("vtxo tree signed for round %s", round.Id)
 
-		tree = signedTree
-	}
-
-	needForfeits := false
-	for _, pay := range payments {
-		if len(pay.Inputs) > 0 {
-			needForfeits = true
-			break
-		}
-	}
-
-	var forfeitTxs, connectors []string
-
-	minRelayFeeRate := s.wallet.MinRelayFeeRate(ctx)
-
-	if needForfeits {
-		connectors, forfeitTxs, err = s.builder.BuildForfeitTxs(unsignedRoundTx, payments, descriptors, minRelayFeeRate)
-		if err != nil {
-			round.Fail(fmt.Errorf("failed to create connectors and forfeit txs: %s", err))
-			log.WithError(err).Warn("failed to create connectors and forfeit txs")
-			return
-		}
-		log.Debugf("forfeit transactions created for round %s", round.Id)
-
-		if err := s.forfeitTxs.push(forfeitTxs); err != nil {
-			round.Fail(fmt.Errorf("failed to store forfeit txs: %s", err))
-			log.WithError(err).Warn("failed to store forfeit txs")
-			return
-		}
+		vtxoTree = signedTree
 	}
 
 	if _, err := round.StartFinalization(
-		connectorAddress, connectors, tree, unsignedRoundTx,
+		connectorAddress, connectors, vtxoTree, unsignedRoundTx,
 	); err != nil {
 		round.Fail(fmt.Errorf("failed to start finalization: %s", err))
 		log.WithError(err).Warn("failed to start finalization")
@@ -997,11 +1244,11 @@ func (s *covenantlessService) startFinalization() {
 }
 
 func (s *covenantlessService) propagateRoundSigningStartedEvent(
-	unsignedCongestionTree tree.CongestionTree, cosigners []*secp256k1.PublicKey,
+	unsignedVtxoTree tree.VtxoTree, cosigners []*secp256k1.PublicKey,
 ) {
 	ev := RoundSigningStarted{
 		Id:               s.currentRound.Id,
-		UnsignedVtxoTree: unsignedCongestionTree,
+		UnsignedVtxoTree: unsignedVtxoTree,
 		Cosigners:        cosigners,
 		UnsignedRoundTx:  s.currentRound.UnsignedTx,
 	}
@@ -1020,7 +1267,7 @@ func (s *covenantlessService) propagateRoundSigningNoncesGeneratedEvent(combined
 	s.eventsCh <- ev
 }
 
-func (s *covenantlessService) finalizeRound() {
+func (s *covenantlessService) finalizeRound(notes []note.Note) {
 	defer s.startRound()
 
 	ctx := context.Background()
@@ -1037,9 +1284,8 @@ func (s *covenantlessService) finalizeRound() {
 		}
 	}()
 
-	forfeitTxs, leftUnsigned := s.forfeitTxs.pop()
-	if len(leftUnsigned) > 0 {
-		err := fmt.Errorf("%d forfeit txs left to sign", len(leftUnsigned))
+	forfeitTxs, err := s.forfeitTxs.pop()
+	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to finalize round: %s", err))
 		log.WithError(err).Warn("failed to finalize round")
 		return
@@ -1093,7 +1339,7 @@ func (s *covenantlessService) finalizeRound() {
 
 	txid, err := s.wallet.BroadcastTransaction(ctx, signedRoundTx)
 	if err != nil {
-		changes = round.Fail(fmt.Errorf("failed to broadcast pool tx: %s", err))
+		changes = round.Fail(fmt.Errorf("failed to broadcast round tx: %s", err))
 		return
 	}
 
@@ -1104,25 +1350,44 @@ func (s *covenantlessService) finalizeRound() {
 		return
 	}
 
+	// mark the notes as spent
+	for _, note := range notes {
+		if err := s.repoManager.Notes().Add(ctx, note.ID); err != nil {
+			log.WithError(err).Warn("failed to mark note as spent")
+		}
+	}
+
 	go func() {
 		s.transactionEventsCh <- RoundTransactionEvent{
-			RoundTxID:             round.Txid,
-			SpentVtxos:            getSpentVtxos(round.Payments),
+			RoundTxid:             round.Txid,
+			SpentVtxos:            getSpentVtxos(round.TxRequests),
 			SpendableVtxos:        s.getNewVtxos(round),
 			ClaimedBoardingInputs: boardingInputs,
 		}
 	}()
 
-	log.Debugf("finalized round %s with pool tx %s", round.Id, round.Txid)
+	log.Debugf("finalized round %s with round tx %s", round.Id, round.Txid)
 }
 
 func (s *covenantlessService) listenToScannerNotifications() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("recovered from panic in listenToScannerNotifications: %v", r)
+		}
+	}()
+
 	ctx := context.Background()
 	chVtxos := s.scanner.GetNotificationChannel(ctx)
 
 	mutx := &sync.Mutex{}
 	for vtxoKeys := range chVtxos {
 		go func(vtxoKeys map[string][]ports.VtxoWithValue) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Errorf("recovered from panic in GetVtxos: %v", r)
+				}
+			}()
+
 			for _, keys := range vtxoKeys {
 				for _, v := range keys {
 					vtxos, err := s.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{v.VtxoKey})
@@ -1134,6 +1399,12 @@ func (s *covenantlessService) listenToScannerNotifications() {
 
 					if !vtxo.Redeemed {
 						go func() {
+							defer func() {
+								if r := recover(); r != nil {
+									log.Errorf("recovered from panic in markAsRedeemed: %v", r)
+								}
+							}()
+
 							if err := s.markAsRedeemed(ctx, vtxo); err != nil {
 								log.WithError(err).Warnf("failed to mark vtxo %s:%d as redeemed", vtxo.Txid, vtxo.VOut)
 							}
@@ -1143,6 +1414,12 @@ func (s *covenantlessService) listenToScannerNotifications() {
 					if vtxo.Spent {
 						log.Infof("fraud detected on vtxo %s:%d", vtxo.Txid, vtxo.VOut)
 						go func() {
+							defer func() {
+								if r := recover(); r != nil {
+									log.Errorf("recovered from panic in reactToFraud: %v", r)
+								}
+							}()
+
 							if err := s.reactToFraud(ctx, vtxo, mutx); err != nil {
 								log.WithError(err).Warnf("failed to prevent fraud for vtxo %s:%d", vtxo.Txid, vtxo.VOut)
 							}
@@ -1242,7 +1519,7 @@ func (s *covenantlessService) updateVtxoSet(round *domain.Round) {
 
 	ctx := context.Background()
 	repo := s.repoManager.Vtxos()
-	spentVtxos := getSpentVtxos(round.Payments)
+	spentVtxos := getSpentVtxos(round.TxRequests)
 	if len(spentVtxos) > 0 {
 		for {
 			if err := repo.SpendVtxos(ctx, spentVtxos, round.Txid); err != nil {
@@ -1268,6 +1545,12 @@ func (s *covenantlessService) updateVtxoSet(round *domain.Round) {
 		}
 
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Errorf("recovered from panic in startWatchingVtxos: %v", r)
+				}
+			}()
+
 			for {
 				if err := s.startWatchingVtxos(newVtxos); err != nil {
 					log.WithError(err).Warn(
@@ -1289,7 +1572,7 @@ func (s *covenantlessService) propagateEvents(round *domain.Round) {
 	case domain.RoundFinalizationStarted:
 		ev := domain.RoundFinalizationStarted{
 			Id:              e.Id,
-			CongestionTree:  e.CongestionTree,
+			VtxoTree:        e.VtxoTree,
 			Connectors:      e.Connectors,
 			RoundTx:         e.RoundTx,
 			MinRelayFeeRate: int64(s.wallet.MinRelayFeeRate(context.Background())),
@@ -1308,21 +1591,21 @@ func (s *covenantlessService) scheduleSweepVtxosForRound(round *domain.Round) {
 		return
 	}
 
-	expirationTimestamp := s.sweeper.scheduler.AddNow(s.roundLifetime)
+	expirationTimestamp := s.sweeper.scheduler.AddNow(int64(s.roundLifetime.Value))
 
-	if err := s.sweeper.schedule(expirationTimestamp, round.Txid, round.CongestionTree); err != nil {
+	if err := s.sweeper.schedule(expirationTimestamp, round.Txid, round.VtxoTree); err != nil {
 		log.WithError(err).Warn("failed to schedule sweep tx")
 	}
 }
 
 func (s *covenantlessService) getNewVtxos(round *domain.Round) []domain.Vtxo {
-	if len(round.CongestionTree) <= 0 {
+	if len(round.VtxoTree) <= 0 {
 		return nil
 	}
 
 	createdAt := time.Now().Unix()
 
-	leaves := round.CongestionTree.Leaves()
+	leaves := round.VtxoTree.Leaves()
 	vtxos := make([]domain.Vtxo, 0)
 	for _, node := range leaves {
 		tx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
@@ -1337,9 +1620,10 @@ func (s *covenantlessService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 				continue
 			}
 
+			vtxoPubkey := hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey))
 			vtxos = append(vtxos, domain.Vtxo{
 				VtxoKey:   domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
-				Pubkey:    hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey)),
+				PubKey:    vtxoPubkey,
 				Amount:    uint64(out.Value),
 				RoundTxid: round.Txid,
 				CreatedAt: createdAt,
@@ -1415,7 +1699,7 @@ func (s *covenantlessService) extractVtxosScripts(vtxos []domain.Vtxo) ([]string
 	indexedScripts := make(map[string]struct{})
 
 	for _, vtxo := range vtxos {
-		vtxoTapKeyBytes, err := hex.DecodeString(vtxo.Pubkey)
+		vtxoTapKeyBytes, err := hex.DecodeString(vtxo.PubKey)
 		if err != nil {
 			return nil, err
 		}
@@ -1474,7 +1758,7 @@ func (s *covenantlessService) reactToFraud(ctx context.Context, vtxo domain.Vtxo
 	if err != nil {
 		vtxosRepo := s.repoManager.Vtxos()
 
-		// if the round is not found, the utxo may be spent by an async payment redeem tx
+		// If the round is not found, the utxo may be spent by an out of round tx
 		vtxos, err := vtxosRepo.GetVtxos(ctx, []domain.VtxoKey{
 			{Txid: vtxo.SpentBy, VOut: 0},
 		})
@@ -1482,14 +1766,14 @@ func (s *covenantlessService) reactToFraud(ctx context.Context, vtxo domain.Vtxo
 			return fmt.Errorf("failed to retrieve round: %s", err)
 		}
 
-		asyncPayVtxo := vtxos[0]
-		if asyncPayVtxo.Redeemed { // redeem tx is already onchain
+		storedVtxo := vtxos[0]
+		if storedVtxo.Redeemed { // redeem tx is already onchain
 			return nil
 		}
 
-		log.Debugf("vtxo %s:%d has been spent by async payment", vtxo.Txid, vtxo.VOut)
+		log.Debugf("vtxo %s:%d has been spent by out of round transaction", vtxo.Txid, vtxo.VOut)
 
-		redeemTxHex, err := s.builder.FinalizeAndExtract(asyncPayVtxo.RedeemTx)
+		redeemTxHex, err := s.builder.FinalizeAndExtract(storedVtxo.RedeemTx)
 		if err != nil {
 			return fmt.Errorf("failed to finalize redeem tx: %s", err)
 		}
@@ -1570,12 +1854,6 @@ func findForfeitTxBitcoin(
 	return "", fmt.Errorf("forfeit tx not found")
 }
 
-type asyncPaymentData struct {
-	receivers []domain.Receiver
-	expireAt  int64
-	roundTxid string
-}
-
 // musigSigningSession holds the state of ephemeral nonces and signatures in order to coordinate the signing of the tree
 type musigSigningSession struct {
 	lock        sync.Mutex
@@ -1597,4 +1875,25 @@ func newMusigSigningSession(nbCosigners int) *musigSigningSession {
 		lock:        sync.Mutex{},
 		nbCosigners: nbCosigners,
 	}
+}
+
+func (s *covenantlessService) GetMarketHourConfig(ctx context.Context) (*domain.MarketHour, error) {
+	return s.repoManager.MarketHourRepo().Get(ctx)
+}
+
+func (s *covenantlessService) UpdateMarketHourConfig(
+	ctx context.Context,
+	marketHourStartTime, marketHourEndTime time.Time, period, roundInterval time.Duration,
+) error {
+	marketHour := domain.NewMarketHour(
+		marketHourStartTime,
+		marketHourEndTime,
+		period,
+		roundInterval,
+	)
+	if err := s.repoManager.MarketHourRepo().Upsert(ctx, *marketHour); err != nil {
+		return fmt.Errorf("failed to upsert market hours: %w", err)
+	}
+
+	return nil
 }

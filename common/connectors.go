@@ -7,14 +7,14 @@ import (
 	"github.com/vulpemventures/go-elements/psetv2"
 )
 
-func ValidateConnectors(poolTx string, connectors []string) error {
-	ptx, err := psetv2.NewPsetFromBase64(poolTx)
+func ValidateConnectors(roundTx string, connectors []string) error {
+	ptx, err := psetv2.NewPsetFromBase64(roundTx)
 	if err != nil {
-		return fmt.Errorf("invalid pool tx: %s", err)
+		return fmt.Errorf("invalid round tx: %s", err)
 	}
 	utx, err := ptx.UnsignedTx()
 	if err != nil {
-		return fmt.Errorf("invalid pool tx: %s", err)
+		return fmt.Errorf("invalid round tx: %s", err)
 	}
 	prevConnectorTxid := utx.TxHash().String()
 	prevConnectorVout := uint32(1)

@@ -29,18 +29,18 @@ func (w *singlekeyWallet) Create(
 ) (string, error) {
 	var privateKey *secp256k1.PrivateKey
 	if len(seed) <= 0 {
-		privKey, err := utils.GenerateRandomPrivateKey()
+		prvkey, err := utils.GenerateRandomPrivateKey()
 		if err != nil {
 			return "", err
 		}
-		privateKey = privKey
+		privateKey = prvkey
 	} else {
-		privKeyBytes, err := hex.DecodeString(seed)
+		prvkeyBytes, err := hex.DecodeString(seed)
 		if err != nil {
 			return "", err
 		}
 
-		privateKey = secp256k1.PrivKeyFromBytes(privKeyBytes)
+		privateKey = secp256k1.PrivKeyFromBytes(prvkeyBytes)
 	}
 
 	pwd := []byte(password)
@@ -55,7 +55,7 @@ func (w *singlekeyWallet) Create(
 	walletData := walletstore.WalletData{
 		EncryptedPrvkey: encryptedPrivateKey,
 		PasswordHash:    passwordHash,
-		Pubkey:          pubkey,
+		PubKey:          pubkey,
 	}
 	if err := w.walletStore.AddWallet(walletData); err != nil {
 		return "", err

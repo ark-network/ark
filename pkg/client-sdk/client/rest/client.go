@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
@@ -33,12 +32,12 @@ type restClient struct {
 	serverURL      string
 	svc            ark_service.ClientService
 	requestTimeout time.Duration
-	treeCache      *utils.Cache[tree.CongestionTree]
+	treeCache      *utils.Cache[tree.VtxoTree]
 }
 
-func NewClient(serverURL string) (client.ASPClient, error) {
+func NewClient(serverURL string) (client.TransportClient, error) {
 	if len(serverURL) <= 0 {
-		return nil, fmt.Errorf("missing asp url")
+		return nil, fmt.Errorf("missing server url")
 	}
 	svc, err := newRestClient(serverURL)
 	if err != nil {
@@ -46,7 +45,7 @@ func NewClient(serverURL string) (client.ASPClient, error) {
 	}
 	// TODO: use twice the round interval.
 	reqTimeout := 15 * time.Second
-	treeCache := utils.NewCache[tree.CongestionTree]()
+	treeCache := utils.NewCache[tree.VtxoTree]()
 
 	return &restClient{serverURL, svc, reqTimeout, treeCache}, nil
 }
@@ -80,7 +79,7 @@ func (a *restClient) GetInfo(
 	}
 
 	return &client.Info{
-		Pubkey:                     resp.Payload.Pubkey,
+		PubKey:                     resp.Payload.Pubkey,
 		RoundLifetime:              int64(roundLifetime),
 		UnilateralExitDelay:        int64(unilateralExitDelay),
 		RoundInterval:              int64(roundInterval),
@@ -109,7 +108,7 @@ func (a *restClient) GetBoardingAddress(
 }
 
 func (a *restClient) RegisterInputsForNextRound(
-	ctx context.Context, inputs []client.Input, ephemeralPublicKey string,
+	ctx context.Context, inputs []client.Input, ephemeralPubkey string,
 ) (string, error) {
 	ins := make([]*models.V1Input, 0, len(inputs))
 	for _, i := range inputs {
@@ -118,14 +117,16 @@ func (a *restClient) RegisterInputsForNextRound(
 				Txid: i.Txid,
 				Vout: int64(i.VOut),
 			},
-			Descriptor: i.Descriptor,
+			Tapscripts: &models.V1Tapscripts{
+				Scripts: i.Tapscripts,
+			},
 		})
 	}
 	body := &models.V1RegisterInputsForNextRoundRequest{
 		Inputs: ins,
 	}
-	if len(ephemeralPublicKey) > 0 {
-		body.EphemeralPubkey = ephemeralPublicKey
+	if len(ephemeralPubkey) > 0 {
+		body.EphemeralPubkey = ephemeralPubkey
 	}
 
 	resp, err := a.svc.ArkServiceRegisterInputsForNextRound(
@@ -135,11 +136,29 @@ func (a *restClient) RegisterInputsForNextRound(
 		return "", err
 	}
 
-	return resp.Payload.ID, nil
+	return resp.Payload.RequestID, nil
+}
+
+func (a *restClient) RegisterNotesForNextRound(
+	ctx context.Context, notes []string, ephemeralKey string,
+) (string, error) {
+	body := &models.V1RegisterInputsForNextRoundRequest{
+		Notes: notes,
+	}
+	if len(ephemeralKey) > 0 {
+		body.EphemeralPubkey = ephemeralKey
+	}
+	resp, err := a.svc.ArkServiceRegisterInputsForNextRound(
+		ark_service.NewArkServiceRegisterInputsForNextRoundParams().WithBody(body),
+	)
+	if err != nil {
+		return "", err
+	}
+	return resp.Payload.RequestID, nil
 }
 
 func (a *restClient) RegisterOutputsForNextRound(
-	ctx context.Context, paymentID string, outputs []client.Output,
+	ctx context.Context, requestID string, outputs []client.Output,
 ) error {
 	outs := make([]*models.V1Output, 0, len(outputs))
 	for _, o := range outputs {
@@ -149,8 +168,8 @@ func (a *restClient) RegisterOutputsForNextRound(
 		})
 	}
 	body := models.V1RegisterOutputsForNextRoundRequest{
-		ID:      paymentID,
-		Outputs: outs,
+		RequestID: requestID,
+		Outputs:   outs,
 	}
 
 	_, err := a.svc.ArkServiceRegisterOutputsForNextRound(
@@ -227,7 +246,7 @@ func (a *restClient) SubmitSignedForfeitTxs(
 }
 
 func (c *restClient) GetEventStream(
-	ctx context.Context, paymentID string,
+	ctx context.Context, requestID string,
 ) (<-chan client.RoundEventChannel, func(), error) {
 	eventsCh := make(chan client.RoundEventChannel)
 
@@ -335,10 +354,10 @@ func (c *restClient) GetEventStream(
 				}
 
 				event = client.RoundSigningStartedEvent{
-					ID:                  e.ID,
-					UnsignedTree:        treeFromProto{e.UnsignedVtxoTree}.parse(),
-					CosignersPublicKeys: pubkeys,
-					UnsignedRoundTx:     e.UnsignedRoundTx,
+					ID:               e.ID,
+					UnsignedTree:     treeFromProto{e.UnsignedVtxoTree}.parse(),
+					CosignersPubKeys: pubkeys,
+					UnsignedRoundTx:  e.UnsignedRoundTx,
 				}
 			case resp.Result.RoundSigningNoncesGenerated != nil:
 				e := resp.Result.RoundSigningNoncesGenerated
@@ -365,63 +384,27 @@ func (c *restClient) GetEventStream(
 }
 
 func (a *restClient) Ping(
-	ctx context.Context, paymentID string,
+	ctx context.Context, requestID string,
 ) error {
 	r := ark_service.NewArkServicePingParams()
-	r.SetPaymentID(paymentID)
+	r.SetRequestID(requestID)
 	_, err := a.svc.ArkServicePing(r)
 	return err
 }
 
-func (a *restClient) CreatePayment(
-	ctx context.Context, inputs []client.AsyncPaymentInput, outputs []client.Output,
+func (a *restClient) SubmitRedeemTx(
+	ctx context.Context, redeemTx string,
 ) (string, error) {
-	ins := make([]*models.V1AsyncPaymentInput, 0, len(inputs))
-	for _, i := range inputs {
-		ins = append(ins, &models.V1AsyncPaymentInput{
-			Input: &models.V1Input{
-				Outpoint: &models.V1Outpoint{
-					Txid: i.Input.Txid,
-					Vout: int64(i.VOut),
-				},
-				Descriptor: i.Input.Descriptor,
-			},
-			ForfeitLeafHash: i.ForfeitLeafHash.String(),
-		})
+	req := &models.V1SubmitRedeemTxRequest{
+		RedeemTx: redeemTx,
 	}
-	outs := make([]*models.V1Output, 0, len(outputs))
-	for _, o := range outputs {
-		outs = append(outs, &models.V1Output{
-			Address: o.Address,
-			Amount:  strconv.Itoa(int(o.Amount)),
-		})
-	}
-	body := models.V1CreatePaymentRequest{
-		Inputs:  ins,
-		Outputs: outs,
-	}
-	resp, err := a.svc.ArkServiceCreatePayment(
-		ark_service.NewArkServiceCreatePaymentParams().WithBody(&body),
+	resp, err := a.svc.ArkServiceSubmitRedeemTx(
+		ark_service.NewArkServiceSubmitRedeemTxParams().WithBody(req),
 	)
 	if err != nil {
 		return "", err
 	}
-	return resp.GetPayload().SignedRedeemTx, nil
-}
-
-func (a *restClient) CompletePayment(
-	ctx context.Context, signedRedeemTx string,
-) error {
-	req := &arkv1.CompletePaymentRequest{
-		SignedRedeemTx: signedRedeemTx,
-	}
-	body := models.V1CompletePaymentRequest{
-		SignedRedeemTx: req.GetSignedRedeemTx(),
-	}
-	_, err := a.svc.ArkServiceCompletePayment(
-		ark_service.NewArkServiceCompletePaymentParams().WithBody(&body),
-	)
-	return err
+	return resp.Payload.SignedRedeemTx, nil
 }
 
 func (a *restClient) GetRound(
@@ -518,6 +501,33 @@ func (a *restClient) ListVtxos(
 	return spendableVtxos, spentVtxos, nil
 }
 
+func (a *restClient) SetNostrRecipient(
+	ctx context.Context, nostrRecipient string, vtxos []client.SignedVtxoOutpoint,
+) error {
+	body := models.V1SetNostrRecipientRequest{
+		NostrRecipient: nostrRecipient,
+		Vtxos:          toSignedVtxoModel(vtxos),
+	}
+
+	_, err := a.svc.ArkServiceSetNostrRecipient(
+		ark_service.NewArkServiceSetNostrRecipientParams().WithBody(&body),
+	)
+	return err
+}
+
+func (a *restClient) DeleteNostrRecipient(
+	ctx context.Context, vtxos []client.SignedVtxoOutpoint,
+) error {
+	body := models.V1DeleteNostrRecipientRequest{
+		Vtxos: toSignedVtxoModel(vtxos),
+	}
+
+	_, err := a.svc.ArkServiceDeleteNostrRecipient(
+		ark_service.NewArkServiceDeleteNostrRecipientParams().WithBody(&body),
+	)
+	return err
+}
+
 func (c *restClient) Close() {}
 
 func newRestClient(
@@ -566,8 +576,8 @@ type treeFromProto struct {
 	*models.V1Tree
 }
 
-func (t treeFromProto) parse() tree.CongestionTree {
-	congestionTree := make(tree.CongestionTree, 0, len(t.Levels))
+func (t treeFromProto) parse() tree.VtxoTree {
+	vtxoTree := make(tree.VtxoTree, 0, len(t.Levels))
 	for _, l := range t.Levels {
 		level := make([]tree.Node, 0, len(l.Nodes))
 		for _, n := range l.Nodes {
@@ -577,13 +587,13 @@ func (t treeFromProto) parse() tree.CongestionTree {
 				ParentTxid: n.ParentTxid,
 			})
 		}
-		congestionTree = append(congestionTree, level)
+		vtxoTree = append(vtxoTree, level)
 	}
 
-	for j, treeLvl := range congestionTree {
+	for j, treeLvl := range vtxoTree {
 		for i, node := range treeLvl {
-			if len(congestionTree.Children(node.Txid)) == 0 {
-				congestionTree[j][i] = tree.Node{
+			if len(vtxoTree.Children(node.Txid)) == 0 {
+				vtxoTree[j][i] = tree.Node{
 					Txid:       node.Txid,
 					Tx:         node.Tx,
 					ParentTxid: node.ParentTxid,
@@ -593,7 +603,7 @@ func (t treeFromProto) parse() tree.CongestionTree {
 		}
 	}
 
-	return congestionTree
+	return vtxoTree
 }
 
 func (c *restClient) GetTransactionsStream(ctx context.Context) (<-chan client.TransactionEvent, func(), error) {
@@ -718,15 +728,33 @@ func vtxosFromRest(restVtxos []*models.V1Vtxo) []client.Vtxo {
 				Txid: v.Outpoint.Txid,
 				VOut: uint32(v.Outpoint.Vout),
 			},
-			Pubkey:    v.Pubkey,
+			PubKey:    v.Pubkey,
 			Amount:    uint64(amount),
 			RoundTxid: v.RoundTxid,
 			ExpiresAt: expiresAt,
 			RedeemTx:  v.RedeemTx,
-			IsOOR:     v.IsOor,
+			IsPending: v.IsPending,
 			SpentBy:   v.SpentBy,
 			CreatedAt: createdAt,
 		}
 	}
 	return vtxos
+}
+
+func toSignedVtxoModel(vtxos []client.SignedVtxoOutpoint) []*models.V1SignedVtxoOutpoint {
+	signedVtxos := make([]*models.V1SignedVtxoOutpoint, 0, len(vtxos))
+	for _, v := range vtxos {
+		signedVtxos = append(signedVtxos, &models.V1SignedVtxoOutpoint{
+			Outpoint: &models.V1Outpoint{
+				Txid: v.Outpoint.Txid,
+				Vout: int64(v.Outpoint.VOut),
+			},
+			Proof: &models.V1OwnershipProof{
+				ControlBlock: v.Proof.ControlBlock,
+				Script:       v.Proof.Script,
+				Signature:    v.Proof.Signature,
+			},
+		})
+	}
+	return signedVtxos
 }

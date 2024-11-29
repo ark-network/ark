@@ -61,8 +61,11 @@ ArkServicePingParams contains all the parameters to send to the API endpoint
 */
 type ArkServicePingParams struct {
 
-	// PaymentID.
-	PaymentID string
+	/* RequestID.
+
+	   The id used to register inputs and ouptuts.
+	*/
+	RequestID string
 
 	timeout    time.Duration
 	Context    context.Context
@@ -117,15 +120,15 @@ func (o *ArkServicePingParams) SetHTTPClient(client *http.Client) {
 	o.HTTPClient = client
 }
 
-// WithPaymentID adds the paymentID to the ark service ping params
-func (o *ArkServicePingParams) WithPaymentID(paymentID string) *ArkServicePingParams {
-	o.SetPaymentID(paymentID)
+// WithRequestID adds the requestID to the ark service ping params
+func (o *ArkServicePingParams) WithRequestID(requestID string) *ArkServicePingParams {
+	o.SetRequestID(requestID)
 	return o
 }
 
-// SetPaymentID adds the paymentId to the ark service ping params
-func (o *ArkServicePingParams) SetPaymentID(paymentID string) {
-	o.PaymentID = paymentID
+// SetRequestID adds the requestId to the ark service ping params
+func (o *ArkServicePingParams) SetRequestID(requestID string) {
+	o.RequestID = requestID
 }
 
 // WriteToRequest writes these params to a swagger request
@@ -136,8 +139,8 @@ func (o *ArkServicePingParams) WriteToRequest(r runtime.ClientRequest, reg strfm
 	}
 	var res []error
 
-	// path param paymentId
-	if err := r.SetPathParam("paymentId", o.PaymentID); err != nil {
+	// path param requestId
+	if err := r.SetPathParam("requestId", o.RequestID); err != nil {
 		return err
 	}
 

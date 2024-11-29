@@ -3,6 +3,8 @@ syntax = "proto3";
 package ark.v1;
 
 import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
 
 service ArkService {
   rpc GetInfo(GetInfoRequest) returns (GetInfoResponse) {
@@ -17,7 +19,7 @@ service ArkService {
     };
   };
 
-  /* In-Round Payment APIs */
+  /* In-Round Transaction APIs */
 
   rpc RegisterInputsForNextRound(RegisterInputsForNextRoundRequest) returns (RegisterInputsForNextRoundResponse) {
     option (google.api.http) = {
@@ -56,21 +58,15 @@ service ArkService {
   };
   rpc Ping(PingRequest) returns (PingResponse) {
     option (google.api.http) = {
-      get: "/v1/round/ping/{payment_id}"
+      get: "/v1/round/ping/{request_id}"
     };
   };
 
-  /* Async Payment APIs */
+  /* Out-of-Round Transaction APIs */
 
-  rpc CreatePayment(CreatePaymentRequest) returns (CreatePaymentResponse) {
+  rpc SubmitRedeemTx(SubmitRedeemTxRequest) returns (SubmitRedeemTxResponse) {
     option (google.api.http) = {
-      post: "/v1/payment"
-      body: "*"
-    };
-  }
-  rpc CompletePayment(CompletePaymentRequest) returns (CompletePaymentResponse) {
-    option (google.api.http) = {
-      post: "/v1/payment/complete"
+      post: "/v1/redeem-tx"
       body: "*"
     };
   }
@@ -97,6 +93,22 @@ service ArkService {
       get: "/v1/transactions"
     };
   }
+
+  /* Entity APIs */
+
+  rpc SetNostrRecipient(SetNostrRecipientRequest) returns (SetNostrRecipientResponse) {
+    option (google.api.http) = {
+      post: "/v1/vtxo/nostr"
+      body: "*"
+    };
+  }
+
+  rpc DeleteNostrRecipient(DeleteNostrRecipientRequest) returns (DeleteNostrRecipientResponse) {
+    option (google.api.http) = {
+      post: "/v1/vtxo/nostr/delete"
+      body: "*"
+    };
+  }
 }
 
 message GetInfoRequest {}
@@ -110,6 +122,7 @@ message GetInfoResponse {
   string boarding_descriptor_template = 7;
   repeated string vtxo_descriptor_templates = 8;
   string forfeit_address = 9;
+  MarketHour market_hour = 10;
 }
 
 message GetBoardingAddressRequest {
@@ -117,24 +130,26 @@ message GetBoardingAddressRequest {
 }
 message GetBoardingAddressResponse {
   string address = 1;
-  string descriptor = 2;
+  oneof taproot_tree {
+    string descriptor = 2;
+    Tapscripts tapscripts = 3;
+  }
 }
 
-/* In-Round Payment API messages */
+/* In-Round Transaction API messages */
 
 message RegisterInputsForNextRoundRequest {
   repeated Input inputs = 1;
   optional string ephemeral_pubkey = 2;
+  repeated string notes = 3;
 }
 message RegisterInputsForNextRoundResponse {
-  // Mocks wabisabi's blinded credentials.
-  string id = 1;
+  string request_id = 1;
 }
 
 message RegisterOutputsForNextRoundRequest {
-  // Mocks wabisabi's blinded credentials.
-  string id = 1;
-  // List of receivers for a registered payment. 
+  string request_id = 1;
+  // List of receivers for to convert to leaves in the next VTXO tree. 
   repeated Output outputs = 2;
 }
 message RegisterOutputsForNextRoundResponse {}
@@ -156,7 +171,7 @@ message SubmitTreeSignaturesResponse {}
 message SubmitSignedForfeitTxsRequest {
   // Forfeit txs signed by the user. 
   repeated string signed_forfeit_txs = 1;
-  // If payment has boarding input, the user must sign the associated inputs.
+  // The user has to sign also the round tx if he registerd a boarding UTXO.
   optional string signed_round_tx = 2;
 }
 message SubmitSignedForfeitTxsResponse {}
@@ -173,29 +188,17 @@ message GetEventStreamResponse {
 }
 
 message PingRequest {
-  string payment_id = 1;
+  // The id used to register inputs and ouptuts.
+  string request_id = 1;
 }
 message PingResponse {}
 
-/* Async Payment API messages */
-
-message AsyncPaymentInput {
-  Input input = 1;
-  string forfeit_leaf_hash = 2;
+message SubmitRedeemTxRequest {
+  string redeem_tx = 1;
 }
-
-message CreatePaymentRequest {
-  repeated AsyncPaymentInput inputs = 1;
-  repeated Output outputs = 2;
-}
-message CreatePaymentResponse {
-  string signed_redeem_tx = 1; // signed only by the ASP
-}
-
-message CompletePaymentRequest {
+message SubmitRedeemTxResponse {
   string signed_redeem_tx = 1;
 }
-message CompletePaymentResponse {}
 
 /* Explorer-like API messages */
 
@@ -281,7 +284,10 @@ message Outpoint {
 
 message Input {
   Outpoint outpoint = 1;
-  string descriptor = 2;
+  oneof taproot_tree {
+    string descriptor = 2;
+    Tapscripts tapscripts = 3;
+  }
 }
 
 message Output {
@@ -310,7 +316,7 @@ message Vtxo {
   string spent_by = 4;
   int64 expire_at = 5;
   bool swept = 6;
-  bool is_oor = 7;
+  bool is_pending = 7;
   string redeem_tx = 8;
   uint64 amount = 9;
   string pubkey = 10;
@@ -336,4 +342,40 @@ message RedeemTransaction {
   string txid = 1;
   repeated Outpoint spent_vtxos = 2;
   repeated Vtxo spendable_vtxos = 3;
+}
+
+// This message is used to prove to the server that the user controls the vtxo without revealing the whole VTXO taproot tree.
+message OwnershipProof {
+  string control_block = 1;
+  string script = 2;
+  string signature = 3; // VTXO outpoint signed with script's secret key
+}
+
+message SignedVtxoOutpoint {
+  Outpoint outpoint = 1;
+  OwnershipProof proof = 2;
+}
+
+message SetNostrRecipientRequest {
+  string nostr_recipient = 1;
+  repeated SignedVtxoOutpoint vtxos = 2;
+}
+
+message SetNostrRecipientResponse {}
+
+message DeleteNostrRecipientRequest {
+  repeated SignedVtxoOutpoint vtxos = 1;
+}
+
+message DeleteNostrRecipientResponse {}
+
+message Tapscripts {
+  repeated string scripts = 1;
+}
+
+message MarketHour {
+  google.protobuf.Timestamp next_start_time = 1;
+  google.protobuf.Timestamp next_end_time = 2;
+  google.protobuf.Duration period = 3;
+  google.protobuf.Duration round_interval = 4;
 }

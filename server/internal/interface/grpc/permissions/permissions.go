@@ -145,11 +145,7 @@ func Whitelist() map[string][]bakery.Op {
 			Entity: EntityArk,
 			Action: "read",
 		}},
-		fmt.Sprintf("/%s/CreatePayment", arkv1.ArkService_ServiceDesc.ServiceName): {{
-			Entity: EntityArk,
-			Action: "write",
-		}},
-		fmt.Sprintf("/%s/CompletePayment", arkv1.ArkService_ServiceDesc.ServiceName): {{
+		fmt.Sprintf("/%s/SubmitRedeemTx", arkv1.ArkService_ServiceDesc.ServiceName): {{
 			Entity: EntityArk,
 			Action: "write",
 		}},
@@ -166,6 +162,14 @@ func Whitelist() map[string][]bakery.Op {
 			Action: "write",
 		}},
 		fmt.Sprintf("/%s/SubmitTreeSignatures", arkv1.ArkService_ServiceDesc.ServiceName): {{
+			Entity: EntityArk,
+			Action: "write",
+		}},
+		fmt.Sprintf("/%s/SetNostrRecipient", arkv1.ArkService_ServiceDesc.ServiceName): {{
+			Entity: EntityArk,
+			Action: "write",
+		}},
+		fmt.Sprintf("/%s/DeleteNostrRecipient", arkv1.ArkService_ServiceDesc.ServiceName): {{
 			Entity: EntityArk,
 			Action: "write",
 		}},
@@ -199,6 +203,18 @@ func AllPermissionsByMethod() map[string][]bakery.Op {
 		fmt.Sprintf("/%s/GetRounds", arkv1.AdminService_ServiceDesc.ServiceName): {{
 			Entity: EntityManager,
 			Action: "read",
+		}},
+		fmt.Sprintf("/%s/CreateNote", arkv1.AdminService_ServiceDesc.ServiceName): {{
+			Entity: EntityManager,
+			Action: "write",
+		}},
+		fmt.Sprintf("/%s/GetMarketHourConfig", arkv1.AdminService_ServiceDesc.ServiceName): {{
+			Entity: EntityManager,
+			Action: "read",
+		}},
+		fmt.Sprintf("/%s/UpdateMarketHourConfig", arkv1.AdminService_ServiceDesc.ServiceName): {{
+			Entity: EntityManager,
+			Action: "write",
 		}},
 	}
 }

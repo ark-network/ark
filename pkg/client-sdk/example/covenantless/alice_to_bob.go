@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	aspUrl     = "localhost:7070"
+	serverUrl  = "localhost:7070"
 	clientType = arksdk.GrpcClient
 	password   = "password"
 	walletType = arksdk.SingleKeyWallet
@@ -128,11 +128,11 @@ func main() {
 	fmt.Println("")
 	log.Infof("alice is sending %d sats to bob offchain...", amount)
 
-	if _, err = aliceArkClient.SendAsync(ctx, false, receivers); err != nil {
+	if _, err = aliceArkClient.SendOffChain(ctx, false, receivers); err != nil {
 		log.Fatal(err)
 	}
 
-	log.Info("payment completed out of round")
+	log.Info("transaction completed out of round")
 
 	if err := generateBlock(); err != nil {
 		log.Fatal(err)
@@ -188,7 +188,7 @@ func setupArkClient(wallet string) (arksdk.ArkClient, error) {
 	if err := client.Init(context.Background(), arksdk.InitArgs{
 		WalletType:          walletType,
 		ClientType:          clientType,
-		AspUrl:              aspUrl,
+		ServerUrl:           serverUrl,
 		Password:            password,
 		WithTransactionFeed: true,
 	}); err != nil {

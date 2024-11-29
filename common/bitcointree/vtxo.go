@@ -1,94 +1,52 @@
 package bitcointree
 
 import (
-	"encoding/hex"
 	"fmt"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/descriptor"
-	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-type VtxoScript common.VtxoScript[bitcoinTapTree]
+type VtxoScript common.VtxoScript[bitcoinTapTree, tree.Closure]
 
-func ParseVtxoScript(desc string) (VtxoScript, error) {
+func ParseVtxoScript(scripts []string) (VtxoScript, error) {
 	types := []VtxoScript{
-		&DefaultVtxoScript{},
+		&TapscriptsVtxoScript{},
 	}
 
 	for _, v := range types {
-		if err := v.FromDescriptor(desc); err == nil {
+		if err := v.Decode(scripts); err == nil {
 			return v, nil
 		}
 	}
 
-	return nil, fmt.Errorf("invalid vtxo descriptor: %s", desc)
+	return nil, fmt.Errorf("invalid vtxo scripts: %s", scripts)
 }
 
-/*
-* DefaultVtxoScript is the default implementation of VTXO with 2 closures
-* - Owner and ASP (forfeit)
-*	- Owner after t (unilateral exit)
- */
-type DefaultVtxoScript struct {
-	Owner     *secp256k1.PublicKey
-	Asp       *secp256k1.PublicKey
-	ExitDelay uint
+func NewDefaultVtxoScript(owner, server *secp256k1.PublicKey, exitDelay common.Locktime) VtxoScript {
+	base := tree.NewDefaultVtxoScript(owner, server, exitDelay)
+
+	return &TapscriptsVtxoScript{*base}
 }
 
-func (v *DefaultVtxoScript) ToDescriptor() string {
-	owner := hex.EncodeToString(schnorr.SerializePubKey(v.Owner))
-
-	return fmt.Sprintf(
-		descriptor.DefaultVtxoDescriptorTemplate,
-		hex.EncodeToString(UnspendableKey().SerializeCompressed()),
-		owner,
-		hex.EncodeToString(schnorr.SerializePubKey(v.Asp)),
-		v.ExitDelay,
-		owner,
-	)
+type TapscriptsVtxoScript struct {
+	tree.TapscriptsVtxoScript
 }
 
-func (v *DefaultVtxoScript) FromDescriptor(desc string) error {
-	owner, asp, exitDelay, err := descriptor.ParseDefaultVtxoDescriptor(desc)
-	if err != nil {
-		return err
+func (v *TapscriptsVtxoScript) TapTree() (*secp256k1.PublicKey, bitcoinTapTree, error) {
+	leaves := make([]txscript.TapLeaf, len(v.Closures))
+	for i, closure := range v.Closures {
+		script, err := closure.Script()
+		if err != nil {
+			return nil, bitcoinTapTree{}, fmt.Errorf("failed to get script for closure %d: %w", i, err)
+		}
+		leaves[i] = txscript.NewBaseTapLeaf(script)
 	}
 
-	v.Owner = owner
-	v.Asp = asp
-	v.ExitDelay = exitDelay
-	return nil
-}
-
-func (v *DefaultVtxoScript) TapTree() (*secp256k1.PublicKey, bitcoinTapTree, error) {
-	redeemClosure := &CSVSigClosure{
-		Pubkey:  v.Owner,
-		Seconds: v.ExitDelay,
-	}
-
-	redeemLeaf, err := redeemClosure.Leaf()
-	if err != nil {
-		return nil, bitcoinTapTree{}, err
-	}
-
-	forfeitClosure := &MultisigClosure{
-		Pubkey:    v.Owner,
-		AspPubkey: v.Asp,
-	}
-
-	forfeitLeaf, err := forfeitClosure.Leaf()
-	if err != nil {
-		return nil, bitcoinTapTree{}, err
-	}
-
-	tapTree := txscript.AssembleTaprootScriptTree(
-		*redeemLeaf, *forfeitLeaf,
-	)
-
+	tapTree := txscript.AssembleTaprootScriptTree(leaves...)
 	root := tapTree.RootNode.TapHash()
 	taprootKey := txscript.ComputeTaprootOutputKey(
 		UnspendableKey(),

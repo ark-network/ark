@@ -97,11 +97,11 @@ func (e *PK) Script(verify bool) (string, error) {
 }
 
 type Older struct {
-	Timeout uint
+	Locktime common.Locktime
 }
 
 func (e *Older) String() string {
-	return fmt.Sprintf("older(%d)", e.Timeout)
+	return fmt.Sprintf("older(%d)", e.Locktime.Value)
 }
 
 func (e *Older) Parse(policy string) error {
@@ -124,13 +124,13 @@ func (e *Older) Parse(policy string) error {
 		return ErrInvalidOlderPolicy
 	}
 
-	e.Timeout = uint(timeout)
+	e.Locktime = common.Locktime{Type: common.LocktimeTypeBlock, Value: uint32(timeout)}
 
 	return nil
 }
 
 func (e *Older) Script(bool) (string, error) {
-	sequence, err := common.BIP68Sequence(e.Timeout)
+	sequence, err := common.BIP68Sequence(e.Locktime)
 	if err != nil {
 		return "", err
 	}

@@ -72,7 +72,7 @@ func InitWrapper() js.Func {
 		err := arkSdkClient.InitWithWallet(context.Background(), arksdk.InitWithWalletArgs{
 			ClientType:  args[1].String(),
 			Wallet:      walletSvc,
-			AspUrl:      args[2].String(),
+			ServerUrl:   args[2].String(),
 			Seed:        args[3].String(),
 			Password:    args[4].String(),
 			ExplorerURL: args[6].String(),
@@ -233,38 +233,12 @@ func SendOffChainWrapper() js.Func {
 		}
 
 		withExpiryCoinselect := args[0].Bool()
-		receivers, err := parseReceivers(args[0])
-		if err != nil {
-			return nil, err
-		}
-
-		txID, err := arkSdkClient.SendOffChain(
-			context.Background(), withExpiryCoinselect, receivers,
-		)
-		if err != nil {
-			return nil, err
-		}
-		return js.ValueOf(txID), nil
-	})
-}
-
-func SendAsyncWrapper() js.Func {
-	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) != 2 {
-			return nil, errors.New("invalid number of args")
-		}
-
-		withExpiryCoinselect := args[0].Bool()
 		receivers, err := parseReceivers(args[1])
 		if err != nil {
 			return nil, err
 		}
 
-		if receivers == nil || len(receivers) == 0 {
-			return nil, errors.New("no receivers specified")
-		}
-
-		txID, err := arkSdkClient.SendAsync(
+		txID, err := arkSdkClient.SendOffChain(
 			context.Background(), withExpiryCoinselect, receivers,
 		)
 		if err != nil {
@@ -340,25 +314,25 @@ func GetTransactionHistoryWrapper() js.Func {
 	})
 }
 
-func GetAspUrlWrapper() js.Func {
+func GetServerUrlWrapper() js.Func {
 	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
 		data, _ := arkSdkClient.GetConfigData(context.Background())
 		var url string
 		if data != nil {
-			url = data.AspUrl
+			url = data.ServerUrl
 		}
 		return js.ValueOf(url)
 	})
 }
 
-func GetAspPubkeyWrapper() js.Func {
+func GetServerPubkeyWrapper() js.Func {
 	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
 		data, _ := arkSdkClient.GetConfigData(context.Background())
-		var aspPubkey string
+		var serverPubkey string
 		if data != nil {
-			aspPubkey = hex.EncodeToString(data.AspPubkey.SerializeCompressed())
+			serverPubkey = hex.EncodeToString(data.ServerPubKey.SerializeCompressed())
 		}
-		return js.ValueOf(aspPubkey)
+		return js.ValueOf(serverPubkey)
 	})
 }
 
@@ -400,7 +374,7 @@ func GetRoundLifetimeWrapper() js.Func {
 		data, _ := arkSdkClient.GetConfigData(context.Background())
 		var roundLifettime int64
 		if data != nil {
-			roundLifettime = data.RoundLifetime
+			roundLifettime = data.RoundLifetime.Seconds()
 		}
 		return js.ValueOf(roundLifettime)
 	})
@@ -411,7 +385,7 @@ func GetUnilateralExitDelayWrapper() js.Func {
 		data, _ := arkSdkClient.GetConfigData(context.Background())
 		var unilateralExitDelay int64
 		if data != nil {
-			unilateralExitDelay = data.UnilateralExitDelay
+			unilateralExitDelay = data.UnilateralExitDelay.Seconds()
 		}
 		return js.ValueOf(unilateralExitDelay)
 	})
@@ -425,6 +399,44 @@ func GetDustWrapper() js.Func {
 			dust = data.Dust
 		}
 		return js.ValueOf(dust)
+	})
+}
+
+func RedeemNotesWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if len(args) != 1 {
+			return nil, errors.New("invalid number of args")
+		}
+
+		// Parse notes array from JS
+		jsNotes := args[0]
+		if jsNotes.Type() != js.TypeObject || jsNotes.Get("length").Type() != js.TypeNumber {
+			return nil, errors.New("invalid notes argument: expected array")
+		}
+
+		notes := make([]string, 0, jsNotes.Length())
+		for i := 0; i < jsNotes.Length(); i++ {
+			notes = append(notes, jsNotes.Index(i).String())
+		}
+
+		txID, err := arkSdkClient.RedeemNotes(context.Background(), notes)
+		if err != nil {
+			return nil, err
+		}
+
+		return js.ValueOf(txID), nil
+	})
+}
+
+func SetNostrNotificationRecipientWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if len(args) != 1 {
+			return nil, errors.New("invalid number of args")
+		}
+
+		nostrRecipient := args[0].String()
+		err := arkSdkClient.SetNostrNotificationRecipient(context.Background(), nostrRecipient)
+		return nil, err
 	})
 }
 

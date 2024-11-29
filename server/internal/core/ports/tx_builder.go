@@ -1,11 +1,11 @@
 package ports
 
 import (
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
 type SweepInput interface {
@@ -19,7 +19,7 @@ type SweepInput interface {
 
 type Input struct {
 	domain.VtxoKey
-	Descriptor string
+	Tapscripts []string
 }
 
 type BoardingInput struct {
@@ -28,28 +28,31 @@ type BoardingInput struct {
 }
 
 type TxBuilder interface {
+	// BuildRoundTx builds a round tx for the given tx requests, boarding inputs
+	// it selects coin from swept rounds and server wallet
+	// returns the round partial tx, the vtxo tree and the set of connectors
 	BuildRoundTx(
-		aspPubkey *secp256k1.PublicKey, payments []domain.Payment, boardingInputs []BoardingInput, sweptRounds []domain.Round,
+		serverPubkey *secp256k1.PublicKey, txRequests []domain.TxRequest, boardingInputs []BoardingInput, sweptRounds []domain.Round,
 		cosigners ...*secp256k1.PublicKey,
-	) (roundTx string, congestionTree tree.CongestionTree, connectorAddress string, err error)
-	BuildForfeitTxs(
+	) (
 		roundTx string,
-		payments []domain.Payment,
-		descriptors map[domain.VtxoKey]string,
-		minRelayFeeRate chainfee.SatPerKVByte,
-	) (connectors []string, forfeitTxs []string, err error)
+		vtxoTree tree.VtxoTree,
+		connectorAddress string,
+		connectors []string,
+		err error,
+	)
+	// VerifyForfeitTxs verifies the given forfeit txs for the given vtxos and connectors
+	VerifyForfeitTxs(
+		vtxos []domain.Vtxo,
+		connectors []string,
+		txs []string,
+	) (valid map[domain.VtxoKey][]string, err error)
 	BuildSweepTx(inputs []SweepInput) (signedSweepTx string, err error)
-	GetSweepInput(node tree.Node) (lifetime int64, sweepInput SweepInput, err error)
+	GetSweepInput(node tree.Node) (lifetime *common.Locktime, sweepInput SweepInput, err error)
 	FinalizeAndExtract(tx string) (txhex string, err error)
-	VerifyTapscriptPartialSigs(tx string) (valid bool, txid string, err error)
+	VerifyTapscriptPartialSigs(tx string) (valid bool, err error)
 	// FindLeaves returns all the leaves txs that are reachable from the given outpoint
-	FindLeaves(congestionTree tree.CongestionTree, fromtxid string, vout uint32) (leaves []tree.Node, err error)
-	BuildAsyncPaymentTransactions(
-		vtxosToSpend []domain.Vtxo,
-		descriptors map[domain.VtxoKey]string,
-		forfeitsLeaves map[domain.VtxoKey]chainhash.Hash,
-		receivers []domain.Receiver,
-	) (string, error)
+	FindLeaves(vtxoTree tree.VtxoTree, fromtxid string, vout uint32) (leaves []tree.Node, err error)
 	VerifyAndCombinePartialTx(dest string, src string) (string, error)
 	GetTxID(tx string) (string, error)
 }

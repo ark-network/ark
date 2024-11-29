@@ -78,11 +78,12 @@ jobs:
         with:
           version: v1.61
           working-directory: ./pkg/client-sdk
-          args: --timeout 5m
+          args: --timeout 5m --skip-files=.*_test.go
       - name: check code integrity
         uses: securego/gosec@master
         with:
           args: '-severity high -quiet -exclude=G115 ./...'
-      - run: go get -v -t -d ./...
+      - name: Run go work sync
+        run: go work sync
       - name: unit testing
         run: make test

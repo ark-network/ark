@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/bitcointree"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -74,8 +74,8 @@ const (
 	connectorAccount accountName = "default"
 
 	// this account won't be restored by lnd, but it's not a problem cause it does not track any funds
-	// it's used to derive a constant public key to be used as "ASP key" in Vtxo scripts
-	aspKeyAccount accountName = "asp"
+	// it's used to derive a constant public key to be used as "server key" in Vtxo scripts
+	serverKeyAccount accountName = "server"
 
 	// https://github.com/bitcoin/bitcoin/blob/439e58c4d8194ca37f70346727d31f52e69592ec/src/policy/policy.cpp#L23C8-L23C11
 	// biggest input size to compute the maximum dust amount
@@ -112,8 +112,8 @@ type service struct {
 	watchedScriptsLock sync.RWMutex
 	watchedScripts     map[string]struct{}
 
-	// holds the data related to the ASP key used in Vtxo scripts
-	aspKeyAddr waddrmgr.ManagedPubKeyAddress
+	// holds the data related to the server key used in Vtxo scripts
+	serverKeyAddr waddrmgr.ManagedPubKeyAddress
 
 	isSynced bool
 	syncedCh chan struct{}
@@ -193,7 +193,7 @@ func WithPollingBitcoind(host, user, pass string) WalletOption {
 			},
 		}
 
-		chain.UseLogger(logger("chain"))
+		btcwallet.UseLogger(logger("btcwallet"))
 
 		// Create the BitcoindConn first
 		bitcoindConn, err := chain.NewBitcoindConn(bitcoindConfig)
@@ -226,7 +226,7 @@ func WithPollingBitcoind(host, user, pass string) WalletOption {
 				User: bitcoindConfig.User,
 				Pass: bitcoindConfig.Pass,
 			},
-			"CONSERVATIVE",
+			"ECONOMICAL",
 			chainfee.AbsoluteFeePerKwFloor,
 		)
 		if err != nil {
@@ -242,6 +242,83 @@ func WithPollingBitcoind(host, user, pass string) WalletOption {
 		}
 
 		// Set up the wallet as chain source and scanner
+		if err := withChainSource(chainClient)(s); err != nil {
+			chainClient.Stop()
+			bitcoindConn.Stop()
+			return fmt.Errorf("failed to set chain source: %w", err)
+		}
+
+		if err := withScanner(chainClient)(s); err != nil {
+			chainClient.Stop()
+			bitcoindConn.Stop()
+			return fmt.Errorf("failed to set scanner: %w", err)
+		}
+
+		return nil
+	}
+}
+
+func WithBitcoindZMQ(block, tx string, host, user, pass string) WalletOption {
+	return func(s *service) error {
+		if s.chainSource != nil {
+			return fmt.Errorf("chain source already set")
+		}
+
+		bitcoindConfig := &chain.BitcoindConfig{
+			ChainParams: s.cfg.chainParams(),
+			Host:        host,
+			User:        user,
+			Pass:        pass,
+			ZMQConfig: &chain.ZMQConfig{
+				ZMQBlockHost:    block,
+				ZMQTxHost:       tx,
+				ZMQReadDeadline: 5 * time.Second,
+			},
+		}
+
+		btcwallet.UseLogger(logger("btcwallet"))
+
+		bitcoindConn, err := chain.NewBitcoindConn(bitcoindConfig)
+		if err != nil {
+			return fmt.Errorf("failed to create bitcoind connection: %w", err)
+		}
+
+		if err := bitcoindConn.Start(); err != nil {
+			return fmt.Errorf("failed to start bitcoind connection: %w", err)
+		}
+
+		chainClient := bitcoindConn.NewBitcoindClient()
+
+		if err := chainClient.Start(); err != nil {
+			bitcoindConn.Stop()
+			return fmt.Errorf("failed to start bitcoind client: %w", err)
+		}
+
+		for !chainClient.IsCurrent() {
+			time.Sleep(1 * time.Second)
+		}
+
+		estimator, err := chainfee.NewBitcoindEstimator(
+			rpcclient.ConnConfig{
+				Host: bitcoindConfig.Host,
+				User: bitcoindConfig.User,
+				Pass: bitcoindConfig.Pass,
+			},
+			"ECONOMICAL",
+			chainfee.AbsoluteFeePerKwFloor,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to create bitcoind fee estimator: %w", err)
+		}
+
+		if err := withExtraAPI(&bitcoindRPCClient{chainClient})(s); err != nil {
+			return err
+		}
+
+		if err := withFeeEstimator(estimator)(s); err != nil {
+			return err
+		}
+
 		if err := withChainSource(chainClient)(s); err != nil {
 			chainClient.Stop()
 			bitcoindConn.Stop()
@@ -334,12 +411,12 @@ func (s *service) Unlock(_ context.Context, password string) error {
 			return fmt.Errorf("failed to start wallet: %s", err)
 		}
 
-		addrs, err := wallet.ListAddresses(string(aspKeyAccount), false)
+		addrs, err := wallet.ListAddresses(string(serverKeyAccount), false)
 		if err != nil {
 			return err
 		}
 		for info, addrs := range addrs {
-			if info.AccountName != string(aspKeyAccount) {
+			if info.AccountName != string(serverKeyAccount) {
 				continue
 			}
 
@@ -366,7 +443,7 @@ func (s *service) Unlock(_ context.Context, password string) error {
 						return fmt.Errorf("failed to cast address to managed pubkey address")
 					}
 
-					s.aspKeyAddr = managedPubkeyAddr
+					s.serverKeyAddr = managedPubkeyAddr
 					break
 				}
 			}
@@ -479,7 +556,7 @@ func (s *service) GetPubkey(ctx context.Context) (*secp256k1.PublicKey, error) {
 	if !s.isLoaded() {
 		return nil, ErrNotLoaded
 	}
-	return s.aspKeyAddr.PubKey(), nil
+	return s.serverKeyAddr.PubKey(), nil
 }
 
 func (s *service) GetForfeitAddress(ctx context.Context) (string, error) {
@@ -668,46 +745,29 @@ func (s *service) SignTransaction(ctx context.Context, partialTx string, extract
 		for i, in := range ptx.Inputs {
 			isTaproot := txscript.IsPayToTaproot(in.WitnessUtxo.PkScript)
 			if isTaproot && len(in.TaprootLeafScript) > 0 {
-				closure, err := bitcointree.DecodeClosure(in.TaprootLeafScript[0].Script)
+				closure, err := tree.DecodeClosure(in.TaprootLeafScript[0].Script)
 				if err != nil {
 					return "", err
 				}
 
-				witness := make(wire.TxWitness, 4)
+				signatures := make(map[string][]byte)
 
-				castClosure, isTaprootMultisig := closure.(*bitcointree.MultisigClosure)
-				if isTaprootMultisig {
-					ownerPubkey := schnorr.SerializePubKey(castClosure.Pubkey)
-					aspKey := schnorr.SerializePubKey(castClosure.AspPubkey)
-
-					for _, sig := range in.TaprootScriptSpendSig {
-						if bytes.Equal(sig.XOnlyPubKey, ownerPubkey) {
-							witness[0] = sig.Signature
-						}
-
-						if bytes.Equal(sig.XOnlyPubKey, aspKey) {
-							witness[1] = sig.Signature
-						}
-					}
-
-					witness[2] = in.TaprootLeafScript[0].Script
-					witness[3] = in.TaprootLeafScript[0].ControlBlock
-
-					for idw, w := range witness {
-						if w == nil {
-							return "", fmt.Errorf("missing witness element %d, cannot finalize taproot mutlisig input %d", idw, i)
-						}
-					}
-
-					var witnessBuf bytes.Buffer
-
-					if err := psbt.WriteTxWitness(&witnessBuf, witness); err != nil {
-						return "", err
-					}
-
-					ptx.Inputs[i].FinalScriptWitness = witnessBuf.Bytes()
-					continue
+				for _, sig := range in.TaprootScriptSpendSig {
+					signatures[hex.EncodeToString(sig.XOnlyPubKey)] = sig.Signature
 				}
+
+				witness, err := closure.Witness(in.TaprootLeafScript[0].ControlBlock, signatures)
+				if err != nil {
+					return "", err
+				}
+
+				var witnessBuf bytes.Buffer
+				if err := psbt.WriteTxWitness(&witnessBuf, witness); err != nil {
+					return "", err
+				}
+
+				ptx.Inputs[i].FinalScriptWitness = witnessBuf.Bytes()
+				continue
 			}
 
 			if err := psbt.Finalize(ptx, i); err != nil {
@@ -1032,6 +1092,50 @@ func (s *service) GetTransaction(ctx context.Context, txid string) (string, erro
 	return hex.EncodeToString(buf.Bytes()), nil
 }
 
+func (s *service) SignMessage(ctx context.Context, message []byte) ([]byte, error) {
+	if s.serverKeyAddr == nil {
+		return nil, fmt.Errorf("wallet not initialized or locked")
+	}
+
+	prvkey, err := s.serverKeyAddr.PrivKey()
+	if err != nil {
+		return nil, err
+	}
+
+	sig, err := schnorr.Sign(prvkey, message)
+	if err != nil {
+		return nil, err
+	}
+
+	return sig.Serialize(), nil
+}
+
+func (s *service) VerifyMessageSignature(ctx context.Context, message, signature []byte) (bool, error) {
+	sig, err := schnorr.ParseSignature(signature)
+	if err != nil {
+		return false, err
+	}
+
+	return sig.Verify(message, s.serverKeyAddr.PubKey()), nil
+}
+
+func (s *service) GetCurrentBlockTime(ctx context.Context) (*ports.BlockTimestamp, error) {
+	blockhash, blockheight, err := s.wallet.GetBestBlock()
+	if err != nil {
+		return nil, err
+	}
+
+	header, err := s.wallet.GetBlockHeader(blockhash)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ports.BlockTimestamp{
+		Time:   header.Timestamp.Unix(),
+		Height: uint32(blockheight),
+	}, nil
+}
+
 func (s *service) castNotification(tx *wtxmgr.TxRecord) map[string][]ports.VtxoWithValue {
 	vtxos := make(map[string][]ports.VtxoWithValue)
 
@@ -1100,7 +1204,7 @@ func (s *service) create(mnemonic, password string, addrGap uint32) error {
 
 	defer wallet.InternalWallet().Lock()
 
-	if err := s.initAspKeyAccount(wallet); err != nil {
+	if err := s.initServerKeyAccount(wallet); err != nil {
 		return err
 	}
 
@@ -1108,7 +1212,7 @@ func (s *service) create(mnemonic, password string, addrGap uint32) error {
 		return fmt.Errorf("failed to start wallet: %s", err)
 	}
 
-	if err := s.initAspKeyAddress(wallet); err != nil {
+	if err := s.initServerKeyAddress(wallet); err != nil {
 		return err
 	}
 
@@ -1164,8 +1268,8 @@ func (s *service) listenToSynced() {
 	}
 }
 
-// initAspKeyAccount creates the asp key account if it doesn't exist
-func (s *service) initAspKeyAccount(wallet *btcwallet.BtcWallet) error {
+// initServerKeyAccount creates the server key account if it doesn't exist
+func (s *service) initServerKeyAccount(wallet *btcwallet.BtcWallet) error {
 	w := wallet.InternalWallet()
 
 	p2trAccounts, err := w.Accounts(p2trKeyScope)
@@ -1173,45 +1277,45 @@ func (s *service) initAspKeyAccount(wallet *btcwallet.BtcWallet) error {
 		return fmt.Errorf("failed to list wallet accounts: %s", err)
 	}
 
-	var aspKeyAccountNumber uint32
+	var serverKeyAccountNumber uint32
 
 	if p2trAccounts != nil {
 		for _, account := range p2trAccounts.Accounts {
-			if account.AccountName == string(aspKeyAccount) {
-				aspKeyAccountNumber = account.AccountNumber
+			if account.AccountName == string(serverKeyAccount) {
+				serverKeyAccountNumber = account.AccountNumber
 				break
 			}
 		}
 	}
 
-	if aspKeyAccountNumber == 0 {
-		log.Debug("creating asp key account")
-		aspKeyAccountNumber, err = w.NextAccount(p2trKeyScope, string(aspKeyAccount))
+	if serverKeyAccountNumber == 0 {
+		log.Debug("creating server key account")
+		serverKeyAccountNumber, err = w.NextAccount(p2trKeyScope, string(serverKeyAccount))
 		if err != nil {
-			return fmt.Errorf("failed to create %s: %s", aspKeyAccount, err)
+			return fmt.Errorf("failed to create %s: %s", serverKeyAccount, err)
 		}
 	}
 
-	log.Debugf("key account number: %d", aspKeyAccountNumber)
+	log.Debugf("key account number: %d", serverKeyAccountNumber)
 
 	return nil
 }
 
-// initAspKeyAddress generates the asp key address if it doesn't exist
-// it also cache the address in s.aspKeyAddr field
-func (s *service) initAspKeyAddress(wallet *btcwallet.BtcWallet) error {
-	addrs, err := wallet.ListAddresses(string(aspKeyAccount), false)
+// initServerKeyAddress generates the server key address if it doesn't exist
+// it also cache the address in s.serverKeyAddr field
+func (s *service) initServerKeyAddress(wallet *btcwallet.BtcWallet) error {
+	addrs, err := wallet.ListAddresses(string(serverKeyAccount), false)
 	if err != nil {
 		return err
 	}
 
 	if len(addrs) == 0 {
-		aspKeyAddr, err := wallet.NewAddress(lnwallet.TaprootPubkey, false, string(aspKeyAccount))
+		serverKeyAddr, err := wallet.NewAddress(lnwallet.TaprootPubkey, false, string(serverKeyAccount))
 		if err != nil {
 			return err
 		}
 
-		addrInfos, err := wallet.AddressInfo(aspKeyAddr)
+		addrInfos, err := wallet.AddressInfo(serverKeyAddr)
 		if err != nil {
 			return err
 		}
@@ -1221,10 +1325,10 @@ func (s *service) initAspKeyAddress(wallet *btcwallet.BtcWallet) error {
 			return fmt.Errorf("failed to cast address to managed pubkey address")
 		}
 
-		s.aspKeyAddr = managedAddr
+		s.serverKeyAddr = managedAddr
 	} else {
 		for info, addrs := range addrs {
-			if info.AccountName != string(aspKeyAccount) {
+			if info.AccountName != string(serverKeyAccount) {
 				continue
 			}
 
@@ -1251,7 +1355,7 @@ func (s *service) initAspKeyAddress(wallet *btcwallet.BtcWallet) error {
 						return fmt.Errorf("failed to cast address to managed pubkey address")
 					}
 
-					s.aspKeyAddr = managedPubkeyAddr
+					s.serverKeyAddr = managedPubkeyAddr
 					break
 				}
 			}

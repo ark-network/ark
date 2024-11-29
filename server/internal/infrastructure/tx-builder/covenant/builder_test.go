@@ -12,26 +12,25 @@ import (
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	txbuilder "github.com/ark-network/ark/server/internal/infrastructure/tx-builder/covenant"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"github.com/vulpemventures/go-elements/psetv2"
 )
 
 const (
-	testingKey        = "020000000000000000000000000000000000000000000000000000000000000001"
-	connectorAddress  = "tex1qekd5u0qj8jl07vy60830xy7n9qtmcx9u3s0cqc"
-	forfeitAddress    = "tex1qekd5u0qj8jl07vy60830xy7n9qtmcx9u3s0cqc"
-	minRelayFee       = uint64(30)
-	roundLifetime     = int64(1209344)
-	boardingExitDelay = int64(512)
-	minRelayFeeRate   = 3
+	testingKey       = "020000000000000000000000000000000000000000000000000000000000000001"
+	connectorAddress = "tex1qekd5u0qj8jl07vy60830xy7n9qtmcx9u3s0cqc"
+	forfeitAddress   = "tex1qekd5u0qj8jl07vy60830xy7n9qtmcx9u3s0cqc"
+	minRelayFee      = uint64(30)
+	minRelayFeeRate  = 3
 )
 
 var (
 	wallet *mockedWallet
 	pubkey *secp256k1.PublicKey
+
+	roundLifetime     = common.Locktime{Type: common.LocktimeTypeSecond, Value: 1209344}
+	boardingExitDelay = common.Locktime{Type: common.LocktimeTypeSecond, Value: 512}
 )
 
 func TestMain(m *testing.M) {
@@ -55,30 +54,30 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestBuildPoolTx(t *testing.T) {
+func TestBuildRoundTx(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(
 		wallet, common.Liquid, roundLifetime, boardingExitDelay,
 	)
 
-	fixtures, err := parsePoolTxFixtures()
+	fixtures, err := parseRoundTxFixtures()
 	require.NoError(t, err)
 	require.NotEmpty(t, fixtures)
 
 	if len(fixtures.Valid) > 0 {
 		t.Run("valid", func(t *testing.T) {
 			for _, f := range fixtures.Valid {
-				poolTx, congestionTree, connAddr, err := builder.BuildRoundTx(
-					pubkey, f.Payments, []ports.BoardingInput{}, []domain.Round{},
+				roundTx, vtxoTree, connAddr, _, err := builder.BuildRoundTx(
+					pubkey, f.Requests, []ports.BoardingInput{}, []domain.Round{},
 				)
 				require.NoError(t, err)
-				require.NotEmpty(t, poolTx)
-				require.NotEmpty(t, congestionTree)
+				require.NotEmpty(t, roundTx)
+				require.NotEmpty(t, vtxoTree)
 				require.Equal(t, connectorAddress, connAddr)
-				require.Equal(t, f.ExpectedNumOfNodes, congestionTree.NumberOfNodes())
-				require.Len(t, congestionTree.Leaves(), f.ExpectedNumOfLeaves)
+				require.Equal(t, f.ExpectedNumOfNodes, vtxoTree.NumberOfNodes())
+				require.Len(t, vtxoTree.Leaves(), f.ExpectedNumOfLeaves)
 
-				err = tree.ValidateCongestionTree(
-					congestionTree, poolTx, pubkey, roundLifetime,
+				err = tree.ValidateVtxoTree(
+					vtxoTree, roundTx, pubkey, roundLifetime,
 				)
 				require.NoError(t, err)
 			}
@@ -88,74 +87,13 @@ func TestBuildPoolTx(t *testing.T) {
 	if len(fixtures.Invalid) > 0 {
 		t.Run("invalid", func(t *testing.T) {
 			for _, f := range fixtures.Invalid {
-				poolTx, congestionTree, connAddr, err := builder.BuildRoundTx(
-					pubkey, f.Payments, []ports.BoardingInput{}, []domain.Round{},
+				roundTx, vtxoTree, connAddr, _, err := builder.BuildRoundTx(
+					pubkey, f.Requests, []ports.BoardingInput{}, []domain.Round{},
 				)
 				require.EqualError(t, err, f.ExpectedErr)
-				require.Empty(t, poolTx)
+				require.Empty(t, roundTx)
 				require.Empty(t, connAddr)
-				require.Empty(t, congestionTree)
-			}
-		})
-	}
-}
-
-func TestBuildForfeitTxs(t *testing.T) {
-	builder := txbuilder.NewTxBuilder(
-		wallet, common.Liquid, 1209344, boardingExitDelay,
-	)
-
-	fixtures, err := parseForfeitTxsFixtures()
-	require.NoError(t, err)
-	require.NotEmpty(t, fixtures)
-
-	if len(fixtures.Valid) > 0 {
-		t.Run("valid", func(t *testing.T) {
-			for _, f := range fixtures.Valid {
-				connectors, forfeitTxs, err := builder.BuildForfeitTxs(
-					f.PoolTx, f.Payments, f.Descriptors, minRelayFeeRate,
-				)
-				require.NoError(t, err)
-				require.Len(t, connectors, f.ExpectedNumOfConnectors)
-				require.Len(t, forfeitTxs, f.ExpectedNumOfForfeitTxs)
-
-				expectedInputTxid := f.PoolTxid
-				// Verify the chain of connectors
-				for _, connector := range connectors {
-					tx, err := psetv2.NewPsetFromBase64(connector)
-					require.NoError(t, err)
-					require.NotNil(t, tx)
-
-					require.Len(t, tx.Inputs, 1)
-					require.Len(t, tx.Outputs, 3)
-
-					inputTxid := chainhash.Hash(tx.Inputs[0].PreviousTxid).String()
-					require.Equal(t, expectedInputTxid, inputTxid)
-					require.Equal(t, 1, int(tx.Inputs[0].PreviousTxIndex))
-
-					expectedInputTxid = getTxid(tx)
-				}
-
-				// decode and check forfeit txs
-				for _, forfeitTx := range forfeitTxs {
-					tx, err := psetv2.NewPsetFromBase64(forfeitTx)
-					require.NoError(t, err)
-					require.Len(t, tx.Inputs, 2)
-					require.Len(t, tx.Outputs, 2)
-				}
-			}
-		})
-	}
-
-	if len(fixtures.Invalid) > 0 {
-		t.Run("invalid", func(t *testing.T) {
-			for _, f := range fixtures.Invalid {
-				connectors, forfeitTxs, err := builder.BuildForfeitTxs(
-					f.PoolTx, f.Payments, f.Descriptors, minRelayFeeRate,
-				)
-				require.EqualError(t, err, f.ExpectedErr)
-				require.Empty(t, connectors)
-				require.Empty(t, forfeitTxs)
+				require.Empty(t, vtxoTree)
 			}
 		})
 	}
@@ -180,19 +118,19 @@ func randomHex(len int) string {
 	return hex.EncodeToString(buf)
 }
 
-type poolTxFixtures struct {
+type roundTxFixtures struct {
 	Valid []struct {
-		Payments            []domain.Payment
+		Requests            []domain.TxRequest
 		ExpectedNumOfNodes  int
 		ExpectedNumOfLeaves int
 	}
 	Invalid []struct {
-		Payments    []domain.Payment
+		Requests    []domain.TxRequest
 		ExpectedErr string
 	}
 }
 
-func parsePoolTxFixtures() (*poolTxFixtures, error) {
+func parseRoundTxFixtures() (*roundTxFixtures, error) {
 	file, err := os.ReadFile("testdata/fixtures.json")
 	if err != nil {
 		return nil, err
@@ -202,90 +140,12 @@ func parsePoolTxFixtures() (*poolTxFixtures, error) {
 		return nil, err
 	}
 
-	vv := v["buildPoolTx"].(map[string]interface{})
+	vv := v["buildRoundTx"].(map[string]interface{})
 	file, _ = json.Marshal(vv)
-	var fixtures poolTxFixtures
+	var fixtures roundTxFixtures
 	if err := json.Unmarshal(file, &fixtures); err != nil {
 		return nil, err
 	}
 
 	return &fixtures, nil
-}
-
-type forfeitTxsFixtures struct {
-	Valid []struct {
-		Payments                []domain.Payment
-		Descriptors             map[domain.VtxoKey]string
-		ExpectedNumOfConnectors int
-		ExpectedNumOfForfeitTxs int
-		PoolTx                  string
-		PoolTxid                string
-	}
-	Invalid []struct {
-		Payments    []domain.Payment
-		Descriptors map[domain.VtxoKey]string
-		ExpectedErr string
-		PoolTx      string
-	}
-}
-
-func parseForfeitTxsFixtures() (*forfeitTxsFixtures, error) {
-	file, err := os.ReadFile("testdata/fixtures.json")
-	if err != nil {
-		return nil, err
-	}
-	v := map[string]interface{}{}
-	if err := json.Unmarshal(file, &v); err != nil {
-		return nil, err
-	}
-
-	vv := v["buildForfeitTxs"].(map[string]interface{})
-	file, _ = json.Marshal(vv)
-	var fixtures forfeitTxsFixtures
-	if err := json.Unmarshal(file, &fixtures); err != nil {
-		return nil, err
-	}
-
-	valid := vv["valid"].([]interface{})
-	for i, v := range valid {
-		val := v.(map[string]interface{})
-		payments := val["payments"].([]interface{})
-		descriptors := make(map[domain.VtxoKey]string)
-		for _, p := range payments {
-			inputs := p.(map[string]interface{})["inputs"].([]interface{})
-			for _, in := range inputs {
-				inMap := in.(map[string]interface{})
-				descriptors[domain.VtxoKey{
-					Txid: inMap["txid"].(string),
-					VOut: uint32(inMap["vout"].(float64)),
-				}] = inMap["descriptor"].(string)
-			}
-		}
-		fixtures.Valid[i].Descriptors = descriptors
-	}
-
-	invalid := vv["invalid"].([]interface{})
-	for i, v := range invalid {
-		val := v.(map[string]interface{})
-		payments := val["payments"].([]interface{})
-		descriptors := make(map[domain.VtxoKey]string)
-		for _, p := range payments {
-			inputs := p.(map[string]interface{})["inputs"].([]interface{})
-			for _, in := range inputs {
-				inMap := in.(map[string]interface{})
-				descriptors[domain.VtxoKey{
-					Txid: inMap["txid"].(string),
-					VOut: uint32(inMap["vout"].(float64)),
-				}] = inMap["descriptor"].(string)
-			}
-		}
-		fixtures.Invalid[i].Descriptors = descriptors
-	}
-
-	return &fixtures, nil
-}
-
-func getTxid(tx *psetv2.Pset) string {
-	utx, _ := tx.UnsignedTx()
-	return utx.TxHash().String()
 }

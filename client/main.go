@@ -43,6 +43,8 @@ func main() {
 		&sendCommand,
 		&balanceCommand,
 		&redeemCommand,
+		&notesCommand,
+		&registerNostrCommand,
 	)
 	app.Flags = []cli.Flag{
 		datadirFlag,
@@ -95,8 +97,8 @@ var (
 		Usage: "optional private key to encrypt",
 	}
 	urlFlag = &cli.StringFlag{
-		Name:     "asp-url",
-		Usage:    "the url of the ASP to connect to",
+		Name:     "server-url",
+		Usage:    "the url of the Ark server to connect to",
 		Required: true,
 	}
 	receiversFlag = &cli.StringFlag{
@@ -127,6 +129,16 @@ var (
 		Name:  "force",
 		Usage: "force redemption without collaboration",
 	}
+	notesFlag = &cli.StringSliceFlag{
+		Name:    "notes",
+		Aliases: []string{"n"},
+		Usage:   "notes to redeem",
+	}
+	nostrProfileFlag = &cli.StringFlag{
+		Name:    "profile",
+		Aliases: []string{"p"},
+		Usage:   "nostr profile to register",
+	}
 	restFlag = &cli.BoolFlag{
 		Name:        "rest",
 		Usage:       "use REST client instead of gRPC",
@@ -138,7 +150,7 @@ var (
 var (
 	initCommand = cli.Command{
 		Name:  "init",
-		Usage: "Initialize Ark wallet with encryption password, connect to ASP",
+		Usage: "Initialize Ark wallet with encryption password, connect to Ark server",
 		Action: func(ctx *cli.Context) error {
 			return initArkSdk(ctx)
 		},
@@ -168,7 +180,7 @@ var (
 	}
 	settleCmd = cli.Command{
 		Name:  "settle",
-		Usage: "Settle onboarding funds or oor payments",
+		Usage: "Settle onboarding or pending funds",
 		Action: func(ctx *cli.Context) error {
 			return settle(ctx)
 		},
@@ -184,7 +196,7 @@ var (
 	}
 	sendCommand = cli.Command{
 		Name:  "send",
-		Usage: "Send funds onchain, offchain, or asynchronously",
+		Usage: "Send funds offchain",
 		Action: func(ctx *cli.Context) error {
 			return send(ctx)
 		},
@@ -196,6 +208,22 @@ var (
 		Flags: []cli.Flag{addressFlag, amountToRedeemFlag, forceFlag, passwordFlag},
 		Action: func(ctx *cli.Context) error {
 			return redeem(ctx)
+		},
+	}
+	notesCommand = cli.Command{
+		Name:  "redeem-notes",
+		Usage: "Redeem offchain notes",
+		Flags: []cli.Flag{notesFlag},
+		Action: func(ctx *cli.Context) error {
+			return redeemNotes(ctx)
+		},
+	}
+	registerNostrCommand = cli.Command{
+		Name:  "register-nostr",
+		Usage: "Register Nostr profile",
+		Flags: []cli.Flag{nostrProfileFlag, passwordFlag},
+		Action: func(ctx *cli.Context) error {
+			return registerNostrProfile(ctx)
 		},
 	}
 )
@@ -215,7 +243,7 @@ func initArkSdk(ctx *cli.Context) error {
 		ctx.Context, arksdk.InitArgs{
 			ClientType:  clientType,
 			WalletType:  arksdk.SingleKeyWallet,
-			AspUrl:      ctx.String(urlFlag.Name),
+			ServerUrl:   ctx.String(urlFlag.Name),
 			Seed:        ctx.String(privateKeyFlag.Name),
 			Password:    string(password),
 			ExplorerURL: ctx.String(explorerFlag.Name),
@@ -230,8 +258,8 @@ func config(ctx *cli.Context) error {
 	}
 
 	cfg := map[string]interface{}{
-		"asp_url":                      cfgData.AspUrl,
-		"asp_pubkey":                   hex.EncodeToString(cfgData.AspPubkey.SerializeCompressed()),
+		"server_url":                   cfgData.ServerUrl,
+		"server_pubkey":                hex.EncodeToString(cfgData.ServerPubKey.SerializeCompressed()),
 		"wallet_type":                  cfgData.WalletType,
 		"client_tyep":                  cfgData.ClientType,
 		"network":                      cfgData.Network.Name,
@@ -340,7 +368,7 @@ func send(ctx *cli.Context) error {
 	if isBitcoin {
 		return sendCovenantLess(ctx, receivers)
 	}
-	return sendCovenant(ctx.Context, receivers)
+	return sendCovenant(ctx, receivers)
 }
 
 func balance(ctx *cli.Context) error {
@@ -376,6 +404,31 @@ func redeem(ctx *cli.Context) error {
 	txID, err := arkSdkClient.CollaborativeRedeem(
 		ctx.Context, address, amount, computeExpiration,
 	)
+	if err != nil {
+		return err
+	}
+	return printJSON(map[string]interface{}{
+		"txid": txID,
+	})
+}
+
+func registerNostrProfile(ctx *cli.Context) error {
+	profile := ctx.String(nostrProfileFlag.Name)
+
+	password, err := readPassword(ctx)
+	if err != nil {
+		return err
+	}
+	if err := arkSdkClient.Unlock(ctx.Context, string(password)); err != nil {
+		return err
+	}
+
+	return arkSdkClient.SetNostrNotificationRecipient(ctx.Context, profile)
+}
+
+func redeemNotes(ctx *cli.Context) error {
+	notes := ctx.StringSlice(notesFlag.Name)
+	txID, err := arkSdkClient.RedeemNotes(ctx.Context, notes)
 	if err != nil {
 		return err
 	}
@@ -472,9 +525,27 @@ func parseReceivers(receveirsJSON string, isBitcoin bool) ([]arksdk.Receiver, er
 }
 
 func sendCovenantLess(ctx *cli.Context, receivers []arksdk.Receiver) error {
+	var onchainReceivers, offchainReceivers []arksdk.Receiver
+
+	for _, receiver := range receivers {
+		if receiver.IsOnchain() {
+			onchainReceivers = append(onchainReceivers, receiver)
+		} else {
+			offchainReceivers = append(offchainReceivers, receiver)
+		}
+	}
+
+	if len(onchainReceivers) > 0 {
+		txid, err := arkSdkClient.SendOnChain(ctx.Context, onchainReceivers)
+		if err != nil {
+			return err
+		}
+		return printJSON(map[string]interface{}{"txid": txid})
+	}
+
 	computeExpiration := ctx.Bool(enableExpiryCoinselectFlag.Name)
-	redeemTx, err := arkSdkClient.SendAsync(
-		ctx.Context, computeExpiration, receivers,
+	redeemTx, err := arkSdkClient.SendOffChain(
+		ctx.Context, computeExpiration, offchainReceivers,
 	)
 	if err != nil {
 		return err
@@ -487,7 +558,7 @@ func sendCovenantLess(ctx *cli.Context, receivers []arksdk.Receiver) error {
 	return printJSON(map[string]string{"txid": ptx.UnsignedTx.TxHash().String()})
 }
 
-func sendCovenant(ctx context.Context, receivers []arksdk.Receiver) error {
+func sendCovenant(ctx *cli.Context, receivers []arksdk.Receiver) error {
 	var onchainReceivers, offchainReceivers []arksdk.Receiver
 
 	for _, receiver := range receivers {
@@ -499,22 +570,21 @@ func sendCovenant(ctx context.Context, receivers []arksdk.Receiver) error {
 	}
 
 	if len(onchainReceivers) > 0 {
-		txID, err := arkSdkClient.SendOnChain(ctx, onchainReceivers)
+		txID, err := arkSdkClient.SendOnChain(ctx.Context, onchainReceivers)
 		if err != nil {
 			return err
 		}
 		return printJSON(map[string]interface{}{"txid": txID})
 	}
 
-	if len(offchainReceivers) > 0 {
-		txID, err := arkSdkClient.SendOffChain(ctx, false, offchainReceivers)
-		if err != nil {
-			return err
-		}
-		return printJSON(map[string]interface{}{"txid": txID})
+	computeExpiration := ctx.Bool(enableExpiryCoinselectFlag.Name)
+	txid, err := arkSdkClient.SendOffChain(
+		ctx.Context, computeExpiration, offchainReceivers,
+	)
+	if err != nil {
+		return err
 	}
-
-	return nil
+	return printJSON(map[string]interface{}{"txid": txid})
 }
 
 func readPassword(ctx *cli.Context) ([]byte, error) {

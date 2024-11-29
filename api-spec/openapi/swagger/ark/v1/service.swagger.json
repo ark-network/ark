@@ -101,14 +101,14 @@
         ]
       }
     },
-    "/v1/payment": {
+    "/v1/redeem-tx": {
       "post": {
-        "operationId": "ArkService_CreatePayment",
+        "operationId": "ArkService_SubmitRedeemTx",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1CreatePaymentResponse"
+              "$ref": "#/definitions/v1SubmitRedeemTxResponse"
             }
           },
           "default": {
@@ -124,39 +124,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/v1CreatePaymentRequest"
-            }
-          }
-        ],
-        "tags": [
-          "ArkService"
-        ]
-      }
-    },
-    "/v1/payment/complete": {
-      "post": {
-        "operationId": "ArkService_CompletePayment",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1CompletePaymentResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1CompletePaymentRequest"
+              "$ref": "#/definitions/v1SubmitRedeemTxRequest"
             }
           }
         ],
@@ -195,7 +163,7 @@
         ]
       }
     },
-    "/v1/round/ping/{paymentId}": {
+    "/v1/round/ping/{requestId}": {
       "get": {
         "operationId": "ArkService_Ping",
         "responses": {
@@ -214,7 +182,8 @@
         },
         "parameters": [
           {
-            "name": "paymentId",
+            "name": "requestId",
+            "description": "The id used to register inputs and ouptuts.",
             "in": "path",
             "required": true,
             "type": "string"
@@ -446,6 +415,70 @@
         ]
       }
     },
+    "/v1/vtxo/nostr": {
+      "post": {
+        "operationId": "ArkService_SetNostrRecipient",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SetNostrRecipientResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1SetNostrRecipientRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
+    "/v1/vtxo/nostr/delete": {
+      "post": {
+        "operationId": "ArkService_DeleteNostrRecipient",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteNostrRecipientResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1DeleteNostrRecipientRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
     "/v1/vtxos/{address}": {
       "get": {
         "operationId": "ArkService_ListVtxos",
@@ -506,55 +539,20 @@
         }
       }
     },
-    "v1AsyncPaymentInput": {
+    "v1DeleteNostrRecipientRequest": {
       "type": "object",
       "properties": {
-        "input": {
-          "$ref": "#/definitions/v1Input"
-        },
-        "forfeitLeafHash": {
-          "type": "string"
+        "vtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1SignedVtxoOutpoint"
+          }
         }
       }
     },
-    "v1CompletePaymentRequest": {
-      "type": "object",
-      "properties": {
-        "signedRedeemTx": {
-          "type": "string"
-        }
-      }
-    },
-    "v1CompletePaymentResponse": {
+    "v1DeleteNostrRecipientResponse": {
       "type": "object"
-    },
-    "v1CreatePaymentRequest": {
-      "type": "object",
-      "properties": {
-        "inputs": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1AsyncPaymentInput"
-          }
-        },
-        "outputs": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1Output"
-          }
-        }
-      }
-    },
-    "v1CreatePaymentResponse": {
-      "type": "object",
-      "properties": {
-        "signedRedeemTx": {
-          "type": "string",
-          "title": "signed only by the ASP"
-        }
-      }
     },
     "v1GetBoardingAddressRequest": {
       "type": "object",
@@ -572,6 +570,9 @@
         },
         "descriptor": {
           "type": "string"
+        },
+        "tapscripts": {
+          "$ref": "#/definitions/v1Tapscripts"
         }
       }
     },
@@ -631,6 +632,9 @@
         },
         "forfeitAddress": {
           "type": "string"
+        },
+        "marketHour": {
+          "$ref": "#/definitions/v1MarketHour"
         }
       }
     },
@@ -669,6 +673,9 @@
         },
         "descriptor": {
           "type": "string"
+        },
+        "tapscripts": {
+          "$ref": "#/definitions/v1Tapscripts"
         }
       }
     },
@@ -688,6 +695,25 @@
             "type": "object",
             "$ref": "#/definitions/v1Vtxo"
           }
+        }
+      }
+    },
+    "v1MarketHour": {
+      "type": "object",
+      "properties": {
+        "nextStartTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "nextEndTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "period": {
+          "type": "string"
+        },
+        "roundInterval": {
+          "type": "string"
         }
       }
     },
@@ -731,6 +757,22 @@
         }
       }
     },
+    "v1OwnershipProof": {
+      "type": "object",
+      "properties": {
+        "controlBlock": {
+          "type": "string"
+        },
+        "script": {
+          "type": "string"
+        },
+        "signature": {
+          "type": "string",
+          "title": "VTXO outpoint signed with script's secret key"
+        }
+      },
+      "description": "This message is used to prove to the server that the user controls the vtxo without revealing the whole VTXO taproot tree."
+    },
     "v1PingResponse": {
       "type": "object"
     },
@@ -768,24 +810,28 @@
         },
         "ephemeralPubkey": {
           "type": "string"
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
     "v1RegisterInputsForNextRoundResponse": {
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Mocks wabisabi's blinded credentials."
+        "requestId": {
+          "type": "string"
         }
       }
     },
     "v1RegisterOutputsForNextRoundRequest": {
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Mocks wabisabi's blinded credentials."
+        "requestId": {
+          "type": "string"
         },
         "outputs": {
           "type": "array",
@@ -793,7 +839,7 @@
             "type": "object",
             "$ref": "#/definitions/v1Output"
           },
-          "description": "List of receivers for a registered payment."
+          "description": "List of receivers for to convert to leaves in the next VTXO tree."
         }
       }
     },
@@ -954,6 +1000,51 @@
         }
       }
     },
+    "v1SetNostrRecipientRequest": {
+      "type": "object",
+      "properties": {
+        "nostrRecipient": {
+          "type": "string"
+        },
+        "vtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1SignedVtxoOutpoint"
+          }
+        }
+      }
+    },
+    "v1SetNostrRecipientResponse": {
+      "type": "object"
+    },
+    "v1SignedVtxoOutpoint": {
+      "type": "object",
+      "properties": {
+        "outpoint": {
+          "$ref": "#/definitions/v1Outpoint"
+        },
+        "proof": {
+          "$ref": "#/definitions/v1OwnershipProof"
+        }
+      }
+    },
+    "v1SubmitRedeemTxRequest": {
+      "type": "object",
+      "properties": {
+        "redeemTx": {
+          "type": "string"
+        }
+      }
+    },
+    "v1SubmitRedeemTxResponse": {
+      "type": "object",
+      "properties": {
+        "signedRedeemTx": {
+          "type": "string"
+        }
+      }
+    },
     "v1SubmitSignedForfeitTxsRequest": {
       "type": "object",
       "properties": {
@@ -966,7 +1057,7 @@
         },
         "signedRoundTx": {
           "type": "string",
-          "description": "If payment has boarding input, the user must sign the associated inputs."
+          "description": "The user has to sign also the round tx if he registerd a boarding UTXO."
         }
       }
     },
@@ -1006,6 +1097,17 @@
     },
     "v1SubmitTreeSignaturesResponse": {
       "type": "object"
+    },
+    "v1Tapscripts": {
+      "type": "object",
+      "properties": {
+        "scripts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     },
     "v1Tree": {
       "type": "object",
@@ -1053,7 +1155,7 @@
         "swept": {
           "type": "boolean"
         },
-        "isOor": {
+        "isPending": {
           "type": "boolean"
         },
         "redeemTx": {

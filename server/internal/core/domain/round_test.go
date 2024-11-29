@@ -11,7 +11,7 @@ import (
 
 var (
 	dustAmount = uint64(450)
-	payments   = []domain.Payment{
+	requests   = []domain.TxRequest{
 		{
 			Id: "0",
 			Inputs: []domain.Vtxo{
@@ -20,21 +20,21 @@ var (
 						Txid: txid,
 						VOut: 0,
 					},
-					Pubkey: pubkey,
+					PubKey: pubkey,
 					Amount: 2000,
 				},
 			},
 			Receivers: []domain.Receiver{
 				{
-					Pubkey: pubkey,
+					PubKey: pubkey,
 					Amount: 700,
 				},
 				{
-					Pubkey: pubkey,
+					PubKey: pubkey,
 					Amount: 700,
 				},
 				{
-					Pubkey: pubkey,
+					PubKey: pubkey,
 					Amount: 600,
 				},
 			},
@@ -47,7 +47,7 @@ var (
 						Txid: txid,
 						VOut: 0,
 					},
-					Pubkey: pubkey,
+					PubKey: pubkey,
 					Amount: 1000,
 				},
 				{
@@ -55,20 +55,20 @@ var (
 						Txid: txid,
 						VOut: 0,
 					},
-					Pubkey: pubkey,
+					PubKey: pubkey,
 					Amount: 1000,
 				},
 			},
 			Receivers: []domain.Receiver{{
-				Pubkey: pubkey,
+				PubKey: pubkey,
 				Amount: 2000,
 			}},
 		},
 	}
-	emptyPtx       = "cHNldP8BAgQCAAAAAQQBAAEFAQABBgEDAfsEAgAAAAA="
-	emptyTx        = "0200000000000000000000"
-	txid           = "0000000000000000000000000000000000000000000000000000000000000000"
-	congestionTree = tree.CongestionTree{
+	emptyPtx = "cHNldP8BAgQCAAAAAQQBAAEFAQABBgEDAfsEAgAAAAA="
+	emptyTx  = "0200000000000000000000"
+	txid     = "0000000000000000000000000000000000000000000000000000000000000000"
+	vtxoTree = tree.VtxoTree{
 		{
 			{
 				Txid:       txid,
@@ -113,13 +113,13 @@ var (
 	}
 	connectors = []string{emptyPtx, emptyPtx, emptyPtx}
 	forfeitTxs = []string{emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx}
-	poolTx     = emptyTx
+	roundTx    = emptyTx
 )
 
 func TestRound(t *testing.T) {
 	testStartRegistration(t)
 
-	testRegisterPayments(t)
+	testRegisterTxRequests(t)
 
 	testStartFinalization(t)
 
@@ -165,7 +165,7 @@ func testStartRegistration(t *testing.T) {
 							Failed: true,
 						},
 					},
-					expectedErr: "not in a valid stage to start payment registration",
+					expectedErr: "not in a valid stage to start tx requests registration",
 				},
 				{
 					round: &domain.Round{
@@ -174,7 +174,7 @@ func testStartRegistration(t *testing.T) {
 							Code: domain.RegistrationStage,
 						},
 					},
-					expectedErr: "not in a valid stage to start payment registration",
+					expectedErr: "not in a valid stage to start tx requests registration",
 				},
 				{
 					round: &domain.Round{
@@ -183,7 +183,7 @@ func testStartRegistration(t *testing.T) {
 							Code: domain.FinalizationStage,
 						},
 					},
-					expectedErr: "not in a valid stage to start payment registration",
+					expectedErr: "not in a valid stage to start tx requests registration",
 				},
 			}
 
@@ -196,20 +196,20 @@ func testStartRegistration(t *testing.T) {
 	})
 }
 
-func testRegisterPayments(t *testing.T) {
-	t.Run("register_payments", func(t *testing.T) {
+func testRegisterTxRequests(t *testing.T) {
+	t.Run("register_tx_requests", func(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
 			round := domain.NewRound(dustAmount)
 			events, err := round.StartRegistration()
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			events, err = round.RegisterPayments(payments)
+			events, err = round.RegisterTxRequests(requests)
 			require.NoError(t, err)
 			require.Len(t, events, 1)
 			require.Condition(t, func() bool {
-				for _, payment := range payments {
-					_, ok := round.Payments[payment.Id]
+				for _, request := range requests {
+					_, ok := round.TxRequests[request.Id]
 					if !ok {
 						return false
 					}
@@ -217,16 +217,16 @@ func testRegisterPayments(t *testing.T) {
 				return true
 			})
 
-			event, ok := events[0].(domain.PaymentsRegistered)
+			event, ok := events[0].(domain.TxRequestsRegistered)
 			require.True(t, ok)
 			require.Equal(t, round.Id, event.Id)
-			require.Equal(t, payments, event.Payments)
+			require.Equal(t, requests, event.TxRequests)
 		})
 
 		t.Run("invalid", func(t *testing.T) {
 			fixtures := []struct {
 				round       *domain.Round
-				payments    []domain.Payment
+				requests    []domain.TxRequest
 				expectedErr string
 			}{
 				{
@@ -234,8 +234,8 @@ func testRegisterPayments(t *testing.T) {
 						Id:    "id",
 						Stage: domain.Stage{},
 					},
-					payments:    payments,
-					expectedErr: "not in a valid stage to register payments",
+					requests:    requests,
+					expectedErr: "not in a valid stage to register tx requests",
 				},
 				{
 					round: &domain.Round{
@@ -245,8 +245,8 @@ func testRegisterPayments(t *testing.T) {
 							Failed: true,
 						},
 					},
-					payments:    payments,
-					expectedErr: "not in a valid stage to register payments",
+					requests:    requests,
+					expectedErr: "not in a valid stage to register tx requests",
 				},
 				{
 					round: &domain.Round{
@@ -255,8 +255,8 @@ func testRegisterPayments(t *testing.T) {
 							Code: domain.FinalizationStage,
 						},
 					},
-					payments:    payments,
-					expectedErr: "not in a valid stage to register payments",
+					requests:    requests,
+					expectedErr: "not in a valid stage to register tx requests",
 				},
 				{
 					round: &domain.Round{
@@ -265,13 +265,13 @@ func testRegisterPayments(t *testing.T) {
 							Code: domain.RegistrationStage,
 						},
 					},
-					payments:    nil,
-					expectedErr: "missing payments to register",
+					requests:    nil,
+					expectedErr: "missing tx requests to register",
 				},
 			}
 
 			for _, f := range fixtures {
-				events, err := f.round.RegisterPayments(f.payments)
+				events, err := f.round.RegisterTxRequests(f.requests)
 				require.EqualError(t, err, f.expectedErr)
 				require.Empty(t, events)
 			}
@@ -287,11 +287,11 @@ func testStartFinalization(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			events, err = round.RegisterPayments(payments)
+			events, err = round.RegisterTxRequests(requests)
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			events, err = round.StartFinalization("", connectors, congestionTree, poolTx)
+			events, err = round.StartFinalization("", connectors, vtxoTree, roundTx)
 			require.NoError(t, err)
 			require.Len(t, events, 1)
 			require.True(t, round.IsStarted())
@@ -302,20 +302,20 @@ func testStartFinalization(t *testing.T) {
 			require.True(t, ok)
 			require.Equal(t, round.Id, event.Id)
 			require.Exactly(t, connectors, event.Connectors)
-			require.Exactly(t, congestionTree, event.CongestionTree)
-			require.Exactly(t, poolTx, event.RoundTx)
+			require.Exactly(t, vtxoTree, event.VtxoTree)
+			require.Exactly(t, roundTx, event.RoundTx)
 		})
 
 		t.Run("invalid", func(t *testing.T) {
-			paymentsById := map[string]domain.Payment{}
-			for _, p := range payments {
-				paymentsById[p.Id] = p
+			requestsById := map[string]domain.TxRequest{}
+			for _, p := range requests {
+				requestsById[p.Id] = p
 			}
 			fixtures := []struct {
 				round       *domain.Round
 				connectors  []string
-				tree        tree.CongestionTree
-				poolTx      string
+				tree        tree.VtxoTree
+				roundTx     string
 				expectedErr string
 			}{
 				{
@@ -324,12 +324,12 @@ func testStartFinalization(t *testing.T) {
 						Stage: domain.Stage{
 							Code: domain.RegistrationStage,
 						},
-						Payments: paymentsById,
+						TxRequests: requestsById,
 					},
 					connectors:  connectors,
-					tree:        congestionTree,
-					poolTx:      "",
-					expectedErr: "missing unsigned pool tx",
+					tree:        vtxoTree,
+					roundTx:     "",
+					expectedErr: "missing unsigned round tx",
 				},
 				{
 					round: &domain.Round{
@@ -337,12 +337,12 @@ func testStartFinalization(t *testing.T) {
 						Stage: domain.Stage{
 							Code: domain.RegistrationStage,
 						},
-						Payments: nil,
+						TxRequests: nil,
 					},
 					connectors:  connectors,
-					tree:        congestionTree,
-					poolTx:      poolTx,
-					expectedErr: "no payments registered",
+					tree:        vtxoTree,
+					roundTx:     roundTx,
+					expectedErr: "no tx requests registered",
 				},
 				{
 					round: &domain.Round{
@@ -350,12 +350,12 @@ func testStartFinalization(t *testing.T) {
 						Stage: domain.Stage{
 							Code: domain.UndefinedStage,
 						},
-						Payments: paymentsById,
+						TxRequests: requestsById,
 					},
 					connectors:  connectors,
-					tree:        congestionTree,
-					poolTx:      poolTx,
-					expectedErr: "not in a valid stage to start payment finalization",
+					tree:        vtxoTree,
+					roundTx:     roundTx,
+					expectedErr: "not in a valid stage to start finalization",
 				},
 				{
 					round: &domain.Round{
@@ -364,12 +364,12 @@ func testStartFinalization(t *testing.T) {
 							Code:   domain.RegistrationStage,
 							Failed: true,
 						},
-						Payments: paymentsById,
+						TxRequests: requestsById,
 					},
 					connectors:  connectors,
-					tree:        congestionTree,
-					poolTx:      poolTx,
-					expectedErr: "not in a valid stage to start payment finalization",
+					tree:        vtxoTree,
+					roundTx:     roundTx,
+					expectedErr: "not in a valid stage to start finalization",
 				},
 				{
 					round: &domain.Round{
@@ -377,18 +377,18 @@ func testStartFinalization(t *testing.T) {
 						Stage: domain.Stage{
 							Code: domain.FinalizationStage,
 						},
-						Payments: paymentsById,
+						TxRequests: requestsById,
 					},
 					connectors:  connectors,
-					tree:        congestionTree,
-					poolTx:      poolTx,
-					expectedErr: "not in a valid stage to start payment finalization",
+					tree:        vtxoTree,
+					roundTx:     roundTx,
+					expectedErr: "not in a valid stage to start finalization",
 				},
 			}
 
 			for _, f := range fixtures {
 				// TODO fix this
-				events, err := f.round.StartFinalization("", f.connectors, f.tree, f.poolTx)
+				events, err := f.round.StartFinalization("", f.connectors, f.tree, f.roundTx)
 				require.EqualError(t, err, f.expectedErr)
 				require.Empty(t, events)
 			}
@@ -404,11 +404,11 @@ func testEndFinalization(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			events, err = round.RegisterPayments(payments)
+			events, err = round.RegisterTxRequests(requests)
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			events, err = round.StartFinalization("", connectors, congestionTree, poolTx)
+			events, err = round.StartFinalization("", connectors, vtxoTree, roundTx)
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
@@ -428,9 +428,9 @@ func testEndFinalization(t *testing.T) {
 		})
 
 		t.Run("invalid", func(t *testing.T) {
-			paymentsById := map[string]domain.Payment{}
-			for _, p := range payments {
-				paymentsById[p.Id] = p
+			requestsById := map[string]domain.TxRequest{}
+			for _, p := range requests {
+				requestsById[p.Id] = p
 			}
 			fixtures := []struct {
 				round       *domain.Round
@@ -444,7 +444,7 @@ func testEndFinalization(t *testing.T) {
 						Stage: domain.Stage{
 							Code: domain.FinalizationStage,
 						},
-						Payments: paymentsById,
+						TxRequests: requestsById,
 					},
 					forfeitTxs:  nil,
 					txid:        txid,
@@ -459,7 +459,7 @@ func testEndFinalization(t *testing.T) {
 					},
 					forfeitTxs:  forfeitTxs,
 					txid:        "",
-					expectedErr: "missing pool txid",
+					expectedErr: "missing round txid",
 				},
 				{
 					round: &domain.Round{
@@ -467,7 +467,7 @@ func testEndFinalization(t *testing.T) {
 					},
 					forfeitTxs:  forfeitTxs,
 					txid:        txid,
-					expectedErr: "not in a valid stage to end payment finalization",
+					expectedErr: "not in a valid stage to end finalization",
 				},
 				{
 					round: &domain.Round{
@@ -478,7 +478,7 @@ func testEndFinalization(t *testing.T) {
 					},
 					forfeitTxs:  forfeitTxs,
 					txid:        txid,
-					expectedErr: "not in a valid stage to end payment finalization",
+					expectedErr: "not in a valid stage to end finalization",
 				},
 				{
 					round: &domain.Round{
@@ -490,7 +490,7 @@ func testEndFinalization(t *testing.T) {
 					},
 					forfeitTxs:  []string{emptyPtx, emptyPtx, emptyPtx, emptyPtx},
 					txid:        txid,
-					expectedErr: "not in a valid stage to end payment finalization",
+					expectedErr: "not in a valid stage to end finalization",
 				},
 				{
 					round: &domain.Round{
@@ -523,7 +523,7 @@ func testFail(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			events, err = round.RegisterPayments(payments)
+			events, err = round.RegisterTxRequests(requests)
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 

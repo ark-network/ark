@@ -76,7 +76,7 @@ func (v vtxos) parse() []client.Vtxo {
 			CreatedAt: parseTimestamp(vv.CreatedAt),
 			RedeemTx:  vv.RedeemTx,
 			SpentBy:   vv.SpentBy,
-			IsOOR:     vv.IsOOR,
+			IsPending: vv.IsOOR,
 		})
 	}
 	return list

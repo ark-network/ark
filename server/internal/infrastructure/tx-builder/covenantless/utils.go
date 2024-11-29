@@ -12,11 +12,11 @@ import (
 )
 
 func getOnchainOutputs(
-	payments []domain.Payment, network *chaincfg.Params,
+	requests []domain.TxRequest, network *chaincfg.Params,
 ) ([]*wire.TxOut, error) {
 	outputs := make([]*wire.TxOut, 0)
-	for _, payment := range payments {
-		for _, receiver := range payment.Receivers {
+	for _, request := range requests {
+		for _, receiver := range request.Receivers {
 			if receiver.IsOnchain() {
 				receiverAddr, err := btcutil.DecodeAddress(receiver.OnchainAddress, network)
 				if err != nil {
@@ -39,14 +39,14 @@ func getOnchainOutputs(
 }
 
 func getOutputVtxosLeaves(
-	payments []domain.Payment,
+	requests []domain.TxRequest,
 ) ([]tree.VtxoLeaf, error) {
 	leaves := make([]tree.VtxoLeaf, 0)
-	for _, payment := range payments {
-		for _, receiver := range payment.Receivers {
+	for _, request := range requests {
+		for _, receiver := range request.Receivers {
 			if !receiver.IsOnchain() {
 				leaves = append(leaves, tree.VtxoLeaf{
-					Pubkey: receiver.Pubkey,
+					PubKey: receiver.PubKey,
 					Amount: receiver.Amount,
 				})
 			}
@@ -55,10 +55,10 @@ func getOutputVtxosLeaves(
 	return leaves, nil
 }
 
-func countSpentVtxos(payments []domain.Payment) uint64 {
+func countSpentVtxos(requests []domain.TxRequest) uint64 {
 	var sum uint64
-	for _, payment := range payments {
-		sum += uint64(len(payment.Inputs))
+	for _, request := range requests {
+		sum += uint64(len(request.Inputs))
 	}
 	return sum
 }
@@ -67,9 +67,9 @@ func taprootOutputScript(taprootKey *secp256k1.PublicKey) ([]byte, error) {
 	return txscript.NewScriptBuilder().AddOp(txscript.OP_1).AddData(schnorr.SerializePubKey(taprootKey)).Script()
 }
 
-func isOnchainOnly(payments []domain.Payment) bool {
-	for _, p := range payments {
-		for _, r := range p.Receivers {
+func isOnchainOnly(requests []domain.TxRequest) bool {
+	for _, request := range requests {
+		for _, r := range request.Receivers {
 			if !r.IsOnchain() {
 				return false
 			}

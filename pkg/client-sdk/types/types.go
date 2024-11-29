@@ -16,14 +16,14 @@ const (
 )
 
 type Config struct {
-	AspUrl                     string
-	AspPubkey                  *secp256k1.PublicKey
+	ServerUrl                  string
+	ServerPubKey               *secp256k1.PublicKey
 	WalletType                 string
 	ClientType                 string
 	Network                    common.Network
-	RoundLifetime              int64
+	RoundLifetime              common.Locktime
 	RoundInterval              int64
-	UnilateralExitDelay        int64
+	UnilateralExitDelay        common.Locktime
 	Dust                       uint64
 	BoardingDescriptorTemplate string
 	ExplorerURL                string
@@ -110,10 +110,10 @@ type Utxo struct {
 	VOut        uint32
 	Amount      uint64
 	Asset       string // liquid only
-	Delay       uint
+	Delay       common.Locktime
 	SpendableAt time.Time
 	CreatedAt   time.Time
-	Descriptor  string
+	Tapscripts  []string
 	Spent       bool
 }
 

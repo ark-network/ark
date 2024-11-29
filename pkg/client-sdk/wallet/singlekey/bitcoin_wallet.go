@@ -9,6 +9,7 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/ark-network/ark/pkg/client-sdk/types"
@@ -43,7 +44,7 @@ func NewBitcoinWallet(
 
 func (w *bitcoinWallet) GetAddresses(
 	ctx context.Context,
-) ([]wallet.DescriptorAddress, []wallet.DescriptorAddress, []wallet.DescriptorAddress, error) {
+) ([]wallet.TapscriptsAddress, []wallet.TapscriptsAddress, []wallet.TapscriptsAddress, error) {
 	offchainAddr, boardingAddr, err := w.getAddress(ctx)
 	if err != nil {
 		return nil, nil, nil, err
@@ -69,21 +70,21 @@ func (w *bitcoinWallet) GetAddresses(
 		return nil, nil, nil, err
 	}
 
-	offchainAddrs := []wallet.DescriptorAddress{
+	offchainAddrs := []wallet.TapscriptsAddress{
 		{
-			Descriptor: offchainAddr.Descriptor,
+			Tapscripts: offchainAddr.Tapscripts,
 			Address:    encodedOffchainAddr,
 		},
 	}
-	boardingAddrs := []wallet.DescriptorAddress{
+	boardingAddrs := []wallet.TapscriptsAddress{
 		{
-			Descriptor: boardingAddr.Descriptor,
+			Tapscripts: boardingAddr.Tapscripts,
 			Address:    boardingAddr.Address,
 		},
 	}
-	redemptionAddrs := []wallet.DescriptorAddress{
+	redemptionAddrs := []wallet.TapscriptsAddress{
 		{
-			Descriptor: offchainAddr.Descriptor,
+			Tapscripts: offchainAddr.Tapscripts,
 			Address:    redemptionAddr.EncodeAddress(),
 		},
 	}
@@ -92,7 +93,7 @@ func (w *bitcoinWallet) GetAddresses(
 
 func (w *bitcoinWallet) NewAddress(
 	ctx context.Context, _ bool,
-) (*wallet.DescriptorAddress, *wallet.DescriptorAddress, error) {
+) (*wallet.TapscriptsAddress, *wallet.TapscriptsAddress, error) {
 	offchainAddr, boardingAddr, err := w.getAddress(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -103,34 +104,34 @@ func (w *bitcoinWallet) NewAddress(
 		return nil, nil, err
 	}
 
-	return &wallet.DescriptorAddress{
-		Descriptor: offchainAddr.Descriptor,
+	return &wallet.TapscriptsAddress{
+		Tapscripts: offchainAddr.Tapscripts,
 		Address:    encodedOffchainAddr,
 	}, boardingAddr, nil
 }
 
 func (w *bitcoinWallet) NewAddresses(
 	ctx context.Context, _ bool, num int,
-) ([]wallet.DescriptorAddress, []wallet.DescriptorAddress, error) {
+) ([]wallet.TapscriptsAddress, []wallet.TapscriptsAddress, error) {
 	offchainAddr, boardingAddr, err := w.getAddress(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	offchainAddrs := make([]wallet.DescriptorAddress, 0, num)
-	boardingAddrs := make([]wallet.DescriptorAddress, 0, num)
+	offchainAddrs := make([]wallet.TapscriptsAddress, 0, num)
+	boardingAddrs := make([]wallet.TapscriptsAddress, 0, num)
 	for i := 0; i < num; i++ {
 		encodedOffchainAddr, err := offchainAddr.Address.Encode()
 		if err != nil {
 			return nil, nil, err
 		}
 
-		offchainAddrs = append(offchainAddrs, wallet.DescriptorAddress{
-			Descriptor: offchainAddr.Descriptor,
+		offchainAddrs = append(offchainAddrs, wallet.TapscriptsAddress{
+			Tapscripts: offchainAddr.Tapscripts,
 			Address:    encodedOffchainAddr,
 		})
-		boardingAddrs = append(boardingAddrs, wallet.DescriptorAddress{
-			Descriptor: boardingAddr.Descriptor,
+		boardingAddrs = append(boardingAddrs, wallet.TapscriptsAddress{
+			Tapscripts: boardingAddr.Tapscripts,
 			Address:    boardingAddr.Address,
 		})
 	}
@@ -192,12 +193,12 @@ func (s *bitcoinWallet) SignTransaction(
 	)
 
 	txsighashes := txscript.NewTxSigHashes(updater.Upsbt.UnsignedTx, prevoutFetcher)
+	myPubkey := schnorr.SerializePubKey(s.walletData.PubKey)
 
 	for i, input := range ptx.Inputs {
 		if len(input.TaprootLeafScript) > 0 {
-			pubkey := s.walletData.Pubkey
 			for _, leaf := range input.TaprootLeafScript {
-				closure, err := bitcointree.DecodeClosure(leaf.Script)
+				closure, err := tree.DecodeClosure(leaf.Script)
 				if err != nil {
 					return "", err
 				}
@@ -205,10 +206,27 @@ func (s *bitcoinWallet) SignTransaction(
 				sign := false
 
 				switch c := closure.(type) {
-				case *bitcointree.CSVSigClosure:
-					sign = bytes.Equal(c.Pubkey.SerializeCompressed()[1:], pubkey.SerializeCompressed()[1:])
-				case *bitcointree.MultisigClosure:
-					sign = bytes.Equal(c.Pubkey.SerializeCompressed()[1:], pubkey.SerializeCompressed()[1:])
+				case *tree.CSVSigClosure:
+					for _, key := range c.MultisigClosure.PubKeys {
+						if bytes.Equal(schnorr.SerializePubKey(key), myPubkey) {
+							sign = true
+							break
+						}
+					}
+				case *tree.MultisigClosure:
+					for _, key := range c.PubKeys {
+						if bytes.Equal(schnorr.SerializePubKey(key), myPubkey) {
+							sign = true
+							break
+						}
+					}
+				case *tree.CLTVMultisigClosure:
+					for _, key := range c.MultisigClosure.PubKeys {
+						if bytes.Equal(schnorr.SerializePubKey(key), myPubkey) {
+							sign = true
+							break
+						}
+					}
 				}
 
 				if sign {
@@ -235,7 +253,7 @@ func (s *bitcoinWallet) SignTransaction(
 						return "", err
 					}
 
-					if !sig.Verify(preimage, pubkey) {
+					if !sig.Verify(preimage, s.walletData.PubKey) {
 						return "", fmt.Errorf("signature verification failed")
 					}
 
@@ -244,7 +262,7 @@ func (s *bitcoinWallet) SignTransaction(
 					}
 
 					updater.Upsbt.Inputs[i].TaprootScriptSpendSig = append(updater.Upsbt.Inputs[i].TaprootScriptSpendSig, &psbt.TaprootScriptSpendSig{
-						XOnlyPubKey: schnorr.SerializePubKey(pubkey),
+						XOnlyPubKey: myPubkey,
 						LeafHash:    hash.CloneBytes(),
 						Signature:   sig.Serialize(),
 						SigHash:     txscript.SigHashDefault,
@@ -258,14 +276,31 @@ func (s *bitcoinWallet) SignTransaction(
 	return ptx.B64Encode()
 }
 
+func (w *bitcoinWallet) SignMessage(
+	ctx context.Context, message []byte,
+) (string, error) {
+	if w.IsLocked() {
+		return "", fmt.Errorf("wallet is locked")
+	}
+
+	sig, err := schnorr.Sign(w.privateKey, message)
+	if err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(sig.Serialize()), nil
+}
+
+type addressWithTapscripts struct {
+	Address    common.Address
+	Tapscripts []string
+}
+
 func (w *bitcoinWallet) getAddress(
 	ctx context.Context,
 ) (
-	*struct {
-		Address    common.Address
-		Descriptor string
-	},
-	*wallet.DescriptorAddress,
+	*addressWithTapscripts,
+	*wallet.TapscriptsAddress,
 	error,
 ) {
 	if w.walletData == nil {
@@ -279,11 +314,11 @@ func (w *bitcoinWallet) getAddress(
 
 	netParams := utils.ToBitcoinNetwork(data.Network)
 
-	defaultVtxoScript := &bitcointree.DefaultVtxoScript{
-		Asp:       data.AspPubkey,
-		Owner:     w.walletData.Pubkey,
-		ExitDelay: uint(data.UnilateralExitDelay),
-	}
+	defaultVtxoScript := bitcointree.NewDefaultVtxoScript(
+		w.walletData.PubKey,
+		data.ServerPubKey,
+		data.UnilateralExitDelay,
+	)
 
 	vtxoTapKey, _, err := defaultVtxoScript.TapTree()
 	if err != nil {
@@ -292,19 +327,18 @@ func (w *bitcoinWallet) getAddress(
 
 	offchainAddress := &common.Address{
 		HRP:        data.Network.Addr,
-		Asp:        data.AspPubkey,
+		Server:     data.ServerPubKey,
 		VtxoTapKey: vtxoTapKey,
 	}
 
-	myPubkeyStr := hex.EncodeToString(schnorr.SerializePubKey(w.walletData.Pubkey))
-	descriptorStr := strings.ReplaceAll(
-		data.BoardingDescriptorTemplate, "USER", myPubkeyStr,
+	boardingVtxoScript := bitcointree.NewDefaultVtxoScript(
+		w.walletData.PubKey,
+		data.ServerPubKey,
+		common.Locktime{
+			Type:  data.UnilateralExitDelay.Type,
+			Value: data.UnilateralExitDelay.Value * 2,
+		},
 	)
-
-	boardingVtxoScript, err := bitcointree.ParseVtxoScript(descriptorStr)
-	if err != nil {
-		return nil, nil, err
-	}
 
 	boardingTapKey, _, err := boardingVtxoScript.TapTree()
 	if err != nil {
@@ -319,14 +353,22 @@ func (w *bitcoinWallet) getAddress(
 		return nil, nil, err
 	}
 
-	return &struct {
-			Address    common.Address
-			Descriptor string
-		}{
-			*offchainAddress, defaultVtxoScript.ToDescriptor(),
+	tapscripts, err := defaultVtxoScript.Encode()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	boardingTapscripts, err := boardingVtxoScript.Encode()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &addressWithTapscripts{
+			Address:    *offchainAddress,
+			Tapscripts: tapscripts,
 		},
-		&wallet.DescriptorAddress{
-			Descriptor: descriptorStr,
+		&wallet.TapscriptsAddress{
+			Tapscripts: boardingTapscripts,
 			Address:    boardingAddr.EncodeAddress(),
 		},
 		nil

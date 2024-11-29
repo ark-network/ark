@@ -6,12 +6,13 @@ import (
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/txscript"
 )
 
 // From interface type to app type
@@ -23,31 +24,22 @@ func parseAddress(addr string) (*common.Address, error) {
 	return common.DecodeAddress(addr)
 }
 
-func parseAsyncPaymentInputs(ins []*arkv1.AsyncPaymentInput) ([]application.AsyncPaymentInput, error) {
-	if len(ins) <= 0 {
-		return nil, fmt.Errorf("missing inputs")
+func parseNotes(notes []string) ([]note.Note, error) {
+	if len(notes) <= 0 {
+		return nil, fmt.Errorf("missing notes")
 	}
 
-	inputs := make([]application.AsyncPaymentInput, 0, len(ins))
-	for _, input := range ins {
-		forfeitLeafHash, err := chainhash.NewHashFromStr(input.GetForfeitLeafHash())
+	notesParsed := make([]note.Note, 0, len(notes))
+	for _, noteStr := range notes {
+		n, err := note.NewFromString(noteStr)
 		if err != nil {
-			return nil, fmt.Errorf("invalid forfeit leaf hash: %s", err)
+			return nil, fmt.Errorf("invalid note: %s", err)
 		}
 
-		inputs = append(inputs, application.AsyncPaymentInput{
-			Input: ports.Input{
-				VtxoKey: domain.VtxoKey{
-					Txid: input.GetInput().GetOutpoint().GetTxid(),
-					VOut: input.GetInput().GetOutpoint().GetVout(),
-				},
-				Descriptor: input.GetInput().GetDescriptor_(),
-			},
-			ForfeitLeafHash: *forfeitLeafHash,
-		})
+		notesParsed = append(notesParsed, *n)
 	}
 
-	return inputs, nil
+	return notesParsed, nil
 }
 
 func parseInputs(ins []*arkv1.Input) ([]ports.Input, error) {
@@ -62,7 +54,7 @@ func parseInputs(ins []*arkv1.Input) ([]ports.Input, error) {
 				Txid: input.GetOutpoint().GetTxid(),
 				VOut: input.GetOutpoint().GetVout(),
 			},
-			Descriptor: input.GetDescriptor_(),
+			Tapscripts: input.GetTapscripts().GetScripts(),
 		})
 	}
 
@@ -81,7 +73,7 @@ func parseReceiver(out *arkv1.Output) (domain.Receiver, error) {
 
 	return domain.Receiver{
 		Amount: out.GetAmount(),
-		Pubkey: hex.EncodeToString(schnorr.SerializePubKey(decodedAddr.VtxoTapKey)),
+		PubKey: hex.EncodeToString(schnorr.SerializePubKey(decodedAddr.VtxoTapKey)),
 	}, nil
 }
 
@@ -124,8 +116,8 @@ func (v vtxoList) toProto() []*arkv1.Vtxo {
 			SpentBy:   vv.SpentBy,
 			Swept:     vv.Swept,
 			RedeemTx:  vv.RedeemTx,
-			IsOor:     len(vv.RedeemTx) > 0,
-			Pubkey:    vv.Pubkey,
+			IsPending: len(vv.RedeemTx) > 0,
+			Pubkey:    vv.PubKey,
 			CreatedAt: vv.CreatedAt,
 		})
 	}
@@ -146,9 +138,9 @@ func (v vtxoKeyList) toProto() []*arkv1.Outpoint {
 	return list
 }
 
-type congestionTree tree.CongestionTree
+type vtxoTree tree.VtxoTree
 
-func (t congestionTree) toProto() *arkv1.Tree {
+func (t vtxoTree) toProto() *arkv1.Tree {
 	levels := make([]*arkv1.TreeLevel, 0, len(t))
 	for _, level := range t {
 		levelProto := &arkv1.TreeLevel{
@@ -188,4 +180,105 @@ func (s stage) toProto() arkv1.RoundStage {
 	default:
 		return arkv1.RoundStage_ROUND_STAGE_UNSPECIFIED
 	}
+}
+
+type roundTxEvent application.RoundTransactionEvent
+
+func (e roundTxEvent) toProto() *arkv1.RoundTransaction {
+	return &arkv1.RoundTransaction{
+		Txid:                 e.RoundTxid,
+		SpentVtxos:           vtxoKeyList(e.SpentVtxos).toProto(),
+		SpendableVtxos:       vtxoList(e.SpendableVtxos).toProto(),
+		ClaimedBoardingUtxos: vtxoKeyList(e.ClaimedBoardingInputs).toProto(),
+	}
+}
+
+type redeemTxEvent application.RedeemTransactionEvent
+
+func (e redeemTxEvent) toProto() *arkv1.RedeemTransaction {
+	return &arkv1.RedeemTransaction{
+		Txid:           e.RedeemTxid,
+		SpentVtxos:     vtxoKeyList(e.SpentVtxos).toProto(),
+		SpendableVtxos: vtxoList(e.SpendableVtxos).toProto(),
+	}
+}
+
+func parseSignedVtxoOutpoints(signedVtxoOutpoints []*arkv1.SignedVtxoOutpoint) ([]application.SignedVtxoOutpoint, error) {
+	if len(signedVtxoOutpoints) <= 0 {
+		return nil, fmt.Errorf("missing signed vtxo outpoints")
+	}
+
+	parsed := make([]application.SignedVtxoOutpoint, 0, len(signedVtxoOutpoints))
+	for _, signedVtxo := range signedVtxoOutpoints {
+		outpoint := signedVtxo.GetOutpoint()
+		if outpoint == nil {
+			return nil, fmt.Errorf("missing outpoint")
+		}
+
+		txid := outpoint.GetTxid()
+		if len(txid) <= 0 {
+			return nil, fmt.Errorf("missing txid")
+		}
+
+		proof := signedVtxo.GetProof()
+		if proof == nil {
+			return nil, fmt.Errorf("missing proof")
+		}
+
+		controlBlockHex := proof.GetControlBlock()
+		if len(controlBlockHex) <= 0 {
+			return nil, fmt.Errorf("missing control block")
+		}
+
+		controlBlockBytes, err := hex.DecodeString(controlBlockHex)
+		if err != nil {
+			return nil, fmt.Errorf("invalid control block: %s", err)
+		}
+
+		controlBlock, err := txscript.ParseControlBlock(controlBlockBytes)
+		if err != nil {
+			return nil, fmt.Errorf("invalid control block: %s", err)
+		}
+
+		signatureHex := proof.GetSignature()
+		if len(signatureHex) <= 0 {
+			return nil, fmt.Errorf("missing signature")
+		}
+
+		signatureBytes, err := hex.DecodeString(signatureHex)
+		if err != nil {
+			return nil, fmt.Errorf("invalid signature: %s", err)
+		}
+
+		signature, err := schnorr.ParseSignature(signatureBytes)
+		if err != nil {
+			return nil, fmt.Errorf("invalid signature: %s", err)
+		}
+
+		scriptHex := proof.GetScript()
+		if len(scriptHex) <= 0 {
+			return nil, fmt.Errorf("missing script")
+		}
+
+		scriptBytes, err := hex.DecodeString(scriptHex)
+		if err != nil {
+			return nil, fmt.Errorf("invalid script: %s", err)
+		}
+
+		vout := outpoint.GetVout()
+
+		parsed = append(parsed, application.SignedVtxoOutpoint{
+			Outpoint: domain.VtxoKey{
+				Txid: txid,
+				VOut: vout,
+			},
+			Proof: application.OwnershipProof{
+				ControlBlock: controlBlock,
+				Script:       scriptBytes,
+				Signature:    signature,
+			},
+		})
+	}
+
+	return parsed, nil
 }

@@ -86,7 +86,7 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 			return fmt.Errorf("failed to upsert round: %w", err)
 		}
 
-		if len(round.ForfeitTxs) > 0 || len(round.Connectors) > 0 || len(round.CongestionTree) > 0 {
+		if len(round.ForfeitTxs) > 0 || len(round.Connectors) > 0 || len(round.VtxoTree) > 0 {
 			for pos, tx := range round.ForfeitTxs {
 				if err := querierWithTx.UpsertTransaction(
 					ctx,
@@ -115,7 +115,7 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 				}
 			}
 
-			for level, levelTxs := range round.CongestionTree {
+			for level, levelTxs := range round.VtxoTree {
 				for pos, tx := range levelTxs {
 					if err := querierWithTx.UpsertTransaction(
 						ctx,
@@ -148,27 +148,27 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 			}
 		}
 
-		if len(round.Payments) > 0 {
-			for _, payment := range round.Payments {
-				if err := querierWithTx.UpsertPayment(
+		if len(round.TxRequests) > 0 {
+			for _, request := range round.TxRequests {
+				if err := querierWithTx.UpsertTxRequest(
 					ctx,
-					queries.UpsertPaymentParams{
-						ID:      payment.Id,
+					queries.UpsertTxRequestParams{
+						ID:      request.Id,
 						RoundID: round.Id,
 					},
 				); err != nil {
-					return fmt.Errorf("failed to upsert payment: %w", err)
+					return fmt.Errorf("failed to upsert tx request: %w", err)
 				}
 
-				for _, receiver := range payment.Receivers {
+				for _, receiver := range request.Receivers {
 					if err := querierWithTx.UpsertReceiver(
 						ctx,
 						queries.UpsertReceiverParams{
-							PaymentID: payment.Id,
+							RequestID: request.Id,
 							Amount:    int64(receiver.Amount),
 							Pubkey: sql.NullString{
-								String: receiver.Pubkey,
-								Valid:  len(receiver.Pubkey) > 0,
+								String: receiver.PubKey,
+								Valid:  len(receiver.PubKey) > 0,
 							},
 							OnchainAddress: sql.NullString{
 								String: receiver.OnchainAddress,
@@ -180,19 +180,19 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 					}
 				}
 
-				for _, input := range payment.Inputs {
-					if err := querierWithTx.UpdateVtxoPaymentId(
+				for _, input := range request.Inputs {
+					if err := querierWithTx.UpdateVtxoRequestId(
 						ctx,
-						queries.UpdateVtxoPaymentIdParams{
-							PaymentID: sql.NullString{
-								String: payment.Id,
+						queries.UpdateVtxoRequestIdParams{
+							RequestID: sql.NullString{
+								String: request.Id,
 								Valid:  true,
 							},
 							Txid: input.Txid,
 							Vout: int64(input.VOut),
 						},
 					); err != nil {
-						return fmt.Errorf("failed to update vtxo payment id: %w", err)
+						return fmt.Errorf("failed to update vtxo request id: %w", err)
 					}
 				}
 			}
@@ -210,18 +210,18 @@ func (r *roundRepository) GetRoundWithId(ctx context.Context, id string) (*domai
 		return nil, err
 	}
 
-	rvs := make([]roundPaymentTxReceiverVtxoRow, 0, len(rows))
+	rvs := make([]combinedRow, 0, len(rows))
 	for _, row := range rows {
-		rvs = append(rvs, roundPaymentTxReceiverVtxoRow{
+		rvs = append(rvs, combinedRow{
 			round:    row.Round,
-			payment:  row.RoundPaymentVw,
+			request:  row.RoundRequestVw,
 			tx:       row.RoundTxVw,
-			receiver: row.PaymentReceiverVw,
-			vtxo:     row.PaymentVtxoVw,
+			receiver: row.RequestReceiverVw,
+			vtxo:     row.RequestVtxoVw,
 		})
 	}
 
-	rounds, err := readRoundRows(rvs)
+	rounds, err := rowsToRounds(rvs)
 	if err != nil {
 		return nil, err
 	}
@@ -239,18 +239,18 @@ func (r *roundRepository) GetRoundWithTxid(ctx context.Context, txid string) (*d
 		return nil, err
 	}
 
-	rvs := make([]roundPaymentTxReceiverVtxoRow, 0, len(rows))
+	rvs := make([]combinedRow, 0, len(rows))
 	for _, row := range rows {
-		rvs = append(rvs, roundPaymentTxReceiverVtxoRow{
+		rvs = append(rvs, combinedRow{
 			round:    row.Round,
-			payment:  row.RoundPaymentVw,
+			request:  row.RoundRequestVw,
 			tx:       row.RoundTxVw,
-			receiver: row.PaymentReceiverVw,
-			vtxo:     row.PaymentVtxoVw,
+			receiver: row.RequestReceiverVw,
+			vtxo:     row.RequestVtxoVw,
 		})
 	}
 
-	rounds, err := readRoundRows(rvs)
+	rounds, err := rowsToRounds(rvs)
 	if err != nil {
 		return nil, err
 	}
@@ -268,18 +268,18 @@ func (r *roundRepository) GetSweepableRounds(ctx context.Context) ([]domain.Roun
 		return nil, err
 	}
 
-	rvs := make([]roundPaymentTxReceiverVtxoRow, 0, len(rows))
+	rvs := make([]combinedRow, 0, len(rows))
 	for _, row := range rows {
-		rvs = append(rvs, roundPaymentTxReceiverVtxoRow{
+		rvs = append(rvs, combinedRow{
 			round:    row.Round,
-			payment:  row.RoundPaymentVw,
+			request:  row.RoundRequestVw,
 			tx:       row.RoundTxVw,
-			receiver: row.PaymentReceiverVw,
-			vtxo:     row.PaymentVtxoVw,
+			receiver: row.RequestReceiverVw,
+			vtxo:     row.RequestVtxoVw,
 		})
 	}
 
-	rounds, err := readRoundRows(rvs)
+	rounds, err := rowsToRounds(rvs)
 	if err != nil {
 		return nil, err
 	}
@@ -299,18 +299,18 @@ func (r *roundRepository) GetSweptRounds(ctx context.Context) ([]domain.Round, e
 		return nil, err
 	}
 
-	rvs := make([]roundPaymentTxReceiverVtxoRow, 0, len(rows))
+	rvs := make([]combinedRow, 0, len(rows))
 	for _, row := range rows {
-		rvs = append(rvs, roundPaymentTxReceiverVtxoRow{
+		rvs = append(rvs, combinedRow{
 			round:    row.Round,
-			payment:  row.RoundPaymentVw,
+			request:  row.RoundRequestVw,
 			tx:       row.RoundTxVw,
-			receiver: row.PaymentReceiverVw,
-			vtxo:     row.PaymentVtxoVw,
+			receiver: row.RequestReceiverVw,
+			vtxo:     row.RequestVtxoVw,
 		})
 	}
 
-	rounds, err := readRoundRows(rvs)
+	rounds, err := rowsToRounds(rvs)
 	if err != nil {
 		return nil, err
 	}
@@ -324,23 +324,23 @@ func (r *roundRepository) GetSweptRounds(ctx context.Context) ([]domain.Round, e
 	return res, nil
 }
 
-func rowToReceiver(row queries.PaymentReceiverVw) domain.Receiver {
+func rowToReceiver(row queries.RequestReceiverVw) domain.Receiver {
 	return domain.Receiver{
 		Amount:         uint64(row.Amount.Int64),
-		Pubkey:         row.Pubkey.String,
+		PubKey:         row.Pubkey.String,
 		OnchainAddress: row.OnchainAddress.String,
 	}
 }
 
-type roundPaymentTxReceiverVtxoRow struct {
+type combinedRow struct {
 	round    queries.Round
-	payment  queries.RoundPaymentVw
+	request  queries.RoundRequestVw
 	tx       queries.RoundTxVw
-	receiver queries.PaymentReceiverVw
-	vtxo     queries.PaymentVtxoVw
+	receiver queries.RequestReceiverVw
+	vtxo     queries.RequestVtxoVw
 }
 
-func readRoundRows(rows []roundPaymentTxReceiverVtxoRow) ([]*domain.Round, error) {
+func rowsToRounds(rows []combinedRow) ([]*domain.Round, error) {
 	rounds := make(map[string]*domain.Round)
 
 	for _, v := range rows {
@@ -364,35 +364,34 @@ func readRoundRows(rows []roundPaymentTxReceiverVtxoRow) ([]*domain.Round, error
 				DustAmount:       uint64(v.round.DustAmount),
 				Version:          uint(v.round.Version),
 				Swept:            v.round.Swept,
-				Payments:         make(map[string]domain.Payment),
+				TxRequests:       make(map[string]domain.TxRequest),
 			}
 		}
 
-		if v.payment.ID.Valid {
-			payment, ok := round.Payments[v.payment.ID.String]
+		if v.request.ID.Valid {
+			request, ok := round.TxRequests[v.request.ID.String]
 			if !ok {
-				payment = domain.Payment{
-					Id:        v.payment.ID.String,
+				request = domain.TxRequest{
+					Id:        v.request.ID.String,
 					Inputs:    make([]domain.Vtxo, 0),
 					Receivers: make([]domain.Receiver, 0),
 				}
-				round.Payments[v.payment.ID.String] = payment
+				round.TxRequests[v.request.ID.String] = request
 			}
 
-			if v.vtxo.PaymentID.Valid {
-				payment, ok = round.Payments[v.vtxo.PaymentID.String]
+			if v.vtxo.RequestID.Valid {
+				request, ok = round.TxRequests[v.vtxo.RequestID.String]
 				if !ok {
-					payment = domain.Payment{
-						Id:        v.vtxo.PaymentID.String,
+					request = domain.TxRequest{
+						Id:        v.vtxo.RequestID.String,
 						Inputs:    make([]domain.Vtxo, 0),
 						Receivers: make([]domain.Receiver, 0),
 					}
 				}
 
-				vtxo := rowToPaymentVtxoVw(v.vtxo)
+				vtxo := combinedRowToVtxo(v.vtxo)
 				found := false
-
-				for _, v := range payment.Inputs {
+				for _, v := range request.Inputs {
 					if vtxo.Txid == v.Txid && vtxo.VOut == v.VOut {
 						found = true
 						break
@@ -400,16 +399,16 @@ func readRoundRows(rows []roundPaymentTxReceiverVtxoRow) ([]*domain.Round, error
 				}
 
 				if !found {
-					payment.Inputs = append(payment.Inputs, rowToPaymentVtxoVw(v.vtxo))
-					round.Payments[v.vtxo.PaymentID.String] = payment
+					request.Inputs = append(request.Inputs, combinedRowToVtxo(v.vtxo))
+					round.TxRequests[v.vtxo.RequestID.String] = request
 				}
 			}
 
-			if v.receiver.PaymentID.Valid {
-				payment, ok = round.Payments[v.receiver.PaymentID.String]
+			if v.receiver.RequestID.Valid {
+				request, ok = round.TxRequests[v.receiver.RequestID.String]
 				if !ok {
-					payment = domain.Payment{
-						Id:        v.receiver.PaymentID.String,
+					request = domain.TxRequest{
+						Id:        v.receiver.RequestID.String,
 						Inputs:    make([]domain.Vtxo, 0),
 						Receivers: make([]domain.Receiver, 0),
 					}
@@ -418,17 +417,17 @@ func readRoundRows(rows []roundPaymentTxReceiverVtxoRow) ([]*domain.Round, error
 				rcv := rowToReceiver(v.receiver)
 
 				found := false
-				for _, rcv := range payment.Receivers {
+				for _, rcv := range request.Receivers {
 					if (v.receiver.Pubkey.Valid || v.receiver.OnchainAddress.Valid) && v.receiver.Amount.Valid {
-						if rcv.Pubkey == v.receiver.Pubkey.String && rcv.OnchainAddress == v.receiver.OnchainAddress.String && int64(rcv.Amount) == v.receiver.Amount.Int64 {
+						if rcv.PubKey == v.receiver.Pubkey.String && rcv.OnchainAddress == v.receiver.OnchainAddress.String && int64(rcv.Amount) == v.receiver.Amount.Int64 {
 							found = true
 							break
 						}
 					}
 				}
 				if !found {
-					payment.Receivers = append(payment.Receivers, rcv)
-					round.Payments[v.receiver.PaymentID.String] = payment
+					request.Receivers = append(request.Receivers, rcv)
+					round.TxRequests[v.receiver.RequestID.String] = request
 				}
 			}
 		}
@@ -444,10 +443,10 @@ func readRoundRows(rows []roundPaymentTxReceiverVtxoRow) ([]*domain.Round, error
 				round.Connectors[position.Int64] = v.tx.Tx.String
 			case "tree":
 				level := v.tx.TreeLevel
-				round.CongestionTree = extendArray(round.CongestionTree, int(level.Int64))
-				round.CongestionTree[int(level.Int64)] = extendArray(round.CongestionTree[int(level.Int64)], int(position.Int64))
-				if round.CongestionTree[int(level.Int64)][position.Int64] == (tree.Node{}) {
-					round.CongestionTree[int(level.Int64)][position.Int64] = tree.Node{
+				round.VtxoTree = extendArray(round.VtxoTree, int(level.Int64))
+				round.VtxoTree[int(level.Int64)] = extendArray(round.VtxoTree[int(level.Int64)], int(position.Int64))
+				if round.VtxoTree[int(level.Int64)][position.Int64] == (tree.Node{}) {
+					round.VtxoTree[int(level.Int64)][position.Int64] = tree.Node{
 						Tx:         v.tx.Tx.String,
 						Txid:       v.tx.Txid.String,
 						ParentTxid: v.tx.ParentTxid.String,
@@ -469,15 +468,15 @@ func readRoundRows(rows []roundPaymentTxReceiverVtxoRow) ([]*domain.Round, error
 	return result, nil
 }
 
-func rowToPaymentVtxoVw(row queries.PaymentVtxoVw) domain.Vtxo {
+func combinedRowToVtxo(row queries.RequestVtxoVw) domain.Vtxo {
 	return domain.Vtxo{
 		VtxoKey: domain.VtxoKey{
 			Txid: row.Txid.String,
 			VOut: uint32(row.Vout.Int64),
 		},
 		Amount:    uint64(row.Amount.Int64),
-		Pubkey:    row.Pubkey.String,
-		RoundTxid: row.PoolTx.String,
+		PubKey:    row.Pubkey.String,
+		RoundTxid: row.RoundTx.String,
 		SpentBy:   row.SpentBy.String,
 		Spent:     row.Spent.Bool,
 		Redeemed:  row.Redeemed.Bool,
