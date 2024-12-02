@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/engine"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
@@ -68,12 +69,21 @@ type CLTVMultisigClosure struct {
 	Locktime common.Locktime
 }
 
+// ConditionMultisigClosure is a closure that contains a condition and a
+// multisig closure. The condition is a boolean script that is executed with the
+// multisig witness.
+type ConditionMultisigClosure struct {
+	MultisigClosure
+	Condition []byte
+}
+
 func DecodeClosure(script []byte) (Closure, error) {
 	types := []Closure{
 		&CSVSigClosure{},
 		&CLTVMultisigClosure{},
 		&MultisigClosure{},
 		&UnrollClosure{},
+		&ConditionMultisigClosure{},
 	}
 
 	for _, closure := range types {
@@ -112,7 +122,7 @@ func (f *MultisigClosure) Script() ([]byte, error) {
 			scriptBuilder.AddOp(txscript.OP_CHECKSIGADD)
 		}
 		scriptBuilder.AddInt64(int64(len(f.PubKeys)))
-		scriptBuilder.AddOp(txscript.OP_EQUAL)
+		scriptBuilder.AddOp(txscript.OP_NUMEQUAL)
 	}
 
 	return scriptBuilder.Script()
@@ -184,7 +194,7 @@ func (f *MultisigClosure) decodeChecksigAdd(script []byte) (bool, error) {
 	}
 
 	lastOp := script[len(script)-1]
-	if lastOp != txscript.OP_EQUAL {
+	if lastOp != txscript.OP_NUMEQUAL {
 		return false, nil
 	}
 
@@ -763,4 +773,150 @@ func (d *CLTVMultisigClosure) Decode(script []byte) (bool, error) {
 	d.MultisigClosure = *multisigClosure
 
 	return valid, nil
+}
+
+// ExecuteBoolScript run the script with the provided witness as argument
+// the result must be a boolean value accepted by OP_IF / OP_NOTIF opcodes
+func ExecuteBoolScript(script []byte, witness wire.TxWitness) (bool, error) {
+	// Create a new script engine
+	vm, err := engine.NewEngine(script)
+	if err != nil {
+		return false, fmt.Errorf("failed to create script engine: %w", err)
+	}
+
+	vm.SetStack(witness)
+
+	// Execute the script with the provided witness
+	if err := vm.Execute(); err != nil {
+		return false, err
+	}
+
+	finalStack := vm.GetStack()
+
+	if len(finalStack) != 1 {
+		return false, fmt.Errorf("script must return a single value on the stack, got %d", len(finalStack))
+	}
+
+	return asBool(finalStack[0]), nil
+}
+
+func asBool(t []byte) bool {
+	for i := range t {
+		if t[i] != 0 {
+			// Negative 0 is also considered false.
+			if i == len(t)-1 && t[i] == 0x80 {
+				return false
+			}
+			return true
+		}
+	}
+	return false
+}
+
+func ReadTxWitness(witnessSerialized []byte) (wire.TxWitness, error) {
+	r := bytes.NewReader(witnessSerialized)
+
+	// first we extract the number of witness elements
+	witCount, err := wire.ReadVarInt(r, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	// read each witness item
+	witness := make(wire.TxWitness, witCount)
+	for i := uint64(0); i < witCount; i++ {
+		witness[i], err = wire.ReadVarBytes(r, 0, txscript.MaxScriptSize, "witness")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return witness, nil
+}
+func (f *ConditionMultisigClosure) WitnessSize() int {
+	return f.MultisigClosure.WitnessSize()
+}
+
+func (f *ConditionMultisigClosure) Script() ([]byte, error) {
+	scriptBuilder := txscript.NewScriptBuilder()
+
+	scriptBuilder.AddOps(f.Condition)
+	scriptBuilder.AddOp(txscript.OP_VERIFY)
+
+	// Add the multisig script
+	multisigScript, err := f.MultisigClosure.Script()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate multisig script: %w", err)
+	}
+	scriptBuilder.AddOps(multisigScript)
+
+	return scriptBuilder.Script()
+}
+
+func (f *ConditionMultisigClosure) Decode(script []byte) (bool, error) {
+	if len(script) == 0 {
+		return false, fmt.Errorf("empty script")
+	}
+
+	// Find OP_VERIFY position
+	verifyPos := bytes.Index(script, []byte{txscript.OP_VERIFY})
+	if verifyPos <= 0 {
+		return false, nil
+	}
+
+	// Extract and store condition
+	condition := script[:verifyPos]
+	f.Condition = condition
+
+	// Extract and decode multisig script
+	multisigScript := script[verifyPos+1:]
+
+	// Decode multisig closure
+	valid, err := f.MultisigClosure.Decode(multisigScript)
+	if err != nil || !valid {
+		return false, err
+	}
+
+	// Verify the script matches what we would generate
+	rebuilt, err := f.Script()
+	if err != nil {
+		return false, err
+	}
+
+	return bytes.Equal(rebuilt, script), nil
+}
+
+func (f *ConditionMultisigClosure) Witness(controlBlock []byte, args map[string][]byte) (wire.TxWitness, error) {
+	script, err := f.Script()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate script: %w", err)
+	}
+
+	// Read and execute condition witness
+	condWitness, err := ReadTxWitness(args["condition"])
+	if err != nil {
+		return nil, fmt.Errorf("failed to read condition witness: %w", err)
+	}
+
+	returnValue, err := ExecuteBoolScript(f.Condition, condWitness)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute condition: %w", err)
+	}
+
+	if !returnValue {
+		return nil, fmt.Errorf("condition evaluated to false")
+	}
+
+	// Get multisig witness
+	multisigWitness, err := f.MultisigClosure.Witness(controlBlock, args)
+	if err != nil {
+		return nil, err
+	}
+
+	multisigWitness = multisigWitness[:len(multisigWitness)-2] // remove control block and script
+	witness := append(multisigWitness, condWitness...)
+	witness = append(witness, script)
+	witness = append(witness, controlBlock)
+
+	return witness, nil
 }

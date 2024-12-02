@@ -2,13 +2,17 @@ package tree_test
 
 import (
 	"bytes"
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"testing"
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/require"
 )
@@ -622,5 +626,368 @@ func TestCLTVMultisigClosure(t *testing.T) {
 				}
 			})
 		}
+	})
+}
+
+func TestExecuteBoolScript(t *testing.T) {
+	// Generate two random byte slices for coinflip
+	rand1 := make([]byte, 16)
+	_, err := rand.Read(rand1)
+	require.NoError(t, err)
+	hash1 := sha256.Sum256(rand1)
+
+	rand2 := make([]byte, 15)
+	_, err = rand.Read(rand2)
+	require.NoError(t, err)
+	hash2 := sha256.Sum256(rand2)
+
+	// wrong length
+	rand3 := make([]byte, 17)
+	_, err = rand.Read(rand3)
+	require.NoError(t, err)
+	hash3 := sha256.Sum256(rand3)
+
+	testCases := []struct {
+		name        string
+		script      []byte
+		witness     wire.TxWitness
+		returnValue bool
+		expectErr   bool
+	}{
+		{
+			name:        "True",
+			script:      []byte{txscript.OP_TRUE},
+			witness:     wire.TxWitness{},
+			returnValue: true,
+			expectErr:   false,
+		},
+		{
+			name:        "False",
+			script:      []byte{txscript.OP_FALSE},
+			witness:     wire.TxWitness{},
+			returnValue: false,
+			expectErr:   false,
+		},
+		{
+			name:        "invalid CHECKSIG",
+			script:      []byte{txscript.OP_CHECKSIG},
+			witness:     wire.TxWitness{},
+			returnValue: false,
+			expectErr:   true,
+		},
+		{
+			name:        "invalid CHECKSIGADD",
+			script:      []byte{txscript.OP_CHECKSIGADD},
+			witness:     wire.TxWitness{},
+			returnValue: false,
+			expectErr:   true,
+		},
+		{
+			name:        "invalid CHECKSIGVERIFY",
+			script:      []byte{txscript.OP_CHECKSIGVERIFY},
+			witness:     wire.TxWitness{},
+			returnValue: false,
+			expectErr:   true,
+		},
+		{
+			name:        "invalid CLTV",
+			script:      []byte{txscript.OP_CHECKLOCKTIMEVERIFY},
+			witness:     wire.TxWitness{},
+			returnValue: false,
+			expectErr:   true,
+		},
+		{
+			name:        "invalid CHECKSIGVERIFY",
+			script:      []byte{txscript.OP_CHECKSIGVERIFY},
+			witness:     wire.TxWitness{},
+			returnValue: false,
+			expectErr:   true,
+		},
+		{
+			name:        "invalid zero elements on the stack",
+			script:      []byte{txscript.OP_TRUE, txscript.OP_VERIFY},
+			witness:     wire.TxWitness{},
+			returnValue: false,
+			expectErr:   true,
+		},
+		{
+			name:        "invalid two elements on the stack",
+			script:      []byte{txscript.OP_TRUE, txscript.OP_TRUE},
+			witness:     wire.TxWitness{},
+			returnValue: false,
+			expectErr:   true,
+		},
+		{
+			name:        "valid SHA256",
+			script:      append(append([]byte{txscript.OP_SHA256, txscript.OP_DATA_32}, hash1[:]...), txscript.OP_EQUAL),
+			witness:     wire.TxWitness{rand1},
+			returnValue: true,
+			expectErr:   false,
+		},
+		{
+			name:        "invalid SHA256",
+			script:      append(append([]byte{txscript.OP_SHA256, txscript.OP_DATA_32}, hash1[:]...), txscript.OP_EQUAL),
+			witness:     wire.TxWitness{rand2},
+			returnValue: false,
+			expectErr:   false,
+		},
+		{
+			name: "valid coinflip different lengths",
+			script: append(append(append(append([]byte{
+				txscript.OP_2DUP,    // stack: a b a b
+				txscript.OP_SHA256,  // stack: a b a h(b)
+				txscript.OP_DATA_32, // stack: a b a h(b) hash2
+			}, hash2[:]...), []byte{
+				txscript.OP_EQUALVERIFY, // stack: a b a
+				txscript.OP_SHA256,      // stack: a b h(a)
+				txscript.OP_DATA_32,     // stack: a b h(a) hash1
+			}...), hash1[:]...), []byte{
+				txscript.OP_EQUALVERIFY, // stack: a b
+				txscript.OP_SIZE,        // stack: a b size(b)
+				txscript.OP_DUP,         // stack: a b size(b) size(b)
+				txscript.OP_16,          // stack: a b size(b) size(b) 16
+				txscript.OP_EQUAL,       // stack: a b size(b) isSize16
+				txscript.OP_SWAP,        // stack: a b isSize16 size(b)
+				txscript.OP_15,          // stack: a b isSize16 size(b) 15
+				txscript.OP_EQUAL,       // stack: a b isSize16 isSize15
+				txscript.OP_BOOLOR,      // stack: a b isValidSize
+				txscript.OP_NOTIF,
+				txscript.OP_2DROP,
+				txscript.OP_1, // stack : 1
+				txscript.OP_ELSE,
+				txscript.OP_SWAP,   // stack: b a
+				txscript.OP_SIZE,   // stack: b a size(a)
+				txscript.OP_DUP,    // stack: b a size(a) size(a)
+				txscript.OP_16,     // stack: b a size(a) size(a) 16
+				txscript.OP_EQUAL,  // stack: b a size(a) isSize16
+				txscript.OP_SWAP,   // stack: b a isSize16 size(a)
+				txscript.OP_15,     // stack: b a isSize16 size(a) 15
+				txscript.OP_EQUAL,  // stack: a b isSize16 isSize15
+				txscript.OP_BOOLOR, // stack: a b isValidSize
+				txscript.OP_NOTIF,
+				txscript.OP_2DROP,
+				txscript.OP_0, // stack : 0
+				txscript.OP_ELSE,
+				txscript.OP_SIZE, // stack: b a size(a)
+				txscript.OP_SWAP, // stack: b size(a) a
+				txscript.OP_DROP, // stack: b size(a)
+				txscript.OP_SWAP, // stack: size(a) b
+				txscript.OP_SIZE, // stack: size(a) b size(b)
+				txscript.OP_SWAP, // stack: size(a) size(b) b
+				txscript.OP_DROP, // stack: size(a) size(b)
+				txscript.OP_EQUAL,
+				txscript.OP_ENDIF,
+				txscript.OP_ENDIF,
+			}...),
+			witness:     wire.TxWitness{rand1, rand2},
+			returnValue: false,
+			expectErr:   false,
+		},
+		{
+			name: "valid coinflip same lengths",
+			script: append(append(append(append([]byte{
+				txscript.OP_2DUP,    // stack: a b a b
+				txscript.OP_SHA256,  // stack: a b a h(b)
+				txscript.OP_DATA_32, // stack: a b a h(b) hash2
+			}, hash1[:]...), []byte{
+				txscript.OP_EQUALVERIFY, // stack: a b a
+				txscript.OP_SHA256,      // stack: a b h(a)
+				txscript.OP_DATA_32,     // stack: a b h(a) hash1
+			}...), hash1[:]...), []byte{
+				txscript.OP_EQUALVERIFY, // stack: a b
+				txscript.OP_SIZE,        // stack: a b size(b)
+				txscript.OP_DUP,         // stack: a b size(b) size(b)
+				txscript.OP_16,          // stack: a b size(b) size(b) 16
+				txscript.OP_EQUAL,       // stack: a b size(b) isSize16
+				txscript.OP_SWAP,        // stack: a b isSize16 size(b)
+				txscript.OP_15,          // stack: a b isSize16 size(b) 15
+				txscript.OP_EQUAL,       // stack: a b isSize16 isSize15
+				txscript.OP_BOOLOR,      // stack: a b isValidSize
+				txscript.OP_NOTIF,
+				txscript.OP_2DROP,
+				txscript.OP_1, // stack : 1
+				txscript.OP_ELSE,
+				txscript.OP_SWAP,   // stack: b a
+				txscript.OP_SIZE,   // stack: b a size(a)
+				txscript.OP_DUP,    // stack: b a size(a) size(a)
+				txscript.OP_16,     // stack: b a size(a) size(a) 16
+				txscript.OP_EQUAL,  // stack: b a size(a) isSize16
+				txscript.OP_SWAP,   // stack: b a isSize16 size(a)
+				txscript.OP_15,     // stack: b a isSize16 size(a) 15
+				txscript.OP_EQUAL,  // stack: a b isSize16 isSize15
+				txscript.OP_BOOLOR, // stack: a b isValidSize
+				txscript.OP_NOTIF,
+				txscript.OP_2DROP,
+				txscript.OP_0, // stack : 0
+				txscript.OP_ELSE,
+				txscript.OP_SIZE, // stack: b a size(a)
+				txscript.OP_SWAP, // stack: b size(a) a
+				txscript.OP_DROP, // stack: b size(a)
+				txscript.OP_SWAP, // stack: size(a) b
+				txscript.OP_SIZE, // stack: size(a) b size(b)
+				txscript.OP_SWAP, // stack: size(a) size(b) b
+				txscript.OP_DROP, // stack: size(a) size(b)
+				txscript.OP_EQUAL,
+				txscript.OP_ENDIF,
+				txscript.OP_ENDIF,
+			}...),
+			witness:     wire.TxWitness{rand1, rand1},
+			returnValue: true,
+			expectErr:   false,
+		},
+		{
+			name: "invalid first element length",
+			script: append(append(append(append([]byte{
+				txscript.OP_2DUP,    // stack: a b a b
+				txscript.OP_SHA256,  // stack: a b a h(b)
+				txscript.OP_DATA_32, // stack: a b a h(b) hash2
+			}, hash3[:]...), []byte{
+				txscript.OP_EQUALVERIFY, // stack: a b a
+				txscript.OP_SHA256,      // stack: a b h(a)
+				txscript.OP_DATA_32,     // stack: a b h(a) hash1
+			}...), hash1[:]...), []byte{
+				txscript.OP_EQUALVERIFY, // stack: a b
+				txscript.OP_SIZE,        // stack: a b size(b)
+				txscript.OP_DUP,         // stack: a b size(b) size(b)
+				txscript.OP_16,          // stack: a b size(b) size(b) 16
+				txscript.OP_EQUAL,       // stack: a b size(b) isSize16
+				txscript.OP_SWAP,        // stack: a b isSize16 size(b)
+				txscript.OP_15,          // stack: a b isSize16 size(b) 15
+				txscript.OP_EQUAL,       // stack: a b isSize16 isSize15
+				txscript.OP_BOOLOR,      // stack: a b isValidSize
+				txscript.OP_NOTIF,
+				txscript.OP_2DROP,
+				txscript.OP_1, // stack : 1
+				txscript.OP_ELSE,
+				txscript.OP_SWAP,   // stack: b a
+				txscript.OP_SIZE,   // stack: b a size(a)
+				txscript.OP_DUP,    // stack: b a size(a) size(a)
+				txscript.OP_16,     // stack: b a size(a) size(a) 16
+				txscript.OP_EQUAL,  // stack: b a size(a) isSize16
+				txscript.OP_SWAP,   // stack: b a isSize16 size(a)
+				txscript.OP_15,     // stack: b a isSize16 size(a) 15
+				txscript.OP_EQUAL,  // stack: a b isSize16 isSize15
+				txscript.OP_BOOLOR, // stack: a b isValidSize
+				txscript.OP_NOTIF,
+				txscript.OP_2DROP,
+				txscript.OP_0, // stack : 0
+				txscript.OP_ELSE,
+				txscript.OP_SIZE, // stack: b a size(a)
+				txscript.OP_SWAP, // stack: b size(a) a
+				txscript.OP_DROP, // stack: b size(a)
+				txscript.OP_SWAP, // stack: size(a) b
+				txscript.OP_SIZE, // stack: size(a) b size(b)
+				txscript.OP_SWAP, // stack: size(a) size(b) b
+				txscript.OP_DROP, // stack: size(a) size(b)
+				txscript.OP_EQUAL,
+				txscript.OP_ENDIF,
+				txscript.OP_ENDIF,
+			}...),
+			witness:     wire.TxWitness{rand1[:], rand3[:]},
+			returnValue: true,
+			expectErr:   false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			valid, err := tree.ExecuteBoolScript(tc.script, tc.witness)
+
+			if tc.expectErr {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tc.returnValue, valid)
+		})
+	}
+}
+
+func TestConditionMultisigClosure(t *testing.T) {
+	// Generate test keys
+	privkey1, err := secp256k1.GeneratePrivateKey()
+	require.NoError(t, err)
+	pubkey1 := privkey1.PubKey()
+
+	privkey2, err := secp256k1.GeneratePrivateKey()
+	require.NoError(t, err)
+	pubkey2 := privkey2.PubKey()
+
+	t.Run("valid condition with single key", func(t *testing.T) {
+		// Create a simple condition script that just returns true
+		conditionScript := []byte{txscript.OP_TRUE}
+
+		closure := &tree.ConditionMultisigClosure{
+			MultisigClosure: tree.MultisigClosure{
+				PubKeys: []*secp256k1.PublicKey{pubkey1},
+				Type:    tree.MultisigTypeChecksig,
+			},
+			Condition: conditionScript,
+		}
+
+		script, err := closure.Script()
+		require.NoError(t, err)
+
+		decodedClosure := &tree.ConditionMultisigClosure{}
+		valid, err := decodedClosure.Decode(script)
+		require.NoError(t, err)
+		require.True(t, valid)
+		require.Equal(t, 1, len(decodedClosure.PubKeys))
+		require.True(t, bytes.Equal(conditionScript, decodedClosure.Condition))
+		require.True(t, bytes.Equal(schnorr.SerializePubKey(pubkey1), schnorr.SerializePubKey(decodedClosure.PubKeys[0])))
+	})
+
+	t.Run("valid condition with two key multisig", func(t *testing.T) {
+		randomBytes := make([]byte, 32)
+		_, err := rand.Read(randomBytes)
+		require.NoError(t, err)
+
+		hash := sha256.Sum256(randomBytes)
+
+		conditionScript := append([]byte{
+			txscript.OP_SHA256,
+			txscript.OP_DATA_32,
+		}, hash[:]...)
+		conditionScript = append(conditionScript, txscript.OP_EQUAL)
+
+		closure := &tree.ConditionMultisigClosure{
+			MultisigClosure: tree.MultisigClosure{
+				PubKeys: []*secp256k1.PublicKey{pubkey1, pubkey2},
+				Type:    tree.MultisigTypeChecksig,
+			},
+			Condition: conditionScript,
+		}
+
+		script, err := closure.Script()
+		require.NoError(t, err)
+
+		decodedClosure := &tree.ConditionMultisigClosure{}
+		valid, err := decodedClosure.Decode(script)
+		require.NoError(t, err)
+		require.True(t, valid)
+		require.Equal(t, 2, len(decodedClosure.PubKeys))
+		require.True(t, bytes.Equal(conditionScript, decodedClosure.Condition))
+
+		conditionWitness := [][]byte{randomBytes[:]}
+		var conditionWitnessBytes bytes.Buffer
+		require.NoError(t, psbt.WriteTxWitness(&conditionWitnessBytes, conditionWitness))
+
+		signatures := map[string][]byte{
+			hex.EncodeToString(schnorr.SerializePubKey(pubkey1)): bytes.Repeat([]byte{0x01}, 64),
+			hex.EncodeToString(schnorr.SerializePubKey(pubkey2)): bytes.Repeat([]byte{0x02}, 64),
+			"condition": conditionWitnessBytes.Bytes(),
+		}
+
+		controlBlock := bytes.Repeat([]byte{0x00}, 32)
+
+		witness, err := closure.Witness(controlBlock, signatures)
+		require.NoError(t, err)
+		require.Equal(t, 5, len(witness)) // condition witness + 2 sigs + script + control block
+		require.Equal(t, controlBlock, witness[len(witness)-1])
+		require.Equal(t, conditionWitness[0], witness[2])
+		require.Equal(t, script, witness[3])
+		require.Equal(t, 64, len(witness[0]))
+		require.Equal(t, 64, len(witness[1]))
 	})
 }

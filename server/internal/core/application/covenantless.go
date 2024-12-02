@@ -310,27 +310,31 @@ func (s *covenantlessService) SubmitRedeemTx(
 			return "", fmt.Errorf("failed to decode forfeit closure: %s", err)
 		}
 
+		var locktime *common.Locktime
+
 		switch c := closure.(type) {
 		case *tree.CLTVMultisigClosure:
+			locktime = &c.Locktime
+		case *tree.MultisigClosure, *tree.ConditionMultisigClosure:
+		default:
+			return "", fmt.Errorf("invalid forfeit closure script")
+		}
+
+		if locktime != nil {
 			blocktimestamp, err := s.wallet.GetCurrentBlockTime(ctx)
 			if err != nil {
 				return "", fmt.Errorf("failed to get current block time: %s", err)
 			}
-
-			switch c.Locktime.Type {
+			switch locktime.Type {
 			case common.LocktimeTypeBlock:
-				if c.Locktime.Value > blocktimestamp.Height {
-					return "", fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block height)", c.Locktime.Value, blocktimestamp.Height)
+				if locktime.Value > blocktimestamp.Height {
+					return "", fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block height)", locktime.Value, blocktimestamp.Height)
 				}
 			case common.LocktimeTypeSecond:
-				if c.Locktime.Value > uint32(blocktimestamp.Time) {
-					return "", fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block time)", c.Locktime.Value, blocktimestamp.Time)
+				if locktime.Value > uint32(blocktimestamp.Time) {
+					return "", fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block time)", locktime.Value, blocktimestamp.Time)
 				}
 			}
-		case *tree.MultisigClosure:
-			// prevent failure in case of multisig closure
-		default:
-			return "", fmt.Errorf("invalid forfeit closure script")
 		}
 
 		ctrlBlock, err := txscript.ParseControlBlock(tapscript.ControlBlock)

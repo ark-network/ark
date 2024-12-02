@@ -95,6 +95,24 @@ func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, error) {
 			for _, key := range c.PubKeys {
 				keys[hex.EncodeToString(schnorr.SerializePubKey(key))] = false
 			}
+		case *tree.ConditionMultisigClosure:
+			witness, err := bitcointree.GetConditionWitness(input)
+			if err != nil {
+				return false, err
+			}
+
+			result, err := tree.ExecuteBoolScript(c.Condition, witness)
+			if err != nil {
+				return false, err
+			}
+
+			if !result {
+				return false, fmt.Errorf("condition not met for input %d", index)
+			}
+
+			for _, key := range c.PubKeys {
+				keys[hex.EncodeToString(schnorr.SerializePubKey(key))] = false
+			}
 		}
 
 		// we don't need to check if server signed
@@ -176,13 +194,25 @@ func (b *txBuilder) FinalizeAndExtract(tx string) (string, error) {
 				return "", err
 			}
 
-			signatures := make(map[string][]byte)
-
-			for _, sig := range in.TaprootScriptSpendSig {
-				signatures[hex.EncodeToString(sig.XOnlyPubKey)] = sig.Signature
+			conditionWitness, err := bitcointree.GetConditionWitness(in)
+			if err != nil {
+				return "", err
 			}
 
-			witness, err := closure.Witness(in.TaprootLeafScript[0].ControlBlock, signatures)
+			args := make(map[string][]byte)
+			if len(conditionWitness) > 0 {
+				var conditionWitnessBytes bytes.Buffer
+				if err := psbt.WriteTxWitness(&conditionWitnessBytes, conditionWitness); err != nil {
+					return "", err
+				}
+				args["condition"] = conditionWitnessBytes.Bytes()
+			}
+
+			for _, sig := range in.TaprootScriptSpendSig {
+				args[hex.EncodeToString(sig.XOnlyPubKey)] = sig.Signature
+			}
+
+			witness, err := closure.Witness(in.TaprootLeafScript[0].ControlBlock, args)
 			if err != nil {
 				return "", err
 			}
@@ -375,21 +405,27 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 			return nil, err
 		}
 
+		var locktime *common.Locktime
+
 		switch c := closure.(type) {
 		case *tree.CLTVMultisigClosure:
-			switch c.Locktime.Type {
-			case common.LocktimeTypeBlock:
-				if c.Locktime.Value > blocktimestamp.Height {
-					return nil, fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block height)", c.Locktime.Value, blocktimestamp.Height)
-				}
-			case common.LocktimeTypeSecond:
-				if c.Locktime.Value > uint32(blocktimestamp.Time) {
-					return nil, fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block time)", c.Locktime.Value, blocktimestamp.Time)
-				}
-			}
-		case *tree.MultisigClosure:
+			locktime = &c.Locktime
+		case *tree.MultisigClosure, *tree.ConditionMultisigClosure:
 		default:
 			return nil, fmt.Errorf("invalid forfeit closure script")
+		}
+
+		if locktime != nil {
+			switch locktime.Type {
+			case common.LocktimeTypeBlock:
+				if locktime.Value > blocktimestamp.Height {
+					return nil, fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block height)", locktime.Value, blocktimestamp.Height)
+				}
+			case common.LocktimeTypeSecond:
+				if locktime.Value > uint32(blocktimestamp.Time) {
+					return nil, fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block time)", locktime.Value, blocktimestamp.Time)
+				}
+			}
 		}
 
 		ctrlBlock, err := txscript.ParseControlBlock(vtxoTapscript.ControlBlock)
