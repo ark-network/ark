@@ -5,10 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
@@ -279,17 +279,10 @@ func (c *Client) balanceHandler(w http.ResponseWriter, r *http.Request) {
 func (c *Client) onboard(url string, amount float64) error {
 	ctx := context.Background()
 
-	amountStr := fmt.Sprintf("%.8f", amount)
-
-	amountUint, err := strconv.ParseUint(amountStr, 10, 32)
-	if err != nil {
-		return err
-	}
-
 	payload := struct {
 		Amount uint32 `json:"amount"`
 	}{
-		Amount: uint32(amountUint),
+		Amount: uint32(math.Round(amount * 100000000)),
 	}
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
