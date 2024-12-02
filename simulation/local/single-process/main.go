@@ -239,7 +239,7 @@ func setupArkClient() (arksdk.ArkClient, error) {
 	if err := client.Init(ctx, arksdk.InitArgs{
 		WalletType: walletType,
 		ClientType: clientType,
-		AspUrl:     aspUrl,
+		ServerUrl:  aspUrl,
 		Password:   password,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to initialize wallet: %s", err)
@@ -294,7 +294,7 @@ func sendAsync(user User, amount float64, to string, users map[string]User) erro
 		arksdk.NewBitcoinReceiver(toAddress, uint64(amount*1e8)),
 	}
 
-	if _, err = user.client.SendAsync(ctx, false, receivers); err != nil {
+	if _, err = user.client.SendOffChain(ctx, false, receivers); err != nil {
 		return fmt.Errorf("user %s failed to send %f BTC to user %s: %v", user.ID, amount, toUser.ID, err)
 	}
 

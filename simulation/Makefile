@@ -45,7 +45,7 @@ run-remote:
 		echo "Error: SECURITY_GROUP_IDS is not set. You can find this in CloudFormation outputs."; \
 		exit 1; \
 	fi
-	go run ./remote/orchestrator/main.go
+	go run ./remote/orchestrator/main.go $(ARGS)
 
 vet:
 	@echo "Running go vet..."

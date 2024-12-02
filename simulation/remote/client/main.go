@@ -106,7 +106,7 @@ func (c *Client) setupArkClient(explorerUrl, aspUrl string) error {
 	if err := client.Init(ctx, arksdk.InitArgs{
 		WalletType:  arksdk.SingleKeyWallet,
 		ClientType:  arksdk.RestClient,
-		AspUrl:      aspUrl,
+		ServerUrl:   aspUrl,
 		Password:    "password",
 		ExplorerURL: explorerUrl,
 	}); err != nil {
@@ -227,7 +227,7 @@ func (c *Client) sendAsyncHandler(w http.ResponseWriter, r *http.Request) {
 		arksdk.NewBitcoinReceiver(req.ToAddress, uint64(req.Amount*1e8)),
 	}
 
-	_, err := c.ArkClient.SendAsync(ctx, false, receivers)
+	_, err := c.ArkClient.SendOffChain(ctx, false, receivers)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

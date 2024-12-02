@@ -78,7 +78,7 @@ func (c *Client) setupArkClient(aspUrl string) error {
 	if err := client.Init(ctx, arksdk.InitArgs{
 		WalletType: arksdk.SingleKeyWallet,
 		ClientType: arksdk.GrpcClient,
-		AspUrl:     aspUrl,
+		ServerUrl:  aspUrl,
 		Password:   "password",
 	}); err != nil {
 		return fmt.Errorf("failed to initialize wallet: %s", err)
@@ -263,7 +263,7 @@ func (c *Client) sendAsync(amount float64, toClientID string) error {
 		arksdk.NewBitcoinReceiver(recipientAddress, uint64(amount*1e8)),
 	}
 
-	_, err = c.ArkClient.SendAsync(ctx, false, receivers)
+	_, err = c.ArkClient.SendOffChain(ctx, false, receivers)
 	if err != nil {
 		return fmt.Errorf("client %s failed to send %f BTC to client %s: %v",
 			c.ID, amount, toClientID, err)
