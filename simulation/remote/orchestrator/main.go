@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/xeipuuv/gojsonschema"
@@ -11,7 +12,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -27,9 +27,9 @@ import (
 )
 
 const (
-	composePath    = "../../../docker-compose.clark.regtest.yml"
-	schemaPath     = "../../schema.yaml"
-	simulationPath = "../../simulation.yaml"
+	composePath    = "../docker-compose.clark.regtest.yml"
+	schemaPath     = "schema.yaml"
+	simulationPath = "simulation.yaml"
 	defaultAspUrl  = "localhost:7070"
 	clientPort     = "9000" // All clients listen on this port
 )
@@ -191,11 +191,9 @@ func faucetHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		if err := faucetSignet(req.Address, req.Amount); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			log.Errorf("Error running faucet command: %v", err)
-			return
-		}
+		http.Error(w, errors.New("faucet not supported in signet").Error(), http.StatusBadRequest)
+		log.Error("faucet not supported in signet")
+		return
 	}
 
 	log.Infof("Faucet sent %s to %s", req.Amount, req.Address)
@@ -881,84 +879,4 @@ type Simulation struct {
 	} `yaml:"server"`
 	Clients []ClientConfig `json:"clients"`
 	Rounds  []Round        `json:"rounds"`
-}
-
-func faucetSignet(address, amount string) error {
-	btcFloat, _ := strconv.ParseFloat(amount, 64)
-	sats := int(btcFloat * 100000000)
-	var req = struct {
-		Sats    int    `json:"sats"`
-		Address string `json:"address"`
-	}{
-		Sats:    sats,
-		Address: address,
-	}
-
-	log.Infof("Requesting %d sats from signet faucet for address %s", req.Sats, req.Address)
-
-	reqBody, err := json.Marshal(req)
-	if err != nil {
-		return fmt.Errorf("error marshalling request: %v", err)
-	}
-
-	resp, err := http.Post("https://faucet.mutinynet.com/api/onchain", "application/json", bytes.NewBuffer(reqBody))
-	if err != nil {
-		return fmt.Errorf("error sending request: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("signet faucet request failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var rsp = struct {
-		TxID    string `json:"txid"`
-		Address string `json:"address"`
-	}{}
-	if err := json.NewDecoder(resp.Body).Decode(&rsp); err != nil {
-		return fmt.Errorf("error decoding response: %v", err)
-	}
-
-	// considering signet block time should be 30sec loop for 40 seconds, checking every 5 seconds
-	timeout := time.After(35 * time.Second)
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-timeout:
-			return fmt.Errorf("transaction %s not confirmed within 40 seconds", rsp.TxID)
-		case <-ticker.C:
-			statusResp, err := http.Get(fmt.Sprintf("https://mutinynet.com/api/tx/%s", rsp.TxID))
-			if err != nil {
-				return fmt.Errorf("error getting transaction status: %v", err)
-			}
-
-			if statusResp.StatusCode != http.StatusOK {
-				body, _ := io.ReadAll(statusResp.Body)
-				statusResp.Body.Close()
-				return fmt.Errorf("signet get tx request failed with status %d: %s", statusResp.StatusCode, string(body))
-			}
-
-			var txStatus = struct {
-				TxID   string `json:"txid"`
-				Status struct {
-					Confirmed bool `json:"confirmed"`
-				} `json:"status"`
-			}{}
-			if err := json.NewDecoder(statusResp.Body).Decode(&txStatus); err != nil {
-				statusResp.Body.Close()
-				return fmt.Errorf("error decoding status response: %v", err)
-			}
-			statusResp.Body.Close()
-
-			if txStatus.Status.Confirmed {
-				log.Infof("Transaction %s confirmed", rsp.TxID)
-				return nil
-			} else {
-				log.Infof("Signet faucet transaction %s not confirmed yet", rsp.TxID)
-			}
-		}
-	}
 }

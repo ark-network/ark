@@ -23,6 +23,7 @@ const (
 
 var (
 	orchestratorUrl string
+	serverUrl       string
 )
 
 func main() {
@@ -52,6 +53,7 @@ func main() {
 		}
 		explorerUrl = signetExplorerUrl
 	}
+	serverUrl = aspUrl
 
 	log.Infof("Env vars: CLIENT_ID=%s, ASP_URL=%s, ORCHESTRATOR_URL=%s, EXPLORER_URL=%s", clientID, aspUrl, orchestratorUrl, explorerUrl)
 
@@ -199,7 +201,7 @@ func (c *Client) onboardHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := c.onboard(orchestratorUrl, req.Amount); err != nil {
+	if err := c.onboard(serverUrl, req.Amount); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -273,22 +275,15 @@ func (c *Client) balanceHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(balance)
 }
 
-func (c *Client) onboard(orchestratorUrl string, amount float64) error {
+func (c *Client) onboard(url string, amount float64) error {
 	ctx := context.Background()
-
-	_, boardingAddress, err := c.ArkClient.Receive(ctx)
-	if err != nil {
-		return err
-	}
 
 	amountStr := fmt.Sprintf("%.8f", amount)
 
 	payload := struct {
-		Address string `json:"address"`
-		Amount  string `json:"amount"`
+		Amount string `json:"amount"`
 	}{
-		Address: boardingAddress,
-		Amount:  amountStr,
+		Amount: amountStr,
 	}
 
 	jsonData, err := json.Marshal(payload)
@@ -296,7 +291,7 @@ func (c *Client) onboard(orchestratorUrl string, amount float64) error {
 		return err
 	}
 
-	resp, err := http.Post(fmt.Sprintf("http://%s/faucet", orchestratorUrl),
+	resp, err := http.Post(fmt.Sprintf("http://%s/v1/admin/note", url),
 		"application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return err
@@ -309,10 +304,18 @@ func (c *Client) onboard(orchestratorUrl string, amount float64) error {
 		return fmt.Errorf("failed to faucet address: status=%d, body=%v", resp.StatusCode, body)
 	}
 
-	// Wait for the funds to be confirmed (simulate delay)
-	time.Sleep(5 * time.Second)
+	time.Sleep(1 * time.Second)
 
-	_, err = c.ArkClient.Settle(ctx)
+	var noteResponse struct {
+		Notes []string `json:"notes"`
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&noteResponse)
+	if err != nil {
+		return fmt.Errorf("failed to decode response: %v", err)
+	}
+
+	_, err = c.ArkClient.RedeemNotes(ctx, noteResponse.Notes)
 	if err != nil {
 		return fmt.Errorf("client %s failed to settle onboard: %v", c.ID, err)
 	}
