@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
-	appconfig "github.com/ark-network/ark/server/internal/app-config"
+	"github.com/ark-network/ark/server/internal/config"
 	"github.com/ark-network/ark/server/internal/core/application"
 	interfaces "github.com/ark-network/ark/server/internal/interface"
 	"github.com/ark-network/ark/server/internal/interface/grpc/handlers"
@@ -39,14 +39,14 @@ const (
 
 type service struct {
 	config      Config
-	appConfig   *appconfig.Config
+	appConfig   *config.Config
 	server      *http.Server
 	grpcServer  *grpc.Server
 	macaroonSvc *macaroons.Service
 }
 
 func NewService(
-	svcConfig Config, appConfig *appconfig.Config,
+	svcConfig Config, appConfig *config.Config,
 ) (interfaces.Service, error) {
 	if err := svcConfig.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid service config: %s", err)
