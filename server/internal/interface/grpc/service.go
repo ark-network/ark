@@ -4,6 +4,11 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"net/http"
+	"path/filepath"
+	"strings"
+	"time"
+
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel"
 	metricExport "go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
@@ -12,13 +17,9 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
-	"net/http"
-	"path/filepath"
-	"strings"
-	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
-	appconfig "github.com/ark-network/ark/server/internal/app-config"
+	"github.com/ark-network/ark/server/internal/config"
 	"github.com/ark-network/ark/server/internal/core/application"
 	interfaces "github.com/ark-network/ark/server/internal/interface"
 	"github.com/ark-network/ark/server/internal/interface/grpc/handlers"
@@ -48,7 +49,7 @@ const (
 
 type service struct {
 	config       Config
-	appConfig    *appconfig.Config
+	appConfig    *config.Config
 	server       *http.Server
 	grpcServer   *grpc.Server
 	macaroonSvc  *macaroons.Service
@@ -56,7 +57,7 @@ type service struct {
 }
 
 func NewService(
-	svcConfig Config, appConfig *appconfig.Config,
+	svcConfig Config, appConfig *config.Config,
 ) (interfaces.Service, error) {
 	if err := svcConfig.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid service config: %s", err)
