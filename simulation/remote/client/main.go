@@ -291,7 +291,7 @@ func (c *Client) onboard(url string, amount float64) error {
 		return err
 	}
 
-	resp, err := http.Post(fmt.Sprintf("http://%s/v1/admin/note", url),
+	resp, err := http.Post(fmt.Sprintf("%s/v1/admin/note", url),
 		"application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return err
