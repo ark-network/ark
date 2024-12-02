@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -280,12 +281,16 @@ func (c *Client) onboard(url string, amount float64) error {
 
 	amountStr := fmt.Sprintf("%.8f", amount)
 
-	payload := struct {
-		Amount string `json:"amount"`
-	}{
-		Amount: amountStr,
+	amountUint, err := strconv.ParseUint(amountStr, 10, 32)
+	if err != nil {
+		return err
 	}
 
+	payload := struct {
+		Amount uint32 `json:"amount"`
+	}{
+		Amount: uint32(amountUint),
+	}
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
 		return err
