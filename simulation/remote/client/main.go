@@ -302,7 +302,7 @@ func (c *Client) onboard(url string, amount float64) error {
 		return fmt.Errorf("failed to faucet address: status=%d, body=%v", resp.StatusCode, body)
 	}
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	var noteResponse struct {
 		Notes []string `json:"notes"`

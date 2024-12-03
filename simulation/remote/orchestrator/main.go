@@ -266,7 +266,7 @@ func executeSimulation(simulation *Simulation) {
 
 					ctx, cancel := context.WithTimeout(
 						context.Background(),
-						time.Duration(simulation.Server.RoundInterval)*time.Second*2,
+						time.Minute,
 					)
 					defer cancel()
 
