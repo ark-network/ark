@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	middleware "github.com/ark-network/ark/simulation/sdk-middleware"
 	"math"
 	"net/http"
 	"os"
@@ -85,11 +86,12 @@ func main() {
 }
 
 type Client struct {
-	ID        string
-	ArkClient arksdk.ArkClient
-	ctx       context.Context
-	cancel    context.CancelFunc
-	Address   string
+	ID             string
+	ArkClient      arksdk.ArkClient
+	ctx            context.Context
+	cancel         context.CancelFunc
+	Address        string
+	StatsCollector *middleware.InMemoryStatsCollector
 }
 
 func (c *Client) setupArkClient(explorerUrl, aspUrl string) error {
@@ -104,6 +106,22 @@ func (c *Client) setupArkClient(explorerUrl, aspUrl string) error {
 	if err != nil {
 		return fmt.Errorf("failed to setup ark client: %s", err)
 	}
+
+	inMemoryStatsCollector := middleware.NewInMemoryStatsCollector()
+	loggingStatsCollector := middleware.NewLoggingStatsCollector()
+
+	statsCollector := middleware.NewCompositeStatsCollector(
+		inMemoryStatsCollector,
+		loggingStatsCollector,
+	)
+
+	chain := middleware.NewChain(
+		middleware.NewCPUUtilizationMiddleware(statsCollector),
+		middleware.NewMemoryStatsMiddleware(statsCollector),
+	)
+
+	c.ArkClient = middleware.NewArkClientProxy(client, chain)
+	c.StatsCollector = inMemoryStatsCollector
 
 	ctx := context.Background()
 	if err := client.Init(ctx, arksdk.InitArgs{
@@ -131,6 +149,7 @@ func (c *Client) startServer() {
 	mux.HandleFunc("/sendAsync", c.sendAsyncHandler)
 	mux.HandleFunc("/claim", c.claimHandler)
 	mux.HandleFunc("/balance", c.balanceHandler)
+	mux.HandleFunc("/stats", c.statsHandler)
 
 	server := &http.Server{
 		Addr:    ":" + clientPort,
@@ -274,6 +293,21 @@ func (c *Client) balanceHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(balance)
+}
+
+func (c *Client) statsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	c.StatsCollector.Lock()
+	defer c.StatsCollector.Unlock()
+
+	stats := c.StatsCollector.Stats
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(stats)
 }
 
 func (c *Client) onboard(url string, amount float64) error {

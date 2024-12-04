@@ -55,6 +55,7 @@ func main() {
 	flag.Parse()
 	sigNet = *signet
 	log.Infof("Signet: %v", sigNet)
+	log.Infof("Simulation file: %s", *simFile)
 
 	subnetIDsEnv := os.Getenv("SUBNET_IDS")
 	securityGroupIDsEnv := os.Getenv("SECURITY_GROUP_IDS")
@@ -266,7 +267,7 @@ func executeSimulation(simulation *Simulation) {
 
 					ctx, cancel := context.WithTimeout(
 						context.Background(),
-						time.Minute,
+						3*time.Minute,
 					)
 					defer cancel()
 
@@ -319,6 +320,8 @@ func executeClientAction(ctx context.Context, clientID string, actionType string
 		return executeSendAsync(ctx, clientURL, amount, toAddress)
 	case "Claim":
 		return executeClaim(ctx, clientURL)
+	case "Stats":
+		return executeStats(ctx, clientURL)
 	default:
 		return fmt.Errorf("unknown action type: %s", actionType)
 	}
@@ -340,7 +343,8 @@ func getClientAddress(clientID string) (string, error) {
 
 func executeOnboard(ctx context.Context, clientURL string, amount float64) error {
 	payload := map[string]float64{"amount": amount}
-	return sendRequest(ctx, clientURL+"/onboard", payload)
+	_, err := sendRequest(ctx, clientURL+"/onboard", payload)
+	return err
 }
 
 func executeSendAsync(ctx context.Context, clientURL string, amount float64, toAddress string) error {
@@ -348,44 +352,56 @@ func executeSendAsync(ctx context.Context, clientURL string, amount float64, toA
 		"amount":     amount,
 		"to_address": toAddress,
 	}
-	return sendRequest(ctx, clientURL+"/sendAsync", payload)
+	_, err := sendRequest(ctx, clientURL+"/sendAsync", payload)
+	return err
 }
 
 func executeClaim(ctx context.Context, clientURL string) error {
-	return sendRequest(ctx, clientURL+"/claim", nil)
+	_, err := sendRequest(ctx, clientURL+"/claim", nil)
+	return err
 }
 
-func sendRequest(ctx context.Context, url string, payload interface{}) error {
+func executeStats(ctx context.Context, clientURL string) error {
+	resp, err := sendRequest(ctx, clientURL+"/stats", nil)
+	if err != nil {
+		return err
+	}
+
+	log.Infoln(resp)
+	return nil
+}
+
+func sendRequest(ctx context.Context, url string, payload interface{}) (string, error) {
 	var jsonData []byte
 	var err error
 	if payload != nil {
 		jsonData, err = json.Marshal(payload)
 		if err != nil {
-			return err
+			return "", err
 		}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return err
+		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return fmt.Errorf("request to %s timed out", url)
+			return "", fmt.Errorf("request to %s timed out", url)
 		}
-		return err
+		return "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
+		return "", fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	return nil
+	return "", nil
 }
 
 // startClients launches each client as an AWS Fargate task.

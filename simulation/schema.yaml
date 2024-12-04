@@ -66,6 +66,7 @@ properties:
                       - "CollaborativeRedeem"
                       - "UnilateralExit"
                       - "Balance"
+                      - "Stats"
                   amount:
                     type: number
                     minimum: 0
