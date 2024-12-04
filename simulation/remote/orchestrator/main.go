@@ -49,6 +49,8 @@ var (
 )
 
 func main() {
+	composeFile := flag.String("compose", composePath, "Path to docker-compose file")
+	schemaFile := flag.String("schema", schemaPath, "Path to simulation schema file")
 	simFile := flag.String("sim", simulationPath, "Path to simulation YAML file")
 	serverUrl := flag.String("asp-url", "", "ASP URL to use for the simulation")
 	signet := flag.Bool("signet", false, "Use signet")
@@ -67,7 +69,7 @@ func main() {
 		log.Fatalf("SECURITY_GROUP_IDS environment variable is not set")
 	}
 
-	simulation, err := loadAndValidateSimulation(*simFile)
+	simulation, err := loadAndValidateSimulation(*simFile, *schemaFile)
 	if err != nil {
 		log.Fatalf("Error loading simulation config: %v", err)
 	}
@@ -75,7 +77,7 @@ func main() {
 	aspUrl := *serverUrl
 	startedLocally := false
 	if aspUrl == "" {
-		if err := startAspLocally(*simulation); err != nil {
+		if err := startAspLocally(*simulation, *composeFile); err != nil {
 			log.Fatalf("Error starting ASP server: %v", err)
 		}
 		aspUrl = defaultAspUrl
@@ -85,7 +87,7 @@ func main() {
 	if startedLocally {
 		defer func() {
 			log.Info("Stopping ASP server...")
-			if _, err := utils.RunCommand("docker-compose", "-f", composePath, "down", "-v"); err != nil {
+			if _, err := utils.RunCommand("docker-compose", "-f", *composeFile, "down", "-v"); err != nil {
 				log.Errorf("Error stopping ASP server: %v", err)
 			}
 		}()
@@ -820,8 +822,8 @@ func stopClients() {
 }
 
 // loadAndValidateSimulation reads and validates the simulation YAML file.
-func loadAndValidateSimulation(simFile string) (*Simulation, error) {
-	schemaBytes, err := os.ReadFile(schemaPath)
+func loadAndValidateSimulation(simFile, schemaFile string) (*Simulation, error) {
+	schemaBytes, err := os.ReadFile(schemaFile)
 	if err != nil {
 		return nil, fmt.Errorf("error reading schema file: %v", err)
 	}
@@ -872,7 +874,7 @@ func loadAndValidateSimulation(simFile string) (*Simulation, error) {
 }
 
 // startAspLocally starts ASP server locally.
-func startAspLocally(simulation Simulation) error {
+func startAspLocally(simulation Simulation, compose string) error {
 	log.Infof("Simulation Version: %s\n", simulation.Version)
 	log.Infof("ASP Network: %s\n", simulation.Server.Network)
 	log.Infof("Number of Clients: %d\n", len(simulation.Clients))
@@ -893,7 +895,7 @@ func startAspLocally(simulation Simulation) error {
 	}
 
 	log.Infof("Start building ARKD docker container ...")
-	if _, err := utils.RunCommand("docker-compose", "-f", composePath, "--env-file", tmpfile.Name(), "up", "-d"); err != nil {
+	if _, err := utils.RunCommand("docker-compose", "-f", compose, "--env-file", tmpfile.Name(), "up", "-d"); err != nil {
 		return err
 	}
 

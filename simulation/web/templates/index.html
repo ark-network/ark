@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Ark Simulation Web Interface</title>
+    <script src="https://unpkg.com/htmx.org@1.9.6"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/tokyo-night-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
+    <style>
+        /* Terminal Styles */
+        .terminal {
+            background-color: #1a1a1a;
+            color: #00ff00;
+            font-family: 'Courier New', Courier, monospace;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            height: 400px;
+            overflow-y: auto;
+        }
+        .terminal pre {
+            margin: 0;
+            white-space: pre;
+            line-height: 1.5;
+            overflow-x: auto;
+            padding: 2px 0;
+        }
+        .terminal pre:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(2px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .terminal pre:last-child {
+            animation: fadeIn 0.15s ease-out;
+        }
+        .terminal::-webkit-scrollbar {
+            width: 8px;
+        }
+        .terminal::-webkit-scrollbar-track {
+            background: #1a1a1a;
+            border-radius: 4px;
+        }
+        .terminal::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 4px;
+        }
+        .terminal::-webkit-scrollbar-thumb:hover {
+            background: #444;
+        }
+
+        /* YAML Preview Styles */
+        .preview-container {
+            height: 684px;
+            display: flex;
+            flex-direction: column;
+        }
+        .preview-header {
+            flex: none;
+            margin-bottom: 1rem;
+        }
+        .yaml-preview {
+            flex: 1;
+            min-height: 0;
+            background-color: #1a1b26;
+            border-radius: 0.5rem;
+            overflow-y: auto;
+            max-height: calc(100% - 4rem);
+        }
+        .yaml-preview pre {
+            margin: 0 !important;
+            height: auto !important;
+            max-height: none !important;
+        }
+        .yaml-preview code {
+            display: block !important;
+            height: auto !important;
+            max-height: none !important;
+            white-space: pre !important;
+            padding: 1rem !important;
+            font-family: 'JetBrains Mono', 'Courier New', monospace !important;
+            font-size: 0.9rem !important;
+            line-height: 1.5 !important;
+            background: transparent !important;
+        }
+        .yaml-preview::-webkit-scrollbar {
+            width: 8px;
+        }
+        .yaml-preview::-webkit-scrollbar-track {
+            background: #1a1b26;
+            border-radius: 4px;
+        }
+        .yaml-preview::-webkit-scrollbar-thumb {
+            background: #434759;
+            border-radius: 4px;
+        }
+        .yaml-preview::-webkit-scrollbar-thumb:hover {
+            background: #565b70;
+        }
+    </style>
+    <script>
+        document.addEventListener('htmx:afterSettle', function(evt) {
+            if (evt.detail.target.id === 'simulation-preview') {
+                hljs.highlightAll();
+            }
+        });
+    </script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+<div class="container mx-auto px-4 py-8">
+    <!-- Header with Logout Link -->
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+        <div class="flex justify-between items-center">
+            <h1 class="text-3xl font-bold">Ark Simulation Web Interface</h1>
+            <a href="/logout" class="text-sm text-gray-500 hover:text-gray-700">Logout</a>
+        </div>
+        <div class="prose max-w-none mt-4">
+            <p class="text-gray-600">
+                Welcome to the Ark Simulation Web Interface! This tool allows you to run and manage Ark Server simulations
+                in different network environments. You can test multiple clients performing various actions over several rounds
+                using either the default simulation configuration or your own custom YAML file.
+            </p>
+            <div class="mt-4 bg-blue-50 border-l-4 border-blue-500 p-4">
+                <p class="text-sm text-blue-700">
+                    <strong>Available Networks:</strong>
+                <ul class="list-disc list-inside mt-2">
+                    <li><strong>Regtest:</strong> For local regression testing</li>
+                    <li><strong>Signet:</strong> For testing in a live test network</li>
+                </ul>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-12 gap-8">
+        <!-- Left Side: Forms -->
+        <div class="col-span-5">
+            <div class="space-y-8">
+                <!-- Run Simulation Form -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h2 class="text-2xl font-bold mb-4">Run Simulation</h2>
+                    <form hx-post="/run" hx-target="#output" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Network Type</label>
+                            <select name="network" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                <option value="regtest">Regtest Network</option>
+                                <option value="signet">Signet Network</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Subnet IDs <span class="text-red-500">*</span></label>
+                            <input type="text" name="subnet_ids" required
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                   placeholder="e.g., subnet-xxxxxx,subnet-yyyyyy">
+                            <p class="mt-1 text-sm text-gray-500">Comma-separated list of subnet IDs</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Security Group IDs <span class="text-red-500">*</span></label>
+                            <input type="text" name="security_group_ids" required
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                   placeholder="e.g., sg-xxxxxx,sg-yyyyyy">
+                            <p class="mt-1 text-sm text-gray-500">Comma-separated list of security group IDs</p>
+                        </div>
+
+                        <div id="signet-params" style="display: none;">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">ASP URL</label>
+                            <input type="text" name="asp_url"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                   placeholder="e.g., http://example.com:7070">
+                            <p class="mt-1 text-sm text-gray-500">Required for signet network</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Select Simulation <span class="text-red-500">*</span></label>
+                            <select name="simulation_file" id="simulation-file-select" required
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                    hx-get="/simulation.yaml"
+                                    hx-target="#simulation-preview"
+                                    hx-trigger="change">
+                                {{ range .SimulationFiles }}
+                                <option value="{{ . }}" {{ if eq . "simulation.yaml" }}selected{{ end }}>{{ . }}</option>
+                                {{ end }}
+                            </select>
+                        </div>
+
+                        <div>
+                            <button type="submit"
+                                    class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                Run Simulation
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Upload Simulation Form -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h2 class="text-2xl font-bold mb-4">Upload Simulation</h2>
+                    <form id="upload-form" class="space-y-4" hx-post="/upload" hx-target="#simulation-file-select" hx-encoding="multipart/form-data">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Select YAML File</label>
+                            <input type="file" name="simulation" accept=".yaml,.yml" required
+                                   class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" />
+                        </div>
+                        <div>
+                            <button type="submit"
+                                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                                Upload Simulation
+                            </button>
+                        </div>
+                        <div id="upload-status" class="mt-2 text-sm"></div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Side: YAML Preview -->
+        <div class="col-span-7">
+            <div class="preview-container bg-white rounded-lg shadow-lg p-6">
+                <div class="preview-header flex items-center justify-between">
+                    <h2 class="text-2xl font-bold">YAML Preview</h2>
+                    <div class="space-x-4">
+                        <button type="button"
+                                hx-get="/simulation.yaml?type=schema"
+                                hx-target="#simulation-preview"
+                                class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                            View Schema
+                        </button>
+                    </div>
+                </div>
+                <div id="simulation-preview" class="yaml-preview"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Simulation Output -->
+    <div class="bg-white rounded-lg shadow-lg p-6 mt-8">
+        <h2 class="text-2xl font-bold mb-4">Simulation Output</h2>
+        <div id="output" class="terminal">
+            <pre>Waiting to start simulation...</pre>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Network type handling
+    document.querySelector('select[name="network"]').addEventListener('change', function() {
+        const signetParams = document.getElementById('signet-params');
+        const aspUrlInput = document.querySelector('input[name="asp_url"]');
+        if (this.value === 'signet') {
+            signetParams.style.display = 'block';
+            aspUrlInput.required = true;
+        } else {
+            signetParams.style.display = 'none';
+            aspUrlInput.required = false;
+        }
+    });
+
+    // Handle upload status messages
+    document.body.addEventListener('htmx:afterSettle', function(evt) {
+        const uploadStatus = document.getElementById('upload-status');
+        if (evt.detail && evt.detail.triggerSpec && evt.detail.triggerSpec.showMessage) {
+            uploadStatus.textContent = evt.detail.triggerSpec.showMessage;
+            uploadStatus.classList.add('text-green-600');
+            // Clear the file input
+            document.querySelector('input[type="file"]').value = '';
+            // Clear the message after 3 seconds
+            setTimeout(() => {
+                uploadStatus.textContent = '';
+                uploadStatus.classList.remove('text-green-600');
+            }, 3000);
+        }
+    });
+
+    // Load initial simulation content
+    window.addEventListener('load', function() {
+        const simulationSelect = document.getElementById('simulation-file-select');
+        // Trigger HTMX request to load initial content
+        htmx.trigger(simulationSelect, 'change');
+    });
+
+    // Handle terminal output
+    const terminal = document.getElementById('output');
+    let eventSource = null;
+    let lastPingTime = 0;
+    let pingTimeout = null;
+
+    // Function to append new line to terminal
+    function appendToTerminal(text, isError = false) {
+        const line = document.createElement('pre');
+        line.textContent = text;
+        if (isError) {
+            line.style.color = '#ff4444';
+        }
+        terminal.appendChild(line);
+        terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    // Function to close existing EventSource
+    function closeEventSource() {
+        if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+            console.log('EventSource closed');
+        }
+        if (pingTimeout) {
+            clearTimeout(pingTimeout);
+            pingTimeout = null;
+            console.log('Ping timeout cleared');
+        }
+    }
+
+    // Function to check connection status
+    function checkConnection() {
+        const now = Date.now();
+        if (now - lastPingTime > 45000) { // 45 seconds timeout
+            appendToTerminal('Connection lost - no ping received', true);
+            closeEventSource();
+            // Optionally, implement retry logic here
+        } else {
+            pingTimeout = setTimeout(checkConnection, 5000);
+        }
+    }
+
+    // Function to setup event handlers
+    function setupEventHandlers(es) {
+        es.addEventListener('message', function(e) {
+            if (e.data) {
+                appendToTerminal(e.data);
+            }
+        });
+
+        es.addEventListener('ping', function(e) {
+            lastPingTime = Date.now();
+            // Optionally log ping for debugging
+            // console.log('Ping received at:', new Date(lastPingTime).toISOString());
+        });
+
+        es.addEventListener('error', function(e) {
+            if (e.data) {
+                appendToTerminal(e.data, true);
+            }
+            if (es.readyState === EventSource.CLOSED) {
+                closeEventSource();
+            }
+        });
+
+        es.onerror = function(e) {
+            if (es.readyState === EventSource.CLOSED) {
+                appendToTerminal('Connection closed', true);
+                closeEventSource();
+            }
+        };
+
+        // Start connection monitoring
+        lastPingTime = Date.now();
+        if (pingTimeout) {
+            clearTimeout(pingTimeout);
+        }
+        pingTimeout = setTimeout(checkConnection, 5000);
+    }
+
+    // Handle simulation form submission
+    document.querySelector('form[hx-target="#output"]').addEventListener('submit', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Close existing EventSource
+        closeEventSource();
+
+        // Clear terminal
+        terminal.innerHTML = '';
+
+        // Create form data
+        const formData = new FormData(this);
+        const params = new URLSearchParams(formData);
+
+        // Create new EventSource
+        eventSource = new EventSource('/run?' + params.toString());
+        setupEventHandlers(eventSource);
+    });
+
+    // Clean up EventSource on page unload
+    window.addEventListener('beforeunload', function() {
+        closeEventSource();
+    });
+</script>
+</body>
+</html>

@@ -96,14 +96,12 @@ To overcome this and to provide a more realistic simulation, this framework supp
 4. **Run Remote Simulation**:
    ```bash
    cd ./ark/simulation
-   export SUBNET_IDS={SUBNET_IDS}
-   export SECURITY_GROUP_IDS={SECURITY_GROUP_IDS}
-   make run-remote
+   SUBNET_IDS={SUBNET_IDS} SECURITY_GROUP_IDS={SECURITY_GROUP_IDS} make run-remote
    ```
 5. **Run Remote Simulation in Signet**:   
    ```bash
    cd ./ark/simulation
    export SUBNET_IDS={SUBNET_IDS}
    export SECURITY_GROUP_IDS={SECURITY_GROUP_IDS}
-   make run-remote-signet ARGS="--asp-url {URL} --signet true"
+   SUBNET_IDS={SUBNET_IDS} SECURITY_GROUP_IDS={SECURITY_GROUP_IDS} make run-remote-signet ARGS="--asp-url {URL} --signet"
    ```

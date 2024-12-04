@@ -50,3 +50,9 @@ run-remote:
 vet:
 	@echo "Running go vet..."
 	go vet ./...
+
+#### Web Application ####
+## run-web: Run web interface for simulation
+run-web:
+	@echo "Starting web interface..."
+	go run ./web/main.go

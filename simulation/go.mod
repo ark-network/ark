@@ -6,6 +6,8 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.32.3
 	github.com/aws/aws-sdk-go-v2/config v1.28.1
 	github.com/aws/aws-sdk-go-v2/service/ecs v1.49.0
+	github.com/gorilla/mux v1.7.4
+	github.com/gorilla/sessions v1.4.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/sirupsen/logrus v1.9.3
 	github.com/xeipuuv/gojsonschema v1.2.0
@@ -27,6 +29,7 @@ require (
 	github.com/aws/smithy-go v1.22.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
+	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
