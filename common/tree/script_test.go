@@ -462,7 +462,7 @@ func TestDecodeChecksigAdd(t *testing.T) {
 		AddData(schnorr.SerializePubKey(pubkeys[2])).
 		AddOp(txscript.OP_CHECKSIGADD).
 		AddInt64(3).
-		AddOp(txscript.OP_EQUAL)
+		AddOp(txscript.OP_NUMEQUAL)
 
 	script, err := scriptBuilder.Script()
 	require.NoError(t, err, "failed to build script")
@@ -509,7 +509,7 @@ func TestCLTVMultisigClosure(t *testing.T) {
 		require.True(t, valid)
 		require.Equal(t, closure.Locktime, decodedClosure.Locktime)
 		require.Equal(t, 1, len(decodedClosure.PubKeys))
-		require.True(t, closure.PubKeys[0].IsEqual(decodedClosure.PubKeys[0]))
+		require.Equal(t, schnorr.SerializePubKey(pubkey1), schnorr.SerializePubKey(decodedClosure.PubKeys[0]))
 	})
 
 	t.Run("valid two keys with CLTV", func(t *testing.T) {

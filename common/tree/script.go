@@ -7,7 +7,6 @@ import (
 	"fmt"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/engine"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
@@ -782,8 +781,47 @@ func (d *CLTVMultisigClosure) Decode(script []byte) (bool, error) {
 // ExecuteBoolScript run the script with the provided witness as argument
 // the result must be a boolean value accepted by OP_IF / OP_NOTIF opcodes
 func ExecuteBoolScript(script []byte, witness wire.TxWitness) (bool, error) {
-	// Create a new script engine
-	vm, err := engine.NewEngine(script)
+
+	// make sure the script doesn't contain any introspections opcodes (sig or locktime)
+	forbiddenOpcodes := []byte{
+		txscript.OP_CHECKMULTISIG,
+		txscript.OP_CHECKSIG,
+		txscript.OP_CHECKSIGVERIFY,
+		txscript.OP_CHECKSIGADD,
+		txscript.OP_CHECKMULTISIGVERIFY,
+		txscript.OP_CHECKLOCKTIMEVERIFY,
+		txscript.OP_CHECKSEQUENCEVERIFY,
+	}
+
+	tokenizer := txscript.MakeScriptTokenizer(0, script)
+	for tokenizer.Next() {
+		for _, opcode := range forbiddenOpcodes {
+			if tokenizer.Opcode() == opcode {
+				return false, fmt.Errorf("forbidden opcode %x", opcode)
+			}
+		}
+	}
+
+	// Create a fake transaction with minimal required fields
+	// this is needed to instantiate the script engine without a tx
+	// as we don't validate any tx data, we just need to have a valid tx structure
+	fakeTx := &wire.MsgTx{
+		Version: 2,
+		TxIn:    []*wire.TxIn{{Sequence: 0xffffffff}}, // At least one input required
+		TxOut:   []*wire.TxOut{{Value: 0}},            // At least one output required
+	}
+
+	// Create a new script engine with the fake tx
+	vm, err := txscript.NewEngine(
+		script,
+		fakeTx,
+		0, // Input index
+		txscript.ScriptVerifyTaproot,
+		nil,
+		nil,
+		0,
+		nil,
+	)
 	if err != nil {
 		return false, fmt.Errorf("failed to create script engine: %w", err)
 	}
@@ -792,29 +830,21 @@ func ExecuteBoolScript(script []byte, witness wire.TxWitness) (bool, error) {
 
 	// Execute the script with the provided witness
 	if err := vm.Execute(); err != nil {
+		if scriptError, ok := err.(txscript.Error); ok {
+			if scriptError.ErrorCode == txscript.ErrEvalFalse {
+				return false, nil
+			}
+		}
 		return false, err
 	}
 
 	finalStack := vm.GetStack()
 
-	if len(finalStack) != 1 {
-		return false, fmt.Errorf("script must return a single value on the stack, got %d", len(finalStack))
+	if len(finalStack) != 0 {
+		return false, fmt.Errorf("script must return zero value on the stack, got %d", len(finalStack))
 	}
 
-	return asBool(finalStack[0]), nil
-}
-
-func asBool(t []byte) bool {
-	for i := range t {
-		if t[i] != 0 {
-			// Negative 0 is also considered false.
-			if i == len(t)-1 && t[i] == 0x80 {
-				return false
-			}
-			return true
-		}
-	}
-	return false
+	return true, nil
 }
 
 func ReadTxWitness(witnessSerialized []byte) (wire.TxWitness, error) {
