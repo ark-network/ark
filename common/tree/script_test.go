@@ -813,7 +813,7 @@ func TestConditionMultisigClosure(t *testing.T) {
 		signatures := map[string][]byte{
 			hex.EncodeToString(schnorr.SerializePubKey(pubkey1)): bytes.Repeat([]byte{0x01}, 64),
 			hex.EncodeToString(schnorr.SerializePubKey(pubkey2)): bytes.Repeat([]byte{0x02}, 64),
-			tree.ConditionWitnessKey:                             conditionWitnessBytes.Bytes(),
+			"condition": conditionWitnessBytes.Bytes(),
 		}
 
 		controlBlock := bytes.Repeat([]byte{0x00}, 32)

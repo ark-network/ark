@@ -67,7 +67,7 @@ func (s *service) SignTransaction(
 				if err := psbt.WriteTxWitness(&conditionWitnessBytes, conditionWitness); err != nil {
 					return "", err
 				}
-				args[tree.ConditionWitnessKey] = conditionWitnessBytes.Bytes()
+				args["condition"] = conditionWitnessBytes.Bytes()
 			}
 
 			for _, sig := range in.TapScriptSig {

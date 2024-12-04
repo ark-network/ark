@@ -205,7 +205,7 @@ func (b *txBuilder) FinalizeAndExtract(tx string) (string, error) {
 				if err := psbt.WriteTxWitness(&conditionWitnessBytes, conditionWitness); err != nil {
 					return "", err
 				}
-				args[tree.ConditionWitnessKey] = conditionWitnessBytes.Bytes()
+				args["condition"] = conditionWitnessBytes.Bytes()
 			}
 
 			for _, sig := range in.TaprootScriptSpendSig {
