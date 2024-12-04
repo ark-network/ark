@@ -31,7 +31,7 @@ func AddConditionWitness(inIndex int, ptx *psbt.Packet, witness wire.TxWitness) 
 
 func GetConditionWitness(in psbt.PInput) (wire.TxWitness, error) {
 	for _, u := range in.Unknowns {
-		if bytes.HasPrefix(u.Key, CONDITION_WITNESS_KEY_PREFIX) {
+		if bytes.Contains(u.Key, CONDITION_WITNESS_KEY_PREFIX) {
 			return tree.ReadTxWitness(u.Value)
 		}
 	}
