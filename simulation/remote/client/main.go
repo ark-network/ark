@@ -102,7 +102,7 @@ func (c *Client) setupArkClient(explorerUrl, aspUrl string) error {
 		return fmt.Errorf("failed to create store: %s", err)
 	}
 
-	client, err := arksdk.NewCovenantlessClient(appDataStore)
+	originalClient, err := arksdk.NewCovenantlessClient(appDataStore)
 	if err != nil {
 		return fmt.Errorf("failed to setup ark client: %s", err)
 	}
@@ -120,7 +120,7 @@ func (c *Client) setupArkClient(explorerUrl, aspUrl string) error {
 		middleware.NewMemoryStatsMiddleware(statsCollector),
 	)
 
-	c.ArkClient = middleware.NewArkClientProxy(client, chain)
+	client := middleware.NewArkClientProxy(originalClient, chain)
 	c.StatsCollector = inMemoryStatsCollector
 
 	ctx := context.Background()

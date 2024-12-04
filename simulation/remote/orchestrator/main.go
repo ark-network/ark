@@ -343,7 +343,7 @@ func getClientAddress(clientID string) (string, error) {
 
 func executeOnboard(ctx context.Context, clientURL string, amount float64) error {
 	payload := map[string]float64{"amount": amount}
-	_, err := sendRequest(ctx, clientURL+"/onboard", payload)
+	_, err := sendRequest(ctx, clientURL+"/onboard", http.MethodPost, payload)
 	return err
 }
 
@@ -352,17 +352,17 @@ func executeSendAsync(ctx context.Context, clientURL string, amount float64, toA
 		"amount":     amount,
 		"to_address": toAddress,
 	}
-	_, err := sendRequest(ctx, clientURL+"/sendAsync", payload)
+	_, err := sendRequest(ctx, clientURL+"/sendAsync", http.MethodPost, payload)
 	return err
 }
 
 func executeClaim(ctx context.Context, clientURL string) error {
-	_, err := sendRequest(ctx, clientURL+"/claim", nil)
+	_, err := sendRequest(ctx, clientURL+"/claim", http.MethodPost, nil)
 	return err
 }
 
 func executeStats(ctx context.Context, clientURL string) error {
-	resp, err := sendRequest(ctx, clientURL+"/stats", nil)
+	resp, err := sendRequest(ctx, clientURL+"/stats", http.MethodGet, nil)
 	if err != nil {
 		return err
 	}
@@ -370,38 +370,71 @@ func executeStats(ctx context.Context, clientURL string) error {
 	log.Infoln(resp)
 	return nil
 }
-
-func sendRequest(ctx context.Context, url string, payload interface{}) (string, error) {
-	var jsonData []byte
+func sendRequest(ctx context.Context, urlStr string, method string, payload interface{}) (string, error) {
+	var req *http.Request
 	var err error
-	if payload != nil {
-		jsonData, err = json.Marshal(payload)
+
+	if method == http.MethodGet && payload != nil {
+		params, ok := payload.(map[string]string)
+		if !ok {
+			return "", fmt.Errorf("payload must be of type map[string]string for GET requests")
+		}
+
+		parsedURL, err := url.Parse(urlStr)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("invalid URL: %w", err)
+		}
+
+		query := parsedURL.Query()
+		for key, value := range params {
+			query.Set(key, value)
+		}
+		parsedURL.RawQuery = query.Encode()
+
+		req, err = http.NewRequestWithContext(ctx, method, parsedURL.String(), nil)
+		if err != nil {
+			return "", fmt.Errorf("failed to create GET request: %w", err)
+		}
+	} else {
+		var body io.Reader
+
+		if payload != nil {
+			jsonData, err := json.Marshal(payload)
+			if err != nil {
+				return "", fmt.Errorf("failed to marshal payload to JSON: %w", err)
+			}
+			body = bytes.NewBuffer(jsonData)
+		}
+
+		req, err = http.NewRequestWithContext(ctx, method, urlStr, body)
+		if err != nil {
+			return "", fmt.Errorf("failed to create %s request: %w", method, err)
+		}
+
+		if method == http.MethodPost {
+			req.Header.Set("Content-Type", "application/json")
 		}
 	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return "", fmt.Errorf("request to %s timed out", url)
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return "", fmt.Errorf("request to %s timed out", urlStr)
 		}
-		return "", err
+		return "", fmt.Errorf("request to %s failed: %w", urlStr, err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	return "", nil
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return string(bodyBytes), nil
 }
 
 // startClients launches each client as an AWS Fargate task.
