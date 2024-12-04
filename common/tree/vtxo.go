@@ -187,15 +187,9 @@ func (b elementsTapTree) GetTaprootMerkleProof(leafhash chainhash.Hash) (*common
 		return nil, err
 	}
 
-	closure, err := DecodeClosure(proof.Script)
-	if err != nil {
-		return nil, err
-	}
-
 	return &common.TaprootMerkleProof{
 		ControlBlock: controlBlockBytes,
 		Script:       proof.Script,
-		WitnessSize:  closure.WitnessSize(),
 	}, nil
 }
 

@@ -398,6 +398,14 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 		}
 
 		vtxoTapscript := firstForfeit.Inputs[1].TaprootLeafScript[0]
+		conditionWitness, err := bitcointree.GetConditionWitness(firstForfeit.Inputs[1])
+		if err != nil {
+			return nil, err
+		}
+		conditionWitnessSize := 0
+		for _, witness := range conditionWitness {
+			conditionWitnessSize += len(witness)
+		}
 
 		// verify the forfeit closure script
 		closure, err := tree.DecodeClosure(vtxoTapscript.Script)
@@ -439,7 +447,7 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 				RevealedScript: vtxoTapscript.Script,
 				ControlBlock:   ctrlBlock,
 			},
-			closure.WitnessSize(),
+			closure.WitnessSize(conditionWitnessSize),
 			txscript.GetScriptClass(forfeitScript),
 		)
 		if err != nil {

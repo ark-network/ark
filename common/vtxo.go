@@ -14,7 +14,6 @@ var (
 type TaprootMerkleProof struct {
 	ControlBlock []byte
 	Script       []byte
-	WitnessSize  int
 }
 
 // TaprootTree is an interface wrapping the methods needed to spend a vtxo taproot contract
