@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"strings"
 
 	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -81,21 +82,43 @@ type ConditionMultisigClosure struct {
 }
 
 func DecodeClosure(script []byte) (Closure, error) {
-	types := []Closure{
-		&CSVSigClosure{},
-		&CLTVMultisigClosure{},
-		&MultisigClosure{},
-		&UnrollClosure{},
-		&ConditionMultisigClosure{},
+	if len(script) == 0 {
+		return nil, fmt.Errorf("cannot decode empty script")
 	}
 
-	for _, closure := range types {
-		if valid, err := closure.Decode(script); err == nil && valid {
-			return closure, nil
+	types := []struct {
+		closure Closure
+		name    string
+	}{
+		{&CSVSigClosure{}, "CSV Signature"},
+		{&CLTVMultisigClosure{}, "CLTV Multisig"},
+		{&MultisigClosure{}, "Multisig"},
+		{&ConditionMultisigClosure{}, "Condition Multisig"},
+		{&UnrollClosure{}, "Unroll"},
+	}
+
+	var decodeErrors []string
+	for _, t := range types {
+		scriptCopy := make([]byte, len(script))
+		copy(scriptCopy, script)
+		valid, err := t.closure.Decode(scriptCopy)
+		if err != nil {
+			decodeErrors = append(decodeErrors, fmt.Sprintf("%s: %v", t.name, err))
+			continue
+		}
+		if valid {
+			return t.closure, nil
 		}
 	}
 
-	return nil, fmt.Errorf("invalid closure script %s", hex.EncodeToString(script))
+	if len(decodeErrors) > 0 {
+		return nil, fmt.Errorf("failed to decode script as any known closure type. Errors encountered:\n%s\nScript hex: %s",
+			strings.Join(decodeErrors, "\n"),
+			hex.EncodeToString(script))
+	}
+
+	return nil, fmt.Errorf("script does not match any known closure type: %s",
+		hex.EncodeToString(script))
 }
 
 func (f *MultisigClosure) WitnessSize(_ ...int) int {
@@ -898,7 +921,7 @@ func (f *ConditionMultisigClosure) Decode(script []byte) (bool, error) {
 	}
 
 	// Find OP_VERIFY position
-	verifyPos := bytes.Index(script, []byte{txscript.OP_VERIFY})
+	verifyPos := bytes.LastIndex(script, []byte{txscript.OP_VERIFY})
 	if verifyPos <= 0 {
 		return false, nil
 	}
