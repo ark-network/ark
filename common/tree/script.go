@@ -25,6 +25,8 @@ const (
 type MultisigType int
 
 const (
+	ConditionWitnessKey = "condition"
+
 	MultisigTypeChecksig MultisigType = iota
 	MultisigTypeChecksigAdd
 )
@@ -893,7 +895,7 @@ func (f *ConditionMultisigClosure) Witness(controlBlock []byte, args map[string]
 	}
 
 	// Read and execute condition witness
-	condWitness, err := ReadTxWitness(args["condition"])
+	condWitness, err := ReadTxWitness(args[ConditionWitnessKey])
 	if err != nil {
 		return nil, fmt.Errorf("failed to read condition witness: %w", err)
 	}
