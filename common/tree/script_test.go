@@ -775,7 +775,7 @@ func TestConditionMultisigClosure(t *testing.T) {
 		require.True(t, bytes.Equal(schnorr.SerializePubKey(pubkey1), schnorr.SerializePubKey(decodedClosure.PubKeys[0])))
 	})
 
-	t.Run("valid condition with two key multisig", func(t *testing.T) {
+	t.Run("valid condition with 2 of 2 multisig", func(t *testing.T) {
 		randomBytes := make([]byte, 32)
 		_, err := rand.Read(randomBytes)
 		require.NoError(t, err)
