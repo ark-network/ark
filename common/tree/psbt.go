@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	CONDITION_WITNESS_KEY_PREFIX = []byte("condition")
+	CONDITION_WITNESS_KEY_PREFIX = []byte(ConditionWitnessKey)
 )
 
 func AddConditionWitness(inIndex int, ptx *psetv2.Pset, witness wire.TxWitness) error {

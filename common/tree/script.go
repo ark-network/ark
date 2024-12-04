@@ -29,6 +29,8 @@ const (
 	MultisigTypeChecksigAdd
 )
 
+const ConditionWitnessKey = "condition"
+
 type Closure interface {
 	Script() ([]byte, error)
 	Decode(script []byte) (bool, error)
@@ -900,7 +902,7 @@ func (f *ConditionMultisigClosure) Witness(controlBlock []byte, args map[string]
 	}
 
 	// Read and execute condition witness
-	condWitness, err := ReadTxWitness(args["condition"])
+	condWitness, err := ReadTxWitness(args[ConditionWitnessKey])
 	if err != nil {
 		return nil, fmt.Errorf("failed to read condition witness: %w", err)
 	}

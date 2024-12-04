@@ -762,7 +762,7 @@ func (s *service) SignTransaction(ctx context.Context, partialTx string, extract
 					if err := psbt.WriteTxWitness(&conditionWitnessBytes, conditionWitness); err != nil {
 						return "", err
 					}
-					args["condition"] = conditionWitnessBytes.Bytes()
+					args[tree.ConditionWitnessKey] = conditionWitnessBytes.Bytes()
 				}
 
 				for _, sig := range in.TaprootScriptSpendSig {

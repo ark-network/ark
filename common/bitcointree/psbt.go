@@ -11,7 +11,7 @@ import (
 
 var (
 	COSIGNER_PSBT_KEY_PREFIX     = []byte("cosigner")
-	CONDITION_WITNESS_KEY_PREFIX = []byte("condition")
+	CONDITION_WITNESS_KEY_PREFIX = []byte(tree.ConditionWitnessKey)
 )
 
 func AddConditionWitness(inIndex int, ptx *psbt.Packet, witness wire.TxWitness) error {
