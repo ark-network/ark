@@ -1,80 +1,99 @@
 package main
 
 import (
-	"bufio"
+	"bytes"
+	"context"
 	"embed"
+	"encoding/json"
+	"errors"
+	"flag"
 	"fmt"
-	"github.com/gorilla/mux"
-	"github.com/gorilla/sessions"
-	log "github.com/sirupsen/logrus"
 	"html/template"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
-	"os/exec"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/ecs"
+	ecsTypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
+	"golang.org/x/sync/errgroup"
+
+	"github.com/gorilla/mux"
+	"github.com/gorilla/sessions"
+	log "github.com/sirupsen/logrus"
+	"github.com/xeipuuv/gojsonschema"
+
+	"sigs.k8s.io/yaml"
+)
+
+const (
+	clientPort = "9000"
 )
 
 //go:embed templates/*
 var content embed.FS
 
 var (
-	templates *template.Template
+	templates           *template.Template
+	clients             = make(map[string]*ClientInfo)
+	clientsMu           sync.Mutex
+	username            string
+	password            string
+	sessionStore        *sessions.CookieStore
+	subnetIDsEnv        = flag.String("subnet", "", "Comma-separated list of subnet IDs")
+	securityGroupIDsEnv = flag.String("sg", "", "Comma-separated list of security group IDs")
+	outputChan          chan string
+	simulationActive    bool
+	simulationMu        sync.Mutex
 )
-
-const (
-	username = "arkadmin"
-	password = "arkadmin123"
-)
-
-// Initialize a new session store
-var store = sessions.NewCookieStore([]byte("your-secret-key"))
-
-type PageData struct {
-	SimulationFiles []string
-	ErrorMessage    string
-}
-
-func init() {
-	// Parse templates
-	var err error
-	templates, err = template.ParseFS(content, "templates/*.html")
-	if err != nil {
-		log.Fatal(err)
-	}
-}
 
 func main() {
-	r := mux.NewRouter()
+	flag.StringVar(&username, "user", "admin", "Username for authentication")
+	flag.StringVar(&password, "pass", "admin", "Password for authentication")
+	flag.Parse()
 
-	store.Options = &sessions.Options{
+	if *subnetIDsEnv == "" || *securityGroupIDsEnv == "" {
+		log.Fatal("Both subnet IDs (-subnet) and security group IDs (-sg) must be provided")
+	}
+
+	sessionStore = sessions.NewCookieStore([]byte("your-secret-key"))
+
+	sessionStore.Options = &sessions.Options{
 		Path:     "/",
 		MaxAge:   86400 * 7, // 7 days
 		HttpOnly: true,
 		// Secure: true, // Uncomment this if using HTTPS
 	}
 
-	// Add logging middleware
-	r.Use(loggingMiddleware)
+	var err error
+	templates, err = template.ParseFS(content, "templates/*.html")
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	// Routes
+	r := mux.NewRouter()
+	r.Use(loggingMiddleware)
 	r.HandleFunc("/login", handleLogin).Methods("GET", "POST")
 	r.HandleFunc("/logout", handleLogout).Methods("GET")
 	r.HandleFunc("/", authMiddleware(handleIndex)).Methods("GET")
 	r.HandleFunc("/run", authMiddleware(handleRun)).Methods("GET", "POST")
-	r.HandleFunc("/upload", authMiddleware(handleUpload)).Methods("POST")
-	r.HandleFunc("/simulation.yaml", authMiddleware(handleSimulationYaml)).Methods("GET")
+	r.HandleFunc("/simulation", authMiddleware(handleSimulation)).Methods("GET", "POST")
+	r.HandleFunc("/address", addressHandler).Methods("GET", "POST")
+	r.HandleFunc("/log", logHandler).Methods("GET", "POST")
 
 	port := "8080"
 	log.Infof("Starting server on http://localhost:%s", port)
 	log.Fatal(http.ListenAndServe(":"+port, r))
 }
 
-// Middleware to check if user is authenticated
 func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session, _ := store.Get(r, "auth-session")
+		session, _ := sessionStore.Get(r, "auth-session")
 		if auth, ok := session.Values["authenticated"].(bool); !ok || !auth {
 			http.Redirect(w, r, "/login", http.StatusFound)
 			return
@@ -83,10 +102,8 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// Handle user login
 func handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		// Render login template
 		if err := templates.ExecuteTemplate(w, "login.html", nil); err != nil {
 			log.Errorf("Error rendering login template: %v", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -94,7 +111,6 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Handle POST request
 	err := r.ParseForm()
 	if err != nil {
 		log.Errorf("Error parsing form: %v", err)
@@ -105,16 +121,14 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	user := r.FormValue("username")
 	pass := r.FormValue("password")
 
-	// Use standard string comparison
 	if user == username && pass == password {
-		session, _ := store.Get(r, "auth-session")
+		session, _ := sessionStore.Get(r, "auth-session")
 		session.Values["authenticated"] = true
 		session.Save(r, w)
 
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	} else {
-		// Invalid credentials
 		data := PageData{
 			ErrorMessage: "Invalid username or password",
 		}
@@ -126,43 +140,37 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Handle user logout
 func handleLogout(w http.ResponseWriter, r *http.Request) {
-	session, _ := store.Get(r, "auth-session")
+	session, _ := sessionStore.Get(r, "auth-session")
 	session.Values["authenticated"] = false
 	session.Save(r, w)
 	http.Redirect(w, r, "/login", http.StatusFound)
 }
 
-// Logging middleware
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
-		// Log request details
 		log.Infof("Request: %s %s", r.Method, r.URL.Path)
 		if r.URL.RawQuery != "" {
 			log.Infof("Query Params: %s", r.URL.RawQuery)
 		}
 
-		// Log form values if present
 		if err := r.ParseForm(); err == nil && len(r.Form) > 0 {
 			log.Infof("Form Data: %v", r.Form)
 		}
 
 		next.ServeHTTP(w, r)
 
-		// Log request duration
 		duration := time.Since(start)
 		log.Infof("Completed %s %s in %v", r.Method, r.URL.Path, duration)
 	})
 }
 
-// Get list of simulation files
 func getSimulationFiles() ([]string, error) {
 	files, err := os.ReadDir(".")
 	if err != nil {
-		return nil, fmt.Errorf("error reading simulation directory: %v", err)
+		return nil, err
 	}
 
 	var simFiles []string
@@ -178,7 +186,6 @@ func getSimulationFiles() ([]string, error) {
 	return simFiles, nil
 }
 
-// Handle index page
 func handleIndex(w http.ResponseWriter, r *http.Request) {
 	simFiles, err := getSimulationFiles()
 	if err != nil {
@@ -198,25 +205,36 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Handle simulation run
 func handleRun(w http.ResponseWriter, r *http.Request) {
+	simulationMu.Lock()
+	if simulationActive {
+		simulationMu.Unlock()
+		http.Error(w, "A simulation is already running", http.StatusConflict)
+		return
+	}
+	simulationActive = true
+	outputChan = make(chan string, 100)
+	simulationMu.Unlock()
+
+	defer func() {
+		simulationMu.Lock()
+		simulationActive = false
+		close(outputChan)
+		simulationMu.Unlock()
+	}()
+
 	if r.Method == http.MethodPost {
-		// Redirect to GET request for SSE
 		http.Redirect(w, r, "/run?"+r.Form.Encode(), http.StatusSeeOther)
 		return
 	}
 
-	// Set headers for SSE
+	outputChan = make(chan string)
+
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
-	// Create a channel for cleanup on client disconnect
-	done := make(chan bool)
-	defer close(done)
-
-	// Create a flusher for SSE
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		log.Errorf("Streaming not supported")
@@ -224,20 +242,6 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Start ping ticker
-	pingTicker := time.NewTicker(2 * time.Second)
-	defer pingTicker.Stop()
-
-	// Handle client disconnect
-	go func() {
-		select {
-		case <-r.Context().Done():
-			log.Infof("Request context done")
-			done <- true
-		}
-	}()
-
-	// Parse query parameters
 	err := r.ParseForm()
 	if err != nil {
 		log.Errorf("Error parsing form: %v", err)
@@ -246,249 +250,937 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	network := r.Form.Get("network")
-	subnetIDs := r.Form.Get("subnet_ids")
-	securityGroupIDs := r.Form.Get("security_group_ids")
-	aspURL := r.Form.Get("asp_url")
-	simFile := r.Form.Get("simulation_file")
-
-	if subnetIDs == "" || securityGroupIDs == "" {
-		log.Errorf("Missing required parameters")
-		fmt.Fprintf(w, "event: error\ndata: Subnet IDs and Security Group IDs are required\n\n")
+	aspUrl := r.Form.Get("asp_url")
+	if aspUrl == "" {
+		log.Errorf("ASP URL is required")
+		fmt.Fprintf(w, "event: error\ndata: ASP URL is required\n\n")
 		flusher.Flush()
 		return
 	}
 
-	if network == "signet" && aspURL == "" {
-		log.Errorf("Missing ASP URL for signet network")
-		fmt.Fprintf(w, "event: error\ndata: ASP URL is required for signet network\n\n")
+	explorerUrl := r.Form.Get("explorer_url")
+	if explorerUrl == "" {
+		log.Errorf("Explorer URL is required")
+		fmt.Fprintf(w, "event: error\ndata: Explorer URL is required\n\n")
 		flusher.Flush()
 		return
 	}
 
-	// Set up environment variables
-	env := []string{
-		fmt.Sprintf("SUBNET_IDS=%s", subnetIDs),
-		fmt.Sprintf("SECURITY_GROUP_IDS=%s", securityGroupIDs),
-	}
-
-	// Prepare command arguments
-	makeArgs := []string{"run-remote"}
-
-	if network == "signet" {
-		if aspURL != "" {
-			env = append(env, fmt.Sprintf("ASP_URL=%s", aspURL))
-		}
-		env = append(env, "SIGNET=true")
-	}
-
-	if simFile != "" {
-		env = append(env, fmt.Sprintf("SIM=%s", simFile))
-	}
-
-	env = append(env, "SCHEMA=schema.yaml")
-	env = append(env, "COMPOSE=./../docker-compose.clark.regtest.yml")
-
-	log.Infof("Running make command with args: %v", makeArgs)
-	log.Infof("Environment variables: %v", env)
-
-	// Send initial message
-	fmt.Fprintf(w, "event: message\ndata: Starting simulation on %s network...\n\n", network)
-	flusher.Flush()
-
-	// Create and configure command
-	cmd := exec.Command("make", makeArgs...)
-	cmd.Env = append(os.Environ(), env...)
-
-	// Create pipes for stdout and stderr
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Errorf("Error creating stdout pipe: %v", err)
-		fmt.Fprintf(w, "event: error\ndata: Failed to create output pipe\n\n")
+	simulationFile := r.Form.Get("simulation_file")
+	if simulationFile == "" {
+		log.Errorf("Simulation file is required")
+		fmt.Fprintf(w, "event: error\ndata: Simulation file is required\n\n")
 		flusher.Flush()
 		return
 	}
 
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		log.Errorf("Error creating stderr pipe: %v", err)
-		fmt.Fprintf(w, "event: error\ndata: Failed to create error pipe\n\n")
-		flusher.Flush()
-		return
-	}
+	done := make(chan bool)
+	defer close(done)
 
-	// Start command
-	if err := cmd.Start(); err != nil {
-		log.Errorf("Error starting command: %v", err)
-		fmt.Fprintf(w, "event: error\ndata: Failed to start simulation\n\n")
-		flusher.Flush()
-		return
-	}
-
-	// Create a channel for the command completion
-	cmdDone := make(chan error)
 	go func() {
-		cmdDone <- cmd.Wait()
+		select {
+		case <-r.Context().Done():
+			log.Infof("Request context done")
+			done <- true
+		}
 	}()
 
-	// Create scanner for output
-	scanner := bufio.NewScanner(io.MultiReader(stdout, stderr))
-	outputChan := make(chan string)
+	go runSimulation(simulationFile, aspUrl, explorerUrl, outputChan)
 
-	// Start scanning in a separate goroutine
-	go func() {
-		for scanner.Scan() {
-			select {
-			case <-done:
-				return
-			default:
-				line := scanner.Text()
-				if line != "" {
-					outputChan <- line
-				}
-			}
-		}
-		close(outputChan)
-	}()
-
-	// Main event loop
 	for {
 		select {
 		case <-done:
-			// Client disconnected, kill the process
-			if err := cmd.Process.Kill(); err != nil {
-				log.Errorf("Error killing process: %v", err)
-			}
 			return
-
-		case line, ok := <-outputChan:
+		case msg, ok := <-outputChan:
 			if !ok {
-				// Output channel closed, wait for command to finish
-				if err := <-cmdDone; err != nil {
-					log.Errorf("Command failed: %v", err)
-					fmt.Fprintf(w, "event: error\ndata: Simulation failed: %v\n\n", err)
-				} else {
-					fmt.Fprintf(w, "event: message\ndata: Simulation completed successfully\n\n")
-				}
-				flusher.Flush()
 				return
 			}
-			fmt.Fprintf(w, "event: message\ndata: %s\n\n", line)
+			fmt.Fprintf(w, "event: message\ndata: %s\n\n", msg)
 			flusher.Flush()
-
-		case <-pingTicker.C:
-			// Send ping event
-			if _, err := fmt.Fprintf(w, "event: ping\ndata: ping\n\n"); err != nil {
-				log.Errorf("Error sending ping: %v", err)
-				return
-			}
-			flusher.Flush()
-
-		case err := <-cmdDone:
-			if err != nil {
-				log.Errorf("Command failed: %v", err)
-				fmt.Fprintf(w, "event: error\ndata: Simulation failed: %v\n\n", err)
-			} else {
-				fmt.Fprintf(w, "event: message\ndata: Simulation completed successfully\n\n")
-			}
-			flusher.Flush()
-			return
 		}
 	}
 }
 
-// Handle file upload
-func handleUpload(w http.ResponseWriter, r *http.Request) {
-	file, header, err := r.FormFile("simulation")
+func runSimulation(simulationFile, aspUrl, explorerUrl string, outputChan chan string) {
+	defer func() {
+		simulationMu.Lock()
+		simulationActive = false
+		close(outputChan)
+		simulationMu.Unlock()
+	}()
+
+	sendToFrontend("Starting simulation...")
+
+	simulationContent, err := os.ReadFile(simulationFile)
 	if err != nil {
-		log.Errorf("Error getting uploaded file: %v", err)
-		http.Error(w, "Failed to get file", http.StatusBadRequest)
+		sendToFrontend(fmt.Sprintf("Error reading simulation file: %v", err))
+		return
+	}
+
+	simulation, err := validateSimulation(simulationContent)
+	if err != nil {
+		sendToFrontend(fmt.Sprintf("Invalid simulation file: %v", err))
+		return
+	}
+
+	err = startClients(aspUrl, explorerUrl, *subnetIDsEnv, *securityGroupIDsEnv, simulation.Clients, outputChan)
+	if err != nil {
+		sendToFrontend(fmt.Sprintf("Error starting clients: %v", err))
+		return
+	}
+	sendToFrontend("Successfully started all clients")
+
+	clientIDs := make([]string, len(simulation.Clients))
+	for i, client := range simulation.Clients {
+		clientIDs[i] = client.ID
+	}
+
+	sendToFrontend("Waiting for clients to send addresses...")
+	waitForClientsToSendAddresses(clientIDs)
+	sendToFrontend("All clients have sent their addresses")
+
+	sendToFrontend("Starting simulation execution...")
+	executeSimulation(simulation, outputChan)
+	sendToFrontend("Simulation execution completed")
+
+	sendToFrontend("Stopping clients...")
+	stopClients()
+	sendToFrontend("All clients stopped")
+
+	sendToFrontend("Simulation completed successfully")
+}
+
+func handleSimulation(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		handleSimulationGet(w, r)
+	case http.MethodPost:
+		handleSimulationPost(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func addressHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		ClientID string `json:"client_id"`
+		Address  string `json:"address"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Errorf("Error decoding address request: %v", err)
+		return
+	}
+
+	clientsMu.Lock()
+	if client, exists := clients[req.ClientID]; exists {
+		client.Address = req.Address
+		log.Infof("Registered address for client %s: %s", req.ClientID, req.Address)
+	} else {
+		log.Warnf("Received address for unknown client: %s", req.ClientID)
+	}
+	clientsMu.Unlock()
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func logHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	simulationMu.Lock()
+	active := simulationActive
+	simulationMu.Unlock()
+
+	if !active {
+		http.Error(w, "No active simulation to receive logs", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		ClientID string `json:"client_id"`
+		Type     string `json:"type"`
+		Message  string `json:"message"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Errorf("Error decoding log request: %v", err)
+		return
+	}
+
+	logMsg := fmt.Sprintf("Client %s: %s", req.ClientID, req.Message)
+	switch req.Type {
+	case "Error":
+		log.Warnln(logMsg)
+		sendToFrontend(fmt.Sprintf("Error: %s", logMsg))
+	case "Info":
+		log.Infoln(logMsg)
+		sendToFrontend(logMsg)
+	default:
+		log.Warnf("Unknown log type: %s", req.Type)
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func sendToFrontend(msg string) {
+	simulationMu.Lock()
+	defer simulationMu.Unlock()
+	if outputChan != nil {
+		select {
+		case outputChan <- msg:
+		default:
+			log.Warn("outputChan is full, dropping message")
+		}
+	}
+}
+
+func handleSimulationGet(w http.ResponseWriter, r *http.Request) {
+	simulationFile := r.URL.Query().Get("file")
+	if simulationFile == "" {
+		simFiles, err := getSimulationFiles()
+		if err != nil {
+			log.WithError(err).Error("Failed to get simulation files")
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/html")
+		for _, file := range simFiles {
+			selected := ""
+			if file == "simulation.yaml" {
+				selected = " selected"
+			}
+			fmt.Fprintf(w, `<option value="%s"%s>%s</option>`, file, selected, file)
+		}
+		return
+	}
+
+	content, err := os.ReadFile(simulationFile)
+	if err != nil {
+		log.WithError(err).WithField("file", simulationFile).Error("Failed to read simulation file")
+		http.Error(w, "Error reading simulation file", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain")
+	w.Write(content)
+}
+
+func handleSimulationPost(w http.ResponseWriter, r *http.Request) {
+	contentType := r.Header.Get("Content-Type")
+	if !strings.Contains(contentType, "multipart/form-data") {
+		log.WithField("content-type", contentType).Error("Invalid content type for simulation upload")
+		http.Error(w, "Invalid request: expected multipart/form-data", http.StatusBadRequest)
+		return
+	}
+
+	err := r.ParseMultipartForm(10 << 20) // 10 MB max
+	if err != nil {
+		log.WithError(err).Error("Failed to parse multipart form")
+		http.Error(w, "Failed to parse form: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	file, handler, err := r.FormFile("file")
+	if err != nil {
+		log.WithError(err).Error("Failed to get file from form")
+		http.Error(w, "Failed to get file: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
 
-	// Validate file extension
-	if !strings.HasSuffix(header.Filename, ".yaml") && !strings.HasSuffix(header.Filename, ".yml") {
-		log.Errorf("Invalid file type: %s", header.Filename)
-		http.Error(w, "Only YAML files (.yaml, .yml) are allowed", http.StatusBadRequest)
-		return
-	}
-
-	log.Infof("Received file upload: %s", header.Filename)
-
-	// Save file to simulation directory
-	dst, err := os.Create(header.Filename)
+	content, err := io.ReadAll(file)
 	if err != nil {
-		log.Errorf("Error creating file: %v", err)
-		http.Error(w, "Failed to create file", http.StatusInternalServerError)
-		return
-	}
-	defer dst.Close()
-
-	// Copy uploaded file
-	if _, err := io.Copy(dst, file); err != nil {
-		log.Errorf("Error saving file: %v", err)
-		http.Error(w, "Failed to save file", http.StatusInternalServerError)
+		log.WithError(err).WithField("filename", handler.Filename).Error("Failed to read file content")
+		http.Error(w, "Failed to read file: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	log.Infof("File uploaded successfully: %s", header.Filename)
-
-	// Get updated list of simulation files
-	simFiles, err := getSimulationFiles()
+	_, err = validateSimulation(content)
 	if err != nil {
-		log.Errorf("Error getting simulation files after upload: %v", err)
-		http.Error(w, "Failed to update simulation list", http.StatusInternalServerError)
+		log.WithError(err).WithFields(log.Fields{
+			"filename":       handler.Filename,
+			"content_length": len(content),
+		}).Error("Simulation validation failed")
+		http.Error(w, fmt.Sprintf("Invalid simulation file: %v", err), http.StatusBadRequest)
 		return
 	}
 
-	// Return HTML for the simulation files dropdown with the new file selected
-	w.Header().Set("Content-Type", "text/html")
-	w.Header().Set("HX-Trigger", `{"showMessage": "Simulation file uploaded successfully"}`)
+	err = os.WriteFile(handler.Filename, content, 0644)
+	if err != nil {
+		log.WithError(err).WithFields(log.Fields{
+			"filename": handler.Filename,
+			"path":     "simulations/" + handler.Filename,
+		}).Error("Failed to save simulation file")
+		http.Error(w, "Failed to save file: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-	// Return updated dropdown with the new file selected
-	for _, file := range simFiles {
-		selected := ""
-		if file == header.Filename {
-			selected = " selected"
+	log.WithFields(log.Fields{
+		"filename": handler.Filename,
+		"size":     len(content),
+	}).Info("Successfully uploaded and validated simulation file")
+
+	w.Header().Set("X-File-Uploaded", "true")
+
+	handleSimulationGet(w, r)
+}
+
+func validateSimulation(content []byte) (*Simulation, error) {
+	schemaContent, err := os.ReadFile("schema.yaml")
+	if err != nil {
+		return nil, fmt.Errorf("failed to read schema file: %v", err)
+	}
+
+	jsonSchema, err := yaml.YAMLToJSON(schemaContent)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert schema to JSON: %v", err)
+	}
+
+	jsonContent, err := yaml.YAMLToJSON(content)
+	if err != nil {
+		return nil, fmt.Errorf("invalid YAML format: %v", err)
+	}
+
+	schemaLoader := gojsonschema.NewBytesLoader(jsonSchema)
+	documentLoader := gojsonschema.NewBytesLoader(jsonContent)
+
+	result, err := gojsonschema.Validate(schemaLoader, documentLoader)
+	if err != nil {
+		return nil, fmt.Errorf("validation error: %v", err)
+	}
+
+	if !result.Valid() {
+		var errorMsgs []string
+		for _, desc := range result.Errors() {
+			errorMsgs = append(errorMsgs, desc.String())
 		}
-		fmt.Fprintf(w, `<option value="%s"%s>%s</option>`, file, selected, file)
+		return nil, fmt.Errorf("%s", strings.Join(errorMsgs, "; "))
+	}
+
+	var simulation Simulation
+	if err := yaml.Unmarshal(content, &simulation); err != nil {
+		return nil, fmt.Errorf("failed to parse simulation YAML: %v", err)
+	}
+
+	return &simulation, nil
+}
+
+type ClientConfig struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type ActionMap map[string]interface{}
+
+type Round struct {
+	Number  int                    `json:"number"`
+	Actions map[string][]ActionMap `json:"actions"`
+}
+
+type Simulation struct {
+	Version string `json:"version"`
+	Server  struct {
+		Network        string  `json:"network"`
+		InitialFunding float64 `json:"initial_funding"`
+		RoundInterval  int     `json:"round_interval"`
+	} `yaml:"server"`
+	Clients []ClientConfig `json:"clients"`
+	Rounds  []Round        `json:"rounds"`
+}
+
+func startClients(aspUrl, explorerUrl, subnetID, securityGroup string, clientConfigs []ClientConfig, outputChan chan string) error {
+	awsRegion := "eu-central-1"
+	cfg, err := config.LoadDefaultConfig(
+		context.TODO(),
+		config.WithRegion(awsRegion),
+	)
+	if err != nil {
+		return fmt.Errorf("unable to load AWS SDK config: %v", err)
+	}
+
+	ecsClient := ecs.NewFromConfig(cfg)
+
+	clusterName := "OrchestratorCluster"
+	taskDefinition := "ClientTaskDefinition"
+
+	describeTaskDefInput := &ecs.DescribeTaskDefinitionInput{
+		TaskDefinition: aws.String(taskDefinition),
+	}
+
+	taskDefDetails, err := ecsClient.DescribeTaskDefinition(context.TODO(), describeTaskDefInput)
+	if err != nil {
+		outputChan <- fmt.Sprintf("Warning: Failed to get task definition details: %v", err)
+		log.Warnf("Failed to get task definition details: %v", err)
+	} else {
+		outputChan <- fmt.Sprintf("Task Definition details: %+v", taskDefDetails.TaskDefinition)
+		log.Infof("Task Definition details: %+v", taskDefDetails.TaskDefinition)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	waitForTaskRunning := func(taskArn string, clientID string) error {
+		for {
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("timeout waiting for task to start")
+			default:
+				describeTasksInput := &ecs.DescribeTasksInput{
+					Cluster: aws.String(clusterName),
+					Tasks:   []string{taskArn},
+				}
+
+				result, err := ecsClient.DescribeTasks(context.TODO(), describeTasksInput)
+				if err != nil {
+					return fmt.Errorf("failed to describe task: %v", err)
+				}
+
+				if len(result.Tasks) > 0 {
+					task := result.Tasks[0]
+					status := aws.ToString(task.LastStatus)
+
+					switch status {
+					case "RUNNING":
+						return nil
+					case "STOPPED":
+						var errorDetail string
+						if task.StoppedReason != nil {
+							errorDetail = *task.StoppedReason
+						}
+
+						for _, container := range task.Containers {
+							if container.Reason != nil {
+								errorDetail += fmt.Sprintf(" Container error: %s", *container.Reason)
+							}
+						}
+
+						return fmt.Errorf("task stopped: %s", errorDetail)
+					case "PENDING", "PROVISIONING":
+						outputChan <- fmt.Sprintf("Client %s task status: %s", clientID, status)
+						log.Infof("Client %s task status: %s", clientID, status)
+					default:
+						outputChan <- fmt.Sprintf("Client %s unexpected status: %s", clientID, status)
+						log.Infof("Client %s unexpected status: %s", clientID, status)
+					}
+				}
+
+				time.Sleep(5 * time.Second)
+			}
+		}
+	}
+
+	var (
+		tasksMu sync.Mutex
+		tasks   []struct {
+			ClientID string
+			TaskArn  string
+		}
+	)
+	g := new(errgroup.Group)
+	for _, client := range clientConfigs {
+		client := client
+		g.Go(func() error {
+			clientID := client.ID
+			outputChan <- fmt.Sprintf("Starting client %s...", clientID)
+			clientEnvVars := []ecsTypes.KeyValuePair{
+				{
+					Name:  aws.String("CLIENT_ID"),
+					Value: aws.String(clientID),
+				},
+				{
+					Name:  aws.String("SIGNET_ASP_URL"),
+					Value: aws.String(aspUrl),
+				},
+				{
+					Name:  aws.String("SIGNET_EXPLORER_URL"),
+					Value: aws.String(explorerUrl),
+				},
+			}
+
+			containerOverrides := ecsTypes.ContainerOverride{
+				Name:        aws.String("ClientContainer"),
+				Environment: clientEnvVars,
+			}
+
+			runTaskInput := &ecs.RunTaskInput{
+				Cluster:        aws.String(clusterName),
+				LaunchType:     ecsTypes.LaunchTypeFargate,
+				TaskDefinition: aws.String(taskDefinition),
+				NetworkConfiguration: &ecsTypes.NetworkConfiguration{
+					AwsvpcConfiguration: &ecsTypes.AwsVpcConfiguration{
+						Subnets:        []string{subnetID},
+						SecurityGroups: []string{securityGroup},
+						AssignPublicIp: ecsTypes.AssignPublicIpEnabled,
+					},
+				},
+				Overrides: &ecsTypes.TaskOverride{
+					ContainerOverrides: []ecsTypes.ContainerOverride{containerOverrides},
+				},
+			}
+
+			var result *ecs.RunTaskOutput
+			backoff := 2 * time.Second
+			for i := 0; i < 5; i++ {
+				result, err = ecsClient.RunTask(context.TODO(), runTaskInput)
+				if err != nil {
+					return fmt.Errorf("failed to start client %s: %v", clientID, err)
+				}
+
+				if len(result.Failures) > 0 {
+					for _, failure := range result.Failures {
+						outputChan <- fmt.Sprintf(
+							"Warning: Failed to start client %s: %s, %s",
+							clientID,
+							aws.ToString(failure.Reason),
+							aws.ToString(failure.Detail),
+						)
+						log.Warnf(
+							"Failed to start client %s: %s, %s",
+							clientID,
+							aws.ToString(failure.Reason),
+							aws.ToString(failure.Detail),
+						)
+					}
+					time.Sleep(backoff)
+					backoff *= 2
+					continue
+				}
+
+				if len(result.Tasks) > 0 {
+					break
+				}
+				outputChan <- fmt.Sprintf("Warning: No tasks created for client %s, retrying... (%d/5)", clientID, i+1)
+				log.Warnf("No tasks created for client %s, retrying... (%d/5)", clientID, i+1)
+				time.Sleep(backoff)
+				backoff *= 2
+			}
+
+			if len(result.Tasks) == 0 {
+				return fmt.Errorf("no tasks created for client %s after 5 attempts", clientID)
+			}
+
+			taskArn := *result.Tasks[0].TaskArn
+			outputChan <- fmt.Sprintf("Started client %s with task ARN: %s", clientID, taskArn)
+			log.Infof("Started client %s with task ARN: %s", clientID, taskArn)
+
+			tasksMu.Lock()
+			tasks = append(tasks, struct {
+				ClientID string
+				TaskArn  string
+			}{
+				ClientID: clientID,
+				TaskArn:  taskArn,
+			})
+			tasksMu.Unlock()
+
+			if err := waitForTaskRunning(taskArn, clientID); err != nil {
+				return fmt.Errorf("client %s failed to start: %v", clientID, err)
+			}
+
+			ip, err := waitForTaskRunningAndGetIP(ctx, ecsClient, clusterName, taskArn)
+			if err != nil {
+				return fmt.Errorf("error waiting for client %s task: %v", clientID, err)
+			}
+
+			clientsMu.Lock()
+			clients[clientID] = &ClientInfo{
+				ID:        clientID,
+				TaskARN:   taskArn,
+				IPAddress: ip,
+			}
+			clientsMu.Unlock()
+
+			outputChan <- fmt.Sprintf("Client %s successfully started and running with IP: %s", clientID, ip)
+			log.Infof("Client %s successfully started and running", clientID)
+			return nil
+		})
+		time.Sleep(1 * time.Second)
+	}
+
+	if err := g.Wait(); err != nil {
+		outputChan <- fmt.Sprintf("Error starting clients: %v", err)
+		log.Errorf("Error starting clients: %v", err)
+		stopClients()
+		return err
+	}
+
+	outputChan <- "All clients started successfully"
+	log.Infof("All clients started successfully")
+
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				tasksMu.Lock()
+				currentTasks := make([]struct {
+					ClientID string
+					TaskArn  string
+				}, len(tasks))
+				copy(currentTasks, tasks)
+				tasksMu.Unlock()
+
+				for _, task := range currentTasks {
+					describeTasksInput := &ecs.DescribeTasksInput{
+						Cluster: aws.String(clusterName),
+						Tasks:   []string{task.TaskArn},
+					}
+
+					result, err := ecsClient.DescribeTasks(context.TODO(), describeTasksInput)
+					if err != nil {
+						outputChan <- fmt.Sprintf("Warning: Failed to describe task for client %s: %v", task.ClientID, err)
+						log.Warnf("Failed to describe task for client %s: %v", task.ClientID, err)
+						continue
+					}
+
+					if len(result.Tasks) > 0 {
+						status := aws.ToString(result.Tasks[0].LastStatus)
+						outputChan <- fmt.Sprintf("Client %s task status: %s", task.ClientID, status)
+						if status == "STOPPED" {
+							outputChan <- fmt.Sprintf("Warning: Client %s task stopped unexpectedly", task.ClientID)
+						}
+					}
+				}
+			}
+		}
+	}()
+
+	return nil
+}
+
+func waitForTaskRunningAndGetIP(ctx context.Context, ecsClient *ecs.Client, clusterName, taskArn string) (string, error) {
+	for {
+		select {
+		case <-ctx.Done():
+			return "", fmt.Errorf("timeout waiting for task to start")
+		default:
+			describeTasksInput := &ecs.DescribeTasksInput{
+				Cluster: aws.String(clusterName),
+				Tasks:   []string{taskArn},
+			}
+
+			result, err := ecsClient.DescribeTasks(ctx, describeTasksInput)
+			if err != nil {
+				return "", fmt.Errorf("failed to describe task: %v", err)
+			}
+
+			if len(result.Tasks) > 0 {
+				task := result.Tasks[0]
+				status := aws.ToString(task.LastStatus)
+				if status == "RUNNING" {
+					if task.TaskArn != nil && len(task.Attachments) > 0 {
+						for _, attachment := range task.Attachments {
+							if aws.ToString(attachment.Type) == "ElasticNetworkInterface" {
+								for _, detail := range attachment.Details {
+									if aws.ToString(detail.Name) == "privateIPv4Address" {
+										return aws.ToString(detail.Value), nil
+									}
+								}
+							}
+						}
+					}
+					return "", fmt.Errorf("could not find IP address for task")
+				}
+			}
+
+			time.Sleep(5 * time.Second)
+		}
 	}
 }
 
-// Handle simulation YAML preview
-func handleSimulationYaml(w http.ResponseWriter, r *http.Request) {
-	yamlType := r.URL.Query().Get("type")
-	selectedFile := r.URL.Query().Get("simulation_file")
+func waitForClientsToSendAddresses(clientIDs []string) {
+	log.Info("Waiting for clients to send addresses...")
+	timeout := time.After(2 * time.Minute)
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
 
-	var filePath string
-	if yamlType == "schema" {
-		filePath = "schema.yaml"
-	} else if selectedFile != "" {
-		filePath = selectedFile
-	} else {
-		// Default to first simulation file if none selected
-		simFiles, err := getSimulationFiles()
-		if err != nil || len(simFiles) == 0 {
-			http.Error(w, "No simulation files available", http.StatusNotFound)
-			return
+	for {
+		select {
+		case <-timeout:
+			log.Fatal("Timeout waiting for client addresses")
+		case <-ticker.C:
+			allReceived := true
+			clientsMu.Lock()
+			for _, clientID := range clientIDs {
+				client, exists := clients[clientID]
+				if !exists || client.Address == "" {
+					allReceived = false
+					break
+				}
+			}
+			clientsMu.Unlock()
+
+			if allReceived {
+				log.Info("All clients have sent their addresses")
+				return
+			}
 		}
-		filePath = simFiles[0]
 	}
+}
 
-	content, err := os.ReadFile(filePath)
+func stopClients() {
+	awsRegion := "eu-central-1"
+	cfg, err := config.LoadDefaultConfig(
+		context.TODO(),
+		config.WithRegion(awsRegion),
+	)
 	if err != nil {
-		log.Errorf("Error reading YAML file: %v", err)
-		http.Error(w, "Failed to read YAML file", http.StatusInternalServerError)
+		log.Errorf("Unable to load AWS SDK config: %v", err)
 		return
 	}
 
-	// Return the content with syntax highlighting
-	w.Header().Set("Content-Type", "text/html")
-	fmt.Fprintf(w, `<pre><code class="language-yaml">%s</code></pre>
-	<script>
-		hljs.highlightElement(document.querySelector('#simulation-preview code'));
-		// Ensure proper height
-		document.querySelector('#simulation-preview').style.height = 'auto';
-	</script>`, content)
+	ecsClient := ecs.NewFromConfig(cfg)
+
+	clientsMu.Lock()
+	defer clientsMu.Unlock()
+
+	for _, client := range clients {
+		if client.TaskARN != "" {
+			_, err := ecsClient.StopTask(context.TODO(), &ecs.StopTaskInput{
+				Cluster: aws.String("OrchestratorCluster"),
+				Task:    aws.String(client.TaskARN),
+			})
+			if err != nil {
+				log.Errorf("Failed to stop client %s task: %v", client.ID, err)
+			} else {
+				log.Infof("Stopped client %s task", client.ID)
+			}
+		}
+	}
+}
+
+type ClientInfo struct {
+	ID        string
+	Address   string
+	TaskARN   string
+	IPAddress string
+}
+
+type PageData struct {
+	SimulationFiles []string
+	ErrorMessage    string
+}
+
+func executeSimulation(simulation *Simulation, outputChan chan string) {
+	for i, round := range simulation.Rounds {
+		waitRound := false
+		roundMsg := fmt.Sprintf("Executing Round %d at %s", round.Number, time.Now().Format("2006-01-02 15:04:05"))
+		outputChan <- roundMsg
+		var wg sync.WaitGroup
+
+		for _, actions := range round.Actions {
+			for _, action := range actions {
+				actionType, ok := action["type"].(string)
+				if !ok {
+					outputChan <- fmt.Sprintf("Warning: Invalid action type for client %+v", action)
+					continue
+				}
+				if actionType == "Onboard" || actionType == "Claim" || actionType == "CollaborativeRedeem" {
+					waitRound = true
+					break
+				}
+			}
+			if waitRound {
+				break
+			}
+		}
+
+		for clientID, actions := range round.Actions {
+			wg.Add(1)
+			go func(clientID string, actions []ActionMap) {
+				defer wg.Done()
+				for _, action := range actions {
+					actionType, ok := action["type"].(string)
+					if !ok {
+						outputChan <- fmt.Sprintf("Warning: Invalid action type for client %s", clientID)
+						return
+					}
+
+					ctx, cancel := context.WithTimeout(
+						context.Background(),
+						3*time.Minute,
+					)
+					defer cancel()
+
+					if err := executeClientAction(ctx, clientID, actionType, action); err != nil {
+						outputChan <- fmt.Sprintf("Warning: Error executing %s for client %s: %v", actionType, clientID, err)
+					} else {
+						outputChan <- fmt.Sprintf("Successfully executed %s for client %s", actionType, clientID)
+					}
+				}
+			}(clientID, actions)
+		}
+		wg.Wait()
+
+		if i == len(simulation.Rounds)-1 {
+			outputChan <- fmt.Sprintf("Simulation completed at %s", time.Now().Format("2006-01-02 15:04:05"))
+			return
+		}
+
+		sleepTime := 2 * time.Second
+		if waitRound {
+			sleepTime = time.Duration(simulation.Server.RoundInterval)*time.Second + 2*time.Second
+		}
+
+		outputChan <- fmt.Sprintf("Waiting for %s before starting next round", sleepTime)
+		time.Sleep(sleepTime)
+		outputChan <- fmt.Sprintf("Round %d completed at %s", round.Number, time.Now().Format("2006-01-02 15:04:05"))
+	}
+}
+
+func executeClientAction(ctx context.Context, clientID string, actionType string, action ActionMap) error {
+	clientsMu.Lock()
+	client, exists := clients[clientID]
+	clientsMu.Unlock()
+
+	if !exists {
+		return fmt.Errorf("client %s not found", clientID)
+	}
+
+	clientURL := fmt.Sprintf("http://%s:%s", client.IPAddress, clientPort)
+
+	switch actionType {
+	case "Onboard":
+		amount, _ := action["amount"].(float64)
+		return executeOnboard(ctx, clientURL, amount)
+	case "SendAsync":
+		amount, _ := action["amount"].(float64)
+		toClientID, _ := action["to"].(string)
+		toAddress, err := getClientAddress(toClientID)
+		if err != nil {
+			return err
+		}
+		return executeSendAsync(ctx, clientURL, amount, toAddress)
+	case "Claim":
+		return executeClaim(ctx, clientURL)
+	case "Stats":
+		return executeStats(ctx, clientURL)
+	default:
+		return fmt.Errorf("unknown action type: %s", actionType)
+	}
+}
+
+func getClientAddress(clientID string) (string, error) {
+	clientsMu.Lock()
+	defer clientsMu.Unlock()
+
+	client, exists := clients[clientID]
+	if !exists {
+		return "", fmt.Errorf("client %s not found", clientID)
+	}
+	if client.Address == "" {
+		return "", fmt.Errorf("address for client %s not available", clientID)
+	}
+	return client.Address, nil
+}
+
+func executeOnboard(ctx context.Context, clientURL string, amount float64) error {
+	payload := map[string]float64{"amount": amount}
+	_, err := sendRequest(ctx, clientURL+"/onboard", http.MethodPost, payload)
+	return err
+}
+
+func executeSendAsync(ctx context.Context, clientURL string, amount float64, toAddress string) error {
+	payload := map[string]interface{}{
+		"amount":     amount,
+		"to_address": toAddress,
+	}
+	_, err := sendRequest(ctx, clientURL+"/sendAsync", http.MethodPost, payload)
+	return err
+}
+
+func executeClaim(ctx context.Context, clientURL string) error {
+	_, err := sendRequest(ctx, clientURL+"/claim", http.MethodPost, nil)
+	return err
+}
+
+func executeStats(ctx context.Context, clientURL string) error {
+	resp, err := sendRequest(ctx, clientURL+"/stats", http.MethodGet, nil)
+	if err != nil {
+		return err
+	}
+
+	log.Infoln(resp)
+	return nil
+}
+
+func sendRequest(ctx context.Context, urlStr string, method string, payload interface{}) (string, error) {
+	var req *http.Request
+	var err error
+
+	if method == http.MethodGet && payload != nil {
+		params, ok := payload.(map[string]string)
+		if !ok {
+			return "", fmt.Errorf("payload must be of type map[string]string for GET requests")
+		}
+
+		parsedURL, err := url.Parse(urlStr)
+		if err != nil {
+			return "", fmt.Errorf("invalid URL: %w", err)
+		}
+
+		query := parsedURL.Query()
+		for key, value := range params {
+			query.Set(key, value)
+		}
+		parsedURL.RawQuery = query.Encode()
+
+		req, err = http.NewRequestWithContext(ctx, method, parsedURL.String(), nil)
+		if err != nil {
+			return "", fmt.Errorf("failed to create GET request: %w", err)
+		}
+	} else {
+		var body io.Reader
+
+		if payload != nil {
+			jsonData, err := json.Marshal(payload)
+			if err != nil {
+				return "", fmt.Errorf("failed to marshal payload to JSON: %w", err)
+			}
+			body = bytes.NewBuffer(jsonData)
+		}
+
+		req, err = http.NewRequestWithContext(ctx, method, urlStr, body)
+		if err != nil {
+			return "", fmt.Errorf("failed to create %s request: %w", method, err)
+		}
+
+		if method == http.MethodPost {
+			req.Header.Set("Content-Type", "application/json")
+		}
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return "", fmt.Errorf("request to %s timed out", urlStr)
+		}
+		return "", fmt.Errorf("request to %s failed: %w", urlStr, err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return string(bodyBytes), nil
 }

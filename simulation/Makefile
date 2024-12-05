@@ -21,7 +21,7 @@ build-local-client:
 # Default values for optional variables
 ECR_REPOSITORY_NAME ?= ark-client-repo
 IMAGE_NAME ?= arkclient
-DOCKERFILE_PATH ?= ./remote/client
+DOCKERFILE_PATH ?= ./web/client
 BUILD_CONTEXT ?= ../
 
 ## push-to-ecr: Build and push client image to ECR

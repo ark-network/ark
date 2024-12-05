@@ -106,9 +106,68 @@
                 hljs.highlightAll();
             }
         });
+
+        // Handle simulation file selection and preview
+        document.addEventListener('DOMContentLoaded', function() {
+            const simulationSelect = document.getElementById('simulation-file-select');
+            const uploadError = document.getElementById('upload-error');
+            const uploadErrorMessage = document.getElementById('upload-error-message');
+
+            // Handle HTMX errors
+            document.body.addEventListener('htmx:responseError', function(evt) {
+                const response = evt.detail.xhr;
+                if (response.status === 400) {
+                    // Show error message
+                    uploadErrorMessage.textContent = response.responseText;
+                    uploadError.classList.remove('hidden');
+                    // Hide error after 5 seconds
+                    setTimeout(() => {
+                        uploadError.classList.add('hidden');
+                    }, 5000);
+                }
+            });
+
+            // Hide error when starting new upload
+            document.querySelector('form[hx-encoding="multipart/form-data"]').addEventListener('htmx:beforeRequest', function() {
+                uploadError.classList.add('hidden');
+            });
+
+            if (simulationSelect) {
+                // Load simulation content when selection changes
+                simulationSelect.addEventListener('change', function() {
+                    const selectedFile = this.value;
+                    if (selectedFile) {
+                        fetch('/simulation?file=' + selectedFile)
+                            .then(response => response.text())
+                            .then(content => {
+                                const previewElement = document.getElementById('simulation-preview');
+                                if (previewElement) {
+                                    previewElement.innerHTML = '<pre><code class="language-yaml">' + 
+                                        content.replace(/&/g, '&amp;')
+                                              .replace(/</g, '&lt;')
+                                              .replace(/>/g, '&gt;') + 
+                                        '</code></pre>';
+                                    hljs.highlightAll();
+                                }
+                            })
+                            .catch(error => console.error('Error loading simulation:', error));
+                    }
+                });
+
+                // Handle successful file upload
+                document.body.addEventListener('htmx:afterSettle', function(evt) {
+                    if (evt.detail.target === simulationSelect) {
+                        // Trigger change event to load the preview for the newly selected file
+                        simulationSelect.dispatchEvent(new Event('change'));
+                    }
+                });
+            }
+        });
     </script>
 </head>
 <body class="bg-gray-100 min-h-screen">
+    <!-- Notification Container -->
+    <div id="notification-container" class="fixed top-4 right-4 z-50"></div>
 <div class="container mx-auto px-4 py-8">
     <!-- Header with Logout Link -->
     <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
@@ -118,19 +177,10 @@
         </div>
         <div class="prose max-w-none mt-4">
             <p class="text-gray-600">
-                Welcome to the Ark Simulation Web Interface! This tool allows you to run and manage Ark Server simulations
-                in different network environments. You can test multiple clients performing various actions over several rounds
-                using either the default simulation configuration or your own custom YAML file.
+                Welcome to the Ark Simulation Web Interface! This tool allows you to run and manage Ark Server simulations.
+                You can test multiple clients performing various actions over several rounds using either the default 
+                simulation configuration or your own custom YAML file.
             </p>
-            <div class="mt-4 bg-blue-50 border-l-4 border-blue-500 p-4">
-                <p class="text-sm text-blue-700">
-                    <strong>Available Networks:</strong>
-                <ul class="list-disc list-inside mt-2">
-                    <li><strong>Regtest:</strong> For local regression testing</li>
-                    <li><strong>Signet:</strong> For testing in a live test network</li>
-                </ul>
-                </p>
-            </div>
         </div>
     </div>
 
@@ -143,44 +193,27 @@
                     <h2 class="text-2xl font-bold mb-4">Run Simulation</h2>
                     <form hx-post="/run" hx-target="#output" class="space-y-4">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700">Network Type</label>
-                            <select name="network" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                <option value="regtest">Regtest Network</option>
-                                <option value="signet">Signet Network</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Subnet IDs <span class="text-red-500">*</span></label>
-                            <input type="text" name="subnet_ids" required
-                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                   placeholder="e.g., subnet-xxxxxx,subnet-yyyyyy">
-                            <p class="mt-1 text-sm text-gray-500">Comma-separated list of subnet IDs</p>
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Security Group IDs <span class="text-red-500">*</span></label>
-                            <input type="text" name="security_group_ids" required
-                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                   placeholder="e.g., sg-xxxxxx,sg-yyyyyy">
-                            <p class="mt-1 text-sm text-gray-500">Comma-separated list of security group IDs</p>
-                        </div>
-
-                        <div id="signet-params" style="display: none;">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">ASP URL</label>
-                            <input type="text" name="asp_url"
+                            <label class="block text-sm font-medium text-gray-700 mb-1">ASP URL <span class="text-red-500">*</span></label>
+                            <input type="text" name="asp_url" required value="https://master.signet.arklabs.to"
                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                                    placeholder="e.g., http://example.com:7070">
-                            <p class="mt-1 text-sm text-gray-500">Required for signet network</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Explorer URL <span class="text-red-500">*</span></label>
+                            <input type="text" name="explorer_url" required value="https://mutinynet.com/api"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                   placeholder="e.g., https://explorer.example.com/api">
                         </div>
 
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Select Simulation <span class="text-red-500">*</span></label>
                             <select name="simulation_file" id="simulation-file-select" required
                                     class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                    hx-get="/simulation.yaml"
-                                    hx-target="#simulation-preview"
-                                    hx-trigger="change">
+                                    hx-get="/simulation"
+                                    hx-target="this"
+                                    hx-trigger="load, simulation-list-updated from:body"
+                                    hx-swap="innerHTML">
                                 {{ range .SimulationFiles }}
                                 <option value="{{ . }}" {{ if eq . "simulation.yaml" }}selected{{ end }}>{{ . }}</option>
                                 {{ end }}
@@ -199,19 +232,39 @@
                 <!-- Upload Simulation Form -->
                 <div class="bg-white rounded-lg shadow-lg p-6">
                     <h2 class="text-2xl font-bold mb-4">Upload Simulation</h2>
-                    <form id="upload-form" class="space-y-4" hx-post="/upload" hx-target="#simulation-file-select" hx-encoding="multipart/form-data">
+                    <form hx-post="/simulation"
+                          hx-encoding="multipart/form-data"
+                          hx-target="#simulation-file-select"
+                          class="space-y-4">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Select YAML File</label>
-                            <input type="file" name="simulation" accept=".yaml,.yml" required
-                                   class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" />
+                            <label class="block text-sm font-medium text-gray-700">Choose File</label>
+                            <input type="file" name="file" accept=".yaml"
+                                   class="mt-1 block w-full text-sm text-gray-500
+                                          file:mr-4 file:py-2 file:px-4
+                                          file:rounded-full file:border-0
+                                          file:text-sm file:font-semibold
+                                          file:bg-indigo-50 file:text-indigo-700
+                                          hover:file:bg-indigo-100">
+                        </div>
+                        <div id="upload-error" class="hidden rounded-md bg-red-50 p-4">
+                            <div class="flex">
+                                <div class="flex-shrink-0">
+                                    <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                                    </svg>
+                                </div>
+                                <div class="ml-3">
+                                    <h3 class="text-sm font-medium text-red-800">Upload Error</h3>
+                                    <div class="mt-2 text-sm text-red-700" id="upload-error-message"></div>
+                                </div>
+                            </div>
                         </div>
                         <div>
                             <button type="submit"
-                                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
-                                Upload Simulation
+                                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                Upload
                             </button>
                         </div>
-                        <div id="upload-status" class="mt-2 text-sm"></div>
                     </form>
                 </div>
             </div>
@@ -237,7 +290,7 @@
     </div>
 
     <!-- Simulation Output -->
-    <div class="bg-white rounded-lg shadow-lg p-6 mt-8">
+    <div class="bg-white rounded-lg shadow-lg p-6 mt-8" id="simulation-output">
         <h2 class="text-2xl font-bold mb-4">Simulation Output</h2>
         <div id="output" class="terminal">
             <pre>Waiting to start simulation...</pre>
@@ -246,19 +299,6 @@
 </div>
 
 <script>
-    // Network type handling
-    document.querySelector('select[name="network"]').addEventListener('change', function() {
-        const signetParams = document.getElementById('signet-params');
-        const aspUrlInput = document.querySelector('input[name="asp_url"]');
-        if (this.value === 'signet') {
-            signetParams.style.display = 'block';
-            aspUrlInput.required = true;
-        } else {
-            signetParams.style.display = 'none';
-            aspUrlInput.required = false;
-        }
-    });
-
     // Handle upload status messages
     document.body.addEventListener('htmx:afterSettle', function(evt) {
         const uploadStatus = document.getElementById('upload-status');
@@ -368,6 +408,9 @@
         e.preventDefault();
         e.stopPropagation();
 
+        // Scroll to output section
+        document.getElementById('simulation-output').scrollIntoView({ behavior: 'smooth' });
+
         // Close existing EventSource
         closeEventSource();
 
@@ -381,6 +424,74 @@
         // Create new EventSource
         eventSource = new EventSource('/run?' + params.toString());
         setupEventHandlers(eventSource);
+    });
+
+    // Notification System
+    function showNotification(message, type = 'error') {
+        const container = document.getElementById('notification-container');
+        const notification = document.createElement('div');
+        
+        // Set notification styles based on type
+        const baseClasses = 'flex items-center p-4 mb-4 rounded-lg shadow-lg transition-opacity duration-500';
+        const typeClasses = type === 'error' 
+            ? 'text-red-800 bg-red-50' 
+            : 'text-green-800 bg-green-50';
+        
+        notification.className = `${baseClasses} ${typeClasses}`;
+        
+        // Create icon
+        const icon = document.createElement('div');
+        icon.className = 'flex-shrink-0';
+        icon.innerHTML = type === 'error' 
+            ? '<svg class="w-5 h-5 text-red-800" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>'
+            : '<svg class="w-5 h-5 text-green-800" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>';
+        
+        // Create message
+        const text = document.createElement('div');
+        text.className = 'ml-3 text-sm font-medium';
+        text.textContent = message;
+        
+        // Create close button
+        const closeButton = document.createElement('button');
+        closeButton.className = `ml-auto -mx-1.5 -my-1.5 rounded-lg focus:ring-2 focus:ring-gray-400 p-1.5 inline-flex h-8 w-8 ${type === 'error' ? 'text-red-800 hover:bg-red-100' : 'text-green-800 hover:bg-green-100'}`;
+        closeButton.innerHTML = '<span class="sr-only">Close</span><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></path></svg>';
+        
+        // Add click handler to close button
+        closeButton.onclick = () => notification.remove();
+        
+        // Assemble notification
+        notification.appendChild(icon);
+        notification.appendChild(text);
+        notification.appendChild(closeButton);
+        
+        // Add to container
+        container.appendChild(notification);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            setTimeout(() => notification.remove(), 500);
+        }, 5000);
+    }
+
+    // Handle HTMX errors
+    document.body.addEventListener('htmx:responseError', function(evt) {
+        const response = evt.detail.xhr;
+        if (response.status === 500) {
+            showNotification('Something went wrong. Please try again later.');
+        } else if (response.status === 400) {
+            showNotification(response.responseText);
+        }
+    });
+
+    // Handle successful uploads
+    document.body.addEventListener('htmx:afterSettle', function(evt) {
+        if (evt.detail.target.id === 'simulation-file-select' && 
+            evt.detail.xhr && 
+            evt.detail.xhr.status === 200 && 
+            evt.detail.xhr.getResponseHeader('X-File-Uploaded') === 'true') {
+            showNotification('File uploaded successfully!', 'success');
+        }
     });
 
     // Clean up EventSource on page unload
