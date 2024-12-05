@@ -31,6 +31,17 @@ const (
 
 const ConditionWitnessKey = "condition"
 
+// forbiddenOpcodes are opcodes that are not allowed in a condition script
+var forbiddenOpcodes = []byte{
+	txscript.OP_CHECKMULTISIG,
+	txscript.OP_CHECKSIG,
+	txscript.OP_CHECKSIGVERIFY,
+	txscript.OP_CHECKSIGADD,
+	txscript.OP_CHECKMULTISIGVERIFY,
+	txscript.OP_CHECKLOCKTIMEVERIFY,
+	txscript.OP_CHECKSEQUENCEVERIFY,
+}
+
 type Closure interface {
 	Script() ([]byte, error)
 	Decode(script []byte) (bool, error)
@@ -806,20 +817,10 @@ func (d *CLTVMultisigClosure) Decode(script []byte) (bool, error) {
 func ExecuteBoolScript(script []byte, witness wire.TxWitness) (bool, error) {
 
 	// make sure the script doesn't contain any introspections opcodes (sig or locktime)
-	forbiddenOpcodes := []byte{
-		txscript.OP_CHECKMULTISIG,
-		txscript.OP_CHECKSIG,
-		txscript.OP_CHECKSIGVERIFY,
-		txscript.OP_CHECKSIGADD,
-		txscript.OP_CHECKMULTISIGVERIFY,
-		txscript.OP_CHECKLOCKTIMEVERIFY,
-		txscript.OP_CHECKSEQUENCEVERIFY,
-	}
-
 	tokenizer := txscript.MakeScriptTokenizer(0, script)
 	for tokenizer.Next() {
 		for _, opcode := range forbiddenOpcodes {
-			if tokenizer.Opcode() == opcode {
+			if tokenizer.OpcodePosition() != -1 && tokenizer.Opcode() == opcode {
 				return false, fmt.Errorf("forbidden opcode %x", opcode)
 			}
 		}
