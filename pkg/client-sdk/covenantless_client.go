@@ -812,7 +812,7 @@ func (a *covenantlessArkClient) SendOffChain(
 	}
 
 	feeRate := chainfee.FeePerKwFloor
-	redeemTx, err := buildRedeemTx(inputs, receivers, feeRate.FeePerVByte())
+	redeemTx, err := buildRedeemTx(inputs, receivers, feeRate.FeePerVByte(), nil)
 	if err != nil {
 		return "", err
 	}
@@ -2584,6 +2584,7 @@ func buildRedeemTx(
 	vtxos []redeemTxInput,
 	receivers []Receiver,
 	feeRate chainfee.SatPerVByte,
+	extraWitnessSizes map[client.Outpoint]int,
 ) (string, error) {
 	if len(vtxos) <= 0 {
 		return "", fmt.Errorf("missing vtxos")
@@ -2636,11 +2637,16 @@ func buildRedeemTx(
 			ControlBlock:   ctrlBlock,
 		}
 
+		extraWitnessSize := 0
+		if size, ok := extraWitnessSizes[client.Outpoint{Txid: vtxo.Txid, VOut: vtxo.VOut}]; ok {
+			extraWitnessSize = size
+		}
+
 		ins = append(ins, common.VtxoInput{
 			Outpoint:    vtxoOutpoint,
 			Tapscript:   tapscript,
 			Amount:      int64(vtxo.Amount),
-			WitnessSize: closure.WitnessSize(),
+			WitnessSize: closure.WitnessSize(extraWitnessSize),
 		})
 	}
 

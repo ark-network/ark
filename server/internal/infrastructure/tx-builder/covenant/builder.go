@@ -206,6 +206,14 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 		}
 
 		vtxoTapscript := firstForfeit.Inputs[1].TapLeafScript[0]
+		conditionWitness, err := tree.GetConditionWitness(firstForfeit.Inputs[1])
+		if err != nil {
+			return nil, err
+		}
+		conditionWitnessSize := 0
+		for _, witness := range conditionWitness {
+			conditionWitnessSize += len(witness)
+		}
 
 		// verify the forfeit closure script
 		closure, err := tree.DecodeClosure(vtxoTapscript.Script)
@@ -213,21 +221,27 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 			return nil, err
 		}
 
+		var locktime *common.Locktime
+
 		switch c := closure.(type) {
 		case *tree.CLTVMultisigClosure:
-			switch c.Locktime.Type {
-			case common.LocktimeTypeBlock:
-				if c.Locktime.Value > blocktimestamp.Height {
-					return nil, fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block height)", c.Locktime.Value, blocktimestamp.Height)
-				}
-			case common.LocktimeTypeSecond:
-				if c.Locktime.Value > uint32(blocktimestamp.Time) {
-					return nil, fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block time)", c.Locktime.Value, blocktimestamp.Time)
-				}
-			}
-		case *tree.MultisigClosure:
+			locktime = &c.Locktime
+		case *tree.MultisigClosure, *tree.ConditionMultisigClosure:
 		default:
 			return nil, fmt.Errorf("invalid forfeit closure script")
+		}
+
+		if locktime != nil {
+			switch locktime.Type {
+			case common.LocktimeTypeBlock:
+				if locktime.Value > blocktimestamp.Height {
+					return nil, fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block height)", locktime.Value, blocktimestamp.Height)
+				}
+			case common.LocktimeTypeSecond:
+				if locktime.Value > uint32(blocktimestamp.Time) {
+					return nil, fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block time)", locktime.Value, blocktimestamp.Time)
+				}
+			}
 		}
 
 		minFee, err := common.ComputeForfeitTxFee(
@@ -236,7 +250,7 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 				RevealedScript: vtxoTapscript.Script,
 				ControlBlock:   &vtxoTapscript.ControlBlock.ControlBlock,
 			},
-			closure.WitnessSize(),
+			closure.WitnessSize(conditionWitnessSize),
 			txscript.GetScriptClass(forfeitScript),
 		)
 		if err != nil {
@@ -541,6 +555,24 @@ func (b *txBuilder) verifyTapscriptPartialSigs(pset *psetv2.Pset) (bool, error) 
 			for _, key := range c.PubKeys {
 				keys[hex.EncodeToString(schnorr.SerializePubKey(key))] = false
 			}
+		case *tree.ConditionMultisigClosure:
+			witness, err := tree.GetConditionWitness(input)
+			if err != nil {
+				return false, err
+			}
+
+			result, err := tree.ExecuteBoolScript(c.Condition, witness)
+			if err != nil {
+				return false, err
+			}
+
+			if !result {
+				return false, fmt.Errorf("condition not met for input %d", index)
+			}
+
+			for _, key := range c.PubKeys {
+				keys[hex.EncodeToString(schnorr.SerializePubKey(key))] = false
+			}
 		}
 
 		// we don't need to check if server signed
@@ -621,10 +653,22 @@ func (b *txBuilder) FinalizeAndExtract(tx string) (string, error) {
 				return "", err
 			}
 
-			signatures := make(map[string][]byte)
+			conditionWitness, err := tree.GetConditionWitness(in)
+			if err != nil {
+				return "", err
+			}
+
+			args := make(map[string][]byte)
+			if len(conditionWitness) > 0 {
+				var conditionWitnessBytes bytes.Buffer
+				if err := psbt.WriteTxWitness(&conditionWitnessBytes, conditionWitness); err != nil {
+					return "", err
+				}
+				args[tree.ConditionWitnessKey] = conditionWitnessBytes.Bytes()
+			}
 
 			for _, sig := range in.TapScriptSig {
-				signatures[hex.EncodeToString(sig.PubKey)] = sig.Signature
+				args[hex.EncodeToString(sig.PubKey)] = sig.Signature
 			}
 
 			controlBlock, err := tapLeaf.ControlBlock.ToBytes()
@@ -632,7 +676,7 @@ func (b *txBuilder) FinalizeAndExtract(tx string) (string, error) {
 				return "", err
 			}
 
-			witness, err := closure.Witness(controlBlock, signatures)
+			witness, err := closure.Witness(controlBlock, args)
 			if err != nil {
 				return "", err
 			}

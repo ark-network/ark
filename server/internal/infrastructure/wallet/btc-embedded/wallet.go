@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -750,13 +751,25 @@ func (s *service) SignTransaction(ctx context.Context, partialTx string, extract
 					return "", err
 				}
 
-				signatures := make(map[string][]byte)
-
-				for _, sig := range in.TaprootScriptSpendSig {
-					signatures[hex.EncodeToString(sig.XOnlyPubKey)] = sig.Signature
+				conditionWitness, err := bitcointree.GetConditionWitness(in)
+				if err != nil {
+					return "", err
 				}
 
-				witness, err := closure.Witness(in.TaprootLeafScript[0].ControlBlock, signatures)
+				args := make(map[string][]byte)
+				if len(conditionWitness) > 0 {
+					var conditionWitnessBytes bytes.Buffer
+					if err := psbt.WriteTxWitness(&conditionWitnessBytes, conditionWitness); err != nil {
+						return "", err
+					}
+					args[tree.ConditionWitnessKey] = conditionWitnessBytes.Bytes()
+				}
+
+				for _, sig := range in.TaprootScriptSpendSig {
+					args[hex.EncodeToString(sig.XOnlyPubKey)] = sig.Signature
+				}
+
+				witness, err := closure.Witness(in.TaprootLeafScript[0].ControlBlock, args)
 				if err != nil {
 					return "", err
 				}

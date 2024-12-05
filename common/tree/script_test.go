@@ -2,16 +2,42 @@ package tree_test
 
 import (
 	"bytes"
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"testing"
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/require"
 )
+
+func TestDecodeClosure(t *testing.T) {
+	testCases := []struct {
+		script string
+	}{
+		{
+			script: "a820d6b309eb6725e371c6b73b232492d7889f9800f09b844d1a6e64be607f5b752b876920daf3e1cf88c667052a05995aede0c325695e53c058f8dfde4b12e7d2a381d6e0ac",
+		},
+		{
+			script: "6ea820264f0fff500e57f00a3c12a655def6f76cf22a604c39692afc619f27971aad5788a8206f83c2c07899e898b7900359b0ebde54c1e789d748c2b988ada29d5e2b28df1a88827660877c5f879b646d00677c827660877c5f879b646d5167827c757c827c758768686920e87b6599b5639844ae359f80b762d01478721d654a47bc174105f289b268707bad20873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465ac",
+		},
+	}
+
+	for _, testCase := range testCases {
+		scriptBytes, err := hex.DecodeString(testCase.script)
+		require.NoError(t, err)
+
+		closure, err := tree.DecodeClosure(scriptBytes)
+		require.NoError(t, err)
+		require.NotNil(t, closure)
+	}
+}
 
 func TestRoundTripCSV(t *testing.T) {
 	seckey, err := secp256k1.GeneratePrivateKey()
@@ -458,7 +484,7 @@ func TestDecodeChecksigAdd(t *testing.T) {
 		AddData(schnorr.SerializePubKey(pubkeys[2])).
 		AddOp(txscript.OP_CHECKSIGADD).
 		AddInt64(3).
-		AddOp(txscript.OP_EQUAL)
+		AddOp(txscript.OP_NUMEQUAL)
 
 	script, err := scriptBuilder.Script()
 	require.NoError(t, err, "failed to build script")
@@ -505,7 +531,7 @@ func TestCLTVMultisigClosure(t *testing.T) {
 		require.True(t, valid)
 		require.Equal(t, closure.Locktime, decodedClosure.Locktime)
 		require.Equal(t, 1, len(decodedClosure.PubKeys))
-		require.True(t, closure.PubKeys[0].IsEqual(decodedClosure.PubKeys[0]))
+		require.Equal(t, schnorr.SerializePubKey(pubkey1), schnorr.SerializePubKey(decodedClosure.PubKeys[0]))
 	})
 
 	t.Run("valid two keys with CLTV", func(t *testing.T) {
@@ -622,5 +648,205 @@ func TestCLTVMultisigClosure(t *testing.T) {
 				}
 			})
 		}
+	})
+}
+
+func TestExecuteBoolScript(t *testing.T) {
+	// Generate two random byte slices for coinflip
+	rand1 := make([]byte, 16)
+	_, err := rand.Read(rand1)
+	require.NoError(t, err)
+	hash1 := sha256.Sum256(rand1)
+
+	rand2 := make([]byte, 15)
+	_, err = rand.Read(rand2)
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name        string
+		script      []byte
+		witness     wire.TxWitness
+		returnValue bool
+		expectErr   bool
+	}{
+		{
+			name:        "True",
+			script:      []byte{txscript.OP_TRUE},
+			witness:     wire.TxWitness{},
+			returnValue: true,
+			expectErr:   false,
+		},
+		{
+			name:        "False",
+			script:      []byte{txscript.OP_FALSE},
+			witness:     wire.TxWitness{},
+			returnValue: false,
+			expectErr:   false,
+		},
+		{
+			name:        "invalid CHECKSIG",
+			script:      []byte{txscript.OP_CHECKSIG},
+			witness:     wire.TxWitness{},
+			returnValue: false,
+			expectErr:   true,
+		},
+		{
+			name:        "invalid CHECKSIGADD",
+			script:      []byte{txscript.OP_CHECKSIGADD},
+			witness:     wire.TxWitness{},
+			returnValue: false,
+			expectErr:   true,
+		},
+		{
+			name:        "invalid CHECKSIGVERIFY",
+			script:      []byte{txscript.OP_CHECKSIGVERIFY},
+			witness:     wire.TxWitness{},
+			returnValue: false,
+			expectErr:   true,
+		},
+		{
+			name:        "invalid CLTV",
+			script:      []byte{txscript.OP_CHECKLOCKTIMEVERIFY},
+			witness:     wire.TxWitness{},
+			returnValue: false,
+			expectErr:   true,
+		},
+		{
+			name:        "invalid CHECKSIGVERIFY",
+			script:      []byte{txscript.OP_CHECKSIGVERIFY},
+			witness:     wire.TxWitness{},
+			returnValue: false,
+			expectErr:   true,
+		},
+		{
+			name:        "invalid zero elements on the stack",
+			script:      []byte{txscript.OP_TRUE, txscript.OP_VERIFY},
+			witness:     wire.TxWitness{},
+			returnValue: false,
+			expectErr:   true,
+		},
+		{
+			name:        "invalid two elements on the stack",
+			script:      []byte{txscript.OP_TRUE, txscript.OP_TRUE},
+			witness:     wire.TxWitness{},
+			returnValue: false,
+			expectErr:   true,
+		},
+		{
+			name:        "valid SHA256",
+			script:      append(append([]byte{txscript.OP_SHA256, txscript.OP_DATA_32}, hash1[:]...), txscript.OP_EQUAL),
+			witness:     wire.TxWitness{rand1},
+			returnValue: true,
+			expectErr:   false,
+		},
+		{
+			name:        "invalid SHA256",
+			script:      append(append([]byte{txscript.OP_SHA256, txscript.OP_DATA_32}, hash1[:]...), txscript.OP_EQUAL),
+			witness:     wire.TxWitness{rand2},
+			returnValue: false,
+			expectErr:   false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			valid, err := tree.ExecuteBoolScript(tc.script, tc.witness)
+
+			if tc.expectErr {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tc.returnValue, valid)
+		})
+	}
+}
+
+func TestConditionMultisigClosure(t *testing.T) {
+	// Generate test keys
+	privkey1, err := secp256k1.GeneratePrivateKey()
+	require.NoError(t, err)
+	pubkey1 := privkey1.PubKey()
+
+	privkey2, err := secp256k1.GeneratePrivateKey()
+	require.NoError(t, err)
+	pubkey2 := privkey2.PubKey()
+
+	t.Run("valid condition with single key", func(t *testing.T) {
+		// Create a simple condition script that just returns true
+		conditionScript := []byte{txscript.OP_TRUE}
+
+		closure := &tree.ConditionMultisigClosure{
+			MultisigClosure: tree.MultisigClosure{
+				PubKeys: []*secp256k1.PublicKey{pubkey1},
+				Type:    tree.MultisigTypeChecksig,
+			},
+			Condition: conditionScript,
+		}
+
+		script, err := closure.Script()
+		require.NoError(t, err)
+
+		decodedClosure := &tree.ConditionMultisigClosure{}
+		valid, err := decodedClosure.Decode(script)
+		require.NoError(t, err)
+		require.True(t, valid)
+		require.Equal(t, 1, len(decodedClosure.PubKeys))
+		require.True(t, bytes.Equal(conditionScript, decodedClosure.Condition))
+		require.True(t, bytes.Equal(schnorr.SerializePubKey(pubkey1), schnorr.SerializePubKey(decodedClosure.PubKeys[0])))
+	})
+
+	t.Run("valid condition with 2 of 2 multisig", func(t *testing.T) {
+		randomBytes := make([]byte, 32)
+		_, err := rand.Read(randomBytes)
+		require.NoError(t, err)
+
+		hash := sha256.Sum256(randomBytes)
+
+		conditionScript := append([]byte{
+			txscript.OP_SHA256,
+			txscript.OP_DATA_32,
+		}, hash[:]...)
+		conditionScript = append(conditionScript, txscript.OP_EQUAL)
+
+		closure := &tree.ConditionMultisigClosure{
+			MultisigClosure: tree.MultisigClosure{
+				PubKeys: []*secp256k1.PublicKey{pubkey1, pubkey2},
+				Type:    tree.MultisigTypeChecksig,
+			},
+			Condition: conditionScript,
+		}
+
+		script, err := closure.Script()
+		require.NoError(t, err)
+
+		decodedClosure := &tree.ConditionMultisigClosure{}
+		valid, err := decodedClosure.Decode(script)
+		require.NoError(t, err)
+		require.True(t, valid)
+		require.Equal(t, 2, len(decodedClosure.PubKeys))
+		require.True(t, bytes.Equal(conditionScript, decodedClosure.Condition))
+
+		conditionWitness := [][]byte{randomBytes[:]}
+		var conditionWitnessBytes bytes.Buffer
+		require.NoError(t, psbt.WriteTxWitness(&conditionWitnessBytes, conditionWitness))
+
+		signatures := map[string][]byte{
+			hex.EncodeToString(schnorr.SerializePubKey(pubkey1)): bytes.Repeat([]byte{0x01}, 64),
+			hex.EncodeToString(schnorr.SerializePubKey(pubkey2)): bytes.Repeat([]byte{0x02}, 64),
+			tree.ConditionWitnessKey:                             conditionWitnessBytes.Bytes(),
+		}
+
+		controlBlock := bytes.Repeat([]byte{0x00}, 32)
+
+		witness, err := closure.Witness(controlBlock, signatures)
+		require.NoError(t, err)
+		require.Equal(t, 5, len(witness)) // condition witness + 2 sigs + script + control block
+		require.Equal(t, controlBlock, witness[len(witness)-1])
+		require.Equal(t, conditionWitness[0], witness[2])
+		require.Equal(t, script, witness[3])
+		require.Equal(t, 64, len(witness[0]))
+		require.Equal(t, 64, len(witness[1]))
 	})
 }

@@ -130,7 +130,7 @@ func (v *TapscriptsVtxoScript) ForfeitClosures() []Closure {
 	forfeits := make([]Closure, 0)
 	for _, closure := range v.Closures {
 		switch closure.(type) {
-		case *MultisigClosure, *CLTVMultisigClosure:
+		case *MultisigClosure, *CLTVMultisigClosure, *ConditionMultisigClosure:
 			forfeits = append(forfeits, closure)
 		}
 	}
@@ -187,15 +187,9 @@ func (b elementsTapTree) GetTaprootMerkleProof(leafhash chainhash.Hash) (*common
 		return nil, err
 	}
 
-	closure, err := DecodeClosure(proof.Script)
-	if err != nil {
-		return nil, err
-	}
-
 	return &common.TaprootMerkleProof{
 		ControlBlock: controlBlockBytes,
 		Script:       proof.Script,
-		WitnessSize:  closure.WitnessSize(),
 	}, nil
 }
 

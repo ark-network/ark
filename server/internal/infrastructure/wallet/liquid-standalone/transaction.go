@@ -56,11 +56,22 @@ func (s *service) SignTransaction(
 			if err != nil {
 				return "", err
 			}
+			conditionWitness, err := tree.GetConditionWitness(in)
+			if err != nil {
+				return "", err
+			}
 
-			signatures := make(map[string][]byte)
+			args := make(map[string][]byte)
+			if len(conditionWitness) > 0 {
+				var conditionWitnessBytes bytes.Buffer
+				if err := psbt.WriteTxWitness(&conditionWitnessBytes, conditionWitness); err != nil {
+					return "", err
+				}
+				args[tree.ConditionWitnessKey] = conditionWitnessBytes.Bytes()
+			}
 
 			for _, sig := range in.TapScriptSig {
-				signatures[hex.EncodeToString(sig.PubKey)] = sig.Signature
+				args[hex.EncodeToString(sig.PubKey)] = sig.Signature
 			}
 
 			controlBlock, err := tapLeaf.ControlBlock.ToBytes()
@@ -68,7 +79,7 @@ func (s *service) SignTransaction(
 				return "", err
 			}
 
-			witness, err := closure.Witness(controlBlock, signatures)
+			witness, err := closure.Witness(controlBlock, args)
 			if err != nil {
 				return "", err
 			}
