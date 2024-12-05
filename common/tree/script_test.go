@@ -17,6 +17,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestDecodeClosure(t *testing.T) {
+	testCases := []struct {
+		script string
+	}{
+		{
+			script: "a820d6b309eb6725e371c6b73b232492d7889f9800f09b844d1a6e64be607f5b752b876920daf3e1cf88c667052a05995aede0c325695e53c058f8dfde4b12e7d2a381d6e0ac",
+		},
+		{
+			script: "6ea820264f0fff500e57f00a3c12a655def6f76cf22a604c39692afc619f27971aad5788a8206f83c2c07899e898b7900359b0ebde54c1e789d748c2b988ada29d5e2b28df1a88827660877c5f879b646d00677c827660877c5f879b646d5167827c757c827c758768686920e87b6599b5639844ae359f80b762d01478721d654a47bc174105f289b268707bad20873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465ac",
+		},
+	}
+
+	for _, testCase := range testCases {
+		scriptBytes, err := hex.DecodeString(testCase.script)
+		require.NoError(t, err)
+
+		closure, err := tree.DecodeClosure(scriptBytes)
+		require.NoError(t, err)
+		require.NotNil(t, closure)
+	}
+}
+
 func TestRoundTripCSV(t *testing.T) {
 	seckey, err := secp256k1.GeneratePrivateKey()
 	require.NoError(t, err)

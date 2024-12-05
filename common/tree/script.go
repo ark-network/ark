@@ -920,19 +920,25 @@ func (f *ConditionMultisigClosure) Decode(script []byte) (bool, error) {
 		return false, fmt.Errorf("empty script")
 	}
 
-	// Find OP_VERIFY position
-	verifyPos := bytes.LastIndex(script, []byte{txscript.OP_VERIFY})
-	if verifyPos <= 0 {
-		return false, nil
+	tokenizer := txscript.MakeScriptTokenizer(0, script)
+	verifyPositions := []int{}
+	for tokenizer.Next() {
+		if tokenizer.OpcodePosition() != -1 && tokenizer.Opcode() == txscript.OP_VERIFY {
+			verifyPositions = append(verifyPositions, int(tokenizer.ByteIndex()))
+		}
 	}
 
+	if len(verifyPositions) == 0 {
+		return false, nil
+	}
+	verifyPos := verifyPositions[len(verifyPositions)-1]
+
 	// Extract and store condition
-	condition := script[:verifyPos]
+	condition := script[:verifyPos-1] // remove OP_VERIFY
 	f.Condition = condition
 
 	// Extract and decode multisig script
-	multisigScript := script[verifyPos+1:]
-
+	multisigScript := script[verifyPos:]
 	// Decode multisig closure
 	valid, err := f.MultisigClosure.Decode(multisigScript)
 	if err != nil || !valid {
