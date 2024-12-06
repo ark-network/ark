@@ -369,6 +369,7 @@
     function setupEventHandlers(es) {
         es.addEventListener('message', function(e) {
             if (e.data) {
+                lastPingTime = Date.now();
                 appendToTerminal(e.data);
             }
         });

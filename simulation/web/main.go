@@ -86,7 +86,7 @@ func main() {
 	r.HandleFunc("/address", addressHandler).Methods("GET", "POST")
 	r.HandleFunc("/log", logHandler).Methods("GET", "POST")
 
-	port := "8080"
+	port := "9000"
 	log.Infof("Starting server on http://localhost:%s", port)
 	log.Fatal(http.ListenAndServe(":"+port, r))
 }
@@ -287,10 +287,16 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 
 	go runSimulation(simulationFile, aspUrl, explorerUrl, outputChan)
 
+	pingTicker := time.NewTicker(10 * time.Second)
+	defer pingTicker.Stop()
+
 	for {
 		select {
 		case <-done:
 			return
+		case <-pingTicker.C:
+			fmt.Fprintf(w, "event: ping\ndata: \n\n")
+			flusher.Flush()
 		case msg, ok := <-outputChan:
 			if !ok {
 				return
@@ -436,11 +442,7 @@ func sendToFrontend(msg string) {
 	simulationMu.Lock()
 	defer simulationMu.Unlock()
 	if outputChan != nil {
-		select {
-		case outputChan <- msg:
-		default:
-			log.Warn("outputChan is full, dropping message")
-		}
+		outputChan <- msg
 	}
 }
 
@@ -1114,7 +1116,17 @@ func executeStats(ctx context.Context, clientURL string) error {
 		return err
 	}
 
-	log.Infoln(resp)
+	var prettyJSON bytes.Buffer
+	err = json.Indent(&prettyJSON, []byte(resp), "", "  ")
+	if err != nil {
+		log.Warnf("Failed to format JSON: %v", err)
+		sendToFrontend(fmt.Sprintf("Client stats: %s", resp))
+	} else {
+		resp = prettyJSON.String()
+		sendToFrontend(fmt.Sprintf("Client stats:\n%s", prettyJSON.String()))
+	}
+	log.Infoln("Received stats from client:", resp)
+
 	return nil
 }
 
@@ -1184,3 +1196,8 @@ func sendRequest(ctx context.Context, urlStr string, method string, payload inte
 
 	return string(bodyBytes), nil
 }
+
+// TODO
+// waitForClientsToSendAddress calls log.Fatal should just close chan etc
+// clients sends data on wrong port 9000 -> either start webserver on 9000 or change client port -> DONE
+// handle panic

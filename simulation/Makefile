@@ -55,4 +55,4 @@ vet:
 ## run-web: Run web interface for simulation
 run-web:
 	@echo "Starting web interface..."
-	go run ./web/main.go
+	go run ./web/main.go $(ARGS)
