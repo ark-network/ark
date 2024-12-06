@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Ark Simulation Web Interface</title>
+    <script src="https://unpkg.com/htmx.org@1.9.6"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/tokyo-night-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
+    <style>
+        /* Terminal Styles */
+        .terminal {
+            background-color: #1a1a1a;
+            color: #00ff00;
+            font-family: 'Courier New', Courier, monospace;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            height: 400px;
+            overflow-y: auto;
+        }
+        .terminal pre {
+            margin: 0;
+            white-space: pre;
+            line-height: 1.5;
+            overflow-x: auto;
+            padding: 2px 0;
+        }
+        .terminal pre:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(2px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .terminal pre:last-child {
+            animation: fadeIn 0.15s ease-out;
+        }
+        .terminal::-webkit-scrollbar {
+            width: 8px;
+        }
+        .terminal::-webkit-scrollbar-track {
+            background: #1a1a1a;
+            border-radius: 4px;
+        }
+        .terminal::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 4px;
+        }
+        .terminal::-webkit-scrollbar-thumb:hover {
+            background: #444;
+        }
+
+        /* YAML Preview Styles */
+        .preview-container {
+            height: 684px;
+            display: flex;
+            flex-direction: column;
+        }
+        .preview-header {
+            flex: none;
+            margin-bottom: 1rem;
+        }
+        .yaml-preview {
+            flex: 1;
+            min-height: 0;
+            background-color: #1a1b26;
+            border-radius: 0.5rem;
+            overflow-y: auto;
+            max-height: calc(100% - 4rem);
+        }
+        .yaml-preview pre {
+            margin: 0 !important;
+            height: auto !important;
+            max-height: none !important;
+        }
+        .yaml-preview code {
+            display: block !important;
+            height: auto !important;
+            max-height: none !important;
+            white-space: pre !important;
+            padding: 1rem !important;
+            font-family: 'JetBrains Mono', 'Courier New', monospace !important;
+            font-size: 0.9rem !important;
+            line-height: 1.5 !important;
+            background: transparent !important;
+        }
+        .yaml-preview::-webkit-scrollbar {
+            width: 8px;
+        }
+        .yaml-preview::-webkit-scrollbar-track {
+            background: #1a1b26;
+            border-radius: 4px;
+        }
+        .yaml-preview::-webkit-scrollbar-thumb {
+            background: #434759;
+            border-radius: 4px;
+        }
+        .yaml-preview::-webkit-scrollbar-thumb:hover {
+            background: #565b70;
+        }
+    </style>
+    <script>
+        document.addEventListener('htmx:afterSettle', function(evt) {
+            if (evt.detail.target.id === 'simulation-preview') {
+                hljs.highlightAll();
+            }
+        });
+
+        // Handle simulation file selection and preview
+        document.addEventListener('DOMContentLoaded', function() {
+            const simulationSelect = document.getElementById('simulation-file-select');
+            const uploadError = document.getElementById('upload-error');
+            const uploadErrorMessage = document.getElementById('upload-error-message');
+
+            // Handle HTMX errors
+            document.body.addEventListener('htmx:responseError', function(evt) {
+                const response = evt.detail.xhr;
+                if (response.status === 400) {
+                    // Show error message
+                    uploadErrorMessage.textContent = response.responseText;
+                    uploadError.classList.remove('hidden');
+                    // Hide error after 5 seconds
+                    setTimeout(() => {
+                        uploadError.classList.add('hidden');
+                    }, 5000);
+                }
+            });
+
+            // Hide error when starting new upload
+            document.querySelector('form[hx-encoding="multipart/form-data"]').addEventListener('htmx:beforeRequest', function() {
+                uploadError.classList.add('hidden');
+            });
+
+            if (simulationSelect) {
+                // Load simulation content when selection changes
+                simulationSelect.addEventListener('change', function() {
+                    const selectedFile = this.value;
+                    if (selectedFile) {
+                        fetch('/simulation?file=' + selectedFile)
+                            .then(response => response.text())
+                            .then(content => {
+                                const previewElement = document.getElementById('simulation-preview');
+                                if (previewElement) {
+                                    previewElement.innerHTML = '<pre><code class="language-yaml">' + 
+                                        content.replace(/&/g, '&amp;')
+                                              .replace(/</g, '&lt;')
+                                              .replace(/>/g, '&gt;') + 
+                                        '</code></pre>';
+                                    hljs.highlightAll();
+                                }
+                            })
+                            .catch(error => console.error('Error loading simulation:', error));
+                    }
+                });
+
+                // Handle successful file upload
+                document.body.addEventListener('htmx:afterSettle', function(evt) {
+                    if (evt.detail.target === simulationSelect) {
+                        // Trigger change event to load the preview for the newly selected file
+                        simulationSelect.dispatchEvent(new Event('change'));
+                    }
+                });
+            }
+        });
+    </script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Notification Container -->
+    <div id="notification-container" class="fixed top-4 right-4 z-50"></div>
+<div class="container mx-auto px-4 py-8">
+    <!-- Header with Logout Link -->
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+        <div class="flex justify-between items-center">
+            <h1 class="text-3xl font-bold">Ark Simulation Web Interface</h1>
+            <a href="/logout" class="text-sm text-gray-500 hover:text-gray-700">Logout</a>
+        </div>
+        <div class="prose max-w-none mt-4">
+            <p class="text-gray-600">
+                Welcome to the Ark Simulation Web Interface! This tool allows you to run and manage Ark Server simulations.
+                You can test multiple clients performing various actions over several rounds using either the default 
+                simulation configuration or your own custom YAML file.
+            </p>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-12 gap-8">
+        <!-- Left Side: Forms -->
+        <div class="col-span-5">
+            <div class="space-y-8">
+                <!-- Run Simulation Form -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h2 class="text-2xl font-bold mb-4">Run Simulation</h2>
+                    <form hx-post="/run" hx-target="#output" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">ASP URL <span class="text-red-500">*</span></label>
+                            <input type="text" name="asp_url" required value="https://master.signet.arklabs.to"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                   placeholder="e.g., http://example.com:7070">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Explorer URL <span class="text-red-500">*</span></label>
+                            <input type="text" name="explorer_url" required value="https://mutinynet.com/api"
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                   placeholder="e.g., https://explorer.example.com/api">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Select Simulation <span class="text-red-500">*</span></label>
+                            <select name="simulation_file" id="simulation-file-select" required
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                    hx-get="/simulation"
+                                    hx-target="this"
+                                    hx-trigger="load, simulation-list-updated from:body"
+                                    hx-swap="innerHTML">
+                                {{ range .SimulationFiles }}
+                                <option value="{{ . }}" {{ if eq . "simulation.yaml" }}selected{{ end }}>{{ . }}</option>
+                                {{ end }}
+                            </select>
+                        </div>
+
+                        <div>
+                            <button type="submit"
+                                    class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                Run Simulation
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Upload Simulation Form -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h2 class="text-2xl font-bold mb-4">Upload Simulation</h2>
+                    <form hx-post="/simulation"
+                          hx-encoding="multipart/form-data"
+                          hx-target="#simulation-file-select"
+                          class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Choose File</label>
+                            <input type="file" name="file" accept=".yaml"
+                                   class="mt-1 block w-full text-sm text-gray-500
+                                          file:mr-4 file:py-2 file:px-4
+                                          file:rounded-full file:border-0
+                                          file:text-sm file:font-semibold
+                                          file:bg-indigo-50 file:text-indigo-700
+                                          hover:file:bg-indigo-100">
+                        </div>
+                        <div id="upload-error" class="hidden rounded-md bg-red-50 p-4">
+                            <div class="flex">
+                                <div class="flex-shrink-0">
+                                    <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                                    </svg>
+                                </div>
+                                <div class="ml-3">
+                                    <h3 class="text-sm font-medium text-red-800">Upload Error</h3>
+                                    <div class="mt-2 text-sm text-red-700" id="upload-error-message"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <button type="submit"
+                                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                Upload
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Side: YAML Preview -->
+        <div class="col-span-7">
+            <div class="preview-container bg-white rounded-lg shadow-lg p-6">
+                <div class="preview-header flex items-center justify-between">
+                    <h2 class="text-2xl font-bold">YAML Preview</h2>
+                    <div class="space-x-4">
+                        <button type="button"
+                                hx-get="/simulation.yaml?type=schema"
+                                hx-target="#simulation-preview"
+                                class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                            View Schema
+                        </button>
+                    </div>
+                </div>
+                <div id="simulation-preview" class="yaml-preview"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Simulation Output -->
+    <div class="bg-white rounded-lg shadow-lg p-6 mt-8" id="simulation-output">
+        <h2 class="text-2xl font-bold mb-4">Simulation Output</h2>
+        <div id="output" class="terminal">
+            <pre>Waiting to start simulation...</pre>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Handle upload status messages
+    document.body.addEventListener('htmx:afterSettle', function(evt) {
+        const uploadStatus = document.getElementById('upload-status');
+        if (evt.detail && evt.detail.triggerSpec && evt.detail.triggerSpec.showMessage) {
+            uploadStatus.textContent = evt.detail.triggerSpec.showMessage;
+            uploadStatus.classList.add('text-green-600');
+            // Clear the file input
+            document.querySelector('input[type="file"]').value = '';
+            // Clear the message after 3 seconds
+            setTimeout(() => {
+                uploadStatus.textContent = '';
+                uploadStatus.classList.remove('text-green-600');
+            }, 3000);
+        }
+    });
+
+    // Load initial simulation content
+    window.addEventListener('load', function() {
+        const simulationSelect = document.getElementById('simulation-file-select');
+        // Trigger HTMX request to load initial content
+        htmx.trigger(simulationSelect, 'change');
+    });
+
+    // Handle terminal output
+    const terminal = document.getElementById('output');
+    let eventSource = null;
+    let lastPingTime = 0;
+    let pingTimeout = null;
+
+    // Function to append new line to terminal
+    function appendToTerminal(text, isError = false) {
+        const line = document.createElement('pre');
+        line.textContent = text;
+        if (isError) {
+            line.style.color = '#ff4444';
+        }
+        terminal.appendChild(line);
+        terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    // Function to close existing EventSource
+    function closeEventSource() {
+        if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+            console.log('EventSource closed');
+        }
+        if (pingTimeout) {
+            clearTimeout(pingTimeout);
+            pingTimeout = null;
+            console.log('Ping timeout cleared');
+        }
+    }
+
+    // Function to check connection status
+    function checkConnection() {
+        const now = Date.now();
+        if (now - lastPingTime > 45000) { // 45 seconds timeout
+            appendToTerminal('Connection lost - no ping received', true);
+            closeEventSource();
+            // Optionally, implement retry logic here
+        } else {
+            pingTimeout = setTimeout(checkConnection, 5000);
+        }
+    }
+
+    // Function to setup event handlers
+    function setupEventHandlers(es) {
+        es.addEventListener('message', function(e) {
+            if (e.data) {
+                lastPingTime = Date.now();
+                appendToTerminal(e.data);
+            }
+        });
+
+        es.addEventListener('ping', function(e) {
+            lastPingTime = Date.now();
+            // Optionally log ping for debugging
+            // console.log('Ping received at:', new Date(lastPingTime).toISOString());
+        });
+
+        es.addEventListener('error', function(e) {
+            if (e.data) {
+                appendToTerminal(e.data, true);
+            }
+            if (es.readyState === EventSource.CLOSED) {
+                closeEventSource();
+            }
+        });
+
+        es.onerror = function(e) {
+            if (es.readyState === EventSource.CLOSED) {
+                appendToTerminal('Connection closed', true);
+                closeEventSource();
+            }
+        };
+
+        // Start connection monitoring
+        lastPingTime = Date.now();
+        if (pingTimeout) {
+            clearTimeout(pingTimeout);
+        }
+        pingTimeout = setTimeout(checkConnection, 5000);
+    }
+
+    // Handle simulation form submission
+    document.querySelector('form[hx-target="#output"]').addEventListener('submit', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Scroll to output section
+        document.getElementById('simulation-output').scrollIntoView({ behavior: 'smooth' });
+
+        // Close existing EventSource
+        closeEventSource();
+
+        // Clear terminal
+        terminal.innerHTML = '';
+
+        // Create form data
+        const formData = new FormData(this);
+        const params = new URLSearchParams(formData);
+
+        // Create new EventSource
+        eventSource = new EventSource('/run?' + params.toString());
+        setupEventHandlers(eventSource);
+    });
+
+    // Notification System
+    function showNotification(message, type = 'error') {
+        const container = document.getElementById('notification-container');
+        const notification = document.createElement('div');
+        
+        // Set notification styles based on type
+        const baseClasses = 'flex items-center p-4 mb-4 rounded-lg shadow-lg transition-opacity duration-500';
+        const typeClasses = type === 'error' 
+            ? 'text-red-800 bg-red-50' 
+            : 'text-green-800 bg-green-50';
+        
+        notification.className = `${baseClasses} ${typeClasses}`;
+        
+        // Create icon
+        const icon = document.createElement('div');
+        icon.className = 'flex-shrink-0';
+        icon.innerHTML = type === 'error' 
+            ? '<svg class="w-5 h-5 text-red-800" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>'
+            : '<svg class="w-5 h-5 text-green-800" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>';
+        
+        // Create message
+        const text = document.createElement('div');
+        text.className = 'ml-3 text-sm font-medium';
+        text.textContent = message;
+        
+        // Create close button
+        const closeButton = document.createElement('button');
+        closeButton.className = `ml-auto -mx-1.5 -my-1.5 rounded-lg focus:ring-2 focus:ring-gray-400 p-1.5 inline-flex h-8 w-8 ${type === 'error' ? 'text-red-800 hover:bg-red-100' : 'text-green-800 hover:bg-green-100'}`;
+        closeButton.innerHTML = '<span class="sr-only">Close</span><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></path></svg>';
+        
+        // Add click handler to close button
+        closeButton.onclick = () => notification.remove();
+        
+        // Assemble notification
+        notification.appendChild(icon);
+        notification.appendChild(text);
+        notification.appendChild(closeButton);
+        
+        // Add to container
+        container.appendChild(notification);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            setTimeout(() => notification.remove(), 500);
+        }, 5000);
+    }
+
+    // Handle HTMX errors
+    document.body.addEventListener('htmx:responseError', function(evt) {
+        const response = evt.detail.xhr;
+        if (response.status === 500) {
+            showNotification('Something went wrong. Please try again later.');
+        } else if (response.status === 400) {
+            showNotification(response.responseText);
+        }
+    });
+
+    // Handle successful uploads
+    document.body.addEventListener('htmx:afterSettle', function(evt) {
+        if (evt.detail.target.id === 'simulation-file-select' && 
+            evt.detail.xhr && 
+            evt.detail.xhr.status === 200 && 
+            evt.detail.xhr.getResponseHeader('X-File-Uploaded') === 'true') {
+            showNotification('File uploaded successfully!', 'success');
+        }
+    });
+
+    // Clean up EventSource on page unload
+    window.addEventListener('beforeunload', function() {
+        closeEventSource();
+    });
+</script>
+</body>
+</html>
