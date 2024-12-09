@@ -15,7 +15,7 @@ import (
 
 func BuildVtxoTree(
 	asset string, serverPubkey *secp256k1.PublicKey, receivers []VtxoLeaf,
-	feeSatsPerNode uint64, roundLifetime common.Locktime,
+	feeSatsPerNode uint64, roundLifetime common.RelativeLocktime,
 ) (
 	factoryFn TreeFactory,
 	sharedOutputScript []byte, sharedOutputAmount uint64, err error,
@@ -54,7 +54,7 @@ type node struct {
 	right         *node
 	asset         string
 	feeSats       uint64
-	roundLifetime common.Locktime
+	roundLifetime common.RelativeLocktime
 
 	_inputTaprootKey  *secp256k1.PublicKey
 	_inputTaprootTree *taproot.IndexedElementsTapScriptTree
@@ -381,7 +381,7 @@ func (n *node) buildVtxoTree() TreeFactory {
 
 func buildTreeNodes(
 	asset string, serverPubkey *secp256k1.PublicKey, receivers []VtxoLeaf,
-	feeSatsPerNode uint64, roundLifetime common.Locktime,
+	feeSatsPerNode uint64, roundLifetime common.RelativeLocktime,
 ) (root *node, err error) {
 	if len(receivers) == 0 {
 		return nil, fmt.Errorf("no receivers provided")

@@ -2101,9 +2101,21 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 			return nil, err
 		}
 
+		vtxoLocktime := common.AbsoluteLocktime(0)
+		if cltv, ok := forfeitClosure.(*tree.CLTVMultisigClosure); ok {
+			vtxoLocktime = cltv.Locktime
+		}
+
 		for _, connectorPset := range connectorsPsets {
 			forfeits, err := bitcointree.BuildForfeitTxs(
-				connectorPset, vtxoInput, vtxo.Amount, a.Dust, feeAmount, vtxoOutputScript, forfeitPkScript,
+				connectorPset,
+				vtxoInput,
+				vtxo.Amount,
+				a.Dust,
+				feeAmount,
+				vtxoOutputScript,
+				forfeitPkScript,
+				uint32(vtxoLocktime),
 			)
 			if err != nil {
 				return nil, err

@@ -65,9 +65,9 @@ type Config struct {
 	SchedulerType           string
 	TxBuilderType           string
 	WalletAddr              string
-	RoundLifetime           common.Locktime
-	UnilateralExitDelay     common.Locktime
-	BoardingExitDelay       common.Locktime
+	RoundLifetime           common.RelativeLocktime
+	UnilateralExitDelay     common.RelativeLocktime
+	BoardingExitDelay       common.RelativeLocktime
 	NostrDefaultRelays      []string
 	NoteUriPrefix           string
 	MarketHourStartTime     time.Time

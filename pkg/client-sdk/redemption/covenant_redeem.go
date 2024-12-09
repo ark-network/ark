@@ -184,7 +184,7 @@ func (r *CovenantRedeemBranch) offchainPath() ([]*psetv2.Pset, error) {
 
 func findCovenantSweepClosure(
 	vtxoTree tree.VtxoTree,
-) (*taproot.TapElementsLeaf, *common.Locktime, error) {
+) (*taproot.TapElementsLeaf, *common.RelativeLocktime, error) {
 	root, err := vtxoTree.Root()
 	if err != nil {
 		return nil, nil, err
@@ -196,7 +196,7 @@ func findCovenantSweepClosure(
 		return nil, nil, err
 	}
 
-	var locktime *common.Locktime
+	var locktime *common.RelativeLocktime
 	var sweepClosure *taproot.TapElementsLeaf
 	for _, tapLeaf := range tx.Inputs[0].TapLeafScript {
 		closure := &tree.CSVSigClosure{}

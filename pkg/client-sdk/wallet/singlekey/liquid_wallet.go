@@ -363,7 +363,7 @@ func (w *liquidWallet) getAddress(
 	boardingVtxoScript := tree.NewDefaultVtxoScript(
 		w.walletData.PubKey,
 		data.ServerPubKey,
-		common.Locktime{
+		common.RelativeLocktime{
 			Type:  data.UnilateralExitDelay.Type,
 			Value: data.UnilateralExitDelay.Value * 2,
 		},

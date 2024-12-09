@@ -27,12 +27,12 @@ import (
 type txBuilder struct {
 	wallet            ports.WalletService
 	net               common.Network
-	roundLifetime     common.Locktime
-	boardingExitDelay common.Locktime
+	roundLifetime     common.RelativeLocktime
+	boardingExitDelay common.RelativeLocktime
 }
 
 func NewTxBuilder(
-	wallet ports.WalletService, net common.Network, roundLifetime, boardingExitDelay common.Locktime,
+	wallet ports.WalletService, net common.Network, roundLifetime, boardingExitDelay common.RelativeLocktime,
 ) ports.TxBuilder {
 	return &txBuilder{wallet, net, roundLifetime, boardingExitDelay}
 }
@@ -413,25 +413,24 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 			return nil, err
 		}
 
-		var locktime *common.Locktime
+		locktime := common.AbsoluteLocktime(0)
 
 		switch c := closure.(type) {
 		case *tree.CLTVMultisigClosure:
-			locktime = &c.Locktime
+			locktime = c.Locktime
 		case *tree.MultisigClosure, *tree.ConditionMultisigClosure:
 		default:
 			return nil, fmt.Errorf("invalid forfeit closure script")
 		}
 
-		if locktime != nil {
-			switch locktime.Type {
-			case common.LocktimeTypeBlock:
-				if locktime.Value > blocktimestamp.Height {
-					return nil, fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block height)", locktime.Value, blocktimestamp.Height)
+		if locktime != 0 {
+			if !locktime.IsSeconds() {
+				if locktime > common.AbsoluteLocktime(blocktimestamp.Height) {
+					return nil, fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block height)", locktime, blocktimestamp.Height)
 				}
-			case common.LocktimeTypeSecond:
-				if locktime.Value > uint32(blocktimestamp.Time) {
-					return nil, fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block time)", locktime.Value, blocktimestamp.Time)
+			} else {
+				if locktime > common.AbsoluteLocktime(blocktimestamp.Time) {
+					return nil, fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block time)", locktime, blocktimestamp.Time)
 				}
 			}
 		}
@@ -504,6 +503,7 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 				feeAmount,
 				vtxoScript,
 				forfeitScript,
+				uint32(locktime),
 			)
 			if err != nil {
 				return nil, err
@@ -646,7 +646,7 @@ func (b *txBuilder) BuildRoundTx(
 	return roundTx, vtxoTree, connectorAddress, connectors, nil
 }
 
-func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime *common.Locktime, sweepInput ports.SweepInput, err error) {
+func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime *common.RelativeLocktime, sweepInput ports.SweepInput, err error) {
 	partialTx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
 	if err != nil {
 		return nil, nil, err
@@ -1257,7 +1257,7 @@ func castToOutpoints(inputs []ports.TxInput) []ports.TxOutpoint {
 	return outpoints
 }
 
-func extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.TaprootTapLeafScript, internalKey *secp256k1.PublicKey, lifetime *common.Locktime, err error) {
+func extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.TaprootTapLeafScript, internalKey *secp256k1.PublicKey, lifetime *common.RelativeLocktime, err error) {
 	for _, leaf := range input.TaprootLeafScript {
 		closure := &tree.CSVSigClosure{}
 		valid, err := closure.Decode(leaf.Script)

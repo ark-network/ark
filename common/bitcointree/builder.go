@@ -18,7 +18,7 @@ import (
 // CraftSharedOutput returns the taproot script and the amount of the initial root output
 func CraftSharedOutput(
 	cosigners []*secp256k1.PublicKey, server *secp256k1.PublicKey, receivers []tree.VtxoLeaf,
-	feeSatsPerNode uint64, roundLifetime common.Locktime,
+	feeSatsPerNode uint64, roundLifetime common.RelativeLocktime,
 ) ([]byte, int64, error) {
 	aggregatedKey, _, err := createAggregatedKeyWithSweep(
 		cosigners, server, roundLifetime,
@@ -45,7 +45,7 @@ func CraftSharedOutput(
 // BuildVtxoTree creates all the tree's transactions
 func BuildVtxoTree(
 	initialInput *wire.OutPoint, cosigners []*secp256k1.PublicKey, server *secp256k1.PublicKey, receivers []tree.VtxoLeaf,
-	feeSatsPerNode uint64, roundLifetime common.Locktime,
+	feeSatsPerNode uint64, roundLifetime common.RelativeLocktime,
 ) (tree.VtxoTree, error) {
 	aggregatedKey, sweepTapLeaf, err := createAggregatedKeyWithSweep(
 		cosigners, server, roundLifetime,
@@ -280,7 +280,7 @@ func createRootNode(
 }
 
 func createAggregatedKeyWithSweep(
-	cosigners []*secp256k1.PublicKey, server *secp256k1.PublicKey, roundLifetime common.Locktime,
+	cosigners []*secp256k1.PublicKey, server *secp256k1.PublicKey, roundLifetime common.RelativeLocktime,
 ) (*musig2.AggregateKey, *psbt.TaprootTapLeafScript, error) {
 	sweepClosure := &tree.CSVSigClosure{
 		MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{server}},

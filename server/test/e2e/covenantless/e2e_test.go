@@ -229,69 +229,279 @@ func TestReactToRedemptionOfRefreshedVtxos(t *testing.T) {
 }
 
 func TestReactToRedemptionOfVtxosSpentOOR(t *testing.T) {
-	ctx := context.Background()
-	sdkClient, grpcClient := setupArkSDK(t)
-	defer grpcClient.Close()
+	t.Run("default vtxo script", func(t *testing.T) {
+		ctx := context.Background()
+		sdkClient, grpcClient := setupArkSDK(t)
+		defer grpcClient.Close()
 
-	offchainAddress, boardingAddress, err := sdkClient.Receive(ctx)
-	require.NoError(t, err)
-
-	_, err = utils.RunCommand("nigiri", "faucet", boardingAddress)
-	require.NoError(t, err)
-
-	time.Sleep(5 * time.Second)
-
-	roundId, err := sdkClient.Settle(ctx)
-	require.NoError(t, err)
-
-	err = utils.GenerateBlock()
-	require.NoError(t, err)
-
-	_, err = sdkClient.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(offchainAddress, 1000)})
-	require.NoError(t, err)
-
-	_, err = sdkClient.Settle(ctx)
-	require.NoError(t, err)
-
-	time.Sleep(5 * time.Second)
-
-	_, spentVtxos, err := sdkClient.ListVtxos(ctx)
-	require.NoError(t, err)
-	require.NotEmpty(t, spentVtxos)
-
-	var vtxo client.Vtxo
-
-	for _, v := range spentVtxos {
-		if v.RoundTxid == roundId {
-			vtxo = v
-			break
-		}
-	}
-	require.NotEmpty(t, vtxo)
-
-	round, err := grpcClient.GetRound(ctx, vtxo.RoundTxid)
-	require.NoError(t, err)
-
-	expl := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
-
-	branch, err := redemption.NewCovenantlessRedeemBranch(expl, round.Tree, vtxo)
-	require.NoError(t, err)
-
-	txs, err := branch.RedeemPath()
-	require.NoError(t, err)
-
-	for _, tx := range txs {
-		_, err := expl.Broadcast(tx)
+		offchainAddress, boardingAddress, err := sdkClient.Receive(ctx)
 		require.NoError(t, err)
-	}
 
-	// give time for the server to detect and process the fraud
-	time.Sleep(50 * time.Second)
+		_, err = utils.RunCommand("nigiri", "faucet", boardingAddress)
+		require.NoError(t, err)
 
-	balance, err := sdkClient.Balance(ctx, false)
-	require.NoError(t, err)
+		time.Sleep(5 * time.Second)
 
-	require.Empty(t, balance.OnchainBalance.LockedAmount)
+		roundId, err := sdkClient.Settle(ctx)
+		require.NoError(t, err)
+
+		err = utils.GenerateBlock()
+		require.NoError(t, err)
+
+		_, err = sdkClient.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(offchainAddress, 1000)})
+		require.NoError(t, err)
+
+		_, err = sdkClient.Settle(ctx)
+		require.NoError(t, err)
+
+		time.Sleep(5 * time.Second)
+
+		_, spentVtxos, err := sdkClient.ListVtxos(ctx)
+		require.NoError(t, err)
+		require.NotEmpty(t, spentVtxos)
+
+		var vtxo client.Vtxo
+
+		for _, v := range spentVtxos {
+			if v.RoundTxid == roundId {
+				vtxo = v
+				break
+			}
+		}
+		require.NotEmpty(t, vtxo)
+
+		round, err := grpcClient.GetRound(ctx, vtxo.RoundTxid)
+		require.NoError(t, err)
+
+		expl := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
+
+		branch, err := redemption.NewCovenantlessRedeemBranch(expl, round.Tree, vtxo)
+		require.NoError(t, err)
+
+		txs, err := branch.RedeemPath()
+		require.NoError(t, err)
+
+		for _, tx := range txs {
+			_, err := expl.Broadcast(tx)
+			require.NoError(t, err)
+		}
+
+		// give time for the server to detect and process the fraud
+		time.Sleep(30 * time.Second)
+
+		balance, err := sdkClient.Balance(ctx, false)
+		require.NoError(t, err)
+
+		require.Empty(t, balance.OnchainBalance.LockedAmount)
+	})
+
+	t.Run("cltv vtxo script", func(t *testing.T) {
+		ctx := context.Background()
+		alice, grpcTransportClient := setupArkSDK(t)
+		defer grpcTransportClient.Close()
+
+		bobPrivKey, err := secp256k1.GeneratePrivateKey()
+		require.NoError(t, err)
+
+		configStore, err := inmemorystoreconfig.NewConfigStore()
+		require.NoError(t, err)
+
+		walletStore, err := inmemorystore.NewWalletStore()
+		require.NoError(t, err)
+
+		bobWallet, err := singlekeywallet.NewBitcoinWallet(
+			configStore,
+			walletStore,
+		)
+		require.NoError(t, err)
+
+		_, err = bobWallet.Create(ctx, utils.Password, hex.EncodeToString(bobPrivKey.Serialize()))
+		require.NoError(t, err)
+
+		_, err = bobWallet.Unlock(ctx, utils.Password)
+		require.NoError(t, err)
+
+		bobPubKey := bobPrivKey.PubKey()
+
+		// Fund Alice's account
+		offchainAddr, boardingAddress, err := alice.Receive(ctx)
+		require.NoError(t, err)
+
+		aliceAddr, err := common.DecodeAddress(offchainAddr)
+		require.NoError(t, err)
+
+		_, err = utils.RunCommand("nigiri", "faucet", boardingAddress)
+		require.NoError(t, err)
+
+		time.Sleep(5 * time.Second)
+
+		_, err = alice.Settle(ctx)
+		require.NoError(t, err)
+
+		spendableVtxos, _, err := alice.ListVtxos(ctx)
+		require.NoError(t, err)
+		require.NotEmpty(t, spendableVtxos)
+		require.Len(t, spendableVtxos, 1)
+
+		initialTreeVtxo := spendableVtxos[0]
+
+		time.Sleep(5 * time.Second)
+
+		const cltvBlocks = 10
+		const sendAmount = 10000
+
+		currentHeight, err := utils.GetBlockHeight(false)
+		require.NoError(t, err)
+
+		cltvLocktime := common.AbsoluteLocktime(currentHeight + cltvBlocks)
+		vtxoScript := bitcointree.TapscriptsVtxoScript{
+			TapscriptsVtxoScript: tree.TapscriptsVtxoScript{
+				Closures: []tree.Closure{
+					&tree.CLTVMultisigClosure{
+						Locktime: cltvLocktime,
+						MultisigClosure: tree.MultisigClosure{
+							PubKeys: []*secp256k1.PublicKey{bobPubKey},
+						},
+					},
+				},
+			},
+		}
+
+		vtxoTapKey, vtxoTapTree, err := vtxoScript.TapTree()
+		require.NoError(t, err)
+
+		closure := vtxoScript.ForfeitClosures()[0]
+
+		bobAddr := common.Address{
+			HRP:        "tark",
+			VtxoTapKey: vtxoTapKey,
+			Server:     aliceAddr.Server,
+		}
+
+		script, err := closure.Script()
+		require.NoError(t, err)
+
+		merkleProof, err := vtxoTapTree.GetTaprootMerkleProof(txscript.NewBaseTapLeaf(script).TapHash())
+		require.NoError(t, err)
+
+		ctrlBlock, err := txscript.ParseControlBlock(merkleProof.ControlBlock)
+		require.NoError(t, err)
+
+		tapscript := &waddrmgr.Tapscript{
+			ControlBlock:   ctrlBlock,
+			RevealedScript: merkleProof.Script,
+		}
+
+		bobAddrStr, err := bobAddr.Encode()
+		require.NoError(t, err)
+
+		redeemTx, err := alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddrStr, sendAmount)})
+		require.NoError(t, err)
+
+		redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
+		require.NoError(t, err)
+
+		var bobOutput *wire.TxOut
+		var bobOutputIndex uint32
+		for i, out := range redeemPtx.UnsignedTx.TxOut {
+			if bytes.Equal(out.PkScript[2:], schnorr.SerializePubKey(bobAddr.VtxoTapKey)) {
+				bobOutput = out
+				bobOutputIndex = uint32(i)
+				break
+			}
+		}
+		require.NotNil(t, bobOutput)
+
+		time.Sleep(2 * time.Second)
+
+		alicePkScript, err := common.P2TRScript(aliceAddr.VtxoTapKey)
+		require.NoError(t, err)
+
+		ptx, err := bitcointree.BuildRedeemTx(
+			[]common.VtxoInput{
+				{
+					Outpoint: &wire.OutPoint{
+						Hash:  redeemPtx.UnsignedTx.TxHash(),
+						Index: bobOutputIndex,
+					},
+					Tapscript:   tapscript,
+					WitnessSize: closure.WitnessSize(),
+					Amount:      bobOutput.Value,
+				},
+			},
+			[]*wire.TxOut{
+				{
+					Value:    bobOutput.Value - 500,
+					PkScript: alicePkScript,
+				},
+			},
+		)
+		require.NoError(t, err)
+
+		signedTx, err := bobWallet.SignTransaction(
+			ctx,
+			explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest),
+			ptx,
+		)
+		require.NoError(t, err)
+
+		// Generate blocks to pass the timelock
+		for i := 0; i < cltvBlocks+1; i++ {
+			err = utils.GenerateBlock()
+			require.NoError(t, err)
+			time.Sleep(1 * time.Second)
+		}
+
+		_, err = grpcTransportClient.SubmitRedeemTx(ctx, signedTx)
+		require.NoError(t, err)
+
+		tx, err := psbt.NewFromRawBytes(strings.NewReader(signedTx), true)
+		require.NoError(t, err)
+
+		txid := tx.UnsignedTx.TxHash().String()
+
+		aliceVtxos, _, err := alice.ListVtxos(ctx)
+		require.NoError(t, err)
+		require.NotEmpty(t, aliceVtxos)
+
+		found := false
+
+		for _, v := range aliceVtxos {
+			if v.Txid == txid && v.VOut == 0 {
+				found = true
+				break
+			}
+		}
+		require.True(t, found)
+
+		round, err := grpcTransportClient.GetRound(ctx, initialTreeVtxo.RoundTxid)
+		require.NoError(t, err)
+
+		expl := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
+
+		branch, err := redemption.NewCovenantlessRedeemBranch(expl, round.Tree, initialTreeVtxo)
+		require.NoError(t, err)
+
+		txs, err := branch.RedeemPath()
+		require.NoError(t, err)
+
+		for _, tx := range txs {
+			_, err := expl.Broadcast(tx)
+			require.NoError(t, err)
+		}
+
+		// give time for the server to detect and process the fraud
+		time.Sleep(20 * time.Second)
+
+		_, bobSpentVtxos, err := grpcTransportClient.ListVtxos(ctx, bobAddrStr)
+		require.NoError(t, err)
+		require.Len(t, bobSpentVtxos, 0)
+
+		// make sure the vtxo of alice is not spendable
+		aliceVtxos, _, err = alice.ListVtxos(ctx)
+		require.NoError(t, err)
+		require.Empty(t, aliceVtxos)
+	})
 }
 
 func TestChainOutOfRoundTransactions(t *testing.T) {
@@ -481,7 +691,7 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 		TapscriptsVtxoScript: tree.TapscriptsVtxoScript{
 			Closures: []tree.Closure{
 				&tree.CLTVMultisigClosure{
-					Locktime: common.Locktime{Type: common.LocktimeTypeBlock, Value: currentHeight + cltvBlocks},
+					Locktime: common.AbsoluteLocktime(currentHeight + cltvBlocks),
 					MultisigClosure: tree.MultisigClosure{
 						PubKeys: []*secp256k1.PublicKey{bobPubKey},
 					},
