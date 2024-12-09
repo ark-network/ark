@@ -1,0 +1,56 @@
+version: "1.0"
+
+description: "Simulation"
+
+clients:
+  - id: "client_0"
+    name: "Client0"
+  - id: "client_1"
+    name: "Client1"
+  - id: "client_2"
+    name: "Client2"
+  - id: "client_3"
+    name: "Client3"
+  - id: "client_4"
+    name: "Client4"
+
+rounds:
+  - number: 1
+    actions:
+      client_0:
+        - type: "Onboard"
+          amount: 0.00002000
+      client_1:
+        - type: "Onboard"
+          amount: 0.00002000
+      client_2:
+        - type: "Onboard"
+          amount: 0.00002000
+      client_3:
+        - type: "Onboard"
+          amount: 0.00002000
+
+  - number: 2
+    actions:
+      client_0:
+        - type: "SendAsync"
+          amount: 0.00002000
+          to: "client_3"
+      client_1:
+        - type: "SendAsync"
+          amount: 0.00002000
+          to: "client_3"
+      client_2:
+        - type: "SendAsync"
+          amount: 0.00002000
+          to: "client_3"
+
+  - number: 3
+    actions:
+      client_3:
+        - type: "Claim"
+
+  - number: 4
+    actions:
+      client_3:
+        - type: "Stats"
