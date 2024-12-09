@@ -44,18 +44,18 @@ For smaller tests, local deployment allows for a quick setup:
    ```bash
    nigiri start
    ```
+2. **Start Ark Server**:
+   ```bash
+   make arkd
+   ```
 
-2. **Configure Testing Scenario**:
+3.**Configure Testing Scenario**:
     - Create a simulation YAML file based on the `schema.yaml` format.
     - Check out the example configuration for guidance.
 
-3. **Run Simulation**:
+4. **Run Simulation**:
    ```bash
-   # Single-process mode:
-   make run-single
-
-   # Multi-process mode:
-   make run-multi
+   make run
    ```
 
 ### AWS Deployment

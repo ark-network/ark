@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	middleware "github.com/ark-network/ark/simulation/sdk-middleware"
-	"math"
 	"net/http"
 	"os"
 	"os/signal"
@@ -149,6 +148,7 @@ func (c *Client) startServer() {
 	mux.HandleFunc("/sendAsync", c.sendAsyncHandler)
 	mux.HandleFunc("/claim", c.claimHandler)
 	mux.HandleFunc("/balance", c.balanceHandler)
+	mux.HandleFunc("/redeem", c.redeemHandler)
 	mux.HandleFunc("/stats", c.statsHandler)
 
 	server := &http.Server{
@@ -214,7 +214,7 @@ func (c *Client) onboardHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Amount float64 `json:"amount"`
+		Amount uint32 `json:"amount"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -295,6 +295,43 @@ func (c *Client) balanceHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(balance)
 }
 
+func (c *Client) redeemHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Force             bool    `json:"force"`
+		Address           string  `json:"address"`
+		Amount            float64 `json:"amount"`
+		ComputeExpiration bool    `json:"compute_expiration"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if req.Force {
+		if err := c.ArkClient.UnilateralRedeem(r.Context()); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	txID, err := c.ArkClient.CollaborativeRedeem(r.Context(), req.Address, uint64(req.Amount*1e8), req.ComputeExpiration)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	resp := map[string]interface{}{"txid": txID}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
 func (c *Client) statsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -310,13 +347,13 @@ func (c *Client) statsHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(stats)
 }
 
-func (c *Client) onboard(url string, amount float64) error {
+func (c *Client) onboard(url string, amount uint32) error {
 	ctx := context.Background()
 
 	payload := struct {
 		Amount uint32 `json:"amount"`
 	}{
-		Amount: uint32(math.Round(amount * 100000000)),
+		Amount: amount,
 	}
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
