@@ -73,7 +73,7 @@ func UnspendableKey() *secp256k1.PublicKey {
 // - input and output amounts
 func ValidateVtxoTree(
 	tree VtxoTree, roundTx string, serverPubkey *secp256k1.PublicKey,
-	roundLifetime common.Locktime,
+	roundLifetime common.RelativeLocktime,
 ) error {
 	roundTransaction, err := psetv2.NewPsetFromBase64(roundTx)
 	if err != nil {
@@ -149,7 +149,7 @@ func ValidateVtxoTree(
 func validateNodeTransaction(
 	node Node, tree VtxoTree,
 	expectedInternalKey, expectedServerPubkey *secp256k1.PublicKey,
-	expectedLifetime common.Locktime,
+	expectedLifetime common.RelativeLocktime,
 ) error {
 	if node.Tx == "" {
 		return ErrNodeTxEmpty

@@ -162,9 +162,9 @@ func (a *arkClient) initWithWallet(
 		WalletType:                 args.Wallet.GetType(),
 		ClientType:                 args.ClientType,
 		Network:                    network,
-		RoundLifetime:              common.Locktime{Type: lifetimeType, Value: uint32(info.RoundLifetime)},
+		RoundLifetime:              common.RelativeLocktime{Type: lifetimeType, Value: uint32(info.RoundLifetime)},
 		RoundInterval:              info.RoundInterval,
-		UnilateralExitDelay:        common.Locktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
+		UnilateralExitDelay:        common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
 		Dust:                       info.Dust,
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 		ForfeitAddress:             info.ForfeitAddress,
@@ -239,9 +239,9 @@ func (a *arkClient) init(
 		WalletType:                 args.WalletType,
 		ClientType:                 args.ClientType,
 		Network:                    network,
-		RoundLifetime:              common.Locktime{Type: lifetimeType, Value: uint32(info.RoundLifetime)},
+		RoundLifetime:              common.RelativeLocktime{Type: lifetimeType, Value: uint32(info.RoundLifetime)},
 		RoundInterval:              info.RoundInterval,
-		UnilateralExitDelay:        common.Locktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
+		UnilateralExitDelay:        common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
 		Dust:                       info.Dust,
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 		ExplorerURL:                args.ExplorerURL,
@@ -367,7 +367,7 @@ func getWalletStore(storeType, datadir string) (walletstore.WalletStore, error) 
 	}
 }
 
-func getCreatedAtFromExpiry(roundLifetime common.Locktime, expiry time.Time) time.Time {
+func getCreatedAtFromExpiry(roundLifetime common.RelativeLocktime, expiry time.Time) time.Time {
 	return expiry.Add(-time.Duration(roundLifetime.Seconds()) * time.Second)
 }
 

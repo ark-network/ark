@@ -32,9 +32,9 @@ type covenantService struct {
 	network             common.Network
 	pubkey              *secp256k1.PublicKey
 	roundInterval       int64
-	roundLifetime       common.Locktime
-	unilateralExitDelay common.Locktime
-	boardingExitDelay   common.Locktime
+	roundLifetime       common.RelativeLocktime
+	unilateralExitDelay common.RelativeLocktime
+	boardingExitDelay   common.RelativeLocktime
 
 	nostrDefaultRelays []string
 
@@ -58,7 +58,7 @@ type covenantService struct {
 func NewCovenantService(
 	network common.Network,
 	roundInterval int64,
-	roundLifetime, unilateralExitDelay, boardingExitDelay common.Locktime,
+	roundLifetime, unilateralExitDelay, boardingExitDelay common.RelativeLocktime,
 	nostrDefaultRelays []string,
 	walletSvc ports.WalletService, repoManager ports.RepoManager,
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,

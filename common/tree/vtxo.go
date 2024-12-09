@@ -25,7 +25,7 @@ func ParseVtxoScript(scripts []string) (VtxoScript, error) {
 	return v, err
 }
 
-func NewDefaultVtxoScript(owner, server *secp256k1.PublicKey, exitDelay common.Locktime) *TapscriptsVtxoScript {
+func NewDefaultVtxoScript(owner, server *secp256k1.PublicKey, exitDelay common.RelativeLocktime) *TapscriptsVtxoScript {
 	return &TapscriptsVtxoScript{
 		[]Closure{
 			&CSVSigClosure{
@@ -72,7 +72,7 @@ func (v *TapscriptsVtxoScript) Decode(scripts []string) error {
 	return nil
 }
 
-func (v *TapscriptsVtxoScript) Validate(server *secp256k1.PublicKey, minLocktime common.Locktime) error {
+func (v *TapscriptsVtxoScript) Validate(server *secp256k1.PublicKey, minLocktime common.RelativeLocktime) error {
 	serverXonly := schnorr.SerializePubKey(server)
 	for _, forfeit := range v.ForfeitClosures() {
 		multisigClosure, ok := forfeit.(*MultisigClosure)
@@ -108,8 +108,8 @@ func (v *TapscriptsVtxoScript) Validate(server *secp256k1.PublicKey, minLocktime
 	return nil
 }
 
-func (v *TapscriptsVtxoScript) SmallestExitDelay() (*common.Locktime, error) {
-	var smallest *common.Locktime
+func (v *TapscriptsVtxoScript) SmallestExitDelay() (*common.RelativeLocktime, error) {
+	var smallest *common.RelativeLocktime
 
 	for _, closure := range v.Closures {
 		if csvClosure, ok := closure.(*CSVSigClosure); ok {

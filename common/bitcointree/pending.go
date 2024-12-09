@@ -4,9 +4,15 @@ import (
 	"fmt"
 
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
+)
+
+const (
+	// signal CLTV with input sequence number
+	cltvSequence = wire.MaxTxInSequenceNum - 1
 )
 
 func BuildRedeemTx(
@@ -18,8 +24,11 @@ func BuildRedeemTx(
 	}
 
 	ins := make([]*wire.OutPoint, 0, len(vtxos))
+	sequences := make([]uint32, 0, len(vtxos))
 	witnessUtxos := make(map[int]*wire.TxOut)
 	tapscripts := make(map[int]*psbt.TaprootTapLeafScript)
+
+	txLocktime := common.AbsoluteLocktime(0)
 
 	for index, vtxo := range vtxos {
 		rootHash := vtxo.Tapscript.ControlBlock.RootHash(vtxo.Tapscript.RevealedScript)
@@ -46,16 +55,41 @@ func BuildRedeemTx(
 			LeafVersion:  txscript.BaseLeafVersion,
 		}
 
-		ins = append(ins, vtxo.Outpoint)
-	}
+		closure, err := tree.DecodeClosure(vtxo.Tapscript.RevealedScript)
+		if err != nil {
+			return "", err
+		}
 
-	sequences := make([]uint32, len(ins))
-	for i := range sequences {
-		sequences[i] = wire.MaxTxInSequenceNum
+		// check if the closure is a CLTV multisig closure,
+		// if so, update the tx locktime
+		var locktime *common.AbsoluteLocktime
+		if cltv, ok := closure.(*tree.CLTVMultisigClosure); ok {
+			locktime = &cltv.Locktime
+			if locktime.IsSeconds() {
+				if txLocktime != 0 && !txLocktime.IsSeconds() {
+					return "", fmt.Errorf("mixed absolute locktime types")
+				}
+			} else {
+				if txLocktime != 0 && txLocktime.IsSeconds() {
+					return "", fmt.Errorf("mixed absolute locktime types")
+				}
+			}
+
+			if *locktime > txLocktime {
+				txLocktime = *locktime
+			}
+		}
+
+		ins = append(ins, vtxo.Outpoint)
+		if locktime != nil {
+			sequences = append(sequences, cltvSequence)
+		} else {
+			sequences = append(sequences, wire.MaxTxInSequenceNum)
+		}
 	}
 
 	redeemPtx, err := psbt.New(
-		ins, outputs, 2, 0, sequences,
+		ins, outputs, 2, uint32(txLocktime), sequences,
 	)
 	if err != nil {
 		return "", err

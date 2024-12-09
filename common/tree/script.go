@@ -73,7 +73,7 @@ type MultisigClosure struct {
 // the sighash type is SIGHASH_DEFAULT.
 type CSVSigClosure struct {
 	MultisigClosure
-	Locktime common.Locktime
+	Locktime common.RelativeLocktime
 }
 
 // CLTVMultisigClosure is a closure that contains a list of public keys and a
@@ -81,7 +81,7 @@ type CSVSigClosure struct {
 // the sighash type is SIGHASH_DEFAULT.
 type CLTVMultisigClosure struct {
 	MultisigClosure
-	Locktime common.Locktime
+	Locktime common.AbsoluteLocktime
 }
 
 // ConditionMultisigClosure is a closure that contains a condition and a
@@ -750,13 +750,8 @@ func (f *CLTVMultisigClosure) WitnessSize(extraWitnessSizes ...int) int {
 }
 
 func (d *CLTVMultisigClosure) Script() ([]byte, error) {
-	locktime, err := common.BIP68Sequence(d.Locktime)
-	if err != nil {
-		return nil, err
-	}
-
 	cltvScript, err := txscript.NewScriptBuilder().
-		AddInt64(int64(locktime)).
+		AddInt64(int64(d.Locktime)).
 		AddOps([]byte{
 			txscript.OP_CHECKLOCKTIMEVERIFY,
 			txscript.OP_DROP,
@@ -791,9 +786,12 @@ func (d *CLTVMultisigClosure) Decode(script []byte) (bool, error) {
 		locktime = locktime[1:]
 	}
 
-	locktimeValue, err := common.BIP68DecodeSequence(locktime)
-	if err != nil {
-		return false, err
+	var locktimeValue uint32
+	// read uint32 from bytes
+	if len(locktime) >= 3 {
+		locktimeValue = binary.LittleEndian.Uint32(locktime)
+	} else {
+		locktimeValue = uint32(binary.LittleEndian.Uint16(locktime))
 	}
 
 	multisigClosure := &MultisigClosure{}
@@ -806,7 +804,7 @@ func (d *CLTVMultisigClosure) Decode(script []byte) (bool, error) {
 		return false, nil
 	}
 
-	d.Locktime = *locktimeValue
+	d.Locktime = common.AbsoluteLocktime(locktimeValue)
 	d.MultisigClosure = *multisigClosure
 
 	return valid, nil

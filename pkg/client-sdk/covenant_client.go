@@ -21,6 +21,7 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcwallet/waddrmgr"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	log "github.com/sirupsen/logrus"
@@ -1471,6 +1472,11 @@ func (a *covenantArkClient) createAndSignForfeits(
 			return nil, err
 		}
 
+		if cltv, ok := forfeitClosure.(*tree.CLTVMultisigClosure); ok {
+			vtxoInput.TimeLock = uint32(cltv.Locktime)
+			vtxoInput.Sequence = wire.MaxTxInSequenceNum - 1
+		}
+
 		for _, connectorPset := range connectorsPsets {
 			forfeits, err := tree.BuildForfeitTxs(
 				connectorPset, vtxoInput, vtxo.Amount, a.Dust, feeAmount, vtxoOutputScript, forfeitPkScript,
@@ -1719,7 +1725,7 @@ func (a *covenantArkClient) getBoardingTxs(ctx context.Context) (transactions []
 }
 
 func vtxosToTxsCovenant(
-	roundLifetime common.Locktime, spendable, spent []client.Vtxo, boardingTxs []types.Transaction,
+	roundLifetime common.RelativeLocktime, spendable, spent []client.Vtxo, boardingTxs []types.Transaction,
 ) ([]types.Transaction, error) {
 	transactions := make([]types.Transaction, 0)
 	unconfirmedBoardingTxs := make([]types.Transaction, 0)

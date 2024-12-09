@@ -10,9 +10,9 @@ func BuildForfeitTxs(
 	connectorTx *psbt.Packet, vtxoInput *wire.OutPoint,
 	vtxoAmount, connectorAmount, feeAmount uint64,
 	vtxoScript, serverScript []byte,
+	txLocktime uint32,
 ) (forfeitTxs []*psbt.Packet, err error) {
 	version := int32(2)
-	locktime := uint32(0)
 	connectors, prevouts := getConnectorInputs(connectorTx, int64(connectorAmount))
 
 	for i, connectorInput := range connectors {
@@ -23,8 +23,19 @@ func BuildForfeitTxs(
 			Value:    int64(vtxoAmount) + int64(connectorAmount) - int64(feeAmount),
 			PkScript: serverScript,
 		}}
-		sequences := []uint32{wire.MaxTxInSequenceNum, wire.MaxTxInSequenceNum}
-		partialTx, err := psbt.New(ins, outs, version, locktime, sequences)
+
+		vtxoSequence := wire.MaxTxInSequenceNum
+		if txLocktime != 0 {
+			vtxoSequence = wire.MaxTxInSequenceNum - 1
+		}
+
+		partialTx, err := psbt.New(
+			ins,
+			outs,
+			version,
+			txLocktime,
+			[]uint32{wire.MaxTxInSequenceNum, vtxoSequence},
+		)
 		if err != nil {
 			return nil, err
 		}

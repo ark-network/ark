@@ -18,7 +18,12 @@ func BuildForfeitTxs(
 		connectorPrevout := prevouts[i]
 		asset := elementsutil.AssetHashFromBytes(connectorPrevout.Asset)
 
-		pset, err := psetv2.New(nil, nil, nil)
+		var nLocktime *uint32
+		if vtxoInput.TimeLock != 0 {
+			nLocktime = &vtxoInput.TimeLock
+		}
+
+		pset, err := psetv2.New(nil, nil, nLocktime)
 		if err != nil {
 			return nil, err
 		}
