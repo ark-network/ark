@@ -167,6 +167,15 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonECS_FullAccess
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess
         - arn:aws:iam::aws:policy/AmazonS3FullAccess
+      Policies:
+        - PolicyName: ServiceQuotasPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - servicequotas:GetServiceQuota
+                Resource: "*"
 
   OrchestratorInstanceProfile:
     Type: AWS::IAM::InstanceProfile

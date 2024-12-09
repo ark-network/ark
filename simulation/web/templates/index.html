@@ -213,7 +213,7 @@
                     <h2 class="text-2xl font-bold">YAML Preview</h2>
                     <div class="space-x-4">
                         <button type="button"
-                                hx-get="/simulation.yaml?type=schema"
+                                hx-get="/simulation?type=schema"
                                 hx-target="#simulation-preview"
                                 class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                             View Schema
@@ -430,13 +430,11 @@
         // Clear terminal
         terminal.innerHTML = '';
 
-        // Create form data
         const formData = new FormData(this);
         const params = new URLSearchParams(formData);
 
         console.log("Running simulation with params: " + params.toString());
 
-        // Create new EventSource with error handling
         try {
             eventSource = new EventSource('/run?' + params.toString());
             setupEventHandlers(eventSource);

@@ -164,7 +164,7 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func getSimulationFiles() ([]string, error) {
-	files, err := os.ReadDir(".")
+	files, err := os.ReadDir("./config")
 	if err != nil {
 		return nil, err
 	}
@@ -202,11 +202,6 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleRun(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodPost {
-		http.Redirect(w, r, "/run?"+r.Form.Encode(), http.StatusSeeOther)
-		return
-	}
-
 	simulationMu.Lock()
 	if simulationActive {
 		simulationMu.Unlock()
@@ -216,6 +211,12 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 	simulationActive = true
 	outputChan = make(chan string, 1000)
 	simulationMu.Unlock()
+	defer func() {
+		simulationMu.Lock()
+		simulationActive = false
+		outputChan = nil
+		simulationMu.Unlock()
+	}()
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -340,7 +341,7 @@ func runSimulation(
 
 	sendToFrontend("Starting simulation...")
 
-	simulationContent, err := os.ReadFile(simulationFile)
+	simulationContent, err := os.ReadFile(fmt.Sprintf("./config/%s", simulationFile))
 	if err != nil {
 		sendToFrontend(fmt.Sprintf("Error reading simulation file: %v", err))
 		return
@@ -470,6 +471,23 @@ func sendToFrontend(msg string) {
 }
 
 func handleSimulationGet(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("type") == "schema" {
+		content, err := os.ReadFile("./config/schema.yaml")
+		if err != nil {
+			log.WithError(err).Error("Failed to read simulation file")
+			http.Error(w, "Error reading simulation file", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		fmt.Fprintf(w, `<pre><code class="language-yaml">%s</code></pre>
+			<script>
+				hljs.highlightElement(document.querySelector('#simulation-preview code'));
+				// Ensure proper height
+				document.querySelector('#simulation-preview').style.height = 'auto';
+			</script>`, content)
+		return
+	}
+
 	simulationFile := r.URL.Query().Get("file")
 	if simulationFile == "" {
 		simFiles, err := getSimulationFiles()
@@ -490,7 +508,7 @@ func handleSimulationGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	content, err := os.ReadFile(simulationFile)
+	content, err := os.ReadFile(fmt.Sprintf("./config/%s", simulationFile))
 	if err != nil {
 		log.WithError(err).WithField("file", simulationFile).Error("Failed to read simulation file")
 		http.Error(w, "Error reading simulation file", http.StatusInternalServerError)
@@ -540,11 +558,11 @@ func handleSimulationPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = os.WriteFile(handler.Filename, content, 0644)
+	err = os.WriteFile(fmt.Sprintf("./config/%s", handler.Filename), content, 0644)
 	if err != nil {
 		log.WithError(err).WithFields(log.Fields{
 			"filename": handler.Filename,
-			"path":     "simulations/" + handler.Filename,
+			"path":     "./config/simulations/" + handler.Filename,
 		}).Error("Failed to save simulation file")
 		http.Error(w, "Failed to save file: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -561,7 +579,7 @@ func handleSimulationPost(w http.ResponseWriter, r *http.Request) {
 }
 
 func validateSimulation(content []byte) (*Simulation, error) {
-	schemaContent, err := os.ReadFile("schema.yaml")
+	schemaContent, err := os.ReadFile("./config/schema.yaml")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read schema file: %v", err)
 	}
