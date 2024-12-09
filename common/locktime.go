@@ -35,7 +35,7 @@ const (
 type AbsoluteLocktime uint32
 
 func (l AbsoluteLocktime) IsSeconds() bool {
-	return l > nLocktimeMinSeconds
+	return l >= nLocktimeMinSeconds
 }
 
 // RelativeLocktime represents a BIP68 relative timelock value
