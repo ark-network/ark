@@ -100,70 +100,6 @@
             background: #565b70;
         }
     </style>
-    <script>
-        document.addEventListener('htmx:afterSettle', function(evt) {
-            if (evt.detail.target.id === 'simulation-preview') {
-                hljs.highlightAll();
-            }
-        });
-
-        // Handle simulation file selection and preview
-        document.addEventListener('DOMContentLoaded', function() {
-            const simulationSelect = document.getElementById('simulation-file-select');
-            const uploadError = document.getElementById('upload-error');
-            const uploadErrorMessage = document.getElementById('upload-error-message');
-
-            // Handle HTMX errors
-            document.body.addEventListener('htmx:responseError', function(evt) {
-                const response = evt.detail.xhr;
-                if (response.status === 400) {
-                    // Show error message
-                    uploadErrorMessage.textContent = response.responseText;
-                    uploadError.classList.remove('hidden');
-                    // Hide error after 5 seconds
-                    setTimeout(() => {
-                        uploadError.classList.add('hidden');
-                    }, 5000);
-                }
-            });
-
-            // Hide error when starting new upload
-            document.querySelector('form[hx-encoding="multipart/form-data"]').addEventListener('htmx:beforeRequest', function() {
-                uploadError.classList.add('hidden');
-            });
-
-            if (simulationSelect) {
-                // Load simulation content when selection changes
-                simulationSelect.addEventListener('change', function() {
-                    const selectedFile = this.value;
-                    if (selectedFile) {
-                        fetch('/simulation?file=' + selectedFile)
-                            .then(response => response.text())
-                            .then(content => {
-                                const previewElement = document.getElementById('simulation-preview');
-                                if (previewElement) {
-                                    previewElement.innerHTML = '<pre><code class="language-yaml">' + 
-                                        content.replace(/&/g, '&amp;')
-                                              .replace(/</g, '&lt;')
-                                              .replace(/>/g, '&gt;') + 
-                                        '</code></pre>';
-                                    hljs.highlightAll();
-                                }
-                            })
-                            .catch(error => console.error('Error loading simulation:', error));
-                    }
-                });
-
-                // Handle successful file upload
-                document.body.addEventListener('htmx:afterSettle', function(evt) {
-                    if (evt.detail.target === simulationSelect) {
-                        // Trigger change event to load the preview for the newly selected file
-                        simulationSelect.dispatchEvent(new Event('change'));
-                    }
-                });
-            }
-        });
-    </script>
 </head>
 <body class="bg-gray-100 min-h-screen">
     <!-- Notification Container -->
@@ -299,6 +235,68 @@
 </div>
 
 <script>
+    document.addEventListener('htmx:afterSettle', function(evt) {
+        if (evt.detail.target.id === 'simulation-preview') {
+            hljs.highlightAll();
+        }
+    });
+
+    // Handle simulation file selection and preview
+    document.addEventListener('DOMContentLoaded', function() {
+        const simulationSelect = document.getElementById('simulation-file-select');
+        const uploadError = document.getElementById('upload-error');
+        const uploadErrorMessage = document.getElementById('upload-error-message');
+
+        // Handle HTMX errors
+        document.body.addEventListener('htmx:responseError', function(evt) {
+            const response = evt.detail.xhr;
+            if (response.status === 400) {
+                // Show error message
+                uploadErrorMessage.textContent = response.responseText;
+                uploadError.classList.remove('hidden');
+                // Hide error after 5 seconds
+                setTimeout(() => {
+                    uploadError.classList.add('hidden');
+                }, 5000);
+            }
+        });
+
+        // Hide error when starting new upload
+        document.querySelector('form[hx-encoding="multipart/form-data"]').addEventListener('htmx:beforeRequest', function() {
+            uploadError.classList.add('hidden');
+        });
+
+        if (simulationSelect) {
+            // Load simulation content when selection changes
+            simulationSelect.addEventListener('change', function() {
+                const selectedFile = this.value;
+                if (selectedFile) {
+                    fetch('/simulation?file=' + selectedFile)
+                        .then(response => response.text())
+                        .then(content => {
+                            const previewElement = document.getElementById('simulation-preview');
+                            if (previewElement) {
+                                previewElement.innerHTML = '<pre><code class="language-yaml">' +
+                                    content.replace(/&/g, '&amp;')
+                                        .replace(/</g, '&lt;')
+                                        .replace(/>/g, '&gt;') +
+                                    '</code></pre>';
+                                hljs.highlightAll();
+                            }
+                        })
+                        .catch(error => console.error('Error loading simulation:', error));
+                }
+            });
+
+            // Handle successful file upload
+            document.body.addEventListener('htmx:afterSettle', function(evt) {
+                if (evt.detail.target === simulationSelect) {
+                    // Trigger change event to load the preview for the newly selected file
+                    simulationSelect.dispatchEvent(new Event('change'));
+                }
+            });
+        }
+    });
     // Handle upload status messages
     document.body.addEventListener('htmx:afterSettle', function(evt) {
         const uploadStatus = document.getElementById('upload-status');
@@ -380,8 +378,14 @@
             // console.log('Ping received at:', new Date(lastPingTime).toISOString());
         });
 
+        es.addEventListener('close', function(e) {
+            console.log("EventSource connection closed");
+            closeEventSource();
+        });
+
         es.addEventListener('error', function(e) {
             if (e.data) {
+                console.log("EventSource error: " + e);
                 appendToTerminal(e.data, true);
             }
             if (es.readyState === EventSource.CLOSED) {
@@ -389,12 +393,20 @@
             }
         });
 
-        es.onerror = function(e) {
+        es.addEventListener('error', function(e) {
+            // Check if the connection is closed (readyState === 2)
             if (es.readyState === EventSource.CLOSED) {
-                appendToTerminal('Connection closed', true);
+                console.log("EventSource connection closed permanently");
+                appendToTerminal("Connection closed");
                 closeEventSource();
+                return;
             }
-        };
+
+            if (e.data) {
+                console.log("EventSource error: ", e);
+                appendToTerminal(e.data, true);
+            }
+        });
 
         // Start connection monitoring
         lastPingTime = Date.now();
@@ -422,9 +434,16 @@
         const formData = new FormData(this);
         const params = new URLSearchParams(formData);
 
-        // Create new EventSource
-        eventSource = new EventSource('/run?' + params.toString());
-        setupEventHandlers(eventSource);
+        console.log("Running simulation with params: " + params.toString());
+
+        // Create new EventSource with error handling
+        try {
+            eventSource = new EventSource('/run?' + params.toString());
+            setupEventHandlers(eventSource);
+        } catch (error) {
+            console.error("Failed to create EventSource:", error);
+            appendToTerminal("Failed to start simulation: " + error.message, true);
+        }
     });
 
     // Notification System

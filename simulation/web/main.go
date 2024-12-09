@@ -77,7 +77,6 @@ func main() {
 	}
 
 	r := mux.NewRouter()
-	r.Use(loggingMiddleware)
 	r.HandleFunc("/login", handleLogin).Methods("GET", "POST")
 	r.HandleFunc("/logout", handleLogout).Methods("GET")
 	r.HandleFunc("/", authMiddleware(handleIndex)).Methods("GET")
@@ -147,26 +146,6 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/login", http.StatusFound)
 }
 
-func loggingMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-
-		log.Infof("Request: %s %s", r.Method, r.URL.Path)
-		if r.URL.RawQuery != "" {
-			log.Infof("Query Params: %s", r.URL.RawQuery)
-		}
-
-		if err := r.ParseForm(); err == nil && len(r.Form) > 0 {
-			log.Infof("Form Data: %v", r.Form)
-		}
-
-		next.ServeHTTP(w, r)
-
-		duration := time.Since(start)
-		log.Infof("Completed %s %s in %v", r.Method, r.URL.Path, duration)
-	})
-}
-
 func getSimulationFiles() ([]string, error) {
 	files, err := os.ReadDir(".")
 	if err != nil {
@@ -206,6 +185,11 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleRun(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		http.Redirect(w, r, "/run?"+r.Form.Encode(), http.StatusSeeOther)
+		return
+	}
+
 	simulationMu.Lock()
 	if simulationActive {
 		simulationMu.Unlock()
@@ -213,22 +197,8 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	simulationActive = true
-	outputChan = make(chan string, 100)
+	outputChan = make(chan string, 1000)
 	simulationMu.Unlock()
-
-	defer func() {
-		simulationMu.Lock()
-		simulationActive = false
-		close(outputChan)
-		simulationMu.Unlock()
-	}()
-
-	if r.Method == http.MethodPost {
-		http.Redirect(w, r, "/run?"+r.Form.Encode(), http.StatusSeeOther)
-		return
-	}
-
-	outputChan = make(chan string)
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -274,47 +244,75 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	done := make(chan bool)
-	defer close(done)
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
 
+	simulationJobDone := make(chan struct{})
 	go func() {
-		select {
-		case <-r.Context().Done():
-			log.Infof("Request context done")
-			done <- true
-		}
+		runSimulation(ctx, simulationFile, aspUrl, explorerUrl, outputChan)
+		simulationJobDone <- struct{}{}
 	}()
-
-	go runSimulation(simulationFile, aspUrl, explorerUrl, outputChan)
 
 	pingTicker := time.NewTicker(10 * time.Second)
 	defer pingTicker.Stop()
 
+	reqCtxDone := false
 	for {
 		select {
-		case <-done:
-			return
+		case <-ctx.Done():
+			log.Infof("Request context done")
+			reqCtxDone = true
 		case <-pingTicker.C:
-			fmt.Fprintf(w, "event: ping\ndata: \n\n")
+			if _, err := fmt.Fprintf(w, "event: ping\ndata: \n\n"); err != nil {
+				log.Warnf("Error sending ping: %v", err)
+			}
 			flusher.Flush()
 		case msg, ok := <-outputChan:
 			if !ok {
 				return
 			}
-			fmt.Fprintf(w, "event: message\ndata: %s\n\n", msg)
+
+			if !reqCtxDone {
+				if _, err := fmt.Fprintf(w, "event: message\n"); err != nil {
+					log.Warnf("Error sending message: %v", err)
+					cancel()
+					return
+				}
+				lines := strings.Split(msg, "\n")
+				for _, line := range lines {
+					if _, err := fmt.Fprintf(w, "data: %s\n", line); err != nil {
+						log.Warnf("Error sending data msg: %v", err)
+						cancel()
+						return
+					}
+				}
+				if _, err := fmt.Fprintf(w, "\n"); err != nil {
+					log.Warnf("Error sending newline: %v", err)
+					cancel()
+					return
+				}
+				flusher.Flush()
+			}
+
+		case <-simulationJobDone:
+			simulationMu.Lock()
+			simulationActive = false
+			close(outputChan)
+			outputChan = nil
+			simulationMu.Unlock()
+			if _, err := fmt.Fprintf(w, "event: close\ndata: stream closed\n\n"); err != nil {
+				log.Warnf("Error sending end msg: %v", err)
+				cancel()
+				return
+			}
 			flusher.Flush()
+			log.Infof("Simulation job done")
+			return
 		}
 	}
 }
 
-func runSimulation(simulationFile, aspUrl, explorerUrl string, outputChan chan string) {
-	defer func() {
-		simulationMu.Lock()
-		simulationActive = false
-		close(outputChan)
-		simulationMu.Unlock()
-	}()
-
+func runSimulation(ctx context.Context, simulationFile, aspUrl, explorerUrl string, outputChan chan string) {
 	sendToFrontend("Starting simulation...")
 
 	simulationContent, err := os.ReadFile(simulationFile)
@@ -329,7 +327,7 @@ func runSimulation(simulationFile, aspUrl, explorerUrl string, outputChan chan s
 		return
 	}
 
-	err = startClients(aspUrl, explorerUrl, *subnetIDsEnv, *securityGroupIDsEnv, simulation.Clients, outputChan)
+	err = startClients(ctx, aspUrl, explorerUrl, *subnetIDsEnv, *securityGroupIDsEnv, simulation.Clients, outputChan)
 	if err != nil {
 		sendToFrontend(fmt.Sprintf("Error starting clients: %v", err))
 		return
@@ -342,11 +340,11 @@ func runSimulation(simulationFile, aspUrl, explorerUrl string, outputChan chan s
 	}
 
 	sendToFrontend("Waiting for clients to send addresses...")
-	waitForClientsToSendAddresses(clientIDs)
+	waitForClientsToSendAddresses(ctx, clientIDs)
 	sendToFrontend("All clients have sent their addresses")
 
 	sendToFrontend("Starting simulation execution...")
-	executeSimulation(simulation, outputChan)
+	executeSimulation(ctx, simulation, outputChan)
 	sendToFrontend("Simulation execution completed")
 
 	sendToFrontend("Stopping clients...")
@@ -600,7 +598,11 @@ type Simulation struct {
 	Rounds  []Round        `json:"rounds"`
 }
 
-func startClients(aspUrl, explorerUrl, subnetID, securityGroup string, clientConfigs []ClientConfig, outputChan chan string) error {
+func startClients(
+	ctx context.Context,
+	aspUrl, explorerUrl, subnetID, securityGroup string,
+	clientConfigs []ClientConfig, outputChan chan string,
+) error {
 	awsRegion := "eu-central-1"
 	cfg, err := config.LoadDefaultConfig(
 		context.TODO(),
@@ -628,14 +630,19 @@ func startClients(aspUrl, explorerUrl, subnetID, securityGroup string, clientCon
 		log.Infof("Task Definition details: %+v", taskDefDetails.TaskDefinition)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 
 	waitForTaskRunning := func(taskArn string, clientID string) error {
 		for {
 			select {
-			case <-ctx.Done():
-				return fmt.Errorf("timeout waiting for task to start")
+			case <-ctxWithTimeout.Done():
+				if errors.Is(ctxWithTimeout.Err(), context.DeadlineExceeded) {
+					log.Infof("waitForTaskRunning: context deadline exceeded, stopping startClients")
+				} else if errors.Is(ctxWithTimeout.Err(), context.Canceled) {
+					log.Infof("waitForTaskRunning: parent context canceled, stopping startClients")
+				}
+				return ctxWithTimeout.Err()
 			default:
 				describeTasksInput := &ecs.DescribeTasksInput{
 					Cluster: aws.String(clusterName),
@@ -690,122 +697,132 @@ func startClients(aspUrl, explorerUrl, subnetID, securityGroup string, clientCon
 	)
 	g := new(errgroup.Group)
 	for _, client := range clientConfigs {
-		client := client
-		g.Go(func() error {
-			clientID := client.ID
-			outputChan <- fmt.Sprintf("Starting client %s...", clientID)
-			clientEnvVars := []ecsTypes.KeyValuePair{
-				{
-					Name:  aws.String("CLIENT_ID"),
-					Value: aws.String(clientID),
-				},
-				{
-					Name:  aws.String("SIGNET_ASP_URL"),
-					Value: aws.String(aspUrl),
-				},
-				{
-					Name:  aws.String("SIGNET_EXPLORER_URL"),
-					Value: aws.String(explorerUrl),
-				},
+		select {
+		case <-ctxWithTimeout.Done():
+			if errors.Is(ctxWithTimeout.Err(), context.DeadlineExceeded) {
+				log.Infof("waitForTaskRunning: context deadline exceeded, stopping startClients")
+			} else if errors.Is(ctxWithTimeout.Err(), context.Canceled) {
+				log.Infof("waitForTaskRunning: parent context canceled, stopping startClients")
 			}
-
-			containerOverrides := ecsTypes.ContainerOverride{
-				Name:        aws.String("ClientContainer"),
-				Environment: clientEnvVars,
-			}
-
-			runTaskInput := &ecs.RunTaskInput{
-				Cluster:        aws.String(clusterName),
-				LaunchType:     ecsTypes.LaunchTypeFargate,
-				TaskDefinition: aws.String(taskDefinition),
-				NetworkConfiguration: &ecsTypes.NetworkConfiguration{
-					AwsvpcConfiguration: &ecsTypes.AwsVpcConfiguration{
-						Subnets:        []string{subnetID},
-						SecurityGroups: []string{securityGroup},
-						AssignPublicIp: ecsTypes.AssignPublicIpEnabled,
+			return ctxWithTimeout.Err()
+		default:
+			client := client
+			g.Go(func() error {
+				clientID := client.ID
+				outputChan <- fmt.Sprintf("Starting client %s...", clientID)
+				clientEnvVars := []ecsTypes.KeyValuePair{
+					{
+						Name:  aws.String("CLIENT_ID"),
+						Value: aws.String(clientID),
 					},
-				},
-				Overrides: &ecsTypes.TaskOverride{
-					ContainerOverrides: []ecsTypes.ContainerOverride{containerOverrides},
-				},
-			}
-
-			var result *ecs.RunTaskOutput
-			backoff := 2 * time.Second
-			for i := 0; i < 5; i++ {
-				result, err = ecsClient.RunTask(context.TODO(), runTaskInput)
-				if err != nil {
-					return fmt.Errorf("failed to start client %s: %v", clientID, err)
+					{
+						Name:  aws.String("SIGNET_ASP_URL"),
+						Value: aws.String(aspUrl),
+					},
+					{
+						Name:  aws.String("SIGNET_EXPLORER_URL"),
+						Value: aws.String(explorerUrl),
+					},
 				}
 
-				if len(result.Failures) > 0 {
-					for _, failure := range result.Failures {
-						outputChan <- fmt.Sprintf(
-							"Warning: Failed to start client %s: %s, %s",
-							clientID,
-							aws.ToString(failure.Reason),
-							aws.ToString(failure.Detail),
-						)
-						log.Warnf(
-							"Failed to start client %s: %s, %s",
-							clientID,
-							aws.ToString(failure.Reason),
-							aws.ToString(failure.Detail),
-						)
+				containerOverrides := ecsTypes.ContainerOverride{
+					Name:        aws.String("ClientContainer"),
+					Environment: clientEnvVars,
+				}
+
+				runTaskInput := &ecs.RunTaskInput{
+					Cluster:        aws.String(clusterName),
+					LaunchType:     ecsTypes.LaunchTypeFargate,
+					TaskDefinition: aws.String(taskDefinition),
+					NetworkConfiguration: &ecsTypes.NetworkConfiguration{
+						AwsvpcConfiguration: &ecsTypes.AwsVpcConfiguration{
+							Subnets:        []string{subnetID},
+							SecurityGroups: []string{securityGroup},
+							AssignPublicIp: ecsTypes.AssignPublicIpEnabled,
+						},
+					},
+					Overrides: &ecsTypes.TaskOverride{
+						ContainerOverrides: []ecsTypes.ContainerOverride{containerOverrides},
+					},
+				}
+
+				var result *ecs.RunTaskOutput
+				backoff := 2 * time.Second
+				for i := 0; i < 5; i++ {
+					result, err = ecsClient.RunTask(context.TODO(), runTaskInput)
+					if err != nil {
+						return fmt.Errorf("failed to start client %s: %v", clientID, err)
 					}
+
+					if len(result.Failures) > 0 {
+						for _, failure := range result.Failures {
+							outputChan <- fmt.Sprintf(
+								"Warning: Failed to start client %s: %s, %s",
+								clientID,
+								aws.ToString(failure.Reason),
+								aws.ToString(failure.Detail),
+							)
+							log.Warnf(
+								"Failed to start client %s: %s, %s",
+								clientID,
+								aws.ToString(failure.Reason),
+								aws.ToString(failure.Detail),
+							)
+						}
+						time.Sleep(backoff)
+						backoff *= 2
+						continue
+					}
+
+					if len(result.Tasks) > 0 {
+						break
+					}
+					outputChan <- fmt.Sprintf("Warning: No tasks created for client %s, retrying... (%d/5)", clientID, i+1)
+					log.Warnf("No tasks created for client %s, retrying... (%d/5)", clientID, i+1)
 					time.Sleep(backoff)
 					backoff *= 2
-					continue
 				}
 
-				if len(result.Tasks) > 0 {
-					break
+				if len(result.Tasks) == 0 {
+					return fmt.Errorf("no tasks created for client %s after 5 attempts", clientID)
 				}
-				outputChan <- fmt.Sprintf("Warning: No tasks created for client %s, retrying... (%d/5)", clientID, i+1)
-				log.Warnf("No tasks created for client %s, retrying... (%d/5)", clientID, i+1)
-				time.Sleep(backoff)
-				backoff *= 2
-			}
 
-			if len(result.Tasks) == 0 {
-				return fmt.Errorf("no tasks created for client %s after 5 attempts", clientID)
-			}
+				taskArn := *result.Tasks[0].TaskArn
+				outputChan <- fmt.Sprintf("Started client %s with task ARN: %s", clientID, taskArn)
+				log.Infof("Started client %s with task ARN: %s", clientID, taskArn)
 
-			taskArn := *result.Tasks[0].TaskArn
-			outputChan <- fmt.Sprintf("Started client %s with task ARN: %s", clientID, taskArn)
-			log.Infof("Started client %s with task ARN: %s", clientID, taskArn)
+				tasksMu.Lock()
+				tasks = append(tasks, struct {
+					ClientID string
+					TaskArn  string
+				}{
+					ClientID: clientID,
+					TaskArn:  taskArn,
+				})
+				tasksMu.Unlock()
 
-			tasksMu.Lock()
-			tasks = append(tasks, struct {
-				ClientID string
-				TaskArn  string
-			}{
-				ClientID: clientID,
-				TaskArn:  taskArn,
+				if err := waitForTaskRunning(taskArn, clientID); err != nil {
+					return fmt.Errorf("client %s failed to start: %v", clientID, err)
+				}
+
+				ip, err := waitForTaskRunningAndGetIP(ctx, ecsClient, clusterName, taskArn)
+				if err != nil {
+					return fmt.Errorf("error waiting for client %s task: %v", clientID, err)
+				}
+
+				clientsMu.Lock()
+				clients[clientID] = &ClientInfo{
+					ID:        clientID,
+					TaskARN:   taskArn,
+					IPAddress: ip,
+				}
+				clientsMu.Unlock()
+
+				outputChan <- fmt.Sprintf("Client %s successfully started and running with IP: %s", clientID, ip)
+				log.Infof("Client %s successfully started and running", clientID)
+				return nil
 			})
-			tasksMu.Unlock()
-
-			if err := waitForTaskRunning(taskArn, clientID); err != nil {
-				return fmt.Errorf("client %s failed to start: %v", clientID, err)
-			}
-
-			ip, err := waitForTaskRunningAndGetIP(ctx, ecsClient, clusterName, taskArn)
-			if err != nil {
-				return fmt.Errorf("error waiting for client %s task: %v", clientID, err)
-			}
-
-			clientsMu.Lock()
-			clients[clientID] = &ClientInfo{
-				ID:        clientID,
-				TaskARN:   taskArn,
-				IPAddress: ip,
-			}
-			clientsMu.Unlock()
-
-			outputChan <- fmt.Sprintf("Client %s successfully started and running with IP: %s", clientID, ip)
-			log.Infof("Client %s successfully started and running", clientID)
-			return nil
-		})
+		}
 		time.Sleep(1 * time.Second)
 	}
 
@@ -825,7 +842,12 @@ func startClients(aspUrl, explorerUrl, subnetID, securityGroup string, clientCon
 
 		for {
 			select {
-			case <-ctx.Done():
+			case <-ctxWithTimeout.Done():
+				if errors.Is(ctxWithTimeout.Err(), context.DeadlineExceeded) {
+					log.Infof("waitForTaskRunning: context deadline exceeded, stopping startClients")
+				} else if errors.Is(ctxWithTimeout.Err(), context.Canceled) {
+					log.Infof("waitForTaskRunning: parent context canceled, stopping startClients")
+				}
 				return
 			case <-ticker.C:
 				tasksMu.Lock()
@@ -904,16 +926,23 @@ func waitForTaskRunningAndGetIP(ctx context.Context, ecsClient *ecs.Client, clus
 	}
 }
 
-func waitForClientsToSendAddresses(clientIDs []string) {
+func waitForClientsToSendAddresses(ctx context.Context, clientIDs []string) {
 	log.Info("Waiting for clients to send addresses...")
-	timeout := time.After(2 * time.Minute)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-timeout:
-			log.Fatal("Timeout waiting for client addresses")
+		case <-ctxWithTimeout.Done():
+			if errors.Is(ctxWithTimeout.Err(), context.DeadlineExceeded) {
+				log.Infof("waitForClientsToSendAddresses: context deadline exceeded, stopping startClients")
+			} else if errors.Is(ctxWithTimeout.Err(), context.Canceled) {
+				log.Infof("waitForClientsToSendAddresses: parent context canceled, stopping startClients")
+			}
+			return
 		case <-ticker.C:
 			allReceived := true
 			clientsMu.Lock()
@@ -977,7 +1006,7 @@ type PageData struct {
 	ErrorMessage    string
 }
 
-func executeSimulation(simulation *Simulation, outputChan chan string) {
+func executeSimulation(ctx context.Context, simulation *Simulation, outputChan chan string) {
 	for i, round := range simulation.Rounds {
 		waitRound := false
 		roundMsg := fmt.Sprintf("Executing Round %d at %s", round.Number, time.Now().Format("2006-01-02 15:04:05"))
@@ -1012,13 +1041,13 @@ func executeSimulation(simulation *Simulation, outputChan chan string) {
 						return
 					}
 
-					ctx, cancel := context.WithTimeout(
-						context.Background(),
+					ctxWithTimeout, cancel := context.WithTimeout(
+						ctx,
 						3*time.Minute,
 					)
 					defer cancel()
 
-					if err := executeClientAction(ctx, clientID, actionType, action); err != nil {
+					if err := executeClientAction(ctxWithTimeout, clientID, actionType, action); err != nil {
 						outputChan <- fmt.Sprintf("Warning: Error executing %s for client %s: %v", actionType, clientID, err)
 					} else {
 						outputChan <- fmt.Sprintf("Successfully executed %s for client %s", actionType, clientID)
@@ -1201,3 +1230,8 @@ func sendRequest(ctx context.Context, urlStr string, method string, payload inte
 // waitForClientsToSendAddress calls log.Fatal should just close chan etc
 // clients sends data on wrong port 9000 -> either start webserver on 9000 or change client port -> DONE
 // handle panic
+// revisit schema, remove server setup, check rounds timeout, add balance, add uni/col redeem, add desc of simulation
+// remove remote folder, leave only local client per process, refactor readme, refactor ec2 starting script maybe
+// check ECS quota to limit num of clients
+// check how to implement more containers per ecs task
+// handling context timeout with parent context
