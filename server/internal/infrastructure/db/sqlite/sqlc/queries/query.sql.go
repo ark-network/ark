@@ -282,6 +282,121 @@ func (q *Queries) SelectNotRedeemedVtxosWithPubkey(ctx context.Context, pubkey s
 	return items, nil
 }
 
+const selectRequestReceiversById = `-- name: SelectRequestReceiversById :many
+SELECT request_receiver_vw.request_id, request_receiver_vw.pubkey, request_receiver_vw.onchain_address, request_receiver_vw.amount
+FROM request_receiver_vw
+WHERE request_id = ?
+`
+
+type SelectRequestReceiversByIdRow struct {
+	RequestReceiverVw RequestReceiverVw
+}
+
+func (q *Queries) SelectRequestReceiversById(ctx context.Context, requestID sql.NullString) ([]SelectRequestReceiversByIdRow, error) {
+	rows, err := q.db.QueryContext(ctx, selectRequestReceiversById, requestID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SelectRequestReceiversByIdRow
+	for rows.Next() {
+		var i SelectRequestReceiversByIdRow
+		if err := rows.Scan(
+			&i.RequestReceiverVw.RequestID,
+			&i.RequestReceiverVw.Pubkey,
+			&i.RequestReceiverVw.OnchainAddress,
+			&i.RequestReceiverVw.Amount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const selectRequestVtxosById = `-- name: SelectRequestVtxosById :many
+SELECT request_vtxo_vw.txid, request_vtxo_vw.vout, request_vtxo_vw.pubkey, request_vtxo_vw.amount, request_vtxo_vw.round_tx, request_vtxo_vw.spent_by, request_vtxo_vw.spent, request_vtxo_vw.redeemed, request_vtxo_vw.swept, request_vtxo_vw.expire_at, request_vtxo_vw.created_at, request_vtxo_vw.request_id, request_vtxo_vw.redeem_tx
+FROM request_vtxo_vw
+WHERE request_id = ?
+`
+
+type SelectRequestVtxosByIdRow struct {
+	RequestVtxoVw RequestVtxoVw
+}
+
+func (q *Queries) SelectRequestVtxosById(ctx context.Context, requestID sql.NullString) ([]SelectRequestVtxosByIdRow, error) {
+	rows, err := q.db.QueryContext(ctx, selectRequestVtxosById, requestID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SelectRequestVtxosByIdRow
+	for rows.Next() {
+		var i SelectRequestVtxosByIdRow
+		if err := rows.Scan(
+			&i.RequestVtxoVw.Txid,
+			&i.RequestVtxoVw.Vout,
+			&i.RequestVtxoVw.Pubkey,
+			&i.RequestVtxoVw.Amount,
+			&i.RequestVtxoVw.RoundTx,
+			&i.RequestVtxoVw.SpentBy,
+			&i.RequestVtxoVw.Spent,
+			&i.RequestVtxoVw.Redeemed,
+			&i.RequestVtxoVw.Swept,
+			&i.RequestVtxoVw.ExpireAt,
+			&i.RequestVtxoVw.CreatedAt,
+			&i.RequestVtxoVw.RequestID,
+			&i.RequestVtxoVw.RedeemTx,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const selectRoundDataById = `-- name: SelectRoundDataById :one
+SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, round.unsigned_tx, round.connector_address, round.dust_amount, round.version, round.swept
+FROM round
+WHERE id = ?
+`
+
+type SelectRoundDataByIdRow struct {
+	Round Round
+}
+
+func (q *Queries) SelectRoundDataById(ctx context.Context, id string) (SelectRoundDataByIdRow, error) {
+	row := q.db.QueryRowContext(ctx, selectRoundDataById, id)
+	var i SelectRoundDataByIdRow
+	err := row.Scan(
+		&i.Round.ID,
+		&i.Round.StartingTimestamp,
+		&i.Round.EndingTimestamp,
+		&i.Round.Ended,
+		&i.Round.Failed,
+		&i.Round.StageCode,
+		&i.Round.Txid,
+		&i.Round.UnsignedTx,
+		&i.Round.ConnectorAddress,
+		&i.Round.DustAmount,
+		&i.Round.Version,
+		&i.Round.Swept,
+	)
+	return i, err
+}
+
 const selectRoundIds = `-- name: SelectRoundIds :many
 SELECT id FROM round
 `
@@ -331,6 +446,82 @@ func (q *Queries) SelectRoundIdsInRange(ctx context.Context, arg SelectRoundIdsI
 			return nil, err
 		}
 		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const selectRoundRequestsById = `-- name: SelectRoundRequestsById :many
+SELECT round_request_vw.id, round_request_vw.round_id
+FROM round_request_vw
+WHERE round_id = ?
+`
+
+type SelectRoundRequestsByIdRow struct {
+	RoundRequestVw RoundRequestVw
+}
+
+func (q *Queries) SelectRoundRequestsById(ctx context.Context, roundID sql.NullString) ([]SelectRoundRequestsByIdRow, error) {
+	rows, err := q.db.QueryContext(ctx, selectRoundRequestsById, roundID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SelectRoundRequestsByIdRow
+	for rows.Next() {
+		var i SelectRoundRequestsByIdRow
+		if err := rows.Scan(&i.RoundRequestVw.ID, &i.RoundRequestVw.RoundID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const selectRoundTxsById = `-- name: SelectRoundTxsById :many
+SELECT round_tx_vw.id, round_tx_vw.tx, round_tx_vw.round_id, round_tx_vw.type, round_tx_vw.position, round_tx_vw.txid, round_tx_vw.tree_level, round_tx_vw.parent_txid, round_tx_vw.is_leaf
+FROM round_tx_vw
+WHERE round_id = ?
+`
+
+type SelectRoundTxsByIdRow struct {
+	RoundTxVw RoundTxVw
+}
+
+func (q *Queries) SelectRoundTxsById(ctx context.Context, roundID sql.NullString) ([]SelectRoundTxsByIdRow, error) {
+	rows, err := q.db.QueryContext(ctx, selectRoundTxsById, roundID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SelectRoundTxsByIdRow
+	for rows.Next() {
+		var i SelectRoundTxsByIdRow
+		if err := rows.Scan(
+			&i.RoundTxVw.ID,
+			&i.RoundTxVw.Tx,
+			&i.RoundTxVw.RoundID,
+			&i.RoundTxVw.Type,
+			&i.RoundTxVw.Position,
+			&i.RoundTxVw.Txid,
+			&i.RoundTxVw.TreeLevel,
+			&i.RoundTxVw.ParentTxid,
+			&i.RoundTxVw.IsLeaf,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -513,82 +704,27 @@ func (q *Queries) SelectRoundWithRoundTxId(ctx context.Context, txid string) ([]
 	return items, nil
 }
 
-const selectSweepableRounds = `-- name: SelectSweepableRounds :many
-SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, round.unsigned_tx, round.connector_address, round.dust_amount, round.version, round.swept,
-       round_request_vw.id, round_request_vw.round_id,
-       round_tx_vw.id, round_tx_vw.tx, round_tx_vw.round_id, round_tx_vw.type, round_tx_vw.position, round_tx_vw.txid, round_tx_vw.tree_level, round_tx_vw.parent_txid, round_tx_vw.is_leaf,
-       request_receiver_vw.request_id, request_receiver_vw.pubkey, request_receiver_vw.onchain_address, request_receiver_vw.amount,
-       request_vtxo_vw.txid, request_vtxo_vw.vout, request_vtxo_vw.pubkey, request_vtxo_vw.amount, request_vtxo_vw.round_tx, request_vtxo_vw.spent_by, request_vtxo_vw.spent, request_vtxo_vw.redeemed, request_vtxo_vw.swept, request_vtxo_vw.expire_at, request_vtxo_vw.created_at, request_vtxo_vw.request_id, request_vtxo_vw.redeem_tx
-FROM round
-         LEFT OUTER JOIN round_request_vw ON round.id=round_request_vw.round_id
-         LEFT OUTER JOIN round_tx_vw ON round.id=round_tx_vw.round_id
-         LEFT OUTER JOIN request_receiver_vw ON round_request_vw.id=request_receiver_vw.request_id
-         LEFT OUTER JOIN request_vtxo_vw ON round_request_vw.id=request_vtxo_vw.request_id
-WHERE round.swept = false AND round.ended = true AND round.failed = false
+const selectSweepableRoundIds = `-- name: SelectSweepableRoundIds :many
+SELECT id 
+FROM round 
+WHERE swept = false 
+  AND ended = true 
+  AND failed = false
 `
 
-type SelectSweepableRoundsRow struct {
-	Round             Round
-	RoundRequestVw    RoundRequestVw
-	RoundTxVw         RoundTxVw
-	RequestReceiverVw RequestReceiverVw
-	RequestVtxoVw     RequestVtxoVw
-}
-
-func (q *Queries) SelectSweepableRounds(ctx context.Context) ([]SelectSweepableRoundsRow, error) {
-	rows, err := q.db.QueryContext(ctx, selectSweepableRounds)
+func (q *Queries) SelectSweepableRoundIds(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, selectSweepableRoundIds)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []SelectSweepableRoundsRow
+	var items []string
 	for rows.Next() {
-		var i SelectSweepableRoundsRow
-		if err := rows.Scan(
-			&i.Round.ID,
-			&i.Round.StartingTimestamp,
-			&i.Round.EndingTimestamp,
-			&i.Round.Ended,
-			&i.Round.Failed,
-			&i.Round.StageCode,
-			&i.Round.Txid,
-			&i.Round.UnsignedTx,
-			&i.Round.ConnectorAddress,
-			&i.Round.DustAmount,
-			&i.Round.Version,
-			&i.Round.Swept,
-			&i.RoundRequestVw.ID,
-			&i.RoundRequestVw.RoundID,
-			&i.RoundTxVw.ID,
-			&i.RoundTxVw.Tx,
-			&i.RoundTxVw.RoundID,
-			&i.RoundTxVw.Type,
-			&i.RoundTxVw.Position,
-			&i.RoundTxVw.Txid,
-			&i.RoundTxVw.TreeLevel,
-			&i.RoundTxVw.ParentTxid,
-			&i.RoundTxVw.IsLeaf,
-			&i.RequestReceiverVw.RequestID,
-			&i.RequestReceiverVw.Pubkey,
-			&i.RequestReceiverVw.OnchainAddress,
-			&i.RequestReceiverVw.Amount,
-			&i.RequestVtxoVw.Txid,
-			&i.RequestVtxoVw.Vout,
-			&i.RequestVtxoVw.Pubkey,
-			&i.RequestVtxoVw.Amount,
-			&i.RequestVtxoVw.RoundTx,
-			&i.RequestVtxoVw.SpentBy,
-			&i.RequestVtxoVw.Spent,
-			&i.RequestVtxoVw.Redeemed,
-			&i.RequestVtxoVw.Swept,
-			&i.RequestVtxoVw.ExpireAt,
-			&i.RequestVtxoVw.CreatedAt,
-			&i.RequestVtxoVw.RequestID,
-			&i.RequestVtxoVw.RedeemTx,
-		); err != nil {
+		var id string
+		if err := rows.Scan(&id); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

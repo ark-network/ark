@@ -263,34 +263,76 @@ func (r *roundRepository) GetRoundWithTxid(ctx context.Context, txid string) (*d
 }
 
 func (r *roundRepository) GetSweepableRounds(ctx context.Context) ([]domain.Round, error) {
-	rows, err := r.querier.SelectSweepableRounds(ctx)
+	// First get the sweepable round IDs
+	ids, err := r.querier.SelectSweepableRoundIds(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	rvs := make([]combinedRow, 0, len(rows))
-	for _, row := range rows {
-		rvs = append(rvs, combinedRow{
-			round:    row.Round,
-			request:  row.RoundRequestVw,
-			tx:       row.RoundTxVw,
-			receiver: row.RequestReceiverVw,
-			vtxo:     row.RequestVtxoVw,
-		})
+	var rounds []domain.Round
+	for _, id := range ids {
+		// Get basic round data
+		round, err := r.querier.SelectRoundDataById(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+
+		// Get requests if needed
+		requests, err := r.querier.SelectRoundRequestsById(ctx, sql.NullString{String: id, Valid: true})
+		if err != nil {
+			return nil, err
+		}
+
+		// Get transactions if needed
+		txs, err := r.querier.SelectRoundTxsById(ctx, sql.NullString{String: id, Valid: true})
+		if err != nil {
+			return nil, err
+		}
+
+		// Create maps to store receivers and vtxos by request ID
+		var allReceivers []queries.SelectRequestReceiversByIdRow
+		var allVtxos []queries.SelectRequestVtxosByIdRow
+
+		// For each request, get receivers and vtxos
+		for _, req := range requests {
+			if !req.RoundRequestVw.ID.Valid {
+				continue
+			}
+
+			receivers, err := r.querier.SelectRequestReceiversById(ctx, req.RoundRequestVw.ID)
+			if err != nil {
+				return nil, err
+			}
+			allReceivers = append(allReceivers, receivers...)
+
+			vtxos, err := r.querier.SelectRequestVtxosById(ctx, req.RoundRequestVw.ID)
+			if err != nil {
+				return nil, err
+			}
+			allVtxos = append(allVtxos, vtxos...)
+		}
+
+		// Convert SelectRoundDataByIdRow to queries.Round
+		roundData := queries.Round{
+			ID:                round.Round.ID,
+			StartingTimestamp: round.Round.StartingTimestamp,
+			EndingTimestamp:   round.Round.EndingTimestamp,
+			Ended:             round.Round.Ended,
+			Failed:            round.Round.Failed,
+			StageCode:         round.Round.StageCode,
+			Txid:              round.Round.Txid,
+			UnsignedTx:        round.Round.UnsignedTx,
+			ConnectorAddress:  round.Round.ConnectorAddress,
+			DustAmount:        round.Round.DustAmount,
+			Version:           round.Round.Version,
+			Swept:             round.Round.Swept,
+		}
+
+		// Assemble the complete round and append to results
+		rounds = append(rounds, assembleRound(roundData, requests, txs, allReceivers, allVtxos))
 	}
 
-	rounds, err := rowsToRounds(rvs)
-	if err != nil {
-		return nil, err
-	}
-
-	res := make([]domain.Round, 0)
-
-	for _, round := range rounds {
-		res = append(res, *round)
-	}
-
-	return res, nil
+	return rounds, nil
 }
 
 func (r *roundRepository) GetSweptRounds(ctx context.Context) ([]domain.Round, error) {
@@ -483,4 +525,108 @@ func combinedRowToVtxo(row queries.RequestVtxoVw) domain.Vtxo {
 		Swept:     row.Swept.Bool,
 		ExpireAt:  row.ExpireAt.Int64,
 	}
+}
+
+func assembleRound(
+	round queries.Round,
+	requests []queries.SelectRoundRequestsByIdRow,
+	txs []queries.SelectRoundTxsByIdRow,
+	receivers []queries.SelectRequestReceiversByIdRow,
+	vtxos []queries.SelectRequestVtxosByIdRow,
+) domain.Round {
+	result := domain.Round{
+		Id:                round.ID,
+		StartingTimestamp: round.StartingTimestamp,
+		EndingTimestamp:   round.EndingTimestamp,
+		Stage: domain.Stage{
+			Ended:  round.Ended,
+			Failed: round.Failed,
+			Code:   domain.RoundStage(round.StageCode),
+		},
+		Txid:             round.Txid,
+		UnsignedTx:       round.UnsignedTx,
+		ConnectorAddress: round.ConnectorAddress,
+		DustAmount:       uint64(round.DustAmount),
+		Version:          uint(round.Version),
+		Swept:            round.Swept,
+		TxRequests:       make(map[string]domain.TxRequest),
+	}
+
+	// Process requests
+	requestMap := make(map[string]domain.TxRequest)
+	for _, req := range requests {
+		if req.RoundRequestVw.ID.Valid {
+			requestMap[req.RoundRequestVw.ID.String] = domain.TxRequest{
+				Id:        req.RoundRequestVw.ID.String,
+				Inputs:    make([]domain.Vtxo, 0),
+				Receivers: make([]domain.Receiver, 0),
+			}
+		}
+	}
+
+	// Process transactions
+	for _, tx := range txs {
+		if tx.RoundTxVw.Tx.Valid && tx.RoundTxVw.Type.Valid && tx.RoundTxVw.Position.Valid {
+			position := tx.RoundTxVw.Position.Int64
+			switch tx.RoundTxVw.Type.String {
+			case "forfeit":
+				result.ForfeitTxs = extendArray(result.ForfeitTxs, int(position))
+				result.ForfeitTxs[position] = tx.RoundTxVw.Tx.String
+			case "connector":
+				result.Connectors = extendArray(result.Connectors, int(position))
+				result.Connectors[position] = tx.RoundTxVw.Tx.String
+			case "tree":
+				if !tx.RoundTxVw.TreeLevel.Valid {
+					continue
+				}
+				level := tx.RoundTxVw.TreeLevel.Int64
+				result.VtxoTree = extendArray(result.VtxoTree, int(level))
+				result.VtxoTree[int(level)] = extendArray(result.VtxoTree[int(level)], int(position))
+				result.VtxoTree[int(level)][position] = tree.Node{
+					Tx:         tx.RoundTxVw.Tx.String,
+					Txid:       tx.RoundTxVw.Txid.String,
+					ParentTxid: tx.RoundTxVw.ParentTxid.String,
+					Leaf:       tx.RoundTxVw.IsLeaf.Bool,
+				}
+			}
+		}
+	}
+
+	// Process receivers
+	for _, rcv := range receivers {
+		if rcv.RequestReceiverVw.RequestID.Valid {
+			req := requestMap[rcv.RequestReceiverVw.RequestID.String]
+			req.Receivers = append(req.Receivers, domain.Receiver{
+				Amount:         uint64(rcv.RequestReceiverVw.Amount.Int64),
+				PubKey:         rcv.RequestReceiverVw.Pubkey.String,
+				OnchainAddress: rcv.RequestReceiverVw.OnchainAddress.String,
+			})
+			requestMap[rcv.RequestReceiverVw.RequestID.String] = req
+		}
+	}
+
+	// Process vtxos
+	for _, vtxo := range vtxos {
+		if vtxo.RequestVtxoVw.RequestID.Valid {
+			req := requestMap[vtxo.RequestVtxoVw.RequestID.String]
+			req.Inputs = append(req.Inputs, domain.Vtxo{
+				VtxoKey: domain.VtxoKey{
+					Txid: vtxo.RequestVtxoVw.Txid.String,
+					VOut: uint32(vtxo.RequestVtxoVw.Vout.Int64),
+				},
+				Amount:    uint64(vtxo.RequestVtxoVw.Amount.Int64),
+				PubKey:    vtxo.RequestVtxoVw.Pubkey.String,
+				RoundTxid: vtxo.RequestVtxoVw.RoundTx.String,
+				SpentBy:   vtxo.RequestVtxoVw.SpentBy.String,
+				Spent:     vtxo.RequestVtxoVw.Spent.Bool,
+				Redeemed:  vtxo.RequestVtxoVw.Redeemed.Bool,
+				Swept:     vtxo.RequestVtxoVw.Swept.Bool,
+				ExpireAt:  vtxo.RequestVtxoVw.ExpireAt.Int64,
+			})
+			requestMap[vtxo.RequestVtxoVw.RequestID.String] = req
+		}
+	}
+
+	result.TxRequests = requestMap
+	return result
 }
