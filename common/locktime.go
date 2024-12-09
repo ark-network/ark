@@ -21,6 +21,8 @@ const (
 	nLocktimeMinSeconds = 500_000_000
 )
 
+// RelativeLocktimeType represents a BIP68 relative locktime
+// it is passed as argument to CheckSequenceVerify opcode
 type RelativeLocktimeType uint
 
 const (
@@ -28,6 +30,8 @@ const (
 	LocktimeTypeBlock
 )
 
+// AbsoluteLocktime represents an nLocktime value
+// it is used as argument to a CheckLocktimeVerify opcode
 type AbsoluteLocktime uint32
 
 func (l AbsoluteLocktime) IsSeconds() bool {
