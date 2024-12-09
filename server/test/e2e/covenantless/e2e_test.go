@@ -228,7 +228,7 @@ func TestReactToRedemptionOfRefreshedVtxos(t *testing.T) {
 	require.Empty(t, balance.OnchainBalance.LockedAmount)
 }
 
-func TestReactToRedemptionOfVtxosSpentOOR(t *testing.T) {
+func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 	t.Run("default vtxo script", func(t *testing.T) {
 		ctx := context.Background()
 		sdkClient, grpcClient := setupArkSDK(t)
