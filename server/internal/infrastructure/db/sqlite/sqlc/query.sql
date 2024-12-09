@@ -79,19 +79,6 @@ FROM round
          LEFT OUTER JOIN request_vtxo_vw ON round_request_vw.id=request_vtxo_vw.request_id
 WHERE round.txid = ?;
 
--- name: SelectSweepableRounds :many
-SELECT sqlc.embed(round),
-       sqlc.embed(round_request_vw),
-       sqlc.embed(round_tx_vw),
-       sqlc.embed(request_receiver_vw),
-       sqlc.embed(request_vtxo_vw)
-FROM round
-         LEFT OUTER JOIN round_request_vw ON round.id=round_request_vw.round_id
-         LEFT OUTER JOIN round_tx_vw ON round.id=round_tx_vw.round_id
-         LEFT OUTER JOIN request_receiver_vw ON round_request_vw.id=request_receiver_vw.request_id
-         LEFT OUTER JOIN request_vtxo_vw ON round_request_vw.id=request_vtxo_vw.request_id
-WHERE round.swept = false AND round.ended = true AND round.failed = false;
-
 -- name: SelectSweptRounds :many
 SELECT sqlc.embed(round),
        sqlc.embed(round_request_vw),
@@ -208,3 +195,35 @@ RETURNING *;
 
 -- name: GetLatestMarketHour :one
 SELECT * FROM market_hour ORDER BY updated_at DESC LIMIT 1;
+
+-- name: SelectSweepableRoundIds :many
+SELECT id 
+FROM round 
+WHERE swept = false 
+  AND ended = true 
+  AND failed = false;
+
+-- name: SelectRoundDataById :one
+SELECT sqlc.embed(round)
+FROM round
+WHERE id = ?;
+
+-- name: SelectRoundRequestsById :many
+SELECT sqlc.embed(round_request_vw)
+FROM round_request_vw
+WHERE round_id = ?;
+
+-- name: SelectRoundTxsById :many
+SELECT sqlc.embed(round_tx_vw)
+FROM round_tx_vw
+WHERE round_id = ?;
+
+-- name: SelectRequestReceiversById :many
+SELECT sqlc.embed(request_receiver_vw)
+FROM request_receiver_vw
+WHERE request_id = ?;
+
+-- name: SelectRequestVtxosById :many
+SELECT sqlc.embed(request_vtxo_vw)
+FROM request_vtxo_vw
+WHERE request_id = ?;
