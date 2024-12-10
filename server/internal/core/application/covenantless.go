@@ -1052,7 +1052,7 @@ func (s *covenantlessService) startFinalization() {
 		return
 	}
 
-	sweptRounds, err := s.repoManager.Rounds().GetSweptRounds(ctx)
+	connectorAddresses, err := s.repoManager.Rounds().GetSweptRoundsConnectorAddress(ctx)
 	if err != nil {
 		round.Fail(fmt.Errorf("failed to retrieve swept rounds: %s", err))
 		log.WithError(err).Warn("failed to retrieve swept rounds")
@@ -1069,11 +1069,7 @@ func (s *covenantlessService) startFinalization() {
 	cosigners = append(cosigners, ephemeralKey.PubKey())
 
 	unsignedRoundTx, vtxoTree, connectorAddress, connectors, err := s.builder.BuildRoundTx(
-		s.pubkey,
-		requests,
-		boardingInputs,
-		sweptRounds,
-		cosigners...,
+		s.pubkey, requests, boardingInputs, connectorAddresses, cosigners...,
 	)
 	if err != nil {
 		round.Fail(fmt.Errorf("failed to create round tx: %s", err))
@@ -1665,19 +1661,18 @@ func (s *covenantlessService) stopWatchingVtxos(vtxos []domain.Vtxo) {
 }
 
 func (s *covenantlessService) restoreWatchingVtxos() error {
-	sweepableRounds, err := s.repoManager.Rounds().GetSweepableRounds(context.Background())
+	ctx := context.Background()
+
+	expiredRounds, err := s.repoManager.Rounds().GetExpiredRoundsTxid(ctx)
 	if err != nil {
 		return err
 	}
 
 	vtxos := make([]domain.Vtxo, 0)
-
-	for _, round := range sweepableRounds {
-		fromRound, err := s.repoManager.Vtxos().GetVtxosForRound(
-			context.Background(), round.Txid,
-		)
+	for _, txid := range expiredRounds {
+		fromRound, err := s.repoManager.Vtxos().GetVtxosForRound(ctx, txid)
 		if err != nil {
-			log.WithError(err).Warnf("failed to retrieve vtxos for round %s", round.Txid)
+			log.WithError(err).Warnf("failed to retrieve vtxos for round %s", txid)
 			continue
 		}
 		for _, v := range fromRound {

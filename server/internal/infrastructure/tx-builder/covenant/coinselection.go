@@ -3,19 +3,20 @@ package txbuilder
 import (
 	"context"
 
-	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 )
 
-func (b *txBuilder) selectUtxos(ctx context.Context, sweptRounds []domain.Round, amount uint64) ([]ports.TxInput, uint64, error) {
+func (b *txBuilder) selectUtxos(
+	ctx context.Context, connectorAddresses []string, amount uint64,
+) ([]ports.TxInput, uint64, error) {
 	selectedConnectorsUtxos := make([]ports.TxInput, 0)
 	selectedConnectorsAmount := uint64(0)
 
-	for _, round := range sweptRounds {
+	for _, addr := range connectorAddresses {
 		if selectedConnectorsAmount >= amount {
 			break
 		}
-		connectors, err := b.wallet.ListConnectorUtxos(ctx, round.ConnectorAddress)
+		connectors, err := b.wallet.ListConnectorUtxos(ctx, addr)
 		if err != nil {
 			return nil, 0, err
 		}

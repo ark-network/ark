@@ -28,11 +28,14 @@ type BoardingInput struct {
 }
 
 type TxBuilder interface {
-	// BuildRoundTx builds a round tx for the given tx requests, boarding inputs
-	// it selects coin from swept rounds and server wallet
-	// returns the round partial tx, the vtxo tree and the set of connectors
+	// BuildRoundTx builds a round tx for the given offchain and boarding tx
+	// requests. It expects an optional list of connector addresses of expired
+	// rounds from which selecting UTXOs as inputs of the transaction.
+	// Returns the round tx, the VTXO tree, the connector chain and its root
+	// address.
 	BuildRoundTx(
-		serverPubkey *secp256k1.PublicKey, txRequests []domain.TxRequest, boardingInputs []BoardingInput, sweptRounds []domain.Round,
+		serverPubkey *secp256k1.PublicKey, txRequests []domain.TxRequest,
+		boardingInputs []BoardingInput, connectorAddresses []string,
 		cosigners ...*secp256k1.PublicKey,
 	) (
 		roundTx string,
@@ -41,11 +44,10 @@ type TxBuilder interface {
 		connectors []string,
 		err error,
 	)
-	// VerifyForfeitTxs verifies the given forfeit txs for the given vtxos and connectors
+	// VerifyForfeitTxs verifies a list of forfeit txs against a set of VTXOs and
+	// connectors.
 	VerifyForfeitTxs(
-		vtxos []domain.Vtxo,
-		connectors []string,
-		txs []string,
+		vtxos []domain.Vtxo, connectors []string, txs []string,
 	) (valid map[domain.VtxoKey][]string, err error)
 	BuildSweepTx(inputs []SweepInput) (signedSweepTx string, err error)
 	GetSweepInput(node tree.Node) (lifetime *common.Locktime, sweepInput SweepInput, err error)

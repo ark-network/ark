@@ -551,9 +551,9 @@ func (b *txBuilder) BuildRoundTx(
 	serverPubkey *secp256k1.PublicKey,
 	requests []domain.TxRequest,
 	boardingInputs []ports.BoardingInput,
-	sweptRounds []domain.Round,
+	connectorAddresses []string,
 	cosigners ...*secp256k1.PublicKey,
-) (roundTx string, vtxoTree tree.VtxoTree, connectorAddress string, connectors []string, err error) {
+) (roundTx string, vtxoTree tree.VtxoTree, nextConnectorAddress string, connectors []string, err error) {
 	var sharedOutputScript []byte
 	var sharedOutputAmount int64
 
@@ -580,13 +580,14 @@ func (b *txBuilder) BuildRoundTx(
 		}
 	}
 
-	connectorAddress, err = b.wallet.DeriveConnectorAddress(context.Background())
+	nextConnectorAddress, err = b.wallet.DeriveConnectorAddress(context.Background())
 	if err != nil {
 		return
 	}
 
 	ptx, err := b.createRoundTx(
-		sharedOutputAmount, sharedOutputScript, requests, boardingInputs, connectorAddress, sweptRounds,
+		sharedOutputAmount, sharedOutputScript, requests,
+		boardingInputs, nextConnectorAddress, connectorAddresses,
 	)
 	if err != nil {
 		return
@@ -615,7 +616,7 @@ func (b *txBuilder) BuildRoundTx(
 		return
 	}
 
-	connectorAddr, err := btcutil.DecodeAddress(connectorAddress, b.onchainNetwork())
+	connectorAddr, err := btcutil.DecodeAddress(nextConnectorAddress, b.onchainNetwork())
 	if err != nil {
 		return "", nil, "", nil, err
 	}
@@ -643,7 +644,7 @@ func (b *txBuilder) BuildRoundTx(
 		connectors = append(connectors, b64)
 	}
 
-	return roundTx, vtxoTree, connectorAddress, connectors, nil
+	return roundTx, vtxoTree, nextConnectorAddress, connectors, nil
 }
 
 func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime *common.Locktime, sweepInput ports.SweepInput, err error) {
@@ -726,15 +727,15 @@ func (b *txBuilder) createRoundTx(
 	sharedOutputScript []byte,
 	requests []domain.TxRequest,
 	boardingInputs []ports.BoardingInput,
-	connectorAddress string,
-	sweptRounds []domain.Round,
+	nextConnectorAddress string,
+	connectorAddresses []string,
 ) (*psbt.Packet, error) {
-	connectorAddr, err := btcutil.DecodeAddress(connectorAddress, b.onchainNetwork())
+	nextConnectorAddr, err := btcutil.DecodeAddress(nextConnectorAddress, b.onchainNetwork())
 	if err != nil {
 		return nil, err
 	}
 
-	connectorScript, err := txscript.PayToAddrScript(connectorAddr)
+	nextConnectorScript, err := txscript.PayToAddrScript(nextConnectorAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -772,7 +773,7 @@ func (b *txBuilder) createRoundTx(
 	if connectorsAmount > 0 {
 		outputs = append(outputs, &wire.TxOut{
 			Value:    int64(connectorsAmount),
-			PkScript: connectorScript,
+			PkScript: nextConnectorScript,
 		})
 	}
 
@@ -792,7 +793,7 @@ func (b *txBuilder) createRoundTx(
 	}
 
 	ctx := context.Background()
-	utxos, change, err := b.selectUtxos(ctx, sweptRounds, targetAmount)
+	utxos, change, err := b.selectUtxos(ctx, connectorAddresses, targetAmount)
 	if err != nil {
 		return nil, err
 	}
@@ -1167,15 +1168,17 @@ func (b *txBuilder) minRelayFeeTreeTx() (uint64, error) {
 	return b.wallet.MinRelayFee(context.Background(), uint64(common.TreeTxSize))
 }
 
-func (b *txBuilder) selectUtxos(ctx context.Context, sweptRounds []domain.Round, amount uint64) ([]ports.TxInput, uint64, error) {
+func (b *txBuilder) selectUtxos(
+	ctx context.Context, connectorAddresses []string, amount uint64,
+) ([]ports.TxInput, uint64, error) {
 	selectedConnectorsUtxos := make([]ports.TxInput, 0)
 	selectedConnectorsAmount := uint64(0)
 
-	for _, round := range sweptRounds {
+	for _, addr := range connectorAddresses {
 		if selectedConnectorsAmount >= amount {
 			break
 		}
-		connectors, err := b.wallet.ListConnectorUtxos(ctx, round.ConnectorAddress)
+		connectors, err := b.wallet.ListConnectorUtxos(ctx, addr)
 		if err != nil {
 			return nil, 0, err
 		}

@@ -52,12 +52,19 @@ func newSweeper(
 func (s *sweeper) start() error {
 	s.scheduler.Start()
 
-	allRounds, err := s.repoManager.Rounds().GetSweepableRounds(context.Background())
+	ctx := context.Background()
+
+	expiredRounds, err := s.repoManager.Rounds().GetExpiredRoundsTxid(ctx)
 	if err != nil {
 		return err
 	}
 
-	for _, round := range allRounds {
+	for _, txid := range expiredRounds {
+		round, err := s.repoManager.Rounds().GetRoundWithTxid(ctx, txid)
+		if err != nil {
+			return err
+		}
+
 		task := s.createTask(round.Txid, round.VtxoTree)
 		task()
 	}
