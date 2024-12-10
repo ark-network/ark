@@ -183,6 +183,11 @@ func getSimulationFiles() ([]string, error) {
 }
 
 func handleIndex(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		http.Redirect(w, r, "/run?"+r.Form.Encode(), http.StatusSeeOther)
+		return
+	}
+
 	simFiles, err := getSimulationFiles()
 	if err != nil {
 		log.Errorf("Error getting simulation files: %v", err)
@@ -663,11 +668,10 @@ func startClients(
 		TaskDefinition: aws.String(taskDefinition),
 	}
 
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 
 	g, gctx := errgroup.WithContext(ctxWithTimeout)
-
 	taskDefDetails, err := ecsClient.DescribeTaskDefinition(gctx, describeTaskDefInput)
 	if err != nil {
 		outputChan <- fmt.Sprintf("Warning: Failed to get task definition details: %v", err)
@@ -684,7 +688,6 @@ func startClients(
 		for {
 			select {
 			case <-gctx.Done():
-				// If gctx is canceled (either timeout or parent cancel), return immediately
 				return gctx.Err()
 			case <-ticker.C:
 				describeTasksInput := &ecs.DescribeTasksInput{
@@ -863,7 +866,6 @@ func startClients(
 		for {
 			select {
 			case <-gctx.Done():
-				// Stop when context is canceled
 				return gctx.Err()
 			case <-ticker.C:
 				tasksMu.Lock()

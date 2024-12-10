@@ -127,7 +127,7 @@
                 <!-- Run Simulation Form -->
                 <div class="bg-white rounded-lg shadow-lg p-6">
                     <h2 class="text-2xl font-bold mb-4">Run Simulation</h2>
-                    <form hx-post="/run" hx-target="#output" class="space-y-4">
+                    <form hx-target="#output" class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">ASP URL <span class="text-red-500">*</span></label>
                             <input type="text" name="asp_url" required value="https://master.signet.arklabs.to"
@@ -394,9 +394,8 @@
         });
 
         es.addEventListener('error', function(e) {
-            // Check if the connection is closed (readyState === 2)
             if (es.readyState === EventSource.CLOSED) {
-                console.log("EventSource connection closed permanently");
+                console.log("EventSource connection closed permanently", e.data);
                 appendToTerminal("Connection closed");
                 closeEventSource();
                 return;
