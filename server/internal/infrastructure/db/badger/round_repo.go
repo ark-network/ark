@@ -80,18 +80,38 @@ func (r *roundRepository) GetRoundWithTxid(
 	return round, nil
 }
 
-func (r *roundRepository) GetSweepableRounds(
+func (r *roundRepository) GetExpiredRoundsTxid(
 	ctx context.Context,
-) ([]domain.Round, error) {
+) ([]string, error) {
 	query := badgerhold.Where("Stage.Code").Eq(domain.FinalizationStage).
 		And("Stage.Ended").Eq(true).And("Swept").Eq(false)
-	return r.findRound(ctx, query)
+	rounds, err := r.findRound(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	txids := make([]string, 0, len(rounds))
+	for _, r := range rounds {
+		txids = append(txids, r.Txid)
+	}
+	return txids, nil
 }
 
-func (r *roundRepository) GetSweptRounds(ctx context.Context) ([]domain.Round, error) {
+func (r *roundRepository) GetSweptRoundsConnectorAddress(
+	ctx context.Context,
+) ([]string, error) {
 	query := badgerhold.Where("Stage.Code").Eq(domain.FinalizationStage).
 		And("Stage.Ended").Eq(true).And("Swept").Eq(true).And("ConnectorAddress").Ne("")
-	return r.findRound(ctx, query)
+	rounds, err := r.findRound(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	txids := make([]string, 0, len(rounds))
+	for _, r := range rounds {
+		txids = append(txids, r.Txid)
+	}
+	return txids, nil
 }
 
 func (r *roundRepository) GetRoundsIds(ctx context.Context, startedAfter int64, startedBefore int64) ([]string, error) {

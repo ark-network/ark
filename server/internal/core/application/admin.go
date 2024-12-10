@@ -125,14 +125,19 @@ func (a *adminService) GetRounds(ctx context.Context, after int64, before int64)
 }
 
 func (a *adminService) GetScheduledSweeps(ctx context.Context) ([]ScheduledSweep, error) {
-	sweepableRounds, err := a.repoManager.Rounds().GetSweepableRounds(ctx)
+	sweepableRounds, err := a.repoManager.Rounds().GetExpiredRoundsTxid(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	scheduledSweeps := make([]ScheduledSweep, 0, len(sweepableRounds))
 
-	for _, round := range sweepableRounds {
+	for _, txid := range sweepableRounds {
+		round, err := a.repoManager.Rounds().GetRoundWithTxid(ctx, txid)
+		if err != nil {
+			return nil, err
+		}
+
 		sweepable, err := findSweepableOutputs(
 			ctx, a.walletSvc, a.txBuilder, a.sweeperTimeUnit, round.VtxoTree,
 		)

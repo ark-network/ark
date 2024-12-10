@@ -360,9 +360,9 @@ func (b *txBuilder) BuildRoundTx(
 	serverPubkey *secp256k1.PublicKey,
 	requests []domain.TxRequest,
 	boardingInputs []ports.BoardingInput,
-	sweptRounds []domain.Round,
+	connectorAddresses []string,
 	_ ...*secp256k1.PublicKey, // cosigners are not used in the covenant
-) (roundTx string, vtxoTree tree.VtxoTree, connectorAddress string, connectors []string, err error) {
+) (roundTx string, vtxoTree tree.VtxoTree, nextConnectorAddress string, connectors []string, err error) {
 	// The creation of the tree and the round tx are tightly coupled:
 	// - building the tree requires knowing the shared outpoint (txid:vout)
 	// - building the round tx requires knowing the shared output script and amount
@@ -398,13 +398,14 @@ func (b *txBuilder) BuildRoundTx(
 		}
 	}
 
-	connectorAddress, err = b.wallet.DeriveConnectorAddress(context.Background())
+	nextConnectorAddress, err = b.wallet.DeriveConnectorAddress(context.Background())
 	if err != nil {
 		return
 	}
 
 	ptx, err := b.createRoundTx(
-		sharedOutputAmount, sharedOutputScript, requests, boardingInputs, serverPubkey, connectorAddress, sweptRounds,
+		sharedOutputAmount, sharedOutputScript, requests, boardingInputs,
+		serverPubkey, nextConnectorAddress, connectorAddresses,
 	)
 	if err != nil {
 		return
@@ -444,7 +445,7 @@ func (b *txBuilder) BuildRoundTx(
 		return "", nil, "", nil, err
 	}
 
-	connectorsPsets, err := b.createConnectors(roundTx, requests, connectorAddress, connectorAmount, connectorFeeAmount)
+	connectorsPsets, err := b.createConnectors(roundTx, requests, nextConnectorAddress, connectorAmount, connectorFeeAmount)
 	if err != nil {
 		return "", nil, "", nil, err
 	}
@@ -751,15 +752,15 @@ func (b *txBuilder) createRoundTx(
 	requests []domain.TxRequest,
 	boardingInputs []ports.BoardingInput,
 	serverPubkey *secp256k1.PublicKey,
-	connectorAddress string,
-	sweptRounds []domain.Round,
+	nextConnectorAddress string,
+	connectorAddresses []string,
 ) (*psetv2.Pset, error) {
 	serverScript, err := p2wpkhScript(serverPubkey, b.onchainNetwork())
 	if err != nil {
 		return nil, err
 	}
 
-	connectorScript, err := address.ToOutputScript(connectorAddress)
+	nextConnectorScript, err := address.ToOutputScript(nextConnectorAddress)
 	if err != nil {
 		return nil, err
 	}
@@ -797,7 +798,7 @@ func (b *txBuilder) createRoundTx(
 		outputs = append(outputs, psetv2.OutputArgs{
 			Asset:  b.onchainNetwork().AssetID,
 			Amount: connectorsAmount,
-			Script: connectorScript,
+			Script: nextConnectorScript,
 		})
 	}
 
@@ -822,7 +823,7 @@ func (b *txBuilder) createRoundTx(
 		return nil, err
 	}
 
-	utxos, change, err := b.selectUtxos(ctx, sweptRounds, targetAmount)
+	utxos, change, err := b.selectUtxos(ctx, connectorAddresses, targetAmount)
 	if err != nil {
 		return nil, err
 	}
@@ -941,7 +942,7 @@ func (b *txBuilder) createRoundTx(
 				ptx.Outputs = ptx.Outputs[:len(ptx.Outputs)-1]
 				ptx.Global.OutputCount--
 			}
-			newUtxos, change, err := b.selectUtxos(ctx, sweptRounds, feeAmount-change)
+			newUtxos, change, err := b.selectUtxos(ctx, connectorAddresses, feeAmount-change)
 			if err != nil {
 				return nil, err
 			}
@@ -967,7 +968,7 @@ func (b *txBuilder) createRoundTx(
 			}
 		}
 	} else if feeAmount-dust > 0 {
-		newUtxos, change, err := b.selectUtxos(ctx, sweptRounds, feeAmount-dust)
+		newUtxos, change, err := b.selectUtxos(ctx, connectorAddresses, feeAmount-dust)
 		if err != nil {
 			return nil, err
 		}

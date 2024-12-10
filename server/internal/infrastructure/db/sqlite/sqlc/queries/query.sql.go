@@ -190,6 +190,34 @@ func (q *Queries) SelectEntitiesByVtxo(ctx context.Context, arg SelectEntitiesBy
 	return items, nil
 }
 
+const selectExpiredRoundsTxid = `-- name: SelectExpiredRoundsTxid :many
+SELECT round.txid FROM round
+WHERE round.swept = false AND round.ended = true AND round.failed = false
+`
+
+func (q *Queries) SelectExpiredRoundsTxid(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, selectExpiredRoundsTxid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var txid string
+		if err := rows.Scan(&txid); err != nil {
+			return nil, err
+		}
+		items = append(items, txid)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const selectNotRedeemedVtxos = `-- name: SelectNotRedeemedVtxos :many
 SELECT vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.round_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.created_at, vtxo.request_id, vtxo.redeem_tx FROM vtxo
 WHERE redeemed = false
@@ -513,92 +541,6 @@ func (q *Queries) SelectRoundWithRoundTxId(ctx context.Context, txid string) ([]
 	return items, nil
 }
 
-const selectSweepableRounds = `-- name: SelectSweepableRounds :many
-SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, round.unsigned_tx, round.connector_address, round.dust_amount, round.version, round.swept,
-       round_request_vw.id, round_request_vw.round_id,
-       round_tx_vw.id, round_tx_vw.tx, round_tx_vw.round_id, round_tx_vw.type, round_tx_vw.position, round_tx_vw.txid, round_tx_vw.tree_level, round_tx_vw.parent_txid, round_tx_vw.is_leaf,
-       request_receiver_vw.request_id, request_receiver_vw.pubkey, request_receiver_vw.onchain_address, request_receiver_vw.amount,
-       request_vtxo_vw.txid, request_vtxo_vw.vout, request_vtxo_vw.pubkey, request_vtxo_vw.amount, request_vtxo_vw.round_tx, request_vtxo_vw.spent_by, request_vtxo_vw.spent, request_vtxo_vw.redeemed, request_vtxo_vw.swept, request_vtxo_vw.expire_at, request_vtxo_vw.created_at, request_vtxo_vw.request_id, request_vtxo_vw.redeem_tx
-FROM round
-         LEFT OUTER JOIN round_request_vw ON round.id=round_request_vw.round_id
-         LEFT OUTER JOIN round_tx_vw ON round.id=round_tx_vw.round_id
-         LEFT OUTER JOIN request_receiver_vw ON round_request_vw.id=request_receiver_vw.request_id
-         LEFT OUTER JOIN request_vtxo_vw ON round_request_vw.id=request_vtxo_vw.request_id
-WHERE round.swept = false AND round.ended = true AND round.failed = false
-`
-
-type SelectSweepableRoundsRow struct {
-	Round             Round
-	RoundRequestVw    RoundRequestVw
-	RoundTxVw         RoundTxVw
-	RequestReceiverVw RequestReceiverVw
-	RequestVtxoVw     RequestVtxoVw
-}
-
-func (q *Queries) SelectSweepableRounds(ctx context.Context) ([]SelectSweepableRoundsRow, error) {
-	rows, err := q.db.QueryContext(ctx, selectSweepableRounds)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []SelectSweepableRoundsRow
-	for rows.Next() {
-		var i SelectSweepableRoundsRow
-		if err := rows.Scan(
-			&i.Round.ID,
-			&i.Round.StartingTimestamp,
-			&i.Round.EndingTimestamp,
-			&i.Round.Ended,
-			&i.Round.Failed,
-			&i.Round.StageCode,
-			&i.Round.Txid,
-			&i.Round.UnsignedTx,
-			&i.Round.ConnectorAddress,
-			&i.Round.DustAmount,
-			&i.Round.Version,
-			&i.Round.Swept,
-			&i.RoundRequestVw.ID,
-			&i.RoundRequestVw.RoundID,
-			&i.RoundTxVw.ID,
-			&i.RoundTxVw.Tx,
-			&i.RoundTxVw.RoundID,
-			&i.RoundTxVw.Type,
-			&i.RoundTxVw.Position,
-			&i.RoundTxVw.Txid,
-			&i.RoundTxVw.TreeLevel,
-			&i.RoundTxVw.ParentTxid,
-			&i.RoundTxVw.IsLeaf,
-			&i.RequestReceiverVw.RequestID,
-			&i.RequestReceiverVw.Pubkey,
-			&i.RequestReceiverVw.OnchainAddress,
-			&i.RequestReceiverVw.Amount,
-			&i.RequestVtxoVw.Txid,
-			&i.RequestVtxoVw.Vout,
-			&i.RequestVtxoVw.Pubkey,
-			&i.RequestVtxoVw.Amount,
-			&i.RequestVtxoVw.RoundTx,
-			&i.RequestVtxoVw.SpentBy,
-			&i.RequestVtxoVw.Spent,
-			&i.RequestVtxoVw.Redeemed,
-			&i.RequestVtxoVw.Swept,
-			&i.RequestVtxoVw.ExpireAt,
-			&i.RequestVtxoVw.CreatedAt,
-			&i.RequestVtxoVw.RequestID,
-			&i.RequestVtxoVw.RedeemTx,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const selectSweepableVtxos = `-- name: SelectSweepableVtxos :many
 SELECT vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.round_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.created_at, vtxo.request_id, vtxo.redeem_tx FROM vtxo
 WHERE redeemed = false AND swept = false
@@ -645,82 +587,24 @@ func (q *Queries) SelectSweepableVtxos(ctx context.Context) ([]SelectSweepableVt
 	return items, nil
 }
 
-const selectSweptRounds = `-- name: SelectSweptRounds :many
-SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, round.unsigned_tx, round.connector_address, round.dust_amount, round.version, round.swept,
-       round_request_vw.id, round_request_vw.round_id,
-       round_tx_vw.id, round_tx_vw.tx, round_tx_vw.round_id, round_tx_vw.type, round_tx_vw.position, round_tx_vw.txid, round_tx_vw.tree_level, round_tx_vw.parent_txid, round_tx_vw.is_leaf,
-       request_receiver_vw.request_id, request_receiver_vw.pubkey, request_receiver_vw.onchain_address, request_receiver_vw.amount,
-       request_vtxo_vw.txid, request_vtxo_vw.vout, request_vtxo_vw.pubkey, request_vtxo_vw.amount, request_vtxo_vw.round_tx, request_vtxo_vw.spent_by, request_vtxo_vw.spent, request_vtxo_vw.redeemed, request_vtxo_vw.swept, request_vtxo_vw.expire_at, request_vtxo_vw.created_at, request_vtxo_vw.request_id, request_vtxo_vw.redeem_tx
-FROM round
-         LEFT OUTER JOIN round_request_vw ON round.id=round_request_vw.round_id
-         LEFT OUTER JOIN round_tx_vw ON round.id=round_tx_vw.round_id
-         LEFT OUTER JOIN request_receiver_vw ON round_request_vw.id=request_receiver_vw.request_id
-         LEFT OUTER JOIN request_vtxo_vw ON round_request_vw.id=request_vtxo_vw.request_id
+const selectSweptRoundsConnectorAddress = `-- name: SelectSweptRoundsConnectorAddress :many
+SELECT round.connector_address FROM round
 WHERE round.swept = true AND round.failed = false AND round.ended = true AND round.connector_address <> ''
 `
 
-type SelectSweptRoundsRow struct {
-	Round             Round
-	RoundRequestVw    RoundRequestVw
-	RoundTxVw         RoundTxVw
-	RequestReceiverVw RequestReceiverVw
-	RequestVtxoVw     RequestVtxoVw
-}
-
-func (q *Queries) SelectSweptRounds(ctx context.Context) ([]SelectSweptRoundsRow, error) {
-	rows, err := q.db.QueryContext(ctx, selectSweptRounds)
+func (q *Queries) SelectSweptRoundsConnectorAddress(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, selectSweptRoundsConnectorAddress)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []SelectSweptRoundsRow
+	var items []string
 	for rows.Next() {
-		var i SelectSweptRoundsRow
-		if err := rows.Scan(
-			&i.Round.ID,
-			&i.Round.StartingTimestamp,
-			&i.Round.EndingTimestamp,
-			&i.Round.Ended,
-			&i.Round.Failed,
-			&i.Round.StageCode,
-			&i.Round.Txid,
-			&i.Round.UnsignedTx,
-			&i.Round.ConnectorAddress,
-			&i.Round.DustAmount,
-			&i.Round.Version,
-			&i.Round.Swept,
-			&i.RoundRequestVw.ID,
-			&i.RoundRequestVw.RoundID,
-			&i.RoundTxVw.ID,
-			&i.RoundTxVw.Tx,
-			&i.RoundTxVw.RoundID,
-			&i.RoundTxVw.Type,
-			&i.RoundTxVw.Position,
-			&i.RoundTxVw.Txid,
-			&i.RoundTxVw.TreeLevel,
-			&i.RoundTxVw.ParentTxid,
-			&i.RoundTxVw.IsLeaf,
-			&i.RequestReceiverVw.RequestID,
-			&i.RequestReceiverVw.Pubkey,
-			&i.RequestReceiverVw.OnchainAddress,
-			&i.RequestReceiverVw.Amount,
-			&i.RequestVtxoVw.Txid,
-			&i.RequestVtxoVw.Vout,
-			&i.RequestVtxoVw.Pubkey,
-			&i.RequestVtxoVw.Amount,
-			&i.RequestVtxoVw.RoundTx,
-			&i.RequestVtxoVw.SpentBy,
-			&i.RequestVtxoVw.Spent,
-			&i.RequestVtxoVw.Redeemed,
-			&i.RequestVtxoVw.Swept,
-			&i.RequestVtxoVw.ExpireAt,
-			&i.RequestVtxoVw.CreatedAt,
-			&i.RequestVtxoVw.RequestID,
-			&i.RequestVtxoVw.RedeemTx,
-		); err != nil {
+		var connector_address string
+		if err := rows.Scan(&connector_address); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, connector_address)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

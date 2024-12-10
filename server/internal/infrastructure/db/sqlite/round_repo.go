@@ -262,66 +262,12 @@ func (r *roundRepository) GetRoundWithTxid(ctx context.Context, txid string) (*d
 	return nil, errors.New("round not found")
 }
 
-func (r *roundRepository) GetSweepableRounds(ctx context.Context) ([]domain.Round, error) {
-	rows, err := r.querier.SelectSweepableRounds(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	rvs := make([]combinedRow, 0, len(rows))
-	for _, row := range rows {
-		rvs = append(rvs, combinedRow{
-			round:    row.Round,
-			request:  row.RoundRequestVw,
-			tx:       row.RoundTxVw,
-			receiver: row.RequestReceiverVw,
-			vtxo:     row.RequestVtxoVw,
-		})
-	}
-
-	rounds, err := rowsToRounds(rvs)
-	if err != nil {
-		return nil, err
-	}
-
-	res := make([]domain.Round, 0)
-
-	for _, round := range rounds {
-		res = append(res, *round)
-	}
-
-	return res, nil
+func (r *roundRepository) GetExpiredRoundsTxid(ctx context.Context) ([]string, error) {
+	return r.querier.SelectExpiredRoundsTxid(ctx)
 }
 
-func (r *roundRepository) GetSweptRounds(ctx context.Context) ([]domain.Round, error) {
-	rows, err := r.querier.SelectSweptRounds(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	rvs := make([]combinedRow, 0, len(rows))
-	for _, row := range rows {
-		rvs = append(rvs, combinedRow{
-			round:    row.Round,
-			request:  row.RoundRequestVw,
-			tx:       row.RoundTxVw,
-			receiver: row.RequestReceiverVw,
-			vtxo:     row.RequestVtxoVw,
-		})
-	}
-
-	rounds, err := rowsToRounds(rvs)
-	if err != nil {
-		return nil, err
-	}
-
-	res := make([]domain.Round, 0)
-
-	for _, round := range rounds {
-		res = append(res, *round)
-	}
-
-	return res, nil
+func (r *roundRepository) GetSweptRoundsConnectorAddress(ctx context.Context) ([]string, error) {
+	return r.querier.SelectSweptRoundsConnectorAddress(ctx)
 }
 
 func rowToReceiver(row queries.RequestReceiverVw) domain.Receiver {
