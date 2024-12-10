@@ -668,7 +668,7 @@ func startClients(
 		TaskDefinition: aws.String(taskDefinition),
 	}
 
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, 45*time.Second)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
 
 	g, gctx := errgroup.WithContext(ctxWithTimeout)
@@ -858,54 +858,6 @@ func startClients(
 
 		time.Sleep(1 * time.Second)
 	}
-
-	g.Go(func() error {
-		ticker := time.NewTicker(30 * time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-gctx.Done():
-				return gctx.Err()
-			case <-ticker.C:
-				tasksMu.Lock()
-				currentTasks := make([]struct {
-					ClientID string
-					TaskArn  string
-				}, len(tasks))
-				copy(currentTasks, tasks)
-				tasksMu.Unlock()
-
-				for _, task := range currentTasks {
-					select {
-					case <-gctx.Done():
-						return gctx.Err()
-					default:
-					}
-
-					describeTasksInput := &ecs.DescribeTasksInput{
-						Cluster: aws.String(clusterName),
-						Tasks:   []string{task.TaskArn},
-					}
-
-					result, err := ecsClient.DescribeTasks(gctx, describeTasksInput)
-					if err != nil {
-						outputChan <- fmt.Sprintf("Warning: Failed to describe task for client %s: %v", task.ClientID, err)
-						log.Warnf("Failed to describe task for client %s: %v", task.ClientID, err)
-						continue
-					}
-
-					if len(result.Tasks) > 0 {
-						status := aws.ToString(result.Tasks[0].LastStatus)
-						outputChan <- fmt.Sprintf("Client %s task status: %s", task.ClientID, status)
-						if status == "STOPPED" {
-							outputChan <- fmt.Sprintf("Warning: Client %s task stopped unexpectedly", task.ClientID)
-						}
-					}
-				}
-			}
-		}
-	})
 
 	if err := g.Wait(); err != nil {
 		outputChan <- fmt.Sprintf("Error starting clients: %v", err)
@@ -1118,7 +1070,7 @@ func executeClientAction(ctx context.Context, clientID string, actionType string
 		}
 		return executeOnboard(ctx, clientURL, amount)
 	case "SendAsync":
-		amount, _ := action["amount"].(int64)
+		amount, _ := action["amount"].(float64)
 		toClientID, _ := action["to"].(string)
 		toAddress, err := getClientAddress(toClientID)
 		if err != nil {
@@ -1172,12 +1124,12 @@ func getClientAddress(clientID string) (string, error) {
 }
 
 func executeOnboard(ctx context.Context, clientURL string, amount float64) error {
-	payload := map[string]float64{"amount": amount}
+	payload := map[string]uint32{"amount": uint32(amount * 1e8)}
 	_, err := sendRequest(ctx, clientURL+"/onboard", http.MethodPost, payload)
 	return err
 }
 
-func executeSendAsync(ctx context.Context, clientURL string, amount int64, toAddress string) error {
+func executeSendAsync(ctx context.Context, clientURL string, amount float64, toAddress string) error {
 	payload := map[string]interface{}{
 		"amount":     amount,
 		"to_address": toAddress,
@@ -1348,7 +1300,6 @@ func checkECSQuotas(ctx context.Context, requestedClients int) error {
 }
 
 // TODO
-// remove remote folder, leave only local client per process, refactor readme, refactor ec2 starting script maybe
 // check how to implement more containers per ecs task
-// improve SDK profiling
+// add schema validation for Redeem
 // check session

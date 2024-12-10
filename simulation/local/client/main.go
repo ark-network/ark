@@ -70,11 +70,8 @@ func (c *Client) setupArkClient(aspUrl string) error {
 	}
 
 	inMemoryStatsCollector := middleware.NewInMemoryStatsCollector()
-	loggingStatsCollector := middleware.NewLoggingStatsCollector()
-
 	statsCollector := middleware.NewCompositeStatsCollector(
 		inMemoryStatsCollector,
-		loggingStatsCollector,
 	)
 
 	chain := middleware.NewChain(
@@ -273,6 +270,7 @@ func (c *Client) onboard(amount float64) error {
 
 	_, err = c.ArkClient.Settle(ctx)
 	if err != nil {
+		log.Errorf("client %s failed to onboard: %v", c.ID, err)
 		return fmt.Errorf("client %s failed to onboard: %v", c.ID, err)
 	}
 
@@ -354,7 +352,6 @@ func (c *Client) balance() error {
 
 func (c *Client) stats() error {
 	stats := c.StatsCollector.Stats
-	log.Infof("Client %s stats: %v", c.ID, stats)
 	c.sendLog(fmt.Sprintf("Stats: %v", stats))
 	return nil
 }
@@ -424,13 +421,4 @@ type Client struct {
 	cancel         context.CancelFunc
 	Address        string
 	StatsCollector *middleware.InMemoryStatsCollector
-}
-
-func printJSON(resp interface{}) error {
-	jsonBytes, err := json.MarshalIndent(resp, "", "\t")
-	if err != nil {
-		return err
-	}
-	log.Infoln(string(jsonBytes))
-	return nil
 }

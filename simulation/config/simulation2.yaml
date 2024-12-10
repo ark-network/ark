@@ -53,4 +53,23 @@ rounds:
   - number: 4
     actions:
       client_3:
+        - type: "Balance"
+
+  - number: 5
+    actions:
+      client_3:
+        - type: "Redeem"
+          amount: 0.00002000
+          address: "tb1qm6rs3jusjjrrfvsaf3q29r2yfj5psm54hvlqcw"
+          force: false
+          compute_expiration: false
+
+  - number: 6
+    actions:
+      client_3:
         - type: "Stats"
+
+  - number: 7
+    actions:
+      client_3:
+        - type: "Balance"

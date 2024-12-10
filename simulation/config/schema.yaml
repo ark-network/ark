@@ -50,8 +50,7 @@ properties:
                       - "Onboard"
                       - "SendAsync"
                       - "Claim"
-                      - "CollaborativeRedeem"
-                      - "UnilateralExit"
+                      - "Redeem"
                       - "Balance"
                       - "Stats"
                   amount:

@@ -62,25 +62,20 @@ func main() {
 		ID: clientID,
 	}
 
-	// Initialize context for cancellation
 	client.ctx, client.cancel = context.WithCancel(context.Background())
 
-	// Set up ArkClient
 	if err := client.setupArkClient(explorerUrl, aspUrl); err != nil {
 		log.Fatalf("Failed to set up client: %v", err)
 	}
 
-	// Start HTTP server
 	go client.startServer()
 
 	time.Sleep(20 * time.Second)
 
-	// Send address to orchestrator
 	if err := client.sendAddress(); err != nil {
 		log.Fatalf("Failed to send address to orchestrator: %v", err)
 	}
 
-	// Wait for shutdown signal
 	client.handleSignals()
 }
 
@@ -107,11 +102,8 @@ func (c *Client) setupArkClient(explorerUrl, aspUrl string) error {
 	}
 
 	inMemoryStatsCollector := middleware.NewInMemoryStatsCollector()
-	loggingStatsCollector := middleware.NewLoggingStatsCollector()
-
 	statsCollector := middleware.NewCompositeStatsCollector(
 		inMemoryStatsCollector,
-		loggingStatsCollector,
 	)
 
 	chain := middleware.NewChain(
@@ -389,7 +381,7 @@ func (c *Client) onboard(url string, amount uint32) error {
 		return fmt.Errorf("client %s failed to settle onboard: %v", c.ID, err)
 	}
 
-	logMsg := fmt.Sprintf("Client %s onboarded successfully with %f BTC", c.ID, amount)
+	logMsg := fmt.Sprintf("Client %s onboarded successfully with %d BTC", c.ID, amount)
 	log.Infoln(logMsg)
 	if err := c.sendLogToOrchestrator(logMsg, "Info"); err != nil {
 		log.Errorf("Failed to send log to orchestrator: %v", err)

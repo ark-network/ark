@@ -55,6 +55,7 @@ func main() {
 			}
 
 			time.Sleep(1 * time.Second)
+			log.Infoln("Generated block")
 		}
 	}()
 

@@ -3,7 +3,7 @@ set -e
 
 cd ../server/cmd/
 
-sleep 2
+sleep 10
 
 echo "Creating wallet..."
 go run ./arkd wallet create --password pass
@@ -11,8 +11,8 @@ go run ./arkd wallet create --password pass
 echo "Unlocking wallet..."
 go run ./arkd wallet unlock --password pass
 
-echo "Sleep for 10 seconds..."
-sleep 10
+echo "Sleep for 15 seconds..."
+sleep 15
 
 echo "Get Address..."
 ADDRESS=$(go run ./arkd --no-macaroon wallet address)
