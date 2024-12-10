@@ -46,7 +46,7 @@ For smaller tests, local deployment allows for a quick setup:
    ```
 2. **Start Ark Server**:
    ```bash
-   make arkd
+   make setup-ark
    ```
 
 3.**Configure Testing Scenario**:
@@ -54,8 +54,9 @@ For smaller tests, local deployment allows for a quick setup:
     - Check out the example configuration for guidance.
 
 4. **Run Simulation**:
+Choose simulation from ./config
    ```bash
-   make run
+   make run ARGS="--sim simulation.yaml"
    ```
 
 ### AWS Deployment
@@ -87,21 +88,14 @@ To overcome this and to provide a more realistic simulation, this framework supp
 
 3. **Verify Installation**:
     - SSH into the EC2 instance
-    - Check installation progress:
+    - Verify that the Ark Client Docker image has been successfully pushed to ECR
       ```bash
       less /var/log/cloud-init-output.log
       ```
-    - Verify that the Ark Client Docker image has been successfully pushed to ECR
-
-4. **Run Remote Simulation**:
+   
+4. **Run Web application**:   
    ```bash
-   cd ./ark/simulation
-   SUBNET_IDS={SUBNET_IDS} SECURITY_GROUP_IDS={SECURITY_GROUP_IDS} make run-remote
+   make run-web ARGS="--subnet {SUBNET_IDS} --sg {SECURITY_GROUP_IDS}"
    ```
-5. **Run Remote Simulation in Signet**:   
-   ```bash
-   cd ./ark/simulation
-   export SUBNET_IDS={SUBNET_IDS}
-   export SECURITY_GROUP_IDS={SECURITY_GROUP_IDS}
-   SUBNET_IDS={SUBNET_IDS} SECURITY_GROUP_IDS={SECURITY_GROUP_IDS} make run-remote-signet ARGS="--asp-url {URL} --signet"
-   ```
+5. **Run Simulation**:
+   Visit the web application to run the simulation {EC2_IP}:9000
