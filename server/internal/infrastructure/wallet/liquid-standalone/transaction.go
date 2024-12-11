@@ -301,7 +301,7 @@ func (s *service) EstimateFees(
 		}
 
 		if len(in.TapLeafScript) == 1 {
-			isSweep, err := (&tree.CSVMultisigClosure{}).Decode(in.TapLeafScript[0].Script)
+			isSweep, err := (&tree.CSVMultisigClosure{}).Decode(txscript.MakeScriptTokenizer(0, in.TapLeafScript[0].Script))
 			if err != nil {
 				return 0, err
 			}
