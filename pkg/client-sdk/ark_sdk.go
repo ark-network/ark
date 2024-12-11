@@ -31,6 +31,7 @@ type ArkClient interface {
 	GetTransactionEventChannel() chan types.TransactionEvent
 	RedeemNotes(ctx context.Context, notes []string) (string, error)
 	SetNostrNotificationRecipient(ctx context.Context, nostrRecipient string) error
+	SignTransaction(ctx context.Context, tx string) (string, error)
 	Stop() error
 }
 
