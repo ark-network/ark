@@ -7,6 +7,7 @@ import (
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/ports"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/elementsutil"
 	"github.com/vulpemventures/go-elements/psetv2"
@@ -33,7 +34,7 @@ func sweepTransaction(
 
 	for i, input := range sweepInputs {
 		sweepClosure := &tree.CSVMultisigClosure{}
-		isSweep, err := sweepClosure.Decode(input.GetLeafScript())
+		isSweep, err := sweepClosure.Decode(txscript.MakeScriptTokenizer(0, input.GetLeafScript()))
 		if err != nil {
 			return nil, err
 		}

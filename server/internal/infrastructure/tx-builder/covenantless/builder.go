@@ -1263,7 +1263,7 @@ func castToOutpoints(inputs []ports.TxInput) []ports.TxOutpoint {
 func extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.TaprootTapLeafScript, internalKey *secp256k1.PublicKey, lifetime *common.RelativeLocktime, err error) {
 	for _, leaf := range input.TaprootLeafScript {
 		closure := &tree.CSVMultisigClosure{}
-		valid, err := closure.Decode(leaf.Script)
+		valid, err := closure.Decode(txscript.MakeScriptTokenizer(0, leaf.Script))
 		if err != nil {
 			return nil, nil, nil, err
 		}

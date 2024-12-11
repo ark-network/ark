@@ -9,6 +9,7 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/taproot"
@@ -200,7 +201,7 @@ func findCovenantSweepClosure(
 	var sweepClosure *taproot.TapElementsLeaf
 	for _, tapLeaf := range tx.Inputs[0].TapLeafScript {
 		closure := &tree.CSVMultisigClosure{}
-		valid, err := closure.Decode(tapLeaf.Script)
+		valid, err := closure.Decode(txscript.MakeScriptTokenizer(0, tapLeaf.Script))
 		if err != nil {
 			continue
 		}
