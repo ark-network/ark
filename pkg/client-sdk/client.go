@@ -101,6 +101,10 @@ func (a *arkClient) GetTransactionEventChannel() chan types.TransactionEvent {
 	return a.store.TransactionStore().GetEventChannel()
 }
 
+func (a *arkClient) SignTransaction(ctx context.Context, tx string) (string, error) {
+	return a.wallet.SignTransaction(ctx, a.explorer, tx)
+}
+
 func (a *arkClient) Stop() error {
 	if a.Config.WithTransactionFeed {
 		a.txStreamCtxCancel()

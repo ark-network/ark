@@ -440,6 +440,22 @@ func SetNostrNotificationRecipientWrapper() js.Func {
 	})
 }
 
+func SignTransactionWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if len(args) != 1 {
+			return nil, errors.New("invalid number of args")
+		}
+
+		tx := args[0]
+
+		if tx.Type() != js.TypeString {
+			return nil, errors.New("invalid transaction argument: expected string")
+		}
+
+		return arkSdkClient.SignTransaction(context.Background(), tx.String())
+	})
+}
+
 type promise func(args []js.Value) (interface{}, error)
 
 func JSPromise(fn promise) js.Func {
