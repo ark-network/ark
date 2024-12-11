@@ -15,6 +15,7 @@ import (
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcwallet/waddrmgr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/address"
@@ -28,15 +29,15 @@ import (
 type txBuilder struct {
 	wallet            ports.WalletService
 	net               common.Network
-	roundLifetime     common.Locktime
-	boardingExitDelay common.Locktime
+	roundLifetime     common.RelativeLocktime
+	boardingExitDelay common.RelativeLocktime
 }
 
 func NewTxBuilder(
 	wallet ports.WalletService,
 	net common.Network,
-	roundLifetime common.Locktime,
-	boardingExitDelay common.Locktime,
+	roundLifetime common.RelativeLocktime,
+	boardingExitDelay common.RelativeLocktime,
 ) ports.TxBuilder {
 	return &txBuilder{wallet, net, roundLifetime, boardingExitDelay}
 }
@@ -221,7 +222,7 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 			return nil, err
 		}
 
-		var locktime *common.Locktime
+		var locktime *common.AbsoluteLocktime
 
 		switch c := closure.(type) {
 		case *tree.CLTVMultisigClosure:
@@ -232,14 +233,13 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 		}
 
 		if locktime != nil {
-			switch locktime.Type {
-			case common.LocktimeTypeBlock:
-				if locktime.Value > blocktimestamp.Height {
-					return nil, fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block height)", locktime.Value, blocktimestamp.Height)
+			if !locktime.IsSeconds() {
+				if *locktime > common.AbsoluteLocktime(blocktimestamp.Time) {
+					return nil, fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block time)", *locktime, blocktimestamp.Time)
 				}
-			case common.LocktimeTypeSecond:
-				if locktime.Value > uint32(blocktimestamp.Time) {
-					return nil, fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block time)", locktime.Value, blocktimestamp.Time)
+			} else {
+				if *locktime > common.AbsoluteLocktime(blocktimestamp.Height) {
+					return nil, fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block height)", *locktime, blocktimestamp.Height)
 				}
 			}
 		}
@@ -279,6 +279,11 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 		vtxoInput := psetv2.InputArgs{
 			Txid:    vtxoKey.Txid,
 			TxIndex: vtxoKey.VOut,
+		}
+
+		if locktime != nil {
+			vtxoInput.TimeLock = uint32(*locktime)
+			vtxoInput.Sequence = wire.MaxTxInSequenceNum - 1
 		}
 
 		vtxoTapKey, err := vtxo.TapKey()
@@ -461,7 +466,7 @@ func (b *txBuilder) BuildRoundTx(
 	return
 }
 
-func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime *common.Locktime, sweepInput ports.SweepInput, err error) {
+func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime *common.RelativeLocktime, sweepInput ports.SweepInput, err error) {
 	pset, err := psetv2.NewPsetFromBase64(node.Tx)
 	if err != nil {
 		return nil, nil, err
@@ -1200,7 +1205,7 @@ func (b *txBuilder) onchainNetwork() *network.Network {
 	}
 }
 
-func extractSweepLeaf(input psetv2.Input) (sweepLeaf *psetv2.TapLeafScript, lifetime *common.Locktime, err error) {
+func extractSweepLeaf(input psetv2.Input) (sweepLeaf *psetv2.TapLeafScript, lifetime *common.RelativeLocktime, err error) {
 	for _, leaf := range input.TapLeafScript {
 		closure := &tree.CSVSigClosure{}
 		valid, err := closure.Decode(leaf.Script)

@@ -29,8 +29,8 @@ var (
 	wallet *mockedWallet
 	pubkey *secp256k1.PublicKey
 
-	roundLifetime     = common.Locktime{Type: common.LocktimeTypeSecond, Value: 1209344}
-	boardingExitDelay = common.Locktime{Type: common.LocktimeTypeSecond, Value: 512}
+	roundLifetime     = common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 1209344}
+	boardingExitDelay = common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 512}
 )
 
 func TestMain(m *testing.M) {

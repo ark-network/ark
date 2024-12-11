@@ -97,7 +97,7 @@ func (e *PK) Script(verify bool) (string, error) {
 }
 
 type Older struct {
-	Locktime common.Locktime
+	Locktime common.RelativeLocktime
 }
 
 func (e *Older) String() string {
@@ -124,7 +124,7 @@ func (e *Older) Parse(policy string) error {
 		return ErrInvalidOlderPolicy
 	}
 
-	e.Locktime = common.Locktime{Type: common.LocktimeTypeBlock, Value: uint32(timeout)}
+	e.Locktime = common.RelativeLocktime{Type: common.LocktimeTypeBlock, Value: uint32(timeout)}
 
 	return nil
 }

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"testing"
+	"time"
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
@@ -47,7 +48,7 @@ func TestRoundTripCSV(t *testing.T) {
 		MultisigClosure: tree.MultisigClosure{
 			PubKeys: []*secp256k1.PublicKey{seckey.PubKey()},
 		},
-		Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 1024},
+		Locktime: common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 1024},
 	}
 
 	leaf, err := csvSig.Script()
@@ -222,7 +223,7 @@ func TestCSVSigClosure(t *testing.T) {
 			MultisigClosure: tree.MultisigClosure{
 				PubKeys: []*secp256k1.PublicKey{pubkey1},
 			},
-			Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 1024},
+			Locktime: common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 1024},
 		}
 
 		script, err := csvSig.Script()
@@ -245,7 +246,7 @@ func TestCSVSigClosure(t *testing.T) {
 			MultisigClosure: tree.MultisigClosure{
 				PubKeys: []*secp256k1.PublicKey{pubkey1, pubkey2},
 			},
-			Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 512 * 4}, // ~2 weeks
+			Locktime: common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 512 * 4}, // ~2 weeks
 		}
 
 		script, err := csvSig.Script()
@@ -293,7 +294,7 @@ func TestCSVSigClosure(t *testing.T) {
 			MultisigClosure: tree.MultisigClosure{
 				PubKeys: []*secp256k1.PublicKey{pubkey1, pubkey2},
 			},
-			Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 1024},
+			Locktime: common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 1024},
 		}
 		// Should be same as multisig witness size (64 bytes per signature)
 		require.Equal(t, 128, csvSig.WitnessSize())
@@ -304,7 +305,7 @@ func TestCSVSigClosure(t *testing.T) {
 			MultisigClosure: tree.MultisigClosure{
 				PubKeys: []*secp256k1.PublicKey{pubkey1},
 			},
-			Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: common.SECONDS_MAX}, // Maximum allowed value
+			Locktime: common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: common.SECONDS_MAX}, // Maximum allowed value
 		}
 
 		script, err := csvSig.Script()
@@ -444,7 +445,7 @@ func TestCSVSigClosureWitness(t *testing.T) {
 		MultisigClosure: tree.MultisigClosure{
 			PubKeys: []*secp256k1.PublicKey{pub1},
 		},
-		Locktime: common.Locktime{Type: common.LocktimeTypeBlock, Value: 144},
+		Locktime: common.RelativeLocktime{Type: common.LocktimeTypeBlock, Value: 144},
 	}
 
 	witness, err := closure.Witness(controlBlock, signatures)
@@ -508,18 +509,34 @@ func TestCLTVMultisigClosure(t *testing.T) {
 	require.NoError(t, err)
 	pubkey2 := privkey2.PubKey()
 
-	locktime := common.Locktime{
-		Type:  common.LocktimeTypeBlock,
-		Value: 100,
-	}
-
 	t.Run("valid single key with CLTV", func(t *testing.T) {
 		closure := &tree.CLTVMultisigClosure{
 			MultisigClosure: tree.MultisigClosure{
 				PubKeys: []*secp256k1.PublicKey{pubkey1},
 				Type:    tree.MultisigTypeChecksig,
 			},
-			Locktime: locktime,
+			Locktime: common.AbsoluteLocktime(time.Now().Unix()),
+		}
+
+		script, err := closure.Script()
+		require.NoError(t, err)
+
+		decodedClosure := &tree.CLTVMultisigClosure{}
+		valid, err := decodedClosure.Decode(script)
+		require.NoError(t, err)
+		require.True(t, valid)
+		require.Equal(t, closure.Locktime, decodedClosure.Locktime)
+		require.Equal(t, 1, len(decodedClosure.PubKeys))
+		require.Equal(t, schnorr.SerializePubKey(pubkey1), schnorr.SerializePubKey(decodedClosure.PubKeys[0]))
+	})
+
+	t.Run("valid single key with CLTV height", func(t *testing.T) {
+		closure := &tree.CLTVMultisigClosure{
+			MultisigClosure: tree.MultisigClosure{
+				PubKeys: []*secp256k1.PublicKey{pubkey1},
+				Type:    tree.MultisigTypeChecksig,
+			},
+			Locktime: common.AbsoluteLocktime(3000),
 		}
 
 		script, err := closure.Script()
@@ -540,7 +557,7 @@ func TestCLTVMultisigClosure(t *testing.T) {
 				PubKeys: []*secp256k1.PublicKey{pubkey1, pubkey2},
 				Type:    tree.MultisigTypeChecksig,
 			},
-			Locktime: locktime,
+			Locktime: common.AbsoluteLocktime(time.Now().Unix()),
 		}
 
 		script, err := closure.Script()
@@ -560,7 +577,7 @@ func TestCLTVMultisigClosure(t *testing.T) {
 				PubKeys: []*secp256k1.PublicKey{pubkey1, pubkey2},
 				Type:    tree.MultisigTypeChecksigAdd,
 			},
-			Locktime: locktime,
+			Locktime: common.AbsoluteLocktime(time.Now().Unix()),
 		}
 
 		script, err := closure.Script()
@@ -581,7 +598,7 @@ func TestCLTVMultisigClosure(t *testing.T) {
 				PubKeys: []*secp256k1.PublicKey{pubkey1, pubkey2},
 				Type:    tree.MultisigTypeChecksig,
 			},
-			Locktime: locktime,
+			Locktime: common.AbsoluteLocktime(time.Now().Unix()),
 		}
 
 		controlBlock := bytes.Repeat([]byte{0x00}, 32)
@@ -606,7 +623,7 @@ func TestCLTVMultisigClosure(t *testing.T) {
 				PubKeys: []*secp256k1.PublicKey{pubkey1},
 				Type:    tree.MultisigTypeChecksig,
 			},
-			Locktime: locktime,
+			Locktime: common.AbsoluteLocktime(time.Now().Unix()),
 		}
 		script, err := validClosure.Script()
 		require.NoError(t, err)

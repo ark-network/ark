@@ -16,30 +16,42 @@ const (
 	SEQUENCE_LOCKTIME_DISABLE_FLAG = 1 << 31
 
 	SECONDS_PER_BLOCK = 10 * 60 // 10 minutes
+
+	// before this value, nLocktime is interpreted as blockheight
+	nLocktimeMinSeconds = 500_000_000
 )
 
-type LocktimeType uint
+// RelativeLocktimeType represents a BIP68 relative locktime
+// it is passed as argument to CheckSequenceVerify opcode
+type RelativeLocktimeType uint
 
 const (
-	LocktimeTypeSecond LocktimeType = iota
+	LocktimeTypeSecond RelativeLocktimeType = iota
 	LocktimeTypeBlock
 )
 
-// Locktime represents a BIP68 relative timelock value.
-// This struct is comparable and can be used as a map key.
-type Locktime struct {
-	Type  LocktimeType
+// AbsoluteLocktime represents an nLocktime value
+// it is used as argument to a CheckLocktimeVerify opcode
+type AbsoluteLocktime uint32
+
+func (l AbsoluteLocktime) IsSeconds() bool {
+	return l >= nLocktimeMinSeconds
+}
+
+// RelativeLocktime represents a BIP68 relative timelock value
+type RelativeLocktime struct {
+	Type  RelativeLocktimeType
 	Value uint32
 }
 
-func (l Locktime) Seconds() int64 {
+func (l RelativeLocktime) Seconds() int64 {
 	if l.Type == LocktimeTypeBlock {
 		return int64(l.Value) * SECONDS_PER_BLOCK
 	}
 	return int64(l.Value)
 }
 
-func (l Locktime) Compare(other Locktime) int {
+func (l RelativeLocktime) Compare(other RelativeLocktime) int {
 	val := l.Seconds()
 	otherVal := other.Seconds()
 
@@ -53,11 +65,11 @@ func (l Locktime) Compare(other Locktime) int {
 }
 
 // LessThan returns true if this locktime is less than the other locktime
-func (l Locktime) LessThan(other Locktime) bool {
+func (l RelativeLocktime) LessThan(other RelativeLocktime) bool {
 	return l.Compare(other) < 0
 }
 
-func BIP68Sequence(locktime Locktime) (uint32, error) {
+func BIP68Sequence(locktime RelativeLocktime) (uint32, error) {
 	value := locktime.Value
 	isSeconds := locktime.Type == LocktimeTypeSecond
 	if isSeconds {
@@ -72,7 +84,7 @@ func BIP68Sequence(locktime Locktime) (uint32, error) {
 	return blockchain.LockTimeToSequence(isSeconds, value), nil
 }
 
-func BIP68DecodeSequence(sequence []byte) (*Locktime, error) {
+func BIP68DecodeSequence(sequence []byte) (*RelativeLocktime, error) {
 	scriptNumber, err := txscript.MakeScriptNum(sequence, true, len(sequence))
 	if err != nil {
 		return nil, err
@@ -89,8 +101,8 @@ func BIP68DecodeSequence(sequence []byte) (*Locktime, error) {
 	}
 	if asNumber&SEQUENCE_LOCKTIME_TYPE_FLAG != 0 {
 		seconds := asNumber & SEQUENCE_LOCKTIME_MASK << SEQUENCE_LOCKTIME_GRANULARITY
-		return &Locktime{Type: LocktimeTypeSecond, Value: uint32(seconds)}, nil
+		return &RelativeLocktime{Type: LocktimeTypeSecond, Value: uint32(seconds)}, nil
 	}
 
-	return &Locktime{Type: LocktimeTypeBlock, Value: uint32(asNumber)}, nil
+	return &RelativeLocktime{Type: LocktimeTypeBlock, Value: uint32(asNumber)}, nil
 }

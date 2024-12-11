@@ -33,10 +33,10 @@ const marketHourDelta = 5 * time.Minute
 type covenantlessService struct {
 	network             common.Network
 	pubkey              *secp256k1.PublicKey
-	roundLifetime       common.Locktime
+	roundLifetime       common.RelativeLocktime
 	roundInterval       int64
-	unilateralExitDelay common.Locktime
-	boardingExitDelay   common.Locktime
+	unilateralExitDelay common.RelativeLocktime
+	boardingExitDelay   common.RelativeLocktime
 
 	nostrDefaultRelays []string
 
@@ -62,7 +62,7 @@ type covenantlessService struct {
 func NewCovenantlessService(
 	network common.Network,
 	roundInterval int64,
-	roundLifetime, unilateralExitDelay, boardingExitDelay common.Locktime,
+	roundLifetime, unilateralExitDelay, boardingExitDelay common.RelativeLocktime,
 	nostrDefaultRelays []string,
 	walletSvc ports.WalletService, repoManager ports.RepoManager,
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
@@ -310,7 +310,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 			return "", fmt.Errorf("failed to decode forfeit closure: %s", err)
 		}
 
-		var locktime *common.Locktime
+		var locktime *common.AbsoluteLocktime
 
 		switch c := closure.(type) {
 		case *tree.CLTVMultisigClosure:
@@ -325,14 +325,13 @@ func (s *covenantlessService) SubmitRedeemTx(
 			if err != nil {
 				return "", fmt.Errorf("failed to get current block time: %s", err)
 			}
-			switch locktime.Type {
-			case common.LocktimeTypeBlock:
-				if locktime.Value > blocktimestamp.Height {
-					return "", fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block height)", locktime.Value, blocktimestamp.Height)
+			if !locktime.IsSeconds() {
+				if *locktime > common.AbsoluteLocktime(blocktimestamp.Height) {
+					return "", fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block time)", *locktime, blocktimestamp.Time)
 				}
-			case common.LocktimeTypeSecond:
-				if locktime.Value > uint32(blocktimestamp.Time) {
-					return "", fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block time)", locktime.Value, blocktimestamp.Time)
+			} else {
+				if *locktime > common.AbsoluteLocktime(blocktimestamp.Time) {
+					return "", fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block time)", *locktime, blocktimestamp.Time)
 				}
 			}
 		}

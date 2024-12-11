@@ -358,7 +358,7 @@ func findSweepableOutputs(
 					}
 				}
 
-				var lifetime *common.Locktime
+				var lifetime *common.RelativeLocktime
 				lifetime, sweepInput, err = txbuilder.GetSweepInput(node)
 				if err != nil {
 					return nil, err

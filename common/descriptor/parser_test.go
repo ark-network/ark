@@ -54,7 +54,7 @@ func TestParseTaprootDescriptor(t *testing.T) {
 							},
 						},
 						Second: &descriptor.Older{
-							Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 144},
+							Locktime: common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 144},
 						},
 					},
 				},
@@ -92,7 +92,7 @@ func TestParseTaprootDescriptor(t *testing.T) {
 							},
 						},
 						First: &descriptor.Older{
-							Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 604672},
+							Locktime: common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 604672},
 						},
 					},
 				},
@@ -157,7 +157,7 @@ func TestParseTaprootDescriptor(t *testing.T) {
 							},
 						},
 						First: &descriptor.Older{
-							Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 604672},
+							Locktime: common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 604672},
 						},
 					},
 					&descriptor.And{
@@ -233,7 +233,7 @@ func TestParseTaprootDescriptor(t *testing.T) {
 					},
 					&descriptor.And{
 						First: &descriptor.Older{
-							Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 512},
+							Locktime: common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 512},
 						},
 						Second: &descriptor.And{
 							First: &descriptor.PK{
@@ -279,7 +279,7 @@ func TestParseTaprootDescriptor(t *testing.T) {
 					},
 					&descriptor.And{
 						First: &descriptor.Older{
-							Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 1024},
+							Locktime: common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 1024},
 						},
 						Second: &descriptor.And{
 							First: &descriptor.PK{
@@ -300,7 +300,7 @@ func TestParseTaprootDescriptor(t *testing.T) {
 					},
 					&descriptor.And{
 						First: &descriptor.Older{
-							Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 512},
+							Locktime: common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 512},
 						},
 						Second: &descriptor.PK{
 							Key: descriptor.XOnlyKey{
@@ -312,7 +312,7 @@ func TestParseTaprootDescriptor(t *testing.T) {
 					},
 					&descriptor.And{
 						First: &descriptor.Older{
-							Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 512},
+							Locktime: common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 512},
 						},
 						Second: &descriptor.And{
 							First: &descriptor.PK{
@@ -394,7 +394,7 @@ func TestCompileDescriptor(t *testing.T) {
 							},
 						},
 						Second: &descriptor.Older{
-							Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 1024},
+							Locktime: common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 1024},
 						},
 					},
 				},
@@ -465,14 +465,14 @@ func TestParseOlder(t *testing.T) {
 			policy:         "older(512)",
 			expectedScript: "03010040b275",
 			expected: descriptor.Older{
-				Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 512},
+				Locktime: common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 512},
 			},
 		},
 		{
 			policy:         "older(1024)",
 			expectedScript: "03020040b275",
 			expected: descriptor.Older{
-				Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 1024},
+				Locktime: common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 1024},
 			},
 		},
 	}
@@ -507,7 +507,7 @@ func TestParseAnd(t *testing.T) {
 					},
 				},
 				Second: &descriptor.Older{
-					Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 512},
+					Locktime: common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 512},
 				},
 			},
 		},
@@ -523,7 +523,7 @@ func TestParseAnd(t *testing.T) {
 					},
 				},
 				First: &descriptor.Older{
-					Locktime: common.Locktime{Type: common.LocktimeTypeSecond, Value: 512},
+					Locktime: common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 512},
 				},
 			},
 		},
