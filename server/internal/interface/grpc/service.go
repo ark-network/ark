@@ -197,10 +197,11 @@ func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 			InsecureSkipVerify: true, // #nosec
 		})
 	}
-	gatewayOpts := grpc.WithTransportCredentials(gatewayCreds)
-	conn, err := grpc.NewClient(
-		s.config.gatewayAddress(), gatewayOpts,
-	)
+	gatewayOpts := []grpc.DialOption{
+		grpc.WithTransportCredentials(gatewayCreds),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(8 * 1024 * 1024)),
+	}
+	conn, err := grpc.NewClient(s.config.gatewayAddress(), gatewayOpts...)
 	if err != nil {
 		return err
 	}
