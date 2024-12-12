@@ -592,7 +592,7 @@ func readPassword(ctx *cli.Context) ([]byte, error) {
 	if len(password) == 0 {
 		fmt.Print("unlock your wallet with password: ")
 		var err error
-		password, err = term.ReadPassword(syscall.Stdin)
+		password, err = term.ReadPassword(int(syscall.Stdin))
 		fmt.Println()
 		if err != nil {
 			return nil, err
