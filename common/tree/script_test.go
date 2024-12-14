@@ -34,6 +34,11 @@ var exPubKey2 = "fc68d5ea9279cc9d2c57e6885e21bbaee9c3aec85089f1d6c705c017d321ea8
 var exPubKey3 = "fc68d5ea9279cc9d2c57e6885e21bbaee9c3aec85089f1d6c705c017d321ea84"
 var exPubKey4 = "fc68d5ea9279cc9d2c57e6885e21bbaee9c3aec85089f1d6c705c017d321ea84"
 
+var sequenceExample = "00400007"
+var disabledSequenceExample = "ffffffff"
+
+var exampleLocktime = "1711249200"
+
 type ClosureTestRun struct {
 	run           string
 	script        string
@@ -112,9 +117,6 @@ var multisigClosureCases = []ClosureTestRun{
 		expectedError: true,
 	},
 }
-
-var sequenceExample = "00400007"
-var disabledSequenceExample = "ffffffff"
 
 var csvMultisigClosureCases = []ClosureTestRun{
 	{
@@ -209,8 +211,98 @@ var csvMultisigClosureCases = []ClosureTestRun{
 	},
 }
 
+var cltvMultisigClosureCases = []ClosureTestRun{
+	{
+		run: "CLTVMultisig 2 pub keys",
+		script: exampleLocktime +
+			fmtCode(txscript.OP_CHECKLOCKTIMEVERIFY) +
+			fmtCode(txscript.OP_DROP) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey1 +
+			fmtCode(txscript.OP_CHECKSIGVERIFY) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey2 +
+			fmtCode(txscript.OP_CHECKSIG),
+		expectedError: false,
+	},
+
+	{
+		run: "CLTVMultisig 3 pub keys",
+		script: exampleLocktime +
+			fmtCode(txscript.OP_CHECKLOCKTIMEVERIFY) +
+			fmtCode(txscript.OP_DROP) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey1 +
+			fmtCode(txscript.OP_CHECKSIGVERIFY) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey2 +
+			fmtCode(txscript.OP_CHECKSIGVERIFY) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey3 +
+			fmtCode(txscript.OP_CHECKSIG),
+		expectedError: false,
+	},
+
+	{
+		run: "CLTVMultisig 4 pub keys",
+		script: exampleLocktime +
+			fmtCode(txscript.OP_CHECKLOCKTIMEVERIFY) +
+			fmtCode(txscript.OP_DROP) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey1 +
+			fmtCode(txscript.OP_CHECKSIGVERIFY) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey2 +
+			fmtCode(txscript.OP_CHECKSIGVERIFY) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey3 +
+			fmtCode(txscript.OP_CHECKSIGVERIFY) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey4 +
+			fmtCode(txscript.OP_CHECKSIG),
+		expectedError: false,
+	},
+
+	{
+		run: "CLTVMultisig missing locktime",
+		script: fmtCode(txscript.OP_CHECKLOCKTIMEVERIFY) +
+			fmtCode(txscript.OP_DROP) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey1 +
+			fmtCode(txscript.OP_CHECKSIGVERIFY) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey2 +
+			fmtCode(txscript.OP_CHECKSIG),
+		expectedError: true,
+	},
+
+	{
+		run: "CLTVMultisig missing OP_CHECKLOCKTIMEVERIFY",
+		script: exampleLocktime +
+			fmtCode(txscript.OP_DROP) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey1 +
+			fmtCode(txscript.OP_CHECKSIGVERIFY) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey2 +
+			fmtCode(txscript.OP_CHECKSIG),
+		expectedError: true,
+	},
+}
+
 func TestDecodeClosure(t *testing.T) {
-	for _, testCase := range append(multisigClosureCases, csvMultisigClosureCases...) {
+	var cases = [][]ClosureTestRun{
+		multisigClosureCases,
+		csvMultisigClosureCases,
+		cltvMultisigClosureCases,
+	}
+
+	var mergedCases []ClosureTestRun
+	for _, s := range cases {
+		mergedCases = append(mergedCases, s...)
+	}
+
+	for _, testCase := range mergedCases {
 		t.Run(testCase.run, func(t *testing.T) {
 			t.Parallel()
 			scriptBytes, err := hex.DecodeString(testCase.script)
