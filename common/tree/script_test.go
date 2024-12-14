@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/ark-network/ark/common"
@@ -17,23 +19,69 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDecodeClosure(t *testing.T) {
-	testCases := []struct {
-		script string
-	}{
-		{
-			script: "a820d6b309eb6725e371c6b73b232492d7889f9800f09b844d1a6e64be607f5b752b876920daf3e1cf88c667052a05995aede0c325695e53c058f8dfde4b12e7d2a381d6e0ac",
-		},
-		{
-			script: "6ea820264f0fff500e57f00a3c12a655def6f76cf22a604c39692afc619f27971aad5788a8206f83c2c07899e898b7900359b0ebde54c1e789d748c2b988ada29d5e2b28df1a88827660877c5f879b646d00677c827660877c5f879b646d5167827c757c827c758768686920e87b6599b5639844ae359f80b762d01478721d654a47bc174105f289b268707bad20873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465ac",
-		},
-	}
+// {&CSVSigClosure{}, "CSV Signature"}, Check Sequence Verify signature
+// {&CLTVMultisigClosure{}, "CLTV Multisig"}, CheckLockTimeVerify multisig
+// {&MultisigClosure{}, "Multisig"},
+// {&ConditionMultisigClosure{}, "Condition Multisig"},
+// {&UnrollClosure{}, "Unroll"},
 
-	for _, testCase := range testCases {
+func fmtCode(t int) string {
+	return fmt.Sprintf("%x", t)
+}
+
+// Schnorr pub keys 32bytes (https://learnmeabitcoin.com/technical/cryptography/elliptic-curve/schnorr/)
+var exPubKey1 = "f8352deebdf5658d95875d89656112b1dd150f176c702eea4f91a91527e48e26"
+var exPubKey2 = "fc68d5ea9279cc9d2c57e6885e21bbaee9c3aec85089f1d6c705c017d321ea84"
+var exPubKey3 = "fc68d5ea9279cc9d2c57e6885e21bbaee9c3aec85089f1d6c705c017d321ea84"
+var exPubKey4 = "fc68d5ea9279cc9d2c57e6885e21bbaee9c3aec85089f1d6c705c017d321ea84"
+
+var multisigClosureCases = []struct {
+	script string
+}{
+	{script: strings.Join([]string{
+		fmtCode(txscript.OP_DATA_32),
+		exPubKey1,
+		fmtCode(txscript.OP_CHECKSIGVERIFY),
+		fmtCode(txscript.OP_DATA_32),
+		exPubKey2,
+		fmtCode(txscript.OP_CHECKSIG),
+	}, "")},
+
+	{script: strings.Join([]string{
+		fmtCode(txscript.OP_DATA_32),
+		exPubKey1,
+		fmtCode(txscript.OP_CHECKSIGVERIFY),
+		fmtCode(txscript.OP_DATA_32),
+		exPubKey2,
+		fmtCode(txscript.OP_CHECKSIGVERIFY),
+		fmtCode(txscript.OP_DATA_32),
+		exPubKey3,
+		fmtCode(txscript.OP_CHECKSIG),
+	}, "")},
+
+	{script: strings.Join([]string{
+		fmtCode(txscript.OP_DATA_32),
+		exPubKey1,
+		fmtCode(txscript.OP_CHECKSIGVERIFY),
+		fmtCode(txscript.OP_DATA_32),
+		exPubKey2,
+		fmtCode(txscript.OP_CHECKSIGVERIFY),
+		fmtCode(txscript.OP_DATA_32),
+		exPubKey3,
+		fmtCode(txscript.OP_CHECKSIGVERIFY),
+		fmtCode(txscript.OP_DATA_32),
+		exPubKey4,
+		fmtCode(txscript.OP_CHECKSIG),
+	}, "")},
+}
+
+func TestDecodeMultisigClosure(t *testing.T) {
+	for _, testCase := range multisigClosureCases {
 		scriptBytes, err := hex.DecodeString(testCase.script)
 		require.NoError(t, err)
 
 		closure, err := tree.DecodeClosure(scriptBytes)
+		fmt.Println("aaaa", err)
 		require.NoError(t, err)
 		require.NotNil(t, closure)
 	}
