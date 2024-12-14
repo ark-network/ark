@@ -32,7 +32,6 @@ func TestDecodeClosure(t *testing.T) {
 	var exPubKey1 = "f8352deebdf5658d95875d89656112b1dd150f176c702eea4f91a91527e48e26"
 	var exPubKey2 = "fc68d5ea9279cc9d2c57e6885e21bbaee9c3aec85089f1d6c705c017d321ea84"
 	var exPubKey3 = "fc68d5ea9279cc9d2c57e6885e21bbaee9c3aec85089f1d6c705c017d321ea84"
-
 	var sequenceExample = "00400007"
 	var disabledSequenceExample = "ffffffff"
 	var exampleLocktime = "1711249200"
@@ -227,7 +226,7 @@ func TestDecodeClosure(t *testing.T) {
 
 	var conditionMultisigClosureCases = []ClosureTestRun{
 		{
-			run: "Conditional multisig closure, condition 2 nums that add up to 8",
+			run: "Conditional multisig closure, ex condition 2 nums that add up to 8",
 			script: fmtCode(txscript.OP_5) +
 				fmtCode(txscript.OP_3) +
 				fmtCode(txscript.OP_2DUP) +
