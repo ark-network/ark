@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/ark-network/ark/common"
@@ -36,54 +35,195 @@ var exPubKey3 = "fc68d5ea9279cc9d2c57e6885e21bbaee9c3aec85089f1d6c705c017d321ea8
 var exPubKey4 = "fc68d5ea9279cc9d2c57e6885e21bbaee9c3aec85089f1d6c705c017d321ea84"
 
 var multisigClosureCases = []struct {
-	script string
+	script        string
+	expectedError bool
 }{
-	{script: strings.Join([]string{
-		fmtCode(txscript.OP_DATA_32),
-		exPubKey1,
-		fmtCode(txscript.OP_CHECKSIGVERIFY),
-		fmtCode(txscript.OP_DATA_32),
-		exPubKey2,
-		fmtCode(txscript.OP_CHECKSIG),
-	}, "")},
+	{
+		script:        fmtCode(txscript.OP_DATA_32) + exPubKey1 + fmtCode(txscript.OP_CHECKSIGVERIFY) + fmtCode(txscript.OP_DATA_32) + exPubKey2 + fmtCode(txscript.OP_CHECKSIG),
+		expectedError: false,
+	},
 
-	{script: strings.Join([]string{
-		fmtCode(txscript.OP_DATA_32),
-		exPubKey1,
-		fmtCode(txscript.OP_CHECKSIGVERIFY),
-		fmtCode(txscript.OP_DATA_32),
-		exPubKey2,
-		fmtCode(txscript.OP_CHECKSIGVERIFY),
-		fmtCode(txscript.OP_DATA_32),
-		exPubKey3,
-		fmtCode(txscript.OP_CHECKSIG),
-	}, "")},
+	{
+		script:        fmtCode(txscript.OP_DATA_32) + exPubKey1 + fmtCode(txscript.OP_CHECKSIGVERIFY) + fmtCode(txscript.OP_DATA_32) + exPubKey2 + fmtCode(txscript.OP_CHECKSIGVERIFY) + fmtCode(txscript.OP_DATA_32) + exPubKey3 + fmtCode(txscript.OP_CHECKSIG),
+		expectedError: false,
+	},
 
-	{script: strings.Join([]string{
-		fmtCode(txscript.OP_DATA_32),
-		exPubKey1,
-		fmtCode(txscript.OP_CHECKSIGVERIFY),
-		fmtCode(txscript.OP_DATA_32),
-		exPubKey2,
-		fmtCode(txscript.OP_CHECKSIGVERIFY),
-		fmtCode(txscript.OP_DATA_32),
-		exPubKey3,
-		fmtCode(txscript.OP_CHECKSIGVERIFY),
-		fmtCode(txscript.OP_DATA_32),
-		exPubKey4,
-		fmtCode(txscript.OP_CHECKSIG),
-	}, "")},
+	{
+		script: fmtCode(txscript.OP_DATA_32) +
+			exPubKey1 +
+			fmtCode(txscript.OP_CHECKSIGVERIFY) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey2 +
+			fmtCode(txscript.OP_CHECKSIGVERIFY) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey3 +
+			fmtCode(txscript.OP_CHECKSIGVERIFY) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey4 +
+			fmtCode(txscript.OP_CHECKSIG),
+		expectedError: false,
+	},
+
+	{
+		script: fmtCode(txscript.OP_DATA_32) +
+			exPubKey1 +
+			fmtCode(txscript.OP_CHECKSIGVERIFY) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey2 +
+			fmtCode(txscript.OP_CHECKSIGVERIFY) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey3 +
+			fmtCode(txscript.OP_CHECKSIGVERIFY) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey4,
+		// Missing last OP_CHECKSIG
+		expectedError: true,
+	},
+
+	{
+		script: exPubKey1 + fmtCode(txscript.OP_CHECKSIGVERIFY) + fmtCode(txscript.OP_DATA_32) + exPubKey2 + fmtCode(txscript.OP_CHECKSIG),
+		// Not pushing 1st pubkey to stack (missing initial OP_DATA_32)
+		expectedError: true,
+	},
+
+	{
+		script: fmtCode(txscript.OP_DATA_32) + exPubKey1 + fmtCode(txscript.OP_CHECKSIGVERIFY) + fmtCode(txscript.OP_CHECKSIG),
+		// Missing 2nd pubkey for multisig closure
+		expectedError: true,
+	},
 }
 
 func TestDecodeMultisigClosure(t *testing.T) {
 	for _, testCase := range multisigClosureCases {
-		scriptBytes, err := hex.DecodeString(testCase.script)
-		require.NoError(t, err)
+		t.Run(testCase.script, func(t *testing.T) {
+			t.Parallel()
+			scriptBytes, err := hex.DecodeString(testCase.script)
+			require.NoError(t, err)
+			closure, err := tree.DecodeClosure(scriptBytes)
 
-		closure, err := tree.DecodeClosure(scriptBytes)
-		fmt.Println("aaaa", err)
-		require.NoError(t, err)
-		require.NotNil(t, closure)
+			if testCase.expectedError && closure != nil {
+				t.Errorf("Expected error but script decoded! Script: %q", testCase.script)
+			}
+
+			if !testCase.expectedError && err != nil {
+				t.Errorf("Failed to decode correct script! Script: %q", testCase.script)
+			}
+		})
+	}
+}
+
+var sequenceExample = "00400007"
+var disabledSequenceExample = "ffffffff"
+
+var csvMultisigClosureCases = []struct {
+	script        string
+	expectedError bool
+}{
+	{
+		script: sequenceExample +
+			fmtCode(txscript.OP_CHECKSEQUENCEVERIFY) +
+			fmtCode(txscript.OP_DROP) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey1 +
+			fmtCode(txscript.OP_CHECKSIGVERIFY) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey2 +
+			fmtCode(txscript.OP_CHECKSIG),
+		expectedError: false,
+	},
+
+	{
+		script: sequenceExample +
+			fmtCode(txscript.OP_CHECKSEQUENCEVERIFY) +
+			fmtCode(txscript.OP_DROP) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey1 +
+			fmtCode(txscript.OP_CHECKSIGVERIFY) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey2 +
+			fmtCode(txscript.OP_CHECKSIGVERIFY) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey3 +
+			fmtCode(txscript.OP_CHECKSIG),
+		expectedError: false,
+	},
+
+	{
+		script: sequenceExample +
+			fmtCode(txscript.OP_CHECKSEQUENCEVERIFY) +
+			fmtCode(txscript.OP_DROP) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey1 +
+			fmtCode(txscript.OP_CHECKSIGVERIFY) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey2 +
+			fmtCode(txscript.OP_CHECKSIGVERIFY) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey3 +
+			fmtCode(txscript.OP_CHECKSIGVERIFY) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey4 +
+			fmtCode(txscript.OP_CHECKSIG),
+		expectedError: false,
+	},
+
+	{
+		script: fmtCode(txscript.OP_CHECKSEQUENCEVERIFY) +
+			fmtCode(txscript.OP_DROP) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey1 +
+			fmtCode(txscript.OP_CHECKSIGVERIFY) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey2 +
+			fmtCode(txscript.OP_CHECKSIG),
+		// Missing sequence
+		expectedError: true,
+	},
+
+	{
+		script: sequenceExample +
+			fmtCode(txscript.OP_DROP) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey1 +
+			fmtCode(txscript.OP_CHECKSIGVERIFY) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey2 +
+			fmtCode(txscript.OP_CHECKSIG),
+		// Missing OP_CHECKSEQUENCEVERIFY
+		expectedError: true,
+	},
+
+	{
+		script: disabledSequenceExample +
+			fmtCode(txscript.OP_CHECKSEQUENCEVERIFY) +
+			fmtCode(txscript.OP_DROP) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey1 +
+			fmtCode(txscript.OP_CHECKSIGVERIFY) +
+			fmtCode(txscript.OP_DATA_32) +
+			exPubKey2 +
+			fmtCode(txscript.OP_CHECKSIG),
+		// Disabled timelock sequence
+		expectedError: true,
+	},
+}
+
+func TestCSVMultisigClosure(t *testing.T) {
+	for _, testCase := range csvMultisigClosureCases {
+		t.Run(testCase.script, func(t *testing.T) {
+			t.Parallel()
+			scriptBytes, err := hex.DecodeString(testCase.script)
+			require.NoError(t, err)
+			closure, err := tree.DecodeClosure(scriptBytes)
+
+			if testCase.expectedError && closure != nil {
+				t.Errorf("Expected error but script decoded! Script: %q", testCase.script)
+			}
+
+			if !testCase.expectedError && err != nil {
+				t.Errorf("Failed to decode correct script! Script: %q", testCase.script)
+			}
+		})
 	}
 }
 
