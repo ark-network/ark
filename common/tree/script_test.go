@@ -300,11 +300,11 @@ func TestDecodeClosure(t *testing.T) {
 			closure, err := tree.DecodeClosure(scriptBytes)
 
 			if testCase.expectedError && closure != nil {
-				t.Errorf("Expected error but script decoded!\nScript: %q", testCase.script)
+				t.Errorf("Expected error but script decoded!")
 			}
 
 			if !testCase.expectedError && err != nil {
-				t.Errorf("Failed to decode correct script!\nScript: %q\nGot error: %q", testCase.script, err)
+				t.Errorf("Failed to decode correct script!")
 			}
 		})
 	}
