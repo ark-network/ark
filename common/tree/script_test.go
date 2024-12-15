@@ -34,7 +34,7 @@ func TestDecodeClosure(t *testing.T) {
 	var exPubKey3 = "fc68d5ea9279cc9d2c57e6885e21bbaee9c3aec85089f1d6c705c017d321ea84"
 	var sequenceExample = "00400007"
 	var disabledSequenceExample = "ffffffff"
-	var exampleLocktime = "1711249200"
+	var exampleLocktime = "001b5e67"
 
 	var multisigClosureCases = []ClosureTestRun{
 		{
