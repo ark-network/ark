@@ -299,13 +299,12 @@ func TestDecodeClosure(t *testing.T) {
 			closure, err := tree.DecodeClosure(scriptBytes)
 
 			if testCase.expectedError {
-			      require.Nil(t, closure)
-			      require.Error(t, err)
-			      continue
+				require.Nil(t, closure)
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, closure)
 			}
-			
-			require.NoError(t, err)
-			require.NotNil(t, closure)
 		})
 	}
 }
