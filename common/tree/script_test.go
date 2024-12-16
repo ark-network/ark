@@ -298,13 +298,14 @@ func TestDecodeClosure(t *testing.T) {
 			require.NoError(t, err)
 			closure, err := tree.DecodeClosure(scriptBytes)
 
-			if testCase.expectedError && closure != nil {
-				t.Errorf("Expected error but script decoded!")
+			if testCase.expectedError {
+			      require.Nil(t, closure)
+			      require.Error(t, err)
+			      continue
 			}
-
-			if !testCase.expectedError && err != nil {
-				t.Errorf("Failed to decode correct script!")
-			}
+			
+			require.NoError(t, err)
+			require.NotNil(t, closure)
 		})
 	}
 }
