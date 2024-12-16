@@ -294,7 +294,6 @@ func TestDecodeClosure(t *testing.T) {
 
 	for _, testCase := range mergedCases {
 		t.Run(testCase.run, func(t *testing.T) {
-			t.Parallel()
 			scriptBytes, err := hex.DecodeString(testCase.script)
 			require.NoError(t, err)
 			closure, err := tree.DecodeClosure(scriptBytes)
