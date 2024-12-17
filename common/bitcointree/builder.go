@@ -282,7 +282,7 @@ func createRootNode(
 func createAggregatedKeyWithSweep(
 	cosigners []*secp256k1.PublicKey, server *secp256k1.PublicKey, roundLifetime common.RelativeLocktime,
 ) (*musig2.AggregateKey, *psbt.TaprootTapLeafScript, error) {
-	sweepClosure := &tree.CSVSigClosure{
+	sweepClosure := &tree.CSVMultisigClosure{
 		MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{server}},
 		Locktime:        roundLifetime,
 	}

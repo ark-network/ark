@@ -27,7 +27,7 @@ func sweepTransaction(
 			Index: input.GetIndex(),
 		})
 
-		sweepClosure := tree.CSVSigClosure{}
+		sweepClosure := tree.CSVMultisigClosure{}
 		valid, err := sweepClosure.Decode(input.GetLeafScript())
 		if err != nil {
 			return nil, err
