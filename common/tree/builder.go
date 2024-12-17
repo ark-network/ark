@@ -163,7 +163,7 @@ func (n *node) getWitnessData() (
 		return n._inputTaprootKey, n._inputTaprootTree, nil
 	}
 
-	sweepClosure := &CSVSigClosure{
+	sweepClosure := &CSVMultisigClosure{
 		MultisigClosure: MultisigClosure{PubKeys: []*secp256k1.PublicKey{n.sweepKey}},
 		Locktime:        n.roundLifetime,
 	}

@@ -238,7 +238,7 @@ func validateNodeTransaction(
 			}
 
 			switch c := closure.(type) {
-			case *CSVSigClosure:
+			case *CSVMultisigClosure:
 				isServer := len(c.MultisigClosure.PubKeys) == 1 && bytes.Equal(
 					schnorr.SerializePubKey(c.MultisigClosure.PubKeys[0]),
 					schnorr.SerializePubKey(expectedServerPubkey),

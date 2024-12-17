@@ -553,7 +553,7 @@ func (b *txBuilder) verifyTapscriptPartialSigs(pset *psetv2.Pset) (bool, error) 
 			for _, key := range c.PubKeys {
 				keys[hex.EncodeToString(schnorr.SerializePubKey(key))] = false
 			}
-		case *tree.CSVSigClosure:
+		case *tree.CSVMultisigClosure:
 			for _, key := range c.PubKeys {
 				keys[hex.EncodeToString(schnorr.SerializePubKey(key))] = false
 			}
@@ -1207,7 +1207,7 @@ func (b *txBuilder) onchainNetwork() *network.Network {
 
 func extractSweepLeaf(input psetv2.Input) (sweepLeaf *psetv2.TapLeafScript, lifetime *common.RelativeLocktime, err error) {
 	for _, leaf := range input.TapLeafScript {
-		closure := &tree.CSVSigClosure{}
+		closure := &tree.CSVMultisigClosure{}
 		valid, err := closure.Decode(leaf.Script)
 		if err != nil {
 			return nil, nil, err

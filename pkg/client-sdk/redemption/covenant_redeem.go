@@ -199,7 +199,7 @@ func findCovenantSweepClosure(
 	var locktime *common.RelativeLocktime
 	var sweepClosure *taproot.TapElementsLeaf
 	for _, tapLeaf := range tx.Inputs[0].TapLeafScript {
-		closure := &tree.CSVSigClosure{}
+		closure := &tree.CSVMultisigClosure{}
 		valid, err := closure.Decode(tapLeaf.Script)
 		if err != nil {
 			continue

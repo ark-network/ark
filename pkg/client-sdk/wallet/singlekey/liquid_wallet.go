@@ -228,7 +228,7 @@ func (s *liquidWallet) SignTransaction(
 
 				sign := false
 				switch c := closure.(type) {
-				case *tree.CSVSigClosure:
+				case *tree.CSVMultisigClosure:
 					for _, key := range c.MultisigClosure.PubKeys {
 						if bytes.Equal(schnorr.SerializePubKey(key), myPubkey) {
 							sign = true

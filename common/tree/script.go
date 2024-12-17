@@ -68,10 +68,10 @@ type MultisigClosure struct {
 	Type    MultisigType
 }
 
-// CSVSigClosure is a closure that contains a list of public keys and a
+// CSVMultisigClosure is a closure that contains a list of public keys and a
 // CHECKSEQUENCEVERIFY. The witness size is 64 bytes per key, admitting
 // the sighash type is SIGHASH_DEFAULT.
-type CSVSigClosure struct {
+type CSVMultisigClosure struct {
 	MultisigClosure
 	Locktime common.RelativeLocktime
 }
@@ -92,6 +92,14 @@ type ConditionMultisigClosure struct {
 	Condition []byte
 }
 
+// ConditionCSVMultisigClosure is a closure that contains a condition and a
+// CSV multisig closure. The condition is a boolean script that is executed with the
+// multisig witness.
+type ConditionCSVMultisigClosure struct {
+	CSVMultisigClosure
+	Condition []byte
+}
+
 func DecodeClosure(script []byte) (Closure, error) {
 	if len(script) == 0 {
 		return nil, fmt.Errorf("cannot decode empty script")
@@ -101,20 +109,21 @@ func DecodeClosure(script []byte) (Closure, error) {
 		closure Closure
 		name    string
 	}{
-		{&CSVSigClosure{}, "CSV Signature"},
+		{&CSVMultisigClosure{}, "CSV Multisig"},
 		{&CLTVMultisigClosure{}, "CLTV Multisig"},
 		{&MultisigClosure{}, "Multisig"},
 		{&ConditionMultisigClosure{}, "Condition Multisig"},
+		{&ConditionCSVMultisigClosure{}, "Condition CSV Multisig"},
 		{&UnrollClosure{}, "Unroll"},
 	}
 
-	var decodeErrors []string
+	var decodeErr []string
 	for _, t := range types {
 		scriptCopy := make([]byte, len(script))
 		copy(scriptCopy, script)
 		valid, err := t.closure.Decode(scriptCopy)
 		if err != nil {
-			decodeErrors = append(decodeErrors, fmt.Sprintf("%s: %v", t.name, err))
+			decodeErr = append(decodeErr, fmt.Sprintf("%s: %v", t.name, err))
 			continue
 		}
 		if valid {
@@ -122,10 +131,10 @@ func DecodeClosure(script []byte) (Closure, error) {
 		}
 	}
 
-	if len(decodeErrors) > 0 {
-		return nil, fmt.Errorf("failed to decode script as any known closure type. Errors encountered:\n%s\nScript hex: %s",
-			strings.Join(decodeErrors, "\n"),
-			hex.EncodeToString(script))
+	if len(decodeErr) > 0 {
+		return nil, fmt.Errorf(
+			"failed to decode script %x.\n%s", script, strings.Join(decodeErr, "\n"),
+		)
 	}
 
 	return nil, fmt.Errorf("script does not match any known closure type: %s",
@@ -358,7 +367,7 @@ func (f *MultisigClosure) Witness(controlBlock []byte, signatures map[string][]b
 	return witness, nil
 }
 
-func (f *CSVSigClosure) Witness(controlBlock []byte, signatures map[string][]byte) (wire.TxWitness, error) {
+func (f *CSVMultisigClosure) Witness(controlBlock []byte, signatures map[string][]byte) (wire.TxWitness, error) {
 	multisigWitness, err := f.MultisigClosure.Witness(controlBlock, signatures)
 	if err != nil {
 		return nil, err
@@ -375,11 +384,11 @@ func (f *CSVSigClosure) Witness(controlBlock []byte, signatures map[string][]byt
 	return multisigWitness, nil
 }
 
-func (f *CSVSigClosure) WitnessSize(extraWitnessSizes ...int) int {
+func (f *CSVMultisigClosure) WitnessSize(extraWitnessSizes ...int) int {
 	return f.MultisigClosure.WitnessSize(extraWitnessSizes...)
 }
 
-func (d *CSVSigClosure) Script() ([]byte, error) {
+func (d *CSVMultisigClosure) Script() ([]byte, error) {
 	sequence, err := common.BIP68Sequence(d.Locktime)
 	if err != nil {
 		return nil, err
@@ -404,7 +413,7 @@ func (d *CSVSigClosure) Script() ([]byte, error) {
 	return append(csvScript, multisigScript...), nil
 }
 
-func (d *CSVSigClosure) Decode(script []byte) (bool, error) {
+func (d *CSVMultisigClosure) Decode(script []byte) (bool, error) {
 	if len(script) == 0 {
 		return false, fmt.Errorf("empty script")
 	}
@@ -417,9 +426,10 @@ func (d *CSVSigClosure) Decode(script []byte) (bool, error) {
 	}
 
 	sequence := script[:csvIndex]
-	if len(sequence) > 1 {
-		sequence = sequence[1:]
+	if len(sequence) > 5 {
+		return false, fmt.Errorf("invalid sequence length")
 	}
+	sequence = sequence[1:]
 
 	locktime, err := common.BIP68DecodeSequence(sequence)
 	if err != nil {
@@ -782,9 +792,10 @@ func (d *CLTVMultisigClosure) Decode(script []byte) (bool, error) {
 	}
 
 	locktime := script[:cltvIndex]
-	if len(locktime) > 1 {
-		locktime = locktime[1:]
+	if len(locktime) > 5 {
+		return false, fmt.Errorf("invalid locktime lenght")
 	}
+	locktime = locktime[1:]
 
 	var locktimeValue uint32
 	// read uint32 from bytes
@@ -813,7 +824,6 @@ func (d *CLTVMultisigClosure) Decode(script []byte) (bool, error) {
 // ExecuteBoolScript run the script with the provided witness as argument
 // the result must be a boolean value accepted by OP_IF / OP_NOTIF opcodes
 func ExecuteBoolScript(script []byte, witness wire.TxWitness) (bool, error) {
-
 	// make sure the script doesn't contain any introspections opcodes (sig or locktime)
 	tokenizer := txscript.MakeScriptTokenizer(0, script)
 	for tokenizer.Next() {
@@ -976,6 +986,104 @@ func (f *ConditionMultisigClosure) Witness(controlBlock []byte, args map[string]
 
 	// Get multisig witness
 	multisigWitness, err := f.MultisigClosure.Witness(controlBlock, args)
+	if err != nil {
+		return nil, err
+	}
+
+	multisigWitness = multisigWitness[:len(multisigWitness)-2] // remove control block and script
+	witness := append(multisigWitness, condWitness...)
+	witness = append(witness, script)
+	witness = append(witness, controlBlock)
+
+	return witness, nil
+}
+
+func (f *ConditionCSVMultisigClosure) WitnessSize(conditionWitnessSizes ...int) int {
+	var sum int
+	for _, size := range conditionWitnessSizes {
+		sum += size
+	}
+
+	return f.CSVMultisigClosure.WitnessSize() + sum
+}
+
+func (f *ConditionCSVMultisigClosure) Script() ([]byte, error) {
+	scriptBuilder := txscript.NewScriptBuilder()
+
+	scriptBuilder.AddOps(f.Condition)
+	scriptBuilder.AddOp(txscript.OP_VERIFY)
+
+	// Add the multisig script
+	multisigScript, err := f.CSVMultisigClosure.Script()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate multisig script: %w", err)
+	}
+	scriptBuilder.AddOps(multisigScript)
+
+	return scriptBuilder.Script()
+}
+
+func (f *ConditionCSVMultisigClosure) Decode(script []byte) (bool, error) {
+	if len(script) == 0 {
+		return false, fmt.Errorf("empty script")
+	}
+
+	tokenizer := txscript.MakeScriptTokenizer(0, script)
+	verifyPositions := []int{}
+	for tokenizer.Next() {
+		if tokenizer.OpcodePosition() != -1 && tokenizer.Opcode() == txscript.OP_VERIFY {
+			verifyPositions = append(verifyPositions, int(tokenizer.ByteIndex()))
+		}
+	}
+
+	if len(verifyPositions) == 0 {
+		return false, nil
+	}
+	verifyPos := verifyPositions[len(verifyPositions)-1]
+	// Extract and store condition
+	condition := script[:verifyPos-1] // remove OP_VERIFY
+	f.Condition = condition
+
+	// Extract and decode multisig script
+	multisigScript := script[verifyPos:]
+	// Decode multisig closure
+	valid, err := f.CSVMultisigClosure.Decode(multisigScript)
+	if err != nil || !valid {
+		return false, err
+	}
+
+	// Verify the script matches what we would generate
+	rebuilt, err := f.Script()
+	if err != nil {
+		return false, err
+	}
+
+	return bytes.Equal(rebuilt, script), nil
+}
+
+func (f *ConditionCSVMultisigClosure) Witness(controlBlock []byte, args map[string][]byte) (wire.TxWitness, error) {
+	script, err := f.Script()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate script: %w", err)
+	}
+
+	// Read and execute condition witness
+	condWitness, err := ReadTxWitness(args[ConditionWitnessKey])
+	if err != nil {
+		return nil, fmt.Errorf("failed to read condition witness: %w", err)
+	}
+
+	returnValue, err := ExecuteBoolScript(f.Condition, condWitness)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute condition: %w", err)
+	}
+
+	if !returnValue {
+		return nil, fmt.Errorf("condition evaluated to false")
+	}
+
+	// Get multisig witness
+	multisigWitness, err := f.CSVMultisigClosure.Witness(controlBlock, args)
 	if err != nil {
 		return nil, err
 	}

@@ -172,7 +172,7 @@ func findCovenantlessSweepClosure(
 	var locktime *common.RelativeLocktime
 	var sweepClosure *txscript.TapLeaf
 	for _, tapLeaf := range tx.Inputs[0].TaprootLeafScript {
-		closure := &tree.CSVSigClosure{}
+		closure := &tree.CSVMultisigClosure{}
 		valid, err := closure.Decode(tapLeaf.Script)
 		if err != nil {
 			continue
