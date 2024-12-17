@@ -1208,7 +1208,7 @@ func (b *txBuilder) onchainNetwork() *network.Network {
 func extractSweepLeaf(input psetv2.Input) (sweepLeaf *psetv2.TapLeafScript, lifetime *common.RelativeLocktime, err error) {
 	for _, leaf := range input.TapLeafScript {
 		closure := &tree.CSVMultisigClosure{}
-		valid, err := closure.Decode(leaf.Script)
+		valid, err := closure.Decode(txscript.MakeScriptTokenizer(0, leaf.Script))
 		if err != nil {
 			return nil, nil, err
 		}
