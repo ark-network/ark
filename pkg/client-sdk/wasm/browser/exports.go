@@ -19,6 +19,7 @@ import (
 var (
 	arkSdkClient arksdk.ArkClient
 	store        types.Store
+	version      string
 )
 
 func init() {
@@ -49,6 +50,7 @@ func init() {
 	js.Global().Set("getRoundLifetime", GetRoundLifetimeWrapper())
 	js.Global().Set("getUnilateralExitDelay", GetUnilateralExitDelayWrapper())
 	js.Global().Set("getDust", GetDustWrapper())
+	js.Global().Set("getVersion", GetVersionWrapper())
 }
 
 func NewCovenantClient(
@@ -87,7 +89,7 @@ func NewCovenantClient(
 }
 
 func NewCovenantlessClient(
-	ctx context.Context, storeSvc types.Store,
+	ctx context.Context, storeSvc types.Store, v string,
 ) error {
 	var err error
 
@@ -117,6 +119,7 @@ func NewCovenantlessClient(
 		return err
 	}
 	store = storeSvc
+	version = v
 
 	select {}
 }
