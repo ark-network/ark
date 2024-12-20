@@ -404,7 +404,7 @@ func GetDustWrapper() js.Func {
 
 func GetVersionWrapper() js.Func {
 	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
-		return js.ValueOf(getVersion())
+		return js.ValueOf(version)
 	})
 }
 

@@ -124,10 +124,6 @@ func NewCovenantlessClient(
 	select {}
 }
 
-func getVersion() string {
-	return version
-}
-
 func getWalletStore(storeType string) (walletstore.WalletStore, error) {
 	if storeType == LocalStorageStore {
 		return NewLocalStorageWalletStore()
