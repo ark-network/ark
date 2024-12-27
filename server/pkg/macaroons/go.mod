@@ -12,7 +12,7 @@ require (
 )
 
 require (
-	github.com/btcsuite/btcd v0.24.2 // indirect
+	github.com/btcsuite/btcd v0.24.3-0.20240921052913-67b8efd3ba53 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4 // indirect
 	github.com/btcsuite/btcd/btcutil v1.1.5 // indirect
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0 // indirect
