@@ -8,8 +8,6 @@ github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2/go.mod h1:W
 github.com/btcsuite/btcd v0.20.1-beta/go.mod h1:wVuoA8VJLEcwgqHBwHmzLRazpKxTv13Px/pDuV7OomQ=
 github.com/btcsuite/btcd v0.22.0-beta.0.20220111032746-97732e52810c/go.mod h1:tjmYdS6MLJ5/s0Fj4DbLgSbDHbEqLJrtnHecBFkdz5M=
 github.com/btcsuite/btcd v0.23.5-0.20231215221805-96c9fd8078fd/go.mod h1:nm3Bko6zh6bWP60UxwoT5LzdGJsQJaPo6HjduXq9p6A=
-github.com/btcsuite/btcd v0.24.2 h1:aLmxPguqxza+4ag8R1I2nnJjSu2iFn/kqtHTIImswcY=
-github.com/btcsuite/btcd v0.24.2/go.mod h1:5C8ChTkl5ejr3WHj8tkQSCmydiMEPB0ZhQhehpq7Dgg=
 github.com/btcsuite/btcd v0.24.3-0.20240921052913-67b8efd3ba53 h1:XOZ/wRGHkKv0AqxfDks5IkzaQ1Ge6fq322ZOOG5VIkU=
 github.com/btcsuite/btcd v0.24.3-0.20240921052913-67b8efd3ba53/go.mod h1:zHK7t7sw8XbsCkD64WePHE3r3k9/XoGAcf6mXV14c64=
 github.com/btcsuite/btcd/btcec/v2 v2.3.3 h1:6+iXlDKE8RMtKsvK0gshlXIuPbyWM/h84Ensb7o3sC0=
