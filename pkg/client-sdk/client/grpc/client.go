@@ -31,8 +31,9 @@ func NewClient(serverUrl string) (client.TransportClient, error) {
 		return nil, fmt.Errorf("missing server url")
 	}
 
-	creds := insecure.NewCredentials()
 	port := 80
+	creds := insecure.NewCredentials()
+	serverUrl = strings.TrimPrefix(serverUrl, "http://")
 	if strings.HasPrefix(serverUrl, "https://") {
 		serverUrl = strings.TrimPrefix(serverUrl, "https://")
 		creds = credentials.NewTLS(nil)
