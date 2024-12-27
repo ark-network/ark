@@ -28,7 +28,7 @@ func ParseVtxoScript(scripts []string) (VtxoScript, error) {
 func NewDefaultVtxoScript(owner, server *secp256k1.PublicKey, exitDelay common.RelativeLocktime) *TapscriptsVtxoScript {
 	return &TapscriptsVtxoScript{
 		[]Closure{
-			&CSVSigClosure{
+			&CSVMultisigClosure{
 				MultisigClosure: MultisigClosure{PubKeys: []*secp256k1.PublicKey{owner}},
 				Locktime:        exitDelay,
 			},
@@ -112,7 +112,7 @@ func (v *TapscriptsVtxoScript) SmallestExitDelay() (*common.RelativeLocktime, er
 	var smallest *common.RelativeLocktime
 
 	for _, closure := range v.Closures {
-		if csvClosure, ok := closure.(*CSVSigClosure); ok {
+		if csvClosure, ok := closure.(*CSVMultisigClosure); ok {
 			if smallest == nil || csvClosure.Locktime.LessThan(*smallest) {
 				smallest = &csvClosure.Locktime
 			}
@@ -141,7 +141,7 @@ func (v *TapscriptsVtxoScript) ExitClosures() []Closure {
 	exits := make([]Closure, 0)
 	for _, closure := range v.Closures {
 		switch closure.(type) {
-		case *CSVSigClosure:
+		case *CSVMultisigClosure:
 			exits = append(exits, closure)
 		}
 	}

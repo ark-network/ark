@@ -402,6 +402,12 @@ func GetDustWrapper() js.Func {
 	})
 }
 
+func GetVersionWrapper() js.Func {
+	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
+		return js.ValueOf(version)
+	})
+}
+
 func RedeemNotesWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
 		if len(args) != 1 {
