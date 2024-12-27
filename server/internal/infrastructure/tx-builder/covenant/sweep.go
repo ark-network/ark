@@ -32,7 +32,7 @@ func sweepTransaction(
 	amount := uint64(0)
 
 	for i, input := range sweepInputs {
-		sweepClosure := &tree.CSVSigClosure{}
+		sweepClosure := &tree.CSVMultisigClosure{}
 		isSweep, err := sweepClosure.Decode(input.GetLeafScript())
 		if err != nil {
 			return nil, err

@@ -124,7 +124,7 @@ func ValidateVtxoTree(
 		return ErrNoLeaves
 	}
 
-	sweepClosure := &tree.CSVSigClosure{
+	sweepClosure := &tree.CSVMultisigClosure{
 		MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{serverPubkey}},
 		Locktime:        roundLifetime,
 	}

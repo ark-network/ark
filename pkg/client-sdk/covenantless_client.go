@@ -1701,7 +1701,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 func (a *covenantlessArkClient) handleRoundSigningStarted(
 	ctx context.Context, ephemeralKey *secp256k1.PrivateKey, event client.RoundSigningStartedEvent,
 ) (signerSession bitcointree.SignerSession, err error) {
-	sweepClosure := tree.CSVSigClosure{
+	sweepClosure := tree.CSVMultisigClosure{
 		MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{a.ServerPubKey}},
 		Locktime:        a.RoundLifetime,
 	}
