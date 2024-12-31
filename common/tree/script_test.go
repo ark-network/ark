@@ -393,7 +393,7 @@ func TestRoundTripCSV(t *testing.T) {
 
 	var cl tree.CSVMultisigClosure
 
-	valid, err := cl.Decode(txscript.MakeScriptTokenizer(0, leaf))
+	valid, err := cl.Decode(leaf)
 	require.NoError(t, err)
 	require.True(t, valid)
 
@@ -421,7 +421,7 @@ func TestMultisigClosure(t *testing.T) {
 
 		// Test decoding
 		decodedClosure := &tree.MultisigClosure{}
-		valid, err := decodedClosure.Decode(txscript.MakeScriptTokenizer(0, script))
+		valid, err := decodedClosure.Decode(script)
 		require.NoError(t, err)
 		require.True(t, valid)
 		require.Equal(t, 2, len(decodedClosure.PubKeys))
@@ -446,8 +446,7 @@ func TestMultisigClosure(t *testing.T) {
 		require.NoError(t, err)
 
 		decodedClosure := &tree.MultisigClosure{}
-		tokenizer := txscript.MakeScriptTokenizer(0, script)
-		valid, err := decodedClosure.Decode(tokenizer)
+		valid, err := decodedClosure.Decode(script)
 		require.NoError(t, err)
 		require.True(t, valid)
 		require.Equal(t, 1, len(decodedClosure.PubKeys))
@@ -461,7 +460,7 @@ func TestMultisigClosure(t *testing.T) {
 
 	t.Run("invalid empty script", func(t *testing.T) {
 		closure := &tree.MultisigClosure{}
-		valid, err := closure.Decode(txscript.MakeScriptTokenizer(0, []byte{}))
+		valid, err := closure.Decode([]byte{})
 		require.NoError(t, err)
 		require.False(t, valid)
 	})
@@ -471,7 +470,7 @@ func TestMultisigClosure(t *testing.T) {
 			txscript.OP_DATA_33, // Wrong size for schnorr pubkey
 		}
 		closure := &tree.MultisigClosure{}
-		valid, err := closure.Decode(txscript.MakeScriptTokenizer(0, script))
+		valid, err := closure.Decode(script)
 		require.NoError(t, err)
 		require.False(t, valid)
 	})
@@ -483,7 +482,7 @@ func TestMultisigClosure(t *testing.T) {
 		// Missing OP_CHECKSIG
 
 		closure := &tree.MultisigClosure{}
-		valid, err := closure.Decode(txscript.MakeScriptTokenizer(0, script))
+		valid, err := closure.Decode(script)
 		require.NoError(t, err)
 		require.False(t, valid)
 	})
@@ -496,7 +495,7 @@ func TestMultisigClosure(t *testing.T) {
 		script = append(script, 0x00) // Extra unwanted byte
 
 		closure := &tree.MultisigClosure{}
-		valid, err := closure.Decode(txscript.MakeScriptTokenizer(0, script))
+		valid, err := closure.Decode(script)
 		require.NoError(t, err)
 		require.False(t, valid)
 	})
@@ -528,7 +527,7 @@ func TestMultisigClosure(t *testing.T) {
 
 		// Test decoding
 		decodedClosure := &tree.MultisigClosure{}
-		valid, err := decodedClosure.Decode(txscript.MakeScriptTokenizer(0, script))
+		valid, err := decodedClosure.Decode(script)
 		require.NoError(t, err)
 		require.True(t, valid)
 		require.Equal(t, 12, len(decodedClosure.PubKeys))
@@ -568,7 +567,7 @@ func TestCSVMultisigClosure(t *testing.T) {
 		require.NoError(t, err)
 
 		decodedCSV := &tree.CSVMultisigClosure{}
-		valid, err := decodedCSV.Decode(txscript.MakeScriptTokenizer(0, script))
+		valid, err := decodedCSV.Decode(script)
 		require.NoError(t, err)
 		require.True(t, valid)
 		require.Equal(t, uint32(1024), uint32(decodedCSV.Locktime.Value))
@@ -591,7 +590,7 @@ func TestCSVMultisigClosure(t *testing.T) {
 		require.NoError(t, err)
 
 		decodedCSV := &tree.CSVMultisigClosure{}
-		valid, err := decodedCSV.Decode(txscript.MakeScriptTokenizer(0, script))
+		valid, err := decodedCSV.Decode(script)
 		require.NoError(t, err)
 		require.True(t, valid)
 		require.Equal(t, uint32(512*4), uint32(decodedCSV.Locktime.Value))
@@ -608,7 +607,7 @@ func TestCSVMultisigClosure(t *testing.T) {
 
 	t.Run("invalid empty script", func(t *testing.T) {
 		csvSig := &tree.CSVMultisigClosure{}
-		valid, err := csvSig.Decode(txscript.MakeScriptTokenizer(0, []byte{}))
+		valid, err := csvSig.Decode([]byte{})
 		require.Error(t, err)
 		require.False(t, valid)
 	})
@@ -622,7 +621,7 @@ func TestCSVMultisigClosure(t *testing.T) {
 		script = append(script, 0xFF) // Invalid CSV value
 
 		csvSig := &tree.CSVMultisigClosure{}
-		valid, err := csvSig.Decode(txscript.MakeScriptTokenizer(0, script))
+		valid, err := csvSig.Decode(script)
 		require.NoError(t, err)
 		require.False(t, valid)
 	})
@@ -650,7 +649,7 @@ func TestCSVMultisigClosure(t *testing.T) {
 		require.NoError(t, err)
 
 		decodedCSV := &tree.CSVMultisigClosure{}
-		valid, err := decodedCSV.Decode(txscript.MakeScriptTokenizer(0, script))
+		valid, err := decodedCSV.Decode(script)
 		require.NoError(t, err)
 		require.True(t, valid)
 		require.Equal(t, uint32(common.SECONDS_MAX), decodedCSV.Locktime.Value)
@@ -830,7 +829,7 @@ func TestDecodeChecksigAdd(t *testing.T) {
 
 	// Decode the script
 	multisigClosure := &tree.MultisigClosure{}
-	valid, err := multisigClosure.Decode(txscript.MakeScriptTokenizer(0, script))
+	valid, err := multisigClosure.Decode(script)
 	require.NoError(t, err, "failed to decode script")
 	require.True(t, valid, "script should be valid")
 	require.Equal(t, tree.MultisigTypeChecksigAdd, multisigClosure.Type, "expected MultisigTypeChecksigAdd")
@@ -860,7 +859,7 @@ func TestCLTVMultisigClosure(t *testing.T) {
 		require.NoError(t, err)
 
 		decodedClosure := &tree.CLTVMultisigClosure{}
-		valid, err := decodedClosure.Decode(txscript.MakeScriptTokenizer(0, script))
+		valid, err := decodedClosure.Decode(script)
 		require.NoError(t, err)
 		require.True(t, valid)
 		require.Equal(t, closure.Locktime, decodedClosure.Locktime)
@@ -881,7 +880,7 @@ func TestCLTVMultisigClosure(t *testing.T) {
 		require.NoError(t, err)
 
 		decodedClosure := &tree.CLTVMultisigClosure{}
-		valid, err := decodedClosure.Decode(txscript.MakeScriptTokenizer(0, script))
+		valid, err := decodedClosure.Decode(script)
 		require.NoError(t, err)
 		require.True(t, valid)
 		require.Equal(t, closure.Locktime, decodedClosure.Locktime)
@@ -902,7 +901,7 @@ func TestCLTVMultisigClosure(t *testing.T) {
 		require.NoError(t, err)
 
 		decodedClosure := &tree.CLTVMultisigClosure{}
-		valid, err := decodedClosure.Decode(txscript.MakeScriptTokenizer(0, script))
+		valid, err := decodedClosure.Decode(script)
 		require.NoError(t, err)
 		require.True(t, valid)
 		require.Equal(t, closure.Locktime, decodedClosure.Locktime)
@@ -922,7 +921,7 @@ func TestCLTVMultisigClosure(t *testing.T) {
 		require.NoError(t, err)
 
 		decodedClosure := &tree.CLTVMultisigClosure{}
-		valid, err := decodedClosure.Decode(txscript.MakeScriptTokenizer(0, script))
+		valid, err := decodedClosure.Decode(script)
 		require.NoError(t, err)
 		require.True(t, valid)
 		require.Equal(t, closure.Locktime, decodedClosure.Locktime)
@@ -994,7 +993,7 @@ func TestCLTVMultisigClosure(t *testing.T) {
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
 				closure := &tree.CLTVMultisigClosure{}
-				valid, err := closure.Decode(txscript.MakeScriptTokenizer(0, tc.script))
+				valid, err := closure.Decode(tc.script)
 				require.False(t, valid)
 				if tc.err != nil {
 					require.Contains(t, err.Error(), *tc.err)
@@ -1144,7 +1143,7 @@ func TestConditionMultisigClosure(t *testing.T) {
 		require.NoError(t, err)
 
 		decodedClosure := &tree.ConditionMultisigClosure{}
-		valid, err := decodedClosure.Decode(txscript.MakeScriptTokenizer(0, script))
+		valid, err := decodedClosure.Decode(script)
 		require.NoError(t, err)
 		require.True(t, valid)
 		require.Equal(t, 1, len(decodedClosure.PubKeys))
@@ -1177,7 +1176,7 @@ func TestConditionMultisigClosure(t *testing.T) {
 		require.NoError(t, err)
 
 		decodedClosure := &tree.ConditionMultisigClosure{}
-		valid, err := decodedClosure.Decode(txscript.MakeScriptTokenizer(0, script))
+		valid, err := decodedClosure.Decode(script)
 		require.NoError(t, err)
 		require.True(t, valid)
 		require.Equal(t, 2, len(decodedClosure.PubKeys))

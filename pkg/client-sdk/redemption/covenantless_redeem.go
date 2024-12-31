@@ -173,7 +173,7 @@ func findCovenantlessSweepClosure(
 	var sweepClosure *txscript.TapLeaf
 	for _, tapLeaf := range tx.Inputs[0].TaprootLeafScript {
 		closure := &tree.CSVMultisigClosure{}
-		valid, err := closure.Decode(txscript.MakeScriptTokenizer(0, tapLeaf.Script))
+		valid, err := closure.Decode(tapLeaf.Script)
 		if err != nil {
 			continue
 		}

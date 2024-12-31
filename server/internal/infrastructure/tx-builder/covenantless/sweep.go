@@ -28,7 +28,7 @@ func sweepTransaction(
 		})
 
 		sweepClosure := tree.CSVMultisigClosure{}
-		valid, err := sweepClosure.Decode(txscript.MakeScriptTokenizer(0, input.GetLeafScript()))
+		valid, err := sweepClosure.Decode(input.GetLeafScript())
 		if err != nil {
 			return nil, err
 		}

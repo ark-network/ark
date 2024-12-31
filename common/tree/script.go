@@ -44,7 +44,7 @@ var forbiddenOpcodes = []byte{
 
 type Closure interface {
 	Script() ([]byte, error)
-	Decode(script txscript.ScriptTokenizer) (bool, error)
+	Decode(script []byte) (bool, error)
 	// WitnessSize returns the size of the witness excluding the script and control block
 	// extraWitnessSize is here to count the condition witness size
 	// or any other witness size that can't be computed from the script
@@ -121,7 +121,7 @@ func DecodeClosure(script []byte) (Closure, error) {
 	for _, t := range types {
 		scriptCopy := make([]byte, len(script))
 		copy(scriptCopy, script)
-		valid, err := t.closure.Decode(txscript.MakeScriptTokenizer(0, scriptCopy))
+		valid, err := t.closure.Decode(scriptCopy)
 		if err != nil {
 			decodeErr = append(decodeErr, fmt.Sprintf("%s: %v", t.name, err))
 			continue
@@ -174,22 +174,23 @@ func (f *MultisigClosure) Script() ([]byte, error) {
 	return scriptBuilder.Script()
 }
 
-func (f *MultisigClosure) Decode(script txscript.ScriptTokenizer) (bool, error) {
-	pubkeys := make([]*secp256k1.PublicKey, 0)
-	scriptStartIndex := script.ByteIndex()
+func (f *MultisigClosure) Decode(script []byte) (bool, error) {
+	tokenizer := txscript.MakeScriptTokenizer(0, script)
 
-	if script.Err() != nil {
-		return false, fmt.Errorf("%w", script.Err())
+	pubkeys := make([]*secp256k1.PublicKey, 0)
+
+	if tokenizer.Err() != nil {
+		return false, fmt.Errorf("%w", tokenizer.Err())
 	}
-	if !script.Next() {
+	if !tokenizer.Next() {
 		return false, nil
 	}
-	if script.Opcode() != txscript.OP_DATA_32 {
+	if tokenizer.Opcode() != txscript.OP_DATA_32 {
 		return false, nil
 	}
 
 	// Parse the public key
-	pubkey, err := schnorr.ParsePubKey(script.Data())
+	pubkey, err := schnorr.ParsePubKey(tokenizer.Data())
 	if err != nil {
 		return false, err
 	}
@@ -197,17 +198,17 @@ func (f *MultisigClosure) Decode(script txscript.ScriptTokenizer) (bool, error) 
 	pubkeys = append(pubkeys, pubkey)
 
 	// Check if we've reached the end
-	if !script.Next() {
+	if !tokenizer.Next() {
 		return false, nil
 	}
 
 	var valid bool
-	isSingleSig := script.ByteIndex() == int32(len(script.Script()))
+	isSingleSig := tokenizer.ByteIndex() == int32(len(tokenizer.Script()))
 
-	if script.Opcode() == txscript.OP_CHECKSIGVERIFY || isSingleSig {
-		valid, err = f.completeDecodeChecksig(script, pubkeys)
+	if tokenizer.Opcode() == txscript.OP_CHECKSIGVERIFY || isSingleSig {
+		valid, err = f.completeDecodeChecksig(tokenizer, pubkeys)
 	} else {
-		valid, err = f.completeDecodeChecksigAdd(script, pubkeys)
+		valid, err = f.completeDecodeChecksigAdd(tokenizer, pubkeys)
 	}
 
 	if err != nil {
@@ -222,7 +223,7 @@ func (f *MultisigClosure) Decode(script txscript.ScriptTokenizer) (bool, error) 
 		return false, err
 	}
 
-	if !bytes.Equal(rebuilt, script.Script()[scriptStartIndex:]) {
+	if !bytes.Equal(rebuilt, script) {
 		f.PubKeys = nil
 		f.Type = 0
 		return false, nil
@@ -404,27 +405,29 @@ func (d *CSVMultisigClosure) Script() ([]byte, error) {
 	return append(csvScript, multisigScript...), nil
 }
 
-func (d *CSVMultisigClosure) Decode(script txscript.ScriptTokenizer) (bool, error) {
-	if len(script.Script()) == 0 {
+func (d *CSVMultisigClosure) Decode(script []byte) (bool, error) {
+	tokenizer := txscript.MakeScriptTokenizer(0, script)
+
+	if len(tokenizer.Script()) == 0 {
 		return false, fmt.Errorf("empty script")
 	}
 
-	if script.Err() != nil {
+	if tokenizer.Err() != nil {
 		return false, nil
 	}
 
-	_ = script.Next()
+	_ = tokenizer.Next()
 	var sequence []byte
-	if txscript.IsSmallInt(script.Opcode()) {
-		sequence = []byte{script.Opcode()}
+	if txscript.IsSmallInt(tokenizer.Opcode()) {
+		sequence = []byte{tokenizer.Opcode()}
 	} else {
-		sequence = script.Data()
+		sequence = tokenizer.Data()
 	}
 
 	for _, opCode := range []byte{txscript.OP_CHECKSEQUENCEVERIFY, txscript.OP_DROP} {
-		script.Next()
+		tokenizer.Next()
 
-		if script.Opcode() != opCode {
+		if tokenizer.Opcode() != opCode {
 			return false, nil
 		}
 	}
@@ -435,7 +438,7 @@ func (d *CSVMultisigClosure) Decode(script txscript.ScriptTokenizer) (bool, erro
 	}
 
 	multisigClosure := &MultisigClosure{}
-	valid, err := multisigClosure.Decode(script)
+	valid, err := multisigClosure.Decode(tokenizer.Script()[tokenizer.ByteIndex():])
 	if err != nil {
 		return false, err
 	}
@@ -496,8 +499,7 @@ func (c *UnrollClosure) Script() ([]byte, error) {
 	return branchScript, nil
 }
 
-func (c *UnrollClosure) Decode(script_token txscript.ScriptTokenizer) (valid bool, err error) {
-	script := script_token.Script()[script_token.ByteIndex():]
+func (c *UnrollClosure) Decode(script []byte) (valid bool, err error) {
 	if len(script) != 52 && len(script) != 59 && len(script) != 104 {
 		return false, nil
 	}
@@ -778,23 +780,25 @@ func (d *CLTVMultisigClosure) Script() ([]byte, error) {
 	return append(cltvScript, multisigScript...), nil
 }
 
-func (d *CLTVMultisigClosure) Decode(script txscript.ScriptTokenizer) (bool, error) {
-	if len(script.Script()) == 0 {
+func (d *CLTVMultisigClosure) Decode(script []byte) (bool, error) {
+	tokenizer := txscript.MakeScriptTokenizer(0, script)
+
+	if len(tokenizer.Script()) == 0 {
 		return false, fmt.Errorf("empty script")
 	}
 
-	_ = script.Next()
+	_ = tokenizer.Next()
 	var locktime []byte
 
-	if txscript.IsSmallInt(script.Opcode()) {
-		locktime = []byte{script.Opcode()}
+	if txscript.IsSmallInt(tokenizer.Opcode()) {
+		locktime = []byte{tokenizer.Opcode()}
 	} else {
-		locktime = script.Data()
+		locktime = tokenizer.Data()
 	}
 
 	for _, opCode := range []byte{txscript.OP_CHECKLOCKTIMEVERIFY, txscript.OP_DROP} {
 
-		if script.Next() && script.Opcode() != opCode {
+		if tokenizer.Next() && tokenizer.Opcode() != opCode {
 			return false, nil
 		}
 	}
@@ -808,7 +812,7 @@ func (d *CLTVMultisigClosure) Decode(script txscript.ScriptTokenizer) (bool, err
 	}
 
 	multisigClosure := &MultisigClosure{}
-	valid, err := multisigClosure.Decode(script)
+	valid, err := multisigClosure.Decode(tokenizer.Script()[tokenizer.ByteIndex():])
 	if err != nil {
 		return false, err
 	}
@@ -926,27 +930,28 @@ func (f *ConditionMultisigClosure) Script() ([]byte, error) {
 	return scriptBuilder.Script()
 }
 
-func (f *ConditionMultisigClosure) Decode(script txscript.ScriptTokenizer) (bool, error) {
-	if len(script.Script()) == 0 {
+func (f *ConditionMultisigClosure) Decode(script []byte) (bool, error) {
+	tokenizer := txscript.MakeScriptTokenizer(0, script)
+
+	if len(tokenizer.Script()) == 0 {
 		return false, fmt.Errorf("empty script")
 	}
-	scriptStartIndex := script.ByteIndex()
 
 	condition := []byte{}
-	for script.Next() {
-		if script.Opcode() == txscript.OP_VERIFY {
+	for tokenizer.Next() {
+		if tokenizer.Opcode() == txscript.OP_VERIFY {
 			break
 		} else {
-			condition = append(condition, script.Opcode())
-			if len(script.Data()) > 0 {
-				condition = append(condition, script.Data()...)
+			condition = append(condition, tokenizer.Opcode())
+			if len(tokenizer.Data()) > 0 {
+				condition = append(condition, tokenizer.Data()...)
 			}
 		}
 	}
 
 	f.Condition = condition
 	// Decode multisig closure
-	valid, err := f.MultisigClosure.Decode(script)
+	valid, err := f.MultisigClosure.Decode(tokenizer.Script()[tokenizer.ByteIndex():])
 	if err != nil || !valid {
 		return false, err
 	}
@@ -957,7 +962,7 @@ func (f *ConditionMultisigClosure) Decode(script txscript.ScriptTokenizer) (bool
 		return false, err
 	}
 
-	return bytes.Equal(rebuilt, script.Script()[scriptStartIndex:]), nil
+	return bytes.Equal(rebuilt, script), nil
 }
 
 func (f *ConditionMultisigClosure) Witness(controlBlock []byte, args map[string][]byte) (wire.TxWitness, error) {
@@ -1020,20 +1025,21 @@ func (f *ConditionCSVMultisigClosure) Script() ([]byte, error) {
 	return scriptBuilder.Script()
 }
 
-func (f *ConditionCSVMultisigClosure) Decode(script txscript.ScriptTokenizer) (bool, error) {
-	if len(script.Script()) == 0 {
+func (f *ConditionCSVMultisigClosure) Decode(script []byte) (bool, error) {
+	tokenizer := txscript.MakeScriptTokenizer(0, script)
+
+	if len(tokenizer.Script()) == 0 {
 		return false, fmt.Errorf("empty script")
 	}
-	scriptStartIndex := script.ByteIndex()
 
 	condition := []byte{}
-	for script.Next() {
-		if script.Opcode() == txscript.OP_VERIFY {
+	for tokenizer.Next() {
+		if tokenizer.Opcode() == txscript.OP_VERIFY {
 			break
 		} else {
-			condition = append(condition, script.Opcode())
-			if len(script.Data()) > 0 {
-				condition = append(condition, script.Data()...)
+			condition = append(condition, tokenizer.Opcode())
+			if len(tokenizer.Data()) > 0 {
+				condition = append(condition, tokenizer.Data()...)
 			}
 		}
 	}
@@ -1041,7 +1047,7 @@ func (f *ConditionCSVMultisigClosure) Decode(script txscript.ScriptTokenizer) (b
 	f.Condition = condition
 
 	// Decode multisig closure
-	valid, err := f.CSVMultisigClosure.Decode(script)
+	valid, err := f.CSVMultisigClosure.Decode(tokenizer.Script()[tokenizer.ByteIndex():])
 	if err != nil || !valid {
 		return false, err
 	}
@@ -1052,7 +1058,7 @@ func (f *ConditionCSVMultisigClosure) Decode(script txscript.ScriptTokenizer) (b
 		return false, err
 	}
 
-	return bytes.Equal(rebuilt, script.Script()[scriptStartIndex:]), nil
+	return bytes.Equal(rebuilt, script), nil
 }
 
 func (f *ConditionCSVMultisigClosure) Witness(controlBlock []byte, args map[string][]byte) (wire.TxWitness, error) {
