@@ -461,7 +461,7 @@ func TestMultisigClosure(t *testing.T) {
 	t.Run("invalid empty script", func(t *testing.T) {
 		closure := &tree.MultisigClosure{}
 		valid, err := closure.Decode([]byte{})
-		require.NoError(t, err)
+		require.Error(t, err)
 		require.False(t, valid)
 	})
 
