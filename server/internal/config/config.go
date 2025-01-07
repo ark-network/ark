@@ -273,7 +273,7 @@ func getNetwork() (common.Network, error) {
 	}
 }
 
-func DetermineLocktimeType(locktime int64) common.RelativeLocktime {
+func determineLocktimeType(locktime int64) common.RelativeLocktime {
 	if locktime >= 512 {
 		return common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: uint32(locktime)}
 	}
