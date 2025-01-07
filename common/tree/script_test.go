@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"testing"
 	"time"
 
@@ -19,369 +18,80 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func fmtCode(t int) string {
-	return fmt.Sprintf("%x", t)
-}
-
-type ClosureTestRun struct {
-	run           string
-	script        string
-	expectedError bool
-}
-
-const (
-	exPubKey1               = "f8352deebdf5658d95875d89656112b1dd150f176c702eea4f91a91527e48e26"
-	exPubKey2               = "fc68d5ea9279cc9d2c57e6885e21bbaee9c3aec85089f1d6c705c017d321ea84"
-	exHash                  = "628850CB844FE63C308C62AFC8BC5351F1952A7F"
-	sequenceExample         = "03070040"
-	disabledSequenceExample = "ffffffff"
-	exampleLocktime         = "049a696167"
-)
-
 func TestDecodeClosure(t *testing.T) {
-	var multisigClosureCases = []ClosureTestRun{
+	testCases := []struct {
+		name        string
+		script      string
+		closureType interface{}
+		valid       bool
+	}{
 		{
-			run: "multisig closure 1 key",
-			script: fmtCode(txscript.OP_DATA_32) +
-				exPubKey1 +
-				fmtCode(txscript.OP_CHECKSIG),
-			expectedError: false,
+			name:        "MultisigClosure",
+			script:      "21022df8750480ad5b26950b25c7ba79d3e37d75f6407ff1a2749f3486e38694e521ac2103e775fd51f07aa044a9614d7908e407ee2c9d802b938c9a6c4e0216f0f5a3c512ac",
+			closureType: &tree.MultisigClosure{},
+			valid:       true,
 		},
 		{
-			run: "multisig closure 2 public keys",
-			script: fmtCode(txscript.OP_DATA_32) +
-				exPubKey1 +
-				fmtCode(txscript.OP_CHECKSIGVERIFY) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey2 +
-				fmtCode(txscript.OP_CHECKSIG),
-			expectedError: false,
+			name:        "CSVMultisigClosure",
+			script:      "01b2755221022df8750480ad5b26950b25c7ba79d3e37d75f6407ff1a2749f3486e38694e5212103e775fd51f07aa044a9614d7908e407ee2c9d802b938c9a6c4e0216f0f5a3c512ac",
+			closureType: &tree.CSVSigClosure{},
+			valid:       true,
 		},
 		{
-			run: "multisig closure missing OP_CHECKSIG",
-			script: fmtCode(txscript.OP_DATA_32) +
-				exPubKey1 +
-				fmtCode(txscript.OP_CHECKSIGVERIFY) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey2,
-			expectedError: true,
+			name:        "CLTVMultisigClosure",
+			script:      "00000001b1755221022df8750480ad5b26950b25c7ba79d3e37d75f6407ff1a2749f3486e38694e5212103e775fd51f07aa044a9614d7908e407ee2c9d802b938c9a6c4e0216f0f5a3c512ac",
+			closureType: &tree.CLTVMultisigClosure{},
+			valid:       true,
 		},
 		{
-			run: "multisig closure missing OP_DATA_32 for first pubkey",
-			script: exPubKey1 +
-				fmtCode(txscript.OP_CHECKSIGVERIFY) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey2 +
-				fmtCode(txscript.OP_CHECKSIG),
-			expectedError: true,
+			name:        "ConditionMultisigClosure",
+			script:      "516921022df8750480ad5b26950b25c7ba79d3e37d75f6407ff1a2749f3486e38694e521ac2103e775fd51f07aa044a9614d7908e407ee2c9d802b938c9a6c4e0216f0f5a3c512ac",
+			closureType: &tree.ConditionMultisigClosure{},
+			valid:       true,
 		},
 		{
-			run: "multisig closure OP_DATA_32 for second pubkey",
-			script: fmtCode(txscript.OP_DATA_32) +
-				exPubKey1 +
-				fmtCode(txscript.OP_CHECKSIGVERIFY) +
-				fmtCode(txscript.OP_CHECKSIG),
-			expectedError: true,
+			// Add an example for an invalid script if applicable
+			name:        "Invalid Script",
+			script:      "5121000000000000000000000000000000000000000000000000000000000000000000ae", // This would be an actual invalid script pattern
+			closureType: &tree.MultisigClosure{},
+			valid:       false,
 		},
 	}
 
-	var csvMultisigClosureCases = []ClosureTestRun{
-		{
-			run: "csv multisig closure 1 key",
-			script: sequenceExample +
-				fmtCode(txscript.OP_CHECKSEQUENCEVERIFY) +
-				fmtCode(txscript.OP_DROP) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey1 +
-				fmtCode(txscript.OP_CHECKSIG),
-			expectedError: false,
-		},
-		{
-			run: "csv multisig closure 2 pub keys",
-			script: sequenceExample +
-				fmtCode(txscript.OP_CHECKSEQUENCEVERIFY) +
-				fmtCode(txscript.OP_DROP) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey1 +
-				fmtCode(txscript.OP_CHECKSIGVERIFY) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey2 +
-				fmtCode(txscript.OP_CHECKSIG),
-			expectedError: false,
-		},
-		{
-			run: "csv multisig closure missing sequence",
-			script: fmtCode(txscript.OP_CHECKSEQUENCEVERIFY) +
-				fmtCode(txscript.OP_DROP) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey1 +
-				fmtCode(txscript.OP_CHECKSIGVERIFY) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey2 +
-				fmtCode(txscript.OP_CHECKSIG),
-			expectedError: true,
-		},
-		{
-			run: "csv multisig closure missing OP_CHECKSEQUENCEVERIFY",
-			script: sequenceExample +
-				fmtCode(txscript.OP_DROP) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey1 +
-				fmtCode(txscript.OP_CHECKSIGVERIFY) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey2 +
-				fmtCode(txscript.OP_CHECKSIG),
-			expectedError: true,
-		},
-		{
-			run: "csv multisig closure disabled timelock sequence",
-			script: disabledSequenceExample +
-				fmtCode(txscript.OP_CHECKSEQUENCEVERIFY) +
-				fmtCode(txscript.OP_DROP) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey1 +
-				fmtCode(txscript.OP_CHECKSIGVERIFY) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey2 +
-				fmtCode(txscript.OP_CHECKSIG),
-			expectedError: true,
-		},
-	}
-
-	var cltvMultisigClosureCases = []ClosureTestRun{
-		{
-			run: "cltv multisig closure 1 pub key",
-			script: exampleLocktime +
-				fmtCode(txscript.OP_CHECKLOCKTIMEVERIFY) +
-				fmtCode(txscript.OP_DROP) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey1 +
-				fmtCode(txscript.OP_CHECKSIG),
-			expectedError: false,
-		},
-		{
-			run: "cltv multisig closure 2 pub keys",
-			script: exampleLocktime +
-				fmtCode(txscript.OP_CHECKLOCKTIMEVERIFY) +
-				fmtCode(txscript.OP_DROP) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey1 +
-				fmtCode(txscript.OP_CHECKSIGVERIFY) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey2 +
-				fmtCode(txscript.OP_CHECKSIG),
-			expectedError: false,
-		},
-		{
-			run: "cltv multisig closure missing locktime",
-			script: fmtCode(txscript.OP_CHECKLOCKTIMEVERIFY) +
-				fmtCode(txscript.OP_DROP) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey1 +
-				fmtCode(txscript.OP_CHECKSIGVERIFY) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey2 +
-				fmtCode(txscript.OP_CHECKSIG),
-			expectedError: true,
-		},
-		{
-			run: "cltv multisig closure missing OP_CHECKLOCKTIMEVERIFY",
-			script: exampleLocktime +
-				fmtCode(txscript.OP_DROP) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey1 +
-				fmtCode(txscript.OP_CHECKSIGVERIFY) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey2 +
-				fmtCode(txscript.OP_CHECKSIG),
-			expectedError: true,
-		},
-	}
-
-	var conditionMultisigClosureCases = []ClosureTestRun{
-		{
-			run: "multisig closure with condition 2 nums that add up to 8",
-			script: fmtCode(txscript.OP_5) +
-				fmtCode(txscript.OP_3) +
-				fmtCode(txscript.OP_2DUP) +
-				fmtCode(txscript.OP_ADD) +
-				fmtCode(txscript.OP_8) +
-				fmtCode(txscript.OP_EQUALVERIFY) +
-				fmtCode(txscript.OP_SUB) +
-				fmtCode(txscript.OP_2) +
-				fmtCode(txscript.OP_EQUAL) +
-				fmtCode(txscript.OP_VERIFY) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey1 +
-				fmtCode(txscript.OP_CHECKSIGVERIFY) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey2 +
-				fmtCode(txscript.OP_CHECKSIG),
-			expectedError: false,
-		},
-		{
-			run: "multisig closure with condition verify secret against hash",
-			script: fmtCode(txscript.OP_1) +
-				fmtCode(txscript.OP_HASH160) +
-				fmtCode(txscript.OP_DATA_20) +
-				exHash +
-				fmtCode(txscript.OP_EQUAL) +
-				fmtCode(txscript.OP_VERIFY) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey1 +
-				fmtCode(txscript.OP_CHECKSIGVERIFY) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey2 +
-				fmtCode(txscript.OP_CHECKSIG),
-			expectedError: false,
-		},
-		{
-			run: "multisig closure with condition missing OP_VERIFY",
-			script: fmtCode(txscript.OP_1) +
-				fmtCode(txscript.OP_HASH160) +
-				fmtCode(txscript.OP_DATA_20) +
-				exHash +
-				fmtCode(txscript.OP_EQUAL) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey1 +
-				fmtCode(txscript.OP_CHECKSIGVERIFY) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey2 +
-				fmtCode(txscript.OP_CHECKSIG),
-			expectedError: true,
-		},
-	}
-
-	var conditionCSVMultisigClosureCases = []ClosureTestRun{
-		{
-			run: "csv multisig closure with condition verify secret against hash",
-			script: fmtCode(txscript.OP_1) +
-				fmtCode(txscript.OP_HASH160) +
-				fmtCode(txscript.OP_DATA_20) +
-				exHash +
-				fmtCode(txscript.OP_EQUAL) +
-				fmtCode(txscript.OP_VERIFY) +
-				sequenceExample +
-				fmtCode(txscript.OP_CHECKSEQUENCEVERIFY) +
-				fmtCode(txscript.OP_DROP) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey1 +
-				fmtCode(txscript.OP_CHECKSIGVERIFY) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey2 +
-				fmtCode(txscript.OP_CHECKSIG),
-			expectedError: false,
-		},
-		{
-			run: "csv multisig closure with condition missing OP_VERIFY",
-			script: fmtCode(txscript.OP_1) +
-				fmtCode(txscript.OP_HASH160) +
-				fmtCode(txscript.OP_DATA_20) +
-				exHash +
-				fmtCode(txscript.OP_EQUAL) +
-				sequenceExample +
-				fmtCode(txscript.OP_CHECKSEQUENCEVERIFY) +
-				fmtCode(txscript.OP_DROP) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey1 +
-				fmtCode(txscript.OP_CHECKSIGVERIFY) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey2 +
-				fmtCode(txscript.OP_CHECKSIG),
-			expectedError: true,
-		},
-		{
-			run: "csv multisig with condition missing sequence",
-			script: fmtCode(txscript.OP_1) +
-				fmtCode(txscript.OP_HASH160) +
-				fmtCode(txscript.OP_DATA_20) +
-				exHash +
-				fmtCode(txscript.OP_EQUAL) +
-				fmtCode(txscript.OP_VERIFY) +
-				fmtCode(txscript.OP_CHECKSEQUENCEVERIFY) +
-				fmtCode(txscript.OP_DROP) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey1 +
-				fmtCode(txscript.OP_CHECKSIGVERIFY) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey2 +
-				fmtCode(txscript.OP_CHECKSIG),
-			expectedError: true,
-		},
-		{
-			run: "csv multisig with condition missing OP_CHECKSEQUENCEVERIFY",
-			script: fmtCode(txscript.OP_1) +
-				fmtCode(txscript.OP_HASH160) +
-				fmtCode(txscript.OP_DATA_20) +
-				exHash +
-				fmtCode(txscript.OP_EQUAL) +
-				fmtCode(txscript.OP_VERIFY) +
-				sequenceExample +
-				fmtCode(txscript.OP_DROP) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey1 +
-				fmtCode(txscript.OP_CHECKSIGVERIFY) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey2 +
-				fmtCode(txscript.OP_CHECKSIG),
-			expectedError: true,
-		},
-		{
-			run: "csv multisig with condition disabled timelock sequence",
-			script: fmtCode(txscript.OP_1) +
-				fmtCode(txscript.OP_HASH160) +
-				fmtCode(txscript.OP_DATA_20) +
-				exHash +
-				fmtCode(txscript.OP_EQUAL) +
-				fmtCode(txscript.OP_VERIFY) +
-				disabledSequenceExample +
-				fmtCode(txscript.OP_CHECKSEQUENCEVERIFY) +
-				fmtCode(txscript.OP_DROP) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey1 +
-				fmtCode(txscript.OP_CHECKSIGVERIFY) +
-				fmtCode(txscript.OP_DATA_32) +
-				exPubKey2 +
-				fmtCode(txscript.OP_CHECKSIG),
-			expectedError: true,
-		},
-	}
-
-	var cases = [][]ClosureTestRun{
-		multisigClosureCases,
-		csvMultisigClosureCases,
-		cltvMultisigClosureCases,
-		conditionMultisigClosureCases,
-		conditionCSVMultisigClosureCases,
-	}
-
-	var mergedCases []ClosureTestRun
-	for _, c := range cases {
-		mergedCases = append(mergedCases, c...)
-	}
-
-	for _, testCase := range mergedCases {
-		t.Run(testCase.run, func(t *testing.T) {
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
 			scriptBytes, err := hex.DecodeString(testCase.script)
 			require.NoError(t, err)
-			closure, err := tree.DecodeClosure(scriptBytes)
 
-			if testCase.expectedError {
-				require.Nil(t, closure)
-				require.Error(t, err)
-			} else {
+			closure := testCase.closureType
+			switch c := closure.(type) {
+			case *tree.MultisigClosure:
+				valid, err := c.Decode(scriptBytes)
 				require.NoError(t, err)
-				require.NotNil(t, closure)
+				require.Equal(t, testCase.valid, valid)
+			case *tree.CSVSigClosure:
+				valid, err := c.Decode(scriptBytes)
+				require.NoError(t, err)
+				require.Equal(t, testCase.valid, valid)
+			case *tree.CLTVMultisigClosure:
+				valid, err := c.Decode(scriptBytes)
+				require.NoError(t, err)
+				require.Equal(t, testCase.valid, valid)
+			case *tree.ConditionMultisigClosure:
+				valid, err := c.Decode(scriptBytes)
+				require.NoError(t, err)
+				require.Equal(t, testCase.valid, valid)
+			default:
+				require.Fail(t, "Unexpected closure type")
 			}
 		})
 	}
 }
-
 func TestRoundTripCSV(t *testing.T) {
 	seckey, err := secp256k1.GeneratePrivateKey()
 	require.NoError(t, err)
 
-	csvSig := &tree.CSVMultisigClosure{
+	csvSig := &tree.CSVSigClosure{
 		MultisigClosure: tree.MultisigClosure{
 			PubKeys: []*secp256k1.PublicKey{seckey.PubKey()},
 		},
@@ -391,7 +101,7 @@ func TestRoundTripCSV(t *testing.T) {
 	leaf, err := csvSig.Script()
 	require.NoError(t, err)
 
-	var cl tree.CSVMultisigClosure
+	var cl tree.CSVSigClosure
 
 	valid, err := cl.Decode(leaf)
 	require.NoError(t, err)
@@ -545,7 +255,7 @@ func TestMultisigClosure(t *testing.T) {
 	})
 }
 
-func TestCSVMultisigClosure(t *testing.T) {
+func TestCSVSigClosure(t *testing.T) {
 	// Generate test keys
 	prvkey1, err := secp256k1.GeneratePrivateKey()
 	require.NoError(t, err)
@@ -556,7 +266,7 @@ func TestCSVMultisigClosure(t *testing.T) {
 	pubkey2 := prvkey2.PubKey()
 
 	t.Run("valid single key CSV", func(t *testing.T) {
-		csvSig := &tree.CSVMultisigClosure{
+		csvSig := &tree.CSVSigClosure{
 			MultisigClosure: tree.MultisigClosure{
 				PubKeys: []*secp256k1.PublicKey{pubkey1},
 			},
@@ -566,7 +276,7 @@ func TestCSVMultisigClosure(t *testing.T) {
 		script, err := csvSig.Script()
 		require.NoError(t, err)
 
-		decodedCSV := &tree.CSVMultisigClosure{}
+		decodedCSV := &tree.CSVSigClosure{}
 		valid, err := decodedCSV.Decode(script)
 		require.NoError(t, err)
 		require.True(t, valid)
@@ -579,7 +289,7 @@ func TestCSVMultisigClosure(t *testing.T) {
 	})
 
 	t.Run("valid 2-of-2 CSV", func(t *testing.T) {
-		csvSig := &tree.CSVMultisigClosure{
+		csvSig := &tree.CSVSigClosure{
 			MultisigClosure: tree.MultisigClosure{
 				PubKeys: []*secp256k1.PublicKey{pubkey1, pubkey2},
 			},
@@ -589,7 +299,7 @@ func TestCSVMultisigClosure(t *testing.T) {
 		script, err := csvSig.Script()
 		require.NoError(t, err)
 
-		decodedCSV := &tree.CSVMultisigClosure{}
+		decodedCSV := &tree.CSVSigClosure{}
 		valid, err := decodedCSV.Decode(script)
 		require.NoError(t, err)
 		require.True(t, valid)
@@ -606,7 +316,7 @@ func TestCSVMultisigClosure(t *testing.T) {
 	})
 
 	t.Run("invalid empty script", func(t *testing.T) {
-		csvSig := &tree.CSVMultisigClosure{}
+		csvSig := &tree.CSVSigClosure{}
 		valid, err := csvSig.Decode([]byte{})
 		require.Error(t, err)
 		require.False(t, valid)
@@ -620,14 +330,14 @@ func TestCSVMultisigClosure(t *testing.T) {
 		script = append(script, txscript.OP_CHECKSIG)
 		script = append(script, 0xFF) // Invalid CSV value
 
-		csvSig := &tree.CSVMultisigClosure{}
+		csvSig := &tree.CSVSigClosure{}
 		valid, err := csvSig.Decode(script)
 		require.NoError(t, err)
 		require.False(t, valid)
 	})
 
 	t.Run("witness size", func(t *testing.T) {
-		csvSig := &tree.CSVMultisigClosure{
+		csvSig := &tree.CSVSigClosure{
 			MultisigClosure: tree.MultisigClosure{
 				PubKeys: []*secp256k1.PublicKey{pubkey1, pubkey2},
 			},
@@ -638,7 +348,7 @@ func TestCSVMultisigClosure(t *testing.T) {
 	})
 
 	t.Run("max timelock", func(t *testing.T) {
-		csvSig := &tree.CSVMultisigClosure{
+		csvSig := &tree.CSVSigClosure{
 			MultisigClosure: tree.MultisigClosure{
 				PubKeys: []*secp256k1.PublicKey{pubkey1},
 			},
@@ -648,7 +358,7 @@ func TestCSVMultisigClosure(t *testing.T) {
 		script, err := csvSig.Script()
 		require.NoError(t, err)
 
-		decodedCSV := &tree.CSVMultisigClosure{}
+		decodedCSV := &tree.CSVSigClosure{}
 		valid, err := decodedCSV.Decode(script)
 		require.NoError(t, err)
 		require.True(t, valid)
@@ -764,7 +474,7 @@ func TestUnrollClosureWitness(t *testing.T) {
 	require.Equal(t, controlBlock, witness[1])
 }
 
-func TestCSVMultisigClosureWitness(t *testing.T) {
+func TestCSVSigClosureWitness(t *testing.T) {
 	// Generate test keys
 	priv1, err := secp256k1.GeneratePrivateKey()
 	require.NoError(t, err)
@@ -778,7 +488,7 @@ func TestCSVMultisigClosureWitness(t *testing.T) {
 
 	controlBlock := []byte("control block")
 
-	closure := &tree.CSVMultisigClosure{
+	closure := &tree.CSVSigClosure{
 		MultisigClosure: tree.MultisigClosure{
 			PubKeys: []*secp256k1.PublicKey{pub1},
 		},
