@@ -209,7 +209,8 @@ func (f *MultisigClosure) decodeChecksigAdd(script []byte) (bool, error) {
 	pubkeys := make([]*secp256k1.PublicKey, 0)
 
 	for tokenizer.Next() {
-
+		// Stop processing if a small integer opcode is encountered,
+		// indicating the required threshold for signature validation.
 		if txscript.IsSmallInt(tokenizer.Opcode()) {
 			break
 		}
@@ -437,7 +438,8 @@ func (d *CSVMultisigClosure) Decode(script []byte) (bool, error) {
 	}
 
 	multisigClosure := &MultisigClosure{}
-	valid, err := multisigClosure.Decode(tokenizer.Script()[tokenizer.ByteIndex():])
+	subScript := tokenizer.Script()[tokenizer.ByteIndex():]
+	valid, err := multisigClosure.Decode(subScript)
 	if err != nil {
 		return false, err
 	}
@@ -816,7 +818,8 @@ func (d *CLTVMultisigClosure) Decode(script []byte) (bool, error) {
 	}
 
 	multisigClosure := &MultisigClosure{}
-	valid, err := multisigClosure.Decode(tokenizer.Script()[tokenizer.ByteIndex():])
+	subScript := tokenizer.Script()[tokenizer.ByteIndex():]
+	valid, err := multisigClosure.Decode(subScript)
 	if err != nil {
 		return false, err
 	}
@@ -954,8 +957,10 @@ func (f *ConditionMultisigClosure) Decode(script []byte) (bool, error) {
 	}
 
 	f.Condition = condition
+
 	// Decode multisig closure
-	valid, err := f.MultisigClosure.Decode(tokenizer.Script()[tokenizer.ByteIndex():])
+	subScript := tokenizer.Script()[tokenizer.ByteIndex():]
+	valid, err := f.MultisigClosure.Decode(subScript)
 	if err != nil || !valid {
 		return false, err
 	}
@@ -1051,7 +1056,8 @@ func (f *ConditionCSVMultisigClosure) Decode(script []byte) (bool, error) {
 	f.Condition = condition
 
 	// Decode multisig closure
-	valid, err := f.CSVMultisigClosure.Decode(tokenizer.Script()[tokenizer.ByteIndex():])
+	subScript := tokenizer.Script()[tokenizer.ByteIndex():]
+	valid, err := f.CSVMultisigClosure.Decode(subScript)
 	if err != nil || !valid {
 		return false, err
 	}
