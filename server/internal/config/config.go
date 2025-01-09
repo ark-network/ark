@@ -47,6 +47,7 @@ type Config struct {
 	MarketHourEndTime       time.Time
 	MarketHourPeriod        time.Duration
 	MarketHourRoundInterval time.Duration
+	OtelCollectorEndpoint   string
 }
 
 var (
@@ -86,6 +87,7 @@ var (
 	MarketHourEndTime       = "MARKET_HOUR_END_TIME"
 	MarketHourPeriod        = "MARKET_HOUR_PERIOD"
 	MarketHourRoundInterval = "MARKET_HOUR_ROUND_INTERVAL"
+	OtelCollectorEndpoint   = "OTEL_COLLECTOR_ENDPOINT"
 
 	defaultDatadir             = common.AppDataDir("arkd", false)
 	defaultRoundInterval       = 15
@@ -181,6 +183,7 @@ func LoadConfig() (*Config, error) {
 		MarketHourEndTime:       viper.GetTime(MarketHourEndTime),
 		MarketHourPeriod:        viper.GetDuration(MarketHourPeriod),
 		MarketHourRoundInterval: viper.GetDuration(MarketHourRoundInterval),
+		OtelCollectorEndpoint:   viper.GetString(OtelCollectorEndpoint),
 	}, nil
 }
 
