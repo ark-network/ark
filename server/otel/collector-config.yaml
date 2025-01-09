@@ -1,0 +1,51 @@
+receivers:
+  # Host metrics (CPU, memory)
+  hostmetrics:
+    collection_interval: 10s
+    scrapers:
+      cpu:
+      memory:
+      disk:
+      filesystem:
+      load:
+      network:
+      process:
+      processes:
+      paging:
+
+  # Receive metrics & traces from your ark server
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+
+exporters:
+  # For metrics
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    # If your build doesn't support namespace, just remove this line:
+    # namespace: "ark"
+
+  # Use the debug exporter instead of logging
+  debug:
+    # Optional settings you might see in newer versions:
+    verbosity: detailed  # or "basic", "normal", etc.
+    # Some builds might allow "include_body: true" or others.
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp, hostmetrics]
+      processors: [batch]
+      exporters: [prometheus]
+
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      # Instead of 'logging', use the 'debug' exporter
+      exporters: [debug]

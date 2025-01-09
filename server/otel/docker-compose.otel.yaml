@@ -1,0 +1,46 @@
+version: "3.9"
+
+services:
+  ########################
+  # OpenTelemetry Collector
+  ########################
+  otel-collector:
+    image: otel/opentelemetry-collector:latest
+    container_name: otel-collector
+    # We'll mount a config file and host file systems for host metrics
+    volumes:
+      - ./collector-config.yaml:/etc/otelcol/config.yaml:ro
+      - /proc:/hostfs/proc:ro
+      - /sys:/hostfs/sys:ro
+    command: ["--config=/etc/otelcol/config.yaml"]
+    ports:
+      - "4317:4317"  # gRPC OTLP
+      - "4318:4318"  # HTTP OTLP
+      - "8889:8889"  # Prometheus metrics endpoint
+    restart: unless-stopped
+
+  ########################
+  # Prometheus
+  ########################
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    depends_on:
+      - otel-collector
+
+  ########################
+  # Grafana
+  ########################
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3333:3000"
+    restart: unless-stopped
+    depends_on:
+      - prometheus

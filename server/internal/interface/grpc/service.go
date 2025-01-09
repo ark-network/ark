@@ -4,9 +4,18 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel"
+	metricExport "go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
+	traceExport "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	appconfig "github.com/ark-network/ark/server/internal/app-config"
@@ -38,11 +47,12 @@ const (
 )
 
 type service struct {
-	config      Config
-	appConfig   *appconfig.Config
-	server      *http.Server
-	grpcServer  *grpc.Server
-	macaroonSvc *macaroons.Service
+	config       Config
+	appConfig    *appconfig.Config
+	server       *http.Server
+	grpcServer   *grpc.Server
+	macaroonSvc  *macaroons.Service
+	otelShutdown func(context.Context) error
 }
 
 func NewService(
@@ -89,7 +99,7 @@ func NewService(
 		log.Debugf("generated TLS key pair at path: %s", svcConfig.tlsDatadir())
 	}
 
-	return &service{svcConfig, appConfig, nil, nil, macaroonSvc}, nil
+	return &service{svcConfig, appConfig, nil, nil, macaroonSvc, nil}, nil
 }
 
 func (s *service) Start() error {
@@ -106,6 +116,11 @@ func (s *service) Start() error {
 func (s *service) Stop() {
 	withAppSvc := true
 	s.stop(withAppSvc)
+	if s.otelShutdown != nil {
+		if err := s.otelShutdown(context.Background()); err != nil {
+
+		}
+	}
 }
 
 func (s *service) start(withAppSvc bool) error {
@@ -152,10 +167,24 @@ func (s *service) stop(withAppSvc bool) {
 }
 
 func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
+	if s.appConfig.OtelCollectorEndpoint != "" {
+		otelShutdown, err := initOpenTelemetry(context.Background(), s.appConfig.OtelCollectorEndpoint)
+		if err != nil {
+			return err
+		}
+
+		s.otelShutdown = otelShutdown
+	}
+
+	otelHandler := otelgrpc.NewServerHandler(
+		otelgrpc.WithTracerProvider(otel.GetTracerProvider()),
+	)
 	grpcConfig := []grpc.ServerOption{
 		interceptors.UnaryInterceptor(s.macaroonSvc),
 		interceptors.StreamInterceptor(s.macaroonSvc),
+		grpc.StatsHandler(otelHandler),
 	}
+
 	creds := insecure.NewCredentials()
 	if !s.config.insecure() {
 		creds = credentials.NewTLS(tlsConfig)
@@ -379,4 +408,61 @@ func isOptionRequest(req *http.Request) bool {
 func isHttpRequest(req *http.Request) bool {
 	return req.Method == http.MethodGet ||
 		strings.Contains(req.Header.Get("Content-Type"), "application/json")
+}
+
+func initOpenTelemetry(ctx context.Context, otelCollectorUrl string) (func(context.Context) error, error) {
+	// Remove trailing slash if present
+	otelCollectorUrl = strings.TrimSuffix(otelCollectorUrl, "/")
+
+	traceExp, err := traceExport.New(
+		ctx,
+		traceExport.WithEndpoint(strings.TrimPrefix(otelCollectorUrl, "http://")), //TODO double check
+		traceExport.WithInsecure(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create trace exporter: %w", err)
+	}
+
+	res := resource.NewWithAttributes(
+		semconv.SchemaURL,
+		semconv.ServiceName("arkd"),
+	)
+	tp := trace.NewTracerProvider(
+		trace.WithBatcher(traceExp),
+		trace.WithResource(res),
+	)
+
+	metricExp, err := metricExport.New(
+		ctx,
+		metricExport.WithEndpoint(strings.TrimPrefix(otelCollectorUrl, "http://")), // Remove http:// prefix
+		metricExport.WithInsecure(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create metric exporter: %w", err)
+	}
+
+	reader := metric.NewPeriodicReader(
+		metricExp,
+		metric.WithInterval(5*time.Second),
+	)
+
+	mp := metric.NewMeterProvider(
+		metric.WithReader(reader),
+		metric.WithResource(res),
+	)
+
+	otel.SetTracerProvider(tp)
+	otel.SetMeterProvider(mp)
+
+	log.Info("initialized opentelemetry")
+
+	shutdown := func(ctx context.Context) error {
+		err1 := tp.Shutdown(ctx)
+		err2 := mp.Shutdown(ctx)
+		if err1 != nil {
+			return err1
+		}
+		return err2
+	}
+	return shutdown, nil
 }

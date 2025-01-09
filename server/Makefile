@@ -1,4 +1,4 @@
-.PHONY: build clean cov help intergrationtest lint run run-neutrino run-neutrino-signet test vet
+.PHONY: build clean cov help intergrationtest lint run run-neutrino run-neutrino-signet test vet run-otel stop-otel
 
 ## build: build for all platforms
 build:
@@ -47,6 +47,7 @@ run: clean
 	export ARK_BITCOIND_ZMQ_BLOCK=tcp://127.0.0.1:28332; \
 	export ARK_BITCOIND_ZMQ_TX=tcp://127.0.0.1:28333; \
 	export ARK_DATADIR=./data/regtest; \
+	export ARK_OTEL_COLLECTOR_ENDPOINT=$$ARK_OTEL_COLLECTOR_ENDPOINT; \
 	go run ./cmd/arkd
 
 ## run-neutrino: run in regtest mode with neutrino
@@ -117,3 +118,17 @@ vet_db: recreatedb mig_up mig_down_yes
 sqlc:
 	@echo "gen sql..."
 	cd ./internal/infrastructure/db/sqlite; sqlc generate
+
+## run-otel: run otel-collector with prometheus and grafana
+run-otel:
+	@echo "Running otel-collector..."
+	@bash ./scripts/run_otel.sh
+
+stop-otel:
+	@echo "Stopping otel-collector..."
+	@bash ./scripts/stop_otel.sh
+
+delete-otel:
+	@echo "Deleting otel containers and volumes..."
+	@bash ./scripts/delete_otel.sh
+
