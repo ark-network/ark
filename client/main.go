@@ -497,7 +497,9 @@ func getNetwork(ctx *cli.Context, cfgData *types.Config) (string, error) {
 func isBtcChain(network string) bool {
 	return network == common.Bitcoin.Name ||
 		network == common.BitcoinTestNet.Name ||
+		network == common.BitcoinTestNet4.Name ||
 		network == common.BitcoinSigNet.Name ||
+		network == common.BitcoinMutinyNet.Name ||
 		network == common.BitcoinRegTest.Name
 }
 

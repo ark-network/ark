@@ -208,10 +208,14 @@ func getNetwork() (common.Network, error) {
 		return common.Bitcoin, nil
 	case common.BitcoinTestNet.Name:
 		return common.BitcoinTestNet, nil
-	case common.BitcoinRegTest.Name:
-		return common.BitcoinRegTest, nil
+	case common.BitcoinTestNet4.Name:
+		return common.BitcoinTestNet4, nil
 	case common.BitcoinSigNet.Name:
 		return common.BitcoinSigNet, nil
+	case common.BitcoinMutinyNet.Name:
+		return common.BitcoinMutinyNet, nil
+	case common.BitcoinRegTest.Name:
+		return common.BitcoinRegTest, nil
 	default:
 		return common.Network{}, fmt.Errorf("unknown network %s", viper.GetString(Network))
 	}

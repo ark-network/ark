@@ -47,8 +47,10 @@ var (
 		common.LiquidRegTest.Name:  "http://localhost:3001",
 		common.Bitcoin.Name:        "https://blockstream.info/api",
 		common.BitcoinTestNet.Name: "https://blockstream.info/testnet/api",
-		common.BitcoinRegTest.Name: "http://localhost:3000",
-		common.BitcoinSigNet.Name:  "https://mutinynet.com/api",
+		//common.BitcoinTestNet4.Name: "https://mempool.space/testnet4/api", //TODO uncomment once supported
+		common.BitcoinSigNet.Name:    "https://blockstream.info/signet/api",
+		common.BitcoinMutinyNet.Name: "https://mutinynet.com/api",
+		common.BitcoinRegTest.Name:   "http://localhost:3000",
 	}
 )
 
