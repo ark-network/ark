@@ -1,4 +1,4 @@
-.PHONY: build clean cov help intergrationtest lint run run-neutrino run-mutinynet-signet test vet
+.PHONY: build clean cov help intergrationtest lint run run-neutrino run-neutrino-mutinynet test vet
 
 ## build: build for all platforms
 build:
@@ -64,7 +64,7 @@ run-neutrino: clean
 	export ARK_DATADIR=./data/regtest; \
 	go run ./cmd/arkd
 
-## run-neutrino-signet: run in signet mode
+## run-neutrino-mutinynet: run in signet mode
 run-neutrino-mutinynet: clean
 	@echo "Running arkd with Neutrino in signet mode ..."
 	@export ARK_ROUND_INTERVAL=10; \
