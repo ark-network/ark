@@ -39,7 +39,7 @@ var BitcoinTestNet = Network{
 
 var BitcoinTestNet4 = Network{
 	Name: "testnet4",
-	Addr: "tark",
+	Addr: BitcoinTestNet.Addr,
 }
 
 var BitcoinSigNet = Network{
