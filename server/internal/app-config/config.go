@@ -44,13 +44,14 @@ var (
 		"file": {},
 	}
 	supportedNetworks = supportedType{
-		common.Bitcoin.Name:        {},
-		common.BitcoinTestNet.Name: {},
-		common.BitcoinRegTest.Name: {},
-		common.BitcoinSigNet.Name:  {},
-		common.Liquid.Name:         {},
-		common.LiquidTestNet.Name:  {},
-		common.LiquidRegTest.Name:  {},
+		common.Bitcoin.Name:          {},
+		common.BitcoinTestNet.Name:   {},
+		common.BitcoinSigNet.Name:    {},
+		common.BitcoinMutinyNet.Name: {},
+		common.BitcoinRegTest.Name:   {},
+		common.Liquid.Name:           {},
+		common.LiquidTestNet.Name:    {},
+		common.LiquidRegTest.Name:    {},
 	}
 )
 

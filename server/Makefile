@@ -1,4 +1,4 @@
-.PHONY: build clean cov help intergrationtest lint run run-neutrino run-neutrino-signet test vet
+.PHONY: build clean cov help intergrationtest lint run run-neutrino run-neutrino-mutinynet test vet
 
 ## build: build for all platforms
 build:
@@ -64,19 +64,19 @@ run-neutrino: clean
 	export ARK_DATADIR=./data/regtest; \
 	go run ./cmd/arkd
 
-## run-neutrino-signet: run in signet mode
-run-neutrino-signet: clean
+## run-neutrino-mutinynet: run in signet mode
+run-neutrino-mutinynet: clean
 	@echo "Running arkd with Neutrino in signet mode ..."
 	@export ARK_ROUND_INTERVAL=10; \
 	export ARK_LOG_LEVEL=5; \
-	export ARK_NETWORK=signet; \
+	export ARK_NETWORK=mutinynet; \
 	export ARK_PORT=7070; \
 	export ARK_NO_TLS=true; \
 	export ARK_NO_MACAROONS=true; \
 	export ARK_TX_BUILDER_TYPE=covenantless; \
 	export ARK_ESPLORA_URL=https://mutinynet.com/api; \
 	export ARK_NEUTRINO_PEER=45.79.52.207:38333; \
-	export ARK_DATADIR=./data/signet; \
+	export ARK_DATADIR=./data/mutinynet; \
 	go run ./cmd/arkd
 
 ## test: runs unit and component tests
