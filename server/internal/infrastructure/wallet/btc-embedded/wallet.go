@@ -58,7 +58,7 @@ func (c WalletConfig) chainParams() *chaincfg.Params {
 		return &chaincfg.TestNet3Params
 	case common.BitcoinSigNet.Name:
 		return &chaincfg.SigNetParams
-	case common.MutinyNetSigNetParams.Name:
+	case common.BitcoinMutinyNet.Name:
 		return &common.MutinyNetSigNetParams
 	case common.BitcoinRegTest.Name:
 		return &chaincfg.RegressionNetParams

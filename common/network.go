@@ -57,6 +57,12 @@ var BitcoinRegTest = Network{
 	Addr: BitcoinTestNet.Addr,
 }
 
+var MutinyNetSigNetParams = func() chaincfg.Params {
+	params := chaincfg.CustomSignetParams(mutinyNetChallenge, nil)
+	params.TargetTimePerBlock = mutinyNetBlockTime
+	return params
+}()
+
 var mutinyNetChallenge = []byte{
 	0x51, 0x21, 0x02, 0xf7, 0x56, 0x1d, 0x20, 0x8d, 0xd9, 0xae, 0x99, 0xbf,
 	0x49, 0x72, 0x73, 0xe1, 0x6f, 0x38, 0x9b, 0xdb, 0xd6, 0xc4, 0x74, 0x2d,
@@ -64,13 +70,7 @@ var mutinyNetChallenge = []byte{
 	0xae,
 }
 
-var MutinyNetSigNetParams = func() chaincfg.Params {
-	params := chaincfg.CustomSignetParams(mutinyNetChallenge, nil)
-	params.TargetTimePerBlock = MutinyNetBlockTime
-	return params
-}()
-
-const MutinyNetBlockTime = time.Second * 30
+const mutinyNetBlockTime = time.Second * 30
 
 func IsLiquid(network Network) bool {
 	return strings.Contains(network.Name, "liquid")
