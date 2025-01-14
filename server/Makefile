@@ -1,4 +1,4 @@
-.PHONY: build clean cov help intergrationtest lint run run-neutrino run-neutrino-signet test vet
+.PHONY: build clean cov help intergrationtest lint run run-neutrino run-mutinynet-signet test vet
 
 ## build: build for all platforms
 build:
