@@ -65,7 +65,7 @@ run-neutrino: clean
 	go run ./cmd/arkd
 
 ## run-neutrino-signet: run in signet mode
-run-mutinynet-signet: clean
+run-neutrino-mutinynet: clean
 	@echo "Running arkd with Neutrino in signet mode ..."
 	@export ARK_ROUND_INTERVAL=10; \
 	export ARK_LOG_LEVEL=5; \
