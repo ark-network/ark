@@ -174,6 +174,7 @@ func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 		appSvc = svc
 		appHandler := handlers.NewHandler(appSvc)
 		arkv1.RegisterArkServiceServer(grpcServer, appHandler)
+		arkv1.RegisterExplorerServiceServer(grpcServer, appHandler)
 	}
 
 	adminHandler := handlers.NewAdminHandler(s.appConfig.AdminService(), appSvc, s.appConfig.NoteUriPrefix)

@@ -6,9 +6,6 @@ import (
 	"fmt"
 	"sync"
 
-	"google.golang.org/protobuf/types/known/durationpb"
-	"google.golang.org/protobuf/types/known/timestamppb"
-
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/descriptor"
@@ -21,6 +18,11 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+type service interface {
+	arkv1.ArkServiceServer
+	arkv1.ExplorerServiceServer
+}
+
 type handler struct {
 	svc application.Service
 
@@ -28,7 +30,7 @@ type handler struct {
 	transactionsListenerHandler *listenerHanlder[*arkv1.GetTransactionsStreamResponse]
 }
 
-func NewHandler(service application.Service) arkv1.ArkServiceServer {
+func NewHandler(service application.Service) service {
 	h := &handler{
 		svc:                         service,
 		eventsListenerHandler:       newListenerHandler[*arkv1.GetEventStreamResponse](),
@@ -69,10 +71,10 @@ func (h *handler) GetInfo(
 		BoardingDescriptorTemplate: desc,
 		VtxoDescriptorTemplates:    []string{desc},
 		MarketHour: &arkv1.MarketHour{
-			NextStartTime: timestamppb.New(info.NextMarketHour.StartTime),
-			NextEndTime:   timestamppb.New(info.NextMarketHour.EndTime),
-			Period:        durationpb.New(info.NextMarketHour.Period),
-			RoundInterval: durationpb.New(info.NextMarketHour.RoundInterval),
+			NextStartTime: info.NextMarketHour.StartTime.Unix(),
+			NextEndTime:   info.NextMarketHour.EndTime.Unix(),
+			Period:        int64(info.NextMarketHour.Period),
+			RoundInterval: int64(info.NextMarketHour.RoundInterval),
 		},
 	}, nil
 }
