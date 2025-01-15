@@ -17,8 +17,8 @@ var (
 type Service interface {
 	Start() error
 	Stop()
-	SpendNotes(ctx context.Context, notes []note.Note) (string, error)
-	SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error)
+	SpendNotes(ctx context.Context, notes []note.Note, signerPubkeys []string, signingType domain.SigningType) (string, error)
+	SpendVtxos(ctx context.Context, inputs []ports.Input, signerPubkeys []string, signingType domain.SigningType) (string, error)
 	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error
 	SignVtxos(ctx context.Context, forfeitTxs []string) error
 	SignRoundTx(ctx context.Context, roundTx string) error
@@ -36,7 +36,6 @@ type Service interface {
 		ctx context.Context, userPubkey *secp256k1.PublicKey,
 	) (address string, scripts []string, err error)
 	// Tree signing methods
-	RegisterCosignerPubkey(ctx context.Context, requestID string, ephemeralPubkey string) error
 	RegisterCosignerNonces(
 		ctx context.Context, roundID string,
 		pubkey *secp256k1.PublicKey, nonces string,

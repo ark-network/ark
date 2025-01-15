@@ -12,6 +12,7 @@ import (
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	txbuilder "github.com/ark-network/ark/server/internal/infrastructure/tx-builder/covenantless"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -68,16 +69,23 @@ func TestBuildRoundTx(t *testing.T) {
 	if len(fixtures.Valid) > 0 {
 		t.Run("valid", func(t *testing.T) {
 			for _, f := range fixtures.Valid {
-				cosigners := make([]*secp256k1.PublicKey, 0)
-				for range f.Requests {
+				requests := make([]domain.TxRequest, 0)
+
+				for _, request := range f.Requests {
 					randKey, err := secp256k1.GeneratePrivateKey()
 					require.NoError(t, err)
 
-					cosigners = append(cosigners, randKey.PubKey())
+					requests = append(requests, domain.TxRequest{
+						Id: request.Id,
+						SignerPubKeys: []string{
+							hex.EncodeToString(schnorr.SerializePubKey(randKey.PubKey())),
+						},
+						SigningType: 0,
+					})
 				}
 
 				roundTx, vtxoTree, connAddr, _, err := builder.BuildRoundTx(
-					pubkey, f.Requests, []ports.BoardingInput{}, []string{}, cosigners...,
+					pubkey, f.Requests, []ports.BoardingInput{}, []string{},
 				)
 				require.NoError(t, err)
 				require.NotEmpty(t, roundTx)

@@ -211,7 +211,7 @@ func (a *covenantArkClient) InitWithWallet(ctx context.Context, args InitWithWal
 	return nil
 }
 
-func (a *covenantArkClient) RedeemNotes(ctx context.Context, notes []string) (string, error) {
+func (a *covenantArkClient) RedeemNotes(_ context.Context, _ []string, _ ...Option) (string, error) {
 	return "", fmt.Errorf("not implemented")
 }
 
@@ -492,6 +492,7 @@ func (a *covenantArkClient) UnilateralRedeem(ctx context.Context) error {
 func (a *covenantArkClient) CollaborativeRedeem(
 	ctx context.Context,
 	addr string, amount uint64, withExpiryCoinselect bool,
+	opts ...Option,
 ) (string, error) {
 	if a.wallet.IsLocked() {
 		return "", fmt.Errorf("wallet is locked")
@@ -585,7 +586,7 @@ func (a *covenantArkClient) CollaborativeRedeem(
 		})
 	}
 
-	requestID, err := a.client.RegisterInputsForNextRound(ctx, inputs, "")
+	requestID, err := a.client.RegisterInputsForNextRound(ctx, inputs, nil, 0)
 	if err != nil {
 		return "", err
 	}
@@ -604,6 +605,7 @@ func (a *covenantArkClient) CollaborativeRedeem(
 
 func (a *covenantArkClient) Settle(
 	ctx context.Context,
+	_ ...Option, // no options for covenant
 ) (string, error) {
 	return a.sendOffchain(ctx, false, nil)
 }
@@ -1012,7 +1014,7 @@ func (a *covenantArkClient) sendOffchain(
 		})
 	}
 
-	requestID, err := a.client.RegisterInputsForNextRound(ctx, inputs, "")
+	requestID, err := a.client.RegisterInputsForNextRound(ctx, inputs, nil, 0)
 	if err != nil {
 		return "", err
 	}

@@ -46,8 +46,10 @@ func getOutputVtxosLeaves(
 		for _, receiver := range request.Receivers {
 			if !receiver.IsOnchain() {
 				leaves = append(leaves, tree.VtxoLeaf{
-					PubKey: receiver.PubKey,
-					Amount: receiver.Amount,
+					PubKey:            receiver.PubKey,
+					Amount:            receiver.Amount,
+					Type:              tree.SigningType(request.SigningType),
+					SignersPublicKeys: request.SignerPubKeys,
 				})
 			}
 		}

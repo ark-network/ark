@@ -131,7 +131,7 @@ func (h *handler) RegisterInputsForNextRound(
 		if err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
-		requestID, err = h.svc.SpendVtxos(ctx, inputs)
+		requestID, err = h.svc.SpendVtxos(ctx, inputs, req.GetSignerPubkeys(), domain.SigningType(req.GetSigningType()))
 		if err != nil {
 			return nil, err
 		}
@@ -142,15 +142,8 @@ func (h *handler) RegisterInputsForNextRound(
 		if err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
-		requestID, err = h.svc.SpendNotes(ctx, notes)
+		requestID, err = h.svc.SpendNotes(ctx, notes, req.GetSignerPubkeys(), domain.SigningType(req.GetSigningType()))
 		if err != nil {
-			return nil, err
-		}
-	}
-
-	pubkey := req.GetEphemeralPubkey()
-	if len(pubkey) > 0 {
-		if err := h.svc.RegisterCosignerPubkey(ctx, requestID, pubkey); err != nil {
 			return nil, err
 		}
 	}
@@ -519,17 +512,10 @@ func (h *handler) listenToEvents() {
 				},
 			}
 		case application.RoundSigningStarted:
-			cosignersKeys := make([]string, 0, len(e.Cosigners))
-			for _, key := range e.Cosigners {
-				keyStr := hex.EncodeToString(key.SerializeCompressed())
-				cosignersKeys = append(cosignersKeys, keyStr)
-			}
-
 			ev = &arkv1.GetEventStreamResponse{
 				Event: &arkv1.GetEventStreamResponse_RoundSigning{
 					RoundSigning: &arkv1.RoundSigningEvent{
 						Id:               e.Id,
-						CosignersPubkeys: cosignersKeys,
 						UnsignedVtxoTree: vtxoTree(e.UnsignedVtxoTree).toProto(),
 						UnsignedRoundTx:  e.UnsignedRoundTx,
 					},

@@ -25,10 +25,10 @@ type RoundEvent interface {
 type TransportClient interface {
 	GetInfo(ctx context.Context) (*Info, error)
 	RegisterInputsForNextRound(
-		ctx context.Context, inputs []Input, ephemeralKey string,
+		ctx context.Context, inputs []Input, signerPubKeys []string, signingType tree.SigningType,
 	) (string, error)
 	RegisterNotesForNextRound(
-		ctx context.Context, notes []string, ephemeralKey string,
+		ctx context.Context, notes []string, signerPubKeys []string, signingType tree.SigningType,
 	) (string, error)
 	RegisterOutputsForNextRound(
 		ctx context.Context, requestID string, outputs []Output,
@@ -191,10 +191,9 @@ type RoundFailedEvent struct {
 func (e RoundFailedEvent) isRoundEvent() {}
 
 type RoundSigningStartedEvent struct {
-	ID               string
-	UnsignedTree     tree.VtxoTree
-	CosignersPubKeys []*secp256k1.PublicKey
-	UnsignedRoundTx  string
+	ID              string
+	UnsignedTree    tree.VtxoTree
+	UnsignedRoundTx string
 }
 
 func (e RoundSigningStartedEvent) isRoundEvent() {}

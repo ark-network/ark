@@ -12,7 +12,6 @@ import (
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/nbd-wtf/go-nostr"
 	"github.com/nbd-wtf/go-nostr/nip19"
 )
@@ -26,15 +25,14 @@ type timedTxRequest struct {
 }
 
 type txRequestsQueue struct {
-	lock          *sync.RWMutex
-	requests      map[string]*timedTxRequest
-	ephemeralKeys map[string]*secp256k1.PublicKey
+	lock     *sync.RWMutex
+	requests map[string]*timedTxRequest
 }
 
 func newTxRequestsQueue() *txRequestsQueue {
 	requestsById := make(map[string]*timedTxRequest)
 	lock := &sync.RWMutex{}
-	return &txRequestsQueue{lock, requestsById, make(map[string]*secp256k1.PublicKey)}
+	return &txRequestsQueue{lock, requestsById}
 }
 
 func (m *txRequestsQueue) len() int64 {
@@ -48,18 +46,6 @@ func (m *txRequestsQueue) len() int64 {
 		}
 	}
 	return count
-}
-
-func (m *txRequestsQueue) delete(id string) error {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-
-	if _, ok := m.requests[id]; !ok {
-		return errTxRequestNotFound{id}
-	}
-
-	delete(m.requests, id)
-	return nil
 }
 
 func (m *txRequestsQueue) pushWithNotes(request domain.TxRequest, notes []note.Note) error {
@@ -119,19 +105,7 @@ func (m *txRequestsQueue) push(
 	return nil
 }
 
-func (m *txRequestsQueue) pushEphemeralKey(requestID string, pubkey *secp256k1.PublicKey) error {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-
-	if _, ok := m.requests[requestID]; !ok {
-		return fmt.Errorf("tx request %s not found, cannot register signing ephemeral public key", requestID)
-	}
-
-	m.ephemeralKeys[requestID] = pubkey
-	return nil
-}
-
-func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingInput, []*secp256k1.PublicKey, []note.Note) {
+func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingInput, []note.Note) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -157,19 +131,14 @@ func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingIn
 
 	requests := make([]domain.TxRequest, 0, num)
 	boardingInputs := make([]ports.BoardingInput, 0)
-	cosigners := make([]*secp256k1.PublicKey, 0, num)
 	notes := make([]note.Note, 0)
 	for _, p := range requestsByTime[:num] {
 		boardingInputs = append(boardingInputs, p.boardingInputs...)
 		requests = append(requests, p.TxRequest)
-		if pubkey, ok := m.ephemeralKeys[p.TxRequest.Id]; ok {
-			cosigners = append(cosigners, pubkey)
-			delete(m.ephemeralKeys, p.TxRequest.Id)
-		}
 		notes = append(notes, p.notes...)
 		delete(m.requests, p.Id)
 	}
-	return requests, boardingInputs, cosigners, notes
+	return requests, boardingInputs, notes
 }
 
 func (m *txRequestsQueue) update(request domain.TxRequest) error {
@@ -233,9 +202,11 @@ func (m *txRequestsQueue) view(id string) (*domain.TxRequest, bool) {
 	}
 
 	return &domain.TxRequest{
-		Id:        request.Id,
-		Inputs:    request.Inputs,
-		Receivers: request.Receivers,
+		Id:            request.Id,
+		Inputs:        request.Inputs,
+		Receivers:     request.Receivers,
+		SignerPubKeys: request.SignerPubKeys,
+		SigningType:   request.SigningType,
 	}, true
 }
 

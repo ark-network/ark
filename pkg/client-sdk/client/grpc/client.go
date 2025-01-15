@@ -85,13 +85,14 @@ func (a *grpcClient) GetBoardingAddress(
 }
 
 func (a *grpcClient) RegisterInputsForNextRound(
-	ctx context.Context, inputs []client.Input, ephemeralPubkey string,
+	ctx context.Context, inputs []client.Input, signerPubKeys []string, signingType tree.SigningType,
 ) (string, error) {
 	req := &arkv1.RegisterInputsForNextRoundRequest{
 		Inputs: ins(inputs).toProto(),
 	}
-	if len(ephemeralPubkey) > 0 {
-		req.EphemeralPubkey = &ephemeralPubkey
+	if len(signerPubKeys) > 0 {
+		req.SignerPubkeys = signerPubKeys
+		req.SigningType = uint32(signingType)
 	}
 
 	resp, err := a.svc.RegisterInputsForNextRound(ctx, req)
@@ -102,13 +103,14 @@ func (a *grpcClient) RegisterInputsForNextRound(
 }
 
 func (a *grpcClient) RegisterNotesForNextRound(
-	ctx context.Context, notes []string, ephemeralKey string,
+	ctx context.Context, notes []string, signerPubKeys []string, signingType tree.SigningType,
 ) (string, error) {
 	req := &arkv1.RegisterInputsForNextRoundRequest{
 		Notes: notes,
 	}
-	if len(ephemeralKey) > 0 {
-		req.EphemeralPubkey = &ephemeralKey
+	if len(signerPubKeys) > 0 {
+		req.SignerPubkeys = signerPubKeys
+		req.SigningType = uint32(signingType)
 	}
 	resp, err := a.svc.RegisterInputsForNextRound(ctx, req)
 	if err != nil {

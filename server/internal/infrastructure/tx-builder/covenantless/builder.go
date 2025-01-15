@@ -32,7 +32,9 @@ type txBuilder struct {
 }
 
 func NewTxBuilder(
-	wallet ports.WalletService, net common.Network, roundLifetime, boardingExitDelay common.RelativeLocktime,
+	wallet ports.WalletService,
+	net common.Network,
+	roundLifetime, boardingExitDelay common.RelativeLocktime,
 ) ports.TxBuilder {
 	return &txBuilder{wallet, net, roundLifetime, boardingExitDelay}
 }
@@ -552,13 +554,14 @@ func (b *txBuilder) BuildRoundTx(
 	requests []domain.TxRequest,
 	boardingInputs []ports.BoardingInput,
 	connectorAddresses []string,
-	cosigners ...*secp256k1.PublicKey,
 ) (roundTx string, vtxoTree tree.VtxoTree, nextConnectorAddress string, connectors []string, err error) {
 	var sharedOutputScript []byte
 	var sharedOutputAmount int64
 
-	if len(cosigners) == 0 {
-		return "", nil, "", nil, fmt.Errorf("missing cosigners")
+	for _, request := range requests {
+		if len(request.SignerPubKeys) == 0 {
+			return "", nil, "", nil, fmt.Errorf("missing signer pubkeys for request ID %s", request.Id)
+		}
 	}
 
 	receivers, err := getOutputVtxosLeaves(requests)
@@ -571,9 +574,23 @@ func (b *txBuilder) BuildRoundTx(
 		return
 	}
 
+	var sweepScript []byte
+	sweepScript, err = (&tree.CSVMultisigClosure{
+		MultisigClosure: tree.MultisigClosure{
+			PubKeys: []*secp256k1.PublicKey{serverPubkey},
+		},
+		Locktime: b.roundLifetime,
+	}).Script()
+	if err != nil {
+		return
+	}
+
+	tree := txscript.AssembleTaprootScriptTree(txscript.NewBaseTapLeaf(sweepScript))
+	root := tree.RootNode.TapHash()
+
 	if !isOnchainOnly(requests) {
 		sharedOutputScript, sharedOutputAmount, err = bitcointree.CraftSharedOutput(
-			cosigners, serverPubkey, receivers, feeAmount, b.roundLifetime,
+			receivers, feeAmount, root[:],
 		)
 		if err != nil {
 			return
@@ -605,7 +622,7 @@ func (b *txBuilder) BuildRoundTx(
 		}
 
 		vtxoTree, err = bitcointree.BuildVtxoTree(
-			initialOutpoint, cosigners, serverPubkey, receivers, feeAmount, b.roundLifetime,
+			initialOutpoint, receivers, feeAmount, root[:],
 		)
 		if err != nil {
 			return "", nil, "", nil, err

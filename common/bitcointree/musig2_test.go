@@ -1,14 +1,15 @@
 package bitcointree_test
 
 import (
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
-	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
@@ -26,110 +27,106 @@ var lifetime = common.RelativeLocktime{Type: common.LocktimeTypeBlock, Value: 14
 var testTxid, _ = chainhash.NewHashFromStr("49f8664acc899be91902f8ade781b7eeb9cbe22bdd9efbc36e56195de21bcd12")
 
 func TestRoundTripSignTree(t *testing.T) {
+	t.Parallel()
 	fixtures := parseFixtures(t)
-	for _, f := range fixtures.Valid {
-		// Generate 20 cosigners
-		cosigners := make([]*secp256k1.PrivateKey, 20)
-		cosignerPubkeys := make([]*btcec.PublicKey, 20)
-		for i := 0; i < 20; i++ {
-			prvkey, err := secp256k1.GeneratePrivateKey()
+	for i, f := range fixtures.Valid {
+		t.Run(fmt.Sprintf("test %d", i), func(t *testing.T) {
+			server, err := secp256k1.GeneratePrivateKey()
 			require.NoError(t, err)
-			cosigners[i] = prvkey
-			cosignerPubkeys[i] = prvkey.PubKey()
-		}
 
-		server, err := secp256k1.GeneratePrivateKey()
-		require.NoError(t, err)
-
-		_, sharedOutputAmount, err := bitcointree.CraftSharedOutput(
-			cosignerPubkeys,
-			server.PubKey(),
-			castReceivers(f.Receivers),
-			minRelayFee,
-			lifetime,
-		)
-		require.NoError(t, err)
-
-		vtxoTree, err := bitcointree.BuildVtxoTree(
-			&wire.OutPoint{
-				Hash:  *testTxid,
-				Index: 0,
-			},
-			cosignerPubkeys,
-			server.PubKey(),
-			castReceivers(f.Receivers),
-			minRelayFee,
-			lifetime,
-		)
-		require.NoError(t, err)
-
-		sweepClosure := &tree.CSVMultisigClosure{
-			MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{server.PubKey()}},
-			Locktime:        lifetime,
-		}
-
-		sweepScript, err := sweepClosure.Script()
-		require.NoError(t, err)
-
-		sweepTapLeaf := txscript.NewBaseTapLeaf(sweepScript)
-		sweepTapTree := txscript.AssembleTaprootScriptTree(sweepTapLeaf)
-		root := sweepTapTree.RootNode.TapHash()
-
-		serverCoordinator, err := bitcointree.NewTreeCoordinatorSession(
-			sharedOutputAmount,
-			vtxoTree,
-			root.CloneBytes(),
-			cosignerPubkeys,
-		)
-		require.NoError(t, err)
-
-		// Create signer sessions for all cosigners
-		signerSessions := make([]bitcointree.SignerSession, 20)
-		for i, cosigner := range cosigners {
-			signerSessions[i] = bitcointree.NewTreeSignerSession(cosigner, sharedOutputAmount, vtxoTree, root.CloneBytes())
-		}
-
-		// Get nonces from all signers
-		for i, session := range signerSessions {
-			nonces, err := session.GetNonces()
+			sweepScript, err := (&tree.CSVMultisigClosure{
+				MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{server.PubKey()}},
+				Locktime:        lifetime,
+			}).Script()
 			require.NoError(t, err)
-			err = serverCoordinator.AddNonce(cosignerPubkeys[i], nonces)
+
+			sweepTapLeaf := txscript.NewBaseTapLeaf(sweepScript)
+			sweepRoot := sweepTapLeaf.TapHash()
+
+			receivers := make([]tree.VtxoLeaf, 0, len(f.Receivers))
+
+			privKeys := make([]*secp256k1.PrivateKey, 0, len(receivers))
+			for i, r := range castReceivers(f.Receivers) {
+				receiver := r
+				prvkey, err := secp256k1.GeneratePrivateKey()
+				require.NoError(t, err)
+				privKeys = append(privKeys, prvkey)
+
+				receiver.SignersPublicKeys = []string{
+					hex.EncodeToString(prvkey.PubKey().SerializeCompressed()),
+				}
+				if i%2 == 0 {
+					receiver.Type = tree.SignAll
+				} else {
+					receiver.Type = tree.SignBranch
+				}
+				receivers = append(receivers, receiver)
+			}
+
+			_, sharedOutputAmount, err := bitcointree.CraftSharedOutput(
+				receivers,
+				minRelayFee,
+				sweepRoot[:],
+			)
 			require.NoError(t, err)
-		}
 
-		aggregatedNonce, err := serverCoordinator.AggregateNonces()
-		require.NoError(t, err)
-
-		// Set keys and aggregated nonces for all signers
-		for _, session := range signerSessions {
-			err = session.SetKeys(cosignerPubkeys)
+			vtxoTree, err := bitcointree.BuildVtxoTree(
+				&wire.OutPoint{
+					Hash:  *testTxid,
+					Index: 0,
+				},
+				receivers,
+				minRelayFee,
+				sweepRoot[:],
+			)
 			require.NoError(t, err)
-			err = session.SetAggregatedNonces(aggregatedNonce)
+
+			serverCoordinator, err := bitcointree.NewTreeCoordinatorSession(
+				sharedOutputAmount,
+				vtxoTree,
+				sweepRoot[:],
+			)
 			require.NoError(t, err)
-		}
 
-		// Get signatures from all signers
-		for i, session := range signerSessions {
-			sig, err := session.Sign()
+			// Create signer sessions for all cosigners
+			signerSessions := make([]bitcointree.SignerSession, len(receivers))
+			for i, prvkey := range privKeys {
+				signerSessions[i], err = bitcointree.NewTreeSignerSession(prvkey, sharedOutputAmount, vtxoTree, sweepRoot[:])
+				require.NoError(t, err)
+			}
+
+			// Get nonces from all signers
+			for i, session := range signerSessions {
+				nonces, err := session.GetNonces()
+				require.NoError(t, err)
+				serverCoordinator.AddNonce(privKeys[i].PubKey(), nonces)
+			}
+
+			aggregatedNonce, err := serverCoordinator.AggregateNonces()
 			require.NoError(t, err)
-			err = serverCoordinator.AddSig(cosignerPubkeys[i], sig)
+
+			// Set keys and aggregated nonces for all signers
+			for _, session := range signerSessions {
+				session.SetAggregatedNonces(aggregatedNonce)
+			}
+
+			// Get signatures from all signers
+			for i, session := range signerSessions {
+				sig, err := session.Sign()
+				require.NoError(t, err)
+				serverCoordinator.AddSig(privKeys[i].PubKey(), sig)
+			}
+
+			signedTree, err := serverCoordinator.SignTree()
 			require.NoError(t, err)
-		}
 
-		signedTree, err := serverCoordinator.SignTree()
-		require.NoError(t, err)
-
-		// verify the tree
-		aggregatedKey, err := bitcointree.AggregateKeys(cosignerPubkeys, root.CloneBytes())
-		require.NoError(t, err)
-
-		err = bitcointree.ValidateTreeSigs(
-			root.CloneBytes(),
-			aggregatedKey.FinalKey,
-			sharedOutputAmount,
-			signedTree,
-		)
-		require.NoError(t, err)
+			err = bitcointree.ValidateTreeSigs(
+				sweepRoot[:],
+				sharedOutputAmount,
+				signedTree,
+			)
+			require.NoError(t, err)
+		})
 	}
 }
 

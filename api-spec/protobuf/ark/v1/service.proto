@@ -140,8 +140,9 @@ message GetBoardingAddressResponse {
 
 message RegisterInputsForNextRoundRequest {
   repeated Input inputs = 1;
-  optional string ephemeral_pubkey = 2;
+  repeated string signer_pubkeys = 2;
   repeated string notes = 3;
+  uint32 signing_type = 4;
 }
 message RegisterInputsForNextRoundResponse {
   string request_id = 1;
@@ -246,9 +247,8 @@ message RoundFailed {
 
 message RoundSigningEvent {
   string id = 1;
-  repeated string cosigners_pubkeys = 2;
-  Tree unsigned_vtxo_tree = 3;
-  string unsigned_round_tx = 4;
+  Tree unsigned_vtxo_tree = 2;
+  string unsigned_round_tx = 3;
 }
 
 message RoundSigningNoncesGeneratedEvent {

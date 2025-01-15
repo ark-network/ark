@@ -188,11 +188,11 @@ func (s *covenantService) GetBoardingAddress(ctx context.Context, userPubkey *se
 	return addr, scripts, nil
 }
 
-func (s *covenantService) SpendNotes(_ context.Context, _ []note.Note) (string, error) {
+func (s *covenantService) SpendNotes(_ context.Context, _ []note.Note, _ []string, _ domain.SigningType) (string, error) {
 	return "", fmt.Errorf("unimplemented")
 }
 
-func (s *covenantService) SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error) {
+func (s *covenantService) SpendVtxos(ctx context.Context, inputs []ports.Input, _ []string, _ domain.SigningType) (string, error) {
 	vtxosInputs := make([]domain.Vtxo, 0)
 	boardingInputs := make([]ports.BoardingInput, 0)
 
@@ -473,16 +473,6 @@ func (s *covenantService) GetInfo(ctx context.Context) (*ServiceInfo, error) {
 	}, nil
 }
 
-func (s *covenantService) RegisterCosignerPubkey(ctx context.Context, requestID string, _ string) error {
-	// if the user sends an ephemeral pubkey, something is going wrong client-side
-	// we should delete the associated tx request
-	if err := s.txRequests.delete(requestID); err != nil {
-		log.WithError(err).Warnf("failed to delete tx request %s", requestID)
-	}
-
-	return ErrTreeSigningNotRequired
-}
-
 func (s *covenantService) RegisterCosignerNonces(context.Context, string, *secp256k1.PublicKey, string) error {
 	return ErrTreeSigningNotRequired
 }
@@ -567,7 +557,7 @@ func (s *covenantService) startFinalization() {
 	if num > txRequestsThreshold {
 		num = txRequestsThreshold
 	}
-	requests, boardingInputs, _, _ := s.txRequests.pop(num)
+	requests, boardingInputs, _ := s.txRequests.pop(num)
 	if _, err := round.RegisterTxRequests(requests); err != nil {
 		round.Fail(fmt.Errorf("failed to register tx requests: %s", err))
 		log.WithError(err).Warn("failed to register tx requests")

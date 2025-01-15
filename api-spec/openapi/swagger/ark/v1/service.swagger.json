@@ -808,14 +808,21 @@
             "$ref": "#/definitions/v1Input"
           }
         },
-        "ephemeralPubkey": {
-          "type": "string"
+        "signerPubkeys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
         "notes": {
           "type": "array",
           "items": {
             "type": "string"
           }
+        },
+        "signingType": {
+          "type": "integer",
+          "format": "int64"
         }
       }
     },
@@ -934,12 +941,6 @@
       "properties": {
         "id": {
           "type": "string"
-        },
-        "cosignersPubkeys": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
         },
         "unsignedVtxoTree": {
           "$ref": "#/definitions/v1Tree"
