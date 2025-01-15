@@ -1,0 +1,43 @@
+name: Verify SDK Autogen REST Client
+
+on:
+  push:
+    branches: [ "*" ]
+  pull_request:
+    branches: [ "*" ]
+
+jobs:
+  verify-client:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '>=1.23.1'
+
+    - name: Run go work sync
+      run: go work sync
+
+    - name: Install Swagger
+      run: |
+        go install github.com/go-swagger/go-swagger/cmd/swagger@latest
+
+    - name: Generate Client
+      run: |
+        cd pkg/client-sdk
+        mkdir -p tmp
+        REST_DIR=tmp make genrest
+
+    - name: Compare Generated Client
+      run: |
+        if ! diff -r path/to/client-folder temp_client; then
+          echo "Generated client differs from the committed version."
+          echo "Please run 'make genrest' locally and commit the changes."
+          exit 1
+        fi
+
+    - name: Clean up
+      run: rm -rf temp_client
