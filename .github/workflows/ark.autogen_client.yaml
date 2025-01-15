@@ -33,7 +33,7 @@ jobs:
 
     - name: Compare Generated Client
       run: |
-        if ! diff -r path/to/client-folder temp_client; then
+        if ! diff -r client/rest/service tmp; then
           echo "Generated client differs from the committed version."
           echo "Please run 'make genrest' locally and commit the changes."
           exit 1
