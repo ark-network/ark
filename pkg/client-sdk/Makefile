@@ -1,13 +1,13 @@
 .PHONY: genrest test vet lint prepare-wasm-test
 
-REST_DIR = $(PWD)/client/rest/service
+client_dir = $(or $(REST_DIR),$(PWD)/client/rest/service)
 
 ## genrest: compiles rest client from stub with https://github.com/go-swagger/go-swagger
 genrest:
 	@echo "Cleaning existing files..."
-	@rm -rf $(REST_DIR)
+	@rm -rf $(client_dir)
 	@echo "Generating rest client from stub..."
-	@mkdir -p $(REST_DIR)
+	@mkdir -p $(client_dir)
 	@swagger generate client -f ../../api-spec/openapi/swagger/ark/v1/service.swagger.json -t $(REST_DIR) --client-package=arkservice
 	@swagger generate client -f ../../api-spec/openapi/swagger/ark/v1/explorer.swagger.json -t $(REST_DIR) --client-package=explorerservice
 
