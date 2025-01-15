@@ -8,8 +8,8 @@ genrest:
 	@rm -rf $(client_dir)
 	@echo "Generating rest client from stub..."
 	@mkdir -p $(client_dir)
-	@swagger generate client -f ../../api-spec/openapi/swagger/ark/v1/service.swagger.json -t $(REST_DIR) --client-package=arkservice
-	@swagger generate client -f ../../api-spec/openapi/swagger/ark/v1/explorer.swagger.json -t $(REST_DIR) --client-package=explorerservice
+	@swagger generate client -f ../../api-spec/openapi/swagger/ark/v1/service.swagger.json -t $(client_dir) --client-package=arkservice
+	@swagger generate client -f ../../api-spec/openapi/swagger/ark/v1/explorer.swagger.json -t $(client_dir) --client-package=explorerservice
 
 ## test: runs unit tests
 test:
