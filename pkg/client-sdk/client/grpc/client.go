@@ -20,9 +20,14 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+type service struct {
+	arkv1.ArkServiceClient
+	arkv1.ExplorerServiceClient
+}
+
 type grpcClient struct {
 	conn      *grpc.ClientConn
-	svc       arkv1.ArkServiceClient
+	svc       service
 	treeCache *utils.Cache[tree.VtxoTree]
 }
 
@@ -47,7 +52,7 @@ func NewClient(serverUrl string) (client.TransportClient, error) {
 		return nil, err
 	}
 
-	svc := arkv1.NewArkServiceClient(conn)
+	svc := service{arkv1.NewArkServiceClient(conn), arkv1.NewExplorerServiceClient(conn)}
 	treeCache := utils.NewCache[tree.VtxoTree]()
 
 	return &grpcClient{conn, svc, treeCache}, nil

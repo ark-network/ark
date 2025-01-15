@@ -8,10 +8,8 @@ package models
 import (
 	"context"
 
-	"github.com/go-openapi/errors"
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
-	"github.com/go-openapi/validate"
 )
 
 // V1MarketHour v1 market hour
@@ -20,12 +18,10 @@ import (
 type V1MarketHour struct {
 
 	// next end time
-	// Format: date-time
-	NextEndTime strfmt.DateTime `json:"nextEndTime,omitempty"`
+	NextEndTime string `json:"nextEndTime,omitempty"`
 
 	// next start time
-	// Format: date-time
-	NextStartTime strfmt.DateTime `json:"nextStartTime,omitempty"`
+	NextStartTime string `json:"nextStartTime,omitempty"`
 
 	// period
 	Period string `json:"period,omitempty"`
@@ -36,43 +32,6 @@ type V1MarketHour struct {
 
 // Validate validates this v1 market hour
 func (m *V1MarketHour) Validate(formats strfmt.Registry) error {
-	var res []error
-
-	if err := m.validateNextEndTime(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.validateNextStartTime(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if len(res) > 0 {
-		return errors.CompositeValidationError(res...)
-	}
-	return nil
-}
-
-func (m *V1MarketHour) validateNextEndTime(formats strfmt.Registry) error {
-	if swag.IsZero(m.NextEndTime) { // not required
-		return nil
-	}
-
-	if err := validate.FormatOf("nextEndTime", "body", "date-time", m.NextEndTime.String(), formats); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (m *V1MarketHour) validateNextStartTime(formats strfmt.Registry) error {
-	if swag.IsZero(m.NextStartTime) { // not required
-		return nil
-	}
-
-	if err := validate.FormatOf("nextStartTime", "body", "date-time", m.NextStartTime.String(), formats); err != nil {
-		return err
-	}
-
 	return nil
 }
 
