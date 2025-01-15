@@ -28,9 +28,6 @@ type ArkServiceClient interface {
 	GetEventStream(ctx context.Context, in *GetEventStreamRequest, opts ...grpc.CallOption) (ArkService_GetEventStreamClient, error)
 	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
 	SubmitRedeemTx(ctx context.Context, in *SubmitRedeemTxRequest, opts ...grpc.CallOption) (*SubmitRedeemTxResponse, error)
-	GetRound(ctx context.Context, in *GetRoundRequest, opts ...grpc.CallOption) (*GetRoundResponse, error)
-	GetRoundById(ctx context.Context, in *GetRoundByIdRequest, opts ...grpc.CallOption) (*GetRoundByIdResponse, error)
-	ListVtxos(ctx context.Context, in *ListVtxosRequest, opts ...grpc.CallOption) (*ListVtxosResponse, error)
 	GetTransactionsStream(ctx context.Context, in *GetTransactionsStreamRequest, opts ...grpc.CallOption) (ArkService_GetTransactionsStreamClient, error)
 	SetNostrRecipient(ctx context.Context, in *SetNostrRecipientRequest, opts ...grpc.CallOption) (*SetNostrRecipientResponse, error)
 	DeleteNostrRecipient(ctx context.Context, in *DeleteNostrRecipientRequest, opts ...grpc.CallOption) (*DeleteNostrRecipientResponse, error)
@@ -157,33 +154,6 @@ func (c *arkServiceClient) SubmitRedeemTx(ctx context.Context, in *SubmitRedeemT
 	return out, nil
 }
 
-func (c *arkServiceClient) GetRound(ctx context.Context, in *GetRoundRequest, opts ...grpc.CallOption) (*GetRoundResponse, error) {
-	out := new(GetRoundResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/GetRound", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *arkServiceClient) GetRoundById(ctx context.Context, in *GetRoundByIdRequest, opts ...grpc.CallOption) (*GetRoundByIdResponse, error) {
-	out := new(GetRoundByIdResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/GetRoundById", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *arkServiceClient) ListVtxos(ctx context.Context, in *ListVtxosRequest, opts ...grpc.CallOption) (*ListVtxosResponse, error) {
-	out := new(ListVtxosResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/ListVtxos", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *arkServiceClient) GetTransactionsStream(ctx context.Context, in *GetTransactionsStreamRequest, opts ...grpc.CallOption) (ArkService_GetTransactionsStreamClient, error) {
 	stream, err := c.cc.NewStream(ctx, &ArkService_ServiceDesc.Streams[1], "/ark.v1.ArkService/GetTransactionsStream", opts...)
 	if err != nil {
@@ -248,9 +218,6 @@ type ArkServiceServer interface {
 	GetEventStream(*GetEventStreamRequest, ArkService_GetEventStreamServer) error
 	Ping(context.Context, *PingRequest) (*PingResponse, error)
 	SubmitRedeemTx(context.Context, *SubmitRedeemTxRequest) (*SubmitRedeemTxResponse, error)
-	GetRound(context.Context, *GetRoundRequest) (*GetRoundResponse, error)
-	GetRoundById(context.Context, *GetRoundByIdRequest) (*GetRoundByIdResponse, error)
-	ListVtxos(context.Context, *ListVtxosRequest) (*ListVtxosResponse, error)
 	GetTransactionsStream(*GetTransactionsStreamRequest, ArkService_GetTransactionsStreamServer) error
 	SetNostrRecipient(context.Context, *SetNostrRecipientRequest) (*SetNostrRecipientResponse, error)
 	DeleteNostrRecipient(context.Context, *DeleteNostrRecipientRequest) (*DeleteNostrRecipientResponse, error)
@@ -289,15 +256,6 @@ func (UnimplementedArkServiceServer) Ping(context.Context, *PingRequest) (*PingR
 }
 func (UnimplementedArkServiceServer) SubmitRedeemTx(context.Context, *SubmitRedeemTxRequest) (*SubmitRedeemTxResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SubmitRedeemTx not implemented")
-}
-func (UnimplementedArkServiceServer) GetRound(context.Context, *GetRoundRequest) (*GetRoundResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetRound not implemented")
-}
-func (UnimplementedArkServiceServer) GetRoundById(context.Context, *GetRoundByIdRequest) (*GetRoundByIdResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetRoundById not implemented")
-}
-func (UnimplementedArkServiceServer) ListVtxos(context.Context, *ListVtxosRequest) (*ListVtxosResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListVtxos not implemented")
 }
 func (UnimplementedArkServiceServer) GetTransactionsStream(*GetTransactionsStreamRequest, ArkService_GetTransactionsStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method GetTransactionsStream not implemented")
@@ -503,60 +461,6 @@ func _ArkService_SubmitRedeemTx_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ArkService_GetRound_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetRoundRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ArkServiceServer).GetRound(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/GetRound",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).GetRound(ctx, req.(*GetRoundRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ArkService_GetRoundById_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetRoundByIdRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ArkServiceServer).GetRoundById(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/GetRoundById",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).GetRoundById(ctx, req.(*GetRoundByIdRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ArkService_ListVtxos_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListVtxosRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ArkServiceServer).ListVtxos(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/ListVtxos",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).ListVtxos(ctx, req.(*ListVtxosRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _ArkService_GetTransactionsStream_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(GetTransactionsStreamRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -656,18 +560,6 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SubmitRedeemTx",
 			Handler:    _ArkService_SubmitRedeemTx_Handler,
-		},
-		{
-			MethodName: "GetRound",
-			Handler:    _ArkService_GetRound_Handler,
-		},
-		{
-			MethodName: "GetRoundById",
-			Handler:    _ArkService_GetRoundById_Handler,
-		},
-		{
-			MethodName: "ListVtxos",
-			Handler:    _ArkService_ListVtxos_Handler,
 		},
 		{
 			MethodName: "SetNostrRecipient",
