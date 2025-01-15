@@ -2,9 +2,15 @@ name: Verify SDK Autogen REST Client
 
 on:
   push:
-    branches: [ "*" ]
+    branches: 
+      - master
+    paths:
+      - "api-spec/**"
   pull_request:
-    branches: [ "*" ]
+    branches:
+      - master
+    paths:
+      - "api-spec/**"
 
 jobs:
   verify-client:
