@@ -26,12 +26,12 @@ jobs:
         go install github.com/go-swagger/go-swagger/cmd/swagger@latest
 
     - name: Generate Client
+      working-directory: pkg/client-sdk
       run: |
-        cd pkg/client-sdk
-        mkdir -p tmp
         REST_DIR=tmp make genrest
 
     - name: Compare Generated Client
+      working-directory: pkg/client-sdk
       run: |
         if ! diff -r client/rest/service tmp; then
           echo "Generated client differs from the committed version."
@@ -40,4 +40,5 @@ jobs:
         fi
 
     - name: Clean up
-      run: rm -rf temp_client
+      working-directory: pkg/client-sdk
+      run: rm -rf tmp
