@@ -3,6 +3,7 @@ package bitcointree
 import (
 	"bytes"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/wire"
@@ -12,6 +13,7 @@ import (
 var (
 	COSIGNER_PSBT_KEY_PREFIX     = []byte("cosigner")
 	CONDITION_WITNESS_KEY_PREFIX = []byte(tree.ConditionWitnessKey)
+	LIFETIME_PSBT_KEY            = []byte("lifetime")
 )
 
 func AddConditionWitness(inIndex int, ptx *psbt.Packet, witness wire.TxWitness) error {
@@ -37,6 +39,25 @@ func GetConditionWitness(in psbt.PInput) (wire.TxWitness, error) {
 	}
 
 	return wire.TxWitness{}, nil
+}
+
+func AddLifetime(inIndex int, ptx *psbt.Packet, lifetime common.RelativeLocktime) error {
+	ptx.Inputs[inIndex].Unknowns = append(ptx.Inputs[inIndex].Unknowns, &psbt.Unknown{
+		Value: lifetime.Bytes(),
+		Key:   LIFETIME_PSBT_KEY,
+	})
+
+	return nil
+}
+
+func GetLifetime(in psbt.PInput) (*common.RelativeLocktime, error) {
+	for _, u := range in.Unknowns {
+		if bytes.Contains(u.Key, LIFETIME_PSBT_KEY) {
+			return common.NewRelativeLocktimeFromBytes(u.Value)
+		}
+	}
+
+	return nil, nil
 }
 
 func AddCosignerKey(inIndex int, ptx *psbt.Packet, key *secp256k1.PublicKey) error {

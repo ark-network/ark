@@ -46,6 +46,7 @@ func BuildVtxoTree(
 	receivers []tree.VtxoLeaf,
 	feeSatsPerNode uint64,
 	sweepTapTreeRoot []byte,
+	lifetime common.RelativeLocktime,
 ) (tree.VtxoTree, error) {
 	root, err := createRootNode(receivers, feeSatsPerNode, sweepTapTreeRoot)
 	if err != nil {
@@ -64,7 +65,7 @@ func BuildVtxoTree(
 		treeLevel := make([]tree.Node, 0)
 
 		for i, node := range nodes {
-			treeNode, err := getTreeNode(node, ins[i])
+			treeNode, err := getTreeNode(node, ins[i], lifetime)
 			if err != nil {
 				return nil, err
 			}
@@ -172,8 +173,9 @@ func (b *branch) getOutputs() ([]*wire.TxOut, error) {
 func getTreeNode(
 	n node,
 	input *wire.OutPoint,
+	lifetime common.RelativeLocktime,
 ) (tree.Node, error) {
-	partialTx, err := getTx(n, input)
+	partialTx, err := getTx(n, input, lifetime)
 	if err != nil {
 		return tree.Node{}, err
 	}
@@ -196,6 +198,7 @@ func getTreeNode(
 func getTx(
 	n node,
 	input *wire.OutPoint,
+	lifetime common.RelativeLocktime,
 ) (*psbt.Packet, error) {
 	outputs, err := n.getOutputs()
 	if err != nil {
@@ -220,6 +223,10 @@ func getTx(
 		if err := AddCosignerKey(0, tx, cosigner); err != nil {
 			return nil, err
 		}
+	}
+
+	if err := AddLifetime(0, tx, lifetime); err != nil {
+		return nil, err
 	}
 
 	return tx, nil

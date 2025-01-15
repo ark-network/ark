@@ -78,6 +78,7 @@ func TestRoundTripSignTree(t *testing.T) {
 				receivers,
 				minRelayFee,
 				sweepRoot[:],
+				lifetime,
 			)
 			require.NoError(t, err)
 

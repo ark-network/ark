@@ -622,7 +622,7 @@ func (b *txBuilder) BuildRoundTx(
 		}
 
 		vtxoTree, err = bitcointree.BuildVtxoTree(
-			initialOutpoint, receivers, feeAmount, root[:],
+			initialOutpoint, receivers, feeAmount, root[:], b.roundLifetime,
 		)
 		if err != nil {
 			return "", nil, "", nil, err
@@ -678,7 +678,7 @@ func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime *common.RelativeLock
 	txid := input.PreviousOutPoint.Hash
 	index := input.PreviousOutPoint.Index
 
-	sweepLeaf, internalKey, lifetime, err := extractSweepLeaf(partialTx.Inputs[0])
+	sweepLeaf, internalKey, lifetime, err := b.extractSweepLeaf(partialTx.Inputs[0])
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1277,27 +1277,84 @@ func castToOutpoints(inputs []ports.TxInput) []ports.TxOutpoint {
 	return outpoints
 }
 
-func extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.TaprootTapLeafScript, internalKey *secp256k1.PublicKey, lifetime *common.RelativeLocktime, err error) {
-	for _, leaf := range input.TaprootLeafScript {
-		closure := &tree.CSVMultisigClosure{}
-		valid, err := closure.Decode(leaf.Script)
+func (b *txBuilder) extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.TaprootTapLeafScript, internalKey *secp256k1.PublicKey, lifetime *common.RelativeLocktime, err error) {
+	// this if case is here to handle previous version of the tree
+	if len(input.TaprootLeafScript) > 0 {
+		for _, leaf := range input.TaprootLeafScript {
+			closure := &tree.CSVMultisigClosure{}
+			valid, err := closure.Decode(leaf.Script)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+
+			if valid && (lifetime == nil || closure.Locktime.LessThan(*lifetime)) {
+				sweepLeaf = leaf
+				lifetime = &closure.Locktime
+			}
+		}
+
+		internalKey, err = schnorr.ParsePubKey(input.TaprootInternalKey)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 
-		if valid && (lifetime == nil || closure.Locktime.LessThan(*lifetime)) {
-			sweepLeaf = leaf
-			lifetime = &closure.Locktime
+		if sweepLeaf == nil {
+			return nil, nil, nil, fmt.Errorf("sweep leaf not found")
 		}
+		return sweepLeaf, internalKey, lifetime, nil
 	}
 
-	internalKey, err = schnorr.ParsePubKey(input.TaprootInternalKey)
+	serverPubKey, err := b.wallet.GetPubkey(context.Background())
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	if sweepLeaf == nil {
-		return nil, nil, nil, fmt.Errorf("sweep leaf not found")
+	cosignerPubKeys, err := bitcointree.GetCosignerKeys(input)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	if len(cosignerPubKeys) == 0 {
+		return nil, nil, nil, fmt.Errorf("no cosigner pubkeys found")
+	}
+
+	lifetime, err = bitcointree.GetLifetime(input)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	sweepClosure := &tree.CSVMultisigClosure{
+		Locktime: *lifetime,
+		MultisigClosure: tree.MultisigClosure{
+			PubKeys: []*secp256k1.PublicKey{serverPubKey},
+		},
+	}
+
+	sweepScript, err := sweepClosure.Script()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	sweepTapTree := txscript.AssembleTaprootScriptTree(txscript.NewBaseTapLeaf(sweepScript))
+	sweepRoot := sweepTapTree.RootNode.TapHash()
+
+	aggregatedKey, err := bitcointree.AggregateKeys(cosignerPubKeys, sweepRoot[:])
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	internalKey = aggregatedKey.PreTweakedKey
+
+	sweepLeafMerkleProof := sweepTapTree.LeafMerkleProofs[0]
+	sweepLeafControlBlock := sweepLeafMerkleProof.ToControlBlock(internalKey)
+	sweepLeafControlBlockBytes, err := sweepLeafControlBlock.ToBytes()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	sweepLeaf = &psbt.TaprootTapLeafScript{
+		Script:       sweepScript,
+		ControlBlock: sweepLeafControlBlockBytes,
+		LeafVersion:  txscript.BaseLeafVersion,
 	}
 
 	return sweepLeaf, internalKey, lifetime, nil

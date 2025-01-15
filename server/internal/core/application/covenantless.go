@@ -1004,6 +1004,7 @@ func (s *covenantlessService) startRound() {
 }
 
 func (s *covenantlessService) startFinalization() {
+	log.Debugf("started finalization stage for round: %s", s.currentRound.Id)
 	ctx := context.Background()
 	round := s.currentRound
 
@@ -1063,6 +1064,7 @@ func (s *covenantlessService) startFinalization() {
 		return
 	}
 
+	log.Debugf("building round tx for round %s", round.Id)
 	unsignedRoundTx, vtxoTree, connectorAddress, connectors, err := s.builder.BuildRoundTx(
 		s.pubkey, requests, boardingInputs, connectorAddresses,
 	)
@@ -1274,6 +1276,7 @@ func (s *covenantlessService) finalizeRound(notes []note.Note) {
 	boardingInputs := make([]domain.VtxoKey, 0)
 	roundTx, err := psbt.NewFromRawBytes(strings.NewReader(round.UnsignedTx), true)
 	if err != nil {
+		log.Debugf("failed to parse round tx: %s", round.UnsignedTx)
 		changes = round.Fail(fmt.Errorf("failed to parse round tx: %s", err))
 		log.WithError(err).Warn("failed to parse round tx")
 		return
