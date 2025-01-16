@@ -85,14 +85,10 @@ func (a *grpcClient) GetBoardingAddress(
 }
 
 func (a *grpcClient) RegisterInputsForNextRound(
-	ctx context.Context, inputs []client.Input, signerPubKeys []string, signingType tree.SigningType,
+	ctx context.Context, inputs []client.Input,
 ) (string, error) {
 	req := &arkv1.RegisterInputsForNextRoundRequest{
 		Inputs: ins(inputs).toProto(),
-	}
-	if len(signerPubKeys) > 0 {
-		req.SignerPubkeys = signerPubKeys
-		req.SigningType = uint32(signingType)
 	}
 
 	resp, err := a.svc.RegisterInputsForNextRound(ctx, req)
@@ -103,14 +99,10 @@ func (a *grpcClient) RegisterInputsForNextRound(
 }
 
 func (a *grpcClient) RegisterNotesForNextRound(
-	ctx context.Context, notes []string, signerPubKeys []string, signingType tree.SigningType,
+	ctx context.Context, notes []string,
 ) (string, error) {
 	req := &arkv1.RegisterInputsForNextRoundRequest{
 		Notes: notes,
-	}
-	if len(signerPubKeys) > 0 {
-		req.SignerPubkeys = signerPubKeys
-		req.SigningType = uint32(signingType)
 	}
 	resp, err := a.svc.RegisterInputsForNextRound(ctx, req)
 	if err != nil {
@@ -120,11 +112,17 @@ func (a *grpcClient) RegisterNotesForNextRound(
 }
 
 func (a *grpcClient) RegisterOutputsForNextRound(
-	ctx context.Context, requestID string, outputs []client.Output,
+	ctx context.Context, requestID string, outputs []client.Output, musig2 *tree.Musig2,
 ) error {
 	req := &arkv1.RegisterOutputsForNextRoundRequest{
 		RequestId: requestID,
 		Outputs:   outs(outputs).toProto(),
+	}
+	if musig2 != nil {
+		req.Musig2 = &arkv1.Musig2{
+			CosignersPublicKeys: musig2.CosignersPublicKeys,
+			SigningType:         uint32(musig2.SigningType),
+		}
 	}
 	_, err := a.svc.RegisterOutputsForNextRound(ctx, req)
 	return err

@@ -34,16 +34,16 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// SettleOptions are only available for covenantless clients
+// Musig2SignOptions is only available for covenantless clients
 // it allows to customize the vtxo signing process
-type SettleOptions struct {
+type Musig2SignOptions struct {
 	CustomSignerPrivKeys []*secp256k1.PrivateKey
 	SigningType          *tree.SigningType
 }
 
 // WithSignAll sets the signing type to ALL instead of the default BRANCH
 func WithSignAll(o interface{}) error {
-	opts, ok := o.(*SettleOptions)
+	opts, ok := o.(*Musig2SignOptions)
 	if !ok {
 		return fmt.Errorf("invalid options type")
 	}
@@ -56,7 +56,7 @@ func WithSignAll(o interface{}) error {
 // WithCustomTreeSigner allows to use a set of custom signer for the vtxo tree signing process
 func WithCustomTreeSigner(privKeys []*secp256k1.PrivateKey) Option {
 	return func(o interface{}) error {
-		opts, ok := o.(*SettleOptions)
+		opts, ok := o.(*Musig2SignOptions)
 		if !ok {
 			return fmt.Errorf("invalid options type")
 		}
@@ -869,7 +869,7 @@ func (a *covenantlessArkClient) SendOffChain(
 func (a *covenantlessArkClient) RedeemNotes(ctx context.Context, notes []string, opts ...Option) (string, error) {
 	amount := uint64(0)
 
-	options := &SettleOptions{}
+	options := &Musig2SignOptions{}
 	for _, opt := range opts {
 		if err := opt(options); err != nil {
 			return "", err
@@ -898,7 +898,7 @@ func (a *covenantlessArkClient) RedeemNotes(ctx context.Context, notes []string,
 	}
 
 	requestID, err := a.client.RegisterNotesForNextRound(
-		ctx, notes, signerPubKeys, signingType,
+		ctx, notes,
 	)
 	if err != nil {
 		return "", err
@@ -913,6 +913,10 @@ func (a *covenantlessArkClient) RedeemNotes(ctx context.Context, notes []string,
 
 	if err := a.client.RegisterOutputsForNextRound(
 		ctx, requestID, receiversOutput,
+		&tree.Musig2{
+			CosignersPublicKeys: signerPubKeys,
+			SigningType:         tree.SigningType(signingType),
+		},
 	); err != nil {
 		return "", err
 	}
@@ -993,7 +997,7 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 	addr string, amount uint64, withExpiryCoinselect bool,
 	opts ...Option,
 ) (string, error) {
-	options := &SettleOptions{}
+	options := &Musig2SignOptions{}
 	for _, opt := range opts {
 		if err := opt(options); err != nil {
 			return "", err
@@ -1096,14 +1100,18 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 	requestID, err := a.client.RegisterInputsForNextRound(
 		ctx,
 		inputs,
-		signerPubKeys,
-		signingType,
 	)
 	if err != nil {
 		return "", err
 	}
 
-	if err := a.client.RegisterOutputsForNextRound(ctx, requestID, receivers); err != nil {
+	if err := a.client.RegisterOutputsForNextRound(
+		ctx, requestID, receivers,
+		&tree.Musig2{
+			CosignersPublicKeys: signerPubKeys,
+			SigningType:         tree.SigningType(signingType),
+		},
+	); err != nil {
 		return "", err
 	}
 
@@ -1399,7 +1407,7 @@ func (a *covenantlessArkClient) sendOffchain(
 	settleOpts ...Option,
 ) (string, error) {
 
-	options := &SettleOptions{}
+	options := &Musig2SignOptions{}
 	for _, opt := range settleOpts {
 		if err := opt(options); err != nil {
 			return "", err
@@ -1544,7 +1552,7 @@ func (a *covenantlessArkClient) sendOffchain(
 	}
 
 	requestID, err := a.client.RegisterInputsForNextRound(
-		ctx, inputs, signerPubKeys, signingType,
+		ctx, inputs,
 	)
 	if err != nil {
 		return "", err
@@ -1552,6 +1560,10 @@ func (a *covenantlessArkClient) sendOffchain(
 
 	if err := a.client.RegisterOutputsForNextRound(
 		ctx, requestID, outputs,
+		&tree.Musig2{
+			CosignersPublicKeys: signerPubKeys,
+			SigningType:         tree.SigningType(signingType),
+		},
 	); err != nil {
 		return "", err
 	}
@@ -2772,7 +2784,7 @@ func buildRedeemTx(
 	return bitcointree.BuildRedeemTx(ins, outs)
 }
 
-func handleOptions(options *SettleOptions) ([]*secp256k1.PrivateKey, []string, tree.SigningType, error) {
+func handleOptions(options *Musig2SignOptions) ([]*secp256k1.PrivateKey, []string, tree.SigningType, error) {
 	signerPrivKeys := make([]*secp256k1.PrivateKey, 0)
 	signerPubKeys := make([]string, 0)
 	if len(options.CustomSignerPrivKeys) > 0 {

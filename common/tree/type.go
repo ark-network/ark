@@ -16,8 +16,12 @@ const (
 type TreeFactory func(outpoint psetv2.InputArgs) (VtxoTree, error)
 
 type VtxoLeaf struct {
-	PubKey            string
-	Amount            uint64
-	Type              SigningType
-	SignersPublicKeys []string
+	PubKey     string
+	Amount     uint64
+	Musig2Data *Musig2
+}
+
+type Musig2 struct {
+	CosignersPublicKeys []string
+	SigningType         SigningType
 }

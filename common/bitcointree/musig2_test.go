@@ -131,9 +131,12 @@ func generateReceiversFixture(count int) ([]tree.VtxoLeaf, []*secp256k1.PrivateK
 		receivers = append(receivers, tree.VtxoLeaf{
 			PubKey: "0000000000000000000000000000000000000000000000000000000000000002",
 			Amount: uint64((i + 1) * 1000),
-			SignersPublicKeys: []string{
-				hex.EncodeToString(prvkey.PubKey().SerializeCompressed()),
-				hex.EncodeToString(serverPrivKey.PubKey().SerializeCompressed()),
+			Musig2Data: &tree.Musig2{
+				CosignersPublicKeys: []string{
+					hex.EncodeToString(prvkey.PubKey().SerializeCompressed()),
+					hex.EncodeToString(serverPrivKey.PubKey().SerializeCompressed()),
+				},
+				SigningType: tree.SignAll,
 			},
 		})
 		privKeys = append(privKeys, prvkey)
@@ -145,10 +148,12 @@ func withSigningType(signingType tree.SigningType, receivers []tree.VtxoLeaf) []
 	newReceivers := make([]tree.VtxoLeaf, 0, len(receivers))
 	for _, receiver := range receivers {
 		newReceivers = append(newReceivers, tree.VtxoLeaf{
-			PubKey:            receiver.PubKey,
-			Amount:            receiver.Amount,
-			SignersPublicKeys: receiver.SignersPublicKeys,
-			Type:              signingType,
+			PubKey: receiver.PubKey,
+			Amount: receiver.Amount,
+			Musig2Data: &tree.Musig2{
+				CosignersPublicKeys: receiver.Musig2Data.CosignersPublicKeys,
+				SigningType:         signingType,
+			},
 		})
 	}
 	return newReceivers

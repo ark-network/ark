@@ -107,7 +107,7 @@ func (a *restClient) GetBoardingAddress(
 }
 
 func (a *restClient) RegisterInputsForNextRound(
-	ctx context.Context, inputs []client.Input, signerPubKeys []string, signingType tree.SigningType,
+	ctx context.Context, inputs []client.Input,
 ) (string, error) {
 	ins := make([]*models.V1Input, 0, len(inputs))
 	for _, i := range inputs {
@@ -124,11 +124,6 @@ func (a *restClient) RegisterInputsForNextRound(
 	body := &models.V1RegisterInputsForNextRoundRequest{
 		Inputs: ins,
 	}
-	if len(signerPubKeys) > 0 {
-		body.SignerPubkeys = signerPubKeys
-		body.SigningType = int64(signingType)
-	}
-
 	resp, err := a.svc.ArkServiceRegisterInputsForNextRound(
 		ark_service.NewArkServiceRegisterInputsForNextRoundParams().WithBody(body),
 	)
@@ -140,14 +135,10 @@ func (a *restClient) RegisterInputsForNextRound(
 }
 
 func (a *restClient) RegisterNotesForNextRound(
-	ctx context.Context, notes []string, signerPubKeys []string, signingType tree.SigningType,
+	ctx context.Context, notes []string,
 ) (string, error) {
 	body := &models.V1RegisterInputsForNextRoundRequest{
 		Notes: notes,
-	}
-	if len(signerPubKeys) > 0 {
-		body.SignerPubkeys = signerPubKeys
-		body.SigningType = int64(signingType)
 	}
 	resp, err := a.svc.ArkServiceRegisterInputsForNextRound(
 		ark_service.NewArkServiceRegisterInputsForNextRoundParams().WithBody(body),
@@ -159,7 +150,7 @@ func (a *restClient) RegisterNotesForNextRound(
 }
 
 func (a *restClient) RegisterOutputsForNextRound(
-	ctx context.Context, requestID string, outputs []client.Output,
+	ctx context.Context, requestID string, outputs []client.Output, musig2 *tree.Musig2,
 ) error {
 	outs := make([]*models.V1Output, 0, len(outputs))
 	for _, o := range outputs {
@@ -172,7 +163,12 @@ func (a *restClient) RegisterOutputsForNextRound(
 		RequestID: requestID,
 		Outputs:   outs,
 	}
-
+	if musig2 != nil {
+		body.Musig2 = &models.V1Musig2{
+			CosignersPublicKeys: musig2.CosignersPublicKeys,
+			SigningType:         int64(musig2.SigningType),
+		}
+	}
 	_, err := a.svc.ArkServiceRegisterOutputsForNextRound(
 		ark_service.NewArkServiceRegisterOutputsForNextRoundParams().WithBody(&body),
 	)

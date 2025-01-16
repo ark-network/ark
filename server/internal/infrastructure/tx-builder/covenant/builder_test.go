@@ -67,7 +67,7 @@ func TestBuildRoundTx(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
 			for _, f := range fixtures.Valid {
 				roundTx, vtxoTree, connAddr, _, err := builder.BuildRoundTx(
-					pubkey, f.Requests, []ports.BoardingInput{}, []string{},
+					pubkey, f.Requests, []ports.BoardingInput{}, []string{}, nil,
 				)
 				require.NoError(t, err)
 				require.NotEmpty(t, roundTx)
@@ -88,7 +88,7 @@ func TestBuildRoundTx(t *testing.T) {
 		t.Run("invalid", func(t *testing.T) {
 			for _, f := range fixtures.Invalid {
 				roundTx, vtxoTree, connAddr, _, err := builder.BuildRoundTx(
-					pubkey, f.Requests, []ports.BoardingInput{}, []string{},
+					pubkey, f.Requests, []ports.BoardingInput{}, []string{}, nil,
 				)
 				require.EqualError(t, err, f.ExpectedErr)
 				require.Empty(t, roundTx)

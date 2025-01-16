@@ -24,12 +24,6 @@ type V1RegisterInputsForNextRoundRequest struct {
 
 	// notes
 	Notes []string `json:"notes"`
-
-	// signer pubkeys
-	SignerPubkeys []string `json:"signerPubkeys"`
-
-	// signing type
-	SigningType int64 `json:"signingType,omitempty"`
 }
 
 // Validate validates this v1 register inputs for next round request

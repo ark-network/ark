@@ -188,11 +188,11 @@ func (s *covenantService) GetBoardingAddress(ctx context.Context, userPubkey *se
 	return addr, scripts, nil
 }
 
-func (s *covenantService) SpendNotes(_ context.Context, _ []note.Note, _ []string, _ domain.SigningType) (string, error) {
+func (s *covenantService) SpendNotes(_ context.Context, _ []note.Note) (string, error) {
 	return "", fmt.Errorf("unimplemented")
 }
 
-func (s *covenantService) SpendVtxos(ctx context.Context, inputs []ports.Input, _ []string, _ domain.SigningType) (string, error) {
+func (s *covenantService) SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error) {
 	vtxosInputs := make([]domain.Vtxo, 0)
 	boardingInputs := make([]ports.BoardingInput, 0)
 
@@ -343,7 +343,7 @@ func (s *covenantService) newBoardingInput(tx *transaction.Transaction, input po
 	}, nil
 }
 
-func (s *covenantService) ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error {
+func (s *covenantService) ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver, _ *tree.Musig2) error {
 	// Check credentials
 	request, ok := s.txRequests.view(creds)
 	if !ok {
@@ -557,7 +557,7 @@ func (s *covenantService) startFinalization() {
 	if num > txRequestsThreshold {
 		num = txRequestsThreshold
 	}
-	requests, boardingInputs, _ := s.txRequests.pop(num)
+	requests, boardingInputs, _, _ := s.txRequests.pop(num)
 	if _, err := round.RegisterTxRequests(requests); err != nil {
 		round.Fail(fmt.Errorf("failed to register tx requests: %s", err))
 		log.WithError(err).Warn("failed to register tx requests")
@@ -571,7 +571,7 @@ func (s *covenantService) startFinalization() {
 		return
 	}
 
-	unsignedRoundTx, tree, connectorAddress, connectors, err := s.builder.BuildRoundTx(s.pubkey, requests, boardingInputs, sweptRounds)
+	unsignedRoundTx, tree, connectorAddress, connectors, err := s.builder.BuildRoundTx(s.pubkey, requests, boardingInputs, sweptRounds, nil)
 	if err != nil {
 		round.Fail(fmt.Errorf("failed to create round tx: %s", err))
 		log.WithError(err).Warn("failed to create round tx")

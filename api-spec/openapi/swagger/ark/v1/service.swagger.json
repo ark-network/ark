@@ -717,6 +717,21 @@
         }
       }
     },
+    "v1Musig2": {
+      "type": "object",
+      "properties": {
+        "cosignersPublicKeys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "signingType": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
     "v1Node": {
       "type": "object",
       "properties": {
@@ -808,21 +823,11 @@
             "$ref": "#/definitions/v1Input"
           }
         },
-        "signerPubkeys": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
         "notes": {
           "type": "array",
           "items": {
             "type": "string"
           }
-        },
-        "signingType": {
-          "type": "integer",
-          "format": "int64"
         }
       }
     },
@@ -847,6 +852,9 @@
             "$ref": "#/definitions/v1Output"
           },
           "description": "List of receivers for to convert to leaves in the next VTXO tree."
+        },
+        "musig2": {
+          "$ref": "#/definitions/v1Musig2"
         }
       }
     },

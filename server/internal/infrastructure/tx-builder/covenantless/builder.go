@@ -554,17 +554,12 @@ func (b *txBuilder) BuildRoundTx(
 	requests []domain.TxRequest,
 	boardingInputs []ports.BoardingInput,
 	connectorAddresses []string,
+	musig2Data []*tree.Musig2,
 ) (roundTx string, vtxoTree tree.VtxoTree, nextConnectorAddress string, connectors []string, err error) {
 	var sharedOutputScript []byte
 	var sharedOutputAmount int64
 
-	for _, request := range requests {
-		if len(request.SignerPubKeys) == 0 {
-			return "", nil, "", nil, fmt.Errorf("missing signer pubkeys for request ID %s", request.Id)
-		}
-	}
-
-	receivers, err := getOutputVtxosLeaves(requests)
+	receivers, err := getOutputVtxosLeaves(requests, musig2Data)
 	if err != nil {
 		return "", nil, "", nil, err
 	}

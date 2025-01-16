@@ -9,6 +9,7 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	txbuilder "github.com/ark-network/ark/server/internal/infrastructure/tx-builder/covenantless"
@@ -68,25 +69,22 @@ func TestBuildRoundTx(t *testing.T) {
 	if len(fixtures.Valid) > 0 {
 		t.Run("valid", func(t *testing.T) {
 			for _, f := range fixtures.Valid {
-				requests := make([]domain.TxRequest, 0)
+				musig2Data := make([]*tree.Musig2, 0)
 
-				for _, request := range f.Requests {
+				for range f.Requests {
 					randKey, err := secp256k1.GeneratePrivateKey()
 					require.NoError(t, err)
 
-					requests = append(requests, domain.TxRequest{
-						Id: request.Id,
-						SignerPubKeys: []string{
+					musig2Data = append(musig2Data, &tree.Musig2{
+						CosignersPublicKeys: []string{
 							hex.EncodeToString(randKey.PubKey().SerializeCompressed()),
 						},
 						SigningType: 0,
-						Inputs:      request.Inputs,
-						Receivers:   request.Receivers,
 					})
 				}
 
 				roundTx, vtxoTree, connAddr, _, err := builder.BuildRoundTx(
-					pubkey, requests, []ports.BoardingInput{}, []string{},
+					pubkey, f.Requests, []ports.BoardingInput{}, []string{}, musig2Data,
 				)
 				require.NoError(t, err)
 				require.NotEmpty(t, roundTx)
@@ -106,22 +104,19 @@ func TestBuildRoundTx(t *testing.T) {
 	if len(fixtures.Invalid) > 0 {
 		t.Run("invalid", func(t *testing.T) {
 			for _, f := range fixtures.Invalid {
-				requests := make([]domain.TxRequest, 0)
+				musig2Data := make([]*tree.Musig2, 0)
 
-				for _, request := range f.Requests {
-					requests = append(requests, domain.TxRequest{
-						Id: request.Id,
-						SignerPubKeys: []string{
+				for range f.Requests {
+					musig2Data = append(musig2Data, &tree.Musig2{
+						CosignersPublicKeys: []string{
 							hex.EncodeToString(pubkey.SerializeCompressed()),
 						},
 						SigningType: 0,
-						Inputs:      request.Inputs,
-						Receivers:   request.Receivers,
 					})
 				}
 
 				roundTx, vtxoTree, connAddr, _, err := builder.BuildRoundTx(
-					pubkey, requests, []ports.BoardingInput{}, []string{},
+					pubkey, f.Requests, []ports.BoardingInput{}, []string{}, musig2Data,
 				)
 				require.EqualError(t, err, f.ExpectedErr)
 				require.Empty(t, roundTx)

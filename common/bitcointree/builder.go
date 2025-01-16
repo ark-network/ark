@@ -243,15 +243,19 @@ func createRootNode(
 
 	cosignersALL := make([]*secp256k1.PublicKey, 0)
 	for _, r := range receivers {
-		if r.Type != tree.SignAll {
+		if r.Musig2Data == nil {
+			return nil, fmt.Errorf("musig2 data is nil for %s", r.PubKey)
+		}
+
+		if r.Musig2Data.SigningType != tree.SignAll {
 			continue
 		}
 
-		if len(r.SignersPublicKeys) == 0 {
-			return nil, fmt.Errorf("signers public keys for %s are empty", r.PubKey)
+		if len(r.Musig2Data.CosignersPublicKeys) == 0 {
+			return nil, fmt.Errorf("cosigners public keys for %s are empty", r.PubKey)
 		}
 
-		for _, cosigner := range r.SignersPublicKeys {
+		for _, cosigner := range r.Musig2Data.CosignersPublicKeys {
 			pubkeyBytes, err := hex.DecodeString(cosigner)
 			if err != nil {
 				return nil, err
@@ -284,9 +288,9 @@ func createRootNode(
 
 		cosigners := make([]*secp256k1.PublicKey, 0)
 
-		switch r.Type {
+		switch r.Musig2Data.SigningType {
 		case tree.SignBranch:
-			for _, cosigner := range r.SignersPublicKeys {
+			for _, cosigner := range r.Musig2Data.CosignersPublicKeys {
 				pubkeyBytes, err := hex.DecodeString(cosigner)
 				if err != nil {
 					return nil, fmt.Errorf("failed to decode cosigner pubkey: %w", err)
@@ -311,7 +315,7 @@ func createRootNode(
 			amount:     int64(r.Amount),
 			pkScript:   pkScript,
 			cosigners:  cosigners,
-			signerType: r.Type,
+			signerType: r.Musig2Data.SigningType,
 		}
 		nodes = append(nodes, leafNode)
 	}

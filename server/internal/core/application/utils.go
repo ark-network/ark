@@ -22,6 +22,7 @@ type timedTxRequest struct {
 	notes          []note.Note
 	timestamp      time.Time
 	pingTimestamp  time.Time
+	musig2Data     *tree.Musig2
 }
 
 type txRequestsQueue struct {
@@ -66,7 +67,7 @@ func (m *txRequestsQueue) pushWithNotes(request domain.TxRequest, notes []note.N
 		}
 	}
 
-	m.requests[request.Id] = &timedTxRequest{request, make([]ports.BoardingInput, 0), notes, time.Now(), time.Time{}}
+	m.requests[request.Id] = &timedTxRequest{request, make([]ports.BoardingInput, 0), notes, time.Now(), time.Time{}, nil}
 	return nil
 }
 
@@ -101,11 +102,11 @@ func (m *txRequestsQueue) push(
 		}
 	}
 
-	m.requests[request.Id] = &timedTxRequest{request, boardingInputs, make([]note.Note, 0), time.Now(), time.Time{}}
+	m.requests[request.Id] = &timedTxRequest{request, boardingInputs, make([]note.Note, 0), time.Now(), time.Time{}, nil}
 	return nil
 }
 
-func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingInput, []note.Note) {
+func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingInput, []note.Note, []*tree.Musig2) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -132,13 +133,15 @@ func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingIn
 	requests := make([]domain.TxRequest, 0, num)
 	boardingInputs := make([]ports.BoardingInput, 0)
 	notes := make([]note.Note, 0)
+	musig2Data := make([]*tree.Musig2, 0)
 	for _, p := range requestsByTime[:num] {
 		boardingInputs = append(boardingInputs, p.boardingInputs...)
 		requests = append(requests, p.TxRequest)
+		musig2Data = append(musig2Data, p.musig2Data)
 		notes = append(notes, p.notes...)
 		delete(m.requests, p.Id)
 	}
-	return requests, boardingInputs, notes
+	return requests, boardingInputs, notes, musig2Data
 }
 
 func (m *txRequestsQueue) update(request domain.TxRequest) error {
@@ -179,6 +182,20 @@ func (m *txRequestsQueue) update(request domain.TxRequest) error {
 	return nil
 }
 
+func (m *txRequestsQueue) addMusig2Data(id string, data *tree.Musig2) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	r, ok := m.requests[id]
+	if !ok {
+		return fmt.Errorf("tx request %s not found", id)
+	}
+
+	r.musig2Data = data
+	m.requests[id] = r
+	return nil
+}
+
 func (m *txRequestsQueue) updatePingTimestamp(id string) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
@@ -202,11 +219,9 @@ func (m *txRequestsQueue) view(id string) (*domain.TxRequest, bool) {
 	}
 
 	return &domain.TxRequest{
-		Id:            request.Id,
-		Inputs:        request.Inputs,
-		Receivers:     request.Receivers,
-		SignerPubKeys: request.SignerPubKeys,
-		SigningType:   request.SigningType,
+		Id:        request.Id,
+		Inputs:    request.Inputs,
+		Receivers: request.Receivers,
 	}, true
 }
 

@@ -12,6 +12,7 @@ import (
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/descriptor"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -131,7 +132,7 @@ func (h *handler) RegisterInputsForNextRound(
 		if err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
-		requestID, err = h.svc.SpendVtxos(ctx, inputs, req.GetSignerPubkeys(), domain.SigningType(req.GetSigningType()))
+		requestID, err = h.svc.SpendVtxos(ctx, inputs)
 		if err != nil {
 			return nil, err
 		}
@@ -142,7 +143,7 @@ func (h *handler) RegisterInputsForNextRound(
 		if err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
-		requestID, err = h.svc.SpendNotes(ctx, notes, req.GetSignerPubkeys(), domain.SigningType(req.GetSigningType()))
+		requestID, err = h.svc.SpendNotes(ctx, notes)
 		if err != nil {
 			return nil, err
 		}
@@ -161,7 +162,16 @@ func (h *handler) RegisterOutputsForNextRound(
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	if err := h.svc.ClaimVtxos(ctx, req.GetRequestId(), receivers); err != nil {
+	musig2Data := req.GetMusig2()
+	var musig2 *tree.Musig2
+	if musig2Data != nil {
+		musig2 = &tree.Musig2{
+			CosignersPublicKeys: musig2Data.GetCosignersPublicKeys(),
+			SigningType:         tree.SigningType(musig2Data.GetSigningType()),
+		}
+	}
+
+	if err := h.svc.ClaimVtxos(ctx, req.GetRequestId(), receivers, musig2); err != nil {
 		return nil, err
 	}
 

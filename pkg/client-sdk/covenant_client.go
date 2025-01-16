@@ -586,12 +586,12 @@ func (a *covenantArkClient) CollaborativeRedeem(
 		})
 	}
 
-	requestID, err := a.client.RegisterInputsForNextRound(ctx, inputs, nil, 0)
+	requestID, err := a.client.RegisterInputsForNextRound(ctx, inputs)
 	if err != nil {
 		return "", err
 	}
 
-	if err := a.client.RegisterOutputsForNextRound(ctx, requestID, receivers); err != nil {
+	if err := a.client.RegisterOutputsForNextRound(ctx, requestID, receivers, nil); err != nil {
 		return "", err
 	}
 
@@ -1014,13 +1014,13 @@ func (a *covenantArkClient) sendOffchain(
 		})
 	}
 
-	requestID, err := a.client.RegisterInputsForNextRound(ctx, inputs, nil, 0)
+	requestID, err := a.client.RegisterInputsForNextRound(ctx, inputs)
 	if err != nil {
 		return "", err
 	}
 
 	if err := a.client.RegisterOutputsForNextRound(
-		ctx, requestID, outputs,
+		ctx, requestID, outputs, nil,
 	); err != nil {
 		return "", err
 	}

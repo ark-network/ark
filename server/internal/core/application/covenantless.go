@@ -506,7 +506,7 @@ func (s *covenantlessService) GetBoardingAddress(
 	return
 }
 
-func (s *covenantlessService) SpendNotes(ctx context.Context, notes []note.Note, signerPubkeys []string, signingType domain.SigningType) (string, error) {
+func (s *covenantlessService) SpendNotes(ctx context.Context, notes []note.Note) (string, error) {
 	notesRepo := s.repoManager.Notes()
 
 	for _, note := range notes {
@@ -538,12 +538,6 @@ func (s *covenantlessService) SpendNotes(ctx context.Context, notes []note.Note,
 		return "", fmt.Errorf("failed to create tx request: %s", err)
 	}
 
-	// add the server pubkey as a signer
-	signerPubkeys = append(signerPubkeys, hex.EncodeToString(s.serverSigningPubKey.SerializeCompressed()))
-
-	request.AddSignerPubKeys(signerPubkeys)
-	request.AddSigningType(signingType)
-
 	if err := s.txRequests.pushWithNotes(*request, notes); err != nil {
 		return "", fmt.Errorf("failed to push tx requests: %s", err)
 	}
@@ -551,7 +545,7 @@ func (s *covenantlessService) SpendNotes(ctx context.Context, notes []note.Note,
 	return request.Id, nil
 }
 
-func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Input, signerPubkeys []string, signingType domain.SigningType) (string, error) {
+func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error) {
 	vtxosInputs := make([]domain.Vtxo, 0)
 	boardingInputs := make([]ports.BoardingInput, 0)
 
@@ -652,15 +646,6 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 		return "", err
 	}
 
-	if len(signerPubkeys) <= 0 {
-		return "", fmt.Errorf("signer pubkeys are required")
-	}
-
-	signerPubkeys = append(signerPubkeys, hex.EncodeToString(s.serverSigningPubKey.SerializeCompressed()))
-
-	request.AddSignerPubKeys(signerPubkeys)
-	request.AddSigningType(signingType)
-
 	if err := s.txRequests.push(*request, boardingInputs); err != nil {
 		return "", err
 	}
@@ -703,7 +688,7 @@ func (s *covenantlessService) newBoardingInput(tx wire.MsgTx, input ports.Input)
 	}, nil
 }
 
-func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error {
+func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver, musig2Data *tree.Musig2) error {
 	// Check credentials
 	request, ok := s.txRequests.view(creds)
 	if !ok {
@@ -715,9 +700,33 @@ func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, rece
 		return fmt.Errorf("unable to verify receiver amount, failed to get dust: %s", err)
 	}
 
+	hasOffChainReceiver := false
+
 	for _, rcv := range receivers {
 		if rcv.Amount <= dustAmount {
 			return fmt.Errorf("receiver amount must be greater than dust amount %d", dustAmount)
+		}
+
+		if !rcv.IsOnchain() {
+			hasOffChainReceiver = true
+		}
+	}
+
+	if hasOffChainReceiver {
+		if musig2Data == nil {
+			return fmt.Errorf("musig2 data is required for offchain receivers")
+		}
+
+		// check if the server pubkey has been set as cosigner
+		serverPubKeyHex := hex.EncodeToString(s.serverSigningPubKey.SerializeCompressed())
+		for _, pubkey := range musig2Data.CosignersPublicKeys {
+			if pubkey == serverPubKeyHex {
+				return fmt.Errorf("server pubkey already in musig2 data")
+			}
+		}
+
+		if err := s.txRequests.addMusig2Data(request.Id, musig2Data); err != nil {
+			return fmt.Errorf("failed to add musig2 data: %s", err)
 		}
 	}
 
@@ -1048,7 +1057,7 @@ func (s *covenantlessService) startFinalization() {
 	if num > txRequestsThreshold {
 		num = txRequestsThreshold
 	}
-	requests, boardingInputs, redeeemedNotes := s.txRequests.pop(num)
+	requests, boardingInputs, redeeemedNotes, musig2data := s.txRequests.pop(num)
 	notes = redeeemedNotes
 
 	if _, err := round.RegisterTxRequests(requests); err != nil {
@@ -1064,9 +1073,19 @@ func (s *covenantlessService) startFinalization() {
 		return
 	}
 
+	// add server pubkey in musig2data and count the number of unique keys
+	uniqueSignerPubkeys := make(map[string]struct{})
+	serverPubKeyHex := hex.EncodeToString(s.serverSigningPubKey.SerializeCompressed())
+	for _, data := range musig2data {
+		for _, pubkey := range data.CosignersPublicKeys {
+			uniqueSignerPubkeys[pubkey] = struct{}{}
+		}
+		data.CosignersPublicKeys = append(data.CosignersPublicKeys, serverPubKeyHex)
+	}
+
 	log.Debugf("building round tx for round %s", round.Id)
 	unsignedRoundTx, vtxoTree, connectorAddress, connectors, err := s.builder.BuildRoundTx(
-		s.pubkey, requests, boardingInputs, connectorAddresses,
+		s.pubkey, requests, boardingInputs, connectorAddresses, musig2data,
 	)
 	if err != nil {
 		round.Fail(fmt.Errorf("failed to create round tx: %s", err))
@@ -1078,15 +1097,7 @@ func (s *covenantlessService) startFinalization() {
 	s.forfeitTxs.init(connectors, requests)
 
 	if len(vtxoTree) > 0 {
-
-		uniqueSignerPubkeys := make(map[string]struct{})
-		for _, request := range requests {
-			for _, pubkey := range request.SignerPubKeys {
-				uniqueSignerPubkeys[pubkey] = struct{}{}
-			}
-		}
-
-		nbOfCosigners := len(uniqueSignerPubkeys)
+		nbOfCosigners := len(uniqueSignerPubkeys) + 1 // +1 for the server
 
 		signingSession := newMusigSigningSession(nbOfCosigners)
 		s.treeSigningSessions[round.Id] = signingSession

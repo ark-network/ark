@@ -19,11 +19,9 @@ const (
 )
 
 type TxRequest struct {
-	Id            string
-	Inputs        []Vtxo
-	Receivers     []Receiver
-	SignerPubKeys []string // pubkeys signing the shared output
-	SigningType   SigningType
+	Id        string
+	Inputs    []Vtxo
+	Receivers []Receiver
 }
 
 func NewTxRequest(inputs []Vtxo) (*TxRequest, error) {
@@ -35,14 +33,6 @@ func NewTxRequest(inputs []Vtxo) (*TxRequest, error) {
 		return nil, err
 	}
 	return request, nil
-}
-
-func (r *TxRequest) AddSignerPubKeys(pubkeys []string) {
-	r.SignerPubKeys = append(r.SignerPubKeys, pubkeys...)
-}
-
-func (r *TxRequest) AddSigningType(signingType SigningType) {
-	r.SigningType = signingType
 }
 
 func (r *TxRequest) AddReceivers(receivers []Receiver) (err error) {
