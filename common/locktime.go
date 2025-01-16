@@ -1,7 +1,6 @@
 package common
 
 import (
-	"encoding/binary"
 	"fmt"
 
 	"github.com/btcsuite/btcd/blockchain"
@@ -45,14 +44,6 @@ type RelativeLocktime struct {
 	Value uint32
 }
 
-func NewRelativeLocktimeFromBytes(b []byte) (*RelativeLocktime, error) {
-	if len(b) != 5 {
-		return nil, fmt.Errorf("invalid locktime bytes length, expected 5, got %d", len(b))
-	}
-
-	return &RelativeLocktime{Type: RelativeLocktimeType(b[0]), Value: binary.BigEndian.Uint32(b[1:])}, nil
-}
-
 func (l RelativeLocktime) Seconds() int64 {
 	if l.Type == LocktimeTypeBlock {
 		return int64(l.Value) * SECONDS_PER_BLOCK
@@ -76,13 +67,6 @@ func (l RelativeLocktime) Compare(other RelativeLocktime) int {
 // LessThan returns true if this locktime is less than the other locktime
 func (l RelativeLocktime) LessThan(other RelativeLocktime) bool {
 	return l.Compare(other) < 0
-}
-
-func (l RelativeLocktime) Bytes() []byte {
-	b := make([]byte, 5)
-	b[0] = byte(l.Type)
-	binary.BigEndian.PutUint32(b[1:], l.Value)
-	return b
 }
 
 func BIP68Sequence(locktime RelativeLocktime) (uint32, error) {

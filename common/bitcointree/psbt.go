@@ -43,8 +43,29 @@ func GetConditionWitness(in psbt.PInput) (wire.TxWitness, error) {
 }
 
 func AddLifetime(inIndex int, ptx *psbt.Packet, lifetime common.RelativeLocktime) error {
+	sequence, err := common.BIP68Sequence(lifetime)
+	if err != nil {
+		return err
+	}
+
+	// the sequence must be encoded as minimal little-endian bytes
+	var sequenceLE [4]byte
+	binary.LittleEndian.PutUint32(sequenceLE[:], sequence)
+
+	// compute the minimum number of bytes needed
+	numBytes := 4
+	for numBytes > 1 && sequenceLE[numBytes-1] == 0 {
+		numBytes-- // remove trailing zeros
+	}
+
+	// if the most significant bit of the last byte is set,
+	// we need one more byte to avoid sign ambiguity
+	if sequenceLE[numBytes-1]&0x80 != 0 {
+		numBytes++
+	}
+
 	ptx.Inputs[inIndex].Unknowns = append(ptx.Inputs[inIndex].Unknowns, &psbt.Unknown{
-		Value: lifetime.Bytes(),
+		Value: sequenceLE[:numBytes],
 		Key:   LIFETIME_PSBT_KEY,
 	})
 
@@ -54,7 +75,7 @@ func AddLifetime(inIndex int, ptx *psbt.Packet, lifetime common.RelativeLocktime
 func GetLifetime(in psbt.PInput) (*common.RelativeLocktime, error) {
 	for _, u := range in.Unknowns {
 		if bytes.Contains(u.Key, LIFETIME_PSBT_KEY) {
-			return common.NewRelativeLocktimeFromBytes(u.Value)
+			return common.BIP68DecodeSequence(u.Value)
 		}
 	}
 
