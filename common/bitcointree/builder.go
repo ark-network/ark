@@ -14,7 +14,7 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-// CraftSharedOutput returns the taproot script and the amount of the initial root shared output of a vtxo tree
+// CraftSharedOutput returns the taproot script and the amount of the root shared output of a vtxo tree
 func CraftSharedOutput(
 	receivers []tree.VtxoLeaf,
 	feeSatsPerNode uint64,
