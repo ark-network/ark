@@ -2,6 +2,7 @@ package bitcointree
 
 import (
 	"bytes"
+	"encoding/binary"
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
@@ -79,8 +80,7 @@ func AddCosignerKey(inIndex int, ptx *psbt.Packet, key *secp256k1.PublicKey) err
 func GetCosignerKeys(in psbt.PInput) ([]*secp256k1.PublicKey, error) {
 	var keys []*secp256k1.PublicKey
 	for _, u := range in.Unknowns {
-		cosignerIndex := parsePrefixedCosignerKey(u.Key)
-		if cosignerIndex == -1 {
+		if !parsePrefixedCosignerKey(u.Key) {
 			continue
 		}
 
@@ -96,13 +96,12 @@ func GetCosignerKeys(in psbt.PInput) ([]*secp256k1.PublicKey, error) {
 }
 
 func cosignerPrefixedKey(index int) []byte {
-	return append(COSIGNER_PSBT_KEY_PREFIX, byte(index))
+	indexBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(indexBytes, uint32(index))
+
+	return append(COSIGNER_PSBT_KEY_PREFIX, indexBytes...)
 }
 
-func parsePrefixedCosignerKey(key []byte) int {
-	if !bytes.HasPrefix(key, COSIGNER_PSBT_KEY_PREFIX) {
-		return -1
-	}
-
-	return int(key[len(COSIGNER_PSBT_KEY_PREFIX)])
+func parsePrefixedCosignerKey(key []byte) bool {
+	return bytes.HasPrefix(key, COSIGNER_PSBT_KEY_PREFIX)
 }

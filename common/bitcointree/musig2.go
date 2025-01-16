@@ -49,23 +49,8 @@ func (n *Musig2Nonce) Decode(r io.Reader) error {
 	return nil
 }
 
-type TreeNonces [][]*Musig2Nonce // public nonces
+type TreeNonces [][]*Musig2Nonce // public nonces only
 type TreePartialSigs [][]*musig2.PartialSignature
-
-type SignerSession interface {
-	GetPublicKey() string
-	GetNonces() (TreeNonces, error) // generate tree nonces for this session
-	SetAggregatedNonces(TreeNonces) // set the aggregated nonces
-	Sign() (TreePartialSigs, error) // sign the tree
-}
-
-type CoordinatorSession interface {
-	AddNonce(*btcec.PublicKey, TreeNonces)
-	AddSig(*btcec.PublicKey, TreePartialSigs)
-	AggregateNonces() (TreeNonces, error)
-	// SignTree combines the signatures and add them to the tree's psbts
-	SignTree() (tree.VtxoTree, error)
-}
 
 func (n TreeNonces) Encode(w io.Writer) error {
 	matrix, err := encodeMatrix(n)
@@ -95,6 +80,22 @@ func DecodeSignatures(r io.Reader) (TreePartialSigs, error) {
 	return decodeMatrix(func() *musig2.PartialSignature { return new(musig2.PartialSignature) }, r)
 }
 
+type SignerSession interface {
+	GetPublicKey() string
+	GetNonces() (TreeNonces, error) // generate tree nonces for this session
+	SetAggregatedNonces(TreeNonces) // set the aggregated nonces
+	Sign() (TreePartialSigs, error) // sign the tree
+}
+
+type CoordinatorSession interface {
+	AddNonce(*btcec.PublicKey, TreeNonces)
+	AddSig(*btcec.PublicKey, TreePartialSigs)
+	AggregateNonces() (TreeNonces, error)
+	// SignTree combines the signatures and add them to the tree's psbts
+	SignTree() (tree.VtxoTree, error)
+}
+
+// AggregateKeys is a wrapper around musig2.AggregateKeys using the given scriptRoot as taproot tweak
 func AggregateKeys(
 	pubkeys []*btcec.PublicKey,
 	scriptRoot []byte,
@@ -123,6 +124,8 @@ func AggregateKeys(
 	return key, nil
 }
 
+// ValidateTreeSigs iterates over the tree matrix and verify the TaprootKeySpendSig
+// the public key is rebuilt from the keys set in the unknown field of the psbt
 func ValidateTreeSigs(
 	scriptRoot []byte,
 	roundSharedOutputAmount int64,
@@ -224,62 +227,8 @@ func (t *treeSignerSession) GetPublicKey() string {
 	return hex.EncodeToString(t.secretKey.PubKey().SerializeCompressed())
 }
 
-func (t *treeSignerSession) generateNonces() error {
-	if len(t.txs) == 0 {
-		return ErrMissingVtxoTree
-	}
-
-	signerPubKey := t.secretKey.PubKey()
-	serializedSignerPubKey := schnorr.SerializePubKey(signerPubKey)
-
-	// Pre-allocate the result matrix
-	myNonces := make([][]*musig2.Nonces, len(t.txs))
-	for i := range myNonces {
-		myNonces[i] = make([]*musig2.Nonces, len(t.txs[i]))
-	}
-
-	err := workPoolMatrix(t.txs, func(i, j int, partialTx *psbt.Packet) error {
-		keys, err := GetCosignerKeys(partialTx.Inputs[0])
-		if err != nil {
-			return err
-		}
-
-		if len(keys) == 0 {
-			return fmt.Errorf("no keys for txid %s", partialTx.UnsignedTx.TxHash().String())
-		}
-
-		mustSign := false
-		for _, key := range keys {
-			if bytes.Equal(schnorr.SerializePubKey(key), serializedSignerPubKey) {
-				mustSign = true
-				break
-			}
-		}
-
-		if !mustSign {
-			myNonces[i][j] = nil
-			return nil
-		}
-
-		nonce, err := musig2.GenNonces(
-			musig2.WithPublicKey(signerPubKey),
-		)
-		if err != nil {
-			return err
-		}
-
-		myNonces[i][j] = nonce
-		return nil
-	})
-
-	if err != nil {
-		return err
-	}
-
-	t.myNonces = myNonces
-	return nil
-}
-
+// GetNonces returns only the public musig2 nonces for each transaction
+// where the signer's key is in the list of cosigners
 func (t *treeSignerSession) GetNonces() (TreeNonces, error) {
 	if len(t.txs) == 0 {
 		return nil, ErrMissingVtxoTree
@@ -313,6 +262,7 @@ func (t *treeSignerSession) SetAggregatedNonces(nonces TreeNonces) {
 	t.aggregateNonces = nonces
 }
 
+// Sign generates the musig2 partial signatures for each transaction where the signer's key is in the list of keys
 func (t *treeSignerSession) Sign() (TreePartialSigs, error) {
 	if len(t.txs) == 0 {
 		return nil, ErrMissingVtxoTree
@@ -322,39 +272,27 @@ func (t *treeSignerSession) Sign() (TreePartialSigs, error) {
 		return nil, errors.New("nonces not set")
 	}
 
-	sigs := make(TreePartialSigs, len(t.txs))
-	for i := range sigs {
-		sigs[i] = make([]*musig2.PartialSignature, len(t.txs[i]))
+	sigs := make(TreePartialSigs, 0, len(t.txs))
+	for i := range t.txs {
+		sigs = append(sigs, make([]*musig2.PartialSignature, len(t.txs[i])))
 	}
 
 	signerPubKey := schnorr.SerializePubKey(t.secretKey.PubKey())
 
 	if err := workPoolMatrix(t.txs, func(i, j int, partialTx *psbt.Packet) error {
-		keys, err := GetCosignerKeys(partialTx.Inputs[0])
+		mustSign, keys, err := getCosignersPublicKeys(signerPubKey, partialTx)
 		if err != nil {
-			return fmt.Errorf("failed to get cosigner keys: %w", err)
+			return err
 		}
 
-		if len(keys) == 0 {
-			return fmt.Errorf("no keys for txid %s", partialTx.UnsignedTx.TxHash().String())
-		}
-
-		// Check if the signer's key is in the list of keys
-		mustSign := false
-		for _, key := range keys {
-			if bytes.Equal(schnorr.SerializePubKey(key), signerPubKey) {
-				mustSign = true
-				break
-			}
-		}
-
-		// Skip signing if not required
+		// if the signer's key is not in the list of keys, skip signing
 		if !mustSign {
 			sigs[i][j] = nil
 			return nil
 		}
 
-		sig, err := t.signPartial(partialTx, i, j, t.secretKey, keys)
+		// craft musig2 partial signature
+		sig, err := t.signPartial(partialTx, i, j, keys)
 		if err != nil {
 			return fmt.Errorf("failed to sign partial tx: %w", err)
 		}
@@ -368,11 +306,56 @@ func (t *treeSignerSession) Sign() (TreePartialSigs, error) {
 	return sigs, nil
 }
 
+// generateNonces iterates over the tree matrix and generates musig2 private and public nonces for each transaction
+func (t *treeSignerSession) generateNonces() error {
+	if len(t.txs) == 0 {
+		return ErrMissingVtxoTree
+	}
+
+	signerPubKey := t.secretKey.PubKey()
+	serializedSignerPubKey := schnorr.SerializePubKey(signerPubKey)
+
+	myNonces := make([][]*musig2.Nonces, 0, len(t.txs))
+	for i := range t.txs {
+		myNonces = append(myNonces, make([]*musig2.Nonces, len(t.txs[i])))
+	}
+
+	err := workPoolMatrix(t.txs, func(i, j int, partialTx *psbt.Packet) error {
+		mustGenerateNonce, _, err := getCosignersPublicKeys(serializedSignerPubKey, partialTx)
+		if err != nil {
+			return err
+		}
+
+		// if the signer's key is not in the list of keys, skip generating nonces
+		if !mustGenerateNonce {
+			myNonces[i][j] = nil
+			return nil
+		}
+
+		// generate musig2 nonces
+		nonce, err := musig2.GenNonces(
+			musig2.WithPublicKey(signerPubKey),
+		)
+		if err != nil {
+			return err
+		}
+
+		myNonces[i][j] = nonce
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	t.myNonces = myNonces
+	return nil
+}
+
+// signPartial signs the given transaction at the position (posx, posy)
 func (t *treeSignerSession) signPartial(
 	partialTx *psbt.Packet,
-	posx int,
-	posy int,
-	seckey *btcec.PrivateKey,
+	posx int, posy int,
 	keys []*btcec.PublicKey,
 ) (*musig2.PartialSignature, error) {
 	prevoutFetcher, err := t.prevoutFetcherFactory(partialTx)
@@ -395,7 +378,7 @@ func (t *treeSignerSession) signPartial(
 	}
 
 	return musig2.Sign(
-		myNonce.SecNonce, seckey, aggregatedNonce.PubNonce, keys, [32]byte(message),
+		myNonce.SecNonce, t.secretKey, aggregatedNonce.PubNonce, keys, [32]byte(message),
 		musig2.WithSortedKeys(), musig2.WithTaprootSignTweak(t.scriptRoot), musig2.WithFastSign(),
 	)
 }
@@ -442,6 +425,8 @@ func (t *treeCoordinatorSession) AddSig(pubkey *btcec.PublicKey, sig TreePartial
 	t.sigs[hex.EncodeToString(schnorr.SerializePubKey(pubkey))] = sig
 }
 
+// AggregateNonces aggregates the musig2 nonces for each transaction in the tree
+// it returns an error if any of the nonces are not set
 func (t *treeCoordinatorSession) AggregateNonces() (TreeNonces, error) {
 	for _, nonce := range t.nonces {
 		if nonce == nil {
@@ -449,9 +434,9 @@ func (t *treeCoordinatorSession) AggregateNonces() (TreeNonces, error) {
 		}
 	}
 
-	aggregatedNonces := make(TreeNonces, len(t.txs))
-	for i := range aggregatedNonces {
-		aggregatedNonces[i] = make([]*Musig2Nonce, len(t.txs[i]))
+	aggregatedNonces := make(TreeNonces, 0, len(t.txs))
+	for i := range t.txs {
+		aggregatedNonces = append(aggregatedNonces, make([]*Musig2Nonce, len(t.txs[i])))
 	}
 
 	err := workPoolMatrix(t.txs, func(i, j int, partialTx *psbt.Packet) error {
@@ -481,6 +466,14 @@ func (t *treeCoordinatorSession) AggregateNonces() (TreeNonces, error) {
 			nonces = append(nonces, nonce.PubNonce)
 		}
 
+		if len(nonces) == 0 {
+			return fmt.Errorf("missing nonces for txid %s", partialTx.UnsignedTx.TxHash().String())
+		}
+
+		if len(nonces) != len(keys) {
+			return fmt.Errorf("wrong number of nonces for txid %s, expected %d got %d", partialTx.UnsignedTx.TxHash().String(), len(keys), len(nonces))
+		}
+
 		aggregatedNonce, err := musig2.AggregateNonces(nonces)
 		if err != nil {
 			return fmt.Errorf("failed to aggregate nonces: %w", err)
@@ -497,10 +490,12 @@ func (t *treeCoordinatorSession) AggregateNonces() (TreeNonces, error) {
 	return aggregatedNonces, nil
 }
 
+// SignTree combines the signatures and add them to the tree's psbts
+// it returns the vtxo tree with the signed transactions set as TaprootKeySpendSig
 func (t *treeCoordinatorSession) SignTree() (tree.VtxoTree, error) {
-	signedTree := make(tree.VtxoTree, len(t.txs))
-	for i := range signedTree {
-		signedTree[i] = make([]tree.Node, len(t.txs[i]))
+	signedTree := make(tree.VtxoTree, 0, len(t.txs))
+	for i := range t.txs {
+		signedTree = append(signedTree, make([]tree.Node, len(t.txs[i])))
 	}
 
 	if err := workPoolMatrix(t.txs, func(i, j int, partialTx *psbt.Packet) error {
@@ -551,6 +546,14 @@ func (t *treeCoordinatorSession) SignTree() (tree.VtxoTree, error) {
 		)
 		if err != nil {
 			return err
+		}
+
+		if len(sigs) == 0 {
+			return fmt.Errorf("missing signatures for txid %s", partialTx.UnsignedTx.TxHash().String())
+		}
+
+		if len(sigs) != len(keys) {
+			return fmt.Errorf("wrong number of signatures for txid %s, expected %d got %d", partialTx.UnsignedTx.TxHash().String(), len(keys), len(sigs))
 		}
 
 		combinedSig := musig2.CombineSigs(
@@ -822,4 +825,19 @@ func workPoolMatrix[T any](matrix [][]T, processItem func(i, j int, item T) erro
 	return workPool(items, runtime.NumCPU(), func(item workItem) error {
 		return processItem(item.i, item.j, item.item)
 	})
+}
+
+// getCosignersPublicKeys extract the set of cosigners public keys from the tx and check if the signer's key is in the set
+func getCosignersPublicKeys(signerPubKey []byte, tx *psbt.Packet) (bool, []*secp256k1.PublicKey, error) {
+	keys, err := GetCosignerKeys(tx.Inputs[0])
+	if err != nil {
+		return false, nil, err
+	}
+
+	for _, key := range keys {
+		if bytes.Equal(schnorr.SerializePubKey(key), signerPubKey) {
+			return true, keys, nil
+		}
+	}
+	return false, nil, nil
 }
