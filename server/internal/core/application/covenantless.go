@@ -1083,7 +1083,7 @@ func (s *covenantlessService) startFinalization() {
 		data.CosignersPublicKeys = append(data.CosignersPublicKeys, serverPubKeyHex)
 	}
 
-	log.Debugf("building round tx for round %s", round.Id)
+	log.Debugf("building tx for round %s", round.Id)
 	unsignedRoundTx, vtxoTree, connectorAddress, connectors, err := s.builder.BuildRoundTx(
 		s.pubkey, requests, boardingInputs, connectorAddresses, musig2data,
 	)
