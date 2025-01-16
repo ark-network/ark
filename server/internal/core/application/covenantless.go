@@ -1064,7 +1064,7 @@ func (s *covenantlessService) startFinalization() {
 		return
 	}
 
-	log.Debugf("building round tx for round %s", round.Id)
+	log.Debugf("building tx for round %s", round.Id)
 	unsignedRoundTx, vtxoTree, connectorAddress, connectors, err := s.builder.BuildRoundTx(
 		s.pubkey, requests, boardingInputs, connectorAddresses,
 	)
