@@ -19,6 +19,8 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/arkservice"
 	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/arkservice/ark_service"
+	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/explorerservice"
+	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/explorerservice/explorer_service"
 	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/models"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -31,6 +33,7 @@ import (
 type restClient struct {
 	serverURL      string
 	svc            ark_service.ClientService
+	explorerSvc    explorer_service.ClientService
 	requestTimeout time.Duration
 	treeCache      *utils.Cache[tree.VtxoTree]
 }
@@ -39,7 +42,11 @@ func NewClient(serverURL string) (client.TransportClient, error) {
 	if len(serverURL) <= 0 {
 		return nil, fmt.Errorf("missing server url")
 	}
-	svc, err := newRestClient(serverURL)
+	svc, err := newRestArkClient(serverURL)
+	if err != nil {
+		return nil, err
+	}
+	explorerSvc, err := newRestExplorerClient(serverURL)
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +54,7 @@ func NewClient(serverURL string) (client.TransportClient, error) {
 	reqTimeout := 15 * time.Second
 	treeCache := utils.NewCache[tree.VtxoTree]()
 
-	return &restClient{serverURL, svc, reqTimeout, treeCache}, nil
+	return &restClient{serverURL, svc, explorerSvc, reqTimeout, treeCache}, nil
 }
 
 func (a *restClient) GetInfo(
@@ -410,8 +417,8 @@ func (a *restClient) SubmitRedeemTx(
 func (a *restClient) GetRound(
 	ctx context.Context, txID string,
 ) (*client.Round, error) {
-	resp, err := a.svc.ArkServiceGetRound(
-		ark_service.NewArkServiceGetRoundParams().WithTxid(txID),
+	resp, err := a.explorerSvc.ExplorerServiceGetRound(
+		explorer_service.NewExplorerServiceGetRoundParams().WithTxid(txID),
 	)
 	if err != nil {
 		return nil, err
@@ -449,8 +456,8 @@ func (a *restClient) GetRound(
 func (a *restClient) GetRoundByID(
 	ctx context.Context, roundID string,
 ) (*client.Round, error) {
-	resp, err := a.svc.ArkServiceGetRoundByID(
-		ark_service.NewArkServiceGetRoundByIDParams().WithID(roundID),
+	resp, err := a.explorerSvc.ExplorerServiceGetRoundByID(
+		explorer_service.NewExplorerServiceGetRoundByIDParams().WithID(roundID),
 	)
 	if err != nil {
 		return nil, err
@@ -488,8 +495,8 @@ func (a *restClient) GetRoundByID(
 func (a *restClient) ListVtxos(
 	ctx context.Context, addr string,
 ) ([]client.Vtxo, []client.Vtxo, error) {
-	resp, err := a.svc.ArkServiceListVtxos(
-		ark_service.NewArkServiceListVtxosParams().WithAddress(addr),
+	resp, err := a.explorerSvc.ExplorerServiceListVtxos(
+		explorer_service.NewExplorerServiceListVtxosParams().WithAddress(addr),
 	)
 	if err != nil {
 		return nil, nil, err
@@ -530,7 +537,7 @@ func (a *restClient) DeleteNostrRecipient(
 
 func (c *restClient) Close() {}
 
-func newRestClient(
+func newRestArkClient(
 	serviceURL string,
 ) (ark_service.ClientService, error) {
 	parsedURL, err := url.Parse(serviceURL)
@@ -555,6 +562,33 @@ func newRestClient(
 	transport := httptransport.New(cfg.Host, cfg.BasePath, cfg.Schemes)
 	svc := arkservice.New(transport, strfmt.Default)
 	return svc.ArkService, nil
+}
+
+func newRestExplorerClient(
+	serviceURL string,
+) (explorer_service.ClientService, error) {
+	parsedURL, err := url.Parse(serviceURL)
+	if err != nil {
+		return nil, err
+	}
+
+	schemes := []string{parsedURL.Scheme}
+	host := parsedURL.Host
+	basePath := parsedURL.Path
+
+	if basePath == "" {
+		basePath = arkservice.DefaultBasePath
+	}
+
+	cfg := &explorerservice.TransportConfig{
+		Host:     host,
+		BasePath: basePath,
+		Schemes:  schemes,
+	}
+
+	transport := httptransport.New(cfg.Host, cfg.BasePath, cfg.Schemes)
+	svc := explorerservice.New(transport, strfmt.Default)
+	return svc.ExplorerService, nil
 }
 
 func toRoundStage(stage models.V1RoundStage) client.RoundStage {

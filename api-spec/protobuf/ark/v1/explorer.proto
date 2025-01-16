@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package ark.v1;
+
+import "google/api/annotations.proto";
+import "ark/v1/types.proto";
+
+service ExplorerService {
+  rpc GetRound(GetRoundRequest) returns (GetRoundResponse) {
+    option (google.api.http) = {
+      get: "/v1/round/{txid}"
+    };
+  };
+  rpc GetRoundById(GetRoundByIdRequest) returns (GetRoundByIdResponse) {
+    option (google.api.http) = {
+      get: "/v1/round/id/{id}"
+    };
+  };
+  rpc ListVtxos(ListVtxosRequest) returns (ListVtxosResponse) {
+    option (google.api.http) = {
+      get: "/v1/vtxos/{address}"
+    };
+  };
+}
+
+message GetRoundRequest {
+  string txid = 1;
+}
+message GetRoundResponse {
+  Round round = 1;
+}
+
+message GetRoundByIdRequest {
+  string id = 1;
+}
+message GetRoundByIdResponse {
+  Round round = 1;
+}
+
+message ListVtxosRequest {
+  string address = 1;
+}
+message ListVtxosResponse {
+  repeated Vtxo spendable_vtxos = 1;
+  repeated Vtxo spent_vtxos = 2;
+}

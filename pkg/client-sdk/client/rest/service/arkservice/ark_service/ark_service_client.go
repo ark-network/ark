@@ -62,13 +62,7 @@ type ClientService interface {
 
 	ArkServiceGetInfo(params *ArkServiceGetInfoParams, opts ...ClientOption) (*ArkServiceGetInfoOK, error)
 
-	ArkServiceGetRound(params *ArkServiceGetRoundParams, opts ...ClientOption) (*ArkServiceGetRoundOK, error)
-
-	ArkServiceGetRoundByID(params *ArkServiceGetRoundByIDParams, opts ...ClientOption) (*ArkServiceGetRoundByIDOK, error)
-
 	ArkServiceGetTransactionsStream(params *ArkServiceGetTransactionsStreamParams, opts ...ClientOption) (*ArkServiceGetTransactionsStreamOK, error)
-
-	ArkServiceListVtxos(params *ArkServiceListVtxosParams, opts ...ClientOption) (*ArkServiceListVtxosOK, error)
 
 	ArkServicePing(params *ArkServicePingParams, opts ...ClientOption) (*ArkServicePingOK, error)
 
@@ -238,80 +232,6 @@ func (a *Client) ArkServiceGetInfo(params *ArkServiceGetInfoParams, opts ...Clie
 }
 
 /*
-ArkServiceGetRound ark service get round API
-*/
-func (a *Client) ArkServiceGetRound(params *ArkServiceGetRoundParams, opts ...ClientOption) (*ArkServiceGetRoundOK, error) {
-	// TODO: Validate the params before sending
-	if params == nil {
-		params = NewArkServiceGetRoundParams()
-	}
-	op := &runtime.ClientOperation{
-		ID:                 "ArkService_GetRound",
-		Method:             "GET",
-		PathPattern:        "/v1/round/{txid}",
-		ProducesMediaTypes: []string{"application/json"},
-		ConsumesMediaTypes: []string{"application/json"},
-		Schemes:            []string{"http"},
-		Params:             params,
-		Reader:             &ArkServiceGetRoundReader{formats: a.formats},
-		Context:            params.Context,
-		Client:             params.HTTPClient,
-	}
-	for _, opt := range opts {
-		opt(op)
-	}
-
-	result, err := a.transport.Submit(op)
-	if err != nil {
-		return nil, err
-	}
-	success, ok := result.(*ArkServiceGetRoundOK)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*ArkServiceGetRoundDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
-}
-
-/*
-ArkServiceGetRoundByID ark service get round by Id API
-*/
-func (a *Client) ArkServiceGetRoundByID(params *ArkServiceGetRoundByIDParams, opts ...ClientOption) (*ArkServiceGetRoundByIDOK, error) {
-	// TODO: Validate the params before sending
-	if params == nil {
-		params = NewArkServiceGetRoundByIDParams()
-	}
-	op := &runtime.ClientOperation{
-		ID:                 "ArkService_GetRoundById",
-		Method:             "GET",
-		PathPattern:        "/v1/round/id/{id}",
-		ProducesMediaTypes: []string{"application/json"},
-		ConsumesMediaTypes: []string{"application/json"},
-		Schemes:            []string{"http"},
-		Params:             params,
-		Reader:             &ArkServiceGetRoundByIDReader{formats: a.formats},
-		Context:            params.Context,
-		Client:             params.HTTPClient,
-	}
-	for _, opt := range opts {
-		opt(op)
-	}
-
-	result, err := a.transport.Submit(op)
-	if err != nil {
-		return nil, err
-	}
-	success, ok := result.(*ArkServiceGetRoundByIDOK)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*ArkServiceGetRoundByIDDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
-}
-
-/*
 ArkServiceGetTransactionsStream ark service get transactions stream API
 */
 func (a *Client) ArkServiceGetTransactionsStream(params *ArkServiceGetTransactionsStreamParams, opts ...ClientOption) (*ArkServiceGetTransactionsStreamOK, error) {
@@ -345,43 +265,6 @@ func (a *Client) ArkServiceGetTransactionsStream(params *ArkServiceGetTransactio
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*ArkServiceGetTransactionsStreamDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
-}
-
-/*
-ArkServiceListVtxos ark service list vtxos API
-*/
-func (a *Client) ArkServiceListVtxos(params *ArkServiceListVtxosParams, opts ...ClientOption) (*ArkServiceListVtxosOK, error) {
-	// TODO: Validate the params before sending
-	if params == nil {
-		params = NewArkServiceListVtxosParams()
-	}
-	op := &runtime.ClientOperation{
-		ID:                 "ArkService_ListVtxos",
-		Method:             "GET",
-		PathPattern:        "/v1/vtxos/{address}",
-		ProducesMediaTypes: []string{"application/json"},
-		ConsumesMediaTypes: []string{"application/json"},
-		Schemes:            []string{"http"},
-		Params:             params,
-		Reader:             &ArkServiceListVtxosReader{formats: a.formats},
-		Context:            params.Context,
-		Client:             params.HTTPClient,
-	}
-	for _, opt := range opts {
-		opt(op)
-	}
-
-	result, err := a.transport.Submit(op)
-	if err != nil {
-		return nil, err
-	}
-	success, ok := result.(*ArkServiceListVtxosOK)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*ArkServiceListVtxosDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 

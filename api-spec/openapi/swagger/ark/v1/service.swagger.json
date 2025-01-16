@@ -133,36 +133,6 @@
         ]
       }
     },
-    "/v1/round/id/{id}": {
-      "get": {
-        "operationId": "ArkService_GetRoundById",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetRoundByIdResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "ArkService"
-        ]
-      }
-    },
     "/v1/round/ping/{requestId}": {
       "get": {
         "operationId": "ArkService_Ping",
@@ -354,36 +324,6 @@
         ]
       }
     },
-    "/v1/round/{txid}": {
-      "get": {
-        "operationId": "ArkService_GetRound",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetRoundResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "txid",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "ArkService"
-        ]
-      }
-    },
     "/v1/transactions": {
       "get": {
         "operationId": "ArkService_GetTransactionsStream",
@@ -472,36 +412,6 @@
             "schema": {
               "$ref": "#/definitions/v1DeleteNostrRecipientRequest"
             }
-          }
-        ],
-        "tags": [
-          "ArkService"
-        ]
-      }
-    },
-    "/v1/vtxos/{address}": {
-      "get": {
-        "operationId": "ArkService_ListVtxos",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1ListVtxosResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "address",
-            "in": "path",
-            "required": true,
-            "type": "string"
           }
         ],
         "tags": [
@@ -638,22 +548,6 @@
         }
       }
     },
-    "v1GetRoundByIdResponse": {
-      "type": "object",
-      "properties": {
-        "round": {
-          "$ref": "#/definitions/v1Round"
-        }
-      }
-    },
-    "v1GetRoundResponse": {
-      "type": "object",
-      "properties": {
-        "round": {
-          "$ref": "#/definitions/v1Round"
-        }
-      }
-    },
     "v1GetTransactionsStreamResponse": {
       "type": "object",
       "properties": {
@@ -679,41 +573,24 @@
         }
       }
     },
-    "v1ListVtxosResponse": {
-      "type": "object",
-      "properties": {
-        "spendableVtxos": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1Vtxo"
-          }
-        },
-        "spentVtxos": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1Vtxo"
-          }
-        }
-      }
-    },
     "v1MarketHour": {
       "type": "object",
       "properties": {
         "nextStartTime": {
           "type": "string",
-          "format": "date-time"
+          "format": "int64"
         },
         "nextEndTime": {
           "type": "string",
-          "format": "date-time"
+          "format": "int64"
         },
         "period": {
-          "type": "string"
+          "type": "string",
+          "format": "int64"
         },
         "roundInterval": {
-          "type": "string"
+          "type": "string",
+          "format": "int64"
         }
       }
     },
@@ -846,43 +723,6 @@
     "v1RegisterOutputsForNextRoundResponse": {
       "type": "object"
     },
-    "v1Round": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "start": {
-          "type": "string",
-          "format": "int64"
-        },
-        "end": {
-          "type": "string",
-          "format": "int64"
-        },
-        "roundTx": {
-          "type": "string"
-        },
-        "vtxoTree": {
-          "$ref": "#/definitions/v1Tree"
-        },
-        "forfeitTxs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "connectors": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "stage": {
-          "$ref": "#/definitions/v1RoundStage"
-        }
-      }
-    },
     "v1RoundFailed": {
       "type": "object",
       "properties": {
@@ -959,17 +799,6 @@
           "type": "string"
         }
       }
-    },
-    "v1RoundStage": {
-      "type": "string",
-      "enum": [
-        "ROUND_STAGE_UNSPECIFIED",
-        "ROUND_STAGE_REGISTRATION",
-        "ROUND_STAGE_FINALIZATION",
-        "ROUND_STAGE_FINALIZED",
-        "ROUND_STAGE_FAILED"
-      ],
-      "default": "ROUND_STAGE_UNSPECIFIED"
     },
     "v1RoundTransaction": {
       "type": "object",
