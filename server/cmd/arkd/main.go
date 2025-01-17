@@ -40,9 +40,10 @@ var (
 		Value: fmt.Sprintf("http://localhost:%d", config.DefaultPort),
 	}
 	datadirFlag = &cli.StringFlag{
-		Name:  flagDatadir,
-		Usage: "data directory containing TLS cert and macaroon",
-		Value: common.AppDataDir("arkd", false),
+		Name:     flagDatadir,
+		Usage:    "data directory of the ark server to source TLS cert and macaroon from if needed",
+		Value:    common.AppDataDir("arkd", false),
+		Required: true,
 	}
 )
 
