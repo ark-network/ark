@@ -213,7 +213,7 @@ var (
 	notesCommand = cli.Command{
 		Name:  "redeem-notes",
 		Usage: "Redeem offchain notes",
-		Flags: []cli.Flag{notesFlag},
+		Flags: []cli.Flag{notesFlag, passwordFlag},
 		Action: func(ctx *cli.Context) error {
 			return redeemNotes(ctx)
 		},
@@ -428,6 +428,15 @@ func registerNostrProfile(ctx *cli.Context) error {
 
 func redeemNotes(ctx *cli.Context) error {
 	notes := ctx.StringSlice(notesFlag.Name)
+
+	password, err := readPassword(ctx)
+	if err != nil {
+		return err
+	}
+	if err := arkSdkClient.Unlock(ctx.Context, string(password)); err != nil {
+		return err
+	}
+
 	txID, err := arkSdkClient.RedeemNotes(ctx.Context, notes)
 	if err != nil {
 		return err

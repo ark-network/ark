@@ -20,6 +20,8 @@ import (
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/vulpemventures/go-bip32"
 )
 
 type bitcoinWallet struct {
@@ -281,6 +283,53 @@ func (s *bitcoinWallet) SignTransaction(
 	}
 
 	return ptx.B64Encode()
+}
+
+func (w *bitcoinWallet) NewVtxoTreeSigner(
+	ctx context.Context, derivationPath string,
+) (bitcointree.SignerSession, error) {
+	if w.IsLocked() {
+		return nil, fmt.Errorf("wallet is locked")
+	}
+
+	if len(derivationPath) == 0 {
+		return nil, fmt.Errorf("derivation path is required")
+	}
+
+	// convert private key to BIP32 master key format
+	// TODO UNSAFE ?
+	privKeyBytes := w.privateKey.Serialize()
+	masterKey, err := bip32.NewMasterKey(privKeyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create master key: %w", err)
+	}
+
+	paths := strings.Split(strings.TrimPrefix(derivationPath, "m/"), "/")
+	currentKey := masterKey
+
+	for _, pathComponent := range paths {
+		index := uint32(0)
+		isHardened := strings.HasSuffix(pathComponent, "'")
+		if isHardened {
+			pathComponent = strings.TrimSuffix(pathComponent, "'")
+		}
+
+		if _, err := fmt.Sscanf(pathComponent, "%d", &index); err != nil {
+			return nil, fmt.Errorf("invalid path component %s: %w", pathComponent, err)
+		}
+
+		if isHardened {
+			index += bip32.FirstHardenedChild
+		}
+
+		currentKey, err = currentKey.NewChildKey(index)
+		if err != nil {
+			return nil, fmt.Errorf("failed to derive child key: %w", err)
+		}
+	}
+
+	derivedPrivKey := secp256k1.PrivKeyFromBytes(currentKey.Key)
+	return bitcointree.NewTreeSignerSession(derivedPrivKey), nil
 }
 
 func (w *bitcoinWallet) SignMessage(

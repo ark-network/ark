@@ -67,14 +67,14 @@ func TestBuildAndSignVtxoTree(t *testing.T) {
 			// Cceate signer sessions for each receivers
 			signerSessions := make(map[*btcec.PublicKey]bitcointree.SignerSession)
 			for _, prvkey := range tc.privKeys {
-				session, err := bitcointree.NewTreeSignerSession(prvkey, sharedOutputAmount, vtxoTree, sweepRoot[:])
-				require.NoError(t, err)
+				session := bitcointree.NewTreeSignerSession(prvkey)
+				require.NoError(t, session.Init(sweepRoot[:], sharedOutputAmount, vtxoTree))
 				signerSessions[prvkey.PubKey()] = session
 			}
 
 			// ddd server's signer session
-			serverSession, err := bitcointree.NewTreeSignerSession(serverPrivKey, sharedOutputAmount, vtxoTree, sweepRoot[:])
-			require.NoError(t, err)
+			serverSession := bitcointree.NewTreeSignerSession(serverPrivKey)
+			require.NoError(t, serverSession.Init(sweepRoot[:], sharedOutputAmount, vtxoTree))
 			signerSessions[serverPrivKey.PubKey()] = serverSession
 
 			// generate nonces from all signers

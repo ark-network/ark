@@ -1143,10 +1143,8 @@ func (s *covenantlessService) startFinalization() {
 			return
 		}
 
-		serverSignerSession, err := bitcointree.NewTreeSignerSession(
-			s.serverSigningKey, sharedOutputAmount, vtxoTree, root.CloneBytes(),
-		)
-		if err != nil {
+		serverSignerSession := bitcointree.NewTreeSignerSession(s.serverSigningKey)
+		if err := serverSignerSession.Init(root.CloneBytes(), sharedOutputAmount, vtxoTree); err != nil {
 			round.Fail(fmt.Errorf("failed to create tree signer session: %s", err))
 			log.WithError(err).Warn("failed to create tree signer session")
 			return

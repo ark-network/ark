@@ -619,7 +619,7 @@ func TestRedeemNotes(t *testing.T) {
 	var balanceBefore utils.ArkBalance
 	require.NoError(t, json.Unmarshal([]byte(balanceBeforeStr), &balanceBefore))
 
-	_, err = runClarkCommand("redeem-notes", "--notes", note)
+	_, err = runClarkCommand("redeem-notes", "--notes", note, "--password", utils.Password)
 	require.NoError(t, err)
 
 	time.Sleep(2 * time.Second)
@@ -632,7 +632,7 @@ func TestRedeemNotes(t *testing.T) {
 
 	require.Greater(t, balanceAfter.Offchain.Total, balanceBefore.Offchain.Total)
 
-	_, err = runClarkCommand("redeem-notes", "--notes", note)
+	_, err = runClarkCommand("redeem-notes", "--notes", note, "--password", utils.Password)
 	require.Error(t, err)
 }
 
@@ -1030,7 +1030,7 @@ func TestSweep(t *testing.T) {
 	require.NotEmpty(t, note)
 
 	// redeem the note
-	_, err = runClarkCommand("redeem-notes", "--notes", note)
+	_, err = runClarkCommand("redeem-notes", "--notes", note, "--password", utils.Password)
 	require.NoError(t, err)
 }
 

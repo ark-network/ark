@@ -81,6 +81,7 @@ func DecodeSignatures(r io.Reader) (TreePartialSigs, error) {
 }
 
 type SignerSession interface {
+	Init(scriptRoot []byte, rootSharedOutputAmount int64, vtxoTree tree.VtxoTree) error
 	GetPublicKey() string
 	GetNonces() (TreeNonces, error) // generate tree nonces for this session
 	SetAggregatedNonces(TreeNonces) // set the aggregated nonces
@@ -190,28 +191,8 @@ func ValidateTreeSigs(
 	})
 }
 
-func NewTreeSignerSession(
-	signer *btcec.PrivateKey,
-	roundSharedOutputAmount int64,
-	vtxoTree tree.VtxoTree,
-	scriptRoot []byte,
-) (SignerSession, error) {
-	prevOutFetcherFactory, err := prevOutFetcherFactory(vtxoTree, roundSharedOutputAmount, scriptRoot)
-	if err != nil {
-		return nil, err
-	}
-
-	txs, err := vtxoTreeToTx(vtxoTree)
-	if err != nil {
-		return nil, err
-	}
-
-	return &treeSignerSession{
-		secretKey:             signer,
-		txs:                   txs,
-		scriptRoot:            scriptRoot,
-		prevoutFetcherFactory: prevOutFetcherFactory,
-	}, nil
+func NewTreeSignerSession(signer *btcec.PrivateKey) SignerSession {
+	return &treeSignerSession{secretKey: signer}
 }
 
 type treeSignerSession struct {
@@ -221,6 +202,23 @@ type treeSignerSession struct {
 	aggregateNonces       TreeNonces
 	scriptRoot            []byte
 	prevoutFetcherFactory func(*psbt.Packet) (txscript.PrevOutputFetcher, error)
+}
+
+func (t *treeSignerSession) Init(scriptRoot []byte, rootSharedOutputAmount int64, vtxoTree tree.VtxoTree) error {
+	prevOutFetcherFactory, err := prevOutFetcherFactory(vtxoTree, rootSharedOutputAmount, scriptRoot)
+	if err != nil {
+		return err
+	}
+
+	txs, err := vtxoTreeToTx(vtxoTree)
+	if err != nil {
+		return err
+	}
+
+	t.scriptRoot = scriptRoot
+	t.txs = txs
+	t.prevoutFetcherFactory = prevOutFetcherFactory
+	return nil
 }
 
 func (t *treeSignerSession) GetPublicKey() string {
