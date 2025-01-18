@@ -18,6 +18,9 @@ import (
 // swagger:model v1RoundSigningEvent
 type V1RoundSigningEvent struct {
 
+	// cosigners pubkeys
+	CosignersPubkeys []string `json:"cosignersPubkeys"`
+
 	// id
 	ID string `json:"id,omitempty"`
 

@@ -1106,7 +1106,12 @@ func (s *covenantlessService) startFinalization() {
 
 		s.currentRound.UnsignedTx = unsignedRoundTx
 		// send back the unsigned tree & all cosigners pubkeys
-		s.propagateRoundSigningStartedEvent(vtxoTree)
+		listOfCosignersPubkeys := make([]string, 0, len(uniqueSignerPubkeys))
+		for pubkey := range uniqueSignerPubkeys {
+			listOfCosignersPubkeys = append(listOfCosignersPubkeys, pubkey)
+		}
+
+		s.propagateRoundSigningStartedEvent(vtxoTree, listOfCosignersPubkeys)
 
 		sweepClosure := tree.CSVMultisigClosure{
 			MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{s.pubkey}},
@@ -1238,11 +1243,12 @@ func (s *covenantlessService) startFinalization() {
 	log.Debugf("started finalization stage for round: %s", round.Id)
 }
 
-func (s *covenantlessService) propagateRoundSigningStartedEvent(unsignedVtxoTree tree.VtxoTree) {
+func (s *covenantlessService) propagateRoundSigningStartedEvent(unsignedVtxoTree tree.VtxoTree, cosignersPubkeys []string) {
 	ev := RoundSigningStarted{
 		Id:               s.currentRound.Id,
 		UnsignedVtxoTree: unsignedVtxoTree,
 		UnsignedRoundTx:  s.currentRound.UnsignedTx,
+		CosignersPubkeys: cosignersPubkeys,
 	}
 
 	s.eventsCh <- ev

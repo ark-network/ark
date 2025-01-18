@@ -246,8 +246,9 @@ message RoundFailed {
 
 message RoundSigningEvent {
   string id = 1;
-  Tree unsigned_vtxo_tree = 2;
-  string unsigned_round_tx = 3;
+  repeated string cosigners_pubkeys = 2;
+  Tree unsigned_vtxo_tree = 3;
+  string unsigned_round_tx = 4;
 }
 
 message RoundSigningNoncesGeneratedEvent {

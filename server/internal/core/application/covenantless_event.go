@@ -18,6 +18,7 @@ type RoundSigningStarted struct {
 	Id               string
 	UnsignedVtxoTree tree.VtxoTree
 	UnsignedRoundTx  string
+	CosignersPubkeys []string
 }
 
 // signer should react to this event by partially signing the vtxo tree transactions

@@ -191,9 +191,10 @@ type RoundFailedEvent struct {
 func (e RoundFailedEvent) isRoundEvent() {}
 
 type RoundSigningStartedEvent struct {
-	ID              string
-	UnsignedTree    tree.VtxoTree
-	UnsignedRoundTx string
+	ID               string
+	UnsignedTree     tree.VtxoTree
+	UnsignedRoundTx  string
+	CosignersPubkeys []string
 }
 
 func (e RoundSigningStartedEvent) isRoundEvent() {}

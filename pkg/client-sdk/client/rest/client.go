@@ -336,9 +336,10 @@ func (c *restClient) GetEventStream(
 			case resp.Result.RoundSigning != nil:
 				e := resp.Result.RoundSigning
 				event = client.RoundSigningStartedEvent{
-					ID:              e.ID,
-					UnsignedTree:    treeFromProto{e.UnsignedVtxoTree}.parse(),
-					UnsignedRoundTx: e.UnsignedRoundTx,
+					ID:               e.ID,
+					UnsignedTree:     treeFromProto{e.UnsignedVtxoTree}.parse(),
+					UnsignedRoundTx:  e.UnsignedRoundTx,
+					CosignersPubkeys: e.CosignersPubkeys,
 				}
 			case resp.Result.RoundSigningNoncesGenerated != nil:
 				e := resp.Result.RoundSigningNoncesGenerated

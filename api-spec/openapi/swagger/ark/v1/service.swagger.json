@@ -950,6 +950,12 @@
         "id": {
           "type": "string"
         },
+        "cosignersPubkeys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "unsignedVtxoTree": {
           "$ref": "#/definitions/v1Tree"
         },

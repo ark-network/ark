@@ -72,9 +72,10 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 
 	if ee := e.GetRoundSigning(); ee != nil {
 		return client.RoundSigningStartedEvent{
-			ID:              ee.GetId(),
-			UnsignedTree:    treeFromProto{ee.GetUnsignedVtxoTree()}.parse(),
-			UnsignedRoundTx: ee.GetUnsignedRoundTx(),
+			ID:               ee.GetId(),
+			UnsignedTree:     treeFromProto{ee.GetUnsignedVtxoTree()}.parse(),
+			UnsignedRoundTx:  ee.GetUnsignedRoundTx(),
+			CosignersPubkeys: ee.GetCosignersPubkeys(),
 		}, nil
 	}
 

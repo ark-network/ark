@@ -528,6 +528,7 @@ func (h *handler) listenToEvents() {
 						Id:               e.Id,
 						UnsignedVtxoTree: vtxoTree(e.UnsignedVtxoTree).toProto(),
 						UnsignedRoundTx:  e.UnsignedRoundTx,
+						CosignersPubkeys: e.CosignersPubkeys,
 					},
 				},
 			}
