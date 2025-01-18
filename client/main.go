@@ -506,7 +506,9 @@ func getNetwork(ctx *cli.Context, cfgData *types.Config) (string, error) {
 func isBtcChain(network string) bool {
 	return network == common.Bitcoin.Name ||
 		network == common.BitcoinTestNet.Name ||
+		network == common.BitcoinTestNet4.Name ||
 		network == common.BitcoinSigNet.Name ||
+		network == common.BitcoinMutinyNet.Name ||
 		network == common.BitcoinRegTest.Name
 }
 
@@ -601,7 +603,7 @@ func readPassword(ctx *cli.Context) ([]byte, error) {
 	if len(password) == 0 {
 		fmt.Print("unlock your wallet with password: ")
 		var err error
-		password, err = term.ReadPassword(syscall.Stdin)
+		password, err = term.ReadPassword(int(syscall.Stdin))
 		fmt.Println()
 		if err != nil {
 			return nil, err

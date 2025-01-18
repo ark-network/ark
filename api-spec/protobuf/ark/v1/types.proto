@@ -1,0 +1,138 @@
+syntax = "proto3";
+
+package ark.v1;
+
+/* Types */
+
+enum RoundStage {
+  ROUND_STAGE_UNSPECIFIED = 0;
+  ROUND_STAGE_REGISTRATION = 1;
+  ROUND_STAGE_FINALIZATION = 2;
+  ROUND_STAGE_FINALIZED = 3;
+  ROUND_STAGE_FAILED = 4;
+}
+
+message Round {
+  string id = 1;
+  int64 start = 2;
+  int64 end = 3;
+  string round_tx = 4;
+  Tree vtxo_tree = 5;
+  repeated string forfeit_txs = 6;
+  repeated string connectors = 7;
+  RoundStage stage = 8;
+}
+
+message Outpoint {
+  string txid = 1;
+  uint32 vout = 2;
+}
+
+message Input {
+  Outpoint outpoint = 1;
+  oneof taproot_tree {
+    string descriptor = 2;
+    Tapscripts tapscripts = 3;
+  }
+}
+
+message Output {
+  string address = 1; // onchain or off-chain
+  uint64 amount = 2; // Amount to send in satoshis.
+}
+
+message Tree {
+  repeated TreeLevel levels = 1;
+}
+
+message TreeLevel {
+  repeated Node nodes = 1;
+}
+
+message Node {
+  string txid = 1;
+  string tx = 2;
+  string parent_txid = 3;
+}
+
+message Vtxo {
+  Outpoint outpoint = 1;
+  bool spent = 2;
+  string round_txid = 3;
+  string spent_by = 4;
+  int64 expire_at = 5;
+  bool swept = 6;
+  bool is_pending = 7;
+  string redeem_tx = 8;
+  uint64 amount = 9;
+  string pubkey = 10;
+  int64 created_at = 11;
+}
+
+message RoundTransaction {
+  string txid = 1;
+  repeated Outpoint spent_vtxos = 2;
+  repeated Vtxo spendable_vtxos = 3;
+  repeated Outpoint claimed_boarding_utxos = 4;
+}
+
+message RedeemTransaction {
+  string txid = 1;
+  repeated Outpoint spent_vtxos = 2;
+  repeated Vtxo spendable_vtxos = 3;
+}
+
+// This message is used to prove to the server that the user controls the vtxo without revealing the whole VTXO taproot tree.
+message OwnershipProof {
+  string control_block = 1;
+  string script = 2;
+  string signature = 3; // VTXO outpoint signed with script's secret key
+}
+
+message SignedVtxoOutpoint {
+  Outpoint outpoint = 1;
+  OwnershipProof proof = 2;
+}
+
+message Tapscripts {
+  repeated string scripts = 1;
+}
+
+message MarketHour {
+  int64 next_start_time = 1;
+  int64 next_end_time = 2;
+  int64 period = 3;
+  int64 round_interval = 4;
+}
+
+/* Events */
+
+message RoundFinalizationEvent {
+  string id = 1;
+  string round_tx = 2;
+  Tree vtxo_tree = 3;
+  repeated string connectors = 4;
+  int64 min_relay_fee_rate = 5;
+}
+
+message RoundFinalizedEvent {
+  string id = 1;
+  string round_txid = 2;
+}
+
+message RoundFailed {
+  string id = 1;
+  string reason = 2;
+}
+
+message RoundSigningEvent {
+  string id = 1;
+  repeated string cosigners_pubkeys = 2;
+  Tree unsigned_vtxo_tree = 3;
+  string unsigned_round_tx = 4;
+}
+
+message RoundSigningNoncesGeneratedEvent {
+  string id = 1;
+  string tree_nonces = 2;
+}

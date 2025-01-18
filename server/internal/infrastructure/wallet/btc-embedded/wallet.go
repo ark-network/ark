@@ -49,17 +49,19 @@ type WalletConfig struct {
 }
 
 func (c WalletConfig) chainParams() *chaincfg.Params {
-	mutinyNetSigNetParams := chaincfg.CustomSignetParams(common.MutinyNetChallenge, nil)
-	mutinyNetSigNetParams.TargetTimePerBlock = common.MutinyNetBlockTime
 	switch c.Network.Name {
 	case common.Bitcoin.Name:
 		return &chaincfg.MainNetParams
+	//case common.BitcoinTestNet4.Name: //TODO uncomment once supported
+	//	return &chaincfg.TestNet4Params
 	case common.BitcoinTestNet.Name:
 		return &chaincfg.TestNet3Params
+	case common.BitcoinSigNet.Name:
+		return &chaincfg.SigNetParams
+	case common.BitcoinMutinyNet.Name:
+		return &common.MutinyNetSigNetParams
 	case common.BitcoinRegTest.Name:
 		return &chaincfg.RegressionNetParams
-	case common.BitcoinSigNet.Name:
-		return &mutinyNetSigNetParams
 	default:
 		return &chaincfg.MainNetParams
 	}
