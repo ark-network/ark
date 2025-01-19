@@ -27,7 +27,7 @@ func TestVtxosToTxs(t *testing.T) {
 
 	for _, tt := range fixtures {
 		t.Run(tt.name, func(t *testing.T) {
-			txHistory, err := vtxosToTxsCovenantless(tt.spendableVtxos, tt.spentVtxos, tt.ignoreTxs)
+			txHistory, err := vtxosToTxsCovenantless(tt.spendableVtxos, tt.spentVtxos)
 			require.NoError(t, err)
 			require.Len(t, txHistory, len(tt.expectedTxHistory))
 

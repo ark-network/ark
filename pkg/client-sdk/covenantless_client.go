@@ -1085,12 +1085,12 @@ func (a *covenantlessArkClient) GetTransactionHistory(
 		return nil, err
 	}
 
-	boardingTxs, roundsToIgnore, err := a.getBoardingTxs(ctx)
+	boardingTxs, err := a.getUnspentBoardingTxs(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	offchainTxs, err := vtxosToTxsCovenantless(spendableVtxos, spentVtxos, roundsToIgnore)
+	offchainTxs, err := vtxosToTxsCovenantless(spendableVtxos, spentVtxos)
 	if err != nil {
 		return nil, err
 	}
@@ -2307,9 +2307,7 @@ func (a *covenantlessArkClient) getOffchainBalance(
 	return balance, amountByExpiration, nil
 }
 
-func (a *covenantlessArkClient) getAllBoardingUtxos(
-	ctx context.Context,
-) ([]types.Utxo, map[string]struct{}, error) {
+func (a *covenantlessArkClient) getAllBoardingUtxos(ctx context.Context) ([]types.Utxo, map[string]struct{}, error) {
 	_, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -2411,9 +2409,7 @@ func (a *covenantlessArkClient) getClaimableBoardingUtxos(ctx context.Context, o
 	return claimable, nil
 }
 
-func (a *covenantlessArkClient) getVtxos(
-	ctx context.Context, opts *CoinSelectOptions,
-) ([]client.Vtxo, error) {
+func (a *covenantlessArkClient) getVtxos(ctx context.Context, opts *CoinSelectOptions) ([]client.Vtxo, error) {
 	spendableVtxos, _, err := a.ListVtxos(ctx)
 	if err != nil {
 		return nil, err
@@ -2450,18 +2446,25 @@ func (a *covenantlessArkClient) getVtxos(
 	return spendableVtxos, nil
 }
 
-func (a *covenantlessArkClient) getBoardingTxs(
-	ctx context.Context,
-) ([]types.Transaction, map[string]struct{}, error) {
-	allUtxos, ignoreVtxos, err := a.getAllBoardingUtxos(ctx)
+func (a *covenantlessArkClient) getUnspentBoardingTxs(ctx context.Context) ([]types.Transaction, error) {
+	allUtxos, _, err := a.getAllBoardingUtxos(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	unconfirmedTxs := make([]types.Transaction, 0)
-	confirmedTxs := make([]types.Transaction, 0)
+	txs := make([]types.Transaction, 0)
+
 	for _, u := range allUtxos {
-		tx := types.Transaction{
+		if u.Spent {
+			continue // already spent
+		}
+
+		emptyTime := time.Time{}
+		if u.CreatedAt == emptyTime {
+			continue // not confirmed yet
+		}
+
+		txs = append(txs, types.Transaction{
 			TransactionKey: types.TransactionKey{
 				BoardingTxid: u.Txid,
 			},
@@ -2469,18 +2472,10 @@ func (a *covenantlessArkClient) getBoardingTxs(
 			Type:      types.TxReceived,
 			CreatedAt: u.CreatedAt,
 			Settled:   u.Spent,
-		}
-
-		emptyTime := time.Time{}
-		if u.CreatedAt == emptyTime {
-			unconfirmedTxs = append(unconfirmedTxs, tx)
-			continue
-		}
-		confirmedTxs = append(confirmedTxs, tx)
+		})
 	}
 
-	txs := append(unconfirmedTxs, confirmedTxs...)
-	return txs, ignoreVtxos, nil
+	return txs, nil
 }
 
 func findVtxosBySpentBy(allVtxos []client.Vtxo, txid string) (vtxos []client.Vtxo) {
@@ -2492,96 +2487,124 @@ func findVtxosBySpentBy(allVtxos []client.Vtxo, txid string) (vtxos []client.Vtx
 	return
 }
 
-func vtxosToTxsCovenantless(
-	spendable, spent []client.Vtxo, ignoreVtxosByRound map[string]struct{},
-) ([]types.Transaction, error) {
-	txs := make([]types.Transaction, 0)
-	vtxosByRound := make(map[string][]client.Vtxo)
-	for _, v := range append(spendable, spent...) {
-		if _, ok := vtxosByRound[v.RoundTxid]; !ok {
-			vtxosByRound[v.RoundTxid] = make([]client.Vtxo, 0)
-		}
-		vtxosByRound[v.RoundTxid] = append(vtxosByRound[v.RoundTxid], v)
-
-		if len(v.SpentBy) > 0 {
-			ignoreVtxosByRound[v.SpentBy] = struct{}{}
+func findVtxosSpent(vtxos []client.Vtxo, id string) []client.Vtxo {
+	var result []client.Vtxo
+	for _, v := range vtxos {
+		if v.SpentBy == id {
+			result = append(result, v)
 		}
 	}
+	return result
+}
 
-	for round := range vtxosByRound {
-		sort.SliceStable(vtxosByRound[round], func(i, j int) bool {
-			return vtxosByRound[round][i].CreatedAt.Before(vtxosByRound[round][j].CreatedAt)
+func findVtxosSpentInSettlement(vtxos []client.Vtxo, vtxo client.Vtxo) []client.Vtxo {
+	return findVtxosSpent(vtxos, vtxo.RoundTxid)
+}
+
+func findVtxosSpentInPayment(vtxos []client.Vtxo, vtxo client.Vtxo) []client.Vtxo {
+	return findVtxosSpent(vtxos, vtxo.Txid)
+}
+
+func findVtxosResultedFromSpentBy(vtxos []client.Vtxo, spentByTxid string) []client.Vtxo {
+	var result []client.Vtxo
+	for _, v := range vtxos {
+		if v.RoundTxid == spentByTxid || v.Txid == spentByTxid {
+			result = append(result, v)
+		}
+	}
+	return result
+}
+
+func reduceVtxosAmount(vtxos []client.Vtxo) uint64 {
+	var total uint64
+	for _, v := range vtxos {
+		total += v.Amount
+	}
+	return total
+}
+
+func getVtxo(usedVtxos []client.Vtxo, spentByVtxos []client.Vtxo) client.Vtxo {
+	if len(usedVtxos) > 0 {
+		return usedVtxos[0]
+	} else if len(spentByVtxos) > 0 {
+		return spentByVtxos[0]
+	}
+	return client.Vtxo{}
+}
+
+func vtxosToTxsCovenantless(spendable, spent []client.Vtxo) ([]types.Transaction, error) {
+	//
+	txs := make([]types.Transaction, 0)
+
+	// receivals
+
+	// all vtxos are receivals UNLESS:
+	// - they resulted from a settlement
+	// - they are change from a payment
+	for _, vtxo := range append(spendable, spent...) {
+		settleVtxos := findVtxosSpentInSettlement(spent, vtxo)
+		settleAmount := reduceVtxosAmount(settleVtxos)
+		if vtxo.Amount <= settleAmount {
+			continue // settlement or change, ignore
+		}
+
+		spentVtxos := findVtxosSpentInPayment(spent, vtxo)
+		spentAmount := reduceVtxosAmount(spentVtxos)
+		if vtxo.Amount <= spentAmount {
+			continue // settlement or change, ignore
+		}
+
+		txs = append(txs, types.Transaction{
+			TransactionKey: types.TransactionKey{
+				RedeemTxid: vtxo.Txid,
+				RoundTxid:  vtxo.RoundTxid,
+			},
+			Amount:    vtxo.Amount - settleAmount - spentAmount,
+			Type:      types.TxReceived,
+			CreatedAt: vtxo.CreatedAt,
+			Settled:   len(vtxo.SpentBy) > 0 || !vtxo.IsPending,
 		})
 	}
 
-	for _, vtxos := range vtxosByRound {
-		v := vtxos[0]
-		if v.IsPending {
-			txs = append(txs, types.Transaction{
-				TransactionKey: types.TransactionKey{
-					RedeemTxid: v.Txid,
-				},
-				Amount:    v.Amount,
-				Type:      types.TxReceived,
-				CreatedAt: v.CreatedAt,
-			})
-		} else if _, ok := ignoreVtxosByRound[v.RoundTxid]; !ok {
-			txs = append(txs, types.Transaction{
-				TransactionKey: types.TransactionKey{
-					RoundTxid: v.RoundTxid,
-				},
-				Amount:    v.Amount,
-				Type:      types.TxReceived,
-				CreatedAt: v.CreatedAt,
-				Settled:   true,
-			})
+	// sendings
+
+	// all spentBy are payments UNLESS:
+	// - they are settlements
+
+	// aggregate spent by spentId
+	vtxosBySpentBy := make(map[string][]client.Vtxo)
+	for _, v := range spent {
+		if _, ok := vtxosBySpentBy[v.SpentBy]; !ok {
+			vtxosBySpentBy[v.SpentBy] = make([]client.Vtxo, 0)
 		}
-		if len(vtxos) > 1 {
-			for _, v := range vtxos[1:] {
-				var tx types.Transaction
-				if v.VOut > 0 {
-					var spentAmount uint64
-					for _, vv := range vtxos {
-						if vv.SpentBy == v.Txid {
-							spentAmount += vv.Amount
-						}
-					}
-					tx = types.Transaction{
-						TransactionKey: types.TransactionKey{
-							RedeemTxid: v.Txid,
-						},
-						Amount:    spentAmount - v.Amount,
-						Type:      types.TxSent,
-						CreatedAt: v.CreatedAt,
-					}
-				} else {
-					tx = types.Transaction{
-						TransactionKey: types.TransactionKey{
-							RedeemTxid: v.Txid,
-						},
-						Amount:    v.Amount,
-						Type:      types.TxReceived,
-						CreatedAt: v.CreatedAt,
-					}
-				}
-				txs = append(txs, tx)
-			}
-			lastVtxo := vtxos[len(vtxos)-1]
-			if len(lastVtxo.SpentBy) > 0 {
-				for i := range txs {
-					txs[i].Settled = true
-				}
-			}
-		}
+		vtxosBySpentBy[v.SpentBy] = append(vtxosBySpentBy[v.SpentBy], v)
 	}
 
-	sort.SliceStable(txs, func(i, j int) bool {
-		txi := txs[i]
-		txj := txs[j]
-		if txi.CreatedAt.Equal(txj.CreatedAt) {
-			return txi.Type > txj.Type
+	for sb := range vtxosBySpentBy {
+		resultedVtxos := findVtxosResultedFromSpentBy(append(spendable, spent...), sb)
+		resultedAmount := reduceVtxosAmount(resultedVtxos)
+		spentAmount := reduceVtxosAmount(vtxosBySpentBy[sb])
+		if spentAmount <= resultedAmount {
+			continue // settlement or change, ignore
 		}
-		return txi.CreatedAt.After(txj.CreatedAt)
+
+		vtxo := getVtxo(resultedVtxos, vtxosBySpentBy[sb])
+
+		txs = append(txs, types.Transaction{
+			TransactionKey: types.TransactionKey{
+				RedeemTxid: vtxo.Txid,
+				RoundTxid:  vtxo.RoundTxid,
+			},
+			Amount:    spentAmount - resultedAmount,
+			Type:      types.TxSent,
+			CreatedAt: vtxo.CreatedAt,
+			Settled:   true, // mark all payments as settled
+		})
+
+	}
+
+	sort.Slice(txs, func(i, j int) bool {
+		return txs[i].CreatedAt.Before(txs[j].CreatedAt)
 	})
 
 	return txs, nil
