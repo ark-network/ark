@@ -57,7 +57,7 @@ type vtxo struct {
 	Swept     bool   `json:"swept"`
 	RedeemTx  string `json:"redeemTx"`
 	CreatedAt string `json:"createdAt"`
-	IsOOR     bool   `json:"isOor"`
+	IsPending bool   `json:"isPending"`
 }
 
 type vtxos []vtxo
@@ -76,7 +76,7 @@ func (v vtxos) parse() []client.Vtxo {
 			CreatedAt: parseTimestamp(vv.CreatedAt),
 			RedeemTx:  vv.RedeemTx,
 			SpentBy:   vv.SpentBy,
-			IsPending: vv.IsOOR,
+			IsPending: vv.IsPending,
 		})
 	}
 	return list

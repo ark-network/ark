@@ -2487,15 +2487,23 @@ func findVtxosBySpentBy(allVtxos []client.Vtxo, txid string) (vtxos []client.Vtx
 
 func findVtxosSpent(vtxos []client.Vtxo, id string) []client.Vtxo {
 	var result []client.Vtxo
+	leftVtxos := make([]client.Vtxo, 0)
 	for _, v := range vtxos {
 		if v.SpentBy == id {
 			result = append(result, v)
+		} else {
+			leftVtxos = append(leftVtxos, v)
 		}
 	}
+	// Update the given list with only the left vtxos.
+	copy(vtxos, leftVtxos)
 	return result
 }
 
 func findVtxosSpentInSettlement(vtxos []client.Vtxo, vtxo client.Vtxo) []client.Vtxo {
+	if vtxo.IsPending {
+		return nil
+	}
 	return findVtxosSpent(vtxos, vtxo.RoundTxid)
 }
 
@@ -2554,22 +2562,23 @@ func vtxosToTxsCovenantless(
 ) ([]types.Transaction, error) {
 	txs := make([]types.Transaction, 0)
 
-	// receivals
+	// Receivals
 
-	// all vtxos are receivals UNLESS:
-	// - they resulted from a settlement
-	// - they are change from a payment
+	// All vtxos are receivals unless:
+	// - they resulted from a settlement (either boarding or refresh)
+	// - they are the change of a spend tx
+	vtxosLeftToCheck := append([]client.Vtxo{}, spent...)
 	for _, vtxo := range append(spendable, spent...) {
 		if _, ok := boardingRounds[vtxo.RoundTxid]; !vtxo.IsPending && ok {
 			continue
 		}
-		settleVtxos := findVtxosSpentInSettlement(spent, vtxo)
+		settleVtxos := findVtxosSpentInSettlement(vtxosLeftToCheck, vtxo)
 		settleAmount := reduceVtxosAmount(settleVtxos)
 		if vtxo.Amount <= settleAmount {
 			continue // settlement or change, ignore
 		}
 
-		spentVtxos := findVtxosSpentInPayment(spent, vtxo)
+		spentVtxos := findVtxosSpentInPayment(vtxosLeftToCheck, vtxo)
 		spentAmount := reduceVtxosAmount(spentVtxos)
 		if vtxo.Amount <= spentAmount {
 			continue // settlement or change, ignore
@@ -2595,9 +2604,9 @@ func vtxosToTxsCovenantless(
 		})
 	}
 
-	// sendings
+	// Sendings
 
-	// all spentBy are payments UNLESS:
+	// All "spentBy" vtxos are payments unless:
 	// - they are settlements
 
 	// aggregate spent by spentId
@@ -2622,7 +2631,6 @@ func vtxosToTxsCovenantless(
 		txKey := types.TransactionKey{
 			RoundTxid: vtxo.RoundTxid,
 		}
-
 		settled := !vtxo.IsPending
 		if vtxo.IsPending {
 			txKey = types.TransactionKey{
