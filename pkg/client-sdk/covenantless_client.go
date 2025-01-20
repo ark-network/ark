@@ -1098,12 +1098,7 @@ func (a *covenantlessArkClient) GetTransactionHistory(
 	txs := append(boardingTxs, offchainTxs...)
 	// Sort the slice by age
 	sort.SliceStable(txs, func(i, j int) bool {
-		txi := txs[i]
-		txj := txs[j]
-		if txi.CreatedAt.Equal(txj.CreatedAt) {
-			return txi.Type > txj.Type
-		}
-		return txi.CreatedAt.After(txj.CreatedAt)
+		return txs[i].CreatedAt.After(txs[j].CreatedAt)
 	})
 
 	return txs, nil
@@ -2623,8 +2618,8 @@ func vtxosToTxsCovenantless(spendable, spent []client.Vtxo) ([]types.Transaction
 
 	}
 
-	sort.Slice(txs, func(i, j int) bool {
-		return txs[i].CreatedAt.Before(txs[j].CreatedAt)
+	sort.SliceStable(txs, func(i, j int) bool {
+		return txs[i].CreatedAt.After(txs[j].CreatedAt)
 	})
 
 	return txs, nil
