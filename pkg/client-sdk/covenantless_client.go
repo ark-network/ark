@@ -1101,6 +1101,8 @@ func (a *covenantlessArkClient) GetTransactionHistory(
 		return txs[i].CreatedAt.After(txs[j].CreatedAt)
 	})
 
+	fmt.Println("TX HISTORY", txs)
+
 	return txs, nil
 }
 
@@ -2504,7 +2506,11 @@ func findVtxosSpentInPayment(vtxos []client.Vtxo, vtxo client.Vtxo) []client.Vtx
 func findVtxosResultedFromSpentBy(vtxos []client.Vtxo, spentByTxid string) []client.Vtxo {
 	var result []client.Vtxo
 	for _, v := range vtxos {
-		if v.RoundTxid == spentByTxid || v.Txid == spentByTxid {
+		if !v.IsPending && v.RoundTxid == spentByTxid {
+			result = append(result, v)
+			break
+		}
+		if v.Txid == spentByTxid {
 			result = append(result, v)
 		}
 	}
@@ -2554,7 +2560,7 @@ func vtxosToTxsCovenantless(
 	// - they resulted from a settlement
 	// - they are change from a payment
 	for _, vtxo := range append(spendable, spent...) {
-		if _, ok := boardingRounds[vtxo.RoundTxid]; ok {
+		if _, ok := boardingRounds[vtxo.RoundTxid]; !vtxo.IsPending && ok {
 			continue
 		}
 		settleVtxos := findVtxosSpentInSettlement(spent, vtxo)
@@ -2573,7 +2579,7 @@ func vtxosToTxsCovenantless(
 			RoundTxid: vtxo.RoundTxid,
 		}
 		settled := !vtxo.IsPending
-		if !settled {
+		if vtxo.IsPending {
 			txKey = types.TransactionKey{
 				RedeemTxid: vtxo.Txid,
 			}
@@ -2616,10 +2622,13 @@ func vtxosToTxsCovenantless(
 		txKey := types.TransactionKey{
 			RoundTxid: vtxo.RoundTxid,
 		}
+
+		settled := !vtxo.IsPending
 		if vtxo.IsPending {
 			txKey = types.TransactionKey{
 				RedeemTxid: vtxo.Txid,
 			}
+			settled = isSettled(append(spendable, spent...), vtxo)
 		}
 
 		txs = append(txs, types.Transaction{
@@ -2627,7 +2636,7 @@ func vtxosToTxsCovenantless(
 			Amount:         spentAmount - resultedAmount,
 			Type:           types.TxSent,
 			CreatedAt:      vtxo.CreatedAt,
-			Settled:        isSettled(append(spendable, spent...), vtxo),
+			Settled:        settled,
 		})
 
 	}
