@@ -10,11 +10,12 @@ import (
 )
 
 const (
-	EntityWallet  = "wallet"
-	EntityAdmin   = "admin"
-	EntityManager = "manager"
-	EntityArk     = "ark"
-	EntityHealth  = "health"
+	EntityWallet   = "wallet"
+	EntityAdmin    = "admin"
+	EntityManager  = "manager"
+	EntityArk      = "ark"
+	EntityExplorer = "explorer"
+	EntityHealth   = "health"
 )
 
 // ReadOnlyPermissions returns the permissions of the macaroon readonly.macaroon.
@@ -121,23 +122,11 @@ func Whitelist() map[string][]bakery.Op {
 			Entity: EntityArk,
 			Action: "write",
 		}},
-		fmt.Sprintf("/%s/GetRound", arkv1.ArkService_ServiceDesc.ServiceName): {{
-			Entity: EntityArk,
-			Action: "read",
-		}},
-		fmt.Sprintf("/%s/GetRoundById", arkv1.ArkService_ServiceDesc.ServiceName): {{
-			Entity: EntityArk,
-			Action: "read",
-		}},
 		fmt.Sprintf("/%s/GetEventStream", arkv1.ArkService_ServiceDesc.ServiceName): {{
 			Entity: EntityArk,
 			Action: "read",
 		}},
 		fmt.Sprintf("/%s/Ping", arkv1.ArkService_ServiceDesc.ServiceName): {{
-			Entity: EntityArk,
-			Action: "read",
-		}},
-		fmt.Sprintf("/%s/ListVtxos", arkv1.ArkService_ServiceDesc.ServiceName): {{
 			Entity: EntityArk,
 			Action: "read",
 		}},
@@ -172,6 +161,18 @@ func Whitelist() map[string][]bakery.Op {
 		fmt.Sprintf("/%s/DeleteNostrRecipient", arkv1.ArkService_ServiceDesc.ServiceName): {{
 			Entity: EntityArk,
 			Action: "write",
+		}},
+		fmt.Sprintf("/%s/GetRound", arkv1.ExplorerService_ServiceDesc.ServiceName): {{
+			Entity: EntityExplorer,
+			Action: "read",
+		}},
+		fmt.Sprintf("/%s/GetRoundById", arkv1.ExplorerService_ServiceDesc.ServiceName): {{
+			Entity: EntityExplorer,
+			Action: "read",
+		}},
+		fmt.Sprintf("/%s/ListVtxos", arkv1.ExplorerService_ServiceDesc.ServiceName): {{
+			Entity: EntityExplorer,
+			Action: "read",
 		}},
 	}
 }
