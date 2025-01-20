@@ -2564,20 +2564,24 @@ func vtxosToTxsCovenantless(spendable, spent []client.Vtxo) ([]types.Transaction
 			continue // settlement or change, ignore
 		}
 
+		txKey := types.TransactionKey{
+			RedeemTxid: vtxo.Txid,
+		}
+
 		settled := !vtxo.IsPending
 		if !settled {
+			txKey = types.TransactionKey{
+				RoundTxid: vtxo.RoundTxid,
+			}
 			settled = isSettled(append(spendable, spent...), vtxo)
 		}
 
 		txs = append(txs, types.Transaction{
-			TransactionKey: types.TransactionKey{
-				RedeemTxid: vtxo.Txid,
-				RoundTxid:  vtxo.RoundTxid,
-			},
-			Amount:    vtxo.Amount - settleAmount - spentAmount,
-			Type:      types.TxReceived,
-			CreatedAt: vtxo.CreatedAt,
-			Settled:   settled,
+			TransactionKey: txKey,
+			Amount:         vtxo.Amount - settleAmount - spentAmount,
+			Type:           types.TxReceived,
+			CreatedAt:      vtxo.CreatedAt,
+			Settled:        settled,
 		})
 	}
 
@@ -2605,15 +2609,21 @@ func vtxosToTxsCovenantless(spendable, spent []client.Vtxo) ([]types.Transaction
 
 		vtxo := getVtxo(resultedVtxos, vtxosBySpentBy[sb])
 
-		txs = append(txs, types.Transaction{
-			TransactionKey: types.TransactionKey{
+		txKey := types.TransactionKey{
+			RoundTxid: vtxo.RoundTxid,
+		}
+		if vtxo.IsPending {
+			txKey = types.TransactionKey{
 				RedeemTxid: vtxo.Txid,
-				RoundTxid:  vtxo.RoundTxid,
-			},
-			Amount:    spentAmount - resultedAmount,
-			Type:      types.TxSent,
-			CreatedAt: vtxo.CreatedAt,
-			Settled:   isSettled(append(spendable, spent...), vtxo),
+			}
+		}
+
+		txs = append(txs, types.Transaction{
+			TransactionKey: txKey,
+			Amount:         spentAmount - resultedAmount,
+			Type:           types.TxSent,
+			CreatedAt:      vtxo.CreatedAt,
+			Settled:        isSettled(append(spendable, spent...), vtxo),
 		})
 
 	}
