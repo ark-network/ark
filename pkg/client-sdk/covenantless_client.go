@@ -2532,6 +2532,21 @@ func getVtxo(usedVtxos []client.Vtxo, spentByVtxos []client.Vtxo) client.Vtxo {
 	return client.Vtxo{}
 }
 
+func isSettled(vtxos []client.Vtxo, vtxo client.Vtxo) bool {
+	if len(vtxo.SpentBy) == 0 {
+		return !vtxo.IsPending
+	}
+	for _, v := range vtxos {
+		if v.RoundTxid == vtxo.SpentBy {
+			return true
+		}
+		if v.Txid == vtxo.SpentBy {
+			return isSettled(vtxos, v)
+		}
+	}
+	return false
+}
+
 func vtxosToTxsCovenantless(spendable, spent []client.Vtxo) ([]types.Transaction, error) {
 	//
 	txs := make([]types.Transaction, 0)
@@ -2554,6 +2569,11 @@ func vtxosToTxsCovenantless(spendable, spent []client.Vtxo) ([]types.Transaction
 			continue // settlement or change, ignore
 		}
 
+		settled := !vtxo.IsPending
+		if !settled {
+			settled = isSettled(append(spendable, spent...), vtxo)
+		}
+
 		txs = append(txs, types.Transaction{
 			TransactionKey: types.TransactionKey{
 				RedeemTxid: vtxo.Txid,
@@ -2562,7 +2582,7 @@ func vtxosToTxsCovenantless(spendable, spent []client.Vtxo) ([]types.Transaction
 			Amount:    vtxo.Amount - settleAmount - spentAmount,
 			Type:      types.TxReceived,
 			CreatedAt: vtxo.CreatedAt,
-			Settled:   len(vtxo.SpentBy) > 0 || !vtxo.IsPending,
+			Settled:   settled,
 		})
 	}
 
@@ -2598,7 +2618,7 @@ func vtxosToTxsCovenantless(spendable, spent []client.Vtxo) ([]types.Transaction
 			Amount:    spentAmount - resultedAmount,
 			Type:      types.TxSent,
 			CreatedAt: vtxo.CreatedAt,
-			Settled:   true, // mark all payments as settled
+			Settled:   isSettled(append(spendable, spent...), vtxo),
 		})
 
 	}
