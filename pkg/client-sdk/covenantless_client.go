@@ -1085,12 +1085,12 @@ func (a *covenantlessArkClient) GetTransactionHistory(
 		return nil, err
 	}
 
-	boardingTxs, err := a.getUnspentBoardingTxs(ctx)
+	boardingTxs, roundsToIgnore, err := a.getBoardingTxs(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	offchainTxs, err := vtxosToTxsCovenantless(spendableVtxos, spentVtxos)
+	offchainTxs, err := vtxosToTxsCovenantless(spendableVtxos, spentVtxos, roundsToIgnore)
 	if err != nil {
 		return nil, err
 	}
@@ -2441,25 +2441,18 @@ func (a *covenantlessArkClient) getVtxos(ctx context.Context, opts *CoinSelectOp
 	return spendableVtxos, nil
 }
 
-func (a *covenantlessArkClient) getUnspentBoardingTxs(ctx context.Context) ([]types.Transaction, error) {
-	allUtxos, _, err := a.getAllBoardingUtxos(ctx)
+func (a *covenantlessArkClient) getBoardingTxs(
+	ctx context.Context,
+) ([]types.Transaction, map[string]struct{}, error) {
+	allUtxos, ignoreVtxos, err := a.getAllBoardingUtxos(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	txs := make([]types.Transaction, 0)
-
+	unconfirmedTxs := make([]types.Transaction, 0)
+	confirmedTxs := make([]types.Transaction, 0)
 	for _, u := range allUtxos {
-		if u.Spent {
-			continue // already spent
-		}
-
-		emptyTime := time.Time{}
-		if u.CreatedAt == emptyTime {
-			continue // not confirmed yet
-		}
-
-		txs = append(txs, types.Transaction{
+		tx := types.Transaction{
 			TransactionKey: types.TransactionKey{
 				BoardingTxid: u.Txid,
 			},
@@ -2467,10 +2460,18 @@ func (a *covenantlessArkClient) getUnspentBoardingTxs(ctx context.Context) ([]ty
 			Type:      types.TxReceived,
 			CreatedAt: u.CreatedAt,
 			Settled:   u.Spent,
-		})
+		}
+
+		emptyTime := time.Time{}
+		if u.CreatedAt == emptyTime {
+			unconfirmedTxs = append(unconfirmedTxs, tx)
+			continue
+		}
+		confirmedTxs = append(confirmedTxs, tx)
 	}
 
-	return txs, nil
+	txs := append(unconfirmedTxs, confirmedTxs...)
+	return txs, ignoreVtxos, nil
 }
 
 func findVtxosBySpentBy(allVtxos []client.Vtxo, txid string) (vtxos []client.Vtxo) {
@@ -2542,8 +2543,9 @@ func isSettled(vtxos []client.Vtxo, vtxo client.Vtxo) bool {
 	return false
 }
 
-func vtxosToTxsCovenantless(spendable, spent []client.Vtxo) ([]types.Transaction, error) {
-	//
+func vtxosToTxsCovenantless(
+	spendable, spent []client.Vtxo, boardingRounds map[string]struct{},
+) ([]types.Transaction, error) {
 	txs := make([]types.Transaction, 0)
 
 	// receivals
@@ -2552,6 +2554,9 @@ func vtxosToTxsCovenantless(spendable, spent []client.Vtxo) ([]types.Transaction
 	// - they resulted from a settlement
 	// - they are change from a payment
 	for _, vtxo := range append(spendable, spent...) {
+		if _, ok := boardingRounds[vtxo.RoundTxid]; ok {
+			continue
+		}
 		settleVtxos := findVtxosSpentInSettlement(spent, vtxo)
 		settleAmount := reduceVtxosAmount(settleVtxos)
 		if vtxo.Amount <= settleAmount {
@@ -2565,13 +2570,12 @@ func vtxosToTxsCovenantless(spendable, spent []client.Vtxo) ([]types.Transaction
 		}
 
 		txKey := types.TransactionKey{
-			RedeemTxid: vtxo.Txid,
+			RoundTxid: vtxo.RoundTxid,
 		}
-
 		settled := !vtxo.IsPending
 		if !settled {
 			txKey = types.TransactionKey{
-				RoundTxid: vtxo.RoundTxid,
+				RedeemTxid: vtxo.Txid,
 			}
 			settled = isSettled(append(spendable, spent...), vtxo)
 		}

@@ -189,14 +189,14 @@
         "amount":    "2000",
         "type":      "RECEIVED",
         "createdAt": "1730330748",
-        "settled": false
+        "settled": true
       },
       {
         "redeemTxid": "33fd8ca9ea9cfb53802c42be10ae428573e19fb89484dfe536d06d43efa82034",
         "amount":    "1000",
         "type":      "RECEIVED",
         "createdAt": "1730330256",
-        "settled": false
+        "settled": true
       }
     ]
 	},
@@ -283,14 +283,14 @@
         "amount":    "2000",
         "type":      "RECEIVED",
         "createdAt": "1730330748",
-        "settled": false
+        "settled": true
       },
       {
         "redeemTxid": "33fd8ca9ea9cfb53802c42be10ae428573e19fb89484dfe536d06d43efa82034",
         "amount":    "1000",
         "type":      "RECEIVED",
         "createdAt": "1730330256",
-        "settled": false
+        "settled": true
       }
     ]
 	}

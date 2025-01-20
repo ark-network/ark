@@ -27,7 +27,7 @@ func TestVtxosToTxs(t *testing.T) {
 
 	for _, tt := range fixtures {
 		t.Run(tt.name, func(t *testing.T) {
-			txHistory, err := vtxosToTxsCovenantless(tt.spendableVtxos, tt.spentVtxos)
+			txHistory, err := vtxosToTxsCovenantless(tt.spendableVtxos, tt.spentVtxos, tt.ignoreTxs)
 			require.NoError(t, err)
 			require.Len(t, txHistory, len(tt.expectedTxHistory))
 
@@ -83,12 +83,13 @@ func (v vtxos) parse() []client.Vtxo {
 }
 
 type tx struct {
-	RoundTxid  string `json:"roundTxid"`
-	RedeemTxid string `json:"redeemTxid"`
-	Amount     string `json:"amount"`
-	Type       string `json:"type"`
-	Settled    bool   `json:"settled"`
-	CreatedAt  string `json:"createdAt"`
+	BoardingTxid string `json:"boardingTxid"`
+	RoundTxid    string `json:"roundTxid"`
+	RedeemTxid   string `json:"redeemTxid"`
+	Amount       string `json:"amount"`
+	Type         string `json:"type"`
+	Settled      bool   `json:"settled"`
+	CreatedAt    string `json:"createdAt"`
 }
 
 type txs []tx
@@ -98,8 +99,9 @@ func (t txs) parse() []sdktypes.Transaction {
 	for _, tx := range t {
 		list = append(list, sdktypes.Transaction{
 			TransactionKey: sdktypes.TransactionKey{
-				RedeemTxid: tx.RedeemTxid,
-				RoundTxid:  tx.RoundTxid,
+				BoardingTxid: tx.BoardingTxid,
+				RedeemTxid:   tx.RedeemTxid,
+				RoundTxid:    tx.RoundTxid,
 			},
 			Amount:    parseAmount(tx.Amount),
 			Type:      sdktypes.TxType(tx.Type),
