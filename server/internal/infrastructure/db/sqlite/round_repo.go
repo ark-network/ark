@@ -270,7 +270,7 @@ func (r *roundRepository) GetSweptRoundsConnectorAddress(ctx context.Context) ([
 	return r.querier.SelectSweptRoundsConnectorAddress(ctx)
 }
 
-func (r *roundRepository) GetVtxoTreeWithTxid(ctx context.Context, txid string) (*tree.VtxoTree, error) {
+func (r *roundRepository) GetVtxoTreeWithTxid(ctx context.Context, txid string) (tree.VtxoTree, error) {
 	rows, err := r.querier.SelectTreeTxsWithRoundTxid(ctx, txid)
 	if err != nil {
 		return nil, err
@@ -292,7 +292,7 @@ func (r *roundRepository) GetVtxoTreeWithTxid(ctx context.Context, txid string) 
 		}
 	}
 
-	return &vtxoTree, nil
+	return vtxoTree, nil
 }
 
 func rowToReceiver(row queries.RequestReceiverVw) domain.Receiver {

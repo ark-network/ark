@@ -65,7 +65,7 @@ func (s *sweeper) start() error {
 			return err
 		}
 
-		task := s.createTask(txid, *vtxoTree)
+		task := s.createTask(txid, vtxoTree)
 		task()
 	}
 
