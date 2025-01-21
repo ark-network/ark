@@ -2631,12 +2631,10 @@ func vtxosToTxsCovenantless(
 		txKey := types.TransactionKey{
 			RoundTxid: vtxo.RoundTxid,
 		}
-		settled := !vtxo.IsPending
 		if vtxo.IsPending {
 			txKey = types.TransactionKey{
 				RedeemTxid: vtxo.Txid,
 			}
-			settled = isSettled(append(spendable, spent...), vtxo)
 		}
 
 		txs = append(txs, types.Transaction{
@@ -2644,7 +2642,7 @@ func vtxosToTxsCovenantless(
 			Amount:         spentAmount - resultedAmount,
 			Type:           types.TxSent,
 			CreatedAt:      vtxo.CreatedAt,
-			Settled:        settled,
+			Settled:        true,
 		})
 
 	}
