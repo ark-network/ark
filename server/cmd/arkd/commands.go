@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -19,26 +20,26 @@ import (
 // flags
 var (
 	passwordFlag = &cli.StringFlag{
-		Name:     "password",
+		Name:     flagPassword,
 		Usage:    "wallet password",
 		Required: true,
 	}
 	mnemonicFlag = &cli.StringFlag{
-		Name:  "mnemonic",
+		Name:  flagMnemonic,
 		Usage: "mnemonic from which restore the wallet",
 	}
 	gapLimitFlag = &cli.Uint64Flag{
-		Name:  "addr-gap-limit",
+		Name:  flagGapLimit,
 		Usage: "address gap limit for wallet restoration",
 		Value: 100,
 	}
 	amountFlag = &cli.UintFlag{
-		Name:     "amount",
+		Name:     flagAmount,
 		Usage:    "amount of the note in satoshis",
 		Required: true,
 	}
 	quantityFlag = &cli.UintFlag{
-		Name:  "quantity",
+		Name:  flagQuantity,
 		Usage: "quantity of notes to create",
 		Value: 1,
 	}
@@ -97,10 +98,10 @@ var (
 var timeout = time.Minute
 
 func walletStatusAction(ctx *cli.Context) error {
-	baseURL := ctx.String("url")
-	tlsCertPath := ctx.String("tls-cert-path")
-	if strings.Contains(baseURL, "http://") {
-		tlsCertPath = ""
+	baseURL := ctx.String(flagURL)
+	_, tlsCertPath, err := getCredentialPaths(ctx)
+	if err != nil {
+		return err
 	}
 
 	url := fmt.Sprintf("%s/v1/admin/wallet/status", baseURL)
@@ -114,14 +115,15 @@ func walletStatusAction(ctx *cli.Context) error {
 }
 
 func walletCreateOrRestoreAction(ctx *cli.Context) error {
-	baseURL := ctx.String("url")
-	password := ctx.String("password")
-	mnemonic := ctx.String("mnemonic")
-	gapLimit := ctx.Uint64("addr-gap-limit")
-	tlsCertPath := ctx.String("tls-cert-path")
-	if strings.Contains(baseURL, "http://") {
-		tlsCertPath = ""
+	baseURL := ctx.String(flagURL)
+	_, tlsCertPath, err := getCredentialPaths(ctx)
+	if err != nil {
+		return err
 	}
+
+	password := ctx.String(flagPassword)
+	mnemonic := ctx.String(flagMnemonic)
+	gapLimit := ctx.Uint64(flagGapLimit)
 
 	if len(mnemonic) > 0 {
 		url := fmt.Sprintf("%s/v1/admin/wallet/restore", baseURL)
@@ -156,14 +158,15 @@ func walletCreateOrRestoreAction(ctx *cli.Context) error {
 }
 
 func walletUnlockAction(ctx *cli.Context) error {
-	baseURL := ctx.String("url")
-	password := ctx.String("password")
+	baseURL := ctx.String(flagURL)
+	_, tlsCertPath, err := getCredentialPaths(ctx)
+	if err != nil {
+		return err
+	}
+
+	password := ctx.String(flagPassword)
 	url := fmt.Sprintf("%s/v1/admin/wallet/unlock", baseURL)
 	body := fmt.Sprintf(`{"password": "%s"}`, password)
-	tlsCertPath := ctx.String("tls-cert-path")
-	if strings.Contains(baseURL, "http://") {
-		tlsCertPath = ""
-	}
 
 	if _, err := post[struct{}](url, body, "", "", tlsCertPath); err != nil {
 		return err
@@ -174,19 +177,10 @@ func walletUnlockAction(ctx *cli.Context) error {
 }
 
 func walletAddressAction(ctx *cli.Context) error {
-	baseURL := ctx.String("url")
-	var macaroon string
-	if !ctx.Bool("no-macaroon") {
-		macaroonPath := ctx.String("macaroon-path")
-		mac, err := getMacaroon(macaroonPath)
-		if err != nil {
-			return err
-		}
-		macaroon = mac
-	}
-	tlsCertPath := ctx.String("tls-cert-path")
-	if strings.Contains(baseURL, "http://") {
-		tlsCertPath = ""
+	baseURL := ctx.String(flagURL)
+	macaroon, tlsCertPath, err := getCredentialPaths(ctx)
+	if err != nil {
+		return err
 	}
 
 	url := fmt.Sprintf("%s/v1/admin/wallet/address", baseURL)
@@ -200,19 +194,10 @@ func walletAddressAction(ctx *cli.Context) error {
 }
 
 func walletBalanceAction(ctx *cli.Context) error {
-	baseURL := ctx.String("url")
-	var macaroon string
-	if !ctx.Bool("no-macaroon") {
-		macaroonPath := ctx.String("macaroon-path")
-		mac, err := getMacaroon(macaroonPath)
-		if err != nil {
-			return err
-		}
-		macaroon = mac
-	}
-	tlsCertPath := ctx.String("tls-cert-path")
-	if strings.Contains(baseURL, "http://") {
-		tlsCertPath = ""
+	baseURL := ctx.String(flagURL)
+	macaroon, tlsCertPath, err := getCredentialPaths(ctx)
+	if err != nil {
+		return err
 	}
 
 	url := fmt.Sprintf("%s/v1/admin/wallet/balance", baseURL)
@@ -226,21 +211,12 @@ func walletBalanceAction(ctx *cli.Context) error {
 }
 
 func createNoteAction(ctx *cli.Context) error {
-	baseURL := ctx.String("url")
-	amount := ctx.Uint("amount")
-	quantity := ctx.Uint("quantity")
-	var macaroon string
-	if !ctx.Bool("no-macaroon") {
-		macaroonPath := ctx.String("macaroon-path")
-		mac, err := getMacaroon(macaroonPath)
-		if err != nil {
-			return err
-		}
-		macaroon = mac
-	}
-	tlsCertPath := ctx.String("tls-cert-path")
-	if strings.Contains(baseURL, "http://") {
-		tlsCertPath = ""
+	baseURL := ctx.String(flagURL)
+	amount := ctx.Uint(flagAmount)
+	quantity := ctx.Uint(flagQuantity)
+	macaroon, tlsCertPath, err := getCredentialPaths(ctx)
+	if err != nil {
+		return err
 	}
 
 	url := fmt.Sprintf("%s/v1/admin/note", baseURL)
@@ -256,6 +232,25 @@ func createNoteAction(ctx *cli.Context) error {
 	}
 
 	return nil
+}
+
+func getCredentialPaths(ctx *cli.Context) (macaroon string, tlsCertPath string, err error) {
+	datadir := ctx.String(flagDatadir)
+
+	macaroonPath := filepath.Join(datadir, macaroonDir, macaroonFile)
+	if _, err := os.Stat(macaroonPath); err == nil {
+		macaroon, err = getMacaroon(macaroonPath)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to read macaroon: %w", err)
+		}
+	}
+
+	tlsCertPath = filepath.Join(datadir, tlsDir, tlsCertFile)
+	if strings.Contains(ctx.String(flagURL), "http://") {
+		tlsCertPath = ""
+	}
+
+	return macaroon, tlsCertPath, nil
 }
 
 func post[T any](url, body, key, macaroon, tlsCert string) (result T, err error) {
