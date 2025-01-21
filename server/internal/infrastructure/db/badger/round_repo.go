@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/dgraph-io/badger/v4"
 	"github.com/timshannon/badgerhold/v4"
@@ -136,6 +137,16 @@ func (r *roundRepository) GetRoundsIds(ctx context.Context, startedAfter int64, 
 	}
 
 	return ids, nil
+}
+
+func (r *roundRepository) GetVtxoTreeWithTxid(
+	ctx context.Context, txid string,
+) (tree.VtxoTree, error) {
+	round, err := r.GetRoundWithTxid(ctx, txid)
+	if err != nil {
+		return nil, err
+	}
+	return round.VtxoTree, nil
 }
 
 func (r *roundRepository) Close() {
