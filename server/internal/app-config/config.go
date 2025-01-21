@@ -75,6 +75,7 @@ type Config struct {
 	MarketHourEndTime       time.Time
 	MarketHourPeriod        time.Duration
 	MarketHourRoundInterval time.Duration
+	OtelCollectorEndpoint   string
 
 	EsploraURL       string
 	NeutrinoPeer     string

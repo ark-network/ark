@@ -5,8 +5,8 @@ go 1.23.1
 require (
 	github.com/btcsuite/btcwallet v0.16.10-0.20240718224643-db3a4a2543bd
 	github.com/btcsuite/btcwallet/walletdb v1.4.2
-	github.com/stretchr/testify v1.9.0
-	google.golang.org/grpc v1.65.0
+	github.com/stretchr/testify v1.10.0
+	google.golang.org/grpc v1.69.4
 	gopkg.in/macaroon-bakery.v2 v2.3.0
 	gopkg.in/macaroon.v2 v2.1.0
 )
@@ -28,15 +28,15 @@ require (
 	github.com/lightningnetwork/lnd/tlv v1.2.6 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/rogpeppe/fastuuid v1.2.0 // indirect
-	github.com/rogpeppe/go-internal v1.12.0 // indirect
+	github.com/rogpeppe/go-internal v1.13.1 // indirect
 	go.etcd.io/bbolt v1.3.10 // indirect
 	golang.org/x/crypto v0.32.0 // indirect
 	golang.org/x/exp v0.0.0-20250106191152-7588d65b2ba8 // indirect
 	golang.org/x/net v0.34.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/sys v0.29.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240812133136-8ffd90a71988 // indirect
-	google.golang.org/protobuf v1.36.2 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250115164207-1a7da9e5054f // indirect
+	google.golang.org/protobuf v1.36.3 // indirect
 	gopkg.in/errgo.v1 v1.0.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
