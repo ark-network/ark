@@ -71,7 +71,8 @@
         "redeemTxid": "33fd8ca9ea9cfb53802c42be10ae428573e19fb89484dfe536d06d43efa82034",
         "amount":    "1216",
         "type":      "SENT",
-        "createdAt": "1730330256"
+        "createdAt": "1730330256",
+        "settled": true
       }
     ]
 	},
@@ -276,7 +277,7 @@
         "amount":    "2316",
         "type":      "SENT",
         "createdAt": "1730331198",
-        "settled": false
+        "settled": true
       },
       {
         "redeemTxid": "884d85c0db6b52139c39337d54c1f20cd8c5c0d2e83109d69246a345ccc9d169",
