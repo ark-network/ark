@@ -60,12 +60,12 @@ func (s *sweeper) start() error {
 	}
 
 	for _, txid := range expiredRounds {
-		round, err := s.repoManager.Rounds().GetRoundWithTxid(ctx, txid)
+		vtxoTree, err := s.repoManager.Rounds().GetVtxoTreeWithTxid(ctx, txid)
 		if err != nil {
 			return err
 		}
 
-		task := s.createTask(round.Txid, round.VtxoTree)
+		task := s.createTask(txid, vtxoTree)
 		task()
 	}
 
