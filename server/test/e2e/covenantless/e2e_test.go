@@ -104,22 +104,6 @@ func TestSettleInSameRound(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	aliceOffchainAddr, _, err := alice.Receive(ctx)
-	require.NoError(t, err)
-
-	bobOffchainAddr, _, err := bob.Receive(ctx)
-	require.NoError(t, err)
-
-	// Alice sends to Bob
-	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobOffchainAddr, 5000)})
-	require.NoError(t, err)
-
-	// Bob sends to Alice
-	_, err = bob.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(aliceOffchainAddr, 3000)})
-	require.NoError(t, err)
-
-	time.Sleep(2 * time.Second)
-
 	var wg sync.WaitGroup
 	wg.Add(2)
 
@@ -153,6 +137,22 @@ func TestSettleInSameRound(t *testing.T) {
 	bobVtxos, _, err := bob.ListVtxos(ctx)
 	require.NoError(t, err)
 	require.NotEmpty(t, bobVtxos)
+
+	aliceOffchainAddr, _, err := alice.Receive(ctx)
+	require.NoError(t, err)
+
+	bobOffchainAddr, _, err := bob.Receive(ctx)
+	require.NoError(t, err)
+
+	// Alice sends to Bob
+	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobOffchainAddr, 5000)})
+	require.NoError(t, err)
+
+	// Bob sends to Alice
+	_, err = bob.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(aliceOffchainAddr, 3000)})
+	require.NoError(t, err)
+
+	time.Sleep(2 * time.Second)
 
 	wg.Add(2)
 
