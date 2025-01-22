@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -81,40 +82,125 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func TestSendOffchain(t *testing.T) {
-	var receive utils.ArkReceive
-	receiveStr, err := runClarkCommand("receive")
+func TestSettleInSameRound(t *testing.T) {
+	ctx := context.Background()
+	alice, grpcAlice := setupArkSDK(t)
+	defer grpcAlice.Close()
+
+	bob, grpcBob := setupArkSDK(t)
+	defer grpcBob.Close()
+
+	_, aliceBoardingAddress, err := alice.Receive(ctx)
 	require.NoError(t, err)
 
-	err = json.Unmarshal([]byte(receiveStr), &receive)
+	_, bobBoardingAddress, err := bob.Receive(ctx)
 	require.NoError(t, err)
 
-	_, err = utils.RunCommand("nigiri", "faucet", receive.Boarding)
+	_, err = utils.RunCommand("nigiri", "faucet", aliceBoardingAddress)
+	require.NoError(t, err)
+
+	_, err = utils.RunCommand("nigiri", "faucet", bobBoardingAddress)
 	require.NoError(t, err)
 
 	time.Sleep(5 * time.Second)
 
-	_, err = runClarkCommand("settle", "--password", utils.Password)
+	aliceOffchainAddr, _, err := alice.Receive(ctx)
 	require.NoError(t, err)
 
-	time.Sleep(3 * time.Second)
-
-	_, err = runClarkCommand("send", "--amount", "10000", "--to", receive.Offchain, "--password", utils.Password)
+	bobOffchainAddr, _, err := bob.Receive(ctx)
 	require.NoError(t, err)
 
-	var balance utils.ArkBalance
-	balanceStr, err := runClarkCommand("balance")
-	require.NoError(t, err)
-	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
-	require.NotZero(t, balance.Offchain.Total)
-
-	_, err = runClarkCommand("settle", "--password", utils.Password)
+	// Alice sends to Bob
+	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobOffchainAddr, 5000)})
 	require.NoError(t, err)
 
-	balanceStr, err = runClarkCommand("balance")
+	// Bob sends to Alice
+	_, err = bob.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(aliceOffchainAddr, 3000)})
 	require.NoError(t, err)
-	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
-	require.NotZero(t, balance.Offchain.Total)
+
+	time.Sleep(2 * time.Second)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	var aliceRoundID, bobRoundID string
+	var aliceErr, bobErr error
+
+	go func() {
+		defer wg.Done()
+		aliceRoundID, aliceErr = alice.Settle(ctx)
+	}()
+
+	go func() {
+		defer wg.Done()
+		bobRoundID, bobErr = bob.Settle(ctx)
+	}()
+
+	wg.Wait()
+
+	require.NoError(t, aliceErr)
+	require.NoError(t, bobErr)
+	require.NotEmpty(t, aliceRoundID)
+	require.NotEmpty(t, bobRoundID)
+	require.Equal(t, aliceRoundID, bobRoundID)
+
+	time.Sleep(5 * time.Second)
+
+	aliceVtxos, _, err := alice.ListVtxos(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, aliceVtxos)
+
+	bobVtxos, _, err := bob.ListVtxos(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, bobVtxos)
+
+	wg.Add(2)
+
+	var aliceSecondRoundID, bobSecondRoundID string
+
+	go func() {
+		defer wg.Done()
+		aliceSecondRoundID, aliceErr = alice.Settle(ctx)
+	}()
+
+	go func() {
+		defer wg.Done()
+		bobSecondRoundID, bobErr = bob.Settle(ctx)
+	}()
+
+	wg.Wait()
+
+	require.NoError(t, aliceErr)
+	require.NoError(t, bobErr)
+	require.Equal(t, aliceSecondRoundID, bobSecondRoundID, "Second settle round IDs should match")
+
+	time.Sleep(5 * time.Second)
+
+	aliceVtxosAfter, _, err := alice.ListVtxos(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, aliceVtxosAfter)
+
+	bobVtxosAfter, _, err := bob.ListVtxos(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, bobVtxosAfter)
+
+	var aliceNewVtxo, bobNewVtxo client.Vtxo
+	for _, vtxo := range aliceVtxosAfter {
+		if vtxo.RoundTxid == aliceSecondRoundID {
+			aliceNewVtxo = vtxo
+			break
+		}
+	}
+	for _, vtxo := range bobVtxosAfter {
+		if vtxo.RoundTxid == bobSecondRoundID {
+			bobNewVtxo = vtxo
+			break
+		}
+	}
+
+	require.NotEmpty(t, aliceNewVtxo)
+	require.NotEmpty(t, bobNewVtxo)
+	require.Equal(t, aliceNewVtxo.RoundTxid, bobNewVtxo.RoundTxid)
 }
 
 func TestUnilateralExit(t *testing.T) {

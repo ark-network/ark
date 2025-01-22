@@ -1,6 +1,7 @@
 package bitcointree_test
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"testing"
@@ -81,6 +82,17 @@ func TestBuildAndSignVtxoTree(t *testing.T) {
 			for pubkey, session := range signerSessions {
 				nonces, err := session.GetNonces()
 				require.NoError(t, err)
+				var encodedNonces bytes.Buffer
+				err = nonces.Encode(&encodedNonces)
+				require.NoError(t, err)
+				decodedNonces, err := bitcointree.DecodeNonces(&encodedNonces)
+				require.NoError(t, err)
+				for i, nonceRow := range nonces {
+					for j, nonce := range nonceRow {
+						require.Equal(t, nonce, decodedNonces[i][j])
+					}
+				}
+
 				serverCoordinator.AddNonce(pubkey, nonces)
 			}
 
@@ -96,6 +108,21 @@ func TestBuildAndSignVtxoTree(t *testing.T) {
 			for pubkey, session := range signerSessions {
 				sig, err := session.Sign()
 				require.NoError(t, err)
+				var encodedSig bytes.Buffer
+				err = sig.Encode(&encodedSig)
+				require.NoError(t, err)
+				decodedSig, err := bitcointree.DecodeSignatures(&encodedSig)
+				require.NoError(t, err)
+				for i, sigRow := range sig {
+					for j, sig := range sigRow {
+						if sig == nil {
+							require.Nil(t, decodedSig[i][j])
+						} else {
+							require.Equal(t, sig.S, decodedSig[i][j].S)
+						}
+					}
+				}
+
 				serverCoordinator.AddSig(pubkey, sig)
 			}
 

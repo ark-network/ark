@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -686,14 +687,24 @@ func encodeMatrix[T writable](matrix [][]T) ([]byte, error) {
 
 	// For each row, write its length and then its elements
 	for _, row := range matrix {
-		// Write row length
+		// for each row, write its length
 		if err := binary.Write(&buf, binary.LittleEndian, uint32(len(row))); err != nil {
 			return nil, err
 		}
-		// Write row data
+		// for each cell, write <isNil> | <cell> bytes
 		for _, cell := range row {
-			if err := cell.Encode(&buf); err != nil {
+			notNil := true
+			if reflect.ValueOf(cell).IsNil() {
+				notNil = false
+			}
+			if err := binary.Write(&buf, binary.LittleEndian, notNil); err != nil {
 				return nil, err
+			}
+
+			if notNil {
+				if err := cell.Encode(&buf); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -723,6 +734,15 @@ func decodeMatrix[T readable](factory func() T, data io.Reader) ([][]T, error) {
 		row := make([]T, 0, colCount)
 		// Read row data
 		for j := uint32(0); j < colCount; j++ {
+			// check if the cell is nil
+			var notNil bool
+			if err := binary.Read(data, binary.LittleEndian, &notNil); err != nil {
+				return nil, err
+			}
+			if !notNil {
+				row = append(row, *new(T)) // append a new nil cell
+				continue
+			}
 			cell := factory()
 			if err := cell.Decode(data); err != nil {
 				return nil, err
