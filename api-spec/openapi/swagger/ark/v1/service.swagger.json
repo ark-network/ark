@@ -603,9 +603,8 @@
             "type": "string"
           }
         },
-        "signingType": {
-          "type": "integer",
-          "format": "int64"
+        "signingAll": {
+          "type": "boolean"
         }
       }
     },

@@ -173,7 +173,7 @@ func (a *restClient) RegisterOutputsForNextRound(
 	if musig2 != nil {
 		body.Musig2 = &models.V1Musig2{
 			CosignersPublicKeys: musig2.CosignersPublicKeys,
-			SigningType:         int64(musig2.SigningType),
+			SigningAll:          musig2.SigningType == tree.SignAll,
 		}
 	}
 	_, err := a.svc.ArkServiceRegisterOutputsForNextRound(

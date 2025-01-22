@@ -126,7 +126,7 @@ func (a *grpcClient) RegisterOutputsForNextRound(
 	if musig2 != nil {
 		req.Musig2 = &arkv1.Musig2{
 			CosignersPublicKeys: musig2.CosignersPublicKeys,
-			SigningType:         uint32(musig2.SigningType),
+			SigningAll:          musig2.SigningType == tree.SignAll,
 		}
 	}
 	_, err := a.svc.RegisterOutputsForNextRound(ctx, req)

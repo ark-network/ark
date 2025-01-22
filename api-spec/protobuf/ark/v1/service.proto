@@ -128,7 +128,7 @@ message RegisterInputsForNextRoundResponse {
 
 message Musig2 {
   repeated string cosigners_public_keys = 1;
-  uint32 signing_type = 2;
+  bool signing_all = 2;
 }
 
 message RegisterOutputsForNextRoundRequest {

@@ -20,8 +20,8 @@ type V1Musig2 struct {
 	// cosigners public keys
 	CosignersPublicKeys []string `json:"cosignersPublicKeys"`
 
-	// signing type
-	SigningType int64 `json:"signingType,omitempty"`
+	// signing all
+	SigningAll bool `json:"signingAll,omitempty"`
 }
 
 // Validate validates this v1 musig2

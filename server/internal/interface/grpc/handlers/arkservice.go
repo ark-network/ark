@@ -167,9 +167,13 @@ func (h *handler) RegisterOutputsForNextRound(
 	musig2Data := req.GetMusig2()
 	var musig2 *tree.Musig2
 	if musig2Data != nil {
+		signingType := tree.SignBranch
+		if musig2Data.SigningAll {
+			signingType = tree.SignAll
+		}
 		musig2 = &tree.Musig2{
 			CosignersPublicKeys: musig2Data.GetCosignersPublicKeys(),
-			SigningType:         tree.SigningType(musig2Data.GetSigningType()),
+			SigningType:         signingType,
 		}
 	}
 
