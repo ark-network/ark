@@ -1,6 +1,7 @@
 package db
 
 import (
+	"embed"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -12,7 +13,11 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	sqlitemigrate "github.com/golang-migrate/migrate/v4/database/sqlite"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 )
+
+//go:embed sqlite/migration/*
+var migrations embed.FS
 
 var (
 	eventStoreTypes = map[string]func(...interface{}) (domain.RoundEventRepository, error){
@@ -128,18 +133,13 @@ func NewService(config ServiceConfig) (ports.RepoManager, error) {
 			return nil, fmt.Errorf("failed to create market hour store: %w", err)
 		}
 	case "sqlite":
-		if len(config.DataStoreConfig) != 2 {
+		if len(config.DataStoreConfig) != 1 {
 			return nil, fmt.Errorf("invalid data store config")
 		}
 
 		baseDir, ok := config.DataStoreConfig[0].(string)
 		if !ok {
 			return nil, fmt.Errorf("invalid base directory")
-		}
-
-		migrationPath, ok := config.DataStoreConfig[1].(string)
-		if !ok {
-			return nil, fmt.Errorf("invalid migration path")
 		}
 
 		dbFile := filepath.Join(baseDir, sqliteDbFile)
@@ -150,14 +150,15 @@ func NewService(config ServiceConfig) (ports.RepoManager, error) {
 
 		driver, err := sqlitemigrate.WithInstance(db, &sqlitemigrate.Config{})
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to init driver: %s", err)
 		}
 
-		m, err := migrate.NewWithDatabaseInstance(
-			migrationPath,
-			"arkdb",
-			driver,
-		)
+		source, err := iofs.New(migrations, "sqlite/migration")
+		if err != nil {
+			return nil, fmt.Errorf("failed to embed migrations: %s", err)
+		}
+
+		m, err := migrate.NewWithInstance("iofs", source, "arkdb", driver)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create migration instance: %s", err)
 		}
