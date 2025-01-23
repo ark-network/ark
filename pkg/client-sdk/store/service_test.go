@@ -26,7 +26,7 @@ func TestStore(t *testing.T) {
 		WalletType:                 wallet.SingleKeyWallet,
 		ClientType:                 client.GrpcClient,
 		Network:                    common.LiquidRegTest,
-		RoundLifetime:              common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 512},
+		VtxoTreeExpiry:             common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 512},
 		RoundInterval:              10,
 		UnilateralExitDelay:        common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 512},
 		Dust:                       1000,

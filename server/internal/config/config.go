@@ -26,7 +26,7 @@ type Config struct {
 	NoMacaroons             bool
 	Network                 common.Network
 	LogLevel                int
-	RoundLifetime           int64
+	VtxoTreeExpiry          int64
 	UnilateralExitDelay     int64
 	BoardingExitDelay       int64
 	EsploraURL              string
@@ -61,7 +61,7 @@ var (
 	TxBuilderType       = "TX_BUILDER_TYPE"
 	LogLevel            = "LOG_LEVEL"
 	Network             = "NETWORK"
-	RoundLifetime       = "ROUND_LIFETIME"
+	VtxoTreeExpiry      = "VTXO_TREE_EXPIRY"
 	UnilateralExitDelay = "UNILATERAL_EXIT_DELAY"
 	BoardingExitDelay   = "BOARDING_EXIT_DELAY"
 	EsploraURL          = "ESPLORA_URL"
@@ -98,7 +98,7 @@ var (
 	defaultNetwork             = "bitcoin"
 	defaultEsploraURL          = "https://blockstream.info/api"
 	defaultLogLevel            = 5
-	defaultRoundLifetime       = 604672
+	defaultVtxoTreeExpiry      = 604672
 	defaultUnilateralExitDelay = 1024
 	defaultBoardingExitDelay   = 604672
 	defaultNoMacaroons         = false
@@ -121,7 +121,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(LogLevel, defaultLogLevel)
 	viper.SetDefault(Network, defaultNetwork)
 	viper.SetDefault(RoundInterval, defaultRoundInterval)
-	viper.SetDefault(RoundLifetime, defaultRoundLifetime)
+	viper.SetDefault(VtxoTreeExpiry, defaultVtxoTreeExpiry)
 	viper.SetDefault(SchedulerType, defaultSchedulerType)
 	viper.SetDefault(EventDbType, defaultEventDbType)
 	viper.SetDefault(TxBuilderType, defaultTxBuilderType)
@@ -157,7 +157,7 @@ func LoadConfig() (*Config, error) {
 		DbDir:                   filepath.Join(viper.GetString(Datadir), "db"),
 		LogLevel:                viper.GetInt(LogLevel),
 		Network:                 net,
-		RoundLifetime:           viper.GetInt64(RoundLifetime),
+		VtxoTreeExpiry:          viper.GetInt64(VtxoTreeExpiry),
 		UnilateralExitDelay:     viper.GetInt64(UnilateralExitDelay),
 		BoardingExitDelay:       viper.GetInt64(BoardingExitDelay),
 		EsploraURL:              viper.GetString(EsploraURL),
@@ -218,4 +218,8 @@ func getNetwork() (common.Network, error) {
 	default:
 		return common.Network{}, fmt.Errorf("unknown network %s", viper.GetString(Network))
 	}
+}
+
+func init() {
+	viper.SetDefault(VtxoTreeExpiry, defaultVtxoTreeExpiry)
 }

@@ -57,7 +57,7 @@ func (s *configStore) AddData(ctx context.Context, data types.Config) error {
 		WalletType:                 data.WalletType,
 		ClientType:                 data.ClientType,
 		Network:                    data.Network.Name,
-		RoundLifetime:              fmt.Sprintf("%d", data.RoundLifetime.Value),
+		VtxoTreeExpiry:             fmt.Sprintf("%d", data.VtxoTreeExpiry.Value),
 		RoundInterval:              fmt.Sprintf("%d", data.RoundInterval),
 		UnilateralExitDelay:        fmt.Sprintf("%d", data.UnilateralExitDelay.Value),
 		Dust:                       fmt.Sprintf("%d", data.Dust),

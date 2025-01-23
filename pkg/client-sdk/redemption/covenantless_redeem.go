@@ -16,10 +16,10 @@ import (
 )
 
 type CovenantlessRedeemBranch struct {
-	vtxo     client.Vtxo
-	branch   []*psbt.Packet
-	lifetime time.Duration
-	explorer explorer.Explorer
+	vtxo           client.Vtxo
+	branch         []*psbt.Packet
+	vtxoTreeExpiry time.Duration
+	explorer       explorer.Explorer
 }
 
 func NewCovenantlessRedeemBranch(
@@ -31,7 +31,7 @@ func NewCovenantlessRedeemBranch(
 		return nil, err
 	}
 
-	lifetime, err := time.ParseDuration(fmt.Sprintf("%ds", locktime.Seconds()))
+	vtxoTreeExpiry, err := time.ParseDuration(fmt.Sprintf("%ds", locktime.Seconds()))
 	if err != nil {
 		return nil, err
 	}
@@ -51,10 +51,10 @@ func NewCovenantlessRedeemBranch(
 	}
 
 	return &CovenantlessRedeemBranch{
-		vtxo:     vtxo,
-		branch:   branch,
-		lifetime: lifetime,
-		explorer: explorer,
+		vtxo:           vtxo,
+		branch:         branch,
+		vtxoTreeExpiry: vtxoTreeExpiry,
+		explorer:       explorer,
 	}, nil
 }
 
@@ -106,7 +106,7 @@ func (r *CovenantlessRedeemBranch) ExpiresAt() (*time.Time, error) {
 	if confirmed {
 		lastKnownBlocktime = blocktime
 	} else {
-		expirationFromNow := time.Now().Add(time.Minute).Add(r.lifetime)
+		expirationFromNow := time.Now().Add(time.Minute).Add(r.vtxoTreeExpiry)
 		return &expirationFromNow, nil
 	}
 
@@ -126,7 +126,7 @@ func (r *CovenantlessRedeemBranch) ExpiresAt() (*time.Time, error) {
 		break
 	}
 
-	t := time.Unix(lastKnownBlocktime, 0).Add(r.lifetime)
+	t := time.Unix(lastKnownBlocktime, 0).Add(r.vtxoTreeExpiry)
 	return &t, nil
 }
 

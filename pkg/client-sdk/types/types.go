@@ -21,7 +21,7 @@ type Config struct {
 	WalletType                 string
 	ClientType                 string
 	Network                    common.Network
-	RoundLifetime              common.RelativeLocktime
+	VtxoTreeExpiry             common.RelativeLocktime
 	RoundInterval              int64
 	UnilateralExitDelay        common.RelativeLocktime
 	Dust                       uint64

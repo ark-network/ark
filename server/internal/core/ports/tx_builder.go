@@ -50,7 +50,7 @@ type TxBuilder interface {
 		vtxos []domain.Vtxo, connectors []string, txs []string,
 	) (valid map[domain.VtxoKey][]string, err error)
 	BuildSweepTx(inputs []SweepInput) (signedSweepTx string, err error)
-	GetSweepInput(node tree.Node) (lifetime *common.RelativeLocktime, sweepInput SweepInput, err error)
+	GetSweepInput(node tree.Node) (vtxoTreeExpiry *common.RelativeLocktime, sweepInput SweepInput, err error)
 	FinalizeAndExtract(tx string) (txhex string, err error)
 	VerifyTapscriptPartialSigs(tx string) (valid bool, err error)
 	// FindLeaves returns all the leaves txs that are reachable from the given outpoint

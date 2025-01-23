@@ -54,7 +54,7 @@ func TestAddConstraints(t *testing.T) {
 	}
 }
 
-// TestTimeoutConstraint tests that a caveat for the lifetime of
+// TestTimeoutConstraint tests that a caveat for the vtxo tree expiry of
 // a macaroon is created.
 func TestTimeoutConstraint(t *testing.T) {
 	t.Parallel()

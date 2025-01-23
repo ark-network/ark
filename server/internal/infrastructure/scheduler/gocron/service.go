@@ -21,8 +21,8 @@ func (s *service) Unit() ports.TimeUnit {
 	return ports.UnixTime
 }
 
-func (s *service) AddNow(lifetime int64) int64 {
-	return time.Now().Add(time.Duration(lifetime) * time.Second).Unix()
+func (s *service) AddNow(expiry int64) int64 {
+	return time.Now().Add(time.Duration(expiry) * time.Second).Unix()
 }
 
 func (s *service) AfterNow(expiry int64) bool {

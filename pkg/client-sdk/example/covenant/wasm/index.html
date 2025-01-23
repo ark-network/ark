@@ -103,8 +103,8 @@
                 const clientType = await getClientType();
                 logMessage("Client Type: " + clientType);
 
-                const roundLifetime = await getRoundLifetime();
-                logMessage("Round Lifetime: " + roundLifetime);
+                const vtxoTreeExpiry = await getVtxoTreeExpiry();
+                logMessage("VTXO Tree Expiry: " + vtxoTreeExpiry);
 
                 const unilateralExitDelay = await getUnilateralExitDelay();
                 logMessage("Unilateral Exit Delay: " + unilateralExitDelay);
