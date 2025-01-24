@@ -219,7 +219,3 @@ func getNetwork() (common.Network, error) {
 		return common.Network{}, fmt.Errorf("unknown network %s", viper.GetString(Network))
 	}
 }
-
-func init() {
-	viper.SetDefault(VtxoTreeExpiry, defaultVtxoTreeExpiry)
-}
