@@ -629,7 +629,7 @@ func (a *covenantArkClient) GetTransactionHistory(
 
 	boardingTxs := a.getBoardingTxs(ctx)
 
-	return vtxosToTxsCovenant(config.RoundLifetime, spendableVtxos, spentVtxos, boardingTxs)
+	return vtxosToTxsCovenant(config.VtxoTreeExpiry, spendableVtxos, spentVtxos, boardingTxs)
 }
 
 func (a *covenantArkClient) getAllBoardingUtxos(ctx context.Context) ([]types.Utxo, error) {
@@ -1279,7 +1279,7 @@ func (a *covenantArkClient) validateVtxoTree(
 
 	if !utils.IsOnchainOnly(receivers) {
 		if err := tree.ValidateVtxoTree(
-			event.Tree, roundTx, a.Config.ServerPubKey, a.RoundLifetime,
+			event.Tree, roundTx, a.Config.ServerPubKey, a.VtxoTreeExpiry,
 		); err != nil {
 			return err
 		}
@@ -1727,7 +1727,9 @@ func (a *covenantArkClient) getBoardingTxs(ctx context.Context) (transactions []
 }
 
 func vtxosToTxsCovenant(
-	roundLifetime common.RelativeLocktime, spendable, spent []client.Vtxo, boardingTxs []types.Transaction,
+	vtxoTreeExpiry common.RelativeLocktime,
+	spendable, spent []client.Vtxo,
+	boardingTxs []types.Transaction,
 ) ([]types.Transaction, error) {
 	transactions := make([]types.Transaction, 0)
 	unconfirmedBoardingTxs := make([]types.Transaction, 0)
@@ -1774,7 +1776,7 @@ func vtxosToTxsCovenant(
 			},
 			Amount:    uint64(math.Abs(float64(amount))),
 			Type:      txType,
-			CreatedAt: getCreatedAtFromExpiry(roundLifetime, v.ExpiresAt),
+			CreatedAt: getCreatedAtFromExpiry(vtxoTreeExpiry, v.ExpiresAt),
 		})
 	}
 

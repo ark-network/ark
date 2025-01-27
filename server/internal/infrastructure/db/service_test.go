@@ -96,7 +96,7 @@ func TestService(t *testing.T) {
 				EventStoreType:   "badger",
 				DataStoreType:    "sqlite",
 				EventStoreConfig: []interface{}{"", nil},
-				DataStoreConfig:  []interface{}{dbDir, "file://sqlite/migration"},
+				DataStoreConfig:  []interface{}{dbDir},
 			},
 		},
 	}

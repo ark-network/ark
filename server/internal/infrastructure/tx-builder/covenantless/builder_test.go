@@ -30,7 +30,7 @@ var (
 	wallet *mockedWallet
 	pubkey *secp256k1.PublicKey
 
-	roundLifetime     = common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 1209344}
+	vtxoTreeExpiry    = common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 1209344}
 	boardingExitDelay = common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 512}
 )
 
@@ -59,7 +59,7 @@ func TestMain(m *testing.M) {
 
 func TestBuildRoundTx(t *testing.T) {
 	builder := txbuilder.NewTxBuilder(
-		wallet, common.Bitcoin, roundLifetime, boardingExitDelay,
+		wallet, common.Bitcoin, vtxoTreeExpiry, boardingExitDelay,
 	)
 
 	fixtures, err := parseRoundTxFixtures()
@@ -94,7 +94,7 @@ func TestBuildRoundTx(t *testing.T) {
 				require.Len(t, vtxoTree.Leaves(), f.ExpectedNumOfLeaves)
 
 				err = bitcointree.ValidateVtxoTree(
-					vtxoTree, roundTx, pubkey, roundLifetime,
+					vtxoTree, roundTx, pubkey, vtxoTreeExpiry,
 				)
 				require.NoError(t, err)
 			}

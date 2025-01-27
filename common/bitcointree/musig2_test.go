@@ -23,12 +23,12 @@ const (
 )
 
 var (
-	lifetime         = common.RelativeLocktime{Type: common.LocktimeTypeBlock, Value: 144}
+	vtxoTreeExpiry   = common.RelativeLocktime{Type: common.LocktimeTypeBlock, Value: 144}
 	testTxid, _      = chainhash.NewHashFromStr("49f8664acc899be91902f8ade781b7eeb9cbe22bdd9efbc36e56195de21bcd12")
 	serverPrivKey, _ = secp256k1.GeneratePrivateKey()
 	sweepScript, _   = (&tree.CSVMultisigClosure{
 		MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{serverPrivKey.PubKey()}},
-		Locktime:        lifetime,
+		Locktime:        vtxoTreeExpiry,
 	}).Script()
 	sweepRoot      = txscript.NewBaseTapLeaf(sweepScript).TapHash()
 	receiverCounts = []int{1, 2, 20, 128}
@@ -54,7 +54,7 @@ func TestBuildAndSignVtxoTree(t *testing.T) {
 				tc.receivers,
 				minRelayFee,
 				sweepRoot[:],
-				lifetime,
+				vtxoTreeExpiry,
 			)
 			require.NoError(t, err)
 

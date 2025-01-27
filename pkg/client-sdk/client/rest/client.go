@@ -64,7 +64,7 @@ func (a *restClient) GetInfo(
 		return nil, err
 	}
 
-	roundLifetime, err := strconv.Atoi(resp.Payload.RoundLifetime)
+	vtxoTreeExpiry, err := strconv.Atoi(resp.Payload.VtxoTreeExpiry)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func (a *restClient) GetInfo(
 
 	return &client.Info{
 		PubKey:                     resp.Payload.Pubkey,
-		RoundLifetime:              int64(roundLifetime),
+		VtxoTreeExpiry:             int64(vtxoTreeExpiry),
 		UnilateralExitDelay:        int64(unilateralExitDelay),
 		RoundInterval:              int64(roundInterval),
 		Network:                    resp.Payload.Network,

@@ -26,7 +26,7 @@ type Config struct {
 	NoMacaroons             bool
 	Network                 common.Network
 	LogLevel                int
-	RoundLifetime           int64
+	VtxoTreeExpiry          int64
 	UnilateralExitDelay     int64
 	BoardingExitDelay       int64
 	EsploraURL              string
@@ -57,12 +57,11 @@ var (
 	Port                = "PORT"
 	EventDbType         = "EVENT_DB_TYPE"
 	DbType              = "DB_TYPE"
-	DbMigrationPath     = "DB_MIGRATION_PATH"
 	SchedulerType       = "SCHEDULER_TYPE"
 	TxBuilderType       = "TX_BUILDER_TYPE"
 	LogLevel            = "LOG_LEVEL"
 	Network             = "NETWORK"
-	RoundLifetime       = "ROUND_LIFETIME"
+	VtxoTreeExpiry      = "VTXO_TREE_EXPIRY"
 	UnilateralExitDelay = "UNILATERAL_EXIT_DELAY"
 	BoardingExitDelay   = "BOARDING_EXIT_DELAY"
 	EsploraURL          = "ESPLORA_URL"
@@ -94,13 +93,12 @@ var (
 	DefaultPort                = 7070
 	defaultDbType              = "sqlite"
 	defaultEventDbType         = "badger"
-	defaultDbMigrationPath     = "file://internal/infrastructure/db/sqlite/migration"
 	defaultSchedulerType       = "gocron"
 	defaultTxBuilderType       = "covenantless"
 	defaultNetwork             = "bitcoin"
 	defaultEsploraURL          = "https://blockstream.info/api"
 	defaultLogLevel            = 5
-	defaultRoundLifetime       = 604672
+	defaultVtxoTreeExpiry      = 604672
 	defaultUnilateralExitDelay = 1024
 	defaultBoardingExitDelay   = 604672
 	defaultNoMacaroons         = false
@@ -119,12 +117,11 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(Datadir, defaultDatadir)
 	viper.SetDefault(Port, DefaultPort)
 	viper.SetDefault(DbType, defaultDbType)
-	viper.SetDefault(DbMigrationPath, defaultDbMigrationPath)
 	viper.SetDefault(NoTLS, defaultNoTLS)
 	viper.SetDefault(LogLevel, defaultLogLevel)
 	viper.SetDefault(Network, defaultNetwork)
 	viper.SetDefault(RoundInterval, defaultRoundInterval)
-	viper.SetDefault(RoundLifetime, defaultRoundLifetime)
+	viper.SetDefault(VtxoTreeExpiry, defaultVtxoTreeExpiry)
 	viper.SetDefault(SchedulerType, defaultSchedulerType)
 	viper.SetDefault(EventDbType, defaultEventDbType)
 	viper.SetDefault(TxBuilderType, defaultTxBuilderType)
@@ -154,14 +151,13 @@ func LoadConfig() (*Config, error) {
 		Port:                    viper.GetUint32(Port),
 		EventDbType:             viper.GetString(EventDbType),
 		DbType:                  viper.GetString(DbType),
-		DbMigrationPath:         viper.GetString(DbMigrationPath),
 		SchedulerType:           viper.GetString(SchedulerType),
 		TxBuilderType:           viper.GetString(TxBuilderType),
 		NoTLS:                   viper.GetBool(NoTLS),
 		DbDir:                   filepath.Join(viper.GetString(Datadir), "db"),
 		LogLevel:                viper.GetInt(LogLevel),
 		Network:                 net,
-		RoundLifetime:           viper.GetInt64(RoundLifetime),
+		VtxoTreeExpiry:          viper.GetInt64(VtxoTreeExpiry),
 		UnilateralExitDelay:     viper.GetInt64(UnilateralExitDelay),
 		BoardingExitDelay:       viper.GetInt64(BoardingExitDelay),
 		EsploraURL:              viper.GetString(EsploraURL),

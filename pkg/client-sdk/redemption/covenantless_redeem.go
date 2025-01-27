@@ -15,10 +15,10 @@ import (
 )
 
 type CovenantlessRedeemBranch struct {
-	vtxo     client.Vtxo
-	branch   []*psbt.Packet
-	lifetime time.Duration
-	explorer explorer.Explorer
+	vtxo           client.Vtxo
+	branch         []*psbt.Packet
+	vtxoTreeExpiry time.Duration
+	explorer       explorer.Explorer
 }
 
 func NewCovenantlessRedeemBranch(
@@ -35,12 +35,10 @@ func NewCovenantlessRedeemBranch(
 		return nil, err
 	}
 
-	lifetime, err := bitcointree.GetLifetime(ptxRoot.Inputs[0])
+	vtxoTreeExpiry, err := bitcointree.GetVtxoTreeExpiry(ptxRoot.Inputs[0])
 	if err != nil {
 		return nil, err
 	}
-
-	lifetimeDuration := time.Duration(lifetime.Seconds()) * time.Second
 
 	nodes, err := vtxoTree.Branch(vtxo.Txid)
 	if err != nil {
@@ -57,10 +55,10 @@ func NewCovenantlessRedeemBranch(
 	}
 
 	return &CovenantlessRedeemBranch{
-		vtxo:     vtxo,
-		branch:   branch,
-		lifetime: lifetimeDuration,
-		explorer: explorer,
+		vtxo:           vtxo,
+		branch:         branch,
+		vtxoTreeExpiry: time.Duration(vtxoTreeExpiry.Seconds()) * time.Second,
+		explorer:       explorer,
 	}, nil
 }
 
@@ -112,7 +110,7 @@ func (r *CovenantlessRedeemBranch) ExpiresAt() (*time.Time, error) {
 	if confirmed {
 		lastKnownBlocktime = blocktime
 	} else {
-		expirationFromNow := time.Now().Add(time.Minute).Add(r.lifetime)
+		expirationFromNow := time.Now().Add(time.Minute).Add(r.vtxoTreeExpiry)
 		return &expirationFromNow, nil
 	}
 
@@ -132,7 +130,7 @@ func (r *CovenantlessRedeemBranch) ExpiresAt() (*time.Time, error) {
 		break
 	}
 
-	t := time.Unix(lastKnownBlocktime, 0).Add(r.lifetime)
+	t := time.Unix(lastKnownBlocktime, 0).Add(r.vtxoTreeExpiry)
 	return &t, nil
 }
 

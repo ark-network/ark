@@ -15,13 +15,13 @@ import (
 
 func BuildVtxoTree(
 	asset string, serverPubkey *secp256k1.PublicKey, receivers []VtxoLeaf,
-	feeSatsPerNode uint64, roundLifetime common.RelativeLocktime,
+	feeSatsPerNode uint64, vtxoTreeExpiry common.RelativeLocktime,
 ) (
 	factoryFn TreeFactory,
 	sharedOutputScript []byte, sharedOutputAmount uint64, err error,
 ) {
 	root, err := buildTreeNodes(
-		asset, serverPubkey, receivers, feeSatsPerNode, roundLifetime,
+		asset, serverPubkey, receivers, feeSatsPerNode, vtxoTreeExpiry,
 	)
 	if err != nil {
 		return
@@ -48,13 +48,13 @@ type vtxoOutput struct {
 }
 
 type node struct {
-	sweepKey      *secp256k1.PublicKey
-	receivers     []vtxoOutput
-	left          *node
-	right         *node
-	asset         string
-	feeSats       uint64
-	roundLifetime common.RelativeLocktime
+	sweepKey       *secp256k1.PublicKey
+	receivers      []vtxoOutput
+	left           *node
+	right          *node
+	asset          string
+	feeSats        uint64
+	vtxoTreeExpiry common.RelativeLocktime
 
 	_inputTaprootKey  *secp256k1.PublicKey
 	_inputTaprootTree *taproot.IndexedElementsTapScriptTree
@@ -165,7 +165,7 @@ func (n *node) getWitnessData() (
 
 	sweepClosure := &CSVMultisigClosure{
 		MultisigClosure: MultisigClosure{PubKeys: []*secp256k1.PublicKey{n.sweepKey}},
-		Locktime:        n.roundLifetime,
+		Locktime:        n.vtxoTreeExpiry,
 	}
 
 	sweepLeaf, err := sweepClosure.Script()
@@ -381,7 +381,7 @@ func (n *node) buildVtxoTree() TreeFactory {
 
 func buildTreeNodes(
 	asset string, serverPubkey *secp256k1.PublicKey, receivers []VtxoLeaf,
-	feeSatsPerNode uint64, roundLifetime common.RelativeLocktime,
+	feeSatsPerNode uint64, vtxoTreeExpiry common.RelativeLocktime,
 ) (root *node, err error) {
 	if len(receivers) == 0 {
 		return nil, fmt.Errorf("no receivers provided")
@@ -400,11 +400,11 @@ func buildTreeNodes(
 		}
 
 		leafNode := &node{
-			sweepKey:      serverPubkey,
-			receivers:     []vtxoOutput{{pubkey, r.Amount}},
-			asset:         asset,
-			feeSats:       feeSatsPerNode,
-			roundLifetime: roundLifetime,
+			sweepKey:       serverPubkey,
+			receivers:      []vtxoOutput{{pubkey, r.Amount}},
+			asset:          asset,
+			feeSats:        feeSatsPerNode,
+			vtxoTreeExpiry: vtxoTreeExpiry,
 		}
 		nodes = append(nodes, leafNode)
 	}
@@ -435,13 +435,13 @@ func createUpperLevel(nodes []*node) ([]*node, error) {
 		left := nodes[i]
 		right := nodes[i+1]
 		branchNode := &node{
-			sweepKey:      left.sweepKey,
-			receivers:     append(left.receivers, right.receivers...),
-			left:          left,
-			right:         right,
-			asset:         left.asset,
-			feeSats:       left.feeSats,
-			roundLifetime: left.roundLifetime,
+			sweepKey:       left.sweepKey,
+			receivers:      append(left.receivers, right.receivers...),
+			left:           left,
+			right:          right,
+			asset:          left.asset,
+			feeSats:        left.feeSats,
+			vtxoTreeExpiry: left.vtxoTreeExpiry,
 		}
 		pairs = append(pairs, branchNode)
 	}

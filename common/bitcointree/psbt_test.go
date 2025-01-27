@@ -44,7 +44,7 @@ func TestPsbtCustomUnknownFields(t *testing.T) {
 		}
 	})
 
-	t.Run("lifetime", func(t *testing.T) {
+	t.Run("vtxo tree expiry", func(t *testing.T) {
 		// Create a new PSBT
 		ptx, err := psbt.New(nil, nil, 2, 0, nil)
 		require.NoError(t, err)
@@ -56,20 +56,20 @@ func TestPsbtCustomUnknownFields(t *testing.T) {
 		}}
 		ptx.Inputs = []psbt.PInput{{}}
 
-		// Add lifetime
-		lifetime := common.RelativeLocktime{
+		// Add vtxo tree expiry
+		vtxoTreeExpiry := common.RelativeLocktime{
 			Type:  common.LocktimeTypeBlock,
 			Value: 144, // 1 day worth of blocks
 		}
-		err = bitcointree.AddLifetime(0, ptx, lifetime)
+		err = bitcointree.AddVtxoTreeExpiry(0, ptx, vtxoTreeExpiry)
 		require.NoError(t, err)
 
-		// Get lifetime back and verify
-		retrievedLifetime, err := bitcointree.GetLifetime(ptx.Inputs[0])
+		// Get vtxo tree expiry back and verify
+		retrievedVtxoTreeExpiry, err := bitcointree.GetVtxoTreeExpiry(ptx.Inputs[0])
 		require.NoError(t, err)
-		require.NotNil(t, retrievedLifetime)
-		require.Equal(t, lifetime.Type, retrievedLifetime.Type)
-		require.Equal(t, lifetime.Value, retrievedLifetime.Value)
+		require.NotNil(t, retrievedVtxoTreeExpiry)
+		require.Equal(t, vtxoTreeExpiry.Type, retrievedVtxoTreeExpiry.Type)
+		require.Equal(t, vtxoTreeExpiry.Value, retrievedVtxoTreeExpiry.Value)
 	})
 
 	t.Run("cosigner keys", func(t *testing.T) {

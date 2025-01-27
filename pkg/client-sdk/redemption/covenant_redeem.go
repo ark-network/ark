@@ -15,12 +15,12 @@ import (
 )
 
 type CovenantRedeemBranch struct {
-	vtxo         client.Vtxo
-	branch       []*psetv2.Pset
-	internalKey  *secp256k1.PublicKey
-	sweepClosure *taproot.TapElementsLeaf
-	lifetime     time.Duration
-	explorer     explorer.Explorer
+	vtxo           client.Vtxo
+	branch         []*psetv2.Pset
+	internalKey    *secp256k1.PublicKey
+	sweepClosure   *taproot.TapElementsLeaf
+	vtxoTreeExpiry time.Duration
+	explorer       explorer.Explorer
 }
 
 func NewCovenantRedeemBranch(
@@ -32,7 +32,7 @@ func NewCovenantRedeemBranch(
 		return nil, err
 	}
 
-	lifetime, err := time.ParseDuration(fmt.Sprintf("%ds", locktime.Seconds()))
+	vtxoTreeExpiry, err := time.ParseDuration(fmt.Sprintf("%ds", locktime.Seconds()))
 	if err != nil {
 		return nil, err
 	}
@@ -58,12 +58,12 @@ func NewCovenantRedeemBranch(
 	}
 
 	return &CovenantRedeemBranch{
-		vtxo:         vtxo,
-		branch:       branch,
-		internalKey:  internalKey,
-		sweepClosure: sweepClosure,
-		lifetime:     lifetime,
-		explorer:     explorer,
+		vtxo:           vtxo,
+		branch:         branch,
+		internalKey:    internalKey,
+		sweepClosure:   sweepClosure,
+		vtxoTreeExpiry: vtxoTreeExpiry,
+		explorer:       explorer,
 	}, nil
 }
 
@@ -126,7 +126,7 @@ func (r *CovenantRedeemBranch) ExpiresAt() (*time.Time, error) {
 	if confirmed {
 		lastKnownBlocktime = blocktime
 	} else {
-		expirationFromNow := time.Now().Add(time.Minute).Add(r.lifetime)
+		expirationFromNow := time.Now().Add(time.Minute).Add(r.vtxoTreeExpiry)
 		return &expirationFromNow, nil
 	}
 
@@ -147,7 +147,7 @@ func (r *CovenantRedeemBranch) ExpiresAt() (*time.Time, error) {
 		break
 	}
 
-	t := time.Unix(lastKnownBlocktime, 0).Add(r.lifetime)
+	t := time.Unix(lastKnownBlocktime, 0).Add(r.vtxoTreeExpiry)
 	return &t, nil
 }
 

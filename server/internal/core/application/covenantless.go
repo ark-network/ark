@@ -33,7 +33,7 @@ const marketHourDelta = 5 * time.Minute
 type covenantlessService struct {
 	network             common.Network
 	pubkey              *secp256k1.PublicKey
-	roundLifetime       common.RelativeLocktime
+	vtxoTreeExpiry      common.RelativeLocktime
 	roundInterval       int64
 	unilateralExitDelay common.RelativeLocktime
 	boardingExitDelay   common.RelativeLocktime
@@ -65,7 +65,7 @@ type covenantlessService struct {
 func NewCovenantlessService(
 	network common.Network,
 	roundInterval int64,
-	roundLifetime, unilateralExitDelay, boardingExitDelay common.RelativeLocktime,
+	vtxoTreeExpiry, unilateralExitDelay, boardingExitDelay common.RelativeLocktime,
 	nostrDefaultRelays []string,
 	walletSvc ports.WalletService, repoManager ports.RepoManager,
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
@@ -100,7 +100,7 @@ func NewCovenantlessService(
 	svc := &covenantlessService{
 		network:             network,
 		pubkey:              pubkey,
-		roundLifetime:       roundLifetime,
+		vtxoTreeExpiry:      vtxoTreeExpiry,
 		roundInterval:       roundInterval,
 		unilateralExitDelay: unilateralExitDelay,
 		wallet:              walletSvc,
@@ -823,7 +823,7 @@ func (s *covenantlessService) GetInfo(ctx context.Context) (*ServiceInfo, error)
 
 	return &ServiceInfo{
 		PubKey:              pubkey,
-		RoundLifetime:       int64(s.roundLifetime.Value),
+		VtxoTreeExpiry:      int64(s.vtxoTreeExpiry.Value),
 		UnilateralExitDelay: int64(s.unilateralExitDelay.Value),
 		RoundInterval:       s.roundInterval,
 		Network:             s.network.Name,
@@ -1115,7 +1115,7 @@ func (s *covenantlessService) startFinalization() {
 
 		sweepClosure := tree.CSVMultisigClosure{
 			MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{s.pubkey}},
-			Locktime:        s.roundLifetime,
+			Locktime:        s.vtxoTreeExpiry,
 		}
 
 		sweepScript, err := sweepClosure.Script()
@@ -1584,7 +1584,7 @@ func (s *covenantlessService) scheduleSweepVtxosForRound(round *domain.Round) {
 		return
 	}
 
-	expirationTimestamp := s.sweeper.scheduler.AddNow(int64(s.roundLifetime.Value))
+	expirationTimestamp := s.sweeper.scheduler.AddNow(int64(s.vtxoTreeExpiry.Value))
 
 	if err := s.sweeper.schedule(expirationTimestamp, round.Txid, round.VtxoTree); err != nil {
 		log.WithError(err).Warn("failed to schedule sweep tx")

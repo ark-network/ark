@@ -27,16 +27,16 @@ import (
 type txBuilder struct {
 	wallet            ports.WalletService
 	net               common.Network
-	roundLifetime     common.RelativeLocktime
+	vtxoTreeExpiry    common.RelativeLocktime
 	boardingExitDelay common.RelativeLocktime
 }
 
 func NewTxBuilder(
 	wallet ports.WalletService,
 	net common.Network,
-	roundLifetime, boardingExitDelay common.RelativeLocktime,
+	vtxoTreeExpiry, boardingExitDelay common.RelativeLocktime,
 ) ports.TxBuilder {
-	return &txBuilder{wallet, net, roundLifetime, boardingExitDelay}
+	return &txBuilder{wallet, net, vtxoTreeExpiry, boardingExitDelay}
 }
 
 func (b *txBuilder) GetTxID(tx string) (string, error) {
@@ -574,7 +574,7 @@ func (b *txBuilder) BuildRoundTx(
 		MultisigClosure: tree.MultisigClosure{
 			PubKeys: []*secp256k1.PublicKey{serverPubkey},
 		},
-		Locktime: b.roundLifetime,
+		Locktime: b.vtxoTreeExpiry,
 	}).Script()
 	if err != nil {
 		return
@@ -617,7 +617,7 @@ func (b *txBuilder) BuildRoundTx(
 		}
 
 		vtxoTree, err = bitcointree.BuildVtxoTree(
-			initialOutpoint, receivers, feeAmount, root[:], b.roundLifetime,
+			initialOutpoint, receivers, feeAmount, root[:], b.vtxoTreeExpiry,
 		)
 		if err != nil {
 			return "", nil, "", nil, err
@@ -659,7 +659,7 @@ func (b *txBuilder) BuildRoundTx(
 	return roundTx, vtxoTree, nextConnectorAddress, connectors, nil
 }
 
-func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime *common.RelativeLocktime, sweepInput ports.SweepInput, err error) {
+func (b *txBuilder) GetSweepInput(node tree.Node) (vtxoTreeExpiry *common.RelativeLocktime, sweepInput ports.SweepInput, err error) {
 	partialTx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
 	if err != nil {
 		return nil, nil, err
@@ -673,7 +673,7 @@ func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime *common.RelativeLock
 	txid := input.PreviousOutPoint.Hash
 	index := input.PreviousOutPoint.Index
 
-	sweepLeaf, internalKey, lifetime, err := b.extractSweepLeaf(partialTx.Inputs[0])
+	sweepLeaf, internalKey, vtxoTreeExpiry, err := b.extractSweepLeaf(partialTx.Inputs[0])
 	if err != nil {
 		return nil, nil, err
 	}
@@ -698,7 +698,7 @@ func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime *common.RelativeLock
 		amount:         tx.TxOut[index].Value,
 	}
 
-	return lifetime, sweepInput, nil
+	return vtxoTreeExpiry, sweepInput, nil
 }
 
 func (b *txBuilder) FindLeaves(vtxoTree tree.VtxoTree, fromtxid string, vout uint32) ([]tree.Node, error) {
@@ -1274,7 +1274,7 @@ func castToOutpoints(inputs []ports.TxInput) []ports.TxOutpoint {
 	return outpoints
 }
 
-func (b *txBuilder) extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.TaprootTapLeafScript, internalKey *secp256k1.PublicKey, lifetime *common.RelativeLocktime, err error) {
+func (b *txBuilder) extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.TaprootTapLeafScript, internalKey *secp256k1.PublicKey, vtxoTreeExpiry *common.RelativeLocktime, err error) {
 	// this if case is here to handle previous version of the tree
 	if len(input.TaprootLeafScript) > 0 {
 		for _, leaf := range input.TaprootLeafScript {
@@ -1284,9 +1284,9 @@ func (b *txBuilder) extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.Taproot
 				return nil, nil, nil, err
 			}
 
-			if valid && (lifetime == nil || closure.Locktime.LessThan(*lifetime)) {
+			if valid && (vtxoTreeExpiry == nil || closure.Locktime.LessThan(*vtxoTreeExpiry)) {
 				sweepLeaf = leaf
-				lifetime = &closure.Locktime
+				vtxoTreeExpiry = &closure.Locktime
 			}
 		}
 
@@ -1298,7 +1298,7 @@ func (b *txBuilder) extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.Taproot
 		if sweepLeaf == nil {
 			return nil, nil, nil, fmt.Errorf("sweep leaf not found")
 		}
-		return sweepLeaf, internalKey, lifetime, nil
+		return sweepLeaf, internalKey, vtxoTreeExpiry, nil
 	}
 
 	serverPubKey, err := b.wallet.GetPubkey(context.Background())
@@ -1315,13 +1315,13 @@ func (b *txBuilder) extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.Taproot
 		return nil, nil, nil, fmt.Errorf("no cosigner pubkeys found")
 	}
 
-	lifetime, err = bitcointree.GetLifetime(input)
+	vtxoTreeExpiry, err = bitcointree.GetVtxoTreeExpiry(input)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
 	sweepClosure := &tree.CSVMultisigClosure{
-		Locktime: *lifetime,
+		Locktime: *vtxoTreeExpiry,
 		MultisigClosure: tree.MultisigClosure{
 			PubKeys: []*secp256k1.PublicKey{serverPubKey},
 		},
@@ -1354,7 +1354,7 @@ func (b *txBuilder) extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.Taproot
 		LeafVersion:  txscript.BaseLeafVersion,
 	}
 
-	return sweepLeaf, internalKey, lifetime, nil
+	return sweepLeaf, internalKey, vtxoTreeExpiry, nil
 }
 
 type sweepBitcoinInput struct {

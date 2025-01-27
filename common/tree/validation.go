@@ -64,7 +64,7 @@ func UnspendableKey() *secp256k1.PublicKey {
 
 // ValidateVtxoTree checks if the given vtxo tree is valid
 // roundTxid & roundTxIndex & roundTxAmount are used to validate the root input outpoint
-// serverPubkey & roundLifetime are used to validate the sweep tapscript leaves
+// serverPubkey & vtxoTreeExpiry are used to validate the sweep tapscript leaves
 // besides that, the function validates:
 // - the number of nodes
 // - the number of leaves
@@ -73,7 +73,7 @@ func UnspendableKey() *secp256k1.PublicKey {
 // - input and output amounts
 func ValidateVtxoTree(
 	tree VtxoTree, roundTx string, serverPubkey *secp256k1.PublicKey,
-	roundLifetime common.RelativeLocktime,
+	vtxoTreeExpiry common.RelativeLocktime,
 ) error {
 	roundTransaction, err := psetv2.NewPsetFromBase64(roundTx)
 	if err != nil {
@@ -136,7 +136,7 @@ func ValidateVtxoTree(
 	for _, level := range tree {
 		for _, node := range level {
 			if err := validateNodeTransaction(
-				node, tree, UnspendableKey(), serverPubkey, roundLifetime,
+				node, tree, UnspendableKey(), serverPubkey, vtxoTreeExpiry,
 			); err != nil {
 				return err
 			}
@@ -149,7 +149,7 @@ func ValidateVtxoTree(
 func validateNodeTransaction(
 	node Node, tree VtxoTree,
 	expectedInternalKey, expectedServerPubkey *secp256k1.PublicKey,
-	expectedLifetime common.RelativeLocktime,
+	expectedVtxoTreeExpiry common.RelativeLocktime,
 ) error {
 	if node.Tx == "" {
 		return ErrNodeTxEmpty
@@ -244,7 +244,7 @@ func validateNodeTransaction(
 					schnorr.SerializePubKey(expectedServerPubkey),
 				)
 
-				isSweepDelay := c.Locktime == expectedLifetime
+				isSweepDelay := c.Locktime == expectedVtxoTreeExpiry
 
 				if isServer && !isSweepDelay {
 					return ErrInvalidSweepSequence

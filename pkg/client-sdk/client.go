@@ -152,9 +152,9 @@ func (a *arkClient) initWithWallet(
 		return fmt.Errorf("failed to parse server pubkey: %s", err)
 	}
 
-	lifetimeType := common.LocktimeTypeBlock
-	if info.RoundLifetime >= 512 {
-		lifetimeType = common.LocktimeTypeSecond
+	vtxoTreeExpiryType := common.LocktimeTypeBlock
+	if info.VtxoTreeExpiry >= 512 {
+		vtxoTreeExpiryType = common.LocktimeTypeSecond
 	}
 
 	unilateralExitDelayType := common.LocktimeTypeBlock
@@ -168,7 +168,7 @@ func (a *arkClient) initWithWallet(
 		WalletType:                 args.Wallet.GetType(),
 		ClientType:                 args.ClientType,
 		Network:                    network,
-		RoundLifetime:              common.RelativeLocktime{Type: lifetimeType, Value: uint32(info.RoundLifetime)},
+		VtxoTreeExpiry:             common.RelativeLocktime{Type: vtxoTreeExpiryType, Value: uint32(info.VtxoTreeExpiry)},
 		RoundInterval:              info.RoundInterval,
 		UnilateralExitDelay:        common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
 		Dust:                       info.Dust,
@@ -229,9 +229,9 @@ func (a *arkClient) init(
 		return fmt.Errorf("failed to parse server pubkey: %s", err)
 	}
 
-	lifetimeType := common.LocktimeTypeBlock
-	if info.RoundLifetime >= 512 {
-		lifetimeType = common.LocktimeTypeSecond
+	vtxoTreeExpiryType := common.LocktimeTypeBlock
+	if info.VtxoTreeExpiry >= 512 {
+		vtxoTreeExpiryType = common.LocktimeTypeSecond
 	}
 
 	unilateralExitDelayType := common.LocktimeTypeBlock
@@ -245,7 +245,7 @@ func (a *arkClient) init(
 		WalletType:                 args.WalletType,
 		ClientType:                 args.ClientType,
 		Network:                    network,
-		RoundLifetime:              common.RelativeLocktime{Type: lifetimeType, Value: uint32(info.RoundLifetime)},
+		VtxoTreeExpiry:             common.RelativeLocktime{Type: vtxoTreeExpiryType, Value: uint32(info.VtxoTreeExpiry)},
 		RoundInterval:              info.RoundInterval,
 		UnilateralExitDelay:        common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
 		Dust:                       info.Dust,
@@ -373,8 +373,8 @@ func getWalletStore(storeType, datadir string) (walletstore.WalletStore, error) 
 	}
 }
 
-func getCreatedAtFromExpiry(roundLifetime common.RelativeLocktime, expiry time.Time) time.Time {
-	return expiry.Add(-time.Duration(roundLifetime.Seconds()) * time.Second)
+func getCreatedAtFromExpiry(vtxoTreeExpiry common.RelativeLocktime, expiry time.Time) time.Time {
+	return expiry.Add(-time.Duration(vtxoTreeExpiry.Seconds()) * time.Second)
 }
 
 func filterByOutpoints(vtxos []client.Vtxo, outpoints []client.Outpoint) []client.Vtxo {
