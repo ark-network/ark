@@ -32,7 +32,7 @@ services:
       - ARK_NETWORK=liquidregtest
       - ARK_LOG_LEVEL=5
       - ARK_ESPLORA_URL=http://chopsticks-liquid:3000
-      - ARK_ROUND_LIFETIME=20
+      - ARK_VTXO_TREE_EXPIRY=20
       - ARK_SCHEDULER_TYPE=block
       - ARK_DB_TYPE=sqlite
       - ARK_TX_BUILDER_TYPE=covenant

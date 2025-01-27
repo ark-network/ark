@@ -29,17 +29,17 @@ import (
 type txBuilder struct {
 	wallet            ports.WalletService
 	net               common.Network
-	roundLifetime     common.RelativeLocktime
+	vtxoTreeExpiry    common.RelativeLocktime
 	boardingExitDelay common.RelativeLocktime
 }
 
 func NewTxBuilder(
 	wallet ports.WalletService,
 	net common.Network,
-	roundLifetime common.RelativeLocktime,
+	vtxoTreeExpiry common.RelativeLocktime,
 	boardingExitDelay common.RelativeLocktime,
 ) ports.TxBuilder {
-	return &txBuilder{wallet, net, roundLifetime, boardingExitDelay}
+	return &txBuilder{wallet, net, vtxoTreeExpiry, boardingExitDelay}
 }
 
 func (b *txBuilder) GetTxID(tx string) (string, error) {
@@ -396,7 +396,7 @@ func (b *txBuilder) BuildRoundTx(
 		}
 
 		treeFactoryFn, sharedOutputScript, sharedOutputAmount, err = tree.BuildVtxoTree(
-			b.onchainNetwork().AssetID, serverPubkey, vtxosLeaves, feeSatsPerNode, b.roundLifetime,
+			b.onchainNetwork().AssetID, serverPubkey, vtxosLeaves, feeSatsPerNode, b.vtxoTreeExpiry,
 		)
 		if err != nil {
 			return "", nil, "", nil, err
@@ -466,7 +466,7 @@ func (b *txBuilder) BuildRoundTx(
 	return
 }
 
-func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime *common.RelativeLocktime, sweepInput ports.SweepInput, err error) {
+func (b *txBuilder) GetSweepInput(node tree.Node) (vtxoTreeExpiry *common.RelativeLocktime, sweepInput ports.SweepInput, err error) {
 	pset, err := psetv2.NewPsetFromBase64(node.Tx)
 	if err != nil {
 		return nil, nil, err
@@ -481,7 +481,7 @@ func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime *common.RelativeLock
 	txid := chainhash.Hash(input.PreviousTxid).String()
 	index := input.PreviousTxIndex
 
-	sweepLeaf, lifetime, err := extractSweepLeaf(input)
+	sweepLeaf, vtxoTreeExpiry, err := extractSweepLeaf(input)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -510,7 +510,7 @@ func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime *common.RelativeLock
 		amount:    inputValue,
 	}
 
-	return lifetime, sweepInput, nil
+	return vtxoTreeExpiry, sweepInput, nil
 }
 func (b *txBuilder) VerifyTapscriptPartialSigs(tx string) (bool, error) {
 	pset, err := psetv2.NewPsetFromBase64(tx)
@@ -1205,16 +1205,16 @@ func (b *txBuilder) onchainNetwork() *network.Network {
 	}
 }
 
-func extractSweepLeaf(input psetv2.Input) (sweepLeaf *psetv2.TapLeafScript, lifetime *common.RelativeLocktime, err error) {
+func extractSweepLeaf(input psetv2.Input) (sweepLeaf *psetv2.TapLeafScript, vtxoTreeExpiry *common.RelativeLocktime, err error) {
 	for _, leaf := range input.TapLeafScript {
 		closure := &tree.CSVMultisigClosure{}
 		valid, err := closure.Decode(leaf.Script)
 		if err != nil {
 			return nil, nil, err
 		}
-		if valid && (lifetime == nil || lifetime.LessThan(closure.Locktime)) {
+		if valid && (vtxoTreeExpiry == nil || vtxoTreeExpiry.LessThan(closure.Locktime)) {
 			sweepLeaf = &leaf
-			lifetime = &closure.Locktime
+			vtxoTreeExpiry = &closure.Locktime
 		}
 	}
 

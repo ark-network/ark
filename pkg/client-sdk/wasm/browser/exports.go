@@ -47,7 +47,7 @@ func init() {
 	js.Global().Set("getWalletType", GetWalletTypeWrapper())
 	js.Global().Set("getClientType", GetClientTypeWrapper())
 	js.Global().Set("getNetwork", GetNetworkWrapper())
-	js.Global().Set("getRoundLifetime", GetRoundLifetimeWrapper())
+	js.Global().Set("getVtxoTreeExpiry", GetVtxoTreeExpiryWrapper())
 	js.Global().Set("getUnilateralExitDelay", GetUnilateralExitDelayWrapper())
 	js.Global().Set("getDust", GetDustWrapper())
 	js.Global().Set("getVersion", GetVersionWrapper())

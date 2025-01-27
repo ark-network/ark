@@ -39,14 +39,14 @@ type V1GetInfoResponse struct {
 	// round interval
 	RoundInterval string `json:"roundInterval,omitempty"`
 
-	// round lifetime
-	RoundLifetime string `json:"roundLifetime,omitempty"`
-
 	// unilateral exit delay
 	UnilateralExitDelay string `json:"unilateralExitDelay,omitempty"`
 
 	// vtxo descriptor templates
 	VtxoDescriptorTemplates []string `json:"vtxoDescriptorTemplates"`
+
+	// vtxo tree expiry
+	VtxoTreeExpiry string `json:"vtxoTreeExpiry,omitempty"`
 }
 
 // Validate validates this v1 get info response

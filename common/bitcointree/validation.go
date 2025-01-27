@@ -64,7 +64,7 @@ func UnspendableKey() *secp256k1.PublicKey {
 
 // ValidateVtxoTree checks if the given vtxo tree is valid
 // roundTxid & roundTxIndex & roundTxAmount are used to validate the root input outpoint
-// serverPubkey & roundLifetime are used to validate the sweep tapscript leaves
+// serverPubkey & vtxoTreeExpiry are used to validate the sweep tapscript leaves
 // besides that, the function validates:
 // - the number of nodes
 // - the number of leaves
@@ -72,7 +72,7 @@ func UnspendableKey() *secp256k1.PublicKey {
 // - every control block and taproot output scripts
 // - input and output amounts
 func ValidateVtxoTree(
-	vtxoTree tree.VtxoTree, roundTx string, serverPubkey *secp256k1.PublicKey, roundLifetime common.RelativeLocktime,
+	vtxoTree tree.VtxoTree, roundTx string, serverPubkey *secp256k1.PublicKey, vtxoTreeExpiry common.RelativeLocktime,
 ) error {
 	roundTransaction, err := psbt.NewFromRawBytes(strings.NewReader(roundTx), true)
 	if err != nil {
@@ -126,7 +126,7 @@ func ValidateVtxoTree(
 
 	sweepClosure := &tree.CSVMultisigClosure{
 		MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{serverPubkey}},
-		Locktime:        roundLifetime,
+		Locktime:        vtxoTreeExpiry,
 	}
 
 	sweepScript, err := sweepClosure.Script()

@@ -63,9 +63,9 @@ func mainAction(_ *cli.Context) error {
 		TLSExtraDomains: cfg.TLSExtraDomains,
 	}
 
-	lifetimeType, unilateralExitType, boardingExitType := common.LocktimeTypeBlock, common.LocktimeTypeBlock, common.LocktimeTypeBlock
-	if cfg.RoundLifetime >= 512 {
-		lifetimeType = common.LocktimeTypeSecond
+	vtxoTreeExpiryType, unilateralExitType, boardingExitType := common.LocktimeTypeBlock, common.LocktimeTypeBlock, common.LocktimeTypeBlock
+	if cfg.VtxoTreeExpiry >= 512 {
+		vtxoTreeExpiryType = common.LocktimeTypeSecond
 	}
 	if cfg.UnilateralExitDelay >= 512 {
 		unilateralExitType = common.LocktimeTypeSecond
@@ -84,7 +84,7 @@ func mainAction(_ *cli.Context) error {
 		SchedulerType:           cfg.SchedulerType,
 		TxBuilderType:           cfg.TxBuilderType,
 		WalletAddr:              cfg.WalletAddr,
-		RoundLifetime:           common.RelativeLocktime{Type: lifetimeType, Value: uint32(cfg.RoundLifetime)},
+		VtxoTreeExpiry:          common.RelativeLocktime{Type: vtxoTreeExpiryType, Value: uint32(cfg.VtxoTreeExpiry)},
 		UnilateralExitDelay:     common.RelativeLocktime{Type: unilateralExitType, Value: uint32(cfg.UnilateralExitDelay)},
 		EsploraURL:              cfg.EsploraURL,
 		NeutrinoPeer:            cfg.NeutrinoPeer,

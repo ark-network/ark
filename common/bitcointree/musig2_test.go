@@ -21,7 +21,7 @@ const (
 	exitDelay   = 512
 )
 
-var lifetime = common.RelativeLocktime{Type: common.LocktimeTypeBlock, Value: 144}
+var vtxoTreeExpiry = common.RelativeLocktime{Type: common.LocktimeTypeBlock, Value: 144}
 
 var testTxid, _ = chainhash.NewHashFromStr("49f8664acc899be91902f8ade781b7eeb9cbe22bdd9efbc36e56195de21bcd12")
 
@@ -46,7 +46,7 @@ func TestRoundTripSignTree(t *testing.T) {
 			server.PubKey(),
 			castReceivers(f.Receivers),
 			minRelayFee,
-			lifetime,
+			vtxoTreeExpiry,
 		)
 		require.NoError(t, err)
 
@@ -59,13 +59,13 @@ func TestRoundTripSignTree(t *testing.T) {
 			server.PubKey(),
 			castReceivers(f.Receivers),
 			minRelayFee,
-			lifetime,
+			vtxoTreeExpiry,
 		)
 		require.NoError(t, err)
 
 		sweepClosure := &tree.CSVMultisigClosure{
 			MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{server.PubKey()}},
-			Locktime:        lifetime,
+			Locktime:        vtxoTreeExpiry,
 		}
 
 		sweepScript, err := sweepClosure.Script()
