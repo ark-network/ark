@@ -31,7 +31,7 @@ type Service interface {
 		ctx context.Context, address string,
 	) (spendableVtxos, spentVtxos []domain.Vtxo, err error)
 	GetInfo(ctx context.Context) (*ServiceInfo, error)
-	SubmitRedeemTx(ctx context.Context, redeemTx string) (string, error)
+	SubmitRedeemTx(ctx context.Context, redeemTx string) (signedRedeemTx, redeemTxid string, err error)
 	GetBoardingAddress(
 		ctx context.Context, userPubkey *secp256k1.PublicKey,
 	) (address string, scripts []string, err error)
