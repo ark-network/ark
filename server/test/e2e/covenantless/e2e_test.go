@@ -395,11 +395,28 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		bobAddrStr, err := bobAddr.Encode()
 		require.NoError(t, err)
 
-		redeemTx, err := alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddrStr, sendAmount)})
+		txid, err := alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddrStr, sendAmount)})
 		require.NoError(t, err)
+		require.NotEmpty(t, txid)
+
+		time.Sleep(2 * time.Second)
+
+		spendable, _, err := alice.ListVtxos(ctx)
+		require.NoError(t, err)
+		require.NotEmpty(t, spendable)
+
+		var redeemTx string
+		for _, vtxo := range spendable {
+			if vtxo.Txid == txid {
+				redeemTx = vtxo.RedeemTx
+				break
+			}
+		}
+		require.NotEmpty(t, redeemTx)
 
 		redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
 		require.NoError(t, err)
+		require.NotNil(t, redeemPtx)
 
 		var bobOutput *wire.TxOut
 		var bobOutputIndex uint32
@@ -411,8 +428,6 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 			}
 		}
 		require.NotNil(t, bobOutput)
-
-		time.Sleep(2 * time.Second)
 
 		alicePkScript, err := common.P2TRScript(aliceAddr.VtxoTapKey)
 		require.NoError(t, err)
@@ -452,7 +467,7 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 			time.Sleep(1 * time.Second)
 		}
 
-		_, txid, err := grpcTransportClient.SubmitRedeemTx(ctx, signedTx)
+		_, bobTxid, err := grpcTransportClient.SubmitRedeemTx(ctx, signedTx)
 		require.NoError(t, err)
 
 		aliceVtxos, _, err := alice.ListVtxos(ctx)
@@ -462,7 +477,7 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		found := false
 
 		for _, v := range aliceVtxos {
-			if v.Txid == txid && v.VOut == 0 {
+			if v.Txid == bobTxid && v.VOut == 0 {
 				found = true
 				break
 			}
@@ -723,8 +738,24 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 	bobAddrStr, err := bobAddr.Encode()
 	require.NoError(t, err)
 
-	redeemTx, err := alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddrStr, sendAmount)})
+	txid, err := alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddrStr, sendAmount)})
 	require.NoError(t, err)
+	require.NotEmpty(t, txid)
+
+	time.Sleep(2 * time.Second)
+
+	spendable, _, err := alice.ListVtxos(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, spendable)
+
+	var redeemTx string
+	for _, vtxo := range spendable {
+		if vtxo.Txid == txid {
+			redeemTx = vtxo.RedeemTx
+			break
+		}
+	}
+	require.NotEmpty(t, redeemTx)
 
 	redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
 	require.NoError(t, err)
@@ -739,8 +770,6 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 		}
 	}
 	require.NotNil(t, bobOutput)
-
-	time.Sleep(2 * time.Second)
 
 	alicePkScript, err := common.P2TRScript(aliceAddr.VtxoTapKey)
 	require.NoError(t, err)
@@ -890,8 +919,24 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 	bobAddrStr, err := bobAddr.Encode()
 	require.NoError(t, err)
 
-	redeemTx, err := alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddrStr, sendAmount)})
+	txid, err := alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddrStr, sendAmount)})
 	require.NoError(t, err)
+	require.NotEmpty(t, txid)
+
+	time.Sleep(2 * time.Second)
+
+	spendable, _, err := alice.ListVtxos(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, spendable)
+
+	var redeemTx string
+	for _, vtxo := range spendable {
+		if vtxo.Txid == txid {
+			redeemTx = vtxo.RedeemTx
+			break
+		}
+	}
+	require.NotEmpty(t, redeemTx)
 
 	redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
 	require.NoError(t, err)
@@ -906,8 +951,6 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 		}
 	}
 	require.NotNil(t, bobOutput)
-
-	time.Sleep(2 * time.Second)
 
 	alicePkScript, err := common.P2TRScript(aliceAddr.VtxoTapKey)
 	require.NoError(t, err)
