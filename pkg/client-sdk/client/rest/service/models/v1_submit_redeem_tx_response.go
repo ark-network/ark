@@ -19,6 +19,9 @@ type V1SubmitRedeemTxResponse struct {
 
 	// signed redeem tx
 	SignedRedeemTx string `json:"signedRedeemTx,omitempty"`
+
+	// txid
+	Txid string `json:"txid,omitempty"`
 }
 
 // Validate validates this v1 submit redeem tx response

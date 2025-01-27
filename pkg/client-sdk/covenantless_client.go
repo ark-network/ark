@@ -822,12 +822,12 @@ func (a *covenantlessArkClient) SendOffChain(
 		return "", err
 	}
 
-	signedRedeemTx, err = a.client.SubmitRedeemTx(ctx, signedRedeemTx)
+	_, redeemTxid, err := a.client.SubmitRedeemTx(ctx, signedRedeemTx)
 	if err != nil {
 		return "", err
 	}
 
-	return signedRedeemTx, nil
+	return redeemTxid, nil
 }
 
 func (a *covenantlessArkClient) RedeemNotes(ctx context.Context, notes []string) (string, error) {

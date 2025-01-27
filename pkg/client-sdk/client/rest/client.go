@@ -401,7 +401,7 @@ func (a *restClient) Ping(
 
 func (a *restClient) SubmitRedeemTx(
 	ctx context.Context, redeemTx string,
-) (string, error) {
+) (string, string, error) {
 	req := &models.V1SubmitRedeemTxRequest{
 		RedeemTx: redeemTx,
 	}
@@ -409,9 +409,9 @@ func (a *restClient) SubmitRedeemTx(
 		ark_service.NewArkServiceSubmitRedeemTxParams().WithBody(req),
 	)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	return resp.Payload.SignedRedeemTx, nil
+	return resp.Payload.SignedRedeemTx, resp.Payload.Txid, nil
 }
 
 func (a *restClient) GetRound(
