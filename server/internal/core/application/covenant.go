@@ -32,7 +32,7 @@ type covenantService struct {
 	network             common.Network
 	pubkey              *secp256k1.PublicKey
 	roundInterval       int64
-	roundLifetime       common.RelativeLocktime
+	vtxoTreeExpiry      common.RelativeLocktime
 	unilateralExitDelay common.RelativeLocktime
 	boardingExitDelay   common.RelativeLocktime
 
@@ -58,7 +58,7 @@ type covenantService struct {
 func NewCovenantService(
 	network common.Network,
 	roundInterval int64,
-	roundLifetime, unilateralExitDelay, boardingExitDelay common.RelativeLocktime,
+	vtxoTreeExpiry, unilateralExitDelay, boardingExitDelay common.RelativeLocktime,
 	nostrDefaultRelays []string,
 	walletSvc ports.WalletService, repoManager ports.RepoManager,
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
@@ -86,7 +86,7 @@ func NewCovenantService(
 	svc := &covenantService{
 		network:             network,
 		pubkey:              pubkey,
-		roundLifetime:       roundLifetime,
+		vtxoTreeExpiry:      vtxoTreeExpiry,
 		roundInterval:       roundInterval,
 		unilateralExitDelay: unilateralExitDelay,
 		boardingExitDelay:   boardingExitDelay,
@@ -458,7 +458,7 @@ func (s *covenantService) GetInfo(ctx context.Context) (*ServiceInfo, error) {
 
 	return &ServiceInfo{
 		PubKey:              pubkey,
-		RoundLifetime:       int64(s.roundLifetime.Value),
+		VtxoTreeExpiry:      int64(s.vtxoTreeExpiry.Value),
 		UnilateralExitDelay: int64(s.unilateralExitDelay.Value),
 		RoundInterval:       s.roundInterval,
 		Network:             s.network.Name,
@@ -1004,7 +1004,7 @@ func (s *covenantService) scheduleSweepVtxosForRound(round *domain.Round) {
 		return
 	}
 
-	expirationTime := s.sweeper.scheduler.AddNow(int64(s.roundLifetime.Value))
+	expirationTime := s.sweeper.scheduler.AddNow(int64(s.vtxoTreeExpiry.Value))
 
 	if err := s.sweeper.schedule(
 		expirationTime, round.Txid, round.VtxoTree,

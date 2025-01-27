@@ -1703,7 +1703,7 @@ func (a *covenantlessArkClient) handleRoundSigningStarted(
 ) (signerSession bitcointree.SignerSession, err error) {
 	sweepClosure := tree.CSVMultisigClosure{
 		MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{a.ServerPubKey}},
-		Locktime:        a.RoundLifetime,
+		Locktime:        a.VtxoTreeExpiry,
 	}
 
 	script, err := sweepClosure.Script()
@@ -1878,7 +1878,7 @@ func (a *covenantlessArkClient) validateVtxoTree(
 
 	if !utils.IsOnchainOnly(receivers) {
 		if err := bitcointree.ValidateVtxoTree(
-			event.Tree, roundTx, a.Config.ServerPubKey, a.RoundLifetime,
+			event.Tree, roundTx, a.Config.ServerPubKey, a.VtxoTreeExpiry,
 		); err != nil {
 			return err
 		}

@@ -60,7 +60,7 @@ type TransportClient interface {
 
 type Info struct {
 	PubKey                     string
-	RoundLifetime              int64
+	VtxoTreeExpiry             int64
 	UnilateralExitDelay        int64
 	RoundInterval              int64
 	Network                    string

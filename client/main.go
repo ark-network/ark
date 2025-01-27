@@ -263,7 +263,7 @@ func config(ctx *cli.Context) error {
 		"wallet_type":                  cfgData.WalletType,
 		"client_tyep":                  cfgData.ClientType,
 		"network":                      cfgData.Network.Name,
-		"round_lifetime":               cfgData.RoundLifetime,
+		"vtxo_tree_expiry":             cfgData.VtxoTreeExpiry,
 		"unilateral_exit_delay":        cfgData.UnilateralExitDelay,
 		"dust":                         cfgData.Dust,
 		"boarding_descriptor_template": cfgData.BoardingDescriptorTemplate,

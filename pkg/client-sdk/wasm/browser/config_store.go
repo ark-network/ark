@@ -28,7 +28,7 @@ type storeData struct {
 	ClientType                 string `json:"client_type"`
 	ExplorerURL                string `json:"explorer_url"`
 	Network                    string `json:"network"`
-	RoundLifetime              string `json:"round_lifetime"`
+	VtxoTreeExpiry             string `json:"vtxo_tree_expiry"`
 	RoundInterval              string `json:"round_interval"`
 	UnilateralExitDelay        string `json:"unilateral_exit_delay"`
 	Dust                       string `json:"dust"`
@@ -60,7 +60,7 @@ func (s *configStore) AddData(ctx context.Context, data types.Config) error {
 		WalletType:                 data.WalletType,
 		ClientType:                 data.ClientType,
 		Network:                    data.Network.Name,
-		RoundLifetime:              fmt.Sprintf("%d", data.RoundLifetime.Value),
+		VtxoTreeExpiry:             fmt.Sprintf("%d", data.VtxoTreeExpiry.Value),
 		RoundInterval:              fmt.Sprintf("%d", data.RoundInterval),
 		UnilateralExitDelay:        fmt.Sprintf("%d", data.UnilateralExitDelay.Value),
 		Dust:                       fmt.Sprintf("%d", data.Dust),
@@ -89,15 +89,15 @@ func (s *configStore) GetData(ctx context.Context) (*types.Config, error) {
 		return nil, err
 	}
 	network := utils.NetworkFromString(s.store.Call("getItem", "network").String())
-	roundLifetime, _ := strconv.Atoi(s.store.Call("getItem", "round_lifetime").String())
+	vtxoTreeExpiry, _ := strconv.Atoi(s.store.Call("getItem", "vtxo_tree_expiry").String())
 	roundInterval, _ := strconv.Atoi(s.store.Call("getItem", "round_interval").String())
 	unilateralExitDelay, _ := strconv.Atoi(s.store.Call("getItem", "unilateral_exit_delay").String())
 	dust, _ := strconv.Atoi(s.store.Call("getItem", "dust").String())
 	withTxFeed, _ := strconv.ParseBool(s.store.Call("getItem", "with_transaction_feed").String())
 
-	lifetimeType := common.LocktimeTypeBlock
-	if roundLifetime >= 512 {
-		lifetimeType = common.LocktimeTypeSecond
+	vtxoTreeExpiryType := common.LocktimeTypeBlock
+	if vtxoTreeExpiry >= 512 {
+		vtxoTreeExpiryType = common.LocktimeTypeSecond
 	}
 
 	unilateralExitDelayType := common.LocktimeTypeBlock
@@ -111,7 +111,7 @@ func (s *configStore) GetData(ctx context.Context) (*types.Config, error) {
 		WalletType:                 s.store.Call("getItem", "wallet_type").String(),
 		ClientType:                 s.store.Call("getItem", "client_type").String(),
 		Network:                    network,
-		RoundLifetime:              common.RelativeLocktime{Value: uint32(roundLifetime), Type: lifetimeType},
+		VtxoTreeExpiry:             common.RelativeLocktime{Value: uint32(vtxoTreeExpiry), Type: vtxoTreeExpiryType},
 		RoundInterval:              int64(roundInterval),
 		UnilateralExitDelay:        common.RelativeLocktime{Value: uint32(unilateralExitDelay), Type: unilateralExitDelayType},
 		Dust:                       uint64(dust),

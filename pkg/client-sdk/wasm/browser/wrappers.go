@@ -369,14 +369,14 @@ func GetNetworkWrapper() js.Func {
 	})
 }
 
-func GetRoundLifetimeWrapper() js.Func {
-	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
+func GetVtxoTreeExpiryWrapper() js.Func {
+	return js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		data, _ := arkSdkClient.GetConfigData(context.Background())
-		var roundLifettime int64
+		var vtxoTreeExpiry int64
 		if data != nil {
-			roundLifettime = data.RoundLifetime.Seconds()
+			vtxoTreeExpiry = data.VtxoTreeExpiry.Seconds()
 		}
-		return js.ValueOf(roundLifettime)
+		return js.ValueOf(vtxoTreeExpiry)
 	})
 }
 

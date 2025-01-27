@@ -512,7 +512,7 @@
         "pubkey": {
           "type": "string"
         },
-        "roundLifetime": {
+        "vtxoTreeExpiry": {
           "type": "string",
           "format": "int64"
         },

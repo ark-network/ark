@@ -62,7 +62,7 @@ func (h *handler) GetInfo(
 
 	return &arkv1.GetInfoResponse{
 		Pubkey:                     info.PubKey,
-		RoundLifetime:              info.RoundLifetime,
+		VtxoTreeExpiry:             info.VtxoTreeExpiry,
 		UnilateralExitDelay:        info.UnilateralExitDelay,
 		RoundInterval:              info.RoundInterval,
 		Network:                    info.Network,
