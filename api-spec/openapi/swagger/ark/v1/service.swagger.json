@@ -871,6 +871,9 @@
       "properties": {
         "signedRedeemTx": {
           "type": "string"
+        },
+        "txid": {
+          "type": "string"
         }
       }
     },

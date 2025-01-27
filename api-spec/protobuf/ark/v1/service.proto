@@ -180,6 +180,7 @@ message SubmitRedeemTxRequest {
 }
 message SubmitRedeemTxResponse {
   string signed_redeem_tx = 1;
+  string txid = 2;
 }
 
 message GetTransactionsStreamRequest {}
