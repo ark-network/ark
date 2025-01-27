@@ -452,13 +452,8 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 			time.Sleep(1 * time.Second)
 		}
 
-		_, err = grpcTransportClient.SubmitRedeemTx(ctx, signedTx)
+		_, txid, err := grpcTransportClient.SubmitRedeemTx(ctx, signedTx)
 		require.NoError(t, err)
-
-		tx, err := psbt.NewFromRawBytes(strings.NewReader(signedTx), true)
-		require.NoError(t, err)
-
-		txid := tx.UnsignedTx.TxHash().String()
 
 		aliceVtxos, _, err := alice.ListVtxos(ctx)
 		require.NoError(t, err)
@@ -779,7 +774,7 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 	require.NoError(t, err)
 
 	// should fail because the tx is not yet valid
-	_, err = grpcAlice.SubmitRedeemTx(ctx, signedTx)
+	_, _, err = grpcAlice.SubmitRedeemTx(ctx, signedTx)
 	require.Error(t, err)
 
 	// Generate blocks to pass the timelock
@@ -789,7 +784,7 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 		time.Sleep(1 * time.Second)
 	}
 
-	_, err = grpcAlice.SubmitRedeemTx(ctx, signedTx)
+	_, _, err = grpcAlice.SubmitRedeemTx(ctx, signedTx)
 	require.NoError(t, err)
 }
 
@@ -954,7 +949,7 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, err = grpcAlice.SubmitRedeemTx(ctx, signedTx)
+	_, _, err = grpcAlice.SubmitRedeemTx(ctx, signedTx)
 	require.NoError(t, err)
 }
 
