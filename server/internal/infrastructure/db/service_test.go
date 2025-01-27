@@ -96,7 +96,7 @@ func TestService(t *testing.T) {
 				EventStoreType:   "badger",
 				DataStoreType:    "sqlite",
 				EventStoreConfig: []interface{}{"", nil},
-				DataStoreConfig:  []interface{}{dbDir, "file://sqlite/migration"},
+				DataStoreConfig:  []interface{}{dbDir},
 			},
 		},
 	}
@@ -328,6 +328,11 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 		require.NoError(t, err)
 		require.NotNil(t, roundById)
 		require.Condition(t, roundsMatch(*finalizedRound, *roundById))
+
+		resultTree, err := svc.Rounds().GetVtxoTreeWithTxid(ctx, txid)
+		require.NoError(t, err)
+		require.NotNil(t, resultTree)
+		require.Equal(t, finalizedRound.VtxoTree, resultTree)
 
 		roundByTxid, err := svc.Rounds().GetRoundWithTxid(ctx, txid)
 		require.NoError(t, err)

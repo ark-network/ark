@@ -16,7 +16,7 @@ type storeData struct {
 	WalletType                 string `json:"wallet_type"`
 	ClientType                 string `json:"client_type"`
 	Network                    string `json:"network"`
-	RoundLifetime              string `json:"round_lifetime"`
+	VtxoTreeExpiry             string `json:"vtxo_tree_expiry"`
 	RoundInterval              string `json:"round_interval"`
 	UnilateralExitDelay        string `json:"unilateral_exit_delay"`
 	Dust                       string `json:"dust"`
@@ -37,7 +37,7 @@ func (d storeData) isEmpty() bool {
 
 func (d storeData) decode() types.Config {
 	network := utils.NetworkFromString(d.Network)
-	roundLifetime, _ := strconv.Atoi(d.RoundLifetime)
+	vtxoTreeExpiry, _ := strconv.Atoi(d.VtxoTreeExpiry)
 	roundInterval, _ := strconv.Atoi(d.RoundInterval)
 	unilateralExitDelay, _ := strconv.Atoi(d.UnilateralExitDelay)
 	withTransactionFeed, _ := strconv.ParseBool(d.WithTransactionFeed)
@@ -46,9 +46,9 @@ func (d storeData) decode() types.Config {
 	serverPubkey, _ := secp256k1.ParsePubKey(buf)
 	explorerURL := d.ExplorerURL
 
-	lifetimeType := common.LocktimeTypeBlock
-	if roundLifetime >= 512 {
-		lifetimeType = common.LocktimeTypeSecond
+	vtxoTreeExpiryType := common.LocktimeTypeBlock
+	if vtxoTreeExpiry >= 512 {
+		vtxoTreeExpiryType = common.LocktimeTypeSecond
 	}
 
 	unilateralExitDelayType := common.LocktimeTypeBlock
@@ -62,7 +62,7 @@ func (d storeData) decode() types.Config {
 		WalletType:                 d.WalletType,
 		ClientType:                 d.ClientType,
 		Network:                    network,
-		RoundLifetime:              common.RelativeLocktime{Type: lifetimeType, Value: uint32(roundLifetime)},
+		VtxoTreeExpiry:             common.RelativeLocktime{Type: vtxoTreeExpiryType, Value: uint32(vtxoTreeExpiry)},
 		UnilateralExitDelay:        common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(unilateralExitDelay)},
 		RoundInterval:              int64(roundInterval),
 		Dust:                       uint64(dust),
@@ -80,7 +80,7 @@ func (d storeData) asMap() map[string]string {
 		"wallet_type":                  d.WalletType,
 		"client_type":                  d.ClientType,
 		"network":                      d.Network,
-		"round_lifetime":               d.RoundLifetime,
+		"vtxo_tree_expiry":             d.VtxoTreeExpiry,
 		"round_interval":               d.RoundInterval,
 		"unilateral_exit_delay":        d.UnilateralExitDelay,
 		"dust":                         d.Dust,

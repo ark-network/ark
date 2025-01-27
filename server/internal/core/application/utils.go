@@ -358,12 +358,12 @@ func findSweepableOutputs(
 					}
 				}
 
-				var lifetime *common.RelativeLocktime
-				lifetime, sweepInput, err = txbuilder.GetSweepInput(node)
+				var vtxoTreeExpiry *common.RelativeLocktime
+				vtxoTreeExpiry, sweepInput, err = txbuilder.GetSweepInput(node)
 				if err != nil {
 					return nil, err
 				}
-				expirationTime = blocktimeCache[node.ParentTxid] + int64(lifetime.Value)
+				expirationTime = blocktimeCache[node.ParentTxid] + int64(vtxoTreeExpiry.Value)
 			} else {
 				// cache the blocktime for future use
 				if schedulerUnit == ports.BlockHeight {

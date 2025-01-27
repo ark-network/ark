@@ -615,6 +615,57 @@ func (q *Queries) SelectSweptRoundsConnectorAddress(ctx context.Context) ([]stri
 	return items, nil
 }
 
+const selectTreeTxsWithRoundTxid = `-- name: SelectTreeTxsWithRoundTxid :many
+SELECT tx.id, tx.tx, tx.round_id, tx.type, tx.position, tx.txid, tx.tree_level, tx.parent_txid, tx.is_leaf FROM round
+LEFT OUTER JOIN tx ON round.id=tx.round_id
+WHERE round.txid = ? AND tx.type = 'tree'
+`
+
+type SelectTreeTxsWithRoundTxidRow struct {
+	ID         sql.NullInt64
+	Tx         sql.NullString
+	RoundID    sql.NullString
+	Type       sql.NullString
+	Position   sql.NullInt64
+	Txid       sql.NullString
+	TreeLevel  sql.NullInt64
+	ParentTxid sql.NullString
+	IsLeaf     sql.NullBool
+}
+
+func (q *Queries) SelectTreeTxsWithRoundTxid(ctx context.Context, txid string) ([]SelectTreeTxsWithRoundTxidRow, error) {
+	rows, err := q.db.QueryContext(ctx, selectTreeTxsWithRoundTxid, txid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SelectTreeTxsWithRoundTxidRow
+	for rows.Next() {
+		var i SelectTreeTxsWithRoundTxidRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Tx,
+			&i.RoundID,
+			&i.Type,
+			&i.Position,
+			&i.Txid,
+			&i.TreeLevel,
+			&i.ParentTxid,
+			&i.IsLeaf,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const selectVtxoByOutpoint = `-- name: SelectVtxoByOutpoint :one
 SELECT vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.round_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.created_at, vtxo.request_id, vtxo.redeem_tx FROM vtxo
 WHERE txid = ? AND vout = ?

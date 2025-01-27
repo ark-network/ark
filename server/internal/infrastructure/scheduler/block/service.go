@@ -70,13 +70,13 @@ func (s *service) Unit() ports.TimeUnit {
 	return ports.BlockHeight
 }
 
-func (s *service) AddNow(lifetime int64) int64 {
+func (s *service) AddNow(expiry int64) int64 {
 	tip, err := s.fetchTipHeight()
 	if err != nil {
 		return 0
 	}
 
-	return tip + lifetime
+	return tip + expiry
 }
 
 func (s *service) AfterNow(expiry int64) bool {

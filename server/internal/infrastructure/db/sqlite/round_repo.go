@@ -270,6 +270,31 @@ func (r *roundRepository) GetSweptRoundsConnectorAddress(ctx context.Context) ([
 	return r.querier.SelectSweptRoundsConnectorAddress(ctx)
 }
 
+func (r *roundRepository) GetVtxoTreeWithTxid(ctx context.Context, txid string) (tree.VtxoTree, error) {
+	rows, err := r.querier.SelectTreeTxsWithRoundTxid(ctx, txid)
+	if err != nil {
+		return nil, err
+	}
+
+	vtxoTree := make(tree.VtxoTree, 0)
+
+	for _, tx := range rows {
+		level := tx.TreeLevel
+		vtxoTree = extendArray(vtxoTree, int(level.Int64))
+		vtxoTree[int(level.Int64)] = extendArray(vtxoTree[int(level.Int64)], int(tx.Position.Int64))
+		if vtxoTree[int(level.Int64)][tx.Position.Int64] == (tree.Node{}) {
+			vtxoTree[int(level.Int64)][tx.Position.Int64] = tree.Node{
+				Tx:         tx.Tx.String,
+				Txid:       tx.Txid.String,
+				ParentTxid: tx.ParentTxid.String,
+				Leaf:       tx.IsLeaf.Bool,
+			}
+		}
+	}
+
+	return vtxoTree, nil
+}
+
 func rowToReceiver(row queries.RequestReceiverVw) domain.Receiver {
 	return domain.Receiver{
 		Amount:         uint64(row.Amount.Int64),

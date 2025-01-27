@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 
 	"github.com/ark-network/ark/common"
@@ -18,27 +17,32 @@ import (
 // Version will be set during build time
 var Version string
 
+const (
+	macaroonDir  = "macaroons"
+	macaroonFile = "admin.macaroon"
+	tlsDir       = "tls"
+	tlsCertFile  = "cert.pem"
+
+	flagURL      = "url"
+	flagDatadir  = "datadir"
+	flagPassword = "password"
+	flagMnemonic = "mnemonic"
+	flagGapLimit = "addr-gap-limit"
+	flagAmount   = "amount"
+	flagQuantity = "quantity"
+)
+
 // flags
 var (
 	urlFlag = &cli.StringFlag{
-		Name:  "url",
+		Name:  flagURL,
 		Usage: "the url where to reach ark server",
 		Value: fmt.Sprintf("http://localhost:%d", config.DefaultPort),
 	}
-	noMacaroonFlag = &cli.BoolFlag{
-		Name:  "no-macaroon",
-		Usage: "don't use macaroon auth",
-		Value: false,
-	}
-	macaroonFlag = &cli.StringFlag{
-		Name:  "macaroon-path",
-		Usage: "the path where to find the admin macaroon file",
-		Value: filepath.Join(common.AppDataDir("arkd", false), "macaroons", "admin.macaroon"),
-	}
-	tlsCertFlag = &cli.StringFlag{
-		Name:  "tls-cert-path",
-		Usage: "the path where to find the TLS certificate",
-		Value: filepath.Join(common.AppDataDir("arkd", false), "tls", "cert.pem"),
+	datadirFlag = &cli.StringFlag{
+		Name:  flagDatadir,
+		Usage: "data directory of the ark server to source TLS cert and macaroon from if needed",
+		Value: common.AppDataDir("arkd", false),
 	}
 )
 
@@ -59,9 +63,9 @@ func mainAction(_ *cli.Context) error {
 		TLSExtraDomains: cfg.TLSExtraDomains,
 	}
 
-	lifetimeType, unilateralExitType, boardingExitType := common.LocktimeTypeBlock, common.LocktimeTypeBlock, common.LocktimeTypeBlock
-	if cfg.RoundLifetime >= 512 {
-		lifetimeType = common.LocktimeTypeSecond
+	vtxoTreeExpiryType, unilateralExitType, boardingExitType := common.LocktimeTypeBlock, common.LocktimeTypeBlock, common.LocktimeTypeBlock
+	if cfg.VtxoTreeExpiry >= 512 {
+		vtxoTreeExpiryType = common.LocktimeTypeSecond
 	}
 	if cfg.UnilateralExitDelay >= 512 {
 		unilateralExitType = common.LocktimeTypeSecond
@@ -74,14 +78,13 @@ func mainAction(_ *cli.Context) error {
 		EventDbType:             cfg.EventDbType,
 		DbType:                  cfg.DbType,
 		DbDir:                   cfg.DbDir,
-		DbMigrationPath:         cfg.DbMigrationPath,
 		EventDbDir:              cfg.DbDir,
 		RoundInterval:           cfg.RoundInterval,
 		Network:                 cfg.Network,
 		SchedulerType:           cfg.SchedulerType,
 		TxBuilderType:           cfg.TxBuilderType,
 		WalletAddr:              cfg.WalletAddr,
-		RoundLifetime:           common.RelativeLocktime{Type: lifetimeType, Value: uint32(cfg.RoundLifetime)},
+		VtxoTreeExpiry:          common.RelativeLocktime{Type: vtxoTreeExpiryType, Value: uint32(cfg.VtxoTreeExpiry)},
 		UnilateralExitDelay:     common.RelativeLocktime{Type: unilateralExitType, Value: uint32(cfg.UnilateralExitDelay)},
 		EsploraURL:              cfg.EsploraURL,
 		NeutrinoPeer:            cfg.NeutrinoPeer,
@@ -132,7 +135,7 @@ func main() {
 	app.Usage = "arkd command line interface"
 	app.Commands = append(app.Commands, walletCmd)
 	app.Action = mainAction
-	app.Flags = append(app.Flags, urlFlag, noMacaroonFlag, macaroonFlag, tlsCertFlag)
+	app.Flags = append(app.Flags, urlFlag, datadirFlag)
 
 	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)

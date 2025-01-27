@@ -27,14 +27,14 @@ import (
 type txBuilder struct {
 	wallet            ports.WalletService
 	net               common.Network
-	roundLifetime     common.RelativeLocktime
+	vtxoTreeExpiry    common.RelativeLocktime
 	boardingExitDelay common.RelativeLocktime
 }
 
 func NewTxBuilder(
-	wallet ports.WalletService, net common.Network, roundLifetime, boardingExitDelay common.RelativeLocktime,
+	wallet ports.WalletService, net common.Network, vtxoTreeExpiry, boardingExitDelay common.RelativeLocktime,
 ) ports.TxBuilder {
-	return &txBuilder{wallet, net, roundLifetime, boardingExitDelay}
+	return &txBuilder{wallet, net, vtxoTreeExpiry, boardingExitDelay}
 }
 
 func (b *txBuilder) GetTxID(tx string) (string, error) {
@@ -573,7 +573,7 @@ func (b *txBuilder) BuildRoundTx(
 
 	if !isOnchainOnly(requests) {
 		sharedOutputScript, sharedOutputAmount, err = bitcointree.CraftSharedOutput(
-			cosigners, serverPubkey, receivers, feeAmount, b.roundLifetime,
+			cosigners, serverPubkey, receivers, feeAmount, b.vtxoTreeExpiry,
 		)
 		if err != nil {
 			return
@@ -605,7 +605,7 @@ func (b *txBuilder) BuildRoundTx(
 		}
 
 		vtxoTree, err = bitcointree.BuildVtxoTree(
-			initialOutpoint, cosigners, serverPubkey, receivers, feeAmount, b.roundLifetime,
+			initialOutpoint, cosigners, serverPubkey, receivers, feeAmount, b.vtxoTreeExpiry,
 		)
 		if err != nil {
 			return "", nil, "", nil, err
@@ -647,7 +647,7 @@ func (b *txBuilder) BuildRoundTx(
 	return roundTx, vtxoTree, nextConnectorAddress, connectors, nil
 }
 
-func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime *common.RelativeLocktime, sweepInput ports.SweepInput, err error) {
+func (b *txBuilder) GetSweepInput(node tree.Node) (vtxoTreeExpiry *common.RelativeLocktime, sweepInput ports.SweepInput, err error) {
 	partialTx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
 	if err != nil {
 		return nil, nil, err
@@ -661,7 +661,7 @@ func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime *common.RelativeLock
 	txid := input.PreviousOutPoint.Hash
 	index := input.PreviousOutPoint.Index
 
-	sweepLeaf, internalKey, lifetime, err := extractSweepLeaf(partialTx.Inputs[0])
+	sweepLeaf, internalKey, vtxoTreeExpiry, err := extractSweepLeaf(partialTx.Inputs[0])
 	if err != nil {
 		return nil, nil, err
 	}
@@ -686,7 +686,7 @@ func (b *txBuilder) GetSweepInput(node tree.Node) (lifetime *common.RelativeLock
 		amount:         tx.TxOut[index].Value,
 	}
 
-	return lifetime, sweepInput, nil
+	return vtxoTreeExpiry, sweepInput, nil
 }
 
 func (b *txBuilder) FindLeaves(vtxoTree tree.VtxoTree, fromtxid string, vout uint32) ([]tree.Node, error) {
@@ -1262,7 +1262,7 @@ func castToOutpoints(inputs []ports.TxInput) []ports.TxOutpoint {
 	return outpoints
 }
 
-func extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.TaprootTapLeafScript, internalKey *secp256k1.PublicKey, lifetime *common.RelativeLocktime, err error) {
+func extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.TaprootTapLeafScript, internalKey *secp256k1.PublicKey, vtxoTreeExpiry *common.RelativeLocktime, err error) {
 	for _, leaf := range input.TaprootLeafScript {
 		closure := &tree.CSVMultisigClosure{}
 		valid, err := closure.Decode(leaf.Script)
@@ -1270,9 +1270,9 @@ func extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.TaprootTapLeafScript, 
 			return nil, nil, nil, err
 		}
 
-		if valid && (lifetime == nil || closure.Locktime.LessThan(*lifetime)) {
+		if valid && (vtxoTreeExpiry == nil || closure.Locktime.LessThan(*vtxoTreeExpiry)) {
 			sweepLeaf = leaf
-			lifetime = &closure.Locktime
+			vtxoTreeExpiry = &closure.Locktime
 		}
 	}
 
@@ -1285,7 +1285,7 @@ func extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.TaprootTapLeafScript, 
 		return nil, nil, nil, fmt.Errorf("sweep leaf not found")
 	}
 
-	return sweepLeaf, internalKey, lifetime, nil
+	return sweepLeaf, internalKey, vtxoTreeExpiry, nil
 }
 
 type sweepBitcoinInput struct {

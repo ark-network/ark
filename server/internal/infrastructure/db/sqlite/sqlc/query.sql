@@ -190,3 +190,8 @@ RETURNING *;
 
 -- name: GetLatestMarketHour :one
 SELECT * FROM market_hour ORDER BY updated_at DESC LIMIT 1;
+
+-- name: SelectTreeTxsWithRoundTxid :many
+SELECT tx.* FROM round
+LEFT OUTER JOIN tx ON round.id=tx.round_id
+WHERE round.txid = ? AND tx.type = 'tree'
