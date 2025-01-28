@@ -118,6 +118,10 @@ type service struct {
 	// holds the data related to the server key used in Vtxo scripts
 	serverKeyAddr waddrmgr.ManagedPubKeyAddress
 
+	// cached forfeit address
+	forfeitAddrLock sync.RWMutex
+	forfeitAddr     string
+
 	isSynced bool
 	syncedCh chan struct{}
 }
@@ -567,43 +571,63 @@ func (s *service) GetForfeitAddress(ctx context.Context) (string, error) {
 		return "", err
 	}
 
+	s.forfeitAddrLock.RLock()
+	if s.forfeitAddr != "" {
+		addr := s.forfeitAddr
+		s.forfeitAddrLock.RUnlock()
+		return addr, nil
+	}
+	s.forfeitAddrLock.RUnlock()
+
 	addrs, err := s.wallet.ListAddresses(string(mainAccount), false)
 	if err != nil {
 		return "", err
 	}
 
+	var forfeitAddr string
 	if len(addrs) == 0 {
 		addr, err := s.deriveNextAddress()
 		if err != nil {
 			return "", err
 		}
-
-		return addr.EncodeAddress(), nil
-	}
-
-	for info, addrs := range addrs {
-		if info.KeyScope != p2wpkhKeyScope {
-			continue
-		}
-
-		if info.AccountName != string(mainAccount) {
-			continue
-		}
-
-		for _, addr := range addrs {
-			if addr.Internal {
+		forfeitAddr = addr.EncodeAddress()
+	} else {
+		for info, addrs := range addrs {
+			if info.KeyScope != p2wpkhKeyScope {
 				continue
 			}
 
-			splittedPath := strings.Split(addr.DerivationPath, "/")
-			last := splittedPath[len(splittedPath)-1]
-			if last == "0" {
-				return addr.Address, nil
+			if info.AccountName != string(mainAccount) {
+				continue
+			}
+
+			for _, addr := range addrs {
+				if addr.Internal {
+					continue
+				}
+
+				splittedPath := strings.Split(addr.DerivationPath, "/")
+				last := splittedPath[len(splittedPath)-1]
+				if last == "0" {
+					forfeitAddr = addr.Address
+					break
+				}
+			}
+			if forfeitAddr != "" {
+				break
 			}
 		}
 	}
 
-	return "", fmt.Errorf("forfeit address not found")
+	if forfeitAddr == "" {
+		return "", fmt.Errorf("forfeit address not found")
+	}
+
+	s.forfeitAddrLock.Lock()
+	s.forfeitAddr = forfeitAddr
+	s.forfeitAddrLock.Unlock()
+
+	return forfeitAddr, nil
 }
 
 func (s *service) ListConnectorUtxos(ctx context.Context, connectorAddress string) ([]ports.TxInput, error) {
