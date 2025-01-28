@@ -103,6 +103,7 @@ func mainAction(_ *cli.Context) error {
 		MarketHourEndTime:       cfg.MarketHourEndTime,
 		MarketHourPeriod:        cfg.MarketHourPeriod,
 		MarketHourRoundInterval: cfg.MarketHourRoundInterval,
+		OtelCollectorEndpoint:   cfg.OtelCollectorEndpoint,
 	}
 	svc, err := grpcservice.NewService(svcConfig, appConfig)
 	if err != nil {
