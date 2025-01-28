@@ -2612,6 +2612,10 @@ func vtxosToTxsCovenantless(
 	// aggregate spent by spentId
 	vtxosBySpentBy := make(map[string][]client.Vtxo)
 	for _, v := range spent {
+		if len(v.SpentBy) <= 0 {
+			continue
+		}
+
 		if _, ok := vtxosBySpentBy[v.SpentBy]; !ok {
 			vtxosBySpentBy[v.SpentBy] = make([]client.Vtxo, 0)
 		}
