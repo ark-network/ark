@@ -171,10 +171,10 @@ func (s *covenantlessService) Stop() {
 
 func (s *covenantlessService) SubmitRedeemTx(
 	ctx context.Context, redeemTx string,
-) (string, error) {
+) (string, string, error) {
 	redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse redeem tx: %s", err)
+		return "", "", fmt.Errorf("failed to parse redeem tx: %s", err)
 	}
 
 	vtxoRepo := s.repoManager.Vtxos()
@@ -186,7 +186,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 
 	ptx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse redeem tx: %s", err)
+		return "", "", fmt.Errorf("failed to parse redeem tx: %s", err)
 	}
 
 	spentVtxoKeys := make([]domain.VtxoKey, 0, len(ptx.Inputs))
@@ -199,18 +199,18 @@ func (s *covenantlessService) SubmitRedeemTx(
 
 	spentVtxos, err := vtxoRepo.GetVtxos(ctx, spentVtxoKeys)
 	if err != nil {
-		return "", fmt.Errorf("failed to get vtxos: %s", err)
+		return "", "", fmt.Errorf("failed to get vtxos: %s", err)
 	}
 
 	if len(spentVtxos) != len(spentVtxoKeys) {
-		return "", fmt.Errorf("some vtxos not found")
+		return "", "", fmt.Errorf("some vtxos not found")
 	}
 
 	vtxoMap := make(map[wire.OutPoint]domain.Vtxo)
 	for _, vtxo := range spentVtxos {
 		hash, err := chainhash.NewHashFromStr(vtxo.Txid)
 		if err != nil {
-			return "", fmt.Errorf("failed to parse vtxo txid: %s", err)
+			return "", "", fmt.Errorf("failed to parse vtxo txid: %s", err)
 		}
 		vtxoMap[wire.OutPoint{Hash: *hash, Index: vtxo.VOut}] = vtxo
 	}
@@ -218,39 +218,39 @@ func (s *covenantlessService) SubmitRedeemTx(
 	sumOfInputs := int64(0)
 	for inputIndex, input := range ptx.Inputs {
 		if input.WitnessUtxo == nil {
-			return "", fmt.Errorf("missing witness utxo")
+			return "", "", fmt.Errorf("missing witness utxo")
 		}
 
 		if len(input.TaprootLeafScript) == 0 {
-			return "", fmt.Errorf("missing tapscript leaf")
+			return "", "", fmt.Errorf("missing tapscript leaf")
 		}
 
 		tapscript := input.TaprootLeafScript[0]
 
 		if len(input.TaprootScriptSpendSig) == 0 {
-			return "", fmt.Errorf("missing tapscript spend sig")
+			return "", "", fmt.Errorf("missing tapscript spend sig")
 		}
 
 		outpoint := ptx.UnsignedTx.TxIn[inputIndex].PreviousOutPoint
 
 		vtxo, exists := vtxoMap[outpoint]
 		if !exists {
-			return "", fmt.Errorf("vtxo not found")
+			return "", "", fmt.Errorf("vtxo not found")
 		}
 
 		// make sure we don't use the same vtxo twice
 		delete(vtxoMap, outpoint)
 
 		if vtxo.Spent {
-			return "", fmt.Errorf("vtxo already spent")
+			return "", "", fmt.Errorf("vtxo already spent")
 		}
 
 		if vtxo.Redeemed {
-			return "", fmt.Errorf("vtxo already redeemed")
+			return "", "", fmt.Errorf("vtxo already redeemed")
 		}
 
 		if vtxo.Swept {
-			return "", fmt.Errorf("vtxo already swept")
+			return "", "", fmt.Errorf("vtxo already swept")
 		}
 
 		sumOfInputs += input.WitnessUtxo.Value
@@ -269,7 +269,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 			if !bytes.Equal(sig.XOnlyPubKey, serverXOnlyPubkey) {
 				parsed, err := schnorr.ParsePubKey(sig.XOnlyPubKey)
 				if err != nil {
-					return "", fmt.Errorf("failed to parse pubkey: %s", err)
+					return "", "", fmt.Errorf("failed to parse pubkey: %s", err)
 				}
 				userPubkey = parsed
 				break
@@ -277,37 +277,37 @@ func (s *covenantlessService) SubmitRedeemTx(
 		}
 
 		if userPubkey == nil {
-			return "", fmt.Errorf("redeem transaction is not signed")
+			return "", "", fmt.Errorf("redeem transaction is not signed")
 		}
 
 		vtxoPubkeyBuf, err := hex.DecodeString(vtxo.PubKey)
 		if err != nil {
-			return "", fmt.Errorf("failed to decode vtxo pubkey: %s", err)
+			return "", "", fmt.Errorf("failed to decode vtxo pubkey: %s", err)
 		}
 
 		vtxoPubkey, err := schnorr.ParsePubKey(vtxoPubkeyBuf)
 		if err != nil {
-			return "", fmt.Errorf("failed to parse vtxo pubkey: %s", err)
+			return "", "", fmt.Errorf("failed to parse vtxo pubkey: %s", err)
 		}
 
 		// verify witness utxo
 		pkscript, err := common.P2TRScript(vtxoPubkey)
 		if err != nil {
-			return "", fmt.Errorf("failed to get pkscript: %s", err)
+			return "", "", fmt.Errorf("failed to get pkscript: %s", err)
 		}
 
 		if !bytes.Equal(input.WitnessUtxo.PkScript, pkscript) {
-			return "", fmt.Errorf("witness utxo script mismatch")
+			return "", "", fmt.Errorf("witness utxo script mismatch")
 		}
 
 		if input.WitnessUtxo.Value != int64(vtxo.Amount) {
-			return "", fmt.Errorf("witness utxo value mismatch")
+			return "", "", fmt.Errorf("witness utxo value mismatch")
 		}
 
 		// verify forfeit closure script
 		closure, err := tree.DecodeClosure(tapscript.Script)
 		if err != nil {
-			return "", fmt.Errorf("failed to decode forfeit closure: %s", err)
+			return "", "", fmt.Errorf("failed to decode forfeit closure: %s", err)
 		}
 
 		var locktime *common.AbsoluteLocktime
@@ -317,28 +317,28 @@ func (s *covenantlessService) SubmitRedeemTx(
 			locktime = &c.Locktime
 		case *tree.MultisigClosure, *tree.ConditionMultisigClosure:
 		default:
-			return "", fmt.Errorf("invalid forfeit closure script")
+			return "", "", fmt.Errorf("invalid forfeit closure script")
 		}
 
 		if locktime != nil {
 			blocktimestamp, err := s.wallet.GetCurrentBlockTime(ctx)
 			if err != nil {
-				return "", fmt.Errorf("failed to get current block time: %s", err)
+				return "", "", fmt.Errorf("failed to get current block time: %s", err)
 			}
 			if !locktime.IsSeconds() {
 				if *locktime > common.AbsoluteLocktime(blocktimestamp.Height) {
-					return "", fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block time)", *locktime, blocktimestamp.Time)
+					return "", "", fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block time)", *locktime, blocktimestamp.Time)
 				}
 			} else {
 				if *locktime > common.AbsoluteLocktime(blocktimestamp.Time) {
-					return "", fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block time)", *locktime, blocktimestamp.Time)
+					return "", "", fmt.Errorf("forfeit closure is CLTV locked, %d > %d (block time)", *locktime, blocktimestamp.Time)
 				}
 			}
 		}
 
 		ctrlBlock, err := txscript.ParseControlBlock(tapscript.ControlBlock)
 		if err != nil {
-			return "", fmt.Errorf("failed to parse control block: %s", err)
+			return "", "", fmt.Errorf("failed to parse control block: %s", err)
 		}
 
 		ins = append(ins, common.VtxoInput{
@@ -352,7 +352,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 
 	dust, err := s.wallet.GetDustAmount(ctx)
 	if err != nil {
-		return "", fmt.Errorf("failed to get dust threshold: %s", err)
+		return "", "", fmt.Errorf("failed to get dust threshold: %s", err)
 	}
 
 	outputs := ptx.UnsignedTx.TxOut
@@ -361,61 +361,61 @@ func (s *covenantlessService) SubmitRedeemTx(
 	for _, out := range outputs {
 		sumOfOutputs += out.Value
 		if out.Value < int64(dust) {
-			return "", fmt.Errorf("output value is less than dust threshold")
+			return "", "", fmt.Errorf("output value is less than dust threshold")
 		}
 	}
 
 	fees := sumOfInputs - sumOfOutputs
 	if fees < 0 {
-		return "", fmt.Errorf("invalid fees, inputs are less than outputs")
+		return "", "", fmt.Errorf("invalid fees, inputs are less than outputs")
 	}
 
 	minFeeRate := s.wallet.MinRelayFeeRate(ctx)
 
 	minFees, err := common.ComputeRedeemTxFee(chainfee.SatPerKVByte(minFeeRate), ins, len(outputs))
 	if err != nil {
-		return "", fmt.Errorf("failed to compute min fees: %s", err)
+		return "", "", fmt.Errorf("failed to compute min fees: %s", err)
 	}
 
 	if fees < minFees {
-		return "", fmt.Errorf("min relay fee not met, %d < %d", fees, minFees)
+		return "", "", fmt.Errorf("min relay fee not met, %d < %d", fees, minFees)
 	}
 
 	// recompute redeem tx
 	rebuiltRedeemTx, err := bitcointree.BuildRedeemTx(ins, outputs)
 	if err != nil {
-		return "", fmt.Errorf("failed to rebuild redeem tx: %s", err)
+		return "", "", fmt.Errorf("failed to rebuild redeem tx: %s", err)
 	}
 
 	rebuiltPtx, err := psbt.NewFromRawBytes(strings.NewReader(rebuiltRedeemTx), true)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse rebuilt redeem tx: %s", err)
+		return "", "", fmt.Errorf("failed to parse rebuilt redeem tx: %s", err)
 	}
 
 	rebuiltTxid := rebuiltPtx.UnsignedTx.TxID()
 	redeemTxid := redeemPtx.UnsignedTx.TxID()
 	if rebuiltTxid != redeemTxid {
-		return "", fmt.Errorf("invalid redeem tx")
+		return "", "", fmt.Errorf("invalid redeem tx")
 	}
 
 	// verify the tapscript signatures
 	if valid, err := s.builder.VerifyTapscriptPartialSigs(redeemTx); err != nil || !valid {
-		return "", fmt.Errorf("invalid tx signature: %s", err)
+		return "", "", fmt.Errorf("invalid tx signature: %s", err)
 	}
 
 	if expiration == 0 {
-		return "", fmt.Errorf("no valid vtxo found")
+		return "", "", fmt.Errorf("no valid vtxo found")
 	}
 
 	if roundTxid == "" {
-		return "", fmt.Errorf("no valid vtxo found")
+		return "", "", fmt.Errorf("no valid vtxo found")
 	}
 
 	// sign the redeem tx
 
 	signedRedeemTx, err := s.wallet.SignTransactionTapscript(ctx, redeemTx, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to sign redeem tx: %s", err)
+		return "", "", fmt.Errorf("failed to sign redeem tx: %s", err)
 	}
 
 	// Create new vtxos, update spent vtxos state
@@ -423,7 +423,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 	for outIndex, out := range outputs {
 		vtxoTapKey, err := schnorr.ParsePubKey(out.PkScript[2:])
 		if err != nil {
-			return "", fmt.Errorf("failed to parse vtxo taproot key: %s", err)
+			return "", "", fmt.Errorf("failed to parse vtxo taproot key: %s", err)
 		}
 
 		vtxoPubkey := hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey))
@@ -443,7 +443,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 	}
 
 	if err := s.repoManager.Vtxos().AddVtxos(ctx, newVtxos); err != nil {
-		return "", fmt.Errorf("failed to add vtxos: %s", err)
+		return "", "", fmt.Errorf("failed to add vtxos: %s", err)
 	}
 	log.Infof("added %d vtxos", len(newVtxos))
 	if err := s.startWatchingVtxos(newVtxos); err != nil {
@@ -454,7 +454,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 	log.Debugf("started watching %d vtxos", len(newVtxos))
 
 	if err := s.repoManager.Vtxos().SpendVtxos(ctx, spentVtxoKeys, redeemTxid); err != nil {
-		return "", fmt.Errorf("failed to spend vtxo: %s", err)
+		return "", "", fmt.Errorf("failed to spend vtxo: %s", err)
 	}
 	log.Infof("spent %d vtxos", len(spentVtxos))
 
@@ -466,7 +466,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 		}
 	}()
 
-	return signedRedeemTx, nil
+	return signedRedeemTx, redeemTxid, nil
 }
 
 func (s *covenantlessService) GetBoardingAddress(

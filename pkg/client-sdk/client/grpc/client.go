@@ -253,17 +253,17 @@ func (a *grpcClient) Ping(
 
 func (a *grpcClient) SubmitRedeemTx(
 	ctx context.Context, redeemTx string,
-) (string, error) {
+) (string, string, error) {
 	req := &arkv1.SubmitRedeemTxRequest{
 		RedeemTx: redeemTx,
 	}
 
 	resp, err := a.svc.SubmitRedeemTx(ctx, req)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	return resp.GetSignedRedeemTx(), nil
+	return resp.GetSignedRedeemTx(), resp.GetTxid(), nil
 }
 
 func (a *grpcClient) GetRound(
