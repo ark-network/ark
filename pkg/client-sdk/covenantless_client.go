@@ -1101,8 +1101,6 @@ func (a *covenantlessArkClient) GetTransactionHistory(
 		return txs[i].CreatedAt.After(txs[j].CreatedAt)
 	})
 
-	fmt.Println("TX HISTORY", txs)
-
 	return txs, nil
 }
 
