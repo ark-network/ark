@@ -57,7 +57,7 @@ type vtxo struct {
 	Swept     bool   `json:"swept"`
 	RedeemTx  string `json:"redeemTx"`
 	CreatedAt string `json:"createdAt"`
-	IsOOR     bool   `json:"isOor"`
+	IsPending bool   `json:"isPending"`
 }
 
 type vtxos []vtxo
@@ -76,19 +76,20 @@ func (v vtxos) parse() []client.Vtxo {
 			CreatedAt: parseTimestamp(vv.CreatedAt),
 			RedeemTx:  vv.RedeemTx,
 			SpentBy:   vv.SpentBy,
-			IsPending: vv.IsOOR,
+			IsPending: vv.IsPending,
 		})
 	}
 	return list
 }
 
 type tx struct {
-	RoundTxid  string `json:"roundTxid"`
-	RedeemTxid string `json:"redeemTxid"`
-	Amount     string `json:"amount"`
-	Type       string `json:"type"`
-	Settled    bool   `json:"settled"`
-	CreatedAt  string `json:"createdAt"`
+	BoardingTxid string `json:"boardingTxid"`
+	RoundTxid    string `json:"roundTxid"`
+	RedeemTxid   string `json:"redeemTxid"`
+	Amount       string `json:"amount"`
+	Type         string `json:"type"`
+	Settled      bool   `json:"settled"`
+	CreatedAt    string `json:"createdAt"`
 }
 
 type txs []tx
@@ -98,8 +99,9 @@ func (t txs) parse() []sdktypes.Transaction {
 	for _, tx := range t {
 		list = append(list, sdktypes.Transaction{
 			TransactionKey: sdktypes.TransactionKey{
-				RedeemTxid: tx.RedeemTxid,
-				RoundTxid:  tx.RoundTxid,
+				BoardingTxid: tx.BoardingTxid,
+				RedeemTxid:   tx.RedeemTxid,
+				RoundTxid:    tx.RoundTxid,
 			},
 			Amount:    parseAmount(tx.Amount),
 			Type:      sdktypes.TxType(tx.Type),
