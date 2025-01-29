@@ -244,7 +244,7 @@ func createRootNode(
 	cosignersALL := make([]*secp256k1.PublicKey, 0)
 	for _, r := range receivers {
 		if r.Musig2Data == nil {
-			return nil, fmt.Errorf("musig2 data is nil for %s", r.PubKey)
+			return nil, fmt.Errorf("missing musig2 data for receiver %s", r.PubKey)
 		}
 
 		if r.Musig2Data.SigningType != tree.SignAll {
