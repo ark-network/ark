@@ -252,7 +252,7 @@ func createRootNode(
 		}
 
 		if len(r.Musig2Data.CosignersPublicKeys) == 0 {
-			return nil, fmt.Errorf("cosigners public keys for %s are empty", r.PubKey)
+			return nil, fmt.Errorf("missing cosigners public keys for receiver %s", r.PubKey)
 		}
 
 		for _, cosigner := range r.Musig2Data.CosignersPublicKeys {
