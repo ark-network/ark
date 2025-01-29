@@ -104,7 +104,13 @@ func mainAction(_ *cli.Context) error {
 		MarketHourPeriod:        cfg.MarketHourPeriod,
 		MarketHourRoundInterval: cfg.MarketHourRoundInterval,
 		OtelCollectorEndpoint:   cfg.OtelCollectorEndpoint,
+		AllowZeroFees:           cfg.AllowZeroFees,
 	}
+
+	if cfg.AllowZeroFees {
+		log.Warn("WARNING: AllowZeroFees is enabled")
+	}
+
 	svc, err := grpcservice.NewService(svcConfig, appConfig)
 	if err != nil {
 		return err

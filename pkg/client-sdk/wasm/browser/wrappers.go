@@ -228,7 +228,7 @@ func SendOnChainWrapper() js.Func {
 
 func SendOffChainWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) != 2 {
+		if len(args) != 2 && len(args) != 3 {
 			return nil, errors.New("invalid number of args")
 		}
 
@@ -238,8 +238,13 @@ func SendOffChainWrapper() js.Func {
 			return nil, err
 		}
 
+		withZeroFees := false
+		if len(args) == 3 {
+			withZeroFees = args[2].Bool()
+		}
+
 		txID, err := arkSdkClient.SendOffChain(
-			context.Background(), withExpiryCoinselect, receivers,
+			context.Background(), withExpiryCoinselect, receivers, withZeroFees,
 		)
 		if err != nil {
 			return nil, err
