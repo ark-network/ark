@@ -76,6 +76,8 @@ type Config struct {
 	MarketHourRoundInterval time.Duration
 	OtelCollectorEndpoint   string
 
+	AllowZeroFees bool
+
 	EsploraURL       string
 	NeutrinoPeer     string
 	BitcoindRpcUser  string
@@ -374,6 +376,7 @@ func (c *Config) appService() error {
 		c.Network, c.RoundInterval, c.VtxoTreeExpiry, c.UnilateralExitDelay, c.BoardingExitDelay, c.NostrDefaultRelays,
 		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NoteUriPrefix,
 		c.MarketHourStartTime, c.MarketHourEndTime, c.MarketHourPeriod, c.MarketHourRoundInterval,
+		c.AllowZeroFees,
 	)
 	if err != nil {
 		return err

@@ -57,6 +57,10 @@ type covenantlessService struct {
 	currentRoundLock    sync.Mutex
 	currentRound        *domain.Round
 	treeSigningSessions map[string]*musigSigningSession
+
+	// allowZeroFees is a temporary flag letting to submit redeem txs with zero miner fees
+	// this should be removed after we migrate to transactions version 3
+	allowZeroFees bool
 }
 
 func NewCovenantlessService(
@@ -70,6 +74,7 @@ func NewCovenantlessService(
 	noteUriPrefix string,
 	marketHourStartTime, marketHourEndTime time.Time,
 	marketHourPeriod, marketHourRoundInterval time.Duration,
+	allowZeroFees bool,
 ) (Service, error) {
 	pubkey, err := walletSvc.GetPubkey(context.Background())
 	if err != nil {
@@ -108,6 +113,7 @@ func NewCovenantlessService(
 		treeSigningSessions: make(map[string]*musigSigningSession),
 		boardingExitDelay:   boardingExitDelay,
 		nostrDefaultRelays:  nostrDefaultRelays,
+		allowZeroFees:       allowZeroFees,
 	}
 
 	repoManager.RegisterEventsHandler(
@@ -370,15 +376,17 @@ func (s *covenantlessService) SubmitRedeemTx(
 		return "", "", fmt.Errorf("invalid fees, inputs are less than outputs")
 	}
 
-	minFeeRate := s.wallet.MinRelayFeeRate(ctx)
+	if !s.allowZeroFees {
+		minFeeRate := s.wallet.MinRelayFeeRate(ctx)
 
-	minFees, err := common.ComputeRedeemTxFee(chainfee.SatPerKVByte(minFeeRate), ins, len(outputs))
-	if err != nil {
-		return "", "", fmt.Errorf("failed to compute min fees: %s", err)
-	}
+		minFees, err := common.ComputeRedeemTxFee(chainfee.SatPerKVByte(minFeeRate), ins, len(outputs))
+		if err != nil {
+			return "", "", fmt.Errorf("failed to compute min fees: %s", err)
+		}
 
-	if fees < minFees {
-		return "", "", fmt.Errorf("min relay fee not met, %d < %d", fees, minFees)
+		if fees < minFees {
+			return "", "", fmt.Errorf("min relay fee not met, %d < %d", fees, minFees)
+		}
 	}
 
 	// recompute redeem tx

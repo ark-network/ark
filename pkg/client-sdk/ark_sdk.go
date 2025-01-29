@@ -19,6 +19,7 @@ type ArkClient interface {
 	SendOnChain(ctx context.Context, receivers []Receiver) (string, error)
 	SendOffChain(
 		ctx context.Context, withExpiryCoinselect bool, receivers []Receiver,
+		withZeroFees bool,
 	) (string, error)
 	UnilateralRedeem(ctx context.Context) error
 	CollaborativeRedeem(

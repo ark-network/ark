@@ -248,7 +248,7 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		err = utils.GenerateBlock()
 		require.NoError(t, err)
 
-		_, err = sdkClient.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(offchainAddress, 1000)})
+		_, err = sdkClient.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(offchainAddress, 1000)}, false)
 		require.NoError(t, err)
 
 		_, err = sdkClient.Settle(ctx)
@@ -395,7 +395,7 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		bobAddrStr, err := bobAddr.Encode()
 		require.NoError(t, err)
 
-		txid, err := alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddrStr, sendAmount)})
+		txid, err := alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddrStr, sendAmount)}, false)
 		require.NoError(t, err)
 		require.NotEmpty(t, txid)
 
@@ -574,7 +574,7 @@ func TestAliceSendsSeveralTimesToBob(t *testing.T) {
 	bobAddress, _, err := bob.Receive(ctx)
 	require.NoError(t, err)
 
-	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 1000)})
+	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 1000)}, false)
 	require.NoError(t, err)
 
 	time.Sleep(2 * time.Second)
@@ -583,7 +583,7 @@ func TestAliceSendsSeveralTimesToBob(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, bobVtxos, 1)
 
-	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)})
+	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)}, false)
 	require.NoError(t, err)
 
 	time.Sleep(2 * time.Second)
@@ -592,7 +592,7 @@ func TestAliceSendsSeveralTimesToBob(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, bobVtxos, 2)
 
-	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)})
+	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)}, false)
 	require.NoError(t, err)
 
 	time.Sleep(2 * time.Second)
@@ -601,7 +601,7 @@ func TestAliceSendsSeveralTimesToBob(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, bobVtxos, 3)
 
-	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)})
+	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)}, false)
 	require.NoError(t, err)
 
 	time.Sleep(2 * time.Second)
@@ -738,7 +738,7 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 	bobAddrStr, err := bobAddr.Encode()
 	require.NoError(t, err)
 
-	txid, err := alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddrStr, sendAmount)})
+	txid, err := alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddrStr, sendAmount)}, false)
 	require.NoError(t, err)
 	require.NotEmpty(t, txid)
 
@@ -919,7 +919,7 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 	bobAddrStr, err := bobAddr.Encode()
 	require.NoError(t, err)
 
-	txid, err := alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddrStr, sendAmount)})
+	txid, err := alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddrStr, sendAmount)}, false)
 	require.NoError(t, err)
 	require.NotEmpty(t, txid)
 

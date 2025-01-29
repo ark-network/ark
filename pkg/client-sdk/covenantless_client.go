@@ -707,6 +707,7 @@ func (a *covenantlessArkClient) SendOnChain(
 func (a *covenantlessArkClient) SendOffChain(
 	ctx context.Context,
 	withExpiryCoinselect bool, receivers []Receiver,
+	withZeroFees bool,
 ) (string, error) {
 	if len(receivers) <= 0 {
 		return "", fmt.Errorf("missing receivers")
@@ -812,7 +813,7 @@ func (a *covenantlessArkClient) SendOffChain(
 	}
 
 	feeRate := chainfee.FeePerKwFloor
-	redeemTx, err := buildRedeemTx(inputs, receivers, feeRate.FeePerVByte(), nil)
+	redeemTx, err := buildRedeemTx(inputs, receivers, feeRate.FeePerVByte(), nil, withZeroFees)
 	if err != nil {
 		return "", err
 	}
@@ -2666,6 +2667,7 @@ func buildRedeemTx(
 	receivers []Receiver,
 	feeRate chainfee.SatPerVByte,
 	extraWitnessSizes map[client.Outpoint]int,
+	withZeroFees bool,
 ) (string, error) {
 	if len(vtxos) <= 0 {
 		return "", fmt.Errorf("missing vtxos")
@@ -2757,11 +2759,13 @@ func buildRedeemTx(
 			return "", err
 		}
 
-		// Deduct the min relay fee from the very last receiver which is supposed
-		// to be the change in case it's not a send-all.
 		value := receiver.Amount()
-		if i == len(receivers)-1 {
-			value -= uint64(fees)
+		if !withZeroFees {
+			// Deduct the min relay fee from the very last receiver which is supposed
+			// to be the change in case it's not a send-all.
+			if i == len(receivers)-1 {
+				value -= uint64(fees)
+			}
 		}
 		outs = append(outs, &wire.TxOut{
 			Value:    int64(value),
