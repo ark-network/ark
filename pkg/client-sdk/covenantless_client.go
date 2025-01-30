@@ -1781,6 +1781,25 @@ func (a *covenantlessArkClient) handleRoundStream(
 func (a *covenantlessArkClient) handleRoundSigningStarted(
 	ctx context.Context, signerSessions []bitcointree.SignerSession, event client.RoundSigningStartedEvent,
 ) error {
+	foundPubkeys := make([]string, 0, len(signerSessions))
+	for _, session := range signerSessions {
+		myPubkey := session.GetPublicKey()
+		for _, cosigner := range event.CosignersPubkeys {
+			if cosigner == myPubkey {
+				foundPubkeys = append(foundPubkeys, myPubkey)
+				break
+			}
+		}
+	}
+
+	if len(foundPubkeys) <= 0 {
+		return nil
+	}
+
+	if len(foundPubkeys) != len(signerSessions) {
+		return fmt.Errorf("not all signers found in cosigner list")
+	}
+
 	sweepClosure := tree.CSVMultisigClosure{
 		MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{a.ServerPubKey}},
 		Locktime:        a.VtxoTreeExpiry,
