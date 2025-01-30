@@ -371,8 +371,8 @@ func (s *covenantService) UpdateTxRequestStatus(_ context.Context, id string) er
 	return s.txRequests.updatePingTimestamp(id)
 }
 
-func (s *covenantService) SubmitRedeemTx(context.Context, string) (string, error) {
-	return "", fmt.Errorf("unimplemented")
+func (s *covenantService) SubmitRedeemTx(context.Context, string) (string, string, error) {
+	return "", "", fmt.Errorf("unimplemented")
 }
 
 func (s *covenantService) SignVtxos(ctx context.Context, forfeitTxs []string) error {

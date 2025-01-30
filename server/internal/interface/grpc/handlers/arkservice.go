@@ -326,7 +326,7 @@ func (h *handler) SubmitRedeemTx(
 		return nil, status.Error(codes.InvalidArgument, "missing redeem tx")
 	}
 
-	signedRedeemTx, err := h.svc.SubmitRedeemTx(
+	signedRedeemTx, redeemTxid, err := h.svc.SubmitRedeemTx(
 		ctx, req.GetRedeemTx(),
 	)
 	if err != nil {
@@ -335,6 +335,7 @@ func (h *handler) SubmitRedeemTx(
 
 	return &arkv1.SubmitRedeemTxResponse{
 		SignedRedeemTx: signedRedeemTx,
+		Txid:           redeemTxid,
 	}, nil
 }
 

@@ -420,6 +420,7 @@ func (a *covenantArkClient) SendOnChain(
 func (a *covenantArkClient) SendOffChain(
 	ctx context.Context,
 	withExpiryCoinselect bool, receivers []Receiver,
+	_ bool,
 ) (string, error) {
 	for _, receiver := range receivers {
 		if receiver.IsOnchain() {

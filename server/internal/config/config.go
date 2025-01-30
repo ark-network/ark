@@ -48,6 +48,9 @@ type Config struct {
 	MarketHourPeriod        time.Duration
 	MarketHourRoundInterval time.Duration
 	OtelCollectorEndpoint   string
+
+	// TODO remove with transactions version 3
+	AllowZeroFees bool
 }
 
 var (
@@ -88,6 +91,8 @@ var (
 	MarketHourRoundInterval = "MARKET_HOUR_ROUND_INTERVAL"
 	OtelCollectorEndpoint   = "OTEL_COLLECTOR_ENDPOINT"
 
+	AllowZeroFees = "ALLOW_ZERO_FEES"
+
 	defaultDatadir             = common.AppDataDir("arkd", false)
 	defaultRoundInterval       = 15
 	DefaultPort                = 7070
@@ -108,6 +113,8 @@ var (
 	defaultMarketHourEndTime   = defaultMarketHourStartTime.Add(time.Duration(defaultRoundInterval) * time.Second)
 	defaultMarketHourPeriod    = time.Duration(24) * time.Hour
 	defaultMarketHourInterval  = time.Duration(defaultRoundInterval) * time.Second
+
+	defaultAllowZeroFees = false
 )
 
 func LoadConfig() (*Config, error) {
@@ -134,7 +141,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(MarketHourEndTime, defaultMarketHourEndTime)
 	viper.SetDefault(MarketHourPeriod, defaultMarketHourPeriod)
 	viper.SetDefault(MarketHourRoundInterval, defaultMarketHourInterval)
-
+	viper.SetDefault(AllowZeroFees, defaultAllowZeroFees)
 	net, err := getNetwork()
 	if err != nil {
 		return nil, fmt.Errorf("error while getting network: %s", err)
@@ -180,6 +187,7 @@ func LoadConfig() (*Config, error) {
 		MarketHourPeriod:        viper.GetDuration(MarketHourPeriod),
 		MarketHourRoundInterval: viper.GetDuration(MarketHourRoundInterval),
 		OtelCollectorEndpoint:   viper.GetString(OtelCollectorEndpoint),
+		AllowZeroFees:           viper.GetBool(AllowZeroFees),
 	}, nil
 }
 

@@ -128,7 +128,7 @@ func main() {
 	fmt.Println("")
 	log.Infof("alice is sending %d sats to bob offchain...", amount)
 
-	if _, err = aliceArkClient.SendOffChain(ctx, false, receivers); err != nil {
+	if _, err = aliceArkClient.SendOffChain(ctx, false, receivers, true); err != nil {
 		log.Fatal(err)
 	}
 

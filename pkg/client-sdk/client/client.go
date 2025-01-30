@@ -47,8 +47,8 @@ type TransportClient interface {
 	) (<-chan RoundEventChannel, func(), error)
 	Ping(ctx context.Context, requestID string) error
 	SubmitRedeemTx(
-		ctx context.Context, signedRedeemTx string,
-	) (string, error)
+		ctx context.Context, partialSignedRedeemTx string,
+	) (signedRedeemTx, redeemTxid string, err error)
 	ListVtxos(ctx context.Context, addr string) ([]Vtxo, []Vtxo, error)
 	GetRound(ctx context.Context, txID string) (*Round, error)
 	GetRoundByID(ctx context.Context, roundID string) (*Round, error)

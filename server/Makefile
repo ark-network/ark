@@ -62,6 +62,7 @@ run-neutrino: clean
 	export ARK_ESPLORA_URL=http://localhost:3000; \
 	export ARK_NEUTRINO_PEER=localhost:18444; \
 	export ARK_DATADIR=./data/regtest; \
+	export ARK_ALLOW_ZERO_FEES=true; \
 	go run ./cmd/arkd
 
 ## run-neutrino-mutinynet: run in signet mode

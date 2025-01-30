@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
@@ -88,6 +89,11 @@ func (t Transaction) IsBoarding() bool {
 
 func (t Transaction) IsOOR() bool {
 	return t.RedeemTxid != ""
+}
+
+func (t Transaction) String() string {
+	buf, _ := json.MarshalIndent(t, "", "  ")
+	return string(buf)
 }
 
 const (
