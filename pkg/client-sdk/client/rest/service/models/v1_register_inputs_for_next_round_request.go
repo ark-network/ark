@@ -19,9 +19,6 @@ import (
 // swagger:model v1RegisterInputsForNextRoundRequest
 type V1RegisterInputsForNextRoundRequest struct {
 
-	// ephemeral pubkey
-	EphemeralPubkey string `json:"ephemeralPubkey,omitempty"`
-
 	// inputs
 	Inputs []*V1Input `json:"inputs"`
 

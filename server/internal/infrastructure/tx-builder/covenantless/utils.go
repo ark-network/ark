@@ -1,6 +1,8 @@
 package txbuilder
 
 import (
+	"fmt"
+
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -40,14 +42,20 @@ func getOnchainOutputs(
 
 func getOutputVtxosLeaves(
 	requests []domain.TxRequest,
+	musig2Data []*tree.Musig2,
 ) ([]tree.VtxoLeaf, error) {
+	if len(musig2Data) != len(requests) {
+		return nil, fmt.Errorf("musig2 data length %d does not match requests length %d", len(musig2Data), len(requests))
+	}
+
 	leaves := make([]tree.VtxoLeaf, 0)
-	for _, request := range requests {
+	for i, request := range requests {
 		for _, receiver := range request.Receivers {
 			if !receiver.IsOnchain() {
 				leaves = append(leaves, tree.VtxoLeaf{
-					PubKey: receiver.PubKey,
-					Amount: receiver.Amount,
+					PubKey:     receiver.PubKey,
+					Amount:     receiver.Amount,
+					Musig2Data: musig2Data[i],
 				})
 			}
 		}

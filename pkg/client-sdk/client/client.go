@@ -25,13 +25,13 @@ type RoundEvent interface {
 type TransportClient interface {
 	GetInfo(ctx context.Context) (*Info, error)
 	RegisterInputsForNextRound(
-		ctx context.Context, inputs []Input, ephemeralKey string,
+		ctx context.Context, inputs []Input,
 	) (string, error)
 	RegisterNotesForNextRound(
-		ctx context.Context, notes []string, ephemeralKey string,
+		ctx context.Context, notes []string,
 	) (string, error)
 	RegisterOutputsForNextRound(
-		ctx context.Context, requestID string, outputs []Output,
+		ctx context.Context, requestID string, outputs []Output, musig2 *tree.Musig2,
 	) error
 	SubmitTreeNonces(
 		ctx context.Context, roundID, cosignerPubkey string, nonces bitcointree.TreeNonces,
@@ -193,8 +193,8 @@ func (e RoundFailedEvent) isRoundEvent() {}
 type RoundSigningStartedEvent struct {
 	ID               string
 	UnsignedTree     tree.VtxoTree
-	CosignersPubKeys []*secp256k1.PublicKey
 	UnsignedRoundTx  string
+	CosignersPubkeys []string
 }
 
 func (e RoundSigningStartedEvent) isRoundEvent() {}

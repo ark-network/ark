@@ -32,7 +32,9 @@ type txBuilder struct {
 }
 
 func NewTxBuilder(
-	wallet ports.WalletService, net common.Network, vtxoTreeExpiry, boardingExitDelay common.RelativeLocktime,
+	wallet ports.WalletService,
+	net common.Network,
+	vtxoTreeExpiry, boardingExitDelay common.RelativeLocktime,
 ) ports.TxBuilder {
 	return &txBuilder{wallet, net, vtxoTreeExpiry, boardingExitDelay}
 }
@@ -552,16 +554,12 @@ func (b *txBuilder) BuildRoundTx(
 	requests []domain.TxRequest,
 	boardingInputs []ports.BoardingInput,
 	connectorAddresses []string,
-	cosigners ...*secp256k1.PublicKey,
+	musig2Data []*tree.Musig2,
 ) (roundTx string, vtxoTree tree.VtxoTree, nextConnectorAddress string, connectors []string, err error) {
 	var sharedOutputScript []byte
 	var sharedOutputAmount int64
 
-	if len(cosigners) == 0 {
-		return "", nil, "", nil, fmt.Errorf("missing cosigners")
-	}
-
-	receivers, err := getOutputVtxosLeaves(requests)
+	receivers, err := getOutputVtxosLeaves(requests, musig2Data)
 	if err != nil {
 		return "", nil, "", nil, err
 	}
@@ -571,9 +569,23 @@ func (b *txBuilder) BuildRoundTx(
 		return
 	}
 
+	var sweepScript []byte
+	sweepScript, err = (&tree.CSVMultisigClosure{
+		MultisigClosure: tree.MultisigClosure{
+			PubKeys: []*secp256k1.PublicKey{serverPubkey},
+		},
+		Locktime: b.vtxoTreeExpiry,
+	}).Script()
+	if err != nil {
+		return
+	}
+
+	tree := txscript.AssembleTaprootScriptTree(txscript.NewBaseTapLeaf(sweepScript))
+	root := tree.RootNode.TapHash()
+
 	if !isOnchainOnly(requests) {
 		sharedOutputScript, sharedOutputAmount, err = bitcointree.CraftSharedOutput(
-			cosigners, serverPubkey, receivers, feeAmount, b.vtxoTreeExpiry,
+			receivers, feeAmount, root[:],
 		)
 		if err != nil {
 			return
@@ -605,7 +617,7 @@ func (b *txBuilder) BuildRoundTx(
 		}
 
 		vtxoTree, err = bitcointree.BuildVtxoTree(
-			initialOutpoint, cosigners, serverPubkey, receivers, feeAmount, b.vtxoTreeExpiry,
+			initialOutpoint, receivers, feeAmount, root[:], b.vtxoTreeExpiry,
 		)
 		if err != nil {
 			return "", nil, "", nil, err
@@ -661,7 +673,7 @@ func (b *txBuilder) GetSweepInput(node tree.Node) (vtxoTreeExpiry *common.Relati
 	txid := input.PreviousOutPoint.Hash
 	index := input.PreviousOutPoint.Index
 
-	sweepLeaf, internalKey, vtxoTreeExpiry, err := extractSweepLeaf(partialTx.Inputs[0])
+	sweepLeaf, internalKey, vtxoTreeExpiry, err := b.extractSweepLeaf(partialTx.Inputs[0])
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1262,27 +1274,84 @@ func castToOutpoints(inputs []ports.TxInput) []ports.TxOutpoint {
 	return outpoints
 }
 
-func extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.TaprootTapLeafScript, internalKey *secp256k1.PublicKey, vtxoTreeExpiry *common.RelativeLocktime, err error) {
-	for _, leaf := range input.TaprootLeafScript {
-		closure := &tree.CSVMultisigClosure{}
-		valid, err := closure.Decode(leaf.Script)
+func (b *txBuilder) extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.TaprootTapLeafScript, internalKey *secp256k1.PublicKey, vtxoTreeExpiry *common.RelativeLocktime, err error) {
+	// this if case is here to handle previous version of the tree
+	if len(input.TaprootLeafScript) > 0 {
+		for _, leaf := range input.TaprootLeafScript {
+			closure := &tree.CSVMultisigClosure{}
+			valid, err := closure.Decode(leaf.Script)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+
+			if valid && (vtxoTreeExpiry == nil || closure.Locktime.LessThan(*vtxoTreeExpiry)) {
+				sweepLeaf = leaf
+				vtxoTreeExpiry = &closure.Locktime
+			}
+		}
+
+		internalKey, err = schnorr.ParsePubKey(input.TaprootInternalKey)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 
-		if valid && (vtxoTreeExpiry == nil || closure.Locktime.LessThan(*vtxoTreeExpiry)) {
-			sweepLeaf = leaf
-			vtxoTreeExpiry = &closure.Locktime
+		if sweepLeaf == nil {
+			return nil, nil, nil, fmt.Errorf("sweep leaf not found")
 		}
+		return sweepLeaf, internalKey, vtxoTreeExpiry, nil
 	}
 
-	internalKey, err = schnorr.ParsePubKey(input.TaprootInternalKey)
+	serverPubKey, err := b.wallet.GetPubkey(context.Background())
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	if sweepLeaf == nil {
-		return nil, nil, nil, fmt.Errorf("sweep leaf not found")
+	cosignerPubKeys, err := bitcointree.GetCosignerKeys(input)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	if len(cosignerPubKeys) == 0 {
+		return nil, nil, nil, fmt.Errorf("no cosigner pubkeys found")
+	}
+
+	vtxoTreeExpiry, err = bitcointree.GetVtxoTreeExpiry(input)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	sweepClosure := &tree.CSVMultisigClosure{
+		Locktime: *vtxoTreeExpiry,
+		MultisigClosure: tree.MultisigClosure{
+			PubKeys: []*secp256k1.PublicKey{serverPubKey},
+		},
+	}
+
+	sweepScript, err := sweepClosure.Script()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	sweepTapTree := txscript.AssembleTaprootScriptTree(txscript.NewBaseTapLeaf(sweepScript))
+	sweepRoot := sweepTapTree.RootNode.TapHash()
+
+	aggregatedKey, err := bitcointree.AggregateKeys(cosignerPubKeys, sweepRoot[:])
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	internalKey = aggregatedKey.PreTweakedKey
+
+	sweepLeafMerkleProof := sweepTapTree.LeafMerkleProofs[0]
+	sweepLeafControlBlock := sweepLeafMerkleProof.ToControlBlock(internalKey)
+	sweepLeafControlBlockBytes, err := sweepLeafControlBlock.ToBytes()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	sweepLeaf = &psbt.TaprootTapLeafScript{
+		Script:       sweepScript,
+		ControlBlock: sweepLeafControlBlockBytes,
+		LeafVersion:  txscript.BaseLeafVersion,
 	}
 
 	return sweepLeaf, internalKey, vtxoTreeExpiry, nil

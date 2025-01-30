@@ -366,7 +366,7 @@ func (b *txBuilder) BuildRoundTx(
 	requests []domain.TxRequest,
 	boardingInputs []ports.BoardingInput,
 	connectorAddresses []string,
-	_ ...*secp256k1.PublicKey, // cosigners are not used in the covenant
+	_ []*tree.Musig2,
 ) (roundTx string, vtxoTree tree.VtxoTree, nextConnectorAddress string, connectors []string, err error) {
 	// The creation of the tree and the round tx are tightly coupled:
 	// - building the tree requires knowing the shared outpoint (txid:vout)

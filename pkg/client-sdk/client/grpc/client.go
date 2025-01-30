@@ -90,13 +90,10 @@ func (a *grpcClient) GetBoardingAddress(
 }
 
 func (a *grpcClient) RegisterInputsForNextRound(
-	ctx context.Context, inputs []client.Input, ephemeralPubkey string,
+	ctx context.Context, inputs []client.Input,
 ) (string, error) {
 	req := &arkv1.RegisterInputsForNextRoundRequest{
 		Inputs: ins(inputs).toProto(),
-	}
-	if len(ephemeralPubkey) > 0 {
-		req.EphemeralPubkey = &ephemeralPubkey
 	}
 
 	resp, err := a.svc.RegisterInputsForNextRound(ctx, req)
@@ -107,13 +104,10 @@ func (a *grpcClient) RegisterInputsForNextRound(
 }
 
 func (a *grpcClient) RegisterNotesForNextRound(
-	ctx context.Context, notes []string, ephemeralKey string,
+	ctx context.Context, notes []string,
 ) (string, error) {
 	req := &arkv1.RegisterInputsForNextRoundRequest{
 		Notes: notes,
-	}
-	if len(ephemeralKey) > 0 {
-		req.EphemeralPubkey = &ephemeralKey
 	}
 	resp, err := a.svc.RegisterInputsForNextRound(ctx, req)
 	if err != nil {
@@ -123,11 +117,17 @@ func (a *grpcClient) RegisterNotesForNextRound(
 }
 
 func (a *grpcClient) RegisterOutputsForNextRound(
-	ctx context.Context, requestID string, outputs []client.Output,
+	ctx context.Context, requestID string, outputs []client.Output, musig2 *tree.Musig2,
 ) error {
 	req := &arkv1.RegisterOutputsForNextRoundRequest{
 		RequestId: requestID,
 		Outputs:   outs(outputs).toProto(),
+	}
+	if musig2 != nil {
+		req.Musig2 = &arkv1.Musig2{
+			CosignersPublicKeys: musig2.CosignersPublicKeys,
+			SigningAll:          musig2.SigningType == tree.SignAll,
+		}
 	}
 	_, err := a.svc.RegisterOutputsForNextRound(ctx, req)
 	return err

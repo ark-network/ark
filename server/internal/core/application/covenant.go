@@ -343,7 +343,7 @@ func (s *covenantService) newBoardingInput(tx *transaction.Transaction, input po
 	}, nil
 }
 
-func (s *covenantService) ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error {
+func (s *covenantService) ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver, _ *tree.Musig2) error {
 	// Check credentials
 	request, ok := s.txRequests.view(creds)
 	if !ok {
@@ -364,7 +364,7 @@ func (s *covenantService) ClaimVtxos(ctx context.Context, creds string, receiver
 	if err := request.AddReceivers(receivers); err != nil {
 		return err
 	}
-	return s.txRequests.update(*request)
+	return s.txRequests.update(*request, nil)
 }
 
 func (s *covenantService) UpdateTxRequestStatus(_ context.Context, id string) error {
@@ -473,16 +473,6 @@ func (s *covenantService) GetInfo(ctx context.Context) (*ServiceInfo, error) {
 	}, nil
 }
 
-func (s *covenantService) RegisterCosignerPubkey(ctx context.Context, requestID string, _ string) error {
-	// if the user sends an ephemeral pubkey, something is going wrong client-side
-	// we should delete the associated tx request
-	if err := s.txRequests.delete(requestID); err != nil {
-		log.WithError(err).Warnf("failed to delete tx request %s", requestID)
-	}
-
-	return ErrTreeSigningNotRequired
-}
-
 func (s *covenantService) RegisterCosignerNonces(context.Context, string, *secp256k1.PublicKey, string) error {
 	return ErrTreeSigningNotRequired
 }
@@ -581,7 +571,7 @@ func (s *covenantService) startFinalization() {
 		return
 	}
 
-	unsignedRoundTx, tree, connectorAddress, connectors, err := s.builder.BuildRoundTx(s.pubkey, requests, boardingInputs, sweptRounds)
+	unsignedRoundTx, tree, connectorAddress, connectors, err := s.builder.BuildRoundTx(s.pubkey, requests, boardingInputs, sweptRounds, nil)
 	if err != nil {
 		round.Fail(fmt.Errorf("failed to create round tx: %s", err))
 		log.WithError(err).Warn("failed to create round tx")

@@ -23,7 +23,6 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/explorerservice/explorer_service"
 	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/models"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -115,7 +114,7 @@ func (a *restClient) GetBoardingAddress(
 }
 
 func (a *restClient) RegisterInputsForNextRound(
-	ctx context.Context, inputs []client.Input, ephemeralPubkey string,
+	ctx context.Context, inputs []client.Input,
 ) (string, error) {
 	ins := make([]*models.V1Input, 0, len(inputs))
 	for _, i := range inputs {
@@ -132,10 +131,6 @@ func (a *restClient) RegisterInputsForNextRound(
 	body := &models.V1RegisterInputsForNextRoundRequest{
 		Inputs: ins,
 	}
-	if len(ephemeralPubkey) > 0 {
-		body.EphemeralPubkey = ephemeralPubkey
-	}
-
 	resp, err := a.svc.ArkServiceRegisterInputsForNextRound(
 		ark_service.NewArkServiceRegisterInputsForNextRoundParams().WithBody(body),
 	)
@@ -147,13 +142,10 @@ func (a *restClient) RegisterInputsForNextRound(
 }
 
 func (a *restClient) RegisterNotesForNextRound(
-	ctx context.Context, notes []string, ephemeralKey string,
+	ctx context.Context, notes []string,
 ) (string, error) {
 	body := &models.V1RegisterInputsForNextRoundRequest{
 		Notes: notes,
-	}
-	if len(ephemeralKey) > 0 {
-		body.EphemeralPubkey = ephemeralKey
 	}
 	resp, err := a.svc.ArkServiceRegisterInputsForNextRound(
 		ark_service.NewArkServiceRegisterInputsForNextRoundParams().WithBody(body),
@@ -165,7 +157,7 @@ func (a *restClient) RegisterNotesForNextRound(
 }
 
 func (a *restClient) RegisterOutputsForNextRound(
-	ctx context.Context, requestID string, outputs []client.Output,
+	ctx context.Context, requestID string, outputs []client.Output, musig2 *tree.Musig2,
 ) error {
 	outs := make([]*models.V1Output, 0, len(outputs))
 	for _, o := range outputs {
@@ -178,7 +170,12 @@ func (a *restClient) RegisterOutputsForNextRound(
 		RequestID: requestID,
 		Outputs:   outs,
 	}
-
+	if musig2 != nil {
+		body.Musig2 = &models.V1Musig2{
+			CosignersPublicKeys: musig2.CosignersPublicKeys,
+			SigningAll:          musig2.SigningType == tree.SignAll,
+		}
+	}
 	_, err := a.svc.ArkServiceRegisterOutputsForNextRound(
 		ark_service.NewArkServiceRegisterOutputsForNextRoundParams().WithBody(&body),
 	)
@@ -345,26 +342,11 @@ func (c *restClient) GetEventStream(
 				}
 			case resp.Result.RoundSigning != nil:
 				e := resp.Result.RoundSigning
-				pubkeys := make([]*secp256k1.PublicKey, 0, len(e.CosignersPubkeys))
-				for _, pubkey := range e.CosignersPubkeys {
-					p, err := hex.DecodeString(pubkey)
-					if err != nil {
-						_err = err
-						break
-					}
-					pk, err := secp256k1.ParsePubKey(p)
-					if err != nil {
-						_err = err
-						break
-					}
-					pubkeys = append(pubkeys, pk)
-				}
-
 				event = client.RoundSigningStartedEvent{
 					ID:               e.ID,
 					UnsignedTree:     treeFromProto{e.UnsignedVtxoTree}.parse(),
-					CosignersPubKeys: pubkeys,
 					UnsignedRoundTx:  e.UnsignedRoundTx,
+					CosignersPubkeys: e.CosignersPubkeys,
 				}
 			case resp.Result.RoundSigningNoncesGenerated != nil:
 				e := resp.Result.RoundSigningNoncesGenerated

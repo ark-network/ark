@@ -1,18 +1,17 @@
 package bitcointree_test
 
 import (
-	"encoding/json"
-	"os"
+	"bytes"
+	"encoding/hex"
+	"fmt"
 	"testing"
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,152 +20,269 @@ const (
 	exitDelay   = 512
 )
 
-var vtxoTreeExpiry = common.RelativeLocktime{Type: common.LocktimeTypeBlock, Value: 144}
+var (
+	vtxoTreeExpiry   = common.RelativeLocktime{Type: common.LocktimeTypeBlock, Value: 144}
+	rootInput, _     = wire.NewOutPointFromString("49f8664acc899be91902f8ade781b7eeb9cbe22bdd9efbc36e56195de21bcd12:0")
+	serverPrivKey, _ = btcec.NewPrivateKey()
+	sweepScript, _   = (&tree.CSVMultisigClosure{
+		MultisigClosure: tree.MultisigClosure{PubKeys: []*btcec.PublicKey{serverPrivKey.PubKey()}},
+		Locktime:        vtxoTreeExpiry,
+	}).Script()
+	sweepRoot      = txscript.NewBaseTapLeaf(sweepScript).TapHash()
+	receiverCounts = []int{1, 2, 20, 128}
+)
 
-var testTxid, _ = chainhash.NewHashFromStr("49f8664acc899be91902f8ade781b7eeb9cbe22bdd9efbc36e56195de21bcd12")
+func TestBuildAndSignVtxoTree(t *testing.T) {
+	t.Parallel()
 
-func TestRoundTripSignTree(t *testing.T) {
-	fixtures := parseFixtures(t)
-	for _, f := range fixtures.Valid {
-		// Generate 20 cosigners
-		cosigners := make([]*secp256k1.PrivateKey, 20)
-		cosignerPubkeys := make([]*btcec.PublicKey, 20)
-		for i := 0; i < 20; i++ {
-			prvkey, err := secp256k1.GeneratePrivateKey()
+	testVectors, err := makeTestVectors()
+	require.NoError(t, err)
+	require.NotEmpty(t, testVectors)
+
+	for _, v := range testVectors {
+		t.Run(v.name, func(t *testing.T) {
+			sharedOutScript, sharedOutAmount, err := bitcointree.CraftSharedOutput(
+				v.receivers, minRelayFee, sweepRoot[:],
+			)
 			require.NoError(t, err)
-			cosigners[i] = prvkey
-			cosignerPubkeys[i] = prvkey.PubKey()
-		}
+			require.NotNil(t, sharedOutScript)
+			require.NotZero(t, sharedOutAmount)
 
-		server, err := secp256k1.GeneratePrivateKey()
-		require.NoError(t, err)
-
-		_, sharedOutputAmount, err := bitcointree.CraftSharedOutput(
-			cosignerPubkeys,
-			server.PubKey(),
-			castReceivers(f.Receivers),
-			minRelayFee,
-			vtxoTreeExpiry,
-		)
-		require.NoError(t, err)
-
-		vtxoTree, err := bitcointree.BuildVtxoTree(
-			&wire.OutPoint{
-				Hash:  *testTxid,
-				Index: 0,
-			},
-			cosignerPubkeys,
-			server.PubKey(),
-			castReceivers(f.Receivers),
-			minRelayFee,
-			vtxoTreeExpiry,
-		)
-		require.NoError(t, err)
-
-		sweepClosure := &tree.CSVMultisigClosure{
-			MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{server.PubKey()}},
-			Locktime:        vtxoTreeExpiry,
-		}
-
-		sweepScript, err := sweepClosure.Script()
-		require.NoError(t, err)
-
-		sweepTapLeaf := txscript.NewBaseTapLeaf(sweepScript)
-		sweepTapTree := txscript.AssembleTaprootScriptTree(sweepTapLeaf)
-		root := sweepTapTree.RootNode.TapHash()
-
-		serverCoordinator, err := bitcointree.NewTreeCoordinatorSession(
-			sharedOutputAmount,
-			vtxoTree,
-			root.CloneBytes(),
-			cosignerPubkeys,
-		)
-		require.NoError(t, err)
-
-		// Create signer sessions for all cosigners
-		signerSessions := make([]bitcointree.SignerSession, 20)
-		for i, cosigner := range cosigners {
-			signerSessions[i] = bitcointree.NewTreeSignerSession(cosigner, sharedOutputAmount, vtxoTree, root.CloneBytes())
-		}
-
-		// Get nonces from all signers
-		for i, session := range signerSessions {
-			nonces, err := session.GetNonces()
+			vtxoTree, err := bitcointree.BuildVtxoTree(
+				rootInput, v.receivers, minRelayFee, sweepRoot[:], vtxoTreeExpiry,
+			)
 			require.NoError(t, err)
-			err = serverCoordinator.AddNonce(cosignerPubkeys[i], nonces)
+			require.NotNil(t, vtxoTree)
+
+			coordinator, err := bitcointree.NewTreeCoordinatorSession(
+				sharedOutAmount, vtxoTree, sweepRoot[:],
+			)
 			require.NoError(t, err)
-		}
+			require.NotNil(t, coordinator)
 
-		aggregatedNonce, err := serverCoordinator.AggregateNonces()
-		require.NoError(t, err)
-
-		// Set keys and aggregated nonces for all signers
-		for _, session := range signerSessions {
-			err = session.SetKeys(cosignerPubkeys)
+			signers, err := makeCosigners(v.privKeys, sharedOutAmount, vtxoTree)
 			require.NoError(t, err)
-			err = session.SetAggregatedNonces(aggregatedNonce)
+			require.NotNil(t, signers)
+
+			err = makeAggregatedNonces(signers, coordinator, checkNoncesRoundtrip(t))
 			require.NoError(t, err)
-		}
 
-		// Get signatures from all signers
-		for i, session := range signerSessions {
-			sig, err := session.Sign()
+			signedTree, err := makeAggregatedSignatures(signers, coordinator, checkSigsRoundtrip(t))
 			require.NoError(t, err)
-			err = serverCoordinator.AddSig(cosignerPubkeys[i], sig)
+			require.NotNil(t, signedTree)
+
+			// validate signatures
+			err = bitcointree.ValidateTreeSigs(sweepRoot[:], sharedOutAmount, signedTree)
 			require.NoError(t, err)
-		}
-
-		signedTree, err := serverCoordinator.SignTree()
-		require.NoError(t, err)
-
-		// verify the tree
-		aggregatedKey, err := bitcointree.AggregateKeys(cosignerPubkeys, root.CloneBytes())
-		require.NoError(t, err)
-
-		err = bitcointree.ValidateTreeSigs(
-			root.CloneBytes(),
-			aggregatedKey.FinalKey,
-			sharedOutputAmount,
-			signedTree,
-		)
-		require.NoError(t, err)
-	}
-}
-
-type receiverFixture struct {
-	Amount int64  `json:"amount"`
-	Pubkey string `json:"pubkey"`
-}
-
-func castReceivers(receivers []receiverFixture) []tree.VtxoLeaf {
-	receiversOut := make([]tree.VtxoLeaf, 0, len(receivers))
-	for _, r := range receivers {
-		receiversOut = append(receiversOut, tree.VtxoLeaf{
-			PubKey: r.Pubkey,
-			Amount: uint64(r.Amount),
 		})
 	}
-	return receiversOut
 }
 
-type fixture struct {
-	Valid []struct {
-		Receivers []receiverFixture `json:"receivers"`
-	} `json:"valid"`
+func checkNoncesRoundtrip(t *testing.T) func(nonces bitcointree.TreeNonces) {
+	return func(nonces bitcointree.TreeNonces) {
+		var encodedNonces bytes.Buffer
+		err := nonces.Encode(&encodedNonces)
+		require.NoError(t, err)
+
+		decodedNonces, err := bitcointree.DecodeNonces(&encodedNonces)
+		require.NoError(t, err)
+		for i, nonceRow := range nonces {
+			for j, nonce := range nonceRow {
+				require.Equal(t, nonce, decodedNonces[i][j])
+			}
+		}
+	}
 }
 
-func parseFixtures(t *testing.T) fixture {
-	file, err := os.ReadFile("testdata/musig2.json")
-	require.NoError(t, err)
-	v := map[string]interface{}{}
-	err = json.Unmarshal(file, &v)
-	require.NoError(t, err)
+func checkSigsRoundtrip(t *testing.T) func(sigs bitcointree.TreePartialSigs) {
+	return func(sigs bitcointree.TreePartialSigs) {
+		var encodedSig bytes.Buffer
+		err := sigs.Encode(&encodedSig)
+		require.NoError(t, err)
+		decodedSig, err := bitcointree.DecodeSignatures(&encodedSig)
+		require.NoError(t, err)
+		for i, sigRow := range sigs {
+			for j, sig := range sigRow {
+				if sig == nil {
+					require.Nil(t, decodedSig[i][j])
+				} else {
+					require.Equal(t, sig.S, decodedSig[i][j].S)
+				}
+			}
+		}
+	}
+}
 
-	vv := v["treeSignature"].(map[string]interface{})
-	file, _ = json.Marshal(vv)
-	var fixtures fixture
-	err = json.Unmarshal(file, &fixtures)
-	require.NoError(t, err)
+func makeCosigners(
+	keys []*btcec.PrivateKey, sharedOutAmount int64, vtxoTree tree.VtxoTree,
+) (map[string]bitcointree.SignerSession, error) {
+	signers := make(map[string]bitcointree.SignerSession)
+	for _, prvkey := range keys {
+		session := bitcointree.NewTreeSignerSession(prvkey)
+		if err := session.Init(sweepRoot[:], sharedOutAmount, vtxoTree); err != nil {
+			return nil, err
+		}
+		signers[keyToStr(prvkey)] = session
+	}
 
-	return fixtures
+	// create signer session for the server itself
+	serverSession := bitcointree.NewTreeSignerSession(serverPrivKey)
+	if err := serverSession.Init(sweepRoot[:], sharedOutAmount, vtxoTree); err != nil {
+		return nil, err
+	}
+	signers[keyToStr(serverPrivKey)] = serverSession
+	return signers, nil
+}
+
+func makeAggregatedNonces(
+	signers map[string]bitcointree.SignerSession, coordinator bitcointree.CoordinatorSession,
+	checkNoncesRoundtrip func(bitcointree.TreeNonces),
+) error {
+	for pk, session := range signers {
+		buf, err := hex.DecodeString(pk)
+		if err != nil {
+			return err
+		}
+		pubkey, err := btcec.ParsePubKey(buf)
+		if err != nil {
+			return err
+		}
+
+		nonces, err := session.GetNonces()
+		if err != nil {
+			return err
+		}
+		checkNoncesRoundtrip(nonces)
+
+		coordinator.AddNonce(pubkey, nonces)
+	}
+
+	aggregatedNonce, err := coordinator.AggregateNonces()
+	if err != nil {
+		return err
+	}
+
+	// set the aggregated nonces for all signers sessions
+	for _, session := range signers {
+		session.SetAggregatedNonces(aggregatedNonce)
+	}
+	return nil
+}
+
+func makeAggregatedSignatures(
+	signers map[string]bitcointree.SignerSession, coordinator bitcointree.CoordinatorSession,
+	checkSigsRoundtrip func(bitcointree.TreePartialSigs),
+) (tree.VtxoTree, error) {
+	for pk, session := range signers {
+		buf, err := hex.DecodeString(pk)
+		if err != nil {
+			return nil, err
+		}
+		pubkey, err := btcec.ParsePubKey(buf)
+		if err != nil {
+			return nil, err
+		}
+
+		sigs, err := session.Sign()
+		if err != nil {
+			return nil, err
+		}
+		checkSigsRoundtrip(sigs)
+
+		coordinator.AddSignatures(pubkey, sigs)
+	}
+
+	// aggregate signatures
+	return coordinator.SignTree()
+}
+
+type testCase struct {
+	name      string
+	receivers []tree.VtxoLeaf
+	privKeys  []*btcec.PrivateKey
+}
+
+func makeTestVectors() ([]testCase, error) {
+	vectors := make([]testCase, 0, len(receiverCounts))
+	for _, count := range receiverCounts {
+		receivers, privKeys, err := generateMockedReceivers(count)
+		if err != nil {
+			return nil, err
+		}
+
+		// add mixed types test case if count is between 2 and 32
+		if count > 1 && count < 32 {
+			vectors = append(vectors, testCase{
+				name:      fmt.Sprintf("%d receivers Mixed Signing Types", len(receivers)),
+				receivers: withMixedSigningTypes(receivers),
+				privKeys:  privKeys,
+			})
+		}
+
+		// add SignAll test case if count is less than 32
+		if count < 32 {
+			vectors = append(vectors, testCase{
+				name:      fmt.Sprintf("%d receivers SignAll", len(receivers)),
+				receivers: withSigningType(tree.SignAll, receivers),
+				privKeys:  privKeys,
+			})
+		}
+
+		// always add SignBranch test case
+		vectors = append(vectors, testCase{
+			name:      fmt.Sprintf("%d receivers SignBranch", len(receivers)),
+			receivers: withSigningType(tree.SignBranch, receivers),
+			privKeys:  privKeys,
+		})
+	}
+	return vectors, nil
+}
+
+func generateMockedReceivers(num int) ([]tree.VtxoLeaf, []*btcec.PrivateKey, error) {
+	receivers := make([]tree.VtxoLeaf, 0, num)
+	privKeys := make([]*btcec.PrivateKey, 0, num)
+	for i := 0; i < num; i++ {
+		prvkey, err := btcec.NewPrivateKey()
+		if err != nil {
+			return nil, nil, err
+		}
+		receivers = append(receivers, tree.VtxoLeaf{
+			PubKey: "0000000000000000000000000000000000000000000000000000000000000002",
+			Amount: uint64((i + 1) * 1000),
+			Musig2Data: &tree.Musig2{
+				CosignersPublicKeys: []string{
+					hex.EncodeToString(prvkey.PubKey().SerializeCompressed()),
+					hex.EncodeToString(serverPrivKey.PubKey().SerializeCompressed()),
+				},
+				SigningType: tree.SignAll,
+			},
+		})
+		privKeys = append(privKeys, prvkey)
+	}
+	return receivers, privKeys, nil
+}
+
+func withSigningType(signingType tree.SigningType, receivers []tree.VtxoLeaf) []tree.VtxoLeaf {
+	newReceivers := make([]tree.VtxoLeaf, 0, len(receivers))
+	for _, receiver := range receivers {
+		newReceivers = append(newReceivers, tree.VtxoLeaf{
+			PubKey: receiver.PubKey,
+			Amount: receiver.Amount,
+			Musig2Data: &tree.Musig2{
+				CosignersPublicKeys: receiver.Musig2Data.CosignersPublicKeys,
+				SigningType:         signingType,
+			},
+		})
+	}
+	return newReceivers
+}
+
+func withMixedSigningTypes(receivers []tree.VtxoLeaf) []tree.VtxoLeaf {
+	first := withSigningType(tree.SignAll, receivers[:len(receivers)/2])
+	second := withSigningType(tree.SignBranch, receivers[len(receivers)/2:])
+	return append(first, second...)
+}
+
+func keyToStr(key *btcec.PrivateKey) string {
+	return hex.EncodeToString(key.PubKey().SerializeCompressed())
 }

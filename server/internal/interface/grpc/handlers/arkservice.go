@@ -9,6 +9,7 @@ import (
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/descriptor"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -150,13 +151,6 @@ func (h *handler) RegisterInputsForNextRound(
 		}
 	}
 
-	pubkey := req.GetEphemeralPubkey()
-	if len(pubkey) > 0 {
-		if err := h.svc.RegisterCosignerPubkey(ctx, requestID, pubkey); err != nil {
-			return nil, err
-		}
-	}
-
 	return &arkv1.RegisterInputsForNextRoundResponse{
 		RequestId: requestID,
 	}, nil
@@ -170,7 +164,20 @@ func (h *handler) RegisterOutputsForNextRound(
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	if err := h.svc.ClaimVtxos(ctx, req.GetRequestId(), receivers); err != nil {
+	musig2Data := req.GetMusig2()
+	var musig2 *tree.Musig2
+	if musig2Data != nil {
+		signingType := tree.SignBranch
+		if musig2Data.SigningAll {
+			signingType = tree.SignAll
+		}
+		musig2 = &tree.Musig2{
+			CosignersPublicKeys: musig2Data.GetCosignersPublicKeys(),
+			SigningType:         signingType,
+		}
+	}
+
+	if err := h.svc.ClaimVtxos(ctx, req.GetRequestId(), receivers, musig2); err != nil {
 		return nil, err
 	}
 
@@ -522,19 +529,13 @@ func (h *handler) listenToEvents() {
 				},
 			}
 		case application.RoundSigningStarted:
-			cosignersKeys := make([]string, 0, len(e.Cosigners))
-			for _, key := range e.Cosigners {
-				keyStr := hex.EncodeToString(key.SerializeCompressed())
-				cosignersKeys = append(cosignersKeys, keyStr)
-			}
-
 			ev = &arkv1.GetEventStreamResponse{
 				Event: &arkv1.GetEventStreamResponse_RoundSigning{
 					RoundSigning: &arkv1.RoundSigningEvent{
 						Id:               e.Id,
-						CosignersPubkeys: cosignersKeys,
 						UnsignedVtxoTree: vtxoTree(e.UnsignedVtxoTree).toProto(),
 						UnsignedRoundTx:  e.UnsignedRoundTx,
+						CosignersPubkeys: e.CosignersPubkeys,
 					},
 				},
 			}

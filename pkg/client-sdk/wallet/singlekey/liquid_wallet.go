@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
@@ -323,6 +324,10 @@ func (w *liquidWallet) SignMessage(
 	}
 
 	return hex.EncodeToString(sig.Serialize()), nil
+}
+
+func (w *liquidWallet) NewVtxoTreeSigner(context.Context, string) (bitcointree.SignerSession, error) {
+	return nil, fmt.Errorf("not implemented")
 }
 
 func (w *liquidWallet) getAddress(

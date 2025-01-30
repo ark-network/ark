@@ -11,15 +11,14 @@ import (
 
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
 // signer should react to this event by generating a musig2 nonce for each transaction in the tree
 type RoundSigningStarted struct {
 	Id               string
 	UnsignedVtxoTree tree.VtxoTree
-	Cosigners        []*secp256k1.PublicKey
 	UnsignedRoundTx  string
+	CosignersPubkeys []string
 }
 
 // signer should react to this event by partially signing the vtxo tree transactions

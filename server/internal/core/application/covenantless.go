@@ -53,10 +53,13 @@ type covenantlessService struct {
 	transactionEventsCh chan TransactionEvent
 
 	// cached data for the current round
-	lastEvent           domain.RoundEvent
 	currentRoundLock    sync.Mutex
 	currentRound        *domain.Round
 	treeSigningSessions map[string]*musigSigningSession
+
+	// TODO derive this from wallet
+	serverSigningKey    *secp256k1.PrivateKey
+	serverSigningPubKey *secp256k1.PublicKey
 
 	// allowZeroFees is a temporary flag letting to submit redeem txs with zero miner fees
 	// this should be removed after we migrate to transactions version 3
@@ -94,6 +97,11 @@ func NewCovenantlessService(
 		}
 	}
 
+	serverSigningKey, err := secp256k1.GeneratePrivateKey()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate ephemeral key: %s", err)
+	}
+
 	svc := &covenantlessService{
 		network:             network,
 		pubkey:              pubkey,
@@ -113,6 +121,8 @@ func NewCovenantlessService(
 		treeSigningSessions: make(map[string]*musigSigningSession),
 		boardingExitDelay:   boardingExitDelay,
 		nostrDefaultRelays:  nostrDefaultRelays,
+		serverSigningKey:    serverSigningKey,
+		serverSigningPubKey: serverSigningKey.PubKey(),
 		allowZeroFees:       allowZeroFees,
 	}
 
@@ -643,6 +653,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 	if err != nil {
 		return "", err
 	}
+
 	if err := s.txRequests.push(*request, boardingInputs); err != nil {
 		return "", err
 	}
@@ -685,7 +696,7 @@ func (s *covenantlessService) newBoardingInput(tx wire.MsgTx, input ports.Input)
 	}, nil
 }
 
-func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver) error {
+func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver, musig2Data *tree.Musig2) error {
 	// Check credentials
 	request, ok := s.txRequests.view(creds)
 	if !ok {
@@ -697,16 +708,41 @@ func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, rece
 		return fmt.Errorf("unable to verify receiver amount, failed to get dust: %s", err)
 	}
 
+	hasOffChainReceiver := false
+
 	for _, rcv := range receivers {
 		if rcv.Amount <= dustAmount {
 			return fmt.Errorf("receiver amount must be greater than dust amount %d", dustAmount)
 		}
+
+		if !rcv.IsOnchain() {
+			hasOffChainReceiver = true
+		}
+	}
+
+	var data *tree.Musig2
+
+	if hasOffChainReceiver {
+		if musig2Data == nil {
+			return fmt.Errorf("musig2 data is required for offchain receivers")
+		}
+
+		// check if the server pubkey has been set as cosigner
+		serverPubKeyHex := hex.EncodeToString(s.serverSigningPubKey.SerializeCompressed())
+		for _, pubkey := range musig2Data.CosignersPublicKeys {
+			if pubkey == serverPubKeyHex {
+				return fmt.Errorf("server pubkey already in musig2 data")
+			}
+		}
+
+		data = musig2Data
 	}
 
 	if err := request.AddReceivers(receivers); err != nil {
 		return err
 	}
-	return s.txRequests.update(*request)
+
+	return s.txRequests.update(*request, data)
 }
 
 func (s *covenantlessService) UpdateTxRequestStatus(_ context.Context, id string) error {
@@ -857,20 +893,6 @@ func calcNextMarketHour(marketHourStartTime, marketHourEndTime time.Time, period
 	}
 }
 
-func (s *covenantlessService) RegisterCosignerPubkey(ctx context.Context, requestID string, pubkey string) error {
-	pubkeyBytes, err := hex.DecodeString(pubkey)
-	if err != nil {
-		return fmt.Errorf("failed to decode hex pubkey: %s", err)
-	}
-
-	ephemeralPubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
-	if err != nil {
-		return fmt.Errorf("failed to parse pubkey: %s", err)
-	}
-
-	return s.txRequests.pushEphemeralKey(requestID, ephemeralPubkey)
-}
-
 func (s *covenantlessService) RegisterCosignerNonces(
 	ctx context.Context, roundID string, pubkey *secp256k1.PublicKey, encodedNonces string,
 ) error {
@@ -1000,6 +1022,7 @@ func (s *covenantlessService) startRound() {
 }
 
 func (s *covenantlessService) startFinalization() {
+	log.Debugf("started finalization stage for round: %s", s.currentRound.Id)
 	ctx := context.Background()
 	round := s.currentRound
 
@@ -1043,14 +1066,7 @@ func (s *covenantlessService) startFinalization() {
 	if num > txRequestsThreshold {
 		num = txRequestsThreshold
 	}
-	requests, boardingInputs, cosigners, redeeemedNotes := s.txRequests.pop(num)
-	if len(requests) > len(cosigners) {
-		err := fmt.Errorf("missing ephemeral key for tx requests")
-		round.Fail(fmt.Errorf("round aborted: %s", err))
-		log.WithError(err).Debugf("round %s aborted", round.Id)
-		return
-	}
-
+	requests, boardingInputs, redeeemedNotes, musig2data := s.txRequests.pop(num)
 	notes = redeeemedNotes
 
 	if _, err := round.RegisterTxRequests(requests); err != nil {
@@ -1066,17 +1082,19 @@ func (s *covenantlessService) startFinalization() {
 		return
 	}
 
-	ephemeralKey, err := secp256k1.GeneratePrivateKey()
-	if err != nil {
-		round.Fail(fmt.Errorf("failed to generate ephemeral key: %s", err))
-		log.WithError(err).Warn("failed to generate ephemeral key")
-		return
+	// add server pubkey in musig2data and count the number of unique keys
+	uniqueSignerPubkeys := make(map[string]struct{})
+	serverPubKeyHex := hex.EncodeToString(s.serverSigningPubKey.SerializeCompressed())
+	for _, data := range musig2data {
+		for _, pubkey := range data.CosignersPublicKeys {
+			uniqueSignerPubkeys[pubkey] = struct{}{}
+		}
+		data.CosignersPublicKeys = append(data.CosignersPublicKeys, serverPubKeyHex)
 	}
 
-	cosigners = append(cosigners, ephemeralKey.PubKey())
-
+	log.Debugf("building tx for round %s", round.Id)
 	unsignedRoundTx, vtxoTree, connectorAddress, connectors, err := s.builder.BuildRoundTx(
-		s.pubkey, requests, boardingInputs, connectorAddresses, cosigners...,
+		s.pubkey, requests, boardingInputs, connectorAddresses, musig2data,
 	)
 	if err != nil {
 		round.Fail(fmt.Errorf("failed to create round tx: %s", err))
@@ -1088,16 +1106,21 @@ func (s *covenantlessService) startFinalization() {
 	s.forfeitTxs.init(connectors, requests)
 
 	if len(vtxoTree) > 0 {
-		log.Debugf("signing vtxo tree for round %s", round.Id)
+		nbOfCosigners := len(uniqueSignerPubkeys) + 1 // +1 for the server
 
-		signingSession := newMusigSigningSession(len(cosigners))
+		signingSession := newMusigSigningSession(nbOfCosigners)
 		s.treeSigningSessions[round.Id] = signingSession
 
 		log.Debugf("signing session created for round %s", round.Id)
 
 		s.currentRound.UnsignedTx = unsignedRoundTx
 		// send back the unsigned tree & all cosigners pubkeys
-		s.propagateRoundSigningStartedEvent(vtxoTree, cosigners)
+		listOfCosignersPubkeys := make([]string, 0, len(uniqueSignerPubkeys))
+		for pubkey := range uniqueSignerPubkeys {
+			listOfCosignersPubkeys = append(listOfCosignersPubkeys, pubkey)
+		}
+
+		s.propagateRoundSigningStartedEvent(vtxoTree, listOfCosignersPubkeys)
 
 		sweepClosure := tree.CSVMultisigClosure{
 			MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{s.pubkey}},
@@ -1122,16 +1145,19 @@ func (s *covenantlessService) startFinalization() {
 		sweepTapTree := txscript.AssembleTaprootScriptTree(sweepLeaf)
 		root := sweepTapTree.RootNode.TapHash()
 
-		coordinator, err := bitcointree.NewTreeCoordinatorSession(sharedOutputAmount, vtxoTree, root.CloneBytes(), cosigners)
+		coordinator, err := bitcointree.NewTreeCoordinatorSession(sharedOutputAmount, vtxoTree, root.CloneBytes())
 		if err != nil {
 			round.Fail(fmt.Errorf("failed to create tree coordinator: %s", err))
 			log.WithError(err).Warn("failed to create tree coordinator")
 			return
 		}
 
-		serverSignerSession := bitcointree.NewTreeSignerSession(
-			ephemeralKey, sharedOutputAmount, vtxoTree, root.CloneBytes(),
-		)
+		serverSignerSession := bitcointree.NewTreeSignerSession(s.serverSigningKey)
+		if err := serverSignerSession.Init(root.CloneBytes(), sharedOutputAmount, vtxoTree); err != nil {
+			round.Fail(fmt.Errorf("failed to create tree signer session: %s", err))
+			log.WithError(err).Warn("failed to create tree signer session")
+			return
+		}
 
 		nonces, err := serverSignerSession.GetNonces()
 		if err != nil {
@@ -1140,11 +1166,7 @@ func (s *covenantlessService) startFinalization() {
 			return
 		}
 
-		if err := coordinator.AddNonce(ephemeralKey.PubKey(), nonces); err != nil {
-			round.Fail(fmt.Errorf("failed to add nonce: %s", err))
-			log.WithError(err).Warn("failed to add nonce")
-			return
-		}
+		coordinator.AddNonce(s.serverSigningPubKey, nonces)
 
 		noncesTimer := time.NewTimer(thirdOfRemainingDuration)
 
@@ -1156,11 +1178,7 @@ func (s *covenantlessService) startFinalization() {
 		case <-signingSession.nonceDoneC:
 			noncesTimer.Stop()
 			for pubkey, nonce := range signingSession.nonces {
-				if err := coordinator.AddNonce(pubkey, nonce); err != nil {
-					round.Fail(fmt.Errorf("failed to add nonce: %s", err))
-					log.WithError(err).Warn("failed to add nonce")
-					return
-				}
+				coordinator.AddNonce(pubkey, nonce)
 			}
 		}
 
@@ -1175,19 +1193,10 @@ func (s *covenantlessService) startFinalization() {
 
 		log.Debugf("nonces aggregated for round %s", round.Id)
 
+		// send the combined nonces to the clients
 		s.propagateRoundSigningNoncesGeneratedEvent(aggragatedNonces)
 
-		if err := serverSignerSession.SetKeys(cosigners); err != nil {
-			round.Fail(fmt.Errorf("failed to set keys: %s", err))
-			log.WithError(err).Warn("failed to set keys")
-			return
-		}
-
-		if err := serverSignerSession.SetAggregatedNonces(aggragatedNonces); err != nil {
-			round.Fail(fmt.Errorf("failed to set aggregated nonces: %s", err))
-			log.WithError(err).Warn("failed to set aggregated nonces")
-			return
-		}
+		serverSignerSession.SetAggregatedNonces(aggragatedNonces)
 
 		// sign the tree as server
 		serverTreeSigs, err := serverSignerSession.Sign()
@@ -1196,12 +1205,7 @@ func (s *covenantlessService) startFinalization() {
 			log.WithError(err).Warn("failed to sign tree")
 			return
 		}
-
-		if err := coordinator.AddSig(ephemeralKey.PubKey(), serverTreeSigs); err != nil {
-			round.Fail(fmt.Errorf("failed to add signature: %s", err))
-			log.WithError(err).Warn("failed to add signature")
-			return
-		}
+		coordinator.AddSignatures(s.serverSigningPubKey, serverTreeSigs)
 
 		log.Debugf("tree signed by us for round %s", round.Id)
 
@@ -1217,11 +1221,7 @@ func (s *covenantlessService) startFinalization() {
 		case <-signingSession.sigDoneC:
 			signaturesTimer.Stop()
 			for pubkey, sig := range signingSession.signatures {
-				if err := coordinator.AddSig(pubkey, sig); err != nil {
-					round.Fail(fmt.Errorf("failed to add signature: %s", err))
-					log.WithError(err).Warn("failed to add signature")
-					return
-				}
+				coordinator.AddSignatures(pubkey, sig)
 			}
 		}
 
@@ -1250,17 +1250,14 @@ func (s *covenantlessService) startFinalization() {
 	log.Debugf("started finalization stage for round: %s", round.Id)
 }
 
-func (s *covenantlessService) propagateRoundSigningStartedEvent(
-	unsignedVtxoTree tree.VtxoTree, cosigners []*secp256k1.PublicKey,
-) {
+func (s *covenantlessService) propagateRoundSigningStartedEvent(unsignedVtxoTree tree.VtxoTree, cosignersPubkeys []string) {
 	ev := RoundSigningStarted{
 		Id:               s.currentRound.Id,
 		UnsignedVtxoTree: unsignedVtxoTree,
-		Cosigners:        cosigners,
 		UnsignedRoundTx:  s.currentRound.UnsignedTx,
+		CosignersPubkeys: cosignersPubkeys,
 	}
 
-	s.lastEvent = ev
 	s.eventsCh <- ev
 }
 
@@ -1270,7 +1267,6 @@ func (s *covenantlessService) propagateRoundSigningNoncesGeneratedEvent(combined
 		Nonces: combinedNonces,
 	}
 
-	s.lastEvent = ev
 	s.eventsCh <- ev
 }
 
@@ -1304,6 +1300,7 @@ func (s *covenantlessService) finalizeRound(notes []note.Note) {
 	boardingInputs := make([]domain.VtxoKey, 0)
 	roundTx, err := psbt.NewFromRawBytes(strings.NewReader(round.UnsignedTx), true)
 	if err != nil {
+		log.Debugf("failed to parse round tx: %s", round.UnsignedTx)
 		changes = round.Fail(fmt.Errorf("failed to parse round tx: %s", err))
 		log.WithError(err).Warn("failed to parse round tx")
 		return
@@ -1584,10 +1581,8 @@ func (s *covenantlessService) propagateEvents(round *domain.Round) {
 			RoundTx:         e.RoundTx,
 			MinRelayFeeRate: int64(s.wallet.MinRelayFeeRate(context.Background())),
 		}
-		s.lastEvent = ev
 		s.eventsCh <- ev
 	case domain.RoundFinalized, domain.RoundFailed:
-		s.lastEvent = e
 		s.eventsCh <- e
 	}
 }

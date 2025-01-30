@@ -11,6 +11,13 @@ import (
 	"github.com/google/uuid"
 )
 
+type SigningType uint8
+
+const (
+	SignAll SigningType = iota
+	SignBranch
+)
+
 type TxRequest struct {
 	Id        string
 	Inputs    []Vtxo

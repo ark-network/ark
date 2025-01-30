@@ -15,36 +15,33 @@ import (
 )
 
 var (
-	ErrInvalidRoundTx           = fmt.Errorf("invalid round transaction")
-	ErrInvalidRoundTxOutputs    = fmt.Errorf("invalid number of outputs in round transaction")
-	ErrEmptyTree                = fmt.Errorf("empty vtxo tree")
-	ErrInvalidRootLevel         = fmt.Errorf("root level must have only one node")
-	ErrNoLeaves                 = fmt.Errorf("no leaves in the tree")
-	ErrNodeTxEmpty              = fmt.Errorf("node transaction is empty")
-	ErrNodeTxidEmpty            = fmt.Errorf("node txid is empty")
-	ErrNodeParentTxidEmpty      = fmt.Errorf("node parent txid is empty")
-	ErrNodeTxidDifferent        = fmt.Errorf("node txid differs from node transaction")
-	ErrNumberOfInputs           = fmt.Errorf("node transaction should have only one input")
-	ErrNumberOfOutputs          = fmt.Errorf("node transaction should have only three or two outputs")
-	ErrParentTxidInput          = fmt.Errorf("parent txid should be the input of the node transaction")
-	ErrNumberOfChildren         = fmt.Errorf("node branch transaction should have two children")
-	ErrLeafChildren             = fmt.Errorf("leaf node should have max 1 child")
-	ErrInvalidChildTxid         = fmt.Errorf("invalid child txid")
-	ErrNumberOfTapscripts       = fmt.Errorf("input should have 1 tapscript leaf")
-	ErrInternalKey              = fmt.Errorf("invalid taproot internal key")
-	ErrInvalidTaprootScript     = fmt.Errorf("invalid taproot script")
-	ErrInvalidControlBlock      = fmt.Errorf("invalid control block")
-	ErrInvalidTaprootScriptLen  = fmt.Errorf("invalid taproot script length (expected 32 bytes)")
-	ErrInvalidLeafTaprootScript = fmt.Errorf("invalid leaf taproot script")
-	ErrInvalidAmount            = fmt.Errorf("children amount is different from parent amount")
-	ErrInvalidSweepSequence     = fmt.Errorf("invalid sweep sequence")
-	ErrInvalidServer            = fmt.Errorf("invalid server")
-	ErrMissingFeeOutput         = fmt.Errorf("missing fee output")
-	ErrInvalidLeftOutput        = fmt.Errorf("invalid left output")
-	ErrInvalidRightOutput       = fmt.Errorf("invalid right output")
-	ErrMissingSweepTapscript    = fmt.Errorf("missing sweep tapscript")
-	ErrInvalidLeaf              = fmt.Errorf("leaf node shouldn't have children")
-	ErrWrongRoundTxid           = fmt.Errorf("the input of the tree root is not the round tx's shared output")
+	ErrInvalidRoundTx             = fmt.Errorf("invalid round transaction")
+	ErrInvalidRoundTxOutputs      = fmt.Errorf("invalid number of outputs in round transaction")
+	ErrEmptyTree                  = fmt.Errorf("empty vtxo tree")
+	ErrInvalidRootLevel           = fmt.Errorf("root level must have only one node")
+	ErrNoLeaves                   = fmt.Errorf("no leaves in the tree")
+	ErrNodeTxEmpty                = fmt.Errorf("node transaction is empty")
+	ErrNodeTxidEmpty              = fmt.Errorf("node txid is empty")
+	ErrNodeParentTxidEmpty        = fmt.Errorf("node parent txid is empty")
+	ErrNodeTxidDifferent          = fmt.Errorf("node txid differs from node transaction")
+	ErrNumberOfInputs             = fmt.Errorf("node transaction should have only one input")
+	ErrNumberOfOutputs            = fmt.Errorf("node transaction should have only three or two outputs")
+	ErrParentTxidInput            = fmt.Errorf("parent txid should be the input of the node transaction")
+	ErrNumberOfChildren           = fmt.Errorf("node branch transaction should have two children")
+	ErrLeafChildren               = fmt.Errorf("leaf node should have max 1 child")
+	ErrInvalidChildTxid           = fmt.Errorf("invalid child txid")
+	ErrInternalKey                = fmt.Errorf("invalid taproot internal key")
+	ErrInvalidTaprootScript       = fmt.Errorf("invalid taproot script")
+	ErrMissingCosignersPublicKeys = fmt.Errorf("missing cosigners public keys")
+	ErrInvalidAmount              = fmt.Errorf("children amount is different from parent amount")
+	ErrInvalidSweepSequence       = fmt.Errorf("invalid sweep sequence")
+	ErrInvalidServer              = fmt.Errorf("invalid server")
+	ErrMissingFeeOutput           = fmt.Errorf("missing fee output")
+	ErrInvalidLeftOutput          = fmt.Errorf("invalid left output")
+	ErrInvalidRightOutput         = fmt.Errorf("invalid right output")
+	ErrMissingSweepTapscript      = fmt.Errorf("missing sweep tapscript")
+	ErrInvalidLeaf                = fmt.Errorf("leaf node shouldn't have children")
+	ErrWrongRoundTxid             = fmt.Errorf("the input of the tree root is not the round tx's shared output")
 )
 
 // 0250929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0
@@ -178,11 +175,6 @@ func validateNodeTransaction(node tree.Node, tree tree.VtxoTree, tapTreeRoot []b
 		return ErrNumberOfInputs
 	}
 
-	input := decodedPsbt.Inputs[0]
-	if len(input.TaprootLeafScript) != 1 {
-		return ErrNumberOfTapscripts
-	}
-
 	prevTxid := decodedPsbt.UnsignedTx.TxIn[0].PreviousOutPoint.Hash.String()
 	if prevTxid != node.ParentTxid {
 		return ErrParentTxidInput
@@ -206,16 +198,13 @@ func validateNodeTransaction(node tree.Node, tree tree.VtxoTree, tapTreeRoot []b
 			return ErrInvalidTaprootScript
 		}
 
-		inputData := decodedPsbt.Inputs[0]
-
-		inputTapInternalKey, err := schnorr.ParsePubKey(inputData.TaprootInternalKey)
-		if err != nil {
-			return fmt.Errorf("invalid internal key: %w", err)
-		}
-
 		cosigners, err := GetCosignerKeys(decodedPsbt.Inputs[0])
 		if err != nil {
 			return fmt.Errorf("unable to get cosigners keys: %w", err)
+		}
+
+		if len(cosigners) == 0 {
+			return ErrMissingCosignersPublicKeys
 		}
 
 		aggregatedKey, err := AggregateKeys(cosigners, tapTreeRoot)
@@ -223,21 +212,7 @@ func validateNodeTransaction(node tree.Node, tree tree.VtxoTree, tapTreeRoot []b
 			return fmt.Errorf("unable to aggregate keys: %w", err)
 		}
 
-		if !bytes.Equal(inputData.TaprootInternalKey, schnorr.SerializePubKey(aggregatedKey.PreTweakedKey)) {
-			return ErrInternalKey
-		}
-
-		inputTapLeaf := inputData.TaprootLeafScript[0]
-
-		ctrlBlock, err := txscript.ParseControlBlock(inputTapLeaf.ControlBlock)
-		if err != nil {
-			return ErrInvalidControlBlock
-		}
-
-		rootHash := ctrlBlock.RootHash(inputTapLeaf.Script)
-		tapKey := txscript.ComputeTaprootOutputKey(inputTapInternalKey, rootHash)
-
-		if !bytes.Equal(schnorr.SerializePubKey(tapKey), schnorr.SerializePubKey(aggregatedKey.FinalKey)) {
+		if !bytes.Equal(schnorr.SerializePubKey(aggregatedKey.FinalKey), previousScriptKey) {
 			return ErrInvalidTaprootScript
 		}
 

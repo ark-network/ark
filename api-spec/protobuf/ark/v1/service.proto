@@ -120,17 +120,22 @@ message GetBoardingAddressResponse {
 
 message RegisterInputsForNextRoundRequest {
   repeated Input inputs = 1;
-  optional string ephemeral_pubkey = 2;
-  repeated string notes = 3;
+  repeated string notes = 2;
 }
 message RegisterInputsForNextRoundResponse {
   string request_id = 1;
+}
+
+message Musig2 {
+  repeated string cosigners_public_keys = 1;
+  bool signing_all = 2;
 }
 
 message RegisterOutputsForNextRoundRequest {
   string request_id = 1;
   // List of receivers for to convert to leaves in the next VTXO tree. 
   repeated Output outputs = 2;
+  optional Musig2 musig2 = 3;
 }
 message RegisterOutputsForNextRoundResponse {}
 

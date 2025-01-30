@@ -7,12 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/btcsuite/btcd/btcutil/psbt"
-	"github.com/btcsuite/btcd/txscript"
 )
 
 type CovenantlessRedeemBranch struct {
@@ -26,12 +25,17 @@ func NewCovenantlessRedeemBranch(
 	explorer explorer.Explorer,
 	vtxoTree tree.VtxoTree, vtxo client.Vtxo,
 ) (*CovenantlessRedeemBranch, error) {
-	_, locktime, err := findCovenantlessSweepClosure(vtxoTree)
+	root, err := vtxoTree.Root()
 	if err != nil {
 		return nil, err
 	}
 
-	vtxoTreeExpiry, err := time.ParseDuration(fmt.Sprintf("%ds", locktime.Seconds()))
+	ptxRoot, err := psbt.NewFromRawBytes(strings.NewReader(root.Tx), true)
+	if err != nil {
+		return nil, err
+	}
+
+	vtxoTreeExpiry, err := bitcointree.GetVtxoTreeExpiry(ptxRoot.Inputs[0])
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +57,7 @@ func NewCovenantlessRedeemBranch(
 	return &CovenantlessRedeemBranch{
 		vtxo:           vtxo,
 		branch:         branch,
-		vtxoTreeExpiry: vtxoTreeExpiry,
+		vtxoTreeExpiry: time.Duration(vtxoTreeExpiry.Seconds()) * time.Second,
 		explorer:       explorer,
 	}, nil
 }
@@ -153,41 +157,4 @@ func (r *CovenantlessRedeemBranch) OffchainPath() ([]*psbt.Packet, error) {
 	}
 
 	return offchainPath, nil
-}
-
-func findCovenantlessSweepClosure(
-	vtxoTree tree.VtxoTree,
-) (*txscript.TapLeaf, *common.RelativeLocktime, error) {
-	root, err := vtxoTree.Root()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// find the sweep closure
-	tx, err := psbt.NewFromRawBytes(strings.NewReader(root.Tx), true)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var locktime *common.RelativeLocktime
-	var sweepClosure *txscript.TapLeaf
-	for _, tapLeaf := range tx.Inputs[0].TaprootLeafScript {
-		closure := &tree.CSVMultisigClosure{}
-		valid, err := closure.Decode(tapLeaf.Script)
-		if err != nil {
-			continue
-		}
-
-		if valid && (locktime == nil || closure.Locktime.LessThan(*locktime)) {
-			locktime = &closure.Locktime
-			leaf := txscript.NewBaseTapLeaf(tapLeaf.Script)
-			sweepClosure = &leaf
-		}
-	}
-
-	if sweepClosure == nil {
-		return nil, nil, fmt.Errorf("sweep closure not found")
-	}
-
-	return sweepClosure, locktime, nil
 }
