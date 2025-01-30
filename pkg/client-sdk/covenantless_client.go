@@ -2768,6 +2768,7 @@ func vtxosToTxsCovenantless(
 			Type:           types.TxSent,
 			CreatedAt:      vtxo.CreatedAt,
 			Settled:        true,
+			SpentBy:        sb,
 		})
 
 	}
