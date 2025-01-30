@@ -1725,12 +1725,15 @@ func (a *covenantlessArkClient) handleRoundStream(
 					continue
 				}
 				log.Info("a round signing started")
-				if err := a.handleRoundSigningStarted(
+				skipped, err := a.handleRoundSigningStarted(
 					ctx, signerSessions, event.(client.RoundSigningStartedEvent),
-				); err != nil {
+				)
+				if err != nil {
 					return "", err
 				}
-				step++
+				if !skipped {
+					step++
+				}
 				continue
 			case client.RoundSigningNoncesGeneratedEvent:
 				if step != roundSigningStarted {
@@ -1780,7 +1783,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 
 func (a *covenantlessArkClient) handleRoundSigningStarted(
 	ctx context.Context, signerSessions []bitcointree.SignerSession, event client.RoundSigningStartedEvent,
-) error {
+) (bool, error) {
 	foundPubkeys := make([]string, 0, len(signerSessions))
 	for _, session := range signerSessions {
 		myPubkey := session.GetPublicKey()
@@ -1793,11 +1796,11 @@ func (a *covenantlessArkClient) handleRoundSigningStarted(
 	}
 
 	if len(foundPubkeys) <= 0 {
-		return nil
+		return true, nil
 	}
 
 	if len(foundPubkeys) != len(signerSessions) {
-		return fmt.Errorf("not all signers found in cosigner list")
+		return false, fmt.Errorf("not all signers found in cosigner list")
 	}
 
 	sweepClosure := tree.CSVMultisigClosure{
@@ -1807,12 +1810,12 @@ func (a *covenantlessArkClient) handleRoundSigningStarted(
 
 	script, err := sweepClosure.Script()
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	roundTx, err := psbt.NewFromRawBytes(strings.NewReader(event.UnsignedRoundTx), true)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	sharedOutput := roundTx.UnsignedTx.TxOut[0]
@@ -1854,11 +1857,11 @@ func (a *covenantlessArkClient) handleRoundSigningStarted(
 
 	for err := range errChan {
 		if err != nil {
-			return err
+			return false, err
 		}
 	}
 
-	return nil
+	return false, nil
 }
 
 func (a *covenantlessArkClient) handleRoundSigningNoncesGenerated(
