@@ -1205,7 +1205,7 @@ func (s *covenantlessService) startFinalization() {
 			log.WithError(err).Warn("failed to sign tree")
 			return
 		}
-		coordinator.AddSig(s.serverSigningPubKey, serverTreeSigs)
+		coordinator.AddSignatures(s.serverSigningPubKey, serverTreeSigs)
 
 		log.Debugf("tree signed by us for round %s", round.Id)
 
@@ -1221,7 +1221,7 @@ func (s *covenantlessService) startFinalization() {
 		case <-signingSession.sigDoneC:
 			signaturesTimer.Stop()
 			for pubkey, sig := range signingSession.signatures {
-				coordinator.AddSig(pubkey, sig)
+				coordinator.AddSignatures(pubkey, sig)
 			}
 		}
 

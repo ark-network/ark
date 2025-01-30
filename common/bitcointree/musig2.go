@@ -91,7 +91,7 @@ type SignerSession interface {
 
 type CoordinatorSession interface {
 	AddNonce(*btcec.PublicKey, TreeNonces)
-	AddSig(*btcec.PublicKey, TreePartialSigs)
+	AddSignatures(*btcec.PublicKey, TreePartialSigs)
 	AggregateNonces() (TreeNonces, error)
 	// SignTree combines the signatures and add them to the tree's psbts
 	SignTree() (tree.VtxoTree, error)
@@ -420,7 +420,7 @@ func (t *treeCoordinatorSession) AddNonce(pubkey *btcec.PublicKey, nonce TreeNon
 	t.nonces[hex.EncodeToString(schnorr.SerializePubKey(pubkey))] = nonce
 }
 
-func (t *treeCoordinatorSession) AddSig(pubkey *btcec.PublicKey, sig TreePartialSigs) {
+func (t *treeCoordinatorSession) AddSignatures(pubkey *btcec.PublicKey, sig TreePartialSigs) {
 	t.sigs[hex.EncodeToString(schnorr.SerializePubKey(pubkey))] = sig
 }
 
