@@ -145,11 +145,11 @@ func TestSettleInSameRound(t *testing.T) {
 	require.NoError(t, err)
 
 	// Alice sends to Bob
-	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobOffchainAddr, 5000)})
+	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobOffchainAddr, 5000)}, false)
 	require.NoError(t, err)
 
 	// Bob sends to Alice
-	_, err = bob.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(aliceOffchainAddr, 3000)})
+	_, err = bob.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(aliceOffchainAddr, 3000)}, false)
 	require.NoError(t, err)
 
 	time.Sleep(2 * time.Second)
