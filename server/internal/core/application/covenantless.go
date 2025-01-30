@@ -712,6 +712,8 @@ func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, rece
 		}
 	}
 
+	var data *tree.Musig2
+
 	if hasOffChainReceiver {
 		if musig2Data == nil {
 			return fmt.Errorf("musig2 data is required for offchain receivers")
@@ -725,15 +727,14 @@ func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, rece
 			}
 		}
 
-		if err := s.txRequests.addMusig2Data(request.Id, musig2Data); err != nil {
-			return fmt.Errorf("failed to add musig2 data: %s", err)
-		}
+		data = musig2Data
 	}
 
 	if err := request.AddReceivers(receivers); err != nil {
 		return err
 	}
-	return s.txRequests.update(*request)
+
+	return s.txRequests.update(*request, data)
 }
 
 func (s *covenantlessService) UpdateTxRequestStatus(_ context.Context, id string) error {

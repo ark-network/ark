@@ -364,7 +364,7 @@ func (s *covenantService) ClaimVtxos(ctx context.Context, creds string, receiver
 	if err := request.AddReceivers(receivers); err != nil {
 		return err
 	}
-	return s.txRequests.update(*request)
+	return s.txRequests.update(*request, nil)
 }
 
 func (s *covenantService) UpdateTxRequestStatus(_ context.Context, id string) error {

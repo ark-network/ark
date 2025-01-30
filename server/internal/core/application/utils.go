@@ -144,7 +144,7 @@ func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingIn
 	return requests, boardingInputs, notes, musig2Data
 }
 
-func (m *txRequestsQueue) update(request domain.TxRequest) error {
+func (m *txRequestsQueue) update(request domain.TxRequest, musig2Data *tree.Musig2) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -179,20 +179,9 @@ func (m *txRequestsQueue) update(request domain.TxRequest) error {
 
 	r.TxRequest = request
 
-	return nil
-}
-
-func (m *txRequestsQueue) addMusig2Data(id string, data *tree.Musig2) error {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-
-	r, ok := m.requests[id]
-	if !ok {
-		return fmt.Errorf("tx request %s not found", id)
+	if musig2Data != nil {
+		r.musig2Data = musig2Data
 	}
-
-	r.musig2Data = data
-	m.requests[id] = r
 	return nil
 }
 
