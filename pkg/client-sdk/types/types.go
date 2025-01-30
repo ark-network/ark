@@ -77,6 +77,7 @@ type Transaction struct {
 	Type      TxType
 	Settled   bool
 	CreatedAt time.Time
+	SpentBy   string
 }
 
 func (t Transaction) IsRound() bool {

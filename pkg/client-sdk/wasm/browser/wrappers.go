@@ -309,6 +309,7 @@ func GetTransactionHistoryWrapper() js.Func {
 				"type":         record.Type,
 				"settled":      record.Settled,
 				"createdAt":    record.CreatedAt.Format(time.RFC3339),
+				"spentBy":      record.SpentBy,
 			})
 		}
 		result, err := json.MarshalIndent(rawHistory, "", "  ")
