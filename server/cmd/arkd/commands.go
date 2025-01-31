@@ -43,6 +43,11 @@ var (
 		Usage: "quantity of notes to create",
 		Value: 1,
 	}
+	requestIdsFlag = &cli.StringSliceFlag{
+		Name:     flagRequestIds,
+		Usage:    "request ids to delete",
+		Required: true,
+	}
 )
 
 // commands
@@ -92,6 +97,32 @@ var (
 		Usage:  "Create a credit note",
 		Action: createNoteAction,
 		Flags:  []cli.Flag{amountFlag, quantityFlag},
+	}
+	queueCmd = &cli.Command{
+		Name:  "queue",
+		Usage: "Manage the tx request queue",
+		Subcommands: append(
+			cli.Commands{},
+			deleteTxRequestsCmd,
+			viewTxRequestsCmd,
+			clearTxRequestQueueCmd,
+		),
+	}
+	viewTxRequestsCmd = &cli.Command{
+		Name:   "view",
+		Usage:  "Inspect tx requests in tx request queue",
+		Action: viewTxRequestsAction,
+	}
+	deleteTxRequestsCmd = &cli.Command{
+		Name:   "delete",
+		Usage:  "Delete tx requests in tx request queue",
+		Flags:  []cli.Flag{requestIdsFlag},
+		Action: deleteTxRequestsAction,
+	}
+	clearTxRequestQueueCmd = &cli.Command{
+		Name:   "clear",
+		Usage:  "Remove all tx requests from tx request queue",
+		Action: clearTxRequestQueueAction,
 	}
 )
 
@@ -491,4 +522,69 @@ func getTLSConfig(path string) (*tls.Config, error) {
 		MinVersion: tls.VersionTLS12,
 		RootCAs:    caCertPool,
 	}, nil
+}
+
+func viewTxRequestsAction(ctx *cli.Context) error {
+	baseURL := ctx.String(flagURL)
+	macaroon, tlsCertPath, err := getCredentialPaths(ctx)
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("%s/v1/admin/queue", baseURL)
+	response, err := get[map[string][]map[string]interface{}](url, "requests", macaroon, tlsCertPath)
+	if err != nil {
+		return err
+	}
+
+	if len(response) == 0 {
+		fmt.Println("No tx requests in queue")
+		return nil
+	}
+
+	for _, request := range response {
+		jsonBytes, err := json.MarshalIndent(request, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(jsonBytes))
+	}
+	return nil
+}
+
+func deleteTxRequestsAction(ctx *cli.Context) error {
+	baseURL := ctx.String(flagURL)
+	macaroon, tlsCertPath, err := getCredentialPaths(ctx)
+	if err != nil {
+		return err
+	}
+
+	requestIds := ctx.StringSlice(flagRequestIds)
+	url := fmt.Sprintf("%s/v1/admin/queue/delete", baseURL)
+	body := fmt.Sprintf(`{"request_ids": ["%s"]}`, strings.Join(requestIds, `","`))
+
+	if _, err := post[struct{}](url, body, "", macaroon, tlsCertPath); err != nil {
+		return err
+	}
+
+	fmt.Printf("Successfully deleted tx requests: %s\n", strings.Join(requestIds, ", "))
+	return nil
+}
+
+func clearTxRequestQueueAction(ctx *cli.Context) error {
+	baseURL := ctx.String(flagURL)
+	macaroon, tlsCertPath, err := getCredentialPaths(ctx)
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("%s/v1/admin/queue/delete", baseURL)
+	body := `{"request_ids": []}`
+
+	if _, err := post[struct{}](url, body, "", macaroon, tlsCertPath); err != nil {
+		return err
+	}
+
+	fmt.Println("Successfully cleared tx request queue")
+	return nil
 }
