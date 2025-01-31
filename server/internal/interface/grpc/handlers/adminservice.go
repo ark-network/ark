@@ -40,10 +40,10 @@ func (a *adminHandler) GetRoundDetails(ctx context.Context, req *arkv1.GetRoundD
 	return &arkv1.GetRoundDetailsResponse{
 		RoundId:          details.RoundId,
 		Txid:             details.TxId,
-		ForfeitedAmount:  convertSatoshis(details.ForfeitedAmount),
-		TotalVtxosAmount: convertSatoshis(details.TotalVtxosAmount),
-		TotalExitAmount:  convertSatoshis(details.TotalExitAmount),
-		FeesAmount:       convertSatoshis(details.FeesAmount),
+		ForfeitedAmount:  convertSatsToBTCStr(details.ForfeitedAmount),
+		TotalVtxosAmount: convertSatsToBTCStr(details.TotalVtxosAmount),
+		TotalExitAmount:  convertSatsToBTCStr(details.TotalExitAmount),
+		FeesAmount:       convertSatsToBTCStr(details.FeesAmount),
 		InputsVtxos:      details.InputsVtxos,
 		OutputsVtxos:     details.OutputsVtxos,
 		ExitAddresses:    details.ExitAddresses,
@@ -90,7 +90,7 @@ func (a *adminHandler) GetScheduledSweep(ctx context.Context, _ *arkv1.GetSchedu
 				Txid:        output.TxId,
 				Vout:        output.Vout,
 				ScheduledAt: output.ScheduledAt,
-				Amount:      convertSatoshis(output.Amount),
+				Amount:      convertSatsToBTCStr(output.Amount),
 			})
 		}
 
@@ -167,71 +167,25 @@ func (a *adminHandler) UpdateMarketHourConfig(
 	return &arkv1.UpdateMarketHourConfigResponse{}, nil
 }
 
-func (a *adminHandler) DeleteTxRequests(ctx context.Context, req *arkv1.DeleteTxRequestsRequest) (*arkv1.DeleteTxRequestsResponse, error) {
-	if err := a.arkService.DeleteTxRequests(ctx, req.GetRequestIds()); err != nil {
-		return nil, err
-	}
-
-	return &arkv1.DeleteTxRequestsResponse{}, nil
-}
-
-func (a *adminHandler) GetTxRequestQueue(ctx context.Context, req *arkv1.GetTxRequestQueueRequest) (*arkv1.GetTxRequestQueueResponse, error) {
-	requests, err := a.arkService.GetTxRequestQueue(ctx)
+func (a *adminHandler) GetTxRequestQueue(
+	ctx context.Context, req *arkv1.GetTxRequestQueueRequest,
+) (*arkv1.GetTxRequestQueueResponse, error) {
+	requestIds := req.GetRequestIds()
+	requests, err := a.arkService.GetTxRequestQueue(ctx, requestIds...)
 	if err != nil {
 		return nil, err
 	}
 
-	txRequestInfos := make([]*arkv1.TxRequestInfo, 0, len(requests))
-	for _, request := range requests {
-		receivers := make([]*arkv1.Output, 0, len(request.Receivers))
-		for _, receiver := range request.Receivers {
-			receivers = append(receivers, &arkv1.Output{
-				Address: receiver.Address,
-				Amount:  receiver.Amount,
-			})
-		}
-
-		inputs := make([]*arkv1.RequestInput, 0, len(request.Inputs))
-		for _, input := range request.Inputs {
-			inputs = append(inputs, &arkv1.RequestInput{
-				Txid:   input.Txid,
-				Vout:   input.VOut,
-				Amount: input.Amount,
-			})
-		}
-
-		boardingInputs := make([]*arkv1.RequestInput, 0, len(request.BoardingInputs))
-		for _, input := range request.BoardingInputs {
-			boardingInputs = append(boardingInputs, &arkv1.RequestInput{
-				Txid:   input.Txid,
-				Vout:   input.VOut,
-				Amount: input.Amount,
-			})
-		}
-
-		notes := make([]string, 0, len(request.Notes))
-		for _, note := range request.Notes {
-			notes = append(notes, note.String())
-		}
-
-		txRequestInfos = append(txRequestInfos, &arkv1.TxRequestInfo{
-			Id:                  request.Id,
-			CreatedAt:           request.CreatedAt.Unix(),
-			Receivers:           receivers,
-			Inputs:              inputs,
-			BoardingInputs:      boardingInputs,
-			Notes:               notes,
-			SigningType:         request.SigningType,
-			CosignersPublicKeys: request.Cosigners,
-			LastPing:            request.LastPing.Unix(),
-		})
-	}
-
-	return &arkv1.GetTxRequestQueueResponse{Requests: txRequestInfos}, nil
+	return &arkv1.GetTxRequestQueueResponse{Requests: txReqsInfo(requests).toProto()}, nil
 }
 
-// convert sats to string BTC
-func convertSatoshis(sats uint64) string {
-	btc := float64(sats) * 1e-8
-	return fmt.Sprintf("%.8f", btc)
+func (a *adminHandler) DeleteTxRequests(
+	ctx context.Context, req *arkv1.DeleteTxRequestsRequest,
+) (*arkv1.DeleteTxRequestsResponse, error) {
+	requestIds := req.GetRequestIds()
+	if err := a.arkService.DeleteTxRequests(ctx, requestIds...); err != nil {
+		return nil, err
+	}
+
+	return &arkv1.DeleteTxRequestsResponse{}, nil
 }

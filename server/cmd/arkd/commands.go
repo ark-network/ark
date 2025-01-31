@@ -43,10 +43,12 @@ var (
 		Usage: "quantity of notes to create",
 		Value: 1,
 	}
-	requestIdsFlag = &cli.StringSliceFlag{
-		Name:     flagRequestIds,
-		Usage:    "request ids to delete",
-		Required: true,
+	requestIdsFlag = func(required bool) *cli.StringSliceFlag {
+		return &cli.StringSliceFlag{
+			Name:     flagRequestIds,
+			Usage:    "request ids to delete",
+			Required: required,
+		}
 	}
 )
 
@@ -111,12 +113,13 @@ var (
 	viewTxRequestsCmd = &cli.Command{
 		Name:   "view",
 		Usage:  "Inspect tx requests in tx request queue",
+		Flags:  []cli.Flag{requestIdsFlag(false)},
 		Action: viewTxRequestsAction,
 	}
 	deleteTxRequestsCmd = &cli.Command{
 		Name:   "delete",
 		Usage:  "Delete tx requests in tx request queue",
-		Flags:  []cli.Flag{requestIdsFlag},
+		Flags:  []cli.Flag{requestIdsFlag(true)},
 		Action: deleteTxRequestsAction,
 	}
 	clearTxRequestQueueCmd = &cli.Command{
@@ -532,7 +535,11 @@ func viewTxRequestsAction(ctx *cli.Context) error {
 	}
 
 	url := fmt.Sprintf("%s/v1/admin/queue", baseURL)
-	response, err := get[map[string][]map[string]interface{}](url, "requests", macaroon, tlsCertPath)
+	requestIds := ctx.StringSlice(flagRequestIds)
+	if len(requestIds) > 0 {
+		url = fmt.Sprintf("%s?request_ids=%s", url, strings.Join(requestIds, ","))
+	}
+	response, err := get[[]map[string]interface{}](url, "requests", macaroon, tlsCertPath)
 	if err != nil {
 		return err
 	}

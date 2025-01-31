@@ -847,13 +847,15 @@ func (s *covenantlessService) GetInfo(ctx context.Context) (*ServiceInfo, error)
 	}, nil
 }
 
-func (s *covenantlessService) GetTxRequestQueue(ctx context.Context) ([]TxRequestInfo, error) {
-	requests, err := s.txRequests.viewAll()
+func (s *covenantlessService) GetTxRequestQueue(
+	ctx context.Context, requestIds ...string,
+) ([]TxRequestInfo, error) {
+	requests, err := s.txRequests.viewAll(requestIds)
 	if err != nil {
 		return nil, err
 	}
 
-	txRequestInfos := make([]TxRequestInfo, 0, len(requests))
+	txReqsInfo := make([]TxRequestInfo, 0, len(requests))
 	for _, request := range requests {
 		signingType := "branch"
 		cosigners := make([]string, 0)
@@ -910,7 +912,7 @@ func (s *covenantlessService) GetTxRequestQueue(ctx context.Context) ([]TxReques
 			})
 		}
 
-		txRequestInfos = append(txRequestInfos, TxRequestInfo{
+		txReqsInfo = append(txReqsInfo, TxRequestInfo{
 			Id:             request.Id,
 			CreatedAt:      request.timestamp,
 			Receivers:      receivers,
@@ -923,10 +925,12 @@ func (s *covenantlessService) GetTxRequestQueue(ctx context.Context) ([]TxReques
 		})
 	}
 
-	return txRequestInfos, nil
+	return txReqsInfo, nil
 }
 
-func (s *covenantlessService) DeleteTxRequests(ctx context.Context, requestIds []string) error {
+func (s *covenantlessService) DeleteTxRequests(
+	ctx context.Context, requestIds ...string,
+) error {
 	if len(requestIds) == 0 {
 		return s.txRequests.deleteAll()
 	}

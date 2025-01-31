@@ -489,13 +489,15 @@ func (s *covenantService) DeleteNostrRecipient(ctx context.Context, signedVtxoOu
 	return fmt.Errorf("not implemented")
 }
 
-func (s *covenantService) GetTxRequestQueue(ctx context.Context) ([]TxRequestInfo, error) {
-	requests, err := s.txRequests.viewAll()
+func (s *covenantService) GetTxRequestQueue(
+	ctx context.Context, requestIds ...string,
+) ([]TxRequestInfo, error) {
+	requests, err := s.txRequests.viewAll(requestIds)
 	if err != nil {
 		return nil, err
 	}
 
-	txRequestInfos := make([]TxRequestInfo, 0, len(requests))
+	txReqstInfo := make([]TxRequestInfo, 0, len(requests))
 	for _, request := range requests {
 		signingType := "branch"
 		cosigners := make([]string, 0)
@@ -552,7 +554,7 @@ func (s *covenantService) GetTxRequestQueue(ctx context.Context) ([]TxRequestInf
 			})
 		}
 
-		txRequestInfos = append(txRequestInfos, TxRequestInfo{
+		txReqstInfo = append(txReqstInfo, TxRequestInfo{
 			Id:             request.Id,
 			CreatedAt:      request.timestamp,
 			Receivers:      receivers,
@@ -565,10 +567,12 @@ func (s *covenantService) GetTxRequestQueue(ctx context.Context) ([]TxRequestInf
 		})
 	}
 
-	return txRequestInfos, nil
+	return txReqstInfo, nil
 }
 
-func (s *covenantService) DeleteTxRequests(ctx context.Context, requestIds []string) error {
+func (s *covenantService) DeleteTxRequests(
+	ctx context.Context, requestIds ...string,
+) error {
 	if len(requestIds) == 0 {
 		return s.txRequests.deleteAll()
 	}

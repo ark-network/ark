@@ -216,12 +216,21 @@ func (m *txRequestsQueue) deleteAll() error {
 	return nil
 }
 
-func (m *txRequestsQueue) viewAll() ([]timedTxRequest, error) {
+func (m *txRequestsQueue) viewAll(ids []string) ([]timedTxRequest, error) {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
 	requests := make([]timedTxRequest, 0, len(m.requests))
 	for _, request := range m.requests {
+		if len(ids) > 0 {
+			for _, id := range ids {
+				if request.Id == id {
+					requests = append(requests, *request)
+					break
+				}
+			}
+			continue
+		}
 		requests = append(requests, *request)
 	}
 	return requests, nil
