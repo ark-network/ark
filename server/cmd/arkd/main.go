@@ -23,13 +23,15 @@ const (
 	tlsDir       = "tls"
 	tlsCertFile  = "cert.pem"
 
-	flagURL      = "url"
-	flagDatadir  = "datadir"
-	flagPassword = "password"
-	flagMnemonic = "mnemonic"
-	flagGapLimit = "addr-gap-limit"
-	flagAmount   = "amount"
-	flagQuantity = "quantity"
+	flagURL             = "url"
+	flagDatadir         = "datadir"
+	flagPassword        = "password"
+	flagMnemonic        = "mnemonic"
+	flagGapLimit        = "addr-gap-limit"
+	flagAmount          = "amount"
+	flagQuantity        = "quantity"
+	flagWithdrawAmount  = "amount"
+	flagWithdrawAddress = "address"
 )
 
 // flags

@@ -271,6 +271,23 @@ func (s *service) LockConnectorUtxos(ctx context.Context, utxos []ports.TxOutpoi
 	return err
 }
 
+func (s *service) Withdraw(ctx context.Context, address string, amount uint64) (string, error) {
+	res, err := s.txClient.Transfer(ctx, &pb.TransferRequest{
+		AccountName: arkAccount,
+		Receivers: []*pb.Output{
+			{
+				Address: address,
+				Amount:  amount,
+			},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return res.GetTxHex(), nil
+}
+
 var minRate = chainfee.SatPerKVByte(0.2 * 1000)
 
 func (s *service) MinRelayFeeRate(ctx context.Context) chainfee.SatPerKVByte {
