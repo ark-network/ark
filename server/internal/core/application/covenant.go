@@ -489,6 +489,93 @@ func (s *covenantService) DeleteNostrRecipient(ctx context.Context, signedVtxoOu
 	return fmt.Errorf("not implemented")
 }
 
+func (s *covenantService) GetTxRequestQueue(ctx context.Context) ([]TxRequestInfo, error) {
+	requests, err := s.txRequests.viewAll()
+	if err != nil {
+		return nil, err
+	}
+
+	txRequestInfos := make([]TxRequestInfo, 0, len(requests))
+	for _, request := range requests {
+		signingType := "branch"
+		cosigners := make([]string, 0)
+		if request.musig2Data != nil {
+			if request.musig2Data.SigningType == tree.SignAll {
+				signingType = "all"
+			}
+			cosigners = request.musig2Data.CosignersPublicKeys
+		}
+
+		receivers := make([]struct {
+			Address string
+			Amount  uint64
+		}, 0, len(request.Receivers))
+		for _, receiver := range request.Receivers {
+			if len(receiver.OnchainAddress) > 0 {
+				receivers = append(receivers, struct {
+					Address string
+					Amount  uint64
+				}{
+					Address: receiver.OnchainAddress,
+					Amount:  receiver.Amount,
+				})
+				continue
+			}
+
+			pubkey, err := hex.DecodeString(receiver.PubKey)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode pubkey: %s", err)
+			}
+
+			vtxoTapKey, err := schnorr.ParsePubKey(pubkey)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse pubkey: %s", err)
+			}
+
+			address := common.Address{
+				HRP:        s.network.Addr,
+				Server:     s.pubkey,
+				VtxoTapKey: vtxoTapKey,
+			}
+
+			addressStr, err := address.Encode()
+			if err != nil {
+				return nil, fmt.Errorf("failed to encode address: %s", err)
+			}
+
+			receivers = append(receivers, struct {
+				Address string
+				Amount  uint64
+			}{
+				Address: addressStr,
+				Amount:  receiver.Amount,
+			})
+		}
+
+		txRequestInfos = append(txRequestInfos, TxRequestInfo{
+			Id:             request.Id,
+			CreatedAt:      request.timestamp,
+			Receivers:      receivers,
+			Inputs:         request.Inputs,
+			BoardingInputs: request.boardingInputs,
+			Notes:          request.notes,
+			LastPing:       request.pingTimestamp,
+			SigningType:    signingType,
+			Cosigners:      cosigners,
+		})
+	}
+
+	return txRequestInfos, nil
+}
+
+func (s *covenantService) DeleteTxRequests(ctx context.Context, requestIds []string) error {
+	if len(requestIds) == 0 {
+		return s.txRequests.deleteAll()
+	}
+
+	return s.txRequests.delete(requestIds)
+}
+
 func (s *covenantService) start() {
 	defer func() {
 		if r := recover(); r != nil {
