@@ -1,6 +1,7 @@
 package badgerdb
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"path/filepath"
@@ -151,6 +152,63 @@ func (r *roundRepository) GetVtxoTreeWithTxid(
 
 func (r *roundRepository) Close() {
 	r.store.Close()
+}
+
+func (r *roundRepository) GetVtxoTreeKeys(ctx context.Context, roundId string) ([]domain.RawKeyPair, error) {
+	var keys []domain.RawKeyPair
+	var err error
+
+	dbKey := fmt.Sprintf("vtxo_tree_keys_%s", roundId)
+
+	if ctx.Value("tx") != nil {
+		tx := ctx.Value("tx").(*badger.Txn)
+		err = r.store.TxGet(tx, dbKey, &keys)
+	} else {
+		err = r.store.Get(dbKey, &keys)
+	}
+
+	return keys, err
+}
+
+func (r *roundRepository) AddVtxoTreeSecretKey(ctx context.Context, roundId string, seckey, pubkey []byte) error {
+	old, err := r.GetVtxoTreeKeys(ctx, roundId)
+	if err != nil {
+		return err
+	}
+
+	new := make([]domain.RawKeyPair, 0, len(old))
+	for _, key := range old {
+		if bytes.Equal(key.Pubkey, pubkey) {
+			new = append(new, domain.RawKeyPair{Pubkey: key.Pubkey, Seckey: seckey})
+			continue
+		}
+
+		new = append(new, key)
+	}
+
+	dbKey := fmt.Sprintf("vtxo_tree_keys_%s", roundId)
+	if ctx.Value("tx") != nil {
+		tx := ctx.Value("tx").(*badger.Txn)
+		err := r.store.TxUpsert(tx, dbKey, new)
+		return err
+	}
+	return r.store.Update(dbKey, new)
+}
+
+func (r *roundRepository) SetVtxoTreePubKeys(ctx context.Context, roundId string, pubkeys [][]byte) error {
+	dbKey := fmt.Sprintf("vtxo_tree_pub_keys_%s", roundId)
+
+	rawKeyPairs := make([]domain.RawKeyPair, 0, len(pubkeys))
+	for _, pubkey := range pubkeys {
+		rawKeyPairs = append(rawKeyPairs, domain.RawKeyPair{Pubkey: pubkey})
+	}
+
+	if ctx.Value("tx") != nil {
+		tx := ctx.Value("tx").(*badger.Txn)
+		err := r.store.TxUpsert(tx, dbKey, rawKeyPairs)
+		return err
+	}
+	return r.store.Update(dbKey, rawKeyPairs)
 }
 
 func (r *roundRepository) findRound(
