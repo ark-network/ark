@@ -25,7 +25,7 @@ func BuildForfeitTxs(
 	chTxs := make(chan chTx, len(connectors))
 
 	wg := sync.WaitGroup{}
-	wg.Add(nbWorkers)
+	wg.Add(len(connectors))
 
 	for i := 0; i < nbWorkers; i++ {
 		go func() {
