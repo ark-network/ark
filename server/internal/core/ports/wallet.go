@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
@@ -43,6 +44,7 @@ type WalletService interface {
 	SignMessage(ctx context.Context, message []byte) ([]byte, error)
 	VerifyMessageSignature(ctx context.Context, message, signature []byte) (bool, error)
 	GetCurrentBlockTime(ctx context.Context) (*BlockTimestamp, error)
+	GetVtxoTreeSignerSession(ctx context.Context, roundID string) (bitcointree.SignerSession, error)
 	Close()
 }
 

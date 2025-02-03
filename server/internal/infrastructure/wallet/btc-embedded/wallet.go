@@ -3,11 +3,14 @@ package btcwallet
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
+
+	"crypto/sha256"
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
@@ -38,6 +41,7 @@ import (
 	"github.com/lightningnetwork/lnd/lnwallet/btcwallet"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	log "github.com/sirupsen/logrus"
+	"github.com/vulpemventures/go-bip32"
 	"github.com/vulpemventures/go-bip39"
 )
 
@@ -1173,6 +1177,46 @@ func (s *service) GetCurrentBlockTime(ctx context.Context) (*ports.BlockTimestam
 		Time:   header.Timestamp.Unix(),
 		Height: uint32(blockheight),
 	}, nil
+}
+
+func (s *service) GetVtxoTreeSignerSession(ctx context.Context, roundID string) (bitcointree.SignerSession, error) {
+	if !s.isLoaded() {
+		return nil, ErrNotLoaded
+	}
+
+	serverPrivKey, err := s.serverKeyAddr.PrivKey()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get server private key: %w", err)
+	}
+
+	privKeyBytes := serverPrivKey.Serialize()
+	masterKey, err := bip32.NewMasterKey(privKeyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create master key: %w", err)
+	}
+
+	digest := sha256.New()
+	digest.Write([]byte(roundID))
+	hash := digest.Sum(nil)
+
+	currentKey := masterKey
+	for i := 0; i < 8; i++ {
+		// convert 4 bytes to uint32 using big-endian encoding
+		// ensure we only use the lower 31 bits to avoid overflow when adding FirstHardenedChild
+		childIndex := binary.BigEndian.Uint32(hash[i*4:(i+1)*4]) & 0x7FFFFFFF
+		// make it a hardened derivation
+		childIndex += bip32.FirstHardenedChild
+
+		nextKey, err := currentKey.NewChildKey(childIndex)
+		if err != nil {
+			return nil, fmt.Errorf("failed to derive child key at segment %d: %w", i, err)
+		}
+		currentKey = nextKey
+	}
+
+	derivedPrivKey := secp256k1.PrivKeyFromBytes(currentKey.Key)
+
+	return bitcointree.NewTreeSignerSession(derivedPrivKey), nil
 }
 
 func (s *service) castNotification(tx *wtxmgr.TxRecord) map[string][]ports.VtxoWithValue {
