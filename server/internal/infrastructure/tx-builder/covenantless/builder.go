@@ -1396,10 +1396,12 @@ func (b *txBuilder) verifyTapscriptPartialSigsMap(txs map[string]*psbt.Packet) e
 				valid, err := b.verifyTapscriptPartialSigs(tx)
 				if err != nil {
 					errChan <- err
+					return
 				}
 
 				if !valid {
 					errChan <- fmt.Errorf("invalid forfeit tx signature (%s)", tx.UnsignedTx.TxHash().String())
+					return
 				}
 			}
 		}()
