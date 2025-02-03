@@ -474,7 +474,7 @@ func (b *txBuilder) VerifyForfeitTxs(
 			return nil, err
 		}
 
-		rebuiltTxIds := make(map[string]any)
+		rebuiltTxIds := make(map[string]bool)
 
 		nbWorkers := runtime.NumCPU()
 		jobsConnector := make(chan *psbt.Packet, len(connectorTxs))
