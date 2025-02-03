@@ -701,6 +701,38 @@ func (q *Queries) SelectVtxoByOutpoint(ctx context.Context, arg SelectVtxoByOutp
 	return i, err
 }
 
+const selectVtxoTreeKeys = `-- name: SelectVtxoTreeKeys :many
+SELECT pubkey, seckey FROM vtxo_tree_keys WHERE round_id = ?
+`
+
+type SelectVtxoTreeKeysRow struct {
+	Pubkey []byte
+	Seckey []byte
+}
+
+func (q *Queries) SelectVtxoTreeKeys(ctx context.Context, roundID string) ([]SelectVtxoTreeKeysRow, error) {
+	rows, err := q.db.QueryContext(ctx, selectVtxoTreeKeys, roundID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SelectVtxoTreeKeysRow
+	for rows.Next() {
+		var i SelectVtxoTreeKeysRow
+		if err := rows.Scan(&i.Pubkey, &i.Seckey); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const selectVtxosByRoundTxid = `-- name: SelectVtxosByRoundTxid :many
 SELECT vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.round_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.created_at, vtxo.request_id, vtxo.redeem_tx FROM vtxo
 WHERE round_tx = ?
@@ -1037,5 +1069,35 @@ func (q *Queries) UpsertVtxo(ctx context.Context, arg UpsertVtxoParams) error {
 		arg.CreatedAt,
 		arg.RedeemTx,
 	)
+	return err
+}
+
+const upsertVtxoTreePubKey = `-- name: UpsertVtxoTreePubKey :exec
+INSERT INTO vtxo_tree_keys (round_id, pubkey)
+VALUES (?, ?)
+`
+
+type UpsertVtxoTreePubKeyParams struct {
+	RoundID string
+	Pubkey  []byte
+}
+
+func (q *Queries) UpsertVtxoTreePubKey(ctx context.Context, arg UpsertVtxoTreePubKeyParams) error {
+	_, err := q.db.ExecContext(ctx, upsertVtxoTreePubKey, arg.RoundID, arg.Pubkey)
+	return err
+}
+
+const upsertVtxoTreeSecKey = `-- name: UpsertVtxoTreeSecKey :exec
+UPDATE vtxo_tree_keys SET seckey = ? WHERE round_id = ? AND pubkey = ?
+`
+
+type UpsertVtxoTreeSecKeyParams struct {
+	Seckey  []byte
+	RoundID string
+	Pubkey  []byte
+}
+
+func (q *Queries) UpsertVtxoTreeSecKey(ctx context.Context, arg UpsertVtxoTreeSecKeyParams) error {
+	_, err := q.db.ExecContext(ctx, upsertVtxoTreeSecKey, arg.Seckey, arg.RoundID, arg.Pubkey)
 	return err
 }

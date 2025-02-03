@@ -295,6 +295,49 @@ func (r *roundRepository) GetVtxoTreeWithTxid(ctx context.Context, txid string) 
 	return vtxoTree, nil
 }
 
+func (r *roundRepository) AddVtxoTreeSecretKey(ctx context.Context, roundId string, seckey []byte, pubkey []byte) error {
+	if err := r.querier.UpsertVtxoTreeSecKey(ctx, queries.UpsertVtxoTreeSecKeyParams{
+		RoundID: roundId,
+		Pubkey:  pubkey,
+		Seckey:  seckey,
+	}); err != nil {
+		return fmt.Errorf("failed to insert vtxo tree key: %w", err)
+	}
+	return nil
+}
+
+func (r *roundRepository) GetVtxoTreeKeys(ctx context.Context, roundId string) ([]domain.RawKeyPair, error) {
+	rows, err := r.querier.SelectVtxoTreeKeys(ctx, roundId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to select vtxo tree keys: %w", err)
+	}
+
+	keyPairs := make([]domain.RawKeyPair, 0, len(rows))
+	for _, row := range rows {
+		keyPairs = append(keyPairs, domain.RawKeyPair{
+			Pubkey: row.Pubkey,
+			Seckey: row.Seckey,
+		})
+	}
+
+	return keyPairs, nil
+}
+
+func (r *roundRepository) SetVtxoTreePubKeys(ctx context.Context, roundId string, pubkeys [][]byte) error {
+	txBody := func(querierWithTx *queries.Queries) error {
+		for _, pubkey := range pubkeys {
+			if err := querierWithTx.UpsertVtxoTreePubKey(ctx, queries.UpsertVtxoTreePubKeyParams{
+				RoundID: roundId,
+				Pubkey:  pubkey,
+			}); err != nil {
+				return fmt.Errorf("failed to insert vtxo tree pubkey: %w", err)
+			}
+		}
+		return nil
+	}
+	return execTx(ctx, r.db, txBody)
+}
+
 func rowToReceiver(row queries.RequestReceiverVw) domain.Receiver {
 	return domain.Receiver{
 		Amount:         uint64(row.Amount.Int64),

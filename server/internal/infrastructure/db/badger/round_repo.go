@@ -13,6 +13,7 @@ import (
 )
 
 const roundStoreDir = "rounds"
+const vtxoTreeKeysPrefix = "vtxo_tree_keys"
 
 type roundRepository struct {
 	store *badgerhold.Store
@@ -155,10 +156,10 @@ func (r *roundRepository) Close() {
 }
 
 func (r *roundRepository) GetVtxoTreeKeys(ctx context.Context, roundId string) ([]domain.RawKeyPair, error) {
-	var keys []domain.RawKeyPair
+	var keys wrappedVtxoTreeKeys
 	var err error
 
-	dbKey := fmt.Sprintf("vtxo_tree_keys_%s", roundId)
+	dbKey := fmt.Sprintf("%s_%s", vtxoTreeKeysPrefix, roundId)
 
 	if ctx.Value("tx") != nil {
 		tx := ctx.Value("tx").(*badger.Txn)
@@ -167,7 +168,7 @@ func (r *roundRepository) GetVtxoTreeKeys(ctx context.Context, roundId string) (
 		err = r.store.Get(dbKey, &keys)
 	}
 
-	return keys, err
+	return keys.Keys, err
 }
 
 func (r *roundRepository) AddVtxoTreeSecretKey(ctx context.Context, roundId string, seckey, pubkey []byte) error {
@@ -176,27 +177,28 @@ func (r *roundRepository) AddVtxoTreeSecretKey(ctx context.Context, roundId stri
 		return err
 	}
 
-	new := make([]domain.RawKeyPair, 0, len(old))
+	new := wrappedVtxoTreeKeys{
+		Keys: make([]domain.RawKeyPair, 0, len(old)),
+	}
 	for _, key := range old {
 		if bytes.Equal(key.Pubkey, pubkey) {
-			new = append(new, domain.RawKeyPair{Pubkey: key.Pubkey, Seckey: seckey})
+			new.Keys = append(new.Keys, domain.RawKeyPair{Pubkey: key.Pubkey, Seckey: seckey})
 			continue
 		}
 
-		new = append(new, key)
+		new.Keys = append(new.Keys, key)
 	}
 
-	dbKey := fmt.Sprintf("vtxo_tree_keys_%s", roundId)
+	dbKey := fmt.Sprintf("%s_%s", vtxoTreeKeysPrefix, roundId)
 	if ctx.Value("tx") != nil {
 		tx := ctx.Value("tx").(*badger.Txn)
-		err := r.store.TxUpsert(tx, dbKey, new)
-		return err
+		return r.store.TxUpdate(tx, dbKey, wrappedVtxoTreeKeys{Keys: new.Keys})
 	}
-	return r.store.Update(dbKey, new)
+	return r.store.Update(dbKey, wrappedVtxoTreeKeys{Keys: new.Keys})
 }
 
 func (r *roundRepository) SetVtxoTreePubKeys(ctx context.Context, roundId string, pubkeys [][]byte) error {
-	dbKey := fmt.Sprintf("vtxo_tree_pub_keys_%s", roundId)
+	dbKey := fmt.Sprintf("%s_%s", vtxoTreeKeysPrefix, roundId)
 
 	rawKeyPairs := make([]domain.RawKeyPair, 0, len(pubkeys))
 	for _, pubkey := range pubkeys {
@@ -205,10 +207,9 @@ func (r *roundRepository) SetVtxoTreePubKeys(ctx context.Context, roundId string
 
 	if ctx.Value("tx") != nil {
 		tx := ctx.Value("tx").(*badger.Txn)
-		err := r.store.TxUpsert(tx, dbKey, rawKeyPairs)
-		return err
+		return r.store.TxInsert(tx, dbKey, wrappedVtxoTreeKeys{Keys: rawKeyPairs})
 	}
-	return r.store.Update(dbKey, rawKeyPairs)
+	return r.store.Insert(dbKey, wrappedVtxoTreeKeys{Keys: rawKeyPairs})
 }
 
 func (r *roundRepository) findRound(
@@ -237,4 +238,8 @@ func (r *roundRepository) addOrUpdateRound(
 		err = r.store.Upsert(round.Id, round)
 	}
 	return
+}
+
+type wrappedVtxoTreeKeys struct {
+	Keys []domain.RawKeyPair
 }

@@ -1,6 +1,7 @@
 package db_test
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -338,6 +339,28 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 		require.NoError(t, err)
 		require.NotNil(t, roundByTxid)
 		require.Condition(t, roundsMatch(*finalizedRound, *roundByTxid))
+
+		err = svc.Rounds().SetVtxoTreePubKeys(ctx, roundId, [][]byte{[]byte(pubkey), []byte(pubkey2)})
+		require.NoError(t, err)
+
+		err = svc.Rounds().AddVtxoTreeSecretKey(ctx, roundId, []byte{0x00}, []byte(pubkey))
+		require.NoError(t, err)
+
+		err = svc.Rounds().AddVtxoTreeSecretKey(ctx, roundId, []byte{0x01}, []byte(pubkey2))
+		require.NoError(t, err)
+
+		keys, err := svc.Rounds().GetVtxoTreeKeys(ctx, roundId)
+		require.NoError(t, err)
+
+		for _, key := range keys {
+			if bytes.Equal(key.Pubkey, []byte(pubkey)) {
+				require.Equal(t, key.Seckey, []byte{0x00})
+			} else if bytes.Equal(key.Pubkey, []byte(pubkey2)) {
+				require.Equal(t, key.Seckey, []byte{0x01})
+			} else {
+				t.Fail()
+			}
+		}
 	})
 }
 

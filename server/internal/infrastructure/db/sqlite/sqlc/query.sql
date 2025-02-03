@@ -194,4 +194,14 @@ SELECT * FROM market_hour ORDER BY updated_at DESC LIMIT 1;
 -- name: SelectTreeTxsWithRoundTxid :many
 SELECT tx.* FROM round
 LEFT OUTER JOIN tx ON round.id=tx.round_id
-WHERE round.txid = ? AND tx.type = 'tree'
+WHERE round.txid = ? AND tx.type = 'tree';
+
+-- name: SelectVtxoTreeKeys :many
+SELECT pubkey, seckey FROM vtxo_tree_keys WHERE round_id = ?;
+
+-- name: UpsertVtxoTreePubKey :exec
+INSERT INTO vtxo_tree_keys (round_id, pubkey)
+VALUES (?, ?);
+
+-- name: UpsertVtxoTreeSecKey :exec
+UPDATE vtxo_tree_keys SET seckey = ? WHERE round_id = ? AND pubkey = ?;
