@@ -130,7 +130,9 @@ func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, error) {
 		}
 
 		rootHash := controlBlock.RootHash(tapLeaf.Script)
-		tapKeyFromControlBlock := txscript.ComputeTaprootOutputKey(bitcointree.UnspendableKey(), rootHash[:])
+		tapKeyFromControlBlock := txscript.ComputeTaprootOutputKey(
+			bitcointree.UnspendableKey(), rootHash[:],
+		)
 		pkscript, err := common.P2TRScript(tapKeyFromControlBlock)
 		if err != nil {
 			return false, err
@@ -140,11 +142,7 @@ func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, error) {
 			return false, fmt.Errorf("invalid control block for input %d", index)
 		}
 
-		preimage, err := b.getTaprootPreimage(
-			ptx,
-			index,
-			tapLeaf.Script,
-		)
+		preimage, err := b.getTaprootPreimage(ptx, index, tapLeaf.Script)
 		if err != nil {
 			return false, err
 		}
@@ -293,37 +291,30 @@ func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (signedSweepTx strin
 	return hex.EncodeToString(buf.Bytes()), nil
 }
 
-func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, forfeitTxs []string) (map[domain.VtxoKey][]string, error) {
-	connectorsPtxs := make([]*psbt.Packet, 0, len(connectors))
-	var connectorAmount uint64
-
-	for i, connector := range connectors {
-		ptx, err := psbt.NewFromRawBytes(strings.NewReader(connector), true)
-		if err != nil {
-			return nil, err
-		}
-
-		if i == len(connectors)-1 {
-			lastOutput := ptx.UnsignedTx.TxOut[len(ptx.UnsignedTx.TxOut)-1]
-			connectorAmount = uint64(lastOutput.Value)
-		}
-
-		connectorsPtxs = append(connectorsPtxs, ptx)
+func (b *txBuilder) VerifyForfeitTxs(
+	vtxos []domain.Vtxo, connectors []string, forfeitTxs []string,
+) (map[domain.VtxoKey][]string, error) {
+	connectorTxs, connectorAmount, err := parseConnectors(connectors)
+	if err != nil {
+		return nil, err
 	}
 
 	// decode forfeit txs, map by vtxo key
-	forfeitTxsPtxs := make(map[domain.VtxoKey][]*psbt.Packet)
+	indexedForfeitTxs := make(map[domain.VtxoKey]*struct {
+		firstTx *psbt.Packet
+		txs     map[string]*psbt.Packet
+	})
 	for _, forfeitTx := range forfeitTxs {
-		ptx, err := psbt.NewFromRawBytes(strings.NewReader(forfeitTx), true)
+		tx, err := psbt.NewFromRawBytes(strings.NewReader(forfeitTx), true)
 		if err != nil {
 			return nil, err
 		}
 
-		if len(ptx.Inputs) != 2 {
-			return nil, fmt.Errorf("invalid forfeit tx, expect 2 inputs, got %d", len(ptx.Inputs))
+		if len(tx.Inputs) != 2 {
+			return nil, fmt.Errorf("invalid forfeit tx, expect 2 inputs, got %d", len(tx.Inputs))
 		}
 
-		valid, err := b.verifyTapscriptPartialSigs(ptx)
+		valid, err := b.verifyTapscriptPartialSigs(tx)
 		if err != nil {
 			return nil, err
 		}
@@ -331,29 +322,27 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 			return nil, fmt.Errorf("invalid forfeit tx signature")
 		}
 
-		vtxoInput := ptx.UnsignedTx.TxIn[1]
-
+		txid := tx.UnsignedTx.TxHash().String()
+		vtxoInput := tx.UnsignedTx.TxIn[1]
 		vtxoKey := domain.VtxoKey{
 			Txid: vtxoInput.PreviousOutPoint.Hash.String(),
 			VOut: vtxoInput.PreviousOutPoint.Index,
 		}
-		if _, ok := forfeitTxsPtxs[vtxoKey]; !ok {
-			forfeitTxsPtxs[vtxoKey] = make([]*psbt.Packet, 0)
+		if _, ok := indexedForfeitTxs[vtxoKey]; !ok {
+			indexedForfeitTxs[vtxoKey] = &struct {
+				firstTx *psbt.Packet
+				txs     map[string]*psbt.Packet
+			}{firstTx: tx}
 		}
-		forfeitTxsPtxs[vtxoKey] = append(forfeitTxsPtxs[vtxoKey], ptx)
+		indexedForfeitTxs[vtxoKey].txs[txid] = tx
 	}
 
-	forfeitAddress, err := b.wallet.GetForfeitAddress(context.Background())
-	if err != nil {
-		return nil, err
+	indexedVtxos := map[domain.VtxoKey]domain.Vtxo{}
+	for _, vtxo := range vtxos {
+		indexedVtxos[vtxo.VtxoKey] = vtxo
 	}
 
-	addr, err := btcutil.DecodeAddress(forfeitAddress, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	forfeitScript, err := txscript.PayToAddrScript(addr)
+	forfeitScript, err := b.getForfeitScript()
 	if err != nil {
 		return nil, err
 	}
@@ -367,27 +356,20 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 		return nil, err
 	}
 
-	for vtxoKey, ptxs := range forfeitTxsPtxs {
-		if len(ptxs) == 0 {
+	for vtxoKey, f := range indexedForfeitTxs {
+		if len(f.txs) == 0 {
 			continue
 		}
 
-		var vtxo *domain.Vtxo
-		for _, v := range vtxos {
-			if v.VtxoKey == vtxoKey {
-				vtxo = &v
-				break
-			}
-		}
-
-		if vtxo == nil {
+		vtxo, ok := indexedVtxos[vtxoKey]
+		if !ok {
 			return nil, fmt.Errorf("missing vtxo %s", vtxoKey)
 		}
 
 		outputAmount := uint64(0)
 
 		// only take the first forfeit tx, as all forfeit must have the same output
-		firstForfeit := ptxs[0]
+		firstForfeit := f.firstTx
 		for _, output := range firstForfeit.UnsignedTx.TxOut {
 			outputAmount += uint64(output.Value)
 		}
@@ -496,7 +478,7 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 
 		rebuiltForfeits := make([]*psbt.Packet, 0)
 
-		for _, connector := range connectorsPtxs {
+		for _, connector := range connectorTxs {
 			forfeits, err := bitcointree.BuildForfeitTxs(
 				connector,
 				vtxoInput,
@@ -514,27 +496,19 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 			rebuiltForfeits = append(rebuiltForfeits, forfeits...)
 		}
 
-		if len(rebuiltForfeits) != len(ptxs) {
-			return nil, fmt.Errorf("missing forfeits, expect %d, got %d", len(ptxs), len(rebuiltForfeits))
+		if len(rebuiltForfeits) != len(f.txs) {
+			return nil, fmt.Errorf("missing forfeits, expect %d, got %d", len(f.txs), len(rebuiltForfeits))
 		}
 
 		for _, forfeit := range rebuiltForfeits {
-			found := false
 			txid := forfeit.UnsignedTx.TxHash().String()
-			for _, ptx := range ptxs {
-				if txid == ptx.UnsignedTx.TxHash().String() {
-					found = true
-					break
-				}
-			}
-
-			if !found {
+			if _, ok := f.txs[txid]; !ok {
 				return nil, fmt.Errorf("missing forfeit tx %s", txid)
 			}
 		}
 
-		b64Txs := make([]string, 0, len(ptxs))
-		for _, forfeit := range ptxs {
+		b64Txs := make([]string, 0, len(f.txs))
+		for _, forfeit := range f.txs {
 			b64, err := forfeit.B64Encode()
 			if err != nil {
 				return nil, err
@@ -1355,6 +1329,40 @@ func (b *txBuilder) extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.Taproot
 	}
 
 	return sweepLeaf, internalKey, vtxoTreeExpiry, nil
+}
+
+func (b *txBuilder) getForfeitScript() ([]byte, error) {
+	forfeitAddress, err := b.wallet.GetForfeitAddress(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	addr, err := btcutil.DecodeAddress(forfeitAddress, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return txscript.PayToAddrScript(addr)
+}
+
+func parseConnectors(connectors []string) ([]*psbt.Packet, uint64, error) {
+	var connectorAmount uint64
+	connectorTxs := make([]*psbt.Packet, 0, len(connectors))
+	for i, connector := range connectors {
+		tx, err := psbt.NewFromRawBytes(strings.NewReader(connector), true)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		if i == len(connectors)-1 {
+			lastOutput := tx.UnsignedTx.TxOut[len(tx.UnsignedTx.TxOut)-1]
+			connectorAmount = uint64(lastOutput.Value)
+		}
+
+		connectorTxs = append(connectorTxs, tx)
+	}
+
+	return connectorTxs, connectorAmount, nil
 }
 
 type sweepBitcoinInput struct {
