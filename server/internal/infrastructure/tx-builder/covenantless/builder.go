@@ -332,7 +332,7 @@ func (b *txBuilder) VerifyForfeitTxs(
 			indexedForfeitTxs[vtxoKey] = &struct {
 				firstTx *psbt.Packet
 				txs     map[string]*psbt.Packet
-			}{firstTx: tx}
+			}{firstTx: tx, txs: make(map[string]*psbt.Packet)}
 		}
 		indexedForfeitTxs[vtxoKey].txs[txid] = tx
 	}
