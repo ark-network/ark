@@ -6,7 +6,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
@@ -314,14 +316,6 @@ func (b *txBuilder) VerifyForfeitTxs(
 			return nil, fmt.Errorf("invalid forfeit tx, expect 2 inputs, got %d", len(tx.Inputs))
 		}
 
-		valid, err := b.verifyTapscriptPartialSigs(tx)
-		if err != nil {
-			return nil, err
-		}
-		if !valid {
-			return nil, fmt.Errorf("invalid forfeit tx signature")
-		}
-
 		txid := tx.UnsignedTx.TxHash().String()
 		vtxoInput := tx.UnsignedTx.TxIn[1]
 		vtxoKey := domain.VtxoKey{
@@ -349,16 +343,25 @@ func (b *txBuilder) VerifyForfeitTxs(
 
 	minRate := b.wallet.MinRelayFeeRate(context.Background())
 
-	validForfeitTxs := make(map[domain.VtxoKey][]string)
-
 	blocktimestamp, err := b.wallet.GetCurrentBlockTime(context.Background())
 	if err != nil {
 		return nil, err
 	}
 
+	dustAmount, err := b.wallet.GetDustAmount(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	validForfeitTxs := make(map[domain.VtxoKey][]string)
+
 	for vtxoKey, f := range indexedForfeitTxs {
 		if len(f.txs) == 0 {
 			continue
+		}
+
+		if err := b.verifyTapscriptPartialSigsMap(f.txs); err != nil {
+			return nil, err
 		}
 
 		vtxo, ok := indexedVtxos[vtxoKey]
@@ -437,11 +440,6 @@ func (b *txBuilder) VerifyForfeitTxs(
 			return nil, err
 		}
 
-		dustAmount, err := b.wallet.GetDustAmount(context.Background())
-		if err != nil {
-			return nil, err
-		}
-
 		if inputAmount-feeAmount < dustAmount {
 			return nil, fmt.Errorf("forfeit tx output amount is dust, %d < %d", inputAmount-feeAmount, dustAmount)
 		}
@@ -476,32 +474,70 @@ func (b *txBuilder) VerifyForfeitTxs(
 			return nil, err
 		}
 
-		rebuiltForfeits := make([]*psbt.Packet, 0)
+		rebuiltTxIds := make(map[string]any)
+
+		nbWorkers := runtime.NumCPU()
+		jobsConnector := make(chan *psbt.Packet, len(connectorTxs))
+		errChan := make(chan error, 1)
+		wg := sync.WaitGroup{}
+		wg.Add(nbWorkers)
+
+		// start work pool
+		for i := 0; i < nbWorkers; i++ {
+			go func() {
+				defer wg.Done()
+
+				for connector := range jobsConnector {
+					forfeits, err := bitcointree.BuildForfeitTxs(
+						connector,
+						vtxoInput,
+						vtxo.Amount,
+						connectorAmount,
+						feeAmount,
+						vtxoScript,
+						forfeitScript,
+						uint32(locktime),
+					)
+					if err != nil {
+						errChan <- err
+						return
+					}
+
+					for _, forfeit := range forfeits {
+						txid := forfeit.UnsignedTx.TxHash().String()
+						rebuiltTxIds[txid] = true
+					}
+				}
+			}()
+		}
 
 		for _, connector := range connectorTxs {
-			forfeits, err := bitcointree.BuildForfeitTxs(
-				connector,
-				vtxoInput,
-				vtxo.Amount,
-				connectorAmount,
-				feeAmount,
-				vtxoScript,
-				forfeitScript,
-				uint32(locktime),
-			)
-			if err != nil {
+			select {
+			// don't wait for the whole jobs pool to be done in case of error
+			case err := <-errChan:
 				return nil, err
+			default:
+				jobsConnector <- connector
 			}
-
-			rebuiltForfeits = append(rebuiltForfeits, forfeits...)
 		}
 
-		if len(rebuiltForfeits) != len(f.txs) {
-			return nil, fmt.Errorf("missing forfeits, expect %d, got %d", len(f.txs), len(rebuiltForfeits))
+		close(jobsConnector)
+		// wait for the workers
+		wg.Wait()
+
+		select {
+		case err := <-errChan:
+			return nil, err
+		default:
+			close(errChan)
 		}
 
-		for _, forfeit := range rebuiltForfeits {
-			txid := forfeit.UnsignedTx.TxHash().String()
+		if len(rebuiltTxIds) != len(f.txs) {
+			return nil, fmt.Errorf("missing forfeits, expect %d, got %d", len(f.txs), len(rebuiltTxIds))
+		}
+
+		// verify all rebuilt are the same as the original forfeits
+		for txid := range rebuiltTxIds {
 			if _, ok := f.txs[txid]; !ok {
 				return nil, fmt.Errorf("missing forfeit tx %s", txid)
 			}
@@ -1343,6 +1379,50 @@ func (b *txBuilder) getForfeitScript() ([]byte, error) {
 	}
 
 	return txscript.PayToAddrScript(addr)
+}
+
+func (b *txBuilder) verifyTapscriptPartialSigsMap(txs map[string]*psbt.Packet) error {
+	nbWorkers := runtime.NumCPU()
+	jobs := make(chan *psbt.Packet, len(txs))
+	errChan := make(chan error, 1)
+	wg := sync.WaitGroup{}
+	wg.Add(nbWorkers)
+
+	for i := 0; i < nbWorkers; i++ {
+		go func() {
+			defer wg.Done()
+
+			for tx := range jobs {
+				valid, err := b.verifyTapscriptPartialSigs(tx)
+				if err != nil {
+					errChan <- err
+				}
+
+				if !valid {
+					errChan <- fmt.Errorf("invalid forfeit tx signature (%s)", tx.UnsignedTx.TxHash().String())
+				}
+			}
+		}()
+	}
+
+	for _, tx := range txs {
+		select {
+		case err := <-errChan:
+			return err
+		default:
+			jobs <- tx
+		}
+	}
+	close(jobs)
+	wg.Wait()
+
+	select {
+	case err := <-errChan:
+		return err
+	default:
+		close(errChan)
+		return nil
+	}
 }
 
 func parseConnectors(connectors []string) ([]*psbt.Packet, uint64, error) {
