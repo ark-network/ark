@@ -26,7 +26,6 @@ import (
 	"github.com/btcsuite/btcwallet/chain"
 	"github.com/btcsuite/btcwallet/waddrmgr"
 	"github.com/btcsuite/btcwallet/wallet"
-	"github.com/btcsuite/btcwallet/wallet/txrules"
 	"github.com/btcsuite/btcwallet/walletdb"
 	_ "github.com/btcsuite/btcwallet/walletdb/bdb"
 	"github.com/btcsuite/btcwallet/wtxmgr"
@@ -1197,16 +1196,6 @@ func (s *service) Withdraw(ctx context.Context, address string, amount uint64) (
 	output := &wire.TxOut{
 		Value:    int64(amount),
 		PkScript: pkScript,
-	}
-
-	if txscript.GetScriptClass(output.PkScript) == txscript.NullDataTy {
-		return "", fmt.Errorf("output is null data")
-	}
-
-	if err = txrules.CheckOutput(
-		output, txrules.DefaultRelayFeePerKb,
-	); err != nil {
-		return "", err
 	}
 
 	mainAccountNumber, err := s.wallet.InternalWallet().AccountNumber(p2wpkhKeyScope, string(mainAccount))
