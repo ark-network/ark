@@ -19,8 +19,8 @@ func BuildForfeitTxs(
 	version := int32(2)
 	connectors, prevouts := getConnectorInputs(connectorTx, int64(connectorAmount))
 	nbWorkers := int(math.Min(float64(runtime.NumCPU()), float64(len(connectors))))
-	forfeitTxs := make([]*psbt.Packet, nbWorkers)
-	jobs := make(chan chJob, nbWorkers)
+	forfeitTxs := make([]*psbt.Packet, len(connectors))
+	jobs := make(chan chJob, len(connectors))
 	chErr := make(chan error, 1)
 
 	wg := sync.WaitGroup{}
