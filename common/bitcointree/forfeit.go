@@ -22,6 +22,7 @@ func BuildForfeitTxs(
 	forfeitTxs := make([]*psbt.Packet, len(connectors))
 	jobs := make(chan chJob, len(connectors))
 	chErr := make(chan error, 1)
+	chTxs := make(chan chTx, len(connectors))
 
 	wg := sync.WaitGroup{}
 	wg.Add(nbWorkers)
@@ -78,7 +79,7 @@ func BuildForfeitTxs(
 						return
 					}
 
-					forfeitTxs[i] = partialTx
+					chTxs <- chTx{i, partialTx}
 				}(job.i, job.connectorInput, job.connectorPrevout)
 			}
 		}()
@@ -97,12 +98,21 @@ func BuildForfeitTxs(
 	close(jobs)
 	wg.Wait()
 
-	select {
-	case err := <-chErr:
-		return nil, err
-	default:
-		close(chErr)
-		return forfeitTxs, nil
+	count := 0
+	for {
+		select {
+		case err := <-chErr:
+			close(chErr)
+			return nil, err
+		case res := <-chTxs:
+			forfeitTxs[res.i] = res.tx
+			count++
+			if count == len(connectors) {
+				close(chTxs)
+				close(chErr)
+				return forfeitTxs, nil
+			}
+		}
 	}
 }
 
@@ -127,4 +137,9 @@ type chJob struct {
 	i                int
 	connectorInput   *wire.OutPoint
 	connectorPrevout *wire.TxOut
+}
+
+type chTx struct {
+	i  int
+	tx *psbt.Packet
 }
