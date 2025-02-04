@@ -1221,7 +1221,9 @@ func (s *service) Withdraw(ctx context.Context, address string, amount uint64) (
 		return "", err
 	}
 
-	return hex.EncodeToString(buf.Bytes()), nil
+	txid := tx.TxHash().String()
+
+	return txid, nil
 }
 
 func (s *service) castNotification(tx *wtxmgr.TxRecord) map[string][]ports.VtxoWithValue {

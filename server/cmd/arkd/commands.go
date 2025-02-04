@@ -263,13 +263,13 @@ func walletWithdrawAction(ctx *cli.Context) error {
 	url := fmt.Sprintf("%s/v1/admin/withdraw", baseURL)
 	body := fmt.Sprintf(`{"address": "%s", "amount": %d}`, address, amount)
 
-	txHex, err := post[string](url, body, "txHex", macaroon, tlsCertPath)
+	txid, err := post[string](url, body, "txid", macaroon, tlsCertPath)
 	if err != nil {
 		return err
 	}
 
 	fmt.Println("transaction successfully broadcasted:")
-	fmt.Println(txHex)
+	fmt.Println(txid)
 	return nil
 }
 

@@ -434,7 +434,7 @@
     "v1WithdrawResponse": {
       "type": "object",
       "properties": {
-        "txHex": {
+        "txid": {
           "type": "string"
         }
       }

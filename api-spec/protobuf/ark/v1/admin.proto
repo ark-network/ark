@@ -124,5 +124,5 @@ message WithdrawRequest {
 }
 
 message WithdrawResponse {
-  string tx_hex = 1;
+  string txid = 1;
 }

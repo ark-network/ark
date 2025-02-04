@@ -18,6 +18,7 @@ import (
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/vulpemventures/go-elements/elementsutil"
 	"github.com/vulpemventures/go-elements/psetv2"
+	"github.com/vulpemventures/go-elements/transaction"
 )
 
 const (
@@ -285,7 +286,12 @@ func (s *service) Withdraw(ctx context.Context, address string, amount uint64) (
 		return "", err
 	}
 
-	return res.GetTxHex(), nil
+	tx, err := transaction.NewTxFromHex(res.GetTxHex())
+	if err != nil {
+		return "", err
+	}
+
+	return tx.TxHash().String(), nil
 }
 
 var minRate = chainfee.SatPerKVByte(0.2 * 1000)
