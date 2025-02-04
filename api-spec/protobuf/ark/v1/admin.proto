@@ -40,6 +40,12 @@ service AdminService {
       body: "*"
     };
   }
+  rpc Withdraw(WithdrawRequest) returns (WithdrawResponse) {
+    option (google.api.http) = {
+      post: "/v1/admin/withdraw"
+      body: "*"
+    };
+  }
 }
 
 message GetScheduledSweepRequest {}
@@ -110,4 +116,13 @@ message MarketHourConfig {
   google.protobuf.Timestamp end_time = 2;
   google.protobuf.Duration period = 3;
   google.protobuf.Duration round_interval = 4;
+}
+
+message WithdrawRequest {
+  string address = 1;
+  uint64 amount = 2;
+}
+
+message WithdrawResponse {
+  string txid = 1;
 }

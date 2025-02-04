@@ -1175,6 +1175,57 @@ func (s *service) GetCurrentBlockTime(ctx context.Context) (*ports.BlockTimestam
 	}, nil
 }
 
+func (s *service) Withdraw(ctx context.Context, address string, amount uint64) (string, error) {
+	addr, err := btcutil.DecodeAddress(address, s.cfg.chainParams())
+	if err != nil {
+		return "", err
+	}
+
+	feeRate, err := s.feeEstimator.EstimateFeePerKW(1)
+	if err != nil {
+		return "", err
+	}
+
+	now := time.Now()
+
+	pkScript, err := txscript.PayToAddrScript(addr)
+	if err != nil {
+		return "", err
+	}
+
+	output := &wire.TxOut{
+		Value:    int64(amount),
+		PkScript: pkScript,
+	}
+
+	mainAccountNumber, err := s.wallet.InternalWallet().AccountNumber(p2wpkhKeyScope, string(mainAccount))
+	if err != nil {
+		return "", err
+	}
+
+	tx, err := s.wallet.InternalWallet().SendOutputs(
+		[]*wire.TxOut{output},
+		&p2wpkhKeyScope,
+		mainAccountNumber,
+		1,
+		btcutil.Amount(feeRate.FeePerKVByte()),
+		wallet.CoinSelectionLargest,
+		fmt.Sprintf("withdraw %d", now.Unix()),
+	)
+	if err != nil {
+		return "", err
+	}
+
+	var buf bytes.Buffer
+	if err := tx.Serialize(&buf); err != nil {
+		return "", err
+	}
+
+	txid := tx.TxHash().String()
+
+	return txid, nil
+}
+
 func (s *service) castNotification(tx *wtxmgr.TxRecord) map[string][]ports.VtxoWithValue {
 	vtxos := make(map[string][]ports.VtxoWithValue)
 
