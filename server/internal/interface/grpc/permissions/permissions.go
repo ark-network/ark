@@ -217,6 +217,14 @@ func AllPermissionsByMethod() map[string][]bakery.Op {
 			Entity: EntityManager,
 			Action: "write",
 		}},
+		fmt.Sprintf("/%s/DeleteTxRequests", arkv1.AdminService_ServiceDesc.ServiceName): {{
+			Entity: EntityManager,
+			Action: "write",
+		}},
+		fmt.Sprintf("/%s/GetTxRequestQueue", arkv1.AdminService_ServiceDesc.ServiceName): {{
+			Entity: EntityManager,
+			Action: "read",
+		}},
 		fmt.Sprintf("/%s/Withdraw", arkv1.AdminService_ServiceDesc.ServiceName): {{
 			Entity: EntityManager,
 			Action: "write",

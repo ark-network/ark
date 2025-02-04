@@ -105,6 +105,36 @@ message MarketHour {
   int64 round_interval = 4;
 }
 
+message SweepableOutput {
+  string txid = 1;
+  uint32 vout = 2;
+  string amount = 3;
+  int64 scheduled_at = 4;
+}
+
+message ScheduledSweep {
+  string round_id = 1;
+  repeated SweepableOutput outputs = 2;
+}
+
+message TxRequestInfo {
+  string id = 1;
+  int64 created_at = 2;
+  repeated Output receivers = 3;
+  repeated RequestInput inputs = 4;
+  repeated RequestInput boarding_inputs = 5;
+  repeated string notes = 6;
+  string signing_type = 7;
+  repeated string cosigners_public_keys = 8;
+  int64 last_ping = 9;
+}
+
+message RequestInput {
+  string txid = 1;
+  uint32 vout = 2;
+  uint64 amount = 3;
+}
+
 /* Events */
 
 message RoundFinalizationEvent {

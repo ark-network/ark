@@ -5,6 +5,7 @@ package ark.v1;
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/duration.proto";
+import "ark/v1/types.proto";
 
 service AdminService {
   rpc GetScheduledSweep(GetScheduledSweepRequest) returns (GetScheduledSweepResponse) {
@@ -40,6 +41,17 @@ service AdminService {
       body: "*"
     };
   }
+  rpc GetTxRequestQueue(GetTxRequestQueueRequest) returns (GetTxRequestQueueResponse) {
+    option (google.api.http) = {
+      get: "/v1/admin/queue"
+    };
+  }
+  rpc DeleteTxRequests(DeleteTxRequestsRequest) returns (DeleteTxRequestsResponse) {
+    option (google.api.http) = {
+      post: "/v1/admin/queue/delete"
+      body: "*"
+    };
+  }
   rpc Withdraw(WithdrawRequest) returns (WithdrawResponse) {
     option (google.api.http) = {
       post: "/v1/admin/withdraw"
@@ -53,22 +65,9 @@ message GetScheduledSweepResponse {
   repeated ScheduledSweep sweeps = 1;
 }
 
-message SweepableOutput {
-  string txid = 1;
-  uint32 vout = 2;
-  string amount = 3;
-  int64 scheduled_at = 4;
-}
-
-message ScheduledSweep {
-  string round_id = 1;
-  repeated SweepableOutput outputs = 2;
-}
-
 message GetRoundDetailsRequest {
   string round_id = 1;
 }
-
 message GetRoundDetailsResponse {
   string round_id = 1;
   string txid = 2;
@@ -85,7 +84,6 @@ message GetRoundsRequest {
   int64 after = 1;
   int64 before = 2;
 }
-
 message GetRoundsResponse {
   repeated string rounds = 1;
 }
@@ -94,13 +92,11 @@ message CreateNoteRequest {
   uint32 amount = 1;
   uint32 quantity = 2;
 }
-
 message CreateNoteResponse {
   repeated string notes = 1;
 }
 
 message GetMarketHourConfigRequest {}
-
 message GetMarketHourConfigResponse {
     MarketHourConfig config = 1;
 }
@@ -108,7 +104,6 @@ message GetMarketHourConfigResponse {
 message UpdateMarketHourConfigRequest {
     MarketHourConfig config = 1;
 }
-
 message UpdateMarketHourConfigResponse {}
 
 message MarketHourConfig {
@@ -118,6 +113,17 @@ message MarketHourConfig {
   google.protobuf.Duration round_interval = 4;
 }
 
+message GetTxRequestQueueRequest {
+  repeated string request_ids = 1;
+}
+message GetTxRequestQueueResponse {
+  repeated TxRequestInfo requests = 1;
+}
+
+message DeleteTxRequestsRequest {
+  repeated string request_ids = 1;
+}
+message DeleteTxRequestsResponse {}
 message WithdrawRequest {
   string address = 1;
   uint64 amount = 2;

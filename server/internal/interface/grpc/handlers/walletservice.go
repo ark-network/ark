@@ -161,12 +161,12 @@ func (a *walletHandler) GetBalance(ctx context.Context, _ *arkv1.GetBalanceReque
 
 	return &arkv1.GetBalanceResponse{
 		MainAccount: &arkv1.Balance{
-			Locked:    convertSatoshis(lockedMainBalance),
-			Available: convertSatoshis(availableMainBalance),
+			Locked:    convertSatsToBTCStr(lockedMainBalance),
+			Available: convertSatsToBTCStr(availableMainBalance),
 		},
 		ConnectorsAccount: &arkv1.Balance{
-			Locked:    convertSatoshis(lockedConnectorsBalance),
-			Available: convertSatoshis(availableConnectorsBalance),
+			Locked:    convertSatsToBTCStr(lockedConnectorsBalance),
+			Available: convertSatsToBTCStr(availableConnectorsBalance),
 		},
 	}, nil
 }

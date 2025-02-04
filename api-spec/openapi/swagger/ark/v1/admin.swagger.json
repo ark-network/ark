@@ -100,6 +100,72 @@
         ]
       }
     },
+    "/v1/admin/queue": {
+      "get": {
+        "operationId": "AdminService_GetTxRequestQueue",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetTxRequestQueueResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "requestIds",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
+    "/v1/admin/queue/delete": {
+      "post": {
+        "operationId": "AdminService_DeleteTxRequests",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteTxRequestsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1DeleteTxRequestsRequest"
+            }
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
     "/v1/admin/round/{roundId}": {
       "get": {
         "operationId": "AdminService_GetRoundDetails",
@@ -270,6 +336,20 @@
         }
       }
     },
+    "v1DeleteTxRequestsRequest": {
+      "type": "object",
+      "properties": {
+        "requestIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "v1DeleteTxRequestsResponse": {
+      "type": "object"
+    },
     "v1GetMarketHourConfigResponse": {
       "type": "object",
       "properties": {
@@ -355,6 +435,18 @@
         }
       }
     },
+    "v1GetTxRequestQueueResponse": {
+      "type": "object",
+      "properties": {
+        "requests": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1TxRequestInfo"
+          }
+        }
+      }
+    },
     "v1MarketHourConfig": {
       "type": "object",
       "properties": {
@@ -371,6 +463,36 @@
         },
         "roundInterval": {
           "type": "string"
+        }
+      }
+    },
+    "v1Output": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string",
+          "title": "onchain or off-chain"
+        },
+        "amount": {
+          "type": "string",
+          "format": "uint64",
+          "description": "Amount to send in satoshis."
+        }
+      }
+    },
+    "v1RequestInput": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "vout": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "amount": {
+          "type": "string",
+          "format": "uint64"
         }
       }
     },
@@ -403,6 +525,58 @@
           "type": "string"
         },
         "scheduledAt": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1TxRequestInfo": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "int64"
+        },
+        "receivers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Output"
+          }
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1RequestInput"
+          }
+        },
+        "boardingInputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1RequestInput"
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "signingType": {
+          "type": "string"
+        },
+        "cosignersPublicKeys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "lastPing": {
           "type": "string",
           "format": "int64"
         }

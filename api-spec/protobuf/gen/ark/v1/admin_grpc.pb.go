@@ -24,6 +24,8 @@ type AdminServiceClient interface {
 	CreateNote(ctx context.Context, in *CreateNoteRequest, opts ...grpc.CallOption) (*CreateNoteResponse, error)
 	GetMarketHourConfig(ctx context.Context, in *GetMarketHourConfigRequest, opts ...grpc.CallOption) (*GetMarketHourConfigResponse, error)
 	UpdateMarketHourConfig(ctx context.Context, in *UpdateMarketHourConfigRequest, opts ...grpc.CallOption) (*UpdateMarketHourConfigResponse, error)
+	GetTxRequestQueue(ctx context.Context, in *GetTxRequestQueueRequest, opts ...grpc.CallOption) (*GetTxRequestQueueResponse, error)
+	DeleteTxRequests(ctx context.Context, in *DeleteTxRequestsRequest, opts ...grpc.CallOption) (*DeleteTxRequestsResponse, error)
 	Withdraw(ctx context.Context, in *WithdrawRequest, opts ...grpc.CallOption) (*WithdrawResponse, error)
 }
 
@@ -89,6 +91,24 @@ func (c *adminServiceClient) UpdateMarketHourConfig(ctx context.Context, in *Upd
 	return out, nil
 }
 
+func (c *adminServiceClient) GetTxRequestQueue(ctx context.Context, in *GetTxRequestQueueRequest, opts ...grpc.CallOption) (*GetTxRequestQueueResponse, error) {
+	out := new(GetTxRequestQueueResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/GetTxRequestQueue", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) DeleteTxRequests(ctx context.Context, in *DeleteTxRequestsRequest, opts ...grpc.CallOption) (*DeleteTxRequestsResponse, error) {
+	out := new(DeleteTxRequestsResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/DeleteTxRequests", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *adminServiceClient) Withdraw(ctx context.Context, in *WithdrawRequest, opts ...grpc.CallOption) (*WithdrawResponse, error) {
 	out := new(WithdrawResponse)
 	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/Withdraw", in, out, opts...)
@@ -108,6 +128,8 @@ type AdminServiceServer interface {
 	CreateNote(context.Context, *CreateNoteRequest) (*CreateNoteResponse, error)
 	GetMarketHourConfig(context.Context, *GetMarketHourConfigRequest) (*GetMarketHourConfigResponse, error)
 	UpdateMarketHourConfig(context.Context, *UpdateMarketHourConfigRequest) (*UpdateMarketHourConfigResponse, error)
+	GetTxRequestQueue(context.Context, *GetTxRequestQueueRequest) (*GetTxRequestQueueResponse, error)
+	DeleteTxRequests(context.Context, *DeleteTxRequestsRequest) (*DeleteTxRequestsResponse, error)
 	Withdraw(context.Context, *WithdrawRequest) (*WithdrawResponse, error)
 }
 
@@ -132,6 +154,12 @@ func (UnimplementedAdminServiceServer) GetMarketHourConfig(context.Context, *Get
 }
 func (UnimplementedAdminServiceServer) UpdateMarketHourConfig(context.Context, *UpdateMarketHourConfigRequest) (*UpdateMarketHourConfigResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateMarketHourConfig not implemented")
+}
+func (UnimplementedAdminServiceServer) GetTxRequestQueue(context.Context, *GetTxRequestQueueRequest) (*GetTxRequestQueueResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTxRequestQueue not implemented")
+}
+func (UnimplementedAdminServiceServer) DeleteTxRequests(context.Context, *DeleteTxRequestsRequest) (*DeleteTxRequestsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteTxRequests not implemented")
 }
 func (UnimplementedAdminServiceServer) Withdraw(context.Context, *WithdrawRequest) (*WithdrawResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Withdraw not implemented")
@@ -256,6 +284,42 @@ func _AdminService_UpdateMarketHourConfig_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AdminService_GetTxRequestQueue_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTxRequestQueueRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).GetTxRequestQueue(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.AdminService/GetTxRequestQueue",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).GetTxRequestQueue(ctx, req.(*GetTxRequestQueueRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_DeleteTxRequests_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteTxRequestsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).DeleteTxRequests(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.AdminService/DeleteTxRequests",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).DeleteTxRequests(ctx, req.(*DeleteTxRequestsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AdminService_Withdraw_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(WithdrawRequest)
 	if err := dec(in); err != nil {
@@ -304,6 +368,14 @@ var AdminService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateMarketHourConfig",
 			Handler:    _AdminService_UpdateMarketHourConfig_Handler,
+		},
+		{
+			MethodName: "GetTxRequestQueue",
+			Handler:    _AdminService_GetTxRequestQueue_Handler,
+		},
+		{
+			MethodName: "DeleteTxRequests",
+			Handler:    _AdminService_DeleteTxRequests_Handler,
 		},
 		{
 			MethodName: "Withdraw",
