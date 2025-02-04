@@ -14,6 +14,7 @@ import (
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr/musig2"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg"
@@ -1108,6 +1109,137 @@ func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, 
 	}
 
 	return roundTx.B64Encode()
+}
+
+func (b *txBuilder) BuildSweepEarlyTx(node tree.Node, vtxoTreeKeys []domain.RawKeyPair) (string, error) {
+	tx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
+	if err != nil {
+		return "", err
+	}
+
+	inputToSweep := tx.Inputs[0]
+
+	cosignerPubKeys, err := bitcointree.GetCosignerKeys(inputToSweep)
+	if err != nil {
+		return "", err
+	}
+	privKeys := make([]*secp256k1.PrivateKey, 0, len(cosignerPubKeys))
+	for _, pubkey := range cosignerPubKeys {
+		for _, key := range vtxoTreeKeys {
+			if bytes.Equal(key.Pubkey, pubkey.SerializeCompressed()) {
+				privKey := secp256k1.PrivKeyFromBytes(key.Seckey)
+				privKeys = append(privKeys, privKey)
+			}
+		}
+	}
+
+	vtxoTreeExpiry, err := bitcointree.GetVtxoTreeExpiry(inputToSweep)
+	if err != nil {
+		return "", err
+	}
+
+	serverPubKey, err := b.wallet.GetPubkey(context.Background())
+	if err != nil {
+		return "", err
+	}
+
+	sweepClosure := &tree.CSVMultisigClosure{
+		Locktime: *vtxoTreeExpiry,
+		MultisigClosure: tree.MultisigClosure{
+			PubKeys: []*secp256k1.PublicKey{serverPubKey},
+		},
+	}
+
+	sweepScript, err := sweepClosure.Script()
+	if err != nil {
+		return "", err
+	}
+
+	sweepRoot := txscript.NewBaseTapLeaf(sweepScript).TapHash()
+
+	aggregatedKey, err := bitcointree.AggregateKeys(cosignerPubKeys, sweepRoot[:])
+	if err != nil {
+		return "", err
+	}
+
+	addresses, err := b.wallet.DeriveAddresses(context.Background(), 1)
+	if err != nil {
+		return "", err
+	}
+
+	addr, err := btcutil.DecodeAddress(addresses[0], b.onchainNetwork())
+	if err != nil {
+		return "", err
+	}
+
+	outputScript, err := txscript.PayToAddrScript(addr)
+	if err != nil {
+		return "", err
+	}
+
+	inputAmount := uint64(inputToSweep.WitnessUtxo.Value)
+
+	outpoint := tx.UnsignedTx.TxIn[0].PreviousOutPoint
+	ptx, err := psbt.New(
+		[]*wire.OutPoint{&outpoint},
+		[]*wire.TxOut{{
+			Value:    int64(inputAmount),
+			PkScript: outputScript,
+		}},
+		2,
+		0,
+		[]uint32{wire.MaxTxInSequenceNum},
+	)
+	if err != nil {
+		return "", err
+	}
+
+	ptx.Inputs[0].WitnessUtxo = inputToSweep.WitnessUtxo
+	ptx.Inputs[0].TaprootInternalKey = schnorr.SerializePubKey(aggregatedKey.PreTweakedKey)
+	ptx.Inputs[0].TaprootMerkleRoot = sweepRoot[:]
+
+	b64, err := ptx.B64Encode()
+	if err != nil {
+		return "", err
+	}
+
+	fees, err := b.wallet.EstimateFees(context.Background(), b64)
+	if err != nil {
+		return "", err
+	}
+
+	ptx.UnsignedTx.TxOut[0].Value = int64(inputAmount - fees)
+
+	// sign using musig2
+	nonces := make([]*musig2.Nonces, 0, len(privKeys))
+	publicNonces := make([][66]byte, 0, len(privKeys))
+
+	for _, privKey := range privKeys {
+		nonces, err := musig2.GenNonces(musig2.WithPublicKey(privKey.PubKey()))
+		if err != nil {
+			return "", err
+		}
+
+		publicNonces = append(publicNonces, nonces.PubNonce)
+	}
+
+	combinedNonces, err := musig2.AggregateNonces(publicNonces)
+	if err != nil {
+		return "", err
+	}
+
+	for _, privKey := range privKeys {
+		secNonce := nonces[i].SecNonce
+
+		partialSig, err := musig2.Sign(secNonce, privKey, combinedNonces, cosignerPubKeys, ptx.UnsignedTx)
+		if err != nil {
+			return "", err
+		}
+
+		ptx.Inputs[0].TaprootScriptSpendSig = append(ptx.Inputs[0].TaprootScriptSpendSig, partialSig)
+	}
+
+	return b64, nil
 }
 
 func (b *txBuilder) createConnectors(

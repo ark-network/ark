@@ -212,6 +212,47 @@ func (r *roundRepository) SetVtxoTreePubKeys(ctx context.Context, roundId string
 	return r.store.Insert(dbKey, wrappedVtxoTreeKeys{Keys: rawKeyPairs})
 }
 
+func (r *roundRepository) GetSweepableEarlyRoundsIds(ctx context.Context) ([]string, error) {
+	notSweptRoundsQuery := badgerhold.Where("Stage.Code").Eq(domain.FinalizationStage).
+		And("Stage.Ended").Eq(true).And("Swept").Eq(false)
+	rounds, err := r.findRound(ctx, notSweptRoundsQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	roundIds := make([]string, 0, len(rounds))
+
+	for _, round := range rounds {
+		dbKey := fmt.Sprintf("%s_%s", vtxoTreeKeysPrefix, round.Id)
+		var keys wrappedVtxoTreeKeys
+		if ctx.Value("tx") != nil {
+			tx := ctx.Value("tx").(*badger.Txn)
+			err = r.store.TxGet(tx, dbKey, &keys)
+		} else {
+			err = r.store.Get(dbKey, &keys)
+		}
+
+		if err != nil {
+			return nil, err
+		}
+
+		// if all private keys are set: add to roundIds
+		missingSeckey := false
+		for _, key := range keys.Keys {
+			if key.Seckey == nil {
+				missingSeckey = true
+				break
+			}
+		}
+
+		if !missingSeckey {
+			roundIds = append(roundIds, round.Id)
+		}
+	}
+
+	return roundIds, nil
+}
+
 func (r *roundRepository) findRound(
 	ctx context.Context, query *badgerhold.Query,
 ) ([]domain.Round, error) {

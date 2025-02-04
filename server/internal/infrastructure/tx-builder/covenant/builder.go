@@ -1256,3 +1256,7 @@ func (s *sweepLiquidInput) GetInternalKey() *secp256k1.PublicKey {
 func (s *sweepLiquidInput) GetLeafScript() []byte {
 	return s.sweepLeaf.Script
 }
+
+func (b *txBuilder) BuildSweepEarlyTx(round domain.Round, vtxoTreeKeys []domain.RawKeyPair) (string, error) {
+	return "", fmt.Errorf("not implemented")
+}

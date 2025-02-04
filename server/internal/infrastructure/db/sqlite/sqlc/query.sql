@@ -205,3 +205,15 @@ VALUES (?, ?);
 
 -- name: UpsertVtxoTreeSecKey :exec
 UPDATE vtxo_tree_keys SET seckey = ? WHERE round_id = ? AND pubkey = ?;
+
+-- name: SelectSweepableEarlyRoundsIds :many
+SELECT DISTINCT vtk.round_id
+FROM vtxo_tree_keys vtk
+JOIN round r ON r.id = vtk.round_id
+WHERE r.swept = false
+AND NOT EXISTS (
+    SELECT 1
+    FROM vtxo_tree_keys sub
+    WHERE sub.round_id = vtk.round_id
+    AND sub.seckey IS NULL
+);

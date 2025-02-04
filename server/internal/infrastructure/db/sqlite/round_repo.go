@@ -338,6 +338,10 @@ func (r *roundRepository) SetVtxoTreePubKeys(ctx context.Context, roundId string
 	return execTx(ctx, r.db, txBody)
 }
 
+func (r *roundRepository) GetSweepableEarlyRoundsIds(ctx context.Context) ([]string, error) {
+	return r.querier.SelectSweepableEarlyRoundsIds(ctx)
+}
+
 func rowToReceiver(row queries.RequestReceiverVw) domain.Receiver {
 	return domain.Receiver{
 		Amount:         uint64(row.Amount.Int64),

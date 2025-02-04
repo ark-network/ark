@@ -162,6 +162,60 @@
         ]
       }
     },
+    "/v1/admin/sweep-early": {
+      "post": {
+        "operationId": "AdminService_SweepEarly",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SweepEarlyResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1SweepEarlyRequest"
+            }
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
+    "/v1/admin/sweepable-early-rounds": {
+      "get": {
+        "operationId": "AdminService_GetSweepableEarlyRounds",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetSweepableEarlyRoundsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
     "/v1/admin/sweeps": {
       "get": {
         "operationId": "AdminService_GetScheduledSweep",
@@ -323,6 +377,17 @@
         }
       }
     },
+    "v1GetSweepableEarlyRoundsResponse": {
+      "type": "object",
+      "properties": {
+        "roundIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "v1MarketHourConfig": {
       "type": "object",
       "properties": {
@@ -354,6 +419,22 @@
             "type": "object",
             "$ref": "#/definitions/v1SweepableOutput"
           }
+        }
+      }
+    },
+    "v1SweepEarlyRequest": {
+      "type": "object",
+      "properties": {
+        "roundId": {
+          "type": "string"
+        }
+      }
+    },
+    "v1SweepEarlyResponse": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
         }
       }
     },

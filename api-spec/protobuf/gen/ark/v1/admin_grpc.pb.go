@@ -24,6 +24,8 @@ type AdminServiceClient interface {
 	CreateNote(ctx context.Context, in *CreateNoteRequest, opts ...grpc.CallOption) (*CreateNoteResponse, error)
 	GetMarketHourConfig(ctx context.Context, in *GetMarketHourConfigRequest, opts ...grpc.CallOption) (*GetMarketHourConfigResponse, error)
 	UpdateMarketHourConfig(ctx context.Context, in *UpdateMarketHourConfigRequest, opts ...grpc.CallOption) (*UpdateMarketHourConfigResponse, error)
+	SweepEarly(ctx context.Context, in *SweepEarlyRequest, opts ...grpc.CallOption) (*SweepEarlyResponse, error)
+	GetSweepableEarlyRounds(ctx context.Context, in *GetSweepableEarlyRoundsRequest, opts ...grpc.CallOption) (*GetSweepableEarlyRoundsResponse, error)
 }
 
 type adminServiceClient struct {
@@ -88,6 +90,24 @@ func (c *adminServiceClient) UpdateMarketHourConfig(ctx context.Context, in *Upd
 	return out, nil
 }
 
+func (c *adminServiceClient) SweepEarly(ctx context.Context, in *SweepEarlyRequest, opts ...grpc.CallOption) (*SweepEarlyResponse, error) {
+	out := new(SweepEarlyResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/SweepEarly", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) GetSweepableEarlyRounds(ctx context.Context, in *GetSweepableEarlyRoundsRequest, opts ...grpc.CallOption) (*GetSweepableEarlyRoundsResponse, error) {
+	out := new(GetSweepableEarlyRoundsResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/GetSweepableEarlyRounds", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AdminServiceServer is the server API for AdminService service.
 // All implementations should embed UnimplementedAdminServiceServer
 // for forward compatibility
@@ -98,6 +118,8 @@ type AdminServiceServer interface {
 	CreateNote(context.Context, *CreateNoteRequest) (*CreateNoteResponse, error)
 	GetMarketHourConfig(context.Context, *GetMarketHourConfigRequest) (*GetMarketHourConfigResponse, error)
 	UpdateMarketHourConfig(context.Context, *UpdateMarketHourConfigRequest) (*UpdateMarketHourConfigResponse, error)
+	SweepEarly(context.Context, *SweepEarlyRequest) (*SweepEarlyResponse, error)
+	GetSweepableEarlyRounds(context.Context, *GetSweepableEarlyRoundsRequest) (*GetSweepableEarlyRoundsResponse, error)
 }
 
 // UnimplementedAdminServiceServer should be embedded to have forward compatible implementations.
@@ -121,6 +143,12 @@ func (UnimplementedAdminServiceServer) GetMarketHourConfig(context.Context, *Get
 }
 func (UnimplementedAdminServiceServer) UpdateMarketHourConfig(context.Context, *UpdateMarketHourConfigRequest) (*UpdateMarketHourConfigResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateMarketHourConfig not implemented")
+}
+func (UnimplementedAdminServiceServer) SweepEarly(context.Context, *SweepEarlyRequest) (*SweepEarlyResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SweepEarly not implemented")
+}
+func (UnimplementedAdminServiceServer) GetSweepableEarlyRounds(context.Context, *GetSweepableEarlyRoundsRequest) (*GetSweepableEarlyRoundsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSweepableEarlyRounds not implemented")
 }
 
 // UnsafeAdminServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -242,6 +270,42 @@ func _AdminService_UpdateMarketHourConfig_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AdminService_SweepEarly_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SweepEarlyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).SweepEarly(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.AdminService/SweepEarly",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).SweepEarly(ctx, req.(*SweepEarlyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_GetSweepableEarlyRounds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSweepableEarlyRoundsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).GetSweepableEarlyRounds(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.AdminService/GetSweepableEarlyRounds",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).GetSweepableEarlyRounds(ctx, req.(*GetSweepableEarlyRoundsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AdminService_ServiceDesc is the grpc.ServiceDesc for AdminService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -272,6 +336,14 @@ var AdminService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateMarketHourConfig",
 			Handler:    _AdminService_UpdateMarketHourConfig_Handler,
+		},
+		{
+			MethodName: "SweepEarly",
+			Handler:    _AdminService_SweepEarly_Handler,
+		},
+		{
+			MethodName: "GetSweepableEarlyRounds",
+			Handler:    _AdminService_GetSweepableEarlyRounds_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -541,6 +541,42 @@ func (q *Queries) SelectRoundWithRoundTxId(ctx context.Context, txid string) ([]
 	return items, nil
 }
 
+const selectSweepableEarlyRoundsIds = `-- name: SelectSweepableEarlyRoundsIds :many
+SELECT DISTINCT vtk.round_id
+FROM vtxo_tree_keys vtk
+JOIN round r ON r.id = vtk.round_id
+WHERE r.swept = false
+AND NOT EXISTS (
+    SELECT 1
+    FROM vtxo_tree_keys sub
+    WHERE sub.round_id = vtk.round_id
+    AND sub.seckey IS NULL
+)
+`
+
+func (q *Queries) SelectSweepableEarlyRoundsIds(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, selectSweepableEarlyRoundsIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var round_id string
+		if err := rows.Scan(&round_id); err != nil {
+			return nil, err
+		}
+		items = append(items, round_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const selectSweepableVtxos = `-- name: SelectSweepableVtxos :many
 SELECT vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.round_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.created_at, vtxo.request_id, vtxo.redeem_tx FROM vtxo
 WHERE redeemed = false AND swept = false

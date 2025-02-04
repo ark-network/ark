@@ -24,6 +24,7 @@ type RoundRepository interface {
 	SetVtxoTreePubKeys(ctx context.Context, roundId string, pubkeys [][]byte) error
 	GetVtxoTreeKeys(ctx context.Context, roundId string) ([]RawKeyPair, error)
 	AddVtxoTreeSecretKey(ctx context.Context, roundId string, seckey, pubkey []byte) error
+	GetSweepableEarlyRoundsIds(ctx context.Context) ([]string, error)
 	Close()
 }
 

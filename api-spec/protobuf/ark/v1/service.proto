@@ -89,6 +89,14 @@ service ArkService {
       body: "*"
     };
   }
+
+  /* Cashback APIs */
+
+  rpc GetCashback(GetCashbackRequest) returns (GetCashbackResponse) {
+    option (google.api.http) = {
+      get: "/v1/cashback"
+    };
+  }
 }
 
 message GetInfoRequest {}
@@ -206,3 +214,15 @@ message DeleteNostrRecipientRequest {
   repeated SignedVtxoOutpoint vtxos = 1;
 }
 message DeleteNostrRecipientResponse {}
+
+message VtxoTreeKeySecretKey {
+  string round_id = 1;
+  string secret_key = 2;
+}
+
+message GetCashbackRequest {
+  repeated VtxoTreeKeySecretKey secret_keys = 1;
+}
+message GetCashbackResponse {
+  repeated string notes = 1;
+}

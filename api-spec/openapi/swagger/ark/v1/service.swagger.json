@@ -48,6 +48,28 @@
         ]
       }
     },
+    "/v1/cashback": {
+      "get": {
+        "operationId": "ArkService_GetCashback",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetCashbackResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
     "/v1/events": {
       "get": {
         "operationId": "ArkService_GetEventStream",
@@ -483,6 +505,17 @@
         },
         "tapscripts": {
           "$ref": "#/definitions/v1Tapscripts"
+        }
+      }
+    },
+    "v1GetCashbackResponse": {
+      "type": "object",
+      "properties": {
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -1017,6 +1050,17 @@
         "createdAt": {
           "type": "string",
           "format": "int64"
+        }
+      }
+    },
+    "v1VtxoTreeKeySecretKey": {
+      "type": "object",
+      "properties": {
+        "roundId": {
+          "type": "string"
+        },
+        "secretKey": {
+          "type": "string"
         }
       }
     }

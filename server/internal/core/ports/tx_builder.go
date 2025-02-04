@@ -57,4 +57,7 @@ type TxBuilder interface {
 	FindLeaves(vtxoTree tree.VtxoTree, fromtxid string, vout uint32) (leaves []tree.Node, err error)
 	VerifyAndCombinePartialTx(dest string, src string) (string, error)
 	GetTxID(tx string) (string, error)
+
+	// BuildSweepEarlyTx builds a sweep tx for the given round and vtxo tree keys
+	BuildSweepEarlyTx(sharedOutput tree.Node, vtxoTreeKeys []domain.RawKeyPair) (string, error)
 }

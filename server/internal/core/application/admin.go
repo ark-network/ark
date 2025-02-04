@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -49,6 +50,8 @@ type AdminService interface {
 	GetWalletAddress(ctx context.Context) (string, error)
 	GetWalletStatus(ctx context.Context) (*WalletStatus, error)
 	CreateNotes(ctx context.Context, amount uint32, quantity int) ([]string, error)
+	GetSweepableEarlyRounds(ctx context.Context) ([]string, error)
+	SweepEarly(ctx context.Context, roundId string) (string, error)
 }
 
 type adminService struct {
@@ -206,4 +209,33 @@ func (a *adminService) CreateNotes(ctx context.Context, value uint32, quantity i
 	}
 
 	return notes, nil
+}
+
+func (a *adminService) GetSweepableEarlyRounds(ctx context.Context) ([]string, error) {
+	return a.repoManager.Rounds().GetSweepableEarlyRoundsIds(ctx)
+}
+
+func (a *adminService) SweepEarly(ctx context.Context, roundId string) (string, error) {
+	vtxoTree, err := a.repoManager.Rounds().GetVtxoTreeWithTxid(ctx, roundId)
+	if err != nil {
+		return "", err
+	}
+
+	vtxoTreeKeys, err := a.repoManager.Rounds().GetVtxoTreeKeys(ctx, roundId)
+	if err != nil {
+		return "", err
+	}
+
+	for _, key := range vtxoTreeKeys {
+		if key.Seckey == nil {
+			return "", fmt.Errorf("missing seckey for round %s", roundId)
+		}
+	}
+
+	root, err := vtxoTree.Root()
+	if err != nil {
+		return "", err
+	}
+
+	return a.txBuilder.BuildSweepEarlyTx(root, vtxoTreeKeys)
 }
