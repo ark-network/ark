@@ -3,7 +3,6 @@ package txbuilder_test
 import (
 	"context"
 
-	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -289,7 +288,7 @@ func (m *mockedWallet) GetCurrentBlockTime(ctx context.Context) (*ports.BlockTim
 	panic("not implemented")
 }
 
-func (m *mockedWallet) GetVtxoTreeSignerSession(ctx context.Context, roundID string) (bitcointree.SignerSession, error) {
+func (m *mockedWallet) GetVtxoTreeSignerSession(ctx context.Context, roundID string) (ports.ExtendedSignerSession, error) {
 	panic("not implemented")
 }
 

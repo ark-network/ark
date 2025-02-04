@@ -1179,7 +1179,7 @@ func (s *service) GetCurrentBlockTime(ctx context.Context) (*ports.BlockTimestam
 	}, nil
 }
 
-func (s *service) GetVtxoTreeSignerSession(ctx context.Context, roundID string) (bitcointree.SignerSession, error) {
+func (s *service) GetVtxoTreeSignerSession(ctx context.Context, roundID string) (ports.ExtendedSignerSession, error) {
 	if !s.isLoaded() {
 		return nil, ErrNotLoaded
 	}
@@ -1216,7 +1216,7 @@ func (s *service) GetVtxoTreeSignerSession(ctx context.Context, roundID string) 
 
 	derivedPrivKey := secp256k1.PrivKeyFromBytes(currentKey.Key)
 
-	return bitcointree.NewTreeSignerSession(derivedPrivKey), nil
+	return newExtendedSignerSession(derivedPrivKey), nil
 }
 
 func (s *service) castNotification(tx *wtxmgr.TxRecord) map[string][]ports.VtxoWithValue {
@@ -1611,4 +1611,20 @@ func logger(subsystem string) btclog.Logger {
 	logger := btclog.NewBackend(log.StandardLogger().Writer()).Logger(subsystem)
 	logger.SetLevel(btclog.LevelWarn)
 	return logger
+}
+
+type extendedSignerSession struct {
+	bitcointree.SignerSession
+	secretKey *secp256k1.PrivateKey
+}
+
+func newExtendedSignerSession(secretKey *secp256k1.PrivateKey) *extendedSignerSession {
+	return &extendedSignerSession{
+		SignerSession: bitcointree.NewTreeSignerSession(secretKey),
+		secretKey:     secretKey,
+	}
+}
+
+func (s *extendedSignerSession) GetSecretKey() *secp256k1.PrivateKey {
+	return s.secretKey
 }

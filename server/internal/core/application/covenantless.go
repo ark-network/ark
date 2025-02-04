@@ -996,6 +996,50 @@ func (s *covenantlessService) DeleteNostrRecipient(ctx context.Context, signedVt
 	return s.repoManager.Entities().Delete(ctx, vtxoKeys)
 }
 
+func (s *covenantlessService) GetCashback(ctx context.Context, roundID string, secretKey *secp256k1.PrivateKey) (string, error) {
+	roundRepo := s.repoManager.Rounds()
+
+	vtxoTreeKeys, err := roundRepo.GetVtxoTreeKeys(ctx, roundID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get vtxo tree keys: %s", err)
+	}
+
+	leakedPublicKeyBytes := secretKey.PubKey().SerializeCompressed()
+	found := false
+
+	for _, vtxoTreeKey := range vtxoTreeKeys {
+		if bytes.Equal(vtxoTreeKey.Pubkey, leakedPublicKeyBytes) {
+			if vtxoTreeKey.Seckey != nil {
+				return "", fmt.Errorf("we already know the secret key %x", vtxoTreeKey.Seckey)
+			}
+
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return "", fmt.Errorf("secret key not found for round %s", roundID)
+	}
+
+	const cashbackSats = 10_000 // TODO compute this from vtxo amount ?
+
+	data, err := note.New(cashbackSats)
+	if err != nil {
+		return "", fmt.Errorf("failed to create note: %s", err)
+	}
+
+	noteHash := data.Hash()
+
+	signature, err := s.wallet.SignMessage(ctx, noteHash)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign note: %s", err)
+	}
+	note := data.ToNote(signature)
+
+	return note.String(), nil
+}
+
 func (s *covenantlessService) start() {
 	defer func() {
 		if r := recover(); r != nil {

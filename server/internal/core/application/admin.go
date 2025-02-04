@@ -237,5 +237,5 @@ func (a *adminService) SweepEarly(ctx context.Context, roundId string) (string, 
 		return "", err
 	}
 
-	return a.txBuilder.BuildSweepEarlyTx(root, vtxoTreeKeys)
+	return a.txBuilder.BuildSweepEarlyTx(roundId, root, vtxoTreeKeys)
 }

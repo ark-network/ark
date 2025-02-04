@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	pb "github.com/ark-network/ark/api-spec/protobuf/gen/ocean/v1"
-	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	log "github.com/sirupsen/logrus"
@@ -222,7 +221,7 @@ func (s *service) GetCurrentBlockTime(ctx context.Context) (*ports.BlockTimestam
 	}, nil
 }
 
-func (s *service) GetVtxoTreeSignerSession(ctx context.Context, roundID string) (bitcointree.SignerSession, error) {
+func (s *service) GetVtxoTreeSignerSession(ctx context.Context, roundID string) (ports.ExtendedSignerSession, error) {
 	return nil, errors.New("not implemented")
 }
 

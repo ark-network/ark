@@ -1195,3 +1195,7 @@ func (s *covenantService) UpdateMarketHourConfig(
 
 	return nil
 }
+
+func (s *covenantService) GetCashback(context.Context, string, *secp256k1.PrivateKey) (string, error) {
+	return "", fmt.Errorf("not implemented")
+}

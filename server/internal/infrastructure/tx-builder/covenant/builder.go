@@ -1257,6 +1257,6 @@ func (s *sweepLiquidInput) GetLeafScript() []byte {
 	return s.sweepLeaf.Script
 }
 
-func (b *txBuilder) BuildSweepEarlyTx(round domain.Round, vtxoTreeKeys []domain.RawKeyPair) (string, error) {
+func (b *txBuilder) BuildSweepEarlyTx(string, tree.Node, []domain.RawKeyPair) (string, error) {
 	return "", fmt.Errorf("not implemented")
 }

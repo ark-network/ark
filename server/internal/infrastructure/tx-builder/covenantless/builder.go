@@ -1111,7 +1111,7 @@ func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, 
 	return roundTx.B64Encode()
 }
 
-func (b *txBuilder) BuildSweepEarlyTx(node tree.Node, vtxoTreeKeys []domain.RawKeyPair) (string, error) {
+func (b *txBuilder) BuildSweepEarlyTx(roundID string, node tree.Node, vtxoTreeKeys []domain.RawKeyPair) (string, error) {
 	tx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
 	if err != nil {
 		return "", err
@@ -1123,13 +1123,37 @@ func (b *txBuilder) BuildSweepEarlyTx(node tree.Node, vtxoTreeKeys []domain.RawK
 	if err != nil {
 		return "", err
 	}
+
+	ctx := context.Background()
+
+	signerSession, err := b.wallet.GetVtxoTreeSignerSession(ctx, roundID)
+	if err != nil {
+		return "", err
+	}
+	serverPrvKey := signerSession.GetSecretKey()
+	serverPubkey := serverPrvKey.PubKey().SerializeCompressed()
+
 	privKeys := make([]*secp256k1.PrivateKey, 0, len(cosignerPubKeys))
+
 	for _, pubkey := range cosignerPubKeys {
+		found := false
+		pubkeyBytes := pubkey.SerializeCompressed()
+
+		if bytes.Equal(pubkeyBytes, serverPubkey) {
+			privKeys = append(privKeys, serverPrvKey)
+			continue
+		}
+
 		for _, key := range vtxoTreeKeys {
 			if bytes.Equal(key.Pubkey, pubkey.SerializeCompressed()) {
 				privKey := secp256k1.PrivKeyFromBytes(key.Seckey)
 				privKeys = append(privKeys, privKey)
+				found = true
+				break
 			}
+		}
+		if !found {
+			return "", fmt.Errorf("missing secret key for cosigner pubkey %x", pubkey.SerializeCompressed())
 		}
 	}
 
@@ -1177,7 +1201,18 @@ func (b *txBuilder) BuildSweepEarlyTx(node tree.Node, vtxoTreeKeys []domain.RawK
 		return "", err
 	}
 
-	inputAmount := uint64(inputToSweep.WitnessUtxo.Value)
+	inputAmount := int64(0)
+
+	for _, out := range tx.UnsignedTx.TxOut {
+		inputAmount += out.Value
+	}
+
+	treeTxFee, err := b.wallet.MinRelayFee(context.Background(), uint64(common.TreeTxSize))
+	if err != nil {
+		return "", err
+	}
+
+	inputAmount -= int64(treeTxFee)
 
 	outpoint := tx.UnsignedTx.TxIn[0].PreviousOutPoint
 	ptx, err := psbt.New(
@@ -1208,7 +1243,7 @@ func (b *txBuilder) BuildSweepEarlyTx(node tree.Node, vtxoTreeKeys []domain.RawK
 		return "", err
 	}
 
-	ptx.UnsignedTx.TxOut[0].Value = int64(inputAmount - fees)
+	ptx.UnsignedTx.TxOut[0].Value = inputAmount - int64(fees)
 
 	// sign using musig2
 	nonces := make([]*musig2.Nonces, 0, len(privKeys))
@@ -1228,18 +1263,73 @@ func (b *txBuilder) BuildSweepEarlyTx(node tree.Node, vtxoTreeKeys []domain.RawK
 		return "", err
 	}
 
-	for _, privKey := range privKeys {
+	prevouts := make(map[wire.OutPoint]*wire.TxOut)
+
+	inputScriptPubKey, err := common.P2TRScript(aggregatedKey.FinalKey)
+	if err != nil {
+		return "", err
+	}
+
+	prevouts[ptx.UnsignedTx.TxIn[0].PreviousOutPoint] = &wire.TxOut{
+		Value:    int64(inputAmount),
+		PkScript: inputScriptPubKey,
+	}
+
+	prevoutFetcher := txscript.NewMultiPrevOutFetcher(prevouts)
+
+	message, err := txscript.CalcTaprootSignatureHash(
+		txscript.NewTxSigHashes(ptx.UnsignedTx, prevoutFetcher),
+		txscript.SigHashDefault,
+		ptx.UnsignedTx,
+		0,
+		prevoutFetcher,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	partialSigs := make([]*musig2.PartialSignature, 0, len(privKeys))
+
+	for i, privKey := range privKeys {
 		secNonce := nonces[i].SecNonce
 
-		partialSig, err := musig2.Sign(secNonce, privKey, combinedNonces, cosignerPubKeys, ptx.UnsignedTx)
+		partialSig, err := musig2.Sign(
+			secNonce, privKey, combinedNonces, cosignerPubKeys, [32]byte(message),
+			musig2.WithSortedKeys(), musig2.WithTaprootSignTweak(sweepRoot[:]), musig2.WithFastSign(),
+		)
 		if err != nil {
 			return "", err
 		}
 
-		ptx.Inputs[0].TaprootScriptSpendSig = append(ptx.Inputs[0].TaprootScriptSpendSig, partialSig)
+		partialSigs = append(partialSigs, partialSig)
 	}
 
-	return b64, nil
+	combinedSig := musig2.CombineSigs(
+		partialSigs[0].R, partialSigs,
+		musig2.WithTaprootTweakedCombine([32]byte(message), cosignerPubKeys, sweepRoot[:], true),
+	)
+
+	ptx.Inputs[0].TaprootScriptSpendSig = []*psbt.TaprootScriptSpendSig{{
+		Signature:   combinedSig.Serialize(),
+		XOnlyPubKey: schnorr.SerializePubKey(aggregatedKey.FinalKey),
+	}}
+
+	if err := psbt.Finalize(ptx, 0); err != nil {
+		return "", err
+	}
+
+	finalized, err := psbt.Extract(ptx)
+	if err != nil {
+		return "", err
+	}
+
+	var buf bytes.Buffer
+	if err := finalized.Serialize(&buf); err != nil {
+		return "", err
+	}
+
+	txHex := hex.EncodeToString(buf.Bytes())
+	return b.wallet.BroadcastTransaction(ctx, txHex)
 }
 
 func (b *txBuilder) createConnectors(

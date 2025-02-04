@@ -59,5 +59,5 @@ type TxBuilder interface {
 	GetTxID(tx string) (string, error)
 
 	// BuildSweepEarlyTx builds a sweep tx for the given round and vtxo tree keys
-	BuildSweepEarlyTx(sharedOutput tree.Node, vtxoTreeKeys []domain.RawKeyPair) (string, error)
+	BuildSweepEarlyTx(roundID string, sharedOutput tree.Node, vtxoTreeKeys []domain.RawKeyPair) (string, error)
 }
