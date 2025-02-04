@@ -176,12 +176,12 @@ func (a *adminHandler) Withdraw(ctx context.Context, req *arkv1.WithdrawRequest)
 		return nil, status.Error(codes.InvalidArgument, "address is required")
 	}
 
-	txHex, err := a.adminService.Wallet().Withdraw(ctx, req.GetAddress(), req.GetAmount())
+	txid, err := a.adminService.Wallet().Withdraw(ctx, req.GetAddress(), req.GetAmount())
 	if err != nil {
 		return nil, err
 	}
 
-	return &arkv1.WithdrawResponse{TxHex: txHex}, nil
+	return &arkv1.WithdrawResponse{Txid: txid}, nil
 }
 
 // convert sats to string BTC
