@@ -94,7 +94,8 @@ service ArkService {
 
   rpc GetCashback(GetCashbackRequest) returns (GetCashbackResponse) {
     option (google.api.http) = {
-      get: "/v1/cashback"
+      post: "/v1/cashback"
+      body: "*"
     };
   }
 }

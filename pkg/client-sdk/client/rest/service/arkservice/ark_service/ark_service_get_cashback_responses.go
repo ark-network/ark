@@ -88,12 +88,12 @@ func (o *ArkServiceGetCashbackOK) Code() int {
 
 func (o *ArkServiceGetCashbackOK) Error() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/cashback][%d] arkServiceGetCashbackOK %s", 200, payload)
+	return fmt.Sprintf("[POST /v1/cashback][%d] arkServiceGetCashbackOK %s", 200, payload)
 }
 
 func (o *ArkServiceGetCashbackOK) String() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/cashback][%d] arkServiceGetCashbackOK %s", 200, payload)
+	return fmt.Sprintf("[POST /v1/cashback][%d] arkServiceGetCashbackOK %s", 200, payload)
 }
 
 func (o *ArkServiceGetCashbackOK) GetPayload() *models.V1GetCashbackResponse {
@@ -162,12 +162,12 @@ func (o *ArkServiceGetCashbackDefault) Code() int {
 
 func (o *ArkServiceGetCashbackDefault) Error() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/cashback][%d] ArkService_GetCashback default %s", o._statusCode, payload)
+	return fmt.Sprintf("[POST /v1/cashback][%d] ArkService_GetCashback default %s", o._statusCode, payload)
 }
 
 func (o *ArkServiceGetCashbackDefault) String() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/cashback][%d] ArkService_GetCashback default %s", o._statusCode, payload)
+	return fmt.Sprintf("[POST /v1/cashback][%d] ArkService_GetCashback default %s", o._statusCode, payload)
 }
 
 func (o *ArkServiceGetCashbackDefault) GetPayload() *models.RPCStatus {

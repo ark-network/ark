@@ -14,6 +14,8 @@ import (
 	"github.com/go-openapi/runtime"
 	cr "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
+
+	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/models"
 )
 
 // NewArkServiceGetCashbackParams creates a new ArkServiceGetCashbackParams object,
@@ -60,6 +62,10 @@ ArkServiceGetCashbackParams contains all the parameters to send to the API endpo
 	Typically these are written to a http.Request.
 */
 type ArkServiceGetCashbackParams struct {
+
+	// Body.
+	Body *models.V1GetCashbackRequest
+
 	timeout    time.Duration
 	Context    context.Context
 	HTTPClient *http.Client
@@ -113,6 +119,17 @@ func (o *ArkServiceGetCashbackParams) SetHTTPClient(client *http.Client) {
 	o.HTTPClient = client
 }
 
+// WithBody adds the body to the ark service get cashback params
+func (o *ArkServiceGetCashbackParams) WithBody(body *models.V1GetCashbackRequest) *ArkServiceGetCashbackParams {
+	o.SetBody(body)
+	return o
+}
+
+// SetBody adds the body to the ark service get cashback params
+func (o *ArkServiceGetCashbackParams) SetBody(body *models.V1GetCashbackRequest) {
+	o.Body = body
+}
+
 // WriteToRequest writes these params to a swagger request
 func (o *ArkServiceGetCashbackParams) WriteToRequest(r runtime.ClientRequest, reg strfmt.Registry) error {
 
@@ -120,6 +137,11 @@ func (o *ArkServiceGetCashbackParams) WriteToRequest(r runtime.ClientRequest, re
 		return err
 	}
 	var res []error
+	if o.Body != nil {
+		if err := r.SetBodyParam(o.Body); err != nil {
+			return err
+		}
+	}
 
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)

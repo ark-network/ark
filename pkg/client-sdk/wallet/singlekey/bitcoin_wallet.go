@@ -287,13 +287,13 @@ func (s *bitcoinWallet) SignTransaction(
 
 func (w *bitcoinWallet) NewVtxoTreeSigner(
 	ctx context.Context, derivationPath string,
-) (bitcointree.SignerSession, error) {
+) (bitcointree.SignerSession, string, error) {
 	if w.IsLocked() {
-		return nil, fmt.Errorf("wallet is locked")
+		return nil, "", fmt.Errorf("wallet is locked")
 	}
 
 	if len(derivationPath) == 0 {
-		return nil, fmt.Errorf("derivation path is required")
+		return nil, "", fmt.Errorf("derivation path is required")
 	}
 
 	// convert private key to BIP32 master key format
@@ -301,7 +301,7 @@ func (w *bitcoinWallet) NewVtxoTreeSigner(
 	privKeyBytes := w.privateKey.Serialize()
 	masterKey, err := bip32.NewMasterKey(privKeyBytes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create master key: %w", err)
+		return nil, "", fmt.Errorf("failed to create master key: %w", err)
 	}
 
 	paths := strings.Split(strings.TrimPrefix(derivationPath, "m/"), "/")
@@ -315,7 +315,7 @@ func (w *bitcoinWallet) NewVtxoTreeSigner(
 		}
 
 		if _, err := fmt.Sscanf(pathComponent, "%d", &index); err != nil {
-			return nil, fmt.Errorf("invalid path component %s: %w", pathComponent, err)
+			return nil, "", fmt.Errorf("invalid path component %s: %w", pathComponent, err)
 		}
 
 		if isHardened {
@@ -324,12 +324,12 @@ func (w *bitcoinWallet) NewVtxoTreeSigner(
 
 		currentKey, err = currentKey.NewChildKey(index)
 		if err != nil {
-			return nil, fmt.Errorf("failed to derive child key: %w", err)
+			return nil, "", fmt.Errorf("failed to derive child key: %w", err)
 		}
 	}
 
 	derivedPrivKey := secp256k1.PrivKeyFromBytes(currentKey.Key)
-	return bitcointree.NewTreeSignerSession(derivedPrivKey), nil
+	return bitcointree.NewTreeSignerSession(derivedPrivKey), hex.EncodeToString(derivedPrivKey.Serialize()), nil
 }
 
 func (w *bitcoinWallet) SignMessage(

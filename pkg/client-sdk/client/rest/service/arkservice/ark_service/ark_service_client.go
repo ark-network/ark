@@ -169,7 +169,7 @@ func (a *Client) ArkServiceGetCashback(params *ArkServiceGetCashbackParams, opts
 	}
 	op := &runtime.ClientOperation{
 		ID:                 "ArkService_GetCashback",
-		Method:             "GET",
+		Method:             "POST",
 		PathPattern:        "/v1/cashback",
 		ProducesMediaTypes: []string{"application/json"},
 		ConsumesMediaTypes: []string{"application/json"},

@@ -774,3 +774,25 @@ func toSignedVtxoModel(vtxos []client.SignedVtxoOutpoint) []*models.V1SignedVtxo
 	}
 	return signedVtxos
 }
+
+func (a *restClient) GetCashback(
+	ctx context.Context, leaks []client.LeakSecretKey,
+) ([]string, error) {
+	body := &models.V1GetCashbackRequest{
+		SecretKeys: make([]*models.V1VtxoTreeKeySecretKey, 0, len(leaks)),
+	}
+	for _, leak := range leaks {
+		body.SecretKeys = append(body.SecretKeys, &models.V1VtxoTreeKeySecretKey{
+			RoundID:   leak.RoundID,
+			SecretKey: leak.SecretKey,
+		})
+	}
+
+	resp, err := a.svc.ArkServiceGetCashback(
+		ark_service.NewArkServiceGetCashbackParams().WithBody(body),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Payload.Notes, nil
+}

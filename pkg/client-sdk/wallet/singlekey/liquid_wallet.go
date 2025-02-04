@@ -326,8 +326,8 @@ func (w *liquidWallet) SignMessage(
 	return hex.EncodeToString(sig.Serialize()), nil
 }
 
-func (w *liquidWallet) NewVtxoTreeSigner(context.Context, string) (bitcointree.SignerSession, error) {
-	return nil, fmt.Errorf("not implemented")
+func (w *liquidWallet) NewVtxoTreeSigner(context.Context, string) (bitcointree.SignerSession, string, error) {
+	return nil, "", fmt.Errorf("not implemented")
 }
 
 func (w *liquidWallet) getAddress(

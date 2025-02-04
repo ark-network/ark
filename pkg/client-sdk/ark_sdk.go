@@ -36,6 +36,7 @@ type ArkClient interface {
 	RedeemNotes(ctx context.Context, notes []string, opts ...Option) (string, error)
 	SetNostrNotificationRecipient(ctx context.Context, nostrRecipient string) error
 	SignTransaction(ctx context.Context, tx string) (string, error)
+	GetCashbackNotes(ctx context.Context, roundTxid string) ([]string, error)
 	Stop() error
 }
 
