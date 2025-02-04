@@ -480,12 +480,14 @@ func (b *txBuilder) VerifyForfeitTxs(
 		nbWorkers := runtime.NumCPU()
 		jobsConnector := make(chan *psbt.Packet, len(connectorTxs))
 		errChan := make(chan error, 1)
+		m := &sync.Mutex{}
+		// txidChan := make(chan string, len(connectorTxs)+1)
 		wg := sync.WaitGroup{}
 		wg.Add(nbWorkers)
 
 		// start work pool
 		for i := 0; i < nbWorkers; i++ {
-			go func() {
+			go func(m *sync.Mutex) {
 				defer wg.Done()
 
 				for connector := range jobsConnector {
@@ -504,12 +506,14 @@ func (b *txBuilder) VerifyForfeitTxs(
 						return
 					}
 
+					m.Lock()
 					for _, forfeit := range forfeits {
 						txid := forfeit.UnsignedTx.TxHash().String()
 						rebuiltTxIds[txid] = true
 					}
+					m.Unlock()
 				}
-			}()
+			}(m)
 		}
 
 		for _, connector := range connectorTxs {
