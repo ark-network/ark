@@ -292,6 +292,10 @@ func (m *mockedWallet) GetVtxoTreeSignerSession(ctx context.Context, roundID str
 	panic("not implemented")
 }
 
+func (m *mockedWallet) Withdraw(ctx context.Context, address string, amount uint64) (string, error) {
+	panic("not implemented")
+}
+
 type mockedInput struct {
 	mock.Mock
 }

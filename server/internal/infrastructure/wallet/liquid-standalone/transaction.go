@@ -18,6 +18,7 @@ import (
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/vulpemventures/go-elements/elementsutil"
 	"github.com/vulpemventures/go-elements/psetv2"
+	"github.com/vulpemventures/go-elements/transaction"
 )
 
 const (
@@ -269,6 +270,28 @@ func (s *service) LockConnectorUtxos(ctx context.Context, utxos []ports.TxOutpoi
 		Utxos:       pbUtxos,
 	})
 	return err
+}
+
+func (s *service) Withdraw(ctx context.Context, address string, amount uint64) (string, error) {
+	res, err := s.txClient.Transfer(ctx, &pb.TransferRequest{
+		AccountName: arkAccount,
+		Receivers: []*pb.Output{
+			{
+				Address: address,
+				Amount:  amount,
+			},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+
+	tx, err := transaction.NewTxFromHex(res.GetTxHex())
+	if err != nil {
+		return "", err
+	}
+
+	return tx.TxHash().String(), nil
 }
 
 var minRate = chainfee.SatPerKVByte(0.2 * 1000)

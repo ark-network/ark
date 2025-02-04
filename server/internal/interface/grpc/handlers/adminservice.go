@@ -40,10 +40,10 @@ func (a *adminHandler) GetRoundDetails(ctx context.Context, req *arkv1.GetRoundD
 	return &arkv1.GetRoundDetailsResponse{
 		RoundId:          details.RoundId,
 		Txid:             details.TxId,
-		ForfeitedAmount:  convertSatoshis(details.ForfeitedAmount),
-		TotalVtxosAmount: convertSatoshis(details.TotalVtxosAmount),
-		TotalExitAmount:  convertSatoshis(details.TotalExitAmount),
-		FeesAmount:       convertSatoshis(details.FeesAmount),
+		ForfeitedAmount:  convertSatsToBTCStr(details.ForfeitedAmount),
+		TotalVtxosAmount: convertSatsToBTCStr(details.TotalVtxosAmount),
+		TotalExitAmount:  convertSatsToBTCStr(details.TotalExitAmount),
+		FeesAmount:       convertSatsToBTCStr(details.FeesAmount),
 		InputsVtxos:      details.InputsVtxos,
 		OutputsVtxos:     details.OutputsVtxos,
 		ExitAddresses:    details.ExitAddresses,
@@ -90,7 +90,7 @@ func (a *adminHandler) GetScheduledSweep(ctx context.Context, _ *arkv1.GetSchedu
 				Txid:        output.TxId,
 				Vout:        output.Vout,
 				ScheduledAt: output.ScheduledAt,
-				Amount:      convertSatoshis(output.Amount),
+				Amount:      convertSatsToBTCStr(output.Amount),
 			})
 		}
 
@@ -176,6 +176,18 @@ func (a *adminHandler) GetSweepableEarlyRounds(ctx context.Context, req *arkv1.G
 	return &arkv1.GetSweepableEarlyRoundsResponse{RoundIds: rounds}, nil
 }
 
+func (a *adminHandler) GetTxRequestQueue(
+	ctx context.Context, req *arkv1.GetTxRequestQueueRequest,
+) (*arkv1.GetTxRequestQueueResponse, error) {
+	requestIds := req.GetRequestIds()
+	requests, err := a.arkService.GetTxRequestQueue(ctx, requestIds...)
+	if err != nil {
+		return nil, err
+	}
+
+	return &arkv1.GetTxRequestQueueResponse{Requests: txReqsInfo(requests).toProto()}, nil
+}
+
 func (a *adminHandler) SweepEarly(ctx context.Context, req *arkv1.SweepEarlyRequest) (*arkv1.SweepEarlyResponse, error) {
 	roundId := req.GetRoundId()
 	if len(roundId) == 0 {
@@ -190,8 +202,29 @@ func (a *adminHandler) SweepEarly(ctx context.Context, req *arkv1.SweepEarlyRequ
 	return &arkv1.SweepEarlyResponse{Txid: txid}, nil
 }
 
-// convert sats to string BTC
-func convertSatoshis(sats uint64) string {
-	btc := float64(sats) * 1e-8
-	return fmt.Sprintf("%.8f", btc)
+func (a *adminHandler) Withdraw(ctx context.Context, req *arkv1.WithdrawRequest) (*arkv1.WithdrawResponse, error) {
+	if req.GetAmount() <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "amount must be greater than 0")
+	}
+
+	if req.GetAddress() == "" {
+		return nil, status.Error(codes.InvalidArgument, "address is required")
+	}
+
+	txid, err := a.adminService.Wallet().Withdraw(ctx, req.GetAddress(), req.GetAmount())
+	if err != nil {
+		return nil, err
+	}
+	return &arkv1.WithdrawResponse{Txid: txid}, nil
+}
+
+func (a *adminHandler) DeleteTxRequests(
+	ctx context.Context, req *arkv1.DeleteTxRequestsRequest,
+) (*arkv1.DeleteTxRequestsResponse, error) {
+	requestIds := req.GetRequestIds()
+	if err := a.arkService.DeleteTxRequests(ctx, requestIds...); err != nil {
+		return nil, err
+	}
+
+	return &arkv1.DeleteTxRequestsResponse{}, nil
 }

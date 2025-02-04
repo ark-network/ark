@@ -282,3 +282,60 @@ func parseSignedVtxoOutpoints(signedVtxoOutpoints []*arkv1.SignedVtxoOutpoint) (
 
 	return parsed, nil
 }
+
+type txReqsInfo []application.TxRequestInfo
+
+func (i txReqsInfo) toProto() []*arkv1.TxRequestInfo {
+	list := make([]*arkv1.TxRequestInfo, 0, len(i))
+	for _, req := range i {
+		receivers := make([]*arkv1.Output, 0, len(req.Receivers))
+		for _, receiver := range req.Receivers {
+			receivers = append(receivers, &arkv1.Output{
+				Address: receiver.Address,
+				Amount:  receiver.Amount,
+			})
+		}
+
+		inputs := make([]*arkv1.RequestInput, 0, len(req.Inputs))
+		for _, input := range req.Inputs {
+			inputs = append(inputs, &arkv1.RequestInput{
+				Txid:   input.Txid,
+				Vout:   input.VOut,
+				Amount: input.Amount,
+			})
+		}
+
+		boardingInputs := make([]*arkv1.RequestInput, 0, len(req.BoardingInputs))
+		for _, input := range req.BoardingInputs {
+			boardingInputs = append(boardingInputs, &arkv1.RequestInput{
+				Txid:   input.Txid,
+				Vout:   input.VOut,
+				Amount: input.Amount,
+			})
+		}
+
+		notes := make([]string, 0, len(req.Notes))
+		for _, note := range req.Notes {
+			notes = append(notes, note.String())
+		}
+
+		list = append(list, &arkv1.TxRequestInfo{
+			Id:                  req.Id,
+			CreatedAt:           req.CreatedAt.Unix(),
+			Receivers:           receivers,
+			Inputs:              inputs,
+			BoardingInputs:      boardingInputs,
+			Notes:               notes,
+			SigningType:         req.SigningType,
+			CosignersPublicKeys: req.Cosigners,
+			LastPing:            req.LastPing.Unix(),
+		})
+	}
+	return list
+}
+
+// convert sats to string BTC
+func convertSatsToBTCStr(sats uint64) string {
+	btc := float64(sats) * 1e-8
+	return fmt.Sprintf("%.8f", btc)
+}

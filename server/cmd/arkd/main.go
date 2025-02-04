@@ -7,7 +7,6 @@ import (
 	"syscall"
 
 	"github.com/ark-network/ark/common"
-	appconfig "github.com/ark-network/ark/server/internal/app-config"
 	"github.com/ark-network/ark/server/internal/config"
 	grpcservice "github.com/ark-network/ark/server/internal/interface/grpc"
 	log "github.com/sirupsen/logrus"
@@ -23,13 +22,16 @@ const (
 	tlsDir       = "tls"
 	tlsCertFile  = "cert.pem"
 
-	flagURL      = "url"
-	flagDatadir  = "datadir"
-	flagPassword = "password"
-	flagMnemonic = "mnemonic"
-	flagGapLimit = "addr-gap-limit"
-	flagAmount   = "amount"
-	flagQuantity = "quantity"
+	flagURL             = "url"
+	flagDatadir         = "datadir"
+	flagPassword        = "password"
+	flagMnemonic        = "mnemonic"
+	flagGapLimit        = "addr-gap-limit"
+	flagAmount          = "amount"
+	flagQuantity        = "quantity"
+	flagWithdrawAmount  = "amount"
+	flagWithdrawAddress = "address"
+	flagRequestIds      = "ids"
 )
 
 // flags
@@ -63,60 +65,16 @@ func mainAction(_ *cli.Context) error {
 		TLSExtraDomains: cfg.TLSExtraDomains,
 	}
 
-	vtxoTreeExpiryType, unilateralExitType, boardingExitType := common.LocktimeTypeBlock, common.LocktimeTypeBlock, common.LocktimeTypeBlock
-	if cfg.VtxoTreeExpiry >= 512 {
-		vtxoTreeExpiryType = common.LocktimeTypeSecond
-	}
-	if cfg.UnilateralExitDelay >= 512 {
-		unilateralExitType = common.LocktimeTypeSecond
-	}
-	if cfg.BoardingExitDelay >= 512 {
-		boardingExitType = common.LocktimeTypeSecond
-	}
-
-	appConfig := &appconfig.Config{
-		EventDbType:             cfg.EventDbType,
-		DbType:                  cfg.DbType,
-		DbDir:                   cfg.DbDir,
-		EventDbDir:              cfg.DbDir,
-		RoundInterval:           cfg.RoundInterval,
-		Network:                 cfg.Network,
-		SchedulerType:           cfg.SchedulerType,
-		TxBuilderType:           cfg.TxBuilderType,
-		WalletAddr:              cfg.WalletAddr,
-		VtxoTreeExpiry:          common.RelativeLocktime{Type: vtxoTreeExpiryType, Value: uint32(cfg.VtxoTreeExpiry)},
-		UnilateralExitDelay:     common.RelativeLocktime{Type: unilateralExitType, Value: uint32(cfg.UnilateralExitDelay)},
-		EsploraURL:              cfg.EsploraURL,
-		NeutrinoPeer:            cfg.NeutrinoPeer,
-		BitcoindRpcUser:         cfg.BitcoindRpcUser,
-		BitcoindRpcPass:         cfg.BitcoindRpcPass,
-		BitcoindRpcHost:         cfg.BitcoindRpcHost,
-		BitcoindZMQBlock:        cfg.BitcoindZMQBlock,
-		BitcoindZMQTx:           cfg.BitcoindZMQTx,
-		BoardingExitDelay:       common.RelativeLocktime{Type: boardingExitType, Value: uint32(cfg.BoardingExitDelay)},
-		UnlockerType:            cfg.UnlockerType,
-		UnlockerFilePath:        cfg.UnlockerFilePath,
-		UnlockerPassword:        cfg.UnlockerPassword,
-		NostrDefaultRelays:      cfg.NostrDefaultRelays,
-		NoteUriPrefix:           cfg.NoteUriPrefix,
-		MarketHourStartTime:     cfg.MarketHourStartTime,
-		MarketHourEndTime:       cfg.MarketHourEndTime,
-		MarketHourPeriod:        cfg.MarketHourPeriod,
-		MarketHourRoundInterval: cfg.MarketHourRoundInterval,
-		OtelCollectorEndpoint:   cfg.OtelCollectorEndpoint,
-		AllowZeroFees:           cfg.AllowZeroFees,
-	}
-
 	if cfg.AllowZeroFees {
 		log.Warn("WARNING: AllowZeroFees is enabled")
 	}
 
-	svc, err := grpcservice.NewService(svcConfig, appConfig)
+	svc, err := grpcservice.NewService(svcConfig, cfg)
 	if err != nil {
 		return err
 	}
 
-	log.Infof("Ark Server config: %+v", appConfig)
+	log.Infof("Ark Server config: %+v", cfg)
 
 	log.Info("starting service...")
 	if err := svc.Start(); err != nil {
@@ -140,7 +98,7 @@ func main() {
 	app.Version = Version
 	app.Name = "Arkd CLI"
 	app.Usage = "arkd command line interface"
-	app.Commands = append(app.Commands, walletCmd)
+	app.Commands = append(app.Commands, walletCmd, queueCmd)
 	app.Action = mainAction
 	app.Flags = append(app.Flags, urlFlag, datadirFlag)
 

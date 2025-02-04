@@ -50,6 +50,7 @@ type WalletService interface {
 	VerifyMessageSignature(ctx context.Context, message, signature []byte) (bool, error)
 	GetCurrentBlockTime(ctx context.Context) (*BlockTimestamp, error)
 	GetVtxoTreeSignerSession(ctx context.Context, roundID string) (ExtendedSignerSession, error)
+	Withdraw(ctx context.Context, address string, amount uint64) (string, error)
 	Close()
 }
 
