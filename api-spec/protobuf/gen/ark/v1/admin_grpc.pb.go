@@ -26,6 +26,7 @@ type AdminServiceClient interface {
 	UpdateMarketHourConfig(ctx context.Context, in *UpdateMarketHourConfigRequest, opts ...grpc.CallOption) (*UpdateMarketHourConfigResponse, error)
 	GetTxRequestQueue(ctx context.Context, in *GetTxRequestQueueRequest, opts ...grpc.CallOption) (*GetTxRequestQueueResponse, error)
 	DeleteTxRequests(ctx context.Context, in *DeleteTxRequestsRequest, opts ...grpc.CallOption) (*DeleteTxRequestsResponse, error)
+	Withdraw(ctx context.Context, in *WithdrawRequest, opts ...grpc.CallOption) (*WithdrawResponse, error)
 }
 
 type adminServiceClient struct {
@@ -108,6 +109,15 @@ func (c *adminServiceClient) DeleteTxRequests(ctx context.Context, in *DeleteTxR
 	return out, nil
 }
 
+func (c *adminServiceClient) Withdraw(ctx context.Context, in *WithdrawRequest, opts ...grpc.CallOption) (*WithdrawResponse, error) {
+	out := new(WithdrawResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/Withdraw", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AdminServiceServer is the server API for AdminService service.
 // All implementations should embed UnimplementedAdminServiceServer
 // for forward compatibility
@@ -120,6 +130,7 @@ type AdminServiceServer interface {
 	UpdateMarketHourConfig(context.Context, *UpdateMarketHourConfigRequest) (*UpdateMarketHourConfigResponse, error)
 	GetTxRequestQueue(context.Context, *GetTxRequestQueueRequest) (*GetTxRequestQueueResponse, error)
 	DeleteTxRequests(context.Context, *DeleteTxRequestsRequest) (*DeleteTxRequestsResponse, error)
+	Withdraw(context.Context, *WithdrawRequest) (*WithdrawResponse, error)
 }
 
 // UnimplementedAdminServiceServer should be embedded to have forward compatible implementations.
@@ -149,6 +160,9 @@ func (UnimplementedAdminServiceServer) GetTxRequestQueue(context.Context, *GetTx
 }
 func (UnimplementedAdminServiceServer) DeleteTxRequests(context.Context, *DeleteTxRequestsRequest) (*DeleteTxRequestsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteTxRequests not implemented")
+}
+func (UnimplementedAdminServiceServer) Withdraw(context.Context, *WithdrawRequest) (*WithdrawResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Withdraw not implemented")
 }
 
 // UnsafeAdminServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -306,6 +320,24 @@ func _AdminService_DeleteTxRequests_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AdminService_Withdraw_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WithdrawRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).Withdraw(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.AdminService/Withdraw",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).Withdraw(ctx, req.(*WithdrawRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AdminService_ServiceDesc is the grpc.ServiceDesc for AdminService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -344,6 +376,10 @@ var AdminService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteTxRequests",
 			Handler:    _AdminService_DeleteTxRequests_Handler,
+		},
+		{
+			MethodName: "Withdraw",
+			Handler:    _AdminService_Withdraw_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

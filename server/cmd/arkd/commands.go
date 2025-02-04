@@ -50,6 +50,16 @@ var (
 			Required: required,
 		}
 	}
+	withdrawAmountFlag = &cli.UintFlag{
+		Name:     flagWithdrawAmount,
+		Usage:    "amount of the withdraw in satoshis",
+		Required: true,
+	}
+	withdrawAddressFlag = &cli.StringFlag{
+		Name:     flagWithdrawAddress,
+		Usage:    "address to withdraw to",
+		Required: true,
+	}
 )
 
 // commands
@@ -65,6 +75,7 @@ var (
 			walletAddressCmd,
 			walletBalanceCmd,
 			createNoteCmd,
+			walletWithdrawCmd,
 		),
 	}
 	walletStatusCmd = &cli.Command{
@@ -126,6 +137,12 @@ var (
 		Name:   "clear",
 		Usage:  "Remove all tx requests from tx request queue",
 		Action: clearTxRequestQueueAction,
+	}
+	walletWithdrawCmd = &cli.Command{
+		Name:   "withdraw",
+		Usage:  "Withdraw funds from the wallet",
+		Action: walletWithdrawAction,
+		Flags:  []cli.Flag{withdrawAmountFlag, withdrawAddressFlag},
 	}
 )
 
@@ -265,6 +282,28 @@ func createNoteAction(ctx *cli.Context) error {
 		fmt.Println(note)
 	}
 
+	return nil
+}
+
+func walletWithdrawAction(ctx *cli.Context) error {
+	baseURL := ctx.String(flagURL)
+	amount := ctx.Uint(flagWithdrawAmount)
+	address := ctx.String(flagWithdrawAddress)
+	macaroon, tlsCertPath, err := getCredentialPaths(ctx)
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("%s/v1/admin/withdraw", baseURL)
+	body := fmt.Sprintf(`{"address": "%s", "amount": %d}`, address, amount)
+
+	txid, err := post[string](url, body, "txid", macaroon, tlsCertPath)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("transaction successfully broadcasted:")
+	fmt.Println(txid)
 	return nil
 }
 

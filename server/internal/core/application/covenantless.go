@@ -992,6 +992,11 @@ func (s *covenantlessService) RegisterCosignerNonces(
 		return fmt.Errorf(`signing session not found for round "%s"`, roundID)
 	}
 
+	userPubkey := hex.EncodeToString(pubkey.SerializeCompressed())
+	if _, ok := session.cosigners[userPubkey]; !ok {
+		return fmt.Errorf(`cosigner %s not found for round "%s"`, userPubkey, roundID)
+	}
+
 	nonces, err := bitcointree.DecodeNonces(hex.NewDecoder(strings.NewReader(encodedNonces)))
 	if err != nil {
 		return fmt.Errorf("failed to decode nonces: %s", err)
@@ -1020,6 +1025,11 @@ func (s *covenantlessService) RegisterCosignerSignatures(
 	session, ok := s.treeSigningSessions[roundID]
 	if !ok {
 		return fmt.Errorf(`signing session not found for round "%s"`, roundID)
+	}
+
+	userPubkey := hex.EncodeToString(pubkey.SerializeCompressed())
+	if _, ok := session.cosigners[userPubkey]; !ok {
+		return fmt.Errorf(`cosigner %s not found for round "%s"`, userPubkey, roundID)
 	}
 
 	signatures, err := bitcointree.DecodeSignatures(hex.NewDecoder(strings.NewReader(encodedSignatures)))
@@ -1197,22 +1207,6 @@ func (s *covenantlessService) startFinalization() {
 	s.forfeitTxs.init(connectors, requests)
 
 	if len(vtxoTree) > 0 {
-		nbOfCosigners := len(uniqueSignerPubkeys) + 1 // +1 for the server
-
-		signingSession := newMusigSigningSession(nbOfCosigners)
-		s.treeSigningSessions[round.Id] = signingSession
-
-		log.Debugf("signing session created for round %s", round.Id)
-
-		s.currentRound.UnsignedTx = unsignedRoundTx
-		// send back the unsigned tree & all cosigners pubkeys
-		listOfCosignersPubkeys := make([]string, 0, len(uniqueSignerPubkeys))
-		for pubkey := range uniqueSignerPubkeys {
-			listOfCosignersPubkeys = append(listOfCosignersPubkeys, pubkey)
-		}
-
-		s.propagateRoundSigningStartedEvent(vtxoTree, listOfCosignersPubkeys)
-
 		sweepClosure := tree.CSVMultisigClosure{
 			MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{s.pubkey}},
 			Locktime:        s.vtxoTreeExpiry,
@@ -1259,12 +1253,30 @@ func (s *covenantlessService) startFinalization() {
 
 		coordinator.AddNonce(s.serverSigningPubKey, nonces)
 
+		signingSession := newMusigSigningSession(uniqueSignerPubkeys)
+		s.treeSigningSessions[round.Id] = signingSession
+
+		log.Debugf("signing session created for round %s with %d signers", round.Id, len(uniqueSignerPubkeys))
+
+		s.currentRound.UnsignedTx = unsignedRoundTx
+		// send back the unsigned tree & all cosigners pubkeys
+		listOfCosignersPubkeys := make([]string, 0, len(uniqueSignerPubkeys))
+		for pubkey := range uniqueSignerPubkeys {
+			listOfCosignersPubkeys = append(listOfCosignersPubkeys, pubkey)
+		}
+
+		s.propagateRoundSigningStartedEvent(vtxoTree, listOfCosignersPubkeys)
+
 		noncesTimer := time.NewTimer(thirdOfRemainingDuration)
 
 		select {
 		case <-noncesTimer.C:
-			round.Fail(fmt.Errorf("musig2 signing session timed out (nonce collection)"))
-			log.Warn("musig2 signing session timed out (nonce collection)")
+			err := fmt.Errorf(
+				"musig2 signing session timed out (nonce collection), collected %d/%d nonces",
+				len(signingSession.nonces), len(uniqueSignerPubkeys),
+			)
+			round.Fail(err)
+			log.Warn(err)
 			return
 		case <-signingSession.nonceDoneC:
 			noncesTimer.Stop()
@@ -1275,7 +1287,7 @@ func (s *covenantlessService) startFinalization() {
 
 		log.Debugf("nonces collected for round %s", round.Id)
 
-		aggragatedNonces, err := coordinator.AggregateNonces()
+		aggregatedNonces, err := coordinator.AggregateNonces()
 		if err != nil {
 			round.Fail(fmt.Errorf("failed to aggregate nonces: %s", err))
 			log.WithError(err).Warn("failed to aggregate nonces")
@@ -1284,10 +1296,10 @@ func (s *covenantlessService) startFinalization() {
 
 		log.Debugf("nonces aggregated for round %s", round.Id)
 
-		// send the combined nonces to the clients
-		s.propagateRoundSigningNoncesGeneratedEvent(aggragatedNonces)
+		serverSignerSession.SetAggregatedNonces(aggregatedNonces)
 
-		serverSignerSession.SetAggregatedNonces(aggragatedNonces)
+		// send the combined nonces to the clients
+		s.propagateRoundSigningNoncesGeneratedEvent(aggregatedNonces)
 
 		// sign the tree as server
 		serverTreeSigs, err := serverSignerSession.Sign()
@@ -1306,8 +1318,12 @@ func (s *covenantlessService) startFinalization() {
 
 		select {
 		case <-signaturesTimer.C:
-			round.Fail(fmt.Errorf("musig2 signing session timed out (signatures)"))
-			log.Warn("musig2 signing session timed out (signatures)")
+			err := fmt.Errorf(
+				"musig2 signing session timed out (signatures collection), collected %d/%d signatures",
+				len(signingSession.signatures), len(uniqueSignerPubkeys),
+			)
+			round.Fail(err)
+			log.Warn(err)
 			return
 		case <-signingSession.sigDoneC:
 			signaturesTimer.Stop()
@@ -1950,6 +1966,7 @@ func findForfeitTxBitcoin(
 type musigSigningSession struct {
 	lock        sync.Mutex
 	nbCosigners int
+	cosigners   map[string]struct{}
 	nonces      map[*secp256k1.PublicKey]bitcointree.TreeNonces
 	nonceDoneC  chan struct{}
 
@@ -1957,7 +1974,7 @@ type musigSigningSession struct {
 	sigDoneC   chan struct{}
 }
 
-func newMusigSigningSession(nbCosigners int) *musigSigningSession {
+func newMusigSigningSession(cosigners map[string]struct{}) *musigSigningSession {
 	return &musigSigningSession{
 		nonces:     make(map[*secp256k1.PublicKey]bitcointree.TreeNonces),
 		nonceDoneC: make(chan struct{}),
@@ -1965,7 +1982,8 @@ func newMusigSigningSession(nbCosigners int) *musigSigningSession {
 		signatures:  make(map[*secp256k1.PublicKey]bitcointree.TreePartialSigs),
 		sigDoneC:    make(chan struct{}),
 		lock:        sync.Mutex{},
-		nbCosigners: nbCosigners,
+		cosigners:   cosigners,
+		nbCosigners: len(cosigners) + 1, // the server
 	}
 }
 

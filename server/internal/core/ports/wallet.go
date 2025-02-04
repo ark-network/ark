@@ -43,6 +43,7 @@ type WalletService interface {
 	SignMessage(ctx context.Context, message []byte) ([]byte, error)
 	VerifyMessageSignature(ctx context.Context, message, signature []byte) (bool, error)
 	GetCurrentBlockTime(ctx context.Context) (*BlockTimestamp, error)
+	Withdraw(ctx context.Context, address string, amount uint64) (string, error)
 	Close()
 }
 

@@ -249,6 +249,38 @@
           "AdminService"
         ]
       }
+    },
+    "/v1/admin/withdraw": {
+      "post": {
+        "operationId": "AdminService_Withdraw",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1WithdrawResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1WithdrawRequest"
+            }
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      }
     }
   },
   "definitions": {
@@ -560,6 +592,26 @@
     },
     "v1UpdateMarketHourConfigResponse": {
       "type": "object"
+    },
+    "v1WithdrawRequest": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "string",
+          "format": "uint64"
+        }
+      }
+    },
+    "v1WithdrawResponse": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        }
+      }
     }
   }
 }

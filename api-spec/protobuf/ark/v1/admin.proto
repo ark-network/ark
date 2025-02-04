@@ -52,6 +52,12 @@ service AdminService {
       body: "*"
     };
   }
+  rpc Withdraw(WithdrawRequest) returns (WithdrawResponse) {
+    option (google.api.http) = {
+      post: "/v1/admin/withdraw"
+      body: "*"
+    };
+  }
 }
 
 message GetScheduledSweepRequest {}
@@ -118,3 +124,11 @@ message DeleteTxRequestsRequest {
   repeated string request_ids = 1;
 }
 message DeleteTxRequestsResponse {}
+message WithdrawRequest {
+  string address = 1;
+  uint64 amount = 2;
+}
+
+message WithdrawResponse {
+  string txid = 1;
+}

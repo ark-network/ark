@@ -179,6 +179,22 @@ func (a *adminHandler) GetTxRequestQueue(
 	return &arkv1.GetTxRequestQueueResponse{Requests: txReqsInfo(requests).toProto()}, nil
 }
 
+func (a *adminHandler) Withdraw(ctx context.Context, req *arkv1.WithdrawRequest) (*arkv1.WithdrawResponse, error) {
+	if req.GetAmount() <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "amount must be greater than 0")
+	}
+
+	if req.GetAddress() == "" {
+		return nil, status.Error(codes.InvalidArgument, "address is required")
+	}
+
+	txid, err := a.adminService.Wallet().Withdraw(ctx, req.GetAddress(), req.GetAmount())
+	if err != nil {
+		return nil, err
+	}
+	return &arkv1.WithdrawResponse{Txid: txid}, nil
+}
+
 func (a *adminHandler) DeleteTxRequests(
 	ctx context.Context, req *arkv1.DeleteTxRequestsRequest,
 ) (*arkv1.DeleteTxRequestsResponse, error) {
