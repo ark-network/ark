@@ -480,7 +480,6 @@ func (b *txBuilder) VerifyForfeitTxs(
 		jobsConnector := make(chan *psbt.Packet, len(connectorTxs))
 		errChan := make(chan error, 1)
 		m := &sync.Mutex{}
-		// txidChan := make(chan string, len(connectorTxs)+1)
 		wg := sync.WaitGroup{}
 		wg.Add(nbWorkers)
 
