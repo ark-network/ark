@@ -300,7 +300,6 @@ func (b *txBuilder) VerifyForfeitTxs(
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("FORFEIT TXS: %d\nCONNECTOR TXS: %d\nCONNECTOR AMOUNT: %d\n", len(forfeitTxs), len(connectorTxs), connectorAmount)
 
 	// decode forfeit txs, map by vtxo key
 	indexedForfeitTxs := make(map[domain.VtxoKey]*struct {
@@ -522,12 +521,7 @@ func (b *txBuilder) VerifyForfeitTxs(
 			case err := <-errChan:
 				return nil, err
 			default:
-				if connector == nil {
-					fmt.Println("CONNECTOR IS NIL, SKIP!!!!")
-				} else {
-					fmt.Println("ADD JOB")
-					jobsConnector <- connector
-				}
+				jobsConnector <- connector
 			}
 		}
 
