@@ -29,13 +29,16 @@ type handler struct {
 
 	eventsListenerHandler       *listenerHanlder[*arkv1.GetEventStreamResponse]
 	transactionsListenerHandler *listenerHanlder[*arkv1.GetTransactionsStreamResponse]
+
+	stopCh <-chan struct{}
 }
 
-func NewHandler(service application.Service) service {
+func NewHandler(service application.Service, stopCh <-chan struct{}) service {
 	h := &handler{
 		svc:                         service,
 		eventsListenerHandler:       newListenerHandler[*arkv1.GetEventStreamResponse](),
 		transactionsListenerHandler: newListenerHandler[*arkv1.GetTransactionsStreamResponse](),
+		stopCh:                      stopCh,
 	}
 
 	go h.listenToEvents()
@@ -295,6 +298,8 @@ func (h *handler) GetEventStream(
 
 	for {
 		select {
+		case <-h.stopCh:
+			return nil
 		case <-stream.Context().Done():
 			return nil
 		case ev := <-listener.ch:

@@ -54,6 +54,8 @@ type service struct {
 	grpcServer   *grpc.Server
 	macaroonSvc  *macaroons.Service
 	otelShutdown func(context.Context) error
+
+	stopCh chan (struct{})
 }
 
 func NewService(
@@ -100,7 +102,9 @@ func NewService(
 		log.Debugf("generated TLS key pair at path: %s", svcConfig.tlsDatadir())
 	}
 
-	return &service{svcConfig, appConfig, nil, nil, macaroonSvc, nil}, nil
+	stopCh := make(chan struct{}, 1)
+
+	return &service{svcConfig, appConfig, nil, nil, macaroonSvc, nil, stopCh}, nil
 }
 
 func (s *service) Start() error {
@@ -156,6 +160,7 @@ func (s *service) start(withAppSvc bool) error {
 
 func (s *service) stop(withAppSvc bool) {
 	//nolint:all
+	s.stopCh <- struct{}{}
 	s.server.Shutdown(context.Background())
 	log.Info("stopped grpc server")
 	if withAppSvc {
@@ -202,7 +207,7 @@ func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 			return err
 		}
 		appSvc = svc
-		appHandler := handlers.NewHandler(appSvc)
+		appHandler := handlers.NewHandler(appSvc, s.stopCh)
 		arkv1.RegisterArkServiceServer(grpcServer, appHandler)
 		arkv1.RegisterExplorerServiceServer(grpcServer, appHandler)
 	}
