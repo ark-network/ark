@@ -1128,6 +1128,10 @@ func (s *covenantlessService) GetCashback(ctx context.Context, roundID string, s
 	}
 	note := data.ToNote(signature)
 
+	if err := roundRepo.AddVtxoTreeSecretKey(ctx, roundID, secretKey.Serialize(), leakedPublicKeyBytes); err != nil {
+		return "", fmt.Errorf("failed to add vtxo tree secret key: %s", err)
+	}
+
 	return note.String(), nil
 }
 
@@ -1179,6 +1183,7 @@ func (s *covenantlessService) startFinalization() {
 	thirdOfRemainingDuration := time.Duration(roundRemainingDuration / 3)
 
 	var notes []note.Note
+	listOfCosignersPubkeys := make([]string, 0)
 	var roundAborted bool
 	defer func() {
 		delete(s.treeSigningSessions, round.Id)
@@ -1196,7 +1201,7 @@ func (s *covenantlessService) startFinalization() {
 			return
 		}
 		time.Sleep(thirdOfRemainingDuration)
-		s.finalizeRound(notes)
+		s.finalizeRound(notes, listOfCosignersPubkeys)
 	}()
 
 	if round.IsFailed() {
@@ -1323,7 +1328,6 @@ func (s *covenantlessService) startFinalization() {
 
 		s.currentRound.round.UnsignedTx = unsignedRoundTx
 		// send back the unsigned tree & all cosigners pubkeys
-		listOfCosignersPubkeys := make([]string, 0, len(uniqueSignerPubkeys))
 		for pubkey := range uniqueSignerPubkeys {
 			listOfCosignersPubkeys = append(listOfCosignersPubkeys, pubkey)
 		}
@@ -1440,7 +1444,7 @@ func (s *covenantlessService) propagateRoundSigningNoncesGeneratedEvent(combined
 	s.eventsCh <- ev
 }
 
-func (s *covenantlessService) finalizeRound(notes []note.Note) {
+func (s *covenantlessService) finalizeRound(notes []note.Note, cosignerPubkeys []string) {
 	defer s.startRound()
 
 	ctx := context.Background()
@@ -1541,6 +1545,22 @@ func (s *covenantlessService) finalizeRound(notes []note.Note) {
 	}()
 
 	log.Debugf("finalized round %s with round tx %s", round.Id, round.Txid)
+
+	cosignerKeyBytes := make([][]byte, 0, len(cosignerPubkeys))
+	for _, pubkey := range cosignerPubkeys {
+		keyBytes, err := hex.DecodeString(pubkey)
+		if err != nil {
+			log.WithError(err).Warn("failed to decode cosigner pubkey")
+			return
+		}
+		cosignerKeyBytes = append(cosignerKeyBytes, keyBytes)
+	}
+
+	log.Debugf("setting %d vtxo tree pubkeys for round %s", len(cosignerKeyBytes), round.Id)
+
+	if err := s.repoManager.Rounds().SetVtxoTreePubKeys(ctx, round.Id, cosignerKeyBytes); err != nil {
+		log.WithError(err).Warn("failed to set vtxo tree pubkeys")
+	}
 }
 
 func (s *covenantlessService) listenToScannerNotifications() {

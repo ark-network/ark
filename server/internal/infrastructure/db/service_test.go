@@ -346,6 +346,10 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 		err = svc.Rounds().AddVtxoTreeSecretKey(ctx, roundId, []byte{0x00}, []byte(pubkey))
 		require.NoError(t, err)
 
+		ids, err := svc.Rounds().GetSweepableEarlyRoundsIds(ctx)
+		require.NoError(t, err)
+		require.NotContains(t, ids, roundId)
+
 		err = svc.Rounds().AddVtxoTreeSecretKey(ctx, roundId, []byte{0x01}, []byte(pubkey2))
 		require.NoError(t, err)
 
@@ -361,6 +365,10 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 				t.Fail()
 			}
 		}
+
+		ids, err = svc.Rounds().GetSweepableEarlyRoundsIds(ctx)
+		require.NoError(t, err)
+		require.Contains(t, ids, roundId)
 	})
 }
 

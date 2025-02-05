@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/ark-network/ark/common/note"
+	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 )
 
@@ -216,9 +217,13 @@ func (a *adminService) GetSweepableEarlyRounds(ctx context.Context) ([]string, e
 }
 
 func (a *adminService) SweepEarly(ctx context.Context, roundId string) (string, error) {
-	vtxoTree, err := a.repoManager.Rounds().GetVtxoTreeWithTxid(ctx, roundId)
+	round, err := a.repoManager.Rounds().GetRoundWithId(ctx, roundId)
 	if err != nil {
 		return "", err
+	}
+
+	if round.Swept {
+		return "", fmt.Errorf("round %s already swept", roundId)
 	}
 
 	vtxoTreeKeys, err := a.repoManager.Rounds().GetVtxoTreeKeys(ctx, roundId)
@@ -232,10 +237,38 @@ func (a *adminService) SweepEarly(ctx context.Context, roundId string) (string, 
 		}
 	}
 
-	root, err := vtxoTree.Root()
+	root, err := round.VtxoTree.Root()
 	if err != nil {
 		return "", err
 	}
 
-	return a.txBuilder.BuildSweepEarlyTx(roundId, root, vtxoTreeKeys)
+	txid, err := a.txBuilder.BuildSweepEarlyTx(roundId, root, vtxoTreeKeys)
+	if err != nil {
+		return "", err
+	}
+
+	vtxosSwept := make([]domain.VtxoKey, 0)
+	for _, leaf := range round.VtxoTree.Leaves() {
+		vtxo, err := extractVtxoOutpoint(leaf)
+		if err != nil {
+			return "", err
+		}
+
+		vtxosSwept = append(vtxosSwept, *vtxo)
+	}
+
+	// mark the round as swept
+	round.Sweep()
+
+	if err := a.repoManager.Rounds().AddOrUpdateRound(ctx, *round); err != nil {
+		return "", err
+	}
+
+	// mark the vtxos as swept
+	err = a.repoManager.Vtxos().SweepVtxos(ctx, vtxosSwept)
+	if err != nil {
+		return "", err
+	}
+
+	return txid, nil
 }

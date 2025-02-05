@@ -668,7 +668,7 @@ func getSweepableEarlyRoundsAction(ctx *cli.Context) error {
 	}
 
 	url := fmt.Sprintf("%s/v1/admin/sweepable-early-rounds", baseURL)
-	response, err := get[[]string](url, "round_ids", macaroon, tlsCertPath)
+	response, err := get[[]string](url, "roundIds", macaroon, tlsCertPath)
 	if err != nil {
 		return err
 	}

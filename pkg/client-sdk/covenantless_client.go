@@ -1276,12 +1276,22 @@ func (a *covenantlessArkClient) GetCashbackNotes(ctx context.Context, roundTxid 
 		return nil, err
 	}
 
-	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+	offchainAddrs, _, boardingAddrs, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	myAddress, err := common.DecodeAddress(offchainAddrs[0].Address)
+	if err != nil {
+		return nil, err
+	}
+
+	myBoardingAddress, err := btcutil.DecodeAddress(boardingAddrs[0].Address, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	myBoardingAddressScript, err := txscript.PayToAddrScript(myBoardingAddress)
 	if err != nil {
 		return nil, err
 	}
@@ -1319,6 +1329,26 @@ func (a *covenantlessArkClient) GetCashbackNotes(ctx context.Context, roundTxid 
 		})
 	}
 
+	roundPtx, err := psbt.NewFromRawBytes(strings.NewReader(round.Tx), true)
+	if err != nil {
+		return nil, err
+	}
+
+	for i, input := range roundPtx.UnsignedTx.TxIn {
+		ptInput := roundPtx.Inputs[i]
+
+		if ptInput.WitnessUtxo == nil {
+			continue
+		}
+
+		if bytes.Equal(ptInput.WitnessUtxo.PkScript, myBoardingAddressScript) {
+			myInputs = append(myInputs, client.Outpoint{
+				Txid: input.PreviousOutPoint.Hash.String(),
+				VOut: input.PreviousOutPoint.Index,
+			})
+		}
+	}
+
 	if len(myInputs) <= 0 {
 		return nil, fmt.Errorf("no inputs found in round %s", roundTxid)
 	}
@@ -1331,16 +1361,9 @@ func (a *covenantlessArkClient) GetCashbackNotes(ctx context.Context, roundTxid 
 		return nil, err
 	}
 
-	privkeyBytes, err := hex.DecodeString(privkeyHex)
-	if err != nil {
-		return nil, err
-	}
-
-	privkeyToLeak := secp256k1.PrivKeyFromBytes(privkeyBytes)
-
 	leak := client.LeakSecretKey{
 		RoundID:   round.ID,
-		SecretKey: hex.EncodeToString(privkeyToLeak.Serialize()),
+		SecretKey: privkeyHex,
 	}
 
 	return a.client.GetCashback(ctx, []client.LeakSecretKey{leak})

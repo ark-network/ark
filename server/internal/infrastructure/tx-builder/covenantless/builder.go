@@ -1225,13 +1225,13 @@ func (b *txBuilder) BuildSweepEarlyTx(roundID string, node tree.Node, vtxoTreeKe
 		return "", err
 	}
 
-	inputAmount -= int64(treeTxFee)
+	inputAmount += int64(treeTxFee)
 
 	outpoint := tx.UnsignedTx.TxIn[0].PreviousOutPoint
 	ptx, err := psbt.New(
 		[]*wire.OutPoint{&outpoint},
 		[]*wire.TxOut{{
-			Value:    int64(inputAmount),
+			Value:    inputAmount - int64(treeTxFee),
 			PkScript: outputScript,
 		}},
 		2,
@@ -1242,7 +1242,17 @@ func (b *txBuilder) BuildSweepEarlyTx(roundID string, node tree.Node, vtxoTreeKe
 		return "", err
 	}
 
-	ptx.Inputs[0].WitnessUtxo = inputToSweep.WitnessUtxo
+	inputScriptPubKey, err := common.P2TRScript(aggregatedKey.FinalKey)
+	if err != nil {
+		return "", err
+	}
+
+	witnessUtxo := &wire.TxOut{
+		Value:    int64(inputAmount),
+		PkScript: inputScriptPubKey,
+	}
+
+	ptx.Inputs[0].WitnessUtxo = witnessUtxo
 	ptx.Inputs[0].TaprootInternalKey = schnorr.SerializePubKey(aggregatedKey.PreTweakedKey)
 	ptx.Inputs[0].TaprootMerkleRoot = sweepRoot[:]
 
@@ -1263,12 +1273,13 @@ func (b *txBuilder) BuildSweepEarlyTx(roundID string, node tree.Node, vtxoTreeKe
 	publicNonces := make([][66]byte, 0, len(privKeys))
 
 	for _, privKey := range privKeys {
-		nonces, err := musig2.GenNonces(musig2.WithPublicKey(privKey.PubKey()))
+		generated, err := musig2.GenNonces(musig2.WithPublicKey(privKey.PubKey()))
 		if err != nil {
 			return "", err
 		}
 
-		publicNonces = append(publicNonces, nonces.PubNonce)
+		nonces = append(nonces, generated)
+		publicNonces = append(publicNonces, generated.PubNonce)
 	}
 
 	combinedNonces, err := musig2.AggregateNonces(publicNonces)
@@ -1277,16 +1288,7 @@ func (b *txBuilder) BuildSweepEarlyTx(roundID string, node tree.Node, vtxoTreeKe
 	}
 
 	prevouts := make(map[wire.OutPoint]*wire.TxOut)
-
-	inputScriptPubKey, err := common.P2TRScript(aggregatedKey.FinalKey)
-	if err != nil {
-		return "", err
-	}
-
-	prevouts[ptx.UnsignedTx.TxIn[0].PreviousOutPoint] = &wire.TxOut{
-		Value:    int64(inputAmount),
-		PkScript: inputScriptPubKey,
-	}
+	prevouts[ptx.UnsignedTx.TxIn[0].PreviousOutPoint] = witnessUtxo
 
 	prevoutFetcher := txscript.NewMultiPrevOutFetcher(prevouts)
 
@@ -1322,10 +1324,7 @@ func (b *txBuilder) BuildSweepEarlyTx(roundID string, node tree.Node, vtxoTreeKe
 		musig2.WithTaprootTweakedCombine([32]byte(message), cosignerPubKeys, sweepRoot[:], true),
 	)
 
-	ptx.Inputs[0].TaprootScriptSpendSig = []*psbt.TaprootScriptSpendSig{{
-		Signature:   combinedSig.Serialize(),
-		XOnlyPubKey: schnorr.SerializePubKey(aggregatedKey.FinalKey),
-	}}
+	ptx.Inputs[0].TaprootKeySpendSig = combinedSig.Serialize()
 
 	if err := psbt.Finalize(ptx, 0); err != nil {
 		return "", err
