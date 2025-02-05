@@ -149,14 +149,23 @@ var (
 		Action: walletWithdrawAction,
 		Flags:  []cli.Flag{withdrawAmountFlag, withdrawAddressFlag},
 	}
-	getSweepableEarlyRoundsCmd = &cli.Command{
-		Name:   "sweepable-rounds",
-		Usage:  "Get rounds that can be swept early",
+	sweepCmd = &cli.Command{
+		Name:  "sweep",
+		Usage: "Manage sweeping of rounds",
+		Subcommands: append(
+			cli.Commands{},
+			listSweepableCmd,
+			sweepRoundCmd,
+		),
+	}
+	listSweepableCmd = &cli.Command{
+		Name:   "list",
+		Usage:  "List all rounds that are eligible for early sweeping",
 		Action: getSweepableEarlyRoundsAction,
 	}
-	sweepEarlyCmd = &cli.Command{
-		Name:   "sweep-early",
-		Usage:  "Sweep specified round early",
+	sweepRoundCmd = &cli.Command{
+		Name:   "round",
+		Usage:  "Sweep a specific round before its scheduled time",
 		Action: sweepEarlyAction,
 		Flags:  []cli.Flag{roundIdFlag},
 	}
