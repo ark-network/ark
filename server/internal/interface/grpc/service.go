@@ -160,10 +160,10 @@ func (s *service) start(withAppSvc bool) error {
 
 func (s *service) stop(withAppSvc bool) {
 	//nolint:all
-	s.stopCh <- struct{}{}
 	s.server.Shutdown(context.Background())
 	log.Info("stopped grpc server")
 	if withAppSvc {
+		s.stopCh <- struct{}{}
 		appSvc, _ := s.appConfig.AppService()
 		if appSvc != nil {
 			appSvc.Stop()
