@@ -1276,7 +1276,7 @@ func (a *covenantlessArkClient) GetCashbackNotes(ctx context.Context, roundTxid 
 		return nil, err
 	}
 
-	offchainAddrs, _, boardingAddrs, err := a.wallet.GetAddresses(ctx)
+	offchainAddrs, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return nil, err
 	}
