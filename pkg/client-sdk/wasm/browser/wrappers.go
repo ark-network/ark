@@ -468,6 +468,25 @@ func SignTransactionWrapper() js.Func {
 	})
 }
 
+func GetCashbackNotesWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if len(args) != 1 {
+			return nil, errors.New("invalid number of args")
+		}
+
+		roundTxid := args[0].String()
+		notes, err := arkSdkClient.GetCashbackNotes(context.Background(), roundTxid)
+		if err != nil {
+			return nil, err
+		}
+
+		result := map[string]interface{}{
+			"notes": notes,
+		}
+		return js.ValueOf(result), nil
+	})
+}
+
 type promise func(args []js.Value) (interface{}, error)
 
 func JSPromise(fn promise) js.Func {
