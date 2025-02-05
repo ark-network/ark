@@ -1807,3 +1807,7 @@ func getRedeemTxidCovenant(redeemTx string) (string, error) {
 
 	return tx.TxHash().String(), nil
 }
+
+func (a *covenantArkClient) GetCashbackNotes(context.Context, string) ([]string, error) {
+	return nil, fmt.Errorf("not implemented")
+}

@@ -491,6 +491,37 @@ func (h *handler) SetNostrRecipient(
 	return &arkv1.SetNostrRecipientResponse{}, nil
 }
 
+func (h *handler) GetCashback(
+	ctx context.Context, req *arkv1.GetCashbackRequest,
+) (*arkv1.GetCashbackResponse, error) {
+	secretKeysWithRoundIds := req.GetSecretKeys()
+	if len(secretKeysWithRoundIds) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing secret keys")
+	}
+
+	notes := make([]string, 0)
+	for _, secretKeyWithRoundId := range secretKeysWithRoundIds {
+		secretKeyBytes, err := hex.DecodeString(secretKeyWithRoundId.GetSecretKey())
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, "invalid secret key")
+		}
+
+		secretKey := secp256k1.PrivKeyFromBytes(secretKeyBytes)
+
+		note, err := h.svc.GetCashback(ctx, secretKeyWithRoundId.GetRoundId(), secretKey)
+		if err != nil {
+			logrus.WithError(err).Error("failed to get cashback")
+			continue
+		}
+
+		notes = append(notes, note)
+	}
+
+	return &arkv1.GetCashbackResponse{
+		Notes: notes,
+	}, nil
+}
+
 // listenToEvents forwards events from the application layer to the set of listeners
 func (h *handler) listenToEvents() {
 	channel := h.svc.GetEventsChannel(context.Background())

@@ -56,6 +56,7 @@ type TransportClient interface {
 	GetTransactionsStream(ctx context.Context) (<-chan TransactionEvent, func(), error)
 	SetNostrRecipient(ctx context.Context, nostrRecipient string, vtxos []SignedVtxoOutpoint) error
 	DeleteNostrRecipient(ctx context.Context, vtxos []SignedVtxoOutpoint) error
+	GetCashback(ctx context.Context, leaks []LeakSecretKey) ([]string, error)
 }
 
 type Info struct {
@@ -234,4 +235,9 @@ type OwnershipProof struct {
 	ControlBlock string
 	Script       string
 	Signature    string
+}
+
+type LeakSecretKey struct {
+	SecretKey string
+	RoundID   string
 }

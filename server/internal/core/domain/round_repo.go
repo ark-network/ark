@@ -21,6 +21,10 @@ type RoundRepository interface {
 	GetExpiredRoundsTxid(ctx context.Context) ([]string, error)
 	GetRoundsIds(ctx context.Context, startedAfter int64, startedBefore int64) ([]string, error)
 	GetSweptRoundsConnectorAddress(ctx context.Context) ([]string, error)
+	SetVtxoTreePubKeys(ctx context.Context, roundId string, pubkeys [][]byte) error
+	GetVtxoTreeKeys(ctx context.Context, roundId string) ([]RawKeyPair, error)
+	AddVtxoTreeSecretKey(ctx context.Context, roundId string, seckey, pubkey []byte) error
+	GetSweepableEarlyRoundsIds(ctx context.Context) ([]string, error)
 	Close()
 }
 
@@ -41,4 +45,9 @@ type MarketHourRepo interface {
 	Get(ctx context.Context) (*MarketHour, error)
 	Upsert(ctx context.Context, marketHour MarketHour) error
 	Close()
+}
+
+type RawKeyPair struct {
+	Pubkey []byte
+	Seckey []byte
 }

@@ -1,6 +1,7 @@
 package badgerdb
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 )
 
 const roundStoreDir = "rounds"
+const vtxoTreeKeysPrefix = "vtxo_tree_keys"
 
 type roundRepository struct {
 	store *badgerhold.Store
@@ -153,6 +155,104 @@ func (r *roundRepository) Close() {
 	r.store.Close()
 }
 
+func (r *roundRepository) GetVtxoTreeKeys(ctx context.Context, roundId string) ([]domain.RawKeyPair, error) {
+	var keys wrappedVtxoTreeKeys
+	var err error
+
+	dbKey := fmt.Sprintf("%s_%s", vtxoTreeKeysPrefix, roundId)
+
+	if ctx.Value("tx") != nil {
+		tx := ctx.Value("tx").(*badger.Txn)
+		err = r.store.TxGet(tx, dbKey, &keys)
+	} else {
+		err = r.store.Get(dbKey, &keys)
+	}
+
+	return keys.Keys, err
+}
+
+func (r *roundRepository) AddVtxoTreeSecretKey(ctx context.Context, roundId string, seckey, pubkey []byte) error {
+	old, err := r.GetVtxoTreeKeys(ctx, roundId)
+	if err != nil {
+		return err
+	}
+
+	new := wrappedVtxoTreeKeys{
+		Keys: make([]domain.RawKeyPair, 0, len(old)),
+	}
+	for _, key := range old {
+		if bytes.Equal(key.Pubkey, pubkey) {
+			new.Keys = append(new.Keys, domain.RawKeyPair{Pubkey: key.Pubkey, Seckey: seckey})
+			continue
+		}
+
+		new.Keys = append(new.Keys, key)
+	}
+
+	dbKey := fmt.Sprintf("%s_%s", vtxoTreeKeysPrefix, roundId)
+	if ctx.Value("tx") != nil {
+		tx := ctx.Value("tx").(*badger.Txn)
+		return r.store.TxUpdate(tx, dbKey, wrappedVtxoTreeKeys{Keys: new.Keys})
+	}
+	return r.store.Update(dbKey, wrappedVtxoTreeKeys{Keys: new.Keys})
+}
+
+func (r *roundRepository) SetVtxoTreePubKeys(ctx context.Context, roundId string, pubkeys [][]byte) error {
+	dbKey := fmt.Sprintf("%s_%s", vtxoTreeKeysPrefix, roundId)
+
+	rawKeyPairs := make([]domain.RawKeyPair, 0, len(pubkeys))
+	for _, pubkey := range pubkeys {
+		rawKeyPairs = append(rawKeyPairs, domain.RawKeyPair{Pubkey: pubkey})
+	}
+
+	if ctx.Value("tx") != nil {
+		tx := ctx.Value("tx").(*badger.Txn)
+		return r.store.TxInsert(tx, dbKey, wrappedVtxoTreeKeys{Keys: rawKeyPairs})
+	}
+	return r.store.Insert(dbKey, wrappedVtxoTreeKeys{Keys: rawKeyPairs})
+}
+
+func (r *roundRepository) GetSweepableEarlyRoundsIds(ctx context.Context) ([]string, error) {
+	notSweptRoundsQuery := badgerhold.Where("Stage.Code").Eq(domain.FinalizationStage).
+		And("Stage.Ended").Eq(true).And("Swept").Eq(false)
+	rounds, err := r.findRound(ctx, notSweptRoundsQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	roundIds := make([]string, 0, len(rounds))
+
+	for _, round := range rounds {
+		dbKey := fmt.Sprintf("%s_%s", vtxoTreeKeysPrefix, round.Id)
+		var keys wrappedVtxoTreeKeys
+		if ctx.Value("tx") != nil {
+			tx := ctx.Value("tx").(*badger.Txn)
+			err = r.store.TxGet(tx, dbKey, &keys)
+		} else {
+			err = r.store.Get(dbKey, &keys)
+		}
+
+		if err != nil {
+			return nil, err
+		}
+
+		// if all private keys are set: add to roundIds
+		missingSeckey := false
+		for _, key := range keys.Keys {
+			if key.Seckey == nil {
+				missingSeckey = true
+				break
+			}
+		}
+
+		if !missingSeckey {
+			roundIds = append(roundIds, round.Id)
+		}
+	}
+
+	return roundIds, nil
+}
+
 func (r *roundRepository) findRound(
 	ctx context.Context, query *badgerhold.Query,
 ) ([]domain.Round, error) {
@@ -179,4 +279,8 @@ func (r *roundRepository) addOrUpdateRound(
 		err = r.store.Upsert(round.Id, round)
 	}
 	return
+}
+
+type wrappedVtxoTreeKeys struct {
+	Keys []domain.RawKeyPair
 }

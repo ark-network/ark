@@ -221,6 +221,10 @@ func (s *service) GetCurrentBlockTime(ctx context.Context) (*ports.BlockTimestam
 	}, nil
 }
 
+func (s *service) GetVtxoTreeSignerSession(ctx context.Context, roundID string) (ports.ExtendedSignerSession, error) {
+	return nil, errors.New("not implemented")
+}
+
 func (s *service) listenToNotifications() {
 	s.isListening = true
 	defer func() {

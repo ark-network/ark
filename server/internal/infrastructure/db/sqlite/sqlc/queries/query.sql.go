@@ -541,6 +541,42 @@ func (q *Queries) SelectRoundWithRoundTxId(ctx context.Context, txid string) ([]
 	return items, nil
 }
 
+const selectSweepableEarlyRoundsIds = `-- name: SelectSweepableEarlyRoundsIds :many
+SELECT DISTINCT vtk.round_id
+FROM vtxo_tree_keys vtk
+JOIN round r ON r.id = vtk.round_id
+WHERE r.swept = false
+AND NOT EXISTS (
+    SELECT 1
+    FROM vtxo_tree_keys sub
+    WHERE sub.round_id = vtk.round_id
+    AND sub.seckey IS NULL
+)
+`
+
+func (q *Queries) SelectSweepableEarlyRoundsIds(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, selectSweepableEarlyRoundsIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var round_id string
+		if err := rows.Scan(&round_id); err != nil {
+			return nil, err
+		}
+		items = append(items, round_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const selectSweepableVtxos = `-- name: SelectSweepableVtxos :many
 SELECT vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.round_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.created_at, vtxo.request_id, vtxo.redeem_tx FROM vtxo
 WHERE redeemed = false AND swept = false
@@ -699,6 +735,38 @@ func (q *Queries) SelectVtxoByOutpoint(ctx context.Context, arg SelectVtxoByOutp
 		&i.Vtxo.RedeemTx,
 	)
 	return i, err
+}
+
+const selectVtxoTreeKeys = `-- name: SelectVtxoTreeKeys :many
+SELECT pubkey, seckey FROM vtxo_tree_keys WHERE round_id = ?
+`
+
+type SelectVtxoTreeKeysRow struct {
+	Pubkey []byte
+	Seckey []byte
+}
+
+func (q *Queries) SelectVtxoTreeKeys(ctx context.Context, roundID string) ([]SelectVtxoTreeKeysRow, error) {
+	rows, err := q.db.QueryContext(ctx, selectVtxoTreeKeys, roundID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SelectVtxoTreeKeysRow
+	for rows.Next() {
+		var i SelectVtxoTreeKeysRow
+		if err := rows.Scan(&i.Pubkey, &i.Seckey); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const selectVtxosByRoundTxid = `-- name: SelectVtxosByRoundTxid :many
@@ -1037,5 +1105,35 @@ func (q *Queries) UpsertVtxo(ctx context.Context, arg UpsertVtxoParams) error {
 		arg.CreatedAt,
 		arg.RedeemTx,
 	)
+	return err
+}
+
+const upsertVtxoTreePubKey = `-- name: UpsertVtxoTreePubKey :exec
+INSERT INTO vtxo_tree_keys (round_id, pubkey)
+VALUES (?, ?)
+`
+
+type UpsertVtxoTreePubKeyParams struct {
+	RoundID string
+	Pubkey  []byte
+}
+
+func (q *Queries) UpsertVtxoTreePubKey(ctx context.Context, arg UpsertVtxoTreePubKeyParams) error {
+	_, err := q.db.ExecContext(ctx, upsertVtxoTreePubKey, arg.RoundID, arg.Pubkey)
+	return err
+}
+
+const upsertVtxoTreeSecKey = `-- name: UpsertVtxoTreeSecKey :exec
+UPDATE vtxo_tree_keys SET seckey = ? WHERE round_id = ? AND pubkey = ?
+`
+
+type UpsertVtxoTreeSecKeyParams struct {
+	Seckey  []byte
+	RoundID string
+	Pubkey  []byte
+}
+
+func (q *Queries) UpsertVtxoTreeSecKey(ctx context.Context, arg UpsertVtxoTreeSecKeyParams) error {
+	_, err := q.db.ExecContext(ctx, upsertVtxoTreeSecKey, arg.Seckey, arg.RoundID, arg.Pubkey)
 	return err
 }

@@ -1270,6 +1270,105 @@ func (a *covenantlessArkClient) SetNostrNotificationRecipient(ctx context.Contex
 	return a.client.SetNostrRecipient(ctx, nostrProfile, vtxos)
 }
 
+func (a *covenantlessArkClient) GetCashbackNotes(ctx context.Context, roundTxid string) ([]string, error) {
+	round, err := a.client.GetRound(ctx, roundTxid)
+	if err != nil {
+		return nil, err
+	}
+
+	offchainAddrs, _, boardingAddrs, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	myAddress, err := common.DecodeAddress(offchainAddrs[0].Address)
+	if err != nil {
+		return nil, err
+	}
+
+	myBoardingAddress, err := btcutil.DecodeAddress(boardingAddrs[0].Address, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	myBoardingAddressScript, err := txscript.PayToAddrScript(myBoardingAddress)
+	if err != nil {
+		return nil, err
+	}
+
+	myAddressScript, err := common.P2TRScript(myAddress.VtxoTapKey)
+	if err != nil {
+		return nil, err
+	}
+
+	myInputs := make([]client.Outpoint, 0)
+	for _, forfeitTx := range round.ForfeitTxs {
+		ptx, err := psbt.NewFromRawBytes(strings.NewReader(forfeitTx), true)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(ptx.UnsignedTx.TxIn) < 2 || len(ptx.Inputs) < 2 {
+			// invalid forfeit tx, ignore
+			continue
+		}
+
+		if ptx.Inputs[1].WitnessUtxo == nil {
+			// invalid forfeit tx, ignore
+			continue
+		}
+
+		vtxoInput := ptx.Inputs[1].WitnessUtxo
+		if !bytes.Equal(vtxoInput.PkScript, myAddressScript) {
+			continue
+		}
+
+		myInputs = append(myInputs, client.Outpoint{
+			Txid: ptx.UnsignedTx.TxIn[1].PreviousOutPoint.Hash.String(),
+			VOut: ptx.UnsignedTx.TxIn[1].PreviousOutPoint.Index,
+		})
+	}
+
+	roundPtx, err := psbt.NewFromRawBytes(strings.NewReader(round.Tx), true)
+	if err != nil {
+		return nil, err
+	}
+
+	for i, input := range roundPtx.UnsignedTx.TxIn {
+		ptInput := roundPtx.Inputs[i]
+
+		if ptInput.WitnessUtxo == nil {
+			continue
+		}
+
+		if bytes.Equal(ptInput.WitnessUtxo.PkScript, myBoardingAddressScript) {
+			myInputs = append(myInputs, client.Outpoint{
+				Txid: input.PreviousOutPoint.Hash.String(),
+				VOut: input.PreviousOutPoint.Index,
+			})
+		}
+	}
+
+	if len(myInputs) <= 0 {
+		return nil, fmt.Errorf("no inputs found in round %s", roundTxid)
+	}
+
+	_, privkeyHex, err := a.wallet.NewVtxoTreeSigner(
+		context.Background(),
+		inputsToDerivationPath(myInputs, []string{}),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	leak := client.LeakSecretKey{
+		RoundID:   round.ID,
+		SecretKey: privkeyHex,
+	}
+
+	return a.client.GetCashback(ctx, []client.LeakSecretKey{leak})
+}
+
 func (a *covenantlessArkClient) sendOnchain(
 	ctx context.Context, receivers []Receiver,
 ) (string, error) {
@@ -2938,7 +3037,7 @@ func (a *covenantlessArkClient) handleOptions(options *Musig2SignOptions, inputs
 			outpoints = append(outpoints, input.Outpoint)
 		}
 
-		signerSession, err := a.wallet.NewVtxoTreeSigner(
+		signerSession, _, err := a.wallet.NewVtxoTreeSigner(
 			context.Background(),
 			inputsToDerivationPath(outpoints, notesInputs),
 		)

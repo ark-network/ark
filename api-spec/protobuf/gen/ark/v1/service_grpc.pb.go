@@ -31,6 +31,7 @@ type ArkServiceClient interface {
 	GetTransactionsStream(ctx context.Context, in *GetTransactionsStreamRequest, opts ...grpc.CallOption) (ArkService_GetTransactionsStreamClient, error)
 	SetNostrRecipient(ctx context.Context, in *SetNostrRecipientRequest, opts ...grpc.CallOption) (*SetNostrRecipientResponse, error)
 	DeleteNostrRecipient(ctx context.Context, in *DeleteNostrRecipientRequest, opts ...grpc.CallOption) (*DeleteNostrRecipientResponse, error)
+	GetCashback(ctx context.Context, in *GetCashbackRequest, opts ...grpc.CallOption) (*GetCashbackResponse, error)
 }
 
 type arkServiceClient struct {
@@ -204,6 +205,15 @@ func (c *arkServiceClient) DeleteNostrRecipient(ctx context.Context, in *DeleteN
 	return out, nil
 }
 
+func (c *arkServiceClient) GetCashback(ctx context.Context, in *GetCashbackRequest, opts ...grpc.CallOption) (*GetCashbackResponse, error) {
+	out := new(GetCashbackResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/GetCashback", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ArkServiceServer is the server API for ArkService service.
 // All implementations should embed UnimplementedArkServiceServer
 // for forward compatibility
@@ -221,6 +231,7 @@ type ArkServiceServer interface {
 	GetTransactionsStream(*GetTransactionsStreamRequest, ArkService_GetTransactionsStreamServer) error
 	SetNostrRecipient(context.Context, *SetNostrRecipientRequest) (*SetNostrRecipientResponse, error)
 	DeleteNostrRecipient(context.Context, *DeleteNostrRecipientRequest) (*DeleteNostrRecipientResponse, error)
+	GetCashback(context.Context, *GetCashbackRequest) (*GetCashbackResponse, error)
 }
 
 // UnimplementedArkServiceServer should be embedded to have forward compatible implementations.
@@ -265,6 +276,9 @@ func (UnimplementedArkServiceServer) SetNostrRecipient(context.Context, *SetNost
 }
 func (UnimplementedArkServiceServer) DeleteNostrRecipient(context.Context, *DeleteNostrRecipientRequest) (*DeleteNostrRecipientResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteNostrRecipient not implemented")
+}
+func (UnimplementedArkServiceServer) GetCashback(context.Context, *GetCashbackRequest) (*GetCashbackResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCashback not implemented")
 }
 
 // UnsafeArkServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -518,6 +532,24 @@ func _ArkService_DeleteNostrRecipient_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ArkService_GetCashback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCashbackRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ArkServiceServer).GetCashback(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.ArkService/GetCashback",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ArkServiceServer).GetCashback(ctx, req.(*GetCashbackRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ArkService_ServiceDesc is the grpc.ServiceDesc for ArkService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -568,6 +600,10 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteNostrRecipient",
 			Handler:    _ArkService_DeleteNostrRecipient_Handler,
+		},
+		{
+			MethodName: "GetCashback",
+			Handler:    _ArkService_GetCashback_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

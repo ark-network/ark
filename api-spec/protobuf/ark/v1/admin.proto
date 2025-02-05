@@ -41,6 +41,17 @@ service AdminService {
       body: "*"
     };
   }
+  rpc SweepEarly(SweepEarlyRequest) returns (SweepEarlyResponse) {
+    option (google.api.http) = {
+      post: "/v1/admin/sweep-early"
+      body: "*"
+    };
+  }
+  rpc GetSweepableEarlyRounds(GetSweepableEarlyRoundsRequest) returns (GetSweepableEarlyRoundsResponse) {
+    option (google.api.http) = {
+      get: "/v1/admin/sweepable-early-rounds"
+    };
+  }
   rpc GetTxRequestQueue(GetTxRequestQueueRequest) returns (GetTxRequestQueueResponse) {
     option (google.api.http) = {
       get: "/v1/admin/queue"
@@ -113,6 +124,18 @@ message MarketHourConfig {
   google.protobuf.Duration round_interval = 4;
 }
 
+message SweepEarlyRequest {
+  string round_id = 1;
+}
+message SweepEarlyResponse {
+  string txid = 1;
+}
+
+message GetSweepableEarlyRoundsRequest {}
+message GetSweepableEarlyRoundsResponse {
+  repeated string round_ids = 1;
+}
+
 message GetTxRequestQueueRequest {
   repeated string request_ids = 1;
 }
@@ -124,11 +147,11 @@ message DeleteTxRequestsRequest {
   repeated string request_ids = 1;
 }
 message DeleteTxRequestsResponse {}
+
 message WithdrawRequest {
   string address = 1;
   uint64 amount = 2;
 }
-
 message WithdrawResponse {
   string txid = 1;
 }

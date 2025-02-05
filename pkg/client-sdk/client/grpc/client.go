@@ -438,3 +438,26 @@ func outpointsFromProto(protoOutpoints []*arkv1.Outpoint) []client.Outpoint {
 	}
 	return outpoints
 }
+
+func (a *grpcClient) GetCashback(
+	ctx context.Context, leaks []client.LeakSecretKey,
+) ([]string, error) {
+	secretKeys := make([]*arkv1.VtxoTreeKeySecretKey, 0, len(leaks))
+	for _, leak := range leaks {
+		secretKeys = append(secretKeys, &arkv1.VtxoTreeKeySecretKey{
+			RoundId:   leak.RoundID,
+			SecretKey: leak.SecretKey,
+		})
+	}
+
+	req := &arkv1.GetCashbackRequest{
+		SecretKeys: secretKeys,
+	}
+
+	resp, err := a.svc.GetCashback(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.GetNotes(), nil
+}

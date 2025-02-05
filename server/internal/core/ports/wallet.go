@@ -4,12 +4,18 @@ import (
 	"context"
 	"errors"
 
+	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
 // ErrNonFinalBIP68 is returned when a transaction spending a CSV-locked output is not final.
 var ErrNonFinalBIP68 = errors.New("non-final BIP68 sequence")
+
+type ExtendedSignerSession interface {
+	bitcointree.SignerSession
+	GetSecretKey() *secp256k1.PrivateKey
+}
 
 type WalletService interface {
 	BlockchainScanner
@@ -43,6 +49,7 @@ type WalletService interface {
 	SignMessage(ctx context.Context, message []byte) ([]byte, error)
 	VerifyMessageSignature(ctx context.Context, message, signature []byte) (bool, error)
 	GetCurrentBlockTime(ctx context.Context) (*BlockTimestamp, error)
+	GetVtxoTreeSignerSession(ctx context.Context, roundID string) (ExtendedSignerSession, error)
 	Withdraw(ctx context.Context, address string, amount uint64) (string, error)
 	Close()
 }

@@ -1,0 +1,1 @@
+DROP TABLE IF EXISTS vtxo_tree_keys;

@@ -167,6 +167,15 @@ func (a *adminHandler) UpdateMarketHourConfig(
 	return &arkv1.UpdateMarketHourConfigResponse{}, nil
 }
 
+func (a *adminHandler) GetSweepableEarlyRounds(ctx context.Context, req *arkv1.GetSweepableEarlyRoundsRequest) (*arkv1.GetSweepableEarlyRoundsResponse, error) {
+	rounds, err := a.adminService.GetSweepableEarlyRounds(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &arkv1.GetSweepableEarlyRoundsResponse{RoundIds: rounds}, nil
+}
+
 func (a *adminHandler) GetTxRequestQueue(
 	ctx context.Context, req *arkv1.GetTxRequestQueueRequest,
 ) (*arkv1.GetTxRequestQueueResponse, error) {
@@ -177,6 +186,20 @@ func (a *adminHandler) GetTxRequestQueue(
 	}
 
 	return &arkv1.GetTxRequestQueueResponse{Requests: txReqsInfo(requests).toProto()}, nil
+}
+
+func (a *adminHandler) SweepEarly(ctx context.Context, req *arkv1.SweepEarlyRequest) (*arkv1.SweepEarlyResponse, error) {
+	roundId := req.GetRoundId()
+	if len(roundId) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing round id")
+	}
+
+	txid, err := a.adminService.SweepEarly(ctx, roundId)
+	if err != nil {
+		return nil, err
+	}
+
+	return &arkv1.SweepEarlyResponse{Txid: txid}, nil
 }
 
 func (a *adminHandler) Withdraw(ctx context.Context, req *arkv1.WithdrawRequest) (*arkv1.WithdrawResponse, error) {

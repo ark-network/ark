@@ -133,3 +133,9 @@ type Vtxo struct {
 	RequestID sql.NullString
 	RedeemTx  sql.NullString
 }
+
+type VtxoTreeKey struct {
+	RoundID string
+	Pubkey  []byte
+	Seckey  []byte
+}

@@ -60,6 +60,11 @@ var (
 		Usage:    "address to withdraw to",
 		Required: true,
 	}
+	roundIdFlag = &cli.StringFlag{
+		Name:     flagRoundId,
+		Usage:    "round id to sweep",
+		Required: true,
+	}
 )
 
 // commands
@@ -143,6 +148,26 @@ var (
 		Usage:  "Withdraw funds from the wallet",
 		Action: walletWithdrawAction,
 		Flags:  []cli.Flag{withdrawAmountFlag, withdrawAddressFlag},
+	}
+	sweepCmd = &cli.Command{
+		Name:  "sweep",
+		Usage: "Manage sweeping of rounds",
+		Subcommands: append(
+			cli.Commands{},
+			listSweepableCmd,
+			sweepRoundCmd,
+		),
+	}
+	listSweepableCmd = &cli.Command{
+		Name:   "list",
+		Usage:  "List all rounds that are eligible for early sweeping",
+		Action: getSweepableEarlyRoundsAction,
+	}
+	sweepRoundCmd = &cli.Command{
+		Name:   "round",
+		Usage:  "Sweep a specific round before its scheduled time",
+		Action: sweepEarlyAction,
+		Flags:  []cli.Flag{roundIdFlag},
 	}
 )
 
@@ -632,5 +657,49 @@ func clearTxRequestQueueAction(ctx *cli.Context) error {
 	}
 
 	fmt.Println("Successfully cleared tx request queue")
+	return nil
+}
+
+func getSweepableEarlyRoundsAction(ctx *cli.Context) error {
+	baseURL := ctx.String(flagURL)
+	macaroon, tlsCertPath, err := getCredentialPaths(ctx)
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("%s/v1/admin/sweepable-early-rounds", baseURL)
+	response, err := get[[]string](url, "roundIds", macaroon, tlsCertPath)
+	if err != nil {
+		return err
+	}
+
+	if len(response) == 0 {
+		fmt.Println("No rounds available for early sweep")
+		return nil
+	}
+
+	for _, roundId := range response {
+		fmt.Println(roundId)
+	}
+	return nil
+}
+
+func sweepEarlyAction(ctx *cli.Context) error {
+	baseURL := ctx.String(flagURL)
+	macaroon, tlsCertPath, err := getCredentialPaths(ctx)
+	if err != nil {
+		return err
+	}
+
+	roundId := ctx.String(flagRoundId)
+	url := fmt.Sprintf("%s/v1/admin/sweep-early", baseURL)
+	body := fmt.Sprintf(`{"round_id": "%s"}`, roundId)
+
+	txid, err := post[string](url, body, "txid", macaroon, tlsCertPath)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Successfully initiated early sweep for round %s\nTransaction ID: %s\n", roundId, txid)
 	return nil
 }

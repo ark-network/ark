@@ -45,6 +45,7 @@ func main() {
 		&redeemCommand,
 		&notesCommand,
 		&registerNostrCommand,
+		&getCashbackCommand,
 	)
 	app.Flags = []cli.Flag{
 		datadirFlag,
@@ -151,6 +152,11 @@ var (
 		Value:       false,
 		DefaultText: "false",
 	}
+	txidFlag = &cli.StringFlag{
+		Name:     "txid",
+		Usage:    "transaction ID of the round to get cashback notes for",
+		Required: true,
+	}
 )
 
 var (
@@ -230,6 +236,14 @@ var (
 		Flags: []cli.Flag{nostrProfileFlag, passwordFlag},
 		Action: func(ctx *cli.Context) error {
 			return registerNostrProfile(ctx)
+		},
+	}
+	getCashbackCommand = cli.Command{
+		Name:  "cashback",
+		Usage: "Get cashback notes for a given round transaction ID",
+		Flags: []cli.Flag{txidFlag, passwordFlag},
+		Action: func(ctx *cli.Context) error {
+			return getCashback(ctx)
 		},
 	}
 )
@@ -450,6 +464,25 @@ func redeemNotes(ctx *cli.Context) error {
 	}
 	return printJSON(map[string]interface{}{
 		"txid": txID,
+	})
+}
+
+func getCashback(ctx *cli.Context) error {
+	password, err := readPassword(ctx)
+	if err != nil {
+		return err
+	}
+	if err := arkSdkClient.Unlock(ctx.Context, string(password)); err != nil {
+		return err
+	}
+
+	txid := ctx.String(txidFlag.Name)
+	notes, err := arkSdkClient.GetCashbackNotes(ctx.Context, txid)
+	if err != nil {
+		return err
+	}
+	return printJSON(map[string]interface{}{
+		"notes": notes,
 	})
 }
 

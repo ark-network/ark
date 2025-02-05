@@ -58,6 +58,8 @@ type ClientService interface {
 
 	ArkServiceGetBoardingAddress(params *ArkServiceGetBoardingAddressParams, opts ...ClientOption) (*ArkServiceGetBoardingAddressOK, error)
 
+	ArkServiceGetCashback(params *ArkServiceGetCashbackParams, opts ...ClientOption) (*ArkServiceGetCashbackOK, error)
+
 	ArkServiceGetEventStream(params *ArkServiceGetEventStreamParams, opts ...ClientOption) (*ArkServiceGetEventStreamOK, error)
 
 	ArkServiceGetInfo(params *ArkServiceGetInfoParams, opts ...ClientOption) (*ArkServiceGetInfoOK, error)
@@ -154,6 +156,43 @@ func (a *Client) ArkServiceGetBoardingAddress(params *ArkServiceGetBoardingAddre
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*ArkServiceGetBoardingAddressDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+ArkServiceGetCashback ark service get cashback API
+*/
+func (a *Client) ArkServiceGetCashback(params *ArkServiceGetCashbackParams, opts ...ClientOption) (*ArkServiceGetCashbackOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewArkServiceGetCashbackParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "ArkService_GetCashback",
+		Method:             "POST",
+		PathPattern:        "/v1/cashback",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &ArkServiceGetCashbackReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*ArkServiceGetCashbackOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*ArkServiceGetCashbackDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 

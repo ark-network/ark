@@ -307,6 +307,10 @@ func (m *mockedWallet) GetCurrentBlockTime(ctx context.Context) (*ports.BlockTim
 	panic("not implemented")
 }
 
+func (m *mockedWallet) GetVtxoTreeSignerSession(ctx context.Context, roundID string) (ports.ExtendedSignerSession, error) {
+	panic("not implemented")
+}
+
 func (m *mockedWallet) Withdraw(ctx context.Context, address string, amount uint64) (string, error) {
 	panic("not implemented")
 }

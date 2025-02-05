@@ -32,6 +32,7 @@ const (
 	flagWithdrawAmount  = "amount"
 	flagWithdrawAddress = "address"
 	flagRequestIds      = "ids"
+	flagRoundId         = "round-id"
 )
 
 // flags
@@ -98,7 +99,7 @@ func main() {
 	app.Version = Version
 	app.Name = "Arkd CLI"
 	app.Usage = "arkd command line interface"
-	app.Commands = append(app.Commands, walletCmd, queueCmd)
+	app.Commands = append(app.Commands, walletCmd, queueCmd, sweepCmd)
 	app.Action = mainAction
 	app.Flags = append(app.Flags, urlFlag, datadirFlag)
 

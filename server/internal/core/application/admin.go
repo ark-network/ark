@@ -2,8 +2,10 @@ package application
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ark-network/ark/common/note"
+	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 )
 
@@ -49,6 +51,8 @@ type AdminService interface {
 	GetWalletAddress(ctx context.Context) (string, error)
 	GetWalletStatus(ctx context.Context) (*WalletStatus, error)
 	CreateNotes(ctx context.Context, amount uint32, quantity int) ([]string, error)
+	GetSweepableEarlyRounds(ctx context.Context) ([]string, error)
+	SweepEarly(ctx context.Context, roundId string) (string, error)
 }
 
 type adminService struct {
@@ -206,4 +210,65 @@ func (a *adminService) CreateNotes(ctx context.Context, value uint32, quantity i
 	}
 
 	return notes, nil
+}
+
+func (a *adminService) GetSweepableEarlyRounds(ctx context.Context) ([]string, error) {
+	return a.repoManager.Rounds().GetSweepableEarlyRoundsIds(ctx)
+}
+
+func (a *adminService) SweepEarly(ctx context.Context, roundId string) (string, error) {
+	round, err := a.repoManager.Rounds().GetRoundWithId(ctx, roundId)
+	if err != nil {
+		return "", err
+	}
+
+	if round.Swept {
+		return "", fmt.Errorf("round %s already swept", roundId)
+	}
+
+	vtxoTreeKeys, err := a.repoManager.Rounds().GetVtxoTreeKeys(ctx, roundId)
+	if err != nil {
+		return "", err
+	}
+
+	for _, key := range vtxoTreeKeys {
+		if key.Seckey == nil {
+			return "", fmt.Errorf("missing seckey for round %s", roundId)
+		}
+	}
+
+	root, err := round.VtxoTree.Root()
+	if err != nil {
+		return "", err
+	}
+
+	txid, err := a.txBuilder.BuildSweepEarlyTx(roundId, root, vtxoTreeKeys)
+	if err != nil {
+		return "", err
+	}
+
+	vtxosSwept := make([]domain.VtxoKey, 0)
+	for _, leaf := range round.VtxoTree.Leaves() {
+		vtxo, err := extractVtxoOutpoint(leaf)
+		if err != nil {
+			return "", err
+		}
+
+		vtxosSwept = append(vtxosSwept, *vtxo)
+	}
+
+	// mark the round as swept
+	round.Sweep()
+
+	if err := a.repoManager.Rounds().AddOrUpdateRound(ctx, *round); err != nil {
+		return "", err
+	}
+
+	// mark the vtxos as swept
+	err = a.repoManager.Vtxos().SweepVtxos(ctx, vtxosSwept)
+	if err != nil {
+		return "", err
+	}
+
+	return txid, nil
 }
