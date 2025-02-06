@@ -602,14 +602,15 @@ func (s *covenantService) startRound() {
 	s.currentRound = round
 
 	defer func() {
-		time.Sleep(time.Duration(s.roundInterval/3) * time.Second)
-		s.startFinalization()
+		roundEndTime := time.Now().Add(time.Duration(s.roundInterval) * time.Second)
+		time.Sleep(time.Duration(s.roundInterval/6) * time.Second)
+		s.startFinalization(roundEndTime)
 	}()
 
 	log.Debugf("started registration stage for new round: %s", round.Id)
 }
 
-func (s *covenantService) startFinalization() {
+func (s *covenantService) startFinalization(roundEndTime time.Time) {
 	ctx := context.Background()
 	round := s.currentRound
 
@@ -629,7 +630,7 @@ func (s *covenantService) startFinalization() {
 			return
 		}
 		time.Sleep(time.Duration((s.roundInterval/3)-1) * time.Second)
-		s.finalizeRound()
+		s.finalizeRound(roundEndTime)
 	}()
 
 	if round.IsFailed() {
@@ -683,7 +684,7 @@ func (s *covenantService) startFinalization() {
 	log.Debugf("started finalization stage for round: %s", round.Id)
 }
 
-func (s *covenantService) finalizeRound() {
+func (s *covenantService) finalizeRound(roundEndTime time.Time) {
 	defer s.startRound()
 
 	ctx := context.Background()
@@ -699,6 +700,16 @@ func (s *covenantService) finalizeRound() {
 			return
 		}
 	}()
+
+	remainingTime := time.Until(roundEndTime)
+	// Wait for the remaining forfeit txs to be sent,
+	// but only wait until the round interval expires.
+	select {
+	case <-s.forfeitTxs.doneCh:
+		log.Debug("all forfeit txs have been sent")
+	case <-time.After(remainingTime):
+		log.Debug("timeout waiting for forfeit txs")
+	}
 
 	forfeitTxs, err := s.forfeitTxs.pop()
 	if err != nil {

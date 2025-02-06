@@ -337,7 +337,7 @@ func (m *forfeitTxsMap) pop() ([]string, error) {
 		m.lock.Unlock()
 		m.reset()
 	}()
-	
+
 	txs := make([]string, 0)
 	for vtxoKey, signed := range m.forfeitTxs {
 		if len(signed) == 0 {
