@@ -445,7 +445,7 @@ func GetVersionWrapper() js.Func {
 
 func RedeemNotesWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) != 1 {
+		if len(args) < 1 {
 			return nil, errors.New("invalid number of args")
 		}
 
@@ -460,7 +460,32 @@ func RedeemNotesWrapper() js.Func {
 			notes = append(notes, jsNotes.Index(i).String())
 		}
 
-		txID, err := arkSdkClient.RedeemNotes(context.Background(), notes)
+		opts := make([]arksdk.Option, 0)
+
+		// Check for callback in second argument
+		if len(args) > 1 && !args[1].IsUndefined() && !args[1].IsNull() {
+			callback := args[1]
+			if callback.Type() != js.TypeFunction {
+				return nil, errors.New("callback must be a function")
+			}
+
+			eventsCh := make(chan client.RoundEvent)
+			defer close(eventsCh)
+			go func() {
+				for event := range eventsCh {
+					eventMap := transformEventForJS(event)
+					jsonEvent, err := json.Marshal(eventMap)
+					if err != nil {
+						return
+					}
+					callback.Invoke(string(jsonEvent))
+				}
+			}()
+
+			opts = append(opts, arksdk.WithEventsCh(eventsCh))
+		}
+
+		txID, err := arkSdkClient.RedeemNotes(context.Background(), notes, opts...)
 		if err != nil {
 			return nil, err
 		}
