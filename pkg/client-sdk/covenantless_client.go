@@ -36,9 +36,9 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-// SetleOptions is only available for covenantless clients
+// SettleOptions is only available for covenantless clients
 // it allows to customize the vtxo signing process
-type SetleOptions struct {
+type SettleOptions struct {
 	ExtraSignerSessions  []bitcointree.SignerSession
 	SigningType          *tree.SigningType
 	WalletSignerDisabled bool
@@ -48,7 +48,7 @@ type SetleOptions struct {
 
 func WithEventsCh(ch chan<- client.RoundEvent) Option {
 	return func(o interface{}) error {
-		opts, ok := o.(*SetleOptions)
+		opts, ok := o.(*SettleOptions)
 		if !ok {
 			return fmt.Errorf("invalid options type")
 		}
@@ -60,7 +60,7 @@ func WithEventsCh(ch chan<- client.RoundEvent) Option {
 
 // WithoutWalletSigner disables the wallet signer
 func WithoutWalletSigner(o interface{}) error {
-	opts, ok := o.(*SetleOptions)
+	opts, ok := o.(*SettleOptions)
 	if !ok {
 		return fmt.Errorf("invalid options type")
 	}
@@ -71,7 +71,7 @@ func WithoutWalletSigner(o interface{}) error {
 
 // WithSignAll sets the signing type to ALL instead of the default BRANCH
 func WithSignAll(o interface{}) error {
-	opts, ok := o.(*SetleOptions)
+	opts, ok := o.(*SettleOptions)
 	if !ok {
 		return fmt.Errorf("invalid options type")
 	}
@@ -84,7 +84,7 @@ func WithSignAll(o interface{}) error {
 // WithExtraSigner allows to use a set of custom signer for the vtxo tree signing process
 func WithExtraSigner(signerSessions ...bitcointree.SignerSession) Option {
 	return func(o interface{}) error {
-		opts, ok := o.(*SetleOptions)
+		opts, ok := o.(*SettleOptions)
 		if !ok {
 			return fmt.Errorf("invalid options type")
 		}
@@ -898,7 +898,7 @@ func (a *covenantlessArkClient) SendOffChain(
 func (a *covenantlessArkClient) RedeemNotes(ctx context.Context, notes []string, opts ...Option) (string, error) {
 	amount := uint64(0)
 
-	options := &SetleOptions{}
+	options := &SettleOptions{}
 	for _, opt := range opts {
 		if err := opt(options); err != nil {
 			return "", err
@@ -1026,7 +1026,7 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 	addr string, amount uint64, withExpiryCoinselect bool,
 	opts ...Option,
 ) (string, error) {
-	options := &SetleOptions{}
+	options := &SettleOptions{}
 	for _, opt := range opts {
 		if err := opt(options); err != nil {
 			return "", err
@@ -1431,7 +1431,7 @@ func (a *covenantlessArkClient) sendOffchain(
 	settleOpts ...Option,
 ) (string, error) {
 
-	options := &SetleOptions{}
+	options := &SettleOptions{}
 	for _, opt := range settleOpts {
 		if err := opt(options); err != nil {
 			return "", err
@@ -2942,7 +2942,7 @@ func buildRedeemTx(
 	return bitcointree.BuildRedeemTx(ins, outs)
 }
 
-func (a *covenantlessArkClient) handleOptions(options *SetleOptions, inputs []client.Input, notesInputs []string) ([]bitcointree.SignerSession, []string, tree.SigningType, error) {
+func (a *covenantlessArkClient) handleOptions(options *SettleOptions, inputs []client.Input, notesInputs []string) ([]bitcointree.SignerSession, []string, tree.SigningType, error) {
 	var signingType tree.SigningType
 	if options.SigningType != nil {
 		signingType = *options.SigningType
