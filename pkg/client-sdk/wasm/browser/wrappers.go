@@ -268,21 +268,27 @@ func SettleWrapper() js.Func {
 			callback = args[0]
 		}
 
-		eventsCh := make(chan client.RoundEvent)
-		defer close(eventsCh)
-		go func() {
-			for event := range eventsCh {
-				// Transform event to map before marshaling
-				eventMap := transformEventForJS(event)
-				jsonEvent, err := json.Marshal(eventMap)
-				if err != nil {
-					return
-				}
-				callback.Invoke(string(jsonEvent))
-			}
-		}()
+		opts := make([]arksdk.Option, 0)
 
-		resp, err := arkSdkClient.Settle(context.Background(), arksdk.WithEventsCh(eventsCh))
+		if !callback.IsUndefined() && !callback.IsNull() {
+			eventsCh := make(chan client.RoundEvent)
+			defer close(eventsCh)
+			go func() {
+				for event := range eventsCh {
+					// Transform event to map before marshaling
+					eventMap := transformEventForJS(event)
+					jsonEvent, err := json.Marshal(eventMap)
+					if err != nil {
+						return
+					}
+					callback.Invoke(string(jsonEvent))
+				}
+			}()
+
+			opts = append(opts, arksdk.WithEventsCh(eventsCh))
+		}
+
+		resp, err := arkSdkClient.Settle(context.Background(), opts...)
 		if err != nil {
 			return nil, err
 		}
