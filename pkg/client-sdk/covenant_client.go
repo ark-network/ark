@@ -1146,10 +1146,10 @@ func (a *covenantArkClient) handleRoundStream(
 			case client.RoundFinalizedEvent:
 				return event.(client.RoundFinalizedEvent).Txid, nil
 			case client.RoundFailedEvent:
-				return "", fmt.Errorf("round failed: %s", event.(client.RoundFailedEvent).Reason)
+				return "", fmt.Errorf("batch failed: %s", event.(client.RoundFailedEvent).Reason)
 			case client.RoundFinalizationEvent:
 				pingStop()
-				log.Info("a round finalization started")
+				log.Info("a batch finalization started")
 
 				signedForfeitTxs, signedRoundTx, err := a.handleRoundFinalization(
 					ctx, event.(client.RoundFinalizationEvent), vtxosToSign, boardingUtxos, receivers,
@@ -1159,7 +1159,7 @@ func (a *covenantArkClient) handleRoundStream(
 				}
 
 				if len(signedForfeitTxs) <= 0 && len(vtxosToSign) > 0 {
-					log.Info("no forfeit txs to sign, waiting for the next round")
+					log.Info("no forfeit txs to sign, waiting for the next batch")
 					continue
 				}
 
@@ -1169,7 +1169,7 @@ func (a *covenantArkClient) handleRoundStream(
 				}
 
 				log.Info("done.")
-				log.Info("waiting for round finalization...")
+				log.Info("waiting for batch finalization...")
 			}
 		}
 	}

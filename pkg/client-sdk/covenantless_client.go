@@ -1712,11 +1712,11 @@ func (a *covenantlessArkClient) handleRoundStream(
 				if step != roundFinalization {
 					continue
 				}
-				log.Infof("round completed %s", event.(client.RoundFinalizedEvent).Txid)
+				log.Infof("batch completed %s", event.(client.RoundFinalizedEvent).Txid)
 				return event.(client.RoundFinalizedEvent).Txid, nil
 			case client.RoundFailedEvent:
 				if event.(client.RoundFailedEvent).ID == round.ID {
-					return "", fmt.Errorf("round failed: %s", event.(client.RoundFailedEvent).Reason)
+					return "", fmt.Errorf("batch failed: %s", event.(client.RoundFailedEvent).Reason)
 				}
 				continue
 			case client.RoundSigningStartedEvent:
@@ -1724,7 +1724,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 				if step != start {
 					continue
 				}
-				log.Info("a round signing started")
+				log.Info("a batch signing started")
 				skipped, err := a.handleRoundSigningStarted(
 					ctx, signerSessions, event.(client.RoundSigningStartedEvent),
 				)
@@ -1740,7 +1740,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 					continue
 				}
 				pingStop()
-				log.Info("round combined nonces generated")
+				log.Info("batch combined nonces generated")
 				if err := a.handleRoundSigningNoncesGenerated(
 					ctx, event.(client.RoundSigningNoncesGeneratedEvent), signerSessions,
 				); err != nil {
@@ -1753,7 +1753,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 					continue
 				}
 				pingStop()
-				log.Info("a round finalization started")
+				log.Info("a batch finalization started")
 
 				signedForfeitTxs, signedRoundTx, err := a.handleRoundFinalization(
 					ctx, event.(client.RoundFinalizationEvent), vtxosToSign, boardingUtxos, receivers,
@@ -1763,7 +1763,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 				}
 
 				if len(signedForfeitTxs) <= 0 && len(vtxosToSign) > 0 {
-					log.Info("no forfeit txs to sign, waiting for the next round")
+					log.Info("no forfeit txs to sign, waiting for the next batch")
 					continue
 				}
 
@@ -1773,7 +1773,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 				}
 
 				log.Info("done.")
-				log.Info("waiting for round finalization...")
+				log.Info("waiting for batch finalization...")
 				step++
 				continue
 			}
