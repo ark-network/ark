@@ -260,8 +260,7 @@ type forfeitTxsMap struct {
 	connectors []string
 	vtxos      []domain.Vtxo
 
-	doneCh   chan struct{}
-	doneOnce sync.Once
+	doneCh chan struct{}
 }
 
 func newForfeitTxsMap(txBuilder ports.TxBuilder) *forfeitTxsMap {
@@ -271,7 +270,7 @@ func newForfeitTxsMap(txBuilder ports.TxBuilder) *forfeitTxsMap {
 		forfeitTxs: make(map[domain.VtxoKey][]string),
 		connectors: nil,
 		vtxos:      nil,
-		doneCh:     make(chan struct{}),
+		doneCh:     make(chan struct{}, 1),
 	}
 }
 
@@ -314,9 +313,7 @@ func (m *forfeitTxsMap) sign(txs []string) error {
 	}
 
 	if m.allSigned() {
-		m.doneOnce.Do(func() {
-			close(m.doneCh)
-		})
+		m.doneCh <- struct{}{}
 	}
 
 	return nil
