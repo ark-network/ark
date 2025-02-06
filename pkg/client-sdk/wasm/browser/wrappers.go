@@ -4,6 +4,7 @@
 package browser
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -255,11 +256,33 @@ func SendOffChainWrapper() js.Func {
 
 func SettleWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) != 0 {
+		if len(args) > 1 {
 			return nil, errors.New("invalid number of args")
 		}
 
-		resp, err := arkSdkClient.Settle(context.Background())
+		var callback js.Value
+		if len(args) == 1 && !args[0].IsUndefined() && !args[0].IsNull() {
+			if args[0].Type() != js.TypeFunction {
+				return nil, errors.New("callback must be a function")
+			}
+			callback = args[0]
+		}
+
+		eventsCh := make(chan client.RoundEvent)
+		defer close(eventsCh)
+		go func() {
+			for event := range eventsCh {
+				// Transform event to map before marshaling
+				eventMap := transformEventForJS(event)
+				jsonEvent, err := json.Marshal(eventMap)
+				if err != nil {
+					return
+				}
+				callback.Invoke(string(jsonEvent))
+			}
+		}()
+
+		resp, err := arkSdkClient.Settle(context.Background(), arksdk.WithEventsCh(eventsCh))
 		if err != nil {
 			return nil, err
 		}
@@ -554,4 +577,55 @@ func parseOutpoints(jsOutpoints js.Value) ([]client.Outpoint, error) {
 	}
 
 	return outpoints, nil
+}
+
+func transformEventForJS(event client.RoundEvent) map[string]interface{} {
+	switch e := event.(type) {
+	case client.RoundFinalizationEvent:
+		return map[string]interface{}{
+			"type":            "finalization",
+			"id":              e.ID,
+			"tx":              e.Tx,
+			"tree":            e.Tree,
+			"connectors":      e.Connectors,
+			"minRelayFeeRate": e.MinRelayFeeRate,
+		}
+	case client.RoundFinalizedEvent:
+		return map[string]interface{}{
+			"type": "finalized",
+			"id":   e.ID,
+			"txid": e.Txid,
+		}
+	case client.RoundFailedEvent:
+		return map[string]interface{}{
+			"type":   "failed",
+			"id":     e.ID,
+			"reason": e.Reason,
+		}
+	case client.RoundSigningStartedEvent:
+		return map[string]interface{}{
+			"type":             "signing_started",
+			"id":               e.ID,
+			"unsignedTree":     e.UnsignedTree,
+			"unsignedRoundTx":  e.UnsignedRoundTx,
+			"cosignersPubkeys": e.CosignersPubkeys,
+		}
+	case client.RoundSigningNoncesGeneratedEvent:
+		var nonceBuffer bytes.Buffer
+		if err := e.Nonces.Encode(&nonceBuffer); err != nil {
+			return map[string]interface{}{
+				"type":  "error",
+				"error": "failed to encode nonces",
+			}
+		}
+		return map[string]interface{}{
+			"type":   "signing_nonces_generated",
+			"id":     e.ID,
+			"nonces": hex.EncodeToString(nonceBuffer.Bytes()),
+		}
+	default:
+		return map[string]interface{}{
+			"type": "unknown",
+		}
+	}
 }

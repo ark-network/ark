@@ -36,17 +36,31 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-// Musig2SignOptions is only available for covenantless clients
+// SetleOptions is only available for covenantless clients
 // it allows to customize the vtxo signing process
-type Musig2SignOptions struct {
+type SetleOptions struct {
 	ExtraSignerSessions  []bitcointree.SignerSession
 	SigningType          *tree.SigningType
 	WalletSignerDisabled bool
+
+	EventsCh chan<- client.RoundEvent
+}
+
+func WithEventsCh(ch chan<- client.RoundEvent) Option {
+	return func(o interface{}) error {
+		opts, ok := o.(*SetleOptions)
+		if !ok {
+			return fmt.Errorf("invalid options type")
+		}
+
+		opts.EventsCh = ch
+		return nil
+	}
 }
 
 // WithoutWalletSigner disables the wallet signer
 func WithoutWalletSigner(o interface{}) error {
-	opts, ok := o.(*Musig2SignOptions)
+	opts, ok := o.(*SetleOptions)
 	if !ok {
 		return fmt.Errorf("invalid options type")
 	}
@@ -57,7 +71,7 @@ func WithoutWalletSigner(o interface{}) error {
 
 // WithSignAll sets the signing type to ALL instead of the default BRANCH
 func WithSignAll(o interface{}) error {
-	opts, ok := o.(*Musig2SignOptions)
+	opts, ok := o.(*SetleOptions)
 	if !ok {
 		return fmt.Errorf("invalid options type")
 	}
@@ -70,7 +84,7 @@ func WithSignAll(o interface{}) error {
 // WithExtraSigner allows to use a set of custom signer for the vtxo tree signing process
 func WithExtraSigner(signerSessions ...bitcointree.SignerSession) Option {
 	return func(o interface{}) error {
-		opts, ok := o.(*Musig2SignOptions)
+		opts, ok := o.(*SetleOptions)
 		if !ok {
 			return fmt.Errorf("invalid options type")
 		}
@@ -884,7 +898,7 @@ func (a *covenantlessArkClient) SendOffChain(
 func (a *covenantlessArkClient) RedeemNotes(ctx context.Context, notes []string, opts ...Option) (string, error) {
 	amount := uint64(0)
 
-	options := &Musig2SignOptions{}
+	options := &SetleOptions{}
 	for _, opt := range opts {
 		if err := opt(options); err != nil {
 			return "", err
@@ -939,7 +953,7 @@ func (a *covenantlessArkClient) RedeemNotes(ctx context.Context, notes []string,
 	log.Infof("payout registered with id: %s", requestID)
 
 	roundTxID, err := a.handleRoundStream(
-		ctx, requestID, nil, nil, receiversOutput, signerSessions,
+		ctx, requestID, nil, nil, receiversOutput, signerSessions, options.EventsCh,
 	)
 	if err != nil {
 		return "", err
@@ -1012,7 +1026,7 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 	addr string, amount uint64, withExpiryCoinselect bool,
 	opts ...Option,
 ) (string, error) {
-	options := &Musig2SignOptions{}
+	options := &SetleOptions{}
 	for _, opt := range opts {
 		if err := opt(options); err != nil {
 			return "", err
@@ -1131,7 +1145,7 @@ func (a *covenantlessArkClient) CollaborativeRedeem(
 	}
 
 	roundTxID, err := a.handleRoundStream(
-		ctx, requestID, selectedCoins, selectedBoardingCoins, receivers, signerSessions,
+		ctx, requestID, selectedCoins, selectedBoardingCoins, receivers, signerSessions, options.EventsCh,
 	)
 	if err != nil {
 		return "", err
@@ -1417,7 +1431,7 @@ func (a *covenantlessArkClient) sendOffchain(
 	settleOpts ...Option,
 ) (string, error) {
 
-	options := &Musig2SignOptions{}
+	options := &SetleOptions{}
 	for _, opt := range settleOpts {
 		if err := opt(options); err != nil {
 			return "", err
@@ -1581,7 +1595,7 @@ func (a *covenantlessArkClient) sendOffchain(
 	log.Infof("registered inputs and outputs with request id: %s", requestID)
 
 	roundTxID, err := a.handleRoundStream(
-		ctx, requestID, selectedCoins, selectedBoardingCoins, outputs, signerSessions,
+		ctx, requestID, selectedCoins, selectedBoardingCoins, outputs, signerSessions, options.EventsCh,
 	)
 	if err != nil {
 		return "", err
@@ -1669,6 +1683,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 	boardingUtxos []types.Utxo,
 	receivers []client.Output,
 	signerSessions []bitcointree.SignerSession,
+	replayEventsCh chan<- client.RoundEvent,
 ) (string, error) {
 	round, err := a.client.GetRound(ctx, "")
 	if err != nil {
@@ -1704,8 +1719,14 @@ func (a *covenantlessArkClient) handleRoundStream(
 		case <-ctx.Done():
 			return "", fmt.Errorf("context done %s", ctx.Err())
 		case notify := <-eventsCh:
+
 			if notify.Err != nil {
 				return "", notify.Err
+			}
+			if replayEventsCh != nil {
+				go func() {
+					replayEventsCh <- notify.Event
+				}()
 			}
 			switch event := notify.Event; event.(type) {
 			case client.RoundFinalizedEvent:
@@ -2921,7 +2942,7 @@ func buildRedeemTx(
 	return bitcointree.BuildRedeemTx(ins, outs)
 }
 
-func (a *covenantlessArkClient) handleOptions(options *Musig2SignOptions, inputs []client.Input, notesInputs []string) ([]bitcointree.SignerSession, []string, tree.SigningType, error) {
+func (a *covenantlessArkClient) handleOptions(options *SetleOptions, inputs []client.Input, notesInputs []string) ([]bitcointree.SignerSession, []string, tree.SigningType, error) {
 	var signingType tree.SigningType
 	if options.SigningType != nil {
 		signingType = *options.SigningType
