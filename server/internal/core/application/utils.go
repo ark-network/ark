@@ -313,7 +313,10 @@ func (m *forfeitTxsMap) sign(txs []string) error {
 	}
 
 	if m.allSigned() {
-		m.doneCh <- struct{}{}
+		select {
+		case m.doneCh <- struct{}{}:
+		default:
+		}
 	}
 
 	return nil
@@ -325,6 +328,7 @@ func (m *forfeitTxsMap) reset() {
 
 	m.forfeitTxs = make(map[domain.VtxoKey][]string)
 	m.connectors = nil
+	m.doneCh = make(chan struct{}, 1)
 }
 
 func (m *forfeitTxsMap) pop() ([]string, error) {
@@ -333,7 +337,7 @@ func (m *forfeitTxsMap) pop() ([]string, error) {
 		m.lock.Unlock()
 		m.reset()
 	}()
-
+	
 	txs := make([]string, 0)
 	for vtxoKey, signed := range m.forfeitTxs {
 		if len(signed) == 0 {
