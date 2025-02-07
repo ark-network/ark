@@ -707,6 +707,21 @@ func (s *covenantService) finalizeRound() {
 		return
 	}
 
+	// TODO: make this concurrent and ensure all forfeits are verified before returning error
+	for _, tx := range forfeitTxs {
+		ok, txid, err := s.builder.VerifyTapscriptPartialSigs(tx)
+		if err != nil {
+			changes = round.Fail(fmt.Errorf("failed to validate forfeit tx %s: %s", txid, err))
+			log.WithError(err).Warnf("failed to validate forfeit tx %s: %s", txid, err)
+			return
+		}
+		if !ok {
+			changes = round.Fail(fmt.Errorf("invalid signature for forfeit tx %s", txid))
+			log.Warnf("invalid signature for forfeit tx %s", txid)
+			return
+		}
+	}
+
 	log.Debugf("signing round transaction %s\n", round.Id)
 
 	boardingInputs := make([]int, 0)

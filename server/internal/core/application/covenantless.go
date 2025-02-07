@@ -417,7 +417,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 	}
 
 	// verify the tapscript signatures
-	if valid, err := s.builder.VerifyTapscriptPartialSigs(redeemTx); err != nil || !valid {
+	if valid, _, err := s.builder.VerifyTapscriptPartialSigs(redeemTx); err != nil || !valid {
 		return "", "", fmt.Errorf("invalid tx signature: %s", err)
 	}
 
@@ -1399,6 +1399,21 @@ func (s *covenantlessService) finalizeRound(notes []note.Note) {
 		changes = round.Fail(fmt.Errorf("failed to finalize round: %s", err))
 		log.WithError(err).Warn("failed to finalize round")
 		return
+	}
+
+	// TODO: make this concurrent and ensure all forfeits are verified before returning error
+	for _, tx := range forfeitTxs {
+		ok, txid, err := s.builder.VerifyTapscriptPartialSigs(tx)
+		if err != nil {
+			changes = round.Fail(fmt.Errorf("failed to validate forfeit tx %s: %s", txid, err))
+			log.WithError(err).Warnf("failed to validate forfeit tx %s: %s", txid, err)
+			return
+		}
+		if !ok {
+			changes = round.Fail(fmt.Errorf("invalid signature for forfeit tx %s", txid))
+			log.Warnf("invalid signature for forfeit tx %s", txid)
+			return
+		}
 	}
 
 	log.Debugf("signing round transaction %s\n", round.Id)
