@@ -1224,7 +1224,13 @@ func (s *service) create(mnemonic, password string, addrGap uint32) error {
 		return err
 	}
 
+	forfeitAddr, err := s.loadForfeitAddress(wallet)
+	if err != nil {
+		return err
+	}
+
 	s.serverKeyAddr = serverAddr
+	s.forfeitAddr = forfeitAddr
 	s.wallet = wallet
 
 	go s.listenToSynced()
@@ -1356,12 +1362,12 @@ func (s *service) loadServerAddress(
 		return nil, err
 	}
 
-	addrInfos, err := wallet.AddressInfo(serverKeyAddr)
+	info, err := wallet.AddressInfo(serverKeyAddr)
 	if err != nil {
 		return nil, err
 	}
 
-	managedAddr, ok := addrInfos.(waddrmgr.ManagedPubKeyAddress)
+	managedAddr, ok := info.(waddrmgr.ManagedPubKeyAddress)
 	if !ok {
 		return nil, fmt.Errorf("failed to cast address to managed pubkey address")
 	}
@@ -1399,9 +1405,9 @@ func (s *service) loadForfeitAddress(
 		}
 	}
 
-	addr, err := s.deriveNextAddress()
+	addr, err := wallet.NewAddress(lnwallet.WitnessPubKey, false, string(mainAccount))
 	if err != nil {
-		return "", fmt.Errorf("failed to derive forfeit address: %s", err)
+		return "", err
 	}
 	return addr.EncodeAddress(), nil
 }
