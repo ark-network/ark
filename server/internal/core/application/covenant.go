@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"runtime"
 	"sync"
 	"time"
 
@@ -707,19 +708,10 @@ func (s *covenantService) finalizeRound() {
 		return
 	}
 
-	// TODO: make this concurrent and ensure all forfeits are verified before returning error
-	for _, tx := range forfeitTxs {
-		ok, txid, err := s.builder.VerifyTapscriptPartialSigs(tx)
-		if err != nil {
-			changes = round.Fail(fmt.Errorf("failed to validate forfeit tx %s: %s", txid, err))
-			log.WithError(err).Warnf("failed to validate forfeit tx %s: %s", txid, err)
-			return
-		}
-		if !ok {
-			changes = round.Fail(fmt.Errorf("invalid signature for forfeit tx %s", txid))
-			log.Warnf("invalid signature for forfeit tx %s", txid)
-			return
-		}
+	if err := s.verifyForfeitTxsSigs(forfeitTxs); err != nil {
+		changes = round.Fail(err)
+		log.WithError(err).Warn("failed to validate forfeit txs")
+		return
 	}
 
 	log.Debugf("signing round transaction %s\n", round.Id)
@@ -1231,6 +1223,52 @@ func (s *covenantService) extractVtxosScripts(vtxos []domain.Vtxo) ([]string, er
 		scripts = append(scripts, script)
 	}
 	return scripts, nil
+}
+
+func (s *covenantService) verifyForfeitTxsSigs(txs []string) error {
+	nbWorkers := runtime.NumCPU()
+	jobs := make(chan string, len(txs))
+	errChan := make(chan error, 1)
+	wg := sync.WaitGroup{}
+	wg.Add(nbWorkers)
+
+	for i := 0; i < nbWorkers; i++ {
+		go func() {
+			defer wg.Done()
+
+			for tx := range jobs {
+				valid, txid, err := s.builder.VerifyTapscriptPartialSigs(tx)
+				if err != nil {
+					errChan <- fmt.Errorf("failed to validate forfeit tx %s: %s", txid, err)
+					return
+				}
+
+				if !valid {
+					errChan <- fmt.Errorf("invalid signature for forfeit tx %s", txid)
+					return
+				}
+			}
+		}()
+	}
+
+	for _, tx := range txs {
+		select {
+		case err := <-errChan:
+			return err
+		default:
+			jobs <- tx
+		}
+	}
+	close(jobs)
+	wg.Wait()
+
+	select {
+	case err := <-errChan:
+		return err
+	default:
+		close(errChan)
+		return nil
+	}
 }
 
 func (s *covenantService) saveEvents(
