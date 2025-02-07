@@ -750,6 +750,11 @@ func (s *covenantlessService) UpdateTxRequestStatus(_ context.Context, id string
 }
 
 func (s *covenantlessService) SignVtxos(ctx context.Context, forfeitTxs []string) error {
+	start := time.Now()
+	defer func() {
+		end := time.Since(start)
+		fmt.Printf("SUBMIt FORFEIT TXS TOOK: %dµs", end.Microseconds())
+	}()
 	return s.forfeitTxs.sign(forfeitTxs)
 }
 
@@ -1402,6 +1407,7 @@ func (s *covenantlessService) finalizeRound(notes []note.Note) {
 	}
 
 	// TODO: make this concurrent and ensure all forfeits are verified before returning error
+	start := time.Now()
 	for _, tx := range forfeitTxs {
 		ok, txid, err := s.builder.VerifyTapscriptPartialSigs(tx)
 		if err != nil {
@@ -1415,6 +1421,8 @@ func (s *covenantlessService) finalizeRound(notes []note.Note) {
 			return
 		}
 	}
+	end := time.Since(start)
+	fmt.Printf("FORFEIT TXS SIGS VERIFICATION TOOK %dµs\n", end.Microseconds())
 
 	log.Debugf("signing round transaction %s\n", round.Id)
 
