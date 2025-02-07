@@ -328,7 +328,6 @@ func (m *forfeitTxsMap) reset() {
 
 	m.forfeitTxs = make(map[domain.VtxoKey][]string)
 	m.connectors = nil
-	m.doneCh = make(chan struct{}, 1)
 }
 
 func (m *forfeitTxsMap) pop() ([]string, error) {
@@ -350,9 +349,6 @@ func (m *forfeitTxsMap) pop() ([]string, error) {
 }
 
 func (m *forfeitTxsMap) allSigned() bool {
-	m.lock.RLock()
-	defer m.lock.RUnlock()
-
 	for _, txs := range m.forfeitTxs {
 		if len(txs) == 0 {
 			return false
