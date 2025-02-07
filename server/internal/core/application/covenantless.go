@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -417,7 +418,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 	}
 
 	// verify the tapscript signatures
-	if valid, err := s.builder.VerifyTapscriptPartialSigs(redeemTx); err != nil || !valid {
+	if valid, _, err := s.builder.VerifyTapscriptPartialSigs(redeemTx); err != nil || !valid {
 		return "", "", fmt.Errorf("invalid tx signature: %s", err)
 	}
 
@@ -1412,6 +1413,12 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, roundEndTime time
 		return
 	}
 
+	if err := s.verifyForfeitTxsSigs(forfeitTxs); err != nil {
+		changes = round.Fail(err)
+		log.WithError(err).Warn("failed to validate forfeit txs")
+		return
+	}
+
 	log.Debugf("signing round transaction %s\n", round.Id)
 
 	boardingInputsIndexes := make([]int, 0)
@@ -1948,6 +1955,52 @@ func (s *covenantlessService) markAsRedeemed(ctx context.Context, vtxo domain.Vt
 
 	log.Debugf("vtxo %s:%d redeemed", vtxo.Txid, vtxo.VOut)
 	return nil
+}
+
+func (s *covenantlessService) verifyForfeitTxsSigs(txs []string) error {
+	nbWorkers := runtime.NumCPU()
+	jobs := make(chan string, len(txs))
+	errChan := make(chan error, 1)
+	wg := sync.WaitGroup{}
+	wg.Add(nbWorkers)
+
+	for i := 0; i < nbWorkers; i++ {
+		go func() {
+			defer wg.Done()
+
+			for tx := range jobs {
+				valid, txid, err := s.builder.VerifyTapscriptPartialSigs(tx)
+				if err != nil {
+					errChan <- fmt.Errorf("failed to validate forfeit tx %s: %s", txid, err)
+					return
+				}
+
+				if !valid {
+					errChan <- fmt.Errorf("invalid signature for forfeit tx %s", txid)
+					return
+				}
+			}
+		}()
+	}
+
+	for _, tx := range txs {
+		select {
+		case err := <-errChan:
+			return err
+		default:
+			jobs <- tx
+		}
+	}
+	close(jobs)
+	wg.Wait()
+
+	select {
+	case err := <-errChan:
+		return err
+	default:
+		close(errChan)
+		return nil
+	}
 }
 
 func findForfeitTxBitcoin(

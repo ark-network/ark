@@ -118,9 +118,8 @@ type service struct {
 	// holds the data related to the server key used in Vtxo scripts
 	serverKeyAddr waddrmgr.ManagedPubKeyAddress
 
-	// cached forfeit address
-	forfeitAddrLock sync.RWMutex
-	forfeitAddr     string
+	// cached forfeit addres
+	forfeitAddr string
 
 	isSynced bool
 	syncedCh chan struct{}
@@ -418,44 +417,18 @@ func (s *service) Unlock(_ context.Context, password string) error {
 			return fmt.Errorf("failed to start wallet: %s", err)
 		}
 
-		addrs, err := wallet.ListAddresses(string(serverKeyAccount), false)
+		serverAddr, err := s.loadServerAddress(wallet)
 		if err != nil {
 			return err
 		}
-		for info, addrs := range addrs {
-			if info.AccountName != string(serverKeyAccount) {
-				continue
-			}
 
-			for _, addr := range addrs {
-				if addr.Internal {
-					continue
-				}
-
-				splittedPath := strings.Split(addr.DerivationPath, "/")
-				last := splittedPath[len(splittedPath)-1]
-				if last == "0" {
-					decoded, err := btcutil.DecodeAddress(addr.Address, s.cfg.chainParams())
-					if err != nil {
-						return err
-					}
-
-					infos, err := wallet.AddressInfo(decoded)
-					if err != nil {
-						return err
-					}
-
-					managedPubkeyAddr, ok := infos.(waddrmgr.ManagedPubKeyAddress)
-					if !ok {
-						return fmt.Errorf("failed to cast address to managed pubkey address")
-					}
-
-					s.serverKeyAddr = managedPubkeyAddr
-					break
-				}
-			}
+		forfeitAddr, err := s.loadForfeitAddress(wallet)
+		if err != nil {
+			return err
 		}
 
+		s.serverKeyAddr = serverAddr
+		s.forfeitAddr = forfeitAddr
 		s.wallet = wallet
 
 		go s.listenToSynced()
@@ -571,63 +544,7 @@ func (s *service) GetForfeitAddress(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	s.forfeitAddrLock.RLock()
-	if s.forfeitAddr != "" {
-		addr := s.forfeitAddr
-		s.forfeitAddrLock.RUnlock()
-		return addr, nil
-	}
-	s.forfeitAddrLock.RUnlock()
-
-	addrs, err := s.wallet.ListAddresses(string(mainAccount), false)
-	if err != nil {
-		return "", err
-	}
-
-	var forfeitAddr string
-	if len(addrs) == 0 {
-		addr, err := s.deriveNextAddress()
-		if err != nil {
-			return "", err
-		}
-		forfeitAddr = addr.EncodeAddress()
-	} else {
-		for info, addrs := range addrs {
-			if info.KeyScope != p2wpkhKeyScope {
-				continue
-			}
-
-			if info.AccountName != string(mainAccount) {
-				continue
-			}
-
-			for _, addr := range addrs {
-				if addr.Internal {
-					continue
-				}
-
-				splittedPath := strings.Split(addr.DerivationPath, "/")
-				last := splittedPath[len(splittedPath)-1]
-				if last == "0" {
-					forfeitAddr = addr.Address
-					break
-				}
-			}
-			if forfeitAddr != "" {
-				break
-			}
-		}
-	}
-
-	if forfeitAddr == "" {
-		return "", fmt.Errorf("forfeit address not found")
-	}
-
-	s.forfeitAddrLock.Lock()
-	s.forfeitAddr = forfeitAddr
-	s.forfeitAddrLock.Unlock()
-
-	return forfeitAddr, nil
+	return s.forfeitAddr, nil
 }
 
 func (s *service) ListConnectorUtxos(ctx context.Context, connectorAddress string) ([]ports.TxInput, error) {
@@ -1302,10 +1219,18 @@ func (s *service) create(mnemonic, password string, addrGap uint32) error {
 		return fmt.Errorf("failed to start wallet: %s", err)
 	}
 
-	if err := s.initServerKeyAddress(wallet); err != nil {
+	serverAddr, err := s.loadServerAddress(wallet)
+	if err != nil {
 		return err
 	}
 
+	forfeitAddr, err := s.loadForfeitAddress(wallet)
+	if err != nil {
+		return err
+	}
+
+	s.serverKeyAddr = serverAddr
+	s.forfeitAddr = forfeitAddr
 	s.wallet = wallet
 
 	go s.listenToSynced()
@@ -1391,68 +1316,100 @@ func (s *service) initServerKeyAccount(wallet *btcwallet.BtcWallet) error {
 	return nil
 }
 
-// initServerKeyAddress generates the server key address if it doesn't exist
-// it also cache the address in s.serverKeyAddr field
-func (s *service) initServerKeyAddress(wallet *btcwallet.BtcWallet) error {
+func (s *service) loadServerAddress(
+	wallet *btcwallet.BtcWallet,
+) (waddrmgr.ManagedPubKeyAddress, error) {
 	addrs, err := wallet.ListAddresses(string(serverKeyAccount), false)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	if len(addrs) == 0 {
-		serverKeyAddr, err := wallet.NewAddress(lnwallet.TaprootPubkey, false, string(serverKeyAccount))
-		if err != nil {
-			return err
+	for info, addrs := range addrs {
+		if info.AccountName != string(serverKeyAccount) {
+			continue
 		}
 
-		addrInfos, err := wallet.AddressInfo(serverKeyAddr)
-		if err != nil {
-			return err
-		}
-
-		managedAddr, ok := addrInfos.(waddrmgr.ManagedPubKeyAddress)
-		if !ok {
-			return fmt.Errorf("failed to cast address to managed pubkey address")
-		}
-
-		s.serverKeyAddr = managedAddr
-	} else {
-		for info, addrs := range addrs {
-			if info.AccountName != string(serverKeyAccount) {
+		for _, addr := range addrs {
+			if addr.Internal {
 				continue
 			}
 
-			for _, addr := range addrs {
-				if addr.Internal {
-					continue
+			splittedPath := strings.Split(addr.DerivationPath, "/")
+			last := splittedPath[len(splittedPath)-1]
+			if last == "0" {
+				decoded, err := btcutil.DecodeAddress(addr.Address, s.cfg.chainParams())
+				if err != nil {
+					return nil, err
 				}
 
-				splittedPath := strings.Split(addr.DerivationPath, "/")
-				last := splittedPath[len(splittedPath)-1]
-				if last == "0" {
-					decoded, err := btcutil.DecodeAddress(addr.Address, s.cfg.chainParams())
-					if err != nil {
-						return err
-					}
-
-					infos, err := wallet.AddressInfo(decoded)
-					if err != nil {
-						return err
-					}
-
-					managedPubkeyAddr, ok := infos.(waddrmgr.ManagedPubKeyAddress)
-					if !ok {
-						return fmt.Errorf("failed to cast address to managed pubkey address")
-					}
-
-					s.serverKeyAddr = managedPubkeyAddr
-					break
+				info, err := wallet.AddressInfo(decoded)
+				if err != nil {
+					return nil, err
 				}
+
+				managedPubkeyAddr, ok := info.(waddrmgr.ManagedPubKeyAddress)
+				if !ok {
+					return nil, fmt.Errorf("failed to cast address to managed pubkey address")
+				}
+
+				return managedPubkeyAddr, nil
 			}
 		}
 	}
 
-	return nil
+	serverKeyAddr, err := wallet.NewAddress(lnwallet.TaprootPubkey, false, string(serverKeyAccount))
+	if err != nil {
+		return nil, err
+	}
+
+	info, err := wallet.AddressInfo(serverKeyAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	managedAddr, ok := info.(waddrmgr.ManagedPubKeyAddress)
+	if !ok {
+		return nil, fmt.Errorf("failed to cast address to managed pubkey address")
+	}
+
+	return managedAddr, nil
+}
+
+func (s *service) loadForfeitAddress(
+	wallet *btcwallet.BtcWallet,
+) (string, error) {
+	addrs, err := wallet.ListAddresses(string(mainAccount), false)
+	if err != nil {
+		return "", err
+	}
+
+	for info, addrs := range addrs {
+		if info.KeyScope != p2wpkhKeyScope {
+			continue
+		}
+
+		if info.AccountName != string(mainAccount) {
+			continue
+		}
+
+		for _, addr := range addrs {
+			if addr.Internal {
+				continue
+			}
+
+			splittedPath := strings.Split(addr.DerivationPath, "/")
+			last := splittedPath[len(splittedPath)-1]
+			if last == "0" {
+				return addr.Address, nil
+			}
+		}
+	}
+
+	addr, err := wallet.NewAddress(lnwallet.WitnessPubKey, false, string(mainAccount))
+	if err != nil {
+		return "", err
+	}
+	return addr.EncodeAddress(), nil
 }
 
 func (s *service) deriveNextAddress() (btcutil.Address, error) {

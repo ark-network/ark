@@ -125,14 +125,6 @@ func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, f
 			return nil, fmt.Errorf("invalid forfeit tx, expect 2 inputs, got %d", len(pset.Inputs))
 		}
 
-		valid, err := b.verifyTapscriptPartialSigs(pset)
-		if err != nil {
-			return nil, err
-		}
-		if !valid {
-			return nil, fmt.Errorf("invalid forfeit tx signature")
-		}
-
 		vtxoInput := pset.Inputs[1]
 
 		vtxoKey := domain.VtxoKey{
@@ -512,22 +504,22 @@ func (b *txBuilder) GetSweepInput(node tree.Node) (vtxoTreeExpiry *common.Relati
 
 	return vtxoTreeExpiry, sweepInput, nil
 }
-func (b *txBuilder) VerifyTapscriptPartialSigs(tx string) (bool, error) {
+func (b *txBuilder) VerifyTapscriptPartialSigs(tx string) (bool, string, error) {
 	pset, err := psetv2.NewPsetFromBase64(tx)
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
 
 	return b.verifyTapscriptPartialSigs(pset)
 }
 
-func (b *txBuilder) verifyTapscriptPartialSigs(pset *psetv2.Pset) (bool, error) {
+func (b *txBuilder) verifyTapscriptPartialSigs(pset *psetv2.Pset) (bool, string, error) {
 	utx, _ := pset.UnsignedTx()
 	txid := utx.TxHash().String()
 
 	serverPubkey, err := b.wallet.GetPubkey(context.Background())
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
 
 	for index, input := range pset.Inputs {
@@ -535,7 +527,7 @@ func (b *txBuilder) verifyTapscriptPartialSigs(pset *psetv2.Pset) (bool, error) 
 			continue
 		}
 		if input.WitnessUtxo == nil {
-			return false, fmt.Errorf("missing witness utxo for input %d, cannot verify signature", index)
+			return false, txid, fmt.Errorf("missing prevout for input %d", index)
 		}
 
 		// verify taproot leaf script
@@ -543,7 +535,7 @@ func (b *txBuilder) verifyTapscriptPartialSigs(pset *psetv2.Pset) (bool, error) 
 
 		closure, err := tree.DecodeClosure(tapLeaf.Script)
 		if err != nil {
-			return false, err
+			return false, txid, err
 		}
 
 		keys := make(map[string]bool)
@@ -564,16 +556,16 @@ func (b *txBuilder) verifyTapscriptPartialSigs(pset *psetv2.Pset) (bool, error) 
 		case *tree.ConditionMultisigClosure:
 			witness, err := tree.GetConditionWitness(input)
 			if err != nil {
-				return false, err
+				return false, txid, err
 			}
 
 			result, err := tree.ExecuteBoolScript(c.Condition, witness)
 			if err != nil {
-				return false, err
+				return false, txid, err
 			}
 
 			if !result {
-				return false, fmt.Errorf("condition not met for input %d", index)
+				return false, txid, fmt.Errorf("condition not met for input %d", index)
 			}
 
 			for _, key := range c.PubKeys {
@@ -589,11 +581,11 @@ func (b *txBuilder) verifyTapscriptPartialSigs(pset *psetv2.Pset) (bool, error) 
 
 		pkscript, err := common.P2TRScript(tapKeyFromControlBlock)
 		if err != nil {
-			return false, err
+			return false, txid, err
 		}
 
 		if !bytes.Equal(pkscript, input.WitnessUtxo.Script) {
-			return false, fmt.Errorf("invalid control block for input %d", index)
+			return false, txid, fmt.Errorf("invalid control block for input %d", index)
 		}
 
 		leafHash := taproot.NewBaseTapElementsLeaf(tapLeaf.Script).TapHash()
@@ -604,22 +596,22 @@ func (b *txBuilder) verifyTapscriptPartialSigs(pset *psetv2.Pset) (bool, error) 
 			&leafHash,
 		)
 		if err != nil {
-			return false, err
+			return false, txid, err
 		}
 
 		for _, tapScriptSig := range input.TapScriptSig {
 			sig, err := schnorr.ParseSignature(tapScriptSig.Signature)
 			if err != nil {
-				return false, err
+				return false, txid, err
 			}
 
 			pubkey, err := schnorr.ParsePubKey(tapScriptSig.PubKey)
 			if err != nil {
-				return false, err
+				return false, txid, err
 			}
 
 			if !sig.Verify(preimage, pubkey) {
-				return false, fmt.Errorf("invalid signature for tx %s", txid)
+				return false, txid, nil
 			}
 
 			keys[hex.EncodeToString(schnorr.SerializePubKey(pubkey))] = true
@@ -633,11 +625,11 @@ func (b *txBuilder) verifyTapscriptPartialSigs(pset *psetv2.Pset) (bool, error) 
 		}
 
 		if missingSigs > 0 {
-			return false, fmt.Errorf("missing %d signatures", missingSigs)
+			return false, txid, fmt.Errorf("missing %d signatures", missingSigs)
 		}
 	}
 
-	return true, nil
+	return true, txid, nil
 }
 
 func (b *txBuilder) FinalizeAndExtract(tx string) (string, error) {
