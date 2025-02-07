@@ -1,5 +1,5 @@
 # Use official Go image as base
-FROM golang:1.23.1-alpine
+FROM golang:1.23.3-alpine
 
 # Install git (needed for go install)
 RUN apk add --no-cache git

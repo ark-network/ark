@@ -325,7 +325,7 @@ func settle(page playwright.Page) (string, error) {
 	result, err := page.Evaluate(`async () => { 
         try {
             await unlock("pass");
-            return await settle();
+            return await settle((e) => console.log(JSON.parse(e)));
         } catch (err) {
             console.error("Error:", err);
             throw err;
