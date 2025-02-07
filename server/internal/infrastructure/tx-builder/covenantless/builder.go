@@ -50,21 +50,21 @@ func (b *txBuilder) GetTxID(tx string) (string, error) {
 	return ptx.UnsignedTx.TxHash().String(), nil
 }
 
-func (b *txBuilder) VerifyTapscriptPartialSigs(tx string) (bool, error) {
+func (b *txBuilder) VerifyTapscriptPartialSigs(tx string) (bool, string, error) {
 	ptx, err := psbt.NewFromRawBytes(strings.NewReader(tx), true)
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
 
 	return b.verifyTapscriptPartialSigs(ptx)
 }
 
-func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, error) {
+func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, string, error) {
 	txid := ptx.UnsignedTx.TxID()
 
 	serverPubkey, err := b.wallet.GetPubkey(context.Background())
 	if err != nil {
-		return false, err
+		return false, txid, err
 	}
 
 	for index, input := range ptx.Inputs {
@@ -73,7 +73,7 @@ func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, error) {
 		}
 
 		if input.WitnessUtxo == nil {
-			return false, fmt.Errorf("missing witness utxo for input %d, cannot verify signature", index)
+			return false, txid, fmt.Errorf("missing prevout for input %d", index)
 		}
 
 		// verify taproot leaf script
@@ -81,7 +81,7 @@ func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, error) {
 
 		closure, err := tree.DecodeClosure(tapLeaf.Script)
 		if err != nil {
-			return false, err
+			return false, txid, err
 		}
 
 		keys := make(map[string]bool)
@@ -102,16 +102,16 @@ func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, error) {
 		case *tree.ConditionMultisigClosure:
 			witness, err := bitcointree.GetConditionWitness(input)
 			if err != nil {
-				return false, err
+				return false, txid, err
 			}
 
 			result, err := tree.ExecuteBoolScript(c.Condition, witness)
 			if err != nil {
-				return false, err
+				return false, txid, err
 			}
 
 			if !result {
-				return false, fmt.Errorf("condition not met for input %d", index)
+				return false, txid, fmt.Errorf("condition not met for input %d", index)
 			}
 
 			for _, key := range c.PubKeys {
@@ -123,12 +123,12 @@ func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, error) {
 		keys[hex.EncodeToString(schnorr.SerializePubKey(serverPubkey))] = true
 
 		if len(tapLeaf.ControlBlock) == 0 {
-			return false, fmt.Errorf("missing control block for input %d", index)
+			return false, txid, fmt.Errorf("missing control block for input %d", index)
 		}
 
 		controlBlock, err := txscript.ParseControlBlock(tapLeaf.ControlBlock)
 		if err != nil {
-			return false, err
+			return false, txid, err
 		}
 
 		rootHash := controlBlock.RootHash(tapLeaf.Script)
@@ -137,31 +137,31 @@ func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, error) {
 		)
 		pkscript, err := common.P2TRScript(tapKeyFromControlBlock)
 		if err != nil {
-			return false, err
+			return false, txid, err
 		}
 
 		if !bytes.Equal(pkscript, input.WitnessUtxo.PkScript) {
-			return false, fmt.Errorf("invalid control block for input %d", index)
+			return false, txid, fmt.Errorf("invalid control block for input %d", index)
 		}
 
 		preimage, err := b.getTaprootPreimage(ptx, index, tapLeaf.Script)
 		if err != nil {
-			return false, err
+			return false, txid, err
 		}
 
 		for _, tapScriptSig := range input.TaprootScriptSpendSig {
 			sig, err := schnorr.ParseSignature(tapScriptSig.Signature)
 			if err != nil {
-				return false, err
+				return false, txid, err
 			}
 
 			pubkey, err := schnorr.ParsePubKey(tapScriptSig.XOnlyPubKey)
 			if err != nil {
-				return false, err
+				return false, txid, err
 			}
 
 			if !sig.Verify(preimage, pubkey) {
-				return false, fmt.Errorf("invalid signature for tx %s", txid)
+				return false, txid, nil
 			}
 
 			keys[hex.EncodeToString(schnorr.SerializePubKey(pubkey))] = true
@@ -175,11 +175,11 @@ func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, error) {
 		}
 
 		if missingSigs > 0 {
-			return false, fmt.Errorf("missing %d signatures", missingSigs)
+			return false, txid, fmt.Errorf("missing %d signatures", missingSigs)
 		}
 	}
 
-	return true, nil
+	return true, txid, nil
 }
 
 func (b *txBuilder) FinalizeAndExtract(tx string) (string, error) {
@@ -358,10 +358,6 @@ func (b *txBuilder) VerifyForfeitTxs(
 	for vtxoKey, f := range indexedForfeitTxs {
 		if len(f.txs) == 0 {
 			continue
-		}
-
-		if err := b.verifyTapscriptPartialSigsMap(f.txs); err != nil {
-			return nil, err
 		}
 
 		vtxo, ok := indexedVtxos[vtxoKey]
@@ -1382,52 +1378,6 @@ func (b *txBuilder) getForfeitScript() ([]byte, error) {
 	}
 
 	return txscript.PayToAddrScript(addr)
-}
-
-func (b *txBuilder) verifyTapscriptPartialSigsMap(txs map[string]*psbt.Packet) error {
-	nbWorkers := runtime.NumCPU()
-	jobs := make(chan *psbt.Packet, len(txs))
-	errChan := make(chan error, 1)
-	wg := sync.WaitGroup{}
-	wg.Add(nbWorkers)
-
-	for i := 0; i < nbWorkers; i++ {
-		go func() {
-			defer wg.Done()
-
-			for tx := range jobs {
-				valid, err := b.verifyTapscriptPartialSigs(tx)
-				if err != nil {
-					errChan <- err
-					return
-				}
-
-				if !valid {
-					errChan <- fmt.Errorf("invalid forfeit tx signature (%s)", tx.UnsignedTx.TxHash().String())
-					return
-				}
-			}
-		}()
-	}
-
-	for _, tx := range txs {
-		select {
-		case err := <-errChan:
-			return err
-		default:
-			jobs <- tx
-		}
-	}
-	close(jobs)
-	wg.Wait()
-
-	select {
-	case err := <-errChan:
-		return err
-	default:
-		close(errChan)
-		return nil
-	}
 }
 
 func parseConnectors(connectors []string) ([]*psbt.Packet, uint64, error) {
