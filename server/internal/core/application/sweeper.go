@@ -236,23 +236,19 @@ func (s *sweeper) createTask(
 		vtxosRepository := s.repoManager.Vtxos()
 		if len(sweepInputs) > 0 {
 			// build the sweep transaction with all the expired non-swept shared outputs
-			sweeptTxId, sweepTx, err := s.builder.BuildSweepTx(sweepInputs)
+			sweepTxId, sweepTx, err := s.builder.BuildSweepTx(sweepInputs)
 			if err != nil {
 				log.WithError(err).Error("error while building sweep tx")
 				return
 			}
 
 			// check if the transaction is already onchain
-			tx, err := s.wallet.GetTransaction(ctx, sweeptTxId)
-			if err != nil {
-				log.WithError(err).Error("error while getting transaction")
-				return
-			}
+			tx, _ := s.wallet.GetTransaction(ctx, sweepTxId)
 
 			txid := ""
 
 			if len(tx) > 0 {
-				txid = sweeptTxId
+				txid = sweepTxId
 			}
 
 			err = nil
