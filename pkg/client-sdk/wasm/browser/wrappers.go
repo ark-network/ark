@@ -110,7 +110,7 @@ func LockWrapper() js.Func {
 		}
 		password := args[0].String()
 
-		err := arkSdkClient.Unlock(context.Background(), password)
+		err := arkSdkClient.Lock(context.Background(), password)
 		return nil, err
 	})
 }
