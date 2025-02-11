@@ -630,7 +630,7 @@ func (s *covenantService) startFinalization(roundEndTime time.Time) {
 			s.startRound()
 			return
 		}
-		time.Sleep(time.Duration((s.roundInterval/3)-1) * time.Second)
+
 		s.finalizeRound(roundEndTime)
 	}()
 
