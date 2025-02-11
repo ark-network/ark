@@ -8,8 +8,10 @@ import (
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
-// ErrNonFinalBIP68 is returned when a transaction spending a CSV-locked output is not final.
-var ErrNonFinalBIP68 = errors.New("non-final BIP68 sequence")
+var (
+	// ErrNonFinalBIP68 is returned when a transaction spending a CSV-locked output is not final.
+	ErrNonFinalBIP68 = errors.New("non-final BIP68 sequence")
+)
 
 type WalletService interface {
 	BlockchainScanner

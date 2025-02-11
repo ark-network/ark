@@ -46,42 +46,47 @@ func (b *txBuilder) GetTxID(tx string) (string, error) {
 	return getTxid(tx)
 }
 
-func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (signedSweepTx string, err error) {
+func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (txid, signedSweepTx string, err error) {
 	sweepPset, err := sweepTransaction(
 		b.wallet,
 		inputs,
 		b.onchainNetwork().AssetID,
 	)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	sweepPsetBase64, err := sweepPset.ToBase64()
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	ctx := context.Background()
 	signedSweepPsetB64, err := b.wallet.SignTransactionTapscript(ctx, sweepPsetBase64, nil)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	signedPset, err := psetv2.NewPsetFromBase64(signedSweepPsetB64)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	if err := psetv2.FinalizeAll(signedPset); err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	extractedTx, err := psetv2.Extract(signedPset)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	return extractedTx.ToHex()
+	txhex, err := extractedTx.ToHex()
+	if err != nil {
+		return "", "", err
+	}
+
+	return extractedTx.TxHash().String(), txhex, nil
 }
 
 func (b *txBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []string, forfeitTxs []string) (map[domain.VtxoKey][]string, error) {
