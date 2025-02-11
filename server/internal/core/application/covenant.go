@@ -592,6 +592,9 @@ func (s *covenantService) start() {
 }
 
 func (s *covenantService) startRound() {
+	// reset the forfeit txs map to avoid polluting the next batch of forfeits transactions
+	s.forfeitTxs.reset()
+
 	dustAmount, err := s.wallet.GetDustAmount(context.Background())
 	if err != nil {
 		log.WithError(err).Warn("failed to retrieve dust amount")

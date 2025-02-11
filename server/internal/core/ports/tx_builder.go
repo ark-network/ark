@@ -49,7 +49,7 @@ type TxBuilder interface {
 	VerifyForfeitTxs(
 		vtxos []domain.Vtxo, connectors []string, txs []string,
 	) (valid map[domain.VtxoKey][]string, err error)
-	BuildSweepTx(inputs []SweepInput) (signedSweepTx string, err error)
+	BuildSweepTx(inputs []SweepInput) (txid string, signedSweepTx string, err error)
 	GetSweepInput(node tree.Node) (vtxoTreeExpiry *common.RelativeLocktime, sweepInput SweepInput, err error)
 	FinalizeAndExtract(tx string) (txhex string, err error)
 	VerifyTapscriptPartialSigs(tx string) (valid bool, txid string, err error)

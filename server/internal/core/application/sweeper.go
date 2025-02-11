@@ -236,14 +236,22 @@ func (s *sweeper) createTask(
 		vtxosRepository := s.repoManager.Vtxos()
 		if len(sweepInputs) > 0 {
 			// build the sweep transaction with all the expired non-swept shared outputs
-			sweepTx, err := s.builder.BuildSweepTx(sweepInputs)
+			sweepTxId, sweepTx, err := s.builder.BuildSweepTx(sweepInputs)
 			if err != nil {
 				log.WithError(err).Error("error while building sweep tx")
 				return
 			}
 
-			err = nil
+			// check if the transaction is already onchain
+			tx, _ := s.wallet.GetTransaction(ctx, sweepTxId)
+
 			txid := ""
+
+			if len(tx) > 0 {
+				txid = sweepTxId
+			}
+
+			err = nil
 			// retry until the tx is broadcasted or the error is not BIP68 final
 			for len(txid) == 0 && (err == nil || err == ports.ErrNonFinalBIP68) {
 				if err != nil {
@@ -253,11 +261,11 @@ func (s *sweeper) createTask(
 
 				txid, err = s.wallet.BroadcastTransaction(ctx, sweepTx)
 			}
-
 			if err != nil {
 				log.WithError(err).Error("error while broadcasting sweep tx")
 				return
 			}
+
 			if len(txid) > 0 {
 				log.Debugln("sweep tx broadcasted:", txid)
 
