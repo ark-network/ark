@@ -1130,7 +1130,7 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 	round := s.currentRound
 
 	roundRemainingDuration := time.Duration((s.roundInterval/3)*2-1) * time.Second
-	thirdOfRemainingDuration := time.Duration(roundRemainingDuration / 3)
+	thirdOfRemainingDuration := roundRemainingDuration / 3
 
 	var notes []note.Note
 	var roundAborted bool
