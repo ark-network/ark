@@ -248,49 +248,49 @@ func (b *txBuilder) FinalizeAndExtract(tx string) (string, error) {
 	return hex.EncodeToString(serialized.Bytes()), nil
 }
 
-func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (signedSweepTx string, err error) {
+func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (txid, signedSweepTx string, err error) {
 	sweepPsbt, err := sweepTransaction(
 		b.wallet,
 		inputs,
 	)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	sweepPsbtBase64, err := sweepPsbt.B64Encode()
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	ctx := context.Background()
 	signedSweepPsbtB64, err := b.wallet.SignTransactionTapscript(ctx, sweepPsbtBase64, nil)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	signedPsbt, err := psbt.NewFromRawBytes(strings.NewReader(signedSweepPsbtB64), true)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	for i := range inputs {
 		if err := psbt.Finalize(signedPsbt, i); err != nil {
-			return "", err
+			return "", "", err
 		}
 	}
 
 	tx, err := psbt.Extract(signedPsbt)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	buf := new(bytes.Buffer)
 
 	if err := tx.Serialize(buf); err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	return hex.EncodeToString(buf.Bytes()), nil
+	return tx.TxHash().String(), hex.EncodeToString(buf.Bytes()), nil
 }
 
 func (b *txBuilder) VerifyForfeitTxs(
