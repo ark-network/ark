@@ -2718,7 +2718,7 @@ func isSettled(vtxos []client.Vtxo, vtxo client.Vtxo) bool {
 			return isSettled(vtxos, v)
 		}
 	}
-	return false
+	return len(vtxo.SpentBy) > 0
 }
 
 func vtxosToTxsCovenantless(
