@@ -141,7 +141,7 @@ func (r *roundRepository) GetRoundsIds(ctx context.Context, startedAfter int64, 
 
 func (r *roundRepository) GetVtxoTreeWithTxid(
 	ctx context.Context, txid string,
-) (tree.VtxoTree, error) {
+) (tree.TxTree, error) {
 	round, err := r.GetRoundWithTxid(ctx, txid)
 	if err != nil {
 		return nil, err

@@ -16,7 +16,7 @@ import (
 // signer should react to this event by generating a musig2 nonce for each transaction in the tree
 type RoundSigningStarted struct {
 	Id               string
-	UnsignedVtxoTree tree.VtxoTree
+	UnsignedVtxoTree tree.TxTree
 	UnsignedRoundTx  string
 	CosignersPubkeys []string
 }

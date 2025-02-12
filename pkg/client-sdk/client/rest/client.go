@@ -34,7 +34,7 @@ type restClient struct {
 	svc            ark_service.ClientService
 	explorerSvc    explorer_service.ClientService
 	requestTimeout time.Duration
-	treeCache      *utils.Cache[tree.VtxoTree]
+	treeCache      *utils.Cache[tree.TxTree]
 }
 
 func NewClient(serverURL string) (client.TransportClient, error) {
@@ -51,7 +51,7 @@ func NewClient(serverURL string) (client.TransportClient, error) {
 	}
 	// TODO: use twice the round interval.
 	reqTimeout := 15 * time.Second
-	treeCache := utils.NewCache[tree.VtxoTree]()
+	treeCache := utils.NewCache[tree.TxTree]()
 
 	return &restClient{serverURL, svc, explorerSvc, reqTimeout, treeCache}, nil
 }
@@ -605,8 +605,8 @@ type treeFromProto struct {
 	*models.V1Tree
 }
 
-func (t treeFromProto) parse() tree.VtxoTree {
-	vtxoTree := make(tree.VtxoTree, 0, len(t.Levels))
+func (t treeFromProto) parse() tree.TxTree {
+	vtxoTree := make(tree.TxTree, 0, len(t.Levels))
 	for _, l := range t.Levels {
 		level := make([]tree.Node, 0, len(l.Nodes))
 		for _, n := range l.Nodes {

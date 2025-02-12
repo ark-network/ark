@@ -2062,7 +2062,7 @@ func (a *covenantlessArkClient) validateVtxoTree(
 func (a *covenantlessArkClient) validateReceivers(
 	ptx *psbt.Packet,
 	receivers []client.Output,
-	vtxoTree tree.VtxoTree,
+	vtxoTree tree.TxTree,
 ) error {
 	netParams := utils.ToBitcoinNetwork(a.Network)
 	for _, receiver := range receivers {
@@ -2113,7 +2113,7 @@ func (a *covenantlessArkClient) validateOnChainReceiver(
 }
 
 func (a *covenantlessArkClient) validateOffChainReceiver(
-	vtxoTree tree.VtxoTree,
+	vtxoTree tree.TxTree,
 	receiver client.Output,
 ) error {
 	found := false
@@ -2406,7 +2406,7 @@ func (a *covenantlessArkClient) coinSelectOnchain(
 func (a *covenantlessArkClient) getRedeemBranches(
 	ctx context.Context, vtxos []client.Vtxo,
 ) (map[string]*redemption.CovenantlessRedeemBranch, error) {
-	vtxoTrees := make(map[string]tree.VtxoTree, 0)
+	vtxoTrees := make(map[string]tree.TxTree, 0)
 	redeemBranches := make(map[string]*redemption.CovenantlessRedeemBranch, 0)
 
 	for i := range vtxos {

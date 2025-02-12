@@ -152,8 +152,8 @@ type treeFromProto struct {
 	*arkv1.Tree
 }
 
-func (t treeFromProto) parse() tree.VtxoTree {
-	levels := make(tree.VtxoTree, 0, len(t.GetLevels()))
+func (t treeFromProto) parse() tree.TxTree {
+	levels := make(tree.TxTree, 0, len(t.GetLevels()))
 
 	for _, level := range t.GetLevels() {
 		nodes := make([]tree.Node, 0, len(level.Nodes))

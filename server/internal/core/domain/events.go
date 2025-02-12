@@ -19,7 +19,7 @@ type RoundStarted struct {
 
 type RoundFinalizationStarted struct {
 	Id               string
-	VtxoTree         tree.VtxoTree
+	VtxoTree         tree.TxTree
 	Connectors       []string
 	ConnectorAddress string
 	RoundTx          string

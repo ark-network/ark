@@ -17,7 +17,7 @@ type RoundRepository interface {
 	AddOrUpdateRound(ctx context.Context, round Round) error
 	GetRoundWithId(ctx context.Context, id string) (*Round, error)
 	GetRoundWithTxid(ctx context.Context, txid string) (*Round, error)
-	GetVtxoTreeWithTxid(ctx context.Context, txid string) (tree.VtxoTree, error)
+	GetVtxoTreeWithTxid(ctx context.Context, txid string) (tree.TxTree, error)
 	GetExpiredRoundsTxid(ctx context.Context) ([]string, error)
 	GetRoundsIds(ctx context.Context, startedAfter int64, startedBefore int64) ([]string, error)
 	GetSweptRoundsConnectorAddress(ctx context.Context) ([]string, error)

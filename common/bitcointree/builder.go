@@ -47,13 +47,13 @@ func BuildVtxoTree(
 	feeSatsPerNode uint64,
 	sweepTapTreeRoot []byte,
 	vtxoTreeExpiry common.RelativeLocktime,
-) (tree.VtxoTree, error) {
+) (tree.TxTree, error) {
 	root, err := createRootNode(receivers, feeSatsPerNode, sweepTapTreeRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	vtxoTree := make(tree.VtxoTree, 0)
+	vtxoTree := make(tree.TxTree, 0)
 
 	ins := []*wire.OutPoint{initialInput}
 	nodes := []node{root}

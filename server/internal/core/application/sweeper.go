@@ -85,7 +85,7 @@ func (s *sweeper) removeTask(treeRootTxid string) {
 
 // schedule set up a task to be executed once at the given timestamp
 func (s *sweeper) schedule(
-	expirationTimestamp int64, roundTxid string, vtxoTree tree.VtxoTree,
+	expirationTimestamp int64, roundTxid string, vtxoTree tree.TxTree,
 ) error {
 	if len(vtxoTree) <= 0 { // skip
 		log.Debugf("skipping sweep scheduling (round tx %s), empty vtxo tree", roundTxid)
@@ -130,7 +130,7 @@ func (s *sweeper) schedule(
 // it tries to craft a sweep tx containing the onchain outputs of the given vtxo tree
 // if some parts of the tree have been broadcasted in the meantine, it will schedule the next taskes for the remaining parts of the tree
 func (s *sweeper) createTask(
-	roundTxid string, vtxoTree tree.VtxoTree,
+	roundTxid string, vtxoTree tree.TxTree,
 ) func() {
 	return func() {
 		ctx := context.Background()
@@ -316,7 +316,7 @@ func (s *sweeper) createTask(
 }
 
 func (s *sweeper) updateVtxoExpirationTime(
-	tree tree.VtxoTree,
+	tree tree.TxTree,
 	expirationTime int64,
 ) error {
 	leaves := tree.Leaves()
@@ -391,8 +391,8 @@ func (s *sweeper) createAndSendNotes(ctx context.Context, vtxosKeys []domain.Vtx
 	}
 }
 
-func computeSubTrees(vtxoTree tree.VtxoTree, inputs []ports.SweepInput) ([]tree.VtxoTree, error) {
-	subTrees := make(map[string]tree.VtxoTree, 0)
+func computeSubTrees(vtxoTree tree.TxTree, inputs []ports.SweepInput) ([]tree.TxTree, error) {
+	subTrees := make(map[string]tree.TxTree, 0)
 
 	// for each sweepable input, create a sub vtxo tree
 	// it allows to skip the part of the tree that has been broadcasted in the next task
@@ -413,7 +413,7 @@ func computeSubTrees(vtxoTree tree.VtxoTree, inputs []ports.SweepInput) ([]tree.
 	}
 
 	// filter out the sub trees, remove the ones that are included in others
-	filteredSubTrees := make([]tree.VtxoTree, 0)
+	filteredSubTrees := make([]tree.TxTree, 0)
 	for i, subTree := range subTrees {
 		notIncludedInOtherTrees := true
 
@@ -441,11 +441,11 @@ func computeSubTrees(vtxoTree tree.VtxoTree, inputs []ports.SweepInput) ([]tree.
 	return filteredSubTrees, nil
 }
 
-func computeSubTree(vtxoTree tree.VtxoTree, newRoot string) (tree.VtxoTree, error) {
+func computeSubTree(vtxoTree tree.TxTree, newRoot string) (tree.TxTree, error) {
 	for _, level := range vtxoTree {
 		for _, node := range level {
 			if node.Txid == newRoot || node.ParentTxid == newRoot {
-				newTree := make(tree.VtxoTree, 0)
+				newTree := make(tree.TxTree, 0)
 				newTree = append(newTree, []tree.Node{node})
 
 				children := vtxoTree.Children(node.Txid)
@@ -466,7 +466,7 @@ func computeSubTree(vtxoTree tree.VtxoTree, newRoot string) (tree.VtxoTree, erro
 	return nil, fmt.Errorf("failed to create subtree, new root not found")
 }
 
-func containsTree(tr0 tree.VtxoTree, tr1 tree.VtxoTree) (bool, error) {
+func containsTree(tr0 tree.TxTree, tr1 tree.TxTree) (bool, error) {
 	tr1Root, err := tr1.Root()
 	if err != nil {
 		return false, err

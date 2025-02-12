@@ -138,7 +138,7 @@ func (v vtxoKeyList) toProto() []*arkv1.Outpoint {
 	return list
 }
 
-type vtxoTree tree.VtxoTree
+type vtxoTree tree.TxTree
 
 func (t vtxoTree) toProto() *arkv1.Tree {
 	levels := make([]*arkv1.TreeLevel, 0, len(t))

@@ -25,7 +25,7 @@ type CovenantRedeemBranch struct {
 
 func NewCovenantRedeemBranch(
 	explorer explorer.Explorer,
-	vtxoTree tree.VtxoTree, vtxo client.Vtxo,
+	vtxoTree tree.TxTree, vtxo client.Vtxo,
 ) (*CovenantRedeemBranch, error) {
 	sweepClosure, locktime, err := findCovenantSweepClosure(vtxoTree)
 	if err != nil {
@@ -183,7 +183,7 @@ func (r *CovenantRedeemBranch) offchainPath() ([]*psetv2.Pset, error) {
 }
 
 func findCovenantSweepClosure(
-	vtxoTree tree.VtxoTree,
+	vtxoTree tree.TxTree,
 ) (*taproot.TapElementsLeaf, *common.RelativeLocktime, error) {
 	root, err := vtxoTree.Root()
 	if err != nil {

@@ -160,7 +160,7 @@ type Round struct {
 	StartedAt  *time.Time
 	EndedAt    *time.Time
 	Tx         string
-	Tree       tree.VtxoTree
+	Tree       tree.TxTree
 	ForfeitTxs []string
 	Connectors []string
 	Stage      RoundStage
@@ -169,7 +169,7 @@ type Round struct {
 type RoundFinalizationEvent struct {
 	ID              string
 	Tx              string
-	Tree            tree.VtxoTree
+	Tree            tree.TxTree
 	Connectors      []string
 	MinRelayFeeRate chainfee.SatPerKVByte
 }
@@ -192,7 +192,7 @@ func (e RoundFailedEvent) isRoundEvent() {}
 
 type RoundSigningStartedEvent struct {
 	ID               string
-	UnsignedTree     tree.VtxoTree
+	UnsignedTree     tree.TxTree
 	UnsignedRoundTx  string
 	CosignersPubkeys []string
 }

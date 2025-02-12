@@ -13,7 +13,7 @@ const (
 	SignBranch
 )
 
-type TreeFactory func(outpoint psetv2.InputArgs) (VtxoTree, error)
+type TreeFactory func(outpoint psetv2.InputArgs) (TxTree, error)
 
 type VtxoLeaf struct {
 	PubKey     string

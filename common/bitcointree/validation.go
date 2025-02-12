@@ -69,7 +69,7 @@ func UnspendableKey() *secp256k1.PublicKey {
 // - every control block and taproot output scripts
 // - input and output amounts
 func ValidateVtxoTree(
-	vtxoTree tree.VtxoTree, roundTx string, serverPubkey *secp256k1.PublicKey, vtxoTreeExpiry common.RelativeLocktime,
+	vtxoTree tree.TxTree, roundTx string, serverPubkey *secp256k1.PublicKey, vtxoTreeExpiry common.RelativeLocktime,
 ) error {
 	roundTransaction, err := psbt.NewFromRawBytes(strings.NewReader(roundTx), true)
 	if err != nil {
@@ -149,7 +149,7 @@ func ValidateVtxoTree(
 	return nil
 }
 
-func validateNodeTransaction(node tree.Node, tree tree.VtxoTree, tapTreeRoot []byte) error {
+func validateNodeTransaction(node tree.Node, tree tree.TxTree, tapTreeRoot []byte) error {
 	if node.Tx == "" {
 		return ErrNodeTxEmpty
 	}

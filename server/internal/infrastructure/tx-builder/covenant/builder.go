@@ -364,7 +364,7 @@ func (b *txBuilder) BuildRoundTx(
 	boardingInputs []ports.BoardingInput,
 	connectorAddresses []string,
 	_ []*tree.Musig2,
-) (roundTx string, vtxoTree tree.VtxoTree, nextConnectorAddress string, connectors []string, err error) {
+) (roundTx string, vtxoTree tree.TxTree, nextConnectorAddress string, connectors []string, err error) {
 	// The creation of the tree and the round tx are tightly coupled:
 	// - building the tree requires knowing the shared outpoint (txid:vout)
 	// - building the round tx requires knowing the shared output script and amount
@@ -708,7 +708,7 @@ func (b *txBuilder) FinalizeAndExtract(tx string) (string, error) {
 }
 
 func (b *txBuilder) FindLeaves(
-	vtxoTree tree.VtxoTree,
+	vtxoTree tree.TxTree,
 	fromtxid string,
 	fromvout uint32,
 ) ([]tree.Node, error) {

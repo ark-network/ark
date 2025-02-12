@@ -270,13 +270,13 @@ func (r *roundRepository) GetSweptRoundsConnectorAddress(ctx context.Context) ([
 	return r.querier.SelectSweptRoundsConnectorAddress(ctx)
 }
 
-func (r *roundRepository) GetVtxoTreeWithTxid(ctx context.Context, txid string) (tree.VtxoTree, error) {
+func (r *roundRepository) GetVtxoTreeWithTxid(ctx context.Context, txid string) (tree.TxTree, error) {
 	rows, err := r.querier.SelectTreeTxsWithRoundTxid(ctx, txid)
 	if err != nil {
 		return nil, err
 	}
 
-	vtxoTree := make(tree.VtxoTree, 0)
+	vtxoTree := make(tree.TxTree, 0)
 
 	for _, tx := range rows {
 		level := tx.TreeLevel

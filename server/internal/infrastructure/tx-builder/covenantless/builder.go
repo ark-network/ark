@@ -564,7 +564,7 @@ func (b *txBuilder) BuildRoundTx(
 	boardingInputs []ports.BoardingInput,
 	connectorAddresses []string,
 	musig2Data []*tree.Musig2,
-) (roundTx string, vtxoTree tree.VtxoTree, nextConnectorAddress string, connectors []string, err error) {
+) (roundTx string, vtxoTree tree.TxTree, nextConnectorAddress string, connectors []string, err error) {
 	var sharedOutputScript []byte
 	var sharedOutputAmount int64
 
@@ -710,7 +710,7 @@ func (b *txBuilder) GetSweepInput(node tree.Node) (vtxoTreeExpiry *common.Relati
 	return vtxoTreeExpiry, sweepInput, nil
 }
 
-func (b *txBuilder) FindLeaves(vtxoTree tree.VtxoTree, fromtxid string, vout uint32) ([]tree.Node, error) {
+func (b *txBuilder) FindLeaves(vtxoTree tree.TxTree, fromtxid string, vout uint32) ([]tree.Node, error) {
 	allLeaves := vtxoTree.Leaves()
 	foundLeaves := make([]tree.Node, 0)
 

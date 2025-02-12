@@ -1302,7 +1302,7 @@ func (a *covenantArkClient) validateVtxoTree(
 func (a *covenantArkClient) validateReceivers(
 	ptx *psetv2.Pset,
 	receivers []client.Output,
-	vtxoTree tree.VtxoTree,
+	vtxoTree tree.TxTree,
 ) error {
 	for _, receiver := range receivers {
 		isOnChain, onchainScript, err := utils.ParseLiquidAddress(
@@ -1352,7 +1352,7 @@ func (a *covenantArkClient) validateOnChainReceiver(
 }
 
 func (a *covenantArkClient) validateOffChainReceiver(
-	vtxoTree tree.VtxoTree,
+	vtxoTree tree.TxTree,
 	receiver client.Output,
 ) error {
 	found := false
@@ -1614,7 +1614,7 @@ func (a *covenantArkClient) coinSelectOnchain(
 func (a *covenantArkClient) getRedeemBranches(
 	ctx context.Context, vtxos []client.Vtxo,
 ) (map[string]*redemption.CovenantRedeemBranch, error) {
-	vtxoTrees := make(map[string]tree.VtxoTree, 0)
+	vtxoTrees := make(map[string]tree.TxTree, 0)
 	redeemBranches := make(map[string]*redemption.CovenantRedeemBranch, 0)
 
 	for i := range vtxos {

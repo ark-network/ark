@@ -68,7 +68,7 @@ var (
 	emptyPtx = "cHNldP8BAgQCAAAAAQQBAAEFAQABBgEDAfsEAgAAAAA="
 	emptyTx  = "0200000000000000000000"
 	txid     = "0000000000000000000000000000000000000000000000000000000000000000"
-	vtxoTree = tree.VtxoTree{
+	vtxoTree = tree.TxTree{
 		{
 			{
 				Txid:       txid,
@@ -314,7 +314,7 @@ func testStartFinalization(t *testing.T) {
 			fixtures := []struct {
 				round       *domain.Round
 				connectors  []string
-				tree        tree.VtxoTree
+				tree        tree.TxTree
 				roundTx     string
 				expectedErr string
 			}{

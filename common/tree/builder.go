@@ -323,8 +323,8 @@ func (n *node) getTx(
 }
 
 func (n *node) buildVtxoTree() TreeFactory {
-	return func(roundTxInput psetv2.InputArgs) (VtxoTree, error) {
-		vtxoTree := make(VtxoTree, 0)
+	return func(roundTxInput psetv2.InputArgs) (TxTree, error) {
+		vtxoTree := make(TxTree, 0)
 
 		_, taprootTree, err := n.getWitnessData()
 		if err != nil {

@@ -114,7 +114,7 @@ func checkSigsRoundtrip(t *testing.T) func(sigs bitcointree.TreePartialSigs) {
 }
 
 func makeCosigners(
-	keys []*btcec.PrivateKey, sharedOutAmount int64, vtxoTree tree.VtxoTree,
+	keys []*btcec.PrivateKey, sharedOutAmount int64, vtxoTree tree.TxTree,
 ) (map[string]bitcointree.SignerSession, error) {
 	signers := make(map[string]bitcointree.SignerSession)
 	for _, prvkey := range keys {
@@ -172,7 +172,7 @@ func makeAggregatedNonces(
 func makeAggregatedSignatures(
 	signers map[string]bitcointree.SignerSession, coordinator bitcointree.CoordinatorSession,
 	checkSigsRoundtrip func(bitcointree.TreePartialSigs),
-) (tree.VtxoTree, error) {
+) (tree.TxTree, error) {
 	for pk, session := range signers {
 		buf, err := hex.DecodeString(pk)
 		if err != nil {

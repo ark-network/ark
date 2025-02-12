@@ -339,7 +339,7 @@ func findSweepableOutputs(
 	walletSvc ports.WalletService,
 	txbuilder ports.TxBuilder,
 	schedulerUnit ports.TimeUnit,
-	vtxoTree tree.VtxoTree,
+	vtxoTree tree.TxTree,
 ) (map[int64][]ports.SweepInput, error) {
 	sweepableOutputs := make(map[int64][]ports.SweepInput)
 	blocktimeCache := make(map[string]int64) // txid -> blocktime / blockheight

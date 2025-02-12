@@ -82,7 +82,7 @@ func DecodeSignatures(r io.Reader) (TreePartialSigs, error) {
 }
 
 type SignerSession interface {
-	Init(scriptRoot []byte, rootSharedOutputAmount int64, vtxoTree tree.VtxoTree) error
+	Init(scriptRoot []byte, rootSharedOutputAmount int64, vtxoTree tree.TxTree) error
 	GetPublicKey() string
 	GetNonces() (TreeNonces, error) // generate tree nonces for this session
 	SetAggregatedNonces(TreeNonces) // set the aggregated nonces
@@ -94,7 +94,7 @@ type CoordinatorSession interface {
 	AddSignatures(*btcec.PublicKey, TreePartialSigs)
 	AggregateNonces() (TreeNonces, error)
 	// SignTree combines the signatures and add them to the tree's psbts
-	SignTree() (tree.VtxoTree, error)
+	SignTree() (tree.TxTree, error)
 }
 
 // AggregateKeys is a wrapper around musig2.AggregateKeys using the given scriptRoot as taproot tweak
@@ -131,7 +131,7 @@ func AggregateKeys(
 func ValidateTreeSigs(
 	scriptRoot []byte,
 	roundSharedOutputAmount int64,
-	vtxoTree tree.VtxoTree,
+	vtxoTree tree.TxTree,
 ) error {
 	prevoutFetcherFactory, err := prevOutFetcherFactory(vtxoTree, roundSharedOutputAmount, scriptRoot)
 	if err != nil {
@@ -205,7 +205,7 @@ type treeSignerSession struct {
 	prevoutFetcherFactory func(*psbt.Packet) (txscript.PrevOutputFetcher, error)
 }
 
-func (t *treeSignerSession) Init(scriptRoot []byte, rootSharedOutputAmount int64, vtxoTree tree.VtxoTree) error {
+func (t *treeSignerSession) Init(scriptRoot []byte, rootSharedOutputAmount int64, vtxoTree tree.TxTree) error {
 	prevOutFetcherFactory, err := prevOutFetcherFactory(vtxoTree, rootSharedOutputAmount, scriptRoot)
 	if err != nil {
 		return err
@@ -388,12 +388,12 @@ type treeCoordinatorSession struct {
 	sigs                  map[string]TreePartialSigs // xonly pubkey -> sigs
 	prevoutFetcherFactory func(*psbt.Packet) (txscript.PrevOutputFetcher, error)
 	txs                   [][]*psbt.Packet
-	vtxoTree              tree.VtxoTree
+	vtxoTree              tree.TxTree
 }
 
 func NewTreeCoordinatorSession(
 	roundSharedOutputAmount int64,
-	vtxoTree tree.VtxoTree,
+	vtxoTree tree.TxTree,
 	scriptRoot []byte,
 ) (CoordinatorSession, error) {
 	prevoutFetcherFactory, err := prevOutFetcherFactory(vtxoTree, roundSharedOutputAmount, scriptRoot)
@@ -491,8 +491,8 @@ func (t *treeCoordinatorSession) AggregateNonces() (TreeNonces, error) {
 
 // SignTree combines the signatures and add them to the tree's psbts
 // it returns the vtxo tree with the signed transactions set as TaprootKeySpendSig
-func (t *treeCoordinatorSession) SignTree() (tree.VtxoTree, error) {
-	signedTree := make(tree.VtxoTree, 0, len(t.txs))
+func (t *treeCoordinatorSession) SignTree() (tree.TxTree, error) {
+	signedTree := make(tree.TxTree, 0, len(t.txs))
 	for i := range t.txs {
 		signedTree = append(signedTree, make([]tree.Node, len(t.txs[i])))
 	}
@@ -592,7 +592,7 @@ func (t *treeCoordinatorSession) SignTree() (tree.VtxoTree, error) {
 }
 
 func prevOutFetcherFactory(
-	vtxoTree tree.VtxoTree,
+	vtxoTree tree.TxTree,
 	roundSharedOutputAmount int64,
 	scriptRoot []byte,
 ) (
@@ -755,7 +755,7 @@ func decodeMatrix[T readable](factory func() T, data io.Reader) ([][]T, error) {
 	return matrix, nil
 }
 
-func vtxoTreeToTx(vtxoTree tree.VtxoTree) ([][]*psbt.Packet, error) {
+func vtxoTreeToTx(vtxoTree tree.TxTree) ([][]*psbt.Packet, error) {
 	txs := make([][]*psbt.Packet, 0)
 
 	for _, level := range vtxoTree {
