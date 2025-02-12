@@ -31,6 +31,7 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcwallet/waddrmgr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/exp/slices"
@@ -1291,6 +1292,7 @@ func (a *covenantlessArkClient) sendOnchain(
 		return "", fmt.Errorf("wallet is locked")
 	}
 
+	estimator := &input.TxWeightEstimator{}
 	ptx, err := psbt.New(nil, nil, 2, 0, nil)
 	if err != nil {
 		return "", err
@@ -1334,7 +1336,7 @@ func (a *covenantlessArkClient) sendOnchain(
 		return "", err
 	}
 
-	if err := a.addInputs(ctx, updater, utxos); err != nil {
+	if err := a.addInputs(ctx, updater, utxos, estimator); err != nil {
 		return "", err
 	}
 
@@ -1357,13 +1359,30 @@ func (a *covenantlessArkClient) sendOnchain(
 		updater.Upsbt.Outputs = append(updater.Upsbt.Outputs, psbt.POutput{})
 	}
 
-	size := updater.Upsbt.UnsignedTx.SerializeSize()
+	for _, out := range ptx.UnsignedTx.TxOut {
+		addrType := txscript.GetScriptClass(out.PkScript)
+		switch addrType {
+		case txscript.PubKeyHashTy:
+			estimator.AddP2PKHOutput()
+		case txscript.ScriptHashTy:
+			estimator.AddP2SHOutput()
+		case txscript.WitnessV0PubKeyHashTy:
+			estimator.AddP2WKHOutput()
+		case txscript.WitnessV0ScriptHashTy:
+			estimator.AddP2WSHOutput()
+		case txscript.WitnessV1TaprootTy:
+			estimator.AddP2TROutput()
+		}
+	}
+
 	feeRate, err := a.explorer.GetFeeRate()
 	if err != nil {
 		return "", err
 	}
-
+	size := estimator.VSize()
+	fmt.Println("fee rate", feeRate, "size", size)
 	feeAmount := uint64(math.Ceil(float64(size)*feeRate) + 50)
+	fmt.Println("fee amount", feeAmount)
 
 	if change > feeAmount {
 		updater.Upsbt.UnsignedTx.TxOut[len(updater.Upsbt.Outputs)-1].Value = int64(change - feeAmount)
@@ -1381,7 +1400,7 @@ func (a *covenantlessArkClient) sendOnchain(
 			return "", err
 		}
 
-		if err := a.addInputs(ctx, updater, selected); err != nil {
+		if err := a.addInputs(ctx, updater, selected, estimator); err != nil {
 			return "", err
 		}
 
@@ -1402,8 +1421,24 @@ func (a *covenantlessArkClient) sendOnchain(
 				PkScript: pkscript,
 			})
 			updater.Upsbt.Outputs = append(updater.Upsbt.Outputs, psbt.POutput{})
+
+			addrType := txscript.GetScriptClass(pkscript)
+			switch addrType {
+			case txscript.PubKeyHashTy:
+				estimator.AddP2PKHOutput()
+			case txscript.ScriptHashTy:
+				estimator.AddP2SHOutput()
+			case txscript.WitnessV0PubKeyHashTy:
+				estimator.AddP2WKHOutput()
+			case txscript.WitnessV0ScriptHashTy:
+				estimator.AddP2WSHOutput()
+			case txscript.WitnessV1TaprootTy:
+				estimator.AddP2TROutput()
+			}
 		}
 	}
+
+	fmt.Println("MANNAGIA A DIOOOOOOOOOOO", estimator.VSize())
 
 	unsignedTx, _ := ptx.B64Encode()
 
@@ -1423,7 +1458,20 @@ func (a *covenantlessArkClient) sendOnchain(
 		}
 	}
 
-	return ptx.B64Encode()
+	tx, err := psbt.Extract(ptx)
+	if err != nil {
+		return "", err
+	}
+
+	var buf bytes.Buffer
+	if err := tx.Serialize(&buf); err != nil {
+		return "", err
+	}
+
+	txHex := hex.EncodeToString(buf.Bytes())
+
+	fmt.Println(txHex)
+	return a.explorer.Broadcast(txHex)
 }
 
 func (a *covenantlessArkClient) sendOffchain(
@@ -1608,6 +1656,7 @@ func (a *covenantlessArkClient) addInputs(
 	ctx context.Context,
 	updater *psbt.Updater,
 	utxos []types.Utxo,
+	estimator *input.TxWeightEstimator,
 ) error {
 	// TODO works only with single-key wallet
 	offchain, _, err := a.wallet.NewAddress(ctx, false)
@@ -1670,6 +1719,12 @@ func (a *covenantlessArkClient) addInputs(
 					LeafVersion:  txscript.BaseLeafVersion,
 				},
 			},
+		})
+
+		cb, _ := txscript.ParseControlBlock(leafProof.ControlBlock)
+		estimator.AddTapscriptInput(64, &waddrmgr.Tapscript{
+			ControlBlock:   cb,
+			RevealedScript: leafProof.Script,
 		})
 	}
 
