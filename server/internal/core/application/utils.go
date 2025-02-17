@@ -260,10 +260,20 @@ type forfeitTxsMap struct {
 	connectors     tree.TxTree
 	connectorIndex map[string]domain.Outpoint
 	vtxos          []domain.Vtxo
+
+	doneCh chan struct{}
 }
 
 func newForfeitTxsMap(txBuilder ports.TxBuilder) *forfeitTxsMap {
-	return &forfeitTxsMap{&sync.RWMutex{}, txBuilder, make(map[domain.VtxoKey]string), nil, nil, nil}
+	return &forfeitTxsMap{
+		lock:           &sync.RWMutex{},
+		builder:        txBuilder,
+		forfeitTxs:     make(map[domain.VtxoKey]string),
+		connectors:     nil,
+		connectorIndex: nil,
+		vtxos:          nil,
+		doneCh:         make(chan struct{}, 1),
+	}
 }
 
 func (m *forfeitTxsMap) init(connectors tree.TxTree, connectorIndex map[string]domain.Outpoint, requests []domain.TxRequest) {
@@ -309,6 +319,13 @@ func (m *forfeitTxsMap) sign(txs []string) error {
 		m.forfeitTxs[vtxoKey] = txs
 	}
 
+	if m.allSigned() {
+		select {
+		case m.doneCh <- struct{}{}:
+		default:
+		}
+	}
+
 	return nil
 }
 
@@ -338,6 +355,16 @@ func (m *forfeitTxsMap) pop() ([]string, error) {
 	}
 
 	return txs, nil
+}
+
+func (m *forfeitTxsMap) allSigned() bool {
+	for _, txs := range m.forfeitTxs {
+		if len(txs) == 0 {
+			return false
+		}
+	}
+
+	return true
 }
 
 // onchainOutputs iterates over all the nodes' outputs in the vtxo tree and checks their onchain state

@@ -36,7 +36,7 @@ func ComputeForfeitTxFee(
 ) (uint64, error) {
 	txWeightEstimator := &input.TxWeightEstimator{}
 
-	txWeightEstimator.AddP2PKHInput() // connector input
+	txWeightEstimator.AddTaprootKeySpendInput(txscript.SigHashDefault) // connector input
 	txWeightEstimator.AddTapscriptInput(
 		lntypes.WeightUnit(witnessSize),
 		tapscript,

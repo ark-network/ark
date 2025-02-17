@@ -198,8 +198,15 @@ func (a *grpcClient) SubmitSignedForfeitTxs(
 
 func (a *grpcClient) GetEventStream(
 	ctx context.Context, requestID string,
-) (<-chan client.RoundEventChannel, func(), error) {
+) (ch <-chan client.RoundEventChannel, closeFn func(), err error) {
 	req := &arkv1.GetEventStreamRequest{}
+	ctx, cancel := context.WithCancel(ctx)
+	defer func() {
+		if err != nil {
+			cancel()
+		}
+	}()
+
 	stream, err := a.svc.GetEventStream(ctx, req)
 	if err != nil {
 		return nil, nil, err
@@ -232,13 +239,7 @@ func (a *grpcClient) GetEventStream(
 		}
 	}()
 
-	closeFn := func() {
-		if err := stream.CloseSend(); err != nil {
-			logrus.Warnf("failed to close stream: %v", err)
-		}
-	}
-
-	return eventsCh, closeFn, nil
+	return eventsCh, cancel, nil
 }
 
 func (a *grpcClient) Ping(

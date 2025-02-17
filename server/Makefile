@@ -1,5 +1,10 @@
 .PHONY: build clean cov help intergrationtest lint run run-neutrino run-neutrino-mutinynet test vet
 
+define setup_env
+    $(eval include $(1))
+    $(eval export)
+endef
+
 ## build: build for all platforms
 build:
 	@echo "Building arkd binary..."
@@ -34,50 +39,20 @@ lint:
 ## run: run in regtest mode with bitcoind
 run: clean
 	@echo "Running arkd with Bitcoin Core in regtest mode ..."
-	@export ARK_ROUND_INTERVAL=10; \
-	export ARK_LOG_LEVEL=5; \
-	export ARK_NETWORK=regtest; \
-	export ARK_PORT=7070; \
-	export ARK_NO_TLS=true; \
-	export ARK_NO_MACAROONS=true; \
-	export ARK_TX_BUILDER_TYPE=covenantless; \
-	export ARK_BITCOIND_RPC_USER=admin1; \
-	export ARK_BITCOIND_RPC_PASS=123; \
-	export ARK_BITCOIND_RPC_HOST=localhost:18443; \
-	export ARK_BITCOIND_ZMQ_BLOCK=tcp://127.0.0.1:28332; \
-	export ARK_BITCOIND_ZMQ_TX=tcp://127.0.0.1:28333; \
-	export ARK_DATADIR=./data/regtest; \
+	$(call setup_env, envs/bitcoind.regtest.env)
+
 	go run ./cmd/arkd
 
 ## run-neutrino: run in regtest mode with neutrino
 run-neutrino: clean
 	@echo "Running arkd with Neutrino in regtest mode ..."
-	@export ARK_ROUND_INTERVAL=10; \
-	export ARK_LOG_LEVEL=5; \
-	export ARK_NETWORK=regtest; \
-	export ARK_PORT=7070; \
-	export ARK_NO_TLS=true; \
-	export ARK_NO_MACAROONS=true; \
-	export ARK_TX_BUILDER_TYPE=covenantless; \
-	export ARK_ESPLORA_URL=http://localhost:3000; \
-	export ARK_NEUTRINO_PEER=localhost:18444; \
-	export ARK_DATADIR=./data/regtest; \
-	export ARK_ALLOW_ZERO_FEES=true; \
+	$(call setup_env, envs/neutrino.regtest.env)
 	go run ./cmd/arkd
 
 ## run-neutrino-mutinynet: run in signet mode
 run-neutrino-mutinynet: clean
 	@echo "Running arkd with Neutrino in signet mode ..."
-	@export ARK_ROUND_INTERVAL=10; \
-	export ARK_LOG_LEVEL=5; \
-	export ARK_NETWORK=mutinynet; \
-	export ARK_PORT=7070; \
-	export ARK_NO_TLS=true; \
-	export ARK_NO_MACAROONS=true; \
-	export ARK_TX_BUILDER_TYPE=covenantless; \
-	export ARK_ESPLORA_URL=https://mutinynet.com/api; \
-	export ARK_NEUTRINO_PEER=45.79.52.207:38333; \
-	export ARK_DATADIR=./data/mutinynet; \
+	$(call setup_env, envs/neutrino.signet.env)
 	go run ./cmd/arkd
 
 ## test: runs unit and component tests
