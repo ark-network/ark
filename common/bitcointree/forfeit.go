@@ -51,6 +51,10 @@ func BuildForfeitTx(
 		return nil, err
 	}
 
+	if err := updater.AddInSighashType(txscript.SigHashDefault, 0); err != nil {
+		return nil, err
+	}
+
 	if err := updater.AddInSighashType(txscript.SigHashDefault, 1); err != nil {
 		return nil, err
 	}
