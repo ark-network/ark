@@ -1868,6 +1868,10 @@ func (s *covenantlessService) reactToFraud(ctx context.Context, vtxo domain.Vtxo
 		return fmt.Errorf("failed to find forfeit tx: %s", err)
 	}
 
+	if len(forfeitTx.UnsignedTx.TxIn) <= 0 {
+		return fmt.Errorf("invalid forfeit tx: %s", forfeitTx.UnsignedTx.TxHash().String())
+	}
+
 	connector := forfeitTx.UnsignedTx.TxIn[0]
 	connectorOutpoint := txOutpoint{
 		connector.PreviousOutPoint.Hash.String(),
@@ -1882,18 +1886,40 @@ func (s *covenantlessService) reactToFraud(ctx context.Context, vtxo domain.Vtxo
 	for _, node := range branch {
 		_, err := s.wallet.GetTransaction(ctx, node.Txid)
 		if err != nil {
-			// TODO sign the tx
-			// transaction not found, it means we need to broadcast it
-			txHex, err := s.builder.FinalizeAndExtract(node.Tx)
+			tx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
 			if err != nil {
-				return fmt.Errorf("failed to finalize transaction: %s", err)
+				return fmt.Errorf("failed to parse tx: %s", err)
 			}
 
-			txid, err := s.wallet.BroadcastTransaction(ctx, txHex)
+			if len(tx.Inputs[0].TaprootKeySpendSig) <= 0 {
+				return fmt.Errorf("invalid connector tx, missing signature: %s", node.Txid)
+			}
+
+			witness := wire.TxWitness{
+				tx.Inputs[0].TaprootKeySpendSig,
+			}
+
+			var serializedWitness bytes.Buffer
+			if err := psbt.WriteTxWitness(&serializedWitness, witness); err != nil {
+				return fmt.Errorf("failed to serialize witness: %s", err)
+			}
+
+			tx.Inputs[0].FinalScriptWitness = serializedWitness.Bytes()
+
+			extracted, err := psbt.Extract(tx)
+			if err != nil {
+				return fmt.Errorf("failed to extract tx: %s", err)
+			}
+
+			var buf bytes.Buffer
+			if err := extracted.Serialize(&buf); err != nil {
+				return fmt.Errorf("failed to serialize tx: %s", err)
+			}
+
+			txid, err := s.wallet.BroadcastTransaction(ctx, hex.EncodeToString(buf.Bytes()))
 			if err != nil {
 				return fmt.Errorf("failed to broadcast transaction: %s", err)
 			}
-
 			log.Debugf("broadcasted transaction %s", txid)
 		}
 	}

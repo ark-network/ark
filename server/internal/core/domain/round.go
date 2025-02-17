@@ -169,23 +169,27 @@ func (r *Round) StartFinalization(
 
 	if len(vtxosToSign) > 0 {
 		connectorsOutpoints := make([]Outpoint, 0)
-		treeRadix, err := connectors.Radix()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get connectors radix: %s", err)
+
+		leaves := connectors.Leaves()
+		if len(leaves) == 0 {
+			return nil, fmt.Errorf("no connectors found")
 		}
-		for _, n := range connectors.Leaves() {
-			for i := 0; i < treeRadix; i++ {
-				connectorsOutpoints = append(connectorsOutpoints, Outpoint{
-					Txid: n.Txid,
-					VOut: uint32(i),
-				})
-			}
+
+		for _, n := range leaves {
+			connectorsOutpoints = append(connectorsOutpoints, Outpoint{
+				Txid: n.Txid,
+				VOut: 0,
+			})
 		}
 
 		// sort lexicographically
 		sort.Slice(vtxosToSign, func(i, j int) bool {
 			return vtxosToSign[i].String() < vtxosToSign[j].String()
 		})
+
+		if len(vtxosToSign) > len(connectorsOutpoints) {
+			return nil, fmt.Errorf("more vtxos to sign than outpoints, %d > %d", len(vtxosToSign), len(connectorsOutpoints))
+		}
 
 		for i, vtxo := range vtxosToSign {
 			connectorsIndex[vtxo.String()] = connectorsOutpoints[i]

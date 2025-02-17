@@ -2068,8 +2068,8 @@ func (a *covenantlessArkClient) validateVtxoTree(
 			return tx.UnsignedTx.TxID()
 		}
 
-		if root.Txid != getTxID(roundTx) {
-			return fmt.Errorf("root txid is not the same as the round txid: %s != %s", root.Txid, getTxID(roundTx))
+		if root.ParentTxid != getTxID(roundTx) {
+			return fmt.Errorf("root's parent txid is not the same as the round txid: %s != %s", root.ParentTxid, getTxID(roundTx))
 		}
 
 		return event.Connectors.Validate(getTxID)
@@ -2218,7 +2218,7 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 					return nil, err
 				}
 				if connectorOutpoint.VOut >= uint32(len(tx.UnsignedTx.TxOut)) {
-					return nil, fmt.Errorf("connector index out of bounds: %d", connectorOutpoint.VOut)
+					return nil, fmt.Errorf("connector index out of bounds: %d >= %d", connectorOutpoint.VOut, len(tx.UnsignedTx.TxOut))
 				}
 				connector = tx.UnsignedTx.TxOut[connectorOutpoint.VOut]
 				break

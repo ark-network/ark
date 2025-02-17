@@ -436,7 +436,7 @@ func createTxTree(
 	for len(nodes) > 1 {
 		nodes, err = createUpperLevel(nodes, int64(feeSatsPerNode), tapTreeRoot, radix)
 		if err != nil {
-			return nil, fmt.Errorf("failed to vtxo tree: %w", err)
+			return nil, fmt.Errorf("failed to create tx tree: %w", err)
 		}
 	}
 
@@ -444,8 +444,12 @@ func createTxTree(
 }
 
 func createUpperLevel(nodes []node, feeAmount int64, tapTreeRoot []byte, radix int) ([]node, error) {
-	if len(nodes) <= radix {
+	if len(nodes) <= 1 {
 		return nodes, nil
+	}
+
+	if len(nodes) < radix {
+		return createUpperLevel(nodes, feeAmount, tapTreeRoot, len(nodes))
 	}
 
 	remainder := len(nodes) % radix

@@ -1317,8 +1317,8 @@ func (a *covenantArkClient) validateVtxoTree(
 			return utx.TxHash().String()
 		}
 
-		if root.Txid != getTxID(roundTx) {
-			return fmt.Errorf("root txid is not the same as the round txid: %s != %s", root.Txid, getTxID(roundTx))
+		if root.ParentTxid != getTxID(roundTx) {
+			return fmt.Errorf("root's parent txid is not the same as the round txid: %s != %s", root.ParentTxid, getTxID(roundTx))
 		}
 
 		return connectors.Validate(getTxID)
@@ -1450,7 +1450,7 @@ func (a *covenantArkClient) createAndSignForfeits(
 					return nil, err
 				}
 				if connectorOutpoint.VOut >= uint32(len(tx.Outputs)) {
-					return nil, fmt.Errorf("connector index out of bounds: %d", connectorOutpoint.VOut)
+					return nil, fmt.Errorf("connector index out of bounds: %d >= %d", connectorOutpoint.VOut, len(tx.Outputs))
 				}
 				connector = &tx.Outputs[connectorOutpoint.VOut]
 				break

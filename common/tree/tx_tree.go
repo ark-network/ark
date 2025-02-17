@@ -24,7 +24,7 @@ type TxTree [][]Node
 
 // Validate checks if the tree is coherent
 func (c TxTree) Validate(getTxID func(string) string) error {
-	for _, level := range c {
+	for _, level := range c[1:] { // exclude the root level
 		for _, node := range level {
 			if getTxID(node.Tx) != node.Txid {
 				return fmt.Errorf("node %s has txid %s, but txid is %s", node.Txid, node.Txid, getTxID(node.Tx))
@@ -118,16 +118,6 @@ func (c TxTree) Branch(leafTxid string) ([]Node, error) {
 	}
 
 	return branch, nil
-}
-
-func (c TxTree) Radix() (int, error) {
-	root, err := c.Root()
-	if err != nil {
-		return 0, err
-	}
-
-	children := c.Children(root.Txid)
-	return len(children), nil
 }
 
 func (n Node) findParent(tree TxTree) (Node, error) {
