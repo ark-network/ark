@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/ark-network/ark/common/tree"
@@ -43,7 +44,7 @@ type Round struct {
 	UnsignedTx        string
 	ForfeitTxs        []string
 	VtxoTree          tree.TxTree
-	Connectors        []string
+	Connectors        tree.TxTree
 	ConnectorAddress  string
 	DustAmount        uint64
 	Version           uint
@@ -85,7 +86,7 @@ func (r *Round) On(event RoundEvent, replayed bool) {
 	case RoundFinalizationStarted:
 		r.Stage.Code = FinalizationStage
 		r.VtxoTree = e.VtxoTree
-		r.Connectors = append([]string{}, e.Connectors...)
+		r.Connectors = e.Connectors
 		r.ConnectorAddress = e.ConnectorAddress
 		r.UnsignedTx = e.RoundTx
 	case RoundFinalized:
@@ -147,7 +148,13 @@ func (r *Round) RegisterTxRequests(txRequests []TxRequest) ([]RoundEvent, error)
 	return []RoundEvent{event}, nil
 }
 
-func (r *Round) StartFinalization(connectorAddress string, connectors []string, vtxoTree tree.TxTree, roundTx string) ([]RoundEvent, error) {
+func (r *Round) StartFinalization(
+	connectorAddress string,
+	connectors tree.TxTree,
+	vtxoTree tree.TxTree,
+	roundTx string,
+	vtxosToSign []VtxoKey,
+) ([]RoundEvent, error) {
 	if len(roundTx) <= 0 {
 		return nil, fmt.Errorf("missing unsigned round tx")
 	}
@@ -158,12 +165,40 @@ func (r *Round) StartFinalization(connectorAddress string, connectors []string, 
 		return nil, fmt.Errorf("no tx requests registered")
 	}
 
+	connectorsIndex := make(map[string]Outpoint)
+
+	if len(vtxosToSign) > 0 {
+		connectorsOutpoints := make([]Outpoint, 0)
+		treeRadix, err := connectors.Radix()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get connectors radix: %s", err)
+		}
+		for _, n := range connectors.Leaves() {
+			for i := 0; i < treeRadix; i++ {
+				connectorsOutpoints = append(connectorsOutpoints, Outpoint{
+					Txid: n.Txid,
+					VOut: uint32(i),
+				})
+			}
+		}
+
+		// sort lexicographically
+		sort.Slice(vtxosToSign, func(i, j int) bool {
+			return vtxosToSign[i].String() < vtxosToSign[j].String()
+		})
+
+		for i, vtxo := range vtxosToSign {
+			connectorsIndex[vtxo.String()] = connectorsOutpoints[i]
+		}
+	}
+
 	event := RoundFinalizationStarted{
 		Id:               r.Id,
 		VtxoTree:         vtxoTree,
 		Connectors:       connectors,
 		ConnectorAddress: connectorAddress,
 		RoundTx:          roundTx,
+		ConnectorsIndex:  connectorsIndex,
 	}
 	r.raise(event)
 

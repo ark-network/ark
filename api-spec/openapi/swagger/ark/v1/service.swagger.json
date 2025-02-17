@@ -761,14 +761,18 @@
           "$ref": "#/definitions/v1Tree"
         },
         "connectors": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
+          "$ref": "#/definitions/v1Tree"
         },
         "minRelayFeeRate": {
           "type": "string",
           "format": "int64"
+        },
+        "connectorsIndex": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/v1Outpoint"
+          },
+          "title": "vtxo outpoint encoded as string -\u003e connector outpoint"
         }
       }
     },

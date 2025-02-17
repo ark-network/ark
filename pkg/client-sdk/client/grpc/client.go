@@ -288,7 +288,7 @@ func (a *grpcClient) GetRound(
 		Tx:         round.GetRoundTx(),
 		Tree:       treeFromProto{round.GetVtxoTree()}.parse(),
 		ForfeitTxs: round.GetForfeitTxs(),
-		Connectors: round.GetConnectors(),
+		Connectors: treeFromProto{round.GetConnectors()}.parse(),
 		Stage:      client.RoundStage(int(round.GetStage())),
 	}, nil
 }
@@ -316,7 +316,7 @@ func (a *grpcClient) GetRoundByID(
 		Tx:         round.GetRoundTx(),
 		Tree:       tree,
 		ForfeitTxs: round.GetForfeitTxs(),
-		Connectors: round.GetConnectors(),
+		Connectors: treeFromProto{round.GetConnectors()}.parse(),
 		Stage:      client.RoundStage(int(round.GetStage())),
 	}, nil
 }

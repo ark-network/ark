@@ -2,6 +2,7 @@ package tree
 
 import (
 	"errors"
+	"fmt"
 )
 
 // Node is a struct embedding the transaction and the parent txid of a vtxo tree node
@@ -20,6 +21,23 @@ var (
 // TxTree is reprensented as a matrix of TreeNode struct
 // the first level of the matrix is the root of the tree
 type TxTree [][]Node
+
+// Validate checks if the tree is coherent
+func (c TxTree) Validate(getTxID func(string) string) error {
+	for _, level := range c {
+		for _, node := range level {
+			if getTxID(node.Tx) != node.Txid {
+				return fmt.Errorf("node %s has txid %s, but txid is %s", node.Txid, node.Txid, getTxID(node.Tx))
+			}
+
+			if _, err := node.findParent(c); err != nil {
+				return fmt.Errorf("node %s has no parent: %s", node.Txid, err)
+			}
+		}
+	}
+
+	return nil
+}
 
 // Root returns the root node of the vtxo tree
 func (c TxTree) Root() (Node, error) {
@@ -71,15 +89,15 @@ func (c TxTree) NumberOfNodes() int {
 	return count
 }
 
-// Branch returns the branch of the given vtxo txid from root to leaf in the order of the vtxo tree
-func (c TxTree) Branch(vtxoTxid string) ([]Node, error) {
+// Branch returns the branch of the given leaf's txid from root to leaf in the order of the vtxo tree
+func (c TxTree) Branch(leafTxid string) ([]Node, error) {
 	branch := make([]Node, 0)
 
 	leaves := c.Leaves()
 	// check if the vtxo is a leaf
 	found := false
 	for _, leaf := range leaves {
-		if leaf.Txid == vtxoTxid {
+		if leaf.Txid == leafTxid {
 			found = true
 			branch = append(branch, leaf)
 			break
@@ -100,6 +118,16 @@ func (c TxTree) Branch(vtxoTxid string) ([]Node, error) {
 	}
 
 	return branch, nil
+}
+
+func (c TxTree) Radix() (int, error) {
+	root, err := c.Root()
+	if err != nil {
+		return 0, err
+	}
+
+	children := c.Children(root.Txid)
+	return len(children), nil
 }
 
 func (n Node) findParent(tree TxTree) (Node, error) {

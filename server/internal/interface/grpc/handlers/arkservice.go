@@ -361,7 +361,7 @@ func (h *handler) GetRound(
 				RoundTx:    round.UnsignedTx,
 				VtxoTree:   vtxoTree(round.VtxoTree).toProto(),
 				ForfeitTxs: round.ForfeitTxs,
-				Connectors: round.Connectors,
+				Connectors: vtxoTree(round.Connectors).toProto(),
 				Stage:      stage(round.Stage).toProto(),
 			},
 		}, nil
@@ -380,7 +380,7 @@ func (h *handler) GetRound(
 			RoundTx:    round.UnsignedTx,
 			VtxoTree:   vtxoTree(round.VtxoTree).toProto(),
 			ForfeitTxs: round.ForfeitTxs,
-			Connectors: round.Connectors,
+			Connectors: vtxoTree(round.Connectors).toProto(),
 			Stage:      stage(round.Stage).toProto(),
 		},
 	}, nil
@@ -407,7 +407,7 @@ func (h *handler) GetRoundById(
 			RoundTx:    round.UnsignedTx,
 			VtxoTree:   vtxoTree(round.VtxoTree).toProto(),
 			ForfeitTxs: round.ForfeitTxs,
-			Connectors: round.Connectors,
+			Connectors: vtxoTree(round.Connectors).toProto(),
 			Stage:      stage(round.Stage).toProto(),
 		},
 	}, nil
@@ -504,14 +504,22 @@ func (h *handler) listenToEvents() {
 
 		switch e := event.(type) {
 		case domain.RoundFinalizationStarted:
+			connectorsIndex := make(map[string]*arkv1.Outpoint)
+			for vtxo, outpoint := range e.ConnectorsIndex {
+				connectorsIndex[vtxo] = &arkv1.Outpoint{
+					Txid: outpoint.Txid,
+					Vout: outpoint.VOut,
+				}
+			}
 			ev = &arkv1.GetEventStreamResponse{
 				Event: &arkv1.GetEventStreamResponse_RoundFinalization{
 					RoundFinalization: &arkv1.RoundFinalizationEvent{
 						Id:              e.Id,
 						RoundTx:         e.RoundTx,
 						VtxoTree:        vtxoTree(e.VtxoTree).toProto(),
-						Connectors:      e.Connectors,
+						Connectors:      vtxoTree(e.Connectors).toProto(),
 						MinRelayFeeRate: e.MinRelayFeeRate,
+						ConnectorsIndex: connectorsIndex,
 					},
 				},
 			}

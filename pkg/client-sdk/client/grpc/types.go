@@ -53,13 +53,24 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 		}, nil
 	}
 	if ee := e.GetRoundFinalization(); ee != nil {
-		tree := treeFromProto{ee.GetVtxoTree()}.parse()
+		vtxoTree := treeFromProto{ee.GetVtxoTree()}.parse()
+		connectorTree := treeFromProto{ee.GetConnectors()}.parse()
+
+		connectorsIndex := make(map[string]client.Outpoint)
+		for vtxoOutpointStr, connectorOutpoint := range ee.GetConnectorsIndex() {
+			connectorsIndex[vtxoOutpointStr] = client.Outpoint{
+				Txid: connectorOutpoint.Txid,
+				VOut: connectorOutpoint.Vout,
+			}
+		}
+
 		return client.RoundFinalizationEvent{
 			ID:              ee.GetId(),
 			Tx:              ee.GetRoundTx(),
-			Tree:            tree,
-			Connectors:      ee.GetConnectors(),
+			Tree:            vtxoTree,
+			Connectors:      connectorTree,
 			MinRelayFeeRate: chainfee.SatPerKVByte(ee.MinRelayFeeRate),
+			ConnectorsIndex: connectorsIndex,
 		}, nil
 	}
 

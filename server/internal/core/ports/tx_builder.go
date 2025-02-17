@@ -41,14 +41,15 @@ type TxBuilder interface {
 		roundTx string,
 		vtxoTree tree.TxTree,
 		connectorAddress string,
-		connectors []string,
+		connectors tree.TxTree,
 		err error,
 	)
 	// VerifyForfeitTxs verifies a list of forfeit txs against a set of VTXOs and
 	// connectors.
 	VerifyForfeitTxs(
-		vtxos []domain.Vtxo, connectors []string, txs []string,
-	) (valid map[domain.VtxoKey][]string, err error)
+		vtxos []domain.Vtxo, connectors tree.TxTree, txs []string,
+		connectorIndex map[string]domain.Outpoint,
+	) (valid map[domain.VtxoKey]string, err error)
 	BuildSweepTx(inputs []SweepInput) (txid string, signedSweepTx string, err error)
 	GetSweepInput(node tree.Node) (vtxoTreeExpiry *common.RelativeLocktime, sweepInput SweepInput, err error)
 	FinalizeAndExtract(tx string) (txhex string, err error)

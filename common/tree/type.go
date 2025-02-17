@@ -15,8 +15,8 @@ const (
 
 type TreeFactory func(outpoint psetv2.InputArgs) (TxTree, error)
 
-type VtxoLeaf struct {
-	PubKey     string
+type TxTreeLeaf struct {
+	Script     string
 	Amount     uint64
 	Musig2Data *Musig2
 }

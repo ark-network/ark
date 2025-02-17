@@ -19,7 +19,7 @@ import (
 type V1Round struct {
 
 	// connectors
-	Connectors []string `json:"connectors"`
+	Connectors *V1Tree `json:"connectors,omitempty"`
 
 	// end
 	End string `json:"end,omitempty"`
@@ -47,6 +47,10 @@ type V1Round struct {
 func (m *V1Round) Validate(formats strfmt.Registry) error {
 	var res []error
 
+	if err := m.validateConnectors(formats); err != nil {
+		res = append(res, err)
+	}
+
 	if err := m.validateStage(formats); err != nil {
 		res = append(res, err)
 	}
@@ -58,6 +62,25 @@ func (m *V1Round) Validate(formats strfmt.Registry) error {
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)
 	}
+	return nil
+}
+
+func (m *V1Round) validateConnectors(formats strfmt.Registry) error {
+	if swag.IsZero(m.Connectors) { // not required
+		return nil
+	}
+
+	if m.Connectors != nil {
+		if err := m.Connectors.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("connectors")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("connectors")
+			}
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -103,6 +126,10 @@ func (m *V1Round) validateVtxoTree(formats strfmt.Registry) error {
 func (m *V1Round) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
+	if err := m.contextValidateConnectors(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
 	if err := m.contextValidateStage(ctx, formats); err != nil {
 		res = append(res, err)
 	}
@@ -114,6 +141,27 @@ func (m *V1Round) ContextValidate(ctx context.Context, formats strfmt.Registry) 
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)
 	}
+	return nil
+}
+
+func (m *V1Round) contextValidateConnectors(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.Connectors != nil {
+
+		if swag.IsZero(m.Connectors) { // not required
+			return nil
+		}
+
+		if err := m.Connectors.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("connectors")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("connectors")
+			}
+			return err
+		}
+	}
+
 	return nil
 }
 

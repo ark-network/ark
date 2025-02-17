@@ -112,13 +112,12 @@ func AggregateKeys(
 		}
 	}
 
-	if scriptRoot == nil {
-		return nil, errors.New("nil script root")
+	opts := make([]musig2.KeyAggOption, 0)
+	if len(scriptRoot) > 0 {
+		opts = append(opts, musig2.WithTaprootKeyTweak(scriptRoot))
 	}
 
-	key, _, _, err := musig2.AggregateKeys(pubkeys, true,
-		musig2.WithTaprootKeyTweak(scriptRoot),
-	)
+	key, _, _, err := musig2.AggregateKeys(pubkeys, true, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -555,9 +554,14 @@ func (t *treeCoordinatorSession) SignTree() (tree.TxTree, error) {
 			return fmt.Errorf("wrong number of signatures for txid %s, expected %d got %d", partialTx.UnsignedTx.TxHash().String(), len(keys), len(sigs))
 		}
 
+		combineOpts := make([]musig2.CombineOption, 0)
+		if t.scriptRoot != nil {
+			combineOpts = append(combineOpts, musig2.WithTaprootTweakedCombine([32]byte(message), keys, t.scriptRoot, true))
+		}
+
 		combinedSig := musig2.CombineSigs(
 			combinedNonce, sigs,
-			musig2.WithTaprootTweakedCombine([32]byte(message), keys, t.scriptRoot, true),
+			combineOpts...,
 		)
 
 		aggregatedKey, err := AggregateKeys(keys, t.scriptRoot)

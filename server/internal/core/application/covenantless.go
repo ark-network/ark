@@ -1208,8 +1208,6 @@ func (s *covenantlessService) startFinalization() {
 	}
 	log.Debugf("round tx created for round %s", round.Id)
 
-	s.forfeitTxs.init(connectors, requests)
-
 	if len(vtxoTree) > 0 {
 		sweepClosure := tree.CSVMultisigClosure{
 			MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{s.pubkey}},
@@ -1350,13 +1348,39 @@ func (s *covenantlessService) startFinalization() {
 		vtxoTree = signedTree
 	}
 
-	if _, err := round.StartFinalization(
-		connectorAddress, connectors, vtxoTree, unsignedRoundTx,
-	); err != nil {
+	vtxoToSign := make([]domain.VtxoKey, 0)
+	for _, request := range requests {
+		for _, vtxo := range request.Inputs {
+			vtxoToSign = append(vtxoToSign, vtxo.VtxoKey)
+		}
+	}
+
+	events, err := round.StartFinalization(
+		connectorAddress, connectors, vtxoTree, unsignedRoundTx, vtxoToSign,
+	)
+	if err != nil {
 		round.Fail(fmt.Errorf("failed to start finalization: %s", err))
 		log.WithError(err).Warn("failed to start finalization")
 		return
 	}
+
+	if len(events) == 0 {
+		round.Fail(fmt.Errorf("failed to start finalization: no events returned"))
+		log.Warn("failed to start finalization: no events returned")
+		return
+	}
+	finalizationEvent := events[0]
+	if _, ok := finalizationEvent.(domain.RoundFinalizationStarted); !ok {
+		round.Fail(fmt.Errorf("failed to start finalization: invalid event type"))
+		log.Warn("failed to start finalization: invalid event type")
+		return
+	}
+
+	s.forfeitTxs.init(
+		connectors,
+		finalizationEvent.(domain.RoundFinalizationStarted).ConnectorsIndex,
+		requests,
+	)
 
 	log.Debugf("started finalization stage for round: %s", round.Id)
 }
@@ -1552,86 +1576,6 @@ func (s *covenantlessService) listenToScannerNotifications() {
 	}
 }
 
-func (s *covenantlessService) getNextConnector(
-	ctx context.Context,
-	round domain.Round,
-) (string, uint32, error) {
-	lastConnectorPtx, err := psbt.NewFromRawBytes(strings.NewReader(round.Connectors[len(round.Connectors)-1]), true)
-	if err != nil {
-		return "", 0, err
-	}
-
-	lastOutput := lastConnectorPtx.UnsignedTx.TxOut[len(lastConnectorPtx.UnsignedTx.TxOut)-1]
-	connectorAmount := lastOutput.Value
-
-	utxos, err := s.wallet.ListConnectorUtxos(ctx, round.ConnectorAddress)
-	if err != nil {
-		return "", 0, err
-	}
-	log.Debugf("found %d connector utxos, dust amount is %d", len(utxos), connectorAmount)
-
-	// if we do not find any utxos, we make sure to wait for the connector outpoint to be confirmed then we retry
-	if len(utxos) <= 0 {
-		if err := s.wallet.WaitForSync(ctx, round.Txid); err != nil {
-			return "", 0, err
-		}
-
-		utxos, err = s.wallet.ListConnectorUtxos(ctx, round.ConnectorAddress)
-		if err != nil {
-			return "", 0, err
-		}
-	}
-
-	// search for an already existing connector
-	for _, u := range utxos {
-		if u.GetValue() == uint64(connectorAmount) {
-			return u.GetTxid(), u.GetIndex(), nil
-		}
-	}
-
-	for _, u := range utxos {
-		if u.GetValue() > uint64(connectorAmount) {
-			for _, b64 := range round.Connectors {
-				ptx, err := psbt.NewFromRawBytes(strings.NewReader(b64), true)
-				if err != nil {
-					return "", 0, err
-				}
-
-				for _, i := range ptx.UnsignedTx.TxIn {
-					if i.PreviousOutPoint.Hash.String() == u.GetTxid() && i.PreviousOutPoint.Index == u.GetIndex() {
-						connectorOutpoint := txOutpoint{u.GetTxid(), u.GetIndex()}
-
-						if err := s.wallet.LockConnectorUtxos(ctx, []ports.TxOutpoint{connectorOutpoint}); err != nil {
-							return "", 0, err
-						}
-
-						// sign & broadcast the connector tx
-						signedConnectorTx, err := s.wallet.SignTransaction(ctx, b64, true)
-						if err != nil {
-							return "", 0, err
-						}
-
-						connectorTxid, err := s.wallet.BroadcastTransaction(ctx, signedConnectorTx)
-						if err != nil {
-							return "", 0, fmt.Errorf("failed to broadcast connector tx: %s", err)
-						}
-						log.Debugf("broadcasted connector tx %s", connectorTxid)
-
-						// wait for the connector tx to be in the mempool
-						if err := s.wallet.WaitForSync(ctx, connectorTxid); err != nil {
-							return "", 0, err
-						}
-
-						return connectorTxid, 0, nil
-					}
-				}
-			}
-		}
-	}
-
-	return "", 0, fmt.Errorf("no connector utxos found")
-}
-
 func (s *covenantlessService) updateVtxoSet(round *domain.Round) {
 	// Update the vtxo set only after a round is finalized.
 	if !round.IsEnded() {
@@ -1692,11 +1636,13 @@ func (s *covenantlessService) propagateEvents(round *domain.Round) {
 	switch e := lastEvent.(type) {
 	case domain.RoundFinalizationStarted:
 		ev := domain.RoundFinalizationStarted{
-			Id:              e.Id,
-			VtxoTree:        e.VtxoTree,
-			Connectors:      e.Connectors,
-			RoundTx:         e.RoundTx,
-			MinRelayFeeRate: int64(s.wallet.MinRelayFeeRate(context.Background())),
+			Id:               e.Id,
+			VtxoTree:         e.VtxoTree,
+			Connectors:       e.Connectors,
+			RoundTx:          e.RoundTx,
+			MinRelayFeeRate:  int64(s.wallet.MinRelayFeeRate(context.Background())),
+			ConnectorAddress: e.ConnectorAddress,
+			ConnectorsIndex:  e.ConnectorsIndex,
 		}
 		s.eventsCh <- ev
 	case domain.RoundFinalized, domain.RoundFailed:
@@ -1905,23 +1851,52 @@ func (s *covenantlessService) reactToFraud(ctx context.Context, vtxo domain.Vtxo
 		return nil
 	}
 
-	connectorTxid, connectorVout, err := s.getNextConnector(ctx, *round)
-	if err != nil {
-		return fmt.Errorf("failed to get next connector: %s", err)
-	}
-
-	log.Debugf("found next connector %s:%d", connectorTxid, connectorVout)
-
-	forfeitTx, err := findForfeitTxBitcoin(round.ForfeitTxs, connectorTxid, connectorVout, vtxo.VtxoKey)
+	// Find the forfeit tx of the VTXO
+	forfeitTx, err := findForfeitTxBitcoin(round.ForfeitTxs, vtxo.VtxoKey)
 	if err != nil {
 		return fmt.Errorf("failed to find forfeit tx: %s", err)
 	}
 
-	if err := s.wallet.LockConnectorUtxos(ctx, []ports.TxOutpoint{txOutpoint{connectorTxid, connectorVout}}); err != nil {
+	connector := forfeitTx.UnsignedTx.TxIn[0]
+	connectorOutpoint := txOutpoint{
+		connector.PreviousOutPoint.Hash.String(),
+		connector.PreviousOutPoint.Index,
+	}
+
+	branch, err := round.Connectors.Branch(connectorOutpoint.txid)
+	if err != nil {
+		return fmt.Errorf("failed to get branch of connector: %s", err)
+	}
+
+	for _, node := range branch {
+		_, err := s.wallet.GetTransaction(ctx, node.Txid)
+		if err != nil {
+			// TODO sign the tx
+			// transaction not found, it means we need to broadcast it
+			txHex, err := s.builder.FinalizeAndExtract(node.Tx)
+			if err != nil {
+				return fmt.Errorf("failed to finalize transaction: %s", err)
+			}
+
+			txid, err := s.wallet.BroadcastTransaction(ctx, txHex)
+			if err != nil {
+				return fmt.Errorf("failed to broadcast transaction: %s", err)
+			}
+
+			log.Debugf("broadcasted transaction %s", txid)
+		}
+	}
+
+	if err := s.wallet.LockConnectorUtxos(ctx, []ports.TxOutpoint{connectorOutpoint}); err != nil {
 		return fmt.Errorf("failed to lock connector utxos: %s", err)
 	}
 
-	signedForfeitTx, err := s.wallet.SignTransactionTapscript(ctx, forfeitTx, nil)
+	forfeitTxB64, err := forfeitTx.B64Encode()
+	if err != nil {
+		return fmt.Errorf("failed to encode forfeit tx: %s", err)
+	}
+
+	signedForfeitTx, err := s.wallet.SignTransactionTapscript(ctx, forfeitTxB64, nil)
 	if err != nil {
 		return fmt.Errorf("failed to sign forfeit tx: %s", err)
 	}
@@ -1996,26 +1971,23 @@ func (s *covenantlessService) verifyForfeitTxsSigs(txs []string) error {
 }
 
 func findForfeitTxBitcoin(
-	forfeits []string, connectorTxid string, connectorVout uint32, vtxo domain.VtxoKey,
-) (string, error) {
+	forfeits []string, vtxo domain.VtxoKey,
+) (*psbt.Packet, error) {
 	for _, forfeit := range forfeits {
 		forfeitTx, err := psbt.NewFromRawBytes(strings.NewReader(forfeit), true)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
-		connector := forfeitTx.UnsignedTx.TxIn[0]
 		vtxoInput := forfeitTx.UnsignedTx.TxIn[1]
 
-		if connector.PreviousOutPoint.Hash.String() == connectorTxid &&
-			connector.PreviousOutPoint.Index == connectorVout &&
-			vtxoInput.PreviousOutPoint.Hash.String() == vtxo.Txid &&
+		if vtxoInput.PreviousOutPoint.Hash.String() == vtxo.Txid &&
 			vtxoInput.PreviousOutPoint.Index == vtxo.VOut {
-			return forfeit, nil
+			return forfeitTx, nil
 		}
 	}
 
-	return "", fmt.Errorf("forfeit tx not found")
+	return nil, fmt.Errorf("forfeit tx not found")
 }
 
 // musigSigningSession holds the state of ephemeral nonces and signatures in order to coordinate the signing of the tree

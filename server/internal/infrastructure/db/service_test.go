@@ -26,49 +26,72 @@ const (
 	pubkey2  = "33ffb3dee353b1a9ebe4ced64b946238d0a4ac364f275d771da6ad2445d07ae0"
 )
 
-var vtxoTree = [][]tree.Node{
-	{
+var (
+	vtxoTree = [][]tree.Node{
 		{
-			Txid:       randomString(32),
-			Tx:         emptyPtx,
-			ParentTxid: randomString(32),
-		},
-	},
-	{
-		{
-			Txid:       randomString(32),
-			Tx:         emptyPtx,
-			ParentTxid: randomString(32),
+			{
+				Txid:       randomString(32),
+				Tx:         emptyPtx,
+				ParentTxid: randomString(32),
+			},
 		},
 		{
-			Txid:       randomString(32),
-			Tx:         emptyPtx,
-			ParentTxid: randomString(32),
-		},
-	},
-	{
-		{
-			Txid:       randomString(32),
-			Tx:         emptyPtx,
-			ParentTxid: randomString(32),
-		},
-		{
-			Txid:       randomString(32),
-			Tx:         emptyPtx,
-			ParentTxid: randomString(32),
+			{
+				Txid:       randomString(32),
+				Tx:         emptyPtx,
+				ParentTxid: randomString(32),
+			},
+			{
+				Txid:       randomString(32),
+				Tx:         emptyPtx,
+				ParentTxid: randomString(32),
+			},
 		},
 		{
-			Txid:       randomString(32),
-			Tx:         emptyPtx,
-			ParentTxid: randomString(32),
+			{
+				Txid:       randomString(32),
+				Tx:         emptyPtx,
+				ParentTxid: randomString(32),
+			},
+			{
+				Txid:       randomString(32),
+				Tx:         emptyPtx,
+				ParentTxid: randomString(32),
+			},
+			{
+				Txid:       randomString(32),
+				Tx:         emptyPtx,
+				ParentTxid: randomString(32),
+			},
+			{
+				Txid:       randomString(32),
+				Tx:         emptyPtx,
+				ParentTxid: randomString(32),
+			},
+		},
+	}
+	connectorsTree = [][]tree.Node{
+		{
+			{
+				Txid:       randomString(32),
+				Tx:         emptyPtx,
+				ParentTxid: randomString(32),
+			},
 		},
 		{
-			Txid:       randomString(32),
-			Tx:         emptyPtx,
-			ParentTxid: randomString(32),
+			{
+				Txid:       randomString(32),
+				Tx:         emptyPtx,
+				ParentTxid: randomString(32),
+			},
+			{
+				Txid:       randomString(32),
+				Tx:         emptyPtx,
+				ParentTxid: randomString(32),
+			},
 		},
-	},
-}
+	}
+)
 
 func TestMain(m *testing.M) {
 	m.Run()
@@ -150,7 +173,7 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 					domain.RoundFinalizationStarted{
 						Id:         "1ea610ff-bf3e-4068-9bfd-b6c3f553467e",
 						VtxoTree:   vtxoTree,
-						Connectors: []string{emptyPtx, emptyPtx},
+						Connectors: connectorsTree,
 						RoundTx:    emptyTx,
 					},
 				},
@@ -172,7 +195,7 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 					domain.RoundFinalizationStarted{
 						Id:         "7578231e-428d-45ae-aaa4-e62c77ad5cec",
 						VtxoTree:   vtxoTree,
-						Connectors: []string{emptyPtx, emptyPtx},
+						Connectors: connectorsTree,
 						RoundTx:    emptyTx,
 					},
 					domain.RoundFinalized{
@@ -290,7 +313,7 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 			domain.RoundFinalizationStarted{
 				Id:         roundId,
 				VtxoTree:   vtxoTree,
-				Connectors: []string{emptyPtx, emptyPtx},
+				Connectors: connectorsTree,
 				RoundTx:    emptyTx,
 			},
 		}
@@ -622,13 +645,7 @@ func roundsMatch(expected, got domain.Round) assert.Comparison {
 		}
 
 		if len(expected.Connectors) > 0 {
-			expectedConnectors := sortStrings(expected.Connectors)
-			gotConnectors := sortStrings(got.Connectors)
-
-			sort.Sort(expectedConnectors)
-			sort.Sort(gotConnectors)
-
-			if !reflect.DeepEqual(expectedConnectors, gotConnectors) {
+			if !reflect.DeepEqual(expected.Connectors, got.Connectors) {
 				return false
 			}
 		}

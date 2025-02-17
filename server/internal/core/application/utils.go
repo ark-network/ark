@@ -150,7 +150,7 @@ func (m *txRequestsQueue) update(request domain.TxRequest, musig2Data *tree.Musi
 
 	r, ok := m.requests[request.Id]
 	if !ok {
-		return fmt.Errorf("tx request %s not found", request.Id)
+		return errTxRequestNotFound{request.Id}
 	}
 
 	// sum inputs = vtxos + boarding utxos + notes
@@ -256,16 +256,17 @@ type forfeitTxsMap struct {
 	lock    *sync.RWMutex
 	builder ports.TxBuilder
 
-	forfeitTxs map[domain.VtxoKey][]string
-	connectors []string
-	vtxos      []domain.Vtxo
+	forfeitTxs     map[domain.VtxoKey]string
+	connectors     tree.TxTree
+	connectorIndex map[string]domain.Outpoint
+	vtxos          []domain.Vtxo
 }
 
 func newForfeitTxsMap(txBuilder ports.TxBuilder) *forfeitTxsMap {
-	return &forfeitTxsMap{&sync.RWMutex{}, txBuilder, make(map[domain.VtxoKey][]string), nil, nil}
+	return &forfeitTxsMap{&sync.RWMutex{}, txBuilder, make(map[domain.VtxoKey]string), nil, nil, nil}
 }
 
-func (m *forfeitTxsMap) init(connectors []string, requests []domain.TxRequest) {
+func (m *forfeitTxsMap) init(connectors tree.TxTree, connectorIndex map[string]domain.Outpoint, requests []domain.TxRequest) {
 	vtxosToSign := make([]domain.Vtxo, 0)
 	for _, request := range requests {
 		vtxosToSign = append(vtxosToSign, request.Inputs...)
@@ -276,8 +277,10 @@ func (m *forfeitTxsMap) init(connectors []string, requests []domain.TxRequest) {
 
 	m.vtxos = vtxosToSign
 	m.connectors = connectors
+	m.connectorIndex = connectorIndex
+
 	for _, vtxo := range vtxosToSign {
-		m.forfeitTxs[vtxo.VtxoKey] = make([]string, 0)
+		m.forfeitTxs[vtxo.VtxoKey] = ""
 	}
 }
 
@@ -291,7 +294,7 @@ func (m *forfeitTxsMap) sign(txs []string) error {
 	}
 
 	// verify the txs are valid
-	validTxs, err := m.builder.VerifyForfeitTxs(m.vtxos, m.connectors, txs)
+	validTxs, err := m.builder.VerifyForfeitTxs(m.vtxos, m.connectors, txs, m.connectorIndex)
 	if err != nil {
 		return err
 	}
@@ -300,6 +303,9 @@ func (m *forfeitTxsMap) sign(txs []string) error {
 	defer m.lock.Unlock()
 
 	for vtxoKey, txs := range validTxs {
+		if _, ok := m.forfeitTxs[vtxoKey]; !ok {
+			return fmt.Errorf("unexpected forfeit tx, vtxo %s is not in the batch", vtxoKey)
+		}
 		m.forfeitTxs[vtxoKey] = txs
 	}
 
@@ -310,8 +316,10 @@ func (m *forfeitTxsMap) reset() {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	m.forfeitTxs = make(map[domain.VtxoKey][]string)
+	m.forfeitTxs = make(map[domain.VtxoKey]string)
 	m.connectors = nil
+	m.connectorIndex = nil
+	m.vtxos = nil
 }
 
 func (m *forfeitTxsMap) pop() ([]string, error) {
@@ -322,11 +330,11 @@ func (m *forfeitTxsMap) pop() ([]string, error) {
 	}()
 
 	txs := make([]string, 0)
-	for vtxoKey, signed := range m.forfeitTxs {
-		if len(signed) == 0 {
-			return nil, fmt.Errorf("missing forfeit txs for vtxo %s", vtxoKey)
+	for vtxo, forfeit := range m.forfeitTxs {
+		if len(forfeit) == 0 {
+			return nil, fmt.Errorf("missing forfeit tx for vtxo %s", vtxo)
 		}
-		txs = append(txs, signed...)
+		txs = append(txs, forfeit)
 	}
 
 	return txs, nil

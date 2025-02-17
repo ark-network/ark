@@ -20,10 +20,11 @@ type RoundStarted struct {
 type RoundFinalizationStarted struct {
 	Id               string
 	VtxoTree         tree.TxTree
-	Connectors       []string
+	Connectors       tree.TxTree
 	ConnectorAddress string
 	RoundTx          string
 	MinRelayFeeRate  int64
+	ConnectorsIndex  map[string]Outpoint
 }
 
 type RoundFinalized struct {

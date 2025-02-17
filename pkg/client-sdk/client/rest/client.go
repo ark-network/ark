@@ -331,7 +331,8 @@ func (c *restClient) GetEventStream(
 					}
 				case resp.Result.RoundFinalization != nil:
 					e := resp.Result.RoundFinalization
-					tree := treeFromProto{e.VtxoTree}.parse()
+					vtxoTree := treeFromProto{e.VtxoTree}.parse()
+					connectorTree := treeFromProto{e.Connectors}.parse()
 
 					minRelayFeeRate, err := strconv.Atoi(e.MinRelayFeeRate)
 					if err != nil {
@@ -339,12 +340,21 @@ func (c *restClient) GetEventStream(
 						break
 					}
 
+					connectorsIndex := make(map[string]client.Outpoint)
+					for vtxoOutpointStr, connectorOutpoint := range e.ConnectorsIndex {
+						connectorsIndex[vtxoOutpointStr] = client.Outpoint{
+							Txid: connectorOutpoint.Txid,
+							VOut: uint32(connectorOutpoint.Vout),
+						}
+					}
+
 					event = client.RoundFinalizationEvent{
 						ID:              e.ID,
 						Tx:              e.RoundTx,
-						Tree:            tree,
-						Connectors:      e.Connectors,
+						Tree:            vtxoTree,
+						Connectors:      connectorTree,
 						MinRelayFeeRate: chainfee.SatPerKVByte(minRelayFeeRate),
+						ConnectorsIndex: connectorsIndex,
 					}
 				case resp.Result.RoundFinalized != nil:
 					e := resp.Result.RoundFinalized
@@ -443,7 +453,7 @@ func (a *restClient) GetRound(
 		Tx:         resp.Payload.Round.RoundTx,
 		Tree:       treeFromProto{resp.Payload.Round.VtxoTree}.parse(),
 		ForfeitTxs: resp.Payload.Round.ForfeitTxs,
-		Connectors: resp.Payload.Round.Connectors,
+		Connectors: treeFromProto{resp.Payload.Round.Connectors}.parse(),
 		Stage:      toRoundStage(*resp.Payload.Round.Stage),
 	}, nil
 }
@@ -482,7 +492,7 @@ func (a *restClient) GetRoundByID(
 		Tx:         resp.Payload.Round.RoundTx,
 		Tree:       treeFromProto{resp.Payload.Round.VtxoTree}.parse(),
 		ForfeitTxs: resp.Payload.Round.ForfeitTxs,
-		Connectors: resp.Payload.Round.Connectors,
+		Connectors: treeFromProto{resp.Payload.Round.Connectors}.parse(),
 		Stage:      toRoundStage(*resp.Payload.Round.Stage),
 	}, nil
 }

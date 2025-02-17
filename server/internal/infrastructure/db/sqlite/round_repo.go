@@ -101,17 +101,35 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 				}
 			}
 
-			for pos, tx := range round.Connectors {
-				if err := querierWithTx.UpsertTransaction(
-					ctx,
-					queries.UpsertTransactionParams{
-						Tx:       tx,
-						RoundID:  round.Id,
-						Type:     "connector",
-						Position: int64(pos),
-					},
-				); err != nil {
-					return fmt.Errorf("failed to upsert connector transaction: %w", err)
+			for level, levelTxs := range round.Connectors {
+				for pos, tx := range levelTxs {
+					if err := querierWithTx.UpsertTransaction(
+						ctx,
+						queries.UpsertTransactionParams{
+							Tx:       tx.Tx,
+							RoundID:  round.Id,
+							Type:     "connector",
+							Position: int64(pos),
+							Txid: sql.NullString{
+								String: tx.Txid,
+								Valid:  true,
+							},
+							TreeLevel: sql.NullInt64{
+								Int64: int64(level),
+								Valid: true,
+							},
+							ParentTxid: sql.NullString{
+								String: tx.ParentTxid,
+								Valid:  true,
+							},
+							IsLeaf: sql.NullBool{
+								Bool:  tx.Leaf,
+								Valid: true,
+							},
+						},
+					); err != nil {
+						return fmt.Errorf("failed to upsert tree transaction: %w", err)
+					}
 				}
 			}
 
@@ -410,8 +428,17 @@ func rowsToRounds(rows []combinedRow) ([]*domain.Round, error) {
 				round.ForfeitTxs = extendArray(round.ForfeitTxs, int(position.Int64))
 				round.ForfeitTxs[position.Int64] = v.tx.Tx.String
 			case "connector":
-				round.Connectors = extendArray(round.Connectors, int(position.Int64))
-				round.Connectors[position.Int64] = v.tx.Tx.String
+				level := v.tx.TreeLevel
+				round.Connectors = extendArray(round.Connectors, int(level.Int64))
+				round.Connectors[int(level.Int64)] = extendArray(round.Connectors[int(level.Int64)], int(position.Int64))
+				if round.Connectors[int(level.Int64)][position.Int64] == (tree.Node{}) {
+					round.Connectors[int(level.Int64)][position.Int64] = tree.Node{
+						Tx:         v.tx.Tx.String,
+						Txid:       v.tx.Txid.String,
+						ParentTxid: v.tx.ParentTxid.String,
+						Leaf:       v.tx.IsLeaf.Bool,
+					}
+				}
 			case "tree":
 				level := v.tx.TreeLevel
 				round.VtxoTree = extendArray(round.VtxoTree, int(level.Int64))
