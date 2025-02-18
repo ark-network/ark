@@ -137,8 +137,13 @@ func TestNewService(t *testing.T) {
 			CreatedAt: time.Now(),
 		},
 	}
-	err = txStore.AddTransactions(ctx, testTxs)
+	count, err := txStore.AddTransactions(ctx, testTxs)
 	require.NoError(t, err)
+	require.Equal(t, len(testTxs), count)
+
+	count, err = txStore.AddTransactions(ctx, testTxs)
+	require.NoError(t, err)
+	require.Zero(t, count)
 
 	retrievedTxs, err := txStore.GetAllTransactions(ctx)
 	require.NoError(t, err)

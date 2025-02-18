@@ -40,33 +40,37 @@ func NewTransactionStore(
 
 func (s *txStore) AddTransactions(
 	_ context.Context, txs []types.Transaction,
-) error {
+) (int, error) {
+	count := 0
 	for _, tx := range txs {
 		if err := s.db.Insert(tx.TransactionKey.String(), &tx); err != nil {
 			if errors.Is(err, badgerhold.ErrKeyExists) {
 				continue
 			}
-			return err
+			return -1, err
 		}
+		count++
 		go func(tx types.Transaction) {
 			s.sendEvent(tx)
 		}(tx)
 	}
-	return nil
+	return count, nil
 }
 
 func (s *txStore) UpdateTransactions(
 	_ context.Context, txs []types.Transaction,
-) error {
+) (int, error) {
+	count := 0
 	for _, tx := range txs {
 		if err := s.db.Upsert(tx.TransactionKey.String(), &tx); err != nil {
-			return err
+			return -1, err
 		}
+		count++
 		go func(tx types.Transaction) {
 			s.sendEvent(tx)
 		}(tx)
 	}
-	return nil
+	return count, nil
 }
 
 func (s *txStore) GetAllTransactions(
