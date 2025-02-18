@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"github.com/btcsuite/btcd/btcutil/psbt"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -619,6 +621,7 @@ func (s *covenantService) startFinalization(roundEndTime time.Time) {
 	round := s.currentRound
 
 	var roundAborted bool
+	numOfBoardingInputs := 0
 	defer func() {
 		if roundAborted {
 			s.startRound()
@@ -634,7 +637,7 @@ func (s *covenantService) startFinalization(roundEndTime time.Time) {
 			return
 		}
 
-		s.finalizeRound(roundEndTime)
+		s.finalizeRound(roundEndTime, numOfBoardingInputs)
 	}()
 
 	if round.IsFailed() {
@@ -659,6 +662,7 @@ func (s *covenantService) startFinalization(roundEndTime time.Time) {
 		log.WithError(err).Warn("failed to register tx requests")
 		return
 	}
+	numOfBoardingInputs = len(boardingInputs)
 
 	sweptRounds, err := s.repoManager.Rounds().GetSweptRoundsConnectorAddress(ctx)
 	if err != nil {
@@ -688,7 +692,7 @@ func (s *covenantService) startFinalization(roundEndTime time.Time) {
 	log.Debugf("started finalization stage for round: %s", round.Id)
 }
 
-func (s *covenantService) finalizeRound(roundEndTime time.Time) {
+func (s *covenantService) finalizeRound(roundEndTime time.Time, numOfBoardingInputs int) {
 	defer s.startRound()
 
 	ctx := context.Background()
@@ -706,14 +710,13 @@ func (s *covenantService) finalizeRound(roundEndTime time.Time) {
 	}()
 
 	remainingTime := time.Until(roundEndTime)
-	// Wait for the remaining forfeit txs to be sent,
-	// but only wait until the round interval expires.
-	select {
-	case <-s.forfeitTxs.doneCh:
-		log.Debug("all forfeit txs have been sent")
-	case <-time.After(remainingTime):
-		log.Debug("timeout waiting for forfeit txs")
+	err := s.waitForForfeitsAndBoardingSigs(ctx, remainingTime, numOfBoardingInputs)
+	if err != nil {
+		changes = round.Fail(err)
+		log.WithError(err).Warn("failed to finalize round")
+		return
 	}
+	log.Debug("all forfeit txs have been sent and boarding inputs have been signed")
 
 	forfeitTxs, err := s.forfeitTxs.pop()
 	if err != nil {
@@ -786,6 +789,73 @@ func (s *covenantService) finalizeRound(roundEndTime time.Time) {
 	}
 
 	log.Debugf("finalized round %s with round tx %s", round.Id, round.Txid)
+}
+
+func (s *covenantService) waitForForfeitsAndBoardingSigs(
+	ctx context.Context,
+	remainingTime time.Duration,
+	numOfBoardingInputs int,
+) error {
+	waitCtx, cancel := context.WithTimeout(ctx, remainingTime)
+	defer cancel()
+
+	doneCh := make(chan struct{}, 1)
+	errCh := make(chan error, 1)
+
+	go func() {
+		ticker := time.NewTicker(time.Second / 3)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-waitCtx.Done():
+				return
+
+			case <-ticker.C:
+				s.currentRoundLock.Lock()
+				currentTx := s.currentRound.UnsignedTx
+				s.currentRoundLock.Unlock()
+
+				roundTx, err := psbt.NewFromRawBytes(strings.NewReader(currentTx), true)
+				if err != nil {
+					errCh <- fmt.Errorf("failed to parse round tx: %w", err)
+					return
+				}
+
+				numOfInputsSigned := 0
+				for i := range roundTx.UnsignedTx.TxIn {
+					in := &roundTx.Inputs[i]
+					if len(in.FinalScriptWitness) > 0 {
+						numOfInputsSigned++
+					}
+				}
+
+				// Condition: all forfeit txs are signed and
+				// the number of signed boarding inputs matches
+				// numOfBoardingInputs we expect
+				if s.forfeitTxs.allSigned() && numOfBoardingInputs == numOfInputsSigned {
+					doneCh <- struct{}{}
+					return
+				}
+			}
+		}
+	}()
+
+	// Block until either:
+	//   1) the goroutine signals success on doneCh,
+	//   2) we receive an error from errCh, or
+	//   3) the context times out
+	select {
+	case <-doneCh:
+		// success: all forfeit txs and all boarding inputs are signed
+		return nil
+	case err := <-errCh:
+		// error from the polling goroutine
+		return err
+	case <-waitCtx.Done():
+		// timed out or canceled
+		return fmt.Errorf("timeout waiting for forfeit txs and boarding inputs signatures")
+	}
 }
 
 func (s *covenantService) listenToScannerNotifications() {
