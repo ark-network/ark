@@ -306,11 +306,12 @@ func (a *covenantlessArkClient) listenForTransactions(ctx context.Context) {
 			for _, addr := range offchainAddrs {
 				// nolint:all
 				decoded, _ := common.DecodeAddress(addr.Address)
-				pubkey := hex.EncodeToString(decoded.VtxoTapKey.SerializeCompressed())
+				pubkey := hex.EncodeToString(decoded.VtxoTapKey.SerializeCompressed()[1:])
 				myPubkeys[pubkey] = struct{}{}
 			}
 
 			if event.Round != nil {
+				fmt.Println("new round tx received")
 				if err := a.handleRoundTx(context.Background(), myPubkeys, event.Round); err != nil {
 					log.WithError(err).Error("failed to process round tx")
 					continue
@@ -318,12 +319,14 @@ func (a *covenantlessArkClient) listenForTransactions(ctx context.Context) {
 			}
 
 			if event.Redeem != nil {
+				log.Debug("new offchain tx received")
 				if err := a.handleRedeemTx(context.Background(), myPubkeys, event.Redeem); err != nil {
 					log.WithError(err).Error("failed to process redeem tx")
 					continue
 				}
 			}
 		case <-ctx.Done():
+			fmt.Println("DONE")
 			return
 		}
 	}
@@ -347,6 +350,7 @@ func (a *covenantlessArkClient) listenForBoardingUtxos(ctx context.Context) {
 				log.WithError(err).Error("Failed to insert new boarding transactions")
 				continue
 			}
+			log.Debugf("added %d boarding transaction(s)", len(newPendingBoardingTxs))
 		case <-ctx.Done():
 			return
 		}
@@ -2427,6 +2431,8 @@ func (a *covenantlessArkClient) handleRoundTx(
 	ctx context.Context,
 	myPubkeys map[string]struct{}, roundTx *client.RoundTransaction,
 ) error {
+	fmt.Printf("MY PUBKEYS %+v\n", myPubkeys)
+	fmt.Printf("ROUND %+v\n", roundTx)
 	vtxosToAdd := make([]types.Vtxo, 0)
 	vtxosToSpend := make([]types.VtxoKey, 0)
 	txsToAdd := make([]types.Transaction, 0)
@@ -2447,6 +2453,8 @@ func (a *covenantlessArkClient) handleRoundTx(
 			})
 		}
 	}
+
+	fmt.Printf("detected %d vtxos to add\n", len(vtxosToAdd))
 
 	if len(vtxosToAdd) > 0 {
 		// Check if any of the spent vtxos is ours.
@@ -2490,6 +2498,9 @@ func (a *covenantlessArkClient) handleRoundTx(
 			vtxosToSpend = append(vtxosToSpend, vtxo.VtxoKey)
 		}
 
+		fmt.Printf("detected %d txs to settle\n", len(pendingBoardingTxids))
+		fmt.Printf("detected %d vtxos to spend\n", len(vtxosToSpend))
+
 		// If no txs are settles, add a new tx record.
 		if len(txsToSettle) <= 0 {
 			amount := uint64(0)
@@ -2506,6 +2517,8 @@ func (a *covenantlessArkClient) handleRoundTx(
 				CreatedAt: time.Now(),
 			})
 		}
+
+		fmt.Printf("detected %d txs to add\n", len(txsToAdd))
 	}
 
 	if len(txsToAdd) > 0 {
