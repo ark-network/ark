@@ -2652,6 +2652,26 @@ func (a *covenantlessArkClient) handleRedeemTx(
 			return err
 		}
 		log.Debugf("spent %d vtxo(s)", count)
+
+		txids := make([]string, 0, len(vtxosToSpend))
+		for _, v := range vtxosToSpend {
+			txids = append(txids, v.Txid)
+		}
+		txs, err := a.store.TransactionStore().GetTransactions(ctx, txids)
+		if err != nil {
+			return err
+		}
+
+		for i, tx := range txs {
+			if !tx.Settled {
+				txs[i].Settled = true
+			}
+		}
+		count, err = a.store.TransactionStore().UpdateTransactions(ctx, txs)
+		if err != nil {
+			return err
+		}
+		log.Debugf("settled %d transaction(s)", count)
 	}
 
 	return nil
@@ -2723,21 +2743,6 @@ func getVtxo(usedVtxos []client.Vtxo, spentByVtxos []client.Vtxo) client.Vtxo {
 	return client.Vtxo{}
 }
 
-func isSettled(vtxos []client.Vtxo, vtxo client.Vtxo) bool {
-	if len(vtxo.SpentBy) == 0 {
-		return !vtxo.IsPending
-	}
-	for _, v := range vtxos {
-		if v.RoundTxid == vtxo.SpentBy {
-			return true
-		}
-		if v.Txid == vtxo.SpentBy {
-			return isSettled(vtxos, v)
-		}
-	}
-	return len(vtxo.SpentBy) > 0
-}
-
 func vtxosToTxsCovenantless(
 	spendable, spent []client.Vtxo, boardingRounds map[string]struct{},
 ) ([]types.Transaction, error) {
@@ -2773,7 +2778,7 @@ func vtxosToTxsCovenantless(
 			txKey = types.TransactionKey{
 				RedeemTxid: vtxo.Txid,
 			}
-			settled = isSettled(append(spendable, spent...), vtxo)
+			settled = vtxo.SpentBy != ""
 		}
 
 		txs = append(txs, types.Transaction{
