@@ -2,6 +2,7 @@ package kvstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -20,7 +21,7 @@ const (
 type txStore struct {
 	db      *badgerhold.Store
 	lock    *sync.Mutex
-	eventCh chan types.TransactionEvent
+	eventCh chan types.Transaction
 }
 
 func NewTransactionStore(
@@ -33,7 +34,7 @@ func NewTransactionStore(
 	return &txStore{
 		db:      badgerDb,
 		lock:    &sync.Mutex{},
-		eventCh: make(chan types.TransactionEvent),
+		eventCh: make(chan types.Transaction),
 	}, nil
 }
 
@@ -42,28 +43,13 @@ func (s *txStore) AddTransactions(
 ) error {
 	for _, tx := range txs {
 		if err := s.db.Insert(tx.TransactionKey.String(), &tx); err != nil {
+			if errors.Is(err, badgerhold.ErrKeyExists) {
+				continue
+			}
 			return err
 		}
 		go func(tx types.Transaction) {
-			var eventType types.EventType
-
-			if tx.IsOOR() {
-				switch tx.Type {
-				case types.TxSent:
-					eventType = types.OORSent
-				case types.TxReceived:
-					eventType = types.OORReceived
-				}
-			}
-
-			if tx.IsBoarding() {
-				eventType = types.BoardingPending
-			}
-
-			s.sendEvent(types.TransactionEvent{
-				Tx:    tx,
-				Event: eventType,
-			})
+			s.sendEvent(tx)
 		}(tx)
 	}
 	return nil
@@ -77,20 +63,7 @@ func (s *txStore) UpdateTransactions(
 			return err
 		}
 		go func(tx types.Transaction) {
-			var event types.EventType
-
-			if tx.IsOOR() {
-				event = types.OORSettled
-			}
-
-			if tx.IsBoarding() {
-				event = types.BoardingSettled
-			}
-
-			s.sendEvent(types.TransactionEvent{
-				Tx:    tx,
-				Event: event,
-			})
+			s.sendEvent(tx)
 		}(tx)
 	}
 	return nil
@@ -114,7 +87,25 @@ func (s *txStore) GetAllTransactions(
 	return txs, err
 }
 
-func (s *txStore) GetEventChannel() chan types.TransactionEvent {
+func (s *txStore) GetTransactions(
+	_ context.Context, txids []string,
+) ([]types.Transaction, error) {
+	txs := make([]types.Transaction, 0, len(txids))
+	for _, txid := range txids {
+		var tx types.Transaction
+		if err := s.db.Get(txid, &tx); err != nil {
+			if errors.Is(err, badgerhold.ErrNotFound) {
+				continue
+			}
+
+			return nil, err
+		}
+		txs = append(txs, tx)
+	}
+	return txs, nil
+}
+
+func (s *txStore) GetEventChannel() chan types.Transaction {
 	return s.eventCh
 }
 
@@ -125,7 +116,7 @@ func (s *txStore) Close() {
 	close(s.eventCh)
 }
 
-func (s *txStore) sendEvent(event types.TransactionEvent) {
+func (s *txStore) sendEvent(event types.Transaction) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 

@@ -22,13 +22,15 @@ type TransactionStore interface {
 	AddTransactions(ctx context.Context, txs []Transaction) error
 	UpdateTransactions(ctx context.Context, txs []Transaction) error
 	GetAllTransactions(ctx context.Context) ([]Transaction, error)
-	GetEventChannel() chan TransactionEvent
+	GetTransactions(ctx context.Context, txids []string) ([]Transaction, error)
+	GetEventChannel() chan Transaction
 	Close()
 }
 
 type VtxoStore interface {
 	AddVtxos(ctx context.Context, vtxos []Vtxo) error
 	UpdateVtxos(ctx context.Context, vtxos []Vtxo) error
+	SpendVtxos(ctx context.Context, vtxos []VtxoKey, spentBy string) error
 	GetAllVtxos(ctx context.Context) (spendable []Vtxo, spent []Vtxo, err error)
 	GetVtxos(ctx context.Context, keys []VtxoKey) ([]Vtxo, error)
 	Close()

@@ -46,6 +46,22 @@ func (s *vtxoStore) UpdateVtxos(_ context.Context, vtxos []types.Vtxo) error {
 	return nil
 }
 
+func (s *vtxoStore) SpendVtxos(ctx context.Context, outpoints []types.VtxoKey, spentBy string) error {
+	vtxos, err := s.GetVtxos(ctx, outpoints)
+	if err != nil {
+		return err
+	}
+
+	for _, vtxo := range vtxos {
+		vtxo.Spent = true
+		vtxo.SpentBy = spentBy
+		if err := s.db.Update(vtxo.VtxoKey.String(), &vtxo); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *vtxoStore) GetAllVtxos(
 	_ context.Context,
 ) (spendable, spent []types.Vtxo, err error) {

@@ -112,7 +112,7 @@ func TestNewService(t *testing.T) {
 	go func() {
 		eventCh := service.TransactionStore().GetEventChannel()
 		for tx := range eventCh {
-			log.Infof("Tx inserted: %d %v", tx.Tx.Amount, tx.Tx.Type)
+			log.Infof("Tx inserted: %d %v", tx.Amount, tx.Type)
 		}
 	}()
 

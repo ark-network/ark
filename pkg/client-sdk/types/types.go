@@ -43,15 +43,15 @@ func (v VtxoKey) String() string {
 
 type Vtxo struct {
 	VtxoKey
-	Amount                  uint64
-	RoundTxid               string
-	ExpiresAt               time.Time
-	CreatedAt               time.Time
-	RedeemTx                string
-	UnconditionalForfeitTxs []string
-	Pending                 bool
-	SpentBy                 string
-	Spent                   bool
+	PubKey    string
+	Amount    uint64
+	RoundTxid string
+	ExpiresAt time.Time
+	CreatedAt time.Time
+	RedeemTx  string
+	Pending   bool
+	SpentBy   string
+	Spent     bool
 }
 
 const (
@@ -95,21 +95,6 @@ func (t Transaction) IsOOR() bool {
 func (t Transaction) String() string {
 	buf, _ := json.MarshalIndent(t, "", "  ")
 	return string(buf)
-}
-
-const (
-	BoardingPending EventType = "BOARDING_PENDING"
-	BoardingSettled EventType = "BOARDING_SETTLED"
-	OORSent         EventType = "OOR_SENT"
-	OORReceived     EventType = "OOR_RECEIVED"
-	OORSettled      EventType = "OOR_SETTLED"
-)
-
-type EventType string
-
-type TransactionEvent struct {
-	Tx    Transaction
-	Event EventType
 }
 
 type Utxo struct {

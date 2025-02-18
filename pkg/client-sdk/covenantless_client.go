@@ -284,20 +284,6 @@ func (a *covenantlessArkClient) listenForTransactions(ctx context.Context) {
 	}
 	defer closeFunc()
 
-	offchainAddr, _, err := a.wallet.NewAddress(ctx, true)
-	if err != nil {
-		log.WithError(err).Error("Failed to get new address")
-		return
-	}
-
-	addr, err := common.DecodeAddress(offchainAddr.Address)
-	if err != nil {
-		log.WithError(err).Error("Failed to decode address")
-		return
-	}
-
-	addrPubkey := hex.EncodeToString(schnorr.SerializePubKey(addr.VtxoTapKey))
-
 	for {
 		select {
 		case event, ok := <-eventChan:
@@ -306,23 +292,37 @@ func (a *covenantlessArkClient) listenForTransactions(ctx context.Context) {
 			}
 
 			if event.Err != nil {
-				log.WithError(event.Err).Error("Error in transaction stream")
+				log.WithError(event.Err).Warn("received error in transaction stream")
 				continue
 			}
 
-			newPendingBoardingTxs, err := a.getBoardingPendingTransactions(ctx)
+			offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
 			if err != nil {
-				log.WithError(err).Error("Failed to get pending transactions")
+				log.WithError(err).Error("failed to get offchain addresses")
 				continue
 			}
 
-			if err := a.store.TransactionStore().
-				AddTransactions(ctx, newPendingBoardingTxs); err != nil {
-				log.WithError(err).Error("Failed to insert new boarding transactions")
-				continue
+			myPubkeys := make(map[string]struct{})
+			for _, addr := range offchainAddrs {
+				// nolint:all
+				decoded, _ := common.DecodeAddress(addr.Address)
+				pubkey := hex.EncodeToString(decoded.VtxoTapKey.SerializeCompressed())
+				myPubkeys[pubkey] = struct{}{}
 			}
 
-			a.processTransactionEvent(addrPubkey, event)
+			if event.Round != nil {
+				if err := a.handleRoundTx(context.Background(), myPubkeys, event.Round); err != nil {
+					log.WithError(err).Error("failed to process round tx")
+					continue
+				}
+			}
+
+			if event.Redeem != nil {
+				if err := a.handleRedeemTx(context.Background(), myPubkeys, event.Redeem); err != nil {
+					log.WithError(err).Error("failed to process redeem tx")
+					continue
+				}
+			}
 		case <-ctx.Done():
 			return
 		}
@@ -391,223 +391,6 @@ func (a *covenantlessArkClient) getBoardingPendingTransactions(
 	}
 
 	return newPendingBoardingTxs, nil
-}
-
-func (a *covenantlessArkClient) processTransactionEvent(
-	pubkey string,
-	event client.TransactionEvent,
-) {
-	if event.Round != nil {
-		allTxs, err := a.store.TransactionStore().GetAllTransactions(context.Background())
-		if err != nil {
-			log.WithError(err).Error("Failed to get all transactions")
-			return
-		}
-		pendingBoardingTxs := make(map[string]types.Transaction)
-		for _, tx := range allTxs {
-			if tx.BoardingTxid != "" && !tx.Settled {
-				pendingBoardingTxs[tx.BoardingTxid] = tx
-			}
-		}
-		var ignoreNewTxs bool
-		settledBoardingTxs := make([]types.Transaction, 0, len(event.Round.ClaimedBoardingUtxos))
-		for _, u := range event.Round.ClaimedBoardingUtxos {
-			if tx, ok := pendingBoardingTxs[u.Txid]; ok {
-				ignoreNewTxs = true
-				tx.Settled = true
-				settledBoardingTxs = append(settledBoardingTxs, tx)
-			}
-		}
-
-		if len(settledBoardingTxs) > 0 {
-			if err := a.store.TransactionStore().
-				UpdateTransactions(context.Background(), settledBoardingTxs); err != nil {
-				log.WithError(err).Error("Failed to settle boarding transactions")
-				return
-			}
-		}
-
-		spentKeys := make([]types.VtxoKey, 0, len(event.Round.SpentVtxos))
-		for _, v := range event.Round.SpentVtxos {
-			spentKeys = append(spentKeys, types.VtxoKey{
-				Txid: v.Txid,
-				VOut: v.VOut,
-			})
-		}
-
-		vtxos, err := a.store.VtxoStore().
-			GetVtxos(context.Background(), spentKeys)
-		if err != nil {
-			log.WithError(err).Error("Failed to get spent vtxos")
-			return
-		}
-
-		if len(vtxos) > 0 {
-			vtxosToUpdate := make([]types.Vtxo, 0)
-			for _, v := range vtxos {
-				v.Spent = true
-				v.Pending = false
-				vtxosToUpdate = append(vtxosToUpdate, v)
-			}
-
-			if err := a.store.VtxoStore().
-				UpdateVtxos(context.Background(), vtxosToUpdate); err != nil {
-				log.WithError(err).Error("Failed to update spent vtxos")
-			}
-		}
-
-		vtxosToInsert := make([]types.Vtxo, 0)
-		txsToInsert := make([]types.Transaction, 0)
-		for _, v := range event.Round.SpendableVtxos {
-			if v.PubKey == pubkey {
-				vtxosToInsert = append(vtxosToInsert, types.Vtxo{
-					VtxoKey: types.VtxoKey{
-						Txid: v.Txid,
-						VOut: v.VOut,
-					},
-					Amount:    v.Amount,
-					ExpiresAt: v.ExpiresAt,
-					CreatedAt: v.CreatedAt,
-					RedeemTx:  event.Round.Txid,
-					Pending:   false,
-					SpentBy:   v.SpentBy,
-					Spent:     false,
-				})
-
-				if !ignoreNewTxs {
-					txsToInsert = append(txsToInsert, types.Transaction{
-						TransactionKey: types.TransactionKey{
-							RoundTxid: event.Round.Txid,
-						},
-						Amount:    v.Amount,
-						Type:      types.TxReceived,
-						CreatedAt: v.CreatedAt,
-					})
-				}
-			}
-		}
-
-		if len(vtxosToInsert) > 0 {
-			if err := a.store.VtxoStore().
-				AddVtxos(context.Background(), vtxosToInsert); err != nil {
-				log.WithError(err).Error("Failed to insert new vtxos")
-				return
-			}
-		}
-
-		if len(txsToInsert) > 0 {
-			if err := a.store.TransactionStore().
-				AddTransactions(context.Background(), txsToInsert); err != nil {
-				log.WithError(err).Error("Failed to insert received transaction")
-				return
-			}
-		}
-	}
-
-	if event.Redeem != nil {
-		vtxosToInsert := make([]types.Vtxo, 0)
-		spentKeys := make([]types.VtxoKey, 0, len(event.Redeem.SpentVtxos))
-		for _, v := range event.Redeem.SpentVtxos {
-			spentKeys = append(spentKeys, types.VtxoKey{
-				Txid: v.Txid,
-				VOut: v.VOut,
-			})
-		}
-
-		vtxos, err := a.store.VtxoStore().
-			GetVtxos(context.Background(), spentKeys)
-		if err != nil {
-			log.WithError(err).Error("Failed to get spent vtxos")
-			return
-		}
-
-		if len(vtxos) > 0 {
-			inputAmount := uint64(0)
-			vtxosToUpdate := make([]types.Vtxo, 0)
-			for _, v := range vtxos {
-				v.Spent = true
-				vtxosToUpdate = append(vtxosToUpdate, v)
-				inputAmount += v.Amount
-			}
-
-			if err := a.store.VtxoStore().
-				UpdateVtxos(context.Background(), vtxosToUpdate); err != nil {
-				log.WithError(err).Error("Failed to update spent vtxos")
-				return
-			}
-
-			outputAmount := uint64(0)
-			for _, v := range event.Redeem.SpendableVtxos {
-				if v.PubKey == pubkey {
-					vtxosToInsert = append(vtxosToInsert, types.Vtxo{
-						VtxoKey: types.VtxoKey{
-							Txid: v.Txid,
-							VOut: v.VOut,
-						},
-						Amount:    v.Amount,
-						ExpiresAt: v.ExpiresAt,
-						CreatedAt: v.CreatedAt,
-						RedeemTx:  event.Redeem.Txid,
-						Pending:   true,
-						SpentBy:   v.SpentBy,
-						Spent:     false,
-					})
-					outputAmount += v.Amount
-				}
-			}
-
-			tx := types.Transaction{
-				TransactionKey: types.TransactionKey{
-					RedeemTxid: event.Redeem.Txid,
-				},
-				Amount:    inputAmount - outputAmount,
-				Type:      types.TxSent,
-				CreatedAt: time.Now(),
-			}
-
-			if err := a.store.TransactionStore().
-				AddTransactions(context.Background(), []types.Transaction{tx}); err != nil {
-				log.WithError(err).Error("Failed to insert received transaction")
-			}
-		} else {
-			for _, v := range event.Redeem.SpendableVtxos {
-				if v.PubKey == pubkey {
-					vtxosToInsert = append(vtxosToInsert, types.Vtxo{
-						VtxoKey: types.VtxoKey{
-							Txid: v.Txid,
-							VOut: v.VOut,
-						},
-						Amount:    v.Amount,
-						ExpiresAt: v.ExpiresAt,
-						CreatedAt: v.CreatedAt,
-						RedeemTx:  event.Redeem.Txid,
-						Pending:   true,
-						SpentBy:   v.SpentBy,
-						Spent:     false,
-					})
-
-					tx := types.Transaction{
-						TransactionKey: types.TransactionKey{
-							RedeemTxid: event.Redeem.Txid,
-						},
-						Amount:    v.Amount,
-						Type:      types.TxReceived,
-						CreatedAt: v.CreatedAt,
-					}
-					if err := a.store.TransactionStore().
-						AddTransactions(context.Background(), []types.Transaction{tx}); err != nil {
-						log.WithError(err).Error("Failed to insert received transaction")
-					}
-				}
-			}
-		}
-
-		if err := a.store.VtxoStore().
-			AddVtxos(context.Background(), vtxosToInsert); err != nil {
-			log.WithError(err).Error("Failed to insert new vtxos")
-			return
-		}
-	}
 }
 
 func (a *covenantlessArkClient) Balance(
@@ -2638,6 +2421,239 @@ func (a *covenantlessArkClient) getBoardingTxs(
 
 	txs := append(unconfirmedTxs, confirmedTxs...)
 	return txs, ignoreVtxos, nil
+}
+
+func (a *covenantlessArkClient) handleRoundTx(
+	ctx context.Context,
+	myPubkeys map[string]struct{}, roundTx *client.RoundTransaction,
+) error {
+	vtxosToAdd := make([]types.Vtxo, 0)
+	vtxosToSpend := make([]types.VtxoKey, 0)
+	txsToAdd := make([]types.Transaction, 0)
+	txsToSettle := make([]string, 0)
+
+	for _, vtxo := range roundTx.SpendableVtxos {
+		if _, ok := myPubkeys[vtxo.PubKey]; ok {
+			vtxosToAdd = append(vtxosToAdd, types.Vtxo{
+				VtxoKey: types.VtxoKey{
+					Txid: vtxo.Txid,
+					VOut: vtxo.VOut,
+				},
+				PubKey:    vtxo.PubKey,
+				Amount:    vtxo.Amount,
+				RoundTxid: vtxo.RoundTxid,
+				ExpiresAt: vtxo.ExpiresAt,
+				CreatedAt: time.Now(),
+			})
+		}
+	}
+
+	if len(vtxosToAdd) > 0 {
+		// Check if any of the spent vtxos is ours.
+		spentVtxos := make([]types.VtxoKey, 0, len(roundTx.SpentVtxos))
+		for _, vtxo := range roundTx.SpentVtxos {
+			spentVtxos = append(spentVtxos, types.VtxoKey{
+				Txid: vtxo.Txid,
+				VOut: vtxo.VOut,
+			})
+		}
+		myVtxos, err := a.store.VtxoStore().GetVtxos(ctx, spentVtxos)
+		if err != nil {
+			return err
+		}
+
+		// Check if any of the claimed boarding utxos is ours.
+		boardingTxids := make([]string, 0, len(roundTx.ClaimedBoardingUtxos))
+		for _, utxo := range roundTx.ClaimedBoardingUtxos {
+			boardingTxids = append(boardingTxids, utxo.Txid)
+		}
+		pendingBoardingTxs, err := a.store.TransactionStore().GetTransactions(
+			ctx, boardingTxids,
+		)
+		if err != nil {
+			return err
+		}
+		pendingBoardingTxids := make([]string, 0, len(pendingBoardingTxs))
+		for _, tx := range pendingBoardingTxs {
+			pendingBoardingTxids = append(pendingBoardingTxids, tx.BoardingTxid)
+		}
+
+		// Add all our pending boarding txs to the list of those to settle.
+		txsToSettle = append(txsToSettle, pendingBoardingTxids...)
+
+		// Add also our pending vtxos settled in this round.
+		for _, vtxo := range myVtxos {
+			if !vtxo.Pending {
+				continue
+			}
+			txsToSettle = append(txsToSettle, vtxo.Txid)
+			vtxosToSpend = append(vtxosToSpend, vtxo.VtxoKey)
+		}
+
+		// If no txs are settles, add a new tx record.
+		if len(txsToSettle) <= 0 {
+			amount := uint64(0)
+			for _, v := range vtxosToAdd {
+				amount += v.Amount
+			}
+			txsToAdd = append(txsToAdd, types.Transaction{
+				TransactionKey: types.TransactionKey{
+					RoundTxid: roundTx.Txid,
+				},
+				Amount:    amount,
+				Type:      types.TxReceived,
+				Settled:   true,
+				CreatedAt: time.Now(),
+			})
+		}
+	}
+
+	if len(txsToAdd) > 0 {
+		if err := a.store.TransactionStore().AddTransactions(ctx, txsToAdd); err != nil {
+			return err
+		}
+	}
+
+	if len(txsToSettle) > 0 {
+		txs, err := a.store.TransactionStore().GetTransactions(ctx, txsToSettle)
+		if err != nil {
+			return err
+		}
+		for i := range txs {
+			txs[i].Settled = true
+		}
+		if err := a.store.TransactionStore().UpdateTransactions(ctx, txs); err != nil {
+			return err
+		}
+	}
+
+	if len(vtxosToAdd) > 0 {
+		if err := a.store.VtxoStore().AddVtxos(ctx, vtxosToAdd); err != nil {
+			return err
+		}
+	}
+
+	if len(vtxosToSpend) > 0 {
+		if err := a.store.VtxoStore().SpendVtxos(ctx, vtxosToSpend, roundTx.Txid); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (a *covenantlessArkClient) handleRedeemTx(
+	ctx context.Context,
+	myPubkeys map[string]struct{}, redeemTx *client.RedeemTransaction,
+) error {
+	vtxosToAdd := make([]types.Vtxo, 0)
+	vtxosToSpend := make([]types.VtxoKey, 0)
+	txsToAdd := make([]types.Transaction, 0)
+	txsToSpend := make([]string, 0)
+
+	for _, vtxo := range redeemTx.SpendableVtxos {
+		if _, ok := myPubkeys[vtxo.PubKey]; ok {
+			vtxosToAdd = append(vtxosToAdd, types.Vtxo{
+				VtxoKey: types.VtxoKey{
+					Txid: vtxo.Txid,
+					VOut: vtxo.VOut,
+				},
+				PubKey:    vtxo.PubKey,
+				Amount:    vtxo.Amount,
+				RoundTxid: vtxo.RoundTxid,
+				ExpiresAt: vtxo.ExpiresAt,
+				CreatedAt: time.Now(),
+				RedeemTx:  vtxo.RedeemTx,
+				Pending:   vtxo.IsPending,
+			})
+		}
+	}
+
+	// Check if any of the spent vtxos are ours.
+	spentVtxos := make([]types.VtxoKey, 0, len(redeemTx.SpentVtxos))
+	for _, vtxo := range redeemTx.SpentVtxos {
+		spentVtxos = append(spentVtxos, types.VtxoKey{
+			Txid: vtxo.Txid,
+			VOut: vtxo.VOut,
+		})
+	}
+	myVtxos, err := a.store.VtxoStore().GetVtxos(ctx, spentVtxos)
+	if err != nil {
+		return err
+	}
+	for _, vtxo := range myVtxos {
+		vtxosToSpend = append(vtxosToSpend, vtxo.VtxoKey)
+		txsToSpend = append(txsToSpend, vtxo.Txid)
+	}
+
+	// If not spent vtxos, add a new received tx to the history.
+	if len(vtxosToSpend) <= 0 {
+		amount := uint64(0)
+		for _, v := range vtxosToAdd {
+			amount += v.Amount
+		}
+		txsToAdd = append(txsToAdd, types.Transaction{
+			TransactionKey: types.TransactionKey{
+				RedeemTxid: redeemTx.Txid,
+			},
+			Amount:    amount,
+			Type:      types.TxReceived,
+			Settled:   true,
+			CreatedAt: time.Now(),
+		})
+	} else {
+		// Otherwise, add a new spent tx to the history.
+		inAmount := uint64(0)
+		for _, vtxo := range myVtxos {
+			inAmount += vtxo.Amount
+		}
+		outAmount := uint64(0)
+		for _, vtxo := range vtxosToAdd {
+			outAmount += vtxo.Amount
+		}
+		txsToAdd = append(txsToAdd, types.Transaction{
+			TransactionKey: types.TransactionKey{
+				RedeemTxid: redeemTx.Txid,
+			},
+			Amount:    inAmount - outAmount,
+			Type:      types.TxSent,
+			Settled:   true,
+			CreatedAt: time.Now(),
+		})
+	}
+
+	if len(txsToAdd) > 0 {
+		if err := a.store.TransactionStore().AddTransactions(ctx, txsToAdd); err != nil {
+			return err
+		}
+	}
+
+	if len(txsToSpend) > 0 {
+		txs, err := a.store.TransactionStore().GetTransactions(ctx, txsToSpend)
+		if err != nil {
+			return err
+		}
+		for i := range txs {
+			txs[i].SpentBy = redeemTx.Txid
+		}
+		if err := a.store.TransactionStore().UpdateTransactions(ctx, txs); err != nil {
+			return err
+		}
+	}
+
+	if len(vtxosToAdd) > 0 {
+		if err := a.store.VtxoStore().AddVtxos(ctx, vtxosToAdd); err != nil {
+			return err
+		}
+	}
+
+	if len(vtxosToSpend) > 0 {
+		if err := a.store.VtxoStore().SpendVtxos(ctx, vtxosToSpend, redeemTx.Txid); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func findVtxosBySpentBy(allVtxos []client.Vtxo, txid string) (vtxos []client.Vtxo) {

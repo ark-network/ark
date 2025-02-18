@@ -273,9 +273,9 @@ func logTxEvents(wallet string, client arksdk.ArkClient) {
 	txsChan := client.GetTransactionEventChannel()
 	go func() {
 		for txEvent := range txsChan {
-			msg := fmt.Sprintf("[EVENT]%s: tx event: %s, %d", wallet, txEvent.Event, txEvent.Tx.Amount)
-			if txEvent.Tx.IsBoarding() {
-				msg += fmt.Sprintf(", boarding tx: %s", txEvent.Tx.BoardingTxid)
+			msg := fmt.Sprintf("[EVENT]%s: tx event: %s, %d", wallet, txEvent.Type, txEvent.Amount)
+			if txEvent.IsBoarding() {
+				msg += fmt.Sprintf(", boarding tx: %s", txEvent.BoardingTxid)
 			}
 			log.Infoln(msg)
 		}
