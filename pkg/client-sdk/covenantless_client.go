@@ -279,7 +279,7 @@ func (a *covenantlessArkClient) InitWithWallet(ctx context.Context, args InitWit
 func (a *covenantlessArkClient) listenForTransactions(ctx context.Context) {
 	eventChan, closeFunc, err := a.client.GetTransactionsStream(ctx)
 	if err != nil {
-		log.WithError(err).Error("Failed to get transaction stream")
+		log.WithError(err).Error("failed to get transaction stream")
 		return
 	}
 	defer closeFunc()
@@ -311,7 +311,6 @@ func (a *covenantlessArkClient) listenForTransactions(ctx context.Context) {
 			}
 
 			if event.Round != nil {
-				fmt.Println("new round tx received")
 				if err := a.handleRoundTx(context.Background(), myPubkeys, event.Round); err != nil {
 					log.WithError(err).Error("failed to process round tx")
 					continue
@@ -319,14 +318,12 @@ func (a *covenantlessArkClient) listenForTransactions(ctx context.Context) {
 			}
 
 			if event.Redeem != nil {
-				log.Debug("new offchain tx received")
 				if err := a.handleRedeemTx(context.Background(), myPubkeys, event.Redeem); err != nil {
 					log.WithError(err).Error("failed to process redeem tx")
 					continue
 				}
 			}
 		case <-ctx.Done():
-			fmt.Println("DONE")
 			return
 		}
 	}
@@ -345,12 +342,14 @@ func (a *covenantlessArkClient) listenForBoardingUtxos(ctx context.Context) {
 				continue
 			}
 
-			if err := a.store.TransactionStore().
-				AddTransactions(ctx, newPendingBoardingTxs); err != nil {
+			count, err := a.store.TransactionStore().AddTransactions(
+				ctx, newPendingBoardingTxs,
+			)
+			if err != nil {
 				log.WithError(err).Error("Failed to insert new boarding transactions")
 				continue
 			}
-			log.Debugf("added %d boarding transaction(s)", len(newPendingBoardingTxs))
+			log.Debugf("added %d boarding transaction(s)", count)
 		case <-ctx.Done():
 			return
 		}
@@ -2431,8 +2430,6 @@ func (a *covenantlessArkClient) handleRoundTx(
 	ctx context.Context,
 	myPubkeys map[string]struct{}, roundTx *client.RoundTransaction,
 ) error {
-	fmt.Printf("MY PUBKEYS %+v\n", myPubkeys)
-	fmt.Printf("ROUND %+v\n", roundTx)
 	vtxosToAdd := make([]types.Vtxo, 0)
 	vtxosToSpend := make([]types.VtxoKey, 0)
 	txsToAdd := make([]types.Transaction, 0)
@@ -2453,8 +2450,6 @@ func (a *covenantlessArkClient) handleRoundTx(
 			})
 		}
 	}
-
-	fmt.Printf("detected %d vtxos to add\n", len(vtxosToAdd))
 
 	if len(vtxosToAdd) > 0 {
 		// Check if any of the spent vtxos is ours.
@@ -2498,9 +2493,6 @@ func (a *covenantlessArkClient) handleRoundTx(
 			vtxosToSpend = append(vtxosToSpend, vtxo.VtxoKey)
 		}
 
-		fmt.Printf("detected %d txs to settle\n", len(pendingBoardingTxids))
-		fmt.Printf("detected %d vtxos to spend\n", len(vtxosToSpend))
-
 		// If no txs are settles, add a new tx record.
 		if len(txsToSettle) <= 0 {
 			amount := uint64(0)
@@ -2517,14 +2509,14 @@ func (a *covenantlessArkClient) handleRoundTx(
 				CreatedAt: time.Now(),
 			})
 		}
-
-		fmt.Printf("detected %d txs to add\n", len(txsToAdd))
 	}
 
 	if len(txsToAdd) > 0 {
-		if err := a.store.TransactionStore().AddTransactions(ctx, txsToAdd); err != nil {
+		count, err := a.store.TransactionStore().AddTransactions(ctx, txsToAdd)
+		if err != nil {
 			return err
 		}
+		log.Debugf("added %d transaction(s)", count)
 	}
 
 	if len(txsToSettle) > 0 {
@@ -2535,21 +2527,27 @@ func (a *covenantlessArkClient) handleRoundTx(
 		for i := range txs {
 			txs[i].Settled = true
 		}
-		if err := a.store.TransactionStore().UpdateTransactions(ctx, txs); err != nil {
+		count, err := a.store.TransactionStore().UpdateTransactions(ctx, txs)
+		if err != nil {
 			return err
 		}
+		log.Debugf("settled %d transaction(s)", count)
 	}
 
 	if len(vtxosToAdd) > 0 {
-		if err := a.store.VtxoStore().AddVtxos(ctx, vtxosToAdd); err != nil {
+		count, err := a.store.VtxoStore().AddVtxos(ctx, vtxosToAdd)
+		if err != nil {
 			return err
 		}
+		log.Debugf("added %d vtxo(s)", count)
 	}
 
 	if len(vtxosToSpend) > 0 {
-		if err := a.store.VtxoStore().SpendVtxos(ctx, vtxosToSpend, roundTx.Txid); err != nil {
+		count, err := a.store.VtxoStore().SpendVtxos(ctx, vtxosToSpend, roundTx.Txid)
+		if err != nil {
 			return err
 		}
+		log.Debugf("spent %d vtxo(s)", count)
 	}
 
 	return nil
@@ -2562,7 +2560,6 @@ func (a *covenantlessArkClient) handleRedeemTx(
 	vtxosToAdd := make([]types.Vtxo, 0)
 	vtxosToSpend := make([]types.VtxoKey, 0)
 	txsToAdd := make([]types.Transaction, 0)
-	txsToSpend := make([]string, 0)
 
 	for _, vtxo := range redeemTx.SpendableVtxos {
 		if _, ok := myPubkeys[vtxo.PubKey]; ok {
@@ -2596,7 +2593,6 @@ func (a *covenantlessArkClient) handleRedeemTx(
 	}
 	for _, vtxo := range myVtxos {
 		vtxosToSpend = append(vtxosToSpend, vtxo.VtxoKey)
-		txsToSpend = append(txsToSpend, vtxo.Txid)
 	}
 
 	// If not spent vtxos, add a new received tx to the history.
@@ -2611,7 +2607,6 @@ func (a *covenantlessArkClient) handleRedeemTx(
 			},
 			Amount:    amount,
 			Type:      types.TxReceived,
-			Settled:   true,
 			CreatedAt: time.Now(),
 		})
 	} else {
@@ -2636,34 +2631,27 @@ func (a *covenantlessArkClient) handleRedeemTx(
 	}
 
 	if len(txsToAdd) > 0 {
-		if err := a.store.TransactionStore().AddTransactions(ctx, txsToAdd); err != nil {
-			return err
-		}
-	}
-
-	if len(txsToSpend) > 0 {
-		txs, err := a.store.TransactionStore().GetTransactions(ctx, txsToSpend)
+		count, err := a.store.TransactionStore().AddTransactions(ctx, txsToAdd)
 		if err != nil {
 			return err
 		}
-		for i := range txs {
-			txs[i].SpentBy = redeemTx.Txid
-		}
-		if err := a.store.TransactionStore().UpdateTransactions(ctx, txs); err != nil {
-			return err
-		}
+		log.Debugf("added %d transaction(s)", count)
 	}
 
 	if len(vtxosToAdd) > 0 {
-		if err := a.store.VtxoStore().AddVtxos(ctx, vtxosToAdd); err != nil {
+		count, err := a.store.VtxoStore().AddVtxos(ctx, vtxosToAdd)
+		if err != nil {
 			return err
 		}
+		log.Debugf("added %d vtxo(s)", count)
 	}
 
 	if len(vtxosToSpend) > 0 {
-		if err := a.store.VtxoStore().SpendVtxos(ctx, vtxosToSpend, redeemTx.Txid); err != nil {
+		count, err := a.store.VtxoStore().SpendVtxos(ctx, vtxosToSpend, redeemTx.Txid)
+		if err != nil {
 			return err
 		}
+		log.Debugf("spent %d vtxo(s)", count)
 	}
 
 	return nil
@@ -2840,7 +2828,6 @@ func vtxosToTxsCovenantless(
 			Type:           types.TxSent,
 			CreatedAt:      vtxo.CreatedAt,
 			Settled:        true,
-			SpentBy:        sb,
 		})
 
 	}
