@@ -6,6 +6,7 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
@@ -383,15 +384,11 @@ func createTxTree(
 				return nil, fmt.Errorf("failed to parse cosigner pubkey: %w", err)
 			}
 
-			for _, cosigner := range cosignersALL {
-				if cosigner.IsEqual(pubkey) {
-					continue
-				}
-			}
-
 			cosignersALL = append(cosignersALL, pubkey)
 		}
 	}
+
+	cosignersALL = uniqueCosigners(cosignersALL)
 
 	nodes := make([]node, 0, len(receivers))
 	for _, r := range receivers {
@@ -414,8 +411,10 @@ func createTxTree(
 				if err != nil {
 					return nil, fmt.Errorf("failed to parse cosigner pubkey: %w", err)
 				}
+
 				cosigners = append(cosigners, pubkey)
 			}
+			cosigners = uniqueCosigners(cosigners)
 		case tree.SignAll:
 			cosigners = cosignersALL
 		}
@@ -470,16 +469,9 @@ func createUpperLevel(nodes []node, feeAmount int64, tapTreeRoot []byte, radix i
 
 		var cosigners []*secp256k1.PublicKey
 		for _, child := range children {
-			for _, cosigner := range child.getCosigners() {
-				for _, existingCosigner := range cosigners {
-					if existingCosigner.IsEqual(cosigner) {
-						continue
-					}
-				}
-
-				cosigners = append(cosigners, cosigner)
-			}
+			cosigners = append(cosigners, child.getCosigners()...)
 		}
+		cosigners = uniqueCosigners(cosigners)
 
 		aggregatedKey, err := AggregateKeys(cosigners, tapTreeRoot)
 		if err != nil {
@@ -501,4 +493,19 @@ func createUpperLevel(nodes []node, feeAmount int64, tapTreeRoot []byte, radix i
 		groups = append(groups, branchNode)
 	}
 	return groups, nil
+}
+
+// uniqueCosigners removes duplicate cosigner keys while preserving order
+func uniqueCosigners(cosigners []*secp256k1.PublicKey) []*secp256k1.PublicKey {
+	seen := make(map[string]struct{})
+	unique := make([]*secp256k1.PublicKey, 0, len(cosigners))
+
+	for _, cosigner := range cosigners {
+		keyStr := hex.EncodeToString(schnorr.SerializePubKey(cosigner))
+		if _, exists := seen[keyStr]; !exists {
+			seen[keyStr] = struct{}{}
+			unique = append(unique, cosigner)
+		}
+	}
+	return unique
 }
