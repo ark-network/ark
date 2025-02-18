@@ -2561,6 +2561,8 @@ func (a *covenantlessArkClient) handleRedeemTx(
 	vtxosToSpend := make([]types.VtxoKey, 0)
 	txsToAdd := make([]types.Transaction, 0)
 
+	fmt.Printf("REDEEM TX %+v\n", redeemTx)
+
 	for _, vtxo := range redeemTx.SpendableVtxos {
 		if _, ok := myPubkeys[vtxo.PubKey]; ok {
 			vtxosToAdd = append(vtxosToAdd, types.Vtxo{
