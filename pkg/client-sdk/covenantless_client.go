@@ -188,8 +188,8 @@ func LoadCovenantlessClient(sdkStore types.Store) (ArkClient, error) {
 	if cfgData.WithTransactionFeed {
 		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
 		covenantlessClient.txStreamCtxCancel = txStreamCtxCancel
-		go covenantlessClient.listenForTransactions(txStreamCtx)
-		go covenantlessClient.listenForBoardingUtxos(txStreamCtx)
+		go covenantlessClient.listenForArkTxs(txStreamCtx)
+		go covenantlessClient.listenForBoardingTxs(txStreamCtx)
 	}
 
 	return &covenantlessClient, nil
@@ -239,8 +239,8 @@ func LoadCovenantlessClientWithWallet(
 	if cfgData.WithTransactionFeed {
 		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
 		covenantlessClient.txStreamCtxCancel = txStreamCtxCancel
-		go covenantlessClient.listenForTransactions(txStreamCtx)
-		go covenantlessClient.listenForBoardingUtxos(txStreamCtx)
+		go covenantlessClient.listenForArkTxs(txStreamCtx)
+		go covenantlessClient.listenForBoardingTxs(txStreamCtx)
 	}
 
 	return &covenantlessClient, nil
@@ -254,8 +254,8 @@ func (a *covenantlessArkClient) Init(ctx context.Context, args InitArgs) error {
 	if args.WithTransactionFeed {
 		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
 		a.txStreamCtxCancel = txStreamCtxCancel
-		go a.listenForTransactions(txStreamCtx)
-		go a.listenForBoardingUtxos(txStreamCtx)
+		go a.listenForArkTxs(txStreamCtx)
+		go a.listenForBoardingTxs(txStreamCtx)
 	}
 
 	return nil
@@ -269,14 +269,14 @@ func (a *covenantlessArkClient) InitWithWallet(ctx context.Context, args InitWit
 	if a.WithTransactionFeed {
 		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
 		a.txStreamCtxCancel = txStreamCtxCancel
-		go a.listenForTransactions(txStreamCtx)
-		go a.listenForBoardingUtxos(txStreamCtx)
+		go a.listenForArkTxs(txStreamCtx)
+		go a.listenForBoardingTxs(txStreamCtx)
 	}
 
 	return nil
 }
 
-func (a *covenantlessArkClient) listenForTransactions(ctx context.Context) {
+func (a *covenantlessArkClient) listenForArkTxs(ctx context.Context) {
 	eventChan, closeFunc, err := a.client.GetTransactionsStream(ctx)
 	if err != nil {
 		log.WithError(err).Error("failed to get transaction stream")
@@ -329,27 +329,40 @@ func (a *covenantlessArkClient) listenForTransactions(ctx context.Context) {
 	}
 }
 
-func (a *covenantlessArkClient) listenForBoardingUtxos(ctx context.Context) {
+func (a *covenantlessArkClient) listenForBoardingTxs(ctx context.Context) {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			newPendingBoardingTxs, err := a.getBoardingPendingTransactions(ctx)
+			txsToAdd, txsToUpdate, err := a.getBoardingPendingTransactions(ctx)
 			if err != nil {
-				log.WithError(err).Error("Failed to get pending transactions")
+				log.WithError(err).Error("failed to get pending transactions")
 				continue
 			}
 
-			count, err := a.store.TransactionStore().AddTransactions(
-				ctx, newPendingBoardingTxs,
-			)
-			if err != nil {
-				log.WithError(err).Error("Failed to insert new boarding transactions")
-				continue
+			if len(txsToAdd) > 0 {
+				count, err := a.store.TransactionStore().AddTransactions(
+					ctx, txsToAdd,
+				)
+				if err != nil {
+					log.WithError(err).Error("failed to add new boarding transactions")
+					continue
+				}
+				log.Debugf("added %d boarding transaction(s)", count)
 			}
-			log.Debugf("added %d boarding transaction(s)", count)
+
+			if len(txsToUpdate) > 0 {
+				count, err := a.store.TransactionStore().AddTransactions(
+					ctx, txsToUpdate,
+				)
+				if err != nil {
+					log.WithError(err).Error("failed to update boarding transactions")
+					continue
+				}
+				log.Debugf("updated %d boarding transaction(s)", count)
+			}
 		case <-ctx.Done():
 			return
 		}
@@ -358,23 +371,34 @@ func (a *covenantlessArkClient) listenForBoardingUtxos(ctx context.Context) {
 
 func (a *covenantlessArkClient) getBoardingPendingTransactions(
 	ctx context.Context,
-) ([]types.Transaction, error) {
+) ([]types.Transaction, []types.Transaction, error) {
 	oldTxs, err := a.store.TransactionStore().GetAllTransactions(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	boardingUtxos, err := a.getClaimableBoardingUtxos(ctx, nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	newPendingBoardingTxs := make([]types.Transaction, 0)
+	txsToAdd := make([]types.Transaction, 0)
+	txsToUpdate := make([]types.Transaction, 0)
 	for _, u := range boardingUtxos {
 		found := false
 		for _, tx := range oldTxs {
 			if tx.BoardingTxid == u.Txid {
 				found = true
+				emptyTime := time.Time{}
+				if tx.CreatedAt == emptyTime && tx.CreatedAt != u.CreatedAt {
+					txsToUpdate = append(txsToUpdate, types.Transaction{
+						TransactionKey: tx.TransactionKey,
+						Amount:         tx.Amount,
+						Type:           tx.Type,
+						Settled:        tx.Settled,
+						CreatedAt:      u.CreatedAt,
+					})
+				}
 				break
 			}
 		}
@@ -383,7 +407,7 @@ func (a *covenantlessArkClient) getBoardingPendingTransactions(
 			continue
 		}
 
-		newPendingBoardingTxs = append(newPendingBoardingTxs, types.Transaction{
+		txsToAdd = append(txsToAdd, types.Transaction{
 			TransactionKey: types.TransactionKey{
 				BoardingTxid: u.Txid,
 			},
@@ -393,7 +417,7 @@ func (a *covenantlessArkClient) getBoardingPendingTransactions(
 		})
 	}
 
-	return newPendingBoardingTxs, nil
+	return txsToAdd, txsToUpdate, nil
 }
 
 func (a *covenantlessArkClient) Balance(
@@ -2493,8 +2517,8 @@ func (a *covenantlessArkClient) handleRoundTx(
 	}
 
 	// If no vtxos have been spent, add a new tx record.
-	if len(vtxosToSpend) <= 0 && len(pendingBoardingTxs) <= 0 {
-		if len(vtxosToAdd) > 0 {
+	if len(vtxosToSpend) <= 0 {
+		if len(vtxosToAdd) > 0 && len(pendingBoardingTxs) <= 0 {
 			amount := uint64(0)
 			for _, v := range vtxosToAdd {
 				amount += v.Amount
@@ -2508,6 +2532,29 @@ func (a *covenantlessArkClient) handleRoundTx(
 				Settled:   true,
 				CreatedAt: time.Now(),
 			})
+		}
+	} else {
+		if len(txsToSettle) <= 0 {
+			amount := uint64(0)
+			for _, v := range myVtxos {
+				amount += v.Amount
+			}
+			for _, v := range vtxosToAdd {
+				amount -= v.Amount
+			}
+
+			if amount > 0 {
+				txsToAdd = append(txsToAdd, types.Transaction{
+					TransactionKey: types.TransactionKey{
+						RoundTxid: roundTx.Txid,
+					},
+					Amount:    amount,
+					Type:      types.TxSent,
+					Settled:   true,
+					CreatedAt: time.Now(),
+				})
+			}
+
 		}
 	}
 
