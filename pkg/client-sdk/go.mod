@@ -25,7 +25,6 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/timshannon/badgerhold/v4 v4.0.3
 	github.com/vulpemventures/go-bip32 v0.0.0-20200624192635-867c159da4d7
-	github.com/vulpemventures/go-elements v0.5.4
 	golang.org/x/crypto v0.32.0
 	golang.org/x/exp v0.0.0-20250106191152-7588d65b2ba8
 	google.golang.org/grpc v1.69.4
@@ -83,7 +82,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7 // indirect
-	github.com/vulpemventures/fastsha256 v0.0.0-20160815193821-637e65642941 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.etcd.io/bbolt v1.3.10 // indirect
 	go.mongodb.org/mongo-driver v1.14.0 // indirect
