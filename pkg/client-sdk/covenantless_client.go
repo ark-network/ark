@@ -1942,7 +1942,7 @@ func (a *covenantlessArkClient) handleRoundFinalization(
 	boardingUtxos []types.Utxo,
 	receivers []client.Output,
 ) ([]string, string, error) {
-	if err := a.validateVtxoTree(event, receivers, len(vtxos) > 0); err != nil {
+	if err := a.validateVtxoTree(event, receivers, vtxos); err != nil {
 		return nil, "", fmt.Errorf("failed to verify vtxo tree: %s", err)
 	}
 
@@ -2031,7 +2031,7 @@ func (a *covenantlessArkClient) handleRoundFinalization(
 }
 
 func (a *covenantlessArkClient) validateVtxoTree(
-	event client.RoundFinalizationEvent, receivers []client.Output, needConnector bool,
+	event client.RoundFinalizationEvent, receivers []client.Output, vtxosInput []client.TapscriptsVtxo,
 ) error {
 	roundTx := event.Tx
 	ptx, err := psbt.NewFromRawBytes(strings.NewReader(roundTx), true)
@@ -2053,7 +2053,7 @@ func (a *covenantlessArkClient) validateVtxoTree(
 		return err
 	}
 
-	if needConnector {
+	if len(vtxosInput) > 0 {
 		root, err := event.Connectors.Root()
 		if err != nil {
 			return err
@@ -2072,7 +2072,19 @@ func (a *covenantlessArkClient) validateVtxoTree(
 			return fmt.Errorf("root's parent txid is not the same as the round txid: %s != %s", root.ParentTxid, getTxID(roundTx))
 		}
 
-		return event.Connectors.Validate(getTxID)
+		if err := event.Connectors.Validate(getTxID); err != nil {
+			return err
+		}
+
+		if len(event.ConnectorsIndex) == 0 {
+			return fmt.Errorf("empty connectors index")
+		}
+
+		for _, vtxo := range vtxosInput {
+			if _, ok := event.ConnectorsIndex[vtxo.Outpoint.String()]; !ok {
+				return fmt.Errorf("missing connector index for vtxo %s", vtxo.String())
+			}
+		}
 	}
 
 	return nil
@@ -2205,10 +2217,7 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 	signedForfeits := make([]string, 0, len(vtxosToSign))
 
 	for _, vtxo := range vtxosToSign {
-		connectorOutpoint, ok := connectorsIndex[vtxo.Outpoint.String()]
-		if !ok {
-			return nil, fmt.Errorf("connector index not found for vtxo %s", vtxo.Outpoint.String())
-		}
+		connectorOutpoint := connectorsIndex[vtxo.Outpoint.String()]
 
 		var connector *wire.TxOut
 		for _, node := range connectorsTxs {
