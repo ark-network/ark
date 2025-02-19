@@ -1534,10 +1534,11 @@ func (s *covenantlessService) waitForForfeitsAndBoardingSigs(
 				}
 
 				numOfInputsSigned := 0
-				for i := range roundTx.UnsignedTx.TxIn {
-					in := &roundTx.Inputs[i]
-					if len(in.FinalScriptWitness) > 0 {
-						numOfInputsSigned++
+				for _, v := range roundTx.Inputs {
+					if len(v.TaprootScriptSpendSig) > 0 {
+						if len(v.TaprootScriptSpendSig[0].Signature) > 0 {
+							numOfInputsSigned++
+						}
 					}
 				}
 

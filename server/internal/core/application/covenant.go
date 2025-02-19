@@ -821,10 +821,11 @@ func (s *covenantService) waitForForfeitsAndBoardingSigs(
 				}
 
 				numOfInputsSigned := 0
-				for i := range roundTx.Inputs {
-					in := &roundTx.Inputs[i]
-					if len(in.FinalScriptWitness) > 0 {
-						numOfInputsSigned++
+				for _, v := range roundTx.Inputs {
+					if len(v.TapScriptSig) > 0 {
+						if len(v.TapScriptSig[0].Signature) > 0 {
+							numOfInputsSigned++
+						}
 					}
 				}
 
