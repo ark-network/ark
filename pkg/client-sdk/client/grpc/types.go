@@ -7,7 +7,6 @@ import (
 	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
-	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -84,7 +83,7 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 	}
 
 	if ee := e.GetRoundSigningNoncesGenerated(); ee != nil {
-		nonces, err := bitcointree.DecodeNonces(hex.NewDecoder(strings.NewReader(ee.GetTreeNonces())))
+		nonces, err := tree.DecodeNonces(hex.NewDecoder(strings.NewReader(ee.GetTreeNonces())))
 		if err != nil {
 			return nil, err
 		}

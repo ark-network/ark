@@ -44,7 +44,7 @@ func DecodeAddress(addr string) (*Address, error) {
 	if err != nil {
 		return nil, err
 	}
-	if prefix != Liquid.Addr && prefix != LiquidTestNet.Addr && prefix != LiquidRegTest.Addr {
+	if prefix != Bitcoin.Addr && prefix != BitcoinTestNet.Addr && prefix != BitcoinRegTest.Addr {
 		return nil, fmt.Errorf("invalid prefix")
 	}
 	grp, err := bech32.ConvertBits(buf, 5, 8, false)

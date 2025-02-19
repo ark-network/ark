@@ -740,30 +740,6 @@ func TestMultisigClosureWitness(t *testing.T) {
 	}
 }
 
-func TestUnrollClosureWitness(t *testing.T) {
-	closure := &tree.UnrollClosure{
-		LeftKey:     secp256k1.NewPublicKey(new(secp256k1.FieldVal), new(secp256k1.FieldVal)),
-		RightKey:    secp256k1.NewPublicKey(new(secp256k1.FieldVal), new(secp256k1.FieldVal)),
-		LeftAmount:  1000,
-		RightAmount: 2000,
-	}
-
-	controlBlock := []byte("control block")
-	witness, err := closure.Witness(controlBlock, nil)
-	require.NoError(t, err)
-
-	// Should contain script and control block
-	require.Equal(t, 2, len(witness))
-
-	// Verify script is first
-	script, err := closure.Script()
-	require.NoError(t, err)
-	require.Equal(t, script, witness[0])
-
-	// Verify control block is last
-	require.Equal(t, controlBlock, witness[1])
-}
-
 func TestCSVMultisigClosureWitness(t *testing.T) {
 	// Generate test keys
 	priv1, err := secp256k1.GeneratePrivateKey()

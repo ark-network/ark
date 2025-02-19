@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
@@ -35,7 +34,7 @@ func NewCovenantlessRedeemBranch(
 		return nil, err
 	}
 
-	vtxoTreeExpiry, err := bitcointree.GetVtxoTreeExpiry(ptxRoot.Inputs[0])
+	vtxoTreeExpiry, err := tree.GetVtxoTreeExpiry(ptxRoot.Inputs[0])
 	if err != nil {
 		return nil, err
 	}

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
-	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
@@ -134,7 +133,7 @@ func (a *grpcClient) RegisterOutputsForNextRound(
 }
 
 func (a *grpcClient) SubmitTreeNonces(
-	ctx context.Context, roundID, cosignerPubkey string, nonces bitcointree.TreeNonces,
+	ctx context.Context, roundID, cosignerPubkey string, nonces tree.TreeNonces,
 ) error {
 	var nonceBuffer bytes.Buffer
 
@@ -158,7 +157,7 @@ func (a *grpcClient) SubmitTreeNonces(
 }
 
 func (a *grpcClient) SubmitTreeSignatures(
-	ctx context.Context, roundID, cosignerPubkey string, signatures bitcointree.TreePartialSigs,
+	ctx context.Context, roundID, cosignerPubkey string, signatures tree.TreePartialSigs,
 ) error {
 	var sigsBuffer bytes.Buffer
 

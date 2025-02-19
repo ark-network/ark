@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"encoding/hex"
 
-	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 )
 
@@ -25,7 +24,7 @@ type RoundSigningStarted struct {
 // then, delete its ephemeral key
 type RoundSigningNoncesGenerated struct {
 	Id     string
-	Nonces bitcointree.TreeNonces // aggregated nonces
+	Nonces tree.TreeNonces // aggregated nonces
 }
 
 func (e RoundSigningNoncesGenerated) SerializeNonces() (string, error) {

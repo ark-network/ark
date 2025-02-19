@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
@@ -436,18 +435,16 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		const cltvBlocks = 10
 		const sendAmount = 10000
 
-		currentHeight, err := utils.GetBlockHeight(false)
+		currentHeight, err := utils.GetBlockHeight()
 		require.NoError(t, err)
 
 		cltvLocktime := common.AbsoluteLocktime(currentHeight + cltvBlocks)
-		vtxoScript := bitcointree.TapscriptsVtxoScript{
-			TapscriptsVtxoScript: tree.TapscriptsVtxoScript{
-				Closures: []tree.Closure{
-					&tree.CLTVMultisigClosure{
-						Locktime: cltvLocktime,
-						MultisigClosure: tree.MultisigClosure{
-							PubKeys: []*secp256k1.PublicKey{bobPubKey},
-						},
+		vtxoScript := tree.TapscriptsVtxoScript{
+			Closures: []tree.Closure{
+				&tree.CLTVMultisigClosure{
+					Locktime: cltvLocktime,
+					MultisigClosure: tree.MultisigClosure{
+						PubKeys: []*secp256k1.PublicKey{bobPubKey},
 					},
 				},
 			},
@@ -518,7 +515,7 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		alicePkScript, err := common.P2TRScript(aliceAddr.VtxoTapKey)
 		require.NoError(t, err)
 
-		ptx, err := bitcointree.BuildRedeemTx(
+		ptx, err := tree.BuildRedeemTx(
 			[]common.VtxoInput{
 				{
 					Outpoint: &wire.OutPoint{
@@ -779,17 +776,15 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 	const cltvBlocks = 10
 	const sendAmount = 10000
 
-	currentHeight, err := utils.GetBlockHeight(false)
+	currentHeight, err := utils.GetBlockHeight()
 	require.NoError(t, err)
 
-	vtxoScript := bitcointree.TapscriptsVtxoScript{
-		TapscriptsVtxoScript: tree.TapscriptsVtxoScript{
-			Closures: []tree.Closure{
-				&tree.CLTVMultisigClosure{
-					Locktime: common.AbsoluteLocktime(currentHeight + cltvBlocks),
-					MultisigClosure: tree.MultisigClosure{
-						PubKeys: []*secp256k1.PublicKey{bobPubKey},
-					},
+	vtxoScript := tree.TapscriptsVtxoScript{
+		Closures: []tree.Closure{
+			&tree.CLTVMultisigClosure{
+				Locktime: common.AbsoluteLocktime(currentHeight + cltvBlocks),
+				MultisigClosure: tree.MultisigClosure{
+					PubKeys: []*secp256k1.PublicKey{bobPubKey},
 				},
 			},
 		},
@@ -859,7 +854,7 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 	alicePkScript, err := common.P2TRScript(aliceAddr.VtxoTapKey)
 	require.NoError(t, err)
 
-	ptx, err := bitcointree.BuildRedeemTx(
+	ptx, err := tree.BuildRedeemTx(
 		[]common.VtxoInput{
 			{
 				Outpoint: &wire.OutPoint{
@@ -962,14 +957,12 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 		Script()
 	require.NoError(t, err)
 
-	vtxoScript := bitcointree.TapscriptsVtxoScript{
-		TapscriptsVtxoScript: tree.TapscriptsVtxoScript{
-			Closures: []tree.Closure{
-				&tree.ConditionMultisigClosure{
-					Condition: conditionScript,
-					MultisigClosure: tree.MultisigClosure{
-						PubKeys: []*secp256k1.PublicKey{bobPubKey},
-					},
+	vtxoScript := tree.TapscriptsVtxoScript{
+		Closures: []tree.Closure{
+			&tree.ConditionMultisigClosure{
+				Condition: conditionScript,
+				MultisigClosure: tree.MultisigClosure{
+					PubKeys: []*secp256k1.PublicKey{bobPubKey},
 				},
 			},
 		},
@@ -1039,7 +1032,7 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 	alicePkScript, err := common.P2TRScript(aliceAddr.VtxoTapKey)
 	require.NoError(t, err)
 
-	ptx, err := bitcointree.BuildRedeemTx(
+	ptx, err := tree.BuildRedeemTx(
 		[]common.VtxoInput{
 			{
 				Outpoint: &wire.OutPoint{
@@ -1063,7 +1056,7 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 	partialTx, err := psbt.NewFromRawBytes(strings.NewReader(ptx), true)
 	require.NoError(t, err)
 
-	err = bitcointree.AddConditionWitness(0, partialTx, wire.TxWitness{preimage[:]})
+	err = tree.AddConditionWitness(0, partialTx, wire.TxWitness{preimage[:]})
 	require.NoError(t, err)
 
 	ptx, err = partialTx.B64Encode()

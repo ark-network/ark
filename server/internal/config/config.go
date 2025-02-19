@@ -13,12 +13,10 @@ import (
 	"github.com/ark-network/ark/server/internal/infrastructure/db"
 	blockscheduler "github.com/ark-network/ark/server/internal/infrastructure/scheduler/block"
 	timescheduler "github.com/ark-network/ark/server/internal/infrastructure/scheduler/gocron"
-	txbuilder "github.com/ark-network/ark/server/internal/infrastructure/tx-builder/covenant"
-	cltxbuilder "github.com/ark-network/ark/server/internal/infrastructure/tx-builder/covenantless"
+	txbuilder "github.com/ark-network/ark/server/internal/infrastructure/tx-builder/covenantless"
 	envunlocker "github.com/ark-network/ark/server/internal/infrastructure/unlocker/env"
 	fileunlocker "github.com/ark-network/ark/server/internal/infrastructure/unlocker/file"
 	btcwallet "github.com/ark-network/ark/server/internal/infrastructure/wallet/btc-embedded"
-	liquidwallet "github.com/ark-network/ark/server/internal/infrastructure/wallet/liquid-standalone"
 	"github.com/nbd-wtf/go-nostr"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -39,7 +37,6 @@ var (
 		"block":  {},
 	}
 	supportedTxBuilders = supportedType{
-		"covenant":     {},
 		"covenantless": {},
 	}
 	supportedUnlockers = supportedType{
@@ -52,9 +49,6 @@ var (
 		common.BitcoinSigNet.Name:    {},
 		common.BitcoinMutinyNet.Name: {},
 		common.BitcoinRegTest.Name:   {},
-		common.Liquid.Name:           {},
-		common.LiquidTestNet.Name:    {},
-		common.LiquidRegTest.Name:    {},
 	}
 )
 
@@ -269,12 +263,6 @@ func makeDirectoryIfNotExists(path string) error {
 
 func getNetwork() (common.Network, error) {
 	switch strings.ToLower(viper.GetString(Network)) {
-	case common.Liquid.Name:
-		return common.Liquid, nil
-	case common.LiquidTestNet.Name:
-		return common.LiquidTestNet, nil
-	case common.LiquidRegTest.Name:
-		return common.LiquidRegTest, nil
 	case common.Bitcoin.Name:
 		return common.Bitcoin, nil
 	case common.BitcoinTestNet.Name:
@@ -462,16 +450,6 @@ func (c *Config) repoManager() error {
 }
 
 func (c *Config) walletService() error {
-	if common.IsLiquid(c.Network) {
-		svc, err := liquidwallet.NewService(c.WalletAddr, c.EsploraURL)
-		if err != nil {
-			return fmt.Errorf("failed to connect to wallet: %s", err)
-		}
-
-		c.wallet = svc
-		return nil
-	}
-
 	// Check if both Neutrino peer and Bitcoind RPC credentials are provided
 	if c.NeutrinoPeer != "" && (c.BitcoindRpcUser != "" || c.BitcoindRpcPass != "") {
 		return fmt.Errorf("cannot use both Neutrino peer and Bitcoind RPC credentials")
@@ -514,12 +492,8 @@ func (c *Config) txBuilderService() error {
 	var svc ports.TxBuilder
 	var err error
 	switch c.TxBuilderType {
-	case "covenant":
-		svc = txbuilder.NewTxBuilder(
-			c.wallet, c.Network, c.VtxoTreeExpiry, c.BoardingExitDelay,
-		)
 	case "covenantless":
-		svc = cltxbuilder.NewTxBuilder(
+		svc = txbuilder.NewTxBuilder(
 			c.wallet, c.Network, c.VtxoTreeExpiry, c.BoardingExitDelay,
 		)
 	default:
@@ -558,20 +532,6 @@ func (c *Config) schedulerService() error {
 }
 
 func (c *Config) appService() error {
-	if common.IsLiquid(c.Network) {
-		svc, err := application.NewCovenantService(
-			c.Network, c.RoundInterval, c.VtxoTreeExpiry, c.UnilateralExitDelay, c.BoardingExitDelay, c.NostrDefaultRelays,
-			c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NoteUriPrefix,
-			c.MarketHourStartTime, c.MarketHourEndTime, c.MarketHourPeriod, c.MarketHourRoundInterval,
-		)
-		if err != nil {
-			return err
-		}
-
-		c.svc = svc
-		return nil
-	}
-
 	svc, err := application.NewCovenantlessService(
 		c.Network, c.RoundInterval, c.VtxoTreeExpiry, c.UnilateralExitDelay, c.BoardingExitDelay, c.NostrDefaultRelays,
 		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NoteUriPrefix,

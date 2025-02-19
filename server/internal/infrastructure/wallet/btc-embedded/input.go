@@ -11,10 +11,6 @@ type transactionOutputTxInput struct {
 	*wallet.TransactionOutput
 }
 
-func (t transactionOutputTxInput) GetAsset() string {
-	panic("ports.TxInput.GetAsset unimplemented on Bitcoin network") // liquid only
-}
-
 func (t transactionOutputTxInput) GetIndex() uint32 {
 	return t.OutPoint.Index
 }
@@ -34,10 +30,6 @@ func (t transactionOutputTxInput) GetValue() uint64 {
 // coinTxInput is a wrapper around wallet.Coin implementing the ports.TxInput interface
 type coinTxInput struct {
 	wallet.Coin
-}
-
-func (c coinTxInput) GetAsset() string {
-	panic("ports.TxInput.GetAsset unimplemented on Bitcoin network") // liquid only
 }
 
 func (c coinTxInput) GetIndex() uint32 {
