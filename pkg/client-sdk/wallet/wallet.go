@@ -3,7 +3,7 @@ package wallet
 import (
 	"context"
 
-	"github.com/ark-network/ark/common/bitcointree"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 )
 
@@ -40,5 +40,5 @@ type WalletService interface {
 		ctx context.Context, message []byte,
 	) (signature string, err error)
 	Dump(ctx context.Context) (seed string, err error)
-	NewVtxoTreeSigner(ctx context.Context, derivationPath string) (bitcointree.SignerSession, error)
+	NewVtxoTreeSigner(ctx context.Context, derivationPath string) (tree.SignerSession, error)
 }

@@ -8,37 +8,28 @@ import (
 	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/vulpemventures/go-elements/taproot"
 )
 
-var (
-	ErrNoExitLeaf = fmt.Errorf("no exit leaf")
-)
+var ErrNoExitLeaf = fmt.Errorf("no exit leaf")
 
-type VtxoScript common.VtxoScript[elementsTapTree, Closure]
+type VtxoScript common.VtxoScript[bitcoinTapTree, Closure]
 
 func ParseVtxoScript(scripts []string) (VtxoScript, error) {
-	v := &TapscriptsVtxoScript{}
-
-	err := v.Decode(scripts)
-	return v, err
-}
-
-func NewDefaultVtxoScript(owner, server *secp256k1.PublicKey, exitDelay common.RelativeLocktime) *TapscriptsVtxoScript {
-	return &TapscriptsVtxoScript{
-		[]Closure{
-			&CSVMultisigClosure{
-				MultisigClosure: MultisigClosure{PubKeys: []*secp256k1.PublicKey{owner}},
-				Locktime:        exitDelay,
-			},
-			&MultisigClosure{PubKeys: []*secp256k1.PublicKey{owner, server}},
-		},
+	types := []VtxoScript{
+		&TapscriptsVtxoScript{},
 	}
+
+	for _, v := range types {
+		if err := v.Decode(scripts); err == nil {
+			return v, nil
+		}
+	}
+
+	return nil, fmt.Errorf("invalid vtxo scripts: %s", scripts)
 }
 
-// TapscriptsVtxoScript represents a taproot script that contains a list of tapscript leaves
-// the key-path is always unspendable
 type TapscriptsVtxoScript struct {
 	Closures []Closure
 }
@@ -148,36 +139,51 @@ func (v *TapscriptsVtxoScript) ExitClosures() []Closure {
 	return exits
 }
 
-func (v *TapscriptsVtxoScript) TapTree() (*secp256k1.PublicKey, elementsTapTree, error) {
-	leaves := make([]taproot.TapElementsLeaf, 0, len(v.Closures))
-	for _, closure := range v.Closures {
-		leaf, err := closure.Script()
+func NewDefaultVtxoScript(owner, server *secp256k1.PublicKey, exitDelay common.RelativeLocktime) *TapscriptsVtxoScript {
+	return &TapscriptsVtxoScript{
+		[]Closure{
+			&CSVMultisigClosure{
+				MultisigClosure: MultisigClosure{PubKeys: []*secp256k1.PublicKey{owner}},
+				Locktime:        exitDelay,
+			},
+			&MultisigClosure{PubKeys: []*secp256k1.PublicKey{owner, server}},
+		},
+	}
+}
+
+func (v *TapscriptsVtxoScript) TapTree() (*secp256k1.PublicKey, bitcoinTapTree, error) {
+	leaves := make([]txscript.TapLeaf, len(v.Closures))
+	for i, closure := range v.Closures {
+		script, err := closure.Script()
 		if err != nil {
-			return nil, elementsTapTree{}, err
+			return nil, bitcoinTapTree{}, fmt.Errorf("failed to get script for closure %d: %w", i, err)
 		}
-		leaves = append(leaves, taproot.NewBaseTapElementsLeaf(leaf))
+		leaves[i] = txscript.NewBaseTapLeaf(script)
 	}
 
-	tapTree := taproot.AssembleTaprootScriptTree(leaves...)
+	tapTree := txscript.AssembleTaprootScriptTree(leaves...)
 	root := tapTree.RootNode.TapHash()
-	taprootKey := taproot.ComputeTaprootOutputKey(UnspendableKey(), root[:])
+	taprootKey := txscript.ComputeTaprootOutputKey(
+		UnspendableKey(),
+		root[:],
+	)
 
-	return taprootKey, elementsTapTree{tapTree}, nil
+	return taprootKey, bitcoinTapTree{tapTree}, nil
 }
 
-// elementsTapTree wraps the IndexedElementsTapScriptTree to implement the common.TaprootTree interface
-type elementsTapTree struct {
-	*taproot.IndexedElementsTapScriptTree
+// bitcoinTapTree is a wrapper around txscript.IndexedTapScriptTree to implement the common.TaprootTree interface
+type bitcoinTapTree struct {
+	*txscript.IndexedTapScriptTree
 }
 
-func (b elementsTapTree) GetRoot() chainhash.Hash {
+func (b bitcoinTapTree) GetRoot() chainhash.Hash {
 	return b.RootNode.TapHash()
 }
 
-func (b elementsTapTree) GetTaprootMerkleProof(leafhash chainhash.Hash) (*common.TaprootMerkleProof, error) {
+func (b bitcoinTapTree) GetTaprootMerkleProof(leafhash chainhash.Hash) (*common.TaprootMerkleProof, error) {
 	index, ok := b.LeafProofIndex[leafhash]
 	if !ok {
-		return nil, fmt.Errorf("leaf %s not found in taproot tree", leafhash.String())
+		return nil, fmt.Errorf("leaf %s not found in tree", leafhash.String())
 	}
 	proof := b.LeafMerkleProofs[index]
 
@@ -193,10 +199,10 @@ func (b elementsTapTree) GetTaprootMerkleProof(leafhash chainhash.Hash) (*common
 	}, nil
 }
 
-func (b elementsTapTree) GetLeaves() []chainhash.Hash {
-	hashes := make([]chainhash.Hash, 0)
-	for h := range b.LeafProofIndex {
-		hashes = append(hashes, h)
+func (b bitcoinTapTree) GetLeaves() []chainhash.Hash {
+	leafHashes := make([]chainhash.Hash, 0)
+	for hash := range b.LeafProofIndex {
+		leafHashes = append(leafHashes, hash)
 	}
-	return hashes
+	return leafHashes
 }

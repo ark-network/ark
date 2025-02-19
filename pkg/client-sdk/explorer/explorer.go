@@ -16,13 +16,10 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/vulpemventures/go-elements/psetv2"
-	"github.com/vulpemventures/go-elements/transaction"
 )
 
 const (
 	BitcoinExplorer = "bitcoin"
-	LiquidExplorer  = "liquid"
 )
 
 type ExplorerTx struct {
@@ -41,7 +38,6 @@ type ExplorerUtxo struct {
 	Txid   string `json:"txid"`
 	Vout   uint32 `json:"vout"`
 	Amount uint64 `json:"value"`
-	Asset  string `json:"asset,omitempty"`
 	Status struct {
 		Confirmed bool  `json:"confirmed"`
 		Blocktime int64 `json:"block_time"`
@@ -143,12 +139,9 @@ func (e *explorerSvc) GetTxHex(txid string) (string, error) {
 
 func (e *explorerSvc) Broadcast(txStr string) (string, error) {
 	clone := strings.Clone(txStr)
-	txStr, txid, err := parseLiquidTx(txStr)
+	txStr, txid, err := parseBitcoinTx(clone)
 	if err != nil {
-		txStr, txid, err = parseBitcoinTx(clone)
-		if err != nil {
-			return "", err
-		}
+		return "", err
 	}
 
 	e.cache.Set(txid, txStr)
@@ -353,39 +346,6 @@ func (e *explorerSvc) broadcast(txHex string) (string, error) {
 	return string(bodyResponse), nil
 }
 
-func parseLiquidTx(txStr string) (string, string, error) {
-	tx, err := transaction.NewTxFromHex(txStr)
-	if err != nil {
-		pset, err := psetv2.NewPsetFromBase64(txStr)
-		if err != nil {
-			return "", "", err
-		}
-
-		tx, err = psetv2.Extract(pset)
-		if err != nil {
-			return "", "", err
-		}
-
-		txhex, err := tx.ToHex()
-		if err != nil {
-			return "", "", err
-		}
-
-		txid := tx.TxHash().String()
-
-		return txhex, txid, nil
-	}
-
-	txhex, err := tx.ToHex()
-	if err != nil {
-		return "", "", err
-	}
-
-	txid := tx.TxHash().String()
-
-	return txhex, txid, nil
-}
-
 func parseBitcoinTx(txStr string) (string, string, error) {
 	var tx wire.MsgTx
 
@@ -427,7 +387,6 @@ func newUtxo(explorerUtxo ExplorerUtxo, delay common.RelativeLocktime, tapscript
 		Txid:        explorerUtxo.Txid,
 		VOut:        explorerUtxo.Vout,
 		Amount:      explorerUtxo.Amount,
-		Asset:       explorerUtxo.Asset,
 		Delay:       delay,
 		SpendableAt: time.Unix(utxoTime, 0).Add(time.Duration(delay.Seconds()) * time.Second),
 		CreatedAt:   createdAt,

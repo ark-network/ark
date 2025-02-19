@@ -1,10 +1,10 @@
-package bitcointree_test
+package tree_test
 
 import (
 	"testing"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/bitcointree"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -31,11 +31,11 @@ func TestPsbtCustomUnknownFields(t *testing.T) {
 		}
 
 		// Add witness to input 0
-		err = bitcointree.AddConditionWitness(0, ptx, witness)
+		err = tree.AddConditionWitness(0, ptx, witness)
 		require.NoError(t, err)
 
 		// Get witness back and verify
-		retrievedWitness, err := bitcointree.GetConditionWitness(ptx.Inputs[0])
+		retrievedWitness, err := tree.GetConditionWitness(ptx.Inputs[0])
 		require.NoError(t, err)
 		require.Equal(t, len(witness), len(retrievedWitness))
 
@@ -61,11 +61,11 @@ func TestPsbtCustomUnknownFields(t *testing.T) {
 			Type:  common.LocktimeTypeBlock,
 			Value: 144, // 1 day worth of blocks
 		}
-		err = bitcointree.AddVtxoTreeExpiry(0, ptx, vtxoTreeExpiry)
+		err = tree.AddVtxoTreeExpiry(0, ptx, vtxoTreeExpiry)
 		require.NoError(t, err)
 
 		// Get vtxo tree expiry back and verify
-		retrievedVtxoTreeExpiry, err := bitcointree.GetVtxoTreeExpiry(ptx.Inputs[0])
+		retrievedVtxoTreeExpiry, err := tree.GetVtxoTreeExpiry(ptx.Inputs[0])
 		require.NoError(t, err)
 		require.NotNil(t, retrievedVtxoTreeExpiry)
 		require.Equal(t, vtxoTreeExpiry.Type, retrievedVtxoTreeExpiry.Type)
@@ -91,12 +91,12 @@ func TestPsbtCustomUnknownFields(t *testing.T) {
 			require.NoError(t, err)
 			keys = append(keys, key.PubKey())
 
-			err = bitcointree.AddCosignerKey(0, ptx, key.PubKey())
+			err = tree.AddCosignerKey(0, ptx, key.PubKey())
 			require.NoError(t, err)
 		}
 
 		// Get cosigner keys back and verify
-		retrievedKeys, err := bitcointree.GetCosignerKeys(ptx.Inputs[0])
+		retrievedKeys, err := tree.GetCosignerKeys(ptx.Inputs[0])
 		require.NoError(t, err)
 		require.Len(t, retrievedKeys, 40)
 

@@ -6,501 +6,445 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/vulpemventures/go-elements/address"
-	"github.com/vulpemventures/go-elements/psetv2"
-	"github.com/vulpemventures/go-elements/taproot"
 )
 
-func BuildTxTree(
-	asset string, serverPubkey *secp256k1.PublicKey, receivers []Leaf,
-	feeSatsPerNode uint64, treeExpiry *common.RelativeLocktime,
-) (
-	factoryFn TreeFactory,
-	sharedOutputScript []byte, sharedOutputAmount uint64, err error,
-) {
-	root, err := buildTreeNodes(
-		asset, serverPubkey, receivers, feeSatsPerNode, treeExpiry,
-	)
+const (
+	vtxoTreeRadix       = 2
+	connectorsTreeRadix = 4
+)
+
+// CraftSharedOutput returns the taproot script and the amount of the root shared output of a vtxo tree
+// radix is hardcoded to 2
+func CraftSharedOutput(
+	receivers []Leaf,
+	feeSatsPerNode uint64,
+	sweepTapTreeRoot []byte,
+) ([]byte, int64, error) {
+	root, err := createTxTree(receivers, feeSatsPerNode, sweepTapTreeRoot, vtxoTreeRadix)
 	if err != nil {
-		return
+		return nil, 0, err
 	}
 
-	taprootKey, _, err := root.getWitnessData()
+	amount := root.getAmount() + int64(feeSatsPerNode)
+
+	aggregatedKey, err := AggregateKeys(root.getCosigners(), sweepTapTreeRoot)
 	if err != nil {
-		return
+		return nil, 0, fmt.Errorf("failed to aggregate keys: %w", err)
 	}
 
-	sharedOutputScript, err = taprootOutputScript(taprootKey)
+	scriptPubkey, err := common.P2TRScript(aggregatedKey.FinalKey)
 	if err != nil {
-		return
+		return nil, 0, fmt.Errorf("failed to create script pubkey: %w", err)
 	}
-	sharedOutputAmount = root.getAmount() + root.feeSats
-	factoryFn = root.buildVtxoTree()
 
-	return
+	return scriptPubkey, amount, nil
 }
 
-type taprootOutput struct {
-	pubkey *secp256k1.PublicKey
-	amount uint64
+// BuildVtxoTree creates all the tree's transactions and returns the vtxo tree
+// radix is hardcoded to 2
+func BuildVtxoTree(
+	initialInput *wire.OutPoint,
+	receivers []Leaf,
+	feeSatsPerNode uint64,
+	sweepTapTreeRoot []byte,
+	vtxoTreeExpiry common.RelativeLocktime,
+) (TxTree, error) {
+	root, err := createTxTree(receivers, feeSatsPerNode, sweepTapTreeRoot, vtxoTreeRadix)
+	if err != nil {
+		return nil, err
+	}
+
+	return toTxTree(root, initialInput, &vtxoTreeExpiry)
 }
 
-type node struct {
-	sweepKey   *secp256k1.PublicKey
-	receivers  []taprootOutput
-	left       *node
-	right      *node
-	asset      string
-	feeSats    uint64
-	treeExpiry *common.RelativeLocktime
+// CraftConnectorsOutput returns the taproot script and the amount of the root shared output of a connectors tree
+// radix is hardcoded to 4
+func CraftConnectorsOutput(
+	receivers []Leaf,
+	feeSatsPerNode uint64,
+) ([]byte, int64, error) {
+	root, err := createTxTree(receivers, feeSatsPerNode, nil, connectorsTreeRadix)
+	if err != nil {
+		return nil, 0, err
+	}
 
-	_inputTaprootKey  *secp256k1.PublicKey
-	_inputTaprootTree *taproot.IndexedElementsTapScriptTree
+	amount := root.getAmount() + int64(feeSatsPerNode)
+
+	aggregatedKey, err := AggregateKeys(root.getCosigners(), nil)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to aggregate keys: %w", err)
+	}
+
+	scriptPubkey, err := common.P2TRScript(aggregatedKey.FinalKey)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to create script pubkey: %w", err)
+	}
+
+	return scriptPubkey, amount, nil
 }
 
-func (n *node) isLeaf() bool {
-	return len(n.receivers) == 1
+// BuildConnectorsTree creates all the tree's transactions and returns the vtxo tree
+// radix is hardcoded to 4
+func BuildConnectorsTree(
+	initialInput *wire.OutPoint,
+	receivers []Leaf,
+	feeSatsPerNode uint64,
+) (TxTree, error) {
+	root, err := createTxTree(receivers, feeSatsPerNode, nil, connectorsTreeRadix)
+	if err != nil {
+		return nil, err
+	}
+
+	return toTxTree(root, initialInput, nil)
 }
 
-func (n *node) getAmount() uint64 {
-	var amount uint64
-	for _, r := range n.receivers {
-		amount += r.amount
-	}
+// toTxTree converts a node root to tree.VtxoTree matrix
+func toTxTree(root node, initialInput *wire.OutPoint, expiry *common.RelativeLocktime) (TxTree, error) {
+	vtxoTree := make(TxTree, 0)
 
-	if n.isLeaf() {
-		return amount
-	}
+	ins := []*wire.OutPoint{initialInput}
+	nodes := []node{root}
 
-	return amount + n.feeSats*uint64(n.countChildren())
-}
+	for len(nodes) > 0 {
+		nextNodes := make([]node, 0)
+		nextInputsArgs := make([]*wire.OutPoint, 0)
 
-func (n *node) countChildren() int {
-	result := 0
+		treeLevel := make([]Node, 0)
 
-	if n.left != nil {
-		result++
-		result += n.left.countChildren()
-	}
+		for i, node := range nodes {
+			treeNode, err := getTreeNode(node, ins[i], expiry)
+			if err != nil {
+				return nil, err
+			}
 
-	if n.right != nil {
-		result++
-		result += n.right.countChildren()
-	}
+			nodeTxHash, err := chainhash.NewHashFromStr(treeNode.Txid)
+			if err != nil {
+				return nil, err
+			}
 
-	return result
-}
+			treeLevel = append(treeLevel, treeNode)
 
-func (n *node) getChildren() []*node {
-	if n.isLeaf() {
-		return nil
-	}
+			children := node.getChildren()
 
-	children := make([]*node, 0, 2)
+			for i, child := range children {
+				nextNodes = append(nextNodes, child)
 
-	if n.left != nil {
-		children = append(children, n.left)
-	}
-
-	if n.right != nil {
-		children = append(children, n.right)
-	}
-
-	return children
-}
-
-func (n *node) getOutputs() ([]psetv2.OutputArgs, error) {
-	if n.isLeaf() {
-		taprootKey, err := n.getOutputWitnessData()
-		if err != nil {
-			return nil, err
+				nextInputsArgs = append(nextInputsArgs, &wire.OutPoint{
+					Hash:  *nodeTxHash,
+					Index: uint32(i),
+				})
+			}
 		}
 
-		script, err := taprootOutputScript(taprootKey)
-		if err != nil {
-			return nil, err
-		}
-
-		output := &psetv2.OutputArgs{
-			Asset:  n.asset,
-			Amount: uint64(n.getAmount()),
-			Script: script,
-		}
-
-		return []psetv2.OutputArgs{*output}, nil
+		vtxoTree = append(vtxoTree, treeLevel)
+		nodes = append([]node{}, nextNodes...)
+		ins = append([]*wire.OutPoint{}, nextInputsArgs...)
 	}
 
-	outputs := make([]psetv2.OutputArgs, 0, 2)
-	children := n.getChildren()
+	return vtxoTree, nil
+}
 
-	for _, child := range children {
-		childWitnessProgram, _, err := child.getWitnessData()
-		if err != nil {
-			return nil, err
-		}
+type node interface {
+	getAmount() int64 // returns the input amount of the node = sum of all receivers' amounts + fees
+	getOutputs() ([]*wire.TxOut, error)
+	getChildren() []node
+	getCosigners() []*secp256k1.PublicKey
+}
 
-		script, err := taprootOutputScript(childWitnessProgram)
-		if err != nil {
-			return nil, err
-		}
+type leaf struct {
+	amount     int64
+	pkScript   []byte
+	cosigners  []*secp256k1.PublicKey
+	signerType SigningType
+}
 
-		outputs = append(outputs, psetv2.OutputArgs{
-			Asset:  n.asset,
-			Amount: child.getAmount() + child.feeSats,
-			Script: script,
+type branch struct {
+	cosigners []*secp256k1.PublicKey
+	pkScript  []byte
+	children  []node
+	feeAmount int64
+}
+
+func (b *branch) getCosigners() []*secp256k1.PublicKey {
+	return b.cosigners
+}
+
+func (l *leaf) getCosigners() []*secp256k1.PublicKey {
+	return l.cosigners
+}
+
+func (b *branch) getChildren() []node {
+	return b.children
+}
+
+func (l *leaf) getChildren() []node {
+	return []node{}
+}
+
+func (b *branch) getAmount() int64 {
+	amount := int64(0)
+	for _, child := range b.children {
+		amount += child.getAmount()
+		amount += b.feeAmount
+	}
+
+	return amount
+}
+
+func (l *leaf) getAmount() int64 {
+	return l.amount
+}
+
+func (l *leaf) getOutputs() ([]*wire.TxOut, error) {
+	return []*wire.TxOut{
+		{
+			Value:    l.amount,
+			PkScript: l.pkScript,
+		},
+	}, nil
+}
+
+func (b *branch) getOutputs() ([]*wire.TxOut, error) {
+	outputs := make([]*wire.TxOut, 0)
+
+	for _, child := range b.children {
+		outputs = append(outputs, &wire.TxOut{
+			Value:    child.getAmount() + b.feeAmount,
+			PkScript: b.pkScript,
 		})
 	}
 
 	return outputs, nil
 }
 
-func (n *node) getWitnessData() (
-	*secp256k1.PublicKey, *taproot.IndexedElementsTapScriptTree, error,
-) {
-	if n._inputTaprootKey != nil && n._inputTaprootTree != nil {
-		return n._inputTaprootKey, n._inputTaprootTree, nil
-	}
-
-	var sweepLeaf []byte
-
-	if n.treeExpiry != nil {
-		sweepClosure := &CSVMultisigClosure{
-			MultisigClosure: MultisigClosure{PubKeys: []*secp256k1.PublicKey{n.sweepKey}},
-			Locktime:        *n.treeExpiry,
-		}
-
-		var err error
-		sweepLeaf, err = sweepClosure.Script()
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	if n.isLeaf() {
-		taprootKey, err := n.getOutputWitnessData()
-		if err != nil {
-			return nil, nil, err
-		}
-
-		unrollClosure := &UnrollClosure{
-			LeftKey:     taprootKey,
-			MinRelayFee: n.feeSats,
-		}
-
-		unrollScript, err := unrollClosure.Script()
-		if err != nil {
-			return nil, nil, err
-		}
-
-		tapLeaves := make([]taproot.TapElementsLeaf, 0, 2)
-		tapLeaves = append(tapLeaves, taproot.NewBaseTapElementsLeaf(unrollScript))
-		if sweepLeaf != nil {
-			tapLeaves = append(tapLeaves, taproot.NewBaseTapElementsLeaf(sweepLeaf))
-		}
-
-		branchTaprootTree := taproot.AssembleTaprootScriptTree(tapLeaves...)
-		root := branchTaprootTree.RootNode.TapHash()
-
-		inputTapkey := taproot.ComputeTaprootOutputKey(
-			UnspendableKey(),
-			root[:],
-		)
-
-		n._inputTaprootKey = inputTapkey
-		n._inputTaprootTree = branchTaprootTree
-
-		return inputTapkey, branchTaprootTree, nil
-	}
-
-	leftKey, _, err := n.left.getWitnessData()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	rightKey, _, err := n.right.getWitnessData()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	leftAmount := n.left.getAmount() + n.feeSats
-	rightAmount := n.right.getAmount() + n.feeSats
-
-	unrollClosure := &UnrollClosure{
-		LeftKey:     leftKey,
-		LeftAmount:  leftAmount,
-		RightKey:    rightKey,
-		RightAmount: rightAmount,
-	}
-
-	unrollLeaf, err := unrollClosure.Script()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	branchTaprootTree := taproot.AssembleTaprootScriptTree(
-		taproot.NewBaseTapElementsLeaf(unrollLeaf),
-		taproot.NewBaseTapElementsLeaf(sweepLeaf),
-	)
-	root := branchTaprootTree.RootNode.TapHash()
-
-	taprootKey := taproot.ComputeTaprootOutputKey(
-		UnspendableKey(),
-		root[:],
-	)
-
-	n._inputTaprootKey = taprootKey
-	n._inputTaprootTree = branchTaprootTree
-
-	return taprootKey, branchTaprootTree, nil
-}
-
-func (n *node) getOutputWitnessData() (
-	*secp256k1.PublicKey, error,
-) {
-	if !n.isLeaf() {
-		return nil, fmt.Errorf("cannot call getOutputWitnessData on a non-leaf node")
-	}
-
-	receiver := n.receivers[0]
-	return receiver.pubkey, nil
-}
-
-func (n *node) getTreeNode(
-	input psetv2.InputArgs, tapTree *taproot.IndexedElementsTapScriptTree,
+func getTreeNode(
+	n node,
+	input *wire.OutPoint,
+	expiry *common.RelativeLocktime,
 ) (Node, error) {
-	pset, err := n.getTx(input, tapTree)
+	partialTx, err := getTx(n, input, expiry)
 	if err != nil {
 		return Node{}, err
 	}
 
-	txid, err := getPsetId(pset)
-	if err != nil {
-		return Node{}, err
-	}
+	txid := partialTx.UnsignedTx.TxHash().String()
 
-	tx, err := pset.ToBase64()
+	tx, err := partialTx.B64Encode()
 	if err != nil {
 		return Node{}, err
 	}
-	parentTxid := chainhash.Hash(pset.Inputs[0].PreviousTxid).String()
 
 	return Node{
 		Txid:       txid,
 		Tx:         tx,
-		ParentTxid: parentTxid,
-		Leaf:       n.isLeaf(),
+		ParentTxid: input.Hash.String(),
+		Leaf:       len(n.getChildren()) == 0,
 	}, nil
 }
 
-func (n *node) getTx(
-	input psetv2.InputArgs, inputTapTree *taproot.IndexedElementsTapScriptTree,
-) (*psetv2.Pset, error) {
-	pset, err := psetv2.New(nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	updater, err := psetv2.NewUpdater(pset)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := addTaprootInput(
-		updater, input, UnspendableKey(), inputTapTree,
-	); err != nil {
-		return nil, err
-	}
-
-	feeOutput := psetv2.OutputArgs{
-		Amount: uint64(n.feeSats),
-		Asset:  n.asset,
-	}
-
+func getTx(
+	n node,
+	input *wire.OutPoint,
+	expiry *common.RelativeLocktime,
+) (*psbt.Packet, error) {
 	outputs, err := n.getOutputs()
 	if err != nil {
 		return nil, err
 	}
 
-	if err := updater.AddOutputs(append(outputs, feeOutput)); err != nil {
+	tx, err := psbt.New([]*wire.OutPoint{input}, outputs, 2, 0, []uint32{wire.MaxTxInSequenceNum})
+	if err != nil {
 		return nil, err
 	}
 
-	return pset, nil
-}
+	updater, err := psbt.NewUpdater(tx)
+	if err != nil {
+		return nil, err
+	}
 
-func (n *node) buildVtxoTree() TreeFactory {
-	return func(roundTxInput psetv2.InputArgs) (TxTree, error) {
-		vtxoTree := make(TxTree, 0)
+	if err := updater.AddInSighashType(0, int(txscript.SigHashDefault)); err != nil {
+		return nil, err
+	}
 
-		_, taprootTree, err := n.getWitnessData()
-		if err != nil {
+	for _, cosigner := range n.getCosigners() {
+		if err := AddCosignerKey(0, tx, cosigner); err != nil {
 			return nil, err
 		}
-
-		ins := []psetv2.InputArgs{roundTxInput}
-		inTrees := []*taproot.IndexedElementsTapScriptTree{taprootTree}
-		nodes := []*node{n}
-
-		for len(nodes) > 0 {
-			nextNodes := make([]*node, 0)
-			nextInputsArgs := make([]psetv2.InputArgs, 0)
-			nextTaprootTrees := make([]*taproot.IndexedElementsTapScriptTree, 0)
-
-			treeLevel := make([]Node, 0)
-
-			for i, node := range nodes {
-				treeNode, err := node.getTreeNode(ins[i], inTrees[i])
-				if err != nil {
-					return nil, err
-				}
-
-				treeLevel = append(treeLevel, treeNode)
-
-				children := node.getChildren()
-
-				for i, child := range children {
-					_, taprootTree, err := child.getWitnessData()
-					if err != nil {
-						return nil, err
-					}
-
-					nextNodes = append(nextNodes, child)
-					nextInputsArgs = append(nextInputsArgs, psetv2.InputArgs{
-						Txid:    treeNode.Txid,
-						TxIndex: uint32(i),
-					})
-					nextTaprootTrees = append(nextTaprootTrees, taprootTree)
-				}
-			}
-
-			vtxoTree = append(vtxoTree, treeLevel)
-			nodes = append([]*node{}, nextNodes...)
-			ins = append([]psetv2.InputArgs{}, nextInputsArgs...)
-			inTrees = append(
-				[]*taproot.IndexedElementsTapScriptTree{}, nextTaprootTrees...,
-			)
-		}
-
-		return vtxoTree, nil
 	}
+
+	if expiry != nil {
+		if err := AddVtxoTreeExpiry(0, tx, *expiry); err != nil {
+			return nil, err
+		}
+	}
+
+	return tx, nil
 }
 
-func buildTreeNodes(
-	asset string, serverPubkey *secp256k1.PublicKey, receivers []Leaf,
-	feeSatsPerNode uint64, treeExpiry *common.RelativeLocktime,
-) (root *node, err error) {
+// createTxTree is a recursive function that creates a tree of transactions
+// from the leaves to the root.
+func createTxTree(
+	receivers []Leaf,
+	feeSatsPerNode uint64,
+	tapTreeRoot []byte,
+	radix int,
+) (root node, err error) {
 	if len(receivers) == 0 {
 		return nil, fmt.Errorf("no receivers provided")
 	}
 
-	nodes := make([]*node, 0, len(receivers))
+	cosignersALL := make([]*secp256k1.PublicKey, 0)
 	for _, r := range receivers {
-		scriptBytes, err := hex.DecodeString(r.Script)
+		if r.Musig2Data == nil {
+			return nil, fmt.Errorf("missing musig2 data for receiver %s", r.Script)
+		}
+
+		if r.Musig2Data.SigningType != SignAll {
+			continue
+		}
+
+		if len(r.Musig2Data.CosignersPublicKeys) == 0 {
+			return nil, fmt.Errorf("missing cosigners public keys for receiver %s", r.Script)
+		}
+
+		for _, cosigner := range r.Musig2Data.CosignersPublicKeys {
+			pubkeyBytes, err := hex.DecodeString(cosigner)
+			if err != nil {
+				return nil, err
+			}
+
+			pubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse cosigner pubkey: %w", err)
+			}
+
+			cosignersALL = append(cosignersALL, pubkey)
+		}
+	}
+
+	cosignersALL = uniqueCosigners(cosignersALL)
+
+	nodes := make([]node, 0, len(receivers))
+	for _, r := range receivers {
+		pkScript, err := hex.DecodeString(r.Script)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to decode cosigner pubkey: %w", err)
 		}
 
-		if address.GetScriptType(scriptBytes) != address.P2TR {
-			return nil, fmt.Errorf("script is not a valid taproot script")
+		cosigners := make([]*secp256k1.PublicKey, 0)
+
+		switch r.Musig2Data.SigningType {
+		case SignBranch:
+			for _, cosigner := range r.Musig2Data.CosignersPublicKeys {
+				pubkeyBytes, err := hex.DecodeString(cosigner)
+				if err != nil {
+					return nil, fmt.Errorf("failed to decode cosigner pubkey: %w", err)
+				}
+
+				pubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
+				if err != nil {
+					return nil, fmt.Errorf("failed to parse cosigner pubkey: %w", err)
+				}
+
+				cosigners = append(cosigners, pubkey)
+			}
+			cosigners = uniqueCosigners(cosigners)
+		case SignAll:
+			cosigners = cosignersALL
 		}
 
-		pubkey, err := schnorr.ParsePubKey(scriptBytes[2:])
-		if err != nil {
-			return nil, err
+		if len(cosigners) == 0 {
+			return nil, fmt.Errorf("no cosigners for %s", r.Script)
 		}
 
-		leafNode := &node{
-			sweepKey:   serverPubkey,
-			receivers:  []taprootOutput{{pubkey, r.Amount}},
-			asset:      asset,
-			feeSats:    feeSatsPerNode,
-			treeExpiry: treeExpiry,
+		leafNode := &leaf{
+			amount:     int64(r.Amount),
+			pkScript:   pkScript,
+			cosigners:  cosigners,
+			signerType: r.Musig2Data.SigningType,
 		}
 		nodes = append(nodes, leafNode)
 	}
 
 	for len(nodes) > 1 {
-		nodes, err = createUpperLevel(nodes)
+		nodes, err = createUpperLevel(nodes, int64(feeSatsPerNode), tapTreeRoot, radix)
 		if err != nil {
-			return
+			return nil, fmt.Errorf("failed to create tx tree: %w", err)
 		}
 	}
 
 	return nodes[0], nil
 }
 
-func createUpperLevel(nodes []*node) ([]*node, error) {
-	if len(nodes)%2 != 0 {
-		last := nodes[len(nodes)-1]
-		pairs, err := createUpperLevel(nodes[:len(nodes)-1])
+func createUpperLevel(nodes []node, feeAmount int64, tapTreeRoot []byte, radix int) ([]node, error) {
+	if len(nodes) <= 1 {
+		return nodes, nil
+	}
+
+	if len(nodes) < radix {
+		return createUpperLevel(nodes, feeAmount, tapTreeRoot, len(nodes))
+	}
+
+	remainder := len(nodes) % radix
+	if remainder != 0 {
+		// Handle nodes that don't form a complete group
+		last := nodes[len(nodes)-remainder:]
+		groups, err := createUpperLevel(nodes[:len(nodes)-remainder], feeAmount, tapTreeRoot, radix)
 		if err != nil {
 			return nil, err
 		}
 
-		return append(pairs, last), nil
+		return append(groups, last...), nil
 	}
 
-	pairs := make([]*node, 0, len(nodes)/2)
-	for i := 0; i < len(nodes); i += 2 {
-		left := nodes[i]
-		right := nodes[i+1]
-		branchNode := &node{
-			sweepKey:   left.sweepKey,
-			receivers:  append(left.receivers, right.receivers...),
-			left:       left,
-			right:      right,
-			asset:      left.asset,
-			feeSats:    left.feeSats,
-			treeExpiry: left.treeExpiry,
+	groups := make([]node, 0, len(nodes)/radix)
+	for i := 0; i < len(nodes); i += radix {
+		children := nodes[i : i+radix]
+
+		var cosigners []*secp256k1.PublicKey
+		for _, child := range children {
+			cosigners = append(cosigners, child.getCosigners()...)
 		}
-		pairs = append(pairs, branchNode)
+		cosigners = uniqueCosigners(cosigners)
+
+		aggregatedKey, err := AggregateKeys(cosigners, tapTreeRoot)
+		if err != nil {
+			return nil, err
+		}
+
+		pkScript, err := common.P2TRScript(aggregatedKey.FinalKey)
+		if err != nil {
+			return nil, err
+		}
+
+		branchNode := &branch{
+			pkScript:  pkScript,
+			cosigners: cosigners,
+			feeAmount: feeAmount,
+			children:  children,
+		}
+
+		groups = append(groups, branchNode)
 	}
-	return pairs, nil
+	return groups, nil
 }
 
-func taprootOutputScript(taprootKey *secp256k1.PublicKey) ([]byte, error) {
-	return txscript.NewScriptBuilder().AddOp(txscript.OP_1).AddData(
-		schnorr.SerializePubKey(taprootKey),
-	).Script()
-}
+// uniqueCosigners removes duplicate cosigner keys while preserving order
+func uniqueCosigners(cosigners []*secp256k1.PublicKey) []*secp256k1.PublicKey {
+	seen := make(map[string]struct{})
+	unique := make([]*secp256k1.PublicKey, 0, len(cosigners))
 
-func getPsetId(pset *psetv2.Pset) (string, error) {
-	utx, err := pset.UnsignedTx()
-	if err != nil {
-		return "", err
-	}
-
-	return utx.TxHash().String(), nil
-}
-
-func addTaprootInput(
-	updater *psetv2.Updater, input psetv2.InputArgs,
-	internalTaprootKey *secp256k1.PublicKey,
-	taprootTree *taproot.IndexedElementsTapScriptTree,
-) error {
-	if err := updater.AddInputs([]psetv2.InputArgs{input}); err != nil {
-		return err
-	}
-
-	if err := updater.AddInTapInternalKey(
-		0, schnorr.SerializePubKey(internalTaprootKey),
-	); err != nil {
-		return err
-	}
-
-	for _, proof := range taprootTree.LeafMerkleProofs {
-		controlBlock := proof.ToControlBlock(internalTaprootKey)
-
-		if err := updater.AddInTapLeafScript(0, psetv2.TapLeafScript{
-			TapElementsLeaf: taproot.NewBaseTapElementsLeaf(proof.Script),
-			ControlBlock:    controlBlock,
-		}); err != nil {
-			return err
+	for _, cosigner := range cosigners {
+		keyStr := hex.EncodeToString(schnorr.SerializePubKey(cosigner))
+		if _, exists := seen[keyStr]; !exists {
+			seen[keyStr] = struct{}{}
+			unique = append(unique, cosigner)
 		}
 	}
-
-	return nil
+	return unique
 }

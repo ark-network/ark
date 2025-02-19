@@ -116,7 +116,6 @@ type Utxo struct {
 	Txid        string
 	VOut        uint32
 	Amount      uint64
-	Asset       string // liquid only
 	Delay       common.RelativeLocktime
 	SpendableAt time.Time
 	CreatedAt   time.Time

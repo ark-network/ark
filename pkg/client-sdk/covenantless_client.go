@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
@@ -39,7 +38,7 @@ import (
 // SettleOptions is only available for covenantless clients
 // it allows to customize the vtxo signing process
 type SettleOptions struct {
-	ExtraSignerSessions  []bitcointree.SignerSession
+	ExtraSignerSessions  []tree.SignerSession
 	SigningType          *tree.SigningType
 	WalletSignerDisabled bool
 
@@ -82,7 +81,7 @@ func WithSignAll(o interface{}) error {
 }
 
 // WithExtraSigner allows to use a set of custom signer for the vtxo tree signing process
-func WithExtraSigner(signerSessions ...bitcointree.SignerSession) Option {
+func WithExtraSigner(signerSessions ...tree.SignerSession) Option {
 	return func(o interface{}) error {
 		opts, ok := o.(*SettleOptions)
 		if !ok {
@@ -856,7 +855,7 @@ func (a *covenantlessArkClient) SendOffChain(
 	inputs := make([]redeemTxInput, 0, len(selectedCoins))
 
 	for _, coin := range selectedCoins {
-		vtxoScript, err := bitcointree.ParseVtxoScript(coin.Tapscripts)
+		vtxoScript, err := tree.ParseVtxoScript(coin.Tapscripts)
 		if err != nil {
 			return "", err
 		}
@@ -1233,7 +1232,7 @@ func (a *covenantlessArkClient) SetNostrNotificationRecipient(ctx context.Contex
 		}
 
 		// validate the vtxo script type
-		vtxoScript, err := bitcointree.ParseVtxoScript(v.Tapscripts)
+		vtxoScript, err := tree.ParseVtxoScript(v.Tapscripts)
 		if err != nil {
 			return err
 		}
@@ -1615,7 +1614,7 @@ func (a *covenantlessArkClient) addInputs(
 		return err
 	}
 
-	vtxoScript, err := bitcointree.ParseVtxoScript(offchain.Tapscripts)
+	vtxoScript, err := tree.ParseVtxoScript(offchain.Tapscripts)
 	if err != nil {
 		return err
 	}
@@ -1682,7 +1681,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 	vtxosToSign []client.TapscriptsVtxo,
 	boardingUtxos []types.Utxo,
 	receivers []client.Output,
-	signerSessions []bitcointree.SignerSession,
+	signerSessions []tree.SignerSession,
 	replayEventsCh chan<- client.RoundEvent,
 ) (string, error) {
 	round, err := a.client.GetRound(ctx, "")
@@ -1803,7 +1802,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 }
 
 func (a *covenantlessArkClient) handleRoundSigningStarted(
-	ctx context.Context, signerSessions []bitcointree.SignerSession, event client.RoundSigningStartedEvent,
+	ctx context.Context, signerSessions []tree.SignerSession, event client.RoundSigningStartedEvent,
 ) (bool, error) {
 	foundPubkeys := make([]string, 0, len(signerSessions))
 	for _, session := range signerSessions {
@@ -1846,7 +1845,7 @@ func (a *covenantlessArkClient) handleRoundSigningStarted(
 	sweepTapTree := txscript.AssembleTaprootScriptTree(sweepTapLeaf)
 	root := sweepTapTree.RootNode.TapHash()
 
-	generateAndSendNonces := func(session bitcointree.SignerSession) error {
+	generateAndSendNonces := func(session tree.SignerSession) error {
 		if err := session.Init(root.CloneBytes(), sharedOutputValue, event.UnsignedTree); err != nil {
 			return err
 		}
@@ -1864,7 +1863,7 @@ func (a *covenantlessArkClient) handleRoundSigningStarted(
 	waitGroup.Add(len(signerSessions))
 
 	for _, session := range signerSessions {
-		go func(session bitcointree.SignerSession) {
+		go func(session tree.SignerSession) {
 			defer waitGroup.Done()
 			if err := generateAndSendNonces(session); err != nil {
 				errChan <- err
@@ -1888,13 +1887,13 @@ func (a *covenantlessArkClient) handleRoundSigningStarted(
 func (a *covenantlessArkClient) handleRoundSigningNoncesGenerated(
 	ctx context.Context,
 	event client.RoundSigningNoncesGeneratedEvent,
-	signerSessions []bitcointree.SignerSession,
+	signerSessions []tree.SignerSession,
 ) error {
 	if len(signerSessions) <= 0 {
 		return fmt.Errorf("tree signer session not set")
 	}
 
-	sign := func(session bitcointree.SignerSession) error {
+	sign := func(session tree.SignerSession) error {
 		session.SetAggregatedNonces(event.Nonces)
 
 		sigs, err := session.Sign()
@@ -1915,7 +1914,7 @@ func (a *covenantlessArkClient) handleRoundSigningNoncesGenerated(
 	waitGroup.Add(len(signerSessions))
 
 	for _, session := range signerSessions {
-		go func(session bitcointree.SignerSession) {
+		go func(session tree.SignerSession) {
 			defer waitGroup.Done()
 			if err := sign(session); err != nil {
 				errChan <- err
@@ -1972,7 +1971,7 @@ func (a *covenantlessArkClient) handleRoundFinalization(
 	}
 
 	for _, boardingUtxo := range boardingUtxos {
-		boardingVtxoScript, err := bitcointree.ParseVtxoScript(boardingUtxo.Tapscripts)
+		boardingVtxoScript, err := tree.ParseVtxoScript(boardingUtxo.Tapscripts)
 		if err != nil {
 			return nil, "", err
 		}
@@ -2040,7 +2039,7 @@ func (a *covenantlessArkClient) validateVtxoTree(
 	}
 
 	if !utils.IsOnchainOnly(receivers) {
-		if err := bitcointree.ValidateVtxoTree(
+		if err := tree.ValidateVtxoTree(
 			event.Tree, roundTx, a.Config.ServerPubKey, a.VtxoTreeExpiry,
 		); err != nil {
 			return err
@@ -2238,7 +2237,7 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 			return nil, fmt.Errorf("connector not found for vtxo %s", vtxo.Outpoint.String())
 		}
 
-		vtxoScript, err := bitcointree.ParseVtxoScript(vtxo.Tapscripts)
+		vtxoScript, err := tree.ParseVtxoScript(vtxo.Tapscripts)
 		if err != nil {
 			return nil, err
 		}
@@ -2315,7 +2314,7 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 			return nil, err
 		}
 
-		forfeit, err := bitcointree.BuildForfeitTx(
+		forfeit, err := tree.BuildForfeitTx(
 			&wire.OutPoint{
 				Hash:  *connectorOutpointHash,
 				Index: connectorOutpoint.VOut,
@@ -2363,7 +2362,7 @@ func (a *covenantlessArkClient) coinSelectOnchain(
 
 	fetchedUtxos := make([]types.Utxo, 0)
 	for _, addr := range boardingAddrs {
-		boardingScript, err := bitcointree.ParseVtxoScript(addr.Tapscripts)
+		boardingScript, err := tree.ParseVtxoScript(addr.Tapscripts)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -2565,7 +2564,7 @@ func (a *covenantlessArkClient) getClaimableBoardingUtxos(ctx context.Context, o
 	claimable := make([]types.Utxo, 0)
 
 	for _, addr := range boardingAddrs {
-		boardingScript, err := bitcointree.ParseVtxoScript(addr.Tapscripts)
+		boardingScript, err := tree.ParseVtxoScript(addr.Tapscripts)
 		if err != nil {
 			return nil, err
 		}
@@ -2681,15 +2680,6 @@ func (a *covenantlessArkClient) getBoardingTxs(
 
 	txs := append(unconfirmedTxs, confirmedTxs...)
 	return txs, ignoreVtxos, nil
-}
-
-func findVtxosBySpentBy(allVtxos []client.Vtxo, txid string) (vtxos []client.Vtxo) {
-	for _, v := range allVtxos {
-		if v.SpentBy == txid {
-			vtxos = append(vtxos, v)
-		}
-	}
-	return
 }
 
 func findVtxosSpent(vtxos []client.Vtxo, id string) []client.Vtxo {
@@ -2899,7 +2889,7 @@ func buildRedeemTx(
 			Index: vtxo.VOut,
 		}
 
-		vtxoScript, err := bitcointree.ParseVtxoScript(vtxo.Tapscripts)
+		vtxoScript, err := tree.ParseVtxoScript(vtxo.Tapscripts)
 		if err != nil {
 			return "", err
 		}
@@ -2982,10 +2972,10 @@ func buildRedeemTx(
 		})
 	}
 
-	return bitcointree.BuildRedeemTx(ins, outs)
+	return tree.BuildRedeemTx(ins, outs)
 }
 
-func (a *covenantlessArkClient) handleOptions(options *SettleOptions, inputs []client.Input, notesInputs []string) ([]bitcointree.SignerSession, []string, tree.SigningType, error) {
+func (a *covenantlessArkClient) handleOptions(options *SettleOptions, inputs []client.Input, notesInputs []string) ([]tree.SignerSession, []string, tree.SigningType, error) {
 	var signingType tree.SigningType
 	if options.SigningType != nil {
 		signingType = *options.SigningType
@@ -2993,7 +2983,7 @@ func (a *covenantlessArkClient) handleOptions(options *SettleOptions, inputs []c
 		signingType = tree.SignBranch
 	}
 
-	sessions := make([]bitcointree.SignerSession, 0)
+	sessions := make([]tree.SignerSession, 0)
 	sessions = append(sessions, options.ExtraSignerSessions...)
 
 	if !options.WalletSignerDisabled {

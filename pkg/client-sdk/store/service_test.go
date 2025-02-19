@@ -25,7 +25,7 @@ func TestStore(t *testing.T) {
 		ServerPubKey:               key.PubKey(),
 		WalletType:                 wallet.SingleKeyWallet,
 		ClientType:                 client.GrpcClient,
-		Network:                    common.LiquidRegTest,
+		Network:                    common.BitcoinRegTest,
 		VtxoTreeExpiry:             common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 512},
 		RoundInterval:              10,
 		UnilateralExitDelay:        common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 512},

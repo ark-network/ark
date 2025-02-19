@@ -17,9 +17,6 @@ var TreeTxSize = (&input.TxWeightEstimator{}).
 	AddP2TROutput().                                  // right child
 	VSize()
 
-// liquid node size is 2x the bitcoin node size (avoid min-relay-fee issues with the low fee rate on liquid)
-var CovenantTreeTxSize = TreeTxSize * 2
-
 var ConnectorTxSize = (&input.TxWeightEstimator{}).
 	AddTaprootKeySpendInput(txscript.SigHashDefault).
 	AddP2TROutput().

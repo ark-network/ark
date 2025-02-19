@@ -1,7 +1,6 @@
 package common
 
 import (
-	"strings"
 	"time"
 
 	"github.com/btcsuite/btcd/chaincfg"
@@ -10,21 +9,6 @@ import (
 type Network struct {
 	Name string
 	Addr string
-}
-
-var Liquid = Network{
-	Name: "liquid",
-	Addr: "ark",
-}
-
-var LiquidTestNet = Network{
-	Name: "liquidtestnet",
-	Addr: "tark",
-}
-
-var LiquidRegTest = Network{
-	Name: "liquidregtest",
-	Addr: LiquidTestNet.Addr,
 }
 
 var Bitcoin = Network{
@@ -71,7 +55,3 @@ var mutinyNetChallenge = []byte{
 }
 
 const mutinyNetBlockTime = time.Second * 30
-
-func IsLiquid(network Network) bool {
-	return strings.Contains(network.Name, "liquid")
-}

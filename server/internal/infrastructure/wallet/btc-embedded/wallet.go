@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -703,7 +702,7 @@ func (s *service) SignTransaction(ctx context.Context, partialTx string, extract
 					return "", err
 				}
 
-				conditionWitness, err := bitcointree.GetConditionWitness(in)
+				conditionWitness, err := tree.GetConditionWitness(in)
 				if err != nil {
 					return "", err
 				}

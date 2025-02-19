@@ -6,7 +6,6 @@ package browser
 import (
 	"context"
 	"fmt"
-	"strings"
 	"syscall/js"
 
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
@@ -53,41 +52,6 @@ func init() {
 	js.Global().Set("getVersion", GetVersionWrapper())
 }
 
-func NewCovenantClient(
-	ctx context.Context, storeSvc types.Store,
-) error {
-	var err error
-
-	data, err := storeSvc.ConfigStore().GetData(ctx)
-	if err != nil {
-		return err
-	}
-
-	if data == nil {
-		arkSdkClient, err = arksdk.NewCovenantClient(storeSvc)
-	} else {
-		var walletSvc wallet.WalletService
-		switch data.WalletType {
-		case arksdk.SingleKeyWallet:
-			walletSvc, err = getSingleKeyWallet(storeSvc.ConfigStore(), data.Network.Name)
-			if err != nil {
-				return err
-			}
-		// TODO: Support HD wallet
-		default:
-			return fmt.Errorf("unknown wallet type")
-		}
-		arkSdkClient, err = arksdk.LoadCovenantClientWithWallet(storeSvc, walletSvc)
-	}
-	if err != nil {
-		js.Global().Get("console").Call("error", err.Error())
-		return err
-	}
-	store = storeSvc
-
-	select {}
-}
-
 func NewCovenantlessClient(
 	ctx context.Context, storeSvc types.Store, v string,
 ) error {
@@ -104,7 +68,7 @@ func NewCovenantlessClient(
 		var walletSvc wallet.WalletService
 		switch data.WalletType {
 		case arksdk.SingleKeyWallet:
-			walletSvc, err = getSingleKeyWallet(storeSvc.ConfigStore(), data.Network.Name)
+			walletSvc, err = getSingleKeyWallet(storeSvc.ConfigStore())
 			if err != nil {
 				return err
 			}
@@ -132,15 +96,10 @@ func getWalletStore(storeType string) (walletstore.WalletStore, error) {
 	return nil, fmt.Errorf("unknown wallet store type")
 }
 
-func getSingleKeyWallet(
-	configStore types.ConfigStore, network string,
-) (wallet.WalletService, error) {
+func getSingleKeyWallet(configStore types.ConfigStore) (wallet.WalletService, error) {
 	walletStore, err := getWalletStore(configStore.GetType())
 	if err != nil {
 		return nil, err
-	}
-	if strings.Contains(network, "liquid") {
-		return singlekeywallet.NewLiquidWallet(configStore, walletStore)
 	}
 	return singlekeywallet.NewBitcoinWallet(configStore, walletStore)
 }
