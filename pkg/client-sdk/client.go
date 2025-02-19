@@ -99,7 +99,7 @@ func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
 	return offchainAddr.Address, boardingAddr.Address, nil
 }
 
-func (a *arkClient) GetTransactionEventChannel() chan types.Transaction {
+func (a *arkClient) GetTransactionChannel() chan types.Transaction {
 	return a.store.TransactionStore().GetEventChannel()
 }
 

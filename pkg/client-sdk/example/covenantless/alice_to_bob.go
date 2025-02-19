@@ -270,7 +270,7 @@ func generateBlock() error {
 }
 
 func logTxEvents(wallet string, client arksdk.ArkClient) {
-	txsChan := client.GetTransactionEventChannel()
+	txsChan := client.GetTransactionChannel()
 	go func() {
 		for txEvent := range txsChan {
 			msg := fmt.Sprintf("[EVENT]%s: tx event: %s, %d", wallet, txEvent.Type, txEvent.Amount)
