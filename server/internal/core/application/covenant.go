@@ -5,9 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"github.com/btcsuite/btcd/btcutil/psbt"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -816,14 +814,14 @@ func (s *covenantService) waitForForfeitsAndBoardingSigs(
 				currentTx := s.currentRound.UnsignedTx
 				s.currentRoundLock.Unlock()
 
-				roundTx, err := psbt.NewFromRawBytes(strings.NewReader(currentTx), true)
+				roundTx, err := psetv2.NewPsetFromBase64(currentTx)
 				if err != nil {
 					errCh <- fmt.Errorf("failed to parse round tx: %w", err)
 					return
 				}
 
 				numOfInputsSigned := 0
-				for i := range roundTx.UnsignedTx.TxIn {
+				for i := range roundTx.Inputs {
 					in := &roundTx.Inputs[i]
 					if len(in.FinalScriptWitness) > 0 {
 						numOfInputsSigned++
