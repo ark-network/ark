@@ -23,7 +23,7 @@ type CovenantlessRedeemBranch struct {
 
 func NewCovenantlessRedeemBranch(
 	explorer explorer.Explorer,
-	vtxoTree tree.VtxoTree, vtxo client.Vtxo,
+	vtxoTree tree.TxTree, vtxo client.Vtxo,
 ) (*CovenantlessRedeemBranch, error) {
 	root, err := vtxoTree.Root()
 	if err != nil {

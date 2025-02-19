@@ -53,13 +53,17 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 		}, nil
 	}
 	if ee := e.GetRoundFinalization(); ee != nil {
-		tree := treeFromProto{ee.GetVtxoTree()}.parse()
+		vtxoTree := treeFromProto{ee.GetVtxoTree()}.parse()
+		connectorTree := treeFromProto{ee.GetConnectors()}.parse()
+		connectorsIndex := connectorsIndexFromProto{ee.GetConnectorsIndex()}.parse()
+
 		return client.RoundFinalizationEvent{
 			ID:              ee.GetId(),
 			Tx:              ee.GetRoundTx(),
-			Tree:            tree,
-			Connectors:      ee.GetConnectors(),
+			Tree:            vtxoTree,
+			Connectors:      connectorTree,
 			MinRelayFeeRate: chainfee.SatPerKVByte(ee.MinRelayFeeRate),
+			ConnectorsIndex: connectorsIndex,
 		}, nil
 	}
 
@@ -152,8 +156,8 @@ type treeFromProto struct {
 	*arkv1.Tree
 }
 
-func (t treeFromProto) parse() tree.VtxoTree {
-	levels := make(tree.VtxoTree, 0, len(t.GetLevels()))
+func (t treeFromProto) parse() tree.TxTree {
+	levels := make(tree.TxTree, 0, len(t.GetLevels()))
 
 	for _, level := range t.GetLevels() {
 		nodes := make([]tree.Node, 0, len(level.Nodes))
@@ -183,4 +187,19 @@ func (t treeFromProto) parse() tree.VtxoTree {
 	}
 
 	return levels
+}
+
+type connectorsIndexFromProto struct {
+	connectorsIndex map[string]*arkv1.Outpoint
+}
+
+func (c connectorsIndexFromProto) parse() map[string]client.Outpoint {
+	connectorsIndex := make(map[string]client.Outpoint)
+	for vtxoOutpointStr, connectorOutpoint := range c.connectorsIndex {
+		connectorsIndex[vtxoOutpointStr] = client.Outpoint{
+			Txid: connectorOutpoint.Txid,
+			VOut: uint32(connectorOutpoint.Vout),
+		}
+	}
+	return connectorsIndex
 }

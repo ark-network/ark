@@ -1942,7 +1942,7 @@ func (a *covenantlessArkClient) handleRoundFinalization(
 	boardingUtxos []types.Utxo,
 	receivers []client.Output,
 ) ([]string, string, error) {
-	if err := a.validateVtxoTree(event, receivers); err != nil {
+	if err := a.validateVtxoTree(event, receivers, vtxos); err != nil {
 		return nil, "", fmt.Errorf("failed to verify vtxo tree: %s", err)
 	}
 
@@ -1950,7 +1950,9 @@ func (a *covenantlessArkClient) handleRoundFinalization(
 
 	if len(vtxos) > 0 {
 		signedForfeits, err := a.createAndSignForfeits(
-			ctx, vtxos, event.Connectors, event.MinRelayFeeRate,
+			ctx,
+			vtxos, event.Connectors.Leaves(),
+			event.ConnectorsIndex, event.MinRelayFeeRate,
 		)
 		if err != nil {
 			return nil, "", err
@@ -2029,7 +2031,7 @@ func (a *covenantlessArkClient) handleRoundFinalization(
 }
 
 func (a *covenantlessArkClient) validateVtxoTree(
-	event client.RoundFinalizationEvent, receivers []client.Output,
+	event client.RoundFinalizationEvent, receivers []client.Output, vtxosInput []client.TapscriptsVtxo,
 ) error {
 	roundTx := event.Tx
 	ptx, err := psbt.NewFromRawBytes(strings.NewReader(roundTx), true)
@@ -2045,15 +2047,44 @@ func (a *covenantlessArkClient) validateVtxoTree(
 		}
 	}
 
-	// TODO: common.ValidateConnectors is for covenant version (liquid), add covenantless (bitcoin) version
-	// if err := common.ValidateConnectors(roundTx, event.Connectors); err != nil {
-	// 	return err
-	// }
-
 	if err := a.validateReceivers(
 		ptx, receivers, event.Tree,
 	); err != nil {
 		return err
+	}
+
+	if len(vtxosInput) > 0 {
+		root, err := event.Connectors.Root()
+		if err != nil {
+			return err
+		}
+
+		getTxID := func(b64 string) string {
+			tx, err := psbt.NewFromRawBytes(strings.NewReader(b64), true)
+			if err != nil {
+				return ""
+			}
+
+			return tx.UnsignedTx.TxID()
+		}
+
+		if root.ParentTxid != getTxID(roundTx) {
+			return fmt.Errorf("root's parent txid is not the same as the round txid: %s != %s", root.ParentTxid, getTxID(roundTx))
+		}
+
+		if err := event.Connectors.Validate(getTxID); err != nil {
+			return err
+		}
+
+		if len(event.ConnectorsIndex) == 0 {
+			return fmt.Errorf("empty connectors index")
+		}
+
+		for _, vtxo := range vtxosInput {
+			if _, ok := event.ConnectorsIndex[vtxo.Outpoint.String()]; !ok {
+				return fmt.Errorf("missing connector index for vtxo %s", vtxo.String())
+			}
+		}
 	}
 
 	return nil
@@ -2062,7 +2093,7 @@ func (a *covenantlessArkClient) validateVtxoTree(
 func (a *covenantlessArkClient) validateReceivers(
 	ptx *psbt.Packet,
 	receivers []client.Output,
-	vtxoTree tree.VtxoTree,
+	vtxoTree tree.TxTree,
 ) error {
 	netParams := utils.ToBitcoinNetwork(a.Network)
 	for _, receiver := range receivers {
@@ -2113,7 +2144,7 @@ func (a *covenantlessArkClient) validateOnChainReceiver(
 }
 
 func (a *covenantlessArkClient) validateOffChainReceiver(
-	vtxoTree tree.VtxoTree,
+	vtxoTree tree.TxTree,
 	receiver client.Output,
 ) error {
 	found := false
@@ -2164,7 +2195,8 @@ func (a *covenantlessArkClient) validateOffChainReceiver(
 func (a *covenantlessArkClient) createAndSignForfeits(
 	ctx context.Context,
 	vtxosToSign []client.TapscriptsVtxo,
-	connectors []string,
+	connectorsTxs []tree.Node,
+	connectorsIndex map[string]client.Outpoint,
 	feeRate chainfee.SatPerKVByte,
 ) ([]string, error) {
 	parsedForfeitAddr, err := btcutil.DecodeAddress(a.ForfeitAddress, nil)
@@ -2182,19 +2214,30 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 		return nil, err
 	}
 
-	signedForfeits := make([]string, 0)
-	connectorsPsets := make([]*psbt.Packet, 0, len(connectors))
-
-	for _, connector := range connectors {
-		p, err := psbt.NewFromRawBytes(strings.NewReader(connector), true)
-		if err != nil {
-			return nil, err
-		}
-
-		connectorsPsets = append(connectorsPsets, p)
-	}
+	signedForfeits := make([]string, 0, len(vtxosToSign))
 
 	for _, vtxo := range vtxosToSign {
+		connectorOutpoint := connectorsIndex[vtxo.Outpoint.String()]
+
+		var connector *wire.TxOut
+		for _, node := range connectorsTxs {
+			if node.Txid == connectorOutpoint.Txid {
+				tx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
+				if err != nil {
+					return nil, err
+				}
+				if connectorOutpoint.VOut >= uint32(len(tx.UnsignedTx.TxOut)) {
+					return nil, fmt.Errorf("connector index out of bounds: %d >= %d", connectorOutpoint.VOut, len(tx.UnsignedTx.TxOut))
+				}
+				connector = tx.UnsignedTx.TxOut[connectorOutpoint.VOut]
+				break
+			}
+		}
+
+		if connector == nil {
+			return nil, fmt.Errorf("connector not found for vtxo %s", vtxo.Outpoint.String())
+		}
+
 		vtxoScript, err := bitcointree.ParseVtxoScript(vtxo.Tapscripts)
 		if err != nil {
 			return nil, err
@@ -2267,42 +2310,42 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 			vtxoLocktime = cltv.Locktime
 		}
 
-		for _, connectorPset := range connectorsPsets {
-			forfeits, err := bitcointree.BuildForfeitTxs(
-				connectorPset,
-				vtxoInput,
-				vtxo.Amount,
-				a.Dust,
-				feeAmount,
-				vtxoOutputScript,
-				forfeitPkScript,
-				uint32(vtxoLocktime),
-			)
-			if err != nil {
-				return nil, err
-			}
-
-			if len(forfeits) <= 0 {
-				return nil, fmt.Errorf("no forfeit txs created dust =  %d", a.Dust)
-			}
-
-			for _, forfeit := range forfeits {
-				forfeit.Inputs[1].TaprootLeafScript = []*psbt.TaprootTapLeafScript{&tapscript}
-
-				b64, err := forfeit.B64Encode()
-				if err != nil {
-					return nil, err
-				}
-
-				signedForfeit, err := a.wallet.SignTransaction(ctx, a.explorer, b64)
-				if err != nil {
-					return nil, err
-				}
-
-				signedForfeits = append(signedForfeits, signedForfeit)
-			}
+		connectorOutpointHash, err := chainhash.NewHashFromStr(connectorOutpoint.Txid)
+		if err != nil {
+			return nil, err
 		}
 
+		forfeit, err := bitcointree.BuildForfeitTx(
+			&wire.OutPoint{
+				Hash:  *connectorOutpointHash,
+				Index: connectorOutpoint.VOut,
+			},
+			vtxoInput,
+			vtxo.Amount,
+			uint64(connector.Value),
+			feeAmount,
+			vtxoOutputScript,
+			connector.PkScript,
+			forfeitPkScript,
+			uint32(vtxoLocktime),
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		forfeit.Inputs[1].TaprootLeafScript = []*psbt.TaprootTapLeafScript{&tapscript}
+
+		b64, err := forfeit.B64Encode()
+		if err != nil {
+			return nil, err
+		}
+
+		signedForfeit, err := a.wallet.SignTransaction(ctx, a.explorer, b64)
+		if err != nil {
+			return nil, err
+		}
+
+		signedForfeits = append(signedForfeits, signedForfeit)
 	}
 
 	return signedForfeits, nil
@@ -2406,7 +2449,7 @@ func (a *covenantlessArkClient) coinSelectOnchain(
 func (a *covenantlessArkClient) getRedeemBranches(
 	ctx context.Context, vtxos []client.Vtxo,
 ) (map[string]*redemption.CovenantlessRedeemBranch, error) {
-	vtxoTrees := make(map[string]tree.VtxoTree, 0)
+	vtxoTrees := make(map[string]tree.TxTree, 0)
 	redeemBranches := make(map[string]*redemption.CovenantlessRedeemBranch, 0)
 
 	for i := range vtxos {

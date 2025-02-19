@@ -4,9 +4,11 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/vulpemventures/go-elements/address"
@@ -70,13 +72,28 @@ func getOnchainOutputs(
 
 func getOutputVtxosLeaves(
 	requests []domain.TxRequest,
-) ([]tree.VtxoLeaf, error) {
-	receivers := make([]tree.VtxoLeaf, 0)
+) ([]tree.Leaf, error) {
+	receivers := make([]tree.Leaf, 0)
 	for _, request := range requests {
 		for _, receiver := range request.Receivers {
 			if !receiver.IsOnchain() {
-				receivers = append(receivers, tree.VtxoLeaf{
-					PubKey: receiver.PubKey,
+				pubkeyBytes, err := hex.DecodeString(receiver.PubKey)
+				if err != nil {
+					return nil, fmt.Errorf("failed to decode pubkey: %s", err)
+				}
+
+				pubkey, err := schnorr.ParsePubKey(pubkeyBytes)
+				if err != nil {
+					return nil, fmt.Errorf("failed to parse pubkey: %s", err)
+				}
+
+				script, err := common.P2TRScript(pubkey)
+				if err != nil {
+					return nil, fmt.Errorf("failed to create script: %s", err)
+				}
+
+				receivers = append(receivers, tree.Leaf{
+					Script: hex.EncodeToString(script),
 					Amount: receiver.Amount,
 				})
 			}

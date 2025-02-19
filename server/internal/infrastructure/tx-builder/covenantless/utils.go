@@ -1,8 +1,10 @@
 package txbuilder
 
 import (
+	"encoding/hex"
 	"fmt"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -43,17 +45,32 @@ func getOnchainOutputs(
 func getOutputVtxosLeaves(
 	requests []domain.TxRequest,
 	musig2Data []*tree.Musig2,
-) ([]tree.VtxoLeaf, error) {
+) ([]tree.Leaf, error) {
 	if len(musig2Data) != len(requests) {
 		return nil, fmt.Errorf("musig2 data length %d does not match requests length %d", len(musig2Data), len(requests))
 	}
 
-	leaves := make([]tree.VtxoLeaf, 0)
+	leaves := make([]tree.Leaf, 0)
 	for i, request := range requests {
 		for _, receiver := range request.Receivers {
 			if !receiver.IsOnchain() {
-				leaves = append(leaves, tree.VtxoLeaf{
-					PubKey:     receiver.PubKey,
+				pubkeyBytes, err := hex.DecodeString(receiver.PubKey)
+				if err != nil {
+					return nil, fmt.Errorf("failed to decode pubkey: %s", err)
+				}
+
+				pubkey, err := schnorr.ParsePubKey(pubkeyBytes)
+				if err != nil {
+					return nil, fmt.Errorf("failed to parse pubkey: %s", err)
+				}
+
+				script, err := common.P2TRScript(pubkey)
+				if err != nil {
+					return nil, fmt.Errorf("failed to create script: %s", err)
+				}
+
+				leaves = append(leaves, tree.Leaf{
+					Script:     hex.EncodeToString(script),
 					Amount:     receiver.Amount,
 					Musig2Data: musig2Data[i],
 				})

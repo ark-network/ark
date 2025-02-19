@@ -9,19 +9,20 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/vulpemventures/go-elements/address"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/taproot"
 )
 
-func BuildVtxoTree(
-	asset string, serverPubkey *secp256k1.PublicKey, receivers []VtxoLeaf,
-	feeSatsPerNode uint64, vtxoTreeExpiry common.RelativeLocktime,
+func BuildTxTree(
+	asset string, serverPubkey *secp256k1.PublicKey, receivers []Leaf,
+	feeSatsPerNode uint64, treeExpiry *common.RelativeLocktime,
 ) (
 	factoryFn TreeFactory,
 	sharedOutputScript []byte, sharedOutputAmount uint64, err error,
 ) {
 	root, err := buildTreeNodes(
-		asset, serverPubkey, receivers, feeSatsPerNode, vtxoTreeExpiry,
+		asset, serverPubkey, receivers, feeSatsPerNode, treeExpiry,
 	)
 	if err != nil {
 		return
@@ -42,19 +43,19 @@ func BuildVtxoTree(
 	return
 }
 
-type vtxoOutput struct {
+type taprootOutput struct {
 	pubkey *secp256k1.PublicKey
 	amount uint64
 }
 
 type node struct {
-	sweepKey       *secp256k1.PublicKey
-	receivers      []vtxoOutput
-	left           *node
-	right          *node
-	asset          string
-	feeSats        uint64
-	vtxoTreeExpiry common.RelativeLocktime
+	sweepKey   *secp256k1.PublicKey
+	receivers  []taprootOutput
+	left       *node
+	right      *node
+	asset      string
+	feeSats    uint64
+	treeExpiry *common.RelativeLocktime
 
 	_inputTaprootKey  *secp256k1.PublicKey
 	_inputTaprootTree *taproot.IndexedElementsTapScriptTree
@@ -113,7 +114,7 @@ func (n *node) getChildren() []*node {
 
 func (n *node) getOutputs() ([]psetv2.OutputArgs, error) {
 	if n.isLeaf() {
-		taprootKey, err := n.getVtxoWitnessData()
+		taprootKey, err := n.getOutputWitnessData()
 		if err != nil {
 			return nil, err
 		}
@@ -163,18 +164,23 @@ func (n *node) getWitnessData() (
 		return n._inputTaprootKey, n._inputTaprootTree, nil
 	}
 
-	sweepClosure := &CSVMultisigClosure{
-		MultisigClosure: MultisigClosure{PubKeys: []*secp256k1.PublicKey{n.sweepKey}},
-		Locktime:        n.vtxoTreeExpiry,
-	}
+	var sweepLeaf []byte
 
-	sweepLeaf, err := sweepClosure.Script()
-	if err != nil {
-		return nil, nil, err
+	if n.treeExpiry != nil {
+		sweepClosure := &CSVMultisigClosure{
+			MultisigClosure: MultisigClosure{PubKeys: []*secp256k1.PublicKey{n.sweepKey}},
+			Locktime:        *n.treeExpiry,
+		}
+
+		var err error
+		sweepLeaf, err = sweepClosure.Script()
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	if n.isLeaf() {
-		taprootKey, err := n.getVtxoWitnessData()
+		taprootKey, err := n.getOutputWitnessData()
 		if err != nil {
 			return nil, nil, err
 		}
@@ -189,10 +195,13 @@ func (n *node) getWitnessData() (
 			return nil, nil, err
 		}
 
-		branchTaprootTree := taproot.AssembleTaprootScriptTree(
-			taproot.NewBaseTapElementsLeaf(unrollScript),
-			taproot.NewBaseTapElementsLeaf(sweepLeaf),
-		)
+		tapLeaves := make([]taproot.TapElementsLeaf, 0, 2)
+		tapLeaves = append(tapLeaves, taproot.NewBaseTapElementsLeaf(unrollScript))
+		if sweepLeaf != nil {
+			tapLeaves = append(tapLeaves, taproot.NewBaseTapElementsLeaf(sweepLeaf))
+		}
+
+		branchTaprootTree := taproot.AssembleTaprootScriptTree(tapLeaves...)
 		root := branchTaprootTree.RootNode.TapHash()
 
 		inputTapkey := taproot.ComputeTaprootOutputKey(
@@ -248,11 +257,11 @@ func (n *node) getWitnessData() (
 	return taprootKey, branchTaprootTree, nil
 }
 
-func (n *node) getVtxoWitnessData() (
+func (n *node) getOutputWitnessData() (
 	*secp256k1.PublicKey, error,
 ) {
 	if !n.isLeaf() {
-		return nil, fmt.Errorf("cannot call vtxoWitness on a non-leaf node")
+		return nil, fmt.Errorf("cannot call getOutputWitnessData on a non-leaf node")
 	}
 
 	receiver := n.receivers[0]
@@ -323,8 +332,8 @@ func (n *node) getTx(
 }
 
 func (n *node) buildVtxoTree() TreeFactory {
-	return func(roundTxInput psetv2.InputArgs) (VtxoTree, error) {
-		vtxoTree := make(VtxoTree, 0)
+	return func(roundTxInput psetv2.InputArgs) (TxTree, error) {
+		vtxoTree := make(TxTree, 0)
 
 		_, taprootTree, err := n.getWitnessData()
 		if err != nil {
@@ -380,8 +389,8 @@ func (n *node) buildVtxoTree() TreeFactory {
 }
 
 func buildTreeNodes(
-	asset string, serverPubkey *secp256k1.PublicKey, receivers []VtxoLeaf,
-	feeSatsPerNode uint64, vtxoTreeExpiry common.RelativeLocktime,
+	asset string, serverPubkey *secp256k1.PublicKey, receivers []Leaf,
+	feeSatsPerNode uint64, treeExpiry *common.RelativeLocktime,
 ) (root *node, err error) {
 	if len(receivers) == 0 {
 		return nil, fmt.Errorf("no receivers provided")
@@ -389,22 +398,26 @@ func buildTreeNodes(
 
 	nodes := make([]*node, 0, len(receivers))
 	for _, r := range receivers {
-		pubkeyBytes, err := hex.DecodeString(r.PubKey)
+		scriptBytes, err := hex.DecodeString(r.Script)
 		if err != nil {
 			return nil, err
 		}
 
-		pubkey, err := schnorr.ParsePubKey(pubkeyBytes)
+		if address.GetScriptType(scriptBytes) != address.P2TR {
+			return nil, fmt.Errorf("script is not a valid taproot script")
+		}
+
+		pubkey, err := schnorr.ParsePubKey(scriptBytes[2:])
 		if err != nil {
 			return nil, err
 		}
 
 		leafNode := &node{
-			sweepKey:       serverPubkey,
-			receivers:      []vtxoOutput{{pubkey, r.Amount}},
-			asset:          asset,
-			feeSats:        feeSatsPerNode,
-			vtxoTreeExpiry: vtxoTreeExpiry,
+			sweepKey:   serverPubkey,
+			receivers:  []taprootOutput{{pubkey, r.Amount}},
+			asset:      asset,
+			feeSats:    feeSatsPerNode,
+			treeExpiry: treeExpiry,
 		}
 		nodes = append(nodes, leafNode)
 	}
@@ -435,13 +448,13 @@ func createUpperLevel(nodes []*node) ([]*node, error) {
 		left := nodes[i]
 		right := nodes[i+1]
 		branchNode := &node{
-			sweepKey:       left.sweepKey,
-			receivers:      append(left.receivers, right.receivers...),
-			left:           left,
-			right:          right,
-			asset:          left.asset,
-			feeSats:        left.feeSats,
-			vtxoTreeExpiry: left.vtxoTreeExpiry,
+			sweepKey:   left.sweepKey,
+			receivers:  append(left.receivers, right.receivers...),
+			left:       left,
+			right:      right,
+			asset:      left.asset,
+			feeSats:    left.feeSats,
+			treeExpiry: left.treeExpiry,
 		}
 		pairs = append(pairs, branchNode)
 	}

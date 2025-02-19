@@ -11,6 +11,7 @@ import (
 	"github.com/go-openapi/errors"
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
+	"github.com/go-openapi/validate"
 )
 
 // V1RoundFinalizationEvent v1 round finalization event
@@ -19,7 +20,10 @@ import (
 type V1RoundFinalizationEvent struct {
 
 	// connectors
-	Connectors []string `json:"connectors"`
+	Connectors *V1Tree `json:"connectors,omitempty"`
+
+	// vtxo outpoint encoded as string -> connector outpoint
+	ConnectorsIndex map[string]V1Outpoint `json:"connectorsIndex,omitempty"`
 
 	// id
 	ID string `json:"id,omitempty"`
@@ -38,6 +42,14 @@ type V1RoundFinalizationEvent struct {
 func (m *V1RoundFinalizationEvent) Validate(formats strfmt.Registry) error {
 	var res []error
 
+	if err := m.validateConnectors(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.validateConnectorsIndex(formats); err != nil {
+		res = append(res, err)
+	}
+
 	if err := m.validateVtxoTree(formats); err != nil {
 		res = append(res, err)
 	}
@@ -45,6 +57,51 @@ func (m *V1RoundFinalizationEvent) Validate(formats strfmt.Registry) error {
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)
 	}
+	return nil
+}
+
+func (m *V1RoundFinalizationEvent) validateConnectors(formats strfmt.Registry) error {
+	if swag.IsZero(m.Connectors) { // not required
+		return nil
+	}
+
+	if m.Connectors != nil {
+		if err := m.Connectors.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("connectors")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("connectors")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *V1RoundFinalizationEvent) validateConnectorsIndex(formats strfmt.Registry) error {
+	if swag.IsZero(m.ConnectorsIndex) { // not required
+		return nil
+	}
+
+	for k := range m.ConnectorsIndex {
+
+		if err := validate.Required("connectorsIndex"+"."+k, "body", m.ConnectorsIndex[k]); err != nil {
+			return err
+		}
+		if val, ok := m.ConnectorsIndex[k]; ok {
+			if err := val.Validate(formats); err != nil {
+				if ve, ok := err.(*errors.Validation); ok {
+					return ve.ValidateName("connectorsIndex" + "." + k)
+				} else if ce, ok := err.(*errors.CompositeError); ok {
+					return ce.ValidateName("connectorsIndex" + "." + k)
+				}
+				return err
+			}
+		}
+
+	}
+
 	return nil
 }
 
@@ -71,6 +128,14 @@ func (m *V1RoundFinalizationEvent) validateVtxoTree(formats strfmt.Registry) err
 func (m *V1RoundFinalizationEvent) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
+	if err := m.contextValidateConnectors(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.contextValidateConnectorsIndex(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
 	if err := m.contextValidateVtxoTree(ctx, formats); err != nil {
 		res = append(res, err)
 	}
@@ -78,6 +143,42 @@ func (m *V1RoundFinalizationEvent) ContextValidate(ctx context.Context, formats 
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)
 	}
+	return nil
+}
+
+func (m *V1RoundFinalizationEvent) contextValidateConnectors(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.Connectors != nil {
+
+		if swag.IsZero(m.Connectors) { // not required
+			return nil
+		}
+
+		if err := m.Connectors.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("connectors")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("connectors")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *V1RoundFinalizationEvent) contextValidateConnectorsIndex(ctx context.Context, formats strfmt.Registry) error {
+
+	for k := range m.ConnectorsIndex {
+
+		if val, ok := m.ConnectorsIndex[k]; ok {
+			if err := val.ContextValidate(ctx, formats); err != nil {
+				return err
+			}
+		}
+
+	}
+
 	return nil
 }
 

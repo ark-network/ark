@@ -13,10 +13,11 @@ const (
 	SignBranch
 )
 
-type TreeFactory func(outpoint psetv2.InputArgs) (VtxoTree, error)
+type TreeFactory func(outpoint psetv2.InputArgs) (TxTree, error)
 
-type VtxoLeaf struct {
-	PubKey     string
+// Leaf is the output leaf of a TxTree
+type Leaf struct {
+	Script     string
 	Amount     uint64
 	Musig2Data *Musig2
 }

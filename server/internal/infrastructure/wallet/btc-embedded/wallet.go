@@ -589,16 +589,25 @@ func (s *service) LockConnectorUtxos(ctx context.Context, utxos []ports.TxOutpoi
 	w := s.wallet.InternalWallet()
 
 	for _, utxo := range utxos {
-		id, _ := chainhash.NewHashFromStr(utxo.GetTxid())
-		if _, err := w.LeaseOutput(
-			wtxmgr.LockID(id[:]),
-			wire.OutPoint{
-				Hash:  *id,
-				Index: utxo.GetIndex(),
-			},
-			outputLockDuration,
-		); err != nil {
-			return err
+		const retry = 60
+
+		for i := 0; i < retry; i++ {
+			id, _ := chainhash.NewHashFromStr(utxo.GetTxid())
+			if _, err := w.LeaseOutput(
+				wtxmgr.LockID(id[:]),
+				wire.OutPoint{
+					Hash:  *id,
+					Index: utxo.GetIndex(),
+				},
+				outputLockDuration,
+			); err != nil {
+				if err == wtxmgr.ErrUnknownOutput {
+					time.Sleep(1 * time.Second)
+					continue
+				}
+				return err
+			}
+			break
 		}
 	}
 

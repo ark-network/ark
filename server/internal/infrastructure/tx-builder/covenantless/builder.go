@@ -6,9 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
-	"runtime"
 	"strings"
-	"sync"
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bitcointree"
@@ -294,41 +292,12 @@ func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (txid, signedSweepTx
 }
 
 func (b *txBuilder) VerifyForfeitTxs(
-	vtxos []domain.Vtxo, connectors []string, forfeitTxs []string,
-) (map[domain.VtxoKey][]string, error) {
-	connectorTxs, connectorAmount, err := parseConnectors(connectors)
-	if err != nil {
-		return nil, err
-	}
-
-	// decode forfeit txs, map by vtxo key
-	indexedForfeitTxs := make(map[domain.VtxoKey]*struct {
-		firstTx *psbt.Packet
-		txs     map[string]*psbt.Packet
-	})
-	for _, forfeitTx := range forfeitTxs {
-		tx, err := psbt.NewFromRawBytes(strings.NewReader(forfeitTx), true)
-		if err != nil {
-			return nil, err
-		}
-
-		if len(tx.Inputs) != 2 {
-			return nil, fmt.Errorf("invalid forfeit tx, expect 2 inputs, got %d", len(tx.Inputs))
-		}
-
-		txid := tx.UnsignedTx.TxHash().String()
-		vtxoInput := tx.UnsignedTx.TxIn[1]
-		vtxoKey := domain.VtxoKey{
-			Txid: vtxoInput.PreviousOutPoint.Hash.String(),
-			VOut: vtxoInput.PreviousOutPoint.Index,
-		}
-		if _, ok := indexedForfeitTxs[vtxoKey]; !ok {
-			indexedForfeitTxs[vtxoKey] = &struct {
-				firstTx *psbt.Packet
-				txs     map[string]*psbt.Packet
-			}{firstTx: tx, txs: make(map[string]*psbt.Packet)}
-		}
-		indexedForfeitTxs[vtxoKey].txs[txid] = tx
+	vtxos []domain.Vtxo, connectors tree.TxTree,
+	forfeitTxs []string, connectorIndex map[string]domain.Outpoint,
+) (map[domain.VtxoKey]string, error) {
+	connectorsLeaves := connectors.Leaves()
+	if len(connectorsLeaves) == 0 {
+		return nil, fmt.Errorf("invalid connectors tree")
 	}
 
 	indexedVtxos := map[domain.VtxoKey]domain.Vtxo{}
@@ -353,10 +322,41 @@ func (b *txBuilder) VerifyForfeitTxs(
 		return nil, err
 	}
 
-	validForfeitTxs := make(map[domain.VtxoKey][]string)
+	validForfeitTxs := make(map[domain.VtxoKey]string)
 
-	for vtxoKey, f := range indexedForfeitTxs {
-		if len(f.txs) == 0 {
+	for _, forfeitTx := range forfeitTxs {
+		tx, err := psbt.NewFromRawBytes(strings.NewReader(forfeitTx), true)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(tx.Inputs) != 2 {
+			continue
+		}
+
+		connectorInput := tx.UnsignedTx.TxIn[0]
+		vtxoInput := tx.UnsignedTx.TxIn[1]
+
+		vtxoKey := domain.VtxoKey{
+			Txid: vtxoInput.PreviousOutPoint.Hash.String(),
+			VOut: vtxoInput.PreviousOutPoint.Index,
+		}
+
+		expectedConnectorOutpoint, ok := connectorIndex[vtxoKey.String()]
+		if !ok {
+			return nil, fmt.Errorf("invalid connector outpoint for vtxo %s", vtxoKey)
+		}
+
+		if connectorInput.PreviousOutPoint.Hash.String() != expectedConnectorOutpoint.Txid ||
+			connectorInput.PreviousOutPoint.Index != expectedConnectorOutpoint.VOut {
+			return nil, fmt.Errorf(
+				"invalid connector outpoint for vtxo %s, wrong outpoint, expected %s",
+				vtxoKey,
+				domain.VtxoKey(expectedConnectorOutpoint),
+			)
+		}
+
+		if _, ok := validForfeitTxs[vtxoKey]; ok {
 			continue
 		}
 
@@ -367,21 +367,40 @@ func (b *txBuilder) VerifyForfeitTxs(
 
 		outputAmount := uint64(0)
 
-		// only take the first forfeit tx, as all forfeit must have the same output
-		firstForfeit := f.firstTx
-		for _, output := range firstForfeit.UnsignedTx.TxOut {
+		for _, output := range tx.UnsignedTx.TxOut {
 			outputAmount += uint64(output.Value)
 		}
 
-		inputAmount := vtxo.Amount + connectorAmount
+		var connectorOutput *wire.TxOut
+		for _, leaf := range connectorsLeaves {
+			if leaf.Txid == connectorInput.PreviousOutPoint.Hash.String() {
+				connectorTx, err := psbt.NewFromRawBytes(strings.NewReader(leaf.Tx), true)
+				if err != nil {
+					return nil, err
+				}
+
+				if len(connectorTx.UnsignedTx.TxOut) <= int(connectorInput.PreviousOutPoint.Index) {
+					return nil, fmt.Errorf("invalid connector tx")
+				}
+
+				connectorOutput = connectorTx.UnsignedTx.TxOut[connectorInput.PreviousOutPoint.Index]
+				break
+			}
+		}
+
+		if connectorOutput == nil {
+			return nil, fmt.Errorf("missing connector output")
+		}
+
+		inputAmount := vtxo.Amount + uint64(connectorOutput.Value)
 		feeAmount := inputAmount - outputAmount
 
-		if len(firstForfeit.Inputs[1].TaprootLeafScript) <= 0 {
+		if len(tx.Inputs[1].TaprootLeafScript) <= 0 {
 			return nil, fmt.Errorf("missing taproot leaf script for vtxo input, invalid forfeit tx")
 		}
 
-		vtxoTapscript := firstForfeit.Inputs[1].TaprootLeafScript[0]
-		conditionWitness, err := bitcointree.GetConditionWitness(firstForfeit.Inputs[1])
+		vtxoTapscript := tx.Inputs[1].TaprootLeafScript[0]
+		conditionWitness, err := bitcointree.GetConditionWitness(tx.Inputs[1])
 		if err != nil {
 			return nil, err
 		}
@@ -450,16 +469,6 @@ func (b *txBuilder) VerifyForfeitTxs(
 			return nil, fmt.Errorf("forfeit tx fee is higher than 5%% of the min relay fee, %d > %d", feeAmount, feeThreshold)
 		}
 
-		vtxoChainhash, err := chainhash.NewHashFromStr(vtxoKey.Txid)
-		if err != nil {
-			return nil, err
-		}
-
-		vtxoInput := &wire.OutPoint{
-			Hash:  *vtxoChainhash,
-			Index: vtxoKey.VOut,
-		}
-
 		vtxoTapKey, err := vtxo.TapKey()
 		if err != nil {
 			return nil, err
@@ -470,89 +479,32 @@ func (b *txBuilder) VerifyForfeitTxs(
 			return nil, err
 		}
 
-		rebuiltTxIds := make(map[string]bool)
-
-		nbWorkers := runtime.NumCPU()
-		jobsConnector := make(chan *psbt.Packet, len(connectorTxs))
-		errChan := make(chan error, 1)
-		m := &sync.Mutex{}
-		wg := sync.WaitGroup{}
-		wg.Add(nbWorkers)
-
-		// start work pool
-		for i := 0; i < nbWorkers; i++ {
-			go func(m *sync.Mutex) {
-				defer wg.Done()
-
-				for connector := range jobsConnector {
-					forfeits, err := bitcointree.BuildForfeitTxs(
-						connector,
-						vtxoInput,
-						vtxo.Amount,
-						connectorAmount,
-						feeAmount,
-						vtxoScript,
-						forfeitScript,
-						uint32(locktime),
-					)
-					if err != nil {
-						errChan <- err
-						return
-					}
-
-					m.Lock()
-					for _, forfeit := range forfeits {
-						txid := forfeit.UnsignedTx.TxHash().String()
-						rebuiltTxIds[txid] = true
-					}
-					m.Unlock()
-				}
-			}(m)
-		}
-
-		for _, connector := range connectorTxs {
-			select {
-			// don't wait for the whole jobs pool to be done in case of error
-			case err := <-errChan:
-				return nil, err
-			default:
-				jobsConnector <- connector
-			}
-		}
-
-		close(jobsConnector)
-		// wait for the workers
-		wg.Wait()
-
-		select {
-		case err := <-errChan:
+		rebuilt, err := bitcointree.BuildForfeitTx(
+			&wire.OutPoint{
+				Hash:  connectorInput.PreviousOutPoint.Hash,
+				Index: connectorInput.PreviousOutPoint.Index,
+			},
+			&wire.OutPoint{
+				Hash:  vtxoInput.PreviousOutPoint.Hash,
+				Index: vtxoInput.PreviousOutPoint.Index,
+			},
+			vtxo.Amount,
+			uint64(connectorOutput.Value),
+			feeAmount,
+			vtxoScript,
+			connectorOutput.PkScript,
+			forfeitScript,
+			uint32(locktime),
+		)
+		if err != nil {
 			return nil, err
-		default:
-			close(errChan)
 		}
 
-		if len(rebuiltTxIds) != len(f.txs) {
-			return nil, fmt.Errorf("missing forfeits, expect %d, got %d", len(f.txs), len(rebuiltTxIds))
+		if rebuilt.UnsignedTx.TxID() != tx.UnsignedTx.TxID() {
+			return nil, fmt.Errorf("invalid forfeit tx")
 		}
 
-		// verify all rebuilt are the same as the original forfeits
-		for txid := range rebuiltTxIds {
-			if _, ok := f.txs[txid]; !ok {
-				return nil, fmt.Errorf("missing forfeit tx %s", txid)
-			}
-		}
-
-		b64Txs := make([]string, 0, len(f.txs))
-		for _, forfeit := range f.txs {
-			b64, err := forfeit.B64Encode()
-			if err != nil {
-				return nil, err
-			}
-
-			b64Txs = append(b64Txs, b64)
-		}
-
-		validForfeitTxs[vtxoKey] = b64Txs
+		validForfeitTxs[vtxoKey] = forfeitTx
 	}
 
 	return validForfeitTxs, nil
@@ -564,7 +516,7 @@ func (b *txBuilder) BuildRoundTx(
 	boardingInputs []ports.BoardingInput,
 	connectorAddresses []string,
 	musig2Data []*tree.Musig2,
-) (roundTx string, vtxoTree tree.VtxoTree, nextConnectorAddress string, connectors []string, err error) {
+) (string, tree.TxTree, string, tree.TxTree, error) {
 	var sharedOutputScript []byte
 	var sharedOutputAmount int64
 
@@ -575,74 +527,33 @@ func (b *txBuilder) BuildRoundTx(
 
 	feeAmount, err := b.minRelayFeeTreeTx()
 	if err != nil {
-		return
+		return "", nil, "", nil, err
 	}
 
-	var sweepScript []byte
-	sweepScript, err = (&tree.CSVMultisigClosure{
+	sweepScript, err := (&tree.CSVMultisigClosure{
 		MultisigClosure: tree.MultisigClosure{
 			PubKeys: []*secp256k1.PublicKey{serverPubkey},
 		},
 		Locktime: b.vtxoTreeExpiry,
 	}).Script()
 	if err != nil {
-		return
+		return "", nil, "", nil, err
 	}
 
-	tree := txscript.AssembleTaprootScriptTree(txscript.NewBaseTapLeaf(sweepScript))
-	root := tree.RootNode.TapHash()
+	sweepTapscriptRoot := txscript.NewBaseTapLeaf(sweepScript).TapHash()
 
 	if !isOnchainOnly(requests) {
 		sharedOutputScript, sharedOutputAmount, err = bitcointree.CraftSharedOutput(
-			receivers, feeAmount, root[:],
-		)
-		if err != nil {
-			return
-		}
-	}
-
-	nextConnectorAddress, err = b.wallet.DeriveConnectorAddress(context.Background())
-	if err != nil {
-		return
-	}
-
-	ptx, err := b.createRoundTx(
-		sharedOutputAmount, sharedOutputScript, requests,
-		boardingInputs, nextConnectorAddress, connectorAddresses,
-	)
-	if err != nil {
-		return
-	}
-
-	roundTx, err = ptx.B64Encode()
-	if err != nil {
-		return
-	}
-
-	if !isOnchainOnly(requests) {
-		initialOutpoint := &wire.OutPoint{
-			Hash:  ptx.UnsignedTx.TxHash(),
-			Index: 0,
-		}
-
-		vtxoTree, err = bitcointree.BuildVtxoTree(
-			initialOutpoint, receivers, feeAmount, root[:], b.vtxoTreeExpiry,
+			receivers, feeAmount, sweepTapscriptRoot[:],
 		)
 		if err != nil {
 			return "", nil, "", nil, err
 		}
 	}
 
-	if countSpentVtxos(requests) <= 0 {
-		return
-	}
+	nbOfConnectors := countSpentVtxos(requests)
 
-	connectorAddr, err := btcutil.DecodeAddress(nextConnectorAddress, b.onchainNetwork())
-	if err != nil {
-		return "", nil, "", nil, err
-	}
-
-	connectorPkScript, err := txscript.PayToAddrScript(connectorAddr)
+	dustAmount, err := b.wallet.GetDustAmount(context.Background())
 	if err != nil {
 		return "", nil, "", nil, err
 	}
@@ -652,17 +563,113 @@ func (b *txBuilder) BuildRoundTx(
 		return "", nil, "", nil, err
 	}
 
-	connectorsPsbts, err := b.createConnectors(roundTx, requests, connectorPkScript, minRelayFeeConnectorTx)
+	var nextConnectorAddress string
+	var connectorsTreePkScript []byte
+	var connectorsTreeAmount int64
+	connectorsTreeLeaves := make([]tree.Leaf, 0)
+
+	if nbOfConnectors > 0 {
+		nextConnectorAddress, err = b.wallet.DeriveConnectorAddress(context.Background())
+		if err != nil {
+			return "", nil, "", nil, err
+		}
+
+		connectorAddress, err := btcutil.DecodeAddress(nextConnectorAddress, b.onchainNetwork())
+		if err != nil {
+			return "", nil, "", nil, err
+		}
+
+		connectorPkScript, err := txscript.PayToAddrScript(connectorAddress)
+		if err != nil {
+			return "", nil, "", nil, err
+		}
+
+		// check if the connector script is a taproot script
+		// we need taproot to properly create the connectors tree
+		connectorScriptClass := txscript.GetScriptClass(connectorPkScript)
+		if connectorScriptClass != txscript.WitnessV1TaprootTy {
+			return "", nil, "", nil, fmt.Errorf("invalid connector script class, expected taproot (%s), got %s", txscript.WitnessV1TaprootTy, connectorScriptClass)
+		}
+
+		taprootKey, err := schnorr.ParsePubKey(connectorPkScript[2:])
+		if err != nil {
+			return "", nil, "", nil, err
+		}
+
+		cosigners := []string{hex.EncodeToString(taprootKey.SerializeCompressed())}
+
+		for i := uint64(0); i < nbOfConnectors; i++ {
+			connectorsTreeLeaves = append(connectorsTreeLeaves, tree.Leaf{
+				Amount: uint64(dustAmount),
+				Script: hex.EncodeToString(connectorPkScript),
+				Musig2Data: &tree.Musig2{
+					CosignersPublicKeys: cosigners,
+					SigningType:         tree.SignBranch,
+				},
+			})
+		}
+
+		connectorsTreePkScript, connectorsTreeAmount, err = bitcointree.CraftConnectorsOutput(
+			connectorsTreeLeaves,
+			minRelayFeeConnectorTx,
+		)
+		if err != nil {
+			return "", nil, "", nil, err
+		}
+	}
+
+	ptx, err := b.createRoundTx(
+		sharedOutputAmount, sharedOutputScript,
+		connectorsTreeAmount, connectorsTreePkScript,
+		requests, boardingInputs,
+		connectorAddresses,
+	)
 	if err != nil {
 		return "", nil, "", nil, err
 	}
 
-	for _, ptx := range connectorsPsbts {
-		b64, err := ptx.B64Encode()
+	roundTx, err := ptx.B64Encode()
+	if err != nil {
+		return "", nil, "", nil, err
+	}
+
+	vtxoTree := make(tree.TxTree, 0)
+
+	if !isOnchainOnly(requests) {
+		initialOutpoint := &wire.OutPoint{
+			Hash:  ptx.UnsignedTx.TxHash(),
+			Index: 0,
+		}
+
+		vtxoTree, err = bitcointree.BuildVtxoTree(
+			initialOutpoint, receivers, feeAmount, sweepTapscriptRoot[:], b.vtxoTreeExpiry,
+		)
 		if err != nil {
 			return "", nil, "", nil, err
 		}
-		connectors = append(connectors, b64)
+	}
+
+	if nbOfConnectors <= 0 {
+		return roundTx, vtxoTree, nextConnectorAddress, nil, nil
+	}
+
+	partialTx, err := psbt.NewFromRawBytes(strings.NewReader(roundTx), true)
+	if err != nil {
+		return "", nil, "", nil, err
+	}
+
+	rootConnectorsOutpoint := &wire.OutPoint{
+		Hash:  partialTx.UnsignedTx.TxHash(),
+		Index: 1,
+	}
+
+	connectors, err := bitcointree.BuildConnectorsTree(
+		rootConnectorsOutpoint,
+		connectorsTreeLeaves,
+		minRelayFeeConnectorTx,
+	)
+	if err != nil {
+		return "", nil, "", nil, err
 	}
 
 	return roundTx, vtxoTree, nextConnectorAddress, connectors, nil
@@ -710,7 +717,7 @@ func (b *txBuilder) GetSweepInput(node tree.Node) (vtxoTreeExpiry *common.Relati
 	return vtxoTreeExpiry, sweepInput, nil
 }
 
-func (b *txBuilder) FindLeaves(vtxoTree tree.VtxoTree, fromtxid string, vout uint32) ([]tree.Node, error) {
+func (b *txBuilder) FindLeaves(vtxoTree tree.TxTree, fromtxid string, vout uint32) ([]tree.Node, error) {
 	allLeaves := vtxoTree.Leaves()
 	foundLeaves := make([]tree.Node, 0)
 
@@ -742,43 +749,21 @@ func (b *txBuilder) FindLeaves(vtxoTree tree.VtxoTree, fromtxid string, vout uin
 	return foundLeaves, nil
 }
 
-// TODO use lnd CoinSelect to craft the pool tx
 func (b *txBuilder) createRoundTx(
 	sharedOutputAmount int64,
 	sharedOutputScript []byte,
+	connectorOutputAmount int64,
+	connectorOutputScript []byte,
 	requests []domain.TxRequest,
 	boardingInputs []ports.BoardingInput,
-	nextConnectorAddress string,
 	connectorAddresses []string,
 ) (*psbt.Packet, error) {
-	nextConnectorAddr, err := btcutil.DecodeAddress(nextConnectorAddress, b.onchainNetwork())
-	if err != nil {
-		return nil, err
-	}
-
-	nextConnectorScript, err := txscript.PayToAddrScript(nextConnectorAddr)
-	if err != nil {
-		return nil, err
-	}
-
-	connectorMinRelayFee, err := b.minRelayFeeConnectorTx()
-	if err != nil {
-		return nil, err
-	}
-
 	dustLimit, err := b.wallet.GetDustAmount(context.Background())
 	if err != nil {
 		return nil, err
 	}
 
-	connectorAmount := dustLimit
-
-	nbOfInputs := countSpentVtxos(requests)
-	connectorsAmount := (connectorAmount + connectorMinRelayFee) * nbOfInputs
-	if nbOfInputs > 1 {
-		connectorsAmount -= connectorMinRelayFee
-	}
-	targetAmount := connectorsAmount
+	targetAmount := uint64(0)
 
 	outputs := make([]*wire.TxOut, 0)
 
@@ -791,10 +776,12 @@ func (b *txBuilder) createRoundTx(
 		})
 	}
 
-	if connectorsAmount > 0 {
+	if connectorOutputScript != nil && connectorOutputAmount > 0 {
+		targetAmount += uint64(connectorOutputAmount)
+
 		outputs = append(outputs, &wire.TxOut{
-			Value:    int64(connectorsAmount),
-			PkScript: nextConnectorScript,
+			Value:    connectorOutputAmount,
+			PkScript: connectorOutputScript,
 		})
 	}
 
@@ -1119,72 +1106,6 @@ func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, 
 	return roundTx.B64Encode()
 }
 
-func (b *txBuilder) createConnectors(
-	roundTx string, requests []domain.TxRequest, connectorScript []byte, feeAmount uint64,
-) ([]*psbt.Packet, error) {
-	partialTx, err := psbt.NewFromRawBytes(strings.NewReader(roundTx), true)
-	if err != nil {
-		return nil, err
-	}
-
-	connectorAmount, err := b.wallet.GetDustAmount(context.Background())
-	if err != nil {
-		return nil, err
-	}
-
-	connectorOutput := &wire.TxOut{
-		PkScript: connectorScript,
-		Value:    int64(connectorAmount),
-	}
-
-	numberOfConnectors := countSpentVtxos(requests)
-
-	previousInput := &wire.OutPoint{
-		Hash:  partialTx.UnsignedTx.TxHash(),
-		Index: 1,
-	}
-	if numberOfConnectors == 1 {
-		outputs := []*wire.TxOut{connectorOutput}
-		connectorTx, err := craftConnectorTx(previousInput, connectorScript, outputs, feeAmount)
-		if err != nil {
-			return nil, err
-		}
-
-		return []*psbt.Packet{connectorTx}, nil
-	}
-
-	totalConnectorAmount := (connectorAmount + feeAmount) * numberOfConnectors
-	if numberOfConnectors > 1 {
-		totalConnectorAmount -= feeAmount
-	}
-
-	connectors := make([]*psbt.Packet, 0, numberOfConnectors-1)
-	for i := uint64(0); i < numberOfConnectors-1; i++ {
-		outputs := []*wire.TxOut{connectorOutput}
-		totalConnectorAmount -= connectorAmount
-		totalConnectorAmount -= feeAmount
-		if totalConnectorAmount > 0 {
-			outputs = append(outputs, &wire.TxOut{
-				PkScript: connectorScript,
-				Value:    int64(totalConnectorAmount),
-			})
-		}
-		connectorTx, err := craftConnectorTx(previousInput, connectorScript, outputs, feeAmount)
-		if err != nil {
-			return nil, err
-		}
-
-		previousInput = &wire.OutPoint{
-			Hash:  connectorTx.UnsignedTx.TxHash(),
-			Index: 1,
-		}
-
-		connectors = append(connectors, connectorTx)
-	}
-
-	return connectors, nil
-}
-
 func (b *txBuilder) minRelayFeeTreeTx() (uint64, error) {
 	return b.wallet.MinRelayFee(context.Background(), uint64(common.TreeTxSize))
 }
@@ -1378,26 +1299,6 @@ func (b *txBuilder) getForfeitScript() ([]byte, error) {
 	}
 
 	return txscript.PayToAddrScript(addr)
-}
-
-func parseConnectors(connectors []string) ([]*psbt.Packet, uint64, error) {
-	var connectorAmount uint64
-	connectorTxs := make([]*psbt.Packet, 0, len(connectors))
-	for i, connector := range connectors {
-		tx, err := psbt.NewFromRawBytes(strings.NewReader(connector), true)
-		if err != nil {
-			return nil, 0, err
-		}
-
-		if i == len(connectors)-1 {
-			lastOutput := tx.UnsignedTx.TxOut[len(tx.UnsignedTx.TxOut)-1]
-			connectorAmount = uint64(lastOutput.Value)
-		}
-
-		connectorTxs = append(connectorTxs, tx)
-	}
-
-	return connectorTxs, connectorAmount, nil
 }
 
 type sweepBitcoinInput struct {

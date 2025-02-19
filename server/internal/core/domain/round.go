@@ -42,8 +42,8 @@ type Round struct {
 	Txid              string
 	UnsignedTx        string
 	ForfeitTxs        []string
-	VtxoTree          tree.VtxoTree
-	Connectors        []string
+	VtxoTree          tree.TxTree
+	Connectors        tree.TxTree
 	ConnectorAddress  string
 	DustAmount        uint64
 	Version           uint
@@ -85,7 +85,7 @@ func (r *Round) On(event RoundEvent, replayed bool) {
 	case RoundFinalizationStarted:
 		r.Stage.Code = FinalizationStage
 		r.VtxoTree = e.VtxoTree
-		r.Connectors = append([]string{}, e.Connectors...)
+		r.Connectors = e.Connectors
 		r.ConnectorAddress = e.ConnectorAddress
 		r.UnsignedTx = e.RoundTx
 	case RoundFinalized:
@@ -147,7 +147,13 @@ func (r *Round) RegisterTxRequests(txRequests []TxRequest) ([]RoundEvent, error)
 	return []RoundEvent{event}, nil
 }
 
-func (r *Round) StartFinalization(connectorAddress string, connectors []string, vtxoTree tree.VtxoTree, roundTx string) ([]RoundEvent, error) {
+func (r *Round) StartFinalization(
+	connectorAddress string,
+	connectors tree.TxTree,
+	vtxoTree tree.TxTree,
+	roundTx string,
+	connectorsIndex map[string]Outpoint,
+) ([]RoundEvent, error) {
 	if len(roundTx) <= 0 {
 		return nil, fmt.Errorf("missing unsigned round tx")
 	}
@@ -164,6 +170,7 @@ func (r *Round) StartFinalization(connectorAddress string, connectors []string, 
 		Connectors:       connectors,
 		ConnectorAddress: connectorAddress,
 		RoundTx:          roundTx,
+		ConnectorsIndex:  connectorsIndex,
 	}
 	r.raise(event)
 

@@ -19,7 +19,7 @@ message Round {
   string round_tx = 4;
   Tree vtxo_tree = 5;
   repeated string forfeit_txs = 6;
-  repeated string connectors = 7;
+  Tree connectors = 7;
   RoundStage stage = 8;
 }
 
@@ -141,8 +141,10 @@ message RoundFinalizationEvent {
   string id = 1;
   string round_tx = 2;
   Tree vtxo_tree = 3;
-  repeated string connectors = 4;
+  Tree connectors = 4;
   int64 min_relay_fee_rate = 5;
+  // vtxo outpoint encoded as string -> connector outpoint
+  map<string, Outpoint> connectors_index = 6;
 }
 
 message RoundFinalizedEvent {

@@ -82,7 +82,7 @@ func DecodeSignatures(r io.Reader) (TreePartialSigs, error) {
 }
 
 type SignerSession interface {
-	Init(scriptRoot []byte, rootSharedOutputAmount int64, vtxoTree tree.VtxoTree) error
+	Init(scriptRoot []byte, rootSharedOutputAmount int64, vtxoTree tree.TxTree) error
 	GetPublicKey() string
 	GetNonces() (TreeNonces, error) // generate tree nonces for this session
 	SetAggregatedNonces(TreeNonces) // set the aggregated nonces
@@ -94,7 +94,7 @@ type CoordinatorSession interface {
 	AddSignatures(*btcec.PublicKey, TreePartialSigs)
 	AggregateNonces() (TreeNonces, error)
 	// SignTree combines the signatures and add them to the tree's psbts
-	SignTree() (tree.VtxoTree, error)
+	SignTree() (tree.TxTree, error)
 }
 
 // AggregateKeys is a wrapper around musig2.AggregateKeys using the given scriptRoot as taproot tweak
@@ -112,13 +112,28 @@ func AggregateKeys(
 		}
 	}
 
-	if scriptRoot == nil {
-		return nil, errors.New("nil script root")
+	// if there is only one pubkey, fallback to classic P2TR
+	if len(pubkeys) == 1 {
+		res := &musig2.AggregateKey{
+			PreTweakedKey: pubkeys[0],
+		}
+
+		if len(scriptRoot) > 0 {
+			finalKey := txscript.ComputeTaprootOutputKey(pubkeys[0], scriptRoot)
+			res.FinalKey = finalKey
+		} else {
+			res.FinalKey = pubkeys[0]
+		}
+
+		return res, nil
 	}
 
-	key, _, _, err := musig2.AggregateKeys(pubkeys, true,
-		musig2.WithTaprootKeyTweak(scriptRoot),
-	)
+	opts := make([]musig2.KeyAggOption, 0)
+	if len(scriptRoot) > 0 {
+		opts = append(opts, musig2.WithTaprootKeyTweak(scriptRoot))
+	}
+
+	key, _, _, err := musig2.AggregateKeys(pubkeys, true, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +146,7 @@ func AggregateKeys(
 func ValidateTreeSigs(
 	scriptRoot []byte,
 	roundSharedOutputAmount int64,
-	vtxoTree tree.VtxoTree,
+	vtxoTree tree.TxTree,
 ) error {
 	prevoutFetcherFactory, err := prevOutFetcherFactory(vtxoTree, roundSharedOutputAmount, scriptRoot)
 	if err != nil {
@@ -205,7 +220,7 @@ type treeSignerSession struct {
 	prevoutFetcherFactory func(*psbt.Packet) (txscript.PrevOutputFetcher, error)
 }
 
-func (t *treeSignerSession) Init(scriptRoot []byte, rootSharedOutputAmount int64, vtxoTree tree.VtxoTree) error {
+func (t *treeSignerSession) Init(scriptRoot []byte, rootSharedOutputAmount int64, vtxoTree tree.TxTree) error {
 	prevOutFetcherFactory, err := prevOutFetcherFactory(vtxoTree, rootSharedOutputAmount, scriptRoot)
 	if err != nil {
 		return err
@@ -388,12 +403,12 @@ type treeCoordinatorSession struct {
 	sigs                  map[string]TreePartialSigs // xonly pubkey -> sigs
 	prevoutFetcherFactory func(*psbt.Packet) (txscript.PrevOutputFetcher, error)
 	txs                   [][]*psbt.Packet
-	vtxoTree              tree.VtxoTree
+	vtxoTree              tree.TxTree
 }
 
 func NewTreeCoordinatorSession(
 	roundSharedOutputAmount int64,
-	vtxoTree tree.VtxoTree,
+	vtxoTree tree.TxTree,
 	scriptRoot []byte,
 ) (CoordinatorSession, error) {
 	prevoutFetcherFactory, err := prevOutFetcherFactory(vtxoTree, roundSharedOutputAmount, scriptRoot)
@@ -491,8 +506,8 @@ func (t *treeCoordinatorSession) AggregateNonces() (TreeNonces, error) {
 
 // SignTree combines the signatures and add them to the tree's psbts
 // it returns the vtxo tree with the signed transactions set as TaprootKeySpendSig
-func (t *treeCoordinatorSession) SignTree() (tree.VtxoTree, error) {
-	signedTree := make(tree.VtxoTree, 0, len(t.txs))
+func (t *treeCoordinatorSession) SignTree() (tree.TxTree, error) {
+	signedTree := make(tree.TxTree, 0, len(t.txs))
 	for i := range t.txs {
 		signedTree = append(signedTree, make([]tree.Node, len(t.txs[i])))
 	}
@@ -555,9 +570,14 @@ func (t *treeCoordinatorSession) SignTree() (tree.VtxoTree, error) {
 			return fmt.Errorf("wrong number of signatures for txid %s, expected %d got %d", partialTx.UnsignedTx.TxHash().String(), len(keys), len(sigs))
 		}
 
+		combineOpts := make([]musig2.CombineOption, 0)
+		if t.scriptRoot != nil {
+			combineOpts = append(combineOpts, musig2.WithTaprootTweakedCombine([32]byte(message), keys, t.scriptRoot, true))
+		}
+
 		combinedSig := musig2.CombineSigs(
 			combinedNonce, sigs,
-			musig2.WithTaprootTweakedCombine([32]byte(message), keys, t.scriptRoot, true),
+			combineOpts...,
 		)
 
 		aggregatedKey, err := AggregateKeys(keys, t.scriptRoot)
@@ -592,7 +612,7 @@ func (t *treeCoordinatorSession) SignTree() (tree.VtxoTree, error) {
 }
 
 func prevOutFetcherFactory(
-	vtxoTree tree.VtxoTree,
+	vtxoTree tree.TxTree,
 	roundSharedOutputAmount int64,
 	scriptRoot []byte,
 ) (
@@ -755,7 +775,7 @@ func decodeMatrix[T readable](factory func() T, data io.Reader) ([][]T, error) {
 	return matrix, nil
 }
 
-func vtxoTreeToTx(vtxoTree tree.VtxoTree) ([][]*psbt.Packet, error) {
+func vtxoTreeToTx(vtxoTree tree.TxTree) ([][]*psbt.Packet, error) {
 	txs := make([][]*psbt.Packet, 0)
 
 	for _, level := range vtxoTree {

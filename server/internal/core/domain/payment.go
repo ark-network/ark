@@ -91,6 +91,7 @@ type VtxoKey struct {
 	Txid string
 	VOut uint32
 }
+type Outpoint VtxoKey
 
 func (k VtxoKey) String() string {
 	return fmt.Sprintf("%s:%d", k.Txid, k.VOut)

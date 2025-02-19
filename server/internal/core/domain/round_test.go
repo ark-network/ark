@@ -68,7 +68,8 @@ var (
 	emptyPtx = "cHNldP8BAgQCAAAAAQQBAAEFAQABBgEDAfsEAgAAAAA="
 	emptyTx  = "0200000000000000000000"
 	txid     = "0000000000000000000000000000000000000000000000000000000000000000"
-	vtxoTree = tree.VtxoTree{
+	txid2    = "0000000000000000000000000000000000000000000000000000000000000001"
+	vtxoTree = tree.TxTree{
 		{
 			{
 				Txid:       txid,
@@ -111,7 +112,27 @@ var (
 			},
 		},
 	}
-	connectors = []string{emptyPtx, emptyPtx, emptyPtx}
+	connectors = tree.TxTree{
+		{
+			{
+				Txid:       txid,
+				Tx:         emptyPtx,
+				ParentTxid: txid,
+			},
+		},
+		{
+			{
+				Txid:       txid,
+				Tx:         emptyPtx,
+				ParentTxid: txid,
+			},
+			{
+				Txid:       txid,
+				Tx:         emptyPtx,
+				ParentTxid: txid,
+			},
+		},
+	}
 	forfeitTxs = []string{emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx}
 	roundTx    = emptyTx
 )
@@ -291,7 +312,16 @@ func testStartFinalization(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			events, err = round.StartFinalization("", connectors, vtxoTree, roundTx)
+			events, err = round.StartFinalization("", connectors, vtxoTree, roundTx, map[string]domain.Outpoint{
+				txid: {
+					Txid: txid,
+					VOut: 0,
+				},
+				txid2: {
+					Txid: txid2,
+					VOut: 1,
+				},
+			})
 			require.NoError(t, err)
 			require.Len(t, events, 1)
 			require.True(t, round.IsStarted())
@@ -313,8 +343,8 @@ func testStartFinalization(t *testing.T) {
 			}
 			fixtures := []struct {
 				round       *domain.Round
-				connectors  []string
-				tree        tree.VtxoTree
+				connectors  tree.TxTree
+				tree        tree.TxTree
 				roundTx     string
 				expectedErr string
 			}{
@@ -388,7 +418,12 @@ func testStartFinalization(t *testing.T) {
 
 			for _, f := range fixtures {
 				// TODO fix this
-				events, err := f.round.StartFinalization("", f.connectors, f.tree, f.roundTx)
+				events, err := f.round.StartFinalization("", f.connectors, f.tree, f.roundTx, map[string]domain.Outpoint{
+					txid: {
+						Txid: txid,
+						VOut: 0,
+					},
+				})
 				require.EqualError(t, err, f.expectedErr)
 				require.Empty(t, events)
 			}
@@ -408,7 +443,12 @@ func testEndFinalization(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			events, err = round.StartFinalization("", connectors, vtxoTree, roundTx)
+			events, err = round.StartFinalization("", connectors, vtxoTree, roundTx, map[string]domain.Outpoint{
+				txid: {
+					Txid: txid,
+					VOut: 0,
+				},
+			})
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 

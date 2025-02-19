@@ -72,7 +72,7 @@ func UnspendableKey() *secp256k1.PublicKey {
 // - every control block and taproot output scripts
 // - input and output amounts
 func ValidateVtxoTree(
-	tree VtxoTree, roundTx string, serverPubkey *secp256k1.PublicKey,
+	tree TxTree, roundTx string, serverPubkey *secp256k1.PublicKey,
 	vtxoTreeExpiry common.RelativeLocktime,
 ) error {
 	roundTransaction, err := psetv2.NewPsetFromBase64(roundTx)
@@ -147,7 +147,7 @@ func ValidateVtxoTree(
 }
 
 func validateNodeTransaction(
-	node Node, tree VtxoTree,
+	node Node, tree TxTree,
 	expectedInternalKey, expectedServerPubkey *secp256k1.PublicKey,
 	expectedVtxoTreeExpiry common.RelativeLocktime,
 ) error {

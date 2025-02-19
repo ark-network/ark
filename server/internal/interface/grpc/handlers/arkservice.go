@@ -361,7 +361,7 @@ func (h *handler) GetRound(
 				RoundTx:    round.UnsignedTx,
 				VtxoTree:   vtxoTree(round.VtxoTree).toProto(),
 				ForfeitTxs: round.ForfeitTxs,
-				Connectors: round.Connectors,
+				Connectors: vtxoTree(round.Connectors).toProto(),
 				Stage:      stage(round.Stage).toProto(),
 			},
 		}, nil
@@ -380,7 +380,7 @@ func (h *handler) GetRound(
 			RoundTx:    round.UnsignedTx,
 			VtxoTree:   vtxoTree(round.VtxoTree).toProto(),
 			ForfeitTxs: round.ForfeitTxs,
-			Connectors: round.Connectors,
+			Connectors: vtxoTree(round.Connectors).toProto(),
 			Stage:      stage(round.Stage).toProto(),
 		},
 	}, nil
@@ -407,7 +407,7 @@ func (h *handler) GetRoundById(
 			RoundTx:    round.UnsignedTx,
 			VtxoTree:   vtxoTree(round.VtxoTree).toProto(),
 			ForfeitTxs: round.ForfeitTxs,
-			Connectors: round.Connectors,
+			Connectors: vtxoTree(round.Connectors).toProto(),
 			Stage:      stage(round.Stage).toProto(),
 		},
 	}, nil
@@ -510,8 +510,9 @@ func (h *handler) listenToEvents() {
 						Id:              e.Id,
 						RoundTx:         e.RoundTx,
 						VtxoTree:        vtxoTree(e.VtxoTree).toProto(),
-						Connectors:      e.Connectors,
+						Connectors:      vtxoTree(e.Connectors).toProto(),
 						MinRelayFeeRate: e.MinRelayFeeRate,
+						ConnectorsIndex: connectorsIndex(e.ConnectorsIndex).toProto(),
 					},
 				},
 			}

@@ -39,22 +39,23 @@ type TxBuilder interface {
 		musig2Data []*tree.Musig2, // only for covenantless
 	) (
 		roundTx string,
-		vtxoTree tree.VtxoTree,
+		vtxoTree tree.TxTree,
 		connectorAddress string,
-		connectors []string,
+		connectors tree.TxTree,
 		err error,
 	)
 	// VerifyForfeitTxs verifies a list of forfeit txs against a set of VTXOs and
 	// connectors.
 	VerifyForfeitTxs(
-		vtxos []domain.Vtxo, connectors []string, txs []string,
-	) (valid map[domain.VtxoKey][]string, err error)
+		vtxos []domain.Vtxo, connectors tree.TxTree, txs []string,
+		connectorIndex map[string]domain.Outpoint,
+	) (valid map[domain.VtxoKey]string, err error)
 	BuildSweepTx(inputs []SweepInput) (txid string, signedSweepTx string, err error)
 	GetSweepInput(node tree.Node) (vtxoTreeExpiry *common.RelativeLocktime, sweepInput SweepInput, err error)
 	FinalizeAndExtract(tx string) (txhex string, err error)
 	VerifyTapscriptPartialSigs(tx string) (valid bool, txid string, err error)
 	// FindLeaves returns all the leaves txs that are reachable from the given outpoint
-	FindLeaves(vtxoTree tree.VtxoTree, fromtxid string, vout uint32) (leaves []tree.Node, err error)
+	FindLeaves(vtxoTree tree.TxTree, fromtxid string, vout uint32) (leaves []tree.Node, err error)
 	VerifyAndCombinePartialTx(dest string, src string) (string, error)
 	GetTxID(tx string) (string, error)
 }

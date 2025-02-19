@@ -14,13 +14,19 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
+const (
+	vtxoTreeRadix       = 2
+	connectorsTreeRadix = 4
+)
+
 // CraftSharedOutput returns the taproot script and the amount of the root shared output of a vtxo tree
+// radix is hardcoded to 2
 func CraftSharedOutput(
-	receivers []tree.VtxoLeaf,
+	receivers []tree.Leaf,
 	feeSatsPerNode uint64,
 	sweepTapTreeRoot []byte,
 ) ([]byte, int64, error) {
-	root, err := createRootNode(receivers, feeSatsPerNode, sweepTapTreeRoot)
+	root, err := createTxTree(receivers, feeSatsPerNode, sweepTapTreeRoot, vtxoTreeRadix)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -41,19 +47,66 @@ func CraftSharedOutput(
 }
 
 // BuildVtxoTree creates all the tree's transactions and returns the vtxo tree
+// radix is hardcoded to 2
 func BuildVtxoTree(
 	initialInput *wire.OutPoint,
-	receivers []tree.VtxoLeaf,
+	receivers []tree.Leaf,
 	feeSatsPerNode uint64,
 	sweepTapTreeRoot []byte,
 	vtxoTreeExpiry common.RelativeLocktime,
-) (tree.VtxoTree, error) {
-	root, err := createRootNode(receivers, feeSatsPerNode, sweepTapTreeRoot)
+) (tree.TxTree, error) {
+	root, err := createTxTree(receivers, feeSatsPerNode, sweepTapTreeRoot, vtxoTreeRadix)
 	if err != nil {
 		return nil, err
 	}
 
-	vtxoTree := make(tree.VtxoTree, 0)
+	return toTxTree(root, initialInput, &vtxoTreeExpiry)
+}
+
+// CraftConnectorsOutput returns the taproot script and the amount of the root shared output of a connectors tree
+// radix is hardcoded to 4
+func CraftConnectorsOutput(
+	receivers []tree.Leaf,
+	feeSatsPerNode uint64,
+) ([]byte, int64, error) {
+	root, err := createTxTree(receivers, feeSatsPerNode, nil, connectorsTreeRadix)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	amount := root.getAmount() + int64(feeSatsPerNode)
+
+	aggregatedKey, err := AggregateKeys(root.getCosigners(), nil)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to aggregate keys: %w", err)
+	}
+
+	scriptPubkey, err := common.P2TRScript(aggregatedKey.FinalKey)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to create script pubkey: %w", err)
+	}
+
+	return scriptPubkey, amount, nil
+}
+
+// BuildConnectorsTree creates all the tree's transactions and returns the vtxo tree
+// radix is hardcoded to 4
+func BuildConnectorsTree(
+	initialInput *wire.OutPoint,
+	receivers []tree.Leaf,
+	feeSatsPerNode uint64,
+) (tree.TxTree, error) {
+	root, err := createTxTree(receivers, feeSatsPerNode, nil, connectorsTreeRadix)
+	if err != nil {
+		return nil, err
+	}
+
+	return toTxTree(root, initialInput, nil)
+}
+
+// toTxTree converts a node root to tree.VtxoTree matrix
+func toTxTree(root node, initialInput *wire.OutPoint, expiry *common.RelativeLocktime) (tree.TxTree, error) {
+	vtxoTree := make(tree.TxTree, 0)
 
 	ins := []*wire.OutPoint{initialInput}
 	nodes := []node{root}
@@ -65,7 +118,7 @@ func BuildVtxoTree(
 		treeLevel := make([]tree.Node, 0)
 
 		for i, node := range nodes {
-			treeNode, err := getTreeNode(node, ins[i], vtxoTreeExpiry)
+			treeNode, err := getTreeNode(node, ins[i], expiry)
 			if err != nil {
 				return nil, err
 			}
@@ -173,9 +226,9 @@ func (b *branch) getOutputs() ([]*wire.TxOut, error) {
 func getTreeNode(
 	n node,
 	input *wire.OutPoint,
-	vtxoTreeExpiry common.RelativeLocktime,
+	expiry *common.RelativeLocktime,
 ) (tree.Node, error) {
-	partialTx, err := getTx(n, input, vtxoTreeExpiry)
+	partialTx, err := getTx(n, input, expiry)
 	if err != nil {
 		return tree.Node{}, err
 	}
@@ -198,7 +251,7 @@ func getTreeNode(
 func getTx(
 	n node,
 	input *wire.OutPoint,
-	vtxoTreeExpiry common.RelativeLocktime,
+	expiry *common.RelativeLocktime,
 ) (*psbt.Packet, error) {
 	outputs, err := n.getOutputs()
 	if err != nil {
@@ -225,17 +278,22 @@ func getTx(
 		}
 	}
 
-	if err := AddVtxoTreeExpiry(0, tx, vtxoTreeExpiry); err != nil {
-		return nil, err
+	if expiry != nil {
+		if err := AddVtxoTreeExpiry(0, tx, *expiry); err != nil {
+			return nil, err
+		}
 	}
 
 	return tx, nil
 }
 
-func createRootNode(
-	receivers []tree.VtxoLeaf,
+// createTxTree is a recursive function that creates a tree of transactions
+// from the leaves to the root.
+func createTxTree(
+	receivers []tree.Leaf,
 	feeSatsPerNode uint64,
-	sweepTapTreeRoot []byte,
+	tapTreeRoot []byte,
+	radix int,
 ) (root node, err error) {
 	if len(receivers) == 0 {
 		return nil, fmt.Errorf("no receivers provided")
@@ -244,7 +302,7 @@ func createRootNode(
 	cosignersALL := make([]*secp256k1.PublicKey, 0)
 	for _, r := range receivers {
 		if r.Musig2Data == nil {
-			return nil, fmt.Errorf("missing musig2 data for receiver %s", r.PubKey)
+			return nil, fmt.Errorf("missing musig2 data for receiver %s", r.Script)
 		}
 
 		if r.Musig2Data.SigningType != tree.SignAll {
@@ -252,7 +310,7 @@ func createRootNode(
 		}
 
 		if len(r.Musig2Data.CosignersPublicKeys) == 0 {
-			return nil, fmt.Errorf("missing cosigners public keys for receiver %s", r.PubKey)
+			return nil, fmt.Errorf("missing cosigners public keys for receiver %s", r.Script)
 		}
 
 		for _, cosigner := range r.Musig2Data.CosignersPublicKeys {
@@ -265,25 +323,18 @@ func createRootNode(
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse cosigner pubkey: %w", err)
 			}
+
 			cosignersALL = append(cosignersALL, pubkey)
 		}
 	}
 
+	cosignersALL = uniqueCosigners(cosignersALL)
+
 	nodes := make([]node, 0, len(receivers))
 	for _, r := range receivers {
-		pubkeyBytes, err := hex.DecodeString(r.PubKey)
+		pkScript, err := hex.DecodeString(r.Script)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode cosigner pubkey: %w", err)
-		}
-
-		pubkey, err := schnorr.ParsePubKey(pubkeyBytes)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse vtxo script pubkey: %w", err)
-		}
-
-		pkScript, err := common.P2TRScript(pubkey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create script pub key: %w", err)
 		}
 
 		cosigners := make([]*secp256k1.PublicKey, 0)
@@ -303,12 +354,13 @@ func createRootNode(
 
 				cosigners = append(cosigners, pubkey)
 			}
+			cosigners = uniqueCosigners(cosigners)
 		case tree.SignAll:
 			cosigners = cosignersALL
 		}
 
 		if len(cosigners) == 0 {
-			return nil, fmt.Errorf("no cosigners for %s", r.PubKey)
+			return nil, fmt.Errorf("no cosigners for %s", r.Script)
 		}
 
 		leafNode := &leaf{
@@ -321,32 +373,45 @@ func createRootNode(
 	}
 
 	for len(nodes) > 1 {
-		nodes, err = createUpperLevel(nodes, int64(feeSatsPerNode), sweepTapTreeRoot)
+		nodes, err = createUpperLevel(nodes, int64(feeSatsPerNode), tapTreeRoot, radix)
 		if err != nil {
-			return nil, fmt.Errorf("failed to vtxo tree: %w", err)
+			return nil, fmt.Errorf("failed to create tx tree: %w", err)
 		}
 	}
 
 	return nodes[0], nil
 }
 
-func createUpperLevel(nodes []node, feeAmount int64, tapTreeRoot []byte) ([]node, error) {
-	if len(nodes)%2 != 0 {
-		last := nodes[len(nodes)-1]
-		pairs, err := createUpperLevel(nodes[:len(nodes)-1], feeAmount, tapTreeRoot)
+func createUpperLevel(nodes []node, feeAmount int64, tapTreeRoot []byte, radix int) ([]node, error) {
+	if len(nodes) <= 1 {
+		return nodes, nil
+	}
+
+	if len(nodes) < radix {
+		return createUpperLevel(nodes, feeAmount, tapTreeRoot, len(nodes))
+	}
+
+	remainder := len(nodes) % radix
+	if remainder != 0 {
+		// Handle nodes that don't form a complete group
+		last := nodes[len(nodes)-remainder:]
+		groups, err := createUpperLevel(nodes[:len(nodes)-remainder], feeAmount, tapTreeRoot, radix)
 		if err != nil {
 			return nil, err
 		}
 
-		return append(pairs, last), nil
+		return append(groups, last...), nil
 	}
 
-	pairs := make([]node, 0, len(nodes)/2)
-	for i := 0; i < len(nodes); i += 2 {
-		left := nodes[i]
-		right := nodes[i+1]
+	groups := make([]node, 0, len(nodes)/radix)
+	for i := 0; i < len(nodes); i += radix {
+		children := nodes[i : i+radix]
 
-		cosigners := append(left.getCosigners(), right.getCosigners()...)
+		var cosigners []*secp256k1.PublicKey
+		for _, child := range children {
+			cosigners = append(cosigners, child.getCosigners()...)
+		}
+		cosigners = uniqueCosigners(cosigners)
 
 		aggregatedKey, err := AggregateKeys(cosigners, tapTreeRoot)
 		if err != nil {
@@ -362,10 +427,25 @@ func createUpperLevel(nodes []node, feeAmount int64, tapTreeRoot []byte) ([]node
 			pkScript:  pkScript,
 			cosigners: cosigners,
 			feeAmount: feeAmount,
-			children:  []node{left, right},
+			children:  children,
 		}
 
-		pairs = append(pairs, branchNode)
+		groups = append(groups, branchNode)
 	}
-	return pairs, nil
+	return groups, nil
+}
+
+// uniqueCosigners removes duplicate cosigner keys while preserving order
+func uniqueCosigners(cosigners []*secp256k1.PublicKey) []*secp256k1.PublicKey {
+	seen := make(map[string]struct{})
+	unique := make([]*secp256k1.PublicKey, 0, len(cosigners))
+
+	for _, cosigner := range cosigners {
+		keyStr := hex.EncodeToString(schnorr.SerializePubKey(cosigner))
+		if _, exists := seen[keyStr]; !exists {
+			seen[keyStr] = struct{}{}
+			unique = append(unique, cosigner)
+		}
+	}
+	return unique
 }

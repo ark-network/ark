@@ -26,6 +26,7 @@ import (
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	log "github.com/sirupsen/logrus"
 	"github.com/vulpemventures/go-elements/address"
+	"github.com/vulpemventures/go-elements/elementsutil"
 	"github.com/vulpemventures/go-elements/psetv2"
 	"github.com/vulpemventures/go-elements/taproot"
 )
@@ -1182,12 +1183,16 @@ func (a *covenantArkClient) handleRoundFinalization(
 	boardingUtxos []types.Utxo,
 	receivers []client.Output,
 ) (signedForfeits []string, signedRoundTx string, err error) {
-	if err = a.validateVtxoTree(event, receivers); err != nil {
+	if err = a.validateVtxoTree(event, receivers, len(vtxos) > 0); err != nil {
 		return
 	}
 
 	if len(vtxos) > 0 {
-		signedForfeits, err = a.createAndSignForfeits(ctx, vtxos, event.Connectors, event.MinRelayFeeRate)
+		signedForfeits, err = a.createAndSignForfeits(
+			ctx, vtxos,
+			event.Connectors.Leaves(), event.ConnectorsIndex,
+			event.MinRelayFeeRate,
+		)
 		if err != nil {
 			return
 		}
@@ -1268,7 +1273,7 @@ func (a *covenantArkClient) handleRoundFinalization(
 }
 
 func (a *covenantArkClient) validateVtxoTree(
-	event client.RoundFinalizationEvent, receivers []client.Output,
+	event client.RoundFinalizationEvent, receivers []client.Output, needConnector bool,
 ) error {
 	roundTx := event.Tx
 	ptx, err := psetv2.NewPsetFromBase64(roundTx)
@@ -1286,14 +1291,37 @@ func (a *covenantArkClient) validateVtxoTree(
 		}
 	}
 
-	if err := common.ValidateConnectors(roundTx, connectors); err != nil {
-		return err
-	}
-
 	if err := a.validateReceivers(
 		ptx, receivers, event.Tree,
 	); err != nil {
 		return err
+	}
+
+	if needConnector {
+		root, err := connectors.Root()
+		if err != nil {
+			return err
+		}
+
+		getTxID := func(b64 string) string {
+			tx, err := psetv2.NewPsetFromBase64(b64)
+			if err != nil {
+				return ""
+			}
+
+			utx, err := tx.UnsignedTx()
+			if err != nil {
+				return ""
+			}
+
+			return utx.TxHash().String()
+		}
+
+		if root.ParentTxid != getTxID(roundTx) {
+			return fmt.Errorf("root's parent txid is not the same as the round txid: %s != %s", root.ParentTxid, getTxID(roundTx))
+		}
+
+		return connectors.Validate(getTxID)
 	}
 
 	return nil
@@ -1302,7 +1330,7 @@ func (a *covenantArkClient) validateVtxoTree(
 func (a *covenantArkClient) validateReceivers(
 	ptx *psetv2.Pset,
 	receivers []client.Output,
-	vtxoTree tree.VtxoTree,
+	vtxoTree tree.TxTree,
 ) error {
 	for _, receiver := range receivers {
 		isOnChain, onchainScript, err := utils.ParseLiquidAddress(
@@ -1352,7 +1380,7 @@ func (a *covenantArkClient) validateOnChainReceiver(
 }
 
 func (a *covenantArkClient) validateOffChainReceiver(
-	vtxoTree tree.VtxoTree,
+	vtxoTree tree.TxTree,
 	receiver client.Output,
 ) error {
 	found := false
@@ -1397,27 +1425,42 @@ func (a *covenantArkClient) validateOffChainReceiver(
 func (a *covenantArkClient) createAndSignForfeits(
 	ctx context.Context,
 	vtxosToSign []client.TapscriptsVtxo,
-	connectors []string,
+	connectorsTxs []tree.Node,
+	connectorsIndex map[string]client.Outpoint,
 	feeRate chainfee.SatPerKVByte,
 ) ([]string, error) {
-	signedForfeits := make([]string, 0)
-	connectorsPsets := make([]*psetv2.Pset, 0, len(connectors))
+	signedForfeits := make([]string, 0, len(vtxosToSign))
 
 	forfeitPkScript, err := address.ToOutputScript(a.ForfeitAddress)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, connector := range connectors {
-		p, err := psetv2.NewPsetFromBase64(connector)
-		if err != nil {
-			return nil, err
+	for _, vtxo := range vtxosToSign {
+		connectorOutpoint, ok := connectorsIndex[vtxo.Outpoint.String()]
+		if !ok {
+			return nil, fmt.Errorf("connector index not found for vtxo %s", vtxo.Outpoint.String())
 		}
 
-		connectorsPsets = append(connectorsPsets, p)
-	}
+		var connector *psetv2.Output
+		for _, node := range connectorsTxs {
+			if node.Txid == connectorOutpoint.Txid {
+				tx, err := psetv2.NewPsetFromBase64(node.Tx)
+				if err != nil {
+					return nil, err
+				}
+				if connectorOutpoint.VOut >= uint32(len(tx.Outputs)) {
+					return nil, fmt.Errorf("connector index out of bounds: %d >= %d", connectorOutpoint.VOut, len(tx.Outputs))
+				}
+				connector = &tx.Outputs[connectorOutpoint.VOut]
+				break
+			}
+		}
 
-	for _, vtxo := range vtxosToSign {
+		if connector == nil {
+			return nil, fmt.Errorf("connector not found for vtxo %s", vtxo.Outpoint.String())
+		}
+
 		vtxoScript, err := tree.ParseVtxoScript(vtxo.Tapscripts)
 		if err != nil {
 			return nil, err
@@ -1480,37 +1523,44 @@ func (a *covenantArkClient) createAndSignForfeits(
 			vtxoInput.Sequence = wire.MaxTxInSequenceNum - 1
 		}
 
-		for _, connectorPset := range connectorsPsets {
-			forfeits, err := tree.BuildForfeitTxs(
-				connectorPset, vtxoInput, vtxo.Amount, a.Dust, feeAmount, vtxoOutputScript, forfeitPkScript,
-			)
-			if err != nil {
-				return nil, err
-			}
-
-			for _, forfeit := range forfeits {
-				updater, err := psetv2.NewUpdater(forfeit)
-				if err != nil {
-					return nil, err
-				}
-
-				if err := updater.AddInTapLeafScript(1, tapscript); err != nil {
-					return nil, err
-				}
-
-				b64, err := updater.Pset.ToBase64()
-				if err != nil {
-					return nil, err
-				}
-
-				signedForfeit, err := a.wallet.SignTransaction(ctx, a.explorer, b64)
-				if err != nil {
-					return nil, err
-				}
-
-				signedForfeits = append(signedForfeits, signedForfeit)
-			}
+		forfeit, err := tree.BuildForfeitTx(
+			elementsutil.AssetHashFromBytes(connector.Script),
+			psetv2.InputArgs{
+				Txid:    connectorOutpoint.Txid,
+				TxIndex: connectorOutpoint.VOut,
+			},
+			vtxoInput,
+			vtxo.Amount,
+			connector.Value,
+			feeAmount,
+			vtxoOutputScript,
+			connector.Script,
+			forfeitPkScript,
+		)
+		if err != nil {
+			return nil, err
 		}
+
+		updater, err := psetv2.NewUpdater(forfeit)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := updater.AddInTapLeafScript(1, tapscript); err != nil {
+			return nil, err
+		}
+
+		b64, err := updater.Pset.ToBase64()
+		if err != nil {
+			return nil, err
+		}
+
+		signedForfeit, err := a.wallet.SignTransaction(ctx, a.explorer, b64)
+		if err != nil {
+			return nil, err
+		}
+
+		signedForfeits = append(signedForfeits, signedForfeit)
 	}
 
 	return signedForfeits, nil
@@ -1614,7 +1664,7 @@ func (a *covenantArkClient) coinSelectOnchain(
 func (a *covenantArkClient) getRedeemBranches(
 	ctx context.Context, vtxos []client.Vtxo,
 ) (map[string]*redemption.CovenantRedeemBranch, error) {
-	vtxoTrees := make(map[string]tree.VtxoTree, 0)
+	vtxoTrees := make(map[string]tree.TxTree, 0)
 	redeemBranches := make(map[string]*redemption.CovenantRedeemBranch, 0)
 
 	for i := range vtxos {

@@ -24,6 +24,8 @@ var ConnectorTxSize = (&input.TxWeightEstimator{}).
 	AddTaprootKeySpendInput(txscript.SigHashDefault).
 	AddP2TROutput().
 	AddP2TROutput().
+	AddP2TROutput().
+	AddP2TROutput().
 	VSize()
 
 func ComputeForfeitTxFee(

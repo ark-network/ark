@@ -114,7 +114,7 @@ func checkSigsRoundtrip(t *testing.T) func(sigs bitcointree.TreePartialSigs) {
 }
 
 func makeCosigners(
-	keys []*btcec.PrivateKey, sharedOutAmount int64, vtxoTree tree.VtxoTree,
+	keys []*btcec.PrivateKey, sharedOutAmount int64, vtxoTree tree.TxTree,
 ) (map[string]bitcointree.SignerSession, error) {
 	signers := make(map[string]bitcointree.SignerSession)
 	for _, prvkey := range keys {
@@ -172,7 +172,7 @@ func makeAggregatedNonces(
 func makeAggregatedSignatures(
 	signers map[string]bitcointree.SignerSession, coordinator bitcointree.CoordinatorSession,
 	checkSigsRoundtrip func(bitcointree.TreePartialSigs),
-) (tree.VtxoTree, error) {
+) (tree.TxTree, error) {
 	for pk, session := range signers {
 		buf, err := hex.DecodeString(pk)
 		if err != nil {
@@ -198,7 +198,7 @@ func makeAggregatedSignatures(
 
 type testCase struct {
 	name      string
-	receivers []tree.VtxoLeaf
+	receivers []tree.Leaf
 	privKeys  []*btcec.PrivateKey
 }
 
@@ -238,16 +238,16 @@ func makeTestVectors() ([]testCase, error) {
 	return vectors, nil
 }
 
-func generateMockedReceivers(num int) ([]tree.VtxoLeaf, []*btcec.PrivateKey, error) {
-	receivers := make([]tree.VtxoLeaf, 0, num)
+func generateMockedReceivers(num int) ([]tree.Leaf, []*btcec.PrivateKey, error) {
+	receivers := make([]tree.Leaf, 0, num)
 	privKeys := make([]*btcec.PrivateKey, 0, num)
 	for i := 0; i < num; i++ {
 		prvkey, err := btcec.NewPrivateKey()
 		if err != nil {
 			return nil, nil, err
 		}
-		receivers = append(receivers, tree.VtxoLeaf{
-			PubKey: "0000000000000000000000000000000000000000000000000000000000000002",
+		receivers = append(receivers, tree.Leaf{
+			Script: "0000000000000000000000000000000000000000000000000000000000000002",
 			Amount: uint64((i + 1) * 1000),
 			Musig2Data: &tree.Musig2{
 				CosignersPublicKeys: []string{
@@ -262,11 +262,11 @@ func generateMockedReceivers(num int) ([]tree.VtxoLeaf, []*btcec.PrivateKey, err
 	return receivers, privKeys, nil
 }
 
-func withSigningType(signingType tree.SigningType, receivers []tree.VtxoLeaf) []tree.VtxoLeaf {
-	newReceivers := make([]tree.VtxoLeaf, 0, len(receivers))
+func withSigningType(signingType tree.SigningType, receivers []tree.Leaf) []tree.Leaf {
+	newReceivers := make([]tree.Leaf, 0, len(receivers))
 	for _, receiver := range receivers {
-		newReceivers = append(newReceivers, tree.VtxoLeaf{
-			PubKey: receiver.PubKey,
+		newReceivers = append(newReceivers, tree.Leaf{
+			Script: receiver.Script,
 			Amount: receiver.Amount,
 			Musig2Data: &tree.Musig2{
 				CosignersPublicKeys: receiver.Musig2Data.CosignersPublicKeys,
@@ -277,7 +277,7 @@ func withSigningType(signingType tree.SigningType, receivers []tree.VtxoLeaf) []
 	return newReceivers
 }
 
-func withMixedSigningTypes(receivers []tree.VtxoLeaf) []tree.VtxoLeaf {
+func withMixedSigningTypes(receivers []tree.Leaf) []tree.Leaf {
 	first := withSigningType(tree.SignAll, receivers[:len(receivers)/2])
 	second := withSigningType(tree.SignBranch, receivers[len(receivers)/2:])
 	return append(first, second...)

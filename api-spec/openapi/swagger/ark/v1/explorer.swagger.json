@@ -224,10 +224,7 @@
           }
         },
         "connectors": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
+          "$ref": "#/definitions/v1Tree"
         },
         "stage": {
           "$ref": "#/definitions/v1RoundStage"
