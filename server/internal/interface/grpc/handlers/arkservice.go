@@ -504,13 +504,6 @@ func (h *handler) listenToEvents() {
 
 		switch e := event.(type) {
 		case domain.RoundFinalizationStarted:
-			connectorsIndex := make(map[string]*arkv1.Outpoint)
-			for vtxo, outpoint := range e.ConnectorsIndex {
-				connectorsIndex[vtxo] = &arkv1.Outpoint{
-					Txid: outpoint.Txid,
-					Vout: outpoint.VOut,
-				}
-			}
 			ev = &arkv1.GetEventStreamResponse{
 				Event: &arkv1.GetEventStreamResponse_RoundFinalization{
 					RoundFinalization: &arkv1.RoundFinalizationEvent{
@@ -519,7 +512,7 @@ func (h *handler) listenToEvents() {
 						VtxoTree:        vtxoTree(e.VtxoTree).toProto(),
 						Connectors:      vtxoTree(e.Connectors).toProto(),
 						MinRelayFeeRate: e.MinRelayFeeRate,
-						ConnectorsIndex: connectorsIndex,
+						ConnectorsIndex: connectorsIndex(e.ConnectorsIndex).toProto(),
 					},
 				},
 			}

@@ -138,6 +138,19 @@ func (v vtxoKeyList) toProto() []*arkv1.Outpoint {
 	return list
 }
 
+type connectorsIndex map[string]domain.Outpoint
+
+func (c connectorsIndex) toProto() map[string]*arkv1.Outpoint {
+	proto := make(map[string]*arkv1.Outpoint)
+	for vtxo, outpoint := range c {
+		proto[vtxo] = &arkv1.Outpoint{
+			Txid: outpoint.Txid,
+			Vout: outpoint.VOut,
+		}
+	}
+	return proto
+}
+
 type vtxoTree tree.TxTree
 
 func (t vtxoTree) toProto() *arkv1.Tree {
