@@ -105,30 +105,9 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 				for pos, tx := range levelTxs {
 					if err := querierWithTx.UpsertTransaction(
 						ctx,
-						queries.UpsertTransactionParams{
-							Tx:       tx.Tx,
-							RoundID:  round.Id,
-							Type:     "connector",
-							Position: int64(pos),
-							Txid: sql.NullString{
-								String: tx.Txid,
-								Valid:  true,
-							},
-							TreeLevel: sql.NullInt64{
-								Int64: int64(level),
-								Valid: true,
-							},
-							ParentTxid: sql.NullString{
-								String: tx.ParentTxid,
-								Valid:  true,
-							},
-							IsLeaf: sql.NullBool{
-								Bool:  tx.Leaf,
-								Valid: true,
-							},
-						},
+						createUpsertTransactionParams(tx, round.Id, "connector", int64(pos), int64(level)),
 					); err != nil {
-						return fmt.Errorf("failed to upsert tree transaction: %w", err)
+						return fmt.Errorf("failed to upsert connector transaction: %w", err)
 					}
 				}
 			}
@@ -137,28 +116,7 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 				for pos, tx := range levelTxs {
 					if err := querierWithTx.UpsertTransaction(
 						ctx,
-						queries.UpsertTransactionParams{
-							Tx:       tx.Tx,
-							RoundID:  round.Id,
-							Type:     "tree",
-							Position: int64(pos),
-							Txid: sql.NullString{
-								String: tx.Txid,
-								Valid:  true,
-							},
-							TreeLevel: sql.NullInt64{
-								Int64: int64(level),
-								Valid: true,
-							},
-							ParentTxid: sql.NullString{
-								String: tx.ParentTxid,
-								Valid:  true,
-							},
-							IsLeaf: sql.NullBool{
-								Bool:  tx.Leaf,
-								Valid: true,
-							},
-						},
+						createUpsertTransactionParams(tx, round.Id, "tree", int64(pos), int64(level)),
 					); err != nil {
 						return fmt.Errorf("failed to upsert tree transaction: %w", err)
 					}
@@ -481,4 +439,34 @@ func combinedRowToVtxo(row queries.RequestVtxoVw) domain.Vtxo {
 		Swept:     row.Swept.Bool,
 		ExpireAt:  row.ExpireAt.Int64,
 	}
+}
+
+func createUpsertTransactionParams(tx tree.Node, roundID string, txType string, position int64, treeLevel int64) queries.UpsertTransactionParams {
+	params := queries.UpsertTransactionParams{
+		Tx:       tx.Tx,
+		RoundID:  roundID,
+		Type:     txType,
+		Position: position,
+	}
+
+	if txType == "connector" || txType == "tree" {
+		params.Txid = sql.NullString{
+			String: tx.Txid,
+			Valid:  true,
+		}
+		params.TreeLevel = sql.NullInt64{
+			Int64: treeLevel,
+			Valid: true,
+		}
+		params.ParentTxid = sql.NullString{
+			String: tx.ParentTxid,
+			Valid:  true,
+		}
+		params.IsLeaf = sql.NullBool{
+			Bool:  tx.Leaf,
+			Valid: true,
+		}
+	}
+
+	return params
 }
