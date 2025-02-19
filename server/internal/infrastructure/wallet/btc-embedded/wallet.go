@@ -589,7 +589,7 @@ func (s *service) LockConnectorUtxos(ctx context.Context, utxos []ports.TxOutpoi
 	w := s.wallet.InternalWallet()
 
 	for _, utxo := range utxos {
-		const retry = 10
+		const retry = 60
 
 		for i := 0; i < retry; i++ {
 			id, _ := chainhash.NewHashFromStr(utxo.GetTxid())
