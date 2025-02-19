@@ -68,6 +68,7 @@ var (
 	emptyPtx = "cHNldP8BAgQCAAAAAQQBAAEFAQABBgEDAfsEAgAAAAA="
 	emptyTx  = "0200000000000000000000"
 	txid     = "0000000000000000000000000000000000000000000000000000000000000000"
+	txid2    = "0000000000000000000000000000000000000000000000000000000000000001"
 	vtxoTree = tree.TxTree{
 		{
 			{
@@ -311,13 +312,13 @@ func testStartFinalization(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			events, err = round.StartFinalization("", connectors, vtxoTree, roundTx, []domain.VtxoKey{
-				{
+			events, err = round.StartFinalization("", connectors, vtxoTree, roundTx, map[string]domain.Outpoint{
+				txid: {
 					Txid: txid,
 					VOut: 0,
 				},
-				{
-					Txid: txid,
+				txid2: {
+					Txid: txid2,
 					VOut: 1,
 				},
 			})
@@ -417,8 +418,8 @@ func testStartFinalization(t *testing.T) {
 
 			for _, f := range fixtures {
 				// TODO fix this
-				events, err := f.round.StartFinalization("", f.connectors, f.tree, f.roundTx, []domain.VtxoKey{
-					{
+				events, err := f.round.StartFinalization("", f.connectors, f.tree, f.roundTx, map[string]domain.Outpoint{
+					txid: {
 						Txid: txid,
 						VOut: 0,
 					},
@@ -442,8 +443,8 @@ func testEndFinalization(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			events, err = round.StartFinalization("", connectors, vtxoTree, roundTx, []domain.VtxoKey{
-				{
+			events, err = round.StartFinalization("", connectors, vtxoTree, roundTx, map[string]domain.Outpoint{
+				txid: {
 					Txid: txid,
 					VOut: 0,
 				},
