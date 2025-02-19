@@ -99,7 +99,7 @@ func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
 	return offchainAddr.Address, boardingAddr.Address, nil
 }
 
-func (a *arkClient) GetTransactionEventChannel() chan types.TransactionEvent {
+func (a *arkClient) GetTransactionChannel() chan types.Transaction {
 	return a.store.TransactionStore().GetEventChannel()
 }
 
@@ -371,10 +371,6 @@ func getWalletStore(storeType, datadir string) (walletstore.WalletStore, error) 
 	default:
 		return nil, fmt.Errorf("unknown wallet store type")
 	}
-}
-
-func getCreatedAtFromExpiry(vtxoTreeExpiry common.RelativeLocktime, expiry time.Time) time.Time {
-	return expiry.Add(-time.Duration(vtxoTreeExpiry.Seconds()) * time.Second)
 }
 
 func filterByOutpoints(vtxos []client.Vtxo, outpoints []client.Outpoint) []client.Vtxo {

@@ -1827,7 +1827,7 @@ func vtxosToTxsCovenant(
 			},
 			Amount:    uint64(math.Abs(float64(amount))),
 			Type:      txType,
-			CreatedAt: getCreatedAtFromExpiry(vtxoTreeExpiry, v.ExpiresAt),
+			CreatedAt: v.CreatedAt,
 		})
 	}
 
