@@ -340,21 +340,13 @@ func (c *restClient) GetEventStream(
 						break
 					}
 
-					connectorsIndex := make(map[string]client.Outpoint)
-					for vtxoOutpointStr, connectorOutpoint := range e.ConnectorsIndex {
-						connectorsIndex[vtxoOutpointStr] = client.Outpoint{
-							Txid: connectorOutpoint.Txid,
-							VOut: uint32(connectorOutpoint.Vout),
-						}
-					}
-
 					event = client.RoundFinalizationEvent{
 						ID:              e.ID,
 						Tx:              e.RoundTx,
 						Tree:            vtxoTree,
 						Connectors:      connectorTree,
 						MinRelayFeeRate: chainfee.SatPerKVByte(minRelayFeeRate),
-						ConnectorsIndex: connectorsIndex,
+						ConnectorsIndex: connectorsIndexFromProto{e.ConnectorsIndex}.parse(),
 					}
 				case resp.Result.RoundFinalized != nil:
 					e := resp.Result.RoundFinalized
@@ -609,6 +601,21 @@ func toRoundStage(stage models.V1RoundStage) client.RoundStage {
 	default:
 		return client.RoundStageUndefined
 	}
+}
+
+type connectorsIndexFromProto struct {
+	connectorsIndex map[string]models.V1Outpoint
+}
+
+func (c connectorsIndexFromProto) parse() map[string]client.Outpoint {
+	connectorsIndex := make(map[string]client.Outpoint)
+	for vtxoOutpointStr, connectorOutpoint := range c.connectorsIndex {
+		connectorsIndex[vtxoOutpointStr] = client.Outpoint{
+			Txid: connectorOutpoint.Txid,
+			VOut: uint32(connectorOutpoint.Vout),
+		}
+	}
+	return connectorsIndex
 }
 
 type treeFromProto struct {

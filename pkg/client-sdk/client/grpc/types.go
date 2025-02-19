@@ -55,14 +55,7 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 	if ee := e.GetRoundFinalization(); ee != nil {
 		vtxoTree := treeFromProto{ee.GetVtxoTree()}.parse()
 		connectorTree := treeFromProto{ee.GetConnectors()}.parse()
-
-		connectorsIndex := make(map[string]client.Outpoint)
-		for vtxoOutpointStr, connectorOutpoint := range ee.GetConnectorsIndex() {
-			connectorsIndex[vtxoOutpointStr] = client.Outpoint{
-				Txid: connectorOutpoint.Txid,
-				VOut: connectorOutpoint.Vout,
-			}
-		}
+		connectorsIndex := connectorsIndexFromProto{ee.GetConnectorsIndex()}.parse()
 
 		return client.RoundFinalizationEvent{
 			ID:              ee.GetId(),
@@ -194,4 +187,19 @@ func (t treeFromProto) parse() tree.TxTree {
 	}
 
 	return levels
+}
+
+type connectorsIndexFromProto struct {
+	connectorsIndex map[string]*arkv1.Outpoint
+}
+
+func (c connectorsIndexFromProto) parse() map[string]client.Outpoint {
+	connectorsIndex := make(map[string]client.Outpoint)
+	for vtxoOutpointStr, connectorOutpoint := range c.connectorsIndex {
+		connectorsIndex[vtxoOutpointStr] = client.Outpoint{
+			Txid: connectorOutpoint.Txid,
+			VOut: uint32(connectorOutpoint.Vout),
+		}
+	}
+	return connectorsIndex
 }
