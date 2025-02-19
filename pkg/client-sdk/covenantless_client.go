@@ -2451,50 +2451,50 @@ func (a *covenantlessArkClient) handleRoundTx(
 		}
 	}
 
-	if len(vtxosToAdd) > 0 {
-		// Check if any of the spent vtxos is ours.
-		spentVtxos := make([]types.VtxoKey, 0, len(roundTx.SpentVtxos))
-		for _, vtxo := range roundTx.SpentVtxos {
-			spentVtxos = append(spentVtxos, types.VtxoKey{
-				Txid: vtxo.Txid,
-				VOut: vtxo.VOut,
-			})
-		}
-		myVtxos, err := a.store.VtxoStore().GetVtxos(ctx, spentVtxos)
-		if err != nil {
-			return err
-		}
+	// Check if any of the spent vtxos is ours.
+	spentVtxos := make([]types.VtxoKey, 0, len(roundTx.SpentVtxos))
+	for _, vtxo := range roundTx.SpentVtxos {
+		spentVtxos = append(spentVtxos, types.VtxoKey{
+			Txid: vtxo.Txid,
+			VOut: vtxo.VOut,
+		})
+	}
+	myVtxos, err := a.store.VtxoStore().GetVtxos(ctx, spentVtxos)
+	if err != nil {
+		return err
+	}
 
-		// Check if any of the claimed boarding utxos is ours.
-		boardingTxids := make([]string, 0, len(roundTx.ClaimedBoardingUtxos))
-		for _, utxo := range roundTx.ClaimedBoardingUtxos {
-			boardingTxids = append(boardingTxids, utxo.Txid)
-		}
-		pendingBoardingTxs, err := a.store.TransactionStore().GetTransactions(
-			ctx, boardingTxids,
-		)
-		if err != nil {
-			return err
-		}
-		pendingBoardingTxids := make([]string, 0, len(pendingBoardingTxs))
-		for _, tx := range pendingBoardingTxs {
-			pendingBoardingTxids = append(pendingBoardingTxids, tx.BoardingTxid)
-		}
+	// Check if any of the claimed boarding utxos is ours.
+	boardingTxids := make([]string, 0, len(roundTx.ClaimedBoardingUtxos))
+	for _, utxo := range roundTx.ClaimedBoardingUtxos {
+		boardingTxids = append(boardingTxids, utxo.Txid)
+	}
+	pendingBoardingTxs, err := a.store.TransactionStore().GetTransactions(
+		ctx, boardingTxids,
+	)
+	if err != nil {
+		return err
+	}
+	pendingBoardingTxids := make([]string, 0, len(pendingBoardingTxs))
+	for _, tx := range pendingBoardingTxs {
+		pendingBoardingTxids = append(pendingBoardingTxids, tx.BoardingTxid)
+	}
 
-		// Add all our pending boarding txs to the list of those to settle.
-		txsToSettle = append(txsToSettle, pendingBoardingTxids...)
+	// Add all our pending boarding txs to the list of those to settle.
+	txsToSettle = append(txsToSettle, pendingBoardingTxids...)
 
-		// Add also our pending vtxos settled in this round.
-		for _, vtxo := range myVtxos {
-			if !vtxo.Pending {
-				continue
-			}
-			txsToSettle = append(txsToSettle, vtxo.Txid)
-			vtxosToSpend = append(vtxosToSpend, vtxo.VtxoKey)
+	// Add also our pending vtxos settled in this round.
+	for _, vtxo := range myVtxos {
+		vtxosToSpend = append(vtxosToSpend, vtxo.VtxoKey)
+		if !vtxo.Pending {
+			continue
 		}
+		txsToSettle = append(txsToSettle, vtxo.Txid)
+	}
 
-		// If no txs are settles, add a new tx record.
-		if len(txsToSettle) <= 0 {
+	// If no vtxos have been spent, add a new tx record.
+	if len(vtxosToSpend) <= 0 && len(pendingBoardingTxs) <= 0 {
+		if len(vtxosToAdd) > 0 {
 			amount := uint64(0)
 			for _, v := range vtxosToAdd {
 				amount += v.Amount
@@ -2561,8 +2561,6 @@ func (a *covenantlessArkClient) handleRedeemTx(
 	vtxosToSpend := make([]types.VtxoKey, 0)
 	txsToAdd := make([]types.Transaction, 0)
 
-	fmt.Printf("REDEEM TX %+v\n", redeemTx)
-
 	for _, vtxo := range redeemTx.SpendableVtxos {
 		if _, ok := myPubkeys[vtxo.PubKey]; ok {
 			vtxosToAdd = append(vtxosToAdd, types.Vtxo{
@@ -2599,18 +2597,20 @@ func (a *covenantlessArkClient) handleRedeemTx(
 
 	// If not spent vtxos, add a new received tx to the history.
 	if len(vtxosToSpend) <= 0 {
-		amount := uint64(0)
-		for _, v := range vtxosToAdd {
-			amount += v.Amount
+		if len(vtxosToAdd) > 0 {
+			amount := uint64(0)
+			for _, v := range vtxosToAdd {
+				amount += v.Amount
+			}
+			txsToAdd = append(txsToAdd, types.Transaction{
+				TransactionKey: types.TransactionKey{
+					RedeemTxid: redeemTx.Txid,
+				},
+				Amount:    amount,
+				Type:      types.TxReceived,
+				CreatedAt: time.Now(),
+			})
 		}
-		txsToAdd = append(txsToAdd, types.Transaction{
-			TransactionKey: types.TransactionKey{
-				RedeemTxid: redeemTx.Txid,
-			},
-			Amount:    amount,
-			Type:      types.TxReceived,
-			CreatedAt: time.Now(),
-		})
 	} else {
 		// Otherwise, add a new spent tx to the history.
 		inAmount := uint64(0)
