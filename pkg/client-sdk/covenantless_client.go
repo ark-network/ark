@@ -354,7 +354,7 @@ func (a *covenantlessArkClient) listenForBoardingTxs(ctx context.Context) {
 			}
 
 			if len(txsToUpdate) > 0 {
-				count, err := a.store.TransactionStore().AddTransactions(
+				count, err := a.store.TransactionStore().UpdateTransactions(
 					ctx, txsToUpdate,
 				)
 				if err != nil {
