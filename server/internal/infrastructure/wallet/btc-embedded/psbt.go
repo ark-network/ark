@@ -3,6 +3,7 @@ package btcwallet
 import (
 	"encoding/hex"
 	"fmt"
+	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
@@ -13,10 +14,42 @@ import (
 )
 
 func (s *service) signPsbt(packet *psbt.Packet, inputsToSign []int) ([]uint32, error) {
-	// iterates over the inputs and set the default sighash flags
 	updater, err := psbt.NewUpdater(packet)
 	if err != nil {
 		return nil, err
+	}
+
+	// try to set witness utxos for inputs that don't have one
+	for idx, input := range packet.Inputs {
+		if input.WitnessUtxo == nil {
+			// try to fetch the utxo
+			inputOutpoint := packet.UnsignedTx.TxIn[idx].PreviousOutPoint
+
+			const retryAttempts = 5
+			for i := 0; i < retryAttempts; i++ {
+				prevoutTx, err := s.extraAPI.getTx(inputOutpoint.Hash.String())
+				if err != nil {
+					if i == retryAttempts-1 {
+						return nil, err
+					}
+
+					log.WithError(err).Debugf("failed to fetch tx %s, attempt %d/%d", inputOutpoint.Hash.String(), i+1, retryAttempts)
+					time.Sleep(2 * time.Second)
+					continue
+				}
+
+				if len(prevoutTx.TxOut) <= int(inputOutpoint.Index) {
+					return nil, fmt.Errorf("invalid prevout index %d for tx with %d outputs",
+						inputOutpoint.Index, len(prevoutTx.TxOut))
+				}
+
+				if err := updater.AddInWitnessUtxo(prevoutTx.TxOut[inputOutpoint.Index], idx); err != nil {
+					return nil, err
+				}
+
+				break
+			}
+		}
 	}
 
 	for idx, input := range packet.Inputs {
@@ -41,9 +74,9 @@ func (s *service) signPsbt(packet *psbt.Packet, inputsToSign []int) ([]uint32, e
 		}
 	}
 
-	tx := packet.UnsignedTx
+	prevoutTx := packet.UnsignedTx
 	signedInputs := make([]uint32, 0)
-	for idx := range tx.TxIn {
+	for idx := range prevoutTx.TxIn {
 		in := &packet.Inputs[idx]
 
 		// skip if the input does not have a witness utxo

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -1554,6 +1555,8 @@ func (s *covenantlessService) listenToScannerNotifications() {
 							defer func() {
 								if r := recover(); r != nil {
 									log.Errorf("recovered from panic in reactToFraud: %v", r)
+									// log the stack trace
+									log.Errorf("stack trace: %s", string(debug.Stack()))
 								}
 							}()
 
@@ -1859,6 +1862,7 @@ func (s *covenantlessService) reactToFraud(ctx context.Context, vtxo domain.Vtxo
 		connector.PreviousOutPoint.Index,
 	}
 
+	// compute, sign and broadcast the branch txs until the connector outpoint is created
 	branch, err := round.Connectors.Branch(connectorOutpoint.txid)
 	if err != nil {
 		return fmt.Errorf("failed to get branch of connector: %s", err)
@@ -1866,38 +1870,14 @@ func (s *covenantlessService) reactToFraud(ctx context.Context, vtxo domain.Vtxo
 
 	for _, node := range branch {
 		_, err := s.wallet.GetTransaction(ctx, node.Txid)
+		// if err, it means the tx is offchain
 		if err != nil {
-			tx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
+			signedTx, err := s.wallet.SignTransaction(ctx, node.Tx, true)
 			if err != nil {
-				return fmt.Errorf("failed to parse tx: %s", err)
+				return fmt.Errorf("failed to sign tx: %s", err)
 			}
 
-			if len(tx.Inputs[0].TaprootKeySpendSig) <= 0 {
-				return fmt.Errorf("invalid connector tx, missing signature: %s", node.Txid)
-			}
-
-			witness := wire.TxWitness{
-				tx.Inputs[0].TaprootKeySpendSig,
-			}
-
-			var serializedWitness bytes.Buffer
-			if err := psbt.WriteTxWitness(&serializedWitness, witness); err != nil {
-				return fmt.Errorf("failed to serialize witness: %s", err)
-			}
-
-			tx.Inputs[0].FinalScriptWitness = serializedWitness.Bytes()
-
-			extracted, err := psbt.Extract(tx)
-			if err != nil {
-				return fmt.Errorf("failed to extract tx: %s", err)
-			}
-
-			var buf bytes.Buffer
-			if err := extracted.Serialize(&buf); err != nil {
-				return fmt.Errorf("failed to serialize tx: %s", err)
-			}
-
-			txid, err := s.wallet.BroadcastTransaction(ctx, hex.EncodeToString(buf.Bytes()))
+			txid, err := s.wallet.BroadcastTransaction(ctx, signedTx)
 			if err != nil {
 				return fmt.Errorf("failed to broadcast transaction: %s", err)
 			}

@@ -516,7 +516,7 @@ func (b *txBuilder) BuildRoundTx(
 	boardingInputs []ports.BoardingInput,
 	connectorAddresses []string,
 	musig2Data []*tree.Musig2,
-) (roundTx string, vtxoTree tree.TxTree, nextConnectorAddress string, connectors tree.TxTree, err error) {
+) (string, tree.TxTree, string, tree.TxTree, error) {
 	var sharedOutputScript []byte
 	var sharedOutputAmount int64
 
@@ -527,79 +527,94 @@ func (b *txBuilder) BuildRoundTx(
 
 	feeAmount, err := b.minRelayFeeTreeTx()
 	if err != nil {
-		return
+		return "", nil, "", nil, err
 	}
 
-	var sweepScript []byte
-	sweepScript, err = (&tree.CSVMultisigClosure{
+	sweepScript, err := (&tree.CSVMultisigClosure{
 		MultisigClosure: tree.MultisigClosure{
 			PubKeys: []*secp256k1.PublicKey{serverPubkey},
 		},
 		Locktime: b.vtxoTreeExpiry,
 	}).Script()
 	if err != nil {
-		return
+		return "", nil, "", nil, err
 	}
 
-	tree := txscript.AssembleTaprootScriptTree(txscript.NewBaseTapLeaf(sweepScript))
-	root := tree.RootNode.TapHash()
+	sweepTapscriptRoot := txscript.NewBaseTapLeaf(sweepScript).TapHash()
 
 	if !isOnchainOnly(requests) {
 		sharedOutputScript, sharedOutputAmount, err = bitcointree.CraftSharedOutput(
-			receivers, feeAmount, root[:],
+			receivers, feeAmount, sweepTapscriptRoot[:],
 		)
 		if err != nil {
-			return
+			return "", nil, "", nil, err
 		}
-	}
-
-	nextConnectorAddress, err = b.wallet.DeriveConnectorAddress(context.Background())
-	if err != nil {
-		return
-	}
-
-	connectorAddress, err := btcutil.DecodeAddress(nextConnectorAddress, b.onchainNetwork())
-	if err != nil {
-		return
-	}
-
-	connectorPkScript, err := txscript.PayToAddrScript(connectorAddress)
-	if err != nil {
-		return
 	}
 
 	nbOfConnectors := countSpentVtxos(requests)
 
 	dustAmount, err := b.wallet.GetDustAmount(context.Background())
 	if err != nil {
-		return
+		return "", nil, "", nil, err
 	}
-
-	connectorOutput := wire.NewTxOut(int64(dustAmount), connectorPkScript)
 
 	minRelayFeeConnectorTx, err := b.minRelayFeeConnectorTx()
 	if err != nil {
-		return
+		return "", nil, "", nil, err
 	}
 
+	var nextConnectorAddress string
 	var connectorsTreePkScript []byte
 	var connectorsTreeAmount int64
-	var ephemeralConnectorTreeKey *secp256k1.PrivateKey
+	connectorsTreeLeaves := make([]tree.Leaf, 0)
 
 	if nbOfConnectors > 0 {
-		ephemeralConnectorTreeKey, err = secp256k1.GeneratePrivateKey()
+		nextConnectorAddress, err = b.wallet.DeriveConnectorAddress(context.Background())
 		if err != nil {
-			return
+			return "", nil, "", nil, err
 		}
 
-		connectorsTreePkScript, connectorsTreeAmount, err = bitcointree.CraftConnectorsTreeOutput(
-			*connectorOutput,
-			nbOfConnectors,
+		connectorAddress, err := btcutil.DecodeAddress(nextConnectorAddress, b.onchainNetwork())
+		if err != nil {
+			return "", nil, "", nil, err
+		}
+
+		connectorPkScript, err := txscript.PayToAddrScript(connectorAddress)
+		if err != nil {
+			return "", nil, "", nil, err
+		}
+
+		// check if the connector script is a taproot script
+		// we need taproot to properly create the connectors tree
+		connectorScriptClass := txscript.GetScriptClass(connectorPkScript)
+		if connectorScriptClass != txscript.WitnessV1TaprootTy {
+			return "", nil, "", nil, fmt.Errorf("invalid connector script class, expected taproot (%s), got %s", txscript.WitnessV1TaprootTy, connectorScriptClass)
+		}
+
+		taprootKey, err := schnorr.ParsePubKey(connectorPkScript[2:])
+		if err != nil {
+			return "", nil, "", nil, err
+		}
+
+		cosigners := []string{hex.EncodeToString(taprootKey.SerializeCompressed())}
+
+		for i := uint64(0); i < nbOfConnectors; i++ {
+			connectorsTreeLeaves = append(connectorsTreeLeaves, tree.Leaf{
+				Amount: uint64(dustAmount),
+				Script: hex.EncodeToString(connectorPkScript),
+				Musig2Data: &tree.Musig2{
+					CosignersPublicKeys: cosigners,
+					SigningType:         tree.SignBranch,
+				},
+			})
+		}
+
+		connectorsTreePkScript, connectorsTreeAmount, err = bitcointree.CraftConnectorsOutput(
+			connectorsTreeLeaves,
 			minRelayFeeConnectorTx,
-			ephemeralConnectorTreeKey.PubKey(),
 		)
 		if err != nil {
-			return
+			return "", nil, "", nil, err
 		}
 	}
 
@@ -610,13 +625,15 @@ func (b *txBuilder) BuildRoundTx(
 		connectorAddresses,
 	)
 	if err != nil {
-		return
+		return "", nil, "", nil, err
 	}
 
-	roundTx, err = ptx.B64Encode()
+	roundTx, err := ptx.B64Encode()
 	if err != nil {
-		return
+		return "", nil, "", nil, err
 	}
+
+	vtxoTree := make(tree.TxTree, 0)
 
 	if !isOnchainOnly(requests) {
 		initialOutpoint := &wire.OutPoint{
@@ -625,7 +642,7 @@ func (b *txBuilder) BuildRoundTx(
 		}
 
 		vtxoTree, err = bitcointree.BuildVtxoTree(
-			initialOutpoint, receivers, feeAmount, root[:], b.vtxoTreeExpiry,
+			initialOutpoint, receivers, feeAmount, sweepTapscriptRoot[:], b.vtxoTreeExpiry,
 		)
 		if err != nil {
 			return "", nil, "", nil, err
@@ -633,7 +650,7 @@ func (b *txBuilder) BuildRoundTx(
 	}
 
 	if nbOfConnectors <= 0 {
-		return
+		return roundTx, vtxoTree, nextConnectorAddress, nil, nil
 	}
 
 	partialTx, err := psbt.NewFromRawBytes(strings.NewReader(roundTx), true)
@@ -646,17 +663,13 @@ func (b *txBuilder) BuildRoundTx(
 		Index: 1,
 	}
 
-	if nbOfConnectors > 0 {
-		connectors, err = bitcointree.BuildConnectorsTree(
-			rootConnectorsOutpoint,
-			*connectorOutput,
-			nbOfConnectors,
-			minRelayFeeConnectorTx,
-			ephemeralConnectorTreeKey,
-		)
-		if err != nil {
-			return "", nil, "", nil, err
-		}
+	connectors, err := bitcointree.BuildConnectorsTree(
+		rootConnectorsOutpoint,
+		connectorsTreeLeaves,
+		minRelayFeeConnectorTx,
+	)
+	if err != nil {
+		return "", nil, "", nil, err
 	}
 
 	return roundTx, vtxoTree, nextConnectorAddress, connectors, nil

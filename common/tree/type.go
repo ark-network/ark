@@ -15,7 +15,8 @@ const (
 
 type TreeFactory func(outpoint psetv2.InputArgs) (TxTree, error)
 
-type TxTreeLeaf struct {
+// Leaf is the output leaf of a TxTree
+type Leaf struct {
 	Script     string
 	Amount     uint64
 	Musig2Data *Musig2

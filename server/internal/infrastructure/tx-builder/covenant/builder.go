@@ -398,9 +398,9 @@ func (b *txBuilder) BuildRoundTx(
 			return "", nil, "", nil, err
 		}
 
-		connectorsLeaves := make([]tree.TxTreeLeaf, 0)
+		connectorsLeaves := make([]tree.Leaf, 0)
 		for i := uint64(0); i < numberOfConnectors; i++ {
-			connectorsLeaves = append(connectorsLeaves, tree.TxTreeLeaf{
+			connectorsLeaves = append(connectorsLeaves, tree.Leaf{
 				Amount: connectorAmount,
 				Script: hex.EncodeToString(connectorPkScript),
 			})

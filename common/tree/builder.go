@@ -15,7 +15,7 @@ import (
 )
 
 func BuildTxTree(
-	asset string, serverPubkey *secp256k1.PublicKey, receivers []TxTreeLeaf,
+	asset string, serverPubkey *secp256k1.PublicKey, receivers []Leaf,
 	feeSatsPerNode uint64, treeExpiry *common.RelativeLocktime,
 ) (
 	factoryFn TreeFactory,
@@ -389,7 +389,7 @@ func (n *node) buildVtxoTree() TreeFactory {
 }
 
 func buildTreeNodes(
-	asset string, serverPubkey *secp256k1.PublicKey, receivers []TxTreeLeaf,
+	asset string, serverPubkey *secp256k1.PublicKey, receivers []Leaf,
 	feeSatsPerNode uint64, treeExpiry *common.RelativeLocktime,
 ) (root *node, err error) {
 	if len(receivers) == 0 {

@@ -20,8 +20,9 @@ const (
 )
 
 // CraftSharedOutput returns the taproot script and the amount of the root shared output of a vtxo tree
+// radix is hardcoded to 2
 func CraftSharedOutput(
-	receivers []tree.TxTreeLeaf,
+	receivers []tree.Leaf,
 	feeSatsPerNode uint64,
 	sweepTapTreeRoot []byte,
 ) ([]byte, int64, error) {
@@ -46,9 +47,10 @@ func CraftSharedOutput(
 }
 
 // BuildVtxoTree creates all the tree's transactions and returns the vtxo tree
+// radix is hardcoded to 2
 func BuildVtxoTree(
 	initialInput *wire.OutPoint,
-	receivers []tree.TxTreeLeaf,
+	receivers []tree.Leaf,
 	feeSatsPerNode uint64,
 	sweepTapTreeRoot []byte,
 	vtxoTreeExpiry common.RelativeLocktime,
@@ -61,24 +63,12 @@ func BuildVtxoTree(
 	return toTxTree(root, initialInput, &vtxoTreeExpiry)
 }
 
-func CraftConnectorsTreeOutput(
-	connectorOutput wire.TxOut,
-	numberOfConnectors uint64,
+// CraftConnectorsOutput returns the taproot script and the amount of the root shared output of a connectors tree
+// radix is hardcoded to 4
+func CraftConnectorsOutput(
+	receivers []tree.Leaf,
 	feeSatsPerNode uint64,
-	signingMusig2PublicKey *secp256k1.PublicKey,
 ) ([]byte, int64, error) {
-	receivers := make([]tree.TxTreeLeaf, 0)
-	for i := uint64(0); i < numberOfConnectors; i++ {
-		receivers = append(receivers, tree.TxTreeLeaf{
-			Amount: uint64(connectorOutput.Value),
-			Script: hex.EncodeToString(connectorOutput.PkScript),
-			Musig2Data: &tree.Musig2{
-				SigningType:         tree.SignBranch,
-				CosignersPublicKeys: []string{hex.EncodeToString(signingMusig2PublicKey.SerializeCompressed())},
-			},
-		})
-	}
-
 	root, err := createTxTree(receivers, feeSatsPerNode, nil, connectorsTreeRadix)
 	if err != nil {
 		return nil, 0, err
@@ -99,72 +89,22 @@ func CraftConnectorsTreeOutput(
 	return scriptPubkey, amount, nil
 }
 
+// BuildConnectorsTree creates all the tree's transactions and returns the vtxo tree
+// radix is hardcoded to 4
 func BuildConnectorsTree(
 	initialInput *wire.OutPoint,
-	connectorOutput wire.TxOut,
-	numberOfConnectors uint64,
+	receivers []tree.Leaf,
 	feeSatsPerNode uint64,
-	signingMusig2PrivateKey *secp256k1.PrivateKey,
 ) (tree.TxTree, error) {
-	receivers := make([]tree.TxTreeLeaf, 0)
-	for i := uint64(0); i < numberOfConnectors; i++ {
-		receivers = append(receivers, tree.TxTreeLeaf{
-			Amount: uint64(connectorOutput.Value),
-			Script: hex.EncodeToString(connectorOutput.PkScript),
-			Musig2Data: &tree.Musig2{
-				SigningType:         tree.SignBranch,
-				CosignersPublicKeys: []string{hex.EncodeToString(signingMusig2PrivateKey.PubKey().SerializeCompressed())},
-			},
-		})
-	}
-
 	root, err := createTxTree(receivers, feeSatsPerNode, nil, connectorsTreeRadix)
 	if err != nil {
 		return nil, err
 	}
 
-	amount := root.getAmount() + int64(feeSatsPerNode)
-
-	txTree, err := toTxTree(root, initialInput, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	coordinatorSession, err := NewTreeCoordinatorSession(amount, txTree, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create coordinator session: %w", err)
-	}
-
-	treeSignerSession := NewTreeSignerSession(signingMusig2PrivateKey)
-
-	if err := treeSignerSession.Init(nil, amount, txTree); err != nil {
-		return nil, fmt.Errorf("failed to init tree signer session: %w", err)
-	}
-
-	nonces, err := treeSignerSession.GetNonces()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get nonces: %w", err)
-	}
-
-	coordinatorSession.AddNonce(signingMusig2PrivateKey.PubKey(), nonces)
-
-	aggregatedNonces, err := coordinatorSession.AggregateNonces()
-	if err != nil {
-		return nil, fmt.Errorf("failed to aggregate nonces: %w", err)
-	}
-
-	treeSignerSession.SetAggregatedNonces(aggregatedNonces)
-
-	sigs, err := treeSignerSession.Sign()
-	if err != nil {
-		return nil, fmt.Errorf("failed to sign tree: %w", err)
-	}
-
-	coordinatorSession.AddSignatures(signingMusig2PrivateKey.PubKey(), sigs)
-
-	return coordinatorSession.SignTree()
+	return toTxTree(root, initialInput, nil)
 }
 
+// toTxTree converts a node root to tree.VtxoTree matrix
 func toTxTree(root node, initialInput *wire.OutPoint, expiry *common.RelativeLocktime) (tree.TxTree, error) {
 	vtxoTree := make(tree.TxTree, 0)
 
@@ -350,7 +290,7 @@ func getTx(
 // createTxTree is a recursive function that creates a tree of transactions
 // from the leaves to the root.
 func createTxTree(
-	receivers []tree.TxTreeLeaf,
+	receivers []tree.Leaf,
 	feeSatsPerNode uint64,
 	tapTreeRoot []byte,
 	radix int,

@@ -45,12 +45,12 @@ func getOnchainOutputs(
 func getOutputVtxosLeaves(
 	requests []domain.TxRequest,
 	musig2Data []*tree.Musig2,
-) ([]tree.TxTreeLeaf, error) {
+) ([]tree.Leaf, error) {
 	if len(musig2Data) != len(requests) {
 		return nil, fmt.Errorf("musig2 data length %d does not match requests length %d", len(musig2Data), len(requests))
 	}
 
-	leaves := make([]tree.TxTreeLeaf, 0)
+	leaves := make([]tree.Leaf, 0)
 	for i, request := range requests {
 		for _, receiver := range request.Receivers {
 			if !receiver.IsOnchain() {
@@ -69,7 +69,7 @@ func getOutputVtxosLeaves(
 					return nil, fmt.Errorf("failed to create script: %s", err)
 				}
 
-				leaves = append(leaves, tree.TxTreeLeaf{
+				leaves = append(leaves, tree.Leaf{
 					Script:     hex.EncodeToString(script),
 					Amount:     receiver.Amount,
 					Musig2Data: musig2Data[i],

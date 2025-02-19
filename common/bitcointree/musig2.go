@@ -112,6 +112,22 @@ func AggregateKeys(
 		}
 	}
 
+	// if there is only one pubkey, fallback to classic P2TR
+	if len(pubkeys) == 1 {
+		res := &musig2.AggregateKey{
+			PreTweakedKey: pubkeys[0],
+		}
+
+		if len(scriptRoot) > 0 {
+			finalKey := txscript.ComputeTaprootOutputKey(pubkeys[0], scriptRoot)
+			res.FinalKey = finalKey
+		} else {
+			res.FinalKey = pubkeys[0]
+		}
+
+		return res, nil
+	}
+
 	opts := make([]musig2.KeyAggOption, 0)
 	if len(scriptRoot) > 0 {
 		opts = append(opts, musig2.WithTaprootKeyTweak(scriptRoot))

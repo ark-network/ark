@@ -72,8 +72,8 @@ func getOnchainOutputs(
 
 func getOutputVtxosLeaves(
 	requests []domain.TxRequest,
-) ([]tree.TxTreeLeaf, error) {
-	receivers := make([]tree.TxTreeLeaf, 0)
+) ([]tree.Leaf, error) {
+	receivers := make([]tree.Leaf, 0)
 	for _, request := range requests {
 		for _, receiver := range request.Receivers {
 			if !receiver.IsOnchain() {
@@ -92,7 +92,7 @@ func getOutputVtxosLeaves(
 					return nil, fmt.Errorf("failed to create script: %s", err)
 				}
 
-				receivers = append(receivers, tree.TxTreeLeaf{
+				receivers = append(receivers, tree.Leaf{
 					Script: hex.EncodeToString(script),
 					Amount: receiver.Amount,
 				})
