@@ -675,40 +675,20 @@ func (s *covenantService) startFinalization(roundEndTime time.Time) {
 	}
 	log.Debugf("round tx created for round %s", round.Id)
 
-	vtxoToSign := make([]domain.VtxoKey, 0)
-	for _, request := range requests {
-		for _, vtxo := range request.Inputs {
-			vtxoToSign = append(vtxoToSign, vtxo.VtxoKey)
-		}
+	if err := s.forfeitTxs.init(connectors, requests); err != nil {
+		round.Fail(fmt.Errorf("failed to initialize forfeit txs: %s", err))
+		log.WithError(err).Warn("failed to initialize forfeit txs")
+		return
 	}
 
-	events, err := round.StartFinalization(
-		connectorAddress, connectors, tree, unsignedRoundTx, vtxoToSign,
+	_, err = round.StartFinalization(
+		connectorAddress, connectors, tree, unsignedRoundTx, s.forfeitTxs.connectorsIndex,
 	)
 	if err != nil {
 		round.Fail(fmt.Errorf("failed to start finalization: %s", err))
 		log.WithError(err).Warn("failed to start finalization")
 		return
 	}
-
-	if len(events) == 0 {
-		round.Fail(fmt.Errorf("failed to start finalization: no events returned"))
-		log.Warn("failed to start finalization: no events returned")
-		return
-	}
-
-	finalizationEvent := events[0]
-	if _, ok := finalizationEvent.(domain.RoundFinalizationStarted); !ok {
-		round.Fail(fmt.Errorf("failed to start finalization: invalid event type"))
-		log.Warn("failed to start finalization: invalid event type")
-		return
-	}
-
-	s.forfeitTxs.init(
-		connectors,
-		finalizationEvent.(domain.RoundFinalizationStarted).ConnectorsIndex,
-		requests,
-	)
 
 	log.Debugf("started finalization stage for round: %s", round.Id)
 }

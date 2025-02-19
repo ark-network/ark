@@ -256,27 +256,27 @@ type forfeitTxsMap struct {
 	lock    *sync.RWMutex
 	builder ports.TxBuilder
 
-	forfeitTxs     map[domain.VtxoKey]string
-	connectors     tree.TxTree
-	connectorIndex map[string]domain.Outpoint
-	vtxos          []domain.Vtxo
+	forfeitTxs      map[domain.VtxoKey]string
+	connectors      tree.TxTree
+	connectorsIndex map[string]domain.Outpoint
+	vtxos           []domain.Vtxo
 
 	doneCh chan struct{}
 }
 
 func newForfeitTxsMap(txBuilder ports.TxBuilder) *forfeitTxsMap {
 	return &forfeitTxsMap{
-		lock:           &sync.RWMutex{},
-		builder:        txBuilder,
-		forfeitTxs:     make(map[domain.VtxoKey]string),
-		connectors:     nil,
-		connectorIndex: nil,
-		vtxos:          nil,
-		doneCh:         make(chan struct{}, 1),
+		lock:            &sync.RWMutex{},
+		builder:         txBuilder,
+		forfeitTxs:      make(map[domain.VtxoKey]string),
+		connectors:      nil,
+		connectorsIndex: nil,
+		vtxos:           nil,
+		doneCh:          make(chan struct{}, 1),
 	}
 }
 
-func (m *forfeitTxsMap) init(connectors tree.TxTree, connectorIndex map[string]domain.Outpoint, requests []domain.TxRequest) {
+func (m *forfeitTxsMap) init(connectors tree.TxTree, requests []domain.TxRequest) error {
 	vtxosToSign := make([]domain.Vtxo, 0)
 	for _, request := range requests {
 		vtxosToSign = append(vtxosToSign, request.Inputs...)
@@ -287,11 +287,47 @@ func (m *forfeitTxsMap) init(connectors tree.TxTree, connectorIndex map[string]d
 
 	m.vtxos = vtxosToSign
 	m.connectors = connectors
-	m.connectorIndex = connectorIndex
 
+	// init the forfeit txs map
 	for _, vtxo := range vtxosToSign {
 		m.forfeitTxs[vtxo.VtxoKey] = ""
 	}
+
+	// create the connectors index
+	connectorsIndex := make(map[string]domain.Outpoint)
+
+	if len(vtxosToSign) > 0 {
+		connectorsOutpoints := make([]domain.Outpoint, 0)
+
+		leaves := connectors.Leaves()
+		if len(leaves) == 0 {
+			return fmt.Errorf("no connectors found")
+		}
+
+		for _, n := range leaves {
+			connectorsOutpoints = append(connectorsOutpoints, domain.Outpoint{
+				Txid: n.Txid,
+				VOut: 0,
+			})
+		}
+
+		// sort lexicographically
+		sort.Slice(vtxosToSign, func(i, j int) bool {
+			return vtxosToSign[i].String() < vtxosToSign[j].String()
+		})
+
+		if len(vtxosToSign) > len(connectorsOutpoints) {
+			return fmt.Errorf("more vtxos to sign than outpoints, %d > %d", len(vtxosToSign), len(connectorsOutpoints))
+		}
+
+		for i, vtxo := range vtxosToSign {
+			connectorsIndex[vtxo.String()] = connectorsOutpoints[i]
+		}
+	}
+
+	m.connectorsIndex = connectorsIndex
+
+	return nil
 }
 
 func (m *forfeitTxsMap) sign(txs []string) error {
@@ -304,7 +340,7 @@ func (m *forfeitTxsMap) sign(txs []string) error {
 	}
 
 	// verify the txs are valid
-	validTxs, err := m.builder.VerifyForfeitTxs(m.vtxos, m.connectors, txs, m.connectorIndex)
+	validTxs, err := m.builder.VerifyForfeitTxs(m.vtxos, m.connectors, txs, m.connectorsIndex)
 	if err != nil {
 		return err
 	}
@@ -335,7 +371,7 @@ func (m *forfeitTxsMap) reset() {
 
 	m.forfeitTxs = make(map[domain.VtxoKey]string)
 	m.connectors = nil
-	m.connectorIndex = nil
+	m.connectorsIndex = nil
 	m.vtxos = nil
 }
 

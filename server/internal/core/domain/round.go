@@ -2,7 +2,6 @@ package domain
 
 import (
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/ark-network/ark/common/tree"
@@ -153,7 +152,7 @@ func (r *Round) StartFinalization(
 	connectors tree.TxTree,
 	vtxoTree tree.TxTree,
 	roundTx string,
-	vtxosToSign []VtxoKey,
+	connectorsIndex map[string]Outpoint,
 ) ([]RoundEvent, error) {
 	if len(roundTx) <= 0 {
 		return nil, fmt.Errorf("missing unsigned round tx")
@@ -163,37 +162,6 @@ func (r *Round) StartFinalization(
 	}
 	if len(r.TxRequests) <= 0 {
 		return nil, fmt.Errorf("no tx requests registered")
-	}
-
-	connectorsIndex := make(map[string]Outpoint)
-
-	if len(vtxosToSign) > 0 {
-		connectorsOutpoints := make([]Outpoint, 0)
-
-		leaves := connectors.Leaves()
-		if len(leaves) == 0 {
-			return nil, fmt.Errorf("no connectors found")
-		}
-
-		for _, n := range leaves {
-			connectorsOutpoints = append(connectorsOutpoints, Outpoint{
-				Txid: n.Txid,
-				VOut: 0,
-			})
-		}
-
-		// sort lexicographically
-		sort.Slice(vtxosToSign, func(i, j int) bool {
-			return vtxosToSign[i].String() < vtxosToSign[j].String()
-		})
-
-		if len(vtxosToSign) > len(connectorsOutpoints) {
-			return nil, fmt.Errorf("more vtxos to sign than outpoints, %d > %d", len(vtxosToSign), len(connectorsOutpoints))
-		}
-
-		for i, vtxo := range vtxosToSign {
-			connectorsIndex[vtxo.String()] = connectorsOutpoints[i]
-		}
 	}
 
 	event := RoundFinalizationStarted{

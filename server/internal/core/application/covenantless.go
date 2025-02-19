@@ -1209,6 +1209,12 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 	}
 	log.Debugf("round tx created for round %s", round.Id)
 
+	if err := s.forfeitTxs.init(connectors, requests); err != nil {
+		round.Fail(fmt.Errorf("failed to initialize forfeit txs: %s", err))
+		log.WithError(err).Warn("failed to initialize forfeit txs")
+		return
+	}
+
 	if len(vtxoTree) > 0 {
 		sweepClosure := tree.CSVMultisigClosure{
 			MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{s.pubkey}},
@@ -1349,39 +1355,14 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 		vtxoTree = signedTree
 	}
 
-	vtxoToSign := make([]domain.VtxoKey, 0)
-	for _, request := range requests {
-		for _, vtxo := range request.Inputs {
-			vtxoToSign = append(vtxoToSign, vtxo.VtxoKey)
-		}
-	}
-
-	events, err := round.StartFinalization(
-		connectorAddress, connectors, vtxoTree, unsignedRoundTx, vtxoToSign,
+	_, err = round.StartFinalization(
+		connectorAddress, connectors, vtxoTree, unsignedRoundTx, s.forfeitTxs.connectorsIndex,
 	)
 	if err != nil {
 		round.Fail(fmt.Errorf("failed to start finalization: %s", err))
 		log.WithError(err).Warn("failed to start finalization")
 		return
 	}
-
-	if len(events) == 0 {
-		round.Fail(fmt.Errorf("failed to start finalization: no events returned"))
-		log.Warn("failed to start finalization: no events returned")
-		return
-	}
-	finalizationEvent := events[0]
-	if _, ok := finalizationEvent.(domain.RoundFinalizationStarted); !ok {
-		round.Fail(fmt.Errorf("failed to start finalization: invalid event type"))
-		log.Warn("failed to start finalization: invalid event type")
-		return
-	}
-
-	s.forfeitTxs.init(
-		connectors,
-		finalizationEvent.(domain.RoundFinalizationStarted).ConnectorsIndex,
-		requests,
-	)
 
 	log.Debugf("started finalization stage for round: %s", round.Id)
 }
