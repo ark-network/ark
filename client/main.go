@@ -151,6 +151,12 @@ var (
 		Value:       false,
 		DefaultText: "false",
 	}
+	completeFlag = &cli.BoolFlag{
+		Name:        "complete",
+		Usage:       "complete the unilateral exit after timelock expired",
+		Value:       false,
+		DefaultText: "false",
+	}
 )
 
 var (
@@ -211,7 +217,7 @@ var (
 	redeemCommand = cli.Command{
 		Name:  "redeem",
 		Usage: "Redeem offchain funds, collaboratively or unilaterally",
-		Flags: []cli.Flag{addressFlag, amountToRedeemFlag, forceFlag, passwordFlag},
+		Flags: []cli.Flag{addressFlag, amountToRedeemFlag, forceFlag, passwordFlag, completeFlag},
 		Action: func(ctx *cli.Context) error {
 			return redeem(ctx)
 		},
@@ -397,18 +403,37 @@ func redeem(ctx *cli.Context) error {
 	}
 
 	force := ctx.Bool(forceFlag.Name)
+	complete := ctx.Bool(completeFlag.Name)
 	address := ctx.String(addressFlag.Name)
 	amount := ctx.Uint64(amountToRedeemFlag.Name)
 	computeExpiration := ctx.Bool(expiryDetailsFlag.Name)
+
+	if force && complete {
+		return fmt.Errorf("cannot use --force and --complete at the same time")
+	}
+
 	if force {
-		err := arkSdkClient.UnilateralRedeem(ctx.Context)
+		return arkSdkClient.StartUnilateralExit(ctx.Context)
+	}
+
+	if address == "" {
+		return fmt.Errorf("missing destination address")
+	}
+
+	if complete {
+		txID, err := arkSdkClient.CompleteUnilateralExit(ctx.Context, address)
 		if err != nil {
 			return err
 		}
-		return nil
+		return printJSON(map[string]interface{}{
+			"txid": txID,
+		})
 	}
 
-	txID, err := arkSdkClient.CollaborativeRedeem(
+	if amount == 0 {
+		return fmt.Errorf("missing amount")
+	}
+	txID, err := arkSdkClient.CollaborativeExit(
 		ctx.Context, address, amount, computeExpiration,
 	)
 	if err != nil {
@@ -554,11 +579,7 @@ func sendCovenantLess(ctx *cli.Context, receivers []arksdk.Receiver, withZeroFee
 	}
 
 	if len(onchainReceivers) > 0 {
-		txid, err := arkSdkClient.SendOnChain(ctx.Context, onchainReceivers)
-		if err != nil {
-			return err
-		}
-		return printJSON(map[string]interface{}{"txid": txid})
+		return fmt.Errorf("onchain receivers not allowed")
 	}
 
 	computeExpiration := ctx.Bool(enableExpiryCoinselectFlag.Name)
@@ -588,11 +609,7 @@ func sendCovenant(ctx *cli.Context, receivers []arksdk.Receiver) error {
 	}
 
 	if len(onchainReceivers) > 0 {
-		txID, err := arkSdkClient.SendOnChain(ctx.Context, onchainReceivers)
-		if err != nil {
-			return err
-		}
-		return printJSON(map[string]interface{}{"txid": txID})
+		return fmt.Errorf("onchain receivers not allowed")
 	}
 
 	computeExpiration := ctx.Bool(enableExpiryCoinselectFlag.Name)
