@@ -14,6 +14,12 @@ import (
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/nbd-wtf/go-nostr"
 	"github.com/nbd-wtf/go-nostr/nip19"
+	log "github.com/sirupsen/logrus"
+)
+
+const (
+	selectGapMinutes = float64(1)
+	deleteGapMinutes = float64(5)
 )
 
 type timedTxRequest struct {
@@ -102,7 +108,8 @@ func (m *txRequestsQueue) push(
 		}
 	}
 
-	m.requests[request.Id] = &timedTxRequest{request, boardingInputs, make([]note.Note, 0), time.Now(), time.Time{}, nil}
+	now := time.Now()
+	m.requests[request.Id] = &timedTxRequest{request, boardingInputs, make([]note.Note, 0), now, now, nil}
 	return nil
 }
 
@@ -116,10 +123,21 @@ func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingIn
 		if len(p.Receivers) <= 0 {
 			continue
 		}
+
+		sinceLastPing := time.Since(p.pingTimestamp).Minutes()
+
 		// Skip tx requests for which users didn't notify to be online in the last minute.
-		if p.pingTimestamp.IsZero() || time.Since(p.pingTimestamp).Minutes() > 1 {
+		if sinceLastPing > selectGapMinutes {
+			// Cleanup the request from the map if greater than deleteGapMinutes
+			// TODO move to dedicated function
+			if sinceLastPing > deleteGapMinutes {
+				log.Debugf("delete tx request %s : we didn't receive a ping in the last %d minutes", p.Id, int(deleteGapMinutes))
+				delete(m.requests, p.Id)
+			}
+
 			continue
 		}
+
 		requestsByTime = append(requestsByTime, *p)
 	}
 	sort.SliceStable(requestsByTime, func(i, j int) bool {
