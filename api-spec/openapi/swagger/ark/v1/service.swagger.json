@@ -545,6 +545,9 @@
         },
         "marketHour": {
           "$ref": "#/definitions/v1MarketHour"
+        },
+        "version": {
+          "type": "string"
         }
       }
     },
