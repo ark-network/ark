@@ -66,6 +66,11 @@ type covenantlessService struct {
 	// allowZeroFees is a temporary flag letting to submit redeem txs with zero miner fees
 	// this should be removed after we migrate to transactions version 3
 	allowZeroFees bool
+
+	numOfBoardingInputs    int
+	numOfBoardingInputsMtx sync.RWMutex
+
+	forfeitsBoardingSigsChan chan struct{}
 }
 
 func NewCovenantlessService(
@@ -105,27 +110,28 @@ func NewCovenantlessService(
 	}
 
 	svc := &covenantlessService{
-		network:             network,
-		pubkey:              pubkey,
-		vtxoTreeExpiry:      vtxoTreeExpiry,
-		roundInterval:       roundInterval,
-		unilateralExitDelay: unilateralExitDelay,
-		wallet:              walletSvc,
-		repoManager:         repoManager,
-		builder:             builder,
-		scanner:             scanner,
-		sweeper:             newSweeper(walletSvc, repoManager, builder, scheduler, noteUriPrefix),
-		txRequests:          newTxRequestsQueue(),
-		forfeitTxs:          newForfeitTxsMap(builder),
-		eventsCh:            make(chan domain.RoundEvent),
-		transactionEventsCh: make(chan TransactionEvent),
-		currentRoundLock:    sync.Mutex{},
-		treeSigningSessions: make(map[string]*musigSigningSession),
-		boardingExitDelay:   boardingExitDelay,
-		nostrDefaultRelays:  nostrDefaultRelays,
-		serverSigningKey:    serverSigningKey,
-		serverSigningPubKey: serverSigningKey.PubKey(),
-		allowZeroFees:       allowZeroFees,
+		network:                  network,
+		pubkey:                   pubkey,
+		vtxoTreeExpiry:           vtxoTreeExpiry,
+		roundInterval:            roundInterval,
+		unilateralExitDelay:      unilateralExitDelay,
+		wallet:                   walletSvc,
+		repoManager:              repoManager,
+		builder:                  builder,
+		scanner:                  scanner,
+		sweeper:                  newSweeper(walletSvc, repoManager, builder, scheduler, noteUriPrefix),
+		txRequests:               newTxRequestsQueue(),
+		forfeitTxs:               newForfeitTxsMap(builder),
+		eventsCh:                 make(chan domain.RoundEvent),
+		transactionEventsCh:      make(chan TransactionEvent),
+		currentRoundLock:         sync.Mutex{},
+		treeSigningSessions:      make(map[string]*musigSigningSession),
+		boardingExitDelay:        boardingExitDelay,
+		nostrDefaultRelays:       nostrDefaultRelays,
+		serverSigningKey:         serverSigningKey,
+		serverSigningPubKey:      serverSigningKey.PubKey(),
+		allowZeroFees:            allowZeroFees,
+		forfeitsBoardingSigsChan: make(chan struct{}, 1),
 	}
 
 	repoManager.RegisterEventsHandler(
@@ -752,19 +758,60 @@ func (s *covenantlessService) UpdateTxRequestStatus(_ context.Context, id string
 }
 
 func (s *covenantlessService) SignVtxos(ctx context.Context, forfeitTxs []string) error {
-	return s.forfeitTxs.sign(forfeitTxs)
+	s.currentRoundLock.Lock()
+	defer s.currentRoundLock.Unlock()
+	currentRound := s.currentRound
+
+	if err := s.forfeitTxs.sign(forfeitTxs); err != nil {
+		return err
+	}
+
+	return s.checkForfeitsAndBoardingSigsSent(currentRound)
 }
 
 func (s *covenantlessService) SignRoundTx(ctx context.Context, signedRoundTx string) error {
 	s.currentRoundLock.Lock()
 	defer s.currentRoundLock.Unlock()
+	currentRound := s.currentRound
 
-	combined, err := s.builder.VerifyAndCombinePartialTx(s.currentRound.UnsignedTx, signedRoundTx)
+	combined, err := s.builder.VerifyAndCombinePartialTx(currentRound.UnsignedTx, signedRoundTx)
 	if err != nil {
 		return fmt.Errorf("failed to verify and combine partial tx: %s", err)
 	}
 
 	s.currentRound.UnsignedTx = combined
+
+	return s.checkForfeitsAndBoardingSigsSent(currentRound)
+}
+
+func (s *covenantlessService) checkForfeitsAndBoardingSigsSent(currentRound *domain.Round) error {
+	roundTx, err := psbt.NewFromRawBytes(strings.NewReader(currentRound.UnsignedTx), true)
+	if err != nil {
+		return fmt.Errorf("failed to parse round tx: %w", err)
+	}
+
+	numOfInputsSigned := 0
+	for _, v := range roundTx.Inputs {
+		if len(v.TaprootScriptSpendSig) > 0 {
+			if len(v.TaprootScriptSpendSig[0].Signature) > 0 {
+				numOfInputsSigned++
+			}
+		}
+	}
+
+	// Condition: all forfeit txs are signed and
+	// the number of signed boarding inputs matches
+	// numOfBoardingInputs we expect
+	s.numOfBoardingInputsMtx.RLock()
+	numOfBoardingInputs := s.numOfBoardingInputs
+	s.numOfBoardingInputsMtx.RUnlock()
+	if s.forfeitTxs.allSigned() && numOfBoardingInputs == numOfInputsSigned {
+		select {
+		case s.forfeitsBoardingSigsChan <- struct{}{}:
+		default:
+		}
+	}
+
 	return nil
 }
 
@@ -1175,6 +1222,9 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 	}
 	requests, boardingInputs, redeeemedNotes, musig2data := s.txRequests.pop(num)
 	notes = redeeemedNotes
+	s.numOfBoardingInputsMtx.Lock()
+	s.numOfBoardingInputs = len(boardingInputs)
+	s.numOfBoardingInputsMtx.Unlock()
 
 	if _, err := round.RegisterTxRequests(requests); err != nil {
 		round.Fail(fmt.Errorf("failed to register tx requests: %s", err))
@@ -1408,13 +1458,11 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, roundEndTime time
 	}()
 
 	remainingTime := time.Until(roundEndTime)
-	// Wait for the remaining forfeit txs to be sent,
-	// but only wait until the round interval expires.
 	select {
-	case <-s.forfeitTxs.doneCh:
-		log.Debug("all forfeit txs have been sent")
+	case <-s.forfeitsBoardingSigsChan:
+		log.Debug("all forfeit txs and boarding inputs signatures have been sent")
 	case <-time.After(remainingTime):
-		log.Debug("timeout waiting for forfeit txs")
+		log.Debug("timeout waiting for forfeit txs and boarding inputs signatures")
 	}
 
 	forfeitTxs, err := s.forfeitTxs.pop()

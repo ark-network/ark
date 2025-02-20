@@ -54,6 +54,11 @@ type covenantService struct {
 	currentRoundLock sync.Mutex
 	currentRound     *domain.Round
 	lastEvent        domain.RoundEvent
+
+	numOfBoardingInputs    int
+	numOfBoardingInputsMtx sync.RWMutex
+
+	forfeitsBoardingSigsChan chan struct{}
 }
 
 func NewCovenantService(
@@ -85,23 +90,24 @@ func NewCovenantService(
 	}
 
 	svc := &covenantService{
-		network:             network,
-		pubkey:              pubkey,
-		vtxoTreeExpiry:      vtxoTreeExpiry,
-		roundInterval:       roundInterval,
-		unilateralExitDelay: unilateralExitDelay,
-		boardingExitDelay:   boardingExitDelay,
-		wallet:              walletSvc,
-		repoManager:         repoManager,
-		builder:             builder,
-		scanner:             scanner,
-		sweeper:             newSweeper(walletSvc, repoManager, builder, scheduler, notificationPrefix),
-		txRequests:          newTxRequestsQueue(),
-		forfeitTxs:          newForfeitTxsMap(builder),
-		eventsCh:            make(chan domain.RoundEvent),
-		transactionEventsCh: make(chan TransactionEvent),
-		currentRoundLock:    sync.Mutex{},
-		nostrDefaultRelays:  nostrDefaultRelays,
+		network:                  network,
+		pubkey:                   pubkey,
+		vtxoTreeExpiry:           vtxoTreeExpiry,
+		roundInterval:            roundInterval,
+		unilateralExitDelay:      unilateralExitDelay,
+		boardingExitDelay:        boardingExitDelay,
+		wallet:                   walletSvc,
+		repoManager:              repoManager,
+		builder:                  builder,
+		scanner:                  scanner,
+		sweeper:                  newSweeper(walletSvc, repoManager, builder, scheduler, notificationPrefix),
+		txRequests:               newTxRequestsQueue(),
+		forfeitTxs:               newForfeitTxsMap(builder),
+		eventsCh:                 make(chan domain.RoundEvent),
+		transactionEventsCh:      make(chan TransactionEvent),
+		currentRoundLock:         sync.Mutex{},
+		nostrDefaultRelays:       nostrDefaultRelays,
+		forfeitsBoardingSigsChan: make(chan struct{}, 1),
 	}
 
 	repoManager.RegisterEventsHandler(
@@ -377,19 +383,61 @@ func (s *covenantService) SubmitRedeemTx(context.Context, string) (string, strin
 }
 
 func (s *covenantService) SignVtxos(ctx context.Context, forfeitTxs []string) error {
-	return s.forfeitTxs.sign(forfeitTxs)
+	s.currentRoundLock.Lock()
+	defer s.currentRoundLock.Unlock()
+	currentRound := s.currentRound
+
+	if err := s.forfeitTxs.sign(forfeitTxs); err != nil {
+		return err
+	}
+
+	return s.checkForfeitsAndBoardingSigsSent(currentRound)
 }
 
 func (s *covenantService) SignRoundTx(ctx context.Context, signedRoundTx string) error {
 	s.currentRoundLock.Lock()
 	defer s.currentRoundLock.Unlock()
+	currentRound := s.currentRound
 
-	combined, err := s.builder.VerifyAndCombinePartialTx(s.currentRound.UnsignedTx, signedRoundTx)
+	combined, err := s.builder.VerifyAndCombinePartialTx(currentRound.UnsignedTx, signedRoundTx)
 	if err != nil {
 		return err
 	}
 
 	s.currentRound.UnsignedTx = combined
+
+	return s.checkForfeitsAndBoardingSigsSent(currentRound)
+}
+
+func (s *covenantService) checkForfeitsAndBoardingSigsSent(currentRound *domain.Round) error {
+	roundTx, err := psetv2.NewPsetFromBase64(currentRound.UnsignedTx)
+	if err != nil {
+		return fmt.Errorf("failed to parse round tx: %w", err)
+	}
+
+	numOfInputsSigned := 0
+	for _, v := range roundTx.Inputs {
+		if len(v.TapScriptSig) > 0 {
+			if len(v.TapScriptSig[0].Signature) > 0 {
+				numOfInputsSigned++
+			}
+		}
+	}
+
+	// Condition: all forfeit txs are signed and
+	// the number of signed boarding inputs matches
+	// numOfBoardingInputs we expect
+	s.numOfBoardingInputsMtx.RLock()
+	numOfBoardingInputs := s.numOfBoardingInputs
+	s.numOfBoardingInputsMtx.RUnlock()
+
+	if s.forfeitTxs.allSigned() && numOfBoardingInputs == numOfInputsSigned {
+		select {
+		case s.forfeitsBoardingSigsChan <- struct{}{}:
+		default:
+		}
+	}
+
 	return nil
 }
 
@@ -659,6 +707,9 @@ func (s *covenantService) startFinalization(roundEndTime time.Time) {
 		log.WithError(err).Warn("failed to register tx requests")
 		return
 	}
+	s.numOfBoardingInputsMtx.Lock()
+	s.numOfBoardingInputs = len(boardingInputs)
+	s.numOfBoardingInputsMtx.Unlock()
 
 	sweptRounds, err := s.repoManager.Rounds().GetSweptRoundsConnectorAddress(ctx)
 	if err != nil {
@@ -711,13 +762,11 @@ func (s *covenantService) finalizeRound(roundEndTime time.Time) {
 	}()
 
 	remainingTime := time.Until(roundEndTime)
-	// Wait for the remaining forfeit txs to be sent,
-	// but only wait until the round interval expires.
 	select {
-	case <-s.forfeitTxs.doneCh:
-		log.Debug("all forfeit txs have been sent")
+	case <-s.forfeitsBoardingSigsChan:
+		log.Debug("all forfeit txs and boarding inputs signatures have been sent")
 	case <-time.After(remainingTime):
-		log.Debug("timeout waiting for forfeit txs")
+		log.Debug("timeout waiting for forfeit txs and boarding inputs signatures")
 	}
 
 	forfeitTxs, err := s.forfeitTxs.pop()
