@@ -117,6 +117,27 @@ func (a *arkClient) Stop() error {
 	return nil
 }
 
+func (a *arkClient) ListVtxos(
+	ctx context.Context,
+) (spendableVtxos, spentVtxos []client.Vtxo, err error) {
+	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return
+	}
+
+	for _, addr := range offchainAddrs {
+		spendable, spent, err := a.client.ListVtxos(ctx, addr.Address)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		spendableVtxos = append(spendableVtxos, spendable...)
+		spentVtxos = append(spentVtxos, spent...)
+	}
+
+	return
+}
+
 func (a *arkClient) initWithWallet(
 	ctx context.Context, args InitWithWalletArgs,
 ) error {
@@ -296,25 +317,14 @@ func (a *arkClient) ping(
 	return ticker.Stop
 }
 
-func (a *arkClient) ListVtxos(
-	ctx context.Context,
-) (spendableVtxos, spentVtxos []client.Vtxo, err error) {
-	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
-	if err != nil {
-		return
+func (a *arkClient) safeCheck() error {
+	if a.wallet == nil {
+		return fmt.Errorf("wallet not initialized")
 	}
-
-	for _, addr := range offchainAddrs {
-		spendable, spent, err := a.client.ListVtxos(ctx, addr.Address)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		spendableVtxos = append(spendableVtxos, spendable...)
-		spentVtxos = append(spentVtxos, spent...)
+	if a.wallet.IsLocked() {
+		return fmt.Errorf("wallet is locked")
 	}
-
-	return
+	return nil
 }
 
 func getClient(

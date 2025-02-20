@@ -204,29 +204,6 @@ func ListVtxosWrapper() js.Func {
 	})
 }
 
-func SendOnChainWrapper() js.Func {
-	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) != 1 {
-			return nil, errors.New("invalid number of args")
-		}
-
-		receivers, err := parseReceivers(args[0])
-		if err != nil {
-			return nil, err
-		}
-
-		if receivers == nil || len(receivers) == 0 {
-			return nil, errors.New("no receivers specified")
-		}
-
-		txID, err := arkSdkClient.SendOnChain(context.Background(), receivers)
-		if err != nil {
-			return nil, err
-		}
-		return js.ValueOf(txID), nil
-	})
-}
-
 func SendOffChainWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
 		if len(args) != 2 && len(args) != 3 {
@@ -297,13 +274,7 @@ func SettleWrapper() js.Func {
 	})
 }
 
-func UnilateralRedeemWrapper() js.Func {
-	return JSPromise(func(args []js.Value) (interface{}, error) {
-		return nil, arkSdkClient.UnilateralRedeem(context.Background())
-	})
-}
-
-func CollaborativeRedeemWrapper() js.Func {
+func CollaborativeExitWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
 		if len(args) != 3 {
 			return nil, errors.New("invalid number of args")
@@ -312,8 +283,68 @@ func CollaborativeRedeemWrapper() js.Func {
 		amount := uint64(args[1].Int())
 		withExpiryCoinselect := args[2].Bool()
 
-		txID, err := arkSdkClient.CollaborativeRedeem(
+		txID, err := arkSdkClient.CollaborativeExit(
 			context.Background(), addr, amount, withExpiryCoinselect,
+		)
+		if err != nil {
+			return nil, err
+		}
+		return js.ValueOf(txID), nil
+	})
+}
+
+func StartUnilateralExitWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		return nil, arkSdkClient.StartUnilateralExit(context.Background())
+	})
+}
+
+func CompleteUnilateralExitWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if len(args) != 1 {
+			return nil, errors.New("invalid number of args")
+		}
+
+		to, err := parseAddress(args[0])
+		if err != nil {
+			return nil, err
+		}
+
+		txID, err := arkSdkClient.CompleteUnilateralExit(
+			context.Background(), to,
+		)
+		if err != nil {
+			return nil, err
+		}
+		return js.ValueOf(txID), nil
+	})
+}
+
+func OnboardAgainAllExpiredBoardingsWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		txID, err := arkSdkClient.OnboardAgainAllExpiredBoardings(
+			context.Background(),
+		)
+		if err != nil {
+			return nil, err
+		}
+		return js.ValueOf(txID), nil
+	})
+}
+
+func WithdrawFromAllExpiredBoardingsWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if len(args) != 1 {
+			return nil, errors.New("invalid number of args")
+		}
+
+		to, err := parseAddress(args[0])
+		if err != nil {
+			return nil, err
+		}
+
+		txID, err := arkSdkClient.WithdrawFromAllExpiredBoardings(
+			context.Background(), to,
 		)
 		if err != nil {
 			return nil, err
@@ -547,6 +578,19 @@ func JSPromise(fn promise) js.Func {
 		promiseConstructor := js.Global().Get("Promise")
 		return promiseConstructor.New(handler)
 	})
+}
+
+func parseAddress(addr js.Value) (string, error) {
+	if addr.IsNull() || addr.IsUndefined() {
+		return "", fmt.Errorf("address is null or undefined")
+	}
+	if addr.Type() != js.TypeString {
+		return "", fmt.Errorf("invalid address argument: expected string")
+	}
+	if addr.String() == "" {
+		return "", fmt.Errorf("missing address")
+	}
+	return addr.String(), nil
 }
 
 func parseReceivers(jsReceivers js.Value) ([]arksdk.Receiver, error) {
