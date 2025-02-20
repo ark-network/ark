@@ -17,6 +17,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const (
+	pingGapMinutes = float64(5)
+)
+
 type timedTxRequest struct {
 	domain.TxRequest
 	boardingInputs []ports.BoardingInput
@@ -118,9 +122,11 @@ func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingIn
 			continue
 		}
 		// Skip tx requests for which users didn't notify to be online in the last minute.
-		if p.pingTimestamp.IsZero() || time.Since(p.pingTimestamp).Minutes() > 1 {
-			log.Debugf("delete tx request %s because it didn't ping in the last minute", p.Id)
-			delete(m.requests, p.Id) // cleanup the request from the map
+		if p.pingTimestamp.IsZero() || time.Since(p.pingTimestamp).Minutes() > pingGapMinutes {
+			log.Debugf("delete tx request %s : we didn't receive a ping in the last %d minutes", p.Id, int(pingGapMinutes))
+			// cleanup the request from the map
+			// TODO move to dedicated function
+			delete(m.requests, p.Id)
 			continue
 		}
 		requestsByTime = append(requestsByTime, *p)
