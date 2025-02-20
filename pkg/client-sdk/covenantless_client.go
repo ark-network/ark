@@ -2621,6 +2621,26 @@ func (a *covenantlessArkClient) handleRoundTx(
 				Settled:   true,
 				CreatedAt: time.Now(),
 			})
+		} else {
+			vtxosToAddAmount := uint64(0)
+			for _, v := range vtxosToAdd {
+				vtxosToAddAmount += v.Amount
+			}
+			settledBoardingAmount := uint64(0)
+			for _, tx := range pendingBoardingTxs {
+				settledBoardingAmount += tx.Amount
+			}
+			if vtxosToAddAmount > 0 && vtxosToAddAmount < settledBoardingAmount {
+				txsToAdd = append(txsToAdd, types.Transaction{
+					TransactionKey: types.TransactionKey{
+						RoundTxid: roundTx.Txid,
+					},
+					Amount:    settledBoardingAmount - vtxosToAddAmount,
+					Type:      types.TxSent,
+					Settled:   true,
+					CreatedAt: time.Now(),
+				})
+			}
 		}
 	} else {
 		if len(txsToSettle) <= 0 {
@@ -2646,6 +2666,11 @@ func (a *covenantlessArkClient) handleRoundTx(
 
 		}
 	}
+
+	fmt.Println("TXS TO ADD", len(txsToAdd))
+	fmt.Println("TXS TO SETTLE", len(txsToSettle))
+	fmt.Println("VTXOS TO ADD", len(vtxosToAdd))
+	fmt.Println("VTXOS TO SPEND", len(vtxosToSpend))
 
 	if len(txsToAdd) > 0 {
 		count, err := a.store.TransactionStore().AddTransactions(ctx, txsToAdd)
