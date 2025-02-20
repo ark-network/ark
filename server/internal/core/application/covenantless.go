@@ -813,6 +813,7 @@ func (s *covenantlessService) checkForfeitsAndBoardingSigsSent(currentRound *dom
 		select {
 		case s.forfeitsBoardingSigsChan <- struct{}{}:
 		default:
+			time.Sleep(time.Millisecond)
 		}
 	}
 }

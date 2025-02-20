@@ -439,6 +439,7 @@ func (s *covenantService) checkForfeitsAndBoardingSigsSent(currentRound *domain.
 		select {
 		case s.forfeitsBoardingSigsChan <- struct{}{}:
 		default:
+			time.Sleep(time.Millisecond)
 		}
 	}
 }
