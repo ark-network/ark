@@ -566,16 +566,33 @@ func (a *covenantlessArkClient) Balance(
 	return response, nil
 }
 
-func (a *covenantlessArkClient) SendOnChain(
-	ctx context.Context, receivers []Receiver,
+func (a *covenantlessArkClient) OnboardAgainAllExpiredOnboarding(
+	ctx context.Context,
 ) (string, error) {
-	for _, receiver := range receivers {
-		if !receiver.IsOnchain() {
-			return "", fmt.Errorf("invalid receiver address '%s': must be onchain", receiver.To())
-		}
+	if err := a.safeCheck(); err != nil {
+		return "", err
 	}
 
-	return a.sendOnchain(ctx, receivers)
+	_, boardingAddr, err := a.wallet.NewAddress(ctx, false)
+	if err != nil {
+		return "", err
+	}
+
+	return a.sendExpiredBoardingUtxos(ctx, boardingAddr.Address)
+}
+
+func (a *covenantlessArkClient) WithdrawFromAllExpiredOnboarding(
+	ctx context.Context, to string,
+) (string, error) {
+	if err := a.safeCheck(); err != nil {
+		return "", err
+	}
+
+	if _, err := btcutil.DecodeAddress(to, nil); err != nil {
+		return "", fmt.Errorf("invalid receiver address '%s': must be onchain", to)
+	}
+
+	return a.sendExpiredBoardingUtxos(ctx, to)
 }
 
 func (a *covenantlessArkClient) SendOffChain(
@@ -772,9 +789,9 @@ func (a *covenantlessArkClient) RedeemNotes(ctx context.Context, notes []string,
 	return roundTxID, nil
 }
 
-func (a *covenantlessArkClient) UnilateralRedeem(ctx context.Context) error {
-	if a.wallet.IsLocked() {
-		return fmt.Errorf("wallet is locked")
+func (a *covenantlessArkClient) StartUnilateralExit(ctx context.Context) error {
+	if err := a.safeCheck(); err != nil {
+		return err
 	}
 
 	vtxos, err := a.getVtxos(ctx, nil)
@@ -831,7 +848,21 @@ func (a *covenantlessArkClient) UnilateralRedeem(ctx context.Context) error {
 	return nil
 }
 
-func (a *covenantlessArkClient) CollaborativeRedeem(
+func (a *covenantlessArkClient) CompleteUnilateralExit(
+	ctx context.Context, to string,
+) (string, error) {
+	if err := a.safeCheck(); err != nil {
+		return "", err
+	}
+
+	if _, err := btcutil.DecodeAddress(to, nil); err != nil {
+		return "", fmt.Errorf("invalid receiver address '%s': must be onchain", to)
+	}
+
+	return a.completeUnilateralExit(ctx, to)
+}
+
+func (a *covenantlessArkClient) CollaborativeExit(
 	ctx context.Context,
 	addr string, amount uint64, withExpiryCoinselect bool,
 	opts ...Option,
@@ -1094,11 +1125,32 @@ func (a *covenantlessArkClient) SetNostrNotificationRecipient(ctx context.Contex
 	return a.client.SetNostrRecipient(ctx, nostrProfile, vtxos)
 }
 
-func (a *covenantlessArkClient) sendOnchain(
-	ctx context.Context, receivers []Receiver,
+func (a *covenantlessArkClient) sendExpiredBoardingUtxos(
+	ctx context.Context, to string,
 ) (string, error) {
-	if a.wallet.IsLocked() {
-		return "", fmt.Errorf("wallet is locked")
+	netParams := utils.ToBitcoinNetwork(a.Network)
+	rcvAddr, err := btcutil.DecodeAddress(to, &netParams)
+	if err != nil {
+		return "", err
+	}
+
+	pkscript, err := txscript.PayToAddrScript(rcvAddr)
+	if err != nil {
+		return "", err
+	}
+
+	utxos, err := a.getExpiredBoardingUtxos(ctx, nil)
+	if err != nil {
+		return "", err
+	}
+
+	targetAmount := uint64(0)
+	for _, u := range utxos {
+		targetAmount += u.Amount
+	}
+
+	if targetAmount == 0 {
+		return "", fmt.Errorf("no expired boarding funds available")
 	}
 
 	ptx, err := psbt.New(nil, nil, 2, 0, nil)
@@ -1111,60 +1163,96 @@ func (a *covenantlessArkClient) sendOnchain(
 		return "", err
 	}
 
-	netParams := utils.ToBitcoinNetwork(a.Network)
-
-	targetAmount := uint64(0)
-	for _, receiver := range receivers {
-		targetAmount += receiver.Amount()
-		if receiver.Amount() < a.Dust {
-			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), a.Dust)
-		}
-
-		rcvAddr, err := btcutil.DecodeAddress(receiver.To(), &netParams)
-		if err != nil {
-			return "", err
-		}
-
-		pkscript, err := txscript.PayToAddrScript(rcvAddr)
-		if err != nil {
-			return "", err
-		}
-
-		updater.Upsbt.UnsignedTx.AddTxOut(&wire.TxOut{
-			Value:    int64(receiver.Amount()),
-			PkScript: pkscript,
-		})
-		updater.Upsbt.Outputs = append(updater.Upsbt.Outputs, psbt.POutput{})
-	}
-
-	utxos, change, err := a.coinSelectOnchain(
-		ctx, targetAmount, nil,
-	)
-	if err != nil {
-		return "", err
-	}
+	updater.Upsbt.UnsignedTx.AddTxOut(&wire.TxOut{
+		Value:    int64(targetAmount),
+		PkScript: pkscript,
+	})
+	updater.Upsbt.Outputs = append(updater.Upsbt.Outputs, psbt.POutput{})
 
 	if err := a.addInputs(ctx, updater, utxos); err != nil {
 		return "", err
 	}
 
-	if change > 0 {
-		_, changeAddr, err := a.wallet.NewAddress(ctx, true)
-		if err != nil {
+	size := updater.Upsbt.UnsignedTx.SerializeSize()
+	feeRate, err := a.explorer.GetFeeRate()
+	if err != nil {
+		return "", err
+	}
+	feeAmount := uint64(math.Ceil(float64(size)*feeRate) + 50)
+
+	if targetAmount-feeAmount <= a.Dust {
+		return "", fmt.Errorf("not enough funds to cover network fees")
+	}
+
+	updater.Upsbt.UnsignedTx.TxOut[0].Value -= int64(feeAmount)
+
+	unsignedTx, _ := ptx.B64Encode()
+
+	signedTx, err := a.wallet.SignTransaction(ctx, a.explorer, unsignedTx)
+	if err != nil {
+		return "", err
+	}
+
+	ptx, err = psbt.NewFromRawBytes(strings.NewReader(signedTx), true)
+	if err != nil {
+		return "", err
+	}
+
+	for i := range ptx.Inputs {
+		if err := psbt.Finalize(ptx, i); err != nil {
 			return "", err
 		}
-		addr, _ := btcutil.DecodeAddress(changeAddr.Address, &netParams)
+	}
 
-		pkscript, err := txscript.PayToAddrScript(addr)
-		if err != nil {
-			return "", err
-		}
+	return ptx.B64Encode()
+}
 
-		updater.Upsbt.UnsignedTx.AddTxOut(&wire.TxOut{
-			Value:    int64(change),
-			PkScript: pkscript,
-		})
-		updater.Upsbt.Outputs = append(updater.Upsbt.Outputs, psbt.POutput{})
+func (a *covenantlessArkClient) completeUnilateralExit(
+	ctx context.Context, to string,
+) (string, error) {
+	netParams := utils.ToBitcoinNetwork(a.Network)
+	rcvAddr, err := btcutil.DecodeAddress(to, &netParams)
+	if err != nil {
+		return "", err
+	}
+
+	pkscript, err := txscript.PayToAddrScript(rcvAddr)
+	if err != nil {
+		return "", err
+	}
+
+	utxos, err := a.getMatureUtxos(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	targetAmount := uint64(0)
+	for _, u := range utxos {
+		targetAmount += u.Amount
+	}
+
+	if targetAmount == 0 {
+		return "", fmt.Errorf("no mature funds available")
+	}
+
+	ptx, err := psbt.New(nil, nil, 2, 0, nil)
+	if err != nil {
+		return "", err
+	}
+
+	updater, err := psbt.NewUpdater(ptx)
+	if err != nil {
+		return "", err
+	}
+
+	updater.Upsbt.UnsignedTx.AddTxOut(&wire.TxOut{
+		Value:    int64(targetAmount),
+		PkScript: pkscript,
+	})
+	updater.Upsbt.Outputs = append(updater.Upsbt.Outputs, psbt.POutput{})
+
+	if err := a.addInputs(ctx, updater, utxos); err != nil {
+		return "", err
 	}
 
 	size := updater.Upsbt.UnsignedTx.SerializeSize()
@@ -1175,45 +1263,11 @@ func (a *covenantlessArkClient) sendOnchain(
 
 	feeAmount := uint64(math.Ceil(float64(size)*feeRate) + 50)
 
-	if change > feeAmount {
-		updater.Upsbt.UnsignedTx.TxOut[len(updater.Upsbt.Outputs)-1].Value = int64(change - feeAmount)
-	} else if change == feeAmount {
-		updater.Upsbt.UnsignedTx.TxOut = updater.Upsbt.UnsignedTx.TxOut[:len(updater.Upsbt.UnsignedTx.TxOut)-1]
-	} else { // change < feeAmount
-		if change > 0 {
-			updater.Upsbt.UnsignedTx.TxOut = updater.Upsbt.UnsignedTx.TxOut[:len(updater.Upsbt.UnsignedTx.TxOut)-1]
-		}
-		// reselect the difference
-		selected, newChange, err := a.coinSelectOnchain(
-			ctx, feeAmount-change, utxos,
-		)
-		if err != nil {
-			return "", err
-		}
-
-		if err := a.addInputs(ctx, updater, selected); err != nil {
-			return "", err
-		}
-
-		if newChange > 0 {
-			_, changeAddr, err := a.wallet.NewAddress(ctx, true)
-			if err != nil {
-				return "", err
-			}
-			addr, _ := btcutil.DecodeAddress(changeAddr.Address, &netParams)
-
-			pkscript, err := txscript.PayToAddrScript(addr)
-			if err != nil {
-				return "", err
-			}
-
-			updater.Upsbt.UnsignedTx.AddTxOut(&wire.TxOut{
-				Value:    int64(newChange),
-				PkScript: pkscript,
-			})
-			updater.Upsbt.Outputs = append(updater.Upsbt.Outputs, psbt.POutput{})
-		}
+	if targetAmount-feeAmount <= a.Dust {
+		return "", fmt.Errorf("not enough funds to cover network fees")
 	}
+
+	updater.Upsbt.UnsignedTx.TxOut[0].Value -= int64(feeAmount)
 
 	unsignedTx, _ := ptx.B64Encode()
 
@@ -2173,99 +2227,32 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 	return signedForfeits, nil
 }
 
-func (a *covenantlessArkClient) coinSelectOnchain(
-	ctx context.Context, targetAmount uint64, exclude []types.Utxo,
-) ([]types.Utxo, uint64, error) {
-	_, boardingAddrs, redemptionAddrs, err := a.wallet.GetAddresses(ctx)
+func (a *covenantlessArkClient) getMatureUtxos(
+	ctx context.Context,
+) ([]types.Utxo, error) {
+	_, _, redemptionAddrs, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	now := time.Now()
 
-	fetchedUtxos := make([]types.Utxo, 0)
-	for _, addr := range boardingAddrs {
-		boardingScript, err := bitcointree.ParseVtxoScript(addr.Tapscripts)
-		if err != nil {
-			return nil, 0, err
-		}
-
-		boardingTimeout, err := boardingScript.SmallestExitDelay()
-		if err != nil {
-			return nil, 0, err
-		}
-
-		utxos, err := a.explorer.GetUtxos(addr.Address)
-		if err != nil {
-			return nil, 0, err
-		}
-
-		for _, utxo := range utxos {
-			u := utxo.ToUtxo(*boardingTimeout, addr.Tapscripts)
-			if u.SpendableAt.Before(now) {
-				fetchedUtxos = append(fetchedUtxos, u)
-			}
-		}
-	}
-
-	selected := make([]types.Utxo, 0)
-	selectedAmount := uint64(0)
-	for _, utxo := range fetchedUtxos {
-		if selectedAmount >= targetAmount {
-			break
-		}
-
-		for _, excluded := range exclude {
-			if utxo.Txid == excluded.Txid && utxo.VOut == excluded.VOut {
-				continue
-			}
-		}
-
-		selected = append(selected, utxo)
-		selectedAmount += utxo.Amount
-	}
-
-	if selectedAmount >= targetAmount {
-		return selected, selectedAmount - targetAmount, nil
-	}
-
-	fetchedUtxos = make([]types.Utxo, 0)
+	utxos := make([]types.Utxo, 0)
 	for _, addr := range redemptionAddrs {
-		utxos, err := a.explorer.GetUtxos(addr.Address)
+		fetchedUtxos, err := a.explorer.GetUtxos(addr.Address)
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 
-		for _, utxo := range utxos {
+		for _, utxo := range fetchedUtxos {
 			u := utxo.ToUtxo(a.UnilateralExitDelay, addr.Tapscripts)
 			if u.SpendableAt.Before(now) {
-				fetchedUtxos = append(fetchedUtxos, u)
+				utxos = append(utxos, u)
 			}
 		}
 	}
 
-	for _, utxo := range fetchedUtxos {
-		if selectedAmount >= targetAmount {
-			break
-		}
-
-		for _, excluded := range exclude {
-			if utxo.Txid == excluded.Txid && utxo.VOut == excluded.VOut {
-				continue
-			}
-		}
-
-		selected = append(selected, utxo)
-		selectedAmount += utxo.Amount
-	}
-
-	if selectedAmount < targetAmount {
-		return nil, 0, fmt.Errorf(
-			"not enough funds to cover amount %d", targetAmount,
-		)
-	}
-
-	return selected, selectedAmount - targetAmount, nil
+	return utxos, nil
 }
 
 func (a *covenantlessArkClient) getRedeemBranches(
@@ -2385,7 +2372,6 @@ func (a *covenantlessArkClient) getClaimableBoardingUtxos(ctx context.Context, o
 	}
 
 	claimable := make([]types.Utxo, 0)
-
 	for _, addr := range boardingAddrs {
 		boardingScript, err := bitcointree.ParseVtxoScript(addr.Tapscripts)
 		if err != nil {
@@ -2433,6 +2419,60 @@ func (a *covenantlessArkClient) getClaimableBoardingUtxos(ctx context.Context, o
 	}
 
 	return claimable, nil
+}
+
+func (a *covenantlessArkClient) getExpiredBoardingUtxos(ctx context.Context, opts *CoinSelectOptions) ([]types.Utxo, error) {
+	_, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	expired := make([]types.Utxo, 0)
+	for _, addr := range boardingAddrs {
+		boardingScript, err := bitcointree.ParseVtxoScript(addr.Tapscripts)
+		if err != nil {
+			return nil, err
+		}
+
+		boardingTimeout, err := boardingScript.SmallestExitDelay()
+		if err != nil {
+			return nil, err
+		}
+
+		boardingUtxos, err := a.explorer.GetUtxos(addr.Address)
+		if err != nil {
+			return nil, err
+		}
+
+		now := time.Now()
+
+		for _, utxo := range boardingUtxos {
+			if opts != nil && len(opts.OutpointsFilter) > 0 {
+				utxoOutpoint := client.Outpoint{
+					Txid: utxo.Txid,
+					VOut: utxo.Vout,
+				}
+				found := false
+				for _, outpoint := range opts.OutpointsFilter {
+					if outpoint.Equals(utxoOutpoint) {
+						found = true
+						break
+					}
+				}
+
+				if !found {
+					continue
+				}
+			}
+
+			u := utxo.ToUtxo(*boardingTimeout, addr.Tapscripts)
+			if u.SpendableAt.Before(now) || u.SpendableAt.Equal(now) {
+				expired = append(expired, u)
+			}
+		}
+	}
+
+	return expired, nil
 }
 
 func (a *covenantlessArkClient) getVtxos(ctx context.Context, opts *CoinSelectOptions) ([]client.Vtxo, error) {

@@ -406,16 +406,16 @@ func (a *covenantArkClient) Balance(
 	return response, nil
 }
 
-func (a *covenantArkClient) SendOnChain(
-	ctx context.Context, receivers []Receiver,
+func (a *covenantArkClient) OnboardAgainAllExpiredOnboarding(
+	ctx context.Context,
 ) (string, error) {
-	for _, receiver := range receivers {
-		if !receiver.IsOnchain() {
-			return "", fmt.Errorf("invalid receiver address '%s': must be onchain", receiver.To())
-		}
-	}
+	return "", fmt.Errorf("not implemented")
+}
 
-	return a.sendOnchain(ctx, receivers)
+func (a *covenantArkClient) WithdrawFromAllExpiredOnboarding(
+	ctx context.Context, to string,
+) (string, error) {
+	return "", fmt.Errorf("not implemented")
 }
 
 func (a *covenantArkClient) SendOffChain(
@@ -432,7 +432,7 @@ func (a *covenantArkClient) SendOffChain(
 	return a.sendOffchain(ctx, withExpiryCoinselect, receivers)
 }
 
-func (a *covenantArkClient) UnilateralRedeem(ctx context.Context) error {
+func (a *covenantArkClient) StartUnilateralExit(ctx context.Context) error {
 	if a.wallet.IsLocked() {
 		return fmt.Errorf("wallet is locked")
 	}
@@ -491,7 +491,21 @@ func (a *covenantArkClient) UnilateralRedeem(ctx context.Context) error {
 	return nil
 }
 
-func (a *covenantArkClient) CollaborativeRedeem(
+func (a *covenantArkClient) CompleteUnilateralExit(
+	ctx context.Context, to string,
+) (string, error) {
+	if err := a.safeCheck(); err != nil {
+		return "", err
+	}
+
+	if _, err := address.ToOutputScript(to); err != nil {
+		return "", fmt.Errorf("invalid receiver address '%s': must be onchain", to)
+	}
+
+	return a.completeUnilateralExit(ctx, to)
+}
+
+func (a *covenantArkClient) CollaborativeExit(
 	ctx context.Context,
 	addr string, amount uint64, withExpiryCoinselect bool,
 	opts ...Option,
@@ -724,11 +738,40 @@ func (a *covenantArkClient) getClaimableBoardingUtxos(ctx context.Context, opts 
 	return claimable, nil
 }
 
-func (a *covenantArkClient) sendOnchain(
-	ctx context.Context, receivers []Receiver,
+func (a *covenantArkClient) completeUnilateralExit(
+	ctx context.Context, to string,
 ) (string, error) {
-	if a.wallet.IsLocked() {
-		return "", fmt.Errorf("wallet is locked")
+	net := utils.ToElementsNetwork(a.Network)
+	script, err := address.ToOutputScript(to)
+	if err != nil {
+		return "", err
+	}
+
+	_, _, redemptionAddrs, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	now := time.Now()
+	spendableUtxos := make([]types.Utxo, 0)
+	targetAmount := uint64(0)
+	for _, addr := range redemptionAddrs {
+		utxos, err := a.explorer.GetUtxos(addr.Address)
+		if err != nil {
+			return "", err
+		}
+
+		for _, utxo := range utxos {
+			u := utxo.ToUtxo(a.UnilateralExitDelay, addr.Tapscripts)
+			if u.SpendableAt.Before(now) || u.SpendableAt.Equal(now) {
+				spendableUtxos = append(spendableUtxos, u)
+				targetAmount += u.Amount
+			}
+		}
+	}
+
+	if targetAmount == 0 {
+		return "", fmt.Errorf("no mature funds available")
 	}
 
 	pset, err := psetv2.New(nil, nil, nil)
@@ -740,62 +783,18 @@ func (a *covenantArkClient) sendOnchain(
 		return "", err
 	}
 
-	net := utils.ToElementsNetwork(a.Network)
-
-	targetAmount := uint64(0)
-	for _, receiver := range receivers {
-		if receiver.Amount() < a.Dust {
-			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), a.Dust)
-		}
-		targetAmount += receiver.Amount()
-
-		script, err := address.ToOutputScript(receiver.To())
-		if err != nil {
-			return "", err
-		}
-
-		if err := updater.AddOutputs([]psetv2.OutputArgs{
-			{
-				Asset:  net.AssetID,
-				Amount: receiver.Amount(),
-				Script: script,
-			},
-		}); err != nil {
-			return "", err
-		}
-	}
-
-	utxos, change, err := a.coinSelectOnchain(
-		ctx, targetAmount, nil,
-	)
-	if err != nil {
+	if err := updater.AddOutputs([]psetv2.OutputArgs{
+		{
+			Asset:  net.AssetID,
+			Amount: targetAmount,
+			Script: script,
+		},
+	}); err != nil {
 		return "", err
 	}
 
-	if err := a.addInputs(ctx, updater, utxos); err != nil {
+	if err := a.addInputs(ctx, updater, spendableUtxos); err != nil {
 		return "", err
-	}
-
-	if change > 0 {
-		_, changeAddr, err := a.wallet.NewAddress(ctx, true)
-		if err != nil {
-			return "", err
-		}
-
-		changeScript, err := address.ToOutputScript(changeAddr.Address)
-		if err != nil {
-			return "", err
-		}
-
-		if err := updater.AddOutputs([]psetv2.OutputArgs{
-			{
-				Asset:  net.AssetID,
-				Amount: change,
-				Script: changeScript,
-			},
-		}); err != nil {
-			return "", err
-		}
 	}
 
 	utx, err := pset.UnsignedTx()
@@ -806,47 +805,8 @@ func (a *covenantArkClient) sendOnchain(
 	vBytes := utx.VirtualSize()
 	feeAmount := uint64(math.Ceil(float64(vBytes) * 0.5))
 
-	if change > feeAmount {
-		updater.Pset.Outputs[len(updater.Pset.Outputs)-1].Value = change - feeAmount
-	} else if change == feeAmount {
-		updater.Pset.Outputs = updater.Pset.Outputs[:len(updater.Pset.Outputs)-1]
-	} else { // change < feeAmount
-		if change > 0 {
-			updater.Pset.Outputs = updater.Pset.Outputs[:len(updater.Pset.Outputs)-1]
-		}
-		// reselect the difference
-		selected, newChange, err := a.coinSelectOnchain(
-			ctx, feeAmount-change, utxos,
-		)
-		if err != nil {
-			return "", err
-		}
-
-		if err := a.addInputs(ctx, updater, selected); err != nil {
-			return "", err
-		}
-
-		if newChange > 0 {
-			_, changeAddr, err := a.wallet.NewAddress(ctx, true)
-			if err != nil {
-				return "", err
-			}
-
-			changeScript, err := address.ToOutputScript(changeAddr.Address)
-			if err != nil {
-				return "", err
-			}
-
-			if err := updater.AddOutputs([]psetv2.OutputArgs{
-				{
-					Asset:  net.AssetID,
-					Amount: newChange,
-					Script: changeScript,
-				},
-			}); err != nil {
-				return "", err
-			}
-		}
+	if targetAmount-feeAmount <= a.Dust {
+		return "", fmt.Errorf("not enough mature funds to cover network fees")
 	}
 
 	if err := updater.AddOutputs([]psetv2.OutputArgs{
@@ -857,6 +817,7 @@ func (a *covenantArkClient) sendOnchain(
 	}); err != nil {
 		return "", err
 	}
+	pset.Outputs[0].Value -= feeAmount
 
 	tx, err := pset.ToBase64()
 	if err != nil {
@@ -1564,101 +1525,6 @@ func (a *covenantArkClient) createAndSignForfeits(
 	}
 
 	return signedForfeits, nil
-}
-
-func (a *covenantArkClient) coinSelectOnchain(
-	ctx context.Context, targetAmount uint64, exclude []types.Utxo,
-) ([]types.Utxo, uint64, error) {
-	_, boardingAddrs, redemptionAddrs, err := a.wallet.GetAddresses(ctx)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	now := time.Now()
-
-	fetchedUtxos := make([]types.Utxo, 0)
-	for _, addr := range boardingAddrs {
-		boardingScript, err := tree.ParseVtxoScript(addr.Tapscripts)
-		if err != nil {
-			return nil, 0, err
-		}
-
-		boardingTimeout, err := boardingScript.SmallestExitDelay()
-		if err != nil {
-			return nil, 0, err
-		}
-
-		utxos, err := a.explorer.GetUtxos(addr.Address)
-		if err != nil {
-			return nil, 0, err
-		}
-
-		for _, utxo := range utxos {
-			u := utxo.ToUtxo(*boardingTimeout, addr.Tapscripts)
-			if u.SpendableAt.Before(now) {
-				fetchedUtxos = append(fetchedUtxos, u)
-			}
-		}
-	}
-
-	selected := make([]types.Utxo, 0)
-	selectedAmount := uint64(0)
-	for _, utxo := range fetchedUtxos {
-		if selectedAmount >= targetAmount {
-			break
-		}
-
-		for _, excluded := range exclude {
-			if utxo.Txid == excluded.Txid && utxo.VOut == excluded.VOut {
-				continue
-			}
-		}
-
-		selected = append(selected, utxo)
-		selectedAmount += utxo.Amount
-	}
-
-	if selectedAmount >= targetAmount {
-		return selected, selectedAmount - targetAmount, nil
-	}
-
-	fetchedUtxos = make([]types.Utxo, 0)
-	for _, addr := range redemptionAddrs {
-		utxos, err := a.explorer.GetUtxos(addr.Address)
-		if err != nil {
-			return nil, 0, err
-		}
-
-		for _, utxo := range utxos {
-			u := utxo.ToUtxo(a.UnilateralExitDelay, addr.Tapscripts)
-			if u.SpendableAt.Before(now) {
-				fetchedUtxos = append(fetchedUtxos, u)
-			}
-		}
-	}
-
-	for _, utxo := range fetchedUtxos {
-		if selectedAmount >= targetAmount {
-			break
-		}
-
-		for _, excluded := range exclude {
-			if utxo.Txid == excluded.Txid && utxo.VOut == excluded.VOut {
-				continue
-			}
-		}
-
-		selected = append(selected, utxo)
-		selectedAmount += utxo.Amount
-	}
-
-	if selectedAmount < targetAmount {
-		return nil, 0, fmt.Errorf(
-			"not enough funds to cover amount %d", targetAmount,
-		)
-	}
-
-	return selected, selectedAmount - targetAmount, nil
 }
 
 func (a *covenantArkClient) getRedeemBranches(
