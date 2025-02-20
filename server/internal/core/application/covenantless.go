@@ -758,15 +758,17 @@ func (s *covenantlessService) UpdateTxRequestStatus(_ context.Context, id string
 }
 
 func (s *covenantlessService) SignVtxos(ctx context.Context, forfeitTxs []string) error {
-	s.currentRoundLock.Lock()
-	defer s.currentRoundLock.Unlock()
-	currentRound := s.currentRound
-
 	if err := s.forfeitTxs.sign(forfeitTxs); err != nil {
 		return err
 	}
 
-	return s.checkForfeitsAndBoardingSigsSent(currentRound)
+	go func() {
+		s.currentRoundLock.Lock()
+		s.checkForfeitsAndBoardingSigsSent(s.currentRound)
+		s.currentRoundLock.Unlock()
+	}()
+
+	return nil
 }
 
 func (s *covenantlessService) SignRoundTx(ctx context.Context, signedRoundTx string) error {
@@ -781,15 +783,17 @@ func (s *covenantlessService) SignRoundTx(ctx context.Context, signedRoundTx str
 
 	s.currentRound.UnsignedTx = combined
 
-	return s.checkForfeitsAndBoardingSigsSent(currentRound)
+	go func() {
+		s.currentRoundLock.Lock()
+		s.checkForfeitsAndBoardingSigsSent(s.currentRound)
+		s.currentRoundLock.Unlock()
+	}()
+
+	return nil
 }
 
-func (s *covenantlessService) checkForfeitsAndBoardingSigsSent(currentRound *domain.Round) error {
-	roundTx, err := psbt.NewFromRawBytes(strings.NewReader(currentRound.UnsignedTx), true)
-	if err != nil {
-		return fmt.Errorf("failed to parse round tx: %w", err)
-	}
-
+func (s *covenantlessService) checkForfeitsAndBoardingSigsSent(currentRound *domain.Round) {
+	roundTx, _ := psbt.NewFromRawBytes(strings.NewReader(currentRound.UnsignedTx), true)
 	numOfInputsSigned := 0
 	for _, v := range roundTx.Inputs {
 		if len(v.TaprootScriptSpendSig) > 0 {
@@ -811,8 +815,6 @@ func (s *covenantlessService) checkForfeitsAndBoardingSigsSent(currentRound *dom
 		default:
 		}
 	}
-
-	return nil
 }
 
 func (s *covenantlessService) ListVtxos(ctx context.Context, address string) ([]domain.Vtxo, []domain.Vtxo, error) {

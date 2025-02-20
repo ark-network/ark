@@ -383,15 +383,17 @@ func (s *covenantService) SubmitRedeemTx(context.Context, string) (string, strin
 }
 
 func (s *covenantService) SignVtxos(ctx context.Context, forfeitTxs []string) error {
-	s.currentRoundLock.Lock()
-	defer s.currentRoundLock.Unlock()
-	currentRound := s.currentRound
-
 	if err := s.forfeitTxs.sign(forfeitTxs); err != nil {
 		return err
 	}
 
-	return s.checkForfeitsAndBoardingSigsSent(currentRound)
+	go func() {
+		s.currentRoundLock.Lock()
+		s.checkForfeitsAndBoardingSigsSent(s.currentRound)
+		s.currentRoundLock.Unlock()
+	}()
+
+	return nil
 }
 
 func (s *covenantService) SignRoundTx(ctx context.Context, signedRoundTx string) error {
@@ -401,20 +403,22 @@ func (s *covenantService) SignRoundTx(ctx context.Context, signedRoundTx string)
 
 	combined, err := s.builder.VerifyAndCombinePartialTx(currentRound.UnsignedTx, signedRoundTx)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to verify and combine partial tx: %s", err)
 	}
 
 	s.currentRound.UnsignedTx = combined
 
-	return s.checkForfeitsAndBoardingSigsSent(currentRound)
+	go func() {
+		s.currentRoundLock.Lock()
+		s.checkForfeitsAndBoardingSigsSent(s.currentRound)
+		s.currentRoundLock.Unlock()
+	}()
+
+	return nil
 }
 
-func (s *covenantService) checkForfeitsAndBoardingSigsSent(currentRound *domain.Round) error {
-	roundTx, err := psetv2.NewPsetFromBase64(currentRound.UnsignedTx)
-	if err != nil {
-		return fmt.Errorf("failed to parse round tx: %w", err)
-	}
-
+func (s *covenantService) checkForfeitsAndBoardingSigsSent(currentRound *domain.Round) {
+	roundTx, _ := psetv2.NewPsetFromBase64(currentRound.UnsignedTx)
 	numOfInputsSigned := 0
 	for _, v := range roundTx.Inputs {
 		if len(v.TapScriptSig) > 0 {
@@ -437,8 +441,6 @@ func (s *covenantService) checkForfeitsAndBoardingSigsSent(currentRound *domain.
 		default:
 		}
 	}
-
-	return nil
 }
 
 func (s *covenantService) ListVtxos(ctx context.Context, address string) ([]domain.Vtxo, []domain.Vtxo, error) {
