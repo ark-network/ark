@@ -60,6 +60,7 @@ type TransportClient interface {
 }
 
 type Info struct {
+	Version                    string
 	PubKey                     string
 	VtxoTreeExpiry             int64
 	UnilateralExitDelay        int64

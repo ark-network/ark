@@ -48,6 +48,7 @@ const (
 )
 
 type service struct {
+	version      string
 	config       Config
 	appConfig    *config.Config
 	server       *http.Server
@@ -59,7 +60,7 @@ type service struct {
 }
 
 func NewService(
-	svcConfig Config, appConfig *config.Config,
+	version string, svcConfig Config, appConfig *config.Config,
 ) (interfaces.Service, error) {
 	if err := svcConfig.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid service config: %s", err)
@@ -104,7 +105,7 @@ func NewService(
 
 	stopCh := make(chan struct{}, 1)
 
-	return &service{svcConfig, appConfig, nil, nil, macaroonSvc, nil, stopCh}, nil
+	return &service{version, svcConfig, appConfig, nil, nil, macaroonSvc, nil, stopCh}, nil
 }
 
 func (s *service) Start() error {
@@ -207,7 +208,7 @@ func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 			return err
 		}
 		appSvc = svc
-		appHandler := handlers.NewHandler(appSvc, s.stopCh)
+		appHandler := handlers.NewHandler(s.version, appSvc, s.stopCh)
 		arkv1.RegisterArkServiceServer(grpcServer, appHandler)
 		arkv1.RegisterExplorerServiceServer(grpcServer, appHandler)
 	}

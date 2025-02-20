@@ -93,6 +93,7 @@ func (a *restClient) GetInfo(
 		Dust:                       uint64(dust),
 		BoardingDescriptorTemplate: resp.Payload.BoardingDescriptorTemplate,
 		ForfeitAddress:             resp.Payload.ForfeitAddress,
+		Version:                    resp.Payload.Version,
 	}, nil
 }
 

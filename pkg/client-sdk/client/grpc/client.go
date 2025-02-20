@@ -73,6 +73,7 @@ func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
 		Dust:                       uint64(resp.GetDust()),
 		BoardingDescriptorTemplate: resp.GetBoardingDescriptorTemplate(),
 		ForfeitAddress:             resp.GetForfeitAddress(),
+		Version:                    resp.GetVersion(),
 	}, nil
 }
 

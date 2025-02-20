@@ -25,6 +25,8 @@ type service interface {
 }
 
 type handler struct {
+	version string
+
 	svc application.Service
 
 	eventsListenerHandler       *listenerHanlder[*arkv1.GetEventStreamResponse]
@@ -33,8 +35,9 @@ type handler struct {
 	stopCh <-chan struct{}
 }
 
-func NewHandler(service application.Service, stopCh <-chan struct{}) service {
+func NewHandler(version string, service application.Service, stopCh <-chan struct{}) service {
 	h := &handler{
+		version:                     version,
 		svc:                         service,
 		eventsListenerHandler:       newListenerHandler[*arkv1.GetEventStreamResponse](),
 		transactionsListenerHandler: newListenerHandler[*arkv1.GetTransactionsStreamResponse](),
@@ -80,6 +83,7 @@ func (h *handler) GetInfo(
 			Period:        int64(info.NextMarketHour.Period),
 			RoundInterval: int64(info.NextMarketHour.RoundInterval),
 		},
+		Version: h.version,
 	}, nil
 }
 

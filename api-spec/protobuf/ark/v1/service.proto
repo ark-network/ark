@@ -103,6 +103,7 @@ message GetInfoResponse {
   repeated string vtxo_descriptor_templates = 8;
   string forfeit_address = 9;
   MarketHour market_hour = 10;
+  string version = 11;
 }
 
 message GetBoardingAddressRequest {

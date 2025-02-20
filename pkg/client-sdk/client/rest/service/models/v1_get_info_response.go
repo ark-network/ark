@@ -42,6 +42,9 @@ type V1GetInfoResponse struct {
 	// unilateral exit delay
 	UnilateralExitDelay string `json:"unilateralExitDelay,omitempty"`
 
+	// version
+	Version string `json:"version,omitempty"`
+
 	// vtxo descriptor templates
 	VtxoDescriptorTemplates []string `json:"vtxoDescriptorTemplates"`
 
