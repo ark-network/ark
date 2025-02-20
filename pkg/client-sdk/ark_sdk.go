@@ -29,8 +29,8 @@ type ArkClient interface {
 	) (string, error)
 	StartUnilateralExit(ctx context.Context) error
 	CompleteUnilateralExit(ctx context.Context, to string) (string, error)
-	OnboardAgainAllExpiredOnboarding(ctx context.Context) (string, error)
-	WithdrawFromAllExpiredOnboarding(ctx context.Context, to string) (string, error)
+	OnboardAgainAllExpiredBoardings(ctx context.Context) (string, error)
+	WithdrawFromAllExpiredBoardings(ctx context.Context, to string) (string, error)
 	ListVtxos(ctx context.Context) (spendable, spent []client.Vtxo, err error)
 	Dump(ctx context.Context) (seed string, err error)
 	GetTransactionHistory(ctx context.Context) ([]types.Transaction, error)

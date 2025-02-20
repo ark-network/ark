@@ -406,13 +406,13 @@ func (a *covenantArkClient) Balance(
 	return response, nil
 }
 
-func (a *covenantArkClient) OnboardAgainAllExpiredOnboarding(
+func (a *covenantArkClient) OnboardAgainAllExpiredBoardings(
 	ctx context.Context,
 ) (string, error) {
 	return "", fmt.Errorf("not implemented")
 }
 
-func (a *covenantArkClient) WithdrawFromAllExpiredOnboarding(
+func (a *covenantArkClient) WithdrawFromAllExpiredBoardings(
 	ctx context.Context, to string,
 ) (string, error) {
 	return "", fmt.Errorf("not implemented")

@@ -320,9 +320,9 @@ func CompleteUnilateralExitWrapper() js.Func {
 	})
 }
 
-func OnboardAgainAllExpiredOnboardingWrapper() js.Func {
+func OnboardAgainAllExpiredBoardingsWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		txID, err := arkSdkClient.OnboardAgainAllExpiredOnboarding(
+		txID, err := arkSdkClient.OnboardAgainAllExpiredBoardings(
 			context.Background(),
 		)
 		if err != nil {
@@ -332,7 +332,7 @@ func OnboardAgainAllExpiredOnboardingWrapper() js.Func {
 	})
 }
 
-func WithdrawFromAllExpiredOnboardingWrapper() js.Func {
+func WithdrawFromAllExpiredBoardingsWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
 		if len(args) != 1 {
 			return nil, errors.New("invalid number of args")
@@ -343,7 +343,7 @@ func WithdrawFromAllExpiredOnboardingWrapper() js.Func {
 			return nil, err
 		}
 
-		txID, err := arkSdkClient.WithdrawFromAllExpiredOnboarding(
+		txID, err := arkSdkClient.WithdrawFromAllExpiredBoardings(
 			context.Background(), to,
 		)
 		if err != nil {

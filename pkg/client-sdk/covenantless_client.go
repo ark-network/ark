@@ -566,7 +566,7 @@ func (a *covenantlessArkClient) Balance(
 	return response, nil
 }
 
-func (a *covenantlessArkClient) OnboardAgainAllExpiredOnboarding(
+func (a *covenantlessArkClient) OnboardAgainAllExpiredBoardings(
 	ctx context.Context,
 ) (string, error) {
 	if err := a.safeCheck(); err != nil {
@@ -581,7 +581,7 @@ func (a *covenantlessArkClient) OnboardAgainAllExpiredOnboarding(
 	return a.sendExpiredBoardingUtxos(ctx, boardingAddr.Address)
 }
 
-func (a *covenantlessArkClient) WithdrawFromAllExpiredOnboarding(
+func (a *covenantlessArkClient) WithdrawFromAllExpiredBoardings(
 	ctx context.Context, to string,
 ) (string, error) {
 	if err := a.safeCheck(); err != nil {
