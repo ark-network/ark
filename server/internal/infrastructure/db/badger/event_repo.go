@@ -22,6 +22,8 @@ type eventRepository struct {
 	lock      *sync.Mutex
 	chUpdates chan *domain.Round
 	handler   func(round *domain.Round)
+	done      chan struct{}
+	wg        sync.WaitGroup
 }
 
 func NewRoundEventRepository(config ...interface{}) (domain.RoundEventRepository, error) {
@@ -49,9 +51,12 @@ func NewRoundEventRepository(config ...interface{}) (domain.RoundEventRepository
 	if err != nil {
 		return nil, fmt.Errorf("failed to open round events store: %s", err)
 	}
-	chEvents := make(chan *domain.Round)
-	lock := &sync.Mutex{}
-	repo := &eventRepository{store, lock, chEvents, nil}
+	repo := &eventRepository{
+		store:     store,
+		lock:      &sync.Mutex{},
+		chUpdates: make(chan *domain.Round),
+		done:      make(chan struct{}),
+	}
 	go repo.listen()
 	return repo, nil
 }
@@ -68,9 +73,11 @@ func (r *eventRepository) Save(
 	if err := r.upsert(ctx, id, allEvents); err != nil {
 		return nil, err
 	}
+	r.wg.Add(1)
 	go r.publishEvents(allEvents)
 	return domain.NewRoundFromEvents(allEvents), nil
 }
+
 func (r *eventRepository) Load(
 	ctx context.Context, id string,
 ) (*domain.Round, error) {
@@ -91,6 +98,8 @@ func (r *eventRepository) RegisterEventsHandler(
 }
 
 func (r *eventRepository) Close() {
+	close(r.done)
+	r.wg.Wait()
 	close(r.chUpdates)
 	r.store.Close()
 }
@@ -136,14 +145,24 @@ func (r *eventRepository) upsert(
 }
 
 func (r *eventRepository) listen() {
-	for round := range r.chUpdates {
-		r.runHandler(round)
+	for {
+		select {
+		case <-r.done:
+			return
+		case round := <-r.chUpdates:
+			r.runHandler(round)
+		}
 	}
 }
 
 func (r *eventRepository) publishEvents(events []domain.RoundEvent) {
+	defer r.wg.Done()
 	round := domain.NewRoundFromEvents(events)
-	r.chUpdates <- round
+	select {
+	case <-r.done:
+		return
+	case r.chUpdates <- round:
+	}
 }
 
 func (r *eventRepository) runHandler(round *domain.Round) {
