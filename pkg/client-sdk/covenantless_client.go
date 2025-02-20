@@ -336,7 +336,7 @@ func (a *covenantlessArkClient) listenForBoardingTxs(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			txsToAdd, txsToUpdate, err := a.getBoardingPendingTransactions(ctx)
+			txsToAdd, txsToConfirm, err := a.getBoardingPendingTransactions(ctx)
 			if err != nil {
 				log.WithError(err).Error("failed to get pending transactions")
 				continue
@@ -353,9 +353,9 @@ func (a *covenantlessArkClient) listenForBoardingTxs(ctx context.Context) {
 				log.Debugf("added %d boarding transaction(s)", count)
 			}
 
-			if len(txsToUpdate) > 0 {
-				count, err := a.store.TransactionStore().UpdateTransactions(
-					ctx, txsToUpdate,
+			if len(txsToConfirm) > 0 {
+				count, err := a.store.TransactionStore().ConfirmTransactions(
+					ctx, txsToConfirm, time.Now(),
 				)
 				if err != nil {
 					log.WithError(err).Error("failed to update boarding transactions")
@@ -371,7 +371,7 @@ func (a *covenantlessArkClient) listenForBoardingTxs(ctx context.Context) {
 
 func (a *covenantlessArkClient) getBoardingPendingTransactions(
 	ctx context.Context,
-) ([]types.Transaction, []types.Transaction, error) {
+) ([]types.Transaction, []string, error) {
 	oldTxs, err := a.store.TransactionStore().GetAllTransactions(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -383,7 +383,7 @@ func (a *covenantlessArkClient) getBoardingPendingTransactions(
 	}
 
 	txsToAdd := make([]types.Transaction, 0)
-	txsToUpdate := make([]types.Transaction, 0)
+	txsToConfirm := make([]string, 0)
 	for _, u := range boardingUtxos {
 		found := false
 		for _, tx := range oldTxs {
@@ -391,13 +391,7 @@ func (a *covenantlessArkClient) getBoardingPendingTransactions(
 				found = true
 				emptyTime := time.Time{}
 				if tx.CreatedAt == emptyTime && tx.CreatedAt != u.CreatedAt {
-					txsToUpdate = append(txsToUpdate, types.Transaction{
-						TransactionKey: tx.TransactionKey,
-						Amount:         tx.Amount,
-						Type:           tx.Type,
-						Settled:        tx.Settled,
-						CreatedAt:      u.CreatedAt,
-					})
+					txsToConfirm = append(txsToConfirm, tx.TransactionKey.String())
 				}
 				break
 			}
@@ -417,7 +411,7 @@ func (a *covenantlessArkClient) getBoardingPendingTransactions(
 		})
 	}
 
-	return txsToAdd, txsToUpdate, nil
+	return txsToAdd, txsToConfirm, nil
 }
 
 func (a *covenantlessArkClient) Balance(
@@ -2662,14 +2656,7 @@ func (a *covenantlessArkClient) handleRoundTx(
 	}
 
 	if len(txsToSettle) > 0 {
-		txs, err := a.store.TransactionStore().GetTransactions(ctx, txsToSettle)
-		if err != nil {
-			return err
-		}
-		for i := range txs {
-			txs[i].Settled = true
-		}
-		count, err := a.store.TransactionStore().UpdateTransactions(ctx, txs)
+		count, err := a.store.TransactionStore().SettleTransactions(ctx, txsToSettle)
 		if err != nil {
 			return err
 		}
@@ -2801,17 +2788,8 @@ func (a *covenantlessArkClient) handleRedeemTx(
 		for _, v := range vtxosToSpend {
 			txids = append(txids, v.Txid)
 		}
-		txs, err := a.store.TransactionStore().GetTransactions(ctx, txids)
-		if err != nil {
-			return err
-		}
 
-		for i, tx := range txs {
-			if !tx.Settled {
-				txs[i].Settled = true
-			}
-		}
-		count, err = a.store.TransactionStore().UpdateTransactions(ctx, txs)
+		count, err = a.store.TransactionStore().SettleTransactions(ctx, txids)
 		if err != nil {
 			return err
 		}

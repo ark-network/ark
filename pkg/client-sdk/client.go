@@ -99,8 +99,12 @@ func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
 	return offchainAddr.Address, boardingAddr.Address, nil
 }
 
-func (a *arkClient) GetTransactionChannel() chan types.Transaction {
+func (a *arkClient) GetTransactionEventChannel() chan types.TransactionEvent {
 	return a.store.TransactionStore().GetEventChannel()
+}
+
+func (a *arkClient) GetVtxoEventChannel() chan types.VtxoEvent {
+	return a.store.VtxoStore().GetEventChannel()
 }
 
 func (a *arkClient) SignTransaction(ctx context.Context, tx string) (string, error) {

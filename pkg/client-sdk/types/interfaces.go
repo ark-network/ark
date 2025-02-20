@@ -1,6 +1,9 @@
 package types
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type Store interface {
 	ConfigStore() ConfigStore
@@ -20,18 +23,19 @@ type ConfigStore interface {
 
 type TransactionStore interface {
 	AddTransactions(ctx context.Context, txs []Transaction) (int, error)
-	UpdateTransactions(ctx context.Context, txs []Transaction) (int, error)
+	SettleTransactions(ctx context.Context, txids []string) (int, error)
+	ConfirmTransactions(ctx context.Context, txids []string, timestamp time.Time) (int, error)
 	GetAllTransactions(ctx context.Context) ([]Transaction, error)
 	GetTransactions(ctx context.Context, txids []string) ([]Transaction, error)
-	GetEventChannel() chan Transaction
+	GetEventChannel() chan TransactionEvent
 	Close()
 }
 
 type VtxoStore interface {
 	AddVtxos(ctx context.Context, vtxos []Vtxo) (int, error)
-	UpdateVtxos(ctx context.Context, vtxos []Vtxo) (int, error)
 	SpendVtxos(ctx context.Context, vtxos []VtxoKey, spentBy string) (int, error)
 	GetAllVtxos(ctx context.Context) (spendable []Vtxo, spent []Vtxo, err error)
 	GetVtxos(ctx context.Context, keys []VtxoKey) ([]Vtxo, error)
+	GetEventChannel() chan VtxoEvent
 	Close()
 }

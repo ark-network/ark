@@ -54,6 +54,25 @@ type Vtxo struct {
 	Spent     bool
 }
 
+type VtxoEventType int
+
+const (
+	VtxosAdded VtxoEventType = iota
+	VtxosSpent
+)
+
+func (e VtxoEventType) String() string {
+	return map[VtxoEventType]string{
+		VtxosAdded: "VTXOS_ADDED",
+		VtxosSpent: "VTXOS_SPENT",
+	}[e]
+}
+
+type VtxoEvent struct {
+	Type  VtxoEventType
+	Vtxos []Vtxo
+}
+
 const (
 	TxSent     TxType = "SENT"
 	TxReceived TxType = "RECEIVED"
@@ -94,6 +113,27 @@ func (t Transaction) IsOOR() bool {
 func (t Transaction) String() string {
 	buf, _ := json.MarshalIndent(t, "", "  ")
 	return string(buf)
+}
+
+type TxEventType int
+
+const (
+	TxsAdded TxEventType = iota
+	TxsSettled
+	TxsConfirmed
+)
+
+func (e TxEventType) String() string {
+	return map[TxEventType]string{
+		TxsAdded:     "TXS_ADDED",
+		TxsSettled:   "TXS_SETTLED",
+		TxsConfirmed: "TXS_CONFIRMED",
+	}[e]
+}
+
+type TransactionEvent struct {
+	Type TxEventType
+	Txs  []Transaction
 }
 
 type Utxo struct {
