@@ -1193,12 +1193,14 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 	uniqueSignerPubkeys := make(map[string]struct{})
 	serverPubKeyHex := hex.EncodeToString(s.serverSigningPubKey.SerializeCompressed())
 	for _, data := range musig2data {
+		if data == nil {
+			continue
+		}
 		for _, pubkey := range data.CosignersPublicKeys {
 			uniqueSignerPubkeys[pubkey] = struct{}{}
 		}
 		data.CosignersPublicKeys = append(data.CosignersPublicKeys, serverPubKeyHex)
 	}
-
 	log.Debugf("building tx for round %s", round.Id)
 	unsignedRoundTx, vtxoTree, connectorAddress, connectors, err := s.builder.BuildRoundTx(
 		s.pubkey, requests, boardingInputs, connectorAddresses, musig2data,

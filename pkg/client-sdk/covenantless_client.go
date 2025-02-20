@@ -1523,6 +1523,18 @@ func (a *covenantlessArkClient) handleRoundStream(
 	)
 
 	step := start
+	hasOffchainOutput := false
+	for _, receiver := range receivers {
+		if _, err := common.DecodeAddress(receiver.Address); err == nil {
+			hasOffchainOutput = true
+			break
+		}
+	}
+
+	if !hasOffchainOutput {
+		// if none of the outputs are offchain, we should skip the vtxo tree signing steps
+		step = roundSigningNoncesGenerated
+	}
 
 	for {
 		select {
