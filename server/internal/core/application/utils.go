@@ -14,6 +14,7 @@ import (
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/nbd-wtf/go-nostr"
 	"github.com/nbd-wtf/go-nostr/nip19"
+	log "github.com/sirupsen/logrus"
 )
 
 type timedTxRequest struct {
@@ -118,6 +119,8 @@ func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingIn
 		}
 		// Skip tx requests for which users didn't notify to be online in the last minute.
 		if p.pingTimestamp.IsZero() || time.Since(p.pingTimestamp).Minutes() > 1 {
+			log.Debugf("delete tx request %s because it didn't ping in the last minute", p.Id)
+			delete(m.requests, p.Id) // cleanup the request from the map
 			continue
 		}
 		requestsByTime = append(requestsByTime, *p)
