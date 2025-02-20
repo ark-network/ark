@@ -278,8 +278,6 @@ type forfeitTxsMap struct {
 	connectors      tree.TxTree
 	connectorsIndex map[string]domain.Outpoint
 	vtxos           []domain.Vtxo
-
-	doneCh chan struct{}
 }
 
 func newForfeitTxsMap(txBuilder ports.TxBuilder) *forfeitTxsMap {
@@ -290,7 +288,6 @@ func newForfeitTxsMap(txBuilder ports.TxBuilder) *forfeitTxsMap {
 		connectors:      nil,
 		connectorsIndex: nil,
 		vtxos:           nil,
-		doneCh:          make(chan struct{}, 1),
 	}
 }
 
@@ -371,13 +368,6 @@ func (m *forfeitTxsMap) sign(txs []string) error {
 			return fmt.Errorf("unexpected forfeit tx, vtxo %s is not in the batch", vtxoKey)
 		}
 		m.forfeitTxs[vtxoKey] = txs
-	}
-
-	if m.allSigned() {
-		select {
-		case m.doneCh <- struct{}{}:
-		default:
-		}
 	}
 
 	return nil
