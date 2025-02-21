@@ -51,13 +51,10 @@ func (s *txStore) AddTransactions(
 			return -1, err
 		}
 		count++
-		go func(tx types.Transaction) {
-			s.sendEvent(types.TransactionEvent{
-				Type: types.TxsAdded,
-				Txs:  []types.Transaction{tx},
-			})
-		}(tx)
 	}
+
+	go s.sendEvent(types.TransactionEvent{Type: types.TxsAdded, Txs: txs})
+
 	return count, nil
 }
 
@@ -75,7 +72,9 @@ func (s *txStore) SettleTransactions(
 			return -1, err
 		}
 	}
-	s.sendEvent(types.TransactionEvent{Type: types.TxsSettled, Txs: txs})
+
+	go s.sendEvent(types.TransactionEvent{Type: types.TxsSettled, Txs: txs})
+
 	return len(txs), nil
 }
 
@@ -93,7 +92,9 @@ func (s *txStore) ConfirmTransactions(
 			return -1, err
 		}
 	}
-	s.sendEvent(types.TransactionEvent{Type: types.TxsConfirmed, Txs: txs})
+
+	go s.sendEvent(types.TransactionEvent{Type: types.TxsConfirmed, Txs: txs})
+
 	return len(txs), nil
 }
 
@@ -148,5 +149,10 @@ func (s *txStore) sendEvent(event types.TransactionEvent) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	s.eventCh <- event
+	select {
+	case s.eventCh <- event:
+		return
+	default:
+		time.Sleep(100 * time.Millisecond)
+	}
 }

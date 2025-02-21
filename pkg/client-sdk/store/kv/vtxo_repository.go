@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/dgraph-io/badger/v4"
@@ -45,10 +46,8 @@ func (s *vtxoStore) AddVtxos(_ context.Context, vtxos []types.Vtxo) (int, error)
 			return -1, err
 		}
 		count++
-		go func() {
-			s.sendEvent(types.VtxoEvent{Type: types.VtxosAdded, Vtxos: vtxos})
-		}()
 	}
+	go s.sendEvent(types.VtxoEvent{Type: types.VtxosAdded, Vtxos: vtxos})
 	return count, nil
 }
 
@@ -66,10 +65,10 @@ func (s *vtxoStore) SpendVtxos(ctx context.Context, outpoints []types.VtxoKey, s
 			return -1, err
 		}
 		count++
-		go func() {
-			s.sendEvent(types.VtxoEvent{Type: types.VtxosSpent, Vtxos: vtxos})
-		}()
 	}
+
+	go s.sendEvent(types.VtxoEvent{Type: types.VtxosSpent, Vtxos: vtxos})
+
 	return count, nil
 }
 
@@ -126,5 +125,10 @@ func (s *vtxoStore) sendEvent(event types.VtxoEvent) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	s.eventCh <- event
+	select {
+	case s.eventCh <- event:
+		return
+	default:
+		time.Sleep(100 * time.Millisecond)
+	}
 }
