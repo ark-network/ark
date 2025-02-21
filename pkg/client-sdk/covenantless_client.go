@@ -2667,11 +2667,6 @@ func (a *covenantlessArkClient) handleRoundTx(
 		}
 	}
 
-	fmt.Println("TXS TO ADD", len(txsToAdd))
-	fmt.Println("TXS TO SETTLE", len(txsToSettle))
-	fmt.Println("VTXOS TO ADD", len(vtxosToAdd))
-	fmt.Println("VTXOS TO SPEND", len(vtxosToSpend))
-
 	if len(txsToAdd) > 0 {
 		count, err := a.store.TransactionStore().AddTransactions(ctx, txsToAdd)
 		if err != nil {
