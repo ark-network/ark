@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sync"
+	"time"
 
 	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/dgraph-io/badger/v4"
@@ -17,7 +19,9 @@ const (
 )
 
 type vtxoStore struct {
-	db *badgerhold.Store
+	db      *badgerhold.Store
+	lock    *sync.Mutex
+	eventCh chan types.VtxoEvent
 }
 
 func NewVtxoStore(dir string, logger badger.Logger) (types.VtxoStore, error) {
@@ -25,7 +29,11 @@ func NewVtxoStore(dir string, logger badger.Logger) (types.VtxoStore, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open round events store: %s", err)
 	}
-	return &vtxoStore{badgerDb}, nil
+	return &vtxoStore{
+		db:      badgerDb,
+		lock:    &sync.Mutex{},
+		eventCh: make(chan types.VtxoEvent),
+	}, nil
 }
 
 func (s *vtxoStore) AddVtxos(_ context.Context, vtxos []types.Vtxo) (int, error) {
@@ -39,17 +47,7 @@ func (s *vtxoStore) AddVtxos(_ context.Context, vtxos []types.Vtxo) (int, error)
 		}
 		count++
 	}
-	return count, nil
-}
-
-func (s *vtxoStore) UpdateVtxos(_ context.Context, vtxos []types.Vtxo) (int, error) {
-	count := 0
-	for _, vtxo := range vtxos {
-		if err := s.db.Update(vtxo.VtxoKey.String(), &vtxo); err != nil {
-			return -1, err
-		}
-		count++
-	}
+	go s.sendEvent(types.VtxoEvent{Type: types.VtxosAdded, Vtxos: vtxos})
 	return count, nil
 }
 
@@ -68,6 +66,9 @@ func (s *vtxoStore) SpendVtxos(ctx context.Context, outpoints []types.VtxoKey, s
 		}
 		count++
 	}
+
+	go s.sendEvent(types.VtxoEvent{Type: types.VtxosSpent, Vtxos: vtxos})
+
 	return count, nil
 }
 
@@ -110,8 +111,24 @@ func (s *vtxoStore) GetVtxos(
 	return vtxos, nil
 }
 
+func (s *vtxoStore) GetEventChannel() chan types.VtxoEvent {
+	return s.eventCh
+}
+
 func (s *vtxoStore) Close() {
 	if err := s.db.Close(); err != nil {
 		log.Debugf("error on closing db: %s", err)
+	}
+}
+
+func (s *vtxoStore) sendEvent(event types.VtxoEvent) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	select {
+	case s.eventCh <- event:
+		return
+	default:
+		time.Sleep(100 * time.Millisecond)
 	}
 }

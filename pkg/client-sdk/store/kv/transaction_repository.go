@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/dgraph-io/badger/v4"
@@ -21,7 +22,7 @@ const (
 type txStore struct {
 	db      *badgerhold.Store
 	lock    *sync.Mutex
-	eventCh chan types.Transaction
+	eventCh chan types.TransactionEvent
 }
 
 func NewTransactionStore(
@@ -34,7 +35,7 @@ func NewTransactionStore(
 	return &txStore{
 		db:      badgerDb,
 		lock:    &sync.Mutex{},
-		eventCh: make(chan types.Transaction),
+		eventCh: make(chan types.TransactionEvent),
 	}, nil
 }
 
@@ -50,27 +51,51 @@ func (s *txStore) AddTransactions(
 			return -1, err
 		}
 		count++
-		go func(tx types.Transaction) {
-			s.sendEvent(tx)
-		}(tx)
 	}
+
+	go s.sendEvent(types.TransactionEvent{Type: types.TxsAdded, Txs: txs})
+
 	return count, nil
 }
 
-func (s *txStore) UpdateTransactions(
-	_ context.Context, txs []types.Transaction,
+func (s *txStore) SettleTransactions(
+	ctx context.Context, txids []string,
 ) (int, error) {
-	count := 0
+	txs, err := s.GetTransactions(ctx, txids)
+	if err != nil {
+		return -1, err
+	}
+
 	for _, tx := range txs {
+		tx.Settled = true
 		if err := s.db.Upsert(tx.TransactionKey.String(), &tx); err != nil {
 			return -1, err
 		}
-		count++
-		go func(tx types.Transaction) {
-			s.sendEvent(tx)
-		}(tx)
 	}
-	return count, nil
+
+	go s.sendEvent(types.TransactionEvent{Type: types.TxsSettled, Txs: txs})
+
+	return len(txs), nil
+}
+
+func (s *txStore) ConfirmTransactions(
+	ctx context.Context, txids []string, timestamp time.Time,
+) (int, error) {
+	txs, err := s.GetTransactions(ctx, txids)
+	if err != nil {
+		return -1, err
+	}
+
+	for _, tx := range txs {
+		tx.CreatedAt = timestamp
+		if err := s.db.Upsert(tx.TransactionKey.String(), &tx); err != nil {
+			return -1, err
+		}
+	}
+
+	go s.sendEvent(types.TransactionEvent{Type: types.TxsConfirmed, Txs: txs})
+
+	return len(txs), nil
 }
 
 func (s *txStore) GetAllTransactions(
@@ -109,7 +134,7 @@ func (s *txStore) GetTransactions(
 	return txs, nil
 }
 
-func (s *txStore) GetEventChannel() chan types.Transaction {
+func (s *txStore) GetEventChannel() chan types.TransactionEvent {
 	return s.eventCh
 }
 
@@ -120,9 +145,14 @@ func (s *txStore) Close() {
 	close(s.eventCh)
 }
 
-func (s *txStore) sendEvent(event types.Transaction) {
+func (s *txStore) sendEvent(event types.TransactionEvent) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	s.eventCh <- event
+	select {
+	case s.eventCh <- event:
+		return
+	default:
+		time.Sleep(100 * time.Millisecond)
+	}
 }

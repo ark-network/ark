@@ -10,6 +10,7 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/store"
 	filedb "github.com/ark-network/ark/pkg/client-sdk/store/file"
 	inmemorydb "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 	sdktypes "github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -111,8 +112,9 @@ func TestNewService(t *testing.T) {
 
 	go func() {
 		eventCh := service.TransactionStore().GetEventChannel()
-		for tx := range eventCh {
-			log.Infof("Tx inserted: %d %v", tx.Amount, tx.Type)
+		for event := range eventCh {
+			log.Infof("Tx inserted: %d %v", event.Txs[0].Amount, event.Txs[0].Type)
+			require.Equal(t, types.TxsAdded, event.Type)
 		}
 	}()
 
