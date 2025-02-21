@@ -270,7 +270,7 @@ func generateBlock() error {
 }
 
 func logTxEvents(wallet string, client arksdk.ArkClient) {
-	txsChan := client.GetTransactionEventChannel()
+	txsChan := client.GetTransactionEventChannel(context.Background())
 	go func() {
 		for txEvent := range txsChan {
 			for _, tx := range txEvent.Txs {
