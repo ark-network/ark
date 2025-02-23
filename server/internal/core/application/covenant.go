@@ -1073,7 +1073,7 @@ func (s *covenantService) updateVtxoSet(round *domain.Round) {
 		}
 		s.transactionEventsCh <- RoundTransactionEvent{
 			RoundTxid:             round.Txid,
-			SpentVtxos:            getSpentVtxos(round.TxRequests),
+			SpentVtxos:            s.getSpentVtxos(round.TxRequests),
 			SpendableVtxos:        s.getNewVtxos(round),
 			ClaimedBoardingInputs: boardingInputs,
 		}
@@ -1149,6 +1149,12 @@ func (s *covenantService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 			})
 		}
 	}
+	return vtxos
+}
+
+func (s *covenantService) getSpentVtxos(requests map[string]domain.TxRequest) []domain.Vtxo {
+	outpoints := getSpentVtxos(requests)
+	vtxos, _ := s.repoManager.Vtxos().GetVtxos(context.Background(), outpoints)
 	return vtxos
 }
 
