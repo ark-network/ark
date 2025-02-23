@@ -200,7 +200,7 @@ type roundTxEvent application.RoundTransactionEvent
 func (e roundTxEvent) toProto() *arkv1.RoundTransaction {
 	return &arkv1.RoundTransaction{
 		Txid:                 e.RoundTxid,
-		SpentVtxos:           vtxoKeyList(e.SpentVtxos).toProto(),
+		SpentVtxos:           vtxoList(e.SpentVtxos).toProto(),
 		SpendableVtxos:       vtxoList(e.SpendableVtxos).toProto(),
 		ClaimedBoardingUtxos: vtxoKeyList(e.ClaimedBoardingInputs).toProto(),
 	}
@@ -211,7 +211,7 @@ type redeemTxEvent application.RedeemTransactionEvent
 func (e redeemTxEvent) toProto() *arkv1.RedeemTransaction {
 	return &arkv1.RedeemTransaction{
 		Txid:           e.RedeemTxid,
-		SpentVtxos:     vtxoKeyList(e.SpentVtxos).toProto(),
+		SpentVtxos:     vtxoList(e.SpentVtxos).toProto(),
 		SpendableVtxos: vtxoList(e.SpendableVtxos).toProto(),
 	}
 }

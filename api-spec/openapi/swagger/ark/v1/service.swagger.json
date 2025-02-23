@@ -680,7 +680,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/v1Outpoint"
+            "$ref": "#/definitions/v1Vtxo"
           }
         },
         "spendableVtxos": {
@@ -831,7 +831,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/v1Outpoint"
+            "$ref": "#/definitions/v1Vtxo"
           }
         },
         "spendableVtxos": {

@@ -487,7 +487,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 	go func() {
 		s.transactionEventsCh <- RedeemTransactionEvent{
 			RedeemTxid:     redeemTxid,
-			SpentVtxos:     spentVtxoKeys,
+			SpentVtxos:     spentVtxos,
 			SpendableVtxos: newVtxos,
 		}
 	}()
@@ -1551,7 +1551,7 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, roundEndTime time
 	go func() {
 		s.transactionEventsCh <- RoundTransactionEvent{
 			RoundTxid:             round.Txid,
-			SpentVtxos:            getSpentVtxos(round.TxRequests),
+			SpentVtxos:            s.getSpentVtxos(round.TxRequests),
 			SpendableVtxos:        s.getNewVtxos(round),
 			ClaimedBoardingInputs: boardingInputs,
 		}
@@ -1743,6 +1743,12 @@ func (s *covenantlessService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 			})
 		}
 	}
+	return vtxos
+}
+
+func (s *covenantlessService) getSpentVtxos(requests map[string]domain.TxRequest) []domain.Vtxo {
+	outpoints := getSpentVtxos(requests)
+	vtxos, _ := s.repoManager.Vtxos().GetVtxos(context.Background(), outpoints)
 	return vtxos
 }
 

@@ -221,14 +221,14 @@ type TransactionEvent struct {
 
 type RoundTransaction struct {
 	Txid                 string
-	SpentVtxos           []Outpoint
+	SpentVtxos           []Vtxo
 	SpendableVtxos       []Vtxo
 	ClaimedBoardingUtxos []Outpoint
 }
 
 type RedeemTransaction struct {
 	Txid           string
-	SpentVtxos     []Outpoint
+	SpentVtxos     []Vtxo
 	SpendableVtxos []Vtxo
 }
 
