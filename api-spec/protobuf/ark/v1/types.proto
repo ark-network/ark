@@ -71,14 +71,14 @@ message Vtxo {
 
 message RoundTransaction {
   string txid = 1;
-  repeated Outpoint spent_vtxos = 2;
+  repeated Vtxo spent_vtxos = 2;
   repeated Vtxo spendable_vtxos = 3;
   repeated Outpoint claimed_boarding_utxos = 4;
 }
 
 message RedeemTransaction {
   string txid = 1;
-  repeated Outpoint spent_vtxos = 2;
+  repeated Vtxo spent_vtxos = 2;
   repeated Vtxo spendable_vtxos = 3;
 }
 
