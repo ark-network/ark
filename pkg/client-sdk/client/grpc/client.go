@@ -365,7 +365,7 @@ func (c *grpcClient) GetTransactionsStream(
 				eventCh <- client.TransactionEvent{
 					Round: &client.RoundTransaction{
 						Txid:                 tx.Round.Txid,
-						SpentVtxos:           outpointsFromProto(tx.Round.SpentVtxos),
+						SpentVtxos:           vtxos(tx.Round.SpentVtxos).toVtxos(),
 						SpendableVtxos:       vtxos(tx.Round.SpendableVtxos).toVtxos(),
 						ClaimedBoardingUtxos: outpointsFromProto(tx.Round.ClaimedBoardingUtxos),
 					},
@@ -374,7 +374,7 @@ func (c *grpcClient) GetTransactionsStream(
 				eventCh <- client.TransactionEvent{
 					Redeem: &client.RedeemTransaction{
 						Txid:           tx.Redeem.Txid,
-						SpentVtxos:     outpointsFromProto(tx.Redeem.SpentVtxos),
+						SpentVtxos:     vtxos(tx.Redeem.SpentVtxos).toVtxos(),
 						SpendableVtxos: vtxos(tx.Redeem.SpendableVtxos).toVtxos(),
 					},
 				}

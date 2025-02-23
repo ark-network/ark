@@ -712,7 +712,7 @@ func (c *restClient) GetTransactionsStream(ctx context.Context) (<-chan client.T
 				event = client.TransactionEvent{
 					Round: &client.RoundTransaction{
 						Txid:                 resp.Payload.Result.Round.Txid,
-						SpentVtxos:           outpointsFromRest(resp.Payload.Result.Round.SpentVtxos),
+						SpentVtxos:           vtxosFromRest(resp.Payload.Result.Round.SpentVtxos),
 						SpendableVtxos:       vtxosFromRest(resp.Payload.Result.Round.SpendableVtxos),
 						ClaimedBoardingUtxos: outpointsFromRest(resp.Payload.Result.Round.ClaimedBoardingUtxos),
 					},
@@ -721,7 +721,7 @@ func (c *restClient) GetTransactionsStream(ctx context.Context) (<-chan client.T
 				event = client.TransactionEvent{
 					Redeem: &client.RedeemTransaction{
 						Txid:           resp.Payload.Result.Redeem.Txid,
-						SpentVtxos:     outpointsFromRest(resp.Payload.Result.Redeem.SpentVtxos),
+						SpentVtxos:     vtxosFromRest(resp.Payload.Result.Redeem.SpentVtxos),
 						SpendableVtxos: vtxosFromRest(resp.Payload.Result.Redeem.SpendableVtxos),
 					},
 				}

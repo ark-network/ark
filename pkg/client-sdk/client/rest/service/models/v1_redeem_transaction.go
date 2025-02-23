@@ -23,7 +23,7 @@ type V1RedeemTransaction struct {
 	SpendableVtxos []*V1Vtxo `json:"spendableVtxos"`
 
 	// spent vtxos
-	SpentVtxos []*V1Outpoint `json:"spentVtxos"`
+	SpentVtxos []*V1Vtxo `json:"spentVtxos"`
 
 	// txid
 	Txid string `json:"txid,omitempty"`
