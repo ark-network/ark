@@ -688,7 +688,7 @@ func (c *restClient) GetTransactionsStream(ctx context.Context) (<-chan client.T
 			}
 
 			chunk = bytes.Trim(chunk, "\n")
-			resp := ark_service.ArkServiceGetTransactionsStreamOK{}
+			resp := ark_service.ArkServiceGetTransactionsStreamOKBody{}
 			if err := json.Unmarshal(chunk, &resp); err != nil {
 				eventsCh <- client.TransactionEvent{
 					Err: fmt.Errorf("failed to parse message from transaction stream: %s", err),
@@ -696,33 +696,29 @@ func (c *restClient) GetTransactionsStream(ctx context.Context) (<-chan client.T
 				return
 			}
 
-			if resp.Payload == nil {
-				continue
-			}
-
-			if resp.Payload.Error != nil {
+			if resp.Error != nil {
 				eventsCh <- client.TransactionEvent{
-					Err: fmt.Errorf("received error from transaction stream: %s", resp.Payload.Error.Message),
+					Err: fmt.Errorf("received error from transaction stream: %s", resp.Error.Message),
 				}
 				continue
 			}
 
 			var event client.TransactionEvent
-			if resp.Payload.Result.Round != nil {
+			if resp.Result.Round != nil {
 				event = client.TransactionEvent{
 					Round: &client.RoundTransaction{
-						Txid:                 resp.Payload.Result.Round.Txid,
-						SpentVtxos:           vtxosFromRest(resp.Payload.Result.Round.SpentVtxos),
-						SpendableVtxos:       vtxosFromRest(resp.Payload.Result.Round.SpendableVtxos),
-						ClaimedBoardingUtxos: outpointsFromRest(resp.Payload.Result.Round.ClaimedBoardingUtxos),
+						Txid:                 resp.Result.Round.Txid,
+						SpentVtxos:           vtxosFromRest(resp.Result.Round.SpentVtxos),
+						SpendableVtxos:       vtxosFromRest(resp.Result.Round.SpendableVtxos),
+						ClaimedBoardingUtxos: outpointsFromRest(resp.Result.Round.ClaimedBoardingUtxos),
 					},
 				}
-			} else if resp.Payload.Result.Redeem != nil {
+			} else if resp.Result.Redeem != nil {
 				event = client.TransactionEvent{
 					Redeem: &client.RedeemTransaction{
-						Txid:           resp.Payload.Result.Redeem.Txid,
-						SpentVtxos:     vtxosFromRest(resp.Payload.Result.Redeem.SpentVtxos),
-						SpendableVtxos: vtxosFromRest(resp.Payload.Result.Redeem.SpendableVtxos),
+						Txid:           resp.Result.Redeem.Txid,
+						SpentVtxos:     vtxosFromRest(resp.Result.Redeem.SpentVtxos),
+						SpendableVtxos: vtxosFromRest(resp.Result.Redeem.SpendableVtxos),
 					},
 				}
 			}
