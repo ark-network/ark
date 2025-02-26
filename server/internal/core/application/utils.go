@@ -12,8 +12,6 @@ import (
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
-	"github.com/nbd-wtf/go-nostr"
-	"github.com/nbd-wtf/go-nostr/nip19"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -346,6 +344,9 @@ func (m *forfeitTxsMap) init(connectors tree.TxTree, requests []domain.TxRequest
 }
 
 func (m *forfeitTxsMap) sign(txs []string) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	if len(txs) == 0 {
 		return nil
 	}
@@ -359,9 +360,6 @@ func (m *forfeitTxsMap) sign(txs []string) error {
 	if err != nil {
 		return err
 	}
-
-	m.lock.Lock()
-	defer m.lock.Unlock()
 
 	for vtxoKey, txs := range validTxs {
 		if _, ok := m.forfeitTxs[vtxoKey]; !ok {
@@ -494,81 +492,4 @@ func getSpentVtxos(requests map[string]domain.TxRequest) []domain.VtxoKey {
 		}
 	}
 	return vtxos
-}
-
-func validateProofs(ctx context.Context, vtxoRepo domain.VtxoRepository, proofs []SignedVtxoOutpoint) error {
-	for _, signedVtxo := range proofs {
-		vtxos, err := vtxoRepo.GetVtxos(ctx, []domain.VtxoKey{signedVtxo.Outpoint})
-		if err != nil {
-			return fmt.Errorf("vtxo not found: %s (%s)", signedVtxo.Outpoint, err)
-		}
-
-		if len(vtxos) < 1 {
-			return fmt.Errorf("vtxo not found: %s", signedVtxo.Outpoint)
-		}
-
-		vtxo := vtxos[0]
-
-		if err := signedVtxo.Proof.validate(vtxo); err != nil {
-			return fmt.Errorf("invalid proof for vtxo %s (%s)", signedVtxo.Outpoint, err)
-		}
-	}
-
-	return nil
-}
-
-// nip19toNostrProfile decodes a NIP-19 string and returns a nostr profile
-// if nprofile => returns nostrRecipient
-// if npub => craft nprofile from npub and defaultRelays
-func nip19toNostrProfile(nostrRecipient string, defaultRelays []string) (string, error) {
-	prefix, result, err := nip19.Decode(nostrRecipient)
-	if err != nil {
-		return "", fmt.Errorf("failed to decode NIP-19 string: %s", err)
-	}
-
-	var nprofileRecipient string
-
-	switch prefix {
-	case "nprofile":
-		recipient, ok := result.(nostr.ProfilePointer)
-		if !ok {
-			return "", fmt.Errorf("invalid NIP-19 result: %v", result)
-		}
-
-		// validate public key
-		if !nostr.IsValidPublicKey(recipient.PublicKey) {
-			return "", fmt.Errorf("invalid nostr public key: %s", recipient.PublicKey)
-		}
-
-		// validate relays
-		if len(recipient.Relays) == 0 {
-			return "", fmt.Errorf("invalid nostr profile: at least one relay is required")
-		}
-
-		for _, relay := range recipient.Relays {
-			if !nostr.IsValidRelayURL(relay) {
-				return "", fmt.Errorf("invalid relay URL: %s", relay)
-			}
-		}
-
-		nprofileRecipient = nostrRecipient
-	case "npub":
-		recipientPubkey, ok := result.(string)
-		if !ok {
-			return "", fmt.Errorf("invalid NIP-19 result: %v", result)
-		}
-
-		nprofileRecipient, err = nip19.EncodeProfile(recipientPubkey, defaultRelays)
-		if err != nil {
-			return "", fmt.Errorf("failed to encode nostr profile: %s", err)
-		}
-	default:
-		return "", fmt.Errorf("invalid NIP-19 prefix: %s", prefix)
-	}
-
-	if nprofileRecipient == "" {
-		return "", fmt.Errorf("invalid nostr recipient")
-	}
-
-	return nprofileRecipient, nil
 }
