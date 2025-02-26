@@ -3,12 +3,9 @@ package bip322_test
 import (
 	"encoding/hex"
 	"encoding/json"
-	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/ark-network/ark/common/bip322"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/stretchr/testify/require"
@@ -35,19 +32,8 @@ func TestVerify(t *testing.T) {
 	prevoutsMap := fixtureMap["prevouts"].(map[string]interface{})
 
 	for outpointStr, prevoutData := range prevoutsMap {
-		splitted := strings.Split(outpointStr, ":")
-		require.Equal(t, 2, len(splitted), "invalid outpoint: %s", outpointStr)
-
-		index, err := strconv.ParseUint(splitted[1], 10, 32)
+		outpoint, err := wire.NewOutPointFromString(outpointStr)
 		require.NoError(t, err)
-
-		txHash, err := chainhash.NewHashFromStr(splitted[0])
-		require.NoError(t, err)
-
-		outpoint := wire.OutPoint{
-			Hash:  *txHash,
-			Index: uint32(index),
-		}
 
 		prevoutMap := prevoutData.(map[string]interface{})
 		pkScript, err := hex.DecodeString(prevoutMap["pkScript"].(string))
@@ -58,7 +44,7 @@ func TestVerify(t *testing.T) {
 			PkScript: pkScript,
 		}
 
-		prevouts[outpoint] = prevout
+		prevouts[*outpoint] = prevout
 	}
 
 	prevoutFetcher := txscript.NewMultiPrevOutFetcher(prevouts)
