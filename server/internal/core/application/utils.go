@@ -344,12 +344,12 @@ func (m *forfeitTxsMap) init(connectors tree.TxTree, requests []domain.TxRequest
 }
 
 func (m *forfeitTxsMap) sign(txs []string) error {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-
 	if len(txs) == 0 {
 		return nil
 	}
+
+	m.lock.Lock()
+	defer m.lock.Unlock()
 
 	if len(m.vtxos) == 0 || len(m.connectors) == 0 {
 		return fmt.Errorf("forfeit txs map not initialized")
