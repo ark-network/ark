@@ -524,15 +524,17 @@ func RedeemNotesWrapper() js.Func {
 	})
 }
 
-func SetNostrNotificationRecipientWrapper() js.Func {
+func RecoverSweptVtxosWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
 		if len(args) != 1 {
 			return nil, errors.New("invalid number of args")
 		}
 
-		nostrRecipient := args[0].String()
-		err := arkSdkClient.SetNostrNotificationRecipient(context.Background(), nostrRecipient)
-		return nil, err
+		txID, err := arkSdkClient.RecoverSweptVtxos(context.Background())
+		if err != nil {
+			return nil, err
+		}
+		return js.ValueOf(txID), nil
 	})
 }
 
