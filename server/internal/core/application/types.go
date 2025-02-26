@@ -68,8 +68,8 @@ type ServiceInfo struct {
 type NextMarketHour struct {
 	StartTime     time.Time
 	EndTime       time.Time
-	Period        time.Duration
-	RoundInterval time.Duration
+	Period        float64
+	RoundInterval float64
 }
 
 type WalletStatus struct {

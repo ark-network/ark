@@ -893,8 +893,8 @@ func (s *covenantlessService) GetInfo(ctx context.Context) (*ServiceInfo, error)
 		NextMarketHour: &NextMarketHour{
 			StartTime:     marketHourNextStart,
 			EndTime:       marketHourNextEnd,
-			Period:        marketHourConfig.Period,
-			RoundInterval: marketHourConfig.RoundInterval,
+			Period:        marketHourConfig.Period.Seconds(),
+			RoundInterval: marketHourConfig.RoundInterval.Seconds(),
 		},
 	}, nil
 }
