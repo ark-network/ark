@@ -29,8 +29,7 @@ type ArkServiceClient interface {
 	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
 	SubmitRedeemTx(ctx context.Context, in *SubmitRedeemTxRequest, opts ...grpc.CallOption) (*SubmitRedeemTxResponse, error)
 	GetTransactionsStream(ctx context.Context, in *GetTransactionsStreamRequest, opts ...grpc.CallOption) (ArkService_GetTransactionsStreamClient, error)
-	SetNostrRecipient(ctx context.Context, in *SetNostrRecipientRequest, opts ...grpc.CallOption) (*SetNostrRecipientResponse, error)
-	DeleteNostrRecipient(ctx context.Context, in *DeleteNostrRecipientRequest, opts ...grpc.CallOption) (*DeleteNostrRecipientResponse, error)
+	GetNote(ctx context.Context, in *GetNoteRequest, opts ...grpc.CallOption) (*GetNoteResponse, error)
 }
 
 type arkServiceClient struct {
@@ -186,18 +185,9 @@ func (x *arkServiceGetTransactionsStreamClient) Recv() (*GetTransactionsStreamRe
 	return m, nil
 }
 
-func (c *arkServiceClient) SetNostrRecipient(ctx context.Context, in *SetNostrRecipientRequest, opts ...grpc.CallOption) (*SetNostrRecipientResponse, error) {
-	out := new(SetNostrRecipientResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/SetNostrRecipient", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *arkServiceClient) DeleteNostrRecipient(ctx context.Context, in *DeleteNostrRecipientRequest, opts ...grpc.CallOption) (*DeleteNostrRecipientResponse, error) {
-	out := new(DeleteNostrRecipientResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/DeleteNostrRecipient", in, out, opts...)
+func (c *arkServiceClient) GetNote(ctx context.Context, in *GetNoteRequest, opts ...grpc.CallOption) (*GetNoteResponse, error) {
+	out := new(GetNoteResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/GetNote", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -219,8 +209,7 @@ type ArkServiceServer interface {
 	Ping(context.Context, *PingRequest) (*PingResponse, error)
 	SubmitRedeemTx(context.Context, *SubmitRedeemTxRequest) (*SubmitRedeemTxResponse, error)
 	GetTransactionsStream(*GetTransactionsStreamRequest, ArkService_GetTransactionsStreamServer) error
-	SetNostrRecipient(context.Context, *SetNostrRecipientRequest) (*SetNostrRecipientResponse, error)
-	DeleteNostrRecipient(context.Context, *DeleteNostrRecipientRequest) (*DeleteNostrRecipientResponse, error)
+	GetNote(context.Context, *GetNoteRequest) (*GetNoteResponse, error)
 }
 
 // UnimplementedArkServiceServer should be embedded to have forward compatible implementations.
@@ -260,11 +249,8 @@ func (UnimplementedArkServiceServer) SubmitRedeemTx(context.Context, *SubmitRede
 func (UnimplementedArkServiceServer) GetTransactionsStream(*GetTransactionsStreamRequest, ArkService_GetTransactionsStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method GetTransactionsStream not implemented")
 }
-func (UnimplementedArkServiceServer) SetNostrRecipient(context.Context, *SetNostrRecipientRequest) (*SetNostrRecipientResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SetNostrRecipient not implemented")
-}
-func (UnimplementedArkServiceServer) DeleteNostrRecipient(context.Context, *DeleteNostrRecipientRequest) (*DeleteNostrRecipientResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DeleteNostrRecipient not implemented")
+func (UnimplementedArkServiceServer) GetNote(context.Context, *GetNoteRequest) (*GetNoteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetNote not implemented")
 }
 
 // UnsafeArkServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -482,38 +468,20 @@ func (x *arkServiceGetTransactionsStreamServer) Send(m *GetTransactionsStreamRes
 	return x.ServerStream.SendMsg(m)
 }
 
-func _ArkService_SetNostrRecipient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SetNostrRecipientRequest)
+func _ArkService_GetNote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetNoteRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ArkServiceServer).SetNostrRecipient(ctx, in)
+		return srv.(ArkServiceServer).GetNote(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/SetNostrRecipient",
+		FullMethod: "/ark.v1.ArkService/GetNote",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).SetNostrRecipient(ctx, req.(*SetNostrRecipientRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ArkService_DeleteNostrRecipient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeleteNostrRecipientRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ArkServiceServer).DeleteNostrRecipient(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/DeleteNostrRecipient",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).DeleteNostrRecipient(ctx, req.(*DeleteNostrRecipientRequest))
+		return srv.(ArkServiceServer).GetNote(ctx, req.(*GetNoteRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -562,12 +530,8 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ArkService_SubmitRedeemTx_Handler,
 		},
 		{
-			MethodName: "SetNostrRecipient",
-			Handler:    _ArkService_SetNostrRecipient_Handler,
-		},
-		{
-			MethodName: "DeleteNostrRecipient",
-			Handler:    _ArkService_DeleteNostrRecipient_Handler,
+			MethodName: "GetNote",
+			Handler:    _ArkService_GetNote_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

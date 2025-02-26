@@ -648,6 +648,10 @@ func (a *covenantArkClient) GetTransactionHistory(
 	return vtxosToTxsCovenant(config.VtxoTreeExpiry, spendableVtxos, spentVtxos, boardingTxs)
 }
 
+func (a *covenantArkClient) RecoverSweptVtxos(ctx context.Context) (string, error) {
+	return "", fmt.Errorf("not implemented")
+}
+
 func (a *covenantArkClient) getAllBoardingUtxos(ctx context.Context) ([]types.Utxo, error) {
 	_, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {

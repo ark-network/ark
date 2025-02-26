@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+	"github.com/ark-network/ark/common/bip322"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/descriptor"
 	"github.com/ark-network/ark/common/tree"
@@ -464,40 +465,32 @@ func (h *handler) GetTransactionsStream(
 	}
 }
 
-func (h *handler) DeleteNostrRecipient(
-	ctx context.Context, req *arkv1.DeleteNostrRecipientRequest,
-) (*arkv1.DeleteNostrRecipientResponse, error) {
-	signedVtxoOutpoints, err := parseSignedVtxoOutpoints(req.GetVtxos())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+func (h *handler) GetNote(
+	ctx context.Context, req *arkv1.GetNoteRequest,
+) (*arkv1.GetNoteResponse, error) {
+	signatureStr := req.GetBip322Signature()
+	if len(signatureStr) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing BIP0322 signature")
 	}
 
-	if err := h.svc.DeleteNostrRecipient(ctx, signedVtxoOutpoints); err != nil {
+	message := req.GetMessage()
+	if len(message) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing message")
+	}
+
+	signature, err := bip322.DecodeSignature(signatureStr)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid BIP0322 signature")
+	}
+
+	note, err := h.svc.GetNote(ctx, *signature, message)
+	if err != nil {
 		return nil, err
 	}
 
-	return &arkv1.DeleteNostrRecipientResponse{}, nil
-}
-
-func (h *handler) SetNostrRecipient(
-	ctx context.Context,
-	req *arkv1.SetNostrRecipientRequest,
-) (*arkv1.SetNostrRecipientResponse, error) {
-	signedVtxoOutpoints, err := parseSignedVtxoOutpoints(req.GetVtxos())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-
-	nostrRecipient := req.GetNostrRecipient()
-	if len(nostrRecipient) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "missing nostr recipient")
-	}
-
-	if err := h.svc.SetNostrRecipient(ctx, nostrRecipient, signedVtxoOutpoints); err != nil {
-		return nil, err
-	}
-
-	return &arkv1.SetNostrRecipientResponse{}, nil
+	return &arkv1.GetNoteResponse{
+		Note: note.String(),
+	}, nil
 }
 
 // listenToEvents forwards events from the application layer to the set of listeners

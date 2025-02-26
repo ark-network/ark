@@ -391,43 +391,18 @@ func (c *grpcClient) GetTransactionsStream(
 	return eventCh, closeFn, nil
 }
 
-func (a *grpcClient) SetNostrRecipient(
-	ctx context.Context, nostrRecipient string, vtxos []client.SignedVtxoOutpoint,
-) error {
-	req := &arkv1.SetNostrRecipientRequest{
-		NostrRecipient: nostrRecipient,
-		Vtxos:          signedVtxosToProto(vtxos),
+func (c *grpcClient) GetNote(ctx context.Context, signature, message string) (string, error) {
+	req := &arkv1.GetNoteRequest{
+		Bip322Signature: signature,
+		Message:         message,
 	}
-	_, err := a.svc.SetNostrRecipient(ctx, req)
-	return err
-}
 
-func (a *grpcClient) DeleteNostrRecipient(
-	ctx context.Context, vtxos []client.SignedVtxoOutpoint,
-) error {
-	req := &arkv1.DeleteNostrRecipientRequest{
-		Vtxos: signedVtxosToProto(vtxos),
+	resp, err := c.svc.GetNote(ctx, req)
+	if err != nil {
+		return "", err
 	}
-	_, err := a.svc.DeleteNostrRecipient(ctx, req)
-	return err
-}
 
-func signedVtxosToProto(vtxos []client.SignedVtxoOutpoint) []*arkv1.SignedVtxoOutpoint {
-	protoVtxos := make([]*arkv1.SignedVtxoOutpoint, len(vtxos))
-	for i, v := range vtxos {
-		protoVtxos[i] = &arkv1.SignedVtxoOutpoint{
-			Outpoint: &arkv1.Outpoint{
-				Txid: v.Outpoint.Txid,
-				Vout: uint32(v.Outpoint.VOut),
-			},
-			Proof: &arkv1.OwnershipProof{
-				ControlBlock: v.Proof.ControlBlock,
-				Script:       v.Proof.Script,
-				Signature:    v.Proof.Signature,
-			},
-		}
-	}
-	return protoVtxos
+	return resp.GetNote(), nil
 }
 
 func outpointsFromProto(protoOutpoints []*arkv1.Outpoint) []client.Outpoint {

@@ -115,6 +115,8 @@ func (v vtxo) toVtxo() client.Vtxo {
 		SpentBy:   v.GetSpentBy(),
 		PubKey:    v.GetPubkey(),
 		CreatedAt: time.Unix(v.GetCreatedAt(), 0),
+		Swept:     v.GetSwept(),
+		Spent:     v.GetSpent(),
 	}
 }
 

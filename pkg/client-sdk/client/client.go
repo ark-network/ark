@@ -55,8 +55,7 @@ type TransportClient interface {
 	GetRoundByID(ctx context.Context, roundID string) (*Round, error)
 	Close()
 	GetTransactionsStream(ctx context.Context) (<-chan TransactionEvent, func(), error)
-	SetNostrRecipient(ctx context.Context, nostrRecipient string, vtxos []SignedVtxoOutpoint) error
-	DeleteNostrRecipient(ctx context.Context, vtxos []SignedVtxoOutpoint) error
+	GetNote(ctx context.Context, signature, message string) (string, error)
 }
 
 type Info struct {
@@ -104,6 +103,8 @@ type Vtxo struct {
 	RedeemTx  string
 	IsPending bool
 	SpentBy   string
+	Swept     bool
+	Spent     bool
 }
 
 func (v Vtxo) Address(server *secp256k1.PublicKey, net common.Network) (string, error) {
@@ -230,15 +231,4 @@ type RedeemTransaction struct {
 	Txid           string
 	SpentVtxos     []Vtxo
 	SpendableVtxos []Vtxo
-}
-
-type SignedVtxoOutpoint struct {
-	Outpoint
-	Proof OwnershipProof
-}
-
-type OwnershipProof struct {
-	ControlBlock string
-	Script       string
-	Signature    string
 }
