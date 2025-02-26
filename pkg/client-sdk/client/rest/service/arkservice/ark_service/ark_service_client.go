@@ -54,13 +54,13 @@ type ClientOption func(*runtime.ClientOperation)
 
 // ClientService is the interface for Client methods
 type ClientService interface {
-	ArkServiceDeleteNostrRecipient(params *ArkServiceDeleteNostrRecipientParams, opts ...ClientOption) (*ArkServiceDeleteNostrRecipientOK, error)
-
 	ArkServiceGetBoardingAddress(params *ArkServiceGetBoardingAddressParams, opts ...ClientOption) (*ArkServiceGetBoardingAddressOK, error)
 
 	ArkServiceGetEventStream(params *ArkServiceGetEventStreamParams, opts ...ClientOption) (*ArkServiceGetEventStreamOK, error)
 
 	ArkServiceGetInfo(params *ArkServiceGetInfoParams, opts ...ClientOption) (*ArkServiceGetInfoOK, error)
+
+	ArkServiceGetNote(params *ArkServiceGetNoteParams, opts ...ClientOption) (*ArkServiceGetNoteOK, error)
 
 	ArkServiceGetTransactionsStream(params *ArkServiceGetTransactionsStreamParams, opts ...ClientOption) (*ArkServiceGetTransactionsStreamOK, error)
 
@@ -69,8 +69,6 @@ type ClientService interface {
 	ArkServiceRegisterInputsForNextRound(params *ArkServiceRegisterInputsForNextRoundParams, opts ...ClientOption) (*ArkServiceRegisterInputsForNextRoundOK, error)
 
 	ArkServiceRegisterOutputsForNextRound(params *ArkServiceRegisterOutputsForNextRoundParams, opts ...ClientOption) (*ArkServiceRegisterOutputsForNextRoundOK, error)
-
-	ArkServiceSetNostrRecipient(params *ArkServiceSetNostrRecipientParams, opts ...ClientOption) (*ArkServiceSetNostrRecipientOK, error)
 
 	ArkServiceSubmitRedeemTx(params *ArkServiceSubmitRedeemTxParams, opts ...ClientOption) (*ArkServiceSubmitRedeemTxOK, error)
 
@@ -81,43 +79,6 @@ type ClientService interface {
 	ArkServiceSubmitTreeSignatures(params *ArkServiceSubmitTreeSignaturesParams, opts ...ClientOption) (*ArkServiceSubmitTreeSignaturesOK, error)
 
 	SetTransport(transport runtime.ClientTransport)
-}
-
-/*
-ArkServiceDeleteNostrRecipient ark service delete nostr recipient API
-*/
-func (a *Client) ArkServiceDeleteNostrRecipient(params *ArkServiceDeleteNostrRecipientParams, opts ...ClientOption) (*ArkServiceDeleteNostrRecipientOK, error) {
-	// TODO: Validate the params before sending
-	if params == nil {
-		params = NewArkServiceDeleteNostrRecipientParams()
-	}
-	op := &runtime.ClientOperation{
-		ID:                 "ArkService_DeleteNostrRecipient",
-		Method:             "POST",
-		PathPattern:        "/v1/vtxo/nostr/delete",
-		ProducesMediaTypes: []string{"application/json"},
-		ConsumesMediaTypes: []string{"application/json"},
-		Schemes:            []string{"http"},
-		Params:             params,
-		Reader:             &ArkServiceDeleteNostrRecipientReader{formats: a.formats},
-		Context:            params.Context,
-		Client:             params.HTTPClient,
-	}
-	for _, opt := range opts {
-		opt(op)
-	}
-
-	result, err := a.transport.Submit(op)
-	if err != nil {
-		return nil, err
-	}
-	success, ok := result.(*ArkServiceDeleteNostrRecipientOK)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*ArkServiceDeleteNostrRecipientDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 
 /*
@@ -228,6 +189,43 @@ func (a *Client) ArkServiceGetInfo(params *ArkServiceGetInfoParams, opts ...Clie
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*ArkServiceGetInfoDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+ArkServiceGetNote ark service get note API
+*/
+func (a *Client) ArkServiceGetNote(params *ArkServiceGetNoteParams, opts ...ClientOption) (*ArkServiceGetNoteOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewArkServiceGetNoteParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "ArkService_GetNote",
+		Method:             "POST",
+		PathPattern:        "/v1/notes",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &ArkServiceGetNoteReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*ArkServiceGetNoteOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*ArkServiceGetNoteDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 
@@ -376,43 +374,6 @@ func (a *Client) ArkServiceRegisterOutputsForNextRound(params *ArkServiceRegiste
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*ArkServiceRegisterOutputsForNextRoundDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
-}
-
-/*
-ArkServiceSetNostrRecipient ark service set nostr recipient API
-*/
-func (a *Client) ArkServiceSetNostrRecipient(params *ArkServiceSetNostrRecipientParams, opts ...ClientOption) (*ArkServiceSetNostrRecipientOK, error) {
-	// TODO: Validate the params before sending
-	if params == nil {
-		params = NewArkServiceSetNostrRecipientParams()
-	}
-	op := &runtime.ClientOperation{
-		ID:                 "ArkService_SetNostrRecipient",
-		Method:             "POST",
-		PathPattern:        "/v1/vtxo/nostr",
-		ProducesMediaTypes: []string{"application/json"},
-		ConsumesMediaTypes: []string{"application/json"},
-		Schemes:            []string{"http"},
-		Params:             params,
-		Reader:             &ArkServiceSetNostrRecipientReader{formats: a.formats},
-		Context:            params.Context,
-		Client:             params.HTTPClient,
-	}
-	for _, opt := range opts {
-		opt(op)
-	}
-
-	result, err := a.transport.Submit(op)
-	if err != nil {
-		return nil, err
-	}
-	success, ok := result.(*ArkServiceSetNostrRecipientOK)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*ArkServiceSetNostrRecipientDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 

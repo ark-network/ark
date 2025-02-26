@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/bip322"
 	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
@@ -37,8 +38,6 @@ type covenantService struct {
 	unilateralExitDelay common.RelativeLocktime
 	boardingExitDelay   common.RelativeLocktime
 
-	nostrDefaultRelays []string
-
 	wallet      ports.WalletService
 	repoManager ports.RepoManager
 	builder     ports.TxBuilder
@@ -65,7 +64,6 @@ func NewCovenantService(
 	network common.Network,
 	roundInterval int64,
 	vtxoTreeExpiry, unilateralExitDelay, boardingExitDelay common.RelativeLocktime,
-	nostrDefaultRelays []string,
 	walletSvc ports.WalletService, repoManager ports.RepoManager,
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	scheduler ports.SchedulerService,
@@ -106,7 +104,6 @@ func NewCovenantService(
 		eventsCh:                 make(chan domain.RoundEvent),
 		transactionEventsCh:      make(chan TransactionEvent),
 		currentRoundLock:         sync.Mutex{},
-		nostrDefaultRelays:       nostrDefaultRelays,
 		forfeitsBoardingSigsChan: make(chan struct{}, 1),
 	}
 
@@ -417,6 +414,10 @@ func (s *covenantService) SignRoundTx(ctx context.Context, signedRoundTx string)
 	return nil
 }
 
+func (s *covenantService) GetNote(context.Context, bip322.Signature, string) (*note.Note, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
 func (s *covenantService) checkForfeitsAndBoardingSigsSent(currentRound *domain.Round) {
 	roundTx, _ := psetv2.NewPsetFromBase64(currentRound.UnsignedTx)
 	numOfInputsSigned := 0
@@ -531,14 +532,6 @@ func (s *covenantService) RegisterCosignerNonces(context.Context, string, *secp2
 
 func (s *covenantService) RegisterCosignerSignatures(context.Context, string, *secp256k1.PublicKey, string) error {
 	return ErrTreeSigningNotRequired
-}
-
-func (s *covenantService) SetNostrRecipient(ctx context.Context, nostrRecipient string, signedVtxoOutpoints []SignedVtxoOutpoint) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (s *covenantService) DeleteNostrRecipient(ctx context.Context, signedVtxoOutpoints []SignedVtxoOutpoint) error {
-	return fmt.Errorf("not implemented")
 }
 
 func (s *covenantService) GetTxRequestQueue(

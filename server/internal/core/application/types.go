@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/ark-network/ark/common/bip322"
 	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
@@ -46,12 +47,11 @@ type Service interface {
 		pubkey *secp256k1.PublicKey, signatures string,
 	) error
 	GetTransactionEventsChannel(ctx context.Context) <-chan TransactionEvent
-	SetNostrRecipient(ctx context.Context, nostrRecipient string, signedVtxoOutpoints []SignedVtxoOutpoint) error
-	DeleteNostrRecipient(ctx context.Context, signedVtxoOutpoints []SignedVtxoOutpoint) error
 	GetMarketHourConfig(ctx context.Context) (*domain.MarketHour, error)
 	UpdateMarketHourConfig(ctx context.Context, marketHourStartTime, marketHourEndTime time.Time, period, roundInterval time.Duration) error
 	GetTxRequestQueue(ctx context.Context, requestIds ...string) ([]TxRequestInfo, error)
 	DeleteTxRequests(ctx context.Context, requestIds ...string) error
+	GetNote(ctx context.Context, signature bip322.Signature, message string) (*note.Note, error)
 }
 
 type ServiceInfo struct {
@@ -76,11 +76,6 @@ type WalletStatus struct {
 	IsInitialized bool
 	IsUnlocked    bool
 	IsSynced      bool
-}
-
-type SignedVtxoOutpoint struct {
-	Outpoint domain.VtxoKey
-	Proof    OwnershipProof
 }
 
 type txOutpoint struct {

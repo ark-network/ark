@@ -37,7 +37,7 @@ type ArkClient interface {
 	GetTransactionEventChannel(ctx context.Context) chan types.TransactionEvent
 	GetVtxoEventChannel(ctx context.Context) chan types.VtxoEvent
 	RedeemNotes(ctx context.Context, notes []string, opts ...Option) (string, error)
-	SetNostrNotificationRecipient(ctx context.Context, nostrRecipient string) error
+	RecoverSweptVtxos(ctx context.Context) (string, error)
 	SignTransaction(ctx context.Context, tx string) (string, error)
 	Stop() error
 }

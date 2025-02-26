@@ -70,22 +70,15 @@ service ArkService {
     };
   }
 
-  /* Nostr APIs */
-
   rpc GetTransactionsStream(GetTransactionsStreamRequest) returns (stream GetTransactionsStreamResponse) {
     option (google.api.http) = {
       get: "/v1/transactions"
     };
   }
-  rpc SetNostrRecipient(SetNostrRecipientRequest) returns (SetNostrRecipientResponse) {
+
+  rpc GetNote(GetNoteRequest) returns (GetNoteResponse) {
     option (google.api.http) = {
-      post: "/v1/vtxo/nostr"
-      body: "*"
-    };
-  }
-  rpc DeleteNostrRecipient(DeleteNostrRecipientRequest) returns (DeleteNostrRecipientResponse) {
-    option (google.api.http) = {
-      post: "/v1/vtxo/nostr/delete"
+      post: "/v1/notes"
       body: "*"
     };
   }
@@ -197,13 +190,11 @@ message GetTransactionsStreamResponse {
   }
 }
 
-message SetNostrRecipientRequest {
-  string nostr_recipient = 1;
-  repeated SignedVtxoOutpoint vtxos = 2;
+message GetNoteRequest {
+  string bip322_signature = 1;
+  string message = 2;
 }
-message SetNostrRecipientResponse {}
 
-message DeleteNostrRecipientRequest {
-  repeated SignedVtxoOutpoint vtxos = 1;
+message GetNoteResponse {
+  string note = 1;
 }
-message DeleteNostrRecipientResponse {}

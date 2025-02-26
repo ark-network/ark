@@ -4,14 +4,17 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/bip322"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
@@ -30,7 +33,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const marketHourDelta = 5 * time.Minute
+const (
+	marketHourDelta   = 5 * time.Minute
+	proofOfFundsDelta = 15 * time.Second
+)
 
 type covenantlessService struct {
 	network             common.Network
@@ -39,8 +45,6 @@ type covenantlessService struct {
 	roundInterval       int64
 	unilateralExitDelay common.RelativeLocktime
 	boardingExitDelay   common.RelativeLocktime
-
-	nostrDefaultRelays []string
 
 	wallet      ports.WalletService
 	repoManager ports.RepoManager
@@ -77,7 +81,6 @@ func NewCovenantlessService(
 	network common.Network,
 	roundInterval int64,
 	vtxoTreeExpiry, unilateralExitDelay, boardingExitDelay common.RelativeLocktime,
-	nostrDefaultRelays []string,
 	walletSvc ports.WalletService, repoManager ports.RepoManager,
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
 	scheduler ports.SchedulerService,
@@ -127,7 +130,6 @@ func NewCovenantlessService(
 		currentRoundLock:         sync.Mutex{},
 		treeSigningSessions:      make(map[string]*musigSigningSession),
 		boardingExitDelay:        boardingExitDelay,
-		nostrDefaultRelays:       nostrDefaultRelays,
 		serverSigningKey:         serverSigningKey,
 		serverSigningPubKey:      serverSigningKey.PubKey(),
 		allowZeroFees:            allowZeroFees,
@@ -1107,41 +1109,129 @@ func (s *covenantlessService) RegisterCosignerSignatures(
 	return nil
 }
 
-func (s *covenantlessService) SetNostrRecipient(ctx context.Context, nostrRecipient string, signedVtxoOutpoints []SignedVtxoOutpoint) error {
-	nprofileRecipient, err := nip19toNostrProfile(nostrRecipient, s.nostrDefaultRelays)
+func (s *covenantlessService) GetNote(ctx context.Context, signature bip322.Signature, message string) (*note.Note, error) {
+	// message should be timestamp
+	parsedMessage, err := strconv.ParseInt(message, 10, 64)
 	if err != nil {
-		return fmt.Errorf("failed to convert nostr recipient: %s", err)
+		return nil, fmt.Errorf("failed to parse message: %s", err)
 	}
 
-	if err := validateProofs(ctx, s.repoManager.Vtxos(), signedVtxoOutpoints); err != nil {
-		return err
+	now := time.Now()
+	messageTimestamp := time.Unix(parsedMessage, 0)
+
+	// parsedMessage should be between now - 15 seconds and now + 15 seconds
+	timeDiff := messageTimestamp.Sub(now)
+	if timeDiff < -proofOfFundsDelta || timeDiff > proofOfFundsDelta {
+		return nil, fmt.Errorf("message timestamp should be within %d and %d, got %d", now.Add(-proofOfFundsDelta).Unix(), now.Add(proofOfFundsDelta).Unix(), messageTimestamp.Unix())
 	}
 
-	vtxoKeys := make([]domain.VtxoKey, 0, len(signedVtxoOutpoints))
-	for _, signedVtxo := range signedVtxoOutpoints {
-		vtxoKeys = append(vtxoKeys, signedVtxo.Outpoint)
+	vtxoRepo := s.repoManager.Vtxos()
+	outpoints := signature.GetOutpoints()
+	vtxosKeys := toVtxoKeys(outpoints)
+	vtxos, err := vtxoRepo.GetVtxos(ctx, vtxosKeys)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get vtxos: %s", err)
 	}
 
-	return s.repoManager.Entities().Add(
-		ctx,
-		domain.Entity{
-			NostrRecipient: nprofileRecipient,
-		},
-		vtxoKeys,
-	)
-}
+	prevouts := make(map[wire.OutPoint]*wire.TxOut)
+	totalAmount := uint64(0)
 
-func (s *covenantlessService) DeleteNostrRecipient(ctx context.Context, signedVtxoOutpoints []SignedVtxoOutpoint) error {
-	if err := validateProofs(ctx, s.repoManager.Vtxos(), signedVtxoOutpoints); err != nil {
-		return err
+	for _, vtxo := range vtxos {
+		// verify vtxo state
+		if !vtxo.Swept {
+			return nil, fmt.Errorf("vtxo %s is not swept", vtxo.VtxoKey)
+		}
+
+		if vtxo.Spent {
+			return nil, fmt.Errorf("vtxo %s has been spent", vtxo.VtxoKey)
+		}
+
+		if vtxo.Redeemed {
+			return nil, fmt.Errorf("vtxo %s has been redeemed", vtxo.VtxoKey)
+		}
+
+		// set the prevout
+		txid, err := chainhash.NewHashFromStr(vtxo.Txid)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse txid: %s", err)
+		}
+
+		pubkeyBytes, err := hex.DecodeString(vtxo.PubKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode script pubkey: %s", err)
+		}
+
+		pubkey, err := schnorr.ParsePubKey(pubkeyBytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse pubkey: %s", err)
+		}
+
+		pkScript, err := common.P2TRScript(pubkey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create p2tr script: %s", err)
+		}
+
+		prevouts[*wire.NewOutPoint(txid, vtxo.VOut)] = &wire.TxOut{
+			Value:    int64(vtxo.Amount),
+			PkScript: pkScript,
+		}
+		totalAmount += vtxo.Amount
 	}
 
-	vtxoKeys := make([]domain.VtxoKey, 0, len(signedVtxoOutpoints))
-	for _, signedVtxo := range signedVtxoOutpoints {
-		vtxoKeys = append(vtxoKeys, signedVtxo.Outpoint)
+	prevoutFetcher := txscript.NewMultiPrevOutFetcher(prevouts)
+
+	b64, err := signature.Encode()
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode signature: %s", err)
 	}
 
-	return s.repoManager.Entities().Delete(ctx, vtxoKeys)
+	prevoutJSON := make(map[string]interface{})
+	for outpoint, prevout := range prevouts {
+		prevoutJSON[fmt.Sprintf("%s:%d", outpoint.Hash, outpoint.Index)] = map[string]interface{}{
+			"value":    prevout.Value,
+			"pkScript": hex.EncodeToString(prevout.PkScript),
+		}
+	}
+
+	fixture := map[string]interface{}{
+		"signature": b64,
+		"message":   message,
+		"prevouts":  prevoutJSON,
+	}
+
+	fixtureJSON, err := json.MarshalIndent(fixture, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal fixture: %s", err)
+	}
+	fmt.Println("fixture:", string(fixtureJSON))
+
+	// verify proof of funds
+	if err := signature.Verify(message, prevoutFetcher); err != nil {
+		return nil, fmt.Errorf("failed to verify signature: %s", err)
+	}
+
+	fmt.Println("signature verified")
+
+	// create note
+	noteData, err := note.New(uint32(totalAmount))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create note: %s", err)
+	}
+
+	// sign note
+	noteSignature, err := s.wallet.SignMessage(ctx, noteData.Hash())
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign note: %s", err)
+	}
+
+	note := noteData.ToNote(noteSignature)
+
+	// mark vtxos as spent to prevent double minting
+	if err := vtxoRepo.SpendVtxos(ctx, vtxosKeys, note.String()); err != nil {
+		return nil, fmt.Errorf("failed to spend vtxos: %s", err)
+	}
+
+	return note, nil
 }
 
 func (s *covenantlessService) start() {
@@ -2091,4 +2181,12 @@ func (s *covenantlessService) UpdateMarketHourConfig(
 	}
 
 	return nil
+}
+
+func toVtxoKeys(outpoints []wire.OutPoint) []domain.VtxoKey {
+	vtxoKeys := make([]domain.VtxoKey, 0, len(outpoints))
+	for _, outpoint := range outpoints {
+		vtxoKeys = append(vtxoKeys, domain.VtxoKey{Txid: outpoint.Hash.String(), VOut: outpoint.Index})
+	}
+	return vtxoKeys
 }

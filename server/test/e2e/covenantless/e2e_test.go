@@ -35,8 +35,6 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcwallet/waddrmgr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/nbd-wtf/go-nostr"
-	"github.com/nbd-wtf/go-nostr/nip04"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1098,36 +1096,10 @@ func TestSweep(t *testing.T) {
 
 	time.Sleep(3 * time.Second)
 
-	secretKey, pubkey, npub, err := utils.GetNostrKeys()
-	require.NoError(t, err)
-
-	_, err = runClarkCommand("register-nostr", "--profile", npub, "--password", utils.Password)
-	require.NoError(t, err)
-
-	time.Sleep(3 * time.Second)
-
-	// connect to relay
-	relay, err := nostr.RelayConnect(context.Background(), "ws://localhost:10547")
-	require.NoError(t, err)
-	defer relay.Close()
-
-	sub, err := relay.Subscribe(context.Background(), nostr.Filters{
-		{
-			Kinds: []int{nostr.KindEncryptedDirectMessage},
-		},
-		{
-			Tags: nostr.TagMap{
-				"p": []string{pubkey},
-			},
-		},
-	})
-	require.NoError(t, err)
-	defer sub.Close()
-
 	_, err = utils.RunCommand("nigiri", "rpc", "generatetoaddress", "100", "bcrt1qe8eelqalnch946nzhefd5ajhgl2afjw5aegc59")
 	require.NoError(t, err)
 
-	time.Sleep(40 * time.Second)
+	time.Sleep(20 * time.Second)
 
 	var balance utils.ArkBalance
 	balanceStr, err := runClarkCommand("balance")
@@ -1135,25 +1107,16 @@ func TestSweep(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 	require.Zero(t, balance.Offchain.Total) // all funds should be swept
 
-	var note string
-
-	for event := range sub.Events {
-		sharedSecret, err := nip04.ComputeSharedSecret(event.PubKey, secretKey)
-		require.NoError(t, err)
-
-		// Decrypt the NIP04 message
-		decrypted, err := nip04.Decrypt(event.Content, sharedSecret)
-		require.NoError(t, err)
-
-		note = decrypted
-		break // Exit after processing the first message
-	}
-
-	require.NotEmpty(t, note)
-
 	// redeem the note
-	_, err = runClarkCommand("redeem-notes", "--notes", note, "--password", utils.Password)
+	_, err = runClarkCommand("recover", "--password", utils.Password)
 	require.NoError(t, err)
+
+	time.Sleep(3 * time.Second)
+
+	balanceStr, err = runClarkCommand("balance")
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
+	require.NotZero(t, balance.Offchain.Total) // funds should be recovered
 }
 
 func runClarkCommand(arg ...string) (string, error) {

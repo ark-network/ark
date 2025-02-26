@@ -506,33 +506,6 @@ func (a *restClient) ListVtxos(
 	return spendableVtxos, spentVtxos, nil
 }
 
-func (a *restClient) SetNostrRecipient(
-	ctx context.Context, nostrRecipient string, vtxos []client.SignedVtxoOutpoint,
-) error {
-	body := models.V1SetNostrRecipientRequest{
-		NostrRecipient: nostrRecipient,
-		Vtxos:          toSignedVtxoModel(vtxos),
-	}
-
-	_, err := a.svc.ArkServiceSetNostrRecipient(
-		ark_service.NewArkServiceSetNostrRecipientParams().WithBody(&body),
-	)
-	return err
-}
-
-func (a *restClient) DeleteNostrRecipient(
-	ctx context.Context, vtxos []client.SignedVtxoOutpoint,
-) error {
-	body := models.V1DeleteNostrRecipientRequest{
-		Vtxos: toSignedVtxoModel(vtxos),
-	}
-
-	_, err := a.svc.ArkServiceDeleteNostrRecipient(
-		ark_service.NewArkServiceDeleteNostrRecipientParams().WithBody(&body),
-	)
-	return err
-}
-
 func (c *restClient) Close() {}
 
 func newRestArkClient(
@@ -730,6 +703,20 @@ func (c *restClient) GetTransactionsStream(ctx context.Context) (<-chan client.T
 	return eventsCh, func() {}, nil
 }
 
+func (c *restClient) GetNote(ctx context.Context, signature, message string) (string, error) {
+	body := models.V1GetNoteRequest{
+		Bip322Signature: signature,
+		Message:         message,
+	}
+
+	resp, err := c.svc.ArkServiceGetNote(ark_service.NewArkServiceGetNoteParams().WithBody(&body))
+	if err != nil {
+		return "", err
+	}
+
+	return resp.Payload.Note, nil
+}
+
 func outpointsFromRest(restOutpoints []*models.V1Outpoint) []client.Outpoint {
 	outpoints := make([]client.Outpoint, len(restOutpoints))
 	for i, o := range restOutpoints {
@@ -779,25 +766,9 @@ func vtxosFromRest(restVtxos []*models.V1Vtxo) []client.Vtxo {
 			IsPending: v.IsPending,
 			SpentBy:   v.SpentBy,
 			CreatedAt: createdAt,
+			Swept:     v.Swept,
+			Spent:     v.Spent,
 		}
 	}
 	return vtxos
-}
-
-func toSignedVtxoModel(vtxos []client.SignedVtxoOutpoint) []*models.V1SignedVtxoOutpoint {
-	signedVtxos := make([]*models.V1SignedVtxoOutpoint, 0, len(vtxos))
-	for _, v := range vtxos {
-		signedVtxos = append(signedVtxos, &models.V1SignedVtxoOutpoint{
-			Outpoint: &models.V1Outpoint{
-				Txid: v.Outpoint.Txid,
-				Vout: int64(v.Outpoint.VOut),
-			},
-			Proof: &models.V1OwnershipProof{
-				ControlBlock: v.Proof.ControlBlock,
-				Script:       v.Proof.Script,
-				Signature:    v.Proof.Signature,
-			},
-		})
-	}
-	return signedVtxos
 }
