@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"runtime"
 	"runtime/debug"
@@ -1180,37 +1179,10 @@ func (s *covenantlessService) GetNote(ctx context.Context, signature bip322.Sign
 
 	prevoutFetcher := txscript.NewMultiPrevOutFetcher(prevouts)
 
-	b64, err := signature.Encode()
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode signature: %s", err)
-	}
-
-	prevoutJSON := make(map[string]interface{})
-	for outpoint, prevout := range prevouts {
-		prevoutJSON[fmt.Sprintf("%s:%d", outpoint.Hash, outpoint.Index)] = map[string]interface{}{
-			"value":    prevout.Value,
-			"pkScript": hex.EncodeToString(prevout.PkScript),
-		}
-	}
-
-	fixture := map[string]interface{}{
-		"signature": b64,
-		"message":   message,
-		"prevouts":  prevoutJSON,
-	}
-
-	fixtureJSON, err := json.MarshalIndent(fixture, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal fixture: %s", err)
-	}
-	fmt.Println("fixture:", string(fixtureJSON))
-
 	// verify proof of funds
 	if err := signature.Verify(message, prevoutFetcher); err != nil {
 		return nil, fmt.Errorf("failed to verify signature: %s", err)
 	}
-
-	fmt.Println("signature verified")
 
 	// create note
 	noteData, err := note.New(uint32(totalAmount))
