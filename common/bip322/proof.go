@@ -44,61 +44,9 @@ func New(message string, inputs []Input) (*FullProof, error) {
 
 	firstInput := inputs[0]
 	toSpend := craftToSpendTx(message, firstInput.WitnessUtxo.PkScript)
-
-	outpoints := make([]*wire.OutPoint, 0, len(inputs)+1)
-	sequences := make([]uint32, 0, len(inputs)+1)
-
-	outpoints = append(outpoints, &wire.OutPoint{
-		Hash:  toSpend.TxHash(),
-		Index: 0,
-	})
-	sequences = append(sequences, firstInput.Sequence)
-
-	for _, input := range inputs {
-		outpoints = append(outpoints, input.OutPoint)
-		sequences = append(sequences, input.Sequence)
-	}
-
-	// build toSign psbt
-	toSign, err := psbt.New(
-		outpoints,
-		[]*wire.TxOut{
-			{
-				Value:    0,
-				PkScript: opReturnPkScript,
-			},
-		},
-		2, 0,
-		sequences,
-	)
+	toSign, err := craftToSignTx(toSpend, inputs)
 	if err != nil {
 		return nil, err
-	}
-
-	updater, err := psbt.NewUpdater(toSign)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := updater.AddInWitnessUtxo(&wire.TxOut{
-		Value:    0,
-		PkScript: firstInput.WitnessUtxo.PkScript,
-	}, 0); err != nil {
-		return nil, err
-	}
-
-	if err := updater.AddInSighashType(txscript.SigHashAll, 0); err != nil {
-		return nil, err
-	}
-
-	for i, input := range inputs {
-		if err := updater.AddInWitnessUtxo(input.WitnessUtxo, i+1); err != nil {
-			return nil, err
-		}
-
-		if err := updater.AddInSighashType(txscript.SigHashAll, i+1); err != nil {
-			return nil, err
-		}
 	}
 
 	return (*FullProof)(toSign), nil
@@ -170,4 +118,65 @@ func craftToSpendTx(message string, pkScript []byte) *wire.MsgTx {
 		},
 	}
 	return toSpend
+}
+
+// craftToSignTx creates the transaction that will be signed for the proof
+func craftToSignTx(toSpend *wire.MsgTx, inputs []Input) (*psbt.Packet, error) {
+	outpoints := make([]*wire.OutPoint, 0, len(inputs)+1)
+	sequences := make([]uint32, 0, len(inputs)+1)
+
+	outpoints = append(outpoints, &wire.OutPoint{
+		Hash:  toSpend.TxHash(),
+		Index: 0,
+	})
+	firstInput := inputs[0]
+	sequences = append(sequences, firstInput.Sequence)
+
+	for _, input := range inputs {
+		outpoints = append(outpoints, input.OutPoint)
+		sequences = append(sequences, input.Sequence)
+	}
+
+	toSign, err := psbt.New(
+		outpoints,
+		[]*wire.TxOut{
+			{
+				Value:    0,
+				PkScript: opReturnPkScript,
+			},
+		},
+		2, 0,
+		sequences,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	updater, err := psbt.NewUpdater(toSign)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := updater.AddInWitnessUtxo(&wire.TxOut{
+		Value:    0,
+		PkScript: firstInput.WitnessUtxo.PkScript,
+	}, 0); err != nil {
+		return nil, err
+	}
+
+	if err := updater.AddInSighashType(txscript.SigHashAll, 0); err != nil {
+		return nil, err
+	}
+
+	for i, input := range inputs {
+		if err := updater.AddInWitnessUtxo(input.WitnessUtxo, i+1); err != nil {
+			return nil, err
+		}
+
+		if err := updater.AddInSighashType(txscript.SigHashAll, i+1); err != nil {
+			return nil, err
+		}
+	}
+
+	return toSign, nil
 }
