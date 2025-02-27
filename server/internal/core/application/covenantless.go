@@ -1115,13 +1115,11 @@ func (s *covenantlessService) GetNote(ctx context.Context, signature bip322.Sign
 		return nil, fmt.Errorf("failed to parse message: %s", err)
 	}
 
-	now := time.Now()
 	messageTimestamp := time.Unix(parsedMessage, 0)
+	now := time.Now()
 
-	// parsedMessage should be between now - 15 seconds and now + 15 seconds
-	timeDiff := messageTimestamp.Sub(now)
-	if timeDiff < -proofOfFundsDelta || timeDiff > proofOfFundsDelta {
-		return nil, fmt.Errorf("message timestamp should be within %d and %d, got %d", now.Add(-proofOfFundsDelta).Unix(), now.Add(proofOfFundsDelta).Unix(), messageTimestamp.Unix())
+	if now.Sub(messageTimestamp) > proofOfFundsDelta {
+		return nil, fmt.Errorf("message timestamp is too old")
 	}
 
 	vtxoRepo := s.repoManager.Vtxos()
