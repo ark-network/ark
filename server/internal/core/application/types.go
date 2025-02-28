@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/ark-network/ark/common/bip322"
 	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
@@ -19,7 +20,7 @@ type Service interface {
 	Start() error
 	Stop()
 	SpendNotes(ctx context.Context, notes []note.Note) (string, error)
-	SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error)
+	SpendVtxos(ctx context.Context, bip322signature bip322.Signature, message string, tapscripts map[string][]string) (string, error)
 	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver, musig2Data *tree.Musig2) error
 	SignVtxos(ctx context.Context, forfeitTxs []string) error
 	SignRoundTx(ctx context.Context, roundTx string) error
@@ -46,8 +47,6 @@ type Service interface {
 		pubkey *secp256k1.PublicKey, signatures string,
 	) error
 	GetTransactionEventsChannel(ctx context.Context) <-chan TransactionEvent
-	SetNostrRecipient(ctx context.Context, nostrRecipient string, signedVtxoOutpoints []SignedVtxoOutpoint) error
-	DeleteNostrRecipient(ctx context.Context, signedVtxoOutpoints []SignedVtxoOutpoint) error
 	GetMarketHourConfig(ctx context.Context) (*domain.MarketHour, error)
 	UpdateMarketHourConfig(ctx context.Context, marketHourStartTime, marketHourEndTime time.Time, period, roundInterval time.Duration) error
 	GetTxRequestQueue(ctx context.Context, requestIds ...string) ([]TxRequestInfo, error)
@@ -76,11 +75,6 @@ type WalletStatus struct {
 	IsInitialized bool
 	IsUnlocked    bool
 	IsSynced      bool
-}
-
-type SignedVtxoOutpoint struct {
-	Outpoint domain.VtxoKey
-	Proof    OwnershipProof
 }
 
 type txOutpoint struct {

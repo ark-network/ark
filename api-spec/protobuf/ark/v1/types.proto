@@ -28,14 +28,6 @@ message Outpoint {
   uint32 vout = 2;
 }
 
-message Input {
-  Outpoint outpoint = 1;
-  oneof taproot_tree {
-    string descriptor = 2;
-    Tapscripts tapscripts = 3;
-  }
-}
-
 message Output {
   string address = 1; // onchain or off-chain
   uint64 amount = 2; // Amount to send in satoshis.
@@ -82,20 +74,13 @@ message RedeemTransaction {
   repeated Vtxo spendable_vtxos = 3;
 }
 
-// This message is used to prove to the server that the user controls the vtxo without revealing the whole VTXO taproot tree.
-message OwnershipProof {
-  string control_block = 1;
-  string script = 2;
-  string signature = 3; // VTXO outpoint signed with script's secret key
-}
-
-message SignedVtxoOutpoint {
-  Outpoint outpoint = 1;
-  OwnershipProof proof = 2;
-}
-
 message Tapscripts {
   repeated string scripts = 1;
+}
+
+message Bip322Signature {
+  string signature = 1;
+  string message = 2;
 }
 
 message MarketHour {

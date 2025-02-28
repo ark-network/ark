@@ -10,6 +10,7 @@ package arkv1
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 
@@ -24,167 +25,122 @@ import (
 )
 
 // Suppress "imported and not used" errors
-var _ codes.Code
-var _ io.Reader
-var _ status.Status
-var _ = runtime.String
-var _ = utilities.NewDoubleArray
-var _ = metadata.Join
+var (
+	_ codes.Code
+	_ io.Reader
+	_ status.Status
+	_ = errors.New
+	_ = runtime.String
+	_ = utilities.NewDoubleArray
+	_ = metadata.Join
+)
 
 func request_ExplorerService_GetRound_0(ctx context.Context, marshaler runtime.Marshaler, client ExplorerServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetRoundRequest
-	var metadata runtime.ServerMetadata
-
 	var (
-		val string
-		ok  bool
-		err error
-		_   = err
+		protoReq GetRoundRequest
+		metadata runtime.ServerMetadata
+		err      error
 	)
-
-	val, ok = pathParams["txid"]
+	val, ok := pathParams["txid"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "txid")
 	}
-
 	protoReq.Txid, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "txid", err)
 	}
-
 	msg, err := client.GetRound(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
-
 }
 
 func local_request_ExplorerService_GetRound_0(ctx context.Context, marshaler runtime.Marshaler, server ExplorerServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetRoundRequest
-	var metadata runtime.ServerMetadata
-
 	var (
-		val string
-		ok  bool
-		err error
-		_   = err
+		protoReq GetRoundRequest
+		metadata runtime.ServerMetadata
+		err      error
 	)
-
-	val, ok = pathParams["txid"]
+	val, ok := pathParams["txid"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "txid")
 	}
-
 	protoReq.Txid, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "txid", err)
 	}
-
 	msg, err := server.GetRound(ctx, &protoReq)
 	return msg, metadata, err
-
 }
 
 func request_ExplorerService_GetRoundById_0(ctx context.Context, marshaler runtime.Marshaler, client ExplorerServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetRoundByIdRequest
-	var metadata runtime.ServerMetadata
-
 	var (
-		val string
-		ok  bool
-		err error
-		_   = err
+		protoReq GetRoundByIdRequest
+		metadata runtime.ServerMetadata
+		err      error
 	)
-
-	val, ok = pathParams["id"]
+	val, ok := pathParams["id"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "id")
 	}
-
 	protoReq.Id, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "id", err)
 	}
-
 	msg, err := client.GetRoundById(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
-
 }
 
 func local_request_ExplorerService_GetRoundById_0(ctx context.Context, marshaler runtime.Marshaler, server ExplorerServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetRoundByIdRequest
-	var metadata runtime.ServerMetadata
-
 	var (
-		val string
-		ok  bool
-		err error
-		_   = err
+		protoReq GetRoundByIdRequest
+		metadata runtime.ServerMetadata
+		err      error
 	)
-
-	val, ok = pathParams["id"]
+	val, ok := pathParams["id"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "id")
 	}
-
 	protoReq.Id, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "id", err)
 	}
-
 	msg, err := server.GetRoundById(ctx, &protoReq)
 	return msg, metadata, err
-
 }
 
 func request_ExplorerService_ListVtxos_0(ctx context.Context, marshaler runtime.Marshaler, client ExplorerServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq ListVtxosRequest
-	var metadata runtime.ServerMetadata
-
 	var (
-		val string
-		ok  bool
-		err error
-		_   = err
+		protoReq ListVtxosRequest
+		metadata runtime.ServerMetadata
+		err      error
 	)
-
-	val, ok = pathParams["address"]
+	val, ok := pathParams["address"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "address")
 	}
-
 	protoReq.Address, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "address", err)
 	}
-
 	msg, err := client.ListVtxos(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
-
 }
 
 func local_request_ExplorerService_ListVtxos_0(ctx context.Context, marshaler runtime.Marshaler, server ExplorerServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq ListVtxosRequest
-	var metadata runtime.ServerMetadata
-
 	var (
-		val string
-		ok  bool
-		err error
-		_   = err
+		protoReq ListVtxosRequest
+		metadata runtime.ServerMetadata
+		err      error
 	)
-
-	val, ok = pathParams["address"]
+	val, ok := pathParams["address"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "address")
 	}
-
 	protoReq.Address, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "address", err)
 	}
-
 	msg, err := server.ListVtxos(ctx, &protoReq)
 	return msg, metadata, err
-
 }
 
 // RegisterExplorerServiceHandlerServer registers the http handlers for service ExplorerService to "mux".
@@ -193,16 +149,13 @@ func local_request_ExplorerService_ListVtxos_0(ctx context.Context, marshaler ru
 // Note that using this registration option will cause many gRPC library features to stop working. Consider using RegisterExplorerServiceHandlerFromEndpoint instead.
 // GRPC interceptors will not work for this type of registration. To use interceptors, you must use the "runtime.WithMiddlewares" option in the "runtime.NewServeMux" call.
 func RegisterExplorerServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux, server ExplorerServiceServer) error {
-
-	mux.Handle("GET", pattern_ExplorerService_GetRound_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_ExplorerService_GetRound_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.ExplorerService/GetRound", runtime.WithHTTPPathPattern("/v1/round/{txid}"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.ExplorerService/GetRound", runtime.WithHTTPPathPattern("/v1/round/{txid}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -214,20 +167,15 @@ func RegisterExplorerServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_ExplorerService_GetRound_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
-	mux.Handle("GET", pattern_ExplorerService_GetRoundById_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_ExplorerService_GetRoundById_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.ExplorerService/GetRoundById", runtime.WithHTTPPathPattern("/v1/round/id/{id}"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.ExplorerService/GetRoundById", runtime.WithHTTPPathPattern("/v1/round/id/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -239,20 +187,15 @@ func RegisterExplorerServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_ExplorerService_GetRoundById_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
-	mux.Handle("GET", pattern_ExplorerService_ListVtxos_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_ExplorerService_ListVtxos_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.ExplorerService/ListVtxos", runtime.WithHTTPPathPattern("/v1/vtxos/{address}"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.ExplorerService/ListVtxos", runtime.WithHTTPPathPattern("/v1/vtxos/{address}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -264,9 +207,7 @@ func RegisterExplorerServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_ExplorerService_ListVtxos_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
 
 	return nil
@@ -293,7 +234,6 @@ func RegisterExplorerServiceHandlerFromEndpoint(ctx context.Context, mux *runtim
 			}
 		}()
 	}()
-
 	return RegisterExplorerServiceHandler(ctx, mux, conn)
 }
 
@@ -309,14 +249,11 @@ func RegisterExplorerServiceHandler(ctx context.Context, mux *runtime.ServeMux, 
 // doesn't go through the normal gRPC flow (creating a gRPC client etc.) then it will be up to the passed in
 // "ExplorerServiceClient" to call the correct interceptors. This client ignores the HTTP middlewares.
 func RegisterExplorerServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux, client ExplorerServiceClient) error {
-
-	mux.Handle("GET", pattern_ExplorerService_GetRound_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_ExplorerService_GetRound_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/ark.v1.ExplorerService/GetRound", runtime.WithHTTPPathPattern("/v1/round/{txid}"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/ark.v1.ExplorerService/GetRound", runtime.WithHTTPPathPattern("/v1/round/{txid}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -327,18 +264,13 @@ func RegisterExplorerServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_ExplorerService_GetRound_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
-	mux.Handle("GET", pattern_ExplorerService_GetRoundById_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_ExplorerService_GetRoundById_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/ark.v1.ExplorerService/GetRoundById", runtime.WithHTTPPathPattern("/v1/round/id/{id}"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/ark.v1.ExplorerService/GetRoundById", runtime.WithHTTPPathPattern("/v1/round/id/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -349,18 +281,13 @@ func RegisterExplorerServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_ExplorerService_GetRoundById_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
-	mux.Handle("GET", pattern_ExplorerService_ListVtxos_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_ExplorerService_ListVtxos_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/ark.v1.ExplorerService/ListVtxos", runtime.WithHTTPPathPattern("/v1/vtxos/{address}"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/ark.v1.ExplorerService/ListVtxos", runtime.WithHTTPPathPattern("/v1/vtxos/{address}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -371,26 +298,19 @@ func RegisterExplorerServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_ExplorerService_ListVtxos_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
 	return nil
 }
 
 var (
-	pattern_ExplorerService_GetRound_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "round", "txid"}, ""))
-
+	pattern_ExplorerService_GetRound_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "round", "txid"}, ""))
 	pattern_ExplorerService_GetRoundById_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 2}, []string{"v1", "round", "id"}, ""))
-
-	pattern_ExplorerService_ListVtxos_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "vtxos", "address"}, ""))
+	pattern_ExplorerService_ListVtxos_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "vtxos", "address"}, ""))
 )
 
 var (
-	forward_ExplorerService_GetRound_0 = runtime.ForwardResponseMessage
-
+	forward_ExplorerService_GetRound_0     = runtime.ForwardResponseMessage
 	forward_ExplorerService_GetRoundById_0 = runtime.ForwardResponseMessage
-
-	forward_ExplorerService_ListVtxos_0 = runtime.ForwardResponseMessage
+	forward_ExplorerService_ListVtxos_0    = runtime.ForwardResponseMessage
 )

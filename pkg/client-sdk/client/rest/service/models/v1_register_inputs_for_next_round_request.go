@@ -7,11 +7,11 @@ package models
 
 import (
 	"context"
-	"strconv"
 
 	"github.com/go-openapi/errors"
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
+	"github.com/go-openapi/validate"
 )
 
 // V1RegisterInputsForNextRoundRequest v1 register inputs for next round request
@@ -19,18 +19,25 @@ import (
 // swagger:model v1RegisterInputsForNextRoundRequest
 type V1RegisterInputsForNextRoundRequest struct {
 
-	// inputs
-	Inputs []*V1Input `json:"inputs"`
+	// bip322 signature
+	Bip322Signature *V1Bip322Signature `json:"bip322Signature,omitempty"`
 
 	// notes
 	Notes []string `json:"notes"`
+
+	// tapscripts
+	Tapscripts map[string]V1Tapscripts `json:"tapscripts,omitempty"`
 }
 
 // Validate validates this v1 register inputs for next round request
 func (m *V1RegisterInputsForNextRoundRequest) Validate(formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.validateInputs(formats); err != nil {
+	if err := m.validateBip322Signature(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.validateTapscripts(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -40,22 +47,41 @@ func (m *V1RegisterInputsForNextRoundRequest) Validate(formats strfmt.Registry) 
 	return nil
 }
 
-func (m *V1RegisterInputsForNextRoundRequest) validateInputs(formats strfmt.Registry) error {
-	if swag.IsZero(m.Inputs) { // not required
+func (m *V1RegisterInputsForNextRoundRequest) validateBip322Signature(formats strfmt.Registry) error {
+	if swag.IsZero(m.Bip322Signature) { // not required
 		return nil
 	}
 
-	for i := 0; i < len(m.Inputs); i++ {
-		if swag.IsZero(m.Inputs[i]) { // not required
-			continue
+	if m.Bip322Signature != nil {
+		if err := m.Bip322Signature.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("bip322Signature")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("bip322Signature")
+			}
+			return err
 		}
+	}
 
-		if m.Inputs[i] != nil {
-			if err := m.Inputs[i].Validate(formats); err != nil {
+	return nil
+}
+
+func (m *V1RegisterInputsForNextRoundRequest) validateTapscripts(formats strfmt.Registry) error {
+	if swag.IsZero(m.Tapscripts) { // not required
+		return nil
+	}
+
+	for k := range m.Tapscripts {
+
+		if err := validate.Required("tapscripts"+"."+k, "body", m.Tapscripts[k]); err != nil {
+			return err
+		}
+		if val, ok := m.Tapscripts[k]; ok {
+			if err := val.Validate(formats); err != nil {
 				if ve, ok := err.(*errors.Validation); ok {
-					return ve.ValidateName("inputs" + "." + strconv.Itoa(i))
+					return ve.ValidateName("tapscripts" + "." + k)
 				} else if ce, ok := err.(*errors.CompositeError); ok {
-					return ce.ValidateName("inputs" + "." + strconv.Itoa(i))
+					return ce.ValidateName("tapscripts" + "." + k)
 				}
 				return err
 			}
@@ -70,7 +96,11 @@ func (m *V1RegisterInputsForNextRoundRequest) validateInputs(formats strfmt.Regi
 func (m *V1RegisterInputsForNextRoundRequest) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.contextValidateInputs(ctx, formats); err != nil {
+	if err := m.contextValidateBip322Signature(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.contextValidateTapscripts(ctx, formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -80,22 +110,33 @@ func (m *V1RegisterInputsForNextRoundRequest) ContextValidate(ctx context.Contex
 	return nil
 }
 
-func (m *V1RegisterInputsForNextRoundRequest) contextValidateInputs(ctx context.Context, formats strfmt.Registry) error {
+func (m *V1RegisterInputsForNextRoundRequest) contextValidateBip322Signature(ctx context.Context, formats strfmt.Registry) error {
 
-	for i := 0; i < len(m.Inputs); i++ {
+	if m.Bip322Signature != nil {
 
-		if m.Inputs[i] != nil {
+		if swag.IsZero(m.Bip322Signature) { // not required
+			return nil
+		}
 
-			if swag.IsZero(m.Inputs[i]) { // not required
-				return nil
+		if err := m.Bip322Signature.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("bip322Signature")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("bip322Signature")
 			}
+			return err
+		}
+	}
 
-			if err := m.Inputs[i].ContextValidate(ctx, formats); err != nil {
-				if ve, ok := err.(*errors.Validation); ok {
-					return ve.ValidateName("inputs" + "." + strconv.Itoa(i))
-				} else if ce, ok := err.(*errors.CompositeError); ok {
-					return ce.ValidateName("inputs" + "." + strconv.Itoa(i))
-				}
+	return nil
+}
+
+func (m *V1RegisterInputsForNextRoundRequest) contextValidateTapscripts(ctx context.Context, formats strfmt.Registry) error {
+
+	for k := range m.Tapscripts {
+
+		if val, ok := m.Tapscripts[k]; ok {
+			if err := val.ContextValidate(ctx, formats); err != nil {
 				return err
 			}
 		}
