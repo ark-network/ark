@@ -764,8 +764,9 @@ func (s *covenantlessService) SignVtxos(ctx context.Context, forfeitTxs []string
 
 	go func() {
 		s.currentRoundLock.Lock()
-		s.checkForfeitsAndBoardingSigsSent(s.currentRound)
+		round := s.currentRound
 		s.currentRoundLock.Unlock()
+		s.checkForfeitsAndBoardingSigsSent(round)
 	}()
 
 	return nil
@@ -785,8 +786,9 @@ func (s *covenantlessService) SignRoundTx(ctx context.Context, signedRoundTx str
 
 	go func() {
 		s.currentRoundLock.Lock()
-		s.checkForfeitsAndBoardingSigsSent(s.currentRound)
+		round := s.currentRound
 		s.currentRoundLock.Unlock()
+		s.checkForfeitsAndBoardingSigsSent(round)
 	}()
 
 	return nil
@@ -813,7 +815,6 @@ func (s *covenantlessService) checkForfeitsAndBoardingSigsSent(currentRound *dom
 		select {
 		case s.forfeitsBoardingSigsChan <- struct{}{}:
 		default:
-			time.Sleep(time.Millisecond)
 		}
 	}
 }
@@ -1168,6 +1169,8 @@ func (s *covenantlessService) startRound() {
 	//nolint:all
 	round.StartRegistration()
 	s.currentRound = round
+	close(s.forfeitsBoardingSigsChan)
+	s.forfeitsBoardingSigsChan = make(chan struct{}, 1)
 
 	defer func() {
 		roundEndTime := time.Now().Add(time.Duration(s.roundInterval) * time.Second)
@@ -1177,7 +1180,6 @@ func (s *covenantlessService) startRound() {
 
 	log.Debugf("started registration stage for new round: %s", round.Id)
 }
-
 func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 	log.Debugf("started finalization stage for round: %s", s.currentRound.Id)
 	ctx := context.Background()
@@ -1447,7 +1449,9 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, roundEndTime time
 	defer s.startRound()
 
 	ctx := context.Background()
+	s.currentRoundLock.Lock()
 	round := s.currentRound
+	s.currentRoundLock.Unlock()
 	if round.IsFailed() {
 		return
 	}
