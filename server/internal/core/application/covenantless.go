@@ -1174,7 +1174,11 @@ func (s *covenantlessService) startRound() {
 
 	defer func() {
 		roundEndTime := time.Now().Add(time.Duration(s.roundInterval) * time.Second)
-		time.Sleep(time.Duration(s.roundInterval/6) * time.Second)
+		sleepingTime := s.roundInterval / 6
+		if sleepingTime < 1 {
+			sleepingTime = 1
+		}
+		time.Sleep(time.Duration(sleepingTime) * time.Second)
 		s.startFinalization(roundEndTime)
 	}()
 
