@@ -2145,11 +2145,3 @@ func (s *covenantlessService) UpdateMarketHourConfig(
 
 	return nil
 }
-
-func toVtxoKeys(outpoints []wire.OutPoint) []domain.VtxoKey {
-	vtxoKeys := make([]domain.VtxoKey, 0, len(outpoints))
-	for _, outpoint := range outpoints {
-		vtxoKeys = append(vtxoKeys, domain.VtxoKey{Txid: outpoint.Hash.String(), VOut: outpoint.Index})
-	}
-	return vtxoKeys
-}
