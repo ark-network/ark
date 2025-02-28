@@ -130,30 +130,6 @@ func (v vtxos) toVtxos() []client.Vtxo {
 	return list
 }
 
-func toProtoInput(i client.Input) *arkv1.Input {
-	return &arkv1.Input{
-		Outpoint: &arkv1.Outpoint{
-			Txid: i.Txid,
-			Vout: i.VOut,
-		},
-		TaprootTree: &arkv1.Input_Tapscripts{
-			Tapscripts: &arkv1.Tapscripts{
-				Scripts: i.Tapscripts,
-			},
-		},
-	}
-}
-
-type ins []client.Input
-
-func (i ins) toProto() []*arkv1.Input {
-	list := make([]*arkv1.Input, 0, len(i))
-	for _, ii := range i {
-		list = append(list, toProtoInput(ii))
-	}
-	return list
-}
-
 type treeFromProto struct {
 	*arkv1.Tree
 }

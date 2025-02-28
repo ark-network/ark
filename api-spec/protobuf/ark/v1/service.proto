@@ -75,13 +75,6 @@ service ArkService {
       get: "/v1/transactions"
     };
   }
-
-  rpc GetNote(GetNoteRequest) returns (GetNoteResponse) {
-    option (google.api.http) = {
-      post: "/v1/notes"
-      body: "*"
-    };
-  }
 }
 
 message GetInfoRequest {}
@@ -113,9 +106,13 @@ message GetBoardingAddressResponse {
 /* In-Round Transaction API messages */
 
 message RegisterInputsForNextRoundRequest {
-  repeated Input inputs = 1;
-  repeated string notes = 2;
+  // Tapscripts aims to reveal the taproot tree of the unspent & unexpired VTXOs.
+  map<string, Tapscripts> tapscripts = 1; 
+  // BIP322 signature embeds the outpoints and the proof of funds
+  Bip322Signature bip322_signature = 2;
+  repeated string notes = 3;
 }
+
 message RegisterInputsForNextRoundResponse {
   string request_id = 1;
 }
@@ -188,13 +185,4 @@ message GetTransactionsStreamResponse {
     RoundTransaction round = 1;
     RedeemTransaction redeem = 2;
   }
-}
-
-message GetNoteRequest {
-  string bip322_signature = 1;
-  string message = 2;
-}
-
-message GetNoteResponse {
-  string note = 1;
 }

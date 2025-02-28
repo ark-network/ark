@@ -91,10 +91,23 @@ func (a *grpcClient) GetBoardingAddress(
 }
 
 func (a *grpcClient) RegisterInputsForNextRound(
-	ctx context.Context, inputs []client.Input,
+	ctx context.Context,
+	signature, message string,
+	tapscripts map[string][]string,
 ) (string, error) {
+	tapscriptsProto := make(map[string]*arkv1.Tapscripts)
+	for outpoint, scripts := range tapscripts {
+		tapscriptsProto[outpoint] = &arkv1.Tapscripts{
+			Scripts: scripts,
+		}
+	}
+
 	req := &arkv1.RegisterInputsForNextRoundRequest{
-		Inputs: ins(inputs).toProto(),
+		Bip322Signature: &arkv1.Bip322Signature{
+			Message:   message,
+			Signature: signature,
+		},
+		Tapscripts: tapscriptsProto,
 	}
 
 	resp, err := a.svc.RegisterInputsForNextRound(ctx, req)
@@ -389,20 +402,6 @@ func (c *grpcClient) GetTransactionsStream(
 	}
 
 	return eventCh, closeFn, nil
-}
-
-func (c *grpcClient) GetNote(ctx context.Context, signature, message string) (string, error) {
-	req := &arkv1.GetNoteRequest{
-		Bip322Signature: signature,
-		Message:         message,
-	}
-
-	resp, err := c.svc.GetNote(ctx, req)
-	if err != nil {
-		return "", err
-	}
-
-	return resp.GetNote(), nil
 }
 
 func outpointsFromProto(protoOutpoints []*arkv1.Outpoint) []client.Outpoint {

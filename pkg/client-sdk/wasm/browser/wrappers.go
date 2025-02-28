@@ -530,7 +530,7 @@ func RecoverSweptVtxosWrapper() js.Func {
 			return nil, errors.New("invalid number of args")
 		}
 
-		txID, err := arkSdkClient.RecoverSweptVtxos(context.Background())
+		txID, err := arkSdkClient.Settle(context.Background(), arksdk.WithRecoverableVtxos)
 		if err != nil {
 			return nil, err
 		}

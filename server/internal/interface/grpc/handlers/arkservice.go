@@ -124,25 +124,32 @@ func (h *handler) GetBoardingAddress(
 func (h *handler) RegisterInputsForNextRound(
 	ctx context.Context, req *arkv1.RegisterInputsForNextRoundRequest,
 ) (*arkv1.RegisterInputsForNextRoundResponse, error) {
-	vtxosInputs := req.GetInputs()
 	notesInputs := req.GetNotes()
+	bip322Signature := req.GetBip322Signature()
 
-	if len(vtxosInputs) <= 0 && len(notesInputs) <= 0 {
+	if len(notesInputs) <= 0 && bip322Signature == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing inputs")
 	}
 
-	if len(vtxosInputs) > 0 && len(notesInputs) > 0 {
+	if bip322Signature != nil && len(notesInputs) > 0 {
 		return nil, status.Error(codes.InvalidArgument, "cannot mix vtxos and notes")
 	}
 
 	requestID := ""
 
-	if len(vtxosInputs) > 0 {
-		inputs, err := parseInputs(vtxosInputs)
+	if bip322Signature != nil {
+		signature, err := bip322.DecodeSignature(bip322Signature.Signature)
 		if err != nil {
-			return nil, status.Error(codes.InvalidArgument, err.Error())
+			return nil, status.Error(codes.InvalidArgument, "invalid BIP0322 signature")
 		}
-		requestID, err = h.svc.SpendVtxos(ctx, inputs)
+
+		if len(bip322Signature.Message) <= 0 {
+			return nil, status.Error(codes.InvalidArgument, "missing message")
+		}
+
+		tapscripts := parseTapscripts(req.GetTapscripts())
+
+		requestID, err = h.svc.SpendVtxos(ctx, *signature, bip322Signature.Message, tapscripts)
 		if err != nil {
 			return nil, err
 		}
@@ -463,34 +470,6 @@ func (h *handler) GetTransactionsStream(
 			}
 		}
 	}
-}
-
-func (h *handler) GetNote(
-	ctx context.Context, req *arkv1.GetNoteRequest,
-) (*arkv1.GetNoteResponse, error) {
-	signatureStr := req.GetBip322Signature()
-	if len(signatureStr) <= 0 {
-		return nil, status.Error(codes.InvalidArgument, "missing BIP0322 signature")
-	}
-
-	message := req.GetMessage()
-	if len(message) <= 0 {
-		return nil, status.Error(codes.InvalidArgument, "missing message")
-	}
-
-	signature, err := bip322.DecodeSignature(signatureStr)
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid BIP0322 signature")
-	}
-
-	note, err := h.svc.GetNote(ctx, *signature, message)
-	if err != nil {
-		return nil, err
-	}
-
-	return &arkv1.GetNoteResponse{
-		Note: note.String(),
-	}, nil
 }
 
 // listenToEvents forwards events from the application layer to the set of listeners

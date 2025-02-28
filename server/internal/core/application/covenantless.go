@@ -562,40 +562,69 @@ func (s *covenantlessService) SpendNotes(ctx context.Context, notes []note.Note)
 	return request.Id, nil
 }
 
-func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error) {
+func (s *covenantlessService) SpendVtxos(ctx context.Context, bip322signature bip322.Signature, message string, tapscripts map[string][]string) (string, error) {
+	// the vtxo to swap for new ones
 	vtxosInputs := make([]domain.Vtxo, 0)
+	// the boarding utxos to add in the commitment tx
 	boardingInputs := make([]ports.BoardingInput, 0)
+	// the vtxos to recover (swept but unspent)
+	recoveredVtxos := make([]domain.Vtxo, 0)
 
-	now := time.Now().Unix()
+	// message should be timestamp
+	parsedMessage, err := strconv.ParseInt(message, 10, 64)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse message: %s", err)
+	}
+
+	now := time.Now()
+	messageTimestamp := time.Unix(parsedMessage, 0)
+
+	if now.Sub(messageTimestamp) > proofOfFundsDelta {
+		return "", fmt.Errorf("message timestamp is too old")
+	}
 
 	boardingTxs := make(map[string]wire.MsgTx, 0) // txid -> txhex
 
-	for _, input := range inputs {
-		vtxosResult, err := s.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{input.VtxoKey})
+	outpoints := bip322signature.GetOutpoints()
+
+	// we need the prevout for verifying the BIP0322 signature
+	prevouts := make(map[wire.OutPoint]*wire.TxOut)
+
+	for _, outpoint := range outpoints {
+		vtxoKey := domain.VtxoKey{
+			Txid: outpoint.Hash.String(),
+			VOut: outpoint.Index,
+		}
+		vtxosResult, err := s.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{vtxoKey})
 		if err != nil || len(vtxosResult) == 0 {
 			// vtxo not found in db, check if it exists on-chain
-			if _, ok := boardingTxs[input.Txid]; !ok {
+			boardingUtxoTapscripts, ok := tapscripts[outpoint.String()]
+			if !ok {
+				return "", fmt.Errorf("no tapscripts found for outpoint %s", outpoint.String())
+			}
+
+			if _, ok := boardingTxs[vtxoKey.Txid]; !ok {
 				// check if the tx exists and is confirmed
-				txhex, err := s.wallet.GetTransaction(ctx, input.Txid)
+				txhex, err := s.wallet.GetTransaction(ctx, outpoint.Hash.String())
 				if err != nil {
-					return "", fmt.Errorf("failed to get tx %s: %s", input.Txid, err)
+					return "", fmt.Errorf("failed to get tx %s: %s", vtxoKey.Txid, err)
 				}
 
 				var tx wire.MsgTx
 				if err := tx.Deserialize(hex.NewDecoder(strings.NewReader(txhex))); err != nil {
-					return "", fmt.Errorf("failed to deserialize tx %s: %s", input.Txid, err)
+					return "", fmt.Errorf("failed to deserialize tx %s: %s", vtxoKey.Txid, err)
 				}
 
-				confirmed, _, blocktime, err := s.wallet.IsTransactionConfirmed(ctx, input.Txid)
+				confirmed, _, blocktime, err := s.wallet.IsTransactionConfirmed(ctx, vtxoKey.Txid)
 				if err != nil {
-					return "", fmt.Errorf("failed to check tx %s: %s", input.Txid, err)
+					return "", fmt.Errorf("failed to check tx %s: %s", vtxoKey.Txid, err)
 				}
 
 				if !confirmed {
-					return "", fmt.Errorf("tx %s not confirmed", input.Txid)
+					return "", fmt.Errorf("tx %s not confirmed", vtxoKey.Txid)
 				}
 
-				vtxoScript, err := bitcointree.ParseVtxoScript(input.Tapscripts)
+				vtxoScript, err := bitcointree.ParseVtxoScript(boardingUtxoTapscripts)
 				if err != nil {
 					return "", fmt.Errorf("failed to parse boarding descriptor: %s", err)
 				}
@@ -606,15 +635,20 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 				}
 
 				// if the exit path is available, forbid registering the boarding utxo
-				if blocktime+exitDelay.Seconds() < now {
-					return "", fmt.Errorf("tx %s expired", input.Txid)
+				if blocktime+exitDelay.Seconds() < now.Unix() {
+					return "", fmt.Errorf("tx %s expired", vtxoKey.Txid)
 				}
 
-				boardingTxs[input.Txid] = tx
+				boardingTxs[vtxoKey.Txid] = tx
 			}
 
-			tx := boardingTxs[input.Txid]
-			boardingInput, err := s.newBoardingInput(tx, input)
+			tx := boardingTxs[vtxoKey.Txid]
+			prevout := tx.TxOut[vtxoKey.VOut]
+			prevouts[outpoint] = prevout
+			boardingInput, err := s.newBoardingInput(tx, ports.Input{
+				VtxoKey:    vtxoKey,
+				Tapscripts: boardingUtxoTapscripts,
+			})
 			if err != nil {
 				return "", err
 			}
@@ -632,11 +666,39 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 			return "", fmt.Errorf("input %s:%d already redeemed", vtxo.Txid, vtxo.VOut)
 		}
 
-		if vtxo.Swept {
-			return "", fmt.Errorf("input %s:%d already swept", vtxo.Txid, vtxo.VOut)
+		// set the prevout
+		pubkeyBytes, err := hex.DecodeString(vtxo.PubKey)
+		if err != nil {
+			return "", fmt.Errorf("failed to decode script pubkey: %s", err)
 		}
 
-		vtxoScript, err := bitcointree.ParseVtxoScript(input.Tapscripts)
+		pubkey, err := schnorr.ParsePubKey(pubkeyBytes)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse pubkey: %s", err)
+		}
+
+		pkScript, err := common.P2TRScript(pubkey)
+		if err != nil {
+			return "", fmt.Errorf("failed to create p2tr script: %s", err)
+		}
+
+		prevouts[outpoint] = &wire.TxOut{
+			Value:    int64(vtxo.Amount),
+			PkScript: pkScript,
+		}
+
+		if vtxo.Swept {
+			// the user is asking for recovery of the vtxo
+			recoveredVtxos = append(recoveredVtxos, vtxo)
+			continue
+		}
+
+		vtxoTapscripts, ok := tapscripts[outpoint.String()]
+		if !ok {
+			return "", fmt.Errorf("no tapscripts found for outpoint %s", outpoint.String())
+		}
+
+		vtxoScript, err := bitcointree.ParseVtxoScript(vtxoTapscripts)
 		if err != nil {
 			return "", fmt.Errorf("failed to parse boarding descriptor: %s", err)
 		}
@@ -658,12 +720,18 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 		vtxosInputs = append(vtxosInputs, vtxo)
 	}
 
+	prevoutFetcher := txscript.NewMultiPrevOutFetcher(prevouts)
+
+	if err := bip322signature.Verify(message, prevoutFetcher); err != nil {
+		return "", fmt.Errorf("invalid BIP0322 proof of funds: %s", err)
+	}
+
 	request, err := domain.NewTxRequest(vtxosInputs)
 	if err != nil {
 		return "", err
 	}
 
-	if err := s.txRequests.push(*request, boardingInputs); err != nil {
+	if err := s.txRequests.push(*request, boardingInputs, recoveredVtxos); err != nil {
 		return "", err
 	}
 	return request.Id, nil
@@ -1108,102 +1176,6 @@ func (s *covenantlessService) RegisterCosignerSignatures(
 	return nil
 }
 
-func (s *covenantlessService) GetNote(ctx context.Context, signature bip322.Signature, message string) (*note.Note, error) {
-	// message should be timestamp
-	parsedMessage, err := strconv.ParseInt(message, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse message: %s", err)
-	}
-
-	messageTimestamp := time.Unix(parsedMessage, 0)
-	now := time.Now()
-
-	if now.Sub(messageTimestamp) > proofOfFundsDelta {
-		return nil, fmt.Errorf("message timestamp is too old")
-	}
-
-	vtxoRepo := s.repoManager.Vtxos()
-	outpoints := signature.GetOutpoints()
-	vtxosKeys := toVtxoKeys(outpoints)
-	vtxos, err := vtxoRepo.GetVtxos(ctx, vtxosKeys)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get vtxos: %s", err)
-	}
-
-	prevouts := make(map[wire.OutPoint]*wire.TxOut)
-	totalAmount := uint64(0)
-
-	for _, vtxo := range vtxos {
-		// verify vtxo state
-		if !vtxo.Swept {
-			return nil, fmt.Errorf("vtxo %s is not swept", vtxo.VtxoKey)
-		}
-
-		if vtxo.Spent {
-			return nil, fmt.Errorf("vtxo %s has been spent", vtxo.VtxoKey)
-		}
-
-		if vtxo.Redeemed {
-			return nil, fmt.Errorf("vtxo %s has been redeemed", vtxo.VtxoKey)
-		}
-
-		// set the prevout
-		txid, err := chainhash.NewHashFromStr(vtxo.Txid)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse txid: %s", err)
-		}
-
-		pubkeyBytes, err := hex.DecodeString(vtxo.PubKey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode script pubkey: %s", err)
-		}
-
-		pubkey, err := schnorr.ParsePubKey(pubkeyBytes)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse pubkey: %s", err)
-		}
-
-		pkScript, err := common.P2TRScript(pubkey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create p2tr script: %s", err)
-		}
-
-		prevouts[*wire.NewOutPoint(txid, vtxo.VOut)] = &wire.TxOut{
-			Value:    int64(vtxo.Amount),
-			PkScript: pkScript,
-		}
-		totalAmount += vtxo.Amount
-	}
-
-	prevoutFetcher := txscript.NewMultiPrevOutFetcher(prevouts)
-
-	// verify proof of funds
-	if err := signature.Verify(message, prevoutFetcher); err != nil {
-		return nil, fmt.Errorf("failed to verify signature: %s", err)
-	}
-
-	// create note
-	noteData, err := note.New(uint32(totalAmount))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create note: %s", err)
-	}
-
-	// sign note
-	noteSignature, err := s.wallet.SignMessage(ctx, noteData.Hash())
-	if err != nil {
-		return nil, fmt.Errorf("failed to sign note: %s", err)
-	}
-
-	note := noteData.ToNote(noteSignature)
-
-	// mark vtxos as spent to prevent double minting
-	if err := vtxoRepo.SpendVtxos(ctx, vtxosKeys, note.String()); err != nil {
-		return nil, fmt.Errorf("failed to spend vtxos: %s", err)
-	}
-
-	return note, nil
-}
-
 func (s *covenantlessService) start() {
 	defer func() {
 		if r := recover(); r != nil {
@@ -1247,6 +1219,7 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 	thirdOfRemainingDuration := roundRemainingDuration / 3
 
 	var notes []note.Note
+	var recoveredVtxos []domain.Vtxo
 	var roundAborted bool
 	defer func() {
 		delete(s.treeSigningSessions, round.Id)
@@ -1264,7 +1237,7 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 			return
 		}
 
-		s.finalizeRound(notes, roundEndTime)
+		s.finalizeRound(notes, recoveredVtxos, roundEndTime)
 	}()
 
 	if round.IsFailed() {
@@ -1283,8 +1256,10 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 	if num > txRequestsThreshold {
 		num = txRequestsThreshold
 	}
-	requests, boardingInputs, redeeemedNotes, musig2data := s.txRequests.pop(num)
+	requests, boardingInputs, redeeemedNotes, musig2data, vtxosToRecover := s.txRequests.pop(num)
+	// save notes and recovered vtxos for finalize function
 	notes = redeeemedNotes
+	recoveredVtxos = vtxosToRecover
 	s.numOfBoardingInputsMtx.Lock()
 	s.numOfBoardingInputs = len(boardingInputs)
 	s.numOfBoardingInputsMtx.Unlock()
@@ -1503,7 +1478,7 @@ func (s *covenantlessService) propagateRoundSigningNoncesGeneratedEvent(combined
 	s.eventsCh <- ev
 }
 
-func (s *covenantlessService) finalizeRound(notes []note.Note, roundEndTime time.Time) {
+func (s *covenantlessService) finalizeRound(notes []note.Note, recoveredVtxos []domain.Vtxo, roundEndTime time.Time) {
 	defer s.startRound()
 
 	ctx := context.Background()
@@ -1608,10 +1583,20 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, roundEndTime time
 		}
 	}
 
+	recoveredVtxosKeys := make([]domain.VtxoKey, 0)
+	for _, vtxo := range recoveredVtxos {
+		recoveredVtxosKeys = append(recoveredVtxosKeys, vtxo.VtxoKey)
+	}
+
+	// mark the recovered vtxos as spent
+	if err := s.repoManager.Vtxos().SpendVtxos(ctx, recoveredVtxosKeys, round.Txid); err != nil {
+		log.WithError(err).Warn("failed to mark recovered vtxos as spent")
+	}
+
 	go func() {
 		s.transactionEventsCh <- RoundTransactionEvent{
 			RoundTxid:             round.Txid,
-			SpentVtxos:            s.getSpentVtxos(round.TxRequests),
+			SpentVtxos:            append(s.getSpentVtxos(round.TxRequests), recoveredVtxos...),
 			SpendableVtxos:        s.getNewVtxos(round),
 			ClaimedBoardingInputs: boardingInputs,
 		}

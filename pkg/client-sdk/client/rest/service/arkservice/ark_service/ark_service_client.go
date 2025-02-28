@@ -60,8 +60,6 @@ type ClientService interface {
 
 	ArkServiceGetInfo(params *ArkServiceGetInfoParams, opts ...ClientOption) (*ArkServiceGetInfoOK, error)
 
-	ArkServiceGetNote(params *ArkServiceGetNoteParams, opts ...ClientOption) (*ArkServiceGetNoteOK, error)
-
 	ArkServiceGetTransactionsStream(params *ArkServiceGetTransactionsStreamParams, opts ...ClientOption) (*ArkServiceGetTransactionsStreamOK, error)
 
 	ArkServicePing(params *ArkServicePingParams, opts ...ClientOption) (*ArkServicePingOK, error)
@@ -189,43 +187,6 @@ func (a *Client) ArkServiceGetInfo(params *ArkServiceGetInfoParams, opts ...Clie
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*ArkServiceGetInfoDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
-}
-
-/*
-ArkServiceGetNote ark service get note API
-*/
-func (a *Client) ArkServiceGetNote(params *ArkServiceGetNoteParams, opts ...ClientOption) (*ArkServiceGetNoteOK, error) {
-	// TODO: Validate the params before sending
-	if params == nil {
-		params = NewArkServiceGetNoteParams()
-	}
-	op := &runtime.ClientOperation{
-		ID:                 "ArkService_GetNote",
-		Method:             "POST",
-		PathPattern:        "/v1/notes",
-		ProducesMediaTypes: []string{"application/json"},
-		ConsumesMediaTypes: []string{"application/json"},
-		Schemes:            []string{"http"},
-		Params:             params,
-		Reader:             &ArkServiceGetNoteReader{formats: a.formats},
-		Context:            params.Context,
-		Client:             params.HTTPClient,
-	}
-	for _, opt := range opts {
-		opt(op)
-	}
-
-	result, err := a.transport.Submit(op)
-	if err != nil {
-		return nil, err
-	}
-	success, ok := result.(*ArkServiceGetNoteOK)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*ArkServiceGetNoteDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 

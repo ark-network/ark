@@ -20,7 +20,7 @@ type Service interface {
 	Start() error
 	Stop()
 	SpendNotes(ctx context.Context, notes []note.Note) (string, error)
-	SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error)
+	SpendVtxos(ctx context.Context, bip322signature bip322.Signature, message string, tapscripts map[string][]string) (string, error)
 	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver, musig2Data *tree.Musig2) error
 	SignVtxos(ctx context.Context, forfeitTxs []string) error
 	SignRoundTx(ctx context.Context, roundTx string) error
@@ -51,7 +51,6 @@ type Service interface {
 	UpdateMarketHourConfig(ctx context.Context, marketHourStartTime, marketHourEndTime time.Time, period, roundInterval time.Duration) error
 	GetTxRequestQueue(ctx context.Context, requestIds ...string) ([]TxRequestInfo, error)
 	DeleteTxRequests(ctx context.Context, requestIds ...string) error
-	GetNote(ctx context.Context, signature bip322.Signature, message string) (*note.Note, error)
 }
 
 type ServiceInfo struct {

@@ -115,22 +115,23 @@ func (a *restClient) GetBoardingAddress(
 }
 
 func (a *restClient) RegisterInputsForNextRound(
-	ctx context.Context, inputs []client.Input,
+	ctx context.Context,
+	signature, message string,
+	tapscripts map[string][]string,
 ) (string, error) {
-	ins := make([]*models.V1Input, 0, len(inputs))
-	for _, i := range inputs {
-		ins = append(ins, &models.V1Input{
-			Outpoint: &models.V1Outpoint{
-				Txid: i.Txid,
-				Vout: int64(i.VOut),
-			},
-			Tapscripts: &models.V1Tapscripts{
-				Scripts: i.Tapscripts,
-			},
-		})
+	tapscriptsRest := make(map[string]models.V1Tapscripts)
+	for outpoint, scripts := range tapscripts {
+		tapscriptsRest[outpoint] = models.V1Tapscripts{
+			Scripts: scripts,
+		}
 	}
+
 	body := &models.V1RegisterInputsForNextRoundRequest{
-		Inputs: ins,
+		Bip322Signature: &models.V1Bip322Signature{
+			Message:   message,
+			Signature: signature,
+		},
+		Tapscripts: tapscriptsRest,
 	}
 	resp, err := a.svc.ArkServiceRegisterInputsForNextRound(
 		ark_service.NewArkServiceRegisterInputsForNextRoundParams().WithBody(body),
@@ -701,20 +702,6 @@ func (c *restClient) GetTransactionsStream(ctx context.Context) (<-chan client.T
 	}(eventsCh)
 
 	return eventsCh, func() {}, nil
-}
-
-func (c *restClient) GetNote(ctx context.Context, signature, message string) (string, error) {
-	body := models.V1GetNoteRequest{
-		Bip322Signature: signature,
-		Message:         message,
-	}
-
-	resp, err := c.svc.ArkServiceGetNote(ark_service.NewArkServiceGetNoteParams().WithBody(&body))
-	if err != nil {
-		return "", err
-	}
-
-	return resp.Payload.Note, nil
 }
 
 func outpointsFromRest(restOutpoints []*models.V1Outpoint) []client.Outpoint {

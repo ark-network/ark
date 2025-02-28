@@ -29,7 +29,6 @@ type ArkServiceClient interface {
 	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
 	SubmitRedeemTx(ctx context.Context, in *SubmitRedeemTxRequest, opts ...grpc.CallOption) (*SubmitRedeemTxResponse, error)
 	GetTransactionsStream(ctx context.Context, in *GetTransactionsStreamRequest, opts ...grpc.CallOption) (ArkService_GetTransactionsStreamClient, error)
-	GetNote(ctx context.Context, in *GetNoteRequest, opts ...grpc.CallOption) (*GetNoteResponse, error)
 }
 
 type arkServiceClient struct {
@@ -185,15 +184,6 @@ func (x *arkServiceGetTransactionsStreamClient) Recv() (*GetTransactionsStreamRe
 	return m, nil
 }
 
-func (c *arkServiceClient) GetNote(ctx context.Context, in *GetNoteRequest, opts ...grpc.CallOption) (*GetNoteResponse, error) {
-	out := new(GetNoteResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/GetNote", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // ArkServiceServer is the server API for ArkService service.
 // All implementations should embed UnimplementedArkServiceServer
 // for forward compatibility
@@ -209,7 +199,6 @@ type ArkServiceServer interface {
 	Ping(context.Context, *PingRequest) (*PingResponse, error)
 	SubmitRedeemTx(context.Context, *SubmitRedeemTxRequest) (*SubmitRedeemTxResponse, error)
 	GetTransactionsStream(*GetTransactionsStreamRequest, ArkService_GetTransactionsStreamServer) error
-	GetNote(context.Context, *GetNoteRequest) (*GetNoteResponse, error)
 }
 
 // UnimplementedArkServiceServer should be embedded to have forward compatible implementations.
@@ -248,9 +237,6 @@ func (UnimplementedArkServiceServer) SubmitRedeemTx(context.Context, *SubmitRede
 }
 func (UnimplementedArkServiceServer) GetTransactionsStream(*GetTransactionsStreamRequest, ArkService_GetTransactionsStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method GetTransactionsStream not implemented")
-}
-func (UnimplementedArkServiceServer) GetNote(context.Context, *GetNoteRequest) (*GetNoteResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetNote not implemented")
 }
 
 // UnsafeArkServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -468,24 +454,6 @@ func (x *arkServiceGetTransactionsStreamServer) Send(m *GetTransactionsStreamRes
 	return x.ServerStream.SendMsg(m)
 }
 
-func _ArkService_GetNote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetNoteRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ArkServiceServer).GetNote(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/GetNote",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).GetNote(ctx, req.(*GetNoteRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // ArkService_ServiceDesc is the grpc.ServiceDesc for ArkService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -528,10 +496,6 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SubmitRedeemTx",
 			Handler:    _ArkService_SubmitRedeemTx_Handler,
-		},
-		{
-			MethodName: "GetNote",
-			Handler:    _ArkService_GetNote_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

@@ -26,7 +26,9 @@ type RoundEvent interface {
 type TransportClient interface {
 	GetInfo(ctx context.Context) (*Info, error)
 	RegisterInputsForNextRound(
-		ctx context.Context, inputs []Input,
+		ctx context.Context,
+		signature, message string,
+		tapscripts map[string][]string,
 	) (string, error)
 	RegisterNotesForNextRound(
 		ctx context.Context, notes []string,
@@ -55,7 +57,6 @@ type TransportClient interface {
 	GetRoundByID(ctx context.Context, roundID string) (*Round, error)
 	Close()
 	GetTransactionsStream(ctx context.Context) (<-chan TransactionEvent, func(), error)
-	GetNote(ctx context.Context, signature, message string) (string, error)
 }
 
 type Info struct {
@@ -88,11 +89,6 @@ func (o Outpoint) Equals(other Outpoint) bool {
 	return o.Txid == other.Txid && o.VOut == other.VOut
 }
 
-type Input struct {
-	Outpoint
-	Tapscripts []string
-}
-
 type Vtxo struct {
 	Outpoint
 	PubKey    string
@@ -105,6 +101,10 @@ type Vtxo struct {
 	SpentBy   string
 	Swept     bool
 	Spent     bool
+}
+
+func (v Vtxo) IsRecoverable() bool {
+	return v.Swept && !v.Spent
 }
 
 func (v Vtxo) Address(server *secp256k1.PublicKey, net common.Network) (string, error) {

@@ -449,7 +449,7 @@ func recoverVtxos(ctx *cli.Context) error {
 		return err
 	}
 
-	txid, err := arkSdkClient.RecoverSweptVtxos(ctx.Context)
+	txid, err := arkSdkClient.Settle(ctx.Context, arksdk.WithRecoverableVtxos)
 	if err != nil {
 		return err
 	}

@@ -101,38 +101,6 @@
         ]
       }
     },
-    "/v1/notes": {
-      "post": {
-        "operationId": "ArkService_GetNote",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetNoteResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1GetNoteRequest"
-            }
-          }
-        ],
-        "tags": [
-          "ArkService"
-        ]
-      }
-    },
     "/v1/redeem-tx": {
       "post": {
         "operationId": "ArkService_SubmitRedeemTx",
@@ -417,6 +385,17 @@
         }
       }
     },
+    "v1Bip322Signature": {
+      "type": "object",
+      "properties": {
+        "signature": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
     "v1GetBoardingAddressRequest": {
       "type": "object",
       "properties": {
@@ -504,25 +483,6 @@
         }
       }
     },
-    "v1GetNoteRequest": {
-      "type": "object",
-      "properties": {
-        "bip322Signature": {
-          "type": "string"
-        },
-        "message": {
-          "type": "string"
-        }
-      }
-    },
-    "v1GetNoteResponse": {
-      "type": "object",
-      "properties": {
-        "note": {
-          "type": "string"
-        }
-      }
-    },
     "v1GetTransactionsStreamResponse": {
       "type": "object",
       "properties": {
@@ -531,20 +491,6 @@
         },
         "redeem": {
           "$ref": "#/definitions/v1RedeemTransaction"
-        }
-      }
-    },
-    "v1Input": {
-      "type": "object",
-      "properties": {
-        "outpoint": {
-          "$ref": "#/definitions/v1Outpoint"
-        },
-        "descriptor": {
-          "type": "string"
-        },
-        "tapscripts": {
-          "$ref": "#/definitions/v1Tapscripts"
         }
       }
     },
@@ -651,12 +597,14 @@
     "v1RegisterInputsForNextRoundRequest": {
       "type": "object",
       "properties": {
-        "inputs": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1Input"
+        "tapscripts": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/v1Tapscripts"
           }
+        },
+        "bip322Signature": {
+          "$ref": "#/definitions/v1Bip322Signature"
         },
         "notes": {
           "type": "array",
