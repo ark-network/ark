@@ -175,7 +175,6 @@ const (
 )
 
 var typeMap = map[string]metricType{
-	"/cgo/go-to-c-calls:calls":          asCounter,
 	"/cpu/classes/user:cpu-seconds":     asCounter,
 	"/cpu/classes/gc/total:cpu-seconds": asCounter,
 	"/gc/cycles/total:gc-cycles":        asCounter,
