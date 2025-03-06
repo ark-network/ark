@@ -19,8 +19,6 @@ import (
 )
 
 var arkRuntimeMetrics = []string{
-	//Counts how many calls Go made into C code (via cgo). Useful for diagnosing heavy cgo overhead
-	"/cgo/go-to-c-calls:calls",
 	//CPU time in user Go code (not GC or idle). Compare with GC CPU to see if GC is dominating.
 	"/cpu/classes/user:cpu-seconds",
 	//CPU time spent in garbage collection. Helps detect if GC overhead is large.
