@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/arkscript"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
@@ -1068,6 +1069,202 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 
 	ptx, err = partialTx.B64Encode()
 	require.NoError(t, err)
+
+	signedTx, err := bobWallet.SignTransaction(
+		ctx,
+		explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest),
+		ptx,
+	)
+	require.NoError(t, err)
+
+	_, _, err = grpcAlice.SubmitRedeemTx(ctx, signedTx)
+	require.NoError(t, err)
+}
+
+func TestSendToArkScriptClosure(t *testing.T) {
+	ctx := context.Background()
+	alice, grpcAlice := setupArkSDK(t)
+	defer grpcAlice.Close()
+
+	bobPrivKey, err := secp256k1.GeneratePrivateKey()
+	require.NoError(t, err)
+
+	configStore, err := inmemorystoreconfig.NewConfigStore()
+	require.NoError(t, err)
+
+	walletStore, err := inmemorystore.NewWalletStore()
+	require.NoError(t, err)
+
+	bobWallet, err := singlekeywallet.NewBitcoinWallet(
+		configStore,
+		walletStore,
+	)
+	require.NoError(t, err)
+
+	_, err = bobWallet.Create(ctx, utils.Password, hex.EncodeToString(bobPrivKey.Serialize()))
+	require.NoError(t, err)
+
+	_, err = bobWallet.Unlock(ctx, utils.Password)
+	require.NoError(t, err)
+
+	bobPubKey := bobPrivKey.PubKey()
+
+	// Fund Alice's account
+	offchainAddr, boardingAddress, err := alice.Receive(ctx)
+	require.NoError(t, err)
+
+	aliceAddr, err := common.DecodeAddress(offchainAddr)
+	require.NoError(t, err)
+
+	_, err = utils.RunCommand("nigiri", "faucet", boardingAddress)
+	require.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+
+	_, err = alice.Settle(ctx)
+	require.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+
+	const sendAmount = 10000
+
+	alicePkScript, err := common.P2TRScript(aliceAddr.VtxoTapKey)
+	require.NoError(t, err)
+
+	// script verifying that the spending tx includes an output going to alice's address
+	arkScript, err := arkscript.NewScriptBuilder().
+		AddInt64(0).
+		AddOp(arkscript.OP_INSPECTOUTPUTSCRIPTPUBKEY).
+		AddData(alicePkScript).
+		AddOp(arkscript.OP_EQUAL).
+		Script()
+	require.NoError(t, err)
+
+	vtxoScript := bitcointree.TapscriptsVtxoScript{
+		TapscriptsVtxoScript: tree.TapscriptsVtxoScript{
+			Closures: []tree.Closure{
+				&tree.ArkScriptClosure{
+					ArkScript: arkScript,
+					MultisigClosure: tree.MultisigClosure{
+						PubKeys: []*secp256k1.PublicKey{bobPubKey},
+					},
+				},
+			},
+		},
+	}
+
+	vtxoTapKey, vtxoTapTree, err := vtxoScript.TapTree()
+	require.NoError(t, err)
+
+	closure := vtxoScript.ForfeitClosures()[0]
+
+	bobAddr := common.Address{
+		HRP:        "tark",
+		VtxoTapKey: vtxoTapKey,
+		Server:     aliceAddr.Server,
+	}
+
+	script, err := closure.Script()
+	require.NoError(t, err)
+
+	merkleProof, err := vtxoTapTree.GetTaprootMerkleProof(txscript.NewBaseTapLeaf(script).TapHash())
+	require.NoError(t, err)
+
+	ctrlBlock, err := txscript.ParseControlBlock(merkleProof.ControlBlock)
+	require.NoError(t, err)
+
+	tapscript := &waddrmgr.Tapscript{
+		ControlBlock:   ctrlBlock,
+		RevealedScript: merkleProof.Script,
+	}
+
+	bobAddrStr, err := bobAddr.Encode()
+	require.NoError(t, err)
+
+	txid, err := alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddrStr, sendAmount)}, false)
+	require.NoError(t, err)
+	require.NotEmpty(t, txid)
+
+	time.Sleep(2 * time.Second)
+
+	spendable, _, err := alice.ListVtxos(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, spendable)
+
+	var redeemTx string
+	for _, vtxo := range spendable {
+		if vtxo.Txid == txid {
+			redeemTx = vtxo.RedeemTx
+			break
+		}
+	}
+	require.NotEmpty(t, redeemTx)
+
+	redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
+	require.NoError(t, err)
+
+	var bobOutput *wire.TxOut
+	var bobOutputIndex uint32
+	for i, out := range redeemPtx.UnsignedTx.TxOut {
+		if bytes.Equal(out.PkScript[2:], schnorr.SerializePubKey(bobAddr.VtxoTapKey)) {
+			bobOutput = out
+			bobOutputIndex = uint32(i)
+			break
+		}
+	}
+	require.NotNil(t, bobOutput)
+
+	ptx, err := bitcointree.BuildRedeemTx(
+		[]common.VtxoInput{
+			{
+				Outpoint: &wire.OutPoint{
+					Hash:  redeemPtx.UnsignedTx.TxHash(),
+					Index: bobOutputIndex,
+				},
+				Tapscript:   tapscript,
+				WitnessSize: closure.WitnessSize(),
+				Amount:      bobOutput.Value,
+			},
+		},
+		[]*wire.TxOut{
+			{
+				Value:    bobOutput.Value - 500,
+				PkScript: alicePkScript,
+			},
+		},
+	)
+	require.NoError(t, err)
+
+	invalidTx, err := bitcointree.BuildRedeemTx(
+		[]common.VtxoInput{
+			{
+				Outpoint: &wire.OutPoint{
+					Hash:  redeemPtx.UnsignedTx.TxHash(),
+					Index: bobOutputIndex,
+				},
+				Tapscript:   tapscript,
+				WitnessSize: closure.WitnessSize(),
+				Amount:      bobOutput.Value,
+			},
+		},
+		[]*wire.TxOut{
+			{
+				Value:    bobOutput.Value - 500,
+				PkScript: []byte{0x6a}, // output 0 is not alice script
+			},
+		},
+	)
+	require.NoError(t, err)
+
+	signedInvalidTx, err := bobWallet.SignTransaction(
+		ctx,
+		explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest),
+		invalidTx,
+	)
+	require.NoError(t, err)
+
+	_, _, err = grpcAlice.SubmitRedeemTx(ctx, signedInvalidTx)
+	require.Error(t, err)
 
 	signedTx, err := bobWallet.SignTransaction(
 		ctx,

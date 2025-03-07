@@ -130,7 +130,7 @@ func (v *TapscriptsVtxoScript) ForfeitClosures() []Closure {
 	forfeits := make([]Closure, 0)
 	for _, closure := range v.Closures {
 		switch closure.(type) {
-		case *MultisigClosure, *CLTVMultisigClosure, *ConditionMultisigClosure:
+		case *MultisigClosure, *CLTVMultisigClosure, *ConditionMultisigClosure, *ArkScriptClosure:
 			forfeits = append(forfeits, closure)
 		}
 	}

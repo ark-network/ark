@@ -672,7 +672,7 @@ func TestMultisigClosureWitness(t *testing.T) {
 	testCases := []struct {
 		name        string
 		closure     *tree.MultisigClosure
-		signatures  map[string][]byte
+		signatures  map[string]interface{}
 		expectError bool
 	}{
 		{
@@ -680,7 +680,7 @@ func TestMultisigClosureWitness(t *testing.T) {
 			closure: &tree.MultisigClosure{
 				PubKeys: []*secp256k1.PublicKey{pub1},
 			},
-			signatures: map[string][]byte{
+			signatures: map[string]interface{}{
 				hex.EncodeToString(schnorr.SerializePubKey(pub1)): []byte("signature1"),
 			},
 			expectError: false,
@@ -690,7 +690,7 @@ func TestMultisigClosureWitness(t *testing.T) {
 			closure: &tree.MultisigClosure{
 				PubKeys: []*secp256k1.PublicKey{pub1, pub2},
 			},
-			signatures: map[string][]byte{
+			signatures: map[string]interface{}{
 				hex.EncodeToString(schnorr.SerializePubKey(pub1)): []byte("signature1"),
 				hex.EncodeToString(schnorr.SerializePubKey(pub2)): []byte("signature2"),
 			},
@@ -701,7 +701,7 @@ func TestMultisigClosureWitness(t *testing.T) {
 			closure: &tree.MultisigClosure{
 				PubKeys: []*secp256k1.PublicKey{pub1, pub2},
 			},
-			signatures: map[string][]byte{
+			signatures: map[string]interface{}{
 				hex.EncodeToString(schnorr.SerializePubKey(pub1)): []byte("signature1"),
 			},
 			expectError: true,
@@ -772,7 +772,7 @@ func TestCSVMultisigClosureWitness(t *testing.T) {
 
 	// Create test signature
 	testSig := []byte("signature1")
-	signatures := map[string][]byte{
+	signatures := map[string]interface{}{
 		hex.EncodeToString(schnorr.SerializePubKey(pub1)): testSig,
 	}
 
@@ -939,7 +939,7 @@ func TestCLTVMultisigClosure(t *testing.T) {
 		}
 
 		controlBlock := bytes.Repeat([]byte{0x00}, 32)
-		signatures := map[string][]byte{
+		signatures := map[string]interface{}{
 			hex.EncodeToString(schnorr.SerializePubKey(pubkey1)): bytes.Repeat([]byte{0x01}, 64),
 			hex.EncodeToString(schnorr.SerializePubKey(pubkey2)): bytes.Repeat([]byte{0x01}, 64),
 		}
@@ -1186,7 +1186,7 @@ func TestConditionMultisigClosure(t *testing.T) {
 		var conditionWitnessBytes bytes.Buffer
 		require.NoError(t, psbt.WriteTxWitness(&conditionWitnessBytes, conditionWitness))
 
-		signatures := map[string][]byte{
+		signatures := map[string]interface{}{
 			hex.EncodeToString(schnorr.SerializePubKey(pubkey1)): bytes.Repeat([]byte{0x01}, 64),
 			hex.EncodeToString(schnorr.SerializePubKey(pubkey2)): bytes.Repeat([]byte{0x02}, 64),
 			tree.ConditionWitnessKey:                             conditionWitnessBytes.Bytes(),
@@ -1202,5 +1202,19 @@ func TestConditionMultisigClosure(t *testing.T) {
 		require.Equal(t, script, witness[3])
 		require.Equal(t, 64, len(witness[0]))
 		require.Equal(t, 64, len(witness[1]))
+	})
+}
+
+func TestArkScriptClosure(t *testing.T) {
+	t.Run("valid ark script", func(t *testing.T) {
+		script := "00632600d1225120c631bc2fc82b7982ade4cdd170138a0f22319f8b407f5643324cbc6cbda5fcbb886820f565c2e01f7c6f832f01e3566ecea22eee65829b2e6192e1e06907520050528eac"
+		var cl tree.ArkScriptClosure
+
+		scriptBytes, err := hex.DecodeString(script)
+		require.NoError(t, err)
+
+		valid, err := cl.Decode(scriptBytes)
+		require.NoError(t, err)
+		require.True(t, valid)
 	})
 }

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/arkscript"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
@@ -29,7 +30,13 @@ const (
 	MultisigTypeChecksigAdd
 )
 
-const ConditionWitnessKey = "condition"
+const (
+	ConditionWitnessKey = "condition"
+	SpendingTxKey       = "spending_tx"
+	InputIndexKey       = "input_index"
+	PrevoutFetcherKey   = "prevout_fetcher"
+	ArkScriptStack      = "ark_script_stack"
+)
 
 // forbiddenOpcodes are opcodes that are not allowed in a condition script
 var forbiddenOpcodes = []byte{
@@ -49,7 +56,7 @@ type Closure interface {
 	// extraWitnessSize is here to count the condition witness size
 	// or any other witness size that can't be computed from the script
 	WitnessSize(extraWitnessSize ...int) int
-	Witness(controlBlock []byte, signatures map[string][]byte) (wire.TxWitness, error)
+	Witness(controlBlock []byte, args map[string]any) (wire.TxWitness, error)
 }
 
 // UnrollClosure is liquid-only tapscript letting to enforce
@@ -100,6 +107,13 @@ type ConditionCSVMultisigClosure struct {
 	Condition []byte
 }
 
+type ArkScriptClosure struct {
+	MultisigClosure
+	// ArkScript is a custom script including new opcodes
+	// it is executed and valid only offchain
+	ArkScript []byte
+}
+
 func DecodeClosure(script []byte) (Closure, error) {
 	if len(script) == 0 {
 		return nil, fmt.Errorf("cannot decode empty script")
@@ -109,6 +123,7 @@ func DecodeClosure(script []byte) (Closure, error) {
 		closure Closure
 		name    string
 	}{
+		{&ArkScriptClosure{}, "Ark Script"},
 		{&CSVMultisigClosure{}, "CSV Multisig"},
 		{&CLTVMultisigClosure{}, "CLTV Multisig"},
 		{&MultisigClosure{}, "Multisig"},
@@ -128,6 +143,8 @@ func DecodeClosure(script []byte) (Closure, error) {
 		}
 		if valid {
 			return t.closure, nil
+		} else {
+			decodeErr = append(decodeErr, fmt.Sprintf("%s: %v", t.name, "invalid"))
 		}
 	}
 
@@ -330,16 +347,16 @@ func (f *MultisigClosure) decodeChecksig(script []byte) (bool, error) {
 	return true, nil
 }
 
-func (f *MultisigClosure) Witness(controlBlock []byte, signatures map[string][]byte) (wire.TxWitness, error) {
+func (f *MultisigClosure) Witness(controlBlock []byte, args map[string]interface{}) (wire.TxWitness, error) {
 	// Create witness stack with capacity for all signatures plus script and control block
 	witness := make(wire.TxWitness, 0, len(f.PubKeys)+2)
 
 	// Add signatures in the reverse order as public keys
 	for i := len(f.PubKeys) - 1; i >= 0; i-- {
 		pubkey := f.PubKeys[i]
-		sig, ok := signatures[hex.EncodeToString(schnorr.SerializePubKey(pubkey))]
+		sig, ok := args[hex.EncodeToString(schnorr.SerializePubKey(pubkey))].([]byte)
 		if !ok {
-			return nil, fmt.Errorf("missing signature for public key %x", schnorr.SerializePubKey(pubkey))
+			return nil, fmt.Errorf("missing or invalid signature for public key %x", schnorr.SerializePubKey(pubkey))
 		}
 		witness = append(witness, sig)
 	}
@@ -357,8 +374,8 @@ func (f *MultisigClosure) Witness(controlBlock []byte, signatures map[string][]b
 	return witness, nil
 }
 
-func (f *CSVMultisigClosure) Witness(controlBlock []byte, signatures map[string][]byte) (wire.TxWitness, error) {
-	multisigWitness, err := f.MultisigClosure.Witness(controlBlock, signatures)
+func (f *CSVMultisigClosure) Witness(controlBlock []byte, args map[string]interface{}) (wire.TxWitness, error) {
+	multisigWitness, err := f.MultisigClosure.Witness(controlBlock, args)
 	if err != nil {
 		return nil, err
 	}
@@ -730,7 +747,7 @@ func encodeOneChildIntrospectionScript(
 	return script
 }
 
-func (c *UnrollClosure) Witness(controlBlock []byte, _ map[string][]byte) (wire.TxWitness, error) {
+func (c *UnrollClosure) Witness(controlBlock []byte, _ map[string]interface{}) (wire.TxWitness, error) {
 	script, err := c.Script()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate script: %w", err)
@@ -740,8 +757,8 @@ func (c *UnrollClosure) Witness(controlBlock []byte, _ map[string][]byte) (wire.
 	return wire.TxWitness{script, controlBlock}, nil
 }
 
-func (f *CLTVMultisigClosure) Witness(controlBlock []byte, signatures map[string][]byte) (wire.TxWitness, error) {
-	multisigWitness, err := f.MultisigClosure.Witness(controlBlock, signatures)
+func (f *CLTVMultisigClosure) Witness(controlBlock []byte, args map[string]interface{}) (wire.TxWitness, error) {
+	multisigWitness, err := f.MultisigClosure.Witness(controlBlock, args)
 	if err != nil {
 		return nil, err
 	}
@@ -974,14 +991,19 @@ func (f *ConditionMultisigClosure) Decode(script []byte) (bool, error) {
 	return bytes.Equal(rebuilt, script), nil
 }
 
-func (f *ConditionMultisigClosure) Witness(controlBlock []byte, args map[string][]byte) (wire.TxWitness, error) {
+func (f *ConditionMultisigClosure) Witness(controlBlock []byte, args map[string]interface{}) (wire.TxWitness, error) {
 	script, err := f.Script()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate script: %w", err)
 	}
 
 	// Read and execute condition witness
-	condWitness, err := ReadTxWitness(args[ConditionWitnessKey])
+	condWitnessBytes, ok := args[ConditionWitnessKey].([]byte)
+	if !ok {
+		return nil, fmt.Errorf("missing or invalid condition witness")
+	}
+
+	condWitness, err := ReadTxWitness(condWitnessBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read condition witness: %w", err)
 	}
@@ -1071,14 +1093,19 @@ func (f *ConditionCSVMultisigClosure) Decode(script []byte) (bool, error) {
 	return bytes.Equal(rebuilt, script), nil
 }
 
-func (f *ConditionCSVMultisigClosure) Witness(controlBlock []byte, args map[string][]byte) (wire.TxWitness, error) {
+func (f *ConditionCSVMultisigClosure) Witness(controlBlock []byte, args map[string]interface{}) (wire.TxWitness, error) {
 	script, err := f.Script()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate script: %w", err)
 	}
 
 	// Read and execute condition witness
-	condWitness, err := ReadTxWitness(args[ConditionWitnessKey])
+	condWitnessBytes, ok := args[ConditionWitnessKey].([]byte)
+	if !ok {
+		return nil, fmt.Errorf("missing or invalid condition witness")
+	}
+
+	condWitness, err := ReadTxWitness(condWitnessBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read condition witness: %w", err)
 	}
@@ -1104,4 +1131,147 @@ func (f *ConditionCSVMultisigClosure) Witness(controlBlock []byte, args map[stri
 	witness = append(witness, controlBlock)
 
 	return witness, nil
+}
+
+func (f *ArkScriptClosure) WitnessSize(_ ...int) int {
+	return f.MultisigClosure.WitnessSize()
+}
+
+func (f *ArkScriptClosure) Witness(controlBlock []byte, args map[string]interface{}) (wire.TxWitness, error) {
+	// Extract required arguments
+	spendingTx, ok := args[SpendingTxKey].(*wire.MsgTx)
+	if !ok {
+		return nil, fmt.Errorf("missing or invalid spending tx")
+	}
+
+	prevoutFetcher, ok := args[PrevoutFetcherKey].(arkscript.PrevOutputFetcher)
+	if !ok {
+		return nil, fmt.Errorf("missing or invalid prevout fetcher")
+	}
+
+	inputIndex, ok := args[InputIndexKey].(int)
+	if !ok {
+		return nil, fmt.Errorf("missing or invalid input index")
+	}
+
+	var stack wire.TxWitness
+
+	if customScriptStack, ok := args[ArkScriptStack].([]byte); ok {
+		var err error
+		stack, err = ReadTxWitness(customScriptStack)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read custom script stack: %w", err)
+		}
+	}
+
+	if err := ExecuteArkScript(f.ArkScript, spendingTx, prevoutFetcher, inputIndex, stack); err != nil {
+		return nil, err
+	}
+
+	// the real witness is the multisig one only
+	// adding the custom script stack to the final witness will break the script
+	return f.MultisigClosure.Witness(controlBlock, args)
+}
+
+// FALSE IF <custom introspection script> ENDIF <multisig script>
+func (f *ArkScriptClosure) Script() ([]byte, error) {
+	scriptBuilder := txscript.NewScriptBuilder()
+
+	scriptBuilder.AddOps([]byte{txscript.OP_FALSE, txscript.OP_IF})
+	scriptBuilder.AddData(f.ArkScript)
+	scriptBuilder.AddOp(txscript.OP_ENDIF)
+
+	multisigScript, err := f.MultisigClosure.Script()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate multisig script: %w", err)
+	}
+
+	script, err := scriptBuilder.Script()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate script: %w", err)
+	}
+
+	return append(script, multisigScript...), nil
+}
+
+func (f *ArkScriptClosure) Decode(script []byte) (bool, error) {
+	tokenizer := txscript.MakeScriptTokenizer(0, script)
+
+	if len(tokenizer.Script()) == 0 {
+		return false, fmt.Errorf("empty script")
+	}
+
+	// must be OP_FALSE
+	if !tokenizer.Next() || tokenizer.Opcode() != txscript.OP_FALSE {
+		return false, nil
+	}
+
+	// must be OP_IF
+	if !tokenizer.Next() || tokenizer.Opcode() != txscript.OP_IF {
+		return false, nil
+	}
+
+	// extract custom introspection script
+	customScript := make([]byte, 0)
+	for tokenizer.Next() {
+		if tokenizer.Opcode() == txscript.OP_ENDIF {
+			break
+		}
+		if len(tokenizer.Data()) > 0 {
+			customScript = append(customScript, tokenizer.Data()...)
+			break
+		}
+	}
+
+	if tokenizer.Err() != nil || len(customScript) == 0 {
+		return false, nil
+	}
+
+	f.ArkScript = customScript
+
+	// subscript must be a valid multisig script
+	subScript := tokenizer.Script()[tokenizer.ByteIndex()+1:]
+	valid, err := f.MultisigClosure.Decode(subScript)
+	if err != nil || !valid {
+		return false, err
+	}
+
+	rebuilt, err := f.Script()
+	if err != nil {
+		return false, err
+	}
+
+	return bytes.Equal(rebuilt, script), nil
+}
+
+func ExecuteArkScript(
+	arkScript []byte,
+	spendingTx *wire.MsgTx,
+	prevoutFetcher arkscript.PrevOutputFetcher,
+	inputIndex int,
+	arkScriptStack wire.TxWitness,
+) error {
+	engine, err := arkscript.NewEngine(
+		arkScript,
+		spendingTx,
+		inputIndex,
+		arkscript.StandardVerifyFlags,
+		arkscript.NewSigCache(100),
+		arkscript.NewTxSigHashes(spendingTx, prevoutFetcher),
+		0, // TODO : add input amount if need CHECKSIG in custom script?
+		prevoutFetcher,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create engine: %w", err)
+	}
+
+	if len(arkScriptStack) > 0 {
+		engine.SetStack(arkScriptStack)
+	}
+
+	if err := engine.Execute(); err != nil {
+		return fmt.Errorf("failed to execute custom script: %w", err)
+	}
+
+	return nil
 }

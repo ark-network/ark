@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/arkscript"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
@@ -695,6 +696,20 @@ func (s *service) SignTransaction(ctx context.Context, partialTx string, extract
 			return "", fmt.Errorf("not all inputs are signed, unable to finalize the psbt")
 		}
 
+		prevouts := make(map[wire.OutPoint]*wire.TxOut)
+		missingPrevouts := false
+		for i, input := range ptx.Inputs {
+			if input.WitnessUtxo == nil {
+				missingPrevouts = true
+				continue
+			}
+
+			outpoint := ptx.UnsignedTx.TxIn[i].PreviousOutPoint
+			prevouts[outpoint] = input.WitnessUtxo
+		}
+
+		prevoutFetcher := arkscript.NewMultiPrevOutFetcher(prevouts)
+
 		for i, in := range ptx.Inputs {
 			isTaproot := txscript.IsPayToTaproot(in.WitnessUtxo.PkScript)
 			if isTaproot && len(in.TaprootLeafScript) > 0 {
@@ -702,19 +717,43 @@ func (s *service) SignTransaction(ctx context.Context, partialTx string, extract
 				if err != nil {
 					return "", err
 				}
+				args := make(map[string]any)
 
-				conditionWitness, err := bitcointree.GetConditionWitness(in)
-				if err != nil {
-					return "", err
-				}
-
-				args := make(map[string][]byte)
-				if len(conditionWitness) > 0 {
-					var conditionWitnessBytes bytes.Buffer
-					if err := psbt.WriteTxWitness(&conditionWitnessBytes, conditionWitness); err != nil {
+				switch closure.(type) {
+				case *tree.ConditionMultisigClosure:
+					witness, err := bitcointree.GetConditionWitness(in)
+					if err != nil {
 						return "", err
 					}
-					args[tree.ConditionWitnessKey] = conditionWitnessBytes.Bytes()
+
+					if len(witness) > 0 {
+						var conditionWitnessBytes bytes.Buffer
+						if err := psbt.WriteTxWitness(&conditionWitnessBytes, witness); err != nil {
+							return "", err
+						}
+						args[tree.ConditionWitnessKey] = conditionWitnessBytes.Bytes()
+					}
+				case *tree.ArkScriptClosure:
+					if missingPrevouts {
+						return "", fmt.Errorf("missing witness utxos, cannot validate ark script")
+					}
+
+					witness, err := bitcointree.GetArkScriptWitness(in)
+					if err != nil {
+						return "", err
+					}
+
+					if len(witness) > 0 {
+						var witnessBytes bytes.Buffer
+						if err := psbt.WriteTxWitness(&witnessBytes, witness); err != nil {
+							return "", err
+						}
+						args[tree.ArkScriptStack] = witnessBytes.Bytes()
+					}
+
+					args[tree.InputIndexKey] = i
+					args[tree.SpendingTxKey] = ptx.UnsignedTx
+					args[tree.PrevoutFetcherKey] = prevoutFetcher
 				}
 
 				for _, sig := range in.TaprootScriptSpendSig {
