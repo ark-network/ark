@@ -333,40 +333,7 @@ func (vm *Engine) isBranchExecuting() bool {
 // always bad to see in the instruction stream (even if turned off by a
 // conditional).
 func isOpcodeDisabled(opcode byte) bool {
-	switch opcode {
-	case OP_CAT:
-		return true
-	case OP_SUBSTR:
-		return true
-	case OP_LEFT:
-		return true
-	case OP_RIGHT:
-		return true
-	case OP_INVERT:
-		return true
-	case OP_AND:
-		return true
-	case OP_OR:
-		return true
-	case OP_XOR:
-		return true
-	case OP_2MUL:
-		return true
-	case OP_2DIV:
-		return true
-	case OP_MUL:
-		return true
-	case OP_DIV:
-		return true
-	case OP_MOD:
-		return true
-	case OP_LSHIFT:
-		return true
-	case OP_RSHIFT:
-		return true
-	default:
-		return false
-	}
+	return false
 }
 
 // isOpcodeAlwaysIllegal returns whether or not the opcode is always illegal

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+	"math/big"
 	"strings"
 
 	"golang.org/x/crypto/ripemd160"
@@ -457,17 +458,17 @@ var opcodeArray = [256]opcode{
 	OP_TUCK:         {OP_TUCK, "OP_TUCK", 1, opcodeTuck},
 
 	// Splice opcodes.
-	OP_CAT:    {OP_CAT, "OP_CAT", 1, opcodeDisabled},
-	OP_SUBSTR: {OP_SUBSTR, "OP_SUBSTR", 1, opcodeDisabled},
-	OP_LEFT:   {OP_LEFT, "OP_LEFT", 1, opcodeDisabled},
-	OP_RIGHT:  {OP_RIGHT, "OP_RIGHT", 1, opcodeDisabled},
+	OP_CAT:    {OP_CAT, "OP_CAT", 1, opcodeCat},
+	OP_SUBSTR: {OP_SUBSTR, "OP_SUBSTR", 1, opcodeSubstr},
+	OP_LEFT:   {OP_LEFT, "OP_LEFT", 1, opcodeLeft},
+	OP_RIGHT:  {OP_RIGHT, "OP_RIGHT", 1, opcodeRight},
 	OP_SIZE:   {OP_SIZE, "OP_SIZE", 1, opcodeSize},
 
 	// Bitwise logic opcodes.
-	OP_INVERT:      {OP_INVERT, "OP_INVERT", 1, opcodeDisabled},
-	OP_AND:         {OP_AND, "OP_AND", 1, opcodeDisabled},
-	OP_OR:          {OP_OR, "OP_OR", 1, opcodeDisabled},
-	OP_XOR:         {OP_XOR, "OP_XOR", 1, opcodeDisabled},
+	OP_INVERT:      {OP_INVERT, "OP_INVERT", 1, opcodeInvert},
+	OP_AND:         {OP_AND, "OP_AND", 1, opcodeAnd},
+	OP_OR:          {OP_OR, "OP_OR", 1, opcodeOr},
+	OP_XOR:         {OP_XOR, "OP_XOR", 1, opcodeXor},
 	OP_EQUAL:       {OP_EQUAL, "OP_EQUAL", 1, opcodeEqual},
 	OP_EQUALVERIFY: {OP_EQUALVERIFY, "OP_EQUALVERIFY", 1, opcodeEqualVerify},
 	OP_RESERVED1:   {OP_RESERVED1, "OP_RESERVED1", 1, opcodeReserved},
@@ -476,19 +477,19 @@ var opcodeArray = [256]opcode{
 	// Numeric related opcodes.
 	OP_1ADD:               {OP_1ADD, "OP_1ADD", 1, opcode1Add},
 	OP_1SUB:               {OP_1SUB, "OP_1SUB", 1, opcode1Sub},
-	OP_2MUL:               {OP_2MUL, "OP_2MUL", 1, opcodeDisabled},
-	OP_2DIV:               {OP_2DIV, "OP_2DIV", 1, opcodeDisabled},
+	OP_2MUL:               {OP_2MUL, "OP_2MUL", 1, opcode2Mul},
+	OP_2DIV:               {OP_2DIV, "OP_2DIV", 1, opcode2Div},
 	OP_NEGATE:             {OP_NEGATE, "OP_NEGATE", 1, opcodeNegate},
 	OP_ABS:                {OP_ABS, "OP_ABS", 1, opcodeAbs},
 	OP_NOT:                {OP_NOT, "OP_NOT", 1, opcodeNot},
 	OP_0NOTEQUAL:          {OP_0NOTEQUAL, "OP_0NOTEQUAL", 1, opcode0NotEqual},
 	OP_ADD:                {OP_ADD, "OP_ADD", 1, opcodeAdd},
 	OP_SUB:                {OP_SUB, "OP_SUB", 1, opcodeSub},
-	OP_MUL:                {OP_MUL, "OP_MUL", 1, opcodeDisabled},
-	OP_DIV:                {OP_DIV, "OP_DIV", 1, opcodeDisabled},
-	OP_MOD:                {OP_MOD, "OP_MOD", 1, opcodeDisabled},
-	OP_LSHIFT:             {OP_LSHIFT, "OP_LSHIFT", 1, opcodeDisabled},
-	OP_RSHIFT:             {OP_RSHIFT, "OP_RSHIFT", 1, opcodeDisabled},
+	OP_MUL:                {OP_MUL, "OP_MUL", 1, opcodeMul},
+	OP_DIV:                {OP_DIV, "OP_DIV", 1, opcodeDiv},
+	OP_MOD:                {OP_MOD, "OP_MOD", 1, opcodeMod},
+	OP_LSHIFT:             {OP_LSHIFT, "OP_LSHIFT", 1, opcodeLshift},
+	OP_RSHIFT:             {OP_RSHIFT, "OP_RSHIFT", 1, opcodeRshift},
 	OP_BOOLAND:            {OP_BOOLAND, "OP_BOOLAND", 1, opcodeBoolAnd},
 	OP_BOOLOR:             {OP_BOOLOR, "OP_BOOLOR", 1, opcodeBoolOr},
 	OP_NUMEQUAL:           {OP_NUMEQUAL, "OP_NUMEQUAL", 1, opcodeNumEqual},
@@ -783,17 +784,6 @@ func disasmOpcode(buf *strings.Builder, op *opcode, data []byte, compact bool) {
 // *******************************************
 // Opcode implementation functions start here.
 // *******************************************
-
-// opcodeDisabled is a common handler for disabled opcodes.  It returns an
-// appropriate error indicating the opcode is disabled.  While it would
-// ordinarily make more sense to detect if the script contains any disabled
-// opcodes before executing in an initial parse step, the consensus rules
-// dictate the script doesn't fail until the program counter passes over a
-// disabled opcode (even when they appear in a branch that is not executed).
-func opcodeDisabled(op *opcode, data []byte, vm *Engine) error {
-	str := fmt.Sprintf("attempt to execute disabled opcode %s", op.name)
-	return scriptError(ErrDisabledOpcode, str)
-}
 
 // opcodeReserved is a common handler for all reserved opcodes.  It returns an
 // appropriate error indicating the opcode is reserved.
@@ -2682,5 +2672,308 @@ func opcodeTxWeight(op *opcode, data []byte, vm *Engine) error {
 	weight := make([]byte, 4)
 	binary.LittleEndian.PutUint32(weight, uint32(vm.tx.SerializeSizeStripped()*4))
 	vm.dstack.PushByteArray(weight)
+	return nil
+}
+
+// opcodeCat concatenates two byte arrays.
+// Stack transformation: [... x1 x2] -> [... x1|x2]
+func opcodeCat(op *opcode, data []byte, vm *Engine) error {
+	x2, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	x1, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+
+	vm.dstack.PushByteArray(append(x1, x2...))
+	return nil
+}
+
+// opcodeSubstr returns a portion of a byte array.
+// Stack transformation: [... x n size] -> [... x[n:n+size]]
+func opcodeSubstr(op *opcode, data []byte, vm *Engine) error {
+	size, err := vm.dstack.PopInt()
+	if err != nil {
+		return err
+	}
+	begin, err := vm.dstack.PopInt()
+	if err != nil {
+		return err
+	}
+	x, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+
+	// Ensure bounds are valid
+	if begin < 0 || size < 0 || begin+size > scriptNum(len(x)) {
+		return scriptError(ErrInvalidIndex, "invalid substring parameters")
+	}
+
+	vm.dstack.PushByteArray(x[begin : begin+size])
+	return nil
+}
+
+// opcodeLeft returns the first N bytes of a byte array.
+// Stack transformation: [... x n] -> [... x[:n]]
+func opcodeLeft(op *opcode, data []byte, vm *Engine) error {
+	n, err := vm.dstack.PopInt()
+	if err != nil {
+		return err
+	}
+	x, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+
+	// Ensure bounds are valid
+	if n < 0 || n > scriptNum(len(x)) {
+		return scriptError(ErrInvalidIndex, "invalid left index")
+	}
+
+	vm.dstack.PushByteArray(x[:n])
+	return nil
+}
+
+// opcodeRight returns the last N bytes of a byte array.
+// Stack transformation: [... x n] -> [... x[len(x)-n:]]
+func opcodeRight(op *opcode, data []byte, vm *Engine) error {
+	n, err := vm.dstack.PopInt()
+	if err != nil {
+		return err
+	}
+	x, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+
+	// Ensure bounds are valid
+	if n < 0 || n > scriptNum(len(x)) {
+		return scriptError(ErrInvalidIndex, "invalid right index")
+	}
+
+	vm.dstack.PushByteArray(x[len(x)-int(n):])
+	return nil
+}
+
+// opcodeInvert performs a bitwise NOT operation.
+// Stack transformation: [... x] -> [... ~x]
+func opcodeInvert(op *opcode, data []byte, vm *Engine) error {
+	x, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+
+	result := make([]byte, len(x))
+	for i := range x {
+		result[i] = ^x[i]
+	}
+
+	vm.dstack.PushByteArray(result)
+	return nil
+}
+
+// opcodeAnd performs a bitwise AND operation.
+// Stack transformation: [... x1 x2] -> [... x1&x2]
+func opcodeAnd(op *opcode, data []byte, vm *Engine) error {
+	x2, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	x1, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+
+	if len(x1) != len(x2) {
+		return scriptError(ErrInvalidStackOperation, "mismatched operand sizes for AND")
+	}
+
+	result := make([]byte, len(x1))
+	for i := range x1 {
+		result[i] = x1[i] & x2[i]
+	}
+
+	vm.dstack.PushByteArray(result)
+	return nil
+}
+
+// opcodeOr performs a bitwise OR operation.
+// Stack transformation: [... x1 x2] -> [... x1|x2]
+func opcodeOr(op *opcode, data []byte, vm *Engine) error {
+	x2, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	x1, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+
+	if len(x1) != len(x2) {
+		return scriptError(ErrInvalidStackOperation, "mismatched operand sizes for OR")
+	}
+
+	result := make([]byte, len(x1))
+	for i := range x1 {
+		result[i] = x1[i] | x2[i]
+	}
+
+	vm.dstack.PushByteArray(result)
+	return nil
+}
+
+// opcodeXor performs a bitwise XOR operation.
+// Stack transformation: [... x1 x2] -> [... x1^x2]
+func opcodeXor(op *opcode, data []byte, vm *Engine) error {
+	x2, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	x1, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+
+	if len(x1) != len(x2) {
+		return scriptError(ErrInvalidStackOperation, "mismatched operand sizes for XOR")
+	}
+
+	result := make([]byte, len(x1))
+	for i := range x1 {
+		result[i] = x1[i] ^ x2[i]
+	}
+
+	vm.dstack.PushByteArray(result)
+	return nil
+}
+
+// opcode2Mul multiplies a number by 2.
+// Stack transformation: [... x] -> [... x*2]
+func opcode2Mul(op *opcode, data []byte, vm *Engine) error {
+	x, err := vm.dstack.PopInt()
+	if err != nil {
+		return err
+	}
+
+	vm.dstack.PushInt(x * 2)
+	return nil
+}
+
+// opcode2Div divides a number by 2.
+// Stack transformation: [... x] -> [... x/2]
+func opcode2Div(op *opcode, data []byte, vm *Engine) error {
+	x, err := vm.dstack.PopInt()
+	if err != nil {
+		return err
+	}
+
+	vm.dstack.PushInt(x / 2)
+	return nil
+}
+
+// opcodeMul multiplies two numbers.
+// Stack transformation: [... x1 x2] -> [... x1*x2]
+func opcodeMul(op *opcode, data []byte, vm *Engine) error {
+	x2, err := vm.dstack.PopInt()
+	if err != nil {
+		return err
+	}
+	x1, err := vm.dstack.PopInt()
+	if err != nil {
+		return err
+	}
+
+	vm.dstack.PushInt(x1 * x2)
+	return nil
+}
+
+// opcodeDiv divides two numbers.
+// Stack transformation: [... x1 x2] -> [... x1/x2]
+func opcodeDiv(op *opcode, data []byte, vm *Engine) error {
+	x2, err := vm.dstack.PopInt()
+	if err != nil {
+		return err
+	}
+	x1, err := vm.dstack.PopInt()
+	if err != nil {
+		return err
+	}
+
+	if x2 == 0 {
+		return scriptError(ErrInvalidStackOperation, "division by zero")
+	}
+
+	vm.dstack.PushInt(x1 / x2)
+	return nil
+}
+
+// opcodeMod returns the remainder after division.
+// Stack transformation: [... x1 x2] -> [... x1%x2]
+func opcodeMod(op *opcode, data []byte, vm *Engine) error {
+	x2, err := vm.dstack.PopInt()
+	if err != nil {
+		return err
+	}
+	x1, err := vm.dstack.PopInt()
+	if err != nil {
+		return err
+	}
+
+	if x2 == 0 {
+		return scriptError(ErrInvalidStackOperation, "modulo by zero")
+	}
+
+	vm.dstack.PushInt(x1 % x2)
+	return nil
+}
+
+// opcodeLshift performs a left shift operation.
+// Stack transformation: [... x n] -> [... x<<n]
+func opcodeLshift(op *opcode, data []byte, vm *Engine) error {
+	n, err := vm.dstack.PopInt()
+	if err != nil {
+		return err
+	}
+	if n < 0 {
+		return scriptError(ErrInvalidIndex, "negative shift count")
+	}
+
+	x, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+
+	// Convert to big integer for arbitrary precision shift
+	value := new(big.Int).SetBytes(x)
+	result := value.Lsh(value, uint(n))
+
+	vm.dstack.PushByteArray(result.Bytes())
+	return nil
+}
+
+// opcodeRshift performs a right shift operation.
+// Stack transformation: [... x n] -> [... x>>n]
+func opcodeRshift(op *opcode, data []byte, vm *Engine) error {
+	n, err := vm.dstack.PopInt()
+	if err != nil {
+		return err
+	}
+	if n < 0 {
+		return scriptError(ErrInvalidIndex, "negative shift count")
+	}
+
+	x, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+
+	// Convert to big integer for arbitrary precision shift
+	value := new(big.Int).SetBytes(x)
+	result := value.Rsh(value, uint(n))
+
+	vm.dstack.PushByteArray(result.Bytes())
 	return nil
 }
