@@ -2550,6 +2550,30 @@ func opcodeInspectInputValue(op *opcode, data []byte, vm *Engine) error {
 	return nil
 }
 
+func pushScriptPubKey(scriptPubKey []byte, vm *Engine) error {
+	if isWitnessProgramScript(scriptPubKey) {
+		version, program, err := ExtractWitnessProgramInfo(scriptPubKey)
+		if err != nil {
+			return err
+		}
+
+		// push the witness program (2-40 bytes)
+		vm.dstack.PushByteArray(program)
+
+		// push the segwit version as a scriptNum
+		vm.dstack.PushInt(scriptNum(version))
+		return nil
+	}
+
+	// non-native segwit, calculate sha256 hash
+	hash := sha256.Sum256(scriptPubKey)
+	vm.dstack.PushByteArray(hash[:])
+
+	// -1 indicate non-native segwit
+	vm.dstack.PushInt(-1)
+	return nil
+}
+
 // opcodeInspectInputScriptPubkey pops the input index from the stack and pushes the scriptPubKey of the current input onto the stack.
 // Stack transformation: [... index] -> [... scriptPubKey]
 func opcodeInspectInputScriptPubkey(op *opcode, data []byte, vm *Engine) error {
@@ -2567,9 +2591,11 @@ func opcodeInspectInputScriptPubkey(op *opcode, data []byte, vm *Engine) error {
 	}
 
 	prevOut := vm.prevOutFetcher.FetchPrevOutput(vm.tx.TxIn[index].PreviousOutPoint)
+	if prevOut == nil {
+		return scriptError(ErrInvalidIndex, "previous output not found")
+	}
 
-	vm.dstack.PushByteArray(prevOut.PkScript)
-	return nil
+	return pushScriptPubKey(prevOut.PkScript, vm)
 }
 
 // opcodeInspectInputSequence pops the input index from the stack and pushes the sequence number of the current input onto the stack.
@@ -2627,8 +2653,7 @@ func opcodeInspectOutputScriptPubkey(op *opcode, data []byte, vm *Engine) error 
 		return scriptError(ErrInvalidIndex, "output index out of range")
 	}
 
-	vm.dstack.PushByteArray(vm.tx.TxOut[index].PkScript)
-	return nil
+	return pushScriptPubKey(vm.tx.TxOut[index].PkScript, vm)
 }
 
 // opcodeInspectVersion pushes the transaction version onto the stack.

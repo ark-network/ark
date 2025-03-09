@@ -1135,7 +1135,9 @@ func TestSendToArkScriptClosure(t *testing.T) {
 	arkScript, err := arkscript.NewScriptBuilder().
 		AddInt64(0).
 		AddOp(arkscript.OP_INSPECTOUTPUTSCRIPTPUBKEY).
-		AddData(alicePkScript).
+		AddOp(arkscript.OP_1).
+		AddOp(arkscript.OP_EQUALVERIFY).
+		AddData(alicePkScript[2:]). // only witness program is pushed
 		AddOp(arkscript.OP_EQUAL).
 		Script()
 	require.NoError(t, err)
