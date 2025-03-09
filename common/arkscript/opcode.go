@@ -21,6 +21,7 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
+	secp "github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
 // An opcode defines the information related to a txscript opcode.  opfunc, if
@@ -284,8 +285,8 @@ const (
 	OP_SCRIPTNUMTOLE64      = 0xe0 // 224
 	OP_LE64TOSCRIPTNUM      = 0xe1 // 225
 	OP_LE32TOLE64           = 0xe2 // 226
-	OP_UNKNOWN227           = 0xe3 // 227
-	OP_UNKNOWN228           = 0xe4 // 228
+	OP_ECMULSCALARVERIFY    = 0xe3 // 227
+	OP_TWEAKVERIFY          = 0xe4 // 228
 	OP_UNKNOWN229           = 0xe5 // 229
 	OP_UNKNOWN230           = 0xe6 // 230
 	OP_UNKNOWN231           = 0xe7 // 231
@@ -584,8 +585,8 @@ var opcodeArray = [256]opcode{
 	OP_SCRIPTNUMTOLE64:      {OP_SCRIPTNUMTOLE64, "OP_SCRIPTNUMTOLE64", 1, opcodeScriptNumToLE64},
 	OP_LE64TOSCRIPTNUM:      {OP_LE64TOSCRIPTNUM, "OP_LE64TOSCRIPTNUM", 1, opcodeLE64ToScriptNum},
 	OP_LE32TOLE64:           {OP_LE32TOLE64, "OP_LE32TOLE64", 1, opcodeLE32ToLE64},
-	OP_UNKNOWN227:           {OP_UNKNOWN227, "OP_UNKNOWN227", 1, opcodeInvalid},
-	OP_UNKNOWN228:           {OP_UNKNOWN228, "OP_UNKNOWN228", 1, opcodeInvalid},
+	OP_ECMULSCALARVERIFY:    {OP_ECMULSCALARVERIFY, "OP_ECMULSCALARVERIFY", 1, opcodeECMulScalarVerify},
+	OP_TWEAKVERIFY:          {OP_TWEAKVERIFY, "OP_TWEAKVERIFY", 1, opcodeTweakVerify},
 	OP_UNKNOWN229:           {OP_UNKNOWN229, "OP_UNKNOWN229", 1, opcodeInvalid},
 	OP_UNKNOWN230:           {OP_UNKNOWN230, "OP_UNKNOWN230", 1, opcodeInvalid},
 	OP_UNKNOWN231:           {OP_UNKNOWN231, "OP_UNKNOWN231", 1, opcodeInvalid},
@@ -706,8 +707,8 @@ var successOpcodes = map[byte]struct{}{
 	OP_SCRIPTNUMTOLE64:           {}, // 224
 	OP_LE64TOSCRIPTNUM:           {}, // 225
 	OP_LE32TOLE64:                {}, // 226
-	OP_UNKNOWN227:                {}, // 227
-	OP_UNKNOWN228:                {}, // 228
+	OP_ECMULSCALARVERIFY:         {}, // 227
+	OP_TWEAKVERIFY:               {}, // 228
 	OP_UNKNOWN229:                {}, // 229
 	OP_UNKNOWN230:                {}, // 230
 	OP_UNKNOWN231:                {}, // 231
@@ -3402,5 +3403,123 @@ func opcodeLE32ToLE64(op *opcode, data []byte, vm *Engine) error {
 	result := make([]byte, 8)
 	binary.LittleEndian.PutUint64(result, uint64(val))
 	vm.dstack.PushByteArray(result)
+	return nil
+}
+
+// opcodeECMulScalarVerify verifies that Q = k*P where k is a 32-byte big endian scalar
+// and P, Q are compressed EC points on the secp256k1 curve.
+// Stack transformation: [... k P Q] -> [...]
+func opcodeECMulScalarVerify(op *opcode, data []byte, vm *Engine) error {
+	Q, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+
+	P, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+
+	k, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+
+	if len(k) != 32 {
+		return scriptError(ErrInvalidStackOperation, "OP_ECMULSCALARVERIFY requires 32-byte scalar")
+	}
+
+	pubKeyP, err := secp.ParsePubKey(P)
+	if err != nil {
+		return scriptError(ErrInvalidStackOperation, "invalid point P")
+	}
+
+	var scalar secp.ModNScalar
+	if overflow := scalar.SetByteSlice(k); overflow {
+		return scriptError(ErrInvalidStackOperation, "scalar k is outside of curve order")
+	}
+
+	var point secp.JacobianPoint
+	point.X.SetByteSlice(pubKeyP.X().Bytes())
+	point.Y.SetByteSlice(pubKeyP.Y().Bytes())
+	point.Z.SetInt(1)
+
+	// calculate k*P
+	var result secp.JacobianPoint
+	secp.ScalarMultNonConst(&scalar, &point, &result)
+	result.ToAffine()
+
+	kP := secp.NewPublicKey(&result.X, &result.Y)
+
+	// verify Q == k*P by comparing their serialized compressed forms
+	if !bytes.Equal(Q, kP.SerializeCompressed()) {
+		return scriptError(ErrInvalidStackOperation, "Q != k*P")
+	}
+
+	return nil
+}
+
+// opcodeTweakVerify verifies that Q = P + k*G where P is a 32-byte X-only internal key,
+// k is a 32-byte big endian scalar, Q is a 33-byte compressed point, and G is the generator point.
+// Stack transformation: [... P k Q] -> [...]
+func opcodeTweakVerify(op *opcode, data []byte, vm *Engine) error {
+	Q, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+
+	k, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+
+	P, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+
+	if len(P) != 32 {
+		return scriptError(ErrInvalidStackOperation, "OP_TWEAKVERIFY requires 32-byte X-only key")
+	}
+
+	if len(k) != 32 {
+		return scriptError(ErrInvalidStackOperation, "OP_TWEAKVERIFY requires 32-byte scalar")
+	}
+
+	var scalar secp.ModNScalar
+	if overflow := scalar.SetByteSlice(k); overflow {
+		return scriptError(ErrInvalidStackOperation, "scalar k is outside of curve order")
+	}
+
+	var kG secp.JacobianPoint
+	secp.ScalarBaseMultNonConst(&scalar, &kG)
+	kG.ToAffine()
+
+	var px secp.FieldVal
+	if overflow := px.SetByteSlice(P); overflow {
+		return scriptError(ErrInvalidStackOperation, "invalid X-only key P")
+	}
+
+	var py secp.FieldVal
+	if !secp.DecompressY(&px, false, &py) {
+		return scriptError(ErrInvalidStackOperation, "invalid X-only key P")
+	}
+
+	var pointP secp.JacobianPoint
+	pointP.X = px
+	pointP.Y = py
+	pointP.Z.SetInt(1)
+
+	var result secp.JacobianPoint
+	secp.AddNonConst(&pointP, &kG, &result)
+	result.ToAffine()
+
+	tweakedKey := secp.NewPublicKey(&result.X, &result.Y)
+
+	// verify Q == P + k*G by comparing their serialized compressed forms
+	if !bytes.Equal(Q, tweakedKey.SerializeCompressed()) {
+		return scriptError(ErrInvalidStackOperation, "Q != P + k*G")
+	}
+
 	return nil
 }
