@@ -9,10 +9,12 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+	"math"
 	"math/big"
 	"strings"
 
 	"golang.org/x/crypto/ripemd160"
+	"modernc.org/mathutil"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
@@ -270,47 +272,47 @@ const (
 	OP_INSPECTNUMOUTPUTS = 0xd5 // 213
 	OP_TXWEIGHT          = 0xd6 // 214
 
-	OP_UNKNOWN215    = 0xd7 // 215
-	OP_UNKNOWN216    = 0xd8 // 216
-	OP_UNKNOWN217    = 0xd9 // 217
-	OP_UNKNOWN218    = 0xda // 218
-	OP_UNKNOWN219    = 0xdb // 219
-	OP_UNKNOWN220    = 0xdc // 220
-	OP_UNKNOWN221    = 0xdd // 221
-	OP_UNKNOWN222    = 0xde // 222
-	OP_UNKNOWN223    = 0xdf // 223
-	OP_UNKNOWN224    = 0xe0 // 224
-	OP_UNKNOWN225    = 0xe1 // 225
-	OP_UNKNOWN226    = 0xe2 // 226
-	OP_UNKNOWN227    = 0xe3 // 227
-	OP_UNKNOWN228    = 0xe4 // 228
-	OP_UNKNOWN229    = 0xe5 // 229
-	OP_UNKNOWN230    = 0xe6 // 230
-	OP_UNKNOWN231    = 0xe7 // 231
-	OP_UNKNOWN232    = 0xe8 // 232
-	OP_UNKNOWN233    = 0xe9 // 233
-	OP_UNKNOWN234    = 0xea // 234
-	OP_UNKNOWN235    = 0xeb // 235
-	OP_UNKNOWN236    = 0xec // 236
-	OP_UNKNOWN237    = 0xed // 237
-	OP_UNKNOWN238    = 0xee // 238
-	OP_UNKNOWN239    = 0xef // 239
-	OP_UNKNOWN240    = 0xf0 // 240
-	OP_UNKNOWN241    = 0xf1 // 241
-	OP_UNKNOWN242    = 0xf2 // 242
-	OP_UNKNOWN243    = 0xf3 // 243
-	OP_UNKNOWN244    = 0xf4 // 244
-	OP_UNKNOWN245    = 0xf5 // 245
-	OP_UNKNOWN246    = 0xf6 // 246
-	OP_UNKNOWN247    = 0xf7 // 247
-	OP_UNKNOWN248    = 0xf8 // 248
-	OP_UNKNOWN249    = 0xf9 // 249
-	OP_SMALLINTEGER  = 0xfa // 250 - bitcoin core internal
-	OP_PUBKEYS       = 0xfb // 251 - bitcoin core internal
-	OP_UNKNOWN252    = 0xfc // 252
-	OP_PUBKEYHASH    = 0xfd // 253 - bitcoin core internal
-	OP_PUBKEY        = 0xfe // 254 - bitcoin core internal
-	OP_INVALIDOPCODE = 0xff // 255 - bitcoin core internal
+	OP_ADD64                = 0xd7
+	OP_SUB64                = 0xd8
+	OP_MUL64                = 0xd9
+	OP_DIV64                = 0xda
+	OP_NEG64                = 0xdb
+	OP_LESSTHAN64           = 0xdc
+	OP_LESSTHANOREQUAL64    = 0xdd
+	OP_GREATERTHAN64        = 0xde
+	OP_GREATERTHANOREQUAL64 = 0xdf
+	OP_UNKNOWN224           = 0xe0 // 224
+	OP_UNKNOWN225           = 0xe1 // 225
+	OP_UNKNOWN226           = 0xe2 // 226
+	OP_UNKNOWN227           = 0xe3 // 227
+	OP_UNKNOWN228           = 0xe4 // 228
+	OP_UNKNOWN229           = 0xe5 // 229
+	OP_UNKNOWN230           = 0xe6 // 230
+	OP_UNKNOWN231           = 0xe7 // 231
+	OP_UNKNOWN232           = 0xe8 // 232
+	OP_UNKNOWN233           = 0xe9 // 233
+	OP_UNKNOWN234           = 0xea // 234
+	OP_UNKNOWN235           = 0xeb // 235
+	OP_UNKNOWN236           = 0xec // 236
+	OP_UNKNOWN237           = 0xed // 237
+	OP_UNKNOWN238           = 0xee // 238
+	OP_UNKNOWN239           = 0xef // 239
+	OP_UNKNOWN240           = 0xf0 // 240
+	OP_UNKNOWN241           = 0xf1 // 241
+	OP_UNKNOWN242           = 0xf2 // 242
+	OP_UNKNOWN243           = 0xf3 // 243
+	OP_UNKNOWN244           = 0xf4 // 244
+	OP_UNKNOWN245           = 0xf5 // 245
+	OP_UNKNOWN246           = 0xf6 // 246
+	OP_UNKNOWN247           = 0xf7 // 247
+	OP_UNKNOWN248           = 0xf8 // 248
+	OP_UNKNOWN249           = 0xf9 // 249
+	OP_SMALLINTEGER         = 0xfa // 250 - bitcoin core internal
+	OP_PUBKEYS              = 0xfb // 251 - bitcoin core internal
+	OP_UNKNOWN252           = 0xfc // 252
+	OP_PUBKEYHASH           = 0xfd // 253 - bitcoin core internal
+	OP_PUBKEY               = 0xfe // 254 - bitcoin core internal
+	OP_INVALIDOPCODE        = 0xff // 255 - bitcoin core internal
 )
 
 // Conditional execution constants.
@@ -570,41 +572,41 @@ var opcodeArray = [256]opcode{
 	OP_INSPECTNUMOUTPUTS: {OP_INSPECTNUMOUTPUTS, "OP_INSPECTNUMOUTPUTS", 1, opcodeInspectNumOutputs},
 	OP_TXWEIGHT:          {OP_TXWEIGHT, "OP_TXWEIGHT", 1, opcodeTxWeight},
 
-	OP_UNKNOWN215: {OP_UNKNOWN215, "OP_UNKNOWN215", 1, opcodeInvalid},
-	OP_UNKNOWN216: {OP_UNKNOWN216, "OP_UNKNOWN216", 1, opcodeInvalid},
-	OP_UNKNOWN217: {OP_UNKNOWN217, "OP_UNKNOWN217", 1, opcodeInvalid},
-	OP_UNKNOWN218: {OP_UNKNOWN218, "OP_UNKNOWN218", 1, opcodeInvalid},
-	OP_UNKNOWN219: {OP_UNKNOWN219, "OP_UNKNOWN219", 1, opcodeInvalid},
-	OP_UNKNOWN220: {OP_UNKNOWN220, "OP_UNKNOWN220", 1, opcodeInvalid},
-	OP_UNKNOWN221: {OP_UNKNOWN221, "OP_UNKNOWN221", 1, opcodeInvalid},
-	OP_UNKNOWN222: {OP_UNKNOWN222, "OP_UNKNOWN222", 1, opcodeInvalid},
-	OP_UNKNOWN223: {OP_UNKNOWN223, "OP_UNKNOWN223", 1, opcodeInvalid},
-	OP_UNKNOWN224: {OP_UNKNOWN224, "OP_UNKNOWN224", 1, opcodeInvalid},
-	OP_UNKNOWN225: {OP_UNKNOWN225, "OP_UNKNOWN225", 1, opcodeInvalid},
-	OP_UNKNOWN226: {OP_UNKNOWN226, "OP_UNKNOWN226", 1, opcodeInvalid},
-	OP_UNKNOWN227: {OP_UNKNOWN227, "OP_UNKNOWN227", 1, opcodeInvalid},
-	OP_UNKNOWN228: {OP_UNKNOWN228, "OP_UNKNOWN228", 1, opcodeInvalid},
-	OP_UNKNOWN229: {OP_UNKNOWN229, "OP_UNKNOWN229", 1, opcodeInvalid},
-	OP_UNKNOWN230: {OP_UNKNOWN230, "OP_UNKNOWN230", 1, opcodeInvalid},
-	OP_UNKNOWN231: {OP_UNKNOWN231, "OP_UNKNOWN231", 1, opcodeInvalid},
-	OP_UNKNOWN232: {OP_UNKNOWN232, "OP_UNKNOWN232", 1, opcodeInvalid},
-	OP_UNKNOWN233: {OP_UNKNOWN233, "OP_UNKNOWN233", 1, opcodeInvalid},
-	OP_UNKNOWN234: {OP_UNKNOWN234, "OP_UNKNOWN234", 1, opcodeInvalid},
-	OP_UNKNOWN235: {OP_UNKNOWN235, "OP_UNKNOWN235", 1, opcodeInvalid},
-	OP_UNKNOWN236: {OP_UNKNOWN236, "OP_UNKNOWN236", 1, opcodeInvalid},
-	OP_UNKNOWN237: {OP_UNKNOWN237, "OP_UNKNOWN237", 1, opcodeInvalid},
-	OP_UNKNOWN238: {OP_UNKNOWN238, "OP_UNKNOWN238", 1, opcodeInvalid},
-	OP_UNKNOWN239: {OP_UNKNOWN239, "OP_UNKNOWN239", 1, opcodeInvalid},
-	OP_UNKNOWN240: {OP_UNKNOWN240, "OP_UNKNOWN240", 1, opcodeInvalid},
-	OP_UNKNOWN241: {OP_UNKNOWN241, "OP_UNKNOWN241", 1, opcodeInvalid},
-	OP_UNKNOWN242: {OP_UNKNOWN242, "OP_UNKNOWN242", 1, opcodeInvalid},
-	OP_UNKNOWN243: {OP_UNKNOWN243, "OP_UNKNOWN243", 1, opcodeInvalid},
-	OP_UNKNOWN244: {OP_UNKNOWN244, "OP_UNKNOWN244", 1, opcodeInvalid},
-	OP_UNKNOWN245: {OP_UNKNOWN245, "OP_UNKNOWN245", 1, opcodeInvalid},
-	OP_UNKNOWN246: {OP_UNKNOWN246, "OP_UNKNOWN246", 1, opcodeInvalid},
-	OP_UNKNOWN247: {OP_UNKNOWN247, "OP_UNKNOWN247", 1, opcodeInvalid},
-	OP_UNKNOWN248: {OP_UNKNOWN248, "OP_UNKNOWN248", 1, opcodeInvalid},
-	OP_UNKNOWN249: {OP_UNKNOWN249, "OP_UNKNOWN249", 1, opcodeInvalid},
+	OP_ADD64:                {OP_ADD64, "OP_ADD64", 1, opcodeAdd64},
+	OP_SUB64:                {OP_SUB64, "OP_SUB64", 1, opcodeSub64},
+	OP_MUL64:                {OP_MUL64, "OP_MUL64", 1, opcodeMul64},
+	OP_DIV64:                {OP_DIV64, "OP_DIV64", 1, opcodeDiv64},
+	OP_NEG64:                {OP_NEG64, "OP_NEG64", 1, opcodeNeg64},
+	OP_LESSTHAN64:           {OP_LESSTHAN64, "OP_LESSTHAN64", 1, opcodeLessThan64},
+	OP_LESSTHANOREQUAL64:    {OP_LESSTHANOREQUAL64, "OP_LESSTHANOREQUAL64", 1, opcodeLessThanOrEqual64},
+	OP_GREATERTHAN64:        {OP_GREATERTHAN64, "OP_GREATERTHAN64", 1, opcodeGreaterThan64},
+	OP_GREATERTHANOREQUAL64: {OP_GREATERTHANOREQUAL64, "OP_GREATERTHANOREQUAL64", 1, opcodeGreaterThanOrEqual64},
+	OP_UNKNOWN224:           {OP_UNKNOWN224, "OP_UNKNOWN224", 1, opcodeInvalid},
+	OP_UNKNOWN225:           {OP_UNKNOWN225, "OP_UNKNOWN225", 1, opcodeInvalid},
+	OP_UNKNOWN226:           {OP_UNKNOWN226, "OP_UNKNOWN226", 1, opcodeInvalid},
+	OP_UNKNOWN227:           {OP_UNKNOWN227, "OP_UNKNOWN227", 1, opcodeInvalid},
+	OP_UNKNOWN228:           {OP_UNKNOWN228, "OP_UNKNOWN228", 1, opcodeInvalid},
+	OP_UNKNOWN229:           {OP_UNKNOWN229, "OP_UNKNOWN229", 1, opcodeInvalid},
+	OP_UNKNOWN230:           {OP_UNKNOWN230, "OP_UNKNOWN230", 1, opcodeInvalid},
+	OP_UNKNOWN231:           {OP_UNKNOWN231, "OP_UNKNOWN231", 1, opcodeInvalid},
+	OP_UNKNOWN232:           {OP_UNKNOWN232, "OP_UNKNOWN232", 1, opcodeInvalid},
+	OP_UNKNOWN233:           {OP_UNKNOWN233, "OP_UNKNOWN233", 1, opcodeInvalid},
+	OP_UNKNOWN234:           {OP_UNKNOWN234, "OP_UNKNOWN234", 1, opcodeInvalid},
+	OP_UNKNOWN235:           {OP_UNKNOWN235, "OP_UNKNOWN235", 1, opcodeInvalid},
+	OP_UNKNOWN236:           {OP_UNKNOWN236, "OP_UNKNOWN236", 1, opcodeInvalid},
+	OP_UNKNOWN237:           {OP_UNKNOWN237, "OP_UNKNOWN237", 1, opcodeInvalid},
+	OP_UNKNOWN238:           {OP_UNKNOWN238, "OP_UNKNOWN238", 1, opcodeInvalid},
+	OP_UNKNOWN239:           {OP_UNKNOWN239, "OP_UNKNOWN239", 1, opcodeInvalid},
+	OP_UNKNOWN240:           {OP_UNKNOWN240, "OP_UNKNOWN240", 1, opcodeInvalid},
+	OP_UNKNOWN241:           {OP_UNKNOWN241, "OP_UNKNOWN241", 1, opcodeInvalid},
+	OP_UNKNOWN242:           {OP_UNKNOWN242, "OP_UNKNOWN242", 1, opcodeInvalid},
+	OP_UNKNOWN243:           {OP_UNKNOWN243, "OP_UNKNOWN243", 1, opcodeInvalid},
+	OP_UNKNOWN244:           {OP_UNKNOWN244, "OP_UNKNOWN244", 1, opcodeInvalid},
+	OP_UNKNOWN245:           {OP_UNKNOWN245, "OP_UNKNOWN245", 1, opcodeInvalid},
+	OP_UNKNOWN246:           {OP_UNKNOWN246, "OP_UNKNOWN246", 1, opcodeInvalid},
+	OP_UNKNOWN247:           {OP_UNKNOWN247, "OP_UNKNOWN247", 1, opcodeInvalid},
+	OP_UNKNOWN248:           {OP_UNKNOWN248, "OP_UNKNOWN248", 1, opcodeInvalid},
+	OP_UNKNOWN249:           {OP_UNKNOWN249, "OP_UNKNOWN249", 1, opcodeInvalid},
 
 	// Bitcoin Core internal use opcode.  Defined here for completeness.
 	OP_SMALLINTEGER: {OP_SMALLINTEGER, "OP_SMALLINTEGER", 1, opcodeInvalid},
@@ -692,15 +694,15 @@ var successOpcodes = map[byte]struct{}{
 	OP_INSPECTNUMINPUTS:          {}, // 212
 	OP_INSPECTNUMOUTPUTS:         {}, // 213
 	OP_TXWEIGHT:                  {}, // 214
-	OP_UNKNOWN215:                {}, // 215
-	OP_UNKNOWN216:                {}, // 216
-	OP_UNKNOWN217:                {}, // 217
-	OP_UNKNOWN218:                {}, // 218
-	OP_UNKNOWN219:                {}, // 219
-	OP_UNKNOWN220:                {}, // 220
-	OP_UNKNOWN221:                {}, // 221
-	OP_UNKNOWN222:                {}, // 222
-	OP_UNKNOWN223:                {}, // 223
+	OP_ADD64:                     {}, // 215
+	OP_SUB64:                     {}, // 216
+	OP_MUL64:                     {}, // 217
+	OP_DIV64:                     {}, // 218
+	OP_NEG64:                     {}, // 219
+	OP_LESSTHAN64:                {}, // 220
+	OP_LESSTHANOREQUAL64:         {}, // 221
+	OP_GREATERTHAN64:             {}, // 222
+	OP_GREATERTHANOREQUAL64:      {}, // 223
 	OP_UNKNOWN224:                {}, // 224
 	OP_UNKNOWN225:                {}, // 225
 	OP_UNKNOWN226:                {}, // 226
@@ -3051,5 +3053,306 @@ func opcodeChecksigFromStack(op *opcode, data []byte, vm *Engine) error {
 
 	// success
 	vm.dstack.PushInt(1)
+	return nil
+}
+
+// opcodeAdd64 performs 64-bit addition with overflow checking
+// Stack transformation: [... a b] -> [... sum 1] (no overflow) or [... a b 0] (overflow)
+func opcodeAdd64(op *opcode, data []byte, vm *Engine) error {
+	b, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	if len(b) != 8 {
+		return scriptError(ErrInvalidStackOperation, "OP_ADD64 requires 8-byte operands")
+	}
+
+	a, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	if len(a) != 8 {
+		return scriptError(ErrInvalidStackOperation, "OP_ADD64 requires 8-byte operands")
+	}
+
+	aVal := int64(binary.LittleEndian.Uint64(a))
+	bVal := int64(binary.LittleEndian.Uint64(b))
+
+	sum, overflow := mathutil.AddOverflowInt64(aVal, bVal)
+	if overflow {
+		// overflow : restore original operands and push 0
+		vm.dstack.PushByteArray(a)
+		vm.dstack.PushByteArray(b)
+		vm.dstack.PushInt(0)
+		return nil
+	}
+
+	// no overflow : push result and success scriptNum
+	result := make([]byte, 8)
+	binary.LittleEndian.PutUint64(result, uint64(sum))
+	vm.dstack.PushByteArray(result)
+	vm.dstack.PushInt(1)
+	return nil
+}
+
+// opcodeSub64 performs 64-bit subtraction with overflow checking
+// Stack transformation: [... a b] -> [... diff 1] (no overflow) or [... a b 0] (overflow)
+func opcodeSub64(op *opcode, data []byte, vm *Engine) error {
+	b, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	if len(b) != 8 {
+		return scriptError(ErrInvalidStackOperation, "OP_SUB64 requires 8-byte operands")
+	}
+
+	a, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	if len(a) != 8 {
+		return scriptError(ErrInvalidStackOperation, "OP_SUB64 requires 8-byte operands")
+	}
+
+	aVal := int64(binary.LittleEndian.Uint64(a))
+	bVal := int64(binary.LittleEndian.Uint64(b))
+
+	diff, overflow := mathutil.SubOverflowInt64(aVal, bVal)
+	if overflow {
+		// overflow : restore original operands and push 0
+		vm.dstack.PushByteArray(a)
+		vm.dstack.PushByteArray(b)
+		vm.dstack.PushInt(0)
+		return nil
+	}
+
+	// no overflow : push result and success scriptNum
+	result := make([]byte, 8)
+	binary.LittleEndian.PutUint64(result, uint64(diff))
+	vm.dstack.PushByteArray(result)
+	vm.dstack.PushInt(1)
+	return nil
+}
+
+// opcodeMul64 performs 64-bit multiplication with overflow checking
+// Stack transformation: [... a b] -> [... product 1] (no overflow) or [... a b 0] (overflow)
+func opcodeMul64(op *opcode, data []byte, vm *Engine) error {
+	b, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	if len(b) != 8 {
+		return scriptError(ErrInvalidStackOperation, "OP_MUL64 requires 8-byte operands")
+	}
+
+	a, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	if len(a) != 8 {
+		return scriptError(ErrInvalidStackOperation, "OP_MUL64 requires 8-byte operands")
+	}
+
+	aVal := int64(binary.LittleEndian.Uint64(a))
+	bVal := int64(binary.LittleEndian.Uint64(b))
+
+	product, overflow := mathutil.MulOverflowInt64(aVal, bVal)
+	if overflow {
+		// overflow : restore original operands and push 0
+		vm.dstack.PushByteArray(a)
+		vm.dstack.PushByteArray(b)
+		vm.dstack.PushInt(0)
+		return nil
+	}
+
+	// no overflow : push result and success scriptNum
+	result := make([]byte, 8)
+	binary.LittleEndian.PutUint64(result, uint64(product))
+	vm.dstack.PushByteArray(result)
+	vm.dstack.PushInt(1)
+	return nil
+}
+
+// opcodeDiv64 performs 64-bit division with overflow checking
+// Stack transformation: [... a b] -> [... remainder quotient 1] (no overflow) or [... a b 0] (overflow)
+func opcodeDiv64(op *opcode, data []byte, vm *Engine) error {
+	b, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	if len(b) != 8 {
+		return scriptError(ErrInvalidStackOperation, "OP_DIV64 requires 8-byte operands")
+	}
+
+	a, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	if len(a) != 8 {
+		return scriptError(ErrInvalidStackOperation, "OP_DIV64 requires 8-byte operands")
+	}
+
+	aVal := int64(binary.LittleEndian.Uint64(a))
+	bVal := int64(binary.LittleEndian.Uint64(b))
+
+	if bVal == 0 || (aVal == math.MinInt64 && bVal == -1) {
+		// division by zero or overflow, restore original operands and push 0
+		vm.dstack.PushByteArray(a)
+		vm.dstack.PushByteArray(b)
+		vm.dstack.PushInt(0)
+		return nil
+	}
+
+	quotient := aVal / bVal
+	remainder := aVal % bVal
+
+	// ensure remainder is non-negative and less than |b|
+	if remainder < 0 {
+		remainder += int64(math.Abs(float64(bVal)))
+		quotient -= 1
+	}
+
+	remainderBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(remainderBytes, uint64(remainder))
+	vm.dstack.PushByteArray(remainderBytes)
+
+	quotientBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(quotientBytes, uint64(quotient))
+	vm.dstack.PushByteArray(quotientBytes)
+
+	vm.dstack.PushInt(1)
+	return nil
+}
+
+// opcodeNeg64 performs 64-bit negation with overflow checking
+// Stack transformation: [... a] -> [... -a 1] (no overflow) or [... a 0] (overflow)
+func opcodeNeg64(op *opcode, data []byte, vm *Engine) error {
+	a, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	if len(a) != 8 {
+		return scriptError(ErrInvalidStackOperation, "OP_NEG64 requires 8-byte operand")
+	}
+
+	aVal := int64(binary.LittleEndian.Uint64(a))
+
+	product, overflow := mathutil.MulOverflowInt64(aVal, -1)
+	if overflow {
+		// overflow : restore original operand and push 0
+		vm.dstack.PushByteArray(a)
+		vm.dstack.PushInt(0)
+		return nil
+	}
+
+	// no overflow : push result and success scriptNum
+	result := make([]byte, 8)
+	binary.LittleEndian.PutUint64(result, uint64(product))
+	vm.dstack.PushByteArray(result)
+	vm.dstack.PushInt(1)
+	return nil
+}
+
+// opcodeLessThan64 performs 64-bit less than comparison
+// Stack transformation: [... a b] -> [... bool]
+func opcodeLessThan64(op *opcode, data []byte, vm *Engine) error {
+	b, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	if len(b) != 8 {
+		return scriptError(ErrInvalidStackOperation, "OP_LESSTHAN64 requires 8-byte operands")
+	}
+
+	a, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	if len(a) != 8 {
+		return scriptError(ErrInvalidStackOperation, "OP_LESSTHAN64 requires 8-byte operands")
+	}
+
+	aVal := int64(binary.LittleEndian.Uint64(a))
+	bVal := int64(binary.LittleEndian.Uint64(b))
+
+	vm.dstack.PushBool(aVal < bVal)
+	return nil
+}
+
+// opcodeLessThanOrEqual64 performs 64-bit less than or equal comparison
+// Stack transformation: [... a b] -> [... bool]
+func opcodeLessThanOrEqual64(op *opcode, data []byte, vm *Engine) error {
+	b, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	if len(b) != 8 {
+		return scriptError(ErrInvalidStackOperation, "OP_LESSTHANOREQUAL64 requires 8-byte operands")
+	}
+
+	a, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	if len(a) != 8 {
+		return scriptError(ErrInvalidStackOperation, "OP_LESSTHANOREQUAL64 requires 8-byte operands")
+	}
+
+	aVal := int64(binary.LittleEndian.Uint64(a))
+	bVal := int64(binary.LittleEndian.Uint64(b))
+
+	vm.dstack.PushBool(aVal <= bVal)
+	return nil
+}
+
+// opcodeGreaterThan64 performs 64-bit greater than comparison
+// Stack transformation: [... a b] -> [... bool]
+func opcodeGreaterThan64(op *opcode, data []byte, vm *Engine) error {
+	b, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	if len(b) != 8 {
+		return scriptError(ErrInvalidStackOperation, "OP_GREATERTHAN64 requires 8-byte operands")
+	}
+
+	a, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	if len(a) != 8 {
+		return scriptError(ErrInvalidStackOperation, "OP_GREATERTHAN64 requires 8-byte operands")
+	}
+
+	aVal := int64(binary.LittleEndian.Uint64(a))
+	bVal := int64(binary.LittleEndian.Uint64(b))
+
+	vm.dstack.PushBool(aVal > bVal)
+	return nil
+}
+
+// opcodeGreaterThanOrEqual64 performs 64-bit greater than or equal comparison
+// Stack transformation: [... a b] -> [... bool]
+func opcodeGreaterThanOrEqual64(op *opcode, data []byte, vm *Engine) error {
+	b, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	if len(b) != 8 {
+		return scriptError(ErrInvalidStackOperation, "OP_GREATERTHANOREQUAL64 requires 8-byte operands")
+	}
+
+	a, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	if len(a) != 8 {
+		return scriptError(ErrInvalidStackOperation, "OP_GREATERTHANOREQUAL64 requires 8-byte operands")
+	}
+
+	aVal := int64(binary.LittleEndian.Uint64(a))
+	bVal := int64(binary.LittleEndian.Uint64(b))
+
+	vm.dstack.PushBool(aVal >= bVal)
 	return nil
 }
