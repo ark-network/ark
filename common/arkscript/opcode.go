@@ -280,10 +280,10 @@ const (
 	OP_LESSTHAN64           = 0xdc
 	OP_LESSTHANOREQUAL64    = 0xdd
 	OP_GREATERTHAN64        = 0xde
-	OP_GREATERTHANOREQUAL64 = 0xdf
-	OP_UNKNOWN224           = 0xe0 // 224
-	OP_UNKNOWN225           = 0xe1 // 225
-	OP_UNKNOWN226           = 0xe2 // 226
+	OP_GREATERTHANOREQUAL64 = 0xdf // 223
+	OP_SCRIPTNUMTOLE64      = 0xe0 // 224
+	OP_LE64TOSCRIPTNUM      = 0xe1 // 225
+	OP_LE32TOLE64           = 0xe2 // 226
 	OP_UNKNOWN227           = 0xe3 // 227
 	OP_UNKNOWN228           = 0xe4 // 228
 	OP_UNKNOWN229           = 0xe5 // 229
@@ -581,9 +581,9 @@ var opcodeArray = [256]opcode{
 	OP_LESSTHANOREQUAL64:    {OP_LESSTHANOREQUAL64, "OP_LESSTHANOREQUAL64", 1, opcodeLessThanOrEqual64},
 	OP_GREATERTHAN64:        {OP_GREATERTHAN64, "OP_GREATERTHAN64", 1, opcodeGreaterThan64},
 	OP_GREATERTHANOREQUAL64: {OP_GREATERTHANOREQUAL64, "OP_GREATERTHANOREQUAL64", 1, opcodeGreaterThanOrEqual64},
-	OP_UNKNOWN224:           {OP_UNKNOWN224, "OP_UNKNOWN224", 1, opcodeInvalid},
-	OP_UNKNOWN225:           {OP_UNKNOWN225, "OP_UNKNOWN225", 1, opcodeInvalid},
-	OP_UNKNOWN226:           {OP_UNKNOWN226, "OP_UNKNOWN226", 1, opcodeInvalid},
+	OP_SCRIPTNUMTOLE64:      {OP_SCRIPTNUMTOLE64, "OP_SCRIPTNUMTOLE64", 1, opcodeScriptNumToLE64},
+	OP_LE64TOSCRIPTNUM:      {OP_LE64TOSCRIPTNUM, "OP_LE64TOSCRIPTNUM", 1, opcodeLE64ToScriptNum},
+	OP_LE32TOLE64:           {OP_LE32TOLE64, "OP_LE32TOLE64", 1, opcodeLE32ToLE64},
 	OP_UNKNOWN227:           {OP_UNKNOWN227, "OP_UNKNOWN227", 1, opcodeInvalid},
 	OP_UNKNOWN228:           {OP_UNKNOWN228, "OP_UNKNOWN228", 1, opcodeInvalid},
 	OP_UNKNOWN229:           {OP_UNKNOWN229, "OP_UNKNOWN229", 1, opcodeInvalid},
@@ -703,9 +703,9 @@ var successOpcodes = map[byte]struct{}{
 	OP_LESSTHANOREQUAL64:         {}, // 221
 	OP_GREATERTHAN64:             {}, // 222
 	OP_GREATERTHANOREQUAL64:      {}, // 223
-	OP_UNKNOWN224:                {}, // 224
-	OP_UNKNOWN225:                {}, // 225
-	OP_UNKNOWN226:                {}, // 226
+	OP_SCRIPTNUMTOLE64:           {}, // 224
+	OP_LE64TOSCRIPTNUM:           {}, // 225
+	OP_LE32TOLE64:                {}, // 226
 	OP_UNKNOWN227:                {}, // 227
 	OP_UNKNOWN228:                {}, // 228
 	OP_UNKNOWN229:                {}, // 229
@@ -3354,5 +3354,53 @@ func opcodeGreaterThanOrEqual64(op *opcode, data []byte, vm *Engine) error {
 	bVal := int64(binary.LittleEndian.Uint64(b))
 
 	vm.dstack.PushBool(aVal >= bVal)
+	return nil
+}
+
+// opcodeScriptNumToLE64 converts a minimal CScriptNum to an 8-byte signed LE number
+// Stack transformation: [... num] -> [... le64]
+func opcodeScriptNumToLE64(op *opcode, data []byte, vm *Engine) error {
+	num, err := vm.dstack.PopInt()
+	if err != nil {
+		return err
+	}
+
+	result := make([]byte, 8)
+	binary.LittleEndian.PutUint64(result, uint64(int64(num)))
+	vm.dstack.PushByteArray(result)
+	return nil
+}
+
+// opcodeLE64ToScriptNum converts an 8-byte signed LE number to a minimal CScriptNum
+// Stack transformation: [... le64] -> [... num]
+func opcodeLE64ToScriptNum(op *opcode, data []byte, vm *Engine) error {
+	b, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	if len(b) != 8 {
+		return scriptError(ErrInvalidStackOperation, "OP_LE64TOSCRIPTNUM requires 8-byte operand")
+	}
+
+	val := int64(binary.LittleEndian.Uint64(b))
+	vm.dstack.PushInt(scriptNum(val))
+	return nil
+}
+
+// opcodeLE32ToLE64 converts a 4-byte unsigned LE number to an 8-byte signed LE number
+// Stack transformation: [... le32] -> [... le64]
+func opcodeLE32ToLE64(op *opcode, data []byte, vm *Engine) error {
+	b, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	if len(b) != 4 {
+		return scriptError(ErrInvalidStackOperation, "OP_LE32TOLE64 requires 4-byte operand")
+	}
+
+	val := uint32(binary.LittleEndian.Uint32(b))
+	result := make([]byte, 8)
+	binary.LittleEndian.PutUint64(result, uint64(val))
+	vm.dstack.PushByteArray(result)
 	return nil
 }
