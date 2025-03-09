@@ -16,6 +16,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 )
@@ -248,7 +249,7 @@ const (
 	OP_INSPECTINPUTSCRIPTPUBKEY = 0xca // 202
 	OP_INSPECTINPUTSEQUENCE     = 0xcb // 203
 
-	OP_UNKNOWN204 = 0xcc // 204
+	OP_CHECKSIGFROMSTACK = 0xcc // 204
 
 	// current index
 	OP_PUSHCURRENTINPUTINDEX = 0xcd // 205
@@ -549,7 +550,7 @@ var opcodeArray = [256]opcode{
 	OP_INSPECTINPUTSCRIPTPUBKEY: {OP_INSPECTINPUTSCRIPTPUBKEY, "OP_INSPECTINPUTSCRIPTPUBKEY", 1, opcodeInspectInputScriptPubkey},
 	OP_INSPECTINPUTSEQUENCE:     {OP_INSPECTINPUTSEQUENCE, "OP_INSPECTINPUTSEQUENCE", 1, opcodeInspectInputSequence},
 
-	OP_UNKNOWN204: {OP_UNKNOWN204, "OP_UNKNOWN204", 1, opcodeInvalid},
+	OP_CHECKSIGFROMSTACK: {OP_CHECKSIGFROMSTACK, "OP_CHECKSIGFROMSTACK", 1, opcodeChecksigFromStack},
 
 	OP_PUSHCURRENTINPUTINDEX: {OP_PUSHCURRENTINPUTINDEX, "OP_PUSHCURRENTINPUTINDEX", 1, opcodePushCurrentInputIndex},
 
@@ -680,7 +681,7 @@ var successOpcodes = map[byte]struct{}{
 	OP_INSPECTINPUTVALUE:         {}, // 201
 	OP_INSPECTINPUTSCRIPTPUBKEY:  {}, // 202
 	OP_INSPECTINPUTSEQUENCE:      {}, // 203
-	OP_UNKNOWN204:                {}, // 204
+	OP_CHECKSIGFROMSTACK:         {}, // 204
 	OP_PUSHCURRENTINPUTINDEX:     {}, // 205
 	OP_UNKNOWN206:                {}, // 206
 	OP_INSPECTOUTPUTVALUE:        {}, // 207
@@ -2975,5 +2976,55 @@ func opcodeRshift(op *opcode, data []byte, vm *Engine) error {
 	result := value.Rsh(value, uint(n))
 
 	vm.dstack.PushByteArray(result.Bytes())
+	return nil
+}
+
+// opcodeChecksigFromStack verifies a signature against a public key and message from the stack.
+// Stack transformation: [... sig msg pubkey] -> [... bool]
+func opcodeChecksigFromStack(op *opcode, data []byte, vm *Engine) error {
+	pubKey, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	message, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	signature, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+
+	if len(signature) == 0 {
+		// push empty vector
+		vm.dstack.PushByteArray([]byte{})
+		return nil
+	}
+
+	if len(pubKey) == 0 {
+		return scriptError(ErrTaprootPubkeyIsEmpty, "public key is empty")
+	}
+
+	if len(pubKey) != 32 {
+		return scriptError(ErrInvalidStackOperation, "invalid public key size, expected 32 bytes")
+	}
+
+	pubKeyObj, err := schnorr.ParsePubKey(pubKey)
+	if err != nil {
+		return err
+	}
+
+	signatureObj, err := schnorr.ParseSignature(signature)
+	if err != nil {
+		return err
+	}
+
+	valid := signatureObj.Verify(message, pubKeyObj)
+	if !valid {
+		return scriptError(ErrNullFail, "schnorr signature verification failed")
+	}
+
+	// success
+	vm.dstack.PushInt(1)
 	return nil
 }
