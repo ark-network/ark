@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/arkscript"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
@@ -132,7 +131,7 @@ func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, string, 
 				prevouts[outpoint] = input.WitnessUtxo
 			}
 
-			prevoutFetcher := arkscript.NewMultiPrevOutFetcher(prevouts)
+			prevoutFetcher := txscript.NewMultiPrevOutFetcher(prevouts)
 
 			if err := tree.ExecuteArkScript(
 				c.ArkScript,
@@ -230,7 +229,7 @@ func (b *txBuilder) FinalizeAndExtract(tx string) (string, error) {
 		prevouts[outpoint] = input.WitnessUtxo
 	}
 
-	prevoutFetcher := arkscript.NewMultiPrevOutFetcher(prevouts)
+	prevoutFetcher := txscript.NewMultiPrevOutFetcher(prevouts)
 
 	for i, in := range ptx.Inputs {
 		isTaproot := txscript.IsPayToTaproot(in.WitnessUtxo.PkScript)

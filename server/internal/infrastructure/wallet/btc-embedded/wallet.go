@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/arkscript"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
@@ -708,7 +707,7 @@ func (s *service) SignTransaction(ctx context.Context, partialTx string, extract
 			prevouts[outpoint] = input.WitnessUtxo
 		}
 
-		prevoutFetcher := arkscript.NewMultiPrevOutFetcher(prevouts)
+		prevoutFetcher := txscript.NewMultiPrevOutFetcher(prevouts)
 
 		for i, in := range ptx.Inputs {
 			isTaproot := txscript.IsPayToTaproot(in.WitnessUtxo.PkScript)

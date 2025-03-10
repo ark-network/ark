@@ -2,6 +2,8 @@ package arkscript
 
 import (
 	"fmt"
+
+	"github.com/btcsuite/btcd/txscript"
 )
 
 const (
@@ -11,18 +13,6 @@ const (
 	// maxScriptNumLen is the maximum number of bytes data being interpreted
 	// as an integer may be for the majority of op codes.
 	maxScriptNumLen = 4
-
-	// cltvMaxScriptNumLen is the maximum number of bytes data being interpreted
-	// as an integer may be for by-time and by-height locks as interpreted by
-	// CHECKLOCKTIMEVERIFY.
-	//
-	// The value comes from the fact that the current transaction locktime
-	// is a uint32 resulting in a maximum locktime of 2^32-1 (the year
-	// 2106).  However, scriptNums are signed and therefore a standard
-	// 4-byte scriptNum would only support up to a maximum of 2^31-1 (the
-	// year 2038).  Thus, a 5-byte scriptNum is needed since it will support
-	// up to 2^39-1 which allows dates beyond the current locktime limit.
-	cltvMaxScriptNumLen = 5
 )
 
 // scriptNum represents a numeric value used in the scripting engine with
@@ -75,7 +65,7 @@ func checkMinimalDataEncoding(v []byte) error {
 		if len(v) == 1 || v[len(v)-2]&0x80 == 0 {
 			str := fmt.Sprintf("numeric value encoded as %x is "+
 				"not minimally encoded", v)
-			return scriptError(ErrMinimalData, str)
+			return scriptError(txscript.ErrMinimalData, str)
 		}
 	}
 
@@ -198,7 +188,7 @@ func MakeScriptNum(v []byte, requireMinimal bool, scriptNumLen int) (scriptNum, 
 		str := fmt.Sprintf("numeric value encoded as %x is %d bytes "+
 			"which exceeds the max allowed of %d", v, len(v),
 			scriptNumLen)
-		return 0, scriptError(ErrNumberTooBig, str)
+		return 0, scriptError(txscript.ErrNumberTooBig, str)
 	}
 
 	// Enforce minimal encoded if requested.

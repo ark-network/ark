@@ -3,6 +3,8 @@ package arkscript
 import (
 	"encoding/binary"
 	"fmt"
+
+	"github.com/btcsuite/btcd/txscript"
 )
 
 // opcodeArrayRef is used to break initialization cycles.
@@ -83,7 +85,7 @@ func (t *ScriptTokenizer) Next() bool {
 		if len(script) < op.length {
 			str := fmt.Sprintf("opcode %s requires %d bytes, but script only "+
 				"has %d remaining", op.name, op.length, len(script))
-			t.err = scriptError(ErrMalformedPush, str)
+			t.err = scriptError(txscript.ErrMalformedPush, str)
 			return false
 		}
 
@@ -99,7 +101,7 @@ func (t *ScriptTokenizer) Next() bool {
 		if len(script) < -op.length {
 			str := fmt.Sprintf("opcode %s requires %d bytes, but script only "+
 				"has %d remaining", op.name, -op.length, len(script))
-			t.err = scriptError(ErrMalformedPush, str)
+			t.err = scriptError(txscript.ErrMalformedPush, str)
 			return false
 		}
 
@@ -117,7 +119,7 @@ func (t *ScriptTokenizer) Next() bool {
 			// check as each op code is predefined, and only uses
 			// the specified lengths.
 			str := fmt.Sprintf("invalid opcode length %d", op.length)
-			t.err = scriptError(ErrMalformedPush, str)
+			t.err = scriptError(txscript.ErrMalformedPush, str)
 			return false
 		}
 
@@ -128,7 +130,7 @@ func (t *ScriptTokenizer) Next() bool {
 		if dataLen > int32(len(script)) || dataLen < 0 {
 			str := fmt.Sprintf("opcode %s pushes %d bytes, but script only "+
 				"has %d remaining", op.name, dataLen, len(script))
-			t.err = scriptError(ErrMalformedPush, str)
+			t.err = scriptError(txscript.ErrMalformedPush, str)
 			return false
 		}
 
@@ -192,7 +194,7 @@ func MakeScriptTokenizer(scriptVersion uint16, script []byte) ScriptTokenizer {
 	var err error
 	if scriptVersion != 0 {
 		str := fmt.Sprintf("script version %d is not supported", scriptVersion)
-		err = scriptError(ErrUnsupportedScriptVersion, str)
+		err = scriptError(txscript.ErrUnsupportedScriptVersion, str)
 
 	}
 	return ScriptTokenizer{

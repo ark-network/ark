@@ -20,6 +20,7 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	secp "github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
@@ -645,99 +646,6 @@ var opcodeOnelineRepls = map[string]string{
 	"OP_16":      "16",
 }
 
-// successOpcodes tracks the set of op codes that are to be interpreted as op
-// codes that cause execution to automatically succeed. This map is used to
-// quickly look up the op codes during script pre-processing.
-var successOpcodes = map[byte]struct{}{
-	OP_RESERVED:                  {}, // 80
-	OP_VER:                       {}, // 98
-	OP_CAT:                       {}, // 126
-	OP_SUBSTR:                    {}, // 127
-	OP_LEFT:                      {}, // 128
-	OP_RIGHT:                     {}, // 129
-	OP_INVERT:                    {}, // 131
-	OP_AND:                       {}, // 132
-	OP_OR:                        {}, // 133
-	OP_XOR:                       {}, // 134
-	OP_RESERVED1:                 {}, // 137
-	OP_RESERVED2:                 {}, // 138
-	OP_2MUL:                      {}, // 141
-	OP_2DIV:                      {}, // 142
-	OP_MUL:                       {}, // 149
-	OP_DIV:                       {}, // 150
-	OP_MOD:                       {}, // 151
-	OP_LSHIFT:                    {}, // 152
-	OP_RSHIFT:                    {}, // 153
-	OP_UNKNOWN187:                {}, // 187
-	OP_UNKNOWN188:                {}, // 188
-	OP_UNKNOWN189:                {}, // 189
-	OP_UNKNOWN190:                {}, // 190
-	OP_UNKNOWN191:                {}, // 191
-	OP_UNKNOWN192:                {}, // 192
-	OP_UNKNOWN193:                {}, // 193
-	OP_UNKNOWN194:                {}, // 194
-	OP_UNKNOWN195:                {}, // 195
-	OP_SHA256INITIALIZE:          {}, // 196
-	OP_SHA256UPDATE:              {}, // 197
-	OP_SHA256FINALIZE:            {}, // 198
-	OP_INSPECTINPUTOUTPOINT:      {}, // 199
-	OP_UNKNOWN200:                {}, // 200
-	OP_INSPECTINPUTVALUE:         {}, // 201
-	OP_INSPECTINPUTSCRIPTPUBKEY:  {}, // 202
-	OP_INSPECTINPUTSEQUENCE:      {}, // 203
-	OP_CHECKSIGFROMSTACK:         {}, // 204
-	OP_PUSHCURRENTINPUTINDEX:     {}, // 205
-	OP_UNKNOWN206:                {}, // 206
-	OP_INSPECTOUTPUTVALUE:        {}, // 207
-	OP_UNKNOWN208:                {}, // 208
-	OP_INSPECTOUTPUTSCRIPTPUBKEY: {}, // 209
-	OP_INSPECTVERSION:            {}, // 210
-	OP_INSPECTLOCKTIME:           {}, // 211
-	OP_INSPECTNUMINPUTS:          {}, // 212
-	OP_INSPECTNUMOUTPUTS:         {}, // 213
-	OP_TXWEIGHT:                  {}, // 214
-	OP_ADD64:                     {}, // 215
-	OP_SUB64:                     {}, // 216
-	OP_MUL64:                     {}, // 217
-	OP_DIV64:                     {}, // 218
-	OP_NEG64:                     {}, // 219
-	OP_LESSTHAN64:                {}, // 220
-	OP_LESSTHANOREQUAL64:         {}, // 221
-	OP_GREATERTHAN64:             {}, // 222
-	OP_GREATERTHANOREQUAL64:      {}, // 223
-	OP_SCRIPTNUMTOLE64:           {}, // 224
-	OP_LE64TOSCRIPTNUM:           {}, // 225
-	OP_LE32TOLE64:                {}, // 226
-	OP_ECMULSCALARVERIFY:         {}, // 227
-	OP_TWEAKVERIFY:               {}, // 228
-	OP_UNKNOWN229:                {}, // 229
-	OP_UNKNOWN230:                {}, // 230
-	OP_UNKNOWN231:                {}, // 231
-	OP_UNKNOWN232:                {}, // 232
-	OP_UNKNOWN233:                {}, // 233
-	OP_UNKNOWN234:                {}, // 234
-	OP_UNKNOWN235:                {}, // 235
-	OP_UNKNOWN236:                {}, // 236
-	OP_UNKNOWN237:                {}, // 237
-	OP_UNKNOWN238:                {}, // 238
-	OP_UNKNOWN239:                {}, // 239
-	OP_UNKNOWN240:                {}, // 240
-	OP_UNKNOWN241:                {}, // 241
-	OP_UNKNOWN242:                {}, // 242
-	OP_UNKNOWN243:                {}, // 243
-	OP_UNKNOWN244:                {}, // 244
-	OP_UNKNOWN245:                {}, // 245
-	OP_UNKNOWN246:                {}, // 246
-	OP_UNKNOWN247:                {}, // 247
-	OP_UNKNOWN248:                {}, // 248
-	OP_UNKNOWN249:                {}, // 249
-	OP_SMALLINTEGER:              {}, // 250
-	OP_PUBKEYS:                   {}, // 251
-	OP_UNKNOWN252:                {}, // 252
-	OP_PUBKEYHASH:                {}, // 253
-	OP_PUBKEY:                    {}, // 254
-}
-
 // disasmOpcode writes a human-readable disassembly of the provided opcode and
 // data into the provided buffer.  The compact flag indicates the disassembly
 // should print a more compact representation of data-carrying and small integer
@@ -794,14 +702,14 @@ func disasmOpcode(buf *strings.Builder, op *opcode, data []byte, compact bool) {
 // appropriate error indicating the opcode is reserved.
 func opcodeReserved(op *opcode, data []byte, vm *Engine) error {
 	str := fmt.Sprintf("attempt to execute reserved opcode %s", op.name)
-	return scriptError(ErrReservedOpcode, str)
+	return scriptError(txscript.ErrReservedOpcode, str)
 }
 
 // opcodeInvalid is a common handler for all invalid opcodes.  It returns an
 // appropriate error indicating the opcode is invalid.
 func opcodeInvalid(op *opcode, data []byte, vm *Engine) error {
 	str := fmt.Sprintf("attempt to execute invalid opcode %s", op.name)
-	return scriptError(ErrReservedOpcode, str)
+	return scriptError(txscript.ErrReservedOpcode, str)
 }
 
 // opcodeFalse pushes an empty array to the data stack to represent false.  Note
@@ -843,10 +751,10 @@ func opcodeNop(op *opcode, data []byte, vm *Engine) error {
 	case OP_NOP1, OP_NOP4, OP_NOP5,
 		OP_NOP6, OP_NOP7, OP_NOP8, OP_NOP9, OP_NOP10:
 
-		if vm.hasFlag(ScriptDiscourageUpgradableNops) {
+		if vm.hasFlag(txscript.ScriptDiscourageUpgradableNops) {
 			str := fmt.Sprintf("%v reserved for soft-fork "+
 				"upgrades", op.name)
-			return scriptError(ErrDiscourageUpgradableNOPs, str)
+			return scriptError(txscript.ErrDiscourageUpgradableNOPs, str)
 		}
 	}
 	return nil
@@ -864,17 +772,17 @@ func popIfBool(vm *Engine) (bool, error) {
 	// isn't set pop the top stack item as a normal bool.
 	switch {
 	// Minimal if is always on for taproot execution.
-	case vm.isWitnessVersionActive(TaprootWitnessVersion):
+	case vm.isWitnessVersionActive(txscript.TaprootWitnessVersion):
 		break
 
 	// If this isn't the base segwit version, then we'll coerce the stack
 	// element as a bool as normal.
-	case !vm.isWitnessVersionActive(BaseSegwitWitnessVersion):
+	case !vm.isWitnessVersionActive(txscript.BaseSegwitWitnessVersion):
 		fallthrough
 
 	// If the minimal if flag isn't set, then we don't need any extra
 	// checks here.
-	case !vm.hasFlag(ScriptVerifyMinimalIf):
+	case !vm.hasFlag(txscript.ScriptVerifyMinimalIf):
 		return vm.dstack.PopBool()
 	}
 
@@ -891,7 +799,7 @@ func popIfBool(vm *Engine) (bool, error) {
 		str := fmt.Sprintf("minimal if is active, top element MUST "+
 			"have a length of at least, instead length is %v",
 			len(so))
-		return false, scriptError(ErrMinimalIf, str)
+		return false, scriptError(txscript.ErrMinimalIf, str)
 	}
 
 	// Additionally, if the length is one, then the value MUST be 0x01.
@@ -899,7 +807,7 @@ func popIfBool(vm *Engine) (bool, error) {
 		str := fmt.Sprintf("minimal if is active, top stack item MUST "+
 			"be an empty byte array or 0x01, is instead: %v",
 			so[0])
-		return false, scriptError(ErrMinimalIf, str)
+		return false, scriptError(txscript.ErrMinimalIf, str)
 	}
 
 	return asBool(so), nil
@@ -981,7 +889,7 @@ func opcodeElse(op *opcode, data []byte, vm *Engine) error {
 	if len(vm.condStack) == 0 {
 		str := fmt.Sprintf("encountered opcode %s with no matching "+
 			"opcode to begin conditional execution", op.name)
-		return scriptError(ErrUnbalancedConditional, str)
+		return scriptError(txscript.ErrUnbalancedConditional, str)
 	}
 
 	conditionalIdx := len(vm.condStack) - 1
@@ -1007,7 +915,7 @@ func opcodeEndif(op *opcode, data []byte, vm *Engine) error {
 	if len(vm.condStack) == 0 {
 		str := fmt.Sprintf("encountered opcode %s with no matching "+
 			"opcode to begin conditional execution", op.name)
-		return scriptError(ErrUnbalancedConditional, str)
+		return scriptError(txscript.ErrUnbalancedConditional, str)
 	}
 
 	vm.condStack = vm.condStack[:len(vm.condStack)-1]
@@ -1019,7 +927,7 @@ func opcodeEndif(op *opcode, data []byte, vm *Engine) error {
 // item on the stack or when that item evaluates to false.  In the latter case
 // where the verification fails specifically due to the top item evaluating
 // to false, the returned error will use the passed error code.
-func abstractVerify(op *opcode, vm *Engine, c ErrorCode) error {
+func abstractVerify(op *opcode, vm *Engine, c txscript.ErrorCode) error {
 	verified, err := vm.dstack.PopBool()
 	if err != nil {
 		return err
@@ -1035,13 +943,13 @@ func abstractVerify(op *opcode, vm *Engine, c ErrorCode) error {
 // opcodeVerify examines the top item on the data stack as a boolean value and
 // verifies it evaluates to true.  An error is returned if it does not.
 func opcodeVerify(op *opcode, data []byte, vm *Engine) error {
-	return abstractVerify(op, vm, ErrVerify)
+	return abstractVerify(op, vm, txscript.ErrVerify)
 }
 
 // opcodeReturn returns an appropriate error since it is always an error to
 // return early from a script.
 func opcodeReturn(op *opcode, data []byte, vm *Engine) error {
-	return scriptError(ErrEarlyReturn, "script returned early")
+	return scriptError(txscript.ErrEarlyReturn, "script returned early")
 }
 
 // verifyLockTime is a helper function used to validate locktimes.
@@ -1052,14 +960,14 @@ func verifyLockTime(txLockTime, threshold, lockTime int64) error {
 		(txLockTime >= threshold && lockTime >= threshold)) {
 		str := fmt.Sprintf("mismatched locktime types -- tx locktime "+
 			"%d, stack locktime %d", txLockTime, lockTime)
-		return scriptError(ErrUnsatisfiedLockTime, str)
+		return scriptError(txscript.ErrUnsatisfiedLockTime, str)
 	}
 
 	if lockTime > txLockTime {
 		str := fmt.Sprintf("locktime requirement not satisfied -- "+
 			"locktime is greater than the transaction locktime: "+
 			"%d > %d", lockTime, txLockTime)
-		return scriptError(ErrUnsatisfiedLockTime, str)
+		return scriptError(txscript.ErrUnsatisfiedLockTime, str)
 	}
 
 	return nil
@@ -1073,9 +981,9 @@ func verifyLockTime(txLockTime, threshold, lockTime int64) error {
 func opcodeCheckLockTimeVerify(op *opcode, data []byte, vm *Engine) error {
 	// If the ScriptVerifyCheckLockTimeVerify script flag is not set, treat
 	// opcode as OP_NOP2 instead.
-	if !vm.hasFlag(ScriptVerifyCheckLockTimeVerify) {
-		if vm.hasFlag(ScriptDiscourageUpgradableNops) {
-			return scriptError(ErrDiscourageUpgradableNOPs,
+	if !vm.hasFlag(txscript.ScriptVerifyCheckLockTimeVerify) {
+		if vm.hasFlag(txscript.ScriptDiscourageUpgradableNops) {
+			return scriptError(txscript.ErrDiscourageUpgradableNOPs,
 				"OP_NOP2 reserved for soft-fork upgrades")
 		}
 		return nil
@@ -1104,14 +1012,14 @@ func opcodeCheckLockTimeVerify(op *opcode, data []byte, vm *Engine) error {
 	// 0 OP_MAX OP_CHECKLOCKTIMEVERIFY.
 	if lockTime < 0 {
 		str := fmt.Sprintf("negative lock time: %d", lockTime)
-		return scriptError(ErrNegativeLockTime, str)
+		return scriptError(txscript.ErrNegativeLockTime, str)
 	}
 
 	// The lock time field of a transaction is either a block height at
 	// which the transaction is finalized or a timestamp depending on if the
 	// value is before the txscript.LockTimeThreshold.  When it is under the
 	// threshold it is a block height.
-	err = verifyLockTime(int64(vm.tx.LockTime), LockTimeThreshold,
+	err = verifyLockTime(int64(vm.tx.LockTime), txscript.LockTimeThreshold,
 		int64(lockTime))
 	if err != nil {
 		return err
@@ -1132,7 +1040,7 @@ func opcodeCheckLockTimeVerify(op *opcode, data []byte, vm *Engine) error {
 	// another input being unlocked, the opcode execution will still fail when the
 	// input being used by the opcode is locked.
 	if vm.tx.TxIn[vm.txIdx].Sequence == wire.MaxTxInSequenceNum {
-		return scriptError(ErrUnsatisfiedLockTime,
+		return scriptError(txscript.ErrUnsatisfiedLockTime,
 			"transaction input is finalized")
 	}
 
@@ -1147,9 +1055,9 @@ func opcodeCheckLockTimeVerify(op *opcode, data []byte, vm *Engine) error {
 func opcodeCheckSequenceVerify(op *opcode, data []byte, vm *Engine) error {
 	// If the ScriptVerifyCheckSequenceVerify script flag is not set, treat
 	// opcode as OP_NOP3 instead.
-	if !vm.hasFlag(ScriptVerifyCheckSequenceVerify) {
-		if vm.hasFlag(ScriptDiscourageUpgradableNops) {
-			return scriptError(ErrDiscourageUpgradableNOPs,
+	if !vm.hasFlag(txscript.ScriptVerifyCheckSequenceVerify) {
+		if vm.hasFlag(txscript.ScriptDiscourageUpgradableNops) {
+			return scriptError(txscript.ErrDiscourageUpgradableNOPs,
 				"OP_NOP3 reserved for soft-fork upgrades")
 		}
 		return nil
@@ -1178,7 +1086,7 @@ func opcodeCheckSequenceVerify(op *opcode, data []byte, vm *Engine) error {
 	// 0 OP_MAX OP_CHECKSEQUENCEVERIFY.
 	if stackSequence < 0 {
 		str := fmt.Sprintf("negative sequence: %d", stackSequence)
-		return scriptError(ErrNegativeLockTime, str)
+		return scriptError(txscript.ErrNegativeLockTime, str)
 	}
 
 	sequence := int64(stackSequence)
@@ -1195,7 +1103,7 @@ func opcodeCheckSequenceVerify(op *opcode, data []byte, vm *Engine) error {
 	if uint32(vm.tx.Version) < 2 {
 		str := fmt.Sprintf("invalid transaction version: %d",
 			vm.tx.Version)
-		return scriptError(ErrUnsatisfiedLockTime, str)
+		return scriptError(txscript.ErrUnsatisfiedLockTime, str)
 	}
 
 	// Sequence numbers with their most significant bit set are not
@@ -1206,7 +1114,7 @@ func opcodeCheckSequenceVerify(op *opcode, data []byte, vm *Engine) error {
 	if txSequence&int64(wire.SequenceLockTimeDisabled) != 0 {
 		str := fmt.Sprintf("transaction sequence has sequence "+
 			"locktime disabled bit set: 0x%x", txSequence)
-		return scriptError(ErrUnsatisfiedLockTime, str)
+		return scriptError(txscript.ErrUnsatisfiedLockTime, str)
 	}
 
 	// Mask off non-consensus bits before doing comparisons.
@@ -1440,7 +1348,7 @@ func opcodeEqual(op *opcode, data []byte, vm *Engine) error {
 func opcodeEqualVerify(op *opcode, data []byte, vm *Engine) error {
 	err := opcodeEqual(op, data, vm)
 	if err == nil {
-		err = abstractVerify(op, vm, ErrEqualVerify)
+		err = abstractVerify(op, vm, txscript.ErrEqualVerify)
 	}
 	return err
 }
@@ -1678,7 +1586,7 @@ func opcodeNumEqual(op *opcode, data []byte, vm *Engine) error {
 func opcodeNumEqualVerify(op *opcode, data []byte, vm *Engine) error {
 	err := opcodeNumEqual(op, data, vm)
 	if err == nil {
-		err = abstractVerify(op, vm, ErrNumEqualVerify)
+		err = abstractVerify(op, vm, txscript.ErrNumEqualVerify)
 	}
 	return err
 }
@@ -1975,11 +1883,11 @@ func opcodeCodeSeparator(op *opcode, data []byte, vm *Engine) error {
 	if vm.taprootCtx != nil {
 		vm.taprootCtx.codeSepPos = uint32(vm.tokenizer.OpcodePosition())
 	} else if vm.witnessProgram == nil &&
-		vm.hasFlag(ScriptVerifyConstScriptCode) {
+		vm.hasFlag(txscript.ScriptVerifyConstScriptCode) {
 
 		// Disable OP_CODESEPARATOR for non-segwit scripts.
 		str := "OP_CODESEPARATOR used in non-segwit script"
-		return scriptError(ErrCodeSeparator, str)
+		return scriptError(txscript.ErrCodeSeparator, str)
 	}
 
 	return nil
@@ -2030,7 +1938,7 @@ func opcodeCheckSig(op *opcode, data []byte, vm *Engine) error {
 			pkBytes, fullSigBytes, vm,
 		)
 		if err != nil {
-			var scriptErr Error
+			var scriptErr txscript.Error
 			if errors.As(err, &scriptErr) {
 				return err
 			}
@@ -2041,12 +1949,12 @@ func opcodeCheckSig(op *opcode, data []byte, vm *Engine) error {
 
 	// If the base segwit version is active, then we'll create the verifier
 	// that factors in those new consensus rules.
-	case vm.isWitnessVersionActive(BaseSegwitWitnessVersion):
+	case vm.isWitnessVersionActive(txscript.BaseSegwitWitnessVersion):
 		sigVerifier, err = newBaseSegwitSigVerifier(
 			pkBytes, fullSigBytes, vm,
 		)
 		if err != nil {
-			var scriptErr Error
+			var scriptErr txscript.Error
 			if errors.As(err, &scriptErr) {
 				return err
 			}
@@ -2067,7 +1975,7 @@ func opcodeCheckSig(op *opcode, data []byte, vm *Engine) error {
 
 		// Empty public keys immediately cause execution to fail.
 		if len(pkBytes) == 0 {
-			return scriptError(ErrTaprootPubkeyIsEmpty, "")
+			return scriptError(txscript.ErrTaprootPubkeyIsEmpty, "")
 		}
 
 		// If this is tapscript execution, and the signature was
@@ -2103,9 +2011,9 @@ func opcodeCheckSig(op *opcode, data []byte, vm *Engine) error {
 	result := sigVerifier.Verify()
 	valid := result.sigValid
 
-	if vm.hasFlag(ScriptVerifyConstScriptCode) && result.sigMatch {
+	if vm.hasFlag(txscript.ScriptVerifyConstScriptCode) && result.sigMatch {
 		str := "non-const script code"
-		return scriptError(ErrNonConstScriptCode, str)
+		return scriptError(txscript.ErrNonConstScriptCode, str)
 	}
 
 	switch {
@@ -2113,9 +2021,9 @@ func opcodeCheckSig(op *opcode, data []byte, vm *Engine) error {
 	// signature is invalid, then this MUST be an empty signature.
 	case !valid && vm.taprootCtx != nil && len(fullSigBytes) != 0:
 		fallthrough
-	case !valid && vm.hasFlag(ScriptVerifyNullFail) && len(fullSigBytes) > 0:
+	case !valid && vm.hasFlag(txscript.ScriptVerifyNullFail) && len(fullSigBytes) > 0:
 		str := "signature not empty on failed checksig"
-		return scriptError(ErrNullFail, str)
+		return scriptError(txscript.ErrNullFail, str)
 	}
 
 	vm.dstack.PushBool(valid)
@@ -2130,7 +2038,7 @@ func opcodeCheckSig(op *opcode, data []byte, vm *Engine) error {
 func opcodeCheckSigVerify(op *opcode, data []byte, vm *Engine) error {
 	err := opcodeCheckSig(op, data, vm)
 	if err == nil {
-		err = abstractVerify(op, vm, ErrCheckSigVerify)
+		err = abstractVerify(op, vm, txscript.ErrCheckSigVerify)
 	}
 	return err
 }
@@ -2150,7 +2058,7 @@ func opcodeCheckSigAdd(op *opcode, data []byte, vm *Engine) error {
 	// op code.
 	if vm.taprootCtx == nil {
 		str := fmt.Sprintf("attempt to execute invalid opcode %s", op.name)
-		return scriptError(ErrReservedOpcode, str)
+		return scriptError(txscript.ErrReservedOpcode, str)
 	}
 
 	// Pop the signature, integer n, and public key off the stack.
@@ -2178,7 +2086,7 @@ func opcodeCheckSigAdd(op *opcode, data []byte, vm *Engine) error {
 
 	// Empty public keys immediately cause execution to fail.
 	if len(pubKeyBytes) == 0 {
-		return scriptError(ErrTaprootPubkeyIsEmpty, "")
+		return scriptError(txscript.ErrTaprootPubkeyIsEmpty, "")
 	}
 
 	// If the signature is empty, then we'll just push the value N back
@@ -2205,7 +2113,7 @@ func opcodeCheckSigAdd(op *opcode, data []byte, vm *Engine) error {
 	// have been an empty signature.
 	if !result.sigValid {
 		str := "signature not empty on failed checksig"
-		return scriptError(ErrNullFail, str)
+		return scriptError(txscript.ErrNullFail, str)
 	}
 
 	// Otherwise, we increment the accumulatorInt by one, and push that
@@ -2249,7 +2157,7 @@ func opcodeCheckMultiSig(op *opcode, data []byte, vm *Engine) error {
 		str := fmt.Sprintf("OP_CHECKMULTISIG and " +
 			"OP_CHECKMULTISIGVERIFY are disabled during " +
 			"tapscript execution")
-		return scriptError(ErrTapscriptCheckMultisig, str)
+		return scriptError(txscript.ErrTapscriptCheckMultisig, str)
 	}
 
 	numKeys, err := vm.dstack.PopInt()
@@ -2261,18 +2169,18 @@ func opcodeCheckMultiSig(op *opcode, data []byte, vm *Engine) error {
 	if numPubKeys < 0 {
 		str := fmt.Sprintf("number of pubkeys %d is negative",
 			numPubKeys)
-		return scriptError(ErrInvalidPubKeyCount, str)
+		return scriptError(txscript.ErrInvalidPubKeyCount, str)
 	}
-	if numPubKeys > MaxPubKeysPerMultiSig {
+	if numPubKeys > txscript.MaxPubKeysPerMultiSig {
 		str := fmt.Sprintf("too many pubkeys: %d > %d",
-			numPubKeys, MaxPubKeysPerMultiSig)
-		return scriptError(ErrInvalidPubKeyCount, str)
+			numPubKeys, txscript.MaxPubKeysPerMultiSig)
+		return scriptError(txscript.ErrInvalidPubKeyCount, str)
 	}
 	vm.numOps += numPubKeys
-	if vm.numOps > MaxOpsPerScript {
+	if vm.numOps > txscript.MaxOpsPerScript {
 		str := fmt.Sprintf("exceeded max operation limit of %d",
-			MaxOpsPerScript)
-		return scriptError(ErrTooManyOperations, str)
+			txscript.MaxOpsPerScript)
+		return scriptError(txscript.ErrTooManyOperations, str)
 	}
 
 	pubKeys := make([][]byte, 0, numPubKeys)
@@ -2292,13 +2200,13 @@ func opcodeCheckMultiSig(op *opcode, data []byte, vm *Engine) error {
 	if numSignatures < 0 {
 		str := fmt.Sprintf("number of signatures %d is negative",
 			numSignatures)
-		return scriptError(ErrInvalidSignatureCount, str)
+		return scriptError(txscript.ErrInvalidSignatureCount, str)
 
 	}
 	if numSignatures > numPubKeys {
 		str := fmt.Sprintf("more signatures than pubkeys: %d > %d",
 			numSignatures, numPubKeys)
-		return scriptError(ErrInvalidSignatureCount, str)
+		return scriptError(txscript.ErrInvalidSignatureCount, str)
 	}
 
 	signatures := make([]*parsedSigInfo, 0, numSignatures)
@@ -2323,10 +2231,10 @@ func opcodeCheckMultiSig(op *opcode, data []byte, vm *Engine) error {
 	// Since the dummy argument is otherwise not checked, it could be any
 	// value which unfortunately provides a source of malleability.  Thus,
 	// there is a script flag to force an error when the value is NOT 0.
-	if vm.hasFlag(ScriptStrictMultiSig) && len(dummy) != 0 {
+	if vm.hasFlag(txscript.ScriptStrictMultiSig) && len(dummy) != 0 {
 		str := fmt.Sprintf("multisig dummy argument has length %d "+
 			"instead of 0", len(dummy))
-		return scriptError(ErrSigNullDummy, str)
+		return scriptError(txscript.ErrSigNullDummy, str)
 	}
 
 	// Get script starting from the most recent OP_CODESEPARATOR.
@@ -2338,10 +2246,10 @@ func opcodeCheckMultiSig(op *opcode, data []byte, vm *Engine) error {
 		for _, sigInfo := range signatures {
 			var match bool
 			script, match = removeOpcodeByData(script, sigInfo.signature)
-			if vm.hasFlag(ScriptVerifyConstScriptCode) && match {
+			if vm.hasFlag(txscript.ScriptVerifyConstScriptCode) && match {
 				str := fmt.Sprintf("got match of %v in %v", sigInfo.signature,
 					script)
-				return scriptError(ErrNonConstScriptCode, str)
+				return scriptError(txscript.ErrNonConstScriptCode, str)
 			}
 		}
 	}
@@ -2375,7 +2283,7 @@ func opcodeCheckMultiSig(op *opcode, data []byte, vm *Engine) error {
 		}
 
 		// Split the signature into hash type and signature components.
-		hashType := SigHashType(rawSig[len(rawSig)-1])
+		hashType := txscript.SigHashType(rawSig[len(rawSig)-1])
 		signature := rawSig[:len(rawSig)-1]
 
 		// Only parse and check the signature encoding once.
@@ -2390,8 +2298,8 @@ func opcodeCheckMultiSig(op *opcode, data []byte, vm *Engine) error {
 
 			// Parse the signature.
 			var err error
-			if vm.hasFlag(ScriptVerifyStrictEncoding) ||
-				vm.hasFlag(ScriptVerifyDERSignatures) {
+			if vm.hasFlag(txscript.ScriptVerifyStrictEncoding) ||
+				vm.hasFlag(txscript.ScriptVerifyDERSignatures) {
 
 				parsedSig, err = ecdsa.ParseDERSignature(signature)
 			} else {
@@ -2425,22 +2333,27 @@ func opcodeCheckMultiSig(op *opcode, data []byte, vm *Engine) error {
 		// Generate the signature hash based on the signature hash type.
 		var hash []byte
 		if vm.isWitnessVersionActive(0) {
-			var sigHashes *TxSigHashes
+			var sigHashes *txscript.TxSigHashes
 			if vm.hashCache != nil {
 				sigHashes = vm.hashCache
 			} else {
-				sigHashes = NewTxSigHashes(
+				sigHashes = txscript.NewTxSigHashes(
 					&vm.tx, vm.prevOutFetcher,
 				)
 			}
 
-			hash, err = calcWitnessSignatureHashRaw(script, sigHashes, hashType,
-				&vm.tx, vm.txIdx, vm.inputAmount)
+			hash, err = txscript.CalcWitnessSigHash(
+				script, sigHashes, hashType,
+				&vm.tx, vm.txIdx, vm.inputAmount,
+			)
 			if err != nil {
 				return err
 			}
 		} else {
-			hash = calcSignatureHash(script, hashType, &vm.tx, vm.txIdx)
+			hash, err = txscript.CalcSignatureHash(script, hashType, &vm.tx, vm.txIdx)
+			if err != nil {
+				return err
+			}
 		}
 
 		var valid bool
@@ -2464,11 +2377,11 @@ func opcodeCheckMultiSig(op *opcode, data []byte, vm *Engine) error {
 		}
 	}
 
-	if !success && vm.hasFlag(ScriptVerifyNullFail) {
+	if !success && vm.hasFlag(txscript.ScriptVerifyNullFail) {
 		for _, sig := range signatures {
 			if len(sig.signature) > 0 {
 				str := "not all signatures empty on failed checkmultisig"
-				return scriptError(ErrNullFail, str)
+				return scriptError(txscript.ErrNullFail, str)
 			}
 		}
 	}
@@ -2486,7 +2399,7 @@ func opcodeCheckMultiSig(op *opcode, data []byte, vm *Engine) error {
 func opcodeCheckMultiSigVerify(op *opcode, data []byte, vm *Engine) error {
 	err := opcodeCheckMultiSig(op, data, vm)
 	if err == nil {
-		err = abstractVerify(op, vm, ErrCheckMultiSigVerify)
+		err = abstractVerify(op, vm, txscript.ErrCheckMultiSigVerify)
 	}
 	return err
 }
@@ -2518,7 +2431,7 @@ func opcodeInspectInputOutpoint(op *opcode, data []byte, vm *Engine) error {
 	}
 
 	if int(index) >= len(vm.tx.TxIn) {
-		return scriptError(ErrInvalidIndex, "input index out of range")
+		return scriptError(txscript.ErrInvalidIndex, "input index out of range")
 	}
 
 	txIn := vm.tx.TxIn[index]
@@ -2539,11 +2452,11 @@ func opcodeInspectInputValue(op *opcode, data []byte, vm *Engine) error {
 	}
 
 	if int(index) >= len(vm.tx.TxIn) {
-		return scriptError(ErrInvalidIndex, "input index out of range")
+		return scriptError(txscript.ErrInvalidIndex, "input index out of range")
 	}
 
 	if vm.prevOutFetcher == nil {
-		return scriptError(ErrInvalidIndex, "previous output fetcher not set")
+		return scriptError(txscript.ErrInvalidIndex, "previous output fetcher not set")
 	}
 
 	prevOut := vm.prevOutFetcher.FetchPrevOutput(vm.tx.TxIn[index].PreviousOutPoint)
@@ -2555,8 +2468,8 @@ func opcodeInspectInputValue(op *opcode, data []byte, vm *Engine) error {
 }
 
 func pushScriptPubKey(scriptPubKey []byte, vm *Engine) error {
-	if isWitnessProgramScript(scriptPubKey) {
-		version, program, err := ExtractWitnessProgramInfo(scriptPubKey)
+	if txscript.IsWitnessProgram(scriptPubKey) {
+		version, program, err := txscript.ExtractWitnessProgramInfo(scriptPubKey)
 		if err != nil {
 			return err
 		}
@@ -2587,16 +2500,16 @@ func opcodeInspectInputScriptPubkey(op *opcode, data []byte, vm *Engine) error {
 	}
 
 	if int(index) >= len(vm.tx.TxIn) {
-		return scriptError(ErrInvalidIndex, "input index out of range")
+		return scriptError(txscript.ErrInvalidIndex, "input index out of range")
 	}
 
 	if vm.prevOutFetcher == nil {
-		return scriptError(ErrInvalidIndex, "previous output fetcher not set")
+		return scriptError(txscript.ErrInvalidIndex, "previous output fetcher not set")
 	}
 
 	prevOut := vm.prevOutFetcher.FetchPrevOutput(vm.tx.TxIn[index].PreviousOutPoint)
 	if prevOut == nil {
-		return scriptError(ErrInvalidIndex, "previous output not found")
+		return scriptError(txscript.ErrInvalidIndex, "previous output not found")
 	}
 
 	return pushScriptPubKey(prevOut.PkScript, vm)
@@ -2611,7 +2524,7 @@ func opcodeInspectInputSequence(op *opcode, data []byte, vm *Engine) error {
 	}
 
 	if int(index) >= len(vm.tx.TxIn) {
-		return scriptError(ErrInvalidIndex, "input index out of range")
+		return scriptError(txscript.ErrInvalidIndex, "input index out of range")
 	}
 
 	sequence := make([]byte, 4)
@@ -2636,7 +2549,7 @@ func opcodeInspectOutputValue(op *opcode, data []byte, vm *Engine) error {
 	}
 
 	if int(index) >= len(vm.tx.TxOut) {
-		return scriptError(ErrInvalidIndex, "output index out of range")
+		return scriptError(txscript.ErrInvalidIndex, "output index out of range")
 	}
 
 	value := make([]byte, 8)
@@ -2654,7 +2567,7 @@ func opcodeInspectOutputScriptPubkey(op *opcode, data []byte, vm *Engine) error 
 	}
 
 	if int(index) >= len(vm.tx.TxOut) {
-		return scriptError(ErrInvalidIndex, "output index out of range")
+		return scriptError(txscript.ErrInvalidIndex, "output index out of range")
 	}
 
 	return pushScriptPubKey(vm.tx.TxOut[index].PkScript, vm)
@@ -2739,7 +2652,7 @@ func opcodeSubstr(op *opcode, data []byte, vm *Engine) error {
 
 	// Ensure bounds are valid
 	if begin < 0 || size < 0 || begin+size > scriptNum(len(x)) {
-		return scriptError(ErrInvalidIndex, "invalid substring parameters")
+		return scriptError(txscript.ErrInvalidIndex, "invalid substring parameters")
 	}
 
 	vm.dstack.PushByteArray(x[begin : begin+size])
@@ -2760,7 +2673,7 @@ func opcodeLeft(op *opcode, data []byte, vm *Engine) error {
 
 	// Ensure bounds are valid
 	if n < 0 || n > scriptNum(len(x)) {
-		return scriptError(ErrInvalidIndex, "invalid left index")
+		return scriptError(txscript.ErrInvalidIndex, "invalid left index")
 	}
 
 	vm.dstack.PushByteArray(x[:n])
@@ -2781,7 +2694,7 @@ func opcodeRight(op *opcode, data []byte, vm *Engine) error {
 
 	// Ensure bounds are valid
 	if n < 0 || n > scriptNum(len(x)) {
-		return scriptError(ErrInvalidIndex, "invalid right index")
+		return scriptError(txscript.ErrInvalidIndex, "invalid right index")
 	}
 
 	vm.dstack.PushByteArray(x[len(x)-int(n):])
@@ -2818,7 +2731,7 @@ func opcodeAnd(op *opcode, data []byte, vm *Engine) error {
 	}
 
 	if len(x1) != len(x2) {
-		return scriptError(ErrInvalidStackOperation, "mismatched operand sizes for AND")
+		return scriptError(txscript.ErrInvalidStackOperation, "mismatched operand sizes for AND")
 	}
 
 	result := make([]byte, len(x1))
@@ -2843,7 +2756,7 @@ func opcodeOr(op *opcode, data []byte, vm *Engine) error {
 	}
 
 	if len(x1) != len(x2) {
-		return scriptError(ErrInvalidStackOperation, "mismatched operand sizes for OR")
+		return scriptError(txscript.ErrInvalidStackOperation, "mismatched operand sizes for OR")
 	}
 
 	result := make([]byte, len(x1))
@@ -2868,7 +2781,7 @@ func opcodeXor(op *opcode, data []byte, vm *Engine) error {
 	}
 
 	if len(x1) != len(x2) {
-		return scriptError(ErrInvalidStackOperation, "mismatched operand sizes for XOR")
+		return scriptError(txscript.ErrInvalidStackOperation, "mismatched operand sizes for XOR")
 	}
 
 	result := make([]byte, len(x1))
@@ -2933,7 +2846,7 @@ func opcodeDiv(op *opcode, data []byte, vm *Engine) error {
 	}
 
 	if x2 == 0 {
-		return scriptError(ErrInvalidStackOperation, "division by zero")
+		return scriptError(txscript.ErrInvalidStackOperation, "division by zero")
 	}
 
 	vm.dstack.PushInt(x1 / x2)
@@ -2953,7 +2866,7 @@ func opcodeMod(op *opcode, data []byte, vm *Engine) error {
 	}
 
 	if x2 == 0 {
-		return scriptError(ErrInvalidStackOperation, "modulo by zero")
+		return scriptError(txscript.ErrInvalidStackOperation, "modulo by zero")
 	}
 
 	vm.dstack.PushInt(x1 % x2)
@@ -2968,7 +2881,7 @@ func opcodeLshift(op *opcode, data []byte, vm *Engine) error {
 		return err
 	}
 	if n < 0 {
-		return scriptError(ErrInvalidIndex, "negative shift count")
+		return scriptError(txscript.ErrInvalidIndex, "negative shift count")
 	}
 
 	x, err := vm.dstack.PopByteArray()
@@ -2992,7 +2905,7 @@ func opcodeRshift(op *opcode, data []byte, vm *Engine) error {
 		return err
 	}
 	if n < 0 {
-		return scriptError(ErrInvalidIndex, "negative shift count")
+		return scriptError(txscript.ErrInvalidIndex, "negative shift count")
 	}
 
 	x, err := vm.dstack.PopByteArray()
@@ -3031,11 +2944,11 @@ func opcodeChecksigFromStack(op *opcode, data []byte, vm *Engine) error {
 	}
 
 	if len(pubKey) == 0 {
-		return scriptError(ErrTaprootPubkeyIsEmpty, "public key is empty")
+		return scriptError(txscript.ErrTaprootPubkeyIsEmpty, "public key is empty")
 	}
 
 	if len(pubKey) != 32 {
-		return scriptError(ErrInvalidStackOperation, "invalid public key size, expected 32 bytes")
+		return scriptError(txscript.ErrInvalidStackOperation, "invalid public key size, expected 32 bytes")
 	}
 
 	pubKeyObj, err := schnorr.ParsePubKey(pubKey)
@@ -3050,7 +2963,7 @@ func opcodeChecksigFromStack(op *opcode, data []byte, vm *Engine) error {
 
 	valid := signatureObj.Verify(message, pubKeyObj)
 	if !valid {
-		return scriptError(ErrNullFail, "schnorr signature verification failed")
+		return scriptError(txscript.ErrNullFail, "schnorr signature verification failed")
 	}
 
 	// success
@@ -3066,7 +2979,7 @@ func opcodeAdd64(op *opcode, data []byte, vm *Engine) error {
 		return err
 	}
 	if len(b) != 8 {
-		return scriptError(ErrInvalidStackOperation, "OP_ADD64 requires 8-byte operands")
+		return scriptError(txscript.ErrInvalidStackOperation, "OP_ADD64 requires 8-byte operands")
 	}
 
 	a, err := vm.dstack.PopByteArray()
@@ -3074,7 +2987,7 @@ func opcodeAdd64(op *opcode, data []byte, vm *Engine) error {
 		return err
 	}
 	if len(a) != 8 {
-		return scriptError(ErrInvalidStackOperation, "OP_ADD64 requires 8-byte operands")
+		return scriptError(txscript.ErrInvalidStackOperation, "OP_ADD64 requires 8-byte operands")
 	}
 
 	aVal := int64(binary.LittleEndian.Uint64(a))
@@ -3105,7 +3018,7 @@ func opcodeSub64(op *opcode, data []byte, vm *Engine) error {
 		return err
 	}
 	if len(b) != 8 {
-		return scriptError(ErrInvalidStackOperation, "OP_SUB64 requires 8-byte operands")
+		return scriptError(txscript.ErrInvalidStackOperation, "OP_SUB64 requires 8-byte operands")
 	}
 
 	a, err := vm.dstack.PopByteArray()
@@ -3113,7 +3026,7 @@ func opcodeSub64(op *opcode, data []byte, vm *Engine) error {
 		return err
 	}
 	if len(a) != 8 {
-		return scriptError(ErrInvalidStackOperation, "OP_SUB64 requires 8-byte operands")
+		return scriptError(txscript.ErrInvalidStackOperation, "OP_SUB64 requires 8-byte operands")
 	}
 
 	aVal := int64(binary.LittleEndian.Uint64(a))
@@ -3144,7 +3057,7 @@ func opcodeMul64(op *opcode, data []byte, vm *Engine) error {
 		return err
 	}
 	if len(b) != 8 {
-		return scriptError(ErrInvalidStackOperation, "OP_MUL64 requires 8-byte operands")
+		return scriptError(txscript.ErrInvalidStackOperation, "OP_MUL64 requires 8-byte operands")
 	}
 
 	a, err := vm.dstack.PopByteArray()
@@ -3152,7 +3065,7 @@ func opcodeMul64(op *opcode, data []byte, vm *Engine) error {
 		return err
 	}
 	if len(a) != 8 {
-		return scriptError(ErrInvalidStackOperation, "OP_MUL64 requires 8-byte operands")
+		return scriptError(txscript.ErrInvalidStackOperation, "OP_MUL64 requires 8-byte operands")
 	}
 
 	aVal := int64(binary.LittleEndian.Uint64(a))
@@ -3183,7 +3096,7 @@ func opcodeDiv64(op *opcode, data []byte, vm *Engine) error {
 		return err
 	}
 	if len(b) != 8 {
-		return scriptError(ErrInvalidStackOperation, "OP_DIV64 requires 8-byte operands")
+		return scriptError(txscript.ErrInvalidStackOperation, "OP_DIV64 requires 8-byte operands")
 	}
 
 	a, err := vm.dstack.PopByteArray()
@@ -3191,7 +3104,7 @@ func opcodeDiv64(op *opcode, data []byte, vm *Engine) error {
 		return err
 	}
 	if len(a) != 8 {
-		return scriptError(ErrInvalidStackOperation, "OP_DIV64 requires 8-byte operands")
+		return scriptError(txscript.ErrInvalidStackOperation, "OP_DIV64 requires 8-byte operands")
 	}
 
 	aVal := int64(binary.LittleEndian.Uint64(a))
@@ -3234,7 +3147,7 @@ func opcodeNeg64(op *opcode, data []byte, vm *Engine) error {
 		return err
 	}
 	if len(a) != 8 {
-		return scriptError(ErrInvalidStackOperation, "OP_NEG64 requires 8-byte operand")
+		return scriptError(txscript.ErrInvalidStackOperation, "OP_NEG64 requires 8-byte operand")
 	}
 
 	aVal := int64(binary.LittleEndian.Uint64(a))
@@ -3263,7 +3176,7 @@ func opcodeLessThan64(op *opcode, data []byte, vm *Engine) error {
 		return err
 	}
 	if len(b) != 8 {
-		return scriptError(ErrInvalidStackOperation, "OP_LESSTHAN64 requires 8-byte operands")
+		return scriptError(txscript.ErrInvalidStackOperation, "OP_LESSTHAN64 requires 8-byte operands")
 	}
 
 	a, err := vm.dstack.PopByteArray()
@@ -3271,7 +3184,7 @@ func opcodeLessThan64(op *opcode, data []byte, vm *Engine) error {
 		return err
 	}
 	if len(a) != 8 {
-		return scriptError(ErrInvalidStackOperation, "OP_LESSTHAN64 requires 8-byte operands")
+		return scriptError(txscript.ErrInvalidStackOperation, "OP_LESSTHAN64 requires 8-byte operands")
 	}
 
 	aVal := int64(binary.LittleEndian.Uint64(a))
@@ -3289,7 +3202,7 @@ func opcodeLessThanOrEqual64(op *opcode, data []byte, vm *Engine) error {
 		return err
 	}
 	if len(b) != 8 {
-		return scriptError(ErrInvalidStackOperation, "OP_LESSTHANOREQUAL64 requires 8-byte operands")
+		return scriptError(txscript.ErrInvalidStackOperation, "OP_LESSTHANOREQUAL64 requires 8-byte operands")
 	}
 
 	a, err := vm.dstack.PopByteArray()
@@ -3297,7 +3210,7 @@ func opcodeLessThanOrEqual64(op *opcode, data []byte, vm *Engine) error {
 		return err
 	}
 	if len(a) != 8 {
-		return scriptError(ErrInvalidStackOperation, "OP_LESSTHANOREQUAL64 requires 8-byte operands")
+		return scriptError(txscript.ErrInvalidStackOperation, "OP_LESSTHANOREQUAL64 requires 8-byte operands")
 	}
 
 	aVal := int64(binary.LittleEndian.Uint64(a))
@@ -3315,7 +3228,7 @@ func opcodeGreaterThan64(op *opcode, data []byte, vm *Engine) error {
 		return err
 	}
 	if len(b) != 8 {
-		return scriptError(ErrInvalidStackOperation, "OP_GREATERTHAN64 requires 8-byte operands")
+		return scriptError(txscript.ErrInvalidStackOperation, "OP_GREATERTHAN64 requires 8-byte operands")
 	}
 
 	a, err := vm.dstack.PopByteArray()
@@ -3323,7 +3236,7 @@ func opcodeGreaterThan64(op *opcode, data []byte, vm *Engine) error {
 		return err
 	}
 	if len(a) != 8 {
-		return scriptError(ErrInvalidStackOperation, "OP_GREATERTHAN64 requires 8-byte operands")
+		return scriptError(txscript.ErrInvalidStackOperation, "OP_GREATERTHAN64 requires 8-byte operands")
 	}
 
 	aVal := int64(binary.LittleEndian.Uint64(a))
@@ -3341,7 +3254,7 @@ func opcodeGreaterThanOrEqual64(op *opcode, data []byte, vm *Engine) error {
 		return err
 	}
 	if len(b) != 8 {
-		return scriptError(ErrInvalidStackOperation, "OP_GREATERTHANOREQUAL64 requires 8-byte operands")
+		return scriptError(txscript.ErrInvalidStackOperation, "OP_GREATERTHANOREQUAL64 requires 8-byte operands")
 	}
 
 	a, err := vm.dstack.PopByteArray()
@@ -3349,7 +3262,7 @@ func opcodeGreaterThanOrEqual64(op *opcode, data []byte, vm *Engine) error {
 		return err
 	}
 	if len(a) != 8 {
-		return scriptError(ErrInvalidStackOperation, "OP_GREATERTHANOREQUAL64 requires 8-byte operands")
+		return scriptError(txscript.ErrInvalidStackOperation, "OP_GREATERTHANOREQUAL64 requires 8-byte operands")
 	}
 
 	aVal := int64(binary.LittleEndian.Uint64(a))
@@ -3381,7 +3294,7 @@ func opcodeLE64ToScriptNum(op *opcode, data []byte, vm *Engine) error {
 		return err
 	}
 	if len(b) != 8 {
-		return scriptError(ErrInvalidStackOperation, "OP_LE64TOSCRIPTNUM requires 8-byte operand")
+		return scriptError(txscript.ErrInvalidStackOperation, "OP_LE64TOSCRIPTNUM requires 8-byte operand")
 	}
 
 	val := int64(binary.LittleEndian.Uint64(b))
@@ -3397,7 +3310,7 @@ func opcodeLE32ToLE64(op *opcode, data []byte, vm *Engine) error {
 		return err
 	}
 	if len(b) != 4 {
-		return scriptError(ErrInvalidStackOperation, "OP_LE32TOLE64 requires 4-byte operand")
+		return scriptError(txscript.ErrInvalidStackOperation, "OP_LE32TOLE64 requires 4-byte operand")
 	}
 
 	val := uint32(binary.LittleEndian.Uint32(b))
@@ -3427,17 +3340,17 @@ func opcodeECMulScalarVerify(op *opcode, data []byte, vm *Engine) error {
 	}
 
 	if len(k) != 32 {
-		return scriptError(ErrInvalidStackOperation, "OP_ECMULSCALARVERIFY requires 32-byte scalar")
+		return scriptError(txscript.ErrInvalidStackOperation, "OP_ECMULSCALARVERIFY requires 32-byte scalar")
 	}
 
 	pubKeyP, err := secp.ParsePubKey(P)
 	if err != nil {
-		return scriptError(ErrInvalidStackOperation, "invalid point P")
+		return scriptError(txscript.ErrInvalidStackOperation, "invalid point P")
 	}
 
 	var scalar secp.ModNScalar
 	if overflow := scalar.SetByteSlice(k); overflow {
-		return scriptError(ErrInvalidStackOperation, "scalar k is outside of curve order")
+		return scriptError(txscript.ErrInvalidStackOperation, "scalar k is outside of curve order")
 	}
 
 	var point secp.JacobianPoint
@@ -3454,7 +3367,7 @@ func opcodeECMulScalarVerify(op *opcode, data []byte, vm *Engine) error {
 
 	// verify Q == k*P by comparing their serialized compressed forms
 	if !bytes.Equal(Q, kP.SerializeCompressed()) {
-		return scriptError(ErrInvalidStackOperation, "Q != k*P")
+		return scriptError(txscript.ErrInvalidStackOperation, "Q != k*P")
 	}
 
 	return nil
@@ -3480,16 +3393,16 @@ func opcodeTweakVerify(op *opcode, data []byte, vm *Engine) error {
 	}
 
 	if len(P) != 32 {
-		return scriptError(ErrInvalidStackOperation, "OP_TWEAKVERIFY requires 32-byte X-only key")
+		return scriptError(txscript.ErrInvalidStackOperation, "OP_TWEAKVERIFY requires 32-byte X-only key")
 	}
 
 	if len(k) != 32 {
-		return scriptError(ErrInvalidStackOperation, "OP_TWEAKVERIFY requires 32-byte scalar")
+		return scriptError(txscript.ErrInvalidStackOperation, "OP_TWEAKVERIFY requires 32-byte scalar")
 	}
 
 	var scalar secp.ModNScalar
 	if overflow := scalar.SetByteSlice(k); overflow {
-		return scriptError(ErrInvalidStackOperation, "scalar k is outside of curve order")
+		return scriptError(txscript.ErrInvalidStackOperation, "scalar k is outside of curve order")
 	}
 
 	var kG secp.JacobianPoint
@@ -3498,12 +3411,12 @@ func opcodeTweakVerify(op *opcode, data []byte, vm *Engine) error {
 
 	var px secp.FieldVal
 	if overflow := px.SetByteSlice(P); overflow {
-		return scriptError(ErrInvalidStackOperation, "invalid X-only key P")
+		return scriptError(txscript.ErrInvalidStackOperation, "invalid X-only key P")
 	}
 
 	var py secp.FieldVal
 	if !secp.DecompressY(&px, false, &py) {
-		return scriptError(ErrInvalidStackOperation, "invalid X-only key P")
+		return scriptError(txscript.ErrInvalidStackOperation, "invalid X-only key P")
 	}
 
 	var pointP secp.JacobianPoint
@@ -3519,7 +3432,7 @@ func opcodeTweakVerify(op *opcode, data []byte, vm *Engine) error {
 
 	// verify Q == P + k*G by comparing their serialized compressed forms
 	if !bytes.Equal(Q, tweakedKey.SerializeCompressed()) {
-		return scriptError(ErrInvalidStackOperation, "Q != P + k*G")
+		return scriptError(txscript.ErrInvalidStackOperation, "Q != P + k*G")
 	}
 
 	return nil
@@ -3535,7 +3448,7 @@ func opcodeSha256Initialize(op *opcode, _ []byte, vm *Engine) error {
 
 	h := sha256.New()
 	if _, err := h.Write(data); err != nil {
-		return scriptError(ErrInvalidStackOperation, "failed to write to SHA256 context")
+		return scriptError(txscript.ErrInvalidStackOperation, "failed to write to SHA256 context")
 	}
 
 	vm.dstack.PushByteArray(h.Sum(nil)[:])
@@ -3557,10 +3470,10 @@ func opcodeSha256Update(op *opcode, _ []byte, vm *Engine) error {
 
 	h := sha256.New()
 	if _, err := h.Write(context); err != nil {
-		return scriptError(ErrInvalidStackOperation, "failed to write context to SHA256")
+		return scriptError(txscript.ErrInvalidStackOperation, "failed to write context to SHA256")
 	}
 	if _, err := h.Write(data); err != nil {
-		return scriptError(ErrInvalidStackOperation, "failed to write data to SHA256")
+		return scriptError(txscript.ErrInvalidStackOperation, "failed to write data to SHA256")
 	}
 
 	vm.dstack.PushByteArray(h.Sum(nil)[:])
@@ -3582,10 +3495,10 @@ func opcodeSha256Finalize(op *opcode, _ []byte, vm *Engine) error {
 
 	h := sha256.New()
 	if _, err := h.Write(context); err != nil {
-		return scriptError(ErrInvalidStackOperation, "failed to write context to SHA256")
+		return scriptError(txscript.ErrInvalidStackOperation, "failed to write context to SHA256")
 	}
 	if _, err := h.Write(data); err != nil {
-		return scriptError(ErrInvalidStackOperation, "failed to write data to SHA256")
+		return scriptError(txscript.ErrInvalidStackOperation, "failed to write data to SHA256")
 	}
 
 	vm.dstack.PushByteArray(h.Sum(nil))

@@ -1132,7 +1132,7 @@ func TestSendToArkScriptClosure(t *testing.T) {
 	require.NoError(t, err)
 
 	// script verifying that the spending tx includes an output going to alice's address
-	arkScript, err := arkscript.NewScriptBuilder().
+	arkScript, err := txscript.NewScriptBuilder().
 		AddInt64(0).
 		AddOp(arkscript.OP_INSPECTOUTPUTSCRIPTPUBKEY).
 		AddOp(arkscript.OP_1).

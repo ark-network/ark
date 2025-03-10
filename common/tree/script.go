@@ -1144,7 +1144,7 @@ func (f *ArkScriptClosure) Witness(controlBlock []byte, args map[string]interfac
 		return nil, fmt.Errorf("missing or invalid spending tx")
 	}
 
-	prevoutFetcher, ok := args[PrevoutFetcherKey].(arkscript.PrevOutputFetcher)
+	prevoutFetcher, ok := args[PrevoutFetcherKey].(txscript.PrevOutputFetcher)
 	if !ok {
 		return nil, fmt.Errorf("missing or invalid prevout fetcher")
 	}
@@ -1247,7 +1247,7 @@ func (f *ArkScriptClosure) Decode(script []byte) (bool, error) {
 func ExecuteArkScript(
 	arkScript []byte,
 	spendingTx *wire.MsgTx,
-	prevoutFetcher arkscript.PrevOutputFetcher,
+	prevoutFetcher txscript.PrevOutputFetcher,
 	inputIndex int,
 	arkScriptStack wire.TxWitness,
 ) error {
@@ -1255,9 +1255,9 @@ func ExecuteArkScript(
 		arkScript,
 		spendingTx,
 		inputIndex,
-		arkscript.StandardVerifyFlags,
-		arkscript.NewSigCache(100),
-		arkscript.NewTxSigHashes(spendingTx, prevoutFetcher),
+		txscript.StandardVerifyFlags,
+		txscript.NewSigCache(100),
+		txscript.NewTxSigHashes(spendingTx, prevoutFetcher),
 		0, // TODO : add input amount if need CHECKSIG in custom script?
 		prevoutFetcher,
 	)

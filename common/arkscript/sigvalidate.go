@@ -7,6 +7,7 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 )
 
@@ -42,17 +43,17 @@ type baseSigVerifier struct {
 
 	subScript []byte
 
-	hashType SigHashType
+	hashType txscript.SigHashType
 }
 
 // parseBaseSigAndPubkey attempts to parse a signature and public key according
 // to the base consensus rules, which expect an 33-byte public key and DER or
 // BER encoded signature.
 func parseBaseSigAndPubkey(pkBytes, fullSigBytes []byte,
-	vm *Engine) (*btcec.PublicKey, *ecdsa.Signature, SigHashType, error) {
+	vm *Engine) (*btcec.PublicKey, *ecdsa.Signature, txscript.SigHashType, error) {
 
-	strictEncoding := vm.hasFlag(ScriptVerifyStrictEncoding) ||
-		vm.hasFlag(ScriptVerifyDERSignatures)
+	strictEncoding := vm.hasFlag(txscript.ScriptVerifyStrictEncoding) ||
+		vm.hasFlag(txscript.ScriptVerifyDERSignatures)
 
 	// Trim off hashtype from the signature string and check if the
 	// signature and pubkey conform to the strict encoding requirements
@@ -66,7 +67,7 @@ func parseBaseSigAndPubkey(pkBytes, fullSigBytes []byte,
 	// the data stack.  This is required because the more general script
 	// validation consensus rules do not have the new strict encoding
 	// requirements enabled by the flags.
-	hashType := SigHashType(fullSigBytes[len(fullSigBytes)-1])
+	hashType := txscript.SigHashType(fullSigBytes[len(fullSigBytes)-1])
 	sigBytes := fullSigBytes[:len(fullSigBytes)-1]
 	if err := vm.checkHashTypeEncoding(hashType); err != nil {
 		return nil, nil, 0, err
@@ -157,9 +158,12 @@ func (b *baseSigVerifier) Verify() verifyResult {
 	// to sign itself.
 	subScript, match := removeOpcodeByData(b.subScript, b.fullSigBytes)
 
-	sigHash := calcSignatureHash(
+	sigHash, err := txscript.CalcSignatureHash(
 		subScript, b.hashType, &b.vm.tx, b.vm.txIdx,
 	)
+	if err != nil {
+		return verifyResult{}
+	}
 
 	return verifyResult{
 		sigValid: b.verifySig(sigHash),
@@ -197,14 +201,14 @@ func newBaseSegwitSigVerifier(pkBytes, fullSigBytes []byte,
 //
 // NOTE: This is part of the baseSigVerifier interface.
 func (s *baseSegwitSigVerifier) Verify() verifyResult {
-	var sigHashes *TxSigHashes
+	var sigHashes *txscript.TxSigHashes
 	if s.vm.hashCache != nil {
 		sigHashes = s.vm.hashCache
 	} else {
-		sigHashes = NewTxSigHashes(&s.vm.tx, s.vm.prevOutFetcher)
+		sigHashes = txscript.NewTxSigHashes(&s.vm.tx, s.vm.prevOutFetcher)
 	}
 
-	sigHash, err := calcWitnessSignatureHashRaw(
+	sigHash, err := txscript.CalcWitnessSigHash(
 		s.subScript, sigHashes, s.hashType, &s.vm.tx, s.vm.txIdx,
 		s.vm.inputAmount,
 	)
@@ -233,10 +237,10 @@ type taprootSigVerifier struct {
 	fullSigBytes []byte
 	sig          *schnorr.Signature
 
-	hashType SigHashType
+	hashType txscript.SigHashType
 
-	sigCache  *SigCache
-	hashCache *TxSigHashes
+	sigCache  *txscript.SigCache
+	hashCache *txscript.TxSigHashes
 
 	tx *wire.MsgTx
 
@@ -244,14 +248,14 @@ type taprootSigVerifier struct {
 
 	annex []byte
 
-	prevOuts PrevOutputFetcher
+	prevOuts txscript.PrevOutputFetcher
 }
 
 // parseTaprootSigAndPubKey attempts to parse the public key and signature for
 // a taproot spend that may be a keyspend or script path spend. This function
 // returns an error if the pubkey is invalid, or the sig is.
 func parseTaprootSigAndPubKey(pkBytes, rawSig []byte,
-) (*btcec.PublicKey, *schnorr.Signature, SigHashType, error) {
+) (*btcec.PublicKey, *schnorr.Signature, txscript.SigHashType, error) {
 
 	// Now that we have the raw key, we'll parse it into a schnorr public
 	// key we can work with.
@@ -264,7 +268,7 @@ func parseTaprootSigAndPubKey(pkBytes, rawSig []byte,
 	// with the desired sighash flag.
 	var (
 		sig         *schnorr.Signature
-		sigHashType SigHashType
+		sigHashType txscript.SigHashType
 	)
 	switch {
 	// If the signature is exactly 64 bytes, then we know we're using the
@@ -279,7 +283,7 @@ func parseTaprootSigAndPubKey(pkBytes, rawSig []byte,
 		// If the sig is 64 bytes, then we'll assume that it's the
 		// default sighash type, which is actually an alias for
 		// SIGHASH_ALL.
-		sigHashType = SigHashDefault
+		sigHashType = txscript.SigHashDefault
 
 	// Otherwise, if this is a signature, with a sighash looking byte
 	// appended that isn't all zero, then we'll extract the sighash from
@@ -287,7 +291,7 @@ func parseTaprootSigAndPubKey(pkBytes, rawSig []byte,
 	case len(rawSig) == schnorr.SignatureSize+1 && rawSig[64] != 0:
 		// Extract the sighash type, then snip off the last byte so we can
 		// parse the signature.
-		sigHashType = SigHashType(rawSig[schnorr.SignatureSize])
+		sigHashType = txscript.SigHashType(rawSig[schnorr.SignatureSize])
 
 		rawSig = rawSig[:schnorr.SignatureSize]
 		sig, err = schnorr.ParseSignature(rawSig)
@@ -298,7 +302,7 @@ func parseTaprootSigAndPubKey(pkBytes, rawSig []byte,
 	// Otherwise, this is an invalid signature, so we need to bail out.
 	default:
 		str := fmt.Sprintf("invalid sig len: %v", len(rawSig))
-		return nil, nil, 0, scriptError(ErrInvalidTaprootSigLen, str)
+		return nil, nil, 0, scriptError(txscript.ErrInvalidTaprootSigLen, str)
 	}
 
 	return pubKey, sig, sigHashType, nil
@@ -307,8 +311,8 @@ func parseTaprootSigAndPubKey(pkBytes, rawSig []byte,
 // newTaprootSigVerifier returns a new instance of a taproot sig verifier given
 // the necessary contextual information.
 func newTaprootSigVerifier(pkBytes []byte, fullSigBytes []byte,
-	tx *wire.MsgTx, inputIndex int, prevOuts PrevOutputFetcher,
-	sigCache *SigCache, hashCache *TxSigHashes,
+	tx *wire.MsgTx, inputIndex int, prevOuts txscript.PrevOutputFetcher,
+	sigCache *txscript.SigCache, hashCache *txscript.TxSigHashes,
 	annex []byte) (*taprootSigVerifier, error) {
 
 	pubKey, sig, sigHashType, err := parseTaprootSigAndPubKey(
@@ -367,16 +371,10 @@ func (t *taprootSigVerifier) verifySig(sigHash []byte) bool {
 //
 // NOTE: This is part of the baseSigVerifier interface.
 func (t *taprootSigVerifier) Verify() verifyResult {
-	var opts []TaprootSigHashOption
-	if t.annex != nil {
-		opts = append(opts, WithAnnex(t.annex))
-	}
-
 	// Before we attempt to verify the signature, we'll need to first
 	// compute the sighash based on the input and tx information.
-	sigHash, err := calcTaprootSignatureHashRaw(
+	sigHash, err := txscript.CalcTaprootSignatureHash(
 		t.hashCache, t.hashType, t.tx, t.inputIndex, t.prevOuts,
-		opts...,
 	)
 	if err != nil {
 		// TODO(roasbeef): propagate the error here?
@@ -410,7 +408,7 @@ func newBaseTapscriptSigVerifier(pkBytes, rawSig []byte,
 	// If the public key is zero bytes, then this is invalid, and will fail
 	// immediately.
 	case 0:
-		return nil, scriptError(ErrTaprootPubkeyIsEmpty, "")
+		return nil, scriptError(txscript.ErrTaprootPubkeyIsEmpty, "")
 
 	// If the public key is 32 byte as we expect, then we'll parse things
 	// as normal.
@@ -433,11 +431,11 @@ func newBaseTapscriptSigVerifier(pkBytes, rawSig []byte,
 	default:
 		// However, if the flag preventing usage of unknown key types
 		// is active, then we'll return that error.
-		if vm.hasFlag(ScriptVerifyDiscourageUpgradeablePubkeyType) {
+		if vm.hasFlag(txscript.ScriptVerifyDiscourageUpgradeablePubkeyType) {
 			str := fmt.Sprintf("pubkey of length %v was used",
 				len(pkBytes))
 			return nil, scriptError(
-				ErrDiscourageUpgradeablePubKeyType, str,
+				txscript.ErrDiscourageUpgradeablePubKeyType, str,
 			)
 		}
 
@@ -461,20 +459,10 @@ func (b *baseTapscriptSigVerifier) Verify() verifyResult {
 		}
 	}
 
-	var opts []TaprootSigHashOption
-	opts = append(opts, WithBaseTapscriptVersion(
-		b.vm.taprootCtx.codeSepPos, b.vm.taprootCtx.tapLeafHash[:],
-	))
-
-	if b.vm.taprootCtx.annex != nil {
-		opts = append(opts, WithAnnex(b.vm.taprootCtx.annex))
-	}
-
 	// Otherwise, we'll compute the sighash using the tapscript message
 	// extensions and return the outcome.
-	sigHash, err := calcTaprootSignatureHashRaw(
+	sigHash, err := txscript.CalcTaprootSignatureHash(
 		b.hashCache, b.hashType, b.tx, b.inputIndex, b.prevOuts,
-		opts...,
 	)
 	if err != nil {
 		// TODO(roasbeef): propagate the error here?
