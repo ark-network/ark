@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/gob"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -2594,18 +2595,14 @@ func opcodeInspectLocktime(op *opcode, data []byte, vm *Engine) error {
 // opcodeInspectNumInputs pushes the number of inputs in the transaction onto the stack.
 // Stack transformation: [...] -> [... numInputs]
 func opcodeInspectNumInputs(op *opcode, data []byte, vm *Engine) error {
-	numInputs := make([]byte, 4)
-	binary.LittleEndian.PutUint32(numInputs, uint32(len(vm.tx.TxIn)))
-	vm.dstack.PushByteArray(numInputs)
+	vm.dstack.PushInt(scriptNum(len(vm.tx.TxIn)))
 	return nil
 }
 
 // opcodeInspectNumOutputs pushes the number of outputs in the transaction onto the stack.
 // Stack transformation: [...] -> [... numOutputs]
 func opcodeInspectNumOutputs(op *opcode, data []byte, vm *Engine) error {
-	numOutputs := make([]byte, 4)
-	binary.LittleEndian.PutUint32(numOutputs, uint32(len(vm.tx.TxOut)))
-	vm.dstack.PushByteArray(numOutputs)
+	vm.dstack.PushInt(scriptNum(len(vm.tx.TxOut)))
 	return nil
 }
 
@@ -2936,7 +2933,6 @@ func opcodeChecksigFromStack(op *opcode, data []byte, vm *Engine) error {
 	if err != nil {
 		return err
 	}
-
 	if len(signature) == 0 {
 		// push empty vector
 		vm.dstack.PushByteArray([]byte{})
@@ -3451,7 +3447,12 @@ func opcodeSha256Initialize(op *opcode, _ []byte, vm *Engine) error {
 		return scriptError(txscript.ErrInvalidStackOperation, "failed to write to SHA256 context")
 	}
 
-	vm.dstack.PushByteArray(h.Sum(nil)[:])
+	var state bytes.Buffer
+	if err := gob.NewEncoder(&state).Encode(h); err != nil {
+		return scriptError(txscript.ErrInvalidStackOperation, "failed to save hash state")
+	}
+
+	vm.dstack.PushByteArray(state.Bytes())
 	return nil
 }
 
@@ -3462,21 +3463,26 @@ func opcodeSha256Update(op *opcode, _ []byte, vm *Engine) error {
 	if err != nil {
 		return err
 	}
-
-	context, err := vm.dstack.PopByteArray()
+	state, err := vm.dstack.PopByteArray()
 	if err != nil {
 		return err
 	}
 
 	h := sha256.New()
-	if _, err := h.Write(context); err != nil {
-		return scriptError(txscript.ErrInvalidStackOperation, "failed to write context to SHA256")
+	if err := gob.NewDecoder(bytes.NewReader(state)).Decode(h); err != nil {
+		return scriptError(txscript.ErrInvalidStackOperation, "failed to load hash state")
 	}
+
 	if _, err := h.Write(data); err != nil {
 		return scriptError(txscript.ErrInvalidStackOperation, "failed to write data to SHA256")
 	}
 
-	vm.dstack.PushByteArray(h.Sum(nil)[:])
+	var newState bytes.Buffer
+	if err := gob.NewEncoder(&newState).Encode(h); err != nil {
+		return scriptError(txscript.ErrInvalidStackOperation, "failed to save hash state")
+	}
+
+	vm.dstack.PushByteArray(newState.Bytes())
 	return nil
 }
 
@@ -3487,15 +3493,14 @@ func opcodeSha256Finalize(op *opcode, _ []byte, vm *Engine) error {
 	if err != nil {
 		return err
 	}
-
-	context, err := vm.dstack.PopByteArray()
+	state, err := vm.dstack.PopByteArray()
 	if err != nil {
 		return err
 	}
 
 	h := sha256.New()
-	if _, err := h.Write(context); err != nil {
-		return scriptError(txscript.ErrInvalidStackOperation, "failed to write context to SHA256")
+	if err := gob.NewDecoder(bytes.NewReader(state)).Decode(h); err != nil {
+		return scriptError(txscript.ErrInvalidStackOperation, "failed to load hash state")
 	}
 	if _, err := h.Write(data); err != nil {
 		return scriptError(txscript.ErrInvalidStackOperation, "failed to write data to SHA256")
