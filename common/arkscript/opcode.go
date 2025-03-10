@@ -239,9 +239,9 @@ const (
 	OP_UNKNOWN193          = 0xc1 // 193
 	OP_UNKNOWN194          = 0xc2 // 194
 	OP_UNKNOWN195          = 0xc3 // 195
-	OP_UNKNOWN196          = 0xc4 // 196
-	OP_UNKNOWN197          = 0xc5 // 197
-	OP_UNKNOWN198          = 0xc6 // 198
+	OP_SHA256INITIALIZE    = 0xc4 // 196
+	OP_SHA256UPDATE        = 0xc5 // 197
+	OP_SHA256FINALIZE      = 0xc6 // 198
 
 	// Inputs
 	OP_INSPECTINPUTOUTPOINT = 0xc7 // 199
@@ -540,9 +540,10 @@ var opcodeArray = [256]opcode{
 	OP_UNKNOWN193: {OP_UNKNOWN193, "OP_UNKNOWN193", 1, opcodeInvalid},
 	OP_UNKNOWN194: {OP_UNKNOWN194, "OP_UNKNOWN194", 1, opcodeInvalid},
 	OP_UNKNOWN195: {OP_UNKNOWN195, "OP_UNKNOWN195", 1, opcodeInvalid},
-	OP_UNKNOWN196: {OP_UNKNOWN196, "OP_UNKNOWN196", 1, opcodeInvalid},
-	OP_UNKNOWN197: {OP_UNKNOWN197, "OP_UNKNOWN197", 1, opcodeInvalid},
-	OP_UNKNOWN198: {OP_UNKNOWN198, "OP_UNKNOWN198", 1, opcodeInvalid},
+	// Streaming opcodes
+	OP_SHA256INITIALIZE: {OP_SHA256INITIALIZE, "OP_SHA256INITIALIZE", 1, opcodeSha256Initialize},
+	OP_SHA256UPDATE:     {OP_SHA256UPDATE, "OP_SHA256UPDATE", 1, opcodeSha256Update},
+	OP_SHA256FINALIZE:   {OP_SHA256FINALIZE, "OP_SHA256FINALIZE", 1, opcodeSha256Finalize},
 
 	// Inputs introspection
 	OP_INSPECTINPUTOUTPOINT: {OP_INSPECTINPUTOUTPOINT, "OP_INSPECTINPUTOUTPOINT", 1, opcodeInspectInputOutpoint},
@@ -676,9 +677,9 @@ var successOpcodes = map[byte]struct{}{
 	OP_UNKNOWN193:                {}, // 193
 	OP_UNKNOWN194:                {}, // 194
 	OP_UNKNOWN195:                {}, // 195
-	OP_UNKNOWN196:                {}, // 196
-	OP_UNKNOWN197:                {}, // 197
-	OP_UNKNOWN198:                {}, // 198
+	OP_SHA256INITIALIZE:          {}, // 196
+	OP_SHA256UPDATE:              {}, // 197
+	OP_SHA256FINALIZE:            {}, // 198
 	OP_INSPECTINPUTOUTPOINT:      {}, // 199
 	OP_UNKNOWN200:                {}, // 200
 	OP_INSPECTINPUTVALUE:         {}, // 201
@@ -3521,5 +3522,72 @@ func opcodeTweakVerify(op *opcode, data []byte, vm *Engine) error {
 		return scriptError(ErrInvalidStackOperation, "Q != P + k*G")
 	}
 
+	return nil
+}
+
+// opcodeSha256Initialize pops a bytestring and pushes a SHA256 context created by adding
+// the bytestring to the initial SHA256 context.
+func opcodeSha256Initialize(op *opcode, _ []byte, vm *Engine) error {
+	data, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+
+	h := sha256.New()
+	if _, err := h.Write(data); err != nil {
+		return scriptError(ErrInvalidStackOperation, "failed to write to SHA256 context")
+	}
+
+	vm.dstack.PushByteArray(h.Sum(nil)[:])
+	return nil
+}
+
+// opcodeSha256Update pops a bytestring and SHA256 context, then pushes an updated
+// context by adding the bytestring to the data stream being hashed.
+func opcodeSha256Update(op *opcode, _ []byte, vm *Engine) error {
+	data, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+
+	context, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+
+	h := sha256.New()
+	if _, err := h.Write(context); err != nil {
+		return scriptError(ErrInvalidStackOperation, "failed to write context to SHA256")
+	}
+	if _, err := h.Write(data); err != nil {
+		return scriptError(ErrInvalidStackOperation, "failed to write data to SHA256")
+	}
+
+	vm.dstack.PushByteArray(h.Sum(nil)[:])
+	return nil
+}
+
+// opcodeSha256Finalize pops a bytestring and SHA256 context, then pushes the final
+// SHA256 hash value after adding the bytestring and completing the padding.
+func opcodeSha256Finalize(op *opcode, _ []byte, vm *Engine) error {
+	data, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+
+	context, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+
+	h := sha256.New()
+	if _, err := h.Write(context); err != nil {
+		return scriptError(ErrInvalidStackOperation, "failed to write context to SHA256")
+	}
+	if _, err := h.Write(data); err != nil {
+		return scriptError(ErrInvalidStackOperation, "failed to write data to SHA256")
+	}
+
+	vm.dstack.PushByteArray(h.Sum(nil))
 	return nil
 }
