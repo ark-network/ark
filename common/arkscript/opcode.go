@@ -14,6 +14,7 @@ import (
 	"math/big"
 	"strings"
 
+	//nolint:staticcheck
 	"golang.org/x/crypto/ripemd160"
 	"modernc.org/mathutil"
 
