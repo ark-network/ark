@@ -161,7 +161,7 @@ func LoadCovenantlessClient(sdkStore types.Store) (ArkClient, error) {
 		return nil, fmt.Errorf("failed to setup transport client: %s", err)
 	}
 
-	explorerSvc, err := getExplorer(cfgData.ExplorerURL, cfgData.Network.Name)
+	explorerSvc, err := getExplorer("", cfgData.Network.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
@@ -221,7 +221,7 @@ func LoadCovenantlessClientWithWallet(
 		return nil, fmt.Errorf("failed to setup transport client: %s", err)
 	}
 
-	explorerSvc, err := getExplorer(cfgData.ExplorerURL, cfgData.Network.Name)
+	explorerSvc, err := getExplorer("", cfgData.Network.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}

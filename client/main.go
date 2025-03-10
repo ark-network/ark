@@ -80,10 +80,6 @@ var (
 		Usage: "network to use liquid, testnet, regtest, signet for bitcoin, or liquid, liquidtestnet, liquidregtest for liquid)",
 		Value: "liquid",
 	}
-	explorerFlag = &cli.StringFlag{
-		Name:  "explorer",
-		Usage: "the url of the explorer to use",
-	}
 	passwordFlag = &cli.StringFlag{
 		Name:  "password",
 		Usage: "password to unlock the wallet",
@@ -166,7 +162,7 @@ var (
 		Action: func(ctx *cli.Context) error {
 			return initArkSdk(ctx)
 		},
-		Flags: []cli.Flag{networkFlag, passwordFlag, privateKeyFlag, urlFlag, explorerFlag, restFlag},
+		Flags: []cli.Flag{networkFlag, passwordFlag, privateKeyFlag, urlFlag, restFlag},
 	}
 	configCommand = cli.Command{
 		Name:  "config",
@@ -253,12 +249,11 @@ func initArkSdk(ctx *cli.Context) error {
 
 	return arkSdkClient.Init(
 		ctx.Context, arksdk.InitArgs{
-			ClientType:  clientType,
-			WalletType:  arksdk.SingleKeyWallet,
-			ServerUrl:   ctx.String(urlFlag.Name),
-			Seed:        ctx.String(privateKeyFlag.Name),
-			Password:    string(password),
-			ExplorerURL: ctx.String(explorerFlag.Name),
+			ClientType: clientType,
+			WalletType: arksdk.SingleKeyWallet,
+			ServerUrl:  ctx.String(urlFlag.Name),
+			Seed:       ctx.String(privateKeyFlag.Name),
+			Password:   string(password),
 		},
 	)
 }
@@ -279,7 +274,6 @@ func config(ctx *cli.Context) error {
 		"unilateral_exit_delay":        cfgData.UnilateralExitDelay,
 		"dust":                         cfgData.Dust,
 		"boarding_descriptor_template": cfgData.BoardingDescriptorTemplate,
-		"explorer_url":                 cfgData.ExplorerURL,
 		"forfeit_address":              cfgData.ForfeitAddress,
 		"with_transaction_feed":        cfgData.WithTransactionFeed,
 	}

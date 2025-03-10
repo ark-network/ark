@@ -21,7 +21,6 @@ type storeData struct {
 	UnilateralExitDelay        string `json:"unilateral_exit_delay"`
 	Dust                       string `json:"dust"`
 	BoardingDescriptorTemplate string `json:"boarding_descriptor_template"`
-	ExplorerURL                string `json:"explorer_url"`
 	ForfeitAddress             string `json:"forfeit_address"`
 	WithTransactionFeed        string `json:"with_transaction_feed"`
 }
@@ -44,7 +43,6 @@ func (d storeData) decode() types.Config {
 	dust, _ := strconv.Atoi(d.Dust)
 	buf, _ := hex.DecodeString(d.ServerPubKey)
 	serverPubkey, _ := secp256k1.ParsePubKey(buf)
-	explorerURL := d.ExplorerURL
 
 	vtxoTreeExpiryType := common.LocktimeTypeBlock
 	if vtxoTreeExpiry >= 512 {
@@ -67,7 +65,6 @@ func (d storeData) decode() types.Config {
 		RoundInterval:              int64(roundInterval),
 		Dust:                       uint64(dust),
 		BoardingDescriptorTemplate: d.BoardingDescriptorTemplate,
-		ExplorerURL:                explorerURL,
 		ForfeitAddress:             d.ForfeitAddress,
 		WithTransactionFeed:        withTransactionFeed,
 	}
@@ -85,7 +82,6 @@ func (d storeData) asMap() map[string]string {
 		"unilateral_exit_delay":        d.UnilateralExitDelay,
 		"dust":                         d.Dust,
 		"boarding_descriptor_template": d.BoardingDescriptorTemplate,
-		"explorer_url":                 d.ExplorerURL,
 		"forfeit_address":              d.ForfeitAddress,
 		"with_transaction_feed":        d.WithTransactionFeed,
 	}

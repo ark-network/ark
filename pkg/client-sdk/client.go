@@ -45,10 +45,10 @@ var (
 		common.Liquid.Name:         "https://blockstream.info/liquid/api",
 		common.LiquidTestNet.Name:  "https://blockstream.info/liquidtestnet/api",
 		common.LiquidRegTest.Name:  "http://localhost:3001",
-		common.Bitcoin.Name:        "https://blockstream.info/api",
-		common.BitcoinTestNet.Name: "https://blockstream.info/testnet/api",
+		common.Bitcoin.Name:        "https://mempool.space/api",
+		common.BitcoinTestNet.Name: "https://mempool.space/testnet/api",
 		//common.BitcoinTestNet4.Name: "https://mempool.space/testnet4/api", //TODO uncomment once supported
-		common.BitcoinSigNet.Name:    "https://blockstream.info/signet/api",
+		common.BitcoinSigNet.Name:    "https://mempool.space/signet/api",
 		common.BitcoinMutinyNet.Name: "https://mutinynet.com/api",
 		common.BitcoinRegTest.Name:   "http://localhost:3000",
 	}
@@ -161,7 +161,7 @@ func (a *arkClient) initWithWallet(
 		return fmt.Errorf("failed to connect to server: %s", err)
 	}
 
-	explorerSvc, err := getExplorer(args.ExplorerURL, info.Network)
+	explorerSvc, err := getExplorer("", info.Network)
 	if err != nil {
 		return fmt.Errorf("failed to setup explorer: %s", err)
 	}
@@ -238,7 +238,7 @@ func (a *arkClient) init(
 		return fmt.Errorf("failed to connect to server: %s", err)
 	}
 
-	explorerSvc, err := getExplorer(args.ExplorerURL, info.Network)
+	explorerSvc, err := getExplorer("", info.Network)
 	if err != nil {
 		return fmt.Errorf("failed to setup explorer: %s", err)
 	}
@@ -275,7 +275,6 @@ func (a *arkClient) init(
 		UnilateralExitDelay:        common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
 		Dust:                       info.Dust,
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
-		ExplorerURL:                args.ExplorerURL,
 		ForfeitAddress:             info.ForfeitAddress,
 		WithTransactionFeed:        args.WithTransactionFeed,
 	}
