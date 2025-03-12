@@ -163,7 +163,7 @@ func (e explorerSvc) IsRBFTx(txid, txHex string) (bool, string, int64, error) {
 		return false, "", -1, err
 	}
 
-	resp.Body.Close()
+	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return false, "", -1, err
