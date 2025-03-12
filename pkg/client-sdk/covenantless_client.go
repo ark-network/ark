@@ -336,7 +336,7 @@ func (a *covenantlessArkClient) listenForBoardingTxs(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			txsToAdd, txsToConfirm, err := a.getBoardingPendingTransactions(ctx)
+			txsToAdd, txsToConfirm, rbfTxs, err := a.getBoardingTransactions(ctx)
 			if err != nil {
 				log.WithError(err).Error("failed to get pending transactions")
 				continue
@@ -361,7 +361,16 @@ func (a *covenantlessArkClient) listenForBoardingTxs(ctx context.Context) {
 					log.WithError(err).Error("failed to update boarding transactions")
 					continue
 				}
-				log.Debugf("updated %d boarding transaction(s)", count)
+				log.Debugf("confirmed %d boarding transaction(s)", count)
+			}
+
+			if len(rbfTxs) > 0 {
+				count, err := a.store.TransactionStore().RbfTransactions(ctx, rbfTxs)
+				if err != nil {
+					log.WithError(err).Error("failed to update rbf boarding transactions")
+					continue
+				}
+				log.Debugf("replaced %d transaction(s)", count)
 			}
 		case <-ctx.Done():
 			return
@@ -369,17 +378,41 @@ func (a *covenantlessArkClient) listenForBoardingTxs(ctx context.Context) {
 	}
 }
 
-func (a *covenantlessArkClient) getBoardingPendingTransactions(
+func (a *covenantlessArkClient) getBoardingTransactions(
 	ctx context.Context,
-) ([]types.Transaction, []string, error) {
+) ([]types.Transaction, []string, map[string]types.Transaction, error) {
 	oldTxs, err := a.store.TransactionStore().GetAllTransactions(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
+	}
+
+	rbfTxs := make(map[string]types.Transaction, 0)
+	emptyTime := time.Time{}
+	for _, tx := range oldTxs {
+		if tx.IsBoarding() && tx.CreatedAt == emptyTime {
+			isRbf, replacedBy, timestamp, err := a.explorer.IsRBFTx(tx.BoardingTxid, tx.Hex)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			if isRbf {
+				txHex, err := a.explorer.GetTxHex(replacedBy)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				rbfTxs[tx.BoardingTxid] = types.Transaction{
+					TransactionKey: types.TransactionKey{
+						BoardingTxid: replacedBy,
+					},
+					CreatedAt: time.Unix(timestamp, 0),
+					Hex:       txHex,
+				}
+			}
+		}
 	}
 
 	boardingUtxos, err := a.getClaimableBoardingUtxos(ctx, nil)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	txsToAdd := make([]types.Transaction, 0)
@@ -387,9 +420,11 @@ func (a *covenantlessArkClient) getBoardingPendingTransactions(
 	for _, u := range boardingUtxos {
 		found := false
 		for _, tx := range oldTxs {
+			if _, ok := rbfTxs[tx.BoardingTxid]; ok {
+				continue
+			}
 			if tx.BoardingTxid == u.Txid {
 				found = true
-				emptyTime := time.Time{}
 				if tx.CreatedAt == emptyTime && tx.CreatedAt != u.CreatedAt {
 					txsToConfirm = append(txsToConfirm, tx.TransactionKey.String())
 				}
@@ -408,10 +443,11 @@ func (a *covenantlessArkClient) getBoardingPendingTransactions(
 			Amount:    u.Amount,
 			Type:      types.TxReceived,
 			CreatedAt: u.CreatedAt,
+			Hex:       u.Tx,
 		})
 	}
 
-	return txsToAdd, txsToConfirm, nil
+	return txsToAdd, txsToConfirm, rbfTxs, nil
 }
 
 func (a *covenantlessArkClient) Balance(
@@ -2331,6 +2367,10 @@ func (a *covenantlessArkClient) getAllBoardingUtxos(ctx context.Context) ([]type
 			for i, vout := range tx.Vout {
 				var spent bool
 				if vout.Address == addr.Address {
+					txHex, err := a.explorer.GetTxHex(tx.Txid)
+					if err != nil {
+						return nil, nil, err
+					}
 					spentStatuses, err := a.explorer.GetTxOutspends(tx.Txid)
 					if err != nil {
 						return nil, nil, err
@@ -2350,6 +2390,7 @@ func (a *covenantlessArkClient) getAllBoardingUtxos(ctx context.Context) ([]type
 						CreatedAt:  createdAt,
 						Tapscripts: addr.Tapscripts,
 						Spent:      spent,
+						Tx:         txHex,
 					})
 				}
 			}
