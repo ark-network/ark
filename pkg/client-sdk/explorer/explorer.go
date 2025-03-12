@@ -358,7 +358,7 @@ func (e *explorerSvc) mempoolIsRBFTx(url, txid string) (bool, string, int64, err
 		return false, "", -1, err
 	}
 
-	resp.Body.Close()
+	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return false, "", -1, err
