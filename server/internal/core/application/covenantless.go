@@ -489,6 +489,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 			RedeemTxid:     redeemTxid,
 			SpentVtxos:     spentVtxos,
 			SpendableVtxos: newVtxos,
+			TxHex:          signedRedeemTx,
 		}
 	}()
 
@@ -1562,6 +1563,7 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, roundEndTime time
 			SpentVtxos:            s.getSpentVtxos(round.TxRequests),
 			SpendableVtxos:        s.getNewVtxos(round),
 			ClaimedBoardingInputs: boardingInputs,
+			TxHex:                 signedRoundTx,
 		}
 	}()
 

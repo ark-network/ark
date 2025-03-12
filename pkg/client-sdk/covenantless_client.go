@@ -2572,6 +2572,7 @@ func (a *covenantlessArkClient) getBoardingTxs(
 			Type:      types.TxReceived,
 			CreatedAt: u.CreatedAt,
 			Settled:   u.Spent,
+			Hex:       u.Tx,
 		}
 
 		if u.CreatedAt.IsZero() {
@@ -2666,6 +2667,7 @@ func (a *covenantlessArkClient) handleRoundTx(
 				Type:      types.TxReceived,
 				Settled:   true,
 				CreatedAt: time.Now(),
+				Hex:       roundTx.Hex,
 			})
 		} else {
 			vtxosToAddAmount := uint64(0)
@@ -2685,6 +2687,7 @@ func (a *covenantlessArkClient) handleRoundTx(
 					Type:      types.TxSent,
 					Settled:   true,
 					CreatedAt: time.Now(),
+					Hex:       roundTx.Hex,
 				})
 			}
 		}
@@ -2707,6 +2710,7 @@ func (a *covenantlessArkClient) handleRoundTx(
 					Type:      types.TxSent,
 					Settled:   true,
 					CreatedAt: time.Now(),
+					Hex:       roundTx.Hex,
 				})
 			}
 
@@ -2804,6 +2808,7 @@ func (a *covenantlessArkClient) handleRedeemTx(
 				Amount:    amount,
 				Type:      types.TxReceived,
 				CreatedAt: time.Now(),
+				Hex:       redeemTx.Hex,
 			})
 		}
 	} else {
