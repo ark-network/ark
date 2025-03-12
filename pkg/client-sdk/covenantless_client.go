@@ -387,9 +387,8 @@ func (a *covenantlessArkClient) getBoardingTransactions(
 	}
 
 	rbfTxs := make(map[string]types.Transaction, 0)
-	emptyTime := time.Time{}
 	for _, tx := range oldTxs {
-		if tx.IsBoarding() && tx.CreatedAt == emptyTime {
+		if tx.IsBoarding() && tx.CreatedAt.IsZero() {
 			isRbf, replacedBy, timestamp, err := a.explorer.IsRBFTx(tx.BoardingTxid, tx.Hex)
 			if err != nil {
 				return nil, nil, nil, err
@@ -425,7 +424,7 @@ func (a *covenantlessArkClient) getBoardingTransactions(
 			}
 			if tx.BoardingTxid == u.Txid {
 				found = true
-				if tx.CreatedAt == emptyTime && tx.CreatedAt != u.CreatedAt {
+				if tx.CreatedAt.IsZero() && tx.CreatedAt != u.CreatedAt {
 					txsToConfirm = append(txsToConfirm, tx.TransactionKey.String())
 				}
 				break
@@ -1037,7 +1036,14 @@ func (a *covenantlessArkClient) GetTransactionHistory(
 	}
 
 	if a.Config.WithTransactionFeed {
-		return a.store.TransactionStore().GetAllTransactions(ctx)
+		history, err := a.store.TransactionStore().GetAllTransactions(ctx)
+		if err != nil {
+			return nil, err
+		}
+		sort.SliceStable(history, func(i, j int) bool {
+			return history[i].CreatedAt.IsZero() || history[i].CreatedAt.After(history[j].CreatedAt)
+		})
+		return history, nil
 	}
 
 	spendableVtxos, spentVtxos, err := a.ListVtxos(ctx)
@@ -1055,13 +1061,13 @@ func (a *covenantlessArkClient) GetTransactionHistory(
 		return nil, err
 	}
 
-	txs := append(boardingTxs, offchainTxs...)
+	history := append(boardingTxs, offchainTxs...)
 	// Sort the slice by age
-	sort.SliceStable(txs, func(i, j int) bool {
-		return txs[i].CreatedAt.After(txs[j].CreatedAt)
+	sort.SliceStable(history, func(i, j int) bool {
+		return history[i].CreatedAt.IsZero() || history[i].CreatedAt.After(history[j].CreatedAt)
 	})
 
-	return txs, nil
+	return history, nil
 }
 
 func (a *covenantlessArkClient) SetNostrNotificationRecipient(ctx context.Context, nostrProfile string) error {
@@ -2568,8 +2574,7 @@ func (a *covenantlessArkClient) getBoardingTxs(
 			Settled:   u.Spent,
 		}
 
-		emptyTime := time.Time{}
-		if u.CreatedAt == emptyTime {
+		if u.CreatedAt.IsZero() {
 			unconfirmedTxs = append(unconfirmedTxs, tx)
 			continue
 		}
