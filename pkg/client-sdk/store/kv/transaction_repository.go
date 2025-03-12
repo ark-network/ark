@@ -142,7 +142,7 @@ func (s *txStore) GetAllTransactions(
 ) ([]types.Transaction, error) {
 	var txs []types.Transaction
 	err := s.db.Find(&txs, nil)
-
+	fmt.Printf("AAAAAAAAA %+v\n", txs)
 	sort.Slice(txs, func(i, j int) bool {
 		txi := txs[i]
 		txj := txs[j]
