@@ -351,7 +351,6 @@ func (a *covenantlessArkClient) listenForBoardingTxs(ctx context.Context) {
 					continue
 				}
 				log.Debugf("added %d boarding transaction(s)", count)
-				fmt.Printf("added %d boarding transaction(s)\n", count)
 			}
 
 			if len(txsToConfirm) > 0 {
@@ -363,7 +362,6 @@ func (a *covenantlessArkClient) listenForBoardingTxs(ctx context.Context) {
 					continue
 				}
 				log.Debugf("confirmed %d boarding transaction(s)", count)
-				fmt.Printf("confirmed %d boarding transaction(s)\n", count)
 			}
 
 			if len(rbfTxs) > 0 {
@@ -373,7 +371,6 @@ func (a *covenantlessArkClient) listenForBoardingTxs(ctx context.Context) {
 					continue
 				}
 				log.Debugf("replaced %d transaction(s)", count)
-				fmt.Printf("replaced %d transaction(s)\n", count)
 			}
 		case <-ctx.Done():
 			return
