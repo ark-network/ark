@@ -214,6 +214,7 @@ func (s *txStore) sendEvent(event types.TransactionEvent) {
 
 	select {
 	case s.eventCh <- event:
+		fmt.Printf("SENT EVENT %+v\n", event)
 		return
 	default:
 		time.Sleep(100 * time.Millisecond)
