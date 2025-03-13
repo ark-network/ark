@@ -387,6 +387,7 @@ func (a *covenantlessArkClient) getBoardingTransactions(
 	}
 
 	rbfTxs := make(map[string]types.Transaction, 0)
+	replacements := make(map[string]struct{}, 0)
 	for _, tx := range oldTxs {
 		if tx.IsBoarding() && tx.CreatedAt.IsZero() {
 			isRbf, replacedBy, timestamp, err := a.explorer.IsRBFTx(tx.BoardingTxid, tx.Hex)
@@ -405,6 +406,7 @@ func (a *covenantlessArkClient) getBoardingTransactions(
 					CreatedAt: time.Unix(timestamp, 0),
 					Hex:       txHex,
 				}
+				replacements[replacedBy] = struct{}{}
 			}
 		}
 	}
@@ -417,11 +419,12 @@ func (a *covenantlessArkClient) getBoardingTransactions(
 	txsToAdd := make([]types.Transaction, 0)
 	txsToConfirm := make([]string, 0)
 	for _, u := range boardingUtxos {
+		if _, ok := replacements[u.Txid]; ok {
+			continue
+		}
+
 		found := false
 		for _, tx := range oldTxs {
-			if _, ok := rbfTxs[tx.BoardingTxid]; ok {
-				continue
-			}
 			if tx.BoardingTxid == u.Txid {
 				found = true
 				if tx.CreatedAt.IsZero() && tx.CreatedAt != u.CreatedAt {
