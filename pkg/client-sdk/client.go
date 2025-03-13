@@ -161,7 +161,7 @@ func (a *arkClient) initWithWallet(
 		return fmt.Errorf("failed to connect to server: %s", err)
 	}
 
-	explorerSvc, err := getExplorer("", info.Network)
+	explorerSvc, err := getExplorer(args.ExplorerURL, info.Network)
 	if err != nil {
 		return fmt.Errorf("failed to setup explorer: %s", err)
 	}
@@ -238,7 +238,7 @@ func (a *arkClient) init(
 		return fmt.Errorf("failed to connect to server: %s", err)
 	}
 
-	explorerSvc, err := getExplorer("", info.Network)
+	explorerSvc, err := getExplorer(args.ExplorerURL, info.Network)
 	if err != nil {
 		return fmt.Errorf("failed to setup explorer: %s", err)
 	}
@@ -275,6 +275,7 @@ func (a *arkClient) init(
 		UnilateralExitDelay:        common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
 		Dust:                       info.Dust,
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
+		ExplorerURL:                args.ExplorerURL,
 		ForfeitAddress:             info.ForfeitAddress,
 		WithTransactionFeed:        args.WithTransactionFeed,
 	}

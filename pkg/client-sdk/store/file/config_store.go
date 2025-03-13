@@ -62,6 +62,7 @@ func (s *configStore) AddData(ctx context.Context, data types.Config) error {
 		UnilateralExitDelay:        fmt.Sprintf("%d", data.UnilateralExitDelay.Value),
 		Dust:                       fmt.Sprintf("%d", data.Dust),
 		BoardingDescriptorTemplate: data.BoardingDescriptorTemplate,
+		ExplorerURL:                data.ExplorerURL,
 		ForfeitAddress:             data.ForfeitAddress,
 		WithTransactionFeed:        strconv.FormatBool(data.WithTransactionFeed),
 	}

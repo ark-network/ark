@@ -27,6 +27,7 @@ type Config struct {
 	UnilateralExitDelay        common.RelativeLocktime
 	Dust                       uint64
 	BoardingDescriptorTemplate string
+	ExplorerURL                string
 	ForfeitAddress             string
 	WithTransactionFeed        bool
 }
