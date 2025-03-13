@@ -64,6 +64,7 @@ func (s *configStore) AddData(ctx context.Context, data types.Config) error {
 		RoundInterval:              fmt.Sprintf("%d", data.RoundInterval),
 		UnilateralExitDelay:        fmt.Sprintf("%d", data.UnilateralExitDelay.Value),
 		Dust:                       fmt.Sprintf("%d", data.Dust),
+		ExplorerURL:                data.ExplorerURL,
 		ForfeitAddress:             data.ForfeitAddress,
 		BoardingDescriptorTemplate: data.BoardingDescriptorTemplate,
 	}
@@ -114,6 +115,7 @@ func (s *configStore) GetData(ctx context.Context) (*types.Config, error) {
 		RoundInterval:              int64(roundInterval),
 		UnilateralExitDelay:        common.RelativeLocktime{Value: uint32(unilateralExitDelay), Type: unilateralExitDelayType},
 		Dust:                       uint64(dust),
+		ExplorerURL:                s.store.Call("getItem", "explorer_url").String(),
 		ForfeitAddress:             s.store.Call("getItem", "forfeit_address").String(),
 		BoardingDescriptorTemplate: s.store.Call("getItem", "boarding_descriptor_template").String(),
 		WithTransactionFeed:        withTxFeed,
