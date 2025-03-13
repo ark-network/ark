@@ -25,6 +25,7 @@ type TransactionStore interface {
 	AddTransactions(ctx context.Context, txs []Transaction) (int, error)
 	SettleTransactions(ctx context.Context, txids []string) (int, error)
 	ConfirmTransactions(ctx context.Context, txids []string, timestamp time.Time) (int, error)
+	RbfTransactions(ctx context.Context, rbfTxs map[string]Transaction) (int, error)
 	GetAllTransactions(ctx context.Context) ([]Transaction, error)
 	GetTransactions(ctx context.Context, txids []string) ([]Transaction, error)
 	GetEventChannel() chan TransactionEvent

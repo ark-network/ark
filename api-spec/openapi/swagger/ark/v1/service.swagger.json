@@ -689,6 +689,9 @@
             "type": "object",
             "$ref": "#/definitions/v1Vtxo"
           }
+        },
+        "hex": {
+          "type": "string"
         }
       }
     },
@@ -847,6 +850,9 @@
             "type": "object",
             "$ref": "#/definitions/v1Outpoint"
           }
+        },
+        "hex": {
+          "type": "string"
         }
       }
     },

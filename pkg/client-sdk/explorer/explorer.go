@@ -25,44 +25,13 @@ const (
 	LiquidExplorer  = "liquid"
 )
 
-type ExplorerTx struct {
-	Txid string `json:"txid"`
-	Vout []struct {
-		Address string `json:"scriptpubkey_address"`
-		Amount  uint64 `json:"value"`
-	} `json:"vout"`
-	Status struct {
-		Confirmed bool  `json:"confirmed"`
-		Blocktime int64 `json:"block_time"`
-	} `json:"status"`
-}
-
-type ExplorerUtxo struct {
-	Txid   string `json:"txid"`
-	Vout   uint32 `json:"vout"`
-	Amount uint64 `json:"value"`
-	Asset  string `json:"asset,omitempty"`
-	Status struct {
-		Confirmed bool  `json:"confirmed"`
-		Blocktime int64 `json:"block_time"`
-	} `json:"status"`
-}
-
-type SpentStatus struct {
-	Spent   bool   `json:"spent"`
-	SpentBy string `json:"txid,omitempty"`
-}
-
-func (e ExplorerUtxo) ToUtxo(delay common.RelativeLocktime, tapscripts []string) types.Utxo {
-	return newUtxo(e, delay, tapscripts)
-}
-
 type Explorer interface {
 	GetTxHex(txid string) (string, error)
 	Broadcast(txHex string) (string, error)
-	GetTxs(addr string) ([]ExplorerTx, error)
-	GetTxOutspends(tx string) ([]SpentStatus, error)
-	GetUtxos(addr string) ([]ExplorerUtxo, error)
+	GetTxs(addr string) ([]tx, error)
+	IsRBFTx(txid, txHex string) (bool, string, int64, error)
+	GetTxOutspends(tx string) ([]spentStatus, error)
+	GetUtxos(addr string) ([]utxo, error)
 	GetBalance(addr string) (uint64, error)
 	GetRedeemedVtxosBalance(
 		addr string, unilateralExitDelay common.RelativeLocktime,
@@ -70,7 +39,6 @@ type Explorer interface {
 	GetTxBlockTime(
 		txid string,
 	) (confirmed bool, blocktime int64, err error)
-	// GetNetwork() common.Network
 	BaseUrl() string
 	GetFeeRate() (float64, error)
 }
@@ -167,7 +135,7 @@ func (e *explorerSvc) Broadcast(txStr string) (string, error) {
 	return txid, nil
 }
 
-func (e *explorerSvc) GetTxs(addr string) ([]ExplorerTx, error) {
+func (e *explorerSvc) GetTxs(addr string) ([]tx, error) {
 	resp, err := http.Get(fmt.Sprintf("%s/address/%s/txs", e.baseUrl, addr))
 	if err != nil {
 		return nil, err
@@ -181,7 +149,7 @@ func (e *explorerSvc) GetTxs(addr string) ([]ExplorerTx, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to get txs: %s", string(body))
 	}
-	payload := []ExplorerTx{}
+	payload := []tx{}
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, err
 	}
@@ -189,7 +157,38 @@ func (e *explorerSvc) GetTxs(addr string) ([]ExplorerTx, error) {
 	return payload, nil
 }
 
-func (e *explorerSvc) GetTxOutspends(txid string) ([]SpentStatus, error) {
+func (e explorerSvc) IsRBFTx(txid, txHex string) (bool, string, int64, error) {
+	resp, err := http.Get(fmt.Sprintf("%s/v1/fullrbf/replacements", e.baseUrl))
+	if err != nil {
+		return false, "", -1, err
+	}
+
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, "", -1, err
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		return e.esploraIsRBFTx(txid, txHex)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return false, "", -1, fmt.Errorf("%s", string(body))
+	}
+
+	isRbf, replacedBy, timestamp, err := e.mempoolIsRBFTx(
+		fmt.Sprintf("%s/v1/fullrbf/replacements", e.baseUrl), txid,
+	)
+	if err != nil {
+		return false, "", -1, err
+	}
+	if isRbf {
+		return isRbf, replacedBy, timestamp, nil
+	}
+
+	return e.mempoolIsRBFTx(fmt.Sprintf("%s/v1/replacements", e.baseUrl), txid)
+}
+
+func (e *explorerSvc) GetTxOutspends(txid string) ([]spentStatus, error) {
 	resp, err := http.Get(fmt.Sprintf("%s/tx/%s/outspends", e.baseUrl, txid))
 	if err != nil {
 		return nil, err
@@ -204,14 +203,14 @@ func (e *explorerSvc) GetTxOutspends(txid string) ([]SpentStatus, error) {
 		return nil, fmt.Errorf("failed to get txs: %s", string(body))
 	}
 
-	spentStatuses := make([]SpentStatus, 0)
+	spentStatuses := make([]spentStatus, 0)
 	if err := json.Unmarshal(body, &spentStatuses); err != nil {
 		return nil, err
 	}
 	return spentStatuses, nil
 }
 
-func (e *explorerSvc) GetUtxos(addr string) ([]ExplorerUtxo, error) {
+func (e *explorerSvc) GetUtxos(addr string) ([]utxo, error) {
 	resp, err := http.Get(fmt.Sprintf("%s/address/%s/utxo", e.baseUrl, addr))
 	if err != nil {
 		return nil, err
@@ -225,7 +224,7 @@ func (e *explorerSvc) GetUtxos(addr string) ([]ExplorerUtxo, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to get utxos: %s", string(body))
 	}
-	payload := []ExplorerUtxo{}
+	payload := []utxo{}
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, err
 	}
@@ -353,6 +352,71 @@ func (e *explorerSvc) broadcast(txHex string) (string, error) {
 	return string(bodyResponse), nil
 }
 
+func (e *explorerSvc) mempoolIsRBFTx(url, txid string) (bool, string, int64, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return false, "", -1, err
+	}
+
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, "", -1, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return false, "", -1, fmt.Errorf("%s", string(body))
+	}
+
+	replacements := make([]replacement, 0)
+	if err := json.Unmarshal(body, &replacements); err != nil {
+		return false, "", -1, err
+	}
+
+	for _, r := range replacements {
+		for _, rr := range r.Replaces {
+			if rr.Tx.Txid == txid {
+				return true, r.Tx.Txid, r.Timestamp, nil
+			}
+		}
+	}
+	return false, "", 0, nil
+}
+
+func (e *explorerSvc) esploraIsRBFTx(txid, txHex string) (bool, string, int64, error) {
+	resp, err := http.Get(fmt.Sprintf("%s/tx/%s/hex", e.baseUrl, txid))
+	if err != nil {
+		return false, "", -1, err
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		var tx wire.MsgTx
+
+		if err := tx.Deserialize(hex.NewDecoder(strings.NewReader(txHex))); err != nil {
+			return false, "", -1, err
+		}
+		spentBy, err := e.GetTxOutspends(tx.TxIn[0].PreviousOutPoint.Hash.String())
+		if err != nil {
+			return false, "", -1, err
+		}
+		if len(spentBy) <= 0 {
+			return false, "", -1, nil
+		}
+		rbfTx := spentBy[0].SpentBy
+
+		confirmed, timestamp, err := e.GetTxBlockTime(rbfTx)
+		if err != nil {
+			return false, "", -1, err
+		}
+		if !confirmed {
+			timestamp = 0
+		}
+
+		return true, rbfTx, timestamp, nil
+	}
+
+	return false, "", -1, nil
+}
+
 func parseLiquidTx(txStr string) (string, string, error) {
 	tx, err := transaction.NewTxFromHex(txStr)
 	if err != nil {
@@ -415,7 +479,7 @@ func parseBitcoinTx(txStr string) (string, string, error) {
 	return txhex, txid, nil
 }
 
-func newUtxo(explorerUtxo ExplorerUtxo, delay common.RelativeLocktime, tapscripts []string) types.Utxo {
+func newUtxo(explorerUtxo utxo, delay common.RelativeLocktime, tapscripts []string) types.Utxo {
 	utxoTime := explorerUtxo.Status.Blocktime
 	createdAt := time.Unix(utxoTime, 0)
 	if utxoTime == 0 {

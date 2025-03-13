@@ -96,6 +96,7 @@ type Transaction struct {
 	Type      TxType
 	Settled   bool
 	CreatedAt time.Time
+	Hex       string
 }
 
 func (t Transaction) IsRound() bool {
@@ -121,6 +122,7 @@ const (
 	TxsAdded TxEventType = iota
 	TxsSettled
 	TxsConfirmed
+	TxsReplaced
 )
 
 func (e TxEventType) String() string {
@@ -128,12 +130,14 @@ func (e TxEventType) String() string {
 		TxsAdded:     "TXS_ADDED",
 		TxsSettled:   "TXS_SETTLED",
 		TxsConfirmed: "TXS_CONFIRMED",
+		TxsReplaced:  "TXS_REPLACED",
 	}[e]
 }
 
 type TransactionEvent struct {
-	Type TxEventType
-	Txs  []Transaction
+	Type         TxEventType
+	Txs          []Transaction
+	Replacements map[string]string
 }
 
 type Utxo struct {
@@ -146,6 +150,7 @@ type Utxo struct {
 	CreatedAt   time.Time
 	Tapscripts  []string
 	Spent       bool
+	Tx          string
 }
 
 func (u *Utxo) Sequence() (uint32, error) {
