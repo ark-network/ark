@@ -336,7 +336,12 @@ func (a *covenantlessArkClient) listenForBoardingTxs(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			txsToAdd, txsToConfirm, rbfTxs, err := a.getBoardingTransactions(ctx)
+			_, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
+			if err != nil {
+				log.WithError(err).Error("failed to get all boarding addresses")
+				continue
+			}
+			txsToAdd, txsToConfirm, rbfTxs, err := a.getBoardingTransactions(ctx, boardingAddrs)
 			if err != nil {
 				log.WithError(err).Error("failed to get pending transactions")
 				continue
@@ -379,7 +384,7 @@ func (a *covenantlessArkClient) listenForBoardingTxs(ctx context.Context) {
 }
 
 func (a *covenantlessArkClient) getBoardingTransactions(
-	ctx context.Context,
+	ctx context.Context, boardingAddrs []wallet.TapscriptsAddress,
 ) ([]types.Transaction, []string, map[string]types.Transaction, error) {
 	oldTxs, err := a.store.TransactionStore().GetAllTransactions(ctx)
 	if err != nil {
@@ -390,16 +395,39 @@ func (a *covenantlessArkClient) getBoardingTransactions(
 	replacements := make(map[string]struct{}, 0)
 	for _, tx := range oldTxs {
 		if tx.IsBoarding() && tx.CreatedAt.IsZero() {
-			fmt.Printf("CHECK IF %s IS RBF\n", tx.BoardingTxid)
 			isRbf, replacedBy, timestamp, err := a.explorer.IsRBFTx(tx.BoardingTxid, tx.Hex)
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			fmt.Println(isRbf, replacedBy, timestamp)
 			if isRbf {
 				txHex, err := a.explorer.GetTxHex(replacedBy)
 				if err != nil {
 					return nil, nil, nil, err
+				}
+				rawTx := &wire.MsgTx{}
+				if err := rawTx.Deserialize(strings.NewReader(txHex)); err != nil {
+					return nil, nil, nil, err
+				}
+				amount := uint64(0)
+				netParams := utils.ToBitcoinNetwork(a.Network)
+				for _, addr := range boardingAddrs {
+					decoded, err := btcutil.DecodeAddress(addr.Address, &netParams)
+					if err != nil {
+						return nil, nil, nil, err
+					}
+					pkScript, err := txscript.PayToAddrScript(decoded)
+					if err != nil {
+						return nil, nil, nil, err
+					}
+					for _, out := range rawTx.TxOut {
+						if bytes.Equal(out.PkScript, pkScript) {
+							amount = uint64(out.Value)
+							break
+						}
+					}
+					if amount > 0 {
+						break
+					}
 				}
 				rbfTxs[tx.BoardingTxid] = types.Transaction{
 					TransactionKey: types.TransactionKey{
@@ -407,13 +435,14 @@ func (a *covenantlessArkClient) getBoardingTransactions(
 					},
 					CreatedAt: time.Unix(timestamp, 0),
 					Hex:       txHex,
+					Amount:    amount,
 				}
 				replacements[replacedBy] = struct{}{}
 			}
 		}
 	}
 
-	boardingUtxos, err := a.getClaimableBoardingUtxos(ctx, nil)
+	boardingUtxos, err := a.getClaimableBoardingUtxos(ctx, boardingAddrs, nil)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -917,7 +946,7 @@ func (a *covenantlessArkClient) CollaborativeExit(
 		return "", fmt.Errorf("invalid onchain address")
 	}
 
-	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+	offchainAddrs, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -951,7 +980,7 @@ func (a *covenantlessArkClient) CollaborativeExit(
 		}
 	}
 
-	boardingUtxos, err := a.getClaimableBoardingUtxos(ctx, nil)
+	boardingUtxos, err := a.getClaimableBoardingUtxos(ctx, boardingAddrs, nil)
 	if err != nil {
 		return "", err
 	}
@@ -1375,7 +1404,7 @@ func (a *covenantlessArkClient) sendOffchain(
 		sumOfReceivers += receiver.Amount()
 	}
 
-	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+	offchainAddrs, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -1407,7 +1436,7 @@ func (a *covenantlessArkClient) sendOffchain(
 		}
 	}
 
-	boardingUtxos, err := a.getClaimableBoardingUtxos(ctx, nil)
+	boardingUtxos, err := a.getClaimableBoardingUtxos(ctx, boardingAddrs, nil)
 	if err != nil {
 		return "", err
 	}
@@ -2411,12 +2440,9 @@ func (a *covenantlessArkClient) getAllBoardingUtxos(ctx context.Context) ([]type
 	return utxos, ignoreVtxos, nil
 }
 
-func (a *covenantlessArkClient) getClaimableBoardingUtxos(ctx context.Context, opts *CoinSelectOptions) ([]types.Utxo, error) {
-	_, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
-	if err != nil {
-		return nil, err
-	}
-
+func (a *covenantlessArkClient) getClaimableBoardingUtxos(
+	_ context.Context, boardingAddrs []wallet.TapscriptsAddress, opts *CoinSelectOptions,
+) ([]types.Utxo, error) {
 	claimable := make([]types.Utxo, 0)
 	for _, addr := range boardingAddrs {
 		boardingScript, err := bitcointree.ParseVtxoScript(addr.Tapscripts)

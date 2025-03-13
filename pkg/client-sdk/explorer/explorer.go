@@ -391,7 +391,9 @@ func (e *explorerSvc) esploraIsRBFTx(txid, txHex string) (bool, string, int64, e
 	if resp.StatusCode == http.StatusNotFound {
 		var tx wire.MsgTx
 
-		tx.Deserialize(hex.NewDecoder(strings.NewReader(txHex)))
+		if err := tx.Deserialize(hex.NewDecoder(strings.NewReader(txHex))); err != nil {
+			return false, "", -1, err
+		}
 		spentBy, err := e.GetTxOutspends(tx.TxIn[0].PreviousOutPoint.Hash.String())
 		if err != nil {
 			return false, "", -1, err
