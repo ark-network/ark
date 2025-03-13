@@ -186,7 +186,7 @@ func (s *txStore) Close() {
 
 func (s *txStore) replaceTxs(txsToAdd []types.Transaction, txsToDelete []string) (int, error) {
 	count := 0
-	dbtx := &badger.Txn{}
+	dbtx := s.db.Badger().NewTransaction(true)
 	for _, tx := range txsToAdd {
 		if err := s.db.TxInsert(dbtx, tx.TransactionKey.String(), &tx); err != nil {
 			if errors.Is(err, badgerhold.ErrKeyExists) {
