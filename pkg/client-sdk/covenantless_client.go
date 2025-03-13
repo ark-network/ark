@@ -390,10 +390,12 @@ func (a *covenantlessArkClient) getBoardingTransactions(
 	replacements := make(map[string]struct{}, 0)
 	for _, tx := range oldTxs {
 		if tx.IsBoarding() && tx.CreatedAt.IsZero() {
+			fmt.Printf("CHECK IF %s IS RBF\n", tx.BoardingTxid)
 			isRbf, replacedBy, timestamp, err := a.explorer.IsRBFTx(tx.BoardingTxid, tx.Hex)
 			if err != nil {
 				return nil, nil, nil, err
 			}
+			fmt.Println(isRbf, replacedBy, timestamp)
 			if isRbf {
 				txHex, err := a.explorer.GetTxHex(replacedBy)
 				if err != nil {
