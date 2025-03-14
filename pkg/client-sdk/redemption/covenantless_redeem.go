@@ -134,7 +134,7 @@ func (r *CovenantlessRedeemBranch) ExpiresAt() (*time.Time, error) {
 	return &t, nil
 }
 
-// offchainPath checks for transactions of the branch onchain and returns only the offchain part
+// OffchainPath checks for transactions of the branch onchain and returns only the offchain part
 func (r *CovenantlessRedeemBranch) OffchainPath() ([]*psbt.Packet, error) {
 	offchainPath := append([]*psbt.Packet{}, r.branch...)
 

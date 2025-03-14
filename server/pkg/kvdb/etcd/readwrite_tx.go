@@ -36,7 +36,7 @@ func newReadWriteTx(stm STM, prefix string, lock sync.Locker) *readWriteTx {
 	}
 }
 
-// rooBucket is a helper function to return the always present
+// rootBucket is a helper function to return the always present
 // pseudo root bucket.
 func rootBucket(tx *readWriteTx) *readWriteBucket {
 	return newReadWriteBucket(tx, tx.rootBucketID[:], tx.rootBucketID[:])
