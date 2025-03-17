@@ -1490,6 +1490,9 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, roundEndTime time
 	}
 	includesBoardingInputs := false
 	for _, in := range roundTx.Inputs {
+		// TODO: this is ok as long as the server doesn't use taproot address too!
+		// We need to find a better way to understand if an in input is ours or if
+		// it's a boarding one.
 		scriptType := txscript.GetScriptClass(in.WitnessUtxo.PkScript)
 		if scriptType == txscript.WitnessV1TaprootTy {
 			includesBoardingInputs = true
