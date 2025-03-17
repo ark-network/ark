@@ -1049,22 +1049,38 @@ func (b *txBuilder) minRelayFeeConnectorTx() (uint64, error) {
 	return b.wallet.MinRelayFee(context.Background(), uint64(common.ConnectorTxSize))
 }
 
-func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (int, string, error) {
+func (b *txBuilder) CountSignedTaprootInputs(tx string) (int, error) {
+	ptx, err := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+	if err != nil {
+		return -1, err
+	}
+
+	signedInputsCount := 0
+	for _, in := range ptx.Inputs {
+		if len(in.TaprootScriptSpendSig) == 0 || len(in.TaprootLeafScript) == 0 {
+			continue
+		}
+
+		signedInputsCount++
+	}
+	return signedInputsCount, nil
+}
+
+func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, error) {
 	roundTx, err := psbt.NewFromRawBytes(strings.NewReader(dest), true)
 	if err != nil {
-		return -1, "", err
+		return "", err
 	}
 
 	sourceTx, err := psbt.NewFromRawBytes(strings.NewReader(src), true)
 	if err != nil {
-		return -1, "", err
+		return "", err
 	}
 
 	if sourceTx.UnsignedTx.TxHash().String() != roundTx.UnsignedTx.TxHash().String() {
-		return -1, "", fmt.Errorf("txids do not match")
+		return "", fmt.Errorf("txids do not match")
 	}
 
-	signedInputsCount := 0
 	for i, sourceInput := range sourceTx.Inputs {
 		isMultisigTaproot := len(sourceInput.TaprootLeafScript) > 0
 		if isMultisigTaproot {
@@ -1076,21 +1092,21 @@ func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (int, str
 			partialSig := sourceInput.TaprootScriptSpendSig[0]
 			preimage, err := b.getTaprootPreimage(sourceTx, i, sourceInput.TaprootLeafScript[0].Script)
 			if err != nil {
-				return -1, "", err
+				return "", err
 			}
 
 			sig, err := schnorr.ParseSignature(partialSig.Signature)
 			if err != nil {
-				return -1, "", err
+				return "", err
 			}
 
 			pubkey, err := schnorr.ParsePubKey(partialSig.XOnlyPubKey)
 			if err != nil {
-				return -1, "", err
+				return "", err
 			}
 
 			if !sig.Verify(preimage, pubkey) {
-				return -1, "", fmt.Errorf(
+				return "", fmt.Errorf(
 					"invalid signature for input %s:%d",
 					sourceTx.UnsignedTx.TxIn[i].PreviousOutPoint.Hash.String(),
 					sourceTx.UnsignedTx.TxIn[i].PreviousOutPoint.Index,
@@ -1099,15 +1115,14 @@ func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (int, str
 
 			roundTx.Inputs[i].TaprootScriptSpendSig = sourceInput.TaprootScriptSpendSig
 			roundTx.Inputs[i].TaprootLeafScript = sourceInput.TaprootLeafScript
-			signedInputsCount++
 		}
 	}
 
 	b64, err := roundTx.B64Encode()
 	if err != nil {
-		return -1, "", err
+		return "", err
 	}
-	return signedInputsCount, b64, nil
+	return b64, nil
 }
 
 func (b *txBuilder) minRelayFeeTreeTx() (uint64, error) {

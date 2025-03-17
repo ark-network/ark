@@ -778,18 +778,21 @@ func (s *covenantlessService) SignVtxos(ctx context.Context, forfeitTxs []string
 }
 
 func (s *covenantlessService) SignRoundTx(ctx context.Context, signedRoundTx string) error {
+	numSignedInputs, err := s.builder.CountSignedTaprootInputs(signedRoundTx)
+	if err != nil {
+		return fmt.Errorf("failed to count number of signed boarding inputs: %s", err)
+	}
+	if numSignedInputs == 0 {
+		return nil
+	}
+
 	s.currentRoundLock.Lock()
 	defer s.currentRoundLock.Unlock()
 	currentRound := s.currentRound
 
-	numSignedInputs, combined, err := s.builder.VerifyAndCombinePartialTx(
-		currentRound.UnsignedTx, signedRoundTx,
-	)
+	combined, err := s.builder.VerifyAndCombinePartialTx(currentRound.UnsignedTx, signedRoundTx)
 	if err != nil {
 		return fmt.Errorf("failed to verify and combine partial tx: %s", err)
-	}
-	if numSignedInputs == 0 {
-		return nil
 	}
 
 	s.currentRound.UnsignedTx = combined
@@ -1487,7 +1490,8 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, roundEndTime time
 	}
 	includesBoardingInputs := false
 	for _, in := range roundTx.Inputs {
-		if len(in.TaprootLeafScript) > 0 {
+		scriptType := txscript.GetScriptClass(in.WitnessUtxo.PkScript)
+		if scriptType == txscript.WitnessV1TaprootTy {
 			includesBoardingInputs = true
 			break
 		}
@@ -1505,6 +1509,19 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, roundEndTime time
 		case <-time.After(remainingTime):
 			log.Debug("timeout waiting for forfeit txs and boarding inputs signatures")
 		}
+
+		s.currentRoundLock.Lock()
+		round := s.currentRound
+		s.currentRoundLock.Unlock()
+
+		roundTx, err := psbt.NewFromRawBytes(strings.NewReader(round.UnsignedTx), true)
+		if err != nil {
+			log.Debugf("failed to parse round tx: %s", round.UnsignedTx)
+			changes = round.Fail(fmt.Errorf("failed to parse round tx: %s", err))
+			log.WithError(err).Warn("failed to parse round tx")
+			return
+		}
+		txToSign = round.UnsignedTx
 
 		forfeitTxs, err = s.forfeitTxs.pop()
 		if err != nil {

@@ -397,18 +397,21 @@ func (s *covenantService) SignVtxos(ctx context.Context, forfeitTxs []string) er
 }
 
 func (s *covenantService) SignRoundTx(ctx context.Context, signedRoundTx string) error {
+	numSignedInputs, err := s.builder.CountSignedTaprootInputs(signedRoundTx)
+	if err != nil {
+		return fmt.Errorf("failed to count number of signed boarding inputs: %s", err)
+	}
+	if numSignedInputs == 0 {
+		return nil
+	}
+
 	s.currentRoundLock.Lock()
 	defer s.currentRoundLock.Unlock()
 	currentRound := s.currentRound
 
-	numSignedInputs, combined, err := s.builder.VerifyAndCombinePartialTx(
-		currentRound.UnsignedTx, signedRoundTx,
-	)
+	combined, err := s.builder.VerifyAndCombinePartialTx(currentRound.UnsignedTx, signedRoundTx)
 	if err != nil {
 		return fmt.Errorf("failed to verify and combine partial tx: %s", err)
-	}
-	if numSignedInputs == 0 {
-		return nil
 	}
 
 	s.currentRound.UnsignedTx = combined

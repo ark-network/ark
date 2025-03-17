@@ -1000,38 +1000,53 @@ func (b *txBuilder) minRelayFeeConnectorTx() (uint64, error) {
 	return b.wallet.MinRelayFee(context.Background(), uint64(common.ConnectorTxSize))
 }
 
+func (b *txBuilder) CountSignedTaprootInputs(tx string) (int, error) {
+	ptx, err := psetv2.NewPsetFromBase64(tx)
+	if err != nil {
+		return -1, err
+	}
+
+	signedInputsCount := 0
+	for _, input := range ptx.Inputs {
+		if len(input.TapScriptSig) == 0 || len(input.TapLeafScript) == 0 {
+			continue
+		}
+		signedInputsCount++
+	}
+	return signedInputsCount, nil
+}
+
 // This method aims to verify and add partial signature from boarding input
-func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (int, string, error) {
+func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, error) {
 	roundPset, err := psetv2.NewPsetFromBase64(dest)
 	if err != nil {
-		return -1, "", err
+		return "", err
 	}
 
 	sourcePset, err := psetv2.NewPsetFromBase64(src)
 	if err != nil {
-		return -1, "", err
+		return "", err
 	}
 
 	roundUtx, err := roundPset.UnsignedTx()
 	if err != nil {
-		return -1, "", err
+		return "", err
 	}
 
 	sourceUtx, err := sourcePset.UnsignedTx()
 	if err != nil {
-		return -1, "", err
+		return "", err
 	}
 
 	if roundUtx.TxHash().String() != sourceUtx.TxHash().String() {
-		return -1, "", fmt.Errorf("txid mismatch")
+		return "", fmt.Errorf("txid mismatch")
 	}
 
 	roundSigner, err := psetv2.NewSigner(roundPset)
 	if err != nil {
-		return -1, "", err
+		return "", err
 	}
 
-	signedInputsCount := 0
 	for i, input := range sourcePset.Inputs {
 		if len(input.TapScriptSig) == 0 || len(input.TapLeafScript) == 0 {
 			continue
@@ -1041,43 +1056,42 @@ func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (int, str
 
 		leafHash, err := chainhash.NewHash(partialSig.LeafHash)
 		if err != nil {
-			return -1, "", err
+			return "", err
 		}
 
 		preimage, err := b.getTaprootPreimage(sourcePset, i, leafHash)
 		if err != nil {
-			return -1, "", err
+			return "", err
 		}
 
 		sig, err := schnorr.ParseSignature(partialSig.Signature)
 		if err != nil {
-			return -1, "", err
+			return "", err
 		}
 
 		pubkey, err := schnorr.ParsePubKey(partialSig.PubKey)
 		if err != nil {
-			return -1, "", err
+			return "", err
 		}
 
 		if !sig.Verify(preimage, pubkey) {
-			return -1, "", fmt.Errorf("invalid signature")
+			return "", fmt.Errorf("invalid signature")
 		}
 
 		if err := roundSigner.AddInTapLeafScript(i, input.TapLeafScript[0]); err != nil {
-			return -1, "", err
+			return "", err
 		}
 
 		if err := roundSigner.SignTaprootInputTapscriptSig(i, partialSig); err != nil {
-			return -1, "", err
+			return "", err
 		}
-		signedInputsCount++
 	}
 
 	b64, err := roundSigner.Pset.ToBase64()
 	if err != nil {
-		return -1, "", err
+		return "", err
 	}
-	return signedInputsCount, b64, nil
+	return b64, nil
 }
 
 func (b *txBuilder) getTaprootPreimage(pset *psetv2.Pset, inputIndex int, leafHash *chainhash.Hash) ([]byte, error) {
