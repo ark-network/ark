@@ -1049,27 +1049,26 @@ func (b *txBuilder) minRelayFeeConnectorTx() (uint64, error) {
 	return b.wallet.MinRelayFee(context.Background(), uint64(common.ConnectorTxSize))
 }
 
-func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, error) {
+func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (int, string, error) {
 	roundTx, err := psbt.NewFromRawBytes(strings.NewReader(dest), true)
 	if err != nil {
-		return "", err
+		return -1, "", err
 	}
 
 	sourceTx, err := psbt.NewFromRawBytes(strings.NewReader(src), true)
 	if err != nil {
-		return "", err
+		return -1, "", err
 	}
 
 	if sourceTx.UnsignedTx.TxHash().String() != roundTx.UnsignedTx.TxHash().String() {
-		return "", fmt.Errorf("txids do not match")
+		return -1, "", fmt.Errorf("txids do not match")
 	}
 
-	for i, in := range sourceTx.Inputs {
-		isMultisigTaproot := len(in.TaprootLeafScript) > 0
+	signedInputsCount := 0
+	for i, sourceInput := range sourceTx.Inputs {
+		isMultisigTaproot := len(sourceInput.TaprootLeafScript) > 0
 		if isMultisigTaproot {
 			// check if the source tx signs the leaf
-			sourceInput := sourceTx.Inputs[i]
-
 			if len(sourceInput.TaprootScriptSpendSig) == 0 {
 				continue
 			}
@@ -1077,21 +1076,21 @@ func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, 
 			partialSig := sourceInput.TaprootScriptSpendSig[0]
 			preimage, err := b.getTaprootPreimage(sourceTx, i, sourceInput.TaprootLeafScript[0].Script)
 			if err != nil {
-				return "", err
+				return -1, "", err
 			}
 
 			sig, err := schnorr.ParseSignature(partialSig.Signature)
 			if err != nil {
-				return "", err
+				return -1, "", err
 			}
 
 			pubkey, err := schnorr.ParsePubKey(partialSig.XOnlyPubKey)
 			if err != nil {
-				return "", err
+				return -1, "", err
 			}
 
 			if !sig.Verify(preimage, pubkey) {
-				return "", fmt.Errorf(
+				return -1, "", fmt.Errorf(
 					"invalid signature for input %s:%d",
 					sourceTx.UnsignedTx.TxIn[i].PreviousOutPoint.Hash.String(),
 					sourceTx.UnsignedTx.TxIn[i].PreviousOutPoint.Index,
@@ -1100,10 +1099,15 @@ func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, 
 
 			roundTx.Inputs[i].TaprootScriptSpendSig = sourceInput.TaprootScriptSpendSig
 			roundTx.Inputs[i].TaprootLeafScript = sourceInput.TaprootLeafScript
+			signedInputsCount++
 		}
 	}
 
-	return roundTx.B64Encode()
+	b64, err := roundTx.B64Encode()
+	if err != nil {
+		return -1, "", err
+	}
+	return signedInputsCount, b64, nil
 }
 
 func (b *txBuilder) minRelayFeeTreeTx() (uint64, error) {

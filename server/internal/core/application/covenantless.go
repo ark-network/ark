@@ -759,6 +759,10 @@ func (s *covenantlessService) UpdateTxRequestStatus(_ context.Context, id string
 }
 
 func (s *covenantlessService) SignVtxos(ctx context.Context, forfeitTxs []string) error {
+	if len(forfeitTxs) <= 0 {
+		return nil
+	}
+
 	if err := s.forfeitTxs.sign(forfeitTxs); err != nil {
 		return err
 	}
@@ -778,9 +782,14 @@ func (s *covenantlessService) SignRoundTx(ctx context.Context, signedRoundTx str
 	defer s.currentRoundLock.Unlock()
 	currentRound := s.currentRound
 
-	combined, err := s.builder.VerifyAndCombinePartialTx(currentRound.UnsignedTx, signedRoundTx)
+	numSignedInputs, combined, err := s.builder.VerifyAndCombinePartialTx(
+		currentRound.UnsignedTx, signedRoundTx,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to verify and combine partial tx: %s", err)
+	}
+	if numSignedInputs == 0 {
+		return nil
 	}
 
 	s.currentRound.UnsignedTx = combined
@@ -1469,31 +1478,6 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, roundEndTime time
 		}
 	}()
 
-	remainingTime := time.Until(roundEndTime)
-	select {
-	case <-s.forfeitsBoardingSigsChan:
-		log.Debug("all forfeit txs and boarding inputs signatures have been sent")
-	case <-time.After(remainingTime):
-		log.Debug("timeout waiting for forfeit txs and boarding inputs signatures")
-	}
-
-	forfeitTxs, err := s.forfeitTxs.pop()
-	if err != nil {
-		changes = round.Fail(fmt.Errorf("failed to finalize round: %s", err))
-		log.WithError(err).Warn("failed to finalize round")
-		return
-	}
-
-	if err := s.verifyForfeitTxsSigs(forfeitTxs); err != nil {
-		changes = round.Fail(err)
-		log.WithError(err).Warn("failed to validate forfeit txs")
-		return
-	}
-
-	log.Debugf("signing round transaction %s\n", round.Id)
-
-	boardingInputsIndexes := make([]int, 0)
-	boardingInputs := make([]domain.VtxoKey, 0)
 	roundTx, err := psbt.NewFromRawBytes(strings.NewReader(round.UnsignedTx), true)
 	if err != nil {
 		log.Debugf("failed to parse round tx: %s", round.UnsignedTx)
@@ -1501,36 +1485,71 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, roundEndTime time
 		log.WithError(err).Warn("failed to parse round tx")
 		return
 	}
-
-	for i, in := range roundTx.Inputs {
+	includesBoardingInputs := false
+	for _, in := range roundTx.Inputs {
 		if len(in.TaprootLeafScript) > 0 {
-			if len(in.TaprootScriptSpendSig) == 0 {
-				err = fmt.Errorf("missing tapscript spend sig for input %d", i)
-				changes = round.Fail(err)
-				log.WithError(err).Warn("missing boarding sig")
-				return
-			}
-
-			boardingInputsIndexes = append(boardingInputsIndexes, i)
-			boardingInputs = append(boardingInputs, domain.VtxoKey{
-				Txid: roundTx.UnsignedTx.TxIn[i].PreviousOutPoint.Hash.String(),
-				VOut: roundTx.UnsignedTx.TxIn[i].PreviousOutPoint.Index,
-			})
+			includesBoardingInputs = true
+			break
 		}
 	}
 
-	signedRoundTx := round.UnsignedTx
+	txToSign := round.UnsignedTx
+	boardingInputs := make([]domain.VtxoKey, 0)
+	forfeitTxs := make([]string, 0)
 
-	if len(boardingInputsIndexes) > 0 {
-		signedRoundTx, err = s.wallet.SignTransactionTapscript(ctx, signedRoundTx, boardingInputsIndexes)
+	if len(s.forfeitTxs.forfeitTxs) > 0 || includesBoardingInputs {
+		remainingTime := time.Until(roundEndTime)
+		select {
+		case <-s.forfeitsBoardingSigsChan:
+			log.Debug("all forfeit txs and boarding inputs signatures have been sent")
+		case <-time.After(remainingTime):
+			log.Debug("timeout waiting for forfeit txs and boarding inputs signatures")
+		}
+
+		forfeitTxs, err = s.forfeitTxs.pop()
 		if err != nil {
-			changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
-			log.WithError(err).Warn("failed to sign round tx")
+			changes = round.Fail(fmt.Errorf("failed to finalize round: %s", err))
+			log.WithError(err).Warn("failed to finalize round")
 			return
 		}
+
+		if err := s.verifyForfeitTxsSigs(forfeitTxs); err != nil {
+			changes = round.Fail(err)
+			log.WithError(err).Warn("failed to validate forfeit txs")
+			return
+		}
+
+		boardingInputsIndexes := make([]int, 0)
+		for i, in := range roundTx.Inputs {
+			if len(in.TaprootLeafScript) > 0 {
+				if len(in.TaprootScriptSpendSig) == 0 {
+					err = fmt.Errorf("missing tapscript spend sig for input %d", i)
+					changes = round.Fail(err)
+					log.WithError(err).Warn("missing boarding sig")
+					return
+				}
+
+				boardingInputsIndexes = append(boardingInputsIndexes, i)
+				boardingInputs = append(boardingInputs, domain.VtxoKey{
+					Txid: roundTx.UnsignedTx.TxIn[i].PreviousOutPoint.Hash.String(),
+					VOut: roundTx.UnsignedTx.TxIn[i].PreviousOutPoint.Index,
+				})
+			}
+		}
+
+		if len(boardingInputsIndexes) > 0 {
+			txToSign, err = s.wallet.SignTransactionTapscript(ctx, txToSign, boardingInputsIndexes)
+			if err != nil {
+				changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
+				log.WithError(err).Warn("failed to sign round tx")
+				return
+			}
+		}
 	}
 
-	signedRoundTx, err = s.wallet.SignTransaction(ctx, signedRoundTx, true)
+	log.Debugf("signing transaction %s\n", round.Id)
+
+	signedRoundTx, err := s.wallet.SignTransaction(ctx, txToSign, true)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
 		log.WithError(err).Warn("failed to sign round tx")
