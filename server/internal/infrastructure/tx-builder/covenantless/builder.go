@@ -1118,11 +1118,7 @@ func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, 
 		}
 	}
 
-	b64, err := roundTx.B64Encode()
-	if err != nil {
-		return "", err
-	}
-	return b64, nil
+	return roundTx.B64Encode()
 }
 
 func (b *txBuilder) minRelayFeeTreeTx() (uint64, error) {

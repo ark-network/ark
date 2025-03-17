@@ -1087,11 +1087,7 @@ func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, 
 		}
 	}
 
-	b64, err := roundSigner.Pset.ToBase64()
-	if err != nil {
-		return "", err
-	}
-	return b64, nil
+	return roundSigner.Pset.ToBase64()
 }
 
 func (b *txBuilder) getTaprootPreimage(pset *psetv2.Pset, inputIndex int, leafHash *chainhash.Hash) ([]byte, error) {
