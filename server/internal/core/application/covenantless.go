@@ -71,6 +71,12 @@ type covenantlessService struct {
 	numOfBoardingInputsMtx sync.RWMutex
 
 	forfeitsBoardingSigsChan chan struct{}
+
+	roundMaxParticipantsCount int64
+	utxoMaxAmount             int64
+	utxoMinAmount             int64
+	vtxoMaxAmount             int64
+	vtxoMinAmount             int64
 }
 
 func NewCovenantlessService(
@@ -85,6 +91,11 @@ func NewCovenantlessService(
 	marketHourStartTime, marketHourEndTime time.Time,
 	marketHourPeriod, marketHourRoundInterval time.Duration,
 	allowZeroFees bool,
+	roundMaxParticipantsCount int64,
+	utxoMaxAmount int64,
+	utxoMinAmount int64,
+	vtxoMaxAmount int64,
+	vtxoMinAmount int64,
 ) (Service, error) {
 	pubkey, err := walletSvc.GetPubkey(context.Background())
 	if err != nil {
@@ -109,29 +120,45 @@ func NewCovenantlessService(
 		return nil, fmt.Errorf("failed to generate ephemeral key: %s", err)
 	}
 
+	dustAmoutn, err := walletSvc.GetDustAmount(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get dust amount: %s", err)
+	}
+	if vtxoMinAmount < int64(dustAmoutn) {
+		vtxoMinAmount = int64(dustAmoutn)
+	}
+	if utxoMinAmount < int64(dustAmoutn) {
+		utxoMinAmount = int64(dustAmoutn)
+	}
+
 	svc := &covenantlessService{
-		network:                  network,
-		pubkey:                   pubkey,
-		vtxoTreeExpiry:           vtxoTreeExpiry,
-		roundInterval:            roundInterval,
-		unilateralExitDelay:      unilateralExitDelay,
-		wallet:                   walletSvc,
-		repoManager:              repoManager,
-		builder:                  builder,
-		scanner:                  scanner,
-		sweeper:                  newSweeper(walletSvc, repoManager, builder, scheduler, noteUriPrefix),
-		txRequests:               newTxRequestsQueue(),
-		forfeitTxs:               newForfeitTxsMap(builder),
-		eventsCh:                 make(chan domain.RoundEvent),
-		transactionEventsCh:      make(chan TransactionEvent),
-		currentRoundLock:         sync.Mutex{},
-		treeSigningSessions:      make(map[string]*musigSigningSession),
-		boardingExitDelay:        boardingExitDelay,
-		nostrDefaultRelays:       nostrDefaultRelays,
-		serverSigningKey:         serverSigningKey,
-		serverSigningPubKey:      serverSigningKey.PubKey(),
-		allowZeroFees:            allowZeroFees,
-		forfeitsBoardingSigsChan: make(chan struct{}, 1),
+		network:                   network,
+		pubkey:                    pubkey,
+		vtxoTreeExpiry:            vtxoTreeExpiry,
+		roundInterval:             roundInterval,
+		unilateralExitDelay:       unilateralExitDelay,
+		wallet:                    walletSvc,
+		repoManager:               repoManager,
+		builder:                   builder,
+		scanner:                   scanner,
+		sweeper:                   newSweeper(walletSvc, repoManager, builder, scheduler, noteUriPrefix),
+		txRequests:                newTxRequestsQueue(),
+		forfeitTxs:                newForfeitTxsMap(builder),
+		eventsCh:                  make(chan domain.RoundEvent),
+		transactionEventsCh:       make(chan TransactionEvent),
+		currentRoundLock:          sync.Mutex{},
+		treeSigningSessions:       make(map[string]*musigSigningSession),
+		boardingExitDelay:         boardingExitDelay,
+		nostrDefaultRelays:        nostrDefaultRelays,
+		serverSigningKey:          serverSigningKey,
+		serverSigningPubKey:       serverSigningKey.PubKey(),
+		allowZeroFees:             allowZeroFees,
+		forfeitsBoardingSigsChan:  make(chan struct{}, 1),
+		roundMaxParticipantsCount: roundMaxParticipantsCount,
+		utxoMaxAmount:             utxoMaxAmount,
+		utxoMinAmount:             utxoMinAmount,
+		vtxoMaxAmount:             vtxoMaxAmount,
+		vtxoMinAmount:             vtxoMinAmount,
 	}
 
 	repoManager.RegisterEventsHandler(
@@ -387,6 +414,15 @@ func (s *covenantlessService) SubmitRedeemTx(
 		if out.Value < int64(dust) {
 			return "", "", fmt.Errorf("output value is less than dust threshold")
 		}
+
+		if s.vtxoMaxAmount > 0 {
+			if out.Value > s.vtxoMaxAmount {
+				return "", "", fmt.Errorf("output amount is higher than max vtxo amount:%d", s.vtxoMaxAmount)
+			}
+		}
+		if out.Value < s.vtxoMinAmount {
+			return "", "", fmt.Errorf("output amount is lower than min utxo amount:%d", s.vtxoMinAmount)
+		}
 	}
 
 	fees := sumOfInputs - sumOfOutputs
@@ -610,6 +646,15 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 					return "", fmt.Errorf("tx %s expired", input.Txid)
 				}
 
+				if s.utxoMaxAmount > 0 {
+					if tx.TxOut[input.VOut].Value > s.utxoMaxAmount {
+						return "", fmt.Errorf("boarding input amount is higher than max utxo amount:%d", s.utxoMaxAmount)
+					}
+				}
+				if tx.TxOut[input.VOut].Value < s.utxoMinAmount {
+					return "", fmt.Errorf("boarding input amount is lower than min utxo amount:%d", s.utxoMinAmount)
+				}
+
 				boardingTxs[input.Txid] = tx
 			}
 
@@ -722,6 +767,15 @@ func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, rece
 	for _, rcv := range receivers {
 		if rcv.Amount <= dustAmount {
 			return fmt.Errorf("receiver amount must be greater than dust amount %d", dustAmount)
+		}
+
+		if s.vtxoMaxAmount > 0 {
+			if rcv.Amount > uint64(s.vtxoMaxAmount) {
+				return fmt.Errorf("receiver amount is higher than max vtxo amount:%d", s.vtxoMaxAmount)
+			}
+		}
+		if rcv.Amount < uint64(s.vtxoMinAmount) {
+			return fmt.Errorf("receiver amount is lower than min vtxo amount:%d", s.vtxoMinAmount)
 		}
 
 		if !rcv.IsOnchain() {
@@ -1239,8 +1293,8 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 		log.WithError(err).Debugf("round %s aborted", round.Id)
 		return
 	}
-	if num > txRequestsThreshold {
-		num = txRequestsThreshold
+	if num > s.roundMaxParticipantsCount {
+		num = s.roundMaxParticipantsCount
 	}
 	requests, boardingInputs, redeeemedNotes, musig2data := s.txRequests.pop(num)
 	notes = redeeemedNotes
