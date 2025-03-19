@@ -115,6 +115,8 @@ func (v vtxo) toVtxo() client.Vtxo {
 		SpentBy:   v.GetSpentBy(),
 		PubKey:    v.GetPubkey(),
 		CreatedAt: time.Unix(v.GetCreatedAt(), 0),
+		Swept:     v.GetSwept(),
+		Spent:     v.GetSpent(),
 	}
 }
 
@@ -124,30 +126,6 @@ func (v vtxos) toVtxos() []client.Vtxo {
 	list := make([]client.Vtxo, 0, len(v))
 	for _, vv := range v {
 		list = append(list, vtxo{vv}.toVtxo())
-	}
-	return list
-}
-
-func toProtoInput(i client.Input) *arkv1.Input {
-	return &arkv1.Input{
-		Outpoint: &arkv1.Outpoint{
-			Txid: i.Txid,
-			Vout: i.VOut,
-		},
-		TaprootTree: &arkv1.Input_Tapscripts{
-			Tapscripts: &arkv1.Tapscripts{
-				Scripts: i.Tapscripts,
-			},
-		},
-	}
-}
-
-type ins []client.Input
-
-func (i ins) toProto() []*arkv1.Input {
-	list := make([]*arkv1.Input, 0, len(i))
-	for _, ii := range i {
-		list = append(list, toProtoInput(ii))
 	}
 	return list
 }
