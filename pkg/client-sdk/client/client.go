@@ -60,15 +60,15 @@ type TransportClient interface {
 }
 
 type Info struct {
-	Version                    string
-	PubKey                     string
-	VtxoTreeExpiry             int64
-	UnilateralExitDelay        int64
-	RoundInterval              int64
-	Network                    string
-	Dust                       uint64
-	BoardingDescriptorTemplate string
-	ForfeitAddress             string
+	Version             string
+	PubKey              string
+	VtxoTreeExpiry      int64
+	UnilateralExitDelay int64
+	BoardingExitDelay   int64
+	RoundInterval       int64
+	Network             string
+	Dust                uint64
+	ForfeitAddress      string
 }
 
 type RoundEventChannel struct {
