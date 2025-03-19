@@ -19,13 +19,13 @@ import (
 // swagger:model v1RegisterInputsForNextRoundRequest
 type V1RegisterInputsForNextRoundRequest struct {
 
-	// bip322 signature
+	// BIP322 signature embeds the outpoints and the proof of funds
 	Bip322Signature *V1Bip322Signature `json:"bip322Signature,omitempty"`
 
 	// notes
 	Notes []string `json:"notes"`
 
-	// tapscripts
+	// Tapscripts aims to reveal the taproot tree of the unspent & unexpired VTXOs.
 	Tapscripts map[string]V1Tapscripts `json:"tapscripts,omitempty"`
 }
 
