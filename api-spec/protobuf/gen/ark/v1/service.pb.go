@@ -327,9 +327,11 @@ type RegisterInputsForNextRoundRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Tapscripts      map[string]*Tapscripts `protobuf:"bytes,1,rep,name=tapscripts,proto3" json:"tapscripts,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	Bip322Signature *Bip322Signature       `protobuf:"bytes,2,opt,name=bip322_signature,json=bip322Signature,proto3" json:"bip322_signature,omitempty"`
-	Notes           []string               `protobuf:"bytes,3,rep,name=notes,proto3" json:"notes,omitempty"`
+	// Tapscripts aims to reveal the taproot tree of the unspent & unexpired VTXOs.
+	Tapscripts map[string]*Tapscripts `protobuf:"bytes,1,rep,name=tapscripts,proto3" json:"tapscripts,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	// BIP322 signature embeds the outpoints and the proof of funds
+	Bip322Signature *Bip322Signature `protobuf:"bytes,2,opt,name=bip322_signature,json=bip322Signature,proto3" json:"bip322_signature,omitempty"`
+	Notes           []string         `protobuf:"bytes,3,rep,name=notes,proto3" json:"notes,omitempty"`
 }
 
 func (x *RegisterInputsForNextRoundRequest) Reset() {

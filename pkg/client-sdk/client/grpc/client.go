@@ -381,6 +381,7 @@ func (c *grpcClient) GetTransactionsStream(
 						SpentVtxos:           vtxos(tx.Round.SpentVtxos).toVtxos(),
 						SpendableVtxos:       vtxos(tx.Round.SpendableVtxos).toVtxos(),
 						ClaimedBoardingUtxos: outpointsFromProto(tx.Round.ClaimedBoardingUtxos),
+						Hex:                  tx.Round.GetHex(),
 					},
 				}
 			case *arkv1.GetTransactionsStreamResponse_Redeem:
@@ -389,6 +390,7 @@ func (c *grpcClient) GetTransactionsStream(
 						Txid:           tx.Redeem.Txid,
 						SpentVtxos:     vtxos(tx.Redeem.SpentVtxos).toVtxos(),
 						SpendableVtxos: vtxos(tx.Redeem.SpendableVtxos).toVtxos(),
+						Hex:            tx.Redeem.GetHex(),
 					},
 				}
 			}

@@ -61,6 +61,12 @@ type covenantService struct {
 	numOfBoardingInputsMtx sync.RWMutex
 
 	forfeitsBoardingSigsChan chan struct{}
+
+	roundMaxParticipantsCount int64
+	utxoMaxAmount             int64
+	utxoMinAmount             int64
+	vtxoMaxAmount             int64
+	vtxoMinAmount             int64
 }
 
 func NewCovenantService(
@@ -72,6 +78,11 @@ func NewCovenantService(
 	scheduler ports.SchedulerService,
 	notificationPrefix string,
 	marketHourStartTime, marketHourEndTime time.Time, marketHourPeriod, marketHourRoundInterval time.Duration,
+	roundMaxParticipantsCount int64,
+	utxoMaxAmount int64,
+	utxoMinAmount int64,
+	vtxoMaxAmount int64,
+	vtxoMinAmount int64,
 ) (Service, error) {
 	pubkey, err := walletSvc.GetPubkey(context.Background())
 	if err != nil {
@@ -90,24 +101,40 @@ func NewCovenantService(
 		}
 	}
 
+	dustAmount, err := walletSvc.GetDustAmount(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get dust amount: %s", err)
+	}
+	if vtxoMinAmount < int64(dustAmount) {
+		vtxoMinAmount = int64(dustAmount)
+	}
+	if utxoMinAmount < int64(dustAmount) {
+		utxoMinAmount = int64(dustAmount)
+	}
+
 	svc := &covenantService{
-		network:                  network,
-		pubkey:                   pubkey,
-		vtxoTreeExpiry:           vtxoTreeExpiry,
-		roundInterval:            roundInterval,
-		unilateralExitDelay:      unilateralExitDelay,
-		boardingExitDelay:        boardingExitDelay,
-		wallet:                   walletSvc,
-		repoManager:              repoManager,
-		builder:                  builder,
-		scanner:                  scanner,
-		sweeper:                  newSweeper(walletSvc, repoManager, builder, scheduler, notificationPrefix),
-		txRequests:               newTxRequestsQueue(),
-		forfeitTxs:               newForfeitTxsMap(builder),
-		eventsCh:                 make(chan domain.RoundEvent),
-		transactionEventsCh:      make(chan TransactionEvent),
-		currentRoundLock:         sync.Mutex{},
-		forfeitsBoardingSigsChan: make(chan struct{}, 1),
+		network:                   network,
+		pubkey:                    pubkey,
+		vtxoTreeExpiry:            vtxoTreeExpiry,
+		roundInterval:             roundInterval,
+		unilateralExitDelay:       unilateralExitDelay,
+		boardingExitDelay:         boardingExitDelay,
+		wallet:                    walletSvc,
+		repoManager:               repoManager,
+		builder:                   builder,
+		scanner:                   scanner,
+		sweeper:                   newSweeper(walletSvc, repoManager, builder, scheduler, notificationPrefix),
+		txRequests:                newTxRequestsQueue(),
+		forfeitTxs:                newForfeitTxsMap(builder),
+		eventsCh:                  make(chan domain.RoundEvent),
+		transactionEventsCh:       make(chan TransactionEvent),
+		currentRoundLock:          sync.Mutex{},
+		forfeitsBoardingSigsChan:  make(chan struct{}, 1),
+		roundMaxParticipantsCount: roundMaxParticipantsCount,
+		utxoMaxAmount:             utxoMaxAmount,
+		utxoMinAmount:             utxoMinAmount,
+		vtxoMaxAmount:             vtxoMaxAmount,
+		vtxoMinAmount:             vtxoMinAmount,
 	}
 
 	repoManager.RegisterEventsHandler(
@@ -276,6 +303,19 @@ func (s *covenantService) SpendVtxos(ctx context.Context, bip322signature bip322
 					return "", fmt.Errorf("tx %s expired", vtxoKey.Txid)
 				}
 
+				inputValue, err := elementsutil.ValueFromBytes(tx.Outputs[vtxoKey.VOut].Value)
+				if err != nil {
+					return "", err
+				}
+				if s.utxoMaxAmount > 0 {
+					if inputValue > uint64(s.utxoMaxAmount) {
+						return "", fmt.Errorf("boarding input amount is higher than max utxo amount:%d", s.utxoMaxAmount)
+					}
+				}
+				if inputValue < uint64(s.utxoMinAmount) {
+					return "", fmt.Errorf("boarding input amount is lower than min utxo amount:%d", s.utxoMinAmount)
+				}
+
 				boardingTxs[vtxoKey.Txid] = tx
 			}
 
@@ -434,6 +474,15 @@ func (s *covenantService) ClaimVtxos(ctx context.Context, creds string, receiver
 		if r.Amount <= dustAmount {
 			return fmt.Errorf("receiver amount must be greater than dust amount: %d", dustAmount)
 		}
+
+		if s.vtxoMaxAmount > 0 {
+			if r.Amount > uint64(s.vtxoMaxAmount) {
+				return fmt.Errorf("receiver amount is higher than max vtxo amount:%d", s.vtxoMaxAmount)
+			}
+		}
+		if r.Amount < uint64(s.vtxoMinAmount) {
+			return fmt.Errorf("receiver amount is lower than min vtxo amount:%d", s.vtxoMinAmount)
+		}
 	}
 
 	if err := request.AddReceivers(receivers); err != nil {
@@ -465,6 +514,14 @@ func (s *covenantService) SignVtxos(ctx context.Context, forfeitTxs []string) er
 }
 
 func (s *covenantService) SignRoundTx(ctx context.Context, signedRoundTx string) error {
+	numSignedInputs, err := s.builder.CountSignedTaprootInputs(signedRoundTx)
+	if err != nil {
+		return fmt.Errorf("failed to count number of signed boarding inputs: %s", err)
+	}
+	if numSignedInputs == 0 {
+		return nil
+	}
+
 	s.currentRoundLock.Lock()
 	defer s.currentRoundLock.Unlock()
 	currentRound := s.currentRound
@@ -761,8 +818,8 @@ func (s *covenantService) startFinalization(roundEndTime time.Time) {
 		log.WithError(err).Debugf("round %s aborted", round.Id)
 		return
 	}
-	if num > txRequestsThreshold {
-		num = txRequestsThreshold
+	if num > s.roundMaxParticipantsCount {
+		num = s.roundMaxParticipantsCount
 	}
 	requests, boardingInputs, _, _, _ := s.txRequests.pop(num)
 	if _, err := round.RegisterTxRequests(requests); err != nil {

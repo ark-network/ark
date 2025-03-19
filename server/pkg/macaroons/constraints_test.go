@@ -80,7 +80,7 @@ func TestTimeoutConstraint(t *testing.T) {
 	}
 }
 
-// TestTimeoutConstraint tests that a caveat for the lifetime of
+// TestIpLockConstraint tests that a caveat for the lifetime of
 // a macaroon is created.
 func TestIpLockConstraint(t *testing.T) {
 	t.Parallel()

@@ -193,6 +193,7 @@ func (e roundTxEvent) toProto() *arkv1.RoundTransaction {
 		SpentVtxos:           vtxoList(e.SpentVtxos).toProto(),
 		SpendableVtxos:       vtxoList(e.SpendableVtxos).toProto(),
 		ClaimedBoardingUtxos: vtxoKeyList(e.ClaimedBoardingInputs).toProto(),
+		Hex:                  e.TxHex,
 	}
 }
 
@@ -203,6 +204,7 @@ func (e redeemTxEvent) toProto() *arkv1.RedeemTransaction {
 		Txid:           e.RedeemTxid,
 		SpentVtxos:     vtxoList(e.SpentVtxos).toProto(),
 		SpendableVtxos: vtxoList(e.SpendableVtxos).toProto(),
+		Hex:            e.TxHex,
 	}
 }
 

@@ -591,6 +591,9 @@
             "type": "object",
             "$ref": "#/definitions/v1Vtxo"
           }
+        },
+        "hex": {
+          "type": "string"
         }
       }
     },
@@ -601,10 +604,12 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/definitions/v1Tapscripts"
-          }
+          },
+          "description": "Tapscripts aims to reveal the taproot tree of the unspent \u0026 unexpired VTXOs."
         },
         "bip322Signature": {
-          "$ref": "#/definitions/v1Bip322Signature"
+          "$ref": "#/definitions/v1Bip322Signature",
+          "title": "BIP322 signature embeds the outpoints and the proof of funds"
         },
         "notes": {
           "type": "array",
@@ -751,6 +756,9 @@
             "type": "object",
             "$ref": "#/definitions/v1Outpoint"
           }
+        },
+        "hex": {
+          "type": "string"
         }
       }
     },

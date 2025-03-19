@@ -45,10 +45,10 @@ var (
 		common.Liquid.Name:         "https://blockstream.info/liquid/api",
 		common.LiquidTestNet.Name:  "https://blockstream.info/liquidtestnet/api",
 		common.LiquidRegTest.Name:  "http://localhost:3001",
-		common.Bitcoin.Name:        "https://blockstream.info/api",
-		common.BitcoinTestNet.Name: "https://blockstream.info/testnet/api",
+		common.Bitcoin.Name:        "https://mempool.space/api",
+		common.BitcoinTestNet.Name: "https://mempool.space/testnet/api",
 		//common.BitcoinTestNet4.Name: "https://mempool.space/testnet4/api", //TODO uncomment once supported
-		common.BitcoinSigNet.Name:    "https://blockstream.info/signet/api",
+		common.BitcoinSigNet.Name:    "https://mempool.space/signet/api",
 		common.BitcoinMutinyNet.Name: "https://mutinynet.com/api",
 		common.BitcoinRegTest.Name:   "http://localhost:3000",
 	}

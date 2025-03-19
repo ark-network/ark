@@ -40,6 +40,7 @@ func request_ArkService_GetInfo_0(ctx context.Context, marshaler runtime.Marshal
 		protoReq GetInfoRequest
 		metadata runtime.ServerMetadata
 	)
+	io.Copy(io.Discard, req.Body)
 	msg, err := client.GetInfo(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
@@ -202,6 +203,7 @@ func request_ArkService_GetEventStream_0(ctx context.Context, marshaler runtime.
 		protoReq GetEventStreamRequest
 		metadata runtime.ServerMetadata
 	)
+	io.Copy(io.Discard, req.Body)
 	stream, err := client.GetEventStream(ctx, &protoReq)
 	if err != nil {
 		return nil, metadata, err
@@ -220,6 +222,7 @@ func request_ArkService_Ping_0(ctx context.Context, marshaler runtime.Marshaler,
 		metadata runtime.ServerMetadata
 		err      error
 	)
+	io.Copy(io.Discard, req.Body)
 	val, ok := pathParams["request_id"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "request_id")
@@ -279,6 +282,7 @@ func request_ArkService_GetTransactionsStream_0(ctx context.Context, marshaler r
 		protoReq GetTransactionsStreamRequest
 		metadata runtime.ServerMetadata
 	)
+	io.Copy(io.Discard, req.Body)
 	stream, err := client.GetTransactionsStream(ctx, &protoReq)
 	if err != nil {
 		return nil, metadata, err

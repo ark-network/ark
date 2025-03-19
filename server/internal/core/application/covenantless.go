@@ -74,6 +74,12 @@ type covenantlessService struct {
 	numOfBoardingInputsMtx sync.RWMutex
 
 	forfeitsBoardingSigsChan chan struct{}
+
+	roundMaxParticipantsCount int64
+	utxoMaxAmount             int64
+	utxoMinAmount             int64
+	vtxoMaxAmount             int64
+	vtxoMinAmount             int64
 }
 
 func NewCovenantlessService(
@@ -87,6 +93,11 @@ func NewCovenantlessService(
 	marketHourStartTime, marketHourEndTime time.Time,
 	marketHourPeriod, marketHourRoundInterval time.Duration,
 	allowZeroFees bool,
+	roundMaxParticipantsCount int64,
+	utxoMaxAmount int64,
+	utxoMinAmount int64,
+	vtxoMaxAmount int64,
+	vtxoMinAmount int64,
 ) (Service, error) {
 	pubkey, err := walletSvc.GetPubkey(context.Background())
 	if err != nil {
@@ -111,28 +122,44 @@ func NewCovenantlessService(
 		return nil, fmt.Errorf("failed to generate ephemeral key: %s", err)
 	}
 
+	dustAmount, err := walletSvc.GetDustAmount(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get dust amount: %s", err)
+	}
+	if vtxoMinAmount < int64(dustAmount) {
+		vtxoMinAmount = int64(dustAmount)
+	}
+	if utxoMinAmount < int64(dustAmount) {
+		utxoMinAmount = int64(dustAmount)
+	}
+
 	svc := &covenantlessService{
-		network:                  network,
-		pubkey:                   pubkey,
-		vtxoTreeExpiry:           vtxoTreeExpiry,
-		roundInterval:            roundInterval,
-		unilateralExitDelay:      unilateralExitDelay,
-		wallet:                   walletSvc,
-		repoManager:              repoManager,
-		builder:                  builder,
-		scanner:                  scanner,
-		sweeper:                  newSweeper(walletSvc, repoManager, builder, scheduler, noteUriPrefix),
-		txRequests:               newTxRequestsQueue(),
-		forfeitTxs:               newForfeitTxsMap(builder),
-		eventsCh:                 make(chan domain.RoundEvent),
-		transactionEventsCh:      make(chan TransactionEvent),
-		currentRoundLock:         sync.Mutex{},
-		treeSigningSessions:      make(map[string]*musigSigningSession),
-		boardingExitDelay:        boardingExitDelay,
-		serverSigningKey:         serverSigningKey,
-		serverSigningPubKey:      serverSigningKey.PubKey(),
-		allowZeroFees:            allowZeroFees,
-		forfeitsBoardingSigsChan: make(chan struct{}, 1),
+		network:                   network,
+		pubkey:                    pubkey,
+		vtxoTreeExpiry:            vtxoTreeExpiry,
+		roundInterval:             roundInterval,
+		unilateralExitDelay:       unilateralExitDelay,
+		wallet:                    walletSvc,
+		repoManager:               repoManager,
+		builder:                   builder,
+		scanner:                   scanner,
+		sweeper:                   newSweeper(walletSvc, repoManager, builder, scheduler, noteUriPrefix),
+		txRequests:                newTxRequestsQueue(),
+		forfeitTxs:                newForfeitTxsMap(builder),
+		eventsCh:                  make(chan domain.RoundEvent),
+		transactionEventsCh:       make(chan TransactionEvent),
+		currentRoundLock:          sync.Mutex{},
+		treeSigningSessions:       make(map[string]*musigSigningSession),
+		boardingExitDelay:         boardingExitDelay,
+		serverSigningKey:          serverSigningKey,
+		serverSigningPubKey:       serverSigningKey.PubKey(),
+		allowZeroFees:             allowZeroFees,
+		forfeitsBoardingSigsChan:  make(chan struct{}, 1),
+		roundMaxParticipantsCount: roundMaxParticipantsCount,
+		utxoMaxAmount:             utxoMaxAmount,
+		utxoMinAmount:             utxoMinAmount,
+		vtxoMaxAmount:             vtxoMaxAmount,
+		vtxoMinAmount:             vtxoMinAmount,
 	}
 
 	repoManager.RegisterEventsHandler(
@@ -388,6 +415,15 @@ func (s *covenantlessService) SubmitRedeemTx(
 		if out.Value < int64(dust) {
 			return "", "", fmt.Errorf("output value is less than dust threshold")
 		}
+
+		if s.vtxoMaxAmount > 0 {
+			if out.Value > s.vtxoMaxAmount {
+				return "", "", fmt.Errorf("output amount is higher than max vtxo amount:%d", s.vtxoMaxAmount)
+			}
+		}
+		if out.Value < s.vtxoMinAmount {
+			return "", "", fmt.Errorf("output amount is lower than min utxo amount:%d", s.vtxoMinAmount)
+		}
 	}
 
 	fees := sumOfInputs - sumOfOutputs
@@ -490,6 +526,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 			RedeemTxid:     redeemTxid,
 			SpentVtxos:     spentVtxos,
 			SpendableVtxos: newVtxos,
+			TxHex:          signedRedeemTx,
 		}
 	}()
 
@@ -637,6 +674,15 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, bip322signature bi
 				// if the exit path is available, forbid registering the boarding utxo
 				if blocktime+exitDelay.Seconds() < now.Unix() {
 					return "", fmt.Errorf("tx %s expired", vtxoKey.Txid)
+				}
+
+				if s.utxoMaxAmount > 0 {
+					if tx.TxOut[vtxoKey.VOut].Value > s.utxoMaxAmount {
+						return "", fmt.Errorf("boarding input amount is higher than max utxo amount:%d", s.utxoMaxAmount)
+					}
+				}
+				if tx.TxOut[vtxoKey.VOut].Value < s.utxoMinAmount {
+					return "", fmt.Errorf("boarding input amount is lower than min utxo amount:%d", s.utxoMinAmount)
 				}
 
 				boardingTxs[vtxoKey.Txid] = tx
@@ -792,6 +838,15 @@ func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, rece
 			return fmt.Errorf("receiver amount must be greater than dust amount %d", dustAmount)
 		}
 
+		if s.vtxoMaxAmount > 0 {
+			if rcv.Amount > uint64(s.vtxoMaxAmount) {
+				return fmt.Errorf("receiver amount is higher than max vtxo amount:%d", s.vtxoMaxAmount)
+			}
+		}
+		if rcv.Amount < uint64(s.vtxoMinAmount) {
+			return fmt.Errorf("receiver amount is lower than min vtxo amount:%d", s.vtxoMinAmount)
+		}
+
 		if !rcv.IsOnchain() {
 			hasOffChainReceiver = true
 		}
@@ -827,6 +882,10 @@ func (s *covenantlessService) UpdateTxRequestStatus(_ context.Context, id string
 }
 
 func (s *covenantlessService) SignVtxos(ctx context.Context, forfeitTxs []string) error {
+	if len(forfeitTxs) <= 0 {
+		return nil
+	}
+
 	if err := s.forfeitTxs.sign(forfeitTxs); err != nil {
 		return err
 	}
@@ -842,6 +901,14 @@ func (s *covenantlessService) SignVtxos(ctx context.Context, forfeitTxs []string
 }
 
 func (s *covenantlessService) SignRoundTx(ctx context.Context, signedRoundTx string) error {
+	numSignedInputs, err := s.builder.CountSignedTaprootInputs(signedRoundTx)
+	if err != nil {
+		return fmt.Errorf("failed to count number of signed boarding inputs: %s", err)
+	}
+	if numSignedInputs == 0 {
+		return nil
+	}
+
 	s.currentRoundLock.Lock()
 	defer s.currentRoundLock.Unlock()
 	currentRound := s.currentRound
@@ -1259,8 +1326,8 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 		log.WithError(err).Debugf("round %s aborted", round.Id)
 		return
 	}
-	if num > txRequestsThreshold {
-		num = txRequestsThreshold
+	if num > s.roundMaxParticipantsCount {
+		num = s.roundMaxParticipantsCount
 	}
 	requests, boardingInputs, redeeemedNotes, musig2data, vtxosToRecover := s.txRequests.pop(num)
 	// save notes and recovered vtxos for finalize function
@@ -1503,31 +1570,6 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, recoveredVtxos []
 		}
 	}()
 
-	remainingTime := time.Until(roundEndTime)
-	select {
-	case <-s.forfeitsBoardingSigsChan:
-		log.Debug("all forfeit txs and boarding inputs signatures have been sent")
-	case <-time.After(remainingTime):
-		log.Debug("timeout waiting for forfeit txs and boarding inputs signatures")
-	}
-
-	forfeitTxs, err := s.forfeitTxs.pop()
-	if err != nil {
-		changes = round.Fail(fmt.Errorf("failed to finalize round: %s", err))
-		log.WithError(err).Warn("failed to finalize round")
-		return
-	}
-
-	if err := s.verifyForfeitTxsSigs(forfeitTxs); err != nil {
-		changes = round.Fail(err)
-		log.WithError(err).Warn("failed to validate forfeit txs")
-		return
-	}
-
-	log.Debugf("signing round transaction %s\n", round.Id)
-
-	boardingInputsIndexes := make([]int, 0)
-	boardingInputs := make([]domain.VtxoKey, 0)
 	roundTx, err := psbt.NewFromRawBytes(strings.NewReader(round.UnsignedTx), true)
 	if err != nil {
 		log.Debugf("failed to parse round tx: %s", round.UnsignedTx)
@@ -1535,36 +1577,88 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, recoveredVtxos []
 		log.WithError(err).Warn("failed to parse round tx")
 		return
 	}
-
-	for i, in := range roundTx.Inputs {
-		if len(in.TaprootLeafScript) > 0 {
-			if len(in.TaprootScriptSpendSig) == 0 {
-				err = fmt.Errorf("missing tapscript spend sig for input %d", i)
-				changes = round.Fail(err)
-				log.WithError(err).Warn("missing boarding sig")
-				return
-			}
-
-			boardingInputsIndexes = append(boardingInputsIndexes, i)
-			boardingInputs = append(boardingInputs, domain.VtxoKey{
-				Txid: roundTx.UnsignedTx.TxIn[i].PreviousOutPoint.Hash.String(),
-				VOut: roundTx.UnsignedTx.TxIn[i].PreviousOutPoint.Index,
-			})
+	includesBoardingInputs := false
+	for _, in := range roundTx.Inputs {
+		// TODO: this is ok as long as the server doesn't use taproot address too!
+		// We need to find a better way to understand if an in input is ours or if
+		// it's a boarding one.
+		scriptType := txscript.GetScriptClass(in.WitnessUtxo.PkScript)
+		if scriptType == txscript.WitnessV1TaprootTy {
+			includesBoardingInputs = true
+			break
 		}
 	}
 
-	signedRoundTx := round.UnsignedTx
+	txToSign := round.UnsignedTx
+	boardingInputs := make([]domain.VtxoKey, 0)
+	forfeitTxs := make([]string, 0)
 
-	if len(boardingInputsIndexes) > 0 {
-		signedRoundTx, err = s.wallet.SignTransactionTapscript(ctx, signedRoundTx, boardingInputsIndexes)
+	if len(s.forfeitTxs.forfeitTxs) > 0 || includesBoardingInputs {
+		remainingTime := time.Until(roundEndTime)
+		select {
+		case <-s.forfeitsBoardingSigsChan:
+			log.Debug("all forfeit txs and boarding inputs signatures have been sent")
+		case <-time.After(remainingTime):
+			log.Debug("timeout waiting for forfeit txs and boarding inputs signatures")
+		}
+
+		s.currentRoundLock.Lock()
+		round := s.currentRound
+		s.currentRoundLock.Unlock()
+
+		roundTx, err := psbt.NewFromRawBytes(strings.NewReader(round.UnsignedTx), true)
 		if err != nil {
-			changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
-			log.WithError(err).Warn("failed to sign round tx")
+			log.Debugf("failed to parse round tx: %s", round.UnsignedTx)
+			changes = round.Fail(fmt.Errorf("failed to parse round tx: %s", err))
+			log.WithError(err).Warn("failed to parse round tx")
 			return
 		}
+		txToSign = round.UnsignedTx
+
+		forfeitTxs, err = s.forfeitTxs.pop()
+		if err != nil {
+			changes = round.Fail(fmt.Errorf("failed to finalize round: %s", err))
+			log.WithError(err).Warn("failed to finalize round")
+			return
+		}
+
+		if err := s.verifyForfeitTxsSigs(forfeitTxs); err != nil {
+			changes = round.Fail(err)
+			log.WithError(err).Warn("failed to validate forfeit txs")
+			return
+		}
+
+		boardingInputsIndexes := make([]int, 0)
+		for i, in := range roundTx.Inputs {
+			if len(in.TaprootLeafScript) > 0 {
+				if len(in.TaprootScriptSpendSig) == 0 {
+					err = fmt.Errorf("missing tapscript spend sig for input %d", i)
+					changes = round.Fail(err)
+					log.WithError(err).Warn("missing boarding sig")
+					return
+				}
+
+				boardingInputsIndexes = append(boardingInputsIndexes, i)
+				boardingInputs = append(boardingInputs, domain.VtxoKey{
+					Txid: roundTx.UnsignedTx.TxIn[i].PreviousOutPoint.Hash.String(),
+					VOut: roundTx.UnsignedTx.TxIn[i].PreviousOutPoint.Index,
+				})
+			}
+		}
+
+		if len(boardingInputsIndexes) > 0 {
+			txToSign, err = s.wallet.SignTransactionTapscript(ctx, txToSign, boardingInputsIndexes)
+			if err != nil {
+				changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
+				log.WithError(err).Warn("failed to sign round tx")
+				return
+			}
+		}
 	}
 
-	signedRoundTx, err = s.wallet.SignTransaction(ctx, signedRoundTx, true)
+	log.Debugf("signing transaction %s\n", round.Id)
+
+	signedRoundTx, err := s.wallet.SignTransaction(ctx, txToSign, true)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
 		log.WithError(err).Warn("failed to sign round tx")
@@ -1607,6 +1701,7 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, recoveredVtxos []
 			SpentVtxos:            append(s.getSpentVtxos(round.TxRequests), recoveredVtxos...),
 			SpendableVtxos:        s.getNewVtxos(round),
 			ClaimedBoardingInputs: boardingInputs,
+			TxHex:                 signedRoundTx,
 		}
 	}()
 
