@@ -100,15 +100,15 @@ func NewCovenantService(
 		}
 	}
 
-	dustAmoutn, err := walletSvc.GetDustAmount(context.Background())
+	dustAmount, err := walletSvc.GetDustAmount(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get dust amount: %s", err)
 	}
-	if vtxoMinAmount < int64(dustAmoutn) {
-		vtxoMinAmount = int64(dustAmoutn)
+	if vtxoMinAmount < int64(dustAmount) {
+		vtxoMinAmount = int64(dustAmount)
 	}
-	if utxoMinAmount < int64(dustAmoutn) {
-		utxoMinAmount = int64(dustAmoutn)
+	if utxoMinAmount < int64(dustAmount) {
+		utxoMinAmount = int64(dustAmount)
 	}
 
 	svc := &covenantService{
