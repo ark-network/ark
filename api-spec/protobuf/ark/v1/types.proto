@@ -4,36 +4,63 @@ package ark.v1;
 
 /* Types */
 
-enum RoundStage {
-  ROUND_STAGE_UNSPECIFIED = 0;
-  ROUND_STAGE_REGISTRATION = 1;
-  ROUND_STAGE_FINALIZATION = 2;
-  ROUND_STAGE_FINALIZED = 3;
-  ROUND_STAGE_FAILED = 4;
+enum BatchStage {
+  BATCH_STAGE_UNSPECIFIED = 0;
+  BATCH_STAGE_REGISTRATION = 1;
+  BATCH_STAGE_FINALIZATION = 2;
+  BATCH_STAGE_FINALIZED = 3;
+  BATCH_STAGE_FAILED = 4;
 }
 
-message Round {
+message Batch {
+  string commitment_txid = 1;
+  string commitment_tx = 2;
+  uint64 total_batch_amount = 3;
+  uint64 total_forfeit_amount = 4;
+  uint64 total_exit_amount = 5;
+  uint64 total_boarding_amount = 6;
+  int32 total_input_utxos = 7;
+  int32 total_input_vtxos = 8;
+  int32 total_output_utxos = 9;
+  int32 total_output_vtxos = 10;
+  int64 started_at = 11;
+  int64 ended_at = 12;
+  int64 expires_at = 13;
+  bool swept = 14;
+  repeated string swept_by = 15;
+}
+
+message BatchCompleted {
+  string batch_id = 1;
+  string commitment_txid = 2;
+  string commitment_tx = 3;
+  int64 started_at = 4;
+  int64 ended_at = 5;
+  uint64 total_batch_amount = 6;
+  uint64 total_forfeit_amount = 7;
+  uint64 total_exit_amount = 8;
+  uint64 total_fee_amount = 9;
+  repeated Outpoint boarding_utxos = 10;
+  repeated Outpoint input_vtxos = 11;
+  repeated Outpoint collaborative_exit_utxos = 12;
+  repeated Outpoint output_vtxos = 13;
+  bool swept = 14;
+  int64 swept_at = 15;
+  repeated string swept_by = 16;
+  int64 sweep_scheduled_at = 17;
+}
+
+message BatchFailed {
   string id = 1;
-  int64 start = 2;
-  int64 end = 3;
-  string round_tx = 4;
-  Tree vtxo_tree = 5;
-  repeated string forfeit_txs = 6;
-  Tree connectors = 7;
-  RoundStage stage = 8;
+  BatchStage stage = 2;
+  string reason = 3;
+  int64 started_at = 4;
+  int64 ended_at = 5;
 }
 
 message Outpoint {
   string txid = 1;
   uint32 vout = 2;
-}
-
-message Input {
-  Outpoint outpoint = 1;
-  oneof taproot_tree {
-    string descriptor = 2;
-    Tapscripts tapscripts = 3;
-  }
 }
 
 message Output {
@@ -55,66 +82,57 @@ message Node {
   string parent_txid = 3;
 }
 
+message FlatNode {
+  string txid = 1;
+  string tx = 2;
+  string parent_txid = 3;
+  int32 level = 4;
+  int32 level_index = 5;
+}
+
 message Vtxo {
   Outpoint outpoint = 1;
-  bool spent = 2;
-  string round_txid = 3;
-  string spent_by = 4;
-  int64 expire_at = 5;
-  bool swept = 6;
-  bool is_pending = 7;
-  string redeem_tx = 8;
-  uint64 amount = 9;
-  string pubkey = 10;
-  int64 created_at = 11;
-}
-
-message RoundTransaction {
-  string txid = 1;
-  repeated Vtxo spent_vtxos = 2;
-  repeated Vtxo spendable_vtxos = 3;
-  repeated Outpoint claimed_boarding_utxos = 4;
-}
-
-message RedeemTransaction {
-  string txid = 1;
-  repeated Vtxo spent_vtxos = 2;
-  repeated Vtxo spendable_vtxos = 3;
-}
-
-// This message is used to prove to the server that the user controls the vtxo without revealing the whole VTXO taproot tree.
-message OwnershipProof {
-  string control_block = 1;
-  string script = 2;
-  string signature = 3; // VTXO outpoint signed with script's secret key
-}
-
-message SignedVtxoOutpoint {
-  Outpoint outpoint = 1;
-  OwnershipProof proof = 2;
+  string commitment_txid = 2;
+  int64 created_at = 3;
+  int64 expires_at = 4;
+  uint64 amount = 5;
+  string pubkey = 6;
+  bool is_leaf = 7;
+  bool is_swept = 8;
+  bool is_spent = 9;
+  string spent_by = 10;
 }
 
 message Tapscripts {
   repeated string scripts = 1;
 }
 
+message Bip322Signature {
+  string signature = 1;
+  string message = 2;
+}
+
 message MarketHour {
   int64 next_start_time = 1;
   int64 next_end_time = 2;
   int64 period = 3;
-  int64 round_interval = 4;
+  int64 batch_interval = 4;
 }
 
-message SweepableOutput {
-  string txid = 1;
-  uint32 vout = 2;
-  string amount = 3;
-  int64 scheduled_at = 4;
+message MarketHourConfig {
+  int64 start_time = 1;
+  int64 end_time = 2;
+  int64 period = 3;
+  int64 batch_interval = 4;
 }
 
 message ScheduledSweep {
-  string round_id = 1;
-  repeated SweepableOutput outputs = 2;
+  string batch_id = 1;
+  string commitment_txid = 2;
+  int32 num_transactions_to_broadcast = 3;
+  uint64 amount_to_sweep = 4;
+  int64 scheduled_start_time = 5;
+  int64 expected_end_time = 6;
 }
 
 message TxRequestInfo {
@@ -135,36 +153,69 @@ message RequestInput {
   uint64 amount = 3;
 }
 
+message TxHistoryRecord {
+  oneof key {
+    string boarding_txid = 1;
+    string commitment_txid = 2;
+    string sweep_txid = 3;
+    string ark_txid = 4;
+  }
+  TxType type = 5;
+  uint64 amount = 6;
+  int64 created_at = 7;
+  int64 confirmed_at = 8;
+  bool is_settled = 9;
+}
+
+enum TxType {
+  TX_TYPE_UNSPECIFIED = 0;
+  TX_TYPE_RECEIVED = 1;
+  TX_TYPE_SENT = 2;
+  TX_TYPE_SWEEP = 3;
+}
+
+message PageRequest {
+  int32 size = 1;
+  int32 index = 2;
+}
+
+message PageResponse {
+  int32 current = 1;
+  int32 next = 2;
+  int32 total = 3;
+}
+
+
 /* Events */
 
-message RoundFinalizationEvent {
+message BatchFinalizationEvent {
   string id = 1;
-  string round_tx = 2;
-  Tree vtxo_tree = 3;
+  string commitment_tx = 2;
+  Tree signed_vtxo_tree = 3;
   Tree connectors = 4;
-  int64 min_relay_fee_rate = 5;
   // vtxo outpoint encoded as string -> connector outpoint
-  map<string, Outpoint> connectors_index = 6;
+  map<string, Outpoint> connectors_index = 5;
 }
 
-message RoundFinalizedEvent {
+message BatchFinalizedEvent {
   string id = 1;
-  string round_txid = 2;
+  string commitment_txid = 2;
 }
 
-message RoundFailed {
+message BatchFailedEvent {
   string id = 1;
   string reason = 2;
 }
 
-message RoundSigningEvent {
+message TreeSigningStartedEvent {
   string id = 1;
-  repeated string cosigners_pubkeys = 2;
-  Tree unsigned_vtxo_tree = 3;
-  string unsigned_round_tx = 4;
+  string signer_pubkey = 2;
+  repeated string cosigners_pubkeys = 3;
+  Tree unsigned_vtxo_tree = 4;
+  string unsigned_commitment_tx = 5;
 }
 
-message RoundSigningNoncesGeneratedEvent {
+message TreeNoncesAggregatedEvent {
   string id = 1;
   string tree_nonces = 2;
 }

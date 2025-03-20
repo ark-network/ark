@@ -6,41 +6,86 @@ import "google/api/annotations.proto";
 import "ark/v1/types.proto";
 
 service ExplorerService {
-  rpc GetRound(GetRoundRequest) returns (GetRoundResponse) {
+  rpc GetBatchInfo(GetBatchInfoRequest) returns (GetBatchInfoResponse) {
     option (google.api.http) = {
-      get: "/v1/round/{txid}"
+      get: "/v1/batch/{txid}"
     };
   };
-  rpc GetRoundById(GetRoundByIdRequest) returns (GetRoundByIdResponse) {
+  rpc GetVtxoTree(GetVtxoTreeRequest) returns (GetVtxoTreeResponse) {
     option (google.api.http) = {
-      get: "/v1/round/id/{id}"
+      get: "/v1/batch/{txid}/tree"
     };
   };
-  rpc ListVtxos(ListVtxosRequest) returns (ListVtxosResponse) {
+  rpc GetForfeitTxs(GetForfeitTxsRequest) returns (GetForfeitTxsResponse) {
+    option (google.api.http) = {
+      get: "/v1/batch/{txid}/forfeitTxs"
+    };
+  };
+  rpc GetConnectors(GetConnectorsRequest) returns (GetConnectorsResponse) {
+    option (google.api.http) = {
+      get: "/v1/batch/{txid}/connectors"
+    };
+  };
+  rpc GetSpendableVtxos(GetSpendableVtxosRequest) returns (GetSpendableVtxosResponse) {
     option (google.api.http) = {
       get: "/v1/vtxos/{address}"
     };
   };
+  rpc GetTransactionHistory(GetTransactionHistoryRequest) returns (GetTransactionHistoryResponse) {
+    option (google.api.http) = {
+      get: "/v1/history/{address}"
+    };
+  };
 }
 
-message GetRoundRequest {
+message GetBatchInfoRequest {
   string txid = 1;
 }
-message GetRoundResponse {
-  Round round = 1;
+message GetBatchInfoResponse {
+  Batch batch = 1;
 }
 
-message GetRoundByIdRequest {
-  string id = 1;
+message GetVtxoTreeRequest {
+  string txid = 1;
+  PageRequest page = 2;
 }
-message GetRoundByIdResponse {
-  Round round = 1;
+message GetVtxoTreeResponse {
+  repeated FlatNode vtxo_tree = 1;
+  PageResponse page = 2;
 }
 
-message ListVtxosRequest {
+message GetForfeitTxsRequest {
+  string txid = 1;
+  PageRequest page = 2;
+}
+message GetForfeitTxsResponse {
+  repeated string txs = 1;
+  PageResponse page = 2;
+}
+
+message GetConnectorsRequest {
+  string txid = 1;
+  PageRequest page = 2;
+}
+message GetConnectorsResponse {
+  repeated FlatNode connectors = 1;
+  PageResponse page = 2;
+}
+
+message GetSpendableVtxosRequest {
   string address = 1;
+  PageRequest page = 2;
 }
-message ListVtxosResponse {
-  repeated Vtxo spendable_vtxos = 1;
-  repeated Vtxo spent_vtxos = 2;
+message GetSpendableVtxosResponse {
+  repeated Vtxo vtxos = 1;
+  PageResponse page = 2;
+}
+
+message GetTransactionHistoryRequest {
+  string address = 1;
+  PageRequest page = 2;
+}
+message GetTransactionHistoryResponse {
+  repeated TxHistoryRecord history = 1;
+  PageResponse page = 2;
 }

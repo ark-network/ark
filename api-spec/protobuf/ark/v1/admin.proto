@@ -3,8 +3,6 @@ syntax = "proto3";
 package ark.v1;
 
 import "google/api/annotations.proto";
-import "google/protobuf/timestamp.proto";
-import "google/protobuf/duration.proto";
 import "ark/v1/types.proto";
 
 service AdminService {
@@ -13,14 +11,14 @@ service AdminService {
       get: "/v1/admin/sweeps"
     };
   }
-  rpc GetRoundDetails(GetRoundDetailsRequest) returns (GetRoundDetailsResponse) {
+  rpc GetBatch(GetBatchRequest) returns (GetBatchResponse) {
     option (google.api.http) = {
-      get: "/v1/admin/round/{round_id}"
+      get: "/v1/admin/batch/{batch_id}"
     };
   }
-  rpc GetRounds(GetRoundsRequest) returns (GetRoundsResponse) {
+  rpc GetBatches(GetBatchesRequest) returns (GetBatchesResponse) {
     option (google.api.http) = {
-      post: "/v1/admin/rounds"
+      post: "/v1/admin/batches"
       body: "*"
     };
   } 
@@ -30,14 +28,14 @@ service AdminService {
       body: "*"
     };
   }
-  rpc GetMarketHourConfig(GetMarketHourConfigRequest) returns (GetMarketHourConfigResponse) {
+  rpc GetMarketHour(GetMarketHourRequest) returns (GetMarketHourResponse) {
     option (google.api.http) = {
-      get: "/v1/admin/market-hour"
+      get: "/v1/admin/marketHour"
     };
   }
-  rpc UpdateMarketHourConfig(UpdateMarketHourConfigRequest) returns (UpdateMarketHourConfigResponse) {
+  rpc UpdateMarketHour(UpdateMarketHourRequest) returns (UpdateMarketHourResponse) {
     option (google.api.http) = {
-      post: "/v1/admin/market-hour"
+      post: "/v1/admin/marketHour"
       body: "*"
     };
   }
@@ -52,12 +50,6 @@ service AdminService {
       body: "*"
     };
   }
-  rpc Withdraw(WithdrawRequest) returns (WithdrawResponse) {
-    option (google.api.http) = {
-      post: "/v1/admin/withdraw"
-      body: "*"
-    };
-  }
 }
 
 message GetScheduledSweepRequest {}
@@ -65,27 +57,22 @@ message GetScheduledSweepResponse {
   repeated ScheduledSweep sweeps = 1;
 }
 
-message GetRoundDetailsRequest {
-  string round_id = 1;
+message GetBatchRequest {
+  string batch_id = 1;
 }
-message GetRoundDetailsResponse {
-  string round_id = 1;
-  string txid = 2;
-  string forfeited_amount = 3;
-  string total_vtxos_amount = 4;
-  string total_exit_amount = 5;
-  string fees_amount = 6;
-  repeated string inputs_vtxos = 7;
-  repeated string outputs_vtxos = 8;
-  repeated string exit_addresses = 9;
+message GetBatchResponse {
+  oneof batch {
+    BatchCompleted success = 1;
+    BatchFailed failure = 2;
+  }
 }
 
-message GetRoundsRequest {
+message GetBatchesRequest {
   int64 after = 1;
   int64 before = 2;
 }
-message GetRoundsResponse {
-  repeated string rounds = 1;
+message GetBatchesResponse {
+  repeated string batch_ids = 1;
 }
 
 message CreateNoteRequest {
@@ -96,22 +83,15 @@ message CreateNoteResponse {
   repeated string notes = 1;
 }
 
-message GetMarketHourConfigRequest {}
-message GetMarketHourConfigResponse {
-    MarketHourConfig config = 1;
+message GetMarketHourRequest {}
+message GetMarketHourResponse {
+    MarketHourConfig market_hour_config = 1;
 }
 
-message UpdateMarketHourConfigRequest {
-    MarketHourConfig config = 1;
+message UpdateMarketHourRequest {
+    MarketHourConfig market_hour_config = 1;
 }
-message UpdateMarketHourConfigResponse {}
-
-message MarketHourConfig {
-  google.protobuf.Timestamp start_time = 1;
-  google.protobuf.Timestamp end_time = 2;
-  google.protobuf.Duration period = 3;
-  google.protobuf.Duration round_interval = 4;
-}
+message UpdateMarketHourResponse {}
 
 message GetTxRequestQueueRequest {
   repeated string request_ids = 1;
@@ -124,11 +104,3 @@ message DeleteTxRequestsRequest {
   repeated string request_ids = 1;
 }
 message DeleteTxRequestsResponse {}
-message WithdrawRequest {
-  string address = 1;
-  uint64 amount = 2;
-}
-
-message WithdrawResponse {
-  string txid = 1;
-}

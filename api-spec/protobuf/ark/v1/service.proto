@@ -18,74 +18,54 @@ service ArkService {
     };
   };
 
-  /* In-Round Transaction APIs */
+  /* Batch APIs */
 
-  rpc RegisterInputsForNextRound(RegisterInputsForNextRoundRequest) returns (RegisterInputsForNextRoundResponse) {
+  rpc RegisterInputsForNextBatch(RegisterInputsForNextBatchRequest) returns (RegisterInputsForNextBatchResponse) {
     option (google.api.http) = {
-      post: "/v1/round/registerInputs"
+      post: "/v1/batch/registerInputs"
       body: "*"
     };
   };
-  rpc RegisterOutputsForNextRound(RegisterOutputsForNextRoundRequest) returns (RegisterOutputsForNextRoundResponse) {
+  rpc RegisterOutputsForNextBatch(RegisterOutputsForNextBatchRequest) returns (RegisterOutputsForNextBatchResponse) {
     option (google.api.http) = {
-      post: "/v1/round/registerOutputs"
+      post: "/v1/batch/registerOutputs"
       body: "*"
     };
   };
   rpc SubmitTreeNonces(SubmitTreeNoncesRequest) returns (SubmitTreeNoncesResponse) {
     option (google.api.http) = {
-      post: "/v1/round/tree/submitNonces"
+      post: "/v1/batch/tree/submitNonces"
       body: "*"
     };
   }
   rpc SubmitTreeSignatures(SubmitTreeSignaturesRequest) returns (SubmitTreeSignaturesResponse) {
     option (google.api.http) = {
-      post: "/v1/round/tree/submitSignatures"
+      post: "/v1/batch/tree/submitSignatures"
       body: "*"
     };
   }
   rpc SubmitSignedForfeitTxs(SubmitSignedForfeitTxsRequest) returns (SubmitSignedForfeitTxsResponse) {
     option (google.api.http) = {
-      post: "/v1/round/submitForfeitTxs"
+      post: "/v1/batch/submitForfeitTxs"
       body: "*"
     };
   };
-  rpc GetEventStream(GetEventStreamRequest) returns (stream GetEventStreamResponse) {
+  rpc GetBatchEventStream(GetBatchEventStreamRequest) returns (stream GetBatchEventStreamResponse) {
     option (google.api.http) = {
-      get: "/v1/events"
+      get: "/v1/batch/events"
     };
   };
   rpc Ping(PingRequest) returns (PingResponse) {
     option (google.api.http) = {
-      get: "/v1/round/ping/{request_id}"
+      get: "/v1/batch/ping/{request_id}"
     };
   };
 
-  /* Out-of-Round Transaction APIs */
+  /* Ark Transaction APIs */
 
-  rpc SubmitRedeemTx(SubmitRedeemTxRequest) returns (SubmitRedeemTxResponse) {
+  rpc SubmitTx(SubmitTxRequest) returns (SubmitTxResponse) {
     option (google.api.http) = {
-      post: "/v1/redeem-tx"
-      body: "*"
-    };
-  }
-
-  /* Nostr APIs */
-
-  rpc GetTransactionsStream(GetTransactionsStreamRequest) returns (stream GetTransactionsStreamResponse) {
-    option (google.api.http) = {
-      get: "/v1/transactions"
-    };
-  }
-  rpc SetNostrRecipient(SetNostrRecipientRequest) returns (SetNostrRecipientResponse) {
-    option (google.api.http) = {
-      post: "/v1/vtxo/nostr"
-      body: "*"
-    };
-  }
-  rpc DeleteNostrRecipient(DeleteNostrRecipientRequest) returns (DeleteNostrRecipientResponse) {
-    option (google.api.http) = {
-      post: "/v1/vtxo/nostr/delete"
+      post: "/v1/submitTx"
       body: "*"
     };
   }
@@ -96,7 +76,7 @@ message GetInfoResponse {
   string pubkey = 1;
   int64 vtxo_tree_expiry = 2;
   int64 unilateral_exit_delay = 3;
-  int64 round_interval = 4;
+  int64 batch_interval = 4;
   string network = 5;
   int64 dust = 6;
   string boarding_descriptor_template = 7;
@@ -112,18 +92,21 @@ message GetBoardingAddressRequest {
 message GetBoardingAddressResponse {
   string address = 1;
   oneof taproot_tree {
-    string descriptor = 2;
     Tapscripts tapscripts = 3;
   }
 }
 
-/* In-Round Transaction API messages */
+/* Batch API messages */
 
-message RegisterInputsForNextRoundRequest {
-  repeated Input inputs = 1;
-  repeated string notes = 2;
+message RegisterInputsForNextBatchRequest {
+  // Tapscripts aims to reveal the taproot tree of the unspent & unexpired VTXOs.
+  map<string, Tapscripts> tapscripts = 1; 
+  // BIP322 signature embeds the outpoints and the proof of funds
+  Bip322Signature bip322_signature = 2;
+  repeated string notes = 3;
 }
-message RegisterInputsForNextRoundResponse {
+
+message RegisterInputsForNextBatchResponse {
   string request_id = 1;
 }
 
@@ -132,23 +115,23 @@ message Musig2 {
   bool signing_all = 2;
 }
 
-message RegisterOutputsForNextRoundRequest {
+message RegisterOutputsForNextBatchRequest {
   string request_id = 1;
   // List of receivers for to convert to leaves in the next VTXO tree. 
   repeated Output outputs = 2;
   optional Musig2 musig2 = 3;
 }
-message RegisterOutputsForNextRoundResponse {}
+message RegisterOutputsForNextBatchResponse {}
 
 message SubmitTreeNoncesRequest {
-  string round_id = 1;
+  string batch_id = 1;
   string pubkey = 2;
   string tree_nonces = 3;
 }
 message SubmitTreeNoncesResponse {}
 
 message SubmitTreeSignaturesRequest {
-  string round_id = 1;
+  string batch_id = 1;
   string pubkey = 2;
   string tree_signatures = 3;
 }
@@ -157,19 +140,19 @@ message SubmitTreeSignaturesResponse {}
 message SubmitSignedForfeitTxsRequest {
   // Forfeit txs signed by the user. 
   repeated string signed_forfeit_txs = 1;
-  // The user has to sign also the round tx if he registerd a boarding UTXO.
-  optional string signed_round_tx = 2;
+  // The user has to sign also the commitment tx if he registerd a boarding UTXO.
+  optional string signed_commitment_tx = 2;
 }
 message SubmitSignedForfeitTxsResponse {}
 
-message GetEventStreamRequest {}
-message GetEventStreamResponse {
+message GetBatchEventStreamRequest {}
+message GetBatchEventStreamResponse {
   oneof event {
-    RoundFinalizationEvent round_finalization = 1;
-    RoundFinalizedEvent round_finalized = 2;
-    RoundFailed round_failed = 3;
-    RoundSigningEvent round_signing = 4;
-    RoundSigningNoncesGeneratedEvent round_signing_nonces_generated = 5; 
+    BatchFinalizationEvent batch_finalization = 1;
+    BatchFinalizedEvent batch_finalized = 2;
+    BatchFailedEvent batch_failed = 3;
+    TreeSigningStartedEvent tree_signing_started = 4;
+    TreeNoncesAggregatedEvent tree_nonces_aggregated = 5; 
   }
 }
 
@@ -179,31 +162,12 @@ message PingRequest {
 }
 message PingResponse {}
 
-/* Out-of-Round Transaction API messages */
+/* Ark Transaction API messages */
 
-message SubmitRedeemTxRequest {
-  string redeem_tx = 1;
+message SubmitTxRequest {
+  string tx = 1;
 }
-message SubmitRedeemTxResponse {
-  string signed_redeem_tx = 1;
+message SubmitTxResponse {
+  string signed_tx = 1;
   string txid = 2;
 }
-
-message GetTransactionsStreamRequest {}
-message GetTransactionsStreamResponse {
-  oneof tx {
-    RoundTransaction round = 1;
-    RedeemTransaction redeem = 2;
-  }
-}
-
-message SetNostrRecipientRequest {
-  string nostr_recipient = 1;
-  repeated SignedVtxoOutpoint vtxos = 2;
-}
-message SetNostrRecipientResponse {}
-
-message DeleteNostrRecipientRequest {
-  repeated SignedVtxoOutpoint vtxos = 1;
-}
-message DeleteNostrRecipientResponse {}
