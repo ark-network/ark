@@ -6,24 +6,24 @@ import "google/api/annotations.proto";
 import "ark/v1/types.proto";
 
 service ExplorerService {
-  rpc GetBatchInfo(GetBatchInfoRequest) returns (GetBatchInfoResponse) {
+  rpc GetCommitmentTxInfo(GetCommitmentTxInfoRequest) returns (GetCommitmentTxInfoResponse) {
     option (google.api.http) = {
-      get: "/v1/batch/{txid}"
+      get: "/v1/commitmentTx/{txid}"
     };
   };
   rpc GetVtxoTree(GetVtxoTreeRequest) returns (GetVtxoTreeResponse) {
     option (google.api.http) = {
-      get: "/v1/batch/{txid}/tree"
+      get: "/v1/batch/{batch_outpoint.txid}/{batch_outpoint.vout}/tree"
     };
   };
   rpc GetForfeitTxs(GetForfeitTxsRequest) returns (GetForfeitTxsResponse) {
     option (google.api.http) = {
-      get: "/v1/batch/{txid}/forfeitTxs"
+      get: "/v1/batch/{batch_outpoint.txid}/{batch_outpoint.vout}/forfeitTxs"
     };
   };
   rpc GetConnectors(GetConnectorsRequest) returns (GetConnectorsResponse) {
     option (google.api.http) = {
-      get: "/v1/batch/{txid}/connectors"
+      get: "/v1/batch/{batch_outpoint.txid}/{batch_outpoint.vout}/connectors"
     };
   };
   rpc GetSpendableVtxos(GetSpendableVtxosRequest) returns (GetSpendableVtxosResponse) {
@@ -43,15 +43,18 @@ service ExplorerService {
   }
 }
 
-message GetBatchInfoRequest {
+message GetCommitmentTxInfoRequest {
   string txid = 1;
 }
-message GetBatchInfoResponse {
-  Batch batch = 1;
+message GetCommitmentTxInfoResponse {
+  string tx = 1;
+  int64 started_at = 2;
+  int64 ended_at = 3;
+  map<uint32, Batch> batches = 4;
 }
 
 message GetVtxoTreeRequest {
-  string txid = 1;
+  Outpoint batch_outpoint = 1;
   PageRequest page = 2;
 }
 message GetVtxoTreeResponse {
@@ -60,7 +63,7 @@ message GetVtxoTreeResponse {
 }
 
 message GetForfeitTxsRequest {
-  string txid = 1;
+  Outpoint batch_outpoint = 1;
   PageRequest page = 2;
 }
 message GetForfeitTxsResponse {
@@ -69,7 +72,7 @@ message GetForfeitTxsResponse {
 }
 
 message GetConnectorsRequest {
-  string txid = 1;
+  Outpoint batch_outpoint = 1;
   PageRequest page = 2;
 }
 message GetConnectorsResponse {
