@@ -36,6 +36,11 @@ service ExplorerService {
       get: "/v1/history/{address}"
     };
   };
+  rpc GetTransactionChain(GetTransactionChainRequest) returns (GetTransactionChainResponse) {
+    option (google.api.http) = {
+      get: "/v1/vtxo/{outpoint.txid}/{outpoint.vout}/chain"
+    };
+  }
 }
 
 message GetBatchInfoRequest {
@@ -83,9 +88,20 @@ message GetSpendableVtxosResponse {
 
 message GetTransactionHistoryRequest {
   string address = 1;
-  PageRequest page = 2;
+  int64 start_time = 2;
+  int64 end_time = 3;
+  PageRequest page = 4;
 }
 message GetTransactionHistoryResponse {
   repeated TxHistoryRecord history = 1;
+  PageResponse page = 2;
+}
+
+message GetTransactionChainRequest {
+  Outpoint outpoint = 1;
+  PageRequest page = 2;
+}
+message GetTransactionChainResponse {
+  repeated string txs = 1;
   PageResponse page = 2;
 }
