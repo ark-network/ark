@@ -277,6 +277,11 @@ func (a *covenantlessArkClient) InitWithWallet(ctx context.Context, args InitWit
 }
 
 func (a *covenantlessArkClient) listenForArkTxs(ctx context.Context) {
+	if err := a.refreshTxDb(ctx); err != nil {
+		log.WithError(err).Error("failed to refreshTxDb")
+		return
+	}
+
 	eventChan, closeFunc, err := a.client.GetTransactionsStream(ctx)
 	if err != nil {
 		log.WithError(err).Error("failed to get transaction stream")
@@ -327,6 +332,34 @@ func (a *covenantlessArkClient) listenForArkTxs(ctx context.Context) {
 			return
 		}
 	}
+}
+
+func (a *covenantlessArkClient) refreshTxDb(ctx context.Context) error {
+	spendableVtxos, spentVtxos, err := a.ListVtxos(ctx)
+	if err != nil {
+		return err
+	}
+
+	boardingTxs, roundsToIgnore, err := a.getBoardingTxs(ctx)
+	if err != nil {
+		return err
+	}
+
+	offchainTxs, err := vtxosToTxsCovenantless(spendableVtxos, spentVtxos, roundsToIgnore)
+	if err != nil {
+		return err
+	}
+
+	allTxs := append(boardingTxs, offchainTxs...)
+	if err := a.store.TransactionStore().DeleteAll(ctx); err != nil {
+		return err
+	}
+
+	if _, err := a.store.TransactionStore().AddTransactions(ctx, allTxs); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (a *covenantlessArkClient) listenForBoardingTxs(ctx context.Context) {
