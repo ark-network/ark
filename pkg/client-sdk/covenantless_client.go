@@ -188,6 +188,9 @@ func LoadCovenantlessClient(sdkStore types.Store) (ArkClient, error) {
 	if cfgData.WithTransactionFeed {
 		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
 		covenantlessClient.txStreamCtxCancel = txStreamCtxCancel
+		if err := covenantlessClient.refreshTxDb(context.Background()); err != nil {
+			return nil, err
+		}
 		go covenantlessClient.listenForArkTxs(txStreamCtx)
 		go covenantlessClient.listenForBoardingTxs(txStreamCtx)
 	}
@@ -239,6 +242,9 @@ func LoadCovenantlessClientWithWallet(
 	if cfgData.WithTransactionFeed {
 		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
 		covenantlessClient.txStreamCtxCancel = txStreamCtxCancel
+		if err := covenantlessClient.refreshTxDb(context.Background()); err != nil {
+			return nil, err
+		}
 		go covenantlessClient.listenForArkTxs(txStreamCtx)
 		go covenantlessClient.listenForBoardingTxs(txStreamCtx)
 	}
@@ -254,6 +260,9 @@ func (a *covenantlessArkClient) Init(ctx context.Context, args InitArgs) error {
 	if args.WithTransactionFeed {
 		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
 		a.txStreamCtxCancel = txStreamCtxCancel
+		if err := a.refreshTxDb(context.Background()); err != nil {
+			return err
+		}
 		go a.listenForArkTxs(txStreamCtx)
 		go a.listenForBoardingTxs(txStreamCtx)
 	}
@@ -269,6 +278,9 @@ func (a *covenantlessArkClient) InitWithWallet(ctx context.Context, args InitWit
 	if a.WithTransactionFeed {
 		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
 		a.txStreamCtxCancel = txStreamCtxCancel
+		if err := a.refreshTxDb(context.Background()); err != nil {
+			return err
+		}
 		go a.listenForArkTxs(txStreamCtx)
 		go a.listenForBoardingTxs(txStreamCtx)
 	}
@@ -277,11 +289,6 @@ func (a *covenantlessArkClient) InitWithWallet(ctx context.Context, args InitWit
 }
 
 func (a *covenantlessArkClient) listenForArkTxs(ctx context.Context) {
-	if err := a.refreshTxDb(ctx); err != nil {
-		log.WithError(err).Error("failed to refreshTxDb")
-		return
-	}
-
 	eventChan, closeFunc, err := a.client.GetTransactionsStream(ctx)
 	if err != nil {
 		log.WithError(err).Error("failed to get transaction stream")
@@ -389,13 +396,18 @@ func (a *covenantlessArkClient) refreshTxDb(ctx context.Context) error {
 	// add new boarding, update existing that are not confirmed
 	boardingTxsToAdd := make([]types.Transaction, 0)
 	boardingTxsToConfirm := make([]types.Transaction, 0)
+	boardingTxsToSettle := make([]string, 0)
 	for _, tx := range boardingTxs {
-		oldTx, exists := oldTxsMap[tx.Hex]
+		oldTx, exists := oldTxsMap[tx.TransactionKey.String()]
 		if !exists {
 			boardingTxsToAdd = append(boardingTxsToAdd, tx)
 		} else {
 			if oldTx.CreatedAt.IsZero() && !tx.CreatedAt.IsZero() {
 				boardingTxsToConfirm = append(boardingTxsToConfirm, tx)
+			}
+
+			if tx.Settled && !oldTx.Settled {
+				boardingTxsToSettle = append(boardingTxsToSettle, oldTx.TransactionKey.String())
 			}
 		}
 	}
@@ -415,8 +427,10 @@ func (a *covenantlessArkClient) refreshTxDb(ctx context.Context) error {
 	}
 
 	allTxsToAdd := append(boardingTxsToAdd, txsToAdd...)
-	if _, err := a.store.TransactionStore().AddTransactions(ctx, allTxsToAdd); err != nil {
-		return err
+	if len(allTxsToAdd) > 0 {
+		if _, err := a.store.TransactionStore().AddTransactions(ctx, allTxsToAdd); err != nil {
+			return err
+		}
 	}
 
 	for _, tx := range boardingTxsToConfirm {
@@ -427,11 +441,14 @@ func (a *covenantlessArkClient) refreshTxDb(ctx context.Context) error {
 		}
 	}
 
-	if _, err := a.store.TransactionStore().SettleTransactions(ctx, txsToSettle); err != nil {
-		return err
+	allTxsToSettle := append(boardingTxsToSettle, txsToSettle...)
+	if len(allTxsToSettle) > 0 {
+		if _, err := a.store.TransactionStore().SettleTransactions(ctx, allTxsToSettle); err != nil {
+			return err
+		}
 	}
 
-	oldSpendableVtxos, _, err := a.store.VtxoStore().GetAllVtxos(ctx)
+	oldSpendableVtxos, oldSpentVtxos, err := a.store.VtxoStore().GetAllVtxos(ctx)
 	if err != nil {
 		return err
 	}
@@ -440,11 +457,29 @@ func (a *covenantlessArkClient) refreshTxDb(ctx context.Context) error {
 	for _, vtxo := range oldSpendableVtxos {
 		oldSpendableMap[vtxo.VtxoKey.String()] = vtxo
 	}
+	oldSpentMap := make(map[string]types.Vtxo, len(oldSpentVtxos))
+	for _, vtxo := range oldSpentVtxos {
+		oldSpentMap[vtxo.String()] = vtxo
+	}
 
 	// Build map of newly fetched spendable vTXOs
 	newSpendableMap := make(map[string]types.Vtxo, len(spendableVtxos))
 	for _, vtxo := range spendableVtxos {
 		newSpendableMap[vtxo.String()] = types.Vtxo{
+			VtxoKey: types.VtxoKey{
+				Txid: vtxo.Txid,
+				VOut: vtxo.VOut,
+			},
+			PubKey:    vtxo.PubKey,
+			Amount:    vtxo.Amount,
+			RoundTxid: vtxo.RoundTxid,
+			ExpiresAt: vtxo.ExpiresAt,
+			CreatedAt: vtxo.CreatedAt,
+		}
+	}
+	newSpentMap := make(map[string]types.Vtxo, len(spentVtxos))
+	for _, vtxo := range spentVtxos {
+		newSpentMap[vtxo.String()] = types.Vtxo{
 			VtxoKey: types.VtxoKey{
 				Txid: vtxo.Txid,
 				VOut: vtxo.VOut,
@@ -469,6 +504,12 @@ func (a *covenantlessArkClient) refreshTxDb(ctx context.Context) error {
 	// anything that was old but is missing from new is now spent
 	for k, v := range oldSpendableMap {
 		if _, found := newSpendableMap[k]; !found {
+			vtxosToSpend = append(vtxosToSpend, v.VtxoKey)
+		}
+	}
+	// anything that was old but is missing from new is now spendable
+	for k, v := range newSpentMap {
+		if _, found := oldSpentMap[k]; !found {
 			vtxosToSpend = append(vtxosToSpend, v.VtxoKey)
 		}
 	}
