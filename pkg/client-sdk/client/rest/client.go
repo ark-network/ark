@@ -94,6 +94,10 @@ func (a *restClient) GetInfo(
 		BoardingDescriptorTemplate: resp.Payload.BoardingDescriptorTemplate,
 		ForfeitAddress:             resp.Payload.ForfeitAddress,
 		Version:                    resp.Payload.Version,
+		MarketHourStartTime:        resp.Payload.MarketHour.NextStartTime,
+		MarketHourEndTime:          resp.Payload.MarketHour.NextEndTime,
+		MarketHourPeriod:           resp.Payload.MarketHour.Period,
+		MarketHourRoundInterval:    resp.Payload.MarketHour.RoundInterval,
 	}, nil
 }
 

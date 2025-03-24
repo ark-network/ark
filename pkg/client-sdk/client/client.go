@@ -69,6 +69,10 @@ type Info struct {
 	Dust                       uint64
 	BoardingDescriptorTemplate string
 	ForfeitAddress             string
+	MarketHourStartTime        string
+	MarketHourEndTime          string
+	MarketHourPeriod           string
+	MarketHourRoundInterval    string
 }
 
 type RoundEventChannel struct {

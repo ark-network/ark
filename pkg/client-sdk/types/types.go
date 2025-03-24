@@ -30,6 +30,10 @@ type Config struct {
 	ExplorerURL                string
 	ForfeitAddress             string
 	WithTransactionFeed        bool
+	MarketHourStartTime        string
+	MarketHourEndTime          string
+	MarketHourPeriod           string
+	MarketHourRoundInterval    string
 }
 
 type VtxoKey struct {

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
@@ -74,6 +75,10 @@ func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
 		BoardingDescriptorTemplate: resp.GetBoardingDescriptorTemplate(),
 		ForfeitAddress:             resp.GetForfeitAddress(),
 		Version:                    resp.GetVersion(),
+		MarketHourStartTime:        strconv.FormatInt(resp.GetMarketHour().GetNextStartTime(), 10),
+		MarketHourEndTime:          strconv.FormatInt(resp.GetMarketHour().GetNextEndTime(), 10),
+		MarketHourPeriod:           strconv.FormatInt(resp.GetMarketHour().GetPeriod(), 10),
+		MarketHourRoundInterval:    strconv.FormatInt(resp.GetMarketHour().GetRoundInterval(), 10),
 	}, nil
 }
 
