@@ -177,21 +177,6 @@ func (s *txStore) GetEventChannel() chan types.TransactionEvent {
 	return s.eventCh
 }
 
-func (s *txStore) DeleteAll(ctx context.Context) error {
-	allTxs, err := s.GetAllTransactions(ctx)
-	if err != nil {
-		return err
-	}
-
-	for _, tx := range allTxs {
-		if err := s.db.Delete(tx.TransactionKey.String(), &types.Transaction{}); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func (s *txStore) Close() {
 	if err := s.db.Close(); err != nil {
 		log.Debugf("error on closing transactions db: %s", err)

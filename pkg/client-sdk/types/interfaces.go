@@ -29,7 +29,6 @@ type TransactionStore interface {
 	GetAllTransactions(ctx context.Context) ([]Transaction, error)
 	GetTransactions(ctx context.Context, txids []string) ([]Transaction, error)
 	GetEventChannel() chan TransactionEvent
-	DeleteAll(ctx context.Context) error
 	Close()
 }
 
