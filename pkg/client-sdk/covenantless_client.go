@@ -342,186 +342,232 @@ func (a *covenantlessArkClient) listenForArkTxs(ctx context.Context) {
 }
 
 func (a *covenantlessArkClient) refreshTxDb(ctx context.Context) error {
+	// fetch new data
 	spendableVtxos, spentVtxos, err := a.ListVtxos(ctx)
 	if err != nil {
 		return err
 	}
-
 	boardingTxs, roundsToIgnore, err := a.getBoardingTxs(ctx)
 	if err != nil {
 		return err
 	}
-
 	offchainTxs, err := vtxosToTxsCovenantless(spendableVtxos, spentVtxos, roundsToIgnore)
 	if err != nil {
 		return err
 	}
 
+	// fetch old transactions
 	oldTxs, err := a.store.TransactionStore().GetAllTransactions(ctx)
 	if err != nil {
 		return err
 	}
 
+	// no old transactions -> store the new offchain + vtxos
 	if len(oldTxs) == 0 {
 		if _, err := a.store.TransactionStore().AddTransactions(ctx, offchainTxs); err != nil {
 			return err
 		}
-
 		vtxosToAdd := make([]types.Vtxo, 0, len(spendableVtxos))
 		for _, vtxo := range spendableVtxos {
-			vtxosToAdd = append(vtxosToAdd, types.Vtxo{
-				VtxoKey: types.VtxoKey{
-					Txid: vtxo.Txid,
-					VOut: vtxo.VOut,
-				},
-				PubKey:    vtxo.PubKey,
-				Amount:    vtxo.Amount,
-				RoundTxid: vtxo.RoundTxid,
-				ExpiresAt: vtxo.ExpiresAt,
-				CreatedAt: vtxo.CreatedAt,
-			})
+			vtxosToAdd = append(vtxosToAdd, toTypesVtxo(vtxo))
 		}
 		if _, err := a.store.VtxoStore().AddVtxos(ctx, vtxosToAdd); err != nil {
 			return err
 		}
-
 		return nil
 	}
 
+	// build a map for quick lookups
 	oldTxsMap := make(map[string]types.Transaction, len(oldTxs))
 	for _, tx := range oldTxs {
 		oldTxsMap[tx.TransactionKey.String()] = tx
 	}
 
-	// add new boarding, update existing that are not confirmed
-	boardingTxsToAdd := make([]types.Transaction, 0)
-	boardingTxsToConfirm := make([]types.Transaction, 0)
-	boardingTxsToSettle := make([]string, 0)
-	for _, tx := range boardingTxs {
-		oldTx, exists := oldTxsMap[tx.TransactionKey.String()]
-		if !exists {
-			boardingTxsToAdd = append(boardingTxsToAdd, tx)
-		} else {
-			if oldTx.CreatedAt.IsZero() && !tx.CreatedAt.IsZero() {
-				boardingTxsToConfirm = append(boardingTxsToConfirm, tx)
-			}
+	// diff the newly fetched txs vs the old ones.
 
-			if tx.Settled && !oldTx.Settled {
-				boardingTxsToSettle = append(boardingTxsToSettle, oldTx.TransactionKey.String())
-			}
-		}
-	}
+	// boarding txs: we might add, confirm, settle, or do a partial update.
+	boardingToAdd, boardingToConfirm, boardingToSettle, boardingToUpdate :=
+		a.diffBoardingTxs(oldTxsMap, boardingTxs)
 
-	// add new offchain, settle existing
-	txsToAdd := make([]types.Transaction, 0)
-	txsToSettle := make([]string, 0)
-	for _, tx := range offchainTxs {
-		oldTx, exists := oldTxsMap[tx.TransactionKey.String()]
-		if !exists {
-			txsToAdd = append(txsToAdd, tx)
-		} else {
-			if tx.Settled && !oldTx.Settled {
-				txsToSettle = append(txsToSettle, tx.TransactionKey.String())
-			}
-		}
-	}
+	// offchain txs: we might add or settle.
+	offchainToAdd, offchainToSettle :=
+		a.diffOffchainTxs(oldTxsMap, offchainTxs)
 
-	allTxsToAdd := append(boardingTxsToAdd, txsToAdd...)
-	if len(allTxsToAdd) > 0 {
-		if _, err := a.store.TransactionStore().AddTransactions(ctx, allTxsToAdd); err != nil {
+	for _, tx := range boardingToUpdate {
+		if err := a.store.TransactionStore().UpdateTransaction(ctx, tx); err != nil {
 			return err
 		}
 	}
 
-	for _, tx := range boardingTxsToConfirm {
+	txsToAdd := append(boardingToAdd, offchainToAdd...)
+	if len(txsToAdd) > 0 {
+		if _, err := a.store.TransactionStore().AddTransactions(ctx, txsToAdd); err != nil {
+			return err
+		}
+	}
+
+	for _, tx := range boardingToConfirm {
 		if _, err := a.store.TransactionStore().ConfirmTransactions(
 			ctx, []string{tx.TransactionKey.String()}, tx.CreatedAt,
 		); err != nil {
 			return err
 		}
 	}
-
-	allTxsToSettle := append(boardingTxsToSettle, txsToSettle...)
-	if len(allTxsToSettle) > 0 {
-		if _, err := a.store.TransactionStore().SettleTransactions(ctx, allTxsToSettle); err != nil {
+	toSettle := append(boardingToSettle, offchainToSettle...)
+	if len(toSettle) > 0 {
+		if _, err := a.store.TransactionStore().SettleTransactions(ctx, toSettle); err != nil {
 			return err
 		}
 	}
 
-	oldSpendableVtxos, oldSpentVtxos, err := a.store.VtxoStore().GetAllVtxos(ctx)
+	// reconcile old vs new vtxos
+
+	oldSpendable, oldSpent, err := a.store.VtxoStore().GetAllVtxos(ctx)
 	if err != nil {
 		return err
 	}
 
-	oldSpendableMap := make(map[string]types.Vtxo, len(oldSpendableVtxos))
-	for _, vtxo := range oldSpendableVtxos {
-		oldSpendableMap[vtxo.VtxoKey.String()] = vtxo
-	}
-	oldSpentMap := make(map[string]types.Vtxo, len(oldSpentVtxos))
-	for _, vtxo := range oldSpentVtxos {
-		oldSpentMap[vtxo.String()] = vtxo
-	}
+	vtxosToAdd, vtxosToSpend := diffVtxos(oldSpendable, oldSpent, spendableVtxos, spentVtxos)
 
-	// Build map of newly fetched spendable vTXOs
-	newSpendableMap := make(map[string]types.Vtxo, len(spendableVtxos))
-	for _, vtxo := range spendableVtxos {
-		newSpendableMap[vtxo.String()] = types.Vtxo{
-			VtxoKey: types.VtxoKey{
-				Txid: vtxo.Txid,
-				VOut: vtxo.VOut,
-			},
-			PubKey:    vtxo.PubKey,
-			Amount:    vtxo.Amount,
-			RoundTxid: vtxo.RoundTxid,
-			ExpiresAt: vtxo.ExpiresAt,
-			CreatedAt: vtxo.CreatedAt,
+	if len(vtxosToAdd) > 0 {
+		if _, err := a.store.VtxoStore().AddVtxos(ctx, vtxosToAdd); err != nil {
+			return err
 		}
 	}
-	newSpentMap := make(map[string]types.Vtxo, len(spentVtxos))
-	for _, vtxo := range spentVtxos {
-		newSpentMap[vtxo.String()] = types.Vtxo{
-			VtxoKey: types.VtxoKey{
-				Txid: vtxo.Txid,
-				VOut: vtxo.VOut,
-			},
-			PubKey:    vtxo.PubKey,
-			Amount:    vtxo.Amount,
-			RoundTxid: vtxo.RoundTxid,
-			ExpiresAt: vtxo.ExpiresAt,
-			CreatedAt: vtxo.CreatedAt,
+	if len(vtxosToSpend) > 0 {
+		if _, err := a.store.VtxoStore().SpendVtxos(ctx, vtxosToSpend, ""); err != nil {
+			return err
 		}
-	}
-
-	vtxosToAdd := make([]types.Vtxo, 0)
-	vtxosToSpend := make([]types.VtxoKey, 0)
-
-	// anything that’s in newSpendableMap but not in oldSpendableMap is newly spendable
-	for k, v := range newSpendableMap {
-		if _, found := oldSpendableMap[k]; !found {
-			vtxosToAdd = append(vtxosToAdd, v)
-		}
-	}
-	// anything that was old but is missing from new is now spent
-	for k, v := range oldSpendableMap {
-		if _, found := newSpendableMap[k]; !found {
-			vtxosToSpend = append(vtxosToSpend, v.VtxoKey)
-		}
-	}
-	// anything that was old but is missing from new is now spendable
-	for k, v := range newSpentMap {
-		if _, found := oldSpentMap[k]; !found {
-			vtxosToSpend = append(vtxosToSpend, v.VtxoKey)
-		}
-	}
-
-	if _, err := a.store.VtxoStore().AddVtxos(ctx, vtxosToAdd); err != nil {
-		return err
-	}
-	if _, err := a.store.VtxoStore().SpendVtxos(ctx, vtxosToSpend, ""); err != nil {
-		return err
 	}
 
 	return nil
+}
+
+func toTypesVtxo(src client.Vtxo) types.Vtxo {
+	return types.Vtxo{
+		VtxoKey: types.VtxoKey{
+			Txid: src.Txid,
+			VOut: src.VOut,
+		},
+		PubKey:    src.PubKey,
+		Amount:    src.Amount,
+		RoundTxid: src.RoundTxid,
+		ExpiresAt: src.ExpiresAt,
+		CreatedAt: src.CreatedAt,
+	}
+}
+
+func (a *covenantlessArkClient) diffBoardingTxs(
+	oldTxs map[string]types.Transaction,
+	newBoarding []types.Transaction,
+) (
+	toAdd []types.Transaction,
+	toConfirm []types.Transaction,
+	toSettle []string,
+	toUpdate []types.Transaction,
+) {
+	for _, tx := range newBoarding {
+		txKey := tx.TransactionKey.String()
+		oldTx, exists := oldTxs[txKey]
+		if !exists {
+			// new boarding tx
+			toAdd = append(toAdd, tx)
+			continue
+		}
+
+		// edge case: tx is unconfirmed in db, while the new tx is settled
+		if oldTx.CreatedAt.IsZero() && !tx.CreatedAt.IsZero() && tx.Settled && !oldTx.Settled {
+			toUpdate = append(toUpdate, tx)
+			continue
+		}
+
+		// If it's newly confirmed
+		if oldTx.CreatedAt.IsZero() && !tx.CreatedAt.IsZero() {
+			toConfirm = append(toConfirm, tx)
+		}
+
+		// If it’s newly settled
+		if tx.Settled && !oldTx.Settled {
+			toSettle = append(toSettle, txKey)
+		}
+	}
+	return
+}
+
+func diffVtxos(
+	oldSpendableVtxos []types.Vtxo,
+	oldSpentVtxos []types.Vtxo,
+	newSpendableVtxos []client.Vtxo,
+	newSpentVtxos []client.Vtxo,
+) (
+	toAdd []types.Vtxo,
+	toSpend []types.VtxoKey,
+) {
+	oldSpendableMap := make(map[string]types.Vtxo, len(oldSpendableVtxos))
+	for _, v := range oldSpendableVtxos {
+		oldSpendableMap[v.VtxoKey.String()] = v
+	}
+	oldSpentMap := make(map[string]types.Vtxo, len(oldSpentVtxos))
+	for _, v := range oldSpentVtxos {
+		oldSpentMap[v.VtxoKey.String()] = v
+	}
+
+	newSpendableMap := make(map[string]types.Vtxo, len(newSpendableVtxos))
+	for _, v := range newSpendableVtxos {
+		newSpendableMap[v.String()] = toTypesVtxo(v)
+	}
+	newSpentMap := make(map[string]types.Vtxo, len(newSpentVtxos))
+	for _, v := range newSpentVtxos {
+		newSpentMap[v.String()] = toTypesVtxo(v)
+	}
+
+	// find newly added spendable
+	for k, v := range newSpendableMap {
+		if _, exists := oldSpendableMap[k]; !exists {
+			toAdd = append(toAdd, v)
+		}
+	}
+
+	// find anything that was spendable but is missing -> now spent
+	for k, v := range oldSpendableMap {
+		if _, exists := newSpendableMap[k]; !exists {
+			toSpend = append(toSpend, v.VtxoKey)
+		}
+	}
+
+	// Also check anything that appears as "spent" now but wasn't before
+	for k, v := range newSpentMap {
+		if _, exists := oldSpentMap[k]; !exists {
+			toSpend = append(toSpend, v.VtxoKey)
+		}
+	}
+
+	return toAdd, toSpend
+}
+
+func (a *covenantlessArkClient) diffOffchainTxs(
+	oldTxs map[string]types.Transaction,
+	newOffchain []types.Transaction,
+) (
+	toAdd []types.Transaction,
+	toSettle []string,
+) {
+	for _, tx := range newOffchain {
+		txKey := tx.TransactionKey.String()
+		oldTx, exists := oldTxs[txKey]
+
+		if !exists {
+			// brand new
+			toAdd = append(toAdd, tx)
+			continue
+		}
+
+		// If newly settled
+		if tx.Settled && !oldTx.Settled {
+			toSettle = append(toSettle, txKey)
+		}
+	}
+	return
 }
 
 func (a *covenantlessArkClient) listenForBoardingTxs(ctx context.Context) {

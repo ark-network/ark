@@ -28,6 +28,7 @@ type TransactionStore interface {
 	RbfTransactions(ctx context.Context, rbfTxs map[string]Transaction) (int, error)
 	GetAllTransactions(ctx context.Context) ([]Transaction, error)
 	GetTransactions(ctx context.Context, txids []string) ([]Transaction, error)
+	UpdateTransaction(ctx context.Context, tx Transaction) error
 	GetEventChannel() chan TransactionEvent
 	Close()
 }
