@@ -3137,10 +3137,11 @@ func buildRedeemTx(
 		}
 
 		ins = append(ins, common.VtxoInput{
-			Outpoint:    vtxoOutpoint,
-			Tapscript:   tapscript,
-			Amount:      int64(vtxo.Amount),
-			WitnessSize: closure.WitnessSize(extraWitnessSize),
+			Outpoint:           vtxoOutpoint,
+			Tapscript:          tapscript,
+			Amount:             int64(vtxo.Amount),
+			WitnessSize:        closure.WitnessSize(extraWitnessSize),
+			RevealedTapscripts: vtxo.Tapscripts,
 		})
 	}
 

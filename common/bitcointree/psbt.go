@@ -3,6 +3,7 @@ package bitcointree
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
@@ -15,7 +16,68 @@ var (
 	COSIGNER_PSBT_KEY_PREFIX     = []byte("cosigner")
 	CONDITION_WITNESS_KEY_PREFIX = []byte(tree.ConditionWitnessKey)
 	VTXO_TREE_EXPIRY_PSBT_KEY    = []byte("expiry")
+	VTXO_TAPSCRIPTS_KEY          = []byte("tapscripts")
 )
+
+func AddTapscripts(inIndex int, ptx *psbt.Packet, tapscripts []string) error {
+	var tapscriptsBytes bytes.Buffer
+
+	err := binary.Write(&tapscriptsBytes, binary.LittleEndian, uint32(len(tapscripts)))
+	if err != nil {
+		return err
+	}
+
+	for _, tapscript := range tapscripts {
+		scriptBytes, err := hex.DecodeString(tapscript)
+		if err != nil {
+			return err
+		}
+		if err := binary.Write(&tapscriptsBytes, binary.LittleEndian, uint32(len(scriptBytes))); err != nil {
+			return err
+		}
+		if _, err := tapscriptsBytes.Write(scriptBytes); err != nil {
+			return err
+		}
+	}
+
+	ptx.Inputs[inIndex].Unknowns = append(ptx.Inputs[inIndex].Unknowns, &psbt.Unknown{
+		Value: tapscriptsBytes.Bytes(),
+		Key:   VTXO_TAPSCRIPTS_KEY,
+	})
+	return nil
+}
+
+func GetTapscripts(in psbt.PInput) ([]string, error) {
+	var tapscripts []string
+
+	for _, u := range in.Unknowns {
+		if bytes.Equal(u.Key, VTXO_TAPSCRIPTS_KEY) {
+			buf := bytes.NewReader(u.Value)
+
+			var count uint32
+			if err := binary.Read(buf, binary.LittleEndian, &count); err != nil {
+				return nil, err
+			}
+
+			for i := uint32(0); i < count; i++ {
+				var scriptLen uint32
+				if err := binary.Read(buf, binary.LittleEndian, &scriptLen); err != nil {
+					return nil, err
+				}
+
+				scriptBytes := make([]byte, scriptLen)
+				if _, err := buf.Read(scriptBytes); err != nil {
+					return nil, err
+				}
+
+				tapscripts = append(tapscripts, hex.EncodeToString(scriptBytes))
+			}
+			break
+		}
+	}
+
+	return tapscripts, nil
+}
 
 func AddConditionWitness(inIndex int, ptx *psbt.Packet, witness wire.TxWitness) error {
 	var witnessBytes bytes.Buffer

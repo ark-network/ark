@@ -75,14 +75,23 @@ func (v *TapscriptsVtxoScript) Decode(scripts []string) error {
 func (v *TapscriptsVtxoScript) Validate(server *secp256k1.PublicKey, minLocktime common.RelativeLocktime) error {
 	serverXonly := schnorr.SerializePubKey(server)
 	for _, forfeit := range v.ForfeitClosures() {
-		multisigClosure, ok := forfeit.(*MultisigClosure)
-		if !ok {
-			return fmt.Errorf("invalid forfeit closure, expected MultisigClosure")
+		keys := make([]*secp256k1.PublicKey, 0)
+		switch c := forfeit.(type) {
+		case *MultisigClosure:
+			keys = c.PubKeys
+		case *CLTVMultisigClosure:
+			keys = c.PubKeys
+		case *ConditionMultisigClosure:
+			keys = c.PubKeys
+		}
+
+		if len(keys) == 0 {
+			return fmt.Errorf("invalid forfeit closure, expected MultisigClosure, CLTVMultisigClosure or ConditionMultisigClosure")
 		}
 
 		// must contain server pubkey
 		found := false
-		for _, pubkey := range multisigClosure.PubKeys {
+		for _, pubkey := range keys {
 			if bytes.Equal(schnorr.SerializePubKey(pubkey), serverXonly) {
 				found = true
 				break
