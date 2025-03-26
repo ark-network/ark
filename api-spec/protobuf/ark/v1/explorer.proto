@@ -6,7 +6,7 @@ import "google/api/annotations.proto";
 import "ark/v1/types.proto";
 
 service ExplorerService {
-  rpc GetCommitmentTxInfo(GetCommitmentTxInfoRequest) returns (GetCommitmentTxInfoResponse) {
+  rpc GetCommitmentTx(GetCommitmentTxRequest) returns (GetCommitmentTxResponse) {
     option (google.api.http) = {
       get: "/v1/commitmentTx/{txid}"
     };
@@ -36,18 +36,27 @@ service ExplorerService {
       get: "/v1/history/{address}"
     };
   };
-  rpc GetTransactionChain(GetTransactionChainRequest) returns (GetTransactionChainResponse) {
+  rpc GetVtxoChain(GetVtxoChainRequest) returns (GetVtxoChainResponse) {
     option (google.api.http) = {
       get: "/v1/vtxo/{outpoint.txid}/{outpoint.vout}/chain"
     };
   }
+  rpc GetVirtualTxs(GetVirtualTxsRequest) returns (GetVirtualTxsResponse) {
+    option (google.api.http) = {
+      get: "/v1/virtualTx/{txids}"
+    };
+  }
+  rpc GetSweptCommitmentTx(GetSweptCommitmentTxRequest) returns (GetSweptCommitmentTxResponse) {
+    option (google.api.http) = {
+      get: "/v1/commitmentTx/{txid}/swept"
+    };
+  }
 }
 
-message GetCommitmentTxInfoRequest {
+message GetCommitmentTxRequest {
   string txid = 1;
 }
-message GetCommitmentTxInfoResponse {
-  string tx = 1;
+message GetCommitmentTxResponse {
   int64 started_at = 2;
   int64 ended_at = 3;
   map<uint32, Batch> batches = 4;
@@ -58,7 +67,7 @@ message GetVtxoTreeRequest {
   PageRequest page = 2;
 }
 message GetVtxoTreeResponse {
-  repeated FlatNode vtxo_tree = 1;
+  repeated Node vtxo_tree = 1;
   PageResponse page = 2;
 }
 
@@ -76,7 +85,7 @@ message GetConnectorsRequest {
   PageRequest page = 2;
 }
 message GetConnectorsResponse {
-  repeated FlatNode connectors = 1;
+  repeated Node connectors = 1;
   PageResponse page = 2;
 }
 
@@ -100,11 +109,31 @@ message GetTransactionHistoryResponse {
   PageResponse page = 2;
 }
 
-message GetTransactionChainRequest {
+message GetVtxoChainRequest {
   Outpoint outpoint = 1;
   PageRequest page = 2;
 }
-message GetTransactionChainResponse {
+message GetVtxoChainResponse {
+  map<string, Transactions> graph = 1;
+  PageResponse page = 2;
+}
+
+message GetVirtualTxsRequest {
+  repeated string txids = 1;
+  PageRequest page = 2;
+}
+message GetVirtualTxsResponse {
   repeated string txs = 1;
   PageResponse page = 2;
+}
+
+message GetSweptCommitmentTxRequest {
+  string txid = 1;
+}
+message GetSweptCommitmentTxResponse {
+  repeated string swept_by = 1;
+}
+
+message Transactions {
+  repeated string txs = 1;
 }

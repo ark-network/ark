@@ -6,22 +6,21 @@ import "google/api/annotations.proto";
 import "ark/v1/types.proto";
 
 service AdminService {
+  rpc GetCommitmentTxInfo(GetCommitmentTxInfoRequest) returns (GetCommitmentTxInfoResponse) {
+    option (google.api.http) = {
+      get: "/v1/admin/commitmentTx/{id}"
+    };
+  }
+  rpc GetCommitmentTxs(GetCommitmentTxsRequest) returns (GetCommitmentTxsResponse) {
+    option (google.api.http) = {
+      get: "/v1/admin/commitmentTxs"
+    };
+  }
   rpc GetScheduledSweep(GetScheduledSweepRequest) returns (GetScheduledSweepResponse) {
     option (google.api.http) = {
       get: "/v1/admin/sweeps"
     };
   }
-  rpc GetBatch(GetBatchRequest) returns (GetBatchResponse) {
-    option (google.api.http) = {
-      get: "/v1/admin/batch/{batch_id}"
-    };
-  }
-  rpc GetBatches(GetBatchesRequest) returns (GetBatchesResponse) {
-    option (google.api.http) = {
-      post: "/v1/admin/batches"
-      body: "*"
-    };
-  } 
   rpc CreateNote(CreateNoteRequest) returns (CreateNoteResponse) {
     option (google.api.http) = {
       post: "/v1/admin/note"
@@ -39,40 +38,43 @@ service AdminService {
       body: "*"
     };
   }
-  rpc GetTxRequestQueue(GetTxRequestQueueRequest) returns (GetTxRequestQueueResponse) {
+  rpc ListIntents(ListIntentsRequest) returns (ListIntentsResponse) {
     option (google.api.http) = {
-      get: "/v1/admin/queue"
+      get: "/v1/admin/intents"
     };
   }
-  rpc DeleteTxRequests(DeleteTxRequestsRequest) returns (DeleteTxRequestsResponse) {
+  rpc DeleteIntents(DeleteIntentsRequest) returns (DeleteIntentsResponse) {
     option (google.api.http) = {
-      post: "/v1/admin/queue/delete"
+      post: "/v1/admin/intents/delete"
       body: "*"
     };
   }
 }
 
-message GetScheduledSweepRequest {}
-message GetScheduledSweepResponse {
-  repeated ScheduledSweep sweeps = 1;
+message GetCommitmentTxInfoRequest {
+  string id = 1;
 }
-
-message GetBatchRequest {
-  string batch_id = 1;
-}
-message GetBatchResponse {
-  oneof batch {
-    BatchCompleted success = 1;
-    BatchFailed failure = 2;
+message GetCommitmentTxInfoResponse {
+  oneof commitment_tx {
+    CommitmentTxCompleted success = 1;
+    CommitmentTxFailed failure = 2;
   }
 }
 
-message GetBatchesRequest {
-  int64 after = 1;
-  int64 before = 2;
+message GetCommitmentTxsRequest {
+  int64 before = 1;
+  int64 after = 2;
 }
-message GetBatchesResponse {
-  repeated string batch_ids = 1;
+message GetCommitmentTxsResponse {
+  repeated string ids = 1;
+}
+
+message GetScheduledSweepRequest {
+  PageRequest page = 1;
+}
+message GetScheduledSweepResponse {
+  repeated ScheduledSweep sweeps = 1;
+  PageResponse page = 2;
 }
 
 message CreateNoteRequest {
@@ -85,22 +87,101 @@ message CreateNoteResponse {
 
 message GetMarketHourRequest {}
 message GetMarketHourResponse {
-    MarketHourConfig market_hour_config = 1;
+    MarketHourConfig market_hour = 1;
 }
 
 message UpdateMarketHourRequest {
-    MarketHourConfig market_hour_config = 1;
+    MarketHourConfig market_hour = 1;
 }
 message UpdateMarketHourResponse {}
 
-message GetTxRequestQueueRequest {
-  repeated string request_ids = 1;
+message ListIntentsRequest {
+  repeated string intent_ids = 1;
 }
-message GetTxRequestQueueResponse {
-  repeated TxRequestInfo requests = 1;
+message ListIntentsResponse {
+  repeated Intent intents = 1;
 }
 
-message DeleteTxRequestsRequest {
-  repeated string request_ids = 1;
+message DeleteIntentsRequest {
+  repeated string intent_ids = 1;
 }
-message DeleteTxRequestsResponse {}
+message DeleteIntentsResponse {}
+
+enum BatchStage {
+  BATCH_STAGE_UNSPECIFIED = 0;
+  BATCH_STAGE_REGISTRATION = 1;
+  BATCH_STAGE_FINALIZATION = 2;
+  BATCH_STAGE_FINALIZED = 3;
+  BATCH_STAGE_FAILED = 4;
+}
+
+message BatchSuccess {
+  uint64 total_forfeit_amount = 1;
+  uint64 total_boarding_amount = 2;
+  uint64 total_batch_amount = 3;
+  uint64 total_exit_amount = 4;
+  uint64 total_fee_amount = 5;
+  repeated Outpoint input_vtxos = 6;
+  repeated Outpoint boarding_utxos = 7;
+  repeated Outpoint output_vtxos = 8;
+  repeated Outpoint collaborative_exit_utxos = 9;
+  bool swept = 10;
+  int64 swept_at = 11;
+  repeated string swept_by = 12;
+  int64 sweep_scheduled_at = 13;
+}
+
+message BatchFailed {
+  BatchStage stage = 1;
+  string reason = 2;
+}
+
+message CommitmentTxCompleted {
+  string id = 1;
+  string commitment_txid = 2;
+  string commitment_tx = 3;
+  int64 started_at = 4;
+  int64 ended_at = 5;
+  map<uint32, BatchSuccess> batches = 6;
+}
+
+message CommitmentTxFailed {
+  string id = 1;
+  int64 started_at = 4;
+  int64 ended_at = 5;
+  map<uint32, BatchFailed> batches = 6;
+}
+
+message MarketHourConfig {
+  int64 start_time = 1;
+  int64 end_time = 2;
+  int64 period = 3;
+  int64 round_interval = 4;
+}
+
+message ScheduledSweep {
+  string batch_id = 1;
+  string commitment_txid = 2;
+  int32 num_transactions_to_broadcast = 3;
+  uint64 amount_to_sweep = 4;
+  int64 scheduled_start_time = 5;
+  int64 expected_end_time = 6;
+}
+
+message IntentInput {
+  string txid = 1;
+  uint32 vout = 2;
+  uint64 amount = 3;
+}
+
+message Intent {
+  string id = 1;
+  int64 created_at = 2;
+  repeated Output receivers = 3;
+  repeated IntentInput inputs = 4;
+  repeated IntentInput boarding_inputs = 5;
+  repeated string notes = 6;
+  string signing_type = 7;
+  repeated string cosigners_public_keys = 8;
+  int64 last_ping = 9;
+}

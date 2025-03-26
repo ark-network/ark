@@ -11,24 +11,12 @@ service ArkService {
       get: "/v1/info"
     };
   }
-  rpc GetBoardingAddress(GetBoardingAddressRequest) returns (GetBoardingAddressResponse) {
-    option (google.api.http) = {
-      post: "/v1/boarding"
-      body: "*"
-    };
-  };
 
   /* Batch APIs */
 
-  rpc RegisterInputsForNextBatch(RegisterInputsForNextBatchRequest) returns (RegisterInputsForNextBatchResponse) {
+  rpc RegisterIntent(RegisterIntentRequest) returns (RegisterIntentResponse) {
     option (google.api.http) = {
-      post: "/v1/batch/registerInputs"
-      body: "*"
-    };
-  };
-  rpc RegisterOutputsForNextBatch(RegisterOutputsForNextBatchRequest) returns (RegisterOutputsForNextBatchResponse) {
-    option (google.api.http) = {
-      post: "/v1/batch/registerOutputs"
+      post: "/v1/batch/registerIntent"
       body: "*"
     };
   };
@@ -52,12 +40,18 @@ service ArkService {
   };
   rpc GetBatchEventStream(GetBatchEventStreamRequest) returns (stream GetBatchEventStreamResponse) {
     option (google.api.http) = {
-      get: "/v1/batch/events"
+      get: "/v1/batch/{batch_id}/events"
     };
   };
-  rpc Ping(PingRequest) returns (PingResponse) {
+  rpc ConfirmRegistration(ConfirmRegistrationRequest) returns (ConfirmRegistrationResponse) {
     option (google.api.http) = {
-      get: "/v1/batch/ping/{request_id}"
+      post: "/v1/batch/{intent_id}/ack"
+    };
+  };
+  rpc RegisterBlindedOutputs(RegisterBlindedOutputsRequest) returns (RegisterBlindedOutputsResponse) {
+    option (google.api.http) = {
+      post: "/v1/batch/registerOutputs"
+      body: "*"
     };
   };
 
@@ -69,21 +63,25 @@ service ArkService {
       body: "*"
     };
   }
+  rpc SubmitCheckpointTxs(SubmitCheckpointTxsRequest) returns (SubmitCheckpointTxsResponse) {
+    option (google.api.http) = {
+      post: "/v1/submitCheckpointTxs"
+      body: "*"
+    };
+  }
 }
 
 message GetInfoRequest {}
 message GetInfoResponse {
   string pubkey = 1;
-  int64 vtxo_tree_expiry = 2;
+  int64 batch_expiry = 2;
   int64 unilateral_exit_delay = 3;
-  int64 batch_interval = 4;
+  int64 round_interval = 4;
   string network = 5;
   int64 dust = 6;
-  string boarding_descriptor_template = 7;
-  repeated string vtxo_descriptor_templates = 8;
-  string forfeit_address = 9;
-  MarketHour market_hour = 10;
-  string version = 11;
+  string boarding_template = 7;
+  MarketHour market_hour = 8;
+  string version = 9;
 }
 
 message GetBoardingAddressRequest {
@@ -98,30 +96,22 @@ message GetBoardingAddressResponse {
 
 /* Batch API messages */
 
-message RegisterInputsForNextBatchRequest {
+message RegisterIntentRequest {
   // Tapscripts aims to reveal the taproot tree of the unspent & unexpired VTXOs.
   map<string, Tapscripts> tapscripts = 1; 
-  // BIP322 signature embeds the outpoints and the proof of funds
+  // The BIP322 signature contains the outpoints that are gonna be forfeit and the outputs to be added in the new tree.
   Bip322Signature bip322_signature = 2;
   repeated string notes = 3;
 }
 
-message RegisterInputsForNextBatchResponse {
-  string request_id = 1;
+message RegisterIntentResponse {
+  string intent_id = 1;
 }
 
 message Musig2 {
   repeated string cosigners_public_keys = 1;
   bool signing_all = 2;
 }
-
-message RegisterOutputsForNextBatchRequest {
-  string request_id = 1;
-  // List of receivers for to convert to leaves in the next VTXO tree. 
-  repeated Output outputs = 2;
-  optional Musig2 musig2 = 3;
-}
-message RegisterOutputsForNextBatchResponse {}
 
 message SubmitTreeNoncesRequest {
   string batch_id = 1;
@@ -138,36 +128,60 @@ message SubmitTreeSignaturesRequest {
 message SubmitTreeSignaturesResponse {}
 
 message SubmitSignedForfeitTxsRequest {
+  string batch_id = 1;
   // Forfeit txs signed by the user. 
-  repeated string signed_forfeit_txs = 1;
+  repeated string signed_forfeit_txs = 2;
   // The user has to sign also the commitment tx if he registerd a boarding UTXO.
-  optional string signed_commitment_tx = 2;
+  string signed_commitment_tx = 3;
 }
 message SubmitSignedForfeitTxsResponse {}
 
-message GetBatchEventStreamRequest {}
+message GetBatchEventStreamRequest {
+  string batch_id = 1;
+  repeated string topics = 2;
+}
 message GetBatchEventStreamResponse {
   oneof event {
-    BatchFinalizationEvent batch_finalization = 1;
-    BatchFinalizedEvent batch_finalized = 2;
-    BatchFailedEvent batch_failed = 3;
-    TreeSigningStartedEvent tree_signing_started = 4;
-    TreeNoncesAggregatedEvent tree_nonces_aggregated = 5; 
+    BatchStartedEvent batch_started = 1;
+    BatchVtxoTreeEvent tree_tx = 2;
+    BatchConnectorTreeEvent connector_tx = 3;
+    BatchFinalizationEvent batch_finalization = 4;
+    BatchFinalizedEvent batch_finalized = 5;
+    BatchFailedEvent batch_failed = 6;
+    TreeSigningStartedEvent tree_signing_started = 7;
+    TreeNoncesAggregatedEvent tree_nonces_aggregated = 8; 
   }
 }
 
-message PingRequest {
-  // The id used to register inputs and ouptuts.
-  string request_id = 1;
+message ConfirmRegistrationRequest {
+  // The id returne dby the server when registering the intent.
+  string intent_id = 1;
 }
-message PingResponse {}
+message ConfirmRegistrationResponse {
+  string blinded_cred = 1;
+}
+
+message RegisterBlindedOutputsRequest {
+  string blinded_cred = 1;
+  repeated Output vtxos = 2;
+}
+message RegisterBlindedOutputsResponse {
+  string blinded_cred = 1;
+}
 
 /* Ark Transaction API messages */
 
 message SubmitTxRequest {
-  string tx = 1;
+  string partial_signed_tx = 1;
+  repeated string unsigned_checkpoint_txs = 2;
 }
 message SubmitTxResponse {
-  string signed_tx = 1;
-  string txid = 2;
+  repeated string partial_signed_checkpoint_txs = 3;
+}
+
+message SubmitCheckpointTxsRequest {
+  repeated string fully_signed_checkpoint_txs = 1;
+}
+message SubmitCheckpointTxsResponse {
+  string fully_signed_tx = 1;
 }
