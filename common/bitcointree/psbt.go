@@ -8,6 +8,7 @@ import (
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcutil/psbt"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
@@ -22,8 +23,8 @@ var (
 func AddTapscripts(inIndex int, ptx *psbt.Packet, tapscripts []string) error {
 	var tapscriptsBytes bytes.Buffer
 
-	err := binary.Write(&tapscriptsBytes, binary.LittleEndian, uint32(len(tapscripts)))
-	if err != nil {
+	// Write number of tapscripts as compact size uint
+	if err := writeCompactSizeUint(&tapscriptsBytes, uint64(len(tapscripts))); err != nil {
 		return err
 	}
 
@@ -32,7 +33,19 @@ func AddTapscripts(inIndex int, ptx *psbt.Packet, tapscripts []string) error {
 		if err != nil {
 			return err
 		}
-		if err := binary.Write(&tapscriptsBytes, binary.LittleEndian, uint32(len(scriptBytes))); err != nil {
+
+		// write depth (always 1)
+		// TODO: allow multiple depth
+		if err := tapscriptsBytes.WriteByte(1); err != nil {
+			return err
+		}
+
+		if err := tapscriptsBytes.WriteByte(byte(txscript.BaseLeafVersion)); err != nil {
+			return err
+		}
+
+		// write script
+		if err := writeCompactSizeUint(&tapscriptsBytes, uint64(len(scriptBytes))); err != nil {
 			return err
 		}
 		if _, err := tapscriptsBytes.Write(scriptBytes); err != nil {
@@ -54,17 +67,30 @@ func GetTapscripts(in psbt.PInput) ([]string, error) {
 		if bytes.Equal(u.Key, VTXO_TAPSCRIPTS_KEY) {
 			buf := bytes.NewReader(u.Value)
 
-			var count uint32
-			if err := binary.Read(buf, binary.LittleEndian, &count); err != nil {
+			// len of tapscripts
+			count, err := readCompactSizeUint(buf)
+			if err != nil {
 				return nil, err
 			}
 
-			for i := uint32(0); i < count; i++ {
-				var scriptLen uint32
-				if err := binary.Read(buf, binary.LittleEndian, &scriptLen); err != nil {
+			for i := uint64(0); i < count; i++ {
+				// depth : ignore
+				if _, err := buf.ReadByte(); err != nil {
 					return nil, err
 				}
 
+				// leaf version : ignore, we assume base tapscript
+				if _, err := buf.ReadByte(); err != nil {
+					return nil, err
+				}
+
+				// script length
+				scriptLen, err := readCompactSizeUint(buf)
+				if err != nil {
+					return nil, err
+				}
+
+				// script bytes
 				scriptBytes := make([]byte, scriptLen)
 				if _, err := buf.Read(scriptBytes); err != nil {
 					return nil, err
@@ -187,4 +213,58 @@ func cosignerPrefixedKey(index int) []byte {
 
 func parsePrefixedCosignerKey(key []byte) bool {
 	return bytes.HasPrefix(key, COSIGNER_PSBT_KEY_PREFIX)
+}
+
+// readCompactSizeUint reads a compact size uint from the reader
+func readCompactSizeUint(r *bytes.Reader) (uint64, error) {
+	firstByte, err := r.ReadByte()
+	if err != nil {
+		return 0, err
+	}
+
+	switch firstByte {
+	case 253:
+		var val uint16
+		if err := binary.Read(r, binary.LittleEndian, &val); err != nil {
+			return 0, err
+		}
+		return uint64(val), nil
+	case 254:
+		var val uint32
+		if err := binary.Read(r, binary.LittleEndian, &val); err != nil {
+			return 0, err
+		}
+		return uint64(val), nil
+	case 255:
+		var val uint64
+		if err := binary.Read(r, binary.LittleEndian, &val); err != nil {
+			return 0, err
+		}
+		return val, nil
+	default:
+		return uint64(firstByte), nil
+	}
+}
+
+// writeCompactSizeUint writes a compact size uint to the writer
+func writeCompactSizeUint(w *bytes.Buffer, val uint64) error {
+	if val < 253 {
+		return w.WriteByte(byte(val))
+	}
+	if val < 0x10000 {
+		if err := w.WriteByte(253); err != nil {
+			return err
+		}
+		return binary.Write(w, binary.LittleEndian, uint16(val))
+	}
+	if val < 0x100000000 {
+		if err := w.WriteByte(254); err != nil {
+			return err
+		}
+		return binary.Write(w, binary.LittleEndian, uint32(val))
+	}
+	if err := w.WriteByte(255); err != nil {
+		return err
+	}
+	return binary.Write(w, binary.LittleEndian, val)
 }
