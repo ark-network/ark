@@ -28,7 +28,7 @@ type TransactionStore interface {
 	RbfTransactions(ctx context.Context, rbfTxs map[string]Transaction) (int, error)
 	GetAllTransactions(ctx context.Context) ([]Transaction, error)
 	GetTransactions(ctx context.Context, txids []string) ([]Transaction, error)
-	UpdateTransaction(ctx context.Context, tx Transaction) error
+	UpdateTransactions(ctx context.Context, txs []Transaction) (int, error)
 	GetEventChannel() chan TransactionEvent
 	Close()
 }
@@ -36,6 +36,7 @@ type TransactionStore interface {
 type VtxoStore interface {
 	AddVtxos(ctx context.Context, vtxos []Vtxo) (int, error)
 	SpendVtxos(ctx context.Context, vtxos []VtxoKey, spentBy string) (int, error)
+	UpdateVtxos(ctx context.Context, vtxos []Vtxo) (int, error)
 	GetAllVtxos(ctx context.Context) (spendable []Vtxo, spent []Vtxo, err error)
 	GetVtxos(ctx context.Context, keys []VtxoKey) ([]Vtxo, error)
 	GetEventChannel() chan VtxoEvent
