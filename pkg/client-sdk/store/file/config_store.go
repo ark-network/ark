@@ -52,19 +52,19 @@ func (s *configStore) GetDatadir() string {
 
 func (s *configStore) AddData(ctx context.Context, data types.Config) error {
 	sd := &storeData{
-		ServerUrl:                  data.ServerUrl,
-		ServerPubKey:               hex.EncodeToString(data.ServerPubKey.SerializeCompressed()),
-		WalletType:                 data.WalletType,
-		ClientType:                 data.ClientType,
-		Network:                    data.Network.Name,
-		VtxoTreeExpiry:             fmt.Sprintf("%d", data.VtxoTreeExpiry.Value),
-		RoundInterval:              fmt.Sprintf("%d", data.RoundInterval),
-		UnilateralExitDelay:        fmt.Sprintf("%d", data.UnilateralExitDelay.Value),
-		Dust:                       fmt.Sprintf("%d", data.Dust),
-		BoardingDescriptorTemplate: data.BoardingDescriptorTemplate,
-		ExplorerURL:                data.ExplorerURL,
-		ForfeitAddress:             data.ForfeitAddress,
-		WithTransactionFeed:        strconv.FormatBool(data.WithTransactionFeed),
+		ServerUrl:           data.ServerUrl,
+		ServerPubKey:        hex.EncodeToString(data.ServerPubKey.SerializeCompressed()),
+		WalletType:          data.WalletType,
+		ClientType:          data.ClientType,
+		Network:             data.Network.Name,
+		VtxoTreeExpiry:      fmt.Sprintf("%d", data.VtxoTreeExpiry.Value),
+		RoundInterval:       fmt.Sprintf("%d", data.RoundInterval),
+		UnilateralExitDelay: fmt.Sprintf("%d", data.UnilateralExitDelay.Value),
+		Dust:                fmt.Sprintf("%d", data.Dust),
+		BoardingExitDelay:   fmt.Sprintf("%d", data.BoardingExitDelay.Value),
+		ExplorerURL:         data.ExplorerURL,
+		ForfeitAddress:      data.ForfeitAddress,
+		WithTransactionFeed: strconv.FormatBool(data.WithTransactionFeed),
 	}
 
 	if err := s.write(sd); err != nil {

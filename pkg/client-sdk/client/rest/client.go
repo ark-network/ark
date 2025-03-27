@@ -74,6 +74,11 @@ func (a *restClient) GetInfo(
 		return nil, err
 	}
 
+	boardingExitDelay, err := strconv.Atoi(resp.Payload.BoardingExitDelay)
+	if err != nil {
+		return nil, err
+	}
+
 	roundInterval, err := strconv.Atoi(resp.Payload.RoundInterval)
 	if err != nil {
 		return nil, err
@@ -85,15 +90,15 @@ func (a *restClient) GetInfo(
 	}
 
 	return &client.Info{
-		PubKey:                     resp.Payload.Pubkey,
-		VtxoTreeExpiry:             int64(vtxoTreeExpiry),
-		UnilateralExitDelay:        int64(unilateralExitDelay),
-		RoundInterval:              int64(roundInterval),
-		Network:                    resp.Payload.Network,
-		Dust:                       uint64(dust),
-		BoardingDescriptorTemplate: resp.Payload.BoardingDescriptorTemplate,
-		ForfeitAddress:             resp.Payload.ForfeitAddress,
-		Version:                    resp.Payload.Version,
+		PubKey:              resp.Payload.Pubkey,
+		VtxoTreeExpiry:      int64(vtxoTreeExpiry),
+		UnilateralExitDelay: int64(unilateralExitDelay),
+		BoardingExitDelay:   int64(boardingExitDelay),
+		RoundInterval:       int64(roundInterval),
+		Network:             resp.Payload.Network,
+		Dust:                uint64(dust),
+		ForfeitAddress:      resp.Payload.ForfeitAddress,
+		Version:             resp.Payload.Version,
 	}, nil
 }
 
