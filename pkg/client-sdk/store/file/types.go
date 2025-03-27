@@ -24,6 +24,10 @@ type storeData struct {
 	ExplorerURL                string `json:"explorer_url"`
 	ForfeitAddress             string `json:"forfeit_address"`
 	WithTransactionFeed        string `json:"with_transaction_feed"`
+	MarketHourStartTime        string `json:"market_hour_start_time"`
+	MarketHourEndTime          string `json:"market_hour_end_time"`
+	MarketHourPeriod           string `json:"market_hour_period"`
+	MarketHourRoundInterval    string `json:"market_hour_round_interval"`
 }
 
 func (d storeData) isEmpty() bool {

@@ -65,6 +65,10 @@ func (s *configStore) AddData(ctx context.Context, data types.Config) error {
 		ExplorerURL:                data.ExplorerURL,
 		ForfeitAddress:             data.ForfeitAddress,
 		WithTransactionFeed:        strconv.FormatBool(data.WithTransactionFeed),
+		MarketHourStartTime:        data.MarketHourStartTime,
+		MarketHourEndTime:          data.MarketHourEndTime,
+		MarketHourPeriod:           data.MarketHourPeriod,
+		MarketHourRoundInterval:    data.MarketHourRoundInterval,
 	}
 
 	if err := s.write(sd); err != nil {
