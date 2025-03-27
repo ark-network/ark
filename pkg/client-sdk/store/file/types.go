@@ -100,5 +100,9 @@ func (d storeData) asMap() map[string]string {
 		"explorer_url":                 d.ExplorerURL,
 		"forfeit_address":              d.ForfeitAddress,
 		"with_transaction_feed":        d.WithTransactionFeed,
+		"market_hour_start_time":       d.MarketHourStartTime,
+		"market_hour_end_time":         d.MarketHourEndTime,
+		"market_hour_period":           d.MarketHourPeriod,
+		"market_hour_round_interval":   d.MarketHourRoundInterval,
 	}
 }
