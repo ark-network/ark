@@ -59,6 +59,7 @@ type VtxoEventType int
 const (
 	VtxosAdded VtxoEventType = iota
 	VtxosSpent
+	VtxosUpdated
 )
 
 func (e VtxoEventType) String() string {
@@ -123,6 +124,7 @@ const (
 	TxsSettled
 	TxsConfirmed
 	TxsReplaced
+	TxsUpdated
 )
 
 func (e TxEventType) String() string {

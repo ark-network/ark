@@ -173,6 +173,21 @@ func (s *txStore) GetTransactions(
 	return txs, nil
 }
 
+func (s *txStore) UpdateTransactions(_ context.Context, txs []types.Transaction) (int, error) {
+	for _, tx := range txs {
+		if err := s.db.Upsert(tx.TransactionKey.String(), &tx); err != nil {
+			return -1, err
+		}
+	}
+
+	go s.sendEvent(types.TransactionEvent{
+		Type: types.TxsUpdated,
+		Txs:  txs,
+	})
+
+	return len(txs), nil
+}
+
 func (s *txStore) GetEventChannel() chan types.TransactionEvent {
 	return s.eventCh
 }
