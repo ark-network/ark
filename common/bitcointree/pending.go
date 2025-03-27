@@ -105,7 +105,7 @@ func BuildRedeemTx(
 	for i := range redeemPtx.Inputs {
 		redeemPtx.Inputs[i].WitnessUtxo = witnessUtxos[i]
 		redeemPtx.Inputs[i].TaprootLeafScript = []*psbt.TaprootTapLeafScript{signingTapLeaves[i]}
-		if err := AddTapscripts(i, redeemPtx, tapscripts[i]); err != nil {
+		if err := AddTaprootTree(i, redeemPtx, tapscripts[i]); err != nil {
 			return "", err
 		}
 	}

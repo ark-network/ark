@@ -276,7 +276,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 			return "", "", fmt.Errorf("missing tapscript leaf")
 		}
 
-		tapscripts, err := bitcointree.GetTapscripts(input)
+		tapscripts, err := bitcointree.GetTaprootTree(input)
 		if err != nil {
 			return "", "", fmt.Errorf("missing tapscripts: %s", err)
 		}

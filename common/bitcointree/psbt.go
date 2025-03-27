@@ -17,18 +17,20 @@ var (
 	COSIGNER_PSBT_KEY_PREFIX     = []byte("cosigner")
 	CONDITION_WITNESS_KEY_PREFIX = []byte(tree.ConditionWitnessKey)
 	VTXO_TREE_EXPIRY_PSBT_KEY    = []byte("expiry")
-	VTXO_TAPSCRIPTS_KEY          = []byte("tapscripts")
+	VTXO_TAPROOT_TREE_KEY        = []byte("taptree")
 )
 
-func AddTapscripts(inIndex int, ptx *psbt.Packet, tapscripts []string) error {
+// AddTaprootTree adds the whole taproot tree of the VTXO to the given PSBT input.
+// it follows the format of PSBT_OUT_TAP_TREE / BIP-371
+func AddTaprootTree(inIndex int, ptx *psbt.Packet, leaves []string) error {
 	var tapscriptsBytes bytes.Buffer
 
-	// Write number of tapscripts as compact size uint
-	if err := writeCompactSizeUint(&tapscriptsBytes, uint64(len(tapscripts))); err != nil {
+	// write number of leaves as compact size uint
+	if err := writeCompactSizeUint(&tapscriptsBytes, uint64(len(leaves))); err != nil {
 		return err
 	}
 
-	for _, tapscript := range tapscripts {
+	for _, tapscript := range leaves {
 		scriptBytes, err := hex.DecodeString(tapscript)
 		if err != nil {
 			return err
@@ -55,16 +57,17 @@ func AddTapscripts(inIndex int, ptx *psbt.Packet, tapscripts []string) error {
 
 	ptx.Inputs[inIndex].Unknowns = append(ptx.Inputs[inIndex].Unknowns, &psbt.Unknown{
 		Value: tapscriptsBytes.Bytes(),
-		Key:   VTXO_TAPSCRIPTS_KEY,
+		Key:   VTXO_TAPROOT_TREE_KEY,
 	})
 	return nil
 }
 
-func GetTapscripts(in psbt.PInput) ([]string, error) {
-	var tapscripts []string
+// GetTaprootTree returns the taproot tree of the given PSBT input.
+func GetTaprootTree(in psbt.PInput) ([]string, error) {
+	var leaves []string
 
 	for _, u := range in.Unknowns {
-		if bytes.Equal(u.Key, VTXO_TAPSCRIPTS_KEY) {
+		if bytes.Equal(u.Key, VTXO_TAPROOT_TREE_KEY) {
 			buf := bytes.NewReader(u.Value)
 
 			// len of tapscripts
@@ -96,13 +99,13 @@ func GetTapscripts(in psbt.PInput) ([]string, error) {
 					return nil, err
 				}
 
-				tapscripts = append(tapscripts, hex.EncodeToString(scriptBytes))
+				leaves = append(leaves, hex.EncodeToString(scriptBytes))
 			}
 			break
 		}
 	}
 
-	return tapscripts, nil
+	return leaves, nil
 }
 
 func AddConditionWitness(inIndex int, ptx *psbt.Packet, witness wire.TxWitness) error {

@@ -131,11 +131,11 @@ func TestPsbtCustomUnknownFields(t *testing.T) {
 
 		for _, scripts := range testCases {
 			// Add tapscripts to input 0
-			err = bitcointree.AddTapscripts(0, ptx, scripts)
+			err = bitcointree.AddTaprootTree(0, ptx, scripts)
 			require.NoError(t, err)
 
 			// Get tapscripts back and verify
-			retrievedScripts, err := bitcointree.GetTapscripts(ptx.Inputs[0])
+			retrievedScripts, err := bitcointree.GetTaprootTree(ptx.Inputs[0])
 			require.NoError(t, err)
 			require.Equal(t, len(scripts), len(retrievedScripts))
 
