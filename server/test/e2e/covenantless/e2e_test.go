@@ -446,7 +446,7 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 					&tree.CLTVMultisigClosure{
 						Locktime: cltvLocktime,
 						MultisigClosure: tree.MultisigClosure{
-							PubKeys: []*secp256k1.PublicKey{bobPubKey},
+							PubKeys: []*secp256k1.PublicKey{bobPubKey, aliceAddr.Server},
 						},
 					},
 				},
@@ -518,6 +518,14 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		alicePkScript, err := common.P2TRScript(aliceAddr.VtxoTapKey)
 		require.NoError(t, err)
 
+		tapscripts := make([]string, 0, len(vtxoScript.Closures))
+		for _, closure := range vtxoScript.Closures {
+			script, err := closure.Script()
+			require.NoError(t, err)
+
+			tapscripts = append(tapscripts, hex.EncodeToString(script))
+		}
+
 		ptx, err := bitcointree.BuildRedeemTx(
 			[]common.VtxoInput{
 				{
@@ -525,9 +533,10 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 						Hash:  redeemPtx.UnsignedTx.TxHash(),
 						Index: bobOutputIndex,
 					},
-					Tapscript:   tapscript,
-					WitnessSize: closure.WitnessSize(),
-					Amount:      bobOutput.Value,
+					Tapscript:          tapscript,
+					WitnessSize:        closure.WitnessSize(),
+					Amount:             bobOutput.Value,
+					RevealedTapscripts: tapscripts,
 				},
 			},
 			[]*wire.TxOut{
@@ -788,7 +797,7 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 				&tree.CLTVMultisigClosure{
 					Locktime: common.AbsoluteLocktime(currentHeight + cltvBlocks),
 					MultisigClosure: tree.MultisigClosure{
-						PubKeys: []*secp256k1.PublicKey{bobPubKey},
+						PubKeys: []*secp256k1.PublicKey{bobPubKey, aliceAddr.Server},
 					},
 				},
 			},
@@ -859,6 +868,14 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 	alicePkScript, err := common.P2TRScript(aliceAddr.VtxoTapKey)
 	require.NoError(t, err)
 
+	tapscripts := make([]string, 0, len(vtxoScript.Closures))
+	for _, closure := range vtxoScript.Closures {
+		script, err := closure.Script()
+		require.NoError(t, err)
+
+		tapscripts = append(tapscripts, hex.EncodeToString(script))
+	}
+
 	ptx, err := bitcointree.BuildRedeemTx(
 		[]common.VtxoInput{
 			{
@@ -866,9 +883,10 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 					Hash:  redeemPtx.UnsignedTx.TxHash(),
 					Index: bobOutputIndex,
 				},
-				Tapscript:   tapscript,
-				WitnessSize: closure.WitnessSize(),
-				Amount:      bobOutput.Value,
+				Tapscript:          tapscript,
+				WitnessSize:        closure.WitnessSize(),
+				Amount:             bobOutput.Value,
+				RevealedTapscripts: tapscripts,
 			},
 		},
 		[]*wire.TxOut{
@@ -968,7 +986,7 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 				&tree.ConditionMultisigClosure{
 					Condition: conditionScript,
 					MultisigClosure: tree.MultisigClosure{
-						PubKeys: []*secp256k1.PublicKey{bobPubKey},
+						PubKeys: []*secp256k1.PublicKey{bobPubKey, aliceAddr.Server},
 					},
 				},
 			},
@@ -1039,6 +1057,14 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 	alicePkScript, err := common.P2TRScript(aliceAddr.VtxoTapKey)
 	require.NoError(t, err)
 
+	tapscripts := make([]string, 0, len(vtxoScript.Closures))
+	for _, closure := range vtxoScript.Closures {
+		script, err := closure.Script()
+		require.NoError(t, err)
+
+		tapscripts = append(tapscripts, hex.EncodeToString(script))
+	}
+
 	ptx, err := bitcointree.BuildRedeemTx(
 		[]common.VtxoInput{
 			{
@@ -1046,9 +1072,10 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 					Hash:  redeemPtx.UnsignedTx.TxHash(),
 					Index: bobOutputIndex,
 				},
-				Tapscript:   tapscript,
-				WitnessSize: closure.WitnessSize(),
-				Amount:      bobOutput.Value,
+				Tapscript:          tapscript,
+				WitnessSize:        closure.WitnessSize(),
+				Amount:             bobOutput.Value,
+				RevealedTapscripts: tapscripts,
 			},
 		},
 		[]*wire.TxOut{
