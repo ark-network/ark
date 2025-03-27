@@ -68,18 +68,31 @@ func (a *restClient) GetInfo(
 	if err != nil {
 		return nil, err
 	}
-
 	unilateralExitDelay, err := strconv.Atoi(resp.Payload.UnilateralExitDelay)
 	if err != nil {
 		return nil, err
 	}
-
 	roundInterval, err := strconv.Atoi(resp.Payload.RoundInterval)
 	if err != nil {
 		return nil, err
 	}
-
 	dust, err := strconv.Atoi(resp.Payload.Dust)
+	if err != nil {
+		return nil, err
+	}
+	nextStartTime, err := strconv.Atoi(resp.Payload.MarketHour.NextStartTime)
+	if err != nil {
+		return nil, err
+	}
+	nextEndTime, err := strconv.Atoi(resp.Payload.MarketHour.NextEndTime)
+	if err != nil {
+		return nil, err
+	}
+	period, err := strconv.Atoi(resp.Payload.MarketHour.Period)
+	if err != nil {
+		return nil, err
+	}
+	mhRoundInterval, err := strconv.Atoi(resp.Payload.MarketHour.RoundInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -94,10 +107,10 @@ func (a *restClient) GetInfo(
 		BoardingDescriptorTemplate: resp.Payload.BoardingDescriptorTemplate,
 		ForfeitAddress:             resp.Payload.ForfeitAddress,
 		Version:                    resp.Payload.Version,
-		MarketHourStartTime:        resp.Payload.MarketHour.NextStartTime,
-		MarketHourEndTime:          resp.Payload.MarketHour.NextEndTime,
-		MarketHourPeriod:           resp.Payload.MarketHour.Period,
-		MarketHourRoundInterval:    resp.Payload.MarketHour.RoundInterval,
+		MarketHourStartTime:        int64(nextStartTime),
+		MarketHourEndTime:          int64(nextEndTime),
+		MarketHourPeriod:           int64(period),
+		MarketHourRoundInterval:    int64(mhRoundInterval),
 	}, nil
 }
 

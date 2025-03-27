@@ -49,6 +49,10 @@ func (d storeData) decode() types.Config {
 	buf, _ := hex.DecodeString(d.ServerPubKey)
 	serverPubkey, _ := secp256k1.ParsePubKey(buf)
 	explorerURL := d.ExplorerURL
+	nextStartTime, _ := strconv.Atoi(d.MarketHourStartTime)
+	nextEndTime, _ := strconv.Atoi(d.MarketHourEndTime)
+	period, _ := strconv.Atoi(d.MarketHourPeriod)
+	mhRoundInterval, _ := strconv.Atoi(d.MarketHourRoundInterval)
 
 	vtxoTreeExpiryType := common.LocktimeTypeBlock
 	if vtxoTreeExpiry >= 512 {
@@ -74,6 +78,10 @@ func (d storeData) decode() types.Config {
 		ExplorerURL:                explorerURL,
 		ForfeitAddress:             d.ForfeitAddress,
 		WithTransactionFeed:        withTransactionFeed,
+		MarketHourStartTime:        int64(nextStartTime),
+		MarketHourEndTime:          int64(nextEndTime),
+		MarketHourPeriod:           int64(period),
+		MarketHourRoundInterval:    int64(mhRoundInterval),
 	}
 }
 
