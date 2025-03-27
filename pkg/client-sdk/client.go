@@ -200,6 +200,10 @@ func (a *arkClient) initWithWallet(
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 		ForfeitAddress:             info.ForfeitAddress,
 		WithTransactionFeed:        args.WithTransactionFeed,
+		MarketHourStartTime:        info.MarketHourStartTime,
+		MarketHourEndTime:          info.MarketHourEndTime,
+		MarketHourPeriod:           info.MarketHourPeriod,
+		MarketHourRoundInterval:    info.MarketHourRoundInterval,
 	}
 	if err := a.store.ConfigStore().AddData(ctx, storeData); err != nil {
 		return err
@@ -278,6 +282,10 @@ func (a *arkClient) init(
 		ExplorerURL:                args.ExplorerURL,
 		ForfeitAddress:             info.ForfeitAddress,
 		WithTransactionFeed:        args.WithTransactionFeed,
+		MarketHourStartTime:        info.MarketHourStartTime,
+		MarketHourEndTime:          info.MarketHourEndTime,
+		MarketHourPeriod:           info.MarketHourPeriod,
+		MarketHourRoundInterval:    info.MarketHourRoundInterval,
 	}
 	walletSvc, err := getWallet(a.store.ConfigStore(), &cfgData, supportedWallets)
 	if err != nil {

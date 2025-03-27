@@ -74,6 +74,10 @@ func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
 		BoardingDescriptorTemplate: resp.GetBoardingDescriptorTemplate(),
 		ForfeitAddress:             resp.GetForfeitAddress(),
 		Version:                    resp.GetVersion(),
+		MarketHourStartTime:        resp.GetMarketHour().GetNextStartTime(),
+		MarketHourEndTime:          resp.GetMarketHour().GetNextEndTime(),
+		MarketHourPeriod:           resp.GetMarketHour().GetPeriod(),
+		MarketHourRoundInterval:    resp.GetMarketHour().GetRoundInterval(),
 	}, nil
 }
 
