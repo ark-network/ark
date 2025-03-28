@@ -31,6 +31,7 @@ type handler struct {
 
 	eventsListenerHandler       *listenerHanlder[*arkv1.GetEventStreamResponse]
 	transactionsListenerHandler *listenerHanlder[*arkv1.GetTransactionsStreamResponse]
+	addressSubsHandler          *listenerHanlder[*arkv1.SubscribeForAddressResponse]
 
 	stopCh <-chan struct{}
 }
@@ -41,6 +42,7 @@ func NewHandler(version string, service application.Service, stopCh <-chan struc
 		svc:                         service,
 		eventsListenerHandler:       newListenerHandler[*arkv1.GetEventStreamResponse](),
 		transactionsListenerHandler: newListenerHandler[*arkv1.GetTransactionsStreamResponse](),
+		addressSubsHandler:          newListenerHandler[*arkv1.SubscribeForAddressResponse](),
 		stopCh:                      stopCh,
 	}
 
@@ -500,6 +502,38 @@ func (h *handler) SetNostrRecipient(
 	return &arkv1.SetNostrRecipientResponse{}, nil
 }
 
+func (h *handler) SubscribeForAddress(
+	req *arkv1.SubscribeForAddressRequest, stream arkv1.ExplorerService_SubscribeForAddressServer,
+) error {
+	vtxoScript, err := parseArkAddress(req.GetAddress())
+	if err != nil {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	listener := &listener[*arkv1.SubscribeForAddressResponse]{
+		id: vtxoScript,
+		ch: make(chan *arkv1.SubscribeForAddressResponse),
+	}
+
+	h.addressSubsHandler.pushListener(listener)
+
+	defer func() {
+		h.addressSubsHandler.removeListener(listener.id)
+		close(listener.ch)
+	}()
+
+	for {
+		select {
+		case <-stream.Context().Done():
+			return nil
+		case ev := <-listener.ch:
+			if err := stream.Send(ev); err != nil {
+				return err
+			}
+		}
+	}
+}
+
 // listenToEvents forwards events from the application layer to the set of listeners
 func (h *handler) listenToEvents() {
 	channel := h.svc.GetEventsChannel(context.Background())
@@ -603,6 +637,37 @@ func (h *handler) listenToTxEvents() {
 				go func(l *listener[*arkv1.GetTransactionsStreamResponse]) {
 					l.ch <- txEvent
 				}(l)
+			}
+
+			if len(h.addressSubsHandler.listeners) > 0 {
+				allSpendableVtxos := make(map[string][]*arkv1.Vtxo)
+				allSpentVtxos := make(map[string][]*arkv1.Vtxo)
+				if txEvent.GetRedeem() != nil {
+					for _, vtxo := range txEvent.GetRedeem().GetSpendableVtxos() {
+						allSpendableVtxos[vtxo.Pubkey] = append(allSpendableVtxos[vtxo.Pubkey], vtxo)
+					}
+					for _, vtxo := range txEvent.GetRedeem().GetSpentVtxos() {
+						allSpentVtxos[vtxo.Pubkey] = append(allSpentVtxos[vtxo.Pubkey], vtxo)
+					}
+				} else {
+					for _, vtxo := range txEvent.GetRound().GetSpendableVtxos() {
+						allSpendableVtxos[vtxo.Pubkey] = append(allSpendableVtxos[vtxo.Pubkey], vtxo)
+					}
+					for _, vtxo := range txEvent.GetRound().GetSpentVtxos() {
+						allSpentVtxos[vtxo.Pubkey] = append(allSpentVtxos[vtxo.Pubkey], vtxo)
+					}
+				}
+
+				for _, l := range h.addressSubsHandler.listeners {
+					spendableVtxos := allSpendableVtxos[l.id]
+					spentVtxos := allSpentVtxos[l.id]
+					if len(spendableVtxos) > 0 || len(spentVtxos) > 0 {
+						l.ch <- &arkv1.SubscribeForAddressResponse{
+							NewVtxos:   spendableVtxos,
+							SpentVtxos: spentVtxos,
+						}
+					}
+				}
 			}
 		}
 	}
