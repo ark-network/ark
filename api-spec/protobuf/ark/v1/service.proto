@@ -167,16 +167,15 @@ message GetBatchEventStreamResponse {
 /* Ark Transaction API messages */
 
 message SubmitTxRequest {
-  string partial_signed_tx = 1;
+  string partially_signed_tx = 1; // signed by sender
   repeated string unsigned_checkpoint_txs = 2;
 }
 message SubmitTxResponse {
-  repeated string partial_signed_checkpoint_txs = 3;
+  string fully_signed_tx = 1;
+  repeated string partially_signed_checkpoint_txs = 2; //signed by server
 }
 
 message SubmitCheckpointTxsRequest {
-  repeated string fully_signed_checkpoint_txs = 1;
+  repeated string fully_signed_checkpoint_txs = 1; 
 }
-message SubmitCheckpointTxsResponse {
-  string fully_signed_tx = 1;
-}
+message SubmitCheckpointTxsResponse {}
