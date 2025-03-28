@@ -323,14 +323,10 @@ func (i *indexerService) GetVirtualTxs(ctx context.Context, req VirtualTxsReq) (
 }
 
 func (i *indexerService) GetSweptCommitmentTx(ctx context.Context, txid string) (SweptCommitmentTxResp, error) {
-	round, err := i.repoManager.Rounds().GetRoundWithTxid(ctx, txid)
-	if err != nil {
-		return SweptCommitmentTxResp{}, err
-	}
+	// TODO currently not possible to find swept commitment tx, we need either to scan explorer which would be inefficient
+	// or to store sweep txs it in the database
 
-	return SweptCommitmentTxResp{
-		SweptBy: round.Swept,
-	}, nil
+	return SweptCommitmentTxResp{}, nil
 }
 
 func paginate[T any](items []T, params PageReq) ([]T, PageResp, error) {
