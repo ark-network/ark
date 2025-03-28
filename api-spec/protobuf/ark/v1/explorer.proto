@@ -51,6 +51,11 @@ service ExplorerService {
       get: "/v1/commitmentTx/{txid}/swept"
     };
   }
+  rpc SubscribeForAddresses(SubscribeForAddressesRequest) returns (stream SubscribeForAddressesResponse) {
+    option (google.api.http) = {
+      get: "/v1/address/subscribe"
+    };
+  }
 }
 
 message GetCommitmentTxRequest {
@@ -132,6 +137,15 @@ message GetSweptCommitmentTxRequest {
 }
 message GetSweptCommitmentTxResponse {
   repeated string swept_by = 1;
+}
+
+message SubscribeForAddressesRequest {
+  repeated string addresses = 1;
+}
+message SubscribeForAddressesResponse {
+  string address = 1;
+  repeated Vtxo new_vtxos = 2;
+  repeated Vtxo spent_vtxos = 3;
 }
 
 message Transactions {
