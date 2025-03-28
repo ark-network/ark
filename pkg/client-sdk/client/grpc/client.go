@@ -421,7 +421,9 @@ func (a *grpcClient) DeleteNostrRecipient(
 func (c *grpcClient) SubscribeForAddress(
 	ctx context.Context, addr string,
 ) (<-chan client.AddressEvent, func(), error) {
-	stream, err := c.svc.SubscribeForAddress(ctx, &arkv1.SubscribeForAddressRequest{})
+	stream, err := c.svc.SubscribeForAddress(ctx, &arkv1.SubscribeForAddressRequest{
+		Address: addr,
+	})
 	if err != nil {
 		return nil, nil, err
 	}
