@@ -33,7 +33,10 @@ type handler struct {
 	transactionsListenerHandler *listenerHanlder[*arkv1.GetTransactionsStreamResponse]
 	addressSubsHandler          *listenerHanlder[*arkv1.SubscribeForAddressResponse]
 
-	stopCh <-chan struct{}
+	stopCh                  <-chan struct{}
+	stopRoundEventsCh       chan struct{}
+	stopTransactionEventsCh chan struct{}
+	stopAddressEventsCh     chan struct{}
 }
 
 func NewHandler(version string, service application.Service, stopCh <-chan struct{}) service {
@@ -44,8 +47,12 @@ func NewHandler(version string, service application.Service, stopCh <-chan struc
 		transactionsListenerHandler: newListenerHandler[*arkv1.GetTransactionsStreamResponse](),
 		addressSubsHandler:          newListenerHandler[*arkv1.SubscribeForAddressResponse](),
 		stopCh:                      stopCh,
+		stopRoundEventsCh:           make(chan struct{}, 1),
+		stopTransactionEventsCh:     make(chan struct{}, 1),
+		stopAddressEventsCh:         make(chan struct{}, 1),
 	}
 
+	go h.listenToStop()
 	go h.listenToEvents()
 	go h.listenToTxEvents()
 
@@ -304,7 +311,7 @@ func (h *handler) GetEventStream(
 
 	for {
 		select {
-		case <-h.stopCh:
+		case <-h.stopRoundEventsCh:
 			return nil
 		case <-stream.Context().Done():
 			return nil
@@ -456,6 +463,8 @@ func (h *handler) GetTransactionsStream(
 
 	for {
 		select {
+		case <-h.stopTransactionEventsCh:
+			return nil
 		case <-stream.Context().Done():
 			return nil
 		case ev := <-listener.ch:
@@ -524,6 +533,8 @@ func (h *handler) SubscribeForAddress(
 
 	for {
 		select {
+		case <-h.stopAddressEventsCh:
+			return nil
 		case <-stream.Context().Done():
 			return nil
 		case ev := <-listener.ch:
@@ -532,6 +543,14 @@ func (h *handler) SubscribeForAddress(
 			}
 		}
 	}
+}
+
+func (h *handler) listenToStop() {
+	<-h.stopCh
+	h.stopRoundEventsCh <- struct{}{}
+	h.stopTransactionEventsCh <- struct{}{}
+	h.stopAddressEventsCh <- struct{}{}
+
 }
 
 // listenToEvents forwards events from the application layer to the set of listeners
