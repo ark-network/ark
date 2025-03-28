@@ -16,14 +16,14 @@
     "application/json"
   ],
   "paths": {
-    "/v1/admin/market-hour": {
+    "/v1/admin/commitmentTx/{id}": {
       "get": {
-        "operationId": "AdminService_GetMarketHourConfig",
+        "operationId": "AdminService_GetCommitmentTxInfo",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1GetMarketHourConfigResponse"
+              "$ref": "#/definitions/v1GetCommitmentTxInfoResponse"
             }
           },
           "default": {
@@ -33,17 +33,99 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
         "tags": [
           "AdminService"
         ]
-      },
-      "post": {
-        "operationId": "AdminService_UpdateMarketHourConfig",
+      }
+    },
+    "/v1/admin/commitmentTxs": {
+      "get": {
+        "operationId": "AdminService_GetCommitmentTxs",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1UpdateMarketHourConfigResponse"
+              "$ref": "#/definitions/v1GetCommitmentTxsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
+    "/v1/admin/intents": {
+      "get": {
+        "operationId": "AdminService_ListIntents",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListIntentsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "intentIds",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
+    "/v1/admin/intents/delete": {
+      "post": {
+        "operationId": "AdminService_DeleteIntents",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteIntentsResponse"
             }
           },
           "default": {
@@ -59,7 +141,59 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/v1UpdateMarketHourConfigRequest"
+              "$ref": "#/definitions/v1DeleteIntentsRequest"
+            }
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
+    "/v1/admin/marketHour": {
+      "get": {
+        "operationId": "AdminService_GetMarketHour",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetMarketHourResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "AdminService"
+        ]
+      },
+      "post": {
+        "operationId": "AdminService_UpdateMarketHour",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1UpdateMarketHourResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1UpdateMarketHourRequest"
             }
           }
         ],
@@ -100,134 +234,6 @@
         ]
       }
     },
-    "/v1/admin/queue": {
-      "get": {
-        "operationId": "AdminService_GetTxRequestQueue",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetTxRequestQueueResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "requestIds",
-            "in": "query",
-            "required": false,
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "collectionFormat": "multi"
-          }
-        ],
-        "tags": [
-          "AdminService"
-        ]
-      }
-    },
-    "/v1/admin/queue/delete": {
-      "post": {
-        "operationId": "AdminService_DeleteTxRequests",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1DeleteTxRequestsResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1DeleteTxRequestsRequest"
-            }
-          }
-        ],
-        "tags": [
-          "AdminService"
-        ]
-      }
-    },
-    "/v1/admin/round/{roundId}": {
-      "get": {
-        "operationId": "AdminService_GetRoundDetails",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetRoundDetailsResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "roundId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "AdminService"
-        ]
-      }
-    },
-    "/v1/admin/rounds": {
-      "post": {
-        "operationId": "AdminService_GetRounds",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetRoundsResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1GetRoundsRequest"
-            }
-          }
-        ],
-        "tags": [
-          "AdminService"
-        ]
-      }
-    },
     "/v1/admin/sweeps": {
       "get": {
         "operationId": "AdminService_GetScheduledSweep",
@@ -245,36 +251,20 @@
             }
           }
         },
-        "tags": [
-          "AdminService"
-        ]
-      }
-    },
-    "/v1/admin/withdraw": {
-      "post": {
-        "operationId": "AdminService_Withdraw",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1WithdrawResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
         "parameters": [
           {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1WithdrawRequest"
-            }
+            "name": "page.size",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "page.index",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
           }
         ],
         "tags": [
@@ -312,6 +302,148 @@
         }
       }
     },
+    "v1BatchFailed": {
+      "type": "object",
+      "properties": {
+        "stage": {
+          "$ref": "#/definitions/v1BatchStage"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "v1BatchStage": {
+      "type": "string",
+      "enum": [
+        "BATCH_STAGE_UNSPECIFIED",
+        "BATCH_STAGE_REGISTRATION",
+        "BATCH_STAGE_FINALIZATION",
+        "BATCH_STAGE_FINALIZED",
+        "BATCH_STAGE_FAILED"
+      ],
+      "default": "BATCH_STAGE_UNSPECIFIED"
+    },
+    "v1BatchSuccess": {
+      "type": "object",
+      "properties": {
+        "totalForfeitAmount": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "totalBoardingAmount": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "totalBatchAmount": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "totalExitAmount": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "totalFeeAmount": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "inputVtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Outpoint"
+          }
+        },
+        "boardingUtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Outpoint"
+          }
+        },
+        "outputVtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Outpoint"
+          }
+        },
+        "collaborativeExitUtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Outpoint"
+          }
+        },
+        "swept": {
+          "type": "boolean"
+        },
+        "sweptAt": {
+          "type": "string",
+          "format": "int64"
+        },
+        "sweptBy": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sweepScheduledAt": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1CommitmentTxCompleted": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "commitmentTxid": {
+          "type": "string"
+        },
+        "commitmentTx": {
+          "type": "string"
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "int64"
+        },
+        "endedAt": {
+          "type": "string",
+          "format": "int64"
+        },
+        "batches": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/v1BatchSuccess"
+          }
+        }
+      }
+    },
+    "v1CommitmentTxFailed": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "int64"
+        },
+        "endedAt": {
+          "type": "string",
+          "format": "int64"
+        },
+        "batches": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/v1BatchFailed"
+          }
+        }
+      }
+    },
     "v1CreateNoteRequest": {
       "type": "object",
       "properties": {
@@ -336,10 +468,10 @@
         }
       }
     },
-    "v1DeleteTxRequestsRequest": {
+    "v1DeleteIntentsRequest": {
       "type": "object",
       "properties": {
-        "requestIds": {
+        "intentIds": {
           "type": "array",
           "items": {
             "type": "string"
@@ -347,79 +479,36 @@
         }
       }
     },
-    "v1DeleteTxRequestsResponse": {
+    "v1DeleteIntentsResponse": {
       "type": "object"
     },
-    "v1GetMarketHourConfigResponse": {
+    "v1GetCommitmentTxInfoResponse": {
       "type": "object",
       "properties": {
-        "config": {
+        "success": {
+          "$ref": "#/definitions/v1CommitmentTxCompleted"
+        },
+        "failure": {
+          "$ref": "#/definitions/v1CommitmentTxFailed"
+        }
+      }
+    },
+    "v1GetCommitmentTxsResponse": {
+      "type": "object",
+      "properties": {
+        "ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "v1GetMarketHourResponse": {
+      "type": "object",
+      "properties": {
+        "marketHour": {
           "$ref": "#/definitions/v1MarketHourConfig"
-        }
-      }
-    },
-    "v1GetRoundDetailsResponse": {
-      "type": "object",
-      "properties": {
-        "roundId": {
-          "type": "string"
-        },
-        "txid": {
-          "type": "string"
-        },
-        "forfeitedAmount": {
-          "type": "string"
-        },
-        "totalVtxosAmount": {
-          "type": "string"
-        },
-        "totalExitAmount": {
-          "type": "string"
-        },
-        "feesAmount": {
-          "type": "string"
-        },
-        "inputsVtxos": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "outputsVtxos": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "exitAddresses": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      }
-    },
-    "v1GetRoundsRequest": {
-      "type": "object",
-      "properties": {
-        "after": {
-          "type": "string",
-          "format": "int64"
-        },
-        "before": {
-          "type": "string",
-          "format": "int64"
-        }
-      }
-    },
-    "v1GetRoundsResponse": {
-      "type": "object",
-      "properties": {
-        "rounds": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
         }
       }
     },
@@ -432,105 +521,13 @@
             "type": "object",
             "$ref": "#/definitions/v1ScheduledSweep"
           }
+        },
+        "page": {
+          "$ref": "#/definitions/v1PageResponse"
         }
       }
     },
-    "v1GetTxRequestQueueResponse": {
-      "type": "object",
-      "properties": {
-        "requests": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1TxRequestInfo"
-          }
-        }
-      }
-    },
-    "v1MarketHourConfig": {
-      "type": "object",
-      "properties": {
-        "startTime": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "endTime": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "period": {
-          "type": "string"
-        },
-        "roundInterval": {
-          "type": "string"
-        }
-      }
-    },
-    "v1Output": {
-      "type": "object",
-      "properties": {
-        "address": {
-          "type": "string",
-          "title": "onchain or off-chain"
-        },
-        "amount": {
-          "type": "string",
-          "format": "uint64",
-          "description": "Amount to send in satoshis."
-        }
-      }
-    },
-    "v1RequestInput": {
-      "type": "object",
-      "properties": {
-        "txid": {
-          "type": "string"
-        },
-        "vout": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "amount": {
-          "type": "string",
-          "format": "uint64"
-        }
-      }
-    },
-    "v1ScheduledSweep": {
-      "type": "object",
-      "properties": {
-        "roundId": {
-          "type": "string"
-        },
-        "outputs": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1SweepableOutput"
-          }
-        }
-      }
-    },
-    "v1SweepableOutput": {
-      "type": "object",
-      "properties": {
-        "txid": {
-          "type": "string"
-        },
-        "vout": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "amount": {
-          "type": "string"
-        },
-        "scheduledAt": {
-          "type": "string",
-          "format": "int64"
-        }
-      }
-    },
-    "v1TxRequestInfo": {
+    "v1Intent": {
       "type": "object",
       "properties": {
         "id": {
@@ -551,14 +548,14 @@
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/v1RequestInput"
+            "$ref": "#/definitions/v1IntentInput"
           }
         },
         "boardingInputs": {
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/v1RequestInput"
+            "$ref": "#/definitions/v1IntentInput"
           }
         },
         "notes": {
@@ -582,22 +579,15 @@
         }
       }
     },
-    "v1UpdateMarketHourConfigRequest": {
+    "v1IntentInput": {
       "type": "object",
       "properties": {
-        "config": {
-          "$ref": "#/definitions/v1MarketHourConfig"
-        }
-      }
-    },
-    "v1UpdateMarketHourConfigResponse": {
-      "type": "object"
-    },
-    "v1WithdrawRequest": {
-      "type": "object",
-      "properties": {
-        "address": {
+        "txid": {
           "type": "string"
+        },
+        "vout": {
+          "type": "integer",
+          "format": "int64"
         },
         "amount": {
           "type": "string",
@@ -605,13 +595,132 @@
         }
       }
     },
-    "v1WithdrawResponse": {
+    "v1ListIntentsResponse": {
+      "type": "object",
+      "properties": {
+        "intents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Intent"
+          }
+        }
+      }
+    },
+    "v1MarketHourConfig": {
+      "type": "object",
+      "properties": {
+        "startTime": {
+          "type": "string",
+          "format": "int64"
+        },
+        "endTime": {
+          "type": "string",
+          "format": "int64"
+        },
+        "period": {
+          "type": "string",
+          "format": "int64"
+        },
+        "roundInterval": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1Outpoint": {
       "type": "object",
       "properties": {
         "txid": {
           "type": "string"
+        },
+        "vout": {
+          "type": "integer",
+          "format": "int64"
         }
       }
+    },
+    "v1Output": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string",
+          "title": "onchain or off-chain"
+        },
+        "amount": {
+          "type": "string",
+          "format": "uint64",
+          "description": "Amount to send in satoshis."
+        }
+      }
+    },
+    "v1PageRequest": {
+      "type": "object",
+      "properties": {
+        "size": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "index": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1PageResponse": {
+      "type": "object",
+      "properties": {
+        "current": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "next": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "total": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1ScheduledSweep": {
+      "type": "object",
+      "properties": {
+        "batchId": {
+          "type": "string"
+        },
+        "commitmentTxid": {
+          "type": "string"
+        },
+        "numTransactionsToBroadcast": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "amountToSweep": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "scheduledStartTime": {
+          "type": "string",
+          "format": "int64"
+        },
+        "expectedEndTime": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1UpdateMarketHourRequest": {
+      "type": "object",
+      "properties": {
+        "marketHour": {
+          "$ref": "#/definitions/v1MarketHourConfig"
+        }
+      }
+    },
+    "v1UpdateMarketHourResponse": {
+      "type": "object"
     }
   }
 }

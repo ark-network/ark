@@ -95,7 +95,7 @@ func (r *vtxoRepository) GetVtxosForRound(
 	return r.findVtxos(ctx, query)
 }
 
-func (r *vtxoRepository) GetAllVtxos(
+func (r *vtxoRepository) GetAllNonRedeemedVtxos(
 	ctx context.Context, pubkey string,
 ) ([]domain.Vtxo, []domain.Vtxo, error) {
 	query := badgerhold.Where("Redeemed").Eq(false)
@@ -122,6 +122,10 @@ func (r *vtxoRepository) GetAllVtxos(
 func (r *vtxoRepository) GetAllSweepableVtxos(ctx context.Context) ([]domain.Vtxo, error) {
 	query := badgerhold.Where("Redeemed").Eq(false).And("Swept").Eq(false)
 	return r.findVtxos(ctx, query)
+}
+
+func (r *vtxoRepository) GetAll(ctx context.Context) ([]domain.Vtxo, error) {
+	return r.findVtxos(ctx, &badgerhold.Query{})
 }
 
 func (r *vtxoRepository) SweepVtxos(

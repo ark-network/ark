@@ -234,6 +234,38 @@
           "WalletInitializerService"
         ]
       }
+    },
+    "/v1/admin/wallet/withdraw": {
+      "post": {
+        "operationId": "WalletService_Withdraw",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1WithdrawResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1WithdrawRequest"
+            }
+          }
+        ],
+        "tags": [
+          "WalletService"
+        ]
+      }
     }
   },
   "definitions": {
@@ -370,6 +402,26 @@
     },
     "v1UnlockResponse": {
       "type": "object"
+    },
+    "v1WithdrawRequest": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "string",
+          "format": "uint64"
+        }
+      }
+    },
+    "v1WithdrawResponse": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        }
+      }
     }
   }
 }

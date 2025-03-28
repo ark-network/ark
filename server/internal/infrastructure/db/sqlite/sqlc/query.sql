@@ -123,6 +123,9 @@ WHERE redeemed = false AND pubkey = ?;
 SELECT sqlc.embed(vtxo) FROM vtxo
 WHERE txid = ? AND vout = ?;
 
+-- name: SelectAllVtxos :many
+SELECT sqlc.embed(vtxo) FROM vtxo;
+
 -- name: SelectVtxosByRoundTxid :many
 SELECT sqlc.embed(vtxo) FROM vtxo
 WHERE round_tx = ?;

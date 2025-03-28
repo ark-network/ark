@@ -57,9 +57,9 @@ message GetCommitmentTxRequest {
   string txid = 1;
 }
 message GetCommitmentTxResponse {
-  int64 started_at = 2;
-  int64 ended_at = 3;
-  map<uint32, Batch> batches = 4;
+  int64 started_at = 1;
+  int64 ended_at = 2;
+  map<uint32, Batch> batches = 3;
 }
 
 message GetVtxoTreeRequest {

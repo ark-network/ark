@@ -18,15 +18,14 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AdminServiceClient interface {
+	GetCommitmentTxInfo(ctx context.Context, in *GetCommitmentTxInfoRequest, opts ...grpc.CallOption) (*GetCommitmentTxInfoResponse, error)
+	GetCommitmentTxs(ctx context.Context, in *GetCommitmentTxsRequest, opts ...grpc.CallOption) (*GetCommitmentTxsResponse, error)
 	GetScheduledSweep(ctx context.Context, in *GetScheduledSweepRequest, opts ...grpc.CallOption) (*GetScheduledSweepResponse, error)
-	GetRoundDetails(ctx context.Context, in *GetRoundDetailsRequest, opts ...grpc.CallOption) (*GetRoundDetailsResponse, error)
-	GetRounds(ctx context.Context, in *GetRoundsRequest, opts ...grpc.CallOption) (*GetRoundsResponse, error)
 	CreateNote(ctx context.Context, in *CreateNoteRequest, opts ...grpc.CallOption) (*CreateNoteResponse, error)
-	GetMarketHourConfig(ctx context.Context, in *GetMarketHourConfigRequest, opts ...grpc.CallOption) (*GetMarketHourConfigResponse, error)
-	UpdateMarketHourConfig(ctx context.Context, in *UpdateMarketHourConfigRequest, opts ...grpc.CallOption) (*UpdateMarketHourConfigResponse, error)
-	GetTxRequestQueue(ctx context.Context, in *GetTxRequestQueueRequest, opts ...grpc.CallOption) (*GetTxRequestQueueResponse, error)
-	DeleteTxRequests(ctx context.Context, in *DeleteTxRequestsRequest, opts ...grpc.CallOption) (*DeleteTxRequestsResponse, error)
-	Withdraw(ctx context.Context, in *WithdrawRequest, opts ...grpc.CallOption) (*WithdrawResponse, error)
+	GetMarketHour(ctx context.Context, in *GetMarketHourRequest, opts ...grpc.CallOption) (*GetMarketHourResponse, error)
+	UpdateMarketHour(ctx context.Context, in *UpdateMarketHourRequest, opts ...grpc.CallOption) (*UpdateMarketHourResponse, error)
+	ListIntents(ctx context.Context, in *ListIntentsRequest, opts ...grpc.CallOption) (*ListIntentsResponse, error)
+	DeleteIntents(ctx context.Context, in *DeleteIntentsRequest, opts ...grpc.CallOption) (*DeleteIntentsResponse, error)
 }
 
 type adminServiceClient struct {
@@ -37,27 +36,27 @@ func NewAdminServiceClient(cc grpc.ClientConnInterface) AdminServiceClient {
 	return &adminServiceClient{cc}
 }
 
+func (c *adminServiceClient) GetCommitmentTxInfo(ctx context.Context, in *GetCommitmentTxInfoRequest, opts ...grpc.CallOption) (*GetCommitmentTxInfoResponse, error) {
+	out := new(GetCommitmentTxInfoResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/GetCommitmentTxInfo", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) GetCommitmentTxs(ctx context.Context, in *GetCommitmentTxsRequest, opts ...grpc.CallOption) (*GetCommitmentTxsResponse, error) {
+	out := new(GetCommitmentTxsResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/GetCommitmentTxs", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *adminServiceClient) GetScheduledSweep(ctx context.Context, in *GetScheduledSweepRequest, opts ...grpc.CallOption) (*GetScheduledSweepResponse, error) {
 	out := new(GetScheduledSweepResponse)
 	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/GetScheduledSweep", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *adminServiceClient) GetRoundDetails(ctx context.Context, in *GetRoundDetailsRequest, opts ...grpc.CallOption) (*GetRoundDetailsResponse, error) {
-	out := new(GetRoundDetailsResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/GetRoundDetails", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *adminServiceClient) GetRounds(ctx context.Context, in *GetRoundsRequest, opts ...grpc.CallOption) (*GetRoundsResponse, error) {
-	out := new(GetRoundsResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/GetRounds", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -73,45 +72,36 @@ func (c *adminServiceClient) CreateNote(ctx context.Context, in *CreateNoteReque
 	return out, nil
 }
 
-func (c *adminServiceClient) GetMarketHourConfig(ctx context.Context, in *GetMarketHourConfigRequest, opts ...grpc.CallOption) (*GetMarketHourConfigResponse, error) {
-	out := new(GetMarketHourConfigResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/GetMarketHourConfig", in, out, opts...)
+func (c *adminServiceClient) GetMarketHour(ctx context.Context, in *GetMarketHourRequest, opts ...grpc.CallOption) (*GetMarketHourResponse, error) {
+	out := new(GetMarketHourResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/GetMarketHour", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *adminServiceClient) UpdateMarketHourConfig(ctx context.Context, in *UpdateMarketHourConfigRequest, opts ...grpc.CallOption) (*UpdateMarketHourConfigResponse, error) {
-	out := new(UpdateMarketHourConfigResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/UpdateMarketHourConfig", in, out, opts...)
+func (c *adminServiceClient) UpdateMarketHour(ctx context.Context, in *UpdateMarketHourRequest, opts ...grpc.CallOption) (*UpdateMarketHourResponse, error) {
+	out := new(UpdateMarketHourResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/UpdateMarketHour", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *adminServiceClient) GetTxRequestQueue(ctx context.Context, in *GetTxRequestQueueRequest, opts ...grpc.CallOption) (*GetTxRequestQueueResponse, error) {
-	out := new(GetTxRequestQueueResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/GetTxRequestQueue", in, out, opts...)
+func (c *adminServiceClient) ListIntents(ctx context.Context, in *ListIntentsRequest, opts ...grpc.CallOption) (*ListIntentsResponse, error) {
+	out := new(ListIntentsResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/ListIntents", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *adminServiceClient) DeleteTxRequests(ctx context.Context, in *DeleteTxRequestsRequest, opts ...grpc.CallOption) (*DeleteTxRequestsResponse, error) {
-	out := new(DeleteTxRequestsResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/DeleteTxRequests", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *adminServiceClient) Withdraw(ctx context.Context, in *WithdrawRequest, opts ...grpc.CallOption) (*WithdrawResponse, error) {
-	out := new(WithdrawResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/Withdraw", in, out, opts...)
+func (c *adminServiceClient) DeleteIntents(ctx context.Context, in *DeleteIntentsRequest, opts ...grpc.CallOption) (*DeleteIntentsResponse, error) {
+	out := new(DeleteIntentsResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.AdminService/DeleteIntents", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -122,47 +112,43 @@ func (c *adminServiceClient) Withdraw(ctx context.Context, in *WithdrawRequest, 
 // All implementations should embed UnimplementedAdminServiceServer
 // for forward compatibility
 type AdminServiceServer interface {
+	GetCommitmentTxInfo(context.Context, *GetCommitmentTxInfoRequest) (*GetCommitmentTxInfoResponse, error)
+	GetCommitmentTxs(context.Context, *GetCommitmentTxsRequest) (*GetCommitmentTxsResponse, error)
 	GetScheduledSweep(context.Context, *GetScheduledSweepRequest) (*GetScheduledSweepResponse, error)
-	GetRoundDetails(context.Context, *GetRoundDetailsRequest) (*GetRoundDetailsResponse, error)
-	GetRounds(context.Context, *GetRoundsRequest) (*GetRoundsResponse, error)
 	CreateNote(context.Context, *CreateNoteRequest) (*CreateNoteResponse, error)
-	GetMarketHourConfig(context.Context, *GetMarketHourConfigRequest) (*GetMarketHourConfigResponse, error)
-	UpdateMarketHourConfig(context.Context, *UpdateMarketHourConfigRequest) (*UpdateMarketHourConfigResponse, error)
-	GetTxRequestQueue(context.Context, *GetTxRequestQueueRequest) (*GetTxRequestQueueResponse, error)
-	DeleteTxRequests(context.Context, *DeleteTxRequestsRequest) (*DeleteTxRequestsResponse, error)
-	Withdraw(context.Context, *WithdrawRequest) (*WithdrawResponse, error)
+	GetMarketHour(context.Context, *GetMarketHourRequest) (*GetMarketHourResponse, error)
+	UpdateMarketHour(context.Context, *UpdateMarketHourRequest) (*UpdateMarketHourResponse, error)
+	ListIntents(context.Context, *ListIntentsRequest) (*ListIntentsResponse, error)
+	DeleteIntents(context.Context, *DeleteIntentsRequest) (*DeleteIntentsResponse, error)
 }
 
 // UnimplementedAdminServiceServer should be embedded to have forward compatible implementations.
 type UnimplementedAdminServiceServer struct {
 }
 
+func (UnimplementedAdminServiceServer) GetCommitmentTxInfo(context.Context, *GetCommitmentTxInfoRequest) (*GetCommitmentTxInfoResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCommitmentTxInfo not implemented")
+}
+func (UnimplementedAdminServiceServer) GetCommitmentTxs(context.Context, *GetCommitmentTxsRequest) (*GetCommitmentTxsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCommitmentTxs not implemented")
+}
 func (UnimplementedAdminServiceServer) GetScheduledSweep(context.Context, *GetScheduledSweepRequest) (*GetScheduledSweepResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetScheduledSweep not implemented")
-}
-func (UnimplementedAdminServiceServer) GetRoundDetails(context.Context, *GetRoundDetailsRequest) (*GetRoundDetailsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetRoundDetails not implemented")
-}
-func (UnimplementedAdminServiceServer) GetRounds(context.Context, *GetRoundsRequest) (*GetRoundsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetRounds not implemented")
 }
 func (UnimplementedAdminServiceServer) CreateNote(context.Context, *CreateNoteRequest) (*CreateNoteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateNote not implemented")
 }
-func (UnimplementedAdminServiceServer) GetMarketHourConfig(context.Context, *GetMarketHourConfigRequest) (*GetMarketHourConfigResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetMarketHourConfig not implemented")
+func (UnimplementedAdminServiceServer) GetMarketHour(context.Context, *GetMarketHourRequest) (*GetMarketHourResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetMarketHour not implemented")
 }
-func (UnimplementedAdminServiceServer) UpdateMarketHourConfig(context.Context, *UpdateMarketHourConfigRequest) (*UpdateMarketHourConfigResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UpdateMarketHourConfig not implemented")
+func (UnimplementedAdminServiceServer) UpdateMarketHour(context.Context, *UpdateMarketHourRequest) (*UpdateMarketHourResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateMarketHour not implemented")
 }
-func (UnimplementedAdminServiceServer) GetTxRequestQueue(context.Context, *GetTxRequestQueueRequest) (*GetTxRequestQueueResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetTxRequestQueue not implemented")
+func (UnimplementedAdminServiceServer) ListIntents(context.Context, *ListIntentsRequest) (*ListIntentsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListIntents not implemented")
 }
-func (UnimplementedAdminServiceServer) DeleteTxRequests(context.Context, *DeleteTxRequestsRequest) (*DeleteTxRequestsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DeleteTxRequests not implemented")
-}
-func (UnimplementedAdminServiceServer) Withdraw(context.Context, *WithdrawRequest) (*WithdrawResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Withdraw not implemented")
+func (UnimplementedAdminServiceServer) DeleteIntents(context.Context, *DeleteIntentsRequest) (*DeleteIntentsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteIntents not implemented")
 }
 
 // UnsafeAdminServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -174,6 +160,42 @@ type UnsafeAdminServiceServer interface {
 
 func RegisterAdminServiceServer(s grpc.ServiceRegistrar, srv AdminServiceServer) {
 	s.RegisterService(&AdminService_ServiceDesc, srv)
+}
+
+func _AdminService_GetCommitmentTxInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCommitmentTxInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).GetCommitmentTxInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.AdminService/GetCommitmentTxInfo",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).GetCommitmentTxInfo(ctx, req.(*GetCommitmentTxInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_GetCommitmentTxs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCommitmentTxsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).GetCommitmentTxs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.AdminService/GetCommitmentTxs",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).GetCommitmentTxs(ctx, req.(*GetCommitmentTxsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _AdminService_GetScheduledSweep_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -190,42 +212,6 @@ func _AdminService_GetScheduledSweep_Handler(srv interface{}, ctx context.Contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AdminServiceServer).GetScheduledSweep(ctx, req.(*GetScheduledSweepRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _AdminService_GetRoundDetails_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetRoundDetailsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AdminServiceServer).GetRoundDetails(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.AdminService/GetRoundDetails",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AdminServiceServer).GetRoundDetails(ctx, req.(*GetRoundDetailsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _AdminService_GetRounds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetRoundsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AdminServiceServer).GetRounds(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.AdminService/GetRounds",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AdminServiceServer).GetRounds(ctx, req.(*GetRoundsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -248,92 +234,74 @@ func _AdminService_CreateNote_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
-func _AdminService_GetMarketHourConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetMarketHourConfigRequest)
+func _AdminService_GetMarketHour_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetMarketHourRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AdminServiceServer).GetMarketHourConfig(ctx, in)
+		return srv.(AdminServiceServer).GetMarketHour(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/ark.v1.AdminService/GetMarketHourConfig",
+		FullMethod: "/ark.v1.AdminService/GetMarketHour",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AdminServiceServer).GetMarketHourConfig(ctx, req.(*GetMarketHourConfigRequest))
+		return srv.(AdminServiceServer).GetMarketHour(ctx, req.(*GetMarketHourRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _AdminService_UpdateMarketHourConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UpdateMarketHourConfigRequest)
+func _AdminService_UpdateMarketHour_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateMarketHourRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AdminServiceServer).UpdateMarketHourConfig(ctx, in)
+		return srv.(AdminServiceServer).UpdateMarketHour(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/ark.v1.AdminService/UpdateMarketHourConfig",
+		FullMethod: "/ark.v1.AdminService/UpdateMarketHour",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AdminServiceServer).UpdateMarketHourConfig(ctx, req.(*UpdateMarketHourConfigRequest))
+		return srv.(AdminServiceServer).UpdateMarketHour(ctx, req.(*UpdateMarketHourRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _AdminService_GetTxRequestQueue_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetTxRequestQueueRequest)
+func _AdminService_ListIntents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListIntentsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AdminServiceServer).GetTxRequestQueue(ctx, in)
+		return srv.(AdminServiceServer).ListIntents(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/ark.v1.AdminService/GetTxRequestQueue",
+		FullMethod: "/ark.v1.AdminService/ListIntents",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AdminServiceServer).GetTxRequestQueue(ctx, req.(*GetTxRequestQueueRequest))
+		return srv.(AdminServiceServer).ListIntents(ctx, req.(*ListIntentsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _AdminService_DeleteTxRequests_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeleteTxRequestsRequest)
+func _AdminService_DeleteIntents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteIntentsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AdminServiceServer).DeleteTxRequests(ctx, in)
+		return srv.(AdminServiceServer).DeleteIntents(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/ark.v1.AdminService/DeleteTxRequests",
+		FullMethod: "/ark.v1.AdminService/DeleteIntents",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AdminServiceServer).DeleteTxRequests(ctx, req.(*DeleteTxRequestsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _AdminService_Withdraw_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(WithdrawRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AdminServiceServer).Withdraw(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.AdminService/Withdraw",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AdminServiceServer).Withdraw(ctx, req.(*WithdrawRequest))
+		return srv.(AdminServiceServer).DeleteIntents(ctx, req.(*DeleteIntentsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -346,40 +314,36 @@ var AdminService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*AdminServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "GetCommitmentTxInfo",
+			Handler:    _AdminService_GetCommitmentTxInfo_Handler,
+		},
+		{
+			MethodName: "GetCommitmentTxs",
+			Handler:    _AdminService_GetCommitmentTxs_Handler,
+		},
+		{
 			MethodName: "GetScheduledSweep",
 			Handler:    _AdminService_GetScheduledSweep_Handler,
-		},
-		{
-			MethodName: "GetRoundDetails",
-			Handler:    _AdminService_GetRoundDetails_Handler,
-		},
-		{
-			MethodName: "GetRounds",
-			Handler:    _AdminService_GetRounds_Handler,
 		},
 		{
 			MethodName: "CreateNote",
 			Handler:    _AdminService_CreateNote_Handler,
 		},
 		{
-			MethodName: "GetMarketHourConfig",
-			Handler:    _AdminService_GetMarketHourConfig_Handler,
+			MethodName: "GetMarketHour",
+			Handler:    _AdminService_GetMarketHour_Handler,
 		},
 		{
-			MethodName: "UpdateMarketHourConfig",
-			Handler:    _AdminService_UpdateMarketHourConfig_Handler,
+			MethodName: "UpdateMarketHour",
+			Handler:    _AdminService_UpdateMarketHour_Handler,
 		},
 		{
-			MethodName: "GetTxRequestQueue",
-			Handler:    _AdminService_GetTxRequestQueue_Handler,
+			MethodName: "ListIntents",
+			Handler:    _AdminService_ListIntents_Handler,
 		},
 		{
-			MethodName: "DeleteTxRequests",
-			Handler:    _AdminService_DeleteTxRequests_Handler,
-		},
-		{
-			MethodName: "Withdraw",
-			Handler:    _AdminService_Withdraw_Handler,
+			MethodName: "DeleteIntents",
+			Handler:    _AdminService_DeleteIntents_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

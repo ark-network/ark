@@ -404,12 +404,12 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 		require.Error(t, err)
 		require.Empty(t, vtxos)
 
-		spendableVtxos, spentVtxos, err := svc.Vtxos().GetAllVtxos(ctx, pubkey)
+		spendableVtxos, spentVtxos, err := svc.Vtxos().GetAllNonRedeemedVtxos(ctx, pubkey)
 		require.NoError(t, err)
 		require.Empty(t, spendableVtxos)
 		require.Empty(t, spentVtxos)
 
-		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllVtxos(ctx, "")
+		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllNonRedeemedVtxos(ctx, "")
 		require.NoError(t, err)
 
 		numberOfVtxos := len(spendableVtxos) + len(spentVtxos)
@@ -417,11 +417,15 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 		err = svc.Vtxos().AddVtxos(ctx, newVtxos)
 		require.NoError(t, err)
 
+		vtxos, err = svc.Vtxos().GetAll(ctx)
+		require.NoError(t, err)
+		require.Equal(t, 5, len(vtxos))
+
 		vtxos, err = svc.Vtxos().GetVtxos(ctx, vtxoKeys)
 		require.NoError(t, err)
 		require.Exactly(t, userVtxos, vtxos)
 
-		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllVtxos(ctx, pubkey)
+		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllNonRedeemedVtxos(ctx, pubkey)
 		require.NoError(t, err)
 
 		sortedVtxos := sortVtxos(userVtxos)
@@ -433,7 +437,7 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 		require.Exactly(t, sortedSpendableVtxos, sortedVtxos)
 		require.Empty(t, spentVtxos)
 
-		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllVtxos(ctx, "")
+		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllNonRedeemedVtxos(ctx, "")
 		require.NoError(t, err)
 		require.Len(t, append(spendableVtxos, spentVtxos...), numberOfVtxos+len(newVtxos))
 
@@ -447,7 +451,7 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 			require.True(t, v.Spent)
 		}
 
-		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllVtxos(ctx, pubkey)
+		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllNonRedeemedVtxos(ctx, pubkey)
 		require.NoError(t, err)
 		require.Exactly(t, vtxos[1:], spendableVtxos)
 		require.Len(t, spentVtxos, len(vtxoKeys[:1]))

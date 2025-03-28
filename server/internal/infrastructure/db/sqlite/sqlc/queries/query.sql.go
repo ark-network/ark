@@ -148,6 +148,51 @@ func (q *Queries) MarkVtxoAsSwept(ctx context.Context, arg MarkVtxoAsSweptParams
 	return err
 }
 
+const selectAllVtxos = `-- name: SelectAllVtxos :many
+SELECT vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.round_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.created_at, vtxo.request_id, vtxo.redeem_tx FROM vtxo
+`
+
+type SelectAllVtxosRow struct {
+	Vtxo Vtxo
+}
+
+func (q *Queries) SelectAllVtxos(ctx context.Context) ([]SelectAllVtxosRow, error) {
+	rows, err := q.db.QueryContext(ctx, selectAllVtxos)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SelectAllVtxosRow
+	for rows.Next() {
+		var i SelectAllVtxosRow
+		if err := rows.Scan(
+			&i.Vtxo.Txid,
+			&i.Vtxo.Vout,
+			&i.Vtxo.Pubkey,
+			&i.Vtxo.Amount,
+			&i.Vtxo.RoundTx,
+			&i.Vtxo.SpentBy,
+			&i.Vtxo.Spent,
+			&i.Vtxo.Redeemed,
+			&i.Vtxo.Swept,
+			&i.Vtxo.ExpireAt,
+			&i.Vtxo.CreatedAt,
+			&i.Vtxo.RequestID,
+			&i.Vtxo.RedeemTx,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const selectEntitiesByVtxo = `-- name: SelectEntitiesByVtxo :many
 SELECT entity_vw.id, entity_vw.nostr_recipient, entity_vw.vtxo_txid, entity_vw.vtxo_vout FROM entity_vw
 WHERE vtxo_txid = ? AND vtxo_vout = ?
