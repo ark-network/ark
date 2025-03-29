@@ -553,6 +553,31 @@ func SignTransactionWrapper() js.Func {
 	})
 }
 
+func NotifyIncomingFundsWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if len(args) != 1 {
+			return nil, fmt.Errorf("invalid number of args")
+		}
+
+		address := args[0].String()
+
+		incomingVtxos, err := arkSdkClient.NotifyIncomingFunds(context.Background(), address)
+		if err != nil {
+			return nil, err
+		}
+
+		rawList := map[string]interface{}{
+			"incomingVtxos": incomingVtxos,
+		}
+		result, err := json.Marshal(rawList)
+		if err != nil {
+			return nil, err
+		}
+
+		return result, nil
+	})
+}
+
 type promise func(args []js.Value) (interface{}, error)
 
 func JSPromise(fn promise) js.Func {
