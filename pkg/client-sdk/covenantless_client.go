@@ -6,7 +6,9 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"io"
 	"math"
 	"sort"
 	"strconv"
@@ -1014,6 +1016,10 @@ func (a *covenantlessArkClient) listenForArkTxs(ctx context.Context) {
 			if !ok {
 				continue
 			}
+			if errors.Is(event.Err, io.EOF) {
+				closeFunc()
+				return
+			}
 
 			if event.Err != nil {
 				log.WithError(event.Err).Warn("received error in transaction stream")
@@ -1756,6 +1762,10 @@ func (a *covenantlessArkClient) handleRoundStream(
 
 	eventsCh, close, err := a.client.GetEventStream(ctx, requestID)
 	if err != nil {
+		if errors.Is(err, io.EOF) {
+			close()
+			return "", fmt.Errorf("connection closed by server")
+		}
 		return "", err
 	}
 

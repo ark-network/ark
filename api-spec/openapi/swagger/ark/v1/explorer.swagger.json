@@ -105,6 +105,45 @@
           "ExplorerService"
         ]
       }
+    },
+    "/v1/vtxos/{address}/subscribe": {
+      "get": {
+        "operationId": "ExplorerService_SubscribeForAddress",
+        "responses": {
+          "200": {
+            "description": "A successful response.(streaming responses)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "$ref": "#/definitions/v1SubscribeForAddressResponse"
+                },
+                "error": {
+                  "$ref": "#/definitions/rpcStatus"
+                }
+              },
+              "title": "Stream result of v1SubscribeForAddressResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ExplorerService"
+        ]
+      }
     }
   },
   "definitions": {
@@ -241,6 +280,25 @@
         "ROUND_STAGE_FAILED"
       ],
       "default": "ROUND_STAGE_UNSPECIFIED"
+    },
+    "v1SubscribeForAddressResponse": {
+      "type": "object",
+      "properties": {
+        "newVtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Vtxo"
+          }
+        },
+        "spentVtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Vtxo"
+          }
+        }
+      }
     },
     "v1Tree": {
       "type": "object",

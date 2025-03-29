@@ -21,6 +21,7 @@ type ExplorerServiceClient interface {
 	GetRound(ctx context.Context, in *GetRoundRequest, opts ...grpc.CallOption) (*GetRoundResponse, error)
 	GetRoundById(ctx context.Context, in *GetRoundByIdRequest, opts ...grpc.CallOption) (*GetRoundByIdResponse, error)
 	ListVtxos(ctx context.Context, in *ListVtxosRequest, opts ...grpc.CallOption) (*ListVtxosResponse, error)
+	SubscribeForAddress(ctx context.Context, in *SubscribeForAddressRequest, opts ...grpc.CallOption) (ExplorerService_SubscribeForAddressClient, error)
 }
 
 type explorerServiceClient struct {
@@ -58,6 +59,38 @@ func (c *explorerServiceClient) ListVtxos(ctx context.Context, in *ListVtxosRequ
 	return out, nil
 }
 
+func (c *explorerServiceClient) SubscribeForAddress(ctx context.Context, in *SubscribeForAddressRequest, opts ...grpc.CallOption) (ExplorerService_SubscribeForAddressClient, error) {
+	stream, err := c.cc.NewStream(ctx, &ExplorerService_ServiceDesc.Streams[0], "/ark.v1.ExplorerService/SubscribeForAddress", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &explorerServiceSubscribeForAddressClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type ExplorerService_SubscribeForAddressClient interface {
+	Recv() (*SubscribeForAddressResponse, error)
+	grpc.ClientStream
+}
+
+type explorerServiceSubscribeForAddressClient struct {
+	grpc.ClientStream
+}
+
+func (x *explorerServiceSubscribeForAddressClient) Recv() (*SubscribeForAddressResponse, error) {
+	m := new(SubscribeForAddressResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // ExplorerServiceServer is the server API for ExplorerService service.
 // All implementations should embed UnimplementedExplorerServiceServer
 // for forward compatibility
@@ -65,6 +98,7 @@ type ExplorerServiceServer interface {
 	GetRound(context.Context, *GetRoundRequest) (*GetRoundResponse, error)
 	GetRoundById(context.Context, *GetRoundByIdRequest) (*GetRoundByIdResponse, error)
 	ListVtxos(context.Context, *ListVtxosRequest) (*ListVtxosResponse, error)
+	SubscribeForAddress(*SubscribeForAddressRequest, ExplorerService_SubscribeForAddressServer) error
 }
 
 // UnimplementedExplorerServiceServer should be embedded to have forward compatible implementations.
@@ -79,6 +113,9 @@ func (UnimplementedExplorerServiceServer) GetRoundById(context.Context, *GetRoun
 }
 func (UnimplementedExplorerServiceServer) ListVtxos(context.Context, *ListVtxosRequest) (*ListVtxosResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListVtxos not implemented")
+}
+func (UnimplementedExplorerServiceServer) SubscribeForAddress(*SubscribeForAddressRequest, ExplorerService_SubscribeForAddressServer) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeForAddress not implemented")
 }
 
 // UnsafeExplorerServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -146,6 +183,27 @@ func _ExplorerService_ListVtxos_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ExplorerService_SubscribeForAddress_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SubscribeForAddressRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ExplorerServiceServer).SubscribeForAddress(m, &explorerServiceSubscribeForAddressServer{stream})
+}
+
+type ExplorerService_SubscribeForAddressServer interface {
+	Send(*SubscribeForAddressResponse) error
+	grpc.ServerStream
+}
+
+type explorerServiceSubscribeForAddressServer struct {
+	grpc.ServerStream
+}
+
+func (x *explorerServiceSubscribeForAddressServer) Send(m *SubscribeForAddressResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // ExplorerService_ServiceDesc is the grpc.ServiceDesc for ExplorerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -166,6 +224,12 @@ var ExplorerService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ExplorerService_ListVtxos_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "SubscribeForAddress",
+			Handler:       _ExplorerService_SubscribeForAddress_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "ark/v1/explorer.proto",
 }

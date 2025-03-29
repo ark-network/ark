@@ -21,6 +21,11 @@ service ExplorerService {
       get: "/v1/vtxos/{address}"
     };
   };
+  rpc SubscribeForAddress(SubscribeForAddressRequest) returns (stream SubscribeForAddressResponse) {
+    option (google.api.http) = {
+      get: "/v1/vtxos/{address}/subscribe"
+    };
+  };
 }
 
 message GetRoundRequest {
@@ -43,4 +48,12 @@ message ListVtxosRequest {
 message ListVtxosResponse {
   repeated Vtxo spendable_vtxos = 1;
   repeated Vtxo spent_vtxos = 2;
+}
+
+message SubscribeForAddressRequest {
+  string address = 1;
+}
+message SubscribeForAddressResponse {
+  repeated Vtxo new_vtxos = 2;
+  repeated Vtxo spent_vtxos = 3;
 }

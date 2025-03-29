@@ -418,6 +418,46 @@ func (a *grpcClient) DeleteNostrRecipient(
 	return err
 }
 
+func (c *grpcClient) SubscribeForAddress(
+	ctx context.Context, addr string,
+) (<-chan client.AddressEvent, func(), error) {
+	stream, err := c.svc.SubscribeForAddress(ctx, &arkv1.SubscribeForAddressRequest{
+		Address: addr,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	eventCh := make(chan client.AddressEvent)
+
+	go func() {
+		defer close(eventCh)
+		for {
+			resp, err := stream.Recv()
+			if err == io.EOF {
+				return
+			}
+			if err != nil {
+				eventCh <- client.AddressEvent{Err: err}
+				return
+			}
+
+			eventCh <- client.AddressEvent{
+				NewVtxos:   vtxos(resp.NewVtxos).toVtxos(),
+				SpentVtxos: vtxos(resp.SpentVtxos).toVtxos(),
+			}
+		}
+	}()
+
+	closeFn := func() {
+		if err := stream.CloseSend(); err != nil {
+			logrus.Warnf("failed to close stream: %v", err)
+		}
+	}
+
+	return eventCh, closeFn, nil
+}
+
 func signedVtxosToProto(vtxos []client.SignedVtxoOutpoint) []*arkv1.SignedVtxoOutpoint {
 	protoVtxos := make([]*arkv1.SignedVtxoOutpoint, len(vtxos))
 	for i, v := range vtxos {
