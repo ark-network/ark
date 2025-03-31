@@ -524,54 +524,58 @@ func (s *covenantlessService) SubmitRedeemTx(
 		return "", "", fmt.Errorf("failed to sign redeem tx: %s", err)
 	}
 
-	// Create new vtxos, update spent vtxos state
-	newVtxos := make([]domain.Vtxo, 0, len(ptx.UnsignedTx.TxOut))
-	for outIndex, out := range outputs {
-		vtxoTapKey, err := schnorr.ParsePubKey(out.PkScript[2:])
-		if err != nil {
-			return "", "", fmt.Errorf("failed to parse vtxo taproot key: %s", err)
+	go func(ptx *psbt.Packet, signedRedeemTx, redeemTxid string) {
+		// Create new vtxos, update spent vtxos state
+		newVtxos := make([]domain.Vtxo, 0, len(ptx.UnsignedTx.TxOut))
+		for outIndex, out := range outputs {
+			//notlint:all
+			vtxoPubkey := hex.EncodeToString(out.PkScript[2:])
+
+			newVtxos = append(newVtxos, domain.Vtxo{
+				VtxoKey: domain.VtxoKey{
+					Txid: redeemTxid,
+					VOut: uint32(outIndex),
+				},
+				PubKey:    vtxoPubkey,
+				Amount:    uint64(out.Value),
+				ExpireAt:  expiration,
+				RoundTxid: roundTxid,
+				RedeemTx:  signedRedeemTx,
+				CreatedAt: time.Now().Unix(),
+			})
 		}
 
-		vtxoPubkey := hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey))
+		err := s.repoManager.Vtxos().AddVtxos(ctx, newVtxos)
+		for err != nil {
+			log.WithError(err).Warn("failed to add vtxos, retrying...")
+			time.Sleep(100 * time.Millisecond)
+			err = s.repoManager.Vtxos().AddVtxos(ctx, newVtxos)
+		}
 
-		newVtxos = append(newVtxos, domain.Vtxo{
-			VtxoKey: domain.VtxoKey{
-				Txid: redeemTxid,
-				VOut: uint32(outIndex),
-			},
-			PubKey:    vtxoPubkey,
-			Amount:    uint64(out.Value),
-			ExpireAt:  expiration,
-			RoundTxid: roundTxid,
-			RedeemTx:  signedRedeemTx,
-			CreatedAt: time.Now().Unix(),
-		})
-	}
+		log.Debugf("added %d vtxos", len(newVtxos))
+		err = s.repoManager.Vtxos().SpendVtxos(ctx, spentVtxoKeys, redeemTxid)
+		for err != nil {
+			log.WithError(err).Warn("failed to spend vtxo, retrying...")
+			time.Sleep(100 * time.Millisecond)
+			err = s.repoManager.Vtxos().SpendVtxos(ctx, spentVtxoKeys, redeemTxid)
+		}
+		log.Debugf("spent %d vtxos", len(spentVtxos))
 
-	if err := s.repoManager.Vtxos().AddVtxos(ctx, newVtxos); err != nil {
-		return "", "", fmt.Errorf("failed to add vtxos: %s", err)
-	}
-	log.Infof("added %d vtxos", len(newVtxos))
-	if err := s.startWatchingVtxos(newVtxos); err != nil {
-		log.WithError(err).Warn(
-			"failed to start watching vtxos",
-		)
-	}
-	log.Debugf("started watching %d vtxos", len(newVtxos))
+		if err := s.startWatchingVtxos(newVtxos); err != nil {
+			log.WithError(err).Warn(
+				"failed to start watching vtxos",
+			)
+		} else {
+			log.Debugf("started watching %d vtxos", len(newVtxos))
+		}
 
-	if err := s.repoManager.Vtxos().SpendVtxos(ctx, spentVtxoKeys, redeemTxid); err != nil {
-		return "", "", fmt.Errorf("failed to spend vtxo: %s", err)
-	}
-	log.Infof("spent %d vtxos", len(spentVtxos))
-
-	go func() {
 		s.transactionEventsCh <- RedeemTransactionEvent{
 			RedeemTxid:     redeemTxid,
 			SpentVtxos:     spentVtxos,
 			SpendableVtxos: newVtxos,
 			TxHex:          signedRedeemTx,
 		}
-	}()
+	}(ptx, signedRedeemTx, redeemTxid)
 
 	return signedRedeemTx, redeemTxid, nil
 }
@@ -1179,20 +1183,23 @@ func (s *covenantlessService) RegisterCosignerNonces(
 	if err != nil {
 		return fmt.Errorf("failed to decode nonces: %s", err)
 	}
-	session.lock.Lock()
-	defer session.lock.Unlock()
 
-	if _, ok := session.nonces[pubkey]; ok {
-		return nil // skip if we already have nonces for this pubkey
-	}
+	go func(session *musigSigningSession) {
+		session.lock.Lock()
+		defer session.lock.Unlock()
 
-	session.nonces[pubkey] = nonces
+		if _, ok := session.nonces[pubkey]; ok {
+			return // skip if we already have nonces for this pubkey
+		}
 
-	if len(session.nonces) == session.nbCosigners-1 { // exclude the server
-		go func() {
-			session.nonceDoneC <- struct{}{}
-		}()
-	}
+		session.nonces[pubkey] = nonces
+
+		if len(session.nonces) == session.nbCosigners-1 { // exclude the server
+			go func() {
+				session.nonceDoneC <- struct{}{}
+			}()
+		}
+	}(session)
 
 	return nil
 }
@@ -1215,20 +1222,22 @@ func (s *covenantlessService) RegisterCosignerSignatures(
 		return fmt.Errorf("failed to decode signatures: %s", err)
 	}
 
-	session.lock.Lock()
-	defer session.lock.Unlock()
+	go func(session *musigSigningSession) {
+		session.lock.Lock()
+		defer session.lock.Unlock()
 
-	if _, ok := session.signatures[pubkey]; ok {
-		return nil // skip if we already have signatures for this pubkey
-	}
+		if _, ok := session.signatures[pubkey]; ok {
+			return // skip if we already have signatures for this pubkey
+		}
 
-	session.signatures[pubkey] = signatures
+		session.signatures[pubkey] = signatures
 
-	if len(session.signatures) == session.nbCosigners-1 { // exclude the server
-		go func() {
-			session.sigDoneC <- struct{}{}
-		}()
-	}
+		if len(session.signatures) == session.nbCosigners-1 { // exclude the server
+			go func() {
+				session.sigDoneC <- struct{}{}
+			}()
+		}
+	}(session)
 
 	return nil
 }
@@ -1248,13 +1257,18 @@ func (s *covenantlessService) SetNostrRecipient(ctx context.Context, nostrRecipi
 		vtxoKeys = append(vtxoKeys, signedVtxo.Outpoint)
 	}
 
-	return s.repoManager.Entities().Add(
-		ctx,
-		domain.Entity{
-			NostrRecipient: nprofileRecipient,
-		},
-		vtxoKeys,
-	)
+	entity := domain.Entity{NostrRecipient: nprofileRecipient}
+	go func(entity domain.Entity, vtxoKeys []domain.VtxoKey) {
+		err := s.repoManager.Entities().Add(ctx, entity, vtxoKeys)
+		for err != nil {
+			log.WithError(err).Warn("failed to add nostr identity, retrying...")
+			time.Sleep(100 * time.Millisecond)
+			err = s.repoManager.Entities().Add(ctx, domain.Entity{NostrRecipient: nprofileRecipient}, vtxoKeys)
+		}
+		log.Debug("added new nostr identity")
+	}(entity, vtxoKeys)
+
+	return nil
 }
 
 func (s *covenantlessService) DeleteNostrRecipient(ctx context.Context, signedVtxoOutpoints []SignedVtxoOutpoint) error {
@@ -1267,7 +1281,29 @@ func (s *covenantlessService) DeleteNostrRecipient(ctx context.Context, signedVt
 		vtxoKeys = append(vtxoKeys, signedVtxo.Outpoint)
 	}
 
-	return s.repoManager.Entities().Delete(ctx, vtxoKeys)
+	fetchedKeys := make([]domain.VtxoKey, 0, len(vtxoKeys))
+	for _, vtxoKey := range vtxoKeys {
+		entities, err := s.repoManager.Entities().Get(ctx, vtxoKey)
+		if err != nil || len(entities) == 0 {
+			continue
+		}
+		fetchedKeys = append(fetchedKeys, vtxoKey)
+	}
+	if len(fetchedKeys) <= 0 {
+		return nil
+	}
+
+	go func(vtxoKeys []domain.VtxoKey) {
+		err := s.repoManager.Entities().Delete(ctx, vtxoKeys)
+		for err != nil {
+			log.WithError(err).Warn("failed to delete nostr identity, retrying...")
+			time.Sleep(100 * time.Millisecond)
+			err = s.repoManager.Entities().Delete(ctx, vtxoKeys)
+		}
+		log.Debug("deleted nostr identities")
+	}(fetchedKeys)
+
+	return nil
 }
 
 func (s *covenantlessService) start() {
