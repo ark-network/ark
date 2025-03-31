@@ -15,6 +15,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"time"
 )
 
 type IndexerService interface {
@@ -203,8 +204,36 @@ func (i *indexerService) GetSpendableVtxos(ctx context.Context, req SpendableVtx
 }
 
 func (i *indexerService) GetTransactionHistory(ctx context.Context, req TxHistoryReq) (TxHistoryResp, error) {
-	//TODO implement me
-	panic("implement me")
+	allVtxos, err := i.repoManager.Vtxos().GetAll(ctx)
+	if err != nil {
+		return TxHistoryResp{}, err
+	}
+
+	spendable := make([]domain.Vtxo, 0)
+	spent := make([]domain.Vtxo, 0)
+
+	for _, vtxo := range allVtxos {
+		if vtxo.Spent || vtxo.Swept {
+			spent = append(spent, vtxo)
+		} else {
+			spendable = append(spendable, vtxo)
+		}
+	}
+
+	txs, err := vtxosToTxs(spendable, spent)
+	if err != nil {
+		return TxHistoryResp{}, err
+	}
+
+	txsPaged, pageResp, err := paginate(txs, req.Page)
+	if err != nil {
+		return TxHistoryResp{}, err
+	}
+
+	return TxHistoryResp{
+		Records:    txsPaged,
+		Pagination: pageResp,
+	}, nil
 }
 
 func (i *indexerService) GetVtxoChain(ctx context.Context, req VtxoChainReq) (VtxoChainResp, error) {
@@ -378,4 +407,149 @@ func flattenNodes(t [][]tree.Node) []Node {
 		}
 	}
 	return result
+}
+
+func vtxosToTxs(spendable, spent []domain.Vtxo) ([]TxHistoryRecord, error) {
+	txs := make([]TxHistoryRecord, 0)
+
+	// Receivals
+
+	// All vtxos are receivals unless:
+	// - they resulted from a settlement (either boarding or refresh)
+	// - they are the change of a spend tx
+	vtxosLeftToCheck := append([]domain.Vtxo{}, spent...)
+	for _, vtxo := range append(spendable, spent...) {
+		settleVtxos := findVtxosSpentInSettlement(vtxosLeftToCheck, vtxo)
+		settleAmount := reduceVtxosAmount(settleVtxos)
+		if vtxo.Amount <= settleAmount {
+			continue // settlement or change, ignore
+		}
+
+		spentVtxos := findVtxosSpentInPayment(vtxosLeftToCheck, vtxo)
+		spentAmount := reduceVtxosAmount(spentVtxos)
+		if vtxo.Amount <= spentAmount {
+			continue // settlement or change, ignore
+		}
+
+		txid := vtxo.RoundTxid
+		settled := !vtxo.IsPending()
+		if vtxo.IsPending() {
+			txid = vtxo.Txid
+			settled = vtxo.SpentBy != ""
+		}
+
+		txs = append(txs, TxHistoryRecord{
+			Txid:      txid,
+			Amount:    vtxo.Amount - settleAmount - spentAmount,
+			Type:      TxReceived,
+			CreatedAt: time.Unix(vtxo.CreatedAt, 0),
+			Settled:   settled,
+		})
+	}
+
+	// Sendings
+
+	// All "spentBy" vtxos are payments unless:
+	// - they are settlements
+
+	// aggregate spent by spentId
+	vtxosBySpentBy := make(map[string][]domain.Vtxo)
+	for _, v := range spent {
+		if len(v.SpentBy) <= 0 {
+			continue
+		}
+
+		if _, ok := vtxosBySpentBy[v.SpentBy]; !ok {
+			vtxosBySpentBy[v.SpentBy] = make([]domain.Vtxo, 0)
+		}
+		vtxosBySpentBy[v.SpentBy] = append(vtxosBySpentBy[v.SpentBy], v)
+	}
+
+	for sb := range vtxosBySpentBy {
+		resultedVtxos := findVtxosResultedFromSpentBy(append(spendable, spent...), sb)
+		resultedAmount := reduceVtxosAmount(resultedVtxos)
+		spentAmount := reduceVtxosAmount(vtxosBySpentBy[sb])
+		if spentAmount <= resultedAmount {
+			continue // settlement or change, ignore
+		}
+
+		vtxo := getVtxo(resultedVtxos, vtxosBySpentBy[sb])
+
+		txid := vtxo.RoundTxid
+		if vtxo.IsPending() {
+			txid = vtxo.Txid
+		}
+
+		txs = append(txs, TxHistoryRecord{
+			Txid:      txid,
+			Amount:    spentAmount - resultedAmount,
+			Type:      TxSent,
+			CreatedAt: time.Unix(vtxo.CreatedAt, 0),
+			Settled:   true,
+		})
+
+	}
+
+	sort.SliceStable(txs, func(i, j int) bool {
+		return txs[i].CreatedAt.After(txs[j].CreatedAt)
+	})
+
+	return txs, nil
+}
+
+func findVtxosSpentInSettlement(vtxos []domain.Vtxo, vtxo domain.Vtxo) []domain.Vtxo {
+	if vtxo.IsPending() {
+		return nil
+	}
+	return findVtxosSpent(vtxos, vtxo.RoundTxid)
+}
+
+func findVtxosSpent(vtxos []domain.Vtxo, id string) []domain.Vtxo {
+	var result []domain.Vtxo
+	leftVtxos := make([]domain.Vtxo, 0)
+	for _, v := range vtxos {
+		if v.SpentBy == id {
+			result = append(result, v)
+		} else {
+			leftVtxos = append(leftVtxos, v)
+		}
+	}
+	// Update the given list with only the left vtxos.
+	copy(vtxos, leftVtxos)
+	return result
+}
+
+func reduceVtxosAmount(vtxos []domain.Vtxo) uint64 {
+	var total uint64
+	for _, v := range vtxos {
+		total += v.Amount
+	}
+	return total
+}
+
+func findVtxosSpentInPayment(vtxos []domain.Vtxo, vtxo domain.Vtxo) []domain.Vtxo {
+	return findVtxosSpent(vtxos, vtxo.Txid)
+}
+
+func findVtxosResultedFromSpentBy(vtxos []domain.Vtxo, spentByTxid string) []domain.Vtxo {
+	var result []domain.Vtxo
+	for _, v := range vtxos {
+		if !v.IsPending() && v.RoundTxid == spentByTxid {
+			result = append(result, v)
+			break
+		}
+		if v.Txid == spentByTxid {
+			result = append(result, v)
+		}
+	}
+	return result
+}
+
+func getVtxo(usedVtxos []domain.Vtxo, spentByVtxos []domain.Vtxo) domain.Vtxo {
+	if len(usedVtxos) > 0 {
+		return usedVtxos[0]
+	} else if len(spentByVtxos) > 0 {
+		return spentByVtxos[0]
+	}
+	return domain.Vtxo{}
 }

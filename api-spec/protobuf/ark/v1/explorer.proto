@@ -3,6 +3,7 @@ syntax = "proto3";
 package ark.v1;
 
 import "google/api/annotations.proto";
+import "ark/v1/new_types.proto";
 import "ark/v1/types.proto";
 
 service ExplorerService {
@@ -72,7 +73,7 @@ message GetVtxoTreeRequest {
   PageRequest page = 2;
 }
 message GetVtxoTreeResponse {
-  repeated Node vtxo_tree = 1;
+  repeated NodeNew vtxo_tree = 1;
   PageResponse page = 2;
 }
 
@@ -90,7 +91,7 @@ message GetConnectorsRequest {
   PageRequest page = 2;
 }
 message GetConnectorsResponse {
-  repeated Node connectors = 1;
+  repeated NodeNew connectors = 1;
   PageResponse page = 2;
 }
 
@@ -99,7 +100,7 @@ message GetSpendableVtxosRequest {
   PageRequest page = 2;
 }
 message GetSpendableVtxosResponse {
-  repeated Vtxo vtxos = 1;
+  repeated NewVtxo vtxos = 1;
   PageResponse page = 2;
 }
 
@@ -144,8 +145,8 @@ message SubscribeForAddressesRequest {
 }
 message SubscribeForAddressesResponse {
   string address = 1;
-  repeated Vtxo new_vtxos = 2;
-  repeated Vtxo spent_vtxos = 3;
+  repeated NewVtxo new_vtxos = 2;
+  repeated NewVtxo spent_vtxos = 3;
 }
 
 message Transactions {

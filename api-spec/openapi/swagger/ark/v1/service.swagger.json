@@ -16,14 +16,14 @@
     "application/json"
   ],
   "paths": {
-    "/v1/batch/registerIntent": {
+    "/v1/boarding": {
       "post": {
-        "operationId": "ArkService_RegisterIntent",
+        "operationId": "ArkService_GetBoardingAddress",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1RegisterIntentResponse"
+              "$ref": "#/definitions/v1GetBoardingAddressResponse"
             }
           },
           "default": {
@@ -39,7 +39,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/v1RegisterIntentRequest"
+              "$ref": "#/definitions/v1GetBoardingAddressRequest"
             }
           }
         ],
@@ -48,14 +48,67 @@
         ]
       }
     },
-    "/v1/batch/registerOutputs": {
-      "post": {
-        "operationId": "ArkService_RegisterBlindedOutputs",
+    "/v1/events": {
+      "get": {
+        "operationId": "ArkService_GetEventStream",
+        "responses": {
+          "200": {
+            "description": "A successful response.(streaming responses)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "$ref": "#/definitions/v1GetEventStreamResponse"
+                },
+                "error": {
+                  "$ref": "#/definitions/rpcStatus"
+                }
+              },
+              "title": "Stream result of v1GetEventStreamResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
+    "/v1/info": {
+      "get": {
+        "operationId": "ArkService_GetInfo",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1RegisterBlindedOutputsResponse"
+              "$ref": "#/definitions/v1GetInfoResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
+    "/v1/redeem-tx": {
+      "post": {
+        "operationId": "ArkService_SubmitRedeemTx",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SubmitRedeemTxResponse"
             }
           },
           "default": {
@@ -71,7 +124,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/v1RegisterBlindedOutputsRequest"
+              "$ref": "#/definitions/v1SubmitRedeemTxRequest"
             }
           }
         ],
@@ -80,7 +133,102 @@
         ]
       }
     },
-    "/v1/batch/submitForfeitTxs": {
+    "/v1/round/ping/{requestId}": {
+      "get": {
+        "operationId": "ArkService_Ping",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1PingResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "requestId",
+            "description": "The id used to register inputs and ouptuts.",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
+    "/v1/round/registerInputs": {
+      "post": {
+        "operationId": "ArkService_RegisterInputsForNextRound",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RegisterInputsForNextRoundResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RegisterInputsForNextRoundRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
+    "/v1/round/registerOutputs": {
+      "post": {
+        "operationId": "ArkService_RegisterOutputsForNextRound",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RegisterOutputsForNextRoundResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RegisterOutputsForNextRoundRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
+    "/v1/round/submitForfeitTxs": {
       "post": {
         "operationId": "ArkService_SubmitSignedForfeitTxs",
         "responses": {
@@ -112,7 +260,7 @@
         ]
       }
     },
-    "/v1/batch/tree/submitNonces": {
+    "/v1/round/tree/submitNonces": {
       "post": {
         "operationId": "ArkService_SubmitTreeNonces",
         "responses": {
@@ -144,7 +292,7 @@
         ]
       }
     },
-    "/v1/batch/tree/submitSignatures": {
+    "/v1/round/tree/submitSignatures": {
       "post": {
         "operationId": "ArkService_SubmitTreeSignatures",
         "responses": {
@@ -176,9 +324,9 @@
         ]
       }
     },
-    "/v1/batch/{batchId}/events": {
+    "/v1/transactions": {
       "get": {
-        "operationId": "ArkService_GetBatchEventStream",
+        "operationId": "ArkService_GetTransactionsStream",
         "responses": {
           "200": {
             "description": "A successful response.(streaming responses)",
@@ -186,13 +334,13 @@
               "type": "object",
               "properties": {
                 "result": {
-                  "$ref": "#/definitions/v1GetBatchEventStreamResponse"
+                  "$ref": "#/definitions/v1GetTransactionsStreamResponse"
                 },
                 "error": {
                   "$ref": "#/definitions/rpcStatus"
                 }
               },
-              "title": "Stream result of v1GetBatchEventStreamResponse"
+              "title": "Stream result of v1GetTransactionsStreamResponse"
             }
           },
           "default": {
@@ -202,90 +350,19 @@
             }
           }
         },
-        "parameters": [
-          {
-            "name": "batchId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "topics",
-            "in": "query",
-            "required": false,
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "collectionFormat": "multi"
-          }
-        ],
         "tags": [
           "ArkService"
         ]
       }
     },
-    "/v1/batch/{intentId}/ack": {
+    "/v1/vtxo/nostr": {
       "post": {
-        "operationId": "ArkService_ConfirmRegistration",
+        "operationId": "ArkService_SetNostrRecipient",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1ConfirmRegistrationResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "intentId",
-            "description": "The id returne dby the server when registering the intent.",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "ArkService"
-        ]
-      }
-    },
-    "/v1/info": {
-      "get": {
-        "operationId": "ArkService_GetInfo",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetInfoResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "tags": [
-          "ArkService"
-        ]
-      }
-    },
-    "/v1/submitCheckpointTxs": {
-      "post": {
-        "operationId": "ArkService_SubmitCheckpointTxs",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1SubmitCheckpointTxsResponse"
+              "$ref": "#/definitions/v1SetNostrRecipientResponse"
             }
           },
           "default": {
@@ -301,7 +378,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/v1SubmitCheckpointTxsRequest"
+              "$ref": "#/definitions/v1SetNostrRecipientRequest"
             }
           }
         ],
@@ -310,14 +387,14 @@
         ]
       }
     },
-    "/v1/submitTx": {
+    "/v1/vtxo/nostr/delete": {
       "post": {
-        "operationId": "ArkService_SubmitTx",
+        "operationId": "ArkService_DeleteNostrRecipient",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1SubmitTxResponse"
+              "$ref": "#/definitions/v1DeleteNostrRecipientResponse"
             }
           },
           "default": {
@@ -333,7 +410,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/v1SubmitTxRequest"
+              "$ref": "#/definitions/v1DeleteNostrRecipientRequest"
             }
           }
         ],
@@ -372,142 +449,60 @@
         }
       }
     },
-    "v1BatchConnectorTreeEvent": {
+    "v1DeleteNostrRecipientRequest": {
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string"
-        },
-        "topic": {
+        "vtxos": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "object",
+            "$ref": "#/definitions/v1SignedVtxoOutpoint"
           }
-        },
-        "connectorTx": {
-          "$ref": "#/definitions/v1Node"
         }
       }
     },
-    "v1BatchFailedEvent": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "reason": {
-          "type": "string"
-        }
-      }
+    "v1DeleteNostrRecipientResponse": {
+      "type": "object"
     },
-    "v1BatchFinalizationEvent": {
+    "v1GetBoardingAddressRequest": {
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string"
-        },
-        "commitmentTx": {
-          "type": "string"
-        },
-        "forfeitAddress": {
+        "pubkey": {
           "type": "string"
         }
       }
     },
-    "v1BatchFinalizedEvent": {
+    "v1GetBoardingAddressResponse": {
       "type": "object",
       "properties": {
-        "id": {
+        "address": {
           "type": "string"
         },
-        "commitmentTxid": {
+        "descriptor": {
           "type": "string"
+        },
+        "tapscripts": {
+          "$ref": "#/definitions/v1Tapscripts"
         }
       }
     },
-    "v1BatchStartedEvent": {
+    "v1GetEventStreamResponse": {
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string"
+        "roundFinalization": {
+          "$ref": "#/definitions/v1RoundFinalizationEvent"
         },
-        "intentIds": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
+        "roundFinalized": {
+          "$ref": "#/definitions/v1RoundFinalizedEvent"
         },
-        "batchExpiry": {
-          "type": "string",
-          "format": "int64"
+        "roundFailed": {
+          "$ref": "#/definitions/v1RoundFailed"
         },
-        "forfeitAddress": {
-          "type": "string"
-        }
-      }
-    },
-    "v1BatchVtxoTreeEvent": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
+        "roundSigning": {
+          "$ref": "#/definitions/v1RoundSigningEvent"
         },
-        "topic": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "treeTx": {
-          "$ref": "#/definitions/v1Node"
-        }
-      }
-    },
-    "v1Bip322Signature": {
-      "type": "object",
-      "properties": {
-        "signature": {
-          "type": "string"
-        },
-        "message": {
-          "type": "string"
-        }
-      }
-    },
-    "v1ConfirmRegistrationResponse": {
-      "type": "object",
-      "properties": {
-        "blindedCred": {
-          "type": "string"
-        }
-      }
-    },
-    "v1GetBatchEventStreamResponse": {
-      "type": "object",
-      "properties": {
-        "batchStarted": {
-          "$ref": "#/definitions/v1BatchStartedEvent"
-        },
-        "treeTx": {
-          "$ref": "#/definitions/v1BatchVtxoTreeEvent"
-        },
-        "connectorTx": {
-          "$ref": "#/definitions/v1BatchConnectorTreeEvent"
-        },
-        "batchFinalization": {
-          "$ref": "#/definitions/v1BatchFinalizationEvent"
-        },
-        "batchFinalized": {
-          "$ref": "#/definitions/v1BatchFinalizedEvent"
-        },
-        "batchFailed": {
-          "$ref": "#/definitions/v1BatchFailedEvent"
-        },
-        "treeSigningStarted": {
-          "$ref": "#/definitions/v1TreeSigningStartedEvent"
-        },
-        "treeNoncesAggregated": {
-          "$ref": "#/definitions/v1TreeNoncesAggregatedEvent"
+        "roundSigningNoncesGenerated": {
+          "$ref": "#/definitions/v1RoundSigningNoncesGeneratedEvent"
         }
       }
     },
@@ -517,7 +512,7 @@
         "pubkey": {
           "type": "string"
         },
-        "batchExpiry": {
+        "vtxoTreeExpiry": {
           "type": "string",
           "format": "int64"
         },
@@ -536,7 +531,16 @@
           "type": "string",
           "format": "int64"
         },
-        "boardingTemplate": {
+        "boardingDescriptorTemplate": {
+          "type": "string"
+        },
+        "vtxoDescriptorTemplates": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "forfeitAddress": {
           "type": "string"
         },
         "marketHour": {
@@ -544,6 +548,31 @@
         },
         "version": {
           "type": "string"
+        }
+      }
+    },
+    "v1GetTransactionsStreamResponse": {
+      "type": "object",
+      "properties": {
+        "round": {
+          "$ref": "#/definitions/v1RoundTransaction"
+        },
+        "redeem": {
+          "$ref": "#/definitions/v1RedeemTransaction"
+        }
+      }
+    },
+    "v1Input": {
+      "type": "object",
+      "properties": {
+        "outpoint": {
+          "$ref": "#/definitions/v1Outpoint"
+        },
+        "descriptor": {
+          "type": "string"
+        },
+        "tapscripts": {
+          "$ref": "#/definitions/v1Tapscripts"
         }
       }
     },
@@ -568,6 +597,20 @@
         }
       }
     },
+    "v1Musig2": {
+      "type": "object",
+      "properties": {
+        "cosignersPublicKeys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "signingAll": {
+          "type": "boolean"
+        }
+      }
+    },
     "v1Node": {
       "type": "object",
       "properties": {
@@ -579,14 +622,18 @@
         },
         "parentTxid": {
           "type": "string"
+        }
+      }
+    },
+    "v1Outpoint": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
         },
-        "level": {
+        "vout": {
           "type": "integer",
-          "format": "int32"
-        },
-        "levelIndex": {
-          "type": "integer",
-          "format": "int32"
+          "format": "int64"
         }
       }
     },
@@ -604,42 +651,59 @@
         }
       }
     },
-    "v1RegisterBlindedOutputsRequest": {
+    "v1OwnershipProof": {
       "type": "object",
       "properties": {
-        "blindedCred": {
+        "controlBlock": {
           "type": "string"
         },
-        "vtxos": {
+        "script": {
+          "type": "string"
+        },
+        "signature": {
+          "type": "string",
+          "title": "VTXO outpoint signed with script's secret key"
+        }
+      },
+      "description": "This message is used to prove to the server that the user controls the vtxo without revealing the whole VTXO taproot tree."
+    },
+    "v1PingResponse": {
+      "type": "object"
+    },
+    "v1RedeemTransaction": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "spentVtxos": {
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/v1Output"
+            "$ref": "#/definitions/v1Vtxo"
           }
-        }
-      }
-    },
-    "v1RegisterBlindedOutputsResponse": {
-      "type": "object",
-      "properties": {
-        "blindedCred": {
+        },
+        "spendableVtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Vtxo"
+          }
+        },
+        "hex": {
           "type": "string"
         }
       }
     },
-    "v1RegisterIntentRequest": {
+    "v1RegisterInputsForNextRoundRequest": {
       "type": "object",
       "properties": {
-        "tapscripts": {
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/definitions/v1Tapscripts"
-          },
-          "description": "Tapscripts aims to reveal the taproot tree of the unspent \u0026 unexpired VTXOs."
-        },
-        "bip322Signature": {
-          "$ref": "#/definitions/v1Bip322Signature",
-          "description": "The BIP322 signature contains the outpoints that are gonna be forfeit and the outputs to be added in the new tree."
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Input"
+          }
         },
         "notes": {
           "type": "array",
@@ -649,29 +713,193 @@
         }
       }
     },
-    "v1RegisterIntentResponse": {
+    "v1RegisterInputsForNextRoundResponse": {
       "type": "object",
       "properties": {
-        "intentId": {
+        "requestId": {
           "type": "string"
         }
       }
     },
-    "v1SubmitCheckpointTxsRequest": {
+    "v1RegisterOutputsForNextRoundRequest": {
       "type": "object",
       "properties": {
-        "fullySignedCheckpointTxs": {
+        "requestId": {
+          "type": "string"
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Output"
+          },
+          "description": "List of receivers for to convert to leaves in the next VTXO tree."
+        },
+        "musig2": {
+          "$ref": "#/definitions/v1Musig2"
+        }
+      }
+    },
+    "v1RegisterOutputsForNextRoundResponse": {
+      "type": "object"
+    },
+    "v1RoundFailed": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "v1RoundFinalizationEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "roundTx": {
+          "type": "string"
+        },
+        "vtxoTree": {
+          "$ref": "#/definitions/v1Tree"
+        },
+        "connectors": {
+          "$ref": "#/definitions/v1Tree"
+        },
+        "minRelayFeeRate": {
+          "type": "string",
+          "format": "int64"
+        },
+        "connectorsIndex": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/v1Outpoint"
+          },
+          "title": "vtxo outpoint encoded as string -\u003e connector outpoint"
+        }
+      }
+    },
+    "v1RoundFinalizedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "roundTxid": {
+          "type": "string"
+        }
+      }
+    },
+    "v1RoundSigningEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "cosignersPubkeys": {
           "type": "array",
           "items": {
             "type": "string"
           }
+        },
+        "unsignedVtxoTree": {
+          "$ref": "#/definitions/v1Tree"
+        },
+        "unsignedRoundTx": {
+          "type": "string"
         }
       }
     },
-    "v1SubmitCheckpointTxsResponse": {
+    "v1RoundSigningNoncesGeneratedEvent": {
       "type": "object",
       "properties": {
-        "fullySignedTx": {
+        "id": {
+          "type": "string"
+        },
+        "treeNonces": {
+          "type": "string"
+        }
+      }
+    },
+    "v1RoundTransaction": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "spentVtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Vtxo"
+          }
+        },
+        "spendableVtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Vtxo"
+          }
+        },
+        "claimedBoardingUtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Outpoint"
+          }
+        },
+        "hex": {
+          "type": "string"
+        }
+      }
+    },
+    "v1SetNostrRecipientRequest": {
+      "type": "object",
+      "properties": {
+        "nostrRecipient": {
+          "type": "string"
+        },
+        "vtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1SignedVtxoOutpoint"
+          }
+        }
+      }
+    },
+    "v1SetNostrRecipientResponse": {
+      "type": "object"
+    },
+    "v1SignedVtxoOutpoint": {
+      "type": "object",
+      "properties": {
+        "outpoint": {
+          "$ref": "#/definitions/v1Outpoint"
+        },
+        "proof": {
+          "$ref": "#/definitions/v1OwnershipProof"
+        }
+      }
+    },
+    "v1SubmitRedeemTxRequest": {
+      "type": "object",
+      "properties": {
+        "redeemTx": {
+          "type": "string"
+        }
+      }
+    },
+    "v1SubmitRedeemTxResponse": {
+      "type": "object",
+      "properties": {
+        "signedRedeemTx": {
+          "type": "string"
+        },
+        "txid": {
           "type": "string"
         }
       }
@@ -679,9 +907,6 @@
     "v1SubmitSignedForfeitTxsRequest": {
       "type": "object",
       "properties": {
-        "batchId": {
-          "type": "string"
-        },
         "signedForfeitTxs": {
           "type": "array",
           "items": {
@@ -689,9 +914,9 @@
           },
           "description": "Forfeit txs signed by the user."
         },
-        "signedCommitmentTx": {
+        "signedRoundTx": {
           "type": "string",
-          "description": "The user has to sign also the commitment tx if he registerd a boarding UTXO."
+          "description": "The user has to sign also the round tx if he registerd a boarding UTXO."
         }
       }
     },
@@ -701,7 +926,7 @@
     "v1SubmitTreeNoncesRequest": {
       "type": "object",
       "properties": {
-        "batchId": {
+        "roundId": {
           "type": "string"
         },
         "pubkey": {
@@ -718,7 +943,7 @@
     "v1SubmitTreeSignaturesRequest": {
       "type": "object",
       "properties": {
-        "batchId": {
+        "roundId": {
           "type": "string"
         },
         "pubkey": {
@@ -732,31 +957,6 @@
     "v1SubmitTreeSignaturesResponse": {
       "type": "object"
     },
-    "v1SubmitTxRequest": {
-      "type": "object",
-      "properties": {
-        "partialSignedTx": {
-          "type": "string"
-        },
-        "unsignedCheckpointTxs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      }
-    },
-    "v1SubmitTxResponse": {
-      "type": "object",
-      "properties": {
-        "partialSignedCheckpointTxs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      }
-    },
     "v1Tapscripts": {
       "type": "object",
       "properties": {
@@ -768,34 +968,68 @@
         }
       }
     },
-    "v1TreeNoncesAggregatedEvent": {
+    "v1Tree": {
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string"
-        },
-        "treeNonces": {
-          "type": "string"
+        "levels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1TreeLevel"
+          }
         }
       }
     },
-    "v1TreeSigningStartedEvent": {
+    "v1TreeLevel": {
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string"
-        },
-        "signerPubkey": {
-          "type": "string"
-        },
-        "cosignersPubkeys": {
+        "nodes": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "object",
+            "$ref": "#/definitions/v1Node"
           }
+        }
+      }
+    },
+    "v1Vtxo": {
+      "type": "object",
+      "properties": {
+        "outpoint": {
+          "$ref": "#/definitions/v1Outpoint"
         },
-        "unsignedCommitmentTx": {
+        "spent": {
+          "type": "boolean"
+        },
+        "roundTxid": {
           "type": "string"
+        },
+        "spentBy": {
+          "type": "string"
+        },
+        "expireAt": {
+          "type": "string",
+          "format": "int64"
+        },
+        "swept": {
+          "type": "boolean"
+        },
+        "isPending": {
+          "type": "boolean"
+        },
+        "redeemTx": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "pubkey": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "int64"
         }
       }
     }

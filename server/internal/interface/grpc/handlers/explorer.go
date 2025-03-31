@@ -64,9 +64,9 @@ func (e explorerService) GetVtxoTree(ctx context.Context, request *arkv1.GetVtxo
 		return nil, status.Errorf(codes.Internal, "failed to get vtxo tree: %v", err)
 	}
 
-	nodes := make([]*arkv1.Node, len(resp.Nodes))
+	nodes := make([]*arkv1.NodeNew, len(resp.Nodes))
 	for i, node := range resp.Nodes {
-		nodes[i] = &arkv1.Node{
+		nodes[i] = &arkv1.NodeNew{
 			Txid:       node.Txid,
 			Tx:         node.Tx,
 			ParentTxid: node.ParentTxid,
@@ -129,9 +129,9 @@ func (e explorerService) GetConnectors(ctx context.Context, request *arkv1.GetCo
 		return nil, status.Errorf(codes.Internal, "failed to get connectors: %v", err)
 	}
 
-	connectors := make([]*arkv1.Node, len(resp.Connectors))
+	connectors := make([]*arkv1.NodeNew, len(resp.Connectors))
 	for i, connector := range resp.Connectors {
-		connectors[i] = &arkv1.Node{
+		connectors[i] = &arkv1.NodeNew{
 			Txid:       connector.Txid,
 			Tx:         connector.Tx,
 			ParentTxid: connector.ParentTxid,
@@ -164,10 +164,10 @@ func (e explorerService) GetSpendableVtxos(ctx context.Context, request *arkv1.G
 		return nil, status.Errorf(codes.Internal, "failed to get spendable vtxos: %v", err)
 	}
 
-	vtxos := make([]*arkv1.Vtxo, len(resp.Vtxos))
+	vtxos := make([]*arkv1.NewVtxo, len(resp.Vtxos))
 	for i, vtxo := range resp.Vtxos {
-		vtxos[i] = &arkv1.Vtxo{
-			Outpoint: &arkv1.Outpoint{
+		vtxos[i] = &arkv1.NewVtxo{
+			Outpoint: &arkv1.NewOutpoint{
 				Txid: vtxo.Txid,
 				Vout: vtxo.VOut,
 			},
@@ -213,29 +213,9 @@ func (e explorerService) GetTransactionHistory(ctx context.Context, request *ark
 		history[i] = &arkv1.TxHistoryRecord{
 			Type:        arkv1.TxType(record.Type),
 			Amount:      record.Amount,
-			CreatedAt:   record.CreatedAt,
+			CreatedAt:   record.CreatedAt.Unix(),
 			ConfirmedAt: record.ConfirmedAt,
-			IsSettled:   record.IsSettled,
-		}
-
-		// Set the appropriate key based on the record type
-		switch record.Type {
-		case application.TxTypeReceived:
-			history[i].Key = &arkv1.TxHistoryRecord_BoardingTxid{
-				BoardingTxid: record.Txid,
-			}
-		case application.TxTypeSent:
-			history[i].Key = &arkv1.TxHistoryRecord_CommitmentTxid{
-				CommitmentTxid: record.Txid,
-			}
-		case application.TxTypeSweep:
-			history[i].Key = &arkv1.TxHistoryRecord_SweepTxid{
-				SweepTxid: record.Txid,
-			}
-		default:
-			history[i].Key = &arkv1.TxHistoryRecord_ArkTxid{
-				ArkTxid: record.Txid,
-			}
+			IsSettled:   record.Settled,
 		}
 	}
 

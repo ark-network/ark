@@ -209,8 +209,9 @@ func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 		}
 		appSvc = svc
 		appHandler := handlers.NewHandler(s.version, appSvc, s.stopCh)
+		explorerHandler := handlers.NewExplorerServiceServer(s.appConfig.IndexerService())
 		arkv1.RegisterArkServiceServer(grpcServer, appHandler)
-		arkv1.RegisterExplorerServiceServer(grpcServer, appHandler)
+		arkv1.RegisterExplorerServiceServer(grpcServer, explorerHandler)
 	}
 
 	adminHandler := handlers.NewAdminHandler(s.appConfig.AdminService(), appSvc, s.appConfig.NoteUriPrefix)

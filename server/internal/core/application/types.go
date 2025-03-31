@@ -252,10 +252,9 @@ type TxHistoryReq struct {
 type TxType int
 
 const (
-	TxTypeUnspecified TxType = iota
-	TxTypeReceived
-	TxTypeSent
-	TxTypeSweep
+	TxUnspecified TxType = iota
+	TxReceived
+	TxSent
 )
 
 type TxHistoryResp struct {
@@ -267,9 +266,9 @@ type TxHistoryRecord struct {
 	Txid        string
 	Type        TxType
 	Amount      uint64
-	CreatedAt   int64
+	CreatedAt   time.Time
 	ConfirmedAt int64
-	IsSettled   bool
+	Settled     bool
 }
 
 type PageReq struct {

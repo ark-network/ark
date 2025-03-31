@@ -16,6 +16,49 @@
     "application/json"
   ],
   "paths": {
+    "/v1/address/subscribe": {
+      "get": {
+        "operationId": "ExplorerService_SubscribeForAddresses",
+        "responses": {
+          "200": {
+            "description": "A successful response.(streaming responses)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "$ref": "#/definitions/v1SubscribeForAddressesResponse"
+                },
+                "error": {
+                  "$ref": "#/definitions/rpcStatus"
+                }
+              },
+              "title": "Stream result of v1SubscribeForAddressesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "addresses",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
+          }
+        ],
+        "tags": [
+          "ExplorerService"
+        ]
+      }
+    },
     "/v1/batch/{batchOutpoint.txid}/{batchOutpoint.vout}/connectors": {
       "get": {
         "operationId": "ExplorerService_GetConnectors",
@@ -515,7 +558,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/v1Node"
+            "$ref": "#/definitions/v1NodeNew"
           }
         },
         "page": {
@@ -544,7 +587,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/v1Vtxo"
+            "$ref": "#/definitions/v1NewVtxo"
           }
         },
         "page": {
@@ -613,7 +656,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/v1Node"
+            "$ref": "#/definitions/v1NodeNew"
           }
         },
         "page": {
@@ -621,7 +664,54 @@
         }
       }
     },
-    "v1Node": {
+    "v1NewOutpoint": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "vout": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
+    "v1NewVtxo": {
+      "type": "object",
+      "properties": {
+        "outpoint": {
+          "$ref": "#/definitions/v1NewOutpoint"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "int64"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "int64"
+        },
+        "amount": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "script": {
+          "type": "string"
+        },
+        "isLeaf": {
+          "type": "boolean"
+        },
+        "isSwept": {
+          "type": "boolean"
+        },
+        "isSpent": {
+          "type": "boolean"
+        },
+        "spentBy": {
+          "type": "string"
+        }
+      }
+    },
+    "v1NodeNew": {
       "type": "object",
       "properties": {
         "txid": {
@@ -685,6 +775,28 @@
         }
       }
     },
+    "v1SubscribeForAddressesResponse": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "newVtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1NewVtxo"
+          }
+        },
+        "spentVtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1NewVtxo"
+          }
+        }
+      }
+    },
     "v1Transactions": {
       "type": "object",
       "properties": {
@@ -740,41 +852,6 @@
         "TX_TYPE_SWEEP"
       ],
       "default": "TX_TYPE_UNSPECIFIED"
-    },
-    "v1Vtxo": {
-      "type": "object",
-      "properties": {
-        "outpoint": {
-          "$ref": "#/definitions/v1Outpoint"
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "int64"
-        },
-        "expiresAt": {
-          "type": "string",
-          "format": "int64"
-        },
-        "amount": {
-          "type": "string",
-          "format": "uint64"
-        },
-        "script": {
-          "type": "string"
-        },
-        "isLeaf": {
-          "type": "boolean"
-        },
-        "isSwept": {
-          "type": "boolean"
-        },
-        "isSpent": {
-          "type": "boolean"
-        },
-        "spentBy": {
-          "type": "string"
-        }
-      }
     }
   }
 }

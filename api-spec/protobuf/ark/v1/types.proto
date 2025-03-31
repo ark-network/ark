@@ -4,13 +4,23 @@ package ark.v1;
 
 /* Types */
 
-message Batch {
-  uint64 total_batch_amount = 1;
-  uint64 total_forfeit_amount = 2;
-  int32 total_input_vtxos = 3;
-  int32 total_output_vtxos = 4;
-  int64 expires_at = 5;
-  bool swept = 6;
+enum RoundStage {
+  ROUND_STAGE_UNSPECIFIED = 0;
+  ROUND_STAGE_REGISTRATION = 1;
+  ROUND_STAGE_FINALIZATION = 2;
+  ROUND_STAGE_FINALIZED = 3;
+  ROUND_STAGE_FAILED = 4;
+}
+
+message Round {
+  string id = 1;
+  int64 start = 2;
+  int64 end = 3;
+  string round_tx = 4;
+  Tree vtxo_tree = 5;
+  repeated string forfeit_txs = 6;
+  Tree connectors = 7;
+  RoundStage stage = 8;
 }
 
 message Outpoint {
@@ -18,38 +28,76 @@ message Outpoint {
   uint32 vout = 2;
 }
 
+message Input {
+  Outpoint outpoint = 1;
+  oneof taproot_tree {
+    string descriptor = 2;
+    Tapscripts tapscripts = 3;
+  }
+}
+
 message Output {
   string address = 1; // onchain or off-chain
   uint64 amount = 2; // Amount to send in satoshis.
+}
+
+message Tree {
+  repeated TreeLevel levels = 1;
+}
+
+message TreeLevel {
+  repeated Node nodes = 1;
 }
 
 message Node {
   string txid = 1;
   string tx = 2;
   string parent_txid = 3;
-  int32 level = 4;
-  int32 level_index = 5;
 }
 
 message Vtxo {
   Outpoint outpoint = 1;
-  int64 created_at = 2;
-  int64 expires_at = 3;
-  uint64 amount = 4;
-  string script = 5;
-  bool is_leaf = 6;
-  bool is_swept = 7;
-  bool is_spent = 8;
-  string spent_by = 9;
+  bool spent = 2;
+  string round_txid = 3;
+  string spent_by = 4;
+  int64 expire_at = 5;
+  bool swept = 6;
+  bool is_pending = 7;
+  string redeem_tx = 8;
+  uint64 amount = 9;
+  string pubkey = 10;
+  int64 created_at = 11;
+}
+
+message RoundTransaction {
+  string txid = 1;
+  repeated Vtxo spent_vtxos = 2;
+  repeated Vtxo spendable_vtxos = 3;
+  repeated Outpoint claimed_boarding_utxos = 4;
+  string hex = 5;
+}
+
+message RedeemTransaction {
+  string txid = 1;
+  repeated Vtxo spent_vtxos = 2;
+  repeated Vtxo spendable_vtxos = 3;
+  string hex = 4;
+}
+
+// This message is used to prove to the server that the user controls the vtxo without revealing the whole VTXO taproot tree.
+message OwnershipProof {
+  string control_block = 1;
+  string script = 2;
+  string signature = 3; // VTXO outpoint signed with script's secret key
+}
+
+message SignedVtxoOutpoint {
+  Outpoint outpoint = 1;
+  OwnershipProof proof = 2;
 }
 
 message Tapscripts {
   repeated string scripts = 1;
-}
-
-message Bip322Signature {
-  string signature = 1;
-  string message = 2;
 }
 
 message MarketHour {
@@ -59,84 +107,66 @@ message MarketHour {
   int64 round_interval = 4;
 }
 
-message TxHistoryRecord {
-  oneof key {
-    string boarding_txid = 1;
-    string commitment_txid = 2;
-    string sweep_txid = 3;
-    string ark_txid = 4;
-  }
-  TxType type = 5;
-  uint64 amount = 6;
-  int64 created_at = 7;
-  int64 confirmed_at = 8;
-  bool is_settled = 9;
+message SweepableOutput {
+  string txid = 1;
+  uint32 vout = 2;
+  string amount = 3;
+  int64 scheduled_at = 4;
 }
 
-enum TxType {
-  TX_TYPE_UNSPECIFIED = 0;
-  TX_TYPE_RECEIVED = 1;
-  TX_TYPE_SENT = 2;
-  TX_TYPE_SWEEP = 3;
+message ScheduledSweep {
+  string round_id = 1;
+  repeated SweepableOutput outputs = 2;
 }
 
-message PageRequest {
-  int32 size = 1;
-  int32 index = 2;
+message TxRequestInfo {
+  string id = 1;
+  int64 created_at = 2;
+  repeated Output receivers = 3;
+  repeated RequestInput inputs = 4;
+  repeated RequestInput boarding_inputs = 5;
+  repeated string notes = 6;
+  string signing_type = 7;
+  repeated string cosigners_public_keys = 8;
+  int64 last_ping = 9;
 }
 
-message PageResponse {
-  int32 current = 1;
-  int32 next = 2;
-  int32 total = 3;
+message RequestInput {
+  string txid = 1;
+  uint32 vout = 2;
+  uint64 amount = 3;
 }
-
 
 /* Events */
 
-message BatchStartedEvent {
+message RoundFinalizationEvent {
   string id = 1;
-  repeated string intent_ids = 2;
-  int64 batch_expiry = 3;
-  string forfeit_address = 4;
+  string round_tx = 2;
+  Tree vtxo_tree = 3;
+  Tree connectors = 4;
+  int64 min_relay_fee_rate = 5;
+  // vtxo outpoint encoded as string -> connector outpoint
+  map<string, Outpoint> connectors_index = 6;
 }
 
-message BatchVtxoTreeEvent {
+message RoundFinalizedEvent {
   string id = 1;
-  repeated string topic  = 2;
-  Node tree_tx = 3;
+  string round_txid = 2;
 }
 
-message BatchConnectorTreeEvent {
-  string id = 1;
-  repeated string topic  = 2;
-  Node connector_tx = 3;
-}
-
-message BatchFinalizationEvent {
-  string id = 1;
-  string commitment_tx = 2;
-  string forfeit_address = 3;
-}
-
-message BatchFinalizedEvent {
-  string id = 1;
-  string commitment_txid = 2;
-}
-
-message BatchFailedEvent {
+message RoundFailed {
   string id = 1;
   string reason = 2;
 }
 
-message TreeSigningStartedEvent {
+message RoundSigningEvent {
   string id = 1;
-  string signer_pubkey = 2;
-  repeated string cosigners_pubkeys = 3;
-  string unsigned_commitment_tx = 4;
+  repeated string cosigners_pubkeys = 2;
+  Tree unsigned_vtxo_tree = 3;
+  string unsigned_round_tx = 4;
 }
 
-message TreeNoncesAggregatedEvent {
+message RoundSigningNoncesGeneratedEvent {
   string id = 1;
   string tree_nonces = 2;
 }

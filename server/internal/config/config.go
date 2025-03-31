@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -104,14 +105,15 @@ type Config struct {
 	UnlockerFilePath string // file unlocker
 	UnlockerPassword string // env unlocker
 
-	repo      ports.RepoManager
-	svc       application.Service
-	adminSvc  application.AdminService
-	wallet    ports.WalletService
-	txBuilder ports.TxBuilder
-	scanner   ports.BlockchainScanner
-	scheduler ports.SchedulerService
-	unlocker  ports.Unlocker
+	repo       ports.RepoManager
+	svc        application.Service
+	adminSvc   application.AdminService
+	wallet     ports.WalletService
+	txBuilder  ports.TxBuilder
+	scanner    ports.BlockchainScanner
+	scheduler  ports.SchedulerService
+	unlocker   ports.Unlocker
+	indexerSvc application.IndexerService
 }
 
 var (
@@ -400,6 +402,9 @@ func (c *Config) Validate() error {
 	if err := c.unlockerService(); err != nil {
 		return err
 	}
+	if err := c.indexerService(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -422,6 +427,10 @@ func (c *Config) WalletService() ports.WalletService {
 
 func (c *Config) UnlockerService() ports.Unlocker {
 	return c.unlocker
+}
+
+func (c *Config) IndexerService() application.IndexerService {
+	return c.indexerSvc
 }
 
 func (c *Config) repoManager() error {
@@ -615,6 +624,16 @@ func (c *Config) unlockerService() error {
 		return err
 	}
 	c.unlocker = svc
+	return nil
+}
+
+func (c *Config) indexerService() error {
+	pubKey, err := c.wallet.GetPubkey(context.Background())
+	if err != nil {
+		return err
+	}
+
+	c.indexerSvc = application.NewIndexerService(pubKey, c.repo)
 	return nil
 }
 

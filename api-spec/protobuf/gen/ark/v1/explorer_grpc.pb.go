@@ -27,6 +27,7 @@ type ExplorerServiceClient interface {
 	GetVtxoChain(ctx context.Context, in *GetVtxoChainRequest, opts ...grpc.CallOption) (*GetVtxoChainResponse, error)
 	GetVirtualTxs(ctx context.Context, in *GetVirtualTxsRequest, opts ...grpc.CallOption) (*GetVirtualTxsResponse, error)
 	GetSweptCommitmentTx(ctx context.Context, in *GetSweptCommitmentTxRequest, opts ...grpc.CallOption) (*GetSweptCommitmentTxResponse, error)
+	SubscribeForAddresses(ctx context.Context, in *SubscribeForAddressesRequest, opts ...grpc.CallOption) (ExplorerService_SubscribeForAddressesClient, error)
 }
 
 type explorerServiceClient struct {
@@ -118,6 +119,38 @@ func (c *explorerServiceClient) GetSweptCommitmentTx(ctx context.Context, in *Ge
 	return out, nil
 }
 
+func (c *explorerServiceClient) SubscribeForAddresses(ctx context.Context, in *SubscribeForAddressesRequest, opts ...grpc.CallOption) (ExplorerService_SubscribeForAddressesClient, error) {
+	stream, err := c.cc.NewStream(ctx, &ExplorerService_ServiceDesc.Streams[0], "/ark.v1.ExplorerService/SubscribeForAddresses", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &explorerServiceSubscribeForAddressesClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type ExplorerService_SubscribeForAddressesClient interface {
+	Recv() (*SubscribeForAddressesResponse, error)
+	grpc.ClientStream
+}
+
+type explorerServiceSubscribeForAddressesClient struct {
+	grpc.ClientStream
+}
+
+func (x *explorerServiceSubscribeForAddressesClient) Recv() (*SubscribeForAddressesResponse, error) {
+	m := new(SubscribeForAddressesResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // ExplorerServiceServer is the server API for ExplorerService service.
 // All implementations should embed UnimplementedExplorerServiceServer
 // for forward compatibility
@@ -131,6 +164,7 @@ type ExplorerServiceServer interface {
 	GetVtxoChain(context.Context, *GetVtxoChainRequest) (*GetVtxoChainResponse, error)
 	GetVirtualTxs(context.Context, *GetVirtualTxsRequest) (*GetVirtualTxsResponse, error)
 	GetSweptCommitmentTx(context.Context, *GetSweptCommitmentTxRequest) (*GetSweptCommitmentTxResponse, error)
+	SubscribeForAddresses(*SubscribeForAddressesRequest, ExplorerService_SubscribeForAddressesServer) error
 }
 
 // UnimplementedExplorerServiceServer should be embedded to have forward compatible implementations.
@@ -163,6 +197,9 @@ func (UnimplementedExplorerServiceServer) GetVirtualTxs(context.Context, *GetVir
 }
 func (UnimplementedExplorerServiceServer) GetSweptCommitmentTx(context.Context, *GetSweptCommitmentTxRequest) (*GetSweptCommitmentTxResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSweptCommitmentTx not implemented")
+}
+func (UnimplementedExplorerServiceServer) SubscribeForAddresses(*SubscribeForAddressesRequest, ExplorerService_SubscribeForAddressesServer) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeForAddresses not implemented")
 }
 
 // UnsafeExplorerServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -338,6 +375,27 @@ func _ExplorerService_GetSweptCommitmentTx_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ExplorerService_SubscribeForAddresses_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SubscribeForAddressesRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ExplorerServiceServer).SubscribeForAddresses(m, &explorerServiceSubscribeForAddressesServer{stream})
+}
+
+type ExplorerService_SubscribeForAddressesServer interface {
+	Send(*SubscribeForAddressesResponse) error
+	grpc.ServerStream
+}
+
+type explorerServiceSubscribeForAddressesServer struct {
+	grpc.ServerStream
+}
+
+func (x *explorerServiceSubscribeForAddressesServer) Send(m *SubscribeForAddressesResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // ExplorerService_ServiceDesc is the grpc.ServiceDesc for ExplorerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -382,6 +440,12 @@ var ExplorerService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ExplorerService_GetSweptCommitmentTx_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "SubscribeForAddresses",
+			Handler:       _ExplorerService_SubscribeForAddresses_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "ark/v1/explorer.proto",
 }

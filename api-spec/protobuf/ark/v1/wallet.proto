@@ -31,7 +31,7 @@ service WalletInitializerService {
   rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {
     option (google.api.http) = {
       get: "/v1/admin/wallet/status"
-    }; 
+    };
   }
 }
 
@@ -50,13 +50,6 @@ service WalletService {
   rpc GetBalance(GetBalanceRequest) returns (GetBalanceResponse) {
     option (google.api.http) = {
       get: "/v1/admin/wallet/balance"
-    };
-  }
-
-  rpc Withdraw(WithdrawRequest) returns (WithdrawResponse) {
-    option (google.api.http) = {
-      post: "/v1/admin/wallet/withdraw"
-      body: "*"
     };
   }
 }
@@ -102,21 +95,13 @@ message DeriveAddressResponse {
 }
 
 message GetBalanceRequest {}
-message GetBalanceResponse {
-  Balance main_account = 1;
-  Balance connectors_account = 2;
-}
-
-message WithdrawRequest {
-  string address = 1;
-  uint64 amount = 2;
-}
-
-message WithdrawResponse {
-  string txid = 1;
-}
 
 message Balance {
   string locked = 1;
   string available = 2;
+}
+
+message GetBalanceResponse {
+  Balance main_account = 1;
+  Balance connectors_account = 2;
 }
