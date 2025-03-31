@@ -56,6 +56,10 @@ func (v *TapscriptsVtxoScript) Encode() ([]string, error) {
 }
 
 func (v *TapscriptsVtxoScript) Decode(scripts []string) error {
+	if len(scripts) == 0 {
+		return fmt.Errorf("empty scripts array")
+	}
+
 	v.Closures = make([]Closure, 0, len(scripts))
 	for _, script := range scripts {
 		scriptBytes, err := hex.DecodeString(script)
@@ -69,6 +73,11 @@ func (v *TapscriptsVtxoScript) Decode(scripts []string) error {
 		}
 		v.Closures = append(v.Closures, closure)
 	}
+
+	if len(v.Closures) == 0 {
+		return fmt.Errorf("no valid closures found in scripts")
+	}
+
 	return nil
 }
 
