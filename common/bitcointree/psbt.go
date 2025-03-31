@@ -67,7 +67,7 @@ func GetTaprootTree(in psbt.PInput) ([]string, error) {
 	var leaves []string
 
 	for _, u := range in.Unknowns {
-		if bytes.Equal(u.Key, VTXO_TAPROOT_TREE_KEY) {
+		if bytes.Contains(u.Key, VTXO_TAPROOT_TREE_KEY) {
 			buf := bytes.NewReader(u.Value)
 
 			// len of tapscripts
