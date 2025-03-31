@@ -223,11 +223,6 @@ func (s *covenantlessService) Stop() {
 func (s *covenantlessService) SubmitRedeemTx(
 	ctx context.Context, redeemTx string,
 ) (string, string, error) {
-	redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to parse redeem tx: %s", err)
-	}
-
 	vtxoRepo := s.repoManager.Vtxos()
 
 	expiration := int64(0)
@@ -504,7 +499,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 	}
 
 	rebuiltTxid := rebuiltPtx.UnsignedTx.TxID()
-	redeemTxid := redeemPtx.UnsignedTx.TxID()
+	redeemTxid := ptx.UnsignedTx.TxID()
 	if rebuiltTxid != redeemTxid {
 		return "", "", fmt.Errorf("invalid redeem tx")
 	}
@@ -530,7 +525,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 	}
 
 	// Create new vtxos, update spent vtxos state
-	newVtxos := make([]domain.Vtxo, 0, len(redeemPtx.UnsignedTx.TxOut))
+	newVtxos := make([]domain.Vtxo, 0, len(ptx.UnsignedTx.TxOut))
 	for outIndex, out := range outputs {
 		vtxoTapKey, err := schnorr.ParsePubKey(out.PkScript[2:])
 		if err != nil {
