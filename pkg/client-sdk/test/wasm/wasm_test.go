@@ -78,6 +78,7 @@ func TestMain(m *testing.M) {
 func TestWasm(t *testing.T) {
 	pw, err := playwright.Run()
 	require.NoError(t, err)
+	// nolint:all
 	defer pw.Stop()
 
 	browser, err := pw.Chromium.Launch(playwright.BrowserTypeLaunchOptions{

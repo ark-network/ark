@@ -39,6 +39,7 @@ type ArkClient interface {
 	RedeemNotes(ctx context.Context, notes []string, opts ...Option) (string, error)
 	SetNostrNotificationRecipient(ctx context.Context, nostrRecipient string) error
 	SignTransaction(ctx context.Context, tx string) (string, error)
+	NotifyIncomingFunds(ctx context.Context, address string) ([]types.Vtxo, error)
 	Stop() error
 }
 
