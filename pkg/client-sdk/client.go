@@ -155,6 +155,7 @@ func (a *arkClient) NotifyIncomingFunds(
 	wg.Add(1)
 	incomingVtxos := make([]types.Vtxo, 0)
 	go func() {
+		defer wg.Done()
 		for event := range eventCh {
 			if event.Err != nil {
 				err = event.Err
@@ -164,10 +165,11 @@ func (a *arkClient) NotifyIncomingFunds(
 				}
 			}
 			closeFn()
+			// nolint:all
 			return
 		}
 	}()
-	wg.Done()
+	wg.Wait()
 
 	return incomingVtxos, nil
 }
