@@ -224,11 +224,6 @@ func (s *covenantlessService) Stop() {
 func (s *covenantlessService) SubmitRedeemTx(
 	ctx context.Context, redeemTx string,
 ) (string, string, error) {
-	redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to parse redeem tx: %s", err)
-	}
-
 	vtxoRepo := s.repoManager.Vtxos()
 
 	expiration := int64(0)
@@ -277,10 +272,23 @@ func (s *covenantlessService) SubmitRedeemTx(
 			return "", "", fmt.Errorf("missing tapscript leaf")
 		}
 
-		tapscript := input.TaprootLeafScript[0]
+		tapscripts, err := bitcointree.GetTaprootTree(input)
+		if err != nil {
+			return "", "", fmt.Errorf("missing tapscripts: %s", err)
+		}
 
 		if len(input.TaprootScriptSpendSig) == 0 {
 			return "", "", fmt.Errorf("missing tapscript spend sig")
+		}
+
+		if len(input.TaprootLeafScript) != 1 {
+			return "", "", fmt.Errorf("expected exactly one taproot leaf script")
+		}
+
+		signedTapscript := input.TaprootLeafScript[0]
+
+		if signedTapscript == nil {
+			return "", "", fmt.Errorf("no matching tapscript found")
 		}
 
 		outpoint := ptx.UnsignedTx.TxIn[inputIndex].PreviousOutPoint
@@ -303,6 +311,41 @@ func (s *covenantlessService) SubmitRedeemTx(
 
 		if vtxo.Swept {
 			return "", "", fmt.Errorf("vtxo already swept")
+		}
+
+		vtxoScript, err := bitcointree.ParseVtxoScript(tapscripts)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to parse vtxo script: %s", err)
+		}
+
+		// validate the vtxo script
+		if err := vtxoScript.Validate(s.pubkey, s.unilateralExitDelay); err != nil {
+			return "", "", fmt.Errorf("invalid vtxo script: %s", err)
+		}
+
+		// verify the witnessUtxo script
+		if input.WitnessUtxo == nil {
+			return "", "", fmt.Errorf("missing witness utxo")
+		}
+
+		witnessUtxoScript := input.WitnessUtxo.PkScript
+
+		tapKeyFromTapscripts, _, err := vtxoScript.TapTree()
+		if err != nil {
+			return "", "", fmt.Errorf("failed to get taproot key from vtxo script: %s", err)
+		}
+
+		if vtxo.PubKey != hex.EncodeToString(schnorr.SerializePubKey(tapKeyFromTapscripts)) {
+			return "", "", fmt.Errorf("vtxo pubkey mismatch")
+		}
+
+		pkScriptFromTapscripts, err := common.P2TRScript(tapKeyFromTapscripts)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to get pkscript from taproot key: %s", err)
+		}
+
+		if !bytes.Equal(witnessUtxoScript, pkScriptFromTapscripts) {
+			return "", "", fmt.Errorf("witness utxo script mismatch")
 		}
 
 		sumOfInputs += input.WitnessUtxo.Value
@@ -357,7 +400,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 		}
 
 		// verify forfeit closure script
-		closure, err := tree.DecodeClosure(tapscript.Script)
+		closure, err := tree.DecodeClosure(signedTapscript.Script)
 		if err != nil {
 			return "", "", fmt.Errorf("failed to decode forfeit closure: %s", err)
 		}
@@ -369,7 +412,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 			locktime = &c.Locktime
 		case *tree.MultisigClosure, *tree.ConditionMultisigClosure:
 		default:
-			return "", "", fmt.Errorf("invalid forfeit closure script")
+			return "", "", fmt.Errorf("invalid forfeit closure script %x, cannot verify redeem tx", signedTapscript.Script)
 		}
 
 		if locktime != nil {
@@ -388,7 +431,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 			}
 		}
 
-		ctrlBlock, err := txscript.ParseControlBlock(tapscript.ControlBlock)
+		ctrlBlock, err := txscript.ParseControlBlock(signedTapscript.ControlBlock)
 		if err != nil {
 			return "", "", fmt.Errorf("failed to parse control block: %s", err)
 		}
@@ -397,8 +440,9 @@ func (s *covenantlessService) SubmitRedeemTx(
 			Outpoint: &outpoint,
 			Tapscript: &waddrmgr.Tapscript{
 				ControlBlock:   ctrlBlock,
-				RevealedScript: tapscript.Script,
+				RevealedScript: signedTapscript.Script,
 			},
+			RevealedTapscripts: tapscripts,
 		})
 	}
 
@@ -456,7 +500,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 	}
 
 	rebuiltTxid := rebuiltPtx.UnsignedTx.TxID()
-	redeemTxid := redeemPtx.UnsignedTx.TxID()
+	redeemTxid := ptx.UnsignedTx.TxID()
 	if rebuiltTxid != redeemTxid {
 		return "", "", fmt.Errorf("invalid redeem tx")
 	}
@@ -482,7 +526,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 	}
 
 	// Create new vtxos, update spent vtxos state
-	newVtxos := make([]domain.Vtxo, 0, len(redeemPtx.UnsignedTx.TxOut))
+	newVtxos := make([]domain.Vtxo, 0, len(ptx.UnsignedTx.TxOut))
 	for outIndex, out := range outputs {
 		vtxoTapKey, err := schnorr.ParsePubKey(out.PkScript[2:])
 		if err != nil {
@@ -666,6 +710,15 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, bip322signature bi
 					return "", fmt.Errorf("failed to parse boarding descriptor: %s", err)
 				}
 
+				// validate the vtxo script
+				// TODO: fix in PR #501
+				if err := vtxoScript.Validate(s.pubkey, common.RelativeLocktime{
+					Type:  s.unilateralExitDelay.Type,
+					Value: s.unilateralExitDelay.Value * 2,
+				}); err != nil {
+					return "", fmt.Errorf("invalid vtxo script: %s", err)
+				}
+
 				exitDelay, err := vtxoScript.SmallestExitDelay()
 				if err != nil {
 					return "", fmt.Errorf("failed to get exit delay: %s", err)
@@ -747,6 +800,11 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, bip322signature bi
 		vtxoScript, err := bitcointree.ParseVtxoScript(vtxoTapscripts)
 		if err != nil {
 			return "", fmt.Errorf("failed to parse boarding descriptor: %s", err)
+		}
+
+		// validate the vtxo script
+		if err := vtxoScript.Validate(s.pubkey, s.unilateralExitDelay); err != nil {
+			return "", fmt.Errorf("invalid vtxo script: %s", err)
 		}
 
 		tapKey, _, err := vtxoScript.TapTree()

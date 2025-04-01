@@ -4,6 +4,10 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"net/http"
+	"path/filepath"
+	"strings"
+
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/server/internal/config"
 	"github.com/ark-network/ark/server/internal/core/application"
@@ -23,9 +27,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	grpchealth "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/protobuf/encoding/protojson"
-	"net/http"
-	"path/filepath"
-	"strings"
 )
 
 const (
@@ -151,9 +152,6 @@ func (s *service) start(withAppSvc bool) error {
 }
 
 func (s *service) stop(withAppSvc bool) {
-	//nolint:all
-	s.server.Shutdown(context.Background())
-	log.Info("stopped grpc server")
 	if withAppSvc {
 		s.stopCh <- struct{}{}
 		appSvc, _ := s.appConfig.AppService()
@@ -162,6 +160,9 @@ func (s *service) stop(withAppSvc bool) {
 			log.Info("stopped app service")
 		}
 	}
+	//nolint:all
+	s.server.Shutdown(context.Background())
+	log.Info("stopped grpc server")
 }
 
 func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {

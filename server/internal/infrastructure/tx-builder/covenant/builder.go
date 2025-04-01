@@ -229,7 +229,7 @@ func (b *txBuilder) VerifyForfeitTxs(
 			locktime = &c.Locktime
 		case *tree.MultisigClosure, *tree.ConditionMultisigClosure:
 		default:
-			return nil, fmt.Errorf("invalid forfeit closure script")
+			return nil, fmt.Errorf("invalid forfeit closure script %x, cannot verify forfeit tx", vtxoTapscript.Script)
 		}
 
 		if locktime != nil {

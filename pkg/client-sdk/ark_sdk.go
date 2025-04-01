@@ -38,6 +38,7 @@ type ArkClient interface {
 	GetVtxoEventChannel(ctx context.Context) chan types.VtxoEvent
 	RedeemNotes(ctx context.Context, notes []string, opts ...Option) (string, error)
 	SignTransaction(ctx context.Context, tx string) (string, error)
+	NotifyIncomingFunds(ctx context.Context, address string) ([]types.Vtxo, error)
 	Stop() error
 }
 

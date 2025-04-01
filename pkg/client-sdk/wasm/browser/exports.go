@@ -43,6 +43,7 @@ func init() {
 	js.Global().Set("recoverSweptVtxos", RecoverSweptVtxosWrapper())
 	js.Global().Set("listVtxos", ListVtxosWrapper())
 	js.Global().Set("signTransaction", SignTransactionWrapper())
+	js.Global().Set("notifyIncomingFunds", NotifyIncomingFundsWrapper())
 
 	js.Global().Set("getServerUrl", GetServerUrlWrapper())
 	js.Global().Set("getServerPubkeyHex", GetServerPubkeyWrapper())

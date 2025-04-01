@@ -57,6 +57,7 @@ type TransportClient interface {
 	GetRoundByID(ctx context.Context, roundID string) (*Round, error)
 	Close()
 	GetTransactionsStream(ctx context.Context) (<-chan TransactionEvent, func(), error)
+	SubscribeForAddress(ctx context.Context, address string) (<-chan AddressEvent, func(), error)
 }
 
 type Info struct {
@@ -69,6 +70,10 @@ type Info struct {
 	Dust                       uint64
 	BoardingDescriptorTemplate string
 	ForfeitAddress             string
+	MarketHourStartTime        int64
+	MarketHourEndTime          int64
+	MarketHourPeriod           int64
+	MarketHourRoundInterval    int64
 }
 
 type RoundEventChannel struct {
@@ -233,4 +238,10 @@ type RedeemTransaction struct {
 	SpentVtxos     []Vtxo
 	SpendableVtxos []Vtxo
 	Hex            string
+}
+
+type AddressEvent struct {
+	NewVtxos   []Vtxo
+	SpentVtxos []Vtxo
+	Err        error
 }

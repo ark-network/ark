@@ -72,6 +72,19 @@ func (s *vtxoStore) SpendVtxos(ctx context.Context, outpoints []types.VtxoKey, s
 	return count, nil
 }
 
+func (s *vtxoStore) UpdateVtxos(ctx context.Context, vtxos []types.Vtxo) (int, error) {
+	for _, vtxo := range vtxos {
+		if err := s.db.Upsert(vtxo.VtxoKey.String(), &vtxo); err != nil {
+			return -1, err
+		}
+	}
+	go s.sendEvent(types.VtxoEvent{
+		Type:  types.VtxosUpdated,
+		Vtxos: vtxos,
+	})
+	return len(vtxos), nil
+}
+
 func (s *vtxoStore) GetAllVtxos(
 	_ context.Context,
 ) (spendable, spent []types.Vtxo, err error) {
