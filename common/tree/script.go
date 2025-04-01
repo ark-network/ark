@@ -811,7 +811,7 @@ func (d *CLTVMultisigClosure) Decode(script []byte) (bool, error) {
 
 	var locktimeValue uint32
 	// read uint32 from bytes
-	if len(locktime) >= 3 {
+	if len(locktime) > 3 {
 		locktimeValue = binary.LittleEndian.Uint32(locktime)
 	} else {
 		locktimeValue = uint32(binary.LittleEndian.Uint16(locktime))
