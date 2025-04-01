@@ -61,6 +61,7 @@ func execTx(
 		qtx := queries.New(db).WithTx(tx)
 
 		if err := txBody(qtx); err != nil {
+			//nolint:all
 			tx.Rollback()
 
 			if isConflictError(err) {

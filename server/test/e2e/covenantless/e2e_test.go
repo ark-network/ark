@@ -116,6 +116,7 @@ func TestSettleInSameRound(t *testing.T) {
 		wwg := &sync.WaitGroup{}
 		wwg.Add(1)
 		go func() {
+			//nolint:all
 			alice.NotifyIncomingFunds(ctx, aliceAddr)
 			wwg.Done()
 		}()
@@ -207,6 +208,7 @@ func TestSettleInSameRound(t *testing.T) {
 		wwg := &sync.WaitGroup{}
 		wwg.Add(1)
 		go func() {
+			//nolint:all
 			alice.NotifyIncomingFunds(ctx, aliceAddr)
 			wwg.Done()
 		}()
@@ -220,6 +222,7 @@ func TestSettleInSameRound(t *testing.T) {
 		wwg := &sync.WaitGroup{}
 		wwg.Add(1)
 		go func() {
+			//nolint:all
 			alice.NotifyIncomingFunds(ctx, aliceAddr)
 			wwg.Done()
 		}()
