@@ -545,26 +545,20 @@ func (s *covenantlessService) SubmitRedeemTx(
 			})
 		}
 
-		err := s.repoManager.Vtxos().AddVtxos(ctx, newVtxos)
-		for err != nil {
-			log.WithError(err).Warn("failed to add vtxos, retrying...")
-			time.Sleep(100 * time.Millisecond)
-			err = s.repoManager.Vtxos().AddVtxos(ctx, newVtxos)
+		if err := s.repoManager.Vtxos().AddVtxos(ctx, newVtxos); err != nil {
+			log.WithError(err).Warn("failed to add vtxos")
+			return
 		}
-
 		log.Debugf("added %d vtxos", len(newVtxos))
-		err = s.repoManager.Vtxos().SpendVtxos(ctx, spentVtxoKeys, redeemTxid)
-		for err != nil {
-			log.WithError(err).Warn("failed to spend vtxo, retrying...")
-			time.Sleep(100 * time.Millisecond)
-			err = s.repoManager.Vtxos().SpendVtxos(ctx, spentVtxoKeys, redeemTxid)
+
+		if err := s.repoManager.Vtxos().SpendVtxos(ctx, spentVtxoKeys, redeemTxid); err != nil {
+			log.WithError(err).Warn("failed to spend vtxos")
+			return
 		}
 		log.Debugf("spent %d vtxos", len(spentVtxos))
 
 		if err := s.startWatchingVtxos(newVtxos); err != nil {
-			log.WithError(err).Warn(
-				"failed to start watching vtxos",
-			)
+			log.WithError(err).Warn("failed to start watching vtxos")
 		} else {
 			log.Debugf("started watching %d vtxos", len(newVtxos))
 		}
@@ -1259,11 +1253,9 @@ func (s *covenantlessService) SetNostrRecipient(ctx context.Context, nostrRecipi
 
 	entity := domain.Entity{NostrRecipient: nprofileRecipient}
 	go func(entity domain.Entity, vtxoKeys []domain.VtxoKey) {
-		err := s.repoManager.Entities().Add(ctx, entity, vtxoKeys)
-		for err != nil {
+		if err := s.repoManager.Entities().Add(ctx, entity, vtxoKeys); err != nil {
 			log.WithError(err).Warn("failed to add nostr identity, retrying...")
-			time.Sleep(100 * time.Millisecond)
-			err = s.repoManager.Entities().Add(ctx, domain.Entity{NostrRecipient: nprofileRecipient}, vtxoKeys)
+			return
 		}
 		log.Debug("added new nostr identity")
 	}(entity, vtxoKeys)
@@ -1294,11 +1286,9 @@ func (s *covenantlessService) DeleteNostrRecipient(ctx context.Context, signedVt
 	}
 
 	go func(vtxoKeys []domain.VtxoKey) {
-		err := s.repoManager.Entities().Delete(ctx, vtxoKeys)
-		for err != nil {
+		if err := s.repoManager.Entities().Delete(ctx, vtxoKeys); err != nil {
 			log.WithError(err).Warn("failed to delete nostr identity, retrying...")
-			time.Sleep(100 * time.Millisecond)
-			err = s.repoManager.Entities().Delete(ctx, vtxoKeys)
+			return
 		}
 		log.Debug("deleted nostr identities")
 	}(fetchedKeys)
