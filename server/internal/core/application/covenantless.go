@@ -525,6 +525,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 	}
 
 	go func(ptx *psbt.Packet, signedRedeemTx, redeemTxid string) {
+		ctx := context.Background()
 		// Create new vtxos, update spent vtxos state
 		newVtxos := make([]domain.Vtxo, 0, len(ptx.UnsignedTx.TxOut))
 		for outIndex, out := range outputs {
@@ -1253,6 +1254,8 @@ func (s *covenantlessService) SetNostrRecipient(ctx context.Context, nostrRecipi
 
 	entity := domain.Entity{NostrRecipient: nprofileRecipient}
 	go func(entity domain.Entity, vtxoKeys []domain.VtxoKey) {
+		ctx := context.Background()
+
 		if err := s.repoManager.Entities().Add(ctx, entity, vtxoKeys); err != nil {
 			log.WithError(err).Warn("failed to add nostr identity, retrying...")
 			return
@@ -1286,6 +1289,7 @@ func (s *covenantlessService) DeleteNostrRecipient(ctx context.Context, signedVt
 	}
 
 	go func(vtxoKeys []domain.VtxoKey) {
+		ctx := context.Background()
 		if err := s.repoManager.Entities().Delete(ctx, vtxoKeys); err != nil {
 			log.WithError(err).Warn("failed to delete nostr identity, retrying...")
 			return
