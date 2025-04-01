@@ -574,7 +574,7 @@ func NotifyIncomingFundsWrapper() js.Func {
 			return nil, err
 		}
 
-		return result, nil
+		return js.ValueOf(string(result)), nil
 	})
 }
 
