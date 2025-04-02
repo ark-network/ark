@@ -130,16 +130,16 @@ func TestSettleInSameRound(t *testing.T) {
 		wwg := &sync.WaitGroup{}
 		wwg.Add(1)
 		go func() {
-			v, err := bob.NotifyIncomingFunds(ctx, bobAddr)
-			fmt.Println("BBBBB", len(v), err)
-			wwg.Done()
+			defer wwg.Done()
+			vtxos, err := bob.NotifyIncomingFunds(ctx, bobAddr)
+			require.NoError(t, err)
+			require.NotEmpty(t, vtxos)
 		}()
 		bobRoundID, bobErr = bob.Settle(ctx)
 		wwg.Wait()
 	}()
 
 	wg.Wait()
-	fmt.Println("1")
 
 	require.NoError(t, aliceErr)
 	require.NoError(t, bobErr)
@@ -152,37 +152,29 @@ func TestSettleInSameRound(t *testing.T) {
 	aliceVtxos, _, err := alice.ListVtxos(ctx)
 	require.NoError(t, err)
 	require.NotEmpty(t, aliceVtxos)
-	fmt.Println("OK")
 
 	bobVtxos, _, err := bob.ListVtxos(ctx)
 	require.NoError(t, err)
 	require.NotEmpty(t, bobVtxos)
-	fmt.Println("OKOK")
 
 	aliceOffchainAddr, _, err := alice.Receive(ctx)
 	require.NoError(t, err)
-	fmt.Println("OKOKOK")
 
 	bobOffchainAddr, _, err := bob.Receive(ctx)
 	require.NoError(t, err)
-	fmt.Println("OKOKOKOK")
 
 	// Alice sends to Bob
 	wg.Add(1)
-	fmt.Println("OKOKOKOKOK")
 	go func() {
 		defer wg.Done()
 		vtxos, err := alice.NotifyIncomingFunds(ctx, bobOffchainAddr)
-		fmt.Println("HAKBHJV", len(vtxos), err)
 		require.NoError(t, err)
 		require.NotEmpty(t, vtxos)
 	}()
 	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobOffchainAddr, 5000)}, false)
 	require.NoError(t, err)
-	fmt.Println("OKOKOKOKOKOK")
 
 	wg.Wait()
-	fmt.Println("2")
 
 	// Bob sends to Alice
 	wg.Add(1)
@@ -196,7 +188,6 @@ func TestSettleInSameRound(t *testing.T) {
 	require.NoError(t, err)
 
 	wg.Wait()
-	fmt.Println("3")
 
 	wg.Add(2)
 
@@ -231,7 +222,6 @@ func TestSettleInSameRound(t *testing.T) {
 	}()
 
 	wg.Wait()
-	fmt.Println("4")
 
 	require.NoError(t, aliceErr)
 	require.NoError(t, bobErr)
