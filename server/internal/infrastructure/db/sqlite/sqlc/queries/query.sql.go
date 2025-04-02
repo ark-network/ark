@@ -8,6 +8,7 @@ package queries
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const containsNote = `-- name: ContainsNote :one
@@ -55,6 +56,58 @@ func (q *Queries) GetLatestMarketHour(ctx context.Context) (MarketHour, error) {
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getTxsByTxid = `-- name: GetTxsByTxid :many
+SELECT tx.id, tx.tx, tx.round_id, tx.type, tx.position, tx.txid, tx.tree_level, tx.parent_txid, tx.is_leaf FROM tx
+WHERE txid in (/*SLICE:ids*/?)
+`
+
+type GetTxsByTxidRow struct {
+	Tx Tx
+}
+
+func (q *Queries) GetTxsByTxid(ctx context.Context, ids []sql.NullString) ([]GetTxsByTxidRow, error) {
+	query := getTxsByTxid
+	var queryParams []interface{}
+	if len(ids) > 0 {
+		for _, v := range ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTxsByTxidRow
+	for rows.Next() {
+		var i GetTxsByTxidRow
+		if err := rows.Scan(
+			&i.Tx.ID,
+			&i.Tx.Tx,
+			&i.Tx.RoundID,
+			&i.Tx.Type,
+			&i.Tx.Position,
+			&i.Tx.Txid,
+			&i.Tx.TreeLevel,
+			&i.Tx.ParentTxid,
+			&i.Tx.IsLeaf,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const insertMarketHour = `-- name: InsertMarketHour :one

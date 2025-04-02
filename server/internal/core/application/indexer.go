@@ -213,8 +213,13 @@ func (i *indexerService) GetTransactionHistory(ctx context.Context, req TxHistor
 	}, nil
 }
 
+type vtxoKeyWithCreatedAt struct {
+	domain.VtxoKey
+	CreatedAt int64
+}
+
 func (i *indexerService) GetVtxoChain(ctx context.Context, req VtxoChainReq) (*VtxoChainResp, error) {
-	chainMap := make(map[Outpoint]domain.Vtxo)
+	chainMap := make(map[vtxoKeyWithCreatedAt][]string)
 
 	outpoint := domain.VtxoKey{
 		Txid: req.VtxoKey.Txid,
@@ -225,8 +230,8 @@ func (i *indexerService) GetVtxoChain(ctx context.Context, req VtxoChainReq) (*V
 		return nil, err
 	}
 
-	chainSlice := make([]domain.Vtxo, 0, len(chainMap))
-	for _, vtxo := range chainMap {
+	chainSlice := make([]vtxoKeyWithCreatedAt, 0, len(chainMap))
+	for vtxo := range chainMap {
 		chainSlice = append(chainSlice, vtxo)
 	}
 
@@ -234,15 +239,11 @@ func (i *indexerService) GetVtxoChain(ctx context.Context, req VtxoChainReq) (*V
 		return chainSlice[i].CreatedAt > chainSlice[j].CreatedAt
 	})
 
-	pagedVtxos, pageResp := paginate(chainSlice, req.Page, maxPageSizeVtxoChain)
+	pagedChainSlice, pageResp := paginate(chainSlice, req.Page, maxPageSizeVtxoChain)
 
-	txMap := make(map[Outpoint]string, len(pagedVtxos))
-	for _, vtxo := range pagedVtxos {
-		out := Outpoint{
-			Txid: vtxo.Txid,
-			Vout: vtxo.VOut,
-		}
-		txMap[out] = vtxo.RedeemTx
+	txMap := make(map[string][]string)
+	for _, vtxo := range pagedChainSlice {
+		txMap[vtxo.Txid] = chainMap[vtxo]
 	}
 
 	return &VtxoChainResp{
@@ -254,7 +255,7 @@ func (i *indexerService) GetVtxoChain(ctx context.Context, req VtxoChainReq) (*V
 func (i *indexerService) buildChain(
 	ctx context.Context,
 	outpoint domain.VtxoKey,
-	chain map[Outpoint]domain.Vtxo,
+	chain map[vtxoKeyWithCreatedAt][]string,
 	isFirst bool,
 ) error {
 	vtxos, err := i.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{outpoint})
@@ -267,10 +268,19 @@ func (i *indexerService) buildChain(
 	}
 
 	vtxo := vtxos[0]
+	key := vtxoKeyWithCreatedAt{
+		VtxoKey:   outpoint,
+		CreatedAt: vtxo.CreatedAt,
+	}
+	if _, ok := chain[key]; !ok {
+		chain[key] = make([]string, 0)
+	} else {
+		return nil
+	}
 
-	chain[Outpoint{Txid: vtxo.Txid, Vout: vtxo.VOut}] = vtxo
-
+	//finish chain if this is the leaf Vtxo
 	if !vtxo.IsPending() {
+		chain[key] = append(chain[key], vtxo.RoundTxid)
 		return nil
 	}
 
@@ -279,13 +289,19 @@ func (i *indexerService) buildChain(
 		return err
 	}
 
-	parentIn := redeemPsbt.UnsignedTx.TxIn[0]
-	parentOutpoint := domain.VtxoKey{
-		Txid: parentIn.PreviousOutPoint.Hash.String(),
-		VOut: parentIn.PreviousOutPoint.Index,
+	for _, in := range redeemPsbt.UnsignedTx.TxIn {
+		chain[key] = append(chain[key], in.PreviousOutPoint.Hash.String())
+		parentOutpoint := domain.VtxoKey{
+			Txid: in.PreviousOutPoint.Hash.String(),
+			VOut: in.PreviousOutPoint.Index,
+		}
+
+		if err := i.buildChain(ctx, parentOutpoint, chain, false); err != nil {
+			return err
+		}
 	}
 
-	return i.buildChain(ctx, parentOutpoint, chain, false)
+	return nil
 }
 
 func (i *indexerService) GetVirtualTxs(ctx context.Context, req VirtualTxsReq) (*VirtualTxsResp, error) {
@@ -312,6 +328,14 @@ func (i *indexerService) GetVirtualTxs(ctx context.Context, req VirtualTxsReq) (
 		if _, ok := txIdsMap[redeemTx.UnsignedTx.TxHash().String()]; ok {
 			txs = append(txs, vtxo.RedeemTx)
 		}
+	}
+
+	vtxs, err := i.repoManager.Rounds().GetTxsWithTxids(ctx, req.TxIDs)
+	if err != nil {
+		return nil, err
+	}
+	for _, vtx := range vtxs {
+		txs = append(txs, vtx)
 	}
 
 	virtualTxs, reps := paginate(txs, req.Page, maxPageSizeVirtualTxs)

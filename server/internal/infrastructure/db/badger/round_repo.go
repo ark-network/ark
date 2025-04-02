@@ -153,6 +153,11 @@ func (r *roundRepository) Close() {
 	r.store.Close()
 }
 
+func (r *roundRepository) GetTxsWithTxids(ctx context.Context, txids []string) ([]string, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (r *roundRepository) findRound(
 	ctx context.Context, query *badgerhold.Query,
 ) ([]domain.Round, error) {

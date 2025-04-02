@@ -271,6 +271,27 @@ func (r *roundRepository) GetVtxoTreeWithTxid(ctx context.Context, txid string) 
 	return vtxoTree, nil
 }
 
+func (r *roundRepository) GetTxsWithTxids(ctx context.Context, txids []string) ([]string, error) {
+	txs := make([]sql.NullString, 0, len(txids))
+	for _, txid := range txids {
+		txs = append(txs, sql.NullString{
+			String: txid,
+			Valid:  true,
+		})
+	}
+	rows, err := r.querier.GetTxsByTxid(ctx, txs)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := make([]string, 0, len(rows))
+	for _, row := range rows {
+		resp = append(resp, row.Tx.Tx)
+	}
+
+	return resp, nil
+}
+
 func rowToReceiver(row queries.RequestReceiverVw) domain.Receiver {
 	return domain.Receiver{
 		Amount:         uint64(row.Amount.Int64),

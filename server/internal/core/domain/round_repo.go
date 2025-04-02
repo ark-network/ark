@@ -21,6 +21,7 @@ type RoundRepository interface {
 	GetExpiredRoundsTxid(ctx context.Context) ([]string, error)
 	GetRoundsIds(ctx context.Context, startedAfter int64, startedBefore int64) ([]string, error)
 	GetSweptRoundsConnectorAddress(ctx context.Context) ([]string, error)
+	GetTxsWithTxids(ctx context.Context, txids []string) ([]string, error)
 	Close()
 }
 

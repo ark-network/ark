@@ -2,8 +2,6 @@ package handlers
 
 import (
 	"context"
-	"fmt"
-
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/server/internal/core/application"
 	"google.golang.org/grpc/codes"
@@ -247,9 +245,9 @@ func (e explorerService) GetVtxoChain(ctx context.Context, request *arkv1.GetVtx
 	}
 
 	graph := make(map[string]*arkv1.Transactions)
-	for outpoint, tx := range resp.Transactions {
-		graph[fmt.Sprintf("%s:%d", outpoint.Txid, outpoint.Vout)] = &arkv1.Transactions{
-			Txs: []string{tx},
+	for key, value := range resp.Transactions {
+		graph[key] = &arkv1.Transactions{
+			Txs: value,
 		}
 	}
 

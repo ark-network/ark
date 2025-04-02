@@ -169,7 +169,7 @@ type VtxoChainReq struct {
 }
 
 type VtxoChainResp struct {
-	Transactions map[Outpoint]string
+	Transactions map[string][]string
 	Page         PageResp
 }
 

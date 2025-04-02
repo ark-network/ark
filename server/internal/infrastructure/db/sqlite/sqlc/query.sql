@@ -39,6 +39,10 @@ ON CONFLICT(id) DO UPDATE SET
     version = EXCLUDED.version,
     swept = EXCLUDED.swept;
 
+-- name: GetTxsByTxid :many
+SELECT sqlc.embed(tx) FROM tx
+WHERE txid in (sqlc.slice('ids'));
+
 -- name: UpsertTxRequest :exec
 INSERT INTO tx_request (id, round_id) VALUES (?, ?)
 ON CONFLICT(id) DO UPDATE SET round_id = EXCLUDED.round_id;
