@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+	"github.com/ark-network/ark/common/bip322"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/descriptor"
 	"github.com/ark-network/ark/common/tree"
@@ -132,25 +133,32 @@ func (h *handler) GetBoardingAddress(
 func (h *handler) RegisterInputsForNextRound(
 	ctx context.Context, req *arkv1.RegisterInputsForNextRoundRequest,
 ) (*arkv1.RegisterInputsForNextRoundResponse, error) {
-	vtxosInputs := req.GetInputs()
 	notesInputs := req.GetNotes()
+	bip322Signature := req.GetBip322Signature()
 
-	if len(vtxosInputs) <= 0 && len(notesInputs) <= 0 {
+	if len(notesInputs) <= 0 && bip322Signature == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing inputs")
 	}
 
-	if len(vtxosInputs) > 0 && len(notesInputs) > 0 {
+	if bip322Signature != nil && len(notesInputs) > 0 {
 		return nil, status.Error(codes.InvalidArgument, "cannot mix vtxos and notes")
 	}
 
 	requestID := ""
 
-	if len(vtxosInputs) > 0 {
-		inputs, err := parseInputs(vtxosInputs)
+	if bip322Signature != nil {
+		signature, err := bip322.DecodeSignature(bip322Signature.Signature)
 		if err != nil {
-			return nil, status.Error(codes.InvalidArgument, err.Error())
+			return nil, status.Error(codes.InvalidArgument, "invalid BIP0322 signature")
 		}
-		requestID, err = h.svc.SpendVtxos(ctx, inputs)
+
+		if len(bip322Signature.Message) <= 0 {
+			return nil, status.Error(codes.InvalidArgument, "missing message")
+		}
+
+		tapscripts := parseTapscripts(req.GetTapscripts())
+
+		requestID, err = h.svc.SpendVtxos(ctx, *signature, bip322Signature.Message, tapscripts)
 		if err != nil {
 			return nil, err
 		}
@@ -473,42 +481,6 @@ func (h *handler) GetTransactionsStream(
 			}
 		}
 	}
-}
-
-func (h *handler) DeleteNostrRecipient(
-	ctx context.Context, req *arkv1.DeleteNostrRecipientRequest,
-) (*arkv1.DeleteNostrRecipientResponse, error) {
-	signedVtxoOutpoints, err := parseSignedVtxoOutpoints(req.GetVtxos())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-
-	if err := h.svc.DeleteNostrRecipient(ctx, signedVtxoOutpoints); err != nil {
-		return nil, err
-	}
-
-	return &arkv1.DeleteNostrRecipientResponse{}, nil
-}
-
-func (h *handler) SetNostrRecipient(
-	ctx context.Context,
-	req *arkv1.SetNostrRecipientRequest,
-) (*arkv1.SetNostrRecipientResponse, error) {
-	signedVtxoOutpoints, err := parseSignedVtxoOutpoints(req.GetVtxos())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-
-	nostrRecipient := req.GetNostrRecipient()
-	if len(nostrRecipient) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "missing nostr recipient")
-	}
-
-	if err := h.svc.SetNostrRecipient(ctx, nostrRecipient, signedVtxoOutpoints); err != nil {
-		return nil, err
-	}
-
-	return &arkv1.SetNostrRecipientResponse{}, nil
 }
 
 func (h *handler) SubscribeForAddress(

@@ -95,10 +95,23 @@ func (a *grpcClient) GetBoardingAddress(
 }
 
 func (a *grpcClient) RegisterInputsForNextRound(
-	ctx context.Context, inputs []client.Input,
+	ctx context.Context,
+	signature, message string,
+	tapscripts map[string][]string,
 ) (string, error) {
+	tapscriptsProto := make(map[string]*arkv1.Tapscripts)
+	for outpoint, scripts := range tapscripts {
+		tapscriptsProto[outpoint] = &arkv1.Tapscripts{
+			Scripts: scripts,
+		}
+	}
+
 	req := &arkv1.RegisterInputsForNextRoundRequest{
-		Inputs: ins(inputs).toProto(),
+		Bip322Signature: &arkv1.Bip322Signature{
+			Message:   message,
+			Signature: signature,
+		},
+		Tapscripts: tapscriptsProto,
 	}
 
 	resp, err := a.svc.RegisterInputsForNextRound(ctx, req)
@@ -397,27 +410,6 @@ func (c *grpcClient) GetTransactionsStream(
 	return eventCh, closeFn, nil
 }
 
-func (a *grpcClient) SetNostrRecipient(
-	ctx context.Context, nostrRecipient string, vtxos []client.SignedVtxoOutpoint,
-) error {
-	req := &arkv1.SetNostrRecipientRequest{
-		NostrRecipient: nostrRecipient,
-		Vtxos:          signedVtxosToProto(vtxos),
-	}
-	_, err := a.svc.SetNostrRecipient(ctx, req)
-	return err
-}
-
-func (a *grpcClient) DeleteNostrRecipient(
-	ctx context.Context, vtxos []client.SignedVtxoOutpoint,
-) error {
-	req := &arkv1.DeleteNostrRecipientRequest{
-		Vtxos: signedVtxosToProto(vtxos),
-	}
-	_, err := a.svc.DeleteNostrRecipient(ctx, req)
-	return err
-}
-
 func (c *grpcClient) SubscribeForAddress(
 	ctx context.Context, addr string,
 ) (<-chan client.AddressEvent, func(), error) {
@@ -456,24 +448,6 @@ func (c *grpcClient) SubscribeForAddress(
 	}
 
 	return eventCh, closeFn, nil
-}
-
-func signedVtxosToProto(vtxos []client.SignedVtxoOutpoint) []*arkv1.SignedVtxoOutpoint {
-	protoVtxos := make([]*arkv1.SignedVtxoOutpoint, len(vtxos))
-	for i, v := range vtxos {
-		protoVtxos[i] = &arkv1.SignedVtxoOutpoint{
-			Outpoint: &arkv1.Outpoint{
-				Txid: v.Outpoint.Txid,
-				Vout: uint32(v.Outpoint.VOut),
-			},
-			Proof: &arkv1.OwnershipProof{
-				ControlBlock: v.Proof.ControlBlock,
-				Script:       v.Proof.Script,
-				Signature:    v.Proof.Signature,
-			},
-		}
-	}
-	return protoVtxos
 }
 
 func outpointsFromProto(protoOutpoints []*arkv1.Outpoint) []client.Outpoint {
