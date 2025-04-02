@@ -121,13 +121,19 @@ func TestWasm(t *testing.T) {
 	require.NoError(t, err)
 
 	time.Sleep(3 * time.Second)
-	err = generateBlock()
-	require.NoError(t, err)
-	time.Sleep(2 * time.Second)
+
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		waitForPayment(alicePage, aliceAddr.OffchainAddr)
+	}()
 
 	txID, err := settle(alicePage)
 	require.NoError(t, err)
 	t.Logf("Alice onboard txID: %v", txID)
+
+	wg.Wait()
 
 	aliceBalance, err := getBalance(alicePage)
 	require.NoError(t, err)
@@ -141,19 +147,31 @@ func TestWasm(t *testing.T) {
 
 	amount := 1000
 	t.Logf("Alice is sending %d sats to Bob offchain...", amount)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		waitForPayment(alicePage, bobAddr.OffchainAddr)
+	}()
 	require.NoError(t, sendOffChain(alicePage, bobAddr.OffchainAddr, amount))
 
 	t.Log("Transaction completed out of round")
 
+	wg.Wait()
+
 	t.Logf("Bob settling the received funds...")
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		waitForPayment(bobPage, bobAddr.OffchainAddr)
+	}()
 	txID, err = settle(bobPage)
 	require.NoError(t, err)
 	t.Logf("Bob settled the received funds in round %v", txID)
 
+	wg.Wait()
+
 	err = generateBlock()
 	require.NoError(t, err)
-
-	time.Sleep(5 * time.Second)
 
 	aliceBalance, err = getBalance(alicePage)
 	require.NoError(t, err)
@@ -347,6 +365,18 @@ func sendOffChain(page playwright.Page, addr string, amount int) error {
             throw err;
         }
     }`, addr, amount))
+	return err
+}
+
+func waitForPayment(page playwright.Page, addr string) error {
+	_, err := page.Evaluate(fmt.Sprintf(`async () => {
+			try {
+            return await notifyIncomingFunds("%s");
+        } catch (err) {
+            console.error("Error:", err);
+            throw err;
+        }
+	}`, addr))
 	return err
 }
 

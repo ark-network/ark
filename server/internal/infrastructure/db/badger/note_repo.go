@@ -2,9 +2,11 @@ package badgerdb
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/dgraph-io/badger/v4"
@@ -60,7 +62,18 @@ func (n *noteRepository) Add(ctx context.Context, id uint64) error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	return n.store.Insert(id, note{ID: id})
+	if err := n.store.Insert(id, note{ID: id}); err != nil {
+		if errors.Is(err, badger.ErrConflict) {
+			attempts := 1
+			for errors.Is(err, badger.ErrConflict) && attempts <= maxRetries {
+				time.Sleep(100 * time.Millisecond)
+				err = n.store.Insert(id, note{ID: id})
+				attempts++
+			}
+		}
+		return err
+	}
+	return nil
 }
 
 func (n *noteRepository) Contains(ctx context.Context, id uint64) (bool, error) {
@@ -70,7 +83,7 @@ func (n *noteRepository) Contains(ctx context.Context, id uint64) (bool, error) 
 	var v note
 	err := n.store.Get(id, &v)
 	if err != nil {
-		if err == badgerhold.ErrNotFound {
+		if errors.Is(err, badgerhold.ErrNotFound) {
 			return false, nil
 		}
 		return false, err

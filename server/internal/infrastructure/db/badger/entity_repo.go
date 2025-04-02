@@ -2,8 +2,10 @@ package badgerdb
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/dgraph-io/badger/v4"
@@ -72,9 +74,16 @@ func (r *entityRepository) Add(ctx context.Context, entity domain.Entity, vtxoKe
 			entities.Entities = append(entities.Entities, entity)
 		}
 
-		err = r.store.Upsert(vtxoKey.String(), entities)
-		if err != nil {
-			return fmt.Errorf("failed to upsert entity: %w", err)
+		if err := r.store.Upsert(vtxoKey.String(), entities); err != nil {
+			if errors.Is(err, badger.ErrConflict) {
+				attempts := 1
+				for errors.Is(err, badger.ErrConflict) && attempts <= maxRetries {
+					time.Sleep(100 * time.Millisecond)
+					err = r.store.Upsert(vtxoKey.String(), entities)
+					attempts++
+				}
+			}
+			return err
 		}
 	}
 	return nil
@@ -98,12 +107,19 @@ func (r *entityRepository) Delete(ctx context.Context, vtxoKeys []domain.VtxoKey
 	}
 
 	for _, vtxoKey := range vtxoKeys {
-		err := r.store.Delete(vtxoKey.String(), &entities{})
-		if err == badgerhold.ErrNotFound {
-			return fmt.Errorf("entities not found for key: %s", vtxoKey)
-		}
-		if err != nil {
-			return fmt.Errorf("failed to delete entity: %w", err)
+		if err := r.store.Delete(vtxoKey.String(), &entities{}); err != nil {
+			if errors.Is(err, badgerhold.ErrNotFound) {
+				continue
+			}
+			if errors.Is(err, badger.ErrConflict) {
+				attempts := 1
+				for errors.Is(err, badger.ErrConflict) && attempts <= maxRetries {
+					time.Sleep(100 * time.Millisecond)
+					err = r.store.Delete(vtxoKey.String(), &entities{})
+					attempts++
+				}
+			}
+			return err
 		}
 	}
 	return nil

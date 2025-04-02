@@ -2,9 +2,11 @@ package badgerdb
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/dgraph-io/badger/v4"
@@ -136,21 +138,38 @@ func (r *vtxoRepository) SweepVtxos(
 }
 
 func (r *vtxoRepository) UpdateExpireAt(ctx context.Context, vtxos []domain.VtxoKey, expireAt int64) error {
-	tx := r.store.Badger().NewTransaction(true)
-	defer tx.Discard()
+	var err error
 
-	for _, vtxo := range vtxos {
-		vtxo, err := r.getVtxo(ctx, vtxo)
-		if err != nil {
-			return err
+	for range maxRetries {
+		err = func() error {
+			tx := r.store.Badger().NewTransaction(true)
+			defer tx.Discard()
+
+			for _, vtxoKey := range vtxos {
+				vtxo, err := r.getVtxo(ctx, vtxoKey)
+				if err != nil {
+					return err
+				}
+				vtxo.ExpireAt = expireAt
+				if err := r.store.TxUpdate(tx, vtxo.Hash(), *vtxo); err != nil {
+					return err
+				}
+			}
+
+			return tx.Commit()
+		}()
+		if err == nil {
+			return nil // Success
 		}
-		vtxo.ExpireAt = expireAt
-		if err := r.store.TxUpdate(tx, vtxo.Hash(), *vtxo); err != nil {
-			return err
+
+		if errors.Is(err, badger.ErrConflict) {
+			time.Sleep(100 * time.Millisecond)
+			continue
 		}
+		return err
 	}
 
-	return tx.Commit()
+	return err
 }
 
 func (r *vtxoRepository) Close() {
@@ -159,20 +178,36 @@ func (r *vtxoRepository) Close() {
 
 func (r *vtxoRepository) addVtxos(
 	ctx context.Context, vtxos []domain.Vtxo,
-) (err error) {
+) error {
 	for _, vtxo := range vtxos {
 		vtxoKey := vtxo.VtxoKey.Hash()
+		var insertFn func() error
 		if ctx.Value("tx") != nil {
 			tx := ctx.Value("tx").(*badger.Txn)
-			err = r.store.TxInsert(tx, vtxoKey, vtxo)
+			insertFn = func() error {
+				return r.store.TxInsert(tx, vtxoKey, vtxo)
+			}
 		} else {
-			err = r.store.Insert(vtxoKey, vtxo)
+			insertFn = func() error {
+				return r.store.Insert(vtxoKey, vtxo)
+			}
+		}
+		if err := insertFn(); err != nil {
+			if errors.Is(err, badgerhold.ErrKeyExists) {
+				continue
+			}
+			if errors.Is(err, badger.ErrConflict) {
+				attempts := 1
+				for errors.Is(err, badger.ErrConflict) && attempts <= maxRetries {
+					time.Sleep(100 * time.Millisecond)
+					err = insertFn()
+					attempts++
+				}
+			}
+			return err
 		}
 	}
-	if err != nil && err == badgerhold.ErrKeyExists {
-		err = nil
-	}
-	return
+	return nil
 }
 
 func (r *vtxoRepository) getVtxo(
@@ -207,13 +242,8 @@ func (r *vtxoRepository) spendVtxo(ctx context.Context, vtxoKey domain.VtxoKey, 
 
 	vtxo.Spent = true
 	vtxo.SpentBy = spendBy
-	if ctx.Value("tx") != nil {
-		tx := ctx.Value("tx").(*badger.Txn)
-		err = r.store.TxUpdate(tx, vtxoKey.Hash(), *vtxo)
-	} else {
-		err = r.store.Update(vtxoKey.Hash(), *vtxo)
-	}
-	return err
+
+	return r.updateVtxo(ctx, vtxo)
 }
 
 func (r *vtxoRepository) redeemVtxo(ctx context.Context, vtxoKey domain.VtxoKey) (*domain.Vtxo, error) {
@@ -230,13 +260,7 @@ func (r *vtxoRepository) redeemVtxo(ctx context.Context, vtxoKey domain.VtxoKey)
 
 	vtxo.Redeemed = true
 	vtxo.ExpireAt = 0
-	if ctx.Value("tx") != nil {
-		tx := ctx.Value("tx").(*badger.Txn)
-		err = r.store.TxUpdate(tx, vtxoKey.Hash(), *vtxo)
-	} else {
-		err = r.store.Update(vtxoKey.Hash(), *vtxo)
-	}
-	if err != nil {
+	if err := r.updateVtxo(ctx, vtxo); err != nil {
 		return nil, err
 	}
 	return vtxo, nil
@@ -266,13 +290,31 @@ func (r *vtxoRepository) sweepVtxo(ctx context.Context, vtxoKey domain.VtxoKey) 
 	}
 
 	vtxo.Swept = true
+	return r.updateVtxo(ctx, vtxo)
+}
+
+func (r *vtxoRepository) updateVtxo(ctx context.Context, vtxo *domain.Vtxo) error {
+	var updateFn func() error
 	if ctx.Value("tx") != nil {
 		tx := ctx.Value("tx").(*badger.Txn)
-		err = r.store.TxUpdate(tx, vtxoKey.Hash(), *vtxo)
+		updateFn = func() error {
+			return r.store.TxUpdate(tx, vtxo.VtxoKey.Hash(), *vtxo)
+		}
 	} else {
-		err = r.store.Update(vtxoKey.Hash(), *vtxo)
+		updateFn = func() error {
+			return r.store.Update(vtxo.VtxoKey.Hash(), *vtxo)
+		}
 	}
-	if err != nil {
+
+	if err := updateFn(); err != nil {
+		if errors.Is(err, badger.ErrConflict) {
+			attempts := 1
+			for errors.Is(err, badger.ErrConflict) && attempts <= maxRetries {
+				time.Sleep(100 * time.Millisecond)
+				err = updateFn()
+				attempts++
+			}
+		}
 		return err
 	}
 	return nil
