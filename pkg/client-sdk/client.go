@@ -396,7 +396,7 @@ func getWallet(
 		return getSingleKeyWallet(configStore, data.Network.Name)
 	default:
 		return nil, fmt.Errorf(
-			"unsuported wallet type '%s', please select one of: %s",
+			"unsupported wallet type '%s', please select one of: %s",
 			data.WalletType, supportedWallets,
 		)
 	}
