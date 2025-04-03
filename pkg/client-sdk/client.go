@@ -332,9 +332,15 @@ func (a *arkClient) init(
 
 	if _, err := walletSvc.Create(ctx, args.Password, args.Seed); err != nil {
 		//nolint:all
-		a.store.ConfigStore().CleanData()
-		a.store.TransactionStore().CleanData()
-		a.store.VtxoStore().CleanData()
+		if cleanErr := a.store.ConfigStore().CleanData(); cleanErr != nil {
+			logrus.Errorf("failed to clean config store data: %s", cleanErr)
+		}
+		if cleanErr := a.store.TransactionStore().CleanData(); cleanErr != nil {
+			logrus.Errorf("failed to clean transaction store data: %s", cleanErr)
+		}
+		if cleanErr := a.store.VtxoStore().CleanData(); cleanErr != nil {
+			logrus.Errorf("failed to clean vtxo store data: %s", cleanErr)
+		}
 		return err
 	}
 
