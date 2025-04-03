@@ -17,7 +17,7 @@ type ConfigStore interface {
 	GetDatadir() string
 	AddData(ctx context.Context, data Config) error
 	GetData(ctx context.Context) (*Config, error)
-	CleanData(ctx context.Context) error
+	CleanData() error
 	Close()
 }
 
@@ -30,6 +30,7 @@ type TransactionStore interface {
 	GetTransactions(ctx context.Context, txids []string) ([]Transaction, error)
 	UpdateTransactions(ctx context.Context, txs []Transaction) (int, error)
 	GetEventChannel() chan TransactionEvent
+	CleanData() error
 	Close()
 }
 
@@ -40,5 +41,6 @@ type VtxoStore interface {
 	GetAllVtxos(ctx context.Context) (spendable []Vtxo, spent []Vtxo, err error)
 	GetVtxos(ctx context.Context, keys []VtxoKey) ([]Vtxo, error)
 	GetEventChannel() chan VtxoEvent
+	CleanData() error
 	Close()
 }

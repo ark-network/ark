@@ -192,6 +192,13 @@ func (s *txStore) GetEventChannel() chan types.TransactionEvent {
 	return s.eventCh
 }
 
+func (s *txStore) CleanData() error {
+	if err := s.db.Badger().DropAll(); err != nil {
+		return fmt.Errorf("failed to clean the transaction db: %s", err)
+	}
+	return nil
+}
+
 func (s *txStore) Close() {
 	if err := s.db.Close(); err != nil {
 		log.Debugf("error on closing transactions db: %s", err)

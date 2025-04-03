@@ -243,7 +243,9 @@ func (a *arkClient) initWithWallet(
 
 	if _, err := args.Wallet.Create(ctx, args.Password, args.Seed); err != nil {
 		//nolint:all
-		a.store.ConfigStore().CleanData(ctx)
+		a.store.ConfigStore().CleanData()
+		a.store.TransactionStore().CleanData()
+		a.store.VtxoStore().CleanData()
 		return err
 	}
 
@@ -330,7 +332,9 @@ func (a *arkClient) init(
 
 	if _, err := walletSvc.Create(ctx, args.Password, args.Seed); err != nil {
 		//nolint:all
-		a.store.ConfigStore().CleanData(ctx)
+		a.store.ConfigStore().CleanData()
+		a.store.TransactionStore().CleanData()
+		a.store.VtxoStore().CleanData()
 		return err
 	}
 

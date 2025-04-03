@@ -68,7 +68,7 @@ func TestStore(t *testing.T) {
 			require.Nil(t, data)
 
 			// Check no side effects when cleaning an empty store.
-			err = storeSvc.CleanData(ctx)
+			err = storeSvc.CleanData()
 			require.NoError(t, err)
 
 			// Check add and retrieve data.
@@ -80,7 +80,7 @@ func TestStore(t *testing.T) {
 			require.Equal(t, testStoreData, *data)
 
 			// Check clean and retrieve data.
-			err = storeSvc.CleanData(ctx)
+			err = storeSvc.CleanData()
 			require.NoError(t, err)
 
 			data, err = storeSvc.GetData(ctx)
