@@ -131,11 +131,7 @@ func TestWallet(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, alreadyUnlocked)
 
-			// Check no password is required to lock if wallet is already locked.
-			err = walletSvc.Lock(ctx, password)
-			require.NoError(t, err)
-
-			err = walletSvc.Lock(ctx, "")
+			err = walletSvc.Lock(ctx)
 			require.NoError(t, err)
 
 			locked := walletSvc.IsLocked()

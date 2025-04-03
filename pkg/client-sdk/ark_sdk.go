@@ -15,7 +15,7 @@ type ArkClient interface {
 	InitWithWallet(ctx context.Context, args InitWithWalletArgs) error
 	IsLocked(ctx context.Context) bool
 	Unlock(ctx context.Context, password string) error
-	Lock(ctx context.Context, password string) error
+	Lock(ctx context.Context) error
 	Balance(ctx context.Context, computeExpiryDetails bool) (*Balance, error)
 	Receive(ctx context.Context) (offchainAddr, boardingAddr string, err error)
 	SendOffChain(

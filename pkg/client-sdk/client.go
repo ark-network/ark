@@ -79,8 +79,8 @@ func (a *arkClient) Unlock(ctx context.Context, pasword string) error {
 	return err
 }
 
-func (a *arkClient) Lock(ctx context.Context, pasword string) error {
-	return a.wallet.Lock(ctx, pasword)
+func (a *arkClient) Lock(ctx context.Context) error {
+	return a.wallet.Lock(ctx)
 }
 
 func (a *arkClient) IsLocked(ctx context.Context) bool {
