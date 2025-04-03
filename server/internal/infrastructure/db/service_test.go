@@ -679,9 +679,3 @@ type sortReceivers []domain.Receiver
 func (a sortReceivers) Len() int           { return len(a) }
 func (a sortReceivers) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a sortReceivers) Less(i, j int) bool { return a[i].Amount < a[j].Amount }
-
-type sortStrings []string
-
-func (a sortStrings) Len() int           { return len(a) }
-func (a sortStrings) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a sortStrings) Less(i, j int) bool { return a[i] < a[j] }
