@@ -336,7 +336,12 @@ func (a *covenantlessArkClient) listenForBoardingTxs(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			txsToAdd, txsToConfirm, err := a.getBoardingPendingTransactions(ctx)
+			_, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
+			if err != nil {
+				log.WithError(err).Error("failed to get all boarding addresses")
+				continue
+			}
+			txsToAdd, txsToConfirm, rbfTxs, err := a.getBoardingTransactions(ctx, boardingAddrs)
 			if err != nil {
 				log.WithError(err).Error("failed to get pending transactions")
 				continue
@@ -361,7 +366,16 @@ func (a *covenantlessArkClient) listenForBoardingTxs(ctx context.Context) {
 					log.WithError(err).Error("failed to update boarding transactions")
 					continue
 				}
-				log.Debugf("updated %d boarding transaction(s)", count)
+				log.Debugf("confirmed %d boarding transaction(s)", count)
+			}
+
+			if len(rbfTxs) > 0 {
+				count, err := a.store.TransactionStore().RbfTransactions(ctx, rbfTxs)
+				if err != nil {
+					log.WithError(err).Error("failed to update rbf boarding transactions")
+					continue
+				}
+				log.Debugf("replaced %d transaction(s)", count)
 			}
 		case <-ctx.Done():
 			return
@@ -369,28 +383,82 @@ func (a *covenantlessArkClient) listenForBoardingTxs(ctx context.Context) {
 	}
 }
 
-func (a *covenantlessArkClient) getBoardingPendingTransactions(
-	ctx context.Context,
-) ([]types.Transaction, []string, error) {
+func (a *covenantlessArkClient) getBoardingTransactions(
+	ctx context.Context, boardingAddrs []wallet.TapscriptsAddress,
+) ([]types.Transaction, []string, map[string]types.Transaction, error) {
 	oldTxs, err := a.store.TransactionStore().GetAllTransactions(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	boardingUtxos, err := a.getClaimableBoardingUtxos(ctx, nil)
+	rbfTxs := make(map[string]types.Transaction, 0)
+	replacements := make(map[string]struct{}, 0)
+	for _, tx := range oldTxs {
+		if tx.IsBoarding() && tx.CreatedAt.IsZero() {
+			isRbf, replacedBy, timestamp, err := a.explorer.IsRBFTx(tx.BoardingTxid, tx.Hex)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			if isRbf {
+				txHex, err := a.explorer.GetTxHex(replacedBy)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				rawTx := &wire.MsgTx{}
+				if err := rawTx.Deserialize(strings.NewReader(txHex)); err != nil {
+					return nil, nil, nil, err
+				}
+				amount := uint64(0)
+				netParams := utils.ToBitcoinNetwork(a.Network)
+				for _, addr := range boardingAddrs {
+					decoded, err := btcutil.DecodeAddress(addr.Address, &netParams)
+					if err != nil {
+						return nil, nil, nil, err
+					}
+					pkScript, err := txscript.PayToAddrScript(decoded)
+					if err != nil {
+						return nil, nil, nil, err
+					}
+					for _, out := range rawTx.TxOut {
+						if bytes.Equal(out.PkScript, pkScript) {
+							amount = uint64(out.Value)
+							break
+						}
+					}
+					if amount > 0 {
+						break
+					}
+				}
+				rbfTxs[tx.BoardingTxid] = types.Transaction{
+					TransactionKey: types.TransactionKey{
+						BoardingTxid: replacedBy,
+					},
+					CreatedAt: time.Unix(timestamp, 0),
+					Hex:       txHex,
+					Amount:    amount,
+				}
+				replacements[replacedBy] = struct{}{}
+			}
+		}
+	}
+
+	boardingUtxos, err := a.getClaimableBoardingUtxos(ctx, boardingAddrs, nil)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	txsToAdd := make([]types.Transaction, 0)
 	txsToConfirm := make([]string, 0)
 	for _, u := range boardingUtxos {
+		if _, ok := replacements[u.Txid]; ok {
+			continue
+		}
+
 		found := false
 		for _, tx := range oldTxs {
 			if tx.BoardingTxid == u.Txid {
 				found = true
-				emptyTime := time.Time{}
-				if tx.CreatedAt == emptyTime && tx.CreatedAt != u.CreatedAt {
+				if tx.CreatedAt.IsZero() && tx.CreatedAt != u.CreatedAt {
 					txsToConfirm = append(txsToConfirm, tx.TransactionKey.String())
 				}
 				break
@@ -408,10 +476,11 @@ func (a *covenantlessArkClient) getBoardingPendingTransactions(
 			Amount:    u.Amount,
 			Type:      types.TxReceived,
 			CreatedAt: u.CreatedAt,
+			Hex:       u.Tx,
 		})
 	}
 
-	return txsToAdd, txsToConfirm, nil
+	return txsToAdd, txsToConfirm, rbfTxs, nil
 }
 
 func (a *covenantlessArkClient) Balance(
@@ -877,7 +946,7 @@ func (a *covenantlessArkClient) CollaborativeExit(
 		return "", fmt.Errorf("invalid onchain address")
 	}
 
-	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+	offchainAddrs, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -911,7 +980,7 @@ func (a *covenantlessArkClient) CollaborativeExit(
 		}
 	}
 
-	boardingUtxos, err := a.getClaimableBoardingUtxos(ctx, nil)
+	boardingUtxos, err := a.getClaimableBoardingUtxos(ctx, boardingAddrs, nil)
 	if err != nil {
 		return "", err
 	}
@@ -1001,7 +1070,14 @@ func (a *covenantlessArkClient) GetTransactionHistory(
 	}
 
 	if a.Config.WithTransactionFeed {
-		return a.store.TransactionStore().GetAllTransactions(ctx)
+		history, err := a.store.TransactionStore().GetAllTransactions(ctx)
+		if err != nil {
+			return nil, err
+		}
+		sort.SliceStable(history, func(i, j int) bool {
+			return history[i].CreatedAt.IsZero() || history[i].CreatedAt.After(history[j].CreatedAt)
+		})
+		return history, nil
 	}
 
 	spendableVtxos, spentVtxos, err := a.ListVtxos(ctx)
@@ -1019,13 +1095,13 @@ func (a *covenantlessArkClient) GetTransactionHistory(
 		return nil, err
 	}
 
-	txs := append(boardingTxs, offchainTxs...)
+	history := append(boardingTxs, offchainTxs...)
 	// Sort the slice by age
-	sort.SliceStable(txs, func(i, j int) bool {
-		return txs[i].CreatedAt.After(txs[j].CreatedAt)
+	sort.SliceStable(history, func(i, j int) bool {
+		return history[i].CreatedAt.IsZero() || history[i].CreatedAt.After(history[j].CreatedAt)
 	})
 
-	return txs, nil
+	return history, nil
 }
 
 func (a *covenantlessArkClient) SetNostrNotificationRecipient(ctx context.Context, nostrProfile string) error {
@@ -1328,7 +1404,7 @@ func (a *covenantlessArkClient) sendOffchain(
 		sumOfReceivers += receiver.Amount()
 	}
 
-	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+	offchainAddrs, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -1360,7 +1436,7 @@ func (a *covenantlessArkClient) sendOffchain(
 		}
 	}
 
-	boardingUtxos, err := a.getClaimableBoardingUtxos(ctx, nil)
+	boardingUtxos, err := a.getClaimableBoardingUtxos(ctx, boardingAddrs, nil)
 	if err != nil {
 		return "", err
 	}
@@ -2331,6 +2407,10 @@ func (a *covenantlessArkClient) getAllBoardingUtxos(ctx context.Context) ([]type
 			for i, vout := range tx.Vout {
 				var spent bool
 				if vout.Address == addr.Address {
+					txHex, err := a.explorer.GetTxHex(tx.Txid)
+					if err != nil {
+						return nil, nil, err
+					}
 					spentStatuses, err := a.explorer.GetTxOutspends(tx.Txid)
 					if err != nil {
 						return nil, nil, err
@@ -2350,6 +2430,7 @@ func (a *covenantlessArkClient) getAllBoardingUtxos(ctx context.Context) ([]type
 						CreatedAt:  createdAt,
 						Tapscripts: addr.Tapscripts,
 						Spent:      spent,
+						Tx:         txHex,
 					})
 				}
 			}
@@ -2359,12 +2440,9 @@ func (a *covenantlessArkClient) getAllBoardingUtxos(ctx context.Context) ([]type
 	return utxos, ignoreVtxos, nil
 }
 
-func (a *covenantlessArkClient) getClaimableBoardingUtxos(ctx context.Context, opts *CoinSelectOptions) ([]types.Utxo, error) {
-	_, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
-	if err != nil {
-		return nil, err
-	}
-
+func (a *covenantlessArkClient) getClaimableBoardingUtxos(
+	_ context.Context, boardingAddrs []wallet.TapscriptsAddress, opts *CoinSelectOptions,
+) ([]types.Utxo, error) {
 	claimable := make([]types.Utxo, 0)
 	for _, addr := range boardingAddrs {
 		boardingScript, err := bitcointree.ParseVtxoScript(addr.Tapscripts)
@@ -2525,10 +2603,10 @@ func (a *covenantlessArkClient) getBoardingTxs(
 			Type:      types.TxReceived,
 			CreatedAt: u.CreatedAt,
 			Settled:   u.Spent,
+			Hex:       u.Tx,
 		}
 
-		emptyTime := time.Time{}
-		if u.CreatedAt == emptyTime {
+		if u.CreatedAt.IsZero() {
 			unconfirmedTxs = append(unconfirmedTxs, tx)
 			continue
 		}
@@ -2620,6 +2698,7 @@ func (a *covenantlessArkClient) handleRoundTx(
 				Type:      types.TxReceived,
 				Settled:   true,
 				CreatedAt: time.Now(),
+				Hex:       roundTx.Hex,
 			})
 		} else {
 			vtxosToAddAmount := uint64(0)
@@ -2639,6 +2718,7 @@ func (a *covenantlessArkClient) handleRoundTx(
 					Type:      types.TxSent,
 					Settled:   true,
 					CreatedAt: time.Now(),
+					Hex:       roundTx.Hex,
 				})
 			}
 		}
@@ -2661,6 +2741,7 @@ func (a *covenantlessArkClient) handleRoundTx(
 					Type:      types.TxSent,
 					Settled:   true,
 					CreatedAt: time.Now(),
+					Hex:       roundTx.Hex,
 				})
 			}
 
@@ -2758,6 +2839,7 @@ func (a *covenantlessArkClient) handleRedeemTx(
 				Amount:    amount,
 				Type:      types.TxReceived,
 				CreatedAt: time.Now(),
+				Hex:       redeemTx.Hex,
 			})
 		}
 	} else {

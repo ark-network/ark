@@ -1000,6 +1000,22 @@ func (b *txBuilder) minRelayFeeConnectorTx() (uint64, error) {
 	return b.wallet.MinRelayFee(context.Background(), uint64(common.ConnectorTxSize))
 }
 
+func (b *txBuilder) CountSignedTaprootInputs(tx string) (int, error) {
+	ptx, err := psetv2.NewPsetFromBase64(tx)
+	if err != nil {
+		return -1, err
+	}
+
+	signedInputsCount := 0
+	for _, input := range ptx.Inputs {
+		if len(input.TapScriptSig) == 0 || len(input.TapLeafScript) == 0 {
+			continue
+		}
+		signedInputsCount++
+	}
+	return signedInputsCount, nil
+}
+
 // This method aims to verify and add partial signature from boarding input
 func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, error) {
 	roundPset, err := psetv2.NewPsetFromBase64(dest)

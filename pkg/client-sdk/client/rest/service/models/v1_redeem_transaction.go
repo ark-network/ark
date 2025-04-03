@@ -19,6 +19,9 @@ import (
 // swagger:model v1RedeemTransaction
 type V1RedeemTransaction struct {
 
+	// hex
+	Hex string `json:"hex,omitempty"`
+
 	// spendable vtxos
 	SpendableVtxos []*V1Vtxo `json:"spendableVtxos"`
 

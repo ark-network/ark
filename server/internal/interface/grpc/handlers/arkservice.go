@@ -79,8 +79,8 @@ func (h *handler) GetInfo(
 		MarketHour: &arkv1.MarketHour{
 			NextStartTime: info.NextMarketHour.StartTime.Unix(),
 			NextEndTime:   info.NextMarketHour.EndTime.Unix(),
-			Period:        int64(info.NextMarketHour.Period),
-			RoundInterval: int64(info.NextMarketHour.RoundInterval),
+			Period:        int64(info.NextMarketHour.Period.Seconds()),
+			RoundInterval: int64(info.NextMarketHour.RoundInterval.Seconds()),
 		},
 		Version: h.version,
 	}, nil

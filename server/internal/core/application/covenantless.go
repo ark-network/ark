@@ -489,6 +489,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 			RedeemTxid:     redeemTxid,
 			SpentVtxos:     spentVtxos,
 			SpendableVtxos: newVtxos,
+			TxHex:          signedRedeemTx,
 		}
 	}()
 
@@ -758,20 +759,33 @@ func (s *covenantlessService) UpdateTxRequestStatus(_ context.Context, id string
 }
 
 func (s *covenantlessService) SignVtxos(ctx context.Context, forfeitTxs []string) error {
+	if len(forfeitTxs) <= 0 {
+		return nil
+	}
+
 	if err := s.forfeitTxs.sign(forfeitTxs); err != nil {
 		return err
 	}
 
 	go func() {
 		s.currentRoundLock.Lock()
-		s.checkForfeitsAndBoardingSigsSent(s.currentRound)
+		round := s.currentRound
 		s.currentRoundLock.Unlock()
+		s.checkForfeitsAndBoardingSigsSent(round)
 	}()
 
 	return nil
 }
 
 func (s *covenantlessService) SignRoundTx(ctx context.Context, signedRoundTx string) error {
+	numSignedInputs, err := s.builder.CountSignedTaprootInputs(signedRoundTx)
+	if err != nil {
+		return fmt.Errorf("failed to count number of signed boarding inputs: %s", err)
+	}
+	if numSignedInputs == 0 {
+		return nil
+	}
+
 	s.currentRoundLock.Lock()
 	defer s.currentRoundLock.Unlock()
 	currentRound := s.currentRound
@@ -785,8 +799,9 @@ func (s *covenantlessService) SignRoundTx(ctx context.Context, signedRoundTx str
 
 	go func() {
 		s.currentRoundLock.Lock()
-		s.checkForfeitsAndBoardingSigsSent(s.currentRound)
+		round := s.currentRound
 		s.currentRoundLock.Unlock()
+		s.checkForfeitsAndBoardingSigsSent(round)
 	}()
 
 	return nil
@@ -813,7 +828,6 @@ func (s *covenantlessService) checkForfeitsAndBoardingSigsSent(currentRound *dom
 		select {
 		case s.forfeitsBoardingSigsChan <- struct{}{}:
 		default:
-			time.Sleep(time.Millisecond)
 		}
 	}
 }
@@ -1168,16 +1182,21 @@ func (s *covenantlessService) startRound() {
 	//nolint:all
 	round.StartRegistration()
 	s.currentRound = round
+	close(s.forfeitsBoardingSigsChan)
+	s.forfeitsBoardingSigsChan = make(chan struct{}, 1)
 
 	defer func() {
 		roundEndTime := time.Now().Add(time.Duration(s.roundInterval) * time.Second)
-		time.Sleep(time.Duration(s.roundInterval/6) * time.Second)
+		sleepingTime := s.roundInterval / 6
+		if sleepingTime < 1 {
+			sleepingTime = 1
+		}
+		time.Sleep(time.Duration(sleepingTime) * time.Second)
 		s.startFinalization(roundEndTime)
 	}()
 
 	log.Debugf("started registration stage for new round: %s", round.Id)
 }
-
 func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 	log.Debugf("started finalization stage for round: %s", s.currentRound.Id)
 	ctx := context.Background()
@@ -1447,7 +1466,9 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, roundEndTime time
 	defer s.startRound()
 
 	ctx := context.Background()
+	s.currentRoundLock.Lock()
 	round := s.currentRound
+	s.currentRoundLock.Unlock()
 	if round.IsFailed() {
 		return
 	}
@@ -1460,31 +1481,6 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, roundEndTime time
 		}
 	}()
 
-	remainingTime := time.Until(roundEndTime)
-	select {
-	case <-s.forfeitsBoardingSigsChan:
-		log.Debug("all forfeit txs and boarding inputs signatures have been sent")
-	case <-time.After(remainingTime):
-		log.Debug("timeout waiting for forfeit txs and boarding inputs signatures")
-	}
-
-	forfeitTxs, err := s.forfeitTxs.pop()
-	if err != nil {
-		changes = round.Fail(fmt.Errorf("failed to finalize round: %s", err))
-		log.WithError(err).Warn("failed to finalize round")
-		return
-	}
-
-	if err := s.verifyForfeitTxsSigs(forfeitTxs); err != nil {
-		changes = round.Fail(err)
-		log.WithError(err).Warn("failed to validate forfeit txs")
-		return
-	}
-
-	log.Debugf("signing round transaction %s\n", round.Id)
-
-	boardingInputsIndexes := make([]int, 0)
-	boardingInputs := make([]domain.VtxoKey, 0)
 	roundTx, err := psbt.NewFromRawBytes(strings.NewReader(round.UnsignedTx), true)
 	if err != nil {
 		log.Debugf("failed to parse round tx: %s", round.UnsignedTx)
@@ -1492,36 +1488,88 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, roundEndTime time
 		log.WithError(err).Warn("failed to parse round tx")
 		return
 	}
-
-	for i, in := range roundTx.Inputs {
-		if len(in.TaprootLeafScript) > 0 {
-			if len(in.TaprootScriptSpendSig) == 0 {
-				err = fmt.Errorf("missing tapscript spend sig for input %d", i)
-				changes = round.Fail(err)
-				log.WithError(err).Warn("missing boarding sig")
-				return
-			}
-
-			boardingInputsIndexes = append(boardingInputsIndexes, i)
-			boardingInputs = append(boardingInputs, domain.VtxoKey{
-				Txid: roundTx.UnsignedTx.TxIn[i].PreviousOutPoint.Hash.String(),
-				VOut: roundTx.UnsignedTx.TxIn[i].PreviousOutPoint.Index,
-			})
+	includesBoardingInputs := false
+	for _, in := range roundTx.Inputs {
+		// TODO: this is ok as long as the server doesn't use taproot address too!
+		// We need to find a better way to understand if an in input is ours or if
+		// it's a boarding one.
+		scriptType := txscript.GetScriptClass(in.WitnessUtxo.PkScript)
+		if scriptType == txscript.WitnessV1TaprootTy {
+			includesBoardingInputs = true
+			break
 		}
 	}
 
-	signedRoundTx := round.UnsignedTx
+	txToSign := round.UnsignedTx
+	boardingInputs := make([]domain.VtxoKey, 0)
+	forfeitTxs := make([]string, 0)
 
-	if len(boardingInputsIndexes) > 0 {
-		signedRoundTx, err = s.wallet.SignTransactionTapscript(ctx, signedRoundTx, boardingInputsIndexes)
+	if len(s.forfeitTxs.forfeitTxs) > 0 || includesBoardingInputs {
+		remainingTime := time.Until(roundEndTime)
+		select {
+		case <-s.forfeitsBoardingSigsChan:
+			log.Debug("all forfeit txs and boarding inputs signatures have been sent")
+		case <-time.After(remainingTime):
+			log.Debug("timeout waiting for forfeit txs and boarding inputs signatures")
+		}
+
+		s.currentRoundLock.Lock()
+		round := s.currentRound
+		s.currentRoundLock.Unlock()
+
+		roundTx, err := psbt.NewFromRawBytes(strings.NewReader(round.UnsignedTx), true)
 		if err != nil {
-			changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
-			log.WithError(err).Warn("failed to sign round tx")
+			log.Debugf("failed to parse round tx: %s", round.UnsignedTx)
+			changes = round.Fail(fmt.Errorf("failed to parse round tx: %s", err))
+			log.WithError(err).Warn("failed to parse round tx")
 			return
 		}
+		txToSign = round.UnsignedTx
+
+		forfeitTxs, err = s.forfeitTxs.pop()
+		if err != nil {
+			changes = round.Fail(fmt.Errorf("failed to finalize round: %s", err))
+			log.WithError(err).Warn("failed to finalize round")
+			return
+		}
+
+		if err := s.verifyForfeitTxsSigs(forfeitTxs); err != nil {
+			changes = round.Fail(err)
+			log.WithError(err).Warn("failed to validate forfeit txs")
+			return
+		}
+
+		boardingInputsIndexes := make([]int, 0)
+		for i, in := range roundTx.Inputs {
+			if len(in.TaprootLeafScript) > 0 {
+				if len(in.TaprootScriptSpendSig) == 0 {
+					err = fmt.Errorf("missing tapscript spend sig for input %d", i)
+					changes = round.Fail(err)
+					log.WithError(err).Warn("missing boarding sig")
+					return
+				}
+
+				boardingInputsIndexes = append(boardingInputsIndexes, i)
+				boardingInputs = append(boardingInputs, domain.VtxoKey{
+					Txid: roundTx.UnsignedTx.TxIn[i].PreviousOutPoint.Hash.String(),
+					VOut: roundTx.UnsignedTx.TxIn[i].PreviousOutPoint.Index,
+				})
+			}
+		}
+
+		if len(boardingInputsIndexes) > 0 {
+			txToSign, err = s.wallet.SignTransactionTapscript(ctx, txToSign, boardingInputsIndexes)
+			if err != nil {
+				changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
+				log.WithError(err).Warn("failed to sign round tx")
+				return
+			}
+		}
 	}
 
-	signedRoundTx, err = s.wallet.SignTransaction(ctx, signedRoundTx, true)
+	log.Debugf("signing transaction %s\n", round.Id)
+
+	signedRoundTx, err := s.wallet.SignTransaction(ctx, txToSign, true)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
 		log.WithError(err).Warn("failed to sign round tx")
@@ -1554,6 +1602,7 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, roundEndTime time
 			SpentVtxos:            s.getSpentVtxos(round.TxRequests),
 			SpendableVtxos:        s.getNewVtxos(round),
 			ClaimedBoardingInputs: boardingInputs,
+			TxHex:                 signedRoundTx,
 		}
 	}()
 

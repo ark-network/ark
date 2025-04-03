@@ -224,12 +224,14 @@ type RoundTransaction struct {
 	SpentVtxos           []Vtxo
 	SpendableVtxos       []Vtxo
 	ClaimedBoardingUtxos []Outpoint
+	Hex                  string
 }
 
 type RedeemTransaction struct {
 	Txid           string
 	SpentVtxos     []Vtxo
 	SpendableVtxos []Vtxo
+	Hex            string
 }
 
 type SignedVtxoOutpoint struct {
