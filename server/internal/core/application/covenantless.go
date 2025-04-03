@@ -1644,7 +1644,7 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, roundEndTime time
 
 	txToSign := round.UnsignedTx
 	boardingInputs := make([]domain.VtxoKey, 0)
-	forfeitTxs := make([]string, 0)
+	forfeitTxs := make([]domain.ForfeitTx, 0)
 
 	if len(s.forfeitTxs.forfeitTxs) > 0 || includesBoardingInputs {
 		remainingTime := time.Until(roundEndTime)
@@ -1668,14 +1668,14 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, roundEndTime time
 		}
 		txToSign = round.UnsignedTx
 
-		forfeitTxs, err = s.forfeitTxs.pop()
+		forfeitTxList, err := s.forfeitTxs.pop()
 		if err != nil {
 			changes = round.Fail(fmt.Errorf("failed to finalize round: %s", err))
 			log.WithError(err).Warn("failed to finalize round")
 			return
 		}
 
-		if err := s.verifyForfeitTxsSigs(forfeitTxs); err != nil {
+		if err := s.verifyForfeitTxsSigs(forfeitTxList); err != nil {
 			changes = round.Fail(err)
 			log.WithError(err).Warn("failed to validate forfeit txs")
 			return
@@ -1706,6 +1706,16 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, roundEndTime time
 				log.WithError(err).Warn("failed to sign round tx")
 				return
 			}
+		}
+
+		for _, tx := range forfeitTxList {
+			// nolint:all
+			ptx, _ := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+			forfeitTxid := ptx.UnsignedTx.TxHash().String()
+			forfeitTxs = append(forfeitTxs, domain.ForfeitTx{
+				Txid: forfeitTxid,
+				Tx:   tx,
+			})
 		}
 	}
 
@@ -2219,10 +2229,10 @@ func (s *covenantlessService) verifyForfeitTxsSigs(txs []string) error {
 }
 
 func findForfeitTxBitcoin(
-	forfeits []string, vtxo domain.VtxoKey,
+	forfeits []domain.ForfeitTx, vtxo domain.VtxoKey,
 ) (*psbt.Packet, error) {
 	for _, forfeit := range forfeits {
-		forfeitTx, err := psbt.NewFromRawBytes(strings.NewReader(forfeit), true)
+		forfeitTx, err := psbt.NewFromRawBytes(strings.NewReader(forfeit.Tx), true)
 		if err != nil {
 			return nil, err
 		}
