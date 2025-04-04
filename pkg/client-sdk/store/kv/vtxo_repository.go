@@ -128,7 +128,7 @@ func (s *vtxoStore) GetEventChannel() chan types.VtxoEvent {
 	return s.eventCh
 }
 
-func (s *vtxoStore) CleanData() error {
+func (s *vtxoStore) Clean(_ context.Context) error {
 	if err := s.db.Badger().DropAll(); err != nil {
 		return fmt.Errorf("failed to clean the vtxo db: %s", err)
 	}

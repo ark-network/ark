@@ -112,6 +112,13 @@ func (a *arkClient) SignTransaction(ctx context.Context, tx string) (string, err
 	return a.wallet.SignTransaction(ctx, a.explorer, tx)
 }
 
+func (a *arkClient) Reset(ctx context.Context) {
+	if a.txStreamCtxCancel != nil {
+		a.txStreamCtxCancel()
+	}
+	a.store.Clean(ctx)
+}
+
 func (a *arkClient) Stop() error {
 	if a.Config.WithTransactionFeed {
 		a.txStreamCtxCancel()
@@ -242,12 +249,8 @@ func (a *arkClient) initWithWallet(
 	}
 
 	if _, err := args.Wallet.Create(ctx, args.Password, args.Seed); err != nil {
-		//nolint:errcheck
-		a.store.ConfigStore().CleanData()
-		//nolint:errcheck
-		a.store.TransactionStore().CleanData()
-		//nolint:errcheck
-		a.store.VtxoStore().CleanData()
+		//nolint:all
+		a.store.ConfigStore().CleanData(ctx)
 		return err
 	}
 
@@ -333,12 +336,8 @@ func (a *arkClient) init(
 	}
 
 	if _, err := walletSvc.Create(ctx, args.Password, args.Seed); err != nil {
-		//nolint:errcheck
-		a.store.ConfigStore().CleanData()
-		//nolint:errcheck
-		a.store.TransactionStore().CleanData()
-		//nolint:errcheck
-		a.store.VtxoStore().CleanData()
+		//nolint:all
+		a.store.ConfigStore().CleanData(ctx)
 		return err
 	}
 

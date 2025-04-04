@@ -122,7 +122,7 @@ func (s *configStore) GetData(ctx context.Context) (*types.Config, error) {
 	}, nil
 }
 
-func (s *configStore) CleanData() error {
+func (s *configStore) CleanData(_ context.Context) error {
 	if err := s.writeData(&storeData{}); err != nil {
 		return fmt.Errorf("failed to write to store: %s", err)
 	}

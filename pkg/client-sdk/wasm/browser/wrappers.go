@@ -578,6 +578,13 @@ func NotifyIncomingFundsWrapper() js.Func {
 	})
 }
 
+func ResetWrapper() js.Func {
+	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
+		arkSdkClient.Reset(context.Background())
+		return nil
+	})
+}
+
 type promise func(args []js.Value) (interface{}, error)
 
 func JSPromise(fn promise) js.Func {

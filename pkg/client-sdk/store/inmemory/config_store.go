@@ -48,7 +48,7 @@ func (s *store) GetData(_ context.Context) (*types.Config, error) {
 	return s.data, nil
 }
 
-func (s *store) CleanData() error {
+func (s *store) CleanData(_ context.Context) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
