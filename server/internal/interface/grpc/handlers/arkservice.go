@@ -21,6 +21,7 @@ import (
 
 type service interface {
 	arkv1.ArkServiceServer
+	arkv1.ExplorerServiceServer
 }
 
 type handler struct {
@@ -344,6 +345,94 @@ func (h *handler) SubmitRedeemTx(
 	return &arkv1.SubmitRedeemTxResponse{
 		SignedRedeemTx: signedRedeemTx,
 		Txid:           redeemTxid,
+	}, nil
+}
+
+func (h *handler) GetRound(
+	ctx context.Context, req *arkv1.GetRoundRequest,
+) (*arkv1.GetRoundResponse, error) {
+	if len(req.GetTxid()) <= 0 {
+		round, err := h.svc.GetCurrentRound(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		return &arkv1.GetRoundResponse{
+			Round: &arkv1.Round{
+				Id:         round.Id,
+				Start:      round.StartingTimestamp,
+				End:        round.EndingTimestamp,
+				RoundTx:    round.UnsignedTx,
+				VtxoTree:   vtxoTree(round.VtxoTree).toProto(),
+				ForfeitTxs: round.ForfeitTxs,
+				Connectors: vtxoTree(round.Connectors).toProto(),
+				Stage:      stage(round.Stage).toProto(),
+			},
+		}, nil
+	}
+
+	round, err := h.svc.GetRoundByTxid(ctx, req.GetTxid())
+	if err != nil {
+		return nil, err
+	}
+
+	return &arkv1.GetRoundResponse{
+		Round: &arkv1.Round{
+			Id:         round.Id,
+			Start:      round.StartingTimestamp,
+			End:        round.EndingTimestamp,
+			RoundTx:    round.UnsignedTx,
+			VtxoTree:   vtxoTree(round.VtxoTree).toProto(),
+			ForfeitTxs: round.ForfeitTxs,
+			Connectors: vtxoTree(round.Connectors).toProto(),
+			Stage:      stage(round.Stage).toProto(),
+		},
+	}, nil
+}
+
+func (h *handler) GetRoundById(
+	ctx context.Context, req *arkv1.GetRoundByIdRequest,
+) (*arkv1.GetRoundByIdResponse, error) {
+	id := req.GetId()
+	if len(id) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing round id")
+	}
+
+	round, err := h.svc.GetRoundById(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return &arkv1.GetRoundByIdResponse{
+		Round: &arkv1.Round{
+			Id:         round.Id,
+			Start:      round.StartingTimestamp,
+			End:        round.EndingTimestamp,
+			RoundTx:    round.UnsignedTx,
+			VtxoTree:   vtxoTree(round.VtxoTree).toProto(),
+			ForfeitTxs: round.ForfeitTxs,
+			Connectors: vtxoTree(round.Connectors).toProto(),
+			Stage:      stage(round.Stage).toProto(),
+		},
+	}, nil
+}
+
+func (h *handler) ListVtxos(
+	ctx context.Context, req *arkv1.ListVtxosRequest,
+) (*arkv1.ListVtxosResponse, error) {
+	_, err := parseAddress(req.GetAddress())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	spendableVtxos, spentVtxos, err := h.svc.ListVtxos(ctx, req.GetAddress())
+	if err != nil {
+		return nil, err
+	}
+
+	return &arkv1.ListVtxosResponse{
+		SpendableVtxos: vtxoList(spendableVtxos).toProto(),
+		SpentVtxos:     vtxoList(spentVtxos).toProto(),
 	}, nil
 }
 

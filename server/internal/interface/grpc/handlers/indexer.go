@@ -12,7 +12,7 @@ type indexerService struct {
 	indexerSvc application.IndexerService
 }
 
-func NewExplorerServiceServer(indexerSvc application.IndexerService) arkv1.IndexerServiceServer {
+func NewIndexerService(indexerSvc application.IndexerService) arkv1.IndexerServiceServer {
 	return indexerService{
 		indexerSvc: indexerSvc,
 	}

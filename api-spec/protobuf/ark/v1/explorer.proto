@@ -3,152 +3,44 @@ syntax = "proto3";
 package ark.v1;
 
 import "google/api/annotations.proto";
-import "ark/v1/new_types.proto";
 import "ark/v1/types.proto";
 
 service ExplorerService {
-  rpc GetCommitmentTx(GetCommitmentTxRequest) returns (GetCommitmentTxResponse) {
+  rpc GetRound(GetRoundRequest) returns (GetRoundResponse) {
     option (google.api.http) = {
-      get: "/v1/commitmentTx/{txid}"
+      get: "/v1/round/{txid}"
     };
   };
-  rpc GetVtxoTree(GetVtxoTreeRequest) returns (GetVtxoTreeResponse) {
+  rpc GetRoundById(GetRoundByIdRequest) returns (GetRoundByIdResponse) {
     option (google.api.http) = {
-      get: "/v1/batch/{batch_outpoint.txid}/{batch_outpoint.vout}/tree"
+      get: "/v1/round/id/{id}"
     };
   };
-  rpc GetForfeitTxs(GetForfeitTxsRequest) returns (GetForfeitTxsResponse) {
-    option (google.api.http) = {
-      get: "/v1/batch/{batch_outpoint.txid}/{batch_outpoint.vout}/forfeitTxs"
-    };
-  };
-  rpc GetConnectors(GetConnectorsRequest) returns (GetConnectorsResponse) {
-    option (google.api.http) = {
-      get: "/v1/batch/{batch_outpoint.txid}/{batch_outpoint.vout}/connectors"
-    };
-  };
-  rpc GetSpendableVtxos(GetSpendableVtxosRequest) returns (GetSpendableVtxosResponse) {
+  rpc ListVtxos(ListVtxosRequest) returns (ListVtxosResponse) {
     option (google.api.http) = {
       get: "/v1/vtxos/{address}"
     };
   };
-  rpc GetTransactionHistory(GetTransactionHistoryRequest) returns (GetTransactionHistoryResponse) {
-    option (google.api.http) = {
-      get: "/v1/history/{address}"
-    };
-  };
-  rpc GetVtxoChain(GetVtxoChainRequest) returns (GetVtxoChainResponse) {
-    option (google.api.http) = {
-      get: "/v1/vtxo/{outpoint.txid}/{outpoint.vout}/chain"
-    };
-  }
-  rpc GetVirtualTxs(GetVirtualTxsRequest) returns (GetVirtualTxsResponse) {
-    option (google.api.http) = {
-      get: "/v1/virtualTx/{txids}"
-    };
-  }
-  rpc GetSweptCommitmentTx(GetSweptCommitmentTxRequest) returns (GetSweptCommitmentTxResponse) {
-    option (google.api.http) = {
-      get: "/v1/commitmentTx/{txid}/swept"
-    };
-  }
-  rpc SubscribeForAddresses(SubscribeForAddressesRequest) returns (stream SubscribeForAddressesResponse) {
-    option (google.api.http) = {
-      get: "/v1/address/subscribe"
-    };
-  }
 }
 
-message GetCommitmentTxRequest {
+message GetRoundRequest {
   string txid = 1;
 }
-message GetCommitmentTxResponse {
-  int64 started_at = 1;
-  int64 ended_at = 2;
-  map<uint32, Batch> batches = 3;
+message GetRoundResponse {
+  Round round = 1;
 }
 
-message GetVtxoTreeRequest {
-  Outpoint batch_outpoint = 1;
-  PageRequest page = 2;
+message GetRoundByIdRequest {
+  string id = 1;
 }
-message GetVtxoTreeResponse {
-  repeated NodeNew vtxo_tree = 1;
-  PageResponse page = 2;
+message GetRoundByIdResponse {
+  Round round = 1;
 }
 
-message GetForfeitTxsRequest {
-  Outpoint batch_outpoint = 1;
-  PageRequest page = 2;
-}
-message GetForfeitTxsResponse {
-  repeated string txs = 1;
-  PageResponse page = 2;
-}
-
-message GetConnectorsRequest {
-  Outpoint batch_outpoint = 1;
-  PageRequest page = 2;
-}
-message GetConnectorsResponse {
-  repeated NodeNew connectors = 1;
-  PageResponse page = 2;
-}
-
-message GetSpendableVtxosRequest {
+message ListVtxosRequest {
   string address = 1;
-  PageRequest page = 2;
 }
-message GetSpendableVtxosResponse {
-  repeated NewVtxo vtxos = 1;
-  PageResponse page = 2;
-}
-
-message GetTransactionHistoryRequest {
-  string address = 1;
-  int64 start_time = 2;
-  int64 end_time = 3;
-  PageRequest page = 4;
-}
-message GetTransactionHistoryResponse {
-  repeated TxHistoryRecord history = 1;
-  PageResponse page = 2;
-}
-
-message GetVtxoChainRequest {
-  Outpoint outpoint = 1;
-  PageRequest page = 2;
-}
-message GetVtxoChainResponse {
-  map<string, Transactions> graph = 1;
-  PageResponse page = 2;
-}
-
-message GetVirtualTxsRequest {
-  repeated string txids = 1;
-  PageRequest page = 2;
-}
-message GetVirtualTxsResponse {
-  repeated string txs = 1;
-  PageResponse page = 2;
-}
-
-message GetSweptCommitmentTxRequest {
-  string txid = 1;
-}
-message GetSweptCommitmentTxResponse {
-  repeated string swept_by = 1;
-}
-
-message SubscribeForAddressesRequest {
-  repeated string addresses = 1;
-}
-message SubscribeForAddressesResponse {
-  string address = 1;
-  repeated NewVtxo new_vtxos = 2;
-  repeated NewVtxo spent_vtxos = 3;
-}
-
-message Transactions {
-  repeated string txs = 1;
+message ListVtxosResponse {
+  repeated Vtxo spendable_vtxos = 1;
+  repeated Vtxo spent_vtxos = 2;
 }

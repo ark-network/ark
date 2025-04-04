@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/infrastructure/db/sqlite/sqlc/queries"
@@ -88,10 +87,16 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 
 		if len(round.ForfeitTxs) > 0 || len(round.Connectors) > 0 || len(round.VtxoTree) > 0 {
 			for pos, tx := range round.ForfeitTxs {
+				//forfeitTx, err := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+				//if err != nil {
+				//	return err
+				//}
+
 				if err := querierWithTx.UpsertTransaction(
 					ctx,
 					queries.UpsertTransactionParams{
-						Tx:       tx,
+						Tx: tx,
+						//Txid:     forfeitTx.UnsignedTx.TxHash().String(),
 						RoundID:  round.Id,
 						Type:     "forfeit",
 						Position: int64(pos),

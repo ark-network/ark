@@ -20,10 +20,16 @@ import (
 )
 
 const (
-	emptyPtx = "cHNldP8BAgQCAAAAAQQBAAEFAQABBgEDAfsEAgAAAAA="
+	dummyPtx = "cHNidP8BADwBAAAAAaqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqAAAAAAD/////AegDAAAAAAAAAAAAAAAAAAA="
+	f1       = "cHNidP8BADwBAAAAAauqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqAAAAAAD/////AegDAAAAAAAAAAAAAAAAAAA="
+	f2       = "cHNidP8BADwBAAAAAayqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqAAAAAAD/////AegDAAAAAAAAAAAAAAAAAAA="
+	f3       = "cHNidP8BADwBAAAAAa2qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqAAAAAAD/////AegDAAAAAAAAAAAAAAAAAAA="
+	f4       = "cHNidP8BADwBAAAAAa6qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqAAAAAAD/////AegDAAAAAAAAAAAAAAAAAAA="
 	emptyTx  = "0200000000000000000000"
 	pubkey   = "25a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967"
 	pubkey2  = "33ffb3dee353b1a9ebe4ced64b946238d0a4ac364f275d771da6ad2445d07ae0"
+	txida    = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	txidb    = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 )
 
 var (
@@ -31,41 +37,41 @@ var (
 		{
 			{
 				Txid:       randomString(32),
-				Tx:         emptyPtx,
+				Tx:         dummyPtx,
 				ParentTxid: randomString(32),
 			},
 		},
 		{
 			{
 				Txid:       randomString(32),
-				Tx:         emptyPtx,
+				Tx:         dummyPtx,
 				ParentTxid: randomString(32),
 			},
 			{
 				Txid:       randomString(32),
-				Tx:         emptyPtx,
+				Tx:         dummyPtx,
 				ParentTxid: randomString(32),
 			},
 		},
 		{
 			{
 				Txid:       randomString(32),
-				Tx:         emptyPtx,
+				Tx:         dummyPtx,
 				ParentTxid: randomString(32),
 			},
 			{
 				Txid:       randomString(32),
-				Tx:         emptyPtx,
+				Tx:         dummyPtx,
 				ParentTxid: randomString(32),
 			},
 			{
-				Txid:       randomString(32),
-				Tx:         emptyPtx,
+				Txid:       txidb,
+				Tx:         dummyPtx,
 				ParentTxid: randomString(32),
 			},
 			{
-				Txid:       randomString(32),
-				Tx:         emptyPtx,
+				Txid:       txida,
+				Tx:         dummyPtx,
 				ParentTxid: randomString(32),
 			},
 		},
@@ -74,19 +80,19 @@ var (
 		{
 			{
 				Txid:       randomString(32),
-				Tx:         emptyPtx,
+				Tx:         dummyPtx,
 				ParentTxid: randomString(32),
 			},
 		},
 		{
 			{
 				Txid:       randomString(32),
-				Tx:         emptyPtx,
+				Tx:         dummyPtx,
 				ParentTxid: randomString(32),
 			},
 			{
 				Txid:       randomString(32),
-				Tx:         emptyPtx,
+				Tx:         dummyPtx,
 				ParentTxid: randomString(32),
 			},
 		},
@@ -99,7 +105,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestService(t *testing.T) {
-	dbDir := t.TempDir()
+	dbDir, _ := os.Getwd()
 	tests := []struct {
 		name   string
 		config db.ServiceConfig
@@ -201,7 +207,7 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 					domain.RoundFinalized{
 						Id:         "7578231e-428d-45ae-aaa4-e62c77ad5cec",
 						Txid:       randomString(32),
-						ForfeitTxs: []string{emptyPtx, emptyPtx, emptyPtx, emptyPtx},
+						ForfeitTxs: []string{dummyPtx, dummyPtx, dummyPtx, dummyPtx},
 						Timestamp:  1701190300,
 					},
 				},
@@ -337,7 +343,7 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 			domain.RoundFinalized{
 				Id:         roundId,
 				Txid:       txid,
-				ForfeitTxs: []string{emptyPtx, emptyPtx, emptyPtx, emptyPtx},
+				ForfeitTxs: []string{f1, f2, f3, f4},
 				Timestamp:  now.Add(60 * time.Second).Unix(),
 			},
 		}
@@ -361,6 +367,11 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 		require.NoError(t, err)
 		require.NotNil(t, roundByTxid)
 		require.Condition(t, roundsMatch(*finalizedRound, *roundByTxid))
+
+		txs, err := svc.Rounds().GetTxsWithTxids(ctx, []string{txida, txidb})
+		require.NoError(t, err)
+		require.NotNil(t, txs)
+		require.Equal(t, 2, len(txs))
 	})
 }
 
