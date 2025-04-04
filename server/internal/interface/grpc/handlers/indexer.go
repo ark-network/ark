@@ -295,10 +295,3 @@ func (e indexerService) GetSweptCommitmentTx(ctx context.Context, request *arkv1
 		SweptBy: resp.SweptBy,
 	}, nil
 }
-
-func (e indexerService) SubscribeForAddresses(
-	request *arkv1.SubscribeForAddressesRequest, server arkv1.IndexerService_SubscribeForAddressesServer,
-) error {
-	//TODO implement me
-	panic("implement me")
-}

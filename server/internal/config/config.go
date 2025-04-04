@@ -105,14 +105,20 @@ type Config struct {
 	UnlockerFilePath string // file unlocker
 	UnlockerPassword string // env unlocker
 
-	repo       ports.RepoManager
-	svc        application.Service
-	adminSvc   application.AdminService
-	wallet     ports.WalletService
-	txBuilder  ports.TxBuilder
-	scanner    ports.BlockchainScanner
-	scheduler  ports.SchedulerService
-	unlocker   ports.Unlocker
+	RoundMaxParticipantsCount int64
+	UtxoMaxAmount             int64
+	UtxoMinAmount             int64
+	VtxoMaxAmount             int64
+	VtxoMinAmount             int64
+
+	repo      ports.RepoManager
+	svc       application.Service
+	adminSvc  application.AdminService
+	wallet    ports.WalletService
+	txBuilder ports.TxBuilder
+	scanner   ports.BlockchainScanner
+	scheduler ports.SchedulerService
+	unlocker  ports.Unlocker
 	indexerSvc application.IndexerService
 }
 
@@ -136,25 +142,29 @@ var (
 	// #nosec G101
 	BitcoindRpcUser = "BITCOIND_RPC_USER"
 	// #nosec G101
-	BitcoindRpcPass         = "BITCOIND_RPC_PASS"
-	BitcoindRpcHost         = "BITCOIND_RPC_HOST"
-	BitcoindZMQBlock        = "BITCOIND_ZMQ_BLOCK"
-	BitcoindZMQTx           = "BITCOIND_ZMQ_TX"
-	NoMacaroons             = "NO_MACAROONS"
-	NoTLS                   = "NO_TLS"
-	TLSExtraIP              = "TLS_EXTRA_IP"
-	TLSExtraDomain          = "TLS_EXTRA_DOMAIN"
-	UnlockerType            = "UNLOCKER_TYPE"
-	UnlockerFilePath        = "UNLOCKER_FILE_PATH"
-	UnlockerPassword        = "UNLOCKER_PASSWORD"
-	NoteUriPrefix           = "NOTE_URI_PREFIX"
-	MarketHourStartTime     = "MARKET_HOUR_START_TIME"
-	MarketHourEndTime       = "MARKET_HOUR_END_TIME"
-	MarketHourPeriod        = "MARKET_HOUR_PERIOD"
-	MarketHourRoundInterval = "MARKET_HOUR_ROUND_INTERVAL"
-	OtelCollectorEndpoint   = "OTEL_COLLECTOR_ENDPOINT"
-
-	AllowZeroFees = "ALLOW_ZERO_FEES"
+	BitcoindRpcPass           = "BITCOIND_RPC_PASS"
+	BitcoindRpcHost           = "BITCOIND_RPC_HOST"
+	BitcoindZMQBlock          = "BITCOIND_ZMQ_BLOCK"
+	BitcoindZMQTx             = "BITCOIND_ZMQ_TX"
+	NoMacaroons               = "NO_MACAROONS"
+	NoTLS                     = "NO_TLS"
+	TLSExtraIP                = "TLS_EXTRA_IP"
+	TLSExtraDomain            = "TLS_EXTRA_DOMAIN"
+	UnlockerType              = "UNLOCKER_TYPE"
+	UnlockerFilePath          = "UNLOCKER_FILE_PATH"
+	UnlockerPassword          = "UNLOCKER_PASSWORD"
+	NoteUriPrefix             = "NOTE_URI_PREFIX"
+	MarketHourStartTime       = "MARKET_HOUR_START_TIME"
+	MarketHourEndTime         = "MARKET_HOUR_END_TIME"
+	MarketHourPeriod          = "MARKET_HOUR_PERIOD"
+	MarketHourRoundInterval   = "MARKET_HOUR_ROUND_INTERVAL"
+	OtelCollectorEndpoint     = "OTEL_COLLECTOR_ENDPOINT"
+	AllowZeroFees             = "ALLOW_ZERO_FEES"
+	RoundMaxParticipantsCount = "ROUND_MAX_PARTICIPANTS_COUNT"
+	UtxoMaxAmount             = "UTXO_MAX_AMOUNT"
+	VtxoMaxAmount             = "VTXO_MAX_AMOUNT"
+	UtxoMinAmount             = "UTXO_MIN_AMOUNT"
+	VtxoMinAmount             = "VTXO_MIN_AMOUNT"
 
 	defaultDatadir             = common.AppDataDir("arkd", false)
 	defaultRoundInterval       = 15
@@ -177,7 +187,8 @@ var (
 	defaultMarketHourPeriod    = time.Duration(24) * time.Hour
 	defaultMarketHourInterval  = time.Duration(defaultRoundInterval) * time.Second
 
-	defaultAllowZeroFees = false
+	defaultAllowZeroFees             = false
+	defaultRoundMaxParticipantsCount = 128
 )
 
 func LoadConfig() (*Config, error) {
@@ -205,6 +216,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(MarketHourPeriod, defaultMarketHourPeriod)
 	viper.SetDefault(MarketHourRoundInterval, defaultMarketHourInterval)
 	viper.SetDefault(AllowZeroFees, defaultAllowZeroFees)
+	viper.SetDefault(RoundMaxParticipantsCount, defaultRoundMaxParticipantsCount)
 	net, err := getNetwork()
 	if err != nil {
 		return nil, fmt.Errorf("error while getting network: %s", err)
@@ -217,43 +229,48 @@ func LoadConfig() (*Config, error) {
 	dbPath := filepath.Join(viper.GetString(Datadir), "db")
 
 	return &Config{
-		Datadir:                 viper.GetString(Datadir),
-		WalletAddr:              viper.GetString(WalletAddr),
-		RoundInterval:           viper.GetInt64(RoundInterval),
-		Port:                    viper.GetUint32(Port),
-		EventDbType:             viper.GetString(EventDbType),
-		DbType:                  viper.GetString(DbType),
-		SchedulerType:           viper.GetString(SchedulerType),
-		TxBuilderType:           viper.GetString(TxBuilderType),
-		NoTLS:                   viper.GetBool(NoTLS),
-		DbDir:                   dbPath,
-		EventDbDir:              dbPath,
-		LogLevel:                viper.GetInt(LogLevel),
-		Network:                 net,
-		VtxoTreeExpiry:          determineLocktimeType(viper.GetInt64(VtxoTreeExpiry)),
-		UnilateralExitDelay:     determineLocktimeType(viper.GetInt64(UnilateralExitDelay)),
-		BoardingExitDelay:       determineLocktimeType(viper.GetInt64(BoardingExitDelay)),
-		EsploraURL:              viper.GetString(EsploraURL),
-		NeutrinoPeer:            viper.GetString(NeutrinoPeer),
-		BitcoindRpcUser:         viper.GetString(BitcoindRpcUser),
-		BitcoindRpcPass:         viper.GetString(BitcoindRpcPass),
-		BitcoindRpcHost:         viper.GetString(BitcoindRpcHost),
-		BitcoindZMQBlock:        viper.GetString(BitcoindZMQBlock),
-		BitcoindZMQTx:           viper.GetString(BitcoindZMQTx),
-		NoMacaroons:             viper.GetBool(NoMacaroons),
-		TLSExtraIPs:             viper.GetStringSlice(TLSExtraIP),
-		TLSExtraDomains:         viper.GetStringSlice(TLSExtraDomain),
-		UnlockerType:            viper.GetString(UnlockerType),
-		UnlockerFilePath:        viper.GetString(UnlockerFilePath),
-		UnlockerPassword:        viper.GetString(UnlockerPassword),
-		NostrDefaultRelays:      viper.GetStringSlice(NostrDefaultRelays),
-		NoteUriPrefix:           viper.GetString(NoteUriPrefix),
-		MarketHourStartTime:     viper.GetTime(MarketHourStartTime),
-		MarketHourEndTime:       viper.GetTime(MarketHourEndTime),
-		MarketHourPeriod:        viper.GetDuration(MarketHourPeriod),
-		MarketHourRoundInterval: viper.GetDuration(MarketHourRoundInterval),
-		OtelCollectorEndpoint:   viper.GetString(OtelCollectorEndpoint),
-		AllowZeroFees:           viper.GetBool(AllowZeroFees),
+		Datadir:                   viper.GetString(Datadir),
+		WalletAddr:                viper.GetString(WalletAddr),
+		RoundInterval:             viper.GetInt64(RoundInterval),
+		Port:                      viper.GetUint32(Port),
+		EventDbType:               viper.GetString(EventDbType),
+		DbType:                    viper.GetString(DbType),
+		SchedulerType:             viper.GetString(SchedulerType),
+		TxBuilderType:             viper.GetString(TxBuilderType),
+		NoTLS:                     viper.GetBool(NoTLS),
+		DbDir:                     dbPath,
+		EventDbDir:                dbPath,
+		LogLevel:                  viper.GetInt(LogLevel),
+		Network:                   net,
+		VtxoTreeExpiry:            determineLocktimeType(viper.GetInt64(VtxoTreeExpiry)),
+		UnilateralExitDelay:       determineLocktimeType(viper.GetInt64(UnilateralExitDelay)),
+		BoardingExitDelay:         determineLocktimeType(viper.GetInt64(BoardingExitDelay)),
+		EsploraURL:                viper.GetString(EsploraURL),
+		NeutrinoPeer:              viper.GetString(NeutrinoPeer),
+		BitcoindRpcUser:           viper.GetString(BitcoindRpcUser),
+		BitcoindRpcPass:           viper.GetString(BitcoindRpcPass),
+		BitcoindRpcHost:           viper.GetString(BitcoindRpcHost),
+		BitcoindZMQBlock:          viper.GetString(BitcoindZMQBlock),
+		BitcoindZMQTx:             viper.GetString(BitcoindZMQTx),
+		NoMacaroons:               viper.GetBool(NoMacaroons),
+		TLSExtraIPs:               viper.GetStringSlice(TLSExtraIP),
+		TLSExtraDomains:           viper.GetStringSlice(TLSExtraDomain),
+		UnlockerType:              viper.GetString(UnlockerType),
+		UnlockerFilePath:          viper.GetString(UnlockerFilePath),
+		UnlockerPassword:          viper.GetString(UnlockerPassword),
+		NostrDefaultRelays:        viper.GetStringSlice(NostrDefaultRelays),
+		NoteUriPrefix:             viper.GetString(NoteUriPrefix),
+		MarketHourStartTime:       viper.GetTime(MarketHourStartTime),
+		MarketHourEndTime:         viper.GetTime(MarketHourEndTime),
+		MarketHourPeriod:          viper.GetDuration(MarketHourPeriod),
+		MarketHourRoundInterval:   viper.GetDuration(MarketHourRoundInterval),
+		OtelCollectorEndpoint:     viper.GetString(OtelCollectorEndpoint),
+		AllowZeroFees:             viper.GetBool(AllowZeroFees),
+		RoundMaxParticipantsCount: viper.GetInt64(RoundMaxParticipantsCount),
+		UtxoMaxAmount:             viper.GetInt64(UtxoMaxAmount),
+		UtxoMinAmount:             viper.GetInt64(UtxoMinAmount),
+		VtxoMaxAmount:             viper.GetInt64(VtxoMaxAmount),
+		VtxoMinAmount:             viper.GetInt64(VtxoMinAmount),
 	}, nil
 }
 
@@ -572,6 +589,7 @@ func (c *Config) appService() error {
 			c.Network, c.RoundInterval, c.VtxoTreeExpiry, c.UnilateralExitDelay, c.BoardingExitDelay, c.NostrDefaultRelays,
 			c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NoteUriPrefix,
 			c.MarketHourStartTime, c.MarketHourEndTime, c.MarketHourPeriod, c.MarketHourRoundInterval,
+			c.RoundMaxParticipantsCount, c.UtxoMaxAmount, c.UtxoMinAmount, c.VtxoMaxAmount, c.VtxoMinAmount,
 		)
 		if err != nil {
 			return err
@@ -585,7 +603,7 @@ func (c *Config) appService() error {
 		c.Network, c.RoundInterval, c.VtxoTreeExpiry, c.UnilateralExitDelay, c.BoardingExitDelay, c.NostrDefaultRelays,
 		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NoteUriPrefix,
 		c.MarketHourStartTime, c.MarketHourEndTime, c.MarketHourPeriod, c.MarketHourRoundInterval,
-		c.AllowZeroFees,
+		c.AllowZeroFees, c.RoundMaxParticipantsCount, c.UtxoMaxAmount, c.UtxoMinAmount, c.VtxoMaxAmount, c.VtxoMinAmount,
 	)
 	if err != nil {
 		return err

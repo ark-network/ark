@@ -86,7 +86,7 @@
             } catch (err) {
                 logMessage("Send error: " + err.message);
             } finally {
-                await lock(password);
+                await lock();
             }
         }
 
@@ -104,7 +104,7 @@
             } catch (err) {
                 logMessage("Settle error: " + err.message);
             } finally {
-                await lock(password);
+                await lock();
             }
         }
 

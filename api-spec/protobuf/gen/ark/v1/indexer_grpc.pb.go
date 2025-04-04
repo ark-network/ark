@@ -27,7 +27,6 @@ type IndexerServiceClient interface {
 	GetVtxoChain(ctx context.Context, in *GetVtxoChainRequest, opts ...grpc.CallOption) (*GetVtxoChainResponse, error)
 	GetVirtualTxs(ctx context.Context, in *GetVirtualTxsRequest, opts ...grpc.CallOption) (*GetVirtualTxsResponse, error)
 	GetSweptCommitmentTx(ctx context.Context, in *GetSweptCommitmentTxRequest, opts ...grpc.CallOption) (*GetSweptCommitmentTxResponse, error)
-	SubscribeForAddresses(ctx context.Context, in *SubscribeForAddressesRequest, opts ...grpc.CallOption) (IndexerService_SubscribeForAddressesClient, error)
 }
 
 type indexerServiceClient struct {
@@ -119,38 +118,6 @@ func (c *indexerServiceClient) GetSweptCommitmentTx(ctx context.Context, in *Get
 	return out, nil
 }
 
-func (c *indexerServiceClient) SubscribeForAddresses(ctx context.Context, in *SubscribeForAddressesRequest, opts ...grpc.CallOption) (IndexerService_SubscribeForAddressesClient, error) {
-	stream, err := c.cc.NewStream(ctx, &IndexerService_ServiceDesc.Streams[0], "/ark.v1.IndexerService/SubscribeForAddresses", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &indexerServiceSubscribeForAddressesClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type IndexerService_SubscribeForAddressesClient interface {
-	Recv() (*SubscribeForAddressesResponse, error)
-	grpc.ClientStream
-}
-
-type indexerServiceSubscribeForAddressesClient struct {
-	grpc.ClientStream
-}
-
-func (x *indexerServiceSubscribeForAddressesClient) Recv() (*SubscribeForAddressesResponse, error) {
-	m := new(SubscribeForAddressesResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
 // IndexerServiceServer is the server API for IndexerService service.
 // All implementations should embed UnimplementedIndexerServiceServer
 // for forward compatibility
@@ -164,7 +131,6 @@ type IndexerServiceServer interface {
 	GetVtxoChain(context.Context, *GetVtxoChainRequest) (*GetVtxoChainResponse, error)
 	GetVirtualTxs(context.Context, *GetVirtualTxsRequest) (*GetVirtualTxsResponse, error)
 	GetSweptCommitmentTx(context.Context, *GetSweptCommitmentTxRequest) (*GetSweptCommitmentTxResponse, error)
-	SubscribeForAddresses(*SubscribeForAddressesRequest, IndexerService_SubscribeForAddressesServer) error
 }
 
 // UnimplementedIndexerServiceServer should be embedded to have forward compatible implementations.
@@ -197,9 +163,6 @@ func (UnimplementedIndexerServiceServer) GetVirtualTxs(context.Context, *GetVirt
 }
 func (UnimplementedIndexerServiceServer) GetSweptCommitmentTx(context.Context, *GetSweptCommitmentTxRequest) (*GetSweptCommitmentTxResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSweptCommitmentTx not implemented")
-}
-func (UnimplementedIndexerServiceServer) SubscribeForAddresses(*SubscribeForAddressesRequest, IndexerService_SubscribeForAddressesServer) error {
-	return status.Errorf(codes.Unimplemented, "method SubscribeForAddresses not implemented")
 }
 
 // UnsafeIndexerServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -375,27 +338,6 @@ func _IndexerService_GetSweptCommitmentTx_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IndexerService_SubscribeForAddresses_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(SubscribeForAddressesRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(IndexerServiceServer).SubscribeForAddresses(m, &indexerServiceSubscribeForAddressesServer{stream})
-}
-
-type IndexerService_SubscribeForAddressesServer interface {
-	Send(*SubscribeForAddressesResponse) error
-	grpc.ServerStream
-}
-
-type indexerServiceSubscribeForAddressesServer struct {
-	grpc.ServerStream
-}
-
-func (x *indexerServiceSubscribeForAddressesServer) Send(m *SubscribeForAddressesResponse) error {
-	return x.ServerStream.SendMsg(m)
-}
-
 // IndexerService_ServiceDesc is the grpc.ServiceDesc for IndexerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -440,12 +382,6 @@ var IndexerService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _IndexerService_GetSweptCommitmentTx_Handler,
 		},
 	},
-	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "SubscribeForAddresses",
-			Handler:       _IndexerService_SubscribeForAddresses_Handler,
-			ServerStreams: true,
-		},
-	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "ark/v1/indexer.proto",
 }

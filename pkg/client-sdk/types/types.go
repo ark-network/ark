@@ -30,6 +30,10 @@ type Config struct {
 	ExplorerURL                string
 	ForfeitAddress             string
 	WithTransactionFeed        bool
+	MarketHourStartTime        int64
+	MarketHourEndTime          int64
+	MarketHourPeriod           int64
+	MarketHourRoundInterval    int64
 }
 
 type VtxoKey struct {
@@ -59,6 +63,7 @@ type VtxoEventType int
 const (
 	VtxosAdded VtxoEventType = iota
 	VtxosSpent
+	VtxosUpdated
 )
 
 func (e VtxoEventType) String() string {
@@ -123,6 +128,7 @@ const (
 	TxsSettled
 	TxsConfirmed
 	TxsReplaced
+	TxsUpdated
 )
 
 func (e TxEventType) String() string {

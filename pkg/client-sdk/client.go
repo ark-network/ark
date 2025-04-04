@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ark-network/ark/common"
@@ -78,8 +79,8 @@ func (a *arkClient) Unlock(ctx context.Context, pasword string) error {
 	return err
 }
 
-func (a *arkClient) Lock(ctx context.Context, pasword string) error {
-	return a.wallet.Lock(ctx, pasword)
+func (a *arkClient) Lock(ctx context.Context) error {
+	return a.wallet.Lock(ctx)
 }
 
 func (a *arkClient) IsLocked(ctx context.Context) bool {
@@ -142,6 +143,37 @@ func (a *arkClient) ListVtxos(
 	return
 }
 
+func (a *arkClient) NotifyIncomingFunds(
+	ctx context.Context, addr string,
+) ([]types.Vtxo, error) {
+	eventCh, closeFn, err := a.client.SubscribeForAddress(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	incomingVtxos := make([]types.Vtxo, 0)
+	go func() {
+		defer wg.Done()
+		for event := range eventCh {
+			if event.Err != nil {
+				err = event.Err
+			} else {
+				for _, vtxo := range event.NewVtxos {
+					incomingVtxos = append(incomingVtxos, toTypesVtxo(vtxo))
+				}
+			}
+			closeFn()
+			// nolint:all
+			return
+		}
+	}()
+	wg.Wait()
+
+	return incomingVtxos, nil
+}
+
 func (a *arkClient) initWithWallet(
 	ctx context.Context, args InitWithWalletArgs,
 ) error {
@@ -200,6 +232,10 @@ func (a *arkClient) initWithWallet(
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 		ForfeitAddress:             info.ForfeitAddress,
 		WithTransactionFeed:        args.WithTransactionFeed,
+		MarketHourStartTime:        info.MarketHourStartTime,
+		MarketHourEndTime:          info.MarketHourEndTime,
+		MarketHourPeriod:           info.MarketHourPeriod,
+		MarketHourRoundInterval:    info.MarketHourRoundInterval,
 	}
 	if err := a.store.ConfigStore().AddData(ctx, storeData); err != nil {
 		return err
@@ -278,6 +314,10 @@ func (a *arkClient) init(
 		ExplorerURL:                args.ExplorerURL,
 		ForfeitAddress:             info.ForfeitAddress,
 		WithTransactionFeed:        args.WithTransactionFeed,
+		MarketHourStartTime:        info.MarketHourStartTime,
+		MarketHourEndTime:          info.MarketHourEndTime,
+		MarketHourPeriod:           info.MarketHourPeriod,
+		MarketHourRoundInterval:    info.MarketHourRoundInterval,
 	}
 	walletSvc, err := getWallet(a.store.ConfigStore(), &cfgData, supportedWallets)
 	if err != nil {
@@ -356,7 +396,7 @@ func getWallet(
 		return getSingleKeyWallet(configStore, data.Network.Name)
 	default:
 		return nil, fmt.Errorf(
-			"unsuported wallet type '%s', please select one of: %s",
+			"unsupported wallet type '%s', please select one of: %s",
 			data.WalletType, supportedWallets,
 		)
 	}

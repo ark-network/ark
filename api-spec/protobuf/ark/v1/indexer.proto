@@ -50,11 +50,6 @@ service IndexerService {
       get: "/v1/commitmentTx/{txid}/swept"
     };
   }
-  rpc SubscribeForAddresses(SubscribeForAddressesRequest) returns (stream SubscribeForAddressesResponse) {
-    option (google.api.http) = {
-      get: "/v1/address/subscribe"
-    };
-  }
 }
 
 message GetCommitmentTxRequest {

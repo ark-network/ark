@@ -66,20 +66,13 @@ func (w *singlekeyWallet) Create(
 	return hex.EncodeToString(privateKey.Serialize()), nil
 }
 
-func (w *singlekeyWallet) Lock(_ context.Context, password string) error {
+func (w *singlekeyWallet) Lock(context.Context) error {
 	if w.walletData == nil {
 		return fmt.Errorf("wallet not initialized")
 	}
 
 	if w.privateKey == nil {
 		return nil
-	}
-
-	pwd := []byte(password)
-	currentPassHash := utils.HashPassword(pwd)
-
-	if !bytes.Equal(w.walletData.PasswordHash, currentPassHash) {
-		return fmt.Errorf("invalid password")
 	}
 
 	w.privateKey = nil

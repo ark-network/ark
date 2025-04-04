@@ -97,6 +97,31 @@ var (
 			},
 		},
 	}
+
+	f1Tx = func() domain.ForfeitTx {
+		return domain.ForfeitTx{
+			Txid: randomString(32),
+			Tx:   f1,
+		}
+	}
+	f2Tx = func() domain.ForfeitTx {
+		return domain.ForfeitTx{
+			Txid: randomString(32),
+			Tx:   f2,
+		}
+	}
+	f3Tx = func() domain.ForfeitTx {
+		return domain.ForfeitTx{
+			Txid: randomString(32),
+			Tx:   f3,
+		}
+	}
+	f4Tx = func() domain.ForfeitTx {
+		return domain.ForfeitTx{
+			Txid: randomString(32),
+			Tx:   f4,
+		}
+	}
 )
 
 func TestMain(m *testing.M) {
@@ -105,7 +130,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestService(t *testing.T) {
-	dbDir, _ := os.Getwd()
+	dbDir := t.TempDir()
 	tests := []struct {
 		name   string
 		config db.ServiceConfig
@@ -207,7 +232,7 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 					domain.RoundFinalized{
 						Id:         "7578231e-428d-45ae-aaa4-e62c77ad5cec",
 						Txid:       randomString(32),
-						ForfeitTxs: []string{dummyPtx, dummyPtx, dummyPtx, dummyPtx},
+						ForfeitTxs: []domain.ForfeitTx{f1Tx(), f2Tx(), f3Tx(), f4Tx()},
 						Timestamp:  1701190300,
 					},
 				},
@@ -343,7 +368,7 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 			domain.RoundFinalized{
 				Id:         roundId,
 				Txid:       txid,
-				ForfeitTxs: []string{f1, f2, f3, f4},
+				ForfeitTxs: []domain.ForfeitTx{f1Tx(), f2Tx(), f3Tx(), f4Tx()},
 				Timestamp:  now.Add(60 * time.Second).Unix(),
 			},
 		}
@@ -644,13 +669,14 @@ func roundsMatch(expected, got domain.Round) assert.Comparison {
 		}
 
 		if len(expected.ForfeitTxs) > 0 {
-			expectedForfeits := sortStrings(expected.ForfeitTxs)
-			gotForfeits := sortStrings(got.ForfeitTxs)
+			sort.SliceStable(expected.ForfeitTxs, func(i, j int) bool {
+				return expected.ForfeitTxs[i].Txid < expected.ForfeitTxs[j].Txid
+			})
+			sort.SliceStable(got.ForfeitTxs, func(i, j int) bool {
+				return got.ForfeitTxs[i].Txid < got.ForfeitTxs[j].Txid
+			})
 
-			sort.Sort(expectedForfeits)
-			sort.Sort(gotForfeits)
-
-			if !reflect.DeepEqual(expectedForfeits, gotForfeits) {
+			if !reflect.DeepEqual(expected.ForfeitTxs, got.ForfeitTxs) {
 				return false
 			}
 		}
@@ -686,9 +712,3 @@ type sortReceivers []domain.Receiver
 func (a sortReceivers) Len() int           { return len(a) }
 func (a sortReceivers) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a sortReceivers) Less(i, j int) bool { return a[i].Amount < a[j].Amount }
-
-type sortStrings []string
-
-func (a sortStrings) Len() int           { return len(a) }
-func (a sortStrings) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a sortStrings) Less(i, j int) bool { return a[i] < a[j] }

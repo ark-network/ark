@@ -74,6 +74,10 @@ func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
 		BoardingDescriptorTemplate: resp.GetBoardingDescriptorTemplate(),
 		ForfeitAddress:             resp.GetForfeitAddress(),
 		Version:                    resp.GetVersion(),
+		MarketHourStartTime:        resp.GetMarketHour().GetNextStartTime(),
+		MarketHourEndTime:          resp.GetMarketHour().GetNextEndTime(),
+		MarketHourPeriod:           resp.GetMarketHour().GetPeriod(),
+		MarketHourRoundInterval:    resp.GetMarketHour().GetRoundInterval(),
 	}, nil
 }
 
@@ -412,6 +416,46 @@ func (a *grpcClient) DeleteNostrRecipient(
 	}
 	_, err := a.svc.DeleteNostrRecipient(ctx, req)
 	return err
+}
+
+func (c *grpcClient) SubscribeForAddress(
+	ctx context.Context, addr string,
+) (<-chan client.AddressEvent, func(), error) {
+	stream, err := c.svc.SubscribeForAddress(ctx, &arkv1.SubscribeForAddressRequest{
+		Address: addr,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	eventCh := make(chan client.AddressEvent)
+
+	go func() {
+		defer close(eventCh)
+		for {
+			resp, err := stream.Recv()
+			if err == io.EOF {
+				return
+			}
+			if err != nil {
+				eventCh <- client.AddressEvent{Err: err}
+				return
+			}
+
+			eventCh <- client.AddressEvent{
+				NewVtxos:   vtxos(resp.NewVtxos).toVtxos(),
+				SpentVtxos: vtxos(resp.SpentVtxos).toVtxos(),
+			}
+		}
+	}()
+
+	closeFn := func() {
+		if err := stream.CloseSend(); err != nil {
+			logrus.Warnf("failed to close stream: %v", err)
+		}
+	}
+
+	return eventCh, closeFn, nil
 }
 
 func signedVtxosToProto(vtxos []client.SignedVtxoOutpoint) []*arkv1.SignedVtxoOutpoint {

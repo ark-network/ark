@@ -11,10 +11,6 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-var (
-	txRequestsThreshold = int64(128)
-)
-
 type Service interface {
 	Start() error
 	Stop()

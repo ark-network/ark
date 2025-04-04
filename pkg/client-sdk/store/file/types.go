@@ -24,6 +24,10 @@ type storeData struct {
 	ExplorerURL                string `json:"explorer_url"`
 	ForfeitAddress             string `json:"forfeit_address"`
 	WithTransactionFeed        string `json:"with_transaction_feed"`
+	MarketHourStartTime        string `json:"market_hour_start_time"`
+	MarketHourEndTime          string `json:"market_hour_end_time"`
+	MarketHourPeriod           string `json:"market_hour_period"`
+	MarketHourRoundInterval    string `json:"market_hour_round_interval"`
 }
 
 func (d storeData) isEmpty() bool {
@@ -45,6 +49,10 @@ func (d storeData) decode() types.Config {
 	buf, _ := hex.DecodeString(d.ServerPubKey)
 	serverPubkey, _ := secp256k1.ParsePubKey(buf)
 	explorerURL := d.ExplorerURL
+	nextStartTime, _ := strconv.Atoi(d.MarketHourStartTime)
+	nextEndTime, _ := strconv.Atoi(d.MarketHourEndTime)
+	period, _ := strconv.Atoi(d.MarketHourPeriod)
+	mhRoundInterval, _ := strconv.Atoi(d.MarketHourRoundInterval)
 
 	vtxoTreeExpiryType := common.LocktimeTypeBlock
 	if vtxoTreeExpiry >= 512 {
@@ -70,6 +78,10 @@ func (d storeData) decode() types.Config {
 		ExplorerURL:                explorerURL,
 		ForfeitAddress:             d.ForfeitAddress,
 		WithTransactionFeed:        withTransactionFeed,
+		MarketHourStartTime:        int64(nextStartTime),
+		MarketHourEndTime:          int64(nextEndTime),
+		MarketHourPeriod:           int64(period),
+		MarketHourRoundInterval:    int64(mhRoundInterval),
 	}
 }
 
@@ -88,5 +100,9 @@ func (d storeData) asMap() map[string]string {
 		"explorer_url":                 d.ExplorerURL,
 		"forfeit_address":              d.ForfeitAddress,
 		"with_transaction_feed":        d.WithTransactionFeed,
+		"market_hour_start_time":       d.MarketHourStartTime,
+		"market_hour_end_time":         d.MarketHourEndTime,
+		"market_hour_period":           d.MarketHourPeriod,
+		"market_hour_round_interval":   d.MarketHourRoundInterval,
 	}
 }

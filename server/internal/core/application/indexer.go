@@ -135,7 +135,12 @@ func (i *indexerService) GetForfeitTxs(ctx context.Context, req ForfeitTxsReq) (
 		return nil, err
 	}
 
-	forfeitTxs, pageResp := paginate(round.ForfeitTxs, req.Page, maxPageSizeForfeitTxs)
+	txs := make([]string, 0, len(round.ForfeitTxs))
+	for _, tx := range round.ForfeitTxs {
+		txs = append(txs, tx.Txid)
+	}
+
+	forfeitTxs, pageResp := paginate(txs, req.Page, maxPageSizeForfeitTxs)
 
 	return &ForfeitTxsResp{
 		Txs:  forfeitTxs,

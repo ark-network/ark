@@ -2,10 +2,10 @@ package badgerdb
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"github.com/btcsuite/btcd/btcutil/psbt"
 	"path/filepath"
-	"strings"
+	"time"
 
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
@@ -181,14 +181,30 @@ func (r *roundRepository) findRound(
 
 func (r *roundRepository) addOrUpdateRound(
 	ctx context.Context, round domain.Round,
-) (err error) {
+) error {
+	var upsertFn func() error
 	if ctx.Value("tx") != nil {
 		tx := ctx.Value("tx").(*badger.Txn)
-		err = r.store.TxUpsert(tx, round.Id, round)
+		upsertFn = func() error {
+			return r.store.TxUpsert(tx, round.Id, round)
+		}
 	} else {
-		err = r.store.Upsert(round.Id, round)
+		upsertFn = func() error {
+			return r.store.Upsert(round.Id, round)
+		}
 	}
-	return
+	if err := upsertFn(); err != nil {
+		if errors.Is(err, badger.ErrConflict) {
+			attempts := 1
+			for errors.Is(err, badger.ErrConflict) && attempts <= maxRetries {
+				time.Sleep(100 * time.Millisecond)
+				err = upsertFn()
+				attempts++
+			}
+		}
+		return err
+	}
+	return nil
 }
 
 type Tx struct {
@@ -202,15 +218,9 @@ func (r *roundRepository) addTxs(
 	txs := make(map[string]Tx)
 	if len(round.ForfeitTxs) > 0 || len(round.Connectors) > 0 || len(round.VtxoTree) > 0 {
 		for _, tx := range round.ForfeitTxs {
-			forfeitTx, err := psbt.NewFromRawBytes(strings.NewReader(tx), true)
-			if err != nil {
-				return err
-			}
-
-			txid := forfeitTx.UnsignedTx.TxHash().String()
-			txs[txid] = Tx{
-				Txid: txid,
-				Tx:   tx,
+			txs[tx.Txid] = Tx{
+				Txid: tx.Txid,
+				Tx:   tx.Tx,
 			}
 		}
 

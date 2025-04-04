@@ -16,49 +16,6 @@
     "application/json"
   ],
   "paths": {
-    "/v1/address/subscribe": {
-      "get": {
-        "operationId": "IndexerService_SubscribeForAddresses",
-        "responses": {
-          "200": {
-            "description": "A successful response.(streaming responses)",
-            "schema": {
-              "type": "object",
-              "properties": {
-                "result": {
-                  "$ref": "#/definitions/v1SubscribeForAddressesResponse"
-                },
-                "error": {
-                  "$ref": "#/definitions/rpcStatus"
-                }
-              },
-              "title": "Stream result of v1SubscribeForAddressesResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "addresses",
-            "in": "query",
-            "required": false,
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "collectionFormat": "multi"
-          }
-        ],
-        "tags": [
-          "IndexerService"
-        ]
-      }
-    },
     "/v1/batch/{batchOutpoint.txid}/{batchOutpoint.vout}/connectors": {
       "get": {
         "operationId": "IndexerService_GetConnectors",
@@ -816,28 +773,6 @@
         },
         "spentBy": {
           "type": "string"
-        }
-      }
-    },
-    "v1SubscribeForAddressesResponse": {
-      "type": "object",
-      "properties": {
-        "address": {
-          "type": "string"
-        },
-        "newVtxos": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1IndexerVtxo"
-          }
-        },
-        "spentVtxos": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1IndexerVtxo"
-          }
         }
       }
     }
