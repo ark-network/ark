@@ -230,6 +230,16 @@ func (e redeemTxEvent) toProto() *arkv1.RedeemTransaction {
 	}
 }
 
+type forfeitTxs []domain.ForfeitTx
+
+func (f forfeitTxs) toProto() []string {
+	list := make([]string, 0, len(f))
+	for _, forfeitTx := range f {
+		list = append(list, forfeitTx.Tx)
+	}
+	return list
+}
+
 func parseSignedVtxoOutpoints(signedVtxoOutpoints []*arkv1.SignedVtxoOutpoint) ([]application.SignedVtxoOutpoint, error) {
 	if len(signedVtxoOutpoints) <= 0 {
 		return nil, fmt.Errorf("missing signed vtxo outpoints")
