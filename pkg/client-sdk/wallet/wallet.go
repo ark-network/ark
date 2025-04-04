@@ -21,7 +21,7 @@ type WalletService interface {
 	Create(
 		ctx context.Context, password, seed string,
 	) (walletSeed string, err error)
-	Lock(ctx context.Context, password string) (err error)
+	Lock(ctx context.Context) (err error)
 	Unlock(ctx context.Context, password string) (alreadyUnlocked bool, err error)
 	IsLocked() bool
 	GetAddresses(
