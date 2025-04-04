@@ -90,7 +90,7 @@ func (s *configStore) GetData(_ context.Context) (*types.Config, error) {
 	return &data, nil
 }
 
-func (s *configStore) CleanData(ctx context.Context) error {
+func (s *configStore) CleanData(_ context.Context) error {
 	if err := s.write(&storeData{}); err != nil {
 		return fmt.Errorf("failed to write to store: %s", err)
 	}

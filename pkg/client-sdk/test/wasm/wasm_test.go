@@ -126,6 +126,7 @@ func TestWasm(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		//nolint:errcheck
 		waitForPayment(alicePage, aliceAddr.OffchainAddr)
 	}()
 
@@ -150,6 +151,7 @@ func TestWasm(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		//nolint:errcheck
 		waitForPayment(alicePage, bobAddr.OffchainAddr)
 	}()
 	require.NoError(t, sendOffChain(alicePage, bobAddr.OffchainAddr, amount))
@@ -162,6 +164,7 @@ func TestWasm(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		//nolint:errcheck
 		waitForPayment(bobPage, bobAddr.OffchainAddr)
 	}()
 	txID, err = settle(bobPage)
