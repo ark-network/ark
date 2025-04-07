@@ -339,9 +339,7 @@ func (i *indexerService) GetVirtualTxs(ctx context.Context, req VirtualTxsReq) (
 	if err != nil {
 		return nil, err
 	}
-	for _, vtx := range vtxs {
-		txs = append(txs, vtx)
-	}
+	txs = append(txs, vtxs...)
 
 	virtualTxs, reps := paginate(txs, req.Page, maxPageSizeVirtualTxs)
 
