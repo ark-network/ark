@@ -16,8 +16,10 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 type service struct {
@@ -218,27 +220,26 @@ func (a *grpcClient) GetEventStream(
 		defer close(eventsCh)
 
 		for {
-			select {
-			case <-stream.Context().Done():
+			resp, err := stream.Recv()
+			if err != nil {
+				if err == io.EOF {
+					eventsCh <- client.RoundEventChannel{Err: client.ErrConnectionClosedByServer}
+					return
+				}
+				if st, ok := status.FromError(err); ok && st.Code() == codes.Canceled {
+					return
+				}
+				eventsCh <- client.RoundEventChannel{Err: err}
 				return
-			default:
-				resp, err := stream.Recv()
-				if err != nil {
-					if err == io.EOF {
-						return
-					}
-					eventsCh <- client.RoundEventChannel{Err: err}
-					return
-				}
-
-				ev, err := event{resp}.toRoundEvent()
-				if err != nil {
-					eventsCh <- client.RoundEventChannel{Err: err}
-					return
-				}
-
-				eventsCh <- client.RoundEventChannel{Event: ev}
 			}
+
+			ev, err := event{resp}.toRoundEvent()
+			if err != nil {
+				eventsCh <- client.RoundEventChannel{Err: err}
+				return
+			}
+
+			eventsCh <- client.RoundEventChannel{Event: ev}
 		}
 	}()
 
@@ -358,45 +359,44 @@ func (c *grpcClient) GetTransactionsStream(
 		return nil, nil, err
 	}
 
-	eventCh := make(chan client.TransactionEvent)
+	eventsCh := make(chan client.TransactionEvent)
 
 	go func() {
-		defer close(eventCh)
-		for {
-			select {
-			case <-stream.Context().Done():
-				return
-			default:
-				resp, err := stream.Recv()
-				if err != nil {
-					if err == io.EOF {
-						return
-					}
+		defer close(eventsCh)
 
-					eventCh <- client.TransactionEvent{Err: err}
+		for {
+			resp, err := stream.Recv()
+			if err != nil {
+				if err == io.EOF {
+					eventsCh <- client.TransactionEvent{Err: client.ErrConnectionClosedByServer}
 					return
 				}
+				if st, ok := status.FromError(err); ok && st.Code() == codes.Canceled {
+					return
+				}
+				eventsCh <- client.TransactionEvent{Err: err}
+				return
+			}
 
-				switch tx := resp.Tx.(type) {
-				case *arkv1.GetTransactionsStreamResponse_Round:
-					eventCh <- client.TransactionEvent{
-						Round: &client.RoundTransaction{
-							Txid:                 tx.Round.Txid,
-							SpentVtxos:           vtxos(tx.Round.SpentVtxos).toVtxos(),
-							SpendableVtxos:       vtxos(tx.Round.SpendableVtxos).toVtxos(),
-							ClaimedBoardingUtxos: outpointsFromProto(tx.Round.ClaimedBoardingUtxos),
-							Hex:                  tx.Round.GetHex(),
-						},
-					}
-				case *arkv1.GetTransactionsStreamResponse_Redeem:
-					eventCh <- client.TransactionEvent{
-						Redeem: &client.RedeemTransaction{
-							Txid:           tx.Redeem.Txid,
-							SpentVtxos:     vtxos(tx.Redeem.SpentVtxos).toVtxos(),
-							SpendableVtxos: vtxos(tx.Redeem.SpendableVtxos).toVtxos(),
-							Hex:            tx.Redeem.GetHex(),
-						},
-					}
+			switch tx := resp.Tx.(type) {
+			case *arkv1.GetTransactionsStreamResponse_Round:
+				eventsCh <- client.TransactionEvent{
+					Round: &client.RoundTransaction{
+						Txid:                 tx.Round.Txid,
+						SpentVtxos:           vtxos(tx.Round.SpentVtxos).toVtxos(),
+						SpendableVtxos:       vtxos(tx.Round.SpendableVtxos).toVtxos(),
+						ClaimedBoardingUtxos: outpointsFromProto(tx.Round.ClaimedBoardingUtxos),
+						Hex:                  tx.Round.GetHex(),
+					},
+				}
+			case *arkv1.GetTransactionsStreamResponse_Redeem:
+				eventsCh <- client.TransactionEvent{
+					Redeem: &client.RedeemTransaction{
+						Txid:           tx.Redeem.Txid,
+						SpentVtxos:     vtxos(tx.Redeem.SpentVtxos).toVtxos(),
+						SpendableVtxos: vtxos(tx.Redeem.SpendableVtxos).toVtxos(),
+						Hex:            tx.Redeem.GetHex(),
+					},
 				}
 			}
 		}
@@ -409,7 +409,7 @@ func (c *grpcClient) GetTransactionsStream(
 		cancel()
 	}
 
-	return eventCh, closeFn, nil
+	return eventsCh, closeFn, nil
 }
 
 func (a *grpcClient) SetNostrRecipient(
@@ -446,28 +446,28 @@ func (c *grpcClient) SubscribeForAddress(
 		return nil, nil, err
 	}
 
-	eventCh := make(chan client.AddressEvent)
+	eventsCh := make(chan client.AddressEvent)
 
 	go func() {
-		defer close(eventCh)
+		defer close(eventsCh)
+
 		for {
-			select {
-			case <-stream.Context().Done():
-				return
-			default:
-				resp, err := stream.Recv()
-				if err != nil {
-					if err == io.EOF {
-						return
-					}
-					eventCh <- client.AddressEvent{Err: err}
+			resp, err := stream.Recv()
+			if err != nil {
+				if err == io.EOF {
+					eventsCh <- client.AddressEvent{Err: client.ErrConnectionClosedByServer}
 					return
 				}
-
-				eventCh <- client.AddressEvent{
-					NewVtxos:   vtxos(resp.NewVtxos).toVtxos(),
-					SpentVtxos: vtxos(resp.SpentVtxos).toVtxos(),
+				if st, ok := status.FromError(err); ok && st.Code() == codes.Canceled {
+					return
 				}
+				eventsCh <- client.AddressEvent{Err: err}
+				return
+			}
+
+			eventsCh <- client.AddressEvent{
+				NewVtxos:   vtxos(resp.NewVtxos).toVtxos(),
+				SpentVtxos: vtxos(resp.SpentVtxos).toVtxos(),
 			}
 		}
 	}()
@@ -479,7 +479,7 @@ func (c *grpcClient) SubscribeForAddress(
 		cancel()
 	}
 
-	return eventCh, closeFn, nil
+	return eventsCh, closeFn, nil
 }
 
 func signedVtxosToProto(vtxos []client.SignedVtxoOutpoint) []*arkv1.SignedVtxoOutpoint {

@@ -26,7 +26,6 @@ import (
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
-	log "github.com/sirupsen/logrus"
 )
 
 type restClient struct {
@@ -290,9 +289,7 @@ func (c *restClient) GetEventStream(
 				}
 
 				if chunk.err != nil {
-					eventsCh <- client.RoundEventChannel{
-						Err: fmt.Errorf("received error from round event stream: %s", chunk.err),
-					}
+					eventsCh <- client.RoundEventChannel{Err: chunk.err}
 					return
 				}
 				// TODO: handle receival of partial chunks
@@ -523,7 +520,7 @@ func (c *restClient) GetTransactionsStream(ctx context.Context) (<-chan client.T
 				}
 
 				if chunk.err != nil {
-					log.WithError(chunk.err).Warn("received error from transaction stream")
+					eventsCh <- client.TransactionEvent{Err: chunk.err}
 					return
 				}
 
@@ -623,7 +620,7 @@ func (c *restClient) SubscribeForAddress(ctx context.Context, addr string) (<-ch
 				}
 
 				if chunk.err != nil {
-					log.WithError(chunk.err).Warn("received error from address stream")
+					eventsCh <- client.AddressEvent{Err: chunk.err}
 					return
 				}
 
@@ -879,7 +876,7 @@ func listenToStream(url string, chunkCh chan chunk) {
 		msg, err := reader.ReadBytes('\n')
 		if err != nil {
 			if err == io.EOF {
-				err = fmt.Errorf("connection closed by server")
+				err = client.ErrConnectionClosedByServer
 			}
 			chunkCh <- chunk{err: err}
 			return
