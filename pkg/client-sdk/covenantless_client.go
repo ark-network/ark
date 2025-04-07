@@ -186,7 +186,7 @@ func LoadCovenantlessClient(sdkStore types.Store) (ArkClient, error) {
 		supportedWallets,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("faile to setup wallet: %s", err)
+		return nil, fmt.Errorf("failed to setup wallet: %s", err)
 	}
 
 	covenantlessClient := covenantlessArkClient{

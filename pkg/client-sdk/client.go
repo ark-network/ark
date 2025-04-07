@@ -79,8 +79,8 @@ func (a *arkClient) Unlock(ctx context.Context, pasword string) error {
 	return err
 }
 
-func (a *arkClient) Lock(ctx context.Context, pasword string) error {
-	return a.wallet.Lock(ctx, pasword)
+func (a *arkClient) Lock(ctx context.Context) error {
+	return a.wallet.Lock(ctx)
 }
 
 func (a *arkClient) IsLocked(ctx context.Context) bool {
@@ -110,6 +110,13 @@ func (a *arkClient) GetVtxoEventChannel(_ context.Context) chan types.VtxoEvent 
 
 func (a *arkClient) SignTransaction(ctx context.Context, tx string) (string, error) {
 	return a.wallet.SignTransaction(ctx, a.explorer, tx)
+}
+
+func (a *arkClient) Reset(ctx context.Context) {
+	if a.txStreamCtxCancel != nil {
+		a.txStreamCtxCancel()
+	}
+	a.store.Clean(ctx)
 }
 
 func (a *arkClient) Stop() error {
@@ -396,7 +403,7 @@ func getWallet(
 		return getSingleKeyWallet(configStore, data.Network.Name)
 	default:
 		return nil, fmt.Errorf(
-			"unsuported wallet type '%s', please select one of: %s",
+			"unsupported wallet type '%s', please select one of: %s",
 			data.WalletType, supportedWallets,
 		)
 	}

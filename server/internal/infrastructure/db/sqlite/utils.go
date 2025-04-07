@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/ark-network/ark/server/internal/infrastructure/db/sqlite/sqlc/queries"
 	_ "modernc.org/sqlite"
@@ -13,6 +15,7 @@ import (
 
 const (
 	driverName = "sqlite"
+	maxRetries = 5
 )
 
 func OpenDb(dbPath string) (*sql.DB, error) {
@@ -47,39 +50,53 @@ func extendArray[T any](arr []T, position int) []T {
 }
 
 func execTx(
-	ctx context.Context,
-	db *sql.DB,
-	txBody func(*queries.Queries) error,
-) (err error) {
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to start transaction: %w", err)
-	}
-
-	querier := queries.New(db)
-
-	defer func() {
-		if p := recover(); p != nil {
-			rollbackErr := tx.Rollback()
-			if rollbackErr != nil {
-				err = fmt.Errorf("panic: %v, rollback error: %w", p, rollbackErr)
-			}
-			panic(p) // Re-throw after rollback
-		} else if err != nil {
-			rollbackErr := tx.Rollback()
-			if rollbackErr != nil {
-				err = fmt.Errorf("original error: %v, rollback error: %w", err, rollbackErr)
-			}
+	ctx context.Context, db *sql.DB, txBody func(*queries.Queries) error,
+) error {
+	var lastErr error
+	for range maxRetries {
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("failed to begin transaction: %w", err)
 		}
-	}()
+		qtx := queries.New(db).WithTx(tx)
 
-	if err = txBody(querier.WithTx(tx)); err != nil {
-		return fmt.Errorf("failed to execute transaction: %w", err)
+		if err := txBody(qtx); err != nil {
+			//nolint:all
+			tx.Rollback()
+
+			if isConflictError(err) {
+				lastErr = err
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			return err
+		}
+
+		// Commit the transaction
+		if err := tx.Commit(); err != nil {
+			if isConflictError(err) {
+				lastErr = err
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			return fmt.Errorf("failed to commit transaction: %w", err)
+		}
+		return nil
 	}
 
-	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
+	return lastErr
+}
+
+func isConflictError(err error) bool {
+	if err == nil {
+		return false
 	}
 
-	return nil
+	errMsg := strings.ToLower(err.Error())
+	return strings.Contains(errMsg, "database is locked") ||
+		strings.Contains(errMsg, "database table is locked") ||
+		strings.Contains(errMsg, "unique constraint failed") ||
+		strings.Contains(errMsg, "foreign key constraint failed") ||
+		strings.Contains(errMsg, "busy") ||
+		strings.Contains(errMsg, "locked")
 }

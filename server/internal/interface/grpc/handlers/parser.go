@@ -220,6 +220,16 @@ func (e redeemTxEvent) toProto() *arkv1.RedeemTransaction {
 	}
 }
 
+type forfeitTxs []domain.ForfeitTx
+
+func (f forfeitTxs) toProto() []string {
+	list := make([]string, 0, len(f))
+	for _, forfeitTx := range f {
+		list = append(list, forfeitTx.Tx)
+	}
+	return list
+}
+
 type txReqsInfo []application.TxRequestInfo
 
 func (i txReqsInfo) toProto() []*arkv1.TxRequestInfo {

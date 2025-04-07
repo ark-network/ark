@@ -72,24 +72,22 @@ type RoundRequestVw struct {
 }
 
 type RoundTxVw struct {
-	ID         sql.NullInt64
+	Txid       sql.NullString
 	Tx         sql.NullString
 	RoundID    sql.NullString
 	Type       sql.NullString
 	Position   sql.NullInt64
-	Txid       sql.NullString
 	TreeLevel  sql.NullInt64
 	ParentTxid sql.NullString
 	IsLeaf     sql.NullBool
 }
 
 type Tx struct {
-	ID         int64
+	Txid       string
 	Tx         string
 	RoundID    string
 	Type       string
 	Position   int64
-	Txid       sql.NullString
 	TreeLevel  sql.NullInt64
 	ParentTxid sql.NullString
 	IsLeaf     sql.NullBool

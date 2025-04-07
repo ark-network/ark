@@ -4,6 +4,7 @@
 package browser
 
 import (
+	"context"
 	"syscall/js"
 
 	"github.com/ark-network/ark/pkg/client-sdk/types"
@@ -29,6 +30,11 @@ func (s *localStorageStore) VtxoStore() types.VtxoStore {
 
 func (s *localStorageStore) TransactionStore() types.TransactionStore {
 	return nil
+}
+
+func (s *localStorageStore) Clean(ctx context.Context) {
+	//nolint:all
+	s.configStore.CleanData(ctx)
 }
 
 func (s *localStorageStore) Close() {}

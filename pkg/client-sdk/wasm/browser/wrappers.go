@@ -105,12 +105,7 @@ func UnlockWrapper() js.Func {
 
 func LockWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) != 1 {
-			return nil, errors.New("invalid number of args")
-		}
-		password := args[0].String()
-
-		err := arkSdkClient.Lock(context.Background(), password)
+		err := arkSdkClient.Lock(context.Background())
 		return nil, err
 	})
 }
@@ -576,7 +571,14 @@ func NotifyIncomingFundsWrapper() js.Func {
 			return nil, err
 		}
 
-		return result, nil
+		return js.ValueOf(string(result)), nil
+	})
+}
+
+func ResetWrapper() js.Func {
+	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
+		arkSdkClient.Reset(context.Background())
+		return nil
 	})
 }
 

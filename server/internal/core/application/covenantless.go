@@ -525,54 +525,53 @@ func (s *covenantlessService) SubmitRedeemTx(
 		return "", "", fmt.Errorf("failed to sign redeem tx: %s", err)
 	}
 
-	// Create new vtxos, update spent vtxos state
-	newVtxos := make([]domain.Vtxo, 0, len(ptx.UnsignedTx.TxOut))
-	for outIndex, out := range outputs {
-		vtxoTapKey, err := schnorr.ParsePubKey(out.PkScript[2:])
-		if err != nil {
-			return "", "", fmt.Errorf("failed to parse vtxo taproot key: %s", err)
+	go func(ptx *psbt.Packet, signedRedeemTx, redeemTxid string) {
+		ctx := context.Background()
+		// Create new vtxos, update spent vtxos state
+		newVtxos := make([]domain.Vtxo, 0, len(ptx.UnsignedTx.TxOut))
+		for outIndex, out := range outputs {
+			//notlint:all
+			vtxoPubkey := hex.EncodeToString(out.PkScript[2:])
+
+			newVtxos = append(newVtxos, domain.Vtxo{
+				VtxoKey: domain.VtxoKey{
+					Txid: redeemTxid,
+					VOut: uint32(outIndex),
+				},
+				PubKey:    vtxoPubkey,
+				Amount:    uint64(out.Value),
+				ExpireAt:  expiration,
+				RoundTxid: roundTxid,
+				RedeemTx:  signedRedeemTx,
+				CreatedAt: time.Now().Unix(),
+			})
 		}
 
-		vtxoPubkey := hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey))
+		if err := s.repoManager.Vtxos().AddVtxos(ctx, newVtxos); err != nil {
+			log.WithError(err).Warn("failed to add vtxos")
+			return
+		}
+		log.Debugf("added %d vtxos", len(newVtxos))
 
-		newVtxos = append(newVtxos, domain.Vtxo{
-			VtxoKey: domain.VtxoKey{
-				Txid: redeemTxid,
-				VOut: uint32(outIndex),
-			},
-			PubKey:    vtxoPubkey,
-			Amount:    uint64(out.Value),
-			ExpireAt:  expiration,
-			RoundTxid: roundTxid,
-			RedeemTx:  signedRedeemTx,
-			CreatedAt: time.Now().Unix(),
-		})
-	}
+		if err := s.repoManager.Vtxos().SpendVtxos(ctx, spentVtxoKeys, redeemTxid); err != nil {
+			log.WithError(err).Warn("failed to spend vtxos")
+			return
+		}
+		log.Debugf("spent %d vtxos", len(spentVtxos))
 
-	if err := s.repoManager.Vtxos().AddVtxos(ctx, newVtxos); err != nil {
-		return "", "", fmt.Errorf("failed to add vtxos: %s", err)
-	}
-	log.Infof("added %d vtxos", len(newVtxos))
-	if err := s.startWatchingVtxos(newVtxos); err != nil {
-		log.WithError(err).Warn(
-			"failed to start watching vtxos",
-		)
-	}
-	log.Debugf("started watching %d vtxos", len(newVtxos))
+		if err := s.startWatchingVtxos(newVtxos); err != nil {
+			log.WithError(err).Warn("failed to start watching vtxos")
+		} else {
+			log.Debugf("started watching %d vtxos", len(newVtxos))
+		}
 
-	if err := s.repoManager.Vtxos().SpendVtxos(ctx, spentVtxoKeys, redeemTxid); err != nil {
-		return "", "", fmt.Errorf("failed to spend vtxo: %s", err)
-	}
-	log.Infof("spent %d vtxos", len(spentVtxos))
-
-	go func() {
 		s.transactionEventsCh <- RedeemTransactionEvent{
 			RedeemTxid:     redeemTxid,
 			SpentVtxos:     spentVtxos,
 			SpendableVtxos: newVtxos,
 			TxHex:          signedRedeemTx,
 		}
-	}()
+	}(ptx, signedRedeemTx, redeemTxid)
 
 	return signedRedeemTx, redeemTxid, nil
 }
@@ -1248,20 +1247,23 @@ func (s *covenantlessService) RegisterCosignerNonces(
 	if err != nil {
 		return fmt.Errorf("failed to decode nonces: %s", err)
 	}
-	session.lock.Lock()
-	defer session.lock.Unlock()
 
-	if _, ok := session.nonces[pubkey]; ok {
-		return nil // skip if we already have nonces for this pubkey
-	}
+	go func(session *musigSigningSession) {
+		session.lock.Lock()
+		defer session.lock.Unlock()
 
-	session.nonces[pubkey] = nonces
+		if _, ok := session.nonces[pubkey]; ok {
+			return // skip if we already have nonces for this pubkey
+		}
 
-	if len(session.nonces) == session.nbCosigners-1 { // exclude the server
-		go func() {
-			session.nonceDoneC <- struct{}{}
-		}()
-	}
+		session.nonces[pubkey] = nonces
+
+		if len(session.nonces) == session.nbCosigners-1 { // exclude the server
+			go func() {
+				session.nonceDoneC <- struct{}{}
+			}()
+		}
+	}(session)
 
 	return nil
 }
@@ -1284,20 +1286,22 @@ func (s *covenantlessService) RegisterCosignerSignatures(
 		return fmt.Errorf("failed to decode signatures: %s", err)
 	}
 
-	session.lock.Lock()
-	defer session.lock.Unlock()
+	go func(session *musigSigningSession) {
+		session.lock.Lock()
+		defer session.lock.Unlock()
 
-	if _, ok := session.signatures[pubkey]; ok {
-		return nil // skip if we already have signatures for this pubkey
-	}
+		if _, ok := session.signatures[pubkey]; ok {
+			return // skip if we already have signatures for this pubkey
+		}
 
-	session.signatures[pubkey] = signatures
+		session.signatures[pubkey] = signatures
 
-	if len(session.signatures) == session.nbCosigners-1 { // exclude the server
-		go func() {
-			session.sigDoneC <- struct{}{}
-		}()
-	}
+		if len(session.signatures) == session.nbCosigners-1 { // exclude the server
+			go func() {
+				session.sigDoneC <- struct{}{}
+			}()
+		}
+	}(session)
 
 	return nil
 }
@@ -1649,7 +1653,7 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, recoveredVtxos []
 
 	txToSign := round.UnsignedTx
 	boardingInputs := make([]domain.VtxoKey, 0)
-	forfeitTxs := make([]string, 0)
+	forfeitTxs := make([]domain.ForfeitTx, 0)
 
 	if len(s.forfeitTxs.forfeitTxs) > 0 || includesBoardingInputs {
 		remainingTime := time.Until(roundEndTime)
@@ -1673,14 +1677,14 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, recoveredVtxos []
 		}
 		txToSign = round.UnsignedTx
 
-		forfeitTxs, err = s.forfeitTxs.pop()
+		forfeitTxList, err := s.forfeitTxs.pop()
 		if err != nil {
 			changes = round.Fail(fmt.Errorf("failed to finalize round: %s", err))
 			log.WithError(err).Warn("failed to finalize round")
 			return
 		}
 
-		if err := s.verifyForfeitTxsSigs(forfeitTxs); err != nil {
+		if err := s.verifyForfeitTxsSigs(forfeitTxList); err != nil {
 			changes = round.Fail(err)
 			log.WithError(err).Warn("failed to validate forfeit txs")
 			return
@@ -1711,6 +1715,16 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, recoveredVtxos []
 				log.WithError(err).Warn("failed to sign round tx")
 				return
 			}
+		}
+
+		for _, tx := range forfeitTxList {
+			// nolint:all
+			ptx, _ := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+			forfeitTxid := ptx.UnsignedTx.TxHash().String()
+			forfeitTxs = append(forfeitTxs, domain.ForfeitTx{
+				Txid: forfeitTxid,
+				Tx:   tx,
+			})
 		}
 	}
 
@@ -2234,10 +2248,10 @@ func (s *covenantlessService) verifyForfeitTxsSigs(txs []string) error {
 }
 
 func findForfeitTxBitcoin(
-	forfeits []string, vtxo domain.VtxoKey,
+	forfeits []domain.ForfeitTx, vtxo domain.VtxoKey,
 ) (*psbt.Packet, error) {
 	for _, forfeit := range forfeits {
-		forfeitTx, err := psbt.NewFromRawBytes(strings.NewReader(forfeit), true)
+		forfeitTx, err := psbt.NewFromRawBytes(strings.NewReader(forfeit.Tx), true)
 		if err != nil {
 			return nil, err
 		}

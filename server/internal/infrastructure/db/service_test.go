@@ -91,6 +91,13 @@ var (
 			},
 		},
 	}
+
+	emptyForfeitTx = func() domain.ForfeitTx {
+		return domain.ForfeitTx{
+			Txid: randomString(32),
+			Tx:   emptyPtx,
+		}
+	}
 )
 
 func TestMain(m *testing.M) {
@@ -200,7 +207,7 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 					domain.RoundFinalized{
 						Id:         "7578231e-428d-45ae-aaa4-e62c77ad5cec",
 						Txid:       randomString(32),
-						ForfeitTxs: []string{emptyPtx, emptyPtx, emptyPtx, emptyPtx},
+						ForfeitTxs: []domain.ForfeitTx{emptyForfeitTx(), emptyForfeitTx(), emptyForfeitTx(), emptyForfeitTx()},
 						Timestamp:  1701190300,
 					},
 				},
@@ -336,7 +343,7 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 			domain.RoundFinalized{
 				Id:         roundId,
 				Txid:       txid,
-				ForfeitTxs: []string{emptyPtx, emptyPtx, emptyPtx, emptyPtx},
+				ForfeitTxs: []domain.ForfeitTx{emptyForfeitTx(), emptyForfeitTx(), emptyForfeitTx(), emptyForfeitTx()},
 				Timestamp:  now.Add(60 * time.Second).Unix(),
 			},
 		}
@@ -577,13 +584,14 @@ func roundsMatch(expected, got domain.Round) assert.Comparison {
 		}
 
 		if len(expected.ForfeitTxs) > 0 {
-			expectedForfeits := sortStrings(expected.ForfeitTxs)
-			gotForfeits := sortStrings(got.ForfeitTxs)
+			sort.SliceStable(expected.ForfeitTxs, func(i, j int) bool {
+				return expected.ForfeitTxs[i].Txid < expected.ForfeitTxs[j].Txid
+			})
+			sort.SliceStable(got.ForfeitTxs, func(i, j int) bool {
+				return got.ForfeitTxs[i].Txid < got.ForfeitTxs[j].Txid
+			})
 
-			sort.Sort(expectedForfeits)
-			sort.Sort(gotForfeits)
-
-			if !reflect.DeepEqual(expectedForfeits, gotForfeits) {
+			if !reflect.DeepEqual(expected.ForfeitTxs, got.ForfeitTxs) {
 				return false
 			}
 		}
@@ -619,9 +627,3 @@ type sortReceivers []domain.Receiver
 func (a sortReceivers) Len() int           { return len(a) }
 func (a sortReceivers) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a sortReceivers) Less(i, j int) bool { return a[i].Amount < a[j].Amount }
-
-type sortStrings []string
-
-func (a sortStrings) Len() int           { return len(a) }
-func (a sortStrings) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a sortStrings) Less(i, j int) bool { return a[i] < a[j] }

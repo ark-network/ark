@@ -889,14 +889,14 @@ func (s *covenantService) finalizeRound(roundEndTime time.Time) {
 		log.Debug("timeout waiting for forfeit txs and boarding inputs signatures")
 	}
 
-	forfeitTxs, err := s.forfeitTxs.pop()
+	forfeitTxList, err := s.forfeitTxs.pop()
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to finalize round: %s", err))
 		log.WithError(err).Warn("failed to finalize round")
 		return
 	}
 
-	if err := s.verifyForfeitTxsSigs(forfeitTxs); err != nil {
+	if err := s.verifyForfeitTxsSigs(forfeitTxList); err != nil {
 		changes = round.Fail(err)
 		log.WithError(err).Warn("failed to validate forfeit txs")
 		return
@@ -953,6 +953,18 @@ func (s *covenantService) finalizeRound(roundEndTime time.Time) {
 		return
 	}
 
+	forfeitTxs := make([]domain.ForfeitTx, 0, len(forfeitTxList))
+	for _, tx := range forfeitTxList {
+		// nolint:all
+		ptx, _ := psetv2.NewPsetFromBase64(tx)
+		// nolint:all
+		utx, _ := ptx.UnsignedTx()
+		forfeitTxid := utx.TxHash().String()
+		forfeitTxs = append(forfeitTxs, domain.ForfeitTx{
+			Txid: forfeitTxid,
+			Tx:   tx,
+		})
+	}
 	changes, err = round.EndFinalization(forfeitTxs, txid)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to finalize round: %s", err))
@@ -1436,10 +1448,10 @@ func (s *covenantService) onchainNetwork() *network.Network {
 }
 
 func findForfeitTxLiquid(
-	forfeits []string, vtxo domain.VtxoKey,
+	forfeits []domain.ForfeitTx, vtxo domain.VtxoKey,
 ) (*psetv2.Pset, error) {
 	for _, forfeit := range forfeits {
-		forfeitTx, err := psetv2.NewPsetFromBase64(forfeit)
+		forfeitTx, err := psetv2.NewPsetFromBase64(forfeit.Tx)
 		if err != nil {
 			return nil, err
 		}
