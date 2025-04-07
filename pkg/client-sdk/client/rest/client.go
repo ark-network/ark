@@ -133,22 +133,23 @@ func (a *restClient) GetBoardingAddress(
 }
 
 func (a *restClient) RegisterInputsForNextRound(
-	ctx context.Context, inputs []client.Input,
+	ctx context.Context,
+	signature, message string,
+	tapscripts map[string][]string,
 ) (string, error) {
-	ins := make([]*models.V1Input, 0, len(inputs))
-	for _, i := range inputs {
-		ins = append(ins, &models.V1Input{
-			Outpoint: &models.V1Outpoint{
-				Txid: i.Txid,
-				Vout: int64(i.VOut),
-			},
-			Tapscripts: &models.V1Tapscripts{
-				Scripts: i.Tapscripts,
-			},
-		})
+	tapscriptsRest := make(map[string]models.V1Tapscripts)
+	for outpoint, scripts := range tapscripts {
+		tapscriptsRest[outpoint] = models.V1Tapscripts{
+			Scripts: scripts,
+		}
 	}
+
 	body := &models.V1RegisterInputsForNextRoundRequest{
-		Inputs: ins,
+		Bip322Signature: &models.V1Bip322Signature{
+			Message:   message,
+			Signature: signature,
+		},
+		Tapscripts: tapscriptsRest,
 	}
 	resp, err := a.svc.ArkServiceRegisterInputsForNextRound(
 		ark_service.NewArkServiceRegisterInputsForNextRoundParams().WithBody(body),
@@ -627,33 +628,6 @@ func (c *restClient) GetTransactionsStream(ctx context.Context) (<-chan client.T
 	return eventsCh, func() { closeCh <- struct{}{} }, nil
 }
 
-func (a *restClient) SetNostrRecipient(
-	ctx context.Context, nostrRecipient string, vtxos []client.SignedVtxoOutpoint,
-) error {
-	body := models.V1SetNostrRecipientRequest{
-		NostrRecipient: nostrRecipient,
-		Vtxos:          toSignedVtxoModel(vtxos),
-	}
-
-	_, err := a.svc.ArkServiceSetNostrRecipient(
-		ark_service.NewArkServiceSetNostrRecipientParams().WithBody(&body),
-	)
-	return err
-}
-
-func (a *restClient) DeleteNostrRecipient(
-	ctx context.Context, vtxos []client.SignedVtxoOutpoint,
-) error {
-	body := models.V1DeleteNostrRecipientRequest{
-		Vtxos: toSignedVtxoModel(vtxos),
-	}
-
-	_, err := a.svc.ArkServiceDeleteNostrRecipient(
-		ark_service.NewArkServiceDeleteNostrRecipientParams().WithBody(&body),
-	)
-	return err
-}
-
 func (c *restClient) SubscribeForAddress(ctx context.Context, addr string) (<-chan client.AddressEvent, func(), error) {
 	eventsCh := make(chan client.AddressEvent)
 	closeCh := make(chan struct{})
@@ -902,25 +876,9 @@ func vtxosFromRest(restVtxos []*models.V1Vtxo) []client.Vtxo {
 			IsPending: v.IsPending,
 			SpentBy:   v.SpentBy,
 			CreatedAt: createdAt,
+			Swept:     v.Swept,
+			Spent:     v.Spent,
 		}
 	}
 	return vtxos
-}
-
-func toSignedVtxoModel(vtxos []client.SignedVtxoOutpoint) []*models.V1SignedVtxoOutpoint {
-	signedVtxos := make([]*models.V1SignedVtxoOutpoint, 0, len(vtxos))
-	for _, v := range vtxos {
-		signedVtxos = append(signedVtxos, &models.V1SignedVtxoOutpoint{
-			Outpoint: &models.V1Outpoint{
-				Txid: v.Outpoint.Txid,
-				Vout: int64(v.Outpoint.VOut),
-			},
-			Proof: &models.V1OwnershipProof{
-				ControlBlock: v.Proof.ControlBlock,
-				Script:       v.Proof.Script,
-				Signature:    v.Proof.Signature,
-			},
-		})
-	}
-	return signedVtxos
 }

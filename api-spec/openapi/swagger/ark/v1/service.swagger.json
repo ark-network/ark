@@ -354,70 +354,6 @@
           "ArkService"
         ]
       }
-    },
-    "/v1/vtxo/nostr": {
-      "post": {
-        "operationId": "ArkService_SetNostrRecipient",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1SetNostrRecipientResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1SetNostrRecipientRequest"
-            }
-          }
-        ],
-        "tags": [
-          "ArkService"
-        ]
-      }
-    },
-    "/v1/vtxo/nostr/delete": {
-      "post": {
-        "operationId": "ArkService_DeleteNostrRecipient",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1DeleteNostrRecipientResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1DeleteNostrRecipientRequest"
-            }
-          }
-        ],
-        "tags": [
-          "ArkService"
-        ]
-      }
     }
   },
   "definitions": {
@@ -449,20 +385,16 @@
         }
       }
     },
-    "v1DeleteNostrRecipientRequest": {
+    "v1Bip322Signature": {
       "type": "object",
       "properties": {
-        "vtxos": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1SignedVtxoOutpoint"
-          }
+        "signature": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
         }
       }
-    },
-    "v1DeleteNostrRecipientResponse": {
-      "type": "object"
     },
     "v1GetBoardingAddressRequest": {
       "type": "object",
@@ -562,20 +494,6 @@
         }
       }
     },
-    "v1Input": {
-      "type": "object",
-      "properties": {
-        "outpoint": {
-          "$ref": "#/definitions/v1Outpoint"
-        },
-        "descriptor": {
-          "type": "string"
-        },
-        "tapscripts": {
-          "$ref": "#/definitions/v1Tapscripts"
-        }
-      }
-    },
     "v1MarketHour": {
       "type": "object",
       "properties": {
@@ -651,22 +569,6 @@
         }
       }
     },
-    "v1OwnershipProof": {
-      "type": "object",
-      "properties": {
-        "controlBlock": {
-          "type": "string"
-        },
-        "script": {
-          "type": "string"
-        },
-        "signature": {
-          "type": "string",
-          "title": "VTXO outpoint signed with script's secret key"
-        }
-      },
-      "description": "This message is used to prove to the server that the user controls the vtxo without revealing the whole VTXO taproot tree."
-    },
     "v1PingResponse": {
       "type": "object"
     },
@@ -698,12 +600,16 @@
     "v1RegisterInputsForNextRoundRequest": {
       "type": "object",
       "properties": {
-        "inputs": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1Input"
-          }
+        "tapscripts": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/v1Tapscripts"
+          },
+          "description": "Tapscripts aims to reveal the taproot tree of the unspent \u0026 unexpired VTXOs."
+        },
+        "bip322Signature": {
+          "$ref": "#/definitions/v1Bip322Signature",
+          "title": "BIP322 signature embeds the outpoints and the proof of funds"
         },
         "notes": {
           "type": "array",
@@ -853,35 +759,6 @@
         },
         "hex": {
           "type": "string"
-        }
-      }
-    },
-    "v1SetNostrRecipientRequest": {
-      "type": "object",
-      "properties": {
-        "nostrRecipient": {
-          "type": "string"
-        },
-        "vtxos": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1SignedVtxoOutpoint"
-          }
-        }
-      }
-    },
-    "v1SetNostrRecipientResponse": {
-      "type": "object"
-    },
-    "v1SignedVtxoOutpoint": {
-      "type": "object",
-      "properties": {
-        "outpoint": {
-          "$ref": "#/definitions/v1Outpoint"
-        },
-        "proof": {
-          "$ref": "#/definitions/v1OwnershipProof"
         }
       }
     },

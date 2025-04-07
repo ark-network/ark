@@ -10,10 +10,8 @@ import (
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/domain"
-	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcd/txscript"
 )
 
 // From interface type to app type
@@ -54,23 +52,15 @@ func parseNotes(notes []string) ([]note.Note, error) {
 	return notesParsed, nil
 }
 
-func parseInputs(ins []*arkv1.Input) ([]ports.Input, error) {
-	if len(ins) <= 0 {
-		return nil, fmt.Errorf("missing inputs")
+func parseTapscripts(tapscripts map[string]*arkv1.Tapscripts) map[string][]string {
+	parsed := make(map[string][]string)
+	for outpointStr, tapscript := range tapscripts {
+		if len(tapscript.GetScripts()) <= 0 {
+			continue
+		}
+		parsed[outpointStr] = tapscript.GetScripts()
 	}
-
-	inputs := make([]ports.Input, 0, len(ins))
-	for _, input := range ins {
-		inputs = append(inputs, ports.Input{
-			VtxoKey: domain.VtxoKey{
-				Txid: input.GetOutpoint().GetTxid(),
-				VOut: input.GetOutpoint().GetVout(),
-			},
-			Tapscripts: input.GetTapscripts().GetScripts(),
-		})
-	}
-
-	return inputs, nil
+	return parsed
 }
 
 func parseReceiver(out *arkv1.Output) (domain.Receiver, error) {
@@ -238,86 +228,6 @@ func (f forfeitTxs) toProto() []string {
 		list = append(list, forfeitTx.Tx)
 	}
 	return list
-}
-
-func parseSignedVtxoOutpoints(signedVtxoOutpoints []*arkv1.SignedVtxoOutpoint) ([]application.SignedVtxoOutpoint, error) {
-	if len(signedVtxoOutpoints) <= 0 {
-		return nil, fmt.Errorf("missing signed vtxo outpoints")
-	}
-
-	parsed := make([]application.SignedVtxoOutpoint, 0, len(signedVtxoOutpoints))
-	for _, signedVtxo := range signedVtxoOutpoints {
-		outpoint := signedVtxo.GetOutpoint()
-		if outpoint == nil {
-			return nil, fmt.Errorf("missing outpoint")
-		}
-
-		txid := outpoint.GetTxid()
-		if len(txid) <= 0 {
-			return nil, fmt.Errorf("missing txid")
-		}
-
-		proof := signedVtxo.GetProof()
-		if proof == nil {
-			return nil, fmt.Errorf("missing proof")
-		}
-
-		controlBlockHex := proof.GetControlBlock()
-		if len(controlBlockHex) <= 0 {
-			return nil, fmt.Errorf("missing control block")
-		}
-
-		controlBlockBytes, err := hex.DecodeString(controlBlockHex)
-		if err != nil {
-			return nil, fmt.Errorf("invalid control block: %s", err)
-		}
-
-		controlBlock, err := txscript.ParseControlBlock(controlBlockBytes)
-		if err != nil {
-			return nil, fmt.Errorf("invalid control block: %s", err)
-		}
-
-		signatureHex := proof.GetSignature()
-		if len(signatureHex) <= 0 {
-			return nil, fmt.Errorf("missing signature")
-		}
-
-		signatureBytes, err := hex.DecodeString(signatureHex)
-		if err != nil {
-			return nil, fmt.Errorf("invalid signature: %s", err)
-		}
-
-		signature, err := schnorr.ParseSignature(signatureBytes)
-		if err != nil {
-			return nil, fmt.Errorf("invalid signature: %s", err)
-		}
-
-		scriptHex := proof.GetScript()
-		if len(scriptHex) <= 0 {
-			return nil, fmt.Errorf("missing script")
-		}
-
-		scriptBytes, err := hex.DecodeString(scriptHex)
-		if err != nil {
-			return nil, fmt.Errorf("invalid script: %s", err)
-		}
-
-		vout := outpoint.GetVout()
-
-		parsed = append(parsed, application.SignedVtxoOutpoint{
-			Outpoint: domain.VtxoKey{
-				Txid: txid,
-				VOut: vout,
-			},
-			Proof: application.OwnershipProof{
-				ControlBlock: controlBlock,
-				Script:       scriptBytes,
-				Signature:    signature,
-			},
-		})
-	}
-
-	return parsed, nil
 }
 
 type txReqsInfo []application.TxRequestInfo

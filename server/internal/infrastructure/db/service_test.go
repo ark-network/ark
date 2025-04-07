@@ -141,7 +141,6 @@ func TestService(t *testing.T) {
 			testRoundRepository(t, svc)
 			testVtxoRepository(t, svc)
 			testNoteRepository(t, svc)
-			testEntityRepository(t, svc)
 			testMarketHourRepository(t, svc)
 		})
 	}
@@ -485,57 +484,6 @@ func testNoteRepository(t *testing.T, svc ports.RepoManager) {
 
 		err = svc.Notes().Add(ctx, 1)
 		require.Error(t, err)
-	})
-}
-
-func testEntityRepository(t *testing.T, svc ports.RepoManager) {
-	t.Run("test_entity_repository", func(t *testing.T) {
-		ctx := context.Background()
-
-		vtxoKey := domain.VtxoKey{
-			Txid: randomString(32),
-			VOut: 0,
-		}
-
-		entity := domain.Entity{
-			NostrRecipient: "test",
-		}
-
-		// add
-		err := svc.Entities().Add(ctx, entity, []domain.VtxoKey{vtxoKey})
-		require.NoError(t, err)
-
-		gotEntities, err := svc.Entities().Get(ctx, vtxoKey)
-		require.NoError(t, err)
-		require.NotNil(t, gotEntities)
-		require.Equal(t, entity, gotEntities[0])
-
-		// add another entity
-		entity2 := domain.Entity{
-			NostrRecipient: "test2",
-		}
-
-		err = svc.Entities().Add(ctx, entity2, []domain.VtxoKey{vtxoKey})
-		require.NoError(t, err)
-
-		// if nostrkey is the same, it should not be added
-		err = svc.Entities().Add(ctx, entity2, []domain.VtxoKey{vtxoKey})
-		require.NoError(t, err)
-
-		gotEntities, err = svc.Entities().Get(ctx, vtxoKey)
-		require.NoError(t, err)
-		require.NotNil(t, gotEntities)
-		require.Contains(t, gotEntities, entity)
-		require.Contains(t, gotEntities, entity2)
-		require.Len(t, gotEntities, 2)
-
-		// delete
-		err = svc.Entities().Delete(ctx, []domain.VtxoKey{vtxoKey})
-		require.NoError(t, err)
-
-		gotEntities, err = svc.Entities().Get(ctx, vtxoKey)
-		require.Error(t, err)
-		require.Nil(t, gotEntities)
 	})
 }
 
