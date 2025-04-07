@@ -112,6 +112,13 @@ func (a *arkClient) SignTransaction(ctx context.Context, tx string) (string, err
 	return a.wallet.SignTransaction(ctx, a.explorer, tx)
 }
 
+func (a *arkClient) Reset(ctx context.Context) {
+	if a.txStreamCtxCancel != nil {
+		a.txStreamCtxCancel()
+	}
+	a.store.Clean(ctx)
+}
+
 func (a *arkClient) Stop() error {
 	if a.Config.WithTransactionFeed {
 		a.txStreamCtxCancel()
