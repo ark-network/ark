@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/ark-network/ark/common"
@@ -150,27 +149,19 @@ func (a *arkClient) NotifyIncomingFunds(
 	if err != nil {
 		return nil, err
 	}
+	defer closeFn()
 
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
+	event := <-eventCh
+
+	if event.Err != nil {
+		err = event.Err
+		return nil, err
+	}
+
 	incomingVtxos := make([]types.Vtxo, 0)
-	go func() {
-		defer wg.Done()
-		for event := range eventCh {
-			if event.Err != nil {
-				err = event.Err
-			} else {
-				for _, vtxo := range event.NewVtxos {
-					incomingVtxos = append(incomingVtxos, toTypesVtxo(vtxo))
-				}
-			}
-			closeFn()
-			// nolint:all
-			return
-		}
-	}()
-	wg.Wait()
-
+	for _, vtxo := range event.NewVtxos {
+		incomingVtxos = append(incomingVtxos, toTypesVtxo(vtxo))
+	}
 	return incomingVtxos, nil
 }
 
