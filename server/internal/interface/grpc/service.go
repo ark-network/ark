@@ -207,6 +207,7 @@ func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 		}
 		indexerHandler := handlers.NewIndexerService(indexerSvc)
 		arkv1.RegisterArkServiceServer(grpcServer, appHandler)
+		arkv1.RegisterExplorerServiceServer(grpcServer, appHandler)
 		arkv1.RegisterIndexerServiceServer(grpcServer, indexerHandler)
 	}
 
