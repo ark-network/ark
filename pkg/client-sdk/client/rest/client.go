@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -27,7 +26,6 @@ import (
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
-	log "github.com/sirupsen/logrus"
 )
 
 type restClient struct {
@@ -271,64 +269,34 @@ func (a *restClient) SubmitSignedForfeitTxs(
 func (c *restClient) GetEventStream(
 	ctx context.Context, requestID string,
 ) (<-chan client.RoundEventChannel, func(), error) {
+	ctx, cancel := context.WithCancel(ctx)
 	eventsCh := make(chan client.RoundEventChannel)
-	closeCh := make(chan struct{})
+	chunkCh := make(chan chunk)
+	url := fmt.Sprintf("%s/v1/events", c.serverURL)
 
-	go func(eventsCh chan client.RoundEventChannel, closeCh chan struct{}) {
-		httpClient := &http.Client{Timeout: time.Second * 0}
+	go listenToStream(url, chunkCh)
 
-		resp, err := httpClient.Get(fmt.Sprintf("%s/v1/events", c.serverURL))
-		if err != nil {
-			eventsCh <- client.RoundEventChannel{
-				Err: fmt.Errorf("failed to fetch round event stream: %s", err),
-			}
-			return
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			eventsCh <- client.RoundEventChannel{
-				Err: fmt.Errorf("received unexpected status %d code when fetching round event stream", resp.StatusCode),
-			}
-			return
-		}
-
-		chunkCh := make(chan []byte)
-		reader := bufio.NewReader(resp.Body)
-		go func() {
-			for {
-				chunk, err := reader.ReadBytes('\n')
-				if err != nil {
-					// Stream ended
-					if errors.Is(err, io.EOF) {
-						chunkCh <- []byte(io.EOF.Error())
-						return
-					}
-					log.WithError(err).Warn("failed to read from round event stream")
-					return
-				}
-
-				chunk = bytes.Trim(chunk, "\n")
-
-				chunkCh <- chunk
-			}
-		}()
+	go func(ctx context.Context, eventsCh chan client.RoundEventChannel, chunkCh chan chunk) {
+		defer close(eventsCh)
 
 		for {
 			select {
-			case <-closeCh:
+			case <-ctx.Done():
 				return
 			case chunk := <-chunkCh:
-				if string(chunk) == io.EOF.Error() {
-					eventsCh <- client.RoundEventChannel{
-						Err: io.EOF,
-					}
+				if chunk.err == nil && len(chunk.msg) == 0 {
 					continue
 				}
+
+				if chunk.err != nil {
+					eventsCh <- client.RoundEventChannel{Err: chunk.err}
+					return
+				}
+				// TODO: handle receival of partial chunks
 				resp := ark_service.ArkServiceGetEventStreamOKBody{}
-				if err := json.Unmarshal(chunk, &resp); err != nil {
+				if err := json.Unmarshal(chunk.msg, &resp); err != nil {
 					eventsCh <- client.RoundEventChannel{
-						Err: fmt.Errorf("failed to parse message from round event stream: %s", err),
+						Err: fmt.Errorf("failed to parse message from round event stream: %s, %s", err, string(chunk.msg)),
 					}
 					return
 				}
@@ -342,7 +310,7 @@ func (c *restClient) GetEventStream(
 					eventsCh <- client.RoundEventChannel{
 						Err: fmt.Errorf("received error %d: %s", resp.Error.Code, resp.Error.Message),
 					}
-					continue
+					return
 				}
 
 				// Handle different event types
@@ -408,9 +376,9 @@ func (c *restClient) GetEventStream(
 				}
 			}
 		}
-	}(eventsCh, closeCh)
+	}(ctx, eventsCh, chunkCh)
 
-	return eventsCh, func() { closeCh <- struct{}{} }, nil
+	return eventsCh, cancel, nil
 }
 
 func (a *restClient) Ping(
@@ -532,71 +500,48 @@ func (a *restClient) ListVtxos(
 }
 
 func (c *restClient) GetTransactionsStream(ctx context.Context) (<-chan client.TransactionEvent, func(), error) {
+	ctx, cancel := context.WithCancel(ctx)
 	eventsCh := make(chan client.TransactionEvent)
-	closeCh := make(chan struct{})
+	chunkCh := make(chan chunk)
+	url := fmt.Sprintf("%s/v1/transactions", c.serverURL)
 
-	go func(eventsCh chan client.TransactionEvent, closeCh chan struct{}) {
-		httpClient := &http.Client{Timeout: time.Second * 0}
+	go listenToStream(url, chunkCh)
 
-		resp, err := httpClient.Get(fmt.Sprintf("%s/v1/transactions", c.serverURL))
-		if err != nil {
-			eventsCh <- client.TransactionEvent{Err: err}
-			return
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			eventsCh <- client.TransactionEvent{
-				Err: fmt.Errorf("unexpected status code: %d", resp.StatusCode),
-			}
-			return
-		}
-
-		chunkCh := make(chan []byte)
-		reader := bufio.NewReader(resp.Body)
-		go func() {
-			for {
-				chunk, err := reader.ReadBytes('\n')
-				if err != nil {
-					// Stream ended
-					if errors.Is(err, io.EOF) {
-						chunkCh <- []byte(io.EOF.Error())
-						return
-					}
-					log.WithError(err).Warn("failed to read from transaction event stream")
-					return
-				}
-
-				chunk = bytes.Trim(chunk, "\n")
-
-				chunkCh <- chunk
-			}
-		}()
+	go func(ctx context.Context, eventsCh chan client.TransactionEvent, chunkCh chan chunk) {
+		defer close(eventsCh)
 
 		for {
 			select {
-			case <-closeCh:
+			case <-ctx.Done():
 				return
 			case chunk := <-chunkCh:
-				if string(chunk) == io.EOF.Error() {
-					eventsCh <- client.TransactionEvent{
-						Err: io.EOF,
-					}
+				if chunk.err == nil && len(chunk.msg) == 0 {
 					continue
 				}
+
+				if chunk.err != nil {
+					eventsCh <- client.TransactionEvent{Err: chunk.err}
+					return
+				}
+
 				resp := ark_service.ArkServiceGetTransactionsStreamOKBody{}
-				if err := json.Unmarshal(chunk, &resp); err != nil {
+				if err := json.Unmarshal(chunk.msg, &resp); err != nil {
 					eventsCh <- client.TransactionEvent{
 						Err: fmt.Errorf("failed to parse message from transaction stream: %s", err),
 					}
 					return
 				}
 
+				emptyResp := ark_service.ArkServiceGetTransactionsStreamOKBody{}
+				if resp == emptyResp {
+					continue
+				}
+
 				if resp.Error != nil {
 					eventsCh <- client.TransactionEvent{
 						Err: fmt.Errorf("received error from transaction stream: %s", resp.Error.Message),
 					}
-					continue
+					return
 				}
 
 				var event client.TransactionEvent
@@ -622,9 +567,9 @@ func (c *restClient) GetTransactionsStream(ctx context.Context) (<-chan client.T
 				eventsCh <- event
 			}
 		}
-	}(eventsCh, closeCh)
+	}(ctx, eventsCh, chunkCh)
 
-	return eventsCh, func() { closeCh <- struct{}{} }, nil
+	return eventsCh, cancel, nil
 }
 
 func (a *restClient) SetNostrRecipient(
@@ -655,71 +600,48 @@ func (a *restClient) DeleteNostrRecipient(
 }
 
 func (c *restClient) SubscribeForAddress(ctx context.Context, addr string) (<-chan client.AddressEvent, func(), error) {
+	ctx, cancel := context.WithCancel(ctx)
 	eventsCh := make(chan client.AddressEvent)
-	closeCh := make(chan struct{})
+	chunkCh := make(chan chunk)
+	url := fmt.Sprintf("%s/v1/vtxos/%s/subscribe", c.serverURL, addr)
 
-	go func(eventsCh chan client.AddressEvent, closeCh chan struct{}) {
-		httpClient := &http.Client{Timeout: time.Second * 0}
+	go listenToStream(url, chunkCh)
 
-		resp, err := httpClient.Get(fmt.Sprintf("%s/v1/vtxos/%s/subscribe", c.serverURL, addr))
-		if err != nil {
-			eventsCh <- client.AddressEvent{Err: err}
-			return
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			eventsCh <- client.AddressEvent{
-				Err: fmt.Errorf("unexpected status code: %d", resp.StatusCode),
-			}
-			return
-		}
-
-		chunkCh := make(chan []byte)
-		reader := bufio.NewReader(resp.Body)
-		go func() {
-			for {
-				chunk, err := reader.ReadBytes('\n')
-				if err != nil {
-					// Stream ended
-					if errors.Is(err, io.EOF) {
-						chunkCh <- []byte(io.EOF.Error())
-						return
-					}
-					log.WithError(err).Warn("failed to read from address event stream")
-					return
-				}
-
-				chunk = bytes.Trim(chunk, "\n")
-
-				chunkCh <- chunk
-			}
-		}()
+	go func(eventsCh chan client.AddressEvent, chunkCh chan chunk) {
+		defer close(eventsCh)
 
 		for {
 			select {
-			case <-closeCh:
+			case <-ctx.Done():
 				return
 			case chunk := <-chunkCh:
-				if string(chunk) == io.EOF.Error() {
-					eventsCh <- client.AddressEvent{
-						Err: io.EOF,
-					}
+				if chunk.err == nil && len(chunk.msg) == 0 {
 					continue
 				}
+
+				if chunk.err != nil {
+					eventsCh <- client.AddressEvent{Err: chunk.err}
+					return
+				}
+
 				resp := explorer_service.ExplorerServiceSubscribeForAddressOKBody{}
-				if err := json.Unmarshal(chunk, &resp); err != nil {
+				if err := json.Unmarshal(chunk.msg, &resp); err != nil {
 					eventsCh <- client.AddressEvent{
-						Err: fmt.Errorf("failed to parse message from address event stream: %s", err),
+						Err: fmt.Errorf("failed to parse message from address stream: %s", err),
 					}
 					return
+				}
+
+				emptyResp := explorer_service.ExplorerServiceSubscribeForAddressOKBody{}
+				if resp == emptyResp {
+					continue
 				}
 
 				if resp.Error != nil {
 					eventsCh <- client.AddressEvent{
-						Err: fmt.Errorf("received error from address event stream: %s", resp.Error.Message),
+						Err: fmt.Errorf("received error from address stream: %s", resp.Error.Message),
 					}
-					continue
+					return
 				}
 
 				eventsCh <- client.AddressEvent{
@@ -728,9 +650,9 @@ func (c *restClient) SubscribeForAddress(ctx context.Context, addr string) (<-ch
 				}
 			}
 		}
-	}(eventsCh, closeCh)
+	}(eventsCh, chunkCh)
 
-	return eventsCh, func() { closeCh <- struct{}{} }, nil
+	return eventsCh, cancel, nil
 }
 
 func (c *restClient) Close() {}
@@ -923,4 +845,43 @@ func toSignedVtxoModel(vtxos []client.SignedVtxoOutpoint) []*models.V1SignedVtxo
 		})
 	}
 	return signedVtxos
+}
+
+type chunk struct {
+	msg []byte
+	err error
+}
+
+func listenToStream(url string, chunkCh chan chunk) {
+	defer close(chunkCh)
+
+	httpClient := &http.Client{Timeout: time.Second * 0}
+
+	resp, err := httpClient.Get(url)
+	if err != nil {
+		chunkCh <- chunk{err: err}
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		chunkCh <- chunk{err: fmt.Errorf(
+			"got unexpected status %d code", resp.StatusCode,
+		)}
+		return
+	}
+
+	reader := bufio.NewReader(resp.Body)
+	for {
+		msg, err := reader.ReadBytes('\n')
+		if err != nil {
+			if err == io.EOF {
+				err = client.ErrConnectionClosedByServer
+			}
+			chunkCh <- chunk{err: err}
+			return
+		}
+		msg = bytes.Trim(msg, "\n")
+		chunkCh <- chunk{msg: msg}
+	}
 }

@@ -19,6 +19,10 @@ const (
 	RestClient = "rest"
 )
 
+var (
+	ErrConnectionClosedByServer = fmt.Errorf("connection closed by server")
+)
+
 type RoundEvent interface {
 	isRoundEvent()
 }
