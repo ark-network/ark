@@ -119,7 +119,6 @@ type Config struct {
 	scanner   ports.BlockchainScanner
 	scheduler ports.SchedulerService
 	unlocker  ports.Unlocker
-	indexerSvc application.IndexerService
 }
 
 var (
@@ -419,9 +418,6 @@ func (c *Config) Validate() error {
 	if err := c.unlockerService(); err != nil {
 		return err
 	}
-	if err := c.indexerService(); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -446,8 +442,13 @@ func (c *Config) UnlockerService() ports.Unlocker {
 	return c.unlocker
 }
 
-func (c *Config) IndexerService() application.IndexerService {
-	return c.indexerSvc
+func (c *Config) IndexerService() (application.IndexerService, error) {
+	pubKey, err := c.wallet.GetPubkey(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	return application.NewIndexerService(pubKey, c.repo), nil
 }
 
 func (c *Config) repoManager() error {
@@ -642,16 +643,6 @@ func (c *Config) unlockerService() error {
 		return err
 	}
 	c.unlocker = svc
-	return nil
-}
-
-func (c *Config) indexerService() error {
-	pubKey, err := c.wallet.GetPubkey(context.Background())
-	if err != nil {
-		return err
-	}
-
-	c.indexerSvc = application.NewIndexerService(pubKey, c.repo)
 	return nil
 }
 
