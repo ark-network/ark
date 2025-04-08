@@ -81,6 +81,7 @@ func (h *handler) GetInfo(
 		Pubkey:                     info.PubKey,
 		VtxoTreeExpiry:             info.VtxoTreeExpiry,
 		UnilateralExitDelay:        info.UnilateralExitDelay,
+		BoardingExitDelay:          info.BoardingExitDelay,
 		RoundInterval:              info.RoundInterval,
 		Network:                    info.Network,
 		Dust:                       int64(info.Dust),

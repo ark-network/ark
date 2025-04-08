@@ -20,6 +20,7 @@ type storeData struct {
 	RoundInterval              string `json:"round_interval"`
 	UnilateralExitDelay        string `json:"unilateral_exit_delay"`
 	Dust                       string `json:"dust"`
+	BoardingExitDelay          string `json:"boarding_exit_delay"`
 	BoardingDescriptorTemplate string `json:"boarding_descriptor_template"`
 	ExplorerURL                string `json:"explorer_url"`
 	ForfeitAddress             string `json:"forfeit_address"`
@@ -48,6 +49,7 @@ func (d storeData) decode() types.Config {
 	vtxoTreeExpiry, _ := strconv.Atoi(d.VtxoTreeExpiry)
 	roundInterval, _ := strconv.Atoi(d.RoundInterval)
 	unilateralExitDelay, _ := strconv.Atoi(d.UnilateralExitDelay)
+	boardingExitDelay, _ := strconv.Atoi(d.BoardingExitDelay)
 	withTransactionFeed, _ := strconv.ParseBool(d.WithTransactionFeed)
 	dust, _ := strconv.Atoi(d.Dust)
 	buf, _ := hex.DecodeString(d.ServerPubKey)
@@ -72,6 +74,11 @@ func (d storeData) decode() types.Config {
 		unilateralExitDelayType = common.LocktimeTypeSecond
 	}
 
+	boardingExitDelayType := common.LocktimeTypeBlock
+	if boardingExitDelay >= 512 {
+		boardingExitDelayType = common.LocktimeTypeSecond
+	}
+
 	return types.Config{
 		ServerUrl:                  d.ServerUrl,
 		ServerPubKey:               serverPubkey,
@@ -82,6 +89,7 @@ func (d storeData) decode() types.Config {
 		UnilateralExitDelay:        common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(unilateralExitDelay)},
 		RoundInterval:              int64(roundInterval),
 		Dust:                       uint64(dust),
+		BoardingExitDelay:          common.RelativeLocktime{Type: boardingExitDelayType, Value: uint32(boardingExitDelay)},
 		BoardingDescriptorTemplate: d.BoardingDescriptorTemplate,
 		ExplorerURL:                explorerURL,
 		ForfeitAddress:             d.ForfeitAddress,
@@ -108,6 +116,7 @@ func (d storeData) asMap() map[string]string {
 		"round_interval":               d.RoundInterval,
 		"unilateral_exit_delay":        d.UnilateralExitDelay,
 		"dust":                         d.Dust,
+		"boarding_exit_delay":          d.BoardingExitDelay,
 		"boarding_descriptor_template": d.BoardingDescriptorTemplate,
 		"explorer_url":                 d.ExplorerURL,
 		"forfeit_address":              d.ForfeitAddress,

@@ -531,6 +531,10 @@
           "type": "string",
           "format": "int64"
         },
+        "boardingExitDelay": {
+          "type": "string",
+          "format": "int64"
+        },
         "boardingDescriptorTemplate": {
           "type": "string"
         },

@@ -26,6 +26,7 @@ type Config struct {
 	RoundInterval              int64
 	UnilateralExitDelay        common.RelativeLocktime
 	Dust                       uint64
+	BoardingExitDelay          common.RelativeLocktime
 	BoardingDescriptorTemplate string
 	ExplorerURL                string
 	ForfeitAddress             string

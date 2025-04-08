@@ -74,6 +74,7 @@ func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
 		Network:                    resp.GetNetwork(),
 		Dust:                       uint64(resp.GetDust()),
 		BoardingDescriptorTemplate: resp.GetBoardingDescriptorTemplate(),
+		BoardingExitDelay:          resp.GetBoardingExitDelay(),
 		ForfeitAddress:             resp.GetForfeitAddress(),
 		Version:                    resp.GetVersion(),
 		MarketHourStartTime:        resp.GetMarketHour().GetNextStartTime(),

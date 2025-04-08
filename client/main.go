@@ -278,6 +278,7 @@ func config(ctx *cli.Context) error {
 		"vtxo_tree_expiry":             cfgData.VtxoTreeExpiry,
 		"unilateral_exit_delay":        cfgData.UnilateralExitDelay,
 		"dust":                         cfgData.Dust,
+		"boarding_exit_delay":          cfgData.BoardingExitDelay,
 		"boarding_descriptor_template": cfgData.BoardingDescriptorTemplate,
 		"explorer_url":                 cfgData.ExplorerURL,
 		"forfeit_address":              cfgData.ForfeitAddress,

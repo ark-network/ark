@@ -21,6 +21,9 @@ type V1GetInfoResponse struct {
 	// boarding descriptor template
 	BoardingDescriptorTemplate string `json:"boardingDescriptorTemplate,omitempty"`
 
+	// boarding exit delay
+	BoardingExitDelay string `json:"boardingExitDelay,omitempty"`
+
 	// dust
 	Dust string `json:"dust,omitempty"`
 

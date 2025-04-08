@@ -60,6 +60,7 @@ func (s *configStore) AddData(ctx context.Context, data types.Config) error {
 		VtxoTreeExpiry:             fmt.Sprintf("%d", data.VtxoTreeExpiry.Value),
 		RoundInterval:              fmt.Sprintf("%d", data.RoundInterval),
 		UnilateralExitDelay:        fmt.Sprintf("%d", data.UnilateralExitDelay.Value),
+		BoardingExitDelay:          fmt.Sprintf("%d", data.BoardingExitDelay.Value),
 		Dust:                       fmt.Sprintf("%d", data.Dust),
 		BoardingDescriptorTemplate: data.BoardingDescriptorTemplate,
 		ExplorerURL:                data.ExplorerURL,

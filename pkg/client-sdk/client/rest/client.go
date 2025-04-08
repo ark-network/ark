@@ -71,6 +71,12 @@ func (a *restClient) GetInfo(
 	if err != nil {
 		return nil, err
 	}
+
+	boardingExitDelay, err := strconv.Atoi(resp.Payload.BoardingExitDelay)
+	if err != nil {
+		return nil, err
+	}
+
 	roundInterval, err := strconv.Atoi(resp.Payload.RoundInterval)
 	if err != nil {
 		return nil, err
@@ -119,6 +125,7 @@ func (a *restClient) GetInfo(
 		RoundInterval:              int64(roundInterval),
 		Network:                    resp.Payload.Network,
 		Dust:                       uint64(dust),
+		BoardingExitDelay:          int64(boardingExitDelay),
 		BoardingDescriptorTemplate: resp.Payload.BoardingDescriptorTemplate,
 		ForfeitAddress:             resp.Payload.ForfeitAddress,
 		Version:                    resp.Payload.Version,

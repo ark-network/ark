@@ -238,6 +238,11 @@ func (a *arkClient) initWithWallet(
 		unilateralExitDelayType = common.LocktimeTypeSecond
 	}
 
+	boardingExitDelayType := common.LocktimeTypeBlock
+	if info.BoardingExitDelay >= 512 {
+		boardingExitDelayType = common.LocktimeTypeSecond
+	}
+
 	storeData := types.Config{
 		ServerUrl:                  args.ServerUrl,
 		ServerPubKey:               serverPubkey,
@@ -248,6 +253,7 @@ func (a *arkClient) initWithWallet(
 		RoundInterval:              info.RoundInterval,
 		UnilateralExitDelay:        common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
 		Dust:                       info.Dust,
+		BoardingExitDelay:          common.RelativeLocktime{Type: boardingExitDelayType, Value: uint32(info.BoardingExitDelay)},
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 		ForfeitAddress:             info.ForfeitAddress,
 		WithTransactionFeed:        args.WithTransactionFeed,
@@ -324,6 +330,11 @@ func (a *arkClient) init(
 		unilateralExitDelayType = common.LocktimeTypeSecond
 	}
 
+	boardingExitDelayType := common.LocktimeTypeBlock
+	if info.BoardingExitDelay >= 512 {
+		boardingExitDelayType = common.LocktimeTypeSecond
+	}
+
 	cfgData := types.Config{
 		ServerUrl:                  args.ServerUrl,
 		ServerPubKey:               serverPubkey,
@@ -334,6 +345,7 @@ func (a *arkClient) init(
 		RoundInterval:              info.RoundInterval,
 		UnilateralExitDelay:        common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
 		Dust:                       info.Dust,
+		BoardingExitDelay:          common.RelativeLocktime{Type: boardingExitDelayType, Value: uint32(info.BoardingExitDelay)},
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 		ExplorerURL:                explorerSvc.BaseUrl(),
 		ForfeitAddress:             info.ForfeitAddress,

@@ -72,6 +72,7 @@ type Info struct {
 	RoundInterval              int64
 	Network                    string
 	Dust                       uint64
+	BoardingExitDelay          int64
 	BoardingDescriptorTemplate string
 	ForfeitAddress             string
 	MarketHourStartTime        int64
