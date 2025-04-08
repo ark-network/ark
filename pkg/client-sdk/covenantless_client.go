@@ -3081,15 +3081,6 @@ func (a *covenantlessArkClient) handleOptions(
 	return sessions, signerPubKeys, signingType, nil
 }
 
-func findVtxosBySpentBy(allVtxos []client.Vtxo, txid string) (vtxos []client.Vtxo) {
-	for _, v := range allVtxos {
-		if v.SpentBy == txid {
-			vtxos = append(vtxos, v)
-		}
-	}
-	return
-}
-
 func findVtxosSpent(vtxos []client.Vtxo, id string) []client.Vtxo {
 	var result []client.Vtxo
 	leftVtxos := make([]client.Vtxo, 0)
