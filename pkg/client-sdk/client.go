@@ -74,19 +74,31 @@ func (a *arkClient) GetConfigData(
 }
 
 func (a *arkClient) Unlock(ctx context.Context, pasword string) error {
+	if a.wallet == nil {
+		return fmt.Errorf("wallet not initialized")
+	}
 	_, err := a.wallet.Unlock(ctx, pasword)
 	return err
 }
 
 func (a *arkClient) Lock(ctx context.Context) error {
+	if a.wallet == nil {
+		return fmt.Errorf("wallet not initialized")
+	}
 	return a.wallet.Lock(ctx)
 }
 
 func (a *arkClient) IsLocked(ctx context.Context) bool {
+	if a.wallet == nil {
+		return true
+	}
 	return a.wallet.IsLocked()
 }
 
 func (a *arkClient) Dump(ctx context.Context) (string, error) {
+	if err := a.safeCheck(); err != nil {
+		return "", err
+	}
 	return a.wallet.Dump(ctx)
 }
 
@@ -100,14 +112,23 @@ func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
 }
 
 func (a *arkClient) GetTransactionEventChannel(_ context.Context) chan types.TransactionEvent {
-	return a.store.TransactionStore().GetEventChannel()
+	if a.store != nil && a.store.TransactionStore() != nil {
+		return a.store.TransactionStore().GetEventChannel()
+	}
+	return nil
 }
 
 func (a *arkClient) GetVtxoEventChannel(_ context.Context) chan types.VtxoEvent {
-	return a.store.VtxoStore().GetEventChannel()
+	if a.store != nil && a.store.VtxoStore() != nil {
+		return a.store.VtxoStore().GetEventChannel()
+	}
+	return nil
 }
 
 func (a *arkClient) SignTransaction(ctx context.Context, tx string) (string, error) {
+	if err := a.safeCheck(); err != nil {
+		return "", err
+	}
 	return a.wallet.SignTransaction(ctx, a.explorer, tx)
 }
 
@@ -119,7 +140,7 @@ func (a *arkClient) Reset(ctx context.Context) {
 }
 
 func (a *arkClient) Stop() error {
-	if a.Config.WithTransactionFeed {
+	if a.txStreamCtxCancel != nil {
 		a.txStreamCtxCancel()
 	}
 
