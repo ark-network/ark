@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/infrastructure/db/sqlite/sqlc/queries"
@@ -270,6 +269,20 @@ func (r *roundRepository) GetVtxoTreeWithTxid(ctx context.Context, txid string) 
 	}
 
 	return vtxoTree, nil
+}
+
+func (r *roundRepository) GetTxsWithTxids(ctx context.Context, txids []string) ([]string, error) {
+	rows, err := r.querier.GetTxsByTxid(ctx, txids)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := make([]string, 0, len(rows))
+	for _, row := range rows {
+		resp = append(resp, row.Tx.Tx)
+	}
+
+	return resp, nil
 }
 
 func rowToReceiver(row queries.RequestReceiverVw) domain.Receiver {

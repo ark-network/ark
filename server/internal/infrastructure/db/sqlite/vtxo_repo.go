@@ -77,7 +77,7 @@ func (v *vxtoRepository) GetAllSweepableVtxos(ctx context.Context) ([]domain.Vtx
 	return readRows(rows)
 }
 
-func (v *vxtoRepository) GetAllVtxos(ctx context.Context, pubkey string) ([]domain.Vtxo, []domain.Vtxo, error) {
+func (v *vxtoRepository) GetAllNonRedeemedVtxos(ctx context.Context, pubkey string) ([]domain.Vtxo, []domain.Vtxo, error) {
 	withPubkey := len(pubkey) > 0
 
 	var rows []queries.Vtxo
@@ -147,6 +147,19 @@ func (v *vxtoRepository) GetVtxos(ctx context.Context, outpoints []domain.VtxoKe
 	}
 
 	return vtxos, nil
+}
+
+func (v *vxtoRepository) GetAll(ctx context.Context) ([]domain.Vtxo, error) {
+	res, err := v.querier.SelectAllVtxos(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]queries.Vtxo, 0, len(res))
+	for _, row := range res {
+		rows = append(rows, row.Vtxo)
+	}
+
+	return readRows(rows)
 }
 
 func (v *vxtoRepository) GetVtxosForRound(ctx context.Context, txid string) ([]domain.Vtxo, error) {

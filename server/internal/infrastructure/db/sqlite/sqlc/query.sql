@@ -39,6 +39,10 @@ ON CONFLICT(id) DO UPDATE SET
     version = EXCLUDED.version,
     swept = EXCLUDED.swept;
 
+-- name: GetTxsByTxid :many
+SELECT sqlc.embed(tx) FROM tx
+WHERE txid in (sqlc.slice('ids'));
+
 -- name: UpsertTxRequest :exec
 INSERT INTO tx_request (id, round_id) VALUES (?, ?)
 ON CONFLICT(id) DO UPDATE SET round_id = EXCLUDED.round_id;
@@ -122,6 +126,9 @@ WHERE redeemed = false AND pubkey = ?;
 -- name: SelectVtxoByOutpoint :one
 SELECT sqlc.embed(vtxo) FROM vtxo
 WHERE txid = ? AND vout = ?;
+
+-- name: SelectAllVtxos :many
+SELECT sqlc.embed(vtxo) FROM vtxo;
 
 -- name: SelectVtxosByRoundTxid :many
 SELECT sqlc.embed(vtxo) FROM vtxo

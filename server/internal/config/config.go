@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -439,6 +440,15 @@ func (c *Config) WalletService() ports.WalletService {
 
 func (c *Config) UnlockerService() ports.Unlocker {
 	return c.unlocker
+}
+
+func (c *Config) IndexerService() (application.IndexerService, error) {
+	pubKey, err := c.wallet.GetPubkey(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	return application.NewIndexerService(pubKey, c.repo), nil
 }
 
 func (c *Config) repoManager() error {
