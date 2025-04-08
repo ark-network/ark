@@ -78,7 +78,6 @@ require (
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7 // indirect
 	github.com/tmc/grpc-websocket-proxy v0.0.0-20220101234140-673ab2c3ae75 // indirect
-	github.com/vulpemventures/fastsha256 v0.0.0-20160815193821-637e65642941 // indirect
 	github.com/xiang90/probing v0.0.0-20221125231312-a49e3df8f510 // indirect
 	go.etcd.io/bbolt v1.3.10 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.15 // indirect
@@ -116,6 +115,5 @@ require (
 require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/vulpemventures/go-elements v0.5.4
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

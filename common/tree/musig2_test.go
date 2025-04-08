@@ -1,4 +1,4 @@
-package bitcointree_test
+package tree_test
 
 import (
 	"bytes"
@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/txscript"
@@ -41,20 +40,20 @@ func TestBuildAndSignVtxoTree(t *testing.T) {
 
 	for _, v := range testVectors {
 		t.Run(v.name, func(t *testing.T) {
-			sharedOutScript, sharedOutAmount, err := bitcointree.CraftSharedOutput(
+			sharedOutScript, sharedOutAmount, err := tree.CraftSharedOutput(
 				v.receivers, minRelayFee, sweepRoot[:],
 			)
 			require.NoError(t, err)
 			require.NotNil(t, sharedOutScript)
 			require.NotZero(t, sharedOutAmount)
 
-			vtxoTree, err := bitcointree.BuildVtxoTree(
+			vtxoTree, err := tree.BuildVtxoTree(
 				rootInput, v.receivers, minRelayFee, sweepRoot[:], vtxoTreeExpiry,
 			)
 			require.NoError(t, err)
 			require.NotNil(t, vtxoTree)
 
-			coordinator, err := bitcointree.NewTreeCoordinatorSession(
+			coordinator, err := tree.NewTreeCoordinatorSession(
 				sharedOutAmount, vtxoTree, sweepRoot[:],
 			)
 			require.NoError(t, err)
@@ -72,19 +71,19 @@ func TestBuildAndSignVtxoTree(t *testing.T) {
 			require.NotNil(t, signedTree)
 
 			// validate signatures
-			err = bitcointree.ValidateTreeSigs(sweepRoot[:], sharedOutAmount, signedTree)
+			err = tree.ValidateTreeSigs(sweepRoot[:], sharedOutAmount, signedTree)
 			require.NoError(t, err)
 		})
 	}
 }
 
-func checkNoncesRoundtrip(t *testing.T) func(nonces bitcointree.TreeNonces) {
-	return func(nonces bitcointree.TreeNonces) {
+func checkNoncesRoundtrip(t *testing.T) func(nonces tree.TreeNonces) {
+	return func(nonces tree.TreeNonces) {
 		var encodedNonces bytes.Buffer
 		err := nonces.Encode(&encodedNonces)
 		require.NoError(t, err)
 
-		decodedNonces, err := bitcointree.DecodeNonces(&encodedNonces)
+		decodedNonces, err := tree.DecodeNonces(&encodedNonces)
 		require.NoError(t, err)
 		for i, nonceRow := range nonces {
 			for j, nonce := range nonceRow {
@@ -94,12 +93,12 @@ func checkNoncesRoundtrip(t *testing.T) func(nonces bitcointree.TreeNonces) {
 	}
 }
 
-func checkSigsRoundtrip(t *testing.T) func(sigs bitcointree.TreePartialSigs) {
-	return func(sigs bitcointree.TreePartialSigs) {
+func checkSigsRoundtrip(t *testing.T) func(sigs tree.TreePartialSigs) {
+	return func(sigs tree.TreePartialSigs) {
 		var encodedSig bytes.Buffer
 		err := sigs.Encode(&encodedSig)
 		require.NoError(t, err)
-		decodedSig, err := bitcointree.DecodeSignatures(&encodedSig)
+		decodedSig, err := tree.DecodeSignatures(&encodedSig)
 		require.NoError(t, err)
 		for i, sigRow := range sigs {
 			for j, sig := range sigRow {
@@ -115,10 +114,10 @@ func checkSigsRoundtrip(t *testing.T) func(sigs bitcointree.TreePartialSigs) {
 
 func makeCosigners(
 	keys []*btcec.PrivateKey, sharedOutAmount int64, vtxoTree tree.TxTree,
-) (map[string]bitcointree.SignerSession, error) {
-	signers := make(map[string]bitcointree.SignerSession)
+) (map[string]tree.SignerSession, error) {
+	signers := make(map[string]tree.SignerSession)
 	for _, prvkey := range keys {
-		session := bitcointree.NewTreeSignerSession(prvkey)
+		session := tree.NewTreeSignerSession(prvkey)
 		if err := session.Init(sweepRoot[:], sharedOutAmount, vtxoTree); err != nil {
 			return nil, err
 		}
@@ -126,7 +125,7 @@ func makeCosigners(
 	}
 
 	// create signer session for the server itself
-	serverSession := bitcointree.NewTreeSignerSession(serverPrivKey)
+	serverSession := tree.NewTreeSignerSession(serverPrivKey)
 	if err := serverSession.Init(sweepRoot[:], sharedOutAmount, vtxoTree); err != nil {
 		return nil, err
 	}
@@ -135,8 +134,8 @@ func makeCosigners(
 }
 
 func makeAggregatedNonces(
-	signers map[string]bitcointree.SignerSession, coordinator bitcointree.CoordinatorSession,
-	checkNoncesRoundtrip func(bitcointree.TreeNonces),
+	signers map[string]tree.SignerSession, coordinator tree.CoordinatorSession,
+	checkNoncesRoundtrip func(tree.TreeNonces),
 ) error {
 	for pk, session := range signers {
 		buf, err := hex.DecodeString(pk)
@@ -170,8 +169,8 @@ func makeAggregatedNonces(
 }
 
 func makeAggregatedSignatures(
-	signers map[string]bitcointree.SignerSession, coordinator bitcointree.CoordinatorSession,
-	checkSigsRoundtrip func(bitcointree.TreePartialSigs),
+	signers map[string]tree.SignerSession, coordinator tree.CoordinatorSession,
+	checkSigsRoundtrip func(tree.TreePartialSigs),
 ) (tree.TxTree, error) {
 	for pk, session := range signers {
 		buf, err := hex.DecodeString(pk)

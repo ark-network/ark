@@ -17,8 +17,6 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/vulpemventures/go-elements/address"
-	"github.com/vulpemventures/go-elements/network"
 	"golang.org/x/crypto/pbkdf2"
 )
 
@@ -83,17 +81,6 @@ func CoinSelect(
 	return selectedBoarding, selected, change, nil
 }
 
-func ParseLiquidAddress(addr string) (
-	bool, []byte, error,
-) {
-	outputScript, err := address.ToOutputScript(addr)
-	if err != nil {
-		return false, nil, nil
-	}
-
-	return true, outputScript, nil
-}
-
 func ParseBitcoinAddress(addr string, net chaincfg.Params) (
 	bool, []byte, error,
 ) {
@@ -123,12 +110,6 @@ func IsOnchainOnly(receivers []client.Output) bool {
 
 func NetworkFromString(net string) common.Network {
 	switch net {
-	case common.Liquid.Name:
-		return common.Liquid
-	case common.LiquidTestNet.Name:
-		return common.LiquidTestNet
-	case common.LiquidRegTest.Name:
-		return common.LiquidRegTest
 	case common.BitcoinTestNet.Name:
 		return common.BitcoinTestNet
 	case common.BitcoinTestNet4.Name:
@@ -143,19 +124,6 @@ func NetworkFromString(net string) common.Network {
 		fallthrough
 	default:
 		return common.Bitcoin
-	}
-}
-
-func ToElementsNetwork(net common.Network) network.Network {
-	switch net.Name {
-	case common.Liquid.Name:
-		return network.Liquid
-	case common.LiquidTestNet.Name:
-		return network.Testnet
-	case common.LiquidRegTest.Name:
-		return network.Regtest
-	default:
-		return network.Liquid
 	}
 }
 

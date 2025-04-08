@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/ark-network/ark/common"
@@ -32,7 +31,6 @@ const (
 	InMemoryStore = types.InMemoryStore
 	// explorer
 	BitcoinExplorer = explorer.BitcoinExplorer
-	LiquidExplorer  = explorer.LiquidExplorer
 )
 
 var (
@@ -42,9 +40,6 @@ var (
 
 var (
 	defaultNetworks = utils.SupportedType[string]{
-		common.Liquid.Name:         "https://blockstream.info/liquid/api",
-		common.LiquidTestNet.Name:  "https://blockstream.info/liquidtestnet/api",
-		common.LiquidRegTest.Name:  "http://localhost:3001",
 		common.Bitcoin.Name:        "https://mempool.space/api",
 		common.BitcoinTestNet.Name: "https://mempool.space/testnet/api",
 		//common.BitcoinTestNet4.Name: "https://mempool.space/testnet4/api", //TODO uncomment once supported
@@ -401,7 +396,7 @@ func getWallet(
 ) (wallet.WalletService, error) {
 	switch data.WalletType {
 	case wallet.SingleKeyWallet:
-		return getSingleKeyWallet(configStore, data.Network.Name)
+		return getSingleKeyWallet(configStore)
 	default:
 		return nil, fmt.Errorf(
 			"unsupported wallet type '%s', please select one of: %s",
@@ -410,17 +405,12 @@ func getWallet(
 	}
 }
 
-func getSingleKeyWallet(
-	configStore types.ConfigStore, network string,
-) (wallet.WalletService, error) {
+func getSingleKeyWallet(configStore types.ConfigStore) (wallet.WalletService, error) {
 	walletStore, err := getWalletStore(configStore.GetType(), configStore.GetDatadir())
 	if err != nil {
 		return nil, err
 	}
 
-	if strings.Contains(network, "liquid") {
-		return singlekeywallet.NewLiquidWallet(configStore, walletStore)
-	}
 	return singlekeywallet.NewBitcoinWallet(configStore, walletStore)
 }
 

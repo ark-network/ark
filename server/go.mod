@@ -22,7 +22,6 @@ require (
 	github.com/timshannon/badgerhold/v4 v4.0.3
 	github.com/urfave/cli/v2 v2.27.4
 	github.com/vulpemventures/go-bip39 v1.0.2
-	github.com/vulpemventures/go-elements v0.5.4
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0
 	go.opentelemetry.io/otel v1.34.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.34.0
@@ -42,8 +41,6 @@ require github.com/stretchr/objx v0.5.2 // indirect
 require (
 	dario.cat/mergo v1.0.1 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161 // indirect
-	github.com/FactomProject/basen v0.0.0-20150613233007-fe3947df716e // indirect
-	github.com/FactomProject/btcutilecc v0.0.0-20130527213604-d3a63a5752ec // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5 // indirect
 	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da // indirect
@@ -220,8 +217,6 @@ require (
 	github.com/spf13/cast v1.6.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
-	github.com/vulpemventures/fastsha256 v0.0.0-20160815193821-637e65642941 // indirect
-	github.com/vulpemventures/go-bip32 v0.0.0-20200624192635-867c159da4d7
 	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect

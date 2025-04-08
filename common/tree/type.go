@@ -1,9 +1,5 @@
 package tree
 
-import (
-	"github.com/vulpemventures/go-elements/psetv2"
-)
-
 type SigningType uint8
 
 const (
@@ -12,8 +8,6 @@ const (
 	// SignBranch makes the signer sign only its own branch
 	SignBranch
 )
-
-type TreeFactory func(outpoint psetv2.InputArgs) (TxTree, error)
 
 // Leaf is the output leaf of a TxTree
 type Leaf struct {

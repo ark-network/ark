@@ -43,8 +43,8 @@ func InitWrapper() js.Func {
 			return nil, errors.New("invalid number of args")
 		}
 		chain := args[5].String()
-		if chain != "bitcoin" && chain != "liquid" {
-			return nil, errors.New("invalid chain, select either 'bitcoin' or 'liquid'")
+		if chain != "bitcoin" {
+			return nil, errors.New("invalid chain, 'bitcoin' is the only supported chain")
 		}
 
 		configStore := store.ConfigStore()
@@ -55,16 +55,10 @@ func InitWrapper() js.Func {
 			if err != nil {
 				return nil, fmt.Errorf("failed to init wallet store: %s", err)
 			}
-			if chain == "liquid" {
-				walletSvc, err = singlekeywallet.NewLiquidWallet(configStore, walletStore)
-				if err != nil {
-					return nil, err
-				}
-			} else {
-				walletSvc, err = singlekeywallet.NewBitcoinWallet(configStore, walletStore)
-				if err != nil {
-					return nil, err
-				}
+
+			walletSvc, err = singlekeywallet.NewBitcoinWallet(configStore, walletStore)
+			if err != nil {
+				return nil, err
 			}
 		default:
 			return nil, fmt.Errorf("unsupported wallet type")
