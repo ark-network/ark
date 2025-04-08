@@ -234,6 +234,7 @@ func (a *arkClient) initWithWallet(
 		MarketHourEndTime:          info.MarketHourEndTime,
 		MarketHourPeriod:           info.MarketHourPeriod,
 		MarketHourRoundInterval:    info.MarketHourRoundInterval,
+		ExplorerURL:                explorerSvc.BaseUrl(),
 	}
 	if err := a.store.ConfigStore().AddData(ctx, storeData); err != nil {
 		return err
