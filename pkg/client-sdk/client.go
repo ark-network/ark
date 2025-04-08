@@ -83,6 +83,9 @@ func (a *arkClient) Lock(ctx context.Context) error {
 }
 
 func (a *arkClient) IsLocked(ctx context.Context) bool {
+	if a.wallet == nil {
+		return true
+	}
 	return a.wallet.IsLocked()
 }
 
