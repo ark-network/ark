@@ -105,12 +105,7 @@ func UnlockWrapper() js.Func {
 
 func LockWrapper() js.Func {
 	return JSPromise(func(args []js.Value) (interface{}, error) {
-		if len(args) != 1 {
-			return nil, errors.New("invalid number of args")
-		}
-		password := args[0].String()
-
-		err := arkSdkClient.Lock(context.Background(), password)
+		err := arkSdkClient.Lock(context.Background())
 		return nil, err
 	})
 }
@@ -550,6 +545,38 @@ func SignTransactionWrapper() js.Func {
 		}
 
 		return arkSdkClient.SignTransaction(context.Background(), tx.String())
+	})
+}
+
+func NotifyIncomingFundsWrapper() js.Func {
+	return JSPromise(func(args []js.Value) (interface{}, error) {
+		if len(args) != 1 {
+			return nil, fmt.Errorf("invalid number of args")
+		}
+
+		address := args[0].String()
+
+		incomingVtxos, err := arkSdkClient.NotifyIncomingFunds(context.Background(), address)
+		if err != nil {
+			return nil, err
+		}
+
+		rawList := map[string]interface{}{
+			"incomingVtxos": incomingVtxos,
+		}
+		result, err := json.Marshal(rawList)
+		if err != nil {
+			return nil, err
+		}
+
+		return js.ValueOf(string(result)), nil
+	})
+}
+
+func ResetWrapper() js.Func {
+	return js.FuncOf(func(this js.Value, p []js.Value) interface{} {
+		arkSdkClient.Reset(context.Background())
+		return nil
 	})
 }
 

@@ -78,8 +78,8 @@ func (a *arkClient) Unlock(ctx context.Context, pasword string) error {
 	return err
 }
 
-func (a *arkClient) Lock(ctx context.Context, pasword string) error {
-	return a.wallet.Lock(ctx, pasword)
+func (a *arkClient) Lock(ctx context.Context) error {
+	return a.wallet.Lock(ctx)
 }
 
 func (a *arkClient) IsLocked(ctx context.Context) bool {
@@ -111,6 +111,13 @@ func (a *arkClient) SignTransaction(ctx context.Context, tx string) (string, err
 	return a.wallet.SignTransaction(ctx, a.explorer, tx)
 }
 
+func (a *arkClient) Reset(ctx context.Context) {
+	if a.txStreamCtxCancel != nil {
+		a.txStreamCtxCancel()
+	}
+	a.store.Clean(ctx)
+}
+
 func (a *arkClient) Stop() error {
 	if a.Config.WithTransactionFeed {
 		a.txStreamCtxCancel()
@@ -140,6 +147,29 @@ func (a *arkClient) ListVtxos(
 	}
 
 	return
+}
+
+func (a *arkClient) NotifyIncomingFunds(
+	ctx context.Context, addr string,
+) ([]types.Vtxo, error) {
+	eventCh, closeFn, err := a.client.SubscribeForAddress(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+	defer closeFn()
+
+	event := <-eventCh
+
+	if event.Err != nil {
+		err = event.Err
+		return nil, err
+	}
+
+	incomingVtxos := make([]types.Vtxo, 0)
+	for _, vtxo := range event.NewVtxos {
+		incomingVtxos = append(incomingVtxos, toTypesVtxo(vtxo))
+	}
+	return incomingVtxos, nil
 }
 
 func (a *arkClient) initWithWallet(
@@ -193,18 +223,22 @@ func (a *arkClient) initWithWallet(
 	}
 
 	storeData := types.Config{
-		ServerUrl:           args.ServerUrl,
-		ServerPubKey:        serverPubkey,
-		WalletType:          args.Wallet.GetType(),
-		ClientType:          args.ClientType,
-		Network:             network,
-		VtxoTreeExpiry:      common.RelativeLocktime{Type: vtxoTreeExpiryType, Value: uint32(info.VtxoTreeExpiry)},
-		RoundInterval:       info.RoundInterval,
-		UnilateralExitDelay: common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
-		Dust:                info.Dust,
-		BoardingExitDelay:   common.RelativeLocktime{Type: boardingExitDelayType, Value: uint32(info.BoardingExitDelay)},
-		ForfeitAddress:      info.ForfeitAddress,
-		WithTransactionFeed: args.WithTransactionFeed,
+		ServerUrl:               args.ServerUrl,
+		ServerPubKey:            serverPubkey,
+		WalletType:              args.Wallet.GetType(),
+		ClientType:              args.ClientType,
+		Network:                 network,
+		VtxoTreeExpiry:          common.RelativeLocktime{Type: vtxoTreeExpiryType, Value: uint32(info.VtxoTreeExpiry)},
+		RoundInterval:           info.RoundInterval,
+		UnilateralExitDelay:     common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
+		BoardingExitDelay:       common.RelativeLocktime{Type: boardingExitDelayType, Value: uint32(info.BoardingExitDelay)},
+		Dust:                    info.Dust,
+		ForfeitAddress:          info.ForfeitAddress,
+		WithTransactionFeed:     args.WithTransactionFeed,
+		MarketHourStartTime:     info.MarketHourStartTime,
+		MarketHourEndTime:       info.MarketHourEndTime,
+		MarketHourPeriod:        info.MarketHourPeriod,
+		MarketHourRoundInterval: info.MarketHourRoundInterval,
 	}
 	if err := a.store.ConfigStore().AddData(ctx, storeData); err != nil {
 		return err
@@ -275,19 +309,23 @@ func (a *arkClient) init(
 	}
 
 	cfgData := types.Config{
-		ServerUrl:           args.ServerUrl,
-		ServerPubKey:        serverPubkey,
-		WalletType:          args.WalletType,
-		ClientType:          args.ClientType,
-		Network:             network,
-		VtxoTreeExpiry:      common.RelativeLocktime{Type: vtxoTreeExpiryType, Value: uint32(info.VtxoTreeExpiry)},
-		RoundInterval:       info.RoundInterval,
-		UnilateralExitDelay: common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
-		Dust:                info.Dust,
-		BoardingExitDelay:   common.RelativeLocktime{Type: boardingExitDelayType, Value: uint32(info.BoardingExitDelay)},
-		ExplorerURL:         args.ExplorerURL,
-		ForfeitAddress:      info.ForfeitAddress,
-		WithTransactionFeed: args.WithTransactionFeed,
+		ServerUrl:               args.ServerUrl,
+		ServerPubKey:            serverPubkey,
+		WalletType:              args.WalletType,
+		ClientType:              args.ClientType,
+		Network:                 network,
+		VtxoTreeExpiry:          common.RelativeLocktime{Type: vtxoTreeExpiryType, Value: uint32(info.VtxoTreeExpiry)},
+		RoundInterval:           info.RoundInterval,
+		UnilateralExitDelay:     common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
+		BoardingExitDelay:       common.RelativeLocktime{Type: boardingExitDelayType, Value: uint32(info.BoardingExitDelay)},
+		Dust:                    info.Dust,
+		ExplorerURL:             args.ExplorerURL,
+		ForfeitAddress:          info.ForfeitAddress,
+		WithTransactionFeed:     args.WithTransactionFeed,
+		MarketHourStartTime:     info.MarketHourStartTime,
+		MarketHourEndTime:       info.MarketHourEndTime,
+		MarketHourPeriod:        info.MarketHourPeriod,
+		MarketHourRoundInterval: info.MarketHourRoundInterval,
 	}
 	walletSvc, err := getWallet(a.store.ConfigStore(), &cfgData, supportedWallets)
 	if err != nil {
@@ -366,7 +404,7 @@ func getWallet(
 		return getSingleKeyWallet(configStore, data.Network.Name)
 	default:
 		return nil, fmt.Errorf(
-			"unsuported wallet type '%s', please select one of: %s",
+			"unsupported wallet type '%s', please select one of: %s",
 			data.WalletType, supportedWallets,
 		)
 	}

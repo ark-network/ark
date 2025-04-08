@@ -60,6 +60,8 @@ type ClientService interface {
 
 	ExplorerServiceListVtxos(params *ExplorerServiceListVtxosParams, opts ...ClientOption) (*ExplorerServiceListVtxosOK, error)
 
+	ExplorerServiceSubscribeForAddress(params *ExplorerServiceSubscribeForAddressParams, opts ...ClientOption) (*ExplorerServiceSubscribeForAddressOK, error)
+
 	SetTransport(transport runtime.ClientTransport)
 }
 
@@ -171,6 +173,43 @@ func (a *Client) ExplorerServiceListVtxos(params *ExplorerServiceListVtxosParams
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*ExplorerServiceListVtxosDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+ExplorerServiceSubscribeForAddress explorer service subscribe for address API
+*/
+func (a *Client) ExplorerServiceSubscribeForAddress(params *ExplorerServiceSubscribeForAddressParams, opts ...ClientOption) (*ExplorerServiceSubscribeForAddressOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewExplorerServiceSubscribeForAddressParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "ExplorerService_SubscribeForAddress",
+		Method:             "GET",
+		PathPattern:        "/v1/vtxos/{address}/subscribe",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &ExplorerServiceSubscribeForAddressReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*ExplorerServiceSubscribeForAddressOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*ExplorerServiceSubscribeForAddressDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 
