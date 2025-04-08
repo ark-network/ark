@@ -67,19 +67,19 @@ func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
 		return nil, err
 	}
 	return &client.Info{
-		PubKey:                     resp.GetPubkey(),
-		VtxoTreeExpiry:             resp.GetVtxoTreeExpiry(),
-		UnilateralExitDelay:        resp.GetUnilateralExitDelay(),
-		RoundInterval:              resp.GetRoundInterval(),
-		Network:                    resp.GetNetwork(),
-		Dust:                       uint64(resp.GetDust()),
-		BoardingDescriptorTemplate: resp.GetBoardingDescriptorTemplate(),
-		ForfeitAddress:             resp.GetForfeitAddress(),
-		Version:                    resp.GetVersion(),
-		MarketHourStartTime:        resp.GetMarketHour().GetNextStartTime(),
-		MarketHourEndTime:          resp.GetMarketHour().GetNextEndTime(),
-		MarketHourPeriod:           resp.GetMarketHour().GetPeriod(),
-		MarketHourRoundInterval:    resp.GetMarketHour().GetRoundInterval(),
+		PubKey:                  resp.GetPubkey(),
+		VtxoTreeExpiry:          resp.GetVtxoTreeExpiry(),
+		UnilateralExitDelay:     resp.GetUnilateralExitDelay(),
+		RoundInterval:           resp.GetRoundInterval(),
+		Network:                 resp.GetNetwork(),
+		Dust:                    uint64(resp.GetDust()),
+		BoardingExitDelay:       resp.GetBoardingExitDelay(),
+		ForfeitAddress:          resp.GetForfeitAddress(),
+		Version:                 resp.GetVersion(),
+		MarketHourStartTime:     resp.GetMarketHour().GetNextStartTime(),
+		MarketHourEndTime:       resp.GetMarketHour().GetNextEndTime(),
+		MarketHourPeriod:        resp.GetMarketHour().GetPeriod(),
+		MarketHourRoundInterval: resp.GetMarketHour().GetRoundInterval(),
 	}, nil
 }
 

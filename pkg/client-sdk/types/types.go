@@ -17,23 +17,23 @@ const (
 )
 
 type Config struct {
-	ServerUrl                  string
-	ServerPubKey               *secp256k1.PublicKey
-	WalletType                 string
-	ClientType                 string
-	Network                    common.Network
-	VtxoTreeExpiry             common.RelativeLocktime
-	RoundInterval              int64
-	UnilateralExitDelay        common.RelativeLocktime
-	Dust                       uint64
-	BoardingDescriptorTemplate string
-	ExplorerURL                string
-	ForfeitAddress             string
-	WithTransactionFeed        bool
-	MarketHourStartTime        int64
-	MarketHourEndTime          int64
-	MarketHourPeriod           int64
-	MarketHourRoundInterval    int64
+	ServerUrl               string
+	ServerPubKey            *secp256k1.PublicKey
+	WalletType              string
+	ClientType              string
+	Network                 common.Network
+	VtxoTreeExpiry          common.RelativeLocktime
+	RoundInterval           int64
+	UnilateralExitDelay     common.RelativeLocktime
+	BoardingExitDelay       common.RelativeLocktime
+	Dust                    uint64
+	ExplorerURL             string
+	ForfeitAddress          string
+	WithTransactionFeed     bool
+	MarketHourStartTime     int64
+	MarketHourEndTime       int64
+	MarketHourPeriod        int64
+	MarketHourRoundInterval int64
 }
 
 type VtxoKey struct {

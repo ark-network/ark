@@ -531,8 +531,9 @@
           "type": "string",
           "format": "int64"
         },
-        "boardingDescriptorTemplate": {
-          "type": "string"
+        "boardingExitDelay": {
+          "type": "string",
+          "format": "int64"
         },
         "vtxoDescriptorTemplates": {
           "type": "array",
