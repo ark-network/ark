@@ -17,19 +17,23 @@ const (
 )
 
 type Config struct {
-	ServerUrl                  string
-	ServerPubKey               *secp256k1.PublicKey
-	WalletType                 string
-	ClientType                 string
-	Network                    common.Network
-	VtxoTreeExpiry             common.RelativeLocktime
-	RoundInterval              int64
-	UnilateralExitDelay        common.RelativeLocktime
-	Dust                       uint64
-	BoardingDescriptorTemplate string
-	ExplorerURL                string
-	ForfeitAddress             string
-	WithTransactionFeed        bool
+	ServerUrl               string
+	ServerPubKey            *secp256k1.PublicKey
+	WalletType              string
+	ClientType              string
+	Network                 common.Network
+	VtxoTreeExpiry          common.RelativeLocktime
+	RoundInterval           int64
+	UnilateralExitDelay     common.RelativeLocktime
+	BoardingExitDelay       common.RelativeLocktime
+	Dust                    uint64
+	ExplorerURL             string
+	ForfeitAddress          string
+	WithTransactionFeed     bool
+	MarketHourStartTime     int64
+	MarketHourEndTime       int64
+	MarketHourPeriod        int64
+	MarketHourRoundInterval int64
 }
 
 type VtxoKey struct {
@@ -43,15 +47,35 @@ func (v VtxoKey) String() string {
 
 type Vtxo struct {
 	VtxoKey
-	Amount                  uint64
-	RoundTxid               string
-	ExpiresAt               time.Time
-	CreatedAt               time.Time
-	RedeemTx                string
-	UnconditionalForfeitTxs []string
-	Pending                 bool
-	SpentBy                 string
-	Spent                   bool
+	PubKey    string
+	Amount    uint64
+	RoundTxid string
+	ExpiresAt time.Time
+	CreatedAt time.Time
+	RedeemTx  string
+	Pending   bool
+	SpentBy   string
+	Spent     bool
+}
+
+type VtxoEventType int
+
+const (
+	VtxosAdded VtxoEventType = iota
+	VtxosSpent
+	VtxosUpdated
+)
+
+func (e VtxoEventType) String() string {
+	return map[VtxoEventType]string{
+		VtxosAdded: "VTXOS_ADDED",
+		VtxosSpent: "VTXOS_SPENT",
+	}[e]
+}
+
+type VtxoEvent struct {
+	Type  VtxoEventType
+	Vtxos []Vtxo
 }
 
 const (
@@ -77,7 +101,7 @@ type Transaction struct {
 	Type      TxType
 	Settled   bool
 	CreatedAt time.Time
-	SpentBy   string
+	Hex       string
 }
 
 func (t Transaction) IsRound() bool {
@@ -97,19 +121,29 @@ func (t Transaction) String() string {
 	return string(buf)
 }
 
+type TxEventType int
+
 const (
-	BoardingPending EventType = "BOARDING_PENDING"
-	BoardingSettled EventType = "BOARDING_SETTLED"
-	OORSent         EventType = "OOR_SENT"
-	OORReceived     EventType = "OOR_RECEIVED"
-	OORSettled      EventType = "OOR_SETTLED"
+	TxsAdded TxEventType = iota
+	TxsSettled
+	TxsConfirmed
+	TxsReplaced
+	TxsUpdated
 )
 
-type EventType string
+func (e TxEventType) String() string {
+	return map[TxEventType]string{
+		TxsAdded:     "TXS_ADDED",
+		TxsSettled:   "TXS_SETTLED",
+		TxsConfirmed: "TXS_CONFIRMED",
+		TxsReplaced:  "TXS_REPLACED",
+	}[e]
+}
 
 type TransactionEvent struct {
-	Tx    Transaction
-	Event EventType
+	Type         TxEventType
+	Txs          []Transaction
+	Replacements map[string]string
 }
 
 type Utxo struct {
@@ -121,6 +155,7 @@ type Utxo struct {
 	CreatedAt   time.Time
 	Tapscripts  []string
 	Spent       bool
+	Tx          string
 }
 
 func (u *Utxo) Sequence() (uint32, error) {

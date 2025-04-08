@@ -2,9 +2,11 @@ package badgerdb
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/dgraph-io/badger/v4"
@@ -22,6 +24,8 @@ type eventRepository struct {
 	lock      *sync.Mutex
 	chUpdates chan *domain.Round
 	handler   func(round *domain.Round)
+	done      chan struct{}
+	wg        sync.WaitGroup
 }
 
 func NewRoundEventRepository(config ...interface{}) (domain.RoundEventRepository, error) {
@@ -49,9 +53,12 @@ func NewRoundEventRepository(config ...interface{}) (domain.RoundEventRepository
 	if err != nil {
 		return nil, fmt.Errorf("failed to open round events store: %s", err)
 	}
-	chEvents := make(chan *domain.Round)
-	lock := &sync.Mutex{}
-	repo := &eventRepository{store, lock, chEvents, nil}
+	repo := &eventRepository{
+		store:     store,
+		lock:      &sync.Mutex{},
+		chUpdates: make(chan *domain.Round),
+		done:      make(chan struct{}),
+	}
 	go repo.listen()
 	return repo, nil
 }
@@ -68,9 +75,11 @@ func (r *eventRepository) Save(
 	if err := r.upsert(ctx, id, allEvents); err != nil {
 		return nil, err
 	}
+	r.wg.Add(1)
 	go r.publishEvents(allEvents)
 	return domain.NewRoundFromEvents(allEvents), nil
 }
+
 func (r *eventRepository) Load(
 	ctx context.Context, id string,
 ) (*domain.Round, error) {
@@ -91,6 +100,8 @@ func (r *eventRepository) RegisterEventsHandler(
 }
 
 func (r *eventRepository) Close() {
+	close(r.done)
+	r.wg.Wait()
 	close(r.chUpdates)
 	r.store.Close()
 }
@@ -123,27 +134,51 @@ func (r *eventRepository) upsert(
 	if err != nil {
 		return err
 	}
+	var upsertFn func() error
 	if ctx.Value("tx") != nil {
 		tx := ctx.Value("tx").(*badger.Txn)
-		err = r.store.TxUpsert(tx, id, buf)
+		upsertFn = func() error {
+			return r.store.TxUpsert(tx, id, buf)
+		}
 	} else {
-		err = r.store.Upsert(id, buf)
+		upsertFn = func() error {
+			return r.store.Upsert(id, buf)
+		}
 	}
-	if err != nil {
+
+	if err := upsertFn(); err != nil {
+		if errors.Is(err, badger.ErrConflict) {
+			attempts := 1
+			for errors.Is(err, badger.ErrConflict) && attempts <= maxRetries {
+				time.Sleep(100 * time.Millisecond)
+				err = upsertFn()
+				attempts++
+			}
+		}
 		return fmt.Errorf("failed to upsert events with id %s: %s", id, err)
 	}
 	return nil
 }
 
 func (r *eventRepository) listen() {
-	for round := range r.chUpdates {
-		r.runHandler(round)
+	for {
+		select {
+		case <-r.done:
+			return
+		case round := <-r.chUpdates:
+			r.runHandler(round)
+		}
 	}
 }
 
 func (r *eventRepository) publishEvents(events []domain.RoundEvent) {
+	defer r.wg.Done()
 	round := domain.NewRoundFromEvents(events)
-	r.chUpdates <- round
+	select {
+	case <-r.done:
+		return
+	case r.chUpdates <- round:
+	}
 }
 
 func (r *eventRepository) runHandler(round *domain.Round) {

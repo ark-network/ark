@@ -11,10 +11,6 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
-var (
-	txRequestsThreshold = int64(128)
-)
-
 type Service interface {
 	Start() error
 	Stop()
@@ -58,6 +54,7 @@ type ServiceInfo struct {
 	PubKey              string
 	VtxoTreeExpiry      int64
 	UnilateralExitDelay int64
+	BoardingExitDelay   int64
 	RoundInterval       int64
 	Network             string
 	Dust                uint64
@@ -109,9 +106,10 @@ type TransactionEvent interface {
 
 type RoundTransactionEvent struct {
 	RoundTxid             string
-	SpentVtxos            []domain.VtxoKey
+	SpentVtxos            []domain.Vtxo
 	SpendableVtxos        []domain.Vtxo
 	ClaimedBoardingInputs []domain.VtxoKey
+	TxHex                 string
 }
 
 func (r RoundTransactionEvent) Type() TransactionEventType {
@@ -120,8 +118,9 @@ func (r RoundTransactionEvent) Type() TransactionEventType {
 
 type RedeemTransactionEvent struct {
 	RedeemTxid     string
-	SpentVtxos     []domain.VtxoKey
+	SpentVtxos     []domain.Vtxo
 	SpendableVtxos []domain.Vtxo
+	TxHex          string
 }
 
 func (a RedeemTransactionEvent) Type() TransactionEventType {

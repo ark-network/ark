@@ -40,10 +40,10 @@ var (
 
 var (
 	defaultNetworks = utils.SupportedType[string]{
-		common.Bitcoin.Name:        "https://blockstream.info/api",
-		common.BitcoinTestNet.Name: "https://blockstream.info/testnet/api",
+		common.Bitcoin.Name:        "https://mempool.space/api",
+		common.BitcoinTestNet.Name: "https://mempool.space/testnet/api",
 		//common.BitcoinTestNet4.Name: "https://mempool.space/testnet4/api", //TODO uncomment once supported
-		common.BitcoinSigNet.Name:    "https://blockstream.info/signet/api",
+		common.BitcoinSigNet.Name:    "https://mempool.space/signet/api",
 		common.BitcoinMutinyNet.Name: "https://mutinynet.com/api",
 		common.BitcoinRegTest.Name:   "http://localhost:3000",
 	}
@@ -73,8 +73,8 @@ func (a *arkClient) Unlock(ctx context.Context, pasword string) error {
 	return err
 }
 
-func (a *arkClient) Lock(ctx context.Context, pasword string) error {
-	return a.wallet.Lock(ctx, pasword)
+func (a *arkClient) Lock(ctx context.Context) error {
+	return a.wallet.Lock(ctx)
 }
 
 func (a *arkClient) IsLocked(ctx context.Context) bool {
@@ -94,12 +94,23 @@ func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
 	return offchainAddr.Address, boardingAddr.Address, nil
 }
 
-func (a *arkClient) GetTransactionEventChannel() chan types.TransactionEvent {
+func (a *arkClient) GetTransactionEventChannel(_ context.Context) chan types.TransactionEvent {
 	return a.store.TransactionStore().GetEventChannel()
+}
+
+func (a *arkClient) GetVtxoEventChannel(_ context.Context) chan types.VtxoEvent {
+	return a.store.VtxoStore().GetEventChannel()
 }
 
 func (a *arkClient) SignTransaction(ctx context.Context, tx string) (string, error) {
 	return a.wallet.SignTransaction(ctx, a.explorer, tx)
+}
+
+func (a *arkClient) Reset(ctx context.Context) {
+	if a.txStreamCtxCancel != nil {
+		a.txStreamCtxCancel()
+	}
+	a.store.Clean(ctx)
 }
 
 func (a *arkClient) Stop() error {
@@ -110,6 +121,50 @@ func (a *arkClient) Stop() error {
 	a.store.Close()
 
 	return nil
+}
+
+func (a *arkClient) ListVtxos(
+	ctx context.Context,
+) (spendableVtxos, spentVtxos []client.Vtxo, err error) {
+	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return
+	}
+
+	for _, addr := range offchainAddrs {
+		spendable, spent, err := a.client.ListVtxos(ctx, addr.Address)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		spendableVtxos = append(spendableVtxos, spendable...)
+		spentVtxos = append(spentVtxos, spent...)
+	}
+
+	return
+}
+
+func (a *arkClient) NotifyIncomingFunds(
+	ctx context.Context, addr string,
+) ([]types.Vtxo, error) {
+	eventCh, closeFn, err := a.client.SubscribeForAddress(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+	defer closeFn()
+
+	event := <-eventCh
+
+	if event.Err != nil {
+		err = event.Err
+		return nil, err
+	}
+
+	incomingVtxos := make([]types.Vtxo, 0)
+	for _, vtxo := range event.NewVtxos {
+		incomingVtxos = append(incomingVtxos, toTypesVtxo(vtxo))
+	}
+	return incomingVtxos, nil
 }
 
 func (a *arkClient) initWithWallet(
@@ -157,19 +212,28 @@ func (a *arkClient) initWithWallet(
 		unilateralExitDelayType = common.LocktimeTypeSecond
 	}
 
+	boardingExitDelayType := common.LocktimeTypeBlock
+	if info.BoardingExitDelay >= 512 {
+		boardingExitDelayType = common.LocktimeTypeSecond
+	}
+
 	storeData := types.Config{
-		ServerUrl:                  args.ServerUrl,
-		ServerPubKey:               serverPubkey,
-		WalletType:                 args.Wallet.GetType(),
-		ClientType:                 args.ClientType,
-		Network:                    network,
-		VtxoTreeExpiry:             common.RelativeLocktime{Type: vtxoTreeExpiryType, Value: uint32(info.VtxoTreeExpiry)},
-		RoundInterval:              info.RoundInterval,
-		UnilateralExitDelay:        common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
-		Dust:                       info.Dust,
-		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
-		ForfeitAddress:             info.ForfeitAddress,
-		WithTransactionFeed:        args.WithTransactionFeed,
+		ServerUrl:               args.ServerUrl,
+		ServerPubKey:            serverPubkey,
+		WalletType:              args.Wallet.GetType(),
+		ClientType:              args.ClientType,
+		Network:                 network,
+		VtxoTreeExpiry:          common.RelativeLocktime{Type: vtxoTreeExpiryType, Value: uint32(info.VtxoTreeExpiry)},
+		RoundInterval:           info.RoundInterval,
+		UnilateralExitDelay:     common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
+		BoardingExitDelay:       common.RelativeLocktime{Type: boardingExitDelayType, Value: uint32(info.BoardingExitDelay)},
+		Dust:                    info.Dust,
+		ForfeitAddress:          info.ForfeitAddress,
+		WithTransactionFeed:     args.WithTransactionFeed,
+		MarketHourStartTime:     info.MarketHourStartTime,
+		MarketHourEndTime:       info.MarketHourEndTime,
+		MarketHourPeriod:        info.MarketHourPeriod,
+		MarketHourRoundInterval: info.MarketHourRoundInterval,
 	}
 	if err := a.store.ConfigStore().AddData(ctx, storeData); err != nil {
 		return err
@@ -234,20 +298,29 @@ func (a *arkClient) init(
 		unilateralExitDelayType = common.LocktimeTypeSecond
 	}
 
+	boardingExitDelayType := common.LocktimeTypeBlock
+	if info.BoardingExitDelay >= 512 {
+		boardingExitDelayType = common.LocktimeTypeSecond
+	}
+
 	cfgData := types.Config{
-		ServerUrl:                  args.ServerUrl,
-		ServerPubKey:               serverPubkey,
-		WalletType:                 args.WalletType,
-		ClientType:                 args.ClientType,
-		Network:                    network,
-		VtxoTreeExpiry:             common.RelativeLocktime{Type: vtxoTreeExpiryType, Value: uint32(info.VtxoTreeExpiry)},
-		RoundInterval:              info.RoundInterval,
-		UnilateralExitDelay:        common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
-		Dust:                       info.Dust,
-		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
-		ExplorerURL:                args.ExplorerURL,
-		ForfeitAddress:             info.ForfeitAddress,
-		WithTransactionFeed:        args.WithTransactionFeed,
+		ServerUrl:               args.ServerUrl,
+		ServerPubKey:            serverPubkey,
+		WalletType:              args.WalletType,
+		ClientType:              args.ClientType,
+		Network:                 network,
+		VtxoTreeExpiry:          common.RelativeLocktime{Type: vtxoTreeExpiryType, Value: uint32(info.VtxoTreeExpiry)},
+		RoundInterval:           info.RoundInterval,
+		UnilateralExitDelay:     common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
+		BoardingExitDelay:       common.RelativeLocktime{Type: boardingExitDelayType, Value: uint32(info.BoardingExitDelay)},
+		Dust:                    info.Dust,
+		ExplorerURL:             args.ExplorerURL,
+		ForfeitAddress:          info.ForfeitAddress,
+		WithTransactionFeed:     args.WithTransactionFeed,
+		MarketHourStartTime:     info.MarketHourStartTime,
+		MarketHourEndTime:       info.MarketHourEndTime,
+		MarketHourPeriod:        info.MarketHourPeriod,
+		MarketHourRoundInterval: info.MarketHourRoundInterval,
 	}
 	walletSvc, err := getWallet(a.store.ConfigStore(), &cfgData, supportedWallets)
 	if err != nil {
@@ -291,25 +364,14 @@ func (a *arkClient) ping(
 	return ticker.Stop
 }
 
-func (a *arkClient) ListVtxos(
-	ctx context.Context,
-) (spendableVtxos, spentVtxos []client.Vtxo, err error) {
-	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
-	if err != nil {
-		return
+func (a *arkClient) safeCheck() error {
+	if a.wallet == nil {
+		return fmt.Errorf("wallet not initialized")
 	}
-
-	for _, addr := range offchainAddrs {
-		spendable, spent, err := a.client.ListVtxos(ctx, addr.Address)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		spendableVtxos = append(spendableVtxos, spendable...)
-		spentVtxos = append(spentVtxos, spent...)
+	if a.wallet.IsLocked() {
+		return fmt.Errorf("wallet is locked")
 	}
-
-	return
+	return nil
 }
 
 func getClient(
@@ -337,7 +399,7 @@ func getWallet(
 		return getSingleKeyWallet(configStore)
 	default:
 		return nil, fmt.Errorf(
-			"unsuported wallet type '%s', please select one of: %s",
+			"unsupported wallet type '%s', please select one of: %s",
 			data.WalletType, supportedWallets,
 		)
 	}

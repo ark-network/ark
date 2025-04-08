@@ -10,6 +10,7 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/store"
 	filedb "github.com/ark-network/ark/pkg/client-sdk/store/file"
 	inmemorydb "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 	sdktypes "github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -21,17 +22,17 @@ func TestStore(t *testing.T) {
 	key, _ := btcec.NewPrivateKey()
 	ctx := context.Background()
 	testStoreData := sdktypes.Config{
-		ServerUrl:                  "localhost:7070",
-		ServerPubKey:               key.PubKey(),
-		WalletType:                 wallet.SingleKeyWallet,
-		ClientType:                 client.GrpcClient,
-		Network:                    common.BitcoinRegTest,
-		VtxoTreeExpiry:             common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 512},
-		RoundInterval:              10,
-		UnilateralExitDelay:        common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 512},
-		Dust:                       1000,
-		BoardingDescriptorTemplate: "tr(0250929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0,{ and(pk(873079a0091c9b16abd1f8c508320b07f0d50144d09ccd792ce9c915dac60465), pk(USER)), and(older(604672), pk(USER)) })",
-		ForfeitAddress:             "bcrt1qzvqj",
+		ServerUrl:           "localhost:7070",
+		ServerPubKey:        key.PubKey(),
+		WalletType:          wallet.SingleKeyWallet,
+		ClientType:          client.GrpcClient,
+		Network:             common.BitcoinRegTest,
+		VtxoTreeExpiry:      common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 512},
+		RoundInterval:       10,
+		UnilateralExitDelay: common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 512},
+		Dust:                1000,
+		BoardingExitDelay:   common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 512},
+		ForfeitAddress:      "bcrt1qzvqj",
 	}
 
 	tests := []struct {
@@ -111,8 +112,11 @@ func TestNewService(t *testing.T) {
 
 	go func() {
 		eventCh := service.TransactionStore().GetEventChannel()
-		for tx := range eventCh {
-			log.Infof("Tx inserted: %d %v", tx.Tx.Amount, tx.Tx.Type)
+		for event := range eventCh {
+			if event.Type == types.TxsAdded {
+				log.Infof("Tx inserted: %d %v", event.Txs[0].Amount, event.Txs[0].Type)
+				require.Equal(t, types.TxsAdded, event.Type)
+			}
 		}
 	}()
 
@@ -137,12 +141,31 @@ func TestNewService(t *testing.T) {
 			CreatedAt: time.Now(),
 		},
 	}
-	err = txStore.AddTransactions(ctx, testTxs)
+	count, err := txStore.AddTransactions(ctx, testTxs)
 	require.NoError(t, err)
+	require.Equal(t, len(testTxs), count)
+
+	count, err = txStore.AddTransactions(ctx, testTxs)
+	require.NoError(t, err)
+	require.Zero(t, count)
 
 	retrievedTxs, err := txStore.GetAllTransactions(ctx)
 	require.NoError(t, err)
 	require.Len(t, retrievedTxs, 2)
+
+	testReplaceTxs := map[string]sdktypes.Transaction{
+		"tx1": {
+			TransactionKey: sdktypes.TransactionKey{
+				RoundTxid: "tx11",
+			},
+			CreatedAt: time.Now(),
+		},
+	}
+	count, err = txStore.RbfTransactions(ctx, testReplaceTxs)
+	require.NoError(t, err)
+	require.Equal(t, 1, count)
+
+	time.Sleep(time.Second)
 
 	service.Close()
 }

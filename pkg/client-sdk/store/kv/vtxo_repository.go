@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sync"
+	"time"
 
 	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/dgraph-io/badger/v4"
@@ -17,7 +19,9 @@ const (
 )
 
 type vtxoStore struct {
-	db *badgerhold.Store
+	db      *badgerhold.Store
+	lock    *sync.Mutex
+	eventCh chan types.VtxoEvent
 }
 
 func NewVtxoStore(dir string, logger badger.Logger) (types.VtxoStore, error) {
@@ -25,25 +29,60 @@ func NewVtxoStore(dir string, logger badger.Logger) (types.VtxoStore, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open round events store: %s", err)
 	}
-	return &vtxoStore{badgerDb}, nil
+	return &vtxoStore{
+		db:      badgerDb,
+		lock:    &sync.Mutex{},
+		eventCh: make(chan types.VtxoEvent),
+	}, nil
 }
 
-func (s *vtxoStore) AddVtxos(_ context.Context, vtxos []types.Vtxo) error {
+func (s *vtxoStore) AddVtxos(_ context.Context, vtxos []types.Vtxo) (int, error) {
+	count := 0
 	for _, vtxo := range vtxos {
 		if err := s.db.Insert(vtxo.VtxoKey.String(), &vtxo); err != nil {
-			return err
+			if errors.Is(err, badgerhold.ErrKeyExists) {
+				continue
+			}
+			return -1, err
 		}
+		count++
 	}
-	return nil
+	go s.sendEvent(types.VtxoEvent{Type: types.VtxosAdded, Vtxos: vtxos})
+	return count, nil
 }
 
-func (s *vtxoStore) UpdateVtxos(_ context.Context, vtxos []types.Vtxo) error {
+func (s *vtxoStore) SpendVtxos(ctx context.Context, outpoints []types.VtxoKey, spentBy string) (int, error) {
+	vtxos, err := s.GetVtxos(ctx, outpoints)
+	if err != nil {
+		return -1, err
+	}
+
+	count := 0
 	for _, vtxo := range vtxos {
+		vtxo.Spent = true
+		vtxo.SpentBy = spentBy
 		if err := s.db.Update(vtxo.VtxoKey.String(), &vtxo); err != nil {
-			return err
+			return -1, err
+		}
+		count++
+	}
+
+	go s.sendEvent(types.VtxoEvent{Type: types.VtxosSpent, Vtxos: vtxos})
+
+	return count, nil
+}
+
+func (s *vtxoStore) UpdateVtxos(ctx context.Context, vtxos []types.Vtxo) (int, error) {
+	for _, vtxo := range vtxos {
+		if err := s.db.Upsert(vtxo.VtxoKey.String(), &vtxo); err != nil {
+			return -1, err
 		}
 	}
-	return nil
+	go s.sendEvent(types.VtxoEvent{
+		Type:  types.VtxosUpdated,
+		Vtxos: vtxos,
+	})
+	return len(vtxos), nil
 }
 
 func (s *vtxoStore) GetAllVtxos(
@@ -85,8 +124,31 @@ func (s *vtxoStore) GetVtxos(
 	return vtxos, nil
 }
 
+func (s *vtxoStore) GetEventChannel() chan types.VtxoEvent {
+	return s.eventCh
+}
+
+func (s *vtxoStore) Clean(_ context.Context) error {
+	if err := s.db.Badger().DropAll(); err != nil {
+		return fmt.Errorf("failed to clean the vtxo db: %s", err)
+	}
+	return nil
+}
+
 func (s *vtxoStore) Close() {
 	if err := s.db.Close(); err != nil {
 		log.Debugf("error on closing db: %s", err)
+	}
+}
+
+func (s *vtxoStore) sendEvent(event types.VtxoEvent) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	select {
+	case s.eventCh <- event:
+		return
+	default:
+		time.Sleep(100 * time.Millisecond)
 	}
 }

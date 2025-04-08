@@ -30,7 +30,7 @@ type RoundFinalizationStarted struct {
 type RoundFinalized struct {
 	Id         string
 	Txid       string
-	ForfeitTxs []string
+	ForfeitTxs []ForfeitTx
 	Timestamp  int64
 }
 

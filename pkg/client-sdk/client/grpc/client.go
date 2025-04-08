@@ -15,8 +15,10 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 type service struct {
@@ -64,14 +66,19 @@ func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
 		return nil, err
 	}
 	return &client.Info{
-		PubKey:                     resp.GetPubkey(),
-		VtxoTreeExpiry:             resp.GetVtxoTreeExpiry(),
-		UnilateralExitDelay:        resp.GetUnilateralExitDelay(),
-		RoundInterval:              resp.GetRoundInterval(),
-		Network:                    resp.GetNetwork(),
-		Dust:                       uint64(resp.GetDust()),
-		BoardingDescriptorTemplate: resp.GetBoardingDescriptorTemplate(),
-		ForfeitAddress:             resp.GetForfeitAddress(),
+		PubKey:                  resp.GetPubkey(),
+		VtxoTreeExpiry:          resp.GetVtxoTreeExpiry(),
+		UnilateralExitDelay:     resp.GetUnilateralExitDelay(),
+		RoundInterval:           resp.GetRoundInterval(),
+		Network:                 resp.GetNetwork(),
+		Dust:                    uint64(resp.GetDust()),
+		BoardingExitDelay:       resp.GetBoardingExitDelay(),
+		ForfeitAddress:          resp.GetForfeitAddress(),
+		Version:                 resp.GetVersion(),
+		MarketHourStartTime:     resp.GetMarketHour().GetNextStartTime(),
+		MarketHourEndTime:       resp.GetMarketHour().GetNextEndTime(),
+		MarketHourPeriod:        resp.GetMarketHour().GetPeriod(),
+		MarketHourRoundInterval: resp.GetMarketHour().GetRoundInterval(),
 	}, nil
 }
 
@@ -197,17 +204,12 @@ func (a *grpcClient) SubmitSignedForfeitTxs(
 
 func (a *grpcClient) GetEventStream(
 	ctx context.Context, requestID string,
-) (ch <-chan client.RoundEventChannel, closeFn func(), err error) {
-	req := &arkv1.GetEventStreamRequest{}
+) (<-chan client.RoundEventChannel, func(), error) {
 	ctx, cancel := context.WithCancel(ctx)
-	defer func() {
-		if err != nil {
-			cancel()
-		}
-	}()
 
-	stream, err := a.svc.GetEventStream(ctx, req)
+	stream, err := a.svc.GetEventStream(ctx, &arkv1.GetEventStreamRequest{})
 	if err != nil {
+		cancel()
 		return nil, nil, err
 	}
 
@@ -217,28 +219,37 @@ func (a *grpcClient) GetEventStream(
 		defer close(eventsCh)
 
 		for {
-			select {
-			case <-stream.Context().Done():
+			resp, err := stream.Recv()
+			if err != nil {
+				if err == io.EOF {
+					eventsCh <- client.RoundEventChannel{Err: client.ErrConnectionClosedByServer}
+					return
+				}
+				if st, ok := status.FromError(err); ok && st.Code() == codes.Canceled {
+					return
+				}
+				eventsCh <- client.RoundEventChannel{Err: err}
 				return
-			default:
-				resp, err := stream.Recv()
-				if err != nil {
-					eventsCh <- client.RoundEventChannel{Err: err}
-					return
-				}
-
-				ev, err := event{resp}.toRoundEvent()
-				if err != nil {
-					eventsCh <- client.RoundEventChannel{Err: err}
-					return
-				}
-
-				eventsCh <- client.RoundEventChannel{Event: ev}
 			}
+
+			ev, err := event{resp}.toRoundEvent()
+			if err != nil {
+				eventsCh <- client.RoundEventChannel{Err: err}
+				return
+			}
+
+			eventsCh <- client.RoundEventChannel{Event: ev}
 		}
 	}()
 
-	return eventsCh, cancel, nil
+	closeFn := func() {
+		if err := stream.CloseSend(); err != nil {
+			logrus.Warnf("failed to close event stream: %s", err)
+		}
+		cancel()
+	}
+
+	return eventsCh, closeFn, nil
 }
 
 func (a *grpcClient) Ping(
@@ -339,41 +350,51 @@ func (c *grpcClient) Close() {
 func (c *grpcClient) GetTransactionsStream(
 	ctx context.Context,
 ) (<-chan client.TransactionEvent, func(), error) {
+	ctx, cancel := context.WithCancel(ctx)
+
 	stream, err := c.svc.GetTransactionsStream(ctx, &arkv1.GetTransactionsStreamRequest{})
 	if err != nil {
+		cancel()
 		return nil, nil, err
 	}
 
-	eventCh := make(chan client.TransactionEvent)
+	eventsCh := make(chan client.TransactionEvent)
 
 	go func() {
-		defer close(eventCh)
+		defer close(eventsCh)
+
 		for {
 			resp, err := stream.Recv()
-			if err == io.EOF {
-				return
-			}
 			if err != nil {
-				eventCh <- client.TransactionEvent{Err: err}
+				if err == io.EOF {
+					eventsCh <- client.TransactionEvent{Err: client.ErrConnectionClosedByServer}
+					return
+				}
+				if st, ok := status.FromError(err); ok && st.Code() == codes.Canceled {
+					return
+				}
+				eventsCh <- client.TransactionEvent{Err: err}
 				return
 			}
 
 			switch tx := resp.Tx.(type) {
 			case *arkv1.GetTransactionsStreamResponse_Round:
-				eventCh <- client.TransactionEvent{
+				eventsCh <- client.TransactionEvent{
 					Round: &client.RoundTransaction{
 						Txid:                 tx.Round.Txid,
-						SpentVtxos:           outpointsFromProto(tx.Round.SpentVtxos),
+						SpentVtxos:           vtxos(tx.Round.SpentVtxos).toVtxos(),
 						SpendableVtxos:       vtxos(tx.Round.SpendableVtxos).toVtxos(),
 						ClaimedBoardingUtxos: outpointsFromProto(tx.Round.ClaimedBoardingUtxos),
+						Hex:                  tx.Round.GetHex(),
 					},
 				}
 			case *arkv1.GetTransactionsStreamResponse_Redeem:
-				eventCh <- client.TransactionEvent{
+				eventsCh <- client.TransactionEvent{
 					Redeem: &client.RedeemTransaction{
 						Txid:           tx.Redeem.Txid,
-						SpentVtxos:     outpointsFromProto(tx.Redeem.SpentVtxos),
+						SpentVtxos:     vtxos(tx.Redeem.SpentVtxos).toVtxos(),
 						SpendableVtxos: vtxos(tx.Redeem.SpendableVtxos).toVtxos(),
+						Hex:            tx.Redeem.GetHex(),
 					},
 				}
 			}
@@ -382,11 +403,12 @@ func (c *grpcClient) GetTransactionsStream(
 
 	closeFn := func() {
 		if err := stream.CloseSend(); err != nil {
-			logrus.Warnf("failed to close stream: %v", err)
+			logrus.Warnf("failed to close transaction stream: %v", err)
 		}
+		cancel()
 	}
 
-	return eventCh, closeFn, nil
+	return eventsCh, closeFn, nil
 }
 
 func (a *grpcClient) SetNostrRecipient(
@@ -408,6 +430,55 @@ func (a *grpcClient) DeleteNostrRecipient(
 	}
 	_, err := a.svc.DeleteNostrRecipient(ctx, req)
 	return err
+}
+
+func (c *grpcClient) SubscribeForAddress(
+	ctx context.Context, addr string,
+) (<-chan client.AddressEvent, func(), error) {
+	ctx, cancel := context.WithCancel(ctx)
+
+	stream, err := c.svc.SubscribeForAddress(ctx, &arkv1.SubscribeForAddressRequest{
+		Address: addr,
+	})
+	if err != nil {
+		cancel()
+		return nil, nil, err
+	}
+
+	eventsCh := make(chan client.AddressEvent)
+
+	go func() {
+		defer close(eventsCh)
+
+		for {
+			resp, err := stream.Recv()
+			if err != nil {
+				if err == io.EOF {
+					eventsCh <- client.AddressEvent{Err: client.ErrConnectionClosedByServer}
+					return
+				}
+				if st, ok := status.FromError(err); ok && st.Code() == codes.Canceled {
+					return
+				}
+				eventsCh <- client.AddressEvent{Err: err}
+				return
+			}
+
+			eventsCh <- client.AddressEvent{
+				NewVtxos:   vtxos(resp.NewVtxos).toVtxos(),
+				SpentVtxos: vtxos(resp.SpentVtxos).toVtxos(),
+			}
+		}
+	}()
+
+	closeFn := func() {
+		if err := stream.CloseSend(); err != nil {
+			logrus.Warnf("failed to close address stream: %v", err)
+		}
+		cancel()
+	}
+
+	return eventsCh, closeFn, nil
 }
 
 func signedVtxosToProto(vtxos []client.SignedVtxoOutpoint) []*arkv1.SignedVtxoOutpoint {

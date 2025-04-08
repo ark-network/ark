@@ -25,11 +25,18 @@ func BuildRedeemTx(
 	ins := make([]*wire.OutPoint, 0, len(vtxos))
 	sequences := make([]uint32, 0, len(vtxos))
 	witnessUtxos := make(map[int]*wire.TxOut)
-	tapscripts := make(map[int]*psbt.TaprootTapLeafScript)
+	signingTapLeaves := make(map[int]*psbt.TaprootTapLeafScript)
+	tapscripts := make(map[int][]string)
 
 	txLocktime := common.AbsoluteLocktime(0)
 
 	for index, vtxo := range vtxos {
+		if len(vtxo.RevealedTapscripts) == 0 {
+			return "", fmt.Errorf("missing tapscripts for input %d", index)
+		}
+
+		tapscripts[index] = vtxo.RevealedTapscripts
+
 		rootHash := vtxo.Tapscript.ControlBlock.RootHash(vtxo.Tapscript.RevealedScript)
 		taprootKey := txscript.ComputeTaprootOutputKey(UnspendableKey(), rootHash)
 
@@ -48,7 +55,7 @@ func BuildRedeemTx(
 			return "", err
 		}
 
-		tapscripts[index] = &psbt.TaprootTapLeafScript{
+		signingTapLeaves[index] = &psbt.TaprootTapLeafScript{
 			ControlBlock: ctrlBlockBytes,
 			Script:       vtxo.Tapscript.RevealedScript,
 			LeafVersion:  txscript.BaseLeafVersion,
@@ -96,7 +103,10 @@ func BuildRedeemTx(
 
 	for i := range redeemPtx.Inputs {
 		redeemPtx.Inputs[i].WitnessUtxo = witnessUtxos[i]
-		redeemPtx.Inputs[i].TaprootLeafScript = []*psbt.TaprootTapLeafScript{tapscripts[i]}
+		redeemPtx.Inputs[i].TaprootLeafScript = []*psbt.TaprootTapLeafScript{signingTapLeaves[i]}
+		if err := AddTaprootTree(i, redeemPtx, tapscripts[i]); err != nil {
+			return "", err
+		}
 	}
 
 	redeemTx, err := redeemPtx.B64Encode()

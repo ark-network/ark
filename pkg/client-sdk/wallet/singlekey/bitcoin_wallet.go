@@ -391,7 +391,7 @@ func (w *bitcoinWallet) getAddress(
 		data.ServerPubKey,
 		common.RelativeLocktime{
 			Type:  data.UnilateralExitDelay.Type,
-			Value: data.UnilateralExitDelay.Value * 2,
+			Value: data.BoardingExitDelay.Value,
 		},
 	)
 

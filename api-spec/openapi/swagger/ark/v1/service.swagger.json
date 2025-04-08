@@ -531,8 +531,9 @@
           "type": "string",
           "format": "int64"
         },
-        "boardingDescriptorTemplate": {
-          "type": "string"
+        "boardingExitDelay": {
+          "type": "string",
+          "format": "int64"
         },
         "vtxoDescriptorTemplates": {
           "type": "array",
@@ -545,6 +546,9 @@
         },
         "marketHour": {
           "$ref": "#/definitions/v1MarketHour"
+        },
+        "version": {
+          "type": "string"
         }
       }
     },
@@ -677,7 +681,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/v1Outpoint"
+            "$ref": "#/definitions/v1Vtxo"
           }
         },
         "spendableVtxos": {
@@ -686,6 +690,9 @@
             "type": "object",
             "$ref": "#/definitions/v1Vtxo"
           }
+        },
+        "hex": {
+          "type": "string"
         }
       }
     },
@@ -828,7 +835,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/v1Outpoint"
+            "$ref": "#/definitions/v1Vtxo"
           }
         },
         "spendableVtxos": {
@@ -844,6 +851,9 @@
             "type": "object",
             "$ref": "#/definitions/v1Outpoint"
           }
+        },
+        "hex": {
+          "type": "string"
         }
       }
     },

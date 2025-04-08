@@ -24,22 +24,34 @@ type service interface {
 }
 
 type handler struct {
+	version string
+
 	svc application.Service
 
 	eventsListenerHandler       *listenerHanlder[*arkv1.GetEventStreamResponse]
 	transactionsListenerHandler *listenerHanlder[*arkv1.GetTransactionsStreamResponse]
+	addressSubsHandler          *listenerHanlder[*arkv1.SubscribeForAddressResponse]
 
-	stopCh <-chan struct{}
+	stopCh                  <-chan struct{}
+	stopRoundEventsCh       chan struct{}
+	stopTransactionEventsCh chan struct{}
+	stopAddressEventsCh     chan struct{}
 }
 
-func NewHandler(service application.Service, stopCh <-chan struct{}) service {
+func NewHandler(version string, service application.Service, stopCh <-chan struct{}) service {
 	h := &handler{
+		version:                     version,
 		svc:                         service,
 		eventsListenerHandler:       newListenerHandler[*arkv1.GetEventStreamResponse](),
 		transactionsListenerHandler: newListenerHandler[*arkv1.GetTransactionsStreamResponse](),
+		addressSubsHandler:          newListenerHandler[*arkv1.SubscribeForAddressResponse](),
 		stopCh:                      stopCh,
+		stopRoundEventsCh:           make(chan struct{}, 1),
+		stopTransactionEventsCh:     make(chan struct{}, 1),
+		stopAddressEventsCh:         make(chan struct{}, 1),
 	}
 
+	go h.listenToStop()
 	go h.listenToEvents()
 	go h.listenToTxEvents()
 
@@ -64,21 +76,22 @@ func (h *handler) GetInfo(
 	)
 
 	return &arkv1.GetInfoResponse{
-		Pubkey:                     info.PubKey,
-		VtxoTreeExpiry:             info.VtxoTreeExpiry,
-		UnilateralExitDelay:        info.UnilateralExitDelay,
-		RoundInterval:              info.RoundInterval,
-		Network:                    info.Network,
-		Dust:                       int64(info.Dust),
-		ForfeitAddress:             info.ForfeitAddress,
-		BoardingDescriptorTemplate: desc,
-		VtxoDescriptorTemplates:    []string{desc},
+		Pubkey:                  info.PubKey,
+		VtxoTreeExpiry:          info.VtxoTreeExpiry,
+		UnilateralExitDelay:     info.UnilateralExitDelay,
+		BoardingExitDelay:       info.BoardingExitDelay,
+		RoundInterval:           info.RoundInterval,
+		Network:                 info.Network,
+		Dust:                    int64(info.Dust),
+		ForfeitAddress:          info.ForfeitAddress,
+		VtxoDescriptorTemplates: []string{desc},
 		MarketHour: &arkv1.MarketHour{
 			NextStartTime: info.NextMarketHour.StartTime.Unix(),
 			NextEndTime:   info.NextMarketHour.EndTime.Unix(),
-			Period:        int64(info.NextMarketHour.Period),
-			RoundInterval: int64(info.NextMarketHour.RoundInterval),
+			Period:        int64(info.NextMarketHour.Period.Seconds()),
+			RoundInterval: int64(info.NextMarketHour.RoundInterval.Seconds()),
 		},
+		Version: h.version,
 	}, nil
 }
 
@@ -297,7 +310,7 @@ func (h *handler) GetEventStream(
 
 	for {
 		select {
-		case <-h.stopCh:
+		case <-h.stopRoundEventsCh:
 			return nil
 		case <-stream.Context().Done():
 			return nil
@@ -359,7 +372,7 @@ func (h *handler) GetRound(
 				End:        round.EndingTimestamp,
 				RoundTx:    round.UnsignedTx,
 				VtxoTree:   vtxoTree(round.VtxoTree).toProto(),
-				ForfeitTxs: round.ForfeitTxs,
+				ForfeitTxs: forfeitTxs(round.ForfeitTxs).toProto(),
 				Connectors: vtxoTree(round.Connectors).toProto(),
 				Stage:      stage(round.Stage).toProto(),
 			},
@@ -378,7 +391,7 @@ func (h *handler) GetRound(
 			End:        round.EndingTimestamp,
 			RoundTx:    round.UnsignedTx,
 			VtxoTree:   vtxoTree(round.VtxoTree).toProto(),
-			ForfeitTxs: round.ForfeitTxs,
+			ForfeitTxs: forfeitTxs(round.ForfeitTxs).toProto(),
 			Connectors: vtxoTree(round.Connectors).toProto(),
 			Stage:      stage(round.Stage).toProto(),
 		},
@@ -405,7 +418,7 @@ func (h *handler) GetRoundById(
 			End:        round.EndingTimestamp,
 			RoundTx:    round.UnsignedTx,
 			VtxoTree:   vtxoTree(round.VtxoTree).toProto(),
-			ForfeitTxs: round.ForfeitTxs,
+			ForfeitTxs: forfeitTxs(round.ForfeitTxs).toProto(),
 			Connectors: vtxoTree(round.Connectors).toProto(),
 			Stage:      stage(round.Stage).toProto(),
 		},
@@ -449,6 +462,8 @@ func (h *handler) GetTransactionsStream(
 
 	for {
 		select {
+		case <-h.stopTransactionEventsCh:
+			return nil
 		case <-stream.Context().Done():
 			return nil
 		case ev := <-listener.ch:
@@ -493,6 +508,48 @@ func (h *handler) SetNostrRecipient(
 	}
 
 	return &arkv1.SetNostrRecipientResponse{}, nil
+}
+
+func (h *handler) SubscribeForAddress(
+	req *arkv1.SubscribeForAddressRequest, stream arkv1.ExplorerService_SubscribeForAddressServer,
+) error {
+	vtxoScript, err := parseArkAddress(req.GetAddress())
+	if err != nil {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	listener := &listener[*arkv1.SubscribeForAddressResponse]{
+		id: vtxoScript,
+		ch: make(chan *arkv1.SubscribeForAddressResponse),
+	}
+
+	h.addressSubsHandler.pushListener(listener)
+
+	defer func() {
+		h.addressSubsHandler.removeListener(listener.id)
+		close(listener.ch)
+	}()
+
+	for {
+		select {
+		case <-h.stopAddressEventsCh:
+			return nil
+		case <-stream.Context().Done():
+			return nil
+		case ev := <-listener.ch:
+			if err := stream.Send(ev); err != nil {
+				return err
+			}
+		}
+	}
+}
+
+func (h *handler) listenToStop() {
+	<-h.stopCh
+	h.stopRoundEventsCh <- struct{}{}
+	h.stopTransactionEventsCh <- struct{}{}
+	h.stopAddressEventsCh <- struct{}{}
+
 }
 
 // listenToEvents forwards events from the application layer to the set of listeners
@@ -598,6 +655,37 @@ func (h *handler) listenToTxEvents() {
 				go func(l *listener[*arkv1.GetTransactionsStreamResponse]) {
 					l.ch <- txEvent
 				}(l)
+			}
+
+			if len(h.addressSubsHandler.listeners) > 0 {
+				allSpendableVtxos := make(map[string][]*arkv1.Vtxo)
+				allSpentVtxos := make(map[string][]*arkv1.Vtxo)
+				if txEvent.GetRedeem() != nil {
+					for _, vtxo := range txEvent.GetRedeem().GetSpendableVtxos() {
+						allSpendableVtxos[vtxo.Pubkey] = append(allSpendableVtxos[vtxo.Pubkey], vtxo)
+					}
+					for _, vtxo := range txEvent.GetRedeem().GetSpentVtxos() {
+						allSpentVtxos[vtxo.Pubkey] = append(allSpentVtxos[vtxo.Pubkey], vtxo)
+					}
+				} else {
+					for _, vtxo := range txEvent.GetRound().GetSpendableVtxos() {
+						allSpendableVtxos[vtxo.Pubkey] = append(allSpendableVtxos[vtxo.Pubkey], vtxo)
+					}
+					for _, vtxo := range txEvent.GetRound().GetSpentVtxos() {
+						allSpentVtxos[vtxo.Pubkey] = append(allSpentVtxos[vtxo.Pubkey], vtxo)
+					}
+				}
+
+				for _, l := range h.addressSubsHandler.listeners {
+					spendableVtxos := allSpendableVtxos[l.id]
+					spentVtxos := allSpentVtxos[l.id]
+					if len(spendableVtxos) > 0 || len(spentVtxos) > 0 {
+						l.ch <- &arkv1.SubscribeForAddressResponse{
+							NewVtxos:   spendableVtxos,
+							SpentVtxos: spentVtxos,
+						}
+					}
+				}
 			}
 		}
 	}

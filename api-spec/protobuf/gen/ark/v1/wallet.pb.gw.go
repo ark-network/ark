@@ -40,6 +40,7 @@ func request_WalletInitializerService_GenSeed_0(ctx context.Context, marshaler r
 		protoReq GenSeedRequest
 		metadata runtime.ServerMetadata
 	)
+	io.Copy(io.Discard, req.Body)
 	msg, err := client.GenSeed(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
@@ -130,6 +131,7 @@ func request_WalletInitializerService_GetStatus_0(ctx context.Context, marshaler
 		protoReq GetStatusRequest
 		metadata runtime.ServerMetadata
 	)
+	io.Copy(io.Discard, req.Body)
 	msg, err := client.GetStatus(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
@@ -172,6 +174,7 @@ func request_WalletService_DeriveAddress_0(ctx context.Context, marshaler runtim
 		protoReq DeriveAddressRequest
 		metadata runtime.ServerMetadata
 	)
+	io.Copy(io.Discard, req.Body)
 	msg, err := client.DeriveAddress(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
@@ -190,6 +193,7 @@ func request_WalletService_GetBalance_0(ctx context.Context, marshaler runtime.M
 		protoReq GetBalanceRequest
 		metadata runtime.ServerMetadata
 	)
+	io.Copy(io.Discard, req.Body)
 	msg, err := client.GetBalance(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }

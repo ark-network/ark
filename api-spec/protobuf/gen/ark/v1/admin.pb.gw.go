@@ -40,6 +40,7 @@ func request_AdminService_GetScheduledSweep_0(ctx context.Context, marshaler run
 		protoReq GetScheduledSweepRequest
 		metadata runtime.ServerMetadata
 	)
+	io.Copy(io.Discard, req.Body)
 	msg, err := client.GetScheduledSweep(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
@@ -59,6 +60,7 @@ func request_AdminService_GetRoundDetails_0(ctx context.Context, marshaler runti
 		metadata runtime.ServerMetadata
 		err      error
 	)
+	io.Copy(io.Discard, req.Body)
 	val, ok := pathParams["round_id"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "round_id")
@@ -142,6 +144,7 @@ func request_AdminService_GetMarketHourConfig_0(ctx context.Context, marshaler r
 		protoReq GetMarketHourConfigRequest
 		metadata runtime.ServerMetadata
 	)
+	io.Copy(io.Discard, req.Body)
 	msg, err := client.GetMarketHourConfig(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
@@ -186,6 +189,7 @@ func request_AdminService_GetTxRequestQueue_0(ctx context.Context, marshaler run
 		protoReq GetTxRequestQueueRequest
 		metadata runtime.ServerMetadata
 	)
+	io.Copy(io.Discard, req.Body)
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}

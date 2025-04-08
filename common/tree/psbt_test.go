@@ -105,4 +105,46 @@ func TestPsbtCustomUnknownFields(t *testing.T) {
 			require.Equal(t, keys[i].SerializeCompressed(), retrievedKeys[i].SerializeCompressed())
 		}
 	})
+
+	t.Run("tapscripts", func(t *testing.T) {
+		// Create a new PSBT
+		ptx, err := psbt.New(nil, nil, 2, 0, nil)
+		require.NoError(t, err)
+
+		// Add an empty input
+		ptx.UnsignedTx.TxIn = []*wire.TxIn{{
+			PreviousOutPoint: wire.OutPoint{},
+			Sequence:         0,
+		}}
+		ptx.Inputs = []psbt.PInput{{}}
+
+		// Test cases with various tapscripts
+		testCases := [][]string{
+			{},
+			{"51201234567890abcdef"},
+			{
+				"51201234567890abcdef",
+				"522103deadbeef",
+				"76a914123456789012345678901234567890",
+			},
+		}
+
+		for _, scripts := range testCases {
+			// Add tapscripts to input 0
+			err = tree.AddTaprootTree(0, ptx, scripts)
+			require.NoError(t, err)
+
+			// Get tapscripts back and verify
+			retrievedScripts, err := tree.GetTaprootTree(ptx.Inputs[0])
+			require.NoError(t, err)
+			require.Equal(t, len(scripts), len(retrievedScripts))
+
+			for i := range scripts {
+				require.Equal(t, scripts[i], retrievedScripts[i])
+			}
+
+			// Clear the unknowns for next test case
+			ptx.Inputs[0].Unknowns = nil
+		}
+	})
 }

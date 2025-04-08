@@ -57,5 +57,6 @@ type TxBuilder interface {
 	// FindLeaves returns all the leaves txs that are reachable from the given outpoint
 	FindLeaves(vtxoTree tree.TxTree, fromtxid string, vout uint32) (leaves []tree.Node, err error)
 	VerifyAndCombinePartialTx(dest string, src string) (string, error)
+	CountSignedTaprootInputs(tx string) (int, error)
 	GetTxID(tx string) (string, error)
 }

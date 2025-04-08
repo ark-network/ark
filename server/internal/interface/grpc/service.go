@@ -7,16 +7,6 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
-	"time"
-
-	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
-	"go.opentelemetry.io/otel"
-	metricExport "go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
-	traceExport "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
-	"go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/resource"
-	"go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/server/internal/config"
@@ -28,6 +18,8 @@ import (
 	"github.com/ark-network/ark/server/pkg/macaroons"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	log "github.com/sirupsen/logrus"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 	"google.golang.org/grpc"
@@ -48,6 +40,7 @@ const (
 )
 
 type service struct {
+	version      string
 	config       Config
 	appConfig    *config.Config
 	server       *http.Server
@@ -59,7 +52,7 @@ type service struct {
 }
 
 func NewService(
-	svcConfig Config, appConfig *config.Config,
+	version string, svcConfig Config, appConfig *config.Config,
 ) (interfaces.Service, error) {
 	if err := svcConfig.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid service config: %s", err)
@@ -104,7 +97,7 @@ func NewService(
 
 	stopCh := make(chan struct{}, 1)
 
-	return &service{svcConfig, appConfig, nil, nil, macaroonSvc, nil, stopCh}, nil
+	return &service{version, svcConfig, appConfig, nil, nil, macaroonSvc, nil, stopCh}, nil
 }
 
 func (s *service) Start() error {
@@ -159,9 +152,6 @@ func (s *service) start(withAppSvc bool) error {
 }
 
 func (s *service) stop(withAppSvc bool) {
-	//nolint:all
-	s.server.Shutdown(context.Background())
-	log.Info("stopped grpc server")
 	if withAppSvc {
 		s.stopCh <- struct{}{}
 		appSvc, _ := s.appConfig.AppService()
@@ -170,11 +160,14 @@ func (s *service) stop(withAppSvc bool) {
 			log.Info("stopped app service")
 		}
 	}
+	//nolint:all
+	s.server.Shutdown(context.Background())
+	log.Info("stopped grpc server")
 }
 
 func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 	if s.appConfig.OtelCollectorEndpoint != "" {
-		otelShutdown, err := initOpenTelemetry(context.Background(), s.appConfig.OtelCollectorEndpoint)
+		otelShutdown, err := initOtelSDK(context.Background(), s.appConfig.OtelCollectorEndpoint)
 		if err != nil {
 			return err
 		}
@@ -207,7 +200,7 @@ func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 			return err
 		}
 		appSvc = svc
-		appHandler := handlers.NewHandler(appSvc, s.stopCh)
+		appHandler := handlers.NewHandler(s.version, appSvc, s.stopCh)
 		arkv1.RegisterArkServiceServer(grpcServer, appHandler)
 		arkv1.RegisterExplorerServiceServer(grpcServer, appHandler)
 	}
@@ -420,61 +413,4 @@ func isOptionRequest(req *http.Request) bool {
 func isHttpRequest(req *http.Request) bool {
 	return req.Method == http.MethodGet ||
 		strings.Contains(req.Header.Get("Content-Type"), "application/json")
-}
-
-func initOpenTelemetry(ctx context.Context, otelCollectorUrl string) (func(context.Context) error, error) {
-	// Remove trailing slash if present
-	otelCollectorUrl = strings.TrimSuffix(otelCollectorUrl, "/")
-
-	traceExp, err := traceExport.New(
-		ctx,
-		traceExport.WithEndpoint(strings.TrimPrefix(otelCollectorUrl, "http://")), //TODO double check
-		traceExport.WithInsecure(),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create trace exporter: %w", err)
-	}
-
-	res := resource.NewWithAttributes(
-		semconv.SchemaURL,
-		semconv.ServiceName("arkd"),
-	)
-	tp := trace.NewTracerProvider(
-		trace.WithBatcher(traceExp),
-		trace.WithResource(res),
-	)
-
-	metricExp, err := metricExport.New(
-		ctx,
-		metricExport.WithEndpoint(strings.TrimPrefix(otelCollectorUrl, "http://")), // Remove http:// prefix
-		metricExport.WithInsecure(),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create metric exporter: %w", err)
-	}
-
-	reader := metric.NewPeriodicReader(
-		metricExp,
-		metric.WithInterval(5*time.Second),
-	)
-
-	mp := metric.NewMeterProvider(
-		metric.WithReader(reader),
-		metric.WithResource(res),
-	)
-
-	otel.SetTracerProvider(tp)
-	otel.SetMeterProvider(mp)
-
-	log.Info("initialized opentelemetry")
-
-	shutdown := func(ctx context.Context) error {
-		err1 := tp.Shutdown(ctx)
-		err2 := mp.Shutdown(ctx)
-		if err1 != nil {
-			return err1
-		}
-		return err2
-	}
-	return shutdown, nil
 }
