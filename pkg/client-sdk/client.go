@@ -112,11 +112,17 @@ func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
 }
 
 func (a *arkClient) GetTransactionEventChannel(_ context.Context) chan types.TransactionEvent {
-	return a.store.TransactionStore().GetEventChannel()
+	if a.store != nil && a.store.TransactionStore() != nil {
+		return a.store.TransactionStore().GetEventChannel()
+	}
+	return nil
 }
 
 func (a *arkClient) GetVtxoEventChannel(_ context.Context) chan types.VtxoEvent {
-	return a.store.VtxoStore().GetEventChannel()
+	if a.store != nil && a.store.VtxoStore() != nil {
+		return a.store.VtxoStore().GetEventChannel()
+	}
+	return nil
 }
 
 func (a *arkClient) SignTransaction(ctx context.Context, tx string) (string, error) {
@@ -134,7 +140,7 @@ func (a *arkClient) Reset(ctx context.Context) {
 }
 
 func (a *arkClient) Stop() error {
-	if a.Config.WithTransactionFeed {
+	if a.txStreamCtxCancel != nil {
 		a.txStreamCtxCancel()
 	}
 
