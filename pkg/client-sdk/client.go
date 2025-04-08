@@ -309,7 +309,7 @@ func (a *arkClient) init(
 		UnilateralExitDelay:        common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
 		Dust:                       info.Dust,
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
-		ExplorerURL:                args.ExplorerURL,
+		ExplorerURL:                explorerSvc.BaseUrl(),
 		ForfeitAddress:             info.ForfeitAddress,
 		WithTransactionFeed:        args.WithTransactionFeed,
 		MarketHourStartTime:        info.MarketHourStartTime,
