@@ -1941,6 +1941,7 @@ func (s *covenantlessService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 				Amount:    uint64(out.Value),
 				RoundTxid: round.Txid,
 				CreatedAt: createdAt,
+				ExpireAt:  createdAt + s.vtxoTreeExpiry.Seconds(),
 			})
 		}
 	}
