@@ -618,45 +618,12 @@ func (a *covenantlessArkClient) RedeemNotes(ctx context.Context, notes []string,
 		return "", fmt.Errorf("no funds detected")
 	}
 
-	signerSessions, signerPubKeys, signingType, err := a.handleOptions(options, nil, notes)
-	if err != nil {
-		return "", err
-	}
-
-	requestID, err := a.client.RegisterNotesForNextRound(
-		ctx, notes,
-	)
-	if err != nil {
-		return "", err
-	}
-
-	output := client.Output{
+	receiversOutput := []client.Output{{
 		Address: offchainAddrs[0].Address,
 		Amount:  amount,
-	}
+	}}
 
-	receiversOutput := []client.Output{output}
-
-	if err := a.client.RegisterOutputsForNextRound(
-		ctx, requestID, receiversOutput,
-		&tree.Musig2{
-			CosignersPublicKeys: signerPubKeys,
-			SigningType:         tree.SigningType(signingType),
-		},
-	); err != nil {
-		return "", err
-	}
-
-	log.Infof("payout registered with id: %s", requestID)
-
-	roundTxID, err := a.handleRoundStream(
-		ctx, requestID, nil, nil, receiversOutput, signerSessions, options.EventsCh,
-	)
-	if err != nil {
-		return "", err
-	}
-
-	return roundTxID, nil
+	return a.joinRoundWithRetry(ctx, nil, notes, receiversOutput, *options, nil, nil)
 }
 
 func (a *covenantlessArkClient) StartUnilateralExit(ctx context.Context) error {
@@ -832,37 +799,7 @@ func (a *covenantlessArkClient) CollaborativeExit(
 		})
 	}
 
-	signerSessions, signerPubKeys, signingType, err := a.handleOptions(options, inputs, nil)
-	if err != nil {
-		return "", err
-	}
-
-	requestID, err := a.client.RegisterInputsForNextRound(
-		ctx,
-		inputs,
-	)
-	if err != nil {
-		return "", err
-	}
-
-	if err := a.client.RegisterOutputsForNextRound(
-		ctx, requestID, receivers,
-		&tree.Musig2{
-			CosignersPublicKeys: signerPubKeys,
-			SigningType:         tree.SigningType(signingType),
-		},
-	); err != nil {
-		return "", err
-	}
-
-	roundTxID, err := a.handleRoundStream(
-		ctx, requestID, selectedCoins, selectedBoardingCoins, receivers, signerSessions, options.EventsCh,
-	)
-	if err != nil {
-		return "", err
-	}
-
-	return roundTxID, nil
+	return a.joinRoundWithRetry(ctx, inputs, nil, receivers, *options, selectedCoins, selectedBoardingCoins)
 }
 
 func (a *covenantlessArkClient) Settle(ctx context.Context, opts ...Option) (string, error) {
@@ -1640,48 +1577,7 @@ func (a *covenantlessArkClient) sendOffchain(
 		})
 	}
 
-	signerSessions, signerPubKeys, signingType, err := a.handleOptions(options, inputs, []string{})
-	if err != nil {
-		return "", err
-	}
-
-	maxRetry := 3
-	retryCount := 0
-	var roundErr error
-	for retryCount < maxRetry {
-		requestID, err := a.client.RegisterInputsForNextRound(
-			ctx, inputs,
-		)
-		if err != nil {
-			return "", err
-		}
-
-		if err := a.client.RegisterOutputsForNextRound(
-			ctx, requestID, outputs,
-			&tree.Musig2{
-				CosignersPublicKeys: signerPubKeys,
-				SigningType:         tree.SigningType(signingType),
-			},
-		); err != nil {
-			return "", err
-		}
-
-		log.Infof("registered inputs and outputs with request id: %s", requestID)
-
-		roundTxID, err := a.handleRoundStream(
-			ctx, requestID, selectedCoins, selectedBoardingCoins, outputs, signerSessions, options.EventsCh,
-		)
-		if err != nil {
-			log.WithError(err).Warn("round failed, retrying...")
-			retryCount++
-			time.Sleep(100 * time.Millisecond)
-			roundErr = err
-			continue
-		}
-
-		return roundTxID, nil
-	}
-	return "", fmt.Errorf("reached max atttempt of retry, last round error: %s", roundErr)
+	return a.joinRoundWithRetry(ctx, inputs, nil, outputs, *options, selectedCoins, selectedBoardingCoins)
 }
 
 func (a *covenantlessArkClient) addInputs(
@@ -1754,6 +1650,59 @@ func (a *covenantlessArkClient) addInputs(
 	}
 
 	return nil
+}
+
+func (a *covenantlessArkClient) joinRoundWithRetry(
+	ctx context.Context, inputs []client.Input, notes []string, outputs []client.Output, options SettleOptions,
+	selectedCoins []client.TapscriptsVtxo, selectedBoardingCoins []types.Utxo,
+) (string, error) {
+	signerSessions, signerPubKeys, signingType, err := a.handleOptions(options, inputs, []string{})
+	if err != nil {
+		return "", err
+	}
+
+	maxRetry := 3
+	retryCount := 0
+	var roundErr error
+	for retryCount < maxRetry {
+		var requestID string
+		var err error
+		if len(inputs) > 0 {
+			requestID, err = a.client.RegisterInputsForNextRound(ctx, inputs)
+		} else {
+			requestID, err = a.client.RegisterNotesForNextRound(ctx, notes)
+		}
+		if err != nil {
+			return "", err
+		}
+
+		if err := a.client.RegisterOutputsForNextRound(
+			ctx, requestID, outputs,
+			&tree.Musig2{
+				CosignersPublicKeys: signerPubKeys,
+				SigningType:         signingType,
+			},
+		); err != nil {
+			return "", err
+		}
+
+		log.Infof("registered inputs and outputs with request id: %s", requestID)
+
+		roundTxID, err := a.handleRoundStream(
+			ctx, requestID, selectedCoins, selectedBoardingCoins, outputs, signerSessions, options.EventsCh,
+		)
+		if err != nil {
+			log.WithError(err).Warn("round failed, retrying...")
+			retryCount++
+			time.Sleep(100 * time.Millisecond)
+			roundErr = err
+			continue
+		}
+
+		return roundTxID, nil
+	}
+
+	return "", fmt.Errorf("reached max atttempt of retries, last round error: %s", roundErr)
 }
 
 func (a *covenantlessArkClient) handleRoundStream(
@@ -3052,7 +3001,7 @@ func (a *covenantlessArkClient) handleRedeemTx(
 }
 
 func (a *covenantlessArkClient) handleOptions(
-	options *SettleOptions, inputs []client.Input, notesInputs []string,
+	options SettleOptions, inputs []client.Input, notesInputs []string,
 ) ([]bitcointree.SignerSession, []string, tree.SigningType, error) {
 	var signingType tree.SigningType
 	if options.SigningType != nil {
