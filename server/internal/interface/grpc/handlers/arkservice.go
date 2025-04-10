@@ -92,7 +92,11 @@ func (h *handler) GetInfo(
 			Period:        int64(info.NextMarketHour.Period.Seconds()),
 			RoundInterval: int64(info.NextMarketHour.RoundInterval.Seconds()),
 		},
-		Version: h.version,
+		Version:       h.version,
+		UtxoMinAmount: info.UtxoMinAmount,
+		UtxoMaxAmount: info.UtxoMaxAmount,
+		VtxoMinAmount: info.VtxoMinAmount,
+		VtxoMaxAmount: info.VtxoMaxAmount,
 	}, nil
 }
 

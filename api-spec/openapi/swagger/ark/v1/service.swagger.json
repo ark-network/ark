@@ -548,6 +548,22 @@
         },
         "version": {
           "type": "string"
+        },
+        "utxoMinAmount": {
+          "type": "string",
+          "format": "int64"
+        },
+        "utxoMaxAmount": {
+          "type": "string",
+          "format": "int64"
+        },
+        "vtxoMinAmount": {
+          "type": "string",
+          "format": "int64"
+        },
+        "vtxoMaxAmount": {
+          "type": "string",
+          "format": "int64"
         }
       }
     },
