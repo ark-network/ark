@@ -30,15 +30,28 @@ func TestRestrictedMethods(t *testing.T) {
 
 func TestWhitelistedMethods(t *testing.T) {
 	allMethods := make([]string, 0)
+
 	for _, m := range arkv1.ArkService_ServiceDesc.Methods {
 		allMethods = append(allMethods, fmt.Sprintf("/%s/%s", arkv1.ArkService_ServiceDesc.ServiceName, m.MethodName))
 	}
+	for _, m := range arkv1.ArkService_ServiceDesc.Streams {
+		allMethods = append(allMethods, fmt.Sprintf("/%s/%s", arkv1.ArkService_ServiceDesc.ServiceName, m.StreamName))
+	}
+
 	for _, v := range arkv1.WalletInitializerService_ServiceDesc.Methods {
 		allMethods = append(allMethods, fmt.Sprintf("/%s/%s", arkv1.WalletInitializerService_ServiceDesc.ServiceName, v.MethodName))
 	}
+	for _, m := range arkv1.WalletInitializerService_ServiceDesc.Streams {
+		allMethods = append(allMethods, fmt.Sprintf("/%s/%s", arkv1.WalletInitializerService_ServiceDesc.ServiceName, m.StreamName))
+	}
+
 	for _, m := range arkv1.ExplorerService_ServiceDesc.Methods {
 		allMethods = append(allMethods, fmt.Sprintf("/%s/%s", arkv1.ExplorerService_ServiceDesc.ServiceName, m.MethodName))
 	}
+	for _, m := range arkv1.ExplorerService_ServiceDesc.Streams {
+		allMethods = append(allMethods, fmt.Sprintf("/%s/%s", arkv1.ExplorerService_ServiceDesc.ServiceName, m.StreamName))
+	}
+
 	allMethods = append(allMethods, fmt.Sprintf("/%s/%s", grpchealth.Health_ServiceDesc.ServiceName, "Check"))
 
 	whitelist := permissions.Whitelist()
