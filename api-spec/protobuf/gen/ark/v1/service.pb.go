@@ -75,10 +75,10 @@ type GetInfoResponse struct {
 	ForfeitAddress             string      `protobuf:"bytes,9,opt,name=forfeit_address,json=forfeitAddress,proto3" json:"forfeit_address,omitempty"`
 	MarketHour                 *MarketHour `protobuf:"bytes,10,opt,name=market_hour,json=marketHour,proto3" json:"market_hour,omitempty"`
 	Version                    string      `protobuf:"bytes,11,opt,name=version,proto3" json:"version,omitempty"`
-	UtxoMinAmount              int64       `protobuf:"varint,12,opt,name=utxo_min_amount,json=utxoMinAmount,proto3" json:"utxo_min_amount,omitempty"`
-	UtxoMaxAmount              int64       `protobuf:"varint,13,opt,name=utxo_max_amount,json=utxoMaxAmount,proto3" json:"utxo_max_amount,omitempty"`
-	VtxoMinAmount              int64       `protobuf:"varint,14,opt,name=vtxo_min_amount,json=vtxoMinAmount,proto3" json:"vtxo_min_amount,omitempty"`
-	VtxoMaxAmount              int64       `protobuf:"varint,15,opt,name=vtxo_max_amount,json=vtxoMaxAmount,proto3" json:"vtxo_max_amount,omitempty"`
+	UtxoMinAmount              int64       `protobuf:"varint,12,opt,name=utxo_min_amount,json=utxoMinAmount,proto3" json:"utxo_min_amount,omitempty"` // -1 means native dust limit (default)
+	UtxoMaxAmount              int64       `protobuf:"varint,13,opt,name=utxo_max_amount,json=utxoMaxAmount,proto3" json:"utxo_max_amount,omitempty"` // -1 means no limit (default), 0 means boarding not allowed
+	VtxoMinAmount              int64       `protobuf:"varint,14,opt,name=vtxo_min_amount,json=vtxoMinAmount,proto3" json:"vtxo_min_amount,omitempty"` // -1 means native dust limit (default)
+	VtxoMaxAmount              int64       `protobuf:"varint,15,opt,name=vtxo_max_amount,json=vtxoMaxAmount,proto3" json:"vtxo_max_amount,omitempty"` // -1 means no limit (default)
 }
 
 func (x *GetInfoResponse) Reset() {
