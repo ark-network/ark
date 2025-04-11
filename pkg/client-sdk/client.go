@@ -103,10 +103,6 @@ func (a *arkClient) Dump(ctx context.Context) (string, error) {
 }
 
 func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
-	if err := a.safeCheck(); err != nil {
-		return "", "", err
-	}
-
 	offchainAddr, boardingAddr, err := a.wallet.NewAddress(ctx, false)
 	if err != nil {
 		return "", "", err
@@ -162,10 +158,6 @@ func (a *arkClient) Stop() error {
 func (a *arkClient) ListVtxos(
 	ctx context.Context,
 ) (spendableVtxos, spentVtxos []client.Vtxo, err error) {
-	if err := a.safeCheck(); err != nil {
-		return nil, nil, err
-	}
-
 	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return
