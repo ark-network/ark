@@ -293,6 +293,10 @@ func (a *covenantlessArkClient) InitWithWallet(ctx context.Context, args InitWit
 func (a *covenantlessArkClient) Balance(
 	ctx context.Context, computeVtxoExpiration bool,
 ) (*Balance, error) {
+	if err := a.safeCheck(); err != nil {
+		return nil, err
+	}
+
 	offchainAddrs, boardingAddrs, redeemAddrs, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return nil, err
@@ -470,6 +474,10 @@ func (a *covenantlessArkClient) SendOffChain(
 	withExpiryCoinselect bool, receivers []Receiver,
 	withZeroFees bool,
 ) (string, error) {
+	if err := a.safeCheck(); err != nil {
+		return "", err
+	}
+
 	if len(receivers) <= 0 {
 		return "", fmt.Errorf("missing receivers")
 	}
@@ -593,6 +601,10 @@ func (a *covenantlessArkClient) SendOffChain(
 }
 
 func (a *covenantlessArkClient) RedeemNotes(ctx context.Context, notes []string, opts ...Option) (string, error) {
+	if err := a.safeCheck(); err != nil {
+		return "", err
+	}
+
 	amount := uint64(0)
 
 	options := &SettleOptions{}
@@ -704,15 +716,19 @@ func (a *covenantlessArkClient) CollaborativeExit(
 	addr string, amount uint64, withExpiryCoinselect bool,
 	opts ...Option,
 ) (string, error) {
+	if err := a.safeCheck(); err != nil {
+		return "", err
+	}
+
+	if a.Config.UtxoMaxAmount == 0 {
+		return "", fmt.Errorf("operation not allowed by the server")
+	}
+
 	options := &SettleOptions{}
 	for _, opt := range opts {
 		if err := opt(options); err != nil {
 			return "", err
 		}
-	}
-
-	if a.wallet.IsLocked() {
-		return "", fmt.Errorf("wallet is locked")
 	}
 
 	netParams := utils.ToBitcoinNetwork(a.Network)
@@ -803,14 +819,18 @@ func (a *covenantlessArkClient) CollaborativeExit(
 }
 
 func (a *covenantlessArkClient) Settle(ctx context.Context, opts ...Option) (string, error) {
+	if err := a.safeCheck(); err != nil {
+		return "", err
+	}
+
 	return a.sendOffchain(ctx, false, nil, opts...)
 }
 
 func (a *covenantlessArkClient) GetTransactionHistory(
 	ctx context.Context,
 ) ([]types.Transaction, error) {
-	if a.Config == nil {
-		return nil, fmt.Errorf("client not initialized")
+	if err := a.safeCheck(); err != nil {
+		return nil, err
 	}
 
 	if a.Config.WithTransactionFeed {
