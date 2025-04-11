@@ -459,13 +459,15 @@ func (s *covenantlessService) SubmitRedeemTx(
 			return "", "", fmt.Errorf("output value is less than dust threshold")
 		}
 
-		if s.vtxoMaxAmount > 0 {
+		if s.vtxoMaxAmount >= 0 {
 			if out.Value > s.vtxoMaxAmount {
 				return "", "", fmt.Errorf("output amount is higher than max vtxo amount:%d", s.vtxoMaxAmount)
 			}
 		}
-		if out.Value < s.vtxoMinAmount {
-			return "", "", fmt.Errorf("output amount is lower than min utxo amount:%d", s.vtxoMinAmount)
+		if s.vtxoMinAmount >= 0 {
+			if out.Value < s.vtxoMinAmount {
+				return "", "", fmt.Errorf("output amount is lower than min utxo amount:%d", s.vtxoMinAmount)
+			}
 		}
 	}
 
@@ -698,13 +700,15 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 					return "", fmt.Errorf("tx %s expired", input.Txid)
 				}
 
-				if s.utxoMaxAmount > 0 {
+				if s.utxoMaxAmount >= 0 {
 					if tx.TxOut[input.VOut].Value > s.utxoMaxAmount {
 						return "", fmt.Errorf("boarding input amount is higher than max utxo amount:%d", s.utxoMaxAmount)
 					}
 				}
-				if tx.TxOut[input.VOut].Value < s.utxoMinAmount {
-					return "", fmt.Errorf("boarding input amount is lower than min utxo amount:%d", s.utxoMinAmount)
+				if s.utxoMinAmount >= 0 {
+					if tx.TxOut[input.VOut].Value < s.utxoMinAmount {
+						return "", fmt.Errorf("boarding input amount is lower than min utxo amount:%d", s.utxoMinAmount)
+					}
 				}
 
 				boardingTxs[input.Txid] = tx
@@ -826,13 +830,15 @@ func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, rece
 			return fmt.Errorf("receiver amount must be greater than dust amount %d", dustAmount)
 		}
 
-		if s.vtxoMaxAmount > 0 {
+		if s.vtxoMaxAmount >= 0 {
 			if rcv.Amount > uint64(s.vtxoMaxAmount) {
 				return fmt.Errorf("receiver amount is higher than max vtxo amount:%d", s.vtxoMaxAmount)
 			}
 		}
-		if rcv.Amount < uint64(s.vtxoMinAmount) {
-			return fmt.Errorf("receiver amount is lower than min vtxo amount:%d", s.vtxoMinAmount)
+		if s.vtxoMinAmount >= 0 {
+			if rcv.Amount < uint64(s.vtxoMinAmount) {
+				return fmt.Errorf("receiver amount is lower than min vtxo amount:%d", s.vtxoMinAmount)
+			}
 		}
 
 		if !rcv.IsOnchain() {
@@ -1021,6 +1027,10 @@ func (s *covenantlessService) GetInfo(ctx context.Context) (*ServiceInfo, error)
 			Period:        marketHourConfig.Period,
 			RoundInterval: marketHourConfig.RoundInterval,
 		},
+		UtxoMinAmount: s.utxoMinAmount,
+		UtxoMaxAmount: s.utxoMaxAmount,
+		VtxoMinAmount: s.vtxoMinAmount,
+		VtxoMaxAmount: s.vtxoMaxAmount,
 	}, nil
 }
 

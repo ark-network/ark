@@ -256,6 +256,10 @@ func (a *arkClient) initWithWallet(
 		MarketHourPeriod:           info.MarketHourPeriod,
 		MarketHourRoundInterval:    info.MarketHourRoundInterval,
 		ExplorerURL:                explorerSvc.BaseUrl(),
+		UtxoMinAmount:              info.UtxoMinAmount,
+		UtxoMaxAmount:              info.UtxoMaxAmount,
+		VtxoMinAmount:              info.VtxoMinAmount,
+		VtxoMaxAmount:              info.VtxoMaxAmount,
 	}
 	if err := a.store.ConfigStore().AddData(ctx, storeData); err != nil {
 		return err
@@ -338,6 +342,10 @@ func (a *arkClient) init(
 		MarketHourEndTime:          info.MarketHourEndTime,
 		MarketHourPeriod:           info.MarketHourPeriod,
 		MarketHourRoundInterval:    info.MarketHourRoundInterval,
+		UtxoMinAmount:              info.UtxoMinAmount,
+		UtxoMaxAmount:              info.UtxoMaxAmount,
+		VtxoMinAmount:              info.VtxoMinAmount,
+		VtxoMaxAmount:              info.VtxoMaxAmount,
 	}
 	walletSvc, err := getWallet(a.store.ConfigStore(), &cfgData, supportedWallets)
 	if err != nil {

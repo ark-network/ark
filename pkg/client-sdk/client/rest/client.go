@@ -95,6 +95,22 @@ func (a *restClient) GetInfo(
 	if err != nil {
 		return nil, err
 	}
+	utxoMinAmount, err := strconv.Atoi(resp.Payload.UtxoMinAmount)
+	if err != nil {
+		return nil, err
+	}
+	utxoMaxAmount, err := strconv.Atoi(resp.Payload.UtxoMaxAmount)
+	if err != nil {
+		return nil, err
+	}
+	vtxoMinAmount, err := strconv.Atoi(resp.Payload.VtxoMinAmount)
+	if err != nil {
+		return nil, err
+	}
+	vtxoMaxAmount, err := strconv.Atoi(resp.Payload.VtxoMaxAmount)
+	if err != nil {
+		return nil, err
+	}
 
 	return &client.Info{
 		PubKey:                     resp.Payload.Pubkey,
@@ -110,6 +126,10 @@ func (a *restClient) GetInfo(
 		MarketHourEndTime:          int64(nextEndTime),
 		MarketHourPeriod:           int64(period),
 		MarketHourRoundInterval:    int64(mhRoundInterval),
+		UtxoMinAmount:              int64(utxoMinAmount),
+		UtxoMaxAmount:              int64(utxoMaxAmount),
+		VtxoMinAmount:              int64(vtxoMinAmount),
+		VtxoMaxAmount:              int64(vtxoMaxAmount),
 	}, nil
 }
 
