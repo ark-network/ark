@@ -141,30 +141,30 @@ type TxRequestInfo struct {
 	LastPing       time.Time
 }
 
-type VtxoTreeReq struct {
-	BatchOutpoint Outpoint
-	Page          PageReq
-}
-
-type ForfeitTxsReq struct {
-	BatchOutpoint Outpoint
-	Page          PageReq
-}
-
-type ConnectorsReq struct {
-	BatchOutpoint Outpoint
-	Page          PageReq
-}
-
-type SpendableVtxosReq struct {
-	Address string
-	Page    PageReq
-}
-
-type VtxoChainReq struct {
-	VtxoKey Outpoint
-	Page    PageReq
-}
+//type VtxoTreeReq struct {
+//	BatchOutpoint Outpoint
+//	Page          PageReq
+//}
+//
+//type ForfeitTxsReq struct {
+//	BatchOutpoint Outpoint
+//	Page          PageReq
+//}
+//
+//type ConnectorsReq struct {
+//	BatchOutpoint Outpoint
+//	Page          PageReq
+//}
+//
+//type SpendableVtxosReq struct {
+//	Address string
+//	Page    PageReq
+//}
+//
+//type VtxoChainReq struct {
+//	VtxoKey Outpoint
+//	Page    PageReq
+//}
 
 type VtxoChainResp struct {
 	Transactions map[string][]string
@@ -216,20 +216,20 @@ type SpendableVtxosResp struct {
 	Page  PageResp
 }
 
-type VirtualTxsReq struct {
-	TxIDs []string
-	Page  PageReq
-}
+//type VirtualTxsReq struct {
+//	TxIDs []string
+//	Page  PageReq
+//}
 
 type VirtualTxsResp struct {
 	Transactions []string
 	Page         PageResp
 }
 
-type SweptCommitmentTxReq struct {
-	Address string
-	Page    PageReq
-}
+//type SweptCommitmentTxReq struct {
+//	Address string
+//	Page    PageReq
+//}
 
 type SweptCommitmentTxResp struct {
 	SweptBy []string
@@ -240,12 +240,12 @@ type Outpoint struct {
 	Vout uint32
 }
 
-type TxHistoryReq struct {
-	Address   string
-	StartTime int64
-	EndTime   int64
-	Page      PageReq
-}
+//type TxHistoryReq struct {
+//	Address   string
+//	StartTime int64
+//	EndTime   int64
+//	Page      PageReq
+//}
 
 type TxType int
 
@@ -269,7 +269,7 @@ type TxHistoryRecord struct {
 	Settled     bool
 }
 
-type PageReq struct {
+type Page struct {
 	PageSize int
 	PageNum  int
 }

@@ -58,6 +58,189 @@ func (q *Queries) GetLatestMarketHour(ctx context.Context) (MarketHour, error) {
 	return i, err
 }
 
+const getRoundConnectorTreeTxs = `-- name: GetRoundConnectorTreeTxs :many
+SELECT tx.txid, tx.tx, tx.round_id, tx.type, tx.position, tx.tree_level, tx.parent_txid, tx.is_leaf FROM tx
+WHERE tx.round_id = ? AND tx.type = 'tree'
+`
+
+func (q *Queries) GetRoundConnectorTreeTxs(ctx context.Context, roundID string) ([]Tx, error) {
+	rows, err := q.db.QueryContext(ctx, getRoundConnectorTreeTxs, roundID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Tx
+	for rows.Next() {
+		var i Tx
+		if err := rows.Scan(
+			&i.Txid,
+			&i.Tx,
+			&i.RoundID,
+			&i.Type,
+			&i.Position,
+			&i.TreeLevel,
+			&i.ParentTxid,
+			&i.IsLeaf,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getRoundForfeitTxs = `-- name: GetRoundForfeitTxs :many
+SELECT tx.txid, tx.tx, tx.round_id, tx.type, tx.position, tx.tree_level, tx.parent_txid, tx.is_leaf FROM tx
+WHERE tx.round_id = ? AND tx.type = 'forfeit'
+`
+
+func (q *Queries) GetRoundForfeitTxs(ctx context.Context, roundID string) ([]Tx, error) {
+	rows, err := q.db.QueryContext(ctx, getRoundForfeitTxs, roundID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Tx
+	for rows.Next() {
+		var i Tx
+		if err := rows.Scan(
+			&i.Txid,
+			&i.Tx,
+			&i.RoundID,
+			&i.Type,
+			&i.Position,
+			&i.TreeLevel,
+			&i.ParentTxid,
+			&i.IsLeaf,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getRoundStats = `-- name: GetRoundStats :one
+SELECT
+    r.swept,
+    r.starting_timestamp,
+    r.ending_timestamp,
+    (
+        SELECT COALESCE(SUM(v2.amount), 0)
+        FROM vtxo v2
+                 JOIN tx_request req2 ON req2.id = v2.request_id
+        WHERE req2.round_id = r.id
+    ) AS total_forfeit_amount,
+    (
+        SELECT COALESCE(COUNT(v3.txid), 0)
+        FROM vtxo v3
+                 JOIN tx_request req3 ON req3.id = v3.request_id
+        WHERE req3.round_id = r.id
+    ) AS total_input_vtxos,
+    (
+        SELECT COALESCE(SUM(rr.amount), 0)
+        FROM receiver rr
+                 JOIN tx_request req4 ON req4.id = rr.request_id
+        WHERE req4.round_id = r.id
+          AND (rr.onchain_address = '' OR rr.onchain_address IS NULL)
+    ) AS total_batch_amount,
+    (
+        SELECT COUNT(*)
+        FROM tx t
+        WHERE t.round_id = r.id
+          AND t.type = 'tree'
+          AND t.is_leaf = 1
+    ) AS total_output_vtxos,
+    (
+        SELECT MAX(v.expire_at)
+        FROM vtxo v
+        WHERE v.round_tx = r.txid
+    ) AS expires_at
+FROM round r
+WHERE r.txid = ?
+`
+
+type GetRoundStatsRow struct {
+	Swept              bool
+	StartingTimestamp  int64
+	EndingTimestamp    int64
+	TotalForfeitAmount interface{}
+	TotalInputVtxos    interface{}
+	TotalBatchAmount   interface{}
+	TotalOutputVtxos   int64
+	ExpiresAt          interface{}
+}
+
+func (q *Queries) GetRoundStats(ctx context.Context, txid string) (GetRoundStatsRow, error) {
+	row := q.db.QueryRowContext(ctx, getRoundStats, txid)
+	var i GetRoundStatsRow
+	err := row.Scan(
+		&i.Swept,
+		&i.StartingTimestamp,
+		&i.EndingTimestamp,
+		&i.TotalForfeitAmount,
+		&i.TotalInputVtxos,
+		&i.TotalBatchAmount,
+		&i.TotalOutputVtxos,
+		&i.ExpiresAt,
+	)
+	return i, err
+}
+
+const getSpendableVtxosWithPubKey = `-- name: GetSpendableVtxosWithPubKey :many
+SELECT vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.round_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.created_at, vtxo.request_id, vtxo.redeem_tx FROM vtxo
+WHERE vtxo.pubkey = ? AND vtxo.spent = false AND vtxo.swept = false
+`
+
+func (q *Queries) GetSpendableVtxosWithPubKey(ctx context.Context, pubkey string) ([]Vtxo, error) {
+	rows, err := q.db.QueryContext(ctx, getSpendableVtxosWithPubKey, pubkey)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Vtxo
+	for rows.Next() {
+		var i Vtxo
+		if err := rows.Scan(
+			&i.Txid,
+			&i.Vout,
+			&i.Pubkey,
+			&i.Amount,
+			&i.RoundTx,
+			&i.SpentBy,
+			&i.Spent,
+			&i.Redeemed,
+			&i.Swept,
+			&i.ExpireAt,
+			&i.CreatedAt,
+			&i.RequestID,
+			&i.RedeemTx,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTxsByTxid = `-- name: GetTxsByTxid :many
 SELECT tx.txid, tx.tx, tx.round_id, tx.type, tx.position, tx.tree_level, tx.parent_txid, tx.is_leaf FROM tx
 WHERE txid in (/*SLICE:ids*/?)

@@ -175,6 +175,35 @@ func (v *vxtoRepository) GetVtxosForRound(ctx context.Context, txid string) ([]d
 	return readRows(rows)
 }
 
+func (v *vxtoRepository) GetSpendableVtxosWithPubKey(ctx context.Context, pubkey string) ([]domain.Vtxo, error) {
+	rows, err := v.querier.GetSpendableVtxosWithPubKey(ctx, pubkey)
+	if err != nil {
+		return nil, err
+	}
+
+	vtxos := make([]domain.Vtxo, 0, len(rows))
+	for _, row := range rows {
+		vtxos = append(vtxos, domain.Vtxo{
+			VtxoKey: domain.VtxoKey{
+				Txid: row.Txid,
+				VOut: uint32(row.Vout),
+			},
+			Amount:    uint64(row.Amount),
+			PubKey:    row.Pubkey,
+			RoundTxid: row.RoundTx,
+			SpentBy:   row.SpentBy,
+			Spent:     row.Spent,
+			Redeemed:  row.Redeemed,
+			Swept:     row.Swept,
+			ExpireAt:  row.ExpireAt,
+			RedeemTx:  row.RedeemTx.String,
+			CreatedAt: row.CreatedAt,
+		})
+	}
+
+	return vtxos, nil
+}
+
 func (v *vxtoRepository) RedeemVtxos(ctx context.Context, vtxos []domain.VtxoKey) error {
 	txBody := func(querierWithTx *queries.Queries) error {
 		for _, vtxo := range vtxos {

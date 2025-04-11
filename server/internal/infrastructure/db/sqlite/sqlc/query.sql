@@ -87,6 +87,57 @@ WHERE round.txid = ?;
 SELECT round.txid FROM round
 WHERE round.swept = false AND round.ended = true AND round.failed = false;
 
+-- name: GetRoundStats :one
+SELECT
+    r.swept,
+    r.starting_timestamp,
+    r.ending_timestamp,
+    (
+        SELECT COALESCE(SUM(v2.amount), 0)
+        FROM vtxo v2
+                 JOIN tx_request req2 ON req2.id = v2.request_id
+        WHERE req2.round_id = r.id
+    ) AS total_forfeit_amount,
+    (
+        SELECT COALESCE(COUNT(v3.txid), 0)
+        FROM vtxo v3
+                 JOIN tx_request req3 ON req3.id = v3.request_id
+        WHERE req3.round_id = r.id
+    ) AS total_input_vtxos,
+    (
+        SELECT COALESCE(SUM(rr.amount), 0)
+        FROM receiver rr
+                 JOIN tx_request req4 ON req4.id = rr.request_id
+        WHERE req4.round_id = r.id
+          AND (rr.onchain_address = '' OR rr.onchain_address IS NULL)
+    ) AS total_batch_amount,
+    (
+        SELECT COUNT(*)
+        FROM tx t
+        WHERE t.round_id = r.id
+          AND t.type = 'tree'
+          AND t.is_leaf = 1
+    ) AS total_output_vtxos,
+    (
+        SELECT MAX(v.expire_at)
+        FROM vtxo v
+        WHERE v.round_tx = r.txid
+    ) AS expires_at
+FROM round r
+WHERE r.txid = ?;
+
+-- name: GetRoundForfeitTxs :many
+SELECT tx.* FROM tx
+WHERE tx.round_id = ? AND tx.type = 'forfeit';
+
+-- name: GetRoundConnectorTreeTxs :many
+SELECT tx.* FROM tx
+WHERE tx.round_id = ? AND tx.type = 'tree';
+
+-- name: GetSpendableVtxosWithPubKey :many
+SELECT vtxo.* FROM vtxo
+WHERE vtxo.pubkey = ? AND vtxo.spent = false AND vtxo.swept = false;
+
 -- name: SelectSweptRoundsConnectorAddress :many
 SELECT round.connector_address FROM round
 WHERE round.swept = true AND round.failed = false AND round.ended = true AND round.connector_address <> '';

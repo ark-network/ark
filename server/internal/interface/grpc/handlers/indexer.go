@@ -46,18 +46,17 @@ func (e indexerService) GetCommitmentTx(
 }
 
 func (e indexerService) GetVtxoTree(ctx context.Context, request *arkv1.GetVtxoTreeRequest) (*arkv1.GetVtxoTreeResponse, error) {
-	req := application.VtxoTreeReq{
-		BatchOutpoint: application.Outpoint{
-			Txid: request.BatchOutpoint.Txid,
-			Vout: request.BatchOutpoint.Vout,
-		},
-		Page: application.PageReq{
-			PageSize: int(request.Page.Size),
-			PageNum:  int(request.Page.Index),
-		},
+	batchOutpoint := application.Outpoint{
+		Txid: request.BatchOutpoint.Txid,
+		Vout: request.BatchOutpoint.Vout,
 	}
 
-	resp, err := e.indexerSvc.GetVtxoTree(ctx, req)
+	page := application.Page{
+		PageSize: int(request.Page.Size),
+		PageNum:  int(request.Page.Index),
+	}
+
+	resp, err := e.indexerSvc.GetVtxoTree(ctx, batchOutpoint, page)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get vtxo tree: %v", err)
 	}
@@ -84,18 +83,17 @@ func (e indexerService) GetVtxoTree(ctx context.Context, request *arkv1.GetVtxoT
 }
 
 func (e indexerService) GetForfeitTxs(ctx context.Context, request *arkv1.GetForfeitTxsRequest) (*arkv1.GetForfeitTxsResponse, error) {
-	req := application.ForfeitTxsReq{
-		BatchOutpoint: application.Outpoint{
-			Txid: request.BatchOutpoint.Txid,
-			Vout: request.BatchOutpoint.Vout,
-		},
-		Page: application.PageReq{
-			PageSize: int(request.Page.Size),
-			PageNum:  int(request.Page.Index),
-		},
+	batchOutpoint := application.Outpoint{
+		Txid: request.BatchOutpoint.Txid,
+		Vout: request.BatchOutpoint.Vout,
 	}
 
-	resp, err := e.indexerSvc.GetForfeitTxs(ctx, req)
+	page := application.Page{
+		PageSize: int(request.Page.Size),
+		PageNum:  int(request.Page.Index),
+	}
+
+	resp, err := e.indexerSvc.GetForfeitTxs(ctx, batchOutpoint, page)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get forfeit txs: %v", err)
 	}
@@ -111,18 +109,17 @@ func (e indexerService) GetForfeitTxs(ctx context.Context, request *arkv1.GetFor
 }
 
 func (e indexerService) GetConnectors(ctx context.Context, request *arkv1.GetConnectorsRequest) (*arkv1.GetConnectorsResponse, error) {
-	req := application.ConnectorsReq{
-		BatchOutpoint: application.Outpoint{
-			Txid: request.BatchOutpoint.Txid,
-			Vout: request.BatchOutpoint.Vout,
-		},
-		Page: application.PageReq{
-			PageSize: int(request.Page.Size),
-			PageNum:  int(request.Page.Index),
-		},
+	batchOutpoint := application.Outpoint{
+		Txid: request.BatchOutpoint.Txid,
+		Vout: request.BatchOutpoint.Vout,
 	}
 
-	resp, err := e.indexerSvc.GetConnectors(ctx, req)
+	page := application.Page{
+		PageSize: int(request.Page.Size),
+		PageNum:  int(request.Page.Index),
+	}
+
+	resp, err := e.indexerSvc.GetConnectors(ctx, batchOutpoint, page)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get connectors: %v", err)
 	}
@@ -149,15 +146,12 @@ func (e indexerService) GetConnectors(ctx context.Context, request *arkv1.GetCon
 }
 
 func (e indexerService) GetSpendableVtxos(ctx context.Context, request *arkv1.GetSpendableVtxosRequest) (*arkv1.GetSpendableVtxosResponse, error) {
-	req := application.SpendableVtxosReq{
-		Address: request.Address,
-		Page: application.PageReq{
-			PageSize: int(request.Page.Size),
-			PageNum:  int(request.Page.Index),
-		},
+	page := application.Page{
+		PageSize: int(request.Page.Size),
+		PageNum:  int(request.Page.Index),
 	}
 
-	resp, err := e.indexerSvc.GetSpendableVtxos(ctx, req)
+	resp, err := e.indexerSvc.GetSpendableVtxos(ctx, request.Address, page)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get spendable vtxos: %v", err)
 	}
@@ -191,17 +185,12 @@ func (e indexerService) GetSpendableVtxos(ctx context.Context, request *arkv1.Ge
 }
 
 func (e indexerService) GetTransactionHistory(ctx context.Context, request *arkv1.GetTransactionHistoryRequest) (*arkv1.GetTransactionHistoryResponse, error) {
-	req := application.TxHistoryReq{
-		Address:   request.Address,
-		StartTime: request.StartTime,
-		EndTime:   request.EndTime,
-		Page: application.PageReq{
-			PageSize: int(request.Page.Size),
-			PageNum:  int(request.Page.Index),
-		},
+	page := application.Page{
+		PageSize: int(request.Page.Size),
+		PageNum:  int(request.Page.Index),
 	}
 
-	resp, err := e.indexerSvc.GetTransactionHistory(ctx, req)
+	resp, err := e.indexerSvc.GetTransactionHistory(ctx, request.Address, request.StartTime, request.EndTime, page)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get transaction history: %v", err)
 	}
@@ -228,18 +217,17 @@ func (e indexerService) GetTransactionHistory(ctx context.Context, request *arkv
 }
 
 func (e indexerService) GetVtxoChain(ctx context.Context, request *arkv1.GetVtxoChainRequest) (*arkv1.GetVtxoChainResponse, error) {
-	req := application.VtxoChainReq{
-		VtxoKey: application.Outpoint{
-			Txid: request.Outpoint.Txid,
-			Vout: request.Outpoint.Vout,
-		},
-		Page: application.PageReq{
-			PageSize: int(request.Page.Size),
-			PageNum:  int(request.Page.Index),
-		},
+	outpoint := application.Outpoint{
+		Txid: request.Outpoint.Txid,
+		Vout: request.Outpoint.Vout,
 	}
 
-	resp, err := e.indexerSvc.GetVtxoChain(ctx, req)
+	page := application.Page{
+		PageSize: int(request.Page.Size),
+		PageNum:  int(request.Page.Index),
+	}
+
+	resp, err := e.indexerSvc.GetVtxoChain(ctx, outpoint, page)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get vtxo chain: %v", err)
 	}
@@ -262,15 +250,12 @@ func (e indexerService) GetVtxoChain(ctx context.Context, request *arkv1.GetVtxo
 }
 
 func (e indexerService) GetVirtualTxs(ctx context.Context, request *arkv1.GetVirtualTxsRequest) (*arkv1.GetVirtualTxsResponse, error) {
-	req := application.VirtualTxsReq{
-		TxIDs: request.Txids,
-		Page: application.PageReq{
-			PageSize: int(request.Page.Size),
-			PageNum:  int(request.Page.Index),
-		},
+	page := application.Page{
+		PageSize: int(request.Page.Size),
+		PageNum:  int(request.Page.Index),
 	}
 
-	resp, err := e.indexerSvc.GetVirtualTxs(ctx, req)
+	resp, err := e.indexerSvc.GetVirtualTxs(ctx, request.Txids, page)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get virtual txs: %v", err)
 	}

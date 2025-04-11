@@ -91,15 +91,12 @@ func TestBuildChain(t *testing.T) {
 	repoManager := &MockRepoManager{vtxoRepo: vtxoRepo}
 	svc := indexerService{repoManager: repoManager}
 
-	resp, err := svc.GetVtxoChain(
-		ctx, VtxoChainReq{
-			VtxoKey: Outpoint{
-				Txid: redeemTx3ID,
-				Vout: 0,
-			},
-			Page: PageReq{},
-		},
-	)
+	outpoint := Outpoint{
+		Txid: redeemTx3ID,
+		Vout: 0,
+	}
+
+	resp, err := svc.GetVtxoChain(ctx, outpoint, Page{})
 	require.NoError(t, err, "buildChain should succeed")
 
 	redeemTx3Txs := resp.Transactions[redeemTx3ID]
@@ -135,6 +132,10 @@ func (m *MockRepoManager) Close()                                    {}
 
 type MockVtxoRepo struct {
 	data map[domain.VtxoKey]domain.Vtxo
+}
+
+func (m *MockVtxoRepo) GetSpendableVtxosWithPubKey(ctx context.Context, pubkey string) ([]domain.Vtxo, error) {
+	panic("not implemented")
 }
 
 func (m *MockVtxoRepo) AddVtxos(ctx context.Context, vtxos []domain.Vtxo) error {

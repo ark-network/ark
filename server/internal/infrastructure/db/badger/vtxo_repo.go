@@ -19,6 +19,11 @@ type vtxoRepository struct {
 	store *badgerhold.Store
 }
 
+func (r *vtxoRepository) GetSpendableVtxosWithPubKey(ctx context.Context, pubkey string) ([]domain.Vtxo, error) {
+	// TODO implement
+	return nil, nil
+}
+
 func NewVtxoRepository(config ...interface{}) (domain.VtxoRepository, error) {
 	if len(config) != 2 {
 		return nil, fmt.Errorf("invalid config")

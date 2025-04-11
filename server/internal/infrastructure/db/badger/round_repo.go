@@ -104,6 +104,21 @@ func (r *roundRepository) GetExpiredRoundsTxid(
 	return txids, nil
 }
 
+func (r *roundRepository) GetRoundStats(ctx context.Context, roundTxid string) (*domain.RoundStats, error) {
+	// TODO implement
+	return nil, nil
+}
+
+func (r *roundRepository) GetRoundForfeitTxs(ctx context.Context, roundTxid string) ([]domain.ForfeitTx, error) {
+	// TODO implement
+	return nil, nil
+}
+
+func (r *roundRepository) GetRoundConnectorTree(ctx context.Context, roundTxid string) (tree.TxTree, error) {
+	// TODO implement
+	return nil, nil
+}
+
 func (r *roundRepository) GetSweptRoundsConnectorAddress(
 	ctx context.Context,
 ) ([]string, error) {
