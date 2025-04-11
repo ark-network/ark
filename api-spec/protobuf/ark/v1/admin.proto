@@ -23,7 +23,7 @@ service AdminService {
       post: "/v1/admin/rounds"
       body: "*"
     };
-  } 
+  }
   rpc CreateNote(CreateNoteRequest) returns (CreateNoteResponse) {
     option (google.api.http) = {
       post: "/v1/admin/note"
@@ -98,11 +98,11 @@ message CreateNoteResponse {
 
 message GetMarketHourConfigRequest {}
 message GetMarketHourConfigResponse {
-    MarketHourConfig config = 1;
+  MarketHourConfig config = 1;
 }
 
 message UpdateMarketHourConfigRequest {
-    MarketHourConfig config = 1;
+  MarketHourConfig config = 1;
 }
 message UpdateMarketHourConfigResponse {}
 
