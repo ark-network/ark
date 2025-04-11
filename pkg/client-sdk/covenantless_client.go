@@ -1013,10 +1013,16 @@ func (a *covenantlessArkClient) refreshDb(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	boardingTxs, roundsToIgnore, err := a.getBoardingTxs(ctx)
-	if err != nil {
-		return err
+
+	boardingTxs := make([]types.Transaction, 0)
+	roundsToIgnore := make(map[string]struct{})
+	if a.Config.UtxoMaxAmount != 0 {
+		boardingTxs, roundsToIgnore, err = a.getBoardingTxs(ctx)
+		if err != nil {
+			return err
+		}
 	}
+
 	offchainTxs, err := vtxosToTxsCovenantless(spendableVtxos, spentVtxos, roundsToIgnore)
 	if err != nil {
 		return err
