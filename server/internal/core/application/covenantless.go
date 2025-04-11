@@ -1917,7 +1917,9 @@ func (s *covenantlessService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 		return nil
 	}
 
-	createdAt := time.Now().Unix()
+	now := time.Now()
+	createdAt := now.Unix()
+	expireAt := now.Add(time.Duration(s.vtxoTreeExpiry.Seconds()) * time.Second).Unix()
 
 	leaves := round.VtxoTree.Leaves()
 	vtxos := make([]domain.Vtxo, 0)
@@ -1941,6 +1943,7 @@ func (s *covenantlessService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 				Amount:    uint64(out.Value),
 				RoundTxid: round.Txid,
 				CreatedAt: createdAt,
+				ExpireAt:  expireAt,
 			})
 		}
 	}
