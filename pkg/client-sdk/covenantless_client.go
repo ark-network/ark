@@ -301,8 +301,8 @@ func (a *covenantlessArkClient) InitWithWallet(ctx context.Context, args InitWit
 func (a *covenantlessArkClient) Balance(
 	ctx context.Context, computeVtxoExpiration bool,
 ) (*Balance, error) {
-	if err := a.safeCheck(); err != nil {
-		return nil, err
+	if a.wallet == nil {
+		return nil, fmt.Errorf("wallet not initialized")
 	}
 
 	offchainAddrs, boardingAddrs, redeemAddrs, err := a.wallet.GetAddresses(ctx)
