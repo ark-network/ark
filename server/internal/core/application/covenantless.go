@@ -1372,6 +1372,9 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 		return
 	}
 
+	// nolint:all
+	availableBalance, _, _ := s.wallet.MainAccountBalance(ctx)
+
 	// TODO: understand how many tx requests must be popped from the queue and actually registered for the round
 	num := s.txRequests.len()
 	if num == 0 {
@@ -1389,6 +1392,17 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 	s.numOfBoardingInputsMtx.Lock()
 	s.numOfBoardingInputs = len(boardingInputs)
 	s.numOfBoardingInputsMtx.Unlock()
+
+	totAmount := uint64(0)
+	for _, request := range requests {
+		totAmount += request.TotalOutputAmount()
+	}
+	if availableBalance <= totAmount {
+		err := fmt.Errorf("not enough liquidity")
+		round.Fail(err)
+		log.WithError(err).Debugf("round %s aborted, balance: %d", round.Id, availableBalance)
+		return
+	}
 
 	if _, err := round.RegisterTxRequests(requests); err != nil {
 		round.Fail(fmt.Errorf("failed to register tx requests: %s", err))
