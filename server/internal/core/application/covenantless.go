@@ -566,9 +566,16 @@ func (s *covenantlessService) SubmitRedeemTx(
 			log.Debugf("started watching %d vtxos", len(newVtxos))
 		}
 
+		updatedSpentVtxos := make([]domain.Vtxo, 0, len(spentVtxos))
+		for _, vtxo := range spentVtxos {
+			updatedSpentVtxos = append(updatedSpentVtxos, vtxo)
+			vtxo.Spent = true
+			vtxo.SpentBy = redeemTxid
+		}
+
 		s.transactionEventsCh <- RedeemTransactionEvent{
 			RedeemTxid:     redeemTxid,
-			SpentVtxos:     spentVtxos,
+			SpentVtxos:     updatedSpentVtxos,
 			SpendableVtxos: newVtxos,
 			TxHex:          signedRedeemTx,
 		}
@@ -1773,9 +1780,16 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, roundEndTime time
 	}
 
 	go func() {
+		spentVtxos := s.getSpentVtxos(round.TxRequests)
+		updatedSpentVtxos := make([]domain.Vtxo, 0, len(spentVtxos))
+		for _, vtxo := range spentVtxos {
+			updatedSpentVtxos = append(updatedSpentVtxos, vtxo)
+			vtxo.Spent = true
+			vtxo.SpentBy = round.Txid
+		}
 		s.transactionEventsCh <- RoundTransactionEvent{
 			RoundTxid:             round.Txid,
-			SpentVtxos:            s.getSpentVtxos(round.TxRequests),
+			SpentVtxos:            updatedSpentVtxos,
 			SpendableVtxos:        s.getNewVtxos(round),
 			ClaimedBoardingInputs: boardingInputs,
 			TxHex:                 signedRoundTx,
