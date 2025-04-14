@@ -77,7 +77,7 @@ func (v *vxtoRepository) GetAllSweepableVtxos(ctx context.Context) ([]domain.Vtx
 	return readRows(rows)
 }
 
-func (v *vxtoRepository) GetAllVtxos(ctx context.Context, pubkey string) ([]domain.Vtxo, []domain.Vtxo, error) {
+func (v *vxtoRepository) GetAllNonRedeemedVtxos(ctx context.Context, pubkey string) ([]domain.Vtxo, []domain.Vtxo, error) {
 	withPubkey := len(pubkey) > 0
 
 	var rows []queries.Vtxo
@@ -149,6 +149,19 @@ func (v *vxtoRepository) GetVtxos(ctx context.Context, outpoints []domain.VtxoKe
 	return vtxos, nil
 }
 
+func (v *vxtoRepository) GetAll(ctx context.Context) ([]domain.Vtxo, error) {
+	res, err := v.querier.SelectAllVtxos(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]queries.Vtxo, 0, len(res))
+	for _, row := range res {
+		rows = append(rows, row.Vtxo)
+	}
+
+	return readRows(rows)
+}
+
 func (v *vxtoRepository) GetVtxosForRound(ctx context.Context, txid string) ([]domain.Vtxo, error) {
 	res, err := v.querier.SelectVtxosByRoundTxid(ctx, txid)
 	if err != nil {
@@ -160,6 +173,35 @@ func (v *vxtoRepository) GetVtxosForRound(ctx context.Context, txid string) ([]d
 	}
 
 	return readRows(rows)
+}
+
+func (v *vxtoRepository) GetSpendableVtxosWithPubKey(ctx context.Context, pubkey string) ([]domain.Vtxo, error) {
+	rows, err := v.querier.GetSpendableVtxosWithPubKey(ctx, pubkey)
+	if err != nil {
+		return nil, err
+	}
+
+	vtxos := make([]domain.Vtxo, 0, len(rows))
+	for _, row := range rows {
+		vtxos = append(vtxos, domain.Vtxo{
+			VtxoKey: domain.VtxoKey{
+				Txid: row.Txid,
+				VOut: uint32(row.Vout),
+			},
+			Amount:    uint64(row.Amount),
+			PubKey:    row.Pubkey,
+			RoundTxid: row.RoundTx,
+			SpentBy:   row.SpentBy,
+			Spent:     row.Spent,
+			Redeemed:  row.Redeemed,
+			Swept:     row.Swept,
+			ExpireAt:  row.ExpireAt,
+			RedeemTx:  row.RedeemTx.String,
+			CreatedAt: row.CreatedAt,
+		})
+	}
+
+	return vtxos, nil
 }
 
 func (v *vxtoRepository) RedeemVtxos(ctx context.Context, vtxos []domain.VtxoKey) error {

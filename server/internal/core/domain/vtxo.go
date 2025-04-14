@@ -49,6 +49,10 @@ type Vtxo struct {
 	CreatedAt int64
 }
 
+func (v Vtxo) IsPending() bool {
+	return len(v.RedeemTx) > 0
+}
+
 func (v Vtxo) TapKey() (*btcec.PublicKey, error) {
 	pubkeyBytes, err := hex.DecodeString(v.PubKey)
 	if err != nil {
