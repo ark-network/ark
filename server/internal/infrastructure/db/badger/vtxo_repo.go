@@ -55,13 +55,16 @@ func (r *vtxoRepository) AddVtxos(
 
 func (r *vtxoRepository) SpendVtxos(
 	ctx context.Context, vtxoKeys []domain.VtxoKey, spentBy string,
-) error {
+) ([]domain.Vtxo, error) {
+	spentVtxos := make([]domain.Vtxo, 0, len(vtxoKeys))
 	for _, vtxoKey := range vtxoKeys {
-		if err := r.spendVtxo(ctx, vtxoKey, spentBy); err != nil {
-			return err
+		vtxo, err := r.spendVtxo(ctx, vtxoKey, spentBy)
+		if err != nil {
+			return nil, err
 		}
+		spentVtxos = append(spentVtxos, *vtxo)
 	}
-	return nil
+	return spentVtxos, nil
 }
 
 func (r *vtxoRepository) RedeemVtxos(
@@ -228,22 +231,26 @@ func (r *vtxoRepository) getVtxo(
 	return &vtxo, nil
 }
 
-func (r *vtxoRepository) spendVtxo(ctx context.Context, vtxoKey domain.VtxoKey, spendBy string) error {
+func (r *vtxoRepository) spendVtxo(ctx context.Context, vtxoKey domain.VtxoKey, spendBy string) (*domain.Vtxo, error) {
 	vtxo, err := r.getVtxo(ctx, vtxoKey)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			return nil
+			return nil, nil
 		}
-		return err
+		return nil, err
 	}
 	if vtxo.Spent {
-		return nil
+		return nil, nil
 	}
 
 	vtxo.Spent = true
 	vtxo.SpentBy = spendBy
 
-	return r.updateVtxo(ctx, vtxo)
+	if err := r.updateVtxo(ctx, vtxo); err != nil {
+		return nil, err
+	}
+
+	return r.getVtxo(ctx, vtxoKey)
 }
 
 func (r *vtxoRepository) redeemVtxo(ctx context.Context, vtxoKey domain.VtxoKey) (*domain.Vtxo, error) {

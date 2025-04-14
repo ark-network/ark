@@ -444,10 +444,7 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 		require.NoError(t, err)
 		require.Len(t, append(spendableVtxos, spentVtxos...), numberOfVtxos+len(newVtxos))
 
-		err = svc.Vtxos().SpendVtxos(ctx, vtxoKeys[:1], randomString(32))
-		require.NoError(t, err)
-
-		spentVtxos, err = svc.Vtxos().GetVtxos(ctx, vtxoKeys[:1])
+		spentVtxos, err = svc.Vtxos().SpendVtxos(ctx, vtxoKeys[:1], randomString(32))
 		require.NoError(t, err)
 		require.Len(t, spentVtxos, len(vtxoKeys[:1]))
 		for _, v := range spentVtxos {

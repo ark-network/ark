@@ -182,7 +182,7 @@ func (v *vxtoRepository) RedeemVtxos(ctx context.Context, vtxos []domain.VtxoKey
 	return execTx(ctx, v.db, txBody)
 }
 
-func (v *vxtoRepository) SpendVtxos(ctx context.Context, vtxos []domain.VtxoKey, txid string) error {
+func (v *vxtoRepository) SpendVtxos(ctx context.Context, vtxos []domain.VtxoKey, txid string) ([]domain.Vtxo, error) {
 	txBody := func(querierWithTx *queries.Queries) error {
 		for _, vtxo := range vtxos {
 			if err := querierWithTx.MarkVtxoAsSpent(
@@ -200,7 +200,11 @@ func (v *vxtoRepository) SpendVtxos(ctx context.Context, vtxos []domain.VtxoKey,
 		return nil
 	}
 
-	return execTx(ctx, v.db, txBody)
+	if err := execTx(ctx, v.db, txBody); err != nil {
+		return nil, err
+	}
+
+	return v.GetVtxos(ctx, vtxos)
 }
 
 func (v *vxtoRepository) SweepVtxos(ctx context.Context, vtxos []domain.VtxoKey) error {

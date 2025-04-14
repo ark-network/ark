@@ -1080,7 +1080,7 @@ func (s *covenantService) updateVtxoSet(round *domain.Round) {
 	spentVtxos := getSpentVtxos(round.TxRequests)
 	if len(spentVtxos) > 0 {
 		for {
-			if err := repo.SpendVtxos(ctx, spentVtxos, round.Txid); err != nil {
+			if _, err := repo.SpendVtxos(ctx, spentVtxos, round.Txid); err != nil {
 				log.WithError(err).Warn("failed to add new vtxos, retrying soon")
 				time.Sleep(100 * time.Millisecond)
 				continue

@@ -181,7 +181,7 @@ func NewCovenantlessService(
 				}()
 
 				// utxo db must be updated before scheduling the sweep events
-				svc.updateVtxoSet(round)
+				svc.addAndWatchNewVtxos(round)
 				svc.scheduleSweepVtxosForRound(round)
 			}()
 		},
@@ -554,7 +554,8 @@ func (s *covenantlessService) SubmitRedeemTx(
 		}
 		log.Debugf("added %d vtxos", len(newVtxos))
 
-		if err := s.repoManager.Vtxos().SpendVtxos(ctx, spentVtxoKeys, redeemTxid); err != nil {
+		spentVtxos, err = s.repoManager.Vtxos().SpendVtxos(ctx, spentVtxoKeys, redeemTxid)
+		if err != nil {
 			log.WithError(err).Warn("failed to spend vtxos")
 			return
 		}
@@ -1773,9 +1774,23 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, roundEndTime time
 	}
 
 	go func() {
+		spentVtxosKeys := getSpentVtxos(round.TxRequests)
+		var spentVtxos []domain.Vtxo
+
+		for {
+			spentVtxos, err = s.repoManager.Vtxos().SpendVtxos(ctx, spentVtxosKeys, round.Txid)
+			if err != nil {
+				log.WithError(err).Warn("failed to add new vtxos, retrying soon")
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			log.Debugf("spent %d vtxos", len(spentVtxos))
+			break
+		}
+
 		s.transactionEventsCh <- RoundTransactionEvent{
 			RoundTxid:             round.Txid,
-			SpentVtxos:            s.getSpentVtxos(round.TxRequests),
+			SpentVtxos:            spentVtxos,
 			SpendableVtxos:        s.getNewVtxos(round),
 			ClaimedBoardingInputs: boardingInputs,
 			TxHex:                 signedRoundTx,
@@ -1849,7 +1864,7 @@ func (s *covenantlessService) listenToScannerNotifications() {
 	}
 }
 
-func (s *covenantlessService) updateVtxoSet(round *domain.Round) {
+func (s *covenantlessService) addAndWatchNewVtxos(round *domain.Round) {
 	// Update the vtxo set only after a round is finalized.
 	if !round.IsEnded() {
 		return
@@ -1857,18 +1872,6 @@ func (s *covenantlessService) updateVtxoSet(round *domain.Round) {
 
 	ctx := context.Background()
 	repo := s.repoManager.Vtxos()
-	spentVtxos := getSpentVtxos(round.TxRequests)
-	if len(spentVtxos) > 0 {
-		for {
-			if err := repo.SpendVtxos(ctx, spentVtxos, round.Txid); err != nil {
-				log.WithError(err).Warn("failed to add new vtxos, retrying soon")
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-			log.Debugf("spent %d vtxos", len(spentVtxos))
-			break
-		}
-	}
 
 	newVtxos := s.getNewVtxos(round)
 	if len(newVtxos) > 0 {
@@ -1971,12 +1974,6 @@ func (s *covenantlessService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 			})
 		}
 	}
-	return vtxos
-}
-
-func (s *covenantlessService) getSpentVtxos(requests map[string]domain.TxRequest) []domain.Vtxo {
-	outpoints := getSpentVtxos(requests)
-	vtxos, _ := s.repoManager.Vtxos().GetVtxos(context.Background(), outpoints)
 	return vtxos
 }
 
