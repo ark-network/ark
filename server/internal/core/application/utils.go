@@ -270,6 +270,21 @@ func (m *txRequestsQueue) view(id string) (*domain.TxRequest, bool) {
 	}, true
 }
 
+func (m *txRequestsQueue) isVtxoRegisteredForNextRound(vtxoKey domain.VtxoKey) bool {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	for _, request := range m.requests {
+		for _, input := range request.Inputs {
+			if input.Txid == vtxoKey.Txid && input.VOut == vtxoKey.VOut {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 type forfeitTxsMap struct {
 	lock    *sync.RWMutex
 	builder ports.TxBuilder
@@ -409,6 +424,37 @@ func (m *forfeitTxsMap) allSigned() bool {
 	}
 
 	return true
+}
+
+type redeemTxRequests struct {
+	lock  *sync.RWMutex
+	vtxos map[string]struct{}
+}
+
+func newRedeemTxRequests() *redeemTxRequests {
+	return &redeemTxRequests{
+		lock:  &sync.RWMutex{},
+		vtxos: make(map[string]struct{}),
+	}
+}
+
+func (r *redeemTxRequests) addVtxo(vtxoKey domain.VtxoKey) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	r.vtxos[vtxoKey.String()] = struct{}{}
+}
+
+func (r *redeemTxRequests) removeVtxo(vtxoKey domain.VtxoKey) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	delete(r.vtxos, vtxoKey.String())
+}
+
+func (r *redeemTxRequests) isVtxoRedeemed(vtxoKey domain.VtxoKey) bool {
+	r.lock.RLock()
+	defer r.lock.RUnlock()
+	_, exists := r.vtxos[vtxoKey.String()]
+	return exists
 }
 
 // onchainOutputs iterates over all the nodes' outputs in the vtxo tree and checks their onchain state

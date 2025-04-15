@@ -48,8 +48,9 @@ type covenantlessService struct {
 	scanner     ports.BlockchainScanner
 	sweeper     *sweeper
 
-	txRequests *txRequestsQueue
-	forfeitTxs *forfeitTxsMap
+	txRequests       *txRequestsQueue
+	forfeitTxs       *forfeitTxsMap
+	redeemTxRequests *redeemTxRequests
 
 	eventsCh            chan domain.RoundEvent
 	transactionEventsCh chan TransactionEvent
@@ -144,6 +145,7 @@ func NewCovenantlessService(
 		sweeper:                   newSweeper(walletSvc, repoManager, builder, scheduler, noteUriPrefix),
 		txRequests:                newTxRequestsQueue(),
 		forfeitTxs:                newForfeitTxsMap(builder),
+		redeemTxRequests:          newRedeemTxRequests(),
 		eventsCh:                  make(chan domain.RoundEvent),
 		transactionEventsCh:       make(chan TransactionEvent),
 		currentRoundLock:          sync.Mutex{},
@@ -251,6 +253,22 @@ func (s *covenantlessService) SubmitRedeemTx(
 	if len(spentVtxos) != len(spentVtxoKeys) {
 		return "", "", fmt.Errorf("some vtxos not found")
 	}
+
+	for _, vtxoKey := range spentVtxoKeys {
+		if s.txRequests.isVtxoRegisteredForNextRound(vtxoKey) {
+			return "", "", fmt.Errorf("vtxo %s is already registered for the next round", vtxoKey.String())
+		}
+	}
+
+	for _, vtxoKey := range spentVtxoKeys {
+		s.redeemTxRequests.addVtxo(vtxoKey)
+	}
+
+	defer func() {
+		for _, vtxoKey := range spentVtxoKeys {
+			s.redeemTxRequests.removeVtxo(vtxoKey)
+		}
+	}()
 
 	vtxoMap := make(map[wire.OutPoint]domain.Vtxo)
 	for _, vtxo := range spentVtxos {
@@ -657,6 +675,10 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 	boardingTxs := make(map[string]wire.MsgTx, 0) // txid -> txhex
 
 	for _, input := range inputs {
+		if s.redeemTxRequests.isVtxoRedeemed(input.VtxoKey) {
+			return "", fmt.Errorf("vtxo %s is currently being redeemed", input.VtxoKey.String())
+		}
+
 		vtxosResult, err := s.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{input.VtxoKey})
 		if err != nil || len(vtxosResult) == 0 {
 			// vtxo not found in db, check if it exists on-chain
