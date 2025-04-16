@@ -9,10 +9,16 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/arkscript"
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+)
+
+var (
+	TagArkScriptHash = []byte("ArkScriptHash")
 )
 
 const (
@@ -35,7 +41,8 @@ const (
 	SpendingTxKey       = "spending_tx"
 	InputIndexKey       = "input_index"
 	PrevoutFetcherKey   = "prevout_fetcher"
-	ArkScriptStack      = "ark_script_stack"
+	ArkScriptStackKey   = "ark_script_stack"
+	ArkScriptKey        = "ark_script"
 )
 
 // forbiddenOpcodes are opcodes that are not allowed in a condition script
@@ -107,13 +114,6 @@ type ConditionCSVMultisigClosure struct {
 	Condition []byte
 }
 
-type ArkScriptClosure struct {
-	MultisigClosure
-	// ArkScript is a custom script including new opcodes
-	// it is executed and valid only offchain
-	ArkScript []byte
-}
-
 func DecodeClosure(script []byte) (Closure, error) {
 	if len(script) == 0 {
 		return nil, fmt.Errorf("cannot decode empty script")
@@ -123,7 +123,6 @@ func DecodeClosure(script []byte) (Closure, error) {
 		closure Closure
 		name    string
 	}{
-		{&ArkScriptClosure{}, "Ark Script"},
 		{&CSVMultisigClosure{}, "CSV Multisig"},
 		{&CLTVMultisigClosure{}, "CLTV Multisig"},
 		{&MultisigClosure{}, "Multisig"},
@@ -1133,117 +1132,6 @@ func (f *ConditionCSVMultisigClosure) Witness(controlBlock []byte, args map[stri
 	return witness, nil
 }
 
-func (f *ArkScriptClosure) WitnessSize(_ ...int) int {
-	return f.MultisigClosure.WitnessSize()
-}
-
-func (f *ArkScriptClosure) Witness(controlBlock []byte, args map[string]interface{}) (wire.TxWitness, error) {
-	// Extract required arguments
-	spendingTx, ok := args[SpendingTxKey].(*wire.MsgTx)
-	if !ok {
-		return nil, fmt.Errorf("missing or invalid spending tx")
-	}
-
-	prevoutFetcher, ok := args[PrevoutFetcherKey].(txscript.PrevOutputFetcher)
-	if !ok {
-		return nil, fmt.Errorf("missing or invalid prevout fetcher")
-	}
-
-	inputIndex, ok := args[InputIndexKey].(int)
-	if !ok {
-		return nil, fmt.Errorf("missing or invalid input index")
-	}
-
-	var stack wire.TxWitness
-
-	if customScriptStack, ok := args[ArkScriptStack].([]byte); ok {
-		var err error
-		stack, err = ReadTxWitness(customScriptStack)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read custom script stack: %w", err)
-		}
-	}
-
-	if err := ExecuteArkScript(f.ArkScript, spendingTx, prevoutFetcher, inputIndex, stack); err != nil {
-		return nil, err
-	}
-
-	// the real witness is the multisig one only
-	// adding the custom script stack to the final witness will break the script
-	return f.MultisigClosure.Witness(controlBlock, args)
-}
-
-// FALSE IF <custom introspection script> ENDIF <multisig script>
-func (f *ArkScriptClosure) Script() ([]byte, error) {
-	scriptBuilder := txscript.NewScriptBuilder()
-
-	scriptBuilder.AddOps([]byte{txscript.OP_FALSE, txscript.OP_IF})
-	scriptBuilder.AddData(f.ArkScript)
-	scriptBuilder.AddOp(txscript.OP_ENDIF)
-
-	multisigScript, err := f.MultisigClosure.Script()
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate multisig script: %w", err)
-	}
-
-	script, err := scriptBuilder.Script()
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate script: %w", err)
-	}
-
-	return append(script, multisigScript...), nil
-}
-
-func (f *ArkScriptClosure) Decode(script []byte) (bool, error) {
-	tokenizer := txscript.MakeScriptTokenizer(0, script)
-
-	if len(tokenizer.Script()) == 0 {
-		return false, fmt.Errorf("empty script")
-	}
-
-	// must be OP_FALSE
-	if !tokenizer.Next() || tokenizer.Opcode() != txscript.OP_FALSE {
-		return false, nil
-	}
-
-	// must be OP_IF
-	if !tokenizer.Next() || tokenizer.Opcode() != txscript.OP_IF {
-		return false, nil
-	}
-
-	// extract custom introspection script
-	customScript := make([]byte, 0)
-	for tokenizer.Next() {
-		if tokenizer.Opcode() == txscript.OP_ENDIF {
-			break
-		}
-		if len(tokenizer.Data()) > 0 {
-			customScript = append(customScript, tokenizer.Data()...)
-			break
-		}
-	}
-
-	if tokenizer.Err() != nil || len(customScript) == 0 {
-		return false, nil
-	}
-
-	f.ArkScript = customScript
-
-	// subscript must be a valid multisig script
-	subScript := tokenizer.Script()[tokenizer.ByteIndex()+1:]
-	valid, err := f.MultisigClosure.Decode(subScript)
-	if err != nil || !valid {
-		return false, err
-	}
-
-	rebuilt, err := f.Script()
-	if err != nil {
-		return false, err
-	}
-
-	return bytes.Equal(rebuilt, script), nil
-}
-
 func ExecuteArkScript(
 	arkScript []byte,
 	spendingTx *wire.MsgTx,
@@ -1274,4 +1162,30 @@ func ExecuteArkScript(
 	}
 
 	return nil
+}
+
+// ArkScriptHash computes the hash of an ark script.
+// scripthash = h_arkScriptHash(script)
+func ArkScriptHash(script []byte) []byte {
+	hash := chainhash.TaggedHash(TagArkScriptHash, script)
+	return hash[:]
+}
+
+// ComputeArkScriptKey calculates a top-level ark script public key given the hash of the arkscript
+func ComputeArkScriptKey(pubKey *secp256k1.PublicKey, scriptHash []byte) *secp256k1.PublicKey {
+	internalKey, _ := schnorr.ParsePubKey(schnorr.SerializePubKey(pubKey))
+
+	var tweakScalar btcec.ModNScalar
+	tweakScalar.SetBytes((*[32]byte)(scriptHash))
+
+	var internalPoint btcec.JacobianPoint
+	internalKey.AsJacobian(&internalPoint)
+
+	var tPoint, arkScriptKey btcec.JacobianPoint
+	btcec.ScalarBaseMultNonConst(&tweakScalar, &tPoint)
+	btcec.AddNonConst(&internalPoint, &tPoint, &arkScriptKey)
+
+	arkScriptKey.ToAffine()
+
+	return secp256k1.NewPublicKey(&arkScriptKey.X, &arkScriptKey.Y)
 }

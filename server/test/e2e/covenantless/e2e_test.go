@@ -1145,10 +1145,10 @@ func TestSendToArkScriptClosure(t *testing.T) {
 	vtxoScript := bitcointree.TapscriptsVtxoScript{
 		TapscriptsVtxoScript: tree.TapscriptsVtxoScript{
 			Closures: []tree.Closure{
-				&tree.ArkScriptClosure{
-					ArkScript: arkScript,
-					MultisigClosure: tree.MultisigClosure{
-						PubKeys: []*secp256k1.PublicKey{bobPubKey},
+				&tree.MultisigClosure{
+					PubKeys: []*secp256k1.PublicKey{
+						bobPubKey,
+						tree.ComputeArkScriptKey(aliceAddr.Server, tree.ArkScriptHash(arkScript)),
 					},
 				},
 			},
@@ -1226,6 +1226,7 @@ func TestSendToArkScriptClosure(t *testing.T) {
 				Tapscript:   tapscript,
 				WitnessSize: closure.WitnessSize(),
 				Amount:      bobOutput.Value,
+				ArkScript:   arkScript,
 			},
 		},
 		[]*wire.TxOut{
@@ -1247,6 +1248,7 @@ func TestSendToArkScriptClosure(t *testing.T) {
 				Tapscript:   tapscript,
 				WitnessSize: closure.WitnessSize(),
 				Amount:      bobOutput.Value,
+				ArkScript:   arkScript,
 			},
 		},
 		[]*wire.TxOut{

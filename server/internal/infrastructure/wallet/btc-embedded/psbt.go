@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ark-network/ark/common/bitcointree"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/btcutil/psbt"
@@ -12,6 +14,10 @@ import (
 	"github.com/btcsuite/btcwallet/waddrmgr"
 	log "github.com/sirupsen/logrus"
 )
+
+// PsbtKeyTypeInputSignatureTweakSingle is a custom/proprietary PSBT key
+// used by btcwallet to signal for custom private key tweak
+var PsbtKeyTypeInputSignatureTweakSingle = []byte{0x51}
 
 func (s *service) signPsbt(packet *psbt.Packet, inputsToSign []int) ([]uint32, error) {
 	updater, err := psbt.NewUpdater(packet)
@@ -107,6 +113,16 @@ func (s *service) signPsbt(packet *psbt.Packet, inputsToSign []int) ([]uint32, e
 
 		if len(in.TaprootLeafScript) > 0 {
 			managedAddress = s.serverKeyAddr
+
+			// if arkscript is present, the key must be tweaked before signing
+			// so we signal to btcwallet using the unknown PSBT field
+			arkscript := bitcointree.GetArkScript(*in)
+			if len(arkscript) > 0 {
+				packet.Inputs[idx].Unknowns = append(packet.Inputs[idx].Unknowns, &psbt.Unknown{
+					Key:   PsbtKeyTypeInputSignatureTweakSingle,
+					Value: tree.ArkScriptHash(arkscript),
+				})
+			}
 		} else {
 			var err error
 			managedAddress, _, _, err = s.wallet.ScriptForOutput(in.WitnessUtxo)

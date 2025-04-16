@@ -1204,17 +1204,3 @@ func TestConditionMultisigClosure(t *testing.T) {
 		require.Equal(t, 64, len(witness[1]))
 	})
 }
-
-func TestArkScriptClosure(t *testing.T) {
-	t.Run("valid ark script", func(t *testing.T) {
-		script := "00632600d1225120c631bc2fc82b7982ade4cdd170138a0f22319f8b407f5643324cbc6cbda5fcbb886820f565c2e01f7c6f832f01e3566ecea22eee65829b2e6192e1e06907520050528eac"
-		var cl tree.ArkScriptClosure
-
-		scriptBytes, err := hex.DecodeString(script)
-		require.NoError(t, err)
-
-		valid, err := cl.Decode(scriptBytes)
-		require.NoError(t, err)
-		require.True(t, valid)
-	})
-}

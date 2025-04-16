@@ -236,13 +236,6 @@ func (s *bitcoinWallet) SignTransaction(
 							break
 						}
 					}
-				case *tree.ArkScriptClosure:
-					for _, key := range c.MultisigClosure.PubKeys {
-						if bytes.Equal(schnorr.SerializePubKey(key), myPubkey) {
-							sign = true
-							break
-						}
-					}
 				}
 
 				if sign {

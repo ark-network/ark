@@ -339,7 +339,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 		switch c := closure.(type) {
 		case *tree.CLTVMultisigClosure:
 			locktime = &c.Locktime
-		case *tree.MultisigClosure, *tree.ConditionMultisigClosure, *tree.ArkScriptClosure:
+		case *tree.MultisigClosure, *tree.ConditionMultisigClosure:
 		default:
 			return "", "", fmt.Errorf("invalid forfeit closure script")
 		}

@@ -115,7 +115,11 @@ func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, string, 
 			for _, key := range c.PubKeys {
 				keys[hex.EncodeToString(schnorr.SerializePubKey(key))] = false
 			}
-		case *tree.ArkScriptClosure:
+		}
+
+		// execute ark script if present in psbt input
+		arkScript := bitcointree.GetArkScript(input)
+		if len(arkScript) > 0 {
 			witness, err := bitcointree.GetArkScriptWitness(input)
 			if err != nil {
 				return false, txid, err
@@ -134,7 +138,7 @@ func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, string, 
 			prevoutFetcher := txscript.NewMultiPrevOutFetcher(prevouts)
 
 			if err := tree.ExecuteArkScript(
-				c.ArkScript,
+				arkScript,
 				ptx.UnsignedTx,
 				prevoutFetcher,
 				int(index),
@@ -143,9 +147,11 @@ func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, string, 
 				return false, txid, err
 			}
 
-			for _, key := range c.PubKeys {
-				keys[hex.EncodeToString(schnorr.SerializePubKey(key))] = false
-			}
+			arkScriptHash := tree.ArkScriptHash(arkScript)
+			arkScriptKey := tree.ComputeArkScriptKey(serverPubkey, arkScriptHash)
+
+			// we don't need to check if server tweaked key signed
+			keys[hex.EncodeToString(schnorr.SerializePubKey(arkScriptKey))] = true
 		}
 
 		// we don't need to check if server signed
@@ -217,20 +223,6 @@ func (b *txBuilder) FinalizeAndExtract(tx string) (string, error) {
 		return "", err
 	}
 
-	prevouts := make(map[wire.OutPoint]*wire.TxOut)
-	missingPrevouts := false
-	for i, input := range ptx.Inputs {
-		if input.WitnessUtxo == nil {
-			missingPrevouts = true
-			continue
-		}
-
-		outpoint := ptx.UnsignedTx.TxIn[i].PreviousOutPoint
-		prevouts[outpoint] = input.WitnessUtxo
-	}
-
-	prevoutFetcher := txscript.NewMultiPrevOutFetcher(prevouts)
-
 	for i, in := range ptx.Inputs {
 		isTaproot := txscript.IsPayToTaproot(in.WitnessUtxo.PkScript)
 		if isTaproot && len(in.TaprootLeafScript) > 0 {
@@ -255,27 +247,6 @@ func (b *txBuilder) FinalizeAndExtract(tx string) (string, error) {
 					}
 					args[tree.ConditionWitnessKey] = conditionWitnessBytes.Bytes()
 				}
-			case *tree.ArkScriptClosure:
-				if missingPrevouts {
-					return "", fmt.Errorf("missing witness utxos, cannot validate ark script")
-				}
-
-				witness, err := bitcointree.GetArkScriptWitness(in)
-				if err != nil {
-					return "", err
-				}
-
-				if len(witness) > 0 {
-					var witnessBytes bytes.Buffer
-					if err := psbt.WriteTxWitness(&witnessBytes, witness); err != nil {
-						return "", err
-					}
-					args[tree.ArkScriptStack] = witnessBytes.Bytes()
-				}
-
-				args[tree.InputIndexKey] = i
-				args[tree.SpendingTxKey] = ptx.UnsignedTx
-				args[tree.PrevoutFetcherKey] = prevoutFetcher
 			}
 
 			for _, sig := range in.TaprootScriptSpendSig {

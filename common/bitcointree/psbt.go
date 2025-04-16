@@ -15,7 +15,8 @@ var (
 	COSIGNER_PSBT_KEY_PREFIX      = []byte("cosigner")
 	CONDITION_WITNESS_KEY_PREFIX  = []byte(tree.ConditionWitnessKey)
 	VTXO_TREE_EXPIRY_PSBT_KEY     = []byte("expiry")
-	ARK_SCRIPT_WITNESS_KEY_PREFIX = []byte(tree.ArkScriptStack)
+	ARK_SCRIPT_WITNESS_KEY_PREFIX = []byte(tree.ArkScriptStackKey)
+	ARK_SCRIPT                    = []byte(tree.ArkScriptKey)
 )
 
 func AddConditionWitness(inIndex int, ptx *psbt.Packet, witness wire.TxWitness) error {
@@ -41,6 +42,23 @@ func GetConditionWitness(in psbt.PInput) (wire.TxWitness, error) {
 	}
 
 	return wire.TxWitness{}, nil
+}
+
+func GetArkScript(in psbt.PInput) []byte {
+	for _, u := range in.Unknowns {
+		if bytes.Contains(u.Key, ARK_SCRIPT) {
+			return u.Value
+		}
+	}
+
+	return nil
+}
+
+func AddArkScript(inIndex int, ptx *psbt.Packet, script []byte) {
+	ptx.Inputs[inIndex].Unknowns = append(ptx.Inputs[inIndex].Unknowns, &psbt.Unknown{
+		Value: script,
+		Key:   ARK_SCRIPT,
+	})
 }
 
 func GetArkScriptWitness(in psbt.PInput) (wire.TxWitness, error) {

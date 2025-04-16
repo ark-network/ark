@@ -695,20 +695,6 @@ func (s *service) SignTransaction(ctx context.Context, partialTx string, extract
 			return "", fmt.Errorf("not all inputs are signed, unable to finalize the psbt")
 		}
 
-		prevouts := make(map[wire.OutPoint]*wire.TxOut)
-		missingPrevouts := false
-		for i, input := range ptx.Inputs {
-			if input.WitnessUtxo == nil {
-				missingPrevouts = true
-				continue
-			}
-
-			outpoint := ptx.UnsignedTx.TxIn[i].PreviousOutPoint
-			prevouts[outpoint] = input.WitnessUtxo
-		}
-
-		prevoutFetcher := txscript.NewMultiPrevOutFetcher(prevouts)
-
 		for i, in := range ptx.Inputs {
 			isTaproot := txscript.IsPayToTaproot(in.WitnessUtxo.PkScript)
 			if isTaproot && len(in.TaprootLeafScript) > 0 {
@@ -732,27 +718,6 @@ func (s *service) SignTransaction(ctx context.Context, partialTx string, extract
 						}
 						args[tree.ConditionWitnessKey] = conditionWitnessBytes.Bytes()
 					}
-				case *tree.ArkScriptClosure:
-					if missingPrevouts {
-						return "", fmt.Errorf("missing witness utxos, cannot validate ark script")
-					}
-
-					witness, err := bitcointree.GetArkScriptWitness(in)
-					if err != nil {
-						return "", err
-					}
-
-					if len(witness) > 0 {
-						var witnessBytes bytes.Buffer
-						if err := psbt.WriteTxWitness(&witnessBytes, witness); err != nil {
-							return "", err
-						}
-						args[tree.ArkScriptStack] = witnessBytes.Bytes()
-					}
-
-					args[tree.InputIndexKey] = i
-					args[tree.SpendingTxKey] = ptx.UnsignedTx
-					args[tree.PrevoutFetcherKey] = prevoutFetcher
 				}
 
 				for _, sig := range in.TaprootScriptSpendSig {

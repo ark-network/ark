@@ -27,6 +27,7 @@ func BuildRedeemTx(
 	sequences := make([]uint32, 0, len(vtxos))
 	witnessUtxos := make(map[int]*wire.TxOut)
 	tapscripts := make(map[int]*psbt.TaprootTapLeafScript)
+	arkscripts := make(map[int][]byte)
 
 	txLocktime := common.AbsoluteLocktime(0)
 
@@ -86,6 +87,10 @@ func BuildRedeemTx(
 		} else {
 			sequences = append(sequences, wire.MaxTxInSequenceNum)
 		}
+
+		if len(vtxo.ArkScript) > 0 {
+			arkscripts[index] = vtxo.ArkScript
+		}
 	}
 
 	redeemPtx, err := psbt.New(
@@ -98,6 +103,9 @@ func BuildRedeemTx(
 	for i := range redeemPtx.Inputs {
 		redeemPtx.Inputs[i].WitnessUtxo = witnessUtxos[i]
 		redeemPtx.Inputs[i].TaprootLeafScript = []*psbt.TaprootTapLeafScript{tapscripts[i]}
+		if arkscript, ok := arkscripts[i]; ok {
+			AddArkScript(i, redeemPtx, arkscript)
+		}
 	}
 
 	redeemTx, err := redeemPtx.B64Encode()
