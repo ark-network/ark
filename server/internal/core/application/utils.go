@@ -32,16 +32,14 @@ type timedTxRequest struct {
 }
 
 type txRequestsQueue struct {
-	lock      *sync.RWMutex
-	requests  map[string]*timedTxRequest
-	vtxoIndex map[domain.VtxoKey]struct{}
+	lock     *sync.RWMutex
+	requests map[string]*timedTxRequest
 }
 
 func newTxRequestsQueue() *txRequestsQueue {
 	requestsById := make(map[string]*timedTxRequest)
 	lock := &sync.RWMutex{}
-	vtxoIndex := make(map[domain.VtxoKey]struct{})
-	return &txRequestsQueue{lock, requestsById, vtxoIndex}
+	return &txRequestsQueue{lock, requestsById}
 }
 
 func (m *txRequestsQueue) len() int64 {
@@ -98,7 +96,6 @@ func (m *txRequestsQueue) push(
 				}
 			}
 		}
-		m.vtxoIndex[input.VtxoKey] = struct{}{}
 	}
 
 	for _, input := range boardingInputs {
@@ -273,19 +270,6 @@ func (m *txRequestsQueue) view(id string) (*domain.TxRequest, bool) {
 	}, true
 }
 
-func (m *txRequestsQueue) vtxosRegisteredForRoundCheck(vtxoKeys []domain.VtxoKey) error {
-	m.lock.RLock()
-	defer m.lock.RUnlock()
-
-	for _, vtxoKey := range vtxoKeys {
-		if _, exists := m.vtxoIndex[vtxoKey]; exists {
-			return fmt.Errorf("vtxo %s is already registered for next round", vtxoKey.String())
-		}
-	}
-
-	return nil
-}
-
 type forfeitTxsMap struct {
 	lock    *sync.RWMutex
 	builder ports.TxBuilder
@@ -428,14 +412,16 @@ func (m *forfeitTxsMap) allSigned() bool {
 }
 
 type redeemTxRequests struct {
-	lock  *sync.RWMutex
-	vtxos map[string]struct{}
+	lock           *sync.RWMutex
+	vtxos          map[string]struct{}
+	roundVtxoIndex map[domain.VtxoKey]struct{}
 }
 
 func newRedeemTxRequests() *redeemTxRequests {
 	return &redeemTxRequests{
-		lock:  &sync.RWMutex{},
-		vtxos: make(map[string]struct{}),
+		lock:           &sync.RWMutex{},
+		vtxos:          make(map[string]struct{}),
+		roundVtxoIndex: make(map[domain.VtxoKey]struct{}),
 	}
 }
 
@@ -460,6 +446,27 @@ func (r *redeemTxRequests) isVtxoRedeemed(vtxoKey domain.VtxoKey) bool {
 	defer r.lock.RUnlock()
 	_, exists := r.vtxos[vtxoKey.String()]
 	return exists
+}
+
+func (r *redeemTxRequests) addToRoundVtxoIndex(vtxoKeys []domain.VtxoKey) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	for _, vtxoKey := range vtxoKeys {
+		r.roundVtxoIndex[vtxoKey] = struct{}{}
+	}
+}
+
+func (r *redeemTxRequests) vtxosRegisteredForRoundCheck(vtxoKeys []domain.VtxoKey) error {
+	r.lock.RLock()
+	defer r.lock.RUnlock()
+
+	for _, vtxoKey := range vtxoKeys {
+		if _, exists := r.roundVtxoIndex[vtxoKey]; exists {
+			return fmt.Errorf("vtxo %s is already registered for next round", vtxoKey.String())
+		}
+	}
+
+	return nil
 }
 
 // onchainOutputs iterates over all the nodes' outputs in the vtxo tree and checks their onchain state

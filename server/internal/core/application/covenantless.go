@@ -660,6 +660,7 @@ func (s *covenantlessService) SpendNotes(ctx context.Context, notes []note.Note)
 
 func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error) {
 	vtxosInputs := make([]domain.Vtxo, 0)
+	vtxoKeys := make([]domain.VtxoKey, 0)
 	boardingInputs := make([]ports.BoardingInput, 0)
 
 	now := time.Now().Unix()
@@ -781,12 +782,15 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 		}
 
 		vtxosInputs = append(vtxosInputs, vtxo)
+		vtxoKeys = append(vtxoKeys, vtxo.VtxoKey)
 	}
 
 	request, err := domain.NewTxRequest(vtxosInputs)
 	if err != nil {
 		return "", err
 	}
+
+	s.redeemTxRequests.addToRoundVtxoIndex(vtxoKeys)
 
 	if err := s.txRequests.push(*request, boardingInputs); err != nil {
 		return "", err
