@@ -50,7 +50,8 @@ type covenantlessService struct {
 
 	txRequests       *txRequestsQueue
 	forfeitTxs       *forfeitTxsMap
-	redeemTxRequests *redeemTxRequests
+	outOfRoundInputs *outpointMap
+	inRoundInputs    *outpointMap
 
 	eventsCh            chan domain.RoundEvent
 	transactionEventsCh chan TransactionEvent
@@ -145,7 +146,8 @@ func NewCovenantlessService(
 		sweeper:                   newSweeper(walletSvc, repoManager, builder, scheduler, noteUriPrefix),
 		txRequests:                newTxRequestsQueue(),
 		forfeitTxs:                newForfeitTxsMap(builder),
-		redeemTxRequests:          newRedeemTxRequests(),
+		outOfRoundInputs:          newOutpointMap(),
+		inRoundInputs:             newOutpointMap(),
 		eventsCh:                  make(chan domain.RoundEvent),
 		transactionEventsCh:       make(chan TransactionEvent),
 		currentRoundLock:          sync.Mutex{},
@@ -254,13 +256,12 @@ func (s *covenantlessService) SubmitRedeemTx(
 		return "", "", fmt.Errorf("some vtxos not found")
 	}
 
-	if err := s.txRequests.vtxosRegisteredForRoundCheck(spentVtxoKeys); err != nil {
-		return "", "", err
+	if exists, vtxo := s.inRoundInputs.includesAny(spentVtxoKeys); exists {
+		return "", "", fmt.Errorf("vtxo %s is already registered for next round", vtxo)
 	}
-	s.redeemTxRequests.addVtxos(spentVtxoKeys)
-	defer func() {
-		s.redeemTxRequests.removeVtxos(spentVtxoKeys)
-	}()
+
+	s.outOfRoundInputs.add(spentVtxoKeys)
+	defer s.outOfRoundInputs.remove(spentVtxoKeys)
 
 	vtxoMap := make(map[wire.OutPoint]domain.Vtxo)
 	for _, vtxo := range spentVtxos {
@@ -668,8 +669,8 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 	boardingTxs := make(map[string]wire.MsgTx, 0) // txid -> txhex
 
 	for _, input := range inputs {
-		if s.redeemTxRequests.isVtxoRedeemed(input.VtxoKey) {
-			return "", fmt.Errorf("vtxo %s is currently being redeemed", input.VtxoKey.String())
+		if s.outOfRoundInputs.includes(input.VtxoKey) {
+			return "", fmt.Errorf("vtxo %s is currently being spent", input.VtxoKey.String())
 		}
 
 		vtxosResult, err := s.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{input.VtxoKey})
@@ -790,11 +791,12 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 		return "", err
 	}
 
-	s.redeemTxRequests.addToRoundVtxoIndex(vtxoKeys)
-
 	if err := s.txRequests.push(*request, boardingInputs); err != nil {
 		return "", err
 	}
+
+	s.inRoundInputs.add(vtxoKeys)
+
 	return request.Id, nil
 }
 
@@ -1422,6 +1424,13 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 	}
 	requests, boardingInputs, redeeemedNotes, musig2data := s.txRequests.pop(num)
 	notes = redeeemedNotes
+	vtxoKeys := make([]domain.VtxoKey, 0)
+	for _, req := range requests {
+		for _, in := range req.Inputs {
+			vtxoKeys = append(vtxoKeys, in.VtxoKey)
+		}
+	}
+	s.inRoundInputs.remove(vtxoKeys)
 	s.numOfBoardingInputsMtx.Lock()
 	s.numOfBoardingInputs = len(boardingInputs)
 	s.numOfBoardingInputsMtx.Unlock()

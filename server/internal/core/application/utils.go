@@ -411,62 +411,52 @@ func (m *forfeitTxsMap) allSigned() bool {
 	return true
 }
 
-type redeemTxRequests struct {
-	lock           *sync.RWMutex
-	vtxos          map[string]struct{}
-	roundVtxoIndex map[domain.VtxoKey]struct{}
+type outpointMap struct {
+	lock      *sync.RWMutex
+	outpoints map[string]struct{}
 }
 
-func newRedeemTxRequests() *redeemTxRequests {
-	return &redeemTxRequests{
-		lock:           &sync.RWMutex{},
-		vtxos:          make(map[string]struct{}),
-		roundVtxoIndex: make(map[domain.VtxoKey]struct{}),
+func newOutpointMap() *outpointMap {
+	return &outpointMap{
+		lock:      &sync.RWMutex{},
+		outpoints: make(map[string]struct{}),
 	}
 }
 
-func (r *redeemTxRequests) addVtxos(vtxoKeys []domain.VtxoKey) {
+func (r *outpointMap) add(outpoints []domain.VtxoKey) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
-	for _, vtxoKey := range vtxoKeys {
-		r.vtxos[vtxoKey.String()] = struct{}{}
+	for _, out := range outpoints {
+		r.outpoints[out.String()] = struct{}{}
 	}
 }
 
-func (r *redeemTxRequests) removeVtxos(vtxoKeys []domain.VtxoKey) {
+func (r *outpointMap) remove(outpoints []domain.VtxoKey) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
-	for _, vtxoKey := range vtxoKeys {
-		delete(r.vtxos, vtxoKey.String())
+	for _, out := range outpoints {
+		delete(r.outpoints, out.String())
 	}
 }
 
-func (r *redeemTxRequests) isVtxoRedeemed(vtxoKey domain.VtxoKey) bool {
+func (r *outpointMap) includes(outpoint domain.VtxoKey) bool {
 	r.lock.RLock()
 	defer r.lock.RUnlock()
-	_, exists := r.vtxos[vtxoKey.String()]
+	_, exists := r.outpoints[outpoint.String()]
 	return exists
 }
 
-func (r *redeemTxRequests) addToRoundVtxoIndex(vtxoKeys []domain.VtxoKey) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-	for _, vtxoKey := range vtxoKeys {
-		r.roundVtxoIndex[vtxoKey] = struct{}{}
-	}
-}
-
-func (r *redeemTxRequests) vtxosRegisteredForRoundCheck(vtxoKeys []domain.VtxoKey) error {
+func (r *outpointMap) includesAny(outpoints []domain.VtxoKey) (bool, string) {
 	r.lock.RLock()
 	defer r.lock.RUnlock()
 
-	for _, vtxoKey := range vtxoKeys {
-		if _, exists := r.roundVtxoIndex[vtxoKey]; exists {
-			return fmt.Errorf("vtxo %s is already registered for next round", vtxoKey.String())
+	for _, out := range outpoints {
+		if _, exists := r.outpoints[out.String()]; exists {
+			return true, out.String()
 		}
 	}
 
-	return nil
+	return false, ""
 }
 
 // onchainOutputs iterates over all the nodes' outputs in the vtxo tree and checks their onchain state
