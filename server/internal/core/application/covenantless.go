@@ -48,10 +48,10 @@ type covenantlessService struct {
 	scanner     ports.BlockchainScanner
 	sweeper     *sweeper
 
-	txRequests       *txRequestsQueue
-	forfeitTxs       *forfeitTxsMap
-	outOfRoundInputs *outpointMap
-	inRoundInputs    *outpointMap
+	txRequests     *txRequestsQueue
+	forfeitTxs     *forfeitTxsMap
+	redeemTxInputs *outpointMap
+	roundInputs    *outpointMap
 
 	eventsCh            chan domain.RoundEvent
 	transactionEventsCh chan TransactionEvent
@@ -146,8 +146,8 @@ func NewCovenantlessService(
 		sweeper:                   newSweeper(walletSvc, repoManager, builder, scheduler, noteUriPrefix),
 		txRequests:                newTxRequestsQueue(),
 		forfeitTxs:                newForfeitTxsMap(builder),
-		outOfRoundInputs:          newOutpointMap(),
-		inRoundInputs:             newOutpointMap(),
+		redeemTxInputs:            newOutpointMap(),
+		roundInputs:               newOutpointMap(),
 		eventsCh:                  make(chan domain.RoundEvent),
 		transactionEventsCh:       make(chan TransactionEvent),
 		currentRoundLock:          sync.Mutex{},
@@ -256,12 +256,12 @@ func (s *covenantlessService) SubmitRedeemTx(
 		return "", "", fmt.Errorf("some vtxos not found")
 	}
 
-	if exists, vtxo := s.inRoundInputs.includesAny(spentVtxoKeys); exists {
+	if exists, vtxo := s.roundInputs.includesAny(spentVtxoKeys); exists {
 		return "", "", fmt.Errorf("vtxo %s is already registered for next round", vtxo)
 	}
 
-	s.outOfRoundInputs.add(spentVtxoKeys)
-	defer s.outOfRoundInputs.remove(spentVtxoKeys)
+	s.redeemTxInputs.add(spentVtxoKeys)
+	defer s.redeemTxInputs.remove(spentVtxoKeys)
 
 	vtxoMap := make(map[wire.OutPoint]domain.Vtxo)
 	for _, vtxo := range spentVtxos {
@@ -669,7 +669,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 	boardingTxs := make(map[string]wire.MsgTx, 0) // txid -> txhex
 
 	for _, input := range inputs {
-		if s.outOfRoundInputs.includes(input.VtxoKey) {
+		if s.redeemTxInputs.includes(input.VtxoKey) {
 			return "", fmt.Errorf("vtxo %s is currently being spent", input.VtxoKey.String())
 		}
 
@@ -795,7 +795,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 		return "", err
 	}
 
-	s.inRoundInputs.add(vtxoKeys)
+	s.roundInputs.add(vtxoKeys)
 
 	return request.Id, nil
 }
@@ -1430,7 +1430,7 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 			vtxoKeys = append(vtxoKeys, in.VtxoKey)
 		}
 	}
-	s.inRoundInputs.remove(vtxoKeys)
+	s.roundInputs.remove(vtxoKeys)
 	s.numOfBoardingInputsMtx.Lock()
 	s.numOfBoardingInputs = len(boardingInputs)
 	s.numOfBoardingInputsMtx.Unlock()
