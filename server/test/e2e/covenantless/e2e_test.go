@@ -1307,6 +1307,11 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// TestSendToArkScriptClosure tests sending funds to an ark script closure
+// alice onboard funds and send to an ark script closure using introspection opcodes
+// then 2 redeem transactions are attempted:
+// 1. redeem with the wrong outputs : test if it fails
+// 2. redeem with the correct outputs : test if it succeeds
 func TestSendToArkScriptClosure(t *testing.T) {
 	ctx := context.Background()
 	alice, grpcAlice := setupArkSDK(t)
