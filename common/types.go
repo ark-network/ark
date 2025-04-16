@@ -6,9 +6,10 @@ import (
 )
 
 type VtxoInput struct {
-	Outpoint    *wire.OutPoint
-	Amount      int64
-	Tapscript   *waddrmgr.Tapscript
-	WitnessSize int
-	ArkScript   []byte
+	Outpoint           *wire.OutPoint
+	Amount             int64
+	Tapscript          *waddrmgr.Tapscript
+	WitnessSize        int
+	RevealedTapscripts []string
+	ArkScript          []byte
 }

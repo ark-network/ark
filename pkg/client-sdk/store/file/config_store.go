@@ -65,6 +65,10 @@ func (s *configStore) AddData(ctx context.Context, data types.Config) error {
 		ExplorerURL:                data.ExplorerURL,
 		ForfeitAddress:             data.ForfeitAddress,
 		WithTransactionFeed:        strconv.FormatBool(data.WithTransactionFeed),
+		MarketHourStartTime:        fmt.Sprintf("%d", data.MarketHourStartTime),
+		MarketHourEndTime:          fmt.Sprintf("%d", data.MarketHourEndTime),
+		MarketHourPeriod:           fmt.Sprintf("%d", data.MarketHourPeriod),
+		MarketHourRoundInterval:    fmt.Sprintf("%d", data.MarketHourRoundInterval),
 	}
 
 	if err := s.write(sd); err != nil {
@@ -86,7 +90,7 @@ func (s *configStore) GetData(_ context.Context) (*types.Config, error) {
 	return &data, nil
 }
 
-func (s *configStore) CleanData(ctx context.Context) error {
+func (s *configStore) CleanData(_ context.Context) error {
 	if err := s.write(&storeData{}); err != nil {
 		return fmt.Errorf("failed to write to store: %s", err)
 	}

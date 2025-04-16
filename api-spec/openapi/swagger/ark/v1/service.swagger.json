@@ -548,6 +548,26 @@
         },
         "version": {
           "type": "string"
+        },
+        "utxoMinAmount": {
+          "type": "string",
+          "format": "int64",
+          "title": "-1 means native dust limit (default)"
+        },
+        "utxoMaxAmount": {
+          "type": "string",
+          "format": "int64",
+          "title": "-1 means no limit (default), 0 means boarding not allowed"
+        },
+        "vtxoMinAmount": {
+          "type": "string",
+          "format": "int64",
+          "title": "-1 means native dust limit (default)"
+        },
+        "vtxoMaxAmount": {
+          "type": "string",
+          "format": "int64",
+          "title": "-1 means no limit (default)"
         }
       }
     },
@@ -689,6 +709,9 @@
             "type": "object",
             "$ref": "#/definitions/v1Vtxo"
           }
+        },
+        "hex": {
+          "type": "string"
         }
       }
     },
@@ -847,6 +870,9 @@
             "type": "object",
             "$ref": "#/definitions/v1Outpoint"
           }
+        },
+        "hex": {
+          "type": "string"
         }
       }
     },

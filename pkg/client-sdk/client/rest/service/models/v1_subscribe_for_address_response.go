@@ -14,29 +14,23 @@ import (
 	"github.com/go-openapi/swag"
 )
 
-// V1RedeemTransaction v1 redeem transaction
+// V1SubscribeForAddressResponse v1 subscribe for address response
 //
-// swagger:model v1RedeemTransaction
-type V1RedeemTransaction struct {
+// swagger:model v1SubscribeForAddressResponse
+type V1SubscribeForAddressResponse struct {
 
-	// hex
-	Hex string `json:"hex,omitempty"`
-
-	// spendable vtxos
-	SpendableVtxos []*V1Vtxo `json:"spendableVtxos"`
+	// new vtxos
+	NewVtxos []*V1Vtxo `json:"newVtxos"`
 
 	// spent vtxos
 	SpentVtxos []*V1Vtxo `json:"spentVtxos"`
-
-	// txid
-	Txid string `json:"txid,omitempty"`
 }
 
-// Validate validates this v1 redeem transaction
-func (m *V1RedeemTransaction) Validate(formats strfmt.Registry) error {
+// Validate validates this v1 subscribe for address response
+func (m *V1SubscribeForAddressResponse) Validate(formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.validateSpendableVtxos(formats); err != nil {
+	if err := m.validateNewVtxos(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -50,22 +44,22 @@ func (m *V1RedeemTransaction) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *V1RedeemTransaction) validateSpendableVtxos(formats strfmt.Registry) error {
-	if swag.IsZero(m.SpendableVtxos) { // not required
+func (m *V1SubscribeForAddressResponse) validateNewVtxos(formats strfmt.Registry) error {
+	if swag.IsZero(m.NewVtxos) { // not required
 		return nil
 	}
 
-	for i := 0; i < len(m.SpendableVtxos); i++ {
-		if swag.IsZero(m.SpendableVtxos[i]) { // not required
+	for i := 0; i < len(m.NewVtxos); i++ {
+		if swag.IsZero(m.NewVtxos[i]) { // not required
 			continue
 		}
 
-		if m.SpendableVtxos[i] != nil {
-			if err := m.SpendableVtxos[i].Validate(formats); err != nil {
+		if m.NewVtxos[i] != nil {
+			if err := m.NewVtxos[i].Validate(formats); err != nil {
 				if ve, ok := err.(*errors.Validation); ok {
-					return ve.ValidateName("spendableVtxos" + "." + strconv.Itoa(i))
+					return ve.ValidateName("newVtxos" + "." + strconv.Itoa(i))
 				} else if ce, ok := err.(*errors.CompositeError); ok {
-					return ce.ValidateName("spendableVtxos" + "." + strconv.Itoa(i))
+					return ce.ValidateName("newVtxos" + "." + strconv.Itoa(i))
 				}
 				return err
 			}
@@ -76,7 +70,7 @@ func (m *V1RedeemTransaction) validateSpendableVtxos(formats strfmt.Registry) er
 	return nil
 }
 
-func (m *V1RedeemTransaction) validateSpentVtxos(formats strfmt.Registry) error {
+func (m *V1SubscribeForAddressResponse) validateSpentVtxos(formats strfmt.Registry) error {
 	if swag.IsZero(m.SpentVtxos) { // not required
 		return nil
 	}
@@ -102,11 +96,11 @@ func (m *V1RedeemTransaction) validateSpentVtxos(formats strfmt.Registry) error 
 	return nil
 }
 
-// ContextValidate validate this v1 redeem transaction based on the context it is used
-func (m *V1RedeemTransaction) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
+// ContextValidate validate this v1 subscribe for address response based on the context it is used
+func (m *V1SubscribeForAddressResponse) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.contextValidateSpendableVtxos(ctx, formats); err != nil {
+	if err := m.contextValidateNewVtxos(ctx, formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -120,21 +114,21 @@ func (m *V1RedeemTransaction) ContextValidate(ctx context.Context, formats strfm
 	return nil
 }
 
-func (m *V1RedeemTransaction) contextValidateSpendableVtxos(ctx context.Context, formats strfmt.Registry) error {
+func (m *V1SubscribeForAddressResponse) contextValidateNewVtxos(ctx context.Context, formats strfmt.Registry) error {
 
-	for i := 0; i < len(m.SpendableVtxos); i++ {
+	for i := 0; i < len(m.NewVtxos); i++ {
 
-		if m.SpendableVtxos[i] != nil {
+		if m.NewVtxos[i] != nil {
 
-			if swag.IsZero(m.SpendableVtxos[i]) { // not required
+			if swag.IsZero(m.NewVtxos[i]) { // not required
 				return nil
 			}
 
-			if err := m.SpendableVtxos[i].ContextValidate(ctx, formats); err != nil {
+			if err := m.NewVtxos[i].ContextValidate(ctx, formats); err != nil {
 				if ve, ok := err.(*errors.Validation); ok {
-					return ve.ValidateName("spendableVtxos" + "." + strconv.Itoa(i))
+					return ve.ValidateName("newVtxos" + "." + strconv.Itoa(i))
 				} else if ce, ok := err.(*errors.CompositeError); ok {
-					return ce.ValidateName("spendableVtxos" + "." + strconv.Itoa(i))
+					return ce.ValidateName("newVtxos" + "." + strconv.Itoa(i))
 				}
 				return err
 			}
@@ -145,7 +139,7 @@ func (m *V1RedeemTransaction) contextValidateSpendableVtxos(ctx context.Context,
 	return nil
 }
 
-func (m *V1RedeemTransaction) contextValidateSpentVtxos(ctx context.Context, formats strfmt.Registry) error {
+func (m *V1SubscribeForAddressResponse) contextValidateSpentVtxos(ctx context.Context, formats strfmt.Registry) error {
 
 	for i := 0; i < len(m.SpentVtxos); i++ {
 
@@ -171,7 +165,7 @@ func (m *V1RedeemTransaction) contextValidateSpentVtxos(ctx context.Context, for
 }
 
 // MarshalBinary interface implementation
-func (m *V1RedeemTransaction) MarshalBinary() ([]byte, error) {
+func (m *V1SubscribeForAddressResponse) MarshalBinary() ([]byte, error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -179,8 +173,8 @@ func (m *V1RedeemTransaction) MarshalBinary() ([]byte, error) {
 }
 
 // UnmarshalBinary interface implementation
-func (m *V1RedeemTransaction) UnmarshalBinary(b []byte) error {
-	var res V1RedeemTransaction
+func (m *V1SubscribeForAddressResponse) UnmarshalBinary(b []byte) error {
+	var res V1SubscribeForAddressResponse
 	if err := swag.ReadJSON(b, &res); err != nil {
 		return err
 	}

@@ -24,7 +24,7 @@ vet:
 ## lint: lint codebase
 lint:
 	@echo "Linting code..."
-	@golangci-lint run --fix --verbose
+	@golangci-lint run --fix
 
 ## wasm: compiles the client-sdk to wasm
 WASM_DIR = wasm

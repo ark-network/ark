@@ -6,7 +6,9 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"io"
 	"math"
 	"sort"
 	"strconv"
@@ -172,7 +174,7 @@ func LoadCovenantlessClient(sdkStore types.Store) (ArkClient, error) {
 		supportedWallets,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("faile to setup wallet: %s", err)
+		return nil, fmt.Errorf("failed to setup wallet: %s", err)
 	}
 
 	covenantlessClient := covenantlessArkClient{
@@ -188,6 +190,9 @@ func LoadCovenantlessClient(sdkStore types.Store) (ArkClient, error) {
 	if cfgData.WithTransactionFeed {
 		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
 		covenantlessClient.txStreamCtxCancel = txStreamCtxCancel
+		if err := covenantlessClient.refreshDb(context.Background()); err != nil {
+			return nil, err
+		}
 		go covenantlessClient.listenForArkTxs(txStreamCtx)
 		go covenantlessClient.listenForBoardingTxs(txStreamCtx)
 	}
@@ -239,6 +244,9 @@ func LoadCovenantlessClientWithWallet(
 	if cfgData.WithTransactionFeed {
 		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
 		covenantlessClient.txStreamCtxCancel = txStreamCtxCancel
+		if err := covenantlessClient.refreshDb(context.Background()); err != nil {
+			return nil, err
+		}
 		go covenantlessClient.listenForArkTxs(txStreamCtx)
 		go covenantlessClient.listenForBoardingTxs(txStreamCtx)
 	}
@@ -254,6 +262,9 @@ func (a *covenantlessArkClient) Init(ctx context.Context, args InitArgs) error {
 	if args.WithTransactionFeed {
 		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
 		a.txStreamCtxCancel = txStreamCtxCancel
+		if err := a.refreshDb(context.Background()); err != nil {
+			return err
+		}
 		go a.listenForArkTxs(txStreamCtx)
 		go a.listenForBoardingTxs(txStreamCtx)
 	}
@@ -269,149 +280,14 @@ func (a *covenantlessArkClient) InitWithWallet(ctx context.Context, args InitWit
 	if a.WithTransactionFeed {
 		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
 		a.txStreamCtxCancel = txStreamCtxCancel
+		if err := a.refreshDb(context.Background()); err != nil {
+			return err
+		}
 		go a.listenForArkTxs(txStreamCtx)
 		go a.listenForBoardingTxs(txStreamCtx)
 	}
 
 	return nil
-}
-
-func (a *covenantlessArkClient) listenForArkTxs(ctx context.Context) {
-	eventChan, closeFunc, err := a.client.GetTransactionsStream(ctx)
-	if err != nil {
-		log.WithError(err).Error("failed to get transaction stream")
-		return
-	}
-	defer closeFunc()
-
-	for {
-		select {
-		case event, ok := <-eventChan:
-			if !ok {
-				continue
-			}
-
-			if event.Err != nil {
-				log.WithError(event.Err).Warn("received error in transaction stream")
-				continue
-			}
-
-			offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
-			if err != nil {
-				log.WithError(err).Error("failed to get offchain addresses")
-				continue
-			}
-
-			myPubkeys := make(map[string]struct{})
-			for _, addr := range offchainAddrs {
-				// nolint:all
-				decoded, _ := common.DecodeAddress(addr.Address)
-				pubkey := hex.EncodeToString(decoded.VtxoTapKey.SerializeCompressed()[1:])
-				myPubkeys[pubkey] = struct{}{}
-			}
-
-			if event.Round != nil {
-				if err := a.handleRoundTx(context.Background(), myPubkeys, event.Round); err != nil {
-					log.WithError(err).Error("failed to process round tx")
-					continue
-				}
-			}
-
-			if event.Redeem != nil {
-				if err := a.handleRedeemTx(context.Background(), myPubkeys, event.Redeem); err != nil {
-					log.WithError(err).Error("failed to process redeem tx")
-					continue
-				}
-			}
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-func (a *covenantlessArkClient) listenForBoardingTxs(ctx context.Context) {
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			txsToAdd, txsToConfirm, err := a.getBoardingPendingTransactions(ctx)
-			if err != nil {
-				log.WithError(err).Error("failed to get pending transactions")
-				continue
-			}
-
-			if len(txsToAdd) > 0 {
-				count, err := a.store.TransactionStore().AddTransactions(
-					ctx, txsToAdd,
-				)
-				if err != nil {
-					log.WithError(err).Error("failed to add new boarding transactions")
-					continue
-				}
-				log.Debugf("added %d boarding transaction(s)", count)
-			}
-
-			if len(txsToConfirm) > 0 {
-				count, err := a.store.TransactionStore().ConfirmTransactions(
-					ctx, txsToConfirm, time.Now(),
-				)
-				if err != nil {
-					log.WithError(err).Error("failed to update boarding transactions")
-					continue
-				}
-				log.Debugf("updated %d boarding transaction(s)", count)
-			}
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-func (a *covenantlessArkClient) getBoardingPendingTransactions(
-	ctx context.Context,
-) ([]types.Transaction, []string, error) {
-	oldTxs, err := a.store.TransactionStore().GetAllTransactions(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	boardingUtxos, err := a.getClaimableBoardingUtxos(ctx, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	txsToAdd := make([]types.Transaction, 0)
-	txsToConfirm := make([]string, 0)
-	for _, u := range boardingUtxos {
-		found := false
-		for _, tx := range oldTxs {
-			if tx.BoardingTxid == u.Txid {
-				found = true
-				emptyTime := time.Time{}
-				if tx.CreatedAt == emptyTime && tx.CreatedAt != u.CreatedAt {
-					txsToConfirm = append(txsToConfirm, tx.TransactionKey.String())
-				}
-				break
-			}
-		}
-
-		if found {
-			continue
-		}
-
-		txsToAdd = append(txsToAdd, types.Transaction{
-			TransactionKey: types.TransactionKey{
-				BoardingTxid: u.Txid,
-			},
-			Amount:    u.Amount,
-			Type:      types.TxReceived,
-			CreatedAt: u.CreatedAt,
-		})
-	}
-
-	return txsToAdd, txsToConfirm, nil
 }
 
 func (a *covenantlessArkClient) Balance(
@@ -742,45 +618,12 @@ func (a *covenantlessArkClient) RedeemNotes(ctx context.Context, notes []string,
 		return "", fmt.Errorf("no funds detected")
 	}
 
-	signerSessions, signerPubKeys, signingType, err := a.handleOptions(options, nil, notes)
-	if err != nil {
-		return "", err
-	}
-
-	requestID, err := a.client.RegisterNotesForNextRound(
-		ctx, notes,
-	)
-	if err != nil {
-		return "", err
-	}
-
-	output := client.Output{
+	receiversOutput := []client.Output{{
 		Address: offchainAddrs[0].Address,
 		Amount:  amount,
-	}
+	}}
 
-	receiversOutput := []client.Output{output}
-
-	if err := a.client.RegisterOutputsForNextRound(
-		ctx, requestID, receiversOutput,
-		&tree.Musig2{
-			CosignersPublicKeys: signerPubKeys,
-			SigningType:         tree.SigningType(signingType),
-		},
-	); err != nil {
-		return "", err
-	}
-
-	log.Infof("payout registered with id: %s", requestID)
-
-	roundTxID, err := a.handleRoundStream(
-		ctx, requestID, nil, nil, receiversOutput, signerSessions, options.EventsCh,
-	)
-	if err != nil {
-		return "", err
-	}
-
-	return roundTxID, nil
+	return a.joinRoundWithRetry(ctx, nil, notes, receiversOutput, *options, nil, nil)
 }
 
 func (a *covenantlessArkClient) StartUnilateralExit(ctx context.Context) error {
@@ -877,7 +720,7 @@ func (a *covenantlessArkClient) CollaborativeExit(
 		return "", fmt.Errorf("invalid onchain address")
 	}
 
-	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+	offchainAddrs, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -911,7 +754,7 @@ func (a *covenantlessArkClient) CollaborativeExit(
 		}
 	}
 
-	boardingUtxos, err := a.getClaimableBoardingUtxos(ctx, nil)
+	boardingUtxos, err := a.getClaimableBoardingUtxos(ctx, boardingAddrs, nil)
 	if err != nil {
 		return "", err
 	}
@@ -956,37 +799,7 @@ func (a *covenantlessArkClient) CollaborativeExit(
 		})
 	}
 
-	signerSessions, signerPubKeys, signingType, err := a.handleOptions(options, inputs, nil)
-	if err != nil {
-		return "", err
-	}
-
-	requestID, err := a.client.RegisterInputsForNextRound(
-		ctx,
-		inputs,
-	)
-	if err != nil {
-		return "", err
-	}
-
-	if err := a.client.RegisterOutputsForNextRound(
-		ctx, requestID, receivers,
-		&tree.Musig2{
-			CosignersPublicKeys: signerPubKeys,
-			SigningType:         tree.SigningType(signingType),
-		},
-	); err != nil {
-		return "", err
-	}
-
-	roundTxID, err := a.handleRoundStream(
-		ctx, requestID, selectedCoins, selectedBoardingCoins, receivers, signerSessions, options.EventsCh,
-	)
-	if err != nil {
-		return "", err
-	}
-
-	return roundTxID, nil
+	return a.joinRoundWithRetry(ctx, inputs, nil, receivers, *options, selectedCoins, selectedBoardingCoins)
 }
 
 func (a *covenantlessArkClient) Settle(ctx context.Context, opts ...Option) (string, error) {
@@ -1001,7 +814,14 @@ func (a *covenantlessArkClient) GetTransactionHistory(
 	}
 
 	if a.Config.WithTransactionFeed {
-		return a.store.TransactionStore().GetAllTransactions(ctx)
+		history, err := a.store.TransactionStore().GetAllTransactions(ctx)
+		if err != nil {
+			return nil, err
+		}
+		sort.SliceStable(history, func(i, j int) bool {
+			return history[i].CreatedAt.IsZero() || history[i].CreatedAt.After(history[j].CreatedAt)
+		})
+		return history, nil
 	}
 
 	spendableVtxos, spentVtxos, err := a.ListVtxos(ctx)
@@ -1019,13 +839,13 @@ func (a *covenantlessArkClient) GetTransactionHistory(
 		return nil, err
 	}
 
-	txs := append(boardingTxs, offchainTxs...)
+	history := append(boardingTxs, offchainTxs...)
 	// Sort the slice by age
-	sort.SliceStable(txs, func(i, j int) bool {
-		return txs[i].CreatedAt.After(txs[j].CreatedAt)
+	sort.SliceStable(history, func(i, j int) bool {
+		return history[i].CreatedAt.IsZero() || history[i].CreatedAt.After(history[j].CreatedAt)
 	})
 
-	return txs, nil
+	return history, nil
 }
 
 func (a *covenantlessArkClient) SetNostrNotificationRecipient(ctx context.Context, nostrProfile string) error {
@@ -1117,6 +937,335 @@ func (a *covenantlessArkClient) SetNostrNotificationRecipient(ctx context.Contex
 	}
 
 	return a.client.SetNostrRecipient(ctx, nostrProfile, vtxos)
+}
+
+func (a *covenantlessArkClient) listenForArkTxs(ctx context.Context) {
+	eventChan, closeFunc, err := a.client.GetTransactionsStream(ctx)
+	if err != nil {
+		log.WithError(err).Error("failed to get transaction stream")
+		return
+	}
+	defer closeFunc()
+
+	for {
+		select {
+		case event, ok := <-eventChan:
+			if !ok {
+				continue
+			}
+			if errors.Is(event.Err, io.EOF) {
+				closeFunc()
+				return
+			}
+
+			if event.Err != nil {
+				log.WithError(event.Err).Warn("received error in transaction stream")
+				continue
+			}
+
+			offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+			if err != nil {
+				log.WithError(err).Error("failed to get offchain addresses")
+				continue
+			}
+
+			myPubkeys := make(map[string]struct{})
+			for _, addr := range offchainAddrs {
+				// nolint:all
+				decoded, _ := common.DecodeAddress(addr.Address)
+				pubkey := hex.EncodeToString(decoded.VtxoTapKey.SerializeCompressed()[1:])
+				myPubkeys[pubkey] = struct{}{}
+			}
+
+			if event.Round != nil {
+				if err := a.handleRoundTx(context.Background(), myPubkeys, event.Round); err != nil {
+					log.WithError(err).Error("failed to process round tx")
+					continue
+				}
+			}
+
+			if event.Redeem != nil {
+				if err := a.handleRedeemTx(context.Background(), myPubkeys, event.Redeem); err != nil {
+					log.WithError(err).Error("failed to process redeem tx")
+					continue
+				}
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (a *covenantlessArkClient) refreshDb(ctx context.Context) error {
+	// fetch new data
+	spendableVtxos, spentVtxos, err := a.ListVtxos(ctx)
+	if err != nil {
+		return err
+	}
+	boardingTxs, roundsToIgnore, err := a.getBoardingTxs(ctx)
+	if err != nil {
+		return err
+	}
+	offchainTxs, err := vtxosToTxsCovenantless(spendableVtxos, spentVtxos, roundsToIgnore)
+	if err != nil {
+		return err
+	}
+
+	newTxs := append(offchainTxs, boardingTxs...)
+	if err := a.refreshTxDb(newTxs); err != nil {
+		return err
+	}
+
+	return a.refreshVtxoDb(spendableVtxos, spentVtxos)
+}
+
+func (a *covenantlessArkClient) refreshTxDb(newTxs []types.Transaction) error {
+	ctx := context.Background()
+
+	// fetch old data
+	oldTxs, err := a.store.TransactionStore().GetAllTransactions(ctx)
+	if err != nil {
+		return err
+	}
+
+	// build a map for quick lookups
+	oldTxsMap := make(map[string]types.Transaction, len(oldTxs))
+	txsToUpdate := make(map[string]types.Transaction, 0)
+	for _, tx := range oldTxs {
+		if tx.CreatedAt.IsZero() || !tx.Settled {
+			txsToUpdate[tx.TransactionKey.String()] = tx
+		}
+		oldTxsMap[tx.TransactionKey.String()] = tx
+	}
+
+	txsToAdd := make([]types.Transaction, 0, len(newTxs))
+	txsToReplace := make([]types.Transaction, 0, len(newTxs))
+	for _, tx := range newTxs {
+		if _, ok := oldTxsMap[tx.TransactionKey.String()]; !ok {
+			txsToAdd = append(txsToAdd, tx)
+			continue
+		}
+
+		if _, ok := txsToUpdate[tx.TransactionKey.String()]; ok {
+			txsToReplace = append(txsToReplace, tx)
+		}
+	}
+
+	if len(txsToAdd) > 0 {
+		count, err := a.store.TransactionStore().AddTransactions(ctx, txsToAdd)
+		if err != nil {
+			return err
+		}
+		log.Debugf("added %d new transaction(s)", count)
+	}
+	if len(txsToReplace) > 0 {
+		count, err := a.store.TransactionStore().UpdateTransactions(ctx, txsToReplace)
+		if err != nil {
+			return err
+		}
+		log.Debugf("updated %d transaction(s)", count)
+	}
+
+	return nil
+}
+
+func (a *covenantlessArkClient) refreshVtxoDb(spendableVtxos, spentVtxos []client.Vtxo) error {
+	ctx := context.Background()
+
+	oldSpendableVtxos, _, err := a.store.VtxoStore().GetAllVtxos(ctx)
+	if err != nil {
+		return err
+	}
+
+	oldSpendableVtxoMap := make(map[types.VtxoKey]types.Vtxo, 0)
+	for _, v := range oldSpendableVtxos {
+		oldSpendableVtxoMap[v.VtxoKey] = v
+	}
+
+	vtxosToAdd := make([]types.Vtxo, 0, len(spendableVtxos))
+	for _, vtxo := range spendableVtxos {
+		if _, ok := oldSpendableVtxoMap[types.VtxoKey(vtxo.Outpoint)]; !ok {
+			vtxosToAdd = append(vtxosToAdd, toTypesVtxo(vtxo))
+		}
+	}
+
+	vtxosToReplace := make([]types.Vtxo, 0, len(spentVtxos))
+	for _, vtxo := range spentVtxos {
+		if _, ok := oldSpendableVtxoMap[types.VtxoKey(vtxo.Outpoint)]; ok {
+			vtxosToReplace = append(vtxosToReplace, toTypesVtxo(vtxo))
+		}
+	}
+
+	if len(vtxosToAdd) > 0 {
+		count, err := a.store.VtxoStore().AddVtxos(ctx, vtxosToAdd)
+		if err != nil {
+			return err
+		}
+		log.Debugf("added %d new vtxo(s)", count)
+	}
+	if len(vtxosToReplace) > 0 {
+		count, err := a.store.VtxoStore().UpdateVtxos(ctx, vtxosToReplace)
+		if err != nil {
+			return err
+		}
+		log.Debugf("updated %d vtxo(s)", count)
+	}
+
+	return nil
+}
+
+func (a *covenantlessArkClient) listenForBoardingTxs(ctx context.Context) {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			_, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
+			if err != nil {
+				log.WithError(err).Error("failed to get all boarding addresses")
+				continue
+			}
+			txsToAdd, txsToConfirm, rbfTxs, err := a.getBoardingTransactions(ctx, boardingAddrs)
+			if err != nil {
+				log.WithError(err).Error("failed to get pending transactions")
+				continue
+			}
+
+			if len(txsToAdd) > 0 {
+				count, err := a.store.TransactionStore().AddTransactions(
+					ctx, txsToAdd,
+				)
+				if err != nil {
+					log.WithError(err).Error("failed to add new boarding transactions")
+					continue
+				}
+				log.Debugf("added %d boarding transaction(s)", count)
+			}
+
+			if len(txsToConfirm) > 0 {
+				count, err := a.store.TransactionStore().ConfirmTransactions(
+					ctx, txsToConfirm, time.Now(),
+				)
+				if err != nil {
+					log.WithError(err).Error("failed to update boarding transactions")
+					continue
+				}
+				log.Debugf("confirmed %d boarding transaction(s)", count)
+			}
+
+			if len(rbfTxs) > 0 {
+				count, err := a.store.TransactionStore().RbfTransactions(ctx, rbfTxs)
+				if err != nil {
+					log.WithError(err).Error("failed to update rbf boarding transactions")
+					continue
+				}
+				log.Debugf("replaced %d transaction(s)", count)
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (a *covenantlessArkClient) getBoardingTransactions(
+	ctx context.Context, boardingAddrs []wallet.TapscriptsAddress,
+) ([]types.Transaction, []string, map[string]types.Transaction, error) {
+	oldTxs, err := a.store.TransactionStore().GetAllTransactions(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	rbfTxs := make(map[string]types.Transaction, 0)
+	replacements := make(map[string]struct{}, 0)
+	for _, tx := range oldTxs {
+		if tx.IsBoarding() && tx.CreatedAt.IsZero() {
+			isRbf, replacedBy, timestamp, err := a.explorer.IsRBFTx(tx.BoardingTxid, tx.Hex)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			if isRbf {
+				txHex, err := a.explorer.GetTxHex(replacedBy)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				rawTx := &wire.MsgTx{}
+				if err := rawTx.Deserialize(strings.NewReader(txHex)); err != nil {
+					return nil, nil, nil, err
+				}
+				amount := uint64(0)
+				netParams := utils.ToBitcoinNetwork(a.Network)
+				for _, addr := range boardingAddrs {
+					decoded, err := btcutil.DecodeAddress(addr.Address, &netParams)
+					if err != nil {
+						return nil, nil, nil, err
+					}
+					pkScript, err := txscript.PayToAddrScript(decoded)
+					if err != nil {
+						return nil, nil, nil, err
+					}
+					for _, out := range rawTx.TxOut {
+						if bytes.Equal(out.PkScript, pkScript) {
+							amount = uint64(out.Value)
+							break
+						}
+					}
+					if amount > 0 {
+						break
+					}
+				}
+				rbfTxs[tx.BoardingTxid] = types.Transaction{
+					TransactionKey: types.TransactionKey{
+						BoardingTxid: replacedBy,
+					},
+					CreatedAt: time.Unix(timestamp, 0),
+					Hex:       txHex,
+					Amount:    amount,
+				}
+				replacements[replacedBy] = struct{}{}
+			}
+		}
+	}
+
+	boardingUtxos, err := a.getClaimableBoardingUtxos(ctx, boardingAddrs, nil)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	txsToAdd := make([]types.Transaction, 0)
+	txsToConfirm := make([]string, 0)
+	for _, u := range boardingUtxos {
+		if _, ok := replacements[u.Txid]; ok {
+			continue
+		}
+
+		found := false
+		for _, tx := range oldTxs {
+			if tx.BoardingTxid == u.Txid {
+				found = true
+				if tx.CreatedAt.IsZero() && tx.CreatedAt != u.CreatedAt {
+					txsToConfirm = append(txsToConfirm, tx.TransactionKey.String())
+				}
+				break
+			}
+		}
+
+		if found {
+			continue
+		}
+
+		txsToAdd = append(txsToAdd, types.Transaction{
+			TransactionKey: types.TransactionKey{
+				BoardingTxid: u.Txid,
+			},
+			Amount:    u.Amount,
+			Type:      types.TxReceived,
+			CreatedAt: u.CreatedAt,
+			Hex:       u.Tx,
+		})
+	}
+
+	return txsToAdd, txsToConfirm, rbfTxs, nil
 }
 
 func (a *covenantlessArkClient) sendExpiredBoardingUtxos(
@@ -1328,7 +1477,7 @@ func (a *covenantlessArkClient) sendOffchain(
 		sumOfReceivers += receiver.Amount()
 	}
 
-	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+	offchainAddrs, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -1360,7 +1509,7 @@ func (a *covenantlessArkClient) sendOffchain(
 		}
 	}
 
-	boardingUtxos, err := a.getClaimableBoardingUtxos(ctx, nil)
+	boardingUtxos, err := a.getClaimableBoardingUtxos(ctx, boardingAddrs, nil)
 	if err != nil {
 		return "", err
 	}
@@ -1428,38 +1577,7 @@ func (a *covenantlessArkClient) sendOffchain(
 		})
 	}
 
-	signerSessions, signerPubKeys, signingType, err := a.handleOptions(options, inputs, []string{})
-	if err != nil {
-		return "", err
-	}
-
-	requestID, err := a.client.RegisterInputsForNextRound(
-		ctx, inputs,
-	)
-	if err != nil {
-		return "", err
-	}
-
-	if err := a.client.RegisterOutputsForNextRound(
-		ctx, requestID, outputs,
-		&tree.Musig2{
-			CosignersPublicKeys: signerPubKeys,
-			SigningType:         tree.SigningType(signingType),
-		},
-	); err != nil {
-		return "", err
-	}
-
-	log.Infof("registered inputs and outputs with request id: %s", requestID)
-
-	roundTxID, err := a.handleRoundStream(
-		ctx, requestID, selectedCoins, selectedBoardingCoins, outputs, signerSessions, options.EventsCh,
-	)
-	if err != nil {
-		return "", err
-	}
-
-	return roundTxID, nil
+	return a.joinRoundWithRetry(ctx, inputs, nil, outputs, *options, selectedCoins, selectedBoardingCoins)
 }
 
 func (a *covenantlessArkClient) addInputs(
@@ -1534,6 +1652,59 @@ func (a *covenantlessArkClient) addInputs(
 	return nil
 }
 
+func (a *covenantlessArkClient) joinRoundWithRetry(
+	ctx context.Context, inputs []client.Input, notes []string, outputs []client.Output, options SettleOptions,
+	selectedCoins []client.TapscriptsVtxo, selectedBoardingCoins []types.Utxo,
+) (string, error) {
+	signerSessions, signerPubKeys, signingType, err := a.handleOptions(options, inputs, []string{})
+	if err != nil {
+		return "", err
+	}
+
+	maxRetry := 3
+	retryCount := 0
+	var roundErr error
+	for retryCount < maxRetry {
+		var requestID string
+		var err error
+		if len(inputs) > 0 {
+			requestID, err = a.client.RegisterInputsForNextRound(ctx, inputs)
+		} else {
+			requestID, err = a.client.RegisterNotesForNextRound(ctx, notes)
+		}
+		if err != nil {
+			return "", err
+		}
+
+		if err := a.client.RegisterOutputsForNextRound(
+			ctx, requestID, outputs,
+			&tree.Musig2{
+				CosignersPublicKeys: signerPubKeys,
+				SigningType:         signingType,
+			},
+		); err != nil {
+			return "", err
+		}
+
+		log.Infof("registered inputs and outputs with request id: %s", requestID)
+
+		roundTxID, err := a.handleRoundStream(
+			ctx, requestID, selectedCoins, selectedBoardingCoins, outputs, signerSessions, options.EventsCh,
+		)
+		if err != nil {
+			log.WithError(err).Warn("round failed, retrying...")
+			retryCount++
+			time.Sleep(100 * time.Millisecond)
+			roundErr = err
+			continue
+		}
+
+		return roundTxID, nil
+	}
+
+	return "", fmt.Errorf("reached max atttempt of retries, last round error: %s", roundErr)
+}
+
 func (a *covenantlessArkClient) handleRoundStream(
 	ctx context.Context,
 	requestID string,
@@ -1550,6 +1721,10 @@ func (a *covenantlessArkClient) handleRoundStream(
 
 	eventsCh, close, err := a.client.GetEventStream(ctx, requestID)
 	if err != nil {
+		if errors.Is(err, io.EOF) {
+			close()
+			return "", fmt.Errorf("connection closed by server")
+		}
 		return "", err
 	}
 
@@ -2331,6 +2506,10 @@ func (a *covenantlessArkClient) getAllBoardingUtxos(ctx context.Context) ([]type
 			for i, vout := range tx.Vout {
 				var spent bool
 				if vout.Address == addr.Address {
+					txHex, err := a.explorer.GetTxHex(tx.Txid)
+					if err != nil {
+						return nil, nil, err
+					}
 					spentStatuses, err := a.explorer.GetTxOutspends(tx.Txid)
 					if err != nil {
 						return nil, nil, err
@@ -2350,6 +2529,7 @@ func (a *covenantlessArkClient) getAllBoardingUtxos(ctx context.Context) ([]type
 						CreatedAt:  createdAt,
 						Tapscripts: addr.Tapscripts,
 						Spent:      spent,
+						Tx:         txHex,
 					})
 				}
 			}
@@ -2359,12 +2539,9 @@ func (a *covenantlessArkClient) getAllBoardingUtxos(ctx context.Context) ([]type
 	return utxos, ignoreVtxos, nil
 }
 
-func (a *covenantlessArkClient) getClaimableBoardingUtxos(ctx context.Context, opts *CoinSelectOptions) ([]types.Utxo, error) {
-	_, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
-	if err != nil {
-		return nil, err
-	}
-
+func (a *covenantlessArkClient) getClaimableBoardingUtxos(
+	_ context.Context, boardingAddrs []wallet.TapscriptsAddress, opts *CoinSelectOptions,
+) ([]types.Utxo, error) {
 	claimable := make([]types.Utxo, 0)
 	for _, addr := range boardingAddrs {
 		boardingScript, err := bitcointree.ParseVtxoScript(addr.Tapscripts)
@@ -2525,10 +2702,10 @@ func (a *covenantlessArkClient) getBoardingTxs(
 			Type:      types.TxReceived,
 			CreatedAt: u.CreatedAt,
 			Settled:   u.Spent,
+			Hex:       u.Tx,
 		}
 
-		emptyTime := time.Time{}
-		if u.CreatedAt == emptyTime {
+		if u.CreatedAt.IsZero() {
 			unconfirmedTxs = append(unconfirmedTxs, tx)
 			continue
 		}
@@ -2620,6 +2797,7 @@ func (a *covenantlessArkClient) handleRoundTx(
 				Type:      types.TxReceived,
 				Settled:   true,
 				CreatedAt: time.Now(),
+				Hex:       roundTx.Hex,
 			})
 		} else {
 			vtxosToAddAmount := uint64(0)
@@ -2639,6 +2817,7 @@ func (a *covenantlessArkClient) handleRoundTx(
 					Type:      types.TxSent,
 					Settled:   true,
 					CreatedAt: time.Now(),
+					Hex:       roundTx.Hex,
 				})
 			}
 		}
@@ -2661,6 +2840,7 @@ func (a *covenantlessArkClient) handleRoundTx(
 					Type:      types.TxSent,
 					Settled:   true,
 					CreatedAt: time.Now(),
+					Hex:       roundTx.Hex,
 				})
 			}
 
@@ -2758,6 +2938,7 @@ func (a *covenantlessArkClient) handleRedeemTx(
 				Amount:    amount,
 				Type:      types.TxReceived,
 				CreatedAt: time.Now(),
+				Hex:       redeemTx.Hex,
 			})
 		}
 	} else {
@@ -2817,6 +2998,47 @@ func (a *covenantlessArkClient) handleRedeemTx(
 	}
 
 	return nil
+}
+
+func (a *covenantlessArkClient) handleOptions(
+	options SettleOptions, inputs []client.Input, notesInputs []string,
+) ([]bitcointree.SignerSession, []string, tree.SigningType, error) {
+	var signingType tree.SigningType
+	if options.SigningType != nil {
+		signingType = *options.SigningType
+	} else {
+		signingType = tree.SignBranch
+	}
+
+	sessions := make([]bitcointree.SignerSession, 0)
+	sessions = append(sessions, options.ExtraSignerSessions...)
+
+	if !options.WalletSignerDisabled {
+		outpoints := make([]client.Outpoint, 0, len(inputs))
+		for _, input := range inputs {
+			outpoints = append(outpoints, input.Outpoint)
+		}
+
+		signerSession, err := a.wallet.NewVtxoTreeSigner(
+			context.Background(),
+			inputsToDerivationPath(outpoints, notesInputs),
+		)
+		if err != nil {
+			return nil, nil, signingType, err
+		}
+		sessions = append(sessions, signerSession)
+	}
+
+	if len(sessions) == 0 {
+		return nil, nil, signingType, fmt.Errorf("no signer sessions")
+	}
+
+	signerPubKeys := make([]string, 0)
+	for _, session := range sessions {
+		signerPubKeys = append(signerPubKeys, session.GetPublicKey())
+	}
+
+	return sessions, signerPubKeys, signingType, nil
 }
 
 func findVtxosBySpentBy(allVtxos []client.Vtxo, txid string) (vtxos []client.Vtxo) {
@@ -3055,10 +3277,11 @@ func buildRedeemTx(
 		}
 
 		ins = append(ins, common.VtxoInput{
-			Outpoint:    vtxoOutpoint,
-			Tapscript:   tapscript,
-			Amount:      int64(vtxo.Amount),
-			WitnessSize: closure.WitnessSize(extraWitnessSize),
+			Outpoint:           vtxoOutpoint,
+			Tapscript:          tapscript,
+			Amount:             int64(vtxo.Amount),
+			WitnessSize:        closure.WitnessSize(extraWitnessSize),
+			RevealedTapscripts: vtxo.Tapscripts,
 		})
 	}
 
@@ -3105,45 +3328,6 @@ func buildRedeemTx(
 	return bitcointree.BuildRedeemTx(ins, outs)
 }
 
-func (a *covenantlessArkClient) handleOptions(options *SettleOptions, inputs []client.Input, notesInputs []string) ([]bitcointree.SignerSession, []string, tree.SigningType, error) {
-	var signingType tree.SigningType
-	if options.SigningType != nil {
-		signingType = *options.SigningType
-	} else {
-		signingType = tree.SignBranch
-	}
-
-	sessions := make([]bitcointree.SignerSession, 0)
-	sessions = append(sessions, options.ExtraSignerSessions...)
-
-	if !options.WalletSignerDisabled {
-		outpoints := make([]client.Outpoint, 0, len(inputs))
-		for _, input := range inputs {
-			outpoints = append(outpoints, input.Outpoint)
-		}
-
-		signerSession, err := a.wallet.NewVtxoTreeSigner(
-			context.Background(),
-			inputsToDerivationPath(outpoints, notesInputs),
-		)
-		if err != nil {
-			return nil, nil, signingType, err
-		}
-		sessions = append(sessions, signerSession)
-	}
-
-	if len(sessions) == 0 {
-		return nil, nil, signingType, fmt.Errorf("no signer sessions")
-	}
-
-	signerPubKeys := make([]string, 0)
-	for _, session := range sessions {
-		signerPubKeys = append(signerPubKeys, session.GetPublicKey())
-	}
-
-	return sessions, signerPubKeys, signingType, nil
-}
-
 func inputsToDerivationPath(inputs []client.Outpoint, notesInputs []string) string {
 	// sort arknotes
 	slices.SortStableFunc(notesInputs, func(i, j string) int {
@@ -3185,4 +3369,18 @@ func inputsToDerivationPath(inputs []client.Outpoint, notesInputs []string) stri
 	}
 
 	return path
+}
+
+func toTypesVtxo(src client.Vtxo) types.Vtxo {
+	return types.Vtxo{
+		VtxoKey: types.VtxoKey{
+			Txid: src.Txid,
+			VOut: src.VOut,
+		},
+		PubKey:    src.PubKey,
+		Amount:    src.Amount,
+		RoundTxid: src.RoundTxid,
+		ExpiresAt: src.ExpiresAt,
+		CreatedAt: src.CreatedAt,
+	}
 }

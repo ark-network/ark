@@ -24,6 +24,14 @@ type storeData struct {
 	ExplorerURL                string `json:"explorer_url"`
 	ForfeitAddress             string `json:"forfeit_address"`
 	WithTransactionFeed        string `json:"with_transaction_feed"`
+	MarketHourStartTime        string `json:"market_hour_start_time"`
+	MarketHourEndTime          string `json:"market_hour_end_time"`
+	MarketHourPeriod           string `json:"market_hour_period"`
+	MarketHourRoundInterval    string `json:"market_hour_round_interval"`
+	UtxoMinAmount              string `json:"utxo_min_amount"`
+	UtxoMaxAmount              string `json:"utxo_max_amount"`
+	VtxoMinAmount              string `json:"vtxo_min_amount"`
+	VtxoMaxAmount              string `json:"vtxo_max_amount"`
 }
 
 func (d storeData) isEmpty() bool {
@@ -45,6 +53,14 @@ func (d storeData) decode() types.Config {
 	buf, _ := hex.DecodeString(d.ServerPubKey)
 	serverPubkey, _ := secp256k1.ParsePubKey(buf)
 	explorerURL := d.ExplorerURL
+	nextStartTime, _ := strconv.Atoi(d.MarketHourStartTime)
+	nextEndTime, _ := strconv.Atoi(d.MarketHourEndTime)
+	period, _ := strconv.Atoi(d.MarketHourPeriod)
+	mhRoundInterval, _ := strconv.Atoi(d.MarketHourRoundInterval)
+	utxoMinAmount, _ := strconv.Atoi(d.UtxoMinAmount)
+	utxoMaxAmount, _ := strconv.Atoi(d.UtxoMaxAmount)
+	vtxoMinAmount, _ := strconv.Atoi(d.VtxoMinAmount)
+	vtxoMaxAmount, _ := strconv.Atoi(d.VtxoMaxAmount)
 
 	vtxoTreeExpiryType := common.LocktimeTypeBlock
 	if vtxoTreeExpiry >= 512 {
@@ -70,6 +86,14 @@ func (d storeData) decode() types.Config {
 		ExplorerURL:                explorerURL,
 		ForfeitAddress:             d.ForfeitAddress,
 		WithTransactionFeed:        withTransactionFeed,
+		MarketHourStartTime:        int64(nextStartTime),
+		MarketHourEndTime:          int64(nextEndTime),
+		MarketHourPeriod:           int64(period),
+		MarketHourRoundInterval:    int64(mhRoundInterval),
+		UtxoMinAmount:              int64(utxoMinAmount),
+		UtxoMaxAmount:              int64(utxoMaxAmount),
+		VtxoMinAmount:              int64(vtxoMinAmount),
+		VtxoMaxAmount:              int64(vtxoMaxAmount),
 	}
 }
 
@@ -88,5 +112,13 @@ func (d storeData) asMap() map[string]string {
 		"explorer_url":                 d.ExplorerURL,
 		"forfeit_address":              d.ForfeitAddress,
 		"with_transaction_feed":        d.WithTransactionFeed,
+		"market_hour_start_time":       d.MarketHourStartTime,
+		"market_hour_end_time":         d.MarketHourEndTime,
+		"market_hour_period":           d.MarketHourPeriod,
+		"market_hour_round_interval":   d.MarketHourRoundInterval,
+		"utxo_min_amount":              d.UtxoMinAmount,
+		"utxo_max_amount":              d.UtxoMaxAmount,
+		"vtxo_min_amount":              d.VtxoMinAmount,
+		"vtxo_max_amount":              d.VtxoMaxAmount,
 	}
 }

@@ -45,10 +45,10 @@ var (
 		common.Liquid.Name:         "https://blockstream.info/liquid/api",
 		common.LiquidTestNet.Name:  "https://blockstream.info/liquidtestnet/api",
 		common.LiquidRegTest.Name:  "http://localhost:3001",
-		common.Bitcoin.Name:        "https://blockstream.info/api",
-		common.BitcoinTestNet.Name: "https://blockstream.info/testnet/api",
+		common.Bitcoin.Name:        "https://mempool.space/api",
+		common.BitcoinTestNet.Name: "https://mempool.space/testnet/api",
 		//common.BitcoinTestNet4.Name: "https://mempool.space/testnet4/api", //TODO uncomment once supported
-		common.BitcoinSigNet.Name:    "https://blockstream.info/signet/api",
+		common.BitcoinSigNet.Name:    "https://mempool.space/signet/api",
 		common.BitcoinMutinyNet.Name: "https://mutinynet.com/api",
 		common.BitcoinRegTest.Name:   "http://localhost:3000",
 	}
@@ -74,19 +74,31 @@ func (a *arkClient) GetConfigData(
 }
 
 func (a *arkClient) Unlock(ctx context.Context, pasword string) error {
+	if a.wallet == nil {
+		return fmt.Errorf("wallet not initialized")
+	}
 	_, err := a.wallet.Unlock(ctx, pasword)
 	return err
 }
 
-func (a *arkClient) Lock(ctx context.Context, pasword string) error {
-	return a.wallet.Lock(ctx, pasword)
+func (a *arkClient) Lock(ctx context.Context) error {
+	if a.wallet == nil {
+		return fmt.Errorf("wallet not initialized")
+	}
+	return a.wallet.Lock(ctx)
 }
 
 func (a *arkClient) IsLocked(ctx context.Context) bool {
+	if a.wallet == nil {
+		return true
+	}
 	return a.wallet.IsLocked()
 }
 
 func (a *arkClient) Dump(ctx context.Context) (string, error) {
+	if err := a.safeCheck(); err != nil {
+		return "", err
+	}
 	return a.wallet.Dump(ctx)
 }
 
@@ -100,19 +112,35 @@ func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
 }
 
 func (a *arkClient) GetTransactionEventChannel(_ context.Context) chan types.TransactionEvent {
-	return a.store.TransactionStore().GetEventChannel()
+	if a.store != nil && a.store.TransactionStore() != nil {
+		return a.store.TransactionStore().GetEventChannel()
+	}
+	return nil
 }
 
 func (a *arkClient) GetVtxoEventChannel(_ context.Context) chan types.VtxoEvent {
-	return a.store.VtxoStore().GetEventChannel()
+	if a.store != nil && a.store.VtxoStore() != nil {
+		return a.store.VtxoStore().GetEventChannel()
+	}
+	return nil
 }
 
 func (a *arkClient) SignTransaction(ctx context.Context, tx string) (string, error) {
+	if err := a.safeCheck(); err != nil {
+		return "", err
+	}
 	return a.wallet.SignTransaction(ctx, a.explorer, tx)
 }
 
+func (a *arkClient) Reset(ctx context.Context) {
+	if a.txStreamCtxCancel != nil {
+		a.txStreamCtxCancel()
+	}
+	a.store.Clean(ctx)
+}
+
 func (a *arkClient) Stop() error {
-	if a.Config.WithTransactionFeed {
+	if a.txStreamCtxCancel != nil {
 		a.txStreamCtxCancel()
 	}
 
@@ -140,6 +168,29 @@ func (a *arkClient) ListVtxos(
 	}
 
 	return
+}
+
+func (a *arkClient) NotifyIncomingFunds(
+	ctx context.Context, addr string,
+) ([]types.Vtxo, error) {
+	eventCh, closeFn, err := a.client.SubscribeForAddress(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+	defer closeFn()
+
+	event := <-eventCh
+
+	if event.Err != nil {
+		err = event.Err
+		return nil, err
+	}
+
+	incomingVtxos := make([]types.Vtxo, 0)
+	for _, vtxo := range event.NewVtxos {
+		incomingVtxos = append(incomingVtxos, toTypesVtxo(vtxo))
+	}
+	return incomingVtxos, nil
 }
 
 func (a *arkClient) initWithWallet(
@@ -200,6 +251,15 @@ func (a *arkClient) initWithWallet(
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 		ForfeitAddress:             info.ForfeitAddress,
 		WithTransactionFeed:        args.WithTransactionFeed,
+		MarketHourStartTime:        info.MarketHourStartTime,
+		MarketHourEndTime:          info.MarketHourEndTime,
+		MarketHourPeriod:           info.MarketHourPeriod,
+		MarketHourRoundInterval:    info.MarketHourRoundInterval,
+		ExplorerURL:                explorerSvc.BaseUrl(),
+		UtxoMinAmount:              info.UtxoMinAmount,
+		UtxoMaxAmount:              info.UtxoMaxAmount,
+		VtxoMinAmount:              info.VtxoMinAmount,
+		VtxoMaxAmount:              info.VtxoMaxAmount,
 	}
 	if err := a.store.ConfigStore().AddData(ctx, storeData); err != nil {
 		return err
@@ -275,9 +335,17 @@ func (a *arkClient) init(
 		UnilateralExitDelay:        common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
 		Dust:                       info.Dust,
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
-		ExplorerURL:                args.ExplorerURL,
+		ExplorerURL:                explorerSvc.BaseUrl(),
 		ForfeitAddress:             info.ForfeitAddress,
 		WithTransactionFeed:        args.WithTransactionFeed,
+		MarketHourStartTime:        info.MarketHourStartTime,
+		MarketHourEndTime:          info.MarketHourEndTime,
+		MarketHourPeriod:           info.MarketHourPeriod,
+		MarketHourRoundInterval:    info.MarketHourRoundInterval,
+		UtxoMinAmount:              info.UtxoMinAmount,
+		UtxoMaxAmount:              info.UtxoMaxAmount,
+		VtxoMinAmount:              info.VtxoMinAmount,
+		VtxoMaxAmount:              info.VtxoMaxAmount,
 	}
 	walletSvc, err := getWallet(a.store.ConfigStore(), &cfgData, supportedWallets)
 	if err != nil {
@@ -356,7 +424,7 @@ func getWallet(
 		return getSingleKeyWallet(configStore, data.Network.Name)
 	default:
 		return nil, fmt.Errorf(
-			"unsuported wallet type '%s', please select one of: %s",
+			"unsupported wallet type '%s', please select one of: %s",
 			data.WalletType, supportedWallets,
 		)
 	}

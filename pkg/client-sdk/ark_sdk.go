@@ -15,7 +15,7 @@ type ArkClient interface {
 	InitWithWallet(ctx context.Context, args InitWithWalletArgs) error
 	IsLocked(ctx context.Context) bool
 	Unlock(ctx context.Context, password string) error
-	Lock(ctx context.Context, password string) error
+	Lock(ctx context.Context) error
 	Balance(ctx context.Context, computeExpiryDetails bool) (*Balance, error)
 	Receive(ctx context.Context) (offchainAddr, boardingAddr string, err error)
 	SendOffChain(
@@ -39,6 +39,8 @@ type ArkClient interface {
 	RedeemNotes(ctx context.Context, notes []string, opts ...Option) (string, error)
 	SetNostrNotificationRecipient(ctx context.Context, nostrRecipient string) error
 	SignTransaction(ctx context.Context, tx string) (string, error)
+	NotifyIncomingFunds(ctx context.Context, address string) ([]types.Vtxo, error)
+	Reset(ctx context.Context)
 	Stop() error
 }
 

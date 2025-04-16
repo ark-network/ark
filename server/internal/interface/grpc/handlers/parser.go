@@ -12,6 +12,7 @@ import (
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/txscript"
 )
 
@@ -22,6 +23,17 @@ func parseAddress(addr string) (*common.Address, error) {
 		return nil, fmt.Errorf("missing address")
 	}
 	return common.DecodeAddress(addr)
+}
+
+func parseArkAddress(addr string) (string, error) {
+	a, err := parseAddress(addr)
+	if err != nil {
+		return "", err
+	}
+	if _, err := btcutil.DecodeAddress(addr, nil); err == nil {
+		return "", fmt.Errorf("must be an ark address")
+	}
+	return hex.EncodeToString(schnorr.SerializePubKey(a.VtxoTapKey)), nil
 }
 
 func parseNotes(notes []string) ([]note.Note, error) {
@@ -203,6 +215,7 @@ func (e roundTxEvent) toProto() *arkv1.RoundTransaction {
 		SpentVtxos:           vtxoList(e.SpentVtxos).toProto(),
 		SpendableVtxos:       vtxoList(e.SpendableVtxos).toProto(),
 		ClaimedBoardingUtxos: vtxoKeyList(e.ClaimedBoardingInputs).toProto(),
+		Hex:                  e.TxHex,
 	}
 }
 
@@ -213,7 +226,18 @@ func (e redeemTxEvent) toProto() *arkv1.RedeemTransaction {
 		Txid:           e.RedeemTxid,
 		SpentVtxos:     vtxoList(e.SpentVtxos).toProto(),
 		SpendableVtxos: vtxoList(e.SpendableVtxos).toProto(),
+		Hex:            e.TxHex,
 	}
+}
+
+type forfeitTxs []domain.ForfeitTx
+
+func (f forfeitTxs) toProto() []string {
+	list := make([]string, 0, len(f))
+	for _, forfeitTx := range f {
+		list = append(list, forfeitTx.Tx)
+	}
+	return list
 }
 
 func parseSignedVtxoOutpoints(signedVtxoOutpoints []*arkv1.SignedVtxoOutpoint) ([]application.SignedVtxoOutpoint, error) {

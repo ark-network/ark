@@ -19,6 +19,10 @@ const (
 	RestClient = "rest"
 )
 
+var (
+	ErrConnectionClosedByServer = fmt.Errorf("connection closed by server")
+)
+
 type RoundEvent interface {
 	isRoundEvent()
 }
@@ -57,6 +61,7 @@ type TransportClient interface {
 	GetTransactionsStream(ctx context.Context) (<-chan TransactionEvent, func(), error)
 	SetNostrRecipient(ctx context.Context, nostrRecipient string, vtxos []SignedVtxoOutpoint) error
 	DeleteNostrRecipient(ctx context.Context, vtxos []SignedVtxoOutpoint) error
+	SubscribeForAddress(ctx context.Context, address string) (<-chan AddressEvent, func(), error)
 }
 
 type Info struct {
@@ -69,6 +74,14 @@ type Info struct {
 	Dust                       uint64
 	BoardingDescriptorTemplate string
 	ForfeitAddress             string
+	MarketHourStartTime        int64
+	MarketHourEndTime          int64
+	MarketHourPeriod           int64
+	MarketHourRoundInterval    int64
+	UtxoMinAmount              int64
+	UtxoMaxAmount              int64
+	VtxoMinAmount              int64
+	VtxoMaxAmount              int64
 }
 
 type RoundEventChannel struct {
@@ -224,12 +237,14 @@ type RoundTransaction struct {
 	SpentVtxos           []Vtxo
 	SpendableVtxos       []Vtxo
 	ClaimedBoardingUtxos []Outpoint
+	Hex                  string
 }
 
 type RedeemTransaction struct {
 	Txid           string
 	SpentVtxos     []Vtxo
 	SpendableVtxos []Vtxo
+	Hex            string
 }
 
 type SignedVtxoOutpoint struct {
@@ -241,4 +256,10 @@ type OwnershipProof struct {
 	ControlBlock string
 	Script       string
 	Signature    string
+}
+
+type AddressEvent struct {
+	NewVtxos   []Vtxo
+	SpentVtxos []Vtxo
+	Err        error
 }

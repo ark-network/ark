@@ -98,6 +98,45 @@ func (s *txStore) ConfirmTransactions(
 	return len(txs), nil
 }
 
+func (s *txStore) RbfTransactions(
+	ctx context.Context, rbfTxs map[string]types.Transaction,
+) (int, error) {
+	txids := make([]string, 0, len(rbfTxs))
+	for txid := range rbfTxs {
+		txids = append(txids, txid)
+	}
+
+	txs, err := s.GetTransactions(ctx, txids)
+	if err != nil {
+		return -1, err
+	}
+
+	txsToAdd := make([]types.Transaction, 0, len(txs))
+	txsToDelete := make([]string, 0, len(txs))
+	replacements := make(map[string]string)
+	for _, tx := range txs {
+		rbfTx := rbfTxs[tx.TransactionKey.String()]
+		rbfTx.Type = tx.Type
+		rbfTx.Amount = tx.Amount
+		txsToAdd = append(txsToAdd, rbfTx)
+		txsToDelete = append(txsToDelete, tx.TransactionKey.String())
+		replacements[tx.TransactionKey.String()] = rbfTx.TransactionKey.String()
+	}
+
+	count, err := s.replaceTxs(txsToAdd, txsToDelete)
+	if err != nil {
+		return -1, err
+	}
+
+	go s.sendEvent(types.TransactionEvent{
+		Type:         types.TxsReplaced,
+		Txs:          txs,
+		Replacements: replacements,
+	})
+
+	return count, nil
+}
+
 func (s *txStore) GetAllTransactions(
 	_ context.Context,
 ) ([]types.Transaction, error) {
@@ -134,8 +173,30 @@ func (s *txStore) GetTransactions(
 	return txs, nil
 }
 
+func (s *txStore) UpdateTransactions(_ context.Context, txs []types.Transaction) (int, error) {
+	for _, tx := range txs {
+		if err := s.db.Upsert(tx.TransactionKey.String(), &tx); err != nil {
+			return -1, err
+		}
+	}
+
+	go s.sendEvent(types.TransactionEvent{
+		Type: types.TxsUpdated,
+		Txs:  txs,
+	})
+
+	return len(txs), nil
+}
+
 func (s *txStore) GetEventChannel() chan types.TransactionEvent {
 	return s.eventCh
+}
+
+func (s *txStore) Clean(_ context.Context) error {
+	if err := s.db.Badger().DropAll(); err != nil {
+		return fmt.Errorf("failed to clean the transaction db: %s", err)
+	}
+	return nil
 }
 
 func (s *txStore) Close() {
@@ -143,6 +204,30 @@ func (s *txStore) Close() {
 		log.Debugf("error on closing transactions db: %s", err)
 	}
 	close(s.eventCh)
+}
+
+func (s *txStore) replaceTxs(txsToAdd []types.Transaction, txsToDelete []string) (int, error) {
+	count := 0
+	dbtx := s.db.Badger().NewTransaction(true)
+	for _, tx := range txsToAdd {
+		if err := s.db.TxInsert(dbtx, tx.TransactionKey.String(), &tx); err != nil {
+			if errors.Is(err, badgerhold.ErrKeyExists) {
+				continue
+			}
+			return -1, err
+		}
+		count++
+	}
+	for _, txid := range txsToDelete {
+		if err := s.db.TxDelete(dbtx, txid, &types.Transaction{}); err != nil {
+			return -1, err
+		}
+	}
+	if err := dbtx.Commit(); err != nil {
+		return -1, err
+	}
+
+	return count, nil
 }
 
 func (s *txStore) sendEvent(event types.TransactionEvent) {

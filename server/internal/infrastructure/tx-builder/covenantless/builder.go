@@ -1090,6 +1090,23 @@ func (b *txBuilder) minRelayFeeConnectorTx() (uint64, error) {
 	return b.wallet.MinRelayFee(context.Background(), uint64(common.ConnectorTxSize))
 }
 
+func (b *txBuilder) CountSignedTaprootInputs(tx string) (int, error) {
+	ptx, err := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+	if err != nil {
+		return -1, err
+	}
+
+	signedInputsCount := 0
+	for _, in := range ptx.Inputs {
+		if len(in.TaprootScriptSpendSig) == 0 || len(in.TaprootLeafScript) == 0 {
+			continue
+		}
+
+		signedInputsCount++
+	}
+	return signedInputsCount, nil
+}
+
 func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, error) {
 	roundTx, err := psbt.NewFromRawBytes(strings.NewReader(dest), true)
 	if err != nil {
@@ -1105,12 +1122,10 @@ func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, 
 		return "", fmt.Errorf("txids do not match")
 	}
 
-	for i, in := range sourceTx.Inputs {
-		isMultisigTaproot := len(in.TaprootLeafScript) > 0
+	for i, sourceInput := range sourceTx.Inputs {
+		isMultisigTaproot := len(sourceInput.TaprootLeafScript) > 0
 		if isMultisigTaproot {
 			// check if the source tx signs the leaf
-			sourceInput := sourceTx.Inputs[i]
-
 			if len(sourceInput.TaprootScriptSpendSig) == 0 {
 				continue
 			}

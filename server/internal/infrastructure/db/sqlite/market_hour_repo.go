@@ -5,9 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/infrastructure/db/sqlite/sqlc/queries"
-	"time"
 )
 
 type marketHourRepository struct {
@@ -54,28 +55,43 @@ func (r *marketHourRepository) Upsert(ctx context.Context, marketHour domain.Mar
 		return fmt.Errorf("failed to get latest market hour: %w", err)
 	}
 
+	var upsertFn func() error
 	if errors.Is(err, sql.ErrNoRows) {
-		_, err = r.querier.InsertMarketHour(ctx, queries.InsertMarketHourParams{
-			StartTime:     marketHour.StartTime.Unix(),
-			EndTime:       marketHour.EndTime.Unix(),
-			Period:        int64(marketHour.Period),
-			RoundInterval: int64(marketHour.RoundInterval),
-			UpdatedAt:     marketHour.UpdatedAt.Unix(),
-		})
-	} else {
-		_, err = r.querier.UpdateMarketHour(ctx, queries.UpdateMarketHourParams{
-			StartTime:     marketHour.StartTime.Unix(),
-			EndTime:       marketHour.EndTime.Unix(),
-			Period:        int64(marketHour.Period),
-			RoundInterval: int64(marketHour.RoundInterval),
-			UpdatedAt:     marketHour.UpdatedAt.Unix(),
-			ID:            latest.ID,
-		})
-	}
-	if err != nil {
-		return fmt.Errorf("failed to upsert market hour: %w", err)
-	}
+		upsertFn = func() error {
+			_, err = r.querier.InsertMarketHour(ctx, queries.InsertMarketHourParams{
+				StartTime:     marketHour.StartTime.Unix(),
+				EndTime:       marketHour.EndTime.Unix(),
+				Period:        int64(marketHour.Period),
+				RoundInterval: int64(marketHour.RoundInterval),
+				UpdatedAt:     marketHour.UpdatedAt.Unix(),
+			})
+			return err
+		}
 
+	} else {
+		upsertFn = func() error {
+			_, err = r.querier.UpdateMarketHour(ctx, queries.UpdateMarketHourParams{
+				StartTime:     marketHour.StartTime.Unix(),
+				EndTime:       marketHour.EndTime.Unix(),
+				Period:        int64(marketHour.Period),
+				RoundInterval: int64(marketHour.RoundInterval),
+				UpdatedAt:     marketHour.UpdatedAt.Unix(),
+				ID:            latest.ID,
+			})
+			return err
+		}
+	}
+	if err := upsertFn(); err != nil {
+		if isConflictError(err) {
+			attempts := 1
+			for isConflictError(err) && attempts <= maxRetries {
+				time.Sleep(100 * time.Millisecond)
+				err = upsertFn()
+				attempts++
+			}
+		}
+		return err
+	}
 	return nil
 }
 
