@@ -32,14 +32,16 @@ type timedTxRequest struct {
 }
 
 type txRequestsQueue struct {
-	lock     *sync.RWMutex
-	requests map[string]*timedTxRequest
+	lock      *sync.RWMutex
+	requests  map[string]*timedTxRequest
+	vtxoIndex map[domain.VtxoKey]struct{}
 }
 
 func newTxRequestsQueue() *txRequestsQueue {
 	requestsById := make(map[string]*timedTxRequest)
 	lock := &sync.RWMutex{}
-	return &txRequestsQueue{lock, requestsById}
+	vtxoIndex := make(map[domain.VtxoKey]struct{})
+	return &txRequestsQueue{lock, requestsById, vtxoIndex}
 }
 
 func (m *txRequestsQueue) len() int64 {
@@ -96,6 +98,7 @@ func (m *txRequestsQueue) push(
 				}
 			}
 		}
+		m.vtxoIndex[input.VtxoKey] = struct{}{}
 	}
 
 	for _, input := range boardingInputs {
@@ -270,19 +273,17 @@ func (m *txRequestsQueue) view(id string) (*domain.TxRequest, bool) {
 	}, true
 }
 
-func (m *txRequestsQueue) isVtxoRegisteredForNextRound(vtxoKey domain.VtxoKey) bool {
+func (m *txRequestsQueue) vtxosRegisteredForRoundCheck(vtxoKeys []domain.VtxoKey) error {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
-	for _, request := range m.requests {
-		for _, input := range request.Inputs {
-			if input.Txid == vtxoKey.Txid && input.VOut == vtxoKey.VOut {
-				return true
-			}
+	for _, vtxoKey := range vtxoKeys {
+		if _, exists := m.vtxoIndex[vtxoKey]; exists {
+			return fmt.Errorf("vtxo %s is already registered for next round", vtxoKey.String())
 		}
 	}
 
-	return false
+	return nil
 }
 
 type forfeitTxsMap struct {
@@ -438,16 +439,20 @@ func newRedeemTxRequests() *redeemTxRequests {
 	}
 }
 
-func (r *redeemTxRequests) addVtxo(vtxoKey domain.VtxoKey) {
+func (r *redeemTxRequests) addVtxos(vtxoKeys []domain.VtxoKey) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
-	r.vtxos[vtxoKey.String()] = struct{}{}
+	for _, vtxoKey := range vtxoKeys {
+		r.vtxos[vtxoKey.String()] = struct{}{}
+	}
 }
 
-func (r *redeemTxRequests) removeVtxo(vtxoKey domain.VtxoKey) {
+func (r *redeemTxRequests) removeVtxos(vtxoKeys []domain.VtxoKey) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
-	delete(r.vtxos, vtxoKey.String())
+	for _, vtxoKey := range vtxoKeys {
+		delete(r.vtxos, vtxoKey.String())
+	}
 }
 
 func (r *redeemTxRequests) isVtxoRedeemed(vtxoKey domain.VtxoKey) bool {

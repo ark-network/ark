@@ -254,20 +254,12 @@ func (s *covenantlessService) SubmitRedeemTx(
 		return "", "", fmt.Errorf("some vtxos not found")
 	}
 
-	for _, vtxoKey := range spentVtxoKeys {
-		if s.txRequests.isVtxoRegisteredForNextRound(vtxoKey) {
-			return "", "", fmt.Errorf("vtxo %s is already registered for the next round", vtxoKey.String())
-		}
+	if err := s.txRequests.vtxosRegisteredForRoundCheck(spentVtxoKeys); err != nil {
+		return "", "", err
 	}
-
-	for _, vtxoKey := range spentVtxoKeys {
-		s.redeemTxRequests.addVtxo(vtxoKey)
-	}
-
+	s.redeemTxRequests.addVtxos(spentVtxoKeys)
 	defer func() {
-		for _, vtxoKey := range spentVtxoKeys {
-			s.redeemTxRequests.removeVtxo(vtxoKey)
-		}
+		s.redeemTxRequests.removeVtxos(spentVtxoKeys)
 	}()
 
 	vtxoMap := make(map[wire.OutPoint]domain.Vtxo)
