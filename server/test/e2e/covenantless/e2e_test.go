@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -45,42 +44,42 @@ const (
 	redeemAddress = "bcrt1q2wrgf2hrkfegt0t97cnv4g5yvfjua9k6vua54d"
 )
 
-func TestMain(m *testing.M) {
-	_, err := utils.RunCommand("docker", "compose", "-f", composePath, "up", "-d", "--build")
-	if err != nil {
-		fmt.Printf("error starting docker-compose: %s", err)
-		os.Exit(1)
-	}
-
-	time.Sleep(10 * time.Second)
-
-	if err := utils.GenerateBlock(); err != nil {
-		fmt.Printf("error generating block: %s", err)
-		os.Exit(1)
-	}
-
-	if err := setupServerWallet(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	time.Sleep(3 * time.Second)
-
-	_, err = runClarkCommand("init", "--server-url", "localhost:7070", "--password", utils.Password, "--network", "regtest", "--explorer", "http://chopsticks:3000")
-	if err != nil {
-		fmt.Printf("error initializing ark config: %s", err)
-		os.Exit(1)
-	}
-
-	code := m.Run()
-
-	_, err = utils.RunCommand("docker", "compose", "-f", composePath, "down")
-	if err != nil {
-		fmt.Printf("error stopping docker-compose: %s", err)
-		os.Exit(1)
-	}
-	os.Exit(code)
-}
+//func TestMain(m *testing.M) {
+//	_, err := utils.RunCommand("docker", "compose", "-f", composePath, "up", "-d", "--build")
+//	if err != nil {
+//		fmt.Printf("error starting docker-compose: %s", err)
+//		os.Exit(1)
+//	}
+//
+//	time.Sleep(10 * time.Second)
+//
+//	if err := utils.GenerateBlock(); err != nil {
+//		fmt.Printf("error generating block: %s", err)
+//		os.Exit(1)
+//	}
+//
+//	if err := setupServerWallet(); err != nil {
+//		fmt.Println(err)
+//		os.Exit(1)
+//	}
+//
+//	time.Sleep(3 * time.Second)
+//
+//	_, err = runClarkCommand("init", "--server-url", "localhost:7070", "--password", utils.Password, "--network", "regtest", "--explorer", "http://chopsticks:3000")
+//	if err != nil {
+//		fmt.Printf("error initializing ark config: %s", err)
+//		os.Exit(1)
+//	}
+//
+//	code := m.Run()
+//
+//	_, err = utils.RunCommand("docker", "compose", "-f", composePath, "down")
+//	if err != nil {
+//		fmt.Printf("error stopping docker-compose: %s", err)
+//		os.Exit(1)
+//	}
+//	os.Exit(code)
+//}
 
 func TestSettleInSameRound(t *testing.T) {
 	ctx := context.Background()
@@ -776,6 +775,66 @@ func TestChainOutOfRoundTransactions(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 	require.NotZero(t, balance.Offchain.Total)
+}
+
+// TestCollisionBetweenInRoundAndRedeemVtxo tests for a potential collision between VTXOs that could occur
+// due to a race condition between simultaneous Settle and SubmitRedeemTx calls. The race condition doesn't
+// consistently reproduce, making the test unreliable in automated test suites. Therefore, the test is skipped
+// by default and left here as documentation for future debugging and reference.
+func TestCollisionBetweenInRoundAndRedeemVtxo(t *testing.T) {
+	t.Skip()
+
+	ctx := context.Background()
+	alice, grpcAlice := setupArkSDK(t)
+	defer grpcAlice.Close()
+
+	bob, grpcBob := setupArkSDK(t)
+	defer grpcBob.Close()
+
+	_, aliceBoardingAddress, err := alice.Receive(ctx)
+	require.NoError(t, err)
+
+	bobAddr, _, err := bob.Receive(ctx)
+	require.NoError(t, err)
+
+	_, err = utils.RunCommand("nigiri", "faucet", aliceBoardingAddress, "0.00005000")
+	require.NoError(t, err)
+
+	_, err = utils.RunCommand("nigiri", "rpc", "generatetoaddress", "1", "bcrt1qe8eelqalnch946nzhefd5ajhgl2afjw5aegc59")
+	require.NoError(t, err)
+	time.Sleep(5 * time.Second)
+
+	_, err = alice.Settle(ctx)
+	require.NoError(t, err)
+
+	time.Sleep(1 * time.Second)
+
+	//test collision when first Settle is called
+	errChan := make(chan error, 1)
+
+	go func() {
+		_, err := alice.Settle(ctx)
+		if err != nil {
+			errChan <- err
+		}
+	}()
+	// SDK Settle call is bit slower than Redeem so we introduce small delay so we make sure Settle is called before Redeem
+	// this timeout can vary depending on the environment
+	time.Sleep(20 * time.Millisecond)
+	go func() {
+		_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddr, 1000)}, false)
+		if err != nil {
+			errChan <- err
+		}
+	}()
+
+	select {
+	case err = <-errChan:
+		require.Error(t, err)
+		t.Log(err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("expected error not received")
+	}
 }
 
 func TestAliceSendsSeveralTimesToBob(t *testing.T) {
