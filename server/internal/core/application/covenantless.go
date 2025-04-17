@@ -1384,6 +1384,7 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 
 	var notes []note.Note
 	var roundAborted bool
+	var vtxoKeys []domain.VtxoKey
 	defer func() {
 		delete(s.treeSigningSessions, round.Id)
 		if roundAborted {
@@ -1396,6 +1397,7 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 		}
 
 		if round.IsFailed() {
+			s.roundInputs.remove(vtxoKeys)
 			s.startRound()
 			return
 		}
@@ -1424,13 +1426,11 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 	}
 	requests, boardingInputs, redeeemedNotes, musig2data := s.txRequests.pop(num)
 	notes = redeeemedNotes
-	vtxoKeys := make([]domain.VtxoKey, 0)
 	for _, req := range requests {
 		for _, in := range req.Inputs {
 			vtxoKeys = append(vtxoKeys, in.VtxoKey)
 		}
 	}
-	s.roundInputs.remove(vtxoKeys)
 	s.numOfBoardingInputsMtx.Lock()
 	s.numOfBoardingInputs = len(boardingInputs)
 	s.numOfBoardingInputsMtx.Unlock()
@@ -1667,6 +1667,17 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, roundEndTime time
 	s.currentRoundLock.Lock()
 	round := s.currentRound
 	s.currentRoundLock.Unlock()
+
+	defer func() {
+		vtxoKeys := make([]domain.VtxoKey, 0)
+		for _, req := range round.TxRequests {
+			for _, in := range req.Inputs {
+				vtxoKeys = append(vtxoKeys, in.VtxoKey)
+			}
+		}
+		s.roundInputs.remove(vtxoKeys)
+	}()
+
 	if round.IsFailed() {
 		return
 	}
