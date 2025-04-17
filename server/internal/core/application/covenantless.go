@@ -48,8 +48,10 @@ type covenantlessService struct {
 	scanner     ports.BlockchainScanner
 	sweeper     *sweeper
 
-	txRequests *txRequestsQueue
-	forfeitTxs *forfeitTxsMap
+	txRequests     *txRequestsQueue
+	forfeitTxs     *forfeitTxsMap
+	redeemTxInputs *outpointMap
+	roundInputs    *outpointMap
 
 	eventsCh            chan domain.RoundEvent
 	transactionEventsCh chan TransactionEvent
@@ -144,6 +146,8 @@ func NewCovenantlessService(
 		sweeper:                   newSweeper(walletSvc, repoManager, builder, scheduler, noteUriPrefix),
 		txRequests:                newTxRequestsQueue(),
 		forfeitTxs:                newForfeitTxsMap(builder),
+		redeemTxInputs:            newOutpointMap(),
+		roundInputs:               newOutpointMap(),
 		eventsCh:                  make(chan domain.RoundEvent),
 		transactionEventsCh:       make(chan TransactionEvent),
 		currentRoundLock:          sync.Mutex{},
@@ -251,6 +255,13 @@ func (s *covenantlessService) SubmitRedeemTx(
 	if len(spentVtxos) != len(spentVtxoKeys) {
 		return "", "", fmt.Errorf("some vtxos not found")
 	}
+
+	if exists, vtxo := s.roundInputs.includesAny(spentVtxoKeys); exists {
+		return "", "", fmt.Errorf("vtxo %s is already registered for next round", vtxo)
+	}
+
+	s.redeemTxInputs.add(spentVtxoKeys)
+	defer s.redeemTxInputs.remove(spentVtxoKeys)
 
 	vtxoMap := make(map[wire.OutPoint]domain.Vtxo)
 	for _, vtxo := range spentVtxos {
@@ -650,6 +661,7 @@ func (s *covenantlessService) SpendNotes(ctx context.Context, notes []note.Note)
 
 func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error) {
 	vtxosInputs := make([]domain.Vtxo, 0)
+	vtxoKeys := make([]domain.VtxoKey, 0)
 	boardingInputs := make([]ports.BoardingInput, 0)
 
 	now := time.Now().Unix()
@@ -657,6 +669,10 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 	boardingTxs := make(map[string]wire.MsgTx, 0) // txid -> txhex
 
 	for _, input := range inputs {
+		if s.redeemTxInputs.includes(input.VtxoKey) {
+			return "", fmt.Errorf("vtxo %s is currently being spent", input.VtxoKey.String())
+		}
+
 		vtxosResult, err := s.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{input.VtxoKey})
 		if err != nil || len(vtxosResult) == 0 {
 			// vtxo not found in db, check if it exists on-chain
@@ -767,6 +783,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 		}
 
 		vtxosInputs = append(vtxosInputs, vtxo)
+		vtxoKeys = append(vtxoKeys, vtxo.VtxoKey)
 	}
 
 	request, err := domain.NewTxRequest(vtxosInputs)
@@ -777,6 +794,9 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 	if err := s.txRequests.push(*request, boardingInputs); err != nil {
 		return "", err
 	}
+
+	s.roundInputs.add(vtxoKeys)
+
 	return request.Id, nil
 }
 
@@ -1364,6 +1384,7 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 
 	var notes []note.Note
 	var roundAborted bool
+	var vtxoKeys []domain.VtxoKey
 	defer func() {
 		delete(s.treeSigningSessions, round.Id)
 		if roundAborted {
@@ -1376,6 +1397,7 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 		}
 
 		if round.IsFailed() {
+			s.roundInputs.remove(vtxoKeys)
 			s.startRound()
 			return
 		}
@@ -1404,6 +1426,11 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 	}
 	requests, boardingInputs, redeeemedNotes, musig2data := s.txRequests.pop(num)
 	notes = redeeemedNotes
+	for _, req := range requests {
+		for _, in := range req.Inputs {
+			vtxoKeys = append(vtxoKeys, in.VtxoKey)
+		}
+	}
 	s.numOfBoardingInputsMtx.Lock()
 	s.numOfBoardingInputs = len(boardingInputs)
 	s.numOfBoardingInputsMtx.Unlock()
@@ -1640,6 +1667,17 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, roundEndTime time
 	s.currentRoundLock.Lock()
 	round := s.currentRound
 	s.currentRoundLock.Unlock()
+
+	defer func() {
+		vtxoKeys := make([]domain.VtxoKey, 0)
+		for _, req := range round.TxRequests {
+			for _, in := range req.Inputs {
+				vtxoKeys = append(vtxoKeys, in.VtxoKey)
+			}
+		}
+		s.roundInputs.remove(vtxoKeys)
+	}()
+
 	if round.IsFailed() {
 		return
 	}
