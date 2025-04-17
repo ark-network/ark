@@ -811,31 +811,47 @@ func TestCollisionBetweenInRoundAndRedeemVtxo(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	//test collision when first Settle is called
-	errChan := make(chan error, 1)
+	type resp struct {
+		txid string
+		err  error
+	}
+
+	ch := make(chan resp, 2)
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
 
 	go func() {
-		_, err := alice.Settle(ctx)
-		if err != nil {
-			errChan <- err
-		}
+		defer wg.Done()
+		txid, err := alice.Settle(ctx)
+		ch <- resp{txid, err}
 	}()
 	// SDK Settle call is bit slower than Redeem so we introduce small delay so we make sure Settle is called before Redeem
 	// this timeout can vary depending on the environment
-	time.Sleep(20 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 	go func() {
-		_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddr, 1000)}, false)
-		if err != nil {
-			errChan <- err
-		}
+		defer wg.Done()
+		txid, err := alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddr, 1000)}, false)
+		ch <- resp{txid, err}
 	}()
 
-	select {
-	case err = <-errChan:
-		require.Error(t, err)
-		t.Log(err)
-	case <-time.After(5 * time.Second):
-		t.Fatal("expected error not received")
+	go func() {
+		wg.Wait()
+		close(ch)
+	}()
+
+	finalResp := resp{}
+	for resp := range ch {
+		if resp.err != nil {
+			finalResp.err = resp.err
+		} else {
+			finalResp.txid = resp.txid
+		}
 	}
+
+	t.Log(finalResp.err)
+	require.NotEmpty(t, finalResp.txid)
+	require.Error(t, finalResp.err)
+
 }
 
 func TestAliceSendsSeveralTimesToBob(t *testing.T) {
