@@ -281,7 +281,10 @@ func config(ctx *cli.Context) error {
 		"boarding_descriptor_template": cfgData.BoardingDescriptorTemplate,
 		"explorer_url":                 cfgData.ExplorerURL,
 		"forfeit_address":              cfgData.ForfeitAddress,
-		"with_transaction_feed":        cfgData.WithTransactionFeed,
+		"utxo_min_amount":              cfgData.UtxoMinAmount,
+		"utxo_max_amount":              cfgData.UtxoMaxAmount,
+		"vtxo_min_amount":              cfgData.VtxoMinAmount,
+		"vtxo_max_amount":              cfgData.VtxoMaxAmount,
 	}
 
 	return printJSON(cfg)
@@ -578,11 +581,17 @@ func sendCovenantLess(ctx *cli.Context, receivers []arksdk.Receiver, withZeroFee
 		}
 	}
 
+	computeExpiration := ctx.Bool(enableExpiryCoinselectFlag.Name)
 	if len(onchainReceivers) > 0 {
-		return fmt.Errorf("onchain receivers not allowed")
+		txid, err := arkSdkClient.CollaborativeExit(
+			ctx.Context, onchainReceivers[0].To(), onchainReceivers[0].Amount(), computeExpiration,
+		)
+		if err != nil {
+			return err
+		}
+		return printJSON(map[string]string{"txid": txid})
 	}
 
-	computeExpiration := ctx.Bool(enableExpiryCoinselectFlag.Name)
 	redeemTx, err := arkSdkClient.SendOffChain(
 		ctx.Context, computeExpiration, offchainReceivers, withZeroFees,
 	)

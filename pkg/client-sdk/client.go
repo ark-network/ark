@@ -103,9 +103,17 @@ func (a *arkClient) Dump(ctx context.Context) (string, error) {
 }
 
 func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
+	if a.wallet == nil {
+		return "", "", fmt.Errorf("wallet not initialized")
+	}
+
 	offchainAddr, boardingAddr, err := a.wallet.NewAddress(ctx, false)
 	if err != nil {
 		return "", "", err
+	}
+
+	if a.Config.UtxoMaxAmount == 0 {
+		boardingAddr.Address = ""
 	}
 
 	return offchainAddr.Address, boardingAddr.Address, nil
@@ -136,7 +144,9 @@ func (a *arkClient) Reset(ctx context.Context) {
 	if a.txStreamCtxCancel != nil {
 		a.txStreamCtxCancel()
 	}
-	a.store.Clean(ctx)
+	if a.store != nil {
+		a.store.Clean(ctx)
+	}
 }
 
 func (a *arkClient) Stop() error {
@@ -173,6 +183,10 @@ func (a *arkClient) ListVtxos(
 func (a *arkClient) NotifyIncomingFunds(
 	ctx context.Context, addr string,
 ) ([]types.Vtxo, error) {
+	if a.client == nil {
+		return nil, fmt.Errorf("wallet not initialized")
+	}
+
 	eventCh, closeFn, err := a.client.SubscribeForAddress(ctx, addr)
 	if err != nil {
 		return nil, err
